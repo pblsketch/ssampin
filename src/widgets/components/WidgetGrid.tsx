@@ -24,16 +24,15 @@ import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { DEFAULT_WIDGET_STYLE } from '@domain/entities/DashboardTheme';
 
 interface WidgetGridProps {
-  isEditMode?: boolean;
   onNavigate?: (page: string) => void;
 }
 
 /**
  * 위젯 그리드 컨테이너
- * - DnD 지원: 편집 모드에서 드래그앤드롭으로 순서 변경
+ * - DnD 항상 활성: 드래그는 ⋮ 핸들로만, 카드 본문 클릭은 모달 열기
  * - 반응형 그리드: colSpan에 따라 위젯 가로 크기 조절
  */
-export function WidgetGrid({ isEditMode, onNavigate }: WidgetGridProps) {
+export function WidgetGrid({ onNavigate }: WidgetGridProps) {
   const config = useDashboardConfig((s) => s.config);
   const toggleWidget = useDashboardConfig((s) => s.toggleWidget);
   const reorderWidgets = useDashboardConfig((s) => s.reorderWidgets);
@@ -52,15 +51,10 @@ export function WidgetGrid({ isEditMode, onNavigate }: WidgetGridProps) {
 
   const visibleWidgets = useMemo(() => {
     if (!config) return [];
-    return [...config.widgets]
-      .filter((w) => w.visible)
-      .sort((a, b) => a.order - b.order);
+    return [...config.widgets].filter((w) => w.visible).sort((a, b) => a.order - b.order);
   }, [config]);
 
-  const widgetIds = useMemo(
-    () => visibleWidgets.map((w) => w.widgetId),
-    [visibleWidgets],
-  );
+  const widgetIds = useMemo(() => visibleWidgets.map((w) => w.widgetId), [visibleWidgets]);
 
   const [activeTab, setActiveTab] = useState<TabFilter>('all');
 
@@ -72,10 +66,7 @@ export function WidgetGrid({ isEditMode, onNavigate }: WidgetGridProps) {
     });
   }, [visibleWidgets, activeTab]);
 
-  const filteredIds = useMemo(
-    () => filteredWidgets.map((w) => w.widgetId),
-    [filteredWidgets],
-  );
+  const filteredIds = useMemo(() => filteredWidgets.map((w) => w.widgetId), [filteredWidgets]);
 
   const activeWidget = useMemo(() => {
     if (!activeId) return null;
@@ -109,7 +100,7 @@ export function WidgetGrid({ isEditMode, onNavigate }: WidgetGridProps) {
       <div className="flex flex-col items-center justify-center py-16 text-sp-muted">
         <span className="mb-3 text-4xl">📌</span>
         <p className="text-sm">표시할 위젯이 없습니다</p>
-        <p className="mt-1 text-xs">우측 상단의 편집 버튼으로 위젯을 추가하세요</p>
+        <p className="mt-1 text-xs">우측 상단의 위젯 관리 버튼으로 위젯을 추가하세요</p>
       </div>
     );
   }
@@ -129,22 +120,23 @@ export function WidgetGrid({ isEditMode, onNavigate }: WidgetGridProps) {
         />
       )}
 
-      {/* 탭 바 — 편집 모드가 아닐 때만 표시 */}
-      {!isEditMode && visibleWidgets.length > 4 && (
+      {/* 탭 바 — 위젯이 4개 초과일 때 표시 */}
+      {visibleWidgets.length > 4 && (
         <WidgetTabBar activeTab={activeTab} onTabChange={setActiveTab} />
       )}
+
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        <SortableContext items={isEditMode ? widgetIds : filteredIds} strategy={rectSortingStrategy}>
+        <SortableContext items={filteredIds} strategy={rectSortingStrategy}>
           <div
             className="widget-grid grid grid-cols-1 md:grid-cols-4 grid-flow-row-dense"
             style={{ gap: `${ws.cardGap}px`, gridAutoRows: `${ws.gridRowHeight ?? 80}px` }}
           >
-            {(isEditMode ? visibleWidgets : filteredWidgets).map((instance) => {
+            {filteredWidgets.map((instance) => {
               const definition = getWidgetById(instance.widgetId);
               if (!definition) return null;
 
@@ -153,7 +145,6 @@ export function WidgetGrid({ isEditMode, onNavigate }: WidgetGridProps) {
                   key={instance.widgetId}
                   instance={instance}
                   definition={definition}
-                  isEditMode={isEditMode}
                   onHide={() => toggleWidget(instance.widgetId)}
                   onResize={(colSpan) => resizeWidget(instance.widgetId, colSpan)}
                   onResizeHeight={(rowSpan) => resizeWidgetHeight(instance.widgetId, rowSpan)}
@@ -161,21 +152,24 @@ export function WidgetGrid({ isEditMode, onNavigate }: WidgetGridProps) {
                 />
               );
             })}
-
           </div>
         </SortableContext>
 
         {/* 드래그 오버레이 */}
-        <DragOverlay dropAnimation={{
-          duration: 200,
-          easing: 'ease',
-        }}>
+        <DragOverlay
+          dropAnimation={{
+            duration: 200,
+            easing: 'ease',
+          }}
+        >
           {activeWidget && (
             <div
               className="ring-2 ring-sp-accent/50 shadow-lg shadow-sp-accent/20 overflow-hidden bg-sp-card"
               style={{
                 borderRadius: 'var(--sp-card-radius, 12px)',
-                maxHeight: activeWidget.instance.rowSpan * (ws.gridRowHeight ?? 80) + (activeWidget.instance.rowSpan - 1) * ws.cardGap,
+                maxHeight:
+                  activeWidget.instance.rowSpan * (ws.gridRowHeight ?? 80) +
+                  (activeWidget.instance.rowSpan - 1) * ws.cardGap,
               }}
             >
               <WidgetCard definition={activeWidget.definition} />

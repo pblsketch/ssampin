@@ -1,6 +1,10 @@
 import { useState } from 'react';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
-import { TOOL_DEFINITIONS, DEFAULT_FAVORITE_TOOLS, getToolDefinition } from '@adapters/constants/toolDefinitions';
+import {
+  TOOL_DEFINITIONS,
+  DEFAULT_FAVORITE_TOOLS,
+  getToolDefinition,
+} from '@adapters/constants/toolDefinitions';
 import type { ToolDefinition } from '@adapters/constants/toolDefinitions';
 
 export function FavoriteTools() {
@@ -35,15 +39,15 @@ export function FavoriteTools() {
     <div className="rounded-xl bg-sp-card p-4 h-full flex flex-col">
       {/* 헤더 */}
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-bold text-sp-text flex items-center gap-1.5"><span>🛠️</span>자주 쓰는 도구</h3>
+        <h3 className="text-sm font-bold text-sp-text flex items-center gap-1.5">
+          <span>🛠️</span>자주 쓰는 도구
+        </h3>
         <button
           onClick={() => setShowPicker(!showPicker)}
-          className="text-sp-muted hover:text-sp-text transition-colors"
+          className="min-w-6 min-h-6 flex items-center justify-center text-sp-muted hover:text-sp-text transition-colors"
           title="도구 편집"
         >
-          <span className="material-symbols-outlined text-sm">
-            {showPicker ? 'close' : 'edit'}
-          </span>
+          <span className="material-symbols-outlined text-sm">{showPicker ? 'close' : 'edit'}</span>
         </button>
       </div>
 
@@ -54,19 +58,17 @@ export function FavoriteTools() {
             <button
               key={tool.id}
               onClick={() => handleToolClick(tool)}
-              className={`flex flex-col items-center justify-center gap-1.5 p-2 rounded-xl ${tool.color} hover:scale-105 active:scale-95 transition-all`}
+              className={`min-w-6 min-h-6 flex flex-col items-center justify-center gap-1.5 p-2 rounded-xl ${tool.color} hover:scale-105 active:scale-95 transition-all`}
             >
               <span className="text-xl">{tool.icon}</span>
-              <span className="text-xs font-medium truncate w-full text-center">
-                {tool.name}
-              </span>
+              <span className="text-xs font-medium truncate w-full text-center">{tool.name}</span>
             </button>
           ))}
 
           {tools.length < 8 && (
             <button
               onClick={() => setShowPicker(true)}
-              className="flex flex-col items-center justify-center gap-1.5 p-2 rounded-xl bg-sp-border/30 text-sp-muted hover:bg-sp-border/50 transition-colors"
+              className="min-w-6 min-h-6 flex flex-col items-center justify-center gap-1.5 p-2 rounded-xl bg-sp-border/30 text-sp-muted hover:bg-sp-border/50 transition-colors"
             >
               <span className="material-symbols-outlined text-xl">add</span>
               <span className="text-xs">추가</span>
@@ -99,9 +101,7 @@ function FavoriteToolPicker({
   const [picked, setPicked] = useState<string[]>([...selected]);
 
   const toggle = (id: string) => {
-    setPicked((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
-    );
+    setPicked((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   };
 
   return (
@@ -109,7 +109,10 @@ function FavoriteToolPicker({
       <p className="text-caption text-sp-muted mb-2">
         대시보드에 표시할 도구를 선택하세요 (최대 8개)
       </p>
-      <div className="grid grid-cols-4 gap-1.5 overflow-y-auto" style={{ maxHeight: 'calc(100% - 60px)' }}>
+      <div
+        className="grid grid-cols-4 gap-1.5 overflow-y-auto"
+        style={{ maxHeight: 'calc(100% - 60px)' }}
+      >
         {TOOL_DEFINITIONS.map((tool) => {
           const isSelected = picked.includes(tool.id);
           return (

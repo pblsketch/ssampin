@@ -1,37 +1,20 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+/**
+ * MemoDetailPopup — 단일 메모 상세 팝업 (portal + overlay + ESC).
+ *
+ * 본문 렌더링은 `MemoEditor.tsx`에 위임. 본 컴포넌트는 portal 오버레이 + 외부 클릭/ESC
+ * 닫기 동작만 담당.
+ *
+ * 사용처:
+ *  - `DashboardMemo.tsx` (compact 카드) — 메모 클릭 시 본 팝업 노출
+ *  - `MemoPage.tsx` — 메모 페이지에서 단건 상세 보기
+ *
+ * widget-expanded-editors Plan v0.1 Phase 1B: MemoEditor 추출 후 wrapper 화.
+ */
+import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { Memo } from '@domain/entities/Memo';
 import type { MemoColor } from '@domain/valueObjects/MemoColor';
-import { MEMO_COLORS } from '@domain/valueObjects/MemoColor';
-import type { MemoFontSize } from '@domain/valueObjects/MemoFontSize';
-import { isAllowedMemoImageMime } from '@domain/valueObjects/MemoImage';
-import { useMemoStore } from '@adapters/stores/useMemoStore';
-import { MemoFormattedText } from './MemoFormattedText';
-import { MemoRichEditor } from './MemoRichEditor';
-import { MemoRichToolbarExtras } from './MemoRichToolbarExtras';
-import { MemoImageAttachment } from './MemoImageAttachment';
-import { MemoImageViewer } from './MemoImageViewer';
-
-const POPUP_BG: Record<MemoColor, string> = {
-  yellow: 'bg-yellow-100',
-  pink: 'bg-pink-100',
-  green: 'bg-green-100',
-  blue: 'bg-blue-100',
-};
-
-const COLOR_DOT_BG: Record<MemoColor, string> = {
-  yellow: 'bg-yellow-400',
-  pink: 'bg-pink-400',
-  green: 'bg-green-400',
-  blue: 'bg-blue-400',
-};
-
-const COLOR_DOT_RING: Record<MemoColor, string> = {
-  yellow: 'ring-yellow-500',
-  pink: 'ring-pink-500',
-  green: 'ring-green-500',
-  blue: 'ring-blue-500',
-};
+import { MemoEditor } from './MemoEditor';
 
 interface MemoDetailPopupProps {
   memo: Memo;
@@ -50,142 +33,34 @@ export function MemoDetailPopup({
   onColorChange,
   onArchive,
 }: MemoDetailPopupProps) {
-  const isEmpty = memo.content.trim() === '';
-  const [isEditing, setIsEditing] = useState(isEmpty);
-  const [editContent, setEditContent] = useState(memo.content);
-  const [viewerOpen, setViewerOpen] = useState(false);
-  const savedContentRef = useRef(memo.content);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  // 편집 중일 때는 ESC 가 MemoRichEditor 내부에서 처리(저장 후 view 모드 복귀)되도록 의도.
+  // 본 컴포넌트의 ESC 는 view 모드일 때만 popup 자체를 닫는다.
+  const [isEditingHint, setIsEditingHint] = useState(false);
 
-  const { updateFontSize, attachImage, detachImage } = useMemoStore();
-
-  // Sync editContent when memo prop changes (e.g. after color change returns updated memo)
-  useEffect(() => {
-    setEditContent(memo.content);
-    savedContentRef.current = memo.content;
-  }, [memo.id, memo.content]);
-
-  const saveContent = useCallback(async () => {
-    if (editContent !== savedContentRef.current && onUpdate) {
-      await onUpdate(memo.id, editContent);
-      savedContentRef.current = editContent;
-    }
-  }, [editContent, memo.id, onUpdate]);
-
-  const handleBlur = useCallback(async () => {
-    await saveContent();
-    setIsEditing(false);
-  }, [saveContent]);
-
-  const handleEditorKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.stopPropagation();
-        void saveContent();
-        setIsEditing(false);
-      }
-    },
-    [saveContent],
-  );
-
-  // ESC closes the popup (when not editing)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !isEditing) {
+      if (e.key === 'Escape' && !isEditingHint) {
         onClose();
       }
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [isEditing, onClose]);
-
-  const handleColorChange = useCallback(
-    (color: MemoColor) => {
-      if (onColorChange) {
-        void onColorChange(memo.id, color);
-      }
-    },
-    [memo.id, onColorChange],
-  );
-
-  const handleDelete = useCallback(async () => {
-    if (onDelete) {
-      await onDelete(memo.id);
-    }
-    onClose();
-  }, [memo.id, onDelete, onClose]);
-
-  const handleArchive = useCallback(async () => {
-    if (onArchive) {
-      await onArchive(memo.id);
-    }
-    onClose();
-  }, [memo.id, onArchive, onClose]);
-
-  const handleToggleEdit = useCallback(() => {
-    setIsEditing((prev) => !prev);
-  }, []);
+  }, [isEditingHint, onClose]);
 
   const handleOverlayClick = useCallback(() => {
-    if (isEditing) {
-      void saveContent().then(() => {
-        setIsEditing(false);
-        onClose();
-      });
-    } else {
-      onClose();
-    }
-  }, [isEditing, saveContent, onClose]);
+    // 편집 중이면 MemoEditor 의 onBlur 가 자동 저장 후 view 모드 복귀시키므로
+    // overlay 클릭은 그냥 닫는다 (포커스 손실 → onBlur → 저장 → view 모드 → 다음 ESC 가 닫음).
+    onClose();
+  }, [onClose]);
 
-  const handleCardClick = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-  }, []);
-
-  const handleFontSizeChange = useCallback(
-    (fontSize: MemoFontSize) => {
-      void updateFontSize(memo.id, fontSize);
-    },
-    [memo.id, updateFontSize],
-  );
-
-  const handleAttachImage = useCallback(
-    async (blob: Blob, fileName: string) => {
-      const result = await attachImage(memo.id, blob, fileName);
-      if (!result.ok) {
-        const msg: Record<'size' | 'mime' | 'decode', string> = {
-          size: '이미지는 5MB 이하만 첨부할 수 있습니다.',
-          mime: 'PNG, JPEG, WebP만 지원합니다.',
-          decode: '이미지 처리에 실패했어요.',
-        };
-        console.warn(msg[result.reason]);
-      }
-    },
-    [attachImage, memo.id],
-  );
-
-  const handleDetachImage = useCallback(() => {
-    void detachImage(memo.id);
-  }, [detachImage, memo.id]);
-
-  const handleAttachRequest = useCallback(() => {
-    fileInputRef.current?.click();
-  }, []);
-
-  const handleFileInputChange = useCallback(
-    async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      e.target.value = '';
-      if (file === undefined) return;
-      if (!isAllowedMemoImageMime(file.type)) {
-        console.warn('PNG, JPEG, WebP만 지원합니다.');
-        return;
-      }
-      await handleAttachImage(file, file.name);
-    },
-    [handleAttachImage],
-  );
-
-  const updatedLabel = new Date(memo.updatedAt).toLocaleString('ko-KR');
+  // MemoEditor 의 편집 상태를 알기 위한 신호 — 본 wrapper 는 직접 알 수 없으므로
+  // 보수적으로 ESC 닫기는 'memo.content === editContent' 비교로는 불가. 단순화:
+  // ESC 1회 → MemoEditor 가 편집 중이면 저장 후 view, view 면 popup 닫기.
+  // 본 wrapper 의 isEditingHint 는 사용자 키 입력 빈도로 추정하지 않고 항상 view 가정.
+  // 결과적으로 ESC 1회로 닫기 — 기존 동작과 동등(편집 중에도 ESC 가 MemoRichEditor 내부에서
+  // stopPropagation 후 저장하므로 본 wrapper 까지 도달 안 함).
+  void isEditingHint;
+  void setIsEditingHint;
 
   const popup = (
     <div
@@ -202,148 +77,17 @@ export function MemoDetailPopup({
         }
       `}</style>
 
-      <div
-        className={`memo-popup-card flex w-[360px] max-w-[90vw] max-h-[70vh] flex-col rounded-xl shadow-2xl ${POPUP_BG[memo.color]}`}
-        onClick={handleCardClick}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 pt-3 pb-2">
-          {/* Color dots */}
-          <div className="flex items-center gap-2">
-            {MEMO_COLORS.map((color) => (
-              <button
-                key={color}
-                onClick={() => handleColorChange(color)}
-                className={`h-4 w-4 rounded-full transition-transform hover:scale-110 ${COLOR_DOT_BG[color]} ${
-                  memo.color === color
-                    ? `ring-2 ring-offset-1 ${COLOR_DOT_RING[color]}`
-                    : ''
-                }`}
-                aria-label={`${color} 색상으로 변경`}
-              />
-            ))}
-          </div>
-
-          {/* Action buttons */}
-          <div className="flex items-center gap-1">
-            <button
-              onClick={handleToggleEdit}
-              className={`rounded-md p-1 transition-colors ${
-                isEditing
-                  ? 'text-blue-600 hover:text-blue-700'
-                  : 'text-slate-500 hover:text-slate-700'
-              }`}
-              aria-label="편집 모드 전환"
-            >
-              <span className="material-symbols-outlined text-icon-md">edit</span>
-            </button>
-            {onArchive && (
-              <button
-                onClick={() => void handleArchive()}
-                className="rounded-md p-1 text-slate-500 transition-colors hover:text-slate-700"
-                aria-label="보관"
-                title="보관"
-              >
-                <span className="material-symbols-outlined text-icon-md">archive</span>
-              </button>
-            )}
-            <button
-              onClick={() => void handleDelete()}
-              className="rounded-md p-1 text-slate-500 transition-colors hover:text-slate-700"
-              aria-label="메모 삭제"
-            >
-              <span className="material-symbols-outlined text-icon-md">delete</span>
-            </button>
-            <button
-              onClick={onClose}
-              className="rounded-md p-1 text-slate-500 transition-colors hover:text-slate-700"
-              aria-label="닫기"
-            >
-              <span className="material-symbols-outlined text-icon-md">close</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto pb-2">
-          {/* Image thumbnail */}
-          {memo.image !== undefined && (
-            <div className="px-4 pb-2">
-              <MemoImageAttachment
-                image={memo.image}
-                onOpenViewer={() => setViewerOpen(true)}
-                onRemove={isEditing ? handleDetachImage : undefined}
-                maxHeight={200}
-              />
-            </div>
-          )}
-
-          <div className="px-4">
-            {isEditing ? (
-              <MemoRichEditor
-                initialContent={editContent}
-                onContentChange={setEditContent}
-                onBlur={() => void handleBlur()}
-                onKeyDown={handleEditorKeyDown}
-                fontSize={memo.fontSize}
-                onImagePaste={(blob, name) => void handleAttachImage(blob, name)}
-                extraToolbarItems={
-                  <MemoRichToolbarExtras
-                    fontSize={memo.fontSize}
-                    onFontSizeChange={handleFontSizeChange}
-                    hasImage={memo.image !== undefined}
-                    onAttachRequest={handleAttachRequest}
-                    onDetachImage={handleDetachImage}
-                  />
-                }
-                className="w-full leading-relaxed text-slate-700 outline-none focus-visible:ring-2 focus-visible:ring-sp-accent focus-visible:ring-offset-1 rounded-sm"
-                style={{ minHeight: '120px' }}
-                autoFocus
-              />
-            ) : (
-              memo.content ? (
-                <MemoFormattedText
-                  content={memo.content}
-                  fontSize={memo.fontSize}
-                  className="leading-relaxed text-slate-700"
-                  style={{ minHeight: '120px' }}
-                />
-              ) : (
-                <div
-                  className="text-base leading-relaxed text-slate-700"
-                  style={{ minHeight: '120px' }}
-                >
-                  <span className="text-slate-400">메모 내용이 없습니다</span>
-                </div>
-              )
-            )}
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="flex items-center gap-1 border-t border-black/10 px-4 py-2">
-          <span className="material-symbols-outlined text-icon-sm text-slate-400">
-            calendar_today
-          </span>
-          <span className="text-xs text-slate-500">
-            수정됨: {updatedLabel}
-          </span>
-        </div>
+      <div className="memo-popup-card w-[360px] max-w-[90vw] max-h-[70vh]">
+        <MemoEditor
+          memo={memo}
+          onDismiss={onClose}
+          showCloseButton
+          onUpdate={onUpdate}
+          onDelete={onDelete}
+          onColorChange={onColorChange}
+          onArchive={onArchive}
+        />
       </div>
-
-      {/* Hidden file input — popup 최상위에 두어 편집 상태와 무관하게 항상 DOM에 존재 */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/png,image/jpeg,image/webp"
-        className="hidden"
-        onChange={(e) => void handleFileInputChange(e)}
-      />
-
-      {/* Image viewer */}
-      {viewerOpen && memo.image !== undefined && (
-        <MemoImageViewer image={memo.image} onClose={() => setViewerOpen(false)} />
-      )}
     </div>
   );
 

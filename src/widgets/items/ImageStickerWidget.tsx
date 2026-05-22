@@ -12,7 +12,13 @@ import {
 function ImageStickerContent({ widgetId }: { widgetId: string }) {
   const { load, loaded, setImage, updateSettings, removeImage } = useImageWidgetStore();
   const data = useImageWidgetStore((s) => s.widgets[widgetId]);
-  const widgetData: ImageWidgetData = data ?? { imageUrl: null, aspectRatio: 'free', fitMode: 'cover', borderRadius: 8, showBorder: false };
+  const widgetData: ImageWidgetData = data ?? {
+    imageUrl: null,
+    aspectRatio: 'free',
+    fitMode: 'cover',
+    borderRadius: 8,
+    showBorder: false,
+  };
   const [showSettings, setShowSettings] = useState(false);
 
   useEffect(() => {
@@ -20,18 +26,18 @@ function ImageStickerContent({ widgetId }: { widgetId: string }) {
   }, [load]);
 
   const handleSelectImage = useCallback(async () => {
-    const api = (window as unknown as Record<string, unknown>).electronAPI as {
-      showOpenDialog?: (opts: unknown) => Promise<{ canceled: boolean; filePaths: string[] }>;
-      readFileAsDataUrl?: (path: string) => Promise<string>;
-    } | undefined;
+    const api = (window as unknown as Record<string, unknown>).electronAPI as
+      | {
+          showOpenDialog?: (opts: unknown) => Promise<{ canceled: boolean; filePaths: string[] }>;
+          readFileAsDataUrl?: (path: string) => Promise<string>;
+        }
+      | undefined;
 
     if (api?.showOpenDialog) {
       // Electron: 파일 선택 다이얼로그
       const result = await api.showOpenDialog({
         title: '이미지 선택',
-        filters: [
-          { name: '이미지', extensions: ['jpg', 'jpeg', 'png', 'svg', 'webp', 'gif'] },
-        ],
+        filters: [{ name: '이미지', extensions: ['jpg', 'jpeg', 'png', 'svg', 'webp', 'gif'] }],
         properties: ['openFile'],
       });
       if (result.canceled || !result.filePaths[0]) return;
@@ -73,9 +79,17 @@ function ImageStickerContent({ widgetId }: { widgetId: string }) {
       <div className="h-full flex flex-col items-center justify-center p-4">
         <button
           onClick={() => void handleSelectImage()}
-          className="flex flex-col items-center gap-3 text-sp-muted hover:text-sp-accent transition-colors cursor-pointer"
+          className="min-w-6 min-h-6 flex flex-col items-center gap-3 text-sp-muted hover:text-sp-accent transition-colors cursor-pointer"
         >
-          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="opacity-60">
+          <svg
+            width="36"
+            height="36"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            className="opacity-60"
+          >
             <rect x="3" y="3" width="18" height="18" rx="2" />
             <circle cx="8.5" cy="8.5" r="1.5" />
             <path d="m21 15-5-5L5 21" />
@@ -89,13 +103,21 @@ function ImageStickerContent({ widgetId }: { widgetId: string }) {
 
   return (
     <div className="h-full flex flex-col overflow-hidden group/img relative">
-      <div className={`${widgetData.aspectRatio === 'free' ? 'flex-1 min-h-0' : 'flex-1 min-h-0 flex items-center justify-center'} overflow-hidden`}>
+      <div
+        className={`${widgetData.aspectRatio === 'free' ? 'flex-1 min-h-0' : 'flex-1 min-h-0 flex items-center justify-center'} overflow-hidden`}
+      >
         <div
-          className={widgetData.aspectRatio === 'free' ? 'w-full h-full overflow-hidden' : 'max-w-full max-h-full overflow-hidden'}
+          className={
+            widgetData.aspectRatio === 'free'
+              ? 'w-full h-full overflow-hidden'
+              : 'max-w-full max-h-full overflow-hidden'
+          }
           style={{
             borderRadius: `${widgetData.borderRadius}px`,
             border: widgetData.showBorder ? '1px solid var(--sp-border)' : 'none',
-            ...(widgetData.aspectRatio !== 'free' ? { aspectRatio: widgetData.aspectRatio.replace(':', '/') } : {}),
+            ...(widgetData.aspectRatio !== 'free'
+              ? { aspectRatio: widgetData.aspectRatio.replace(':', '/') }
+              : {}),
           }}
         >
           <img
@@ -110,9 +132,7 @@ function ImageStickerContent({ widgetId }: { widgetId: string }) {
 
       {/* 캡션 */}
       {widgetData.caption && (
-        <p className="text-center text-xs text-sp-muted py-1 truncate px-2">
-          {widgetData.caption}
-        </p>
+        <p className="text-center text-xs text-sp-muted py-1 truncate px-2">{widgetData.caption}</p>
       )}
 
       {/* 호버 시 오버레이 */}
@@ -161,90 +181,112 @@ function ImageSettingsPopover({
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={onClose}>
-    <div
-      className="w-64 bg-sp-bg border border-sp-border rounded-xl shadow-2xl p-4 space-y-3 max-h-[80vh] overflow-y-auto"
-      onClick={(e) => e.stopPropagation()}
-    >
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-bold text-sp-text">이미지 설정</span>
-        <button onClick={onClose} className="text-sp-muted hover:text-sp-text text-lg leading-none">
-          &times;
-        </button>
-      </div>
+      <div
+        className="w-64 bg-sp-bg border border-sp-border rounded-xl shadow-2xl p-4 space-y-3 max-h-[80vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-bold text-sp-text">이미지 설정</span>
+          <button
+            onClick={onClose}
+            className="text-sp-muted hover:text-sp-text text-lg leading-none"
+          >
+            &times;
+          </button>
+        </div>
 
-      {/* 비율 */}
-      <div>
-        <label className="text-[10px] text-sp-muted mb-1 block">비율</label>
-        <select
-          value={data.aspectRatio}
-          onChange={(e) => onUpdate({ aspectRatio: e.target.value as ImageAspectRatio })}
-          className="w-full bg-sp-surface border border-sp-border rounded-lg px-2 py-1 text-[11px] text-sp-text"
-        >
-          {Object.entries(ASPECT_RATIO_LABELS).map(([k, v]) => (
-            <option key={k} value={k}>{v}</option>
-          ))}
-        </select>
-      </div>
+        {/* 비율 */}
+        <div>
+          <label className="text-[10px] text-sp-muted mb-1 block">비율</label>
+          <select
+            value={data.aspectRatio}
+            onChange={(e) => onUpdate({ aspectRatio: e.target.value as ImageAspectRatio })}
+            className="w-full bg-sp-surface border border-sp-border rounded-lg px-2 py-1 text-[11px] text-sp-text"
+          >
+            {Object.entries(ASPECT_RATIO_LABELS).map(([k, v]) => (
+              <option key={k} value={k}>
+                {v}
+              </option>
+            ))}
+          </select>
+        </div>
 
-      {/* 표시 모드 */}
-      <div>
-        <label className="text-[10px] text-sp-muted mb-1 block">표시 모드</label>
-        <select
-          value={data.fitMode}
-          onChange={(e) => onUpdate({ fitMode: e.target.value as ImageFitMode })}
-          className="w-full bg-sp-surface border border-sp-border rounded-lg px-2 py-1 text-[11px] text-sp-text"
-        >
-          {Object.entries(FIT_MODE_LABELS).map(([k, v]) => (
-            <option key={k} value={k}>{v}</option>
-          ))}
-        </select>
-      </div>
+        {/* 표시 모드 */}
+        <div>
+          <label className="text-[10px] text-sp-muted mb-1 block">표시 모드</label>
+          <select
+            value={data.fitMode}
+            onChange={(e) => onUpdate({ fitMode: e.target.value as ImageFitMode })}
+            className="w-full bg-sp-surface border border-sp-border rounded-lg px-2 py-1 text-[11px] text-sp-text"
+          >
+            {Object.entries(FIT_MODE_LABELS).map(([k, v]) => (
+              <option key={k} value={k}>
+                {v}
+              </option>
+            ))}
+          </select>
+        </div>
 
-      {/* 라운드 */}
-      <div>
-        <label className="text-[10px] text-sp-muted mb-1 block">둥글기 {data.borderRadius}px</label>
-        <input
-          type="range" min={0} max={24} step={2}
-          value={data.borderRadius}
-          onChange={(e) => onUpdate({ borderRadius: Number(e.target.value) })}
-          className="w-full accent-sp-accent"
-        />
-      </div>
+        {/* 라운드 */}
+        <div>
+          <label className="text-[10px] text-sp-muted mb-1 block">
+            둥글기 {data.borderRadius}px
+          </label>
+          <input
+            type="range"
+            min={0}
+            max={24}
+            step={2}
+            value={data.borderRadius}
+            onChange={(e) => onUpdate({ borderRadius: Number(e.target.value) })}
+            className="w-full accent-sp-accent"
+          />
+        </div>
 
-      {/* 테두리 */}
-      <div className="flex items-center justify-between">
-        <span className="text-[10px] text-sp-muted">테두리</span>
-        <button
-          onClick={() => onUpdate({ showBorder: !data.showBorder })}
-          className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors ${
-            data.showBorder ? 'bg-sp-accent' : 'bg-sp-border'
-          }`}
-        >
-          <span className={`inline-block h-2.5 w-2.5 rounded-full bg-white transition-transform ${
-            data.showBorder ? 'translate-x-3.5' : 'translate-x-0.5'
-          }`} />
-        </button>
-      </div>
+        {/* 테두리 */}
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] text-sp-muted">테두리</span>
+          <button
+            onClick={() => onUpdate({ showBorder: !data.showBorder })}
+            className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors ${
+              data.showBorder ? 'bg-sp-accent' : 'bg-sp-border'
+            }`}
+          >
+            <span
+              className={`inline-block h-2.5 w-2.5 rounded-full bg-white transition-transform ${
+                data.showBorder ? 'translate-x-3.5' : 'translate-x-0.5'
+              }`}
+            />
+          </button>
+        </div>
 
-      {/* 캡션 */}
-      <div>
-        <label className="text-[10px] text-sp-muted mb-1 block">캡션</label>
-        <input
-          type="text"
-          value={data.caption ?? ''}
-          onChange={(e) => onUpdate({ caption: e.target.value || undefined })}
-          placeholder="예: 우리 반 단체 사진"
-          className="w-full bg-sp-surface border border-sp-border rounded-lg px-2 py-1 text-[11px] text-sp-text placeholder:text-sp-muted/50"
-        />
+        {/* 캡션 */}
+        <div>
+          <label className="text-[10px] text-sp-muted mb-1 block">캡션</label>
+          <input
+            type="text"
+            value={data.caption ?? ''}
+            onChange={(e) => onUpdate({ caption: e.target.value || undefined })}
+            placeholder="예: 우리 반 단체 사진"
+            className="w-full bg-sp-surface border border-sp-border rounded-lg px-2 py-1 text-[11px] text-sp-text placeholder:text-sp-muted/50"
+          />
+        </div>
       </div>
-    </div>
     </div>
   );
 }
 
 // ─── 개별 인스턴스 내보내기 (위젯 시스템이 props 없이 렌더링) ───
 
-export function ImageSticker1() { return <ImageStickerContent widgetId="image-sticker-1" />; }
-export function ImageSticker2() { return <ImageStickerContent widgetId="image-sticker-2" />; }
-export function ImageSticker3() { return <ImageStickerContent widgetId="image-sticker-3" />; }
-export function ImageSticker4() { return <ImageStickerContent widgetId="image-sticker-4" />; }
+export function ImageSticker1() {
+  return <ImageStickerContent widgetId="image-sticker-1" />;
+}
+export function ImageSticker2() {
+  return <ImageStickerContent widgetId="image-sticker-2" />;
+}
+export function ImageSticker3() {
+  return <ImageStickerContent widgetId="image-sticker-3" />;
+}
+export function ImageSticker4() {
+  return <ImageStickerContent widgetId="image-sticker-4" />;
+}

@@ -6,7 +6,7 @@
  * 목표: 우선순위 sort + LIFO tiebreaker + 등록/해제 라이프사이클 + isOpen 토글 +
  * 회귀 가드(priority enum 7종) 검증. 20+ 케이스.
  */
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   useModalCoordinatorStore,
   selectHead,
@@ -204,13 +204,14 @@ describe('useModalCoordinatorStore', () => {
   });
 
   describe('priority enum 정합성 (회귀 가드)', () => {
-    it('PRIORITY_ORDER에 7종 priority 모두 정의되어 있다', () => {
+    it('PRIORITY_ORDER에 8종 priority 모두 정의되어 있다 (WIDGET_EXPAND 포함)', () => {
       const all: ModalPriority[] = [
         'SECURITY_UPDATE',
         'FIRST_SYNC',
         'DRIVE_CONFLICT',
         'OAUTH_FLOW',
         'NORMAL_UPDATE',
+        'WIDGET_EXPAND',
         'EVENT_ALERT',
         'SHARE_PROMPT',
       ];
@@ -219,9 +220,10 @@ describe('useModalCoordinatorStore', () => {
       }
     });
 
-    it('PRIORITY_ORDER 값은 0~6의 고유 정수 (sparse 또는 중복 없음)', () => {
+    it('PRIORITY_ORDER 값은 단조 증가 (sparse 허용: WIDGET_EXPAND=4.5)', () => {
       const values = Object.values(PRIORITY_ORDER).sort((a, b) => a - b);
-      expect(values).toEqual([0, 1, 2, 3, 4, 5, 6]);
+      // 0,1,2,3,4,4.5,5,6 — WIDGET_EXPAND가 NORMAL_UPDATE와 EVENT_ALERT 사이.
+      expect(values).toEqual([0, 1, 2, 3, 4, 4.5, 5, 6]);
     });
 
     it('SECURITY_UPDATE가 가장 작은 값 (최우선)', () => {
@@ -236,6 +238,129 @@ describe('useModalCoordinatorStore', () => {
 
     it('OAUTH_FLOW(3) > NORMAL_UPDATE(4) — 사용자 결정 2026-05-21: OAuth 도중 알림 대기', () => {
       expect(PRIORITY_ORDER.OAUTH_FLOW).toBeLessThan(PRIORITY_ORDER.NORMAL_UPDATE);
+    });
+
+    it('WIDGET_EXPAND(4.5)는 NORMAL_UPDATE(4) 다음·EVENT_ALERT(5) 직전 — G001 Foundation', () => {
+      expect(PRIORITY_ORDER.WIDGET_EXPAND).toBe(4.5);
+      expect(PRIORITY_ORDER.NORMAL_UPDATE).toBeLessThan(PRIORITY_ORDER.WIDGET_EXPAND);
+      expect(PRIORITY_ORDER.WIDGET_EXPAND).toBeLessThan(PRIORITY_ORDER.EVENT_ALERT);
+    });
+  });
+
+  describe('onPreempt 콜백 (G001 — Widget Inline UX AC20 데이터 보호)', () => {
+    it('register-driven 전환: prevHead가 빼앗기면 onPreempt 발화', () => {
+      const onPreempt = vi.fn();
+      // prevHead는 NORMAL_UPDATE, 새로 등록되는 SECURITY_UPDATE가 빼앗는다.
+      const prevId = useModalCoordinatorStore
+        .getState()
+        .register('NORMAL_UPDATE', true, { onPreempt });
+      expect(useModalCoordinatorStore.getState().getHeadId()).toBe(prevId);
+      expect(onPreempt).not.toHaveBeenCalled();
+
+      const newId = useModalCoordinatorStore.getState().register('SECURITY_UPDATE', true);
+      expect(useModalCoordinatorStore.getState().getHeadId()).toBe(newId);
+      expect(onPreempt).toHaveBeenCalledTimes(1);
+      // 새 entry priority(0) < prevHead priority(4) → 'higher_priority'
+      expect(onPreempt).toHaveBeenCalledWith('higher_priority');
+    });
+
+    it("같은 priority + LIFO로 head를 잃어도 'system_modal' reason 으로 발화", () => {
+      const onPreempt = vi.fn();
+      useModalCoordinatorStore.getState().register('EVENT_ALERT', true, { onPreempt });
+      // 동일 priority, 나중 등록 → LIFO로 새 entry가 head.
+      useModalCoordinatorStore.getState().register('EVENT_ALERT', true);
+      expect(onPreempt).toHaveBeenCalledTimes(1);
+      // 새 entry priority == prev priority → 'higher_priority'가 아님 → 'system_modal'
+      expect(onPreempt).toHaveBeenCalledWith('system_modal');
+    });
+
+    it('unregister-driven 전환: head가 unregister 돼도 onPreempt는 발화하지 않음 (무한루프 방지)', () => {
+      const onPreemptHigh = vi.fn();
+      const onPreemptLow = vi.fn();
+      const idHigh = useModalCoordinatorStore
+        .getState()
+        .register('NORMAL_UPDATE', true, { onPreempt: onPreemptHigh });
+      useModalCoordinatorStore
+        .getState()
+        .register('EVENT_ALERT', true, { onPreempt: onPreemptLow });
+      // 현재 head는 idHigh. 이걸 unregister → idLow가 새 head.
+      useModalCoordinatorStore.getState().unregister(idHigh);
+      // 어느 쪽도 onPreempt 발화하지 않아야 한다 — unregister는 cleanup이지 preempt가 아니다.
+      expect(onPreemptHigh).not.toHaveBeenCalled();
+      expect(onPreemptLow).not.toHaveBeenCalled();
+    });
+
+    it('updateIsOpen으로 head가 바뀌어도 onPreempt는 발화하지 않음', () => {
+      // 현재 구현은 register 시에만 onPreempt 발화. updateIsOpen 경유 head 전환은
+      // 컴포넌트 자체가 자기 상태를 닫는 경우라 데이터 손실 위험 없음.
+      const onPreempt = vi.fn();
+      const idHigh = useModalCoordinatorStore
+        .getState()
+        .register('NORMAL_UPDATE', true, { onPreempt });
+      useModalCoordinatorStore.getState().register('EVENT_ALERT', true);
+      useModalCoordinatorStore.getState().updateIsOpen(idHigh, false);
+      expect(onPreempt).not.toHaveBeenCalled();
+    });
+
+    it('초기 head 없음 → 신규 register는 onPreempt 발화하지 않음', () => {
+      const onPreemptNew = vi.fn();
+      // prevHead가 없는 상황에서 신규 등록. 자기가 첫 head가 됨 — 빼앗을 대상 없음.
+      useModalCoordinatorStore
+        .getState()
+        .register('SECURITY_UPDATE', true, { onPreempt: onPreemptNew });
+      expect(onPreemptNew).not.toHaveBeenCalled();
+    });
+
+    it('하위 priority entry가 register 돼도 head는 그대로 → onPreempt 발화 없음', () => {
+      const onPreempt = vi.fn();
+      useModalCoordinatorStore.getState().register('SECURITY_UPDATE', true, { onPreempt });
+      // 더 낮은 우선순위가 들어옴 — head 변동 없음.
+      useModalCoordinatorStore.getState().register('SHARE_PROMPT', true);
+      expect(onPreempt).not.toHaveBeenCalled();
+    });
+
+    it('연속 preempt: A→B 한 번 + B→C 한 번, 각 transition마다 정확히 1회 발화', () => {
+      const onPreemptA = vi.fn();
+      const onPreemptB = vi.fn();
+      // A=NORMAL_UPDATE 등록 → head=A.
+      useModalCoordinatorStore
+        .getState()
+        .register('NORMAL_UPDATE', true, { onPreempt: onPreemptA });
+      // B=DRIVE_CONFLICT 등록 → head=B, A는 preempt 당함 (1회).
+      useModalCoordinatorStore
+        .getState()
+        .register('DRIVE_CONFLICT', true, { onPreempt: onPreemptB });
+      expect(onPreemptA).toHaveBeenCalledTimes(1);
+      expect(onPreemptB).not.toHaveBeenCalled();
+      // C=SECURITY_UPDATE 등록 → head=C, B는 preempt 당함 (1회). A는 추가 발화 없음.
+      useModalCoordinatorStore.getState().register('SECURITY_UPDATE', true);
+      expect(onPreemptA).toHaveBeenCalledTimes(1);
+      expect(onPreemptB).toHaveBeenCalledTimes(1);
+    });
+
+    it('WIDGET_EXPAND 모달이 EVENT_ALERT보다 head — AC20 시나리오 일반화', () => {
+      const onWidgetPreempt = vi.fn();
+      const idWidget = useModalCoordinatorStore
+        .getState()
+        .register('WIDGET_EXPAND', true, { onPreempt: onWidgetPreempt });
+      // EVENT_ALERT는 WIDGET_EXPAND(4.5)보다 큼(5) → head는 그대로 idWidget.
+      useModalCoordinatorStore.getState().register('EVENT_ALERT', true);
+      expect(useModalCoordinatorStore.getState().getHeadId()).toBe(idWidget);
+      expect(onWidgetPreempt).not.toHaveBeenCalled();
+      // SECURITY_UPDATE 등록 → head를 빼앗김 → onPreempt 1회.
+      useModalCoordinatorStore.getState().register('SECURITY_UPDATE', true);
+      expect(onWidgetPreempt).toHaveBeenCalledTimes(1);
+      expect(onWidgetPreempt).toHaveBeenCalledWith('higher_priority');
+    });
+
+    it('onPreempt 미제공 entry는 발화 없이 정상 head 전환', () => {
+      // onPreempt 옵션 없는 entry — register 시 options 없음 — 그래도 head 전환은 정상.
+      const idLow = useModalCoordinatorStore.getState().register('SHARE_PROMPT', true);
+      expect(useModalCoordinatorStore.getState().getHeadId()).toBe(idLow);
+      // 상위 등록 — preempt 콜백 없이도 throw 없이 동작해야 한다.
+      expect(() =>
+        useModalCoordinatorStore.getState().register('SECURITY_UPDATE', true),
+      ).not.toThrow();
     });
   });
 

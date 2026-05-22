@@ -26,17 +26,31 @@ import {
   useModalCoordinatorStore,
   selectHead,
   type ModalPriority,
+  type ModalEntry,
 } from '@adapters/stores/useModalCoordinatorStore';
 
-export function useRegisterModal(priority: ModalPriority, isOpen: boolean): boolean {
+export interface RegisterModalOptions {
+  onPreempt?: ModalEntry['onPreempt'];
+}
+
+export function useRegisterModal(
+  priority: ModalPriority,
+  isOpen: boolean,
+  options?: RegisterModalOptions,
+): boolean {
   const idRef = useRef<string | null>(null);
+  // options는 mount 시 1회만 캡처. onPreempt는 ref를 통해 최신값 참조한다.
+  const onPreemptRef = useRef(options?.onPreempt);
+  onPreemptRef.current = options?.onPreempt;
 
   // 마운트 시 1회 등록, unmount 시 해제.
   // priority는 컴포넌트 라이프타임 내 불변 가정 (대부분의 경우 상수).
   // 동적 priority(예: isSecurity에 따라 SECURITY_UPDATE vs NORMAL_UPDATE)는
   // 컴포넌트가 분기 점에서 unmount/remount 하거나, 별도 hook 호출로 처리.
   useEffect(() => {
-    const id = useModalCoordinatorStore.getState().register(priority, isOpen);
+    const id = useModalCoordinatorStore.getState().register(priority, isOpen, {
+      onPreempt: (reason) => onPreemptRef.current?.(reason),
+    });
     idRef.current = id;
     return () => {
       const currentId = idRef.current;

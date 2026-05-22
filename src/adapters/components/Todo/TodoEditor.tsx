@@ -1,18 +1,26 @@
+/**
+ * TodoEditor — 할 일 풀 편집기 본문.
+ *
+ * 기존 TodoPopup의 본문(입력 + 리스트 + 인라인 편집)을 모달 wrapper 없이 추출.
+ * DashboardTodo가 isCompactMode=false 모드(WidgetModal 내부)에서 직접 마운트한다.
+ *
+ * 외부에서 모달 컨테이너(WidgetModal)가 제공되므로 본 컴포넌트는
+ *  - overlay 없음
+ *  - close 버튼 없음
+ *  - 헤더(✕ 포함)는 WidgetModal이 그림 — 본 컴포넌트는 입력 + 목록만 그림
+ *
+ * widget-expanded-editors Plan v0.1 Phase 1A.
+ */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTodoStore } from '@adapters/stores/useTodoStore';
-import type { Todo } from '@domain/entities/Todo';
-import type { TodoPriority } from '@domain/entities/Todo';
+import { useToastStore } from '@adapters/components/common/Toast';
+import type { Todo, TodoPriority } from '@domain/entities/Todo';
 import { filterActive, sortTodos } from '@domain/rules/todoRules';
 import { PRIORITY_CONFIG } from '@domain/valueObjects/TodoPriority';
 
 const MAX_VISIBLE = 50;
 
-export interface TodoPopupProps {
-  open: boolean;
-  onClose: () => void;
-}
-
-export function TodoPopup({ open, onClose }: TodoPopupProps) {
+export function TodoEditor() {
   const { todos, addTodo, toggleTodo, deleteTodo, updateTodo } = useTodoStore();
   const inputRef = useRef<HTMLInputElement>(null);
   const [inputText, setInputText] = useState('');
@@ -26,20 +34,11 @@ export function TodoPopup({ open, onClose }: TodoPopupProps) {
   const incomplete = visible.filter((t) => !t.completed);
   const completed = visible.filter((t) => t.completed);
 
+  // 마운트 시 입력칸 자동 포커스 — WidgetModal의 focus trap 첫 노드와 일치
   useEffect(() => {
-    if (!open) return;
     const timer = setTimeout(() => inputRef.current?.focus(), 50);
     return () => clearTimeout(timer);
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [open, onClose]);
+  }, []);
 
   const handleAdd = async () => {
     const text = inputText.trim();
@@ -54,128 +53,97 @@ export function TodoPopup({ open, onClose }: TodoPopupProps) {
     }
   };
 
-  if (!open) return null;
-
   return (
-    <>
-      {/* 오버레이 */}
-      <div
-        className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
-        onClick={onClose}
-      />
-
-      {/* 모달 */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div
-          className="w-full max-w-[520px] max-h-[70vh] bg-sp-card rounded-2xl border border-sp-border shadow-2xl overflow-hidden flex flex-col"
-          onClick={(e) => e.stopPropagation()}
+    <div className="flex flex-col gap-3 min-h-0 flex-1">
+      {/* 입력 영역 */}
+      <div className="flex gap-2 shrink-0">
+        <input
+          ref={inputRef}
+          type="text"
+          value={inputText}
+          onChange={(e) => setInputText(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="새로운 할 일 추가... (Enter)"
+          className="flex-1 min-h-6 rounded-lg bg-sp-surface border border-sp-border px-3 py-2 text-sm text-sp-text placeholder:text-sp-muted focus:outline-none focus:border-sp-accent transition-colors"
+        />
+        <button
+          type="button"
+          onClick={() => void handleAdd()}
+          disabled={!inputText.trim()}
+          className="min-w-6 min-h-6 rounded-lg bg-sp-accent px-3 py-2 text-sm font-medium text-white hover:bg-sp-accent/80 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
-          {/* 헤더 */}
-          <div className="flex items-center justify-between px-5 py-4 border-b border-sp-border/60">
-            <h2 className="text-base font-bold text-sp-text flex items-center gap-2">
-              <span>✅</span>
-              <span>할 일 관리</span>
-            </h2>
-            <button
-              onClick={onClose}
-              className="flex h-7 w-7 items-center justify-center rounded-lg text-sp-muted hover:bg-sp-surface hover:text-sp-text transition-colors"
-              aria-label="닫기"
-            >
-              <svg viewBox="0 0 14 14" fill="none" className="h-3.5 w-3.5">
-                <path d="M1 1l12 12M13 1L1 13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-              </svg>
-            </button>
-          </div>
-
-          {/* 입력 영역 */}
-          <div className="px-5 py-3 border-b border-sp-border/40">
-            <div className="flex gap-2">
-              <input
-                ref={inputRef}
-                type="text"
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="새로운 할 일 추가... (Enter)"
-                className="flex-1 rounded-lg bg-sp-surface border border-sp-border px-3 py-2 text-sm text-sp-text placeholder:text-sp-muted focus:outline-none focus:border-sp-accent transition-colors"
-              />
-              <button
-                onClick={() => void handleAdd()}
-                disabled={!inputText.trim()}
-                className="rounded-lg bg-sp-accent px-3 py-2 text-sm font-medium text-white hover:bg-sp-accent/80 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              >
-                추가
-              </button>
-            </div>
-          </div>
-
-          {/* 할 일 목록 */}
-          <div className="flex-1 min-h-0 overflow-y-auto px-5 py-3">
-            {visible.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-10 gap-2">
-                <span className="text-2xl">📝</span>
-                <p className="text-sm text-sp-muted">바로 추가해보세요</p>
-              </div>
-            ) : (
-              <>
-                {/* 미완료 */}
-                <ul className="space-y-1">
-                  {incomplete.map((todo) => (
-                    <PopupTodoItem
-                      key={todo.id}
-                      todo={todo}
-                      onToggle={toggleTodo}
-                      onDelete={deleteTodo}
-                      onUpdate={updateTodo}
-                    />
-                  ))}
-                </ul>
-
-                {/* 구분선 + 완료 */}
-                {completed.length > 0 && incomplete.length > 0 && (
-                  <div className="my-3 flex items-center gap-2">
-                    <div className="flex-1 border-t border-sp-border/30" />
-                    <span className="text-xs text-sp-muted">완료됨</span>
-                    <div className="flex-1 border-t border-sp-border/30" />
-                  </div>
-                )}
-                {completed.length > 0 && incomplete.length === 0 && (
-                  <div className="mb-2">
-                    <span className="text-xs text-sp-muted">완료됨</span>
-                  </div>
-                )}
-                {completed.length > 0 && (
-                  <ul className="space-y-1">
-                    {completed.map((todo) => (
-                      <PopupTodoItem
-                        key={todo.id}
-                        todo={todo}
-                        onToggle={toggleTodo}
-                        onDelete={deleteTodo}
-                        onUpdate={updateTodo}
-                      />
-                    ))}
-                  </ul>
-                )}
-              </>
-            )}
-          </div>
-        </div>
+          추가
+        </button>
       </div>
-    </>
+
+      {/* 할 일 목록 */}
+      <div className="flex-1 min-h-0 overflow-y-auto widget-scroll -mr-2 pr-2">
+        {visible.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-10 gap-2">
+            <span className="text-2xl">📝</span>
+            <p className="text-sm text-sp-muted">바로 추가해보세요</p>
+          </div>
+        ) : (
+          <>
+            {/* 미완료 */}
+            <ul className="space-y-1">
+              {incomplete.map((todo) => (
+                <EditorTodoItem
+                  key={todo.id}
+                  todo={todo}
+                  onToggle={toggleTodo}
+                  onDelete={deleteTodo}
+                  onUpdate={updateTodo}
+                />
+              ))}
+            </ul>
+
+            {/* 구분선 + 완료 */}
+            {completed.length > 0 && incomplete.length > 0 && (
+              <div className="my-3 flex items-center gap-2">
+                <div className="flex-1 border-t border-sp-border/30" />
+                <span className="text-xs text-sp-muted">완료됨</span>
+                <div className="flex-1 border-t border-sp-border/30" />
+              </div>
+            )}
+            {completed.length > 0 && incomplete.length === 0 && (
+              <div className="mb-2">
+                <span className="text-xs text-sp-muted">완료됨</span>
+              </div>
+            )}
+            {completed.length > 0 && (
+              <ul className="space-y-1">
+                {completed.map((todo) => (
+                  <EditorTodoItem
+                    key={todo.id}
+                    todo={todo}
+                    onToggle={toggleTodo}
+                    onDelete={deleteTodo}
+                    onUpdate={updateTodo}
+                  />
+                ))}
+              </ul>
+            )}
+          </>
+        )}
+      </div>
+    </div>
   );
 }
 
-/* ─── 개별 할 일 아이템 ─── */
+/* ─── 개별 할 일 아이템 (인라인 편집) ─── */
 
-interface PopupTodoItemProps {
+interface EditorTodoItemProps {
   todo: Todo;
   onToggle: (id: string) => void;
   onDelete: (id: string) => void;
-  onUpdate: (id: string, changes: Partial<Pick<Todo, 'text' | 'priority' | 'dueDate' | 'time'>>) => void;
+  onUpdate: (
+    id: string,
+    changes: Partial<Pick<Todo, 'text' | 'priority' | 'dueDate' | 'time'>>,
+  ) => void;
 }
 
-function PopupTodoItem({ todo, onToggle, onDelete, onUpdate }: PopupTodoItemProps) {
+function EditorTodoItem({ todo, onToggle, onDelete, onUpdate }: EditorTodoItemProps) {
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState(todo.text);
   const [editPriority, setEditPriority] = useState<TodoPriority>(todo.priority ?? 'none');
@@ -209,14 +177,38 @@ function PopupTodoItem({ todo, onToggle, onDelete, onUpdate }: PopupTodoItemProp
     }
   };
 
+  const handleDelete = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    // 5초 Undo 토스트 (Plan §P1-5)
+    onDelete(todo.id);
+    useToastStore.getState().show(
+      '할 일 삭제됨',
+      'success',
+      {
+        label: '되돌리기',
+        onClick: () => {
+          // 삭제 직후 add 폴백 — useTodoStore의 addTodo 사용 불가(id 자동 생성).
+          // 안전한 폴백: 사용자가 삭제 직후 되돌리기 누르면 사용자 텍스트만 재추가.
+          // (note: 마감일/우선순위 등 메타는 사용자에게 다시 입력 안내 — Phase 1 단순화)
+          void useTodoStore.getState().addTodo(todo.text, todo.dueDate, todo.priority ?? 'none');
+        },
+      },
+      5000,
+    );
+  };
+
   return (
     <li className="rounded-lg border border-transparent hover:border-sp-border/30 hover:bg-sp-surface/30 transition-colors">
       {/* 메인 행 */}
       <div className="flex items-center gap-2 px-2 py-1.5">
         {/* 체크박스 */}
         <button
-          onClick={(e) => { e.stopPropagation(); onToggle(todo.id); }}
-          className="shrink-0"
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggle(todo.id);
+          }}
+          className="shrink-0 min-w-6 min-h-6 flex items-center justify-center"
           aria-label={todo.completed ? '완료 취소' : '완료'}
         >
           <div
@@ -228,7 +220,13 @@ function PopupTodoItem({ todo, onToggle, onDelete, onUpdate }: PopupTodoItemProp
           >
             {todo.completed && (
               <svg viewBox="0 0 10 8" fill="none" className="h-2.5 w-2.5 text-white">
-                <path d="M1 4L3.5 6.5L9 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                <path
+                  d="M1 4L3.5 6.5L9 1"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
               </svg>
             )}
           </div>
@@ -256,31 +254,37 @@ function PopupTodoItem({ todo, onToggle, onDelete, onUpdate }: PopupTodoItemProp
         </span>
 
         {/* 마감일 */}
-        {todo.dueDate && !todo.completed && (
-          <DueDateBadge dueDate={todo.dueDate} />
-        )}
+        {todo.dueDate && !todo.completed && <DueDateBadge dueDate={todo.dueDate} />}
 
         {/* 편집 버튼 */}
         <button
+          type="button"
           onClick={handleEditToggle}
-          className={`shrink-0 rounded px-1.5 py-0.5 text-xs transition-colors ${
+          className={`shrink-0 min-w-6 min-h-6 rounded px-1.5 py-0.5 text-xs transition-colors ${
             editing
               ? 'bg-sp-accent text-white'
               : 'text-sp-muted hover:text-sp-text hover:bg-sp-surface'
           }`}
-          aria-label="편집"
+          aria-label={editing ? '저장' : '편집'}
         >
           {editing ? '저장' : '···'}
         </button>
 
         {/* 삭제 버튼 */}
         <button
-          onClick={(e) => { e.stopPropagation(); onDelete(todo.id); }}
-          className="shrink-0 rounded p-1 text-sp-muted hover:text-red-400 hover:bg-red-400/10 transition-colors"
+          type="button"
+          onClick={handleDelete}
+          className="shrink-0 min-w-6 min-h-6 rounded p-1 text-sp-muted hover:text-red-400 hover:bg-red-400/10 transition-colors"
           aria-label="삭제"
         >
           <svg viewBox="0 0 14 16" fill="none" className="h-3.5 w-3.5">
-            <path d="M1 4h12M5 4V2h4v2M2 4l1 10h8l1-10" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+            <path
+              d="M1 4h12M5 4V2h4v2M2 4l1 10h8l1-10"
+              stroke="currentColor"
+              strokeWidth="1.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
           </svg>
         </button>
       </div>
@@ -293,8 +297,11 @@ function PopupTodoItem({ todo, onToggle, onDelete, onUpdate }: PopupTodoItemProp
             type="text"
             value={editText}
             onChange={(e) => setEditText(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') setEditing(false); }}
-            className="w-full rounded-lg bg-sp-bg border border-sp-border px-3 py-1.5 text-sm text-sp-text focus:outline-none focus:border-sp-accent transition-colors"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleSave();
+              if (e.key === 'Escape') setEditing(false);
+            }}
+            className="w-full min-h-6 rounded-lg bg-sp-bg border border-sp-border px-3 py-1.5 text-sm text-sp-text focus:outline-none focus:border-sp-accent transition-colors"
             placeholder="할 일 내용"
             autoFocus
           />
@@ -304,7 +311,7 @@ function PopupTodoItem({ todo, onToggle, onDelete, onUpdate }: PopupTodoItemProp
             <select
               value={editPriority}
               onChange={(e) => setEditPriority(e.target.value as TodoPriority)}
-              className="rounded-lg bg-sp-bg border border-sp-border px-2 py-1.5 text-xs text-sp-text focus:outline-none focus:border-sp-accent transition-colors"
+              className="min-h-6 rounded-lg bg-sp-bg border border-sp-border px-2 py-1.5 text-xs text-sp-text focus:outline-none focus:border-sp-accent transition-colors"
             >
               <option value="none">우선순위 없음</option>
               <option value="high">🔴 높음</option>
@@ -317,7 +324,7 @@ function PopupTodoItem({ todo, onToggle, onDelete, onUpdate }: PopupTodoItemProp
               type="date"
               value={editDueDate}
               onChange={(e) => setEditDueDate(e.target.value)}
-              className="rounded-lg bg-sp-bg border border-sp-border px-2 py-1.5 text-xs text-sp-text focus:outline-none focus:border-sp-accent transition-colors [color-scheme:dark]"
+              className="min-h-6 rounded-lg bg-sp-bg border border-sp-border px-2 py-1.5 text-xs text-sp-text focus:outline-none focus:border-sp-accent transition-colors [color-scheme:dark]"
               placeholder="마감일"
             />
 
@@ -326,7 +333,7 @@ function PopupTodoItem({ todo, onToggle, onDelete, onUpdate }: PopupTodoItemProp
               type="time"
               value={editTime}
               onChange={(e) => setEditTime(e.target.value)}
-              className="rounded-lg bg-sp-bg border border-sp-border px-2 py-1.5 text-xs text-sp-text focus:outline-none focus:border-sp-accent transition-colors [color-scheme:dark]"
+              className="min-h-6 rounded-lg bg-sp-bg border border-sp-border px-2 py-1.5 text-xs text-sp-text focus:outline-none focus:border-sp-accent transition-colors [color-scheme:dark]"
               placeholder="시간"
             />
           </div>
@@ -373,9 +380,7 @@ function DueDateBadge({ dueDate }: { dueDate: string }) {
     className = 'text-sp-muted';
   }
 
-  return (
-    <span className={`shrink-0 text-xs ${className}`}>{text}</span>
-  );
+  return <span className={`shrink-0 text-xs ${className}`}>{text}</span>;
 }
 
 function formatLocalDate(date: Date): string {

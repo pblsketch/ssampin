@@ -3,9 +3,16 @@ import { useConsultationStore } from '@adapters/stores/useConsultationStore';
 import { consultationSupabaseClient } from '@adapters/di/container';
 import type { SlotPublic } from '@infrastructure/supabase/ConsultationSupabaseClient';
 
-export function ConsultationWidget() {
+interface ConsultationWidgetProps {
+  /** false일 때(모달 확장 뷰) 전체 페이지 이동 링크 노출. 기본값 true(카드 뷰) */
+  isCompactMode?: boolean;
+}
+
+export function ConsultationWidget({ isCompactMode = true }: ConsultationWidgetProps) {
   const { schedules, loaded, load } = useConsultationStore();
-  const [slotData, setSlotData] = useState<Map<string, { total: number; booked: number }>>(new Map());
+  const [slotData, setSlotData] = useState<Map<string, { total: number; booked: number }>>(
+    new Map(),
+  );
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
   useEffect(() => {
@@ -17,13 +24,13 @@ export function ConsultationWidget() {
     const off = () => setIsOnline(false);
     window.addEventListener('online', on);
     window.addEventListener('offline', off);
-    return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off); };
+    return () => {
+      window.removeEventListener('online', on);
+      window.removeEventListener('offline', off);
+    };
   }, []);
 
-  const activeSchedules = useMemo(
-    () => schedules.filter((s) => !s.isArchived),
-    [schedules],
-  );
+  const activeSchedules = useMemo(() => schedules.filter((s) => !s.isArchived), [schedules]);
 
   // Fetch slot data for active schedules (once)
   useEffect(() => {
@@ -58,6 +65,22 @@ export function ConsultationWidget() {
       <div className="rounded-xl bg-sp-card p-4 flex flex-col items-center justify-center h-full gap-2 text-sp-muted">
         <span className="text-2xl">📅</span>
         <p className="text-xs">진행 중인 상담 없음</p>
+        {!isCompactMode && (
+          /* G004: 모달 확장 뷰 탈출구 — navigateTo: 'homeroom' */
+          <button
+            data-widget-escape-hatch="consultation"
+            className="text-caption text-sp-accent hover:text-sp-accent/80 font-medium transition-colors mt-1"
+            onClick={() => {
+              if (window.electronAPI?.navigateToPage) {
+                void window.electronAPI.navigateToPage('homeroom');
+              } else {
+                window.dispatchEvent(new CustomEvent('ssampin:navigate', { detail: 'homeroom' }));
+              }
+            }}
+          >
+            📄 전체 페이지로 보기
+          </button>
+        )}
       </div>
     );
   }
@@ -66,21 +89,36 @@ export function ConsultationWidget() {
     <div className="rounded-xl bg-sp-card p-4 h-full flex flex-col gap-3">
       {/* 헤더 */}
       <div className="flex items-center justify-between shrink-0">
-        <h3 className="text-sm font-bold text-sp-text flex items-center gap-1.5"><span>📅</span>상담 예약</h3>
+        <h3 className="text-sm font-bold text-sp-text flex items-center gap-1.5">
+          <span>📅</span>상담 예약
+        </h3>
+        {!isCompactMode && (
+          /* G004: 모달 확장 뷰 탈출구 — navigateTo: 'homeroom' */
+          <button
+            data-widget-escape-hatch="consultation"
+            className="text-caption text-sp-accent hover:text-sp-accent/80 font-medium transition-colors"
+            onClick={() => {
+              if (window.electronAPI?.navigateToPage) {
+                void window.electronAPI.navigateToPage('homeroom');
+              } else {
+                window.dispatchEvent(new CustomEvent('ssampin:navigate', { detail: 'homeroom' }));
+              }
+            }}
+          >
+            📄 전체 페이지로 보기
+          </button>
+        )}
       </div>
 
       {activeSchedules.slice(0, 3).map((schedule) => {
         const data = slotData.get(schedule.id);
-        const percentage = data && data.total > 0
-          ? Math.round((data.booked / data.total) * 100)
-          : 0;
+        const percentage =
+          data && data.total > 0 ? Math.round((data.booked / data.total) * 100) : 0;
 
         return (
           <div key={schedule.id} className="flex flex-col gap-1.5">
             <div className="flex items-center gap-2">
-              <span className="text-xs">
-                {schedule.type === 'parent' ? '👨‍👩‍👧' : '🙋'}
-              </span>
+              <span className="text-xs">{schedule.type === 'parent' ? '👨‍👩‍👧' : '🙋'}</span>
               <span className="text-xs text-sp-text font-medium truncate flex-1">
                 {schedule.title}
               </span>
@@ -107,14 +145,10 @@ export function ConsultationWidget() {
       })}
 
       {activeSchedules.length > 3 && (
-        <p className="text-caption text-sp-muted text-right">
-          외 {activeSchedules.length - 3}건
-        </p>
+        <p className="text-caption text-sp-muted text-right">외 {activeSchedules.length - 3}건</p>
       )}
 
-      <p className="text-caption text-sp-muted mt-auto">
-        진행 중 {activeSchedules.length}건
-      </p>
+      <p className="text-caption text-sp-muted mt-auto">진행 중 {activeSchedules.length}건</p>
     </div>
   );
 }

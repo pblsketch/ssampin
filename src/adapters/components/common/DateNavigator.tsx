@@ -1,7 +1,13 @@
 import { useCallback } from 'react';
 
 const DAY_KO: Record<number, string> = {
-  0: '일', 1: '월', 2: '화', 3: '수', 4: '목', 5: '금', 6: '토',
+  0: '일',
+  1: '월',
+  2: '화',
+  3: '수',
+  4: '목',
+  5: '금',
+  6: '토',
 };
 
 function isSameDay(a: Date, b: Date): boolean {
@@ -80,7 +86,7 @@ export function DateNavigator({ date, onDateChange, className = '' }: DateNaviga
         onClick={goPrev}
         title="이전 날"
         className="
-          w-5 h-5 flex items-center justify-center rounded
+          min-w-6 min-h-6 w-6 h-6 flex items-center justify-center rounded
           text-sp-muted hover:text-sp-text hover:bg-sp-surface
           transition-colors duration-150
         "
@@ -93,11 +99,14 @@ export function DateNavigator({ date, onDateChange, className = '' }: DateNaviga
       <span
         className={`
           min-w-[72px] text-center text-xs font-medium select-none
-          ${isToday
-            ? 'text-sp-text'
-            : isWeekend
-              ? isFuture ? 'text-sp-muted/70' : 'text-sp-muted/70'
-              : 'text-sp-muted'
+          ${
+            isToday
+              ? 'text-sp-text'
+              : isWeekend
+                ? isFuture
+                  ? 'text-sp-muted/70'
+                  : 'text-sp-muted/70'
+                : 'text-sp-muted'
           }
         `}
       >
@@ -106,9 +115,7 @@ export function DateNavigator({ date, onDateChange, className = '' }: DateNaviga
             오늘 <span className="text-sp-muted font-normal">({DAY_KO[dayOfWeek]})</span>
           </span>
         ) : (
-          <span className={isWeekend ? 'text-sp-muted/60' : ''}>
-            {formatDate(date)}
-          </span>
+          <span className={isWeekend ? 'text-sp-muted/60' : ''}>{formatDate(date)}</span>
         )}
       </span>
 
@@ -117,7 +124,7 @@ export function DateNavigator({ date, onDateChange, className = '' }: DateNaviga
         onClick={goNext}
         title="다음 날"
         className="
-          w-5 h-5 flex items-center justify-center rounded
+          min-w-6 min-h-6 w-6 h-6 flex items-center justify-center rounded
           text-sp-muted hover:text-sp-text hover:bg-sp-surface
           transition-colors duration-150
         "

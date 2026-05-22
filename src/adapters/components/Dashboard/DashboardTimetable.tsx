@@ -5,7 +5,12 @@ import { getDayOfWeek, getCurrentPeriod } from '@domain/rules/periodRules';
 import type { TeacherPeriod, ClassPeriod } from '@domain/entities/Timetable';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import type { SubjectColorMap } from '@domain/valueObjects/SubjectColor';
-import { getSubjectTextColor, getSubjectDotColor, getCellStyle, getCellDotColor } from '@adapters/presenters/timetablePresenter';
+import {
+  getSubjectTextColor,
+  getSubjectDotColor,
+  getCellStyle,
+  getCellDotColor,
+} from '@adapters/presenters/timetablePresenter';
 import { toLocalDateString } from '@shared/utils/localDate';
 import { DateNavigator, isSameDay } from '@adapters/components/common/DateNavigator';
 
@@ -25,13 +30,19 @@ export function DashboardTimetable() {
     try {
       const saved = localStorage.getItem('ssampin:timetable-tab');
       if (saved === 'class' || saved === 'teacher') return saved;
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     return 'teacher';
   });
 
   const handleTabChange = (newTab: TabType) => {
     setTab(newTab);
-    try { localStorage.setItem('ssampin:timetable-tab', newTab); } catch { /* ignore */ }
+    try {
+      localStorage.setItem('ssampin:timetable-tab', newTab);
+    } catch {
+      /* ignore */
+    }
   };
   const [now, setNow] = useState(new Date());
   // 날짜 탐색: 기본값은 오늘, 사용자가 이동하면 해당 날짜 시간표 표시
@@ -95,7 +106,8 @@ export function DashboardTimetable() {
     [dayOfWeek, isViewingToday, settings.periodTimes, now],
   );
 
-  const colorBy = settings.timetableColorBy ?? (settings.schoolLevel === 'elementary' ? 'subject' : 'classroom');
+  const colorBy =
+    settings.timetableColorBy ?? (settings.schoolLevel === 'elementary' ? 'subject' : 'classroom');
   const classroomColors = settings.classroomColors;
   const isWeekend = dayOfWeek === null;
 
@@ -192,10 +204,8 @@ function TabButton({ active, onClick, label }: TabButtonProps) {
   return (
     <button
       onClick={onClick}
-      className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
-        active
-          ? 'bg-sp-accent text-sp-accent-fg'
-          : 'text-sp-muted hover:text-sp-text'
+      className={`min-w-6 min-h-6 rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+        active ? 'bg-sp-accent text-sp-accent-fg' : 'text-sp-muted hover:text-sp-text'
       }`}
     >
       {label}
@@ -228,11 +238,7 @@ function ClassTimetableList({
   subjectColors,
 }: ClassTimetableListProps) {
   if (periods.length === 0) {
-    return (
-      <p className="py-4 text-center text-sm text-sp-muted">
-        시간표가 등록되지 않았습니다
-      </p>
-    );
+    return <p className="py-4 text-center text-sm text-sp-muted">시간표가 등록되지 않았습니다</p>;
   }
 
   return (
@@ -254,21 +260,17 @@ function ClassTimetableList({
                 : 'hover:bg-sp-surface/50'
             }`}
           >
-            <span className={`w-12 text-xs ${isCurrent ? 'text-sp-highlight font-bold' : 'text-sp-muted font-medium'}`}>
+            <span
+              className={`w-12 text-xs ${isCurrent ? 'text-sp-highlight font-bold' : 'text-sp-muted font-medium'}`}
+            >
               {period}교시
             </span>
             {isCurrent && (
               <span className="w-2 h-2 rounded-full bg-sp-highlight animate-pulse mr-1.5 shrink-0" />
             )}
             <span className={`mr-1.5 h-2 w-2 rounded-full ${dotClass}`} />
-            <span className={`flex-1 text-sm font-medium ${colorClass}`}>
-              {subject}
-            </span>
-            {cp.teacher && (
-              <span className="text-xs text-sp-muted mr-1">
-                {cp.teacher}
-              </span>
-            )}
+            <span className={`flex-1 text-sm font-medium ${colorClass}`}>{subject}</span>
+            {cp.teacher && <span className="text-xs text-sp-muted mr-1">{cp.teacher}</span>}
             {pt && (
               <span className="text-xs text-sp-muted">
                 {pt.start}~{pt.end}
@@ -301,11 +303,7 @@ function TeacherTimetableList({
   colorBy,
 }: TeacherTimetableListProps) {
   if (periods.length === 0) {
-    return (
-      <p className="py-4 text-center text-sm text-sp-muted">
-        시간표가 등록되지 않았습니다
-      </p>
-    );
+    return <p className="py-4 text-center text-sm text-sp-muted">시간표가 등록되지 않았습니다</p>;
   }
 
   return (
@@ -315,8 +313,12 @@ function TeacherTimetableList({
         const pt = periodTimeMap.get(period);
         const isCurrent = currentPeriod === period;
         const subject = tp?.subject ?? '';
-        const cellStyle = tp ? getCellStyle(subject, tp.classroom, colorBy, subjectColors, classroomColors) : null;
-        const dotClass = tp ? getCellDotColor(subject, tp.classroom, colorBy, subjectColors, classroomColors) : 'bg-sp-muted';
+        const cellStyle = tp
+          ? getCellStyle(subject, tp.classroom, colorBy, subjectColors, classroomColors)
+          : null;
+        const dotClass = tp
+          ? getCellDotColor(subject, tp.classroom, colorBy, subjectColors, classroomColors)
+          : 'bg-sp-muted';
 
         return (
           <div
@@ -327,7 +329,9 @@ function TeacherTimetableList({
                 : 'hover:bg-sp-surface/50'
             }`}
           >
-            <span className={`w-12 text-xs ${isCurrent ? 'text-sp-highlight font-bold' : 'text-sp-muted font-medium'}`}>
+            <span
+              className={`w-12 text-xs ${isCurrent ? 'text-sp-highlight font-bold' : 'text-sp-muted font-medium'}`}
+            >
               {period}교시
             </span>
             {isCurrent && (
@@ -339,9 +343,7 @@ function TeacherTimetableList({
                 <span className={`flex-1 text-sm font-medium ${cellStyle?.text ?? 'text-sp-text'}`}>
                   {tp.subject}
                 </span>
-                <span className="text-xs text-sp-muted">
-                  {tp.classroom}
-                </span>
+                <span className="text-xs text-sp-muted">{tp.classroom}</span>
               </>
             ) : (
               <span className="flex-1 text-xs text-sp-muted">공강</span>

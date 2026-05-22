@@ -13,7 +13,13 @@ import {
 } from '@domain/entities/DashboardTheme';
 import type { ThemeColors, PresetThemeId } from '@domain/entities/DashboardTheme';
 import { FONT_PRESETS } from '@domain/entities/FontPreset';
-import { StyleSection, SliderRow, ToggleRow, SelectRow, ColorSwatchRow } from '@adapters/components/shared/StyleControls';
+import {
+  StyleSection,
+  SliderRow,
+  ToggleRow,
+  SelectRow,
+  ColorSwatchRow,
+} from '@adapters/components/shared/StyleControls';
 import { BackgroundImageSection } from '@adapters/components/shared/BackgroundImageSection';
 
 type PanelTab = 'widgets' | 'style';
@@ -22,6 +28,8 @@ interface WidgetSettingsPanelProps {
   onClose: () => void;
   /** true면 스타일 탭만 표시 (위젯 구성 탭 숨김) */
   styleOnly?: boolean;
+  /** 초기 활성 탭. 지정 시 styleOnly보다 우선. 미지정 시 styleOnly=true면 'style', 그 외 'widgets' */
+  initialTab?: PanelTab;
 }
 
 /**
@@ -29,8 +37,14 @@ interface WidgetSettingsPanelProps {
  * 2탭 구조: 위젯 구성 / 스타일
  * styleOnly=true 면 스타일 탭만 표시
  */
-export function WidgetSettingsPanel({ onClose, styleOnly = false }: WidgetSettingsPanelProps) {
-  const [activeTab, setActiveTab] = useState<PanelTab>(styleOnly ? 'style' : 'widgets');
+export function WidgetSettingsPanel({
+  onClose,
+  styleOnly = false,
+  initialTab,
+}: WidgetSettingsPanelProps) {
+  const [activeTab, setActiveTab] = useState<PanelTab>(
+    initialTab ?? (styleOnly ? 'style' : 'widgets'),
+  );
 
   return (
     <aside className="w-64 shrink-0 border-l-2 border-sp-accent/30 bg-sp-bg flex flex-col animate-slide-in-right shadow-[-4px_0_16px_rgba(0,0,0,0.3)]">
@@ -38,9 +52,19 @@ export function WidgetSettingsPanel({ onClose, styleOnly = false }: WidgetSettin
       <div className="flex items-center justify-between border-b border-sp-border/50 px-4 py-3 bg-sp-accent/5">
         <h2 className="text-sm font-bold text-sp-text flex items-center gap-2">
           {styleOnly ? (
-            <span className="material-symbols-outlined text-sp-accent" style={{ fontSize: 14 }}>palette</span>
+            <span className="material-symbols-outlined text-sp-accent" style={{ fontSize: 14 }}>
+              palette
+            </span>
           ) : (
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-sp-accent">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              className="text-sp-accent"
+            >
               <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
               <circle cx="12" cy="12" r="3" />
             </svg>
@@ -52,7 +76,14 @@ export function WidgetSettingsPanel({ onClose, styleOnly = false }: WidgetSettin
           className="rounded-lg p-1 text-sp-muted hover:text-sp-text hover:bg-sp-card transition-colors"
           title="닫기"
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
             <line x1="18" y1="6" x2="6" y2="18" />
             <line x1="6" y1="6" x2="18" y2="18" />
           </svg>
@@ -104,7 +135,7 @@ function WidgetListTab() {
     for (const def of WIDGET_DEFINITIONS) {
       const list = map.get(def.category);
       if (list) {
-        (list as typeof WIDGET_DEFINITIONS[number][]).push(def);
+        (list as (typeof WIDGET_DEFINITIONS)[number][]).push(def);
       }
     }
     return map;
@@ -117,7 +148,9 @@ function WidgetListTab() {
 
   const sizeMap = useMemo(() => {
     if (!config) return new Map<string, { colSpan: number; rowSpan: number }>();
-    return new Map(config.widgets.map((w) => [w.widgetId, { colSpan: w.colSpan, rowSpan: w.rowSpan }]));
+    return new Map(
+      config.widgets.map((w) => [w.widgetId, { colSpan: w.colSpan, rowSpan: w.rowSpan }]),
+    );
   }, [config]);
 
   return (
@@ -172,7 +205,6 @@ function WidgetListTab() {
           </Fragment>
         );
       })}
-
     </div>
   );
 }
@@ -188,7 +220,8 @@ function StyleTab() {
   const themeColors: ThemeColors = useMemo(() => {
     const pid = settings.dashboardTheme?.presetId;
     if (pid && pid !== 'custom') return getPresetTheme(pid as PresetThemeId).colors;
-    if (pid === 'custom' && settings.dashboardTheme?.customColors) return settings.dashboardTheme.customColors;
+    if (pid === 'custom' && settings.dashboardTheme?.customColors)
+      return settings.dashboardTheme.customColors;
     return PRESET_THEMES[0]!.colors;
   }, [settings.dashboardTheme]);
 
@@ -201,57 +234,92 @@ function StyleTab() {
   return (
     <div className="space-y-5 px-4 py-3">
       <StyleSection title="투명도" compact>
-        <SliderRow label="배경 투명도" min={0} max={100} step={5} compact
-          value={Math.round(settings.widget.opacity * 100)} unit="%"
-          onChange={(v) => void updateSettings({ widget: { ...settings.widget, opacity: v / 100 } })} />
-        <SliderRow label="카드 투명도" min={0} max={100} step={5} compact
-          value={Math.round((settings.widget.cardOpacity ?? 1) * 100)} unit="%"
-          onChange={(v) => void updateSettings({ widget: { ...settings.widget, cardOpacity: v / 100 } })} />
+        <SliderRow
+          label="배경 투명도"
+          min={0}
+          max={100}
+          step={5}
+          compact
+          value={Math.round(settings.widget.opacity * 100)}
+          unit="%"
+          onChange={(v) =>
+            void updateSettings({ widget: { ...settings.widget, opacity: v / 100 } })
+          }
+        />
+        <SliderRow
+          label="카드 투명도"
+          min={0}
+          max={100}
+          step={5}
+          compact
+          value={Math.round((settings.widget.cardOpacity ?? 1) * 100)}
+          unit="%"
+          onChange={(v) =>
+            void updateSettings({ widget: { ...settings.widget, cardOpacity: v / 100 } })
+          }
+        />
       </StyleSection>
 
       <StyleSection title="위젯 창" compact>
-        <ToggleRow label="창 외곽선 표시" checked={!ws.hideWindowBorder} compact
-          onChange={(v) => updateStyle({ hideWindowBorder: !v })} />
+        <ToggleRow
+          label="창 외곽선 표시"
+          checked={!ws.hideWindowBorder}
+          compact
+          onChange={(v) => updateStyle({ hideWindowBorder: !v })}
+        />
       </StyleSection>
 
       <StyleSection title="테마" compact>
         <div className="grid grid-cols-3 gap-1.5">
           {(() => {
-            const currentPresetId = settings.dashboardTheme?.presetId
-              ?? (settings.theme === 'light' ? 'light' : settings.theme === 'dark' ? 'dark' : undefined);
+            const currentPresetId =
+              settings.dashboardTheme?.presetId ??
+              (settings.theme === 'light'
+                ? 'light'
+                : settings.theme === 'dark'
+                  ? 'dark'
+                  : undefined);
             return PRESET_THEMES.map((t) => {
               const isSelected = currentPresetId === t.id;
               return (
-              <button
-                key={t.id}
-                onClick={() => {
-                  const colorReset = { bgColor: null, cardColor: null, accentColor: null, textColor: null } as const;
-                  const baseStyle = settings.widgetStyle
-                    ? { ...settings.widgetStyle, ...colorReset }
-                    : undefined;
-                  const mergedStyle = t.styleHint
-                    ? { ...(baseStyle ?? DEFAULT_WIDGET_STYLE), ...t.styleHint, ...colorReset }
-                    : baseStyle;
-                  void updateSettings({
-                    dashboardTheme: { presetId: t.id },
-                    widgetStyle: mergedStyle,
-                  });
-                }}
-                className={`rounded-lg p-1.5 text-center text-caption border transition-all ${
-                  isSelected
-                    ? 'border-sp-accent ring-1 ring-sp-accent scale-105'
-                    : 'border-sp-border/50 hover:border-sp-border'
-                }`}
-                style={{ background: t.colors.bg, color: t.colors.text }}
-              >
-                <div className="flex gap-0.5 justify-center mb-1">
-                  <div className="w-2 h-2 rounded-full" style={{ background: t.colors.card }} />
-                  <div className="w-2 h-2 rounded-full" style={{ background: t.colors.accent }} />
-                  <div className="w-2 h-2 rounded-full" style={{ background: t.colors.highlight }} />
-                </div>
-                {t.name}
-              </button>
-            );
+                <button
+                  key={t.id}
+                  onClick={() => {
+                    const colorReset = {
+                      bgColor: null,
+                      cardColor: null,
+                      accentColor: null,
+                      textColor: null,
+                    } as const;
+                    const baseStyle = settings.widgetStyle
+                      ? { ...settings.widgetStyle, ...colorReset }
+                      : undefined;
+                    const mergedStyle = t.styleHint
+                      ? { ...(baseStyle ?? DEFAULT_WIDGET_STYLE), ...t.styleHint, ...colorReset }
+                      : baseStyle;
+                    void updateSettings({
+                      dashboardTheme: { presetId: t.id },
+                      widgetStyle: mergedStyle,
+                    });
+                  }}
+                  className={`rounded-lg p-1.5 text-center text-caption border transition-all ${
+                    isSelected
+                      ? 'border-sp-accent ring-1 ring-sp-accent scale-105'
+                      : 'border-sp-border/50 hover:border-sp-border'
+                  }`}
+                  style={{ background: t.colors.bg, color: t.colors.text }}
+                >
+                  <div className="flex gap-0.5 justify-center mb-1">
+                    <div className="w-2 h-2 rounded-full" style={{ background: t.colors.card }} />
+                    <div className="w-2 h-2 rounded-full" style={{ background: t.colors.accent }} />
+                    <div
+                      className="w-2 h-2 rounded-full"
+                      style={{ background: t.colors.highlight }}
+                    />
+                  </div>
+                  {t.name}
+                </button>
+              );
             });
           })()}
         </div>
@@ -259,18 +327,42 @@ function StyleTab() {
 
       <StyleSection title="색상 조정" compact>
         <div className="space-y-3">
-          <ColorSwatchRow label="배경" value={ws.bgColor} themeDefault={themeColors.bg} compact
-            swatches={COLOR_SWATCHES['bg'] ?? []} onChange={(v) => updateStyle({ bgColor: v })}
-            onReset={() => updateStyle({ bgColor: null })} />
-          <ColorSwatchRow label="카드" value={ws.cardColor} themeDefault={themeColors.card} compact
-            swatches={COLOR_SWATCHES['card'] ?? []} onChange={(v) => updateStyle({ cardColor: v })}
-            onReset={() => updateStyle({ cardColor: null })} />
-          <ColorSwatchRow label="강조" value={ws.accentColor} themeDefault={themeColors.accent} compact
-            swatches={COLOR_SWATCHES['accent'] ?? []} onChange={(v) => updateStyle({ accentColor: v })}
-            onReset={() => updateStyle({ accentColor: null })} />
-          <ColorSwatchRow label="텍스트" value={ws.textColor} themeDefault={themeColors.text} compact
-            swatches={COLOR_SWATCHES['text'] ?? []} onChange={(v) => updateStyle({ textColor: v })}
-            onReset={() => updateStyle({ textColor: null })} />
+          <ColorSwatchRow
+            label="배경"
+            value={ws.bgColor}
+            themeDefault={themeColors.bg}
+            compact
+            swatches={COLOR_SWATCHES['bg'] ?? []}
+            onChange={(v) => updateStyle({ bgColor: v })}
+            onReset={() => updateStyle({ bgColor: null })}
+          />
+          <ColorSwatchRow
+            label="카드"
+            value={ws.cardColor}
+            themeDefault={themeColors.card}
+            compact
+            swatches={COLOR_SWATCHES['card'] ?? []}
+            onChange={(v) => updateStyle({ cardColor: v })}
+            onReset={() => updateStyle({ cardColor: null })}
+          />
+          <ColorSwatchRow
+            label="강조"
+            value={ws.accentColor}
+            themeDefault={themeColors.accent}
+            compact
+            swatches={COLOR_SWATCHES['accent'] ?? []}
+            onChange={(v) => updateStyle({ accentColor: v })}
+            onReset={() => updateStyle({ accentColor: null })}
+          />
+          <ColorSwatchRow
+            label="텍스트"
+            value={ws.textColor}
+            themeDefault={themeColors.text}
+            compact
+            swatches={COLOR_SWATCHES['text'] ?? []}
+            onChange={(v) => updateStyle({ textColor: v })}
+            onReset={() => updateStyle({ textColor: null })}
+          />
         </div>
       </StyleSection>
 
@@ -284,18 +376,44 @@ function StyleTab() {
       </StyleSection>
 
       <StyleSection title="카드 모양" compact>
-        <SliderRow label="둥글기" min={0} max={24} step={2} value={ws.borderRadius} unit="px" compact
-          onChange={(v) => updateStyle({ borderRadius: v })} />
-        <SliderRow label="간격" min={4} max={32} step={2} value={ws.cardGap} unit="px" compact
-          onChange={(v) => updateStyle({ cardGap: v })} />
-        <SliderRow label="행 높이" min={40} max={100} step={5} value={ws.gridRowHeight ?? 80} unit="px" compact
-          onChange={(v) => updateStyle({ gridRowHeight: v })} />
+        <SliderRow
+          label="둥글기"
+          min={0}
+          max={24}
+          step={2}
+          value={ws.borderRadius}
+          unit="px"
+          compact
+          onChange={(v) => updateStyle({ borderRadius: v })}
+        />
+        <SliderRow
+          label="간격"
+          min={4}
+          max={32}
+          step={2}
+          value={ws.cardGap}
+          unit="px"
+          compact
+          onChange={(v) => updateStyle({ cardGap: v })}
+        />
+        <SliderRow
+          label="행 높이"
+          min={40}
+          max={100}
+          step={5}
+          value={ws.gridRowHeight ?? 80}
+          unit="px"
+          compact
+          onChange={(v) => updateStyle({ gridRowHeight: v })}
+        />
         <div className="flex gap-1 mt-0.5">
-          {([
-            { label: '촘촘', value: 50 },
-            { label: '기본', value: 80 },
-            { label: '넓게', value: 100 },
-          ] as const).map((p) => (
+          {(
+            [
+              { label: '촘촘', value: 50 },
+              { label: '기본', value: 80 },
+              { label: '넓게', value: 100 },
+            ] as const
+          ).map((p) => (
             <button
               key={p.label}
               onClick={() => updateStyle({ gridRowHeight: p.value })}
@@ -309,41 +427,76 @@ function StyleTab() {
             </button>
           ))}
         </div>
-        <ToggleRow label="테두리" checked={ws.showBorder} compact
-          onChange={(v) => updateStyle({ showBorder: v })} />
+        <ToggleRow
+          label="테두리"
+          checked={ws.showBorder}
+          compact
+          onChange={(v) => updateStyle({ showBorder: v })}
+        />
         {ws.showBorder && (
           <>
-            <SliderRow label="두께" min={1} max={4} step={1} value={ws.borderWidth} unit="px" compact
-              onChange={(v) => updateStyle({ borderWidth: v })} />
-            <ColorSwatchRow label="테두리 색상" value={ws.borderColor} themeDefault={themeColors.border} compact
-              swatches={COLOR_SWATCHES['border'] ?? []} onChange={(v) => updateStyle({ borderColor: v })}
-              onReset={() => updateStyle({ borderColor: null })} />
+            <SliderRow
+              label="두께"
+              min={1}
+              max={4}
+              step={1}
+              value={ws.borderWidth}
+              unit="px"
+              compact
+              onChange={(v) => updateStyle({ borderWidth: v })}
+            />
+            <ColorSwatchRow
+              label="테두리 색상"
+              value={ws.borderColor}
+              themeDefault={themeColors.border}
+              compact
+              swatches={COLOR_SWATCHES['border'] ?? []}
+              onChange={(v) => updateStyle({ borderColor: v })}
+              onReset={() => updateStyle({ borderColor: null })}
+            />
           </>
         )}
-        <SelectRow label="그림자" value={ws.shadow} compact
+        <SelectRow
+          label="그림자"
+          value={ws.shadow}
+          compact
           options={[
             { value: 'none', label: '없음' },
             { value: 'sm', label: '약간' },
             { value: 'md', label: '보통' },
             { value: 'lg', label: '강하게' },
           ]}
-          onChange={(v) => updateStyle({ shadow: v as ShadowLevel })} />
+          onChange={(v) => updateStyle({ shadow: v as ShadowLevel })}
+        />
       </StyleSection>
 
       <StyleSection title="텍스트" compact>
-        <SelectRow label="폰트" value={ws.fontFamily} compact
+        <SelectRow
+          label="폰트"
+          value={ws.fontFamily}
+          compact
           options={FONT_PRESETS.map((f) => ({ value: f.id, label: f.name }))}
-          onChange={(v) => updateStyle({ fontFamily: v as FontFamily })} />
-        <SliderRow label="글씨 크기" min={80} max={150} step={5} compact
-          value={Math.round((settings.dashboardFontScale ?? 1.0) * 100)} unit="%"
-          onChange={(v) => void updateSettings({ dashboardFontScale: v / 100 })} />
+          onChange={(v) => updateStyle({ fontFamily: v as FontFamily })}
+        />
+        <SliderRow
+          label="글씨 크기"
+          min={80}
+          max={150}
+          step={5}
+          compact
+          value={Math.round((settings.dashboardFontScale ?? 1.0) * 100)}
+          unit="%"
+          onChange={(v) => void updateSettings({ dashboardFontScale: v / 100 })}
+        />
         <div className="flex gap-1 mt-1">
-          {([
-            { label: '작게', value: 0.85 },
-            { label: '기본', value: 1.0 },
-            { label: '크게', value: 1.2 },
-            { label: '최대', value: 1.4 },
-          ] as const).map((p) => (
+          {(
+            [
+              { label: '작게', value: 0.85 },
+              { label: '기본', value: 1.0 },
+              { label: '크게', value: 1.2 },
+              { label: '최대', value: 1.4 },
+            ] as const
+          ).map((p) => (
             <button
               key={p.label}
               onClick={() => void updateSettings({ dashboardFontScale: p.value })}
@@ -379,8 +532,10 @@ function PanelFooter({ activeTab }: { activeTab: PanelTab }) {
 
   return (
     <div className="border-t border-sp-border/50 px-4 py-2.5">
-      <button onClick={handleReset}
-        className="w-full rounded-lg border border-sp-border/50 px-3 py-1.5 text-xs text-sp-muted hover:text-sp-text hover:border-sp-accent/30 transition-colors">
+      <button
+        onClick={handleReset}
+        className="w-full rounded-lg border border-sp-border/50 px-3 py-1.5 text-xs text-sp-muted hover:text-sp-text hover:border-sp-accent/30 transition-colors"
+      >
         {activeTab === 'widgets' ? '기본 프리셋으로 초기화' : '스타일 초기화'}
       </button>
     </div>

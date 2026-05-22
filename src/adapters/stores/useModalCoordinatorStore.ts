@@ -22,6 +22,7 @@ export type ModalPriority =
   | 'DRIVE_CONFLICT'
   | 'OAUTH_FLOW'
   | 'NORMAL_UPDATE'
+  | 'WIDGET_EXPAND'
   | 'EVENT_ALERT'
   | 'SHARE_PROMPT';
 
@@ -34,6 +35,7 @@ export type ModalPriority =
  * DRIVE_CONFLICT: 클라우드 충돌 — resolve 전 다른 모달 차단
  * OAUTH_FLOW: OAuth 흐름 — 사용자 결정 (2026-05-21) 도중 알림 모두 대기
  * NORMAL_UPDATE: 일반 업데이트 안내
+ * WIDGET_EXPAND: 위젯 확장 모달 — 업데이트 안내와 행사 알림 사이 (4.5)
  * EVENT_ALERT: 오늘 행사 알림
  * SHARE_PROMPT: 충성 사용자 공유 권유 — 마케팅 성격, 가장 후순위
  */
@@ -43,6 +45,7 @@ export const PRIORITY_ORDER: Record<ModalPriority, number> = {
   DRIVE_CONFLICT: 2,
   OAUTH_FLOW: 3,
   NORMAL_UPDATE: 4,
+  WIDGET_EXPAND: 4.5,
   EVENT_ALERT: 5,
   SHARE_PROMPT: 6,
 };
@@ -55,12 +58,22 @@ export interface ModalEntry {
   readonly isOpen: boolean;
   /** 마운트 시각 — 같은 priority 안에서 LIFO tiebreaker (높은 값이 우선) */
   readonly registeredAt: number;
+  /**
+   * 이 entry가 head를 빼앗겼을 때 호출되는 콜백.
+   * register로 새 entry가 head가 될 때만 발화 — unregister 시에는 절대 발화하지 않음.
+   * (unregister → onPreempt → onClose → unregister 무한 루프 방지)
+   */
+  readonly onPreempt?: (reason: 'system_modal' | 'higher_priority') => void;
 }
 
 export interface ModalCoordinatorState {
   readonly entries: readonly ModalEntry[];
   /** 마운트 시 1회 호출. id 반환 → cleanup에서 unregister에 전달 */
-  register: (priority: ModalPriority, isOpen: boolean) => string;
+  register: (
+    priority: ModalPriority,
+    isOpen: boolean,
+    options?: { onPreempt?: ModalEntry['onPreempt'] },
+  ) => string;
   unregister: (id: string) => void;
   /** isOpen 상태 갱신 (컴포넌트의 showPopup/status 등 변화 반영) */
   updateIsOpen: (id: string, isOpen: boolean) => void;
@@ -95,7 +108,7 @@ export function selectHead(entries: readonly ModalEntry[]): string | null {
 
 export const useModalCoordinatorStore = create<ModalCoordinatorState>((set, get) => ({
   entries: [],
-  register: (priority, isOpen) => {
+  register: (priority, isOpen, options) => {
     const id = generateUUID();
     // performance.now()는 페이지 로드 후 monotonically increasing — Date.now()와 달리
     // 시스템 시계 변경에 영향 받지 않아 LIFO tiebreaker로 안전
@@ -103,9 +116,32 @@ export const useModalCoordinatorStore = create<ModalCoordinatorState>((set, get)
       typeof performance !== 'undefined' && typeof performance.now === 'function'
         ? performance.now()
         : Date.now();
+
+    // onPreempt는 register로 인한 head 전환 시에만 발화한다.
+    // unregister 시에는 절대 발화하지 않음 — 무한 루프 방지:
+    //   onPreempt → onClose → unregister → onPreempt → ...
+    const prevHead = selectHead(get().entries);
+
     set((s) => ({
-      entries: [...s.entries, { id, priority, isOpen, registeredAt }],
+      entries: [
+        ...s.entries,
+        { id, priority, isOpen, registeredAt, onPreempt: options?.onPreempt },
+      ],
     }));
+
+    const newHead = selectHead(get().entries);
+    if (prevHead && prevHead !== newHead) {
+      const prevEntry = get().entries.find((e) => e.id === prevHead);
+      if (prevEntry?.onPreempt) {
+        const newEntry = newHead ? get().entries.find((e) => e.id === newHead) : null;
+        const reason: 'system_modal' | 'higher_priority' =
+          newEntry && PRIORITY_ORDER[newEntry.priority] < PRIORITY_ORDER[prevEntry.priority]
+            ? 'higher_priority'
+            : 'system_modal';
+        prevEntry.onPreempt(reason);
+      }
+    }
+
     return id;
   },
   unregister: (id) => {

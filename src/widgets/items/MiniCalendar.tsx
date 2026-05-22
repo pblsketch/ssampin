@@ -2,8 +2,22 @@ import { useState, useMemo, useEffect } from 'react';
 import { useEventsStore } from '@adapters/stores/useEventsStore';
 import { getCategoryInfo, getCategoryColors } from '@adapters/presenters/categoryPresenter';
 import { getHolidayMapForMonth } from '@domain/rules/holidayRules';
+import { MiniCalendarExpanded } from './MiniCalendarExpanded';
 
-export function MiniCalendar() {
+interface MiniCalendarProps {
+  /** false 일 때(모달 확장 뷰) 큰 달력 + 일정 CRUD 패널 렌더. 기본 true(작은 카드 뷰). */
+  isCompactMode?: boolean;
+}
+
+export function MiniCalendar({ isCompactMode = true }: MiniCalendarProps = {}) {
+  // widget-expanded-editors Phase 2A: 모달 모드는 별도 expanded 컴포넌트에 위임
+  if (!isCompactMode) {
+    return <MiniCalendarExpanded />;
+  }
+  return <MiniCalendarCompact />;
+}
+
+function MiniCalendarCompact() {
   const events = useEventsStore((s) => s.events);
   const categories = useEventsStore((s) => s.categories);
   const loaded = useEventsStore((s) => s.loaded);
@@ -19,8 +33,14 @@ export function MiniCalendar() {
   const year = viewDate.getFullYear();
   const month = viewDate.getMonth();
 
-  const prevMonth = () => { setViewDate(new Date(year, month - 1, 1)); setSelectedDate(null); };
-  const nextMonth = () => { setViewDate(new Date(year, month + 1, 1)); setSelectedDate(null); };
+  const prevMonth = () => {
+    setViewDate(new Date(year, month - 1, 1));
+    setSelectedDate(null);
+  };
+  const nextMonth = () => {
+    setViewDate(new Date(year, month + 1, 1));
+    setSelectedDate(null);
+  };
   const goToday = () => setViewDate(new Date());
 
   const calendarDays = useMemo(() => {
@@ -113,9 +133,10 @@ export function MiniCalendar() {
     if (!selectedDate) return [];
     return events
       .filter((e) => !e.isHidden)
-      .filter((e) =>
-        e.date === selectedDate ||
-        (e.endDate && e.date <= selectedDate && e.endDate >= selectedDate)
+      .filter(
+        (e) =>
+          e.date === selectedDate ||
+          (e.endDate && e.date <= selectedDate && e.endDate >= selectedDate),
       )
       .sort((a, b) => {
         const timeA = a.startTime ?? a.time?.split(' - ')[0]?.trim() ?? '';
@@ -131,7 +152,9 @@ export function MiniCalendar() {
     <div className="rounded-xl bg-sp-card p-4 h-full flex flex-col">
       {/* 헤더: 제목 + 월 네비게이션 */}
       <div className="flex items-center justify-between mb-3 shrink-0">
-        <h3 className="text-sm font-bold text-sp-text flex items-center gap-1.5"><span>📅</span>미니 캘린더</h3>
+        <h3 className="text-sm font-bold text-sp-text flex items-center gap-1.5">
+          <span>📅</span>미니 캘린더
+        </h3>
         <div className="flex items-center gap-1">
           <button onClick={prevMonth} className="text-sp-muted hover:text-sp-text p-0.5">
             <span className="material-symbols-outlined text-sm">chevron_left</span>
@@ -177,9 +200,7 @@ export function MiniCalendar() {
               day.eventColors.length > 0 && day.isCurrentMonth
                 ? 'hover:bg-sp-accent/10 cursor-pointer'
                 : ''
-            } ${
-              selectedDate === day.dateStr ? 'bg-sp-accent/15 ring-1 ring-sp-accent/30' : ''
-            }`}
+            } ${selectedDate === day.dateStr ? 'bg-sp-accent/15 ring-1 ring-sp-accent/30' : ''}`}
           >
             <span
               className={`text-caption w-5 h-5 flex items-center justify-center rounded-full ${
@@ -211,15 +232,21 @@ export function MiniCalendar() {
         <div className="mt-1 pt-1.5 border-t border-sp-border/30 animate-in fade-in slide-in-from-top-1 duration-150">
           <div className="flex items-center justify-between mb-1">
             <span className="text-[10px] font-bold text-sp-text">
-              {parseInt(selectedDate.slice(5, 7), 10)}/{parseInt(selectedDate.slice(8, 10), 10)}
-              {' '}
-              {['일', '월', '화', '수', '목', '금', '토'][new Date(selectedDate + 'T00:00:00').getDay()]}요일
+              {parseInt(selectedDate.slice(5, 7), 10)}/{parseInt(selectedDate.slice(8, 10), 10)}{' '}
+              {
+                ['일', '월', '화', '수', '목', '금', '토'][
+                  new Date(selectedDate + 'T00:00:00').getDay()
+                ]
+              }
+              요일
             </span>
             <button
               onClick={() => setSelectedDate(null)}
               className="text-sp-muted hover:text-sp-text"
             >
-              <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>close</span>
+              <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>
+                close
+              </span>
             </button>
           </div>
           <div className="space-y-0.5 max-h-24 overflow-y-auto">
@@ -232,9 +259,7 @@ export function MiniCalendar() {
                   className="flex items-center gap-1.5 px-1.5 py-1 rounded hover:bg-sp-surface/50 transition-colors"
                 >
                   <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${colors.dot}`} />
-                  <span className="text-[10px] text-sp-text truncate flex-1">
-                    {event.title}
-                  </span>
+                  <span className="text-[10px] text-sp-text truncate flex-1">{event.title}</span>
                   {(event.startTime || event.time) && (
                     <span className="text-tiny text-sp-muted shrink-0">
                       {event.startTime ?? event.time?.split(' - ')[0]?.trim()}
@@ -250,9 +275,7 @@ export function MiniCalendar() {
       {/* 하단 — 팝업 열려있으면 숨김 */}
       {!selectedDate && (
         <div className="mt-1 pt-1 border-t border-sp-border/20 text-center">
-          <span className="text-caption text-sp-muted">
-            이번 달 일정 {monthEventCount}건
-          </span>
+          <span className="text-caption text-sp-muted">이번 달 일정 {monthEventCount}건</span>
         </div>
       )}
     </div>

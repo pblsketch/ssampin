@@ -15,10 +15,14 @@ import { BookmarksWidget } from './items/Bookmarks';
 import { DDayCounter } from './items/DDayCounter';
 import { SurveyWidget } from './items/SurveyWidget';
 import { ConsultationWidget } from './items/ConsultationWidget';
-import { MemoFocus } from './items/MemoFocus';
 import { FavoriteTools } from './items/FavoriteTools';
 import { MiniCalendar } from './items/MiniCalendar';
-import { ImageSticker1, ImageSticker2, ImageSticker3, ImageSticker4 } from './items/ImageStickerWidget';
+import {
+  ImageSticker1,
+  ImageSticker2,
+  ImageSticker3,
+  ImageSticker4,
+} from './items/ImageStickerWidget';
 import { DesktopOrganize } from './items/DesktopOrganize';
 
 /**
@@ -42,6 +46,8 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
     component: WeeklyTimetable,
     navigateTo: 'timetable',
     navigateLabel: '시간표 전체 보기',
+    modalSize: 'fullscreen',
+    modalMode: 'expanded',
   },
   {
     id: 'today-class',
@@ -58,6 +64,8 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
     component: TodayClass,
     navigateTo: 'timetable',
     navigateLabel: '시간표 전체 보기',
+    modalSize: 'lg',
+    modalMode: 'expanded',
   },
   {
     id: 'class-timetable',
@@ -74,6 +82,8 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
     component: ClassTimetable,
     navigateTo: 'timetable',
     navigateLabel: '시간표 전체 보기',
+    modalSize: 'fullscreen',
+    modalMode: 'expanded',
   },
 
   // ─── 학급 카테고리 ───
@@ -92,6 +102,9 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
     component: Seating,
     navigateTo: 'seating',
     navigateLabel: '자리배치 보기',
+    modalSize: 'fullscreen',
+    modalMode: 'expanded',
+    requiresExplicitCancel: true,
   },
   {
     id: 'today-progress',
@@ -108,6 +121,8 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
     component: TodayProgress,
     navigateTo: 'class-management',
     navigateLabel: '수업 관리 보기',
+    modalSize: 'lg',
+    modalMode: 'expanded',
   },
   {
     id: 'student-records',
@@ -124,6 +139,9 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
     component: StudentRecords,
     navigateTo: 'homeroom',
     navigateLabel: '담임 업무 보기',
+    modalSize: 'lg',
+    modalMode: 'view+edit',
+    requiresExplicitCancel: true,
   },
 
   // ─── 정보 카테고리 ───
@@ -142,6 +160,8 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
     component: Meal,
     navigateTo: 'meal',
     navigateLabel: '급식 전체 보기',
+    modalSize: 'md',
+    modalMode: 'expanded',
   },
   {
     id: 'events',
@@ -158,6 +178,8 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
     component: Events,
     navigateTo: 'schedule',
     navigateLabel: '일정 전체 보기',
+    modalSize: 'lg',
+    modalMode: 'view+edit',
   },
   {
     id: 'mini-calendar',
@@ -174,6 +196,8 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
     component: MiniCalendar,
     navigateTo: 'schedule',
     navigateLabel: '일정 전체 보기',
+    modalSize: 'lg',
+    modalMode: 'expanded',
   },
   {
     id: 'memo',
@@ -190,24 +214,10 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
     component: Memo,
     navigateTo: 'memo',
     navigateLabel: '메모 전체 보기',
+    modalSize: 'lg',
+    modalMode: 'view+edit',
+    inplaceCapable: true,
   },
-  {
-    id: 'memo-focus',
-    name: '메모 (전체 보기)',
-    icon: '📄',
-    description: '메모 하나를 대시보드 전체에 펼쳐 봅니다',
-    category: 'info',
-    defaultSize: { w: 4, h: 6 },
-    minSize: { w: 2, h: 3 },
-    availableFor: {
-      schoolLevel: ['elementary', 'middle', 'high', 'custom'],
-      role: ['homeroom', 'subject', 'admin'],
-    },
-    component: MemoFocus,
-    navigateTo: 'memo',
-    navigateLabel: '메모장 전체 보기',
-  },
-
   // ─── 관리 카테고리 ───
   {
     id: 'desktop-organize',
@@ -222,6 +232,9 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
       role: ['homeroom', 'subject', 'admin'],
     },
     component: DesktopOrganize,
+    modalSize: 'fullscreen',
+    modalMode: 'expanded',
+    requiresExplicitCancel: true,
   },
   {
     id: 'todo',
@@ -238,6 +251,9 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
     component: TodoWidget,
     navigateTo: 'todo',
     navigateLabel: '할 일 전체 보기',
+    modalSize: 'lg',
+    modalMode: 'view+edit',
+    inplaceCapable: true,
   },
 
   // ─── D-Day 카운터 ───
@@ -254,6 +270,9 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
       role: ['homeroom', 'subject', 'admin'],
     },
     component: DDayCounter,
+    modalSize: 'md',
+    modalMode: 'view+edit',
+    inplaceCapable: true,
   },
 
   // ─── 설문/체크리스트 ───
@@ -272,6 +291,9 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
     component: SurveyWidget,
     navigateTo: 'homeroom',
     navigateLabel: '설문 탭 보기',
+    modalSize: 'lg',
+    modalMode: 'view+edit',
+    requiresExplicitCancel: true,
   },
 
   // ─── 상담 예약 ───
@@ -290,6 +312,9 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
     component: ConsultationWidget,
     navigateTo: 'homeroom',
     navigateLabel: '상담 예약 탭 보기',
+    modalSize: 'lg',
+    modalMode: 'view+edit',
+    requiresExplicitCancel: true,
   },
 
   // ─── 자주 쓰는 도구 ───
@@ -308,6 +333,9 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
     component: FavoriteTools,
     navigateTo: 'tools',
     navigateLabel: '쌤도구 전체 보기',
+    modalSize: 'md',
+    modalMode: 'view+edit',
+    inplaceCapable: true,
   },
 
   // ─── 즐겨찾기 카테고리 ───
@@ -326,6 +354,9 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
     component: BookmarksWidget,
     navigateTo: 'bookmarks',
     navigateLabel: '즐겨찾기 전체 보기',
+    modalSize: 'md',
+    modalMode: 'view+edit',
+    inplaceCapable: true,
   },
 
   // ─── 이미지 스티커 ───
@@ -342,6 +373,8 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
       role: ['homeroom', 'subject', 'admin'],
     },
     component: ImageSticker1,
+    modalSize: 'md',
+    modalMode: 'large-only',
   },
   {
     id: 'image-sticker-2',
@@ -356,6 +389,8 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
       role: ['homeroom', 'subject', 'admin'],
     },
     component: ImageSticker2,
+    modalSize: 'md',
+    modalMode: 'large-only',
   },
   {
     id: 'image-sticker-3',
@@ -370,6 +405,8 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
       role: ['homeroom', 'subject', 'admin'],
     },
     component: ImageSticker3,
+    modalSize: 'md',
+    modalMode: 'large-only',
   },
   {
     id: 'image-sticker-4',
@@ -384,6 +421,8 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
       role: ['homeroom', 'subject', 'admin'],
     },
     component: ImageSticker4,
+    modalSize: 'md',
+    modalMode: 'large-only',
   },
 ];
 

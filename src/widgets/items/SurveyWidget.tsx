@@ -5,18 +5,33 @@ import { getActiveSurveys, getTeacherCheckProgress } from '@domain/rules/surveyR
 import { isStudentActive } from '@domain/rules/studentActivity';
 
 const COLOR_DOT: Record<string, string> = {
-  blue: 'bg-blue-400', green: 'bg-green-400', yellow: 'bg-yellow-400',
-  purple: 'bg-purple-400', red: 'bg-red-400', pink: 'bg-pink-400',
-  indigo: 'bg-indigo-400', teal: 'bg-teal-400',
+  blue: 'bg-blue-400',
+  green: 'bg-green-400',
+  yellow: 'bg-yellow-400',
+  purple: 'bg-purple-400',
+  red: 'bg-red-400',
+  pink: 'bg-pink-400',
+  indigo: 'bg-indigo-400',
+  teal: 'bg-teal-400',
 };
 
 const COLOR_BAR: Record<string, string> = {
-  blue: 'bg-blue-400', green: 'bg-green-400', yellow: 'bg-yellow-400',
-  purple: 'bg-purple-400', red: 'bg-red-400', pink: 'bg-pink-400',
-  indigo: 'bg-indigo-400', teal: 'bg-teal-400',
+  blue: 'bg-blue-400',
+  green: 'bg-green-400',
+  yellow: 'bg-yellow-400',
+  purple: 'bg-purple-400',
+  red: 'bg-red-400',
+  pink: 'bg-pink-400',
+  indigo: 'bg-indigo-400',
+  teal: 'bg-teal-400',
 };
 
-export function SurveyWidget() {
+interface SurveyWidgetProps {
+  /** false일 때(모달 확장 뷰) 전체 페이지 이동 링크 노출. 기본값 true(카드 뷰) */
+  isCompactMode?: boolean;
+}
+
+export function SurveyWidget({ isCompactMode = true }: SurveyWidgetProps) {
   const { surveys, loaded, load } = useSurveyStore();
   const { students, loaded: studentsLoaded, load: loadStudents } = useStudentStore();
 
@@ -26,10 +41,7 @@ export function SurveyWidget() {
   }, [loaded, load, studentsLoaded, loadStudents]);
 
   const activeSurveys = useMemo(() => getActiveSurveys(surveys), [surveys]);
-  const totalStudents = useMemo(
-    () => students.filter(isStudentActive).length,
-    [students],
-  );
+  const totalStudents = useMemo(() => students.filter(isStudentActive).length, [students]);
 
   if (!loaded) {
     return (
@@ -44,6 +56,22 @@ export function SurveyWidget() {
       <div className="rounded-xl bg-sp-card p-4 flex flex-col items-center justify-center h-full gap-2 text-sp-muted">
         <span className="text-2xl">📋</span>
         <p className="text-xs">진행 중인 설문 없음</p>
+        {!isCompactMode && (
+          /* G004: 모달 확장 뷰 탈출구 — navigateTo: 'homeroom' */
+          <button
+            data-widget-escape-hatch="survey"
+            className="text-caption text-sp-accent hover:text-sp-accent/80 font-medium transition-colors mt-1"
+            onClick={() => {
+              if (window.electronAPI?.navigateToPage) {
+                void window.electronAPI.navigateToPage('homeroom');
+              } else {
+                window.dispatchEvent(new CustomEvent('ssampin:navigate', { detail: 'homeroom' }));
+              }
+            }}
+          >
+            📄 전체 페이지로 보기
+          </button>
+        )}
       </div>
     );
   }
@@ -52,14 +80,33 @@ export function SurveyWidget() {
     <div className="rounded-xl bg-sp-card p-4 h-full flex flex-col gap-3">
       {/* 헤더 */}
       <div className="flex items-center justify-between shrink-0">
-        <h3 className="text-sm font-bold text-sp-text flex items-center gap-1.5"><span>📋</span>설문/체크리스트</h3>
+        <h3 className="text-sm font-bold text-sp-text flex items-center gap-1.5">
+          <span>📋</span>설문/체크리스트
+        </h3>
+        {!isCompactMode && (
+          /* G004: 모달 확장 뷰 탈출구 — navigateTo: 'homeroom' */
+          <button
+            data-widget-escape-hatch="survey"
+            className="text-caption text-sp-accent hover:text-sp-accent/80 font-medium transition-colors"
+            onClick={() => {
+              if (window.electronAPI?.navigateToPage) {
+                void window.electronAPI.navigateToPage('homeroom');
+              } else {
+                window.dispatchEvent(new CustomEvent('ssampin:navigate', { detail: 'homeroom' }));
+              }
+            }}
+          >
+            📄 전체 페이지로 보기
+          </button>
+        )}
       </div>
 
       {activeSurveys.slice(0, 3).map((survey) => {
         const localData = useSurveyStore.getState().getLocalData(survey.id);
-        const progress = survey.mode === 'teacher'
-          ? getTeacherCheckProgress(survey, localData, totalStudents)
-          : { completed: 0, total: totalStudents, percentage: 0 };
+        const progress =
+          survey.mode === 'teacher'
+            ? getTeacherCheckProgress(survey, localData, totalStudents)
+            : { completed: 0, total: totalStudents, percentage: 0 };
 
         const dot = COLOR_DOT[survey.categoryColor] ?? 'bg-blue-400';
         const bar = COLOR_BAR[survey.categoryColor] ?? 'bg-blue-400';
@@ -86,14 +133,10 @@ export function SurveyWidget() {
       })}
 
       {activeSurveys.length > 3 && (
-        <p className="text-caption text-sp-muted text-right">
-          외 {activeSurveys.length - 3}건
-        </p>
+        <p className="text-caption text-sp-muted text-right">외 {activeSurveys.length - 3}건</p>
       )}
 
-      <p className="text-caption text-sp-muted mt-auto">
-        진행 중 {activeSurveys.length}건
-      </p>
+      <p className="text-caption text-sp-muted mt-auto">진행 중 {activeSurveys.length}건</p>
     </div>
   );
 }

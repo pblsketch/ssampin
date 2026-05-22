@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTodoStore } from '@adapters/stores/useTodoStore';
+import { useToastStore } from '@adapters/components/common/Toast';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { useEventsStore } from '@adapters/stores/useEventsStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
@@ -7,7 +8,7 @@ import type { Todo } from '@domain/entities/Todo';
 import { filterActive, sortTodos } from '@domain/rules/todoRules';
 import { getDayOfWeek } from '@domain/rules/periodRules';
 import { PRIORITY_CONFIG } from '@domain/valueObjects/TodoPriority';
-import { TodoPopup } from '@adapters/components/Todo/TodoPopup';
+import { TodoEditor } from '@adapters/components/Todo/TodoEditor';
 
 const MAX_VISIBLE = 20;
 
@@ -19,9 +20,13 @@ interface TimelineEntry {
   icon: string;
 }
 
-export function DashboardTodo() {
+interface DashboardTodoProps {
+  /** false일 때(모달 확장 뷰) 팝업 헤더 클릭 전용. 기본값 true(카드 뷰) */
+  isCompactMode?: boolean;
+}
+
+export function DashboardTodo({ isCompactMode = true }: DashboardTodoProps) {
   const { todos, load, toggleTodo } = useTodoStore();
-  const [isPopupOpen, setIsPopupOpen] = useState(false);
   const { teacherSchedule, classSchedule, load: loadSchedule } = useScheduleStore();
   const { events, load: loadEvents } = useEventsStore();
   const { settings } = useSettingsStore();
@@ -95,11 +100,11 @@ export function DashboardTodo() {
     }
 
     if (showEvents) {
-      const todayEvents = events.filter((e) =>
-        !('isHidden' in e && e.isHidden) && (
-          e.date === todayStr ||
-          (e.endDate !== undefined && e.date <= todayStr && e.endDate >= todayStr)
-        ),
+      const todayEvents = events.filter(
+        (e) =>
+          !('isHidden' in e && e.isHidden) &&
+          (e.date === todayStr ||
+            (e.endDate !== undefined && e.date <= todayStr && e.endDate >= todayStr)),
       );
       for (const ev of todayEvents) {
         items.push({
@@ -118,7 +123,14 @@ export function DashboardTodo() {
       if (!a.time && b.time) return 1;
       return 0;
     });
-  }, [settings.todoShowTimetable, settings.todoShowEvents, teacherSchedule, classSchedule, events, settings.periodTimes]);
+  }, [
+    settings.todoShowTimetable,
+    settings.todoShowEvents,
+    teacherSchedule,
+    classSchedule,
+    events,
+    settings.periodTimes,
+  ]);
 
   const visible = sorted.slice(0, MAX_VISIBLE);
   const activeTodos = useMemo(() => filterActive(todos), [todos]);
@@ -129,33 +141,43 @@ export function DashboardTodo() {
   const incomplete = visible.filter((t) => !t.completed);
   const completed = visible.filter((t) => t.completed);
 
-  const hasBothSections = timelineEntries.length > 0 && (incomplete.length > 0 || completed.length > 0);
+  // widget-expanded-editors Phase 1A: 모달(확장) 모드는 TodoEditor에 위임.
+  // WidgetModal이 헤더/패딩/배경을 제공하므로 본 컴포넌트는 본문만 렌더.
+  if (!isCompactMode) {
+    return <TodoEditor />;
+  }
+
+  const hasBothSections =
+    timelineEntries.length > 0 && (incomplete.length > 0 || completed.length > 0);
   const showWideLayout = isWide && hasBothSections;
 
   const timelineList = (
     <ul className="space-y-0.5">
       {timelineEntries.map((entry) => (
-        <li
-          key={entry.id}
-          className="flex items-center gap-2 rounded-lg px-2 py-1 opacity-60"
-        >
+        <li key={entry.id} className="flex items-center gap-2 rounded-lg px-2 py-1 opacity-60">
           <span className="text-caption text-sp-muted w-10 text-right font-mono shrink-0">
             {entry.time ?? '--:--'}
           </span>
           <span className="text-xs shrink-0">{entry.icon}</span>
-          <span className="text-xs text-sp-text truncate flex-1">
-            {entry.title}
-          </span>
+          <span className="text-xs text-sp-text truncate flex-1">{entry.title}</span>
         </li>
       ))}
     </ul>
   );
 
+  const handleToggle = (id: string, wasCompleted: boolean) => {
+    void toggleTodo(id);
+    const msg = wasCompleted ? '할 일 미완료로 변경됨' : '할 일 완료';
+    useToastStore
+      .getState()
+      .show(msg, 'success', { label: '되돌리기', onClick: () => void toggleTodo(id) }, 5000);
+  };
+
   const todoList = (
     <>
       <ul className="space-y-1">
         {incomplete.map((todo) => (
-          <TodoItem key={todo.id} todo={todo} onToggle={toggleTodo} />
+          <TodoItem key={todo.id} todo={todo} onToggle={handleToggle} />
         ))}
       </ul>
       {completed.length > 0 && incomplete.length > 0 && (
@@ -164,7 +186,7 @@ export function DashboardTodo() {
       {completed.length > 0 && (
         <ul className="space-y-1">
           {completed.map((todo) => (
-            <TodoItem key={todo.id} todo={todo} onToggle={toggleTodo} />
+            <TodoItem key={todo.id} todo={todo} onToggle={handleToggle} />
           ))}
         </ul>
       )}
@@ -173,12 +195,11 @@ export function DashboardTodo() {
 
   return (
     <div ref={containerRef} className="rounded-xl bg-sp-card p-4 h-full flex flex-col">
-      {/* 헤더 */}
-      <div
-        className="mb-4 flex items-center justify-between cursor-pointer hover:bg-sp-surface/30 rounded-lg -mx-1 px-1 py-0.5 transition-colors"
-        onClick={() => setIsPopupOpen(true)}
-      >
-        <h3 className="text-sm font-bold text-sp-text flex items-center gap-1.5"><span>✅</span>할 일 목록</h3>
+      {/* 헤더 — 클릭은 카드 본체로 bubble → WidgetCard 가 WidgetModal 오픈 */}
+      <div className="mb-4 flex items-center justify-between -mx-1 px-1 py-0.5">
+        <h3 className="text-sm font-bold text-sp-text flex items-center gap-1.5">
+          <span>✅</span>할 일 목록
+        </h3>
         {totalCount > 0 && (
           <span className="text-xs text-sp-muted">
             {completedCount}/{totalCount} 완료
@@ -186,24 +207,17 @@ export function DashboardTodo() {
         )}
       </div>
 
-      {/* 콘텐츠 */}
+      {/* 콘텐츠 — 빈 상태 클릭도 카드 본체로 bubble → WidgetModal */}
       {totalCount === 0 && timelineEntries.length === 0 ? (
-        <div
-          className="flex items-center justify-center py-6 cursor-pointer"
-          onClick={() => setIsPopupOpen(true)}
-        >
+        <div className="flex items-center justify-center py-6">
           <p className="text-sm text-sp-muted">클릭하여 할 일을 추가하세요</p>
         </div>
       ) : showWideLayout ? (
         /* 가로 레이아웃: 시간표/일정 | 할 일 */
         <div className="flex-1 min-h-0 flex gap-4">
-          <div className="flex-1 min-h-0 overflow-y-auto">
-            {timelineList}
-          </div>
+          <div className="flex-1 min-h-0 overflow-y-auto">{timelineList}</div>
           <div className="w-px bg-sp-border/30 shrink-0" />
-          <div className="flex-1 min-h-0 overflow-y-auto">
-            {todoList}
-          </div>
+          <div className="flex-1 min-h-0 overflow-y-auto">{todoList}</div>
         </div>
       ) : (
         /* 세로 레이아웃 (기존) */
@@ -217,7 +231,6 @@ export function DashboardTodo() {
           {todoList}
         </div>
       )}
-      <TodoPopup open={isPopupOpen} onClose={() => setIsPopupOpen(false)} />
     </div>
   );
 }
@@ -269,7 +282,7 @@ function formatLocalDate(date: Date): string {
 
 interface TodoItemProps {
   todo: Todo;
-  onToggle: (id: string) => void;
+  onToggle: (id: string, wasCompleted: boolean) => void;
 }
 
 function TodoItem({ todo, onToggle }: TodoItemProps) {
@@ -279,30 +292,27 @@ function TodoItem({ todo, onToggle }: TodoItemProps) {
 
   return (
     <li
-      className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-sp-surface/50"
-      onClick={(e) => { e.stopPropagation(); onToggle(todo.id); }}
+      className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-sp-surface/50 min-h-6"
+      onClick={(e) => {
+        e.stopPropagation();
+        onToggle(todo.id, todo.completed);
+      }}
     >
       <Checkbox checked={todo.completed} />
 
       {/* 우선순위 dot */}
       {showPriority && (
-        <span className={`text-tiny ${priorityConfig.color}`}>
-          {priorityConfig.icon}
-        </span>
+        <span className={`text-tiny ${priorityConfig.color}`}>{priorityConfig.icon}</span>
       )}
 
       {/* 시간 표시 */}
       {todo.time && !todo.completed && (
-        <span className="text-caption text-sp-accent font-mono shrink-0">
-          {todo.time}
-        </span>
+        <span className="text-caption text-sp-accent font-mono shrink-0">{todo.time}</span>
       )}
 
       <span
         className={`flex-1 text-sm leading-tight truncate transition-all ${
-          todo.completed
-            ? 'text-sp-muted line-through opacity-50'
-            : 'text-sp-text'
+          todo.completed ? 'text-sp-muted line-through opacity-50' : 'text-sp-text'
         }`}
       >
         {todo.text}
@@ -325,7 +335,7 @@ interface CheckboxProps {
 function Checkbox({ checked }: CheckboxProps) {
   return (
     <div
-      className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded transition-colors ${
+      className={`flex min-w-6 min-h-6 h-4 w-4 flex-shrink-0 items-center justify-center rounded transition-colors ${
         checked
           ? 'border border-sp-accent bg-sp-accent'
           : 'border border-sp-border hover:border-sp-accent'

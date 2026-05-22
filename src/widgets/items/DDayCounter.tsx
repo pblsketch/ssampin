@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useDDayStore } from '@adapters/stores/useDDayStore';
+import { useToastStore } from '@adapters/components/common/Toast';
 import { calculateDDay, formatDDay, sortDDayItems } from '@domain/rules/ddayRules';
 import {
   DDAY_COLOR_MAP,
@@ -12,7 +13,16 @@ import { toLocalDateString } from '@shared/utils/localDate';
 
 /* ─── 상수 ─── */
 
-const ALL_COLORS: DDayColor[] = ['blue', 'green', 'purple', 'orange', 'red', 'pink', 'teal', 'amber'];
+const ALL_COLORS: DDayColor[] = [
+  'blue',
+  'green',
+  'purple',
+  'orange',
+  'red',
+  'pink',
+  'teal',
+  'amber',
+];
 
 /* ─── 유틸 ─── */
 
@@ -39,9 +49,7 @@ interface DDayFormProps {
 
 function DDayForm({ initial, onSave, onCancel }: DDayFormProps) {
   const [title, setTitle] = useState(initial?.title ?? '');
-  const [targetDate, setTargetDate] = useState(
-    initial?.targetDate ?? toLocalDateString(),
-  );
+  const [targetDate, setTargetDate] = useState(initial?.targetDate ?? toLocalDateString());
   const [emoji, setEmoji] = useState(initial?.emoji ?? '📌');
   const [color, setColor] = useState<DDayColor>(initial?.color ?? 'blue');
 
@@ -58,10 +66,11 @@ function DDayForm({ initial, onSave, onCancel }: DDayFormProps) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3 p-3 rounded-xl bg-sp-surface border border-sp-border">
-      <div className="text-sm font-bold text-sp-text">
-        {initial ? 'D-Day 편집' : 'D-Day 추가'}
-      </div>
+    <form
+      onSubmit={handleSubmit}
+      className="space-y-3 p-3 rounded-xl bg-sp-surface border border-sp-border"
+    >
+      <div className="text-sm font-bold text-sp-text">{initial ? 'D-Day 편집' : 'D-Day 추가'}</div>
 
       {/* 제목 */}
       <input
@@ -91,9 +100,7 @@ function DDayForm({ initial, onSave, onCancel }: DDayFormProps) {
               type="button"
               onClick={() => setEmoji(em)}
               className={`w-8 h-8 rounded-lg text-base flex items-center justify-center transition-colors ${
-                emoji === em
-                  ? 'bg-sp-accent/20 ring-1 ring-sp-accent'
-                  : 'hover:bg-sp-card'
+                emoji === em ? 'bg-sp-accent/20 ring-1 ring-sp-accent' : 'hover:bg-sp-card'
               }`}
             >
               {em}
@@ -111,7 +118,7 @@ function DDayForm({ initial, onSave, onCancel }: DDayFormProps) {
               key={c}
               type="button"
               onClick={() => setColor(c)}
-              className={`w-6 h-6 rounded-full ${DDAY_COLOR_MAP[c].bg} ${DDAY_COLOR_MAP[c].border} border transition-transform ${
+              className={`w-6 h-6 min-w-6 min-h-6 rounded-full ${DDAY_COLOR_MAP[c].bg} ${DDAY_COLOR_MAP[c].border} border transition-transform ${
                 color === c ? 'scale-125 ring-1 ring-white/40' : 'hover:scale-110'
               }`}
             />
@@ -168,9 +175,7 @@ function DDayRow({ item, dday, onEdit, onTogglePin, onDelete }: DDayRowProps) {
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1">
           <span className="text-sm text-sp-text truncate">{item.title}</span>
-          {item.pinned && (
-            <span className="text-caption text-sp-muted">📌</span>
-          )}
+          {item.pinned && <span className="text-caption text-sp-muted">📌</span>}
         </div>
         <span className="text-xs text-sp-muted">{formatDateKR(item.targetDate)}</span>
       </div>
@@ -178,11 +183,7 @@ function DDayRow({ item, dday, onEdit, onTogglePin, onDelete }: DDayRowProps) {
       {/* D-Day 숫자 — hover 시 액션 버튼으로 교체 */}
       <span
         className={`shrink-0 text-sm font-bold group-hover:hidden ${
-          isToday
-            ? 'text-red-400 animate-pulse'
-            : isPast
-              ? 'text-sp-muted'
-              : colorSet.text
+          isToday ? 'text-red-400 animate-pulse' : isPast ? 'text-sp-muted' : colorSet.text
         }`}
       >
         {formatDDay(dday)}
@@ -191,23 +192,32 @@ function DDayRow({ item, dday, onEdit, onTogglePin, onDelete }: DDayRowProps) {
       {/* 액션 버튼 — hover 시 표시 */}
       <div className="hidden group-hover:flex items-center gap-0.5 shrink-0">
         <button
-          onClick={onTogglePin}
+          onClick={(e) => {
+            e.stopPropagation();
+            onTogglePin();
+          }}
           title={item.pinned ? '고정 해제' : '상단 고정'}
-          className="w-6 h-6 flex items-center justify-center rounded text-xs text-sp-muted hover:text-sp-accent hover:bg-sp-card transition-colors"
+          className="min-w-6 min-h-6 w-6 h-6 flex items-center justify-center rounded text-xs text-sp-muted hover:text-sp-accent hover:bg-sp-card transition-colors"
         >
           {item.pinned ? '📌' : '📍'}
         </button>
         <button
-          onClick={onEdit}
+          onClick={(e) => {
+            e.stopPropagation();
+            onEdit();
+          }}
           title="편집"
-          className="w-6 h-6 flex items-center justify-center rounded text-sp-muted hover:text-sp-accent hover:bg-sp-card transition-colors"
+          className="min-w-6 min-h-6 w-6 h-6 flex items-center justify-center rounded text-sp-muted hover:text-sp-accent hover:bg-sp-card transition-colors"
         >
           <span className="material-symbols-outlined text-icon-sm">edit</span>
         </button>
         <button
-          onClick={onDelete}
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
           title="삭제"
-          className="w-6 h-6 flex items-center justify-center rounded text-sp-muted hover:text-red-400 hover:bg-sp-card transition-colors"
+          className="min-w-6 min-h-6 w-6 h-6 flex items-center justify-center rounded text-sp-muted hover:text-red-400 hover:bg-sp-card transition-colors"
         >
           <span className="material-symbols-outlined text-icon-sm">delete</span>
         </button>
@@ -251,8 +261,17 @@ export function DDayCounter() {
       };
       await add(newItem);
       setShowForm(false);
+      useToastStore.getState().show(
+        'D-Day 추가됨',
+        'success',
+        {
+          label: '되돌리기',
+          onClick: () => void remove(newItem.id),
+        },
+        5000,
+      );
     },
-    [add],
+    [add, remove],
   );
 
   const handleUpdate = useCallback(
@@ -266,9 +285,21 @@ export function DDayCounter() {
 
   const handleDelete = useCallback(
     async (id: string) => {
+      const snapshot = useDDayStore.getState().items.find((i) => i.id === id);
       await remove(id);
+      if (snapshot) {
+        useToastStore.getState().show(
+          'D-Day 삭제됨',
+          'success',
+          {
+            label: '되돌리기',
+            onClick: () => void add(snapshot),
+          },
+          5000,
+        );
+      }
     },
-    [remove],
+    [remove, add],
   );
 
   const handleDeleteAllPast = useCallback(async () => {
@@ -281,14 +312,19 @@ export function DDayCounter() {
     <div className="rounded-xl bg-sp-card p-4 h-full flex flex-col min-h-0 overflow-auto">
       {/* 헤더 */}
       <div className="flex items-center justify-between mb-2 shrink-0">
-        <h3 className="text-sm font-bold text-sp-text flex items-center gap-1.5"><span>🎯</span>D-Day 카운터</h3>
+        <h3 className="text-sm font-bold text-sp-text flex items-center gap-1.5">
+          <span>🎯</span>D-Day 카운터
+        </h3>
       </div>
 
       {/* 추가 버튼 */}
       {!showForm && !editingItem && (
         <button
-          onClick={() => setShowForm(true)}
-          className="mb-2 shrink-0 flex items-center justify-center gap-1 rounded-lg border border-dashed border-sp-border px-2 py-1.5 text-xs text-sp-muted hover:border-sp-accent hover:text-sp-accent transition-colors"
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowForm(true);
+          }}
+          className="mb-2 min-w-6 min-h-6 shrink-0 flex items-center justify-center gap-1 rounded-lg border border-dashed border-sp-border px-2 py-1.5 text-xs text-sp-muted hover:border-sp-accent hover:text-sp-accent transition-colors"
         >
           <span className="text-base leading-none">+</span>
           D-Day 추가
@@ -319,7 +355,9 @@ export function DDayCounter() {
           <div className="flex flex-col items-center justify-center h-full text-center py-4">
             <span className="text-3xl mb-2">🎯</span>
             <p className="text-sm text-sp-muted">
-              D-Day를 추가하여<br />중요한 날짜를 관리하세요
+              D-Day를 추가하여
+              <br />
+              중요한 날짜를 관리하세요
             </p>
           </div>
         ) : (
@@ -340,8 +378,11 @@ export function DDayCounter() {
             {pastItems.length > 0 && (
               <div className="mt-2 pt-2 border-t border-sp-border/50">
                 <button
-                  onClick={() => setShowPast((v) => !v)}
-                  className="flex items-center gap-1.5 w-full px-2 py-1 text-xs text-sp-muted hover:text-sp-text transition-colors"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowPast((v) => !v);
+                  }}
+                  className="flex items-center gap-1.5 w-full min-h-6 px-2 py-1 text-xs text-sp-muted hover:text-sp-text transition-colors"
                 >
                   <span
                     className={`transition-transform text-caption ${showPast ? 'rotate-90' : ''}`}
@@ -350,15 +391,23 @@ export function DDayCounter() {
                   </span>
                   지난 항목 ({pastItems.length})
                   {showPast && (
-                    <button
+                    <span
+                      role="button"
+                      tabIndex={0}
                       onClick={(e) => {
                         e.stopPropagation();
                         void handleDeleteAllPast();
                       }}
-                      className="ml-auto text-caption text-red-400/70 hover:text-red-400"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.stopPropagation();
+                          void handleDeleteAllPast();
+                        }
+                      }}
+                      className="ml-auto min-w-6 min-h-6 inline-flex items-center text-caption text-red-400/70 hover:text-red-400 cursor-pointer"
                     >
                       모두 삭제
-                    </button>
+                    </span>
                   )}
                 </button>
                 {showPast && (

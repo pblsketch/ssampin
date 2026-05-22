@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useDesktopWidgetContextStore } from '@adapters/stores/useDesktopWidgetContextStore';
 import { useClock } from '@adapters/hooks/useClock';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
@@ -10,7 +11,6 @@ import { useMessageStore } from '@adapters/stores/useMessageStore';
 import { useDashboardConfig } from '@widgets/useDashboardConfig';
 import { getWidgetById } from '@widgets/registry';
 import { WidgetCard } from '@widgets/components/WidgetCard';
-import { WidgetGrid } from '@widgets/components/WidgetGrid';
 import { WidgetSettingsPanel } from '@widgets/components/WidgetSettingsPanel';
 import { WidgetTabBar } from '@widgets/components/WidgetTabBar';
 import type { TabFilter } from '@widgets/components/WidgetTabBar';
@@ -31,6 +31,17 @@ interface ContextMenuState {
 const LAYOUT_CYCLE: WidgetLayoutMode[] = ['full', 'split-h', 'split-v', 'quad', 'sidebar-right'];
 
 export function Widget() {
+  // G009: 이 BrowserWindow는 데스크톱 위젯 창이므로 플래그를 true로 설정.
+  // WidgetCard가 이 플래그를 읽어 WidgetModal을 readOnly로 마운트 → 편집 비활성화.
+  // WidgetSettingsPanel(📋/🎨 패널)은 이 플래그와 무관하게 항상 쓰기 모드 유지 — Architect N4.
+  const setIsDesktopWidget = useDesktopWidgetContextStore((s) => s.setIsDesktopWidget);
+  useEffect(() => {
+    setIsDesktopWidget(true);
+    return () => {
+      setIsDesktopWidget(false);
+    };
+  }, [setIsDesktopWidget]);
+
   const { track } = useAnalytics();
   const clock = useClock();
   const { load: loadSchedule } = useScheduleStore();
@@ -45,7 +56,7 @@ export function Widget() {
 
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [showLayoutSelector, setShowLayoutSelector] = useState(false);
-  const [isEditMode, setIsEditMode] = useState(false);
+  const [panelMode, setPanelMode] = useState<'closed' | 'widgets' | 'style'>('closed');
   const layoutBtnRef = useRef<HTMLButtonElement>(null);
   // Phase 7-C — 헤더 드래그 영역 좌표를 main에 등록 (native-desktop 모드 헤더 드래그용).
   // WS_CHILD가 된 위젯은 -webkit-app-region:drag가 작동 안 하므로, hook이 직접 widget을 이동시킨다.
@@ -61,7 +72,6 @@ export function Widget() {
   );
 
   // 스크롤바 트랙 영역(가장자리 12px) 근처에서만 스크롤바 노출 (macOS overlay 관습)
-  const editScroll = useNearScrollbar(12);
   const normalScroll = useNearScrollbar(12);
 
   // 반응형 폴백: 창 크기가 작으면 강제 full 모드
@@ -169,11 +179,14 @@ export function Widget() {
   }, []);
 
   // 레이아웃 모드 변경 (설정 저장 + 창 크기 조절)
-  const setLayoutMode = useCallback((mode: WidgetLayoutMode) => {
-    track('widget_layout_change', { from: layoutMode, to: mode });
-    void update({ widget: { ...settings.widget, layoutMode: mode } });
-    window.electronAPI?.setWidgetLayout(mode);
-  }, [settings.widget, update, layoutMode, track]);
+  const setLayoutMode = useCallback(
+    (mode: WidgetLayoutMode) => {
+      track('widget_layout_change', { from: layoutMode, to: mode });
+      void update({ widget: { ...settings.widget, layoutMode: mode } });
+      window.electronAPI?.setWidgetLayout(mode);
+    },
+    [settings.widget, update, layoutMode, track],
+  );
 
   // 키보드 단축키: Ctrl+1~4, Ctrl+0 순환
   useEffect(() => {
@@ -222,7 +235,13 @@ export function Widget() {
     const onShortcut = window.electronAPI?.onLayoutShortcut;
     if (!onShortcut) return;
     const dispose = onShortcut((mode) => {
-      const valid: ReadonlyArray<WidgetLayoutMode> = ['full', 'split-h', 'split-v', 'quad', 'sidebar-right'];
+      const valid: ReadonlyArray<WidgetLayoutMode> = [
+        'full',
+        'split-h',
+        'split-v',
+        'quad',
+        'sidebar-right',
+      ];
       if ((valid as readonly string[]).includes(mode)) {
         setLayoutMode(mode as WidgetLayoutMode);
       }
@@ -243,14 +262,14 @@ export function Widget() {
       // 4 edge: 가장자리 변. 모서리 12px씩 비워(corner와 겹치지 않도록).
       // 4 corner: 12×12 모서리.
       const regions = [
-        { edge: 'top' as const,          dipRect: { x: 8,      y: 0,      width: w - 16, height: 6 } },
-        { edge: 'bottom' as const,       dipRect: { x: 8,      y: h - 6,  width: w - 16, height: 6 } },
-        { edge: 'left' as const,         dipRect: { x: 0,      y: 8,      width: 6,      height: h - 16 } },
-        { edge: 'right' as const,        dipRect: { x: w - 6,  y: 8,      width: 6,      height: h - 16 } },
-        { edge: 'top-left' as const,     dipRect: { x: 0,      y: 0,      width: 12,     height: 12 } },
-        { edge: 'top-right' as const,    dipRect: { x: w - 12, y: 0,      width: 12,     height: 12 } },
-        { edge: 'bottom-left' as const,  dipRect: { x: 0,      y: h - 12, width: 12,     height: 12 } },
-        { edge: 'bottom-right' as const, dipRect: { x: w - 12, y: h - 12, width: 12,     height: 12 } },
+        { edge: 'top' as const, dipRect: { x: 8, y: 0, width: w - 16, height: 6 } },
+        { edge: 'bottom' as const, dipRect: { x: 8, y: h - 6, width: w - 16, height: 6 } },
+        { edge: 'left' as const, dipRect: { x: 0, y: 8, width: 6, height: h - 16 } },
+        { edge: 'right' as const, dipRect: { x: w - 6, y: 8, width: 6, height: h - 16 } },
+        { edge: 'top-left' as const, dipRect: { x: 0, y: 0, width: 12, height: 12 } },
+        { edge: 'top-right' as const, dipRect: { x: w - 12, y: 0, width: 12, height: 12 } },
+        { edge: 'bottom-left' as const, dipRect: { x: 0, y: h - 12, width: 12, height: 12 } },
+        { edge: 'bottom-right' as const, dipRect: { x: w - 12, y: h - 12, width: 12, height: 12 } },
       ];
       void setRegion(regions);
     };
@@ -306,19 +325,28 @@ export function Widget() {
         className={[
           'w-full h-screen backdrop-blur-md rounded-2xl shadow-2xl flex flex-col overflow-hidden text-sp-text relative select-none',
           widgetStyle.hideWindowBorder ? '' : 'border border-sp-border/50',
-        ].filter(Boolean).join(' ')}
+        ]
+          .filter(Boolean)
+          .join(' ')}
         onContextMenu={handleContextMenu}
-        style={{
-          fontFamily: 'inherit',
-          backgroundColor: `rgba(var(--sp-widget-rgb), ${settings.widget.opacity})`,
-          '--sp-card': `color-mix(in srgb, var(--sp-card-base) ${(settings.widget.cardOpacity ?? 1) * 100}%, transparent)`,
-        } as React.CSSProperties}
+        style={
+          {
+            fontFamily: 'inherit',
+            backgroundColor: `rgba(var(--sp-widget-rgb), ${settings.widget.opacity})`,
+            '--sp-card': `color-mix(in srgb, var(--sp-card-base) ${(settings.widget.cardOpacity ?? 1) * 100}%, transparent)`,
+          } as React.CSSProperties
+        }
       >
         {/* ── 헤더 (드래그 영역) ── */}
         <div
           ref={headerRef}
           className="flex-shrink-0 px-6 pt-5 pb-3 border-b border-sp-border/40 text-center"
-          style={{ WebkitAppRegion: 'drag', zoom: settings.dashboardFontScale ?? 1 } as React.CSSProperties}
+          style={
+            {
+              WebkitAppRegion: 'drag',
+              zoom: settings.dashboardFontScale ?? 1,
+            } as React.CSSProperties
+          }
           onDoubleClick={handleHeaderDoubleClick}
         >
           {/* 날짜 + 시간 */}
@@ -331,9 +359,7 @@ export function Widget() {
             </span>
           </div>
           {/* 날씨 정보 */}
-          {settings.widget.showWeather !== false && (
-            <WidgetWeatherBar />
-          )}
+          {settings.widget.showWeather !== false && <WidgetWeatherBar />}
 
           {/* 헤더 우측 버튼 그룹 */}
           <div
@@ -345,7 +371,10 @@ export function Widget() {
             <button
               className="p-1.5 rounded-lg hover:bg-sp-border/60 transition-colors text-sp-muted hover:text-sp-text"
               style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-              onClick={(e) => { e.stopPropagation(); triggerRefreshAll(); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                triggerRefreshAll();
+              }}
               onDoubleClick={(e) => e.stopPropagation()}
               title="모든 위젯 새로고침"
             >
@@ -354,21 +383,45 @@ export function Widget() {
               </span>
             </button>
 
-            {/* 위젯 편집 버튼 */}
+            {/* 위젯 관리 버튼 */}
             <button
               className={[
                 'p-1.5 rounded-lg transition-colors',
-                isEditMode
+                panelMode === 'widgets'
                   ? 'bg-sp-accent/20 text-sp-accent'
                   : 'hover:bg-sp-border/60 text-sp-muted hover:text-sp-text',
               ].join(' ')}
               style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-              onClick={(e) => { e.stopPropagation(); setIsEditMode((prev) => !prev); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                setPanelMode((prev) => (prev === 'widgets' ? 'closed' : 'widgets'));
+              }}
               onDoubleClick={(e) => e.stopPropagation()}
-              title="위젯 편집"
+              title="위젯 관리"
             >
               <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
-                {isEditMode ? 'check' : 'edit'}
+                dashboard_customize
+              </span>
+            </button>
+
+            {/* 스타일 버튼 */}
+            <button
+              className={[
+                'p-1.5 rounded-lg transition-colors',
+                panelMode === 'style'
+                  ? 'bg-sp-accent/20 text-sp-accent'
+                  : 'hover:bg-sp-border/60 text-sp-muted hover:text-sp-text',
+              ].join(' ')}
+              style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+              onClick={(e) => {
+                e.stopPropagation();
+                setPanelMode((prev) => (prev === 'style' ? 'closed' : 'style'));
+              }}
+              onDoubleClick={(e) => e.stopPropagation()}
+              title="스타일"
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
+                palette
               </span>
             </button>
 
@@ -382,7 +435,10 @@ export function Widget() {
                   : 'hover:bg-sp-border/60 text-sp-muted hover:text-sp-text',
               ].join(' ')}
               style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-              onClick={(e) => { e.stopPropagation(); setShowLayoutSelector((prev) => !prev); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowLayoutSelector((prev) => !prev);
+              }}
               onDoubleClick={(e) => e.stopPropagation()}
               title="레이아웃 선택 (Ctrl+0)"
             >
@@ -395,7 +451,11 @@ export function Widget() {
             <button
               className="p-1.5 rounded-lg hover:bg-sp-border/60 transition-colors text-sp-muted hover:text-sp-text"
               style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-              onClick={(e) => { e.stopPropagation(); track('widget_close'); window.electronAPI?.toggleWidget(); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                track('widget_close');
+                window.electronAPI?.toggleWidget();
+              }}
               onDoubleClick={(e) => e.stopPropagation()}
               title="전체 화면으로 전환"
             >
@@ -408,9 +468,15 @@ export function Widget() {
 
         {/* ── 메시지 배너 ── */}
         {message && (
-          <div className="flex-shrink-0 mx-4 mt-3" style={{ zoom: settings.dashboardFontScale ?? 1 }}>
+          <div
+            className="flex-shrink-0 mx-4 mt-3"
+            style={{ zoom: settings.dashboardFontScale ?? 1 }}
+          >
             <div className="bg-sp-accent/10 border border-sp-accent/30 rounded-xl px-4 py-2.5 flex items-center gap-2">
-              <span className="material-symbols-outlined text-sp-accent flex-shrink-0" style={{ fontSize: 16 }}>
+              <span
+                className="material-symbols-outlined text-sp-accent flex-shrink-0"
+                style={{ fontSize: 16 }}
+              >
                 campaign
               </span>
               <p className="text-sm text-sp-text leading-relaxed flex-1 truncate">{message}</p>
@@ -421,20 +487,11 @@ export function Widget() {
         {/* ── 대시보드 카드 ── */}
         <div className="flex-1 flex min-h-0" style={{ zoom: settings.dashboardFontScale ?? 1 }}>
           <div className="flex-1 overflow-hidden px-4 py-3 min-h-0">
-            {visibleWidgets.length === 0 && !isEditMode ? (
+            {visibleWidgets.length === 0 && panelMode === 'closed' ? (
               <div className="flex flex-col items-center justify-center h-full text-sp-muted">
                 <span className="mb-3 text-4xl">📌</span>
                 <p className="text-sm">표시할 위젯이 없습니다</p>
-                <p className="mt-1 text-xs">편집 버튼을 눌러 위젯을 추가하세요</p>
-              </div>
-            ) : isEditMode ? (
-              /* 편집 모드: WidgetGrid (DnD 지원) */
-              <div
-                ref={editScroll.ref}
-                className={`h-full overflow-y-auto scrollbar-hover-only${editScroll.near ? ' is-near-scrollbar' : ''}`}
-                {...editScroll.handlers}
-              >
-                <WidgetGrid isEditMode onNavigate={handleWidgetNavigate} />
+                <p className="mt-1 text-xs">위젯 관리 버튼을 눌러 위젯을 추가하세요</p>
               </div>
             ) : (
               /* 전체/분할 공통: 3열 그리드 + 단일 스크롤 + scale 축소 */
@@ -448,11 +505,15 @@ export function Widget() {
                   <WidgetTabBar activeTab={activeTab} onTabChange={setActiveTab} />
                 )}
                 <div
-                  style={(effectiveMode !== 'full' && effectiveMode !== 'sidebar-right') ? {
-                    transform: `scale(${effectiveMode === 'quad' ? 0.7 : 0.85})`,
-                    transformOrigin: 'top left',
-                    width: `${100 / (effectiveMode === 'quad' ? 0.7 : 0.85)}%`,
-                  } : undefined}
+                  style={
+                    effectiveMode !== 'full' && effectiveMode !== 'sidebar-right'
+                      ? {
+                          transform: `scale(${effectiveMode === 'quad' ? 0.7 : 0.85})`,
+                          transformOrigin: 'top left',
+                          width: `${100 / (effectiveMode === 'quad' ? 0.7 : 0.85)}%`,
+                        }
+                      : undefined
+                  }
                 >
                   <div
                     className={[
@@ -468,7 +529,11 @@ export function Widget() {
                       return (
                         <div
                           key={instance.widgetId}
-                          className={effectiveMode === 'sidebar-right' ? 'col-span-1' : getSpanClass(instance.colSpan)}
+                          className={
+                            effectiveMode === 'sidebar-right'
+                              ? 'col-span-1'
+                              : getSpanClass(instance.colSpan)
+                          }
                           style={{ gridRow: `span ${instance.rowSpan} / span ${instance.rowSpan}` }}
                         >
                           <WidgetCard definition={definition} onNavigate={handleWidgetNavigate} />
@@ -481,29 +546,60 @@ export function Widget() {
             )}
           </div>
 
-          {/* 편집 모드: 위젯 설정 사이드 패널 */}
-          {isEditMode && (
-            <WidgetSettingsPanel onClose={() => setIsEditMode(false)} />
+          {/* 위젯 설정 사이드 패널 */}
+          {panelMode !== 'closed' && (
+            <WidgetSettingsPanel
+              initialTab={panelMode}
+              styleOnly={panelMode === 'style'}
+              onClose={() => setPanelMode('closed')}
+            />
           )}
         </div>
 
         {/* ── 리사이즈 핸들 (JS 기반, thickFrame: false 대응) ── */}
-        {['top', 'bottom', 'left', 'right', 'top-left', 'top-right', 'bottom-left', 'bottom-right'].map((edge) => (
+        {[
+          'top',
+          'bottom',
+          'left',
+          'right',
+          'top-left',
+          'top-right',
+          'bottom-left',
+          'bottom-right',
+        ].map((edge) => (
           <div
             key={edge}
             className="absolute"
-            style={{
-              ...(edge === 'right' ? { right: 0, top: 8, bottom: 8, width: 6, cursor: 'ew-resize' } : {}),
-              ...(edge === 'bottom' ? { bottom: 0, left: 8, right: 8, height: 6, cursor: 'ns-resize' } : {}),
-              ...(edge === 'left' ? { left: 0, top: 8, bottom: 8, width: 6, cursor: 'ew-resize' } : {}),
-              ...(edge === 'top' ? { top: 0, left: 8, right: 8, height: 6, cursor: 'ns-resize' } : {}),
-              ...(edge === 'bottom-right' ? { bottom: 0, right: 0, width: 12, height: 12, cursor: 'nwse-resize' } : {}),
-              ...(edge === 'bottom-left' ? { bottom: 0, left: 0, width: 12, height: 12, cursor: 'nesw-resize' } : {}),
-              ...(edge === 'top-right' ? { top: 0, right: 0, width: 12, height: 12, cursor: 'nesw-resize' } : {}),
-              ...(edge === 'top-left' ? { top: 0, left: 0, width: 12, height: 12, cursor: 'nwse-resize' } : {}),
-              WebkitAppRegion: 'no-drag',
-              zIndex: 50,
-            } as React.CSSProperties}
+            style={
+              {
+                ...(edge === 'right'
+                  ? { right: 0, top: 8, bottom: 8, width: 6, cursor: 'ew-resize' }
+                  : {}),
+                ...(edge === 'bottom'
+                  ? { bottom: 0, left: 8, right: 8, height: 6, cursor: 'ns-resize' }
+                  : {}),
+                ...(edge === 'left'
+                  ? { left: 0, top: 8, bottom: 8, width: 6, cursor: 'ew-resize' }
+                  : {}),
+                ...(edge === 'top'
+                  ? { top: 0, left: 8, right: 8, height: 6, cursor: 'ns-resize' }
+                  : {}),
+                ...(edge === 'bottom-right'
+                  ? { bottom: 0, right: 0, width: 12, height: 12, cursor: 'nwse-resize' }
+                  : {}),
+                ...(edge === 'bottom-left'
+                  ? { bottom: 0, left: 0, width: 12, height: 12, cursor: 'nesw-resize' }
+                  : {}),
+                ...(edge === 'top-right'
+                  ? { top: 0, right: 0, width: 12, height: 12, cursor: 'nesw-resize' }
+                  : {}),
+                ...(edge === 'top-left'
+                  ? { top: 0, left: 0, width: 12, height: 12, cursor: 'nwse-resize' }
+                  : {}),
+                WebkitAppRegion: 'no-drag',
+                zIndex: 50,
+              } as React.CSSProperties
+            }
             onPointerDown={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -562,11 +658,7 @@ export function Widget() {
 
       {/* 컨텍스트 메뉴 */}
       {contextMenu && (
-        <WidgetContextMenu
-          x={contextMenu.x}
-          y={contextMenu.y}
-          onClose={handleCloseContextMenu}
-        />
+        <WidgetContextMenu x={contextMenu.x} y={contextMenu.y} onClose={handleCloseContextMenu} />
       )}
     </>
   );
