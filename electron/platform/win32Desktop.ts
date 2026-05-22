@@ -30,7 +30,10 @@ import { diagLog, diagWarn } from '../nativeDesktopDiag';
  * koffi 또는 시스템 라이브러리(user32/kernel32) load 실패.
  */
 export class KoffiLoadError extends Error {
-  constructor(message: string, public readonly cause?: unknown) {
+  constructor(
+    message: string,
+    public readonly cause?: unknown,
+  ) {
     super(message);
     this.name = 'KoffiLoadError';
   }
@@ -175,8 +178,8 @@ const GW_HWNDPREV = 3;
  */
 const IDC_SIZENWSE = 32642n; // ↘↖ (top-left ↔ bottom-right corner)
 const IDC_SIZENESW = 32643n; // ↗↙ (top-right ↔ bottom-left corner)
-const IDC_SIZEWE = 32644n;   // ↔ (left/right edge)
-const IDC_SIZENS = 32645n;   // ↕ (top/bottom edge)
+const IDC_SIZEWE = 32644n; // ↔ (left/right edge)
+const IDC_SIZENS = 32645n; // ↕ (top/bottom edge)
 
 /**
  * GetAncestor gaFlags.
@@ -252,7 +255,12 @@ interface Win32Bindings {
   EnumWindows: (callback: unknown, lParam: bigint | number) => number;
 
   // user32 — 메시지 송신
-  SendMessageW: (hWnd: bigint | number, msg: number, wParam: bigint | number, lParam: bigint | number) => bigint | number;
+  SendMessageW: (
+    hWnd: bigint | number,
+    msg: number,
+    wParam: bigint | number,
+    lParam: bigint | number,
+  ) => bigint | number;
   SendMessageTimeoutW: (
     hWnd: bigint | number,
     msg: number,
@@ -282,11 +290,18 @@ interface Win32Bindings {
   SetParent: (child: bigint | number, newParent: bigint | number | null) => bigint | null;
   GetParent: (hWnd: bigint | number) => bigint | null;
   GetWindowLongPtrW: (hWnd: bigint | number, nIndex: number) => bigint | number;
-  SetWindowLongPtrW: (hWnd: bigint | number, nIndex: number, dwNewLong: bigint | number) => bigint | number;
+  SetWindowLongPtrW: (
+    hWnd: bigint | number,
+    nIndex: number,
+    dwNewLong: bigint | number,
+  ) => bigint | number;
   SetWindowPos: (
     hWnd: bigint | number,
     hWndInsertAfter: bigint | number,
-    x: number, y: number, cx: number, cy: number,
+    x: number,
+    y: number,
+    cx: number,
+    cy: number,
     flags: number,
   ) => number;
   ShowWindow: (hWnd: bigint | number, nCmdShow: number) => number;
@@ -351,7 +366,11 @@ interface Win32Bindings {
   ScreenToClient: (hWnd: bigint | number, lpPoint: unknown) => number;
 
   // kernel32 — Phase 6: 원격 메모리 조작
-  OpenProcess: (dwDesiredAccess: number, bInheritHandle: number, dwProcessId: number) => bigint | null;
+  OpenProcess: (
+    dwDesiredAccess: number,
+    bInheritHandle: number,
+    dwProcessId: number,
+  ) => bigint | null;
   CloseHandle: (hObject: bigint | number) => number;
   VirtualAllocEx: (
     hProcess: bigint | number,
@@ -382,10 +401,20 @@ interface Win32Bindings {
   ) => number;
 
   // user32 — Phase 7: low-level mouse hook
-  SetWindowsHookExW: (idHook: number, lpfn: unknown, hmod: bigint | number | null, dwThreadId: number) => bigint | null;
+  SetWindowsHookExW: (
+    idHook: number,
+    lpfn: unknown,
+    hmod: bigint | number | null,
+    dwThreadId: number,
+  ) => bigint | null;
   UnhookWindowsHookEx: (hhk: bigint | number) => number;
   // Phase 7-B: lParam은 proto에서 'void*'이므로 koffi가 External pointer object | BigInt | number 가능 → unknown.
-  CallNextHookEx: (hhk: bigint | number | null, nCode: number, wParam: bigint | number, lParam: unknown) => bigint | number;
+  CallNextHookEx: (
+    hhk: bigint | number | null,
+    nCode: number,
+    wParam: bigint | number,
+    lParam: unknown,
+  ) => bigint | number;
 
   // kernel32 — Phase 7: 모듈 핸들 (hook callback이 모듈에 속해야 함)
   GetModuleHandleW: (lpModuleName: string | null) => bigint | null;
@@ -474,7 +503,9 @@ function loadWin32Bindings(): Win32Bindings {
   // Win32 ANSI/W 둘 다 있을 때 W를 선택해 한글 환경 호환성 보장.
 
   try {
-    const GetCurrentProcessId = kernel32.func('uint32 __stdcall GetCurrentProcessId()') as Win32Bindings['GetCurrentProcessId'];
+    const GetCurrentProcessId = kernel32.func(
+      'uint32 __stdcall GetCurrentProcessId()',
+    ) as Win32Bindings['GetCurrentProcessId'];
 
     const FindWindowW = user32.func(
       'void* __stdcall FindWindowW(str16, str16)',
@@ -504,9 +535,7 @@ function loadWin32Bindings(): Win32Bindings {
       'void* __stdcall SetParent(void*, void*)',
     ) as Win32Bindings['SetParent'];
 
-    const GetParent = user32.func(
-      'void* __stdcall GetParent(void*)',
-    ) as Win32Bindings['GetParent'];
+    const GetParent = user32.func('void* __stdcall GetParent(void*)') as Win32Bindings['GetParent'];
 
     const GetWindowLongPtrW = user32.func(
       'intptr_t __stdcall GetWindowLongPtrW(void*, int)',
@@ -524,9 +553,7 @@ function loadWin32Bindings(): Win32Bindings {
       'int __stdcall ShowWindow(void*, int)',
     ) as Win32Bindings['ShowWindow'];
 
-    const IsWindow = user32.func(
-      'int __stdcall IsWindow(void*)',
-    ) as Win32Bindings['IsWindow'];
+    const IsWindow = user32.func('int __stdcall IsWindow(void*)') as Win32Bindings['IsWindow'];
 
     const IsWindowVisible = user32.func(
       'int __stdcall IsWindowVisible(void*)',
@@ -548,9 +575,7 @@ function loadWin32Bindings(): Win32Bindings {
       'void* __stdcall LoadCursorW(void*, void*)',
     ) as Win32Bindings['LoadCursorW'];
 
-    const SetCursor = user32.func(
-      'void* __stdcall SetCursor(void*)',
-    ) as Win32Bindings['SetCursor'];
+    const SetCursor = user32.func('void* __stdcall SetCursor(void*)') as Win32Bindings['SetCursor'];
 
     // Phase 7-stable: WindowFromPoint — POINT by-value 인자.
     //   koffi의 'POINT' 타입은 위에서 cachedPointStruct로 등록됨. 같은 이름 'POINT'를
@@ -621,9 +646,9 @@ function loadWin32Bindings(): Win32Bindings {
     // Phase 7-B 진단: hook callback 진입을 OutputDebugStringW로 시그널 — 파일 IO보다 가볍고
     // DebugView 등 외부 도구로 가시화 가능. file fanout이 silent fail하는 경우 대비.
     try {
-      const OutputDebugStringW = kernel32.func(
-        'void __stdcall OutputDebugStringW(str16)',
-      ) as (msg: string) => void;
+      const OutputDebugStringW = kernel32.func('void __stdcall OutputDebugStringW(str16)') as (
+        msg: string,
+      ) => void;
       cachedOutputDebugStringW = OutputDebugStringW;
     } catch {
       cachedOutputDebugStringW = null;
@@ -795,14 +820,20 @@ export function collectDesktopAttachCandidates(): DesktopAttachCandidates {
   try {
     progmanRaw = b.FindWindowW('Progman', null);
   } catch (e) {
-    diagWarn('native-desktop', `collectDesktopAttachCandidates.C: FindWindowW(Progman) throw: ${e instanceof Error ? e.message : String(e)}`);
+    diagWarn(
+      'native-desktop',
+      `collectDesktopAttachCandidates.C: FindWindowW(Progman) throw: ${e instanceof Error ? e.message : String(e)}`,
+    );
     throw e;
   }
   let progman: bigint;
   try {
     progman = toBigInt(progmanRaw);
   } catch (e) {
-    diagWarn('native-desktop', `collectDesktopAttachCandidates.D: toBigInt(progman) throw: ${e instanceof Error ? e.message : String(e)}`);
+    diagWarn(
+      'native-desktop',
+      `collectDesktopAttachCandidates.D: toBigInt(progman) throw: ${e instanceof Error ? e.message : String(e)}`,
+    );
     throw e;
   }
   diagLog('native-desktop', `collectDesktopAttachCandidates.D: Progman=0x${progman.toString(16)}`);
@@ -815,7 +846,10 @@ export function collectDesktopAttachCandidates(): DesktopAttachCandidates {
     b.SendMessageTimeoutW(progman, WM_SPAWN_WORKER, 0xd, 0, 0x0002, 1000, 0);
     diagLog('native-desktop', 'collectDesktopAttachCandidates.E: WM_SPAWN_WORKER sent');
   } catch (e) {
-    diagWarn('native-desktop', `collectDesktopAttachCandidates.E: WM_SPAWN_WORKER send 실패 (무시): ${e instanceof Error ? e.message : String(e)}`);
+    diagWarn(
+      'native-desktop',
+      `collectDesktopAttachCandidates.E: WM_SPAWN_WORKER send 실패 (무시): ${e instanceof Error ? e.message : String(e)}`,
+    );
   }
 
   // 3. STRATEGY 1 — 모든 top-level WorkerW 순회. SHELLDLL_DefView 자식 보유 후보 모두 수집.
@@ -828,41 +862,62 @@ export function collectDesktopAttachCandidates(): DesktopAttachCandidates {
     try {
       workerWRaw = b.FindWindowExW(null, prev === 0n ? null : prev, 'WorkerW', null);
     } catch (e) {
-      diagWarn('native-desktop', `collectDesktopAttachCandidates.F[${i}]: FindWindowExW(WorkerW) throw: ${e instanceof Error ? e.message : String(e)}`);
+      diagWarn(
+        'native-desktop',
+        `collectDesktopAttachCandidates.F[${i}]: FindWindowExW(WorkerW) throw: ${e instanceof Error ? e.message : String(e)}`,
+      );
       throw e;
     }
     let workerW: bigint;
     try {
       workerW = toBigInt(workerWRaw);
     } catch (e) {
-      diagWarn('native-desktop', `collectDesktopAttachCandidates.F[${i}]: toBigInt(workerW) throw: ${e instanceof Error ? e.message : String(e)}`);
+      diagWarn(
+        'native-desktop',
+        `collectDesktopAttachCandidates.F[${i}]: toBigInt(workerW) throw: ${e instanceof Error ? e.message : String(e)}`,
+      );
       throw e;
     }
     if (isNullHandle(workerW)) break;
     count++;
     const shellDef = toBigInt(b.FindWindowExW(workerW, null, 'SHELLDLL_DefView', null));
-    diagLog('native-desktop', `collectDesktopAttachCandidates.G: WorkerW#${count}=0x${workerW.toString(16)}, SHELLDLL_DefView=${isNullHandle(shellDef) ? 'NONE' : '0x' + shellDef.toString(16)}`);
+    diagLog(
+      'native-desktop',
+      `collectDesktopAttachCandidates.G: WorkerW#${count}=0x${workerW.toString(16)}, SHELLDLL_DefView=${isNullHandle(shellDef) ? 'NONE' : '0x' + shellDef.toString(16)}`,
+    );
     if (!isNullHandle(shellDef)) {
       standardWorkerWs.push(workerW);
     }
     prev = workerW;
   }
-  diagLog('native-desktop', `collectDesktopAttachCandidates.STRATEGY1_RESULT: ${standardWorkerWs.length}개 표준 WorkerW 후보 (검사 ${count}개)`);
+  diagLog(
+    'native-desktop',
+    `collectDesktopAttachCandidates.STRATEGY1_RESULT: ${standardWorkerWs.length}개 표준 WorkerW 후보 (검사 ${count}개)`,
+  );
 
   // 4. SHELLDLL_DefView (Progman 직속) — STRATEGY 2/3에서 사용
   let shellDefView: bigint = 0n;
   try {
     shellDefView = toBigInt(b.FindWindowExW(progman, null, 'SHELLDLL_DefView', null));
   } catch (e) {
-    diagWarn('native-desktop', `collectDesktopAttachCandidates.H: FindWindowExW(Progman, SHELLDLL_DefView) throw: ${e instanceof Error ? e.message : String(e)}`);
+    diagWarn(
+      'native-desktop',
+      `collectDesktopAttachCandidates.H: FindWindowExW(Progman, SHELLDLL_DefView) throw: ${e instanceof Error ? e.message : String(e)}`,
+    );
   }
-  diagLog('native-desktop', `collectDesktopAttachCandidates.H: Progman 직속 SHELLDLL_DefView=${isNullHandle(shellDefView) ? 'NONE' : '0x' + shellDefView.toString(16)}`);
+  diagLog(
+    'native-desktop',
+    `collectDesktopAttachCandidates.H: Progman 직속 SHELLDLL_DefView=${isNullHandle(shellDefView) ? 'NONE' : '0x' + shellDefView.toString(16)}`,
+  );
 
   // 5. STRATEGY 2 — SHELLDLL_DefView의 sibling WorkerW 탐색
   // Progman의 자식 트리에서 GetWindow(shellDefView, GW_HWNDPREV/NEXT)로 sibling 검사.
   // 또는 FindWindowExW로 Progman의 모든 자식을 순회하며 클래스가 WorkerW이고
   // GW_HWNDNEXT가 shellDefView인 후보를 찾는다.
-  diagLog('native-desktop', 'collectDesktopAttachCandidates.STRATEGY2: SHELLDLL_DefView sibling 탐색...');
+  diagLog(
+    'native-desktop',
+    'collectDesktopAttachCandidates.STRATEGY2: SHELLDLL_DefView sibling 탐색...',
+  );
   let shellDefViewSiblingWorkerW: bigint = 0n;
   if (!isNullHandle(shellDefView)) {
     // 방법 A: GetWindow(shellDefView, GW_HWNDPREV/NEXT)로 직접 sibling 조회
@@ -870,31 +925,51 @@ export function collectDesktopAttachCandidates(): DesktopAttachCandidates {
     try {
       const prevSibling = toBigInt(b.GetWindow(shellDefView, GW_HWNDPREV));
       const nextSibling = toBigInt(b.GetWindow(shellDefView, GW_HWNDNEXT));
-      diagLog('native-desktop', `collectDesktopAttachCandidates.STRATEGY2.A: shellDefView siblings prev=0x${prevSibling.toString(16)} next=0x${nextSibling.toString(16)}`);
+      diagLog(
+        'native-desktop',
+        `collectDesktopAttachCandidates.STRATEGY2.A: shellDefView siblings prev=0x${prevSibling.toString(16)} next=0x${nextSibling.toString(16)}`,
+      );
 
       // 클래스 검증은 EnumChildWindows 없이 GetClassName으로 해야 하지만 본 구현엔
       // GetClassName이 없다. 대신 FindWindowExW로 Progman의 자식 WorkerW를 순회하며
       // 각 WorkerW의 GetWindow(GW_HWNDNEXT)가 shellDefView인 것을 찾는다.
       let childPrev: bigint = 0n;
       for (let i = 0; i < 32; i++) {
-        const childRaw = b.FindWindowExW(progman, childPrev === 0n ? null : childPrev, 'WorkerW', null);
+        const childRaw = b.FindWindowExW(
+          progman,
+          childPrev === 0n ? null : childPrev,
+          'WorkerW',
+          null,
+        );
         const child = toBigInt(childRaw);
         if (isNullHandle(child)) break;
         const childNextSibling = toBigInt(b.GetWindow(child, GW_HWNDNEXT));
         const childPrevSibling = toBigInt(b.GetWindow(child, GW_HWNDPREV));
-        diagLog('native-desktop', `collectDesktopAttachCandidates.STRATEGY2.B: Progman 자식 WorkerW#${i + 1}=0x${child.toString(16)}, prev=0x${childPrevSibling.toString(16)}, next=0x${childNextSibling.toString(16)}`);
+        diagLog(
+          'native-desktop',
+          `collectDesktopAttachCandidates.STRATEGY2.B: Progman 자식 WorkerW#${i + 1}=0x${child.toString(16)}, prev=0x${childPrevSibling.toString(16)}, next=0x${childNextSibling.toString(16)}`,
+        );
         if (childNextSibling === shellDefView || childPrevSibling === shellDefView) {
           shellDefViewSiblingWorkerW = child;
-          diagLog('native-desktop', `collectDesktopAttachCandidates.STRATEGY2.C: SUCCESS sibling WorkerW=0x${child.toString(16)}`);
+          diagLog(
+            'native-desktop',
+            `collectDesktopAttachCandidates.STRATEGY2.C: SUCCESS sibling WorkerW=0x${child.toString(16)}`,
+          );
           break;
         }
         childPrev = child;
       }
     } catch (e) {
-      diagWarn('native-desktop', `collectDesktopAttachCandidates.STRATEGY2: 예외 (무시): ${e instanceof Error ? e.message : String(e)}`);
+      diagWarn(
+        'native-desktop',
+        `collectDesktopAttachCandidates.STRATEGY2: 예외 (무시): ${e instanceof Error ? e.message : String(e)}`,
+      );
     }
   }
-  diagLog('native-desktop', `collectDesktopAttachCandidates.STRATEGY2_RESULT: ${isNullHandle(shellDefViewSiblingWorkerW) ? 'NONE' : '0x' + shellDefViewSiblingWorkerW.toString(16)}`);
+  diagLog(
+    'native-desktop',
+    `collectDesktopAttachCandidates.STRATEGY2_RESULT: ${isNullHandle(shellDefViewSiblingWorkerW) ? 'NONE' : '0x' + shellDefViewSiblingWorkerW.toString(16)}`,
+  );
 
   return {
     standardWorkerWs,
@@ -968,7 +1043,10 @@ function verifySetParent(
   return new Promise((resolve) => {
     // 1차 검증 — 즉시
     const newParent1 = toBigInt(b.GetParent(widgetHwnd));
-    diagLog('native-desktop', `${diagPrefix} verifySetParent.t0: newParent=0x${newParent1.toString(16)} expected=0x${expected.toString(16)}`);
+    diagLog(
+      'native-desktop',
+      `${diagPrefix} verifySetParent.t0: newParent=0x${newParent1.toString(16)} expected=0x${expected.toString(16)}`,
+    );
     if (newParent1 === expected) {
       resolve(true);
       return;
@@ -977,7 +1055,10 @@ function verifySetParent(
     // 2차 — 50ms 후
     setTimeout(() => {
       const newParent2 = toBigInt(b.GetParent(widgetHwnd));
-      diagLog('native-desktop', `${diagPrefix} verifySetParent.t50: newParent=0x${newParent2.toString(16)} expected=0x${expected.toString(16)}`);
+      diagLog(
+        'native-desktop',
+        `${diagPrefix} verifySetParent.t50: newParent=0x${newParent2.toString(16)} expected=0x${expected.toString(16)}`,
+      );
       if (newParent2 === expected) {
         resolve(true);
         return;
@@ -986,7 +1067,10 @@ function verifySetParent(
       // 3차 — 추가 100ms (총 150ms) 후
       setTimeout(() => {
         const newParent3 = toBigInt(b.GetParent(widgetHwnd));
-        diagLog('native-desktop', `${diagPrefix} verifySetParent.t150: newParent=0x${newParent3.toString(16)} expected=0x${expected.toString(16)}`);
+        diagLog(
+          'native-desktop',
+          `${diagPrefix} verifySetParent.t150: newParent=0x${newParent3.toString(16)} expected=0x${expected.toString(16)}`,
+        );
         resolve(newParent3 === expected);
       }, 100);
     }, 50);
@@ -1041,11 +1125,17 @@ async function attachToTarget(
   // 2-ter. WS_POPUP 제거 + WS_CHILD 추가. 다른 모든 style 비트(WS_VISIBLE, WS_CLIPSIBLINGS 등)는 보존.
   const newStyle = (prevStyle & ~WS_POPUP) | WS_CHILD;
   b.SetWindowLongPtrW(widgetHwnd, GWL_STYLE, newStyle);
-  diagLog('native-desktop', `${diagLabel} step2-ter newStyle=0x${newStyle.toString(16)} (WS_POPUP 제거 + WS_CHILD 추가)`);
+  diagLog(
+    'native-desktop',
+    `${diagLabel} step2-ter newStyle=0x${newStyle.toString(16)} (WS_POPUP 제거 + WS_CHILD 추가)`,
+  );
 
   // 3. SetParent
   const setParentResult = toBigInt(b.SetParent(widgetHwnd, target));
-  diagLog('native-desktop', `${diagLabel} step3 SetParent return=0x${setParentResult.toString(16)} (returns previous parent on success)`);
+  diagLog(
+    'native-desktop',
+    `${diagLabel} step3 SetParent return=0x${setParentResult.toString(16)} (returns previous parent on success)`,
+  );
 
   // 3-bis. SetParent 검증 — race 대응 retry. target이 widget을 진짜로 받아들였는지 확인.
   const verified = await verifySetParent(b, widgetHwnd, target, diagLabel);
@@ -1054,9 +1144,15 @@ async function attachToTarget(
     // 검증 실패 → style 원복 (부분 변경 상태로 두지 않음). best-effort.
     try {
       b.SetWindowLongPtrW(widgetHwnd, GWL_STYLE, prevStyle);
-      diagLog('native-desktop', `${diagLabel} step3-bis 검증 실패 → prevStyle 0x${prevStyle.toString(16)} 원복`);
+      diagLog(
+        'native-desktop',
+        `${diagLabel} step3-bis 검증 실패 → prevStyle 0x${prevStyle.toString(16)} 원복`,
+      );
     } catch (e) {
-      diagWarn('native-desktop', `${diagLabel} step3-bis style 원복 실패 (무시): ${e instanceof Error ? e.message : String(e)}`);
+      diagWarn(
+        'native-desktop',
+        `${diagLabel} step3-bis style 원복 실패 (무시): ${e instanceof Error ? e.message : String(e)}`,
+      );
     }
     // SetParent도 가능하면 원복. SetParent 자체는 success를 반환했으므로 부모는 setParentResult가 이전 부모.
     // 다만 여기서 다시 원복 시도하면 추가 race가 생기므로 style 원복만으로 충분 (Win32 SetWindowLongPtrW가
@@ -1073,7 +1169,10 @@ async function attachToTarget(
   const swpResult = b.SetWindowPos(
     widgetHwnd,
     HWND_BOTTOM_HANDLE,
-    0, 0, 0, 0,
+    0,
+    0,
+    0,
+    0,
     SWP_NOACTIVATE | SWP_NOSIZE | SWP_NOMOVE | SWP_FRAMECHANGED,
   );
   diagLog('native-desktop', `${diagLabel} step5 SetWindowPos(HWND_BOTTOM)=${swpResult}`);
@@ -1104,7 +1203,10 @@ async function attachToTarget(
  *
  * @throws AttachFailedError SetParent 후 부모 검증 실패 또는 사전 검증 실패.
  */
-export async function attachToWorkerW(widgetHwnd: bigint, workerW: bigint): Promise<Win32DesktopHandles> {
+export async function attachToWorkerW(
+  widgetHwnd: bigint,
+  workerW: bigint,
+): Promise<Win32DesktopHandles> {
   return attachToTarget(widgetHwnd, workerW, 'attachToWorkerW');
 }
 
@@ -1120,7 +1222,10 @@ export async function attachToWorkerW(widgetHwnd: bigint, workerW: bigint): Prom
  *
  * @throws AttachFailedError SetParent 후 부모 검증 실패.
  */
-export async function attachToShellDefView(widgetHwnd: bigint, shellDefView: bigint): Promise<Win32DesktopHandles> {
+export async function attachToShellDefView(
+  widgetHwnd: bigint,
+  shellDefView: bigint,
+): Promise<Win32DesktopHandles> {
   return attachToTarget(widgetHwnd, shellDefView, 'attachToShellDefView');
 }
 
@@ -1188,7 +1293,10 @@ export function detachFromWorkerW(h: Win32DesktopHandles): void {
     b.SetWindowPos(
       h.widgetHwnd,
       0,
-      0, 0, 0, 0,
+      0,
+      0,
+      0,
+      0,
       SWP_NOACTIVATE | SWP_NOSIZE | SWP_NOMOVE | SWP_FRAMECHANGED,
     );
   } catch {
@@ -1413,10 +1521,7 @@ export function findDesktopListView(workerW: bigint): bigint | null {
  * @throws OpenProcessDeniedError UAC 등 권한 문제로 Explorer 프로세스 open 실패
  * @throws RemoteMemoryError VirtualAllocEx / WriteProcessMemory 실패
  */
-export function lvmHitTest(
-  listView: bigint,
-  physicalPoint: { x: number; y: number },
-): boolean {
+export function lvmHitTest(listView: bigint, physicalPoint: { x: number; y: number }): boolean {
   if (isNullHandle(listView)) return false;
   const b = loadWin32Bindings();
 
@@ -1429,7 +1534,8 @@ export function lvmHitTest(
   if (pid === 0) return false; // 잘못된 핸들
 
   // 2. OpenProcess
-  const access = PROCESS_VM_OPERATION | PROCESS_VM_READ | PROCESS_VM_WRITE | PROCESS_QUERY_INFORMATION;
+  const access =
+    PROCESS_VM_OPERATION | PROCESS_VM_READ | PROCESS_VM_WRITE | PROCESS_QUERY_INFORMATION;
   const hProcess = toBigInt(b.OpenProcess(access, 0, pid));
   if (isNullHandle(hProcess)) {
     throw new OpenProcessDeniedError(`OpenProcess(pid=${pid}) ACCESS_DENIED 또는 실패`);
@@ -1473,9 +1579,7 @@ export function lvmHitTest(
     // 6. SendMessage(LVM_HITTEST) — 동기 호출. 결과는 hit된 아이콘 인덱스 또는 -1.
     // SendMessage 자체의 반환값을 사용 (LVM_HITTEST는 LRESULT로 인덱스 반환).
     const result = b.SendMessageW(listView, LVM_HITTEST, 0, remote);
-    const idx = typeof result === 'bigint'
-      ? Number(BigInt.asIntN(32, result))
-      : (result | 0);
+    const idx = typeof result === 'bigint' ? Number(BigInt.asIntN(32, result)) : result | 0;
 
     return idx >= 0;
   } finally {
@@ -1565,9 +1669,7 @@ export type MouseHookCallback = (
  *
  * @throws HookInstallError SetWindowsHookExW 실패 (보안 차단 등)
  */
-export function installLowLevelMouseHook(
-  onMouseEvent: MouseHookCallback,
-): MouseHookHandle {
+export function installLowLevelMouseHook(onMouseEvent: MouseHookCallback): MouseHookHandle {
   const b = loadWin32Bindings();
 
   // 1. proto는 loadWin32Bindings()에서 이미 등록됨 (SetWindowsHookExW 시그니처가 `LowLevelMouseProc *`를
@@ -1583,7 +1685,11 @@ export function installLowLevelMouseHook(
   // koffi 콜백 — JS 함수를 함수 포인터로 변환. 등록된 callback은 unregister할 때까지 GC 불가.
   // Phase 7-B FIX: lParam 타입을 proto에서 `void*`로 선언했으므로 koffi가 raw pointer로 마샬링.
   // typeof lParam === 'object' (External) 또는 BigInt 가능 — koffi.decode는 두 형태 모두 수용.
-  const callback = (nCode: number, wParamRaw: bigint | number, lParamRaw: unknown): bigint | number => {
+  const callback = (
+    nCode: number,
+    wParamRaw: bigint | number,
+    lParamRaw: unknown,
+  ): bigint | number => {
     // Phase 7-B 진단: 첫 진입 시 OutputDebugString으로 시그널.
     if (!firstCallbackEntry) {
       firstCallbackEntry = true;
@@ -1612,7 +1718,8 @@ export function installLowLevelMouseHook(
         const y = decoded[1] ?? 0;
         const mouseDataRaw = decoded[2] ?? 0;
         // wParam = mouse 메시지 타입 (WM_LBUTTONDOWN 등).
-        const msgType = typeof wParamRaw === 'bigint' ? Number(BigInt.asUintN(32, wParamRaw)) : (wParamRaw >>> 0);
+        const msgType =
+          typeof wParamRaw === 'bigint' ? Number(BigInt.asUintN(32, wParamRaw)) : wParamRaw >>> 0;
         try {
           // callback이 truthy 반환 시 OS 메시지 흐름 차단 (drag mode 등).
           shouldBlock = onMouseEvent({ x, y }, msgType, mouseDataRaw) === true;
@@ -1711,16 +1818,16 @@ export function uninstallLowLevelMouseHook(h: MouseHookHandle): void {
  */
 export function isMouseMessageOfInterest(msgType: number): boolean {
   return (
-    msgType === WM_LBUTTONDOWN
-    || msgType === WM_LBUTTONUP
-    || msgType === WM_RBUTTONDOWN
-    || msgType === WM_RBUTTONUP
-    || msgType === WM_MBUTTONDOWN
-    || msgType === WM_MBUTTONUP
-    || msgType === WM_LBUTTONDBLCLK
-    || msgType === WM_MOUSEMOVE
-    || msgType === WM_MOUSEWHEEL
-    || msgType === WM_MOUSEHWHEEL
+    msgType === WM_LBUTTONDOWN ||
+    msgType === WM_LBUTTONUP ||
+    msgType === WM_RBUTTONDOWN ||
+    msgType === WM_RBUTTONUP ||
+    msgType === WM_MBUTTONDOWN ||
+    msgType === WM_MBUTTONUP ||
+    msgType === WM_LBUTTONDBLCLK ||
+    msgType === WM_MOUSEMOVE ||
+    msgType === WM_MOUSEWHEEL ||
+    msgType === WM_MOUSEHWHEEL
   );
 }
 
@@ -1796,7 +1903,7 @@ export function postMouseMessageToWidget(
   // 16-bit signed로 packing되며 매우 큰 값(±32767 초과)은 어차피 의미가 없다).
   const cx = clientX | 0;
   const cy = clientY | 0;
-  const lparam = ((cy & 0xFFFF) << 16) | (cx & 0xFFFF);
+  const lparam = ((cy & 0xffff) << 16) | (cx & 0xffff);
 
   // wParam: Phase 7-A에서는 0 (수정자 키/버튼 state 미보강).
   // mouseData는 wheel/XBUTTON에서만 lParam 또는 wParam high word로 들어가므로 본 단계에서 미사용.
@@ -2013,6 +2120,61 @@ export function decodeWheelDelta(mouseData: number): number {
   return high >= 0x8000 ? high - 0x10000 : high;
 }
 
+/**
+ * Phase 7-B — Win32 raw wheel delta → Electron `sendInputEvent({type:'mouseWheel'})`의
+ * `{ deltaX, deltaY }` 매핑. **부호 정책 SSOT(single source of truth).**
+ *
+ * Electron `webContents.sendInputEvent({type:'mouseWheel', deltaY})`는 blink
+ * `WebMouseWheelEvent` 부호 컨벤션을 따른다 (OS layer를 우회해 blink에 직접 합성):
+ *   - blink `WebMouseWheelEvent.deltaY` +값 = 콘텐츠를 위로 스크롤 (사용자가 위쪽 콘텐츠를 보게 됨)
+ *   - blink `WebMouseWheelEvent.deltaY` -값 = 콘텐츠를 아래로 스크롤
+ *   - 이는 DOM `WheelEvent.deltaY`와 **반대 부호 컨벤션** (blink → DOM 변환 시 부호 반전).
+ *
+ * Win32 WHEEL_DELTA 부호 컨벤션:
+ *   - WM_MOUSEWHEEL +delta = 휠 forward(앞으로 멀리) = 콘텐츠를 위로 보고 싶음
+ *   - WM_MOUSEWHEEL -delta = 휠 backward(뒤로 당김) = 콘텐츠를 아래로 보고 싶음
+ *
+ * 매핑 결과 (Win32 raw 부호와 blink deltaY 부호가 *같은 방향*을 가리킴):
+ *   - Win32 +delta (forward) → blink deltaY +값 (위로 스크롤) → `deltaY = +rawDelta`
+ *   - Win32 -delta (backward) → blink deltaY -값 (아래로 스크롤) → `deltaY = +rawDelta`
+ *   - 따라서 vertical 축은 **부호 보존** (반전 X).
+ *
+ * 수평 축 (WM_MOUSEHWHEEL):
+ *   - Win32 +delta = 오른쪽 회전. blink `WebMouseWheelEvent.deltaX` +값 = 오른쪽 스크롤.
+ *   - 부호 일치 → `deltaX = +rawDelta` (반전 없음).
+ *   - 사용자 신고 부재(2026-05-22 기준) + 가로 휠 사용 빈도 낮음 → 현 동작 freeze, 신고 시
+ *     별도 PDCA로 재검토.
+ *
+ * 검증 이력 (헛돈 추론 기록 — 미래 회귀 차단용):
+ *   - 2026-05-22 사용자 1차 신고: "위젯 모드 상하 스크롤 반대 방향".
+ *     원본 inline 코드는 `deltaY = -delta`였고 사용자 기준 반대 → 사용자 의도 = `+delta`가 옳음.
+ *   - 1차 fix 후 사용자 "여전히 반대" 보고 → DOM 컨벤션 가설로 `-rawDelta` 재정정.
+ *   - 2차 정정 후에도 사용자 "여전히 반대" + "다른 브라우저는 정상" 보고.
+ *   - 진단 결과: `scripts/electron-dev.mjs`가 `electron/` 폴더 변경을 watch하지 않아
+ *     `dist-electron/main.js`가 한 번도 rebuild되지 않음 → 사용자 모든 보고는 원본
+ *     `-delta` 코드의 동작이었음.
+ *   - 사용자 자가 비교 "다른 브라우저는 정상" → OS 자연 스크롤 가설 부정.
+ *   - 결론: blink convention 확정 (Win32 raw 부호 보존). `deltaY = +rawDelta`.
+ *   - Follow-up: dev 스크립트에 electron main watch 추가가 필요(별도 PDCA).
+ *
+ * 검증 환경: Electron 40.9.3 on Windows 11 24H2.
+ *
+ * @param rawDelta `decodeWheelDelta`가 반환한 signed short (표준 ±120, 정밀 휠/터치패드는 ±N).
+ * @param axis     `mapWin32MsgToWheelAxis`가 반환한 `'vertical' | 'horizontal'`.
+ * @returns Electron `sendInputEvent`에 그대로 넘길 `{ deltaX, deltaY }`. 반대 축은 0.
+ */
+export function computeWheelDeltas(
+  rawDelta: number,
+  axis: WheelAxis,
+): { deltaX: number; deltaY: number } {
+  if (axis === 'vertical') {
+    // blink convention: Win32 raw 부호 그대로 보존 (forward +120 → deltaY +120 → 위로 스크롤).
+    return { deltaX: 0, deltaY: rawDelta };
+  }
+  // horizontal: Win32 +delta (오른쪽 회전) = blink deltaX +값 (오른쪽 스크롤). 부호 일치.
+  return { deltaX: rawDelta, deltaY: 0 };
+}
+
 // ────────────────────────────────────────────────────────────
 // Diagnostic helpers (이슈 B/D 진단 라운드 — 2026-05-06)
 // ────────────────────────────────────────────────────────────
@@ -2050,13 +2212,19 @@ export function snapshotWidgetWin32State(widgetHwnd: bigint): string {
   const parts: string[] = [];
   try {
     parts.push(`hwnd=0x${widgetHwnd.toString(16)}`);
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   try {
     parts.push(`isWindow=${b.IsWindow(widgetHwnd)}`);
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   try {
     parts.push(`isWindowVisible=${b.IsWindowVisible(widgetHwnd)}`);
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   try {
     const styleRaw = b.GetWindowLongPtrW(widgetHwnd, GWL_STYLE);
     const style = typeof styleRaw === 'bigint' ? styleRaw : BigInt(styleRaw);
@@ -2066,7 +2234,9 @@ export function snapshotWidgetWin32State(widgetHwnd: bigint): string {
     // WS_VISIBLE = 0x10000000
     const WS_VISIBLE = 0x10000000n;
     parts.push(`WS_VISIBLE=${(style & WS_VISIBLE) === WS_VISIBLE ? '1' : '0'}`);
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   try {
     const exStyleRaw = b.GetWindowLongPtrW(widgetHwnd, GWL_EXSTYLE);
     const exStyle = typeof exStyleRaw === 'bigint' ? exStyleRaw : BigInt(exStyleRaw);
@@ -2074,16 +2244,22 @@ export function snapshotWidgetWin32State(widgetHwnd: bigint): string {
     // WS_EX_LAYERED = 0x00080000
     const WS_EX_LAYERED = 0x80000n;
     parts.push(`WS_EX_LAYERED=${(exStyle & WS_EX_LAYERED) === WS_EX_LAYERED ? '1' : '0'}`);
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   try {
     const parent = toBigInt(b.GetParent(widgetHwnd));
     parts.push(`parent=0x${parent.toString(16)}`);
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   try {
     const root = toBigInt(b.GetAncestor(widgetHwnd, GA_ROOT));
     parts.push(`gaRoot=0x${root.toString(16)}`);
     parts.push(`isTopLevel=${root === widgetHwnd ? '1' : '0'}`);
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   // GetWindowRect — physical screen 좌표
   try {
     const rectBuf = Buffer.alloc(16);
@@ -2097,7 +2273,9 @@ export function snapshotWidgetWin32State(widgetHwnd: bigint): string {
     } else {
       parts.push('rect=GetWindowRect-failed');
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return parts.join(' ');
 }
 
@@ -2150,10 +2328,12 @@ export function dumpWorkerWLayout(): string {
   }
 
   lines.push(`Progman=0x${cands.progman.toString(16)} rect=${dumpRect(cands.progman)}`);
-  lines.push(`shellDefView=0x${cands.shellDefView.toString(16)} rect=${dumpRect(cands.shellDefView)}`);
+  lines.push(
+    `shellDefView=0x${cands.shellDefView.toString(16)} rect=${dumpRect(cands.shellDefView)}`,
+  );
   lines.push(
     `shellDefViewSiblingWorkerW=0x${cands.shellDefViewSiblingWorkerW.toString(16)} ` +
-    `rect=${dumpRect(cands.shellDefViewSiblingWorkerW)}`,
+      `rect=${dumpRect(cands.shellDefViewSiblingWorkerW)}`,
   );
   lines.push(`standardWorkerWs.count=${cands.standardWorkerWs.length}`);
   cands.standardWorkerWs.forEach((w, i) => {
@@ -2177,7 +2357,9 @@ export type ResizeCursorKind = 'ns' | 'we' | 'nwse' | 'nesw';
  */
 let cachedCursorHandles: { ns: bigint; we: bigint; nwse: bigint; nesw: bigint } | null = null;
 
-function getCursorHandles(b: Win32Bindings): { ns: bigint; we: bigint; nwse: bigint; nesw: bigint } | null {
+function getCursorHandles(
+  b: Win32Bindings,
+): { ns: bigint; we: bigint; nwse: bigint; nesw: bigint } | null {
   if (cachedCursorHandles) return cachedCursorHandles;
   try {
     const ns = toBigInt(b.LoadCursorW(null, IDC_SIZENS));
@@ -2226,7 +2408,9 @@ export function setResizeCursor(kind: ResizeCursorKind): boolean {
  * 추가 진단 헬퍼 — 임의 HWND의 GetWindowRect만 단순 dump.
  * dragstate / mouse hook callback 등 hot path에서 호출 안전 (단순 한 번 호출).
  */
-export function getWindowRect(hwnd: bigint): { x: number; y: number; width: number; height: number } | null {
+export function getWindowRect(
+  hwnd: bigint,
+): { x: number; y: number; width: number; height: number } | null {
   if (isNullHandle(hwnd)) return null;
   let b: Win32Bindings;
   try {

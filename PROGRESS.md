@@ -1,6 +1,6 @@
 # Progress
 
-마지막 업데이트: 2026-05-22 KST
+마지막 업데이트: 2026-05-23 KST
 
 ## Current Version
 
@@ -17,6 +17,8 @@ v2.0.7 (2026-05-22 출시 진행, 검증 게이트 4/4 통과 후 빌드·태깅
 **검증 게이트 4/4 통과 (2026-05-22)**: tsc 0 errors / lint 0 errors / vitest 1566/1566 / regression 24/24.
 
 ## Completed (최근)
+
+- 🟢 **widget-wheel-direction-fix PDCA 완료 (2026-05-23, main 미커밋, 사용자 수동 검증 통과)** — 사용자 신고 "바탕화면 위젯 모드에서 마우스 휠 상하 스크롤이 일반 윈도우와 반대 방향" 핫픽스. 부호 정책을 manager inline `-delta` → 순수 helper `computeWheelDeltas(rawDelta, axis)`(SSOT)로 추출 + blink `WebMouseWheelEvent` 컨벤션 채택(Win32 raw 부호 보존). 신규 메타테스트 16건이 회귀 차단. **진단 과정 헛돔 1.5h**: 1차 fix(`+rawDelta`)와 2차 정정(`-rawDelta`)이 사용자 인스턴스에 한 번도 도달하지 못했음을 `dist-electron/main.js` mtime + `computeWheelDeltas` grep으로 확정 — `scripts/electron-dev.mjs`가 `electron/` 폴더 변경을 watch하지 않는 dev 함정 재발(2026-05-21 realtime-tool-student-page-health에도 동일 함정 기록되어 있었음. PROGRESS.md 미독으로 재발견). `node scripts/build-electron.mjs` 명시 빌드 + dev 재시작으로 blink convention 정답 확정. 검증 게이트: tsc 0(본 PDCA 변경분) / lint 0 / vitest focused 78/78 / regression 24/24. ADR-007. **Follow-up**: `electron-dev.mjs`에 `electron/` watch + 자동 rebuild + electron 재실행 (별도 작은 PDCA 권장). [DECISIONS.md ADR-007](DECISIONS.md)
 
 - 🟢 **ssampin-widget-inline-ux + widget-expanded-editors PDCA 완료 (2026-05-22, main 미커밋)** — 위젯 카드 클릭 → 큰 창(모달) 한 개로 통합 + 그 안에서 추가/수정/삭제까지 가능. 두 PDCA 종결.
   - **ssampin-widget-inline-ux (G001~G011)**: WidgetModal(createPortal+ESC+✕+backdrop+autoSave) / ModalCoordinator `onPreempt`(시스템 모달 발생 시 자동 저장) / `useFocusTrap`(직접 구현, focus-trap-react 무사용) / PIN_FEATURE_MAP 추출 / registry 22→21 위젯(`modalSize`/`modalMode`/`inplaceCapable`/`requiresExplicitCancel` 4 필드) / WidgetCard 클릭→모달 / SortableWidget quadrant dwell 호버 핸들 / DashboardHeader 📋·🎨 두 버튼 / WidgetGrid `isEditMode` 분기 완전 제거 / Settings panel `initialTab` prop / Electron Widget.tsx 헤더 동일 두 버튼 + read-only shim(AC17 Phase 2 이연) / 마이크로 인플레이스 편집 + 5초 Undo(Todo/Memo/DDayCounter, `durationMs=5000` 명시) / MemoFocus 위젯 deprecate / AC4·AC11·AC12·AC14·AC20 메타테스트 추가 / AC11 hitbox 8건(today-class·meal·dday-counter·favorite-tools·image-sticker-2/3/4) 일괄 수정 + mini-calendar는 카드 사이즈 제약상 SKIP_AUDIT.

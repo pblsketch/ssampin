@@ -28,6 +28,7 @@ import {
   mapWin32MsgToClickCount,
   decodeWheelDelta,
   mapWin32MsgToWheelAxis,
+  computeWheelDeltas,
   moveWidget,
   isWidgetOrAncestor,
 } from './win32Desktop';
@@ -167,9 +168,9 @@ describe('Phase 7-A — isMouseMessageOfInterest', () => {
 
   it('다음 phase로 분리된 메시지는 false (NC*/RBUTTONDBLCLK 등)', () => {
     // WM_NCLBUTTONDOWN (Phase 7-C)
-    expect(isMouseMessageOfInterest(0x00A1)).toBe(false);
+    expect(isMouseMessageOfInterest(0x00a1)).toBe(false);
     // WM_NCMOUSEMOVE (Phase 7-D)
-    expect(isMouseMessageOfInterest(0x00A0)).toBe(false);
+    expect(isMouseMessageOfInterest(0x00a0)).toBe(false);
     // WM_RBUTTONDBLCLK는 본 단계에서 미포함 (한국어 키보드/한자 변환 등 비주류 경로 — 추후 추가 가능)
     expect(isMouseMessageOfInterest(0x0206)).toBe(false);
     // WM_MBUTTONDBLCLK 미포함
@@ -178,38 +179,36 @@ describe('Phase 7-A — isMouseMessageOfInterest', () => {
 
   it('완전 무관한 메시지(0, WM_PAINT 등)도 false', () => {
     expect(isMouseMessageOfInterest(0)).toBe(false);
-    expect(isMouseMessageOfInterest(0x000F)).toBe(false); // WM_PAINT
-    expect(isMouseMessageOfInterest(0xFFFF)).toBe(false);
+    expect(isMouseMessageOfInterest(0x000f)).toBe(false); // WM_PAINT
+    expect(isMouseMessageOfInterest(0xffff)).toBe(false);
   });
 });
 
 describe('Phase 7-A — physicalToClient', () => {
   it('widget 좌상단 (0,0)이면 physical = client', () => {
-    expect(physicalToClient({ x: 100, y: 200 }, { x: 0, y: 0 }))
-      .toEqual({ x: 100, y: 200 });
+    expect(physicalToClient({ x: 100, y: 200 }, { x: 0, y: 0 })).toEqual({ x: 100, y: 200 });
   });
 
   it('widget bounds.x/y만큼 빼서 client coord 변환', () => {
-    expect(physicalToClient({ x: 1000, y: 800 }, { x: 800, y: 600 }))
-      .toEqual({ x: 200, y: 200 });
+    expect(physicalToClient({ x: 1000, y: 800 }, { x: 800, y: 600 })).toEqual({ x: 200, y: 200 });
   });
 
   it('physical이 widget 영역 밖이면 음수 client (Win32에서도 합법)', () => {
-    expect(physicalToClient({ x: 50, y: 100 }, { x: 100, y: 100 }))
-      .toEqual({ x: -50, y: 0 });
+    expect(physicalToClient({ x: 50, y: 100 }, { x: 100, y: 100 })).toEqual({ x: -50, y: 0 });
   });
 
   it('multi-monitor: 두 번째 모니터(음수 x)에 widget이 있어도 정확히 변환', () => {
     // primary 우측 (-1920, 0)에 second monitor가 있는 환경
     const widgetBounds = { x: -1500, y: 100 };
     const physicalCursor = { x: -1400, y: 250 };
-    expect(physicalToClient(physicalCursor, widgetBounds))
-      .toEqual({ x: 100, y: 150 });
+    expect(physicalToClient(physicalCursor, widgetBounds)).toEqual({ x: 100, y: 150 });
   });
 
   it('실수 좌표가 들어와도 그대로 빼기 (반올림은 caller 책임)', () => {
-    expect(physicalToClient({ x: 100.5, y: 200.5 }, { x: 50.25, y: 100.75 }))
-      .toEqual({ x: 50.25, y: 99.75 });
+    expect(physicalToClient({ x: 100.5, y: 200.5 }, { x: 50.25, y: 100.75 })).toEqual({
+      x: 50.25,
+      y: 99.75,
+    });
   });
 });
 
@@ -248,9 +247,9 @@ describe('Phase 7-A 재시도 — mapWin32MsgToElectronEvent', () => {
 
   it('매핑 불가 메시지 → null', () => {
     // WM_MOUSEWHEEL/WM_MOUSEHWHEEL은 Phase 7-B에서 'mouseWheel'로 매핑됨 (별도 테스트)
-    expect(mapWin32MsgToElectronEvent(0x00A1)).toBeNull(); // WM_NCLBUTTONDOWN
+    expect(mapWin32MsgToElectronEvent(0x00a1)).toBeNull(); // WM_NCLBUTTONDOWN
     expect(mapWin32MsgToElectronEvent(0)).toBeNull();
-    expect(mapWin32MsgToElectronEvent(0xFFFF)).toBeNull();
+    expect(mapWin32MsgToElectronEvent(0xffff)).toBeNull();
   });
 
   it('isMouseMessageOfInterest이 true인 메시지 8종은 모두 mapping 가능 (null 아님)', () => {
@@ -282,7 +281,7 @@ describe('Phase 7-A 재시도 — mapWin32MsgToButton', () => {
 
   it("매핑 불가 메시지도 안전하게 'left' 기본값", () => {
     // hot path 안전성 — switch/case 누락이 아닌 default 분기 검증
-    expect(mapWin32MsgToButton(0xFFFF)).toBe('left');
+    expect(mapWin32MsgToButton(0xffff)).toBe('left');
     expect(mapWin32MsgToButton(0)).toBe('left');
   });
 });
@@ -305,22 +304,24 @@ describe('Phase 7-A — lParam 16-bit packing 산술', () => {
   // 실제 PostMessage 호출 없이 packing 결과만 확인 — Phase 7-B에서 NC* 메시지 추가 시
   // 동일 packing 패턴을 재사용한다.
   it('client (100, 50)의 lParam encoding은 (50 << 16) | 100', () => {
-    const cx = 100, cy = 50;
-    const lparam = ((cy & 0xFFFF) << 16) | (cx & 0xFFFF);
+    const cx = 100,
+      cy = 50;
+    const lparam = ((cy & 0xffff) << 16) | (cx & 0xffff);
     expect(lparam).toBe((50 << 16) | 100);
     // low word
-    expect(lparam & 0xFFFF).toBe(100);
+    expect(lparam & 0xffff).toBe(100);
     // high word
-    expect((lparam >> 16) & 0xFFFF).toBe(50);
+    expect((lparam >> 16) & 0xffff).toBe(50);
   });
 
   it('음수 client coord도 16-bit signed로 두 word 모두 잘 packing', () => {
-    const cx = -10, cy = -5;
-    const lparam = ((cy & 0xFFFF) << 16) | (cx & 0xFFFF);
+    const cx = -10,
+      cy = -5;
+    const lparam = ((cy & 0xffff) << 16) | (cx & 0xffff);
     // -10의 16-bit 보수: 0xFFF6
-    expect(lparam & 0xFFFF).toBe(0xFFF6);
+    expect(lparam & 0xffff).toBe(0xfff6);
     // -5의 16-bit 보수: 0xFFFB
-    expect(((lparam >>> 16) & 0xFFFF)).toBe(0xFFFB);
+    expect((lparam >>> 16) & 0xffff).toBe(0xfffb);
   });
 });
 
@@ -459,15 +460,111 @@ describe('Phase 7-stable — isWidgetOrAncestor (z-order 검증, 2026-05-06 결�
   // 본 테스트 환경의 동작은 "비-Win32에서는 over-block 안 함"으로 동작 보존.
 });
 
-describe('Phase 7-B — wheel 부호 매핑 정합성', () => {
-  // Phase 7-B 구현 약속: WM_MOUSEWHEEL의 양수 delta → Chromium deltaY 음수
-  //   (Win32: 양수 = 휠을 위로 회전 = 사용자가 위쪽 콘텐츠를 보고 싶다)
-  //   (Chromium: deltaY 양수 = 아래로 스크롤 = 사용자가 아래쪽을 보고 싶다)
-  //
-  // 본 테스트는 helper 자체가 부호 변환을 하지는 않는다 (manager에서 -delta 적용).
-  // helper는 raw signed delta만 반환하고 부호 정책은 manager가 결정.
-  it('decodeWheelDelta는 raw signed short를 반환 (manager가 axis별 부호 정책 적용)', () => {
-    expect(decodeWheelDelta(0x00780000)).toBeGreaterThan(0); // up = positive raw
-    expect(decodeWheelDelta(0xff880000 | 0)).toBeLessThan(0); // down = negative raw
+describe('Phase 7-B — wheel raw decode 부호 보존', () => {
+  // decodeWheelDelta는 부호 정책이 아니라 단순 HIWORD signed 추출만 책임진다.
+  // 부호 정책 SSOT는 computeWheelDeltas (아래 describe). 본 테스트는 raw 추출 단계의
+  // 부호 보존만 회귀 방지로 잡아둔다.
+  it('decodeWheelDelta는 Win32 raw signed short를 부호 그대로 반환', () => {
+    expect(decodeWheelDelta(0x00780000)).toBeGreaterThan(0); // forward (휠 멀리 밀기) = positive raw
+    expect(decodeWheelDelta(0xff880000 | 0)).toBeLessThan(0); // backward (휠 당기기) = negative raw
+  });
+});
+
+// ────────────────────────────────────────────────────────────
+// Phase 7-B — computeWheelDeltas 부호 정책 SSOT 테스트
+// ────────────────────────────────────────────────────────────
+// 본 describe는 위젯 모드 휠 sign policy의 *단일 진실 원천*(SSOT) 테스트다.
+// 과거에는 정책이 manager inline 코드와 주석에만 존재해 회귀를 방지하지 못했고,
+// 결과적으로 2026-05-22 사용자 신고("상하 스크롤이 일반 윈도우와 반대 방향")가 발생.
+// computeWheelDeltas로 추출하며 본 테스트가 부호 정책의 회귀 차단 게이트 역할을 한다.
+//
+// Electron sendInputEvent의 mouseWheel deltaY는 blink WebMouseWheelEvent 컨벤션을 따른다
+// (OS layer 우회해 blink에 직접 합성):
+//   - WM_MOUSEWHEEL +delta (휠 forward)  → blink +deltaY → 콘텐츠 위로 스크롤
+//   - WM_MOUSEWHEEL -delta (휠 backward) → blink -deltaY → 콘텐츠 아래로 스크롤
+// 결론: vertical과 horizontal 모두 Win32 raw 부호를 그대로 보존 (반전 X).
+// (DOM WheelEvent와는 반대 부호 컨벤션이지만, sendInputEvent는 blink 단계로 들어가므로 SSOT 신뢰.)
+describe('Phase 7-B — computeWheelDeltas (부호 정책 SSOT)', () => {
+  it('vertical +120 (휠 forward, 표준 한 클릭) → deltaY=+120 (위로 스크롤), deltaX=0', () => {
+    expect(computeWheelDeltas(120, 'vertical')).toEqual({ deltaX: 0, deltaY: 120 });
+  });
+
+  it('vertical -120 (휠 backward, 표준 한 클릭) → deltaY=-120 (아래로 스크롤), deltaX=0', () => {
+    expect(computeWheelDeltas(-120, 'vertical')).toEqual({ deltaX: 0, deltaY: -120 });
+  });
+
+  it('horizontal +120 (오른쪽 회전) → deltaX=+120 (오른쪽 스크롤), deltaY=0', () => {
+    expect(computeWheelDeltas(120, 'horizontal')).toEqual({ deltaX: 120, deltaY: 0 });
+  });
+
+  it('horizontal -120 (왼쪽 회전) → deltaX=-120 (왼쪽 스크롤), deltaY=0', () => {
+    expect(computeWheelDeltas(-120, 'horizontal')).toEqual({ deltaX: -120, deltaY: 0 });
+  });
+
+  it('정밀 휠 vertical +1 → deltaY=+1 (작은 위로 스크롤)', () => {
+    expect(computeWheelDeltas(1, 'vertical')).toEqual({ deltaX: 0, deltaY: 1 });
+  });
+
+  it('정밀 휠 vertical -40 (터치패드 작은 swipe) → deltaY=-40 (아래로 스크롤)', () => {
+    expect(computeWheelDeltas(-40, 'vertical')).toEqual({ deltaX: 0, deltaY: -40 });
+  });
+
+  it('정밀 휠 horizontal +1 → deltaX=+1', () => {
+    expect(computeWheelDeltas(1, 'horizontal')).toEqual({ deltaX: 1, deltaY: 0 });
+  });
+
+  it('정밀 휠 horizontal -1 → deltaX=-1', () => {
+    expect(computeWheelDeltas(-1, 'horizontal')).toEqual({ deltaX: -1, deltaY: 0 });
+  });
+
+  it('boundary vertical +32767 (signed short max) → deltaY=+32767', () => {
+    expect(computeWheelDeltas(32767, 'vertical')).toEqual({ deltaX: 0, deltaY: 32767 });
+  });
+
+  it('boundary vertical -32768 (signed short min) → deltaY=-32768', () => {
+    expect(computeWheelDeltas(-32768, 'vertical')).toEqual({ deltaX: 0, deltaY: -32768 });
+  });
+
+  it('raw 0 vertical → 둘 다 0 (no-op, 발생 가능성 낮지만 방어)', () => {
+    expect(computeWheelDeltas(0, 'vertical')).toEqual({ deltaX: 0, deltaY: 0 });
+  });
+
+  it('raw 0 horizontal → 둘 다 0', () => {
+    expect(computeWheelDeltas(0, 'horizontal')).toEqual({ deltaX: 0, deltaY: 0 });
+  });
+
+  // ──── 정책 회귀 차단 가드 ────
+  // 본 두 단언이 동시에 깨지면 부호 정책이 잘못된 방향으로 뒤집힌 것.
+  // (blink WebMouseWheelEvent 컨벤션 기준: forward 휠 → deltaY 양수, backward 휠 → deltaY 음수)
+  // 2026-05-22 사용자 비교 검증으로 확정: "다른 브라우저 창에서는 정상" + 원본 -delta 코드 반대
+  // → blink convention 채택. SSOT가 정책 원복(`-rawDelta`) 회귀를 차단함.
+  it('SSOT 회귀 가드: vertical 부호는 raw와 일치 (blink convention; `-rawDelta` 재발 차단)', () => {
+    const fwd = computeWheelDeltas(120, 'vertical');
+    const bwd = computeWheelDeltas(-120, 'vertical');
+    // forward 휠 (Win32 +) → blink +deltaY (위로 스크롤)
+    expect(fwd.deltaY).toBeGreaterThan(0);
+    // backward 휠 (Win32 -) → blink -deltaY (아래로 스크롤)
+    expect(bwd.deltaY).toBeLessThan(0);
+    expect(Math.sign(fwd.deltaY)).toBe(1);
+    expect(Math.sign(bwd.deltaY)).toBe(-1);
+  });
+
+  it('SSOT 회귀 가드: horizontal 부호도 raw와 일치 (freeze, 신고 시 재검토)', () => {
+    const right = computeWheelDeltas(120, 'horizontal');
+    const left = computeWheelDeltas(-120, 'horizontal');
+    expect(right.deltaX).toBeGreaterThan(0);
+    expect(left.deltaX).toBeLessThan(0);
+    expect(Math.sign(right.deltaX)).toBe(1);
+    expect(Math.sign(left.deltaX)).toBe(-1);
+  });
+
+  it('축 분리: vertical일 때 deltaX는 항상 0', () => {
+    expect(computeWheelDeltas(99999, 'vertical').deltaX).toBe(0);
+    expect(computeWheelDeltas(-99999, 'vertical').deltaX).toBe(0);
+  });
+
+  it('축 분리: horizontal일 때 deltaY는 항상 0', () => {
+    expect(computeWheelDeltas(99999, 'horizontal').deltaY).toBe(0);
+    expect(computeWheelDeltas(-99999, 'horizontal').deltaY).toBe(0);
   });
 });
