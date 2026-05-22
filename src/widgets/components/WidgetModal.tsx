@@ -23,9 +23,25 @@ import { useEffect, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useRegisterModal } from '@adapters/hooks/useRegisterModal';
 import { DashboardPinGuard } from '@adapters/components/Dashboard/DashboardPinGuard';
+import { useDesktopWidgetContextStore } from '@adapters/stores/useDesktopWidgetContextStore';
 import { useFocusTrap } from '../utils/useFocusTrap';
 import { PIN_FEATURE_MAP } from '../utils/pinFeatureMap';
 import type { WidgetDefinition } from '../types';
+
+/**
+ * preload.ts 가 노출하는 ESC IPC API. 위젯 BrowserWindow 외 환경에선 undefined.
+ * 안전한 optional chain 호출을 위해 타입 캐스팅.
+ */
+interface WidgetEscapeApi {
+  requestModalEscape?: () => Promise<void> | void;
+  releaseModalEscape?: () => Promise<void> | void;
+  onModalEscape?: (cb: () => void) => () => void;
+}
+function getEscapeApi(): WidgetEscapeApi | null {
+  if (typeof window === 'undefined') return null;
+  const api = (window as unknown as { electronAPI?: WidgetEscapeApi }).electronAPI;
+  return api ?? null;
+}
 
 export type WidgetModalSize = 'sm' | 'md' | 'lg' | 'fullscreen';
 
@@ -117,6 +133,7 @@ export function WidgetModal({
   readOnly = false,
 }: WidgetModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);
+  const isDesktopWidget = useDesktopWidgetContextStore((s) => s.isDesktopWidget);
 
   // saveAndClose는 매 렌더 새로 생성하되, 캡처된 props는 호출 시점 값.
   // 클래스 메소드 형태가 아니므로 ref 패턴은 불필요.
@@ -172,6 +189,23 @@ export function WidgetModal({
     };
     // saveAndClose는 props 캡처라 의존성 추가 시 매 렌더 재구독. props 변화 잡기 위해 의도.
   }, [isOpen, isHead, saveAndClose]);
+
+  // native-desktop 모드(WS_CHILD) 폴백: 위젯이 keyboard focus 를 못 받아 renderer
+  // keydown 이 안 잡히는 경우 main 의 globalShortcut('Escape')로 ESC 신호 수신.
+  // 모달 닫히면 즉시 release 해서 다른 앱의 ESC 정상 복구.
+  useEffect(() => {
+    if (!isOpen || !isHead || !isDesktopWidget) return;
+    const api = getEscapeApi();
+    if (!api?.requestModalEscape || !api.onModalEscape || !api.releaseModalEscape) return;
+    void api.requestModalEscape();
+    const unsub = api.onModalEscape(() => {
+      saveAndClose();
+    });
+    return () => {
+      void api.releaseModalEscape?.();
+      unsub?.();
+    };
+  }, [isOpen, isHead, isDesktopWidget, saveAndClose]);
 
   if (!isOpen || !isHead) return null;
 

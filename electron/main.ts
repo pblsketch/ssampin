@@ -1,4 +1,18 @@
-import { app, BrowserWindow, ipcMain, screen, dialog, shell, Tray, Menu, nativeImage, powerMonitor, globalShortcut, clipboard, session } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  ipcMain,
+  screen,
+  dialog,
+  shell,
+  Tray,
+  Menu,
+  nativeImage,
+  powerMonitor,
+  globalShortcut,
+  clipboard,
+  session,
+} from 'electron';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
@@ -23,22 +37,9 @@ import {
   registerRealtimeWallBoardHandlers,
   saveDirtyWallBoardsSync,
 } from './ipc/realtimeWallBoard';
-import {
-  buildStoreZip,
-  dedupeFilenames,
-  sanitizeFilename,
-  type ZipEntry,
-} from './lib/zipStore';
-import {
-  getDataLocationInfo,
-  openDataLocation,
-  exportBackup,
-  importBackup,
-} from './backupManager';
-import {
-  createDesktopWidgetManager,
-  type DesktopWidgetManager,
-} from './desktopWidgetManager';
+import { buildStoreZip, dedupeFilenames, sanitizeFilename, type ZipEntry } from './lib/zipStore';
+import { getDataLocationInfo, openDataLocation, exportBackup, importBackup } from './backupManager';
+import { createDesktopWidgetManager, type DesktopWidgetManager } from './desktopWidgetManager';
 import type { DesktopModeFallbackEvent } from './desktopWidgetTypes';
 import { initNativeDesktopDiag, diagLog, diagLogVerbose, diagWarn } from './nativeDesktopDiag';
 import {
@@ -56,8 +57,8 @@ let widgetWindow: BrowserWindow | null = null;
 let quickAddWindow: BrowserWindow | null = null;
 let stickerPickerWindow: BrowserWindow | null = null;
 let widgetWasActive = false;
-let widgetActiveBeforeSleep = false;  // suspend/lock 시점의 스냅샷
-let isSystemSuspending = false;       // 시스템 이벤트(화면보호기/잠금/절전)로 인한 close 구분 플래그
+let widgetActiveBeforeSleep = false; // suspend/lock 시점의 스냅샷
+let isSystemSuspending = false; // 시스템 이벤트(화면보호기/잠금/절전)로 인한 close 구분 플래그
 let savePositionTimer: ReturnType<typeof setTimeout> | null = null;
 let tray: Tray | null = null;
 let isQuitting = false;
@@ -119,10 +120,7 @@ type WidgetDesktopMode = 'normal' | 'topmost' | 'native-desktop';
  * @param platformIsWin32   현재 플랫폼이 win32인가. false면 'native-desktop' → 'normal'
  *                          (호출자가 process.platform === 'win32'를 직접 넘겨준다)
  */
-function normalizeDesktopMode(
-  value: unknown,
-  platformIsWin32?: boolean,
-): WidgetDesktopMode {
+function normalizeDesktopMode(value: unknown, platformIsWin32?: boolean): WidgetDesktopMode {
   if (value === 'topmost') return 'topmost';
   if (value === 'native-desktop') {
     if (platformIsWin32 === false) return 'normal';
@@ -189,6 +187,20 @@ async function transitionWidgetMode(
 ): Promise<{ appliedMode: WidgetDesktopMode; fallbackEvent: DesktopModeFallbackEvent | null }> {
   const fromMode = currentDesktopMode;
 
+  // widget-mode-discovery (2026-05-22): 모드 전환 시 위젯 크기·위치가 의도치 않게
+  // 바뀌는 회귀 차단(사용자 보고).
+  //
+  // 원인: SetParent → SetAlwaysOnTop → show()/SW_SHOWNOACTIVATE → 100ms 비동기 토글
+  // 시퀀스 사이에 OS가 다음 중 하나로 bounds를 변경할 수 있음:
+  //   - WS_CHILD ↔ top-level 전환 시 좌표계(부모 client ↔ screen) 재해석으로 시각 위치 이동
+  //   - setAlwaysOnTop(true,'normal')의 z-level 변경이 일부 환경에서 SetWindowPos를 동반
+  //   - SW_SHOWNOACTIVATE/show() 호출이 minimize 또는 hidden 상태에서 default-size로 복원
+  //
+  // 해결: 진입 시점 bounds를 캡처하고, 동기 끝(STAGE 4) + 비동기 100ms 검증(STAGE 5)에서
+  // 변경 감지 시 강제 복원. 사용자가 widget 크기/위치를 의도적으로 바꾼 게 아니므로
+  // 항상 진입 값 유지가 정답.
+  const boundsBeforeTransition = widgetWindow.getBounds();
+
   // ─── 진단 라운드 (이슈 B) — STAGE 0: enter 시점 native state 스냅샷 ───
   // BrowserWindow API 결과(visible/opacity/alwaysOnTop)와 OS 결과(IsWindowVisible/style 비트)
   // 가 disconnect되는 race를 가시화. 매 단계 호출마다 새 dump를 찍어 직전 단계 효과 확인.
@@ -208,7 +220,10 @@ async function transitionWidgetMode(
   // 1. 이전 모드 정리: native-desktop이었거나 manager가 살아있으면 disable.
   //    'idempotent' — disable이 이미 풀린 상태면 no-op.
   if (fromMode === 'native-desktop' || desktopWidgetManager.isEnabled()) {
-    diagLogVerbose('widget', '[transitionMode][stage1-pre-disable] disable() 호출 (이전 native-desktop 정리)');
+    diagLogVerbose(
+      'widget',
+      '[transitionMode][stage1-pre-disable] disable() 호출 (이전 native-desktop 정리)',
+    );
     desktopWidgetManager.disable();
 
     // ─── 진단 (이슈 B) — STAGE 1: disable 직후 native state ───
@@ -288,6 +303,30 @@ async function transitionWidgetMode(
       `win32=${stage4.widgetWin32}`,
   );
 
+  // widget-mode-discovery — STAGE 4 직후 동기 bounds 복원.
+  // 모드 전환 시퀀스가 widget 크기/위치를 건드리지 않도록 진입 값으로 강제 복원.
+  const boundsAfterSync = widgetWindow.getBounds();
+  const boundsChangedSync =
+    boundsAfterSync.x !== boundsBeforeTransition.x ||
+    boundsAfterSync.y !== boundsBeforeTransition.y ||
+    boundsAfterSync.width !== boundsBeforeTransition.width ||
+    boundsAfterSync.height !== boundsBeforeTransition.height;
+  if (boundsChangedSync) {
+    diagLog(
+      'widget',
+      `[transitionMode][stage4-restore-bounds] 모드 전환 중 bounds 변경 감지 — 진입 값으로 복원. ` +
+        `before=${JSON.stringify(boundsBeforeTransition)} after=${JSON.stringify(boundsAfterSync)}`,
+    );
+    widgetWindow.setBounds(boundsBeforeTransition);
+    // native-desktop(WS_CHILD) 환경에서 setBounds가 race로 무시되는 사례 대비
+    // setPosition/setSize 동기 추가 호출(layout handler 패턴과 동일).
+    widgetWindow.setPosition(boundsBeforeTransition.x, boundsBeforeTransition.y);
+    widgetWindow.setSize(boundsBeforeTransition.width, boundsBeforeTransition.height);
+    if (desktopWidgetManager.isEnabled()) {
+      desktopWidgetManager.updateWidgetBounds(widgetWindow);
+    }
+  }
+
   // 5. 비동기 추가 안전망 — 100ms 후 visible 재확인.
   //    DWM 합성이 늦게 반영되는 케이스에서 ShowWindow가 무시됐을 가능성 대응.
   //    hide+show 토글은 Electron의 알려진 visibility 회복 패턴.
@@ -317,6 +356,27 @@ async function transitionWidgetMode(
             `opacity=${widgetWindow.getOpacity()} win32=${stage6.widgetWin32}`,
         );
       }
+      // widget-mode-discovery — 비동기 안전망: 100ms 후에도 bounds가 변경됐다면 재복원.
+      // 100ms 사이의 hide+show 토글 또는 DWM 늦은 합성이 size를 변경했을 가능성 대응.
+      const boundsAfterAsync = widgetWindow.getBounds();
+      const boundsChangedAsync =
+        boundsAfterAsync.x !== boundsBeforeTransition.x ||
+        boundsAfterAsync.y !== boundsBeforeTransition.y ||
+        boundsAfterAsync.width !== boundsBeforeTransition.width ||
+        boundsAfterAsync.height !== boundsBeforeTransition.height;
+      if (boundsChangedAsync) {
+        diagLog(
+          'widget',
+          `[transitionMode][stage5-restore-bounds] 100ms 후 bounds 변경 감지 — 재복원. ` +
+            `before=${JSON.stringify(boundsBeforeTransition)} after=${JSON.stringify(boundsAfterAsync)}`,
+        );
+        widgetWindow.setBounds(boundsBeforeTransition);
+        widgetWindow.setPosition(boundsBeforeTransition.x, boundsBeforeTransition.y);
+        widgetWindow.setSize(boundsBeforeTransition.width, boundsBeforeTransition.height);
+        if (desktopWidgetManager.isEnabled()) {
+          desktopWidgetManager.updateWidgetBounds(widgetWindow);
+        }
+      }
     }
   }, 100);
 
@@ -325,7 +385,7 @@ async function transitionWidgetMode(
 }
 
 let winDRecoveryTimer: ReturnType<typeof setInterval> | null = null;
-let winDRecoveryDedup = false;  // minimize 핸들러와 폴링 중복 방지
+let winDRecoveryDedup = false; // minimize 핸들러와 폴링 중복 방지
 let widgetBoundsBeforeLayout: WidgetBounds | null = null;
 
 interface WidgetBounds {
@@ -355,7 +415,10 @@ function stickerLog(message: string, data?: unknown): void {
   }
   try {
     if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('sticker:diag-log', { message, data: data === undefined ? null : data });
+      mainWindow.webContents.send('sticker:diag-log', {
+        message,
+        data: data === undefined ? null : data,
+      });
     }
   } catch {
     /* ignore */
@@ -369,11 +432,21 @@ type ShortcutSyncConfig = {
 };
 
 function comboToAccelerator(combo: string): string {
-  const tokens = combo.toLowerCase().split('+').map((t) => t.trim()).filter(Boolean);
-  const mod = tokens.includes('mod') || tokens.includes('ctrl') || tokens.includes('cmd') || tokens.includes('meta');
+  const tokens = combo
+    .toLowerCase()
+    .split('+')
+    .map((t) => t.trim())
+    .filter(Boolean);
+  const mod =
+    tokens.includes('mod') ||
+    tokens.includes('ctrl') ||
+    tokens.includes('cmd') ||
+    tokens.includes('meta');
   const alt = tokens.includes('alt') || tokens.includes('option');
   const shift = tokens.includes('shift');
-  const key = tokens.find((t) => !['mod', 'ctrl', 'cmd', 'meta', 'alt', 'option', 'shift'].includes(t));
+  const key = tokens.find(
+    (t) => !['mod', 'ctrl', 'cmd', 'meta', 'alt', 'option', 'shift'].includes(t),
+  );
   if (!key) return '';
   const parts: string[] = [];
   if (mod) parts.push('CommandOrControl');
@@ -668,7 +741,11 @@ function triggerShortcut(commandId: string): void {
   //   별도 frameless BrowserWindow이므로 mainWindow에 IPC를 보내봤자 처리 핸들러가 없다.
   //   COMMAND_TO_KIND 매핑이 없는 commandId라 useGlobalShortcuts onShortcutTriggered가 무시함.
   if (commandId === 'sticker-picker:toggle') {
-    if (stickerPickerWindow && !stickerPickerWindow.isDestroyed() && stickerPickerWindow.isVisible()) {
+    if (
+      stickerPickerWindow &&
+      !stickerPickerWindow.isDestroyed() &&
+      stickerPickerWindow.isVisible()
+    ) {
       stickerPickerWindow.hide();
       stickerPickerWindow.setOpacity(0);
       return;
@@ -722,7 +799,10 @@ function registerLayoutShortcuts(): void {
         diagWarn('widget', `[7-G] layout shortcut ${accel} 등록 실패 (OS 충돌 등)`);
       }
     } catch (e) {
-      diagWarn('widget', `[7-G] layout shortcut ${accel} register 예외: ${e instanceof Error ? e.message : String(e)}`);
+      diagWarn(
+        'widget',
+        `[7-G] layout shortcut ${accel} register 예외: ${e instanceof Error ? e.message : String(e)}`,
+      );
     }
   }
   layoutShortcutsRegistered = true;
@@ -742,7 +822,55 @@ function unregisterLayoutShortcuts(): void {
   diagLog('widget', '[7-G] layout shortcuts unregistered (mouse left widget bounds)');
 }
 
-function applyGlobalShortcuts(config: ShortcutSyncConfig): { registered: string[]; failed: string[] } {
+// ─── 모달 ESC (native-desktop 모드 키보드 focus 부재 회피) ────────────────────
+//
+// native-desktop 모드(WS_CHILD)에선 위젯이 keyboard focus 를 못 받아 renderer 의
+// document/window keydown 리스너가 ESC 를 못 잡는다. 모달이 열린 동안만 main 이
+// globalShortcut('Escape')를 register 해서 widget renderer 로 ESC press 신호를 전달.
+//
+// 충돌 회피: 모달 닫히는 즉시 unregister. 모달 열린 짧은 시간 동안만 시스템 전역 ESC 가
+// 위젯에 캡쳐된다. user-configurable shortcut(applyGlobalShortcuts)의 unregisterAll 이
+// 호출되면 본 등록도 사라지지만, 모달은 ✕/배경/취소 버튼 으로도 닫을 수 있어 치명적 아님.
+
+let modalEscapeRegistered = false;
+
+function registerModalEscape(): void {
+  if (modalEscapeRegistered) return;
+  try {
+    const ok = globalShortcut.register('Escape', () => {
+      if (widgetWindow && !widgetWindow.isDestroyed()) {
+        widgetWindow.webContents.send('widget:modal-escape');
+      }
+    });
+    if (ok) {
+      modalEscapeRegistered = true;
+      diagLog('widget', '[modal] global Escape shortcut registered (modal open)');
+    } else {
+      diagWarn('widget', '[modal] Escape shortcut register failed (OS conflict)');
+    }
+  } catch (e) {
+    diagWarn(
+      'widget',
+      `[modal] Escape register exception: ${e instanceof Error ? e.message : String(e)}`,
+    );
+  }
+}
+
+function unregisterModalEscape(): void {
+  if (!modalEscapeRegistered) return;
+  try {
+    globalShortcut.unregister('Escape');
+  } catch {
+    // best-effort
+  }
+  modalEscapeRegistered = false;
+  diagLog('widget', '[modal] global Escape shortcut unregistered (modal closed)');
+}
+
+function applyGlobalShortcuts(config: ShortcutSyncConfig): {
+  registered: string[];
+  failed: string[];
+} {
   globalShortcut.unregisterAll();
   const registered: string[] = [];
   const failed: string[] = [];
@@ -767,7 +895,9 @@ function applyGlobalShortcuts(config: ShortcutSyncConfig): { registered: string[
         console.log(`[shortcuts] ${b.id} → ${accel} (registered)`);
         registered.push(b.id);
       } else {
-        console.log(`[shortcuts] ${b.id} → ${accel} REGISTRATION FAILED (likely OS-level conflict)`);
+        console.log(
+          `[shortcuts] ${b.id} → ${accel} REGISTRATION FAILED (likely OS-level conflict)`,
+        );
         failed.push(b.id);
         // PRD §3.1.4 — sticker 단축키 등록 실패 시 메인 창에 토스트용 이벤트
         if (b.id === 'sticker-picker:toggle' && mainWindow && !mainWindow.isDestroyed()) {
@@ -863,8 +993,8 @@ function getDefaultWidgetBounds(width: number): { x: number; y: number } {
 // frameless 윈도우가 60px 미만일 때 상단/하단에 어두운 잔상 + 알파 합성 깨짐).
 // 내부 캐릭터는 56×56로 표시하고 외곽 4px은 transparent margin으로 잡혀서
 // 시각적으로는 동일하지만 OS 합성 이슈를 피한다.
-const ICON_SIZE = 64;        // BrowserWindow 크기 (Issue #30171 회피)
-const ICON_VISUAL = 56;      // 내부 캐릭터 표시 크기
+const ICON_SIZE = 64; // BrowserWindow 크기 (Issue #30171 회피)
+const ICON_VISUAL = 56; // 내부 캐릭터 표시 크기
 const ICON_MARGIN = 24;
 
 interface IconBounds {
@@ -947,7 +1077,10 @@ let iconDragSeq = 0;
 
 function startIconDrag(): void {
   iconDragSeq++;
-  diagLog('icon', `startIconDrag seq=${iconDragSeq} iconWindow=${!!iconWindow} destroyed=${iconWindow?.isDestroyed()}`);
+  diagLog(
+    'icon',
+    `startIconDrag seq=${iconDragSeq} iconWindow=${!!iconWindow} destroyed=${iconWindow?.isDestroyed()}`,
+  );
   if (!iconWindow || iconWindow.isDestroyed()) {
     diagWarn('icon', 'startIconDrag aborted — no window');
     return;
@@ -961,7 +1094,10 @@ function startIconDrag(): void {
     startWinX: bounds.x,
     startWinY: bounds.y,
   };
-  diagLog('icon', `startIconDrag start mouse=(${mouse.x},${mouse.y}) bounds=(${bounds.x},${bounds.y})`);
+  diagLog(
+    'icon',
+    `startIconDrag start mouse=(${mouse.x},${mouse.y}) bounds=(${bounds.x},${bounds.y})`,
+  );
   // 16ms (60fps) 폴링으로 마우스 따라가기
   iconDragInterval = setInterval(() => {
     if (!iconDragState || !iconWindow || iconWindow.isDestroyed()) {
@@ -1086,7 +1222,10 @@ function buildIconWindow(): void {
     diagWarn('icon', `iconWindow did-fail-load code=${code} desc=${desc} url=${url}`);
   });
   iconWindow.webContents.on('render-process-gone', (_e, details) => {
-    diagWarn('icon', `iconWindow render-process-gone reason=${details.reason} exitCode=${details.exitCode}`);
+    diagWarn(
+      'icon',
+      `iconWindow render-process-gone reason=${details.reason} exitCode=${details.exitCode}`,
+    );
   });
   iconWindow.on('show', () => {
     diagLog('icon', `iconWindow event:show bounds=${JSON.stringify(iconWindow?.getBounds())}`);
@@ -1129,7 +1268,9 @@ function shouldReduceMotion(): boolean {
     const raw = fs.readFileSync(filePath, 'utf-8');
     const settings = JSON.parse(raw) as { widget?: { icon?: { reduceMotion?: boolean } } };
     if (settings.widget?.icon?.reduceMotion === true) return true;
-  } catch { /* fall through */ }
+  } catch {
+    /* fall through */
+  }
   // env 변수 fallback (테스트/QA용)
   return process.env['SSAMPIN_REDUCE_MOTION'] === '1';
 }
@@ -1205,7 +1346,10 @@ function executeWindowTransition(target: WindowMode): Promise<void> {
   diagLog('icon', `executeWindowTransition queued target=${target}`);
   windowTransitionInProgress = windowTransitionInProgress.then(async () => {
     const opts = readSettingsWidgetOptions();
-    diagLog('icon', `executeWindowTransition running target=${target} currentWindowMode=${currentWindowMode}`);
+    diagLog(
+      'icon',
+      `executeWindowTransition running target=${target} currentWindowMode=${currentWindowMode}`,
+    );
 
     switch (target) {
       case 'icon': {
@@ -1214,7 +1358,10 @@ function executeWindowTransition(target: WindowMode): Promise<void> {
 
         // 3) 아이콘 윈도우 보장 + fade-in
         const needsBuild = !iconWindow || iconWindow.isDestroyed();
-        diagLog('icon', `case icon: needsBuild=${needsBuild} iconWindow=${!!iconWindow} destroyed=${iconWindow?.isDestroyed()}`);
+        diagLog(
+          'icon',
+          `case icon: needsBuild=${needsBuild} iconWindow=${!!iconWindow} destroyed=${iconWindow?.isDestroyed()}`,
+        );
         if (needsBuild) buildIconWindow();
         if (iconWindow && !iconWindow.isDestroyed()) {
           const wasVisible = iconWindow.isVisible();
@@ -1222,7 +1369,10 @@ function executeWindowTransition(target: WindowMode): Promise<void> {
           if (!wasVisible) iconWindow.setOpacity(0);
           await fadeInIconWindow(220);
           ensureIconOnScreen();
-          diagLog('icon', `case icon: post-fadeIn bounds=${JSON.stringify(iconWindow.getBounds())} isVisible=${iconWindow.isVisible()}`);
+          diagLog(
+            'icon',
+            `case icon: post-fadeIn bounds=${JSON.stringify(iconWindow.getBounds())} isVisible=${iconWindow.isVisible()}`,
+          );
         } else {
           diagWarn('icon', 'case icon: iconWindow null/destroyed AFTER buildIconWindow attempt');
         }
@@ -1240,7 +1390,7 @@ function executeWindowTransition(target: WindowMode): Promise<void> {
 
       case 'widget': {
         currentWindowMode = 'widget';
-        lastUserMode = 'widget';  // icon 진입 시 복원할 위치 즉시 기록
+        lastUserMode = 'widget'; // icon 진입 시 복원할 위치 즉시 기록
 
         // 1) 아이콘 fade-out 먼저 (위젯 표시 전에 사라지게)
         if (iconWindow && !iconWindow.isDestroyed() && iconWindow.isVisible()) {
@@ -1270,7 +1420,7 @@ function executeWindowTransition(target: WindowMode): Promise<void> {
 
       case 'main': {
         currentWindowMode = 'main';
-        lastUserMode = 'main';  // icon 진입 시 복원할 위치 즉시 기록
+        lastUserMode = 'main'; // icon 진입 시 복원할 위치 즉시 기록
 
         // 1) 메인 보장 + show + focus
         if (!mainWindow || mainWindow.isDestroyed()) {
@@ -1325,7 +1475,7 @@ function checkInstallation(): void {
 
   const isFromTemp = exePath.toLowerCase().startsWith(tempDir.toLowerCase());
   const isFromDownloads = downloadsPatterns.some((p) =>
-    exePath.toLowerCase().includes(p.toLowerCase())
+    exePath.toLowerCase().includes(p.toLowerCase()),
   );
   const isSetupExe = path.basename(exePath).toLowerCase().includes('setup');
 
@@ -1399,7 +1549,7 @@ function createWindow(): void {
         void executeWindowTransition('widget');
       } else {
         // tray: 위젯 전환 없이 트레이로만 숨김 (메모리 절약 모드와 무관)
-        currentWindowMode = 'main';  // 트레이로만 숨겼으므로 main 상태 유지
+        currentWindowMode = 'main'; // 트레이로만 숨겼으므로 main 상태 유지
         mainWindow?.hide();
       }
     }
@@ -1430,15 +1580,21 @@ function createTray(): void {
     const contextMenu = Menu.buildFromTemplate([
       {
         label: '쌤핀 열기',
-        click: () => { void executeWindowTransition('main'); },
+        click: () => {
+          void executeWindowTransition('main');
+        },
       },
       {
         label: '위젯 모드',
-        click: () => { void executeWindowTransition('widget'); },
+        click: () => {
+          void executeWindowTransition('widget');
+        },
       },
       {
         label: '아이콘 모드',
-        click: () => { void executeWindowTransition('icon'); },
+        click: () => {
+          void executeWindowTransition('icon');
+        },
       },
       { type: 'separator' },
       {
@@ -1518,7 +1674,9 @@ function recoverWidget(): void {
   if (!widgetWindow || widgetWindow.isDestroyed()) return;
   if (winDRecoveryDedup) return;
   winDRecoveryDedup = true;
-  setTimeout(() => { winDRecoveryDedup = false; }, 500);
+  setTimeout(() => {
+    winDRecoveryDedup = false;
+  }, 500);
 
   widgetWindow.restore();
   widgetWindow.showInactive();
@@ -1627,7 +1785,10 @@ async function doRestoreWidget(): Promise<void> {
 
     await new Promise<void>((resolve) => {
       setTimeout(async () => {
-        if (!widgetWindow || widgetWindow.isDestroyed()) { resolve(); return; }
+        if (!widgetWindow || widgetWindow.isDestroyed()) {
+          resolve();
+          return;
+        }
 
         widgetWindow.show();
         widgetWindow.setBounds(bounds);
@@ -1655,20 +1816,25 @@ async function doRestoreWidget(): Promise<void> {
 
         // 500ms 뒤 렌더러 실제 동작 검증
         setTimeout(async () => {
-          if (!widgetWindow || widgetWindow.isDestroyed()) { resolve(); return; }
+          if (!widgetWindow || widgetWindow.isDestroyed()) {
+            resolve();
+            return;
+          }
 
           // 검증 1: visibility
           if (!widgetWindow.isVisible()) {
             console.log('[widget] 절전 복귀 — invisible, 재생성');
             recreateWidget();
-            resolve(); return;
+            resolve();
+            return;
           }
 
           // 검증 2: 렌더러 크래시
           if (widgetWindow.webContents.isCrashed()) {
             console.log('[widget] 절전 복귀 — 렌더러 크래시, 재생성');
             recreateWidget();
-            resolve(); return;
+            resolve();
+            return;
           }
 
           // 검증 3: 렌더러 응답 (3초 타임아웃)
@@ -1687,7 +1853,6 @@ async function doRestoreWidget(): Promise<void> {
         }, 500);
       }, 200);
     });
-
   } else if (shouldRestore) {
     // ── 케이스 B: 창 파괴됨 + 절전 전 활성이었음 ──
     console.log('[widget] 절전 복귀 — 위젯 파괴됨, 재생성');
@@ -1754,7 +1919,7 @@ function createWidgetWindow(
     thickFrame: false,
     alwaysOnTop: false,
     resizable: false,
-    skipTaskbar: true,           // 작업표시줄에 나타나지 않음 (바탕화면 위젯)
+    skipTaskbar: true, // 작업표시줄에 나타나지 않음 (바탕화면 위젯)
     show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -1801,7 +1966,10 @@ function createWidgetWindow(
 
     if (process.platform === 'win32') {
       const desktopMode = normalizeDesktopMode(options.desktopMode, true);
-      diagLog('widget', `attachAndShow start — requested desktopMode=${desktopMode} (raw=${String(options.desktopMode)})`);
+      diagLog(
+        'widget',
+        `attachAndShow start — requested desktopMode=${desktopMode} (raw=${String(options.desktopMode)})`,
+      );
 
       // 시동 시점은 currentDesktopMode='normal' 초기값이라 transitionWidgetMode의
       // disable() 분기는 자연스럽게 skip된다. enable + visibility 보장 흐름은
@@ -1872,7 +2040,9 @@ function createWidgetWindow(
   });
 
   widgetWindow.on('close', (e) => {
-    console.log(`[diag] widget close — isQuitting=${isQuitting}, isSystemSuspending=${isSystemSuspending}, widgetWasActive=${widgetWasActive}`);
+    console.log(
+      `[diag] widget close — isQuitting=${isQuitting}, isSystemSuspending=${isSystemSuspending}, widgetWasActive=${widgetWasActive}`,
+    );
     if (!isQuitting) {
       e.preventDefault();
       widgetWindow?.hide();
@@ -1888,7 +2058,9 @@ function createWidgetWindow(
   });
 
   widgetWindow.on('closed', () => {
-    console.log(`[diag] widget closed — isQuitting=${isQuitting}, isSystemSuspending=${isSystemSuspending}`);
+    console.log(
+      `[diag] widget closed — isQuitting=${isQuitting}, isSystemSuspending=${isSystemSuspending}`,
+    );
     stopWinDRecovery();
     // 바탕화면 아이콘 아래 모드: 위젯 창이 사라졌으므로 native attach 정리
     desktopWidgetManager.disable();
@@ -1909,27 +2081,49 @@ function createWidgetWindow(
   });
 }
 
-function readSettingsWidgetOptions(): { width: number; height: number; startInWidgetMode: boolean; closeAction: 'widget' | 'tray' | 'ask'; desktopMode: WidgetDesktopMode; memorySaverMode: boolean } {
+function readSettingsWidgetOptions(): {
+  width: number;
+  height: number;
+  startInWidgetMode: boolean;
+  closeAction: 'widget' | 'tray' | 'ask';
+  desktopMode: WidgetDesktopMode;
+  memorySaverMode: boolean;
+} {
   const isWin32 = process.platform === 'win32';
   try {
     const filePath = path.join(getDataDir(), 'settings.json');
     if (fs.existsSync(filePath)) {
       const raw = fs.readFileSync(filePath, 'utf-8');
       const settings = JSON.parse(raw) as {
-        widget?: { width?: number; height?: number; transparent?: boolean; closeToWidget?: boolean; desktopMode?: string; memorySaverMode?: boolean };
+        widget?: {
+          width?: number;
+          height?: number;
+          transparent?: boolean;
+          closeToWidget?: boolean;
+          desktopMode?: string;
+          memorySaverMode?: boolean;
+        };
       };
       const rawMode = settings.widget?.desktopMode;
       // 마이그레이션: legacy alias → 정식 값
       const aliasResolved =
-        rawMode === 'floating' ? 'topmost'
-        : (rawMode === 'auto' || rawMode === 'desktop' || rawMode === 'behind' || rawMode === 'above') ? 'normal'
-        : rawMode;
+        rawMode === 'floating'
+          ? 'topmost'
+          : rawMode === 'auto' ||
+              rawMode === 'desktop' ||
+              rawMode === 'behind' ||
+              rawMode === 'above'
+            ? 'normal'
+            : rawMode;
       // 정규화 helper로 단일 통과 (unknown/native-desktop on non-win32 모두 안전 처리)
       const desktopMode = normalizeDesktopMode(aliasResolved, isWin32);
       // 하위 호환: closeAction 없으면 closeToWidget으로 판단
+      const widgetSettings = settings.widget as
+        | { closeAction?: 'widget' | 'tray' | 'ask'; closeToWidget?: boolean }
+        | undefined;
       const closeAction: 'widget' | 'tray' | 'ask' =
-        (settings.widget as any)?.closeAction ??
-        (settings.widget?.closeToWidget === false ? 'tray' : 'widget');
+        widgetSettings?.closeAction ??
+        (widgetSettings?.closeToWidget === false ? 'tray' : 'widget');
       return {
         width: settings.widget?.width ?? 920,
         height: settings.widget?.height ?? 700,
@@ -1942,7 +2136,14 @@ function readSettingsWidgetOptions(): { width: number; height: number; startInWi
   } catch {
     // fall through to defaults
   }
-  return { width: 920, height: 700, startInWidgetMode: false, closeAction: 'widget', desktopMode: 'normal', memorySaverMode: true };
+  return {
+    width: 920,
+    height: 700,
+    startInWidgetMode: false,
+    closeAction: 'widget',
+    desktopMode: 'normal',
+    memorySaverMode: true,
+  };
 }
 
 function setupAutoUpdater(): void {
@@ -1978,7 +2179,7 @@ function setupAutoUpdater(): void {
     console.error('[autoUpdater] error:', err.message);
     // 네트워크 오류는 사용자에게 표시하지 않음 (백그라운드 체크이므로)
     const silentErrors = ['net::ERR_', 'ENOTFOUND', 'ETIMEDOUT', 'ECONNREFUSED', 'ECONNRESET'];
-    const isSilent = silentErrors.some(keyword => err.message.includes(keyword));
+    const isSilent = silentErrors.some((keyword) => err.message.includes(keyword));
     if (!isSilent && mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('update:error', err.message);
     }
@@ -2036,64 +2237,69 @@ function registerIpcHandlers(): void {
   });
 
   // data:write — JSON 파일 쓰기 (백업 + atomic write + 검증)
-  ipcMain.handle(
-    'data:write',
-    (_event, filename: string, data: string): void => {
-      const dataDir = getDataDir();
-      const filePath = path.join(dataDir, `${filename}.json`);
-      const backupPath = path.join(dataDir, `${filename}.backup.json`);
+  ipcMain.handle('data:write', (_event, filename: string, data: string): void => {
+    const dataDir = getDataDir();
+    const filePath = path.join(dataDir, `${filename}.json`);
+    const backupPath = path.join(dataDir, `${filename}.backup.json`);
 
-      // Step 1: 기존 파일이 있으면 백업 생성
-      try {
-        if (fs.existsSync(filePath)) {
-          const existing = fs.readFileSync(filePath, 'utf-8');
-          if (existing.length > 10) {
-            fs.writeFileSync(backupPath, existing, 'utf-8');
-          }
+    // Step 1: 기존 파일이 있으면 백업 생성
+    try {
+      if (fs.existsSync(filePath)) {
+        const existing = fs.readFileSync(filePath, 'utf-8');
+        if (existing.length > 10) {
+          fs.writeFileSync(backupPath, existing, 'utf-8');
         }
-      } catch {
-        // 백업 실패해도 저장은 계속 진행
       }
+    } catch {
+      // 백업 실패해도 저장은 계속 진행
+    }
 
-      // Step 2: 임시 파일에 먼저 쓰기 (atomic write)
-      const tempPath = path.join(dataDir, `${filename}.tmp.json`);
-      try {
-        fs.writeFileSync(tempPath, data, 'utf-8');
+    // Step 2: 임시 파일에 먼저 쓰기 (atomic write)
+    const tempPath = path.join(dataDir, `${filename}.tmp.json`);
+    try {
+      fs.writeFileSync(tempPath, data, 'utf-8');
 
-        // Step 3: 쓰기 검증 — 다시 읽어서 맞는지 확인
-        const verification = fs.readFileSync(tempPath, 'utf-8');
-        if (verification.length !== data.length) {
-          console.error(
-            `[data:write] 검증 실패: ${filename} (기대 ${data.length}바이트, 실제 ${verification.length}바이트)`,
-          );
-          try { fs.unlinkSync(tempPath); } catch { /* ignore */ }
-          return;
+      // Step 3: 쓰기 검증 — 다시 읽어서 맞는지 확인
+      const verification = fs.readFileSync(tempPath, 'utf-8');
+      if (verification.length !== data.length) {
+        console.error(
+          `[data:write] 검증 실패: ${filename} (기대 ${data.length}바이트, 실제 ${verification.length}바이트)`,
+        );
+        try {
+          fs.unlinkSync(tempPath);
+        } catch {
+          /* ignore */
         }
-
-        // Step 4: 검증 통과 → 임시 파일을 원본으로 교체 (rename은 atomic)
-        fs.renameSync(tempPath, filePath);
-      } catch (writeErr) {
-        console.error(`[data:write] 저장 실패: ${filename}`, writeErr);
-        try { fs.unlinkSync(tempPath); } catch { /* ignore */ }
         return;
       }
 
-      // 다른 창에 데이터 변경 알림 (메인 ↔ 위젯 동기화)
-      broadcastToAllWindows('data:changed', filename, _event.sender.id);
-
-      if (filename === 'settings' && !process.env['VITE_DEV_SERVER_URL']) {
-        try {
-          const settings = JSON.parse(data);
-          const autoLaunch = settings.system?.autoLaunch ?? false;
-          app.setLoginItemSettings({
-            openAtLogin: autoLaunch,
-          });
-        } catch {
-          // ignore parsing error
-        }
+      // Step 4: 검증 통과 → 임시 파일을 원본으로 교체 (rename은 atomic)
+      fs.renameSync(tempPath, filePath);
+    } catch (writeErr) {
+      console.error(`[data:write] 저장 실패: ${filename}`, writeErr);
+      try {
+        fs.unlinkSync(tempPath);
+      } catch {
+        /* ignore */
       }
-    },
-  );
+      return;
+    }
+
+    // 다른 창에 데이터 변경 알림 (메인 ↔ 위젯 동기화)
+    broadcastToAllWindows('data:changed', filename, _event.sender.id);
+
+    if (filename === 'settings' && !process.env['VITE_DEV_SERVER_URL']) {
+      try {
+        const settings = JSON.parse(data);
+        const autoLaunch = settings.system?.autoLaunch ?? false;
+        app.setLoginItemSettings({
+          openAtLogin: autoLaunch,
+        });
+      } catch {
+        // ignore parsing error
+      }
+    }
+  });
 
   ipcMain.handle('data:remove', (_event, filename: string): void => {
     const dataDir = getDataDir();
@@ -2116,26 +2322,29 @@ function registerIpcHandlers(): void {
 
   // system:getMemoryMetrics — 현재 Electron 앱 프로세스별 메모리 사용량 조회 (진단용)
   // 반환: { totalBytes, processes: [{ type, pid, memoryBytes }] }
-  ipcMain.handle('system:getMemoryMetrics', async (): Promise<{
-    totalBytes: number;
-    processes: Array<{ type: string; pid: number; memoryBytes: number; name?: string }>;
-  }> => {
-    try {
-      const metrics = app.getAppMetrics();
-      const processes = metrics.map((m) => ({
-        type: m.type,
-        pid: m.pid,
-        // workingSetSize는 KB 단위 → bytes로 변환
-        memoryBytes: (m.memory?.workingSetSize ?? 0) * 1024,
-        name: (m as { name?: string }).name,
-      }));
-      const totalBytes = processes.reduce((sum, p) => sum + p.memoryBytes, 0);
-      return { totalBytes, processes };
-    } catch (err) {
-      console.error('[system:getMemoryMetrics] 실패:', err);
-      return { totalBytes: 0, processes: [] };
-    }
-  });
+  ipcMain.handle(
+    'system:getMemoryMetrics',
+    async (): Promise<{
+      totalBytes: number;
+      processes: Array<{ type: string; pid: number; memoryBytes: number; name?: string }>;
+    }> => {
+      try {
+        const metrics = app.getAppMetrics();
+        const processes = metrics.map((m) => ({
+          type: m.type,
+          pid: m.pid,
+          // workingSetSize는 KB 단위 → bytes로 변환
+          memoryBytes: (m.memory?.workingSetSize ?? 0) * 1024,
+          name: (m as { name?: string }).name,
+        }));
+        const totalBytes = processes.reduce((sum, p) => sum + p.memoryBytes, 0);
+        return { totalBytes, processes };
+      } catch (err) {
+        console.error('[system:getMemoryMetrics] 실패:', err);
+        return { totalBytes: 0, processes: [] };
+      }
+    },
+  );
 
   // window:setAlwaysOnTop — 메인 창에만 적용 (위젯은 모드별 자동 관리)
   ipcMain.handle('window:setAlwaysOnTop', (_event, flag: boolean): void => {
@@ -2174,7 +2383,9 @@ function registerIpcHandlers(): void {
     } else {
       // 위젯이 없으면 생성하고, 표시된 뒤 메인창 숨김/해제
       const widgetOptions = readSettingsWidgetOptions();
-      createWidgetWindow(widgetOptions, () => hideOrDestroyMainWindow(widgetOptions.memorySaverMode));
+      createWidgetWindow(widgetOptions, () =>
+        hideOrDestroyMainWindow(widgetOptions.memorySaverMode),
+      );
     }
   });
 
@@ -2314,52 +2525,57 @@ function registerIpcHandlers(): void {
   });
 
   // window:applyWidgetSettings — 설정 페이지에서 위젯 설정 변경 시 실시간 적용
-  ipcMain.handle('window:applyWidgetSettings', async (
-    _event,
-    widget: { opacity: number; desktopMode: string },
-  ): Promise<void> => {
-    if (!widgetWindow || widgetWindow.isDestroyed()) return;
+  ipcMain.handle(
+    'window:applyWidgetSettings',
+    async (_event, widget: { opacity: number; desktopMode: string }): Promise<void> => {
+      if (!widgetWindow || widgetWindow.isDestroyed()) return;
 
-    // OS BrowserWindow.setOpacity는 native-desktop(WS_CHILD) 모드에서 OS가 무시하기 때문에
-    // 모드별로 위젯 가시성이 부조화하게 보이는 회귀를 일으킨다(사용자 보고: native-desktop에서
-    // 일반/항상 위로 전환할 때 갑자기 어두워짐).
-    //
-    // 결정(2026-05-06): widget.opacity는 **CSS 배경 투명도(Widget.tsx의 rgba)** 로만 사용한다.
-    // OS 알파 호출은 영구 차단해 모든 모드에서 일관되게 동작.
-    // payload의 opacity는 settings store가 이미 갱신했고 renderer가 CSS rgba에 적용 중이므로
-    // main process는 무시한다.
+      // OS BrowserWindow.setOpacity는 native-desktop(WS_CHILD) 모드에서 OS가 무시하기 때문에
+      // 모드별로 위젯 가시성이 부조화하게 보이는 회귀를 일으킨다(사용자 보고: native-desktop에서
+      // 일반/항상 위로 전환할 때 갑자기 어두워짐).
+      //
+      // 결정(2026-05-06): widget.opacity는 **CSS 배경 투명도(Widget.tsx의 rgba)** 로만 사용한다.
+      // OS 알파 호출은 영구 차단해 모든 모드에서 일관되게 동작.
+      // payload의 opacity는 settings store가 이미 갱신했고 renderer가 CSS rgba에 적용 중이므로
+      // main process는 무시한다.
 
-    // 데스크톱 모드 변경 (정규화 helper 통과 — 'native-desktop' silent drop 방지)
-    const requestedMode = normalizeDesktopMode(widget.desktopMode, process.platform === 'win32');
+      // 데스크톱 모드 변경 (정규화 helper 통과 — 'native-desktop' silent drop 방지)
+      const requestedMode = normalizeDesktopMode(widget.desktopMode, process.platform === 'win32');
 
-    // 가드 보강: 같은 모드여도 native-desktop이면서 manager가 enable 상태가 아니면 재시도 허용.
-    //   - createWidgetWindow가 attachAndShow 실행 중인 동안 사용자가 라디오를 다시 누르는 race
-    //   - healthCheck 후 stale로 판정되어 disable됐는데 settings상 모드는 그대로인 경우
-    //   - dev 핫리로드로 manager 인스턴스가 살아있지만 attach 상태가 깨진 경우
-    const shouldSkip =
-      requestedMode === currentDesktopMode &&
-      !(requestedMode === 'native-desktop' && !desktopWidgetManager.isEnabled());
-    if (shouldSkip) {
-      diagLog('widget', `applyWidgetSettings skip (already ${currentDesktopMode}, manager.isEnabled=${desktopWidgetManager.isEnabled()})`);
-      return;
-    }
+      // 가드 보강: 같은 모드여도 native-desktop이면서 manager가 enable 상태가 아니면 재시도 허용.
+      //   - createWidgetWindow가 attachAndShow 실행 중인 동안 사용자가 라디오를 다시 누르는 race
+      //   - healthCheck 후 stale로 판정되어 disable됐는데 settings상 모드는 그대로인 경우
+      //   - dev 핫리로드로 manager 인스턴스가 살아있지만 attach 상태가 깨진 경우
+      const shouldSkip =
+        requestedMode === currentDesktopMode &&
+        !(requestedMode === 'native-desktop' && !desktopWidgetManager.isEnabled());
+      if (shouldSkip) {
+        diagLog(
+          'widget',
+          `applyWidgetSettings skip (already ${currentDesktopMode}, manager.isEnabled=${desktopWidgetManager.isEnabled()})`,
+        );
+        return;
+      }
 
-    console.log(`[widget] 설정 변경 요청: ${currentDesktopMode} → ${requestedMode} (manager.isEnabled=${desktopWidgetManager.isEnabled()})`);
+      console.log(
+        `[widget] 설정 변경 요청: ${currentDesktopMode} → ${requestedMode} (manager.isEnabled=${desktopWidgetManager.isEnabled()})`,
+      );
 
-    // 모드 전환 단일 흐름 — disable + 안정화 대기 + 새 모드 적용 + visibility 보장
-    // (transitionWidgetMode 내부에서 currentDesktopMode 갱신 + 100ms 후 visibility 재검증).
-    const { appliedMode, fallbackEvent } = await transitionWidgetMode(
-      widgetWindow,
-      requestedMode,
-      'applyWidgetSettings',
-    );
-    console.log(`[widget] 적용 완료: ${appliedMode}`);
+      // 모드 전환 단일 흐름 — disable + 안정화 대기 + 새 모드 적용 + visibility 보장
+      // (transitionWidgetMode 내부에서 currentDesktopMode 갱신 + 100ms 후 visibility 재검증).
+      const { appliedMode, fallbackEvent } = await transitionWidgetMode(
+        widgetWindow,
+        requestedMode,
+        'applyWidgetSettings',
+      );
+      console.log(`[widget] 적용 완료: ${appliedMode}`);
 
-    // ── fallback 발생 시 renderer에 토스트 알림 ──
-    if (fallbackEvent) {
-      broadcastToAllWindows('desktopMode:fallback', fallbackEvent);
-    }
-  });
+      // ── fallback 발생 시 renderer에 토스트 알림 ──
+      if (fallbackEvent) {
+        broadcastToAllWindows('desktopMode:fallback', fallbackEvent);
+      }
+    },
+  );
 
   // window:setOpacity — 호환성 유지를 위한 no-op IPC.
   // 결정(2026-05-06): widget.opacity는 CSS 배경 투명도(Widget.tsx rgba)로만 사용하고
@@ -2376,10 +2592,16 @@ function registerIpcHandlers(): void {
     const bounds = widgetWindow.getBounds();
 
     const newBounds = { ...bounds };
-    if (edge.includes('right'))  newBounds.width = Math.max(300, bounds.width + dx);
+    if (edge.includes('right')) newBounds.width = Math.max(300, bounds.width + dx);
     if (edge.includes('bottom')) newBounds.height = Math.max(200, bounds.height + dy);
-    if (edge.includes('left'))   { newBounds.x = bounds.x + dx; newBounds.width = Math.max(300, bounds.width - dx); }
-    if (edge.includes('top'))    { newBounds.y = bounds.y + dy; newBounds.height = Math.max(200, bounds.height - dy); }
+    if (edge.includes('left')) {
+      newBounds.x = bounds.x + dx;
+      newBounds.width = Math.max(300, bounds.width - dx);
+    }
+    if (edge.includes('top')) {
+      newBounds.y = bounds.y + dy;
+      newBounds.height = Math.max(200, bounds.height - dy);
+    }
 
     widgetWindow.setBounds(newBounds);
     scheduleWidgetBoundsSave();
@@ -2419,18 +2641,43 @@ function registerIpcHandlers(): void {
     ): void => {
       if (!widgetWindow || widgetWindow.isDestroyed()) return;
       const validEdges: ReadonlyArray<string> = [
-        'top', 'bottom', 'left', 'right',
-        'top-left', 'top-right', 'bottom-left', 'bottom-right',
+        'top',
+        'bottom',
+        'left',
+        'right',
+        'top-left',
+        'top-right',
+        'bottom-left',
+        'bottom-right',
       ];
-      const filtered = (regions ?? []).filter(r => validEdges.includes(r.edge));
+      const filtered = (regions ?? []).filter((r) => validEdges.includes(r.edge));
       // ResizeRegion 타입은 desktopWidgetTypes에서 import — main.ts는 string으로 받아 manager에 위임.
       // edge는 매니저 내부에서 includes()로만 사용하므로 string 그대로 전달.
       desktopWidgetManager.setResizeRegions(
-        filtered.map(r => ({ edge: r.edge as 'top'|'bottom'|'left'|'right'|'top-left'|'top-right'|'bottom-left'|'bottom-right', dipRect: r.dipRect })),
+        filtered.map((r) => ({
+          edge: r.edge as
+            | 'top'
+            | 'bottom'
+            | 'left'
+            | 'right'
+            | 'top-left'
+            | 'top-right'
+            | 'bottom-left'
+            | 'bottom-right',
+          dipRect: r.dipRect,
+        })),
         widgetWindow,
       );
     },
   );
+
+  // 모달 ESC IPC — widget renderer가 모달 open/close 시 호출
+  ipcMain.handle('widget:request-modal-escape', (): void => {
+    registerModalEscape();
+  });
+  ipcMain.handle('widget:release-modal-escape', (): void => {
+    unregisterModalEscape();
+  });
 
   ipcMain.handle(
     'widget:setHeaderRegion',
@@ -2454,7 +2701,10 @@ function registerIpcHandlers(): void {
         desktopWidgetManager.setHeaderRegions(sanitized, widgetWindow, sanitizedExcludes);
       } catch (e) {
         // setHeaderRegions는 manager 내부에서 throw하지 않지만 안전망.
-        diagLog('widget', `setHeaderRegions 예외 (무시): ${e instanceof Error ? e.message : String(e)}`);
+        diagLog(
+          'widget',
+          `setHeaderRegions 예외 (무시): ${e instanceof Error ? e.message : String(e)}`,
+        );
       }
     },
   );
@@ -2508,15 +2758,16 @@ function registerIpcHandlers(): void {
     saveIconBounds(fallback);
   });
 
-  ipcMain.handle('icon:expand', async (_event, payload: { to: 'main' | 'widget' | 'restore' }): Promise<void> => {
-    const target = payload?.to ?? 'restore';
-    const resolved: WindowMode =
-      target === 'main' ? 'main' :
-      target === 'widget' ? 'widget' :
-      lastUserMode;  // 'restore' → 마지막 사용 상태
-    diagLog('icon', `icon:expand to=${target} resolved=${resolved} lastUserMode=${lastUserMode}`);
-    await executeWindowTransition(resolved);
-  });
+  ipcMain.handle(
+    'icon:expand',
+    async (_event, payload: { to: 'main' | 'widget' | 'restore' }): Promise<void> => {
+      const target = payload?.to ?? 'restore';
+      const resolved: WindowMode =
+        target === 'main' ? 'main' : target === 'widget' ? 'widget' : lastUserMode; // 'restore' → 마지막 사용 상태
+      diagLog('icon', `icon:expand to=${target} resolved=${resolved} lastUserMode=${lastUserMode}`);
+      await executeWindowTransition(resolved);
+    },
+  );
 
   /**
    * 아이콘 윈도우 renderer 가 송출하는 진단 로그를 main 의 diagLog 로 라우팅.
@@ -2616,10 +2867,7 @@ function registerIpcHandlers(): void {
       }
 
       // 5. 현재 모드 상태
-      diagLog(
-        'widget',
-        `[diagDump:${safeLabel}] currentDesktopMode=${currentDesktopMode}`,
-      );
+      diagLog('widget', `[diagDump:${safeLabel}] currentDesktopMode=${currentDesktopMode}`);
     } catch (e) {
       diagWarn(
         'widget',
@@ -2684,7 +2932,8 @@ function registerIpcHandlers(): void {
         if (code === 'EBUSY' || code === 'EPERM' || code === 'EACCES') {
           throw new Error(
             `파일이 다른 프로그램에서 열려 있어 저장할 수 없습니다.\n` +
-            `해당 파일(${path.basename(filePath)})을 닫은 뒤 다시 시도하거나, 다른 이름으로 저장해 주세요.`,
+              `해당 파일(${path.basename(filePath)})을 닫은 뒤 다시 시도하거나, 다른 이름으로 저장해 주세요.`,
+            { cause: err },
           );
         }
         throw err;
@@ -2716,32 +2965,27 @@ function registerIpcHandlers(): void {
         printBackground: true,
         landscape: options?.landscape ?? false,
         pageSize: options?.pageSize ?? 'A4',
-        ...(options?.marginsType !== undefined
-          ? { marginsType: options.marginsType }
-          : {}),
+        ...(options?.marginsType !== undefined ? { marginsType: options.marginsType } : {}),
       });
       return data.buffer as ArrayBuffer;
     },
   );
 
   // export:openFile — 방금 저장한 파일 열기 (핸들 기반). 핸들은 소비하지 않음(여러 번 열 수 있음).
-  ipcMain.handle(
-    'export:openFile',
-    async (_event, args: { handle: string }): Promise<void> => {
-      if (
-        !args ||
-        typeof args !== 'object' ||
-        typeof (args as { handle?: unknown }).handle !== 'string'
-      ) {
-        throw new Error(
-          'export:openFile 시그니처가 변경되었습니다. { handle } 형태로 호출하세요 (export:showSaveDialog 가 발급한 handle).',
-        );
-      }
-      const filePath = peekOpenPath(args.handle);
-      const err = await shell.openPath(filePath);
-      if (err) throw new Error(`파일 열기에 실패했습니다 — ${err}`);
-    },
-  );
+  ipcMain.handle('export:openFile', async (_event, args: { handle: string }): Promise<void> => {
+    if (
+      !args ||
+      typeof args !== 'object' ||
+      typeof (args as { handle?: unknown }).handle !== 'string'
+    ) {
+      throw new Error(
+        'export:openFile 시그니처가 변경되었습니다. { handle } 형태로 호출하세요 (export:showSaveDialog 가 발급한 handle).',
+      );
+    }
+    const filePath = peekOpenPath(args.handle);
+    const err = await shell.openPath(filePath);
+    if (err) throw new Error(`파일 열기에 실패했습니다 — ${err}`);
+  });
 
   // shell:openExternal — 기본 브라우저에서 URL 열기. 프로토콜 화이트리스트(https/http/mailto)만.
   // file:/javascript:/vbscript:/smb:/커스텀 스킴 전부 차단 — 침해된 렌더러가 OS 핸들러를 통해
@@ -2766,9 +3010,9 @@ function registerIpcHandlers(): void {
   //   (c) 디스크상 존재하는 디렉토리 (PC 폴더 즐겨찾기 — 사용자가 디렉토리 선택 dialog 로 직접 고른 폴더.
   //       폴더를 탐색기로 여는 것은 코드 실행이 아니며, 임의 *파일* 실행(.exe 등)은 (c) 가 막는다).
   // 그 외 절대경로 파일은 거부.
-  const OPEN_PATH_ALLOWED_ROOTS: Array<'userData' | 'downloads' | 'documents' | 'desktop' | 'home' | 'temp'> = [
-    'userData', 'downloads', 'documents', 'desktop', 'home', 'temp',
-  ];
+  const OPEN_PATH_ALLOWED_ROOTS: Array<
+    'userData' | 'downloads' | 'documents' | 'desktop' | 'home' | 'temp'
+  > = ['userData', 'downloads', 'documents', 'desktop', 'home', 'temp'];
   function isUnderAllowedRoot(target: string): boolean {
     const resolved = path.resolve(target);
     for (const name of OPEN_PATH_ALLOWED_ROOTS) {
@@ -2819,14 +3063,21 @@ function registerIpcHandlers(): void {
   });
 
   // dialog:showOpen — 폴더/파일 선택 다이얼로그
-  ipcMain.handle('dialog:showOpen', async (
-    _event,
-    options: { title?: string; properties?: Array<'openFile' | 'openDirectory' | 'multiSelections'>; filters?: { name: string; extensions: string[] }[] },
-  ): Promise<{ canceled: boolean; filePaths: string[] }> => {
-    const win = mainWindow ?? BrowserWindow.getFocusedWindow();
-    if (!win) throw new Error('No window available');
-    return dialog.showOpenDialog(win, options);
-  });
+  ipcMain.handle(
+    'dialog:showOpen',
+    async (
+      _event,
+      options: {
+        title?: string;
+        properties?: Array<'openFile' | 'openDirectory' | 'multiSelections'>;
+        filters?: { name: string; extensions: string[] }[];
+      },
+    ): Promise<{ canceled: boolean; filePaths: string[] }> => {
+      const win = mainWindow ?? BrowserWindow.getFocusedWindow();
+      if (!win) throw new Error('No window available');
+      return dialog.showOpenDialog(win, options);
+    },
+  );
 
   // ─── 백업·복원·데이터 위치 센터 ──────────────────────────────────────
   // 외부 서버 전송 절대 없음. 모든 처리가 main 프로세스 + 사용자 디스크 안에서만 일어난다.
@@ -2857,9 +3108,7 @@ function registerIpcHandlers(): void {
       if (!mainWindow) return null;
       const result = await dialog.showOpenDialog(mainWindow, {
         title: '알람음 파일 선택',
-        filters: [
-          { name: '오디오 파일', extensions: ['mp3', 'wav', 'ogg', 'm4a', 'webm'] },
-        ],
+        filters: [{ name: '오디오 파일', extensions: ['mp3', 'wav', 'ogg', 'm4a', 'webm'] }],
         properties: ['openFile'],
       });
       if (result.canceled || result.filePaths.length === 0) return null;
@@ -2891,9 +3140,7 @@ function registerIpcHandlers(): void {
       if (!mainWindow) return null;
       const result = await dialog.showOpenDialog(mainWindow, {
         title: '폰트 파일 선택',
-        filters: [
-          { name: '폰트 파일', extensions: ['woff2', 'woff', 'ttf', 'otf'] },
-        ],
+        filters: [{ name: '폰트 파일', extensions: ['woff2', 'woff', 'ttf', 'otf'] }],
         properties: ['openFile'],
       });
       if (result.canceled || result.filePaths.length === 0) return null;
@@ -2944,16 +3191,13 @@ function registerIpcHandlers(): void {
   );
 
   // 클립보드 텍스트 읽기 — 렌더러 navigator.clipboard 권한 제약 우회
-  ipcMain.handle(
-    'clipboard:readText',
-    async (): Promise<string> => {
-      try {
-        return clipboard.readText();
-      } catch {
-        return '';
-      }
-    },
-  );
+  ipcMain.handle('clipboard:readText', async (): Promise<string> => {
+    try {
+      return clipboard.readText();
+    } catch {
+      return '';
+    }
+  });
 
   // 즐겨찾기 가져오기 — .json (쌤핀 내보내기) 또는 .html (브라우저 내보내기)
   ipcMain.handle(
@@ -3061,108 +3305,101 @@ function registerIpcHandlers(): void {
     },
   );
 
-  ipcMain.handle(
-    'forms:removeBinary',
-    async (_event, args: { relPath: string }): Promise<void> => {
-      const abs = resolveFormsPath(args.relPath, true);
-      try {
-        await fs.promises.unlink(abs);
-      } catch (err) {
-        if ((err as NodeJS.ErrnoException).code === 'ENOENT') return; // no-op
-        throw err;
-      }
-    },
-  );
+  ipcMain.handle('forms:removeBinary', async (_event, args: { relPath: string }): Promise<void> => {
+    const abs = resolveFormsPath(args.relPath, true);
+    try {
+      await fs.promises.unlink(abs);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') return; // no-op
+      throw err;
+    }
+  });
 
-  ipcMain.handle(
-    'forms:openFile',
-    async (_event, args: { relPath: string }): Promise<void> => {
-      const abs = resolveFormsPath(args.relPath, true);
-      try {
-        await fs.promises.access(abs);
-      } catch {
-        throw new Error('forms: 파일이 존재하지 않습니다');
-      }
-      const err = await shell.openPath(abs);
-      if (err) throw new Error(`forms: 기본 프로그램으로 열기 실패 — ${err}`);
-    },
-  );
+  ipcMain.handle('forms:openFile', async (_event, args: { relPath: string }): Promise<void> => {
+    const abs = resolveFormsPath(args.relPath, true);
+    try {
+      await fs.promises.access(abs);
+    } catch {
+      throw new Error('forms: 파일이 존재하지 않습니다');
+    }
+    const err = await shell.openPath(abs);
+    if (err) throw new Error(`forms: 기본 프로그램으로 열기 실패 — ${err}`);
+  });
 
   // forms:printPdf — PDF 서식 바로 인쇄.
   // Chromium 내장 PDF 뷰어로 로드 후 webContents.print({ silent: false }) 로 OS 인쇄 대화상자 표시.
   // OS 연결 프로그램(Acrobat/Edge 등) 의존 제거 — 어떤 환경에서도 일관된 인쇄 흐름 보장.
-  ipcMain.handle(
-    'forms:printPdf',
-    async (_event, args: { relPath: string }): Promise<void> => {
-      const abs = resolveFormsPath(args.relPath, true);
-      const ext = path.extname(abs).toLowerCase();
-      if (ext !== '.pdf') {
-        throw new Error(`forms:printPdf 는 .pdf 전용입니다 (현재: ${ext})`);
-      }
-      try {
-        await fs.promises.access(abs);
-      } catch {
-        throw new Error('forms: 파일이 존재하지 않습니다');
-      }
+  ipcMain.handle('forms:printPdf', async (_event, args: { relPath: string }): Promise<void> => {
+    const abs = resolveFormsPath(args.relPath, true);
+    const ext = path.extname(abs).toLowerCase();
+    if (ext !== '.pdf') {
+      throw new Error(`forms:printPdf 는 .pdf 전용입니다 (현재: ${ext})`);
+    }
+    try {
+      await fs.promises.access(abs);
+    } catch {
+      throw new Error('forms: 파일이 존재하지 않습니다');
+    }
 
-      // hidden BrowserWindow — Chromium 에 PDF 뷰어 내장되어 있으므로 loadFile 로 직접 로드 가능
-      const parent = mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined;
-      const printWin = new BrowserWindow({
-        show: false,
-        width: 800,
-        height: 1000,
-        parent,
-        webPreferences: {
-          sandbox: true,
-          contextIsolation: true,
-          nodeIntegration: false,
-          // PDF 뷰어 플러그인 사용 허용
-          plugins: true,
-        },
+    // hidden BrowserWindow — Chromium 에 PDF 뷰어 내장되어 있으므로 loadFile 로 직접 로드 가능
+    const parent = mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined;
+    const printWin = new BrowserWindow({
+      show: false,
+      width: 800,
+      height: 1000,
+      parent,
+      webPreferences: {
+        sandbox: true,
+        contextIsolation: true,
+        nodeIntegration: false,
+        // PDF 뷰어 플러그인 사용 허용
+        plugins: true,
+      },
+    });
+
+    try {
+      await printWin.loadFile(abs);
+      // PDF 렌더링은 did-finish-load 이후에도 약간의 시간이 필요 (Chromium 내장 뷰어)
+      await new Promise<void>((r) => setTimeout(r, 600));
+
+      await new Promise<void>((resolve, reject) => {
+        printWin.webContents.print(
+          { silent: false, printBackground: true },
+          (success, failureReason) => {
+            // 사용자 취소(cancelled)는 정상 흐름 — 에러로 취급하지 않음
+            if (success) {
+              resolve();
+            } else if (!failureReason || failureReason === 'cancelled') {
+              resolve();
+            } else {
+              reject(new Error(failureReason));
+            }
+          },
+        );
       });
-
+    } catch (err) {
+      // 폴백: Chromium PDF 뷰어 실패(예: 잘못된 PDF, 플러그인 차단 등)
+      // shell.openPath 로 OS 기본 뷰어에서 열도록 시도 → 사용자가 Ctrl+P 로 인쇄
       try {
-        await printWin.loadFile(abs);
-        // PDF 렌더링은 did-finish-load 이후에도 약간의 시간이 필요 (Chromium 내장 뷰어)
-        await new Promise<void>((r) => setTimeout(r, 600));
-
-        await new Promise<void>((resolve, reject) => {
-          printWin.webContents.print(
-            { silent: false, printBackground: true },
-            (success, failureReason) => {
-              // 사용자 취소(cancelled)는 정상 흐름 — 에러로 취급하지 않음
-              if (success) {
-                resolve();
-              } else if (!failureReason || failureReason === 'cancelled') {
-                resolve();
-              } else {
-                reject(new Error(failureReason));
-              }
-            },
-          );
-        });
-      } catch (err) {
-        // 폴백: Chromium PDF 뷰어 실패(예: 잘못된 PDF, 플러그인 차단 등)
-        // shell.openPath 로 OS 기본 뷰어에서 열도록 시도 → 사용자가 Ctrl+P 로 인쇄
-        try {
-          const openErr = await shell.openPath(abs);
-          if (openErr) {
-            throw new Error(
-              `PDF 인쇄에 실패했습니다. (상세: ${err instanceof Error ? err.message : String(err)}) 폴백도 실패: ${openErr}`,
-            );
-          }
-        } catch (fallbackErr) {
+        const openErr = await shell.openPath(abs);
+        if (openErr) {
           throw new Error(
-            `PDF 인쇄에 실패했습니다. (${err instanceof Error ? err.message : String(err)})`,
+            `PDF 인쇄에 실패했습니다. (상세: ${err instanceof Error ? err.message : String(err)}) 폴백도 실패: ${openErr}`,
+            { cause: err },
           );
         }
-      } finally {
-        if (!printWin.isDestroyed()) {
-          printWin.destroy();
-        }
+      } catch (fallbackErr) {
+        throw new Error(
+          `PDF 인쇄에 실패했습니다. (${err instanceof Error ? err.message : String(err)})`,
+          { cause: fallbackErr },
+        );
       }
-    },
-  );
+    } finally {
+      if (!printWin.isDestroyed()) {
+        printWin.destroy();
+      }
+    }
+  });
 
   ipcMain.handle(
     'forms:listBinary',
@@ -3246,11 +3483,7 @@ function registerIpcHandlers(): void {
   // sourcePath 안전 검증 — path traversal/null-byte 차단 + 절대 경로 강제
   // 외부에서 들어오는 경로 인자(파일 시스템에 접근하는 모든 sticker 핸들러)에서 공통 사용
   function validateAbsoluteSourcePath(sourcePath: unknown): string {
-    if (
-      typeof sourcePath !== 'string' ||
-      sourcePath.length === 0 ||
-      sourcePath.includes('\0')
-    ) {
+    if (typeof sourcePath !== 'string' || sourcePath.length === 0 || sourcePath.includes('\0')) {
       throw new Error('sticker: 잘못된 파일 경로입니다');
     }
     if (!path.isAbsolute(sourcePath)) {
@@ -3366,19 +3599,16 @@ function registerIpcHandlers(): void {
   }
 
   // sticker:delete-image — PNG 파일 삭제 (ENOENT 무시)
-  ipcMain.handle(
-    'sticker:delete-image',
-    async (_event, stickerId: string): Promise<void> => {
-      const id = validateStickerId(stickerId);
-      const filePath = path.join(getStickerImageDir(), `${id}.png`);
-      try {
-        await fs.promises.unlink(filePath);
-      } catch (err) {
-        if ((err as NodeJS.ErrnoException).code === 'ENOENT') return;
-        throw err;
-      }
-    },
-  );
+  ipcMain.handle('sticker:delete-image', async (_event, stickerId: string): Promise<void> => {
+    const id = validateStickerId(stickerId);
+    const filePath = path.join(getStickerImageDir(), `${id}.png`);
+    try {
+      await fs.promises.unlink(filePath);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') return;
+      throw err;
+    }
+  });
 
   // sticker:export-zip — 다중 이모티콘 PNG를 ZIP 한 파일로 내보내기.
   // 입력: items=[{ stickerId, filename }] (filename은 사용자 친화 이름, .png 확장자 포함)
@@ -3488,10 +3718,7 @@ function registerIpcHandlers(): void {
     return new Promise((resolve, reject) => {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { exec } = require('child_process') as {
-        exec: (
-          cmd: string,
-          cb: (error: Error | null) => void,
-        ) => void;
+        exec: (cmd: string, cb: (error: Error | null) => void) => void;
       };
       // JSON.stringify로 quote escape — 공백/특수문자 안전
       exec(`osascript -e ${JSON.stringify(script)}`, (error: Error | null) => {
@@ -3559,10 +3786,13 @@ function registerIpcHandlers(): void {
       pasteReason = err instanceof Error ? err.message : String(err);
       // 진단을 위해 stack까지 포함한 error 로그 — 사용자 환경에서 native binding 로드
       // 실패(libnut 미언팩 등) 원인을 추적하기 쉽도록 한다.
-      stickerLog('[sticker:paste] nut-js require/dispatch failed:', err instanceof Error ? err.message : String(err));
+      stickerLog(
+        '[sticker:paste] nut-js require/dispatch failed:',
+        err instanceof Error ? err.message : String(err),
+      );
       console.error(
         '[sticker:paste] nut-js require/dispatch failed:',
-        err instanceof Error ? err.stack ?? err.message : err,
+        err instanceof Error ? (err.stack ?? err.message) : err,
       );
     }
 
@@ -3589,7 +3819,9 @@ function registerIpcHandlers(): void {
               }
             })();
             if (prevSig.length > 0 && prevSig === stickerSig) {
-              stickerLog('[sticker:paste] skipping restore — prev image identical to sticker (polluted snapshot)');
+              stickerLog(
+                '[sticker:paste] skipping restore — prev image identical to sticker (polluted snapshot)',
+              );
               return;
             }
             clipboard.writeImage(prevImage);
@@ -3599,7 +3831,10 @@ function registerIpcHandlers(): void {
             stickerLog('[sticker:paste] restored prev clipboard text');
           }
         } catch (restoreErr) {
-          stickerLog('[sticker:paste] 클립보드 복원 실패', restoreErr instanceof Error ? restoreErr.message : String(restoreErr));
+          stickerLog(
+            '[sticker:paste] 클립보드 복원 실패',
+            restoreErr instanceof Error ? restoreErr.message : String(restoreErr),
+          );
         }
       }, 1500);
     }
@@ -3652,15 +3887,16 @@ function registerIpcHandlers(): void {
     let pasteReason: string | undefined;
     try {
       stickerLog('[sticker:paste] dispatching Cmd+V via osascript');
-      await runAppleScript(
-        'tell application "System Events" to keystroke "v" using command down',
-      );
+      await runAppleScript('tell application "System Events" to keystroke "v" using command down');
       autoPasted = true;
       stickerLog('[sticker:paste] osascript dispatch complete, autoPasted=true');
     } catch (err) {
       autoPasted = false;
       pasteReason = 'osascript-failed';
-      stickerLog('[sticker:paste] macOS osascript 실패', err instanceof Error ? err.message : String(err));
+      stickerLog(
+        '[sticker:paste] macOS osascript 실패',
+        err instanceof Error ? err.message : String(err),
+      );
       console.error(
         '[sticker:paste] macOS osascript 실패',
         err instanceof Error ? err.message : err,
@@ -3688,7 +3924,9 @@ function registerIpcHandlers(): void {
               }
             })();
             if (prevSig.length > 0 && prevSig === stickerSig) {
-              stickerLog('[sticker:paste] skipping restore (macOS) — prev image identical to sticker');
+              stickerLog(
+                '[sticker:paste] skipping restore (macOS) — prev image identical to sticker',
+              );
               return;
             }
             clipboard.writeImage(prevImage);
@@ -3698,7 +3936,10 @@ function registerIpcHandlers(): void {
             stickerLog('[sticker:paste] restored prev clipboard text (macOS)');
           }
         } catch (restoreErr) {
-          stickerLog('[sticker:paste] 클립보드 복원 실패 (macOS)', restoreErr instanceof Error ? restoreErr.message : String(restoreErr));
+          stickerLog(
+            '[sticker:paste] 클립보드 복원 실패 (macOS)',
+            restoreErr instanceof Error ? restoreErr.message : String(restoreErr),
+          );
         }
       }, 1500);
     }
@@ -3742,7 +3983,11 @@ function registerIpcHandlers(): void {
       // 규명 후 다시 활성화 검토.
       // 원래 라인: const restoreMode = args.restorePreviousClipboard === true;
       const restoreMode = false;
-      stickerLog('[sticker:paste] start', { id, restoreMode, requestedRestore: args.restorePreviousClipboard === true });
+      stickerLog('[sticker:paste] start', {
+        id,
+        restoreMode,
+        requestedRestore: args.restorePreviousClipboard === true,
+      });
 
       // 1) 이전 클립보드 스냅샷 (복원 모드)
       let prevImage: Electron.NativeImage | null = null;
@@ -3806,7 +4051,10 @@ function registerIpcHandlers(): void {
         try {
           stickerPickerWindow.setAlwaysOnTop(false);
         } catch (topErr) {
-          stickerLog('[sticker:paste] setAlwaysOnTop(false) 실패', topErr instanceof Error ? topErr.message : String(topErr));
+          stickerLog(
+            '[sticker:paste] setAlwaysOnTop(false) 실패',
+            topErr instanceof Error ? topErr.message : String(topErr),
+          );
         }
         stickerPickerWindow.hide();
         stickerPickerWindow.setOpacity(0);
@@ -3830,25 +4078,26 @@ function registerIpcHandlers(): void {
         try {
           stickerPickerWindow.setAlwaysOnTop(true, 'screen-saver');
         } catch (topErr) {
-          stickerLog('[sticker:paste] setAlwaysOnTop(true) 재무장 실패', topErr instanceof Error ? topErr.message : String(topErr));
+          stickerLog(
+            '[sticker:paste] setAlwaysOnTop(true) 재무장 실패',
+            topErr instanceof Error ? topErr.message : String(topErr),
+          );
         }
       }
 
       // 6) 자동 붙여넣기 실패 시 메인 윈도우에 폴백 안내 이벤트 송신.
       //    피커 윈도우는 이미 hide되어 있어 피커 측 토스트가 보이지 않으므로,
       //    메인 윈도우에서 "이모티콘이 클립보드에 복사됐어요. Ctrl+V로 붙여넣어 주세요." 토스트를 띄운다.
-      if (
-        result.ok &&
-        !result.autoPasted &&
-        mainWindow &&
-        !mainWindow.isDestroyed()
-      ) {
+      if (result.ok && !result.autoPasted && mainWindow && !mainWindow.isDestroyed()) {
         try {
           mainWindow.webContents.send('sticker:fallback-paste-needed', {
             reason: result.reason ?? '',
           });
         } catch (sendErr) {
-          stickerLog('[sticker:paste] fallback IPC 송신 실패', sendErr instanceof Error ? sendErr.message : String(sendErr));
+          stickerLog(
+            '[sticker:paste] fallback IPC 송신 실패',
+            sendErr instanceof Error ? sendErr.message : String(sendErr),
+          );
           console.error('[sticker:paste] fallback IPC 송신 실패', sendErr);
         }
       }
@@ -3902,17 +4151,14 @@ function registerIpcHandlers(): void {
   );
 
   // sticker:get-platform — 렌더러가 macOS 전용 UI(접근성 안내 등)를 조건부 렌더링.
-  ipcMain.handle(
-    'sticker:get-platform',
-    (): { platform: 'win32' | 'darwin' | 'linux' } => {
-      const p = process.platform;
-      if (p === 'win32' || p === 'darwin' || p === 'linux') {
-        return { platform: p };
-      }
-      // freebsd, openbsd 등 — UI상 linux 취급
-      return { platform: 'linux' };
-    },
-  );
+  ipcMain.handle('sticker:get-platform', (): { platform: 'win32' | 'darwin' | 'linux' } => {
+    const p = process.platform;
+    if (p === 'win32' || p === 'darwin' || p === 'linux') {
+      return { platform: p };
+    }
+    // freebsd, openbsd 등 — UI상 linux 취급
+    return { platform: 'linux' };
+  });
 
   // ─── 시트 분할 (Phase 2B / PRD §3.4.3) ───
   // SheetSplitter 클래스를 inline으로 보유 (tsconfig.electron rootDir=electron 한계).
@@ -4024,10 +4270,7 @@ function registerIpcHandlers(): void {
   // sticker:validate-sheet — 시트 dimension 검증용 (renderer가 grid size 선택 전 호출)
   ipcMain.handle(
     'sticker:validate-sheet',
-    async (
-      _event,
-      args: { sourcePath: string },
-    ): Promise<{ width: number; height: number }> => {
+    async (_event, args: { sourcePath: string }): Promise<{ width: number; height: number }> => {
       const resolved = validateAbsoluteSourcePath(args.sourcePath);
       const buffer = await fs.promises.readFile(resolved);
       const img = nativeImage.createFromBuffer(buffer);
@@ -4069,10 +4312,7 @@ function registerIpcHandlers(): void {
       const size = img.getSize();
 
       const sessionId = crypto.randomBytes(16).toString('hex');
-      const expireTimer = setTimeout(
-        () => splitSessionCache.delete(sessionId),
-        10 * 60 * 1000,
-      );
+      const expireTimer = setTimeout(() => splitSessionCache.delete(sessionId), 10 * 60 * 1000);
       splitSessionCache.set(sessionId, {
         cells,
         sheetWidth: size.width,
@@ -4190,8 +4430,13 @@ function registerIpcHandlers(): void {
 function createStartupBackups(): void {
   const dataDir = getDataDir();
   const criticalFiles = [
-    'attendance', 'teaching-classes', 'curriculum-progress',
-    'settings', 'memos', 'todos', 'events',
+    'attendance',
+    'teaching-classes',
+    'curriculum-progress',
+    'settings',
+    'memos',
+    'todos',
+    'events',
   ];
 
   for (const filename of criticalFiles) {
@@ -4243,13 +4488,20 @@ if (!gotTheLock) {
     // 진단 로그 fanout (console + IPC + file) 초기화.
     // BrowserWindow 직접 import를 피하기 위해 closure로 주입.
     initNativeDesktopDiag(
-      () => BrowserWindow.getAllWindows() as unknown as readonly {
-        isDestroyed: () => boolean;
-        webContents: { isDestroyed: () => boolean; send: (channel: string, payload: unknown) => void };
-      }[],
+      () =>
+        BrowserWindow.getAllWindows() as unknown as readonly {
+          isDestroyed: () => boolean;
+          webContents: {
+            isDestroyed: () => boolean;
+            send: (channel: string, payload: unknown) => void;
+          };
+        }[],
       app.getPath('userData'),
     );
-    diagLog('native-desktop', `nativeDesktopDiag initialized — log file=${app.getPath('userData')}/native-desktop-diag.log`);
+    diagLog(
+      'native-desktop',
+      `nativeDesktopDiag initialized — log file=${app.getPath('userData')}/native-desktop-diag.log`,
+    );
     createStartupBackups();
     checkInstallation();
     registerIpcHandlers();
@@ -4289,11 +4541,14 @@ if (!gotTheLock) {
       }, 5000);
 
       // 4시간마다 재체크
-      setInterval(() => {
-        autoUpdater.checkForUpdates().catch((e: Error) => {
-          console.error('[autoUpdater] periodic check failed:', e.message);
-        });
-      }, 4 * 60 * 60 * 1000);
+      setInterval(
+        () => {
+          autoUpdater.checkForUpdates().catch((e: Error) => {
+            console.error('[autoUpdater] periodic check failed:', e.message);
+          });
+        },
+        4 * 60 * 60 * 1000,
+      );
     }
 
     // 모니터 연결/해제/배율 변경 시 위젯 + 아이콘 위치 보정
@@ -4323,7 +4578,9 @@ if (!gotTheLock) {
     // Start in widget mode if the setting is enabled
     const widgetOptions = readSettingsWidgetOptions();
     if (widgetOptions.startInWidgetMode) {
-      createWidgetWindow(widgetOptions, () => hideOrDestroyMainWindow(widgetOptions.memorySaverMode));
+      createWidgetWindow(widgetOptions, () =>
+        hideOrDestroyMainWindow(widgetOptions.memorySaverMode),
+      );
     }
 
     // Handle .ssampin file open from CLI args
@@ -4339,8 +4596,8 @@ if (!gotTheLock) {
     powerMonitor.on('suspend', () => {
       console.log('[power] 시스템 suspend 감지');
       isSystemSuspending = true;
-      widgetActiveBeforeSleep = widgetWasActive ||
-        (widgetWindow !== null && !widgetWindow.isDestroyed());
+      widgetActiveBeforeSleep =
+        widgetWasActive || (widgetWindow !== null && !widgetWindow.isDestroyed());
     });
 
     powerMonitor.on('resume', () => {
@@ -4352,18 +4609,30 @@ if (!gotTheLock) {
         setTimeout(() => {
           if (!widgetWindow || widgetWindow.isDestroyed()) return;
           const win = widgetWindow;
-          desktopWidgetManager.healthCheck(win).then(async (result) => {
-            if (!result.ok) {
-              console.log(`[widget] resume 후 healthCheck 실패: ${result.reason} → ${result.fallbackMode} fallback`);
-              // transitionWidgetMode 통해 visibility 보장 — fallback 모드에서 widget이
-              // hidden 상태로 남는 이전 회귀 차단.
-              const { fallbackEvent } = await transitionWidgetMode(win, result.fallbackMode, 'resume-healthCheck-fallback');
-              broadcastToAllWindows('desktopMode:fallback', (fallbackEvent ?? {
-                reason: result.reason,
-                fallbackMode: result.fallbackMode,
-              }) satisfies DesktopModeFallbackEvent);
-            }
-          }).catch((e) => console.warn('[widget] resume healthCheck 예외:', e));
+          desktopWidgetManager
+            .healthCheck(win)
+            .then(async (result) => {
+              if (!result.ok) {
+                console.log(
+                  `[widget] resume 후 healthCheck 실패: ${result.reason} → ${result.fallbackMode} fallback`,
+                );
+                // transitionWidgetMode 통해 visibility 보장 — fallback 모드에서 widget이
+                // hidden 상태로 남는 이전 회귀 차단.
+                const { fallbackEvent } = await transitionWidgetMode(
+                  win,
+                  result.fallbackMode,
+                  'resume-healthCheck-fallback',
+                );
+                broadcastToAllWindows(
+                  'desktopMode:fallback',
+                  (fallbackEvent ?? {
+                    reason: result.reason,
+                    fallbackMode: result.fallbackMode,
+                  }) satisfies DesktopModeFallbackEvent,
+                );
+              }
+            })
+            .catch((e) => console.warn('[widget] resume healthCheck 예외:', e));
         }, 1500);
       }
     });
@@ -4372,8 +4641,8 @@ if (!gotTheLock) {
     powerMonitor.on('lock-screen', () => {
       console.log('[power] 화면 잠금 감지');
       isSystemSuspending = true;
-      widgetActiveBeforeSleep = widgetWasActive ||
-        (widgetWindow !== null && !widgetWindow.isDestroyed());
+      widgetActiveBeforeSleep =
+        widgetWasActive || (widgetWindow !== null && !widgetWindow.isDestroyed());
     });
 
     powerMonitor.on('unlock-screen', () => {
@@ -4384,17 +4653,29 @@ if (!gotTheLock) {
         setTimeout(() => {
           if (!widgetWindow || widgetWindow.isDestroyed()) return;
           const win = widgetWindow;
-          desktopWidgetManager.healthCheck(win).then(async (result) => {
-            if (!result.ok) {
-              console.log(`[widget] unlock 후 healthCheck 실패: ${result.reason} → ${result.fallbackMode} fallback`);
-              // resume 분기와 동일 — transitionWidgetMode로 visibility 보장.
-              const { fallbackEvent } = await transitionWidgetMode(win, result.fallbackMode, 'unlock-healthCheck-fallback');
-              broadcastToAllWindows('desktopMode:fallback', (fallbackEvent ?? {
-                reason: result.reason,
-                fallbackMode: result.fallbackMode,
-              }) satisfies DesktopModeFallbackEvent);
-            }
-          }).catch((e) => console.warn('[widget] unlock healthCheck 예외:', e));
+          desktopWidgetManager
+            .healthCheck(win)
+            .then(async (result) => {
+              if (!result.ok) {
+                console.log(
+                  `[widget] unlock 후 healthCheck 실패: ${result.reason} → ${result.fallbackMode} fallback`,
+                );
+                // resume 분기와 동일 — transitionWidgetMode로 visibility 보장.
+                const { fallbackEvent } = await transitionWidgetMode(
+                  win,
+                  result.fallbackMode,
+                  'unlock-healthCheck-fallback',
+                );
+                broadcastToAllWindows(
+                  'desktopMode:fallback',
+                  (fallbackEvent ?? {
+                    reason: result.reason,
+                    fallbackMode: result.fallbackMode,
+                  }) satisfies DesktopModeFallbackEvent,
+                );
+              }
+            })
+            .catch((e) => console.warn('[widget] unlock healthCheck 예외:', e));
         }, 1000);
       }
     });

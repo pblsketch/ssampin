@@ -17,12 +17,10 @@ type AggregatedText = { answers: string[] };
 type AggregatedResult = AggregatedSingleMulti | AggregatedScale | AggregatedText;
 
 contextBridge.exposeInMainWorld('electronAPI', {
-  readData: (filename: string): Promise<string | null> =>
-    ipcRenderer.invoke('data:read', filename),
+  readData: (filename: string): Promise<string | null> => ipcRenderer.invoke('data:read', filename),
   writeData: (filename: string, data: string): Promise<void> =>
     ipcRenderer.invoke('data:write', filename, data),
-  removeData: (filename: string): Promise<void> =>
-    ipcRenderer.invoke('data:remove', filename),
+  removeData: (filename: string): Promise<void> => ipcRenderer.invoke('data:remove', filename),
   setAlwaysOnTop: (flag: boolean): Promise<void> =>
     ipcRenderer.invoke('window:setAlwaysOnTop', flag),
   setWidget: (options: {
@@ -34,7 +32,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   }): Promise<void> => ipcRenderer.invoke('window:setWidget', options),
   toggleWidget: (): Promise<void> => ipcRenderer.invoke('window:toggleWidget'),
   setOpacity: (value: number): Promise<void> => ipcRenderer.invoke('window:setOpacity', value),
-  setWidgetLayout: (mode: string): Promise<void> => ipcRenderer.invoke('window:setWidgetLayout', mode),
+  setWidgetLayout: (mode: string): Promise<void> =>
+    ipcRenderer.invoke('window:setWidgetLayout', mode),
   /**
    * Phase 7-G — native-desktop hover 시 globalShortcut(Ctrl+1~4)으로 layout 변경 신호 수신.
    *
@@ -52,10 +51,24 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.off('widget:layout-shortcut', handler);
     };
   },
-  applyWidgetSettings: (widget: {
-    opacity: number;
-    desktopMode: string;
-  }): Promise<void> => ipcRenderer.invoke('window:applyWidgetSettings', widget),
+  /**
+   * 모달이 열리면 main 에 globalShortcut('Escape') 등록 요청.
+   * native-desktop 모드(WS_CHILD)에선 위젯이 keyboard focus 를 못 받아 renderer keydown
+   * 리스너가 ESC 를 못 잡으므로 main 이 가로채 widget:modal-escape 채널로 송신한다.
+   */
+  requestModalEscape: (): Promise<void> => ipcRenderer.invoke('widget:request-modal-escape'),
+  /** 모달이 닫히면 globalShortcut('Escape') 등록 해제 — 다른 앱의 ESC 정상 복구. */
+  releaseModalEscape: (): Promise<void> => ipcRenderer.invoke('widget:release-modal-escape'),
+  /** 모달 열린 동안 ESC press 수신. */
+  onModalEscape: (cb: () => void): (() => void) => {
+    const handler = (): void => cb();
+    ipcRenderer.on('widget:modal-escape', handler);
+    return (): void => {
+      ipcRenderer.off('widget:modal-escape', handler);
+    };
+  },
+  applyWidgetSettings: (widget: { opacity: number; desktopMode: string }): Promise<void> =>
+    ipcRenderer.invoke('window:applyWidgetSettings', widget),
   /**
    * Phase 7-C (native-desktop) — widget 헤더(`-webkit-app-region: drag`) 영역의 client DIP rect를
    * main에 등록한다. WH_MOUSE_LL hook이 LBUTTONDOWN을 헤더 안에서 받으면 widget을 마우스 따라
@@ -82,7 +95,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
    */
   setWidgetResizeRegion: (
     regions: {
-      edge: 'top'|'bottom'|'left'|'right'|'top-left'|'top-right'|'bottom-left'|'bottom-right';
+      edge:
+        | 'top'
+        | 'bottom'
+        | 'left'
+        | 'right'
+        | 'top-left'
+        | 'top-right'
+        | 'bottom-left'
+        | 'bottom-right';
       dipRect: { x: number; y: number; width: number; height: number };
     }[],
   ): Promise<void> => ipcRenderer.invoke('widget:setResizeRegion', regions),
@@ -97,9 +118,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onDesktopModeFallback: (
     callback: (info: { reason: string; fallbackMode: 'normal' | 'topmost' }) => void,
   ): (() => void) => {
-    const handler = (_event: unknown, info: { reason: string; fallbackMode: 'normal' | 'topmost' }) => callback(info);
+    const handler = (
+      _event: unknown,
+      info: { reason: string; fallbackMode: 'normal' | 'topmost' },
+    ) => callback(info);
     ipcRenderer.on('desktopMode:fallback', handler);
-    return () => { ipcRenderer.removeListener('desktopMode:fallback', handler); };
+    return () => {
+      ipcRenderer.removeListener('desktopMode:fallback', handler);
+    };
   },
   /**
    * native-desktop / widget 진단 로그 forwarding (디버깅용 — 임시).
@@ -116,9 +142,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onNativeDesktopDiag: (
     callback: (payload: { message: string; args?: unknown[] }) => void,
   ): (() => void) => {
-    const handler = (_event: unknown, payload: { message: string; args?: unknown[] }) => callback(payload);
+    const handler = (_event: unknown, payload: { message: string; args?: unknown[] }) =>
+      callback(payload);
     ipcRenderer.on('native-desktop:diag', handler);
-    return () => { ipcRenderer.removeListener('native-desktop:diag', handler); };
+    return () => {
+      ipcRenderer.removeListener('native-desktop:diag', handler);
+    };
   },
   /**
    * 진단 라운드 (2026-05-06) — 이슈 B/D 분석용 종합 dump 트리거.
@@ -130,20 +159,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
    *
    * 반환값 없음 — 결과는 파일 + DevTools 콘솔(IPC mirror)에 비동기로 흐른다.
    */
-  widgetDiagDump: (label: string): Promise<void> =>
-    ipcRenderer.invoke('widget:diagDump', label),
+  widgetDiagDump: (label: string): Promise<void> => ipcRenderer.invoke('widget:diagDump', label),
   closeWindow: (): Promise<void> => ipcRenderer.invoke('window:closeApp'),
   // ─── 아이콘 모드 (v2.0.2~) ───
   iconShow: (): Promise<void> => ipcRenderer.invoke('icon:show'),
   iconHide: (): Promise<void> => ipcRenderer.invoke('icon:hide'),
   iconSetBounds: (bounds: { x: number; y: number }): Promise<void> =>
     ipcRenderer.invoke('icon:set-bounds', bounds),
-  iconStartDrag: (): Promise<void> =>
-    ipcRenderer.invoke('icon:start-drag'),
-  iconEndDrag: (): Promise<void> =>
-    ipcRenderer.invoke('icon:end-drag'),
-  iconResetPosition: (): Promise<void> =>
-    ipcRenderer.invoke('icon:reset-position'),
+  iconStartDrag: (): Promise<void> => ipcRenderer.invoke('icon:start-drag'),
+  iconEndDrag: (): Promise<void> => ipcRenderer.invoke('icon:end-drag'),
+  iconResetPosition: (): Promise<void> => ipcRenderer.invoke('icon:reset-position'),
   iconDragBy: (delta: { dx: number; dy: number }): Promise<void> =>
     ipcRenderer.invoke('icon:drag-by', delta),
   iconExpand: (target: { to: 'main' | 'widget' | 'restore' }): Promise<void> =>
@@ -160,41 +185,39 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 핸들로 쓰기 — handle 은 showSaveDialog 가 발급한 것. 1회 소비.
   writeFile: (handle: string, data: ArrayBuffer | string): Promise<void> =>
     ipcRenderer.invoke('export:writeFile', { handle, data }),
-  printToPDF: (
-    options?: {
-      pageSize?:
-        | 'A3'
-        | 'A4'
-        | 'A5'
-        | 'Letter'
-        | 'Legal'
-        | 'Tabloid'
-        | { width: number; height: number };
-      landscape?: boolean;
-      marginsType?: 0 | 1 | 2;
-    },
-  ): Promise<ArrayBuffer | null> =>
-    ipcRenderer.invoke('export:printToPDF', options),
+  printToPDF: (options?: {
+    pageSize?:
+      | 'A3'
+      | 'A4'
+      | 'A5'
+      | 'Letter'
+      | 'Legal'
+      | 'Tabloid'
+      | { width: number; height: number };
+    landscape?: boolean;
+    marginsType?: 0 | 1 | 2;
+  }): Promise<ArrayBuffer | null> => ipcRenderer.invoke('export:printToPDF', options),
   // 방금 저장한 파일 열기 — handle 은 showSaveDialog 가 발급한 것 (소비하지 않음).
-  openFile: (handle: string): Promise<void> =>
-    ipcRenderer.invoke('export:openFile', { handle }),
+  openFile: (handle: string): Promise<void> => ipcRenderer.invoke('export:openFile', { handle }),
   importAlarmAudio: (): Promise<{ name: string; dataUrl: string } | null> =>
     ipcRenderer.invoke('audio:importAlarm'),
   importFont: (): Promise<{ name: string; dataUrl: string; mimeType: string } | null> =>
     ipcRenderer.invoke('font:import'),
-  importShareFile: (): Promise<{ content: string | ArrayBuffer; fileType: 'ssampin' | 'xlsx' } | null> =>
-    ipcRenderer.invoke('share:import'),
+  importShareFile: (): Promise<{
+    content: string | ArrayBuffer;
+    fileType: 'ssampin' | 'xlsx';
+  } | null> => ipcRenderer.invoke('share:import'),
   importBookmarksFile: (): Promise<{ content: string; format: 'json' | 'html' } | null> =>
     ipcRenderer.invoke('bookmarks:import'),
-  readClipboardText: (): Promise<string> =>
-    ipcRenderer.invoke('clipboard:readText'),
+  readClipboardText: (): Promise<string> => ipcRenderer.invoke('clipboard:readText'),
   onFileOpened: (callback: (filePath: string) => void): (() => void) => {
     const handler = (_event: unknown, filePath: string) => callback(filePath);
     ipcRenderer.on('share:file-opened', handler);
-    return () => { ipcRenderer.removeListener('share:file-opened', handler); };
+    return () => {
+      ipcRenderer.removeListener('share:file-opened', handler);
+    };
   },
-  openExternal: (url: string): Promise<void> =>
-    ipcRenderer.invoke('shell:openExternal', url),
+  openExternal: (url: string): Promise<void> => ipcRenderer.invoke('shell:openExternal', url),
   openPath: (folderPath: string): Promise<string> =>
     ipcRenderer.invoke('shell:openPath', folderPath),
   showOpenDialog: (options: {
@@ -209,30 +232,43 @@ contextBridge.exposeInMainWorld('electronAPI', {
   checkForUpdate: (): Promise<void> => ipcRenderer.invoke('update:check'),
   downloadUpdate: (): Promise<void> => ipcRenderer.invoke('update:download'),
   installUpdate: (): Promise<void> => ipcRenderer.invoke('update:install'),
-  onUpdateAvailable: (callback: (info: { version: string; releaseNotes?: string }) => void): (() => void) => {
-    const handler = (_event: unknown, info: { version: string; releaseNotes?: string }) => callback(info);
+  onUpdateAvailable: (
+    callback: (info: { version: string; releaseNotes?: string }) => void,
+  ): (() => void) => {
+    const handler = (_event: unknown, info: { version: string; releaseNotes?: string }) =>
+      callback(info);
     ipcRenderer.on('update:available', handler);
-    return () => { ipcRenderer.removeListener('update:available', handler); };
+    return () => {
+      ipcRenderer.removeListener('update:available', handler);
+    };
   },
   onUpdateNotAvailable: (callback: () => void): (() => void) => {
     const handler = () => callback();
     ipcRenderer.on('update:not-available', handler);
-    return () => { ipcRenderer.removeListener('update:not-available', handler); };
+    return () => {
+      ipcRenderer.removeListener('update:not-available', handler);
+    };
   },
   onUpdateDownloadProgress: (callback: (progress: { percent: number }) => void): (() => void) => {
     const handler = (_event: unknown, progress: { percent: number }) => callback(progress);
     ipcRenderer.on('update:download-progress', handler);
-    return () => { ipcRenderer.removeListener('update:download-progress', handler); };
+    return () => {
+      ipcRenderer.removeListener('update:download-progress', handler);
+    };
   },
   onUpdateDownloaded: (callback: (info: { version: string }) => void): (() => void) => {
     const handler = (_event: unknown, info: { version: string }) => callback(info);
     ipcRenderer.on('update:update-downloaded', handler);
-    return () => { ipcRenderer.removeListener('update:update-downloaded', handler); };
+    return () => {
+      ipcRenderer.removeListener('update:update-downloaded', handler);
+    };
   },
   onUpdateError: (callback: (error: string) => void): (() => void) => {
     const handler = (_event: unknown, error: string) => callback(error);
     ipcRenderer.on('update:error', handler);
-    return () => { ipcRenderer.removeListener('update:error', handler); };
+    return () => {
+      ipcRenderer.removeListener('update:error', handler);
+    };
   },
   // Cross-window navigation
   navigateToPage: (page: string): Promise<void> =>
@@ -240,29 +276,43 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onNavigateToPage: (callback: (page: string) => void): (() => void) => {
     const handler = (_event: unknown, page: string) => callback(page);
     ipcRenderer.on('navigate:to-page', handler);
-    return () => { ipcRenderer.removeListener('navigate:to-page', handler); };
+    return () => {
+      ipcRenderer.removeListener('navigate:to-page', handler);
+    };
   },
   // Google OAuth — {code, redirectUri, codeVerifier} 묶음 반환 (별도 oauth:redirect-uri 이벤트 의존 제거)
   // codeVerifier: Desktop app 클라이언트는 OAuth 시크릿 없이 PKCE 로 토큰을 교환한다 (P0-C / F-2)
-  startOAuth: (authUrl: string): Promise<{ code: string; redirectUri: string; codeVerifier: string }> =>
+  startOAuth: (
+    authUrl: string,
+  ): Promise<{ code: string; redirectUri: string; codeVerifier: string }> =>
     ipcRenderer.invoke('oauth:start', authUrl),
-  cancelOAuth: (): Promise<void> =>
-    ipcRenderer.invoke('oauth:cancel'),
+  cancelOAuth: (): Promise<void> => ipcRenderer.invoke('oauth:cancel'),
   onOAuthRedirectUri: (callback: (uri: string) => void): (() => void) => {
     const handler = (_event: unknown, uri: string) => callback(uri);
     ipcRenderer.on('oauth:redirect-uri', handler);
-    return () => { ipcRenderer.removeListener('oauth:redirect-uri', handler); };
+    return () => {
+      ipcRenderer.removeListener('oauth:redirect-uri', handler);
+    };
   },
   onOAuthError: (callback: (error: { code: string; message: string }) => void): (() => void) => {
     const handler = (_event: unknown, error: { code: string; message: string }) => callback(error);
     ipcRenderer.on('oauth:error', handler);
-    return () => { ipcRenderer.removeListener('oauth:error', handler); };
+    return () => {
+      ipcRenderer.removeListener('oauth:error', handler);
+    };
   },
   // OAuth 콜백 미수신 → PKCE 폴백 제안
-  onOAuthFallbackNeeded: (callback: (data: { reason: string; message: string; elapsedSec: number }) => void): (() => void) => {
-    const handler = (_event: unknown, data: { reason: string; message: string; elapsedSec: number }) => callback(data);
+  onOAuthFallbackNeeded: (
+    callback: (data: { reason: string; message: string; elapsedSec: number }) => void,
+  ): (() => void) => {
+    const handler = (
+      _event: unknown,
+      data: { reason: string; message: string; elapsedSec: number },
+    ) => callback(data);
     ipcRenderer.on('oauth:fallback-needed', handler);
-    return () => { ipcRenderer.removeListener('oauth:fallback-needed', handler); };
+    return () => {
+      ipcRenderer.removeListener('oauth:fallback-needed', handler);
+    };
   },
   // Google OAuth PKCE 폴백 (로컬 서버 실패 시 — loopback 모드)
   startPKCEAuth: (authUrl: string): Promise<{ verifier: string; redirectUri: string }> =>
@@ -272,10 +322,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Secure Storage
   secureWrite: (key: string, value: string): Promise<void> =>
     ipcRenderer.invoke('secure:write', key, value),
-  secureRead: (key: string): Promise<string | null> =>
-    ipcRenderer.invoke('secure:read', key),
-  secureDelete: (key: string): Promise<void> =>
-    ipcRenderer.invoke('secure:delete', key),
+  secureRead: (key: string): Promise<string | null> => ipcRenderer.invoke('secure:read', key),
+  secureDelete: (key: string): Promise<void> => ipcRenderer.invoke('secure:delete', key),
   // Network status
   onNetworkChange: (callback: (online: boolean) => void): (() => void) => {
     const onlineHandler = () => callback(true);
@@ -291,50 +339,56 @@ contextBridge.exposeInMainWorld('electronAPI', {
   startLiveVote: (data: {
     question: string;
     options: { id: string; text: string; color: string }[];
-  }): Promise<{ port: number; localIPs: string[] }> =>
-    ipcRenderer.invoke('live-vote:start', data),
-  stopLiveVote: (): Promise<void> =>
-    ipcRenderer.invoke('live-vote:stop'),
-  onLiveVoteStudentVoted: (callback: (data: { optionId: string; totalVoters: number }) => void): (() => void) => {
-    const handler = (_event: unknown, data: { optionId: string; totalVoters: number }) => callback(data);
+  }): Promise<{ port: number; localIPs: string[] }> => ipcRenderer.invoke('live-vote:start', data),
+  stopLiveVote: (): Promise<void> => ipcRenderer.invoke('live-vote:stop'),
+  onLiveVoteStudentVoted: (
+    callback: (data: { optionId: string; totalVoters: number }) => void,
+  ): (() => void) => {
+    const handler = (_event: unknown, data: { optionId: string; totalVoters: number }) =>
+      callback(data);
     ipcRenderer.on('live-vote:student-voted', handler);
-    return () => { ipcRenderer.removeListener('live-vote:student-voted', handler); };
+    return () => {
+      ipcRenderer.removeListener('live-vote:student-voted', handler);
+    };
   },
   onLiveVoteConnectionCount: (callback: (data: { count: number }) => void): (() => void) => {
     const handler = (_event: unknown, data: { count: number }) => callback(data);
     ipcRenderer.on('live-vote:connection-count', handler);
-    return () => { ipcRenderer.removeListener('live-vote:connection-count', handler); };
+    return () => {
+      ipcRenderer.removeListener('live-vote:connection-count', handler);
+    };
   },
   // Live Vote Tunnel
-  tunnelAvailable: (): Promise<boolean> =>
-    ipcRenderer.invoke('live-vote:tunnel-available'),
-  tunnelInstall: (): Promise<void> =>
-    ipcRenderer.invoke('live-vote:tunnel-install'),
-  tunnelStart: (): Promise<{ tunnelUrl: string }> =>
-    ipcRenderer.invoke('live-vote:tunnel-start'),
+  tunnelAvailable: (): Promise<boolean> => ipcRenderer.invoke('live-vote:tunnel-available'),
+  tunnelInstall: (): Promise<void> => ipcRenderer.invoke('live-vote:tunnel-install'),
+  tunnelStart: (): Promise<{ tunnelUrl: string }> => ipcRenderer.invoke('live-vote:tunnel-start'),
   // Live Survey
   startLiveSurvey: (data: {
     question: string;
     maxLength: number;
   }): Promise<{ port: number; localIPs: string[] }> =>
     ipcRenderer.invoke('live-survey:start', data),
-  stopLiveSurvey: (): Promise<void> =>
-    ipcRenderer.invoke('live-survey:stop'),
-  surveyTunnelAvailable: (): Promise<boolean> =>
-    ipcRenderer.invoke('live-survey:tunnel-available'),
-  surveyTunnelInstall: (): Promise<void> =>
-    ipcRenderer.invoke('live-survey:tunnel-install'),
+  stopLiveSurvey: (): Promise<void> => ipcRenderer.invoke('live-survey:stop'),
+  surveyTunnelAvailable: (): Promise<boolean> => ipcRenderer.invoke('live-survey:tunnel-available'),
+  surveyTunnelInstall: (): Promise<void> => ipcRenderer.invoke('live-survey:tunnel-install'),
   surveyTunnelStart: (): Promise<{ tunnelUrl: string }> =>
     ipcRenderer.invoke('live-survey:tunnel-start'),
-  onLiveSurveyStudentSubmitted: (callback: (data: { text: string; totalResponders: number }) => void): (() => void) => {
-    const handler = (_event: unknown, data: { text: string; totalResponders: number }) => callback(data);
+  onLiveSurveyStudentSubmitted: (
+    callback: (data: { text: string; totalResponders: number }) => void,
+  ): (() => void) => {
+    const handler = (_event: unknown, data: { text: string; totalResponders: number }) =>
+      callback(data);
     ipcRenderer.on('live-survey:student-submitted', handler);
-    return () => { ipcRenderer.removeListener('live-survey:student-submitted', handler); };
+    return () => {
+      ipcRenderer.removeListener('live-survey:student-submitted', handler);
+    };
   },
   onLiveSurveyConnectionCount: (callback: (data: { count: number }) => void): (() => void) => {
     const handler = (_event: unknown, data: { count: number }) => callback(data);
     ipcRenderer.on('live-survey:connection-count', handler);
-    return () => { ipcRenderer.removeListener('live-survey:connection-count', handler); };
+    return () => {
+      ipcRenderer.removeListener('live-survey:connection-count', handler);
+    };
   },
   // Realtime Wall
   startRealtimeWall: (data: {
@@ -342,8 +396,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     maxTextLength: number;
   }): Promise<{ port: number; localIPs: string[] }> =>
     ipcRenderer.invoke('realtime-wall:start', data),
-  stopRealtimeWall: (): Promise<void> =>
-    ipcRenderer.invoke('realtime-wall:stop'),
+  stopRealtimeWall: (): Promise<void> => ipcRenderer.invoke('realtime-wall:stop'),
   realtimeWallTunnelAvailable: (): Promise<boolean> =>
     ipcRenderer.invoke('realtime-wall:tunnel-available'),
   realtimeWallTunnelInstall: (): Promise<void> =>
@@ -353,8 +406,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   fetchRealtimeWallLinkPreview: (url: string) =>
     ipcRenderer.invoke('realtime-wall:fetch-link-preview', url),
   // 동일한 OG 파싱 IPC를 도메인 중립적인 이름으로 재노출 (북마크 등에서 사용)
-  fetchLinkPreview: (url: string) =>
-    ipcRenderer.invoke('realtime-wall:fetch-link-preview', url),
+  fetchLinkPreview: (url: string) => ipcRenderer.invoke('realtime-wall:fetch-link-preview', url),
   /**
    * v1.14 P1 — 교사 → 학생 broadcast 트리거.
    * renderer에서 posts/title/layoutMode/columns 변화 시 호출. Main이 연결된 모든
@@ -391,8 +443,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     settings?: unknown;
     postIds?: readonly string[];
     newNickname?: string;
-  }): Promise<void> =>
-    ipcRenderer.invoke('realtime-wall:broadcast', msg),
+  }): Promise<void> => ipcRenderer.invoke('realtime-wall:broadcast', msg),
   /**
    * v2.1 신규 (Phase B) — 학생 PDF 업로드.
    * Renderer → Main → magic byte 검증 → 임시 디렉토리 저장 → file:// URL 반환.
@@ -418,13 +469,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   /**
    * v2.1 Phase D — 학생 자기 카드 수정 알림 (교사 entry).
    */
-  onRealtimeWallStudentEdit: (callback: (data: {
-    postId: string;
-    post: unknown;
-  }) => void): (() => void) => {
+  onRealtimeWallStudentEdit: (
+    callback: (data: { postId: string; post: unknown }) => void,
+  ): (() => void) => {
     const handler = (_event: unknown, data: { postId: string; post: unknown }) => callback(data);
     ipcRenderer.on('realtime-wall:student-edit', handler);
-    return () => { ipcRenderer.removeListener('realtime-wall:student-edit', handler); };
+    return () => {
+      ipcRenderer.removeListener('realtime-wall:student-edit', handler);
+    };
   },
   /**
    * v2.1 Phase D — 학생 자기 카드 삭제(soft delete) 알림 (교사 entry).
@@ -432,19 +484,22 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onRealtimeWallStudentDelete: (callback: (data: { postId: string }) => void): (() => void) => {
     const handler = (_event: unknown, data: { postId: string }) => callback(data);
     ipcRenderer.on('realtime-wall:student-delete', handler);
-    return () => { ipcRenderer.removeListener('realtime-wall:student-delete', handler); };
+    return () => {
+      ipcRenderer.removeListener('realtime-wall:student-delete', handler);
+    };
   },
   /**
    * v2.1 Phase D — 닉네임 변경 broadcast 알림 (교사 entry).
    */
-  onRealtimeWallNicknameChanged: (callback: (data: {
-    postIds: readonly string[];
-    newNickname: string;
-  }) => void): (() => void) => {
+  onRealtimeWallNicknameChanged: (
+    callback: (data: { postIds: readonly string[]; newNickname: string }) => void,
+  ): (() => void) => {
     const handler = (_event: unknown, data: { postIds: readonly string[]; newNickname: string }) =>
       callback(data);
     ipcRenderer.on('realtime-wall:nickname-changed', handler);
-    return () => { ipcRenderer.removeListener('realtime-wall:nickname-changed', handler); };
+    return () => {
+      ipcRenderer.removeListener('realtime-wall:nickname-changed', handler);
+    };
   },
   /**
    * v2.1 Phase C — 학생 자기 카드 위치 변경(submit-move) 도착 알림 (교사 entry).
@@ -458,13 +513,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * 본 이벤트는 서버가 위치 patch를 적용한 *최종* post 객체를 그대로 전달하므로
    * 교사 renderer는 해당 postId 항목을 통째로 교체한다.
    */
-  onRealtimeWallStudentMove: (callback: (data: {
-    postId: string;
-    post: unknown;
-  }) => void): (() => void) => {
+  onRealtimeWallStudentMove: (
+    callback: (data: { postId: string; post: unknown }) => void,
+  ): (() => void) => {
     const handler = (_event: unknown, data: { postId: string; post: unknown }) => callback(data);
     ipcRenderer.on('realtime-wall:student-move', handler);
-    return () => { ipcRenderer.removeListener('realtime-wall:student-move', handler); };
+    return () => {
+      ipcRenderer.removeListener('realtime-wall:student-move', handler);
+    };
   },
   /**
    * v1.14 P3 — 교사가 학생 카드 추가 잠금 토글.
@@ -476,34 +532,27 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * v1.14 P2 — 학생 좋아요 도착 알림.
    * 교사 renderer는 posts 상태를 해당 postId에 대해 likes/likedBy 갱신.
    */
-  onRealtimeWallStudentLike: (callback: (data: {
-    postId: string;
-    likes: number;
-    likedBy: readonly string[];
-  }) => void): (() => void) => {
-    const handler = (_event: unknown, data: {
-      postId: string;
-      likes: number;
-      likedBy: readonly string[];
-    }) => callback(data);
+  onRealtimeWallStudentLike: (
+    callback: (data: { postId: string; likes: number; likedBy: readonly string[] }) => void,
+  ): (() => void) => {
+    const handler = (
+      _event: unknown,
+      data: {
+        postId: string;
+        likes: number;
+        likedBy: readonly string[];
+      },
+    ) => callback(data);
     ipcRenderer.on('realtime-wall:student-like', handler);
-    return () => { ipcRenderer.removeListener('realtime-wall:student-like', handler); };
+    return () => {
+      ipcRenderer.removeListener('realtime-wall:student-like', handler);
+    };
   },
   /**
    * v1.14 P2 — 학생 댓글 도착 알림.
    */
-  onRealtimeWallStudentComment: (callback: (data: {
-    postId: string;
-    comment: {
-      id: string;
-      nickname: string;
-      text: string;
-      submittedAt: number;
-      sessionToken: string;
-      status: 'approved' | 'hidden';
-    };
-  }) => void): (() => void) => {
-    const handler = (_event: unknown, data: {
+  onRealtimeWallStudentComment: (
+    callback: (data: {
       postId: string;
       comment: {
         id: string;
@@ -513,28 +562,51 @@ contextBridge.exposeInMainWorld('electronAPI', {
         sessionToken: string;
         status: 'approved' | 'hidden';
       };
-    }) => callback(data);
+    }) => void,
+  ): (() => void) => {
+    const handler = (
+      _event: unknown,
+      data: {
+        postId: string;
+        comment: {
+          id: string;
+          nickname: string;
+          text: string;
+          submittedAt: number;
+          sessionToken: string;
+          status: 'approved' | 'hidden';
+        };
+      },
+    ) => callback(data);
     ipcRenderer.on('realtime-wall:student-comment', handler);
-    return () => { ipcRenderer.removeListener('realtime-wall:student-comment', handler); };
+    return () => {
+      ipcRenderer.removeListener('realtime-wall:student-comment', handler);
+    };
   },
   // v2.1 student-ux 회귀 fix (2026-04-24): post payload에 v2.1 필드 + status/kanban/freeform
   // 등 RealtimeWallPost 전체 필드를 포함. 서버가 도메인 createWallPost로 카드를 직접 생성한
   // 결과를 그대로 전달하므로 renderer는 재계산 X — 그대로 setPosts에 merge.
-  onRealtimeWallStudentSubmitted: (callback: (data: {
-    post: unknown;
-    totalSubmissions: number;
-  }) => void): (() => void) => {
-    const handler = (_event: unknown, data: {
-      post: unknown;
-      totalSubmissions: number;
-    }) => callback(data);
+  onRealtimeWallStudentSubmitted: (
+    callback: (data: { post: unknown; totalSubmissions: number }) => void,
+  ): (() => void) => {
+    const handler = (
+      _event: unknown,
+      data: {
+        post: unknown;
+        totalSubmissions: number;
+      },
+    ) => callback(data);
     ipcRenderer.on('realtime-wall:student-submitted', handler);
-    return () => { ipcRenderer.removeListener('realtime-wall:student-submitted', handler); };
+    return () => {
+      ipcRenderer.removeListener('realtime-wall:student-submitted', handler);
+    };
   },
   onRealtimeWallConnectionCount: (callback: (data: { count: number }) => void): (() => void) => {
     const handler = (_event: unknown, data: { count: number }) => callback(data);
     ipcRenderer.on('realtime-wall:connection-count', handler);
-    return () => { ipcRenderer.removeListener('realtime-wall:connection-count', handler); };
+    return () => {
+      ipcRenderer.removeListener('realtime-wall:connection-count', handler);
+    };
   },
   // Live Multi Survey
   startLiveMultiSurvey: (data: {
@@ -553,93 +625,133 @@ contextBridge.exposeInMainWorld('electronAPI', {
     stepMode?: boolean;
   }): Promise<{ port: number; localIPs: string[] }> =>
     ipcRenderer.invoke('live-multi-survey:start', data),
-  stopLiveMultiSurvey: (): Promise<void> =>
-    ipcRenderer.invoke('live-multi-survey:stop'),
+  stopLiveMultiSurvey: (): Promise<void> => ipcRenderer.invoke('live-multi-survey:stop'),
   multiSurveyTunnelAvailable: (): Promise<boolean> =>
     ipcRenderer.invoke('live-multi-survey:tunnel-available'),
   multiSurveyTunnelInstall: (): Promise<void> =>
     ipcRenderer.invoke('live-multi-survey:tunnel-install'),
   multiSurveyTunnelStart: (): Promise<{ tunnelUrl: string }> =>
     ipcRenderer.invoke('live-multi-survey:tunnel-start'),
-  onLiveMultiSurveyStudentSubmitted: (callback: (data: { answers: Array<{ questionId: string; value: string | string[] | number }>; submissionId: string; totalSubmissions: number }) => void): (() => void) => {
-    const handler = (_event: unknown, data: { answers: Array<{ questionId: string; value: string | string[] | number }>; submissionId: string; totalSubmissions: number }) => callback(data);
+  onLiveMultiSurveyStudentSubmitted: (
+    callback: (data: {
+      answers: Array<{ questionId: string; value: string | string[] | number }>;
+      submissionId: string;
+      totalSubmissions: number;
+    }) => void,
+  ): (() => void) => {
+    const handler = (
+      _event: unknown,
+      data: {
+        answers: Array<{ questionId: string; value: string | string[] | number }>;
+        submissionId: string;
+        totalSubmissions: number;
+      },
+    ) => callback(data);
     ipcRenderer.on('live-multi-survey:student-submitted', handler);
-    return () => { ipcRenderer.removeListener('live-multi-survey:student-submitted', handler); };
+    return () => {
+      ipcRenderer.removeListener('live-multi-survey:student-submitted', handler);
+    };
   },
   onLiveMultiSurveyConnectionCount: (callback: (data: { count: number }) => void): (() => void) => {
     const handler = (_event: unknown, data: { count: number }) => callback(data);
     ipcRenderer.on('live-multi-survey:connection-count', handler);
-    return () => { ipcRenderer.removeListener('live-multi-survey:connection-count', handler); };
+    return () => {
+      ipcRenderer.removeListener('live-multi-survey:connection-count', handler);
+    };
   },
   // Live Multi Survey — step mode controls
   liveMultiSurveyActivateSession: (): Promise<void> =>
     ipcRenderer.invoke('live-multi-survey:activate-session'),
-  liveMultiSurveyReveal: (): Promise<void> =>
-    ipcRenderer.invoke('live-multi-survey:reveal'),
-  liveMultiSurveyAdvance: (): Promise<void> =>
-    ipcRenderer.invoke('live-multi-survey:advance'),
-  liveMultiSurveyPrev: (): Promise<void> =>
-    ipcRenderer.invoke('live-multi-survey:prev'),
-  liveMultiSurveyReopen: (): Promise<void> =>
-    ipcRenderer.invoke('live-multi-survey:reopen'),
+  liveMultiSurveyReveal: (): Promise<void> => ipcRenderer.invoke('live-multi-survey:reveal'),
+  liveMultiSurveyAdvance: (): Promise<void> => ipcRenderer.invoke('live-multi-survey:advance'),
+  liveMultiSurveyPrev: (): Promise<void> => ipcRenderer.invoke('live-multi-survey:prev'),
+  liveMultiSurveyReopen: (): Promise<void> => ipcRenderer.invoke('live-multi-survey:reopen'),
   liveMultiSurveyEndSession: (): Promise<void> =>
     ipcRenderer.invoke('live-multi-survey:end-session'),
   // Live Multi Survey — step mode events
-  onLiveMultiSurveyStudentAnswered: (callback: (data: {
-    sessionId: string;
-    nickname: string;
-    questionIndex: number;
-    totalAnswered: number;
-    totalConnected: number;
-    aggregatedPreview: AggregatedResult | null;
-  }) => void): (() => void) => {
-    const handler = (_event: unknown, data: {
+  onLiveMultiSurveyStudentAnswered: (
+    callback: (data: {
       sessionId: string;
       nickname: string;
       questionIndex: number;
       totalAnswered: number;
       totalConnected: number;
       aggregatedPreview: AggregatedResult | null;
-    }) => callback(data);
+    }) => void,
+  ): (() => void) => {
+    const handler = (
+      _event: unknown,
+      data: {
+        sessionId: string;
+        nickname: string;
+        questionIndex: number;
+        totalAnswered: number;
+        totalConnected: number;
+        aggregatedPreview: AggregatedResult | null;
+      },
+    ) => callback(data);
     ipcRenderer.on('live-multi-survey:student-answered', handler);
-    return () => { ipcRenderer.removeListener('live-multi-survey:student-answered', handler); };
+    return () => {
+      ipcRenderer.removeListener('live-multi-survey:student-answered', handler);
+    };
   },
-  onLiveMultiSurveyPhaseChanged: (callback: (data: {
-    phase: 'lobby' | 'open' | 'revealed' | 'ended';
-    currentQuestionIndex: number;
-    totalAnswered: number;
-    totalConnected: number;
-    aggregated?: AggregatedResult;
-  }) => void): (() => void) => {
-    const handler = (_event: unknown, data: {
+  onLiveMultiSurveyPhaseChanged: (
+    callback: (data: {
       phase: 'lobby' | 'open' | 'revealed' | 'ended';
       currentQuestionIndex: number;
       totalAnswered: number;
       totalConnected: number;
       aggregated?: AggregatedResult;
-    }) => callback(data);
+    }) => void,
+  ): (() => void) => {
+    const handler = (
+      _event: unknown,
+      data: {
+        phase: 'lobby' | 'open' | 'revealed' | 'ended';
+        currentQuestionIndex: number;
+        totalAnswered: number;
+        totalConnected: number;
+        aggregated?: AggregatedResult;
+      },
+    ) => callback(data);
     ipcRenderer.on('live-multi-survey:phase-changed', handler);
-    return () => { ipcRenderer.removeListener('live-multi-survey:phase-changed', handler); };
+    return () => {
+      ipcRenderer.removeListener('live-multi-survey:phase-changed', handler);
+    };
   },
-  onLiveMultiSurveyRoster: (callback: (data: {
-    roster: Array<{ sessionId: string; nickname: string; answeredQuestions: number[] }>;
-  }) => void): (() => void) => {
-    const handler = (_event: unknown, data: {
+  onLiveMultiSurveyRoster: (
+    callback: (data: {
       roster: Array<{ sessionId: string; nickname: string; answeredQuestions: number[] }>;
-    }) => callback(data);
+    }) => void,
+  ): (() => void) => {
+    const handler = (
+      _event: unknown,
+      data: {
+        roster: Array<{ sessionId: string; nickname: string; answeredQuestions: number[] }>;
+      },
+    ) => callback(data);
     ipcRenderer.on('live-multi-survey:roster', handler);
-    return () => { ipcRenderer.removeListener('live-multi-survey:roster', handler); };
+    return () => {
+      ipcRenderer.removeListener('live-multi-survey:roster', handler);
+    };
   },
-  onLiveMultiSurveyTextAnswerDetail: (callback: (data: {
-    questionIndex: number;
-    entries: Array<{ sessionId: string; nickname: string; text: string }>;
-  }) => void): (() => void) => {
-    const handler = (_event: unknown, data: {
+  onLiveMultiSurveyTextAnswerDetail: (
+    callback: (data: {
       questionIndex: number;
       entries: Array<{ sessionId: string; nickname: string; text: string }>;
-    }) => callback(data);
+    }) => void,
+  ): (() => void) => {
+    const handler = (
+      _event: unknown,
+      data: {
+        questionIndex: number;
+        entries: Array<{ sessionId: string; nickname: string; text: string }>;
+      },
+    ) => callback(data);
     ipcRenderer.on('live-multi-survey:text-answer-detail', handler);
-    return () => { ipcRenderer.removeListener('live-multi-survey:text-answer-detail', handler); };
+    return () => {
+      ipcRenderer.removeListener('live-multi-survey:text-answer-detail', handler);
+    };
   },
   // Live Word Cloud
   startLiveWordCloud: (data: {
@@ -647,66 +759,128 @@ contextBridge.exposeInMainWorld('electronAPI', {
     maxSubmissions: number;
   }): Promise<{ port: number; localIPs: string[] }> =>
     ipcRenderer.invoke('live-wordcloud:start', data),
-  stopLiveWordCloud: (): Promise<void> =>
-    ipcRenderer.invoke('live-wordcloud:stop'),
-  onLiveWordCloudWordSubmitted: (callback: (data: { word: string; count: number; totalWords: number }) => void): (() => void) => {
-    const handler = (_event: unknown, data: { word: string; count: number; totalWords: number }) => callback(data);
+  stopLiveWordCloud: (): Promise<void> => ipcRenderer.invoke('live-wordcloud:stop'),
+  onLiveWordCloudWordSubmitted: (
+    callback: (data: { word: string; count: number; totalWords: number }) => void,
+  ): (() => void) => {
+    const handler = (_event: unknown, data: { word: string; count: number; totalWords: number }) =>
+      callback(data);
     ipcRenderer.on('live-wordcloud:word-submitted', handler);
-    return () => { ipcRenderer.removeListener('live-wordcloud:word-submitted', handler); };
+    return () => {
+      ipcRenderer.removeListener('live-wordcloud:word-submitted', handler);
+    };
   },
   onLiveWordCloudConnectionCount: (callback: (data: { count: number }) => void): (() => void) => {
     const handler = (_event: unknown, data: { count: number }) => callback(data);
     ipcRenderer.on('live-wordcloud:connection-count', handler);
-    return () => { ipcRenderer.removeListener('live-wordcloud:connection-count', handler); };
+    return () => {
+      ipcRenderer.removeListener('live-wordcloud:connection-count', handler);
+    };
   },
   // Live Word Cloud Tunnel
   wordcloudTunnelAvailable: (): Promise<boolean> =>
     ipcRenderer.invoke('live-wordcloud:tunnel-available'),
-  wordcloudTunnelInstall: (): Promise<void> =>
-    ipcRenderer.invoke('live-wordcloud:tunnel-install'),
+  wordcloudTunnelInstall: (): Promise<void> => ipcRenderer.invoke('live-wordcloud:tunnel-install'),
   wordcloudTunnelStart: (): Promise<{ tunnelUrl: string }> =>
     ipcRenderer.invoke('live-wordcloud:tunnel-start'),
   // Live Discussion (Value Line / Traffic Light)
-  startDiscussion: (config: { toolType: string; topics: string[] }): Promise<{ port: number; localIPs: string[] }> =>
+  startDiscussion: (config: {
+    toolType: string;
+    topics: string[];
+  }): Promise<{ port: number; localIPs: string[] }> =>
     ipcRenderer.invoke('discussion:start', config),
-  stopDiscussion: (): Promise<void> =>
-    ipcRenderer.invoke('discussion:stop'),
-  discussionNextRound: (): Promise<void> =>
-    ipcRenderer.invoke('discussion:next-round'),
+  stopDiscussion: (): Promise<void> => ipcRenderer.invoke('discussion:stop'),
+  discussionNextRound: (): Promise<void> => ipcRenderer.invoke('discussion:next-round'),
   discussionGetState: (): Promise<{
     toolType: string;
     topics: string[];
     currentRound: number;
-    students: Array<{ id: string; name: string; emoji: string; avatarColor: string; connected: boolean; position: number; signal: string }>;
+    students: Array<{
+      id: string;
+      name: string;
+      emoji: string;
+      avatarColor: string;
+      connected: boolean;
+      position: number;
+      signal: string;
+    }>;
     chats: Array<{ name: string; emoji: string; avatarColor: string; text: string; time: string }>;
-  } | null> =>
-    ipcRenderer.invoke('discussion:get-state'),
+  } | null> => ipcRenderer.invoke('discussion:get-state'),
   onDiscussionConnectionCount: (callback: (count: number) => void): (() => void) => {
     const handler = (_event: unknown, data: { count: number }) => callback(data.count);
     ipcRenderer.on('discussion:connection-count', handler);
-    return () => { ipcRenderer.removeListener('discussion:connection-count', handler); };
+    return () => {
+      ipcRenderer.removeListener('discussion:connection-count', handler);
+    };
   },
-  onDiscussionState: (callback: (state: {
-    students: Array<{ id: string; name: string; emoji: string; avatarColor: string; connected: boolean; position: number; signal: string }>;
-    chats: Array<{ name: string; emoji: string; avatarColor: string; text: string; time: string }>;
-  }) => void): (() => void) => {
-    const handler = (_event: unknown, state: {
-      students: Array<{ id: string; name: string; emoji: string; avatarColor: string; connected: boolean; position: number; signal: string }>;
-      chats: Array<{ name: string; emoji: string; avatarColor: string; text: string; time: string }>;
-    }) => callback(state);
+  onDiscussionState: (
+    callback: (state: {
+      students: Array<{
+        id: string;
+        name: string;
+        emoji: string;
+        avatarColor: string;
+        connected: boolean;
+        position: number;
+        signal: string;
+      }>;
+      chats: Array<{
+        name: string;
+        emoji: string;
+        avatarColor: string;
+        text: string;
+        time: string;
+      }>;
+    }) => void,
+  ): (() => void) => {
+    const handler = (
+      _event: unknown,
+      state: {
+        students: Array<{
+          id: string;
+          name: string;
+          emoji: string;
+          avatarColor: string;
+          connected: boolean;
+          position: number;
+          signal: string;
+        }>;
+        chats: Array<{
+          name: string;
+          emoji: string;
+          avatarColor: string;
+          text: string;
+          time: string;
+        }>;
+      },
+    ) => callback(state);
     ipcRenderer.on('discussion:state', handler);
-    return () => { ipcRenderer.removeListener('discussion:state', handler); };
+    return () => {
+      ipcRenderer.removeListener('discussion:state', handler);
+    };
   },
-  onDiscussionChat: (callback: (chat: { name: string; emoji: string; avatarColor: string; text: string; time: string }) => void): (() => void) => {
-    const handler = (_event: unknown, chat: { name: string; emoji: string; avatarColor: string; text: string; time: string }) => callback(chat);
+  onDiscussionChat: (
+    callback: (chat: {
+      name: string;
+      emoji: string;
+      avatarColor: string;
+      text: string;
+      time: string;
+    }) => void,
+  ): (() => void) => {
+    const handler = (
+      _event: unknown,
+      chat: { name: string; emoji: string; avatarColor: string; text: string; time: string },
+    ) => callback(chat);
     ipcRenderer.on('discussion:chat', handler);
-    return () => { ipcRenderer.removeListener('discussion:chat', handler); };
+    return () => {
+      ipcRenderer.removeListener('discussion:chat', handler);
+    };
   },
   // Discussion Tunnel
   discussionTunnelAvailable: (): Promise<boolean> =>
     ipcRenderer.invoke('discussion:tunnel-available'),
-  discussionTunnelInstall: (): Promise<void> =>
-    ipcRenderer.invoke('discussion:tunnel-install'),
+  discussionTunnelInstall: (): Promise<void> => ipcRenderer.invoke('discussion:tunnel-install'),
   discussionTunnelStart: (): Promise<{ tunnelUrl: string }> =>
     ipcRenderer.invoke('discussion:tunnel-start'),
   // Widget 리사이즈 (JS 기반, thickFrame: false 대응)
@@ -716,13 +890,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onAnalyticsFlush: (callback: () => void): (() => void) => {
     const handler = () => callback();
     ipcRenderer.on('analytics:flush', handler);
-    return () => { ipcRenderer.removeListener('analytics:flush', handler); };
+    return () => {
+      ipcRenderer.removeListener('analytics:flush', handler);
+    };
   },
   // Close action dialog
   onCloseActionAsk: (callback: () => void): (() => void) => {
     const handler = () => callback();
     ipcRenderer.on('close-action:ask', handler);
-    return () => { ipcRenderer.removeListener('close-action:ask', handler); };
+    return () => {
+      ipcRenderer.removeListener('close-action:ask', handler);
+    };
   },
   respondCloseAction: (action: 'widget' | 'tray' | 'icon'): void => {
     ipcRenderer.send('close-action:respond', action);
@@ -731,13 +909,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onDataChanged: (callback: (filename: string) => void): (() => void) => {
     const handler = (_event: unknown, filename: string) => callback(filename);
     ipcRenderer.on('data:changed', handler);
-    return () => { ipcRenderer.removeListener('data:changed', handler); };
+    return () => {
+      ipcRenderer.removeListener('data:changed', handler);
+    };
   },
   // 절전/잠금 복귀 알림 (렌더러에서 날짜/데이터 갱신용)
   onSystemResume: (callback: () => void): (() => void) => {
     const handler = () => callback();
     ipcRenderer.on('system:resume', handler);
-    return () => { ipcRenderer.removeListener('system:resume', handler); };
+    return () => {
+      ipcRenderer.removeListener('system:resume', handler);
+    };
   },
   // 메모리 진단 (설정 화면 표시용)
   getMemoryMetrics: (): Promise<{
@@ -755,10 +937,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('forms:removeBinary', { relPath }),
     listBinary: (dirRelPath: string): Promise<string[]> =>
       ipcRenderer.invoke('forms:listBinary', { dirRelPath }),
-    openFile: (relPath: string): Promise<void> =>
-      ipcRenderer.invoke('forms:openFile', { relPath }),
-    printPdf: (relPath: string): Promise<void> =>
-      ipcRenderer.invoke('forms:printPdf', { relPath }),
+    openFile: (relPath: string): Promise<void> => ipcRenderer.invoke('forms:openFile', { relPath }),
+    printPdf: (relPath: string): Promise<void> => ipcRenderer.invoke('forms:printPdf', { relPath }),
   },
 
   // === 협업 보드 (collab-board) ===
@@ -775,34 +955,42 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('collab-board:start-session', args),
     endSession: (args: { id: string; forceSave: boolean }): Promise<{ ok: true }> =>
       ipcRenderer.invoke('collab-board:end-session', args),
-    getActiveSession: (): Promise<unknown> =>
-      ipcRenderer.invoke('collab-board:get-active-session'),
+    getActiveSession: (): Promise<unknown> => ipcRenderer.invoke('collab-board:get-active-session'),
     saveSnapshot: (args: { id: string }): Promise<{ savedAt: number }> =>
       ipcRenderer.invoke('collab-board:save-snapshot', args),
     tunnelAvailable: (): Promise<{ available: boolean }> =>
       ipcRenderer.invoke('collab-board:tunnel-available'),
-    tunnelInstall: (): Promise<{ ok: true }> =>
-      ipcRenderer.invoke('collab-board:tunnel-install'),
+    tunnelInstall: (): Promise<{ ok: true }> => ipcRenderer.invoke('collab-board:tunnel-install'),
 
-    onParticipantChange: (cb: (data: { boardId: string; names: string[] }) => void): (() => void) => {
+    onParticipantChange: (
+      cb: (data: { boardId: string; names: string[] }) => void,
+    ): (() => void) => {
       const handler = (_e: unknown, data: { boardId: string; names: string[] }) => cb(data);
       ipcRenderer.on('collab-board:participant-change', handler);
-      return () => { ipcRenderer.removeListener('collab-board:participant-change', handler); };
+      return () => {
+        ipcRenderer.removeListener('collab-board:participant-change', handler);
+      };
     },
     onAutoSave: (cb: (data: { boardId: string; savedAt: number }) => void): (() => void) => {
       const handler = (_e: unknown, data: { boardId: string; savedAt: number }) => cb(data);
       ipcRenderer.on('collab-board:auto-save', handler);
-      return () => { ipcRenderer.removeListener('collab-board:auto-save', handler); };
+      return () => {
+        ipcRenderer.removeListener('collab-board:auto-save', handler);
+      };
     },
     onSessionError: (cb: (data: { boardId: string; reason: string }) => void): (() => void) => {
       const handler = (_e: unknown, data: { boardId: string; reason: string }) => cb(data);
       ipcRenderer.on('collab-board:session-error', handler);
-      return () => { ipcRenderer.removeListener('collab-board:session-error', handler); };
+      return () => {
+        ipcRenderer.removeListener('collab-board:session-error', handler);
+      };
     },
     onSessionStarted: (cb: (data: unknown) => void): (() => void) => {
       const handler = (_e: unknown, data: unknown) => cb(data);
       ipcRenderer.on('collab-board:session-started', handler);
-      return () => { ipcRenderer.removeListener('collab-board:session-started', handler); };
+      return () => {
+        ipcRenderer.removeListener('collab-board:session-started', handler);
+      };
     },
   },
 
@@ -815,14 +1003,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onShortcutTriggered: (callback: (commandId: string) => void): (() => void) => {
     const handler = (_event: unknown, commandId: string) => callback(commandId);
     ipcRenderer.on('shortcut:triggered', handler);
-    return () => { ipcRenderer.removeListener('shortcut:triggered', handler); };
+    return () => {
+      ipcRenderer.removeListener('shortcut:triggered', handler);
+    };
   },
 
   // === 실시간 담벼락 영속 보드 (v1.13 Stage A) ===
   // Design §3.4 — Main 프로세스가 fs 직접 접근하여 userData/data/wall-board-*.json 관리.
   wallBoards: {
-    listMeta: (): Promise<unknown[]> =>
-      ipcRenderer.invoke('realtime-wall:board:list-meta'),
+    listMeta: (): Promise<unknown[]> => ipcRenderer.invoke('realtime-wall:board:list-meta'),
     load: (args: { id: string }): Promise<unknown | null> =>
       ipcRenderer.invoke('realtime-wall:board:load', args),
     save: (args: { board: unknown }): Promise<{ savedAt: number }> =>
@@ -914,10 +1103,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
         restorePreviousClipboard,
         flattenAlphaOnPaste,
       }),
-    closePicker: (): Promise<void> =>
-      ipcRenderer.invoke('sticker:close-picker'),
-    triggerToggle: (): Promise<void> =>
-      ipcRenderer.invoke('sticker:trigger-toggle'),
+    closePicker: (): Promise<void> => ipcRenderer.invoke('sticker:close-picker'),
+    triggerToggle: (): Promise<void> => ipcRenderer.invoke('sticker:trigger-toggle'),
     /**
      * PRD §3.1.4 — globalShortcut.register() 실패 시 메인 프로세스가
      * 메인 창에 송신하는 이벤트. 렌더러는 토스트 + 설정 안내 표시.
@@ -925,14 +1112,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
     onShortcutConflict: (callback: (combo: string) => void): (() => void) => {
       const handler = (_event: unknown, payload: { combo: string }) => callback(payload.combo);
       ipcRenderer.on('sticker:shortcut-conflict', handler);
-      return () => { ipcRenderer.removeListener('sticker:shortcut-conflict', handler); };
+      return () => {
+        ipcRenderer.removeListener('sticker:shortcut-conflict', handler);
+      };
     },
     /**
      * 메인 창의 관리 화면이 metadata를 저장한 직후 호출.
      * Main이 별도 피커 BrowserWindow에 `sticker:data-changed` 이벤트를 송신한다.
      */
-    notifyDataChanged: (): Promise<void> =>
-      ipcRenderer.invoke('sticker:notify-data-changed'),
+    notifyDataChanged: (): Promise<void> => ipcRenderer.invoke('sticker:notify-data-changed'),
     /**
      * 피커 윈도우 측에서 데이터 변경 알림을 구독한다.
      * 호출 시 store load 다시 트리거 → UI 즉시 반영.
@@ -940,20 +1128,24 @@ contextBridge.exposeInMainWorld('electronAPI', {
     onDataChanged: (callback: () => void): (() => void) => {
       const handler = () => callback();
       ipcRenderer.on('sticker:data-changed', handler);
-      return () => { ipcRenderer.removeListener('sticker:data-changed', handler); };
+      return () => {
+        ipcRenderer.removeListener('sticker:data-changed', handler);
+      };
     },
     /**
      * 피커 빈 상태에서 "쌤도구 열기" 클릭 시 호출.
      * Main 창을 tool-sticker 페이지로 이동시키고 피커 윈도우는 hide.
      */
-    openManager: (): Promise<void> =>
-      ipcRenderer.invoke('sticker:open-manager'),
+    openManager: (): Promise<void> => ipcRenderer.invoke('sticker:open-manager'),
     /**
      * macOS 전용 — 접근성 권한 요청. paste 결과 reason='accessibility-denied'
      * 토스트의 "권한 허용하기" 버튼이 호출. 시스템 다이얼로그 표시 + 보안 패널 자동 오픈.
      */
-    requestAccessibilityPermission: (): Promise<{ granted: boolean; requested: boolean; reason?: string }> =>
-      ipcRenderer.invoke('sticker:request-accessibility-permission'),
+    requestAccessibilityPermission: (): Promise<{
+      granted: boolean;
+      requested: boolean;
+      reason?: string;
+    }> => ipcRenderer.invoke('sticker:request-accessibility-permission'),
     /**
      * 자동 Ctrl+V/Cmd+V 시뮬레이션이 실패했을 때 메인 윈도우에서 사용자에게
      * "수동으로 Ctrl+V 붙여넣기" 안내 토스트를 표시하기 위한 이벤트 구독.
@@ -964,16 +1156,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
     onFallbackPasteNeeded: (callback: (data: { reason: string }) => void): (() => void) => {
       const handler = (_event: unknown, data: { reason: string }) => callback(data);
       ipcRenderer.on('sticker:fallback-paste-needed', handler);
-      return () => { ipcRenderer.removeListener('sticker:fallback-paste-needed', handler); };
+      return () => {
+        ipcRenderer.removeListener('sticker:fallback-paste-needed', handler);
+      };
     },
     /**
      * sticker:paste 진단 로그를 메인 프로세스에서 DevTools 콘솔로 forwarding.
      * MainApp에서 구독하면 cmd 없이도 DevTools Console에서 흐름 추적 가능.
      */
     onDiagLog: (callback: (payload: { message: string; data: unknown }) => void): (() => void) => {
-      const handler = (_e: unknown, payload: { message: string; data: unknown }) => callback(payload);
+      const handler = (_e: unknown, payload: { message: string; data: unknown }) =>
+        callback(payload);
       ipcRenderer.on('sticker:diag-log', handler);
-      return () => { ipcRenderer.removeListener('sticker:diag-log', handler); };
+      return () => {
+        ipcRenderer.removeListener('sticker:diag-log', handler);
+      };
     },
     /**
      * 현재 OS 플랫폼 — 렌더러가 macOS 전용 UI(접근성 안내 배너 등)를 조건부 렌더링.
@@ -1001,8 +1198,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
         isEmpty: boolean;
         dataUrl: string;
       }>;
-    }> =>
-      ipcRenderer.invoke('sticker:split-sheet', { sourcePath, gridSize }),
+    }> => ipcRenderer.invoke('sticker:split-sheet', { sourcePath, gridSize }),
     /** 사용자가 선택한 셀들을 stickers/{id}.png로 저장 */
     commitSheetCells: (
       sessionId: string,
@@ -1024,8 +1220,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('slides-source:fetch-from-google', args),
 
     // Source — PDF (renderer 측에서 pdfjs-dist로 렌더 후 PNG 바이트 전달)
-    renderPdf: (args: unknown) =>
-      ipcRenderer.invoke('slides-source:render-pdf', args),
+    renderPdf: (args: unknown) => ipcRenderer.invoke('slides-source:render-pdf', args),
 
     // 로컬 IPv4 후보 (Plan §11.7 — VPN/다중 NIC 환경에서 학생 폰 접속 URL 결정)
     getLocalIpCandidates: () =>
@@ -1034,22 +1229,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
       }>,
 
     // Session lifecycle (교사 액션)
-    startSession: (args: unknown) =>
-      ipcRenderer.invoke('slides-session:start', args),
+    startSession: (args: unknown) => ipcRenderer.invoke('slides-session:start', args),
     beginPresentation: (args: unknown) =>
       ipcRenderer.invoke('slides-session:begin-presentation', args),
     stopSession: () => ipcRenderer.invoke('slides-session:stop'),
-    advanceSlide: (args: unknown) =>
-      ipcRenderer.invoke('slides-session:advance-slide', args),
-    activateOverlay: (args: unknown) =>
-      ipcRenderer.invoke('slides-session:activate-overlay', args),
+    advanceSlide: (args: unknown) => ipcRenderer.invoke('slides-session:advance-slide', args),
+    activateOverlay: (args: unknown) => ipcRenderer.invoke('slides-session:activate-overlay', args),
     deactivateOverlay: (args: unknown) =>
       ipcRenderer.invoke('slides-session:deactivate-overlay', args),
-    endLesson: (args: unknown) =>
-      ipcRenderer.invoke('slides-session:end-lesson', args),
+    endLesson: (args: unknown) => ipcRenderer.invoke('slides-session:end-lesson', args),
     /** 교사 heartbeat — 5초마다 호출. 10초 누락 시 학생에게 teacher-disconnected broadcast */
-    teacherHeartbeat: () =>
-      ipcRenderer.invoke('slides-session:teacher-heartbeat') as Promise<void>,
+    teacherHeartbeat: () => ipcRenderer.invoke('slides-session:teacher-heartbeat') as Promise<void>,
 
     // 터널 모드 (Plan §11.3)
     tunnelAvailable: () =>
