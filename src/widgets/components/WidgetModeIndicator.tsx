@@ -51,15 +51,21 @@ const FALLBACK_VISUAL: ModeVisual = {
 };
 
 function toneClasses(tone: ModeVisual['tone']): string {
+  // 명도 대비 정책 (가독성 fix, 2026-05-22):
+  //   - 컬러 톤(blue/amber/red)은 색=의미를 채도 있는 배경이 담당하고, 텍스트는 흰색으로
+  //     통일해 다크/라이트 양쪽에서 명도 대비 4.5:1 이상 확보.
+  //   - 이전엔 text-{tone}-400 + bg-{tone}-500/20 였는데 채도가 같아 라이트 모드/얇은 폰트에서
+  //     "노랑 위 노랑" 인지 불가 문제가 보고됐다.
+  //   - 회색(normal)은 sp-text 토큰을 유지 — 다크/라이트 테마가 자동 대응.
   switch (tone) {
     case 'gray':
-      return 'bg-sp-border/40 text-sp-text hover:bg-sp-border/60';
+      return 'bg-sp-border/50 text-sp-text hover:bg-sp-border/70';
     case 'blue':
-      return 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30';
+      return 'bg-blue-500/80 text-white hover:bg-blue-500';
     case 'amber':
-      return 'bg-amber-500/20 text-amber-400 hover:bg-amber-500/30';
+      return 'bg-amber-500/80 text-white hover:bg-amber-500';
     case 'red':
-      return 'bg-red-500/25 text-red-400 hover:bg-red-500/35 animate-pulse';
+      return 'bg-red-500/85 text-white hover:bg-red-500 animate-pulse';
   }
 }
 
