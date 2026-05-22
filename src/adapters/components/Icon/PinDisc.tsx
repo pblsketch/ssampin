@@ -51,6 +51,8 @@ export function PinDisc({ hasAlert, hovered }: PinDiscProps) {
           transformOrigin: 'center bottom',
           background: 'transparent',
           backgroundColor: 'transparent',
+          // 픽셀아트 PNG가 Electron/Chromium 축소 렌더링에서 흐려지지 않도록 보간을 끈다.
+          imageRendering: 'pixelated',
         }}
       />
     </div>
