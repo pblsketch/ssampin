@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 80" fill="none" aria-hidden="true">
+  <!-- 바탕화면 -->
+  <rect x="0" y="0" width="120" height="80" rx="6" fill="currentColor" opacity="0.06"/>
+  <!-- 위젯이 바탕화면 작업판처럼 깔림 (가장 아래) -->
+  <rect x="14" y="14" width="92" height="56" rx="5" fill="#f59e0b" fill-opacity="0.16" stroke="#f59e0b" stroke-opacity="0.5" stroke-width="1.5"/>
+  <line x1="14" y1="24" x2="106" y2="24" stroke="#f59e0b" stroke-opacity="0.4" stroke-width="1"/>
+  <!-- 위젯 안쪽 카드들 (얇게 표시) -->
+  <rect x="20" y="30" width="34" height="14" rx="2" fill="#ffffff" fill-opacity="0.7"/>
+  <rect x="58" y="30" width="42" height="14" rx="2" fill="#ffffff" fill-opacity="0.7"/>
+  <rect x="20" y="48" width="80" height="18" rx="2" fill="#ffffff" fill-opacity="0.7"/>
+  <!-- 위 위에 아이콘들 (위젯 위로 보이고 클릭 가능) -->
+  <g>
+    <rect x="22" y="32" width="8" height="8" rx="1.5" fill="currentColor" opacity="0.75"/>
+    <rect x="20" y="42" width="6" height="2" rx="0.5" fill="currentColor" opacity="0.6"/>
+  </g>
+  <g>
+    <rect x="68" y="32" width="8" height="8" rx="1.5" fill="currentColor" opacity="0.75"/>
+    <rect x="66" y="42" width="6" height="2" rx="0.5" fill="currentColor" opacity="0.6"/>
+  </g>
+  <g>
+    <rect x="86" y="32" width="8" height="8" rx="1.5" fill="currentColor" opacity="0.75"/>
+    <rect x="84" y="42" width="6" height="2" rx="0.5" fill="currentColor" opacity="0.6"/>
+  </g>
+  <g>
+    <rect x="24" y="50" width="8" height="8" rx="1.5" fill="currentColor" opacity="0.75"/>
+    <rect x="22" y="60" width="6" height="2" rx="0.5" fill="currentColor" opacity="0.6"/>
+  </g>
+  <!-- 클릭 가능 표시 (커서) -->
+  <path d="M 78 56 L 78 64 L 80 62 L 82 66 L 84 65 L 82 61 L 85 61 Z" fill="currentColor" opacity="0.8" stroke="#ffffff" stroke-width="0.6"/>
+</svg>

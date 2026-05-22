@@ -208,6 +208,19 @@ export interface WidgetSettings {
    * 본 플래그는 "사용 전 가벼운 사전 안내" 용도로만 사용된다.
    */
   readonly nativeDesktopAvWarningShown?: boolean;
+  /**
+   * widget-mode-discovery (v2.1.x~) — 모드 발견성 개선 PDCA.
+   *
+   * 위젯 모드 첫 진입 시 모드 3종(normal/topmost/native-desktop)을 비교 설명하는
+   * 1회성 코치 투어(WidgetModeCoachTour)가 표시된다. 사용자가 봤거나 Skip을 누르면
+   * `shown=true`로 저장 → 다음 진입에서 자동 표시 안 함.
+   *
+   * 사용자가 "모드 가이드 다시 보기"를 누르면 `shown=false`로 reset되어 재진입 시 표시.
+   * 옵셔널 — 기존 사용자 마이그레이션 불필요(undefined → 표시 가능).
+   */
+  readonly modeTour?: {
+    readonly shown: boolean;
+  };
 }
 
 /**

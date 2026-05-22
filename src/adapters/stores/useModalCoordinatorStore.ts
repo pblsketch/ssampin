@@ -20,10 +20,12 @@ export type ModalPriority =
   | 'SECURITY_UPDATE'
   | 'FIRST_SYNC'
   | 'DRIVE_CONFLICT'
+  | 'WIDGET_MODE_FALLBACK'
   | 'OAUTH_FLOW'
   | 'NORMAL_UPDATE'
   | 'WIDGET_EXPAND'
   | 'EVENT_ALERT'
+  | 'WIDGET_MODE_COACH'
   | 'SHARE_PROMPT';
 
 /**
@@ -33,20 +35,24 @@ export type ModalPriority =
  * SECURITY_UPDATE: 보안 패치 강제 노출 — 다른 모든 모달 후순위 밀어냄
  * FIRST_SYNC: 신규 기기 첫 동기화 — 사용자 결정 전 데이터 안전 우선
  * DRIVE_CONFLICT: 클라우드 충돌 — resolve 전 다른 모달 차단
+ * WIDGET_MODE_FALLBACK: 바탕화면 모드 적용 실패 — 사용자 행동 가이드 필요 (v2.1.x widget-mode-discovery, 2.5)
  * OAUTH_FLOW: OAuth 흐름 — 사용자 결정 (2026-05-21) 도중 알림 모두 대기
  * NORMAL_UPDATE: 일반 업데이트 안내
  * WIDGET_EXPAND: 위젯 확장 모달 — 업데이트 안내와 행사 알림 사이 (4.5)
  * EVENT_ALERT: 오늘 행사 알림
+ * WIDGET_MODE_COACH: 위젯 모드 첫 진입 코치 투어 — 교육 성격, 알림보다 후순위 (v2.1.x, 5.5)
  * SHARE_PROMPT: 충성 사용자 공유 권유 — 마케팅 성격, 가장 후순위
  */
 export const PRIORITY_ORDER: Record<ModalPriority, number> = {
   SECURITY_UPDATE: 0,
   FIRST_SYNC: 1,
   DRIVE_CONFLICT: 2,
+  WIDGET_MODE_FALLBACK: 2.5,
   OAUTH_FLOW: 3,
   NORMAL_UPDATE: 4,
   WIDGET_EXPAND: 4.5,
   EVENT_ALERT: 5,
+  WIDGET_MODE_COACH: 5.5,
   SHARE_PROMPT: 6,
 };
 

@@ -19,9 +19,17 @@ import { triggerRefreshAll } from '@widgets/hooks/useWidgetRefresh';
 import { LayoutSelector } from '@widgets/components/LayoutSelector';
 import { WidgetContextMenu } from './WidgetContextMenu';
 import { WidgetWeatherBar } from '@widgets/components/WidgetWeatherBar';
-import type { WidgetLayoutMode } from '@domain/entities/Settings';
+import {
+  WidgetModeIndicator,
+  type ModeFallbackInfo,
+} from '@widgets/components/WidgetModeIndicator';
+import { WidgetModePopover } from '@widgets/components/WidgetModePopover';
+import { WidgetModeFallbackModal } from '@widgets/components/WidgetModeFallbackModal';
+import { WidgetModeCoachTour } from '@widgets/components/WidgetModeCoachTour';
+import type { WidgetDesktopMode, WidgetLayoutMode } from '@domain/entities/Settings';
 import { DEFAULT_WIDGET_STYLE } from '@domain/entities/DashboardTheme';
 import { useNearScrollbar } from '@adapters/hooks/useNearScrollbar';
+import { useFirstRunModeCoachTour } from '@adapters/hooks/useFirstRunModeCoachTour';
 
 interface ContextMenuState {
   x: number;
@@ -58,6 +66,13 @@ export function Widget() {
   const [showLayoutSelector, setShowLayoutSelector] = useState(false);
   const [panelMode, setPanelMode] = useState<'closed' | 'widgets' | 'style'>('closed');
   const layoutBtnRef = useRef<HTMLButtonElement>(null);
+  // widget-mode-discovery (v2.1.x~) — 모드 인디케이터 칩 + 팝오버 + fallback 모달 + 코치 투어
+  const modeChipRef = useRef<HTMLDivElement>(null);
+  const [showModePopover, setShowModePopover] = useState(false);
+  const [modeFallback, setModeFallback] = useState<ModeFallbackInfo | null>(null);
+  const [showFallbackModal, setShowFallbackModal] = useState(false);
+  const coachTour = useFirstRunModeCoachTour();
+  const [showCoachTour, setShowCoachTour] = useState(false);
   // Phase 7-C — 헤더 드래그 영역 좌표를 main에 등록 (native-desktop 모드 헤더 드래그용).
   // WS_CHILD가 된 위젯은 -webkit-app-region:drag가 작동 안 하므로, hook이 직접 widget을 이동시킨다.
   const headerRef = useRef<HTMLDivElement>(null);
@@ -177,6 +192,47 @@ export function Widget() {
     track('widget_open', { trigger: 'close_button' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // widget-mode-discovery — 첫 진입 1회 코치 투어 트리거.
+  // settings 로드 완료 + shouldShow=true일 때만 자동 표시.
+  useEffect(() => {
+    if (coachTour.shouldShow && !showCoachTour) {
+      setShowCoachTour(true);
+      track('widget_mode_coach_tour_shown', { firstRun: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coachTour.shouldShow]);
+
+  // widget-mode-discovery — desktopMode:fallback IPC 구독.
+  // native-desktop 적용 실패 시 칩 상태 + 모달 트리거.
+  useEffect(() => {
+    const off = window.electronAPI?.onDesktopModeFallback?.((info) => {
+      setModeFallback({ reason: info.reason, fallbackMode: info.fallbackMode });
+      setShowFallbackModal(true);
+      track('widget_mode_fallback_shown', {
+        reason: info.reason,
+        fallbackMode: info.fallbackMode,
+      });
+    });
+    return off;
+  }, [track]);
+
+  // 모드 적용 헬퍼 — popover/tour/context-menu 공통 진입점
+  const applyDesktopMode = useCallback(
+    (next: WidgetDesktopMode, via: 'coach-tour' | 'header-chip' | 'context-menu' | 'settings') => {
+      const from = settings.widget.desktopMode;
+      if (from === next) return;
+      track('widget_mode_changed', { from, to: next, via });
+      // 적용 성공 시 fallback 상태 클리어 (실패 시 onDesktopModeFallback이 다시 set)
+      setModeFallback(null);
+      void update({ widget: { ...settings.widget, desktopMode: next } });
+      void window.electronAPI?.applyWidgetSettings({
+        opacity: settings.widget.opacity,
+        desktopMode: next,
+      });
+    },
+    [settings.widget, track, update],
+  );
 
   // 레이아웃 모드 변경 (설정 저장 + 창 크기 조절)
   const setLayoutMode = useCallback(
@@ -367,6 +423,26 @@ export function Widget() {
             className="absolute top-3 right-3 flex items-center gap-1"
             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
           >
+            {/* widget-mode-discovery — 모드 인디케이터 칩 (헤더에서 가장 먼저 노출) */}
+            <div ref={modeChipRef} className="mr-1">
+              <WidgetModeIndicator
+                currentMode={settings.widget.desktopMode}
+                fallback={modeFallback}
+                layoutMode={layoutMode}
+                onClick={() => {
+                  track('widget_mode_indicator_click', {
+                    currentMode: settings.widget.desktopMode,
+                    fallback: modeFallback !== null,
+                  });
+                  if (modeFallback) {
+                    setShowFallbackModal(true);
+                  } else {
+                    setShowModePopover((v) => !v);
+                  }
+                }}
+              />
+            </div>
+
             {/* 새로고침 버튼 */}
             <button
               className="p-1.5 rounded-lg hover:bg-sp-border/60 transition-colors text-sp-muted hover:text-sp-text"
@@ -658,8 +734,63 @@ export function Widget() {
 
       {/* 컨텍스트 메뉴 */}
       {contextMenu && (
-        <WidgetContextMenu x={contextMenu.x} y={contextMenu.y} onClose={handleCloseContextMenu} />
+        <WidgetContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onClose={handleCloseContextMenu}
+          onShowModeTour={() => {
+            void coachTour.reset().then(() => setShowCoachTour(true));
+          }}
+        />
       )}
+
+      {/* widget-mode-discovery — 모드 팝오버 */}
+      {showModePopover && modeChipRef.current && (
+        <WidgetModePopover
+          anchorRect={modeChipRef.current.getBoundingClientRect()}
+          currentMode={settings.widget.desktopMode}
+          onSelect={(mode) => {
+            applyDesktopMode(mode, 'header-chip');
+            setShowModePopover(false);
+          }}
+          onShowTour={() => {
+            void coachTour.reset().then(() => setShowCoachTour(true));
+          }}
+          onClose={() => setShowModePopover(false)}
+        />
+      )}
+
+      {/* widget-mode-discovery — fallback 진단 모달 */}
+      {modeFallback && (
+        <WidgetModeFallbackModal
+          isOpen={showFallbackModal}
+          reason={modeFallback.reason}
+          fallbackMode={modeFallback.fallbackMode}
+          onClose={() => setShowFallbackModal(false)}
+          onRetry={() => {
+            // 다시 native-desktop 적용 시도 — 실패하면 IPC가 다시 fallback 발사.
+            applyDesktopMode('native-desktop', 'header-chip');
+          }}
+        />
+      )}
+
+      {/* widget-mode-discovery — 1회성 모드 코치 투어 */}
+      <WidgetModeCoachTour
+        isOpen={showCoachTour}
+        onSkip={(slideIndex) => {
+          track('widget_mode_coach_tour_skipped', { slideIndex });
+          void coachTour.markShown();
+          setShowCoachTour(false);
+        }}
+        onComplete={(trySelected) => {
+          track('widget_mode_coach_tour_completed', { trySelected });
+          void coachTour.markShown();
+          setShowCoachTour(false);
+        }}
+        onTrySelected={(mode) => {
+          applyDesktopMode(mode, 'coach-tour');
+        }}
+      />
     </>
   );
 }

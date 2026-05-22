@@ -1,5 +1,13 @@
 import { create } from 'zustand';
-import type { Settings, WorkSymbolItem, FeedbackConfig, WidgetVisibleSections, DashboardThemeSettings, WidgetStyleSettings, ShortcutSettings } from '@domain/entities/Settings';
+import type {
+  Settings,
+  WorkSymbolItem,
+  FeedbackConfig,
+  WidgetVisibleSections,
+  DashboardThemeSettings,
+  WidgetStyleSettings,
+  ShortcutSettings,
+} from '@domain/entities/Settings';
 import { DEFAULT_TODO_SETTINGS } from '@domain/entities/TodoSettings';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import { settingsRepository } from '@adapters/di/container';
@@ -7,11 +15,41 @@ import { detectLunchFromPeriods, getDefaultLunchTime } from '@domain/rules/perio
 import { generateUUID } from '@infrastructure/utils/uuid';
 
 export const DEFAULT_WORK_SYMBOLS: readonly WorkSymbolItem[] = [
-  { id: 'silence', emoji: '🤫', name: '조용히', description: '소리 내지 않고 혼자 활동합니다', bgGradient: 'from-blue-950/30 to-transparent' },
-  { id: 'raise-hand', emoji: '🙋', name: '손들고 질문', description: '질문이 있으면 손을 들어주세요', bgGradient: 'from-green-950/30 to-transparent' },
-  { id: 'pair-talk', emoji: '💬', name: '짝과 상의', description: '짝꿍과 작은 소리로 이야기하세요', bgGradient: 'from-yellow-950/30 to-transparent' },
-  { id: 'group-work', emoji: '👥', name: '모둠 활동', description: '모둠원과 함께 활동합니다', bgGradient: 'from-purple-950/30 to-transparent' },
-  { id: 'individual', emoji: '📝', name: '개인 활동', description: '스스로 생각하고 작성합니다', bgGradient: 'from-slate-950/30 to-transparent' },
+  {
+    id: 'silence',
+    emoji: '🤫',
+    name: '조용히',
+    description: '소리 내지 않고 혼자 활동합니다',
+    bgGradient: 'from-blue-950/30 to-transparent',
+  },
+  {
+    id: 'raise-hand',
+    emoji: '🙋',
+    name: '손들고 질문',
+    description: '질문이 있으면 손을 들어주세요',
+    bgGradient: 'from-green-950/30 to-transparent',
+  },
+  {
+    id: 'pair-talk',
+    emoji: '💬',
+    name: '짝과 상의',
+    description: '짝꿍과 작은 소리로 이야기하세요',
+    bgGradient: 'from-yellow-950/30 to-transparent',
+  },
+  {
+    id: 'group-work',
+    emoji: '👥',
+    name: '모둠 활동',
+    description: '모둠원과 함께 활동합니다',
+    bgGradient: 'from-purple-950/30 to-transparent',
+  },
+  {
+    id: 'individual',
+    emoji: '📝',
+    name: '개인 활동',
+    description: '스스로 생각하고 작성합니다',
+    bgGradient: 'from-slate-950/30 to-transparent',
+  },
 ];
 
 const DEFAULT_PERIOD_TIMES: readonly PeriodTime[] = [
@@ -45,6 +83,9 @@ const DEFAULT_SETTINGS: Settings = {
     closeAction: 'widget',
     icon: {
       showCoachMark: true,
+    },
+    modeTour: {
+      shown: false,
     },
     layoutMode: 'full',
     desktopMode: 'normal',
@@ -158,16 +199,16 @@ const DEFAULT_SETTINGS: Settings = {
     autoSyncIntervalMin: 0,
     conflictPolicy: 'latest' as const,
     lastSyncedAt: null,
-    deviceId: '',  // 런타임에 generateUUID()로 초기화
+    deviceId: '', // 런타임에 generateUUID()로 초기화
   },
   shortcuts: {
     globalEnabled: true,
     bindings: {
-      'quickAdd.todo':         { combo: 'mod+alt+t', enabled: true },
-      'quickAdd.event':        { combo: 'mod+alt+e', enabled: true },
-      'quickAdd.memo':         { combo: 'mod+alt+m', enabled: true },
-      'quickAdd.note':         { combo: 'mod+alt+n', enabled: true },
-      'quickAdd.bookmark':     { combo: 'mod+alt+b', enabled: true },
+      'quickAdd.todo': { combo: 'mod+alt+t', enabled: true },
+      'quickAdd.event': { combo: 'mod+alt+e', enabled: true },
+      'quickAdd.memo': { combo: 'mod+alt+m', enabled: true },
+      'quickAdd.note': { combo: 'mod+alt+n', enabled: true },
+      'quickAdd.bookmark': { combo: 'mod+alt+b', enabled: true },
       'sticker-picker:toggle': { combo: 'mod+shift+e', enabled: true },
     },
     migratedAutoEnableV2: true,
@@ -177,11 +218,11 @@ const DEFAULT_SETTINGS: Settings = {
 export const DEFAULT_SHORTCUTS: ShortcutSettings = {
   globalEnabled: true,
   bindings: {
-    'quickAdd.todo':         { combo: 'mod+alt+t', enabled: true },
-    'quickAdd.event':        { combo: 'mod+alt+e', enabled: true },
-    'quickAdd.memo':         { combo: 'mod+alt+m', enabled: true },
-    'quickAdd.note':         { combo: 'mod+alt+n', enabled: true },
-    'quickAdd.bookmark':     { combo: 'mod+alt+b', enabled: true },
+    'quickAdd.todo': { combo: 'mod+alt+t', enabled: true },
+    'quickAdd.event': { combo: 'mod+alt+e', enabled: true },
+    'quickAdd.memo': { combo: 'mod+alt+m', enabled: true },
+    'quickAdd.note': { combo: 'mod+alt+n', enabled: true },
+    'quickAdd.bookmark': { combo: 'mod+alt+b', enabled: true },
     'sticker-picker:toggle': { combo: 'mod+shift+e', enabled: true },
   },
   migratedAutoEnableV2: true,
@@ -217,7 +258,9 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
             ...DEFAULT_SETTINGS.widget,
             ...(saved.widget ?? {}),
             visibleSections: (() => {
-              const savedVis = (saved.widget as unknown as { visibleSections?: Record<string, unknown> })?.visibleSections ?? {};
+              const savedVis =
+                (saved.widget as unknown as { visibleSections?: Record<string, unknown> })
+                  ?.visibleSections ?? {};
               // 기존 timetable 키 → teacherTimetable/classTimetable 마이그레이션
               const migrated: Record<string, unknown> = { ...savedVis };
               if ('timetable' in savedVis && !('teacherTimetable' in savedVis)) {
@@ -225,15 +268,25 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
                 migrated.classTimetable = savedVis.timetable;
                 delete migrated.timetable;
               }
-              return { ...DEFAULT_SETTINGS.widget.visibleSections, ...migrated } as WidgetVisibleSections;
+              return {
+                ...DEFAULT_SETTINGS.widget.visibleSections,
+                ...migrated,
+              } as WidgetVisibleSections;
             })(),
             desktopMode: (() => {
               // Migrate old values → 'normal' | 'topmost' | 'native-desktop' (v2.1.0~)
               const rawMode = (saved.widget as unknown as { desktopMode?: string })?.desktopMode;
               if (rawMode === 'floating') return 'topmost' as const;
-              if (rawMode === 'auto' || rawMode === 'desktop' || rawMode === 'behind' || rawMode === 'above') return 'normal' as const;
+              if (
+                rawMode === 'auto' ||
+                rawMode === 'desktop' ||
+                rawMode === 'behind' ||
+                rawMode === 'above'
+              )
+                return 'normal' as const;
               // 정식 값만 보존 (native-desktop 포함). 그 외는 기본값으로 fallback.
-              if (rawMode === 'normal' || rawMode === 'topmost' || rawMode === 'native-desktop') return rawMode;
+              if (rawMode === 'normal' || rawMode === 'topmost' || rawMode === 'native-desktop')
+                return rawMode;
               return DEFAULT_SETTINGS.widget.desktopMode;
             })(),
             closeAction: (() => {
@@ -241,8 +294,15 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
               // 하위 호환: closeAction이 명시 없으면 closeToWidget legacy 키로 폴백.
               //   closeToWidget=true  → 'widget'
               //   closeToWidget=false → 'tray'
-              const explicit = (saved.widget as unknown as { closeAction?: 'widget' | 'tray' | 'ask' | 'icon' })?.closeAction;
-              if (explicit === 'widget' || explicit === 'tray' || explicit === 'ask' || explicit === 'icon') {
+              const explicit = (
+                saved.widget as unknown as { closeAction?: 'widget' | 'tray' | 'ask' | 'icon' }
+              )?.closeAction;
+              if (
+                explicit === 'widget' ||
+                explicit === 'tray' ||
+                explicit === 'ask' ||
+                explicit === 'icon'
+              ) {
                 return explicit;
               }
               const legacy = saved.widget?.closeToWidget;
@@ -251,17 +311,28 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
             })(),
             icon: (() => {
               // v2.0.2~: 아이콘 모드 옵션 폴백
-              const savedIcon = (saved.widget as unknown as { icon?: Partial<NonNullable<Settings['widget']['icon']>> })?.icon;
+              const savedIcon = (
+                saved.widget as unknown as {
+                  icon?: Partial<NonNullable<Settings['widget']['icon']>>;
+                }
+              )?.icon;
               return {
                 ...DEFAULT_SETTINGS.widget.icon!,
                 ...(savedIcon ?? {}),
               };
             })(),
           },
-          system: { ...DEFAULT_SETTINGS.system, ...((saved as unknown as { system?: Partial<Settings['system']> }).system ?? {}) },
+          system: {
+            ...DEFAULT_SETTINGS.system,
+            ...((saved as unknown as { system?: Partial<Settings['system']> }).system ?? {}),
+          },
           neis: (() => {
             const savedNeis = (saved as unknown as { neis?: Partial<Settings['neis']> }).neis ?? {};
-            const savedAutoSync = (savedNeis as unknown as { autoSync?: Partial<NonNullable<Settings['neis']['autoSync']>> }).autoSync;
+            const savedAutoSync = (
+              savedNeis as unknown as {
+                autoSync?: Partial<NonNullable<Settings['neis']['autoSync']>>;
+              }
+            ).autoSync;
             return {
               ...DEFAULT_SETTINGS.neis,
               ...savedNeis,
@@ -281,22 +352,38 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
           })(),
           alarmSound: {
             ...DEFAULT_SETTINGS.alarmSound,
-            ...((saved as unknown as { alarmSound?: Partial<Settings['alarmSound']> }).alarmSound ?? {}),
+            ...((saved as unknown as { alarmSound?: Partial<Settings['alarmSound']> }).alarmSound ??
+              {}),
             preWarning: {
               ...DEFAULT_SETTINGS.alarmSound.preWarning,
-              ...((saved as unknown as { alarmSound?: { preWarning?: Partial<Settings['alarmSound']['preWarning']> } }).alarmSound?.preWarning ?? {}),
+              ...((
+                saved as unknown as {
+                  alarmSound?: { preWarning?: Partial<Settings['alarmSound']['preWarning']> };
+                }
+              ).alarmSound?.preWarning ?? {}),
             },
           },
-          workSymbols: { ...DEFAULT_SETTINGS.workSymbols, ...((saved as unknown as { workSymbols?: Partial<Settings['workSymbols']> }).workSymbols ?? {}) },
-          weather: { ...DEFAULT_SETTINGS.weather, ...((saved as unknown as { weather?: Partial<Settings['weather']> }).weather ?? {}) },
-          feedback: { ...DEFAULT_SETTINGS.feedback, ...((saved as unknown as { feedback?: Partial<FeedbackConfig> }).feedback ?? {}) } as FeedbackConfig,
+          workSymbols: {
+            ...DEFAULT_SETTINGS.workSymbols,
+            ...((saved as unknown as { workSymbols?: Partial<Settings['workSymbols']> })
+              .workSymbols ?? {}),
+          },
+          weather: {
+            ...DEFAULT_SETTINGS.weather,
+            ...((saved as unknown as { weather?: Partial<Settings['weather']> }).weather ?? {}),
+          },
+          feedback: {
+            ...DEFAULT_SETTINGS.feedback,
+            ...((saved as unknown as { feedback?: Partial<FeedbackConfig> }).feedback ?? {}),
+          } as FeedbackConfig,
           sync: (() => {
             const savedSync = (saved as unknown as { sync?: Record<string, unknown> }).sync ?? {};
             const defaults = DEFAULT_SETTINGS.sync!;
             return { ...defaults, ...savedSync };
           })(),
           shortcuts: (() => {
-            const savedShortcuts = (saved as unknown as { shortcuts?: Partial<ShortcutSettings> }).shortcuts;
+            const savedShortcuts = (saved as unknown as { shortcuts?: Partial<ShortcutSettings> })
+              .shortcuts;
             // 레거시 사용자(shortcuts 키 자체가 없음) → DEFAULT_SHORTCUTS 사용 (이미 globalEnabled=true + migrated=true)
             if (!savedShortcuts) return DEFAULT_SHORTCUTS;
             // v2 자동 활성화 마이그레이션:
@@ -312,21 +399,36 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
               migratedAutoEnableV2: true,
             };
           })(),
-          dashboardTheme: (saved as unknown as { dashboardTheme?: DashboardThemeSettings }).dashboardTheme,
+          dashboardTheme: (saved as unknown as { dashboardTheme?: DashboardThemeSettings })
+            .dashboardTheme,
           widgetStyle: (saved as unknown as { widgetStyle?: WidgetStyleSettings }).widgetStyle,
-          subjectColors: (saved as unknown as { subjectColors?: Settings['subjectColors'] }).subjectColors,
-          timetableColorBy: (saved as unknown as { timetableColorBy?: Settings['timetableColorBy'] }).timetableColorBy,
-          classroomColors: (saved as unknown as { classroomColors?: Settings['classroomColors'] }).classroomColors,
-          favoriteTools: (saved as unknown as { favoriteTools?: Settings['favoriteTools'] }).favoriteTools,
-          bookmarkWidgetHiddenGroups: (saved as unknown as { bookmarkWidgetHiddenGroups?: Settings['bookmarkWidgetHiddenGroups'] }).bookmarkWidgetHiddenGroups,
-          bookmarkWidgetHiddenBookmarks: (saved as unknown as { bookmarkWidgetHiddenBookmarks?: Settings['bookmarkWidgetHiddenBookmarks'] }).bookmarkWidgetHiddenBookmarks,
+          subjectColors: (saved as unknown as { subjectColors?: Settings['subjectColors'] })
+            .subjectColors,
+          timetableColorBy: (
+            saved as unknown as { timetableColorBy?: Settings['timetableColorBy'] }
+          ).timetableColorBy,
+          classroomColors: (saved as unknown as { classroomColors?: Settings['classroomColors'] })
+            .classroomColors,
+          favoriteTools: (saved as unknown as { favoriteTools?: Settings['favoriteTools'] })
+            .favoriteTools,
+          bookmarkWidgetHiddenGroups: (
+            saved as unknown as {
+              bookmarkWidgetHiddenGroups?: Settings['bookmarkWidgetHiddenGroups'];
+            }
+          ).bookmarkWidgetHiddenGroups,
+          bookmarkWidgetHiddenBookmarks: (
+            saved as unknown as {
+              bookmarkWidgetHiddenBookmarks?: Settings['bookmarkWidgetHiddenBookmarks'];
+            }
+          ).bookmarkWidgetHiddenBookmarks,
           lunchStart: (saved as unknown as { lunchStart?: string }).lunchStart,
           lunchEnd: (saved as unknown as { lunchEnd?: string }).lunchEnd,
         };
         // maxPeriods가 periodTimes 개수보다 작으면 보정 (온보딩 버그 마이그레이션)
-        let corrected = merged.periodTimes && merged.maxPeriods < merged.periodTimes.length
-          ? { ...merged, maxPeriods: merged.periodTimes.length }
-          : merged;
+        let corrected =
+          merged.periodTimes && merged.maxPeriods < merged.periodTimes.length
+            ? { ...merged, maxPeriods: merged.periodTimes.length }
+            : merged;
 
         // lunchStart/lunchEnd 마이그레이션 (기존 사용자)
         if (!corrected.lunchStart) {
@@ -366,18 +468,10 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       ...current,
       ...patch,
       // 중첩 객체는 명시적 딥 머지 (부분 업데이트 시 기존 값 보존)
-      weather: patch.weather
-        ? { ...current.weather, ...patch.weather }
-        : current.weather,
-      neis: patch.neis
-        ? { ...current.neis, ...patch.neis }
-        : current.neis,
-      widget: patch.widget
-        ? { ...current.widget, ...patch.widget }
-        : current.widget,
-      system: patch.system
-        ? { ...current.system, ...patch.system }
-        : current.system,
+      weather: patch.weather ? { ...current.weather, ...patch.weather } : current.weather,
+      neis: patch.neis ? { ...current.neis, ...patch.neis } : current.neis,
+      widget: patch.widget ? { ...current.widget, ...patch.widget } : current.widget,
+      system: patch.system ? { ...current.system, ...patch.system } : current.system,
       todoSettings: patch.todoSettings
         ? { ...(current.todoSettings ?? DEFAULT_TODO_SETTINGS), ...patch.todoSettings }
         : current.todoSettings,

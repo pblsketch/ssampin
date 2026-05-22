@@ -8,9 +8,14 @@ interface WidgetContextMenuProps {
   x: number;
   y: number;
   onClose: () => void;
+  /**
+   * widget-mode-discovery (v2.1.x~) — "모드 가이드 다시 보기" 클릭 시 호출.
+   * 호출자(Widget.tsx)가 useFirstRunModeCoachTour.reset() 후 투어 모달을 노출.
+   */
+  onShowModeTour?: () => void;
 }
 
-export function WidgetContextMenu({ x, y, onClose }: WidgetContextMenuProps) {
+export function WidgetContextMenu({ x, y, onClose, onShowModeTour }: WidgetContextMenuProps) {
   const { settings, update } = useSettingsStore();
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -63,30 +68,6 @@ export function WidgetContextMenu({ x, y, onClose }: WidgetContextMenuProps) {
     window.electronAPI?.setOpacity(normalized);
   };
 
-  const isAlwaysOnTop = settings.widget.desktopMode === 'topmost';
-  const handleToggleAlwaysOnTop = () => {
-    const nextMode: WidgetDesktopMode = isAlwaysOnTop ? 'normal' : 'topmost';
-    const nextWidget = { ...settings.widget, desktopMode: nextMode };
-    void update({ widget: nextWidget });
-    void window.electronAPI?.applyWidgetSettings({
-      opacity: nextWidget.opacity,
-      desktopMode: nextMode,
-    });
-  };
-
-  // 바탕화면 아이콘 아래 모드 (Windows 전용, v2.1.0~)
-  const isNativeDesktop = settings.widget.desktopMode === 'native-desktop';
-  const supportsNativeDesktop = isWindows();
-  const handleToggleNativeDesktop = () => {
-    const nextMode: WidgetDesktopMode = isNativeDesktop ? 'normal' : 'native-desktop';
-    const nextWidget = { ...settings.widget, desktopMode: nextMode };
-    void update({ widget: nextWidget });
-    void window.electronAPI?.applyWidgetSettings({
-      opacity: nextWidget.opacity,
-      desktopMode: nextMode,
-    });
-  };
-
   const handleSettings = () => {
     onClose();
     window.electronAPI?.toggleWidget();
@@ -105,62 +86,102 @@ export function WidgetContextMenu({ x, y, onClose }: WidgetContextMenuProps) {
     >
       {/* 메뉴 헤더 */}
       <div className="px-3 pt-3 pb-2">
-        <p className="text-xs uppercase tracking-wider text-sp-muted font-semibold">
-          SsamPin Menu
-        </p>
+        <p className="text-xs uppercase tracking-wider text-sp-muted font-semibold">SsamPin Menu</p>
       </div>
 
-      {/* 항상 위에 표시 토글 (Always on Top) */}
-      <button
-        className="w-full flex items-center gap-3 px-3 py-2 hover:bg-sp-text/[0.08] transition-colors text-left"
-        onClick={handleToggleAlwaysOnTop}
-      >
-        <span
-          className="material-symbols-outlined flex-shrink-0"
-          style={{ fontSize: 20, color: isAlwaysOnTop ? '#3b82f6' : undefined }}
-        >
-          push_pin
-        </span>
-        <span className="flex-1 text-sm text-sp-text">항상 위에 표시</span>
-        {isAlwaysOnTop && (
+      {/* widget-mode-discovery — "모드" 섹션 최상단 승격 (3종 라디오 + 미리보기 썸네일) */}
+      <div className="px-3 py-2" data-testid="context-menu-mode-section">
+        <div className="flex items-center gap-3 mb-2">
           <span
-            className="material-symbols-outlined text-blue-400 flex-shrink-0"
-            style={{ fontSize: 18 }}
+            className="material-symbols-outlined text-sp-muted flex-shrink-0"
+            style={{ fontSize: 20 }}
           >
-            check
+            tune
           </span>
-        )}
-      </button>
-
-      {/* 바탕화면 아이콘 아래 토글 (v2.1.0~, Windows 전용) */}
-      <button
-        type="button"
-        className={[
-          'w-full flex items-center gap-3 px-3 py-2 transition-colors text-left',
-          supportsNativeDesktop
-            ? 'hover:bg-sp-text/[0.08]'
-            : 'opacity-50 cursor-not-allowed',
-        ].join(' ')}
-        onClick={supportsNativeDesktop ? handleToggleNativeDesktop : undefined}
-        disabled={!supportsNativeDesktop}
-        title={supportsNativeDesktop ? undefined : 'Windows에서만 사용할 수 있는 기능입니다.'}
-      >
-        <span
-          className="material-symbols-outlined flex-shrink-0"
-          style={{ fontSize: 20, color: isNativeDesktop ? '#3b82f6' : undefined }}
-        >
-          desktop_windows
-        </span>
-        <span className="flex-1 text-sm text-sp-text">바탕화면 아이콘 아래</span>
-        {isNativeDesktop && (
-          <span
-            className="material-symbols-outlined text-blue-400 flex-shrink-0"
-            style={{ fontSize: 18 }}
+          <span className="flex-1 text-sm text-sp-text font-medium">모드</span>
+        </div>
+        <div className="flex flex-col gap-0.5 pl-1">
+          {[
+            { value: 'normal' as const, label: '일반', preview: '/mode-preview/normal.svg' },
+            { value: 'topmost' as const, label: '항상 위에', preview: '/mode-preview/topmost.svg' },
+            {
+              value: 'native-desktop' as const,
+              label: '바탕화면 아이콘 아래',
+              preview: '/mode-preview/native-desktop.svg',
+              winOnly: true,
+            },
+          ].map((opt) => {
+            const isSelected = settings.widget.desktopMode === opt.value;
+            const disabled = opt.winOnly === true && !isWindows();
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                className={[
+                  'w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left transition-colors text-sm',
+                  isSelected
+                    ? 'bg-blue-500/15 text-blue-400'
+                    : disabled
+                      ? 'opacity-50 cursor-not-allowed text-sp-muted'
+                      : 'hover:bg-sp-text/[0.06] text-sp-text',
+                ].join(' ')}
+                onClick={() => {
+                  if (disabled || isSelected) return;
+                  const nextMode: WidgetDesktopMode = opt.value;
+                  void update({ widget: { ...settings.widget, desktopMode: nextMode } });
+                  void window.electronAPI?.applyWidgetSettings({
+                    opacity: settings.widget.opacity,
+                    desktopMode: nextMode,
+                  });
+                }}
+                disabled={disabled}
+                title={disabled ? 'Windows에서만 사용할 수 있는 기능입니다' : undefined}
+                data-testid={`context-menu-mode-${opt.value}`}
+              >
+                <span
+                  className={[
+                    'w-3.5 h-3.5 rounded-full border-2 flex-shrink-0 flex items-center justify-center',
+                    isSelected ? 'border-blue-400' : 'border-sp-border',
+                  ].join(' ')}
+                >
+                  {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />}
+                </span>
+                <img
+                  src={opt.preview}
+                  alt=""
+                  width={24}
+                  height={16}
+                  className="flex-shrink-0 rounded opacity-70"
+                  aria-hidden="true"
+                />
+                <span className="flex-1 truncate">{opt.label}</span>
+                {opt.winOnly && (
+                  <span className="px-1 rounded bg-sp-accent/15 text-sp-accent text-[9px] font-bold flex-shrink-0">
+                    Win
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+        {/* 모드 가이드 다시 보기 */}
+        {onShowModeTour && (
+          <button
+            type="button"
+            className="mt-1 w-full text-left px-2 py-1 rounded-lg text-xs text-sp-muted hover:text-sp-text hover:bg-sp-text/[0.06]"
+            onClick={() => {
+              onShowModeTour();
+              onClose();
+            }}
+            data-testid="context-menu-mode-tour-reset"
           >
-            check
-          </span>
+            <span className="material-symbols-outlined align-middle mr-1" style={{ fontSize: 14 }}>
+              help
+            </span>
+            모드 가이드 다시 보기
+          </button>
         )}
-      </button>
+      </div>
 
       {/* 구분선 */}
       <div className="h-px bg-sp-border mx-3 my-1" />
@@ -177,13 +198,13 @@ export function WidgetContextMenu({ x, y, onClose }: WidgetContextMenuProps) {
           <span className="flex-1 text-sm text-sp-text">레이아웃</span>
         </div>
         <div className="flex flex-col gap-0.5 pl-1">
-          {([
+          {[
             { mode: 'full' as WidgetLayoutMode, label: '전체화면', shortcut: 'Ctrl+1' },
             { mode: 'split-h' as WidgetLayoutMode, label: '좌우 분할', shortcut: 'Ctrl+2' },
             { mode: 'split-v' as WidgetLayoutMode, label: '상하 분할', shortcut: 'Ctrl+3' },
             { mode: 'quad' as WidgetLayoutMode, label: '4분할', shortcut: 'Ctrl+4' },
             { mode: 'sidebar-right' as WidgetLayoutMode, label: '우측 사이드', shortcut: 'Ctrl+5' },
-          ]).map((opt) => {
+          ].map((opt) => {
             const isActive = (settings.widget.layoutMode ?? 'full') === opt.mode;
             return (
               <button
@@ -199,10 +220,12 @@ export function WidgetContextMenu({ x, y, onClose }: WidgetContextMenuProps) {
                   window.electronAPI?.setWidgetLayout(opt.mode);
                 }}
               >
-                <span className={[
-                  'w-3.5 h-3.5 rounded-full border-2 flex-shrink-0 flex items-center justify-center',
-                  isActive ? 'border-blue-400' : 'border-sp-border',
-                ].join(' ')}>
+                <span
+                  className={[
+                    'w-3.5 h-3.5 rounded-full border-2 flex-shrink-0 flex items-center justify-center',
+                    isActive ? 'border-blue-400' : 'border-sp-border',
+                  ].join(' ')}
+                >
                   {isActive && <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />}
                 </span>
                 <span className="flex-1">{opt.label}</span>
@@ -220,7 +243,9 @@ export function WidgetContextMenu({ x, y, onClose }: WidgetContextMenuProps) {
       <button
         className="w-full flex items-center gap-3 px-3 py-2 hover:bg-sp-text/[0.08] transition-colors text-left"
         onClick={() => {
-          void update({ widget: { ...settings.widget, showWeather: !(settings.widget.showWeather !== false) } });
+          void update({
+            widget: { ...settings.widget, showWeather: !(settings.widget.showWeather !== false) },
+          });
           onClose();
         }}
       >
@@ -313,7 +338,13 @@ export function WidgetContextMenu({ x, y, onClose }: WidgetContextMenuProps) {
           </span>
           <span className="flex-1 text-sm text-sp-text">글자 크기</span>
           <span className="text-xs font-mono text-sp-muted flex-shrink-0 w-12 text-right">
-            {settings.fontSize === 'small' ? '작게' : settings.fontSize === 'large' ? '크게' : settings.fontSize === 'xlarge' ? '매우 크게' : '보통'}
+            {settings.fontSize === 'small'
+              ? '작게'
+              : settings.fontSize === 'large'
+                ? '크게'
+                : settings.fontSize === 'xlarge'
+                  ? '매우 크게'
+                  : '보통'}
           </span>
         </div>
         <div className="px-1 flex items-center justify-between gap-2">
@@ -321,10 +352,11 @@ export function WidgetContextMenu({ x, y, onClose }: WidgetContextMenuProps) {
             <button
               key={size}
               onClick={() => void update({ fontSize: size })}
-              className={`w-full py-1 rounded text-xs transition-colors ${settings.fontSize === size
+              className={`w-full py-1 rounded text-xs transition-colors ${
+                settings.fontSize === size
                   ? 'bg-blue-500/20 text-blue-400 ring-1 ring-blue-500/50'
                   : 'bg-sp-surface/50 text-sp-muted hover:bg-sp-surface hover:text-sp-text'
-                }`}
+              }`}
             >
               {size === 'small' ? '가' : size === 'medium' ? '가' : size === 'large' ? '가' : '가'}
             </button>

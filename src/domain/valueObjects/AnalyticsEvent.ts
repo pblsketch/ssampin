@@ -42,7 +42,13 @@ export type AnalyticsEventName =
   | 'share_click'
   | 'share_prompt_shown'
   | 'share_prompt_action'
-  | 'release_notes_notion_link_clicked';
+  | 'release_notes_notion_link_clicked'
+  | 'widget_mode_indicator_click'
+  | 'widget_mode_changed'
+  | 'widget_mode_fallback_shown'
+  | 'widget_mode_coach_tour_shown'
+  | 'widget_mode_coach_tour_completed'
+  | 'widget_mode_coach_tour_skipped';
 
 /** tool_use 이벤트의 tool 프로퍼티에 사용 가능한 도구명 */
 export type ToolName =
@@ -105,11 +111,32 @@ export interface AnalyticsEventProperties {
   widget_layout_change: { from: string; to: string };
   onboarding_roles_selected: { roles: string[]; hiddenMenuCount: number; visibleMenuCount: number };
   onboarding_widget_preset: { presetKey: string; roles: string[] };
-  chatbot_feedback: { result: 'resolved' | 'unresolved' | 'no_response' | 'implicit_positive'; topic?: string; elapsed_ms?: number; sessionId?: string };
+  chatbot_feedback: {
+    result: 'resolved' | 'unresolved' | 'no_response' | 'implicit_positive';
+    topic?: string;
+    elapsed_ms?: number;
+    sessionId?: string;
+  };
   chatbot_escalate: { questionText: string; sessionId?: string };
   share_modal_open: { trigger: 'manual' | 'prompt' };
   share_click: { method: 'kakao' | 'clipboard' | 'qr' };
   share_prompt_shown: Record<string, never>;
   share_prompt_action: { action: 'share' | 'later' | 'never' };
   release_notes_notion_link_clicked: { version: string; title: string };
+  /** 위젯 헤더의 모드 인디케이터 칩 클릭 (팝오버 열기) */
+  widget_mode_indicator_click: { currentMode: string; fallback: boolean };
+  /** 사용자가 모드를 변경 — via는 변경 진입 경로 */
+  widget_mode_changed: {
+    from: string;
+    to: string;
+    via: 'coach-tour' | 'header-chip' | 'context-menu' | 'settings';
+  };
+  /** native-desktop fallback 알림 표시 */
+  widget_mode_fallback_shown: { reason: string; fallbackMode: string };
+  /** 모드 코치 투어 노출 */
+  widget_mode_coach_tour_shown: { firstRun: boolean };
+  widget_mode_coach_tour_completed: {
+    trySelected: 'normal' | 'topmost' | 'native-desktop' | 'none';
+  };
+  widget_mode_coach_tour_skipped: { slideIndex: number };
 }

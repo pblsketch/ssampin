@@ -3,6 +3,8 @@ import type { Settings, WidgetSettings, WidgetDesktopMode } from '@domain/entiti
 import { SettingsSection } from '../shared/SettingsSection';
 import { Toggle } from '../shared/Toggle';
 import { isWindows } from '@adapters/hooks/shortcut/keyNormalize';
+import { useFirstRunModeCoachTour } from '@adapters/hooks/useFirstRunModeCoachTour';
+import { useToastStore } from '@adapters/components/common/Toast';
 
 interface Props {
   draft: Settings;
@@ -24,9 +26,14 @@ function useMemoryMetrics(enabled: boolean): MemoryMetrics | null {
     if (!enabled || !window.electronAPI?.getMemoryMetrics) return undefined;
     let cancelled = false;
     const fetchMetrics = () => {
-      window.electronAPI?.getMemoryMetrics?.().then((m) => {
-        if (!cancelled) setMetrics(m);
-      }).catch(() => { /* ignore */ });
+      window.electronAPI
+        ?.getMemoryMetrics?.()
+        .then((m) => {
+          if (!cancelled) setMetrics(m);
+        })
+        .catch(() => {
+          /* ignore */
+        });
     };
     fetchMetrics();
     const timerId = window.setInterval(fetchMetrics, 3000);
@@ -39,24 +46,142 @@ function useMemoryMetrics(enabled: boolean): MemoryMetrics | null {
 }
 
 export function WidgetTab({ draft, patch }: Props) {
-  const patchWidget = useCallback((p: Partial<WidgetSettings>) => {
-    patch({ widget: { ...draft.widget, ...p } });
-  }, [draft.widget, patch]);
+  const patchWidget = useCallback(
+    (p: Partial<WidgetSettings>) => {
+      patch({ widget: { ...draft.widget, ...p } });
+    },
+    [draft.widget, patch],
+  );
 
   const [showMemory, setShowMemory] = useState(false);
   const metrics = useMemoryMetrics(showMemory);
+  const coachTour = useFirstRunModeCoachTour();
+  const showToast = useToastStore((s) => s.show);
+
+  // widget-mode-discovery — 모드 옵션 메타 (페이지 최상단 승격용)
+  const winSupported = isWindows();
+  const modeOpts: Array<{
+    value: WidgetDesktopMode;
+    label: string;
+    desc: string;
+    preview: string;
+    winOnly?: boolean;
+  }> = [
+    {
+      value: 'normal',
+      label: '일반',
+      desc: '다른 창에 가려질 수 있습니다. Win+D를 눌러도 사라지지 않습니다.',
+      preview: '/mode-preview/normal.svg',
+    },
+    {
+      value: 'topmost',
+      label: '항상 위에',
+      desc: '항상 다른 창 위에 표시됩니다. Win+D를 눌러도 사라지지 않습니다.',
+      preview: '/mode-preview/topmost.svg',
+    },
+    {
+      value: 'native-desktop',
+      label: '바탕화면 아이콘 아래',
+      desc: '쌤핀 위젯을 바탕화면 작업판처럼 깔고, 바탕화면 아이콘은 위에서 그대로 클릭·이동할 수 있습니다. Windows 전용 기능입니다.',
+      preview: '/mode-preview/native-desktop.svg',
+      winOnly: true,
+    },
+  ];
 
   return (
-    <SettingsSection
-      icon="widgets"
-      iconColor="bg-indigo-500/10 text-indigo-400"
-      title="위젯 설정"
-    >
+    <SettingsSection icon="widgets" iconColor="bg-indigo-500/10 text-indigo-400" title="위젯 설정">
       <div className="space-y-6">
-        <div className="space-y-3">
+        {/* widget-mode-discovery — "위젯 표시 모드" 섹션을 페이지 최상단으로 승격 */}
+        <div className="space-y-1.5" data-testid="settings-mode-section">
+          <span className="text-sm font-medium text-sp-text">위젯 표시 모드</span>
+          <p className="text-xs text-sp-muted mb-2">
+            위젯 창이 다른 창과 어떻게 어울릴지 선택합니다.
+          </p>
+          {modeOpts.map((opt) => {
+            const disabled = opt.winOnly === true && !winSupported;
+            const isSelected = draft.widget.desktopMode === opt.value;
+            return (
+              <label
+                key={opt.value}
+                title={disabled ? 'Windows에서만 사용할 수 있는 기능입니다.' : undefined}
+                className={[
+                  'flex items-start gap-3 px-3 py-2 rounded-lg transition-colors',
+                  disabled
+                    ? 'opacity-50 cursor-not-allowed'
+                    : 'hover:bg-sp-surface/50 cursor-pointer',
+                ].join(' ')}
+              >
+                <input
+                  type="radio"
+                  name="widgetDesktopMode"
+                  value={opt.value}
+                  checked={isSelected}
+                  disabled={disabled}
+                  onChange={() => patchWidget({ desktopMode: opt.value })}
+                  className="mt-0.5 w-3.5 h-3.5 text-sp-accent focus:ring-sp-accent"
+                />
+                <img
+                  src={opt.preview}
+                  alt=""
+                  width={48}
+                  height={32}
+                  className="flex-shrink-0 rounded opacity-80 mt-0.5"
+                  aria-hidden="true"
+                />
+                <div className="flex-1">
+                  <span className="text-xs font-medium text-sp-text">
+                    {opt.label}
+                    {opt.winOnly && (
+                      <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded bg-sp-accent/15 text-sp-accent text-[10px] font-semibold">
+                        Windows
+                      </span>
+                    )}
+                    {opt.value === 'native-desktop' && (
+                      <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 text-[10px] font-semibold">
+                        NEW
+                      </span>
+                    )}
+                  </span>
+                  <p className="text-caption text-sp-muted mt-0.5 leading-relaxed">{opt.desc}</p>
+                </div>
+              </label>
+            );
+          })}
+          {draft.widget.desktopMode === 'native-desktop' && (
+            <div className="mt-2 px-3 py-2 rounded-lg bg-amber-500/5 border border-amber-500/20">
+              <p className="text-xs text-amber-300/90 leading-relaxed">
+                <span className="material-symbols-outlined text-icon-sm align-middle mr-1">
+                  info
+                </span>
+                이 모드는 바탕화면 아이콘과 함께 동작하기 위해 Windows 바탕화면 창 계층과 마우스
+                이벤트를 제어합니다. 일부 보안 프로그램에서 민감하게 볼 수 있으며, 문제가 있으면
+                일반 모드로 되돌릴 수 있습니다.
+              </p>
+            </div>
+          )}
+          {/* 모드 가이드 다시 보기 — settings.widget.modeTour.shown=false reset → 다음 위젯 모드 진입에서 표시 */}
+          <button
+            type="button"
+            className="mt-2 text-xs text-sp-accent hover:text-sp-accent/80 underline-offset-2 hover:underline"
+            onClick={() => {
+              void coachTour.reset();
+              showToast('모드 가이드가 다음 위젯 모드 진입 시 다시 표시됩니다.', 'success');
+            }}
+            data-testid="settings-mode-tour-reset"
+          >
+            <span className="material-symbols-outlined align-middle mr-1" style={{ fontSize: 14 }}>
+              help
+            </span>
+            모드 가이드 다시 보기
+          </button>
+        </div>
+
+        <div className="space-y-3 pt-4 border-t border-sp-border">
           <div className="flex justify-between">
             <span className="text-sm font-medium text-sp-text">배경 투명도</span>
-            <span className="text-sm font-bold text-sp-accent">{Math.round((draft.widget.opacity ?? 1) * 100)}%</span>
+            <span className="text-sm font-bold text-sp-accent">
+              {Math.round((draft.widget.opacity ?? 1) * 100)}%
+            </span>
           </div>
           {/*
             widget.opacity는 위젯 카드 배경의 CSS rgba alpha로만 사용된다(OS BrowserWindow.setOpacity는
@@ -75,7 +200,9 @@ export function WidgetTab({ draft, patch }: Props) {
         <div className="space-y-3">
           <div className="flex justify-between">
             <span className="text-sm font-medium text-sp-text">카드 배경 투명도</span>
-            <span className="text-sm font-bold text-sp-accent">{Math.round((draft.widget.cardOpacity ?? 1) * 100)}%</span>
+            <span className="text-sm font-bold text-sp-accent">
+              {Math.round((draft.widget.cardOpacity ?? 1) * 100)}%
+            </span>
           </div>
           <input
             type="range"
@@ -89,17 +216,31 @@ export function WidgetTab({ draft, patch }: Props) {
         <div className="space-y-1.5">
           <span className="text-sm font-medium text-sp-text">창 닫기 동작</span>
           <p className="text-xs text-sp-muted mb-2">X 버튼을 누를 때의 동작을 선택합니다.</p>
-          {([
-            { value: 'widget' as const, label: '위젯 모드로 전환', desc: '작은 위젯 창으로 전환합니다' },
-            { value: 'icon' as const, label: '아이콘 모드로 접기', desc: '화면에 떠 있는 작은 아이콘으로 접습니다 (NEW)' },
+          {[
+            {
+              value: 'widget' as const,
+              label: '위젯 모드로 전환',
+              desc: '작은 위젯 창으로 전환합니다',
+            },
+            {
+              value: 'icon' as const,
+              label: '아이콘 모드로 접기',
+              desc: '화면에 떠 있는 작은 아이콘으로 접습니다 (NEW)',
+            },
             { value: 'tray' as const, label: '트레이로 최소화', desc: '시스템 트레이로 숨깁니다' },
             { value: 'ask' as const, label: '매번 물어보기', desc: '닫을 때마다 선택합니다' },
-          ]).map((opt) => (
-            <label key={opt.value} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sp-surface/50 cursor-pointer transition-colors">
+          ].map((opt) => (
+            <label
+              key={opt.value}
+              className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sp-surface/50 cursor-pointer transition-colors"
+            >
               <input
                 type="radio"
                 name="closeAction"
-                checked={(draft.widget.closeAction ?? (draft.widget.closeToWidget ? 'widget' : 'tray')) === opt.value}
+                checked={
+                  (draft.widget.closeAction ?? (draft.widget.closeToWidget ? 'widget' : 'tray')) ===
+                  opt.value
+                }
                 onChange={() => patchWidget({ closeAction: opt.value })}
                 className="w-3.5 h-3.5 text-sp-accent focus:ring-sp-accent"
               />
@@ -110,87 +251,17 @@ export function WidgetTab({ draft, patch }: Props) {
             </label>
           ))}
         </div>
-        <div className="space-y-1.5">
-          <span className="text-sm font-medium text-sp-text">위젯 표시 모드</span>
-          <p className="text-xs text-sp-muted mb-2">위젯 창이 다른 창과 어떻게 어울릴지 선택합니다.</p>
-          {(() => {
-            const winSupported = isWindows();
-            const opts: Array<{ value: WidgetDesktopMode; label: string; desc: string; winOnly?: boolean }> = [
-              {
-                value: 'normal',
-                label: '일반',
-                desc: '다른 창에 가려질 수 있습니다. Win+D를 눌러도 사라지지 않습니다.',
-              },
-              {
-                value: 'topmost',
-                label: '항상 위에',
-                desc: '항상 다른 창 위에 표시됩니다. Win+D를 눌러도 사라지지 않습니다.',
-              },
-              {
-                value: 'native-desktop',
-                label: '바탕화면 아이콘 아래',
-                desc: '쌤핀 위젯을 바탕화면 작업판처럼 깔고, 바탕화면 아이콘은 위에서 그대로 클릭ㆍ이동할 수 있습니다. Windows 전용 기능입니다.',
-                winOnly: true,
-              },
-            ];
-            return opts.map((opt) => {
-              const disabled = opt.winOnly === true && !winSupported;
-              const isSelected = draft.widget.desktopMode === opt.value;
-              return (
-                <label
-                  key={opt.value}
-                  title={disabled ? 'Windows에서만 사용할 수 있는 기능입니다.' : undefined}
-                  className={[
-                    'flex items-start gap-3 px-3 py-2 rounded-lg transition-colors',
-                    disabled
-                      ? 'opacity-50 cursor-not-allowed'
-                      : 'hover:bg-sp-surface/50 cursor-pointer',
-                  ].join(' ')}
-                >
-                  <input
-                    type="radio"
-                    name="widgetDesktopMode"
-                    value={opt.value}
-                    checked={isSelected}
-                    disabled={disabled}
-                    onChange={() => patchWidget({ desktopMode: opt.value })}
-                    className="mt-0.5 w-3.5 h-3.5 text-sp-accent focus:ring-sp-accent"
-                  />
-                  <div className="flex-1">
-                    <span className="text-xs font-medium text-sp-text">
-                      {opt.label}
-                      {opt.winOnly && (
-                        <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded bg-sp-accent/15 text-sp-accent text-[10px] font-semibold">
-                          Windows
-                        </span>
-                      )}
-                      {opt.value === 'native-desktop' && (
-                        <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 text-[10px] font-semibold">
-                          NEW
-                        </span>
-                      )}
-                    </span>
-                    <p className="text-caption text-sp-muted mt-0.5 leading-relaxed">{opt.desc}</p>
-                  </div>
-                </label>
-              );
-            });
-          })()}
-          {draft.widget.desktopMode === 'native-desktop' && (
-            <div className="mt-2 px-3 py-2 rounded-lg bg-amber-500/5 border border-amber-500/20">
-              <p className="text-xs text-amber-300/90 leading-relaxed">
-                <span className="material-symbols-outlined text-icon-sm align-middle mr-1">info</span>
-                이 모드는 바탕화면 아이콘과 함께 동작하기 위해 Windows 바탕화면 창 계층과 마우스 이벤트를 제어합니다. 일부 보안 프로그램에서 민감하게 볼 수 있으며, 문제가 있으면 일반 모드로 되돌릴 수 있습니다.
-              </p>
-            </div>
-          )}
-        </div>
         <div className="flex items-center justify-between pt-4 border-t border-sp-border">
           <div className="flex flex-col">
             <span className="text-sm font-medium text-sp-text">시작 시 위젯 모드</span>
-            <span className="text-xs text-sp-muted">앱 실행 시 전체화면 대신 위젯으로 시작합니다.</span>
+            <span className="text-xs text-sp-muted">
+              앱 실행 시 전체화면 대신 위젯으로 시작합니다.
+            </span>
           </div>
-          <Toggle checked={draft.widget.transparent} onChange={(v) => patchWidget({ transparent: v })} />
+          <Toggle
+            checked={draft.widget.transparent}
+            onChange={(v) => patchWidget({ transparent: v })}
+          />
         </div>
         <div className="flex items-center justify-between pt-4 border-t border-sp-border">
           <div className="flex flex-col">
@@ -220,14 +291,18 @@ export function WidgetTab({ draft, patch }: Props) {
           {showMemory && (
             <div className="mt-3 rounded-lg bg-sp-surface p-3 space-y-2">
               {!window.electronAPI?.getMemoryMetrics ? (
-                <p className="text-xs text-sp-muted">개발 모드(브라우저)에서는 사용할 수 없습니다.</p>
+                <p className="text-xs text-sp-muted">
+                  개발 모드(브라우저)에서는 사용할 수 없습니다.
+                </p>
               ) : metrics === null ? (
                 <p className="text-xs text-sp-muted">측정 중…</p>
               ) : (
                 <>
                   <div className="flex items-baseline justify-between">
                     <span className="text-xs text-sp-muted">전체 사용량</span>
-                    <span className="text-base font-bold text-sp-text">{formatMB(metrics.totalBytes)}</span>
+                    <span className="text-base font-bold text-sp-text">
+                      {formatMB(metrics.totalBytes)}
+                    </span>
                   </div>
                   <div className="text-xs text-sp-muted">
                     프로세스 {metrics.processes.length}개 (메인 + 렌더러 + GPU 등)
@@ -236,13 +311,18 @@ export function WidgetTab({ draft, patch }: Props) {
                     {[...metrics.processes]
                       .sort((a, b) => b.memoryBytes - a.memoryBytes)
                       .map((p) => (
-                        <li key={p.pid} className="flex items-center justify-between text-detail text-sp-muted">
+                        <li
+                          key={p.pid}
+                          className="flex items-center justify-between text-detail text-sp-muted"
+                        >
                           <span className="truncate">
                             {p.type}
                             {p.name ? ` · ${p.name}` : ''}
                             <span className="text-sp-muted/60"> (pid {p.pid})</span>
                           </span>
-                          <span className="font-mono text-sp-text shrink-0 ml-2">{formatMB(p.memoryBytes)}</span>
+                          <span className="font-mono text-sp-text shrink-0 ml-2">
+                            {formatMB(p.memoryBytes)}
+                          </span>
                         </li>
                       ))}
                   </ul>
@@ -254,7 +334,10 @@ export function WidgetTab({ draft, patch }: Props) {
         </div>
         <div className="pt-4 border-t border-sp-border">
           <p className="text-sm font-medium text-sp-text mb-1">위젯 표시 항목</p>
-          <p className="text-xs text-sp-muted">위젯 모드는 대시보드 화면의 카드 설정을 그대로 따릅니다. 대시보드 편집 모드에서 카드를 추가/제거하세요.</p>
+          <p className="text-xs text-sp-muted">
+            위젯 모드는 대시보드 화면의 카드 설정을 그대로 따릅니다. 대시보드 편집 모드에서 카드를
+            추가/제거하세요.
+          </p>
         </div>
       </div>
     </SettingsSection>
