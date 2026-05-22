@@ -16,6 +16,9 @@
 // 한글 + 공백 파일명을 Vite import 경로로 쓰면 빌드가 transforming 단계에서 멈추는 이슈 회피.
 import floatingIconUrl from '/floating-pin.png?url';
 
+// public/ 자산은 개발 서버/브라우저 캐시에 남을 수 있어 아이콘 교체 시 버전을 붙인다.
+const floatingIconCacheBustedUrl = `${floatingIconUrl}?v=pixelart-20260522`;
+
 interface PinDiscProps {
   hasAlert: boolean;
   hovered: boolean;
@@ -38,7 +41,7 @@ export function PinDisc({ hasAlert, hovered }: PinDiscProps) {
 
       {/* 캐릭터 — 호버 시 통통 점프, 평소엔 살짝 흔들 */}
       <img
-        src={floatingIconUrl}
+        src={floatingIconCacheBustedUrl}
         alt=""
         width={56}
         height={56}
