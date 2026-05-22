@@ -1,4 +1,4 @@
-import { useMemo, useState, Fragment } from 'react';
+import { useEffect, useMemo, useState, Fragment } from 'react';
 import { WIDGET_DEFINITIONS } from '../registry';
 import { useDashboardConfig } from '../useDashboardConfig';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
@@ -45,6 +45,19 @@ export function WidgetSettingsPanel({
   const [activeTab, setActiveTab] = useState<PanelTab>(
     initialTab ?? (styleOnly ? 'style' : 'widgets'),
   );
+
+  // ESC 키로 패널 닫기 — 위젯 모드(Electron BrowserWindow) 포함 모든 환경에서 동작
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        onClose();
+      }
+    }
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
 
   return (
     <aside className="w-64 shrink-0 border-l-2 border-sp-accent/30 bg-sp-bg flex flex-col animate-slide-in-right shadow-[-4px_0_16px_rgba(0,0,0,0.3)]">
