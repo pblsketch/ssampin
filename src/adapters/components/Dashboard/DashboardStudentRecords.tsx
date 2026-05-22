@@ -39,10 +39,15 @@ interface DashboardStudentRecordsProps {
 }
 
 export function DashboardStudentRecords({ isCompactMode = true }: DashboardStudentRecordsProps) {
+  // widget-expanded-editors Phase 4A: 모달(확장) 모드는 별도 컴포넌트로 위임.
+  // wrapper 분기 패턴 — Hook 규칙(rules-of-hooks) 준수.
   if (!isCompactMode) {
     return <StudentRecordsEditor />;
   }
+  return <DashboardStudentRecordsCompact />;
+}
 
+function DashboardStudentRecordsCompact() {
   const [expanded, setExpanded] = useState(false);
   const [activeTab, setActiveTab] = useState<WidgetTab>('all');
   const { records, loaded, load, categories } = useStudentRecordsStore();
