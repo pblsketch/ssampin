@@ -122,6 +122,11 @@ export function generateBoardHTML(input: GenerateBoardHtmlInput): string {
     #board-toolbar .shape-btn { width: 28px; height: 28px; border: 1px solid #cbd5e1; background: #ffffff; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 13px; color: #475569; padding: 0; }
     #board-toolbar .shape-btn:hover { background: #f1f5f9; }
     #board-toolbar .shape-btn[aria-pressed="true"] { background: #dbeafe; border-color: #3b82f6; color: #1d4ed8; }
+    /* PDCA-1 Step 1.3: snap-to-grid 토글 — toolbar 하단 단일 가로 버튼. */
+    #board-toolbar .grid-toggle { width: 100%; height: 28px; border: 1px solid #cbd5e1; background: #ffffff; border-radius: 6px; cursor: pointer; font-size: 11px; color: #475569; padding: 0 6px; display: flex; align-items: center; justify-content: center; gap: 4px; }
+    #board-toolbar .grid-toggle:hover { background: #f1f5f9; }
+    #board-toolbar .grid-toggle[aria-pressed="true"] { background: #dbeafe; border-color: #3b82f6; color: #1d4ed8; }
+    #board-toolbar .grid-toggle .grid-dot { font-size: 14px; line-height: 1; }
   </style>
 
   <script type="importmap">
@@ -191,6 +196,14 @@ export function generateBoardHTML(input: GenerateBoardHtmlInput): string {
         <button type="button" class="shape-btn" data-shape="elbow-arrow-equiv" aria-label="꺾인 화살표(직선 결합)" aria-pressed="false" title="꺾인 화살표 → 직선 결합 (시각 동등)">⤵</button>
         <button type="button" class="shape-btn" data-shape="bidirectional-equiv" aria-label="양방향(양 끝 화살표)" aria-pressed="false" title="양방향 → 양 끝 화살표 (시각 동등)">⇔</button>
       </div>
+    </div>
+    <!-- PDCA-1 Step 1.3: snap-to-grid 토글 (Excalidraw gridSize 20 ↔ null) -->
+    <div class="tool-section">
+      <div class="section-label">격자</div>
+      <button type="button" class="grid-toggle" data-grid-toggle aria-pressed="true" title="20px 격자 켜기/끄기 — 스티커가 격자에 자동 정렬">
+        <span class="grid-dot" aria-hidden="true">⊞</span>
+        <span>20px</span>
+      </button>
     </div>
   </div>
 
@@ -385,7 +398,8 @@ export function generateBoardHTML(input: GenerateBoardHtmlInput): string {
         return React.createElement('div', { ref: containerRef, style: { height: '100vh' } },
           React.createElement(Excalidraw, {
             excalidrawAPI: setApi,
-            initialData: { elements: yjsToExcalidraw(yElements) },
+            // PDCA-1 Step 1.3: gridSize 20px default ON. toolbar 토글로 null ↔ 20 전환.
+            initialData: { elements: yjsToExcalidraw(yElements), appState: { gridSize: 20 } },
             onPointerUpdate: (p) => bindingRef.current?.onPointerUpdate(p),
             onChange: handleSceneChange,
             theme: 'light',
@@ -480,6 +494,19 @@ export function generateBoardHTML(input: GenerateBoardHtmlInput): string {
             console.log('[toolbar] AC-1.0 shape placeholder:', btn.dataset.shape);
           }
         });
+
+        // PDCA-1 Step 1.3: grid 토글 (gridSize 20 ↔ null). default ON (initialData 에 gridSize: 20).
+        const gridBtn = toolbar.querySelector('[data-grid-toggle]');
+        if (gridBtn) {
+          gridBtn.addEventListener('click', () => {
+            const isOn = gridBtn.getAttribute('aria-pressed') === 'true';
+            const nextSize = isOn ? null : 20;
+            gridBtn.setAttribute('aria-pressed', isOn ? 'false' : 'true');
+            if (currentExcalidrawAPI) {
+              currentExcalidrawAPI.updateScene({ appState: { gridSize: nextSize } });
+            }
+          });
+        }
       }
     }
   </script>
