@@ -22,7 +22,6 @@ import {
   collectDesktopAttachCandidates,
   isMouseMessageOfInterest,
   physicalToClient,
-  postMouseMessageToWidget,
   mapWin32MsgToElectronEvent,
   mapWin32MsgToButton,
   mapWin32MsgToClickCount,
@@ -212,17 +211,6 @@ describe('Phase 7-A — physicalToClient', () => {
   });
 });
 
-describe('Phase 7-A — postMouseMessageToWidget null/safety', () => {
-  it('null handle(0n)이면 즉시 false (PostMessageW 호출 안 함)', () => {
-    expect(postMouseMessageToWidget(0n, 0x0201, 100, 50, 0)).toBe(false);
-  });
-
-  it('mouseData 인자 미전달 시 default 0으로 동작 (throw 없음)', () => {
-    // 실제 Win32 호출은 안 일어남 (handle 0n에서 early return). 시그너처 호환만 검증.
-    expect(() => postMouseMessageToWidget(0n, 0x0200, 0, 0)).not.toThrow();
-  });
-});
-
 // ────────────────────────────────────────────────────────────
 // Phase 7-A 재시도: Electron sendInputEvent 매핑
 // ────────────────────────────────────────────────────────────
@@ -296,32 +284,6 @@ describe('Phase 7-A 재시도 — mapWin32MsgToClickCount', () => {
     expect(mapWin32MsgToClickCount(0x0202)).toBe(1); // LBUTTONUP
     expect(mapWin32MsgToClickCount(0x0204)).toBe(1); // RBUTTONDOWN
     expect(mapWin32MsgToClickCount(0x0200)).toBe(1); // MOUSEMOVE
-  });
-});
-
-describe('Phase 7-A — lParam 16-bit packing 산술', () => {
-  // postMouseMessageToWidget 내부의 lparam = ((cy & 0xFFFF) << 16) | (cx & 0xFFFF) 산술 검증.
-  // 실제 PostMessage 호출 없이 packing 결과만 확인 — Phase 7-B에서 NC* 메시지 추가 시
-  // 동일 packing 패턴을 재사용한다.
-  it('client (100, 50)의 lParam encoding은 (50 << 16) | 100', () => {
-    const cx = 100,
-      cy = 50;
-    const lparam = ((cy & 0xffff) << 16) | (cx & 0xffff);
-    expect(lparam).toBe((50 << 16) | 100);
-    // low word
-    expect(lparam & 0xffff).toBe(100);
-    // high word
-    expect((lparam >> 16) & 0xffff).toBe(50);
-  });
-
-  it('음수 client coord도 16-bit signed로 두 word 모두 잘 packing', () => {
-    const cx = -10,
-      cy = -5;
-    const lparam = ((cy & 0xffff) << 16) | (cx & 0xffff);
-    // -10의 16-bit 보수: 0xFFF6
-    expect(lparam & 0xffff).toBe(0xfff6);
-    // -5의 16-bit 보수: 0xFFFB
-    expect((lparam >>> 16) & 0xffff).toBe(0xfffb);
   });
 });
 

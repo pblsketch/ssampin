@@ -172,6 +172,113 @@ export interface DesktopWidgetManager {
   setHoverCallback(cb: ((inside: boolean) => void) | null): void;
 }
 
+interface RoutingStats {
+  sent: number;
+  skippedIcon: number;
+  skippedOutOfBounds: number;
+  skippedAbove: number;
+  failed: number;
+  totalCallbacks: number;
+}
+
+function createEmptyRoutingStats(): RoutingStats {
+  return {
+    sent: 0,
+    skippedIcon: 0,
+    skippedOutOfBounds: 0,
+    skippedAbove: 0,
+    failed: 0,
+    totalCallbacks: 0,
+  };
+}
+
+/**
+ * STRATEGY 1/2/3 순서대로 widget을 WorkerW에 attach 시도. 첫 성공 시 즉시 반환.
+ *
+ * - STRATEGY 1: 표준 WorkerW (SHELLDLL_DefView 자식 보유)
+ * - STRATEGY 2: SHELLDLL_DefView sibling WorkerW (Wallpaper Engine 패턴)
+ * - STRATEGY 3: SHELLDLL_DefView 자체 (Progman 직속)
+ *
+ * 모든 실패는 lastError로 누적, 마지막 에러만 호출자에게 노출. 모두 실패하면 handles=null.
+ *
+ * `verbose=true`면 enable() 사용자 트리거 경로처럼 후보별 진단 로그를 남긴다.
+ * healthCheck() 주기 호출처럼 노이즈를 줄여야 하면 `verbose=false`로 호출.
+ */
+async function tryAttachWithStrategies(
+  win32: typeof import('./platform/win32Desktop'),
+  widgetHwnd: bigint,
+  candidates: import('./platform/win32Desktop').DesktopAttachCandidates,
+  options: { verbose: boolean },
+): Promise<{
+  handles: import('./platform/win32Desktop').Win32DesktopHandles | null;
+  lastError: Error | null;
+}> {
+  const log: typeof diagLog = options.verbose ? diagLog : () => {};
+  const warn: typeof diagWarn = options.verbose ? diagWarn : () => {};
+  let lastError: Error | null = null;
+
+  for (const candidate of candidates.standardWorkerWs) {
+    log('native-desktop', `STRATEGY1: 표준 WorkerW=0x${candidate.toString(16)} attach 시도`);
+    try {
+      const handles = await win32.attachToWorkerW(widgetHwnd, candidate);
+      log(
+        'native-desktop',
+        `STRATEGY1: SUCCESS — prevParent=0x${handles.prevParent.toString(16)}, prevExStyle=0x${handles.prevExStyle.toString(16)}`,
+      );
+      return { handles, lastError };
+    } catch (e) {
+      lastError = e instanceof Error ? e : new Error(String(e));
+      warn(
+        'native-desktop',
+        `STRATEGY1: 0x${candidate.toString(16)} 거부 (${lastError.name}: ${lastError.message})`,
+      );
+    }
+  }
+
+  if (candidates.shellDefViewSiblingWorkerW !== 0n) {
+    const sibling = candidates.shellDefViewSiblingWorkerW;
+    log('native-desktop', `STRATEGY2: sibling WorkerW=0x${sibling.toString(16)} attach 시도`);
+    try {
+      const handles = await win32.attachToWorkerW(widgetHwnd, sibling);
+      log(
+        'native-desktop',
+        `STRATEGY2: SUCCESS — prevParent=0x${handles.prevParent.toString(16)}, prevExStyle=0x${handles.prevExStyle.toString(16)}`,
+      );
+      return { handles, lastError };
+    } catch (e) {
+      lastError = e instanceof Error ? e : new Error(String(e));
+      warn(
+        'native-desktop',
+        `STRATEGY2: 0x${sibling.toString(16)} 거부 (${lastError.name}: ${lastError.message})`,
+      );
+    }
+  }
+
+  if (candidates.shellDefView !== 0n) {
+    const shellDef = candidates.shellDefView;
+    log(
+      'native-desktop',
+      `STRATEGY3: SHELLDLL_DefView=0x${shellDef.toString(16)} 자체 attach 시도`,
+    );
+    try {
+      const handles = await win32.attachToShellDefView(widgetHwnd, shellDef);
+      log(
+        'native-desktop',
+        `STRATEGY3: SUCCESS — prevParent=0x${handles.prevParent.toString(16)}, prevExStyle=0x${handles.prevExStyle.toString(16)}`,
+      );
+      return { handles, lastError };
+    } catch (e) {
+      lastError = e instanceof Error ? e : new Error(String(e));
+      warn(
+        'native-desktop',
+        `STRATEGY3: 0x${shellDef.toString(16)} 거부 (${lastError.name}: ${lastError.message})`,
+      );
+    }
+  }
+
+  return { handles: null, lastError };
+}
+
 /**
  * Manager 팩토리.
  *
@@ -271,14 +378,7 @@ function createNoopManager(reason: string): DesktopWidgetManager {
       };
     },
     getRoutingStats() {
-      return {
-        sent: 0,
-        skippedIcon: 0,
-        skippedOutOfBounds: 0,
-        skippedAbove: 0,
-        failed: 0,
-        totalCallbacks: 0,
-      };
+      return createEmptyRoutingStats();
     },
     setHoverCallback(_cb: ((inside: boolean) => void) | null): void {
       // no-op manager는 mouse hook이 없으므로 hover 트랜지션을 감지 못함.
@@ -338,22 +438,6 @@ function createWin32Manager(win32: typeof import('./platform/win32Desktop')): De
    */
   let cachedWidgetWindow: BrowserWindow | null = null;
   /**
-   * Phase 7-A (재시도): 라우팅 방식 토글.
-   *
-   * - 'send-input-event' (기본값): Electron webContents.sendInputEvent 사용. Chromium renderer가
-   *   native 이벤트와 동등하게 처리.
-   * - 'post-message' (legacy fallback): Win32 PostMessageW로 widget HWND에 직접 송신.
-   *   Electron 버전이나 환경에서 sendInputEvent가 실패할 가능성 대비 보존.
-   *
-   * 환경변수 SSAMPIN_NATIVE_DESKTOP_ROUTING으로 디버그 시 'post-message'로 강제 가능.
-   * 정식 빌드에선 'send-input-event'만 사용.
-   */
-  const routingMethod: 'send-input-event' | 'post-message' = (() => {
-    const envVal = process.env.SSAMPIN_NATIVE_DESKTOP_ROUTING;
-    if (envVal === 'post-message') return 'post-message';
-    return 'send-input-event';
-  })();
-  /**
    * Phase 7-A: 라우팅 통계 — 디버그용 카운터. 빈번하게 갱신되지만 atomic 증가만 하므로 hot path 영향 없음.
    * sent/skipped(아이콘)/skipped(영역밖)/failed 4분류.
    *
@@ -362,15 +446,10 @@ function createWin32Manager(win32: typeof import('./platform/win32Desktop')): De
    * Phase 7-stable: skippedAbove 추가 — 다른 윈도우(브라우저/탐색기 등)가 z-order로 위에 있어
    *   라우팅을 의도적으로 skip한 카운트. 정상 동작에서는 위젯 위에서만 0이 아니어야 함.
    */
-  let routingStats = {
-    sent: 0,
-    skippedIcon: 0,
-    skippedOutOfBounds: 0,
-    skippedAbove: 0,
-    failed: 0,
-    totalCallbacks: 0,
-  };
+  let routingStats: RoutingStats = createEmptyRoutingStats();
   let firstCallbackLogged = false;
+  // [7-C] LBUTTONDOWN 진단 로그는 다른 진단 로그와 동일한 정책으로 첫 5건만 dump해 디스크 포화 회피.
+  let lbuttonDownDiagCount = 0;
   let statsTimer: NodeJS.Timeout | null = null;
 
   // 16ms TTL 캐시 (Phase 6/7 — mouse hook hot path 성능)
@@ -595,15 +674,9 @@ function createWin32Manager(win32: typeof import('./platform/win32Desktop')): De
     lastHitResult = false;
     lastHitUntil = 0;
     // Phase 7-A 통계 초기화 (다음 enable에서 깨끗하게 시작)
-    routingStats = {
-      sent: 0,
-      skippedIcon: 0,
-      skippedOutOfBounds: 0,
-      skippedAbove: 0,
-      failed: 0,
-      totalCallbacks: 0,
-    };
+    routingStats = createEmptyRoutingStats();
     firstCallbackLogged = false;
+    lbuttonDownDiagCount = 0;
     if (statsTimer) {
       clearInterval(statsTimer);
       statsTimer = null;
@@ -747,74 +820,12 @@ function createWin32Manager(win32: typeof import('./platform/win32Desktop')): De
         return { ok: false, reason: 'workerw-not-found', fallbackMode: 'normal' };
       }
 
-      // 3. STRATEGY 우선순위로 attach 시도. 첫 성공한 후보 사용.
-      let lastError: Error | null = null;
-
-      // STRATEGY 1: 표준 WorkerW (SHELLDLL_DefView 자식 보유)
-      for (const candidate of candidates.standardWorkerWs) {
-        diagLog(
-          'native-desktop',
-          `STRATEGY1: 표준 WorkerW=0x${candidate.toString(16)} attach 시도`,
-        );
-        try {
-          handles = await win32.attachToWorkerW(widgetHwnd, candidate);
-          diagLog(
-            'native-desktop',
-            `STRATEGY1: SUCCESS — prevParent=0x${handles.prevParent.toString(16)}, prevExStyle=0x${handles.prevExStyle.toString(16)}`,
-          );
-          break;
-        } catch (e) {
-          lastError = e instanceof Error ? e : new Error(String(e));
-          diagWarn(
-            'native-desktop',
-            `STRATEGY1: 0x${candidate.toString(16)} 거부 (${lastError.name}: ${lastError.message})`,
-          );
-        }
-      }
-
-      // STRATEGY 2: SHELLDLL_DefView sibling WorkerW (Wallpaper Engine 패턴)
-      if (!handles && candidates.shellDefViewSiblingWorkerW !== 0n) {
-        const sibling = candidates.shellDefViewSiblingWorkerW;
-        diagLog(
-          'native-desktop',
-          `STRATEGY2: sibling WorkerW=0x${sibling.toString(16)} attach 시도`,
-        );
-        try {
-          handles = await win32.attachToWorkerW(widgetHwnd, sibling);
-          diagLog(
-            'native-desktop',
-            `STRATEGY2: SUCCESS — prevParent=0x${handles.prevParent.toString(16)}, prevExStyle=0x${handles.prevExStyle.toString(16)}`,
-          );
-        } catch (e) {
-          lastError = e instanceof Error ? e : new Error(String(e));
-          diagWarn(
-            'native-desktop',
-            `STRATEGY2: 0x${sibling.toString(16)} 거부 (${lastError.name}: ${lastError.message})`,
-          );
-        }
-      }
-
-      // STRATEGY 3: SHELLDLL_DefView 자체 (Progman 직속 SHELLDLL_DefView 환경)
-      if (!handles && candidates.shellDefView !== 0n) {
-        const shellDef = candidates.shellDefView;
-        diagLog(
-          'native-desktop',
-          `STRATEGY3: SHELLDLL_DefView=0x${shellDef.toString(16)} 자체 attach 시도`,
-        );
-        try {
-          handles = await win32.attachToShellDefView(widgetHwnd, shellDef);
-          diagLog(
-            'native-desktop',
-            `STRATEGY3: SUCCESS — prevParent=0x${handles.prevParent.toString(16)}, prevExStyle=0x${handles.prevExStyle.toString(16)}`,
-          );
-        } catch (e) {
-          lastError = e instanceof Error ? e : new Error(String(e));
-          diagWarn(
-            'native-desktop',
-            `STRATEGY3: 0x${shellDef.toString(16)} 거부 (${lastError.name}: ${lastError.message})`,
-          );
-        }
-      }
+      // 3. STRATEGY 1/2/3 우선순위로 attach 시도 — 사용자 트리거라 verbose 로그 활성.
+      const attachResult = await tryAttachWithStrategies(win32, widgetHwnd, candidates, {
+        verbose: true,
+      });
+      handles = attachResult.handles;
+      const lastError = attachResult.lastError;
 
       if (!handles) {
         // 모든 strategy 실패 → normal fallback (사용자 의도 보존).
@@ -846,7 +857,7 @@ function createWin32Manager(win32: typeof import('./platform/win32Desktop')): De
       recalcResizeRegionsPhysical(window);
       diagLog(
         'native-desktop',
-        `Phase 7-A: routingMethod='${routingMethod}', BrowserWindow 캐시 완료, headerRegions=${cachedHeaderRegions.length}`,
+        `Phase 7-A: BrowserWindow 캐시 완료, headerRegions=${cachedHeaderRegions.length}`,
       );
 
       // 5. Phase 6: ListView 탐색 (실패해도 attach 자체는 유지 — 모든 hit이 Electron으로 처리됨)
@@ -994,29 +1005,32 @@ function createWin32Manager(win32: typeof import('./platform/win32Desktop')): De
               }
 
               resizeState.moveCount = (resizeState.moveCount ?? 0) + 1;
-              // Electron BrowserWindow.setBounds 사용 (DIP 단위) — win32 SetWindowPos는
-              // origin+size 동시 변경 시 SWP_ASYNCWINDOWPOS와 race로 left/top edge에서
-              // origin을 무시하는 회귀가 사용자 검증에서 확인됨(2026-05-07).
-              // setBounds는 Electron 내부 state도 동기 갱신해 더 안정적.
+              // Phase 7-D 2차 fix (2026-05-23) — Electron BrowserWindow.setBounds()가
+              // WS_CHILD HWND에서 origin+size 동시 변경 시 단일 프레임 teleport 회귀
+              // (사용자 신고 "한 번에 사라짐")를 일으켜, native SetWindowPos sync 호출로 전환.
+              //
+              // 이력:
+              //   - 1차 fix(2026-05-07): win32 SetWindowPos `SWP_ASYNCWINDOWPOS`로 인한
+              //     origin+size race 회피 위해 Electron setBounds 채택.
+              //   - 2차 fix(2026-05-23): setBounds가 WS_CHILD에서 새 회귀를 만들어
+              //     `moveAndResizeWidgetSync` (SWP_ASYNCWINDOWPOS 제외 sync 변형) 도입.
+              //
+              // 좌표는 physical pixel 그대로 사용 — DPI 변환 불필요 (SetWindowPos는 physical 기대).
               let setOk = false;
-              if (cachedWidgetWindow && !cachedWidgetWindow.isDestroyed()) {
-                try {
-                  const sf =
-                    screen.getDisplayMatching({ x: newX, y: newY, width: newW, height: newH })
-                      .scaleFactor || 1;
-                  cachedWidgetWindow.setBounds({
-                    x: Math.round(newX / sf),
-                    y: Math.round(newY / sf),
-                    width: Math.round(newW / sf),
-                    height: Math.round(newH / sf),
-                  });
-                  setOk = true;
-                } catch (e) {
-                  diagWarn(
-                    'native-desktop',
-                    `[7-D] setBounds 실패: ${e instanceof Error ? e.message : String(e)}`,
-                  );
+              try {
+                setOk = win32.moveAndResizeWidgetSync(cachedWidgetHwnd, newX, newY, newW, newH);
+                // cachedPhysicalBounds 동기 갱신 — BrowserWindow.getBounds()는 WS_CHILD에서
+                // stale할 수 있어 의도값으로 직접 set. 다음 MOUSEMOVE의 start 비교 기준은
+                // resizeState.startBounds (frozen)이라 본 갱신은 다른 hook 경로(passThrough,
+                // hover 등)와의 일관성용.
+                if (setOk) {
+                  cachedPhysicalBounds = { x: newX, y: newY, width: newW, height: newH };
                 }
+              } catch (e) {
+                diagWarn(
+                  'native-desktop',
+                  `[7-D] moveAndResizeWidgetSync 실패: ${e instanceof Error ? e.message : String(e)}`,
+                );
               }
               if (resizeState.moveCount % 30 === 1) {
                 diagLog(
@@ -1166,13 +1180,14 @@ function createWin32Manager(win32: typeof import('./platform/win32Desktop')): De
           // 헤더가 아닌 일반 위젯 영역의 LBUTTONDOWN은 정상 sendInputEvent로 흘러감.
           // ─── 진단: LBUTTONDOWN 좌표가 어떤 region에 들어왔는지 ───
           // drag 안 됨 회귀 디버깅용. 모든 LBUTTONDOWN을 1회 로그.
-          if (msgType === 0x0201) {
+          if (msgType === 0x0201 && lbuttonDownDiagCount < 5) {
+            lbuttonDownDiagCount++;
             const inDrag = isInsideAnyRect(p, cachedHeaderRegions);
             const inExclude = isInsideAnyRect(p, cachedHeaderExcludeRegions);
             const draggable = isInDraggableHeaderRegion(p);
             diagLog(
               'native-desktop',
-              `[7-C] LBUTTONDOWN screen=(${p.x},${p.y}) inDrag=${inDrag} inExclude=${inExclude} draggable=${draggable} cachedDrag=${cachedHeaderRegions.length} cachedExclude=${cachedHeaderExcludeRegions.length}`,
+              `[7-C] LBUTTONDOWN screen=(${p.x},${p.y}) inDrag=${inDrag} inExclude=${inExclude} draggable=${draggable} cachedDrag=${cachedHeaderRegions.length} cachedExclude=${cachedHeaderExcludeRegions.length} count=${lbuttonDownDiagCount}`,
             );
           }
           if (
@@ -1211,165 +1226,98 @@ function createWin32Manager(win32: typeof import('./platform/win32Desktop')): De
           if (!cachedPhysicalBounds) return;
           const client = win32.physicalToClient(p, cachedPhysicalBounds);
 
-          if (routingMethod === 'send-input-event') {
-            // ─── 정통 패턴: webContents.sendInputEvent ───
-            const win = cachedWidgetWindow;
-            if (!win || win.isDestroyed()) {
+          // ─── 라우팅: webContents.sendInputEvent ───
+          // Chromium renderer가 native input과 동등하게 처리. PostMessageW로의 legacy fallback은
+          // Chromium이 무시하는 한계와 wheel encoding 미구현 이슈로 제거됨(v2.1 cleanup).
+          const win = cachedWidgetWindow;
+          if (!win || win.isDestroyed()) {
+            routingStats.failed++;
+            return;
+          }
+          const eventType = win32.mapWin32MsgToElectronEvent(msgType);
+          if (!eventType) {
+            // 매핑 불가 메시지 — Phase 7-A/B 관심 메시지인데 매핑 미정의면 코드 일관성 문제.
+            routingStats.failed++;
+            return;
+          }
+          // sendInputEvent는 DIP 좌표(BrowserWindow의 client area 기준)를 받는다.
+          // hook callback의 p는 physical pixel, cachedPhysicalBounds도 physical.
+          // physicalToClient 결과(client)도 physical pixel이므로 scaleFactor로 나눠 DIP로 변환.
+          const dipBounds = win.getBounds();
+          const widthRatio =
+            cachedPhysicalBounds.width === 0 ? 1 : dipBounds.width / cachedPhysicalBounds.width;
+          const heightRatio =
+            cachedPhysicalBounds.height === 0 ? 1 : dipBounds.height / cachedPhysicalBounds.height;
+          const dipX = Math.round(client.x * widthRatio);
+          const dipY = Math.round(client.y * heightRatio);
+
+          // ─── Phase 7-B: WHEEL 분기 ───
+          if (eventType === 'mouseWheel') {
+            const axis = win32.mapWin32MsgToWheelAxis(msgType);
+            if (!axis) {
               routingStats.failed++;
               return;
             }
-            const eventType = win32.mapWin32MsgToElectronEvent(msgType);
-            if (!eventType) {
-              // 매핑 불가 메시지 — Phase 7-A/B 관심 메시지인데 매핑 미정의면 코드 일관성 문제.
-              routingStats.failed++;
-              return;
-            }
-            // sendInputEvent는 DIP 좌표(BrowserWindow의 client area 기준)를 받는다.
-            // hook callback의 p는 physical pixel, cachedPhysicalBounds도 physical.
-            // physicalToClient 결과(client)도 physical pixel이므로 scaleFactor로 나눠 DIP로 변환.
-            // bounds.scaleFactor를 매번 조회하지 않기 위해 hot path 캐시는 다음 라운드에. 현 단계에선 정확성 우선.
-            const dipBounds = win.getBounds();
-            const widthRatio =
-              cachedPhysicalBounds.width === 0 ? 1 : dipBounds.width / cachedPhysicalBounds.width;
-            const heightRatio =
-              cachedPhysicalBounds.height === 0
-                ? 1
-                : dipBounds.height / cachedPhysicalBounds.height;
-            const dipX = Math.round(client.x * widthRatio);
-            const dipY = Math.round(client.y * heightRatio);
-
-            // ─── Phase 7-B: WHEEL 분기 ───
-            if (eventType === 'mouseWheel') {
-              const axis = win32.mapWin32MsgToWheelAxis(msgType);
-              if (!axis) {
-                routingStats.failed++;
-                return;
-              }
-              const delta = win32.decodeWheelDelta(mouseData);
-              // 부호 정책은 win32.computeWheelDeltas(SSOT)에 위임. Electron sendInputEvent의
-              // mouseWheel deltaY는 blink WebMouseWheelEvent 컨벤션을 따른다 (실기 확정 2026-05-22,
-              // 사용자가 "다른 브라우저 창에서는 정상" + 원본 -delta 코드 반대 보고로 확정):
-              // forward 휠 → deltaY 양수(위로), backward 휠 → deltaY 음수(아래로).
-              // 본 manager는 helper 결과를 그대로 전달만 한다. 부호 변경 필요 시 helper + 메타테스트 동시 수정.
-              const { deltaX, deltaY } = win32.computeWheelDeltas(delta, axis);
-              try {
-                win.webContents.sendInputEvent({
-                  type: 'mouseWheel',
-                  x: dipX,
-                  y: dipY,
-                  deltaX,
-                  deltaY,
-                  canScroll: true,
-                });
-                routingStats.sent++;
-                diagLog(
-                  'native-desktop',
-                  `[7-B] sendInput wheel msg=0x${msgType.toString(16)} axis=${axis} raw=${delta} dip=(${dipX},${dipY})`,
-                );
-              } catch (e) {
-                routingStats.failed++;
-                diagWarn(
-                  'native-desktop',
-                  `[7-B] sendInput wheel 실패 msg=0x${msgType.toString(16)}: ${e instanceof Error ? e.message : String(e)}`,
-                );
-              }
-              return;
-            }
-
-            // ─── Phase 7-A: Click/Move 분기 ───
+            const delta = win32.decodeWheelDelta(mouseData);
+            // 부호 정책은 win32.computeWheelDeltas(SSOT)에 위임. Electron sendInputEvent의
+            // mouseWheel deltaY는 blink WebMouseWheelEvent 컨벤션을 따른다 (실기 확정 2026-05-22):
+            // forward 휠 → deltaY 양수(위로), backward 휠 → deltaY 음수(아래로).
+            // 본 manager는 helper 결과를 그대로 전달만 한다. 부호 변경 필요 시 helper + 메타테스트 동시 수정.
+            const { deltaX, deltaY } = win32.computeWheelDeltas(delta, axis);
             try {
               win.webContents.sendInputEvent({
-                type: eventType,
+                type: 'mouseWheel',
                 x: dipX,
                 y: dipY,
-                button: win32.mapWin32MsgToButton(msgType),
-                clickCount: win32.mapWin32MsgToClickCount(msgType),
+                deltaX,
+                deltaY,
+                canScroll: true,
               });
               routingStats.sent++;
-              if (msgType !== 0x0200) {
-                diagLog(
-                  'native-desktop',
-                  `[7-A] sendInput msg=0x${msgType.toString(16)} type=${eventType} dip=(${dipX},${dipY}) client=(${client.x},${client.y})`,
-                );
-              }
+              diagLog(
+                'native-desktop',
+                `[7-B] sendInput wheel msg=0x${msgType.toString(16)} axis=${axis} raw=${delta} dip=(${dipX},${dipY})`,
+              );
             } catch (e) {
               routingStats.failed++;
-              if (msgType !== 0x0200) {
-                diagWarn(
-                  'native-desktop',
-                  `[7-A] sendInput 실패 msg=0x${msgType.toString(16)}: ${e instanceof Error ? e.message : String(e)}`,
-                );
-              }
+              diagWarn(
+                'native-desktop',
+                `[7-B] sendInput wheel 실패 msg=0x${msgType.toString(16)}: ${e instanceof Error ? e.message : String(e)}`,
+              );
             }
-            void mouseData; // click/move 경로에선 미사용
-          } else {
-            // ─── Legacy fallback: PostMessageW ───
-            // 환경변수 SSAMPIN_NATIVE_DESKTOP_ROUTING=post-message 로 켰을 때만 도달.
-            // Chromium 무시 가능성 있음 (사용자 검증 결과). 디버깅용으로만 유지.
-            if (cachedWidgetHwnd === 0n) return;
+            return;
+          }
 
-            // Phase 7-B: PostMessage 경로의 wheel encoding.
-            //   wParam HIWORD에 wheel delta (signed short), LOWORD에 fwKeys (button/modifier flags, 0=none)
-            //   lParam에 screen coordinate (LOWORD=x, HIWORD=y) — *주의*: WM_MOUSEWHEEL은 client가 아니라 screen coord
-            //   (MSDN: "The low-order word specifies the x-coordinate of the pointer, relative to
-            //   the upper-left corner of the screen.")
-            // 본 단계에서는 fallback 경로이므로 client 좌표 그대로 넘기고(잘못 동작해도 fallback일 뿐),
-            // PostMessageW 자체는 실패하지 않도록 wheel delta 부호만 살려 wParam에 packing.
-            if (msgType === 0x020a /* WM_MOUSEWHEEL */ || msgType === 0x020e /* WM_MOUSEHWHEEL */) {
-              const delta = win32.decodeWheelDelta(mouseData);
-              // wParam HIWORD에 delta (16-bit signed → unsigned 16-bit로 packing).
-              // LOWORD = 0 (no key/button flags).
-              const wParamPacked = ((delta & 0xffff) << 16) >>> 0;
-              // lParam은 screen coord 사용. MOUSEWHEEL의 lParam은 screen이지만 fallback 정확성 깊이 X.
-              const sx = (p.x | 0) & 0xffff;
-              const sy = (p.y | 0) & 0xffff;
-              const lparamPacked = ((sy << 16) | sx) >>> 0;
-              try {
-                // postMouseMessageToWidget의 lParam encoding은 client용이라 wheel에 부적합.
-                // 직접 PostMessage가 필요하지만 현 인터페이스에 노출 안 됨 → fallback이라 best-effort.
-                // 정밀하게 송신하려면 별도 win32 helper 필요. 본 단계에선 통과시키고 stats만 기록.
-                void wParamPacked;
-                void lparamPacked;
-                routingStats.failed++;
-                diagWarn(
-                  'native-desktop',
-                  `[7-B] post-message fallback에서 wheel 라우팅은 미구현 (axis=${msgType === 0x020a ? 'V' : 'H'} delta=${delta})`,
-                );
-              } catch {
-                routingStats.failed++;
-              }
-              return;
+          // ─── Phase 7-A: Click/Move 분기 ───
+          try {
+            win.webContents.sendInputEvent({
+              type: eventType,
+              x: dipX,
+              y: dipY,
+              button: win32.mapWin32MsgToButton(msgType),
+              clickCount: win32.mapWin32MsgToClickCount(msgType),
+            });
+            routingStats.sent++;
+            if (msgType !== 0x0200) {
+              diagLog(
+                'native-desktop',
+                `[7-A] sendInput msg=0x${msgType.toString(16)} type=${eventType} dip=(${dipX},${dipY}) client=(${client.x},${client.y})`,
+              );
             }
-
-            const ok = win32.postMouseMessageToWidget(
-              cachedWidgetHwnd,
-              msgType,
-              client.x,
-              client.y,
-              mouseData,
-            );
-            if (ok) {
-              routingStats.sent++;
-              if (msgType !== 0x0200) {
-                diagLog(
-                  'native-desktop',
-                  `[7-A] postMsg msg=0x${msgType.toString(16)} client=(${client.x},${client.y})`,
-                );
-              }
-            } else {
-              routingStats.failed++;
-              if (msgType !== 0x0200) {
-                diagWarn(
-                  'native-desktop',
-                  `[7-A] postMsg 실패 msg=0x${msgType.toString(16)} client=(${client.x},${client.y})`,
-                );
-              }
+          } catch (e) {
+            routingStats.failed++;
+            if (msgType !== 0x0200) {
+              diagWarn(
+                'native-desktop',
+                `[7-A] sendInput 실패 msg=0x${msgType.toString(16)}: ${e instanceof Error ? e.message : String(e)}`,
+              );
             }
           }
+          void mouseData; // click/move 경로에선 미사용
         });
         diagLog(
           'native-desktop',
-          `Phase 7-A: mouse hook 설치 완료 — routing 활성 (method='${routingMethod}')`,
+          `Phase 7-A: mouse hook 설치 완료 — routing 활성 (sendInputEvent)`,
         );
         // ⚠️ Win11 24H2 진단: 5초마다 통계 dump.
         // totalCallbacks=0이면 hook이 OS에 차단된 것. 정상적인 환경에선 사용자 mouse 움직임만으로도
@@ -1462,38 +1410,18 @@ function createWin32Manager(win32: typeof import('./platform/win32Desktop')): De
         return { ok: false, reason: 'widget-hwnd-failed', fallbackMode: 'normal' };
       }
 
-      // 재attach: 최초 enable과 동일한 STRATEGY 우선순위 적용.
+      // 재attach: 최초 enable과 동일한 STRATEGY 우선순위 적용. 주기 호출이라 verbose 로그 미활성.
       try {
         const cands = win32.collectDesktopAttachCandidates();
-        let lastError: Error | null = null;
-
-        for (const c of cands.standardWorkerWs) {
-          try {
-            handles = await win32.attachToWorkerW(widgetHwnd, c);
-            return { ok: true, mode: 'native-desktop' };
-          } catch (e) {
-            lastError = e instanceof Error ? e : new Error(String(e));
-          }
+        const attachResult = await tryAttachWithStrategies(win32, widgetHwnd, cands, {
+          verbose: false,
+        });
+        if (attachResult.handles) {
+          handles = attachResult.handles;
+          return { ok: true, mode: 'native-desktop' };
         }
-        if (cands.shellDefViewSiblingWorkerW !== 0n) {
-          try {
-            handles = await win32.attachToWorkerW(widgetHwnd, cands.shellDefViewSiblingWorkerW);
-            return { ok: true, mode: 'native-desktop' };
-          } catch (e) {
-            lastError = e instanceof Error ? e : new Error(String(e));
-          }
-        }
-        if (cands.shellDefView !== 0n) {
-          try {
-            handles = await win32.attachToShellDefView(widgetHwnd, cands.shellDefView);
-            return { ok: true, mode: 'native-desktop' };
-          } catch (e) {
-            lastError = e instanceof Error ? e : new Error(String(e));
-          }
-        }
-
-        const reason = lastError
-          ? `${lastError.name}: ${lastError.message}`
+        const reason = attachResult.lastError
+          ? `${attachResult.lastError.name}: ${attachResult.lastError.message}`
           : 'no-strategy-succeeded';
         console.warn('[desktopWidgetManager] healthCheck 재attach 실패:', reason);
         return { ok: false, reason: 'workerw-stale', fallbackMode: 'topmost' };
@@ -1614,4 +1542,48 @@ function createWin32Manager(win32: typeof import('./platform/win32Desktop')): De
       hoverCallback = cb;
     },
   };
+}
+
+// ─── Phase 7-D 2차 fix 회귀 가드 — 순수 산식 헬퍼 (테스트 전용 export) ───
+// inline resize 산식(line 962-994)과 동일 로직. 실제 hook callback 호출 없이
+// 산식만 단독 검증하기 위해 추출. ADR-007/ADR-008 메타테스트 패턴.
+export function computeResizeBounds(
+  edge:
+    | 'top'
+    | 'bottom'
+    | 'left'
+    | 'right'
+    | 'top-left'
+    | 'top-right'
+    | 'bottom-left'
+    | 'bottom-right',
+  start: { x: number; y: number; width: number; height: number },
+  dx: number,
+  dy: number,
+  minW: number,
+  minH: number,
+): { x: number; y: number; width: number; height: number } {
+  let newX = start.x;
+  let newY = start.y;
+  let newW = start.width;
+  let newH = start.height;
+  if (edge.includes('right')) newW = start.width + dx;
+  if (edge.includes('bottom')) newH = start.height + dy;
+  if (edge.includes('left')) {
+    newX = start.x + dx;
+    newW = start.width - dx;
+  }
+  if (edge.includes('top')) {
+    newY = start.y + dy;
+    newH = start.height - dy;
+  }
+  if (newW < minW) {
+    if (edge.includes('left')) newX = start.x + start.width - minW;
+    newW = minW;
+  }
+  if (newH < minH) {
+    if (edge.includes('top')) newY = start.y + start.height - minH;
+    newH = minH;
+  }
+  return { x: newX, y: newY, width: newW, height: newH };
 }

@@ -1848,9 +1848,6 @@ export function isMouseMessageOfInterest(msgType: number): boolean {
  *
  * 음수가 될 수 있는데(이론상 widget 영역 밖이지만 caller가 잘못 호출), Win32 마우스 메시지의
  * client coord는 음수도 합법(클라이언트 영역 밖이지만 OS가 그대로 전달).
- *
- * **주의**: WM_MOUSEMOVE 등의 lParam 인코딩은 16-bit signed × 2이지만 PostMessage 호출 시
- * 32-bit 합치기는 caller(`postMouseMessageToWidget`)가 책임진다.
  */
 export function physicalToClient(
   physicalPoint: { readonly x: number; readonly y: number },
@@ -1860,62 +1857,6 @@ export function physicalToClient(
     x: physicalPoint.x - widgetPhysicalBounds.x,
     y: physicalPoint.y - widgetPhysicalBounds.y,
   };
-}
-
-/**
- * Win32 마우스 메시지를 widget HWND에 PostMessage로 송신.
- *
- * lParam encoding:
- *   - low-order WORD = client.x (16-bit signed)
- *   - high-order WORD = client.y (16-bit signed)
- *   - 32-bit 정수 한 개로 packing: (clientY << 16) | (clientX & 0xFFFF)
- *   - JS bitwise는 32-bit signed → 그대로 사용 가능
- *
- * wParam encoding (메시지별 다름, Phase 7-A에선 0으로 충분):
- *   - WM_MOUSEMOVE: MK_LBUTTON | MK_RBUTTON 등 button state. 0이면 "어떤 버튼도 안 눌림".
- *   - WM_LBUTTONDOWN/UP: 다른 키(SHIFT/CTRL) state. 0이면 "수정자 없음".
- *   - 정확한 state가 필요하면 GetAsyncKeyState로 보강 가능 (현재는 미구현 — 단순 클릭/이동만
- *     처리하면 사용자 입장에서 시각적 차이 없음).
- *
- * @param widgetHwnd PostMessage 대상 HWND (위젯 native handle)
- * @param msgType WM_LBUTTONDOWN 등
- * @param clientX widget client area 기준 x (physical pixel)
- * @param clientY widget client area 기준 y (physical pixel)
- * @param mouseData MSLLHOOKSTRUCT.mouseData. wheel/XBUTTON에서만 의미. 클릭/이동에선 0.
- * @returns true = PostMessage success, false = 실패(큐 가득 참 등)
- */
-export function postMouseMessageToWidget(
-  widgetHwnd: bigint,
-  msgType: number,
-  clientX: number,
-  clientY: number,
-  mouseData: number = 0,
-): boolean {
-  if (isNullHandle(widgetHwnd)) return false;
-  let b: Win32Bindings;
-  try {
-    b = loadWin32Bindings();
-  } catch {
-    return false;
-  }
-
-  // 16-bit signed clamp (값이 범위 밖이면 잘리는 게 정상 — Win32 마우스 메시지의 client coord는
-  // 16-bit signed로 packing되며 매우 큰 값(±32767 초과)은 어차피 의미가 없다).
-  const cx = clientX | 0;
-  const cy = clientY | 0;
-  const lparam = ((cy & 0xffff) << 16) | (cx & 0xffff);
-
-  // wParam: Phase 7-A에서는 0 (수정자 키/버튼 state 미보강).
-  // mouseData는 wheel/XBUTTON에서만 lParam 또는 wParam high word로 들어가므로 본 단계에서 미사용.
-  const wParam = 0;
-  void mouseData; // 의도적 미사용 — Phase 7-B에서 wheel delta로 활용 예정.
-
-  try {
-    const result = b.PostMessageW(widgetHwnd, msgType, wParam, lparam);
-    return result !== 0;
-  } catch {
-    return false;
-  }
 }
 
 // ────────────────────────────────────────────────────────────
@@ -1965,6 +1906,45 @@ export function moveWidget(
   try {
     const flags = SWP_NOZORDER | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS;
     // hWndInsertAfter는 SWP_NOZORDER로 무시되지만 0(NULL)을 안전 기본값으로.
+    const result = b.SetWindowPos(widgetHwnd, 0, x, y, width, height, flags);
+    return result !== 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Phase 7-D 2차 fix (2026-05-23) — resize 전용 sync SetWindowPos.
+ *
+ * 1차 fix(2026-05-07)는 `moveWidget`이 `SWP_ASYNCWINDOWPOS`로 비동기 호출이라 origin+size
+ * 동시 변경 시 left/top edge race가 발견되어 Electron `BrowserWindow.setBounds`로 전환했다.
+ * 그러나 setBounds는 WS_CHILD HWND(WorkerW 자식) 상태에서 단일 프레임 teleport 회귀를
+ * 일으켜(사용자 신고 2026-05-23 "한 번에 사라짐"), native 경로로 복귀하되 `SWP_ASYNCWINDOWPOS`만
+ * 제외한 sync 변형을 도입한다.
+ *
+ * drag(hot path, origin-only 변경)는 빈도가 높아 ASYNC 유지가 안전. resize(사용자 의도적 드래그,
+ * 빈도 낮음, 정확성 우선)는 SYNC가 옳다. 두 race(1차의 ASYNC race + 2차의 setBounds WS_CHILD
+ * 회귀)를 동시에 해소.
+ *
+ * @returns true = SetWindowPos 호출 성공, false = 실패/null handle.
+ */
+export function moveAndResizeWidgetSync(
+  widgetHwnd: bigint,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+): boolean {
+  if (isNullHandle(widgetHwnd)) return false;
+  let b: Win32Bindings;
+  try {
+    b = loadWin32Bindings();
+  } catch {
+    return false;
+  }
+  try {
+    // SWP_ASYNCWINDOWPOS 제외 — sync 호출로 origin+size race 회피.
+    const flags = SWP_NOZORDER | SWP_NOACTIVATE;
     const result = b.SetWindowPos(widgetHwnd, 0, x, y, width, height, flags);
     return result !== 0;
   } catch {
