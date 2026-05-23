@@ -60,16 +60,11 @@ interface StickerCommitSheetCellsResult {
 }
 interface StickerElectronAPI {
   selectImage: () => Promise<StickerSelectImageResult>;
-  importImage: (
-    stickerId: string,
-    sourcePath: string,
-  ) => Promise<StickerImportImageResult>;
+  importImage: (stickerId: string, sourcePath: string) => Promise<StickerImportImageResult>;
   getImageDataUrl: (stickerId: string) => Promise<string | null>;
   deleteImage: (stickerId: string) => Promise<void>;
   /** 다중 이모티콘 PNG를 ZIP 한 파일로 내보내기 (사용자 저장 다이얼로그 표시). */
-  exportZip?: (
-    items: ReadonlyArray<{ stickerId: string; filename: string }>,
-  ) => Promise<{
+  exportZip?: (items: ReadonlyArray<{ stickerId: string; filename: string }>) => Promise<{
     canceled: boolean;
     filePath?: string;
     count?: number;
@@ -98,9 +93,7 @@ interface StickerElectronAPI {
    * 피커 윈도우는 paste 직후 hide되어 피커 측 토스트가 보이지 않으므로
    * MainApp에서 본 리스너를 등록해 사용자에게 안내한다.
    */
-  onFallbackPasteNeeded?: (
-    cb: (data: { reason: string }) => void,
-  ) => () => void;
+  onFallbackPasteNeeded?: (cb: (data: { reason: string }) => void) => () => void;
   /** sticker:paste 진단 로그 forwarding — DevTools Console에서 흐름 추적용. */
   onDiagLog?: (cb: (payload: { message: string; data: unknown }) => void) => () => void;
   /** 현재 OS 플랫폼 — 렌더러가 macOS 전용 UI를 조건부 렌더링. */
@@ -109,10 +102,7 @@ interface StickerElectronAPI {
   /** 시트 dimension 검증 — renderer가 grid size 선택 전 호출 */
   validateSheet?: (sourcePath: string) => Promise<{ width: number; height: number }>;
   /** 시트를 N×N으로 분할 → 미리보기 dataUrl + sessionId 반환 */
-  splitSheet?: (
-    sourcePath: string,
-    gridSize: 2 | 3 | 4,
-  ) => Promise<StickerSplitSheetResult>;
+  splitSheet?: (sourcePath: string, gridSize: 2 | 3 | 4) => Promise<StickerSplitSheetResult>;
   /** 사용자가 선택한 셀들을 stickers/{id}.png로 저장 */
   commitSheetCells?: (
     sessionId: string,
@@ -143,10 +133,12 @@ interface ElectronAPI {
    * 반환값은 구독 해제 함수 (cleanup 시 호출 권장).
    */
   onLayoutShortcut?: (cb: (mode: string) => void) => () => void;
-  applyWidgetSettings: (widget: {
-    opacity: number;
-    desktopMode: string;
-  }) => Promise<void>;
+  requestModalEscape?: () => Promise<void>;
+  releaseModalEscape?: () => Promise<void>;
+  onModalEscape?: (cb: () => void) => () => void;
+  requestModalInput?: () => Promise<void>;
+  releaseModalInput?: () => Promise<void>;
+  applyWidgetSettings: (widget: { opacity: number; desktopMode: string }) => Promise<void>;
   /**
    * Phase 7-C (native-desktop) — widget 헤더 드래그 영역 등록.
    * mount/resize 시 호출. 빈 배열이면 drag 비활성화.
@@ -164,7 +156,15 @@ interface ElectronAPI {
    */
   setWidgetResizeRegion?: (
     regions: {
-      edge: 'top'|'bottom'|'left'|'right'|'top-left'|'top-right'|'bottom-left'|'bottom-right';
+      edge:
+        | 'top'
+        | 'bottom'
+        | 'left'
+        | 'right'
+        | 'top-left'
+        | 'top-right'
+        | 'bottom-left'
+        | 'bottom-right';
       dipRect: { x: number; y: number; width: number; height: number };
     }[],
   ) => Promise<void>;
@@ -213,25 +213,26 @@ interface ElectronAPI {
   }) => Promise<{ handle: string; fileName: string } | null>;
   /** showSaveDialog 가 준 handle 로 파일 쓰기 (1회 소비). */
   writeFile: (handle: string, data: ArrayBuffer | string) => Promise<void>;
-  printToPDF: (
-    options?: {
-      pageSize?:
-        | 'A3'
-        | 'A4'
-        | 'A5'
-        | 'Letter'
-        | 'Legal'
-        | 'Tabloid'
-        | { width: number; height: number };
-      landscape?: boolean;
-      marginsType?: 0 | 1 | 2;
-    },
-  ) => Promise<ArrayBuffer | null>;
+  printToPDF: (options?: {
+    pageSize?:
+      | 'A3'
+      | 'A4'
+      | 'A5'
+      | 'Letter'
+      | 'Legal'
+      | 'Tabloid'
+      | { width: number; height: number };
+    landscape?: boolean;
+    marginsType?: 0 | 1 | 2;
+  }) => Promise<ArrayBuffer | null>;
   /** showSaveDialog 가 준 handle 로 방금 저장한 파일 열기 (소비하지 않음). */
   openFile: (handle: string) => Promise<void>;
   importAlarmAudio: () => Promise<{ name: string; dataUrl: string } | null>;
   importFont: () => Promise<{ name: string; dataUrl: string; mimeType: string } | null>;
-  importShareFile: () => Promise<{ content: string | ArrayBuffer; fileType: 'ssampin' | 'xlsx' } | null>;
+  importShareFile: () => Promise<{
+    content: string | ArrayBuffer;
+    fileType: 'ssampin' | 'xlsx';
+  } | null>;
   importBookmarksFile: () => Promise<{ content: string; format: 'json' | 'html' } | null>;
   /** 클립보드 텍스트 읽기 — 렌더러 navigator.clipboard 권한 우회 (Electron 메인 프로세스 경유) */
   readClipboardText: () => Promise<string>;
@@ -248,7 +249,9 @@ interface ElectronAPI {
   checkForUpdate: () => Promise<void>;
   downloadUpdate: () => Promise<void>;
   installUpdate: () => Promise<void>;
-  onUpdateAvailable: (callback: (info: { version: string; releaseNotes?: string }) => void) => () => void;
+  onUpdateAvailable: (
+    callback: (info: { version: string; releaseNotes?: string }) => void,
+  ) => () => void;
   onUpdateDownloadProgress: (callback: (progress: { percent: number }) => void) => () => void;
   onUpdateDownloaded: (callback: (info: { version: string }) => void) => () => void;
   onUpdateNotAvailable: (callback: () => void) => () => void;
@@ -257,12 +260,16 @@ interface ElectronAPI {
   navigateToPage: (page: string) => Promise<void>;
   onNavigateToPage: (callback: (page: string) => void) => () => void;
   // Google OAuth — {code, redirectUri, codeVerifier} 묶음 반환 (Desktop app 클라이언트는 PKCE 로 교환)
-  startOAuth: (authUrl: string) => Promise<{ code: string; redirectUri: string; codeVerifier: string }>;
+  startOAuth: (
+    authUrl: string,
+  ) => Promise<{ code: string; redirectUri: string; codeVerifier: string }>;
   cancelOAuth: () => Promise<void>;
   onOAuthRedirectUri: (callback: (uri: string) => void) => () => void;
   onOAuthError: (callback: (error: { code: string; message: string }) => void) => () => void;
   // OAuth 콜백 미수신 → PKCE 폴백 제안
-  onOAuthFallbackNeeded: (callback: (data: { reason: string; message: string; elapsedSec: number }) => void) => () => void;
+  onOAuthFallbackNeeded: (
+    callback: (data: { reason: string; message: string; elapsedSec: number }) => void,
+  ) => () => void;
   // Google OAuth PKCE 폴백 (로컬 서버 실패 시 — loopback 모드)
   startPKCEAuth: (authUrl: string) => Promise<{ verifier: string; redirectUri: string }>;
   exchangePKCECode: () => Promise<{ verifier: string; redirectUri: string }>;
@@ -278,7 +285,9 @@ interface ElectronAPI {
     options: { id: string; text: string; color: string }[];
   }) => Promise<{ port: number; localIPs: string[] }>;
   stopLiveVote: () => Promise<void>;
-  onLiveVoteStudentVoted: (callback: (data: { optionId: string; totalVoters: number }) => void) => () => void;
+  onLiveVoteStudentVoted: (
+    callback: (data: { optionId: string; totalVoters: number }) => void,
+  ) => () => void;
   onLiveVoteConnectionCount: (callback: (data: { count: number }) => void) => () => void;
   // Live Vote Tunnel
   tunnelAvailable: () => Promise<boolean>;
@@ -293,7 +302,9 @@ interface ElectronAPI {
   surveyTunnelAvailable: () => Promise<boolean>;
   surveyTunnelInstall: () => Promise<void>;
   surveyTunnelStart: () => Promise<{ tunnelUrl: string }>;
-  onLiveSurveyStudentSubmitted: (callback: (data: { text: string; totalResponders: number }) => void) => () => void;
+  onLiveSurveyStudentSubmitted: (
+    callback: (data: { text: string; totalResponders: number }) => void,
+  ) => () => void;
   onLiveSurveyConnectionCount: (callback: (data: { count: number }) => void) => () => void;
   // Realtime Wall
   startRealtimeWall: (data: {
@@ -344,29 +355,31 @@ interface ElectronAPI {
    * 이전 v2.1 phase B는 RealtimeWallSubmission(부분 필드) 전달이었으나, renderer가
    * createWallPost 호출 시 images/pdf/color 등을 누락한 채 input 작성하여 첨부 유실 발생.
    */
-  onRealtimeWallStudentSubmitted: (callback: (data: {
-    post: import('./domain/entities/RealtimeWall').RealtimeWallPost & {
-      // v2.1 student-ux — Padlet 컬럼별 + 버튼 진입 시 columnId (post 자체에는 없지만 호환)
-      columnId?: string;
-    };
-    totalSubmissions: number;
-  }) => void) => () => void;
+  onRealtimeWallStudentSubmitted: (
+    callback: (data: {
+      post: import('./domain/entities/RealtimeWall').RealtimeWallPost & {
+        // v2.1 student-ux — Padlet 컬럼별 + 버튼 진입 시 columnId (post 자체에는 없지만 호환)
+        columnId?: string;
+      };
+      totalSubmissions: number;
+    }) => void,
+  ) => () => void;
   onRealtimeWallConnectionCount: (callback: (data: { count: number }) => void) => () => void;
   /**
    * v1.14 P2 — 학생 좋아요 도착 알림 (서버 → 교사 renderer).
    */
-  onRealtimeWallStudentLike?: (callback: (data: {
-    postId: string;
-    likes: number;
-    likedBy: readonly string[];
-  }) => void) => () => void;
+  onRealtimeWallStudentLike?: (
+    callback: (data: { postId: string; likes: number; likedBy: readonly string[] }) => void,
+  ) => () => void;
   /**
    * v1.14 P2 — 학생 댓글 도착 알림 (서버 → 교사 renderer).
    */
-  onRealtimeWallStudentComment?: (callback: (data: {
-    postId: string;
-    comment: import('./domain/entities/RealtimeWall').RealtimeWallComment;
-  }) => void) => () => void;
+  onRealtimeWallStudentComment?: (
+    callback: (data: {
+      postId: string;
+      comment: import('./domain/entities/RealtimeWall').RealtimeWallComment;
+    }) => void,
+  ) => () => void;
   /**
    * v2.1 Phase D — 교사가 학생 placeholder 카드 복원.
    */
@@ -374,10 +387,12 @@ interface ElectronAPI {
   /**
    * v2.1 Phase D — 학생 자기 카드 수정 도착 알림 (서버 → 교사 renderer).
    */
-  onRealtimeWallStudentEdit?: (callback: (data: {
-    postId: string;
-    post: import('./domain/entities/RealtimeWall').RealtimeWallPost;
-  }) => void) => () => void;
+  onRealtimeWallStudentEdit?: (
+    callback: (data: {
+      postId: string;
+      post: import('./domain/entities/RealtimeWall').RealtimeWallPost;
+    }) => void,
+  ) => () => void;
   /**
    * v2.1 Phase D — 학생 자기 카드 삭제(soft delete) 도착 알림.
    */
@@ -385,10 +400,9 @@ interface ElectronAPI {
   /**
    * v2.1 Phase D — 닉네임 변경 broadcast 도착 알림.
    */
-  onRealtimeWallNicknameChanged?: (callback: (data: {
-    postIds: readonly string[];
-    newNickname: string;
-  }) => void) => () => void;
+  onRealtimeWallNicknameChanged?: (
+    callback: (data: { postIds: readonly string[]; newNickname: string }) => void,
+  ) => () => void;
   /**
    * v2.1 Phase C — 학생 자기 카드 위치 변경(submit-move) 도착 알림.
    *
@@ -398,10 +412,12 @@ interface ElectronAPI {
    * 되돌아가는 회귀가 발생. 본 핸들러로 교사 state를 학생 이동 즉시
    * 동기화한다.
    */
-  onRealtimeWallStudentMove?: (callback: (data: {
-    postId: string;
-    post: import('./domain/entities/RealtimeWall').RealtimeWallPost;
-  }) => void) => () => void;
+  onRealtimeWallStudentMove?: (
+    callback: (data: {
+      postId: string;
+      post: import('./domain/entities/RealtimeWall').RealtimeWallPost;
+    }) => void,
+  ) => () => void;
   // Live Multi Survey
   startLiveMultiSurvey: (data: {
     questions: Array<{
@@ -422,7 +438,13 @@ interface ElectronAPI {
   multiSurveyTunnelAvailable: () => Promise<boolean>;
   multiSurveyTunnelInstall: () => Promise<void>;
   multiSurveyTunnelStart: () => Promise<{ tunnelUrl: string }>;
-  onLiveMultiSurveyStudentSubmitted: (callback: (data: { answers: Array<{ questionId: string; value: string | string[] | number }>; submissionId: string; totalSubmissions: number }) => void) => () => void;
+  onLiveMultiSurveyStudentSubmitted: (
+    callback: (data: {
+      answers: Array<{ questionId: string; value: string | string[] | number }>;
+      submissionId: string;
+      totalSubmissions: number;
+    }) => void,
+  ) => () => void;
   onLiveMultiSurveyConnectionCount: (callback: (data: { count: number }) => void) => () => void;
   // Live Multi Survey — step mode controls
   liveMultiSurveyActivateSession: () => Promise<void>;
@@ -432,57 +454,102 @@ interface ElectronAPI {
   liveMultiSurveyReopen: () => Promise<void>;
   liveMultiSurveyEndSession: () => Promise<void>;
   // Live Multi Survey — step mode events
-  onLiveMultiSurveyStudentAnswered: (callback: (data: {
-    sessionId: string;
-    nickname: string;
-    questionIndex: number;
-    totalAnswered: number;
-    totalConnected: number;
-    aggregatedPreview: AggregatedResult | null;
-  }) => void) => () => void;
-  onLiveMultiSurveyPhaseChanged: (callback: (data: {
-    phase: 'lobby' | 'open' | 'revealed' | 'ended';
-    currentQuestionIndex: number;
-    totalAnswered: number;
-    totalConnected: number;
-    aggregated?: AggregatedResult;
-  }) => void) => () => void;
-  onLiveMultiSurveyRoster: (callback: (data: {
-    roster: Array<{ sessionId: string; nickname: string; answeredQuestions: number[] }>;
-  }) => void) => () => void;
-  onLiveMultiSurveyTextAnswerDetail: (callback: (data: {
-    questionIndex: number;
-    entries: Array<{ sessionId: string; nickname: string; text: string }>;
-  }) => void) => () => void;
+  onLiveMultiSurveyStudentAnswered: (
+    callback: (data: {
+      sessionId: string;
+      nickname: string;
+      questionIndex: number;
+      totalAnswered: number;
+      totalConnected: number;
+      aggregatedPreview: AggregatedResult | null;
+    }) => void,
+  ) => () => void;
+  onLiveMultiSurveyPhaseChanged: (
+    callback: (data: {
+      phase: 'lobby' | 'open' | 'revealed' | 'ended';
+      currentQuestionIndex: number;
+      totalAnswered: number;
+      totalConnected: number;
+      aggregated?: AggregatedResult;
+    }) => void,
+  ) => () => void;
+  onLiveMultiSurveyRoster: (
+    callback: (data: {
+      roster: Array<{ sessionId: string; nickname: string; answeredQuestions: number[] }>;
+    }) => void,
+  ) => () => void;
+  onLiveMultiSurveyTextAnswerDetail: (
+    callback: (data: {
+      questionIndex: number;
+      entries: Array<{ sessionId: string; nickname: string; text: string }>;
+    }) => void,
+  ) => () => void;
   // Live Word Cloud
   startLiveWordCloud: (data: {
     question: string;
     maxSubmissions: number;
   }) => Promise<{ port: number; localIPs: string[] }>;
   stopLiveWordCloud: () => Promise<void>;
-  onLiveWordCloudWordSubmitted: (callback: (data: { word: string; count: number; totalWords: number }) => void) => () => void;
+  onLiveWordCloudWordSubmitted: (
+    callback: (data: { word: string; count: number; totalWords: number }) => void,
+  ) => () => void;
   onLiveWordCloudConnectionCount: (callback: (data: { count: number }) => void) => () => void;
   // Live Word Cloud Tunnel
   wordcloudTunnelAvailable: () => Promise<boolean>;
   wordcloudTunnelInstall: () => Promise<void>;
   wordcloudTunnelStart: () => Promise<{ tunnelUrl: string }>;
   // Live Discussion (Value Line / Traffic Light)
-  startDiscussion: (config: { toolType: string; topics: string[] }) => Promise<{ port: number; localIPs: string[] }>;
+  startDiscussion: (config: {
+    toolType: string;
+    topics: string[];
+  }) => Promise<{ port: number; localIPs: string[] }>;
   stopDiscussion: () => Promise<void>;
   discussionNextRound: () => Promise<void>;
   discussionGetState: () => Promise<{
     toolType: string;
     topics: string[];
     currentRound: number;
-    students: Array<{ id: string; name: string; emoji: string; avatarColor: string; connected: boolean; position: number; signal: string }>;
+    students: Array<{
+      id: string;
+      name: string;
+      emoji: string;
+      avatarColor: string;
+      connected: boolean;
+      position: number;
+      signal: string;
+    }>;
     chats: Array<{ name: string; emoji: string; avatarColor: string; text: string; time: string }>;
   } | null>;
   onDiscussionConnectionCount: (callback: (count: number) => void) => () => void;
-  onDiscussionState: (callback: (state: {
-    students: Array<{ id: string; name: string; emoji: string; avatarColor: string; connected: boolean; position: number; signal: string }>;
-    chats: Array<{ name: string; emoji: string; avatarColor: string; text: string; time: string }>;
-  }) => void) => () => void;
-  onDiscussionChat: (callback: (chat: { name: string; emoji: string; avatarColor: string; text: string; time: string }) => void) => () => void;
+  onDiscussionState: (
+    callback: (state: {
+      students: Array<{
+        id: string;
+        name: string;
+        emoji: string;
+        avatarColor: string;
+        connected: boolean;
+        position: number;
+        signal: string;
+      }>;
+      chats: Array<{
+        name: string;
+        emoji: string;
+        avatarColor: string;
+        text: string;
+        time: string;
+      }>;
+    }) => void,
+  ) => () => void;
+  onDiscussionChat: (
+    callback: (chat: {
+      name: string;
+      emoji: string;
+      avatarColor: string;
+      text: string;
+      time: string;
+    }) => void,
+  ) => () => void;
   // Discussion Tunnel
   discussionTunnelAvailable: () => Promise<boolean>;
   discussionTunnelInstall: () => Promise<void>;
@@ -622,9 +689,7 @@ interface InteractiveSlidesElectronAPI {
    * PDF 페이지 PNG들을 캐시에 저장 (renderer가 pdfjs-dist로 미리 렌더).
    * 응답은 Google Slides와 동일한 shape — UI 일관성 유지.
    */
-  renderPdf: (
-    args: InteractiveSlidesRenderPdfArgs,
-  ) => Promise<InteractiveSlidesRenderPdfResult>;
+  renderPdf: (args: InteractiveSlidesRenderPdfArgs) => Promise<InteractiveSlidesRenderPdfResult>;
   /** 로컬 IPv4 후보 (Plan §11.7 — VPN/다중 NIC 처리). 학생 폰 접속 URL 표시용. */
   getLocalIpCandidates: () => Promise<{ candidates: readonly string[] }>;
 

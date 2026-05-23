@@ -27,6 +27,7 @@ import { act } from 'react';
 import React from 'react';
 import { WidgetModal } from '../WidgetModal';
 import { useModalCoordinatorStore } from '@adapters/stores/useModalCoordinatorStore';
+import { useDesktopWidgetContextStore } from '@adapters/stores/useDesktopWidgetContextStore';
 import type { WidgetDefinition } from '../../types';
 
 /* ------------------------------------------------------------------ */
@@ -100,6 +101,8 @@ function teardown(ctx: Ctx) {
   });
   ctx.container.remove();
   useModalCoordinatorStore.setState({ entries: [] });
+  useDesktopWidgetContextStore.setState({ isDesktopWidget: false });
+  Reflect.deleteProperty(window, 'electronAPI');
 }
 
 async function flushMicrotasks() {
@@ -262,5 +265,45 @@ describe('AC14 — WidgetModal 키보드 상호작용', () => {
     });
     document.dispatchEvent(shiftTabEvent);
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('6. native-desktop 위젯 모달은 입력 가능 모드를 요청하고 닫을 때 해제한다', async () => {
+    const requestModalInput = vi.fn(() => Promise.resolve());
+    const releaseModalInput = vi.fn(() => Promise.resolve());
+    const requestModalEscape = vi.fn(() => Promise.resolve());
+    const releaseModalEscape = vi.fn(() => Promise.resolve());
+    const onModalEscape = vi.fn(() => () => {});
+
+    Object.defineProperty(window, 'electronAPI', {
+      configurable: true,
+      value: {
+        requestModalInput,
+        releaseModalInput,
+        requestModalEscape,
+        releaseModalEscape,
+        onModalEscape,
+      } as unknown as ElectronAPI,
+    });
+    useDesktopWidgetContextStore.setState({ isDesktopWidget: true });
+
+    const onClose = vi.fn();
+    renderModal(ctx, { onClose });
+
+    await act(async () => {
+      await flushMicrotasks();
+    });
+
+    expect(requestModalInput).toHaveBeenCalledTimes(1);
+    expect(requestModalEscape).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      ctx.root.unmount();
+    });
+    await act(async () => {
+      await flushMicrotasks();
+    });
+
+    expect(releaseModalInput).toHaveBeenCalledTimes(1);
+    expect(releaseModalEscape).toHaveBeenCalledTimes(1);
   });
 });

@@ -36,6 +36,8 @@ interface WidgetEscapeApi {
   requestModalEscape?: () => Promise<void> | void;
   releaseModalEscape?: () => Promise<void> | void;
   onModalEscape?: (cb: () => void) => () => void;
+  requestModalInput?: () => Promise<void> | void;
+  releaseModalInput?: () => Promise<void> | void;
 }
 function getEscapeApi(): WidgetEscapeApi | null {
   if (typeof window === 'undefined') return null;
@@ -189,6 +191,16 @@ export function WidgetModal({
     };
     // saveAndClose는 props 캡처라 의존성 추가 시 매 렌더 재구독. props 변화 잡기 위해 의도.
   }, [isOpen, isHead, saveAndClose]);
+
+  useEffect(() => {
+    if (!isOpen || !isHead || !isDesktopWidget) return;
+    const api = getEscapeApi();
+    if (!api?.requestModalInput || !api.releaseModalInput) return;
+    void api.requestModalInput();
+    return () => {
+      void api.releaseModalInput?.();
+    };
+  }, [isOpen, isHead, isDesktopWidget]);
 
   // native-desktop 모드(WS_CHILD) 폴백: 위젯이 keyboard focus 를 못 받아 renderer
   // keydown 이 안 잡히는 경우 main 의 globalShortcut('Escape')로 ESC 신호 수신.

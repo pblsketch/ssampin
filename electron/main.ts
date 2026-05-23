@@ -833,6 +833,9 @@ function unregisterLayoutShortcuts(): void {
 // 호출되면 본 등록도 사라지지만, 모달은 ✕/배경/취소 버튼 으로도 닫을 수 있어 치명적 아님.
 
 let modalEscapeRegistered = false;
+let modalInputDepth = 0;
+let modalInputRestoreMode: WidgetDesktopMode | null = null;
+let modalInputTransitionQueue: Promise<void> = Promise.resolve();
 
 function registerModalEscape(): void {
   if (modalEscapeRegistered) return;
@@ -865,6 +868,69 @@ function unregisterModalEscape(): void {
   }
   modalEscapeRegistered = false;
   diagLog('widget', '[modal] global Escape shortcut unregistered (modal closed)');
+}
+
+function queueModalInputTransition(work: () => Promise<void>): Promise<void> {
+  const run = modalInputTransitionQueue.catch(() => undefined).then(work);
+  modalInputTransitionQueue = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
+
+async function requestModalInputMode(): Promise<void> {
+  modalInputDepth += 1;
+
+  await queueModalInputTransition(async () => {
+    if (modalInputDepth <= 0) return;
+    if (!widgetWindow || widgetWindow.isDestroyed()) return;
+
+    const needsDetachForKeyboard =
+      process.platform === 'win32' &&
+      (currentDesktopMode === 'native-desktop' || desktopWidgetManager.isEnabled());
+
+    if (needsDetachForKeyboard && !modalInputRestoreMode) {
+      modalInputRestoreMode = 'native-desktop';
+      diagLog('widget', '[modal-input] native-desktop -> topmost for text input');
+      const { fallbackEvent } = await transitionWidgetMode(
+        widgetWindow,
+        'topmost',
+        'modal-input.request',
+      );
+      if (fallbackEvent) {
+        broadcastToAllWindows('desktopMode:fallback', fallbackEvent);
+      }
+    }
+
+    if (!widgetWindow || widgetWindow.isDestroyed()) return;
+    widgetWindow.show();
+    widgetWindow.focus();
+    widgetWindow.webContents.focus();
+  });
+}
+
+async function releaseModalInputMode(): Promise<void> {
+  modalInputDepth = Math.max(0, modalInputDepth - 1);
+
+  await queueModalInputTransition(async () => {
+    if (modalInputDepth > 0) return;
+    const restoreMode = modalInputRestoreMode;
+    modalInputRestoreMode = null;
+    if (!restoreMode) return;
+    if (!widgetWindow || widgetWindow.isDestroyed()) return;
+    if (currentDesktopMode === restoreMode && desktopWidgetManager.isEnabled()) return;
+
+    diagLog('widget', `[modal-input] restoring widget mode: ${restoreMode}`);
+    const { fallbackEvent } = await transitionWidgetMode(
+      widgetWindow,
+      restoreMode,
+      'modal-input.release',
+    );
+    if (fallbackEvent) {
+      broadcastToAllWindows('desktopMode:fallback', fallbackEvent);
+    }
+  });
 }
 
 function applyGlobalShortcuts(config: ShortcutSyncConfig): {
@@ -2677,6 +2743,12 @@ function registerIpcHandlers(): void {
   });
   ipcMain.handle('widget:release-modal-escape', (): void => {
     unregisterModalEscape();
+  });
+  ipcMain.handle('widget:request-modal-input', async (): Promise<void> => {
+    await requestModalInputMode();
+  });
+  ipcMain.handle('widget:release-modal-input', async (): Promise<void> => {
+    await releaseModalInputMode();
   });
 
   ipcMain.handle(

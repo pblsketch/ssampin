@@ -1,4 +1,5 @@
-import { spawn } from 'child_process';
+/* global console, process, setTimeout */
+import { spawn, spawnSync } from 'child_process';
 import { createRequire } from 'module';
 import http from 'http';
 
@@ -30,6 +31,14 @@ function waitForServer(url, timeout = 30000) {
 }
 
 await waitForServer(DEV_SERVER_URL);
+
+const buildResult = spawnSync(process.execPath, ['scripts/build-electron.mjs'], {
+  stdio: 'inherit',
+  env: process.env,
+});
+if (buildResult.status !== 0) {
+  process.exit(buildResult.status ?? 1);
+}
 
 // Remove ELECTRON_RUN_AS_NODE (set by VS Code) so Electron runs in browser mode
 const env = { ...process.env };

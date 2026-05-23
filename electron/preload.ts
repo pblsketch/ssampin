@@ -67,6 +67,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.off('widget:modal-escape', handler);
     };
   },
+  requestModalInput: (): Promise<void> => ipcRenderer.invoke('widget:request-modal-input'),
+  releaseModalInput: (): Promise<void> => ipcRenderer.invoke('widget:release-modal-input'),
   applyWidgetSettings: (widget: { opacity: number; desktopMode: string }): Promise<void> =>
     ipcRenderer.invoke('window:applyWidgetSettings', widget),
   /**
