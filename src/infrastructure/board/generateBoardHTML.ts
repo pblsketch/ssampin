@@ -98,6 +98,30 @@ export function generateBoardHTML(input: GenerateBoardHtmlInput): string {
     .error-title { font-size: 20px; font-weight: 700; color: #dc2626; margin-bottom: 10px; }
     .error-body { font-size: 14px; color: #1e293b; margin-bottom: 8px; line-height: 1.5; }
     .error-hint { font-size: 12px; color: #94a3b8; line-height: 1.5; }
+
+    /* PDCA-1 AC-1.0: 좌측 board toolbar scaffold — 스티커 5색 + 도형 9 native + 3 시각 동등(plan AC-2.2) 진입점 placeholder.
+       실제 도구 활성화(setActiveTool, customData.authorAwarenessId, fillColor 토큰)는 AC-1.1 이후 연결. */
+    #board-toolbar {
+      position: fixed; top: 60px; left: 12px; z-index: 9990;
+      background: rgba(255, 255, 255, 0.97);
+      border: 1px solid #e2e8f0; border-radius: 12px;
+      padding: 10px 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+      display: flex; flex-direction: column; gap: 10px;
+      user-select: none;
+      font-family: inherit;
+    }
+    #board-toolbar[hidden] { display: none !important; }
+    #board-toolbar .tool-section { display: flex; flex-direction: column; gap: 4px; }
+    #board-toolbar .section-label { font-size: 10px; color: #64748b; text-align: center; font-weight: 600; }
+    #board-toolbar .swatch-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
+    #board-toolbar .swatch { width: 28px; height: 28px; border: 2px solid transparent; border-radius: 8px; cursor: pointer; padding: 0; }
+    #board-toolbar .swatch:hover { border-color: #94a3b8; }
+    #board-toolbar .swatch[aria-pressed="true"] { border-color: #3b82f6; box-shadow: 0 0 0 2px #bfdbfe; }
+    #board-toolbar .shape-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+    #board-toolbar .shape-btn { width: 28px; height: 28px; border: 1px solid #cbd5e1; background: #ffffff; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 13px; color: #475569; padding: 0; }
+    #board-toolbar .shape-btn:hover { background: #f1f5f9; }
+    #board-toolbar .shape-btn[aria-pressed="true"] { background: #dbeafe; border-color: #3b82f6; color: #1d4ed8; }
   </style>
 
   <script type="importmap">
@@ -138,6 +162,37 @@ export function generateBoardHTML(input: GenerateBoardHtmlInput): string {
   </div>
 
   <div id="app"></div>
+
+  <!-- PDCA-1 AC-1.0: 좌측 board toolbar scaffold (placeholder). 실제 도구 활성화는 AC-1.1+ 에서 연결. -->
+  <div id="board-toolbar" hidden aria-label="협업 보드 도구">
+    <div class="tool-section">
+      <div class="section-label">스티커</div>
+      <div class="swatch-row">
+        <button type="button" class="swatch" data-color="yellow" aria-label="노란 스티커" aria-pressed="false" style="background:#FEF3C7"></button>
+        <button type="button" class="swatch" data-color="pink" aria-label="분홍 스티커" aria-pressed="false" style="background:#FCE7F3"></button>
+        <button type="button" class="swatch" data-color="blue" aria-label="파란 스티커" aria-pressed="false" style="background:#DBEAFE"></button>
+        <button type="button" class="swatch" data-color="green" aria-label="초록 스티커" aria-pressed="false" style="background:#D1FAE5"></button>
+        <button type="button" class="swatch" data-color="purple" aria-label="보라 스티커" aria-pressed="false" style="background:#EDE9FE"></button>
+      </div>
+    </div>
+    <div class="tool-section">
+      <div class="section-label">도형</div>
+      <div class="shape-row">
+        <button type="button" class="shape-btn" data-shape="line" aria-label="직선" aria-pressed="false" title="직선">—</button>
+        <button type="button" class="shape-btn" data-shape="arrow" aria-label="화살표" aria-pressed="false" title="화살표">→</button>
+        <button type="button" class="shape-btn" data-shape="rect" aria-label="사각형" aria-pressed="false" title="사각형">▭</button>
+        <button type="button" class="shape-btn" data-shape="rounded-rect" aria-label="둥근 사각형" aria-pressed="false" title="둥근 사각형">▢</button>
+        <button type="button" class="shape-btn" data-shape="ellipse" aria-label="원" aria-pressed="false" title="원">○</button>
+        <button type="button" class="shape-btn" data-shape="triangle" aria-label="삼각형" aria-pressed="false" title="삼각형">△</button>
+        <button type="button" class="shape-btn" data-shape="diamond" aria-label="마름모" aria-pressed="false" title="마름모">◇</button>
+        <button type="button" class="shape-btn" data-shape="right-arrow" aria-label="오른쪽 화살표" aria-pressed="false" title="오른쪽 화살표">⇒</button>
+        <button type="button" class="shape-btn" data-shape="text-box" aria-label="텍스트" aria-pressed="false" title="텍스트">T</button>
+        <button type="button" class="shape-btn" data-shape="pentagon-equiv" aria-label="오각형(육각 대체)" aria-pressed="false" title="오각 → 정육각 (시각 동등 매핑)">⬡</button>
+        <button type="button" class="shape-btn" data-shape="elbow-arrow-equiv" aria-label="꺾인 화살표(직선 결합)" aria-pressed="false" title="꺾인 화살표 → 직선 결합 (시각 동등)">⤵</button>
+        <button type="button" class="shape-btn" data-shape="bidirectional-equiv" aria-label="양방향(양 끝 화살표)" aria-pressed="false" title="양방향 → 양 끝 화살표 (시각 동등)">⇔</button>
+      </div>
+    </div>
+  </div>
 
   <script type="module">
     import React from 'react';
@@ -251,12 +306,26 @@ export function generateBoardHTML(input: GenerateBoardHtmlInput): string {
         colorLight: '#3b82f655',
       });
 
+      // PDCA-1 Step 1.1: 스티커 메모 closure state (toolbar 핸들러 ↔ Excalidraw onChange 공유)
+      // SP-1 PASS 근거: customData.authorAwarenessId 가 y-excalidraw 2.0.12 round-trip 안전 확인.
+      const STICKER_COLORS = {
+        yellow: '#FEF3C7',
+        pink: '#FCE7F3',
+        blue: '#DBEAFE',
+        green: '#D1FAE5',
+        purple: '#EDE9FE',
+      };
+      let currentExcalidrawAPI = null;
+      let activeStickerColor = null;
+      const processedTextIds = new Set();
+
       function App() {
         const [api, setApi] = React.useState(null);
         const containerRef = React.useRef(null);
         const bindingRef = React.useRef(null);
 
         React.useEffect(() => {
+          currentExcalidrawAPI = api; // Step 1.1: toolbar 핸들러용 closure 공유
           if (!api) return;
           // y-excalidraw 2.0.12 setupUndoRedo null-check 버그 회피 — undoManager 생략
           const setup = setTimeout(() => {
@@ -266,7 +335,49 @@ export function generateBoardHTML(input: GenerateBoardHtmlInput): string {
               console.error('[board] binding 실패:', err);
             }
           }, 300);
-          return () => { clearTimeout(setup); bindingRef.current?.destroy(); bindingRef.current = null; };
+          return () => {
+            clearTimeout(setup);
+            bindingRef.current?.destroy();
+            bindingRef.current = null;
+            currentExcalidrawAPI = null;
+          };
+        }, [api]);
+
+        // PDCA-1 Step 1.1 (AC-1.1 + AC-1.4 + AC-1.5): text element finalize 감지 시
+        // 작성자 라벨 prepend + sticker 배경색 + customData.authorAwarenessId 주입.
+        const handleSceneChange = React.useCallback((elements, appState) => {
+          if (!activeStickerColor) return;
+          if (appState && appState.editingElement) return; // inline 텍스트 편집 중이면 대기
+          let needsUpdate = false;
+          const updated = elements.map((el) => {
+            if (
+              el.type === 'text' &&
+              !el.isDeleted &&
+              !processedTextIds.has(el.id) &&
+              el.text && el.text.trim().length > 0 &&
+              !el.text.startsWith('⭐ ')
+            ) {
+              processedTextIds.add(el.id);
+              needsUpdate = true;
+              return {
+                ...el,
+                text: '⭐ ' + userName + '\\n' + el.text,
+                backgroundColor: STICKER_COLORS[activeStickerColor] || '#FEF3C7',
+                customData: {
+                  ...(el.customData || {}),
+                  authorAwarenessId: String(provider.awareness.clientID),
+                  authorName: userName,
+                  stickerType: 'memo',
+                  stickerColor: activeStickerColor,
+                  createdAtIso: new Date().toISOString(),
+                },
+              };
+            }
+            return el;
+          });
+          if (needsUpdate && api) {
+            api.updateScene({ elements: updated, commitToHistory: false });
+          }
         }, [api]);
 
         return React.createElement('div', { ref: containerRef, style: { height: '100vh' } },
@@ -274,6 +385,7 @@ export function generateBoardHTML(input: GenerateBoardHtmlInput): string {
             excalidrawAPI: setApi,
             initialData: { elements: yjsToExcalidraw(yElements) },
             onPointerUpdate: (p) => bindingRef.current?.onPointerUpdate(p),
+            onChange: handleSceneChange,
             theme: 'light',
             langCode: 'ko-KR',
             UIOptions: {
@@ -328,6 +440,45 @@ export function generateBoardHTML(input: GenerateBoardHtmlInput): string {
         console.log('[board] palm rejection installed (touch blocked on canvas)');
       }
       installPalmRejection();
+
+      // PDCA-1 Step 1.0+1.1: toolbar 활성화.
+      // 스티커 swatch: 토글 + Excalidraw text tool 활성화 (Step 1.1). 도형 버튼: placeholder (Step 다음).
+      const toolbar = document.getElementById('board-toolbar');
+      if (toolbar) {
+        toolbar.hidden = false;
+        toolbar.addEventListener('click', (ev) => {
+          const target = ev.target;
+          if (!(target instanceof HTMLElement)) return;
+          const btn = target.closest('button');
+          if (!btn) return;
+          const isSwatch = btn.classList.contains('swatch');
+          const isShape = btn.classList.contains('shape-btn');
+          if (!isSwatch && !isShape) return;
+
+          if (isSwatch) {
+            const wasActive = btn.getAttribute('aria-pressed') === 'true';
+            toolbar.querySelectorAll('.swatch').forEach((el) => el.setAttribute('aria-pressed', 'false'));
+            if (wasActive) {
+              // 토글 OFF: 활성 색상 해제 + selection 도구로 복귀
+              activeStickerColor = null;
+              if (currentExcalidrawAPI) currentExcalidrawAPI.setActiveTool({ type: 'selection' });
+              return;
+            }
+            // 토글 ON: 색상 저장 + text 도구 활성화 (Excalidraw inline text editor 사용)
+            btn.setAttribute('aria-pressed', 'true');
+            activeStickerColor = btn.dataset.color || null;
+            if (currentExcalidrawAPI) currentExcalidrawAPI.setActiveTool({ type: 'text' });
+            return;
+          }
+
+          if (isShape) {
+            // Step 1.0 placeholder — 다음 step 에서 setActiveTool(rectangle/line/...) 연결
+            toolbar.querySelectorAll('.shape-btn').forEach((el) => el.setAttribute('aria-pressed', 'false'));
+            btn.setAttribute('aria-pressed', 'true');
+            console.log('[toolbar] AC-1.0 shape placeholder:', btn.dataset.shape);
+          }
+        });
+      }
     }
   </script>
 </body>
