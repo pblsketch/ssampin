@@ -1,10 +1,18 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { useObservationStore } from '@adapters/stores/useObservationStore';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+import { useDriveSyncStore } from '@adapters/stores/useDriveSyncStore';
+import { useToastStore } from '@adapters/components/common/Toast';
+import { FEATURE_FLAGS } from '@adapters/config/featureFlags';
 import { studentKey } from '@domain/entities/TeachingClass';
-import type { AttendanceStatus, AttendanceReason, StudentAttendance, AttendanceRecord } from '@domain/entities/Attendance';
+import type {
+  AttendanceStatus,
+  AttendanceReason,
+  StudentAttendance,
+  AttendanceRecord,
+} from '@domain/entities/Attendance';
 import { ATTENDANCE_REASONS } from '@domain/entities/Attendance';
 import { isSubjectMatch } from '@domain/rules/matchingRules';
 import { isStudentActive } from '@domain/rules/studentActivity';
@@ -13,6 +21,7 @@ import { resolvePreset, resolveClassroomPreset } from '@domain/valueObjects/Subj
 import { ObservationForm } from './ObservationForm';
 import { ObservationCard } from './ObservationCard';
 import { ClassRecordStudentGrid } from './ClassRecordStudentGrid';
+import { createAttendanceSaveSequencer, markAttendanceMutation } from './shared/attendanceAutosave';
 
 /* ── 유틸 ── */
 
@@ -22,11 +31,36 @@ function todayString(): string {
 }
 
 const STATUS_OPTIONS: { key: AttendanceStatus; label: string; icon: string; color: string }[] = [
-  { key: 'present', label: '출석', icon: 'check_circle', color: 'bg-green-500/20 text-green-400 border-green-500/30' },
-  { key: 'absent', label: '결석', icon: 'cancel', color: 'bg-red-500/20 text-red-400 border-red-500/30' },
-  { key: 'late', label: '지각', icon: 'schedule', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
-  { key: 'earlyLeave', label: '조퇴', icon: 'exit_to_app', color: 'bg-orange-500/20 text-orange-400 border-orange-500/30' },
-  { key: 'classAbsence', label: '결과', icon: 'event_busy', color: 'bg-purple-500/20 text-purple-400 border-purple-500/30' },
+  {
+    key: 'present',
+    label: '출석',
+    icon: 'check_circle',
+    color: 'bg-green-500/20 text-green-400 border-green-500/30',
+  },
+  {
+    key: 'absent',
+    label: '결석',
+    icon: 'cancel',
+    color: 'bg-red-500/20 text-red-400 border-red-500/30',
+  },
+  {
+    key: 'late',
+    label: '지각',
+    icon: 'schedule',
+    color: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
+  },
+  {
+    key: 'earlyLeave',
+    label: '조퇴',
+    icon: 'exit_to_app',
+    color: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
+  },
+  {
+    key: 'classAbsence',
+    label: '결과',
+    icon: 'event_busy',
+    color: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
+  },
 ];
 
 const STATUS_BADGE: Record<AttendanceStatus, string> = {
@@ -51,28 +85,46 @@ const PERIODS = [1, 2, 3, 4, 5, 6, 7, 8] as const;
 
 interface ClassRecordInputViewProps {
   classId: string;
+  onGoToRosterTab?: () => void;
+  onGoToSeatingTab?: () => void;
 }
 
-export function ClassRecordInputView({ classId }: ClassRecordInputViewProps) {
+export function ClassRecordInputView({
+  classId,
+  onGoToRosterTab,
+  onGoToSeatingTab,
+}: ClassRecordInputViewProps) {
   const classes = useTeachingClassStore((s) => s.classes);
   const getAttendanceRecord = useTeachingClassStore((s) => s.getAttendanceRecord);
   const saveAttendanceRecord = useTeachingClassStore((s) => s.saveAttendanceRecord);
   const teacherSchedule = useScheduleStore((s) => s.teacherSchedule);
   const loadSchedule = useScheduleStore((s) => s.load);
   const { settings } = useSettingsStore();
+  const driveStatus = useDriveSyncStore((s) => s.status);
+  const lastSyncedAt = useDriveSyncStore((s) => s.lastSyncedAt);
+  const syncToCloud = useDriveSyncStore((s) => s.syncToCloud);
+  const showToast = useToastStore((s) => s.show);
 
   const observationRecords = useObservationStore((s) => s.records);
   const loadObservations = useObservationStore((s) => s.load);
+  const { enqueueSave } = useMemo(
+    () => createAttendanceSaveSequencer(saveAttendanceRecord),
+    [saveAttendanceRecord],
+  );
+  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const skipNextAutosaveRef = useRef(false);
 
-  useEffect(() => { void loadSchedule(); }, [loadSchedule]);
-  useEffect(() => { void loadObservations(); }, [loadObservations]);
+  useEffect(() => {
+    void loadSchedule();
+  }, [loadSchedule]);
+  useEffect(() => {
+    void loadObservations();
+  }, [loadObservations]);
 
   const cls = useMemo(() => classes.find((c) => c.id === classId), [classes, classId]);
   const students = useMemo(() => {
     if (!cls) return [];
-    return [...cls.students]
-      .filter(isStudentActive)
-      .sort((a, b) => a.number - b.number);
+    return [...cls.students].filter(isStudentActive).sort((a, b) => a.number - b.number);
   }, [cls]);
 
   /* ── state ── */
@@ -82,7 +134,9 @@ export function ClassRecordInputView({ classId }: ClassRecordInputViewProps) {
   const [selectedStudentKey, setSelectedStudentKey] = useState<string | null>(null);
   const [localAttendance, setLocalAttendance] = useState<StudentAttendance[]>([]);
   const [attendanceInitialized, setAttendanceInitialized] = useState(false);
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [saveStatus, setSaveStatus] = useState<
+    'idle' | 'saving' | 'saved' | 'synced' | 'offline' | 'error'
+  >('idle');
   const [showRecentRecords, setShowRecentRecords] = useState(false);
 
   /* ── 시간표 연동 ── */
@@ -95,26 +149,35 @@ export function ClassRecordInputView({ classId }: ClassRecordInputViewProps) {
     return resolvePreset(cls.subject, settings.subjectColors).tw;
   }, [cls, settings.subjectColors, settings.classroomColors, settings.timetableColorBy]);
 
-  const getMatchingPeriods = useCallback((dateStr: string): number[] => {
-    if (!cls || !teacherSchedule) return [];
-    const DAYS = ['일', '월', '화', '수', '목', '금', '토'];
-    const d = new Date(dateStr + 'T00:00:00');
-    const dayOfWeek = DAYS[d.getDay()] ?? '';
-    if (!dayOfWeek) return [];
-    const daySchedule = teacherSchedule[dayOfWeek];
-    if (!daySchedule) return [];
-    const periods: number[] = [];
-    daySchedule.forEach((slot, idx) => {
-      if (!slot) return;
-      const classMatch = slot.classroom === cls.name || slot.classroom.includes(cls.name) || cls.name.includes(slot.classroom);
-      if (classMatch && isSubjectMatch(slot.subject, cls.subject)) {
-        periods.push(idx + 1);
-      }
-    });
-    return periods;
-  }, [cls, teacherSchedule]);
+  const getMatchingPeriods = useCallback(
+    (dateStr: string): number[] => {
+      if (!cls || !teacherSchedule) return [];
+      const DAYS = ['일', '월', '화', '수', '목', '금', '토'];
+      const d = new Date(dateStr + 'T00:00:00');
+      const dayOfWeek = DAYS[d.getDay()] ?? '';
+      if (!dayOfWeek) return [];
+      const daySchedule = teacherSchedule[dayOfWeek];
+      if (!daySchedule) return [];
+      const periods: number[] = [];
+      daySchedule.forEach((slot, idx) => {
+        if (!slot) return;
+        const classMatch =
+          slot.classroom === cls.name ||
+          slot.classroom.includes(cls.name) ||
+          cls.name.includes(slot.classroom);
+        if (classMatch && isSubjectMatch(slot.subject, cls.subject)) {
+          periods.push(idx + 1);
+        }
+      });
+      return periods;
+    },
+    [cls, teacherSchedule],
+  );
 
-  const matchingPeriods = useMemo(() => new Set(getMatchingPeriods(date)), [date, getMatchingPeriods]);
+  const matchingPeriods = useMemo(
+    () => new Set(getMatchingPeriods(date)),
+    [date, getMatchingPeriods],
+  );
 
   const lessonDayIndices = useMemo(() => {
     const indices: number[] = [];
@@ -130,45 +193,68 @@ export function ClassRecordInputView({ classId }: ClassRecordInputViewProps) {
   }, [getMatchingPeriods]);
 
   /* ── 출석 로드 ── */
-  const loadRecord = useCallback((d: string, p: number) => {
-    const existing = getAttendanceRecord(classId, d, p);
-    if (existing) {
-      const map = new Map(existing.students.map((s) => [studentKey(s), s]));
-      setLocalAttendance(
-        students.map((s) => {
-          const prev = map.get(studentKey(s));
-          return {
+  const loadRecord = useCallback(
+    (d: string, p: number) => {
+      const existing = getAttendanceRecord(classId, d, p);
+      if (existing) {
+        const map = new Map(existing.students.map((s) => [studentKey(s), s]));
+        setLocalAttendance(
+          students.map((s) => {
+            const prev = map.get(studentKey(s));
+            return {
+              number: s.number,
+              grade: s.grade,
+              classNum: s.classNum,
+              status: prev?.status ?? ('present' as AttendanceStatus),
+              reason: prev?.reason,
+              memo: prev?.memo,
+            };
+          }),
+        );
+      } else {
+        setLocalAttendance(
+          students.map((s) => ({
             number: s.number,
             grade: s.grade,
             classNum: s.classNum,
-            status: prev?.status ?? 'present' as AttendanceStatus,
-            reason: prev?.reason,
-            memo: prev?.memo,
-          };
-        }),
-      );
-    } else {
-      setLocalAttendance(
-        students.map((s) => ({ number: s.number, grade: s.grade, classNum: s.classNum, status: 'present' as AttendanceStatus })),
-      );
-    }
-    setAttendanceInitialized(true);
-    setSaveStatus('idle');
-  }, [classId, students, getAttendanceRecord]);
+            status: 'present' as AttendanceStatus,
+          })),
+        );
+      }
+      setAttendanceInitialized(true);
+      setSaveStatus('idle');
+      skipNextAutosaveRef.current = true;
+    },
+    [classId, students, getAttendanceRecord],
+  );
 
   useEffect(() => {
     if (students.length > 0) loadRecord(date, period);
   }, [date, period, classId, students.length, loadRecord]);
 
-  const handleDateChange = useCallback((d: string) => { setDate(d); }, []);
-  const handlePeriodChange = useCallback((p: number) => { setPeriod(p); }, []);
+  useEffect(() => {
+    if (!selectedStudentKey) return;
+    const exists = students.some((s) => studentKey(s) === selectedStudentKey);
+    if (!exists) setSelectedStudentKey(null);
+  }, [selectedStudentKey, students]);
+
+  const handleDateChange = useCallback((d: string) => {
+    setDate(d);
+  }, []);
+  const handlePeriodChange = useCallback((p: number) => {
+    setPeriod(p);
+  }, []);
 
   /* ── 출석 변경 ── */
   const setStudentAttendanceStatus = useCallback((key: string, newStatus: AttendanceStatus) => {
     setLocalAttendance((prev) =>
       prev.map((s) =>
         studentKey(s) === key
-          ? { ...s, status: newStatus, ...(newStatus === 'present' ? { reason: undefined, memo: undefined } : {}) }
+          ? {
+              ...s,
+              status: newStatus,
+              ...(newStatus === 'present' ? { reason: undefined, memo: undefined } : {}),
+            }
           : s,
       ),
     );
@@ -176,26 +262,114 @@ export function ClassRecordInputView({ classId }: ClassRecordInputViewProps) {
   }, []);
 
   const setStudentReason = useCallback((key: string, reason: AttendanceReason | undefined) => {
-    setLocalAttendance((prev) =>
-      prev.map((s) => studentKey(s) === key ? { ...s, reason } : s),
-    );
+    setLocalAttendance((prev) => prev.map((s) => (studentKey(s) === key ? { ...s, reason } : s)));
     setSaveStatus('idle');
   }, []);
 
   const setStudentMemo = useCallback((key: string, memo: string) => {
-    setLocalAttendance((prev) =>
-      prev.map((s) => studentKey(s) === key ? { ...s, memo } : s),
-    );
+    setLocalAttendance((prev) => prev.map((s) => (studentKey(s) === key ? { ...s, memo } : s)));
     setSaveStatus('idle');
   }, []);
 
-  const handleSaveAttendance = useCallback(async () => {
+  const handleFillAllPresent = useCallback(() => {
+    const hasNonPresent = localAttendance.some((s) => s.status !== 'present');
+    if (hasNonPresent) {
+      const ok = window.confirm(
+        '이미 결석/지각/조퇴/결과 처리된 학생이 있습니다. 전체 출석으로 덮어쓸까요?',
+      );
+      if (!ok) return;
+    }
+    setLocalAttendance((prev) =>
+      prev.map((s) => ({
+        ...s,
+        status: 'present' as AttendanceStatus,
+        reason: undefined,
+        memo: undefined,
+      })),
+    );
+    setSaveStatus('idle');
+  }, [localAttendance]);
+
+  const buildAttendanceRecord = useCallback(
+    (): AttendanceRecord => ({
+      classId,
+      date,
+      period,
+      students: localAttendance,
+    }),
+    [classId, date, period, localAttendance],
+  );
+
+  const syncDriveAfterLocalSave = useCallback(async () => {
+    if (!settings.sync?.enabled || !settings.sync.autoSyncOnSave) return;
+    try {
+      await syncToCloud();
+      setSaveStatus('synced');
+    } catch {
+      setSaveStatus('offline');
+      showToast(
+        '오프라인 변경으로 남았습니다. 연결 후 다시 동기화해 주세요.',
+        'error',
+        {
+          label: '재시도',
+          onClick: () => {
+            void syncToCloud();
+          },
+        },
+        5000,
+      );
+    }
+  }, [settings.sync, showToast, syncToCloud]);
+
+  const saveAttendance = useCallback(async () => {
     setSaveStatus('saving');
-    const record: AttendanceRecord = { classId, date, period, students: localAttendance };
-    await saveAttendanceRecord(record);
-    setSaveStatus('saved');
-    setTimeout(() => setSaveStatus('idle'), 2000);
-  }, [classId, date, period, localAttendance, saveAttendanceRecord]);
+    const record = buildAttendanceRecord();
+    try {
+      await enqueueSave(record);
+      markAttendanceMutation();
+      setSaveStatus('saved');
+      void syncDriveAfterLocalSave();
+      setTimeout(() => setSaveStatus((current) => (current === 'saved' ? 'idle' : current)), 2000);
+    } catch {
+      setSaveStatus('error');
+      showToast('출석 저장에 실패했습니다. 다시 시도해 주세요.', 'error');
+    }
+  }, [buildAttendanceRecord, enqueueSave, showToast, syncDriveAfterLocalSave]);
+
+  const handleSaveAttendance = useCallback(async () => {
+    await saveAttendance();
+  }, [saveAttendance]);
+
+  useEffect(() => {
+    if (!FEATURE_FLAGS.inlineAutosave || !attendanceInitialized || localAttendance.length === 0)
+      return;
+    if (skipNextAutosaveRef.current) {
+      skipNextAutosaveRef.current = false;
+      return;
+    }
+    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    autosaveTimerRef.current = setTimeout(() => {
+      void saveAttendance();
+    }, 700);
+    return () => {
+      if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    };
+  }, [attendanceInitialized, localAttendance, saveAttendance]);
+
+  useEffect(
+    () => () => {
+      if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!settings.sync?.enabled || !settings.sync.autoSyncOnSave) return;
+    const lastMutationAt = markAttendanceMutation;
+    void lastMutationAt;
+    if (driveStatus === 'error') setSaveStatus('offline');
+    if (driveStatus === 'success') setSaveStatus('synced');
+  }, [driveStatus, lastSyncedAt, settings.sync]);
 
   /* ── 파생 데이터 ── */
   const attendanceMap = useMemo(() => {
@@ -256,11 +430,12 @@ export function ClassRecordInputView({ classId }: ClassRecordInputViewProps) {
                   key={p}
                   onClick={() => handlePeriodChange(p)}
                   className={`relative w-8 h-8 rounded-lg text-sm font-medium transition-all
-                    ${period === p
-                      ? 'bg-sp-accent text-white ring-2 ring-sp-accent/40'
-                      : isMatching
-                        ? 'bg-sp-accent/15 border-2 border-sp-accent text-sp-accent font-semibold'
-                        : 'bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text'
+                    ${
+                      period === p
+                        ? 'bg-sp-accent text-white ring-2 ring-sp-accent/40'
+                        : isMatching
+                          ? 'bg-sp-accent/15 border-2 border-sp-accent text-sp-accent font-semibold'
+                          : 'bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text'
                     }`}
                 >
                   {p}
@@ -280,7 +455,9 @@ export function ClassRecordInputView({ classId }: ClassRecordInputViewProps) {
           <button
             onClick={() => setStudentViewMode('list')}
             className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-              studentViewMode === 'list' ? 'bg-sp-accent text-white' : 'text-sp-muted hover:text-sp-text'
+              studentViewMode === 'list'
+                ? 'bg-sp-accent text-white'
+                : 'text-sp-muted hover:text-sp-text'
             }`}
           >
             <span className="material-symbols-outlined text-sm">format_list_numbered</span>
@@ -289,7 +466,9 @@ export function ClassRecordInputView({ classId }: ClassRecordInputViewProps) {
           <button
             onClick={() => setStudentViewMode('seating')}
             className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-              studentViewMode === 'seating' ? 'bg-sp-accent text-white' : 'text-sp-muted hover:text-sp-text'
+              studentViewMode === 'seating'
+                ? 'bg-sp-accent text-white'
+                : 'text-sp-muted hover:text-sp-text'
             }`}
           >
             <span className="material-symbols-outlined text-sm">grid_view</span>
@@ -302,10 +481,20 @@ export function ClassRecordInputView({ classId }: ClassRecordInputViewProps) {
       <div className="flex-1 flex gap-3 min-h-0">
         {/* 왼쪽: 학생 선택 */}
         <div className="w-[260px] shrink-0 bg-sp-card border border-sp-border rounded-xl overflow-hidden flex flex-col">
-          <div className="px-4 py-2.5 border-b border-sp-border flex items-center justify-between">
+          <div className="px-4 py-2.5 border-b border-sp-border flex items-center justify-between gap-2">
             <span className="text-sm font-semibold text-sp-text">
-              {cls?.name ?? '수업반'} <span className="text-xs text-sp-muted font-normal">{students.length}명</span>
+              {cls?.name ?? '수업반'}{' '}
+              <span className="text-xs text-sp-muted font-normal">{students.length}명</span>
             </span>
+            {students.length > 0 && (
+              <button
+                type="button"
+                onClick={handleFillAllPresent}
+                className="shrink-0 px-2 py-1 rounded-lg bg-green-500/15 text-green-400 text-caption font-medium hover:bg-green-500/25 transition-colors"
+              >
+                전체 출석으로 채우기
+              </button>
+            )}
           </div>
 
           <div className="flex-1 overflow-y-auto">
@@ -321,13 +510,19 @@ export function ClassRecordInputView({ classId }: ClassRecordInputViewProps) {
                       key={sKey}
                       onClick={() => setSelectedStudentKey(sKey)}
                       className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left transition-colors ${
-                        isSelected ? 'bg-sp-accent/10 text-sp-text' : 'text-sp-text hover:bg-sp-border/30'
+                        isSelected
+                          ? 'bg-sp-accent/10 text-sp-text'
+                          : 'text-sp-text hover:bg-sp-border/30'
                       }`}
                     >
-                      <span className="w-8 shrink-0 text-xs text-sp-muted text-center">{s.number}</span>
+                      <span className="w-8 shrink-0 text-xs text-sp-muted text-center">
+                        {s.number}
+                      </span>
                       <span className="flex-1 text-sm">{s.name}</span>
                       {attendanceInitialized && (
-                        <span className={`px-1.5 py-0.5 rounded text-caption font-medium ${STATUS_BADGE[att]}`}>
+                        <span
+                          className={`px-1.5 py-0.5 rounded text-caption font-medium ${STATUS_BADGE[att]}`}
+                        >
                           {STATUS_LABEL[att]}
                         </span>
                       )}
@@ -340,7 +535,18 @@ export function ClassRecordInputView({ classId }: ClassRecordInputViewProps) {
                   );
                 })}
                 {students.length === 0 && (
-                  <div className="py-8 text-center text-xs text-sp-muted">학생이 없습니다</div>
+                  <div className="py-8 px-4 text-center text-xs text-sp-muted">
+                    <p>학생이 없습니다</p>
+                    {onGoToRosterTab && (
+                      <button
+                        type="button"
+                        onClick={onGoToRosterTab}
+                        className="mt-3 px-3 py-1.5 rounded-lg bg-sp-accent text-white text-xs font-medium hover:brightness-110 transition-all"
+                      >
+                        명렬 관리로 가기
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
             ) : (
@@ -350,6 +556,7 @@ export function ClassRecordInputView({ classId }: ClassRecordInputViewProps) {
                 onSelectStudent={setSelectedStudentKey}
                 attendanceMap={attendanceMap}
                 recordCountMap={recordCountMap}
+                onCreateSeating={onGoToSeatingTab}
               />
             )}
           </div>
@@ -362,7 +569,9 @@ export function ClassRecordInputView({ classId }: ClassRecordInputViewProps) {
             <div className="flex items-center justify-between px-4 py-3 border-b border-sp-border">
               <div className="flex items-center gap-2.5">
                 <div className="w-7 h-7 rounded-full bg-sp-accent/20 flex items-center justify-center">
-                  <span className="text-detail font-bold text-sp-accent">{selectedStudent.number}</span>
+                  <span className="text-detail font-bold text-sp-accent">
+                    {selectedStudent.number}
+                  </span>
                 </div>
                 <span className="text-sm font-bold text-sp-text">{selectedStudent.name}</span>
               </div>
@@ -406,7 +615,12 @@ export function ClassRecordInputView({ classId }: ClassRecordInputViewProps) {
                     {ATTENDANCE_REASONS.map((r) => (
                       <button
                         key={r}
-                        onClick={() => setStudentReason(selectedStudentKey, selectedAttendance.reason === r ? undefined : r)}
+                        onClick={() =>
+                          setStudentReason(
+                            selectedStudentKey,
+                            selectedAttendance.reason === r ? undefined : r,
+                          )
+                        }
                         className={`px-2 py-0.5 rounded-lg text-caption font-medium transition-colors border ${
                           selectedAttendance.reason === r
                             ? 'bg-sp-accent/15 text-sp-accent border-sp-accent/30'
@@ -433,12 +647,24 @@ export function ClassRecordInputView({ classId }: ClassRecordInputViewProps) {
                   onClick={() => void handleSaveAttendance()}
                   disabled={saveStatus === 'saving'}
                   className={`w-full py-1.5 rounded-lg text-xs font-medium transition-all ${
-                    saveStatus === 'saved'
+                    saveStatus === 'saved' || saveStatus === 'synced'
                       ? 'bg-green-500/20 text-green-400'
-                      : 'bg-sp-accent text-white hover:bg-sp-accent/80'
+                      : saveStatus === 'offline' || saveStatus === 'error'
+                        ? 'bg-amber-500/20 text-amber-400'
+                        : 'bg-sp-accent text-white hover:bg-sp-accent/80'
                   } disabled:opacity-50`}
                 >
-                  {saveStatus === 'saved' ? '✓ 저장됨' : saveStatus === 'saving' ? '저장 중...' : '출석 저장'}
+                  {saveStatus === 'saved'
+                    ? '✓ 저장됨(로컬)'
+                    : saveStatus === 'synced'
+                      ? '✓ 동기화됨'
+                      : saveStatus === 'offline'
+                        ? '오프라인 변경'
+                        : saveStatus === 'error'
+                          ? '저장 실패'
+                          : saveStatus === 'saving'
+                            ? '저장 중...'
+                            : '출석 저장'}
                 </button>
               </div>
 
@@ -459,7 +685,13 @@ export function ClassRecordInputView({ classId }: ClassRecordInputViewProps) {
                     onClick={() => setShowRecentRecords((v) => !v)}
                     className="flex items-center gap-1 text-xs font-semibold text-sp-muted mb-2 uppercase tracking-wide hover:text-sp-text transition-colors"
                   >
-                    <span className="material-symbols-outlined text-sm" style={{ transition: 'transform 0.2s', transform: showRecentRecords ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+                    <span
+                      className="material-symbols-outlined text-sm"
+                      style={{
+                        transition: 'transform 0.2s',
+                        transform: showRecentRecords ? 'rotate(90deg)' : 'rotate(0deg)',
+                      }}
+                    >
                       chevron_right
                     </span>
                     최근 기록 ({selectedObservations.length})

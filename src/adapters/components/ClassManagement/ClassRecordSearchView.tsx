@@ -24,6 +24,13 @@ const STATUS_LABEL: Record<AttendanceStatus, string> = {
 
 type CategoryFilter = 'all' | 'attendance' | 'observation';
 
+type PeriodFilter = 'all' | 'semester' | 'month' | 'week' | 'custom';
+
+function getInitialPeriodFilter(): PeriodFilter {
+  const month = new Date().getMonth() + 1;
+  return month === 7 || month === 12 ? 'semester' : 'all';
+}
+
 interface MixedRecord {
   type: 'attendance' | 'observation';
   date: string;
@@ -50,9 +57,7 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
   const [tagFilter, setTagFilter] = useState<string[]>([]);
   const [keyword, setKeyword] = useState('');
-  const [periodFilter, setPeriodFilter] = useState<
-    'all' | 'semester' | 'month' | 'week' | 'custom'
-  >('all');
+  const [periodFilter, setPeriodFilter] = useState<PeriodFilter>(getInitialPeriodFilter);
   const [customStart, setCustomStart] = useState(() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
@@ -202,6 +207,14 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
     return groups;
   }, [filtered]);
 
+  const handleResetFilters = () => {
+    setStudentFilter('');
+    setCategoryFilter('all');
+    setTagFilter([]);
+    setKeyword('');
+    setPeriodFilter('all');
+  };
+
   return (
     <div className="space-y-3">
       {/* 필터 바 */}
@@ -317,7 +330,16 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
       {/* 타임라인 */}
       <div className="space-y-4">
         {grouped.length === 0 ? (
-          <div className="py-12 text-center text-sm text-sp-muted">조건에 맞는 기록이 없습니다</div>
+          <div className="py-12 text-center text-sm text-sp-muted">
+            <p>조건에 맞는 기록이 없습니다</p>
+            <button
+              type="button"
+              onClick={handleResetFilters}
+              className="mt-3 px-3 py-1.5 rounded-lg bg-sp-accent text-white text-xs font-medium hover:brightness-110 transition-all"
+            >
+              필터 초기화
+            </button>
+          </div>
         ) : (
           grouped.map((group) => (
             <div key={group.date}>

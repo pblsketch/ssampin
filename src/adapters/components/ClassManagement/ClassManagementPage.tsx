@@ -1,5 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+import { useDriveSyncStore } from '@adapters/stores/useDriveSyncStore';
+import { FEATURE_FLAGS } from '@adapters/config/featureFlags';
+import { getLastAttendanceMutationAt } from './shared/attendanceAutosave';
 import { ClassList } from './ClassList';
 import { ClassRosterTab } from './ClassRosterTab';
 import { ClassRecordTab } from './ClassRecordTab';
@@ -10,7 +14,6 @@ import { ClassAssignmentTab } from './ClassAssignmentTab';
 import { AttendanceTab } from './AttendanceTab';
 import { AddClassModal } from './AddClassModal';
 import { PageHeader } from '@adapters/components/common/PageHeader';
-
 
 type TabId = 'roster' | 'record' | 'attendance' | 'seating' | 'progress' | 'survey' | 'assignment';
 
@@ -33,6 +36,10 @@ const TABS: readonly TabConfig[] = [
 export function ClassManagementPage() {
   const load = useTeachingClassStore((s) => s.load);
   const selectedClassId = useTeachingClassStore((s) => s.selectedClassId);
+  const syncSettings = useSettingsStore((s) => s.settings.sync);
+  const driveStatus = useDriveSyncStore((s) => s.status);
+  const driveLastSyncedAt = useDriveSyncStore((s) => s.lastSyncedAt);
+  const syncToCloud = useDriveSyncStore((s) => s.syncToCloud);
 
   const [activeTab, setActiveTab] = useState<TabId>('roster');
   const [showAddModal, setShowAddModal] = useState(false);
@@ -40,6 +47,34 @@ export function ClassManagementPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const hasUnfinishedDriveSync = useCallback(() => {
+    if (!FEATURE_FLAGS.inlineAutosave || !syncSettings?.enabled || !syncSettings.autoSyncOnSave)
+      return false;
+    const lastMutationAt = getLastAttendanceMutationAt();
+    const lastSyncedAt = driveLastSyncedAt ? Date.parse(driveLastSyncedAt) : 0;
+    return driveStatus === 'syncing' || driveStatus === 'error' || lastSyncedAt < lastMutationAt;
+  }, [driveLastSyncedAt, driveStatus, syncSettings?.autoSyncOnSave, syncSettings?.enabled]);
+
+  const handleBeforeClassSwitch = useCallback(async () => {
+    if (!hasUnfinishedDriveSync()) return true;
+    const ok = window.confirm(
+      '동기화 중입니다. 이대로 이동하면 다른 기기에서 이 변경이 보이지 않을 수 있습니다. 잠시 기다리시겠습니까?',
+    );
+    if (!ok) return false;
+    await Promise.race([syncToCloud(), new Promise((resolve) => setTimeout(resolve, 5000))]);
+    return true;
+  }, [hasUnfinishedDriveSync, syncToCloud]);
+
+  useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!hasUnfinishedDriveSync()) return;
+      event.preventDefault();
+      event.returnValue = '동기화 중입니다';
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasUnfinishedDriveSync]);
 
   return (
     <div className="h-full flex flex-col -m-8">
@@ -62,7 +97,10 @@ export function ClassManagementPage() {
       <div className="flex-1 flex gap-6 min-h-0 p-8">
         {/* 왼쪽: 학급 리스트 */}
         <div className="w-72 shrink-0 bg-sp-card border border-sp-border rounded-xl overflow-hidden flex flex-col">
-          <ClassList onAddClass={() => setShowAddModal(true)} />
+          <ClassList
+            onAddClass={() => setShowAddModal(true)}
+            onBeforeSelect={handleBeforeClassSwitch}
+          />
         </div>
 
         {/* 오른쪽: 탭 콘텐츠 */}
@@ -91,7 +129,11 @@ export function ClassManagementPage() {
               <div className="flex-1 overflow-y-auto">
                 {activeTab === 'roster' && <ClassRosterTab classId={selectedClassId} />}
                 {activeTab === 'record' && (
-                    <ClassRecordTab classId={selectedClassId} />
+                  <ClassRecordTab
+                    classId={selectedClassId}
+                    onGoToRosterTab={() => setActiveTab('roster')}
+                    onGoToSeatingTab={() => setActiveTab('seating')}
+                  />
                 )}
                 {activeTab === 'attendance' && <AttendanceTab classId={selectedClassId} />}
                 {activeTab === 'seating' && <ClassSeatingTab classId={selectedClassId} />}
@@ -110,9 +152,7 @@ export function ClassManagementPage() {
       </div>
 
       {/* 학급 추가 모달 */}
-      {showAddModal && (
-        <AddClassModal onClose={() => setShowAddModal(false)} />
-      )}
+      {showAddModal && <AddClassModal onClose={() => setShowAddModal(false)} />}
     </div>
   );
 }

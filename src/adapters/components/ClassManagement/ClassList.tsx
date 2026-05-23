@@ -22,6 +22,7 @@ import { CSS } from '@dnd-kit/utilities';
 
 interface ClassListProps {
   onAddClass: () => void;
+  onBeforeSelect?: () => Promise<boolean> | boolean;
 }
 
 /* ── 드래그 가능한 학급 아이템 ── */
@@ -70,14 +71,9 @@ function SortableClassItem({
   classroomColors: SubjectColorMap | undefined;
   colorBy: 'subject' | 'classroom';
 }) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: cls.id });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: cls.id,
+  });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -144,16 +140,22 @@ function SortableClassItem({
             : 'hover:bg-sp-text/5 border-l-[3px] border-transparent'
         }`}
       >
-        <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${getCellDotColor(cls.subject, cls.name, colorBy, subjectColors, classroomColors)}`} />
+        <span
+          className={`w-2.5 h-2.5 rounded-full shrink-0 ${getCellDotColor(cls.subject, cls.name, colorBy, subjectColors, classroomColors)}`}
+        />
         <div className="flex-1 min-w-0">
-          <p className={`text-sm font-medium truncate ${isSelected ? 'text-sp-text' : 'text-sp-muted'}`}>
+          <p
+            className={`text-sm font-medium truncate ${isSelected ? 'text-sp-text' : 'text-sp-muted'}`}
+          >
             {cls.name}
           </p>
           <p className="text-xs text-sp-muted/70 truncate">{cls.subject}</p>
         </div>
         {isSelected ? (
           <span className="flex items-center gap-1 shrink-0">
-            <span className="material-symbols-outlined text-icon-sm text-sp-accent">check_circle</span>
+            <span className="material-symbols-outlined text-icon-sm text-sp-accent">
+              check_circle
+            </span>
             <span className="text-caption text-sp-accent font-medium bg-sp-accent/10 px-1.5 py-0.5 rounded-full">
               {cls.students.length}명
             </span>
@@ -182,7 +184,10 @@ function SortableClassItem({
 
       {/* 컨텍스트 메뉴 */}
       {menuOpenId === cls.id && (
-        <div ref={menuRef as React.RefObject<HTMLDivElement>} className="absolute right-2 top-full mt-1 z-20 bg-sp-card border border-sp-border rounded-xl shadow-lg py-1 min-w-[100px]">
+        <div
+          ref={menuRef as React.RefObject<HTMLDivElement>}
+          className="absolute right-2 top-full mt-1 z-20 bg-sp-card border border-sp-border rounded-xl shadow-lg py-1 min-w-[100px]"
+        >
           <button
             onClick={() => onStartEdit(cls.id)}
             className="w-full flex items-center gap-2 px-3 py-2 text-xs text-sp-text hover:bg-sp-text/5 transition-colors"
@@ -230,7 +235,7 @@ function SortableClassItem({
 }
 
 /* ── 메인 ClassList ── */
-export function ClassList({ onAddClass }: ClassListProps) {
+export function ClassList({ onAddClass, onBeforeSelect }: ClassListProps) {
   const classes = useTeachingClassStore((s) => s.classes);
   const selectedClassId = useTeachingClassStore((s) => s.selectedClassId);
   const selectClass = useTeachingClassStore((s) => s.selectClass);
@@ -267,19 +272,31 @@ export function ClassList({ onAddClass }: ClassListProps) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [menuOpenId]);
 
-  const handleSelect = useCallback((id: string) => {
-    selectClass(id);
-    setMenuOpenId(null);
-  }, [selectClass]);
+  const handleSelect = useCallback(
+    async (id: string) => {
+      if (id === selectedClassId) {
+        setMenuOpenId(null);
+        return;
+      }
+      const canSelect = await onBeforeSelect?.();
+      if (canSelect === false) return;
+      selectClass(id);
+      setMenuOpenId(null);
+    },
+    [onBeforeSelect, selectClass, selectedClassId],
+  );
 
-  const startEdit = useCallback((id: string) => {
-    const cls = classes.find((c) => c.id === id);
-    if (!cls) return;
-    setEditingId(id);
-    setEditName(cls.name);
-    setEditSubject(cls.subject);
-    setMenuOpenId(null);
-  }, [classes]);
+  const startEdit = useCallback(
+    (id: string) => {
+      const cls = classes.find((c) => c.id === id);
+      if (!cls) return;
+      setEditingId(id);
+      setEditName(cls.name);
+      setEditSubject(cls.subject);
+      setMenuOpenId(null);
+    },
+    [classes],
+  );
 
   const saveEdit = useCallback(async () => {
     if (!editingId) return;
@@ -300,47 +317,48 @@ export function ClassList({ onAddClass }: ClassListProps) {
     setEditingId(null);
   }, []);
 
-  const handleDelete = useCallback(async (id: string) => {
-    await deleteClass(id);
-    setConfirmDeleteId(null);
-    setMenuOpenId(null);
-  }, [deleteClass]);
+  const handleDelete = useCallback(
+    async (id: string) => {
+      await deleteClass(id);
+      setConfirmDeleteId(null);
+      setMenuOpenId(null);
+    },
+    [deleteClass],
+  );
 
-  const handleDragEnd = useCallback((event: DragEndEvent) => {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
+  const handleDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event;
+      if (!over || active.id === over.id) return;
 
-    const oldIndex = classes.findIndex((c) => c.id === active.id);
-    const newIndex = classes.findIndex((c) => c.id === over.id);
-    if (oldIndex === -1 || newIndex === -1) return;
+      const oldIndex = classes.findIndex((c) => c.id === active.id);
+      const newIndex = classes.findIndex((c) => c.id === over.id);
+      if (oldIndex === -1 || newIndex === -1) return;
 
-    const reordered = arrayMove(classes.map((c) => c.id), oldIndex, newIndex);
-    void reorderClasses(reordered);
-  }, [classes, reorderClasses]);
+      const reordered = arrayMove(
+        classes.map((c) => c.id),
+        oldIndex,
+        newIndex,
+      );
+      void reorderClasses(reordered);
+    },
+    [classes, reorderClasses],
+  );
 
   return (
     <div className="flex flex-col h-full">
       <div className="flex-1 overflow-y-auto px-2 py-2 space-y-1">
         {classes.length === 0 && (
-          <p className="text-sp-muted text-xs text-center py-8">
-            등록된 학급이 없습니다
-          </p>
+          <p className="text-sp-muted text-xs text-center py-8">등록된 학급이 없습니다</p>
         )}
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragEnd={handleDragEnd}
-        >
-          <SortableContext
-            items={classes.map((c) => c.id)}
-            strategy={verticalListSortingStrategy}
-          >
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={classes.map((c) => c.id)} strategy={verticalListSortingStrategy}>
             {classes.map((cls) => (
               <SortableClassItem
                 key={cls.id}
                 cls={cls}
                 isSelected={selectedClassId === cls.id}
-                onSelect={handleSelect}
+                onSelect={(id) => void handleSelect(id)}
                 isEditing={editingId === cls.id}
                 editName={editName}
                 editSubject={editSubject}

@@ -13,9 +13,15 @@ const VIEW_TABS: { id: RecordViewMode; icon: string; label: string }[] = [
 
 interface ClassRecordTabProps {
   classId: string;
+  onGoToRosterTab?: () => void;
+  onGoToSeatingTab?: () => void;
 }
 
-export function ClassRecordTab({ classId }: ClassRecordTabProps) {
+export function ClassRecordTab({
+  classId,
+  onGoToRosterTab,
+  onGoToSeatingTab,
+}: ClassRecordTabProps) {
   const [viewMode, setViewMode] = useState<RecordViewMode>('input');
 
   return (
@@ -28,9 +34,7 @@ export function ClassRecordTab({ classId }: ClassRecordTabProps) {
               key={tab.id}
               onClick={() => setViewMode(tab.id)}
               className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                viewMode === tab.id
-                  ? 'bg-sp-accent text-white'
-                  : 'text-sp-muted hover:text-sp-text'
+                viewMode === tab.id ? 'bg-sp-accent text-white' : 'text-sp-muted hover:text-sp-text'
               }`}
             >
               <span>{tab.icon}</span>
@@ -42,7 +46,13 @@ export function ClassRecordTab({ classId }: ClassRecordTabProps) {
 
       {/* 뷰 콘텐츠 */}
       <div className="flex-1 min-h-0">
-        {viewMode === 'input' && <ClassRecordInputView classId={classId} />}
+        {viewMode === 'input' && (
+          <ClassRecordInputView
+            classId={classId}
+            onGoToRosterTab={onGoToRosterTab}
+            onGoToSeatingTab={onGoToSeatingTab}
+          />
+        )}
         {viewMode === 'stats' && <ClassRecordStatsView classId={classId} />}
         {viewMode === 'search' && <ClassRecordSearchView classId={classId} />}
       </div>

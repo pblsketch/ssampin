@@ -34,7 +34,10 @@ function getFilterRange(filter: PeriodFilter): { start: string | null; end: stri
     };
   }
   if (filter === 'month') {
-    return { start: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`, end: null };
+    return {
+      start: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`,
+      end: null,
+    };
   }
   if (filter === 'semester') {
     const month = now.getMonth() + 1;
@@ -53,6 +56,8 @@ const ATT_STATUSES: { key: AttendanceStatus; label: string; color: string }[] = 
   { key: 'classAbsence', label: '결과', color: 'text-purple-400' },
 ];
 
+const skeletonRows = Array.from({ length: 4 }, (_, index) => index);
+
 interface ClassRecordStatsViewProps {
   classId: string;
 }
@@ -69,9 +74,7 @@ export function ClassRecordStatsView({ classId }: ClassRecordStatsViewProps) {
   const cls = useMemo(() => classes.find((c) => c.id === classId), [classes, classId]);
   const students = useMemo(() => {
     if (!cls) return [];
-    return [...cls.students]
-      .filter(isStudentActive)
-      .sort((a, b) => a.number - b.number);
+    return [...cls.students].filter(isStudentActive).sort((a, b) => a.number - b.number);
   }, [cls]);
 
   const dateRange = useMemo(() => {
@@ -85,7 +88,12 @@ export function ClassRecordStatsView({ classId }: ClassRecordStatsViewProps) {
     for (const s of students) {
       stats.set(studentKey(s), { present: 0, absent: 0, late: 0, earlyLeave: 0, classAbsence: 0 });
     }
-    const filtered = attendanceRecords.filter((r) => r.classId === classId && (!dateRange.start || r.date >= dateRange.start) && (!dateRange.end || r.date <= dateRange.end));
+    const filtered = attendanceRecords.filter(
+      (r) =>
+        r.classId === classId &&
+        (!dateRange.start || r.date >= dateRange.start) &&
+        (!dateRange.end || r.date <= dateRange.end),
+    );
     for (const record of filtered) {
       for (const sa of record.students) {
         const key = studentKey(sa);
@@ -104,7 +112,12 @@ export function ClassRecordStatsView({ classId }: ClassRecordStatsViewProps) {
       for (const t of DEFAULT_OBSERVATION_TAGS) tagMap[t] = 0;
       stats.set(studentKey(s), { total: 0, tags: tagMap });
     }
-    const filtered = observationRecords.filter((r) => r.classId === classId && (!dateRange.start || r.date >= dateRange.start) && (!dateRange.end || r.date <= dateRange.end));
+    const filtered = observationRecords.filter(
+      (r) =>
+        r.classId === classId &&
+        (!dateRange.start || r.date >= dateRange.start) &&
+        (!dateRange.end || r.date <= dateRange.end),
+    );
     for (const r of filtered) {
       const entry = stats.get(r.studentId);
       if (!entry) continue;
@@ -116,22 +129,35 @@ export function ClassRecordStatsView({ classId }: ClassRecordStatsViewProps) {
     return stats;
   }, [observationRecords, classId, students, dateRange]);
 
+  if (!cls) {
+    return (
+      <div className="space-y-3 animate-pulse" aria-label="통계를 불러오는 중입니다">
+        <p className="text-xs text-sp-muted">통계를 불러오는 중입니다</p>
+        {skeletonRows.map((row) => (
+          <div key={row} className="h-10 rounded-lg bg-sp-surface border border-sp-border" />
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       {/* 기간 필터 */}
       <div className="flex items-center gap-1 flex-wrap">
-        {([
+        {[
           { id: 'all' as const, label: '전체' },
           { id: 'semester' as const, label: '이번 학기' },
           { id: 'month' as const, label: '이번 달' },
           { id: 'week' as const, label: '이번 주' },
           { id: 'custom' as const, label: '직접 설정' },
-        ]).map((f) => (
+        ].map((f) => (
           <button
             key={f.id}
             onClick={() => setFilter(f.id)}
             className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-              filter === f.id ? 'bg-sp-accent text-white' : 'bg-sp-surface text-sp-muted hover:text-sp-text'
+              filter === f.id
+                ? 'bg-sp-accent text-white'
+                : 'bg-sp-surface text-sp-muted hover:text-sp-text'
             }`}
           >
             {f.label}
@@ -173,7 +199,9 @@ export function ClassRecordStatsView({ classId }: ClassRecordStatsViewProps) {
                 <th className="px-4 py-2 text-left font-medium">번호</th>
                 <th className="px-4 py-2 text-left font-medium">이름</th>
                 {ATT_STATUSES.map((s) => (
-                  <th key={s.key} className={`px-3 py-2 text-center font-medium ${s.color}`}>{s.label}</th>
+                  <th key={s.key} className={`px-3 py-2 text-center font-medium ${s.color}`}>
+                    {s.label}
+                  </th>
                 ))}
               </tr>
             </thead>
@@ -214,7 +242,9 @@ export function ClassRecordStatsView({ classId }: ClassRecordStatsViewProps) {
                 <th className="px-4 py-2 text-left font-medium">이름</th>
                 <th className="px-3 py-2 text-center font-medium text-sp-accent">기록 수</th>
                 {DEFAULT_OBSERVATION_TAGS.map((tag) => (
-                  <th key={tag} className="px-3 py-2 text-center font-medium">{tag}</th>
+                  <th key={tag} className="px-3 py-2 text-center font-medium">
+                    {tag}
+                  </th>
                 ))}
               </tr>
             </thead>
@@ -226,7 +256,9 @@ export function ClassRecordStatsView({ classId }: ClassRecordStatsViewProps) {
                   <tr key={sKey} className="hover:bg-sp-text/[0.02]">
                     <td className="px-4 py-2 text-sp-muted">{s.number}</td>
                     <td className="px-4 py-2 text-sp-text">{s.name}</td>
-                    <td className="px-3 py-2 text-center text-sp-accent font-medium">{stat?.total ?? 0}</td>
+                    <td className="px-3 py-2 text-center text-sp-accent font-medium">
+                      {stat?.total ?? 0}
+                    </td>
                     {DEFAULT_OBSERVATION_TAGS.map((tag) => (
                       <td key={tag} className="px-3 py-2 text-center text-sp-muted">
                         {stat?.tags[tag] ?? 0}

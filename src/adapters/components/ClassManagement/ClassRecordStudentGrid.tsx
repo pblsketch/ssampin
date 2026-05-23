@@ -17,6 +17,7 @@ interface ClassRecordStudentGridProps {
   onSelectStudent: (key: string) => void;
   attendanceMap: Map<string, AttendanceStatus>;
   recordCountMap: Map<string, number>;
+  onCreateSeating?: () => void;
 }
 
 export function ClassRecordStudentGrid({
@@ -25,29 +26,38 @@ export function ClassRecordStudentGrid({
   onSelectStudent,
   attendanceMap,
   recordCountMap,
+  onCreateSeating,
 }: ClassRecordStudentGridProps) {
   const classes = useTeachingClassStore((s) => s.classes);
   const cls = useMemo(() => classes.find((c) => c.id === classId), [classes, classId]);
+  const studentMap = useMemo(() => {
+    const m = new Map<string, { number: number; name: string }>();
+    for (const s of cls?.students ?? []) {
+      m.set(studentKey(s), { number: s.number, name: s.name });
+    }
+    return m;
+  }, [cls?.students]);
 
   if (!cls?.seating) {
     return (
-      <div className="flex flex-col items-center justify-center py-12 text-sp-muted">
+      <div className="flex flex-col items-center justify-center py-12 px-4 text-center text-sp-muted">
         <span className="material-symbols-outlined text-3xl mb-2 opacity-30">grid_view</span>
-        <p className="text-xs">좌석배치를 먼저 설정하세요</p>
+        <p className="text-xs font-medium text-sp-text">좌석배치를 먼저 설정하세요</p>
         <p className="text-caption mt-1">좌석배치 탭에서 배치를 만든 뒤 사용할 수 있습니다</p>
+        {onCreateSeating && (
+          <button
+            type="button"
+            onClick={onCreateSeating}
+            className="mt-3 px-3 py-1.5 rounded-lg bg-sp-accent text-white text-xs font-medium hover:brightness-110 transition-all"
+          >
+            좌석배치 만들러 가기
+          </button>
+        )}
       </div>
     );
   }
 
   const { rows, cols, seats } = cls.seating;
-
-  const studentMap = useMemo(() => {
-    const m = new Map<string, { number: number; name: string }>();
-    for (const s of cls.students) {
-      m.set(studentKey(s), { number: s.number, name: s.name });
-    }
-    return m;
-  }, [cls.students]);
 
   return (
     <div className="flex flex-col items-center gap-1 p-2">
