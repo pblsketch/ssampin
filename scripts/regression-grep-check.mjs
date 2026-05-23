@@ -228,6 +228,15 @@ const absenceChecks = [
     patterns: [/const\s+SAMPLE_STUDENTS\s*=/],
     fileFilter: (path) => /useStudentStore\.ts$/.test(path),
   },
+  {
+    // 회귀 #25 — Electron file:// 환경에서 `/mode-preview/*.svg` 절대 경로는
+    // `file:///mode-preview/*.svg`로 해석되어 위젯 모드 팝오버 썸네일이 깨진다.
+    // `mode-preview/*.svg` 상대 경로를 써야 dist/mode-preview 로 정상 해석된다.
+    name: 'REGRESSION #25: 위젯 모드 미리보기 이미지는 file:// 호환 상대 경로를 사용',
+    roots: ['src/widgets', 'src/adapters/components/Widget', 'src/adapters/components/Settings'],
+    extensions: ['.ts', '.tsx'],
+    patterns: [/['"`]\/mode-preview\//],
+  },
 ];
 
 // ============================================================

@@ -102,12 +102,12 @@ export function WidgetContextMenu({ x, y, onClose, onShowModeTour }: WidgetConte
         </div>
         <div className="flex flex-col gap-0.5 pl-1">
           {[
-            { value: 'normal' as const, label: '일반', preview: '/mode-preview/normal.svg' },
-            { value: 'topmost' as const, label: '항상 위에', preview: '/mode-preview/topmost.svg' },
+            { value: 'normal' as const, label: '일반', preview: 'mode-preview/normal.svg' },
+            { value: 'topmost' as const, label: '항상 위에', preview: 'mode-preview/topmost.svg' },
             {
               value: 'native-desktop' as const,
               label: '바탕화면 아이콘 아래',
-              preview: '/mode-preview/native-desktop.svg',
+              preview: 'mode-preview/native-desktop.svg',
               winOnly: true,
             },
           ].map((opt) => {

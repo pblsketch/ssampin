@@ -25,7 +25,7 @@ interface ModeOption {
   readonly value: WidgetDesktopMode;
   readonly label: string;
   readonly desc: string;
-  readonly preview: string; // svg URL (public 경로)
+  readonly preview: string; // public/mode-preview 상대 경로
   readonly winOnly?: boolean;
 }
 
@@ -34,19 +34,19 @@ const MODE_OPTIONS: readonly ModeOption[] = [
     value: 'normal',
     label: '일반',
     desc: '평범한 창처럼 — 다른 창에 가려질 수 있어요.',
-    preview: '/mode-preview/normal.svg',
+    preview: 'mode-preview/normal.svg',
   },
   {
     value: 'topmost',
     label: '항상 위에',
     desc: '다른 창 위에 고정 — 수업 중에도 안 가려져요.',
-    preview: '/mode-preview/topmost.svg',
+    preview: 'mode-preview/topmost.svg',
   },
   {
     value: 'native-desktop',
     label: '바탕화면 아이콘 아래',
     desc: '바탕화면 작업판처럼 깔리고, 아이콘은 위에서 그대로 클릭 가능. Windows 전용.',
-    preview: '/mode-preview/native-desktop.svg',
+    preview: 'mode-preview/native-desktop.svg',
     winOnly: true,
   },
 ];

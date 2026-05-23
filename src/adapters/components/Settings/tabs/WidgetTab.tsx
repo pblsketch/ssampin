@@ -71,19 +71,19 @@ export function WidgetTab({ draft, patch }: Props) {
       value: 'normal',
       label: '일반',
       desc: '다른 창에 가려질 수 있습니다. Win+D를 눌러도 사라지지 않습니다.',
-      preview: '/mode-preview/normal.svg',
+      preview: 'mode-preview/normal.svg',
     },
     {
       value: 'topmost',
       label: '항상 위에',
       desc: '항상 다른 창 위에 표시됩니다. Win+D를 눌러도 사라지지 않습니다.',
-      preview: '/mode-preview/topmost.svg',
+      preview: 'mode-preview/topmost.svg',
     },
     {
       value: 'native-desktop',
       label: '바탕화면 아이콘 아래',
       desc: '쌤핀 위젯을 바탕화면 작업판처럼 깔고, 바탕화면 아이콘은 위에서 그대로 클릭·이동할 수 있습니다. Windows 전용 기능입니다.',
-      preview: '/mode-preview/native-desktop.svg',
+      preview: 'mode-preview/native-desktop.svg',
       winOnly: true,
     },
   ];
