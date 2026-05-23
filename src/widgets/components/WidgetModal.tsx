@@ -45,6 +45,18 @@ function getEscapeApi(): WidgetEscapeApi | null {
   return api ?? null;
 }
 
+const EDITABLE_INPUT_SELECTOR =
+  'input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]), textarea, select, [contenteditable="true"]';
+
+function isEditableModalTarget(
+  target: EventTarget | null,
+  modalRoot: HTMLDivElement | null,
+): boolean {
+  if (!(target instanceof HTMLElement) || !modalRoot?.contains(target)) return false;
+  if (target.isContentEditable) return true;
+  return Boolean(target.closest(EDITABLE_INPUT_SELECTOR));
+}
+
 export type WidgetModalSize = 'sm' | 'md' | 'lg' | 'fullscreen';
 
 /**
@@ -135,6 +147,8 @@ export function WidgetModal({
   readOnly = false,
 }: WidgetModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);
+  const modalInputRequestedRef = useRef(false);
+  const releaseModalInputTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isDesktopWidget = useDesktopWidgetContextStore((s) => s.isDesktopWidget);
 
   // saveAndClose는 매 렌더 새로 생성하되, 캡처된 props는 호출 시점 값.
@@ -196,9 +210,54 @@ export function WidgetModal({
     if (!isOpen || !isHead || !isDesktopWidget) return;
     const api = getEscapeApi();
     if (!api?.requestModalInput || !api.releaseModalInput) return;
-    void api.requestModalInput();
-    return () => {
+
+    const clearReleaseTimer = () => {
+      if (releaseModalInputTimerRef.current === null) return;
+      clearTimeout(releaseModalInputTimerRef.current);
+      releaseModalInputTimerRef.current = null;
+    };
+
+    const requestInputMode = () => {
+      clearReleaseTimer();
+      if (modalInputRequestedRef.current) return;
+      modalInputRequestedRef.current = true;
+      void api.requestModalInput?.();
+    };
+
+    const releaseInputMode = () => {
+      clearReleaseTimer();
+      if (!modalInputRequestedRef.current) return;
+      modalInputRequestedRef.current = false;
       void api.releaseModalInput?.();
+    };
+
+    const handleFocusIn = (event: FocusEvent) => {
+      if (isEditableModalTarget(event.target, modalRef.current)) {
+        requestInputMode();
+      }
+    };
+
+    const handleFocusOut = () => {
+      clearReleaseTimer();
+      releaseModalInputTimerRef.current = setTimeout(() => {
+        releaseModalInputTimerRef.current = null;
+        if (!isEditableModalTarget(document.activeElement, modalRef.current)) {
+          releaseInputMode();
+        }
+      }, 0);
+    };
+
+    document.addEventListener('focusin', handleFocusIn, true);
+    document.addEventListener('focusout', handleFocusOut, true);
+
+    if (isEditableModalTarget(document.activeElement, modalRef.current)) {
+      requestInputMode();
+    }
+
+    return () => {
+      document.removeEventListener('focusin', handleFocusIn, true);
+      document.removeEventListener('focusout', handleFocusOut, true);
+      releaseInputMode();
     };
   }, [isOpen, isHead, isDesktopWidget]);
 

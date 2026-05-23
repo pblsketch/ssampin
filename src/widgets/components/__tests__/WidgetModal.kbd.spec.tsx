@@ -293,8 +293,18 @@ describe('AC14 — WidgetModal 키보드 상호작용', () => {
       await flushMicrotasks();
     });
 
-    expect(requestModalInput).toHaveBeenCalledTimes(1);
+    expect(requestModalInput).not.toHaveBeenCalled();
     expect(requestModalEscape).toHaveBeenCalledTimes(1);
+
+    const input = document.querySelector<HTMLInputElement>('[data-testid="text-input"]');
+    expect(input).not.toBeNull();
+
+    await act(async () => {
+      input!.focus();
+      await flushMicrotasks();
+    });
+
+    expect(requestModalInput).toHaveBeenCalledTimes(1);
 
     act(() => {
       ctx.root.unmount();
@@ -304,6 +314,45 @@ describe('AC14 — WidgetModal 키보드 상호작용', () => {
     });
 
     expect(releaseModalInput).toHaveBeenCalledTimes(1);
+    expect(releaseModalEscape).toHaveBeenCalledTimes(1);
+  });
+
+  it('7. native-desktop widget modal does not request input mode when closed without editable focus', async () => {
+    const requestModalInput = vi.fn(() => Promise.resolve());
+    const releaseModalInput = vi.fn(() => Promise.resolve());
+    const requestModalEscape = vi.fn(() => Promise.resolve());
+    const releaseModalEscape = vi.fn(() => Promise.resolve());
+    const onModalEscape = vi.fn(() => () => {});
+
+    Object.defineProperty(window, 'electronAPI', {
+      configurable: true,
+      value: {
+        requestModalInput,
+        releaseModalInput,
+        requestModalEscape,
+        releaseModalEscape,
+        onModalEscape,
+      } as unknown as ElectronAPI,
+    });
+    useDesktopWidgetContextStore.setState({ isDesktopWidget: true });
+
+    const onClose = vi.fn();
+    renderModal(ctx, { onClose });
+
+    await act(async () => {
+      await flushMicrotasks();
+    });
+
+    act(() => {
+      ctx.root.unmount();
+    });
+    await act(async () => {
+      await flushMicrotasks();
+    });
+
+    expect(requestModalInput).not.toHaveBeenCalled();
+    expect(releaseModalInput).not.toHaveBeenCalled();
+    expect(requestModalEscape).toHaveBeenCalledTimes(1);
     expect(releaseModalEscape).toHaveBeenCalledTimes(1);
   });
 });
