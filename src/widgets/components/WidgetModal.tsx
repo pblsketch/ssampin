@@ -52,9 +52,18 @@ function isEditableModalTarget(
   target: EventTarget | null,
   modalRoot: HTMLDivElement | null,
 ): boolean {
-  if (!(target instanceof HTMLElement) || !modalRoot?.contains(target)) return false;
-  if (target.isContentEditable) return true;
-  return Boolean(target.closest(EDITABLE_INPUT_SELECTOR));
+  return getEditableModalTarget(target, modalRoot) !== null;
+}
+
+function getEditableModalTarget(
+  target: EventTarget | null,
+  modalRoot: HTMLDivElement | null,
+): HTMLElement | null {
+  if (!(target instanceof HTMLElement) || !modalRoot?.contains(target)) return null;
+  if (target.isContentEditable) return target;
+  const editable = target.closest<HTMLElement>(EDITABLE_INPUT_SELECTOR);
+  if (!editable || !modalRoot.contains(editable)) return null;
+  return editable;
 }
 
 export type WidgetModalSize = 'sm' | 'md' | 'lg' | 'fullscreen';
@@ -148,7 +157,6 @@ export function WidgetModal({
 }: WidgetModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);
   const modalInputRequestedRef = useRef(false);
-  const releaseModalInputTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isDesktopWidget = useDesktopWidgetContextStore((s) => s.isDesktopWidget);
 
   // saveAndClose는 매 렌더 새로 생성하되, 캡처된 props는 호출 시점 값.
@@ -211,21 +219,24 @@ export function WidgetModal({
     const api = getEscapeApi();
     if (!api?.requestModalInput || !api.releaseModalInput) return;
 
-    const clearReleaseTimer = () => {
-      if (releaseModalInputTimerRef.current === null) return;
-      clearTimeout(releaseModalInputTimerRef.current);
-      releaseModalInputTimerRef.current = null;
-    };
+    const requestInputMode = (focusTarget?: HTMLElement) => {
+      let request: Promise<void>;
+      if (modalInputRequestedRef.current) {
+        request = Promise.resolve();
+      } else {
+        modalInputRequestedRef.current = true;
+        request = Promise.resolve(api.requestModalInput?.()).then(() => undefined);
+      }
 
-    const requestInputMode = () => {
-      clearReleaseTimer();
-      if (modalInputRequestedRef.current) return;
-      modalInputRequestedRef.current = true;
-      void api.requestModalInput?.();
+      if (focusTarget) {
+        void request.finally(() => {
+          if (!isEditableModalTarget(focusTarget, modalRef.current)) return;
+          focusTarget.focus({ preventScroll: true });
+        });
+      }
     };
 
     const releaseInputMode = () => {
-      clearReleaseTimer();
       if (!modalInputRequestedRef.current) return;
       modalInputRequestedRef.current = false;
       void api.releaseModalInput?.();
@@ -237,18 +248,16 @@ export function WidgetModal({
       }
     };
 
-    const handleFocusOut = () => {
-      clearReleaseTimer();
-      releaseModalInputTimerRef.current = setTimeout(() => {
-        releaseModalInputTimerRef.current = null;
-        if (!isEditableModalTarget(document.activeElement, modalRef.current)) {
-          releaseInputMode();
-        }
-      }, 0);
+    const handleEditablePointerDown = (event: Event) => {
+      const editableTarget = getEditableModalTarget(event.target, modalRef.current);
+      if (editableTarget) {
+        requestInputMode(editableTarget);
+      }
     };
 
     document.addEventListener('focusin', handleFocusIn, true);
-    document.addEventListener('focusout', handleFocusOut, true);
+    document.addEventListener('pointerdown', handleEditablePointerDown, true);
+    document.addEventListener('mousedown', handleEditablePointerDown, true);
 
     if (isEditableModalTarget(document.activeElement, modalRef.current)) {
       requestInputMode();
@@ -256,7 +265,8 @@ export function WidgetModal({
 
     return () => {
       document.removeEventListener('focusin', handleFocusIn, true);
-      document.removeEventListener('focusout', handleFocusOut, true);
+      document.removeEventListener('pointerdown', handleEditablePointerDown, true);
+      document.removeEventListener('mousedown', handleEditablePointerDown, true);
       releaseInputMode();
     };
   }, [isOpen, isHead, isDesktopWidget]);

@@ -300,11 +300,12 @@ describe('AC14 — WidgetModal 키보드 상호작용', () => {
     expect(input).not.toBeNull();
 
     await act(async () => {
-      input!.focus();
+      input!.dispatchEvent(new Event('pointerdown', { bubbles: true }));
       await flushMicrotasks();
     });
 
     expect(requestModalInput).toHaveBeenCalledTimes(1);
+    expect(document.activeElement).toBe(input);
 
     act(() => {
       ctx.root.unmount();

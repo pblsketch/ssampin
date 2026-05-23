@@ -32,10 +32,10 @@ const presenceChecks = [
   {
     // REGRESSION #27 (2026-05-23): opening the modal must not switch the whole
     // native-desktop widget window to topmost. Request text-input mode only when
-    // an editable control actually receives focus.
+    // the user interacts with an editable control.
     file: 'src/widgets/components/WidgetModal.tsx',
-    pattern: /focusin[\s\S]{0,900}?requestInputMode/,
-    name: 'REGRESSION #27: native-desktop modal input mode starts on editable focus, not modal open',
+    pattern: /pointerdown[\s\S]{0,900}?requestInputMode/,
+    name: 'REGRESSION #27: native-desktop modal input mode starts on editable pointer down, not modal open',
   },
   {
     file: 'src/usecases/realtimeWall/BroadcastWallState.ts',
