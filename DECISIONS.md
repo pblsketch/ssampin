@@ -84,3 +84,36 @@
   - 4차 fix: `node scripts/build-electron.mjs` 명시적 실행 후 dev 재시작 → blink convention 정답 확정.
 - **Follow-up (별도 PDCA 권장)**:
   - `scripts/electron-dev.mjs`에 `electron/` 폴더 watch + `build-electron.mjs` 자동 호출 + electron 자동 재실행 추가. 본 함정은 PROGRESS.md(2026-05-21 realtime-tool-student-page-health 빌드 노트)에도 이미 기록된 반복 사고로, 인프라 차원에서 해소 필요.
+
+---
+
+## ADR-008: native-desktop resize SetWindowPos sync 채택 — Electron setBounds WS_CHILD 회귀
+
+- **상태**: active
+- **일자**: 2026-05-23
+- **결정**:
+  - native-desktop(WS_CHILD on WorkerW) 모드의 위젯 가장자리 resize MOUSEMOVE 경로에서 `BrowserWindow.setBounds({x, y, width, height})` 호출을 **`win32 SetWindowPos` sync 호출 (`SWP_ASYNCWINDOWPOS` 제외)** 로 전환한다.
+  - 신규 헬퍼 `moveAndResizeWidgetSync(hwnd, x, y, w, h)`를 `electron/platform/win32Desktop.ts`에 추가하며, `moveWidget`(drag 경로용, ASYNC 유지)과는 별개로 보존한다.
+  - resize 산식 자체는 순수 함수 `computeResizeBounds(edge, start, dx, dy, minW, minH)`로 추출해 회귀 가드 단위 테스트를 동봉(5케이스).
+
+- **근거**:
+  - 사용자 신고(2026-05-23): "바탕화면 위젯 모드에서 위젯 왼쪽 테두리 드래그 시 위젯이 한 번에 사라짐". 작업 표시줄 "위젯 위치 초기화"로 복귀 → BrowserWindow는 살아 있고 좌표/사이즈만 비정상 상태.
+  - 진단: 단일 프레임 결정적 teleport. 누적 드리프트 아님 → clamp hysteresis 가설(B2) 폐기.
+  - right edge는 정상 → setBounds의 size-only call은 OK, origin+size 동시 변경에서만 회귀.
+  - drag 경로(같은 native SetWindowPos, ASYNC 플래그 포함)는 origin-only 변경이라 정상 동작 → sync 변형의 안전성 입증.
+  - WS_CHILD HWND + Electron BrowserWindow.setBounds 좌표계 mismatch가 결합되어 단일 프레임 teleport를 일으키는 것으로 진단.
+
+- **트레이드오프**:
+  - sync 호출은 매 MOUSEMOVE마다 OS 동기 대기 발생. 다만 resize는 사용자 의도적 드래그 동작이라 빈도가 drag보다 낮고, 정확성이 hot path 성능보다 우선.
+  - `cachedPhysicalBounds`를 setBounds 결과가 아닌 의도값으로 직접 갱신 → BrowserWindow.getBounds()와의 일시적 disconnect 가능. resize 종료 시 LBUTTONUP 분기의 `recalcPhysicalBounds` 호출로 재동기화하므로 누적 차이 없음.
+
+- **헛돈 추론 이력 (미래 회귀 차단용)**:
+  - 1차 fix(2026-05-07): `win32 SetWindowPos`의 `SWP_ASYNCWINDOWPOS` 플래그로 인한 origin+size race 회피 목적으로 Electron `setBounds`로 전환. 그러나 WS_CHILD HWND 환경에서 setBounds 자체가 새 단일 프레임 teleport 회귀를 만들었음을 사용자 신고로 확인.
+  - 2차 fix(2026-05-23, 본 ADR): `SWP_ASYNCWINDOWPOS`만 제외한 sync 변형(`moveAndResizeWidgetSync`)으로 두 race를 동시 해소.
+  - 교훈: WS_CHILD HWND 상태에서 Electron 추상화(BrowserWindow.setBounds)는 좌표계 가정이 어긋날 수 있다. native 경로가 더 예측 가능. drag/resize 동선이 같은 native API를 공유하도록 통일하면 회귀 노출 면적이 작아진다.
+
+- **검증 환경**: Electron 40.9.3 on Windows 11 24H2. 사용자 직접 재현 확인 필요.
+
+- **회귀 가드**:
+  - `electron/desktopWidgetManager.resize.test.ts` — 5 케이스(left edge clamp 미적용/적용, right edge, top-left corner, SWP flag SSOT 메타테스트).
+  - SWP flag 메타테스트는 ADR-007 패턴 차용 — 부호/플래그 SSOT 회귀 차단.

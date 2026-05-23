@@ -47,6 +47,14 @@ promo-styles-output/
 # 개인 작업 캡쳐 (경쟁사 UI 캡쳐 등 외부 자료)
 외부노트앱_캡쳐/
 
+# 외부 참고 도구 캡쳐 (외부 자료, 절대 commit 금지)
+clboard-*.png
+clboard-space-*.png
+rb-*.png
+
+# UI 스파이크 prototype (Phase 0 종료 시 별도 정리, 외부 참고 표현 포함)
+prototype/
+
 # 빌드 산출물 (학생 entry SPA)
 dist-student/
 dist-slides-student/
