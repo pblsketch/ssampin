@@ -17,7 +17,7 @@ interface ObservationState {
     date: string;
     content: string;
     tags: string[];
-  }) => Promise<void>;
+  }) => Promise<string>;
   updateRecord: (record: ObservationRecord) => Promise<void>;
   deleteRecord: (id: string) => Promise<void>;
   deleteByClassId: (classId: string) => Promise<void>;
@@ -65,6 +65,7 @@ export const useObservationStore = create<ObservationState>((set, get) => {
       };
       set((s) => ({ records: [...s.records, record] }));
       await manage.add(record);
+      return record.id;
     },
 
     updateRecord: async (record) => {
@@ -100,8 +101,8 @@ export const useObservationStore = create<ObservationState>((set, get) => {
     },
 
     getByStudent: (studentId, classId) => {
-      return get().records
-        .filter((r) => r.studentId === studentId && r.classId === classId)
+      return get()
+        .records.filter((r) => r.studentId === studentId && r.classId === classId)
         .sort((a, b) => b.date.localeCompare(a.date));
     },
 
@@ -110,8 +111,9 @@ export const useObservationStore = create<ObservationState>((set, get) => {
         (r) => r.studentId === studentId && r.classId === classId,
       );
       if (studentRecords.length === 0) return null;
-      return studentRecords.reduce((latest, r) =>
-        r.date > latest ? r.date : latest, studentRecords[0]!.date,
+      return studentRecords.reduce(
+        (latest, r) => (r.date > latest ? r.date : latest),
+        studentRecords[0]!.date,
       );
     },
 

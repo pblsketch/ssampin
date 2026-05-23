@@ -15,7 +15,11 @@ const STATUS_BADGE: Record<AttendanceStatus, string> = {
 };
 
 const STATUS_LABEL: Record<AttendanceStatus, string> = {
-  present: '출석', absent: '결석', late: '지각', earlyLeave: '조퇴', classAbsence: '결과',
+  present: '출석',
+  absent: '결석',
+  late: '지각',
+  earlyLeave: '조퇴',
+  classAbsence: '결과',
 };
 
 type CategoryFilter = 'all' | 'attendance' | 'observation';
@@ -46,7 +50,9 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
   const [tagFilter, setTagFilter] = useState<string[]>([]);
   const [keyword, setKeyword] = useState('');
-  const [periodFilter, setPeriodFilter] = useState<'all' | 'semester' | 'month' | 'week' | 'custom'>('all');
+  const [periodFilter, setPeriodFilter] = useState<
+    'all' | 'semester' | 'month' | 'week' | 'custom'
+  >('all');
   const [customStart, setCustomStart] = useState(() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
@@ -62,7 +68,9 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
   const loadObs = useObservationStore((s) => s.load);
   const customTags = useObservationStore((s) => s.customTags);
 
-  useEffect(() => { void loadObs(); }, [loadObs]);
+  useEffect(() => {
+    void loadObs();
+  }, [loadObs]);
 
   const cls = useMemo(() => classes.find((c) => c.id === classId), [classes, classId]);
   const students = useMemo(() => {
@@ -136,12 +144,19 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
     if (periodFilter === 'week') {
       const day = now.getDay();
       const diff = day === 0 ? 6 : day - 1;
-      const start = new Date(now); start.setDate(now.getDate() - diff);
-      const end = new Date(start); end.setDate(start.getDate() + 6);
-      const fmt = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const start = new Date(now);
+      start.setDate(now.getDate() - diff);
+      const end = new Date(start);
+      end.setDate(start.getDate() + 6);
+      const fmt = (d: Date) =>
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
       return { start: fmt(start), end: fmt(end) };
     }
-    if (periodFilter === 'month') return { start: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`, end: null };
+    if (periodFilter === 'month')
+      return {
+        start: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`,
+        end: null,
+      };
     // semester
     const month = now.getMonth() + 1;
     const semStart = month >= 3 && month < 9 ? 3 : 9;
@@ -157,20 +172,21 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
     if (dateRange.end) result = result.filter((r) => r.date <= dateRange.end!);
     if (studentFilter) result = result.filter((r) => r.studentKey === studentFilter);
     if (tagFilter.length > 0) {
-      result = result.filter((r) =>
-        r.type === 'observation' && r.tags?.some((t) => tagFilter.includes(t)),
+      result = result.filter(
+        (r) => r.type === 'observation' && r.tags?.some((t) => tagFilter.includes(t)),
       );
     }
     if (keyword.trim()) {
       const kw = keyword.trim().toLowerCase();
-      result = result.filter((r) =>
-        r.studentName.toLowerCase().includes(kw) ||
-        r.content?.toLowerCase().includes(kw) ||
-        r.memo?.toLowerCase().includes(kw),
+      result = result.filter(
+        (r) =>
+          r.studentName.toLowerCase().includes(kw) ||
+          r.content?.toLowerCase().includes(kw) ||
+          r.memo?.toLowerCase().includes(kw),
       );
     }
     return result;
-  }, [mixedRecords, studentFilter, tagFilter, keyword]);
+  }, [mixedRecords, studentFilter, tagFilter, keyword, dateRange.start, dateRange.end]);
 
   /* 날짜별 그룹핑 */
   const grouped = useMemo(() => {
@@ -197,21 +213,25 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
         >
           <option value="">전체 학생</option>
           {students.map((s) => (
-            <option key={studentKey(s)} value={studentKey(s)}>{s.number}번 {s.name}</option>
+            <option key={studentKey(s)} value={studentKey(s)}>
+              {s.number}번 {s.name}
+            </option>
           ))}
         </select>
 
         <div className="flex gap-1">
-          {([
+          {[
             { id: 'all' as const, label: '전체' },
             { id: 'attendance' as const, label: '출결' },
             { id: 'observation' as const, label: '특기사항' },
-          ]).map((c) => (
+          ].map((c) => (
             <button
               key={c.id}
               onClick={() => setCategoryFilter(c.id)}
               className={`px-2.5 py-1 rounded-lg text-detail font-medium transition-colors ${
-                categoryFilter === c.id ? 'bg-sp-accent text-white' : 'bg-sp-surface text-sp-muted hover:text-sp-text'
+                categoryFilter === c.id
+                  ? 'bg-sp-accent text-white'
+                  : 'bg-sp-surface text-sp-muted hover:text-sp-text'
               }`}
             >
               {c.label}
@@ -224,7 +244,11 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
             {allTags.map((tag) => (
               <button
                 key={tag}
-                onClick={() => setTagFilter((prev) => prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag])}
+                onClick={() =>
+                  setTagFilter((prev) =>
+                    prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag],
+                  )
+                }
                 className={`px-2 py-0.5 rounded-full text-caption font-medium transition-colors ${
                   tagFilter.includes(tag)
                     ? 'bg-sp-accent text-white'
@@ -250,18 +274,20 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
 
       {/* 기간 필터 */}
       <div className="flex items-center gap-1 flex-wrap">
-        {([
+        {[
           { id: 'all' as const, label: '전체' },
           { id: 'semester' as const, label: '이번 학기' },
           { id: 'month' as const, label: '이번 달' },
           { id: 'week' as const, label: '이번 주' },
           { id: 'custom' as const, label: '직접 설정' },
-        ]).map((f) => (
+        ].map((f) => (
           <button
             key={f.id}
             onClick={() => setPeriodFilter(f.id)}
             className={`px-2.5 py-1 rounded-lg text-detail font-medium transition-colors ${
-              periodFilter === f.id ? 'bg-sp-accent text-white' : 'bg-sp-surface text-sp-muted hover:text-sp-text'
+              periodFilter === f.id
+                ? 'bg-sp-accent text-white'
+                : 'bg-sp-surface text-sp-muted hover:text-sp-text'
             }`}
           >
             {f.label}
@@ -291,9 +317,7 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
       {/* 타임라인 */}
       <div className="space-y-4">
         {grouped.length === 0 ? (
-          <div className="py-12 text-center text-sm text-sp-muted">
-            조건에 맞는 기록이 없습니다
-          </div>
+          <div className="py-12 text-center text-sm text-sp-muted">조건에 맞는 기록이 없습니다</div>
         ) : (
           grouped.map((group) => (
             <div key={group.date}>
@@ -307,9 +331,13 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
                     className="bg-sp-surface border border-sp-border rounded-xl px-3 py-2.5"
                   >
                     <div className="flex items-center gap-2 mb-1">
-                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                        r.type === 'attendance' ? 'bg-amber-500/15 text-amber-400' : 'bg-blue-500/15 text-blue-400'
-                      }`}>
+                      <span
+                        className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                          r.type === 'attendance'
+                            ? 'bg-amber-500/15 text-amber-400'
+                            : 'bg-blue-500/15 text-blue-400'
+                        }`}
+                      >
                         {r.type === 'attendance' ? '출결' : '특기'}
                       </span>
                       <span className="text-xs font-medium text-sp-text">
@@ -317,17 +345,26 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
                       </span>
                       {r.type === 'attendance' && r.status && (
                         <>
-                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${STATUS_BADGE[r.status]}`}>
+                          <span
+                            className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${STATUS_BADGE[r.status]}`}
+                          >
                             {STATUS_LABEL[r.status]}
                           </span>
-                          {r.period && <span className="text-caption text-sp-muted">{r.period}교시</span>}
-                          {r.reason && <span className="text-caption text-sp-muted">({r.reason})</span>}
+                          {r.period && (
+                            <span className="text-caption text-sp-muted">{r.period}교시</span>
+                          )}
+                          {r.reason && (
+                            <span className="text-caption text-sp-muted">({r.reason})</span>
+                          )}
                         </>
                       )}
                       {r.type === 'observation' && r.tags && (
                         <div className="flex gap-1">
                           {r.tags.map((tag) => (
-                            <span key={tag} className="px-1.5 py-0.5 rounded-full text-[9px] font-medium bg-sp-accent/10 text-sp-accent">
+                            <span
+                              key={tag}
+                              className="px-1.5 py-0.5 rounded-full text-[9px] font-medium bg-sp-accent/10 text-sp-accent"
+                            >
                               {tag}
                             </span>
                           ))}
