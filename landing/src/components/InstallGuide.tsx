@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import FadeIn from './FadeIn';
+import WindowsProtectionAnimation from './WindowsProtectionAnimation';
 
 const steps = [
   {
@@ -288,7 +289,7 @@ export default function InstallGuide() {
                 <div
                   key={tc.id}
                   className={`overflow-hidden transition-all duration-300 ${
-                    openCase === tc.id ? 'mt-4 max-h-[500px] opacity-100' : 'max-h-0 opacity-0'
+                    openCase === tc.id ? 'mt-4 max-h-[1100px] opacity-100' : 'max-h-0 opacity-0'
                   }`}
                 >
                   <div className="rounded-lg border border-amber-300/70 bg-white/70 p-4">
@@ -299,16 +300,27 @@ export default function InstallGuide() {
                       {tc.description}
                     </p>
 
-                    <ol className="mt-3 space-y-2">
-                      {tc.steps.map((step, i) => (
-                        <li key={i} className="flex items-start gap-2.5 text-xs text-amber-800/85">
-                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-200 text-[0.65rem] font-bold text-amber-900">
-                            {i + 1}
-                          </span>
-                          <span className="pt-0.5">{step.text}</span>
-                        </li>
-                      ))}
-                    </ol>
+                    {tc.id === 'smartscreen' && (
+                      <div className="mt-4">
+                        <WindowsProtectionAnimation compact />
+                      </div>
+                    )}
+
+                    {tc.id !== 'smartscreen' && (
+                      <ol className="mt-3 space-y-2">
+                        {tc.steps.map((step, i) => (
+                          <li
+                            key={i}
+                            className="flex items-start gap-2.5 text-xs text-amber-800/85"
+                          >
+                            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-200 text-[0.65rem] font-bold text-amber-900">
+                              {i + 1}
+                            </span>
+                            <span className="pt-0.5">{step.text}</span>
+                          </li>
+                        ))}
+                      </ol>
+                    )}
 
                     {tc.extraTip && (
                       <div className="mt-3 rounded-md bg-amber-50 px-3 py-2">

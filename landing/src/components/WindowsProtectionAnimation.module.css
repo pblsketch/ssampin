@@ -1,0 +1,96 @@
+.infoTarget {
+  animation: smartscreen-info-target-pulse 5.6s ease-in-out infinite;
+}
+
+.runTarget {
+  animation: smartscreen-run-target-pulse 5.6s ease-in-out infinite;
+}
+
+.cursorInfo {
+  animation: smartscreen-cursor-info 5.6s ease-in-out infinite;
+}
+
+.cursorRun {
+  animation: smartscreen-cursor-run 5.6s ease-in-out infinite;
+}
+
+@keyframes smartscreen-info-target-pulse {
+  0%,
+  12%,
+  46%,
+  100% {
+    filter: brightness(1);
+    transform: scale(1);
+  }
+  31% {
+    filter: brightness(1.12);
+    transform: scale(1.02);
+  }
+}
+
+@keyframes smartscreen-run-target-pulse {
+  0%,
+  54%,
+  88%,
+  100% {
+    filter: brightness(1);
+    transform: scale(1);
+  }
+  73% {
+    filter: brightness(1.12);
+    transform: scale(1.02);
+  }
+}
+
+@keyframes smartscreen-cursor-info {
+  0%,
+  8% {
+    opacity: 0;
+    transform: translate(6rem, 1.4rem) scale(0.96);
+  }
+  16%,
+  28% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+  35% {
+    opacity: 1;
+    transform: translate(-0.12rem, 0.18rem) scale(0.9);
+  }
+  45%,
+  100% {
+    opacity: 0;
+    transform: translate(-0.12rem, 0.18rem) scale(0.9);
+  }
+}
+
+@keyframes smartscreen-cursor-run {
+  0%,
+  54% {
+    opacity: 0;
+    transform: translate(-6rem, -3.2rem) scale(0.96);
+  }
+  63%,
+  76% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+  83% {
+    opacity: 1;
+    transform: translate(-0.15rem, 0.15rem) scale(0.9);
+  }
+  93%,
+  100% {
+    opacity: 0;
+    transform: translate(-0.15rem, 0.15rem) scale(0.9);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .infoTarget,
+  .runTarget,
+  .cursorInfo,
+  .cursorRun {
+    animation: none;
+  }
+}

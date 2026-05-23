@@ -11,6 +11,7 @@ import {
   FALLBACK_DOWNLOAD_URL,
   MOBILE_URL,
 } from '@/config';
+import WindowsProtectionAnimation from './WindowsProtectionAnimation';
 
 interface DownloadButtonProps {
   variant?: 'primary' | 'white';
@@ -110,7 +111,7 @@ export default function DownloadButton({
   const primaryOs = os; // 'windows' | 'mac'
 
   return (
-    <div className="flex flex-col items-center gap-3">
+    <div className="flex w-full flex-col items-center gap-3">
       {/* Primary 버튼 (감지된 OS) */}
       <a
         href={primaryOs === 'mac' ? DOWNLOAD_URL_MAC_ARM : DOWNLOAD_URL}
@@ -233,7 +234,7 @@ export default function DownloadButton({
             </div>
           </details>
         ) : (
-          <details className="group mt-3 w-full max-w-md rounded-xl border border-amber-300/70 bg-amber-50 text-left">
+          <details className="group mt-3 w-full max-w-xl rounded-xl border border-amber-300/70 bg-amber-50 text-left">
             <summary className="flex min-h-[44px] cursor-pointer items-center gap-2 px-4 py-3 text-[0.85rem] font-medium text-amber-900 select-none">
               <span>⚠️</span>
               <span className="flex-1">다운로드 시 보안 경고가 뜨나요?</span>
@@ -250,31 +251,7 @@ export default function DownloadButton({
               </p>
 
               <div className="mt-3 space-y-2">
-                <div className="rounded-lg border border-amber-200 bg-white/70 p-3">
-                  <p className="text-xs font-semibold text-amber-900">
-                    A. &quot;Windows의 PC 보호&quot; 화면이 뜰 때
-                  </p>
-                  <ol className="mt-1.5 space-y-1 text-xs text-amber-800/85">
-                    <li className="flex items-start gap-2">
-                      <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-200 text-[0.6rem] font-bold text-amber-900">
-                        1
-                      </span>
-                      <span>
-                        <strong className="text-amber-900">&quot;추가 정보&quot;</strong>를
-                        클릭합니다
-                      </span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-200 text-[0.6rem] font-bold text-amber-900">
-                        2
-                      </span>
-                      <span>
-                        <strong className="text-amber-900">&quot;실행&quot;</strong> 버튼을
-                        클릭합니다
-                      </span>
-                    </li>
-                  </ol>
-                </div>
+                <WindowsProtectionAnimation compact />
 
                 <div className="rounded-lg border border-amber-200 bg-white/70 p-3">
                   <p className="text-xs font-semibold text-amber-900">
