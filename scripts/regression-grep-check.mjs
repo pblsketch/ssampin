@@ -30,12 +30,14 @@ const ROOT = resolve(__dirname, '..');
 
 const presenceChecks = [
   {
-    // REGRESSION #28 (2026-05-23): native-desktop modal text input should try
-    // in-place Win32 focus first. Falling straight back to topmost reintroduces
-    // the visible widget-window flicker on the first input click.
+    // REGRESSION #28 (2026-05-23): native-desktop modal text input may try
+    // in-place Win32 focus, but must only accept confirmed focus. When Windows
+    // cannot confirm it, fall back to the top-level window path without the
+    // normal 50ms settle delay so text entry works and click flicker is reduced.
     file: 'electron/main.ts',
-    pattern: /focusForKeyboard[\s\S]{0,700}?native-desktop focus in place/,
-    name: 'REGRESSION #28: native-desktop modal input uses in-place focus before topmost fallback',
+    pattern:
+      /settleDelayMs\s*=\s*reason === ['"]modal-input\.request['"] \? 0 : 50[\s\S]*?native focus not confirmed[\s\S]*?falling back to topmost/,
+    name: 'REGRESSION #28: native-desktop modal input falls back to topmost with zero settle delay when focus is unconfirmed',
   },
   {
     // REGRESSION #27 (2026-05-23): opening the modal must not switch the whole

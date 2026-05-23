@@ -228,6 +228,7 @@ async function transitionWidgetMode(
   // 변경 감지 시 강제 복원. 사용자가 widget 크기/위치를 의도적으로 바꾼 게 아니므로
   // 항상 진입 값 유지가 정답.
   const boundsBeforeTransition = widgetWindow.getBounds();
+  const settleDelayMs = reason === 'modal-input.request' ? 0 : 50;
 
   // ─── 진단 라운드 (이슈 B) — STAGE 0: enter 시점 native state 스냅샷 ───
   // BrowserWindow API 결과(visible/opacity/alwaysOnTop)와 OS 결과(IsWindowVisible/style 비트)
@@ -254,8 +255,8 @@ async function transitionWidgetMode(
     );
     desktopWidgetManager.disable();
     // Native desktop detach can briefly expose Electron's fallback DIP bounds
-    // (for example 960x1032 -> 549x590). Restore before the 50ms settle wait
-    // so users do not see the widget shrink when opening a modal.
+    // (for example 960x1032 -> 549x590). Restore before the settle wait so
+    // users do not see the widget shrink when opening or typing into a modal.
     restoreWidgetBoundsIfChanged(
       widgetWindow,
       boundsBeforeTransition,
@@ -272,10 +273,12 @@ async function transitionWidgetMode(
     );
 
     // 2. 안정화 대기 — DWM이 SetParent/GWL_STYLE 복원 + ShowWindow 처리 시간.
-    //    50ms는 Win11/Win10 양쪽에서 vsync 1~3프레임 안에 흡수되는 경험치.
-    //    너무 짧으면(<30ms) 일부 케이스에서 visibility 미반영, 너무 길면(>100ms)
-    //    사용자 체감 지연 → 50ms 채택.
-    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    //    일반 모드 전환은 Win11/Win10 양쪽 안정성을 위해 50ms를 유지한다.
+    //    텍스트 입력 클릭으로 발생하는 modal-input.request는 이미 bounds를 즉시 복원했고
+    //    사용자가 클릭 순간을 보고 있으므로 대기 없이 topmost 적용으로 이어간다.
+    if (settleDelayMs > 0) {
+      await new Promise<void>((resolve) => setTimeout(resolve, settleDelayMs));
+    }
     if (widgetWindow.isDestroyed()) {
       diagWarn('widget', '[transitionMode] 안정화 대기 중 widget destroyed — abort');
       return { appliedMode: fromMode, fallbackEvent: null };
@@ -286,11 +289,11 @@ async function transitionWidgetMode(
       'stage2-restore-bounds-after-settle',
     );
 
-    // ─── 진단 (이슈 B) — STAGE 2: 50ms 안정화 후 native state ───
+    // ─── 진단 (이슈 B) — STAGE 2: 안정화 후 native state ───
     const stage2 = desktopWidgetManager.diagnosticSnapshot(widgetWindow);
     diagLogVerbose(
       'widget',
-      `[transitionMode][stage2-after-50ms] visible=${widgetWindow.isVisible()} ` +
+      `[transitionMode][stage2-after-${settleDelayMs}ms] visible=${widgetWindow.isVisible()} ` +
         `opacity=${widgetWindow.getOpacity()} win32=${stage2.widgetWin32}`,
     );
   }
@@ -906,7 +909,7 @@ async function requestModalInputMode(): Promise<void> {
 
       diagWarn(
         'widget',
-        `[modal-input] native focus failed (${focusResult.reason}); falling back to topmost`,
+        `[modal-input] native focus not confirmed (${focusResult.reason}); falling back to topmost`,
       );
       modalInputRestoreMode = 'native-desktop';
       diagLog('widget', '[modal-input] native-desktop -> topmost for text input');

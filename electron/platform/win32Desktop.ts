@@ -829,9 +829,9 @@ function getWindowThreadId(b: Win32Bindings, hwnd: bigint): number {
 /**
  * Give keyboard focus to the attached WS_CHILD widget without detaching it from WorkerW.
  *
- * This avoids the visible native-desktop -> topmost transition that made modal text
- * fields flicker on the first click. The return value is diagnostic rather than a
- * hard guarantee because GetFocus can be thread-local on Windows.
+ * Only report success when Windows confirms that the widget HWND owns focus. A bare
+ * SetFocus request can return without making Electron receive text input in WorkerW mode,
+ * so callers must fall back to the top-level window path when confirmation is missing.
  */
 export function focusWidgetHwndForKeyboard(widgetHwnd: bigint): NativeKeyboardFocusResult {
   if (isNullHandle(widgetHwnd)) {
@@ -866,12 +866,12 @@ export function focusWidgetHwndForKeyboard(widgetHwnd: bigint): NativeKeyboardFo
     b.SetFocus(widgetHwnd);
 
     const focusAfter = toBigInt(b.GetFocus());
+    const focusConfirmed = focusAfter === widgetHwnd;
     return {
-      ok: true,
-      reason:
-        focusAfter === widgetHwnd
-          ? 'focus-applied-without-detach'
-          : 'focus-requested-without-detach',
+      ok: focusConfirmed,
+      reason: focusConfirmed
+        ? 'focus-applied-without-detach'
+        : 'focus-not-confirmed-without-detach',
       widgetThreadId,
       foregroundThreadId,
       focusAfter: `0x${focusAfter.toString(16)}`,
