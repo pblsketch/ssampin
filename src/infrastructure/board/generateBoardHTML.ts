@@ -127,6 +127,22 @@ export function generateBoardHTML(input: GenerateBoardHtmlInput): string {
     #board-toolbar .grid-toggle:hover { background: #f1f5f9; }
     #board-toolbar .grid-toggle[aria-pressed="true"] { background: #dbeafe; border-color: #3b82f6; color: #1d4ed8; }
     #board-toolbar .grid-toggle .grid-dot { font-size: 14px; line-height: 1; }
+
+    /* PDCA-1 Step 1.4 (AC-1.4): 권한 거부 toast — boardRules.canEditElement === false 시 표시.
+       바닥 중앙, 자동 페이드 아웃 (2.5초). 학생이 다른 학생 sticker 를 끌려 하거나 템플릿을 만지면 안내.
+       z-index #status(9999) 보다 낮추고 #join-modal(10000) 보다도 낮음 — 모달 위에 뜨면 안 됨. */
+    #board-toast {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+      z-index: 9980;
+      background: rgba(15, 23, 42, 0.92); color: #fff;
+      padding: 10px 18px; border-radius: 999px;
+      font-size: 13px; font-weight: 500;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+      pointer-events: none;
+      opacity: 0; transition: opacity 0.2s ease-out;
+      max-width: 90vw; text-align: center;
+    }
+    #board-toast.visible { opacity: 1; }
   </style>
 
   <script type="importmap">
@@ -167,6 +183,9 @@ export function generateBoardHTML(input: GenerateBoardHtmlInput): string {
   </div>
 
   <div id="app"></div>
+
+  <!-- PDCA-1 Step 1.4 (AC-1.4): 권한 거부 toast. JS 에서 showToast(text) 호출 시 2.5초 페이드. -->
+  <div id="board-toast" role="status" aria-live="polite"></div>
 
   <!-- PDCA-1 AC-1.0: 좌측 board toolbar scaffold (placeholder). 실제 도구 활성화는 AC-1.1+ 에서 연결. -->
   <div id="board-toolbar" hidden aria-label="협업 보드 도구">
@@ -224,6 +243,18 @@ export function generateBoardHTML(input: GenerateBoardHtmlInput): string {
     const statusEl = document.getElementById('status');
     const statusText = document.getElementById('status-text');
     const setStatus = (cls, text) => { statusEl.className = cls; statusText.textContent = text; };
+
+    // PDCA-1 Step 1.4 (AC-1.4): inline toast — boardRules.canEditElement === false 시 호출.
+    // 같은 메시지 연속 호출 시 timer reset (사용자가 계속 드래그하면 2.5초 연장).
+    let toastTimer = null;
+    function showToast(text) {
+      const t = document.getElementById('board-toast');
+      if (!t) return;
+      t.textContent = text;
+      t.classList.add('visible');
+      if (toastTimer) clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => { t.classList.remove('visible'); toastTimer = null; }, 2500);
+    }
 
     const showCloseError = (code) => {
       const overlay = document.getElementById('error-overlay');
@@ -333,6 +364,21 @@ export function generateBoardHTML(input: GenerateBoardHtmlInput): string {
       let currentExcalidrawAPI = null;
       let activeStickerColor = null;
       const processedTextIds = new Set();
+      // PDCA-1 Step 1.4 (AC-1.4): 권한 검사용 lastSnapshot.
+      // boardRules.canEditElement 와 동기 로직 (inline 복제 — generateBoardHTML 은 string template 이라 import 불가).
+      // 각 onChange 마다 elementId → 직전 element 객체 매핑을 유지해 version/isDeleted 변동을 검출.
+      const lastSnapshot = new Map();
+      const myAwarenessId = String(provider.awareness.clientID);
+      // 학생 페이지(generateBoardHTML) 는 항상 role='student'. 교사 페이지(별도 React 컴포넌트) 는
+      // 자체 권한 처리를 가질 예정 (PDCA-3 design 단계 결정 — open-questions R-NEW-1 참조).
+      const MY_ROLE = 'student';
+      // boardRules.canEditElement 의 inline 복제. 변경 시 양쪽 동기 필수.
+      function canEditElementInline(elementAuthorAwarenessId, currentAwarenessId, role) {
+        if (!currentAwarenessId || currentAwarenessId.length === 0) return false;
+        if (role === 'teacher') return true;
+        if (!elementAuthorAwarenessId) return false;
+        return elementAuthorAwarenessId === currentAwarenessId;
+      }
 
       function App() {
         const [api, setApi] = React.useState(null);
@@ -358,41 +404,72 @@ export function generateBoardHTML(input: GenerateBoardHtmlInput): string {
           };
         }, [api]);
 
-        // PDCA-1 Step 1.1 (AC-1.1 + AC-1.4 + AC-1.5): text element finalize 감지 시
-        // 작성자 라벨 prepend + sticker 배경색 + customData.authorAwarenessId 주입.
+        // PDCA-1 Step 1.1 + 1.4 (AC-1.1 + AC-1.4 + AC-1.5):
+        // (1) text element finalize 감지 시 작성자 라벨 prepend + sticker 배경색 + customData 주입
+        // (2) 다른 학생/템플릿 요소 mutation 감지 시 revert + toast (학생 권한 가드)
+        // (3) lastSnapshot 갱신 (다음 onChange 의 비교 기준)
         const handleSceneChange = React.useCallback((elements, appState) => {
-          if (!activeStickerColor) return;
           if (appState && appState.editingElement) return; // inline 텍스트 편집 중이면 대기
-          let needsUpdate = false;
-          const updated = elements.map((el) => {
-            if (
-              el.type === 'text' &&
-              !el.isDeleted &&
-              !processedTextIds.has(el.id) &&
-              el.text && el.text.trim().length > 0 &&
-              !el.text.startsWith('⭐ ')
-            ) {
-              processedTextIds.add(el.id);
-              needsUpdate = true;
-              return {
-                ...el,
-                text: '⭐ ' + userName + '\\n' + el.text,
-                backgroundColor: STICKER_COLORS[activeStickerColor] || '#FEF3C7',
-                customData: {
-                  ...(el.customData || {}),
-                  authorAwarenessId: String(provider.awareness.clientID),
-                  authorName: userName,
-                  stickerType: 'memo',
-                  stickerColor: activeStickerColor,
-                  createdAtIso: new Date().toISOString(),
-                },
-              };
+
+          // (1) 권한 가드: lastSnapshot 과 비교해 mutation/deletion 검출.
+          // 신규 element (snapshot 에 없음) 은 항상 허용 — 학생이 본인 sticker 를 새로 만드는 경우.
+          let needsRevert = false;
+          const guarded = elements.map((el) => {
+            const snap = lastSnapshot.get(el.id);
+            if (!snap) return el;
+            const versionChanged = el.version !== snap.version;
+            const deletionChanged = el.isDeleted !== snap.isDeleted;
+            if (!versionChanged && !deletionChanged) return el;
+            const authorId = snap.customData && snap.customData.authorAwarenessId;
+            if (!canEditElementInline(authorId, myAwarenessId, MY_ROLE)) {
+              needsRevert = true;
+              return snap; // 직전 상태로 되돌림
             }
             return el;
           });
-          if (needsUpdate && api) {
-            api.updateScene({ elements: updated, commitToHistory: false });
+
+          let workingElements = needsRevert ? guarded : elements;
+          let needsRender = needsRevert;
+
+          // (2) sticker 주입: 권한 가드 통과한 경로에서만, 활성 색상이 있을 때만.
+          if (!needsRevert && activeStickerColor) {
+            workingElements = workingElements.map((el) => {
+              if (
+                el.type === 'text' &&
+                !el.isDeleted &&
+                !processedTextIds.has(el.id) &&
+                el.text && el.text.trim().length > 0 &&
+                !el.text.startsWith('⭐ ')
+              ) {
+                processedTextIds.add(el.id);
+                needsRender = true;
+                return {
+                  ...el,
+                  text: '⭐ ' + userName + '\\n' + el.text,
+                  backgroundColor: STICKER_COLORS[activeStickerColor] || '#FEF3C7',
+                  customData: {
+                    ...(el.customData || {}),
+                    authorAwarenessId: myAwarenessId,
+                    authorName: userName,
+                    stickerType: 'memo',
+                    stickerColor: activeStickerColor,
+                    createdAtIso: new Date().toISOString(),
+                  },
+                };
+              }
+              return el;
+            });
           }
+
+          if (needsRender && api) {
+            api.updateScene({ elements: workingElements, commitToHistory: false });
+          }
+          if (needsRevert) showToast('다른 사람의 메모는 수정할 수 없어요');
+
+          // (3) snapshot 갱신: 우리가 화면에 띄운 (revert/inject 또는 그대로 둔) 상태를 기록.
+          // 이렇게 해야 revert 직후 발생하는 onChange 가 "또 다른 mutation" 으로 잘못 검출되지 않음.
+          lastSnapshot.clear();
+          for (const el of workingElements) lastSnapshot.set(el.id, el);
         }, [api]);
 
         return React.createElement('div', { ref: containerRef, style: { height: '100vh' } },

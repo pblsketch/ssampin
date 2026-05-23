@@ -86,3 +86,37 @@ export function mergeParticipantHistory(
   }
   return out;
 }
+
+/**
+ * 협업 보드 참여자 역할.
+ *
+ * - `teacher`: 교사 페이지에서 접속한 사용자. 모든 요소 편집 가능.
+ * - `student`: 학생 페이지(`generateBoardHTML`)에서 접속한 사용자. 본인이 만든 sticker만 편집 가능.
+ */
+export type BoardRole = 'teacher' | 'student';
+
+/**
+ * 보드 요소 편집 권한 검증 — 순수 함수.
+ *
+ * **신뢰 경계** (Plan ADR Consequences §3 부정 3):
+ * 이 함수는 클라이언트 UI 가드용이다. Excalidraw `element.locked = true` 와 마찬가지로
+ * Y.Doc 프로토콜 자체는 보호하지 않는다. 쌤핀 폐쇄 환경(터널 + sessionCode + authToken)에서
+ * 학생이 직접 Y.Doc 메시지를 위조할 위험은 낮다고 가정한다. 진짜 적대적 환경이라면
+ * Y.Type observer 기반 immutability 가드가 필요하다 (별도 PDCA).
+ *
+ * **결정 규칙**:
+ * - teacher → 항상 true (자기 sticker + 다른 학생 sticker + 템플릿 모두)
+ * - student → element.customData.authorAwarenessId 가 본인 awareness ID와 동일할 때만 true
+ * - authorAwarenessId 가 없는 요소 (템플릿 lock된 요소) → student false / teacher true
+ * - currentAwarenessId 가 비어 있으면 항상 false (방어적, 초기화 전 호출 차단)
+ */
+export function canEditElement(args: {
+  readonly elementAuthorAwarenessId: string | null | undefined;
+  readonly currentAwarenessId: string;
+  readonly role: BoardRole;
+}): boolean {
+  if (args.currentAwarenessId.length === 0) return false;
+  if (args.role === 'teacher') return true;
+  if (!args.elementAuthorAwarenessId) return false;
+  return args.elementAuthorAwarenessId === args.currentAwarenessId;
+}

@@ -10,6 +10,7 @@ import {
   nextAvailableName,
   verifyJoinCredentials,
   mergeParticipantHistory,
+  canEditElement,
   PARTICIPANT_NAME_MAX_LENGTH,
 } from '../../../src/domain/rules/boardRules';
 import {
@@ -17,10 +18,7 @@ import {
   isSessionCode,
   type BoardSessionCode,
 } from '../../../src/domain/valueObjects/BoardSessionCode';
-import {
-  isAuthToken,
-  type BoardAuthToken,
-} from '../../../src/domain/valueObjects/BoardAuthToken';
+import { isAuthToken, type BoardAuthToken } from '../../../src/domain/valueObjects/BoardAuthToken';
 import { isBoardId } from '../../../src/domain/valueObjects/BoardId';
 
 function assert(cond: boolean, msg: string) {
@@ -61,12 +59,33 @@ function testVerify() {
   console.log('\n[verifyJoinCredentials]');
   const validToken = 'a'.repeat(32) as BoardAuthToken;
   const validCode = 'ABCDEF' as BoardSessionCode;
-  assert(verifyJoinCredentials(validToken, validCode, { token: validToken, code: validCode }) === true, '일치 시 true');
-  assert(verifyJoinCredentials('a'.repeat(32), 'ABCDEZ', { token: validToken, code: validCode }) === false, '코드 불일치 false');
-  assert(verifyJoinCredentials('b'.repeat(32), 'ABCDEF', { token: validToken, code: validCode }) === false, '토큰 불일치 false');
-  assert(verifyJoinCredentials('xxx', validCode, { token: validToken, code: validCode }) === false, '토큰 형식 불량 false');
-  assert(verifyJoinCredentials(validToken, 'xxx', { token: validToken, code: validCode }) === false, '코드 형식 불량 false');
-  assert(verifyJoinCredentials('ZZZZ'.repeat(8), validCode, { token: validToken, code: validCode }) === false, '대문자 hex는 비허용 (소문자만)');
+  assert(
+    verifyJoinCredentials(validToken, validCode, { token: validToken, code: validCode }) === true,
+    '일치 시 true',
+  );
+  assert(
+    verifyJoinCredentials('a'.repeat(32), 'ABCDEZ', { token: validToken, code: validCode }) ===
+      false,
+    '코드 불일치 false',
+  );
+  assert(
+    verifyJoinCredentials('b'.repeat(32), 'ABCDEF', { token: validToken, code: validCode }) ===
+      false,
+    '토큰 불일치 false',
+  );
+  assert(
+    verifyJoinCredentials('xxx', validCode, { token: validToken, code: validCode }) === false,
+    '토큰 형식 불량 false',
+  );
+  assert(
+    verifyJoinCredentials(validToken, 'xxx', { token: validToken, code: validCode }) === false,
+    '코드 형식 불량 false',
+  );
+  assert(
+    verifyJoinCredentials('ZZZZ'.repeat(8), validCode, { token: validToken, code: validCode }) ===
+      false,
+    '대문자 hex는 비허용 (소문자만)',
+  );
 }
 
 function testMergeHistory() {
@@ -112,9 +131,77 @@ function testValueObjectGuards() {
   assert(isAuthToken('a'.repeat(31)) === false, '31자는 거부');
 }
 
+function testCanEditElement() {
+  console.log('\n[canEditElement]');
+  const me = 'awareness-100';
+  const other = 'awareness-200';
+
+  // teacher: 모든 요소
+  assert(
+    canEditElement({ elementAuthorAwarenessId: me, currentAwarenessId: me, role: 'teacher' }) ===
+      true,
+    'teacher + 본인 sticker → true',
+  );
+  assert(
+    canEditElement({ elementAuthorAwarenessId: other, currentAwarenessId: me, role: 'teacher' }) ===
+      true,
+    'teacher + 다른 학생 sticker → true',
+  );
+  assert(
+    canEditElement({ elementAuthorAwarenessId: null, currentAwarenessId: me, role: 'teacher' }) ===
+      true,
+    'teacher + 템플릿(authorAwarenessId 없음) → true',
+  );
+  assert(
+    canEditElement({
+      elementAuthorAwarenessId: undefined,
+      currentAwarenessId: me,
+      role: 'teacher',
+    }) === true,
+    'teacher + undefined authorAwarenessId → true',
+  );
+
+  // student: 본인 sticker 만
+  assert(
+    canEditElement({ elementAuthorAwarenessId: me, currentAwarenessId: me, role: 'student' }) ===
+      true,
+    'student + 본인 sticker → true',
+  );
+  assert(
+    canEditElement({ elementAuthorAwarenessId: other, currentAwarenessId: me, role: 'student' }) ===
+      false,
+    'student + 다른 학생 sticker → false',
+  );
+  assert(
+    canEditElement({ elementAuthorAwarenessId: null, currentAwarenessId: me, role: 'student' }) ===
+      false,
+    'student + 템플릿(authorAwarenessId 없음) → false',
+  );
+  assert(
+    canEditElement({
+      elementAuthorAwarenessId: undefined,
+      currentAwarenessId: me,
+      role: 'student',
+    }) === false,
+    'student + undefined authorAwarenessId → false',
+  );
+
+  // 방어적: currentAwarenessId 비어있으면 항상 false
+  assert(
+    canEditElement({ elementAuthorAwarenessId: me, currentAwarenessId: '', role: 'teacher' }) ===
+      false,
+    '빈 currentAwarenessId → 항상 false (teacher도)',
+  );
+  assert(
+    canEditElement({ elementAuthorAwarenessId: me, currentAwarenessId: '', role: 'student' }) ===
+      false,
+    '빈 currentAwarenessId → 항상 false (student도)',
+  );
+}
+
 function testSessionCodeGenerator() {
   console.log('\n[generateSessionCode]');
-  let prng = 0.5;
+  const prng = 0.5;
   const code = generateSessionCode(() => prng);
   assert(isSessionCode(code), '생성된 코드는 형식 검증 통과');
   assert(code.length === 6, '6자리');
@@ -130,6 +217,7 @@ function testSessionCodeGenerator() {
     testNextAvailable();
     testVerify();
     testMergeHistory();
+    testCanEditElement();
     testValueObjectGuards();
     testSessionCodeGenerator();
     console.log('\n========================================');
