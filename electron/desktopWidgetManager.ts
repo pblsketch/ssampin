@@ -61,6 +61,12 @@ export interface DesktopWidgetManager {
   isEnabled(): boolean;
 
   /**
+   * native-desktop WS_CHILD 상태를 유지한 채 키보드 포커스를 위젯 HWND에 준다.
+   * 모달 텍스트 입력 시 topmost로 떼어내는 전환을 피하기 위한 경량 경로.
+   */
+  focusForKeyboard(window: BrowserWindow): { ok: boolean; reason: string };
+
+  /**
    * Phase 5+ — 가장 최근 updateWidgetBounds로 캐시된 physical pixel rect.
    *
    * Phase 6/7에서 mouse hook callback이 위젯 영역 hit 판정에 사용한다.
@@ -357,6 +363,9 @@ function createNoopManager(reason: string): DesktopWidgetManager {
     },
     isEnabled(): boolean {
       return active;
+    },
+    focusForKeyboard(_window: BrowserWindow): { ok: boolean; reason: string } {
+      return { ok: false, reason };
     },
     getCachedPhysicalBounds(): PhysicalRect | null {
       return null;
@@ -1434,6 +1443,32 @@ function createWin32Manager(win32: typeof import('./platform/win32Desktop')): De
 
     isEnabled(): boolean {
       return handles !== null;
+    },
+
+    focusForKeyboard(window: BrowserWindow): { ok: boolean; reason: string } {
+      try {
+        const widgetHwnd =
+          handles && win32.isWindowAlive(handles.widgetHwnd)
+            ? handles.widgetHwnd
+            : win32.getWidgetHwnd(window);
+        const result = win32.focusWidgetHwndForKeyboard(widgetHwnd);
+        if (result.ok) {
+          diagLog(
+            'native-desktop',
+            `[modal-input] focusForKeyboard ok: ${result.reason} ` +
+              `widgetThread=${result.widgetThreadId ?? 'n/a'} ` +
+              `foregroundThread=${result.foregroundThreadId ?? 'n/a'} ` +
+              `focusAfter=${result.focusAfter ?? 'n/a'}`,
+          );
+        } else {
+          diagWarn('native-desktop', `[modal-input] focusForKeyboard failed: ${result.reason}`);
+        }
+        return result;
+      } catch (e) {
+        const reason = e instanceof Error ? e.message : String(e);
+        diagWarn('native-desktop', `[modal-input] focusForKeyboard exception: ${reason}`);
+        return { ok: false, reason };
+      }
     },
 
     getCachedPhysicalBounds(): PhysicalRect | null {

@@ -243,6 +243,7 @@ const WM_MOUSEHWHEEL = 0x020e;
 interface Win32Bindings {
   // kernel32
   GetCurrentProcessId: () => number;
+  GetCurrentThreadId: () => number;
 
   // user32 — 창 탐색
   FindWindowW: (className: string | null, windowName: string | null) => bigint | null;
@@ -360,6 +361,11 @@ interface Win32Bindings {
    *     검증 로직에서 widget HWND뿐 아니라 WorkerW도 같이 비교한다.
    */
   GetAncestor: (hWnd: bigint | number, gaFlags: number) => bigint | null;
+  GetForegroundWindow: () => bigint | null;
+  SetForegroundWindow: (hWnd: bigint | number) => number;
+  SetFocus: (hWnd: bigint | number) => bigint | null;
+  GetFocus: () => bigint | null;
+  AttachThreadInput: (idAttach: number, idAttachTo: number, fAttach: number) => number;
 
   // user32 — Phase 6: 좌표/스레드/프로세스
   GetWindowThreadProcessId: (hWnd: bigint | number, lpdwProcessId: unknown) => number;
@@ -507,6 +513,10 @@ function loadWin32Bindings(): Win32Bindings {
       'uint32 __stdcall GetCurrentProcessId()',
     ) as Win32Bindings['GetCurrentProcessId'];
 
+    const GetCurrentThreadId = kernel32.func(
+      'uint32 __stdcall GetCurrentThreadId()',
+    ) as Win32Bindings['GetCurrentThreadId'];
+
     const FindWindowW = user32.func(
       'void* __stdcall FindWindowW(str16, str16)',
     ) as Win32Bindings['FindWindowW'];
@@ -588,6 +598,22 @@ function loadWin32Bindings(): Win32Bindings {
       'void* __stdcall GetAncestor(void*, uint32)',
     ) as Win32Bindings['GetAncestor'];
 
+    const GetForegroundWindow = user32.func(
+      'void* __stdcall GetForegroundWindow()',
+    ) as Win32Bindings['GetForegroundWindow'];
+
+    const SetForegroundWindow = user32.func(
+      'int __stdcall SetForegroundWindow(void*)',
+    ) as Win32Bindings['SetForegroundWindow'];
+
+    const SetFocus = user32.func('void* __stdcall SetFocus(void*)') as Win32Bindings['SetFocus'];
+
+    const GetFocus = user32.func('void* __stdcall GetFocus()') as Win32Bindings['GetFocus'];
+
+    const AttachThreadInput = user32.func(
+      'int __stdcall AttachThreadInput(uint32, uint32, int)',
+    ) as Win32Bindings['AttachThreadInput'];
+
     // Phase 6 추가 바인딩
     const GetWindowThreadProcessId = user32.func(
       'uint32 __stdcall GetWindowThreadProcessId(void*, uint32 *)',
@@ -656,6 +682,7 @@ function loadWin32Bindings(): Win32Bindings {
 
     cachedBindings = {
       GetCurrentProcessId,
+      GetCurrentThreadId,
       FindWindowW,
       FindWindowExW,
       EnumWindows,
@@ -676,6 +703,11 @@ function loadWin32Bindings(): Win32Bindings {
       SetCursor,
       WindowFromPoint,
       GetAncestor,
+      GetForegroundWindow,
+      SetForegroundWindow,
+      SetFocus,
+      GetFocus,
+      AttachThreadInput,
       GetWindowThreadProcessId,
       ScreenToClient,
       OpenProcess,
@@ -775,6 +807,91 @@ export function getWidgetHwnd(win: BrowserWindow): bigint {
     );
   }
   return buf.readBigUInt64LE(0);
+}
+
+export interface NativeKeyboardFocusResult {
+  readonly ok: boolean;
+  readonly reason: string;
+  readonly widgetThreadId?: number;
+  readonly foregroundThreadId?: number;
+  readonly focusAfter?: string;
+}
+
+function getWindowThreadId(b: Win32Bindings, hwnd: bigint): number {
+  if (isNullHandle(hwnd)) return 0;
+  try {
+    return b.GetWindowThreadProcessId(hwnd, Buffer.alloc(4));
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Give keyboard focus to the attached WS_CHILD widget without detaching it from WorkerW.
+ *
+ * This avoids the visible native-desktop -> topmost transition that made modal text
+ * fields flicker on the first click. The return value is diagnostic rather than a
+ * hard guarantee because GetFocus can be thread-local on Windows.
+ */
+export function focusWidgetHwndForKeyboard(widgetHwnd: bigint): NativeKeyboardFocusResult {
+  if (isNullHandle(widgetHwnd)) {
+    return { ok: false, reason: 'widget-hwnd-empty' };
+  }
+
+  const b = loadWin32Bindings();
+  if (b.IsWindow(widgetHwnd) === 0) {
+    return { ok: false, reason: 'widget-hwnd-invalid' };
+  }
+
+  const currentThreadId = b.GetCurrentThreadId();
+  const widgetThreadId = getWindowThreadId(b, widgetHwnd);
+  const foregroundHwnd = toBigInt(b.GetForegroundWindow());
+  const foregroundThreadId = getWindowThreadId(b, foregroundHwnd);
+  const attachedThreadIds: number[] = [];
+
+  const attach = (threadId: number): void => {
+    if (threadId === 0 || threadId === currentThreadId || attachedThreadIds.includes(threadId)) {
+      return;
+    }
+    if (b.AttachThreadInput(currentThreadId, threadId, 1) !== 0) {
+      attachedThreadIds.push(threadId);
+    }
+  };
+
+  try {
+    attach(widgetThreadId);
+    attach(foregroundThreadId);
+
+    b.SetForegroundWindow(widgetHwnd);
+    b.SetFocus(widgetHwnd);
+
+    const focusAfter = toBigInt(b.GetFocus());
+    return {
+      ok: true,
+      reason:
+        focusAfter === widgetHwnd
+          ? 'focus-applied-without-detach'
+          : 'focus-requested-without-detach',
+      widgetThreadId,
+      foregroundThreadId,
+      focusAfter: `0x${focusAfter.toString(16)}`,
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      reason: e instanceof Error ? e.message : String(e),
+      widgetThreadId,
+      foregroundThreadId,
+    };
+  } finally {
+    for (let i = attachedThreadIds.length - 1; i >= 0; i -= 1) {
+      try {
+        b.AttachThreadInput(currentThreadId, attachedThreadIds[i]!, 0);
+      } catch {
+        // best-effort cleanup
+      }
+    }
+  }
 }
 
 /**

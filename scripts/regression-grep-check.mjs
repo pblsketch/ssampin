@@ -30,6 +30,14 @@ const ROOT = resolve(__dirname, '..');
 
 const presenceChecks = [
   {
+    // REGRESSION #28 (2026-05-23): native-desktop modal text input should try
+    // in-place Win32 focus first. Falling straight back to topmost reintroduces
+    // the visible widget-window flicker on the first input click.
+    file: 'electron/main.ts',
+    pattern: /focusForKeyboard[\s\S]{0,700}?native-desktop focus in place/,
+    name: 'REGRESSION #28: native-desktop modal input uses in-place focus before topmost fallback',
+  },
+  {
     // REGRESSION #27 (2026-05-23): opening the modal must not switch the whole
     // native-desktop widget window to topmost. Request text-input mode only when
     // the user interacts with an editable control.

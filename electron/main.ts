@@ -889,11 +889,25 @@ async function requestModalInputMode(): Promise<void> {
     if (modalInputDepth <= 0) return;
     if (!widgetWindow || widgetWindow.isDestroyed()) return;
 
-    const needsDetachForKeyboard =
+    const needsNativeDesktopKeyboard =
       process.platform === 'win32' &&
       (currentDesktopMode === 'native-desktop' || desktopWidgetManager.isEnabled());
 
-    if (needsDetachForKeyboard && !modalInputRestoreMode) {
+    if (needsNativeDesktopKeyboard && !modalInputRestoreMode) {
+      const focusResult = desktopWidgetManager.focusForKeyboard(widgetWindow);
+      if (focusResult.ok) {
+        diagLog(
+          'widget',
+          `[modal-input] native-desktop focus in place for text input (${focusResult.reason})`,
+        );
+        widgetWindow.webContents.focus();
+        return;
+      }
+
+      diagWarn(
+        'widget',
+        `[modal-input] native focus failed (${focusResult.reason}); falling back to topmost`,
+      );
       modalInputRestoreMode = 'native-desktop';
       diagLog('widget', '[modal-input] native-desktop -> topmost for text input');
       const { fallbackEvent } = await transitionWidgetMode(
