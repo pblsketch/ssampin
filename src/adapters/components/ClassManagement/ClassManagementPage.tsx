@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
-import { useSettingsStore } from '@adapters/stores/useSettingsStore';
-import { useDriveSyncStore } from '@adapters/stores/useDriveSyncStore';
-import { FEATURE_FLAGS } from '@adapters/config/featureFlags';
-import { getLastAttendanceMutationAt } from './shared/attendanceAutosave';
+import {
+  getLastAttendanceSaveErrorAt,
+  hasPendingAttendanceSave,
+} from './shared/attendanceAutosave';
 import { ClassList } from './ClassList';
 import { ClassRosterTab } from './ClassRosterTab';
 import { ClassRecordTab } from './ClassRecordTab';
@@ -11,11 +11,10 @@ import { ClassSeatingTab } from './ClassSeatingTab';
 import { ProgressTab } from './ProgressTab';
 import { ClassSurveyTab } from './ClassSurveyTab';
 import { ClassAssignmentTab } from './ClassAssignmentTab';
-import { AttendanceTab } from './AttendanceTab';
 import { AddClassModal } from './AddClassModal';
 import { PageHeader } from '@adapters/components/common/PageHeader';
 
-type TabId = 'roster' | 'record' | 'attendance' | 'seating' | 'progress' | 'survey' | 'assignment';
+type TabId = 'roster' | 'record' | 'seating' | 'progress' | 'survey' | 'assignment';
 
 interface TabConfig {
   id: TabId;
@@ -26,7 +25,6 @@ interface TabConfig {
 const TABS: readonly TabConfig[] = [
   { id: 'roster', label: '명렬 관리', icon: 'people' },
   { id: 'record', label: '수업 기록', icon: 'edit_note' },
-  { id: 'attendance', label: '출석부', icon: 'fact_check' },
   { id: 'seating', label: '좌석배치', icon: 'grid_view' },
   { id: 'progress', label: '진도 관리', icon: 'trending_up' },
   { id: 'survey', label: '설문/체크', icon: 'checklist' },
@@ -36,45 +34,36 @@ const TABS: readonly TabConfig[] = [
 export function ClassManagementPage() {
   const load = useTeachingClassStore((s) => s.load);
   const selectedClassId = useTeachingClassStore((s) => s.selectedClassId);
-  const syncSettings = useSettingsStore((s) => s.settings.sync);
-  const driveStatus = useDriveSyncStore((s) => s.status);
-  const driveLastSyncedAt = useDriveSyncStore((s) => s.lastSyncedAt);
-  const syncToCloud = useDriveSyncStore((s) => s.syncToCloud);
-
   const [activeTab, setActiveTab] = useState<TabId>('roster');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [recordInitialStudentView, setRecordInitialStudentView] = useState<'list' | 'seating'>(
+    'list',
+  );
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  const hasUnfinishedDriveSync = useCallback(() => {
-    if (!FEATURE_FLAGS.inlineAutosave || !syncSettings?.enabled || !syncSettings.autoSyncOnSave)
-      return false;
-    const lastMutationAt = getLastAttendanceMutationAt();
-    const lastSyncedAt = driveLastSyncedAt ? Date.parse(driveLastSyncedAt) : 0;
-    return driveStatus === 'syncing' || driveStatus === 'error' || lastSyncedAt < lastMutationAt;
-  }, [driveLastSyncedAt, driveStatus, syncSettings?.autoSyncOnSave, syncSettings?.enabled]);
+  const hasUnsafeLocalAttendanceSave = useCallback(() => {
+    return hasPendingAttendanceSave() || getLastAttendanceSaveErrorAt() > 0;
+  }, []);
 
   const handleBeforeClassSwitch = useCallback(async () => {
-    if (!hasUnfinishedDriveSync()) return true;
-    const ok = window.confirm(
-      '동기화 중입니다. 이대로 이동하면 다른 기기에서 이 변경이 보이지 않을 수 있습니다. 잠시 기다리시겠습니까?',
+    if (!hasUnsafeLocalAttendanceSave()) return true;
+    return window.confirm(
+      '출결이 아직 이 기기에 저장되지 않았습니다. 이동하면 변경 내용이 사라질 수 있습니다. 그래도 이동할까요?',
     );
-    if (!ok) return false;
-    await Promise.race([syncToCloud(), new Promise((resolve) => setTimeout(resolve, 5000))]);
-    return true;
-  }, [hasUnfinishedDriveSync, syncToCloud]);
+  }, [hasUnsafeLocalAttendanceSave]);
 
   useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      if (!hasUnfinishedDriveSync()) return;
+      if (!hasUnsafeLocalAttendanceSave()) return;
       event.preventDefault();
-      event.returnValue = '동기화 중입니다';
+      event.returnValue = '출결이 아직 이 기기에 저장되지 않았습니다';
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [hasUnfinishedDriveSync]);
+  }, [hasUnsafeLocalAttendanceSave]);
 
   return (
     <div className="h-full flex flex-col -m-8">
@@ -134,11 +123,19 @@ export function ClassManagementPage() {
                   <ClassRecordTab
                     classId={selectedClassId}
                     onGoToRosterTab={() => setActiveTab('roster')}
+                    initialStudentViewMode={recordInitialStudentView}
                     onGoToSeatingTab={() => setActiveTab('seating')}
                   />
                 )}
-                {activeTab === 'attendance' && <AttendanceTab classId={selectedClassId} />}
-                {activeTab === 'seating' && <ClassSeatingTab classId={selectedClassId} />}
+                {activeTab === 'seating' && (
+                  <ClassSeatingTab
+                    classId={selectedClassId}
+                    onOpenRecordSeatView={() => {
+                      setRecordInitialStudentView('seating');
+                      setActiveTab('record');
+                    }}
+                  />
+                )}
                 {activeTab === 'progress' && <ProgressTab classId={selectedClassId} />}
                 {activeTab === 'survey' && <ClassSurveyTab classId={selectedClassId} />}
                 {activeTab === 'assignment' && <ClassAssignmentTab classId={selectedClassId} />}

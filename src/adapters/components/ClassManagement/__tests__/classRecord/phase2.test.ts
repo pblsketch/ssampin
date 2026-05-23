@@ -5,6 +5,9 @@ import type { AttendanceRecord } from '@domain/entities/Attendance';
 import {
   createAttendanceSaveSequencer,
   getLastAttendanceMutationAt,
+  getLastAttendanceSaveErrorAt,
+  getPendingAttendanceSaveCount,
+  hasPendingAttendanceSave,
   markAttendanceMutation,
 } from '../../shared/attendanceAutosave';
 
@@ -47,6 +50,9 @@ describe('class record phase 2 autosave safeguards', () => {
       'fulfilled',
       'fulfilled',
     ]);
+    expect(hasPendingAttendanceSave()).toBe(false);
+    expect(getPendingAttendanceSaveCount()).toBe(0);
+    expect(getLastAttendanceSaveErrorAt()).toBe(0);
   });
 
   it('exposes module-scope mutation time so route guards survive component unmounts', () => {
@@ -68,14 +74,16 @@ describe('class record phase 2 autosave safeguards', () => {
     expect(source).toContain('오프라인 변경');
   });
 
-  it('guards class routing and beforeunload while Drive sync is unfinished', () => {
+  it('guards class routing and beforeunload only while local attendance save is unsafe', () => {
     const source = readClassManagementSource('ClassManagementPage.tsx');
 
-    expect(source).toContain('getLastAttendanceMutationAt');
-    expect(source).toContain('lastSyncedAt < lastMutationAt');
-    expect(source).toContain('syncToCloud()');
-    expect(source).toContain('setTimeout(resolve, 5000)');
+    expect(source).toContain('hasUnsafeLocalAttendanceSave');
+    expect(source).toContain('hasPendingAttendanceSave()');
+    expect(source).toContain('getLastAttendanceSaveErrorAt() > 0');
     expect(source).toContain('beforeunload');
-    expect(source).toContain('동기화 중입니다');
+    expect(source).toContain('출결이 아직 이 기기에 저장되지 않았습니다');
+    expect(source).not.toContain('lastSyncedAt < lastMutationAt');
+    expect(source).not.toContain('syncToCloud()');
+    expect(source).not.toContain('동기화 중입니다');
   });
 });

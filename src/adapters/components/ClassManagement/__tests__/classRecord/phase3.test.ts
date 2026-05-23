@@ -13,11 +13,11 @@ const tabSource = () =>
   readFileSync('src/adapters/components/ClassManagement/ClassRecordTab.tsx', 'utf8');
 
 describe('class record phase 3 ux safeguards', () => {
-  it('adds bulk present fill, stale selected student cleanup, and roster next action', () => {
+  it('keeps stale selected student cleanup and roster next action while defaulting unmarked students to present', () => {
     const source = inputSource();
-    expect(source).toContain('handleFillAllPresent');
-    expect(source).toContain('전체 출석으로 채우기');
-    expect(source).toContain('이미 결석/지각/조퇴/결과 처리된 학생이 있습니다');
+    expect(source).not.toContain('전체 출석으로 채우기');
+    expect(source).toContain('체크하지 않은 학생은 출석으로 저장됩니다');
+    expect(source).toContain("status: 'present'");
     expect(source).toContain('setSelectedStudentKey(null)');
     expect(source).toContain('명렬 관리로 가기');
   });

@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import type { CSSProperties } from 'react';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { studentKey } from '@domain/entities/TeachingClass';
 import type { AttendanceStatus } from '@domain/entities/Attendance';
@@ -58,23 +59,26 @@ export function ClassRecordStudentGrid({
   }
 
   const { rows, cols, seats } = cls.seating;
+  const gridStyle = {
+    gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
+  } satisfies CSSProperties;
 
   return (
-    <div className="flex flex-col items-center gap-1 p-2">
+    <div className="flex w-full flex-col items-center gap-2 p-2">
       {/* 교탁 */}
       <div className="w-32 py-1 mb-2 rounded bg-sp-surface text-center text-xs text-sp-muted font-medium">
         교 탁
       </div>
 
-      {Array.from({ length: rows }, (_, r) => (
-        <div key={r} className="flex gap-1">
-          {Array.from({ length: cols }, (_, c) => {
+      <div className="grid w-full max-w-full gap-1.5" style={gridStyle}>
+        {Array.from({ length: rows }, (_, r) =>
+          Array.from({ length: cols }, (_, c) => {
             const sKey = seats[r]?.[c] ?? null;
             if (!sKey) {
               return (
                 <div
-                  key={c}
-                  className="w-16 h-14 rounded-lg border border-dashed border-sp-border/30"
+                  key={`${r}-${c}`}
+                  className="aspect-[1.15/1] min-h-12 rounded-lg border border-dashed border-sp-border/30"
                 />
               );
             }
@@ -86,29 +90,29 @@ export function ClassRecordStudentGrid({
 
             return (
               <button
-                key={c}
+                key={`${r}-${c}`}
                 onClick={() => onSelectStudent(sKey)}
                 aria-label={`${student?.number ?? '?'}번 ${student?.name ?? ''} 학생 선택, 현재 출결 ${attStatus}`}
-                className={`relative w-16 h-14 rounded-lg border-2 transition-all text-center
+                className={`relative aspect-[1.15/1] min-h-12 rounded-lg border-2 px-1 text-center transition-all
                   ${isSelected ? 'ring-2 ring-sp-accent ring-offset-1 ring-offset-sp-bg' : ''}
                   ${borderColor} bg-sp-surface hover:bg-sp-card`}
               >
                 <span className="block text-xs font-bold text-sp-text">
                   {student?.number ?? '?'}
                 </span>
-                <span className="block text-xs text-sp-muted truncate px-0.5">
+                <span className="block truncate px-0.5 text-xs text-sp-muted">
                   {student?.name ?? ''}
                 </span>
                 {count > 0 && (
-                  <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-sp-accent text-white text-xs font-bold flex items-center justify-center">
+                  <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-sp-accent text-xs font-bold text-white">
                     {count}
                   </span>
                 )}
               </button>
             );
-          })}
-        </div>
-      ))}
+          }),
+        )}
+      </div>
     </div>
   );
 }

@@ -1,6 +1,5 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
-import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { studentKey } from '@domain/entities/TeachingClass';
@@ -8,61 +7,18 @@ import { isStudentActive, isStudentInactive } from '@domain/rules/studentActivit
 import type { TeachingClassStudent } from '@domain/entities/TeachingClass';
 import type { SeatingData } from '@domain/entities/Seating';
 import type { Student } from '@domain/entities/Student';
-import type {
-  AttendanceStatus,
-  AttendanceReason,
-  StudentAttendance,
-  AttendanceRecord,
-} from '@domain/entities/Attendance';
-import { ATTENDANCE_REASONS } from '@domain/entities/Attendance';
-import { getCurrentPeriod, getDayOfWeek } from '@domain/rules/periodRules';
-import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import { exportSeatingToExcel, exportSeatingToHwpx } from '@infrastructure/export';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { buildPairGroups, adjustPairGroupsForRow } from '@domain/rules/seatingLayoutRules';
-import { ObservationForm } from './ObservationForm';
-import { ObservationCard } from './ObservationCard';
-import { useObservationStore } from '@adapters/stores/useObservationStore';
 import { NameLearningMode } from '@adapters/components/Seating/NameLearningMode';
 import type { LearningStudentInfo } from '@adapters/components/Seating/NameLearningMode';
 
-/* ──────────────────────── 출석 체크 상수 ──────────────────────── */
-
-function todayString(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-/**
- * 오늘 날짜일 때만, 교사가 설정한 periodTimes 기준으로 현재 교시를 반환.
- * 수업 시간 외이거나 오늘이 아니면 null.
- */
-function computeAutoPeriod(periodTimes: readonly PeriodTime[], targetDate: string): number | null {
-  if (targetDate !== todayString()) return null;
-  return getCurrentPeriod(periodTimes, new Date());
-}
-
-const STATUS_CONFIG: Record<AttendanceStatus, { label: string; icon: string; color: string }> = {
-  present: { label: '출석', icon: 'check_circle', color: 'green' },
-  absent: { label: '결석', icon: 'cancel', color: 'red' },
-  late: { label: '지각', icon: 'schedule', color: 'amber' },
-  earlyLeave: { label: '조퇴', icon: 'exit_to_app', color: 'orange' },
-  classAbsence: { label: '결과', icon: 'event_busy', color: 'purple' },
-};
-
-const BORDER_COLOR_MAP: Record<AttendanceStatus, string> = {
-  present: 'border-green-500/60',
-  absent: 'border-red-500/60',
-  late: 'border-amber-500/60',
-  earlyLeave: 'border-orange-500/60',
-  classAbsence: 'border-purple-500/60',
-};
-
 interface ClassSeatingTabProps {
   classId: string;
+  onOpenRecordSeatView?: () => void;
 }
 
-export function ClassSeatingTab({ classId }: ClassSeatingTabProps) {
+export function ClassSeatingTab({ classId, onOpenRecordSeatView }: ClassSeatingTabProps) {
   const cls = useTeachingClassStore((s) => s.classes.find((c) => c.id === classId));
   const groupSiblingCount = useTeachingClassStore((s) =>
     s.classes.find((c) => c.id === classId)?.groupId
@@ -81,20 +37,7 @@ export function ClassSeatingTab({ classId }: ClassSeatingTabProps) {
   const { track } = useAnalytics();
   const showToast = useToastStore((s) => s.show);
 
-  const getAttendanceRecord = useTeachingClassStore((s) => s.getAttendanceRecord);
-  const saveAttendanceRecord = useTeachingClassStore((s) => s.saveAttendanceRecord);
-
-  const teacherSchedule = useScheduleStore((s) => s.teacherSchedule);
-  const scheduleOverrides = useScheduleStore((s) => s.overrides);
-  const loadSchedule = useScheduleStore((s) => s.load);
-
   const seatingDefaultView = useSettingsStore((s) => s.settings.seatingDefaultView);
-  // 교사별 교시 시간표를 기준으로 자동 기본 교시를 계산 (학교마다 교시 시간이 다름)
-  const periodTimes = useSettingsStore((s) => s.settings.periodTimes);
-  const maxPeriods = useSettingsStore((s) => s.settings.maxPeriods);
-  const settingsLoaded = useSettingsStore((s) => s.loaded);
-  const loadSettings = useSettingsStore((s) => s.load);
-
   const [isEditing, setIsEditing] = useState(false);
   const [isTeacherView, setIsTeacherView] = useState(seatingDefaultView === 'teacher');
   const [showNameLearning, setShowNameLearning] = useState(false);
@@ -112,230 +55,6 @@ export function ClassSeatingTab({ classId }: ClassSeatingTabProps) {
   const [dragOver, setDragOver] = useState<{ row: number; col: number } | null>(null);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);
-
-  // 출석 체크 모드 상태
-  const [isAttendanceMode, setIsAttendanceMode] = useState(false);
-  const [attendanceDate, setAttendanceDate] = useState(todayString);
-  const [attendancePeriod, setAttendancePeriod] = useState(1);
-  // 사용자가 교시를 직접 변경했으면 자동 로직이 덮어쓰지 않도록 추적
-  const [hasManualPeriodOverride, setHasManualPeriodOverride] = useState(false);
-  // 설정 로드 후 초기 자동 선택을 1회만 적용했는지
-  const [initialAutoApplied, setInitialAutoApplied] = useState(false);
-  const [localAttendance, setLocalAttendance] = useState<Map<string, AttendanceStatus>>(new Map());
-  const [attendanceReasons, setAttendanceReasons] = useState<Map<string, string>>(new Map());
-  const [attendanceMemos, setAttendanceMemos] = useState<Map<string, string>>(new Map());
-  const [hasModified, setHasModified] = useState(false);
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
-
-  // 출석 팝업 모달 상태
-  const [selectedStudentKey, setSelectedStudentKey] = useState<string | null>(null);
-
-  const [showRecentRecords, setShowRecentRecords] = useState(false);
-
-  // 특기사항 데이터
-  const observationRecords = useObservationStore((s) => s.records);
-  const loadObs = useObservationStore((s) => s.load);
-
-  // 스케줄 로드
-  useEffect(() => {
-    void loadSchedule();
-  }, [loadSchedule]);
-
-  // 설정 로드 (idempotent)
-  useEffect(() => {
-    void loadSettings();
-  }, [loadSettings]);
-
-  // 특기사항 로드
-  useEffect(() => {
-    void loadObs();
-  }, [loadObs]);
-
-  // 학급이 바뀌면 출석 교시 관련 플래그를 리셋하여 새 학급에서 다시 자동 선택되도록 한다.
-  useEffect(() => {
-    setAttendancePeriod(1);
-    setHasManualPeriodOverride(false);
-    setInitialAutoApplied(false);
-  }, [classId]);
-
-  // 설정이 로드되면 현재 시각 기준으로 출석 교시를 1회 자동 선택 (오늘 날짜일 때만).
-  // 수동 변경이 이미 있었다면 덮어쓰지 않음.
-  useEffect(() => {
-    if (initialAutoApplied || !settingsLoaded) return;
-    if (!hasManualPeriodOverride) {
-      const auto = computeAutoPeriod(periodTimes, attendanceDate);
-      if (auto !== null) setAttendancePeriod(auto);
-    }
-    setInitialAutoApplied(true);
-  }, [initialAutoApplied, settingsLoaded, hasManualPeriodOverride, periodTimes, attendanceDate]);
-
-  // 날짜 변경 시, 오늘로 돌아왔고 수동 변경이 없다면 현재 시각 기준 교시 재적용
-  const handleAttendanceDateChange = useCallback(
-    (newDate: string) => {
-      setAttendanceDate(newDate);
-      if (!hasManualPeriodOverride) {
-        const auto = computeAutoPeriod(periodTimes, newDate);
-        if (auto !== null) setAttendancePeriod(auto);
-      }
-    },
-    [hasManualPeriodOverride, periodTimes],
-  );
-
-  // 교시 수동 변경 — 이후 자동 재선택 비활성화
-  const handleAttendancePeriodChange = useCallback((p: number) => {
-    setAttendancePeriod(p);
-    setHasManualPeriodOverride(true);
-  }, []);
-
-  // 교시 버튼 목록: 학교별 maxPeriods 기준으로 동적 생성
-  const periodButtons = useMemo<readonly number[]>(() => {
-    const total = Math.max(1, maxPeriods);
-    const list: number[] = [];
-    for (let i = 1; i <= total; i++) list.push(i);
-    return list;
-  }, [maxPeriods]);
-
-  // 출석 모드 ON / 날짜·교시 변경 시 기록 로드
-  useEffect(() => {
-    if (!isAttendanceMode || !cls) return;
-    const existing = getAttendanceRecord(classId, attendanceDate, attendancePeriod);
-    const map = new Map<string, AttendanceStatus>();
-    const reasonMap = new Map<string, string>();
-    const memoMap = new Map<string, string>();
-    if (existing) {
-      for (const sa of existing.students) {
-        map.set(studentKey(sa), sa.status);
-        if (sa.reason) reasonMap.set(studentKey(sa), sa.reason);
-        if (sa.memo) memoMap.set(studentKey(sa), sa.memo);
-      }
-      // 새로 추가된 학생은 present
-      for (const s of cls.students) {
-        if (isStudentActive(s)) {
-          const k = studentKey(s);
-          if (!map.has(k)) map.set(k, 'present');
-        }
-      }
-    } else {
-      for (const s of cls.students) {
-        if (isStudentActive(s)) map.set(studentKey(s), 'present');
-      }
-    }
-    setLocalAttendance(map);
-    setAttendanceReasons(reasonMap);
-    setAttendanceMemos(memoMap);
-    setHasModified(false);
-    setSaveStatus('idle');
-  }, [isAttendanceMode, attendanceDate, attendancePeriod, classId, cls, getAttendanceRecord]);
-
-  // 수업 매칭 교시 계산
-  const matchingPeriods = useMemo(() => {
-    if (!cls) return new Set<number>();
-    const d = new Date(attendanceDate + 'T00:00:00');
-    const dayOfWeekVal = getDayOfWeek(d);
-    if (!dayOfWeekVal) return new Set<number>();
-
-    const baseSchedule = teacherSchedule[dayOfWeekVal] ?? [];
-    const dayOverrides = scheduleOverrides.filter((o) => o.date === attendanceDate);
-
-    const periods = [...baseSchedule];
-    for (const override of dayOverrides) {
-      const idx = override.period - 1;
-      if (idx >= 0 && idx < periods.length) {
-        if (override.subject) {
-          periods[idx] = { subject: override.subject, classroom: override.classroom ?? '' };
-        } else {
-          periods[idx] = null;
-        }
-      }
-    }
-
-    const matching = new Set<number>();
-    periods.forEach((slot, idx) => {
-      if (slot && slot.classroom === cls.name && slot.subject === cls.subject) {
-        matching.add(idx + 1);
-      }
-    });
-    return matching;
-  }, [cls, attendanceDate, teacherSchedule, scheduleOverrides]);
-
-  // 출석 클릭 핸들러 — 팝업 열기
-  const handleAttendanceClick = useCallback((key: string) => {
-    setSelectedStudentKey(key);
-  }, []);
-
-  // 팝업 내 출석 상태 변경
-  const setStudentAttStatus = useCallback((key: string, newStatus: AttendanceStatus) => {
-    setLocalAttendance((prev) => {
-      const next = new Map(prev);
-      next.set(key, newStatus);
-      return next;
-    });
-    setHasModified(true);
-    setSaveStatus('idle');
-  }, []);
-
-  // 선택된 학생의 최근 특기사항
-  const selectedObservations = useMemo(() => {
-    if (!selectedStudentKey) return [];
-    return [...observationRecords]
-      .filter((r) => r.classId === classId && r.studentId === selectedStudentKey)
-      .sort((a, b) => b.date.localeCompare(a.date))
-      .slice(0, 5);
-  }, [observationRecords, classId, selectedStudentKey]);
-
-  // 출석 저장
-  const handleSaveAttendance = useCallback(async () => {
-    if (!cls) return;
-    setSaveStatus('saving');
-    const studentAttendances: StudentAttendance[] = cls.students
-      .filter(isStudentActive)
-      .map((s) => {
-        const k = studentKey(s);
-        return {
-          number: s.number,
-          status: localAttendance.get(k) ?? 'present',
-          reason: attendanceReasons.get(k) as AttendanceReason | undefined,
-          memo: attendanceMemos.get(k),
-          grade: s.grade,
-          classNum: s.classNum,
-        };
-      });
-    const record: AttendanceRecord = {
-      classId,
-      date: attendanceDate,
-      period: attendancePeriod,
-      students: studentAttendances,
-    };
-    await saveAttendanceRecord(record);
-    setSaveStatus('saved');
-    setHasModified(false);
-    showToast('출석이 저장되었습니다', 'success');
-  }, [
-    cls,
-    classId,
-    attendanceDate,
-    attendancePeriod,
-    localAttendance,
-    attendanceReasons,
-    attendanceMemos,
-    saveAttendanceRecord,
-    showToast,
-  ]);
-
-  // 출석 통계
-  const attendanceStats = useMemo(() => {
-    const counts: Record<AttendanceStatus, number> = {
-      present: 0,
-      absent: 0,
-      late: 0,
-      earlyLeave: 0,
-      classAbsence: 0,
-    };
-    for (const status of localAttendance.values()) {
-      counts[status]++;
-    }
-    return counts;
-  }, [localAttendance]);
 
   // 내보내기 메뉴 외부 클릭 닫기
   useEffect(() => {
@@ -745,16 +464,12 @@ export function ClassSeatingTab({ classId }: ClassSeatingTabProps) {
           </button>
         )}
 
-        <button
-          onClick={() => {
-            setIsAttendanceMode((v) => !v);
-            if (isEditing) setIsEditing(false);
-          }}
-          className={isAttendanceMode ? activeBtnClass : toolBtnClass}
-        >
-          <span className="material-symbols-outlined text-lg">fact_check</span>
-          출석/기록
-        </button>
+        {onOpenRecordSeatView && (
+          <button onClick={onOpenRecordSeatView} className={toolBtnClass}>
+            <span className="material-symbols-outlined text-lg">edit_note</span>이 좌석으로 수업
+            기록하기
+          </button>
+        )}
 
         {/* 내보내기 */}
         <div className="relative ml-auto" ref={exportMenuRef}>
@@ -790,83 +505,6 @@ export function ClassSeatingTab({ classId }: ClassSeatingTabProps) {
         </button>
       </div>
 
-      {/* 출석 체크 컨트롤 바 */}
-      {isAttendanceMode && (
-        <div className="flex items-center gap-4 mb-4 bg-sp-card border border-sp-border rounded-xl px-4 py-3 flex-wrap">
-          <div className="flex items-center gap-1.5">
-            <label className="text-xs text-sp-muted">날짜</label>
-            <input
-              type="date"
-              value={attendanceDate}
-              onChange={(e) => handleAttendanceDateChange(e.target.value)}
-              className="px-3 py-1.5 bg-sp-card border border-sp-border rounded-lg text-sp-text text-sm focus:outline-none focus:border-sp-accent"
-            />
-          </div>
-          <div className="flex items-center gap-1.5">
-            <label className="text-xs text-sp-muted">교시</label>
-            <div className="flex gap-1">
-              {periodButtons.map((p) => {
-                const isMatching = matchingPeriods.has(p);
-                return (
-                  <button
-                    key={p}
-                    onClick={() => handleAttendancePeriodChange(p)}
-                    title={isMatching ? `${cls?.subject} 수업` : undefined}
-                    className={`relative w-8 h-8 rounded-lg text-sm font-medium transition-all
-                      ${
-                        attendancePeriod === p
-                          ? 'bg-sp-accent text-white ring-2 ring-sp-accent/40 shadow-md shadow-sp-accent/20'
-                          : isMatching
-                            ? 'bg-sp-accent/15 border-2 border-sp-accent text-sp-accent font-semibold'
-                            : 'bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/50'
-                      }`}
-                  >
-                    {p}
-                    {isMatching && attendancePeriod !== p && (
-                      <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-sp-accent" />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-          <div className="flex items-center gap-2 text-xs text-sp-muted">
-            <span className="text-green-400">
-              {STATUS_CONFIG.present.label} {attendanceStats.present}
-            </span>
-            <span className="text-red-400">
-              {STATUS_CONFIG.absent.label} {attendanceStats.absent}
-            </span>
-            <span className="text-amber-400">
-              {STATUS_CONFIG.late.label} {attendanceStats.late}
-            </span>
-            <span className="text-orange-400">
-              {STATUS_CONFIG.earlyLeave.label} {attendanceStats.earlyLeave}
-            </span>
-            <span className="text-purple-400">
-              {STATUS_CONFIG.classAbsence.label} {attendanceStats.classAbsence}
-            </span>
-          </div>
-          <button
-            onClick={() => void handleSaveAttendance()}
-            disabled={!hasModified || saveStatus === 'saving'}
-            className={`ml-auto flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium transition-colors
-              ${
-                hasModified
-                  ? 'bg-sp-accent text-white hover:bg-sp-accent/80'
-                  : saveStatus === 'saved'
-                    ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                    : 'bg-sp-card border border-sp-border text-sp-muted'
-              }`}
-          >
-            <span className="material-symbols-outlined text-lg">
-              {saveStatus === 'saving' ? 'sync' : saveStatus === 'saved' ? 'check' : 'save'}
-            </span>
-            {saveStatus === 'saving' ? '저장 중...' : saveStatus === 'saved' ? '저장됨' : '저장'}
-          </button>
-        </div>
-      )}
-
       {/* 교실 정면 레이블 (학생 시점: 위, 교사 시점: 아래) */}
       {!isTeacherView && (
         <div className="flex justify-center mb-3">
@@ -894,9 +532,6 @@ export function ClassSeatingTab({ classId }: ClassSeatingTabProps) {
               handleDragEnd,
               isTeacherView,
               cls.seating?.oddColumnMode ?? 'single',
-              isAttendanceMode,
-              localAttendance,
-              handleAttendanceClick,
             )}
           </div>
         ) : (
@@ -921,9 +556,6 @@ export function ClassSeatingTab({ classId }: ClassSeatingTabProps) {
               handleDrop,
               handleDragEnd,
               isTeacherView,
-              isAttendanceMode,
-              localAttendance,
-              handleAttendanceClick,
             )}
           </div>
         )}
@@ -937,203 +569,6 @@ export function ClassSeatingTab({ classId }: ClassSeatingTabProps) {
           </div>
         </div>
       )}
-
-      {/* 출석 팝업 모달 */}
-      {selectedStudentKey &&
-        (() => {
-          const student = studentMap.get(selectedStudentKey);
-          const currentStatus = localAttendance.get(selectedStudentKey) ?? 'present';
-          const currentReason = attendanceReasons.get(selectedStudentKey) ?? '';
-          const currentMemo = attendanceMemos.get(selectedStudentKey) ?? '';
-          const needsReason = currentStatus !== 'present';
-
-          const STATUS_BUTTONS: { status: AttendanceStatus; label: string; color: string }[] = [
-            {
-              status: 'present',
-              label: '출석',
-              color: 'bg-green-500/20 text-green-400 border-green-500/40',
-            },
-            {
-              status: 'absent',
-              label: '결석',
-              color: 'bg-red-500/20 text-red-400 border-red-500/40',
-            },
-            {
-              status: 'late',
-              label: '지각',
-              color: 'bg-amber-500/20 text-amber-400 border-amber-500/40',
-            },
-            {
-              status: 'earlyLeave',
-              label: '조퇴',
-              color: 'bg-orange-500/20 text-orange-400 border-orange-500/40',
-            },
-            {
-              status: 'classAbsence',
-              label: '결과',
-              color: 'bg-purple-500/20 text-purple-400 border-purple-500/40',
-            },
-          ];
-
-          return (
-            <div
-              className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-              onClick={() => setSelectedStudentKey(null)}
-            >
-              <div
-                className="bg-sp-card border border-sp-border rounded-2xl w-full max-w-md mx-4 max-h-[80vh] overflow-y-auto shadow-2xl shadow-black/40"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {/* 헤더 */}
-                <div className="flex items-center justify-between px-5 py-4 border-b border-sp-border">
-                  <h3 className="text-base font-semibold text-sp-text">
-                    {student ? `${student.number}번 ${student.name}` : '학생'}
-                  </h3>
-                  <button
-                    onClick={() => setSelectedStudentKey(null)}
-                    className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-sp-border/50 text-sp-muted transition-colors"
-                  >
-                    <span className="material-symbols-outlined text-lg">close</span>
-                  </button>
-                </div>
-
-                <div className="px-5 py-4 space-y-5">
-                  {/* 출결 섹션 */}
-                  <div>
-                    <p className="text-xs font-semibold text-sp-muted mb-2 uppercase tracking-wide">
-                      출결
-                    </p>
-                    <div className="flex gap-1.5 flex-wrap mb-3">
-                      {STATUS_BUTTONS.map(({ status, label, color }) => (
-                        <button
-                          key={status}
-                          onClick={() => setStudentAttStatus(selectedStudentKey, status)}
-                          className={`px-3 py-1.5 rounded-lg text-sm border transition-all
-                          ${currentStatus === status ? color + ' font-semibold ring-2 ring-offset-1 ring-offset-sp-card ring-current' : 'bg-sp-surface border-sp-border text-sp-muted hover:text-sp-text'}`}
-                        >
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-
-                    {/* 사유 (출석이 아닐 때) */}
-                    {needsReason && (
-                      <div className="mb-3">
-                        <p className="text-xs text-sp-muted mb-1.5">사유</p>
-                        <div className="flex gap-1.5 flex-wrap">
-                          {ATTENDANCE_REASONS.map((reason) => (
-                            <button
-                              key={reason}
-                              onClick={() => {
-                                setAttendanceReasons((prev) => {
-                                  const next = new Map(prev);
-                                  if (next.get(selectedStudentKey) === reason) {
-                                    next.delete(selectedStudentKey);
-                                  } else {
-                                    next.set(selectedStudentKey, reason);
-                                  }
-                                  return next;
-                                });
-                                setHasModified(true);
-                                setSaveStatus('idle');
-                              }}
-                              className={`px-3 py-1 rounded-lg text-sm border transition-all
-                              ${
-                                currentReason === reason
-                                  ? 'bg-sp-accent/20 border-sp-accent/40 text-sp-accent font-semibold'
-                                  : 'bg-sp-surface border-sp-border text-sp-muted hover:text-sp-text'
-                              }`}
-                            >
-                              {reason}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* 상세 메모 */}
-                    <div>
-                      <p className="text-xs text-sp-muted mb-1.5">상세 메모</p>
-                      <input
-                        type="text"
-                        value={currentMemo}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setAttendanceMemos((prev) => {
-                            const next = new Map(prev);
-                            if (val) next.set(selectedStudentKey, val);
-                            else next.delete(selectedStudentKey);
-                            return next;
-                          });
-                          setHasModified(true);
-                          setSaveStatus('idle');
-                        }}
-                        placeholder="메모 입력 (선택)"
-                        className="w-full px-3 py-2 bg-sp-surface border border-sp-border rounded-lg text-sp-text text-sm placeholder:text-sp-muted focus:outline-none focus:border-sp-accent"
-                      />
-                    </div>
-                  </div>
-
-                  {/* 출결 저장 버튼 */}
-                  <button
-                    onClick={async () => {
-                      await handleSaveAttendance();
-                      setSelectedStudentKey(null);
-                    }}
-                    disabled={saveStatus === 'saving'}
-                    className={`w-full py-2 rounded-lg text-sm font-medium transition-all ${
-                      saveStatus === 'saved'
-                        ? 'bg-green-500/20 text-green-400'
-                        : 'bg-sp-accent text-white hover:bg-sp-accent/80'
-                    } disabled:opacity-50`}
-                  >
-                    {saveStatus === 'saved'
-                      ? '✓ 출석 저장됨'
-                      : saveStatus === 'saving'
-                        ? '저장 중...'
-                        : '출석 저장'}
-                  </button>
-
-                  {/* 특기사항 섹션 */}
-                  <div className="border-t border-sp-border pt-4">
-                    <p className="text-xs font-semibold text-sp-muted mb-3 uppercase tracking-wide">
-                      특기사항
-                    </p>
-                    <ObservationForm classId={classId} studentId={selectedStudentKey} />
-                  </div>
-
-                  {/* 최근 기록 (토글) */}
-                  {selectedObservations.length > 0 && (
-                    <div className="border-t border-sp-border pt-4">
-                      <button
-                        onClick={() => setShowRecentRecords((v) => !v)}
-                        className="flex items-center gap-1 text-xs font-semibold text-sp-muted mb-3 uppercase tracking-wide hover:text-sp-text transition-colors"
-                      >
-                        <span
-                          className="material-symbols-outlined text-sm"
-                          style={{
-                            transition: 'transform 0.2s',
-                            transform: showRecentRecords ? 'rotate(90deg)' : 'rotate(0deg)',
-                          }}
-                        >
-                          chevron_right
-                        </span>
-                        최근 기록 ({selectedObservations.length})
-                      </button>
-                      {showRecentRecords && (
-                        <div className="space-y-2">
-                          {selectedObservations.map((rec) => (
-                            <ObservationCard key={rec.id} record={rec} />
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          );
-        })()}
 
       {/* Phase 3a — 이름 학습 모드 (자리배치 콘텐츠 영역 안에 한정) */}
       {cls.seating && (
@@ -1169,9 +604,6 @@ function renderNormalGrid(
   onDrop: (r: number, c: number) => Promise<void>,
   onDragEnd: () => void,
   isTeacherView: boolean,
-  isAttendanceMode: boolean,
-  attendanceMap: Map<string, AttendanceStatus>,
-  onAttendanceClick: (key: string) => void,
 ) {
   const cells: React.ReactNode[] = [];
   for (let vi = 0; vi < rows; vi++) {
@@ -1189,16 +621,13 @@ function renderNormalGrid(
           key={`${r}-${c}`}
           student={student ?? null}
           isEmpty={key === null}
-          isEditing={isAttendanceMode ? false : isEditing}
+          isEditing={isEditing}
           isDragSource={isDragSrc}
           isDragOver={isDragOvr}
           onDragStart={() => onDragStart(r, c)}
           onDragOver={(e) => onDragOver(e, r, c)}
           onDrop={() => void onDrop(r, c)}
           onDragEnd={onDragEnd}
-          isAttendanceMode={isAttendanceMode}
-          attendanceStatus={key ? attendanceMap.get(key) : undefined}
-          onAttendanceClick={key ? () => onAttendanceClick(key) : undefined}
         />,
       );
     }
@@ -1222,9 +651,6 @@ function renderPairGrid(
   onDragEnd: () => void,
   isTeacherView: boolean,
   oddColumnMode: 'single' | 'triple' = 'single',
-  isAttendanceMode: boolean = false,
-  attendanceMap: Map<string, AttendanceStatus> = new Map(),
-  onAttendanceClick: (key: string) => void = () => {},
 ) {
   const mode = oddColumnMode;
   const basePairs = buildPairGroups(cols, cols % 2 !== 0 ? mode : 'single');
@@ -1259,16 +685,13 @@ function renderPairGrid(
             key={`${r}-${c}`}
             student={student ?? null}
             isEmpty={key === null}
-            isEditing={isAttendanceMode ? false : isEditing}
+            isEditing={isEditing}
             isDragSource={isDragSrc}
             isDragOver={isDragOvr}
             onDragStart={() => onDragStart(r, c)}
             onDragOver={(e) => onDragOver(e, r, c)}
             onDrop={() => void onDrop(r, c)}
             onDragEnd={onDragEnd}
-            isAttendanceMode={isAttendanceMode}
-            attendanceStatus={key ? attendanceMap.get(key) : undefined}
-            onAttendanceClick={key ? () => onAttendanceClick(key) : undefined}
           />,
         );
       }
@@ -1301,9 +724,6 @@ interface SeatCardProps {
   onDragOver: (e: React.DragEvent) => void;
   onDrop: () => void;
   onDragEnd: () => void;
-  isAttendanceMode?: boolean;
-  attendanceStatus?: AttendanceStatus;
-  onAttendanceClick?: () => void;
 }
 
 function SeatCard({
@@ -1316,69 +736,35 @@ function SeatCard({
   onDragOver,
   onDrop,
   onDragEnd,
-  isAttendanceMode,
-  attendanceStatus,
-  onAttendanceClick,
 }: SeatCardProps) {
   let className =
     'w-20 min-h-[72px] rounded-xl p-2 flex flex-col items-center justify-center gap-0.5 transition-all select-none relative';
 
   if (isEmpty) {
     className += ' border border-dashed border-sp-border/50 bg-transparent';
-  } else if (isAttendanceMode && attendanceStatus) {
-    className += ` bg-sp-card border-2 ${BORDER_COLOR_MAP[attendanceStatus]}`;
   } else {
     className += ' bg-sp-card border border-sp-border';
   }
 
-  if (isDragOver && !isAttendanceMode) {
+  if (isDragOver) {
     className += ' ring-2 ring-sp-accent bg-sp-accent/10';
   }
-  if (isDragSource && !isAttendanceMode) {
+  if (isDragSource) {
     className += ' opacity-40';
   }
-  if (isAttendanceMode && !isEmpty) {
-    className += ' cursor-pointer hover:brightness-110';
-  } else if (isEditing && !isEmpty) {
+  if (isEditing && !isEmpty) {
     className += ' cursor-grab active:cursor-grabbing';
   }
-
-  const handleClick = () => {
-    if (isAttendanceMode && onAttendanceClick && !isEmpty) {
-      onAttendanceClick();
-    }
-  };
 
   return (
     <div
       className={className}
-      draggable={!isAttendanceMode && isEditing}
-      onDragStart={isAttendanceMode ? undefined : onDragStart}
-      onDragOver={isAttendanceMode ? undefined : onDragOver}
-      onDrop={isAttendanceMode ? undefined : onDrop}
-      onDragEnd={isAttendanceMode ? undefined : onDragEnd}
-      onClick={handleClick}
+      draggable={isEditing}
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      onDragEnd={onDragEnd}
     >
-      {/* 출석 상태 뱃지 */}
-      {isAttendanceMode && attendanceStatus && !isEmpty && attendanceStatus !== 'present' && (
-        <span
-          className={`absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-white text-xs
-            ${attendanceStatus === 'absent' ? 'bg-red-500' : ''}
-            ${attendanceStatus === 'late' ? 'bg-amber-500' : ''}
-            ${attendanceStatus === 'earlyLeave' ? 'bg-orange-500' : ''}
-            ${attendanceStatus === 'classAbsence' ? 'bg-purple-500' : ''}
-          `}
-        >
-          <span className="material-symbols-outlined text-icon-sm">
-            {STATUS_CONFIG[attendanceStatus].icon}
-          </span>
-        </span>
-      )}
-      {isAttendanceMode && attendanceStatus === 'present' && !isEmpty && (
-        <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-white text-xs bg-green-500">
-          <span className="material-symbols-outlined text-icon-sm">check</span>
-        </span>
-      )}
       {student ? (
         <>
           {student.grade != null && student.classNum != null && (

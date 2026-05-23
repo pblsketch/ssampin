@@ -13,12 +13,14 @@ const VIEW_TABS: { id: RecordViewMode; icon: string; label: string }[] = [
 
 interface ClassRecordTabProps {
   classId: string;
+  initialStudentViewMode?: 'list' | 'seating';
   onGoToRosterTab?: () => void;
   onGoToSeatingTab?: () => void;
 }
 
 export function ClassRecordTab({
   classId,
+  initialStudentViewMode,
   onGoToRosterTab,
   onGoToSeatingTab,
 }: ClassRecordTabProps) {
@@ -55,6 +57,7 @@ export function ClassRecordTab({
         {viewMode === 'input' && (
           <ClassRecordInputView
             classId={classId}
+            initialStudentViewMode={initialStudentViewMode}
             onGoToRosterTab={onGoToRosterTab}
             onGoToSeatingTab={onGoToSeatingTab}
           />
