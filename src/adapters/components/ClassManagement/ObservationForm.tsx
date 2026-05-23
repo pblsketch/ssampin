@@ -244,7 +244,7 @@ export function ObservationForm({ classId, studentId }: ObservationFormProps) {
         value={content}
         onChange={(e) => handleContentChange(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder="관찰 내용을 입력하세요..."
+        placeholder="관찰한 내용이나 학생부에 참고할 내용을 적어 주세요"
         maxLength={500}
         rows={3}
         className="w-full bg-sp-bg border border-sp-border rounded-lg px-3 py-2 text-sm text-sp-text placeholder:text-sp-muted resize-none focus:outline-none focus:border-sp-accent"

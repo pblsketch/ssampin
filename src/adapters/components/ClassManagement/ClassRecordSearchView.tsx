@@ -31,22 +31,29 @@ function getInitialPeriodFilter(): PeriodFilter {
   return month === 7 || month === 12 ? 'semester' : 'all';
 }
 
-interface MixedRecord {
-  type: 'attendance' | 'observation';
+interface MixedRecordBase {
   date: string;
   studentKey: string;
   studentName: string;
   studentNumber: number;
-  // attendance fields
-  period?: number;
-  status?: AttendanceStatus;
+}
+
+interface AttendanceMixedRecord extends MixedRecordBase {
+  type: 'attendance';
+  period: number;
+  status: AttendanceStatus;
   reason?: string;
   memo?: string;
-  // observation fields
-  id?: string;
-  tags?: readonly string[];
-  content?: string;
 }
+
+interface ObservationMixedRecord extends MixedRecordBase {
+  type: 'observation';
+  id: string;
+  tags: readonly string[];
+  content: string;
+}
+
+type MixedRecord = AttendanceMixedRecord | ObservationMixedRecord;
 
 interface ClassRecordSearchViewProps {
   classId: string;
@@ -186,8 +193,8 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
       result = result.filter(
         (r) =>
           r.studentName.toLowerCase().includes(kw) ||
-          r.content?.toLowerCase().includes(kw) ||
-          r.memo?.toLowerCase().includes(kw),
+          (r.type === 'observation' && r.content.toLowerCase().includes(kw)) ||
+          (r.type === 'attendance' && r.memo?.toLowerCase().includes(kw)),
       );
     }
     return result;
@@ -262,7 +269,7 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
                     prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag],
                   )
                 }
-                className={`px-2 py-0.5 rounded-full text-caption font-medium transition-colors ${
+                className={`px-2 py-0.5 rounded-full text-xs font-medium transition-colors ${
                   tagFilter.includes(tag)
                     ? 'bg-sp-accent text-white'
                     : 'bg-sp-surface text-sp-muted hover:text-sp-text'
@@ -282,7 +289,7 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
           className="bg-sp-bg border border-sp-border rounded-lg px-2 py-1.5 text-xs text-sp-text placeholder:text-sp-muted focus:outline-none focus:border-sp-accent w-40"
         />
 
-        <span className="text-caption text-sp-muted">{filtered.length}건</span>
+        <span className="text-xs text-sp-muted">{filtered.length}건</span>
       </div>
 
       {/* 기간 필터 */}
@@ -347,14 +354,14 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
                 {group.date.replace(/^\d{4}-/, '').replace('-', '/')}
               </div>
               <div className="space-y-1.5">
-                {group.records.map((r, i) => (
+                {group.records.map((r) => (
                   <div
-                    key={`${r.type}-${r.date}-${r.studentKey}-${r.period ?? r.id ?? i}`}
+                    key={`${r.type}-${r.date}-${r.studentKey}-${r.type === 'attendance' ? r.period : r.id}`}
                     className="bg-sp-surface border border-sp-border rounded-xl px-3 py-2.5"
                   >
                     <div className="flex items-center gap-2 mb-1">
                       <span
-                        className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                        className={`px-1.5 py-0.5 rounded text-xs font-bold ${
                           r.type === 'attendance'
                             ? 'bg-amber-500/15 text-amber-400'
                             : 'bg-blue-500/15 text-blue-400'
@@ -368,16 +375,14 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
                       {r.type === 'attendance' && r.status && (
                         <>
                           <span
-                            className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${STATUS_BADGE[r.status]}`}
+                            className={`px-1.5 py-0.5 rounded text-xs font-medium ${STATUS_BADGE[r.status]}`}
                           >
                             {STATUS_LABEL[r.status]}
                           </span>
                           {r.period && (
-                            <span className="text-caption text-sp-muted">{r.period}교시</span>
+                            <span className="text-xs text-sp-muted">{r.period}교시</span>
                           )}
-                          {r.reason && (
-                            <span className="text-caption text-sp-muted">({r.reason})</span>
-                          )}
+                          {r.reason && <span className="text-xs text-sp-muted">({r.reason})</span>}
                         </>
                       )}
                       {r.type === 'observation' && r.tags && (
@@ -385,7 +390,7 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
                           {r.tags.map((tag) => (
                             <span
                               key={tag}
-                              className="px-1.5 py-0.5 rounded-full text-[9px] font-medium bg-sp-accent/10 text-sp-accent"
+                              className="px-1.5 py-0.5 rounded-full text-xs font-medium bg-sp-accent/10 text-sp-accent"
                             >
                               {tag}
                             </span>

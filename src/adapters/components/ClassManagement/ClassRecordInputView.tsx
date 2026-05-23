@@ -57,7 +57,7 @@ const STATUS_OPTIONS: { key: AttendanceStatus; label: string; icon: string; colo
   },
   {
     key: 'classAbsence',
-    label: '결과',
+    label: '결과(수업 불참)',
     icon: 'event_busy',
     color: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
   },
@@ -490,7 +490,7 @@ export function ClassRecordInputView({
               <button
                 type="button"
                 onClick={handleFillAllPresent}
-                className="shrink-0 px-2 py-1 rounded-lg bg-green-500/15 text-green-400 text-caption font-medium hover:bg-green-500/25 transition-colors"
+                className="shrink-0 px-2 py-1 rounded-lg bg-green-500/15 text-green-400 text-xs font-medium hover:bg-green-500/25 transition-colors"
               >
                 전체 출석으로 채우기
               </button>
@@ -521,13 +521,13 @@ export function ClassRecordInputView({
                       <span className="flex-1 text-sm">{s.name}</span>
                       {attendanceInitialized && (
                         <span
-                          className={`px-1.5 py-0.5 rounded text-caption font-medium ${STATUS_BADGE[att]}`}
+                          className={`px-1.5 py-0.5 rounded text-xs font-medium ${STATUS_BADGE[att]}`}
                         >
                           {STATUS_LABEL[att]}
                         </span>
                       )}
                       {count > 0 && (
-                        <span className="px-1.5 py-0.5 rounded-full text-caption font-medium bg-sp-accent/15 text-sp-accent">
+                        <span className="px-1.5 py-0.5 rounded-full text-xs font-medium bg-sp-accent/15 text-sp-accent">
                           {count}건
                         </span>
                       )}
@@ -594,8 +594,9 @@ export function ClassRecordInputView({
                   {STATUS_OPTIONS.map((opt) => (
                     <button
                       key={opt.key}
+                      aria-pressed={selectedAttendance?.status === opt.key}
                       onClick={() => setStudentAttendanceStatus(selectedStudentKey, opt.key)}
-                      className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-detail font-medium transition-colors border ${
+                      className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-detail font-medium transition-colors border focus-visible:outline focus-visible:outline-2 focus-visible:outline-sp-accent ${
                         selectedAttendance?.status === opt.key
                           ? opt.color
                           : 'border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-muted'
@@ -611,7 +612,7 @@ export function ClassRecordInputView({
 
                 {selectedAttendance && selectedAttendance.status !== 'present' && (
                   <div className="flex items-center gap-1.5 mb-2">
-                    <span className="text-caption text-sp-muted font-medium">사유</span>
+                    <span className="text-xs text-sp-muted font-medium">사유</span>
                     {ATTENDANCE_REASONS.map((r) => (
                       <button
                         key={r}
@@ -621,7 +622,7 @@ export function ClassRecordInputView({
                             selectedAttendance.reason === r ? undefined : r,
                           )
                         }
-                        className={`px-2 py-0.5 rounded-lg text-caption font-medium transition-colors border ${
+                        className={`px-2 py-0.5 rounded-lg text-xs font-medium transition-colors border ${
                           selectedAttendance.reason === r
                             ? 'bg-sp-accent/15 text-sp-accent border-sp-accent/30'
                             : 'border-sp-border text-sp-muted hover:text-sp-text'
@@ -639,7 +640,7 @@ export function ClassRecordInputView({
                     placeholder="상세 사유..."
                     value={selectedAttendance.memo ?? ''}
                     onChange={(e) => setStudentMemo(selectedStudentKey, e.target.value)}
-                    className="w-full bg-sp-bg border border-sp-border rounded-lg px-2 py-1 text-caption text-sp-text placeholder:text-sp-muted/50 focus:outline-none focus:border-sp-accent mb-2"
+                    className="w-full bg-sp-bg border border-sp-border rounded-lg px-2 py-1 text-xs text-sp-text placeholder:text-sp-muted/50 focus:outline-none focus:border-sp-accent mb-2"
                   />
                 )}
 
@@ -711,7 +712,7 @@ export function ClassRecordInputView({
           <div className="flex-1 min-w-0 bg-sp-card border border-sp-border rounded-xl flex items-center justify-center">
             <div className="text-center text-sp-muted">
               <span className="material-symbols-outlined text-3xl mb-2 opacity-30">person</span>
-              <p className="text-xs">학생을 선택하세요</p>
+              <p className="text-xs">기록할 학생을 왼쪽 리스트에서 선택해 주세요</p>
             </div>
           </div>
         )}

@@ -108,12 +108,14 @@ export function ClassManagementPage() {
           {selectedClassId ? (
             <>
               {/* 탭 버튼 */}
-              <div className="flex gap-2 mb-4">
+              <div className="flex gap-2 mb-4" role="tablist" aria-label="수업 관리 탭">
                 {TABS.map((tab) => (
                   <button
                     key={tab.id}
+                    role="tab"
+                    aria-selected={activeTab === tab.id}
                     onClick={() => setActiveTab(tab.id)}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-sp-accent ${
                       activeTab === tab.id
                         ? 'bg-sp-accent text-white'
                         : 'text-sp-muted hover:text-sp-text hover:bg-sp-text/5'
