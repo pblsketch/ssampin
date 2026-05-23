@@ -153,6 +153,34 @@ desktopWidgetManager.setHoverCallback((inside) => {
   }
 });
 
+function restoreWidgetBoundsIfChanged(
+  window: BrowserWindow,
+  expected: WidgetBounds,
+  reason: string,
+): boolean {
+  const current = window.getBounds();
+  const changed =
+    current.x !== expected.x ||
+    current.y !== expected.y ||
+    current.width !== expected.width ||
+    current.height !== expected.height;
+
+  if (!changed) return false;
+
+  diagLog(
+    'widget',
+    `[transitionMode][${reason}] bounds changed during mode transition; restoring. ` +
+      `before=${JSON.stringify(expected)} after=${JSON.stringify(current)}`,
+  );
+  window.setBounds(expected);
+  window.setPosition(expected.x, expected.y);
+  window.setSize(expected.width, expected.height);
+  if (desktopWidgetManager.isEnabled()) {
+    desktopWidgetManager.updateWidgetBounds(window);
+  }
+  return true;
+}
+
 // ──────────────────────────────────────────────────────────────────────
 // 위젯 모드 전환 단일 흐름 — race 안정화 (PR-2 안정화 라운드)
 // ──────────────────────────────────────────────────────────────────────
@@ -225,6 +253,14 @@ async function transitionWidgetMode(
       '[transitionMode][stage1-pre-disable] disable() 호출 (이전 native-desktop 정리)',
     );
     desktopWidgetManager.disable();
+    // Native desktop detach can briefly expose Electron's fallback DIP bounds
+    // (for example 960x1032 -> 549x590). Restore before the 50ms settle wait
+    // so users do not see the widget shrink when opening a modal.
+    restoreWidgetBoundsIfChanged(
+      widgetWindow,
+      boundsBeforeTransition,
+      'stage1-restore-bounds-after-disable',
+    );
 
     // ─── 진단 (이슈 B) — STAGE 1: disable 직후 native state ───
     // GWL_STYLE의 WS_CHILD 비트가 이 시점에 떨어졌는지 확인. 여전히 WS_CHILD면 detach 실패.
@@ -244,6 +280,11 @@ async function transitionWidgetMode(
       diagWarn('widget', '[transitionMode] 안정화 대기 중 widget destroyed — abort');
       return { appliedMode: fromMode, fallbackEvent: null };
     }
+    restoreWidgetBoundsIfChanged(
+      widgetWindow,
+      boundsBeforeTransition,
+      'stage2-restore-bounds-after-settle',
+    );
 
     // ─── 진단 (이슈 B) — STAGE 2: 50ms 안정화 후 native state ───
     const stage2 = desktopWidgetManager.diagnosticSnapshot(widgetWindow);
@@ -305,27 +346,7 @@ async function transitionWidgetMode(
 
   // widget-mode-discovery — STAGE 4 직후 동기 bounds 복원.
   // 모드 전환 시퀀스가 widget 크기/위치를 건드리지 않도록 진입 값으로 강제 복원.
-  const boundsAfterSync = widgetWindow.getBounds();
-  const boundsChangedSync =
-    boundsAfterSync.x !== boundsBeforeTransition.x ||
-    boundsAfterSync.y !== boundsBeforeTransition.y ||
-    boundsAfterSync.width !== boundsBeforeTransition.width ||
-    boundsAfterSync.height !== boundsBeforeTransition.height;
-  if (boundsChangedSync) {
-    diagLog(
-      'widget',
-      `[transitionMode][stage4-restore-bounds] 모드 전환 중 bounds 변경 감지 — 진입 값으로 복원. ` +
-        `before=${JSON.stringify(boundsBeforeTransition)} after=${JSON.stringify(boundsAfterSync)}`,
-    );
-    widgetWindow.setBounds(boundsBeforeTransition);
-    // native-desktop(WS_CHILD) 환경에서 setBounds가 race로 무시되는 사례 대비
-    // setPosition/setSize 동기 추가 호출(layout handler 패턴과 동일).
-    widgetWindow.setPosition(boundsBeforeTransition.x, boundsBeforeTransition.y);
-    widgetWindow.setSize(boundsBeforeTransition.width, boundsBeforeTransition.height);
-    if (desktopWidgetManager.isEnabled()) {
-      desktopWidgetManager.updateWidgetBounds(widgetWindow);
-    }
-  }
+  restoreWidgetBoundsIfChanged(widgetWindow, boundsBeforeTransition, 'stage4-restore-bounds');
 
   // 5. 비동기 추가 안전망 — 100ms 후 visible 재확인.
   //    DWM 합성이 늦게 반영되는 케이스에서 ShowWindow가 무시됐을 가능성 대응.
@@ -358,25 +379,7 @@ async function transitionWidgetMode(
       }
       // widget-mode-discovery — 비동기 안전망: 100ms 후에도 bounds가 변경됐다면 재복원.
       // 100ms 사이의 hide+show 토글 또는 DWM 늦은 합성이 size를 변경했을 가능성 대응.
-      const boundsAfterAsync = widgetWindow.getBounds();
-      const boundsChangedAsync =
-        boundsAfterAsync.x !== boundsBeforeTransition.x ||
-        boundsAfterAsync.y !== boundsBeforeTransition.y ||
-        boundsAfterAsync.width !== boundsBeforeTransition.width ||
-        boundsAfterAsync.height !== boundsBeforeTransition.height;
-      if (boundsChangedAsync) {
-        diagLog(
-          'widget',
-          `[transitionMode][stage5-restore-bounds] 100ms 후 bounds 변경 감지 — 재복원. ` +
-            `before=${JSON.stringify(boundsBeforeTransition)} after=${JSON.stringify(boundsAfterAsync)}`,
-        );
-        widgetWindow.setBounds(boundsBeforeTransition);
-        widgetWindow.setPosition(boundsBeforeTransition.x, boundsBeforeTransition.y);
-        widgetWindow.setSize(boundsBeforeTransition.width, boundsBeforeTransition.height);
-        if (desktopWidgetManager.isEnabled()) {
-          desktopWidgetManager.updateWidgetBounds(widgetWindow);
-        }
-      }
+      restoreWidgetBoundsIfChanged(widgetWindow, boundsBeforeTransition, 'stage5-restore-bounds');
     }
   }, 100);
 

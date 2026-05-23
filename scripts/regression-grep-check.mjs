@@ -61,6 +61,15 @@ const presenceChecks = [
     pattern: /isRateLimited[\s\S]{0,400}?session\.handle\.isRateLimited\s*\(/,
     name: 'REGRESSION #5b: isRateLimited()가 session.handle.isRateLimited()로 위임',
   },
+  {
+    // REGRESSION #26 (2026-05-23): native-desktop widget modal input mode detaches
+    // the WS_CHILD window to topmost. On Windows this can expose a one-frame fallback
+    // size such as 960x1032 -> 549x590 unless bounds are restored immediately after
+    // disable(), before the 50ms settle wait.
+    file: 'electron/main.ts',
+    pattern: /stage1-restore-bounds-after-disable/,
+    name: 'REGRESSION #26: native-desktop 모달 입력 전환은 disable 직후 bounds를 즉시 복원',
+  },
   // ────────────────────────────────────────────────────────────────────────
   // REGRESSION #10~#16 — notification-modal-stacking-fix Phase 4 (2026-05-21)
   // 사용자 신고 "처음 일정 알림 X 안 눌림"의 근본 원인이었던 모달 동시 노출
