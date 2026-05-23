@@ -33,6 +33,16 @@
     --sp-card-shadow: none;
     --sp-font-family: 'Pretendard Variable', 'Pretendard', 'Noto Sans KR', sans-serif;
 
+    /* === Board Sticky Note Colors (PDCA-1 Step 1.2) === */
+    /* 협업보드 스티커 메모 배경색. generateBoardHTML.ts STICKER_COLORS 와 hex 동기.
+       학생 페이지는 inline HTML 이라 CSS 변수 직접 사용 어려움 — 두 곳 동시 갱신 필요.
+       다크 모드 override 는 .theme-dark 블록 참조. */
+    --sp-board-sticky-yellow: #fef3c7;
+    --sp-board-sticky-pink: #fce7f3;
+    --sp-board-sticky-blue: #dbeafe;
+    --sp-board-sticky-green: #d1fae5;
+    --sp-board-sticky-purple: #ede9fe;
+
     /* === Radius scale === */
     --sp-radius-xs: 4px;
     --sp-radius-sm: 6px;
@@ -176,6 +186,13 @@ body {
     0 1px 1px 0 rgba(0, 0, 0, 0.28), 0 0 1px 0 rgba(0, 0, 0, 0.32);
   --sp-shadow-lg: 0 24px 48px rgba(0, 0, 0, 0.48), 0 8px 16px rgba(0, 0, 0, 0.32);
   --sp-shadow-accent: 0 8px 24px rgba(59, 130, 246, 0.35);
+
+  /* Board sticky note colors — dark theme overrides (legibility 위해 desaturated) */
+  --sp-board-sticky-yellow: #5a4720;
+  --sp-board-sticky-pink: #4d2536;
+  --sp-board-sticky-blue: #1e3a5f;
+  --sp-board-sticky-green: #1f3d2a;
+  --sp-board-sticky-purple: #3d2d5c;
 }
 
 /* ─── Light Theme: Fix hover text & background visibility ─── */

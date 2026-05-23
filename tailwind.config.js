@@ -49,6 +49,13 @@ export default {
           warning: 'var(--sp-warning)',
           error: 'var(--sp-error)',
           info: 'var(--sp-info)',
+          /* PDCA-1 Step 1.2: 협업보드 스티커 메모 5색 토큰. light/dark 자동 대응.
+             generateBoardHTML.ts STICKER_COLORS 의 hex 값과 동기 유지 필수. */
+          'board-sticky-yellow': 'var(--sp-board-sticky-yellow)',
+          'board-sticky-pink': 'var(--sp-board-sticky-pink)',
+          'board-sticky-blue': 'var(--sp-board-sticky-blue)',
+          'board-sticky-green': 'var(--sp-board-sticky-green)',
+          'board-sticky-purple': 'var(--sp-board-sticky-purple)',
         },
       },
       fontSize: {

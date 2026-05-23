@@ -308,12 +308,14 @@ export function generateBoardHTML(input: GenerateBoardHtmlInput): string {
 
       // PDCA-1 Step 1.1: 스티커 메모 closure state (toolbar 핸들러 ↔ Excalidraw onChange 공유)
       // SP-1 PASS 근거: customData.authorAwarenessId 가 y-excalidraw 2.0.12 round-trip 안전 확인.
+      // PDCA-1 Step 1.2: hex 값은 src/index.css 의 --sp-board-sticky-* 토큰과 hex 동기.
+      // 학생 페이지는 inline HTML 이라 CSS 변수 직접 사용 어려움 — 두 곳 동시 갱신 필요.
       const STICKER_COLORS = {
-        yellow: '#FEF3C7',
-        pink: '#FCE7F3',
-        blue: '#DBEAFE',
-        green: '#D1FAE5',
-        purple: '#EDE9FE',
+        yellow: '#FEF3C7', // --sp-board-sticky-yellow
+        pink: '#FCE7F3', // --sp-board-sticky-pink
+        blue: '#DBEAFE', // --sp-board-sticky-blue
+        green: '#D1FAE5', // --sp-board-sticky-green
+        purple: '#EDE9FE', // --sp-board-sticky-purple
       };
       let currentExcalidrawAPI = null;
       let activeStickerColor = null;
