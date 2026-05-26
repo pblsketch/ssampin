@@ -466,8 +466,8 @@ export function ClassSeatingTab({ classId, onOpenRecordSeatView }: ClassSeatingT
 
         {onOpenRecordSeatView && (
           <button onClick={onOpenRecordSeatView} className={toolBtnClass}>
-            <span className="material-symbols-outlined text-lg">edit_note</span>이 좌석으로 수업
-            기록하기
+            <span className="material-symbols-outlined text-lg">edit_note</span>
+            {'이 좌석으로 수업 기록하기'}
           </button>
         )}
 

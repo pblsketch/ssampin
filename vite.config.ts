@@ -5,6 +5,25 @@ import pkg from './package.json';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
+
+  // v2.0.9 빌드 가드 — v2.0.8 빌드 사고(.env 누락 → client_id 빈 채로 박혀
+  // OAuth 전체 깨짐) 재발 차단.
+  // 프로덕션 빌드 시 client_id/secret 둘 다 비어있으면 즉시 throw.
+  const clientId = (env.VITE_GOOGLE_CLIENT_ID || '').trim();
+  const clientSecret = (env.VITE_GOOGLE_CLIENT_SECRET || '').trim();
+  if (mode === 'production') {
+    const missing: string[] = [];
+    if (!clientId) missing.push('VITE_GOOGLE_CLIENT_ID');
+    if (!clientSecret) missing.push('VITE_GOOGLE_CLIENT_SECRET');
+    if (missing.length > 0) {
+      throw new Error(
+        `[vite] 프로덕션 빌드 중단: ${missing.join(', ')} 가 비어있습니다.\n` +
+          `프로젝트 루트 .env 파일을 확인하거나, 빌드 cwd가 프로젝트 루트인지 확인하세요.\n` +
+          `(이 가드는 v2.0.8 빌드 사고 — client_id 누락 채 배포되어 OAuth 전체 깨진 회귀를 차단합니다.)`,
+      );
+    }
+  }
+
   return {
     plugins: [react()],
     resolve: {
@@ -29,10 +48,8 @@ export default defineConfig(({ mode }) => {
       exclude: ['pdfjs-dist'],
     },
     define: {
-      'process.env.GOOGLE_CLIENT_ID': JSON.stringify((env.VITE_GOOGLE_CLIENT_ID || '').trim()),
-      'process.env.GOOGLE_CLIENT_SECRET': JSON.stringify(
-        (env.VITE_GOOGLE_CLIENT_SECRET || '').trim(),
-      ),
+      'process.env.GOOGLE_CLIENT_ID': JSON.stringify(clientId),
+      'process.env.GOOGLE_CLIENT_SECRET': JSON.stringify(clientSecret),
       __APP_VERSION__: JSON.stringify(pkg.version),
     },
     server: {

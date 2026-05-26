@@ -36,6 +36,9 @@ export default defineConfig(({ mode, command }) => {
     const missing: string[] = [];
     if (!env.VITE_SUPABASE_URL) missing.push('VITE_SUPABASE_URL');
     if (!env.VITE_SUPABASE_ANON_KEY) missing.push('VITE_SUPABASE_ANON_KEY');
+    // v2.0.9 추가 — v2.0.8 데스크톱 빌드 사고(.env 누락 → client_id 빈 채로 박힘)와 동일 패턴이
+    // 모바일에도 발생할 수 있으므로 함께 가드. 모바일은 secret 없이 client_id만 사용.
+    if (!env.VITE_GOOGLE_CLIENT_ID) missing.push('VITE_GOOGLE_CLIENT_ID');
     if (missing.length > 0) {
       throw new Error(
         `[vite.mobile.config] production build에 필요한 환경변수 누락: ${missing.join(', ')}. ` +
