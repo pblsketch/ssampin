@@ -312,6 +312,29 @@ interface ElectronAPI {
     maxTextLength: number;
   }) => Promise<{ port: number; localIPs: string[] }>;
   stopRealtimeWall: () => Promise<void>;
+  startClassroomAgreement: (data: {
+    session: import('./domain/entities/ClassroomAgreement').ClassroomAgreementSession;
+  }) => Promise<{ port: number; localIPs: string[] }>;
+  stopClassroomAgreement: () => Promise<void>;
+  classroomAgreementTunnelAvailable: () => Promise<boolean>;
+  classroomAgreementTunnelInstall: () => Promise<void>;
+  classroomAgreementTunnelStart: () => Promise<{ tunnelUrl: string }>;
+  getClassroomAgreementState: () => Promise<
+    import('./domain/entities/ClassroomAgreement').ClassroomAgreementSession | null
+  >;
+  setClassroomAgreementPhase: (data: {
+    command: import('./domain/rules/classroomAgreementPhaseRules').ClassroomAgreementTeacherPhaseCommand;
+  }) => Promise<{ phase: import('./domain/entities/ClassroomAgreement').ClassroomAgreementPhase }>;
+  updateClassroomAgreementSession: (data: {
+    session: import('./domain/entities/ClassroomAgreement').ClassroomAgreementSession;
+  }) => Promise<void>;
+  onClassroomAgreementEvent: (
+    callback: (
+      event:
+        | import('./usecases/classroomAgreement/ClassroomAgreementRealtimeSession').ClassroomAgreementTeacherEvent
+        | { type: 'connection-count'; count: number },
+    ) => void,
+  ) => () => void;
   realtimeWallTunnelAvailable: () => Promise<boolean>;
   realtimeWallTunnelInstall: () => Promise<void>;
   realtimeWallTunnelStart: () => Promise<{ tunnelUrl: string }>;

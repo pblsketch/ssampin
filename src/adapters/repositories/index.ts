@@ -6,3 +6,4 @@ export { JsonTodoRepository } from './JsonTodoRepository';
 export { JsonSettingsRepository } from './JsonSettingsRepository';
 export { JsonStudentRecordsRepository } from './JsonStudentRecordsRepository';
 export { JsonMessageRepository } from './JsonMessageRepository';
+export { JsonClassroomAgreementRepository } from './JsonClassroomAgreementRepository';

@@ -7,3 +7,6 @@ export * from './matchingRules';
 export * from './boardRules';
 export * from './notebookRules';
 export * from './notePageRules';
+export * from './classroomAgreementRules';
+export * from './classroomAgreementPhaseRules';
+export * from './classroomAgreementSanitization';

@@ -1,6 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { StudentRealtimeWallApp } from './StudentRealtimeWallApp';
+import { StudentApp } from './StudentApp';
 import { applyDefaultBoardTheme } from './useStudentBoardTheme';
 import '../index.css';
 
@@ -22,6 +22,6 @@ if (!rootEl) throw new Error('#root element not found');
 
 createRoot(rootEl).render(
   <StrictMode>
-    <StudentRealtimeWallApp />
+    <StudentApp />
   </StrictMode>,
 );

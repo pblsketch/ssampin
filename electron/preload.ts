@@ -399,6 +399,30 @@ contextBridge.exposeInMainWorld('electronAPI', {
   }): Promise<{ port: number; localIPs: string[] }> =>
     ipcRenderer.invoke('realtime-wall:start', data),
   stopRealtimeWall: (): Promise<void> => ipcRenderer.invoke('realtime-wall:stop'),
+  startClassroomAgreement: (data: {
+    session: unknown;
+  }): Promise<{ port: number; localIPs: string[] }> =>
+    ipcRenderer.invoke('classroom-agreement:start', data),
+  stopClassroomAgreement: (): Promise<void> => ipcRenderer.invoke('classroom-agreement:stop'),
+  classroomAgreementTunnelAvailable: (): Promise<boolean> =>
+    ipcRenderer.invoke('classroom-agreement:tunnel-available'),
+  classroomAgreementTunnelInstall: (): Promise<void> =>
+    ipcRenderer.invoke('classroom-agreement:tunnel-install'),
+  classroomAgreementTunnelStart: (): Promise<{ tunnelUrl: string }> =>
+    ipcRenderer.invoke('classroom-agreement:tunnel-start'),
+  getClassroomAgreementState: (): Promise<unknown | null> =>
+    ipcRenderer.invoke('classroom-agreement:get-state'),
+  setClassroomAgreementPhase: (data: { command: string }): Promise<{ phase: string }> =>
+    ipcRenderer.invoke('classroom-agreement:phase-command', data),
+  updateClassroomAgreementSession: (data: { session: unknown }): Promise<void> =>
+    ipcRenderer.invoke('classroom-agreement:update-session', data),
+  onClassroomAgreementEvent: (callback: (event: unknown) => void): (() => void) => {
+    const handler = (_event: unknown, data: unknown) => callback(data);
+    ipcRenderer.on('classroom-agreement:event', handler);
+    return () => {
+      ipcRenderer.removeListener('classroom-agreement:event', handler);
+    };
+  },
   realtimeWallTunnelAvailable: (): Promise<boolean> =>
     ipcRenderer.invoke('realtime-wall:tunnel-available'),
   realtimeWallTunnelInstall: (): Promise<void> =>

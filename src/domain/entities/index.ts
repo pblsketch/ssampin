@@ -10,11 +10,7 @@ export type {
 
 export type { SeatingData } from './Seating';
 
-export type {
-  EventCategory,
-  SchoolEvent,
-  SchoolEventsData,
-} from './SchoolEvent';
+export type { EventCategory, SchoolEvent, SchoolEventsData } from './SchoolEvent';
 
 export type { Memo, MemosData } from './Memo';
 export type { Notebook, NotebookColor, NotebookContext } from './Notebook';
@@ -23,10 +19,7 @@ export type { NotePage, NotePageBody } from './NotePage';
 
 export type { Todo, TodosData } from './Todo';
 
-export type {
-  StudentRecord,
-  StudentRecordsData,
-} from './StudentRecord';
+export type { StudentRecord, StudentRecordsData } from './StudentRecord';
 
 export type { SchoolLevel, WidgetSettings, SystemSettings, Settings } from './Settings';
 
@@ -59,3 +52,22 @@ export type { SyncSettings } from './Settings';
 export type { Board } from './Board';
 export type { BoardSession, BoardSessionPhase } from './BoardSession';
 export type { BoardParticipant } from './BoardParticipant';
+export type {
+  AgreementFinalItem,
+  AgreementValidationIssue,
+  AgreementValidationIssueCode,
+  AgreementValidationIssueSeverity,
+  ClassroomAgreementCandidate,
+  ClassroomAgreementParticipant,
+  ClassroomAgreementPhase,
+  ClassroomAgreementProposal,
+  ClassroomAgreementSavedSession,
+  ClassroomAgreementSaveMode,
+  ClassroomAgreementSession,
+  ClassroomAgreementSessionsData,
+  ClassroomAgreementSettings,
+  ClassroomAgreementType,
+  PriorityVote,
+  RefinementVote,
+} from './ClassroomAgreement';
+export { CLASSROOM_AGREEMENT_SCHEMA_VERSION } from './ClassroomAgreement';

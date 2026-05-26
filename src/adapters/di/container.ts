@@ -43,6 +43,7 @@ import type { IFormTemplateRepository } from '@domain/repositories/IFormTemplate
 import type { INotebookRepository } from '@domain/repositories/INotebookRepository';
 import type { IWallBoardRepository } from '@domain/repositories/IWallBoardRepository';
 import type { IStickerRepository } from '@domain/repositories/IStickerRepository';
+import type { IClassroomAgreementRepository } from '@domain/repositories/IClassroomAgreementRepository';
 import type { IThumbnailer, IPreviewExtractor, IPrinterAdapter } from '@domain/ports/IFormPorts';
 
 import { ElectronStorageAdapter } from '@infrastructure/storage/ElectronStorageAdapter';
@@ -92,6 +93,7 @@ import { JsonNotebookRepository } from '@adapters/repositories/JsonNotebookRepos
 import { JsonWallBoardRepository } from '@adapters/repositories/JsonWallBoardRepository';
 import { JsonStickerRepository } from '@adapters/repositories/JsonStickerRepository';
 import { JsonInteractiveLessonsRepository } from '@adapters/repositories/JsonInteractiveLessonsRepository';
+import { JsonClassroomAgreementRepository } from '@adapters/repositories/JsonClassroomAgreementRepository';
 import type { IInteractiveLessonRepository } from '@domain/repositories/IInteractiveLessonRepository';
 import { PdfJsThumbnailer } from '@infrastructure/forms/PdfJsThumbnailer';
 import { HwpxExcelPreviewExtractor } from '@infrastructure/forms/HwpxExcelPreviewExtractor';
@@ -186,6 +188,10 @@ export const wallBoardRepository: IWallBoardRepository = new JsonWallBoardReposi
 
 // === 내 이모티콘 (Sticker Picker) ===
 export const stickerRepository: IStickerRepository = new JsonStickerRepository(storage);
+
+// === 교실 약속 정하기 ===
+export const classroomAgreementRepository: IClassroomAgreementRepository =
+  new JsonClassroomAgreementRepository(storage);
 
 // === 서식 관리 ===
 export const formRepository: IFormTemplateRepository = new JsonFormTemplateRepository(storage);

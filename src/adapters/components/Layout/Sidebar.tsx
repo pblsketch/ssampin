@@ -28,6 +28,7 @@ export type PageId =
   | 'tool-poll'
   | 'tool-survey'
   | 'tool-multi-survey'
+  | 'tool-classroom-agreement'
   | 'tool-realtime-wall'
   | 'tool-interactive-slides'
   | 'tool-wordcloud'
@@ -131,6 +132,7 @@ const NON_PROTECTABLE: ReadonlySet<PageId> = new Set([
   'tool-coin',
   'tool-poll',
   'tool-survey',
+  'tool-classroom-agreement',
   'tool-seat-picker',
   'tool-sticker',
   'settings',

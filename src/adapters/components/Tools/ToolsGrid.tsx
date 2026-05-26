@@ -21,7 +21,7 @@ interface ToolCard {
   hidden?: boolean;
 }
 
-const TOOLS: ToolCard[] = [
+export const TOOLS: ToolCard[] = [
   { id: 'tool-timer', emoji: '⏱️', name: '타이머', description: '시간 제한 활동에 딱!' },
   { id: 'tool-random', emoji: '🎲', name: '랜덤 뽑기', description: '공정한 발표자 선정' },
   { id: 'tool-traffic-light', emoji: '🚦', name: '신호등', description: '활동 시작과 멈춤' },
@@ -38,6 +38,13 @@ const TOOLS: ToolCard[] = [
     emoji: '📋',
     name: '복합 유형 설문',
     description: '여러 질문 유형을 한 번에 설문',
+  },
+  {
+    id: 'tool-classroom-agreement',
+    emoji: '🤝',
+    name: '교실 약속 정하기',
+    description: '학생들과 만약-그러면 실행 약속을 함께 정합니다',
+    badge: 'NEW',
   },
   {
     id: 'tool-wordcloud',

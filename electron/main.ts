@@ -30,6 +30,7 @@ import { registerLiveDiscussionHandlers } from './ipc/liveDiscussion';
 import { registerInteractiveSlidesHandlers } from './ipc/interactiveSlides';
 import { registerSlidesSourceHandlers } from './ipc/slidesSource';
 import { registerRealtimeWallHandlers } from './ipc/realtimeWall';
+import { registerClassroomAgreementHandlers } from './ipc/classroomAgreement';
 import { registerRealtimeWallLinkPreviewHandler } from './ipc/realtimeWallLinkPreview';
 import { registerRealtimeWallPdfHandlers } from './ipc/realtimeWallPdf';
 import { registerBoardHandlers, endActiveBoardSessionSync } from './ipc/board';
@@ -4607,6 +4608,7 @@ if (!gotTheLock) {
     registerLiveMultiSurveyHandlers(mainWindow!);
     registerLiveDiscussionHandlers(mainWindow!);
     registerRealtimeWallHandlers(mainWindow!);
+    registerClassroomAgreementHandlers(mainWindow!);
     registerInteractiveSlidesHandlers(mainWindow!);
     registerSlidesSourceHandlers();
     registerRealtimeWallLinkPreviewHandler();
