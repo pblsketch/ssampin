@@ -1,9 +1,11 @@
 import type {
-  AgreementFinalItem,
+  AgreementFinalScene,
   ClassroomAgreementCandidate,
+  ClassroomAgreementClassContext,
   ClassroomAgreementParticipant,
   ClassroomAgreementPhase,
   ClassroomAgreementProposal,
+  ClassroomAgreementScene,
   ClassroomAgreementSession,
   PriorityVote,
   RefinementVote,
@@ -43,6 +45,7 @@ export interface ClassroomAgreementMessageResult {
 
 export interface ClassroomAgreementPublicCandidate {
   readonly id: string;
+  readonly sceneId: string;
   readonly ifText: string;
   readonly thenText: string;
   readonly showAuthors: boolean;
@@ -57,7 +60,9 @@ export interface ClassroomAgreementPublicState {
   readonly id: string;
   readonly title: string;
   readonly agreementType: ClassroomAgreementSession['agreementType'];
-  readonly scene: string;
+  readonly classContext: ClassroomAgreementClassContext;
+  readonly scenes: readonly ClassroomAgreementScene[];
+  readonly activeSceneId: string;
   readonly phase: ClassroomAgreementPhase;
   readonly settings: {
     readonly maxProposalsPerStudent: number;
@@ -67,7 +72,7 @@ export interface ClassroomAgreementPublicState {
   readonly participantCount: number;
   readonly proposalCount: number;
   readonly candidates: readonly ClassroomAgreementPublicCandidate[];
-  readonly finalItems: readonly AgreementFinalItem[];
+  readonly finalItems: readonly AgreementFinalScene[];
 }
 
 export class ClassroomAgreementRealtimeSession {
@@ -219,6 +224,7 @@ export class ClassroomAgreementRealtimeSession {
     const participant = this.requireParticipant(studentToken);
     const proposal: ClassroomAgreementProposal = {
       id: this.deps.makeId(),
+      sceneId: this.session.activeSceneId,
       studentToken,
       displayName: participant.displayName,
       ifText: ifText.trim(),
@@ -395,7 +401,9 @@ export function makeClassroomAgreementPublicState(
     id: session.id,
     title: session.title,
     agreementType: session.agreementType,
-    scene: session.scene,
+    classContext: session.classContext,
+    scenes: session.scenes,
+    activeSceneId: session.activeSceneId,
     phase: session.phase,
     settings: {
       maxProposalsPerStudent: session.settings.maxProposalsPerStudent,
@@ -408,6 +416,7 @@ export function makeClassroomAgreementPublicState(
       .filter((candidate) => candidate.status !== 'removed')
       .map((candidate) => ({
         id: candidate.id,
+        sceneId: candidate.sceneId,
         ifText: candidate.ifText,
         thenText: candidate.thenText,
         showAuthors: candidate.showAuthors,
@@ -418,9 +427,12 @@ export function makeClassroomAgreementPublicState(
         priorityVoteCount: candidate.priorityVotes.length,
         status: candidate.status,
       })),
-    finalItems: session.finalItems.map((item) => ({
-      ...item,
-      authorLabels: item.showAuthors ? [...item.authorLabels] : [],
+    finalItems: session.finalItems.map((scene) => ({
+      ...scene,
+      items: scene.items.map((item) => ({
+        ...item,
+        authorLabels: item.showAuthors ? [...item.authorLabels] : [],
+      })),
     })),
   };
 }

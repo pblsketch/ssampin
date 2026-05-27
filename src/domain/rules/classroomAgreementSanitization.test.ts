@@ -10,7 +10,9 @@ const buildSession = (
   id: 'session-1',
   title: '3학년 2반 약속',
   agreementType: 'class-rule',
-  scene: '발표 듣기',
+  classContext: { kind: 'manual', label: '3학년 2반' },
+  scenes: [{ id: 'scene-1', label: '발표 듣기', order: 1 }],
+  activeSceneId: 'scene-1',
   phase: 'finalized',
   settings: {
     maxProposalsPerStudent: 2,
@@ -37,6 +39,7 @@ const buildSession = (
   proposals: [
     {
       id: 'proposal-1',
+      sceneId: 'scene-1',
       studentToken: 'tok-hidden-a',
       displayName: '숨김학생',
       ifText: '만약 친구가 발표하고 있으면',
@@ -48,6 +51,7 @@ const buildSession = (
   candidates: [
     {
       id: 'candidate-1',
+      sceneId: 'scene-1',
       sourceProposalIds: ['proposal-1'],
       authorLabels: ['숨김학생'],
       ifText: '만약 친구가 발표하고 있으면',
@@ -74,20 +78,28 @@ const buildSession = (
   ],
   finalItems: [
     {
-      id: 'final-hidden-author',
-      ifText: '만약 친구가 발표하고 있으면',
-      thenText: '우리는 말을 끊지 않고 메모한다',
-      showAuthors: false,
-      authorLabels: ['숨김학생'],
-      priorityRank: 1,
-    },
-    {
-      id: 'final-shown-author',
-      ifText: '만약 모둠 의견이 다르면',
-      thenText: '우리는 먼저 상대 의견을 한 문장으로 다시 말한다',
-      showAuthors: true,
-      authorLabels: ['공개학생'],
-      priorityRank: 2,
+      sceneId: 'scene-1',
+      sceneLabel: '발표 듣기',
+      items: [
+        {
+          id: 'final-hidden-author',
+          sceneId: 'scene-1',
+          ifText: '만약 친구가 발표하고 있으면',
+          thenText: '우리는 말을 끊지 않고 메모한다',
+          showAuthors: false,
+          authorLabels: ['숨김학생'],
+          priorityRank: 1,
+        },
+        {
+          id: 'final-shown-author',
+          sceneId: 'scene-1',
+          ifText: '만약 모둠 의견이 다르면',
+          thenText: '우리는 먼저 상대 의견을 한 문장으로 다시 말한다',
+          showAuthors: true,
+          authorLabels: ['공개학생'],
+          priorityRank: 2,
+        },
+      ],
     },
   ],
   createdAt: 1000,
@@ -104,8 +116,8 @@ describe('classroomAgreementSanitization', () => {
     expect(saved.saveMode).toBe('finalOnly');
     expect(saved.savedAt).toBe(3000);
     expect(saved.process).toBeUndefined();
-    expect(saved.finalItems[0]!.authorLabels).toEqual([]);
-    expect(saved.finalItems[1]!.authorLabels).toEqual(['공개학생']);
+    expect(saved.finalItems[0]!.items[0]!.authorLabels).toEqual([]);
+    expect(saved.finalItems[0]!.items[1]!.authorLabels).toEqual(['공개학생']);
 
     const serialized = JSON.stringify(saved);
     expect(serialized).not.toContain('participants');

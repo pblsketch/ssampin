@@ -13,6 +13,7 @@ const TOKEN_B = '22222222-2222-4222-8222-222222222222';
 function buildCandidate(id: string): ClassroomAgreementCandidate {
   return {
     id,
+    sceneId: 'scene-1',
     sourceProposalIds: [],
     authorLabels: [],
     ifText: `만약 ${id} 상황이면`,
@@ -33,7 +34,9 @@ function buildSession(
     id: 'session-1',
     title: '교실 약속',
     agreementType: 'class-rule',
-    scene: '수업 시작',
+    classContext: { kind: 'manual', label: '3학년 2반' },
+    scenes: [{ id: 'scene-1', label: '수업 시작', order: 1 }],
+    activeSceneId: 'scene-1',
     phase: 'collecting',
     settings: {
       maxProposalsPerStudent: 1,
@@ -111,6 +114,33 @@ describe('ClassroomAgreementRealtimeSession', () => {
       code: 'proposal-limit',
     });
     expect(runtime.getSession().proposals).toHaveLength(1);
+  });
+
+  it('assigns submitted proposals to the currently active scene', () => {
+    const runtime = createRuntime(
+      buildSession({
+        scenes: [
+          { id: 'scene-1', label: '수업 시작', order: 1 },
+          { id: 'scene-2', label: '모둠 토의', order: 2 },
+        ],
+        activeSceneId: 'scene-2',
+      }),
+    );
+    runtime.handleClientMessage({
+      type: 'join-session',
+      protocolVersion: CLASSROOM_AGREEMENT_PROTOCOL_VERSION,
+      displayName: '민수',
+    });
+
+    runtime.handleClientMessage({
+      type: 'submit-proposal',
+      studentToken: TOKEN_A,
+      clientMessageId: 'scene-message-1',
+      ifText: '만약 모둠 의견이 다르면',
+      thenText: '우리는 먼저 상대 의견을 다시 말한다',
+    });
+
+    expect(runtime.getSession().proposals[0]!.sceneId).toBe('scene-2');
   });
 
   it('rejects student input in the wrong phase', () => {

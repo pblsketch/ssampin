@@ -4,6 +4,7 @@ import {
   buildFinalItemsFromCandidates,
   buildClassroomAgreementStudentUrl,
   ClassroomAgreementResultView,
+  ClassroomAgreementSavedResultsPanel,
   createCandidateFromProposal,
   createClassroomAgreementSession,
   deriveClassroomAgreementTeacherStep,
@@ -22,7 +23,8 @@ describe('ToolClassroomAgreement shell', () => {
       {
         title: ' 우리 반 약속 ',
         agreementType: 'class-rule',
-        scene: ' 발표 듣기 ',
+        classContext: { kind: 'manual', label: ' 3학년 2반 ' },
+        scenes: [' 발표 듣기 ', '모둠 토의'],
         maxProposalsPerStudent: 2,
         priorityVoteLimit: 3,
         allowNickname: true,
@@ -37,7 +39,12 @@ describe('ToolClassroomAgreement shell', () => {
       id: 'session-1',
       title: '우리 반 약속',
       agreementType: 'class-rule',
-      scene: '발표 듣기',
+      classContext: { kind: 'manual', label: '3학년 2반' },
+      scenes: [
+        { id: 'session-1', label: '발표 듣기', order: 1 },
+        { id: 'session-1', label: '모둠 토의', order: 2 },
+      ],
+      activeSceneId: 'session-1',
       phase: 'setup',
       createdAt: 1234,
       updatedAt: 1234,
@@ -52,7 +59,8 @@ describe('ToolClassroomAgreement shell', () => {
       {
         title: '우리 반 약속',
         agreementType: 'class-rule',
-        scene: '발표 듣기',
+        classContext: { kind: 'manual', label: '3학년 2반' },
+        scenes: ['발표 듣기'],
         maxProposalsPerStudent: 2,
         priorityVoteLimit: 3,
         allowNickname: true,
@@ -133,10 +141,14 @@ describe('ToolClassroomAgreement shell', () => {
   });
 
   it('builds final items by priority votes and strips hidden authors', () => {
-    const finalItems = buildFinalItemsFromCandidates([
-      buildCandidate('candidate-low', 'Hidden author', false, 1),
-      buildCandidate('candidate-high', 'Visible author', true, 3),
-    ]);
+    const finalScenes = buildFinalItemsFromCandidates(
+      [
+        buildCandidate('candidate-low', 'Hidden author', false, 1),
+        buildCandidate('candidate-high', 'Visible author', true, 3),
+      ],
+      [{ id: 'scene-1', label: 'Start', order: 1 }],
+    );
+    const finalItems = finalScenes[0]!.items;
 
     expect(finalItems.map((item) => item.id)).toEqual(['candidate-high', 'candidate-low']);
     expect(finalItems.map((item) => item.priorityRank)).toEqual([1, 2]);
@@ -146,18 +158,21 @@ describe('ToolClassroomAgreement shell', () => {
   });
 
   it('keeps author visibility settings in copy and print output', () => {
-    const finalItems = buildFinalItemsFromCandidates([
-      buildCandidate('candidate-hidden', 'Hidden author', false, 2),
-      buildCandidate('candidate-visible', 'Visible author', true, 1),
-    ]);
+    const finalItems = buildFinalItemsFromCandidates(
+      [
+        buildCandidate('candidate-hidden', 'Hidden author', false, 2),
+        buildCandidate('candidate-visible', 'Visible author', true, 1),
+      ],
+      [{ id: 'scene-1', label: 'Start', order: 1 }],
+    );
 
-    const copyText = formatClassroomAgreementCopyText(finalItems, 'Class Promise', 'Start');
+    const copyText = formatClassroomAgreementCopyText(finalItems, 'Class Promise', '3학년 2반');
     const printHtml = renderToString(
       <ClassroomAgreementResultView
         title="Class Promise"
-        scene="Start"
+        classContextLabel="3학년 2반"
         view="cards"
-        items={finalItems}
+        finalScenes={finalItems}
       />,
     );
 
@@ -166,11 +181,52 @@ describe('ToolClassroomAgreement shell', () => {
     expect(printHtml).toContain('Visible author');
     expect(printHtml).not.toContain('Hidden author');
   });
+
+  it('renders saved classroom agreement results so teachers can reopen stored promises', () => {
+    const finalItems = buildFinalItemsFromCandidates(
+      [buildCandidate('candidate-visible', 'Visible author', true, 2)],
+      [{ id: 'scene-1', label: '발표 듣기', order: 1 }],
+    );
+
+    const html = renderToString(
+      <ClassroomAgreementSavedResultsPanel
+        savedSessions={[
+          {
+            schemaVersion: 2,
+            id: 'saved-session-1',
+            title: '우리 반 교실 약속',
+            agreementType: 'class-rule',
+            classContext: { kind: 'manual', label: '3학년 2반' },
+            scenes: [{ id: 'scene-1', label: '발표 듣기', order: 1 }],
+            saveMode: 'includeProcess',
+            finalItems,
+            savedAt: new Date('2026-05-27T09:00:00+09:00').getTime(),
+            process: {
+              participants: [],
+              proposals: [buildProposal('proposal-1', '민수')],
+              candidates: [],
+            },
+          },
+        ]}
+        onDelete={() => {}}
+      />,
+    );
+
+    expect(html).toContain('저장된 약속');
+    expect(html).toContain('우리 반 교실 약속');
+    expect(html).toContain('장면');
+    expect(html).toContain('발표 듣기');
+    expect(html).toContain('과정 포함');
+    expect(html).toContain('제안');
+    expect(html).toContain('1');
+    expect(html).toContain('If candidate-visible happens, we choose one visible action.');
+  });
 });
 
 function buildProposal(id: string, displayName: string): ClassroomAgreementProposal {
   return {
     id,
+    sceneId: 'scene-1',
     studentToken: `${id}-token`,
     displayName,
     ifText: '만약 친구가 발표하고 있으면',
@@ -187,6 +243,7 @@ function buildCandidate(
 ): ClassroomAgreementCandidate {
   return {
     id,
+    sceneId: 'scene-1',
     sourceProposalIds: [`${id}-proposal`],
     authorLabels: [authorLabel],
     ifText: `If ${id} happens`,

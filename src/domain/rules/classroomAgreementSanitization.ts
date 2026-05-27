@@ -1,5 +1,5 @@
 import type {
-  AgreementFinalItem,
+  AgreementFinalScene,
   ClassroomAgreementSaveMode,
   ClassroomAgreementSavedSession,
   ClassroomAgreementSession,
@@ -20,7 +20,8 @@ export function sanitizeClassroomAgreementSessionForSave(
     id: session.id,
     title: session.title,
     agreementType: session.agreementType,
-    scene: session.scene,
+    classContext: session.classContext,
+    scenes: [...session.scenes],
     saveMode,
     finalItems: sanitizeFinalItemsForSave(session.finalItems),
     savedAt: options.savedAt ?? Date.now(),
@@ -48,10 +49,13 @@ export function sanitizeClassroomAgreementSessionForSave(
 }
 
 export function sanitizeFinalItemsForSave(
-  finalItems: readonly AgreementFinalItem[],
-): AgreementFinalItem[] {
-  return finalItems.map((item) => ({
-    ...item,
-    authorLabels: item.showAuthors ? [...item.authorLabels] : [],
+  finalItems: readonly AgreementFinalScene[],
+): AgreementFinalScene[] {
+  return finalItems.map((scene) => ({
+    ...scene,
+    items: scene.items.map((item) => ({
+      ...item,
+      authorLabels: item.showAuthors ? [...item.authorLabels] : [],
+    })),
   }));
 }

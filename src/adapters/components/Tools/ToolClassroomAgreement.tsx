@@ -4,9 +4,13 @@ import { ToolLayout } from './ToolLayout';
 import { LiveSessionClient } from '@infrastructure/supabase/LiveSessionClient';
 import type {
   AgreementFinalItem,
+  AgreementFinalScene,
   ClassroomAgreementCandidate,
+  ClassroomAgreementClassContext,
   ClassroomAgreementProposal,
   ClassroomAgreementSaveMode,
+  ClassroomAgreementSavedSession,
+  ClassroomAgreementScene,
   ClassroomAgreementSession,
   ClassroomAgreementType,
 } from '@domain/entities/ClassroomAgreement';
@@ -22,7 +26,8 @@ interface ToolClassroomAgreementProps {
 interface ClassroomAgreementSetupInput {
   readonly title: string;
   readonly agreementType: ClassroomAgreementType;
-  readonly scene: string;
+  readonly classContext: ClassroomAgreementClassContext;
+  readonly scenes: readonly string[];
   readonly maxProposalsPerStudent: number;
   readonly priorityVoteLimit: number;
   readonly allowNickname: boolean;
@@ -82,7 +87,11 @@ export const CLASSROOM_AGREEMENT_SCENES = [
 export function ToolClassroomAgreement({ onBack, isFullscreen }: ToolClassroomAgreementProps) {
   const [title, setTitle] = useState('우리 반 교실 약속');
   const [agreementType, setAgreementType] = useState<ClassroomAgreementType>('class-rule');
-  const [selectedScene, setSelectedScene] = useState<string>(CLASSROOM_AGREEMENT_SCENES[0]);
+  const [classContext, setClassContext] = useState<ClassroomAgreementClassContext>({
+    kind: 'manual',
+    label: '우리 반',
+  });
+  const [selectedScenes, setSelectedScenes] = useState<string[]>([CLASSROOM_AGREEMENT_SCENES[0]]);
   const [customScene, setCustomScene] = useState('');
   const [maxProposalsPerStudent, setMaxProposalsPerStudent] = useState(2);
   const [priorityVoteLimit, setPriorityVoteLimit] = useState(3);
@@ -103,16 +112,30 @@ export function ToolClassroomAgreement({ onBack, isFullscreen }: ToolClassroomAg
   const [resultView, setResultView] = useState<'list' | 'cards' | 'group' | 'lesson'>('list');
   const [saveNotice, setSaveNotice] = useState<string | null>(null);
   const liveSessionClientRef = useRef(new LiveSessionClient());
+  const savedSessions = useClassroomAgreementStore((state) => state.savedSessions);
+  const loadSavedAgreementSessions = useClassroomAgreementStore((state) => state.load);
   const saveAgreementSession = useClassroomAgreementStore((state) => state.saveSession);
+  const deleteAgreementSession = useClassroomAgreementStore((state) => state.deleteSession);
 
-  const scene = customScene.trim() || selectedScene;
+  const scenes = useMemo(
+    () => normalizeSceneLabels([...selectedScenes, customScene]),
+    [selectedScenes, customScene],
+  );
   const studentUrl = shortUrl ?? tunnelUrl ?? '';
   const teacherStep = deriveClassroomAgreementTeacherStep(session);
   const activeCandidates = useMemo(
     () => session?.candidates.filter((candidate) => candidate.status !== 'removed') ?? [],
     [session?.candidates],
   );
+  const activeSceneProposals = useMemo(
+    () => session?.proposals.filter((proposal) => proposal.sceneId === session.activeSceneId) ?? [],
+    [session],
+  );
   const hasActiveCandidates = activeCandidates.length > 0;
+
+  useEffect(() => {
+    void loadSavedAgreementSessions();
+  }, [loadSavedAgreementSessions]);
 
   useEffect(() => {
     const unsubscribe = window.electronAPI?.onClassroomAgreementEvent?.((event) => {
@@ -165,7 +188,8 @@ export function ToolClassroomAgreement({ onBack, isFullscreen }: ToolClassroomAg
         {
           title,
           agreementType,
-          scene,
+          classContext,
+          scenes,
           maxProposalsPerStudent,
           priorityVoteLimit,
           allowNickname,
@@ -178,7 +202,8 @@ export function ToolClassroomAgreement({ onBack, isFullscreen }: ToolClassroomAg
     [
       title,
       agreementType,
-      scene,
+      classContext,
+      scenes,
       maxProposalsPerStudent,
       priorityVoteLimit,
       allowNickname,
@@ -239,7 +264,8 @@ export function ToolClassroomAgreement({ onBack, isFullscreen }: ToolClassroomAg
         {
           title,
           agreementType,
-          scene,
+          classContext,
+          scenes,
           maxProposalsPerStudent,
           priorityVoteLimit,
           allowNickname,
@@ -260,7 +286,8 @@ export function ToolClassroomAgreement({ onBack, isFullscreen }: ToolClassroomAg
   }, [
     title,
     agreementType,
-    scene,
+    classContext,
+    scenes,
     maxProposalsPerStudent,
     priorityVoteLimit,
     allowNickname,
@@ -321,6 +348,21 @@ export function ToolClassroomAgreement({ onBack, isFullscreen }: ToolClassroomAg
       });
     },
     [],
+  );
+
+  const changeActiveScene = useCallback(
+    (sceneId: string) => {
+      commitSession((current) => {
+        if (!current.scenes.some((scene) => scene.id === sceneId)) return current;
+        setSelectedProposalIds([]);
+        return {
+          ...current,
+          activeSceneId: sceneId,
+          updatedAt: Date.now(),
+        };
+      });
+    },
+    [commitSession],
   );
 
   const promoteProposal = useCallback(
@@ -427,7 +469,7 @@ export function ToolClassroomAgreement({ onBack, isFullscreen }: ToolClassroomAg
 
   const finalizeResults = useCallback(async () => {
     if (!session || !window.electronAPI?.setClassroomAgreementPhase) return;
-    const finalItems = buildFinalItemsFromCandidates(session.candidates);
+    const finalItems = buildFinalItemsFromCandidates(session.candidates, session.scenes);
     const nextSession: ClassroomAgreementSession = {
       ...session,
       candidates: session.candidates.map((candidate) =>
@@ -446,7 +488,11 @@ export function ToolClassroomAgreement({ onBack, isFullscreen }: ToolClassroomAg
     if (!session) return;
     try {
       await navigator.clipboard.writeText(
-        formatClassroomAgreementCopyText(session.finalItems, session.title, session.scene),
+        formatClassroomAgreementCopyText(
+          session.finalItems,
+          session.title,
+          session.classContext.label,
+        ),
       );
       setSaveNotice('완성된 약속을 클립보드에 복사했습니다.');
     } catch {
@@ -516,11 +562,18 @@ export function ToolClassroomAgreement({ onBack, isFullscreen }: ToolClassroomAg
         )}
 
         {teacherStep === 'setup' && (
+          <ClassroomAgreementSavedResultsPanel
+            savedSessions={savedSessions}
+            onDelete={deleteAgreementSession}
+          />
+        )}
+
+        {teacherStep === 'setup' && (
           <section className="rounded-2xl border border-sp-border bg-sp-card p-5">
             <div className="flex flex-col gap-2">
               <p className="text-sm font-semibold text-sp-accent">1단계 · 사전 설정</p>
               <h3 className="text-xl font-bold text-sp-text">
-                교사와 학생이 함께 다룰 장면을 정해요
+                교사와 학생이 함께 약속이 필요한 장면을 정해요
               </h3>
               <p className="text-sm leading-6 text-sp-muted">
                 이 단계에서는 활동 조건만 정합니다. 학생 제안, 후보 다듬기, 투표 화면은 다음
@@ -553,18 +606,21 @@ export function ToolClassroomAgreement({ onBack, isFullscreen }: ToolClassroomAg
               </div>
 
               <div className="rounded-2xl border border-sp-border bg-sp-surface p-5">
-                <h4 className="text-lg font-bold text-sp-text">자주 흐트러지는 장면</h4>
+                <h4 className="text-lg font-bold text-sp-text">약속이 필요한 장면</h4>
                 <div className="mt-4 flex flex-wrap gap-2">
                   {CLASSROOM_AGREEMENT_SCENES.map((item) => (
                     <button
                       key={item}
                       type="button"
                       onClick={() => {
-                        setSelectedScene(item);
-                        setCustomScene('');
+                        setSelectedScenes((current) =>
+                          current.includes(item)
+                            ? current.filter((sceneLabel) => sceneLabel !== item)
+                            : [...current, item],
+                        );
                       }}
                       className={`rounded-full border px-3 py-2 text-sm transition ${
-                        scene === item && !customScene.trim()
+                        selectedScenes.includes(item)
                           ? 'border-sp-accent bg-sp-accent/10 text-sp-text'
                           : 'border-sp-border bg-sp-card text-sp-muted hover:text-sp-text'
                       }`}
@@ -593,6 +649,17 @@ export function ToolClassroomAgreement({ onBack, isFullscreen }: ToolClassroomAg
                       value={title}
                       onChange={(event) => setTitle(event.target.value)}
                       className="mt-2 w-full rounded-xl border border-sp-border bg-sp-card px-4 py-3 text-sm text-sp-text focus:border-sp-accent focus:outline-none"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="text-sm font-medium text-sp-text">학급/수업 맥락</span>
+                    <input
+                      value={classContext.label}
+                      onChange={(event) =>
+                        setClassContext({ kind: 'manual', label: event.target.value })
+                      }
+                      placeholder="예: 3학년 2반, 5교시 국어"
+                      className="mt-2 w-full rounded-xl border border-sp-border bg-sp-card px-4 py-3 text-sm text-sp-text placeholder:text-sp-muted focus:border-sp-accent focus:outline-none"
                     />
                   </label>
                   <label className="block">
@@ -657,7 +724,8 @@ export function ToolClassroomAgreement({ onBack, isFullscreen }: ToolClassroomAg
             <div className="mt-5 grid gap-4 rounded-2xl border border-sp-border bg-sp-surface p-5 lg:grid-cols-[1fr_auto] lg:items-center">
               <dl className="grid gap-2 text-sm md:grid-cols-2">
                 <InfoRow label="유형" value={labelForAgreementType(previewSession.agreementType)} />
-                <InfoRow label="장면" value={previewSession.scene} />
+                <InfoRow label="맥락" value={previewSession.classContext.label} />
+                <InfoRow label="장면" value={formatSessionSceneLabels(previewSession)} />
                 <InfoRow label="제안 수" value={`학생 1명당 ${maxProposalsPerStudent}개`} />
                 <InfoRow label="선택 수" value={`${priorityVoteLimit}개까지`} />
               </dl>
@@ -686,7 +754,8 @@ export function ToolClassroomAgreement({ onBack, isFullscreen }: ToolClassroomAg
                 </p>
                 <dl className="mt-5 grid gap-3 text-sm md:grid-cols-2">
                   <InfoRow label="활동 제목" value={session.title} />
-                  <InfoRow label="장면" value={session.scene} />
+                  <InfoRow label="맥락" value={session.classContext.label} />
+                  <InfoRow label="장면" value={formatSessionSceneLabels(session)} />
                   <InfoRow label="참여 학생" value={`${connectedStudents}명 연결`} />
                   <InfoRow label="학생 제안" value="대기 중" />
                 </dl>
@@ -787,19 +856,23 @@ export function ToolClassroomAgreement({ onBack, isFullscreen }: ToolClassroomAg
               </div>
             </div>
 
-            <div className="mt-5 grid gap-3 md:grid-cols-3">
+            <div className="mt-5 grid gap-3 md:grid-cols-4">
               <SummaryCard label="참여 학생" value={`${connectedStudents}명`} />
               <SummaryCard label="들어온 제안" value={`${session.proposals.length}개`} />
+              <SummaryCard label="현재 장면 제안" value={`${activeSceneProposals.length}개`} />
               <SummaryCard label="후보로 올린 약속" value={`${activeCandidates.length}개`} />
             </div>
 
+            <ActiveSceneSelector session={session} onChange={changeActiveScene} />
+
             <div className="mt-5 space-y-3">
-              {session.proposals.length === 0 ? (
+              {activeSceneProposals.length === 0 ? (
                 <p className="rounded-xl bg-sp-surface p-4 text-sm text-sp-muted">
-                  아직 들어온 제안이 없습니다. 학생 화면에서 제안이 도착하면 이곳에 모입니다.
+                  현재 장면에는 아직 들어온 제안이 없습니다. 장면을 바꾸거나 학생 제안을 기다려
+                  주세요.
                 </p>
               ) : (
-                session.proposals.map((proposal) => (
+                activeSceneProposals.map((proposal) => (
                   <article
                     key={proposal.id}
                     className="rounded-xl border border-sp-border bg-sp-surface p-4"
@@ -819,7 +892,9 @@ export function ToolClassroomAgreement({ onBack, isFullscreen }: ToolClassroomAg
                         aria-label="합칠 제안 선택"
                       />
                       <div className="min-w-0 flex-1">
-                        <p className="text-xs text-sp-muted">{proposal.displayName}</p>
+                        <p className="text-xs text-sp-muted">
+                          {proposal.displayName} · {getSceneLabel(session.scenes, proposal.sceneId)}
+                        </p>
                         <p className="mt-2 text-sm leading-6 text-sp-text">
                           {proposal.ifText}, {proposal.thenText}.
                         </p>
@@ -884,6 +959,7 @@ export function ToolClassroomAgreement({ onBack, isFullscreen }: ToolClassroomAg
                   <CandidateEditor
                     key={candidate.id}
                     candidate={candidate}
+                    sceneLabel={getSceneLabel(session.scenes, candidate.sceneId)}
                     onChange={updateCandidate}
                     onRemove={removeCandidate}
                   />
@@ -959,7 +1035,11 @@ export function ToolClassroomAgreement({ onBack, isFullscreen }: ToolClassroomAg
 
             <div className="mt-5 space-y-3">
               {activeCandidates.map((candidate) => (
-                <CandidateVoteSummary key={candidate.id} candidate={candidate} />
+                <CandidateVoteSummary
+                  key={candidate.id}
+                  candidate={candidate}
+                  sceneLabel={getSceneLabel(session.scenes, candidate.sceneId)}
+                />
               ))}
             </div>
           </section>
@@ -995,9 +1075,9 @@ export function ToolClassroomAgreement({ onBack, isFullscreen }: ToolClassroomAg
 
             <ClassroomAgreementResultView
               title={session.title}
-              scene={session.scene}
+              classContextLabel={session.classContext.label}
               view={resultView}
-              items={session.finalItems}
+              finalScenes={session.finalItems}
             />
 
             <div className="mt-5 flex flex-wrap gap-2">
@@ -1031,18 +1111,67 @@ export function ToolClassroomAgreement({ onBack, isFullscreen }: ToolClassroomAg
   );
 }
 
+function normalizeSceneLabels(labels: readonly string[]): string[] {
+  const normalized = labels.map((label) => label.trim()).filter(Boolean);
+  const deduped = [...new Set(normalized)];
+  return deduped.length > 0 ? deduped : [CLASSROOM_AGREEMENT_SCENES[0]];
+}
+
+function createClassroomAgreementScenes(
+  labels: readonly string[],
+  makeId: () => string,
+): ClassroomAgreementScene[] {
+  return normalizeSceneLabels(labels).map((label, index) => ({
+    id: makeId(),
+    label,
+    order: index + 1,
+  }));
+}
+
+function formatSceneLabels(labels: readonly string[]): string {
+  return normalizeSceneLabels(labels).join(', ');
+}
+
+function formatSessionSceneLabels(session: Pick<ClassroomAgreementSession, 'scenes'>): string {
+  return formatSceneLabels(session.scenes.map((scene) => scene.label));
+}
+
+function getSceneLabel(scenes: readonly ClassroomAgreementScene[], sceneId: string): string {
+  return scenes.find((scene) => scene.id === sceneId)?.label ?? '알 수 없는 장면';
+}
+
+function formatFinalSceneLabels(finalScenes: readonly AgreementFinalScene[]): string {
+  return finalScenes.map((scene) => scene.sceneLabel).join(', ') || CLASSROOM_AGREEMENT_SCENES[0];
+}
+
+function formatSavedSessionSceneLabels(
+  session: Pick<ClassroomAgreementSavedSession, 'scenes' | 'finalItems'>,
+): string {
+  return formatSceneLabels(
+    session.scenes.length > 0
+      ? session.scenes.map((scene) => scene.label)
+      : session.finalItems.map((scene) => scene.sceneLabel),
+  );
+}
+
 export function createClassroomAgreementSession(
   input: ClassroomAgreementSetupInput,
   now: () => number,
   makeId: () => string,
 ): ClassroomAgreementSession {
   const timestamp = now();
+  const sceneEntities = createClassroomAgreementScenes(input.scenes, makeId);
   return {
     schemaVersion: CLASSROOM_AGREEMENT_SCHEMA_VERSION,
     id: makeId(),
     title: input.title.trim() || '교실 약속 정하기',
     agreementType: input.agreementType,
-    scene: input.scene.trim() || '수업 시작',
+    classContext: {
+      ...input.classContext,
+      label: input.classContext.label.trim() || '우리 반',
+    },
+    scenes: sceneEntities,
+    activeSceneId: sceneEntities[0]!.id,
     phase: 'setup',
     settings: {
       maxProposalsPerStudent: input.maxProposalsPerStudent,
@@ -1086,6 +1215,7 @@ export function createCandidateFromProposal(
 ): ClassroomAgreementCandidate {
   return {
     id: makeId(),
+    sceneId: proposal.sceneId,
     sourceProposalIds: [proposal.id],
     authorLabels: [proposal.displayName],
     ifText: proposal.ifText,
@@ -1113,6 +1243,7 @@ export function mergeProposalsIntoCandidate(
   const authorLabels = [...new Set(proposals.map((proposal) => proposal.displayName))];
   return {
     id: makeId(),
+    sceneId: first.sceneId,
     sourceProposalIds: proposals.map((proposal) => proposal.id),
     authorLabels,
     ifText: first.ifText,
@@ -1130,35 +1261,46 @@ export function mergeProposalsIntoCandidate(
 
 export function buildFinalItemsFromCandidates(
   candidates: readonly ClassroomAgreementCandidate[],
-): AgreementFinalItem[] {
-  return candidates
-    .map((candidate, originalIndex) => ({ candidate, originalIndex }))
-    .filter(({ candidate }) => candidate.status !== 'removed')
-    .sort(
-      (left, right) =>
-        right.candidate.priorityVotes.length - left.candidate.priorityVotes.length ||
-        left.originalIndex - right.originalIndex,
-    )
-    .map(({ candidate }, index) => ({
-      id: candidate.id,
-      ifText: normalizeSentencePart(candidate.ifText),
-      thenText: normalizeSentencePart(candidate.thenText),
-      showAuthors: candidate.showAuthors,
-      authorLabels: candidate.showAuthors ? [...candidate.authorLabels] : [],
-      priorityRank: index + 1,
-    }));
+  scenes: readonly ClassroomAgreementScene[],
+): AgreementFinalScene[] {
+  return scenes.map((scene) => ({
+    sceneId: scene.id,
+    sceneLabel: scene.label,
+    items: candidates
+      .map((candidate, originalIndex) => ({ candidate, originalIndex }))
+      .filter(({ candidate }) => candidate.status !== 'removed' && candidate.sceneId === scene.id)
+      .sort(
+        (left, right) =>
+          right.candidate.priorityVotes.length - left.candidate.priorityVotes.length ||
+          left.originalIndex - right.originalIndex,
+      )
+      .map(({ candidate }, index) => ({
+        id: candidate.id,
+        sceneId: candidate.sceneId,
+        ifText: normalizeSentencePart(candidate.ifText),
+        thenText: normalizeSentencePart(candidate.thenText),
+        showAuthors: candidate.showAuthors,
+        authorLabels: candidate.showAuthors ? [...candidate.authorLabels] : [],
+        priorityRank: index + 1,
+      })),
+  }));
 }
 
 export function formatClassroomAgreementCopyText(
-  items: readonly AgreementFinalItem[],
+  finalScenes: readonly AgreementFinalScene[],
   title = '완성된 교실 약속',
-  scene?: string,
+  classContextLabel?: string,
 ): string {
-  const header = [title, scene ? `장면: ${scene}` : null].filter(Boolean).join('\n');
-  const lines =
-    items.length > 0
-      ? items.map((item) => `- ${formatAgreementSentence(item)}${formatAuthorSuffix(item)}`)
-      : ['- 완성된 약속이 없습니다.'];
+  const header = [title, classContextLabel ? `맥락: ${classContextLabel}` : null]
+    .filter(Boolean)
+    .join('\n');
+  const lines = finalScenes.flatMap((scene) => {
+    const allItems =
+      scene.items.length > 0
+        ? scene.items.map((item) => `- ${formatAgreementSentence(item)}${formatAuthorSuffix(item)}`)
+        : ['- 완성된 약속이 없습니다.'];
+    return [`장면: ${scene.sceneLabel}`, ...allItems];
+  });
 
   return [header, ...lines].join('\n');
 }
@@ -1172,19 +1314,20 @@ function resultViewLabel(view: ClassroomAgreementResultViewMode): string {
 
 export function ClassroomAgreementResultView({
   title,
-  scene,
+  classContextLabel,
   view,
-  items,
+  finalScenes,
 }: {
   readonly title: string;
-  readonly scene: string;
+  readonly classContextLabel?: string;
   readonly view: ClassroomAgreementResultViewMode;
-  readonly items: readonly AgreementFinalItem[];
+  readonly finalScenes: readonly AgreementFinalScene[];
 }) {
+  const allItems = finalScenes.flatMap((scene) => scene.items);
   if (view === 'cards') {
     return (
       <div className="mt-5 grid gap-3 print:grid-cols-2">
-        {items.map((item) => (
+        {allItems.map((item) => (
           <article
             key={item.id}
             className="rounded-2xl border border-sp-border bg-sp-surface p-5 print:border-zinc-300 print:bg-white"
@@ -1205,9 +1348,12 @@ export function ClassroomAgreementResultView({
       <section className="mt-5 rounded-2xl border border-sp-border bg-sp-surface p-5 print:border-zinc-300 print:bg-white">
         <p className="text-sm font-bold text-sp-accent">모둠 활동 약속지</p>
         <h4 className="mt-2 text-xl font-bold text-sp-text print:text-black">{title}</h4>
-        <p className="mt-1 text-sm text-sp-muted print:text-zinc-600">장면: {scene}</p>
+        <p className="mt-1 text-sm text-sp-muted print:text-zinc-600">
+          {classContextLabel ? `맥락: ${classContextLabel} · ` : ''}장면:{' '}
+          {formatFinalSceneLabels(finalScenes)}
+        </p>
         <div className="mt-4 grid gap-3">
-          {items.map((item) => (
+          {allItems.map((item) => (
             <article
               key={item.id}
               className="rounded-xl bg-sp-card p-4 print:border print:bg-white"
@@ -1231,9 +1377,12 @@ export function ClassroomAgreementResultView({
       <section className="mt-5 rounded-2xl border border-sp-border bg-sp-surface p-5 print:border-zinc-300 print:bg-white">
         <p className="text-sm font-bold text-sp-accent">수업 루틴 약속지</p>
         <h4 className="mt-2 text-xl font-bold text-sp-text print:text-black">{title}</h4>
-        <p className="mt-1 text-sm text-sp-muted print:text-zinc-600">장면: {scene}</p>
+        <p className="mt-1 text-sm text-sp-muted print:text-zinc-600">
+          {classContextLabel ? `맥락: ${classContextLabel} · ` : ''}장면:{' '}
+          {formatFinalSceneLabels(finalScenes)}
+        </p>
         <ol className="mt-4 space-y-3">
-          {items.map((item) => (
+          {allItems.map((item) => (
             <li key={item.id} className="rounded-xl bg-sp-card p-4 print:border print:bg-white">
               <p className="text-sm font-semibold text-sp-text print:text-black">
                 루틴 {item.priorityRank}. {formatAgreementSentence(item)}
@@ -1248,7 +1397,7 @@ export function ClassroomAgreementResultView({
 
   return (
     <ol className="mt-5 space-y-3">
-      {items.map((item) => (
+      {allItems.map((item) => (
         <li key={item.id} className="rounded-xl border border-sp-border bg-sp-surface p-4">
           <p className="text-sm font-semibold leading-6 text-sp-text">
             {item.priorityRank}. {formatAgreementSentence(item)}
@@ -1258,6 +1407,141 @@ export function ClassroomAgreementResultView({
       ))}
     </ol>
   );
+}
+
+export function ClassroomAgreementSavedResultsPanel({
+  savedSessions,
+  onDelete,
+}: {
+  readonly savedSessions: readonly ClassroomAgreementSavedSession[];
+  readonly onDelete: (id: string) => void | Promise<void>;
+}) {
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(
+    savedSessions[0]?.id ?? null,
+  );
+  const selectedSession =
+    savedSessions.find((item) => item.id === selectedSessionId) ?? savedSessions[0] ?? null;
+
+  useEffect(() => {
+    if (savedSessions.length === 0) {
+      setSelectedSessionId(null);
+      return;
+    }
+    if (!selectedSession || !savedSessions.some((item) => item.id === selectedSession.id)) {
+      setSelectedSessionId(savedSessions[0]!.id);
+    }
+  }, [savedSessions, selectedSession]);
+
+  return (
+    <section className="rounded-2xl border border-sp-border bg-sp-card p-5">
+      <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+        <div>
+          <p className="text-sm font-semibold text-sp-accent">저장된 약속</p>
+          <h3 className="mt-1 text-xl font-bold text-sp-text">
+            저장한 교실 약속 결과를 다시 볼 수 있어요
+          </h3>
+          <p className="mt-2 text-sm leading-6 text-sp-muted">
+            활동을 마친 뒤 앱에 저장한 약속은 여기에서 다시 확인하고 수업에 활용할 수 있습니다.
+          </p>
+        </div>
+        <p className="rounded-full bg-sp-surface px-3 py-2 text-xs font-bold text-sp-muted">
+          총 {savedSessions.length}개
+        </p>
+      </div>
+
+      {savedSessions.length === 0 ? (
+        <p className="mt-4 rounded-xl bg-sp-surface p-4 text-sm text-sp-muted">
+          아직 저장된 약속이 없습니다. 활동을 마친 뒤 최종 카드에서 `앱에 저장`을 누르면 이곳에
+          표시됩니다.
+        </p>
+      ) : (
+        <div className="mt-5 grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
+          <div className="space-y-2">
+            {savedSessions.map((saved) => {
+              const isSelected = selectedSession?.id === saved.id;
+              return (
+                <button
+                  key={saved.id}
+                  type="button"
+                  onClick={() => setSelectedSessionId(saved.id)}
+                  className={`w-full rounded-xl border p-4 text-left transition ${
+                    isSelected
+                      ? 'border-sp-accent bg-sp-accent/10'
+                      : 'border-sp-border bg-sp-surface hover:border-sp-accent/60'
+                  }`}
+                >
+                  <span className="block text-sm font-bold text-sp-text">{saved.title}</span>
+                  <span className="mt-2 block text-xs leading-5 text-sp-muted">
+                    장면: {formatSavedSessionSceneLabels(saved)} ·{' '}
+                    {formatSavedAgreementDate(saved.savedAt)}
+                  </span>
+                  <span className="mt-2 inline-flex rounded-full bg-sp-card px-2 py-1 text-[11px] font-bold text-sp-muted">
+                    {labelForSaveMode(saved.saveMode)}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {selectedSession && (
+            <article className="rounded-2xl border border-sp-border bg-sp-surface p-5">
+              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <p className="text-xs font-bold text-sp-accent">
+                    {labelForSaveMode(selectedSession.saveMode)}
+                  </p>
+                  <h4 className="mt-1 text-lg font-bold text-sp-text">{selectedSession.title}</h4>
+                  <p className="mt-1 text-sm text-sp-muted">
+                    맥락: {selectedSession.classContext.label} · 장면:{' '}
+                    {formatSavedSessionSceneLabels(selectedSession)} · 저장:{' '}
+                    {formatSavedAgreementDate(selectedSession.savedAt)}
+                  </p>
+                  {selectedSession.process && (
+                    <p className="mt-2 text-xs text-sp-muted">
+                      참여 {selectedSession.process.participants.length}명 · 제안{' '}
+                      {selectedSession.process.proposals.length}개 · 후보{' '}
+                      {selectedSession.process.candidates.length}개
+                    </p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const ok = window.confirm('저장된 교실 약속 결과를 삭제할까요?');
+                    if (ok) void onDelete(selectedSession.id);
+                  }}
+                  className="rounded-xl border border-red-500/40 px-3 py-2 text-xs font-bold text-red-500 transition hover:bg-red-500/10"
+                >
+                  삭제
+                </button>
+              </div>
+
+              <ClassroomAgreementResultView
+                title={selectedSession.title}
+                classContextLabel={selectedSession.classContext.label}
+                view="list"
+                finalScenes={selectedSession.finalItems}
+              />
+            </article>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function labelForSaveMode(saveMode: ClassroomAgreementSaveMode): string {
+  return saveMode === 'includeProcess' ? '과정 포함' : '완성 약속만';
+}
+
+function formatSavedAgreementDate(savedAt: number): string {
+  return new Intl.DateTimeFormat('ko-KR', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(savedAt));
 }
 
 function AgreementAuthors({ item }: { readonly item: AgreementFinalItem }) {
@@ -1340,6 +1624,43 @@ function SummaryCard({ label, value }: { readonly label: string; readonly value:
   );
 }
 
+function ActiveSceneSelector({
+  session,
+  onChange,
+}: {
+  readonly session: ClassroomAgreementSession;
+  readonly onChange: (sceneId: string) => void;
+}) {
+  return (
+    <div className="mt-5 rounded-2xl border border-sp-border bg-sp-surface p-4">
+      <p className="text-xs font-semibold text-sp-muted">현재 열려 있는 장면</p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {session.scenes.map((scene) => {
+          const isActive = scene.id === session.activeSceneId;
+          return (
+            <button
+              key={scene.id}
+              type="button"
+              onClick={() => onChange(scene.id)}
+              aria-pressed={isActive}
+              className={`rounded-xl border px-4 py-2 text-sm font-bold transition ${
+                isActive
+                  ? 'border-sp-accent bg-sp-accent/10 text-sp-text'
+                  : 'border-sp-border bg-sp-card text-sp-muted hover:border-sp-accent/60 hover:text-sp-text'
+              }`}
+            >
+              {scene.order}. {scene.label}
+            </button>
+          );
+        })}
+      </div>
+      <p className="mt-3 text-xs leading-5 text-sp-muted">
+        선택한 장면이 학생 화면에 열리고, 새 제안은 해당 장면으로 모입니다.
+      </p>
+    </div>
+  );
+}
+
 function countCandidateVotes(
   candidates: readonly ClassroomAgreementCandidate[],
   phase: ClassroomAgreementSession['phase'],
@@ -1393,15 +1714,18 @@ function InfoRow({ label, value }: { readonly label: string; readonly value: str
 
 function CandidateEditor({
   candidate,
+  sceneLabel,
   onChange,
   onRemove,
 }: {
   readonly candidate: ClassroomAgreementCandidate;
+  readonly sceneLabel: string;
   readonly onChange: (candidateId: string, patch: Partial<ClassroomAgreementCandidate>) => void;
   readonly onRemove: (candidateId: string) => void;
 }) {
   return (
     <article className="rounded-xl border border-sp-border bg-sp-surface p-4">
+      <p className="mb-3 text-xs font-semibold text-sp-accent">장면: {sceneLabel}</p>
       <div className="grid gap-3">
         <label className="block">
           <span className="text-xs font-semibold text-sp-muted">만약 상황</span>
@@ -1488,9 +1812,16 @@ function CandidateEditor({
   );
 }
 
-function CandidateVoteSummary({ candidate }: { readonly candidate: ClassroomAgreementCandidate }) {
+function CandidateVoteSummary({
+  candidate,
+  sceneLabel,
+}: {
+  readonly candidate: ClassroomAgreementCandidate;
+  readonly sceneLabel: string;
+}) {
   return (
     <article className="rounded-xl border border-sp-border bg-sp-surface p-4">
+      <p className="mb-2 text-xs font-semibold text-sp-accent">장면: {sceneLabel}</p>
       <p className="text-sm font-semibold leading-6 text-sp-text">
         {normalizeSentencePart(candidate.ifText)}, {normalizeSentencePart(candidate.thenText)}.
       </p>

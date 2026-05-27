@@ -1,4 +1,4 @@
-export const CLASSROOM_AGREEMENT_SCHEMA_VERSION = 1;
+export const CLASSROOM_AGREEMENT_SCHEMA_VERSION = 2;
 
 export type ClassroomAgreementType = 'class-rule' | 'lesson-rule' | 'group-agreement';
 
@@ -11,6 +11,20 @@ export type ClassroomAgreementPhase =
   | 'finalized';
 
 export type ClassroomAgreementSaveMode = 'finalOnly' | 'includeProcess';
+
+export type ClassroomAgreementContextKind = 'homeroom' | 'subject' | 'manual';
+
+export interface ClassroomAgreementClassContext {
+  readonly kind: ClassroomAgreementContextKind;
+  readonly id?: string;
+  readonly label: string;
+}
+
+export interface ClassroomAgreementScene {
+  readonly id: string;
+  readonly label: string;
+  readonly order: number;
+}
 
 export type AgreementValidationIssueCode =
   | 'abstractPhrase'
@@ -49,6 +63,7 @@ export interface ClassroomAgreementParticipant {
 
 export interface ClassroomAgreementProposal {
   readonly id: string;
+  readonly sceneId: string;
   readonly studentToken: string;
   readonly displayName: string;
   readonly ifText: string;
@@ -72,6 +87,7 @@ export interface PriorityVote {
 
 export interface ClassroomAgreementCandidate {
   readonly id: string;
+  readonly sceneId: string;
   readonly sourceProposalIds: readonly string[];
   readonly authorLabels: readonly string[];
   readonly ifText: string;
@@ -85,6 +101,7 @@ export interface ClassroomAgreementCandidate {
 
 export interface AgreementFinalItem {
   readonly id: string;
+  readonly sceneId: string;
   readonly ifText: string;
   readonly thenText: string;
   readonly showAuthors: boolean;
@@ -92,18 +109,26 @@ export interface AgreementFinalItem {
   readonly priorityRank: number;
 }
 
+export interface AgreementFinalScene {
+  readonly sceneId: string;
+  readonly sceneLabel: string;
+  readonly items: readonly AgreementFinalItem[];
+}
+
 export interface ClassroomAgreementSession {
   readonly schemaVersion: typeof CLASSROOM_AGREEMENT_SCHEMA_VERSION;
   readonly id: string;
   readonly title: string;
   readonly agreementType: ClassroomAgreementType;
-  readonly scene: string;
+  readonly classContext: ClassroomAgreementClassContext;
+  readonly scenes: readonly ClassroomAgreementScene[];
+  readonly activeSceneId: string;
   readonly phase: ClassroomAgreementPhase;
   readonly settings: ClassroomAgreementSettings;
   readonly participants: readonly ClassroomAgreementParticipant[];
   readonly proposals: readonly ClassroomAgreementProposal[];
   readonly candidates: readonly ClassroomAgreementCandidate[];
-  readonly finalItems: readonly AgreementFinalItem[];
+  readonly finalItems: readonly AgreementFinalScene[];
   readonly createdAt: number;
   readonly updatedAt: number;
 }
@@ -113,9 +138,10 @@ export interface ClassroomAgreementSavedSession {
   readonly id: string;
   readonly title: string;
   readonly agreementType: ClassroomAgreementType;
-  readonly scene: string;
+  readonly classContext: ClassroomAgreementClassContext;
+  readonly scenes: readonly ClassroomAgreementScene[];
   readonly saveMode: ClassroomAgreementSaveMode;
-  readonly finalItems: readonly AgreementFinalItem[];
+  readonly finalItems: readonly AgreementFinalScene[];
   readonly savedAt: number;
   readonly process?: {
     readonly participants: readonly ClassroomAgreementParticipant[];

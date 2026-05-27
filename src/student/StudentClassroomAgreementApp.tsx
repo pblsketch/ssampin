@@ -262,7 +262,7 @@ export function StudentClassroomAgreementApp() {
           </p>
           <h1 className="mt-2 text-2xl font-bold text-sp-text">“만약 ___하면, 우리는 ___한다.”</h1>
           <p className="mt-2 text-sm leading-6 text-sp-muted">
-            장면: {publicState?.scene ?? '연결 중'} · 내 이름: {displayName}
+            장면: {formatStudentActiveSceneLabel(publicState)} · 내 이름: {displayName}
           </p>
           <p className="mt-2 text-xs text-sp-muted">
             제안 {submittedCount}/{publicState?.settings.maxProposalsPerStudent ?? '-'}개
@@ -538,6 +538,15 @@ function parseServerMessage(raw: unknown): ClassroomAgreementServerMessage | nul
 function makeClientMessageId(): string {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
   return `msg-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function formatStudentActiveSceneLabel(publicState: ClassroomAgreementPublicState | null): string {
+  if (!publicState) return '연결 중';
+  return (
+    publicState.scenes.find((scene) => scene.id === publicState.activeSceneId)?.label ??
+    publicState.scenes[0]?.label ??
+    '연결 중'
+  );
 }
 
 function readSessionValue(key: string): string | null {

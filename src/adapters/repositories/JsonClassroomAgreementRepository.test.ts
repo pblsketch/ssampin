@@ -46,7 +46,9 @@ const buildSession = (
   id: 'session-1',
   title: '수업 약속',
   agreementType: 'lesson-rule',
-  scene: '수업 시작',
+  classContext: { kind: 'manual', label: '3학년 2반' },
+  scenes: [{ id: 'scene-1', label: '수업 시작', order: 1 }],
+  activeSceneId: 'scene-1',
   phase: 'finalized',
   settings: {
     maxProposalsPerStudent: 2,
@@ -67,6 +69,7 @@ const buildSession = (
   proposals: [
     {
       id: 'proposal-1',
+      sceneId: 'scene-1',
       studentToken: 'token-1',
       displayName: '학생1',
       ifText: '만약 수업 시작 종이 울리면',
@@ -77,6 +80,7 @@ const buildSession = (
   candidates: [
     {
       id: 'candidate-1',
+      sceneId: 'scene-1',
       sourceProposalIds: ['proposal-1'],
       authorLabels: ['학생1'],
       ifText: '만약 수업 시작 종이 울리면',
@@ -90,12 +94,19 @@ const buildSession = (
   ],
   finalItems: [
     {
-      id: 'final-1',
-      ifText: '만약 수업 시작 종이 울리면',
-      thenText: '우리는 자리에 앉아 책과 노트를 펼친다',
-      showAuthors: false,
-      authorLabels: ['학생1'],
-      priorityRank: 1,
+      sceneId: 'scene-1',
+      sceneLabel: '수업 시작',
+      items: [
+        {
+          id: 'final-1',
+          sceneId: 'scene-1',
+          ifText: '만약 수업 시작 종이 울리면',
+          thenText: '우리는 자리에 앉아 책과 노트를 펼친다',
+          showAuthors: false,
+          authorLabels: ['학생1'],
+          priorityRank: 1,
+        },
+      ],
     },
   ],
   createdAt: 1000,
@@ -116,7 +127,7 @@ describe('JsonClassroomAgreementRepository', () => {
     const saved = await repo.saveSession(buildSession(), { savedAt: 3000 });
 
     expect(saved.process).toBeUndefined();
-    expect(saved.finalItems[0]!.authorLabels).toEqual([]);
+    expect(saved.finalItems[0]!.items[0]!.authorLabels).toEqual([]);
 
     const raw = JSON.stringify(storage.files.get(CLASSROOM_AGREEMENTS_STORAGE_KEY));
     expect(raw).not.toContain('studentToken');
