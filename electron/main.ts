@@ -34,6 +34,7 @@ import { registerClassroomAgreementHandlers } from './ipc/classroomAgreement';
 import { registerRealtimeWallLinkPreviewHandler } from './ipc/realtimeWallLinkPreview';
 import { registerRealtimeWallPdfHandlers } from './ipc/realtimeWallPdf';
 import { registerBoardHandlers, endActiveBoardSessionSync } from './ipc/board';
+import { registerSignatureSheetsHandlers } from './ipc/signatureSheets';
 import {
   registerRealtimeWallBoardHandlers,
   saveDirtyWallBoardsSync,
@@ -4615,6 +4616,7 @@ if (!gotTheLock) {
     registerRealtimeWallPdfHandlers();
     registerBoardHandlers(mainWindow!);
     registerRealtimeWallBoardHandlers();
+    registerSignatureSheetsHandlers();
     // 글로벌 퀵애드 단축키 IPC
     ipcMain.handle('shortcuts:sync', (_event, config: ShortcutSyncConfig) => {
       return applyGlobalShortcuts(config);

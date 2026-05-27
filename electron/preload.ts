@@ -1282,4 +1282,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
       };
     },
   },
+
+  // 서명받기: 공개 Google 시트 CSV를 Electron main에서 프록시 fetch (CORS 우회)
+  signature: {
+    fetchPublicSheetCsv: (url: string): Promise<{ ok: boolean; csv?: string; error?: string }> =>
+      ipcRenderer.invoke('signature:fetch-public-sheet-csv', { url }),
+  },
 });

@@ -18,8 +18,26 @@ import {
   getParticipantSignatureStatus,
   getSignatureRequestProgress,
 } from '@domain/rules/signatureRequestRules';
+import {
+  inferSignatureMappingFromCsv,
+  type SignatureMappingInferenceResult,
+} from '@domain/rules/signatureMappingInference';
+import { parseCsvLines } from '@domain/utils/parseCsvLines';
 import type { CreateSignatureRequestDraftInput } from '@adapters/stores/useSignatureRequestStore';
 import { useSignatureRequestStore } from '@adapters/stores/useSignatureRequestStore';
+
+interface SignatureSheetsBridge {
+  readonly fetchPublicSheetCsv: (
+    url: string,
+  ) => Promise<{ ok: boolean; csv?: string; error?: string }>;
+}
+
+function getSignatureSheetsBridge(): SignatureSheetsBridge | null {
+  if (typeof window === 'undefined') return null;
+  const api = (window as unknown as { electronAPI?: { signature?: SignatureSheetsBridge } })
+    .electronAPI;
+  return api?.signature ?? null;
+}
 
 interface ToolSignatureRequestProps {
   readonly onBack: () => void;
@@ -178,6 +196,11 @@ export function ToolSignatureRequest({ onBack, isFullscreen }: ToolSignatureRequ
   const [pinEnabled, setPinEnabled] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importNote, setImportNote] = useState<{
+    readonly tone: 'success' | 'error' | 'info';
+    readonly text: string;
+  } | null>(null);
 
   useEffect(() => {
     void load();
@@ -213,6 +236,86 @@ export function ToolSignatureRequest({ onBack, isFullscreen }: ToolSignatureRequ
     setSourceType(nextType);
     setTextFields((current) => retargetTextFields(current, nextType));
     setSignatureSlots((current) => retargetSignatureSlots(current, nextType));
+  };
+
+  const handleAutoFillFromSheet = async () => {
+    setImportNote(null);
+    if (!templateUrl.trim()) {
+      setImportNote({ tone: 'error', text: '먼저 Google 시트 URL을 입력해 주세요.' });
+      return;
+    }
+    const bridge = getSignatureSheetsBridge();
+    if (!bridge) {
+      setImportNote({
+        tone: 'error',
+        text: '자동 채우기는 쌤핀 데스크톱 앱에서만 동작합니다. (브라우저 미리보기에서는 사용 불가)',
+      });
+      return;
+    }
+    // 명단을 이미 작성한 상태에서 덮어쓰기 전 확인
+    if (rosterText.trim().length > 0 && typeof window !== 'undefined') {
+      const confirmed = window.confirm(
+        '입력해 둔 명단과 매핑이 자동 채우기 결과로 덮어써집니다. 계속할까요?',
+      );
+      if (!confirmed) {
+        setImportNote({
+          tone: 'info',
+          text: '자동 채우기를 취소했어요. 기존 입력은 그대로 유지돼요.',
+        });
+        return;
+      }
+    }
+    setIsImporting(true);
+    try {
+      const response = await bridge.fetchPublicSheetCsv(templateUrl.trim());
+      if (!response.ok || !response.csv) {
+        setImportNote({
+          tone: 'error',
+          text:
+            response.error ??
+            '시트를 가져오지 못했습니다. 공유 설정이 "링크가 있는 모든 사용자에게 보기 권한"인지 확인해 주세요.',
+        });
+        return;
+      }
+      const { headers, rows } = parseCsvLines(response.csv);
+      const inference = inferSignatureMappingFromCsv({ headers, rows });
+      applyInferenceToState(inference);
+      const summary = buildInferenceSummary(inference);
+      setImportNote({
+        tone: inference.warnings.length > 0 ? 'info' : 'success',
+        text: summary,
+      });
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const applyInferenceToState = (inference: SignatureMappingInferenceResult) => {
+    setSourceType('google-sheets');
+    setTemplateKind(inference.suggestedTemplateKind);
+    setTextFields(
+      inference.mapping.textFields.map((field) => ({
+        id: field.id,
+        key: field.key,
+        label: field.label,
+        targetType: field.target.type,
+        targetValue: field.target.value,
+        sheetName: field.target.sheetName,
+        required: field.required,
+      })),
+    );
+    setSignatureSlots(
+      inference.mapping.signatureSlots.map((slot) => ({
+        id: slot.id,
+        kind: slot.kind,
+        label: slot.label,
+        targetType: slot.target.type,
+        targetValue: slot.target.value,
+        sheetName: slot.target.sheetName,
+        required: slot.required,
+      })),
+    );
+    setRosterText(formatParticipantsAsRoster(inference.participants));
   };
 
   const handleSave = async () => {
@@ -355,6 +458,33 @@ export function ToolSignatureRequest({ onBack, isFullscreen }: ToolSignatureRequ
                       placeholder="https://docs.google.com/..."
                     />
                   </LabeledInput>
+                  <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-xs leading-relaxed text-sp-muted">
+                      공개 권한(링크가 있는 모든 사용자에게 보기)이 있는 Google Sheets라면 한 번에
+                      매핑·명단·시나리오를 자동으로 채울 수 있어요.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => void handleAutoFillFromSheet()}
+                      disabled={isImporting || !templateUrl.trim()}
+                      className="rounded-xl border border-sp-accent bg-sp-accent/10 px-3 py-2 text-xs font-sp-semibold text-sp-accent transition-opacity hover:bg-sp-accent/20 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {isImporting ? '시트 불러오는 중…' : '이 시트로 자동 채우기'}
+                    </button>
+                  </div>
+                  {importNote && (
+                    <p
+                      className={`mt-2 rounded-xl border px-3 py-2 text-xs leading-relaxed ${
+                        importNote.tone === 'success'
+                          ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
+                          : importNote.tone === 'error'
+                            ? 'border-red-300 bg-red-50 text-red-700'
+                            : 'border-amber-300 bg-amber-50 text-amber-800'
+                      }`}
+                    >
+                      {importNote.text}
+                    </p>
+                  )}
                 </div>
                 <div className="md:col-span-2">
                   <LabeledInput label="교사용 메모">
@@ -605,6 +735,27 @@ export function parseSignatureRosterLines(
         requiredSignatureKinds: inferRequiredSignatureKinds(templateKind, role),
       };
     });
+}
+
+export function formatParticipantsAsRoster(participants: readonly SignatureParticipant[]): string {
+  return participants
+    .map((participant) =>
+      participant.studentNumber !== undefined
+        ? `${participant.studentNumber} ${participant.displayName}`
+        : participant.displayName,
+    )
+    .join('\n');
+}
+
+export function buildInferenceSummary(inference: SignatureMappingInferenceResult): string {
+  const headParts = [
+    `필드 ${inference.mapping.textFields.length}개`,
+    `서명 슬롯 ${inference.mapping.signatureSlots.length}개`,
+    `명단 ${inference.participants.length}명`,
+  ];
+  const head = `${headParts.join(' · ')}을 자동으로 채웠어요. 확인 후 필요한 부분만 수정해 주세요.`;
+  if (inference.warnings.length === 0) return head;
+  return `${head}\n· ${inference.warnings.join('\n· ')}`;
 }
 
 export function buildSignatureTemplateMapping(
