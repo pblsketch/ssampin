@@ -126,9 +126,9 @@ const TEMPLATE_KIND_OPTIONS: readonly TemplateKindOption[] = [
 ];
 
 const TARGET_TYPE_LABELS: Record<SignatureMappingTargetType, string> = {
-  'docs-placeholder': '문서 치환자',
+  'docs-placeholder': 'Docs 치환자 ({{이름}} 형식)',
   'sheets-cell': '시트 셀',
-  'sheets-named-range': '시트 이름 범위',
+  'sheets-named-range': 'Sheets 이름 지정 범위',
   'generated-table-column': '자동 생성 표 열',
 };
 
@@ -244,7 +244,7 @@ export function ToolSignatureRequest({ onBack, isFullscreen }: ToolSignatureRequ
     });
     await createDraft(draftInput);
     setMessage(
-      '초안이 저장되었습니다. 오른쪽 "저장된 초안 · 제출 현황" 목록에서 이 초안을 선택해 공개 링크·QR을 발급할 수 있습니다.',
+      '이 기기에 저장했습니다. 공개 링크와 QR 발급은 다음 버전에서 지원됩니다. 지금은 명단·매핑·1차 정책 검토에만 사용해 주세요.',
     );
   };
 
@@ -283,9 +283,9 @@ export function ToolSignatureRequest({ onBack, isFullscreen }: ToolSignatureRequ
                     선생님이 만든 Google 양식 그대로, 이름·서명만 자동으로 받아 채웁니다
                   </h2>
                   <p className="mt-2 text-sm leading-relaxed text-sp-muted">
-                    결석계와 연수 등록부는 학교마다 다르므로 고정 양식을 만들지 않습니다. 교사가
-                    만든 Google Docs/Sheets URL을 등록하고, 이름·제출 시각·서명 이미지가 들어갈
-                    위치를 직접 매핑합니다.
+                    학교마다 양식이 다르기 때문에 고정 서식 없이, 선생님이 쓰시는 Google
+                    Docs/Sheets를 그대로 가져옵니다. 이름·서명이 들어갈 위치만 한 번 지정하면
+                    됩니다.
                   </p>
                 </div>
                 <span className="rounded-full border border-sp-accent/30 bg-sp-accent/10 px-3 py-1 text-xs font-sp-semibold text-sp-accent">
@@ -423,7 +423,7 @@ export function ToolSignatureRequest({ onBack, isFullscreen }: ToolSignatureRequ
               <div className="mt-4 grid gap-3 md:grid-cols-2">
                 <ToggleRow
                   title="개인별 고유 링크 생성"
-                  description="명단 대상자마다 다른 토큰 링크를 만들어 링크 공유 실수를 줄입니다."
+                  description="한 명마다 다른 고유 링크를 만들어 다른 사람에게 잘못 공유될 위험을 줄입니다."
                   checked={uniqueLinksEnabled}
                   onChange={setUniqueLinksEnabled}
                 />
@@ -497,7 +497,7 @@ export function ToolSignatureRequest({ onBack, isFullscreen }: ToolSignatureRequ
                 disabled={isSaving}
                 className="mt-4 w-full rounded-xl bg-sp-accent px-4 py-3 text-sm font-sp-bold text-white shadow-sp-sm transition-opacity disabled:opacity-50"
               >
-                {isSaving ? '저장 중...' : '로컬 초안 저장'}
+                {isSaving ? '저장 중...' : '이 기기에 저장'}
               </button>
             </section>
 
@@ -1207,8 +1207,7 @@ function SavedDraftCard({
           <StatusPill label={syncStatus.label} />
         </div>
         <p className="mt-2 text-xs leading-relaxed text-sp-muted">
-          Docs는 서명 이미지 삽입을 목표로 하고, Sheets는 이름·제출 시각·상태 반영을 우선합니다.
-          Sheets 셀 이미지는 공개·지속 URL일 때만 안전하게 연결합니다.
+          Sheets 셀 이미지 자동 삽입은 공개 URL 검증 시에만 안전하게 연결합니다.
         </p>
       </div>
 

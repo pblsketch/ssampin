@@ -177,8 +177,7 @@ export function SignatureRequestPublicApp({
 
             {route.token && (
               <div className="rounded-xl border border-sp-border bg-sp-surface/70 p-3 text-sm">
-                선생님이 보내 주신 링크로 본인 확인이 되었습니다. 아래 정보를 입력하고 서명해
-                주세요.
+                선생님이 보내신 개인 링크로 접속했습니다. 아래 정보를 입력하고 서명해 주세요.
               </div>
             )}
 
@@ -222,7 +221,7 @@ export function SignatureRequestPublicApp({
                 <div>
                   <h2 className="text-sm font-sp-bold">서명</h2>
                   <p className="mt-1 text-xs text-sp-muted">
-                    아래 영역에 손가락 또는 마우스로 서명한 뒤 제출 버튼을 눌러 주세요.
+                    지금은 미리보기 단계예요. 실제 손글씨 서명 입력은 다음 버전에서 지원됩니다.
                   </p>
                 </div>
                 <button
@@ -230,14 +229,14 @@ export function SignatureRequestPublicApp({
                   onClick={handleCreateSignaturePreview}
                   className="rounded-xl border border-sp-border bg-sp-card px-4 py-2 text-sm font-sp-semibold text-sp-text"
                 >
-                  서명 이미지 만들기
+                  서명 미리보기 생성
                 </button>
               </div>
               <div className="mt-4 flex h-36 items-center justify-center rounded-xl bg-white text-center text-sm text-sp-muted">
                 {signatureImageDataUrl ? (
                   <img src={signatureImageDataUrl} alt="캡처된 서명" className="max-h-28" />
                 ) : (
-                  '여기에 손가락 또는 마우스로 서명합니다'
+                  '실제 손글씨 입력은 다음 버전 예정 — 지금은 예시 이미지가 들어갑니다'
                 )}
               </div>
             </section>

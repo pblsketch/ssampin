@@ -25,7 +25,7 @@ describe('ToolSignatureRequest template workflow', () => {
     expect(html).toContain('저장된 초안 · 제출 현황');
     expect(html).toContain('법적 전자서명 효력 보장 제외');
     expect(html).toContain('Sheets 셀 이미지 자동 삽입은 공개 URL 검증 시에만');
-    expect(html).toContain('로컬 초안 저장');
+    expect(html).toContain('이 기기에 저장');
   });
 
   it('parses numbered students and staff from a teacher roster', () => {
