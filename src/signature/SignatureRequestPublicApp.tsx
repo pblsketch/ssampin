@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { SignatureKind } from '@domain/entities/SignatureRequest';
 import {
   disabledSignaturePublicClient,
@@ -8,6 +8,7 @@ import {
   type SignaturePublicSubmissionDraft,
   type SignaturePublicSubmitResult,
 } from './SignatureRequestPublicClient';
+import { SignatureCanvasPad, type SignatureCanvasPadHandle } from './SignatureCanvasPad';
 
 interface SignatureRequestPublicAppProps {
   readonly client?: SignaturePublicRequestClient;
@@ -57,9 +58,10 @@ export function SignatureRequestPublicApp({
   const [signatureKind, setSignatureKind] = useState<SignatureKind>('recipient');
   const [signerName, setSignerName] = useState('');
   const [pin, setPin] = useState('');
-  const [signatureImageDataUrl, setSignatureImageDataUrl] = useState('');
+  const [hasInk, setHasInk] = useState(false);
   const [submitResult, setSubmitResult] = useState<SignaturePublicSubmitResult | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const canvasRef = useRef<SignatureCanvasPadHandle | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -98,19 +100,16 @@ export function SignatureRequestPublicApp({
   const isReadyToSubmit =
     Boolean(route.requestId) &&
     Boolean(signerName.trim()) &&
-    Boolean(signatureImageDataUrl) &&
+    hasInk &&
     (route.token || Boolean(selectedParticipantId));
-
-  const handleCreateSignaturePreview = () => {
-    setSignatureImageDataUrl(createSignaturePreviewDataUrl(signerName || '서명'));
-  };
 
   const handleSubmit = async () => {
     setSubmitResult(null);
-    if (!isReadyToSubmit) {
+    const dataUrl = canvasRef.current?.toDataUrl('image/png') ?? null;
+    if (!isReadyToSubmit || !dataUrl) {
       setSubmitResult({
         status: 'rejected',
-        message: '이름, 대상자, 서명 이미지를 모두 입력해 주세요.',
+        message: '이름, 대상자, 손글씨 서명을 모두 입력해 주세요.',
       });
       return;
     }
@@ -123,10 +122,14 @@ export function SignatureRequestPublicApp({
         pin: pin.trim() || undefined,
         signatureKind,
         signerName,
-        signatureImageDataUrl,
+        signatureImageDataUrl: dataUrl,
       });
       const result = await client.submitSignature(draft);
       setSubmitResult(result);
+      if (result.status === 'accepted') {
+        canvasRef.current?.clear();
+        setHasInk(false);
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -217,31 +220,18 @@ export function SignatureRequestPublicApp({
             )}
 
             <section className="rounded-2xl border border-dashed border-sp-border bg-sp-surface/60 p-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h2 className="text-sm font-sp-bold">서명</h2>
-                  <p className="mt-1 text-xs text-sp-muted">
-                    지금은 미리보기 단계예요. 실제 손글씨 서명 입력은 다음 버전에서 지원됩니다.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleCreateSignaturePreview}
-                  disabled
-                  title="실제 손글씨 서명 캡처는 다음 버전에서 지원됩니다."
-                  aria-disabled="true"
-                  className="cursor-not-allowed rounded-xl border border-sp-border bg-sp-card px-4 py-2 text-sm font-sp-semibold text-sp-muted opacity-60"
-                >
-                  서명 미리보기 (준비 중)
-                </button>
+              <div className="mb-3">
+                <h2 className="text-sm font-sp-bold">서명</h2>
+                <p className="mt-1 text-xs text-sp-muted">
+                  손가락(모바일)이나 마우스로 아래 영역에 서명한 뒤 제출 버튼을 누르세요.
+                </p>
               </div>
-              <div className="mt-4 flex h-36 items-center justify-center rounded-xl bg-white text-center text-sm text-sp-muted">
-                {signatureImageDataUrl ? (
-                  <img src={signatureImageDataUrl} alt="캡처된 서명" className="max-h-28" />
-                ) : (
-                  '실제 손글씨 입력은 다음 버전 예정 — 지금은 예시 이미지가 들어갑니다'
-                )}
-              </div>
+              <SignatureCanvasPad
+                ref={canvasRef}
+                disabled={isSubmitting}
+                onChange={setHasInk}
+                ariaLabel="손글씨 서명 입력 캔버스"
+              />
             </section>
 
             {submitResult && (
@@ -253,7 +243,7 @@ export function SignatureRequestPublicApp({
                 }`}
               >
                 {submitResult.status === 'accepted'
-                  ? '서명이 접수되었습니다.'
+                  ? '서명이 접수되었습니다. 이 화면을 닫으셔도 됩니다.'
                   : submitResult.message}
               </div>
             )}
@@ -322,15 +312,6 @@ export function createSignaturePublicSubmissionDraft({
     signatureImageDataUrl,
     submittedAt: now(),
   };
-}
-
-function createSignaturePreviewDataUrl(label: string): string {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="360" height="120" viewBox="0 0 360 120"><rect width="360" height="120" fill="white"/><path d="M35 78 C95 20, 130 105, 185 54 S285 40, 325 72" fill="none" stroke="#111827" stroke-width="5" stroke-linecap="round"/><text x="35" y="108" fill="#6b7280" font-size="14">${escapeSvgText(label)}</text></svg>`;
-  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
-}
-
-function escapeSvgText(value: string): string {
-  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }
 
 function LabeledField({
