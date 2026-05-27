@@ -153,7 +153,8 @@ const REQUEST_STATUS_LABELS: Record<SignatureRequest['status'], string> = {
   archived: '보관됨',
 };
 
-const DEFAULT_ROSTER = '1 홍길동\n2 김민서\n김교사';
+const ROSTER_PLACEHOLDER =
+  '예: 1 홍길동\n2 김민서\n김교사\n(번호가 있으면 학생, 없으면 교직원으로 처리됩니다)';
 
 export function ToolSignatureRequest({ onBack, isFullscreen }: ToolSignatureRequestProps) {
   const load = useSignatureRequestStore((state) => state.load);
@@ -161,7 +162,7 @@ export function ToolSignatureRequest({ onBack, isFullscreen }: ToolSignatureRequ
   const isSaving = useSignatureRequestStore((state) => state.isSaving);
   const createDraft = useSignatureRequestStore((state) => state.createDraft);
 
-  const [title, setTitle] = useState('서명받기 요청');
+  const [title, setTitle] = useState('');
   const [templateKind, setTemplateKind] = useState<SignatureTemplateKind>('training-register');
   const [sourceType, setSourceType] = useState<SignatureTemplateSourceType>('google-sheets');
   const [templateUrl, setTemplateUrl] = useState('');
@@ -172,7 +173,7 @@ export function ToolSignatureRequest({ onBack, isFullscreen }: ToolSignatureRequ
   const [signatureSlots, setSignatureSlots] = useState<readonly SignatureSlotDraft[]>(() =>
     buildDefaultSignatureSlots('training-register', 'google-sheets'),
   );
-  const [rosterText, setRosterText] = useState(DEFAULT_ROSTER);
+  const [rosterText, setRosterText] = useState('');
   const [uniqueLinksEnabled, setUniqueLinksEnabled] = useState(true);
   const [pinEnabled, setPinEnabled] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -217,6 +218,10 @@ export function ToolSignatureRequest({ onBack, isFullscreen }: ToolSignatureRequ
   const handleSave = async () => {
     setMessage(null);
     setError(null);
+    if (!title.trim()) {
+      setError('서명받기 제목을 먼저 입력해 주세요. 예: 3학년 결석계 서명 (5월)');
+      return;
+    }
     if (!templateUrl.trim()) {
       setError('Google 문서 또는 스프레드시트 URL을 먼저 입력해 주세요.');
       return;
@@ -239,7 +244,7 @@ export function ToolSignatureRequest({ onBack, isFullscreen }: ToolSignatureRequ
     });
     await createDraft(draftInput);
     setMessage(
-      '로컬 초안이 저장되었습니다. 다음 단계에서 공개 링크/QR과 Google 반영을 연결합니다.',
+      '초안이 저장되었습니다. 오른쪽 "저장된 초안 · 제출 현황" 목록에서 이 초안을 선택해 공개 링크·QR을 발급할 수 있습니다.',
     );
   };
 
@@ -259,7 +264,7 @@ export function ToolSignatureRequest({ onBack, isFullscreen }: ToolSignatureRequ
     }
     try {
       await navigator.clipboard.writeText(text);
-      setMessage('미서명 명단을 클립보드에 복사했습니다.');
+      setMessage('미서명 명단을 복사했습니다. 카카오톡·문자·메일에 붙여 넣어 안내해 주세요.');
     } catch {
       setError('클립보드 복사에 실패했습니다. 브라우저 권한을 확인해 주세요.');
     }
@@ -284,7 +289,7 @@ export function ToolSignatureRequest({ onBack, isFullscreen }: ToolSignatureRequ
                   </p>
                 </div>
                 <span className="rounded-full border border-sp-accent/30 bg-sp-accent/10 px-3 py-1 text-xs font-sp-semibold text-sp-accent">
-                  로컬 초안 저장 가능
+                  이 기기에서 초안 저장
                 </span>
               </div>
 
@@ -326,7 +331,7 @@ export function ToolSignatureRequest({ onBack, isFullscreen }: ToolSignatureRequ
                     value={title}
                     onChange={(event) => setTitle(event.target.value)}
                     className="w-full rounded-xl border border-sp-border bg-sp-surface px-3 py-2 text-sm text-sp-text outline-none focus:border-sp-accent"
-                    placeholder="예: 3학년 결석계 서명"
+                    placeholder="예: 3학년 결석계 서명 (5월)"
                   />
                 </LabeledInput>
                 <LabeledInput label="양식 종류">
@@ -413,7 +418,7 @@ export function ToolSignatureRequest({ onBack, isFullscreen }: ToolSignatureRequ
                 value={rosterText}
                 onChange={(event) => setRosterText(event.target.value)}
                 className="mt-4 min-h-36 w-full rounded-xl border border-sp-border bg-sp-surface px-3 py-2 text-sm text-sp-text outline-none focus:border-sp-accent"
-                placeholder={'1 홍길동\n2 김민서\n김교사'}
+                placeholder={ROSTER_PLACEHOLDER}
               />
               <div className="mt-4 grid gap-3 md:grid-cols-2">
                 <ToggleRow
@@ -424,11 +429,17 @@ export function ToolSignatureRequest({ onBack, isFullscreen }: ToolSignatureRequ
                 />
                 <ToggleRow
                   title="PIN 확인 사용"
-                  description="선택 시 로컬 초안에 대상자별 PIN 원문을 보관합니다. 서버 저장은 이후 해시로 전환합니다."
+                  description="PIN을 켜면 이 기기에만 저장된 초안 파일에 각자의 번호가 담깁니다. 서버에는 번호 자체가 아닌 암호화된 값만 올라갑니다."
                   checked={pinEnabled}
                   onChange={setPinEnabled}
                 />
               </div>
+              {uniqueLinksEnabled && pinEnabled && (
+                <p className="mt-3 rounded-xl border border-sp-border bg-sp-surface/60 px-3 py-2 text-xs leading-relaxed text-sp-muted">
+                  두 옵션을 모두 켜면 학생은 개인 링크(URL에 토큰 자동 포함)로 접속한 뒤 교사가 따로
+                  안내한 PIN을 입력해야 합니다. PIN은 명단과 별도 채널로 전달하세요.
+                </p>
+              )}
             </section>
           </div>
 
@@ -513,7 +524,7 @@ export function ToolSignatureRequest({ onBack, isFullscreen }: ToolSignatureRequ
             </section>
 
             <section className="rounded-2xl border border-sp-border bg-sp-card p-5 shadow-sp-sm">
-              <h3 className="text-base font-sp-bold text-sp-text">1차 제외 범위</h3>
+              <h3 className="text-base font-sp-bold text-sp-text">현재 버전 안내</h3>
               <p className="mt-2 text-xs leading-relaxed text-sp-muted">
                 1차 버전은 전자 확인 기록으로 충분한 학교 업무를 대상으로 하며, 법적 전자서명 효력을
                 보장하지 않습니다. Google Sheets 셀 안 이미지 삽입은 사설/단기 서명 URL로는
@@ -1222,6 +1233,7 @@ function SavedDraftCard({
           <button
             type="button"
             disabled
+            title="공개 링크가 발급되고 첫 서명이 접수되면 결과 파일이 만들어집니다."
             className="rounded-lg border border-sp-border px-3 py-2 text-xs font-sp-semibold text-sp-muted opacity-60"
           >
             결과 파일 준비 전

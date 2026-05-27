@@ -81,7 +81,7 @@ describe('SignatureRequestPublicApp route and skeleton', () => {
 
     expect(html).toContain('서명 대상자 선택');
     expect(html).toContain('PIN');
-    expect(html).toContain('서명 이미지 캡처');
+    expect(html).toContain('서명 이미지 만들기');
     expect(html).toContain('서명 제출');
   });
 

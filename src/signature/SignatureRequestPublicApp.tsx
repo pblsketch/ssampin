@@ -22,7 +22,8 @@ export interface SignaturePublicRoute {
 const PREVIEW_REQUEST: SignaturePublicRequestView = {
   id: 'preview',
   title: '서명받기',
-  description: '공개 링크 흐름 미리보기입니다. 실제 저장은 아직 비활성화되어 있습니다.',
+  description:
+    '준비 중인 서명 요청입니다. 선생님이 링크를 발급하면 이 화면에서 서명을 제출할 수 있습니다.',
   participants: [
     {
       id: 'participant-1',
@@ -143,14 +144,16 @@ export function SignatureRequestPublicApp({
                 {request.description ?? '링크를 받은 사람이 직접 서명을 제출하는 화면입니다.'}
               </p>
             </div>
-            <span className="rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-xs font-sp-semibold text-amber-700">
-              저장 비활성
-            </span>
+            {(!loadResult || loadResult.status !== 'ready') && (
+              <span className="rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-xs font-sp-semibold text-amber-700">
+                연결 준비 중
+              </span>
+            )}
           </div>
 
           {loadResult && loadResult.status !== 'ready' && (
             <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800">
-              {loadResult.message} 지금은 공개 서명 흐름 확인용 화면으로 표시됩니다.
+              {loadResult.message}
             </div>
           )}
 
@@ -174,8 +177,8 @@ export function SignatureRequestPublicApp({
 
             {route.token && (
               <div className="rounded-xl border border-sp-border bg-sp-surface/70 p-3 text-sm">
-                개인 링크 토큰이 확인되었습니다. 실제 서버 연결 후 토큰으로 대상자를 자동
-                식별합니다.
+                선생님이 보내 주신 링크로 본인 확인이 되었습니다. 아래 정보를 입력하고 서명해
+                주세요.
               </div>
             )}
 
@@ -217,9 +220,9 @@ export function SignatureRequestPublicApp({
             <section className="rounded-2xl border border-dashed border-sp-border bg-sp-surface/60 p-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <h2 className="text-sm font-sp-bold">서명 이미지 캡처</h2>
+                  <h2 className="text-sm font-sp-bold">서명</h2>
                   <p className="mt-1 text-xs text-sp-muted">
-                    실제 구현에서는 캔버스 서명 패드를 PNG/WebP로 저장합니다.
+                    아래 영역에 손가락 또는 마우스로 서명한 뒤 제출 버튼을 눌러 주세요.
                   </p>
                 </div>
                 <button
