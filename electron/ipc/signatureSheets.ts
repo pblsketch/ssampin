@@ -10,14 +10,27 @@
 import { ipcMain, net } from 'electron';
 import { extractGoogleFileId } from '../../src/infrastructure/google/SignatureGoogleTemplatePlanner';
 
-const MAX_REDIRECTS = 5;
 const MAX_CSV_BYTES = 2 * 1024 * 1024; // 2MB — 일반 학교 명단 시트 대비 충분
 const FETCH_TIMEOUT_MS = 15000;
+// Google Sheets export가 따라가는 redirect 호스트만 허용한다 (SSRF 방어).
+const ALLOWED_REDIRECT_HOST_SUFFIXES = ['.google.com', '.googleusercontent.com'];
 
 export interface FetchPublicSheetCsvResult {
   readonly ok: boolean;
   readonly csv?: string;
   readonly error?: string;
+}
+
+function redirectHostIsAllowed(redirectUrl: string): boolean {
+  try {
+    const parsed = new URL(redirectUrl);
+    const host = parsed.hostname.toLowerCase();
+    return ALLOWED_REDIRECT_HOST_SUFFIXES.some(
+      (suffix) => host === suffix.replace(/^\./, '') || host.endsWith(suffix),
+    );
+  } catch {
+    return false;
+  }
 }
 
 function buildCsvExportUrl(fileId: string, gid: string | null): string {
@@ -37,76 +50,78 @@ function extractGidFromUrl(input: string): string | null {
   }
 }
 
-async function fetchFollowingRedirects(initialUrl: string): Promise<string> {
-  let currentUrl = initialUrl;
-  for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
-    const body = await new Promise<{ status: number; location?: string; csv?: string }>(
-      (resolve, reject) => {
-        const request = net.request({ method: 'GET', url: currentUrl, redirect: 'manual' });
-        const timeout = setTimeout(() => {
+async function fetchCsvBody(initialUrl: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    // Electron net이 redirect를 자동으로 follow하되, 'redirect' 이벤트에서 호스트를
+    // 검증해 허용된 Google 도메인을 벗어나면 abort한다.
+    const request = net.request({ method: 'GET', url: initialUrl, redirect: 'follow' });
+    const timeout = setTimeout(() => {
+      request.abort();
+      reject(new Error('요청 시간이 초과됐습니다.'));
+    }, FETCH_TIMEOUT_MS);
+
+    request.on('redirect', (_status, _method, redirectUrl) => {
+      if (!redirectHostIsAllowed(redirectUrl)) {
+        request.abort();
+        clearTimeout(timeout);
+        reject(new Error('허용되지 않은 호스트로 redirect되어 요청을 중단했습니다.'));
+        return;
+      }
+      request.followRedirect();
+    });
+
+    request.on('response', (response) => {
+      const status = response.statusCode ?? 0;
+      if (status === 401 || status === 403) {
+        clearTimeout(timeout);
+        request.abort();
+        reject(
+          new Error(
+            '시트에 접근할 수 없습니다. Google 시트의 공유 설정을 "링크가 있는 모든 사용자에게 보기 권한"으로 바꾸거나, 다음 버전의 Google 로그인 연동을 기다려 주세요.',
+          ),
+        );
+        return;
+      }
+      if (status === 404) {
+        clearTimeout(timeout);
+        request.abort();
+        reject(new Error('해당 ID의 시트를 찾을 수 없습니다. URL을 다시 확인해 주세요.'));
+        return;
+      }
+      if (status !== 200) {
+        clearTimeout(timeout);
+        request.abort();
+        reject(new Error(`시트를 가져오지 못했습니다. (HTTP ${status})`));
+        return;
+      }
+      const chunks: Buffer[] = [];
+      let total = 0;
+      response.on('data', (chunk: Buffer) => {
+        total += chunk.length;
+        if (total > MAX_CSV_BYTES) {
           request.abort();
-          reject(new Error('요청 시간이 초과됐습니다.'));
-        }, FETCH_TIMEOUT_MS);
-
-        request.on('response', (response) => {
-          const status = response.statusCode ?? 0;
-          if (status >= 300 && status < 400) {
-            const locationHeader = response.headers['location'];
-            const location = Array.isArray(locationHeader) ? locationHeader[0] : locationHeader;
-            clearTimeout(timeout);
-            response.on('data', () => {});
-            response.on('end', () => resolve({ status, location }));
-            return;
-          }
-
-          const chunks: Buffer[] = [];
-          let total = 0;
-          response.on('data', (chunk: Buffer) => {
-            total += chunk.length;
-            if (total > MAX_CSV_BYTES) {
-              request.abort();
-              clearTimeout(timeout);
-              reject(new Error('시트 응답이 너무 큽니다 (2MB 초과).'));
-              return;
-            }
-            chunks.push(chunk);
-          });
-          response.on('end', () => {
-            clearTimeout(timeout);
-            resolve({ status, csv: Buffer.concat(chunks).toString('utf-8') });
-          });
-          response.on('error', (err) => {
-            clearTimeout(timeout);
-            reject(err);
-          });
-        });
-
-        request.on('error', (err) => {
           clearTimeout(timeout);
-          reject(err);
-        });
-        request.end();
-      },
-    );
+          reject(new Error('시트 응답이 너무 큽니다 (2MB 초과).'));
+          return;
+        }
+        chunks.push(chunk);
+      });
+      response.on('end', () => {
+        clearTimeout(timeout);
+        resolve(Buffer.concat(chunks).toString('utf-8'));
+      });
+      response.on('error', (err) => {
+        clearTimeout(timeout);
+        reject(err);
+      });
+    });
 
-    if (body.status >= 300 && body.status < 400 && body.location) {
-      currentUrl = new URL(body.location, currentUrl).toString();
-      continue;
-    }
-    if (body.status === 200 && typeof body.csv === 'string') {
-      return body.csv;
-    }
-    if (body.status === 401 || body.status === 403) {
-      throw new Error(
-        '시트에 접근할 수 없습니다. Google 시트의 공유 설정을 "링크가 있는 모든 사용자에게 보기 권한"으로 바꾸거나, 다음 버전의 Google 로그인 연동을 기다려 주세요.',
-      );
-    }
-    if (body.status === 404) {
-      throw new Error('해당 ID의 시트를 찾을 수 없습니다. URL을 다시 확인해 주세요.');
-    }
-    throw new Error(`시트를 가져오지 못했습니다. (HTTP ${body.status})`);
-  }
-  throw new Error('리다이렉트가 너무 많이 발생했습니다.');
+    request.on('error', (err) => {
+      clearTimeout(timeout);
+      reject(err);
+    });
+    request.end();
+  });
 }
 
 const ALLOWED_INPUT_HOSTS = new Set(['docs.google.com', 'drive.google.com']);
@@ -139,7 +154,7 @@ export async function fetchPublicSheetCsvImpl(url: string): Promise<FetchPublicS
   const gid = extractGidFromUrl(url);
   const csvUrl = buildCsvExportUrl(fileId, gid);
   try {
-    const csv = await fetchFollowingRedirects(csvUrl);
+    const csv = await fetchCsvBody(csvUrl);
     return { ok: true, csv };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
