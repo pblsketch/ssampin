@@ -227,9 +227,12 @@ export function SignatureRequestPublicApp({
                 <button
                   type="button"
                   onClick={handleCreateSignaturePreview}
-                  className="rounded-xl border border-sp-border bg-sp-card px-4 py-2 text-sm font-sp-semibold text-sp-text"
+                  disabled
+                  title="실제 손글씨 서명 캡처는 다음 버전에서 지원됩니다."
+                  aria-disabled="true"
+                  className="cursor-not-allowed rounded-xl border border-sp-border bg-sp-card px-4 py-2 text-sm font-sp-semibold text-sp-muted opacity-60"
                 >
-                  서명 미리보기 생성
+                  서명 미리보기 (준비 중)
                 </button>
               </div>
               <div className="mt-4 flex h-36 items-center justify-center rounded-xl bg-white text-center text-sm text-sp-muted">
