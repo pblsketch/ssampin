@@ -100,28 +100,28 @@ export interface SignatureRequestStatusView {
 const TEMPLATE_KIND_OPTIONS: readonly TemplateKindOption[] = [
   {
     value: 'training-register',
-    label: '연수 등록부',
-    description: '교직원 연수, 협의회 참석부처럼 한 문서에 여러 명 서명을 모읍니다.',
+    label: '여러 명이 한 문서에 서명',
+    description: '교직원 연수, 협의회처럼 같은 문서에 여러 명이 차례로 서명하는 경우.',
   },
   {
     value: 'absence-form',
-    label: '결석계',
-    description: '학교별 결석계 양식에 학생·학부모 서명 위치를 매핑합니다.',
+    label: '학생 + 학부모 함께 서명',
+    description: '결석계처럼 한 양식에 학생 본인과 학부모 서명을 모두 받습니다.',
   },
   {
     value: 'notice-form',
-    label: '가정통신문',
-    description: '가정통신문 확인 서명과 제출 현황을 명단 기준으로 추적합니다.',
+    label: '학부모만 서명',
+    description: '가정통신문 확인서 등 학부모 서명만 받는 경우.',
   },
   {
     value: 'general-register',
-    label: '일반 서명부',
-    description: '동의서, 확인서, 회의록 등 자유 양식을 등록합니다.',
+    label: '한 명만 서명',
+    description: '동의서·확인서 등 한 사람의 서명만 받는 양식.',
   },
   {
     value: 'custom',
-    label: '직접 설정',
-    description: '필드와 서명 위치를 처음부터 사용자가 구성합니다.',
+    label: '직접 구성',
+    description: '필드와 서명 위치를 처음부터 사용자가 지정합니다.',
   },
 ];
 
@@ -278,7 +278,7 @@ export function ToolSignatureRequest({ onBack, isFullscreen }: ToolSignatureRequ
             <section className="rounded-2xl border border-sp-border bg-sp-card p-5 shadow-sp-sm">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div>
-                  <p className="text-xs font-sp-semibold text-sp-accent">사용자 양식 기반</p>
+                  <p className="text-xs font-sp-semibold text-sp-accent">누가 서명하나요?</p>
                   <h2 className="mt-1 text-xl font-sp-bold text-sp-text">
                     선생님이 만든 Google 양식 그대로, 이름·서명만 자동으로 받아 채웁니다
                   </h2>
