@@ -57,4 +57,10 @@ describe('signature request Supabase contracts', () => {
     expect(source).toContain('[functions.submit-signature]');
     expect(source).toMatch(/\[functions\.submit-signature\]\s+verify_jwt = true/);
   });
+
+  it('registers publish-signature-request function with verify_jwt=true', () => {
+    const source = config();
+    expect(source).toContain('[functions.publish-signature-request]');
+    expect(source).toMatch(/\[functions\.publish-signature-request\]\s+verify_jwt = true/);
+  });
 });

@@ -28,7 +28,7 @@ describe('signature request regression gates', () => {
     const appSource = readFileSync('src/App.tsx', 'utf8');
     expect(appSource).toContain("page === 'tool-signature-request'");
     expect(appSource).toContain('if (isSignaturePublicMode())');
-    expect(appSource).toContain('return <SignatureRequestPublicApp />');
+    expect(appSource).toContain('<SignatureRequestPublicApp');
   });
 
   it('preserves optional per-person link and PIN behavior without forcing secrets', () => {

@@ -46,6 +46,15 @@ import {
   isSignaturePublicRoute,
   SignatureRequestPublicApp,
 } from './signature/SignatureRequestPublicApp';
+import { disabledSignaturePublicClient } from './signature/SignatureRequestPublicClient';
+import {
+  SupabaseSignaturePublicClient,
+  isSupabaseConfigured as isSignatureSupabaseConfigured,
+} from '@infrastructure/supabase/SignatureSupabaseClient';
+
+const signaturePublicClient = isSignatureSupabaseConfigured()
+  ? new SupabaseSignaturePublicClient()
+  : disabledSignaturePublicClient;
 import { ToolRealtimeWall } from '@adapters/components/Tools/ToolRealtimeWall';
 import { ToolInteractiveSlides } from '@adapters/components/Tools/InteractiveSlides';
 import { ToolWordCloud } from '@adapters/components/Tools/ToolWordCloud';
@@ -448,7 +457,7 @@ function WidgetUpdateBanner() {
 
 export function App() {
   if (isSignaturePublicMode()) {
-    return <SignatureRequestPublicApp />;
+    return <SignatureRequestPublicApp client={signaturePublicClient} />;
   }
   if (isStickerPickerMode()) {
     return <StickerPickerApp />;

@@ -22,9 +22,28 @@ import {
   inferSignatureMappingFromCsv,
   type SignatureMappingInferenceResult,
 } from '@domain/rules/signatureMappingInference';
+import {
+  buildIssuedLinks,
+  formatIssuedLinksAsText,
+  type IssuedLinkSet,
+} from '@domain/rules/signatureRequestPublication';
 import { parseCsvLines } from '@domain/utils/parseCsvLines';
+import type { LocalSignatureRequestDraft } from '@domain/entities/SignatureRequest';
 import type { CreateSignatureRequestDraftInput } from '@adapters/stores/useSignatureRequestStore';
 import { useSignatureRequestStore } from '@adapters/stores/useSignatureRequestStore';
+import {
+  SupabaseSignatureAdminClient,
+  isSupabaseConfigured,
+} from '@infrastructure/supabase/SignatureSupabaseClient';
+
+const adminSignatureClient = new SupabaseSignatureAdminClient();
+
+function resolvePublicBaseUrl(): string {
+  const env = ((import.meta.env.VITE_SIGNATURE_PUBLIC_BASE_URL as string | undefined) ?? '').trim();
+  if (env) return env;
+  if (typeof window !== 'undefined' && window.location?.origin) return window.location.origin;
+  return 'https://sign.ssampin.app';
+}
 
 interface SignatureSheetsBridge {
   readonly fetchPublicSheetCsv: (
@@ -201,6 +220,54 @@ export function ToolSignatureRequest({ onBack, isFullscreen }: ToolSignatureRequ
     readonly tone: 'success' | 'error' | 'info';
     readonly text: string;
   } | null>(null);
+  const [issuedByDraftId, setIssuedByDraftId] = useState<Record<string, IssuedLinkSet>>({});
+  const [issuingDraftId, setIssuingDraftId] = useState<string | null>(null);
+  const [issueErrorByDraftId, setIssueErrorByDraftId] = useState<Record<string, string>>({});
+
+  const handleIssuePublicLinks = async (draft: LocalSignatureRequestDraft) => {
+    const draftId = draft.request.id;
+    setIssueErrorByDraftId((prev) => ({ ...prev, [draftId]: '' }));
+    if (!isSupabaseConfigured()) {
+      // 환경 변수가 없으면 로컬 미리보기 모드 — 발급 흐름을 도메인 함수만으로 시뮬레이션
+      const issued = buildIssuedLinks({ draft, baseUrl: resolvePublicBaseUrl() });
+      setIssuedByDraftId((prev) => ({ ...prev, [draftId]: issued }));
+      setIssueErrorByDraftId((prev) => ({
+        ...prev,
+        [draftId]:
+          'Supabase 환경 변수가 비어 있어 미리보기 링크만 생성했어요. 실제 학생 제출은 서버 연동 후에 동작합니다.',
+      }));
+      return;
+    }
+    setIssuingDraftId(draftId);
+    try {
+      const result = await adminSignatureClient.publishDraft(draft, resolvePublicBaseUrl());
+      setIssuedByDraftId((prev) => ({ ...prev, [draftId]: result.issuedLinks }));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setIssueErrorByDraftId((prev) => ({
+        ...prev,
+        [draftId]: message || '공개 링크 발급에 실패했어요. 잠시 후 다시 시도해 주세요.',
+      }));
+    } finally {
+      setIssuingDraftId(null);
+    }
+  };
+
+  const handleCopyText = async (text: string, successMessage: string) => {
+    setMessage(null);
+    setError(null);
+    if (!text) return;
+    if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) {
+      setError('이 브라우저에서는 클립보드 복사를 사용할 수 없습니다.');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      setMessage(successMessage);
+    } catch {
+      setError('클립보드 복사에 실패했습니다. 브라우저 권한을 확인해 주세요.');
+    }
+  };
 
   useEffect(() => {
     void load();
@@ -645,8 +712,18 @@ export function ToolSignatureRequest({ onBack, isFullscreen }: ToolSignatureRequ
                     .map((draft) => (
                       <SavedDraftCard
                         key={draft.request.id}
-                        request={draft.request}
+                        draft={draft}
+                        issued={issuedByDraftId[draft.request.id]}
+                        isIssuing={issuingDraftId === draft.request.id}
+                        issueError={issueErrorByDraftId[draft.request.id]}
                         onCopyMissingList={() => void handleCopyMissingList(draft.request)}
+                        onIssue={() => void handleIssuePublicLinks(draft)}
+                        onCopyIssuedText={(text) =>
+                          void handleCopyText(text, '공개 링크를 클립보드에 복사했어요.')
+                        }
+                        onCopySingleUrl={(url) =>
+                          void handleCopyText(url, '링크를 클립보드에 복사했어요.')
+                        }
                       />
                     ))
                 )}
@@ -1294,16 +1371,30 @@ function PreviewRow({ label, value }: { readonly label: string; readonly value: 
 }
 
 function SavedDraftCard({
-  request,
+  draft,
+  issued,
+  isIssuing,
+  issueError,
   onCopyMissingList,
+  onIssue,
+  onCopyIssuedText,
+  onCopySingleUrl,
 }: {
-  readonly request: SignatureRequest;
+  readonly draft: LocalSignatureRequestDraft;
+  readonly issued?: IssuedLinkSet;
+  readonly isIssuing: boolean;
+  readonly issueError?: string;
   readonly onCopyMissingList: () => void;
+  readonly onIssue: () => void;
+  readonly onCopyIssuedText: (text: string) => void;
+  readonly onCopySingleUrl: (url: string) => void;
 }) {
+  const request = draft.request;
   const statusView = buildSignatureRequestStatusView(request);
   const syncStatus = getGoogleResultSyncStatusView(request);
   const visibleRows = statusView.participantRows.slice(0, 4);
   const remainingRows = statusView.participantRows.length - visibleRows.length;
+  const issuedText = issued ? formatIssuedLinksAsText(issued, request.title) : '';
 
   return (
     <div className="rounded-xl bg-sp-surface/60 p-3">
@@ -1346,6 +1437,82 @@ function SavedDraftCard({
           <p className="text-xs text-sp-muted">
             외 {remainingRows}명은 미서명 명단 복사로 확인할 수 있습니다.
           </p>
+        )}
+      </div>
+
+      <div className="mt-3 rounded-xl border border-sp-accent/40 bg-sp-accent/5 p-3">
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <p className="text-xs font-sp-bold text-sp-text">공개 서명 링크</p>
+            <p className="mt-1 text-xs leading-relaxed text-sp-muted">
+              {request.access.uniqueLinksEnabled
+                ? '한 명마다 다른 개인 링크가 발급됩니다. 카카오톡·문자·메일로 직접 전달해 주세요.'
+                : '모두에게 같은 공통 링크를 발급합니다. 학생이 명단에서 본인을 선택해 서명합니다.'}
+            </p>
+          </div>
+          {!issued && (
+            <button
+              type="button"
+              onClick={onIssue}
+              disabled={isIssuing}
+              className="shrink-0 rounded-xl bg-sp-accent px-3 py-2 text-xs font-sp-bold text-white shadow-sp-sm transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isIssuing ? '발급 중…' : '공개 링크 발급'}
+            </button>
+          )}
+        </div>
+        {issueError && (
+          <p className="mt-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800">
+            {issueError}
+          </p>
+        )}
+        {issued && (
+          <div className="mt-3 space-y-2">
+            {issued.mode === 'common' && issued.commonUrl && (
+              <div className="rounded-xl bg-sp-card px-3 py-2">
+                <p className="break-all text-xs font-mono text-sp-text">{issued.commonUrl}</p>
+                <button
+                  type="button"
+                  onClick={() => onCopySingleUrl(issued.commonUrl!)}
+                  className="mt-2 rounded-lg border border-sp-border px-3 py-1 text-xs font-sp-semibold text-sp-muted hover:border-sp-accent hover:text-sp-accent"
+                >
+                  링크 복사
+                </button>
+              </div>
+            )}
+            {issued.mode === 'per-participant' && (
+              <div className="max-h-60 space-y-1 overflow-y-auto rounded-xl bg-sp-card px-3 py-2">
+                {(issued.participantLinks ?? []).map((link) => (
+                  <div
+                    key={link.participantId}
+                    className="flex items-center justify-between gap-2 border-b border-sp-border/40 pb-1 last:border-b-0 last:pb-0"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-xs font-sp-semibold text-sp-text">
+                        {link.displayName}
+                        {link.pin && <span className="ml-2 text-sp-muted">PIN {link.pin}</span>}
+                      </p>
+                      <p className="truncate text-xs font-mono text-sp-muted">{link.url}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => onCopySingleUrl(link.url)}
+                      className="shrink-0 rounded-lg border border-sp-border px-2 py-1 text-xs font-sp-semibold text-sp-muted hover:border-sp-accent hover:text-sp-accent"
+                    >
+                      복사
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => onCopyIssuedText(issuedText)}
+              className="w-full rounded-lg border border-sp-border px-3 py-2 text-xs font-sp-semibold text-sp-muted hover:border-sp-accent hover:text-sp-accent"
+            >
+              전체 명단을 텍스트로 복사
+            </button>
+          </div>
         )}
       </div>
 
