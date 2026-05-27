@@ -64,14 +64,15 @@ export const disabledSignaturePublicClient: SignaturePublicRequestClient = {
   async loadRequest() {
     return {
       status: 'not-configured',
-      message: '아직 Supabase 공개 서명 계약이 연결되지 않았습니다.',
+      message:
+        '아직 서명을 받을 준비가 끝나지 않은 화면이에요. 링크가 맞는지 선생님께 다시 확인해 주세요.',
     };
   },
 
   async submitSignature() {
     return {
       status: 'not-configured',
-      message: '서명 제출 저장은 Supabase 계약 연결 후 활성화됩니다.',
+      message: '지금은 서명 제출이 열려 있지 않아요. 선생님이 링크를 발급한 뒤 다시 시도해 주세요.',
     };
   },
 };

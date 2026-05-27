@@ -280,7 +280,7 @@ export function ToolSignatureRequest({ onBack, isFullscreen }: ToolSignatureRequ
                 <div>
                   <p className="text-xs font-sp-semibold text-sp-accent">사용자 양식 기반</p>
                   <h2 className="mt-1 text-xl font-sp-bold text-sp-text">
-                    학교별 양식은 그대로 두고, 서명 위치만 연결합니다
+                    선생님이 만든 Google 양식 그대로, 이름·서명만 자동으로 받아 채웁니다
                   </h2>
                   <p className="mt-2 text-sm leading-relaxed text-sp-muted">
                     결석계와 연수 등록부는 학교마다 다르므로 고정 양식을 만들지 않습니다. 교사가
