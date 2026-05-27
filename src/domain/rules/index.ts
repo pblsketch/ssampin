@@ -10,3 +10,4 @@ export * from './notePageRules';
 export * from './classroomAgreementRules';
 export * from './classroomAgreementPhaseRules';
 export * from './classroomAgreementSanitization';
+export * from './signatureRequestRules';

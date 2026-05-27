@@ -41,6 +41,11 @@ import { ToolPoll } from '@adapters/components/Tools/ToolPoll';
 import { ToolSurvey } from '@adapters/components/Tools/ToolSurvey';
 import { ToolMultiSurvey } from '@adapters/components/Tools/ToolMultiSurvey';
 import { ToolClassroomAgreement } from '@adapters/components/Tools/ToolClassroomAgreement';
+import { ToolSignatureRequest } from '@adapters/components/Tools/ToolSignatureRequest';
+import {
+  isSignaturePublicRoute,
+  SignatureRequestPublicApp,
+} from './signature/SignatureRequestPublicApp';
 import { ToolRealtimeWall } from '@adapters/components/Tools/ToolRealtimeWall';
 import { ToolInteractiveSlides } from '@adapters/components/Tools/InteractiveSlides';
 import { ToolWordCloud } from '@adapters/components/Tools/ToolWordCloud';
@@ -129,6 +134,10 @@ function isStickerPickerMode(): boolean {
 function isIconMode(): boolean {
   const params = new URLSearchParams(window.location.search);
   return params.get('mode') === 'icon';
+}
+
+function isSignaturePublicMode(): boolean {
+  return isSignaturePublicRoute(window.location.pathname, window.location.search);
 }
 
 function getQuickAddKindFromUrl(): QuickAddKind {
@@ -339,6 +348,9 @@ function renderPage(
       <ToolClassroomAgreement onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />,
     );
   }
+  if (page === 'tool-signature-request') {
+    return <ToolSignatureRequest onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />;
+  }
   if (page === 'tool-realtime-wall') {
     return wrap(
       <ToolRealtimeWall onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />,
@@ -435,6 +447,9 @@ function WidgetUpdateBanner() {
 }
 
 export function App() {
+  if (isSignaturePublicMode()) {
+    return <SignatureRequestPublicApp />;
+  }
   if (isStickerPickerMode()) {
     return <StickerPickerApp />;
   }

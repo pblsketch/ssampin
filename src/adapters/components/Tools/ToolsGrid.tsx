@@ -47,6 +47,13 @@ export const TOOLS: ToolCard[] = [
     badge: 'NEW',
   },
   {
+    id: 'tool-signature-request',
+    emoji: '✍️',
+    name: '서명받기',
+    description: '학교 양식에 필요한 서명을 링크로 받고 현황을 확인',
+    badge: 'BETA',
+  },
+  {
     id: 'tool-wordcloud',
     emoji: '☁️',
     name: '워드클라우드 브레인스토밍',

@@ -32,3 +32,32 @@ describe('classroom agreement tool registration', () => {
     expect(appSource).toContain('ToolClassroomAgreement');
   });
 });
+
+describe('signature request tool registration', () => {
+  const pageId: PageId = 'tool-signature-request';
+
+  it('registers the tool in the grid and favorite-tool definitions', () => {
+    const gridCard = TOOLS.find((tool) => tool.id === pageId);
+    const favoriteDefinition = getToolDefinition(pageId);
+
+    expect(gridCard).toMatchObject({
+      id: pageId,
+      name: '서명받기',
+    });
+    expect(gridCard?.externalUrl).toBeUndefined();
+    expect(gridCard?.description).toContain('서명');
+    expect(favoriteDefinition).toMatchObject({
+      id: pageId,
+      name: '서명받기',
+    });
+    expect(favoriteDefinition?.externalUrl).toBeUndefined();
+    expect(TOOL_DEFINITIONS.map((tool) => tool.id)).toContain(pageId);
+  });
+
+  it('has a teacher app render branch for the registered PageId', () => {
+    const appSource = readFileSync('src/App.tsx', 'utf8');
+
+    expect(appSource).toContain("page === 'tool-signature-request'");
+    expect(appSource).toContain('ToolSignatureRequest');
+  });
+});

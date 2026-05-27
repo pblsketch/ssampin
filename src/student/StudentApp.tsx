@@ -1,8 +1,8 @@
-import type { ComponentType } from 'react';
+import { lazy, Suspense, type ComponentType, type LazyExoticComponent } from 'react';
 import { StudentRealtimeWallApp } from './StudentRealtimeWallApp';
-import { StudentClassroomAgreementApp } from './StudentClassroomAgreementApp';
 
 export type StudentAppMode = 'realtime-wall' | 'classroom-agreement';
+type StudentRouteComponent = ComponentType | LazyExoticComponent<ComponentType>;
 
 interface StudentAppLocationLike {
   readonly search?: string;
@@ -19,12 +19,25 @@ const CLASSROOM_AGREEMENT_MODE_VALUES = new Set([
   'classroom-agreements',
 ]);
 
+const StudentClassroomAgreementApp = lazy(() =>
+  import('./StudentClassroomAgreementApp').then((module) => ({
+    default: module.StudentClassroomAgreementApp,
+  })),
+);
+
 export function StudentApp({ mode = resolveStudentAppMode() }: StudentAppProps) {
   const Component = resolveStudentAppComponent(mode);
+  if (mode === 'classroom-agreement') {
+    return (
+      <Suspense fallback={<StudentAppLoading />}>
+        <Component />
+      </Suspense>
+    );
+  }
   return <Component />;
 }
 
-export function resolveStudentAppComponent(mode: StudentAppMode): ComponentType {
+export function resolveStudentAppComponent(mode: StudentAppMode): StudentRouteComponent {
   return mode === 'classroom-agreement' ? StudentClassroomAgreementApp : StudentRealtimeWallApp;
 }
 
@@ -59,4 +72,14 @@ function readModeFromSearchParams(search: string): StudentAppMode | null {
 
   const normalizedMode = rawMode.trim().toLowerCase();
   return CLASSROOM_AGREEMENT_MODE_VALUES.has(normalizedMode) ? 'classroom-agreement' : null;
+}
+
+function StudentAppLoading() {
+  return (
+    <div className="min-h-screen bg-sp-bg px-6 py-12 text-sp-text">
+      <div className="mx-auto max-w-md rounded-xl border border-sp-border bg-sp-card p-8 text-center text-sm text-sp-muted">
+        학생 앱을 불러오는 중입니다.
+      </div>
+    </div>
+  );
 }

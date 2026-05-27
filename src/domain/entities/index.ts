@@ -71,3 +71,30 @@ export type {
   RefinementVote,
 } from './ClassroomAgreement';
 export { CLASSROOM_AGREEMENT_SCHEMA_VERSION } from './ClassroomAgreement';
+export type {
+  SignatureImageRef,
+  SignatureKind,
+  SignatureMappingTarget,
+  SignatureMappingTargetType,
+  SignatureParticipant,
+  SignatureParticipantProgress,
+  SignatureParticipantRole,
+  SignatureParticipantStatus,
+  SignatureRequest,
+  SignatureRequestAccessOptions,
+  SignatureRequestFirstReleaseScope,
+  SignatureRequestProgress,
+  SignatureRequestStatus,
+  SignatureSlotMapping,
+  SignatureSubmission,
+  SignatureTemplateKind,
+  SignatureTemplateMapping,
+  SignatureTemplateSource,
+  SignatureTemplateSourceType,
+  SignatureTextFieldKey,
+  SignatureTextFieldMapping,
+} from './SignatureRequest';
+export {
+  SIGNATURE_REQUEST_FIRST_RELEASE_SCOPE,
+  SIGNATURE_REQUEST_SCHEMA_VERSION,
+} from './SignatureRequest';
