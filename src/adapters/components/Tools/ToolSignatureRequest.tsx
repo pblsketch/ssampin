@@ -39,6 +39,7 @@ import {
   SupabaseSignatureAdminClient,
   isSupabaseConfigured,
 } from '@infrastructure/supabase/SignatureSupabaseClient';
+import { SIGNATURE_LEGAL_DISCLAIMER } from '../../../signature/signatureLegalCopy';
 
 const adminSignatureClient = new SupabaseSignatureAdminClient();
 
@@ -1600,7 +1601,7 @@ function SavedDraftCard({
           <button
             type="button"
             disabled
-            title="공개 링크가 발급되고 첫 서명이 접수되면 결과 파일이 만들어집니다."
+            title={`공개 링크가 발급되고 첫 서명이 접수되면 결과 파일이 만들어집니다. ${SIGNATURE_LEGAL_DISCLAIMER}`}
             className="rounded-lg border border-sp-border px-3 py-2 text-xs font-sp-semibold text-sp-muted opacity-60"
           >
             결과 파일 준비 전

@@ -23,6 +23,7 @@ import {
   isSupabaseConfigured,
   type ValidatePdfUploadResponse,
 } from '@infrastructure/supabase/SignatureSupabaseClient';
+import { SIGNATURE_LEGAL_DISCLAIMER } from './signatureLegalCopy';
 
 const adminClient = new SupabaseSignatureAdminClient();
 
@@ -143,6 +144,13 @@ export function SignaturePdfUploadPanel({
         <p className="mt-2 text-xs leading-relaxed text-sp-muted">
           10MB 이하 / 10페이지 이하 / 비밀번호·디지털 서명·활성 양식 필드 없는 PDF 만 업로드할 수
           있습니다.
+        </p>
+        {/* US-2C-14: 발급 화면 — 학생 동의 표 · 결과 PDF 툴팁과 동일 카피 */}
+        <p
+          className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-800"
+          data-testid="signature-legal-disclaimer-issue"
+        >
+          {SIGNATURE_LEGAL_DISCLAIMER}
         </p>
       </header>
 

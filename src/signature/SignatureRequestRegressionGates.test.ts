@@ -14,6 +14,7 @@ import {
   buildSignatureRequestDraftInput,
 } from '@adapters/components/Tools/ToolSignatureRequest';
 import { isSignaturePublicRoute } from './SignatureRequestPublicApp';
+import { SIGNATURE_LEGAL_DISCLAIMER } from './signatureLegalCopy';
 
 describe('signature request regression gates', () => {
   it('keeps the public signing route narrow and separate from teacher tool navigation', () => {
@@ -112,6 +113,40 @@ describe('signature request regression gates', () => {
     expect(html).toContain('Google 결과 반영 상태');
     expect(html).toContain('Sheets 셀 이미지 자동 삽입은 공개 URL 검증 시에만');
     expect(source).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
+  });
+
+  it('Phase 2C US-2C-14: legal disclaimer 가 3 위치에서 동일 모듈을 import 한다', () => {
+    // 1) 단일 진실 원천 카피 확인
+    expect(SIGNATURE_LEGAL_DISCLAIMER).toBe(
+      '이 서명은 행정용 의사 확인용입니다. 자필 서명과 동등한 법적 효력은 보장되지 않습니다.',
+    );
+
+    // 2) 3 위치 소스 파일이 signatureLegalCopy 를 import 한다
+    const pdfUploadSource = readFileSync('src/signature/SignaturePdfUploadPanel.tsx', 'utf8');
+    const consentTableSource = readFileSync('src/signature/PrivacyConsentTable.tsx', 'utf8');
+    const toolSignatureSource = readFileSync(
+      'src/adapters/components/Tools/ToolSignatureRequest.tsx',
+      'utf8',
+    );
+
+    for (const [name, source] of [
+      ['SignaturePdfUploadPanel (교사 발급 화면)', pdfUploadSource],
+      ['PrivacyConsentTable (학생 동의 표 헤더)', consentTableSource],
+      ['ToolSignatureRequest (결과 PDF 버튼 툴팁)', toolSignatureSource],
+    ] as const) {
+      expect(source, name).toMatch(/SIGNATURE_LEGAL_DISCLAIMER/);
+      expect(source, name).toMatch(/signatureLegalCopy/);
+    }
+
+    // 3) 카피 문장 자체는 다른 곳에 하드코딩되지 않는다 (단일 정의)
+    const hardcodedCopyRegex =
+      /이 서명은 행정용 의사 확인용입니다\. 자필 서명과 동등한 법적 효력은 보장되지 않습니다\./;
+    const legalCopySource = readFileSync('src/signature/signatureLegalCopy.ts', 'utf8');
+    expect(legalCopySource).toMatch(hardcodedCopyRegex);
+    // 정의 파일 외에는 import 만 사용 — 본문에 같은 문자열이 직접 박혀 있으면 회귀
+    expect(pdfUploadSource).not.toMatch(hardcodedCopyRegex);
+    expect(consentTableSource).not.toMatch(hardcodedCopyRegex);
+    expect(toolSignatureSource).not.toMatch(hardcodedCopyRegex);
   });
 
   it('keeps missing-list copy text focused on unsigned and partially signed participants', () => {

@@ -17,6 +17,7 @@
  *   - 카피 한 문장이라도 바뀌면 G005 (US-2C-14) 3 위치 일관성도 함께 확인.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { SIGNATURE_LEGAL_DISCLAIMER } from './signatureLegalCopy';
 
 export type PrivacyConsentItemId =
   | 'legal_effect_disclaimer'
@@ -44,13 +45,10 @@ export interface PrivacyConsentTableProps {
 }
 
 /**
- * G005 (US-2C-14) 3 위치 공통 카피 — 변경 시 함께 갱신해야 한다:
- *   1. 교사 발급 화면 (SignaturePdfUploadPanel 또는 발급 직전 카피)
- *   2. 학생 동의 표 헤더 (여기 — `LEGAL_DISCLAIMER`)
- *   3. 결과 PDF 생성 버튼 툴팁 (ToolSignatureRequest)
+ * G005 (US-2C-14) 3 위치 공통 카피 — 단일 정의는 `./signatureLegalCopy`.
+ * 본 export 는 기존 import 경로 호환을 위해 alias 로 유지.
  */
-export const LEGAL_DISCLAIMER =
-  '이 서명은 행정용 의사 확인용입니다. 자필 서명과 동등한 법적 효력은 보장되지 않습니다.';
+export const LEGAL_DISCLAIMER = SIGNATURE_LEGAL_DISCLAIMER;
 
 export const PRIVACY_CONSENT_ITEMS: readonly PrivacyConsentItem[] = [
   {
