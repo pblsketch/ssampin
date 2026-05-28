@@ -16,6 +16,8 @@ import type {
   SignatureTextFieldKey,
 } from '@domain/entities/SignatureRequest';
 import { SignaturePdfUploadPanel } from '../../../signature/SignaturePdfUploadPanel';
+import { SignatureRegionDesigner } from '../../../signature/SignatureRegionDesigner';
+import type { SignatureRegion } from '@domain/entities/SignatureRequest';
 import {
   getParticipantSignatureStatus,
   getSignatureRequestProgress,
@@ -232,6 +234,9 @@ export function ToolSignatureRequest({ onBack, isFullscreen }: ToolSignatureRequ
   // 와 publish 단계 (US-2C-10/11) 가 이 값을 읽어 region 좌표 / pre-render 경로를 만든다.
   // 본 PR 범위에서는 업로드 + UI 노출만 (publish 와의 wiring 은 다음 PRD task).
   const [pdfTemplate, setPdfTemplate] = useState<PdfTemplate | null>(null);
+  // Phase 2C US-2C-09: SignatureRegionDesigner 가 그린 좌표 기반 서명 영역. publish 단계
+  // 에서 SignatureRequest.regions 로 저장되고, pre-render 가 이 좌표로 cutout PNG 를 만든다.
+  const [pdfRegions, setPdfRegions] = useState<readonly SignatureRegion[]>([]);
 
   const handleIssuePublicLinks = async (draft: LocalSignatureRequestDraft) => {
     const draftId = draft.request.id;
@@ -583,6 +588,22 @@ export function ToolSignatureRequest({ onBack, isFullscreen }: ToolSignatureRequ
               onUploaded={setPdfTemplate}
               initialPdfTemplate={pdfTemplate ?? undefined}
             />
+
+            {/*
+              Phase 2C US-2C-09: PDF 업로드 + 명단이 모두 있으면 SignatureRegionDesigner 노출.
+              교사가 PDF 위에 사각형을 드래그해 서명 자리를 지정한다. Pattern 2 토글로 명단
+              N명 자동복제. 본 PR 범위는 좌표 designer + state 관리까지 (publish 단계의 region
+              persistence 는 US-2C-10 에서).
+            */}
+            {pdfTemplate && participants.length > 0 && (
+              <SignatureRegionDesigner
+                pdfTemplate={pdfTemplate}
+                pdfUrl={pdfTemplate.storagePath}
+                participants={participants}
+                initialRegions={pdfRegions}
+                onRegionsChange={setPdfRegions}
+              />
+            )}
 
             <section className="rounded-2xl border border-sp-border bg-sp-card p-5 shadow-sp-sm">
               <SectionTitle
