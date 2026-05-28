@@ -1,0 +1,8 @@
+# Phase 2C PoC: 풀 Noto Sans KR Regular OTF (4.6MB) 는 git 추적 제외.
+# Edge Function 은 GitHub raw URL 에서 fetch — 로컬 다운로드는 reference 용.
+# PoC 통과 후 ~30글자 subset (~20-30KB) 만 정식 commit (Plan v2.1 Step F.1).
+NotoSansKR-Regular.otf
+NotoSansKR-Regular.ttf
+NotoSansKR-Bold.otf
+NotoSansKR-Bold.ttf
+*.woff2
