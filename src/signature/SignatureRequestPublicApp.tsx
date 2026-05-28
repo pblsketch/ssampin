@@ -3,12 +3,14 @@ import type { SignatureKind } from '@domain/entities/SignatureRequest';
 import {
   disabledSignaturePublicClient,
   type SignaturePublicLoadResult,
+  type SignaturePublicRegionView,
   type SignaturePublicRequestClient,
   type SignaturePublicRequestView,
   type SignaturePublicSubmissionDraft,
   type SignaturePublicSubmitResult,
 } from './SignatureRequestPublicClient';
 import { SignatureCanvasPad, type SignatureCanvasPadHandle } from './SignatureCanvasPad';
+import { PrivacyConsentTable, type PrivacyConsentLogEntry } from './PrivacyConsentTable';
 
 interface SignatureRequestPublicAppProps {
   readonly client?: SignaturePublicRequestClient;
@@ -61,6 +63,8 @@ export function SignatureRequestPublicApp({
   const [hasInk, setHasInk] = useState(false);
   const [submitResult, setSubmitResult] = useState<SignaturePublicSubmitResult | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [consentLog, setConsentLog] = useState<readonly PrivacyConsentLogEntry[] | null>(null);
+  const [zoomMyRegion, setZoomMyRegion] = useState(false);
   const canvasRef = useRef<SignatureCanvasPadHandle | null>(null);
 
   useEffect(() => {
@@ -97,10 +101,22 @@ export function SignatureRequestPublicApp({
   }, [availableSignatureKinds, signatureKind]);
 
   const modeLabel = route.token ? '개인 고유 링크' : '명단 선택';
+  const myRegions: readonly SignaturePublicRegionView[] = useMemo(() => {
+    if (!request.regions || !selectedParticipantId) return [];
+    return request.regions.filter(
+      (region) =>
+        region.participantId === selectedParticipantId && region.signatureKind === signatureKind,
+    );
+  }, [request.regions, selectedParticipantId, signatureKind]);
+
+  const hasPdfOverlay = Boolean(request.pdfTemplate && request.pagePreviewUrls?.length);
+  const allConsented = consentLog !== null;
+
   const isReadyToSubmit =
     Boolean(route.requestId) &&
     Boolean(signerName.trim()) &&
     hasInk &&
+    allConsented &&
     (route.token || Boolean(selectedParticipantId));
 
   const handleSubmit = async () => {
@@ -109,7 +125,7 @@ export function SignatureRequestPublicApp({
     if (!isReadyToSubmit || !dataUrl) {
       setSubmitResult({
         status: 'rejected',
-        message: '이름, 대상자, 손글씨 서명을 모두 입력해 주세요.',
+        message: '이름, 대상자, 손글씨 서명, 동의 항목 4개 모두 확인해 주세요.',
       });
       return;
     }
@@ -123,6 +139,7 @@ export function SignatureRequestPublicApp({
         signatureKind,
         signerName,
         signatureImageDataUrl: dataUrl,
+        consentLog: consentLog ?? undefined,
       });
       const result = await client.submitSignature(draft);
       setSubmitResult(result);
@@ -219,6 +236,17 @@ export function SignatureRequestPublicApp({
               </LabeledField>
             )}
 
+            {hasPdfOverlay && (
+              <SignaturePdfPreviewSection
+                request={request}
+                myRegions={myRegions}
+                zoom={zoomMyRegion}
+                onZoomChange={setZoomMyRegion}
+              />
+            )}
+
+            <PrivacyConsentTable disabled={isSubmitting} onLogChange={setConsentLog} />
+
             <section className="rounded-2xl border border-dashed border-sp-border bg-sp-surface/60 p-4">
               <div className="mb-3">
                 <h2 className="text-sm font-sp-bold">서명</h2>
@@ -251,7 +279,7 @@ export function SignatureRequestPublicApp({
             <button
               type="button"
               onClick={() => void handleSubmit()}
-              disabled={isSubmitting}
+              disabled={isSubmitting || !isReadyToSubmit}
               className="w-full rounded-xl bg-sp-accent px-4 py-3 text-sm font-sp-bold text-white shadow-sp-sm disabled:opacity-50"
             >
               {isSubmitting ? '제출 중...' : '서명 제출'}
@@ -260,6 +288,126 @@ export function SignatureRequestPublicApp({
         </section>
       </div>
     </main>
+  );
+}
+
+interface SignaturePdfPreviewSectionProps {
+  readonly request: SignaturePublicRequestView;
+  readonly myRegions: readonly SignaturePublicRegionView[];
+  readonly zoom: boolean;
+  readonly onZoomChange: (zoom: boolean) => void;
+}
+
+function SignaturePdfPreviewSection({
+  request,
+  myRegions,
+  zoom,
+  onZoomChange,
+}: SignaturePdfPreviewSectionProps) {
+  const regionUrlById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const item of request.regionPreviewUrls ?? []) {
+      map.set(item.regionId, item.publicUrl);
+    }
+    return map;
+  }, [request.regionPreviewUrls]);
+
+  const pageItems = request.pagePreviewUrls ?? [];
+
+  return (
+    <section
+      aria-label="서명 양식 미리보기"
+      className="rounded-2xl border border-sp-border bg-sp-surface/40 p-4"
+    >
+      <header className="mb-3 flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-sp-bold">서명 양식 미리보기</h2>
+          <p className="mt-1 text-xs text-sp-muted">
+            선생님이 업로드한 PDF 페이지에서 본인이 서명할 칸 위치를 확인하세요.
+            {myRegions.length === 0 && ' (현재 선택한 서명 종류에 해당하는 칸이 없습니다.)'}
+          </p>
+        </div>
+        {myRegions.length > 0 && (
+          <label className="flex shrink-0 items-center gap-2 text-xs font-sp-semibold">
+            <input
+              type="checkbox"
+              checked={zoom}
+              onChange={(event) => onZoomChange(event.target.checked)}
+              className="h-4 w-4 rounded border-sp-border"
+            />
+            내 칸 확대 보기
+          </label>
+        )}
+      </header>
+
+      {zoom && myRegions.length > 0 ? (
+        <ul className="space-y-3">
+          {myRegions.map((region) => {
+            const url = regionUrlById.get(region.id);
+            return (
+              <li
+                key={region.id}
+                className="overflow-hidden rounded-xl border border-sp-accent bg-white"
+              >
+                {url ? (
+                  <img
+                    src={url}
+                    alt={`서명 칸 ${region.id} (페이지 ${region.pageIndex + 1})`}
+                    className="block w-full"
+                    loading="lazy"
+                  />
+                ) : (
+                  <div className="p-3 text-center text-xs text-sp-muted">미리보기 준비 중…</div>
+                )}
+                <div className="border-t border-sp-border bg-sp-surface/60 px-3 py-2 text-xs text-sp-muted">
+                  페이지 {region.pageIndex + 1} · {SIGNATURE_KIND_LABELS[region.signatureKind]}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <ul className="space-y-3">
+          {pageItems.map((page) => {
+            const pageRegions = myRegions.filter((region) => region.pageIndex === page.pageIndex);
+            return (
+              <li
+                key={page.pageIndex}
+                className="overflow-hidden rounded-xl border border-sp-border bg-white"
+              >
+                <div className="relative">
+                  <img
+                    src={page.publicUrl}
+                    alt={`서명 양식 페이지 ${page.pageIndex + 1}`}
+                    className="block w-full"
+                    loading="lazy"
+                  />
+                  {pageRegions.map((region) => (
+                    <span
+                      key={region.id}
+                      aria-label={`내 서명 칸 — 페이지 ${region.pageIndex + 1}`}
+                      className="pointer-events-none absolute rounded-sm border-2 border-sp-accent bg-sp-accent/10"
+                      style={{
+                        left: `${region.rect.x * 100}%`,
+                        top: `${region.rect.y * 100}%`,
+                        width: `${region.rect.w * 100}%`,
+                        height: `${region.rect.h * 100}%`,
+                      }}
+                    />
+                  ))}
+                </div>
+                <div className="border-t border-sp-border bg-sp-surface/60 px-3 py-2 text-xs text-sp-muted">
+                  페이지 {page.pageIndex + 1}
+                  {pageRegions.length > 0
+                    ? ` · 내 서명 칸 ${pageRegions.length}개 강조`
+                    : ' · 내 서명 칸 없음'}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
   );
 }
 
@@ -291,6 +439,7 @@ export function createSignaturePublicSubmissionDraft({
   signatureKind,
   signerName,
   signatureImageDataUrl,
+  consentLog,
   now = () => new Date().toISOString(),
 }: {
   readonly requestId: string;
@@ -300,6 +449,7 @@ export function createSignaturePublicSubmissionDraft({
   readonly signatureKind: SignatureKind;
   readonly signerName: string;
   readonly signatureImageDataUrl: string;
+  readonly consentLog?: readonly PrivacyConsentLogEntry[];
   readonly now?: () => string;
 }): SignaturePublicSubmissionDraft {
   return {
@@ -311,6 +461,7 @@ export function createSignaturePublicSubmissionDraft({
     signerName: signerName.trim(),
     signatureImageDataUrl,
     submittedAt: now(),
+    consentLog,
   };
 }
 

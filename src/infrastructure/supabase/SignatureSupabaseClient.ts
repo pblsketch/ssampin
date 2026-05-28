@@ -80,6 +80,29 @@ interface PublicGetResponse {
     readonly requiredSignatureKinds: readonly string[];
   }>;
   readonly resolvedParticipantId?: string;
+  // Phase 2C v2 (US-2C-10): PDF 오버레이 + pre-render 결과
+  readonly pdfTemplate?: { readonly pageCount: number };
+  readonly regions?: ReadonlyArray<{
+    readonly id: string;
+    readonly pageIndex: number;
+    readonly rect: {
+      readonly x: number;
+      readonly y: number;
+      readonly w: number;
+      readonly h: number;
+    };
+    readonly participantId: string;
+    readonly signatureKind: string;
+  }>;
+  readonly pagePreviewUrls?: ReadonlyArray<{
+    readonly pageIndex: number;
+    readonly publicUrl: string;
+  }>;
+  readonly regionPreviewUrls?: ReadonlyArray<{
+    readonly regionId: string;
+    readonly publicUrl: string;
+  }>;
+  readonly regionVersion?: number;
 }
 
 function normalizeSignatureKinds(values: readonly string[]): readonly SignatureKind[] {
@@ -113,6 +136,18 @@ export class SupabaseSignaturePublicClient implements SignaturePublicRequestClie
             displayName: participant.displayName,
             requiredSignatureKinds: normalizeSignatureKinds(participant.requiredSignatureKinds),
           })),
+          // Phase 2C v2: PDF 오버레이 메타 (optional, 양식 없는 요청은 undefined)
+          pdfTemplate: payload.pdfTemplate,
+          regions: payload.regions?.map((region) => ({
+            id: region.id,
+            pageIndex: region.pageIndex,
+            rect: region.rect,
+            participantId: region.participantId,
+            signatureKind: normalizeSignatureKinds([region.signatureKind])[0] ?? 'recipient',
+          })),
+          pagePreviewUrls: payload.pagePreviewUrls,
+          regionPreviewUrls: payload.regionPreviewUrls,
+          regionVersion: payload.regionVersion,
         },
         resolvedParticipantId: payload.resolvedParticipantId,
       };
@@ -137,6 +172,8 @@ export class SupabaseSignaturePublicClient implements SignaturePublicRequestClie
         signatureKind: draft.signatureKind,
         signerName: draft.signerName,
         signatureImageDataUrl: draft.signatureImageDataUrl,
+        // Phase 2C v2 (US-2C-11): 4행 동의 표 로그 전송
+        consentLog: draft.consentLog,
       });
       return { status: 'accepted', submissionId: payload.submissionId };
     } catch (err) {

@@ -11,6 +11,13 @@ import { checkRateLimit, clientIpFrom } from '../_shared/rateLimit.ts';
 const MAX_SIGNATURE_BYTES = 1024 * 1024;
 const SIGNATURE_BUCKET = 'signature-images';
 
+interface ConsentLogEntry {
+  readonly id?: string;
+  readonly label?: string;
+  readonly checked?: boolean;
+  readonly at?: string;
+}
+
 interface SubmitSignatureBody {
   readonly requestId?: string;
   readonly participantId?: string;
@@ -19,6 +26,36 @@ interface SubmitSignatureBody {
   readonly signatureKind?: string;
   readonly signerName?: string;
   readonly signatureImageDataUrl?: string;
+  /** Phase 2C US-2C-11: 4행 동의 표 결과. 모두 checked=true 여야 제출 허용. */
+  readonly consentLog?: readonly ConsentLogEntry[];
+}
+
+const REQUIRED_CONSENT_IDS = new Set([
+  'legal_effect_disclaimer',
+  'hash_storage',
+  'result_pdf_share',
+  'retention_period',
+]);
+
+function validateConsentLog(log: readonly ConsentLogEntry[] | undefined): string | null {
+  if (!log || !Array.isArray(log)) return '동의 항목 4개 모두 체크 후 제출해 주세요.';
+  if (log.length < 4) return '동의 항목 4개 모두 체크 후 제출해 주세요.';
+  const seenIds = new Set<string>();
+  for (const entry of log) {
+    if (!entry || typeof entry.id !== 'string' || !REQUIRED_CONSENT_IDS.has(entry.id)) {
+      return '동의 항목 형식이 잘못되었습니다.';
+    }
+    if (entry.checked !== true) return '동의 항목 4개 모두 체크 후 제출해 주세요.';
+    if (typeof entry.label !== 'string' || entry.label.length === 0) {
+      return '동의 항목 레이블 누락.';
+    }
+    if (typeof entry.at !== 'string' || entry.at.length === 0) {
+      return '동의 시각 정보 누락.';
+    }
+    seenIds.add(entry.id);
+  }
+  if (seenIds.size !== 4) return '필수 동의 항목이 모두 포함되지 않았습니다.';
+  return null;
 }
 
 async function sha256Hex(value: string): Promise<string> {
@@ -63,10 +100,17 @@ serve(async (req: Request) => {
       signatureKind,
       signerName,
       signatureImageDataUrl,
+      consentLog,
     } = body;
 
     if (!requestId || !signatureKind || !signerName || !signatureImageDataUrl) {
       return errorResponse('필수 필드가 누락되었습니다.', 400);
+    }
+
+    // Phase 2C US-2C-11: 4행 동의 표 검증 (raw IP 저장 X — 해시만)
+    const consentError = validateConsentLog(consentLog);
+    if (consentError) {
+      return errorResponse(consentError, 400);
     }
     if (!participantId && !token) {
       return errorResponse('participantId 또는 token이 필요합니다.', 400);
@@ -157,6 +201,8 @@ serve(async (req: Request) => {
 
     const ipHash = await sha256Hex(clientIP);
     const userAgentHash = await sha256Hex(req.headers.get('user-agent') ?? 'unknown');
+    // Phase 2C US-2C-11: consent_ip_hash 는 동의 시점 IP SHA-256. raw IP 비저장 — 제1 원칙.
+    const consentIpHash = await sha256Hex(clientIP);
     const { error: upsertError } = await supabase.from('signature_submissions').upsert(
       {
         id: submissionId,
@@ -170,6 +216,8 @@ serve(async (req: Request) => {
         submitted_at: new Date().toISOString(),
         ip_hash: ipHash,
         user_agent_hash: userAgentHash,
+        consent_log: consentLog,
+        consent_ip_hash: consentIpHash,
       },
       { onConflict: 'request_id,participant_id,signature_kind' },
     );
