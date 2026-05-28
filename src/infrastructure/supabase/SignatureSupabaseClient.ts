@@ -20,9 +20,15 @@ import type { IssuedLinkSet } from '@domain/rules/signatureRequestPublication';
 import { buildIssuedLinks } from '@domain/rules/signatureRequestPublication';
 import type {
   LocalSignatureRequestDraft,
+  PdfTemplate,
   SignatureKind,
   SignatureParticipantRole,
 } from '@domain/entities/SignatureRequest';
+import type {
+  PageOrientation,
+  PdfRejectCode,
+  PdfWarnCode,
+} from '@domain/rules/pdfTemplateValidation';
 
 interface ErrorResponse {
   readonly error?: string;
@@ -176,7 +182,79 @@ function normalizeRole(role: string): SignatureParticipantRole {
     : 'staff';
 }
 
+interface ValidatePdfUploadOkResponse {
+  readonly ok: true;
+  readonly pdfTemplate: PdfTemplate;
+  readonly orientations: readonly PageOrientation[];
+  readonly warning?: { readonly code: PdfWarnCode; readonly message: string };
+}
+
+interface ValidatePdfUploadRejectResponse {
+  readonly ok: false;
+  readonly code: PdfRejectCode;
+  readonly message: string;
+}
+
+export type ValidatePdfUploadResponse =
+  | ValidatePdfUploadOkResponse
+  | ValidatePdfUploadRejectResponse;
+
+/**
+ * `File` 또는 `Blob` 을 base64 (data URL 헤더 제거된) 문자열로 변환. FileReader API 사용.
+ */
+export async function fileToBase64(file: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result !== 'string') {
+        reject(new Error('FileReader 결과가 문자열이 아닙니다.'));
+        return;
+      }
+      resolve(result.replace(/^data:[^,]+,/, ''));
+    };
+    reader.onerror = () => reject(reader.error ?? new Error('파일 읽기 실패'));
+    reader.readAsDataURL(file);
+  });
+}
+
 export class SupabaseSignatureAdminClient {
+  /**
+   * Phase 2C: 교사가 업로드한 PDF 양식을 validate-pdf-upload Edge Function 으로 전송.
+   * Edge Function 이 검증 + Storage 업로드를 수행하고, 성공 시 PdfTemplate 메타를 반환.
+   *
+   * caller 는 `result.ok` 분기로 거절 안내 카피 (한국어) 또는 PdfTemplate 을 처리.
+   * mixed-orientation 경고는 `result.ok === true && result.warning` 으로 받아서
+   * 교사 confirm 프롬프트를 띄운다 (계속 진행은 PdfTemplate 으로 이미 가능).
+   */
+  async uploadPdfTemplate(file: File, teacherId?: string): Promise<ValidatePdfUploadResponse> {
+    const { url, anonKey } = readSupabaseEnv();
+    if (!url || !anonKey) {
+      throw new Error('Supabase가 설정되지 않았습니다.');
+    }
+    const pdfBase64 = await fileToBase64(file);
+    const response = await fetch(`${url}/functions/v1/validate-pdf-upload`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: anonKey,
+        Authorization: `Bearer ${anonKey}`,
+      },
+      body: JSON.stringify({
+        teacherId,
+        fileName: file.name,
+        pdfBase64,
+      }),
+    });
+    // 응답 자체는 4xx (reject) 도 JSON body 를 담아서 보낸다. 5xx 만 throw.
+    if (response.status >= 500) {
+      const payload = (await response.json().catch(() => ({}))) as ErrorResponse;
+      throw new Error(payload.error ?? `Edge Function 오류 (HTTP ${response.status})`);
+    }
+    const payload = (await response.json()) as ValidatePdfUploadResponse;
+    return payload;
+  }
+
   async publishDraft(
     draft: LocalSignatureRequestDraft,
     baseUrl: string,

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ToolLayout } from './ToolLayout';
 import type {
+  PdfTemplate,
   SignatureKind,
   SignatureMappingTarget,
   SignatureMappingTargetType,
@@ -14,6 +15,7 @@ import type {
   SignatureTemplateSourceType,
   SignatureTextFieldKey,
 } from '@domain/entities/SignatureRequest';
+import { SignaturePdfUploadPanel } from '../../../signature/SignaturePdfUploadPanel';
 import {
   getParticipantSignatureStatus,
   getSignatureRequestProgress,
@@ -226,6 +228,10 @@ export function ToolSignatureRequest({ onBack, isFullscreen }: ToolSignatureRequ
   const [issuedByDraftId, setIssuedByDraftId] = useState<Record<string, IssuedLinkSet>>({});
   const [issuingDraftId, setIssuingDraftId] = useState<string | null>(null);
   const [issueErrorByDraftId, setIssueErrorByDraftId] = useState<Record<string, string>>({});
+  // Phase 2C US-2C-08: 교사가 업로드한 PDF 양식 메타. SignatureRegionDesigner (US-2C-09)
+  // 와 publish 단계 (US-2C-10/11) 가 이 값을 읽어 region 좌표 / pre-render 경로를 만든다.
+  // 본 PR 범위에서는 업로드 + UI 노출만 (publish 와의 wiring 은 다음 PRD task).
+  const [pdfTemplate, setPdfTemplate] = useState<PdfTemplate | null>(null);
 
   const handleIssuePublicLinks = async (draft: LocalSignatureRequestDraft) => {
     const draftId = draft.request.id;
@@ -568,6 +574,15 @@ export function ToolSignatureRequest({ onBack, isFullscreen }: ToolSignatureRequ
                 </div>
               </div>
             </section>
+
+            {/*
+              Phase 2C US-2C-08 (베타): PDF 양식 직접 업로드. 본 PR 에서는 업로드 + 검증
+              + Storage 저장까지 (publish 단계 wiring 은 US-2C-09 의 디자이너에서).
+            */}
+            <SignaturePdfUploadPanel
+              onUploaded={setPdfTemplate}
+              initialPdfTemplate={pdfTemplate ?? undefined}
+            />
 
             <section className="rounded-2xl border border-sp-border bg-sp-card p-5 shadow-sp-sm">
               <SectionTitle
