@@ -278,7 +278,12 @@ export function SignatureRegionDesigner({
         setToast({ tone: 'error', message: '사각형이 페이지 안에 들어가야 해요.' });
         return;
       }
-      if (!meetsMinimumSize(newRect, currentViewport)) {
+      if (
+        !meetsMinimumSize(newRect, {
+          widthPx: currentViewport.width,
+          heightPx: currentViewport.height,
+        })
+      ) {
         setToast({
           tone: 'warn',
           message: `사각형 최소 크기는 ${MIN_REGION_SCREEN_PX.width}×${MIN_REGION_SCREEN_PX.height}px 입니다.`,

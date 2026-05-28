@@ -199,6 +199,20 @@ export type ValidatePdfUploadResponse =
   | ValidatePdfUploadOkResponse
   | ValidatePdfUploadRejectResponse;
 
+interface UploadSignaturePreviewBody {
+  readonly requestId: string;
+  readonly regionVersion: number;
+  readonly kind: 'page' | 'region';
+  readonly pageIndex?: number;
+  readonly regionId?: string;
+  readonly base64Png: string;
+}
+
+export interface UploadSignaturePreviewResult {
+  readonly storagePath: string;
+  readonly publicUrl: string;
+}
+
 /**
  * `File` 또는 `Blob` 을 base64 (data URL 헤더 제거된) 문자열로 변환. FileReader API 사용.
  */
@@ -255,6 +269,16 @@ export class SupabaseSignatureAdminClient {
     return payload;
   }
 
+  /**
+   * Phase 2C v2: 클라이언트 사이드 pre-render 결과 (페이지 PNG / region cutout PNG) 를
+   * signature-previews bucket 에 업로드. 학생 hot-path 는 반환된 publicUrl 을 직접 GET.
+   */
+  async uploadSignaturePreview(
+    body: UploadSignaturePreviewBody,
+  ): Promise<UploadSignaturePreviewResult> {
+    return invokeEdgeFunction<UploadSignaturePreviewResult>('upload-signature-preview', body);
+  }
+
   async publishDraft(
     draft: LocalSignatureRequestDraft,
     baseUrl: string,
@@ -272,6 +296,18 @@ export class SupabaseSignatureAdminClient {
       templateSource: draft.request.templateSource,
       mapping: draft.request.mapping,
       access: draft.request.access,
+      // Phase 2C v2: PDF 양식 + 좌표 기반 region 매핑을 함께 publish.
+      // server 가 region.participantId 를 clientId → serverId 로 remap.
+      pdfTemplate: draft.request.pdfTemplate,
+      regions: draft.request.regions.map((region) => ({
+        id: region.id,
+        pageIndex: region.pageIndex,
+        rect: region.rect,
+        participantId: region.participantId,
+        signatureKind: region.signatureKind,
+        autoReplicateRowSourceId: region.autoReplicateRowSourceId,
+      })),
+      regionVersion: draft.request.regionVersion,
       participants: draft.request.participants.map((participant) => ({
         clientId: participant.id,
         displayName: participant.displayName,
@@ -297,6 +333,10 @@ export class SupabaseSignatureAdminClient {
           ...participant,
           id: serverIdByClientId.get(participant.id) ?? participant.id,
           role: normalizeRole(participant.role),
+        })),
+        regions: draft.request.regions.map((region) => ({
+          ...region,
+          participantId: serverIdByClientId.get(region.participantId) ?? region.participantId,
         })),
       },
       participantAccessSecrets: draft.participantAccessSecrets.map((secret) => ({

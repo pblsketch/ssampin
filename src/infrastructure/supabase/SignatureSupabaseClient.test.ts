@@ -250,6 +250,11 @@ describe('SupabaseSignatureAdminClient.publishDraft', () => {
     expect(body.participants[0].uniqueLinkToken).toBe('tok-1');
     expect(body.participants[0].pin).toBe('4827');
     expect(body.access).toEqual({ uniqueLinksEnabled: true, pinEnabled: true });
+    // Phase 2C v2: publish body 가 pdfTemplate / regions / regionVersion 을 함께 전송
+    expect(body).toHaveProperty('regions');
+    expect(Array.isArray(body.regions)).toBe(true);
+    expect(body.regionVersion).toBe(0);
+    expect(body.pdfTemplate).toBeUndefined();
   });
 
   it('공통 모드: uniqueLinksEnabled=false → 단일 commonUrl만 발급', async () => {
