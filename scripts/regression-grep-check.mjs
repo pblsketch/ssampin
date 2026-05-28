@@ -52,6 +52,35 @@ const presenceChecks = [
     pattern: /posts\.filter\(\s*\(?\s*\w+\s*\)?\s*=>\s*\w+\.status\s*===\s*['"]approved['"]\s*\)/,
     name: 'REGRESSION #1: buildWallStateForStudents approved filter (Design v2.1 §10.6)',
   },
+  // ────────────────────────────────────────────────────────────────────────
+  // Phase 2C 서명받기 회귀 가드 (US-2C-15 G006)
+  // ────────────────────────────────────────────────────────────────────────
+  {
+    file: 'src/domain/entities/SignatureRequest.ts',
+    pattern: /export\s+type\s+SignatureMappingTargetType\s*=\s*['"]pdf-region['"]\s*;/,
+    name: "REGRESSION #29 (Phase 2C v2): SignatureMappingTargetType 가 'pdf-region' 단일 literal",
+  },
+  {
+    file: 'supabase/functions/compose-signed-pdf/index.ts',
+    pattern: /setKeywords\(\[[^\]]*['"]행정용['"][^\]]*['"]법적효력없음['"][^\]]*\]\)/,
+    name: 'REGRESSION #30 (Phase 2C v2): compose-signed-pdf 가 setKeywords 에 행정용 + 법적효력없음 메타 포함',
+  },
+  {
+    file: 'supabase/functions/compose-signed-pdf/index.ts',
+    pattern: /\$\{sanitized\}_쌤핀_행정용_v\$\{nextVersion\}\.pdf/,
+    name: 'REGRESSION #31 (Phase 2C v2): 결과 PDF 파일명 패턴 {title}_쌤핀_행정용_v{n}.pdf 보존',
+  },
+  {
+    file: 'src/signature/PrivacyConsentTable.tsx',
+    pattern:
+      /PRIVACY_CONSENT_ITEMS[\s\S]*?legal_effect_disclaimer[\s\S]*?hash_storage[\s\S]*?result_pdf_share[\s\S]*?retention_period/,
+    name: 'REGRESSION #32 (Phase 2C v2): PrivacyConsentTable 가 4행 동의 항목 (legal_effect_disclaimer/hash_storage/result_pdf_share/retention_period) 모두 보존',
+  },
+  {
+    file: 'supabase/functions/compose-signed-pdf/index.ts',
+    pattern: /NotoSansKR-Regular\.otf|loadKoreanFont/,
+    name: 'REGRESSION #33 (Phase 2C v2): compose-signed-pdf 가 Noto Sans KR 폰트 로드 (한글 tofu 방지)',
+  },
   {
     file: 'src/adapters/components/Tools/RealtimeWall/RealtimeWallCard.tsx',
     pattern: /viewerRole\s*===\s*['"]teacher['"]/,
@@ -263,6 +292,34 @@ const absenceChecks = [
     roots: ['src/widgets', 'src/adapters/components/Widget', 'src/adapters/components/Settings'],
     extensions: ['.ts', '.tsx'],
     patterns: [/['"`]\/mode-preview\//],
+  },
+  // ────────────────────────────────────────────────────────────────────────
+  // Phase 2C 서명받기 부재 회귀 가드 (US-2C-15 G006)
+  // ────────────────────────────────────────────────────────────────────────
+  {
+    // 제1 원칙: 합성 PDF 본문에 시각 워터마크 텍스트를 그려서는 안 된다.
+    // 행정용 표시는 setKeywords/setProducer 메타데이터로만 표기.
+    name: 'REGRESSION #34 (Phase 2C v2): compose-signed-pdf 가 페이지 본문에 시각 워터마크를 drawText 하지 않는다',
+    roots: ['supabase/functions/compose-signed-pdf'],
+    extensions: ['.ts'],
+    patterns: [
+      /page\.drawText\(\s*['"`][^'"`]*(?:워터마크|WATERMARK|watermark)/i,
+      /drawText\([^)]*\bWATERMARK\b/,
+    ],
+  },
+  {
+    // 제1 원칙: submit-signature 가 client IP 를 raw 로 DB column 에 직접 저장 금지.
+    // 모든 IP/UA 는 SHA-256 해시 (ip_hash / consent_ip_hash / user_agent_hash) 만 저장.
+    name: 'REGRESSION #35 (Phase 2C v2): submit-signature 가 client IP/UA 를 raw 로 DB 에 저장하지 않는다 (해시만 허용)',
+    roots: ['supabase/functions/submit-signature'],
+    extensions: ['.ts'],
+    patterns: [
+      // 패턴: `client_ip: clientIP`, `ip: clientIP`, `raw_ip: clientIP`, `user_agent: req.headers...`
+      /\b(?:client_ip|raw_ip)\s*:\s*clientIP\b/,
+      /[^_]ip\s*:\s*clientIP\b/,
+      /\bipAddress\s*:\s*clientIP\b/,
+      /\buser_agent\s*:\s*req\.headers\.get\(/,
+    ],
   },
 ];
 

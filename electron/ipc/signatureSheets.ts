@@ -8,7 +8,22 @@
  * Phase 2 OAuth 통합 전까지는 비공개 시트는 명확한 안내로 거부.
  */
 import { ipcMain, net } from 'electron';
-import { extractGoogleFileId } from '../../src/infrastructure/google/SignatureGoogleTemplatePlanner';
+
+/**
+ * Phase 2C 정리: `SignatureGoogleTemplatePlanner` 모듈 (Google Docs/Sheets 자동 매핑) 은
+ * `SignatureMappingTargetType = 'pdf-region'` 단일 literal 로 축소되며 entity 정리 단계에서
+ * 제거됐다. 본 Electron IPC 는 여전히 공개 Sheets CSV fetch (명단 자동 채우기) 를 지원하므로
+ * 시트 ID 추출 로직만 inline 으로 보존한다. `/d/{fileId}` path segment 만 인식.
+ */
+function extractGoogleFileId(url: string): string | null {
+  try {
+    const parsed = new URL(url.trim());
+    const match = parsed.pathname.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    return match?.[1] ?? null;
+  } catch {
+    return null;
+  }
+}
 
 const MAX_CSV_BYTES = 2 * 1024 * 1024; // 2MB — 일반 학교 명단 시트 대비 충분
 const FETCH_TIMEOUT_MS = 15000;
