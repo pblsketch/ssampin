@@ -11,6 +11,21 @@ import type {
   SignatureTemplateMapping,
   SignatureTemplateSource,
 } from '@domain/entities/SignatureRequest';
+
+/**
+ * Phase 2C US-2C-13: compose-signed-pdf 결과 캐시 entry.
+ * `signedUrl` 는 Supabase Storage signed URL — `signedUrlExpiresAt` 이후에는 fallback 으로 폐기.
+ */
+export interface ComposedPdfCacheEntry {
+  readonly version: number;
+  readonly storagePath: string;
+  readonly fileName: string;
+  readonly signedUrl: string;
+  readonly signedUrlExpiresAt: number;
+  readonly submissionCount: number;
+  readonly participantCount: number;
+  readonly composedAt: string;
+}
 import {
   SIGNATURE_REQUEST_FIRST_RELEASE_SCOPE,
   SIGNATURE_REQUEST_SCHEMA_VERSION,
@@ -74,6 +89,11 @@ interface SignatureRequestStoreState {
   readonly loaded: boolean;
   readonly isSaving: boolean;
   readonly selectedDraftId: string | null;
+  /**
+   * Phase 2C US-2C-13: requestId → 최신 ComposedPdf 캐시. compose-signed-pdf 호출 결과를
+   * `setComposedPdf` 로 저장하면, `getResultUrl` 가 우선 사용한다.
+   */
+  readonly composedPdfsByRequestId: ReadonlyMap<string, ComposedPdfCacheEntry>;
   readonly load: () => Promise<void>;
   readonly selectDraft: (id: string | null) => void;
   readonly getDraft: (id: string) => LocalSignatureRequestDraft | undefined;
@@ -83,15 +103,31 @@ interface SignatureRequestStoreState {
   readonly updateDraft: (id: string, input: UpdateSignatureRequestDraftInput) => Promise<void>;
   readonly setStatus: (id: string, status: SignatureRequestStatus) => Promise<void>;
   readonly deleteDraft: (id: string) => Promise<void>;
+  /**
+   * Phase 2C US-2C-13: compose-signed-pdf 응답을 캐시에 저장.
+   * `signedUrlTtlMs` 기본 5분 (Supabase 권장).
+   */
+  readonly setComposedPdf: (
+    requestId: string,
+    entry: Omit<ComposedPdfCacheEntry, 'signedUrlExpiresAt'> & { readonly signedUrlTtlMs?: number },
+  ) => void;
+  /**
+   * Phase 2C US-2C-13: 결과 PDF URL 해결 — ComposedPdf 우선, 만료 시 또는 미설정 시
+   * 레거시 `request.resultFileUrl` 로 fallback. 둘 다 없으면 undefined.
+   */
+  readonly getResultUrl: (request: SignatureRequest) => string | undefined;
 }
 
 type SignatureRequestStoreSet = (state: Partial<SignatureRequestStoreState>) => void;
+
+const DEFAULT_SIGNED_URL_TTL_MS = 5 * 60 * 1000;
 
 export const useSignatureRequestStore = create<SignatureRequestStoreState>((set, get) => ({
   drafts: [],
   loaded: false,
   isSaving: false,
   selectedDraftId: null,
+  composedPdfsByRequestId: new Map(),
 
   load: async () => {
     if (get().loaded) return;
@@ -180,14 +216,41 @@ export const useSignatureRequestStore = create<SignatureRequestStoreState>((set,
     set({ isSaving: true });
     try {
       await signatureRequestRepository.delete(id);
+      const nextComposed = new Map(get().composedPdfsByRequestId);
+      nextComposed.delete(id);
       set({
         drafts: get().drafts.filter((draft) => draft.request.id !== id),
         loaded: true,
         selectedDraftId: get().selectedDraftId === id ? null : get().selectedDraftId,
+        composedPdfsByRequestId: nextComposed,
       });
     } finally {
       set({ isSaving: false });
     }
+  },
+
+  setComposedPdf: (requestId, entry) => {
+    const ttl = entry.signedUrlTtlMs ?? DEFAULT_SIGNED_URL_TTL_MS;
+    const next = new Map(get().composedPdfsByRequestId);
+    next.set(requestId, {
+      version: entry.version,
+      storagePath: entry.storagePath,
+      fileName: entry.fileName,
+      signedUrl: entry.signedUrl,
+      signedUrlExpiresAt: Date.now() + ttl,
+      submissionCount: entry.submissionCount,
+      participantCount: entry.participantCount,
+      composedAt: entry.composedAt,
+    });
+    set({ composedPdfsByRequestId: next });
+  },
+
+  getResultUrl: (request) => {
+    const composed = get().composedPdfsByRequestId.get(request.id);
+    if (composed && composed.signedUrlExpiresAt > Date.now()) {
+      return composed.signedUrl;
+    }
+    return request.resultFileUrl;
   },
 }));
 

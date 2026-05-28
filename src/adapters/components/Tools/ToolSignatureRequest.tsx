@@ -979,6 +979,11 @@ export function buildMissingSignatureListText(request: SignatureRequest): string
 
 export function getGoogleResultSyncStatusView(
   request: SignatureRequest,
+  /**
+   * Phase 2C US-2C-13: useSignatureRequestStore.getResultUrl(request) 결과.
+   * 미제공 시 레거시 request.resultFileUrl 만 확인 (단위 테스트/구버전 호환).
+   */
+  resolvedResultUrl?: string,
 ): GoogleResultSyncStatusView {
   if (request.status === 'draft') {
     return {
@@ -989,7 +994,8 @@ export function getGoogleResultSyncStatusView(
     };
   }
 
-  if (!request.resultFileUrl) {
+  const effectiveResultUrl = resolvedResultUrl ?? request.resultFileUrl;
+  if (!effectiveResultUrl) {
     return {
       label: '결과 파일 미연결',
       description: '원본 Google 양식 복사본을 만든 뒤 텍스트·상태·서명 이미지를 반영합니다.',
@@ -1433,7 +1439,9 @@ function SavedDraftCard({
 }) {
   const request = draft.request;
   const statusView = buildSignatureRequestStatusView(request);
-  const syncStatus = getGoogleResultSyncStatusView(request);
+  // Phase 2C US-2C-13: ComposedPdf 우선, resultFileUrl fallback.
+  const resolvedResultUrl = useSignatureRequestStore((s) => s.getResultUrl(request));
+  const syncStatus = getGoogleResultSyncStatusView(request, resolvedResultUrl);
   const visibleRows = statusView.participantRows.slice(0, 4);
   const remainingRows = statusView.participantRows.length - visibleRows.length;
   const issuedText = issued ? formatIssuedLinksAsText(issued, request.title) : '';
@@ -1579,9 +1587,9 @@ function SavedDraftCard({
         >
           미서명 명단 복사
         </button>
-        {syncStatus.canOpenResultFile && request.resultFileUrl ? (
+        {syncStatus.canOpenResultFile && resolvedResultUrl ? (
           <a
-            href={request.resultFileUrl}
+            href={resolvedResultUrl}
             target="_blank"
             rel="noreferrer"
             className="rounded-lg border border-sp-border px-3 py-2 text-center text-xs font-sp-semibold text-sp-muted hover:border-sp-accent hover:text-sp-accent"

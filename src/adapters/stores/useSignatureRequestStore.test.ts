@@ -29,6 +29,7 @@ describe('useSignatureRequestStore', () => {
       loaded: false,
       isSaving: false,
       selectedDraftId: null,
+      composedPdfsByRequestId: new Map(),
     });
   });
 
@@ -105,6 +106,95 @@ describe('useSignatureRequestStore', () => {
     expect(saved?.request.status).toBe('active');
     expect(useSignatureRequestStore.getState().drafts).toEqual([]);
     expect(useSignatureRequestStore.getState().selectedDraftId).toBeNull();
+  });
+});
+
+describe('Phase 2C US-2C-13: getResultUrl 헬퍼 (ComposedPdf 우선, resultFileUrl fallback)', () => {
+  beforeEach(() => {
+    useSignatureRequestStore.setState({
+      drafts: [],
+      loaded: false,
+      isSaving: false,
+      selectedDraftId: null,
+      composedPdfsByRequestId: new Map(),
+    });
+  });
+
+  it('ComposedPdf 가 캐시되어 있고 만료 전이면 signedUrl 을 반환한다', () => {
+    const draft = makeDraft('req-1');
+    useSignatureRequestStore.getState().setComposedPdf('req-1', {
+      version: 1,
+      storagePath: 'signature-results/req-1/v1.pdf',
+      fileName: '연수등록부_쌤핀_행정용_v1.pdf',
+      signedUrl: 'https://supabase.test/v1.pdf?token=abc',
+      submissionCount: 5,
+      participantCount: 10,
+      composedAt: '2026-05-28T00:00:00.000Z',
+      signedUrlTtlMs: 60_000,
+    });
+    const url = useSignatureRequestStore.getState().getResultUrl(draft.request);
+    expect(url).toBe('https://supabase.test/v1.pdf?token=abc');
+  });
+
+  it('ComposedPdf 캐시가 없으면 레거시 resultFileUrl 로 fallback', () => {
+    const draft = makeDraft('req-2');
+    const requestWithLegacy = {
+      ...draft.request,
+      resultFileUrl: 'https://docs.example.com/legacy-results.pdf',
+    };
+    const url = useSignatureRequestStore.getState().getResultUrl(requestWithLegacy);
+    expect(url).toBe('https://docs.example.com/legacy-results.pdf');
+  });
+
+  it('ComposedPdf signedUrl 이 만료되면 resultFileUrl 로 fallback', () => {
+    const draft = makeDraft('req-3');
+    const requestWithLegacy = {
+      ...draft.request,
+      resultFileUrl: 'https://docs.example.com/legacy.pdf',
+    };
+    // TTL=1ms 후 즉시 만료
+    useSignatureRequestStore.getState().setComposedPdf('req-3', {
+      version: 2,
+      storagePath: 'signature-results/req-3/v2.pdf',
+      fileName: 'r3.pdf',
+      signedUrl: 'https://supabase.test/expired',
+      submissionCount: 1,
+      participantCount: 1,
+      composedAt: '2026-05-28T00:00:00.000Z',
+      signedUrlTtlMs: 1,
+    });
+    // 만료 보장 — Date.now() advance 시뮬레이션 대신 entry 직접 덮어쓰기
+    const cache = new Map(useSignatureRequestStore.getState().composedPdfsByRequestId);
+    const expired = cache.get('req-3');
+    if (expired) {
+      cache.set('req-3', { ...expired, signedUrlExpiresAt: Date.now() - 1000 });
+      useSignatureRequestStore.setState({ composedPdfsByRequestId: cache });
+    }
+    const url = useSignatureRequestStore.getState().getResultUrl(requestWithLegacy);
+    expect(url).toBe('https://docs.example.com/legacy.pdf');
+  });
+
+  it('둘 다 없으면 undefined 반환', () => {
+    const draft = makeDraft('req-4');
+    const url = useSignatureRequestStore.getState().getResultUrl(draft.request);
+    expect(url).toBeUndefined();
+  });
+
+  it('deleteDraft 시 해당 요청의 ComposedPdf 캐시도 비워진다', async () => {
+    const existing = makeDraft('req-5');
+    useSignatureRequestStore.setState({ drafts: [existing], loaded: true });
+    useSignatureRequestStore.getState().setComposedPdf('req-5', {
+      version: 1,
+      storagePath: 'signature-results/req-5/v1.pdf',
+      fileName: 'r5.pdf',
+      signedUrl: 'https://supabase.test/v1.pdf',
+      submissionCount: 3,
+      participantCount: 3,
+      composedAt: '2026-05-28T00:00:00.000Z',
+    });
+    expect(useSignatureRequestStore.getState().composedPdfsByRequestId.has('req-5')).toBe(true);
+    await useSignatureRequestStore.getState().deleteDraft('req-5');
+    expect(useSignatureRequestStore.getState().composedPdfsByRequestId.has('req-5')).toBe(false);
   });
 });
 
