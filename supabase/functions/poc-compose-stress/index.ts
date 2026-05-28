@@ -234,78 +234,16 @@ async function loadFont(): Promise<Uint8Array> {
   return cachedFontBytes;
 }
 
+// 1x1 검정 PNG (표준 67-byte minimal PNG). 직접 byte 배열로 작성하면 CRC 계산 누락으로
+// upng decoder 가 RangeError 를 던지므로 base64 디코드 결과로 안전하게 만든다.
+const PLACEHOLDER_PNG_BASE64 =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNgAAIAAAUAAen63NgAAAAASUVORK5CYII=';
+
 function buildPlaceholderPng(): Uint8Array {
-  // 16x8 검정 PNG — 직접 작성한 최소 PNG. crc/length 계산 정확해야 함.
-  // 더 간단한 길: pure 1x1 검정 PNG (67 bytes 표준)
-  return new Uint8Array([
-    0x89,
-    0x50,
-    0x4e,
-    0x47,
-    0x0d,
-    0x0a,
-    0x1a,
-    0x0a, // PNG signature
-    0x00,
-    0x00,
-    0x00,
-    0x0d,
-    0x49,
-    0x48,
-    0x44,
-    0x52, // IHDR chunk header
-    0x00,
-    0x00,
-    0x00,
-    0x01, // width=1
-    0x00,
-    0x00,
-    0x00,
-    0x01, // height=1
-    0x08,
-    0x06, // bit depth 8, color type 6 (RGBA)
-    0x00,
-    0x00,
-    0x00, // compression, filter, interlace
-    0x1f,
-    0x15,
-    0xc4,
-    0x89, // CRC
-    0x00,
-    0x00,
-    0x00,
-    0x0d,
-    0x49,
-    0x44,
-    0x41,
-    0x54, // IDAT
-    0x78,
-    0x9c,
-    0x62,
-    0x00,
-    0x01,
-    0x00,
-    0x00,
-    0x05,
-    0x00,
-    0x01,
-    0x0d,
-    0x0a,
-    0x2d,
-    0xb4,
-    0x00,
-    0x00,
-    0x00,
-    0x00,
-    0x49,
-    0x45,
-    0x4e,
-    0x44,
-    0xae,
-    0x42,
-    0x60,
-    0x82, // IEND
-  ]);
+  const binary = atob(PLACEHOLDER_PNG_BASE64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
 }
 
 function readMemoryMB(): number {

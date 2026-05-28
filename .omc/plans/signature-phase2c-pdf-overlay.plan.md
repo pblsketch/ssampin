@@ -1,12 +1,39 @@
-# Plan: 쌤핀 서명받기 Phase 2C — PDF 오버레이 기반 서명 시스템 (v2.1)
+# Plan: 쌤핀 서명받기 Phase 2C — PDF 오버레이 기반 서명 시스템 (v2.2)
 
-- **Status**: ✅ **pending approval** (consensus loop complete, 2 iterations)
+- **Status**: 🟡 **partial Step 0 PoC executed** — 3/4 PASS (A0-1 FAIL, A0-2/A0-3/A0-4 PASS). v2.2 갱신 사항을 v2.1 plan 본문에 반영 + Changelog 추가. Architect/Critic 의 v2.2 재 consensus 는 Session 3 시작 시 (실제 implementation 착수 전) 수행 권고.
 - **Origin Spec**: `.omc/specs/deep-interview-signature-phase2c-pdf-overlay.md` (ambiguity 18%, status PASSED)
-- **Project**: `E:/github/ssampin` (commit base: `5485ae8` Phase 2B)
+- **Project**: `E:/github/ssampin` (commit base: `419c8d1` Phase 2C Step 0 PoC)
 - **Mode**: consensus non-interactive (--consensus --direct, no --interactive)
 - **RALPLAN-DR**: short mode
-- **Consensus Quality**: composite 0.62 → 0.87 (above 0.80 threshold), A–J 10/10 FULLY addressed
-- **Next Step**: explicit user execution approval required (separate action — not auto-handed off)
+- **Consensus Quality**: composite 0.62 → 0.87 (v2.1 base), v2.2 변경분은 PoC 실측 기반으로 단방향 갱신 (consensus 재실행 권고).
+- **Next Step**: A0-1 FAIL 에 따른 architecture pivot (Step E.1 client-side pre-render) 을 본문에 반영 + 개인정보 제1 원칙에 따른 AC-4 consent_log ip_hash 변경 + AC-6 가드 `poc-*` 패턴 갱신.
+
+### Iteration 3 changes vs v2.1 (Step 0 PoC 실측 + 개인정보 권고 반영)
+
+1. **A0-1 FAIL — Architecture pivot (Step E.1 client-side pre-render)**
+   - pdfjs-dist + unpdf 둘 다 Supabase Edge Function (Deno) 에서 `document is not defined` / worker version mismatch 로 fail. Plan v2.1 Risk #1 현실화 확인.
+   - Edge Function `prerender-template-previews` 폐기. `src/signature/prerenderTemplatePreviews.ts` 신규 client-side 모듈로 교체 — 교사 SignatureRegionDesigner 가 이미 사용 중인 pdfjs-dist 인스턴스로 publish 시점에 페이지 PNG + region cutout PNG 렌더 → Supabase Storage 업로드.
+   - 학생 hot-path Edge Function 호출 0회 목적은 그대로 유지. Edge Function 비용 ↓, 새 의존성 0.
+
+2. **A0-2 PASS — Step F (compose-signed-pdf) 그대로 진행**
+   - pdf-lib + @pdf-lib/fontkit + Noto Sans KR 4.6MB OTF 가 Supabase Edge Function 에서 작동 확인 (80 region × 10 page 합성 **327ms** / 50s 한도의 0.6%). 50s 한도 30x 마진 — composition_queue fallback 발동 가능성 낮음. 단 메모리는 Deno Edge `memoryUsage` 미지원으로 직접 측정 불가 — 256MB 한도는 Edge Function 로그에서 별도 모니터링.
+   - PoC 의 `poc-compose-stress` 와 production `compose-signed-pdf` 의 코드 차이는: (a) 실제 region 좌표/PNG 입력 (b) Storage 업로드 (c) `composition_queue` 폴링 통합. 라이브러리 호환은 검증 완료.
+
+3. **AC-4 consent_log → consent_ip_hash (개인정보 제1 원칙 일관성)**
+   - v2.1: "동의 시각 + 동의 시점 IP 가 `signature_submissions.consent_log` JSON 컬럼에 기록"
+   - v2.2: **"동의 시각 + 동의 시점 IP 의 SHA-256 해시 가 기록"**. 같은 함수 `submit-signature` 의 기존 `ip_hash` / `user_agent_hash` 패턴과 동일. 5년 retention (migration 032) 유지.
+   - 운영 publish 0건이라 변경 비용 0. 동의 *증거* 의 법적 의미상 "같은 사람 재방문 여부" 검증으로 충분 (raw IP 불필요).
+
+4. **AC-6 회귀 가드 — `_poc` → `poc-*` 패턴 갱신**
+   - Plan v2.1 의 `'_poc 잔존 가드': supabase/functions/_poc/ 디렉터리 부재` → Supabase CLI 가 `functions/` 직속만 인식하므로 PoC 함수는 `poc-render-pdf-page` / `poc-compose-stress` / `poc-measure-cold` 식으로 명명됐다. 가드도 `'poc- 잔존 가드': supabase/functions/poc-* 디렉터리 부재 (PoC 단계 통과 후 삭제 의무)` 로 변경.
+
+5. **A0-3 PASS (1회) — 7일 baseline 은 follow-up**
+   - cold 1.25s (Seoul region, supabase-edge-runtime-1.74.0 / Deno v2.1.4). 흥미로운 발견: 매 호출 새 isolate (per-request 모델) — warm 재사용 거의 없음. 운영에서는 "cold 일정성" 이 더 중요한 메트릭.
+   - 7일 p95 cold / p50 warm 측정은 pg_cron 으로 별도 schedule (Session 3 또는 Phase 2D).
+
+6. **A0-4 PASS — `inferRowSpacing` 알고리즘 검증 (15/15)**
+   - 균일 양식 100% 정확도, 비균일 (소계 행 끼움) 양식 균일가정 ~50% (manual fallback 트리거 정당화), 비균일 + 4 anchor 100% 회복.
+   - `src/signature/inferRowSpacing.ts` + `.test.ts` 신규 commit (`419c8d1`).
 
 ### Iteration 2 changes vs v1
 - Step 0 PoC Gate 추가 (Architect P0#1 / Critic A)
@@ -97,20 +124,25 @@ Phase 2B 의 4타입 셀·치환자 매핑 모델 (`sheets-cell` / `sheets-named
   - "내 칸 확대" 토글 → cutout PNG signed URL 전환
   - 개인정보 동의 표 + 체크박스 1개 → 캔버스 활성화
   - 미동의 시 캔버스 회색 + 안내
-- [ ] 동의 시각 + 동의 시점 IP 가 `signature_submissions.consent_log` JSON 컬럼에 기록 (migration 031)
+- [ ] **동의 시각 + 동의 시점 IP 의 SHA-256 해시** (`consent_ip_hash`) 가 `signature_submissions.consent_log` JSON 컬럼에 기록 (migration 031). 기존 `ip_hash` / `user_agent_hash` 패턴과 동일. **raw IP 는 어디에도 저장하지 않는다** (제1 원칙 — 개인정보 최소 수집). 같은 사람 재방문 검증으로 충분.
 - [ ] SSR 테스트: 페이지 PNG / 강조 박스 / 토글 / 동의 표 / 체크박스
 
-### AC-4.5: Publish-time Pre-render (Component 3 보조)
-- [ ] Edge Function `prerender-template-previews` 신규:
-  - `publish-signature-request` 응답 200 직후 **비동기 invoke** (immediate-after, not in-line — publish atomicity 보호)
-  - 각 페이지를 PNG 로 렌더 → `signature-templates/{teacherId}/{templateId}/v{regionVersion}/page-{i}.png` 저장 (**버전 경로 — 디자이너 편집 시 cache-bust**)
-  - 각 region 의 cutout PNG 렌더 → `signature-templates/{teacherId}/{templateId}/v{regionVersion}/cutout-{participantId}-{kind}.png` 저장
-  - 강조 박스 (빨간 테두리) 는 페이지 PNG 위에 미리 그려서 저장
-  - 결과 URL signed (signature-templates bucket private). **TTL**: `signature_requests.expiresAt` 가 있으면 그 시점, 없으면 **기본 60일**. 만료 임박 (`<7d`) 시 자동 재서명 cron 작업
-  - **사전 렌더 실패 처리**: 페이지 N개 중 1개라도 실패 시 (a) 부분 결과 cleanup, (b) `signature_requests.status='publishing'` 유지, (c) 응답에 retry-token 포함. 5분 후 자동 재시도 1회 + UI "미리보기 생성 실패 — 다시 발급" 버튼. 재시도까지 실패하면 `status='publish_failed'`
-- [ ] 디자이너에서 region 편집 시 → `regionVersion` 증분 + 새 v{n} 경로에 재렌더 (이전 버전은 migration 032 lifecycle 으로 soft-delete)
+### AC-4.5: Publish-time Pre-render (Component 3 보조) — **v2.2: client-side pivot**
+
+> **v2.2 변경 (A0-1 FAIL 결과 반영)**: Edge Function `prerender-template-previews` 폐기. 교사 브라우저에서 publish 시점에 pdfjs-dist 로 렌더. SignatureRegionDesigner 가 이미 pdfjs-dist 를 사용하므로 추가 의존성 0. Edge Function 비용 ↓, 학생 hot-path 호출 0회 목적 그대로.
+
+- [ ] **`src/signature/prerenderTemplatePreviews.ts` 신규 client-side 모듈**:
+  - SignatureRegionDesigner 의 "발급" 버튼 클릭 시 호출
+  - 입력: `templateId`, `signatureRegions[]`, `participants[]`, `regionVersion`
+  - 처리: pdfjs-dist 로 각 페이지 PNG 렌더 (디자이너의 캔버스 재사용 가능) + 강조 박스 합성 + 각 region cutout PNG 렌더
+  - 출력: 브라우저에서 Supabase Storage `signature-templates/{teacherId}/{templateId}/v{regionVersion}/page-{i}.png` 및 `.../cutout-{participantId}-{kind}.png` 업로드 (signed URL with TTL 60d default 또는 `expiresAt`). 학생 hot-path 가 그 signed URL 만 fetch
+  - **사전 렌더 실패 처리**: 브라우저 측에서 페이지 N개 중 1개라도 실패 시 → 토스트 "미리보기 생성 실패. 잠시 후 다시 시도해 주세요" + 자동 재시도 1회. 재시도까지 실패하면 publish 자체를 `status='publish_failed'` 로 둠
+  - 진행률 UI: "1/10 페이지 미리보기 생성 중..." (모달 또는 progress bar)
+- [ ] `publish-signature-request` Edge Function 갱신: 응답에 `templateId`, `teacherId`, `signedUrlSpec` 등 client-side pre-render 가 필요한 메타데이터 포함 (Supabase Storage 업로드 URL 발급)
+- [ ] 디자이너에서 region 편집 시 → `regionVersion` 증분 + 다음 publish 시점에 새 v{n} 경로에 재렌더 (이전 버전은 migration 032 lifecycle 으로 soft-delete)
 - [ ] 학생이 사전 렌더 완료 전 페이지 진입 시 "미리보기 준비 중..." 스피너 + 2초 폴링, 30초 timeout 후 "잠시 후 다시 열어 주세요" 안내
-- [ ] 통합 테스트: publish → 사전 렌더 → 학생 페이지 fetch 흐름
+- [ ] 통합 테스트: publish → client-side 사전 렌더 → Storage 업로드 → 학생 페이지 fetch 흐름
+- [ ] 학생 번들 397KB 가드 유지 — `prerenderTemplatePreviews` 는 *교사* 번들에만 포함, 학생 번들에는 제외 (route 분리 + Vite chunk split)
 
 ### AC-5: PDF 합성 (Component 4)
 - [ ] Edge Function `compose-signed-pdf` 신규 (Deno + pdf-lib + `@pdf-lib/fontkit` + Noto Sans KR subset)
@@ -137,7 +169,8 @@ Phase 2B 의 4타입 셀·치환자 매핑 모델 (`sheets-cell` / `sheets-named
     - `파일명 패턴`: `compose-signed-pdf` 에 `_쌤핀_행정용_v` 문자열 존재
     - `학생 동의 표 4행`: `SignatureRequestPublicApp.tsx` 또는 `PrivacyConsentTable.tsx` 에 "수집 항목", "목적", "보관 기간", "파기" 4개 문자열 모두 존재
     - `Noto Sans KR 폰트 임베드`: `compose-signed-pdf` + `prerender-template-previews` 에 `fontkit` import 와 `NotoSansKR` 또는 `noto-sans-kr` 패스 존재
-    - `_poc 잔존 가드`: `supabase/functions/_poc/` 디렉터리 부재 검증 (PoC 단계 통과 후 삭제 의무)
+    - **v2.2** `poc- 잔존 가드`: `supabase/functions/poc-*` 디렉터리 부재 검증 (PoC 단계 통과 후 삭제 의무). Supabase CLI 가 `functions/` 직속만 함수로 인식하므로 v2.1 의 `_poc/` 가 아닌 `poc-` prefix 사용
+    - **v2.2** `consent_log raw IP 부재 가드`: `submit-signature` Edge Function 의 consent_log write 코드에 `clientIP` 변수를 raw 로 저장하는 코드가 없는지 검증. `consent_ip_hash` 필드만 허용 (정규 표현 `consent_log.*ip[^_]` 검출 시 fail — `consent_log.*ip_hash` 는 통과)
     - `Keywords round-trip 가드`: 결과 PDF 통합 테스트에서 `pdftotext -keywords` 또는 pdf-lib `doc.getKeywords()` 로 `행정용,법적효력없음,쌤핀` 추출 검증
   - **제거 가드**:
     - "Google Sheets URL → 매핑 자동 추론 가드" (Phase 1 명단 추출 가드는 유지)
@@ -313,7 +346,7 @@ CI 검증: `supabase db reset` 으로 030→031→032 순서대로 클린 적용
 
 | Risk | 영향 | Mitigation |
 |---|---|---|
-| pdfjs-dist 의 Deno Edge Function 호환 (rasterization) 미검증 | Step E.1 prerender / Step C validate 작동 불가 | **Step 0 PoC Gate (A0-1, 2-3일)** 가 hard stop. 실패 시 fallback: (a) `unpdf` 등 Deno-native, (b) Cloudflare Worker 동반, (c) external Node container. 어느 fallback 으로도 안 되면 plan 중단. |
+| pdfjs-dist 의 Deno Edge Function 호환 (rasterization) 미검증 | Step E.1 prerender / Step C validate 작동 불가 | **v2.2 — Step 0 PoC A0-1 결과 FAIL 확정** (pdfjs-dist worker version mismatch + unpdf `document is not defined`). v2.2 mitigation: **(d) Step E pre-render 를 server-side Edge Function 이 아닌 client-side 교사 브라우저로 이동** (`src/signature/prerenderTemplatePreviews.ts`). 학생 hot-path Edge Function 호출 0회 목적 그대로 유지. Step C validate-pdf-upload 의 페이지 수 / AcroForm 등 검증은 pdf-lib (Deno 호환 검증 완료) 만으로도 가능 — PNG 래스터화는 불필요. |
 | 80 × 10 합성이 Edge Function 50s/256MB 초과 | 합성 실패 | Step 0 PoC A0-2 측정 후 한도 근접 시 **`composition_queue` 테이블 + pg_cron 1분 폴링 → chunked composition (20×10 4 배치 + 최종 merge)** 으로 각 invocation ≤ 15s 보장. UI 는 queue status realtime subscribe. expected fallback 으로 plan 포함 (예전 mitigation 의 "비상 case"가 아니라 정상 path). |
 | pdfjs-dist 가 교사 번들 ms 증가 | dev 빌드 속도 저하 | Vite `optimizeDeps` 사전 번들. 초기 빌드 2~5s 증가 허용. |
 | Pattern 2 행 간격 추론이 비균일 양식에서 빗나감 | 자동복제 잘못된 자리 | AC-3 의 자동 일시정지 + manual fallback UX + 실제 연수등록부 fixture 의무 (Step 0 A0-4) |
@@ -458,4 +491,7 @@ CI 검증: `supabase db reset` 으로 030→031→032 순서대로 클린 적용
 - 2026-05-28 [planner v2]: 12 개선 적용 — Step 0 PoC Gate, publish-time pre-render, schemaVersion bump, 폰트 번들, 정책 3층 carry, lifecycle migration, signatureMappingInference 명시 리팩터, resultFileUrl deprecation, fallback 정정, 실제 fixture 의무화, SignatureRequestPublicApp ~60% reclassify, Architect 사실 오류 정정
 - 2026-05-28 [iteration 2]: Architect APPROVE WITH MINOR IMPROVEMENTS (8 NI + 5 TT, 10 low-effort refinements) + Critic APPROVE WITH IMPROVEMENTS (composite quality 0.62 → 0.87, A-J 10/10 FULLY) — v2.1 개정
 - 2026-05-28 [planner v2.1]: 10개 minor patch 적용 — pre-render 비동기·실패처리·재시도, signed URL TTL 기본 60일, composition_queue + chunked composition 패턴, 버전 경로 cache-bust, `_poc` cleanup 가드, Keywords round-trip 검증, 테스트 카운트 ±30 band, mixed-orientation reject→warn, migration 030→031→032 ordering note, pg_cron 모니터링
-- **Status: pending approval** (consensus loop complete, ready for explicit execution approval via separate user action)
+- 2026-05-28 [Session 2 part 1, commit `d43aa6e`]: US-2C-01 strict + US-2C-02 + US-2C-04 + US-2C-06 완료. schemaVersion 1→2 bump, migration shim, Repository auto-wire, signatureMappingInference 리팩터. 검증: typecheck 0 errors, 1933 tests PASS, regression 28/28 PASS.
+- 2026-05-28 [Session 2 part 2, commit `419c8d1`]: Step 0 PoC 측정. A0-1 ❌ FAIL (pdfjs-dist / unpdf Deno 비호환), A0-2 ⏸️ deploy/list 동기화 갭, A0-3 ✅ PASS (cold 1.25s), A0-4 ✅ PASS (15/15). Gate FAIL → plan v2.2 갱신 필요.
+- 2026-05-28 [Session 3 시작 — A0-2 isolation + plan v2.2]: A0-2 isolation 결과 — deploy/list 갭은 propagation 지연 + redeploy 로 해결, PNG placeholder bytes 오류 (직접 작성 시 CRC 잘못) → base64 디코드로 교체 후 **PASS** (80×10 합성 327ms, 50s 한도의 0.6%). **3/4 PASS**. v2.2 본문 갱신 — Step E client-side pivot (A0-1 mitigation), AC-4 consent_ip_hash (개인정보 제1 원칙), AC-6 `poc-*` 가드, Risk #1 mitigation 갱신.
+- **Status: 🟡 partial Step 0 PoC executed (3/4 PASS)**. A0-1 FAIL 의 client-side pivot 채택 시 Step C/D/E/F 모두 진행 가능. Session 3 이후 Architect/Critic 의 v2.2 재 consensus 권고 (architecture pivot 의 영향도 재평가).
