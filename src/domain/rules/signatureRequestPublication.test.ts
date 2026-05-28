@@ -20,6 +20,8 @@ function makeDraft(overrides: {
       templateKind: 'training-register',
       templateSource: { type: 'google-sheets', url: 'https://docs.google.com/...' },
       mapping: { textFields: [], signatureSlots: [] },
+      regions: [],
+      regionVersion: 0,
       participants: overrides.participants.map((p) => ({
         id: p.id,
         displayName: p.displayName,

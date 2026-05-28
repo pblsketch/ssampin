@@ -128,6 +128,8 @@ describe('signature request regression gates', () => {
         textFields: [],
         signatureSlots: [],
       },
+      regions: [],
+      regionVersion: 0,
       participants: [
         {
           id: 'participant-1',

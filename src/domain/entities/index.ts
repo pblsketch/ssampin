@@ -72,6 +72,16 @@ export type {
 } from './ClassroomAgreement';
 export { CLASSROOM_AGREEMENT_SCHEMA_VERSION } from './ClassroomAgreement';
 export type {
+  ComposedPdf,
+  LegacyLocalSignatureRequestDraft,
+  LegacySignatureMappingTarget,
+  LegacySignatureMappingTargetType,
+  LegacySignatureRequest,
+  LegacySignatureSlotMapping,
+  LegacySignatureTemplateMapping,
+  LegacySignatureTextFieldMapping,
+  PdfRegionRect,
+  PdfTemplate,
   SignatureImageRef,
   SignatureKind,
   SignatureMappingTarget,
@@ -80,6 +90,7 @@ export type {
   SignatureParticipantProgress,
   SignatureParticipantRole,
   SignatureParticipantStatus,
+  SignatureRegion,
   SignatureRequest,
   SignatureRequestAccessOptions,
   SignatureRequestFirstReleaseScope,

@@ -18,7 +18,9 @@ import {
 import { signatureRequestRepository } from '@adapters/di/container';
 
 const DEFAULT_SIGNATURE_TARGET: SignatureMappingTarget = {
-  type: 'generated-table-column',
+  // Phase 2C v2: 매핑은 PDF 오버레이 (`SignatureRegion`) 로 이전됐다. legacy slot 의 target
+  // 은 의미가 없어졌지만 v1 호환을 위해 'pdf-region' literal 로 placeholder 만 둔다.
+  type: 'pdf-region',
   value: '서명',
 };
 
@@ -115,6 +117,10 @@ export const useSignatureRequestStore = create<SignatureRequestStoreState>((set,
       templateKind: input.templateKind,
       templateSource: input.templateSource,
       mapping: cloneMapping(input.mapping ?? DEFAULT_MAPPING),
+      // Phase 2C v2: 신규 draft 는 regions 가 비어 있는 상태로 시작한다. PDF 업로드 + 디자이너에서
+      // 사각형을 그리면 채워진다. regionVersion 은 디자이너 편집마다 증분된다.
+      regions: [],
+      regionVersion: 0,
       participants: [...(input.participants ?? [])],
       submissions: [],
       access: input.access ?? DEFAULT_ACCESS,

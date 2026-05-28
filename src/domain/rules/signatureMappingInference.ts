@@ -1,20 +1,21 @@
 /**
- * Google Sheets CSV에서 추출한 헤더와 데이터 행을 보고
- * 서명받기 매핑·명단·시나리오를 자동으로 추정한다.
+ * Google Sheets CSV에서 추출한 헤더와 데이터 행을 보고 서명받기 명단을 자동으로 추정한다.
+ *
+ * Phase 2C 리팩터 (PRD US-2C-06):
+ *   - 매핑 추론(`signatureSlots` 자동 생성)을 완전히 제거.
+ *   - 명단/역할 컬럼 검출은 `inferParticipantColumns()` 로 분리.
+ *   - 반환되는 `mapping` 은 항상 빈 객체 `{ textFields: [], signatureSlots: [] }`.
+ *     실제 매핑은 PDF 오버레이 위 `SignatureRegion` 으로 대체된다.
  *
  * 순수 함수. Electron/Network API에 의존하지 않는다.
  */
 
 import type {
-  SignatureKind,
-  SignatureMappingTarget,
   SignatureParticipant,
   SignatureParticipantRole,
-  SignatureSlotMapping,
   SignatureTemplateKind,
   SignatureTemplateMapping,
   SignatureTextFieldKey,
-  SignatureTextFieldMapping,
 } from '@domain/entities/SignatureRequest';
 
 export interface SignatureMappingInferenceInput {
@@ -23,18 +24,21 @@ export interface SignatureMappingInferenceInput {
 }
 
 export interface SignatureMappingInferenceResult {
+  /**
+   * Phase 2C 리팩터: mapping 은 더 이상 자동 추론되지 않는다. 항상 빈 객체.
+   * 실제 매핑은 PDF 오버레이 위에 교사가 직접 사각형으로 그린다.
+   */
   readonly mapping: SignatureTemplateMapping;
   readonly participants: readonly SignatureParticipant[];
   readonly suggestedTemplateKind: SignatureTemplateKind;
   readonly warnings: readonly string[];
 }
 
-interface HeaderClassification {
-  readonly kind:
-    | { type: 'text'; key: SignatureTextFieldKey }
-    | { type: 'signature'; kind: SignatureKind }
-    | { type: 'role' }
-    | { type: 'custom' };
+export interface ParticipantColumnIndices {
+  readonly recipientNameColumn: number | null;
+  readonly studentNumberColumn: number | null;
+  readonly classNameColumn: number | null;
+  readonly roleColumn: number | null;
 }
 
 const TEXT_KEYWORDS: Record<SignatureTextFieldKey, readonly string[]> = {
@@ -47,15 +51,6 @@ const TEXT_KEYWORDS: Record<SignatureTextFieldKey, readonly string[]> = {
   signatureStatus: ['상태', '확인여부'],
   custom: [],
 };
-
-const SIGNATURE_KEYWORDS: { kind: SignatureKind; patterns: readonly string[] }[] = [
-  // 학생/학부모/교사 등 한정자가 붙은 서명은 먼저 매칭한다 (recipient 일반 서명보다 우선).
-  { kind: 'parent', patterns: ['학부모서명', '보호자서명', '부모서명'] },
-  { kind: 'student', patterns: ['학생서명', '본인서명'] },
-  { kind: 'teacher', patterns: ['교사서명', '담임서명'] },
-  { kind: 'guardian', patterns: ['보호자서명'] },
-  { kind: 'recipient', patterns: ['서명', '사인', '서명(정자)'] },
-];
 
 const ROLE_KEYWORDS_TEACHER = [
   '교사',
@@ -70,6 +65,57 @@ const ROLE_KEYWORDS_TEACHER = [
 
 const ROLE_HEADER_PATTERNS = ['직위', '직책'];
 
+const EMPTY_MAPPING: SignatureTemplateMapping = {
+  textFields: [],
+  signatureSlots: [],
+};
+
+/**
+ * 헤더에서 명단·역할 컬럼 인덱스를 검출한다. Phase 2C 리팩터로 매핑 자동 추론은
+ * 제거되었지만, 명단 자동 채우기(이름/학번/소속/직위)는 그대로 유지된다.
+ *
+ * @param headers 시트 첫 행 헤더
+ * @param _sampleRows 선택적 샘플 행 — 현재 구현에서는 사용되지 않지만, 향후 휴리스틱
+ *   (예: studentNumber 컬럼이 숫자만 담는지 검증) 을 추가할 자리.
+ */
+export function inferParticipantColumns(
+  headers: readonly string[],
+  _sampleRows: readonly (readonly string[])[] = [],
+): ParticipantColumnIndices {
+  let recipientNameColumn: number | null = null;
+  let studentNumberColumn: number | null = null;
+  let classNameColumn: number | null = null;
+  let roleColumn: number | null = null;
+
+  headers.forEach((rawHeader, index) => {
+    const header = rawHeader.trim();
+    if (!header) return;
+    const normalized = normalizeHeader(header);
+    if (!normalized) return;
+
+    if (roleColumn === null && isRoleHeader(normalized)) {
+      roleColumn = index;
+      return;
+    }
+
+    const textKey = classifyTextHeader(normalized);
+    if (textKey === 'recipientName' && recipientNameColumn === null) {
+      recipientNameColumn = index;
+      return;
+    }
+    if (textKey === 'studentNumber' && studentNumberColumn === null) {
+      studentNumberColumn = index;
+      return;
+    }
+    if (textKey === 'className' && classNameColumn === null) {
+      classNameColumn = index;
+      return;
+    }
+  });
+
+  return { recipientNameColumn, studentNumberColumn, classNameColumn, roleColumn };
+}
+
 export function inferSignatureMappingFromCsv(
   input: SignatureMappingInferenceInput,
 ): SignatureMappingInferenceResult {
@@ -78,134 +124,58 @@ export function inferSignatureMappingFromCsv(
 
   if (headers.length === 0) {
     return {
-      mapping: { textFields: [], signatureSlots: [] },
+      mapping: EMPTY_MAPPING,
       participants: [],
       suggestedTemplateKind: 'custom',
       warnings: ['헤더 행을 찾지 못했습니다. 시트의 첫 행에 컬럼 이름이 있는지 확인해 주세요.'],
     };
   }
 
-  const classifications = headers.map((header) => classifyHeader(header));
+  const columns = inferParticipantColumns(headers, input.rows);
 
-  const textFields: SignatureTextFieldMapping[] = [];
-  const signatureSlots: SignatureSlotMapping[] = [];
-  const seenSignatureKinds = new Set<SignatureKind>();
-  let recipientNameColumn: number | null = null;
-  let studentNumberColumn: number | null = null;
-  let classNameColumn: number | null = null;
-  let roleColumn: number | null = null;
-
-  classifications.forEach((classification, index) => {
-    const header = headers[index]!;
-    if (!header) return;
-    const target: SignatureMappingTarget = {
-      type: 'generated-table-column',
-      value: header,
-    };
-
-    if (classification.kind.type === 'signature') {
-      if (seenSignatureKinds.has(classification.kind.kind)) {
-        warnings.push(`서명 컬럼 "${header}"이(가) 중복되어 첫 번째만 사용했습니다.`);
-        return;
-      }
-      seenSignatureKinds.add(classification.kind.kind);
-      signatureSlots.push({
-        id: `slot-inferred-${index + 1}`,
-        kind: classification.kind.kind,
-        label: header,
-        required: true,
-        target,
-      });
-      return;
-    }
-
-    if (classification.kind.type === 'role') {
-      roleColumn = index;
-      return;
-    }
-
-    if (classification.kind.type === 'text') {
-      const key = classification.kind.key;
-      if (key === 'recipientName') recipientNameColumn = index;
-      if (key === 'studentNumber') studentNumberColumn = index;
-      if (key === 'className') classNameColumn = index;
-      textFields.push({
-        id: `field-inferred-${index + 1}`,
-        key,
-        label: header,
-        required: key === 'recipientName',
-        target,
-      });
-      return;
-    }
-
-    textFields.push({
-      id: `field-inferred-${index + 1}`,
-      key: 'custom',
-      label: header,
-      required: false,
-      target,
-    });
-  });
-
-  if (signatureSlots.length === 0) {
-    warnings.push(
-      '서명 컬럼을 찾지 못했습니다. 시트에 "서명" 또는 "학생서명/학부모서명" 같은 컬럼이 있는지 확인해 주세요.',
-    );
-  }
-
-  if (recipientNameColumn === null) {
+  if (columns.recipientNameColumn === null) {
     warnings.push('이름 컬럼을 찾지 못해 명단을 자동으로 채우지 못했습니다.');
   }
 
   const participants =
-    recipientNameColumn === null
+    columns.recipientNameColumn === null
       ? []
       : buildParticipantsFromRows({
           rows: input.rows,
-          recipientNameColumn,
-          studentNumberColumn,
-          classNameColumn,
-          roleColumn,
+          recipientNameColumn: columns.recipientNameColumn,
+          studentNumberColumn: columns.studentNumberColumn,
+          classNameColumn: columns.classNameColumn,
+          roleColumn: columns.roleColumn,
         });
 
-  const suggestedTemplateKind = pickTemplateKind(seenSignatureKinds, participants.length);
+  const suggestedTemplateKind = pickTemplateKind(participants);
 
   return {
-    mapping: { textFields, signatureSlots },
+    mapping: EMPTY_MAPPING,
     participants,
     suggestedTemplateKind,
     warnings,
   };
 }
 
-function classifyHeader(header: string): HeaderClassification {
-  const normalized = normalizeHeader(header);
-  if (!normalized) return { kind: { type: 'custom' } };
-
-  for (const { kind, patterns } of SIGNATURE_KEYWORDS) {
-    if (patterns.some((pattern) => normalized.includes(normalizeHeader(pattern)))) {
-      return { kind: { type: 'signature', kind } };
-    }
-  }
-
-  for (const pattern of ROLE_HEADER_PATTERNS) {
-    if (normalized === normalizeHeader(pattern) || normalized.includes(normalizeHeader(pattern))) {
-      return { kind: { type: 'role' } };
-    }
-  }
-
+function classifyTextHeader(normalized: string): SignatureTextFieldKey | null {
   for (const [key, patterns] of Object.entries(TEXT_KEYWORDS) as [
     SignatureTextFieldKey,
     readonly string[],
   ][]) {
     if (key === 'custom') continue;
     if (patterns.some((pattern) => matchesTextHeader(normalized, normalizeHeader(pattern)))) {
-      return { kind: { type: 'text', key } };
+      return key;
     }
   }
+  return null;
+}
 
-  return { kind: { type: 'custom' } };
+function isRoleHeader(normalized: string): boolean {
+  return ROLE_HEADER_PATTERNS.some((pattern) => {
+    const normalizedPattern = normalizeHeader(pattern);
+    return normalized === normalizedPattern || normalized.includes(normalizedPattern);
+  });
 }
 
 function matchesTextHeader(normalizedHeader: string, normalizedPattern: string): boolean {
@@ -290,15 +260,16 @@ function createParticipantId(index: number, displayName: string): string {
   return `participant-${index + 1}-${safeName || 'unknown'}`;
 }
 
-function pickTemplateKind(
-  signatureKinds: ReadonlySet<SignatureKind>,
-  participantCount: number,
-): SignatureTemplateKind {
-  const hasStudent = signatureKinds.has('student');
-  const hasParent = signatureKinds.has('parent');
-  if (hasStudent && hasParent) return 'absence-form';
-  if (hasParent && !hasStudent) return 'notice-form';
-  if (signatureKinds.size === 1 && participantCount >= 2) return 'training-register';
-  if (signatureKinds.size === 1 && participantCount <= 1) return 'general-register';
+/**
+ * Phase 2C 리팩터: signature 슬롯이 없으므로 참여자 수와 역할 분포만으로 추정한다.
+ *   - 참여자 1명 → `general-register`
+ *   - 모두 teacher → `training-register`
+ *   - 그 외 → `custom` (PDF 디자이너에서 교사가 명시적으로 선택)
+ */
+function pickTemplateKind(participants: readonly SignatureParticipant[]): SignatureTemplateKind {
+  if (participants.length === 0) return 'custom';
+  if (participants.length === 1) return 'general-register';
+  const allTeacher = participants.every((p) => p.role === 'teacher');
+  if (allTeacher) return 'training-register';
   return 'custom';
 }

@@ -48,11 +48,9 @@ function isBlank(value: string): boolean {
 }
 
 function isTargetEmpty(target: SignatureMappingTarget): boolean {
-  if (isBlank(target.value)) return true;
-  if (target.type === 'sheets-cell' || target.type === 'sheets-named-range') {
-    return !target.sheetName || isBlank(target.sheetName);
-  }
-  return false;
+  // Phase 2C v2: target.type 은 'pdf-region' 단일이므로 sheetName 분기는 불필요.
+  // value 가 비어 있으면 매핑 미설정으로 판단한다.
+  return isBlank(target.value);
 }
 
 function uniqueRequiredKinds(participant: SignatureParticipant): readonly SignatureKind[] {

@@ -69,9 +69,11 @@ describe('ToolSignatureRequest template workflow', () => {
       url: 'https://docs.google.com/document/d/template',
     });
     expect(input.mapping?.signatureSlots.map((slot) => slot.kind)).toEqual(['student', 'parent']);
+    // Phase 2C v2: 매핑 target.type 은 'pdf-region' 단일. SignatureRegionDesigner 가
+    // PDF 좌표 기반 region 으로 매핑을 완성한다.
     expect(input.mapping?.signatureSlots[0]?.target).toMatchObject({
-      type: 'docs-placeholder',
-      value: '{{학생 서명}}',
+      type: 'pdf-region',
+      value: '학생 서명',
     });
     expect(input.participants?.[0]).toMatchObject({
       displayName: '홍길동',
@@ -103,18 +105,20 @@ describe('ToolSignatureRequest template workflow', () => {
             id: 'slot-student',
             kind: 'student',
             label: '학생 서명',
-            target: { type: 'generated-table-column', value: '학생 서명' },
+            target: { type: 'pdf-region', value: 'student-slot' },
             required: true,
           },
           {
             id: 'slot-parent',
             kind: 'parent',
             label: '학부모 서명',
-            target: { type: 'generated-table-column', value: '학부모 서명' },
+            target: { type: 'pdf-region', value: 'parent-slot' },
             required: true,
           },
         ],
       },
+      regions: [],
+      regionVersion: 0,
       participants: [
         {
           id: 'participant-1',

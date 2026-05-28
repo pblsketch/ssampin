@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { LocalSignatureRequestDraft } from '@domain/entities/SignatureRequest';
+import {
+  SIGNATURE_REQUEST_SCHEMA_VERSION,
+  type LocalSignatureRequestDraft,
+} from '@domain/entities/SignatureRequest';
 
 const repository = vi.hoisted(() => ({
   list: vi.fn<() => Promise<readonly LocalSignatureRequestDraft[]>>(),
@@ -108,23 +111,15 @@ describe('useSignatureRequestStore', () => {
 function makeDraft(id: string): LocalSignatureRequestDraft {
   return {
     request: {
-      schemaVersion: 1,
+      schemaVersion: SIGNATURE_REQUEST_SCHEMA_VERSION,
       id,
       title: '연수 등록부',
       templateKind: 'training-register',
-      templateSource: { type: 'google-sheets', url: 'https://docs.google.com/spreadsheets/d/test' },
-      mapping: {
-        textFields: [],
-        signatureSlots: [
-          {
-            id: 'signature-recipient',
-            kind: 'recipient',
-            label: '서명',
-            required: true,
-            target: { type: 'generated-table-column', value: '서명' },
-          },
-        ],
-      },
+      templateSource: { type: 'pdf', url: 'https://example.com/template.pdf' },
+      // Phase 2C v2: mapping 은 빈 객체. 실제 매핑은 regions 에 저장된다.
+      mapping: { textFields: [], signatureSlots: [] },
+      regions: [],
+      regionVersion: 0,
       participants: [],
       submissions: [],
       access: { uniqueLinksEnabled: true, pinEnabled: false },

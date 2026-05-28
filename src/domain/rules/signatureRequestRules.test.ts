@@ -29,7 +29,7 @@ function createRequest(overrides: Partial<SignatureRequest> = {}): SignatureRequ
           key: 'recipientName',
           label: '이름',
           required: true,
-          target: { type: 'generated-table-column', value: '이름' },
+          target: { type: 'pdf-region', value: '이름' },
         },
       ],
       signatureSlots: [
@@ -38,10 +38,15 @@ function createRequest(overrides: Partial<SignatureRequest> = {}): SignatureRequ
           kind: 'recipient',
           label: '대상자 서명',
           required: true,
-          target: { type: 'generated-table-column', value: '서명' },
+          target: { type: 'pdf-region', value: '서명' },
         },
       ],
     },
+    // Phase 2C v2 신규 필수 필드. 매핑은 실제로 regions 에 들어가지만 validateSignatureRequest 는
+    // 아직 mapping.signatureSlots 의 길이로 missingSignatureSlot 을 판정한다. 본격적인 regions
+    // 기반 검증은 후속 PRD task 에서 따라간다.
+    regions: [],
+    regionVersion: 0,
     participants: [
       {
         id: 'p1',
@@ -88,7 +93,7 @@ describe('validateSignatureRequest', () => {
     );
   });
 
-  it('Sheets 셀 매핑은 시트 이름과 셀 주소가 모두 필요하다', () => {
+  it('Phase 2C v2: 매핑 target 의 value 가 비어 있으면 emptyMappingTarget 을 낸다', () => {
     const issues = validateSignatureRequest(
       createRequest({
         mapping: {
@@ -99,7 +104,7 @@ describe('validateSignatureRequest', () => {
               kind: 'parent',
               label: '학부모 서명',
               required: true,
-              target: { type: 'sheets-cell', value: ' ' },
+              target: { type: 'pdf-region', value: ' ' },
             },
           ],
         },
@@ -182,14 +187,14 @@ describe('signature progress rules', () => {
             kind: 'student',
             label: '학생 서명',
             required: true,
-            target: { type: 'sheets-cell', sheetName: '결석계', value: 'B10' },
+            target: { type: 'pdf-region', value: 'student-slot' },
           },
           {
             id: 'slot-parent',
             kind: 'parent',
             label: '학부모 서명',
             required: true,
-            target: { type: 'sheets-cell', sheetName: '결석계', value: 'B11' },
+            target: { type: 'pdf-region', value: 'parent-slot' },
           },
         ],
       },

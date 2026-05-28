@@ -178,6 +178,8 @@ function makeDraft(overrides: {
       templateKind: 'absence-form',
       templateSource: { type: 'google-sheets', url: 'https://docs.google.com/spreadsheets/d/abc' },
       mapping: { textFields: [], signatureSlots: [] },
+      regions: [],
+      regionVersion: 0,
       participants: [
         {
           id: 'participant-1-홍길동',

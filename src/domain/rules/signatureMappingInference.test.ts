@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { inferSignatureMappingFromCsv } from './signatureMappingInference';
+import { inferParticipantColumns, inferSignatureMappingFromCsv } from './signatureMappingInference';
 import { parseCsvLines } from '@domain/utils/parseCsvLines';
 
 const TRAINING_REGISTER_CSV = `연번,소속(학교명),직위,성명,연락처,신청 연수 과정명,출석,수료,서명(정자),비고
@@ -15,39 +15,57 @@ const TRAINING_REGISTER_CSV = `연번,소속(학교명),직위,성명,연락처,
 10,온양여자중학교,교사,한소통,010-0123-4567,[학습과학] 인지부하 이론을 적용한 교수학습 설계,,,,
 `;
 
-describe('inferSignatureMappingFromCsv', () => {
-  it('자동 추론: 연수 등록부 CSV의 헤더에서 매핑·명단·시나리오를 도출한다', () => {
+describe('inferParticipantColumns (Phase 2C 신규 export)', () => {
+  it('연수 등록부 헤더에서 이름·연번·소속·직위 컬럼 인덱스를 검출한다', () => {
+    const { headers } = parseCsvLines(TRAINING_REGISTER_CSV);
+    const columns = inferParticipantColumns(headers);
+
+    // "연번"(번호)·"소속(학교명)"·"직위"·"성명" 순서로 검출되어야 함
+    expect(columns).toEqual({
+      recipientNameColumn: 3, // 성명
+      studentNumberColumn: 0, // 연번
+      classNameColumn: 1, // 소속(학교명)
+      roleColumn: 2, // 직위
+    });
+  });
+
+  it('결석계 헤더(학년반/번호/성명/결석 기간/결석 사유)를 검출한다', () => {
+    const columns = inferParticipantColumns(['학년반', '번호', '성명', '결석기간', '결석사유']);
+
+    expect(columns.recipientNameColumn).toBe(2);
+    expect(columns.studentNumberColumn).toBe(1);
+    expect(columns.classNameColumn).toBe(0);
+    expect(columns.roleColumn).toBeNull();
+  });
+
+  it('일부 컬럼만 있을 때 나머지는 null 로 반환한다', () => {
+    const columns = inferParticipantColumns(['이름', '메모']);
+
+    expect(columns.recipientNameColumn).toBe(0);
+    expect(columns.studentNumberColumn).toBeNull();
+    expect(columns.classNameColumn).toBeNull();
+    expect(columns.roleColumn).toBeNull();
+  });
+
+  it('빈 헤더 배열은 모두 null 을 반환한다', () => {
+    expect(inferParticipantColumns([])).toEqual({
+      recipientNameColumn: null,
+      studentNumberColumn: null,
+      classNameColumn: null,
+      roleColumn: null,
+    });
+  });
+});
+
+describe('inferSignatureMappingFromCsv (명단 추출 중심)', () => {
+  it('연수 등록부 CSV에서 명단 10명을 모두 teacher 로 추출한다', () => {
     const { headers, rows } = parseCsvLines(TRAINING_REGISTER_CSV);
     const result = inferSignatureMappingFromCsv({ headers, rows });
 
-    expect(result.suggestedTemplateKind).toBe('training-register');
+    // Phase 2C 리팩터: mapping 은 항상 빈 객체
+    expect(result.mapping).toEqual({ textFields: [], signatureSlots: [] });
 
-    // recipientName / studentNumber / className이 자동 식별되어야 함
-    const fieldKeys = result.mapping.textFields.map((field) => field.key);
-    expect(fieldKeys).toContain('recipientName');
-    expect(fieldKeys).toContain('studentNumber');
-    expect(fieldKeys).toContain('className');
-
-    // 서명(정자)는 recipient kind으로 매핑되어야 함
-    expect(result.mapping.signatureSlots).toHaveLength(1);
-    expect(result.mapping.signatureSlots[0]).toMatchObject({
-      kind: 'recipient',
-      label: '서명(정자)',
-      target: { type: 'generated-table-column', value: '서명(정자)' },
-    });
-
-    // 직위 컬럼은 role 분류로 잡혀서 textField에 포함되지 않음
-    const textLabels = result.mapping.textFields.map((field) => field.label);
-    expect(textLabels).not.toContain('직위');
-
-    // 미매칭 헤더는 custom으로 들어가야 함
-    expect(textLabels).toContain('연락처');
-    expect(textLabels).toContain('신청 연수 과정명');
-    expect(textLabels).toContain('출석');
-    expect(textLabels).toContain('수료');
-    expect(textLabels).toContain('비고');
-
-    // 명단 10명, 모두 teacher role
+    // 명단 10명 추출, 모두 teacher 역할
     expect(result.participants).toHaveLength(10);
     expect(result.participants[0]).toMatchObject({
       displayName: '김국어',
@@ -57,73 +75,82 @@ describe('inferSignatureMappingFromCsv', () => {
       requiredSignatureKinds: ['recipient'],
     });
     expect(result.participants.every((p) => p.role === 'teacher')).toBe(true);
+
+    // 전원이 teacher 이므로 training-register 추정
+    expect(result.suggestedTemplateKind).toBe('training-register');
   });
 
-  it('결석계: 학생서명 + 학부모서명 두 컬럼 → absence-form 추정', () => {
+  it('학번이 숫자인 결석계 행은 student 역할로 추출한다', () => {
     const result = inferSignatureMappingFromCsv({
-      headers: ['학년반', '번호', '성명', '결석기간', '결석사유', '학생서명', '학부모서명'],
-      rows: [['3-2', '1', '홍길동', '5/1~5/3', '감기', '', '']],
+      headers: ['학년반', '번호', '성명'],
+      rows: [
+        ['3-2', '1', '홍길동'],
+        ['3-2', '2', '김민서'],
+      ],
     });
 
-    expect(result.suggestedTemplateKind).toBe('absence-form');
-    expect(result.mapping.signatureSlots.map((slot) => slot.kind).sort()).toEqual([
-      'parent',
-      'student',
-    ]);
-    expect(result.mapping.textFields.find((field) => field.key === 'absencePeriod')).toBeDefined();
-    expect(result.mapping.textFields.find((field) => field.key === 'absenceReason')).toBeDefined();
-  });
+    // Phase 2C: mapping 은 빈 객체
+    expect(result.mapping).toEqual({ textFields: [], signatureSlots: [] });
 
-  it('가정통신문: 학부모서명만 → notice-form 추정', () => {
-    const result = inferSignatureMappingFromCsv({
-      headers: ['번호', '성명', '학부모서명'],
-      rows: [['1', '김민서', '']],
+    expect(result.participants).toHaveLength(2);
+    expect(result.participants[0]).toMatchObject({
+      displayName: '홍길동',
+      role: 'student',
+      studentNumber: 1,
+      className: '3-2',
+      requiredSignatureKinds: ['recipient'],
     });
-
-    expect(result.suggestedTemplateKind).toBe('notice-form');
-    expect(result.mapping.signatureSlots).toHaveLength(1);
-    expect(result.mapping.signatureSlots[0]).toMatchObject({ kind: 'parent' });
   });
 
-  it('한 명만 서명: 데이터 1행 + 서명 1슬롯 → general-register', () => {
+  it('한 명만 있는 명단은 general-register 로 추정한다', () => {
     const result = inferSignatureMappingFromCsv({
-      headers: ['이름', '서명'],
-      rows: [['김교사', '']],
+      headers: ['이름'],
+      rows: [['김교사']],
     });
 
     expect(result.suggestedTemplateKind).toBe('general-register');
     expect(result.participants).toHaveLength(1);
   });
 
-  it('헤더 미매칭: 모든 컬럼이 custom으로 떨어지고 서명 슬롯 부재 경고', () => {
+  it('이름 컬럼을 찾지 못하면 빈 명단 + 경고를 반환한다', () => {
     const result = inferSignatureMappingFromCsv({
       headers: ['컬럼A', '컬럼B'],
       rows: [['값1', '값2']],
     });
 
-    expect(result.mapping.signatureSlots).toHaveLength(0);
-    expect(result.mapping.textFields.every((field) => field.key === 'custom')).toBe(true);
-    expect(result.warnings.some((msg) => msg.includes('서명 컬럼을 찾지 못했습니다'))).toBe(true);
+    expect(result.mapping).toEqual({ textFields: [], signatureSlots: [] });
+    expect(result.participants).toHaveLength(0);
     expect(result.warnings.some((msg) => msg.includes('이름 컬럼을 찾지 못해'))).toBe(true);
+    expect(result.suggestedTemplateKind).toBe('custom');
   });
 
   it('빈 헤더 입력 시 안전하게 빈 결과를 반환한다', () => {
     const result = inferSignatureMappingFromCsv({ headers: [], rows: [] });
-    expect(result.mapping.textFields).toHaveLength(0);
-    expect(result.mapping.signatureSlots).toHaveLength(0);
+    expect(result.mapping).toEqual({ textFields: [], signatureSlots: [] });
     expect(result.participants).toHaveLength(0);
     expect(result.warnings.length).toBeGreaterThan(0);
   });
 
   it('이름이 빈 데이터 행은 명단에서 건너뛴다', () => {
     const result = inferSignatureMappingFromCsv({
-      headers: ['이름', '서명'],
-      rows: [
-        ['홍길동', ''],
-        ['', ''],
-        ['김민서', ''],
-      ],
+      headers: ['이름'],
+      rows: [['홍길동'], [''], ['김민서']],
     });
     expect(result.participants.map((p) => p.displayName)).toEqual(['홍길동', '김민서']);
+  });
+
+  it('Phase 2C: signature 슬롯 자동 추론은 더 이상 발생하지 않는다 (학생서명/학부모서명 헤더가 있어도)', () => {
+    const result = inferSignatureMappingFromCsv({
+      headers: ['학년반', '번호', '성명', '학생서명', '학부모서명'],
+      rows: [['3-2', '1', '홍길동', '', '']],
+    });
+
+    // 매핑은 PDF 오버레이로 이동했으므로 자동 추론하지 않음
+    expect(result.mapping.signatureSlots).toHaveLength(0);
+    expect(result.mapping.textFields).toHaveLength(0);
+
+    // 명단은 정상 추출
+    expect(result.participants).toHaveLength(1);
+    expect(result.participants[0]?.displayName).toBe('홍길동');
   });
 });

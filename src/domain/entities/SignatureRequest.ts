@@ -1,9 +1,15 @@
 /**
- * Phase 2C step 1: new entity types (PdfTemplate, SignatureRegion, ComposedPdf) are introduced
- * additively while keeping schemaVersion at 1. The bump to v2 + cascade refactor of consumers
- * is intentionally deferred to a focused follow-up session (see PRD US-2C-01 deferral note).
+ * Phase 2C v2 (PRD US-2C-01 strict cascade): PDF 오버레이 + `SignatureRegion` 단일 매핑 모델.
+ *
+ * - `SIGNATURE_REQUEST_SCHEMA_VERSION` 가 2 로 bump 되었고, `SignatureRequest.regions` /
+ *   `regionVersion` 가 필수 필드가 되었다.
+ * - `SignatureMappingTargetType` 는 `'pdf-region'` 단일 literal 로 좁혀졌다. 4개 레거시
+ *   타입(`'docs-placeholder'` / `'sheets-cell'` / `'sheets-named-range'` / `'generated-table-column'`)
+ *   은 `LegacySignatureMappingTargetType` 와 `LegacySignatureRequest` 인터페이스에서만 사용된다.
+ * - 로컬에 저장된 v1 draft 는 `signatureSchemaMigration.migrateV1ToV2()` 를 통해 자동으로 v2 로
+ *   coerce 되며, repository load 시점에 write-back 된다 (US-2C-04).
  */
-export const SIGNATURE_REQUEST_SCHEMA_VERSION = 1;
+export const SIGNATURE_REQUEST_SCHEMA_VERSION = 2;
 
 export type SignatureTemplateKind =
   | 'general-register'
@@ -22,16 +28,17 @@ export interface SignatureTemplateSource {
 }
 
 /**
- * Phase 2C target type — `'pdf-region'` is the canonical new value used by SignatureRegion-based layouts.
- *
- * @deprecated The legacy literals (`'docs-placeholder'`, `'sheets-cell'`, `'sheets-named-range'`,
- * `'generated-table-column'`) remain in this union ONLY so the v1→v2 migration shim and existing
- * fixtures continue to type-check. New code MUST use `'pdf-region'`. A follow-up commit will narrow
- * this union to `'pdf-region'` after all consumers are migrated (see plan US-2C-01 follow-up).
+ * Phase 2C v2: canonical mapping target type. 좌표 기반 `SignatureRegion` 으로 모든
+ * 매핑이 이동했기 때문에 단일 literal 만 남는다. 새 코드는 `SignatureRegion` 을 직접
+ * 사용하고, `SignatureTemplateMapping.signatureSlots` / `textFields` 는 v1 호환을 위해
+ * 빈 배열로 유지된다.
  */
-export type SignatureMappingTargetType = 'pdf-region' | LegacySignatureMappingTargetType;
+export type SignatureMappingTargetType = 'pdf-region';
 
-/** @deprecated Legacy v1 mapping targets retained for migration only. */
+/**
+ * v1 mapping 타깃 종류. `LegacySignatureRequest` 와 `migrateV1ToV2()` 내부에서만 사용된다.
+ * 새 v2 코드에서 직접 참조 금지.
+ */
 export type LegacySignatureMappingTargetType =
   | 'docs-placeholder'
   | 'sheets-cell'
@@ -40,6 +47,13 @@ export type LegacySignatureMappingTargetType =
 
 export interface SignatureMappingTarget {
   readonly type: SignatureMappingTargetType;
+  readonly value: string;
+  readonly sheetName?: string;
+}
+
+/** v1 mapping 타깃. migration shim 안에서만 사용. */
+export interface LegacySignatureMappingTarget {
+  readonly type: LegacySignatureMappingTargetType;
   readonly value: string;
   readonly sheetName?: string;
 }
@@ -75,6 +89,29 @@ export interface SignatureSlotMapping {
 export interface SignatureTemplateMapping {
   readonly textFields: readonly SignatureTextFieldMapping[];
   readonly signatureSlots: readonly SignatureSlotMapping[];
+}
+
+/** v1 텍스트 필드 매핑. migration shim 안에서만 사용. */
+export interface LegacySignatureTextFieldMapping {
+  readonly id: string;
+  readonly key: SignatureTextFieldKey;
+  readonly label: string;
+  readonly target: LegacySignatureMappingTarget;
+  readonly required: boolean;
+}
+
+/** v1 서명 슬롯 매핑. migration shim 안에서만 사용. */
+export interface LegacySignatureSlotMapping {
+  readonly id: string;
+  readonly kind: SignatureKind;
+  readonly label: string;
+  readonly target: LegacySignatureMappingTarget;
+  readonly required: boolean;
+}
+
+export interface LegacySignatureTemplateMapping {
+  readonly textFields: readonly LegacySignatureTextFieldMapping[];
+  readonly signatureSlots: readonly LegacySignatureSlotMapping[];
 }
 
 export type SignatureParticipantRole =
@@ -191,22 +228,25 @@ export interface SignatureRequest {
   readonly description?: string;
   readonly templateKind: SignatureTemplateKind;
   readonly templateSource: SignatureTemplateSource;
+  /**
+   * Phase 2C v2: 항상 빈 객체 `{ textFields: [], signatureSlots: [] }` 로 유지된다.
+   * 실제 매핑은 `regions` 에 저장된다. 이 필드는 v1 호환과 일부 미감각 검증 경로 보존용.
+   */
   readonly mapping: SignatureTemplateMapping;
   /**
-   * Phase 2C step 1: PDF template metadata. Optional during the additive-only step;
-   * a follow-up commit makes this canonical (required for new drafts via builder).
+   * Phase 2C v2: 교사가 업로드한 PDF 양식 메타데이터. v1 draft 가 마이그레이션될 때 null
+   * 일 수 있으므로 optional 유지. 새 v2 draft 는 PDF 업로드 직후 채워진다.
    */
   readonly pdfTemplate?: PdfTemplate;
   /**
-   * Phase 2C step 1: signature regions drawn on the PDF template. Optional during the
-   * additive-only step; defaults to `[]` when omitted. Becomes required in follow-up.
+   * Phase 2C v2: 좌표 기반 서명 영역. 매핑의 canonical 위치. 비어 있어도 OK (PDF 미업로드 + region 미설정 단계).
    */
-  readonly regions?: readonly SignatureRegion[];
+  readonly regions: readonly SignatureRegion[];
   /**
-   * Phase 2C step 1: increments each time regions are edited. Cache-bust segment in pre-render
-   * Storage paths (`.../v{regionVersion}/page-{i}.png`). Optional during additive-only step.
+   * Phase 2C v2: 디자이너에서 region 편집 시마다 증분. pre-render Storage 경로
+   * `.../v{regionVersion}/page-{i}.png` 의 cache-bust 세그먼트.
    */
-  readonly regionVersion?: number;
+  readonly regionVersion: number;
   readonly participants: readonly SignatureParticipant[];
   readonly submissions: readonly SignatureSubmission[];
   readonly access: SignatureRequestAccessOptions;
@@ -224,6 +264,29 @@ export interface SignatureRequest {
   readonly resultFileUrl?: string;
 }
 
+/**
+ * v1 `SignatureRequest` 스냅샷. `migrateV1ToV2()` 에서만 사용된다. 이전 운영 draft 가
+ * v1 4가지 mapping target 타입을 그대로 가질 수 있도록 wide-mapping 타입을 허용한다.
+ */
+export interface LegacySignatureRequest {
+  readonly schemaVersion: 1;
+  readonly id: string;
+  readonly title: string;
+  readonly description?: string;
+  readonly templateKind: SignatureTemplateKind;
+  readonly templateSource: SignatureTemplateSource;
+  readonly mapping: LegacySignatureTemplateMapping;
+  readonly participants: readonly SignatureParticipant[];
+  readonly submissions: readonly SignatureSubmission[];
+  readonly access: SignatureRequestAccessOptions;
+  readonly scope: SignatureRequestFirstReleaseScope;
+  readonly status: SignatureRequestStatus;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly dueAt?: string;
+  readonly resultFileUrl?: string;
+}
+
 export interface SignatureParticipantLocalAccessSecret {
   readonly participantId: string;
   readonly uniqueLinkToken?: string;
@@ -232,6 +295,11 @@ export interface SignatureParticipantLocalAccessSecret {
 
 export interface LocalSignatureRequestDraft {
   readonly request: SignatureRequest;
+  readonly participantAccessSecrets: readonly SignatureParticipantLocalAccessSecret[];
+}
+
+export interface LegacyLocalSignatureRequestDraft {
+  readonly request: LegacySignatureRequest;
   readonly participantAccessSecrets: readonly SignatureParticipantLocalAccessSecret[];
 }
 

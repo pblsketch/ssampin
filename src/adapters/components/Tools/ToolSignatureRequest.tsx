@@ -162,12 +162,12 @@ const TEMPLATE_KIND_OPTIONS: readonly TemplateKindOption[] = [
   },
 ];
 
+// Phase 2C v2: SignatureMappingTargetType 가 'pdf-region' 단일로 좁혀졌다. 기존 4개 레거시
+// 옵션 (docs-placeholder / sheets-cell / sheets-named-range / generated-table-column) 은
+// PDF 오버레이 + `SignatureRegion` 좌표 모델로 대체되었다. 매핑 편집 UI 자체는 SignatureRegionDesigner
+// (Phase 2C Step D) 가 담당하며, 이 화면의 매핑 셀렉트는 placeholder 단일 옵션만 노출된다.
 const TARGET_TYPE_LABELS: Record<SignatureMappingTargetType, string> = {
   'pdf-region': 'PDF 영역 (Phase 2C)',
-  'docs-placeholder': 'Docs 치환자 ({{이름}} 형식)',
-  'sheets-cell': '시트 셀',
-  'sheets-named-range': 'Sheets 이름 지정 범위',
-  'generated-table-column': '자동 생성 표 열',
 };
 
 const SIGNATURE_KIND_LABELS: Record<SignatureKind, string> = {
@@ -1060,12 +1060,15 @@ function retargetSignatureSlots(
   }));
 }
 
-function defaultTargetType(sourceType: SignatureTemplateSourceType): SignatureMappingTargetType {
-  return sourceType === 'google-docs' ? 'docs-placeholder' : 'generated-table-column';
+function defaultTargetType(_sourceType: SignatureTemplateSourceType): SignatureMappingTargetType {
+  // Phase 2C v2: 모든 매핑 target 은 'pdf-region' 단일로 좁혀졌다. sourceType 분기 불필요.
+  return 'pdf-region';
 }
 
-function defaultTargetValue(label: string, sourceType: SignatureTemplateSourceType): string {
-  return sourceType === 'google-docs' ? `{{${label}}}` : label;
+function defaultTargetValue(label: string, _sourceType: SignatureTemplateSourceType): string {
+  // Phase 2C v2: target.value 는 region 의 식별자 placeholder. SignatureRegionDesigner 가
+  // 좌표 기반으로 region 을 만들면 이 값을 region.id 로 대체한다.
+  return label;
 }
 
 function createMappingTarget(draft: TextMappingDraft | SignatureSlotDraft): SignatureMappingTarget {
