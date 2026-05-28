@@ -16,7 +16,7 @@
  *   - 4개 모두 체크되어야 onAllConsented(true) 호출.
  *   - 카피 한 문장이라도 바뀌면 G005 (US-2C-14) 3 위치 일관성도 함께 확인.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SIGNATURE_LEGAL_DISCLAIMER } from './signatureLegalCopy';
 
 export type PrivacyConsentItemId =
@@ -79,38 +79,47 @@ export function PrivacyConsentTable({
   onLogChange,
   now = () => new Date().toISOString(),
 }: PrivacyConsentTableProps) {
-  const [checkedIds, setCheckedIds] = useState<ReadonlySet<PrivacyConsentItemId>>(() => new Set());
+  const [checkedAtById, setCheckedAtById] = useState<ReadonlyMap<PrivacyConsentItemId, string>>(
+    () => new Map(),
+  );
+
+  // UltraQA Q5: onLogChange/now prop 이 매 render 새 함수일 수 있으므로 latest ref 보관.
+  // useEffect deps 에 직접 넣으면 stable 한 부모도 매 render 마다 effect 실행되어
+  // 무한 onLogChange 호출이 됨.
+  const onLogChangeRef = useRef(onLogChange);
+  const nowRef = useRef(now);
+  useEffect(() => {
+    onLogChangeRef.current = onLogChange;
+    nowRef.current = now;
+  });
 
   const allChecked = useMemo(
-    () => PRIVACY_CONSENT_ITEMS.every((item) => checkedIds.has(item.id)),
-    [checkedIds],
+    () => PRIVACY_CONSENT_ITEMS.every((item) => checkedAtById.has(item.id)),
+    [checkedAtById],
   );
 
   useEffect(() => {
     if (!allChecked) {
-      onLogChange(null);
+      onLogChangeRef.current(null);
       return;
     }
-    const at = now();
+    // UltraQA Q5: entry.at 은 항목별 체크 시각을 보존 — 4개 동일 timestamp 회피.
     const log: readonly PrivacyConsentLogEntry[] = PRIVACY_CONSENT_ITEMS.map((item) => ({
       id: item.id,
       label: item.label,
       checked: true as const,
-      at,
+      at: checkedAtById.get(item.id) ?? nowRef.current(),
     }));
-    onLogChange(log);
-    // now/onLogChange 는 상위 컴포넌트에서 변경되지 않는 안정 참조 가정.
-    // allChecked false → true 천이 시점에만 새 log 생성.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allChecked]);
+    onLogChangeRef.current(log);
+  }, [allChecked, checkedAtById]);
 
   const handleToggle = useCallback((id: PrivacyConsentItemId) => {
-    setCheckedIds((prev) => {
-      const next = new Set(prev);
+    setCheckedAtById((prev) => {
+      const next = new Map(prev);
       if (next.has(id)) {
         next.delete(id);
       } else {
-        next.add(id);
+        next.set(id, nowRef.current());
       }
       return next;
     });
@@ -131,7 +140,7 @@ export function PrivacyConsentTable({
       </header>
       <ul className="divide-y divide-sp-border/70">
         {PRIVACY_CONSENT_ITEMS.map((item) => {
-          const checked = checkedIds.has(item.id);
+          const checked = checkedAtById.has(item.id);
           return (
             <li key={item.id} className="py-2">
               <label className="flex cursor-pointer items-start gap-3 text-xs">
@@ -163,7 +172,7 @@ export function PrivacyConsentTable({
       >
         {allChecked
           ? '모든 항목에 동의했습니다. 서명을 제출할 수 있어요.'
-          : `${checkedIds.size}/4 항목 동의 — 나머지 항목도 확인 후 체크해 주세요.`}
+          : `${checkedAtById.size}/4 항목 동의 — 나머지 항목도 확인 후 체크해 주세요.`}
       </p>
     </section>
   );

@@ -58,16 +58,12 @@ function validateConsentLog(log: readonly ConsentLogEntry[] | undefined): string
   return null;
 }
 
-async function sha256Hex(value: string): Promise<string> {
-  const bytes = new TextEncoder().encode(value);
-  const digest = await crypto.subtle.digest('SHA-256', bytes);
-  return Array.from(new Uint8Array(digest))
-    .map((byte) => byte.toString(16).padStart(2, '0'))
-    .join('');
-}
+import { sha256Hex } from '../_shared/hash.ts';
 
 function parseSignatureDataUrl(dataUrl: string): { mimeType: string; bytes: Uint8Array } | null {
-  const match = dataUrl.match(/^data:(image\/png|image\/webp);base64,([A-Za-z0-9+/=]+)$/);
+  // UltraQA Q2: WebP 는 pdf-lib (compose-signed-pdf) 가 embed 못함 → 결과 PDF 에서 빈 박스로
+  // 나타나는 silent 결함 발생. submit 단계에서 PNG 만 허용해 깊이 방어.
+  const match = dataUrl.match(/^data:(image\/png);base64,([A-Za-z0-9+/=]+)$/);
   if (!match?.[1] || !match?.[2]) return null;
   let binary: string;
   try {
@@ -159,7 +155,11 @@ serve(async (req: Request) => {
       .limit(1);
 
     if (token) {
-      participantQuery = participantQuery.eq('unique_link_token_hash', await sha256Hex(token));
+      // 호환: 기존 DB token hash 는 pepper 미적용 — auto pepper 가 일치 안 됨.
+      participantQuery = participantQuery.eq(
+        'unique_link_token_hash',
+        await sha256Hex(token, 'no-pepper'),
+      );
     } else {
       participantQuery = participantQuery.eq('id', participantId);
     }
@@ -180,15 +180,16 @@ serve(async (req: Request) => {
       if (!pin || !participant.pin_hash) {
         return errorResponse('PIN이 필요합니다.', 403);
       }
-      const pinHash = await sha256Hex(pin);
+      // 호환: 기존 DB PIN hash 는 pepper 미적용.
+      const pinHash = await sha256Hex(pin, 'no-pepper');
       if (pinHash !== participant.pin_hash) {
         return errorResponse('PIN이 일치하지 않습니다.', 403);
       }
     }
 
     const submissionId = crypto.randomUUID();
-    const extension = parsedImage.mimeType === 'image/webp' ? 'webp' : 'png';
-    const storagePath = `${requestId}/${participant.id}/${signatureKind}-${submissionId}.${extension}`;
+    // UltraQA Q2: parseSignatureDataUrl 이 PNG only 만 통과시키므로 확장자 분기 dead — 'png' 고정.
+    const storagePath = `${requestId}/${participant.id}/${signatureKind}-${submissionId}.png`;
     const { error: uploadError } = await supabase.storage
       .from(SIGNATURE_BUCKET)
       .upload(storagePath, parsedImage.bytes, {

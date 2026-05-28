@@ -1,9 +1,11 @@
 import { create } from 'zustand';
 import type {
   LocalSignatureRequestDraft,
+  PdfTemplate,
   SignatureMappingTarget,
   SignatureParticipant,
   SignatureParticipantLocalAccessSecret,
+  SignatureRegion,
   SignatureRequest,
   SignatureRequestAccessOptions,
   SignatureRequestStatus,
@@ -82,6 +84,13 @@ export interface UpdateSignatureRequestDraftInput {
   readonly dueAt?: string | null;
   readonly resultFileUrl?: string | null;
   readonly status?: SignatureRequestStatus;
+  /**
+   * Phase 2C v2 (UltraQA Q7): SignatureRegionDesigner 가 region 편집 후 store 를 갱신할 때 사용.
+   * regions 가 변경되면 호출자가 regionVersion 도 함께 증분 (pre-render cache-bust 의도).
+   */
+  readonly regions?: readonly SignatureRegion[];
+  readonly regionVersion?: number;
+  readonly pdfTemplate?: PdfTemplate | null;
 }
 
 interface SignatureRequestStoreState {
@@ -94,6 +103,12 @@ interface SignatureRequestStoreState {
    * `setComposedPdf` 로 저장하면, `getResultUrl` 가 우선 사용한다.
    */
   readonly composedPdfsByRequestId: ReadonlyMap<string, ComposedPdfCacheEntry>;
+  /**
+   * UltraQA Q7: requestId → adminKey 세션 메모리 캐시. publishDraft 응답으로 받은
+   * adminKey 를 페이지 새로고침 전까지 보관 (persist 비활성 — localStorage 노출 위험).
+   * 새로고침 후 재발급 필요 (compose-signed-pdf 버튼 disabled 안내).
+   */
+  readonly adminKeysByRequestId: ReadonlyMap<string, string>;
   readonly load: () => Promise<void>;
   readonly selectDraft: (id: string | null) => void;
   readonly getDraft: (id: string) => LocalSignatureRequestDraft | undefined;
@@ -116,6 +131,13 @@ interface SignatureRequestStoreState {
    * 레거시 `request.resultFileUrl` 로 fallback. 둘 다 없으면 undefined.
    */
   readonly getResultUrl: (request: SignatureRequest) => string | undefined;
+  /**
+   * UltraQA Q7: publishDraft 응답의 adminKey 를 세션 캐시에 저장 — compose-signed-pdf
+   * 버튼 활성화 조건.
+   */
+  readonly setAdminKey: (requestId: string, adminKey: string) => void;
+  /** 세션 캐시에서 adminKey 조회. 없으면 undefined. */
+  readonly getAdminKey: (requestId: string) => string | undefined;
 }
 
 type SignatureRequestStoreSet = (state: Partial<SignatureRequestStoreState>) => void;
@@ -128,6 +150,7 @@ export const useSignatureRequestStore = create<SignatureRequestStoreState>((set,
   isSaving: false,
   selectedDraftId: null,
   composedPdfsByRequestId: new Map(),
+  adminKeysByRequestId: new Map(),
 
   load: async () => {
     if (get().loaded) return;
@@ -198,6 +221,11 @@ export const useSignatureRequestStore = create<SignatureRequestStoreState>((set,
         input.resultFileUrl === null
           ? undefined
           : (input.resultFileUrl ?? current.request.resultFileUrl),
+      // Phase 2C v2 (UltraQA Q7): region 편집 / PDF 양식 교체 / regionVersion 증분 지원.
+      regions: input.regions ? [...input.regions] : current.request.regions,
+      regionVersion: input.regionVersion ?? current.request.regionVersion,
+      pdfTemplate:
+        input.pdfTemplate === null ? undefined : (input.pdfTemplate ?? current.request.pdfTemplate),
     };
     const draft: LocalSignatureRequestDraft = {
       request,
@@ -218,11 +246,14 @@ export const useSignatureRequestStore = create<SignatureRequestStoreState>((set,
       await signatureRequestRepository.delete(id);
       const nextComposed = new Map(get().composedPdfsByRequestId);
       nextComposed.delete(id);
+      const nextAdminKeys = new Map(get().adminKeysByRequestId);
+      nextAdminKeys.delete(id);
       set({
         drafts: get().drafts.filter((draft) => draft.request.id !== id),
         loaded: true,
         selectedDraftId: get().selectedDraftId === id ? null : get().selectedDraftId,
         composedPdfsByRequestId: nextComposed,
+        adminKeysByRequestId: nextAdminKeys,
       });
     } finally {
       set({ isSaving: false });
@@ -251,6 +282,16 @@ export const useSignatureRequestStore = create<SignatureRequestStoreState>((set,
       return composed.signedUrl;
     }
     return request.resultFileUrl;
+  },
+
+  setAdminKey: (requestId, adminKey) => {
+    const next = new Map(get().adminKeysByRequestId);
+    next.set(requestId, adminKey);
+    set({ adminKeysByRequestId: next });
+  },
+
+  getAdminKey: (requestId) => {
+    return get().adminKeysByRequestId.get(requestId);
   },
 }));
 

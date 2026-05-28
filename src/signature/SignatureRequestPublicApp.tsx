@@ -327,17 +327,19 @@ function SignaturePdfPreviewSection({
             {myRegions.length === 0 && ' (현재 선택한 서명 종류에 해당하는 칸이 없습니다.)'}
           </p>
         </div>
-        {myRegions.length > 0 && (
-          <label className="flex shrink-0 items-center gap-2 text-xs font-sp-semibold">
-            <input
-              type="checkbox"
-              checked={zoom}
-              onChange={(event) => onZoomChange(event.target.checked)}
-              className="h-4 w-4 rounded border-sp-border"
-            />
-            내 칸 확대 보기
-          </label>
-        )}
+        {myRegions.length > 0 &&
+          request.regionPreviewUrls &&
+          request.regionPreviewUrls.length > 0 && (
+            <label className="flex shrink-0 items-center gap-2 text-xs font-sp-semibold">
+              <input
+                type="checkbox"
+                checked={zoom}
+                onChange={(event) => onZoomChange(event.target.checked)}
+                className="h-4 w-4 rounded border-sp-border"
+              />
+              내 칸 확대 보기
+            </label>
+          )}
       </header>
 
       {zoom && myRegions.length > 0 ? (
@@ -357,7 +359,9 @@ function SignaturePdfPreviewSection({
                     loading="lazy"
                   />
                 ) : (
-                  <div className="p-3 text-center text-xs text-sp-muted">미리보기 준비 중…</div>
+                  <div className="p-3 text-center text-xs text-sp-muted">
+                    개인 링크로 접속하면 본인 칸 확대 미리보기를 볼 수 있어요.
+                  </div>
                 )}
                 <div className="border-t border-sp-border bg-sp-surface/60 px-3 py-2 text-xs text-sp-muted">
                   페이지 {region.pageIndex + 1} · {SIGNATURE_KIND_LABELS[region.signatureKind]}

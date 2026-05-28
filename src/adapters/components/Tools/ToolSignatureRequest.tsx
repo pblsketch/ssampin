@@ -257,6 +257,8 @@ export function ToolSignatureRequest({ onBack, isFullscreen }: ToolSignatureRequ
     try {
       const result = await adminSignatureClient.publishDraft(draft, resolvePublicBaseUrl());
       setIssuedByDraftId((prev) => ({ ...prev, [draftId]: result.issuedLinks }));
+      // UltraQA Q7: 결과 PDF 생성 (compose-signed-pdf) 가능하도록 adminKey 세션 캐시.
+      useSignatureRequestStore.getState().setAdminKey(result.requestId, result.adminKey);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setIssueErrorByDraftId((prev) => ({
@@ -1443,6 +1445,13 @@ function SavedDraftCard({
   // Phase 2C US-2C-13: ComposedPdf 우선, resultFileUrl fallback.
   const resolvedResultUrl = useSignatureRequestStore((s) => s.getResultUrl(request));
   const syncStatus = getGoogleResultSyncStatusView(request, resolvedResultUrl);
+  // UltraQA Q7: adminKey 세션 캐시 — 발급 직후에만 결과 PDF 생성 가능. 새로고침 시 재발급 필요.
+  const adminKeyForCompose = useSignatureRequestStore((s) =>
+    s.adminKeysByRequestId.get(request.id),
+  );
+  const setComposedPdf = useSignatureRequestStore((s) => s.setComposedPdf);
+  const [isComposing, setIsComposing] = useState(false);
+  const [composeError, setComposeError] = useState<string | null>(null);
   const visibleRows = statusView.participantRows.slice(0, 4);
   const remainingRows = statusView.participantRows.length - visibleRows.length;
   const issuedText = issued ? formatIssuedLinksAsText(issued, request.title) : '';
@@ -1606,6 +1615,56 @@ function SavedDraftCard({
           >
             결과 파일 준비 전
           </button>
+        )}
+      </div>
+      {/* UltraQA Q7: 결과 PDF 합성 트리거 — adminKey 세션 캐시 보유 시에만 활성. */}
+      <div className="mt-2">
+        {adminKeyForCompose ? (
+          <button
+            type="button"
+            disabled={isComposing}
+            onClick={async () => {
+              setComposeError(null);
+              setIsComposing(true);
+              try {
+                const result = await adminSignatureClient.composeSignedPdf({
+                  requestId: request.id,
+                  adminKey: adminKeyForCompose,
+                });
+                setComposedPdf(request.id, {
+                  version: result.version,
+                  storagePath: result.storagePath,
+                  fileName: result.fileName,
+                  signedUrl: result.signedUrl,
+                  submissionCount: result.submissionCount,
+                  participantCount: result.participantCount,
+                  composedAt: result.composedAt,
+                  signedUrlTtlMs: result.signedUrlExpiresInSeconds * 1000,
+                });
+              } catch (err) {
+                setComposeError(err instanceof Error ? err.message : String(err));
+              } finally {
+                setIsComposing(false);
+              }
+            }}
+            title={SIGNATURE_LEGAL_DISCLAIMER}
+            className="w-full rounded-lg border border-sp-accent px-3 py-2 text-xs font-sp-bold text-sp-accent hover:bg-sp-accent hover:text-white disabled:opacity-50"
+          >
+            {isComposing ? '결과 PDF 생성 중…' : '결과 PDF 생성 (v+1)'}
+          </button>
+        ) : (
+          <p
+            className="rounded-lg border border-sp-border bg-sp-surface/50 px-3 py-2 text-xs leading-relaxed text-sp-muted"
+            title={SIGNATURE_LEGAL_DISCLAIMER}
+          >
+            결과 PDF 생성은 공개 링크 발급 직후에만 가능합니다. 새로고침 후에는 발급을 다시 진행해
+            주세요.
+          </p>
+        )}
+        {composeError && (
+          <p className="mt-1 text-xs text-amber-700" role="alert">
+            {composeError}
+          </p>
         )}
       </div>
     </div>

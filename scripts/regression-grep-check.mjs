@@ -81,6 +81,30 @@ const presenceChecks = [
     pattern: /NotoSansKR-Regular\.otf|loadKoreanFont/,
     name: 'REGRESSION #33 (Phase 2C v2): compose-signed-pdf 가 Noto Sans KR 폰트 로드 (한글 tofu 방지)',
   },
+  // ────────────────────────────────────────────────────────────────────────
+  // Phase 2C v2 UltraQA 추가 회귀 가드 (#36~#39)
+  // ────────────────────────────────────────────────────────────────────────
+  {
+    file: 'supabase/functions/compose-signed-pdf/index.ts',
+    pattern: /NOTO_FONT_SHA256[\s\S]{0,2500}?actualHash !== NOTO_FONT_SHA256/,
+    name: 'REGRESSION #36 (UltraQA Q3): compose-signed-pdf 가 Noto Sans KR fetch 응답을 SHA-256 integrity 검증',
+  },
+  {
+    file: 'supabase/functions/compose-signed-pdf/index.ts',
+    pattern: /createSignedUrl\([\s\S]{0,1500}?signedUrl:\s*signedUrlData\.signedUrl/,
+    name: 'REGRESSION #37 (UltraQA Q2): compose-signed-pdf 응답에 signedUrl 포함 (private bucket access)',
+  },
+  {
+    file: 'supabase/functions/publish-signature-request/index.ts',
+    pattern:
+      /status:\s*'draft'[\s\S]{0,1500}?rollbackAndError[\s\S]{0,2500}?\.update\(\{\s*status:\s*'active'/,
+    name: 'REGRESSION #38 (UltraQA Q4): publish 트랜잭션 — draft → bulk insert → active + rollbackAndError',
+  },
+  {
+    file: 'src/infrastructure/supabase/SignatureSupabaseClient.ts',
+    pattern: /async composeSignedPdf\([\s\S]{0,200}?invokeEdgeFunction<ComposeSignedPdfResult>/,
+    name: 'REGRESSION #39 (UltraQA Q7): SignatureSupabaseClient 에 composeSignedPdf 어댑터 메서드 존재',
+  },
   {
     file: 'src/adapters/components/Tools/RealtimeWall/RealtimeWallCard.tsx',
     pattern: /viewerRole\s*===\s*['"]teacher['"]/,
@@ -320,6 +344,22 @@ const absenceChecks = [
       /\bipAddress\s*:\s*clientIP\b/,
       /\buser_agent\s*:\s*req\.headers\.get\(/,
     ],
+  },
+  {
+    // UltraQA Q1: 4 개 Edge Function 이 각자 정의했던 `async function sha256Hex(...)` 가
+    // 다시 등장하면 안 됨 (단일 진실 원천 `_shared/hash.ts` 사용 강제).
+    name: 'REGRESSION #40 (UltraQA Q1): Edge Function 이 sha256Hex 를 중복 정의하지 않는다 (_shared/hash.ts 만 사용)',
+    roots: ['supabase/functions'],
+    extensions: ['.ts'],
+    patterns: [/async function sha256Hex\b/],
+    fileFilter: (path) => !path.includes(`${sep}_shared${sep}`),
+  },
+  {
+    // UltraQA Q2: submit-signature 가 WebP MIME 를 다시 허용하면 안 됨 (compose-signed-pdf embed 실패).
+    name: 'REGRESSION #41 (UltraQA Q2): submit-signature parseSignatureDataUrl 이 image/webp 를 허용하지 않는다 (PNG only)',
+    roots: ['supabase/functions/submit-signature'],
+    extensions: ['.ts'],
+    patterns: [/image\/png\|image\/webp/, /'image\/webp'/],
   },
 ];
 

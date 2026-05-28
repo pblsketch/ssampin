@@ -8,13 +8,7 @@ import {
 } from '../_shared/cors.ts';
 import { checkRateLimit, clientIpFrom } from '../_shared/rateLimit.ts';
 
-async function sha256Hex(value: string): Promise<string> {
-  const bytes = new TextEncoder().encode(value);
-  const digest = await crypto.subtle.digest('SHA-256', bytes);
-  return Array.from(new Uint8Array(digest))
-    .map((byte) => byte.toString(16).padStart(2, '0'))
-    .join('');
-}
+import { sha256Hex } from '../_shared/hash.ts';
 
 serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
@@ -64,7 +58,8 @@ serve(async (req: Request) => {
 
     let resolvedParticipantId: string | undefined;
     if (token && typeof token === 'string') {
-      const tokenHash = await sha256Hex(token);
+      // 호환: 기존 DB token hash 는 pepper 미적용 (publish 시 동일하게).
+      const tokenHash = await sha256Hex(token, 'no-pepper');
       participantQuery = participantQuery.eq('unique_link_token_hash', tokenHash);
     }
 
@@ -102,12 +97,14 @@ serve(async (req: Request) => {
     let visibleRegions: typeof regions = [];
 
     if (pdfTemplate && typeof pdfTemplate.pageCount === 'number' && pdfTemplate.pageCount > 0) {
-      // 토큰 기반 접근: 본인 participant 의 region 만 노출.
-      // 명단 기반 접근: 전체 region 노출 (학생이 본인 칸을 선택 후 강조 확인).
+      // UltraQA Q6: anon enumeration 방지.
+      // - 토큰 기반: 본인 region 만 노출 (메타 + cutout PNG).
+      // - 명단 기반: region 메타는 전체 노출 (학생이 본인 칸 위치 확인 가능),
+      //   단 region cutout publicUrl 은 응답하지 않음 → cutout 에 다른 학생 PII (이름/학번) 가
+      //   인쇄돼 있을 가능성 차단. 학생은 페이지 PNG + 좌표 overlay 로 본인 칸 위치 확인 가능.
+      const isTokenAccess = Boolean(token && resolvedParticipantId);
       const allowedParticipantIds = new Set(
-        token && resolvedParticipantId
-          ? [resolvedParticipantId]
-          : (participants ?? []).map((p) => p.id),
+        isTokenAccess ? [resolvedParticipantId as string] : (participants ?? []).map((p) => p.id),
       );
       visibleRegions = regions.filter((region) => allowedParticipantIds.has(region.participantId));
 
@@ -120,12 +117,17 @@ serve(async (req: Request) => {
       }
       pagePreviewUrls = pages;
 
-      regionPreviewUrls = visibleRegions.map((region) => {
-        const fileName = `region-${region.id}.png`;
-        const path = `${requestId}/v${regionVersion}/${fileName}`;
-        const { data: urlData } = supabase.storage.from('signature-previews').getPublicUrl(path);
-        return { regionId: region.id, publicUrl: urlData.publicUrl };
-      });
+      // 명단 모드는 cutout PNG URL 미제공 — 학생 페이지가 페이지 PNG + 좌표 overlay 로 폴백.
+      regionPreviewUrls = isTokenAccess
+        ? visibleRegions.map((region) => {
+            const fileName = `region-${region.id}.png`;
+            const path = `${requestId}/v${regionVersion}/${fileName}`;
+            const { data: urlData } = supabase.storage
+              .from('signature-previews')
+              .getPublicUrl(path);
+            return { regionId: region.id, publicUrl: urlData.publicUrl };
+          })
+        : [];
     }
 
     return jsonResponse({

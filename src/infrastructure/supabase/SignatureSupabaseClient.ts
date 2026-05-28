@@ -251,6 +251,22 @@ export interface UploadSignaturePreviewResult {
 }
 
 /**
+ * Phase 2C v2 (UltraQA Q7): compose-signed-pdf Edge Function 응답.
+ * `signedUrl` 은 signature-results bucket (private) 의 5분 TTL signed URL.
+ */
+export interface ComposeSignedPdfResult {
+  readonly ok: true;
+  readonly version: number;
+  readonly storagePath: string;
+  readonly fileName: string;
+  readonly signedUrl: string;
+  readonly signedUrlExpiresInSeconds: number;
+  readonly submissionCount: number;
+  readonly participantCount: number;
+  readonly composedAt: string;
+}
+
+/**
  * `File` 또는 `Blob` 을 base64 (data URL 헤더 제거된) 문자열로 변환. FileReader API 사용.
  */
 export async function fileToBase64(file: Blob): Promise<string> {
@@ -314,6 +330,19 @@ export class SupabaseSignatureAdminClient {
     body: UploadSignaturePreviewBody,
   ): Promise<UploadSignaturePreviewResult> {
     return invokeEdgeFunction<UploadSignaturePreviewResult>('upload-signature-preview', body);
+  }
+
+  /**
+   * Phase 2C v2 (UltraQA Q7): 결과 PDF 합성 호출. compose-signed-pdf Edge Function 이
+   * region 좌표 + 서명 이미지 + 한글 footer 를 결합한 PDF 를 signature-results bucket 에
+   * 저장하고, signedUrl (5분 TTL) 을 반환한다. 호출자는 응답을 store.setComposedPdf 로
+   * 캐싱해 getResultUrl 헬퍼가 활용 가능하게 한다.
+   */
+  async composeSignedPdf(input: {
+    readonly requestId: string;
+    readonly adminKey: string;
+  }): Promise<ComposeSignedPdfResult> {
+    return invokeEdgeFunction<ComposeSignedPdfResult>('compose-signed-pdf', input);
   }
 
   async publishDraft(

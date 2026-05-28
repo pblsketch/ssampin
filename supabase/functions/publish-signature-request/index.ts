@@ -7,6 +7,8 @@ import {
   jsonResponse,
 } from '../_shared/cors.ts';
 import { checkRateLimit, clientIpFrom } from '../_shared/rateLimit.ts';
+import { sha256Hex } from '../_shared/hash.ts';
+import { isValidRegionId, isValidTemplateStoragePath } from '../_shared/validators.ts';
 
 interface PublishParticipantPayload {
   readonly clientId: string;
@@ -73,11 +75,8 @@ function isFiniteFraction(value: unknown): value is number {
 
 function validatePdfTemplate(payload: PublishPdfTemplatePayload | undefined): string | null {
   if (!payload) return null;
-  if (
-    typeof payload.storagePath !== 'string' ||
-    !payload.storagePath.startsWith('signature-templates/')
-  ) {
-    return 'pdfTemplate.storagePath 가 signature-templates/ 로 시작해야 합니다.';
+  if (!isValidTemplateStoragePath(payload.storagePath)) {
+    return 'pdfTemplate.storagePath 형식이 올바르지 않습니다 (signature-templates/{owner}/{filename}.pdf).';
   }
   if (
     typeof payload.pageCount !== 'number' ||
@@ -106,8 +105,8 @@ function validateRegions(
   if (regions.length > MAX_REGIONS) return `regions 가 너무 많습니다 (>${MAX_REGIONS}).`;
   const seenIds = new Set<string>();
   for (const region of regions) {
-    if (!region || typeof region.id !== 'string' || region.id.length === 0) {
-      return 'region.id 가 누락되었습니다.';
+    if (!region || !isValidRegionId(region.id)) {
+      return 'region.id 가 누락되었거나 형식이 잘못되었습니다 (영숫자/_-, 80자 이하).';
     }
     if (seenIds.has(region.id)) return `region.id 중복: ${region.id}`;
     seenIds.add(region.id);
@@ -140,14 +139,6 @@ function validateRegions(
     }
   }
   return null;
-}
-
-async function sha256Hex(value: string): Promise<string> {
-  const bytes = new TextEncoder().encode(value);
-  const digest = await crypto.subtle.digest('SHA-256', bytes);
-  return Array.from(new Uint8Array(digest))
-    .map((byte) => byte.toString(16).padStart(2, '0'))
-    .join('');
 }
 
 serve(async (req: Request) => {
@@ -247,6 +238,11 @@ serve(async (req: Request) => {
         autoReplicateRowSourceId: region.autoReplicateRowSourceId,
       })) ?? [];
 
+    // UltraQA Q4: 트랜잭션 패턴 — request 'draft' INSERT → bulk participants INSERT →
+    // request status='active' UPDATE. 어떤 단계라도 실패 시 cleanup 으로 orphan 방지.
+    // Supabase JS 클라이언트는 multi-statement transaction 미지원 → 단계별 보상 패턴 사용.
+    // signature_requests 가 'draft' 상태이면 get-signature-request-public 의 .in(['active','closed'])
+    // 필터에 막혀 공개 노출되지 않음 (안전한 transient state).
     const { error: insertRequestError } = await supabase.from('signature_requests').insert({
       id: requestId,
       teacher_id: teacherId,
@@ -258,7 +254,7 @@ serve(async (req: Request) => {
       mapping: body.mapping ?? { textFields: [], signatureSlots: [] },
       access,
       scope: { legalEffect: 'none', automaticReminders: false, strongIdentityRequired: false },
-      status: 'active',
+      status: 'draft',
       pdf_template: body.pdfTemplate ?? null,
       regions: remappedRegions,
       region_version: regionVersion,
@@ -268,52 +264,97 @@ serve(async (req: Request) => {
       return internalErrorResponse('publish-signature-request request', insertRequestError);
     }
 
-    const participantRows: Array<{
-      id: string;
-      clientId: string;
-      displayName: string;
-      studentNumber?: number;
-    }> = [];
+    // cleanup helper — 어느 단계에서든 실패 시 transient 'draft' row 삭제 후 에러 반환.
+    const rollbackAndError = async (
+      context: string,
+      err: unknown,
+      status = 500,
+    ): Promise<Response> => {
+      try {
+        await supabase
+          .from('signature_requests')
+          .delete()
+          .eq('id', requestId)
+          .eq('status', 'draft');
+      } catch (cleanupErr) {
+        console.error(`[publish-signature-request] cleanup failed (${context}):`, cleanupErr);
+      }
+      if (status === 500) {
+        return internalErrorResponse(context, err);
+      }
+      return errorResponse(typeof err === 'string' ? err : `${context} 실패`, status);
+    };
 
+    // 1) 참여자 행 + token/PIN 해시를 모두 병렬 사전 계산.
+    const participantInputs: Array<{
+      trimmedName: string;
+      role: string;
+      input: PublishParticipantPayload;
+      id: string;
+    }> = [];
     for (const participant of body.participants) {
       const trimmedName = participant.displayName?.trim() ?? '';
       if (!trimmedName) {
-        return errorResponse('명단에 빈 이름이 포함되었습니다.', 400);
-      }
-      const role = ALLOWED_ROLES.has(participant.role) ? participant.role : 'staff';
-      const tokenHash = participant.uniqueLinkToken
-        ? await sha256Hex(participant.uniqueLinkToken)
-        : null;
-      const pinHash =
-        access.pinEnabled && participant.pin ? await sha256Hex(participant.pin) : null;
-      const participantId = clientIdToServerId.get(participant.clientId) ?? crypto.randomUUID();
-
-      const { error: insertParticipantError } = await supabase
-        .from('signature_participants')
-        .insert({
-          id: participantId,
-          request_id: requestId,
-          display_name: trimmedName,
-          role,
-          student_number: participant.studentNumber ?? null,
-          class_name: participant.className ?? null,
-          required_signature_kinds: participant.requiredSignatureKinds ?? ['recipient'],
-          unique_link_token_hash: tokenHash,
-          pin_hash: pinHash,
-        });
-      if (insertParticipantError) {
-        return internalErrorResponse(
-          'publish-signature-request participant',
-          insertParticipantError,
+        return rollbackAndError(
+          '명단에 빈 이름이 포함되었습니다',
+          '명단에 빈 이름이 포함되었습니다.',
+          400,
         );
       }
-      participantRows.push({
-        id: participantId,
-        clientId: participant.clientId,
-        displayName: trimmedName,
-        studentNumber: participant.studentNumber,
-      });
+      const role = ALLOWED_ROLES.has(participant.role) ? participant.role : 'staff';
+      const participantId = clientIdToServerId.get(participant.clientId) ?? crypto.randomUUID();
+      participantInputs.push({ trimmedName, role, input: participant, id: participantId });
     }
+
+    const hashedRows = await Promise.all(
+      participantInputs.map(async (entry) => {
+        const tokenHash = entry.input.uniqueLinkToken
+          ? await sha256Hex(entry.input.uniqueLinkToken, 'no-pepper')
+          : null;
+        const pinHash =
+          access.pinEnabled && entry.input.pin
+            ? await sha256Hex(entry.input.pin, 'no-pepper')
+            : null;
+        return {
+          id: entry.id,
+          request_id: requestId,
+          display_name: entry.trimmedName,
+          role: entry.role,
+          student_number: entry.input.studentNumber ?? null,
+          class_name: entry.input.className ?? null,
+          required_signature_kinds: entry.input.requiredSignatureKinds ?? ['recipient'],
+          unique_link_token_hash: tokenHash,
+          pin_hash: pinHash,
+        };
+      }),
+    );
+
+    // 2) 단일 bulk INSERT — 부분 실패 시 Postgres 가 전체 rollback (single statement).
+    if (hashedRows.length > 0) {
+      const { error: bulkInsertErr } = await supabase
+        .from('signature_participants')
+        .insert(hashedRows);
+      if (bulkInsertErr) {
+        return rollbackAndError('publish-signature-request participants', bulkInsertErr);
+      }
+    }
+
+    // 3) request status='draft' → 'active' UPDATE (트랜잭션 commit 신호).
+    const { error: activateErr } = await supabase
+      .from('signature_requests')
+      .update({ status: 'active' })
+      .eq('id', requestId)
+      .eq('status', 'draft');
+    if (activateErr) {
+      return rollbackAndError('publish-signature-request activate', activateErr);
+    }
+
+    const participantRows = participantInputs.map((entry) => ({
+      id: entry.id,
+      clientId: entry.input.clientId,
+      displayName: entry.trimmedName,
+      studentNumber: entry.input.studentNumber,
+    }));
 
     return jsonResponse({
       requestId,

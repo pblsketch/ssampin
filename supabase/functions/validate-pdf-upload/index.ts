@@ -59,13 +59,7 @@ const REJECT_COPY: Record<string, string> = {
 const MIXED_ORIENTATION_WARN_COPY =
   '가로/세로 혼합 양식이에요. Pattern 2 자동복제는 페이지 단위로만 작동합니다. 그대로 진행할까요?';
 
-async function sha256Hex(value: string): Promise<string> {
-  const bytes = new TextEncoder().encode(value);
-  const digest = await crypto.subtle.digest('SHA-256', bytes);
-  return Array.from(new Uint8Array(digest))
-    .map((byte) => byte.toString(16).padStart(2, '0'))
-    .join('');
-}
+import { sha256Hex } from '../_shared/hash.ts';
 
 function base64ToBytes(base64: string): Uint8Array {
   const clean = base64.replace(/^data:[^,]+,/, '');

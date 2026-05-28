@@ -49,4 +49,32 @@ describe('PrivacyConsentTable', () => {
     expect(entry.checked).toBe(true);
     expect(entry.at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
+
+  describe('UltraQA Q5: per-item timestamp 보장 (소스 정적 검증)', () => {
+    it('컴포넌트 소스가 checkedAtById Map 패턴 + nowRef latest-ref 패턴을 사용한다', async () => {
+      // testing-library 미사용 환경 — SSR + 소스 정적 검증으로 회귀 보호.
+      // 핵심 회귀 위험: (a) 4 entry 모두 동일 timestamp 사용 (b) onLogChange/now stale closure
+      const { readFileSync } = await import('node:fs');
+      const source = readFileSync('src/signature/PrivacyConsentTable.tsx', 'utf8');
+      // (a) per-item timestamp — checkedAtById Map 으로 항목별 시각 저장
+      expect(source).toMatch(/checkedAtById/);
+      expect(source).toMatch(/setCheckedAtById/);
+      // entry.at 이 항목별 시각 사용
+      expect(source).toMatch(/at:\s*checkedAtById\.get\(item\.id\)/);
+      // (b) latest-ref 패턴 — onLogChangeRef / nowRef
+      expect(source).toMatch(/onLogChangeRef/);
+      expect(source).toMatch(/nowRef/);
+      // eslint-disable 흔적이 없어야 (deps 우회 회귀)
+      expect(source).not.toMatch(/eslint-disable-next-line\s+react-hooks\/exhaustive-deps/);
+    });
+
+    it('vi.fn 시그니처 정합 — onLogChange 호출 타입 보존', () => {
+      const onLogChange = vi.fn<(log: readonly PrivacyConsentLogEntry[] | null) => void>();
+      onLogChange(null);
+      onLogChange([
+        { id: 'legal_effect_disclaimer', label: '...', checked: true, at: '2026-05-28T00:00:00Z' },
+      ]);
+      expect(onLogChange).toHaveBeenCalledTimes(2);
+    });
+  });
 });
