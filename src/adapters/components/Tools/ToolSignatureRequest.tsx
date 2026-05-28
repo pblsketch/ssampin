@@ -163,6 +163,7 @@ const TEMPLATE_KIND_OPTIONS: readonly TemplateKindOption[] = [
 ];
 
 const TARGET_TYPE_LABELS: Record<SignatureMappingTargetType, string> = {
+  'pdf-region': 'PDF 영역 (Phase 2C)',
   'docs-placeholder': 'Docs 치환자 ({{이름}} 형식)',
   'sheets-cell': '시트 셀',
   'sheets-named-range': 'Sheets 이름 지정 범위',
@@ -185,9 +186,11 @@ const PARTICIPANT_STATUS_LABELS: Record<SignatureParticipantStatus, string> = {
 
 const REQUEST_STATUS_LABELS: Record<SignatureRequest['status'], string> = {
   draft: '초안',
+  publishing: '발급 중',
   active: '진행 중',
   closed: '마감',
   archived: '보관됨',
+  publish_failed: '발급 실패',
 };
 
 const ROSTER_PLACEHOLDER =
