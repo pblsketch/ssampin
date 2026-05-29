@@ -7,12 +7,14 @@ import { toLocalDateString } from '@shared/utils/localDate';
 import { getActiveDays } from '@domain/valueObjects/DayOfWeek';
 import type { DayOfWeekFull } from '@domain/valueObjects/DayOfWeek';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
-import type { ClassScheduleData, TeacherScheduleData, TeacherPeriod, ClassPeriod } from '@domain/entities/Timetable';
+import type {
+  ClassScheduleData,
+  TeacherScheduleData,
+  TeacherPeriod,
+  ClassPeriod,
+} from '@domain/entities/Timetable';
 import { parseMinutes } from '@domain/rules/periodRules';
-import {
-  getLunchBreakIndex,
-  formatLunchBreakTime,
-} from '@adapters/presenters/timetablePresenter';
+import { getLunchBreakIndex, formatLunchBreakTime } from '@adapters/presenters/timetablePresenter';
 import { NeisImportModal } from './NeisImportModal';
 import { TeacherExcelPreviewModal } from './TeacherExcelPreviewModal';
 /* eslint-disable no-restricted-imports */
@@ -22,8 +24,15 @@ import {
 } from '@infrastructure/export/ExcelExporter';
 /* eslint-enable no-restricted-imports */
 import type { SubjectColorId, SubjectColorMap } from '@domain/valueObjects/SubjectColor';
-import { COLOR_PRESETS, getColorPreset, DEFAULT_SUBJECT_COLORS } from '@domain/valueObjects/SubjectColor';
-import { smartAutoAssignColors, extractSubjectsFromSchedule } from '@domain/rules/subjectColorRules';
+import {
+  COLOR_PRESETS,
+  getColorPreset,
+  DEFAULT_SUBJECT_COLORS,
+} from '@domain/valueObjects/SubjectColor';
+import {
+  smartAutoAssignColors,
+  extractSubjectsFromSchedule,
+} from '@domain/rules/subjectColorRules';
 import { getCurrentISOWeek } from '@usecases/timetable/AutoSyncNeisTimetable';
 
 type TabType = 'class' | 'teacher';
@@ -52,8 +61,15 @@ function formatTimeFromMinutes(totalMinutes: number): string {
 export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps) {
   const { track } = useAnalytics();
   const {
-    classSchedule, teacherSchedule, updateClassSchedule, updateTeacherSchedule,
-    undo, redo, clearAll, canUndo, canRedo,
+    classSchedule,
+    teacherSchedule,
+    updateClassSchedule,
+    updateTeacherSchedule,
+    undo,
+    redo,
+    clearAll,
+    canUndo,
+    canRedo,
   } = useScheduleStore();
   const { settings, update: updateSettings } = useSettingsStore();
 
@@ -61,7 +77,7 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
   const activeDays = useMemo(() => getActiveDays(weekendDays), [weekendDays]);
 
   // 편집용 로컬 상태 — 문자열 2D 배열 [periodIdx][dayIdx]
-  const [classGrid, setClassGrid] = useState<string[][]>([]);          // 학급: 과목
+  const [classGrid, setClassGrid] = useState<string[][]>([]); // 학급: 과목
   const [classTeacherGrid, setClassTeacherGrid] = useState<string[][]>([]); // 학급: 담당 교사
   const [teacherSubjectGrid, setTeacherSubjectGrid] = useState<string[][]>([]);
   const [teacherClassroomGrid, setTeacherClassroomGrid] = useState<string[][]>([]);
@@ -74,9 +90,9 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
 
   // 로컬 교시 관리 상태
   const [localMaxPeriods, setLocalMaxPeriods] = useState(maxPeriods);
-  const [localPeriodTimes, setLocalPeriodTimes] = useState<PeriodTime[]>(
-    () => [...settings.periodTimes],
-  );
+  const [localPeriodTimes, setLocalPeriodTimes] = useState<PeriodTime[]>(() => [
+    ...settings.periodTimes,
+  ]);
 
   // 초기 데이터 → 편집 그리드로 복사
   useEffect(() => {
@@ -118,13 +134,19 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
       if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
-        if (canUndo()) { e.preventDefault(); void undo(); }
+        if (canUndo()) {
+          e.preventDefault();
+          void undo();
+        }
       }
       if (
         ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'z') ||
         ((e.ctrlKey || e.metaKey) && e.key === 'y')
       ) {
-        if (canRedo()) { e.preventDefault(); void redo(); }
+        if (canRedo()) {
+          e.preventDefault();
+          void redo();
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -137,8 +159,14 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
   );
 
   const lunchIndex = useMemo(
-    () => getLunchBreakIndex(visiblePeriodTimes, settings.lunchStart, settings.lunchEnd),
-    [visiblePeriodTimes, settings.lunchStart, settings.lunchEnd],
+    () =>
+      getLunchBreakIndex(
+        visiblePeriodTimes,
+        settings.lunchStart,
+        settings.lunchEnd,
+        settings.lunchAfterPeriod,
+      ),
+    [visiblePeriodTimes, settings.lunchStart, settings.lunchEnd, settings.lunchAfterPeriod],
   );
   const lunchTimeStr = useMemo(
     () => (lunchIndex >= 0 ? formatLunchBreakTime(visiblePeriodTimes, lunchIndex) : ''),
@@ -154,31 +182,25 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
     [settings.subjectColors, updateSettings],
   );
 
-  const updateClassCell = useCallback(
-    (periodIdx: number, dayIdx: number, value: string) => {
-      setClassGrid((prev) => {
-        const next = prev.map((row) => [...row]);
-        if (next[periodIdx]) {
-          next[periodIdx]![dayIdx] = value;
-        }
-        return next;
-      });
-    },
-    [],
-  );
+  const updateClassCell = useCallback((periodIdx: number, dayIdx: number, value: string) => {
+    setClassGrid((prev) => {
+      const next = prev.map((row) => [...row]);
+      if (next[periodIdx]) {
+        next[periodIdx]![dayIdx] = value;
+      }
+      return next;
+    });
+  }, []);
 
-  const updateClassTeacherCell = useCallback(
-    (periodIdx: number, dayIdx: number, value: string) => {
-      setClassTeacherGrid((prev) => {
-        const next = prev.map((row) => [...row]);
-        if (next[periodIdx]) {
-          next[periodIdx]![dayIdx] = value;
-        }
-        return next;
-      });
-    },
-    [],
-  );
+  const updateClassTeacherCell = useCallback((periodIdx: number, dayIdx: number, value: string) => {
+    setClassTeacherGrid((prev) => {
+      const next = prev.map((row) => [...row]);
+      if (next[periodIdx]) {
+        next[periodIdx]![dayIdx] = value;
+      }
+      return next;
+    });
+  }, []);
 
   const updateTeacherSubjectCell = useCallback(
     (periodIdx: number, dayIdx: number, value: string) => {
@@ -214,9 +236,10 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
         const arr = [...prev];
         const existing = arr[periodIdx];
         if (!existing) return prev;
-        const dur = settings.schoolLevel === 'custom' && settings.customPeriodDuration
-          ? settings.customPeriodDuration
-          : (PERIOD_DURATION_MAP[settings.schoolLevel] ?? 45);
+        const dur =
+          settings.schoolLevel === 'custom' && settings.customPeriodDuration
+            ? settings.customPeriodDuration
+            : (PERIOD_DURATION_MAP[settings.schoolLevel] ?? 45);
         const startMin = parseMinutes(newStart);
         const endMin = startMin + dur;
         arr[periodIdx] = {
@@ -246,7 +269,11 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
 
       setLocalPeriodTimes((prev) => [
         ...prev,
-        { period: newCount, start: formatTimeFromMinutes(startMin), end: formatTimeFromMinutes(endMin) },
+        {
+          period: newCount,
+          start: formatTimeFromMinutes(startMin),
+          end: formatTimeFromMinutes(endMin),
+        },
       ]);
     }
 
@@ -259,7 +286,14 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
     }
 
     setLocalMaxPeriods(newCount);
-  }, [localMaxPeriods, localPeriodTimes, classGrid.length, settings.schoolLevel, track, activeDays]);
+  }, [
+    localMaxPeriods,
+    localPeriodTimes,
+    classGrid.length,
+    settings.schoolLevel,
+    track,
+    activeDays,
+  ]);
 
   // 교시 삭제
   const removePeriod = useCallback(() => {
@@ -325,7 +359,11 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
   const handleDownloadTemplate = useCallback(async () => {
     try {
       const days = activeDays as readonly string[];
-      const normalized = await exportTeacherTimetableTemplate(localMaxPeriods, days, teacherSchedule);
+      const normalized = await exportTeacherTimetableTemplate(
+        localMaxPeriods,
+        days,
+        teacherSchedule,
+      );
 
       if (window.electronAPI) {
         const saved = await window.electronAPI.showSaveDialog({
@@ -363,11 +401,12 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
       const buffer = await file.arrayBuffer();
       const parsed = await parseTeacherTimetableFromExcel(buffer);
       const hasDays = Object.keys(parsed).length > 0;
-      const hasData = hasDays && Object.values(parsed).some(
-        (periods) => periods.some((p) => p !== null),
-      );
+      const hasData =
+        hasDays && Object.values(parsed).some((periods) => periods.some((p) => p !== null));
       if (!hasData) {
-        useToastStore.getState().show('시간표 데이터를 찾을 수 없습니다. 양식을 확인해주세요.', 'error');
+        useToastStore
+          .getState()
+          .show('시간표 데이터를 찾을 수 없습니다. 양식을 확인해주세요.', 'error');
         return;
       }
       setPreviewSchedule(parsed);
@@ -384,10 +423,7 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
     await updateTeacherSchedule(previewSchedule);
 
     // 교시 수 조정: 데이터에서 최대 교시 계산
-    const maxFromData = Math.max(
-      ...Object.values(previewSchedule).map((arr) => arr.length),
-      0,
-    );
+    const maxFromData = Math.max(...Object.values(previewSchedule).map((arr) => arr.length), 0);
     if (maxFromData > 0 && maxFromData !== settings.maxPeriods) {
       await updateSettings({ maxPeriods: maxFromData });
     }
@@ -423,7 +459,14 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
     setShowExcelPreview(false);
     setPreviewSchedule(null);
     onSaved();
-  }, [previewSchedule, updateTeacherSchedule, settings.maxPeriods, settings.subjectColors, updateSettings, onSaved]);
+  }, [
+    previewSchedule,
+    updateTeacherSchedule,
+    settings.maxPeriods,
+    settings.subjectColors,
+    updateSettings,
+    onSaved,
+  ]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -510,9 +553,7 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-3">
             <span className="text-3xl">✏️</span>
-            <h2 className="text-3xl font-black text-sp-text tracking-tight">
-              시간표 편집
-            </h2>
+            <h2 className="text-3xl font-black text-sp-text tracking-tight">시간표 편집</h2>
           </div>
           <p className="text-sp-muted text-sm font-medium pl-1">
             {tab === 'class' ? '학급 시간표' : '교사 시간표'} 수정 중
@@ -543,12 +584,7 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
               <label className="flex items-center gap-2 rounded-xl bg-sp-accent/10 border border-sp-accent/30 px-4 py-2.5 text-sm font-bold text-sp-accent hover:bg-sp-accent/20 transition-all active:scale-95 cursor-pointer">
                 <span className="material-symbols-outlined text-icon-lg">file_open</span>
                 <span>엑셀 불러오기</span>
-                <input
-                  type="file"
-                  accept=".xlsx"
-                  className="hidden"
-                  onChange={handleExcelUpload}
-                />
+                <input type="file" accept=".xlsx" className="hidden" onChange={handleExcelUpload} />
               </label>
               <div className="w-px h-8 bg-sp-border" />
             </>
@@ -692,7 +728,10 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
           maxPeriods={localMaxPeriods}
           activeDays={activeDays}
           onConfirm={() => void handleExcelConfirm()}
-          onCancel={() => { setShowExcelPreview(false); setPreviewSchedule(null); }}
+          onCancel={() => {
+            setShowExcelPreview(false);
+            setPreviewSchedule(null);
+          }}
         />
       )}
 
@@ -818,11 +857,14 @@ function EditorPeriodRow({
           />
         </td>
         {activeDays.map((_, dayIdx) => {
-          const subjectValue = tab === 'class'
-            ? (classRow[dayIdx] ?? '').trim()
-            : (teacherSubjectRow[dayIdx] ?? '').trim();
+          const subjectValue =
+            tab === 'class'
+              ? (classRow[dayIdx] ?? '').trim()
+              : (teacherSubjectRow[dayIdx] ?? '').trim();
           const colorId = subjectValue
-            ? (subjectColors?.[subjectValue] ?? DEFAULT_SUBJECT_COLORS[subjectValue] ?? ('cyan' as SubjectColorId))
+            ? (subjectColors?.[subjectValue] ??
+              DEFAULT_SUBJECT_COLORS[subjectValue] ??
+              ('cyan' as SubjectColorId))
             : ('cyan' as SubjectColorId);
           const preset = getColorPreset(colorId);
 
@@ -918,4 +960,3 @@ function EditorPeriodRow({
     </>
   );
 }
-

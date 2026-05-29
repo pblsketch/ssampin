@@ -29,10 +29,7 @@ export function getDayOfWeek(
 /**
  * 현재 시각이 몇 교시인지 반환 (수업 시간 외이면 null)
  */
-export function getCurrentPeriod(
-  periodTimes: readonly PeriodTime[],
-  now: Date,
-): number | null {
+export function getCurrentPeriod(periodTimes: readonly PeriodTime[], now: Date): number | null {
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
 
   for (const pt of periodTimes) {
@@ -66,10 +63,10 @@ const DEFAULT_TOTAL_PERIODS: Record<SchoolLevel, number> = {
 
 /** 학교급별 기본 1교시 시작 시간(분) */
 const DEFAULT_FIRST_START: Record<SchoolLevel, number> = {
-  elementary: 9 * 60,       // 09:00
-  middle: 8 * 60 + 50,      // 08:50
-  high: 8 * 60 + 50,        // 08:50
-  custom: 9 * 60,            // 09:00
+  elementary: 9 * 60, // 09:00
+  middle: 8 * 60 + 50, // 08:50
+  high: 8 * 60 + 50, // 08:50
+  custom: 9 * 60, // 09:00
 };
 
 /** 학교급별 기본 점심 시간(분) */
@@ -89,9 +86,9 @@ export function formatTime(totalMinutes: number): string {
 export interface PeriodPreset {
   schoolLevel: SchoolLevel;
   firstPeriodStart: string; // "HH:mm"
-  breakDuration: number;    // 분
+  breakDuration: number; // 분
   lunchAfterPeriod: number; // 점심 시작 교시 (이 교시 직후 점심)
-  lunchDuration: number;    // 분
+  lunchDuration: number; // 분
   totalPeriods: number;
   customPeriodDuration?: number;
 }
@@ -113,9 +110,10 @@ export function getDefaultPreset(level: SchoolLevel): PeriodPreset {
  * 프리셋 기반으로 교시 시간표 자동 생성
  */
 export function generatePeriodTimes(preset: PeriodPreset): PeriodTime[] {
-  const classDuration = preset.schoolLevel === 'custom' && preset.customPeriodDuration
-    ? preset.customPeriodDuration
-    : PERIOD_DURATION[preset.schoolLevel];
+  const classDuration =
+    preset.schoolLevel === 'custom' && preset.customPeriodDuration
+      ? preset.customPeriodDuration
+      : PERIOD_DURATION[preset.schoolLevel];
   const result: PeriodTime[] = [];
   let cursor = parseMinutes(preset.firstPeriodStart);
 
@@ -142,15 +140,21 @@ export function generatePeriodTimes(preset: PeriodPreset): PeriodTime[] {
 /** 학교급별 기본 점심시간 */
 export function getDefaultLunchTime(level: SchoolLevel): { start: string; end: string } {
   switch (level) {
-    case 'elementary': return { start: '12:00', end: '12:50' };
-    case 'middle':     return { start: '12:00', end: '12:50' };
-    case 'high':       return { start: '12:50', end: '13:50' };
-    default:           return { start: '12:00', end: '13:00' };
+    case 'elementary':
+      return { start: '12:00', end: '12:50' };
+    case 'middle':
+      return { start: '12:00', end: '12:50' };
+    case 'high':
+      return { start: '12:50', end: '13:50' };
+    default:
+      return { start: '12:00', end: '13:00' };
   }
 }
 
 /** 기존 교시 시간표에서 점심시간 추정 (마이그레이션용) */
-export function detectLunchFromPeriods(periodTimes: readonly PeriodTime[]): { start: string; end: string } | null {
+export function detectLunchFromPeriods(
+  periodTimes: readonly PeriodTime[],
+): { start: string; end: string } | null {
   for (let i = 1; i < periodTimes.length; i++) {
     const prevEnd = parseMinutes(periodTimes[i - 1]!.end);
     const currStart = parseMinutes(periodTimes[i]!.start);
@@ -159,6 +163,132 @@ export function detectLunchFromPeriods(periodTimes: readonly PeriodTime[]): { st
         start: periodTimes[i - 1]!.end,
         end: periodTimes[i]!.start,
       };
+    }
+  }
+  return null;
+}
+
+/**
+ * [fromIndex, end) 구간의 모든 교시 시작·종료 시각을 deltaMinutes(음수 가능)만큼 평행 이동.
+ * 입력 배열은 변경하지 않고 새 배열을 반환한다.
+ */
+export function shiftPeriodsFrom(
+  periodTimes: readonly PeriodTime[],
+  fromIndex: number,
+  deltaMinutes: number,
+): PeriodTime[] {
+  return periodTimes.map((pt, i) => {
+    if (i < fromIndex) return pt;
+    return {
+      period: pt.period,
+      start: formatTime(parseMinutes(pt.start) + deltaMinutes),
+      end: formatTime(parseMinutes(pt.end) + deltaMinutes),
+    };
+  });
+}
+
+/**
+ * 모든 교시 시작·종료 시각이 00:00~23:59 범위에 들어가는지 검사.
+ */
+export function validatePeriodTimes(periodTimes: readonly PeriodTime[]): boolean {
+  return periodTimes.every((pt) => {
+    const s = parseMinutes(pt.start);
+    const e = parseMinutes(pt.end);
+    return s >= 0 && s <= 1439 && e >= 0 && e <= 1439;
+  });
+}
+
+/**
+ * 점심을 targetAfter 직후로 옮길 때 평행 이동된 교시 배열을 반환한다.
+ * canMoveLunch와 moveLunchToAfterPeriod가 공통으로 사용하는 핵심 산식.
+ */
+function shiftPeriodsForLunchTarget(
+  periodTimes: readonly PeriodTime[],
+  targetAfter: number,
+  lunchDurationMinutes: number,
+): PeriodTime[] {
+  const oldNextStart = parseMinutes(periodTimes[targetAfter]!.start);
+  const newPrevEnd = parseMinutes(periodTimes[targetAfter - 1]!.end);
+  const delta = newPrevEnd + lunchDurationMinutes - oldNextStart;
+  return shiftPeriodsFrom(periodTimes, targetAfter, delta);
+}
+
+/**
+ * 점심을 N교시 후로 이동 가능한지 검사. 결과만 반환(부작용 없음).
+ *
+ * reason:
+ * - 'noop': targetAfter === currentAfter
+ * - 'boundary': targetAfter < 1 또는 targetAfter >= periodTimes.length
+ * - 'invalid-duration': lunchDurationMinutes <= 0
+ * - 'overflow': 결과 교시가 23:59를 초과
+ */
+export function canMoveLunch(
+  periodTimes: readonly PeriodTime[],
+  currentAfter: number,
+  targetAfter: number,
+  lunchDurationMinutes: number,
+): { allowed: boolean; reason?: 'noop' | 'boundary' | 'overflow' | 'invalid-duration' } {
+  if (lunchDurationMinutes <= 0) return { allowed: false, reason: 'invalid-duration' };
+  if (targetAfter === currentAfter) return { allowed: false, reason: 'noop' };
+  if (targetAfter < 1 || targetAfter >= periodTimes.length)
+    return { allowed: false, reason: 'boundary' };
+
+  const moved = shiftPeriodsForLunchTarget(periodTimes, targetAfter, lunchDurationMinutes);
+  if (!validatePeriodTimes(moved)) return { allowed: false, reason: 'overflow' };
+  return { allowed: true };
+}
+
+/**
+ * 점심 위치를 targetAfter 직후로 이동.
+ * - 이전 교시는 보존, 점심 이후 교시는 평행 이동.
+ * - 실패 시 입력 그대로 반환, status로 결과 구분.
+ */
+export function moveLunchToAfterPeriod(
+  periodTimes: readonly PeriodTime[],
+  currentAfter: number,
+  targetAfter: number,
+  lunchDurationMinutes: number,
+): {
+  periodTimes: PeriodTime[];
+  lunchStart: string;
+  lunchEnd: string;
+  lunchAfterPeriod: number;
+  status: 'moved' | 'noop' | 'boundary' | 'overflow' | 'invalid-duration';
+} {
+  const check = canMoveLunch(periodTimes, currentAfter, targetAfter, lunchDurationMinutes);
+  if (!check.allowed) {
+    const inRange = currentAfter >= 1 && currentAfter < periodTimes.length;
+    return {
+      periodTimes: [...periodTimes],
+      lunchStart: inRange ? periodTimes[currentAfter - 1]!.end : '',
+      lunchEnd: inRange ? periodTimes[currentAfter]!.start : '',
+      lunchAfterPeriod: currentAfter,
+      status: check.reason ?? 'noop',
+    };
+  }
+
+  const shifted = shiftPeriodsForLunchTarget(periodTimes, targetAfter, lunchDurationMinutes);
+  return {
+    periodTimes: shifted,
+    lunchStart: shifted[targetAfter - 1]!.end,
+    lunchEnd: shifted[targetAfter]!.start,
+    lunchAfterPeriod: targetAfter,
+    status: 'moved',
+  };
+}
+
+/**
+ * 교시 시간 배열에서 점심 위치를 추정 (마이그레이션/폴백용).
+ * detectLunchFromPeriods의 결과를 1-based 위치로 변환.
+ * 추정 실패 시 null.
+ */
+export function inferLunchAfterPeriod(periodTimes: readonly PeriodTime[]): number | null {
+  const lunchRange = detectLunchFromPeriods(periodTimes);
+  if (!lunchRange) return null;
+  // detectLunchFromPeriods는 prevEnd == periodTimes[i-1].end 인 i를 찾는다
+  for (let i = 1; i < periodTimes.length; i++) {
+    if (periodTimes[i - 1]!.end === lunchRange.start && periodTimes[i]!.start === lunchRange.end) {
+      return i; // i는 0-based 인덱스이자 1-based "i교시 후" 위치 (i교시가 끝나고 i+1교시 시작 사이)
     }
   }
   return null;

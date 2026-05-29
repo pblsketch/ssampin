@@ -401,6 +401,19 @@ export interface Settings {
   readonly lunchStart?: string;
   /** 점심시간 종료 (HH:mm). 미설정 시 학교급 기본값 사용 */
   readonly lunchEnd?: string;
+  /**
+   * 점심을 둘 교시 위치 (이 교시 직후에 점심). 1-based.
+   *
+   * 우선순위 (presenter `getLunchBreakIndex`):
+   * 1. 이 값
+   * 2. `lunchStart` / `lunchEnd` 시간대 겹침
+   * 3. 교시 간 30분 이상 갭 자동 추정 (레거시)
+   *
+   * 마이그레이션 정책: lazy — 사용자가 PeriodTab에서 위·아래 버튼을 처음 누르는
+   * 순간 박힌다. 부팅 시 자동 마이그레이션은 수행하지 않는다.
+   * 옵셔널 필드라 기존 사용자 마이그레이션 0줄 + 동기화 호환.
+   */
+  readonly lunchAfterPeriod?: number;
   /** 학생 생일을 일정에 자동 등록 (기본 false) */
   readonly syncBirthdaysToSchedule?: boolean;
   /** 대시보드 일정 위젯 표시 기간 (일 단위, 기본 14) */

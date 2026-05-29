@@ -19,7 +19,12 @@ import {
   getLunchBreakIndex,
   formatLunchBreakTime,
 } from '@adapters/presenters/timetablePresenter';
-import { smartAutoAssignColors, extractSubjectsFromSchedule, extractClassroomsFromSchedule, autoAssignClassroomColors } from '@domain/rules/subjectColorRules';
+import {
+  smartAutoAssignColors,
+  extractSubjectsFromSchedule,
+  extractClassroomsFromSchedule,
+  autoAssignClassroomColors,
+} from '@domain/rules/subjectColorRules';
 import { getCurrentISOWeek } from '@usecases/timetable/AutoSyncNeisTimetable';
 import type { ClassScheduleData, TeacherScheduleData } from '@domain/entities/Timetable';
 import { TimetableEditor } from './TimetableEditor';
@@ -59,8 +64,7 @@ export function TimetablePage() {
   const { settings, load: loadSettings } = useSettingsStore();
   useAnalytics();
   const [tab, setTabState] = useState<TabType>(
-    settings.timetableDefaultView
-      ?? (settings.schoolLevel === 'elementary' ? 'class' : 'teacher'),
+    settings.timetableDefaultView ?? (settings.schoolLevel === 'elementary' ? 'class' : 'teacher'),
   );
   const tabInitializedRef = useRef(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -76,15 +80,16 @@ export function TimetablePage() {
     if (tabInitializedRef.current) return;
     if (settings.timetableDefaultView || settings.schoolLevel) {
       setTabState(
-        settings.timetableDefaultView
-          ?? (settings.schoolLevel === 'elementary' ? 'class' : 'teacher'),
+        settings.timetableDefaultView ??
+          (settings.schoolLevel === 'elementary' ? 'class' : 'teacher'),
       );
       tabInitializedRef.current = true;
     }
   }, [settings.timetableDefaultView, settings.schoolLevel]);
 
   // 색상 모드: schoolLevel 기반 기본값
-  const colorBy = settings.timetableColorBy ?? (settings.schoolLevel === 'elementary' ? 'subject' : 'classroom');
+  const colorBy =
+    settings.timetableColorBy ?? (settings.schoolLevel === 'elementary' ? 'subject' : 'classroom');
   const classroomColors = settings.classroomColors;
 
   // 기존 사용자 마이그레이션: 색상 미배정 과목 자동 배정
@@ -196,8 +201,14 @@ export function TimetablePage() {
   }, [overrides]);
 
   const lunchIndex = useMemo(
-    () => getLunchBreakIndex(settings.periodTimes, settings.lunchStart, settings.lunchEnd),
-    [settings.periodTimes, settings.lunchStart, settings.lunchEnd],
+    () =>
+      getLunchBreakIndex(
+        settings.periodTimes,
+        settings.lunchStart,
+        settings.lunchEnd,
+        settings.lunchAfterPeriod,
+      ),
+    [settings.periodTimes, settings.lunchStart, settings.lunchEnd, settings.lunchAfterPeriod],
   );
   const lunchTimeStr = useMemo(
     () => (lunchIndex >= 0 ? formatLunchBreakTime(settings.periodTimes, lunchIndex) : ''),
@@ -227,64 +238,77 @@ export function TimetablePage() {
 
   const showToast = useToastStore((s) => s.show);
 
-  const handleExport = useCallback(async (format: 'excel' | 'hwpx') => {
-    setShowExportMenu(false);
-    try {
-      let data: ArrayBuffer | Uint8Array;
-      let defaultFileName: string;
+  const handleExport = useCallback(
+    async (format: 'excel' | 'hwpx') => {
+      setShowExportMenu(false);
+      try {
+        let data: ArrayBuffer | Uint8Array;
+        let defaultFileName: string;
 
-      if (format === 'excel') {
-        if (tab === 'class') {
-          data = await exportClassScheduleToExcel(classSchedule, settings.maxPeriods, settings.subjectColors);
-          defaultFileName = '학급시간표.xlsx';
+        if (format === 'excel') {
+          if (tab === 'class') {
+            data = await exportClassScheduleToExcel(
+              classSchedule,
+              settings.maxPeriods,
+              settings.subjectColors,
+            );
+            defaultFileName = '학급시간표.xlsx';
+          } else {
+            data = await exportTeacherScheduleToExcel(
+              teacherSchedule,
+              settings.maxPeriods,
+              settings.subjectColors,
+              colorBy,
+              classroomColors,
+            );
+            defaultFileName = '교사시간표.xlsx';
+          }
         } else {
-          data = await exportTeacherScheduleToExcel(teacherSchedule, settings.maxPeriods, settings.subjectColors, colorBy, classroomColors);
-          defaultFileName = '교사시간표.xlsx';
+          if (tab === 'class') {
+            data = await exportClassScheduleToHwpx(classSchedule, settings.maxPeriods);
+            defaultFileName = '학급시간표.hwpx';
+          } else {
+            data = await exportTeacherScheduleToHwpx(teacherSchedule, settings.maxPeriods);
+            defaultFileName = '교사시간표.hwpx';
+          }
         }
-      } else {
-        if (tab === 'class') {
-          data = await exportClassScheduleToHwpx(classSchedule, settings.maxPeriods);
-          defaultFileName = '학급시간표.hwpx';
-        } else {
-          data = await exportTeacherScheduleToHwpx(teacherSchedule, settings.maxPeriods);
-          defaultFileName = '교사시간표.hwpx';
-        }
-      }
 
-      const normalized: ArrayBuffer | string =
-        data instanceof Uint8Array
-          ? data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer
-          : data;
+        const normalized: ArrayBuffer | string =
+          data instanceof Uint8Array
+            ? (data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer)
+            : data;
 
-      if (window.electronAPI) {
-        const ext = format === 'excel' ? 'xlsx' : 'hwpx';
-        const filterName = format === 'excel' ? 'Excel 파일' : '한글 문서';
-        const saved = await window.electronAPI.showSaveDialog({
-          title: '내보내기',
-          defaultPath: defaultFileName,
-          filters: [{ name: filterName, extensions: [ext] }],
-        });
-        if (saved) {
-          await window.electronAPI.writeFile(saved.handle, normalized);
-          showToast('파일이 저장되었습니다', 'success', {
-            label: '파일 열기',
-            onClick: () => window.electronAPI?.openFile(saved.handle),
+        if (window.electronAPI) {
+          const ext = format === 'excel' ? 'xlsx' : 'hwpx';
+          const filterName = format === 'excel' ? 'Excel 파일' : '한글 문서';
+          const saved = await window.electronAPI.showSaveDialog({
+            title: '내보내기',
+            defaultPath: defaultFileName,
+            filters: [{ name: filterName, extensions: [ext] }],
           });
+          if (saved) {
+            await window.electronAPI.writeFile(saved.handle, normalized);
+            showToast('파일이 저장되었습니다', 'success', {
+              label: '파일 열기',
+              onClick: () => window.electronAPI?.openFile(saved.handle),
+            });
+          }
+        } else {
+          const blob = new Blob([normalized], { type: 'application/octet-stream' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = defaultFileName;
+          a.click();
+          URL.revokeObjectURL(url);
+          showToast('파일이 다운로드되었습니다', 'success');
         }
-      } else {
-        const blob = new Blob([normalized], { type: 'application/octet-stream' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = defaultFileName;
-        a.click();
-        URL.revokeObjectURL(url);
-        showToast('파일이 다운로드되었습니다', 'success');
+      } catch {
+        showToast('내보내기 중 오류가 발생했습니다', 'error');
       }
-    } catch {
-      showToast('내보내기 중 오류가 발생했습니다', 'error');
-    }
-  }, [tab, classSchedule, teacherSchedule, settings.maxPeriods, showToast]);
+    },
+    [tab, classSchedule, teacherSchedule, settings.maxPeriods, showToast],
+  );
 
   const updateSettings = useSettingsStore((s) => s.update);
   const updateClassSchedule = useScheduleStore((s) => s.updateClassSchedule);
@@ -372,7 +396,11 @@ export function TimetablePage() {
   const handleDownloadTemplate = useCallback(async () => {
     try {
       const days = activeDays as readonly string[];
-      const normalized = await exportTeacherTimetableTemplate(settings.maxPeriods, days, teacherSchedule);
+      const normalized = await exportTeacherTimetableTemplate(
+        settings.maxPeriods,
+        days,
+        teacherSchedule,
+      );
 
       if (window.electronAPI) {
         const saved = await window.electronAPI.showSaveDialog({
@@ -402,34 +430,36 @@ export function TimetablePage() {
     }
   }, [settings.maxPeriods, activeDays, teacherSchedule, showToast]);
 
-  const handleExcelUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    try {
-      const buffer = await file.arrayBuffer();
-      const parsed = await parseTeacherTimetableFromExcel(buffer);
-      const hasData = Object.keys(parsed).length > 0 &&
-        Object.values(parsed).some((periods) => periods.some((p) => p !== null));
-      if (!hasData) {
-        showToast('시간표 데이터를 찾을 수 없습니다. 양식을 확인해주세요.', 'error');
-        return;
+  const handleExcelUpload = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      try {
+        const buffer = await file.arrayBuffer();
+        const parsed = await parseTeacherTimetableFromExcel(buffer);
+        const hasData =
+          Object.keys(parsed).length > 0 &&
+          Object.values(parsed).some((periods) => periods.some((p) => p !== null));
+        if (!hasData) {
+          showToast('시간표 데이터를 찾을 수 없습니다. 양식을 확인해주세요.', 'error');
+          return;
+        }
+        setPreviewSchedule(parsed);
+        setShowExcelPreview(true);
+      } catch (err) {
+        console.error('[TimetablePage] 엑셀 파싱 실패:', err);
+        showToast('엑셀 파일을 읽을 수 없습니다. 양식을 확인해주세요.', 'error');
       }
-      setPreviewSchedule(parsed);
-      setShowExcelPreview(true);
-    } catch (err) {
-      console.error('[TimetablePage] 엑셀 파싱 실패:', err);
-      showToast('엑셀 파일을 읽을 수 없습니다. 양식을 확인해주세요.', 'error');
-    }
-    e.target.value = '';
-  }, [showToast]);
+      e.target.value = '';
+    },
+    [showToast],
+  );
 
   const handleExcelConfirm = useCallback(async () => {
     if (!previewSchedule) return;
     await updateTeacherSchedule(previewSchedule);
 
-    const maxFromData = Math.max(
-      ...Object.values(previewSchedule).map((arr) => arr.length), 0,
-    );
+    const maxFromData = Math.max(...Object.values(previewSchedule).map((arr) => arr.length), 0);
     if (maxFromData > 0 && maxFromData !== settings.maxPeriods) {
       await updateSettings({ maxPeriods: maxFromData });
     }
@@ -462,14 +492,23 @@ export function TimetablePage() {
     showToast('교사 시간표가 업데이트되었습니다!', 'success');
     setShowExcelPreview(false);
     setPreviewSchedule(null);
-  }, [previewSchedule, updateTeacherSchedule, settings.maxPeriods, settings.enableWeekendDays, settings.subjectColors, updateSettings, showToast]);
+  }, [
+    previewSchedule,
+    updateTeacherSchedule,
+    settings.maxPeriods,
+    settings.enableWeekendDays,
+    settings.subjectColors,
+    updateSettings,
+    showToast,
+  ]);
 
   const { className, teacherName } = settings;
   const yearStr = `${now.getFullYear()}학년도`;
   const semester = now.getMonth() < 8 ? '1학기' : '2학기';
-  const infoLabel = tab === 'class' && (className || teacherName)
-    ? `${className}  |  담임: ${teacherName}  |  ${yearStr} ${semester}`
-    : `${yearStr} ${semester}`;
+  const infoLabel =
+    tab === 'class' && (className || teacherName)
+      ? `${className}  |  담임: ${teacherName}  |  ${yearStr} ${semester}`
+      : `${yearStr} ${semester}`;
 
   if (isEditing) {
     return (
@@ -492,126 +531,144 @@ export function TimetablePage() {
             {yearStr} {semester} · 주간 시간표
           </span>
         }
-        rightActions={<>
-          {/* 나이스에서 불러오기 (학급 시간표, 비-custom 학교급) */}
-          {tab === 'class' && settings.schoolLevel !== 'custom' && (
-            <button
-              onClick={() => setShowNeisImport(true)}
-              className="flex items-center gap-2 rounded-xl bg-sp-accent/10 border border-sp-accent/30 px-4 py-2.5 text-sm font-bold text-sp-accent hover:bg-sp-accent/20 transition-all active:scale-95"
-            >
-              <span className="material-symbols-outlined text-icon-lg">download</span>
-              <span>나이스에서 불러오기</span>
-            </button>
-          )}
-
-          {/* 교사 시간표: 양식 다운로드 + 엑셀 불러오기 */}
-          {tab === 'teacher' && (
-            <>
+        rightActions={
+          <>
+            {/* 나이스에서 불러오기 (학급 시간표, 비-custom 학교급) */}
+            {tab === 'class' && settings.schoolLevel !== 'custom' && (
               <button
-                onClick={() => void handleDownloadTemplate()}
-                className="flex items-center gap-2 rounded-xl bg-sp-surface border border-sp-border px-4 py-2.5 text-sm font-bold text-sp-muted hover:text-sp-text hover:bg-sp-card transition-all active:scale-95"
+                onClick={() => setShowNeisImport(true)}
+                className="flex items-center gap-2 rounded-xl bg-sp-accent/10 border border-sp-accent/30 px-4 py-2.5 text-sm font-bold text-sp-accent hover:bg-sp-accent/20 transition-all active:scale-95"
               >
                 <span className="material-symbols-outlined text-icon-lg">download</span>
-                <span>양식 다운로드</span>
+                <span>나이스에서 불러오기</span>
               </button>
-              <div className="flex flex-col items-start gap-1">
-                <label className="flex items-center gap-2 rounded-xl bg-sp-accent/10 border border-sp-accent/30 px-4 py-2.5 text-sm font-bold text-sp-accent hover:bg-sp-accent/20 transition-all active:scale-95 cursor-pointer">
-                  <span className="material-symbols-outlined text-icon-lg">file_open</span>
-                  <span>엑셀 불러오기</span>
-                  <input
-                    type="file"
-                    accept=".xlsx"
-                    className="hidden"
-                    onChange={(e) => void handleExcelUpload(e)}
-                  />
-                </label>
-                <FormatHint formats=".xlsx" />
-              </div>
-            </>
-          )}
-
-          {/* 색상 모드 토글 (교사 시간표에서만 표시) */}
-          {tab === 'teacher' && (
-            <div className="flex items-center gap-1 bg-sp-surface rounded-xl p-1 border border-sp-border">
-              <button
-                onClick={() => void updateSettings({ timetableColorBy: 'subject' })}
-                className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                  colorBy === 'subject' ? 'bg-sp-accent text-white shadow-md' : 'text-sp-muted hover:text-sp-text'
-                }`}
-                title="과목별 색상"
-              >
-                과목색
-              </button>
-              <button
-                onClick={() => void updateSettings({ timetableColorBy: 'classroom' })}
-                className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                  colorBy === 'classroom' ? 'bg-sp-accent text-white shadow-md' : 'text-sp-muted hover:text-sp-text'
-                }`}
-                title="학반별 색상"
-              >
-                학반색
-              </button>
-            </div>
-          )}
-          {/* 탭 토글 */}
-          <div className="flex rounded-xl bg-sp-surface p-1 border border-sp-border">
-            <TabButton active={tab === 'teacher'} onClick={() => handleTabChange('teacher')} label="교사 시간표" />
-            <TabButton active={tab === 'class'} onClick={() => handleTabChange('class')} label="학급 시간표" />
-          </div>
-          {/* 변동 시간표 버튼 */}
-          <button
-            onClick={() => setOverridesPanelOpen(true)}
-            className="relative flex items-center gap-2 rounded-xl bg-sp-surface border border-sp-border px-4 py-2.5 text-sm font-bold text-sp-text hover:bg-sp-card transition-all active:scale-95"
-            aria-label="변동 시간표 관리"
-          >
-            <span className="material-symbols-outlined text-icon-lg">swap_horiz</span>
-            <span>변동 시간표</span>
-            {futureOverrideCount > 0 && (
-              <span
-                className="ml-1 min-w-[18px] h-[18px] px-1.5 inline-flex items-center justify-center text-caption font-bold rounded-full bg-sp-accent text-white"
-                title={`미래 변동 ${futureOverrideCount}건`}
-              >
-                {futureOverrideCount}
-              </span>
             )}
-          </button>
-          {/* 직접 편집 버튼 */}
-          <button
-            onClick={() => setIsEditing(true)}
-            className="flex items-center gap-2 rounded-xl bg-sp-surface border border-sp-border px-4 py-2.5 text-sm font-bold text-sp-text hover:bg-sp-card transition-all active:scale-95"
-          >
-            <span className="material-symbols-outlined text-icon-lg">edit</span>
-            <span>직접 편집</span>
-          </button>
-          {/* 내보내기 */}
-          <div className="relative" ref={exportMenuRef}>
+
+            {/* 교사 시간표: 양식 다운로드 + 엑셀 불러오기 */}
+            {tab === 'teacher' && (
+              <>
+                <button
+                  onClick={() => void handleDownloadTemplate()}
+                  className="flex items-center gap-2 rounded-xl bg-sp-surface border border-sp-border px-4 py-2.5 text-sm font-bold text-sp-muted hover:text-sp-text hover:bg-sp-card transition-all active:scale-95"
+                >
+                  <span className="material-symbols-outlined text-icon-lg">download</span>
+                  <span>양식 다운로드</span>
+                </button>
+                <div className="flex flex-col items-start gap-1">
+                  <label className="flex items-center gap-2 rounded-xl bg-sp-accent/10 border border-sp-accent/30 px-4 py-2.5 text-sm font-bold text-sp-accent hover:bg-sp-accent/20 transition-all active:scale-95 cursor-pointer">
+                    <span className="material-symbols-outlined text-icon-lg">file_open</span>
+                    <span>엑셀 불러오기</span>
+                    <input
+                      type="file"
+                      accept=".xlsx"
+                      className="hidden"
+                      onChange={(e) => void handleExcelUpload(e)}
+                    />
+                  </label>
+                  <FormatHint formats=".xlsx" />
+                </div>
+              </>
+            )}
+
+            {/* 색상 모드 토글 (교사 시간표에서만 표시) */}
+            {tab === 'teacher' && (
+              <div className="flex items-center gap-1 bg-sp-surface rounded-xl p-1 border border-sp-border">
+                <button
+                  onClick={() => void updateSettings({ timetableColorBy: 'subject' })}
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    colorBy === 'subject'
+                      ? 'bg-sp-accent text-white shadow-md'
+                      : 'text-sp-muted hover:text-sp-text'
+                  }`}
+                  title="과목별 색상"
+                >
+                  과목색
+                </button>
+                <button
+                  onClick={() => void updateSettings({ timetableColorBy: 'classroom' })}
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    colorBy === 'classroom'
+                      ? 'bg-sp-accent text-white shadow-md'
+                      : 'text-sp-muted hover:text-sp-text'
+                  }`}
+                  title="학반별 색상"
+                >
+                  학반색
+                </button>
+              </div>
+            )}
+            {/* 탭 토글 */}
+            <div className="flex rounded-xl bg-sp-surface p-1 border border-sp-border">
+              <TabButton
+                active={tab === 'teacher'}
+                onClick={() => handleTabChange('teacher')}
+                label="교사 시간표"
+              />
+              <TabButton
+                active={tab === 'class'}
+                onClick={() => handleTabChange('class')}
+                label="학급 시간표"
+              />
+            </div>
+            {/* 변동 시간표 버튼 */}
             <button
-              onClick={() => setShowExportMenu((v) => !v)}
+              onClick={() => setOverridesPanelOpen(true)}
+              className="relative flex items-center gap-2 rounded-xl bg-sp-surface border border-sp-border px-4 py-2.5 text-sm font-bold text-sp-text hover:bg-sp-card transition-all active:scale-95"
+              aria-label="변동 시간표 관리"
+            >
+              <span className="material-symbols-outlined text-icon-lg">swap_horiz</span>
+              <span>변동 시간표</span>
+              {futureOverrideCount > 0 && (
+                <span
+                  className="ml-1 min-w-[18px] h-[18px] px-1.5 inline-flex items-center justify-center text-caption font-bold rounded-full bg-sp-accent text-white"
+                  title={`미래 변동 ${futureOverrideCount}건`}
+                >
+                  {futureOverrideCount}
+                </span>
+              )}
+            </button>
+            {/* 직접 편집 버튼 */}
+            <button
+              onClick={() => setIsEditing(true)}
               className="flex items-center gap-2 rounded-xl bg-sp-surface border border-sp-border px-4 py-2.5 text-sm font-bold text-sp-text hover:bg-sp-card transition-all active:scale-95"
             >
-              <span className="material-symbols-outlined text-icon-lg">download</span>
-              <span>내보내기</span>
+              <span className="material-symbols-outlined text-icon-lg">edit</span>
+              <span>직접 편집</span>
             </button>
-            {showExportMenu && (
-              <div className="absolute right-0 top-full mt-2 w-48 bg-sp-card border border-sp-border rounded-xl shadow-2xl shadow-black/30 z-50 overflow-hidden">
-                <button
-                  onClick={() => void handleExport('excel')}
-                  className="w-full flex items-center gap-3 px-4 py-3 text-sm text-sp-text hover:bg-sp-accent/10 transition-colors"
-                >
-                  <span className="material-symbols-outlined text-green-400 text-lg">table_view</span>
-                  <span>Excel (.xlsx)</span>
-                </button>
-                <button
-                  onClick={() => void handleExport('hwpx')}
-                  className="w-full flex items-center gap-3 px-4 py-3 text-sm text-sp-text hover:bg-sp-accent/10 transition-colors border-t border-sp-border"
-                >
-                  <span className="material-symbols-outlined text-blue-400 text-lg">description</span>
-                  <span>한글 (.hwpx)</span>
-                </button>
-              </div>
-            )}
-          </div>
-        </>}
+            {/* 내보내기 */}
+            <div className="relative" ref={exportMenuRef}>
+              <button
+                onClick={() => setShowExportMenu((v) => !v)}
+                className="flex items-center gap-2 rounded-xl bg-sp-surface border border-sp-border px-4 py-2.5 text-sm font-bold text-sp-text hover:bg-sp-card transition-all active:scale-95"
+              >
+                <span className="material-symbols-outlined text-icon-lg">download</span>
+                <span>내보내기</span>
+              </button>
+              {showExportMenu && (
+                <div className="absolute right-0 top-full mt-2 w-48 bg-sp-card border border-sp-border rounded-xl shadow-2xl shadow-black/30 z-50 overflow-hidden">
+                  <button
+                    onClick={() => void handleExport('excel')}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-sm text-sp-text hover:bg-sp-accent/10 transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-green-400 text-lg">
+                      table_view
+                    </span>
+                    <span>Excel (.xlsx)</span>
+                  </button>
+                  <button
+                    onClick={() => void handleExport('hwpx')}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-sm text-sp-text hover:bg-sp-accent/10 transition-colors border-t border-sp-border"
+                  >
+                    <span className="material-symbols-outlined text-blue-400 text-lg">
+                      description
+                    </span>
+                    <span>한글 (.hwpx)</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </>
+        }
       />
 
       {/* 시간표 그리드 */}
@@ -648,7 +705,13 @@ export function TimetablePage() {
                         overrideMap={overrideMap}
                         activeDays={activeDays}
                         onTempChange={(date, dayIdx, subject, classroom) =>
-                          setTempChangeTarget({ date, period: periodNum, dayIdx, subject, classroom })
+                          setTempChangeTarget({
+                            date,
+                            period: periodNum,
+                            dayIdx,
+                            subject,
+                            classroom,
+                          })
                         }
                         onDeleteOverride={(id) => void deleteOverride(id)}
                         openPalette={openPalette}
@@ -706,8 +769,22 @@ export function TimetablePage() {
           }}
           onSaveSwap={(input) => {
             void addSwapPair(
-              { date: input.slotA.date, period: input.slotA.period, subject: input.slotA.subject, classroom: input.slotA.classroom, reason: input.reason, scope: input.scope },
-              { date: input.slotB.date, period: input.slotB.period, subject: input.slotB.subject, classroom: input.slotB.classroom, reason: input.reason, scope: input.scope },
+              {
+                date: input.slotA.date,
+                period: input.slotA.period,
+                subject: input.slotA.subject,
+                classroom: input.slotA.classroom,
+                reason: input.reason,
+                scope: input.scope,
+              },
+              {
+                date: input.slotB.date,
+                period: input.slotB.period,
+                subject: input.slotB.subject,
+                classroom: input.slotB.classroom,
+                reason: input.reason,
+                scope: input.scope,
+              },
             );
           }}
           onClose={() => setTempChangeTarget(null)}
@@ -759,8 +836,22 @@ export function TimetablePage() {
           }}
           onSaveSwap={(input) => {
             void addSwapPair(
-              { date: input.slotA.date, period: input.slotA.period, subject: input.slotA.subject, classroom: input.slotA.classroom, reason: input.reason, scope: input.scope },
-              { date: input.slotB.date, period: input.slotB.period, subject: input.slotB.subject, classroom: input.slotB.classroom, reason: input.reason, scope: input.scope },
+              {
+                date: input.slotA.date,
+                period: input.slotA.period,
+                subject: input.slotA.subject,
+                classroom: input.slotA.classroom,
+                reason: input.reason,
+                scope: input.scope,
+              },
+              {
+                date: input.slotB.date,
+                period: input.slotB.period,
+                subject: input.slotB.subject,
+                classroom: input.slotB.classroom,
+                reason: input.reason,
+                scope: input.scope,
+              },
             );
           }}
           onClose={() => setAddFromPanelOpen(false)}
@@ -836,7 +927,10 @@ export function TimetablePage() {
           maxPeriods={settings.maxPeriods}
           activeDays={activeDays}
           onConfirm={() => void handleExcelConfirm()}
-          onCancel={() => { setShowExcelPreview(false); setPreviewSchedule(null); }}
+          onCancel={() => {
+            setShowExcelPreview(false);
+            setPreviewSchedule(null);
+          }}
         />
       )}
     </div>
@@ -856,9 +950,7 @@ function TabButton({ active, onClick, label }: TabButtonProps) {
     <button
       onClick={onClick}
       className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
-        active
-          ? 'bg-sp-accent text-white shadow-md'
-          : 'text-sp-muted hover:text-sp-text'
+        active ? 'bg-sp-accent text-white shadow-md' : 'text-sp-muted hover:text-sp-text'
       }`}
     >
       {label}
@@ -891,13 +983,9 @@ function TimetableHeader({ dayOfWeek, activeDays }: TimetableHeaderProps) {
               }`}
               style={{ width: `${100 / activeDays.length}%` }}
             >
-              {isToday && (
-                <div className="absolute top-0 left-0 w-full h-1 bg-sp-accent" />
-              )}
+              {isToday && <div className="absolute top-0 left-0 w-full h-1 bg-sp-accent" />}
               {day}
-              {isToday && (
-                <span className="ml-1 text-xs font-medium">(Today)</span>
-              )}
+              {isToday && <span className="ml-1 text-xs font-medium">(Today)</span>}
             </th>
           );
         })}
@@ -1025,7 +1113,9 @@ function PeriodRow({
                     onTempChange(dateStr, dayIdx, cp?.subject ?? '', undefined);
                   }
                 }}
-                isColorPaletteOpen={openPalette?.dayIdx === dayIdx && openPalette?.period === periodTime.period}
+                isColorPaletteOpen={
+                  openPalette?.dayIdx === dayIdx && openPalette?.period === periodTime.period
+                }
                 onOpenColorPalette={() => onOpenPalette({ dayIdx, period: periodTime.period })}
                 onCloseColorPalette={onClosePalette}
                 onColorChange={onViewColorChange}
@@ -1054,7 +1144,9 @@ function PeriodRow({
                   onTempChange(dateStr, dayIdx, tp?.subject ?? '', tp?.classroom ?? '');
                 }
               }}
-              isColorPaletteOpen={openPalette?.dayIdx === dayIdx && openPalette?.period === periodTime.period}
+              isColorPaletteOpen={
+                openPalette?.dayIdx === dayIdx && openPalette?.period === periodTime.period
+              }
               onOpenColorPalette={() => onOpenPalette({ dayIdx, period: periodTime.period })}
               onCloseColorPalette={onClosePalette}
               onColorChange={onViewColorChange}
@@ -1082,9 +1174,23 @@ interface SubjectCellProps {
   colorBy: 'subject' | 'classroom';
 }
 
-function SubjectCell({ subject, teacher, isToday, isCurrent, isLastCol, subjectColors, override, onContextMenu, isColorPaletteOpen, onOpenColorPalette, onCloseColorPalette, onColorChange, colorBy: _colorBy }: SubjectCellProps) {
+function SubjectCell({
+  subject,
+  teacher,
+  isToday,
+  isCurrent,
+  isLastCol,
+  subjectColors,
+  override,
+  onContextMenu,
+  isColorPaletteOpen,
+  onOpenColorPalette,
+  onCloseColorPalette,
+  onColorChange,
+  colorBy: _colorBy,
+}: SubjectCellProps) {
   const isOverridden = override != null;
-  const displaySubject = isOverridden ? (override.subject || '') : subject;
+  const displaySubject = isOverridden ? override.subject || '' : subject;
   const displayTeacher = isOverridden ? '' : teacher;
 
   if (!displaySubject) {
@@ -1095,12 +1201,17 @@ function SubjectCell({ subject, teacher, isToday, isCurrent, isLastCol, subjectC
         }`}
         onContextMenu={onContextMenu}
       >
-        <div className={`h-14 w-full flex items-center justify-center text-sp-muted text-sm relative ${
-          isOverridden ? 'border border-dashed border-amber-400/30 rounded-lg' : ''
-        }`}>
+        <div
+          className={`h-14 w-full flex items-center justify-center text-sp-muted text-sm relative ${
+            isOverridden ? 'border border-dashed border-amber-400/30 rounded-lg' : ''
+          }`}
+        >
           {isOverridden ? '자습' : '—'}
           {isOverridden && (
-            <span className="absolute top-0.5 right-0.5 text-micro text-amber-400" title={`임시 변경: ${override.reason ?? ''}`}>
+            <span
+              className="absolute top-0.5 right-0.5 text-micro text-amber-400"
+              title={`임시 변경: ${override.reason ?? ''}`}
+            >
               <span className="material-symbols-outlined text-xs">push_pin</span>
             </span>
           )}
@@ -1116,7 +1227,9 @@ function SubjectCell({ subject, teacher, isToday, isCurrent, isLastCol, subjectC
       <span className={`${style.text} font-bold text-sm`}>{displaySubject}</span>
       {displayTeacher && <span className="text-sp-muted text-xs">{displayTeacher}</span>}
       {isOverridden && override.reason && (
-        <span className="text-amber-300 text-detail font-semibold drop-shadow-[0_1px_1px_rgba(0,0,0,0.7)]">{override.reason}</span>
+        <span className="text-amber-300 text-detail font-semibold drop-shadow-[0_1px_1px_rgba(0,0,0,0.7)]">
+          {override.reason}
+        </span>
       )}
     </div>
   );
@@ -1172,7 +1285,10 @@ function SubjectCell({ subject, teacher, isToday, isCurrent, isLastCol, subjectC
       >
         {cellContent}
         {isOverridden && (
-          <span className="absolute top-0.5 right-0.5 text-amber-400" title={`임시 변경: ${override.reason ?? ''}`}>
+          <span
+            className="absolute top-0.5 right-0.5 text-amber-400"
+            title={`임시 변경: ${override.reason ?? ''}`}
+          >
             <span className="material-symbols-outlined text-xs">push_pin</span>
           </span>
         )}
@@ -1205,12 +1321,28 @@ interface TeacherCellProps {
   onColorChange: (key: string, colorId: SubjectColorId) => void;
 }
 
-function TeacherCell({ period, isToday, isCurrent, isLastCol, subjectColors, classroomColors, colorBy, override, onContextMenu, isColorPaletteOpen, onOpenColorPalette, onCloseColorPalette, onColorChange }: TeacherCellProps) {
+function TeacherCell({
+  period,
+  isToday,
+  isCurrent,
+  isLastCol,
+  subjectColors,
+  classroomColors,
+  colorBy,
+  override,
+  onContextMenu,
+  isColorPaletteOpen,
+  onOpenColorPalette,
+  onCloseColorPalette,
+  onColorChange,
+}: TeacherCellProps) {
   const isOverridden = override != null;
 
   // 오버라이드된 경우 override 데이터로 표시
   const displayPeriod: TeacherPeriod | null = isOverridden
-    ? (override.subject ? { subject: override.subject, classroom: override.classroom ?? '' } : null)
+    ? override.subject
+      ? { subject: override.subject, classroom: override.classroom ?? '' }
+      : null
     : period;
 
   if (!displayPeriod) {
@@ -1221,12 +1353,17 @@ function TeacherCell({ period, isToday, isCurrent, isLastCol, subjectColors, cla
         }`}
         onContextMenu={onContextMenu}
       >
-        <div className={`h-14 w-full flex items-center justify-center text-sp-muted text-xs relative ${
-          isOverridden ? 'border border-dashed border-amber-400/30 rounded-lg' : ''
-        }`}>
+        <div
+          className={`h-14 w-full flex items-center justify-center text-sp-muted text-xs relative ${
+            isOverridden ? 'border border-dashed border-amber-400/30 rounded-lg' : ''
+          }`}
+        >
           {isOverridden ? '자습' : '공강'}
           {isOverridden && (
-            <span className="absolute top-0.5 right-0.5 text-amber-400" title={`임시 변경: ${override.reason ?? ''}`}>
+            <span
+              className="absolute top-0.5 right-0.5 text-amber-400"
+              title={`임시 변경: ${override.reason ?? ''}`}
+            >
               <span className="material-symbols-outlined text-xs">push_pin</span>
             </span>
           )}
@@ -1235,7 +1372,13 @@ function TeacherCell({ period, isToday, isCurrent, isLastCol, subjectColors, cla
     );
   }
 
-  const style = getCellStyle(displayPeriod.subject, displayPeriod.classroom, colorBy, subjectColors, classroomColors);
+  const style = getCellStyle(
+    displayPeriod.subject,
+    displayPeriod.classroom,
+    colorBy,
+    subjectColors,
+    classroomColors,
+  );
   const colorKey = colorBy === 'classroom' ? displayPeriod.classroom : displayPeriod.subject;
   const colorMap = colorBy === 'classroom' ? classroomColors : subjectColors;
 
@@ -1244,7 +1387,9 @@ function TeacherCell({ period, isToday, isCurrent, isLastCol, subjectColors, cla
       <span className={`${style.text} font-bold text-sm`}>{displayPeriod.subject}</span>
       <span className="text-sp-muted text-xs">{displayPeriod.classroom}</span>
       {isOverridden && override.reason && (
-        <span className="text-amber-300 text-detail font-semibold drop-shadow-[0_1px_1px_rgba(0,0,0,0.7)]">{override.reason}</span>
+        <span className="text-amber-300 text-detail font-semibold drop-shadow-[0_1px_1px_rgba(0,0,0,0.7)]">
+          {override.reason}
+        </span>
       )}
     </div>
   );
@@ -1300,7 +1445,10 @@ function TeacherCell({ period, isToday, isCurrent, isLastCol, subjectColors, cla
       >
         {cellContent}
         {isOverridden && (
-          <span className="absolute top-0.5 right-0.5 text-amber-400" title={`임시 변경: ${override.reason ?? ''}`}>
+          <span
+            className="absolute top-0.5 right-0.5 text-amber-400"
+            title={`임시 변경: ${override.reason ?? ''}`}
+          >
             <span className="material-symbols-outlined text-xs">push_pin</span>
           </span>
         )}

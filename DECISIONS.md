@@ -117,3 +117,45 @@
 - **회귀 가드**:
   - `electron/desktopWidgetManager.resize.test.ts` — 5 케이스(left edge clamp 미적용/적용, right edge, top-left corner, SWP flag SSOT 메타테스트).
   - SWP flag 메타테스트는 ADR-007 패턴 차용 — 부호/플래그 SSOT 회귀 차단.
+
+---
+
+## ADR-009: 점심 위치 1급 도메인 승격 + 표 내 인라인 위·아래 버튼 (C안)
+
+- **상태**: active
+- **일자**: 2026-05-29
+
+- **결정**:
+  - `Settings`에 `lunchAfterPeriod?: number` 정식 필드를 추가한다 (1-based, 이 교시 직후에 점심).
+  - 마이그레이션은 **lazy** — 사용자가 PeriodTab에서 위·아래 버튼을 처음 누르는 순간 박힌다. 부팅 시 자동 마이그레이션은 수행하지 않는다.
+  - PeriodTab 교시 표 안의 점심 행에 인라인 [↑][↓] 버튼을 배치한다. 위·아래 버튼은 키보드 접근성(↑/↓ 화살표) 1급, 경계 도달 시 disabled+aria-disabled.
+  - `getLunchBreakIndex` 우선순위 3단: ① `lunchAfterPeriod` ② `lunchStart`/`lunchEnd` ③ 30분 갭 자동 추정(레거시).
+  - 도메인 순수 함수 5개 신규: `shiftPeriodsFrom`, `validatePeriodTimes`, `canMoveLunch`, `moveLunchToAfterPeriod`, `inferLunchAfterPeriod`.
+
+- **근거**:
+  - 사용자 피드백(2026-05): "3교시 후 점심으로 옮기는 단일 액션이 없거나 발견하기 어렵다".
+  - UX 분석(designer + critic 병렬 분석 2026-05-29): 발견성 3/10. 점심 위치는 사용자 멘탈 모델의 1급 개념인데 UI는 "시간 겹침"으로만 노출해 멘탈 모델 충돌. `lunchAfterPeriod` 셀렉트가 빠른 설정 패널 안에 묻혀 있고 그 셀렉트의 유일한 적용 경로 `[자동 생성]`이 교시 전체를 덮어쓰는 파괴적 액션이라 사용자가 회피.
+  - 호출처 사전 조사: `infrastructure/`(NEIS/Excel/HWPX) 직접 의존 0건, `getLunchBreakIndex` 호출처는 PeriodTab/TimetablePage/TimetableEditor 3곳. TimetablePage·TimetableEditor는 학급/교사 탭 두 가지가 같은 lunchIndex를 공유 → 단일 변경으로 양쪽 자동 적용.
+
+- **대안**:
+  - **Option α (채택)**: 위·아래 버튼 + lazy 마이그레이션 + 평탄 필드 `lunchAfterPeriod?: number`.
+  - **Option β (Phase 3 이연)**: HTML5 드래그 인터랙션 추가. 디자인 시스템 일관성·접근성 검증 비용이 표면적보다 크며, MVP 안정화 후 사용자 행동 데이터 기반으로 결정.
+  - **Option γ (Phase 3 이연)**: 모바일 PeriodTimesEditor 동등 기능. 모바일은 시간표 그리드 화면 자체가 없어(`SchedulePage.tsx`는 월별 캘린더) 점심 UI 추가의 컨텍스트가 부재. 시간표 도입과 묶어야 의미 있음.
+
+- **트레이드오프**:
+  - lazy 마이그레이션은 부팅 시 invisible state change를 회피하지만, `lunchAfterPeriod`가 박히기 전까지는 폴백 경로(`getLunchBreakIndex` ②/③)로 동작해 동일 사용자가 첫 클릭 전엔 자동 추정과 같은 결과를 본다 — 사용자 입장에선 차이를 못 느낌.
+  - 위·아래 버튼은 안전·접근성 1급이지만 "표 안에서 직접 옮긴다"는 시그니파이어가 드래그보다 약함. 점심 행 amber 강조 + grip-style 아이콘으로 부분 보완.
+  - `Settings.lunchAfterPeriod`는 옵셔널이므로 동기화 sync 정책에 영향 0. 다중 기기에서 모르는 필드는 그대로 보존됨(모바일 `EditableSettings`가 patch 방식 → passthrough).
+
+- **검증 환경**: Electron 40.x on Windows 11 24H2. 데스크톱 only(Phase 1).
+
+- **회귀 가드**:
+  - `src/domain/rules/periodRules.test.ts` — 도메인 함수 9건(A1~A8 + B0): noop, 한 칸 위/아래, 여러 칸 점프, boundary, invalid-duration, overflow, shiftPeriodsFrom 양방향, inferLunchAfterPeriod 성공/실패.
+  - `src/adapters/presenters/timetablePresenter.test.ts` — 3단 폴백 5건(B1~B5): lunchAfterPeriod 우선, 시간 폴백, 갭 폴백, 모두 실패, 0/1-based 변환 경계.
+  - `src/adapters/components/Settings/tabs/PeriodTab.test.tsx` — 9건(D1~D9): 버튼 클릭, 경계 disabled, 키보드 동등, lazy 박힘, 학급/교사 양쪽 적용 검증.
+  - 수동 검증 13단계: `docs/manual-verification/lunch-position.md`.
+
+- **Follow-ups**:
+  - Phase 3 ralplan: 드래그 인터랙션(Option β) — react-dnd 또는 HTML5 DnD 도입 + 접근성 보조.
+  - Phase 3 ralplan: 모바일 시간표 그리드 신규 + 점심 1급 도입(Option γ) — 시간표 화면 자체부터 설계 필요.
+  - Phase 4: `lunchStart`/`lunchEnd` deprecation — `lunchAfterPeriod` + 교시 시간으로 충분히 도출 가능해질 시점에 정리.

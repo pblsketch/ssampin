@@ -1,6 +1,10 @@
 # Progress
 
-마지막 업데이트: 2026-05-26 KST
+마지막 업데이트: 2026-05-29 KST
+
+## Recently completed (다음 릴리즈 묶음 후보)
+
+- 🍱 **점심 위치 1급 도메인 승격 + 표 내 인라인 위·아래 버튼** (ADR-009 / C안 + Phase 2 통합, 2026-05-29) — 사용자 피드백 "3교시 후 점심으로 옮기는 단일 액션이 없음"에 대응. Settings에 `lunchAfterPeriod?: number` 추가, PeriodTab 점심 행에 [↑][↓] 버튼 인라인 배치, lazy 마이그레이션, 3단 폴백(`lunchAfterPeriod` → `lunchStart/End` → 30분 갭). 데스크톱만(모바일은 Phase 3 이연 — 시간표 그리드 화면 자체가 없음). 도메인 함수 5개 + presenter 3단 폴백 + PeriodTab UI 갱신 + 학급/교사 시간표 양쪽 동일 lunchIndex 공유 검증 완료. 검증 게이트 4/4 통과: tsc 0 errors / lint 0 errors / vitest 2021 passed (166 files, 10 skipped) / regression 41/41.
 
 ## Current Version
 
