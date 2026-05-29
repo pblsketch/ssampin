@@ -34,7 +34,16 @@
     "build:mobile": "vite build --config vite.mobile.config.ts",
     "preview:mobile": "vite preview --config vite.mobile.config.ts",
     "build:mac": "npm run build && electron-builder --mac",
-    "build:mac:dmg": "npm run build && electron-builder --mac dmg"
+    "build:mac:dmg": "npm run build && electron-builder --mac dmg",
+    "migration-roundtrip": "node scripts/migration-roundtrip.mjs",
+    "migration-roundtrip:1-load": "node scripts/migration-roundtrip-1-load.mjs",
+    "migration-roundtrip:2-forward": "node scripts/migration-roundtrip-2-forward.mjs",
+    "migration-roundtrip:3-backward": "node scripts/migration-roundtrip-3-backward.mjs",
+    "migration-roundtrip:4-diff": "node scripts/migration-roundtrip-4-diff.mjs",
+    "migration-roundtrip:5-report": "node scripts/migration-roundtrip-5-report.mjs",
+    "check-flag-usage": "node scripts/check-flag-usage.mjs",
+    "check-hex-hardcoding": "node scripts/check-hex-hardcoding.mjs",
+    "check-sp-coverage": "node scripts/check-sp-coverage.mjs"
   },
   "dependencies": {
     "@blocknote/ariakit": "~0.47.3",
