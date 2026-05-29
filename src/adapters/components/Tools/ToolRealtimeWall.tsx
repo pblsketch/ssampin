@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from 'react';
 import { ToolLayout } from './ToolLayout';
 import { PastResultsView } from './TemplateManager';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
@@ -57,12 +65,19 @@ import {
   sanitizeRealtimeWallFileBase,
   type RealtimeWallExportOptions,
 } from '@usecases/realtimeWall/ExportRealtimeWallBoard';
-import {
-  exportRealtimeWallToExcel,
-  exportRealtimeWallToPdf,
-} from '@infrastructure/export';
+import { exportRealtimeWallToExcel, exportRealtimeWallToPdf } from '@infrastructure/export';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { RealtimeWallTeacherActionBar } from './RealtimeWall/RealtimeWallTeacherActionBar';
+import { RealtimeWallTabBar } from './RealtimeWall/RealtimeWallTabBar';
+import { DEFAULT_TAB_TITLE } from './RealtimeWall/realtimeWallConstants';
+import {
+  addRealtimeWallTab,
+  deleteRealtimeWallTab,
+  renameRealtimeWallTab,
+  updateRealtimeWallTabPermission,
+  REALTIME_WALL_MAX_TABS,
+} from '@domain/rules/realtimeWallRules';
+import { DEFAULT_TAB_ID, type RealtimeWallTabConfig } from '@domain/entities/RealtimeWallTabConfig';
 import { WallBoardListView } from './RealtimeWall/WallBoardListView';
 import { RealtimeWallTeacherStudentTrackerPanel } from './RealtimeWall/RealtimeWallTeacherStudentTrackerPanel';
 import { openExternalLink } from './RealtimeWall/realtimeWallHelpers';
@@ -78,9 +93,10 @@ const TEACHER_SESSION_TOKEN = '__teacher__';
 
 /** crypto.randomUUID → WallBoardId branded type 캐스팅 */
 function newWallBoardId(): WallBoardId {
-  const raw = typeof crypto !== 'undefined' && crypto.randomUUID
-    ? crypto.randomUUID()
-    : `wb-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  const raw =
+    typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `wb-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
   return raw as WallBoardId;
 }
 
@@ -242,9 +258,7 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
     // 변경 즉시 Main에 dirty 스냅샷 푸시 (before-quit 안전망).
     const dirty = buildSnapshot();
     if (dirty && window.electronAPI?.wallBoards?.stageDirty) {
-      void window.electronAPI.wallBoards
-        .stageDirty({ board: dirty })
-        .catch(() => {});
+      void window.electronAPI.wallBoards.stageDirty({ board: dirty }).catch(() => {});
     }
 
     const saveSnapshot = () => {
@@ -252,9 +266,12 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
       if (!next) return;
       // 저장 실패는 조용히 무시 — 다음 주기에 재시도.
       // 토스트는 수동 "저장/종료" 시에만 노출.
-      void wallBoardRepository.save(next).then(() => {
-        setCurrentBoard(next);
-      }).catch(() => {});
+      void wallBoardRepository
+        .save(next)
+        .then(() => {
+          setCurrentBoard(next);
+        })
+        .catch(() => {});
     };
 
     const debounceTimer = window.setTimeout(saveSnapshot, AUTO_SAVE_DEBOUNCE_MS);
@@ -319,13 +336,18 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
             shortCode: liveSession.code,
             updatedAt: Date.now(),
           };
-          void wallBoardRepository.save(updatedBoard).then(() => {
-            setCurrentBoard(updatedBoard);
-          }).catch(() => {});
+          void wallBoardRepository
+            .save(updatedBoard)
+            .then(() => {
+              setCurrentBoard(updatedBoard);
+            })
+            .catch(() => {});
         }
       }
     } catch {
-      setTunnelError('외부 접속 주소를 만들지 못했습니다. 인터넷 연결을 확인한 뒤 다시 시도해주세요.');
+      setTunnelError(
+        '외부 접속 주소를 만들지 못했습니다. 인터넷 연결을 확인한 뒤 다시 시도해주세요.',
+      );
     } finally {
       setTunnelLoading(false);
     }
@@ -361,9 +383,7 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
       await connectTunnel();
     } catch (error) {
       console.error('[realtime-wall] startLive failed', error);
-      setLiveError(
-        '학생 참여를 시작하지 못했습니다. 인터넷 연결을 확인한 뒤 다시 시도해 주세요.',
-      );
+      setLiveError('학생 참여를 시작하지 못했습니다. 인터넷 연결을 확인한 뒤 다시 시도해 주세요.');
     }
   }, [connectTunnel, normalizedTitle]);
 
@@ -461,9 +481,10 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
           options,
         });
 
-        const buffer = format === 'pdf'
-          ? await exportRealtimeWallToPdf(rows)
-          : await exportRealtimeWallToExcel(rows);
+        const buffer =
+          format === 'pdf'
+            ? await exportRealtimeWallToPdf(rows)
+            : await exportRealtimeWallToExcel(rows);
 
         const ext = format === 'pdf' ? 'pdf' : 'xlsx';
         const filterName = format === 'pdf' ? 'PDF 파일' : 'Excel 파일';
@@ -484,9 +505,10 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
             });
           }
         } else {
-          const mime = format === 'pdf'
-            ? 'application/pdf'
-            : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+          const mime =
+            format === 'pdf'
+              ? 'application/pdf'
+              : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
           const blob = new Blob([buffer], { type: mime });
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
@@ -540,42 +562,45 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
     setViewMode('running');
   }, []);
 
-  const handleApprovePost = useCallback((postId: string) => {
-    setPosts((prev) => approveRealtimeWallPost(prev, postId, columns));
-  }, [columns]);
+  const handleApprovePost = useCallback(
+    (postId: string) => {
+      setPosts((prev) => approveRealtimeWallPost(prev, postId, columns));
+    },
+    [columns],
+  );
 
   const handleHidePost = useCallback((postId: string) => {
     setPosts((prev) => hideRealtimeWallPost(prev, postId));
   }, []);
 
-  const handleRestorePost = useCallback((postId: string) => {
-    setPosts((prev) => approveRealtimeWallPost(prev, postId, columns));
-  }, [columns]);
-
-  const handleHeartPost = useCallback(
+  const handleRestorePost = useCallback(
     (postId: string) => {
-      // heartRealtimeWallPost는 (prev, postId) 순수 함수이며 컨테이너 외부 상태
-      // (columns 등)에 의존하지 않음. setState updater가 최신 prev를 보장하므로
-      // deps는 의도적으로 빈 배열.
-      setPosts((prev) => heartRealtimeWallPost(prev, postId));
+      setPosts((prev) => approveRealtimeWallPost(prev, postId, columns));
     },
-    [],
+    [columns],
   );
+
+  const handleHeartPost = useCallback((postId: string) => {
+    // heartRealtimeWallPost는 (prev, postId) 순수 함수이며 컨테이너 외부 상태
+    // (columns 등)에 의존하지 않음. setState updater가 최신 prev를 보장하므로
+    // deps는 의도적으로 빈 배열.
+    setPosts((prev) => heartRealtimeWallPost(prev, postId));
+  }, []);
 
   const handleTogglePin = useCallback((postId: string) => {
     setPosts((prev) => togglePinRealtimeWallPost(prev, postId));
   }, []);
 
   const handleChangeColumnInput = useCallback((index: number, value: string) => {
-    setColumnInputs((prev) => prev.map((entry, currentIndex) => (
-      currentIndex === index ? value : entry
-    )));
+    setColumnInputs((prev) =>
+      prev.map((entry, currentIndex) => (currentIndex === index ? value : entry)),
+    );
   }, []);
 
   const handleAddColumn = useCallback(() => {
-    setColumnInputs((prev) => (
-      prev.length >= REALTIME_WALL_MAX_COLUMNS ? prev : [...prev, `컬럼 ${prev.length + 1}`]
-    ));
+    setColumnInputs((prev) =>
+      prev.length >= REALTIME_WALL_MAX_COLUMNS ? prev : [...prev, `컬럼 ${prev.length + 1}`],
+    );
   }, []);
 
   // 2026-04-26 결함 #4 — Padlet 동일 인라인 "+ 섹션 추가" (Kanban 보드 우측 ghost 카드).
@@ -583,15 +608,13 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
   // 상한 REALTIME_WALL_MAX_COLUMNS(=50, 사실상 무제한) 도달 시 무시 (no-op).
   // 빈 문자열은 컴포넌트가 미호출.
   const handleAddColumnInline = useCallback((title: string) => {
-    setColumnInputs((prev) => (
-      prev.length >= REALTIME_WALL_MAX_COLUMNS ? prev : [...prev, title]
-    ));
+    setColumnInputs((prev) => (prev.length >= REALTIME_WALL_MAX_COLUMNS ? prev : [...prev, title]));
   }, []);
 
   const handleRemoveColumn = useCallback((index: number) => {
-    setColumnInputs((prev) => (
-      prev.length <= 2 ? prev : prev.filter((_, currentIndex) => currentIndex !== index)
-    ));
+    setColumnInputs((prev) =>
+      prev.length <= 2 ? prev : prev.filter((_, currentIndex) => currentIndex !== index),
+    );
   }, []);
 
   // v1.13 Stage C: 라이브 설정 드로어에서 모드 적용.
@@ -748,7 +771,16 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
       },
     });
     void window.electronAPI.broadcastRealtimeWall({ type: 'wall-state', board: snapshot });
-  }, [isLiveMode, normalizedTitle, layoutMode, columns, posts, studentFormLocked, approvalMode, boardTheme]);
+  }, [
+    isLiveMode,
+    normalizedTitle,
+    layoutMode,
+    columns,
+    posts,
+    studentFormLocked,
+    approvalMode,
+    boardTheme,
+  ]);
 
   // v1.14 P3 — 학생 카드 추가 잠금 토글 핸들러.
   // Main에 IPC로 전달 → 세션 플래그 갱신 + student-form-locked broadcast.
@@ -768,18 +800,14 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
     const offLike = api.onRealtimeWallStudentLike?.((data) => {
       setPosts((prev) =>
         prev.map((p) =>
-          p.id === data.postId
-            ? { ...p, likes: data.likes, likedBy: data.likedBy }
-            : p,
+          p.id === data.postId ? { ...p, likes: data.likes, likedBy: data.likedBy } : p,
         ),
       );
     });
     const offComment = api.onRealtimeWallStudentComment?.((data) => {
       setPosts((prev) =>
         prev.map((p) =>
-          p.id === data.postId
-            ? { ...p, comments: [...(p.comments ?? []), data.comment] }
-            : p,
+          p.id === data.postId ? { ...p, comments: [...(p.comments ?? []), data.comment] } : p,
         ),
       );
     });
@@ -788,9 +816,7 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
     const offEdit = api.onRealtimeWallStudentEdit?.((data) => {
       const updatedPost = data.post as RealtimeWallPost | undefined;
       if (!updatedPost) return;
-      setPosts((prev) =>
-        prev.map((p) => (p.id === data.postId ? updatedPost : p)),
-      );
+      setPosts((prev) => prev.map((p) => (p.id === data.postId ? updatedPost : p)));
     });
 
     // v2.1 Phase C — 학생 자기 카드 위치 변경 이벤트.
@@ -802,18 +828,14 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
     const offMove = api.onRealtimeWallStudentMove?.((data) => {
       const updatedPost = data.post as RealtimeWallPost | undefined;
       if (!updatedPost) return;
-      setPosts((prev) =>
-        prev.map((p) => (p.id === data.postId ? updatedPost : p)),
-      );
+      setPosts((prev) => prev.map((p) => (p.id === data.postId ? updatedPost : p)));
     });
 
     // v2.1 Phase D — 학생 자기 카드 삭제(soft delete) 이벤트
     // 회귀 위험 #8: hard delete 패턴 사용 X — status='hidden-by-author' 갱신만
     const offDelete = api.onRealtimeWallStudentDelete?.((data) => {
       setPosts((prev) =>
-        prev.map((p) =>
-          p.id === data.postId ? { ...p, status: 'hidden-by-author' as const } : p,
-        ),
+        prev.map((p) => (p.id === data.postId ? { ...p, status: 'hidden-by-author' as const } : p)),
       );
     });
 
@@ -929,17 +951,11 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
     if (!trackedAuthor) return new Set();
     const set = new Set<string>();
     for (const p of posts) {
-      if (
-        trackedAuthor.sessionToken &&
-        p.ownerSessionToken === trackedAuthor.sessionToken
-      ) {
+      if (trackedAuthor.sessionToken && p.ownerSessionToken === trackedAuthor.sessionToken) {
         set.add(p.id);
         continue;
       }
-      if (
-        trackedAuthor.pinHash &&
-        p.studentPinHash === trackedAuthor.pinHash
-      ) {
+      if (trackedAuthor.pinHash && p.studentPinHash === trackedAuthor.pinHash) {
         set.add(p.id);
       }
     }
@@ -947,25 +963,22 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
   }, [trackedAuthor, posts]);
 
   // v1.14 P2 — 교사 댓글 삭제 핸들러 (보드 내 카드의 휴지통 클릭)
-  const handleRemoveComment = useCallback(
-    (postId: string, commentId: string) => {
-      // 로컬 posts 즉시 갱신 (status='hidden')
-      setPosts((prev) =>
-        prev.map((p) => {
-          if (p.id !== postId) return p;
-          const nextComments = (p.comments ?? []).map((c) =>
-            c.id === commentId ? { ...c, status: 'hidden' as const } : c,
-          );
-          return { ...p, comments: nextComments };
-        }),
-      );
-      // Main에 삭제 + broadcast 요청
-      if (window.electronAPI?.removeRealtimeWallComment) {
-        void window.electronAPI.removeRealtimeWallComment({ postId, commentId });
-      }
-    },
-    [],
-  );
+  const handleRemoveComment = useCallback((postId: string, commentId: string) => {
+    // 로컬 posts 즉시 갱신 (status='hidden')
+    setPosts((prev) =>
+      prev.map((p) => {
+        if (p.id !== postId) return p;
+        const nextComments = (p.comments ?? []).map((c) =>
+          c.id === commentId ? { ...c, status: 'hidden' as const } : c,
+        );
+        return { ...p, comments: nextComments };
+      }),
+    );
+    // Main에 삭제 + broadcast 요청
+    if (window.electronAPI?.removeRealtimeWallComment) {
+      void window.electronAPI.removeRealtimeWallComment({ postId, commentId });
+    }
+  }, []);
 
   /**
    * Step 2 — 교사 좋아요 토글 핸들러.
@@ -974,23 +987,20 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
    * likes 카운트도 동기 증감.
    * buildWallStateForStudents useEffect가 posts 변경 → broadcast 자동 처리.
    */
-  const handleTeacherLike = useCallback(
-    (postId: string) => {
-      setPosts((prev) =>
-        prev.map((p) => {
-          if (p.id !== postId) return p;
-          const likedBy = p.likedBy ?? [];
-          const alreadyLiked = likedBy.includes(TEACHER_SESSION_TOKEN);
-          const nextLikedBy = alreadyLiked
-            ? likedBy.filter((t) => t !== TEACHER_SESSION_TOKEN)
-            : [...likedBy, TEACHER_SESSION_TOKEN];
-          const nextLikes = Math.max(0, (p.likes ?? 0) + (alreadyLiked ? -1 : 1));
-          return { ...p, likes: nextLikes, likedBy: nextLikedBy };
-        }),
-      );
-    },
-    [],
-  );
+  const handleTeacherLike = useCallback((postId: string) => {
+    setPosts((prev) =>
+      prev.map((p) => {
+        if (p.id !== postId) return p;
+        const likedBy = p.likedBy ?? [];
+        const alreadyLiked = likedBy.includes(TEACHER_SESSION_TOKEN);
+        const nextLikedBy = alreadyLiked
+          ? likedBy.filter((t) => t !== TEACHER_SESSION_TOKEN)
+          : [...likedBy, TEACHER_SESSION_TOKEN];
+        const nextLikes = Math.max(0, (p.likes ?? 0) + (alreadyLiked ? -1 : 1));
+        return { ...p, likes: nextLikes, likedBy: nextLikedBy };
+      }),
+    );
+  }, []);
 
   /**
    * Step 2 — 교사 댓글 추가 핸들러.
@@ -999,10 +1009,14 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
    * 도메인 comment 객체를 직접 생성해 setPosts 패치.
    */
   const handleTeacherAddComment = useCallback(
-    (postId: string, input: Omit<import('@domain/entities/RealtimeWall').StudentCommentInput, 'sessionToken'>) => {
-      const commentId = typeof crypto !== 'undefined' && crypto.randomUUID
-        ? crypto.randomUUID()
-        : `tc-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    (
+      postId: string,
+      input: Omit<import('@domain/entities/RealtimeWall').StudentCommentInput, 'sessionToken'>,
+    ) => {
+      const commentId =
+        typeof crypto !== 'undefined' && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `tc-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
       const newComment: import('@domain/entities/RealtimeWall').RealtimeWallComment = {
         id: commentId,
         nickname: '선생님',
@@ -1046,9 +1060,10 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
       columnId?: string;
       freeformPosition?: { x: number; y: number };
     }) => {
-      const id = typeof crypto !== 'undefined' && crypto.randomUUID
-        ? crypto.randomUUID()
-        : `teacher-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      const id =
+        typeof crypto !== 'undefined' && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `teacher-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 
       const submission: RealtimeWallStudentSubmission = {
         id,
@@ -1056,7 +1071,9 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
         text: input.text,
         submittedAt: Date.now(),
         ...(input.linkUrl ? { linkUrl: input.linkUrl } : {}),
-        ...(input.images && input.images.length > 0 ? { images: input.images as readonly string[] } : {}),
+        ...(input.images && input.images.length > 0
+          ? { images: input.images as readonly string[] }
+          : {}),
         ...(input.columnId ? { columnId: input.columnId } : {}),
         ...(input.color ? { color: input.color } : {}),
         // pdfDataUrl은 renderer에서는 file:// URL이 아니라 base64이므로 IPC 없이는 사용 불가.
@@ -1110,7 +1127,7 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
    * detailPost는 항상 최신 posts에서 lookup (좋아요/댓글 실시간 반영).
    */
   const detailPost = useMemo(
-    () => (detailPostId ? posts.find((p) => p.id === detailPostId) ?? null : null),
+    () => (detailPostId ? (posts.find((p) => p.id === detailPostId) ?? null) : null),
     [detailPostId, posts],
   );
   const handleOpenCardDetail = useCallback((postId: string) => {
@@ -1195,6 +1212,112 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
       window.removeEventListener('resize', measure);
     };
   }, [viewMode, isLiveMode]);
+
+  // β-Step13 (G013-A) — Teacher tab strip + CRUD.
+  //   - 학생 측 BroadcastWallState 가 teacher-only 제외 + order sort 적용; 교사는 전체 tabs 표시
+  //   - tabs 미정의 = legacy 보드 → DEFAULT_TAB_ID 단일 탭 합성 (학생 측과 동일 정합)
+  //   - addRealtimeWallTab / renameRealtimeWallTab / updateRealtimeWallTabPermission /
+  //     deleteRealtimeWallTab 모두 도메인 rules 함수 위임 (cap 8 + orphan auto-move 보장)
+  //   - 실제 WebSocket broadcast (tab-added/-deleted/-renamed/-permission-changed) 는
+  //     electron/ipc/realtimeWall.ts wire 시점에 추가 — 본 commit 은 도메인 + UI 단까지.
+  const teacherTabs: readonly RealtimeWallTabConfig[] = useMemo(
+    () =>
+      currentBoard?.tabs && currentBoard.tabs.length > 0
+        ? currentBoard.tabs
+        : [{ id: DEFAULT_TAB_ID, title: DEFAULT_TAB_TITLE, permission: 'all', order: 0 }],
+    [currentBoard?.tabs],
+  );
+  const [activeTabId, setActiveTabId] = useState<string>(DEFAULT_TAB_ID);
+  const effectiveTeacherActiveTabId =
+    teacherTabs.find((t) => t.id === activeTabId)?.id ?? teacherTabs[0]?.id ?? DEFAULT_TAB_ID;
+
+  const handleAddTab = useCallback(() => {
+    if (!currentBoard) return;
+    if ((currentBoard.tabs?.length ?? 0) >= REALTIME_WALL_MAX_TABS) {
+      window.alert(`탭은 최대 ${REALTIME_WALL_MAX_TABS}개까지 만들 수 있어요.`);
+      return;
+    }
+    const title = window.prompt('새 탭 이름 (1~30자)')?.trim();
+    if (!title) return;
+    try {
+      const tabsBase: readonly RealtimeWallTabConfig[] = currentBoard.tabs ?? teacherTabs;
+      const newTabs = addRealtimeWallTab(tabsBase, title, 'all');
+      const next: WallBoard = { ...currentBoard, tabs: newTabs, updatedAt: Date.now() };
+      setCurrentBoard(next);
+      void wallBoardRepository.save(next);
+    } catch (e) {
+      if (e instanceof Error) window.alert(e.message);
+    }
+  }, [currentBoard, teacherTabs]);
+
+  const handleRenameTab = useCallback(
+    (tabId: string) => {
+      if (!currentBoard) return;
+      const target = (currentBoard.tabs ?? teacherTabs).find((t) => t.id === tabId);
+      if (!target) return;
+      const title = window.prompt('새 탭 이름 (1~30자)', target.title)?.trim();
+      if (!title || title === target.title) return;
+      try {
+        const newTabs = renameRealtimeWallTab(currentBoard.tabs ?? teacherTabs, tabId, title);
+        const next: WallBoard = { ...currentBoard, tabs: newTabs, updatedAt: Date.now() };
+        setCurrentBoard(next);
+        void wallBoardRepository.save(next);
+      } catch (e) {
+        if (e instanceof Error) window.alert(e.message);
+      }
+    },
+    [currentBoard, teacherTabs],
+  );
+
+  const handleDeleteTab = useCallback(
+    (tabId: string) => {
+      if (!currentBoard) return;
+      if (tabId === DEFAULT_TAB_ID) {
+        window.alert('기본 탭은 삭제할 수 없어요.');
+        return;
+      }
+      if (!window.confirm('탭을 삭제하면 카드는 기본 탭으로 이동돼요. 계속할까요?')) return;
+      try {
+        const result = deleteRealtimeWallTab(currentBoard.tabs ?? teacherTabs, posts, tabId);
+        const next: WallBoard = {
+          ...currentBoard,
+          tabs: result.tabs,
+          posts: result.posts,
+          updatedAt: Date.now(),
+        };
+        setCurrentBoard(next);
+        setPosts([...result.posts]);
+        void wallBoardRepository.save(next);
+        if (activeTabId === tabId) setActiveTabId(DEFAULT_TAB_ID);
+      } catch (e) {
+        if (e instanceof Error) window.alert(e.message);
+      }
+    },
+    [activeTabId, currentBoard, posts, teacherTabs],
+  );
+
+  const handleTogglePermission = useCallback(
+    (tabId: string) => {
+      if (!currentBoard) return;
+      const target = (currentBoard.tabs ?? teacherTabs).find((t) => t.id === tabId);
+      if (!target) return;
+      // 'all' ↔ 'teacher-only' 토글 ('role-gated' 는 v2.1+ deferred)
+      const nextPermission = target.permission === 'all' ? 'teacher-only' : 'all';
+      try {
+        const newTabs = updateRealtimeWallTabPermission(
+          currentBoard.tabs ?? teacherTabs,
+          tabId,
+          nextPermission,
+        );
+        const next: WallBoard = { ...currentBoard, tabs: newTabs, updatedAt: Date.now() };
+        setCurrentBoard(next);
+        void wallBoardRepository.save(next);
+      } catch (e) {
+        if (e instanceof Error) window.alert(e.message);
+      }
+    },
+    [currentBoard, teacherTabs],
+  );
 
   const boardView = (() => {
     switch (layoutMode) {
@@ -1415,7 +1538,9 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
                 <div className="flex items-center gap-2">
                   <span className="material-symbols-outlined text-base text-sp-accent">wifi</span>
                   <span className="text-xs font-bold text-sp-text">학생 참여 준비 완료</span>
-                  <span className="text-xs text-sp-muted">— 시작 버튼을 누르면 접속 주소가 만들어져요</span>
+                  <span className="text-xs text-sp-muted">
+                    — 시작 버튼을 누르면 접속 주소가 만들어져요
+                  </span>
                 </div>
                 <div className="ml-auto flex items-center gap-2">
                   <button
@@ -1459,14 +1584,16 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
                   <span className="flex h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_6px_2px_rgba(52,211,153,0.4)]" />
                   라이브 · 학생 {connectedStudents}명
                 </span>
-                {tunnelLoading && !((shortUrl ?? tunnelUrl)) ? (
+                {tunnelLoading && !(shortUrl ?? tunnelUrl) ? (
                   <span className="flex items-center gap-1 text-sp-muted">
-                    <span className="material-symbols-outlined animate-spin text-sm text-sp-accent">progress_activity</span>
+                    <span className="material-symbols-outlined animate-spin text-sm text-sp-accent">
+                      progress_activity
+                    </span>
                     외부 접속 주소를 만드는 중...
                   </span>
-                ) : tunnelError && !((shortUrl ?? tunnelUrl)) ? (
+                ) : tunnelError && !(shortUrl ?? tunnelUrl) ? (
                   <span className="text-red-400">{tunnelError}</span>
-                ) : ((shortUrl ?? tunnelUrl)) ? (
+                ) : (shortUrl ?? tunnelUrl) ? (
                   <>
                     <span className="text-sp-muted">학생 접속:</span>
                     <span className="min-w-0 max-w-[260px] truncate font-mono font-bold text-sp-accent">
@@ -1590,6 +1717,62 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
                 section / 내부 div / BoardThemeWrapper 모두 `min-w-0`을 명시해 컬럼이
                 `1fr`로 축소되고 kanban 내부에서만 가로 스크롤이 발생하도록 한다. */}
             <section className="flex min-h-0 min-w-0 flex-1 flex-col">
+              {/* β-Step13 (G013-A) — Teacher tab strip. teacher variant 는 항상 노출
+                  (탭 1개여도 + 버튼 진입점 필요). 우클릭/긴 클릭 같은 추가 UX 는 후속. */}
+              <div className="flex min-w-0 items-center gap-2 px-2 pt-1">
+                <div className="min-w-0 flex-1 overflow-x-auto">
+                  <RealtimeWallTabBar
+                    tabs={teacherTabs}
+                    activeTabId={effectiveTeacherActiveTabId}
+                    onTabChange={(tabId) => {
+                      // 더블 클릭이 아니라 단순 클릭 — active 변경만. CRUD 는 별도 버튼.
+                      setActiveTabId(tabId);
+                    }}
+                    variant="teacher"
+                    maxTabs={REALTIME_WALL_MAX_TABS}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={handleAddTab}
+                  className="inline-flex shrink-0 items-center gap-1 rounded-md border border-sp-border bg-sp-card px-2 py-1 text-xs font-semibold text-sp-muted transition hover:border-sp-accent/40 hover:text-sp-accent"
+                  title="새 탭 추가"
+                  aria-label="새 탭 추가"
+                >
+                  <span className="material-symbols-outlined text-[14px]">add</span>탭
+                </button>
+                {effectiveTeacherActiveTabId !== DEFAULT_TAB_ID && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => handleRenameTab(effectiveTeacherActiveTabId)}
+                      className="inline-flex shrink-0 items-center gap-1 rounded-md border border-sp-border bg-sp-card px-2 py-1 text-xs font-semibold text-sp-muted transition hover:border-sp-accent/40 hover:text-sp-accent"
+                      title="현재 탭 이름 변경"
+                      aria-label="현재 탭 이름 변경"
+                    >
+                      <span className="material-symbols-outlined text-[14px]">edit</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleTogglePermission(effectiveTeacherActiveTabId)}
+                      className="inline-flex shrink-0 items-center gap-1 rounded-md border border-sp-border bg-sp-card px-2 py-1 text-xs font-semibold text-sp-muted transition hover:border-sp-accent/40 hover:text-sp-accent"
+                      title="현재 탭 권한 토글 (모두 ↔ 교사만)"
+                      aria-label="현재 탭 권한 토글"
+                    >
+                      <span className="material-symbols-outlined text-[14px]">lock_open</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteTab(effectiveTeacherActiveTabId)}
+                      className="inline-flex shrink-0 items-center gap-1 rounded-md border border-rose-500/40 bg-sp-card px-2 py-1 text-xs font-semibold text-rose-400 transition hover:border-rose-500 hover:text-rose-300"
+                      title="현재 탭 삭제 (카드는 기본 탭으로 이동)"
+                      aria-label="현재 탭 삭제"
+                    >
+                      <span className="material-symbols-outlined text-[14px]">delete</span>
+                    </button>
+                  </>
+                )}
+              </div>
               <div className="min-h-0 min-w-0 flex-1">
                 <RealtimeWallBoardThemeWrapper
                   theme={boardTheme}

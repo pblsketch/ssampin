@@ -561,6 +561,79 @@ export const useRealtimeWallSyncStore = create<RealtimeWallSyncState>((set, get)
             : s,
         );
         return;
+      // ============ v2.0 (β-Step12 / G012-D) — 탭 CRUD broadcast 처리 ============
+      // 회귀 보호 #2 SERVER_TRUSTED_BROADCAST: 본 case 들은 서버에서만 송신 가능 (학생 송신은
+      // 신뢰 경계 외 — server 의 Zod parse 가 차단). 학생 측은 store 갱신만 수행.
+      case 'tab-added':
+        set((s) =>
+          s.board
+            ? {
+                board: {
+                  ...s.board,
+                  tabs: [...(s.board.tabs ?? []), msg.tab].sort((a, b) => a.order - b.order),
+                },
+              }
+            : s,
+        );
+        return;
+      case 'tab-deleted':
+        set((s) =>
+          s.board
+            ? {
+                board: {
+                  ...s.board,
+                  tabs: (s.board.tabs ?? []).filter((t) => t.id !== msg.tabId),
+                  // orphaned posts → DEFAULT_TAB_ID 로 이동 (서버가 결정한 list 그대로 반영)
+                  posts: s.board.posts.map((p) =>
+                    msg.orphanedPostIds.includes(p.id) ? { ...p, tabId: 'default' } : p,
+                  ),
+                },
+              }
+            : s,
+        );
+        return;
+      case 'tab-renamed':
+        set((s) =>
+          s.board
+            ? {
+                board: {
+                  ...s.board,
+                  tabs: (s.board.tabs ?? []).map((t) =>
+                    t.id === msg.tabId ? { ...t, title: msg.newTitle } : t,
+                  ),
+                },
+              }
+            : s,
+        );
+        return;
+      case 'tab-permission-changed':
+        set((s) =>
+          s.board
+            ? {
+                board: {
+                  ...s.board,
+                  tabs: (s.board.tabs ?? []).map((t) =>
+                    t.id === msg.tabId ? { ...t, permission: msg.permission } : t,
+                  ),
+                },
+              }
+            : s,
+        );
+        return;
+      case 'post-tab-moved':
+        set((s) =>
+          s.board
+            ? {
+                board: {
+                  ...s.board,
+                  posts: s.board.posts.map((p) =>
+                    p.id === msg.postId ? { ...p, tabId: msg.newTabId } : p,
+                  ),
+                },
+              }
+            : s,
+        );
+        return;
       default: {
         // exhaustive-check
         const _exhaustive: never = msg;

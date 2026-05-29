@@ -289,10 +289,9 @@ const ClientMessageSchema = z
     UpdateNicknameSchema,
     StudentSubmitMoveSchema,
   ])
-  .refine(
-    (m) => m.type !== 'submit-move' || m.freeform !== undefined || m.kanban !== undefined,
-    { message: 'either freeform or kanban must be provided' },
-  );
+  .refine((m) => m.type !== 'submit-move' || m.freeform !== undefined || m.kanban !== undefined, {
+    message: 'either freeform or kanban must be provided',
+  });
 
 // ============================================================
 // v1.16.x (Phase 1, Design §3.5) — WallBoardTheme Zod 검증
@@ -303,12 +302,13 @@ const WallBoardThemeSchemaIpc = z.object({
   colorScheme: z.enum(['light', 'dark']),
   background: z.object({
     type: z.enum(['solid', 'gradient', 'pattern']),
-    presetId: z.enum(
-      WALL_BOARD_BACKGROUND_PRESET_IDS as unknown as readonly [string, ...string[]],
-    ),
+    presetId: z.enum(WALL_BOARD_BACKGROUND_PRESET_IDS as unknown as readonly [string, ...string[]]),
   }),
   // accent — hex 6자리만 (CSS injection 차단, 회귀 위험 #10)
-  accent: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  accent: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .optional(),
 });
 
 const RealtimeWallBoardSettingsSchemaIpc = z.object({
@@ -427,10 +427,7 @@ function getStudentAssetContentType(filePath: string): string {
   }
 }
 
-function serveStudentAsset(
-  pathname: string,
-  res: http.ServerResponse,
-): boolean {
+function serveStudentAsset(pathname: string, res: http.ServerResponse): boolean {
   const distRoot = getStudentDistRoot();
   if (!fs.existsSync(distRoot)) return false;
 
@@ -517,13 +514,7 @@ const REALTIME_WALL_MAX_IMAGES_PER_POST = 5;
 const REALTIME_WALL_MAX_IMAGES_TOTAL_BYTES = 15 * 1024 * 1024;
 const REALTIME_WALL_MAX_SINGLE_IMAGE_BYTES = 10 * 1024 * 1024;
 
-const ALLOWED_IMAGE_MIMES = [
-  'image/png',
-  'image/jpeg',
-  'image/jpg',
-  'image/gif',
-  'image/webp',
-];
+const ALLOWED_IMAGE_MIMES = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp'];
 
 type ImageValidationReason =
   | 'too-many-images'
@@ -544,8 +535,7 @@ function approximateRawBytesFromDataUrl(dataUrl: string): number {
   const commaIdx = dataUrl.indexOf(',');
   if (commaIdx === -1) return 0;
   const base64Len = dataUrl.length - commaIdx - 1;
-  const padding =
-    dataUrl.endsWith('==') ? 2 : dataUrl.endsWith('=') ? 1 : 0;
+  const padding = dataUrl.endsWith('==') ? 2 : dataUrl.endsWith('=') ? 1 : 0;
   return Math.floor((base64Len * 3) / 4) - padding;
 }
 
@@ -704,7 +694,7 @@ interface PersistPdfResult {
 }
 
 function sanitizePdfFilename(filename: string): string {
-  const cleaned = filename.replace(/[^\w가-힣.\-]/g, '_').slice(0, 100);
+  const cleaned = filename.replace(/[^\w가-힣.-]/g, '_').slice(0, 100);
   return cleaned.toLowerCase().endsWith('.pdf') ? cleaned : `${cleaned}.pdf`;
 }
 
@@ -757,7 +747,10 @@ async function persistStudentPdfFromDataUrl(
     return { ok: false, message: '올바른 PDF 파일이 아니에요.' };
   }
   if (bytes.length > REALTIME_WALL_MAX_PDF_BYTES) {
-    return { ok: false, message: `PDF는 최대 ${REALTIME_WALL_MAX_PDF_BYTES / 1024 / 1024}MB까지 첨부할 수 있어요.` };
+    return {
+      ok: false,
+      message: `PDF는 최대 ${REALTIME_WALL_MAX_PDF_BYTES / 1024 / 1024}MB까지 첨부할 수 있어요.`,
+    };
   }
   const head = bytes.subarray(0, PDF_MAGIC_BYTES.length);
   if (!head.equals(PDF_MAGIC_BYTES)) {
@@ -803,6 +796,21 @@ function emitConnectionCount(mainWindow: BrowserWindow, current: RealtimeWallSes
 /**
  * 모든 연결된 학생 클라이언트에 메시지 송신.
  * 베이스가 sentAt 자동 첨부 + 개별 client 실패 swallow.
+ *
+ * **SERVER_TRUSTED_BROADCAST** (회귀 보호 #2 — Plan §2.2 Step 12 / G012-D):
+ *
+ *   본 함수는 서버 → 학생 broadcast 의 **유일한 진입점**이다. 본 함수를 통해 송신되는
+ *   모든 메시지는 `BroadcastableServerMessage` union 에 정의된 형태를 따르며, 이 union 은
+ *   `src/shared/wsProtocol/realtimeWall.ts` 의 `RealtimeWallServerMessageSchema` 와 1:1
+ *   정합한다 (server-side TypeScript union ↔ client-side runtime Zod schema).
+ *
+ *   학생 SPA 는 본 broadcast 만을 신뢰 (학생 송신 메시지는 본 함수 미경유 — 서버 단의
+ *   `RealtimeWallClientMessageSchema` parse → 도메인 갱신 → broadcast 형태로만 전파).
+ *   따라서 학생이 임의 broadcast 를 만들어 다른 학생에게 영향을 줄 수 없다 (회귀 #2 보호).
+ *
+ *   17 messages (v1.15.x 12종 + v2.0 5종) 모두 본 함수를 거쳐야 학생에게 도달한다.
+ *   메시지 추가 시: (1) `BroadcastableServerMessage` union 갱신, (2) `RealtimeWallServerMessageSchema`
+ *   discriminated union 에 신규 sub-schema 등록, (3) 메타테스트 카운트 갱신.
  */
 function broadcastToStudents(msg: BroadcastableServerMessage): void {
   if (!session) return;
@@ -900,7 +908,10 @@ export function registerRealtimeWallHandlers(mainWindow: BrowserWindow): void {
 
         // v2.1 student-ux 회귀 fix (2026-04-24): maxPayload 20MB.
         // 이미지 합계 15MB(raw) → base64 ~20MB + 메타.
-        const handle = await startSessionedWebSocketServer<ClientMessage, BroadcastableServerMessage>({
+        const handle = await startSessionedWebSocketServer<
+          ClientMessage,
+          BroadcastableServerMessage
+        >({
           port: 0,
           maxPayloadBytes: 20 * 1024 * 1024,
           clientMessageSchema: ClientMessageSchema,
@@ -1029,11 +1040,13 @@ export function registerRealtimeWallHandlers(mainWindow: BrowserWindow): void {
 
                 if (ws.readyState === WebSocket.OPEN) {
                   // 1) legacy 'wall' 메시지 — 구 HTML 폴백 경로 호환.
-                  ws.send(JSON.stringify({
-                    type: 'wall',
-                    title: session.title,
-                    maxTextLength: session.maxTextLength,
-                  }));
+                  ws.send(
+                    JSON.stringify({
+                      type: 'wall',
+                      title: session.title,
+                      maxTextLength: session.maxTextLength,
+                    }),
+                  );
 
                   // 2) 패들렛 모드: 캐시된 wall-state 스냅샷 즉시 송신.
                   //
@@ -1182,8 +1195,7 @@ export function registerRealtimeWallHandlers(mainWindow: BrowserWindow): void {
                       } | null)
                     : null;
                 const existingPosts: readonly RealtimeWallPost[] = currentBoard?.posts ?? [];
-                const existingColumns: readonly RealtimeWallColumn[] =
-                  currentBoard?.columns ?? [];
+                const existingColumns: readonly RealtimeWallColumn[] = currentBoard?.columns ?? [];
                 const moderation = currentBoard?.settings?.moderation ?? 'off';
                 const approvalMode: WallApprovalMode = approvalModeFromModerationMode(moderation);
 
@@ -1383,7 +1395,8 @@ export function registerRealtimeWallHandlers(mainWindow: BrowserWindow): void {
                 // 자기 카드 검증 — sessionToken OR PIN hash 양방향
                 const ownerSt = cached.ownerSessionToken;
                 const ownerPh = cached.studentPinHash;
-                const matchesSession = ownerSt && ownerSt.length > 0 && ownerSt === msg.sessionToken;
+                const matchesSession =
+                  ownerSt && ownerSt.length > 0 && ownerSt === msg.sessionToken;
                 const matchesPin =
                   msg.pinHash && ownerPh && ownerPh.length > 0 && ownerPh === msg.pinHash;
                 if (!matchesSession && !matchesPin) {
@@ -1398,10 +1411,7 @@ export function registerRealtimeWallHandlers(mainWindow: BrowserWindow): void {
                 // 검증
                 if (msg.text !== undefined) {
                   const trimmedText = msg.text.trim();
-                  if (
-                    trimmedText.length === 0 ||
-                    trimmedText.length > session.maxTextLength
-                  ) {
+                  if (trimmedText.length === 0 || trimmedText.length > session.maxTextLength) {
                     sendError(ws, '내용을 다시 확인해주세요.');
                     return;
                   }
@@ -1531,7 +1541,8 @@ export function registerRealtimeWallHandlers(mainWindow: BrowserWindow): void {
                 }
                 const ownerSt = cached.ownerSessionToken;
                 const ownerPh = cached.studentPinHash;
-                const matchesSession = ownerSt && ownerSt.length > 0 && ownerSt === msg.sessionToken;
+                const matchesSession =
+                  ownerSt && ownerSt.length > 0 && ownerSt === msg.sessionToken;
                 const matchesPin =
                   msg.pinHash && ownerPh && ownerPh.length > 0 && ownerPh === msg.pinHash;
                 if (!matchesSession && !matchesPin) {
@@ -1583,7 +1594,9 @@ export function registerRealtimeWallHandlers(mainWindow: BrowserWindow): void {
                 // 서버는 보드 내 모든 카드의 studentPinHash와 비교 → 매칭 1건이라도 있으면 ok
                 let matched = false;
                 if (session.lastWallState && session.lastWallState.type === 'wall-state') {
-                  const board = session.lastWallState.board as { posts?: RealtimeWallPost[] } | null;
+                  const board = session.lastWallState.board as {
+                    posts?: RealtimeWallPost[];
+                  } | null;
                   if (board && Array.isArray(board.posts)) {
                     for (const p of board.posts) {
                       if (p.studentPinHash && p.studentPinHash === msg.pinHash) {
@@ -1760,9 +1773,7 @@ export function registerRealtimeWallHandlers(mainWindow: BrowserWindow): void {
                   postId: msg.postId,
                   matchesSession: Boolean(matchesSession),
                   matchesPin: Boolean(matchesPin),
-                  cachedOwnerSessionPrefix: ownerSt
-                    ? `${ownerSt.slice(0, 8)}...`
-                    : '(missing)',
+                  cachedOwnerSessionPrefix: ownerSt ? `${ownerSt.slice(0, 8)}...` : '(missing)',
                   cachedHasPinHash: Boolean(ownerPh),
                 });
                 if (!matchesSession && !matchesPin) {
@@ -1786,9 +1797,7 @@ export function registerRealtimeWallHandlers(mainWindow: BrowserWindow): void {
                     y: msg.freeform.y,
                     w: msg.freeform.w,
                     h: msg.freeform.h,
-                    ...(msg.freeform.zIndex !== undefined
-                      ? { zIndex: msg.freeform.zIndex }
-                      : {}),
+                    ...(msg.freeform.zIndex !== undefined ? { zIndex: msg.freeform.zIndex } : {}),
                   };
                   Object.assign(updated, { freeform: nextFreeform });
                   patch['freeform'] = nextFreeform;
@@ -1864,64 +1873,61 @@ export function registerRealtimeWallHandlers(mainWindow: BrowserWindow): void {
    * Main은 모든 연결된 학생에게 JSON 송신하고, 'wall-state' 타입이면 lastWallState 캐시 갱신
    * + postsCache 재구성.
    */
-  ipcMain.handle(
-    'realtime-wall:broadcast',
-    (_event, msg: BroadcastableServerMessage): void => {
-      if (!session) return;
-      if (!msg || typeof msg !== 'object' || typeof msg.type !== 'string') return;
+  ipcMain.handle('realtime-wall:broadcast', (_event, msg: BroadcastableServerMessage): void => {
+    if (!session) return;
+    if (!msg || typeof msg !== 'object' || typeof msg.type !== 'string') return;
 
-      // v1.16.x (Phase 1, Design §3.5) — boardSettings-changed 페이로드 Zod 검증.
-      // 교사 renderer 변조 가정 — settings.theme의 presetId / accent 화이트리스트 통과만 broadcast.
-      // 검증 실패 시 broadcast 차단 (학생 화면 깨짐 0).
-      if (msg.type === 'boardSettings-changed') {
-        const result = RealtimeWallBoardSettingsSchemaIpc.safeParse(
-          (msg as { settings?: unknown }).settings,
-        );
-        if (!result.success) {
-          rwallLog('broadcast boardSettings-changed REJECTED: zod failed', {
-            error: result.error.errors[0]?.message,
-          });
-          return;
-        }
-        // 정규화된 settings로 교체 — 학생 SPA가 신뢰할 수 있는 값만 수신.
-        const sanitizedMsg: BroadcastableServerMessage = {
-          type: 'boardSettings-changed',
-          settings: result.data as RealtimeWallBoardSettings,
-        };
-        rwallLog('broadcast boardSettings-changed from teacher', {
-          hasTheme: result.data.theme !== undefined,
-          presetId: result.data.theme?.background.presetId,
-          colorScheme: result.data.theme?.colorScheme,
+    // v1.16.x (Phase 1, Design §3.5) — boardSettings-changed 페이로드 Zod 검증.
+    // 교사 renderer 변조 가정 — settings.theme의 presetId / accent 화이트리스트 통과만 broadcast.
+    // 검증 실패 시 broadcast 차단 (학생 화면 깨짐 0).
+    if (msg.type === 'boardSettings-changed') {
+      const result = RealtimeWallBoardSettingsSchemaIpc.safeParse(
+        (msg as { settings?: unknown }).settings,
+      );
+      if (!result.success) {
+        rwallLog('broadcast boardSettings-changed REJECTED: zod failed', {
+          error: result.error.errors[0]?.message,
         });
-        // lastWallState의 settings도 갱신해 신규 join 학생에게 즉시 동기화.
-        if (session.lastWallState && session.lastWallState.type === 'wall-state') {
-          const board = session.lastWallState.board as Record<string, unknown> | null;
-          if (board) {
-            session.lastWallState = {
-              type: 'wall-state',
-              board: { ...board, settings: result.data },
-            };
-          }
-        }
-        broadcastToStudents(sanitizedMsg);
         return;
       }
-
-      // wall-state 메시지는 캐시로 보관 — 신규 join 시 자동 송신.
-      if (msg.type === 'wall-state') {
-        const board = (msg as { board?: { posts?: unknown[] } }).board;
-        rwallLog('broadcast wall-state from teacher', {
-          postsCount: Array.isArray(board?.posts) ? board.posts.length : 0,
-        });
-        session.lastWallState = msg;
-        rebuildPostsCacheFromWallState(msg);
-      } else {
-        rwallLog(`broadcast ${msg.type} from teacher`);
+      // 정규화된 settings로 교체 — 학생 SPA가 신뢰할 수 있는 값만 수신.
+      const sanitizedMsg: BroadcastableServerMessage = {
+        type: 'boardSettings-changed',
+        settings: result.data as RealtimeWallBoardSettings,
+      };
+      rwallLog('broadcast boardSettings-changed from teacher', {
+        hasTheme: result.data.theme !== undefined,
+        presetId: result.data.theme?.background.presetId,
+        colorScheme: result.data.theme?.colorScheme,
+      });
+      // lastWallState의 settings도 갱신해 신규 join 학생에게 즉시 동기화.
+      if (session.lastWallState && session.lastWallState.type === 'wall-state') {
+        const board = session.lastWallState.board as Record<string, unknown> | null;
+        if (board) {
+          session.lastWallState = {
+            type: 'wall-state',
+            board: { ...board, settings: result.data },
+          };
+        }
       }
+      broadcastToStudents(sanitizedMsg);
+      return;
+    }
 
-      broadcastToStudents(msg);
-    },
-  );
+    // wall-state 메시지는 캐시로 보관 — 신규 join 시 자동 송신.
+    if (msg.type === 'wall-state') {
+      const board = (msg as { board?: { posts?: unknown[] } }).board;
+      rwallLog('broadcast wall-state from teacher', {
+        postsCount: Array.isArray(board?.posts) ? board.posts.length : 0,
+      });
+      session.lastWallState = msg;
+      rebuildPostsCacheFromWallState(msg);
+    } else {
+      rwallLog(`broadcast ${msg.type} from teacher`);
+    }
+
+    broadcastToStudents(msg);
+  });
 
   /**
    * v2.1 Phase D — 교사가 placeholder 카드 복원 (status='hidden-by-author' → 'approved').
@@ -1929,23 +1935,20 @@ export function registerRealtimeWallHandlers(mainWindow: BrowserWindow): void {
    * renderer에서 호출 → Main이 broadcast post-updated patch: { status: 'approved' }.
    * 클라이언트 측은 RealtimeWallCard placeholder 분기에서 다시 일반 카드로 복귀.
    */
-  ipcMain.handle(
-    'realtime-wall:restore-card',
-    (_event, args: { postId: string }): void => {
-      if (!session) return;
-      if (!args || typeof args.postId !== 'string') return;
-      const cached = getCachedPost(args.postId);
-      if (!cached) return;
-      if (cached.status !== 'hidden-by-author') return;
-      const updated: RealtimeWallPost = { ...cached, status: 'approved' };
-      updateCachedPost(updated);
-      broadcastToStudents({
-        type: 'post-updated',
-        postId: args.postId,
-        patch: { status: 'approved' },
-      });
-    },
-  );
+  ipcMain.handle('realtime-wall:restore-card', (_event, args: { postId: string }): void => {
+    if (!session) return;
+    if (!args || typeof args.postId !== 'string') return;
+    const cached = getCachedPost(args.postId);
+    if (!cached) return;
+    if (cached.status !== 'hidden-by-author') return;
+    const updated: RealtimeWallPost = { ...cached, status: 'approved' };
+    updateCachedPost(updated);
+    broadcastToStudents({
+      type: 'post-updated',
+      postId: args.postId,
+      patch: { status: 'approved' },
+    });
+  });
 
   /**
    * v1.14 P2 — 교사가 학생 댓글 삭제 (status='hidden' 전환).
@@ -1978,16 +1981,13 @@ export function registerRealtimeWallHandlers(mainWindow: BrowserWindow): void {
    * 잠금 상태는 lastWallState 다음 broadcast 시 스냅샷에도 반영되므로
    * 신규 join 학생도 즉시 올바른 FAB 비활성 상태를 받는다.
    */
-  ipcMain.handle(
-    'realtime-wall:student-form-locked',
-    (_event, locked: boolean): void => {
-      if (!session) return;
-      const nextLocked = Boolean(locked);
-      if (session.studentFormLocked === nextLocked) return;
-      session.studentFormLocked = nextLocked;
-      broadcastToStudents({ type: 'student-form-locked', locked: nextLocked });
-    },
-  );
+  ipcMain.handle('realtime-wall:student-form-locked', (_event, locked: boolean): void => {
+    if (!session) return;
+    const nextLocked = Boolean(locked);
+    if (session.studentFormLocked === nextLocked) return;
+    session.studentFormLocked = nextLocked;
+    broadcastToStudents({ type: 'student-form-locked', locked: nextLocked });
+  });
 
   ipcMain.handle('realtime-wall:tunnel-available', (): boolean => {
     return isTunnelAvailable();

@@ -7,7 +7,19 @@ import type {
   WallBoardId,
 } from '@domain/entities/RealtimeWall';
 import { createWallBoard } from '@domain/rules/realtimeWallRules';
+import { migrateWallBoardToV2 } from '@usecases/realtimeWall/MigrateWallBoardToV2';
+import { DEFAULT_TAB_TITLE } from '@adapters/components/Tools/RealtimeWall/realtimeWallConstants';
+import { DEFAULT_TAB_ID } from '@domain/entities/RealtimeWallTabConfig';
 import { JsonWallBoardRepository, migratePostFields } from './JsonWallBoardRepository';
+
+/**
+ * v2.0 (β-Step4) — `load` 가 v1.15.x 보드 자동 마이그레이션하므로
+ * `save(board) → load === board` 는 더 이상 성립하지 않는다.
+ * 비교 대상을 `migrateWallBoardToV2` 결과로 정규화한 다음 비교한다.
+ */
+function expectedAfterAutoMigration(board: WallBoard): WallBoard {
+  return migrateWallBoardToV2(board, { defaultTabTitle: DEFAULT_TAB_TITLE }).board;
+}
 
 /**
  * In-memory IStoragePort for Repository integration testing.
@@ -35,10 +47,18 @@ class FakeStorage implements IStoragePort {
   }
 
   // 바이너리 메서드는 WallBoard 저장에 사용되지 않음 — no-op stubs.
-  async readBinary(): Promise<Uint8Array | null> { return null; }
-  async writeBinary(): Promise<void> { /* noop */ }
-  async removeBinary(): Promise<void> { /* noop */ }
-  async listBinary(): Promise<readonly string[]> { return []; }
+  async readBinary(): Promise<Uint8Array | null> {
+    return null;
+  }
+  async writeBinary(): Promise<void> {
+    /* noop */
+  }
+  async removeBinary(): Promise<void> {
+    /* noop */
+  }
+  async listBinary(): Promise<readonly string[]> {
+    return [];
+  }
 
   has(filename: string): boolean {
     return this.store.has(filename);
@@ -89,11 +109,40 @@ describe('JsonWallBoardRepository', () => {
   });
 
   describe('save + load 왕복', () => {
-    it('빈 보드 저장 후 load로 동일 값 복원', async () => {
+    it('빈 보드 저장 후 load로 자동 마이그레이션된 값 복원 (v2.0 β-Step4)', async () => {
       const board = mkBoard('b1');
       await repo.save(board);
       const loaded = await repo.load('b1' as WallBoardId);
-      expect(loaded).toEqual(board);
+      // v1.x save → v2 auto-migrate on load → schemaVersion='2.0' + tabs + posts.tabId 백필.
+      expect(loaded).toEqual(expectedAfterAutoMigration(board));
+    });
+
+    it('v2.0 auto-migration: schemaVersion 부재 → load 시 부여 + persist (idempotent next load)', async () => {
+      const board = mkBoard('b-migrate');
+      await repo.save(board);
+      // 첫 load: 마이그레이션 트리거 + persist
+      const firstLoad = await repo.load('b-migrate' as WallBoardId);
+      expect(firstLoad?.schemaVersion).toBe('2.0');
+      expect(firstLoad?.tabs).toHaveLength(1);
+      expect(firstLoad?.tabs?.[0]?.id).toBe(DEFAULT_TAB_ID);
+      expect(firstLoad?.tabs?.[0]?.title).toBe(DEFAULT_TAB_TITLE);
+
+      // 두 번째 load: 이미 v2.0 — fast-path skip (toEqual 동일)
+      const secondLoad = await repo.load('b-migrate' as WallBoardId);
+      expect(secondLoad).toEqual(firstLoad);
+    });
+
+    it('v2.0 auto-migration: posts.tabId 모두 DEFAULT_TAB_ID 백필', async () => {
+      const board: WallBoard = {
+        ...mkBoard('b-posts'),
+        posts: [mkPost('p1'), mkPost('p2', { status: 'pending' })],
+      };
+      await repo.save(board);
+      const loaded = await repo.load('b-posts' as WallBoardId);
+      expect(loaded?.posts).toHaveLength(2);
+      for (const post of loaded?.posts ?? []) {
+        expect(post.tabId).toBe(DEFAULT_TAB_ID);
+      }
     });
 
     it('posts 포함 보드 저장 후 load로 posts 복원', async () => {

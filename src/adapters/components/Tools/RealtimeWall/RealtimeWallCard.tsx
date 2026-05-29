@@ -110,6 +110,20 @@ export interface RealtimeWallCardProps {
    */
   readonly studentDragHandle?: React.ReactNode;
   /**
+   * β-Step7 (v2.0) — `RealtimeWallCardCounterBadge` slot.
+   *
+   * Spec L189 CounterBadge `UI presentation (NEW v2.0)` 와 정합. 카드 우하단 absolute
+   * 위치에 ❤️N · 💬M 항상 노출. v1.14 broadcast(like-toggled·comment-added/removed)
+   * 그대로 재사용 — 별도 broadcast 채널 추가 0건.
+   *
+   * 회귀 보호:
+   *   - 회귀 #11 viewerRole 비대칭 0: slot prop 자체는 viewerRole 분기 없이 동일하게
+   *     렌더 (badge 내부에서 prop 으로 colorscheme 분기 — 본 카드는 통과만).
+   *   - 미전달 시 미렌더 (기존 호출자 무회귀).
+   *   - status='hidden-by-author' 카드는 본 컴포넌트 상단에서 일찍 return 하므로 badge 도 자동 미노출.
+   */
+  readonly counterBadgeSlot?: React.ReactNode;
+  /**
    * 2026-04-26 결함 fix — 카드 더블클릭 시 상세 보기 모달 열기 콜백.
    *
    * 회귀 위험 보호:
@@ -208,9 +222,7 @@ function WebPagePreview({
         {preview.ogDescription && (
           <p className="mt-0.5 line-clamp-2 text-detail text-sp-muted">{preview.ogDescription}</p>
         )}
-        <p className="mt-1 truncate text-caption text-sp-muted/70">
-          {getLinkLabel(linkUrl)}
-        </p>
+        <p className="mt-1 truncate text-caption text-sp-muted/70">{getLinkLabel(linkUrl)}</p>
       </div>
     </button>
   );
@@ -222,7 +234,7 @@ export function RealtimeWallCard({
   actions,
   dragHandle,
   onOpenLink,
-  onHeart: _onHeart,  // v2-student-ux 옵션 B: deprecated, UI 렌더링 안 함 (도메인 필드는 v1.13 호환 유지)
+  onHeart: _onHeart, // v2-student-ux 옵션 B: deprecated, UI 렌더링 안 함 (도메인 필드는 v1.13 호환 유지)
   viewerRole = 'teacher',
   currentSessionToken,
   currentPinHash,
@@ -240,6 +252,7 @@ export function RealtimeWallCard({
   onTeacherBulkHideStudent,
   highlighted = false,
   studentDragHandle,
+  counterBadgeSlot,
   onCardDetail,
 }: RealtimeWallCardProps) {
   // v2.1 Phase D — soft delete placeholder 분기 (회귀 위험 #8 보호 표시 로직)
@@ -251,9 +264,7 @@ export function RealtimeWallCard({
         post={post}
         viewerRole={viewerRole}
         onRestore={
-          viewerRole === 'teacher' && onRestoreCard
-            ? () => onRestoreCard(post.id)
-            : undefined
+          viewerRole === 'teacher' && onRestoreCard ? () => onRestoreCard(post.id) : undefined
         }
       />
     );
@@ -274,9 +285,7 @@ export function RealtimeWallCard({
   );
   // Step 2 — 교사 좋아요 상태: __teacher__ 토큰으로 likedBy 포함 여부 판정
   const TEACHER_SESSION_TOKEN = '__teacher__';
-  const hasTeacherLiked = Boolean(
-    (post.likedBy ?? []).includes(TEACHER_SESSION_TOKEN),
-  );
+  const hasTeacherLiked = Boolean((post.likedBy ?? []).includes(TEACHER_SESSION_TOKEN));
 
   // v1.14 P2 댓글 토글 상태 — 기본 접힘
   const [commentsOpen, setCommentsOpen] = useState(false);
@@ -298,9 +307,10 @@ export function RealtimeWallCard({
     onTeacherLike(post.id);
     setTimeout(() => setTeacherLikePending(false), 300);
   }, [onTeacherLike, teacherLikePending, post.id]);
-  const visibleComments = viewerRole === 'teacher'
-    ? (post.comments ?? [])
-    : (post.comments ?? []).filter((c) => c.status === 'approved');
+  const visibleComments =
+    viewerRole === 'teacher'
+      ? (post.comments ?? [])
+      : (post.comments ?? []).filter((c) => c.status === 'approved');
   const commentCount = visibleComments.length;
   const showComments = post.status === 'approved';
 
@@ -319,8 +329,7 @@ export function RealtimeWallCard({
   );
   // v2.1 Phase C 버그 fix (2026-04-24) — 학생 자기 카드 드래그 핸들 게이트.
   // 회귀 #3 보호: viewerRole='student' + isOwn일 때만 렌더 (다른 학생 카드는 KanbanBoard에서 차단).
-  const studentDragHandleNode =
-    viewerRole === 'student' && isOwn ? studentDragHandle : null;
+  const studentDragHandleNode = viewerRole === 'student' && isOwn ? studentDragHandle : null;
   const showOwnerActions =
     viewerRole === 'student' && isOwn && (Boolean(onOwnCardEdit) || Boolean(onOwnCardDelete));
   const ownerActionsNode = showOwnerActions ? (
@@ -389,221 +398,230 @@ export function RealtimeWallCard({
   const bodyText = parsed?.body ?? post.text ?? '';
 
   // v2.1 Phase D — 강조 ring (자기 카드 sky / 교사 추적 매칭 sky-bright)
-  const ringClass = isOwn && viewerRole === 'student'
-    ? 'ring-1 ring-sky-400/30'
-    : highlighted
-      ? 'ring-2 ring-sky-400/70'
-      : '';
+  const ringClass =
+    isOwn && viewerRole === 'student'
+      ? 'ring-1 ring-sky-400/30'
+      : highlighted
+        ? 'ring-2 ring-sky-400/70'
+        : '';
 
   return (
     <>
-    {/*
+      {/*
       2026-04-26 사용자 피드백 #2 — 카드 가시성 강화:
       - shadow-sm → shadow-md(기본) / hover:shadow-lg (Padlet 정합 부유감)
       - light 모드: ring-1 ring-black/5로 미세 outline (흰 카드도 흰 배경 위에서 또렷)
       - dark 모드: 기존 ring 0 + border 유지
     */}
-    <article
-      ref={articleRef}
-      data-card-root="true"
-      // 2026-04-26 라운드 7 결함 A 검증 안전망 — DevTools에서 boardColorScheme 조회 가능.
-      // Light board면 light 카드 배경 + slate-900 텍스트, dark면 그 반대 — 직접 확인용.
-      data-color-scheme={boardColorScheme}
-      onContextMenu={showTeacherContextMenu ? handleContextMenu : undefined}
-      onDoubleClick={onCardDetail ? handleCardDoubleClick : undefined}
-      className={`relative group flex h-full flex-col rounded-xl border p-3.5 shadow-md ring-1 ring-black/5 transition-shadow hover:shadow-lg dark:ring-0 ${
-        isPinned
-          ? 'border-amber-400/60 shadow-amber-400/10'
-          : 'border-sp-border hover:border-sp-border/80'
-      } ${colorBgClass} ${ringClass}`}
-    >
-      {/* v2.1 — 좌상단 색상 점 (white 제외) */}
-      {colorDotClass && (
-        <span
-          className={`absolute top-2 left-2 inline-block w-2 h-2 rounded-full ${colorDotClass}`}
-          aria-hidden="true"
-        />
-      )}
-      <div className="mb-2.5 flex items-start gap-1.5">
-        {teacherDragHandle && (
-          <div className="mt-0.5 shrink-0 opacity-0 transition-opacity group-hover:opacity-100">
-            {teacherDragHandle}
-          </div>
+      <article
+        ref={articleRef}
+        data-card-root="true"
+        // 2026-04-26 라운드 7 결함 A 검증 안전망 — DevTools에서 boardColorScheme 조회 가능.
+        // Light board면 light 카드 배경 + slate-900 텍스트, dark면 그 반대 — 직접 확인용.
+        data-color-scheme={boardColorScheme}
+        onContextMenu={showTeacherContextMenu ? handleContextMenu : undefined}
+        onDoubleClick={onCardDetail ? handleCardDoubleClick : undefined}
+        className={`relative group flex h-full flex-col rounded-xl border p-3.5 shadow-md ring-1 ring-black/5 transition-shadow hover:shadow-lg dark:ring-0 ${
+          isPinned
+            ? 'border-amber-400/60 shadow-amber-400/10'
+            : 'border-sp-border hover:border-sp-border/80'
+        } ${colorBgClass} ${ringClass}`}
+      >
+        {/* v2.1 — 좌상단 색상 점 (white 제외) */}
+        {colorDotClass && (
+          <span
+            className={`absolute top-2 left-2 inline-block w-2 h-2 rounded-full ${colorDotClass}`}
+            aria-hidden="true"
+          />
         )}
-        {/* v2.1 Phase C 버그 fix (2026-04-24) — 학생 자기 카드 드래그 핸들 슬롯.
+        <div className="mb-2.5 flex items-start gap-1.5">
+          {teacherDragHandle && (
+            <div className="mt-0.5 shrink-0 opacity-0 transition-opacity group-hover:opacity-100">
+              {teacherDragHandle}
+            </div>
+          )}
+          {/* v2.1 Phase C 버그 fix (2026-04-24) — 학생 자기 카드 드래그 핸들 슬롯.
             회귀 #3 보호: studentDragHandleNode는 viewerRole='student' + isOwn일 때만 non-null.
             모바일 학생 친화성: opacity-100으로 항상 표시(터치 환경에서는 hover 부재). */}
-        {studentDragHandleNode && (
-          <div className="mt-0.5 shrink-0">
-            {studentDragHandleNode}
-          </div>
-        )}
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5">
-            <span className={`truncate text-sm font-semibold ${textPrimaryClass}`}>{post.nickname}</span>
-            {isPinned && (
-              <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full border border-amber-400/30 bg-amber-400/10 px-1.5 py-0.5 text-caption font-bold text-amber-300">
-                <span className="material-symbols-outlined text-detail">push_pin</span>
-                고정
+          {studentDragHandleNode && <div className="mt-0.5 shrink-0">{studentDragHandleNode}</div>}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5">
+              <span className={`truncate text-sm font-semibold ${textPrimaryClass}`}>
+                {post.nickname}
               </span>
-            )}
+              {isPinned && (
+                <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full border border-amber-400/30 bg-amber-400/10 px-1.5 py-0.5 text-caption font-bold text-amber-300">
+                  <span className="material-symbols-outlined text-detail">push_pin</span>
+                  고정
+                </span>
+              )}
+            </div>
+            <p className={`mt-0.5 text-detail ${textMetaClass}`}>
+              {new Date(post.submittedAt).toLocaleTimeString('ko-KR', {
+                hour: '2-digit',
+                minute: '2-digit',
+              })}
+            </p>
           </div>
-          <p className={`mt-0.5 text-detail ${textMetaClass}`}>
-            {new Date(post.submittedAt).toLocaleTimeString('ko-KR', {
-              hour: '2-digit',
-              minute: '2-digit',
-            })}
-          </p>
+          {teacherActions && (
+            <div className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100">
+              {teacherActions}
+            </div>
+          )}
+          {ownerActionsNode && (
+            <div className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100 sm:opacity-100">
+              {ownerActionsNode}
+            </div>
+          )}
         </div>
-        {teacherActions && (
-          <div className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100">
-            {teacherActions}
-          </div>
-        )}
-        {ownerActionsNode && (
-          <div className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100 sm:opacity-100">
-            {ownerActionsNode}
-          </div>
-        )}
-      </div>
 
-      {/* 본문 — `# 제목\n\n본문` 형식 분리 렌더 (2026-04-26 결함 #3 fix).
+        {/* 본문 — `# 제목\n\n본문` 형식 분리 렌더 (2026-04-26 결함 #3 fix).
           - 매칭 시: 제목은 굵고 큰 글씨, 본문은 본문 톤 (Padlet 동일뷰).
           - 미매칭 시: 전체를 본문으로 plain text 렌더 (기존 호환).
           - whitespace-pre-wrap로 줄바꿈/공백 보존. textPrimaryClass = 4.5:1 대비 보장.
           - 학생/교사 양쪽 동일 분기 — 회귀 #11 viewerRole 비대칭 0건.
           - React 텍스트 노드 렌더로 자동 escape (회귀 #7 dangerouslySetInnerHTML 0건). */}
-      {titleText && titleText.length > 0 && (
-        <p
-          className={`break-words mb-1 font-bold leading-snug text-base ${textPrimaryClass}`}
-        >
-          {titleText}
-        </p>
-      )}
-      {bodyText && bodyText.length > 0 && (
-        <p
-          className={`break-words whitespace-pre-wrap leading-relaxed text-sm ${textPrimaryClass}`}
-        >
-          {bodyText}
-        </p>
-      )}
+        {titleText && titleText.length > 0 && (
+          <p className={`break-words mb-1 font-bold leading-snug text-base ${textPrimaryClass}`}>
+            {titleText}
+          </p>
+        )}
+        {bodyText && bodyText.length > 0 && (
+          <p
+            className={`break-words whitespace-pre-wrap leading-relaxed text-sm ${textPrimaryClass}`}
+          >
+            {bodyText}
+          </p>
+        )}
 
-      {/* v2.1 — 이미지 다중 표시 (max 3장 carousel) */}
-      {post.images && post.images.length > 0 && (
-        <RealtimeWallCardImageGallery images={post.images} />
-      )}
+        {/* v2.1 — 이미지 다중 표시 (max 3장 carousel) */}
+        {post.images && post.images.length > 0 && (
+          <RealtimeWallCardImageGallery images={post.images} />
+        )}
 
-      {/* v2.1 — PDF 첨부 배지 */}
-      {post.pdfUrl && (
-        <RealtimeWallCardPdfBadge
-          pdfUrl={post.pdfUrl}
-          pdfFilename={post.pdfFilename ?? 'document.pdf'}
-        />
-      )}
+        {/* v2.1 — PDF 첨부 배지 */}
+        {post.pdfUrl && (
+          <RealtimeWallCardPdfBadge
+            pdfUrl={post.pdfUrl}
+            pdfFilename={post.pdfFilename ?? 'document.pdf'}
+          />
+        )}
 
-      {/* YouTube 임베드 */}
-      {post.linkUrl && preview?.kind === 'youtube' && (
-        <YoutubeEmbed videoId={preview.videoId} compact={compact} />
-      )}
+        {/* YouTube 임베드 */}
+        {post.linkUrl && preview?.kind === 'youtube' && (
+          <YoutubeEmbed videoId={preview.videoId} compact={compact} />
+        )}
 
-      {/* 웹페이지 OG 미리보기 */}
-      {post.linkUrl && preview?.kind === 'webpage' && (
-        <WebPagePreview preview={preview} linkUrl={post.linkUrl} onOpenLink={onOpenLink} />
-      )}
+        {/* 웹페이지 OG 미리보기 */}
+        {post.linkUrl && preview?.kind === 'webpage' && (
+          <WebPagePreview preview={preview} linkUrl={post.linkUrl} onOpenLink={onOpenLink} />
+        )}
 
-      {/* 링크 칩 */}
-      {post.linkUrl && (
-        <button
-          type="button"
-          onClick={() => onOpenLink?.(post.linkUrl!)}
-          className="mt-2 inline-flex max-w-full items-center gap-1 self-start rounded-lg border border-sp-accent/25 bg-sp-accent/8 px-2.5 py-1 text-xs font-medium text-sp-accent transition hover:border-sp-accent/50 hover:bg-sp-accent/15"
-        >
-          <span className="material-symbols-outlined text-[13px]">open_in_new</span>
-          <span className="truncate">{getLinkLabel(post.linkUrl)}</span>
-        </button>
-      )}
+        {/* 링크 칩 */}
+        {post.linkUrl && (
+          <button
+            type="button"
+            onClick={() => onOpenLink?.(post.linkUrl!)}
+            className="mt-2 inline-flex max-w-full items-center gap-1 self-start rounded-lg border border-sp-accent/25 bg-sp-accent/8 px-2.5 py-1 text-xs font-medium text-sp-accent transition hover:border-sp-accent/50 hover:bg-sp-accent/15"
+          >
+            <span className="material-symbols-outlined text-[13px]">open_in_new</span>
+            <span className="truncate">{getLinkLabel(post.linkUrl)}</span>
+          </button>
+        )}
 
-      {/*
+        {/*
         v2-student-ux 옵션 B footer 영역:
         [학생 좋아요(통일)] | [댓글 토글]
         교사·학생 모두 StudentLikeButton 1개. teacherHearts UI 제거.
       */}
-      {showHearts && (
-        <div className="mt-2 flex flex-wrap items-center gap-1.5">
-          {/* v2-student-ux 옵션 B: 교사·학생 모두 동일 버튼. 학생만 클릭 가능. */}
-          <StudentLikeButton
-            count={studentLikes}
-            hasLiked={viewerRole === 'teacher' ? hasTeacherLiked : hasLiked}
-            onClick={
-              viewerRole === 'student' && onStudentLike && !likePending
-                ? handleStudentLike
-                : viewerRole === 'teacher' && onTeacherLike && !teacherLikePending
-                  ? handleTeacherLikeClick
-                  : undefined
-            }
-          />
-          {showComments && (
-            <button
-              type="button"
-              onClick={() => setCommentsOpen((prev) => !prev)}
-              className="ml-auto inline-flex items-center gap-1 rounded-full border border-sp-border bg-sp-surface px-2 py-0.5 text-detail font-semibold text-sp-muted transition hover:border-sp-accent/40 hover:text-sp-accent"
-              aria-expanded={commentsOpen}
-              title={commentsOpen ? '댓글 접기' : '댓글 펼치기'}
-            >
-              <span className="material-symbols-outlined text-[13px]">
-                {commentsOpen ? 'expand_less' : 'chat_bubble'}
-              </span>
-              <span className="tabular-nums">댓글 {commentCount}</span>
-            </button>
-          )}
-        </div>
-      )}
+        {showHearts && (
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            {/* v2-student-ux 옵션 B: 교사·학생 모두 동일 버튼. 학생만 클릭 가능. */}
+            <StudentLikeButton
+              count={studentLikes}
+              hasLiked={viewerRole === 'teacher' ? hasTeacherLiked : hasLiked}
+              onClick={
+                viewerRole === 'student' && onStudentLike && !likePending
+                  ? handleStudentLike
+                  : viewerRole === 'teacher' && onTeacherLike && !teacherLikePending
+                    ? handleTeacherLikeClick
+                    : undefined
+              }
+            />
+            {showComments && (
+              <button
+                type="button"
+                onClick={() => setCommentsOpen((prev) => !prev)}
+                className="ml-auto inline-flex items-center gap-1 rounded-full border border-sp-border bg-sp-surface px-2 py-0.5 text-detail font-semibold text-sp-muted transition hover:border-sp-accent/40 hover:text-sp-accent"
+                aria-expanded={commentsOpen}
+                title={commentsOpen ? '댓글 접기' : '댓글 펼치기'}
+              >
+                <span className="material-symbols-outlined text-[13px]">
+                  {commentsOpen ? 'expand_less' : 'chat_bubble'}
+                </span>
+                <span className="tabular-nums">댓글 {commentCount}</span>
+              </button>
+            )}
+          </div>
+        )}
 
-      {/* v1.14 P2 댓글 영역 (collapsible) */}
-      {showComments && commentsOpen && (
-        <div className="mt-2 rounded-lg border border-sp-border/40 bg-sp-bg/30 p-2">
-          <RealtimeWallCommentList
-            comments={post.comments ?? []}
-            viewerRole={viewerRole}
-            onRemove={
-              viewerRole === 'teacher' && onRemoveComment
-                ? (commentId) => onRemoveComment(post.id, commentId)
-                : undefined
-            }
-          />
-          {viewerRole === 'student' && (commentInputSlot ?? (onAddComment && (
-            <div className="mt-2">
-              <RealtimeWallCommentInput
-                postId={post.id}
-                nicknameDefault={post.nickname}
-                onSubmit={(input) => onAddComment(post.id, input)}
-              />
-            </div>
-          )))}
-          {/* Step 2 — 교사 댓글 입력 (닉네임 "선생님" 고정) */}
-          {viewerRole === 'teacher' && onTeacherAddComment && (
-            <div className="mt-2">
-              <RealtimeWallCommentInput
-                postId={post.id}
-                nicknameDefault="선생님"
-                nicknameFixed
-                onSubmit={(input) => onTeacherAddComment(post.id, { ...input, nickname: '선생님' })}
-              />
-            </div>
-          )}
-        </div>
+        {/* v1.14 P2 댓글 영역 (collapsible) */}
+        {showComments && commentsOpen && (
+          <div className="mt-2 rounded-lg border border-sp-border/40 bg-sp-bg/30 p-2">
+            <RealtimeWallCommentList
+              comments={post.comments ?? []}
+              viewerRole={viewerRole}
+              onRemove={
+                viewerRole === 'teacher' && onRemoveComment
+                  ? (commentId) => onRemoveComment(post.id, commentId)
+                  : undefined
+              }
+            />
+            {viewerRole === 'student' &&
+              (commentInputSlot ??
+                (onAddComment && (
+                  <div className="mt-2">
+                    <RealtimeWallCommentInput
+                      postId={post.id}
+                      nicknameDefault={post.nickname}
+                      onSubmit={(input) => onAddComment(post.id, input)}
+                    />
+                  </div>
+                )))}
+            {/* Step 2 — 교사 댓글 입력 (닉네임 "선생님" 고정) */}
+            {viewerRole === 'teacher' && onTeacherAddComment && (
+              <div className="mt-2">
+                <RealtimeWallCommentInput
+                  postId={post.id}
+                  nicknameDefault="선생님"
+                  nicknameFixed
+                  onSubmit={(input) =>
+                    onTeacherAddComment(post.id, { ...input, nickname: '선생님' })
+                  }
+                />
+              </div>
+            )}
+          </div>
+        )}
+        {/* β-Step7 — CounterBadge slot (absolute 우하단, hover-free).
+          미전달 시 미렌더 (기존 호출자 무회귀). status='hidden-by-author' 는 본 컴포넌트
+          상단 placeholder 분기에서 일찍 return 되므로 여기 도달하지 않음 (자동 미노출). */}
+        {counterBadgeSlot}
+      </article>
+      {showTeacherContextMenu && (
+        <RealtimeWallTeacherContextMenu
+          open={contextMenuRect !== null}
+          anchorRect={contextMenuRect}
+          onClose={() => setContextMenuRect(null)}
+          onTrackAuthor={onTeacherTrackAuthor ? () => onTeacherTrackAuthor(post.id) : undefined}
+          onUpdateNickname={
+            onTeacherUpdateNickname ? () => onTeacherUpdateNickname(post.id) : undefined
+          }
+          onBulkHideStudent={
+            onTeacherBulkHideStudent ? () => onTeacherBulkHideStudent(post.id) : undefined
+          }
+        />
       )}
-    </article>
-    {showTeacherContextMenu && (
-      <RealtimeWallTeacherContextMenu
-        open={contextMenuRect !== null}
-        anchorRect={contextMenuRect}
-        onClose={() => setContextMenuRect(null)}
-        onTrackAuthor={onTeacherTrackAuthor ? () => onTeacherTrackAuthor(post.id) : undefined}
-        onUpdateNickname={onTeacherUpdateNickname ? () => onTeacherUpdateNickname(post.id) : undefined}
-        onBulkHideStudent={onTeacherBulkHideStudent ? () => onTeacherBulkHideStudent(post.id) : undefined}
-      />
-    )}
     </>
   );
 }

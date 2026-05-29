@@ -115,6 +115,35 @@ const presenceChecks = [
     pattern: /(teacherActions|teacherDragHandle)/,
     name: 'REGRESSION #3b: RealtimeWallCard teacherActions/teacherDragHandle naming',
   },
+  // ────────────────────────────────────────────────────────────────────────
+  // Realtime Wall v2.0 (β-phase) 회귀 가드 5건 (Plan §2.2 Step 14.5 / G014-A)
+  // ────────────────────────────────────────────────────────────────────────
+  {
+    file: 'electron/ipc/realtimeWall.ts',
+    pattern: /\*\*SERVER_TRUSTED_BROADCAST\*\*[\s\S]{0,800}?broadcastToStudents\b/,
+    name: 'REGRESSION #42 (v2.0): electron/ipc/realtimeWall.ts 에 SERVER_TRUSTED_BROADCAST 마커 + broadcastToStudents 진입점 코멘트 유지 (Plan §2.2 Step 12)',
+  },
+  {
+    file: 'src/shared/wsProtocol/realtimeWall.ts',
+    pattern:
+      /REALTIME_WALL_SERVER_MESSAGE_COUNT\s*=\s*17[\s\S]{0,200}?REALTIME_WALL_V2_NEW_MESSAGE_COUNT\s*=\s*5/,
+    name: 'REGRESSION #43 (v2.0): wsProtocol/realtimeWall.ts 가 17 server messages (12 v1.15 + 5 v2.0) 카운트 정합 (Plan §2.2 Step 3.5)',
+  },
+  {
+    file: 'src/domain/services/RealtimeWallBoardNormalizer.ts',
+    pattern: /requirePin:\s*true[\s\S]{0,400}?schemaVersion:\s*['"]2\.0['"]/,
+    name: 'REGRESSION #44 (v2.0): normalizeWallBoardForV2 가 신규 v2.0 보드에 requirePin: true 강제 + schemaVersion 부여 (Plan §2.2 Step 11)',
+  },
+  {
+    file: 'src/domain/entities/RealtimeWallTabConfig.ts',
+    pattern: /export\s+const\s+DEFAULT_TAB_ID\s*=\s*['"]default['"]\s+as\s+const/,
+    name: 'REGRESSION #45 (v2.0): DEFAULT_TAB_ID 도메인 식별자 sentinel ("default") 보존 — UI 문자열 분리 (Plan §2.2 Step 1)',
+  },
+  {
+    file: 'src/adapters/components/Tools/RealtimeWall/RealtimeWallCardCounterBadge.tsx',
+    pattern: /absolute\s+bottom-2\s+right-2[\s\S]{0,500}?data-counter-badge=['"]true['"]/,
+    name: 'REGRESSION #46 (v2.0): RealtimeWallCardCounterBadge 가 우하단 absolute + data-counter-badge 노출 — hover 의존 X (Plan §2.2 Step 7 spec L189)',
+  },
   {
     // REGRESSION #5 (rev. 2026-05-11) — v2.1 리팩토링으로 rate-limit 상태가
     // 모듈 레벨 `rateLimitBuckets` Map → `session.handle` 내부로 이동했다.

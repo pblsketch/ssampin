@@ -37,6 +37,26 @@ export interface RealtimeWallBoardSettings {
    * - normalizer에서는 부재 유지 (DEFAULT 주입은 broadcast/UI 시점에서 일원화 — 구버전 보드 무손실).
    */
   readonly theme?: WallBoardTheme;
+  /**
+   * v2.0 신규 (β-Step8 + G012-B) — 학생 인라인 컴포저 활성 토글.
+   *
+   * - undefined = 기본 활성 (legacy v1.x 보드 무손실)
+   * - false = 명시 비활성 (교사가 토글로 끈 상태)
+   * - parseTabAwareWallState 가 canCompose 계산 시 `!== false` 로 분기
+   *
+   * Plan §2.2 Step 8 — `boardSettings.studentInlineComposerEnabled & tab.permission='all'` 조건.
+   */
+  readonly studentInlineComposerEnabled?: boolean;
+  /**
+   * v2.0 신규 (β-Step11 + G012-B) — PIN 필수화 옵션.
+   *
+   * 정책 (Plan §2.2 Step 11):
+   *   - 신규 v2.0 보드 default: `true` (`MigrateWallBoardToV2` 가 schemaVersion 부재 보드만 강제)
+   *   - legacy v1.x 보드: `undefined` 유지 — 기존 학생 흐름 무회귀 (`false`/undefined 동일)
+   *   - 미지정 = 기존 옵션 모드 (학생이 PIN 입력 안 해도 카드 추가 가능)
+   *   - true = StudentJoinScreen 이 PIN 입력 강제 (β-Step11 UI 작업은 별도 commit)
+   */
+  readonly requirePin?: boolean;
 }
 
 export const REALTIME_WALL_BOARD_SETTINGS_VERSION = 1 as const;

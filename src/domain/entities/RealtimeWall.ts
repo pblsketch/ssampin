@@ -1,3 +1,5 @@
+import type { RealtimeWallTabConfig } from './RealtimeWallTabConfig';
+
 export type RealtimeWallLayoutMode = 'kanban' | 'freeform' | 'grid' | 'stream';
 
 /**
@@ -14,11 +16,7 @@ export type RealtimeWallLayoutMode = 'kanban' | 'freeform' | 'grid' | 'stream';
  *
  * 참고: Phase B에서는 status union 확장만 도입 (선언). 실제 활용은 Phase D.
  */
-export type RealtimeWallPostStatus =
-  | 'pending'
-  | 'approved'
-  | 'hidden'
-  | 'hidden-by-author';
+export type RealtimeWallPostStatus = 'pending' | 'approved' | 'hidden' | 'hidden-by-author';
 
 /**
  * v2.1 신규 — 카드 색상 8색 (Plan §7.2 결정 #6, Padlet 패턴 research §3 #1).
@@ -187,6 +185,23 @@ export interface RealtimeWallPost {
    * Phase B에서는 선언만.
    */
   readonly edited?: boolean;
+
+  // ============ v2.0 (β-Step1) — 탭 도메인 ============
+  // 모두 optional — v1.15.x 데이터 무손실 마이그레이션 보장.
+  // `normalizeForRealtimeWallV2`(β-Step2 BoardNormalizer)가 로드 시 `DEFAULT_TAB_ID` 백필.
+
+  /**
+   * v2.0 — 카드가 소속된 탭 ID.
+   *
+   * - 미존재 = legacy v1.15.x 카드 → normalizer 가 `DEFAULT_TAB_ID`(='default') 백필
+   * - 도메인 식별자만 보관 (UI 라벨 '전체' 는 어댑터 `realtimeWallConstants.ts`)
+   * - `assertTabCountWithinCap`(β-Step3) 가 보드 단위로 최대 8개 탭 강제
+   * - 탭 삭제 시 orphan posts 는 `DEFAULT_TAB_ID` 로 자동 이동 (Plan §3 OC Q2 RESOLVED)
+   *
+   * 인프라(`XlsxExporter.ts`) 는 `(p as { tabId?: string }).tabId ?? DEFAULT_TAB_ID` cast
+   * 패턴을 G003 에서 도입했으며, β-Step1 에서 본 필드 정식화 후 cast 제거 가능 (별도 cleanup).
+   */
+  readonly tabId?: string;
 }
 
 /**
@@ -243,6 +258,19 @@ export interface RealtimeWallBoard {
   readonly layoutMode: RealtimeWallLayoutMode;
   readonly columns: readonly RealtimeWallColumn[];
   readonly posts: readonly RealtimeWallPost[];
+
+  /**
+   * v2.0 (β-Step1) — 라이브 보드의 탭 메타데이터 배열.
+   *
+   * - 미존재 = legacy v1.15.x 보드 → normalizer 가 단일 default 탭 주입
+   *   (`{ id: DEFAULT_TAB_ID, title: '전체', permission: 'all', order: 0 }`)
+   * - 최대 8개 (`REALTIME_WALL_MAX_TABS`, β-Step3 `assertTabCountWithinCap` 강제)
+   * - WebSocket broadcast(`buildWallStateForStudents`) 가 학생 페이지에 전달
+   * - 탭별 permission 으로 학생 wall-state 필터링 (β-Step8)
+   *
+   * Phase 분할 폐기 R6: v2.0 BREAKING 단일 머지에 포함 (Plan §1).
+   */
+  readonly tabs?: readonly RealtimeWallTabConfig[];
 }
 
 // ============================================================
@@ -347,4 +375,33 @@ export interface WallBoard {
    * (`{ version: 1, moderation: 'off' }`) 주입.
    */
   readonly settings?: import('./RealtimeWallBoardSettings').RealtimeWallBoardSettings;
+
+  // ============ v2.0 (β-Step1) — 탭 + 마이그레이션 트리거 ============
+
+  /**
+   * v2.0 신규 — 영속 보드의 탭 메타데이터 배열.
+   *
+   * - 미존재 = legacy v1.15.x 보드 → normalizer (β-Step2 BoardNormalizer) 가
+   *   단일 default 탭 주입 + `RealtimeWallBoardSettings.requirePin` OFF 유지 정책 보존
+   * - 최대 8개 (`REALTIME_WALL_MAX_TABS`)
+   * - Repository(`JsonWallBoardRepository.load`) 가 schemaVersion 누락 감지 시
+   *   `MigrateWallBoardToV2`(β-Step4) 호출 후 이 필드 백필 + 저장
+   *
+   * 라이브 broadcast 시 `RealtimeWallBoard.tabs` 에 동일 배열 전달.
+   */
+  readonly tabs?: readonly RealtimeWallTabConfig[];
+
+  /**
+   * v2.0 신규 — 영속 보드의 schema 버전.
+   *
+   * - 미존재 또는 다른 값 = v1.x legacy → Repository load 시 마이그레이션 트리거
+   * - '2.0' 명시 = v2.0 마이그레이션 완료 (idempotent — 다시 normalize 해도 동일)
+   *
+   * 마이그레이션 정책 (Plan §3 OC Q3 RESOLVED / Plan §5):
+   * - v1.15.x posts: `tabId` 미존재 → DEFAULT_TAB_ID 백필
+   * - 보드: tabs 미존재 → default 탭 1개 주입 (`title: '전체'`)
+   * - 무손실: 기존 카드/좋아요/댓글/하트/색상 100% 보존 (release-checklist E-1 검증)
+   * - PIN 옵션 → 필수 강제: 신규 v2.0 보드만 `requirePin: true` (legacy v1.x 보드는 미변경)
+   */
+  readonly schemaVersion?: '2.0';
 }

@@ -174,8 +174,16 @@ describe('approveRealtimeWallPost', () => {
 
   it('zIndex는 전체 posts의 최댓값 + 1로 승격된다', () => {
     const posts = [
-      makePost({ id: 'p1', status: 'approved', freeform: { x: 0, y: 0, w: 260, h: 180, zIndex: 42 } }),
-      makePost({ id: 'p2', status: 'pending', freeform: { x: 0, y: 0, w: 260, h: 180, zIndex: 3 } }),
+      makePost({
+        id: 'p1',
+        status: 'approved',
+        freeform: { x: 0, y: 0, w: 260, h: 180, zIndex: 42 },
+      }),
+      makePost({
+        id: 'p2',
+        status: 'pending',
+        freeform: { x: 0, y: 0, w: 260, h: 180, zIndex: 3 },
+      }),
     ];
 
     const result = approveRealtimeWallPost(posts, 'p2', columns);
@@ -193,8 +201,12 @@ describe('approveRealtimeWallPost', () => {
 
 describe('extractYoutubeVideoId', () => {
   it('표준 watch URL에서 v 파라미터를 추출', () => {
-    expect(extractYoutubeVideoId('https://www.youtube.com/watch?v=dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ');
-    expect(extractYoutubeVideoId('https://youtube.com/watch?v=dQw4w9WgXcQ&t=30')).toBe('dQw4w9WgXcQ');
+    expect(extractYoutubeVideoId('https://www.youtube.com/watch?v=dQw4w9WgXcQ')).toBe(
+      'dQw4w9WgXcQ',
+    );
+    expect(extractYoutubeVideoId('https://youtube.com/watch?v=dQw4w9WgXcQ&t=30')).toBe(
+      'dQw4w9WgXcQ',
+    );
   });
 
   it('youtu.be 단축 URL 지원', () => {
@@ -210,12 +222,16 @@ describe('extractYoutubeVideoId', () => {
 
   it('m.youtube.com / music.youtube.com 호스트 지원', () => {
     expect(extractYoutubeVideoId('https://m.youtube.com/watch?v=dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ');
-    expect(extractYoutubeVideoId('https://music.youtube.com/watch?v=dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ');
+    expect(extractYoutubeVideoId('https://music.youtube.com/watch?v=dQw4w9WgXcQ')).toBe(
+      'dQw4w9WgXcQ',
+    );
   });
 
   it('유효하지 않은 videoId 길이는 거부', () => {
     expect(extractYoutubeVideoId('https://youtu.be/short')).toBeUndefined();
-    expect(extractYoutubeVideoId('https://www.youtube.com/watch?v=tooLongId1234567')).toBeUndefined();
+    expect(
+      extractYoutubeVideoId('https://www.youtube.com/watch?v=tooLongId1234567'),
+    ).toBeUndefined();
   });
 
   it('유튜브가 아닌 호스트는 undefined', () => {
@@ -235,7 +251,9 @@ describe('extractYoutubeVideoId', () => {
 });
 
 describe('heartRealtimeWallPost', () => {
-  function makeHeartablePost(overrides: Partial<RealtimeWallPost> & { id: string }): RealtimeWallPost {
+  function makeHeartablePost(
+    overrides: Partial<RealtimeWallPost> & { id: string },
+  ): RealtimeWallPost {
     return {
       nickname: '학생',
       text: '내용',
@@ -447,7 +465,9 @@ describe('hideRealtimeWallPost', () => {
 });
 
 describe('togglePinRealtimeWallPost', () => {
-  function makePinnablePost(overrides: Partial<RealtimeWallPost> & { id: string }): RealtimeWallPost {
+  function makePinnablePost(
+    overrides: Partial<RealtimeWallPost> & { id: string },
+  ): RealtimeWallPost {
     return {
       nickname: '학생',
       text: '',
@@ -462,8 +482,16 @@ describe('togglePinRealtimeWallPost', () => {
 
   it('pinned false → true 전환 + zIndex 승격', () => {
     const posts = [
-      makePinnablePost({ id: 'p1', pinned: false, freeform: { x: 0, y: 0, w: 260, h: 180, zIndex: 3 } }),
-      makePinnablePost({ id: 'p2', pinned: false, freeform: { x: 0, y: 0, w: 260, h: 180, zIndex: 7 } }),
+      makePinnablePost({
+        id: 'p1',
+        pinned: false,
+        freeform: { x: 0, y: 0, w: 260, h: 180, zIndex: 3 },
+      }),
+      makePinnablePost({
+        id: 'p2',
+        pinned: false,
+        freeform: { x: 0, y: 0, w: 260, h: 180, zIndex: 7 },
+      }),
     ];
     const result = togglePinRealtimeWallPost(posts, 'p1');
     expect(result[0]!.pinned).toBe(true);
@@ -472,7 +500,11 @@ describe('togglePinRealtimeWallPost', () => {
 
   it('pinned true → false 전환 (zIndex 는 여전히 승격)', () => {
     const posts = [
-      makePinnablePost({ id: 'p1', pinned: true, freeform: { x: 0, y: 0, w: 260, h: 180, zIndex: 2 } }),
+      makePinnablePost({
+        id: 'p1',
+        pinned: true,
+        freeform: { x: 0, y: 0, w: 260, h: 180, zIndex: 2 },
+      }),
     ];
     const result = togglePinRealtimeWallPost(posts, 'p1');
     expect(result[0]!.pinned).toBe(false);
@@ -513,12 +545,11 @@ describe('classifyRealtimeWallLink', () => {
 // ============================================================
 
 describe('generateWallShortCode', () => {
-  it('6자 영숫자 코드를 생성한다', () => {
+  it('v2.0 — 6자 숫자(0-9) 코드를 생성한다 (β-Step5 Plan §3 OC Q6)', () => {
     const code = generateWallShortCode();
     expect(code).toHaveLength(WALL_SHORT_CODE_LENGTH);
-    // 0/O/1/I는 알파벳에 포함되지 않아야 한다
-    expect(code).not.toMatch(/[01OI]/);
-    expect(code).toMatch(/^[A-HJ-NP-Z2-9]+$/);
+    // v2.0: 0-9 numeric only (외부 참고 도구 동일 패턴)
+    expect(code).toMatch(/^\d{6}$/);
   });
 
   it('randomSource 주입으로 결정적 코드 생성', () => {
@@ -534,15 +565,14 @@ describe('generateWallShortCode', () => {
   });
 
   it('generateUniqueWallShortCode는 기존 코드와 충돌 시 재시도', () => {
-    // 첫 3회는 'AAAAAA'(rng=0), 네 번째부터 'HHHHHH'(rng=0.25*32=8th 근방)
-    // 여기서는 단순히 2개 충돌 후 성공 확인
+    // v2.0 numeric: rng=0 → '000000' 모두 0, rng=0.5 → idx=Math.floor(0.5*10)=5 → '555555'
     let calls = 0;
     const rng = (): number => {
       calls++;
-      // 첫 6 호출(1 code)은 0 → 'AAAAAA', 다음 6 호출은 0.5 → 약간 다른 문자
+      // 첫 6 호출(1 code)은 0 → '000000', 다음 6 호출은 0.5 → '555555'
       return calls <= 6 ? 0 : 0.5;
     };
-    const existing = new Set<string>([generateWallShortCode(() => 0)]); // AAAAAA
+    const existing = new Set<string>([generateWallShortCode(() => 0)]); // '000000'
     const code = generateUniqueWallShortCode(existing, rng);
     expect(code).toHaveLength(WALL_SHORT_CODE_LENGTH);
     expect(existing.has(code)).toBe(false);
@@ -664,9 +694,7 @@ describe('createWallBoard', () => {
 });
 
 describe('toWallBoardMeta', () => {
-  const columns: RealtimeWallColumn[] = [
-    { id: 'column-1', title: '생각', order: 0 },
-  ];
+  const columns: RealtimeWallColumn[] = [{ id: 'column-1', title: '생각', order: 0 }];
   const mkPost = (id: string, status: 'pending' | 'approved' | 'hidden'): RealtimeWallPost => ({
     id,
     nickname: `n-${id}`,
@@ -688,11 +716,7 @@ describe('toWallBoardMeta', () => {
     });
     const withPosts: WallBoard = {
       ...board,
-      posts: [
-        mkPost('1', 'approved'),
-        mkPost('2', 'pending'),
-        mkPost('3', 'approved'),
-      ],
+      posts: [mkPost('1', 'approved'), mkPost('2', 'pending'), mkPost('3', 'approved')],
     };
     const meta = toWallBoardMeta(withPosts);
     expect(meta.postCount).toBe(3);
@@ -780,9 +804,9 @@ describe('createWallPost (v1.13 Stage C)', () => {
   });
 
   it('알 수 없는 승인 모드는 never exhaustive 방어로 에러', () => {
-    expect(() =>
-      createWallPost(submission, [], columns, 'unknown' as WallApprovalMode),
-    ).toThrow(/Unknown approvalMode/);
+    expect(() => createWallPost(submission, [], columns, 'unknown' as WallApprovalMode)).toThrow(
+      /Unknown approvalMode/,
+    );
   });
 
   it("'auto' 모드 링크 분류는 manual과 동일 (youtube kind 유지)", () => {
@@ -1040,12 +1064,10 @@ describe('removeWallColumn', () => {
         mkPost('3', 'column-2', { kanban: { columnId: 'column-2', order: 0 } }),
         mkPost('4', 'column-3', { kanban: { columnId: 'column-3', order: 0 } }),
       ];
-      const { columns: nextCols, posts: nextPosts } = removeWallColumn(
-        columns,
-        posts,
-        'column-3',
-        { kind: 'move-to', targetColumnId: 'column-1' },
-      );
+      const { columns: nextCols, posts: nextPosts } = removeWallColumn(columns, posts, 'column-3', {
+        kind: 'move-to',
+        targetColumnId: 'column-1',
+      });
 
       expect(nextCols.map((c) => c.id)).toEqual(['column-1', 'column-2']);
       expect(nextCols.map((c) => c.order)).toEqual([0, 1]);
@@ -1094,12 +1116,9 @@ describe('removeWallColumn', () => {
         mkPost('b', 'column-3'),
         mkPost('c', 'column-3'),
       ];
-      const { columns: nextCols, posts: nextPosts } = removeWallColumn(
-        columns,
-        posts,
-        'column-3',
-        { kind: 'hide' },
-      );
+      const { columns: nextCols, posts: nextPosts } = removeWallColumn(columns, posts, 'column-3', {
+        kind: 'hide',
+      });
       expect(nextCols.map((c) => c.id)).toEqual(['column-1', 'column-2']);
 
       const a = nextPosts.find((p) => p.id === 'a')!;
@@ -1118,12 +1137,7 @@ describe('removeWallColumn', () => {
         mkPost('b', 'column-3'),
         mkPost('c', 'column-3'),
       ];
-      const { posts: nextPosts } = removeWallColumn(
-        columns,
-        posts,
-        'column-3',
-        { kind: 'delete' },
-      );
+      const { posts: nextPosts } = removeWallColumn(columns, posts, 'column-3', { kind: 'delete' });
       expect(nextPosts.map((p) => p.id)).toEqual(['a']);
     });
   });
@@ -1134,24 +1148,18 @@ describe('removeWallColumn', () => {
       { id: 'column-2', title: 'B', order: 1 },
     ];
     const posts: RealtimeWallPost[] = [mkPost('a', 'column-1')];
-    const { columns: nextCols, posts: nextPosts } = removeWallColumn(
-      twoCols,
-      posts,
-      'column-1',
-      { kind: 'delete' },
-    );
+    const { columns: nextCols, posts: nextPosts } = removeWallColumn(twoCols, posts, 'column-1', {
+      kind: 'delete',
+    });
     expect(nextCols).toHaveLength(2);
     expect(nextPosts).toHaveLength(1);
   });
 
   it('존재하지 않는 columnId는 원본 반환', () => {
     const posts: RealtimeWallPost[] = [mkPost('a', 'column-1')];
-    const { columns: nextCols, posts: nextPosts } = removeWallColumn(
-      columns,
-      posts,
-      'column-999',
-      { kind: 'delete' },
-    );
+    const { columns: nextCols, posts: nextPosts } = removeWallColumn(columns, posts, 'column-999', {
+      kind: 'delete',
+    });
     expect(nextCols).toEqual(columns);
     expect(nextPosts).toEqual(posts);
   });

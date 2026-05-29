@@ -13,6 +13,11 @@ import type {
   WallPreviewPost,
 } from '@domain/entities/RealtimeWall';
 import {
+  DEFAULT_TAB_ID,
+  type RealtimeWallTabConfig,
+  type RealtimeWallTabPermission,
+} from '@domain/entities/RealtimeWallTabConfig';
+import {
   DEFAULT_REALTIME_WALL_BOARD_SETTINGS,
   REALTIME_WALL_BOARD_SETTINGS_VERSION,
   type RealtimeWallBoardSettings,
@@ -436,20 +441,39 @@ export function approveRealtimeWallPost(
 export const WALL_PREVIEW_POST_MAX = 6;
 /** WallPreviewPost.text 최대 길이 — Design §1.1 WallPreviewPost */
 export const WALL_PREVIEW_TEXT_MAX = 100;
-/** shortCode 길이 (6자 영숫자 대문자) — Design §1.1 */
+/** shortCode 길이 (6자) — Design §1.1 */
 export const WALL_SHORT_CODE_LENGTH = 6;
-/** shortCode 허용 문자 — 혼동 쉬운 0/O/1/I 제외 (교사 공지 편의) */
-const WALL_SHORT_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 /**
- * 6자 영숫자 short-code 생성기. 충돌 검사는 호출자(Repository)가 수행.
+ * v2.0 (β-Step5) — shortCode 허용 문자 = 숫자 0-9.
  *
- * 정책:
- * - 사용 문자: `A-Z` + `2-9` (0/O/1/I 제외) — 학생이 숫자·영문 혼동하지 않도록
- * - 길이: WALL_SHORT_CODE_LENGTH (6자)
+ * 클래스보드/외부 참고 도구와 동일 패턴 (Plan §3 OC Q6 RESOLVED).
+ * 신규 v2.0 보드는 numeric, 기존 v1.x legacy 알파벳 코드는 호환 유지
+ * (`JsonWallBoardRepository.getByShortCode` 가 exact-match → numeric/alpha 양쪽 인덱스 통과).
+ */
+const WALL_SHORT_CODE_ALPHABET = '0123456789';
+
+/**
+ * v1.x legacy 알파벳 (호환 참조용 — 신규 발급은 안 함).
+ *
+ * 기존 v1.x 보드의 `shortCode` 가 이 패턴 `[ACDEFGHJKLMNPQRTUVWXY3479]{6}` 이면
+ * `isLegacyAlphaShortCode` 가 true 반환. 학생이 옛 코드 입력 시 정상 라우팅.
+ * 0/O/1/I 혼동 회피 정책은 신규 numeric (0/1 포함) 으로 폐기 — UX 단순화.
+ */
+export const WALL_SHORT_CODE_LEGACY_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+/**
+ * v2.0 — 6자 numeric short-code 생성기. 충돌 검사는 호출자(Repository)가 수행.
+ *
+ * 정책 (Plan §3 OC Q6 RESOLVED):
+ * - 사용 문자: `0-9` (10자 alphabet)
+ * - 길이: WALL_SHORT_CODE_LENGTH (6자) — 10^6 = 1e6 조합
  * - `randomSource`: 선택적. 테스트 결정적으로 돌리고 싶을 때 주입.
+ * - leading zero 허용 ('012345' 도 valid)
  *
- * Design §1.1 shortCode 규정.
+ * Repository 호출 패턴은 동일 — `generateUniqueWallShortCode` 가 충돌 회피 5회 재시도.
+ *
+ * Design §1.1 shortCode 규정 (v2.0 변경).
  */
 export function generateWallShortCode(randomSource: () => number = Math.random): string {
   let code = '';
@@ -458,6 +482,46 @@ export function generateWallShortCode(randomSource: () => number = Math.random):
     code += WALL_SHORT_CODE_ALPHABET[idx];
   }
   return code;
+}
+
+/**
+ * v2.0 — shortCode 가 v1.x legacy 알파벳 패턴인지 판별.
+ *
+ * 사용처: `JsonWallBoardRepository.getByShortCode` dual-lookup 진단,
+ * 챗봇 KB Q&A "옛 코드 입력 시 어떻게 되나요?" 답변 보조.
+ *
+ * 정의:
+ *   - 6자 길이
+ *   - 모든 문자가 `WALL_SHORT_CODE_LEGACY_ALPHABET` 에 포함
+ *
+ * 신규 v2.0 numeric 코드(`/^\d{6}$/`)는 false 반환 (오답 회피).
+ */
+export function isLegacyAlphaShortCode(code: string): boolean {
+  if (code.length !== WALL_SHORT_CODE_LENGTH) return false;
+  for (const ch of code) {
+    if (!WALL_SHORT_CODE_LEGACY_ALPHABET.includes(ch)) return false;
+  }
+  // 100% numeric 은 legacy 아님 (신규 v2.0 패턴 우선)
+  if (/^\d{6}$/.test(code)) return false;
+  return true;
+}
+
+/**
+ * v2.0 — archived 보드의 shortCode 를 nullify (Plan §2.1 정책 승격).
+ *
+ * - `archived === true` 이고 `shortCode` 존재 시 shortCode 필드 제거
+ * - 그 외에는 원본 그대로 반환 (idempotent)
+ *
+ * 사용처: 교사가 보드 archive 처리 시 (`archiveWallBoard` use case, β-Step13 teacher UI).
+ * 학생이 archived 보드의 옛 코드로 진입 시도 시 `null` 응답 → "이 보드는 보관됨" 안내.
+ */
+export function nullifyShortCodeOnArchive(board: WallBoard): WallBoard {
+  if (board.archived !== true) return board;
+  if (board.shortCode === undefined) return board;
+  // shortCode 키만 제거 — readonly 우회는 spread + delete 패턴 (clone 후 mutate).
+  const { shortCode: _shortCode, ...rest } = board;
+  void _shortCode;
+  return rest as WallBoard;
 }
 
 /**
@@ -1877,4 +1941,159 @@ export function ensureOwnerCredentials(
       ? { studentPinHash: serverContext.pinHashFromMessage }
       : {}),
   };
+}
+
+// ============================================================
+// v2.0 (β-Step3) — 탭 규칙 + Tab CRUD
+// Plan §3 OC Q2 RESOLVED (탭 삭제 시 orphan default 이동)
+// Delta v3.1 §2 Step 3 + AC `tab-cap-01/02` `tab-delete-orphan-01`
+// ============================================================
+
+/**
+ * v2.0 — 보드당 최대 탭 수 (Plan §1 결정 / Plan §3 OC Q5 RESOLVED).
+ *
+ * `assertTabCountWithinCap` + `addRealtimeWallTab` 양쪽에서 강제.
+ * `src/shared/wsProtocol/realtimeWall.ts`(β-Step3.5) 의 Zod schema `.max(8)`도 동일 cap.
+ */
+export const REALTIME_WALL_MAX_TABS = 8;
+
+/**
+ * v2.0 — 탭 cap 검증 결과.
+ */
+export type TabCountValidationResult =
+  | { ok: true }
+  | { ok: false; reason: 'TAB_CAP_EXCEEDED'; current: number; cap: number };
+
+/**
+ * v2.0 — 탭 cap 강제 검증 (AC `tab-cap-01` `tab-cap-02`).
+ *
+ * - tabs.length > cap → fail (default 8)
+ * - WebSocket payload Zod schema 도 동일 cap 강제 (β-Step3.5 wsProtocol).
+ *
+ * 사용처:
+ *   - electron/ipc/realtimeWall.ts: tab-create 메시지 처리 전 가드
+ *   - JsonWallBoardRepository.save: persist 직전 가드
+ *   - RealtimeWallTabBar (teacher UI): "+" 버튼 disabled 토글 비교
+ */
+export function assertTabCountWithinCap(
+  tabs: readonly RealtimeWallTabConfig[],
+  cap: number = REALTIME_WALL_MAX_TABS,
+): TabCountValidationResult {
+  if (tabs.length > cap) {
+    return { ok: false, reason: 'TAB_CAP_EXCEEDED', current: tabs.length, cap };
+  }
+  return { ok: true };
+}
+
+/**
+ * v2.0 — 새 탭 ID 생성 (충돌 회피).
+ *
+ * 기존 "tab-N" 패턴의 최댓값 +1 시도, 충돌 시 Date.now() 36진수 suffix.
+ * `nextColumnId` 패턴 모방 (realtimeWallRules.ts:587).
+ */
+function nextTabId(existing: readonly RealtimeWallTabConfig[]): string {
+  let maxNum = 0;
+  for (const t of existing) {
+    const match = /^tab-(\d+)$/.exec(t.id);
+    if (match && match[1]) {
+      const n = Number(match[1]);
+      if (Number.isFinite(n) && n > maxNum) maxNum = n;
+    }
+  }
+  const candidate = `tab-${maxNum + 1}`;
+  if (!existing.some((t) => t.id === candidate)) return candidate;
+  return `tab-${maxNum + 1}-${Date.now().toString(36)}`;
+}
+
+/**
+ * v2.0 — 탭 배열의 order 필드를 0..n-1 로 재계산 (insert/delete 후 정규화).
+ */
+function normalizeTabOrder(tabs: readonly RealtimeWallTabConfig[]): RealtimeWallTabConfig[] {
+  return tabs.map((t, index) => ({ ...t, order: index }));
+}
+
+/**
+ * v2.0 — 탭 추가. cap 8 도달 시 원본 반환 (AC `tab-cap-01`).
+ *
+ * - 빈/공백 제목 거부 → 원본 반환
+ * - 새 탭 id 자동 발급 (tab-1, tab-2, ...)
+ * - default permission = 'all' (학생 카드 읽기·쓰기 허용)
+ * - 새 탭은 배열 끝 + order 재계산 (Plan §3 OC Q5)
+ *
+ * Caller 책임: cap 도달 시 RealtimeWallError('TAB_CAP_EXCEEDED') throw +
+ * UI 토스트 "탭은 최대 8개까지 만들 수 있어요" (release-checklist B-2).
+ */
+export function addRealtimeWallTab(
+  tabs: readonly RealtimeWallTabConfig[],
+  title: string,
+  permission: RealtimeWallTabPermission = 'all',
+): RealtimeWallTabConfig[] {
+  const trimmed = title.trim();
+  if (trimmed.length === 0) return [...tabs];
+  if (tabs.length >= REALTIME_WALL_MAX_TABS) return [...tabs];
+  const id = nextTabId(tabs);
+  return normalizeTabOrder([...tabs, { id, title: trimmed, permission, order: tabs.length }]);
+}
+
+/**
+ * v2.0 — 탭 이름 변경. 빈/공백 거부 + 존재하지 않는 id 거부.
+ */
+export function renameRealtimeWallTab(
+  tabs: readonly RealtimeWallTabConfig[],
+  tabId: string,
+  newTitle: string,
+): RealtimeWallTabConfig[] {
+  const trimmed = newTitle.trim();
+  if (trimmed.length === 0) return [...tabs];
+  if (!tabs.some((t) => t.id === tabId)) return [...tabs];
+  return tabs.map((t) => (t.id === tabId ? { ...t, title: trimmed } : t));
+}
+
+/**
+ * v2.0 — 탭 권한 변경 (AC `tab-permission-01/02`).
+ *
+ * - 존재하지 않는 id 거부
+ * - permission 변경 시 학생 wall-state 필터링 즉시 적용 (β-Step8 broadcast).
+ */
+export function updateRealtimeWallTabPermission(
+  tabs: readonly RealtimeWallTabConfig[],
+  tabId: string,
+  permission: RealtimeWallTabPermission,
+): RealtimeWallTabConfig[] {
+  if (!tabs.some((t) => t.id === tabId)) return [...tabs];
+  return tabs.map((t) => (t.id === tabId ? { ...t, permission } : t));
+}
+
+/**
+ * v2.0 — 탭 삭제 + orphan posts auto-move to DEFAULT_TAB_ID (AC `tab-delete-orphan-01`).
+ *
+ * 정책 (Plan §3 OC Q2 RESOLVED — 자동으로 default tab 이동):
+ *   - `DEFAULT_TAB_ID` 탭은 삭제 거부 — 시스템 보호 (release-checklist B-5)
+ *   - 존재하지 않는 tabId 는 원본 반환
+ *   - 해당 탭의 모든 카드(post)는 `DEFAULT_TAB_ID` 탭으로 자동 이동 (orphan 0)
+ *   - 좋아요/댓글/색상/핀 등 모든 카드 필드 보존 (release-checklist B-4)
+ *   - 명시 destination UX 는 v2.1+ deferred (Plan §3 OC Q2 명시).
+ *
+ * 회귀 보호: posts.filter X — 모두 map 으로 tabId 만 갱신 (회귀 위험 #8 — hard delete 패턴 금지).
+ */
+export function deleteRealtimeWallTab(
+  tabs: readonly RealtimeWallTabConfig[],
+  posts: readonly RealtimeWallPost[],
+  tabId: string,
+): { tabs: RealtimeWallTabConfig[]; posts: RealtimeWallPost[] } {
+  // DEFAULT_TAB_ID 탭 보호 (release-checklist B-5: "기본 탭의 ⋮ 메뉴에 '탭 삭제' 항목 없음")
+  if (tabId === DEFAULT_TAB_ID) {
+    return { tabs: [...tabs], posts: [...posts] };
+  }
+  // 존재 검증
+  if (!tabs.some((t) => t.id === tabId)) {
+    return { tabs: [...tabs], posts: [...posts] };
+  }
+
+  const remainingTabs = normalizeTabOrder(tabs.filter((t) => t.id !== tabId));
+
+  // orphan posts auto-move to DEFAULT_TAB_ID (회귀 위험 #8 — posts.filter X)
+  const nextPosts = posts.map((p) => (p.tabId === tabId ? { ...p, tabId: DEFAULT_TAB_ID } : p));
+
+  return { tabs: remainingTabs, posts: nextPosts };
 }

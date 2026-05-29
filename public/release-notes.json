@@ -1,6 +1,63 @@
 {
   "versions": [
     {
+      "version": "2.1.0",
+      "appVersion": "v2.1.0",
+      "domainVersion": "v2.0.0",
+      "date": "2026-05-29",
+      "adr": "docs/03-decisions/ADR-V-realtime-wall-v2-release-labels.md",
+      "highlights": [
+        "🗂️ 실시간 담벼락 v2.0 — 보드 안에 탭을 만들어 주제별로 카드 정리 (최대 8개)",
+        "⚡ 빠른 카드 추가 (인라인 컴포저) — 모달 없이 텍스트만 즉시 작성",
+        "💬 카드 우하단 좋아요·댓글 배지 — 항상 보이는 카운터로 한눈에 호응 확인",
+        "🔐 신규 보드 PIN 필수화 — 학생 카드 수정·삭제 보호 강화 (기존 보드는 종전 정책 유지)",
+        "🔢 보드 접속 코드 6자리 숫자 — 입력 빠르고 헷갈리는 알파벳 제거 (기존 알파벳 코드도 그대로 작동)",
+        "🛡️ 회귀 보호 5건 — SERVER_TRUSTED_BROADCAST + WS 프로토콜 17 schemas + 무손실 마이그레이션"
+      ],
+      "changes": [
+        {
+          "type": "new",
+          "title": "보드 안 탭 (Tabs) — 주제별 카드 정리",
+          "description": "한 보드 안에서 여러 주제를 동시에 다룰 수 있도록 탭을 도입했어요.\n\n· **최대 8개** 탭 — 보드별로 주제·차시·조별 등 자유롭게 분류\n· **권한 토글** — '모두' (학생도 읽고 쓰기) ↔ '교사만' (학생 화면에서 숨김)\n· **기본 탭은 삭제 불가** — 시스템 보호. 다른 탭을 지우면 카드가 기본 탭으로 자동 이동 (데이터 손실 0)\n· **학생 화면**: 탭이 2개 이상이면 상단에 strip 표시. 1개면 깔끔하게 숨김\n· **기존 보드 (v1.15.x) 는 무손실 마이그레이션** — 처음 열 때 '전체' 탭 하나가 자동 생성되고 모든 카드가 그 안으로 정렬됩니다"
+        },
+        {
+          "type": "new",
+          "title": "빠른 카드 추가 — InlineComposer",
+          "description": "큰 모달을 띄우지 않고 작은 popup 으로 텍스트 카드를 즉시 작성할 수 있어요.\n\n· 보드 우상단 '빠른 추가' 버튼 클릭 → textarea + 색상 + 글자 크기만 노출\n· Enter 한 번에 제출, Shift+Enter 는 줄바꿈, ESC 로 취소\n· 이미지·PDF·링크가 필요한 경우는 기존 카드 추가 버튼 (전체 모달) 그대로 사용\n· 글자 크기 조절은 **UI 표시 도구** — 카드 도메인에 저장되지 않아요 (작성자가 입력 시 보기 편한 크기로)"
+        },
+        {
+          "type": "new",
+          "title": "카드 우하단 좋아요·댓글 배지 (CounterBadge)",
+          "description": "카드 위에 마우스를 올리지 않아도 좋아요·댓글 수가 항상 보여요.\n\n· **❤️ N · 💬 M** 우하단 absolute 위치 — 4 레이아웃 (칸반/그리드/스트림/자유) 일관\n· 클릭 시 좋아요 토글 / 댓글 패널 열기·닫기\n· 기존 footer 의 액션 버튼은 그대로 (호환) — 배지는 외부 노출용 추가\n· v1.14 의 broadcast 채널 (like-toggled · comment-added/removed) 그대로 재사용"
+        },
+        {
+          "type": "new",
+          "title": "신규 보드 PIN 필수화",
+          "description": "v2.0 이후 새로 만드는 보드는 학생 PIN 입력을 기본으로 요구해요.\n\n· **신규 v2.0 보드 default**: `requirePin: true`\n· **기존 v1.x 보드는 그대로** — 학생 흐름 변경 0 (release-checklist E-2 정합)\n· 보드 설정 드로어에서 끄거나 켤 수 있어요 (사용자 의도 우선)\n· PIN 은 SHA-256 hex hash 만 서버에 저장 — 평문 절대 금지 (회귀 #9 보호)"
+        },
+        {
+          "type": "improve",
+          "title": "보드 접속 코드 6자리 숫자화",
+          "description": "신규 보드 접속 코드를 6자리 영문 → 6자리 숫자로 바꿨어요.\n\n· 학생이 휴대폰·태블릿으로 입력할 때 더 빠르고 오타 적음\n· 헷갈리기 쉬운 0/O, 1/l 제거\n· **기존 알파벳 코드는 호환** — 학생이 옛 코드 입력해도 정상 라우팅 (legacy alpha 자동 인식)\n· 보드 보관 시 코드가 풀로 환원 — 다른 보드가 그 번호를 재사용할 수 있어요. 보관 해제 시 새 코드 발급."
+        },
+        {
+          "type": "improve",
+          "title": "탭 권한 변경 시 학생 측 즉시 갱신",
+          "description": "교사가 탭을 추가·삭제·이름변경·권한 토글하면 학생 화면이 새로고침 없이 즉시 반영되도록 WebSocket broadcast 5종을 새로 정의했어요 (tab-added · tab-deleted · tab-renamed · tab-permission-changed · post-tab-moved). 실제 wire 는 다음 패치에서 활성화 — 현 버전은 도메인 + UI 까지 정합 완료."
+        },
+        {
+          "type": "improve",
+          "title": "SERVER_TRUSTED_BROADCAST — 학생 위조 broadcast 차단",
+          "description": "학생 측이 다른 학생에게 임의 broadcast 를 보낼 수 없도록 서버 송신 경로를 단일 게이트로 명시했어요.\n\n· `broadcastToStudents` 함수가 서버→학생 broadcast 의 유일한 진입점\n· 17 server messages (v1.15 12종 + v2.0 5종) discriminated union 정합\n· 메시지 추가 시 TypeScript union ↔ Zod schema ↔ store case 3종 동시 갱신 의무 (회귀 #2)"
+        },
+        {
+          "type": "improve",
+          "title": "회귀 가드 5건 추가",
+          "description": "릴리즈 가드를 9건 → 14건으로 늘렸어요. v2.0 핵심 정합을 잡는 5건:\n\n· **#42** SERVER_TRUSTED_BROADCAST 마커 보존\n· **#43** wsProtocol 17 server messages 카운트\n· **#44** Normalizer 신규 보드 requirePin: true 강제\n· **#45** DEFAULT_TAB_ID 도메인 sentinel 보존\n· **#46** CounterBadge data-counter-badge + 우하단 absolute (hover-free)"
+        }
+      ]
+    },
+    {
       "version": "2.0.9",
       "date": "2026-05-26",
       "highlights": [

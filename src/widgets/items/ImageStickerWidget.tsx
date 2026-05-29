@@ -180,7 +180,11 @@ function ImageSettingsPopover({
   onClose: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      data-widget-interactive="true"
+      onClick={onClose}
+    >
       <div
         className="w-64 bg-sp-bg border border-sp-border rounded-xl shadow-2xl p-4 space-y-3 max-h-[80vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}

@@ -27,6 +27,10 @@ import { useIsMobile } from './useIsMobile';
 import { useStudentFreeformLockState } from './useStudentFreeformLockState';
 import { RealtimeWallBoardThemeWrapper } from '@adapters/components/Tools/RealtimeWall/RealtimeWallBoardThemeWrapper';
 import { RealtimeWallCardDetailModal } from '@adapters/components/Tools/RealtimeWall/RealtimeWallCardDetailModal';
+import { RealtimeWallTabBar } from '@adapters/components/Tools/RealtimeWall/RealtimeWallTabBar';
+import { DEFAULT_TAB_TITLE } from '@adapters/components/Tools/RealtimeWall/realtimeWallConstants';
+import { parseTabAwareWallState } from './parseTabAwareWallState';
+import { StudentInlineComposer } from './StudentInlineComposer';
 
 const STUDENT_NICKNAME_STORAGE_KEY = 'ssampin-realtime-wall-nickname';
 
@@ -61,10 +65,44 @@ interface StudentBoardViewProps {
 }
 
 export function StudentBoardView({ board }: StudentBoardViewProps) {
-  const { title, layoutMode, columns, posts, studentFormLocked, settings } = board;
+  const { title, layoutMode, columns, studentFormLocked, settings } = board;
   // v1.16.x Phase 2 (Design §5.3) — 보드 wrapper에 적용할 theme.
   // settings.theme이 broadcast로 도착하지 않았다면 default 적용 (sanitizeBoardSettingsForStudents가 보장).
   const boardTheme = settings?.theme;
+
+  // β-Step8: tab-aware filter.
+  //   - activeTabId 는 보드 단위 sessionStorage 영속 (탭 전환 후 새로고침 시에도 보존).
+  //   - parseTabAwareWallState 가 legacy 보드 (tabs 미정의) 처리·검증·정정 일임.
+  //   - 본 컴포넌트는 visibleTabs + postsForActiveTab + canCompose 만 활용.
+  const [activeTabId, setActiveTabId] = useState<string | undefined>(undefined);
+  const tabAware = useMemo(
+    () =>
+      parseTabAwareWallState(board, {
+        ...(activeTabId !== undefined ? { activeTabId } : {}),
+        defaultTabTitle: DEFAULT_TAB_TITLE,
+      }),
+    [board, activeTabId],
+  );
+  const visibleTabs = tabAware.visibleTabs;
+  const effectiveActiveTabId = tabAware.activeTabId;
+  const posts = tabAware.postsForActiveTab;
+  const canCompose = tabAware.canCompose;
+
+  // β-Step8: 인라인 컴포저 popup 상태.
+  //   - StudentSubmitForm (모달) 과 별도 — 모달 우회 단축 경로 (Plan §2.2 Step 6 정합)
+  //   - canCompose=false 시 본 컴포저 자체 미렌더 (TabBar 권한/잠금 분기는 부모가 결정)
+  const [inlineComposerOpen, setInlineComposerOpen] = useState(false);
+  const handleOpenInlineComposer = useCallback(() => {
+    if (!canCompose) return;
+    setInlineComposerOpen(true);
+  }, [canCompose]);
+  const handleCloseInlineComposer = useCallback(() => {
+    setInlineComposerOpen(false);
+  }, []);
+  const handleInlineSubmitted = useCallback(() => {
+    setInlineComposerOpen(false);
+  }, []);
+
   const [submitOpen, setSubmitOpen] = useState(false);
   const [resumeRequested, setResumeRequested] = useState(false);
   // v2.1 student-ux — Padlet 컬럼별 + 버튼: 클릭 시 columnId를 기억해 모달 제출에 전달
@@ -245,6 +283,13 @@ export function StudentBoardView({ board }: StudentBoardViewProps) {
     <div className="flex min-h-screen flex-col bg-transparent text-sp-text">
       <StudentBoardHeader title={title} postCount={posts.length} />
 
+      {/* β-Step8 — 학생 tab strip (visibleTabs.length >= 2 일 때만 노출 — TabBar 내부 가드) */}
+      <RealtimeWallTabBar
+        tabs={visibleTabs}
+        activeTabId={effectiveActiveTabId}
+        onTabChange={(tabId) => setActiveTabId(tabId)}
+      />
+
       <main
         className="relative flex-1 px-3 pb-24 pt-3 sm:px-6"
         data-empty-area="true"
@@ -254,6 +299,35 @@ export function StudentBoardView({ board }: StudentBoardViewProps) {
         onTouchCancel={longPressHandlers.onTouchCancel}
         onDoubleClick={doubleClickHandlers.onDoubleClick}
       >
+        {/* β-Step8 — 빠른 추가 (인라인 컴포저) 진입 버튼 + popup.
+            FAB(전체 모달) 와 별도 — 텍스트 메모만 빨리 적는 단축 경로 (Plan §2.2 Step 6).
+            canCompose=false (탭 권한·잠금·toggle off) 시 미렌더 — 모달 우회로의 단일 게이트. */}
+        {canCompose && (
+          <div className="mb-2 flex justify-end">
+            <button
+              type="button"
+              onClick={handleOpenInlineComposer}
+              disabled={inlineComposerOpen}
+              className="inline-flex items-center gap-1 rounded-full border border-sp-border bg-sp-card px-3 py-1 text-xs font-semibold text-sp-muted transition hover:border-sp-accent/40 hover:text-sp-accent disabled:opacity-50"
+              title="텍스트 카드 빠른 추가"
+              aria-label="텍스트 카드 빠른 추가"
+            >
+              <span className="material-symbols-outlined text-[14px]">bolt</span>
+              빠른 추가
+            </button>
+          </div>
+        )}
+        {canCompose && inlineComposerOpen && (
+          <div className="mb-3">
+            <StudentInlineComposer
+              open={inlineComposerOpen}
+              onCancel={handleCloseInlineComposer}
+              onSubmitted={handleInlineSubmitted}
+              tabId={effectiveActiveTabId}
+            />
+          </div>
+        )}
+
         {/* v2.1 Phase C-C5 — Freeform 잠금 토글 (Freeform 레이아웃에서만 노출) */}
         {layoutMode === 'freeform' && (
           <div className="mb-2 flex justify-end">

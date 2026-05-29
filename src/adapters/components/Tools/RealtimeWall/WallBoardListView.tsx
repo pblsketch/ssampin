@@ -19,15 +19,12 @@
  *     (파일 시스템 + index entry 모두 제거, 되돌릴 수 없음)
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import type {
-  WallBoard,
-  WallBoardId,
-  WallBoardMeta,
-} from '@domain/entities/RealtimeWall';
+import type { WallBoard, WallBoardId, WallBoardMeta } from '@domain/entities/RealtimeWall';
 import type { IWallBoardRepository } from '@domain/repositories/IWallBoardRepository';
 import {
   cloneWallBoard,
   generateUniqueWallShortCode,
+  nullifyShortCodeOnArchive,
 } from '@domain/rules/realtimeWallRules';
 import { Modal } from '@adapters/components/common/Modal';
 
@@ -36,9 +33,10 @@ import { REALTIME_WALL_LAYOUT_LABELS } from './realtimeWallHelpers';
 
 /** crypto.randomUUID → WallBoardId branded type 캐스팅 (ToolRealtimeWall와 동일 규칙) */
 function newWallBoardId(): WallBoardId {
-  const raw = typeof crypto !== 'undefined' && crypto.randomUUID
-    ? crypto.randomUUID()
-    : `wb-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  const raw =
+    typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `wb-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
   return raw as WallBoardId;
 }
 
@@ -48,11 +46,7 @@ interface WallBoardListViewProps {
   readonly onCreate: () => void;
 }
 
-export const WallBoardListView: React.FC<WallBoardListViewProps> = ({
-  repo,
-  onOpen,
-  onCreate,
-}) => {
+export const WallBoardListView: React.FC<WallBoardListViewProps> = ({ repo, onOpen, onCreate }) => {
   const [metas, setMetas] = useState<readonly WallBoardMeta[]>([]);
   const [loading, setLoading] = useState(true);
   const [cloningId, setCloningId] = useState<WallBoardId | null>(null);
@@ -102,9 +96,7 @@ export const WallBoardListView: React.FC<WallBoardListViewProps> = ({
         }
         const existingMetas = await repo.listAllMeta();
         const existingCodes = new Set(
-          existingMetas
-            .map((m) => m.shortCode)
-            .filter((c): c is string => Boolean(c)),
+          existingMetas.map((m) => m.shortCode).filter((c): c is string => Boolean(c)),
         );
         const newShortCode = generateUniqueWallShortCode(existingCodes);
         const clone = cloneWallBoard(source, newWallBoardId(), Date.now(), {
@@ -136,11 +128,32 @@ export const WallBoardListView: React.FC<WallBoardListViewProps> = ({
           setArchiveError('담벼락을 불러오지 못했어요.');
           return;
         }
-        const next: WallBoard = {
+        // β-Step5 (G013-B) — 보관 진입 시 shortCode null 처리 (회수 — 재사용 풀로 환원).
+        //   - 보관 (nextArchived=true): nullifyShortCodeOnArchive 로 shortCode 제거.
+        //     학생이 옛 코드를 입력해도 활성 보드로 매칭되지 않음. 보관 해제 시 새 코드 재발급.
+        //   - 보관 해제 (nextArchived=false): shortCode 가 null 이면 generateUniqueWallShortCode
+        //     로 신규 발급. 기존 코드가 살아있으면 보존 (legacy alpha 도 그대로 호환 — Plan §5).
+        const baseNext: WallBoard = {
           ...source,
           archived: nextArchived,
           updatedAt: Date.now(),
         };
+        let next: WallBoard;
+        if (nextArchived) {
+          next = nullifyShortCodeOnArchive(baseNext);
+        } else if (baseNext.shortCode === null || baseNext.shortCode === undefined) {
+          // 보관 해제 시 신규 shortCode 발급. 다른 활성/보관 보드와 충돌 회피 위해 전체 풀에서 중복 검사.
+          const allMetas = await repo.listAllMeta();
+          const existingCodes = new Set(
+            allMetas.map((m) => m.shortCode).filter((c): c is string => Boolean(c)),
+          );
+          next = {
+            ...baseNext,
+            shortCode: generateUniqueWallShortCode(existingCodes),
+          };
+        } else {
+          next = baseNext;
+        }
         await repo.save(next);
         await refresh();
         setArchiveSuccess(
@@ -419,9 +432,7 @@ function BoardCard({
               </span>
             )}
           </div>
-          <h3 className="truncate text-sm font-bold text-sp-text">
-            {meta.title}
-          </h3>
+          <h3 className="truncate text-sm font-bold text-sp-text">{meta.title}</h3>
           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-detail text-sp-muted">
             <span>카드 {meta.approvedCount}</span>
             <span>·</span>
@@ -429,9 +440,7 @@ function BoardCard({
             {meta.shortCode && (
               <>
                 <span>·</span>
-                <span className="font-mono text-amber-300">
-                  {meta.shortCode}
-                </span>
+                <span className="font-mono text-amber-300">{meta.shortCode}</span>
               </>
             )}
           </div>
@@ -508,7 +517,9 @@ function BoardCard({
             {isDeleting
               ? '삭제 중…'
               : isArchiving
-                ? (isArchived ? '보관 해제 중…' : '보관 중…')
+                ? isArchived
+                  ? '보관 해제 중…'
+                  : '보관 중…'
                 : '복제 중…'}
           </span>
         </div>
@@ -557,15 +568,12 @@ function DeleteWallBoardConfirmModal({
               &lsquo;{target.title}&rsquo; 담벼락을 삭제하시겠습니까?
             </h3>
             <p className="mt-1 text-sm text-sp-muted">
-              카드 {target.approvedCount}개와 모든 게시물이 함께 삭제되며,
-              한번 삭제하면 되돌릴 수 없어요.
+              카드 {target.approvedCount}개와 모든 게시물이 함께 삭제되며, 한번 삭제하면 되돌릴 수
+              없어요.
             </p>
             {target.shortCode && (
               <p className="mt-2 text-xs text-sp-muted">
-                참여 코드:{' '}
-                <span className="font-mono text-amber-300">
-                  {target.shortCode}
-                </span>
+                참여 코드: <span className="font-mono text-amber-300">{target.shortCode}</span>
               </p>
             )}
           </div>

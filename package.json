@@ -1,6 +1,6 @@
 {
   "name": "ssampin",
-  "version": "2.0.9",
+  "version": "2.1.0",
   "description": "쌤핀 - 교사용 데스크톱 대시보드",
   "private": true,
   "license": "GPL-3.0",
@@ -10,8 +10,10 @@
     "electron:dev": "concurrently -k \"vite\" \"node scripts/electron-dev.mjs\"",
     "electron:dev:fresh": "concurrently -k \"vite\" \"node scripts/electron-dev.mjs --user-data-dir=.dev-data\"",
     "build": "tsc -b && vite build && vite build --config vite.student.config.ts && node scripts/build-electron.mjs",
+    "postbuild": "node scripts/check-bundle-isolation.mjs",
     "build:electron": "node scripts/build-electron.mjs",
     "build:student": "vite build --config vite.student.config.ts",
+    "check:bundle-isolation": "node scripts/check-bundle-isolation.mjs",
     "dev:student": "vite --config vite.student.config.ts --port 5175",
     "electron:build": "npm run build && electron-builder",
     "preview": "vite preview",

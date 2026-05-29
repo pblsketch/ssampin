@@ -21,6 +21,8 @@ import type {
   WallBoardMeta,
 } from '@domain/entities/RealtimeWall';
 import { normalizePostForPadletMode, toWallBoardMeta } from '@domain/rules/realtimeWallRules';
+import { migrateWallBoardToV2 } from '@usecases/realtimeWall/MigrateWallBoardToV2';
+import { DEFAULT_TAB_TITLE } from '@adapters/components/Tools/RealtimeWall/realtimeWallConstants';
 
 const INDEX_FILE = 'wall-boards-index';
 /**
@@ -88,7 +90,17 @@ export class JsonWallBoardRepository implements IWallBoardRepository {
   async load(id: WallBoardId): Promise<WallBoard | null> {
     const raw = await this.storage.read<WallBoard>(boardFile(id));
     if (raw === null) return null;
-    return migrateBoard(raw);
+    // 1) v1.13/v1.14 호환: likes → teacherHearts + padlet mode default 주입
+    const migrated = migrateBoard(raw);
+    // 2) v2.0 (β-Step4): schemaVersion 누락 감지 → tabs/tabId/'2.0' 백필 + 즉시 persist (idempotent).
+    //    다음 load 는 schemaVersion='2.0' 매칭으로 fast-path skip.
+    const v2Result = migrateWallBoardToV2(migrated, {
+      defaultTabTitle: DEFAULT_TAB_TITLE,
+    });
+    if (v2Result.migrated) {
+      await this.save(v2Result.board);
+    }
+    return v2Result.board;
   }
 
   async getByShortCode(shortCode: string): Promise<WallBoard | null> {

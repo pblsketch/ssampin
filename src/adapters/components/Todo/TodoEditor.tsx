@@ -17,6 +17,8 @@ import { useToastStore } from '@adapters/components/common/Toast';
 import type { Todo, TodoPriority } from '@domain/entities/Todo';
 import { filterActive, sortTodos } from '@domain/rules/todoRules';
 import { PRIORITY_CONFIG } from '@domain/valueObjects/TodoPriority';
+import { DatePopover } from './components/DatePopover';
+import { toLocalDateString } from '@shared/utils/localDate';
 
 const MAX_VISIBLE = 50;
 
@@ -24,6 +26,9 @@ export function TodoEditor() {
   const { todos, addTodo, toggleTodo, deleteTodo, updateTodo } = useTodoStore();
   const inputRef = useRef<HTMLInputElement>(null);
   const [inputText, setInputText] = useState('');
+  const [inputDueDate, setInputDueDate] = useState(() => toLocalDateString());
+  const [inputStartDate, setInputStartDate] = useState<string | undefined>(undefined);
+  const [inputNoDueDate, setInputNoDueDate] = useState(false);
 
   const sorted = useMemo<readonly Todo[]>(() => {
     const active = filterActive(todos);
@@ -44,7 +49,19 @@ export function TodoEditor() {
     const text = inputText.trim();
     if (!text) return;
     setInputText('');
-    await addTodo(text, undefined, 'none');
+    await addTodo(
+      text,
+      inputNoDueDate ? undefined : inputDueDate || undefined,
+      'none',
+      undefined,
+      undefined,
+      undefined,
+      inputNoDueDate ? undefined : inputStartDate,
+    );
+    setInputStartDate(undefined);
+    if (!inputNoDueDate) {
+      setInputDueDate(toLocalDateString());
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -57,6 +74,52 @@ export function TodoEditor() {
     <div className="flex flex-col gap-3 min-h-0 flex-1">
       {/* 입력 영역 */}
       <div className="flex gap-2 shrink-0">
+        <DatePopover
+          date={inputDueDate}
+          endDate={inputStartDate ? inputDueDate : undefined}
+          noDueDate={inputNoDueDate}
+          onDateChange={(date) => {
+            if (inputStartDate) {
+              setInputStartDate(date);
+            } else {
+              setInputDueDate(date);
+              setInputNoDueDate(false);
+            }
+          }}
+          onEndDateChange={(endDate) => {
+            if (endDate) {
+              setInputStartDate(inputDueDate);
+              setInputDueDate(endDate);
+            } else {
+              setInputStartDate(undefined);
+            }
+          }}
+          onNoDueDateChange={(noDueDate) => {
+            setInputNoDueDate(noDueDate);
+            if (noDueDate) {
+              setInputDueDate('');
+              setInputStartDate(undefined);
+            } else {
+              setInputDueDate(toLocalDateString());
+            }
+          }}
+        >
+          <div
+            className={`min-h-6 flex items-center gap-1.5 shrink-0 rounded-lg border border-sp-border px-3 py-2 text-xs transition-colors hover:border-sp-accent ${
+              inputNoDueDate ? 'text-sp-muted opacity-60' : 'text-sp-text'
+            } bg-sp-surface`}
+            title="날짜 선택"
+          >
+            <span className="material-symbols-outlined text-sm">calendar_today</span>
+            <span className="whitespace-nowrap">
+              {inputNoDueDate
+                ? '기한 없음'
+                : inputStartDate
+                  ? `${inputStartDate} → ${inputDueDate}`
+                  : inputDueDate || '날짜 선택'}
+            </span>
+          </div>
+        </DatePopover>
         <input
           ref={inputRef}
           type="text"

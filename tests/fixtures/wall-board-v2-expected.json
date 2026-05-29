@@ -1,0 +1,90 @@
+{
+  "id": "fixture-v115-board",
+  "title": "v1.15 샘플 보드",
+  "description": "탭 도입 전 v1.15.x 보드 — tabs/tabId/schemaVersion 모두 부재",
+  "layoutMode": "grid",
+  "columns": [
+    { "id": "column-1", "title": "생각", "order": 0 },
+    { "id": "column-2", "title": "질문", "order": 1 },
+    { "id": "column-3", "title": "정리", "order": 2 }
+  ],
+  "approvalMode": "auto",
+  "posts": [
+    {
+      "id": "post-001",
+      "nickname": "학생A",
+      "text": "v1.15.x 시기에 작성된 카드 — tabId 없음",
+      "status": "approved",
+      "pinned": false,
+      "submittedAt": 1740000000000,
+      "kanban": { "columnId": "column-1", "order": 0 },
+      "freeform": { "x": 24, "y": 24, "w": 260, "h": 180, "zIndex": 1 },
+      "likes": 3,
+      "likedBy": ["session-a1", "session-a2", "session-a3"],
+      "comments": [],
+      "color": "yellow",
+      "tabId": "default"
+    },
+    {
+      "id": "post-002",
+      "nickname": "학생B",
+      "text": "댓글 + PDF + edited 포함",
+      "status": "approved",
+      "pinned": true,
+      "submittedAt": 1740000005000,
+      "kanban": { "columnId": "column-2", "order": 0 },
+      "freeform": { "x": 316, "y": 24, "w": 260, "h": 180, "zIndex": 2 },
+      "teacherHearts": 5,
+      "likes": 1,
+      "likedBy": ["session-b1"],
+      "comments": [
+        {
+          "id": "comment-1",
+          "nickname": "댓글학생",
+          "text": "좋은 의견이에요",
+          "submittedAt": 1740000010000,
+          "sessionToken": "session-comment-1",
+          "status": "approved"
+        }
+      ],
+      "color": "blue",
+      "pdfUrl": "file:///fake/path/sample.pdf",
+      "pdfFilename": "sample.pdf",
+      "edited": true,
+      "ownerSessionToken": "session-b1",
+      "tabId": "default"
+    },
+    {
+      "id": "post-003",
+      "nickname": "학생C",
+      "text": "hidden-by-author 상태도 보존되어야 함",
+      "status": "hidden-by-author",
+      "pinned": false,
+      "submittedAt": 1740000020000,
+      "kanban": { "columnId": "column-3", "order": 0 },
+      "freeform": { "x": 608, "y": 24, "w": 260, "h": 180, "zIndex": 3 },
+      "likes": 0,
+      "likedBy": [],
+      "comments": [],
+      "tabId": "default"
+    }
+  ],
+  "createdAt": 1739999000000,
+  "updatedAt": 1740000020000,
+  "lastSessionAt": 1740000020000,
+  "shortCode": "ABC234",
+  "settings": {
+    "version": 1,
+    "moderation": "off",
+    "requirePin": true
+  },
+  "tabs": [
+    {
+      "id": "default",
+      "title": "전체",
+      "permission": "all",
+      "order": 0
+    }
+  ],
+  "schemaVersion": "2.0"
+}

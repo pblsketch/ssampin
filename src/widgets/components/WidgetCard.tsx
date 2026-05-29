@@ -1,4 +1,4 @@
-import { useState, useEffect, type ComponentType } from 'react';
+import { useState, useEffect, type ComponentType, type MouseEvent } from 'react';
 import type { WidgetDefinition } from '../types';
 import { WidgetModal } from './WidgetModal';
 import { useWidgetModalStore } from '../stores/useWidgetModalStore';
@@ -49,7 +49,17 @@ export function WidgetCard({ definition, onNavigate, maxHeight, scaleFactor }: W
     return () => clearTimeout(t);
   }, [flashKey, isModalOpen]);
 
-  const handleCardClick = () => {
+  const handleCardClick = (event: MouseEvent<HTMLDivElement>) => {
+    const target = event.target;
+    if (
+      target instanceof Element &&
+      target.closest(
+        'button, a, input, select, textarea, [role="button"], [data-widget-interactive="true"]',
+      )
+    ) {
+      return;
+    }
+
     if (definition.modalMode) {
       // 다른 모달이 이미 열려 있으면 flash만 트리거
       if (openId !== null && openId !== definition.id) {
