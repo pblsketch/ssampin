@@ -11,7 +11,8 @@ import { ToolQRCode } from '@adapters/components/Tools/ToolQRCode';
 import { ToolWorkSymbols } from '@adapters/components/Tools/ToolWorkSymbols';
 import { ToolPoll } from '@adapters/components/Tools/ToolPoll';
 import { ToolSurvey } from '@adapters/components/Tools/ToolSurvey';
-import { ToolMultiSurvey } from '@adapters/components/Tools/ToolMultiSurvey';
+// MultiSurveyToolEntry — V1/V2 flag 분기 진입점 (Phase C C.0). flag OFF 시 ToolMultiSurvey 그대로.
+import { MultiSurveyToolEntry } from '@adapters/components/MultiSurvey/MultiSurveyToolEntry';
 import { ToolWordCloud } from '@adapters/components/Tools/ToolWordCloud';
 import { ToolGrouping } from '@adapters/components/Tools/ToolGrouping';
 import { ToolChalkboard } from '@adapters/components/Tools/ToolChalkboard';
@@ -62,23 +63,87 @@ export interface ToolMeta {
 }
 
 export const TOOL_REGISTRY = {
-  'tool-timer':              { id: 'tool-timer',              name: '타이머',             emoji: '⏱️', component: ToolTimer },
-  'tool-random':             { id: 'tool-random',             name: '랜덤 뽑기',          emoji: '🎲', component: ToolRandom },
-  'tool-traffic-light':      { id: 'tool-traffic-light',      name: '신호등',             emoji: '🚦', component: ToolTrafficLight },
-  'tool-scoreboard':         { id: 'tool-scoreboard',         name: '점수판',             emoji: '📊', component: ToolScoreboard, prefersWide: true },
-  'tool-roulette':           { id: 'tool-roulette',           name: '룰렛',               emoji: '🎯', component: ToolRoulette },
-  'tool-dice':               { id: 'tool-dice',               name: '주사위',             emoji: '🎲', component: ToolDice },
-  'tool-coin':               { id: 'tool-coin',               name: '동전',               emoji: '🪙', component: ToolCoin },
-  'tool-qrcode':             { id: 'tool-qrcode',             name: 'QR코드',             emoji: '🔗', component: ToolQRCode },
-  'tool-work-symbols':       { id: 'tool-work-symbols',       name: '활동 기호',          emoji: '🤫', component: ToolWorkSymbols },
-  'tool-poll':               { id: 'tool-poll',               name: '객관식 설문',        emoji: '📊', component: ToolPoll, prefersWide: true },
-  'tool-survey':             { id: 'tool-survey',             name: '주관식 설문',        emoji: '📝', component: ToolSurvey, prefersWide: true },
-  'tool-multi-survey':       { id: 'tool-multi-survey',       name: '복합 유형 설문',     emoji: '📋', component: ToolMultiSurvey, prefersWide: true },
-  'tool-wordcloud':          { id: 'tool-wordcloud',          name: '워드클라우드',       emoji: '☁️', component: ToolWordCloud, prefersWide: true },
-  'tool-grouping':           { id: 'tool-grouping',           name: '모둠 편성기',        emoji: '👥', component: ToolGrouping, prefersWide: true },
-  'tool-valueline':          { id: 'tool-valueline',          name: '가치수직선 토론',    emoji: '📏', component: ToolValueLine, prefersWide: true },
-  'tool-traffic-discussion': { id: 'tool-traffic-discussion', name: '신호등 토론',        emoji: '🚦', component: ToolTrafficLightDiscussion, prefersWide: true },
-  'tool-chalkboard':         { id: 'tool-chalkboard',         name: '칠판',               emoji: '🖍️', component: ToolChalkboard, prefersWide: true },
+  'tool-timer': { id: 'tool-timer', name: '타이머', emoji: '⏱️', component: ToolTimer },
+  'tool-random': { id: 'tool-random', name: '랜덤 뽑기', emoji: '🎲', component: ToolRandom },
+  'tool-traffic-light': {
+    id: 'tool-traffic-light',
+    name: '신호등',
+    emoji: '🚦',
+    component: ToolTrafficLight,
+  },
+  'tool-scoreboard': {
+    id: 'tool-scoreboard',
+    name: '점수판',
+    emoji: '📊',
+    component: ToolScoreboard,
+    prefersWide: true,
+  },
+  'tool-roulette': { id: 'tool-roulette', name: '룰렛', emoji: '🎯', component: ToolRoulette },
+  'tool-dice': { id: 'tool-dice', name: '주사위', emoji: '🎲', component: ToolDice },
+  'tool-coin': { id: 'tool-coin', name: '동전', emoji: '🪙', component: ToolCoin },
+  'tool-qrcode': { id: 'tool-qrcode', name: 'QR코드', emoji: '🔗', component: ToolQRCode },
+  'tool-work-symbols': {
+    id: 'tool-work-symbols',
+    name: '활동 기호',
+    emoji: '🤫',
+    component: ToolWorkSymbols,
+  },
+  'tool-poll': {
+    id: 'tool-poll',
+    name: '객관식 설문',
+    emoji: '📊',
+    component: ToolPoll,
+    prefersWide: true,
+  },
+  'tool-survey': {
+    id: 'tool-survey',
+    name: '주관식 설문',
+    emoji: '📝',
+    component: ToolSurvey,
+    prefersWide: true,
+  },
+  'tool-multi-survey': {
+    id: 'tool-multi-survey',
+    name: '복합 유형 설문',
+    emoji: '📋',
+    component: MultiSurveyToolEntry,
+    prefersWide: true,
+  },
+  'tool-wordcloud': {
+    id: 'tool-wordcloud',
+    name: '워드클라우드',
+    emoji: '☁️',
+    component: ToolWordCloud,
+    prefersWide: true,
+  },
+  'tool-grouping': {
+    id: 'tool-grouping',
+    name: '모둠 편성기',
+    emoji: '👥',
+    component: ToolGrouping,
+    prefersWide: true,
+  },
+  'tool-valueline': {
+    id: 'tool-valueline',
+    name: '가치수직선 토론',
+    emoji: '📏',
+    component: ToolValueLine,
+    prefersWide: true,
+  },
+  'tool-traffic-discussion': {
+    id: 'tool-traffic-discussion',
+    name: '신호등 토론',
+    emoji: '🚦',
+    component: ToolTrafficLightDiscussion,
+    prefersWide: true,
+  },
+  'tool-chalkboard': {
+    id: 'tool-chalkboard',
+    name: '칠판',
+    emoji: '🖍️',
+    component: ToolChalkboard,
+    prefersWide: true,
+  },
 } as const satisfies Record<DualToolId, ToolMeta>;
 
 export const DUAL_TOOL_LIST: readonly ToolMeta[] = Object.values(TOOL_REGISTRY);

@@ -39,7 +39,9 @@ import { ToolQRCode } from '@adapters/components/Tools/ToolQRCode';
 import { ToolWorkSymbols } from '@adapters/components/Tools/ToolWorkSymbols';
 import { ToolPoll } from '@adapters/components/Tools/ToolPoll';
 import { ToolSurvey } from '@adapters/components/Tools/ToolSurvey';
-import { ToolMultiSurvey } from '@adapters/components/Tools/ToolMultiSurvey';
+// MultiSurveyToolEntry — V1/V2 flag 분기 진입점 (Phase C C.0).
+// V1 ToolMultiSurvey는 본 entry 내부에서 import해 flag OFF 시 그대로 렌더. App 레벨 직접 import는 Phase D 회귀 방지 위해 제거.
+import { MultiSurveyToolEntry } from '@adapters/components/MultiSurvey/MultiSurveyToolEntry';
 import { ToolClassroomAgreement } from '@adapters/components/Tools/ToolClassroomAgreement';
 import { ToolSignatureRequest } from '@adapters/components/Tools/ToolSignatureRequest';
 import {
@@ -350,7 +352,9 @@ function renderPage(
     return wrap(<ToolSurvey onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />);
   }
   if (page === 'tool-multi-survey') {
-    return wrap(<ToolMultiSurvey onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />);
+    return wrap(
+      <MultiSurveyToolEntry onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />,
+    );
   }
   if (page === 'tool-classroom-agreement') {
     return wrap(
