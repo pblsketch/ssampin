@@ -6,7 +6,10 @@ import type {
   SeatConstraints,
   FixedSeatConstraint,
   ZoneConstraint,
+  ForbiddenPairConstraint,
 } from '../entities/SeatConstraints';
+import type { StudentPiiOverlay } from '../entities/StudentPiiOverlay';
+import type { SeatBalanceDescriptor, SeatBalanceKind } from './seatBalanceDescriptors';
 import type { OddColumnMode } from './seatingLayoutRules';
 import {
   buildPairGroups,
@@ -541,6 +544,251 @@ export function shuffleSeatsWithConstraints(
     attempts: 600,
     relaxed: true,
     violations: ['모든 배치 시도 실패'],
+  };
+}
+
+/* ──────────────────────── 2-stage Solver (P4 — ADR Decision 3) ──────────────────────── */
+
+/** 학생 ID → 좌석 좌표 map 구축 */
+function seatsToPositions(
+  grid: readonly (readonly (string | null)[])[],
+): ReadonlyMap<string, { row: number; col: number }> {
+  const map = new Map<string, { row: number; col: number }>();
+  for (let r = 0; r < grid.length; r++) {
+    const row = grid[r];
+    if (!row) continue;
+    for (let c = 0; c < row.length; c++) {
+      const id = row[c];
+      if (id != null) map.set(id, { row: r, col: c });
+    }
+  }
+  return map;
+}
+
+/**
+ * forbiddenPairs 위반 검증 (Hard).
+ * 두 학생이 Manhattan distance < 2 (= 인접 또는 동일 좌석) 인 경우 위반.
+ */
+export function checkForbiddenPairs(
+  grid: readonly (readonly (string | null)[])[],
+  forbiddenPairs: readonly ForbiddenPairConstraint[],
+): string[] {
+  const violations: string[] = [];
+  const positions = seatsToPositions(grid);
+  for (const pair of forbiddenPairs) {
+    const a = positions.get(pair.studentA);
+    const b = positions.get(pair.studentB);
+    if (!a || !b) continue;
+    const d = manhattanDistance(a.row, a.col, b.row, b.col);
+    if (d < 2) {
+      violations.push(`forbiddenPair: ${pair.studentA}-${pair.studentB} (dist ${d})`);
+    }
+  }
+  return violations;
+}
+
+/**
+ * 표본 분산 (Σ(x - mean)² / n).
+ * 빈 배열은 0 반환.
+ */
+function variance(values: readonly number[]): number {
+  if (values.length === 0) return 0;
+  const mean = values.reduce((s, v) => s + v, 0) / values.length;
+  return (
+    values.reduce((s, v) => s + (v - mean) * (v - mean), 0) / values.length
+  );
+}
+
+/** ABCDE → 1..5 ordinal (A=5 최상, E=1 최하). undefined → null. */
+function academicOrdinal(overlay: StudentPiiOverlay | undefined): number | null {
+  if (!overlay?.academicLevel) return null;
+  const map: Record<string, number> = { A: 5, B: 4, C: 3, D: 2, E: 1 };
+  return map[overlay.academicLevel] ?? null;
+}
+
+/** gender → 1/0 (M=1, F=0). undefined → null. */
+function genderOrdinal(overlay: StudentPiiOverlay | undefined): number | null {
+  if (!overlay?.gender) return null;
+  return overlay.gender === 'M' ? 1 : 0;
+}
+
+/**
+ * row-level within-variance 평균 점수 (낮을수록 균형 잡힘).
+ *
+ * 각 행 내부의 ordinal variance 평균. 행마다 등급이 통일될수록 score 低 (좋음).
+ *
+ * **사전 작성 ralph 의도 합의**: "균형 = 행 내부 일관성". 이는 등급별 cluster
+ * 또는 모둠 형성에 적합한 metric. shuffleSeatsTwoStage는 이 metric을 최소화한다.
+ *
+ * undefined 값 학생은 점수 계산에서 제외.
+ *
+ * 관련 ADR: docs/architecture/student-pii-adr-v1.2.md Decision 3 (Soft layer)
+ */
+export function computeBalanceScore(
+  grid: readonly (readonly (string | null)[])[],
+  pii: ReadonlyMap<string, StudentPiiOverlay>,
+  kind: SeatBalanceKind,
+): number {
+  const rowScores: number[] = [];
+  for (const row of grid) {
+    const values: number[] = [];
+    for (const id of row) {
+      if (id == null) continue;
+      const overlay = pii.get(id);
+      const ord = kind === 'academicLevel' ? academicOrdinal(overlay) : genderOrdinal(overlay);
+      if (ord != null) values.push(ord);
+    }
+    if (values.length > 0) rowScores.push(variance(values));
+  }
+  if (rowScores.length === 0) return 0;
+  return rowScores.reduce((s, v) => s + v, 0) / rowScores.length;
+}
+
+/**
+ * lex score tuple. descriptors 선언 순서대로 점수 배열 생성.
+ */
+export function computeLexScore(
+  grid: readonly (readonly (string | null)[])[],
+  pii: ReadonlyMap<string, StudentPiiOverlay>,
+  descriptors: readonly SeatBalanceDescriptor[],
+): readonly number[] {
+  return descriptors.map((d) => computeBalanceScore(grid, pii, d.kind));
+}
+
+/**
+ * lex 비교: a < b 면 음수, a > b 면 양수, 같으면 0.
+ */
+export function compareLexScores(
+  a: readonly number[],
+  b: readonly number[],
+): number {
+  const len = Math.max(a.length, b.length);
+  for (let i = 0; i < len; i++) {
+    const av = a[i] ?? 0;
+    const bv = b[i] ?? 0;
+    if (av < bv) return -1;
+    if (av > bv) return 1;
+  }
+  return 0;
+}
+
+/** 결정적 mulberry32 PRNG (seed 기반). */
+export function makeSeededRandom(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let t = state;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+export interface TwoStageOptions {
+  readonly pairMode?: boolean;
+  readonly oddColumnMode?: OddColumnMode;
+  /** 후보 생성 횟수. 기본 50. balance 활성 시 클수록 균형↑. */
+  readonly candidateCount?: number;
+  /** 결정적 seed. 미지정 시 Math.random. */
+  readonly seed?: number;
+}
+
+export interface TwoStageResult extends ShuffleResult {
+  readonly hardSatisfied: boolean;
+  readonly score: readonly number[];
+}
+
+/**
+ * shuffleSeatsTwoStage — ADR Decision 3 (Hard/Soft 2-stage solver)
+ *
+ * **Stage 1 (Hard, boolean must-pass)**:
+ *   fixedSeats, zones, forbiddenPairs, separations(minDistance), adjacencies(maxDistance).
+ *
+ * **Stage 2 (Soft, lexicographic by `balanceDescriptors` 선언 순서)**:
+ *   기본 순서: balance.academicLevel ≻ balance.gender.
+ *   동일 lex 점수 시 결정적 seed RNG 타이브레이크.
+ *
+ * 절차:
+ * 1. `candidateCount`회 후보 생성 (각 후보는 `shuffleSeatsWithConstraints` 1회 호출).
+ * 2. 각 후보에 대해 hard violations 카운트 (forbiddenPairs 추가).
+ * 3. hard 통과 후보 중 soft score 최저 선택.
+ * 4. 모두 hard fail 시 violations 최소 후보 반환.
+ *
+ * 관련 ADR: docs/architecture/student-pii-adr-v1.2.md Decision 3
+ */
+export function shuffleSeatsTwoStage(
+  seats: readonly (readonly (string | null)[])[],
+  constraints: SeatConstraints,
+  rows: number,
+  cols: number,
+  pii: ReadonlyMap<string, StudentPiiOverlay>,
+  options: TwoStageOptions = {},
+): TwoStageResult {
+  const {
+    pairMode,
+    oddColumnMode,
+    candidateCount = 50,
+    seed,
+  } = options;
+
+  const descriptors = constraints.balanceDescriptors ?? [];
+  const forbiddenPairs = constraints.forbiddenPairs ?? [];
+  const rng = seed != null ? makeSeededRandom(seed) : Math.random;
+
+  let bestHardOk: TwoStageResult | null = null;
+  let bestFallback: TwoStageResult | null = null;
+  let bestFallbackViolations = Infinity;
+
+  for (let i = 0; i < candidateCount; i++) {
+    const inner = shuffleSeatsWithConstraints(
+      seats,
+      constraints,
+      rows,
+      cols,
+      rng,
+      pairMode != null ? { pairMode, oddColumnMode } : undefined,
+    );
+
+    const fpViolations = checkForbiddenPairs(inner.seats, forbiddenPairs);
+    const allViolations = [...inner.violations, ...fpViolations];
+    const hardOk = allViolations.length === 0;
+
+    const score = computeLexScore(inner.seats, pii, descriptors);
+    const candidate: TwoStageResult = {
+      seats: inner.seats,
+      success: hardOk,
+      attempts: inner.attempts,
+      relaxed: inner.relaxed,
+      violations: allViolations,
+      hardSatisfied: hardOk,
+      score,
+    };
+
+    if (hardOk) {
+      if (
+        bestHardOk === null ||
+        compareLexScores(candidate.score, bestHardOk.score) < 0
+      ) {
+        bestHardOk = candidate;
+      }
+    } else if (allViolations.length < bestFallbackViolations) {
+      bestFallbackViolations = allViolations.length;
+      bestFallback = candidate;
+    }
+  }
+
+  if (bestHardOk) return bestHardOk;
+  if (bestFallback) return bestFallback;
+
+  // 극단적 fallback (예: candidateCount 0)
+  return {
+    seats: seats.map((row) => [...row]),
+    success: false,
+    attempts: 0,
+    relaxed: false,
+    violations: ['no candidate generated'],
+    hardSatisfied: false,
+    score: [],
   };
 }
 

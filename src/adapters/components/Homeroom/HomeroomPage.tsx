@@ -7,6 +7,8 @@ import { AssignmentTab } from './Assignment/AssignmentTab';
 import { ConsultationTab } from './Consultation/ConsultationTab';
 import { Seating } from '@adapters/components/Seating/Seating';
 import { RosterManagementTab } from './RosterManagementTab';
+import { PiiConsentModal } from '@adapters/components/common/PiiConsentModal';
+import { usePiiConsentMount } from '@adapters/hooks/usePiiConsentMount';
 
 export interface RecordPrefill {
   studentId: string;
@@ -24,6 +26,10 @@ export function HomeroomPage() {
     setPrefillRecord(prefill);
     setActiveTab('records');
   }, []);
+
+  // 학생 PII 첫 진입(roster 탭) 시 1회 ConsentModal — US-P5 wire 후속.
+  const piiConsent = usePiiConsentMount();
+  const showConsent = activeTab === 'roster' && piiConsent.modalOpen;
 
   return (
     <div className="h-full flex flex-col">
@@ -43,6 +49,11 @@ export function HomeroomPage() {
       {activeTab === 'assignment' && <AssignmentTab />}
       {activeTab === 'consultation' && <ConsultationTab onWriteRecord={handleWriteRecord} />}
       {activeTab === 'seating' && <Seating embedded />}
+
+      <PiiConsentModal
+        open={showConsent}
+        onSelect={(mode) => { void piiConsent.onSelect(mode); }}
+      />
     </div>
   );
 }

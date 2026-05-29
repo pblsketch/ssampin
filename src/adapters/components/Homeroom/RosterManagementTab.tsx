@@ -10,6 +10,7 @@ import type { Student } from '@domain/entities/Student';
 import { exportRosterToExcel, parseRosterFromExcel } from '@infrastructure/export/ExcelExporter';
 /* eslint-enable no-restricted-imports */
 import { FormatHint } from '../common/FormatHint';
+import { StudentPiiSection } from './StudentPiiSection';
 import {
   parseClipboardText,
   validateRows,
@@ -388,8 +389,8 @@ export function RosterManagementTab() {
               const isVacant = isInactiveStatus(student.status) || !!student.isVacant;
               const hasParent2 = showParent2.has(student.id);
               return (
+                <div key={student.id} className="contents">
                 <div
-                  key={student.id}
                   className={`grid grid-cols-[36px_36px_minmax(60px,1fr)_120px_64px_120px_64px_120px_96px_56px] gap-1.5 px-3 py-2.5 items-center transition-colors ${isVacant ? 'opacity-50 bg-red-500/5' : ''} ${isEditing ? 'hover:bg-sp-accent/5' : 'hover:bg-sp-card'}`}
                 >
                   {/* 번호 */}
@@ -621,6 +622,12 @@ export function RosterManagementTab() {
                       </span>
                     ) : null}
                   </div>
+                </div>
+                {!isVacant && (
+                  <div className="px-3 pb-2">
+                    <StudentPiiSection studentId={student.id} />
+                  </div>
+                )}
                 </div>
               );
             })}

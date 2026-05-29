@@ -91,6 +91,18 @@ import { GetSubmissions } from '@usecases/assignment/GetSubmissions';
 import { DeleteAssignment } from '@usecases/assignment/DeleteAssignment';
 import { CopyMissingList } from '@usecases/assignment/CopyMissingList';
 
+// === 학생 PII 보호 (P2 — Decision 2, 5) ===
+import type { IPinGate } from '@domain/ports/IPinGate';
+import type { IAuditLogger } from '@domain/ports/IAuditLogger';
+import type { IStudentPiiRepository } from '@domain/repositories/IStudentPiiRepository';
+import type { IStudentPiiReader } from '@domain/repositories/IStudentPiiReader';
+import { ClassManagementPinGate } from '@adapters/pin/ClassManagementPinGate';
+import { PiiAuditLogger, InMemoryPiiAuditLogStorage } from '@adapters/audit/PiiAuditLogger';
+import { RequirePiiCapability } from '@usecases/pii/RequirePiiCapability';
+import { RecordConsent } from '@usecases/pii/RecordConsent';
+// P3 — Migration + Repository
+import { SessionOnlyStudentPiiRepository } from '@infrastructure/persistence/SessionOnlyStudentPiiRepository';
+
 const isElectron = typeof window !== 'undefined' && window.electronAPI != null;
 
 export const storage: IStoragePort = isElectron
@@ -279,6 +291,48 @@ export function resetDriveSyncAdapter(): void {
 }
 
 // (협업 보드 조립은 electron/ipc/board.ts 가 담당 — 상단 import 주석 참조)
+
+// === 학생 PII 보호 인프라 wiring (P2 + P3) ===
+
+/**
+ * PII 감사 로그 백엔드. v1.11.x는 in-memory 저장 (메인 윈도우 lifecycle 동안만 보존).
+ * 향후 #PII-TRACK-3 (post-v1): 파일 영속 + 90일 rolling.
+ */
+const piiAuditStorage = new InMemoryPiiAuditLogStorage();
+
+/** PII 감사 로그 (Sticky+FIFO 2-tier). */
+export const piiAuditLogger: IAuditLogger = new PiiAuditLogger(piiAuditStorage);
+
+/** PIN gate (classManagement PIN 재사용). */
+export const pinGate: IPinGate = new ClassManagementPinGate();
+
+/** PII capability 게이트 usecase. */
+export const requirePiiCapability = new RequirePiiCapability(pinGate, piiAuditLogger);
+
+/** PII 동의 기록 usecase. */
+export const recordConsent = new RecordConsent(piiAuditLogger);
+
+// === P3 — Student PII Repository (factory swap by consent) ===
+
+/**
+ * 디폴트 PII repository: SessionOnly (v1.11.x 안전 기본값).
+ * `RecordConsent('persisted')` 선택 후 호출자가 `setStudentPiiRepository(FileStudentPiiRepository)`로 교체.
+ *
+ * Electron 환경에서는 부팅 시 runMigrations.ts가 FileStudentPiiRepository를 instantiate한다.
+ * Browser 환경에서는 SessionOnly만 사용.
+ */
+let _studentPiiRepository: IStudentPiiRepository & IStudentPiiReader =
+  new SessionOnlyStudentPiiRepository();
+
+export function getStudentPiiRepository(): IStudentPiiRepository & IStudentPiiReader {
+  return _studentPiiRepository;
+}
+
+export function setStudentPiiRepository(
+  repo: IStudentPiiRepository & IStudentPiiReader,
+): void {
+  _studentPiiRepository = repo;
+}
 
 // UseCase 팩토리 (Drive 클라이언트가 lazy이므로 팩토리 패턴)
 export function createAssignmentUseCases(getAccessToken: () => Promise<string>) {

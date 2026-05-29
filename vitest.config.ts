@@ -16,7 +16,10 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    include: ['src/**/*.{test,spec}.{ts,tsx}'],
+    include: [
+      'src/**/*.{test,spec}.{ts,tsx}',
+      'eslint-rules/**/*.{test,spec}.{ts,tsx}',
+    ],
     exclude: ['node_modules', 'dist', 'dist-electron', 'release', 'spikes/**'],
     globals: false,
   },
