@@ -400,6 +400,20 @@ export function StudentBoardView({ board }: StudentBoardViewProps) {
         onClose={() => setPinSetupOpen(false)}
         boardKey={draftBoardKey}
       />
+      {/* v2.0 (post-release hotfix B) — PIN 강제 모달.
+          board.settings.requirePin === true 이고 currentPinHash 미설정이면 강제 mount.
+          학생이 PIN 등록할 때까지 닫히지 않음 (onClose noop). 등록 직후 currentPinHash 충족
+          → 자동 unmount. 회귀 #9 (PIN 평문 금지) 보호 — useStudentPin 훅이 hash 후 송신.
+          v1.x legacy 보드는 settings.requirePin 미정의 → mount 안 됨 (무회귀). */}
+      {settings?.requirePin === true && !currentPinHash && (
+        <StudentPinSetupModalWithHook
+          open={true}
+          onClose={() => {
+            /* 강제 모달 — PIN 등록 완료(currentPinHash 채워짐) 시에만 자동 unmount */
+          }}
+          boardKey={draftBoardKey}
+        />
+      )}
 
       {/* v2.1 Phase D — 닉네임 변경 토스트 */}
       <StudentNicknameChangedToast

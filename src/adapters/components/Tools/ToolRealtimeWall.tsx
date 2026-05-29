@@ -1245,10 +1245,18 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
       const next: WallBoard = { ...currentBoard, tabs: newTabs, updatedAt: Date.now() };
       setCurrentBoard(next);
       void wallBoardRepository.save(next);
+      // β-Step12 (post-release hotfix A) — 라이브 모드면 학생 broadcast (회귀 #2 SERVER_TRUSTED_BROADCAST 진입점)
+      if (isLiveMode && window.electronAPI?.broadcastRealtimeWall) {
+        // 신규 탭은 base 와 비교해서 추가된 것 — addRealtimeWallTab 은 배열 끝 + order 재계산
+        const newlyAdded = newTabs.find((t) => !tabsBase.some((b) => b.id === t.id));
+        if (newlyAdded) {
+          void window.electronAPI.broadcastRealtimeWall({ type: 'tab-added', tab: newlyAdded });
+        }
+      }
     } catch (e) {
       if (e instanceof Error) window.alert(e.message);
     }
-  }, [currentBoard, teacherTabs]);
+  }, [currentBoard, isLiveMode, teacherTabs]);
 
   const handleRenameTab = useCallback(
     (tabId: string) => {
@@ -1262,11 +1270,19 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
         const next: WallBoard = { ...currentBoard, tabs: newTabs, updatedAt: Date.now() };
         setCurrentBoard(next);
         void wallBoardRepository.save(next);
+        // hotfix A — tab-renamed broadcast
+        if (isLiveMode && window.electronAPI?.broadcastRealtimeWall) {
+          void window.electronAPI.broadcastRealtimeWall({
+            type: 'tab-renamed',
+            tabId,
+            newTitle: title,
+          });
+        }
       } catch (e) {
         if (e instanceof Error) window.alert(e.message);
       }
     },
-    [currentBoard, teacherTabs],
+    [currentBoard, isLiveMode, teacherTabs],
   );
 
   const handleDeleteTab = useCallback(
@@ -1289,11 +1305,20 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
         setPosts([...result.posts]);
         void wallBoardRepository.save(next);
         if (activeTabId === tabId) setActiveTabId(DEFAULT_TAB_ID);
+        // hotfix A — tab-deleted broadcast (orphan posts 는 학생측 store 가 DEFAULT_TAB_ID 백필)
+        if (isLiveMode && window.electronAPI?.broadcastRealtimeWall) {
+          const orphanedPostIds = posts.filter((p) => p.tabId === tabId).map((p) => p.id);
+          void window.electronAPI.broadcastRealtimeWall({
+            type: 'tab-deleted',
+            tabId,
+            orphanedPostIds,
+          });
+        }
       } catch (e) {
         if (e instanceof Error) window.alert(e.message);
       }
     },
-    [activeTabId, currentBoard, posts, teacherTabs],
+    [activeTabId, currentBoard, isLiveMode, posts, teacherTabs],
   );
 
   const handleTogglePermission = useCallback(
@@ -1312,11 +1337,19 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
         const next: WallBoard = { ...currentBoard, tabs: newTabs, updatedAt: Date.now() };
         setCurrentBoard(next);
         void wallBoardRepository.save(next);
+        // hotfix A — tab-permission-changed broadcast (BroadcastWallState 가 teacher-only 탭은 학생측 필터)
+        if (isLiveMode && window.electronAPI?.broadcastRealtimeWall) {
+          void window.electronAPI.broadcastRealtimeWall({
+            type: 'tab-permission-changed',
+            tabId,
+            permission: nextPermission,
+          });
+        }
       } catch (e) {
         if (e instanceof Error) window.alert(e.message);
       }
     },
-    [currentBoard, teacherTabs],
+    [currentBoard, isLiveMode, teacherTabs],
   );
 
   const boardView = (() => {
