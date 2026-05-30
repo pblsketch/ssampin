@@ -16,11 +16,13 @@
  * Phase D(v2.1.1) flag 제거 시 본 컴포넌트 삭제 + ToolMultiSurvey 직접 라우팅 복귀.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ToolMultiSurvey } from '@adapters/components/Tools/ToolMultiSurvey';
 import { useRealtimeToolFlag } from '@adapters/hooks/useRealtimeToolFlag';
 import { useMigrationReport } from '@adapters/hooks/useMigrationReport';
+import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { useMultiSurveyV2Store } from '@adapters/stores/useMultiSurveyV2Store';
+import { useToolTemplateStore } from '@adapters/stores/useToolTemplateStore';
 import { MigrationReportModal } from './v2/Migration/MigrationReportModal';
 import { MakerLayout } from './v2/Maker/MakerLayout';
 
@@ -32,16 +34,63 @@ interface MultiSurveyToolEntryProps {
 }
 
 /**
- * v1 데이터 수집 hook.
+ * v1 데이터 수집 hook (Phase C C.4 — Q4 ADR-010 분리 채택 후 구현).
  *
- * Phase C 초기 구현: 빈 배열 반환 (자동 마이그레이션 대상 없음 = 신규 사용자 시뮬레이션).
- * 후속 PDCA에서 `useToolTemplateStore`의 `'tool-multi-survey'` 키 템플릿을 변환 대상으로 추출.
+ * `useToolTemplateStore`의 `multi-survey` 타입 템플릿을 v1ToV2 어댑터가 기대하는
+ * V1Survey shape로 변환해 반환한다.
  *
- * 분리 이유: V1 store 의존을 본 진입점에 직접 박지 않아 보호 파일 가드 + 테스트 격리 단순화.
+ * V1Survey shape (src/adapters/multiSurvey/migration/v1ToV2.ts §V1Survey 참조):
+ *  - id: string (non-empty)
+ *  - title: string
+ *  - questions: V1Question[]
+ *  - submissions: readonly unknown[]  ← 템플릿엔 없음 → []
+ *  - isOpen: boolean                  ← 템플릿엔 없음 → false
+ *  - createdAt: number (epoch ms)     ← ToolTemplate.createdAt(ISO 8601) → Date.parse()
+ *
+ * 분리 이유:
+ *  - 보호 파일(useSettingsStore 등) 회피 — useToolTemplateStore만 의존
+ *  - V1 데이터 1차 진실 원천이 다른 곳(예: 별도 영속 store)으로 옮길 때 본 어댑터만 교체
+ *  - 빈 배열 시 마이그레이션 트리거 자체를 건너뛰므로 미가입 사용자 비용 0
  */
 function useV1MultiSurveyData(): unknown[] {
-  // TODO(C.4-followup): useToolTemplateStore에서 tool-multi-survey 템플릿 추출
-  return [];
+  const loaded = useToolTemplateStore((s) => s.loaded);
+  const templates = useToolTemplateStore((s) => s.templates);
+  const load = useToolTemplateStore((s) => s.load);
+
+  useEffect(() => {
+    if (!loaded) void load();
+  }, [loaded, load]);
+
+  return useMemo(() => {
+    if (!loaded) return [];
+    return templates
+      .filter((t) => t.toolType === 'multi-survey' && t.config.type === 'multi-survey')
+      .map((t) => {
+        // type narrowing — filter에서 이미 확인했지만 TS는 모름
+        const cfg = t.config as Extract<typeof t.config, { type: 'multi-survey' }>;
+        const parsed = Date.parse(t.createdAt);
+        const createdAtMs = Number.isFinite(parsed) ? parsed : Date.now();
+        return {
+          id: t.id,
+          title: cfg.title,
+          questions: cfg.questions.map((q) => ({
+            id: q.id,
+            type: q.type,
+            question: q.question,
+            required: q.required,
+            options: q.options.map((o) => ({ id: o.id, text: o.text })),
+            scaleMin: q.scaleMin,
+            scaleMax: q.scaleMax,
+            scaleMinLabel: q.scaleMinLabel,
+            scaleMaxLabel: q.scaleMaxLabel,
+            maxLength: q.maxLength,
+          })),
+          submissions: [],
+          isOpen: false,
+          createdAt: createdAtMs,
+        };
+      });
+  }, [loaded, templates]);
 }
 
 export function MultiSurveyToolEntry({
@@ -52,6 +101,10 @@ export function MultiSurveyToolEntry({
   const flag = useRealtimeToolFlag();
   const migrationReport = useMigrationReport();
   const v1Sessions = useV1MultiSurveyData();
+  // Phase C C.4 — opt-in/opt-out + 마이그레이션 결과 로깅 채널.
+  // useAnalytics는 보호 파일 useSettingsStore를 내부에서 *읽기만* 함 → 본 파일은 보호 파일 비-수정.
+  // trackRaw 사용: AnalyticsEvent enum(보호 파일) 확장 없이 v2 전용 이벤트 게재.
+  const { trackRaw } = useAnalytics();
 
   const selectedSessionId = useMultiSurveyV2Store((s) => s.selectedSessionId);
   const sessions = useMultiSurveyV2Store((s) => s.sessions);
@@ -67,13 +120,26 @@ export function MultiSurveyToolEntry({
     if (migrationAttemptedRef.current) return;
     if (flag.migrationStatus !== 'idle') return;
 
-    migrationAttemptedRef.current = true;
+    // v2 세션 로드는 항상 시도 (idempotent — 다중 호출 안전)
     void loadSessions();
 
-    if (v1Sessions.length > 0) {
-      void migrationReport.runMigration(v1Sessions);
-    }
-  }, [flag.enabled, flag.migrationStatus, loadSessions, migrationReport, v1Sessions]);
+    // 빈 배열이면 아직 템플릿 로드 전이거나 변환 대상이 없음.
+    // ref를 세팅하지 않아 템플릿 로드 완료 후 재진입 시 자동 트리거.
+    if (v1Sessions.length === 0) return;
+
+    migrationAttemptedRef.current = true;
+    void migrationReport.runMigration(v1Sessions).then((result) => {
+      if (result) {
+        trackRaw('multi_survey_v2_migration_completed', {
+          total_count: result.totalCount,
+          success_count: result.successCount,
+          failed_count: result.failedCount,
+        });
+      } else {
+        trackRaw('multi_survey_v2_migration_failed', {});
+      }
+    });
+  }, [flag.enabled, flag.migrationStatus, loadSessions, migrationReport, v1Sessions, trackRaw]);
 
   // V2 첫 진입 시 빈 세션 1개 자동 생성 (메이커가 sessionId 필수)
   const [provisionalSessionEnsured, setProvisionalSessionEnsured] = useState(false);
@@ -96,15 +162,26 @@ export function MultiSurveyToolEntry({
     selectSession,
   ]);
 
+  // Phase C C.4 — 사용자가 명시적으로 V2를 켜는 시점 (배너 버튼). v1Sessions 개수도 함께 보고.
+  const handleOptIn = useCallback(() => {
+    trackRaw('multi_survey_v2_opt_in', {
+      source: 'entry-banner',
+      v1_templates_count: v1Sessions.length,
+    });
+    flag.setEnabled(true);
+  }, [flag, trackRaw, v1Sessions.length]);
+
+  // Phase C C.4 — 사용자가 V2에서 V1으로 돌아가는 시점 (헤더 "이전 도구로 돌아가기").
   const handleRollbackToV1 = useCallback(() => {
+    trackRaw('multi_survey_v2_opt_out', { source: 'entry-header' });
     flag.setEnabled(false);
-  }, [flag]);
+  }, [flag, trackRaw]);
 
   // flag OFF — V1 ToolMultiSurvey 그대로 렌더 (분기 위치 ②)
   if (!flag.enabled) {
     return (
       <div className="relative h-full w-full">
-        <V2OptInBanner onOptIn={() => flag.setEnabled(true)} />
+        <V2OptInBanner onOptIn={handleOptIn} />
         <ToolMultiSurvey onBack={onBack} isFullscreen={isFullscreen} />
       </div>
     );

@@ -1,10 +1,10 @@
 # HANDOFF — 복합 유형 설문 RB 수준 리뉴얼 · Phase C 진입 (G004)
 
 **작성**: 2026-05-30 (G003 Phase B 완료 직후)
-**갱신**: 2026-05-30 (Phase C C.0 + C.1 + C.3 완료 — 본 핸드오프 § "Phase C C.0/C.1/C.3 진행 결과" 참조)
+**갱신**: 2026-05-30 (Phase C C.0 + C.1 + C.3 + **C.4** 완료 — 본 핸드오프 § "Phase C C.0/C.1/C.3 진행 결과" + § "Phase C C.4 진행 결과" 참조)
 **이전 핸드오프**: [docs/HANDOFF_multisurvey-v2-renewal-phase-b.md](HANDOFF_multisurvey-v2-renewal-phase-b.md) (Phase B 진입용 — 보존)
-**다음 세션 시작점**: Phase C 잔여 (C.2 정성 게이트 시각 검증 → C.4 v1 데이터 추출 + opt-in 로깅 → C.5 릴리즈 워크플로우 → C.6 사용자 테스트)
-**ultragoal 상태**: 3/5 complete (G001 ✓, G002 ✓, G003 ✓), G004 active (C.0/C.1/C.3 완료, C.2/C.4/C.5/C.6 잔여), G005 pending
+**다음 세션 시작점**: Phase C 잔여 (C.2 정성 게이트 시각 검증 → C.6 사용자 테스트 → C.5 릴리즈 워크플로우)
+**ultragoal 상태**: 3/5 complete (G001 ✓, G002 ✓, G003 ✓), G004 active (C.0/C.1/C.3/**C.4** 완료, C.2/C.5/C.6 잔여), G005 pending
 
 ---
 
@@ -230,10 +230,56 @@
 ### Phase C 잔여 작업 (다음 세션 핸드오프)
 
 - [ ] **C.2 정성 게이트 (여백 + ambient motion)** — 데스크톱 실 화면 시연. frontend-design 협업 의무(`feedback_frontend_agent_collaboration.md` 메모리 룰).
-- [ ] **C.4 v1 데이터 추출 + opt-in 이벤트 로깅** — `MultiSurveyToolEntry`의 `useV1MultiSurveyData()` stub(현재 빈 배열) → `useToolTemplateStore`의 'tool-multi-survey' 키 템플릿 추출 구현. opt-in/opt-out 이벤트 로깅은 보호 파일 useSettingsStore 회피 위해 별도 analytics 채널 추가 필요.
+- [x] **C.4 v1 데이터 추출 + opt-in 이벤트 로깅** — 2026-05-30 완료. § "Phase C C.4 진행 결과" 참조.
 - [ ] **C.5 릴리즈 워크플로우 8단계** — KB(Notion) 갱신 / release-notes v2.1.0 작성 / electron-builder 인스톨러 빌드 / GitHub 릴리즈 / 사용자 공지 / 모니터링 대시보드 / 30일 모니터링 시작 / prototype/realtime-tool-spike/ git rm.
 - [ ] **C.6 사용자 테스트 5 시나리오 수동 검증** — Open Questions Q7 결정된 5건. 데스크톱 환경(Electron 40.x Win11 24H2). 결과를 `docs/manual-verification/multisurvey-v2-c6-scenarios.md`로 별도 작성.
-- [ ] **G004 ultragoal checkpoint complete** — C.2~C.6 모두 통과 후 `ultragoal checkpoint --goal-id G004-... --status complete --evidence "..."` 실행.
+- [ ] **G004 ultragoal checkpoint complete** — C.2/C.5/C.6 모두 통과 후 `ultragoal checkpoint --goal-id G004-... --status complete --evidence "..."` 실행.
+
+---
+
+## Phase C C.4 진행 결과 (2026-05-30, 본 세션)
+
+### 신규 산출물
+
+**코드 (1 파일 5개 영역 수정)**:
+
+- `src/adapters/components/MultiSurvey/MultiSurveyToolEntry.tsx` — 5개 수술적 편집:
+  1. **import 확장**: `useMemo` from react + `useAnalytics` from `@adapters/hooks/useAnalytics` + `useToolTemplateStore` from `@adapters/stores/useToolTemplateStore` 추가.
+  2. **`useV1MultiSurveyData()` 실제 구현** (line 55~94, 약 40줄): 빈 배열 stub → `useToolTemplateStore`의 `toolType==='multi-survey' && config.type==='multi-survey'` 필터 + `Date.parse(template.createdAt)` epoch ms 변환 + V1Survey shape(id/title/questions/submissions=[]/isOpen=false/createdAt) 조립. `useEffect`로 미로드 시 `load()` 호출 + `useMemo`로 변환 캐시.
+  3. **`useAnalytics().trackRaw` 도입** (line 107): `trackRaw` 채널 사용으로 `AnalyticsEvent` enum(보호 파일) 확장 회피. 보호 파일 `useSettingsStore`는 useAnalytics 내부에서 _읽기만_ 함 → 본 진입점은 보호 파일 비-수정.
+  4. **마이그레이션 useEffect 보강** (line 118~142): (a) `v1Sessions.length === 0` 시 `migrationAttemptedRef` 미세팅 → 템플릿 비동기 로드 후 재진입 시 자동 트리거 가능, (b) `runMigration` 결과 promise 체인에서 `multi_survey_v2_migration_completed`(totalCount/successCount/failedCount) 또는 `multi_survey_v2_migration_failed` 이벤트 게재.
+  5. **`handleOptIn`/`handleRollbackToV1` 트래킹 추가** (line 165~178): 클릭 시점에 `multi_survey_v2_opt_in`(source: entry-banner + v1_templates_count) / `multi_survey_v2_opt_out`(source: entry-header) 이벤트 게재. V2OptInBanner의 `onOptIn={() => flag.setEnabled(true)}` inline 콜백을 `onOptIn={handleOptIn}` 참조로 교체.
+
+**문서 갱신**:
+
+- `docs/03-analysis/multisurvey-v2-renewal.open-questions.md` — 진행 기록 표 1행 추가 ("C.4 v1 데이터 추출 + opt-in 이벤트 로깅 구현 완료").
+- `docs/HANDOFF_multisurvey-v2-renewal-phase-c.md` (본 파일) — 헤더 § "Phase C 잔여 작업"의 C.4 체크박스 ✓ + 본 § "Phase C C.4 진행 결과" 신설.
+
+### 검증 결과
+
+| 게이트                                | 결과        | 비고                                                                    |
+| ------------------------------------- | ----------- | ----------------------------------------------------------------------- |
+| `npx tsc --noEmit`                    | 0 errors    | 본 세션 변경 범위 전부 통과 (TSC_EXIT=0)                                |
+| `npx eslint MultiSurveyToolEntry.tsx` | 0 errors    | LINT_EXIT=0                                                             |
+| `npm run check-flag-usage`            | 3/3 PASS    | useRealtimeToolFlag 추가 호출 없음 (line 101 1건 + hooks 정의 2건 유지) |
+| `npm run check-hex-hardcoding`        | 0건 PASS    | v2/\*\* 범위 무변경                                                     |
+| `npm run check-sp-coverage`           | 1175건 PASS | sp-\* 토큰 사용 무변경 (entry 파일은 v2/\*\* 외 범위)                   |
+| migration roundtrip test              | 29/29 PASS  | `src/adapters/multiSurvey/migration/__tests__/roundtrip.test.ts`        |
+| 보호 파일 10종 가드                   | 0줄         | 본 세션 내내 GUARD-CLEAN — useAnalytics는 *호출*만 (수정 X)             |
+
+### 새로 게재되는 분석 이벤트 (Phase D 모니터링 입력)
+
+- `multi_survey_v2_opt_in` — properties: `source: 'entry-banner'`, `v1_templates_count: number`. Phase D 합격선 95% (Q5 ADR-005) 측정의 분자.
+- `multi_survey_v2_opt_out` — properties: `source: 'entry-header'`. 폴백 합격선 미달 시 분기 분석 입력.
+- `multi_survey_v2_migration_completed` — properties: `total_count`, `success_count`, `failed_count`. 마이그레이션 신뢰도 + DN-02/DN-07 v1 enum 4종 실측 분포 확인.
+- `multi_survey_v2_migration_failed` — properties: `{}`. IPC 라인 끊김/타임아웃 모니터.
+
+**※ AnalyticsEvent enum 비-확장 원칙**: 위 4종은 trackRaw 채널로만 발행 (보호 파일 비-수정). Phase D 합격선 측정 시 분석 대시보드 측에서 raw 이벤트 키를 인덱싱.
+
+### C.4 잔여 결정 (사용자 명시 받기)
+
+- **본 세션 변경을 c4 커밋으로 묶을지** — 현재 본 진입점 1 파일 + 문서 2건. 단일 commit `feat(multi-survey-v2): Phase C C.4 — v1 템플릿 추출 + opt-in 이벤트 로깅` 권장.
+- **본 세션 4 커밋(C.0/C.1/C.3 3 commit + C.4 1 commit) push 시점** — main 푸시는 사용자 명시 대기.
 
 ### MultiSurveyToolEntry 구현 세부 (다음 세션 참고)
 
