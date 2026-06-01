@@ -1147,10 +1147,12 @@ function formatFinalSceneLabels(finalScenes: readonly AgreementFinalScene[]): st
 function formatSavedSessionSceneLabels(
   session: Pick<ClassroomAgreementSavedSession, 'scenes' | 'finalItems'>,
 ): string {
+  const scenes = session.scenes ?? [];
+  const finalItems = session.finalItems ?? [];
   return formatSceneLabels(
-    session.scenes.length > 0
-      ? session.scenes.map((scene) => scene.label)
-      : session.finalItems.map((scene) => scene.sceneLabel),
+    scenes.length > 0
+      ? scenes.map((scene) => scene.label)
+      : finalItems.map((scene) => scene.sceneLabel),
   );
 }
 

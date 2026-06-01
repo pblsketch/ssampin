@@ -8,15 +8,22 @@ import type {
   IClassroomAgreementRepository,
   SaveClassroomAgreementSessionOptions,
 } from '@domain/repositories/IClassroomAgreementRepository';
-import { sanitizeClassroomAgreementSessionForSave } from '@domain/rules/classroomAgreementSanitization';
+import {
+  normalizeStoredSavedSessions,
+  sanitizeClassroomAgreementSessionForSave,
+} from '@domain/rules/classroomAgreementSanitization';
 
 export const CLASSROOM_AGREEMENTS_STORAGE_KEY = 'classroom-agreements';
 
 export class JsonClassroomAgreementRepository implements IClassroomAgreementRepository {
   constructor(private readonly storage: IStoragePort) {}
 
-  load(): Promise<ClassroomAgreementSessionsData | null> {
-    return this.storage.read<ClassroomAgreementSessionsData>(CLASSROOM_AGREEMENTS_STORAGE_KEY);
+  async load(): Promise<ClassroomAgreementSessionsData | null> {
+    const raw = await this.storage.read<{ readonly sessions?: readonly unknown[] }>(
+      CLASSROOM_AGREEMENTS_STORAGE_KEY,
+    );
+    if (!raw) return null;
+    return { sessions: normalizeStoredSavedSessions(raw.sessions) };
   }
 
   save(data: ClassroomAgreementSessionsData): Promise<void> {
