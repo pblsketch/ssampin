@@ -1,0 +1,33 @@
+{
+  "measuredAt": "2026-05-22",
+  "capturedBy": "Phase B Step 5.5 (team-lead direct)",
+  "purpose": "Plan §2.2 Step 9 bundle-02 gate baseline (exceljs 미사용 상태)",
+  "phase": "B",
+  "buildCommand": "npm run build:student",
+  "viteConfig": "vite.student.config.ts",
+  "files": [
+    {
+      "pattern": "dist-student/assets/student-*.js",
+      "actualFile": "student-qqsnmPwp.js",
+      "rawBytes": 388746,
+      "gzipBytes": 120642,
+      "rawKB": 379.6,
+      "gzipKB": 117.8
+    }
+  ],
+  "growthBudget": {
+    "absoluteBytes": 5120,
+    "absoluteKB": 5,
+    "note": "Step 9 (Phase D) exceljs dynamic import 후 학생 SPA 번들 gzip 크기가 baseline 대비 +5KB 이하여야 PASS. bundle-02 게이트가 이 baseline을 참조."
+  },
+  "verification": {
+    "regenerateCommand": "rm -rf dist-student && npm run build:student",
+    "measureScript": "node -e \"const fs=require('fs'),zlib=require('zlib'),path=require('path');const dir='dist-student/assets';const f=fs.readdirSync(dir).filter(n=>n.startsWith('student-')&&n.endsWith('.js'))[0];const p=path.join(dir,f);const raw=fs.statSync(p).size;const gz=zlib.gzipSync(fs.readFileSync(p)).length;console.log(JSON.stringify({file:f,rawBytes:raw,gzipBytes:gz}))\""
+  },
+  "notes": [
+    "exceljs는 package.json:54에 이미 설치되어 있으나 학생 entry에서는 import되지 않은 상태가 baseline.",
+    "Phase D Step 9에서 XlsxExporter.ts가 dynamic import로 exceljs 사용 시작 → student SPA가 exceljs를 chunk로 포함하지 않도록 vite.config.ts manualChunks 격리 필요.",
+    "bundle-01 gate (no 'exceljs' string in student bundle) + bundle-02 gate (gzip 크기 +5KB 이하) 두 가지 모두 통과해야 Step 9 완료.",
+    "baseline 재측정 시 dist-student 비우고 빌드 후 동일 측정 스크립트 실행."
+  ]
+}
