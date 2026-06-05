@@ -44,7 +44,6 @@ import type { INotebookRepository } from '@domain/repositories/INotebookReposito
 import type { IWallBoardRepository } from '@domain/repositories/IWallBoardRepository';
 import type { IStickerRepository } from '@domain/repositories/IStickerRepository';
 import type { IClassroomAgreementRepository } from '@domain/repositories/IClassroomAgreementRepository';
-import type { ISignatureRequestRepository } from '@domain/repositories/ISignatureRequestRepository';
 import type { IThumbnailer, IPreviewExtractor, IPrinterAdapter } from '@domain/ports/IFormPorts';
 
 import { ElectronStorageAdapter } from '@infrastructure/storage/ElectronStorageAdapter';
@@ -95,7 +94,6 @@ import { JsonWallBoardRepository } from '@adapters/repositories/JsonWallBoardRep
 import { JsonStickerRepository } from '@adapters/repositories/JsonStickerRepository';
 import { JsonInteractiveLessonsRepository } from '@adapters/repositories/JsonInteractiveLessonsRepository';
 import { JsonClassroomAgreementRepository } from '@adapters/repositories/JsonClassroomAgreementRepository';
-import { JsonSignatureRequestRepository } from '@adapters/repositories/JsonSignatureRequestRepository';
 import type { IInteractiveLessonRepository } from '@domain/repositories/IInteractiveLessonRepository';
 import { PdfJsThumbnailer } from '@infrastructure/forms/PdfJsThumbnailer';
 import { HwpxExcelPreviewExtractor } from '@infrastructure/forms/HwpxExcelPreviewExtractor';
@@ -194,10 +192,6 @@ export const stickerRepository: IStickerRepository = new JsonStickerRepository(s
 // === 교실 약속 정하기 ===
 export const classroomAgreementRepository: IClassroomAgreementRepository =
   new JsonClassroomAgreementRepository(storage);
-
-// === 서명받기 로컬 초안 ===
-export const signatureRequestRepository: ISignatureRequestRepository =
-  new JsonSignatureRequestRepository(storage);
 
 // === 서식 관리 ===
 export const formRepository: IFormTemplateRepository = new JsonFormTemplateRepository(storage);

@@ -99,18 +99,6 @@ verify_jwt = false
 [functions.submit-assignment]
 verify_jwt = true
 
-# 서명받기 공개 요청 조회. 서비스 역할로만 DB를 읽고 공개 응답에서 admin_key/hash를 제외한다.
-[functions.get-signature-request-public]
-verify_jwt = false
-
-# 서명받기 공개 제출. 게이트웨이 JWT(anon key) + 함수 내부 token/PIN/rate limit 검증.
-[functions.submit-signature]
-verify_jwt = true
-
-# 서명받기 발급. 교사가 로컬 초안을 server에 publish — anon key + 함수 내부 sha256 해시 + IP rate limit.
-[functions.publish-signature-request]
-verify_jwt = true
-
 # 모바일 PWA Google OAuth code↔token 교환 — 서버 env GOOGLE_CLIENT_SECRET 로 교환.
 # 인증 없음(anon key 옵션) + body 검증 + IP rate limit. security-hardening P0-C / 감사 F-2.
 [functions.oauth-exchange]

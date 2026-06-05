@@ -29,7 +29,6 @@ export type PageId =
   | 'tool-survey'
   | 'tool-multi-survey'
   | 'tool-classroom-agreement'
-  | 'tool-signature-request'
   | 'tool-realtime-wall'
   | 'tool-interactive-slides'
   | 'tool-wordcloud'

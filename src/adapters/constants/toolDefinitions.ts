@@ -46,12 +46,6 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
     icon: '🤝',
     color: 'bg-emerald-500/20 text-emerald-600',
   },
-  {
-    id: 'tool-signature-request',
-    name: '서명받기',
-    icon: '✍️',
-    color: 'bg-sky-500/20 text-sky-600',
-  },
   { id: 'tool-assignment', name: '과제수합', icon: '📮', color: 'bg-amber-500/20 text-amber-600' },
   { id: 'tool-coin', name: '동전던지기', icon: '🪙', color: 'bg-slate-500/20 text-slate-600' },
   { id: 'tool-grouping', name: '모둠 편성기', icon: '👥', color: 'bg-sky-500/20 text-sky-600' },

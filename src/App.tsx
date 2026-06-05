@@ -43,20 +43,6 @@ import { ToolSurvey } from '@adapters/components/Tools/ToolSurvey';
 // V1 ToolMultiSurvey는 본 entry 내부에서 import해 flag OFF 시 그대로 렌더. App 레벨 직접 import는 Phase D 회귀 방지 위해 제거.
 import { MultiSurveyToolEntry } from '@adapters/components/MultiSurvey/MultiSurveyToolEntry';
 import { ToolClassroomAgreement } from '@adapters/components/Tools/ToolClassroomAgreement';
-import { ToolSignatureRequest } from '@adapters/components/Tools/ToolSignatureRequest';
-import {
-  isSignaturePublicRoute,
-  SignatureRequestPublicApp,
-} from './signature/SignatureRequestPublicApp';
-import { disabledSignaturePublicClient } from './signature/SignatureRequestPublicClient';
-import {
-  SupabaseSignaturePublicClient,
-  isSupabaseConfigured as isSignatureSupabaseConfigured,
-} from '@infrastructure/supabase/SignatureSupabaseClient';
-
-const signaturePublicClient = isSignatureSupabaseConfigured()
-  ? new SupabaseSignaturePublicClient()
-  : disabledSignaturePublicClient;
 import { ToolRealtimeWall } from '@adapters/components/Tools/ToolRealtimeWall';
 import { ToolInteractiveSlides } from '@adapters/components/Tools/InteractiveSlides';
 import { ToolWordCloud } from '@adapters/components/Tools/ToolWordCloud';
@@ -145,10 +131,6 @@ function isStickerPickerMode(): boolean {
 function isIconMode(): boolean {
   const params = new URLSearchParams(window.location.search);
   return params.get('mode') === 'icon';
-}
-
-function isSignaturePublicMode(): boolean {
-  return isSignaturePublicRoute(window.location.pathname, window.location.search);
 }
 
 function getQuickAddKindFromUrl(): QuickAddKind {
@@ -361,9 +343,6 @@ function renderPage(
       <ToolClassroomAgreement onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />,
     );
   }
-  if (page === 'tool-signature-request') {
-    return <ToolSignatureRequest onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />;
-  }
   if (page === 'tool-realtime-wall') {
     return wrap(
       <ToolRealtimeWall onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />,
@@ -460,9 +439,6 @@ function WidgetUpdateBanner() {
 }
 
 export function App() {
-  if (isSignaturePublicMode()) {
-    return <SignatureRequestPublicApp client={signaturePublicClient} />;
-  }
   if (isStickerPickerMode()) {
     return <StickerPickerApp />;
   }

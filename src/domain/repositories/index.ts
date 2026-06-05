@@ -15,4 +15,3 @@ export type {
   IClassroomAgreementRepository,
   SaveClassroomAgreementSessionOptions,
 } from './IClassroomAgreementRepository';
-export type { ISignatureRequestRepository } from './ISignatureRequestRepository';
