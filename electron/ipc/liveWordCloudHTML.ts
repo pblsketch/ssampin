@@ -2,6 +2,12 @@ import {
   getConnectionChipCSS,
   getConnectionChipHTML,
   getConnectionChipJS,
+  getStatusScreenHTML,
+  getStudentBaseCSS,
+  getStudentFeedbackJS,
+  getStudentFontLinks,
+  getStudentViewportMeta,
+  getToastHTML,
 } from './_studentPageChrome';
 
 function escapeHtml(text: string): string {
@@ -18,114 +24,58 @@ export function generateWordCloudHTML(question: string, maxSubmissions: number):
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  ${getStudentViewportMeta()}
   <title>쌤핀 워드클라우드</title>
+  ${getStudentFontLinks()}
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
     /* HTML hidden 속성이 display:flex CSS에 덮여 모든 상태가 동시 노출되던 버그 차단.
      * 다른 학생 페이지(liveVoteHTML, liveMultiSurveyHTML)와 동일한 패턴으로 정렬. */
     [hidden] { display: none !important; }
-
-    body {
-      min-height: 100vh;
-      background: #0a0e17;
-      color: #e2e8f0;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      display: flex;
-      justify-content: center;
-      align-items: flex-start;
-    }
-
-    #app {
-      max-width: 480px;
-      width: 100%;
-      padding: 20px;
-    }
-
-    #header {
-      text-align: center;
-      padding: 16px;
-      color: #94a3b8;
-      font-size: 14px;
-    }
-
-    h1 {
-      font-size: 22px;
-      font-weight: 700;
-      text-align: center;
-      margin: 20px 0;
-      color: #e2e8f0;
-      line-height: 1.4;
-    }
-
-    h2 {
-      font-size: 20px;
-      font-weight: 700;
-      margin-bottom: 12px;
-      color: #e2e8f0;
-    }
+${getStudentBaseCSS()}
+    /* ── 페이지 고유 ── */
+    #header { text-align: center; padding-top: 4px; }
+    #question { text-align: center; }
 
     .input-row {
       display: flex;
       gap: 8px;
-      margin-bottom: 16px;
+      margin-bottom: 12px;
+    }
+    .input-row .sps-input { min-height: 52px; }
+    .input-row .sps-btn { width: auto; min-width: 92px; flex: none; }
+
+    /* invalid 응답 — 흔들림 + 토스트 (색 외 단서, 2026-06-12 감사 워드클라우드 ⑤) */
+    .input-row.shake { animation: sps-shake 0.4s ease; }
+    @keyframes sps-shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-6px); }
+      75% { transform: translateX(6px); }
     }
 
-    .word-input {
-      flex: 1;
-      min-height: 48px;
-      padding: 12px 16px;
-      border-radius: 12px;
-      font-size: 16px;
-      border: 2px solid #2a3548;
-      background: #131a2b;
-      color: #e2e8f0;
-      outline: none;
-      transition: border-color 0.2s;
-    }
-
-    .word-input:focus {
-      border-color: #3b82f6;
-    }
-
-    .word-input::placeholder {
-      color: #64748b;
-    }
-
-    .submit-btn {
-      min-width: 72px;
-      min-height: 48px;
-      padding: 12px 16px;
-      border-radius: 12px;
-      font-size: 16px;
-      font-weight: 600;
-      border: none;
-      background: #3b82f6;
-      color: #fff;
-      cursor: pointer;
-      transition: background 0.2s, transform 0.1s;
-      -webkit-tap-highlight-color: transparent;
-      touch-action: manipulation;
-    }
-
-    .submit-btn:active {
-      transform: scale(0.95);
-    }
-
-    .submit-btn:disabled {
-      background: #1e293b;
-      color: #475569;
-      pointer-events: none;
-    }
-
+    /* ── 남은 횟수 — 텍스트 + 도트 시각화 ── */
     .remaining {
-      text-align: center;
-      color: #94a3b8;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      color: var(--sps-muted);
       font-size: 14px;
       margin-bottom: 16px;
     }
+    .remaining-dots { display: inline-flex; gap: 5px; }
+    .remaining-dots .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      border: 1px solid var(--sps-border);
+      background: transparent;
+    }
+    .remaining-dots .dot.used {
+      border-color: var(--sps-highlight);
+      background: var(--sps-highlight);
+    }
 
+    /* ── 제출 단어 칩 — 차분한 틴트 4색 순환 (도구 성격에 맞는 다채로움) ── */
     .submitted-list {
       display: flex;
       flex-wrap: wrap;
@@ -133,95 +83,68 @@ export function generateWordCloudHTML(question: string, maxSubmissions: number):
       justify-content: center;
       margin-top: 12px;
     }
-
     .submitted-word {
       display: inline-block;
       padding: 6px 14px;
-      border-radius: 20px;
-      background: #1e293b;
-      color: #94a3b8;
+      border-radius: 999px;
+      border: 1px solid var(--sps-border);
       font-size: 14px;
-      animation: fadeIn 0.3s ease-out;
+      font-weight: 600;
+      animation: sps-chip-in 0.3s ease-out;
     }
+    .submitted-word.c0 { background: rgba(59, 130, 246, 0.14); color: #93c5fd; border-color: rgba(59, 130, 246, 0.35); }
+    .submitted-word.c1 { background: rgba(245, 158, 11, 0.14); color: #fcd34d; border-color: rgba(245, 158, 11, 0.35); }
+    .submitted-word.c2 { background: rgba(52, 211, 153, 0.14); color: #6ee7b7; border-color: rgba(52, 211, 153, 0.35); }
+    .submitted-word.c3 { background: rgba(167, 139, 250, 0.14); color: #c4b5fd; border-color: rgba(167, 139, 250, 0.35); }
 
-    .state-view {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      text-align: center;
-      min-height: 60vh;
-      gap: 12px;
-    }
-
-    #connecting {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 60vh;
-      color: #94a3b8;
-      font-size: 16px;
-    }
-
-    .check {
-      font-size: 80px;
-      animation: scaleIn 0.5s ease-out;
-      line-height: 1;
-    }
-
-    p {
-      color: #94a3b8;
-      font-size: 15px;
-    }
-
-    @keyframes scaleIn {
-      from { transform: scale(0); opacity: 0; }
-      to   { transform: scale(1); opacity: 1; }
-    }
-
-    @keyframes fadeIn {
+    @keyframes sps-chip-in {
       from { opacity: 0; transform: translateY(4px); }
       to   { opacity: 1; transform: translateY(0); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .input-row.shake { animation: none; }
+      .submitted-word { animation: none; }
     }
 ${getConnectionChipCSS()}
   </style>
 </head>
-<body>
+<body class="sps-page">
   ${getConnectionChipHTML()}
   <script>${getConnectionChipJS({ submitButtonSelectors: ['#submitBtn'] })}</script>
-  <div id="app">
+  <div id="app" class="sps-app">
     <div id="header">
-      <div>☁️ 쌤핀 워드클라우드</div>
+      <div class="sps-logo">쌤핀 워드클라우드</div>
     </div>
 
-    <div id="connecting">연결 중...</div>
+    ${getStatusScreenHTML('connecting', { id: 'connecting', hiddenByDefault: false })}
 
     <div id="ready" hidden>
-      <h1 id="question">${escapeHtml(question)}</h1>
-      <div class="input-row">
-        <input type="text" id="wordInput" class="word-input" placeholder="단어를 입력하세요" autocomplete="off">
-        <button id="submitBtn" class="submit-btn">보내기</button>
+      <h1 id="question" class="sps-title">${escapeHtml(question)}</h1>
+      <div class="input-row" id="inputRow">
+        <input type="text" id="wordInput" class="sps-input" placeholder="단어를 입력하세요"
+          autocomplete="off" autocapitalize="off" enterkeyhint="send">
+        <button id="submitBtn" class="sps-btn">보내기</button>
       </div>
-      <div id="remaining" class="remaining">남은 횟수: ${maxSubmissions}/${maxSubmissions}</div>
+      <div id="remaining" class="remaining" aria-live="polite">
+        <span id="remainingText">남은 횟수: ${maxSubmissions}/${maxSubmissions}</span>
+        <span id="remainingDots" class="remaining-dots" aria-hidden="true"></span>
+      </div>
       <div id="submittedList" class="submitted-list"></div>
     </div>
 
-    <div id="limit" class="state-view" hidden>
-      <div class="check">✓</div>
-      <h2>제출 완료!</h2>
-      <p>모든 단어를 제출했습니다</p>
-      <div id="limitList" class="submitted-list"></div>
-    </div>
+    ${getStatusScreenHTML('done', {
+      id: 'limit',
+      title: '제출 완료!',
+      subtitle: '모든 단어를 제출했습니다',
+      extraHTML: '<div id="limitList" class="submitted-list"></div>',
+    })}
 
-    <div id="closed" class="state-view" hidden>
-      <h2>워드클라우드가 종료되었습니다</h2>
-    </div>
+    ${getStatusScreenHTML('closed', { id: 'closed', title: '워드클라우드가 종료되었습니다' })}
 
-    <div id="disconnected" class="state-view" hidden>
-      <h2>연결이 끊어졌습니다</h2>
-      <p>다시 연결 중...</p>
-    </div>
+    ${getStatusScreenHTML('disconnected', { id: 'disconnected' })}
   </div>
+  ${getToastHTML()}
+  <script>${getStudentFeedbackJS()}</script>
 
   <script>
     (function () {
@@ -237,6 +160,8 @@ ${getConnectionChipCSS()}
       var ws = null;
       var reconnectDelay = 1000;
       var reconnectTimer = null;
+      var awaitingAck = false;
+      var ackTimer = null;
 
       function show(id) {
         var ids = ['connecting', 'ready', 'limit', 'closed', 'disconnected'];
@@ -247,8 +172,27 @@ ${getConnectionChipCSS()}
       }
 
       function updateRemaining() {
-        var el = document.getElementById('remaining');
-        if (el) el.textContent = '남은 횟수: ' + remaining + '/' + maxSubs;
+        var text = document.getElementById('remainingText');
+        if (text) text.textContent = '남은 횟수: ' + remaining + '/' + maxSubs;
+        var dots = document.getElementById('remainingDots');
+        if (dots) {
+          dots.innerHTML = '';
+          for (var i = 0; i < maxSubs; i++) {
+            var dot = document.createElement('span');
+            dot.className = i < maxSubs - remaining ? 'dot used' : 'dot';
+            dots.appendChild(dot);
+          }
+        }
+      }
+
+      function clearAwaitingAck() {
+        awaitingAck = false;
+        if (ackTimer) {
+          clearTimeout(ackTimer);
+          ackTimer = null;
+        }
+        var btn = document.getElementById('submitBtn');
+        if (btn && window.spsSetPending) window.spsSetPending(btn, false);
       }
 
       function addSubmittedWord(word) {
@@ -263,7 +207,7 @@ ${getConnectionChipCSS()}
         container.innerHTML = '';
         for (var i = 0; i < submittedWords.length; i++) {
           var span = document.createElement('span');
-          span.className = 'submitted-word';
+          span.className = 'submitted-word c' + (i % 4);
           span.textContent = submittedWords[i];
           container.appendChild(span);
         }
@@ -310,6 +254,7 @@ ${getConnectionChipCSS()}
               document.getElementById('wordInput').focus();
             }
           } else if (msg.type === 'word_accepted') {
+            clearAwaitingAck();
             remaining = msg.remaining;
             updateRemaining();
             addSubmittedWord(msg.word);
@@ -320,18 +265,31 @@ ${getConnectionChipCSS()}
               show('limit');
             }
           } else if (msg.type === 'limit_reached') {
+            clearAwaitingAck();
             remaining = 0;
             updateRemaining();
             show('limit');
           } else if (msg.type === 'invalid') {
-            // 유효하지 않은 입력 → 입력 필드에 포커스 유지
+            // 무반응이던 구간 — 흔들림 + 토스트로 사유 안내 (2026-06-12 감사)
+            clearAwaitingAck();
+            var row = document.getElementById('inputRow');
+            if (row) {
+              row.classList.remove('shake');
+              void row.offsetWidth; /* reflow로 애니메이션 재시작 */
+              row.classList.add('shake');
+            }
+            if (window.spsToast) window.spsToast('이 단어는 보낼 수 없어요. 다른 단어를 입력해 보세요.');
+            var wi = document.getElementById('wordInput');
+            if (wi) wi.focus();
           } else if (msg.type === 'closed') {
+            clearAwaitingAck();
             show('closed');
           }
         };
 
         ws.onclose = function () {
           ws = null;
+          clearAwaitingAck();
           if (window.spConnSetState) window.spConnSetState('disconnected');
           if (remaining > 0) {
             show('disconnected');
@@ -358,16 +316,24 @@ ${getConnectionChipCSS()}
         var word = input.value.trim();
         if (!word) return;
         if (remaining <= 0) return;
+        if (awaitingAck) return; /* 연타 중복 전송 차단 */
 
-        // WS 미연결 시 silent no-op 차단 — 학생에게 안내
+        // WS 미연결 — placeholder 교체 대신 토스트 안내
         if (!ws || ws.readyState !== WebSocket.OPEN) {
-          var prev = input.placeholder;
-          input.placeholder = '연결을 확인 중입니다...';
-          setTimeout(function () { input.placeholder = prev; }, 1500);
+          if (window.spsToast) window.spsToast('연결을 확인하는 중이에요. 잠시 후 다시 눌러 주세요.');
           return;
         }
 
+        awaitingAck = true;
+        var btn = document.getElementById('submitBtn');
+        if (btn && window.spsSetPending) window.spsSetPending(btn, true);
         ws.send(JSON.stringify({ type: 'submit_word', word: word, sessionToken: sessionToken }));
+
+        // 서버 ack 6초 무응답 시 복구
+        ackTimer = setTimeout(function () {
+          clearAwaitingAck();
+          if (window.spsToast) window.spsToast('전송이 확인되지 않았어요. 다시 시도해 주세요.');
+        }, 6000);
       }
 
       document.getElementById('submitBtn').addEventListener('click', submitWord);
@@ -379,6 +345,7 @@ ${getConnectionChipCSS()}
         }
       });
 
+      updateRemaining();
       connect();
     })();
   </script>
