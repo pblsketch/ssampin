@@ -81,6 +81,7 @@ export function MemoBoardContent({ fileId }: MemoBoardContentProps) {
   const [pulsedIds, setPulsedIds] = useState<ReadonlySet<string>>(new Set());
   const [leavingItems, setLeavingItems] = useState<readonly MemoShareItemSnapshot[]>([]);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [now, setNow] = useState<Date | null>(null);
   const [canInstall, setCanInstall] = useState(false);
   const [installed, setInstalled] = useState(false);
@@ -96,6 +97,7 @@ export function MemoBoardContent({ fileId }: MemoBoardContentProps) {
   const tickRef = useRef<() => void>(() => undefined);
   const installEventRef = useRef<BeforeInstallPromptEvent | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const popupCloseRef = useRef<HTMLButtonElement | null>(null);
   const playChimeRef = useRef(playChime);
   playChimeRef.current = playChime;
 
@@ -267,6 +269,36 @@ export function MemoBoardContent({ fileId }: MemoBoardContentProps) {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [lightboxSrc]);
+
+  /* ── 포스트잇 확대 팝업 ── */
+
+  /** 팝업은 보드의 최신 항목을 참조 — 폴링 갱신이 곧바로 팝업에 반영(id 기준) */
+  const expandedItem = useMemo(() => {
+    if (expandedId === null) return null;
+    return board?.items.find((item) => item.id === expandedId) ?? null;
+  }, [board, expandedId]);
+
+  /* 항목이 보드에서 제거되면 팝업 자동 닫기 */
+  useEffect(() => {
+    if (expandedId !== null && board !== null && expandedItem === null) {
+      setExpandedId(null);
+    }
+  }, [expandedId, board, expandedItem]);
+
+  /* 팝업 ESC 닫기 — 라이트박스가 위에 떠 있으면 라이트박스부터 닫힘 */
+  useEffect(() => {
+    if (expandedId === null) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && lightboxSrc === null) setExpandedId(null);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [expandedId, lightboxSrc]);
+
+  /* 팝업 열릴 때 닫기 버튼으로 포커스 이동 */
+  useEffect(() => {
+    if (expandedId !== null) popupCloseRef.current?.focus();
+  }, [expandedId]);
 
   /* PWA — SW 등록 + 설치 프롬프트 캡처 */
   useEffect(() => {
@@ -448,10 +480,12 @@ export function MemoBoardContent({ fileId }: MemoBoardContentProps) {
               </p>
             ) : (
               displayItems.map(({ item, leaving }) => (
-                <article
+                <button
                   key={item.id}
+                  type="button"
                   className={[
                     styles.card,
+                    styles.cardClickable,
                     COLOR_CLASS[item.color],
                     freshIds.has(item.id) ? styles.cardFresh : '',
                     pulsedIds.has(item.id) ? styles.cardPulse : '',
@@ -459,29 +493,26 @@ export function MemoBoardContent({ fileId }: MemoBoardContentProps) {
                   ]
                     .filter(Boolean)
                     .join(' ')}
+                  onClick={() => {
+                    if (!leaving) setExpandedId(item.id);
+                  }}
+                  title="크게 보기"
                 >
-                  <div className={styles.colorBar} aria-hidden="true" />
+                  <span className={styles.colorBar} aria-hidden="true" />
                   {item.image && (
-                    <button
-                      type="button"
-                      className={styles.imageButton}
-                      onClick={() => item.image && setLightboxSrc(buildImageUrl(item.image.fileId))}
-                      aria-label="이미지 크게 보기"
-                    >
-                      <img
-                        className={styles.cardImage}
-                        src={buildImageUrl(item.image.fileId)}
-                        width={item.image.width}
-                        height={item.image.height}
-                        alt=""
-                        loading="lazy"
-                      />
-                    </button>
+                    <img
+                      className={styles.cardImage}
+                      src={buildImageUrl(item.image.fileId)}
+                      width={item.image.width}
+                      height={item.image.height}
+                      alt=""
+                      loading="lazy"
+                    />
                   )}
-                  <p className={`${styles.cardContent} ${FONT_CLASS[item.fontSize]}`}>
+                  <span className={`${styles.cardContent} ${FONT_CLASS[item.fontSize]}`}>
                     {item.content}
-                  </p>
-                </article>
+                  </span>
+                </button>
               ))
             )}
           </div>
@@ -489,6 +520,54 @@ export function MemoBoardContent({ fileId }: MemoBoardContentProps) {
       )}
 
       <footer className={styles.footer}>쌤핀 · 우리 반 메모</footer>
+
+      {expandedItem !== null && (
+        <div className={styles.popupOverlay} onClick={() => setExpandedId(null)}>
+          <div
+            className={`${styles.popup} ${COLOR_CLASS[expandedItem.color]} ${
+              pulsedIds.has(expandedItem.id) ? styles.cardPulse : ''
+            }`}
+            role="dialog"
+            aria-modal="true"
+            aria-label="메모 크게 보기"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <span className={styles.colorBar} aria-hidden="true" />
+            <button
+              ref={popupCloseRef}
+              type="button"
+              className={styles.popupClose}
+              onClick={() => setExpandedId(null)}
+              aria-label="닫기"
+            >
+              ✕
+            </button>
+            {expandedItem.image && (
+              <button
+                type="button"
+                className={styles.imageButton}
+                onClick={() =>
+                  expandedItem.image && setLightboxSrc(buildImageUrl(expandedItem.image.fileId))
+                }
+                aria-label="이미지 전체 화면으로 보기"
+              >
+                <img
+                  className={styles.popupImage}
+                  src={buildImageUrl(expandedItem.image.fileId)}
+                  width={expandedItem.image.width}
+                  height={expandedItem.image.height}
+                  alt=""
+                />
+              </button>
+            )}
+            <div className={styles.popupBody}>
+              <p className={`${styles.cardContent} ${FONT_CLASS[expandedItem.fontSize]}`}>
+                {expandedItem.content}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {lightboxSrc !== null && (
         <button

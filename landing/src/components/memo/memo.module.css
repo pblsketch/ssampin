@@ -225,6 +225,47 @@
     border-color 240ms ease;
 }
 
+/* 그리드 카드 = 클릭 가능한 버튼(팝업 확대) — 절제된 호버 리프트 */
+.cardClickable {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: start;
+  cursor: pointer;
+  transition:
+    background-color 240ms ease,
+    border-color 240ms ease,
+    transform 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.cardClickable:hover {
+  transform: translateY(-3px);
+  box-shadow:
+    0 2px 4px rgba(72, 60, 40, 0.06),
+    0 16px 32px -20px rgba(72, 60, 40, 0.5);
+}
+
+.root[data-theme='dark'] .cardClickable:hover {
+  box-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.35),
+    0 16px 36px -20px rgba(0, 0, 0, 0.8);
+}
+
+.cardClickable:focus-visible {
+  outline: 2px solid var(--memo-bar-blue);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cardClickable,
+  .cardClickable:hover {
+    transform: none;
+  }
+}
+
 .colorBar {
   height: 4px;
   flex-shrink: 0;
@@ -252,6 +293,7 @@
 }
 
 .cardContent {
+  display: block;
   padding: clamp(1rem, 1.5vw, 1.5rem);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -432,6 +474,112 @@
   padding: clamp(3rem, 10vh, 6rem) 1rem;
   color: var(--memo-muted);
   font-size: clamp(1.05rem, 1rem + 0.4vw, 1.3rem);
+}
+
+/* ── 포스트잇 확대 팝업 ──────────────────────────────────────── */
+
+@keyframes memoFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.popupOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40; /* 라이트박스(50)보다 아래 — 팝업 위에서 이미지 전체 화면 전환 가능 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(1rem, 4vw, 3rem);
+  background: rgba(12, 10, 7, 0.55);
+  animation: memoFadeIn 200ms ease-out;
+}
+
+.popup {
+  /* 교실 뒤에서도 읽히게 — 그리드 카드 대비 약 1.75배 */
+  --memo-font-scale: 1.75;
+  --memo-bar-color: var(--memo-bar-yellow);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(100%, 880px);
+  max-height: min(88dvh, 100%);
+  border-radius: 1.25rem;
+  background: var(--memo-card);
+  border: 1px solid var(--memo-border);
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.12),
+    0 32px 80px -32px rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+  animation: memoScaleIn 250ms ease-out;
+}
+
+.popup .colorBar {
+  height: 6px;
+}
+
+.popupClose {
+  position: absolute;
+  top: 0.9rem;
+  right: 0.9rem;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border: none;
+  border-radius: 9999px;
+  background: var(--memo-control-bg);
+  color: var(--memo-text);
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 150ms ease;
+}
+
+.popupClose:hover {
+  background: var(--memo-control-bg-hover);
+}
+
+.popupClose:focus-visible {
+  outline: 2px solid var(--memo-bar-blue);
+  outline-offset: 2px;
+}
+
+.popupBody {
+  overflow-y: auto;
+  min-height: 0;
+  padding: clamp(1.5rem, 3vw, 2.75rem);
+}
+
+.popupBody .cardContent {
+  padding: 0; /* popupBody 패딩과 중복 방지 */
+}
+
+.popupImage {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 48dvh;
+  object-fit: contain;
+  background: rgba(12, 10, 7, 0.04);
+  border-radius: 0;
+}
+
+.root[data-theme='dark'] .popupImage {
+  background: rgba(0, 0, 0, 0.25);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .popupOverlay,
+  .popup {
+    animation: none;
+  }
 }
 
 /* ── 라이트박스 ──────────────────────────────────────────────── */
