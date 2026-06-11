@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { Memo } from '@domain/entities/Memo';
 import type { MemoShareBoard, MemoShareBoardsData } from '@domain/entities/MemoShareBoard';
+import { MAX_ITEMS } from '@domain/rules/memoShareRules';
 import { CreateShareBoard } from '@usecases/memoShare/CreateShareBoard';
 import { SyncShareBoard } from '@usecases/memoShare/SyncShareBoard';
 import { StopSharing } from '@usecases/memoShare/StopSharing';
@@ -66,6 +67,13 @@ interface MemoShareState {
   dismissDeletedMemoNotice: () => void;
   /** "동기화 대기 중" 큐 수동 재시도 */
   retrySync: () => void;
+  /**
+   * 공유 중 보드의 구성(포스트잇 목록)·제목 편집 — 링크(fileId/URL)는 절대 바뀌지 않는다.
+   * 새 구성은 동기화 큐를 통해 직렬화되어 push된다 (추가 메모 이미지 업로드,
+   * 빠진 메모 JSON 제거 + Drive 이미지 삭제는 diffForSync가 산출).
+   * 0개 구성·MAX_ITEMS 초과는 거부(false + error).
+   */
+  updateBoardMemos: (boardId: string, memoIds: readonly string[], title?: string) => boolean;
 }
 
 // ============================================================
@@ -76,6 +84,15 @@ let unsubscribeMemos: (() => void) | null = null;
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 let prevMemos: readonly Memo[] | null = null;
 let flushing = false;
+
+/**
+ * 보드 편집(updateBoardMemos)으로 예약된 "원하는 구성/제목".
+ * board.items(마지막 동기화 상태)는 sync 성공 시점에만 갱신되므로,
+ * flush가 이 맵을 우선 사용해 diffForSync가 추가(업로드)·제거(이미지 삭제)를 산출하게 한다.
+ * sync 성공·보드 제거 시 삭제. (동기화 큐와 동일하게 메모리 전용)
+ */
+const desiredCompositions = new Map<string, readonly string[]>();
+const desiredTitles = new Map<string, string>();
 
 function readWarningAck(): boolean {
   try {
@@ -106,6 +123,12 @@ function currentMemosForBoard(board: MemoShareBoard, memos: readonly Memo[]): re
     .sort((a, b) => a.sortOrder - b.sortOrder)
     .map((link) => byId.get(link.memoId))
     .filter((memo): memo is Memo => memo !== undefined);
+}
+
+/** memoId 목록 순서대로 현재 메모를 모은다 (편집된 구성용) — 사라진 메모는 제외 */
+function memosForIds(memoIds: readonly string[], memos: readonly Memo[]): readonly Memo[] {
+  const byId = new Map(memos.map((memo) => [memo.id, memo]));
+  return memoIds.map((id) => byId.get(id)).filter((memo): memo is Memo => memo !== undefined);
 }
 
 /** 백오프 재시도 — 초기 시도 + SYNC_RETRY_DELAYS_MS 횟수만큼 재시도 */
@@ -159,9 +182,18 @@ async function flushSyncQueue(): Promise<void> {
         }));
         continue;
       }
-      const memos = currentMemosForBoard(board, useMemoStore.getState().memos);
+      // 보드 편집으로 예약된 구성이 있으면 그 구성을, 없으면 기존 items 구성을 push
+      const allMemos = useMemoStore.getState().memos;
+      const desired = desiredCompositions.get(boardId);
+      const memos =
+        desired !== undefined
+          ? memosForIds(desired, allMemos)
+          : currentMemosForBoard(board, allMemos);
+      const titleOverride = desiredTitles.get(boardId);
       try {
-        const updated = await runWithRetry(() => sync.execute(board, memos));
+        const updated = await runWithRetry(() => sync.execute(board, memos, titleOverride));
+        desiredCompositions.delete(boardId);
+        desiredTitles.delete(boardId);
         const boards = store
           .getState()
           .boards.map((b) =>
@@ -179,6 +211,8 @@ async function flushSyncQueue(): Promise<void> {
         const message = err instanceof Error ? err.message : '';
         if (message.includes('404')) {
           // 사용자가 Drive에서 직접 삭제 — 공유 끊김. 크래시 금지, 재시도 무의미라 큐에서 제거
+          desiredCompositions.delete(boardId);
+          desiredTitles.delete(boardId);
           store.setState((state) => ({
             pendingBoardIds: state.pendingBoardIds.filter((id) => id !== boardId),
             error:
@@ -356,6 +390,8 @@ export const useMemoShareStore = create<MemoShareState>((set, get) => ({
         return false;
       }
     }
+    desiredCompositions.delete(boardId);
+    desiredTitles.delete(boardId);
     const boards = get().boards.filter((b) => b.id !== boardId);
     set((state) => ({
       boards,
@@ -412,6 +448,50 @@ export const useMemoShareStore = create<MemoShareState>((set, get) => ({
     }
     void flushSyncQueue();
   },
+
+  updateBoardMemos: (boardId, memoIds, title) => {
+    const board = get().boards.find((b) => b.id === boardId);
+    if (!board) {
+      set({ error: '편집할 공유 보드를 찾을 수 없어요.' });
+      return false;
+    }
+
+    // 현재 존재하는 메모만 인정 (보관/삭제된 메모 방어)
+    const existingIds = new Set(useMemoStore.getState().memos.map((memo) => memo.id));
+    const validIds = memoIds.filter((id) => existingIds.has(id));
+
+    if (validIds.length === 0) {
+      set({
+        error:
+          '공유 보드에는 포스트잇이 1개 이상 필요해요. 공유를 끝내려면 "공유 중지"를 눌러 주세요.',
+      });
+      return false;
+    }
+    if (validIds.length > MAX_ITEMS) {
+      set({ error: `공유 가능한 포스트잇은 최대 ${MAX_ITEMS}개입니다.` });
+      return false;
+    }
+
+    // 원하는 구성/제목 예약 → 동기화 큐로 직렬화 (링크 fileId/URL은 updateBoard라 불변)
+    desiredCompositions.set(boardId, validIds);
+    const nextTitle = title?.trim();
+    if (nextTitle !== undefined && nextTitle.length > 0 && nextTitle !== board.title) {
+      desiredTitles.set(boardId, nextTitle);
+    } else {
+      desiredTitles.delete(boardId);
+    }
+
+    set((state) => ({
+      error: null,
+      pendingBoardIds: [...new Set([...state.pendingBoardIds, boardId])],
+    }));
+    if (debounceTimer !== null) {
+      clearTimeout(debounceTimer);
+      debounceTimer = null;
+    }
+    void flushSyncQueue();
+    return true;
+  },
 }));
 
 /**
@@ -427,6 +507,8 @@ export function __resetMemoShareStoreForTests(): void {
   unsubscribeMemos = null;
   prevMemos = null;
   flushing = false;
+  desiredCompositions.clear();
+  desiredTitles.clear();
   useMemoShareStore.setState({
     boards: [],
     loaded: false,

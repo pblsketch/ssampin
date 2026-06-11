@@ -4,6 +4,7 @@ import type { Memo } from '@domain/entities/Memo';
 import type { MemoColor } from '@domain/valueObjects/MemoColor';
 import { MAX_ITEMS } from '@domain/rules/memoShareRules';
 import { Modal } from '@adapters/components/common/Modal';
+import { Notice } from '@adapters/components/common/Notice';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { useMemoStore } from '@adapters/stores/useMemoStore';
 import { useMemoShareStore } from '@adapters/stores/useMemoShareStore';
@@ -52,6 +53,7 @@ export function MemoShareModal({ isOpen, onClose }: MemoShareModalProps) {
     confirmDeletedMemoSync,
     dismissDeletedMemoNotice,
     retrySync,
+    updateBoardMemos,
   } = useMemoShareStore.getState();
 
   const memos = useMemoStore((s) => s.memos);
@@ -63,12 +65,22 @@ export function MemoShareModal({ isOpen, onClose }: MemoShareModalProps) {
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [stopConfirmId, setStopConfirmId] = useState<string | null>(null);
   const [stoppingId, setStoppingId] = useState<string | null>(null);
+  /** 공유 중 보드의 포스트잇 구성 편집 모드 — null이면 새 보드 만들기 모드 */
+  const [editingBoardId, setEditingBoardId] = useState<string | null>(null);
+
+  const editingBoard = useMemo(
+    () => boards.find((b) => b.id === editingBoardId) ?? null,
+    [boards, editingBoardId],
+  );
 
   // 모달 닫힐 때 일회성 상태 정리
   useEffect(() => {
     if (isOpen) return;
     setQrBoardId(null);
     setStopConfirmId(null);
+    setEditingBoardId(null);
+    setSelectedIds(new Set());
+    setTitle('');
   }, [isOpen]);
 
   // QR 생성 (ToolSignatureRoster 패턴)
@@ -130,12 +142,56 @@ export function MemoShareModal({ isOpen, onClose }: MemoShareModalProps) {
       const ok = await stopSharing(boardId);
       setStoppingId(null);
       setStopConfirmId(null);
-      if (ok) showToast('공유를 중지하고 드라이브에서 완전히 삭제했어요.', 'success');
+      if (ok) {
+        // 편집 중이던 보드가 중지되면 편집 모드도 종료
+        setEditingBoardId((prev) => (prev === boardId ? null : prev));
+        showToast('공유를 중지하고 드라이브에서 완전히 삭제했어요.', 'success');
+      }
     },
     [stopSharing, showToast],
   );
 
+  /** 보드 편집 시작 — 현재 보드 구성이 체크된 상태로 그리드 표시 */
+  const handleStartEdit = useCallback(
+    (boardId: string) => {
+      const board = boards.find((b) => b.id === boardId);
+      if (!board) return;
+      setEditingBoardId(boardId);
+      setTitle(board.title);
+      setSelectedIds(new Set(board.items.map((item) => item.memoId)));
+      setStopConfirmId(null);
+    },
+    [boards],
+  );
+
+  const handleCancelEdit = useCallback(() => {
+    setEditingBoardId(null);
+    setSelectedIds(new Set());
+    setTitle('');
+  }, []);
+
+  const handleSaveEdit = useCallback(() => {
+    if (editingBoardId === null) return;
+    // 캔버스 표시 순서대로 구성 (새로 만들기와 동일 규칙)
+    const memoIds = activeMemos.filter((m) => selectedIds.has(m.id)).map((m) => m.id);
+    const ok = updateBoardMemos(editingBoardId, memoIds, title.trim() || undefined);
+    if (ok) {
+      handleCancelEdit();
+      showToast('보드 구성을 저장했어요. 교실 화면에 곧 반영돼요.', 'success');
+    }
+  }, [
+    editingBoardId,
+    activeMemos,
+    selectedIds,
+    title,
+    updateBoardMemos,
+    handleCancelEdit,
+    showToast,
+  ]);
+
+  const isEditing = editingBoard !== null;
   const canCreate = selectedIds.size > 0 && warningAcknowledged && !isCreating && isConnected;
+  const canSaveEdit = selectedIds.size > 0 && isConnected;
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="교실에 공유" size="lg">
@@ -186,11 +242,9 @@ export function MemoShareModal({ isOpen, onClose }: MemoShareModalProps) {
 
               {/* 공유 중 메모 삭제 — 확인 플로우 */}
               {deletedMemoNotice !== null && (
-                <div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
-                  <p className="text-sm leading-relaxed text-amber-400">
-                    삭제한 포스트잇 {deletedMemoNotice.memoIds.length}개가 아직 교실 화면에 남아
-                    있어요. 교실 화면에서도 지울까요?
-                  </p>
+                <Notice variant="warning" size="md" className="mt-3">
+                  삭제한 포스트잇 {deletedMemoNotice.memoIds.length}개가 아직 교실 화면에 남아
+                  있어요. 교실 화면에서도 지울까요?
                   <div className="mt-2 flex gap-2">
                     <button
                       onClick={confirmDeletedMemoSync}
@@ -205,7 +259,7 @@ export function MemoShareModal({ isOpen, onClose }: MemoShareModalProps) {
                       나중에
                     </button>
                   </div>
-                </div>
+                </Notice>
               )}
 
               {/* ── 공유 중인 보드 목록 ── */}
@@ -234,10 +288,10 @@ export function MemoShareModal({ isOpen, onClose }: MemoShareModalProps) {
                             {isPending ? (
                               <button
                                 onClick={retrySync}
-                                className="flex shrink-0 items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-xs font-sp-medium text-amber-400 transition-all hover:bg-amber-500/20"
+                                className="flex shrink-0 items-center gap-1 rounded-full border border-amber-500/30 bg-sp-card px-2.5 py-1 text-xs font-sp-medium text-sp-text transition-all hover:bg-sp-surface"
                                 title="다시 동기화 시도"
                               >
-                                <span className="material-symbols-outlined text-sm">
+                                <span className="material-symbols-outlined text-sm text-amber-500">
                                   sync_problem
                                 </span>
                                 동기화 대기 중
@@ -339,15 +393,30 @@ export function MemoShareModal({ isOpen, onClose }: MemoShareModalProps) {
                                 </div>
                               </div>
                             ) : (
-                              <button
-                                onClick={() => setStopConfirmId(board.id)}
-                                className="flex items-center gap-1 text-xs font-sp-medium text-sp-muted transition-colors hover:text-red-400"
-                              >
-                                <span className="material-symbols-outlined text-sm">
-                                  stop_circle
-                                </span>
-                                공유 중지
-                              </button>
+                              <div className="flex items-center gap-4">
+                                <button
+                                  onClick={() => handleStartEdit(board.id)}
+                                  className={`flex items-center gap-1 text-xs font-sp-medium transition-colors ${
+                                    editingBoardId === board.id
+                                      ? 'text-sp-accent'
+                                      : 'text-sp-muted hover:text-sp-accent'
+                                  }`}
+                                >
+                                  <span className="material-symbols-outlined text-sm">
+                                    edit_note
+                                  </span>
+                                  {editingBoardId === board.id ? '편집 중...' : '포스트잇 편집'}
+                                </button>
+                                <button
+                                  onClick={() => setStopConfirmId(board.id)}
+                                  className="flex items-center gap-1 text-xs font-sp-medium text-sp-muted transition-colors hover:text-red-400"
+                                >
+                                  <span className="material-symbols-outlined text-sm">
+                                    stop_circle
+                                  </span>
+                                  공유 중지
+                                </button>
+                              </div>
                             )}
                           </div>
                         </div>
@@ -357,25 +426,33 @@ export function MemoShareModal({ isOpen, onClose }: MemoShareModalProps) {
                 </section>
               )}
 
-              {/* ── 새 보드 만들기 ── */}
+              {/* ── 새 보드 만들기 / 공유 중 보드 편집 (그리드 공용) ── */}
               <section className="mt-5">
-                <h3 className="text-sm font-sp-semibold text-sp-text">새로 공유하기</h3>
+                <h3 className="text-sm font-sp-semibold text-sp-text">
+                  {isEditing ? `보드 편집 — ${editingBoard.title}` : '새로 공유하기'}
+                </h3>
+
+                {/* 편집 모드 안내 — 링크는 그대로, 구성만 바뀜 */}
+                {isEditing && (
+                  <Notice variant="info" size="md" className="mt-2">
+                    체크를 바꿔 포스트잇을 더하거나 빼세요. 교실 화면의 링크와 QR은 그대로 유지되고,
+                    저장하면 새 구성이 곧 반영돼요. 보드에는 포스트잇이 1개 이상 필요해요.
+                  </Notice>
+                )}
 
                 {/* 최초 1회 개인정보 경고 */}
-                {!warningAcknowledged && (
-                  <div className="mt-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
-                    <p className="text-sm leading-relaxed text-amber-400">
-                      공유한 메모는 링크를 아는 누구나 볼 수 있어요. 학생 이름·연락처 같은
-                      개인정보가 담긴 메모는 공유하지 말아 주세요. 공유를 중지하면 드라이브에서 바로
-                      완전히 삭제돼요.
-                    </p>
+                {!isEditing && !warningAcknowledged && (
+                  <Notice variant="warning" size="md" className="mt-2">
+                    공유한 메모는 링크를 아는 누구나 볼 수 있어요. 학생 이름·연락처 같은 개인정보가
+                    담긴 메모는 공유하지 말아 주세요. 공유를 중지하면 드라이브에서 바로 완전히
+                    삭제돼요.
                     <button
                       onClick={acknowledgeWarning}
-                      className="mt-2 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-sp-semibold text-slate-900 transition-all hover:brightness-110 active:scale-95"
+                      className="mt-2 block rounded-lg bg-sp-accent px-3 py-1.5 text-xs font-sp-semibold text-white transition-all hover:brightness-110 active:scale-95"
                     >
                       확인했어요
                     </button>
-                  </div>
+                  </Notice>
                 )}
 
                 <input
@@ -464,20 +541,41 @@ export function MemoShareModal({ isOpen, onClose }: MemoShareModalProps) {
 
             {/* ── 푸터 ── */}
             <div className="flex items-center justify-end gap-2 border-t border-sp-border px-6 py-4">
-              <button
-                onClick={onClose}
-                className="rounded-xl border border-sp-border bg-sp-surface px-4 py-2.5 text-sm font-sp-semibold text-sp-text transition-all hover:bg-sp-card active:scale-95"
-              >
-                닫기
-              </button>
-              <button
-                onClick={() => void handleCreate()}
-                disabled={!canCreate}
-                className="flex items-center gap-1.5 rounded-xl bg-sp-accent px-4 py-2.5 text-sm font-sp-semibold text-white transition-all hover:brightness-110 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                <span className="material-symbols-outlined text-icon">cast</span>
-                {isCreating ? '공유 시작 중...' : '공유 시작'}
-              </button>
+              {isEditing ? (
+                <>
+                  <button
+                    onClick={handleCancelEdit}
+                    className="rounded-xl border border-sp-border bg-sp-surface px-4 py-2.5 text-sm font-sp-semibold text-sp-text transition-all hover:bg-sp-card active:scale-95"
+                  >
+                    편집 취소
+                  </button>
+                  <button
+                    onClick={handleSaveEdit}
+                    disabled={!canSaveEdit}
+                    className="flex items-center gap-1.5 rounded-xl bg-sp-accent px-4 py-2.5 text-sm font-sp-semibold text-white transition-all hover:brightness-110 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <span className="material-symbols-outlined text-icon">save</span>
+                    변경 저장
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={onClose}
+                    className="rounded-xl border border-sp-border bg-sp-surface px-4 py-2.5 text-sm font-sp-semibold text-sp-text transition-all hover:bg-sp-card active:scale-95"
+                  >
+                    닫기
+                  </button>
+                  <button
+                    onClick={() => void handleCreate()}
+                    disabled={!canCreate}
+                    className="flex items-center gap-1.5 rounded-xl bg-sp-accent px-4 py-2.5 text-sm font-sp-semibold text-white transition-all hover:brightness-110 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <span className="material-symbols-outlined text-icon">cast</span>
+                    {isCreating ? '공유 시작 중...' : '공유 시작'}
+                  </button>
+                </>
+              )}
             </div>
           </>
         )}

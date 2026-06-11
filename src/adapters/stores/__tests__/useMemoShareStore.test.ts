@@ -310,6 +310,126 @@ describe('useMemoShareStore — syncPending 전이 (백오프 재시도)', () =>
   });
 });
 
+describe('useMemoShareStore — updateBoardMemos (공유 중 보드 구성 편집)', () => {
+  const PNG_IMAGE = {
+    dataUrl: 'data:image/png;base64,QUFBQQ==',
+    fileName: 'photo.png',
+    mimeType: 'image/png',
+    width: 100,
+    height: 80,
+    originalSize: 1000,
+  } as const;
+
+  it('포스트잇 추가: 새 메모는 이미지 업로드 포함 push되고 링크(fileId/shareUrl)는 불변이다', async () => {
+    const m1 = makeMemo('m1');
+    const m2 = makeMemo('m2', { content: '이미지 메모', image: PNG_IMAGE });
+    await seedAndInitialize(makeBoard([m1]), [m1, m2]);
+    fakes.client.updateBoard.mockImplementation(async () => ({
+      imageFileIds: { m2: 'img-file-2' } as Record<string, string>,
+      updatedAt: '2026-06-11T03:00:00.000Z',
+    }));
+
+    const ok = useMemoShareStore.getState().updateBoardMemos('file-1', ['m1', 'm2']);
+    expect(ok).toBe(true);
+    await vi.advanceTimersByTimeAsync(100);
+
+    expect(fakes.client.updateBoard).toHaveBeenCalledTimes(1);
+    const call = fakes.client.updateBoard.mock.calls[0];
+    // 링크 불변 — 새 파일 생성이 아니라 같은 fileId로 updateBoard
+    expect(call?.[0]).toBe('file-1');
+    expect(call?.[1]?.items).toHaveLength(2);
+    // 새 메모 이미지 업로드 포함
+    expect(call?.[2]).toEqual([expect.objectContaining({ itemId: 'm2', mime: 'image/png' })]);
+    expect(call?.[3]).toEqual([]);
+
+    const board = useMemoShareStore.getState().boards[0];
+    expect(board?.id).toBe('file-1');
+    expect(board?.shareUrl).toBe('https://ssampin.com/memo/file-1');
+    expect(board?.items.map((i) => i.memoId)).toEqual(['m1', 'm2']);
+    expect(board?.items[1]?.imageFileId).toBe('img-file-2');
+    expect(useMemoShareStore.getState().pendingBoardIds).toHaveLength(0);
+  });
+
+  it('포스트잇 제거: 보드 JSON에서 빠지고 해당 이미지 fileId가 Drive 삭제 목록에 담긴다', async () => {
+    const m1 = makeMemo('m1');
+    const m2 = makeMemo('m2', { content: '이미지 메모', image: PNG_IMAGE });
+    const base = makeBoard([m1, m2]);
+    const boardWithImage: MemoShareBoard = {
+      ...base,
+      items: base.items.map((link) =>
+        link.memoId === 'm2' ? { ...link, imageFileId: 'img-old' } : link,
+      ),
+    };
+    await seedAndInitialize(boardWithImage, [m1, m2]);
+
+    const ok = useMemoShareStore.getState().updateBoardMemos('file-1', ['m1']);
+    expect(ok).toBe(true);
+    await vi.advanceTimersByTimeAsync(100);
+
+    expect(fakes.client.updateBoard).toHaveBeenCalledTimes(1);
+    const call = fakes.client.updateBoard.mock.calls[0];
+    expect(call?.[0]).toBe('file-1');
+    expect(call?.[1]?.items).toHaveLength(1);
+    expect(call?.[2]).toEqual([]); // 업로드 없음
+    expect(call?.[3]).toEqual(['img-old']); // 빠진 메모의 이미지 영구 삭제
+
+    const board = useMemoShareStore.getState().boards[0];
+    expect(board?.id).toBe('file-1');
+    expect(board?.items.map((i) => i.memoId)).toEqual(['m1']);
+    // 로컬 메모는 무손상 — 보드에서만 빠진다
+    expect(useMemoStore.getState().memos.map((m) => m.id)).toContain('m2');
+  });
+
+  it('제목 변경: 보드 JSON title 갱신 + 링크 불변', async () => {
+    const m1 = makeMemo('m1');
+    await seedAndInitialize(makeBoard([m1]), [m1]);
+
+    const ok = useMemoShareStore.getState().updateBoardMemos('file-1', ['m1'], '새 제목');
+    expect(ok).toBe(true);
+    await vi.advanceTimersByTimeAsync(100);
+
+    expect(fakes.client.updateBoard).toHaveBeenCalledTimes(1);
+    const call = fakes.client.updateBoard.mock.calls[0];
+    expect(call?.[0]).toBe('file-1');
+    expect((call?.[1] as { title?: string } | undefined)?.title).toBe('새 제목');
+
+    const board = useMemoShareStore.getState().boards[0];
+    expect(board?.title).toBe('새 제목');
+    expect(board?.id).toBe('file-1');
+    expect(board?.shareUrl).toBe('https://ssampin.com/memo/file-1');
+  });
+
+  it('0개 구성은 거부한다 (최소 1개) — 존재하지 않는 memoId만 넘겨도 거부', async () => {
+    const m1 = makeMemo('m1');
+    await seedAndInitialize(makeBoard([m1]), [m1]);
+
+    expect(useMemoShareStore.getState().updateBoardMemos('file-1', [])).toBe(false);
+    expect(useMemoShareStore.getState().updateBoardMemos('file-1', ['ghost'])).toBe(false);
+    expect(useMemoShareStore.getState().error).toContain('1개 이상');
+
+    await vi.advanceTimersByTimeAsync(SYNC_DEBOUNCE_MS + 500);
+    expect(fakes.client.updateBoard).not.toHaveBeenCalled();
+    // 거부 후에도 기존 보드 구성 유지
+    expect(useMemoShareStore.getState().boards[0]?.items.map((i) => i.memoId)).toEqual(['m1']);
+  });
+
+  it('MAX_ITEMS(50) 초과 구성은 거부한다', async () => {
+    const m1 = makeMemo('m1');
+    const many = Array.from({ length: 51 }, (_, i) => makeMemo(`x${i}`));
+    await seedAndInitialize(makeBoard([m1]), [m1, ...many]);
+
+    const ok = useMemoShareStore.getState().updateBoardMemos(
+      'file-1',
+      many.map((m) => m.id),
+    );
+    expect(ok).toBe(false);
+    expect(useMemoShareStore.getState().error).toContain('최대');
+
+    await vi.advanceTimersByTimeAsync(SYNC_DEBOUNCE_MS + 500);
+    expect(fakes.client.updateBoard).not.toHaveBeenCalled();
+  });
+});
+
 /* ──────────────────────────────────────────────────────────────────────────
  * 메타 테스트
  * ────────────────────────────────────────────────────────────────────────── */
