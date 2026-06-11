@@ -8,6 +8,7 @@ import type { SignaturePublicMember } from '@domain/entities/SignatureSession';
 import type { ColumnDef } from '@domain/entities/SignatureRoster';
 import { SIGNATURE_LEGAL_DISCLAIMER } from '../signature/signatureLegalCopy';
 import { extractSignatureRef } from '../signature/signatureRoute';
+import { matchesSignatureName } from './signatureNameSearch';
 import { StudentSignaturePad, type SignaturePadHandle } from './StudentSignaturePad';
 
 /**
@@ -28,7 +29,7 @@ type LoadState =
   | { kind: 'error'; message: string }
   | { kind: 'ready'; session: PublicSessionResolved };
 
-type Step = 'affiliation' | 'member' | 'accessCode' | 'sign' | 'done';
+type Step = 'member' | 'accessCode' | 'sign' | 'done';
 
 const ALL_AFFILIATIONS = '__all__';
 
@@ -79,11 +80,13 @@ export function StudentSignatureApp() {
 
 // ── 메인 플로우 ───────────────────────────────────────────────────────────────
 
+/** 명단이 이 인원을 넘으면 검색창을 노출한다 (소규모 명단은 한눈에 보이므로 불필요). */
+const SEARCH_THRESHOLD = 8;
+
 function SignatureFlow({ session }: { session: PublicSessionResolved }) {
-  const [step, setStep] = useState<Step>(() =>
-    hasAffiliations(session.members) ? 'affiliation' : 'member',
-  );
+  const [step, setStep] = useState<Step>('member');
   const [affiliation, setAffiliation] = useState<string>(ALL_AFFILIATIONS);
+  const [searchQuery, setSearchQuery] = useState('');
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
   const [accessCode, setAccessCode] = useState('');
   const [rowData, setRowData] = useState<Record<string, string>>({});
@@ -94,13 +97,22 @@ function SignatureFlow({ session }: { session: PublicSessionResolved }) {
   const accessCodeEnabled = session.trustMode.accessCodeEnabled;
 
   const affiliations = useMemo(() => distinctAffiliations(session.members), [session.members]);
+  // 가나다순 정렬 — 100명 규모에서도 본인 위치를 예측할 수 있게.
+  const sortedMembers = useMemo(
+    () => [...session.members].sort((a, b) => a.name.localeCompare(b.name, 'ko')),
+    [session.members],
+  );
+  // 소속 칩 + 이름 검색(초성 지원) 동시 적용.
   const filteredMembers = useMemo(
     () =>
-      affiliation === ALL_AFFILIATIONS
-        ? session.members
-        : session.members.filter((m) => (m.affiliation ?? '') === affiliation),
-    [session.members, affiliation],
+      sortedMembers.filter(
+        (m) =>
+          (affiliation === ALL_AFFILIATIONS || (m.affiliation ?? '') === affiliation) &&
+          matchesSignatureName(m.name, searchQuery),
+      ),
+    [sortedMembers, affiliation, searchQuery],
   );
+  const showSearch = session.members.length > SEARCH_THRESHOLD;
   const selectedMember = useMemo(
     () => session.members.find((m) => m.id === selectedMemberId) ?? null,
     [session.members, selectedMemberId],
@@ -163,76 +175,89 @@ function SignatureFlow({ session }: { session: PublicSessionResolved }) {
   return (
     <SignatureShell title={session.title} headerText={session.headerText}>
       <ol className="flex items-center justify-center gap-2 text-xs text-sp-muted" aria-hidden>
-        <StepDot active={step === 'affiliation' || step === 'member'} label="이름" />
+        <StepDot active={step === 'member'} label="이름" />
         {accessCodeEnabled && <StepDot active={step === 'accessCode'} label="코드" />}
         <StepDot active={step === 'sign'} label="서명" />
       </ol>
 
-      {step === 'affiliation' && (
-        <StepCard
-          title="소속을 선택하세요"
-          subtitle="본인이 속한 소속을 골라 명단을 좁힐 수 있어요."
-        >
-          <div className="flex flex-col gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setAffiliation(ALL_AFFILIATIONS);
-                setStep('member');
-              }}
-              className="rounded-lg border border-sp-border bg-sp-surface px-4 py-3 text-left text-sm text-sp-text transition hover:border-sp-accent"
-            >
-              전체 보기
-            </button>
-            {affiliations.map((aff) => (
-              <button
-                key={aff}
-                type="button"
-                onClick={() => {
-                  setAffiliation(aff);
-                  setStep('member');
-                }}
-                className="rounded-lg border border-sp-border bg-sp-surface px-4 py-3 text-left text-sm text-sp-text transition hover:border-sp-accent"
-              >
-                {aff}
-              </button>
-            ))}
-          </div>
-        </StepCard>
-      )}
-
       {step === 'member' && (
         <StepCard
           title="본인 이름을 선택하세요"
-          subtitle={affiliation === ALL_AFFILIATIONS ? undefined : `소속: ${affiliation}`}
+          subtitle={
+            showSearch ? '이름을 검색하면 빨라요. 초성(ㅎㄱㄷ)으로도 찾을 수 있어요.' : undefined
+          }
         >
-          {hasAffiliations(session.members) && (
-            <button
-              type="button"
-              onClick={() => setStep('affiliation')}
-              className="self-start text-xs text-sp-muted underline"
-            >
-              ← 소속 다시 선택
-            </button>
+          {showSearch && (
+            <div className="relative">
+              <span className="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[20px] text-sp-muted">
+                search
+              </span>
+              <input
+                type="search"
+                inputMode="search"
+                autoComplete="off"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="이름 검색 (예: 길동, ㅎㄱㄷ)"
+                aria-label="이름 검색"
+                className="w-full rounded-lg border border-sp-border bg-sp-surface py-3 pl-10 pr-3 text-base text-sp-text placeholder:text-sp-muted focus:border-sp-accent focus:outline-none"
+              />
+            </div>
           )}
-          {filteredMembers.length === 0 ? (
-            <p className="text-sm text-sp-muted">표시할 이름이 없습니다.</p>
-          ) : (
-            <div className="grid grid-cols-2 gap-2">
-              {filteredMembers.map((m) => (
-                <button
-                  key={m.id}
-                  type="button"
-                  onClick={() => {
-                    setSelectedMemberId(m.id);
-                    goAfterMember();
-                  }}
-                  className="rounded-lg border border-sp-border bg-sp-surface px-3 py-3 text-sm font-semibold text-sp-text transition hover:border-sp-accent"
-                >
-                  {m.name}
-                </button>
+
+          {affiliations.length > 0 && (
+            <div className="flex flex-wrap gap-1.5" role="group" aria-label="소속 필터">
+              <AffiliationChip
+                label="전체"
+                active={affiliation === ALL_AFFILIATIONS}
+                onClick={() => setAffiliation(ALL_AFFILIATIONS)}
+              />
+              {affiliations.map((aff) => (
+                <AffiliationChip
+                  key={aff}
+                  label={aff}
+                  active={affiliation === aff}
+                  onClick={() => setAffiliation(aff)}
+                />
               ))}
             </div>
+          )}
+
+          {filteredMembers.length === 0 ? (
+            <div className="rounded-lg bg-sp-surface p-4 text-center text-sm text-sp-muted">
+              {searchQuery.trim()
+                ? `'${searchQuery.trim()}' 검색 결과가 없어요. 철자를 확인하거나 소속을 '전체'로 바꿔 보세요.`
+                : '표시할 이름이 없습니다.'}
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {filteredMembers.map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedMemberId(m.id);
+                      goAfterMember();
+                    }}
+                    className="min-h-[52px] rounded-lg border border-sp-border bg-sp-surface px-3 py-2.5 text-sm font-semibold text-sp-text transition hover:border-sp-accent"
+                  >
+                    {m.name}
+                    {/* 동명이인 구분 — 소속 필터가 '전체'일 때만 소속을 함께 표시 */}
+                    {affiliation === ALL_AFFILIATIONS && (m.affiliation ?? '') !== '' && (
+                      <span className="mt-0.5 block text-[11px] font-normal text-sp-muted">
+                        {m.affiliation}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+              {showSearch && (
+                <p className="text-center text-[11px] text-sp-muted">
+                  {filteredMembers.length}명 표시 중 · 가나다순
+                </p>
+              )}
+            </>
           )}
         </StepCard>
       )}
@@ -416,6 +441,31 @@ function ErrorText({ children }: { children: React.ReactNode }) {
   );
 }
 
+function AffiliationChip({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`rounded-full border px-3 py-1.5 text-xs font-bold transition ${
+        active
+          ? 'border-sp-accent bg-sp-accent/10 text-sp-text'
+          : 'border-sp-border bg-sp-surface text-sp-muted hover:text-sp-text'
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
 function StepDot({ active, label }: { active: boolean; label: string }) {
   return (
     <li className="flex items-center gap-1">
@@ -441,10 +491,6 @@ function CenteredNotice({ icon, text, tone }: { icon: string; text: string; tone
 }
 
 // ── 순수 헬퍼 ─────────────────────────────────────────────────────────────────
-
-function hasAffiliations(members: readonly SignaturePublicMember[]): boolean {
-  return members.some((m) => (m.affiliation ?? '').trim().length > 0);
-}
 
 function distinctAffiliations(members: readonly SignaturePublicMember[]): string[] {
   const set = new Set<string>();
