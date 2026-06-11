@@ -65,10 +65,7 @@ export class GoogleDriveClient {
   /**
    * API 요청 헬퍼 (JSON 응답용)
    */
-  private async request<T>(
-    path: string,
-    options?: RequestInit,
-  ): Promise<T> {
+  private async request<T>(path: string, options?: RequestInit): Promise<T> {
     const accessToken = await this.getAccessToken();
 
     const res = await fetch(`${DRIVE_API_URL}${path}`, {
@@ -83,8 +80,15 @@ export class GoogleDriveClient {
     if (!res.ok) {
       const err = await res.text();
       // Drive API 미활성화 감지
-      if (res.status === 403 && (err.includes('accessNotConfigured') || err.includes('Drive API has not been used') || err.includes('it is disabled'))) {
-        throw new Error('Google Drive API가 활성화되지 않았습니다. Google Cloud Console에서 Drive API를 사용 설정해주세요.');
+      if (
+        res.status === 403 &&
+        (err.includes('accessNotConfigured') ||
+          err.includes('Drive API has not been used') ||
+          err.includes('it is disabled'))
+      ) {
+        throw new Error(
+          'Google Drive API가 활성화되지 않았습니다. Google Cloud Console에서 Drive API를 사용 설정해주세요.',
+        );
       }
       const message =
         res.status === 401
@@ -125,9 +129,10 @@ export class GoogleDriveClient {
 
     const body = new Blob(parts);
 
-    const url = method === 'POST'
-      ? `${DRIVE_UPLOAD_URL}/files?uploadType=multipart&fields=id,name,mimeType,size,createdTime,webViewLink`
-      : `${DRIVE_UPLOAD_URL}/files/${path}?uploadType=multipart&fields=id,name,mimeType,size,createdTime,webViewLink`;
+    const url =
+      method === 'POST'
+        ? `${DRIVE_UPLOAD_URL}/files?uploadType=multipart&fields=id,name,mimeType,size,createdTime,webViewLink`
+        : `${DRIVE_UPLOAD_URL}/files/${path}?uploadType=multipart&fields=id,name,mimeType,size,createdTime,webViewLink`;
 
     const res = await fetch(url, {
       method,
@@ -141,8 +146,15 @@ export class GoogleDriveClient {
     if (!res.ok) {
       const err = await res.text();
       // Drive API 미활성화 감지
-      if (res.status === 403 && (err.includes('accessNotConfigured') || err.includes('Drive API has not been used') || err.includes('it is disabled'))) {
-        throw new Error('Google Drive API가 활성화되지 않았습니다. Google Cloud Console에서 Drive API를 사용 설정해주세요.');
+      if (
+        res.status === 403 &&
+        (err.includes('accessNotConfigured') ||
+          err.includes('Drive API has not been used') ||
+          err.includes('it is disabled'))
+      ) {
+        throw new Error(
+          'Google Drive API가 활성화되지 않았습니다. Google Cloud Console에서 Drive API를 사용 설정해주세요.',
+        );
       }
       const message =
         res.status === 401
@@ -171,23 +183,23 @@ export class GoogleDriveClient {
   }
 
   /**
-   * "쌤핀 과제" 루트 폴더 조회 또는 생성
-   * 1) name="쌤핀 과제", mimeType=folder로 검색
+   * 루트 폴더 조회 또는 생성
+   * 1) name=<폴더명>, mimeType=folder로 검색
    * 2) 없으면 생성
    * 3) 있으면 기존 폴더 ID 반환
+   *
+   * @param name 루트 폴더명 (기본값 '쌤핀 과제' — 기존 과제수합 호출 불변)
    */
-  async getOrCreateRootFolder(): Promise<DriveFolder> {
+  async getOrCreateRootFolder(name: string = ROOT_FOLDER_NAME): Promise<DriveFolder> {
     // 기존 루트 폴더 검색
-    const query = `name='${ROOT_FOLDER_NAME}' and mimeType='${FOLDER_MIME_TYPE}' and trashed=false`;
+    const query = `name='${name}' and mimeType='${FOLDER_MIME_TYPE}' and trashed=false`;
     const params = new URLSearchParams({
       q: query,
       fields: 'files(id,name)',
       spaces: 'drive',
     });
 
-    const data = await this.request<FilesListResponse>(
-      `/files?${params.toString()}`,
-    );
+    const data = await this.request<FilesListResponse>(`/files?${params.toString()}`);
 
     const existing = data.files?.[0];
     if (existing) {
@@ -198,7 +210,7 @@ export class GoogleDriveClient {
     const folder = await this.request<FileResponse>('/files', {
       method: 'POST',
       body: JSON.stringify({
-        name: ROOT_FOLDER_NAME,
+        name,
         mimeType: FOLDER_MIME_TYPE,
       }),
     });
@@ -253,11 +265,7 @@ export class GoogleDriveClient {
    * @param fileBlob 새 파일 데이터
    * @param mimeType MIME 타입
    */
-  async updateFile(
-    fileId: string,
-    fileBlob: Blob,
-    mimeType: string,
-  ): Promise<DriveFile> {
+  async updateFile(fileId: string, fileBlob: Blob, mimeType: string): Promise<DriveFile> {
     const data = await this.uploadRequest(fileId, {}, fileBlob, mimeType, 'PATCH');
     return this.toFile(data);
   }
@@ -274,9 +282,7 @@ export class GoogleDriveClient {
       orderBy: 'name',
     });
 
-    const data = await this.request<FilesListResponse>(
-      `/files?${params.toString()}`,
-    );
+    const data = await this.request<FilesListResponse>(`/files?${params.toString()}`);
 
     return (data.files ?? []).map((f) => ({
       id: f.id,

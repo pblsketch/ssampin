@@ -29,6 +29,8 @@ import type { IAssignmentRepository } from '@domain/repositories/IAssignmentRepo
 import type { IGoogleDrivePort } from '@domain/ports/IGoogleDrivePort';
 import type { IGoogleTasksPort } from '@domain/ports/IGoogleTasksPort';
 import type { IAssignmentServicePort } from '@domain/ports/IAssignmentServicePort';
+import type { ISignaturePort } from '@domain/ports/ISignaturePort';
+import type { IGoogleSheetPort } from '@domain/ports/IGoogleSheetPort';
 import type { IConsultationRepository } from '@domain/repositories/IConsultationRepository';
 import type { ISurveyRepository } from '@domain/repositories/ISurveyRepository';
 import type { IDriveSyncPort } from '@domain/ports/IDriveSyncPort';
@@ -55,6 +57,8 @@ import { SupabaseAnalyticsAdapter } from '@infrastructure/analytics/SupabaseAnal
 import { GoogleDriveClient } from '@infrastructure/google/GoogleDriveClient';
 import { GoogleTasksApiClient } from '@infrastructure/google/GoogleTasksApiClient';
 import { AssignmentSupabaseClient } from '@infrastructure/supabase/AssignmentSupabaseClient';
+import { SignatureSupabaseClient } from '@infrastructure/supabase/SignatureSupabaseClient';
+import { GoogleSheetClient } from '@infrastructure/google/GoogleSheetClient';
 import { ShortLinkClient } from '@infrastructure/supabase/ShortLinkClient';
 // 협업 보드 infrastructure는 Node-only(yjs/ws/y-websocket/fs) 의존성을 가지므로
 // renderer 번들에 포함되면 Vite 빌드 실패. 따라서 container.ts에서 import하지 않고
@@ -114,6 +118,10 @@ import { GetAssignments } from '@usecases/assignment/GetAssignments';
 import { GetSubmissions } from '@usecases/assignment/GetSubmissions';
 import { DeleteAssignment } from '@usecases/assignment/DeleteAssignment';
 import { CopyMissingList } from '@usecases/assignment/CopyMissingList';
+
+import { PublishSignatureSession } from '@usecases/signature/PublishSignatureSession';
+import { SubmitMonitorSignature } from '@usecases/signature/SubmitMonitorSignature';
+import { ExportRegisterToSheet } from '@usecases/signature/ExportRegisterToSheet';
 
 const isElectron = typeof window !== 'undefined' && window.electronAPI != null;
 
@@ -253,6 +261,40 @@ export const assignmentRepository: IAssignmentRepository = new JsonAssignmentRep
 export const assignmentSupabaseClient = new AssignmentSupabaseClient();
 
 export const assignmentServicePort: IAssignmentServicePort = assignmentSupabaseClient;
+
+// === 서명받기 관련 ===
+
+// 구체 클래스 참조 (startStatusPolling 접근용 + ISignaturePort 구현)
+export const signatureSupabaseClient = new SignatureSupabaseClient();
+
+export const signaturePort: ISignaturePort = signatureSupabaseClient;
+
+// GoogleSheetClient는 토큰 getter가 필요 → lazy 초기화
+let _sheetClient: GoogleSheetClient | null = null;
+
+export function getGoogleSheetClient(getAccessToken: () => Promise<string>): IGoogleSheetPort {
+  if (!_sheetClient) {
+    _sheetClient = new GoogleSheetClient(getAccessToken, getGoogleDriveClient(getAccessToken));
+  }
+  return _sheetClient;
+}
+
+export function resetGoogleSheetClient(): void {
+  _sheetClient = null;
+}
+
+// 현황 폴링은 토큰 불필요(anon key) → 즉시 생성 가능
+export const submitMonitorSignature = new SubmitMonitorSignature(signatureSupabaseClient);
+
+export const publishSignatureSession = new PublishSignatureSession(signaturePort);
+
+// 시트 내보내기는 Sheet 클라이언트가 lazy이므로 팩토리 패턴
+export function createExportRegisterToSheet(
+  getAccessToken: () => Promise<string>,
+): ExportRegisterToSheet {
+  const sheetPort = getGoogleSheetClient(getAccessToken);
+  return new ExportRegisterToSheet(signaturePort, sheetPort);
+}
 
 // === 숏링크 ===
 

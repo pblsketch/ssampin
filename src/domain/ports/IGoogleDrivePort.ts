@@ -6,8 +6,8 @@ export interface DriveFolderInfo {
 
 /** Google Drive 포트 — UseCase에서 Drive 작업 시 사용 */
 export interface IGoogleDrivePort {
-  /** "쌤핀 과제" 루트 폴더 조회 또는 생성 */
-  getOrCreateRootFolder(): Promise<DriveFolderInfo>;
+  /** 루트 폴더 조회 또는 생성 (name 미지정 시 기본 '쌤핀 과제') */
+  getOrCreateRootFolder(name?: string): Promise<DriveFolderInfo>;
   /** 서브폴더 생성 */
   createSubFolder(name: string, parentId: string): Promise<DriveFolderInfo>;
 }

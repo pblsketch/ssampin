@@ -47,6 +47,13 @@ export const TOOLS: ToolCard[] = [
     badge: 'NEW',
   },
   {
+    id: 'tool-signature-roster',
+    emoji: '✍️',
+    name: '서명받기',
+    description: '명단에 QR로 서명을 받아 구글시트 등록부로',
+    badge: 'BETA',
+  },
+  {
     id: 'tool-wordcloud',
     emoji: '☁️',
     name: '워드클라우드 브레인스토밍',

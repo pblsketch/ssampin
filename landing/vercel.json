@@ -1,3 +1,10 @@
 {
-  "framework": "nextjs"
+  "framework": "nextjs",
+  "redirects": [
+    {
+      "source": "/sign/:path*",
+      "destination": "https://m.ssampin.com/sign/:path*",
+      "permanent": false
+    }
+  ]
 }

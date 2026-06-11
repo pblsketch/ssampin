@@ -153,54 +153,78 @@ function buildShapeForKind(
   }
   if (kind === 'roundedRect') {
     const r = Math.min(w, h) * 0.15;
-    return new Rect({ ...common, left: l, top: t, width: w, height: h, rx: r, ry: r, fill: 'transparent' });
+    return new Rect({
+      ...common,
+      left: l,
+      top: t,
+      width: w,
+      height: h,
+      rx: r,
+      ry: r,
+      fill: 'transparent',
+    });
   }
   if (kind === 'ellipse') {
     return new Ellipse({ ...common, left: l, top: t, rx: w / 2, ry: h / 2, fill: 'transparent' });
   }
   if (kind === 'triangleEq') {
     // 정삼각형: bbox의 작은 쪽 기준으로 fit, 내부 중앙 정렬
-    const side = Math.min(w, h * 2 / Math.sqrt(3));
-    const triH = side * Math.sqrt(3) / 2;
+    const side = Math.min(w, (h * 2) / Math.sqrt(3));
+    const triH = (side * Math.sqrt(3)) / 2;
     const baseY = t + (h + triH) / 2;
-    return new Polygon([
-      { x: cx - side / 2, y: baseY },
-      { x: cx + side / 2, y: baseY },
-      { x: cx, y: baseY - triH },
-    ], { ...common, fill: 'transparent' });
+    return new Polygon(
+      [
+        { x: cx - side / 2, y: baseY },
+        { x: cx + side / 2, y: baseY },
+        { x: cx, y: baseY - triH },
+      ],
+      { ...common, fill: 'transparent' },
+    );
   }
   if (kind === 'triangleIso') {
     // 이등변: bbox 가득, 꼭짓점은 위쪽 중앙
-    return new Polygon([
-      { x: l, y: t + h },
-      { x: l + w, y: t + h },
-      { x: cx, y: t },
-    ], { ...common, fill: 'transparent' });
+    return new Polygon(
+      [
+        { x: l, y: t + h },
+        { x: l + w, y: t + h },
+        { x: cx, y: t },
+      ],
+      { ...common, fill: 'transparent' },
+    );
   }
   if (kind === 'triangleRight') {
     // 직각 좌하단, 수직 좌변, 수평 밑변, 빗변은 좌상-우하
-    return new Polygon([
-      { x: l, y: t },
-      { x: l, y: t + h },
-      { x: l + w, y: t + h },
-    ], { ...common, fill: 'transparent' });
+    return new Polygon(
+      [
+        { x: l, y: t },
+        { x: l, y: t + h },
+        { x: l + w, y: t + h },
+      ],
+      { ...common, fill: 'transparent' },
+    );
   }
   if (kind === 'diamond') {
-    return new Polygon([
-      { x: cx, y: t },
-      { x: l + w, y: cy },
-      { x: cx, y: t + h },
-      { x: l, y: cy },
-    ], { ...common, fill: 'transparent' });
+    return new Polygon(
+      [
+        { x: cx, y: t },
+        { x: l + w, y: cy },
+        { x: cx, y: t + h },
+        { x: l, y: cy },
+      ],
+      { ...common, fill: 'transparent' },
+    );
   }
   if (kind === 'parallelogram') {
     const skew = Math.min(w * 0.25, h * 0.5);
-    return new Polygon([
-      { x: l + skew, y: t },
-      { x: l + w, y: t },
-      { x: l + w - skew, y: t + h },
-      { x: l, y: t + h },
-    ], { ...common, fill: 'transparent' });
+    return new Polygon(
+      [
+        { x: l + skew, y: t },
+        { x: l + w, y: t },
+        { x: l + w - skew, y: t + h },
+        { x: l, y: t + h },
+      ],
+      { ...common, fill: 'transparent' },
+    );
   }
   if (kind === 'star') {
     // 5각 별: 10 포인트 (외·내 교대), 시작은 상단
@@ -371,11 +395,11 @@ function createGridObjects(w: number, h: number, gridMode: GridMode): Line[] {
     }
   } else if (gridMode === 'staff') {
     // 오선지: 5선 한 세트 + 세트 간 공백을 세로로 반복. 악보처럼 좌우 여백을 넉넉히 두어 수평 중앙 정렬.
-    const STAFF_LINE_GAP = 14;                              // 선 사이 간격
-    const STAFF_SET_HEIGHT = STAFF_LINE_GAP * 4;            // 5선 = 4간격
-    const STAFF_SET_GAP = 60;                               // 세트 사이 공백
+    const STAFF_LINE_GAP = 14; // 선 사이 간격
+    const STAFF_SET_HEIGHT = STAFF_LINE_GAP * 4; // 5선 = 4간격
+    const STAFF_SET_GAP = 60; // 세트 사이 공백
     const SET_PERIOD = STAFF_SET_HEIGHT + STAFF_SET_GAP;
-    const STAFF_WIDTH_RATIO = 0.72;                         // 캔버스 폭의 72%만 사용 → 중앙에 블록처럼 보이게
+    const STAFF_WIDTH_RATIO = 0.72; // 캔버스 폭의 72%만 사용 → 중앙에 블록처럼 보이게
     const staffWidth = Math.round(w * STAFF_WIDTH_RATIO);
     const xStart = Math.round((w - staffWidth) / 2);
     const xEnd = xStart + staffWidth;
@@ -401,7 +425,16 @@ function createGridObjects(w: number, h: number, gridMode: GridMode): Line[] {
   return lines;
 }
 
-export function useChalkCanvas({ canvasElRef, mode, color, penSize, eraserSize, boardColor, shapeKind, onShapeDrawn }: UseChalkCanvasOptions) {
+export function useChalkCanvas({
+  canvasElRef,
+  mode,
+  color,
+  penSize,
+  eraserSize,
+  boardColor,
+  shapeKind,
+  onShapeDrawn,
+}: UseChalkCanvasOptions) {
   const fabricRef = useRef<Canvas | null>(null);
   const [gridMode, setGridMode] = useState<GridMode>('none');
   const [canUndo, setCanUndo] = useState(false);
@@ -546,6 +579,32 @@ export function useChalkCanvas({ canvasElRef, mode, color, penSize, eraserSize, 
     a.click();
   }, [boardColor]);
 
+  // \u2500\u2500 Export as PNG data URL (\uc11c\uba85\ud328\ub4dc \ub4f1 \uc7ac\uc0ac\uc6a9) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  // saveAsImage\uac00 \ub2e4\uc6b4\ub85c\ub4dc\uc6a9 boardColor \ubc30\uacbd\uc744 \uac15\uc81c\ud558\ub294 \uac83\uacfc \ub2ec\ub9ac,
+  // \ud638\ucd9c\uc790\uac00 \ubc30\uacbd\uc0c9\uc744 \uc9c0\uc815(\ub610\ub294 \ud22c\uba85)\ud574 toDataURL \ubb38\uc790\uc5f4\ub9cc \ubc18\ud658\ud55c\ub2e4.
+  // \uc11c\uba85 \uc81c\ucd9c\uc740 \ud770 \ubc30\uacbd PNG\uac00 \ud544\uc694\ud558\ubbc0\ub85c background \uc778\uc790\ub85c \uc8fc\uc785.
+  const toDataURL = useCallback((background?: string): string | null => {
+    const canvas = fabricRef.current;
+    if (!canvas) return null;
+    const prevBg = canvas.backgroundColor;
+    if (background !== undefined) {
+      canvas.backgroundColor = background;
+    }
+    canvas.renderAll();
+    const dataUrl = canvas.toDataURL({ format: 'png', quality: 1, multiplier: 1 });
+    canvas.backgroundColor = prevBg;
+    canvas.renderAll();
+    return dataUrl;
+  }, []);
+
+  // \u2500\u2500 \ube44\uc5b4\uc788\ub294\uc9c0 \uac80\uc0ac (grid \uc81c\uc678, eraser stroke \uc81c\uc678) \u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  // \uc11c\uba85 \ubbf8\uc785\ub825(\ube48 \uce94\ubc84\uc2a4) \uc81c\ucd9c \uac00\ub4dc\uc6a9.
+  const isCanvasEmpty = useCallback((): boolean => {
+    const canvas = fabricRef.current;
+    if (!canvas) return true;
+    return canvas.getObjects().every((obj) => isGrid(obj) || isEraserStroke(obj));
+  }, []);
+
   // ── Multi-page ────────────────────────────────────────
   const saveCurrentPage = useCallback(() => {
     const canvas = fabricRef.current;
@@ -557,32 +616,35 @@ export function useChalkCanvas({ canvasElRef, mode, color, penSize, eraserSize, 
     gridObjects.forEach((o) => canvas.add(o));
   }, [currentPage]);
 
-  const goToPage = useCallback(async (n: number) => {
-    if (n < 0 || n >= pages.current.length) return;
-    const canvas = fabricRef.current;
-    if (!canvas) return;
-    saveCurrentPage();
-    // Clear non-grid objects
-    skipSnapshotRef.current = true;
-    canvas.getObjects().forEach((obj) => {
-      if (!isGrid(obj)) {
-        canvas.remove(obj);
+  const goToPage = useCallback(
+    async (n: number) => {
+      if (n < 0 || n >= pages.current.length) return;
+      const canvas = fabricRef.current;
+      if (!canvas) return;
+      saveCurrentPage();
+      // Clear non-grid objects
+      skipSnapshotRef.current = true;
+      canvas.getObjects().forEach((obj) => {
+        if (!isGrid(obj)) {
+          canvas.remove(obj);
+        }
+      });
+      const pageData = pages.current[n];
+      if (pageData) {
+        await canvas.loadFromJSON(pageData);
       }
-    });
-    const pageData = pages.current[n];
-    if (pageData) {
-      await canvas.loadFromJSON(pageData);
-    }
-    canvas.discardActiveObject();
-    canvas.renderAll();
-    skipSnapshotRef.current = false;
-    setCurrentPage(n);
-    // Reset history for new page
-    history.current = [];
-    historyIndex.current = -1;
-    pushSnapshot();
-    redrawGrid();
-  }, [saveCurrentPage, pushSnapshot, redrawGrid]);
+      canvas.discardActiveObject();
+      canvas.renderAll();
+      skipSnapshotRef.current = false;
+      setCurrentPage(n);
+      // Reset history for new page
+      history.current = [];
+      historyIndex.current = -1;
+      pushSnapshot();
+      redrawGrid();
+    },
+    [saveCurrentPage, pushSnapshot, redrawGrid],
+  );
 
   const addPage = useCallback(() => {
     if (pages.current.length >= MAX_PAGES) return;
@@ -873,10 +935,23 @@ export function useChalkCanvas({ canvasElRef, mode, color, penSize, eraserSize, 
       };
     };
 
-    const updateShapeDraftTo = (pointerX: number, pointerY: number, shift: boolean, alt: boolean) => {
+    const updateShapeDraftTo = (
+      pointerX: number,
+      pointerY: number,
+      shift: boolean,
+      alt: boolean,
+    ) => {
       const draft = shapeDraftRef.current;
       if (!draft) return;
-      const bbox = computeShapeBBox(draft.kind, draft.startX, draft.startY, pointerX, pointerY, shift, alt);
+      const bbox = computeShapeBBox(
+        draft.kind,
+        draft.startX,
+        draft.startY,
+        pointerX,
+        pointerY,
+        shift,
+        alt,
+      );
 
       // in-place 업데이트가 가능한 단순 도형은 set()으로 처리 (성능 최적).
       if (draft.kind === 'line') {
@@ -887,7 +962,12 @@ export function useChalkCanvas({ canvasElRef, mode, color, penSize, eraserSize, 
         const rectObj = draft.obj as Rect;
         const w = Math.max(1, bbox.width);
         const h = Math.max(1, bbox.height);
-        const nextProps: Record<string, number> = { left: bbox.left, top: bbox.top, width: w, height: h };
+        const nextProps: Record<string, number> = {
+          left: bbox.left,
+          top: bbox.top,
+          width: w,
+          height: h,
+        };
         if (draft.kind === 'roundedRect') {
           const r = Math.min(w, h) * 0.15;
           nextProps.rx = r;
@@ -921,7 +1001,12 @@ export function useChalkCanvas({ canvasElRef, mode, color, penSize, eraserSize, 
       if (!shapeDraftRef.current) return;
       const nativeEvent = opt.e as MouseEvent;
       const pointer = getPointerInScene(nativeEvent);
-      updateShapeDraftTo(pointer.x, pointer.y, nativeEvent.shiftKey === true, nativeEvent.altKey === true);
+      updateShapeDraftTo(
+        pointer.x,
+        pointer.y,
+        nativeEvent.shiftKey === true,
+        nativeEvent.altKey === true,
+      );
       // setCoords는 드래프트가 selectable:false라 드래그 중엔 불필요 — 해제 시점에 한 번만.
       // requestRenderAll로 rAF에 병합해 렌더가 mouse 이벤트보다 느려져도 큐잉되지 않도록.
       canvas.requestRenderAll();
@@ -933,7 +1018,12 @@ export function useChalkCanvas({ canvasElRef, mode, color, penSize, eraserSize, 
       // 캐치업: 해제 시점 커서 위치로 최종 치수 재계산 (mouse:move가 마지막 프레임을 놓쳐도 일치).
       const nativeEvent = opt.e as MouseEvent;
       const pointer = getPointerInScene(nativeEvent);
-      updateShapeDraftTo(pointer.x, pointer.y, nativeEvent.shiftKey === true, nativeEvent.altKey === true);
+      updateShapeDraftTo(
+        pointer.x,
+        pointer.y,
+        nativeEvent.shiftKey === true,
+        nativeEvent.altKey === true,
+      );
       shapeDraftRef.current = null;
       // remove+recreate 경로에서는 draft.obj가 교체됐을 수 있으므로 최신 참조 사용
       const obj = draft.obj;
@@ -1024,6 +1114,8 @@ export function useChalkCanvas({ canvasElRef, mode, color, penSize, eraserSize, 
     canRedo,
     clearAll,
     saveAsImage,
+    toDataURL,
+    isCanvasEmpty,
     gridMode,
     setGridMode,
     /** 지도 모드에서 컨테이너 div에 주입할 CSS background-image URL. Fabric 경로 모드는 null. */

@@ -43,6 +43,7 @@ import { ToolSurvey } from '@adapters/components/Tools/ToolSurvey';
 // V1 ToolMultiSurvey는 본 entry 내부에서 import해 flag OFF 시 그대로 렌더. App 레벨 직접 import는 Phase D 회귀 방지 위해 제거.
 import { MultiSurveyToolEntry } from '@adapters/components/MultiSurvey/MultiSurveyToolEntry';
 import { ToolClassroomAgreement } from '@adapters/components/Tools/ToolClassroomAgreement';
+import { ToolSignatureRoster } from '@adapters/components/Tools/ToolSignatureRoster';
 import { ToolRealtimeWall } from '@adapters/components/Tools/ToolRealtimeWall';
 import { ToolInteractiveSlides } from '@adapters/components/Tools/InteractiveSlides';
 import { ToolWordCloud } from '@adapters/components/Tools/ToolWordCloud';
@@ -341,6 +342,11 @@ function renderPage(
   if (page === 'tool-classroom-agreement') {
     return wrap(
       <ToolClassroomAgreement onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />,
+    );
+  }
+  if (page === 'tool-signature-roster') {
+    return wrap(
+      <ToolSignatureRoster onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />,
     );
   }
   if (page === 'tool-realtime-wall') {

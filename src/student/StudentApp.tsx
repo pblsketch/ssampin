@@ -1,10 +1,12 @@
 import { lazy, Suspense, type ComponentType, type LazyExoticComponent } from 'react';
 import { StudentRealtimeWallApp } from './StudentRealtimeWallApp';
+import { isSignatureRoute } from '../signature/signatureRoute';
 
 export type StudentAppMode = 'realtime-wall' | 'classroom-agreement';
 type StudentRouteComponent = ComponentType | LazyExoticComponent<ComponentType>;
 
 interface StudentAppLocationLike {
+  readonly pathname?: string;
   readonly search?: string;
   readonly hash?: string;
 }
@@ -25,7 +27,23 @@ const StudentClassroomAgreementApp = lazy(() =>
   })),
 );
 
+// 서명받기 공개 페이지(`/sign/{id}`)는 lazy 로드 — 실시간 담벼락 critical path 밖.
+const StudentSignatureApp = lazy(() =>
+  import('./StudentSignatureApp').then((module) => ({
+    default: module.StudentSignatureApp,
+  })),
+);
+
 export function StudentApp({ mode = resolveStudentAppMode() }: StudentAppProps) {
+  // path 기반 라우트(`/sign/...`)는 mode(쿼리/해시) 분기보다 우선.
+  if (isSignatureRoute()) {
+    return (
+      <Suspense fallback={<StudentAppLoading />}>
+        <StudentSignatureApp />
+      </Suspense>
+    );
+  }
+
   const Component = resolveStudentAppComponent(mode);
   if (mode === 'classroom-agreement') {
     return (

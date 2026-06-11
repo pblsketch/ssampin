@@ -71,3 +71,22 @@ export type {
   RefinementVote,
 } from './ClassroomAgreement';
 export { CLASSROOM_AGREEMENT_SCHEMA_VERSION } from './ClassroomAgreement';
+
+export type {
+  ColumnType,
+  ColumnDef,
+  RosterMember,
+  SignatureRosterType,
+  SignatureRoster,
+} from './SignatureRoster';
+
+export type {
+  TrustMode,
+  SignatureSessionStatus,
+  SignatureSession,
+  SignatureSessionPublic,
+  SignaturePublicMember,
+} from './SignatureSession';
+export { SIGNATURE_SCHEMA_VERSION } from './SignatureSession';
+
+export type { SignatureEntry, SignatureStatusRow } from './SignatureEntry';

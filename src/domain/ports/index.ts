@@ -1,6 +1,9 @@
 export type { IStoragePort } from './IStoragePort';
 export type { IGoogleDrivePort, DriveFolderInfo } from './IGoogleDrivePort';
-export type { IAssignmentServicePort, CreateAssignmentServiceRequest } from './IAssignmentServicePort';
+export type {
+  IAssignmentServicePort,
+  CreateAssignmentServiceRequest,
+} from './IAssignmentServicePort';
 
 export type {
   IBoardTunnelPort,
@@ -10,8 +13,20 @@ export type {
 } from './IBoardTunnelPort';
 export { TunnelBusyError } from './IBoardTunnelPort';
 
+export type { IBoardServerPort, BoardServerHandle, BoardServerStartOpts } from './IBoardServerPort';
+
 export type {
-  IBoardServerPort,
-  BoardServerHandle,
-  BoardServerStartOpts,
-} from './IBoardServerPort';
+  ISignaturePort,
+  CreateSignatureSessionInput,
+  CreateSignatureSessionResult,
+  PublishSignatureSessionResult,
+  SubmitSignatureInput,
+  SubmitSignatureResult,
+} from './ISignaturePort';
+
+export type {
+  IGoogleSheetPort,
+  SheetRow,
+  CreateRegisterSheetInput,
+  CreateRegisterSheetResult,
+} from './IGoogleSheetPort';
