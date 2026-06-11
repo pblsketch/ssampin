@@ -703,6 +703,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       totalAnswered: number;
       totalConnected: number;
       aggregatedPreview: AggregatedResult | null;
+      answer?: { optionIds?: string[]; text?: string; scale?: number };
     }) => void,
   ): (() => void) => {
     const handler = (
@@ -714,6 +715,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
         totalAnswered: number;
         totalConnected: number;
         aggregatedPreview: AggregatedResult | null;
+        answer?: { optionIds?: string[]; text?: string; scale?: number };
       },
     ) => callback(data);
     ipcRenderer.on('live-multi-survey:student-answered', handler);

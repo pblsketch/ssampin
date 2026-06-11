@@ -6,7 +6,7 @@
 > **Version**: v2.1.0 (Phase A~C 묶음) · v2.1.1 (Phase D flag 제거)
 > **Author**: pblsketch
 > **Date**: 2026-05-22
-> **Status**: Draft (Phase 0 산출물 완료 후 v0.2로 확정)
+> **Status**: v0.2 (2026-05-29 — Phase A 진입 전 v1 enum 실측 후 §2.2 Question union을 v1 4종 + v2 5종 합집합 9종으로 확장. 경로 ① 채택 — `Open Questions Q11` 참조)
 > **Plan Reference**: [docs/01-plan/features/multisurvey-RB-renewal.plan.md](../../01-plan/features/multisurvey-RB-renewal.plan.md)
 > **Spec Reference**: [.omc/specs/deep-interview-multisurvey-RB.md](../../../.omc/specs/deep-interview-multisurvey-RB.md)
 
@@ -160,7 +160,27 @@ export interface DisplayOpts {
 ```typescript
 // domain/entities/multiSurvey/Question.ts
 
-export type QuestionType = 'ox' | 'multiple' | 'short' | 'blank' | 'description';
+// v1 4종(설문) + v2 5종(퀴즈) 합집합 — Open Questions Q11 결정(경로 ①) 반영
+// v1 타입은 정답 개념 없음(survey), v2 타입은 정답·점수·포디움 메카닉(quiz)
+export type QuestionType =
+  // v1 survey (정답 없음, formatVersion 1 보존용)
+  | 'single-choice'
+  | 'multi-choice'
+  | 'text'
+  | 'scale'
+  // v2 quiz (정답 있음, formatVersion 2 신규)
+  | 'ox'
+  | 'multiple'
+  | 'short'
+  | 'blank'
+  | 'description';
+
+/** 퀴즈 메카닉(정답·점수·포디움)을 적용할 수 있는 v2 타입 narrowing */
+export type QuizQuestionType = 'ox' | 'multiple' | 'short' | 'blank' | 'description';
+
+export function isQuizType(t: QuestionType): t is QuizQuestionType {
+  return t === 'ox' || t === 'multiple' || t === 'short' || t === 'blank' || t === 'description';
+}
 
 export interface QuestionBase {
   readonly id: string;
@@ -272,16 +292,20 @@ export function useRealtimeToolFlag(): {
 
 ### 4.1 v1 → v2 변환 매핑
 
-| v1 필드            | v2 필드            | 변환 규칙                                                                            |
-| ------------------ | ------------------ | ------------------------------------------------------------------------------------ |
-| `id`               | `id`               | 그대로                                                                               |
-| `title`            | `title`            | 그대로                                                                               |
-| `questions[].type` | `questions[].type` | 1:1 매핑 (`'objective'` → `'multiple'`, `'subjective'` → `'short'` 등 [TBD Phase 0]) |
-| (v1에 없음)        | `formatVersion: 2` | 신규 추가                                                                            |
-| (v1에 없음)        | `presentationOpts` | 기본값 (재입장만 true)                                                               |
-| (v1에 없음)        | `responseOpts`     | 기본값 (게임 메카닉 모두 false)                                                      |
-| (v1에 없음)        | `displayOpts`      | 기본값                                                                               |
-| (v1에 응답 없음)   | (보존 안 함)       | 라이브 응답은 v1에서 휘발성이라 보존 불가 — 정상                                     |
+| v1 필드                           | v2 필드               | 변환 규칙                                                                                                                                                                                |
+| --------------------------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                              | `id`                  | 그대로                                                                                                                                                                                   |
+| `title`                           | `title`               | 그대로                                                                                                                                                                                   |
+| `questions[].type`                | `questions[].type`    | **그대로 유지** (v1 4종 `'single-choice'`/`'multi-choice'`/`'text'`/`'scale'` 그대로 보존). v2 enum이 9종 합집합이라 매핑 불요. v1 문항은 quiz 메카닉(`isCorrect`/점수) 미적용. Q11 결정 |
+| `questions[].options`             | `questions[].options` | 그대로 (이름·옵션 형태 동일)                                                                                                                                                             |
+| `questions[].scaleMin/Max/Labels` | 그대로                | v1 `'scale'` 타입 메타 보존                                                                                                                                                              |
+| (v1에 없음)                       | `formatVersion: 2`    | 신규 추가                                                                                                                                                                                |
+| (v1에 없음)                       | `presentationOpts`    | 기본값 (재입장만 true)                                                                                                                                                                   |
+| (v1에 없음)                       | `responseOpts`        | 기본값 (게임 메카닉 모두 false)                                                                                                                                                          |
+| (v1에 없음)                       | `displayOpts`         | 기본값                                                                                                                                                                                   |
+| (v1에 응답 없음)                  | (보존 안 함)          | 라이브 응답은 v1에서 휘발성이라 보존 불가 — 정상                                                                                                                                         |
+
+**중요 함의 (Q11 결정)**: v1은 `correctAnswer` / `correctChoiceIds` / `isCorrect` 필드가 0건(실측 `grep` 0 hit). 따라서 v1 → v2 변환된 문항은 **정답 없는 설문**으로 유지됨. quiz 메카닉(점수·포디움·정답률)은 사용자가 v2에서 새로 작성한 `ox`/`multiple`/`short`/`blank`/`description` 5종에만 적용. v1 문항을 quiz로 사용하려면 사용자가 정답을 수동 추가해야 함(Phase B Maker UI에서 v1 문항도 quiz 타입으로 변환 가능한 옵션 제공 [TBD Phase B]).
 
 ### 4.2 v2 → v1 역변환 (라운드트립 검증용)
 

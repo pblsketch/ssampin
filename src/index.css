@@ -22,6 +22,13 @@
     --sp-accent: #2383e2;
     --sp-accent-fg: #ffffff;
     --sp-highlight: #c29343;
+    /* === Semantic accent colors (Phase B B.7 S1 — Q11 9종 시각 구분) ===
+       MultiSurvey v2 QuestionTypeChip 5종 quiz 의미 색상 매핑용.
+       모바일(src/mobile/styles/mobile.css)과 의미 통일. */
+    --sp-info: #7c3aed; /* violet-600 — ox */
+    --sp-success: #16a34a; /* green-600 — multiple */
+    --sp-warning: #d97706; /* amber-600 — description */
+    --sp-error: #dc2626; /* red-600 — 오류/파괴적 액션 (모바일 mobile.css 와 동일) */
     --sp-text: #37352f;
     --sp-muted: #787774;
     --memo-dot-color: rgba(0, 0, 0, 0.12);
@@ -73,6 +80,25 @@
     --sp-ease-out: cubic-bezier(0.25, 0.46, 0.45, 0.94);
     --sp-ease-out-cubic: cubic-bezier(0.215, 0.61, 0.355, 1);
     --sp-ease-in-out: cubic-bezier(0.86, 0, 0.07, 1);
+  }
+
+  /* Phase B B.7 S2-A — MultiSurvey v2 TimerBar urgent pulse keyframe */
+  @keyframes sp-timer-urgent {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-1px);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    @keyframes sp-timer-urgent {
+      0%,
+      100% {
+        transform: none;
+      }
+    }
   }
 
   body {
@@ -159,6 +185,11 @@ body {
   --sp-border: #b0b5bf;
   --sp-accent: #2563eb;
   --sp-highlight: #d97706;
+  /* Semantic accents (Phase B B.7 S1) */
+  --sp-info: #7c3aed;
+  --sp-success: #16a34a;
+  --sp-warning: #c2410c;
+  --sp-error: #dc2626;
   --sp-text: #0f172a;
   --sp-muted: #64748b;
   --memo-dot-color: rgba(0, 0, 0, 0.12);
@@ -174,6 +205,11 @@ body {
   --sp-border: #2a3f5c;
   --sp-accent: #3b82f6;
   --sp-highlight: #f59e0b;
+  /* Semantic accents (Phase B B.7 S1 — dark theme, brighter for AA contrast) */
+  --sp-info: #a78bfa; /* violet-400 — ox */
+  --sp-success: #4ade80; /* green-400 — multiple */
+  --sp-warning: #fbbf24; /* amber-400 — description */
+  --sp-error: #f87171; /* red-400 — 오류/파괴적 액션 (모바일 mobile.css 와 동일) */
   --sp-text: #e2e8f0;
   --sp-muted: #94a3b8;
   --sp-widget-rgb: 15, 23, 42;

@@ -25,6 +25,7 @@ import { useMultiSurveyV2Store } from '@adapters/stores/useMultiSurveyV2Store';
 import { useToolTemplateStore } from '@adapters/stores/useToolTemplateStore';
 import { MigrationReportModal } from './v2/Migration/MigrationReportModal';
 import { MakerLayout } from './v2/Maker/MakerLayout';
+import { LiveConsoleContainer } from './v2/Console/LiveConsoleContainer';
 
 interface MultiSurveyToolEntryProps {
   /** V1 ToolMultiSurvey가 받는 onBack — 도구 목록으로 복귀 */
@@ -111,6 +112,8 @@ export function MultiSurveyToolEntry({
   const createSession = useMultiSurveyV2Store((s) => s.createSession);
   const selectSession = useMultiSurveyV2Store((s) => s.selectSession);
   const loadSessions = useMultiSurveyV2Store((s) => s.loadSessions);
+  const liveActive = useMultiSurveyV2Store((s) => s.liveSession !== null);
+  const exitLive = useMultiSurveyV2Store((s) => s.exitLive);
 
   // 마이그레이션 자동 트리거 — opt-in 시점 1회만
   const migrationAttemptedRef = useRef(false);
@@ -189,6 +192,15 @@ export function MultiSurveyToolEntry({
 
   // flag ON — V2 진입
   const activeSessionId = selectedSessionId ?? sessions[0]?.id ?? null;
+
+  // 라이브 진행 중 — 교사 콘솔 전체 화면 (헤더 액션은 콘솔 자체 컨트롤로 대체)
+  if (liveActive) {
+    return (
+      <div className="relative h-full w-full">
+        <LiveConsoleContainer onExit={exitLive} />
+      </div>
+    );
+  }
 
   return (
     <div className="relative h-full w-full flex flex-col">

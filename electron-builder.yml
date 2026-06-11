@@ -6,17 +6,20 @@ directories:
   buildResources: build
   output: release
 extraResources:
-  - from: "build/icon.ico"
-    to: "icon.ico"
+  - from: 'build/icon.ico'
+    to: 'icon.ico'
 files:
-  - from: "."
-    to: "."
+  - from: '.'
+    to: '.'
     filter:
-      - "package.json"
-      - "dist/**/*"
-      - "dist-electron/**/*"
-      - "dist-student/**/*"
-      - "node_modules/**/*"
+      - 'package.json'
+      - 'dist/**/*'
+      - 'dist-electron/**/*'
+      - 'dist-student/**/*'
+      - 'node_modules/**/*'
+      # Phase 0 spike isolation: prototype/realtime-tool-spike/는 G001 산출물이며 main 빌드에서 격리한다.
+      # Plan D8 + G002 A.7 결정 (builderFiles.meta.test가 이 라인 부재 시 fail).
+      - '!prototype/**'
 # 네이티브 모듈은 asar 내부에서 require할 수 없으므로 언팩 필요.
 # @nut-tree-fork/nut-js (스티커 자동 붙여넣기용) → libnut-{win32,darwin,linux} 의
 # .node 바이너리가 OS dlopen으로 로드되어야 한다. 미언팩 시 win32에서
@@ -28,18 +31,18 @@ files:
 # (a) nut-js 하위 패키지를 명시 + (b) bindings/file-uri-to-path 의존성도 함께
 # 언팩 + (c) 보험으로 모든 `.node` 파일을 강제 언팩한다.
 asarUnpack:
-  - "**/node_modules/@nut-tree-fork/**"
-  - "**/node_modules/@nut-tree-fork/libnut-win32/**"
-  - "**/node_modules/@nut-tree-fork/libnut-darwin/**"
-  - "**/node_modules/@nut-tree-fork/libnut-linux/**"
-  - "**/node_modules/libnut*/**"
-  - "**/node_modules/bindings/**"
-  - "**/node_modules/file-uri-to-path/**"
+  - '**/node_modules/@nut-tree-fork/**'
+  - '**/node_modules/@nut-tree-fork/libnut-win32/**'
+  - '**/node_modules/@nut-tree-fork/libnut-darwin/**'
+  - '**/node_modules/@nut-tree-fork/libnut-linux/**'
+  - '**/node_modules/libnut*/**'
+  - '**/node_modules/bindings/**'
+  - '**/node_modules/file-uri-to-path/**'
   # koffi: 바탕화면 아이콘 아래 모드(native-desktop) FFI. Win32 전용이지만 packaging은
   # 모든 OS 빌드에 포함되며, win32 패키지에서만 require된다. .node 바이너리는 asar
   # 외부에서 dlopen 가능해야 함 (Phase 4-1~).
-  - "**/node_modules/koffi/**"
-  - "**/*.node"
+  - '**/node_modules/koffi/**'
+  - '**/*.node'
 win:
   target:
     - target: nsis
@@ -69,7 +72,7 @@ mac:
         - arm64
   icon: build/icon.png
   category: public.app-category.education
-  minimumSystemVersion: "12.0.0"
+  minimumSystemVersion: '12.0.0'
   hardenedRuntime: true
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist

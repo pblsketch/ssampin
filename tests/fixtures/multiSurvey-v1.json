@@ -1,0 +1,49 @@
+{
+  "id": "survey-v1-fixture-001",
+  "title": "v1 테스트 설문",
+  "questions": [
+    {
+      "id": "q1",
+      "type": "single-choice",
+      "question": "좋아하는 계절은?",
+      "required": true,
+      "options": [
+        { "id": "o1", "text": "봄" },
+        { "id": "o2", "text": "여름" },
+        { "id": "o3", "text": "가을" },
+        { "id": "o4", "text": "겨울" }
+      ]
+    },
+    {
+      "id": "q2",
+      "type": "multi-choice",
+      "question": "즐기는 취미를 모두 골라주세요",
+      "required": false,
+      "options": [
+        { "id": "o1", "text": "독서" },
+        { "id": "o2", "text": "운동" },
+        { "id": "o3", "text": "음악 감상" }
+      ]
+    },
+    {
+      "id": "q3",
+      "type": "text",
+      "question": "자기소개를 적어주세요",
+      "required": true,
+      "maxLength": 200
+    },
+    {
+      "id": "q4",
+      "type": "scale",
+      "question": "수업 만족도는?",
+      "required": true,
+      "scaleMin": 1,
+      "scaleMax": 5,
+      "scaleMinLabel": "매우 불만족",
+      "scaleMaxLabel": "매우 만족"
+    }
+  ],
+  "submissions": [],
+  "isOpen": false,
+  "createdAt": 1716979200000
+}

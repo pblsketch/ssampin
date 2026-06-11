@@ -16,9 +16,24 @@ import { generateMultiSurveyHTML, MultiSurveyQuestionForHTML } from './liveMulti
 import { isTunnelAvailable, installTunnel, openTunnel, closeTunnel } from './tunnel';
 
 /** WSL/Hyper-V 등 가상 네트워크 대역 (외부 기기 접속 불가) */
-const VIRTUAL_PREFIXES = ['172.16.', '172.17.', '172.18.', '172.19.', '172.20.',
-  '172.21.', '172.22.', '172.23.', '172.24.', '172.25.', '172.26.', '172.27.',
-  '172.28.', '172.29.', '172.30.', '172.31.'];
+const VIRTUAL_PREFIXES = [
+  '172.16.',
+  '172.17.',
+  '172.18.',
+  '172.19.',
+  '172.20.',
+  '172.21.',
+  '172.22.',
+  '172.23.',
+  '172.24.',
+  '172.25.',
+  '172.26.',
+  '172.27.',
+  '172.28.',
+  '172.29.',
+  '172.30.',
+  '172.31.',
+];
 
 /**
  * 로컬 IPv4 주소 목록 반환 (루프백 + 가상 네트워크 제외)
@@ -30,7 +45,12 @@ function getLocalIPs(): string[] {
     if (!iface) continue;
     // vEthernet (WSL) 등 가상 인터페이스 이름 필터링
     const lowerName = name.toLowerCase();
-    if (lowerName.includes('wsl') || lowerName.includes('docker') || lowerName.includes('vethernet')) continue;
+    if (
+      lowerName.includes('wsl') ||
+      lowerName.includes('docker') ||
+      lowerName.includes('vethernet')
+    )
+      continue;
     for (const alias of iface) {
       if (alias.family !== 'IPv4' || alias.internal) continue;
       // 172.16.0.0/12 대역 제외 (WSL, Hyper-V, Docker 등)
@@ -50,6 +70,24 @@ interface PerAnswer {
 
 /** 세션 phase */
 type Phase = 'lobby' | 'open' | 'revealed' | 'ended';
+
+// ─────────────────────────────────────────────────────────────────────
+// Phase B B.4 — 신규 IPC 이벤트 타입 (DN-03, DN-06)
+// ─────────────────────────────────────────────────────────────────────
+
+/**
+ * 라이브 IPC 이벤트 union — Phase B.4 worker 신설.
+ *
+ * - STUDENT_WAVE: 학생이 대기 화면 아바타 탭 시 교사 콘솔 강조 (DN-03).
+ * - TOGGLE_FOCUS_MODE: 교사 집중 모드 토글을 모든 학생에게 broadcast (DN-06).
+ *
+ * TODO(Phase B B.5+): 실제 ipcMain.handle 및 WebSocket broadcast 라우팅 등록.
+ *   - 'live-multi-survey:student-wave' 핸들러 → mainWindow.webContents.send
+ *   - 'live-multi-survey:toggle-focus-mode' 핸들러 → broadcast to all WS clients
+ */
+export type LiveIpcEvent =
+  | { type: 'STUDENT_WAVE'; studentId: string }
+  | { type: 'TOGGLE_FOCUS_MODE'; active: boolean };
 
 /** 참가자 정보 (phase 머신 모드 전용) */
 interface Participant {
@@ -269,10 +307,7 @@ function buildRoster(s: LiveMultiSurveySession): RosterEntry[] {
 /**
  * 특정 WebSocket 클라이언트에게 보낼 state payload 생성
  */
-function buildStatePayload(
-  s: LiveMultiSurveySession,
-  ws: WebSocket,
-): Record<string, unknown> {
+function buildStatePayload(s: LiveMultiSurveySession, ws: WebSocket): Record<string, unknown> {
   const sessionId = s.clients.get(ws) ?? '';
   const participant = sessionId ? s.participants.get(sessionId) : undefined;
   const myNickname = participant?.nickname ?? '';
@@ -334,11 +369,7 @@ function sendStateToClient(s: LiveMultiSurveySession, ws: WebSocket): void {
 /**
  * 교사(메인 윈도우)에 IPC 이벤트 안전 송신
  */
-function sendToMain(
-  mainWindow: BrowserWindow,
-  channel: string,
-  payload: unknown,
-): void {
+function sendToMain(mainWindow: BrowserWindow, channel: string, payload: unknown): void {
   if (mainWindow.isDestroyed()) return;
   try {
     mainWindow.webContents.send(channel, payload);
@@ -350,10 +381,7 @@ function sendToMain(
 /**
  * 교사 화면 phase-changed IPC 송신
  */
-function emitPhaseChanged(
-  mainWindow: BrowserWindow,
-  s: LiveMultiSurveySession,
-): void {
+function emitPhaseChanged(mainWindow: BrowserWindow, s: LiveMultiSurveySession): void {
   const payload: Record<string, unknown> = {
     phase: s.phase,
     currentQuestionIndex: s.currentQuestionIndex,
@@ -377,10 +405,7 @@ function emitRoster(mainWindow: BrowserWindow, s: LiveMultiSurveySession): void 
 /**
  * 교사 화면 connection-count IPC 송신 (clients.size 기반)
  */
-function emitConnectionCount(
-  mainWindow: BrowserWindow,
-  s: LiveMultiSurveySession,
-): void {
+function emitConnectionCount(mainWindow: BrowserWindow, s: LiveMultiSurveySession): void {
   sendToMain(mainWindow, 'live-multi-survey:connection-count', {
     count: s.clients.size,
   });
@@ -484,9 +509,10 @@ export function registerLiveMultiSurveyHandlers(mainWindow: BrowserWindow): void
                   if (ws.readyState === WebSocket.OPEN) {
                     try {
                       const raw = msg['nickname'];
-                      const code = typeof raw === 'string' && raw.length > 0
-                        ? 'nickname_invalid'
-                        : 'nickname_required';
+                      const code =
+                        typeof raw === 'string' && raw.length > 0
+                          ? 'nickname_invalid'
+                          : 'nickname_required';
                       ws.send(
                         JSON.stringify({
                           type: 'error',
@@ -608,6 +634,7 @@ export function registerLiveMultiSurveyHandlers(mainWindow: BrowserWindow): void
                 broadcastState(session);
 
                 // 교사 UI에 student-answered 이벤트
+                // answer: v2 교사 콘솔이 정답 판정·점수 계산에 사용 (v1 UI는 무시 — additive)
                 const aggregatedPreview = aggregateAnswers(session, questionIndex);
                 sendToMain(mainWindow, 'live-multi-survey:student-answered', {
                   sessionId,
@@ -616,6 +643,7 @@ export function registerLiveMultiSurveyHandlers(mainWindow: BrowserWindow): void
                   totalAnswered: countAnsweredForCurrent(session),
                   totalConnected: session.clients.size,
                   aggregatedPreview,
+                  answer: perAnswer,
                 });
                 emitRoster(mainWindow, session);
                 return;

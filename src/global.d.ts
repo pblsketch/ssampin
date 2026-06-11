@@ -485,6 +485,8 @@ interface ElectronAPI {
       totalAnswered: number;
       totalConnected: number;
       aggregatedPreview: AggregatedResult | null;
+      /** 학생 답변 원본 (stepMode v2 콘솔 정답 판정용 — v1 UI는 무시) */
+      answer?: { optionIds?: string[]; text?: string; scale?: number };
     }) => void,
   ) => () => void;
   onLiveMultiSurveyPhaseChanged: (

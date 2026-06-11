@@ -142,3 +142,46 @@ export function getConnectionChipBundle(config: { submitButtonSelectors: readonl
     js: getConnectionChipJS(config),
   };
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// 디자인 토큰 — Phase B 학생 페이지 정적 HTML 주입 (DN-10)
+// ─────────────────────────────────────────────────────────────────────
+
+/**
+ * 학생 페이지가 사용하는 sp-* / --color-* CSS 변수 기본값.
+ *
+ * 학생 페이지 React 컴포넌트는 `var(--color-xxx, #fallback)` 패턴으로
+ * 토큰을 참조한다. 정적 HTML 컨텍스트에서 토큰 주입이 누락되더라도
+ * fallback HEX 가 동작하도록 이중 안전장치 (DN-10 예외 허용).
+ *
+ * @example
+ *   const tokenStyle = injectDesignTokens();
+ *   const html = `<html><head>${tokenStyle}</head>...`;
+ */
+export function getDesignTokenDefaults(): Record<string, string> {
+  return {
+    '--color-bg': '#0a0e17',
+    '--color-card': '#1a1f2e',
+    '--color-text': '#e2e8f0',
+    '--color-muted': '#94a3b8',
+    '--color-accent': '#60a5fa',
+    '--color-highlight': '#fbbf24',
+    '--color-border': '#334155',
+    '--sp-radius-md': '12px',
+    '--sp-shadow-card': '0 2px 8px rgba(0,0,0,0.08)',
+    '--sp-duration-base': '200ms',
+    '--sp-ease-out': 'cubic-bezier(0.16, 1, 0.3, 1)',
+  };
+}
+
+/**
+ * 학생 페이지 `<head>` 에 inline 으로 삽입할 `<style>:root { ... }</style>` 문자열.
+ * 컴포넌트 className 의 sp-* 토큰과 그 fallback HEX 가 모두 정의된다.
+ */
+export function injectDesignTokens(): string {
+  const defaults = getDesignTokenDefaults();
+  const rules = Object.entries(defaults)
+    .map(([k, v]) => `  ${k}: ${v};`)
+    .join('\n');
+  return `<style>:root {\n${rules}\n}</style>`;
+}
