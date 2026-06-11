@@ -448,6 +448,13 @@ export function MemoShareModal({ isOpen, onClose }: MemoShareModalProps) {
                             <p className="mt-1.5 text-xs text-sp-muted">
                               전자칠판 화면에서 소리가 켜져 있어야 들려요 (🔔 버튼)
                             </p>
+                            {(board.ttsVoice ?? 'female') === 'male' && (
+                              <p className="mt-1 text-xs text-sp-muted">
+                                남성 음성은 전자칠판 브라우저가 <strong>Edge</strong>일 때 가장 잘
+                                지원돼요. Chrome은 기기에 따라 여성 음성만 있어서, 그 경우 다른
+                                음성으로 대신 읽고 화면에 안내가 표시돼요.
+                              </p>
+                            )}
 
                             {/* 공유 중 포스트잇 목록 — 항목별 TTS 읽기 */}
                             {readListBoardId === board.id && (
