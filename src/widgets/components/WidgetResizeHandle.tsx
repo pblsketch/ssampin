@@ -4,11 +4,9 @@ interface WidgetResizeHandleProps {
   currentSpan: 1 | 2 | 3 | 4;
   minSpan: 1 | 2 | 3 | 4;
   onResize: (colSpan: 1 | 2 | 3 | 4) => void;
-  /** 드래그 시작/종료 알림 — 드래그 중 핸들 unmount 방지용 */
-  onDraggingChange?: (dragging: boolean) => void;
 }
 
-const SPAN_LABELS: Record<number, string> = {
+export const SPAN_LABELS: Record<number, string> = {
   1: '좁게',
   2: '보통',
   3: '넓게',
@@ -19,12 +17,7 @@ const SPAN_LABELS: Record<number, string> = {
  * 위젯 가로 크기 조절 — 우측 가장자리 드래그
  * 그리드 컬럼 너비를 계산하여 드래그 거리에 따라 colSpan 변경
  */
-export function WidgetResizeHandle({
-  currentSpan,
-  minSpan,
-  onResize,
-  onDraggingChange,
-}: WidgetResizeHandleProps) {
+export function WidgetResizeHandle({ currentSpan, minSpan, onResize }: WidgetResizeHandleProps) {
   const handleRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [previewSpan, setPreviewSpan] = useState(currentSpan);
@@ -61,7 +54,6 @@ export function WidgetResizeHandle({
       previewRef.current = startSpan;
       setIsDragging(true);
       setPreviewSpan(startSpan);
-      onDraggingChange?.(true);
 
       const onMove = (ev: PointerEvent) => {
         const deltaX = ev.clientX - startX;
@@ -76,7 +68,6 @@ export function WidgetResizeHandle({
         document.removeEventListener('pointermove', onMove);
         document.removeEventListener('pointerup', onUp);
         setIsDragging(false);
-        onDraggingChange?.(false);
         const finalSpan = previewRef.current as 1 | 2 | 3 | 4;
         if (finalSpan !== startSpan) {
           onResize(finalSpan);
@@ -86,24 +77,25 @@ export function WidgetResizeHandle({
       document.addEventListener('pointermove', onMove);
       document.addEventListener('pointerup', onUp);
     },
-    [currentSpan, minSpan, onResize, onDraggingChange],
+    [currentSpan, minSpan, onResize],
   );
 
   return (
     <>
-      {/* 우측 가장자리 드래그 핸들 */}
+      {/* 우측 가장자리 드래그 핸들 — 카드 테두리에 걸치게 배치 */}
       <div
         ref={handleRef}
         onPointerDown={handlePointerDown}
-        className={`absolute top-0 bottom-0 right-0 w-3 cursor-col-resize z-10
+        title="드래그하여 너비 조절"
+        className={`absolute top-0 bottom-0 -right-1.5 w-3 cursor-col-resize z-10
           flex items-center justify-center
-          opacity-0 group-hover/widget:opacity-100 transition-opacity
+          opacity-0 group-hover/widget:opacity-100 transition-opacity duration-200
           ${isDragging ? '!opacity-100' : ''}`}
       >
-        {/* 시각적 그립 바 */}
+        {/* 시각적 그립 바 — sp 토큰은 /N 투명도 수식이 안 먹으므로 opacity 유틸 사용 */}
         <div
-          className={`w-1 h-10 rounded-full transition-colors ${
-            isDragging ? 'bg-sp-accent' : 'bg-sp-muted/40 hover:bg-sp-accent/70'
+          className={`w-1.5 h-12 rounded-full shadow-sm bg-sp-accent transition-opacity ${
+            isDragging ? 'opacity-100' : 'opacity-60 hover:opacity-100'
           }`}
         />
       </div>

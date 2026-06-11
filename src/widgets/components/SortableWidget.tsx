@@ -5,6 +5,7 @@ import type { WidgetDefinition, WidgetInstance } from '../types';
 import { WidgetCard } from './WidgetCard';
 import { WidgetResizeHandle } from './WidgetResizeHandle';
 import { WidgetVerticalResizeHandle } from './WidgetVerticalResizeHandle';
+import { WidgetCornerResizeHandle } from './WidgetCornerResizeHandle';
 import { getSpanClass } from '../utils/getSpanClass';
 
 interface SortableWidgetProps {
@@ -22,11 +23,12 @@ interface SortableWidgetProps {
  * G004 PR-core 변경사항:
  * - isEditMode 제거 — DnD 항상 활성
  * - 드래그 리스너(listeners)는 ⋮ 핸들 버튼에만 부착 → 카드 본문 클릭 보존
- * - 상단 오른쪽 60×60 quadrant hover zone → 300ms 후 핸들 그룹 표시
- *   (⋮ 드래그 + ✕ 숨기기 pill + absolute 리사이즈 핸들)
- * - 핸들 유지: 한번 표시되면 카드 내부에 마우스가 있는 동안 유지,
- *   카드를 벗어나면 150ms 후 숨김 (리사이즈 핸들까지 이동 가능해야 함)
- * - 리사이즈 드래그 중에는 마우스가 카드 밖으로 나가도 핸들 유지
+ *
+ * 리사이즈 발견성 개선:
+ * - 리사이즈 그립(우측·하단·우하단 코너)은 항상 mount — 카드 호버만으로
+ *   CSS(group-hover)로 표시. 숨은 dwell 없이 바로 발견 가능.
+ * - ⋮ 드래그 + ✕ 숨기기 pill만 상단 오른쪽 60×60 quadrant 300ms dwell로 표시
+ *   (카드 내부에 머무는 동안 유지, 카드 이탈 150ms 후 숨김)
  */
 export function SortableWidget({
   instance,
@@ -49,10 +51,8 @@ export function SortableWidget({
 
   const spanClass = getSpanClass(instance.colSpan);
 
-  // Quadrant-dwell hover state
+  // Quadrant-dwell hover state (⋮/✕ pill 전용)
   const [showHandles, setShowHandles] = useState(false);
-  // 리사이즈 드래그 중 — 마우스가 카드를 벗어나도 핸들을 유지
-  const [isResizing, setIsResizing] = useState(false);
   const showTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -78,7 +78,7 @@ export function SortableWidget({
     }
   };
 
-  // quadrant zone 진입: 300ms 머물면 핸들 표시
+  // quadrant zone 진입: 300ms 머물면 pill 표시
   const handleZoneEnter = () => {
     cancelHideTimer();
     if (!showHandles) {
@@ -93,7 +93,7 @@ export function SortableWidget({
     cancelShowTimer();
   };
 
-  // 카드 전체 진입/이탈: 핸들이 표시된 뒤에는 카드 안에서 자유롭게 이동 가능
+  // 카드 전체 진입/이탈: pill이 표시된 뒤에는 카드 안에서 자유롭게 이동 가능
   const handleCardEnter = () => {
     cancelHideTimer();
   };
@@ -104,8 +104,6 @@ export function SortableWidget({
       setShowHandles(false);
     }, 150);
   };
-
-  const handlesVisible = showHandles || isResizing;
 
   return (
     <div
@@ -140,7 +138,7 @@ export function SortableWidget({
         />
 
         {/* ⋮ 드래그 + ✕ 숨기기 pill — quadrant hover 후 300ms 표시 */}
-        {handlesVisible && (
+        {showHandles && (
           <div className="absolute top-1.5 right-1.5 z-20 flex items-center gap-0.5 bg-sp-card/95 border border-sp-border/60 rounded-lg px-1 py-0.5 shadow-md">
             {/* ⋮ 드래그 핸들 — listeners 여기에만 부착 */}
             <button
@@ -185,23 +183,27 @@ export function SortableWidget({
           </div>
         )}
 
-        {/* 리사이즈 핸들 — quadrant hover 시 표시 (absolute 위치, 카드 엣지에 부착) */}
-        {handlesVisible && (
-          <>
-            <WidgetResizeHandle
-              currentSpan={instance.colSpan}
-              minSpan={definition.minSize.w as 1 | 2 | 3 | 4}
-              onResize={onResize}
-              onDraggingChange={setIsResizing}
-            />
-            <WidgetVerticalResizeHandle
-              currentRowSpan={instance.rowSpan}
-              minRowSpan={definition.minSize.h}
-              onResize={onResizeHeight}
-              onDraggingChange={setIsResizing}
-            />
-          </>
-        )}
+        {/* 리사이즈 그립 — 항상 mount, 카드 호버(group-hover)만으로 표시 */}
+        <WidgetResizeHandle
+          currentSpan={instance.colSpan}
+          minSpan={definition.minSize.w as 1 | 2 | 3 | 4}
+          onResize={onResize}
+        />
+        <WidgetVerticalResizeHandle
+          currentRowSpan={instance.rowSpan}
+          minRowSpan={definition.minSize.h}
+          onResize={onResizeHeight}
+        />
+        <WidgetCornerResizeHandle
+          currentColSpan={instance.colSpan}
+          currentRowSpan={instance.rowSpan}
+          minColSpan={definition.minSize.w as 1 | 2 | 3 | 4}
+          minRowSpan={definition.minSize.h}
+          onResize={(colSpan, rowSpan) => {
+            if (colSpan !== instance.colSpan) onResize(colSpan);
+            if (rowSpan !== instance.rowSpan) onResizeHeight(rowSpan);
+          }}
+        />
       </div>
     </div>
   );
