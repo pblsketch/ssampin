@@ -53,14 +53,16 @@ export function WidgetCornerResizeHandle({
       const gap = parseFloat(gridStyle.gap) || parseFloat(gridStyle.columnGap || '0') || 16;
       const colWidth = parseFloat(colWidths[0] ?? '0') || gridEl.clientWidth / maxCols;
       const rowHeight = parseFloat(gridStyle.gridAutoRows) || 80;
+      // 위젯 모드 분할 레이아웃의 transform: scale() 보정 — 시각 px → 레이아웃 px
+      const scale = gridEl.getBoundingClientRect().width / gridEl.offsetWidth || 1;
 
       previewRef.current = { col: startCol, row: startRow };
       setIsDragging(true);
       setPreview({ col: startCol, row: startRow });
 
       const onMove = (ev: PointerEvent) => {
-        const deltaCols = Math.round((ev.clientX - startX) / (colWidth + gap));
-        const deltaRows = Math.round((ev.clientY - startY) / (rowHeight + gap));
+        const deltaCols = Math.round((ev.clientX - startX) / scale / (colWidth + gap));
+        const deltaRows = Math.round((ev.clientY - startY) / scale / (rowHeight + gap));
         // 1열 레이아웃에서는 가로 조절 불가 — 세로만
         const col =
           maxCols <= 1

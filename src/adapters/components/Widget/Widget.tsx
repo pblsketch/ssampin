@@ -11,6 +11,9 @@ import { useMessageStore } from '@adapters/stores/useMessageStore';
 import { useDashboardConfig } from '@widgets/useDashboardConfig';
 import { getWidgetById } from '@widgets/registry';
 import { WidgetCard } from '@widgets/components/WidgetCard';
+import { WidgetResizeHandle } from '@widgets/components/WidgetResizeHandle';
+import { WidgetVerticalResizeHandle } from '@widgets/components/WidgetVerticalResizeHandle';
+import { WidgetCornerResizeHandle } from '@widgets/components/WidgetCornerResizeHandle';
 import { WidgetSettingsPanel } from '@widgets/components/WidgetSettingsPanel';
 import { WidgetTabBar } from '@widgets/components/WidgetTabBar';
 import type { TabFilter } from '@widgets/components/WidgetTabBar';
@@ -61,6 +64,8 @@ export function Widget() {
 
   const loadConfig = useDashboardConfig((s) => s.load);
   const getVisibleWidgets = useDashboardConfig((s) => s.getVisibleWidgets);
+  const resizeWidget = useDashboardConfig((s) => s.resizeWidget);
+  const resizeWidgetHeight = useDashboardConfig((s) => s.resizeWidgetHeight);
 
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [showLayoutSelector, setShowLayoutSelector] = useState(false);
@@ -627,7 +632,37 @@ export function Widget() {
                           }
                           style={{ gridRow: `span ${instance.rowSpan} / span ${instance.rowSpan}` }}
                         >
-                          <WidgetCard definition={definition} onNavigate={handleWidgetNavigate} />
+                          {/* 대시보드와 동일한 리사이즈 그립 — 카드 호버 시 표시 (group-hover) */}
+                          <div className="relative group/widget h-full">
+                            <div className="h-full">
+                              <WidgetCard
+                                definition={definition}
+                                onNavigate={handleWidgetNavigate}
+                              />
+                            </div>
+                            <WidgetResizeHandle
+                              currentSpan={instance.colSpan}
+                              minSpan={definition.minSize.w as 1 | 2 | 3 | 4}
+                              onResize={(colSpan) => resizeWidget(instance.widgetId, colSpan)}
+                            />
+                            <WidgetVerticalResizeHandle
+                              currentRowSpan={instance.rowSpan}
+                              minRowSpan={definition.minSize.h}
+                              onResize={(rowSpan) => resizeWidgetHeight(instance.widgetId, rowSpan)}
+                            />
+                            <WidgetCornerResizeHandle
+                              currentColSpan={instance.colSpan}
+                              currentRowSpan={instance.rowSpan}
+                              minColSpan={definition.minSize.w as 1 | 2 | 3 | 4}
+                              minRowSpan={definition.minSize.h}
+                              onResize={(colSpan, rowSpan) => {
+                                if (colSpan !== instance.colSpan)
+                                  resizeWidget(instance.widgetId, colSpan);
+                                if (rowSpan !== instance.rowSpan)
+                                  resizeWidgetHeight(instance.widgetId, rowSpan);
+                              }}
+                            />
+                          </div>
                         </div>
                       );
                     })}

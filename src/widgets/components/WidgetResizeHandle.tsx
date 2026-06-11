@@ -50,13 +50,15 @@ export function WidgetResizeHandle({ currentSpan, minSpan, onResize }: WidgetRes
 
       const gap = parseFloat(gridStyle.gap) || parseFloat(gridStyle.columnGap || '0') || 16;
       const colWidth = parseFloat(colWidths[0] ?? '0') || gridEl.clientWidth / maxCols;
+      // 위젯 모드 분할 레이아웃의 transform: scale() 보정 — 시각 px → 레이아웃 px
+      const scale = gridEl.getBoundingClientRect().width / gridEl.offsetWidth || 1;
 
       previewRef.current = startSpan;
       setIsDragging(true);
       setPreviewSpan(startSpan);
 
       const onMove = (ev: PointerEvent) => {
-        const deltaX = ev.clientX - startX;
+        const deltaX = (ev.clientX - startX) / scale;
         const deltaSpans = Math.round(deltaX / (colWidth + gap));
         const raw = startSpan + deltaSpans;
         const clamped = Math.max(minSpan, Math.min(maxCols, raw)) as 1 | 2 | 3 | 4;

@@ -6,9 +6,6 @@ interface WidgetVerticalResizeHandleProps {
   onResize: (rowSpan: number) => void;
 }
 
-const ROW_HEIGHT = 80;
-const GAP = 16;
-
 export function WidgetVerticalResizeHandle({
   currentRowSpan,
   minRowSpan,
@@ -32,13 +29,24 @@ export function WidgetVerticalResizeHandle({
       const startY = e.clientY;
       const startSpan = currentRowSpan;
 
+      // 그리드 컨테이너에서 줄 높이·간격을 직접 읽음 (대시보드 16px / 위젯 모드 12px 등 차이 대응)
+      let gridEl: HTMLElement | null = handleRef.current;
+      while (gridEl && !gridEl.classList.contains('grid')) {
+        gridEl = gridEl.parentElement;
+      }
+      const gridStyle = gridEl ? getComputedStyle(gridEl) : null;
+      const rowHeight = (gridStyle && parseFloat(gridStyle.gridAutoRows)) || 80;
+      const gap = (gridStyle && (parseFloat(gridStyle.rowGap) || parseFloat(gridStyle.gap))) || 16;
+      // 위젯 모드 분할 레이아웃의 transform: scale() 보정 — 시각 px → 레이아웃 px
+      const scale = gridEl ? gridEl.getBoundingClientRect().width / gridEl.offsetWidth || 1 : 1;
+
       previewRef.current = startSpan;
       setIsDragging(true);
       setPreviewSpan(startSpan);
 
       const onMove = (ev: PointerEvent) => {
-        const deltaY = ev.clientY - startY;
-        const deltaSpans = Math.round(deltaY / (ROW_HEIGHT + GAP));
+        const deltaY = (ev.clientY - startY) / scale;
+        const deltaSpans = Math.round(deltaY / (rowHeight + gap));
         const raw = startSpan + deltaSpans;
         const clamped = Math.max(minRowSpan, Math.min(12, raw));
         previewRef.current = clamped;
