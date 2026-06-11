@@ -83,7 +83,19 @@ async function driveFetch(url: string): Promise<Response> {
   } catch {
     throw new DriveBoardError('network', '네트워크 요청에 실패했습니다.');
   }
-  if (res.status === 404 || res.status === 403) {
+  if (res.status === 403) {
+    // 같은 403이라도 "API 키 referrer 차단"은 보드 삭제가 아니라 설정 문제다.
+    // (실사례: 키 허용 목록에 www.ssampin.com 누락 → 전 보드가 "공유 중지"로 오표시)
+    const body = await res.text().catch(() => '');
+    if (/referer|api key|keyInvalid|ipRefererBlocked|API_KEY/i.test(body)) {
+      throw new DriveBoardError(
+        'missing-key',
+        '읽기 키가 이 주소에서 차단되었습니다. (키 허용 목록 확인 필요)',
+      );
+    }
+    throw new DriveBoardError('gone', '보드를 더 이상 읽을 수 없습니다. (공유 중지 또는 삭제)');
+  }
+  if (res.status === 404) {
     throw new DriveBoardError('gone', '보드를 더 이상 읽을 수 없습니다. (공유 중지 또는 삭제)');
   }
   if (!res.ok) {
