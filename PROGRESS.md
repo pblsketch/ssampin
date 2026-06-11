@@ -2,9 +2,11 @@
 
 마지막 업데이트: 2026-06-11 KST
 
-## 🚀 v2.1.1 릴리즈 진행 중 (2026-06-11)
+## ✅ v2.1.1 릴리즈 완료 (2026-06-11, tag `v2.1.1`, main `62ba7de`)
 
-v2.1.0(2026-06-01) 이후 미배포 커밋 묶음. 검증 게이트 4/4 통과(tsc 0 / lint 0 errors(MemoFocus 1 기존 부채) / vitest 2097 passed / regression 34/34).
+v2.1.0(2026-06-01) 이후 미배포 커밋 묶음. 검증 게이트 4/4 통과(tsc 0 / lint 0 errors(MemoFocus 1 기존 부채) / vitest 2097 passed / regression 34/34). **8단계 릴리즈 워크플로우 전부 완료**: 버전 6+lock / release-notes.json / KB Q&A 6건 ingest(289 임베딩) / 노션 메인 callout / 커밋·푸시 / Windows 빌드 / macOS GHA / GitHub 릴리즈 8자산 + URL 8/8 302.
+
+**빌드 트러블 2건 복구**: (1) electron-builder 1차 실패 — `app-builder-lib/@electron/get/node_modules/fs-extra`(v8.1.0) lib/ 본체 누락(중단된 설치 잔재) → 동일 v8.1.0 최상위 사본 복사로 국소 복구(npm install·Electron 종료 불필요). (2) 2차 EPERM rename `win-unpacked.tmp`→`win-unpacked`(Defender 추출물 일시 잠금) → tmp 정리 후 재시도로 해소. **dev Electron 5프로세스는 node_modules/electron/dist 실행이라 종료 불필요했음**. 빌드 가드 `990268309712` app.asar 1건 박힘 확인.
 
 **사용자 노출(release-notes.json 7건)**: ① 서명받기(등록부) 5단계 마법사 전면 개편 + 수업반 명렬 + 임포트 열 매핑 ② 서명 공개 페이지 이름 찾기(초성 검색·소속·가나다) ③ 서명 일시 KST + 공개 링크 정정 ④ 협업 보드 실작동 복구(충돌 해소·도형 12종·교사 [보드 열기]) ⑤ 복합 설문 v2 미리 체험(베타, 옵트인 배너) ⑥ 위젯 카드 크기 조절(대시보드+위젯 모드+발견성) ⑦ "교실 약속 정하기" 진입 차단 해소.
 
