@@ -10,9 +10,12 @@ export default function ChatWidget() {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [hasNewMessage, setHasNewMessage] = useState(false);
-  // 교실 게시용 화면(/memo)은 학생이 보는 전자칠판이므로 챗봇 미노출.
+  // 교실 게시용 화면(/memo)·학생/보호자 공개 페이지(/submit, /check, /sign)는
+  // 교사 지원 챗봇이 불필요하고 모바일 제출 버튼을 가릴 수 있어 미노출.
   // hook 순서 보장을 위해 isClassroomDisplay 판정만 먼저 하고 return은 hook 뒤에서.
-  const isClassroomDisplay = pathname?.startsWith('/memo') ?? false;
+  const isClassroomDisplay = ['/memo', '/submit', '/check', '/sign'].some(
+    (prefix) => pathname?.startsWith(prefix) ?? false,
+  );
   const chat = useChatbot();
 
   // 웰컴 메시지 후 3초 뒤 알림 뱃지 표시

@@ -2,15 +2,17 @@
 
 interface OfflineNoticeProps {
   onRetry?: () => void;
+  /** 페이지별 안내 문구 (check 설문 페이지에서 재사용 — 기본은 과제 제출) */
+  message?: string;
 }
 
-export function OfflineNotice({ onRetry }: OfflineNoticeProps) {
+export function OfflineNotice({ onRetry, message }: OfflineNoticeProps) {
   return (
     <div role="alert" className="flex min-h-[60vh] items-center justify-center">
       <div className="text-center px-6">
         <div className="text-5xl mb-4">📡</div>
         <h2 className="text-xl font-bold text-sp-text mb-2">인터넷 연결이 필요합니다</h2>
-        <p className="text-sp-muted mb-2">과제 제출은 온라인에서만 가능합니다.</p>
+        <p className="text-sp-muted mb-2">{message ?? '과제 제출은 온라인에서만 가능합니다.'}</p>
         <p className="text-sp-muted/60 text-sm mb-6">인터넷 연결을 확인한 후 다시 시도해주세요.</p>
         <button
           onClick={onRetry ?? (() => window.location.reload())}

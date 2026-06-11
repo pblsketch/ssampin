@@ -97,8 +97,8 @@ export function SubmitForm({ assignment }: SubmitFormProps) {
 
     // 학년/반/번호 복합 매칭 우선
     let matches = hasGradeClass
-      ? assignment.students.filter((s) =>
-          s.number === num && s.grade === gradeNum && s.classNum === classNum,
+      ? assignment.students.filter(
+          (s) => s.number === num && s.grade === gradeNum && s.classNum === classNum,
         )
       : [];
 
@@ -130,12 +130,14 @@ export function SubmitForm({ assignment }: SubmitFormProps) {
 
   // 학년/반 입력 필요 여부: 명단에 학년 또는 반 정보가 조금이라도 있으면 true.
   // 담임반 / 전학공처럼 명단에 학년·반이 아예 없으면 입력 필드를 숨기고 필수 조건에서도 제외 (000 편법 회피).
-  const hasAnyGradeClass = !identifyByName && assignment.students.some(
-    (s) => s.grade != null || s.classNum != null,
-  );
+  const hasAnyGradeClass =
+    !identifyByName && assignment.students.some((s) => s.grade != null || s.classNum != null);
 
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files?.[0];
+    // 같은 파일을 다시 선택해도 onChange 가 발화하도록 항상 value 리셋
+    // (10MB 초과 후 같은 파일 재선택이 무반응이던 버그 — 2026-06-12 감사 submit ⑤)
+    e.target.value = '';
     if (!selected) return;
 
     const MAX_SIZE = 10 * 1024 * 1024; // 10MB
@@ -234,7 +236,8 @@ export function SubmitForm({ assignment }: SubmitFormProps) {
   const hasFile = file !== null;
   const hasText = textContent.trim().length > 0;
   const hasSubmitContent = hasFile || hasText;
-  const gradeClassOk = !hasAnyGradeClass || (studentGrade.trim().length > 0 && studentClass.trim().length > 0);
+  const gradeClassOk =
+    !hasAnyGradeClass || (studentGrade.trim().length > 0 && studentClass.trim().length > 0);
   // identifyByName 모드는 이름 1개만 필수, 그 외는 번호 + 이름
   const identityOk = identifyByName
     ? studentName.length > 0
@@ -251,7 +254,9 @@ export function SubmitForm({ assignment }: SubmitFormProps) {
         )}
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-sp-muted">
           <span>마감: {deadlineText}</span>
-          <span className={`font-medium ${remainingTime === '마감됨' ? 'text-red-400' : 'text-sp-accent'}`}>
+          <span
+            className={`font-medium ${remainingTime === '마감됨' ? 'text-red-400' : 'text-sp-accent'}`}
+          >
             남은 시간: {remainingTime}
           </span>
         </div>
@@ -261,63 +266,68 @@ export function SubmitForm({ assignment }: SubmitFormProps) {
 
       {/* Error */}
       {error && (
-        <div role="alert" className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm">
+        <div
+          role="alert"
+          className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm"
+        >
           {error}
         </div>
       )}
 
       {/* Student grade / class / number — identifyByName 모드면 통째로 숨김, 명단에 학년·반 정보가 없으면 번호만 표시 */}
       {!identifyByName && (
-      <div className="mb-4">
-        <label className="block text-sm font-medium text-sp-text mb-1.5">
-          {hasAnyGradeClass ? '학년 / 반 / 번호' : '번호'}
-        </label>
-        <div className="flex gap-2">
-          {hasAnyGradeClass && (
-            <>
-              <div className="flex-1">
-                <input
-                  id="student-grade"
-                  type="text"
-                  inputMode="numeric"
-                  value={studentGrade}
-                  onChange={(e) => setStudentGrade(e.target.value)}
-                  placeholder="학년"
-                  className="w-full px-4 py-3 bg-sp-card border border-sp-border rounded-lg text-sp-text placeholder-sp-muted/50 focus:outline-none focus:border-sp-accent transition-colors text-lg text-center"
-                />
-              </div>
-              <div className="flex-1">
-                <input
-                  id="student-class"
-                  type="text"
-                  inputMode="numeric"
-                  value={studentClass}
-                  onChange={(e) => setStudentClass(e.target.value)}
-                  placeholder="반"
-                  className="w-full px-4 py-3 bg-sp-card border border-sp-border rounded-lg text-sp-text placeholder-sp-muted/50 focus:outline-none focus:border-sp-accent transition-colors text-lg text-center"
-                />
-              </div>
-            </>
-          )}
-          <div className="flex-1">
-            <input
-              id="student-number"
-              type="number"
-              inputMode="numeric"
-              value={studentNumber}
-              onChange={(e) => setStudentNumber(e.target.value)}
-              placeholder="번호"
-              min={1}
-              className="w-full px-4 py-3 bg-sp-card border border-sp-border rounded-lg text-sp-text placeholder-sp-muted/50 focus:outline-none focus:border-sp-accent transition-colors text-lg text-center"
-            />
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-sp-text mb-1.5">
+            {hasAnyGradeClass ? '학년 / 반 / 번호' : '번호'}
+          </label>
+          <div className="flex gap-2">
+            {hasAnyGradeClass && (
+              <>
+                <div className="flex-1">
+                  <input
+                    id="student-grade"
+                    type="text"
+                    inputMode="numeric"
+                    value={studentGrade}
+                    onChange={(e) => setStudentGrade(e.target.value)}
+                    placeholder="학년"
+                    className="w-full px-4 py-3 bg-sp-card border border-sp-border rounded-lg text-sp-text placeholder-sp-muted/50 focus:outline-none focus:border-sp-accent transition-colors text-lg text-center"
+                  />
+                </div>
+                <div className="flex-1">
+                  <input
+                    id="student-class"
+                    type="text"
+                    inputMode="numeric"
+                    value={studentClass}
+                    onChange={(e) => setStudentClass(e.target.value)}
+                    placeholder="반"
+                    className="w-full px-4 py-3 bg-sp-card border border-sp-border rounded-lg text-sp-text placeholder-sp-muted/50 focus:outline-none focus:border-sp-accent transition-colors text-lg text-center"
+                  />
+                </div>
+              </>
+            )}
+            <div className="flex-1">
+              <input
+                id="student-number"
+                type="number"
+                inputMode="numeric"
+                value={studentNumber}
+                onChange={(e) => setStudentNumber(e.target.value)}
+                placeholder="번호"
+                min={1}
+                className="w-full px-4 py-3 bg-sp-card border border-sp-border rounded-lg text-sp-text placeholder-sp-muted/50 focus:outline-none focus:border-sp-accent transition-colors text-lg text-center"
+              />
+            </div>
           </div>
         </div>
-      </div>
       )}
 
       {/* Student name */}
       <div className="mb-4">
-        <label htmlFor="student-name" className="block text-sm font-medium text-sp-text mb-1.5">이름</label>
+        <label htmlFor="student-name" className="block text-sm font-medium text-sp-text mb-1.5">
+          이름
+        </label>
         <input
           id="student-name"
           type="text"
@@ -325,110 +335,124 @@ export function SubmitForm({ assignment }: SubmitFormProps) {
           onChange={(e) => {
             setStudentName(e.target.value);
             const val = e.target.value;
-            if (!val) { setNameWarning(false); return; }
+            if (!val) {
+              setNameWarning(false);
+              return;
+            }
             const gradeNum = parseInt(studentGrade, 10);
             const classNum = parseInt(studentClass, 10);
             const num = parseInt(studentNumber, 10);
             const hasGradeClassInput = !isNaN(gradeNum) && !isNaN(classNum);
             // 명단에 학년·반이 있고 사용자가 입력한 경우에만 복합 매칭. 번호 + 이름만으로 매칭되는 담임반/전학공 케이스 지원.
-            const found = hasAnyGradeClass && hasGradeClassInput && !isNaN(num)
-              ? assignment.students.some((s) => s.name === val && s.grade === gradeNum && s.classNum === classNum && s.number === num)
-              : !isNaN(num)
-                ? assignment.students.some((s) => s.name === val && s.number === num)
-                : assignment.students.some((s) => s.name === val);
+            const found =
+              hasAnyGradeClass && hasGradeClassInput && !isNaN(num)
+                ? assignment.students.some(
+                    (s) =>
+                      s.name === val &&
+                      s.grade === gradeNum &&
+                      s.classNum === classNum &&
+                      s.number === num,
+                  )
+                : !isNaN(num)
+                  ? assignment.students.some((s) => s.name === val && s.number === num)
+                  : assignment.students.some((s) => s.name === val);
             setNameWarning(!found);
           }}
           placeholder="이름을 입력하세요"
           className="w-full px-4 py-3 bg-sp-card border border-sp-border rounded-lg text-sp-text placeholder-sp-muted/50 focus:outline-none focus:border-sp-accent transition-colors text-lg"
         />
-        {nameWarning && (
-          <p className="text-amber-400 text-xs mt-1">명단에 없는 학생입니다</p>
-        )}
+        {nameWarning && <p className="text-amber-400 text-xs mt-1">명단에 없는 학생입니다</p>}
       </div>
 
       <div className="h-px bg-sp-border/50 my-6" />
 
       {/* File selection */}
       {showFile && (
-      <div className="mb-5">
-        <label className="block text-sm font-medium text-sp-text mb-1.5">📎 파일 첨부{st === 'both' && <span className="text-sp-muted font-normal"> (선택)</span>}</label>
+        <div className="mb-5">
+          <label className="block text-sm font-medium text-sp-text mb-1.5">
+            📎 파일 첨부
+            {st === 'both' && <span className="text-sp-muted font-normal"> (선택)</span>}
+          </label>
 
-        {file ? (
-          <div className="flex items-center gap-3 p-3 bg-sp-card border border-sp-accent/30 rounded-lg">
-            <span className="text-sp-accent text-lg">📎</span>
-            <div className="flex-1 min-w-0">
-              <p className="text-sp-text text-sm truncate">{file.name}</p>
-              <p className="text-sp-muted text-xs">{(file.size / 1024 / 1024).toFixed(1)} MB</p>
+          {file ? (
+            <div className="flex items-center gap-3 p-3 bg-sp-card border border-sp-accent/30 rounded-lg">
+              <span className="text-sp-accent text-lg">📎</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-sp-text text-sm truncate">{file.name}</p>
+                <p className="text-sp-muted text-xs">{(file.size / 1024 / 1024).toFixed(1)} MB</p>
+              </div>
+              <button
+                onClick={() => setFile(null)}
+                aria-label="파일 제거"
+                className="text-sp-muted hover:text-red-400 transition-colors text-sm"
+              >
+                ✕
+              </button>
             </div>
-            <button
-              onClick={() => setFile(null)}
-              aria-label="파일 제거"
-              className="text-sp-muted hover:text-red-400 transition-colors text-sm"
-            >
-              ✕
-            </button>
-          </div>
-        ) : (
-          <div className="flex gap-2">
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              aria-label="파일 선택"
-              className="flex-1 px-4 py-3 bg-sp-card border border-sp-border border-dashed rounded-lg text-sp-muted hover:border-sp-accent/50 hover:text-sp-text transition-colors flex items-center justify-center gap-2 text-sm"
-            >
-              📎 파일 선택
-            </button>
-            <button
-              onClick={() => cameraInputRef.current?.click()}
-              aria-label="카메라 촬영"
-              className="flex-1 px-4 py-3 bg-sp-card border border-sp-border border-dashed rounded-lg text-sp-muted hover:border-sp-accent/50 hover:text-sp-text transition-colors flex items-center justify-center gap-2 text-sm"
-            >
-              📷 카메라
-            </button>
-          </div>
-        )}
+          ) : (
+            <div className="flex gap-2">
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                aria-label="파일 선택"
+                className="flex-1 px-4 py-3 bg-sp-card border border-sp-border border-dashed rounded-lg text-sp-muted hover:border-sp-accent/50 hover:text-sp-text transition-colors flex items-center justify-center gap-2 text-sm"
+              >
+                📎 파일 선택
+              </button>
+              <button
+                onClick={() => cameraInputRef.current?.click()}
+                aria-label="카메라 촬영"
+                className="flex-1 px-4 py-3 bg-sp-card border border-sp-border border-dashed rounded-lg text-sp-muted hover:border-sp-accent/50 hover:text-sp-text transition-colors flex items-center justify-center gap-2 text-sm"
+              >
+                📷 카메라
+              </button>
+            </div>
+          )}
 
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept={acceptAttr}
-          onChange={handleFileChange}
-          className="hidden"
-        />
-        <input
-          ref={cameraInputRef}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          onChange={handleFileChange}
-          className="hidden"
-        />
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={acceptAttr}
+            onChange={handleFileChange}
+            className="hidden"
+          />
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={handleFileChange}
+            className="hidden"
+          />
 
-        <p className="text-xs text-sp-muted/60 mt-1.5">
-          허용: {FILE_TYPE_LABELS[assignment.fileTypeRestriction] ?? '모든 파일'} · 최대 10MB
-        </p>
-      </div>
+          <p className="text-xs text-sp-muted/60 mt-1.5">
+            허용: {FILE_TYPE_LABELS[assignment.fileTypeRestriction] ?? '모든 파일'} · 최대 10MB
+          </p>
+        </div>
       )}
 
       {/* Text submission */}
       {showText && (
-      <div className="mb-6">
-        <label htmlFor="text-content" className="block text-sm font-medium text-sp-text mb-1.5">✏️ 텍스트 입력{st === 'both' && <span className="text-sp-muted font-normal"> (선택)</span>}</label>
-        <textarea
-          id="text-content"
-          value={textContent}
-          onChange={(e) => setTextContent(e.target.value)}
-          // 한글 IME 조합 중에 일부 모바일 브라우저에서 onChange 반영이 늦어, 제출 버튼이 비활성 상태로 잘못 표시되는 문제 방지.
-          onCompositionEnd={(e) => setTextContent(e.currentTarget.value)}
-          placeholder="과제 내용을 입력하세요 (선택)"
-          rows={5}
-          className="w-full px-4 py-3 bg-sp-card border border-sp-border rounded-lg text-sp-text placeholder-sp-muted/50 focus:outline-none focus:border-sp-accent transition-colors resize-none text-sm"
-        />
-        {st === 'both' && (
-          <p className="text-xs text-sp-muted/60 mt-1.5">
-            파일과 텍스트를 함께 제출하거나, 하나만 제출할 수도 있습니다
-          </p>
-        )}
-      </div>
+        <div className="mb-6">
+          <label htmlFor="text-content" className="block text-sm font-medium text-sp-text mb-1.5">
+            ✏️ 텍스트 입력
+            {st === 'both' && <span className="text-sp-muted font-normal"> (선택)</span>}
+          </label>
+          <textarea
+            id="text-content"
+            value={textContent}
+            onChange={(e) => setTextContent(e.target.value)}
+            // 한글 IME 조합 중에 일부 모바일 브라우저에서 onChange 반영이 늦어, 제출 버튼이 비활성 상태로 잘못 표시되는 문제 방지.
+            onCompositionEnd={(e) => setTextContent(e.currentTarget.value)}
+            placeholder="과제 내용을 입력하세요 (선택)"
+            rows={5}
+            className="w-full px-4 py-3 bg-sp-card border border-sp-border rounded-lg text-sp-text placeholder-sp-muted/50 focus:outline-none focus:border-sp-accent transition-colors resize-none text-sm"
+          />
+          {st === 'both' && (
+            <p className="text-xs text-sp-muted/60 mt-1.5">
+              파일과 텍스트를 함께 제출하거나, 하나만 제출할 수도 있습니다
+            </p>
+          )}
+        </div>
       )}
 
       {/* Submit button */}
@@ -442,11 +466,7 @@ export function SubmitForm({ assignment }: SubmitFormProps) {
             : 'bg-sp-border text-sp-muted cursor-not-allowed'
         }`}
       >
-        {isSubmitting ? (
-          <>⏳ 제출 중...</>
-        ) : (
-          <>📤 제출하기</>
-        )}
+        {isSubmitting ? <>⏳ 제출 중...</> : <>📤 제출하기</>}
       </button>
     </div>
   );

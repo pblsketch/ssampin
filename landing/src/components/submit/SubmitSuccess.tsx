@@ -32,7 +32,18 @@ export function SubmitSuccess({ assignment, submittedInfo, onResubmit }: SubmitS
           </div>
           <div>
             <p className="text-xs text-sp-muted mb-0.5">이름</p>
-            <p className="text-sp-text">{submittedInfo.grade}학년 {submittedInfo.class}반 {submittedInfo.number}번 {submittedInfo.name}</p>
+            {/* 학년/반 빈값(이름 식별 모드·담임반 명단)이면 "학년 반 7번"처럼 깨진 문장이
+                렌더되던 버그 — 값이 있는 항목만 조합 (2026-06-12 감사 submit ⑤) */}
+            <p className="text-sp-text">
+              {[
+                submittedInfo.grade ? `${submittedInfo.grade}학년` : null,
+                submittedInfo.class ? `${submittedInfo.class}반` : null,
+                `${submittedInfo.number}번`,
+                submittedInfo.name,
+              ]
+                .filter(Boolean)
+                .join(' ')}
+            </p>
           </div>
           {submittedInfo.fileName && (
             <div>
@@ -43,7 +54,9 @@ export function SubmitSuccess({ assignment, submittedInfo, onResubmit }: SubmitS
           {submittedInfo.textContent && (
             <div>
               <p className="text-xs text-sp-muted mb-0.5">텍스트</p>
-              <p className="text-sp-text text-sm line-clamp-3 whitespace-pre-wrap">{submittedInfo.textContent}</p>
+              <p className="text-sp-text text-sm line-clamp-3 whitespace-pre-wrap">
+                {submittedInfo.textContent}
+              </p>
             </div>
           )}
           <div>

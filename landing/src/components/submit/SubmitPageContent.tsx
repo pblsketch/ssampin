@@ -5,6 +5,7 @@ import type { AssignmentPublic } from './submitApi';
 import { getAssignmentPublic } from './submitApi';
 import { SubmitForm } from './SubmitForm';
 import { OfflineNotice } from './OfflineNotice';
+import { PublicPageHeader, PublicPageFooter } from '../common/PublicPageHeader';
 
 interface SubmitPageContentProps {
   assignmentId: string;
@@ -50,20 +51,24 @@ export function SubmitPageContent({ assignmentId }: SubmitPageContentProps) {
   return (
     <div className="min-h-screen bg-sp-bg">
       {/* Header */}
-      <header className="border-b border-sp-border/50 bg-sp-bg/80 backdrop-blur-sm sticky top-0 z-10">
-        <div className="mx-auto max-w-lg px-4 py-3 text-center">
-          <h1 className="text-lg font-bold text-sp-text">📝 쌤핀 과제수합</h1>
-        </div>
-      </header>
+      <PublicPageHeader title="쌤핀 과제수합" />
 
       {/* Main */}
       <main className="mx-auto max-w-lg px-4 py-8">
         {!isOnline ? (
           <div role="alert">
-            <OfflineNotice onRetry={() => { setIsOnline(navigator.onLine); }} />
+            <OfflineNotice
+              onRetry={() => {
+                setIsOnline(navigator.onLine);
+              }}
+            />
           </div>
         ) : isLoading ? (
-          <div role="status" aria-label="로딩 중" className="flex min-h-[60vh] items-center justify-center">
+          <div
+            role="status"
+            aria-label="로딩 중"
+            className="flex min-h-[60vh] items-center justify-center"
+          >
             <div className="text-center">
               <div className="text-4xl mb-4 animate-pulse">📝</div>
               <p className="text-sp-muted">과제 정보를 불러오는 중...</p>
@@ -83,9 +88,7 @@ export function SubmitPageContent({ assignmentId }: SubmitPageContentProps) {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-sp-border/30 py-4 text-center">
-        <p className="text-xs text-sp-muted/40">Powered by 쌤핀</p>
-      </footer>
+      <PublicPageFooter />
     </div>
   );
 }

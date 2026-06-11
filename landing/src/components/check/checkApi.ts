@@ -4,8 +4,8 @@ const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '';
 function headers(): Record<string, string> {
   return {
     'Content-Type': 'application/json',
-    'apikey': SUPABASE_ANON_KEY,
-    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+    apikey: SUPABASE_ANON_KEY,
+    Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
   };
 }
 
@@ -38,14 +38,20 @@ interface SurveyRow {
   pin_hashes: Record<string, string> | null;
 }
 
-export async function getSurveyPublic(surveyId: string): Promise<SurveyPublic | null> {
+/** 네트워크/서버 오류 — "없는 설문"과 구분하기 위한 sentinel (2026-06-12 감사 check ⑤) */
+export const NETWORK_ERROR = 'network-error' as const;
+export type NetworkError = typeof NETWORK_ERROR;
+
+export async function getSurveyPublic(
+  surveyId: string,
+): Promise<SurveyPublic | null | NetworkError> {
   try {
     const res = await fetch(
       `${SUPABASE_URL}/rest/v1/surveys?id=eq.${surveyId}&select=id,title,description,questions,due_date,target_count,is_closed,pin_protection`,
       { headers: headers() },
     );
 
-    if (!res.ok) return null;
+    if (!res.ok) return NETWORK_ERROR;
     const rows = (await res.json()) as SurveyRow[];
     if (rows.length === 0) return null;
 
@@ -61,7 +67,8 @@ export async function getSurveyPublic(surveyId: string): Promise<SurveyPublic | 
       pinProtection: row.pin_protection ?? false,
     };
   } catch {
-    return null;
+    // fetch 실패(오프라인·DNS 등) — "설문을 찾을 수 없습니다" 오표시 방지
+    return NETWORK_ERROR;
   }
 }
 
@@ -100,13 +107,12 @@ export async function verifyPin(
   surveyId: string,
   studentNumber: number,
   pin: string,
-): Promise<boolean> {
+): Promise<boolean | NetworkError> {
   try {
-    const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/surveys?id=eq.${surveyId}&select=pin_hashes`,
-      { headers: headers() },
-    );
-    if (!res.ok) return false;
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/surveys?id=eq.${surveyId}&select=pin_hashes`, {
+      headers: headers(),
+    });
+    if (!res.ok) return NETWORK_ERROR;
     const rows = (await res.json()) as Array<{ pin_hashes: Record<string, string> | null }>;
     if (rows.length === 0) return false;
 
@@ -119,7 +125,8 @@ export async function verifyPin(
     const inputHash = await hashPin(pin);
     return inputHash === expectedHash;
   } catch {
-    return false;
+    // 네트워크 실패를 "PIN이 올바르지 않습니다"로 오표시하지 않도록 구분
+    return NETWORK_ERROR;
   }
 }
 
@@ -133,7 +140,7 @@ export async function submitSurveyResponse(data: {
       method: 'POST',
       headers: {
         ...headers(),
-        'Prefer': 'return=minimal',
+        Prefer: 'return=minimal',
       },
       body: JSON.stringify({
         survey_id: data.surveyId,
