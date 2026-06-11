@@ -4,12 +4,19 @@ interface WidgetVerticalResizeHandleProps {
   currentRowSpan: number;
   minRowSpan: number;
   onResize: (rowSpan: number) => void;
+  /** 드래그 시작/종료 알림 — 드래그 중 핸들 unmount 방지용 */
+  onDraggingChange?: (dragging: boolean) => void;
 }
 
 const ROW_HEIGHT = 80;
 const GAP = 16;
 
-export function WidgetVerticalResizeHandle({ currentRowSpan, minRowSpan, onResize }: WidgetVerticalResizeHandleProps) {
+export function WidgetVerticalResizeHandle({
+  currentRowSpan,
+  minRowSpan,
+  onResize,
+  onDraggingChange,
+}: WidgetVerticalResizeHandleProps) {
   const handleRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [previewSpan, setPreviewSpan] = useState(currentRowSpan);
@@ -20,39 +27,44 @@ export function WidgetVerticalResizeHandle({ currentRowSpan, minRowSpan, onResiz
     setPreviewSpan(currentRowSpan);
   }, [currentRowSpan]);
 
-  const handlePointerDown = useCallback((e: React.PointerEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const handlePointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
 
-    const startY = e.clientY;
-    const startSpan = currentRowSpan;
+      const startY = e.clientY;
+      const startSpan = currentRowSpan;
 
-    previewRef.current = startSpan;
-    setIsDragging(true);
-    setPreviewSpan(startSpan);
+      previewRef.current = startSpan;
+      setIsDragging(true);
+      setPreviewSpan(startSpan);
+      onDraggingChange?.(true);
 
-    const onMove = (ev: PointerEvent) => {
-      const deltaY = ev.clientY - startY;
-      const deltaSpans = Math.round(deltaY / (ROW_HEIGHT + GAP));
-      const raw = startSpan + deltaSpans;
-      const clamped = Math.max(minRowSpan, Math.min(12, raw));
-      previewRef.current = clamped;
-      setPreviewSpan(clamped);
-    };
+      const onMove = (ev: PointerEvent) => {
+        const deltaY = ev.clientY - startY;
+        const deltaSpans = Math.round(deltaY / (ROW_HEIGHT + GAP));
+        const raw = startSpan + deltaSpans;
+        const clamped = Math.max(minRowSpan, Math.min(12, raw));
+        previewRef.current = clamped;
+        setPreviewSpan(clamped);
+      };
 
-    const onUp = () => {
-      document.removeEventListener('pointermove', onMove);
-      document.removeEventListener('pointerup', onUp);
-      setIsDragging(false);
-      const finalSpan = previewRef.current;
-      if (finalSpan !== startSpan) {
-        onResize(finalSpan);
-      }
-    };
+      const onUp = () => {
+        document.removeEventListener('pointermove', onMove);
+        document.removeEventListener('pointerup', onUp);
+        setIsDragging(false);
+        onDraggingChange?.(false);
+        const finalSpan = previewRef.current;
+        if (finalSpan !== startSpan) {
+          onResize(finalSpan);
+        }
+      };
 
-    document.addEventListener('pointermove', onMove);
-    document.addEventListener('pointerup', onUp);
-  }, [currentRowSpan, minRowSpan, onResize]);
+      document.addEventListener('pointermove', onMove);
+      document.addEventListener('pointerup', onUp);
+    },
+    [currentRowSpan, minRowSpan, onResize, onDraggingChange],
+  );
 
   return (
     <>
@@ -66,7 +78,9 @@ export function WidgetVerticalResizeHandle({ currentRowSpan, minRowSpan, onResiz
           ${isDragging ? '!opacity-100' : ''}`}
       >
         {/* 시각적 그립 바 (가로) */}
-        <div className={`h-1 w-10 rounded-full transition-colors ${isDragging ? 'bg-sp-accent' : 'bg-sp-muted/40 hover:bg-sp-accent/70'}`} />
+        <div
+          className={`h-1 w-10 rounded-full transition-colors ${isDragging ? 'bg-sp-accent' : 'bg-sp-muted/40 hover:bg-sp-accent/70'}`}
+        />
       </div>
 
       {isDragging && (

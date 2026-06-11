@@ -24,7 +24,9 @@ interface SortableWidgetProps {
  * - 드래그 리스너(listeners)는 ⋮ 핸들 버튼에만 부착 → 카드 본문 클릭 보존
  * - 상단 오른쪽 60×60 quadrant hover zone → 300ms 후 핸들 그룹 표시
  *   (⋮ 드래그 + ✕ 숨기기 pill + absolute 리사이즈 핸들)
- * - 핸들 그룹: mouseEnter 300ms 후 표시, mouseLeave 100ms 후 숨김
+ * - 핸들 유지: 한번 표시되면 카드 내부에 마우스가 있는 동안 유지,
+ *   카드를 벗어나면 150ms 후 숨김 (리사이즈 핸들까지 이동 가능해야 함)
+ * - 리사이즈 드래그 중에는 마우스가 카드 밖으로 나가도 핸들 유지
  */
 export function SortableWidget({
   instance,
@@ -49,6 +51,8 @@ export function SortableWidget({
 
   // Quadrant-dwell hover state
   const [showHandles, setShowHandles] = useState(false);
+  // 리사이즈 드래그 중 — 마우스가 카드를 벗어나도 핸들을 유지
+  const [isResizing, setIsResizing] = useState(false);
   const showTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -60,11 +64,23 @@ export function SortableWidget({
     };
   }, []);
 
-  const handleZoneEnter = () => {
+  const cancelShowTimer = () => {
+    if (showTimerRef.current) {
+      clearTimeout(showTimerRef.current);
+      showTimerRef.current = null;
+    }
+  };
+
+  const cancelHideTimer = () => {
     if (hideTimerRef.current) {
       clearTimeout(hideTimerRef.current);
       hideTimerRef.current = null;
     }
+  };
+
+  // quadrant zone 진입: 300ms 머물면 핸들 표시
+  const handleZoneEnter = () => {
+    cancelHideTimer();
     if (!showHandles) {
       showTimerRef.current = setTimeout(() => {
         setShowHandles(true);
@@ -72,15 +88,24 @@ export function SortableWidget({
     }
   };
 
+  // quadrant zone 이탈: 표시 대기만 취소 (숨김은 카드 전체 이탈에서 처리)
   const handleZoneLeave = () => {
-    if (showTimerRef.current) {
-      clearTimeout(showTimerRef.current);
-      showTimerRef.current = null;
-    }
+    cancelShowTimer();
+  };
+
+  // 카드 전체 진입/이탈: 핸들이 표시된 뒤에는 카드 안에서 자유롭게 이동 가능
+  const handleCardEnter = () => {
+    cancelHideTimer();
+  };
+
+  const handleCardLeave = () => {
+    cancelShowTimer();
     hideTimerRef.current = setTimeout(() => {
       setShowHandles(false);
-    }, 100);
+    }, 150);
   };
+
+  const handlesVisible = showHandles || isResizing;
 
   return (
     <div
@@ -88,7 +113,11 @@ export function SortableWidget({
       style={style}
       className={`${spanClass} ${isDragging ? 'opacity-50 z-50' : ''}`}
     >
-      <div className="relative group/widget h-full">
+      <div
+        className="relative group/widget h-full"
+        onMouseEnter={handleCardEnter}
+        onMouseLeave={handleCardLeave}
+      >
         <div
           className="h-full overflow-hidden bg-sp-card flex flex-col"
           style={{
@@ -111,12 +140,8 @@ export function SortableWidget({
         />
 
         {/* ⋮ 드래그 + ✕ 숨기기 pill — quadrant hover 후 300ms 표시 */}
-        {showHandles && (
-          <div
-            className="absolute top-1.5 right-1.5 z-20 flex items-center gap-0.5 bg-sp-card/95 border border-sp-border/60 rounded-lg px-1 py-0.5 shadow-md"
-            onMouseEnter={handleZoneEnter}
-            onMouseLeave={handleZoneLeave}
-          >
+        {handlesVisible && (
+          <div className="absolute top-1.5 right-1.5 z-20 flex items-center gap-0.5 bg-sp-card/95 border border-sp-border/60 rounded-lg px-1 py-0.5 shadow-md">
             {/* ⋮ 드래그 핸들 — listeners 여기에만 부착 */}
             <button
               {...attributes}
@@ -161,17 +186,19 @@ export function SortableWidget({
         )}
 
         {/* 리사이즈 핸들 — quadrant hover 시 표시 (absolute 위치, 카드 엣지에 부착) */}
-        {showHandles && (
+        {handlesVisible && (
           <>
             <WidgetResizeHandle
               currentSpan={instance.colSpan}
               minSpan={definition.minSize.w as 1 | 2 | 3 | 4}
               onResize={onResize}
+              onDraggingChange={setIsResizing}
             />
             <WidgetVerticalResizeHandle
               currentRowSpan={instance.rowSpan}
               minRowSpan={definition.minSize.h}
               onResize={onResizeHeight}
+              onDraggingChange={setIsResizing}
             />
           </>
         )}

@@ -4,6 +4,8 @@ interface WidgetResizeHandleProps {
   currentSpan: 1 | 2 | 3 | 4;
   minSpan: 1 | 2 | 3 | 4;
   onResize: (colSpan: 1 | 2 | 3 | 4) => void;
+  /** 드래그 시작/종료 알림 — 드래그 중 핸들 unmount 방지용 */
+  onDraggingChange?: (dragging: boolean) => void;
 }
 
 const SPAN_LABELS: Record<number, string> = {
@@ -17,7 +19,12 @@ const SPAN_LABELS: Record<number, string> = {
  * 위젯 가로 크기 조절 — 우측 가장자리 드래그
  * 그리드 컬럼 너비를 계산하여 드래그 거리에 따라 colSpan 변경
  */
-export function WidgetResizeHandle({ currentSpan, minSpan, onResize }: WidgetResizeHandleProps) {
+export function WidgetResizeHandle({
+  currentSpan,
+  minSpan,
+  onResize,
+  onDraggingChange,
+}: WidgetResizeHandleProps) {
   const handleRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [previewSpan, setPreviewSpan] = useState(currentSpan);
@@ -28,54 +35,59 @@ export function WidgetResizeHandle({ currentSpan, minSpan, onResize }: WidgetRes
     setPreviewSpan(currentSpan);
   }, [currentSpan]);
 
-  const handlePointerDown = useCallback((e: React.PointerEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const handlePointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
 
-    const startX = e.clientX;
-    const startSpan = currentSpan;
+      const startX = e.clientX;
+      const startSpan = currentSpan;
 
-    // 그리드 컨테이너 탐색 (Tailwind 'grid' 클래스)
-    let gridEl: HTMLElement | null = handleRef.current;
-    while (gridEl && !gridEl.classList.contains('grid')) {
-      gridEl = gridEl.parentElement;
-    }
-    if (!gridEl) return;
-
-    const gridStyle = getComputedStyle(gridEl);
-    const colWidths = gridStyle.gridTemplateColumns.split(' ');
-    const maxCols = colWidths.length;
-    if (maxCols <= 1) return; // 1열 레이아웃에서는 리사이즈 불가
-
-    const gap = parseFloat(gridStyle.gap) || parseFloat(gridStyle.columnGap || '0') || 16;
-    const colWidth = parseFloat(colWidths[0] ?? '0') || gridEl.clientWidth / maxCols;
-
-    previewRef.current = startSpan;
-    setIsDragging(true);
-    setPreviewSpan(startSpan);
-
-    const onMove = (ev: PointerEvent) => {
-      const deltaX = ev.clientX - startX;
-      const deltaSpans = Math.round(deltaX / (colWidth + gap));
-      const raw = startSpan + deltaSpans;
-      const clamped = Math.max(minSpan, Math.min(maxCols, raw)) as 1 | 2 | 3 | 4;
-      previewRef.current = clamped;
-      setPreviewSpan(clamped);
-    };
-
-    const onUp = () => {
-      document.removeEventListener('pointermove', onMove);
-      document.removeEventListener('pointerup', onUp);
-      setIsDragging(false);
-      const finalSpan = previewRef.current as 1 | 2 | 3 | 4;
-      if (finalSpan !== startSpan) {
-        onResize(finalSpan);
+      // 그리드 컨테이너 탐색 (Tailwind 'grid' 클래스)
+      let gridEl: HTMLElement | null = handleRef.current;
+      while (gridEl && !gridEl.classList.contains('grid')) {
+        gridEl = gridEl.parentElement;
       }
-    };
+      if (!gridEl) return;
 
-    document.addEventListener('pointermove', onMove);
-    document.addEventListener('pointerup', onUp);
-  }, [currentSpan, minSpan, onResize]);
+      const gridStyle = getComputedStyle(gridEl);
+      const colWidths = gridStyle.gridTemplateColumns.split(' ');
+      const maxCols = colWidths.length;
+      if (maxCols <= 1) return; // 1열 레이아웃에서는 리사이즈 불가
+
+      const gap = parseFloat(gridStyle.gap) || parseFloat(gridStyle.columnGap || '0') || 16;
+      const colWidth = parseFloat(colWidths[0] ?? '0') || gridEl.clientWidth / maxCols;
+
+      previewRef.current = startSpan;
+      setIsDragging(true);
+      setPreviewSpan(startSpan);
+      onDraggingChange?.(true);
+
+      const onMove = (ev: PointerEvent) => {
+        const deltaX = ev.clientX - startX;
+        const deltaSpans = Math.round(deltaX / (colWidth + gap));
+        const raw = startSpan + deltaSpans;
+        const clamped = Math.max(minSpan, Math.min(maxCols, raw)) as 1 | 2 | 3 | 4;
+        previewRef.current = clamped;
+        setPreviewSpan(clamped);
+      };
+
+      const onUp = () => {
+        document.removeEventListener('pointermove', onMove);
+        document.removeEventListener('pointerup', onUp);
+        setIsDragging(false);
+        onDraggingChange?.(false);
+        const finalSpan = previewRef.current as 1 | 2 | 3 | 4;
+        if (finalSpan !== startSpan) {
+          onResize(finalSpan);
+        }
+      };
+
+      document.addEventListener('pointermove', onMove);
+      document.addEventListener('pointerup', onUp);
+    },
+    [currentSpan, minSpan, onResize, onDraggingChange],
+  );
 
   return (
     <>
@@ -89,8 +101,11 @@ export function WidgetResizeHandle({ currentSpan, minSpan, onResize }: WidgetRes
           ${isDragging ? '!opacity-100' : ''}`}
       >
         {/* 시각적 그립 바 */}
-        <div className={`w-1 h-10 rounded-full transition-colors ${isDragging ? 'bg-sp-accent' : 'bg-sp-muted/40 hover:bg-sp-accent/70'
-          }`} />
+        <div
+          className={`w-1 h-10 rounded-full transition-colors ${
+            isDragging ? 'bg-sp-accent' : 'bg-sp-muted/40 hover:bg-sp-accent/70'
+          }`}
+        />
       </div>
 
       {/* 드래그 중 프리뷰 오버레이 */}
