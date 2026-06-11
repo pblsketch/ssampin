@@ -99,19 +99,36 @@ export function generateBoardHTML(input: GenerateBoardHtmlInput): string {
     .error-body { font-size: 14px; color: #1e293b; margin-bottom: 8px; line-height: 1.5; }
     .error-hint { font-size: 12px; color: #94a3b8; line-height: 1.5; }
 
-    /* PDCA-1 AC-1.0: 좌측 board toolbar scaffold — 스티커 5색 + 도형 9 native + 3 시각 동등(plan AC-2.2) 진입점 placeholder.
-       실제 도구 활성화(setActiveTool, customData.authorAwarenessId, fillColor 토큰)는 AC-1.1 이후 연결. */
+    /* PDCA-1/2: board toolbar — 스티커 5색 + 도형 9 native + 3 시각 동등(plan AC-2.2).
+       스티커 = text 도구 + finalize 시 포스트잇 변환, 도형 = 도구형/스탬프형 분기 (script 참조).
+       위치: 우측 상단 고정. 좌측(12px)에 두면 Excalidraw 의 메뉴 드롭다운·속성 패널
+       (불투명도/레이어 island)과 겹쳐 뒤 창을 가린다 — 사용자 신고 2026-06-11.
+       Excalidraw 우측은 상단 toolbar 가운데 정렬이라 비어 있음. 접기 버튼으로 폭 좁은
+       화면(모바일)에서도 캔버스를 가리지 않게 한다. */
     #board-toolbar {
-      position: fixed; top: 60px; left: 12px; z-index: 9990;
+      position: fixed; top: 64px; right: 12px; z-index: 9990;
       background: rgba(255, 255, 255, 0.97);
       border: 1px solid #e2e8f0; border-radius: 12px;
-      padding: 10px 8px;
+      padding: 8px;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
       display: flex; flex-direction: column; gap: 10px;
       user-select: none;
       font-family: inherit;
+      max-height: calc(100vh - 140px);
+      overflow-y: auto;
     }
     #board-toolbar[hidden] { display: none !important; }
+    /* 접기 토글 헤더 — 접힌 상태에선 이 버튼만 남는다 */
+    #board-toolbar .toolbar-collapse {
+      width: 100%; height: 28px; border: 0; background: transparent;
+      cursor: pointer; padding: 0 4px;
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      font-size: 12px; font-weight: 700; color: #475569; font-family: inherit;
+    }
+    #board-toolbar .toolbar-collapse:hover { color: #1d4ed8; }
+    #board-toolbar .toolbar-collapse .chev { font-size: 11px; color: #94a3b8; }
+    #board-toolbar.collapsed { gap: 0; }
+    #board-toolbar.collapsed .tool-section { display: none; }
     #board-toolbar .tool-section { display: flex; flex-direction: column; gap: 4px; }
     #board-toolbar .section-label { font-size: 10px; color: #64748b; text-align: center; font-weight: 600; }
     #board-toolbar .swatch-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
@@ -187,16 +204,20 @@ export function generateBoardHTML(input: GenerateBoardHtmlInput): string {
   <!-- PDCA-1 Step 1.4 (AC-1.4): 권한 거부 toast. JS 에서 showToast(text) 호출 시 2.5초 페이드. -->
   <div id="board-toast" role="status" aria-live="polite"></div>
 
-  <!-- PDCA-1 AC-1.0: 좌측 board toolbar scaffold (placeholder). 실제 도구 활성화는 AC-1.1+ 에서 연결. -->
+  <!-- PDCA-1/2: 우측 board toolbar — 스티커 5색 + 도형 12종 + 격자 토글 (전부 활성, 접기 가능). -->
   <div id="board-toolbar" hidden aria-label="협업 보드 도구">
+    <button type="button" class="toolbar-collapse" data-toolbar-collapse aria-expanded="true" title="도구 모음 접기/펼치기">
+      <span>🧰 도구</span>
+      <span class="chev" aria-hidden="true">▲</span>
+    </button>
     <div class="tool-section">
       <div class="section-label">스티커</div>
       <div class="swatch-row">
-        <button type="button" class="swatch" data-color="yellow" aria-label="노란 스티커" aria-pressed="false" style="background:#FEF3C7"></button>
-        <button type="button" class="swatch" data-color="pink" aria-label="분홍 스티커" aria-pressed="false" style="background:#FCE7F3"></button>
-        <button type="button" class="swatch" data-color="blue" aria-label="파란 스티커" aria-pressed="false" style="background:#DBEAFE"></button>
-        <button type="button" class="swatch" data-color="green" aria-label="초록 스티커" aria-pressed="false" style="background:#D1FAE5"></button>
-        <button type="button" class="swatch" data-color="purple" aria-label="보라 스티커" aria-pressed="false" style="background:#EDE9FE"></button>
+        <button type="button" class="swatch" data-color="yellow" aria-label="노란 스티커 추가" title="노란 스티커 추가 — 클릭하면 화면 가운데에 생겨요" aria-pressed="false" style="background:#FEF3C7"></button>
+        <button type="button" class="swatch" data-color="pink" aria-label="분홍 스티커 추가" title="분홍 스티커 추가 — 클릭하면 화면 가운데에 생겨요" aria-pressed="false" style="background:#FCE7F3"></button>
+        <button type="button" class="swatch" data-color="blue" aria-label="파란 스티커 추가" title="파란 스티커 추가 — 클릭하면 화면 가운데에 생겨요" aria-pressed="false" style="background:#DBEAFE"></button>
+        <button type="button" class="swatch" data-color="green" aria-label="초록 스티커 추가" title="초록 스티커 추가 — 클릭하면 화면 가운데에 생겨요" aria-pressed="false" style="background:#D1FAE5"></button>
+        <button type="button" class="swatch" data-color="purple" aria-label="보라 스티커 추가" title="보라 스티커 추가 — 클릭하면 화면 가운데에 생겨요" aria-pressed="false" style="background:#EDE9FE"></button>
       </div>
     </div>
     <div class="tool-section">
@@ -230,7 +251,7 @@ export function generateBoardHTML(input: GenerateBoardHtmlInput): string {
     import React from 'react';
     import { createRoot } from 'react-dom/client';
     import ExcalidrawLib from '@excalidraw/excalidraw';
-    const { Excalidraw } = ExcalidrawLib;
+    const { Excalidraw, convertToExcalidrawElements } = ExcalidrawLib;
     import * as Y from 'yjs';
     import { WebsocketProvider } from 'y-websocket';
     import { ExcalidrawBinding, yjsToExcalidraw } from 'y-excalidraw';
@@ -314,6 +335,16 @@ export function generateBoardHTML(input: GenerateBoardHtmlInput): string {
     });
     nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') joinBtn.click(); });
 
+    // 교사 입장 (PDCA 리팩토링 2026-06-11): ?role=teacher 쿼리 → 이름 입력 없이 즉시 입장.
+    // 교사는 모든 요소 편집 가능 (선택 차단 가드 미적용).
+    // 신뢰 경계: 클라이언트 신뢰 — Plan ADR Consequences. 폐쇄 교실 환경(교사 PC + 학생 브라우저)
+    // 전제로 URL 파라미터 권한을 수용한다. Y.Doc 프로토콜 레벨 보호는 비목표.
+    const IS_TEACHER = new URLSearchParams(location.search).get('role') === 'teacher';
+    if (IS_TEACHER) {
+      joinModal.hidden = true;
+      startBoard('선생님');
+    }
+
     function startBoard(userName) {
       const ydoc = new Y.Doc();
       const yElements = ydoc.getArray('elements');
@@ -350,8 +381,23 @@ export function generateBoardHTML(input: GenerateBoardHtmlInput): string {
         colorLight: '#3b82f655',
       });
 
-      // PDCA-1 Step 1.1: 스티커 메모 closure state (toolbar 핸들러 ↔ Excalidraw onChange 공유)
-      // SP-1 PASS 근거: customData.authorAwarenessId 가 y-excalidraw 2.0.12 round-trip 안전 확인.
+      // ────────────────────────────────────────────────────────────────────
+      // PDCA-1/2 리팩토링 (2026-06-11): "되돌리기(revert) 가드" → "선택 차단 가드"
+      //
+      // 이전 구현은 onChange 마다 직전 스냅샷(lastSnapshot)과 비교해 남의 요소
+      // 변경을 revert 했다. 그러나 Excalidraw onChange 는 **원격(다른 학생) 변경이
+      // ExcalidrawBinding 으로 반영될 때도** 발생하므로, 학생 A 가 자기 메모를
+      // 움직이면 학생 B 클라이언트가 "남의 요소 mutation" 으로 오판해 revert →
+      // Y.Doc 재전파 → 서로 되돌리는 sync war + toast 도배가 발생했다
+      // (2인 이상 접속 시 협업 자체가 불능 — "잘 안되는" 근본 원인 1).
+      //
+      // 새 구조: Excalidraw 에서 요소를 이동/수정/삭제하려면 반드시 먼저 **선택**해야
+      // 한다는 점을 이용해 선택 단계에서 차단한다. selectedElementIds 는 로컬
+      // appState 라 Y.Doc 으로 전파되지 않으므로 원격 변경과 충돌할 수 없다.
+      // 판정 predicate 는 boardRules.canEditElement 와 동기 (inline 복제 — string template).
+      // 잔여 한계(주석으로 명시): 지우개 도구(E)는 선택 없이 삭제 가능 — 폐쇄 교실
+      // 신뢰 모델(Plan ADR)에서 수용, PDCA-5 권한 단계에서 재검토.
+      // ────────────────────────────────────────────────────────────────────
       // PDCA-1 Step 1.2: hex 값은 src/index.css 의 --sp-board-sticky-* 토큰과 hex 동기.
       // 학생 페이지는 inline HTML 이라 CSS 변수 직접 사용 어려움 — 두 곳 동시 갱신 필요.
       const STICKER_COLORS = {
@@ -362,22 +408,100 @@ export function generateBoardHTML(input: GenerateBoardHtmlInput): string {
         purple: '#EDE9FE', // --sp-board-sticky-purple
       };
       let currentExcalidrawAPI = null;
-      let activeStickerColor = null;
-      const processedTextIds = new Set();
-      // PDCA-1 Step 1.4 (AC-1.4): 권한 검사용 lastSnapshot.
-      // boardRules.canEditElement 와 동기 로직 (inline 복제 — generateBoardHTML 은 string template 이라 import 불가).
-      // 각 onChange 마다 elementId → 직전 element 객체 매핑을 유지해 version/isDeleted 변동을 검출.
-      const lastSnapshot = new Map();
+      let activeShapeKey = null; // 도구형 도형 버튼 (line/arrow/...) 활성 키
+      let stickerStampCount = 0; // 연속 추가 시 계단식 offset 용
+      // 한 번이라도 화면에 존재했던 요소 id — "신규 요소" 판정용.
+      // 원격 신규 요소도 즉시 등록되므로 내 작성자 id 로 잘못 태깅되지 않는다.
+      const knownElementIds = new Set();
       const myAwarenessId = String(provider.awareness.clientID);
-      // 학생 페이지(generateBoardHTML) 는 항상 role='student'. 교사 페이지(별도 React 컴포넌트) 는
-      // 자체 권한 처리를 가질 예정 (PDCA-3 design 단계 결정 — open-questions R-NEW-1 참조).
-      const MY_ROLE = 'student';
+      const MY_ROLE = IS_TEACHER ? 'teacher' : 'student';
       // boardRules.canEditElement 의 inline 복제. 변경 시 양쪽 동기 필수.
       function canEditElementInline(elementAuthorAwarenessId, currentAwarenessId, role) {
         if (!currentAwarenessId || currentAwarenessId.length === 0) return false;
         if (role === 'teacher') return true;
         if (!elementAuthorAwarenessId) return false;
         return elementAuthorAwarenessId === currentAwarenessId;
+      }
+
+      function randomVersionNonce() {
+        return Math.floor(Math.random() * 0x7fffffff);
+      }
+
+      // 작성자 customData — 모든 신규 로컬 요소에 부여 (근본 원인 2 해소:
+      // 이전엔 스티커에만 부여되어 학생이 그린 일반 도형/텍스트를 본인조차
+      // 다시 수정할 수 없었다. author 없음 → canEditElement false → 잠김).
+      function authorCustomData(userName, extra) {
+        return Object.assign({
+          authorAwarenessId: myAwarenessId,
+          authorName: userName,
+          createdAtIso: new Date().toISOString(),
+        }, extra || {});
+      }
+
+      // 스티커 메모 생성 방식 (2026-06-11 2차 수정):
+      // 처음엔 "색 선택 → text 도구 → 입력 완료 시 포스트잇 변환" 4단계 모드였는데,
+      // (a) 색을 눌러도 화면에 즉각 변화가 없어 "안 된다"로 보이고
+      // (b) Excalidraw 가 텍스트 편집 중 activeTool 을 되돌리면 모드가 풀리는
+      // 허점이 있었다 (사용자 신고: 스티커가 만들어지지 않음).
+      // → 도형 스탬프와 동일하게 **클릭 즉시 화면 중앙에 생성**으로 단순화.
+      // 생성 후 더블클릭으로 내용 편집 (Excalidraw 기본 bound text 편집).
+      function stampSticker(colorKey, userName) {
+        if (!currentExcalidrawAPI) return;
+        if (typeof convertToExcalidrawElements !== 'function') {
+          showToast('이 브라우저에서는 스티커를 추가할 수 없어요');
+          return;
+        }
+        const colorHex = STICKER_COLORS[colorKey] || '#FEF3C7';
+        const appState = currentExcalidrawAPI.getAppState();
+        const z = appState.zoom && appState.zoom.value ? appState.zoom.value : 1;
+        const cx = appState.width / (2 * z) - appState.scrollX;
+        const cy = appState.height / (2 * z) - appState.scrollY;
+        // 연속 추가 시 겹쳐서 안 보이는 일이 없도록 계단식 offset
+        const offset = (stickerStampCount % 6) * 22;
+        stickerStampCount += 1;
+        let converted;
+        try {
+          converted = convertToExcalidrawElements([{
+            type: 'rectangle',
+            x: cx - 90 + offset,
+            y: cy - 55 + offset,
+            width: 180,
+            height: 110,
+            backgroundColor: colorHex,
+            fillStyle: 'solid',
+            strokeColor: '#94a3b8',
+            strokeWidth: 1,
+            label: {
+              text: '⭐ ' + userName + '\\n메모를 입력하세요',
+              fontSize: 16,
+              textAlign: 'left',
+              verticalAlign: 'top',
+            },
+          }]);
+        } catch (err) {
+          console.warn('[board] 스티커 생성 실패:', err);
+          showToast('스티커 추가에 실패했어요. 다시 시도해주세요');
+          return;
+        }
+        const tagged = converted.map((el) => Object.assign({}, el, {
+          customData: authorCustomData(userName, {
+            stickerType: 'memo',
+            stickerColor: colorKey,
+          }),
+        }));
+        const selectedIds = {};
+        for (const el of tagged) {
+          knownElementIds.add(el.id);
+          selectedIds[el.id] = true;
+        }
+        const scene = currentExcalidrawAPI.getSceneElementsIncludingDeleted();
+        currentExcalidrawAPI.updateScene({
+          elements: scene.concat(tagged),
+          appState: { selectedElementIds: selectedIds },
+          commitToHistory: false,
+        });
+        currentExcalidrawAPI.setActiveTool({ type: 'selection' });
+        showToast('스티커를 더블클릭하면 내용을 쓸 수 있어요');
       }
 
       function App() {
@@ -404,72 +528,80 @@ export function generateBoardHTML(input: GenerateBoardHtmlInput): string {
           };
         }, [api]);
 
-        // PDCA-1 Step 1.1 + 1.4 (AC-1.1 + AC-1.4 + AC-1.5):
-        // (1) text element finalize 감지 시 작성자 라벨 prepend + sticker 배경색 + customData 주입
-        // (2) 다른 학생/템플릿 요소 mutation 감지 시 revert + toast (학생 권한 가드)
-        // (3) lastSnapshot 갱신 (다음 onChange 의 비교 기준)
+        // PDCA-1/2 리팩토링 onChange 파이프라인 (AC-1.1 + AC-1.4 + AC-1.5):
+        // (1) 선택 차단 가드 — 학생이 남의 요소를 선택하면 즉시 해제 + toast
+        // (2) 작성자 태깅 — 내가 만든 모든 신규 요소에 customData.authorAwarenessId 부여
+        //     (스티커는 stampSticker 가 생성 시점에 직접 태깅 — 여기 안 거침)
+        // (3) knownElementIds 등록 — 원격 요소 오태깅 방지
+        // (4) toolbar pressed 상태 ↔ 실제 활성 도구 동기화
         const handleSceneChange = React.useCallback((elements, appState) => {
-          if (appState && appState.editingElement) return; // inline 텍스트 편집 중이면 대기
+          // 사용자 조작 중(그리기 드래그/리사이즈/텍스트 편집)에는 요소를 건드리지
+          // 않는다 — finalize 후에만 변환·태깅. 조작 중 updateScene 은 입력을 끊는다.
+          const interacting = Boolean(
+            appState && (appState.draggingElement || appState.editingElement || appState.resizingElement)
+          );
+          const sel = (appState && appState.selectedElementIds) || {};
 
-          // (1) 권한 가드: lastSnapshot 과 비교해 mutation/deletion 검출.
-          // 신규 element (snapshot 에 없음) 은 항상 허용 — 학생이 본인 sticker 를 새로 만드는 경우.
-          let needsRevert = false;
-          const guarded = elements.map((el) => {
-            const snap = lastSnapshot.get(el.id);
-            if (!snap) return el;
-            const versionChanged = el.version !== snap.version;
-            const deletionChanged = el.isDeleted !== snap.isDeleted;
-            if (!versionChanged && !deletionChanged) return el;
-            const authorId = snap.customData && snap.customData.authorAwarenessId;
-            if (!canEditElementInline(authorId, myAwarenessId, MY_ROLE)) {
-              needsRevert = true;
-              return snap; // 직전 상태로 되돌림
-            }
-            return el;
-          });
-
-          let workingElements = needsRevert ? guarded : elements;
-          let needsRender = needsRevert;
-
-          // (2) sticker 주입: 권한 가드 통과한 경로에서만, 활성 색상이 있을 때만.
-          if (!needsRevert && activeStickerColor) {
-            workingElements = workingElements.map((el) => {
-              if (
-                el.type === 'text' &&
-                !el.isDeleted &&
-                !processedTextIds.has(el.id) &&
-                el.text && el.text.trim().length > 0 &&
-                !el.text.startsWith('⭐ ')
-              ) {
-                processedTextIds.add(el.id);
-                needsRender = true;
-                return {
-                  ...el,
-                  text: '⭐ ' + userName + '\\n' + el.text,
-                  backgroundColor: STICKER_COLORS[activeStickerColor] || '#FEF3C7',
-                  customData: {
-                    ...(el.customData || {}),
-                    authorAwarenessId: myAwarenessId,
-                    authorName: userName,
-                    stickerType: 'memo',
-                    stickerColor: activeStickerColor,
-                    createdAtIso: new Date().toISOString(),
-                  },
-                };
+          // (1) 선택 차단 가드 (학생만). 선택은 로컬 상태라 원격과 충돌 없음.
+          if (MY_ROLE === 'student') {
+            let blocked = false;
+            const nextSel = {};
+            for (const el of elements) {
+              if (el.isDeleted || !sel[el.id]) continue;
+              const author = el.customData && el.customData.authorAwarenessId;
+              if (author && !canEditElementInline(author, myAwarenessId, MY_ROLE)) {
+                blocked = true;
+              } else {
+                nextSel[el.id] = true;
               }
-              return el;
+            }
+            if (blocked && api) {
+              api.updateScene({ appState: { selectedElementIds: nextSel } });
+              showToast('다른 사람이 만든 것은 수정할 수 없어요');
+            }
+          }
+
+          let mutated = false;
+          let working = elements;
+
+          if (!interacting) {
+            // (2) 작성자 태깅: 내 선택에 들어있는 신규 미태깅 요소 = 내가 방금 만든 요소.
+            //     (Excalidraw 는 그리기 완료 직후 해당 요소를 선택 상태로 둔다.)
+            //     원격 신규 요소는 내 selectedElementIds 에 없으므로 태깅되지 않는다.
+            //     version/versionNonce 를 올려야 y-excalidraw 가 변경으로 인식해 전파한다.
+            working = working.map((el) => {
+              if (el.isDeleted) return el;
+              if (knownElementIds.has(el.id)) return el;
+              if (el.customData && el.customData.authorAwarenessId) return el;
+              if (!sel[el.id]) return el;
+              mutated = true;
+              return Object.assign({}, el, {
+                customData: Object.assign({}, el.customData || {}, authorCustomData(userName)),
+                version: el.version + 1,
+                versionNonce: randomVersionNonce(),
+              });
             });
           }
 
-          if (needsRender && api) {
-            api.updateScene({ elements: workingElements, commitToHistory: false });
+          if (mutated && api) {
+            api.updateScene({ elements: working, commitToHistory: false });
           }
-          if (needsRevert) showToast('다른 사람의 메모는 수정할 수 없어요');
 
-          // (3) snapshot 갱신: 우리가 화면에 띄운 (revert/inject 또는 그대로 둔) 상태를 기록.
-          // 이렇게 해야 revert 직후 발생하는 onChange 가 "또 다른 mutation" 으로 잘못 검출되지 않음.
-          lastSnapshot.clear();
-          for (const el of workingElements) lastSnapshot.set(el.id, el);
+          // (3) 알려진 id 등록. 단, 내가 아직 조작/선택 중인 미태깅 요소는 finalize 시
+          //     (2)에서 태깅해야 하므로 등록을 보류한다 (등록되면 신규 판정에서 제외됨).
+          for (const el of elements) {
+            if (!el.customData || !el.customData.authorAwarenessId) {
+              const isMineInProgress =
+                sel[el.id] ||
+                (appState && appState.draggingElement && appState.draggingElement.id === el.id) ||
+                (appState && appState.editingElement && appState.editingElement.id === el.id);
+              if (isMineInProgress) continue;
+            }
+            knownElementIds.add(el.id);
+          }
+
+          // (4) toolbar pressed 상태 동기화 (ESC·도구 자동 복귀 대응).
+          syncToolbarState(appState && appState.activeTool ? appState.activeTool.type : null);
         }, [api]);
 
         return React.createElement('div', { ref: containerRef, style: { height: '100vh' } },
@@ -534,8 +666,113 @@ export function generateBoardHTML(input: GenerateBoardHtmlInput): string {
       }
       installPalmRejection();
 
-      // PDCA-1 Step 1.0+1.1: toolbar 활성화.
-      // 스티커 swatch: 토글 + Excalidraw text tool 활성화 (Step 1.1). 도형 버튼: placeholder (Step 다음).
+      // ────────────────────────────────────────────────────────────────────
+      // PDCA-2 (AC-2.x): 도형 12종 활성화 — placeholder 제거 (근본 원인 4:
+      // 버튼이 보이는데 누르면 console.log 만 찍혀 "고장난 기능"으로 보였다).
+      //
+      // 두 갈래:
+      //  - 도구형(SHAPE_TOOL_MAP): Excalidraw native 도구 활성화 + appState 기본값
+      //    (둥근/직각 사각형, 단방향/양방향 화살표는 currentItem* 으로 표현)
+      //  - 스탬프형(STAMP_BUILDERS): native 도구가 없는 도형(삼각형·오각형·블록
+      //    화살표·꺾인 화살표)을 화면 중앙에 즉시 추가 (Plan "native 9 + 시각 동등 3")
+      // ────────────────────────────────────────────────────────────────────
+      const SHAPE_TOOL_MAP = {
+        'line': { type: 'line' },
+        'arrow': { type: 'arrow', appState: { currentItemStartArrowhead: null, currentItemEndArrowhead: 'arrow' } },
+        'rect': { type: 'rectangle', appState: { currentItemRoundness: 'sharp' } },
+        'rounded-rect': { type: 'rectangle', appState: { currentItemRoundness: 'round' } },
+        'ellipse': { type: 'ellipse' },
+        'diamond': { type: 'diamond' },
+        'text-box': { type: 'text' },
+        'bidirectional-equiv': { type: 'arrow', appState: { currentItemStartArrowhead: 'arrow', currentItemEndArrowhead: 'arrow' } },
+      };
+
+      // 정다각형 꼭짓점 (좌상단 0,0 기준 닫힌 polyline)
+      function regularPolygonPoints(sides, radius) {
+        const pts = [];
+        for (let i = 0; i <= sides; i++) {
+          const a = -Math.PI / 2 + (2 * Math.PI * i) / sides;
+          pts.push([
+            Math.round(radius + radius * Math.cos(a)),
+            Math.round(radius + radius * Math.sin(a)),
+          ]);
+        }
+        return pts;
+      }
+
+      const STAMP_BUILDERS = {
+        'triangle': () => ({ type: 'line', points: regularPolygonPoints(3, 65) }),
+        'pentagon-equiv': () => ({ type: 'line', points: regularPolygonPoints(5, 65) }),
+        'right-arrow': () => ({
+          type: 'line',
+          points: [[0, 20], [70, 20], [70, 0], [120, 40], [70, 80], [70, 60], [0, 60], [0, 20]],
+        }),
+        'elbow-arrow-equiv': () => ({
+          type: 'arrow',
+          points: [[0, 0], [90, 0], [90, 70]],
+          endArrowhead: 'arrow',
+        }),
+      };
+
+      function stampShape(key, userName) {
+        if (!currentExcalidrawAPI) return;
+        if (typeof convertToExcalidrawElements !== 'function') {
+          showToast('이 도형은 현재 브라우저에서 추가할 수 없어요');
+          return;
+        }
+        const appState = currentExcalidrawAPI.getAppState();
+        const z = appState.zoom && appState.zoom.value ? appState.zoom.value : 1;
+        const cx = appState.width / (2 * z) - appState.scrollX;
+        const cy = appState.height / (2 * z) - appState.scrollY;
+        const base = STAMP_BUILDERS[key]();
+        const skeleton = Object.assign({
+          x: cx - 65,
+          y: cy - 65,
+          strokeColor: '#1e293b',
+          backgroundColor: base.type === 'line' ? '#e2e8f0' : 'transparent',
+          fillStyle: 'solid',
+        }, base);
+        let converted;
+        try {
+          converted = convertToExcalidrawElements([skeleton]);
+        } catch (err) {
+          console.warn('[board] 도형 스탬프 실패:', key, err);
+          showToast('도형 추가에 실패했어요. 다시 시도해주세요');
+          return;
+        }
+        const tagged = converted.map((el) => Object.assign({}, el, {
+          customData: authorCustomData(userName, { stampShape: key }),
+        }));
+        const selectedIds = {};
+        for (const el of tagged) {
+          knownElementIds.add(el.id);
+          selectedIds[el.id] = true;
+        }
+        const scene = currentExcalidrawAPI.getSceneElementsIncludingDeleted();
+        currentExcalidrawAPI.updateScene({
+          elements: scene.concat(tagged),
+          appState: { selectedElementIds: selectedIds },
+          commitToHistory: false,
+        });
+        // 추가 직후 selection 도구 — 바로 끌어서 배치 가능
+        currentExcalidrawAPI.setActiveTool({ type: 'selection' });
+      }
+
+      // toolbar pressed 상태 ↔ Excalidraw 실제 활성 도구 동기화.
+      // ESC, 그리기 완료 후 selection 자동 복귀, 기본 toolbar 사용 시 호출됨.
+      // (스티커는 즉시 생성 방식이라 모드 상태가 없음 — 도형 도구만 동기화)
+      function syncToolbarState(toolType) {
+        const tb = document.getElementById('board-toolbar');
+        if (!tb || toolType === null) return;
+        if (activeShapeKey) {
+          const map = SHAPE_TOOL_MAP[activeShapeKey];
+          if (!map || map.type !== toolType) {
+            activeShapeKey = null;
+            tb.querySelectorAll('.shape-btn').forEach((el) => el.setAttribute('aria-pressed', 'false'));
+          }
+        }
+      }
+
       const toolbar = document.getElementById('board-toolbar');
       if (toolbar) {
         toolbar.hidden = false;
@@ -549,28 +786,49 @@ export function generateBoardHTML(input: GenerateBoardHtmlInput): string {
           if (!isSwatch && !isShape) return;
 
           if (isSwatch) {
-            const wasActive = btn.getAttribute('aria-pressed') === 'true';
-            toolbar.querySelectorAll('.swatch').forEach((el) => el.setAttribute('aria-pressed', 'false'));
-            if (wasActive) {
-              // 토글 OFF: 활성 색상 해제 + selection 도구로 복귀
-              activeStickerColor = null;
-              if (currentExcalidrawAPI) currentExcalidrawAPI.setActiveTool({ type: 'selection' });
-              return;
-            }
-            // 토글 ON: 색상 저장 + text 도구 활성화 (Excalidraw inline text editor 사용)
+            // 즉시 생성 방식 — 모드 토글 없음. 누름 표시는 짧게 깜빡여 피드백만.
             btn.setAttribute('aria-pressed', 'true');
-            activeStickerColor = btn.dataset.color || null;
-            if (currentExcalidrawAPI) currentExcalidrawAPI.setActiveTool({ type: 'text' });
+            setTimeout(() => btn.setAttribute('aria-pressed', 'false'), 250);
+            stampSticker(btn.dataset.color || 'yellow', userName);
             return;
           }
 
           if (isShape) {
-            // Step 1.0 placeholder — 다음 step 에서 setActiveTool(rectangle/line/...) 연결
+            const key = btn.dataset.shape || '';
+
+            if (STAMP_BUILDERS[key]) {
+              // 스탬프형: 즉시 캔버스 중앙에 추가 (누름 상태 유지 안 함)
+              stampShape(key, userName);
+              return;
+            }
+
+            const wasActive = btn.getAttribute('aria-pressed') === 'true';
             toolbar.querySelectorAll('.shape-btn').forEach((el) => el.setAttribute('aria-pressed', 'false'));
+            if (wasActive) {
+              activeShapeKey = null;
+              if (currentExcalidrawAPI) currentExcalidrawAPI.setActiveTool({ type: 'selection' });
+              return;
+            }
             btn.setAttribute('aria-pressed', 'true');
-            console.log('[toolbar] AC-1.0 shape placeholder:', btn.dataset.shape);
+            activeShapeKey = key;
+            const map = SHAPE_TOOL_MAP[key];
+            if (map && currentExcalidrawAPI) {
+              if (map.appState) currentExcalidrawAPI.updateScene({ appState: map.appState });
+              currentExcalidrawAPI.setActiveTool({ type: map.type });
+            }
           }
         });
+
+        // 접기/펼치기 토글 — 패널이 캔버스·다른 창을 가릴 때 접어둘 수 있다 (사용자 신고 2026-06-11).
+        const collapseBtn = toolbar.querySelector('[data-toolbar-collapse]');
+        if (collapseBtn) {
+          collapseBtn.addEventListener('click', () => {
+            const collapsed = toolbar.classList.toggle('collapsed');
+            collapseBtn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+            const chev = collapseBtn.querySelector('.chev');
+            if (chev) chev.textContent = collapsed ? '▼' : '▲';
+          });
+        }
 
         // PDCA-1 Step 1.3: grid 토글 (gridSize 20 ↔ null). default ON (initialData 에 gridSize: 20).
         const gridBtn = toolbar.querySelector('[data-grid-toggle]');

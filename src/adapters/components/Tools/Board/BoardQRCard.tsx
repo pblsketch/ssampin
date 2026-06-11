@@ -20,6 +20,8 @@ export function BoardQRCard({
   qrDataUrl,
 }: BoardQRCardProps): JSX.Element {
   const fullUrl = `${publicUrl}?t=${authToken}&code=${sessionCode}`;
+  // 교사 권한 입장 URL — 이름 입력 생략 + 모든 요소 편집 가능 (generateBoardHTML ?role=teacher)
+  const teacherUrl = `${fullUrl}&role=teacher`;
 
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
 
@@ -32,6 +34,10 @@ export function BoardQRCard({
       setCopyStatus('failed');
       window.setTimeout(() => setCopyStatus('idle'), 2000);
     }
+  }
+
+  function handleOpenTeacherBoard(): void {
+    void window.electronAPI?.openExternal(teacherUrl);
   }
 
   return (
@@ -63,17 +69,32 @@ export function BoardQRCard({
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={handleCopy}
-            className="w-full px-3 py-2 rounded-lg bg-sp-border/40 text-sp-text text-sm hover:bg-sp-border/60 flex items-center justify-center gap-1"
-          >
-            <span className="material-symbols-outlined text-icon-sm">content_copy</span>
-            {copyStatus === 'copied' ? '복사됨!' : copyStatus === 'failed' ? '복사 실패' : 'URL 복사'}
-          </button>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={handleCopy}
+              className="flex-1 px-3 py-2 rounded-lg bg-sp-border/40 text-sp-text text-sm hover:bg-sp-border/60 flex items-center justify-center gap-1"
+            >
+              <span className="material-symbols-outlined text-icon-sm">content_copy</span>
+              {copyStatus === 'copied'
+                ? '복사됨!'
+                : copyStatus === 'failed'
+                  ? '복사 실패'
+                  : 'URL 복사'}
+            </button>
+            <button
+              type="button"
+              onClick={handleOpenTeacherBoard}
+              className="flex-1 px-3 py-2 rounded-lg bg-sp-accent text-white text-sm font-semibold hover:bg-sp-accent/90 flex items-center justify-center gap-1"
+            >
+              <span className="material-symbols-outlined text-icon-sm">open_in_new</span>
+              보드 열기
+            </button>
+          </div>
 
           <div className="text-detail text-sp-muted">
-            학생이 QR을 스캔하거나 URL을 직접 입력해 접속할 수 있어요.
+            학생은 QR 스캔이나 URL 입력으로 접속해요. [보드 열기]를 누르면 선생님 권한으로
+            브라우저에서 같은 보드에 참여할 수 있어요 (이름 입력 없이 바로 입장).
           </div>
         </div>
       </div>
