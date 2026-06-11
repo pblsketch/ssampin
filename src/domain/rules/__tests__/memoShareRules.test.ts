@@ -373,3 +373,94 @@ describe('buildShareUrl', () => {
     expect(buildShareUrl('abc123')).toBe('https://ssampin.com/memo/abc123');
   });
 });
+
+// ============================================================
+// ttsVoice · attention (주목/낭독 신호 — 선택 필드, 하위 호환)
+// ============================================================
+
+describe('parseBoardFile — ttsVoice/attention 선택 필드', () => {
+  const item = {
+    id: 'm1',
+    content: '내용',
+    color: 'yellow',
+    fontSize: 'base',
+    sortOrder: 0,
+    updatedAt: '2026-06-12T00:00:00.000Z',
+  };
+  const base = { version: 1, title: '보드', updatedAt: '2026-06-12T00:00:00.000Z', items: [item] };
+
+  it('ttsVoice male/female을 보존하고, 그 외 값은 필드만 무시한다(보드는 유효)', () => {
+    expect(parseBoardFile({ ...base, ttsVoice: 'male' })?.ttsVoice).toBe('male');
+    expect(parseBoardFile({ ...base, ttsVoice: 'female' })?.ttsVoice).toBe('female');
+    const dropped = parseBoardFile({ ...base, ttsVoice: 'robot' });
+    expect(dropped).not.toBeNull();
+    expect(dropped?.ttsVoice).toBeUndefined();
+  });
+
+  it('유효한 attention(chime/tts)을 보존한다', () => {
+    const chime = { kind: 'chime', requestedAt: '2026-06-12T01:00:00.000Z', nonce: 'n-1' };
+    expect(parseBoardFile({ ...base, attention: chime })?.attention).toEqual(chime);
+    const tts = {
+      kind: 'tts',
+      itemId: 'm1',
+      requestedAt: '2026-06-12T01:00:00.000Z',
+      nonce: 'n-2',
+    };
+    expect(parseBoardFile({ ...base, attention: tts })?.attention).toEqual(tts);
+  });
+
+  it('깨진 attention은 필드만 무시한다 — tts인데 itemId 없음 / nonce 빈 값 / kind 불명', () => {
+    const cases = [
+      { kind: 'tts', requestedAt: '2026-06-12T01:00:00.000Z', nonce: 'n-3' },
+      { kind: 'chime', requestedAt: '2026-06-12T01:00:00.000Z', nonce: '' },
+      { kind: 'siren', requestedAt: '2026-06-12T01:00:00.000Z', nonce: 'n-4' },
+      '문자열',
+    ];
+    for (const attention of cases) {
+      const parsed = parseBoardFile({ ...base, attention });
+      expect(parsed).not.toBeNull();
+      expect(parsed?.attention).toBeUndefined();
+    }
+  });
+});
+
+describe('buildBoardFile — extras(ttsVoice/attention)', () => {
+  const memo: Memo = {
+    id: 'm1',
+    content: '내용',
+    color: 'yellow',
+    x: 0,
+    y: 0,
+    width: 280,
+    height: 220,
+    rotation: 0,
+    createdAt: '2026-06-12T00:00:00.000Z',
+    updatedAt: '2026-06-12T00:00:00.000Z',
+    archived: false,
+    fontSize: 'base',
+  };
+
+  it('extras 미전달 시 ttsVoice/attention 키 자체가 없다 (구버전 페이지 호환)', () => {
+    const file = buildBoardFile([memo], '보드', '2026-06-12T02:00:00.000Z');
+    expect('ttsVoice' in file).toBe(false);
+    expect('attention' in file).toBe(false);
+  });
+
+  it('extras를 그대로 싣고, 산출물이 parseBoardFile 라운드트립을 통과한다', () => {
+    const attention = {
+      kind: 'tts' as const,
+      itemId: 'm1',
+      requestedAt: '2026-06-12T02:00:00.000Z',
+      nonce: 'n-5',
+    };
+    const file = buildBoardFile([memo], '보드', '2026-06-12T02:00:00.000Z', {
+      ttsVoice: 'male',
+      attention,
+    });
+    expect(file.ttsVoice).toBe('male');
+    expect(file.attention).toEqual(attention);
+    const roundTrip = parseBoardFile(JSON.parse(JSON.stringify(file)));
+    expect(roundTrip?.ttsVoice).toBe('male');
+    expect(roundTrip?.attention).toEqual(attention);
+  });
+});

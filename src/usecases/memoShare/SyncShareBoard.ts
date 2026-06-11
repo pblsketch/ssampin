@@ -1,8 +1,20 @@
 import type { Memo } from '@domain/entities/Memo';
 import type { MemoShareBoard, MemoShareItemLink } from '@domain/entities/MemoShareBoard';
-import type { MemoShareBoardFile } from '@domain/entities/MemoShareItem';
+import type { MemoShareAttention, MemoShareBoardFile } from '@domain/entities/MemoShareItem';
 import type { IMemoShareClient } from '@domain/ports/IMemoShareClient';
 import { buildBoardFile, computeItemHash, diffForSync } from '@domain/rules/memoShareRules';
+
+/** SyncShareBoard.execute 선택 확장 — 주목(알림음/TTS) 기능 */
+export interface SyncShareBoardExtras {
+  /**
+   * 1회성 주목 신호 — **이번 업로드에만** 실린다. 다음 일반 동기화의 보드 JSON에는
+   * 포함되지 않아 자연 소멸한다 (페이지는 nonce 신규 여부로 1회 재생 판별).
+   * 신호가 있으면 내용 diff가 없어도 업로드를 강제한다.
+   */
+  readonly attention?: MemoShareAttention;
+  /** ttsVoice 등 보드 메타만 바뀐 경우 내용 diff가 없어도 업로드 강제 */
+  readonly forceUpload?: boolean;
+}
 
 /**
  * 공유 보드 동기화 UseCase (plan.md v2 B-2).
@@ -23,13 +35,16 @@ export class SyncShareBoard {
     currentMemos: readonly Memo[],
     title?: string,
     now: string = new Date().toISOString(),
+    extras?: SyncShareBoardExtras,
   ): Promise<MemoShareBoard> {
     const nextTitle = title ?? board.title;
     const diff = diffForSync(board, currentMemos);
     const titleChanged = nextTitle !== board.title;
+    // 주목 신호·메타 변경(forceUpload)은 내용 diff가 없어도 업로드해야 한다
+    const forced = extras?.attention !== undefined || extras?.forceUpload === true;
 
     // 변경 없음 — 포트 미호출 skip
-    if (!diff.needsJsonUpload && !titleChanged) {
+    if (!diff.needsJsonUpload && !titleChanged && !forced) {
       return board;
     }
 
@@ -39,6 +54,7 @@ export class SyncShareBoard {
       nextTitle,
       now,
       diff.imagesToUpload,
+      extras?.attention,
     );
 
     const result = await this.client.updateBoard(
@@ -75,6 +91,9 @@ export class SyncShareBoard {
    * buildBoardFile은 모든 image.fileId를 ''로 두지만, 이번에 재업로드하지 않는
    * 이미지는 infra가 fileId를 알 수 없으므로 기존 링크의 fileId를 채워 넣는다.
    * (업로드 대상 항목만 ''로 남겨 infra가 치환)
+   *
+   * extras 운반 규칙: ttsVoice는 보드 상태에서 읽어 **모든 동기화에 항상** 싣고,
+   * attention은 호출자가 명시한 **이번 1회 업로드에만** 싣는다.
    */
   private buildFileWithKnownImageIds(
     board: MemoShareBoard,
@@ -82,8 +101,12 @@ export class SyncShareBoard {
     title: string,
     now: string,
     imagesToUpload: readonly { itemId: string }[],
+    attention?: MemoShareAttention,
   ): MemoShareBoardFile {
-    const base = buildBoardFile(currentMemos, title, now);
+    const base = buildBoardFile(currentMemos, title, now, {
+      ...(board.ttsVoice !== undefined ? { ttsVoice: board.ttsVoice } : {}),
+      ...(attention !== undefined ? { attention } : {}),
+    });
     const uploadIds = new Set(imagesToUpload.map((upload) => upload.itemId));
     const linkByMemoId = new Map(board.items.map((link) => [link.memoId, link]));
 

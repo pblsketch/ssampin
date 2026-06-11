@@ -1,6 +1,11 @@
 import type { Memo } from '../entities/Memo';
 import type { MemoShareBoard } from '../entities/MemoShareBoard';
-import type { MemoShareBoardFile, MemoShareItemSnapshot } from '../entities/MemoShareItem';
+import type {
+  MemoShareAttention,
+  MemoShareBoardFile,
+  MemoShareItemSnapshot,
+  MemoShareTtsVoice,
+} from '../entities/MemoShareItem';
 import type { MemoShareImageUpload } from '../ports/IMemoShareClient';
 import { MEMO_COLORS } from '../valueObjects/MemoColor';
 import { MEMO_FONT_SIZES } from '../valueObjects/MemoFontSize';
@@ -88,6 +93,12 @@ function imageHashPart(hash: string): string {
 // 보드 파일 생성
 // ============================================================
 
+/** buildBoardFile의 선택 확장 — 보드 기본 음성 + 1회성 주목 신호 */
+export interface BoardFileExtras {
+  readonly ttsVoice?: MemoShareTtsVoice;
+  readonly attention?: MemoShareAttention;
+}
+
 /**
  * 선택된 메모 목록 → Drive 보드 JSON (`MemoShareBoardFile`).
  *
@@ -95,11 +106,13 @@ function imageHashPart(hash: string): string {
  * - image.fileId는 빈 문자열 — infra(MemoShareDriveClient)가 업로드 후 치환
  * - 위치(x/y)·rotation·archived는 스냅샷에 포함하지 않음 (공유 대상 아님)
  * - MAX_ITEMS(50) 초과 시 Error
+ * - extras.attention은 "이번 업로드 1회"에만 싣는다 — 다음 일반 동기화에서 자연 소멸
  */
 export function buildBoardFile(
   memos: readonly Memo[],
   title: string,
   now: string,
+  extras?: BoardFileExtras,
 ): MemoShareBoardFile {
   if (memos.length > MAX_ITEMS) {
     throw new Error(`공유 가능한 포스트잇은 최대 ${MAX_ITEMS}개입니다.`);
@@ -121,7 +134,14 @@ export function buildBoardFile(
         }
       : {}),
   }));
-  return { version: 1, title, updatedAt: now, items };
+  return {
+    version: 1,
+    title,
+    updatedAt: now,
+    items,
+    ...(extras?.ttsVoice ? { ttsVoice: extras.ttsVoice } : {}),
+    ...(extras?.attention ? { attention: extras.attention } : {}),
+  };
 }
 
 /**
@@ -263,10 +283,40 @@ export function parseBoardFile(raw: unknown): MemoShareBoardFile | null {
   if (!Array.isArray(items)) return null;
   if (items.length > MAX_ITEMS) return null;
   if (!items.every(isValidSnapshot)) return null;
+
+  // 선택 필드 — 형식이 어긋나면 보드 전체를 거부하지 않고 해당 필드만 무시한다
+  // (구버전 페이지/앱과의 상호 호환: 모르는 필드 때문에 보드가 안 보이면 안 됨)
+  const ttsVoice = parseTtsVoice(raw['ttsVoice']);
+  const attention = parseAttention(raw['attention']);
+
   return {
     version: 1,
     title: raw['title'],
     updatedAt: raw['updatedAt'],
     items: items as MemoShareItemSnapshot[],
+    ...(ttsVoice ? { ttsVoice } : {}),
+    ...(attention ? { attention } : {}),
+  };
+}
+
+/** 'male' | 'female' 외에는 undefined (필드 단위 무시) */
+function parseTtsVoice(raw: unknown): MemoShareTtsVoice | undefined {
+  return raw === 'male' || raw === 'female' ? raw : undefined;
+}
+
+/** 주목 신호 검증 — kind·nonce 필수, tts면 itemId 필수 */
+function parseAttention(raw: unknown): MemoShareAttention | undefined {
+  if (!isRecord(raw)) return undefined;
+  const kind = raw['kind'];
+  if (kind !== 'chime' && kind !== 'tts') return undefined;
+  if (typeof raw['nonce'] !== 'string' || raw['nonce'].length === 0) return undefined;
+  if (typeof raw['requestedAt'] !== 'string') return undefined;
+  const itemId = raw['itemId'];
+  if (kind === 'tts' && (typeof itemId !== 'string' || itemId.length === 0)) return undefined;
+  return {
+    kind,
+    requestedAt: raw['requestedAt'],
+    nonce: raw['nonce'],
+    ...(typeof itemId === 'string' && itemId.length > 0 ? { itemId } : {}),
   };
 }

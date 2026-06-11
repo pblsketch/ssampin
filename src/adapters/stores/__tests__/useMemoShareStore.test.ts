@@ -51,7 +51,12 @@ const { fakes } = vi.hoisted(() => {
         updateBoard: vi.fn(
           async (
             _fileId: string,
-            _board: { items: readonly unknown[] },
+            _board: {
+              items: readonly unknown[];
+              title?: string;
+              ttsVoice?: string;
+              attention?: { kind: string; itemId?: string; nonce: string; requestedAt: string };
+            },
             _imagesToUpload: readonly unknown[],
             _imageFileIdsToDelete: readonly string[],
           ) => ({
@@ -427,6 +432,91 @@ describe('useMemoShareStore — updateBoardMemos (공유 중 보드 구성 편�
 
     await vi.advanceTimersByTimeAsync(SYNC_DEBOUNCE_MS + 500);
     expect(fakes.client.updateBoard).not.toHaveBeenCalled();
+  });
+});
+
+describe('useMemoShareStore — 주목 (알림음/TTS 낭독)', () => {
+  it('triggerAttention: debounce를 우회해 즉시 attention(chime)을 실어 업로드하고, 다음 일반 동기화에는 미포함(자연 소멸)', async () => {
+    const m1 = makeMemo('m1');
+    const board = { ...makeBoard([m1]), ttsVoice: 'male' as const };
+    await seedAndInitialize(board, [m1]);
+
+    const ok = await useMemoShareStore.getState().triggerAttention('file-1');
+    expect(ok).toBe(true);
+    await vi.advanceTimersByTimeAsync(100); // debounce(1.5s) 없이 즉시
+
+    expect(fakes.client.updateBoard).toHaveBeenCalledTimes(1);
+    const first = fakes.client.updateBoard.mock.calls[0]?.[1];
+    expect(first?.attention?.kind).toBe('chime');
+    expect(first?.attention?.nonce).toBeTruthy();
+    expect(first?.attention?.itemId).toBeUndefined();
+    // ttsVoice는 모든 동기화에 항상 실린다
+    expect(first?.ttsVoice).toBe('male');
+
+    // 다음 일반 동기화(메모 수정) — attention 미포함, ttsVoice는 유지
+    useMemoStore.setState({
+      memos: [{ ...m1, content: '수정', updatedAt: '2026-06-11T00:30:00.000Z' }],
+    });
+    await vi.advanceTimersByTimeAsync(SYNC_DEBOUNCE_MS + 100);
+
+    expect(fakes.client.updateBoard).toHaveBeenCalledTimes(2);
+    const second = fakes.client.updateBoard.mock.calls[1]?.[1];
+    expect(second?.attention).toBeUndefined();
+    expect(second?.ttsVoice).toBe('male');
+  });
+
+  it('triggerTtsRead: attention(kind=tts)에 itemId가 실리고, 보드에 없는 메모는 거부한다', async () => {
+    const m1 = makeMemo('m1');
+    const other = makeMemo('other');
+    await seedAndInitialize(makeBoard([m1]), [m1, other]);
+
+    // 보드에 공유되지 않은 메모 → 거부
+    expect(await useMemoShareStore.getState().triggerTtsRead('file-1', 'other')).toBe(false);
+    expect(fakes.client.updateBoard).not.toHaveBeenCalled();
+
+    const ok = await useMemoShareStore.getState().triggerTtsRead('file-1', 'm1');
+    expect(ok).toBe(true);
+    await vi.advanceTimersByTimeAsync(100);
+
+    expect(fakes.client.updateBoard).toHaveBeenCalledTimes(1);
+    const boardFile = fakes.client.updateBoard.mock.calls[0]?.[1];
+    expect(boardFile?.attention?.kind).toBe('tts');
+    expect(boardFile?.attention?.itemId).toBe('m1');
+    expect(boardFile?.attention?.nonce).toBeTruthy();
+  });
+
+  it('미로그인이면 주목 신호를 거부하고 한국어 안내를 세팅한다', async () => {
+    const m1 = makeMemo('m1');
+    await seedAndInitialize(makeBoard([m1]), [m1]);
+    fakes.authenticateGoogle.isConnected.mockImplementation(async () => false);
+
+    expect(await useMemoShareStore.getState().triggerAttention('file-1')).toBe(false);
+    expect(useMemoShareStore.getState().error).toContain('로그인');
+
+    await vi.advanceTimersByTimeAsync(SYNC_DEBOUNCE_MS + 500);
+    expect(fakes.client.updateBoard).not.toHaveBeenCalled();
+  });
+
+  it('setBoardTtsVoice: 보드 영속 + 내용 diff가 없어도 ttsVoice를 실어 업로드한다', async () => {
+    const m1 = makeMemo('m1');
+    await seedAndInitialize(makeBoard([m1]), [m1]);
+
+    await useMemoShareStore.getState().setBoardTtsVoice('file-1', 'male');
+
+    // 로컬 보드 갱신 + 영속
+    expect(useMemoShareStore.getState().boards[0]?.ttsVoice).toBe('male');
+    expect(fakes.storage.write).toHaveBeenCalledWith(
+      'memoShareBoards',
+      expect.objectContaining({ boards: expect.any(Array) }),
+    );
+
+    // 내용 변경이 전혀 없어도 forceUpload로 업로드된다 (일반 debounce 경유)
+    await vi.advanceTimersByTimeAsync(SYNC_DEBOUNCE_MS + 100);
+    expect(fakes.client.updateBoard).toHaveBeenCalledTimes(1);
+    const boardFile = fakes.client.updateBoard.mock.calls[0]?.[1];
+    expect(boardFile?.ttsVoice).toBe('male');
+    expect(boardFile?.attention).toBeUndefined();
+    expect(useMemoShareStore.getState().syncStatus).toBe('idle');
   });
 });
 

@@ -19,6 +19,31 @@ export interface MemoShareBoardFile {
   readonly updatedAt: string;
   /** 최대 50개(MAX_ITEMS), sortOrder 오름차순 권장 */
   readonly items: readonly MemoShareItemSnapshot[];
+  /** 보드 기본 TTS 음성 (없으면 페이지가 여성 폴백) — v1 스키마 하위 호환 optional */
+  readonly ttsVoice?: MemoShareTtsVoice;
+  /** 교사가 보낸 1회성 주목 신호 — 없거나 nonce가 같으면 페이지는 무시 */
+  readonly attention?: MemoShareAttention;
+}
+
+/** 보드 기본 TTS 음성 */
+export type MemoShareTtsVoice = 'male' | 'female';
+
+/**
+ * 교사 → 교실 화면 1회성 주목 신호.
+ *
+ * 교사가 [주목]/[음성으로 읽기]를 누를 때마다 nonce가 새로 발급되어
+ * 보드 JSON에 실리고, 페이지는 "처음 보는 nonce"일 때만 1회 재생한다.
+ * 페이지 첫 로드 시 이미 실려 있는 신호는 재생하지 않는다(과거 신호 재생 방지).
+ */
+export interface MemoShareAttention {
+  /** chime = 알림음만 / tts = 해당 포스트잇 팝업 + 낭독 */
+  readonly kind: 'chime' | 'tts';
+  /** kind='tts'일 때 낭독 대상 항목 id */
+  readonly itemId?: string;
+  /** ISO 8601 — 참고용 (판별 키는 nonce) */
+  readonly requestedAt: string;
+  /** 클릭마다 새로 발급되는 값 — 중복 재생 판별 키 */
+  readonly nonce: string;
 }
 
 /** 보드 JSON 안의 포스트잇 1장 스냅샷 */

@@ -1,9 +1,10 @@
 import { create } from 'zustand';
 import type { Memo } from '@domain/entities/Memo';
 import type { MemoShareBoard, MemoShareBoardsData } from '@domain/entities/MemoShareBoard';
+import type { MemoShareAttention, MemoShareTtsVoice } from '@domain/entities/MemoShareItem';
 import { MAX_ITEMS } from '@domain/rules/memoShareRules';
 import { CreateShareBoard } from '@usecases/memoShare/CreateShareBoard';
-import { SyncShareBoard } from '@usecases/memoShare/SyncShareBoard';
+import { SyncShareBoard, type SyncShareBoardExtras } from '@usecases/memoShare/SyncShareBoard';
 import { StopSharing } from '@usecases/memoShare/StopSharing';
 import { useMemoStore } from './useMemoStore';
 
@@ -74,6 +75,12 @@ interface MemoShareState {
    * 0개 구성·MAX_ITEMS 초과는 거부(false + error).
    */
   updateBoardMemos: (boardId: string, memoIds: readonly string[], title?: string) => boolean;
+  /** 보드 기본 TTS 음성 설정 — 보드 영속 + 동기화 큐(내용 diff 없어도 업로드 강제) */
+  setBoardTtsVoice: (boardId: string, voice: MemoShareTtsVoice) => Promise<void>;
+  /** 주목(알림음 1회) 신호 — 미로그인/오프라인이면 false + 한국어 안내 */
+  triggerAttention: (boardId: string) => Promise<boolean>;
+  /** 포스트잇 TTS 낭독 1회 신호 — 교실 화면이 해당 포스트잇 팝업 + 낭독 */
+  triggerTtsRead: (boardId: string, memoId: string) => Promise<boolean>;
 }
 
 // ============================================================
@@ -93,6 +100,17 @@ let flushing = false;
  */
 const desiredCompositions = new Map<string, readonly string[]>();
 const desiredTitles = new Map<string, string>();
+
+/**
+ * 주목 신호 대기열 — 보드당 1건.
+ * 신호는 트리거된 그 1회 업로드에만 실리고(성공 시 맵에서 제거), 다음 일반
+ * 동기화의 보드 JSON에는 포함되지 않아 자연 소멸한다.
+ * **한계**: 연속 클릭 시 이전 신호가 업로드되기 전이면 마지막 신호만 살아남는다
+ * (보드당 1슬롯 덮어쓰기) — 교실에서 같은 소리가 N번 겹쳐 울리는 것보다 안전한 선택.
+ */
+const pendingAttention = new Map<string, MemoShareAttention>();
+/** ttsVoice 등 메타만 바뀐 보드 — 내용 diff가 없어도 업로드 강제 */
+const forceUploadBoardIds = new Set<string>();
 
 function readWarningAck(): boolean {
   try {
@@ -190,10 +208,20 @@ async function flushSyncQueue(): Promise<void> {
           ? memosForIds(desired, allMemos)
           : currentMemosForBoard(board, allMemos);
       const titleOverride = desiredTitles.get(boardId);
+      // 주목 신호는 이번 업로드에만 싣고 성공 시 소모 — ttsVoice는 usecase가 보드 상태에서 항상 싣는다
+      const attention = pendingAttention.get(boardId);
+      const extras: SyncShareBoardExtras = {
+        ...(attention !== undefined ? { attention } : {}),
+        ...(forceUploadBoardIds.has(boardId) ? { forceUpload: true } : {}),
+      };
       try {
-        const updated = await runWithRetry(() => sync.execute(board, memos, titleOverride));
+        const updated = await runWithRetry(() =>
+          sync.execute(board, memos, titleOverride, undefined, extras),
+        );
         desiredCompositions.delete(boardId);
         desiredTitles.delete(boardId);
+        pendingAttention.delete(boardId);
+        forceUploadBoardIds.delete(boardId);
         const boards = store
           .getState()
           .boards.map((b) =>
@@ -213,6 +241,8 @@ async function flushSyncQueue(): Promise<void> {
           // 사용자가 Drive에서 직접 삭제 — 공유 끊김. 크래시 금지, 재시도 무의미라 큐에서 제거
           desiredCompositions.delete(boardId);
           desiredTitles.delete(boardId);
+          pendingAttention.delete(boardId);
+          forceUploadBoardIds.delete(boardId);
           store.setState((state) => ({
             pendingBoardIds: state.pendingBoardIds.filter((id) => id !== boardId),
             error:
@@ -392,6 +422,8 @@ export const useMemoShareStore = create<MemoShareState>((set, get) => ({
     }
     desiredCompositions.delete(boardId);
     desiredTitles.delete(boardId);
+    pendingAttention.delete(boardId);
+    forceUploadBoardIds.delete(boardId);
     const boards = get().boards.filter((b) => b.id !== boardId);
     set((state) => ({
       boards,
@@ -492,7 +524,90 @@ export const useMemoShareStore = create<MemoShareState>((set, get) => ({
     void flushSyncQueue();
     return true;
   },
+
+  setBoardTtsVoice: async (boardId, voice) => {
+    const board = get().boards.find((b) => b.id === boardId);
+    if (!board || board.ttsVoice === voice) return;
+
+    const boards = get().boards.map((b) => (b.id === boardId ? { ...b, ttsVoice: voice } : b));
+    set((state) => ({
+      boards,
+      // 음성 변경은 내용 diff가 없으므로 업로드 강제 플래그로 큐에 태운다
+      pendingBoardIds: [...new Set([...state.pendingBoardIds, boardId])],
+    }));
+    forceUploadBoardIds.add(boardId);
+    await persistBoards(boards);
+    // 즉시성 불필요 — 일반 debounce로 묶음 (연타 시 1회 업로드)
+    scheduleFlush();
+  },
+
+  triggerAttention: async (boardId) => triggerSignal(boardId, 'chime'),
+
+  triggerTtsRead: async (boardId, memoId) => {
+    // 주의: 여기서 useMemoShareStore를 직접 참조하면 자기 initializer 순환 참조로
+    // const가 암시적 any가 되므로 반드시 get/set을 사용한다
+    const board = get().boards.find((b) => b.id === boardId);
+    if (!board) return false;
+    // 보드 구성(편집 예약이 있으면 그 구성)에 포함된 메모만 낭독 가능
+    const composition = desiredCompositions.get(boardId) ?? board.items.map((i) => i.memoId);
+    if (!composition.includes(memoId)) {
+      set({ error: '이 포스트잇은 보드에 공유되어 있지 않아요.' });
+      return false;
+    }
+    return triggerSignal(boardId, 'tts', memoId);
+  },
 }));
+
+/**
+ * 주목/낭독 공통 트리거 — nonce 발급 후 debounce를 우회해 즉시 동기화한다
+ * (클릭 → 교실 재생 체감 지연 최소화). 진행 중 sync와는 기존 큐로 직렬화.
+ */
+async function triggerSignal(
+  boardId: string,
+  kind: MemoShareAttention['kind'],
+  itemId?: string,
+): Promise<boolean> {
+  const store = useMemoShareStore;
+  const board = store.getState().boards.find((b) => b.id === boardId);
+  if (!board) return false;
+
+  // 오프라인 게이트 — 늦게 도착한 "주목"은 의미가 없으므로 큐에 쌓지 않고 거부
+  // (navigator.onLine을 모르는 환경에서는 게이트를 건너뛰고 동기화 실패 경로에 맡긴다)
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    store.setState({
+      error: '인터넷에 연결된 뒤 다시 눌러 주세요. 주목 신호는 바로 전달될 때만 의미가 있어요.',
+    });
+    return false;
+  }
+
+  // 구글 미로그인 게이트
+  const { authenticateGoogle } = await import('@adapters/di/container');
+  const connected = await authenticateGoogle.isConnected().catch(() => false);
+  if (!connected) {
+    store.setState({ error: '구글 계정에 로그인한 뒤 사용할 수 있어요.' });
+    return false;
+  }
+
+  // 프로젝트 공통 id 생성기 재사용 — 정적 import는 adapters→infrastructure 레이어 규칙
+  // 위반(no-restricted-imports)이라 container와 동일하게 호출 시점 dynamic import 사용
+  const { generateUUID } = await import('@infrastructure/utils/uuid');
+  pendingAttention.set(boardId, {
+    kind,
+    ...(itemId !== undefined ? { itemId } : {}),
+    requestedAt: new Date().toISOString(),
+    nonce: generateUUID(),
+  });
+  store.setState((state) => ({
+    error: null,
+    pendingBoardIds: [...new Set([...state.pendingBoardIds, boardId])],
+  }));
+  if (debounceTimer !== null) {
+    clearTimeout(debounceTimer);
+    debounceTimer = null;
+  }
+  void flushSyncQueue();
+  return true;
+}
 
 /**
  * @internal 테스트 전용 — watcher/타이머 등 모듈 내부 상태와 스토어 상태를 초기화한다.
@@ -509,6 +624,8 @@ export function __resetMemoShareStoreForTests(): void {
   flushing = false;
   desiredCompositions.clear();
   desiredTitles.clear();
+  pendingAttention.clear();
+  forceUploadBoardIds.clear();
   useMemoShareStore.setState({
     boards: [],
     loaded: false,

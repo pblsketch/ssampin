@@ -7,6 +7,8 @@
  * 공유 데이터(내용·이미지)는 선생님 개인 Google Drive에만 존재한다 — 쌤핀 서버 무저장.
  */
 
+import type { MemoShareTtsVoice } from './MemoShareItem';
+
 /** 로컬 Memo ↔ Drive 업로드 결과의 연결 + 마지막 동기화 추적 1건 */
 export interface MemoShareItemLink {
   /** 로컬 Memo.id */
@@ -32,6 +34,8 @@ export interface MemoShareBoard {
   /** ShortLinkClient 재사용 숏링크 (선택) — URL 문자열만 저장, 내용 아님 */
   readonly shortUrl?: string;
   readonly items: readonly MemoShareItemLink[];
+  /** 보드 기본 TTS 음성 (미설정 = 여성) — 보드 JSON에도 실림 */
+  readonly ttsVoice?: MemoShareTtsVoice;
   /** ISO 8601 */
   readonly createdAt: string;
   /** ISO 8601 */

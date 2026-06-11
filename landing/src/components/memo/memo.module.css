@@ -85,6 +85,36 @@
   border-bottom: 1px solid var(--memo-border);
 }
 
+/* 주목 신호 시각 강조 — 헤더 하단 컬러 글로우 1회 (절제) */
+@keyframes memoHeaderGlow {
+  0% {
+    box-shadow:
+      inset 0 -2.5px 0 var(--memo-bar-blue),
+      0 8px 24px -10px var(--memo-bar-blue);
+  }
+  60% {
+    box-shadow:
+      inset 0 -2.5px 0 var(--memo-bar-blue),
+      0 8px 24px -10px var(--memo-bar-blue);
+  }
+  100% {
+    box-shadow:
+      inset 0 -2.5px 0 transparent,
+      0 8px 24px -10px transparent;
+  }
+}
+
+.headerPulse {
+  animation: memoHeaderGlow 1.6s ease-out 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .headerPulse {
+    animation: none;
+    box-shadow: inset 0 -2.5px 0 var(--memo-bar-blue);
+  }
+}
+
 .headerTitleGroup {
   display: flex;
   flex-direction: column;

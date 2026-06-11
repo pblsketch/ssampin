@@ -13,10 +13,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type {
+  MemoAttention,
   MemoColor,
   MemoFontSize,
   MemoShareBoardFile,
   MemoShareItemSnapshot,
+  MemoTtsVoice,
 } from './driveBoardApi';
 import {
   DriveBoardError,
@@ -26,6 +28,7 @@ import {
   getDriveApiKey,
 } from './driveBoardApi';
 import { useMemoChime } from './useMemoChime';
+import { useMemoTts } from './useMemoTts';
 import styles from './memo.module.css';
 
 const POLL_INTERVAL_MS = 5000;
@@ -33,6 +36,7 @@ const BACKOFF_STEPS_MS = [5000, 10000, 30000] as const;
 const FRESH_DURATION_MS = 2300;
 const PULSE_DURATION_MS = 1400;
 const LEAVE_DURATION_MS = 320;
+const HEADER_PULSE_DURATION_MS = 1700;
 const THEME_STORAGE_KEY = 'ssampin-memo-theme';
 
 type BoardStatus = 'loading' | 'ready' | 'gone' | 'config-error';
@@ -86,8 +90,10 @@ export function MemoBoardContent({ fileId }: MemoBoardContentProps) {
   const [canInstall, setCanInstall] = useState(false);
   const [installed, setInstalled] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [headerPulse, setHeaderPulse] = useState(false);
 
   const { soundOn, toggleSound, playChime } = useMemoChime();
+  const { speakText, cancelSpeech, unlockTts } = useMemoTts();
 
   const statusRef = useRef<BoardStatus>('loading');
   const boardRef = useRef<MemoShareBoardFile | null>(null);
@@ -100,6 +106,16 @@ export function MemoBoardContent({ fileId }: MemoBoardContentProps) {
   const popupCloseRef = useRef<HTMLButtonElement | null>(null);
   const playChimeRef = useRef(playChime);
   playChimeRef.current = playChime;
+  const soundOnRef = useRef(soundOn);
+  soundOnRef.current = soundOn;
+  /** 처리한(또는 첫 로드에 이미 실려 있던) attention nonce — 같은 nonce 재수신 무시 */
+  const seenNoncesRef = useRef<Set<string>>(new Set());
+  /** TTS 세션 토큰 — 새 신호가 오면 이전 낭독의 후처리(팝업 닫기)를 무효화 */
+  const ttsSessionRef = useRef(0);
+  const headerPulseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleAttentionRef = useRef<(attention: MemoAttention, file: MemoShareBoardFile) => void>(
+    () => undefined,
+  );
 
   const updateStatus = useCallback((next: BoardStatus) => {
     statusRef.current = next;
@@ -124,13 +140,18 @@ export function MemoBoardContent({ fileId }: MemoBoardContentProps) {
     [clearPollTimer],
   );
 
-  /** 새 보드 적용 + diff 애니메이션 트리거 */
+  /** 새 보드 적용 + diff 애니메이션 트리거 + 주목 신호 1회 처리 */
   const applyBoard = useCallback((next: MemoShareBoardFile) => {
     const prev = boardRef.current;
     boardRef.current = next;
     setBoard(next);
 
-    if (prev === null) return; // 첫 로드 — 애니메이션·차임 없음
+    if (prev === null) {
+      // 첫 로드 — 애니메이션·차임 없음.
+      // 이미 실려 있는 attention은 "처리됨"으로만 기록 (전자칠판 재부팅 시 과거 신호 재생 방지)
+      if (next.attention) seenNoncesRef.current.add(next.attention.nonce);
+      return;
+    }
 
     const prevById = new Map(prev.items.map((item) => [item.id, item]));
     const nextIds = new Set(next.items.map((item) => item.id));
@@ -156,6 +177,13 @@ export function MemoBoardContent({ fileId }: MemoBoardContentProps) {
     if (removed.length > 0) {
       setLeavingItems(removed);
       setTimeout(() => setLeavingItems([]), LEAVE_DURATION_MS);
+    }
+
+    // 주목 신호 — 처음 보는 nonce일 때만 1회 재생, 같은 nonce 재수신은 무시
+    const attention = next.attention;
+    if (attention !== undefined && !seenNoncesRef.current.has(attention.nonce)) {
+      seenNoncesRef.current.add(attention.nonce);
+      handleAttentionRef.current(attention, next);
     }
   }, []);
 
@@ -357,6 +385,72 @@ export function MemoBoardContent({ fileId }: MemoBoardContentProps) {
     }
   }, [showToast]);
 
+  /* ── 주목 신호 (attention) ── */
+
+  /** 헤더 펄스 — 절제된 시각 강조 (chime·소리 OFF 안내 시) */
+  const triggerHeaderPulse = useCallback(() => {
+    if (headerPulseTimerRef.current !== null) clearTimeout(headerPulseTimerRef.current);
+    setHeaderPulse(true);
+    headerPulseTimerRef.current = setTimeout(() => {
+      headerPulseTimerRef.current = null;
+      setHeaderPulse(false);
+    }, HEADER_PULSE_DURATION_MS);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (headerPulseTimerRef.current !== null) clearTimeout(headerPulseTimerRef.current);
+    };
+  }, []);
+
+  /** kind='tts' — 팝업 열고 낭독, 끝나면(실패·타임아웃 포함) 팝업 자동 닫기 */
+  const runTtsAttention = useCallback(
+    async (item: MemoShareItemSnapshot, voicePref: MemoTtsVoice) => {
+      const session = ++ttsSessionRef.current;
+      setExpandedId(item.id);
+      const result = await speakText(item.content, voicePref); // 진행 중 낭독은 내부에서 취소
+      if (ttsSessionRef.current !== session) return; // 새 신호가 가로챘으면 후처리 중단
+      if (result.spoken && result.fallbackUsed) {
+        showToast(
+          voicePref === 'male'
+            ? '남성 음성이 없어 다른 음성으로 읽었어요'
+            : '여성 음성이 없어 다른 음성으로 읽었어요',
+        );
+      }
+      setExpandedId((current) => (current === item.id ? null : current));
+    },
+    [speakText, showToast],
+  );
+
+  const handleAttention = useCallback(
+    (attention: MemoAttention, file: MemoShareBoardFile) => {
+      if (!soundOnRef.current) {
+        // 오디오 정책상 토글 OFF면 재생 불가 — 시각 강조 + 안내
+        triggerHeaderPulse();
+        showToast('선생님이 주목 알림을 보냈어요 — 🔔 소리를 켜 주세요');
+        return;
+      }
+      if (attention.kind === 'chime') {
+        playChimeRef.current(true); // 교사의 명시적 호출 — 5초 스로틀 우회
+        triggerHeaderPulse();
+        return;
+      }
+      // kind='tts' — 대상 항목이 보드에 없으면 무시 (parseAttention이 itemId 필수 보장)
+      const target = attention.itemId
+        ? file.items.find((item) => item.id === attention.itemId)
+        : undefined;
+      if (!target) return;
+      void runTtsAttention(target, file.ttsVoice ?? 'female');
+    },
+    [triggerHeaderPulse, showToast, runTtsAttention],
+  );
+  handleAttentionRef.current = handleAttention;
+
+  /* 팝업이 닫히면 진행 중 낭독도 중단 (학생이 ✕/딤/ESC로 닫는 경우) */
+  useEffect(() => {
+    if (expandedId === null) cancelSpeech();
+  }, [expandedId, cancelSpeech]);
+
   /* 표시 목록 — 현재 항목 + 퇴장 중인 항목(fade-out), sortOrder 순 */
   const displayItems = useMemo(() => {
     const items: { item: MemoShareItemSnapshot; leaving: boolean }[] = (board?.items ?? []).map(
@@ -418,7 +512,7 @@ export function MemoBoardContent({ fileId }: MemoBoardContentProps) {
 
   return (
     <div className={styles.root} data-theme={theme}>
-      <header className={styles.header}>
+      <header className={`${styles.header} ${headerPulse ? styles.headerPulse : ''}`}>
         <div className={styles.headerTitleGroup}>
           <h1 className={styles.boardTitle}>{board?.title.trim() || '우리 반 메모'}</h1>
           {now !== null && <span className={styles.clock}>{formatClock(now)}</span>}
@@ -439,7 +533,12 @@ export function MemoBoardContent({ fileId }: MemoBoardContentProps) {
           <button
             type="button"
             className={styles.controlButton}
-            onClick={toggleSound}
+            onClick={() => {
+              // ON 전환 제스처 안에서 speechSynthesis도 함께 unlock
+              // (useMemoChime의 무음 재생은 AudioContext만 해제 — TTS는 별도 API)
+              if (!soundOn) unlockTts();
+              toggleSound();
+            }}
             aria-pressed={soundOn}
             aria-label={soundOn ? '새 메모 알림음 끄기' : '새 메모 알림음 켜기'}
             title={soundOn ? '알림음 켜짐' : '알림음 꺼짐'}

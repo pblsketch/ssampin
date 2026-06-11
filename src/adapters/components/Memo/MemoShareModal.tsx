@@ -54,10 +54,14 @@ export function MemoShareModal({ isOpen, onClose }: MemoShareModalProps) {
     dismissDeletedMemoNotice,
     retrySync,
     updateBoardMemos,
+    setBoardTtsVoice,
+    triggerAttention,
+    triggerTtsRead,
   } = useMemoShareStore.getState();
 
   const memos = useMemoStore((s) => s.memos);
   const activeMemos = useMemo(() => memos.filter((m) => !m.archived), [memos]);
+  const memosById = useMemo(() => new Map(memos.map((m) => [m.id, m])), [memos]);
 
   const [title, setTitle] = useState('');
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
@@ -67,6 +71,8 @@ export function MemoShareModal({ isOpen, onClose }: MemoShareModalProps) {
   const [stoppingId, setStoppingId] = useState<string | null>(null);
   /** 공유 중 보드의 포스트잇 구성 편집 모드 — null이면 새 보드 만들기 모드 */
   const [editingBoardId, setEditingBoardId] = useState<string | null>(null);
+  /** "포스트잇 읽기" 접이식 목록이 펼쳐진 보드 id */
+  const [readListBoardId, setReadListBoardId] = useState<string | null>(null);
 
   const editingBoard = useMemo(
     () => boards.find((b) => b.id === editingBoardId) ?? null,
@@ -79,6 +85,7 @@ export function MemoShareModal({ isOpen, onClose }: MemoShareModalProps) {
     setQrBoardId(null);
     setStopConfirmId(null);
     setEditingBoardId(null);
+    setReadListBoardId(null);
     setSelectedIds(new Set());
     setTitle('');
   }, [isOpen]);
@@ -188,6 +195,24 @@ export function MemoShareModal({ isOpen, onClose }: MemoShareModalProps) {
     handleCancelEdit,
     showToast,
   ]);
+
+  /** 주목(알림음 1회) — 누를 때마다 1회 재생, 자동 반복 아님 */
+  const handleAttention = useCallback(
+    async (boardId: string) => {
+      const ok = await triggerAttention(boardId);
+      if (ok) showToast('교실에서 알림음이 울려요.', 'success');
+    },
+    [triggerAttention, showToast],
+  );
+
+  /** 포스트잇 TTS 낭독 1회 — 교실 화면이 해당 포스트잇 팝업 + 낭독 */
+  const handleTtsRead = useCallback(
+    async (boardId: string, memoId: string) => {
+      const ok = await triggerTtsRead(boardId, memoId);
+      if (ok) showToast('교실에서 포스트잇을 읽어 드려요.', 'success');
+    },
+    [triggerTtsRead, showToast],
+  );
 
   const isEditing = editingBoard !== null;
   const canCreate = selectedIds.size > 0 && warningAcknowledged && !isCreating && isConnected;
@@ -367,6 +392,101 @@ export function MemoShareModal({ isOpen, onClose }: MemoShareModalProps) {
                               />
                             </div>
                           )}
+
+                          {/* ── 주목 — 알림음 / TTS 낭독 (누를 때마다 1회 재생) ── */}
+                          <div className="mt-3 border-t border-sp-border pt-3">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <button
+                                onClick={() => void handleAttention(board.id)}
+                                className="flex items-center gap-1.5 rounded-lg bg-sp-accent px-3 py-1.5 text-xs font-sp-semibold text-white transition-all hover:brightness-110 active:scale-95"
+                                title="교실 화면에서 알림음 1회 재생"
+                              >
+                                <span className="material-symbols-outlined text-sm">
+                                  notifications_active
+                                </span>
+                                주목
+                              </button>
+
+                              {/* 보드 기본 TTS 음성 — 남/여 세그먼트 */}
+                              <div className="flex items-center rounded-lg border border-sp-border bg-sp-card p-0.5">
+                                <span className="px-2 text-xs text-sp-muted">읽기 음성</span>
+                                {(['female', 'male'] as const).map((voice) => {
+                                  const active = (board.ttsVoice ?? 'female') === voice;
+                                  return (
+                                    <button
+                                      key={voice}
+                                      onClick={() => void setBoardTtsVoice(board.id, voice)}
+                                      aria-pressed={active}
+                                      className={`rounded-md px-2.5 py-1 text-xs font-sp-medium transition-all ${
+                                        active
+                                          ? 'bg-sp-accent text-white'
+                                          : 'text-sp-muted hover:text-sp-text'
+                                      }`}
+                                    >
+                                      {voice === 'female' ? '여성' : '남성'}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+
+                              {/* 포스트잇 읽기 목록 접기/펼치기 */}
+                              <button
+                                onClick={() =>
+                                  setReadListBoardId((prev) =>
+                                    prev === board.id ? null : board.id,
+                                  )
+                                }
+                                className="flex items-center gap-1 rounded-lg border border-sp-border bg-sp-card px-2.5 py-1.5 text-xs font-sp-medium text-sp-text transition-all hover:bg-sp-surface active:scale-95"
+                              >
+                                <span className="material-symbols-outlined text-sm">campaign</span>
+                                포스트잇 읽기
+                                <span className="material-symbols-outlined text-sm">
+                                  {readListBoardId === board.id ? 'expand_less' : 'expand_more'}
+                                </span>
+                              </button>
+                            </div>
+                            <p className="mt-1.5 text-xs text-sp-muted">
+                              전자칠판 화면에서 소리가 켜져 있어야 들려요 (🔔 버튼)
+                            </p>
+
+                            {/* 공유 중 포스트잇 목록 — 항목별 TTS 읽기 */}
+                            {readListBoardId === board.id && (
+                              <div className="mt-2 flex flex-col gap-1.5">
+                                {[...board.items]
+                                  .sort((a, b) => a.sortOrder - b.sortOrder)
+                                  .map((link) => {
+                                    const memo = memosById.get(link.memoId);
+                                    if (memo === undefined) return null;
+                                    const firstLine = memo.content.split('\n')[0]?.trim() ?? '';
+                                    return (
+                                      <div
+                                        key={link.memoId}
+                                        className="flex items-center gap-2 rounded-lg border border-sp-border bg-sp-card px-2.5 py-1.5"
+                                      >
+                                        <span
+                                          className={`h-2.5 w-2.5 shrink-0 rounded-full ${COLOR_DOT_BG[memo.color]}`}
+                                        />
+                                        <p className="min-w-0 flex-1 truncate text-xs text-sp-text">
+                                          {firstLine || (
+                                            <span className="italic text-sp-muted">내용 없음</span>
+                                          )}
+                                        </p>
+                                        <button
+                                          onClick={() => void handleTtsRead(board.id, link.memoId)}
+                                          className="flex shrink-0 items-center gap-1 rounded-md border border-sp-border bg-sp-surface px-2 py-1 text-xs font-sp-medium text-sp-text transition-all hover:bg-sp-card active:scale-95"
+                                          title="교실 화면에서 이 포스트잇을 팝업 + 낭독"
+                                        >
+                                          <span className="material-symbols-outlined text-sm">
+                                            volume_up
+                                          </span>
+                                          읽기
+                                        </button>
+                                      </div>
+                                    );
+                                  })}
+                              </div>
+                            )}
+                          </div>
 
                           {/* 공유 중지 (확인 단계) */}
                           <div className="mt-3 border-t border-sp-border pt-3">

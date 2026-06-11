@@ -31,11 +31,33 @@ export interface MemoShareItemSnapshot {
   readonly image?: MemoShareItemImage;
 }
 
+/** 보드 기본 TTS 음성 (src/domain/entities/MemoShareItem.ts `MemoShareTtsVoice` 미러) */
+export type MemoTtsVoice = 'male' | 'female';
+
+/**
+ * 교사 → 교실 화면 1회성 주목 신호 (domain `MemoShareAttention` 미러).
+ * 페이지는 "처음 보는 nonce"일 때만 1회 재생한다.
+ */
+export interface MemoAttention {
+  /** chime = 알림음만 / tts = 해당 포스트잇 팝업 + 낭독 */
+  readonly kind: 'chime' | 'tts';
+  /** kind='tts'일 때 낭독 대상 항목 id */
+  readonly itemId?: string;
+  /** ISO 8601 — 참고용 (판별 키는 nonce) */
+  readonly requestedAt: string;
+  /** 클릭마다 새로 발급되는 값 — 중복 재생 판별 키 */
+  readonly nonce: string;
+}
+
 export interface MemoShareBoardFile {
   readonly version: 1;
   readonly title: string;
   readonly updatedAt: string;
   readonly items: readonly MemoShareItemSnapshot[];
+  /** 보드 기본 TTS 음성 — 없으면 페이지가 female 폴백 (하위 호환 optional) */
+  readonly ttsVoice?: MemoTtsVoice;
+  /** 1회성 주목 신호 — 형식 위반 시 이 필드만 무시하고 보드는 유효 처리 */
+  readonly attention?: MemoAttention;
 }
 
 export interface BoardMeta {
@@ -167,22 +189,22 @@ function isMemoFontSize(value: unknown): value is MemoFontSize {
 }
 
 function parseItemImage(raw: unknown): MemoShareItemImage | null {
-  if (typeof raw !== 'object' || raw === null) return null;
+  // domain isValidSnapshot의 image 규칙과 동일 — fileId는 빈 문자열도 허용(업로드 전 placeholder)
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null;
   const record = raw as Record<string, unknown>;
-  if (typeof record.fileId !== 'string' || record.fileId.length === 0) return null;
+  if (typeof record.fileId !== 'string') return null;
   if (typeof record.width !== 'number' || typeof record.height !== 'number') return null;
-  if (!Number.isFinite(record.width) || !Number.isFinite(record.height)) return null;
   return { fileId: record.fileId, width: record.width, height: record.height };
 }
 
 function parseItem(raw: unknown): MemoShareItemSnapshot | null {
-  if (typeof raw !== 'object' || raw === null) return null;
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null;
   const record = raw as Record<string, unknown>;
   if (typeof record.id !== 'string' || record.id.length === 0) return null;
   if (typeof record.content !== 'string') return null;
   if (!isMemoColor(record.color)) return null;
   if (!isMemoFontSize(record.fontSize)) return null;
-  if (typeof record.sortOrder !== 'number' || !Number.isFinite(record.sortOrder)) return null;
+  if (typeof record.sortOrder !== 'number') return null;
   if (typeof record.updatedAt !== 'string') return null;
 
   const item: MemoShareItemSnapshot = {
@@ -224,10 +246,40 @@ export function parseBoardFile(raw: unknown): MemoShareBoardFile | null {
   }
   items.sort((a, b) => a.sortOrder - b.sortOrder);
 
+  // 선택 필드 — 형식이 어긋나면 보드 전체를 거부하지 않고 해당 필드만 무시한다
+  // (domain memoShareRules.parseBoardFile과 동일 규칙 — 구버전 페이지/앱 상호 호환)
+  const ttsVoice = parseTtsVoice(record.ttsVoice);
+  const attention = parseAttention(record.attention);
+
   return {
     version: 1,
     title: record.title,
     updatedAt: record.updatedAt,
     items,
+    ...(ttsVoice ? { ttsVoice } : {}),
+    ...(attention ? { attention } : {}),
+  };
+}
+
+/** 'male' | 'female' 외에는 undefined — 필드 단위 무시 (domain parseTtsVoice 미러) */
+function parseTtsVoice(raw: unknown): MemoTtsVoice | undefined {
+  return raw === 'male' || raw === 'female' ? raw : undefined;
+}
+
+/** 주목 신호 검증 — kind·nonce 필수, tts면 itemId 필수 (domain parseAttention 미러) */
+function parseAttention(raw: unknown): MemoAttention | undefined {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return undefined;
+  const record = raw as Record<string, unknown>;
+  const kind = record.kind;
+  if (kind !== 'chime' && kind !== 'tts') return undefined;
+  if (typeof record.nonce !== 'string' || record.nonce.length === 0) return undefined;
+  if (typeof record.requestedAt !== 'string') return undefined;
+  const itemId = record.itemId;
+  if (kind === 'tts' && (typeof itemId !== 'string' || itemId.length === 0)) return undefined;
+  return {
+    kind,
+    requestedAt: record.requestedAt,
+    nonce: record.nonce,
+    ...(typeof itemId === 'string' && itemId.length > 0 ? { itemId } : {}),
   };
 }

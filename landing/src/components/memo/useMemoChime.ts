@@ -23,8 +23,11 @@ export interface MemoChime {
   readonly soundOn: boolean;
   /** 토글 (ON 전환 시 오디오 컨텍스트 활성화) */
   readonly toggleSound: () => void;
-  /** 새 항목 등장 시 호출 — OFF면 무음, 5초 스로틀 */
-  readonly playChime: () => void;
+  /**
+   * 차임 재생 — OFF면 무음, 5초 스로틀.
+   * force=true: 교사의 명시적 [주목] 신호 — 스로틀 우회(토글 OFF 게이트는 유지)
+   */
+  readonly playChime: (force?: boolean) => void;
 }
 
 function createAudioContext(): AudioContext | null {
@@ -135,20 +138,23 @@ export function useMemoChime(): MemoChime {
     }
   }, [ensureContext]);
 
-  const playChime = useCallback(() => {
-    if (!soundOnRef.current) return;
+  const playChime = useCallback(
+    (force = false) => {
+      if (!soundOnRef.current) return;
 
-    const now = Date.now();
-    if (now - lastPlayedAtRef.current < CHIME_THROTTLE_MS) return;
+      const now = Date.now();
+      if (!force && now - lastPlayedAtRef.current < CHIME_THROTTLE_MS) return;
 
-    const ctx = ensureContext();
-    if (!ctx) return;
+      const ctx = ensureContext();
+      if (!ctx) return;
 
-    lastPlayedAtRef.current = now;
-    const t = ctx.currentTime + 0.02;
-    playMarimbaNote(ctx, 987.77, t, 0.22); // B5
-    playMarimbaNote(ctx, 1318.51, t + 0.13, 0.18); // E6
-  }, [ensureContext]);
+      lastPlayedAtRef.current = now;
+      const t = ctx.currentTime + 0.02;
+      playMarimbaNote(ctx, 987.77, t, 0.22); // B5
+      playMarimbaNote(ctx, 1318.51, t + 0.13, 0.18); // E6
+    },
+    [ensureContext],
+  );
 
   return { soundOn, toggleSound, playChime };
 }
