@@ -214,6 +214,17 @@ const presenceChecks = [
     pattern: /sp-conn-chip[\s\S]{0,1500}?role="status"[\s\S]{0,400}?aria-live="polite"/,
     name: 'REGRESSION #22: _studentPageChrome 연결 상태 칩 구조 (sp-conn-chip + role=status + aria-live=polite)',
   },
+  {
+    // REGRESSION #47 (2026-06-12) — student-pages-design-refactor Phase 1.
+    // 학생 페이지 공용 셸: 줌 허용 viewport(WCAG 1.4.4, viewport-fit=cover) +
+    // --sps-accent 단일 파랑 토큰(plan D1). 사라지면 6개 학생 페이지 디자인
+    // 단일 소스가 깨지고 색/접근성 표류가 재발한다.
+    // (user-scalable=no 부재 검증은 _studentPageChrome.shell.test.ts 메타테스트 담당)
+    file: 'electron/ipc/_studentPageChrome.ts',
+    pattern:
+      /getStudentViewportMeta[\s\S]{0,600}?viewport-fit=cover[\s\S]*?--sps-accent:\s*#3b82f6/,
+    name: 'REGRESSION #47: 학생 셸 줌 허용 viewport + --sps-accent 토큰 (student-pages-design-refactor)',
+  },
 ];
 
 // ============================================================
