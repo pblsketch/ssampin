@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "framer-motion": "^12.34.3",
-    "next": "16.1.6",
+    "next": "16.2.9",
     "qrcode.react": "^4.2.0",
     "react": "19.2.3",
     "react-dom": "19.2.3"
@@ -21,5 +21,8 @@
     "@types/react-dom": "^19",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "overrides": {
+    "postcss": "^8.5.10"
   }
 }

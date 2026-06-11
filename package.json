@@ -83,6 +83,10 @@
     "zod": "^3.25.76",
     "zustand": "^5.0.3"
   },
+  "overrides": {
+    "shell-quote": "1.8.4",
+    "uuid": "^11.1.1"
+  },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@fontsource/noto-sans-kr": "^5.2.9",
