@@ -77,7 +77,8 @@ describe('buildSheetRows — 동적 열 매핑', () => {
     expect(signedRow?.no).toBe('1');
     expect(signedRow?.name).toBe('홍길동');
     expect(signedRow?.affiliation).toBe('3-2');
-    expect(signedRow?.signedAt).toBe('2026-06-05T01:00:00.000Z');
+    // 서버 UTC ISO(01:00Z)가 한국 시간(10:00)으로 변환되어 등록부에 들어간다.
+    expect(signedRow?.signedAt).toBe('2026-06-05 10:00');
     // 미서명자는 signedAt 빈칸.
     expect(unsignedRow?.signedAt).toBe('');
   });
@@ -105,7 +106,7 @@ describe('buildExcelRows — 서명 PNG 임베드 매핑', () => {
   it('builtin·커스텀 셀 텍스트를 시트 행과 동일 규약으로 채운다', () => {
     const [signedRow] = buildExcelRows(MEMBERS, COLUMNS, STATUS_ROWS);
     expect(signedRow?.cells.name).toBe('홍길동');
-    expect(signedRow?.cells.signedAt).toBe('2026-06-05T01:00:00.000Z');
+    expect(signedRow?.cells.signedAt).toBe('2026-06-05 10:00');
     expect(signedRow?.cells.custom_memo).toBe('비고1');
   });
 });
@@ -282,5 +283,21 @@ describe('parsePastedRoster — 레거시(무열) 호환 + BOM·헤더 스킵', 
     const members = parsePastedRoster('홍길동\n김철수');
     expect(members).toHaveLength(2);
     expect(members[0]?.name).toBe('홍길동');
+  });
+});
+
+describe('formatSignedAtKst — 등록부 서명일시 한국 시간 변환', () => {
+  it('UTC ISO 문자열을 Asia/Seoul 기준 YYYY-MM-DD HH:mm으로 변환한다', async () => {
+    const { formatSignedAtKst } = await import('./SignatureRoster/signatureRosterLogic');
+    // 사용자 신고 사례: 2026-06-11T04:08:47.85494+00:00 → 한국 시간 13:08
+    expect(formatSignedAtKst('2026-06-11T04:08:47.85494+00:00')).toBe('2026-06-11 13:08');
+    expect(formatSignedAtKst('2026-06-05T01:00:00.000Z')).toBe('2026-06-05 10:00');
+    // 자정 경계 — UTC 15:30 = 다음날 00:30 KST.
+    expect(formatSignedAtKst('2026-06-10T15:30:00.000Z')).toBe('2026-06-11 00:30');
+  });
+
+  it('파싱 불가한 값은 원문을 그대로 반환한다', async () => {
+    const { formatSignedAtKst } = await import('./SignatureRoster/signatureRosterLogic');
+    expect(formatSignedAtKst('알 수 없음')).toBe('알 수 없음');
   });
 });

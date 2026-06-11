@@ -473,10 +473,30 @@ function resolveCellValue(
     return member.affiliation ?? status?.affiliation ?? '';
   }
   if (column.key === 'signedAt') {
-    return status?.signedAt ?? '';
+    // 서버는 UTC ISO 문자열을 주므로 등록부에는 한국 시간으로 변환해 넣는다.
+    return status?.signedAt ? formatSignedAtKst(status.signedAt) : '';
   }
   // 커스텀 열: member.fields 폴백 (status에 rowData가 없으면 빈칸 허용).
   return member.fields[column.key] ?? '';
+}
+
+/**
+ * ISO 일시 → 한국 시간 'YYYY-MM-DD HH:mm' (등록부 서명일시 표기).
+ * 파싱 불가한 값은 원문 그대로 반환한다. PC 시간대와 무관하게 항상 Asia/Seoul 기준.
+ */
+export function formatSignedAtKst(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  // sv-SE 로케일은 'YYYY-MM-DD HH:mm' 형태 — 등록부 정렬·가독에 적합.
+  return new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(date);
 }
 
 /**
