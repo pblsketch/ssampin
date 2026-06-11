@@ -29,6 +29,7 @@ export type PageId =
   | 'tool-survey'
   | 'tool-multi-survey'
   | 'tool-classroom-agreement'
+  | 'tool-signature-roster'
   | 'tool-realtime-wall'
   | 'tool-interactive-slides'
   | 'tool-wordcloud'
@@ -429,7 +430,7 @@ export function Sidebar({ currentPage, onNavigate, onFeedback }: SidebarProps) {
 
         {!sidebarCollapsed && (
           <p className="text-caption text-sp-muted text-center mt-2">
-            v2.0.9
+            v2.1.0
             {showUpdateBadge && newVersion && (
               <button
                 type="button"
