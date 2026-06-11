@@ -1,13 +1,18 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { usePathname } from 'next/navigation';
 import { useChatbot } from '../../hooks/useChatbot';
 import ChatWindow from './ChatWindow';
 import type { FeedbackState } from '../../types/chat';
 
 export default function ChatWidget() {
+  const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [hasNewMessage, setHasNewMessage] = useState(false);
+  // 교실 게시용 화면(/memo)은 학생이 보는 전자칠판이므로 챗봇 미노출.
+  // hook 순서 보장을 위해 isClassroomDisplay 판정만 먼저 하고 return은 hook 뒤에서.
+  const isClassroomDisplay = pathname?.startsWith('/memo') ?? false;
   const chat = useChatbot();
 
   // 웰컴 메시지 후 3초 뒤 알림 뱃지 표시
@@ -34,13 +39,19 @@ export default function ChatWidget() {
     setIsOpen(false);
   };
 
-  const handleFeedbackResolved = useCallback((messageId: string) => {
-    chat.setMessageFeedback(messageId, 'resolved' as FeedbackState);
-  }, [chat]);
+  const handleFeedbackResolved = useCallback(
+    (messageId: string) => {
+      chat.setMessageFeedback(messageId, 'resolved' as FeedbackState);
+    },
+    [chat],
+  );
 
-  const handleFeedbackUnresolved = useCallback((messageId: string) => {
-    chat.setMessageFeedback(messageId, 'unresolved' as FeedbackState);
-  }, [chat]);
+  const handleFeedbackUnresolved = useCallback(
+    (messageId: string) => {
+      chat.setMessageFeedback(messageId, 'unresolved' as FeedbackState);
+    },
+    [chat],
+  );
 
   const handleFeedbackAskMore = useCallback(() => {
     // 랜딩은 inputRef 없이 동작 — 별도 처리 불필요
@@ -59,6 +70,10 @@ export default function ChatWidget() {
       delete (window as any).__ssampin_open_chat;
     };
   });
+
+  if (isClassroomDisplay) {
+    return null;
+  }
 
   return (
     <>
@@ -89,7 +104,16 @@ export default function ChatWidget() {
         aria-label={isOpen ? '채팅 닫기' : '쌤핀 AI에게 물어보기'}
       >
         {isOpen ? (
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="white"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
             <path d="M18 6 6 18" />
             <path d="M6 6l12 12" />
           </svg>

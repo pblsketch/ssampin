@@ -46,6 +46,7 @@ import type { INotebookRepository } from '@domain/repositories/INotebookReposito
 import type { IWallBoardRepository } from '@domain/repositories/IWallBoardRepository';
 import type { IStickerRepository } from '@domain/repositories/IStickerRepository';
 import type { IClassroomAgreementRepository } from '@domain/repositories/IClassroomAgreementRepository';
+import type { IMemoShareClient } from '@domain/ports/IMemoShareClient';
 import type { IThumbnailer, IPreviewExtractor, IPrinterAdapter } from '@domain/ports/IFormPorts';
 
 import { ElectronStorageAdapter } from '@infrastructure/storage/ElectronStorageAdapter';
@@ -326,6 +327,28 @@ export const surveySupabaseClient = new SurveySupabaseClient();
 
 export function resetGoogleDriveClient(): void {
   _driveClient = null;
+}
+
+// === 메모 교실 공유 (Google Drive) ===
+
+// MemoShareDriveClient는 토큰 getter가 필요 → 인증 후 lazy 초기화.
+// 구현 파일(src/infrastructure/google/MemoShareDriveClient.ts)은 다른 세션이 병렬 작성 중이므로
+// 정적 import 대신 호출 시점 dynamic import를 사용한다 — 파일이 아직 없어도
+// container를 import하는 기존 테스트/번들이 깨지지 않는다.
+let _memoShareClient: IMemoShareClient | null = null;
+
+export async function getMemoShareClient(
+  getAccessToken: () => Promise<string>,
+): Promise<IMemoShareClient> {
+  if (!_memoShareClient) {
+    const { MemoShareDriveClient } = await import('@infrastructure/google/MemoShareDriveClient');
+    _memoShareClient = new MemoShareDriveClient(getAccessToken);
+  }
+  return _memoShareClient;
+}
+
+export function resetMemoShareClient(): void {
+  _memoShareClient = null;
 }
 
 // === Google Drive 동기화 ===

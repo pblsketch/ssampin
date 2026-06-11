@@ -1,5 +1,6 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useMemoStore } from '@adapters/stores/useMemoStore';
+import { useMemoShareStore } from '@adapters/stores/useMemoShareStore';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import type { Memo } from '@domain/entities/Memo';
 import type { MemoColor } from '@domain/valueObjects/MemoColor';
@@ -7,6 +8,7 @@ import { PageHeader } from '@adapters/components/common/PageHeader';
 import { MEMO_COLORS } from '@domain/valueObjects/MemoColor';
 import { MemoCard } from './MemoCard';
 import { MemoDetailPopup } from './MemoDetailPopup';
+import { MemoShareModal } from './MemoShareModal';
 
 const COLOR_BG: Record<MemoColor, string> = {
   yellow: 'bg-yellow-300',
@@ -24,16 +26,37 @@ const COLOR_DOT_BG: Record<MemoColor, string> = {
 
 export function MemoPage() {
   const { track } = useAnalytics();
-  const { memos, loaded, load, addMemo, deleteMemo, updateMemo, updateColor, arrangeInGrid, archiveMemo, unarchiveMemo } = useMemoStore();
+  const {
+    memos,
+    loaded,
+    load,
+    addMemo,
+    deleteMemo,
+    updateMemo,
+    updateColor,
+    arrangeInGrid,
+    archiveMemo,
+    unarchiveMemo,
+  } = useMemoStore();
   const [selectedColor, setSelectedColor] = useState<MemoColor>('yellow');
   const [topMemoId, setTopMemoId] = useState<string | null>(null);
   const [detailMemo, setDetailMemo] = useState<Memo | null>(null);
   const [showArchived, setShowArchived] = useState(false);
+  const [shareModalOpen, setShareModalOpen] = useState(false);
+  const shareBoards = useMemoShareStore((s) => s.boards);
   const canvasRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     void load();
+    // 교실 공유 보드 로드 + 메모 변경 관찰 시작 (멱등)
+    void useMemoShareStore.getState().initialize();
   }, [load]);
+
+  // 공유 중인 메모 id 집합 (카드 배지용)
+  const sharedMemoIds = useMemo(
+    () => new Set(shareBoards.flatMap((board) => board.items.map((item) => item.memoId))),
+    [shareBoards],
+  );
 
   const handleAddMemo = useCallback(() => {
     track('memo_create');
@@ -112,59 +135,80 @@ export function MemoPage() {
         icon="sticky_note_2"
         iconIsMaterial
         title="나의 메모장"
-        leftAddon={!showArchived ? (
-          <div className="flex items-center gap-2 rounded-full border border-sp-border bg-sp-card px-3 py-1.5">
-            <span className="text-xs font-sp-medium text-sp-muted">색상</span>
-            {MEMO_COLORS.map((color) => (
+        leftAddon={
+          !showArchived ? (
+            <div className="flex items-center gap-2 rounded-full border border-sp-border bg-sp-card px-3 py-1.5">
+              <span className="text-xs font-sp-medium text-sp-muted">색상</span>
+              {MEMO_COLORS.map((color) => (
+                <button
+                  key={color}
+                  onClick={() => setSelectedColor(color)}
+                  className={`h-5 w-5 rounded-full ${COLOR_BG[color]} ring-2 transition-all hover:scale-110 ${selectedColor === color ? 'ring-white' : 'ring-transparent'}`}
+                  aria-label={`${color} 색상 선택`}
+                />
+              ))}
+            </div>
+          ) : undefined
+        }
+        rightActions={
+          <>
+            {!showArchived && (
               <button
-                key={color}
-                onClick={() => setSelectedColor(color)}
-                className={`h-5 w-5 rounded-full ${COLOR_BG[color]} ring-2 transition-all hover:scale-110 ${selectedColor === color ? 'ring-white' : 'ring-transparent'}`}
-                aria-label={`${color} 색상 선택`}
-              />
-            ))}
-          </div>
-        ) : undefined}
-        rightActions={<>
-          <button
-            onClick={() => setShowArchived((v) => !v)}
-            className={`flex items-center gap-1.5 rounded-xl border px-3 xl:px-4 py-2 xl:py-2.5 text-xs xl:text-sm font-sp-semibold transition-all duration-sp-base ease-sp-out active:scale-95 ${
-              showArchived
-                ? 'bg-sp-accent border-sp-accent text-white'
-                : 'bg-sp-card border-sp-border text-sp-text hover:bg-sp-surface'
-            }`}
-            title="보관함 보기"
-          >
-            <span className="material-symbols-outlined text-icon">archive</span>
-            <span className="hidden sm:inline">보관함</span>
-            {archivedMemos.length > 0 && (
-              <span className={`flex h-5 min-w-[20px] items-center justify-center rounded-full px-1.5 text-xs font-bold ${
-                showArchived ? 'bg-white/20 text-white' : 'bg-sp-accent text-white'
-              }`}>
-                {archivedMemos.length}
-              </span>
+                onClick={() => setShareModalOpen(true)}
+                className="flex items-center gap-1.5 rounded-xl border border-sp-border bg-sp-card px-3 xl:px-4 py-2 xl:py-2.5 text-xs xl:text-sm font-sp-semibold text-sp-text transition-all duration-sp-base ease-sp-out hover:bg-sp-surface active:scale-95"
+                title="교실 화면에 공유"
+              >
+                <span className="material-symbols-outlined text-icon">cast</span>
+                <span className="hidden sm:inline">교실에 공유</span>
+                {shareBoards.length > 0 && (
+                  <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-sp-accent px-1.5 text-xs font-bold text-white">
+                    {shareBoards.length}
+                  </span>
+                )}
+              </button>
             )}
-          </button>
-          {!showArchived && (
             <button
-              onClick={() => void arrangeInGrid(canvasRef.current?.clientWidth || 800)}
-              className="flex items-center gap-1.5 rounded-xl border border-sp-border bg-sp-card px-3 xl:px-4 py-2 xl:py-2.5 text-xs xl:text-sm font-sp-semibold text-sp-text transition-all duration-sp-base ease-sp-out hover:bg-sp-surface active:scale-95"
-              title="격자로 정렬"
+              onClick={() => setShowArchived((v) => !v)}
+              className={`flex items-center gap-1.5 rounded-xl border px-3 xl:px-4 py-2 xl:py-2.5 text-xs xl:text-sm font-sp-semibold transition-all duration-sp-base ease-sp-out active:scale-95 ${
+                showArchived
+                  ? 'bg-sp-accent border-sp-accent text-white'
+                  : 'bg-sp-card border-sp-border text-sp-text hover:bg-sp-surface'
+              }`}
+              title="보관함 보기"
             >
-              <span className="material-symbols-outlined text-icon">grid_view</span>
-              <span className="hidden sm:inline">격자 정렬</span>
+              <span className="material-symbols-outlined text-icon">archive</span>
+              <span className="hidden sm:inline">보관함</span>
+              {archivedMemos.length > 0 && (
+                <span
+                  className={`flex h-5 min-w-[20px] items-center justify-center rounded-full px-1.5 text-xs font-bold ${
+                    showArchived ? 'bg-white/20 text-white' : 'bg-sp-accent text-white'
+                  }`}
+                >
+                  {archivedMemos.length}
+                </span>
+              )}
             </button>
-          )}
-          {!showArchived && (
-            <button
-              onClick={handleAddMemo}
-              className="flex items-center gap-1.5 rounded-xl bg-sp-accent px-3 xl:px-4 py-2 xl:py-2.5 text-xs xl:text-sm font-sp-semibold text-white shadow-sp-accent transition-all duration-sp-base ease-sp-out hover:brightness-110 active:scale-95"
-            >
-              <span className="material-symbols-outlined text-icon">add</span>
-              <span className="hidden sm:inline">새 메모</span>
-            </button>
-          )}
-        </>}
+            {!showArchived && (
+              <button
+                onClick={() => void arrangeInGrid(canvasRef.current?.clientWidth || 800)}
+                className="flex items-center gap-1.5 rounded-xl border border-sp-border bg-sp-card px-3 xl:px-4 py-2 xl:py-2.5 text-xs xl:text-sm font-sp-semibold text-sp-text transition-all duration-sp-base ease-sp-out hover:bg-sp-surface active:scale-95"
+                title="격자로 정렬"
+              >
+                <span className="material-symbols-outlined text-icon">grid_view</span>
+                <span className="hidden sm:inline">격자 정렬</span>
+              </button>
+            )}
+            {!showArchived && (
+              <button
+                onClick={handleAddMemo}
+                className="flex items-center gap-1.5 rounded-xl bg-sp-accent px-3 xl:px-4 py-2 xl:py-2.5 text-xs xl:text-sm font-sp-semibold text-white shadow-sp-accent transition-all duration-sp-base ease-sp-out hover:brightness-110 active:scale-95"
+              >
+                <span className="material-symbols-outlined text-icon">add</span>
+                <span className="hidden sm:inline">새 메모</span>
+              </button>
+            )}
+          </>
+        }
       />
 
       {showArchived ? (
@@ -172,7 +216,9 @@ export function MemoPage() {
         <div className="flex-1 overflow-y-auto p-8">
           {archivedMemos.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-3 py-24">
-              <span className="material-symbols-outlined text-5xl text-sp-muted/30">inventory_2</span>
+              <span className="material-symbols-outlined text-5xl text-sp-muted/30">
+                inventory_2
+              </span>
               <p className="text-sp-muted/50 text-sm">보관된 메모가 없습니다</p>
             </div>
           ) : (
@@ -184,9 +230,13 @@ export function MemoPage() {
                 >
                   {/* Color indicator + content */}
                   <div className="flex items-start gap-3">
-                    <span className={`mt-1 h-3 w-3 shrink-0 rounded-full ${COLOR_DOT_BG[memo.color]}`} />
+                    <span
+                      className={`mt-1 h-3 w-3 shrink-0 rounded-full ${COLOR_DOT_BG[memo.color]}`}
+                    />
                     <p className="flex-1 text-sm leading-relaxed text-sp-text line-clamp-4">
-                      {memo.content.trim() || <span className="text-sp-muted italic">내용 없음</span>}
+                      {memo.content.trim() || (
+                        <span className="text-sp-muted italic">내용 없음</span>
+                      )}
                     </p>
                   </div>
                   {/* Date */}
@@ -237,6 +287,7 @@ export function MemoPage() {
               key={memo.id}
               memo={memo}
               isTop={memo.id === topMemoId}
+              isShared={sharedMemoIds.has(memo.id)}
               onBringToFront={handleBringToFront}
               onDelete={deleteMemo}
               onOpenDetail={handleOpenDetail}
@@ -252,6 +303,8 @@ export function MemoPage() {
           </p>
         </div>
       )}
+
+      <MemoShareModal isOpen={shareModalOpen} onClose={() => setShareModalOpen(false)} />
 
       {detailMemo && (
         <MemoDetailPopup

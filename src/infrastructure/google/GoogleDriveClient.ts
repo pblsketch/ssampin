@@ -304,4 +304,34 @@ export class GoogleDriveClient {
       body: JSON.stringify({ trashed: true }),
     });
   }
+
+  /**
+   * 공개 권한 부여 — "링크가 있는 모든 사용자" 읽기 전용 (plan C-3 W5)
+   *
+   * 메모 교실 공유: 보드 JSON·이미지 업로드 직후 각각 적용해
+   * 비로그인 교실 페이지가 API 키만으로 읽을 수 있게 한다.
+   * @param fileId 파일 ID
+   */
+  async createPublicPermission(fileId: string): Promise<void> {
+    await this.request(`/files/${fileId}/permissions`, {
+      method: 'POST',
+      body: JSON.stringify({ type: 'anyone', role: 'reader' }),
+    });
+  }
+
+  /**
+   * 파일 영구 삭제 — 휴지통 미경유, 204 응답 (plan C-3 W7)
+   *
+   * 공유 중지 = 즉시 소멸 요구이므로 `trashFile`(휴지통행) 대신 사용.
+   * 404(이미 삭제됨)는 조용히 무시 — 멱등성 보장.
+   * @param fileId 파일 ID
+   */
+  async deleteFile(fileId: string): Promise<void> {
+    try {
+      await this.request(`/files/${fileId}`, { method: 'DELETE' });
+    } catch (error) {
+      if ((error as Partial<DriveApiError>).code === 404) return; // 이미 삭제됨 — 멱등
+      throw error;
+    }
+  }
 }

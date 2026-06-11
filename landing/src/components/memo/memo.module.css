@@ -1,0 +1,509 @@
+/* ───────────────────────────────────────────────────────────────
+   우리 반 메모 — 교실 전자칠판 게시용 미니멀 그리드
+   라이트: 따뜻한 종이 결 / 다크: 명도 반전(어두운 카드 + 밝은 텍스트,
+   컬러 바는 채도 유지) — feedback_dark_mode_color_assimilation 준수
+   ─────────────────────────────────────────────────────────────── */
+
+.root {
+  /* 표면 */
+  --memo-bg: #f6f1e7;
+  --memo-header-bg: rgba(246, 241, 231, 0.86);
+  --memo-card: #fffdf8;
+  --memo-border: rgba(94, 80, 58, 0.14);
+  --memo-shadow: 0 1px 2px rgba(72, 60, 40, 0.05), 0 10px 28px -22px rgba(72, 60, 40, 0.4);
+
+  /* 텍스트 */
+  --memo-text: #241e15;
+  --memo-muted: #75695a;
+
+  /* 포스트잇 컬러 바 (양 테마 채도 유지) */
+  --memo-bar-yellow: #e3a82d;
+  --memo-bar-pink: #e06b96;
+  --memo-bar-green: #4caf72;
+  --memo-bar-blue: #4f86d8;
+
+  /* 카드 틴트 표면 — 라이트: 은은한 파스텔 */
+  --memo-card-yellow: #fdf8ea;
+  --memo-card-pink: #fcf2f5;
+  --memo-card-green: #f1f8f1;
+  --memo-card-blue: #f0f5fb;
+
+  /* 상태 */
+  --memo-dot-ok: #34a866;
+  --memo-dot-bad: #a8a094;
+  --memo-control-bg: rgba(94, 80, 58, 0.07);
+  --memo-control-bg-hover: rgba(94, 80, 58, 0.13);
+
+  min-height: 100dvh;
+  background: var(--memo-bg);
+  color: var(--memo-text);
+  font-family:
+    var(--font-noto-sans-kr), 'Pretendard Variable', Pretendard, 'Apple SD Gothic Neo',
+    'Malgun Gothic', system-ui, sans-serif;
+  line-height: 1.6;
+  word-break: keep-all;
+  transition:
+    background-color 240ms ease,
+    color 240ms ease;
+}
+
+.root[data-theme='dark'] {
+  --memo-bg: #16130e;
+  --memo-header-bg: rgba(22, 19, 14, 0.84);
+  --memo-card: #221e17;
+  --memo-border: rgba(238, 228, 206, 0.1);
+  --memo-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 30px -22px rgba(0, 0, 0, 0.7);
+
+  --memo-text: #f0e9da;
+  --memo-muted: #a79d8b;
+
+  /* 명도 반전: 어두운 카드 표면(아주 약한 색 기운) + 밝은 텍스트 */
+  --memo-card-yellow: #272015;
+  --memo-card-pink: #281c21;
+  --memo-card-green: #1c241c;
+  --memo-card-blue: #1b2129;
+
+  --memo-dot-ok: #3fce7f;
+  --memo-dot-bad: #6f675b;
+  --memo-control-bg: rgba(238, 228, 206, 0.08);
+  --memo-control-bg-hover: rgba(238, 228, 206, 0.16);
+}
+
+/* ── 헤더 ────────────────────────────────────────────────────── */
+
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.9rem clamp(1rem, 3vw, 2.5rem);
+  background: var(--memo-header-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--memo-border);
+}
+
+.headerTitleGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.boardTitle {
+  font-size: clamp(1.15rem, 1rem + 1vw, 1.7rem);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.clock {
+  font-size: clamp(0.8rem, 0.7rem + 0.5vw, 1rem);
+  color: var(--memo-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.headerControls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.statusDot {
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 9999px;
+  margin-right: 0.25rem;
+  transition: background-color 300ms ease;
+}
+
+.statusDotOk {
+  background: var(--memo-dot-ok);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--memo-dot-ok) 22%, transparent);
+}
+
+.statusDotBad {
+  background: var(--memo-dot-bad);
+}
+
+.controlButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  height: 2.5rem;
+  min-width: 2.5rem;
+  padding: 0 0.65rem;
+  border: none;
+  border-radius: 0.75rem;
+  background: var(--memo-control-bg);
+  color: var(--memo-text);
+  font-size: 1.05rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background-color 150ms ease;
+}
+
+.controlButton:hover {
+  background: var(--memo-control-bg-hover);
+}
+
+.controlButton:focus-visible {
+  outline: 2px solid var(--memo-bar-blue);
+  outline-offset: 2px;
+}
+
+.installButton {
+  font-size: 0.875rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.installLabel {
+  display: none;
+}
+
+@media (min-width: 640px) {
+  .installLabel {
+    display: inline;
+  }
+}
+
+/* ── 보드 그리드 ─────────────────────────────────────────────── */
+
+.boardMain {
+  padding: clamp(1.25rem, 3vw, 2.5rem);
+  padding-bottom: clamp(3rem, 6vw, 5rem);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: clamp(1rem, 2vw, 1.5rem);
+  align-items: start;
+  max-width: 1680px;
+  margin: 0 auto;
+}
+
+/* 항목 1~2개 — 중앙 정렬 + 크게 (교실 뒤에서 가독) */
+.gridFew {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: stretch;
+  gap: clamp(1.25rem, 2.5vw, 2rem);
+  padding-top: clamp(1rem, 6vh, 4rem);
+}
+
+.gridFew .card {
+  width: min(100%, 720px);
+  --memo-font-scale: 1.35;
+}
+
+/* ── 카드 ────────────────────────────────────────────────────── */
+
+.card {
+  --memo-font-scale: 1;
+  --memo-bar-color: var(--memo-bar-yellow);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  border-radius: 1rem;
+  background: var(--memo-card);
+  border: 1px solid var(--memo-border);
+  box-shadow: var(--memo-shadow);
+  overflow: hidden;
+  transition:
+    background-color 240ms ease,
+    border-color 240ms ease;
+}
+
+.colorBar {
+  height: 4px;
+  flex-shrink: 0;
+  background: var(--memo-bar-color);
+}
+
+.cardYellow {
+  --memo-bar-color: var(--memo-bar-yellow);
+  background: var(--memo-card-yellow);
+}
+
+.cardPink {
+  --memo-bar-color: var(--memo-bar-pink);
+  background: var(--memo-card-pink);
+}
+
+.cardGreen {
+  --memo-bar-color: var(--memo-bar-green);
+  background: var(--memo-card-green);
+}
+
+.cardBlue {
+  --memo-bar-color: var(--memo-bar-blue);
+  background: var(--memo-card-blue);
+}
+
+.cardContent {
+  padding: clamp(1rem, 1.5vw, 1.5rem);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 0;
+}
+
+/* 칠판 가독용 타이포 스케일 — 데스크톱 메모 대비 약 1.25~1.5배 */
+.fontSm {
+  font-size: calc(clamp(1rem, 0.9rem + 0.45vw, 1.25rem) * var(--memo-font-scale));
+}
+
+.fontBase {
+  font-size: calc(clamp(1.2rem, 1.05rem + 0.6vw, 1.55rem) * var(--memo-font-scale));
+}
+
+.fontLg {
+  font-size: calc(clamp(1.45rem, 1.25rem + 0.8vw, 1.95rem) * var(--memo-font-scale));
+  line-height: 1.5;
+}
+
+.fontXl {
+  font-size: calc(clamp(1.8rem, 1.5rem + 1.1vw, 2.5rem) * var(--memo-font-scale));
+  line-height: 1.4;
+  font-weight: 600;
+}
+
+/* 이미지 */
+.imageButton {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: zoom-in;
+}
+
+.cardImage {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 0.75rem 0.75rem 0 0;
+  object-fit: cover;
+}
+
+/* ── 카드 등장/수정/퇴장 애니메이션 ───────────────────────────── */
+
+@keyframes memoScaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes memoGlow {
+  0% {
+    box-shadow:
+      0 0 0 2.5px var(--memo-bar-color),
+      var(--memo-shadow);
+  }
+  70% {
+    box-shadow:
+      0 0 0 2.5px var(--memo-bar-color),
+      var(--memo-shadow);
+  }
+  100% {
+    box-shadow:
+      0 0 0 2.5px transparent,
+      var(--memo-shadow);
+  }
+}
+
+@keyframes memoPulse {
+  0%,
+  100% {
+    box-shadow: var(--memo-shadow);
+    transform: scale(1);
+  }
+  35% {
+    box-shadow:
+      0 0 0 3px var(--memo-bar-color),
+      var(--memo-shadow);
+    transform: scale(1.012);
+  }
+}
+
+@keyframes memoFadeOut {
+  to {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+.cardFresh {
+  animation:
+    memoScaleIn 250ms ease-out,
+    memoGlow 2s ease-out;
+}
+
+.cardPulse {
+  animation: memoPulse 1.2s ease-in-out 1;
+}
+
+.cardLeaving {
+  animation: memoFadeOut 300ms ease-in forwards;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cardFresh,
+  .cardPulse {
+    animation: none;
+  }
+  .cardLeaving {
+    animation: none;
+    opacity: 0;
+  }
+}
+
+/* ── 상태 화면 (로딩 / 공유 중지 / 설정 오류) ─────────────────── */
+
+.stateScreen {
+  min-height: calc(100dvh - 5rem);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 2rem;
+  text-align: center;
+}
+
+.stateEmoji {
+  font-size: 3rem;
+  line-height: 1;
+}
+
+.stateTitle {
+  font-size: clamp(1.3rem, 1.1rem + 1vw, 1.8rem);
+  font-weight: 700;
+  margin: 0;
+}
+
+.stateDescription {
+  font-size: clamp(0.95rem, 0.85rem + 0.4vw, 1.15rem);
+  color: var(--memo-muted);
+  margin: 0;
+  max-width: 32rem;
+}
+
+@keyframes memoSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spinner {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 9999px;
+  border: 3px solid var(--memo-border);
+  border-top-color: var(--memo-bar-blue);
+  animation: memoSpin 0.9s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation-duration: 2.4s;
+  }
+}
+
+.emptyBoard {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: clamp(3rem, 10vh, 6rem) 1rem;
+  color: var(--memo-muted);
+  font-size: clamp(1.05rem, 1rem + 0.4vw, 1.3rem);
+}
+
+/* ── 라이트박스 ──────────────────────────────────────────────── */
+
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(1rem, 4vw, 3rem);
+  background: rgba(12, 10, 7, 0.82);
+  border: none;
+  cursor: zoom-out;
+  animation: memoScaleIn 200ms ease-out;
+}
+
+.lightboxImage {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 1rem;
+  box-shadow: 0 24px 64px -24px rgba(0, 0, 0, 0.8);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lightbox {
+    animation: none;
+  }
+}
+
+/* ── 토스트 ──────────────────────────────────────────────────── */
+
+@keyframes memoToastIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 0.75rem);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: clamp(1.5rem, 4vh, 3rem);
+  transform: translateX(-50%);
+  z-index: 60;
+  max-width: min(92vw, 26rem);
+  padding: 0.8rem 1.2rem;
+  border-radius: 0.875rem;
+  background: var(--memo-text);
+  color: var(--memo-bg);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  box-shadow: 0 12px 32px -12px rgba(0, 0, 0, 0.4);
+  animation: memoToastIn 220ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast {
+    animation: none;
+  }
+}
+
+/* ── 푸터 ────────────────────────────────────────────────────── */
+
+.footer {
+  text-align: center;
+  padding: 0 1rem 1.5rem;
+  font-size: 0.8rem;
+  color: var(--memo-muted);
+}

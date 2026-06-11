@@ -1,0 +1,221 @@
+/**
+ * 교실 메모 보드 — Google Drive 읽기 전용 API 래퍼 (plan.md C-3 R1~R3)
+ *
+ * 비로그인 교실 페이지는 referrer 제한된 공개 API 키만 사용한다.
+ * 교사 OAuth 토큰은 이 경로에 절대 존재하지 않는다 (SC-4).
+ */
+
+const DRIVE_FILES_BASE = 'https://www.googleapis.com/drive/v3/files';
+
+export const MAX_BOARD_ITEMS = 50;
+
+export type MemoColor = 'yellow' | 'pink' | 'green' | 'blue';
+export type MemoFontSize = 'sm' | 'base' | 'lg' | 'xl';
+
+const MEMO_COLORS: readonly MemoColor[] = ['yellow', 'pink', 'green', 'blue'];
+const MEMO_FONT_SIZES: readonly MemoFontSize[] = ['sm', 'base', 'lg', 'xl'];
+
+export interface MemoShareItemImage {
+  readonly fileId: string;
+  readonly width: number;
+  readonly height: number;
+}
+
+export interface MemoShareItemSnapshot {
+  readonly id: string;
+  readonly content: string;
+  readonly color: MemoColor;
+  readonly fontSize: MemoFontSize;
+  readonly sortOrder: number;
+  readonly updatedAt: string;
+  readonly image?: MemoShareItemImage;
+}
+
+export interface MemoShareBoardFile {
+  readonly version: 1;
+  readonly title: string;
+  readonly updatedAt: string;
+  readonly items: readonly MemoShareItemSnapshot[];
+}
+
+export interface BoardMeta {
+  readonly version: string;
+  readonly modifiedTime: string;
+}
+
+/**
+ * 오류 분류:
+ * - 'gone'        → 404/403: 선생님이 공유를 중지했거나 파일이 삭제됨
+ * - 'missing-key' → NEXT_PUBLIC_GOOGLE_DRIVE_API_KEY 미설정 (배포 설정 오류)
+ * - 'invalid'     → 응답 JSON이 보드 스키마(version=1)와 불일치
+ * - 'network'     → 일시적 네트워크/서버 오류 (백오프 재시도 대상)
+ */
+export type DriveBoardErrorKind = 'gone' | 'missing-key' | 'invalid' | 'network';
+
+export class DriveBoardError extends Error {
+  readonly kind: DriveBoardErrorKind;
+
+  constructor(kind: DriveBoardErrorKind, message: string) {
+    super(message);
+    this.name = 'DriveBoardError';
+    this.kind = kind;
+  }
+}
+
+export function getDriveApiKey(): string | null {
+  const key = process.env.NEXT_PUBLIC_GOOGLE_DRIVE_API_KEY;
+  if (typeof key !== 'string' || key.trim().length === 0) return null;
+  return key.trim();
+}
+
+function requireApiKey(): string {
+  const key = getDriveApiKey();
+  if (key === null) {
+    throw new DriveBoardError('missing-key', 'Google Drive 읽기 키가 설정되지 않았습니다.');
+  }
+  return key;
+}
+
+async function driveFetch(url: string): Promise<Response> {
+  let res: Response;
+  try {
+    res = await fetch(url, { cache: 'no-store' });
+  } catch {
+    throw new DriveBoardError('network', '네트워크 요청에 실패했습니다.');
+  }
+  if (res.status === 404 || res.status === 403) {
+    throw new DriveBoardError('gone', '보드를 더 이상 읽을 수 없습니다. (공유 중지 또는 삭제)');
+  }
+  if (!res.ok) {
+    throw new DriveBoardError('network', `Drive 응답 오류 (HTTP ${res.status})`);
+  }
+  return res;
+}
+
+/** R1 — 변경 감지용 메타데이터 (응답 ~100B). version 변화 시에만 본문을 다시 가져온다. */
+export async function getBoardMeta(fileId: string): Promise<BoardMeta> {
+  const key = requireApiKey();
+  const url = `${DRIVE_FILES_BASE}/${encodeURIComponent(fileId)}?fields=version%2CmodifiedTime&key=${encodeURIComponent(key)}`;
+  const res = await driveFetch(url);
+
+  let raw: unknown;
+  try {
+    raw = await res.json();
+  } catch {
+    throw new DriveBoardError('invalid', '메타데이터 응답을 해석할 수 없습니다.');
+  }
+
+  if (typeof raw !== 'object' || raw === null) {
+    throw new DriveBoardError('invalid', '메타데이터 형식이 올바르지 않습니다.');
+  }
+  const record = raw as Record<string, unknown>;
+  const version = record.version;
+  const modifiedTime = record.modifiedTime;
+  if (typeof version !== 'string' || version.length === 0) {
+    throw new DriveBoardError('invalid', '메타데이터에 version이 없습니다.');
+  }
+  return {
+    version,
+    modifiedTime: typeof modifiedTime === 'string' ? modifiedTime : '',
+  };
+}
+
+/** R2 — 보드 본문 JSON. 스키마 검증 실패 시 'invalid' 오류를 던진다. */
+export async function getBoardFile(fileId: string): Promise<MemoShareBoardFile> {
+  const key = requireApiKey();
+  const url = `${DRIVE_FILES_BASE}/${encodeURIComponent(fileId)}?alt=media&key=${encodeURIComponent(key)}`;
+  const res = await driveFetch(url);
+
+  let raw: unknown;
+  try {
+    raw = await res.json();
+  } catch {
+    throw new DriveBoardError('invalid', '보드 파일을 해석할 수 없습니다.');
+  }
+
+  const board = parseBoardFile(raw);
+  if (board === null) {
+    throw new DriveBoardError('invalid', '보드 파일이 알 수 없는 형식입니다.');
+  }
+  return board;
+}
+
+/** R3 — 이미지 URL 빌더. `<img src>`로 직접 사용 (CORS 불필요). */
+export function buildImageUrl(imageFileId: string): string {
+  const key = getDriveApiKey() ?? '';
+  return `${DRIVE_FILES_BASE}/${encodeURIComponent(imageFileId)}?alt=media&key=${encodeURIComponent(key)}`;
+}
+
+function isMemoColor(value: unknown): value is MemoColor {
+  return typeof value === 'string' && (MEMO_COLORS as readonly string[]).includes(value);
+}
+
+function isMemoFontSize(value: unknown): value is MemoFontSize {
+  return typeof value === 'string' && (MEMO_FONT_SIZES as readonly string[]).includes(value);
+}
+
+function parseItemImage(raw: unknown): MemoShareItemImage | null {
+  if (typeof raw !== 'object' || raw === null) return null;
+  const record = raw as Record<string, unknown>;
+  if (typeof record.fileId !== 'string' || record.fileId.length === 0) return null;
+  if (typeof record.width !== 'number' || typeof record.height !== 'number') return null;
+  if (!Number.isFinite(record.width) || !Number.isFinite(record.height)) return null;
+  return { fileId: record.fileId, width: record.width, height: record.height };
+}
+
+function parseItem(raw: unknown): MemoShareItemSnapshot | null {
+  if (typeof raw !== 'object' || raw === null) return null;
+  const record = raw as Record<string, unknown>;
+  if (typeof record.id !== 'string' || record.id.length === 0) return null;
+  if (typeof record.content !== 'string') return null;
+  if (!isMemoColor(record.color)) return null;
+  if (!isMemoFontSize(record.fontSize)) return null;
+  if (typeof record.sortOrder !== 'number' || !Number.isFinite(record.sortOrder)) return null;
+  if (typeof record.updatedAt !== 'string') return null;
+
+  const item: MemoShareItemSnapshot = {
+    id: record.id,
+    content: record.content,
+    color: record.color,
+    fontSize: record.fontSize,
+    sortOrder: record.sortOrder,
+    updatedAt: record.updatedAt,
+  };
+
+  if (record.image !== undefined && record.image !== null) {
+    const image = parseItemImage(record.image);
+    if (image === null) return null;
+    return { ...item, image };
+  }
+  return item;
+}
+
+/**
+ * 보드 JSON 검증 (plan.md C-2와 동일 규칙: version=1 · 필수 필드 · enum · items≤50).
+ * 검증 실패 시 null — 호출 측이 안전한 오류 화면으로 빠진다.
+ */
+export function parseBoardFile(raw: unknown): MemoShareBoardFile | null {
+  if (typeof raw !== 'object' || raw === null) return null;
+  const record = raw as Record<string, unknown>;
+
+  if (record.version !== 1) return null;
+  if (typeof record.title !== 'string') return null;
+  if (typeof record.updatedAt !== 'string') return null;
+  if (!Array.isArray(record.items)) return null;
+  if (record.items.length > MAX_BOARD_ITEMS) return null;
+
+  const items: MemoShareItemSnapshot[] = [];
+  for (const rawItem of record.items) {
+    const item = parseItem(rawItem);
+    if (item === null) return null;
+    items.push(item);
+  }
+  items.sort((a, b) => a.sortOrder - b.sortOrder);
+
+  return {
+    version: 1,
+    title: record.title,
+    updatedAt: record.updatedAt,
+    items,
+  };
+}

@@ -30,3 +30,10 @@ export type {
   CreateRegisterSheetInput,
   CreateRegisterSheetResult,
 } from './IGoogleSheetPort';
+
+export type {
+  IMemoShareClient,
+  MemoShareImageUpload,
+  CreateBoardResult,
+  UpdateBoardResult,
+} from './IMemoShareClient';

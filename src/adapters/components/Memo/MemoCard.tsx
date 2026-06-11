@@ -12,6 +12,7 @@ import { MemoRichEditor } from './MemoRichEditor';
 import { MemoRichToolbarExtras } from './MemoRichToolbarExtras';
 import { MemoImageAttachment } from './MemoImageAttachment';
 import { MemoImageViewer } from './MemoImageViewer';
+import { MemoShareBadge } from './MemoShareBadge';
 
 const NOTE_BG: Record<MemoColor, string> = {
   yellow: 'bg-yellow-200',
@@ -44,6 +45,8 @@ const COLOR_DOT_BG: Record<MemoColor, string> = {
 interface MemoCardProps {
   memo: Memo;
   isTop: boolean;
+  /** 교실 공유 보드에 포함된 메모면 배지 표시 (기존 동작 무변경) */
+  isShared?: boolean;
   onBringToFront: (id: string) => void;
   onDelete: (id: string) => void;
   onOpenDetail?: (memo: Memo) => void;
@@ -51,15 +54,35 @@ interface MemoCardProps {
   canvasRef: RefObject<HTMLDivElement | null>;
 }
 
-export function MemoCard({ memo, isTop, onBringToFront, onDelete, onOpenDetail, onArchive, canvasRef }: MemoCardProps) {
-  const { updateMemo, updatePosition, updateColor, updateSize, updateFontSize, attachImage, detachImage } = useMemoStore();
+export function MemoCard({
+  memo,
+  isTop,
+  isShared = false,
+  onBringToFront,
+  onDelete,
+  onOpenDetail,
+  onArchive,
+  canvasRef,
+}: MemoCardProps) {
+  const {
+    updateMemo,
+    updatePosition,
+    updateColor,
+    updateSize,
+    updateFontSize,
+    attachImage,
+    detachImage,
+  } = useMemoStore();
   const { show: showToast } = useToastStore();
   const [editing, setEditing] = useState(false);
   const [viewerOpen, setViewerOpen] = useState(false);
   const [content, setContent] = useState(memo.content);
   const [dragging, setDragging] = useState(false);
   const [resizing, setResizing] = useState(false);
-  const [resizeSize, setResizeSize] = useState({ width: memo.width ?? MEMO_SIZE.DEFAULT_WIDTH, height: memo.height ?? MEMO_SIZE.DEFAULT_HEIGHT });
+  const [resizeSize, setResizeSize] = useState({
+    width: memo.width ?? MEMO_SIZE.DEFAULT_WIDTH,
+    height: memo.height ?? MEMO_SIZE.DEFAULT_HEIGHT,
+  });
   const cardRef = useRef<HTMLDivElement>(null);
   const dragOffset = useRef({ x: 0, y: 0 });
   const mouseDownPos = useRef({ x: 0, y: 0 });
@@ -71,7 +94,10 @@ export function MemoCard({ memo, isTop, onBringToFront, onDelete, onOpenDetail, 
   }, [memo.content]);
 
   useEffect(() => {
-    setResizeSize({ width: memo.width ?? MEMO_SIZE.DEFAULT_WIDTH, height: memo.height ?? MEMO_SIZE.DEFAULT_HEIGHT });
+    setResizeSize({
+      width: memo.width ?? MEMO_SIZE.DEFAULT_WIDTH,
+      height: memo.height ?? MEMO_SIZE.DEFAULT_HEIGHT,
+    });
   }, [memo.width, memo.height]);
 
   const handleDoubleClick = useCallback(() => {
@@ -202,8 +228,14 @@ export function MemoCard({ memo, isTop, onBringToFront, onDelete, onOpenDetail, 
       setResizing(true);
 
       const handleMouseMove = (ev: MouseEvent) => {
-        const newWidth = Math.max(MEMO_SIZE.MIN_WIDTH, Math.min(MEMO_SIZE.MAX_WIDTH, startWidth + (ev.clientX - startX)));
-        const newHeight = Math.max(MEMO_SIZE.MIN_HEIGHT, Math.min(MEMO_SIZE.MAX_HEIGHT, startHeight + (ev.clientY - startY)));
+        const newWidth = Math.max(
+          MEMO_SIZE.MIN_WIDTH,
+          Math.min(MEMO_SIZE.MAX_WIDTH, startWidth + (ev.clientX - startX)),
+        );
+        const newHeight = Math.max(
+          MEMO_SIZE.MIN_HEIGHT,
+          Math.min(MEMO_SIZE.MAX_HEIGHT, startHeight + (ev.clientY - startY)),
+        );
         setResizeSize({ width: newWidth, height: newHeight });
       };
 
@@ -212,8 +244,14 @@ export function MemoCard({ memo, isTop, onBringToFront, onDelete, onOpenDetail, 
         window.removeEventListener('mouseup', handleMouseUp);
         setResizing(false);
 
-        const finalWidth = Math.max(MEMO_SIZE.MIN_WIDTH, Math.min(MEMO_SIZE.MAX_WIDTH, startWidth + (ev.clientX - startX)));
-        const finalHeight = Math.max(MEMO_SIZE.MIN_HEIGHT, Math.min(MEMO_SIZE.MAX_HEIGHT, startHeight + (ev.clientY - startY)));
+        const finalWidth = Math.max(
+          MEMO_SIZE.MIN_WIDTH,
+          Math.min(MEMO_SIZE.MAX_WIDTH, startWidth + (ev.clientX - startX)),
+        );
+        const finalHeight = Math.max(
+          MEMO_SIZE.MIN_HEIGHT,
+          Math.min(MEMO_SIZE.MAX_HEIGHT, startHeight + (ev.clientY - startY)),
+        );
         void updateSize(memo.id, finalWidth, finalHeight);
       };
 
@@ -285,8 +323,11 @@ export function MemoCard({ memo, isTop, onBringToFront, onDelete, onOpenDetail, 
   return (
     <div
       ref={cardRef}
-      className={`group absolute ${NOTE_BG[memo.color]} rounded-sm text-slate-800 shadow-[0_4px_6px_-1px_rgba(0,0,0,0.1),0_2px_4px_-1px_rgba(0,0,0,0.06),0_10px_15px_-3px_rgba(0,0,0,0.1)] transition-transform duration-300 ${dragging ? 'scale-105 !rotate-0 cursor-grabbing' : 'cursor-move hover:rotate-0 hover:scale-105'
-        }`}
+      className={`group absolute ${NOTE_BG[memo.color]} rounded-sm text-slate-800 shadow-[0_4px_6px_-1px_rgba(0,0,0,0.1),0_2px_4px_-1px_rgba(0,0,0,0.06),0_10px_15px_-3px_rgba(0,0,0,0.1)] transition-transform duration-300 ${
+        dragging
+          ? 'scale-105 !rotate-0 cursor-grabbing'
+          : 'cursor-move hover:rotate-0 hover:scale-105'
+      }`}
       style={{
         left: memo.x,
         top: memo.y,
@@ -298,6 +339,9 @@ export function MemoCard({ memo, isTop, onBringToFront, onDelete, onOpenDetail, 
       onMouseDown={handleMouseDown}
       onDoubleClick={handleDoubleClick}
     >
+      {/* 교실 공유 중 배지 */}
+      {isShared && <MemoShareBadge className="absolute -top-2.5 left-3 z-30" />}
+
       {/* Paper texture overlay */}
       <div
         className="pointer-events-none absolute inset-0 rounded-sm opacity-[0.08]"
@@ -317,8 +361,9 @@ export function MemoCard({ memo, isTop, onBringToFront, onDelete, onOpenDetail, 
                 e.stopPropagation();
                 handleColorChange(color);
               }}
-              className={`h-2.5 w-2.5 rounded-full ${color === memo.color ? DOT_COLOR[color] : COLOR_DOT_BG[color]
-                } opacity-0 transition-opacity group-hover:opacity-100 hover:scale-125`}
+              className={`h-2.5 w-2.5 rounded-full ${
+                color === memo.color ? DOT_COLOR[color] : COLOR_DOT_BG[color]
+              } opacity-0 transition-opacity group-hover:opacity-100 hover:scale-125`}
               aria-label={`${color} 색상으로 변경`}
             />
           ))}
@@ -351,7 +396,7 @@ export function MemoCard({ memo, isTop, onBringToFront, onDelete, onOpenDetail, 
           <MemoImageAttachment
             image={memo.image}
             onOpenViewer={() => setViewerOpen(true)}
-            onRemove={editing ? (() => void handleDetachImage()) : undefined}
+            onRemove={editing ? () => void handleDetachImage() : undefined}
           />
         </div>
       )}
@@ -378,18 +423,16 @@ export function MemoCard({ memo, isTop, onBringToFront, onDelete, onOpenDetail, 
               />
             }
           />
+        ) : memo.content ? (
+          <MemoFormattedText
+            content={memo.content}
+            className="flex-1 leading-relaxed text-slate-700"
+            fontSize={memo.fontSize}
+          />
         ) : (
-          memo.content ? (
-            <MemoFormattedText
-              content={memo.content}
-              className="flex-1 leading-relaxed text-slate-700"
-              fontSize={memo.fontSize}
-            />
-          ) : (
-            <div className="flex-1 text-base leading-relaxed text-slate-700">
-              <span className="text-slate-400">더블 클릭하여 메모를 작성하세요</span>
-            </div>
-          )
+          <div className="flex-1 text-base leading-relaxed text-slate-700">
+            <span className="text-slate-400">더블 클릭하여 메모를 작성하세요</span>
+          </div>
         )}
       </div>
 

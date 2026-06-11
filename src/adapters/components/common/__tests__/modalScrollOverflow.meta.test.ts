@@ -49,6 +49,7 @@ const MODALS_TO_GUARD: ReadonlyArray<readonly [filePath: string, label: string]>
   ['src/adapters/components/Export/ExportPreviewModal.tsx', 'ExportPreviewModal'],
   ['src/adapters/components/Tools/Sticker/StickerAddPickerModal.tsx', 'StickerAddPickerModal'],
   ['src/adapters/components/Tools/Sticker/StickerSettingsModal.tsx', 'StickerSettingsModal'],
+  ['src/adapters/components/Memo/MemoShareModal.tsx', 'MemoShareModal'],
 ];
 
 /** Modal 베이스 컴포넌트가 보장해야 하는 패널 클래스. 베이스 회귀를 차단. */

@@ -1,0 +1,511 @@
+'use client';
+
+/**
+ * 우리 반 메모 — 교실 전자칠판 게시 페이지 (읽기 전용)
+ *
+ * plan.md C-3: 5초 메타데이터(version) 폴링 → 변경 시에만 본문 fetch
+ * - diff(항목 id·updatedAt) → 추가 scale-in+차임 / 수정 pulse / 삭제 fade-out
+ * - visibilitychange: hidden→중단, visible→즉시 1회 후 재개
+ * - 연속 실패 백오프 5s→10s→30s, 네트워크 오류 시 마지막 데이터 유지
+ * - 404/403 → "선생님이 공유를 중지했어요"
+ */
+
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
+import type {
+  MemoColor,
+  MemoFontSize,
+  MemoShareBoardFile,
+  MemoShareItemSnapshot,
+} from './driveBoardApi';
+import {
+  DriveBoardError,
+  buildImageUrl,
+  getBoardFile,
+  getBoardMeta,
+  getDriveApiKey,
+} from './driveBoardApi';
+import { useMemoChime } from './useMemoChime';
+import styles from './memo.module.css';
+
+const POLL_INTERVAL_MS = 5000;
+const BACKOFF_STEPS_MS = [5000, 10000, 30000] as const;
+const FRESH_DURATION_MS = 2300;
+const PULSE_DURATION_MS = 1400;
+const LEAVE_DURATION_MS = 320;
+const THEME_STORAGE_KEY = 'ssampin-memo-theme';
+
+type BoardStatus = 'loading' | 'ready' | 'gone' | 'config-error';
+type Theme = 'light' | 'dark';
+
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
+}
+
+const COLOR_CLASS: Record<MemoColor, string> = {
+  yellow: styles.cardYellow,
+  pink: styles.cardPink,
+  green: styles.cardGreen,
+  blue: styles.cardBlue,
+};
+
+const FONT_CLASS: Record<MemoFontSize, string> = {
+  sm: styles.fontSm,
+  base: styles.fontBase,
+  lg: styles.fontLg,
+  xl: styles.fontXl,
+};
+
+const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'] as const;
+
+function formatClock(date: Date): string {
+  const month = date.getMonth() + 1;
+  const day = date.getDate();
+  const weekday = WEEKDAYS[date.getDay()];
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  return `${month}월 ${day}일 (${weekday}) · ${hours}:${minutes}`;
+}
+
+interface MemoBoardContentProps {
+  fileId: string;
+}
+
+export function MemoBoardContent({ fileId }: MemoBoardContentProps) {
+  const [status, setStatus] = useState<BoardStatus>('loading');
+  const [board, setBoard] = useState<MemoShareBoardFile | null>(null);
+  const [connected, setConnected] = useState(true);
+  const [theme, setTheme] = useState<Theme>('light');
+  const [freshIds, setFreshIds] = useState<ReadonlySet<string>>(new Set());
+  const [pulsedIds, setPulsedIds] = useState<ReadonlySet<string>>(new Set());
+  const [leavingItems, setLeavingItems] = useState<readonly MemoShareItemSnapshot[]>([]);
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+  const [now, setNow] = useState<Date | null>(null);
+  const [canInstall, setCanInstall] = useState(false);
+  const [installed, setInstalled] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+
+  const { soundOn, toggleSound, playChime } = useMemoChime();
+
+  const statusRef = useRef<BoardStatus>('loading');
+  const boardRef = useRef<MemoShareBoardFile | null>(null);
+  const versionRef = useRef<string | null>(null);
+  const failCountRef = useRef(0);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tickRef = useRef<() => void>(() => undefined);
+  const installEventRef = useRef<BeforeInstallPromptEvent | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const playChimeRef = useRef(playChime);
+  playChimeRef.current = playChime;
+
+  const updateStatus = useCallback((next: BoardStatus) => {
+    statusRef.current = next;
+    setStatus(next);
+  }, []);
+
+  const clearPollTimer = useCallback(() => {
+    if (timerRef.current !== null) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+  }, []);
+
+  const schedulePoll = useCallback(
+    (delay: number) => {
+      clearPollTimer();
+      timerRef.current = setTimeout(() => {
+        timerRef.current = null;
+        tickRef.current();
+      }, delay);
+    },
+    [clearPollTimer],
+  );
+
+  /** 새 보드 적용 + diff 애니메이션 트리거 */
+  const applyBoard = useCallback((next: MemoShareBoardFile) => {
+    const prev = boardRef.current;
+    boardRef.current = next;
+    setBoard(next);
+
+    if (prev === null) return; // 첫 로드 — 애니메이션·차임 없음
+
+    const prevById = new Map(prev.items.map((item) => [item.id, item]));
+    const nextIds = new Set(next.items.map((item) => item.id));
+
+    const addedIds = next.items.filter((item) => !prevById.has(item.id)).map((item) => item.id);
+    const updatedIds = next.items
+      .filter((item) => {
+        const before = prevById.get(item.id);
+        return before !== undefined && before.updatedAt !== item.updatedAt;
+      })
+      .map((item) => item.id);
+    const removed = prev.items.filter((item) => !nextIds.has(item.id));
+
+    if (addedIds.length > 0) {
+      setFreshIds(new Set(addedIds));
+      playChimeRef.current();
+      setTimeout(() => setFreshIds(new Set()), FRESH_DURATION_MS);
+    }
+    if (updatedIds.length > 0) {
+      setPulsedIds(new Set(updatedIds));
+      setTimeout(() => setPulsedIds(new Set()), PULSE_DURATION_MS);
+    }
+    if (removed.length > 0) {
+      setLeavingItems(removed);
+      setTimeout(() => setLeavingItems([]), LEAVE_DURATION_MS);
+    }
+  }, []);
+
+  /** 폴링 1회 — R1 메타데이터 확인 후 version 변화 시에만 R2 본문 */
+  const tick = useCallback(async () => {
+    if (statusRef.current === 'gone' || statusRef.current === 'config-error') return;
+
+    try {
+      const meta = await getBoardMeta(fileId);
+      if (versionRef.current === null || meta.version !== versionRef.current) {
+        const file = await getBoardFile(fileId);
+        versionRef.current = meta.version;
+        applyBoard(file);
+        if (statusRef.current !== 'ready') updateStatus('ready');
+      }
+      failCountRef.current = 0;
+      setConnected(true);
+      schedulePoll(POLL_INTERVAL_MS);
+    } catch (error) {
+      if (error instanceof DriveBoardError) {
+        if (error.kind === 'gone') {
+          clearPollTimer();
+          updateStatus('gone');
+          return;
+        }
+        if (error.kind === 'missing-key') {
+          clearPollTimer();
+          updateStatus('config-error');
+          return;
+        }
+      }
+      // network / invalid → 마지막 데이터 유지 + 백오프 재시도
+      const failIndex = Math.min(failCountRef.current, BACKOFF_STEPS_MS.length - 1);
+      failCountRef.current += 1;
+      setConnected(false);
+      schedulePoll(BACKOFF_STEPS_MS[failIndex]);
+    }
+  }, [fileId, applyBoard, schedulePoll, clearPollTimer, updateStatus]);
+
+  useEffect(() => {
+    tickRef.current = () => {
+      void tick();
+    };
+  }, [tick]);
+
+  /* 초기 로드 + 폴링 시작 */
+  useEffect(() => {
+    if (getDriveApiKey() === null) {
+      updateStatus('config-error');
+      return;
+    }
+    tickRef.current();
+    return clearPollTimer;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fileId]);
+
+  /* 탭 가시성 — hidden이면 폴링 중단, 복귀 시 즉시 1회 */
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        clearPollTimer();
+      } else if (statusRef.current === 'loading' || statusRef.current === 'ready') {
+        clearPollTimer();
+        tickRef.current();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
+  }, [clearPollTimer]);
+
+  /* 테마 — localStorage 우선, 없으면 prefers-color-scheme */
+  useEffect(() => {
+    let stored: string | null = null;
+    try {
+      stored = window.localStorage.getItem(THEME_STORAGE_KEY);
+    } catch {
+      /* localStorage 비활성 환경 */
+    }
+    if (stored === 'dark' || stored === 'light') {
+      setTheme(stored);
+    } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      setTheme('dark');
+    }
+  }, []);
+
+  const toggleTheme = useCallback(() => {
+    setTheme((prev) => {
+      const next: Theme = prev === 'light' ? 'dark' : 'light';
+      try {
+        window.localStorage.setItem(THEME_STORAGE_KEY, next);
+      } catch {
+        /* 영속 실패 무시 */
+      }
+      return next;
+    });
+  }, []);
+
+  /* 현재 시각 — 분 단위 갱신 (교실 게시 특성) */
+  useEffect(() => {
+    setNow(new Date());
+    const interval = setInterval(() => setNow(new Date()), 15000);
+    return () => clearInterval(interval);
+  }, []);
+
+  /* 라이트박스 ESC 닫기 */
+  useEffect(() => {
+    if (lightboxSrc === null) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setLightboxSrc(null);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [lightboxSrc]);
+
+  /* PWA — SW 등록 + 설치 프롬프트 캡처 */
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      void navigator.serviceWorker
+        .register('/sw-memo.js', { scope: '/memo/' })
+        .catch(() => undefined);
+    }
+    if (window.matchMedia('(display-mode: standalone)').matches) {
+      setInstalled(true);
+    }
+    const onBeforeInstall = (event: Event) => {
+      event.preventDefault();
+      installEventRef.current = event as BeforeInstallPromptEvent;
+      setCanInstall(true);
+    };
+    const onInstalled = () => {
+      installEventRef.current = null;
+      setCanInstall(false);
+      setInstalled(true);
+    };
+    window.addEventListener('beforeinstallprompt', onBeforeInstall);
+    window.addEventListener('appinstalled', onInstalled);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', onBeforeInstall);
+      window.removeEventListener('appinstalled', onInstalled);
+    };
+  }, []);
+
+  const showToast = useCallback((message: string) => {
+    setToast(message);
+    if (toastTimerRef.current !== null) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setToast(null), 4000);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current !== null) clearTimeout(toastTimerRef.current);
+    };
+  }, []);
+
+  const handleInstall = useCallback(() => {
+    const installEvent = installEventRef.current;
+    if (installEvent) {
+      void installEvent.prompt();
+      void installEvent.userChoice.then(({ outcome }) => {
+        if (outcome === 'accepted') {
+          installEventRef.current = null;
+          setCanInstall(false);
+        }
+      });
+    } else {
+      showToast(
+        '이 브라우저는 바로 설치를 지원하지 않아요. 브라우저 메뉴에서 "홈 화면에 추가"를 눌러 주세요.',
+      );
+    }
+  }, [showToast]);
+
+  /* 표시 목록 — 현재 항목 + 퇴장 중인 항목(fade-out), sortOrder 순 */
+  const displayItems = useMemo(() => {
+    const items: { item: MemoShareItemSnapshot; leaving: boolean }[] = (board?.items ?? []).map(
+      (item) => ({
+        item,
+        leaving: false,
+      }),
+    );
+    const currentIds = new Set(items.map(({ item }) => item.id));
+    for (const item of leavingItems) {
+      if (!currentIds.has(item.id)) items.push({ item, leaving: true });
+    }
+    items.sort((a, b) => a.item.sortOrder - b.item.sortOrder);
+    return items;
+  }, [board, leavingItems]);
+
+  const fewItems = displayItems.length > 0 && displayItems.length <= 2;
+
+  /* ── 상태 화면 ── */
+
+  let stateScreen: ReactNode = null;
+  if (status === 'loading') {
+    stateScreen = (
+      <div className={styles.stateScreen} role="status">
+        <div className={styles.spinner} aria-hidden="true" />
+        <h2 className={styles.stateTitle}>메모를 불러오고 있어요</h2>
+        {!connected && (
+          <p className={styles.stateDescription}>
+            연결이 원활하지 않아요. 잠시 후 자동으로 다시 시도합니다.
+          </p>
+        )}
+      </div>
+    );
+  } else if (status === 'gone') {
+    stateScreen = (
+      <div className={styles.stateScreen}>
+        <div className={styles.stateEmoji} aria-hidden="true">
+          📪
+        </div>
+        <h2 className={styles.stateTitle}>선생님이 공유를 중지했어요</h2>
+        <p className={styles.stateDescription}>
+          이 메모 보드는 더 이상 볼 수 없어요. 새 링크가 필요하면 선생님께 문의해 주세요.
+        </p>
+      </div>
+    );
+  } else if (status === 'config-error') {
+    stateScreen = (
+      <div className={styles.stateScreen}>
+        <div className={styles.stateEmoji} aria-hidden="true">
+          🔧
+        </div>
+        <h2 className={styles.stateTitle}>페이지 설정이 완료되지 않았어요</h2>
+        <p className={styles.stateDescription}>
+          보드를 읽기 위한 설정이 아직 등록되지 않았어요. 쌤핀 관리자에게 알려 주세요.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className={styles.root} data-theme={theme}>
+      <header className={styles.header}>
+        <div className={styles.headerTitleGroup}>
+          <h1 className={styles.boardTitle}>{board?.title.trim() || '우리 반 메모'}</h1>
+          {now !== null && <span className={styles.clock}>{formatClock(now)}</span>}
+        </div>
+
+        <div className={styles.headerControls}>
+          {/* 공유 중지(gone)·설정 오류는 재연결 대상이 아니므로 상태 점 미표시 */}
+          {status !== 'gone' && status !== 'config-error' && (
+            <span
+              className={`${styles.statusDot} ${connected && status === 'ready' ? styles.statusDotOk : styles.statusDotBad}`}
+              role="status"
+              aria-label={
+                connected && status === 'ready' ? '실시간 연결됨' : '연결 끊김 — 다시 연결 중'
+              }
+              title={connected && status === 'ready' ? '실시간 연결됨' : '연결 끊김 — 다시 연결 중'}
+            />
+          )}
+          <button
+            type="button"
+            className={styles.controlButton}
+            onClick={toggleSound}
+            aria-pressed={soundOn}
+            aria-label={soundOn ? '새 메모 알림음 끄기' : '새 메모 알림음 켜기'}
+            title={soundOn ? '알림음 켜짐' : '알림음 꺼짐'}
+          >
+            {soundOn ? '🔔' : '🔕'}
+          </button>
+          <button
+            type="button"
+            className={styles.controlButton}
+            onClick={toggleTheme}
+            aria-label={theme === 'light' ? '어두운 화면으로 바꾸기' : '밝은 화면으로 바꾸기'}
+            title={theme === 'light' ? '어두운 화면' : '밝은 화면'}
+          >
+            {theme === 'light' ? '🌙' : '☀️'}
+          </button>
+          {!installed && (
+            <button
+              type="button"
+              className={`${styles.controlButton} ${styles.installButton}`}
+              onClick={handleInstall}
+              aria-label="전자칠판에 앱으로 설치"
+            >
+              <span aria-hidden="true">⬇</span>
+              <span className={styles.installLabel}>
+                {canInstall ? '전자칠판에 설치' : '설치 안내'}
+              </span>
+            </button>
+          )}
+        </div>
+      </header>
+
+      {stateScreen ?? (
+        <main className={styles.boardMain}>
+          <div className={fewItems ? styles.gridFew : styles.grid}>
+            {displayItems.length === 0 ? (
+              <p className={styles.emptyBoard}>
+                아직 공유된 메모가 없어요. 선생님이 메모를 올리면 여기에 바로 나타나요.
+              </p>
+            ) : (
+              displayItems.map(({ item, leaving }) => (
+                <article
+                  key={item.id}
+                  className={[
+                    styles.card,
+                    COLOR_CLASS[item.color],
+                    freshIds.has(item.id) ? styles.cardFresh : '',
+                    pulsedIds.has(item.id) ? styles.cardPulse : '',
+                    leaving ? styles.cardLeaving : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                >
+                  <div className={styles.colorBar} aria-hidden="true" />
+                  {item.image && (
+                    <button
+                      type="button"
+                      className={styles.imageButton}
+                      onClick={() => item.image && setLightboxSrc(buildImageUrl(item.image.fileId))}
+                      aria-label="이미지 크게 보기"
+                    >
+                      <img
+                        className={styles.cardImage}
+                        src={buildImageUrl(item.image.fileId)}
+                        width={item.image.width}
+                        height={item.image.height}
+                        alt=""
+                        loading="lazy"
+                      />
+                    </button>
+                  )}
+                  <p className={`${styles.cardContent} ${FONT_CLASS[item.fontSize]}`}>
+                    {item.content}
+                  </p>
+                </article>
+              ))
+            )}
+          </div>
+        </main>
+      )}
+
+      <footer className={styles.footer}>쌤핀 · 우리 반 메모</footer>
+
+      {lightboxSrc !== null && (
+        <button
+          type="button"
+          className={styles.lightbox}
+          onClick={() => setLightboxSrc(null)}
+          aria-label="이미지 닫기"
+        >
+          <img className={styles.lightboxImage} src={lightboxSrc} alt="확대된 메모 이미지" />
+        </button>
+      )}
+
+      {toast !== null && (
+        <div className={styles.toast} role="status">
+          {toast}
+        </div>
+      )}
+    </div>
+  );
+}
