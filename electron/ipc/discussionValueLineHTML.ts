@@ -1,3 +1,15 @@
+import {
+  getConnectionChipCSS,
+  getConnectionChipHTML,
+  getConnectionChipJS,
+  getStatusScreenHTML,
+  getStudentBaseCSS,
+  getStudentFeedbackJS,
+  getStudentFontLinks,
+  getStudentViewportMeta,
+  getToastHTML,
+} from './_studentPageChrome';
+
 function escapeHtml(text: string): string {
   return text
     .replace(/&/g, '&amp;')
@@ -12,116 +24,33 @@ export function generateValueLineHTML(topic: string): string {
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  ${getStudentViewportMeta()}
   <title>쌤핀 가치수직선 토론</title>
+  ${getStudentFontLinks()}
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
+    [hidden] { display: none !important; }
+${getStudentBaseCSS()}
+    /* 기존 페이지 변수 — 셸 토큰으로 단일화 (값 정의는 --sps-* 한 곳) */
     :root {
-      --accent: #3b82f6;
-      --bg: #0a0e17;
-      --card: #1a2332;
-      --border: #2a3548;
-      --text: #e2e8f0;
-      --muted: #94a3b8;
-    }
-
-    body {
-      min-height: 100vh;
-      background: var(--bg);
-      color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      display: flex;
-      justify-content: center;
-      align-items: flex-start;
-    }
-
-    #app {
-      max-width: 480px;
-      width: 100%;
-      padding: 20px;
+      --accent: var(--sps-accent);
+      --bg: var(--sps-bg);
+      --card: var(--sps-card);
+      --border: var(--sps-border);
+      --text: var(--sps-text);
+      --muted: var(--sps-muted);
     }
 
     /* ── Shared ── */
     .screen { display: none; }
     .screen.active { display: block; }
 
-    .state-view {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      text-align: center;
-      min-height: 60vh;
-      gap: 16px;
-    }
-
-    .logo {
-      text-align: center;
-      font-size: 18px;
-      font-weight: 700;
-      color: var(--text);
-      margin-bottom: 28px;
-      margin-top: 12px;
-    }
-
-    .card {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 20px;
-    }
-
-    input[type="text"] {
-      width: 100%;
-      height: 52px;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      color: var(--text);
-      font-family: inherit;
-      font-size: 16px;
-      padding: 0 14px;
-      outline: none;
-      transition: border-color 0.2s;
-      -webkit-tap-highlight-color: transparent;
-    }
-
-    input[type="text"]::placeholder { color: var(--muted); }
-    input[type="text"]:focus { border-color: var(--accent); }
-
-    .primary-btn {
-      width: 100%;
-      height: 52px;
-      background: var(--accent);
-      color: #fff;
-      border: none;
-      border-radius: 14px;
-      font-size: 17px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: opacity 0.2s, transform 0.1s;
-      -webkit-tap-highlight-color: transparent;
-      touch-action: manipulation;
-    }
-
-    .primary-btn:active { transform: scale(0.97); }
-    .primary-btn:disabled { opacity: 0.4; pointer-events: none; }
-
-    /* ── Join Screen ── */
-    #join-screen .label {
-      font-size: 13px;
-      color: var(--muted);
-      margin-bottom: 8px;
-    }
-
-    #join-screen .field { margin-bottom: 16px; }
+    #header { text-align: center; padding-top: 4px; }
 
     /* ── Discussion Screen ── */
     #topic-bar {
       background: var(--card);
       border: 1px solid var(--border);
-      border-radius: 12px;
+      border-radius: var(--sps-radius-card);
       padding: 12px 16px;
       font-size: 15px;
       font-weight: 600;
@@ -140,9 +69,10 @@ export function generateValueLineHTML(topic: string): string {
     #value-line-card {
       background: var(--card);
       border: 1px solid var(--border);
-      border-radius: 16px;
+      border-radius: var(--sps-radius-card);
       padding: 20px 16px;
       margin-bottom: 16px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
     }
 
     .vl-labels {
@@ -154,7 +84,7 @@ export function generateValueLineHTML(topic: string): string {
     .vl-label-oppose {
       font-size: 14px;
       font-weight: 700;
-      color: #ef4444;
+      color: var(--sps-error);
     }
 
     .vl-label-agree {
@@ -182,6 +112,20 @@ export function generateValueLineHTML(topic: string): string {
       background: linear-gradient(to right, #ef4444, #8b5cf6, #3b82f6);
     }
 
+    /* 중앙(중립) 눈금 — 색 그라데이션 외 비색상 단서 (색각 이상 대응) */
+    #vl-center-tick {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 2px;
+      height: 22px;
+      transform: translate(-50%, -50%);
+      background: var(--sps-text);
+      opacity: 0.5;
+      border-radius: 1px;
+      pointer-events: none;
+    }
+
     /* Other students */
     .peer-handle {
       position: absolute;
@@ -204,14 +148,14 @@ export function generateValueLineHTML(topic: string): string {
       position: absolute;
       top: calc(50% + 20px);
       transform: translateX(-50%);
-      font-size: 10px;
+      font-size: 11px;
       color: var(--muted);
       white-space: nowrap;
       pointer-events: none;
       transition: left 0.2s ease;
     }
 
-    /* My handle */
+    /* My handle — role=slider, 키보드 조작 가능 */
     #my-handle {
       position: absolute;
       top: 50%;
@@ -220,7 +164,7 @@ export function generateValueLineHTML(topic: string): string {
       height: 48px;
       border-radius: 50%;
       border: 3px solid var(--accent);
-      box-shadow: 0 0 0 4px rgba(59,130,246,0.25);
+      box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.25);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -235,15 +179,27 @@ export function generateValueLineHTML(topic: string): string {
 
     #my-handle:active { cursor: grabbing; }
 
+    /* 위치 확정 피드백 — 드래그 종료 시 1회 펄스 */
+    #my-handle.confirmed { animation: vl-confirm 0.35s ease-out; }
+    @keyframes vl-confirm {
+      0% { transform: translate(-50%, -50%) scale(1); }
+      40% { transform: translate(-50%, -50%) scale(1.12); }
+      100% { transform: translate(-50%, -50%) scale(1); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      #my-handle.confirmed { animation: none; }
+    }
+
     /* Chat */
     #chat-card {
       background: var(--card);
       border: 1px solid var(--border);
-      border-radius: 16px;
+      border-radius: var(--sps-radius-card);
       overflow: hidden;
       display: flex;
       flex-direction: column;
       height: 260px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
     }
 
     #chat-messages {
@@ -279,8 +235,6 @@ export function generateValueLineHTML(topic: string): string {
       margin-top: 2px;
     }
 
-    .chat-msg-body {}
-
     .chat-msg-meta {
       font-size: 11px;
       color: var(--muted);
@@ -308,7 +262,7 @@ export function generateValueLineHTML(topic: string): string {
       border: none;
       color: var(--text);
       font-family: inherit;
-      font-size: 15px;
+      font-size: 16px;
       padding: 0 14px;
       outline: none;
     }
@@ -317,10 +271,12 @@ export function generateValueLineHTML(topic: string): string {
 
     #chat-send {
       height: 48px;
+      min-width: 64px;
       padding: 0 16px;
       background: var(--accent);
       color: #fff;
       border: none;
+      font-family: inherit;
       font-size: 14px;
       font-weight: 600;
       cursor: pointer;
@@ -330,54 +286,29 @@ export function generateValueLineHTML(topic: string): string {
     }
 
     #chat-send:active { opacity: 0.8; }
-
-    /* ── End Screen ── */
-    #end-screen .big-emoji {
-      font-size: 72px;
-      line-height: 1;
-      animation: scaleIn 0.5s ease-out;
-    }
-
-    #end-screen h2 {
-      font-size: 22px;
-      font-weight: 700;
-    }
-
-    #end-screen p {
-      color: var(--muted);
-      font-size: 15px;
-    }
-
-    @keyframes scaleIn {
-      from { transform: scale(0); opacity: 0; }
-      to   { transform: scale(1); opacity: 1; }
-    }
-
-    /* ── Connecting ── */
-    #connecting-screen {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 60vh;
-      color: var(--muted);
-      font-size: 16px;
-    }
+    #chat-send:disabled { opacity: 0.4; cursor: not-allowed; }
+${getConnectionChipCSS()}
   </style>
 </head>
-<body>
-  <div id="app">
+<body class="sps-page">
+  ${getConnectionChipHTML()}
+  <script>${getConnectionChipJS({ submitButtonSelectors: ['#join-btn', '#chat-send'] })}</script>
+  <div id="app" class="sps-app">
     <!-- Connecting -->
-    <div id="connecting-screen">연결 중...</div>
+    <div id="connecting-screen">${getStatusScreenHTML('connecting', { id: 'connecting-inner', hiddenByDefault: false })}</div>
 
     <!-- Join Screen -->
     <div id="join-screen" class="screen">
-      <div class="logo">📏 쌤핀 가치수직선 토론</div>
-      <div class="card">
-        <div class="field">
-          <div class="label">이름 또는 닉네임</div>
-          <input type="text" id="name-input" placeholder="이름 또는 닉네임" maxlength="10" autocomplete="off" />
+      <div id="header">
+        <div class="sps-logo">쌤핀 가치수직선 토론</div>
+      </div>
+      <div id="join-topic" class="sps-screen-subtitle" style="text-align:center;margin-bottom:16px;">${escapeHtml(topic)}</div>
+      <div class="sps-card">
+        <div class="field" style="margin-bottom:16px;">
+          <label class="sps-screen-subtitle" for="name-input" style="display:block;margin-bottom:8px;font-size:13px;">이름 또는 닉네임</label>
+          <input type="text" id="name-input" class="sps-input" placeholder="이름 또는 닉네임" maxlength="10" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="go" />
         </div>
-        <button class="primary-btn" id="join-btn" disabled>입장하기</button>
+        <button class="sps-btn" id="join-btn" disabled>입장하기</button>
       </div>
     </div>
 
@@ -395,29 +326,30 @@ export function generateValueLineHTML(topic: string): string {
         </div>
         <div id="vl-track-wrapper">
           <div id="vl-track"></div>
+          <div id="vl-center-tick"></div>
           <!-- Peer handles injected by JS -->
-          <div id="my-handle"></div>
+          <div id="my-handle" role="slider" tabindex="0" aria-label="내 위치 (왼쪽 반대, 오른쪽 찬성)"
+            aria-valuemin="0" aria-valuemax="100" aria-valuenow="50"></div>
         </div>
       </div>
 
       <div id="chat-card">
         <div id="chat-messages"></div>
         <div class="chat-input-row">
-          <input type="text" id="chat-input" placeholder="의견을 입력하세요..." maxlength="500" autocomplete="off" />
-          <button id="chat-send">전송</button>
+          <input type="text" id="chat-input" placeholder="의견을 입력하세요..." maxlength="500" autocomplete="off" enterkeyhint="send" />
+          <button id="chat-send" disabled>전송</button>
         </div>
       </div>
     </div>
 
+    <!-- Disconnected Screen (2026-06-12 감사 P0 — 침묵 재연결로 응답이 유실되던 결함) -->
+    <div id="disconnected-screen" class="screen">${getStatusScreenHTML('disconnected', { id: 'disconnected-inner', hiddenByDefault: false })}</div>
+
     <!-- End Screen -->
-    <div id="end-screen" class="screen">
-      <div class="state-view">
-        <div class="big-emoji">📏</div>
-        <h2>토론이 종료되었습니다</h2>
-        <p>참여해 주셔서 감사합니다!</p>
-      </div>
-    </div>
+    <div id="end-screen" class="screen">${getStatusScreenHTML('closed', { id: 'end-inner', title: '토론이 종료되었습니다', subtitle: '참여해 주셔서 감사합니다!', hiddenByDefault: false })}</div>
   </div>
+  ${getToastHTML()}
+  <script>${getStudentFeedbackJS()}</script>
 
   <script>
     (function () {
@@ -433,13 +365,17 @@ export function generateValueLineHTML(topic: string): string {
       var reconnectDelay = 1000;
       var reconnectTimer = null;
       var hasJoined = false;
+      var hasEnded = false;
       var lastMoveSent = 0;
       var pingInterval = null;
+      var joinPendingTimer = null;
       var peers = {}; // id -> { name, emoji, avatarColor, position }
+
+      var HANDLE_HALF = 24; /* #my-handle 48px 고정 — style.width 파싱 취약점 제거 */
 
       /* ── Screen helpers ── */
       function showScreen(id) {
-        var screens = ['connecting-screen', 'join-screen', 'discussion-screen', 'end-screen'];
+        var screens = ['connecting-screen', 'join-screen', 'discussion-screen', 'disconnected-screen', 'end-screen'];
         for (var i = 0; i < screens.length; i++) {
           var el = document.getElementById(screens[i]);
           if (!el) continue;
@@ -462,8 +398,22 @@ export function generateValueLineHTML(topic: string): string {
         joinBtn.disabled = name.length === 0;
       }
 
+      function clearJoinPending() {
+        if (joinPendingTimer) {
+          clearTimeout(joinPendingTimer);
+          joinPendingTimer = null;
+        }
+        if (joinBtn && window.spsSetPending) window.spsSetPending(joinBtn, false);
+      }
+
       if (nameInput) {
         nameInput.addEventListener('input', validateJoin);
+        nameInput.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            if (joinBtn && !joinBtn.disabled) joinBtn.click();
+          }
+        });
       }
 
       if (joinBtn) {
@@ -473,7 +423,14 @@ export function generateValueLineHTML(topic: string): string {
           if (!name) return;
           myName = name;
           if (ws && ws.readyState === WebSocket.OPEN) {
+            if (window.spsSetPending) window.spsSetPending(joinBtn, true, '입장 중...');
             ws.send(JSON.stringify({ type: 'join', name: myName }));
+            joinPendingTimer = setTimeout(function () {
+              clearJoinPending();
+              if (!hasJoined && window.spsToast) window.spsToast('입장이 확인되지 않았어요. 다시 시도해 주세요.');
+            }, 6000);
+          } else {
+            if (window.spsToast) window.spsToast('연결을 확인하는 중이에요. 잠시 후 다시 눌러 주세요.');
           }
         });
       }
@@ -490,10 +447,13 @@ export function generateValueLineHTML(topic: string): string {
       function applyHandlePosition(el, pos) {
         if (!el || !trackWrapper) return;
         var wrapperWidth = trackWrapper.offsetWidth;
-        var halfHandle = parseInt(el.style.width || '48') / 2 || 24;
+        var halfHandle = el === myHandle ? HANDLE_HALF : 16;
         var px = pos * wrapperWidth;
         px = Math.max(halfHandle, Math.min(wrapperWidth - halfHandle, px));
         el.style.left = px + 'px';
+        if (el === myHandle) {
+          el.setAttribute('aria-valuenow', String(Math.round(pos * 100)));
+        }
       }
 
       function clamp(v, min, max) {
@@ -512,6 +472,17 @@ export function generateValueLineHTML(topic: string): string {
         lastMoveSent = now;
         if (ws && ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({ type: 'move', position: positionToPercent(pos) }));
+        }
+      }
+
+      function commitPosition() {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'move', position: positionToPercent(myPosition) }));
+        }
+        if (myHandle) {
+          myHandle.classList.remove('confirmed');
+          void myHandle.offsetWidth; /* reflow로 애니메이션 재시작 */
+          myHandle.classList.add('confirmed');
         }
       }
 
@@ -536,9 +507,7 @@ export function generateValueLineHTML(topic: string): string {
       document.addEventListener('touchend', function () {
         if (!isDragging) return;
         isDragging = false;
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: 'move', position: positionToPercent(myPosition) }));
-        }
+        commitPosition();
       });
 
       // Mouse events (desktop testing)
@@ -560,10 +529,25 @@ export function generateValueLineHTML(topic: string): string {
       document.addEventListener('mouseup', function () {
         if (!isDragging) return;
         isDragging = false;
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: 'move', position: positionToPercent(myPosition) }));
-        }
+        commitPosition();
       });
+
+      // Keyboard (role=slider — 스크린리더/키보드 사용자 대응, 2026-06-12 감사 ③)
+      if (myHandle) {
+        myHandle.addEventListener('keydown', function (e) {
+          var step = 0.05;
+          var next = null;
+          if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') next = clamp(myPosition - step, 0, 1);
+          else if (e.key === 'ArrowRight' || e.key === 'ArrowUp') next = clamp(myPosition + step, 0, 1);
+          else if (e.key === 'Home') next = 0;
+          else if (e.key === 'End') next = 1;
+          if (next === null) return;
+          e.preventDefault();
+          myPosition = next;
+          applyHandlePosition(myHandle, next);
+          commitPosition();
+        });
+      }
 
       /* ── Peers rendering ── */
       function renderPeers() {
@@ -604,6 +588,11 @@ export function generateValueLineHTML(topic: string): string {
       var chatSend = document.getElementById('chat-send');
       var chatMessages = document.getElementById('chat-messages');
 
+      function updateChatSend() {
+        if (!chatInput || !chatSend) return;
+        chatSend.disabled = chatInput.value.trim().length === 0;
+      }
+
       function appendChat(name, emoji, avatarColor, text, isMe) {
         if (!chatMessages) return;
         var msg = document.createElement('div');
@@ -637,10 +626,14 @@ export function generateValueLineHTML(topic: string): string {
         if (!chatInput) return;
         var text = chatInput.value.trim();
         if (!text) return;
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: 'chat', text: text }));
+        // 소켓이 닫혔을 때 입력만 비우고 메시지가 유실되던 결함 — 안내 후 입력 보존
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+          if (window.spsToast) window.spsToast('연결을 확인하는 중이에요. 잠시 후 다시 보내 주세요.');
+          return;
         }
+        ws.send(JSON.stringify({ type: 'chat', text: text }));
         chatInput.value = '';
+        updateChatSend();
       }
 
       if (chatSend) {
@@ -648,6 +641,7 @@ export function generateValueLineHTML(topic: string): string {
       }
 
       if (chatInput) {
+        chatInput.addEventListener('input', updateChatSend);
         chatInput.addEventListener('keydown', function (e) {
           if (e.key === 'Enter') {
             e.preventDefault();
@@ -663,16 +657,20 @@ export function generateValueLineHTML(topic: string): string {
           reconnectTimer = null;
         }
 
+        if (window.spConnSetState) window.spConnSetState('connecting');
+
         try {
           var wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
           ws = new WebSocket(wsProto + '//' + location.host);
         } catch (e) {
+          if (window.spConnSetState) window.spConnSetState('disconnected');
           scheduleReconnect();
           return;
         }
 
         ws.onopen = function () {
           reconnectDelay = 1000;
+          if (window.spConnSetState) window.spConnSetState('connected');
 
           if (pingInterval) clearInterval(pingInterval);
           pingInterval = setInterval(function () {
@@ -700,6 +698,7 @@ export function generateValueLineHTML(topic: string): string {
           if (msg.type === 'session') {
             myId = msg.yourId;
             hasJoined = true;
+            clearJoinPending();
             // Extract avatar info from server
             if (msg.avatar) {
               myConsonant = msg.avatar.consonant || '?';
@@ -739,9 +738,10 @@ export function generateValueLineHTML(topic: string): string {
             var topicEl = document.getElementById('topic-text');
             if (roundEl && msg.round != null) roundEl.textContent = '라운드 ' + msg.round;
             if (topicEl && msg.topic) topicEl.textContent = msg.topic;
-            // Reset to center
+            // Reset to center — 조용한 리셋이던 구간, 안내 추가 (2026-06-12 감사 ⑤)
             myPosition = 0.5;
             applyHandlePosition(myHandle, myPosition);
+            if (window.spsToast) window.spsToast('새 라운드가 시작됐어요. 위치가 가운데로 돌아갑니다.');
             return;
           }
 
@@ -752,6 +752,7 @@ export function generateValueLineHTML(topic: string): string {
           }
 
           if (msg.type === 'end') {
+            hasEnded = true;
             if (pingInterval) clearInterval(pingInterval);
             showScreen('end-screen');
             return;
@@ -761,6 +762,12 @@ export function generateValueLineHTML(topic: string): string {
         ws.onclose = function () {
           ws = null;
           if (pingInterval) { clearInterval(pingInterval); pingInterval = null; }
+          clearJoinPending();
+          if (window.spConnSetState) window.spConnSetState('disconnected');
+          // 침묵 재연결로 학생이 끊김을 모른 채 응답이 유실되던 결함 (감사 P0)
+          if (!hasEnded && hasJoined) {
+            showScreen('disconnected-screen');
+          }
           scheduleReconnect();
         };
 
@@ -772,6 +779,7 @@ export function generateValueLineHTML(topic: string): string {
       function scheduleReconnect() {
         reconnectTimer = setTimeout(function () {
           reconnectTimer = null;
+          if (window.spConnSetState) window.spConnSetState('reconnecting');
           connect();
         }, reconnectDelay);
         reconnectDelay = Math.min(reconnectDelay * 1.5, 10000);
