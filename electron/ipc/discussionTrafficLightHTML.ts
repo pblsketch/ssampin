@@ -1,3 +1,15 @@
+import {
+  getConnectionChipCSS,
+  getConnectionChipHTML,
+  getConnectionChipJS,
+  getStatusScreenHTML,
+  getStudentBaseCSS,
+  getStudentFeedbackJS,
+  getStudentFontLinks,
+  getStudentViewportMeta,
+  getToastHTML,
+} from './_studentPageChrome';
+
 function escapeHtml(text: string): string {
   return text
     .replace(/&/g, '&amp;')
@@ -12,83 +24,33 @@ export function generateTrafficLightHTML(topic: string): string {
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  ${getStudentViewportMeta()}
   <title>쌤핀 신호등 토론</title>
+  ${getStudentFontLinks()}
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
+    [hidden] { display: none !important; }
+${getStudentBaseCSS()}
+    /* 기존 페이지 변수 — 셸 토큰으로 단일화 (값 정의는 --sps-* 한 곳) */
     :root {
-      --accent: #3b82f6;
-      --bg: #0a0e17;
-      --card: #1a2332;
-      --border: #2a3548;
-      --text: #e2e8f0;
-      --muted: #94a3b8;
-    }
-
-    body {
-      min-height: 100vh;
-      background: var(--bg);
-      color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      display: flex;
-      justify-content: center;
-      align-items: flex-start;
-    }
-
-    #app {
-      max-width: 480px;
-      width: 100%;
-      padding: 20px;
+      --accent: var(--sps-accent);
+      --bg: var(--sps-bg);
+      --card: var(--sps-card);
+      --border: var(--sps-border);
+      --text: var(--sps-text);
+      --muted: var(--sps-muted);
     }
 
     /* ── Shared utilities ── */
     .hidden { display: none !important; }
 
-    .state-view {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      text-align: center;
-      min-height: 70vh;
-      gap: 12px;
-    }
-
-    .state-view h2 {
-      font-size: 22px;
-      font-weight: 700;
-      color: var(--text);
-    }
-
-    .state-view p {
-      color: var(--muted);
-      font-size: 15px;
-    }
+    #header { text-align: center; padding-top: 4px; }
 
     /* ── JOIN SCREEN ── */
     #join-screen {
       display: flex;
       flex-direction: column;
-      align-items: center;
-      gap: 0;
-      padding-top: 32px;
-    }
-
-    .logo {
-      font-size: 15px;
-      color: var(--muted);
-      text-align: center;
-      margin-bottom: 28px;
-      letter-spacing: 0.01em;
-    }
-
-    .join-card {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 24px 20px;
-      width: 100%;
+      align-items: stretch;
+      padding-top: 16px;
     }
 
     .join-card label {
@@ -99,64 +61,19 @@ export function generateTrafficLightHTML(topic: string): string {
       margin-bottom: 8px;
     }
 
-    .name-input {
-      width: 100%;
-      height: 48px;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      color: var(--text);
-      font-family: inherit;
-      font-size: 16px;
-      padding: 0 14px;
-      outline: none;
-      transition: border-color 0.2s ease;
-      -webkit-tap-highlight-color: transparent;
-    }
+    .join-card .sps-btn { margin-top: 20px; }
 
-    .name-input::placeholder {
-      color: var(--muted);
-    }
-
-    .name-input:focus {
-      border-color: var(--accent);
-    }
-
-    .join-btn {
-      width: 100%;
-      height: 52px;
-      background: var(--accent);
-      color: #fff;
-      border: none;
-      border-radius: 14px;
-      font-size: 17px;
-      font-weight: 600;
-      cursor: pointer;
-      margin-top: 20px;
-      transition: opacity 0.2s ease, transform 0.1s ease;
-      -webkit-tap-highlight-color: transparent;
-      touch-action: manipulation;
-    }
-
-    .join-btn:active {
-      transform: scale(0.97);
-    }
-
-    .join-btn:disabled {
-      opacity: 0.4;
-      pointer-events: none;
-    }
-
-    /* ── DISCUSSION SCREEN ── */
+    /* ── DISCUSSION SCREEN — fixed 풀스크린 (음수 마진 핵 제거, dvh+safe-area 대응) ── */
     #discussion-screen {
+      position: fixed;
+      inset: 0;
       display: flex;
       flex-direction: column;
       height: 100vh;
-      max-height: 100vh;
+      height: 100dvh;
       overflow: hidden;
-      padding: 0;
-      margin: -20px;
-      width: calc(100% + 40px);
+      background: var(--bg);
+      padding-top: env(safe-area-inset-top, 0px);
     }
 
     .topic-bar {
@@ -179,12 +96,14 @@ export function generateTrafficLightHTML(topic: string): string {
     }
 
     .signal-btn {
+      position: relative;
       width: 100%;
-      height: 80px;
+      height: 76px;
       background: var(--card);
       border: 2px solid var(--border);
-      border-radius: 14px;
+      border-radius: var(--sps-radius-card);
       color: var(--text);
+      font-family: inherit;
       font-size: 18px;
       font-weight: 600;
       cursor: pointer;
@@ -206,8 +125,34 @@ export function generateTrafficLightHTML(topic: string): string {
       line-height: 1;
     }
 
+    /* 선택 인디케이터 — 색 변화 외 "모양" 단서 (적록색약 학생 대응, 2026-06-12 감사 P0).
+     * 비선택: 우측 빈 원 / 선택: 흰 체크가 들어간 신호색 원판 */
+    .signal-btn::after {
+      content: '';
+      position: absolute;
+      right: 16px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      border: 2px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 15px;
+      font-weight: 700;
+      color: #ffffff;
+      line-height: 1;
+    }
+    .signal-btn.selected::after {
+      content: '✓';
+      border-color: var(--signal-color);
+      background: var(--signal-color);
+    }
+
     /* Red */
-    .signal-btn.red { border-color: rgba(239, 68, 68, 0.4); }
+    .signal-btn.red { --signal-color: #ef4444; border-color: rgba(239, 68, 68, 0.4); }
     .signal-btn.red.selected {
       border-color: #ef4444;
       background: rgba(239, 68, 68, 0.18);
@@ -215,7 +160,7 @@ export function generateTrafficLightHTML(topic: string): string {
     }
 
     /* Yellow */
-    .signal-btn.yellow { border-color: rgba(245, 158, 11, 0.4); }
+    .signal-btn.yellow { --signal-color: #f59e0b; border-color: rgba(245, 158, 11, 0.4); }
     .signal-btn.yellow.selected {
       border-color: #f59e0b;
       background: rgba(245, 158, 11, 0.18);
@@ -223,7 +168,7 @@ export function generateTrafficLightHTML(topic: string): string {
     }
 
     /* Green */
-    .signal-btn.green { border-color: rgba(34, 197, 94, 0.4); }
+    .signal-btn.green { --signal-color: #22c55e; border-color: rgba(34, 197, 94, 0.4); }
     .signal-btn.green.selected {
       border-color: #22c55e;
       background: rgba(34, 197, 94, 0.18);
@@ -295,7 +240,7 @@ export function generateTrafficLightHTML(topic: string): string {
     .chat-msg .bubble {
       background: var(--card);
       border: 1px solid var(--border);
-      border-radius: 0 10px 10px 10px;
+      border-radius: 4px 10px 10px 10px; /* 좌상단 직각 제거 — 라운드 정책 */
       padding: 7px 10px;
       font-size: 14px;
       line-height: 1.5;
@@ -314,7 +259,7 @@ export function generateTrafficLightHTML(topic: string): string {
     .chat-input-row {
       display: flex;
       gap: 8px;
-      padding: 10px 16px 16px;
+      padding: 10px 16px calc(env(safe-area-inset-bottom, 0px) + 16px);
       flex-shrink: 0;
       background: var(--bg);
       border-top: 1px solid var(--border);
@@ -322,13 +267,13 @@ export function generateTrafficLightHTML(topic: string): string {
 
     .chat-input {
       flex: 1;
-      height: 42px;
+      height: 48px;
       background: var(--card);
       border: 1px solid var(--border);
-      border-radius: 10px;
+      border-radius: var(--sps-radius-control);
       color: var(--text);
       font-family: inherit;
-      font-size: 15px;
+      font-size: 16px;
       padding: 0 12px;
       outline: none;
       transition: border-color 0.2s ease;
@@ -339,11 +284,11 @@ export function generateTrafficLightHTML(topic: string): string {
     .chat-input:focus { border-color: var(--accent); }
 
     .chat-send-btn {
-      width: 42px;
-      height: 42px;
+      width: 48px;
+      height: 48px;
       background: var(--accent);
       border: none;
-      border-radius: 10px;
+      border-radius: var(--sps-radius-control);
       color: #fff;
       font-size: 18px;
       cursor: pointer;
@@ -358,29 +303,28 @@ export function generateTrafficLightHTML(topic: string): string {
 
     .chat-send-btn:active { transform: scale(0.93); }
     .chat-send-btn:disabled { opacity: 0.4; pointer-events: none; }
-
-    /* ── END SCREEN ── */
-    #end-screen {
-      padding-top: 0;
-    }
+${getConnectionChipCSS()}
   </style>
 </head>
-<body>
-  <div id="app">
+<body class="sps-page">
+  ${getConnectionChipHTML()}
+  <script>${getConnectionChipJS({ submitButtonSelectors: ['#join-btn', '#chat-send-btn', '.signal-btn'] })}</script>
+  <div id="app" class="sps-app">
 
     <!-- CONNECTING -->
-    <div id="connecting-screen" class="state-view">
-      <p>연결 중...</p>
-    </div>
+    <div id="connecting-screen">${getStatusScreenHTML('connecting', { id: 'connecting-inner', hiddenByDefault: false })}</div>
 
     <!-- JOIN SCREEN -->
     <div id="join-screen" class="hidden">
-      <div class="logo">🚦 쌤핀 신호등 토론</div>
-      <div class="join-card">
+      <div id="header">
+        <div class="sps-logo">쌤핀 신호등 토론</div>
+      </div>
+      <div id="join-topic" class="sps-screen-subtitle" style="text-align:center;margin-bottom:16px;">${escapeHtml(topic)}</div>
+      <div class="join-card sps-card">
         <label for="name-input">이름</label>
         <input
           id="name-input"
-          class="name-input"
+          class="sps-input"
           type="text"
           placeholder="이름 또는 닉네임"
           maxlength="10"
@@ -388,9 +332,10 @@ export function generateTrafficLightHTML(topic: string): string {
           autocorrect="off"
           autocapitalize="off"
           spellcheck="false"
+          enterkeyhint="go"
         />
 
-        <button class="join-btn" id="join-btn" disabled>입장하기</button>
+        <button class="sps-btn" id="join-btn" disabled>입장하기</button>
       </div>
     </div>
 
@@ -399,21 +344,21 @@ export function generateTrafficLightHTML(topic: string): string {
       <div class="topic-bar" id="topic-bar">라운드 1 — ${escapeHtml(topic)}</div>
 
       <div class="signals-area">
-        <button class="signal-btn red" id="signal-red" data-value="red">
-          <span class="signal-emoji">🔴</span>
+        <button class="signal-btn red" id="signal-red" data-value="red" aria-pressed="false">
+          <span class="signal-emoji" aria-hidden="true">🔴</span>
           <span>반대</span>
         </button>
-        <button class="signal-btn yellow" id="signal-yellow" data-value="yellow">
-          <span class="signal-emoji">🟡</span>
+        <button class="signal-btn yellow" id="signal-yellow" data-value="yellow" aria-pressed="false">
+          <span class="signal-emoji" aria-hidden="true">🟡</span>
           <span>보류</span>
         </button>
-        <button class="signal-btn green" id="signal-green" data-value="green">
-          <span class="signal-emoji">🟢</span>
+        <button class="signal-btn green" id="signal-green" data-value="green" aria-pressed="false">
+          <span class="signal-emoji" aria-hidden="true">🟢</span>
           <span>찬성</span>
         </button>
       </div>
 
-      <div class="signal-status" id="signal-status">아직 선택하지 않았습니다</div>
+      <div class="signal-status" id="signal-status" aria-live="polite">아직 선택하지 않았습니다</div>
 
       <div class="chat-divider"></div>
 
@@ -430,25 +375,21 @@ export function generateTrafficLightHTML(topic: string): string {
           autocorrect="off"
           autocapitalize="off"
           spellcheck="false"
+          enterkeyhint="send"
         />
-        <button class="chat-send-btn" id="chat-send-btn" disabled>↑</button>
+        <button class="chat-send-btn" id="chat-send-btn" disabled aria-label="보내기">↑</button>
       </div>
     </div>
 
     <!-- END SCREEN -->
-    <div id="end-screen" class="state-view hidden">
-      <div style="font-size:60px;line-height:1;margin-bottom:8px;">🚦</div>
-      <h2>토론이 종료되었습니다</h2>
-      <p>참여해 주셔서 감사합니다</p>
-    </div>
+    <div id="end-screen" class="hidden">${getStatusScreenHTML('closed', { id: 'end-inner', title: '토론이 종료되었습니다', subtitle: '참여해 주셔서 감사합니다', hiddenByDefault: false })}</div>
 
     <!-- DISCONNECTED -->
-    <div id="disconnected-screen" class="state-view hidden">
-      <h2>연결이 끊어졌습니다</h2>
-      <p>다시 연결 중...</p>
-    </div>
+    <div id="disconnected-screen" class="hidden">${getStatusScreenHTML('disconnected', { id: 'disconnected-inner', hiddenByDefault: false })}</div>
 
   </div>
+  ${getToastHTML()}
+  <script>${getStudentFeedbackJS()}</script>
 
   <script>
     (function () {
@@ -462,6 +403,7 @@ export function generateTrafficLightHTML(topic: string): string {
       var reconnectDelay = 1000;
       var reconnectTimer = null;
       var pingTimer = null;
+      var joinPendingTimer = null;
 
       /* ── Screen management ── */
       var SCREENS = ['connecting-screen', 'join-screen', 'discussion-screen', 'end-screen', 'disconnected-screen'];
@@ -483,16 +425,39 @@ export function generateTrafficLightHTML(topic: string): string {
       var nameInput = document.getElementById('name-input');
       var joinBtn = document.getElementById('join-btn');
 
+      function clearJoinPending() {
+        if (joinPendingTimer) {
+          clearTimeout(joinPendingTimer);
+          joinPendingTimer = null;
+        }
+        if (joinBtn && window.spsSetPending) window.spsSetPending(joinBtn, false);
+      }
+
       nameInput.addEventListener('input', function () {
         joinBtn.disabled = nameInput.value.trim().length === 0;
+      });
+
+      nameInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          if (!joinBtn.disabled) joinBtn.click();
+        }
       });
 
       joinBtn.addEventListener('click', function () {
         var name = nameInput.value.trim();
         if (!name) return;
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+          if (window.spsToast) window.spsToast('연결을 확인하는 중이에요. 잠시 후 다시 눌러 주세요.');
+          return;
+        }
         myName = name;
         hasJoined = true;
+        if (window.spsSetPending) window.spsSetPending(joinBtn, true, '입장 중...');
         sendJoin();
+        joinPendingTimer = setTimeout(function () {
+          clearJoinPending();
+        }, 6000);
       });
 
       /* ── SIGNAL BUTTONS ── */
@@ -505,8 +470,10 @@ export function generateTrafficLightHTML(topic: string): string {
           var val = btn.getAttribute('data-value');
           if (val === currentSignal) {
             btn.classList.add('selected');
+            btn.setAttribute('aria-pressed', 'true');
           } else {
             btn.classList.remove('selected');
+            btn.setAttribute('aria-pressed', 'false');
           }
         }
         var statusEl = document.getElementById('signal-status');
@@ -525,6 +492,11 @@ export function generateTrafficLightHTML(topic: string): string {
         if (!btn) return;
         var val = btn.getAttribute('data-value');
         if (val === currentSignal) return; // no change
+        // 낙관 반영 전 연결 확인 — 화면과 교사 집계가 어긋나던 결함 보완
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+          if (window.spsToast) window.spsToast('연결을 확인하는 중이에요. 잠시 후 다시 눌러 주세요.');
+          return;
+        }
         currentSignal = val;
         updateSignalUI();
         wsSend({ type: 'signal', value: val });
@@ -550,6 +522,11 @@ export function generateTrafficLightHTML(topic: string): string {
       function sendChat() {
         var text = chatInput.value.trim();
         if (!text) return;
+        // 소켓이 닫혔을 때 입력만 비워지고 메시지가 유실되던 결함 — 안내 후 입력 보존
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+          if (window.spsToast) window.spsToast('연결을 확인하는 중이에요. 잠시 후 다시 보내 주세요.');
+          return;
+        }
         wsSend({ type: 'chat', text: text });
         chatInput.value = '';
         chatSendBtn.disabled = true;
@@ -631,16 +608,20 @@ export function generateTrafficLightHTML(topic: string): string {
           reconnectTimer = null;
         }
 
+        if (window.spConnSetState) window.spConnSetState('connecting');
+
         try {
           var wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
           ws = new WebSocket(wsProto + '//' + location.host);
         } catch (e) {
+          if (window.spConnSetState) window.spConnSetState('disconnected');
           scheduleReconnect();
           return;
         }
 
         ws.onopen = function () {
           reconnectDelay = 1000;
+          if (window.spConnSetState) window.spConnSetState('connected');
           startPing();
           if (hasJoined) {
             sendJoin();
@@ -662,6 +643,7 @@ export function generateTrafficLightHTML(topic: string): string {
             case 'session':
               // Server confirmed session — show discussion screen
               hasJoined = true;
+              clearJoinPending();
               showScreen('discussion-screen');
               break;
 
@@ -699,6 +681,8 @@ export function generateTrafficLightHTML(topic: string): string {
         ws.onclose = function () {
           ws = null;
           stopPing();
+          clearJoinPending();
+          if (window.spConnSetState) window.spConnSetState('disconnected');
           if (hasJoined) {
             showScreen('disconnected-screen');
           }
@@ -713,6 +697,7 @@ export function generateTrafficLightHTML(topic: string): string {
       function scheduleReconnect() {
         reconnectTimer = setTimeout(function () {
           reconnectTimer = null;
+          if (window.spConnSetState) window.spConnSetState('reconnecting');
           connect();
         }, reconnectDelay);
         reconnectDelay = Math.min(reconnectDelay * 1.5, 10000);
