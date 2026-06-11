@@ -2,6 +2,16 @@
 
 마지막 업데이트: 2026-06-11 KST
 
+## 🚀 v2.1.1 릴리즈 진행 중 (2026-06-11)
+
+v2.1.0(2026-06-01) 이후 미배포 커밋 묶음. 검증 게이트 4/4 통과(tsc 0 / lint 0 errors(MemoFocus 1 기존 부채) / vitest 2097 passed / regression 34/34).
+
+**사용자 노출(release-notes.json 7건)**: ① 서명받기(등록부) 5단계 마법사 전면 개편 + 수업반 명렬 + 임포트 열 매핑 ② 서명 공개 페이지 이름 찾기(초성 검색·소속·가나다) ③ 서명 일시 KST + 공개 링크 정정 ④ 협업 보드 실작동 복구(충돌 해소·도형 12종·교사 [보드 열기]) ⑤ 복합 설문 v2 미리 체험(베타, 옵트인 배너) ⑥ 위젯 카드 크기 조절(대시보드+위젯 모드+발견성) ⑦ "교실 약속 정하기" 진입 차단 해소.
+
+**노출 제외(사용자 결정)**: AI 챗봇 안정화·보안 취약점 12건 패치 — 내부 작업이라 release-notes에서 제외. 챗봇 대화 원문 전체 보기(관리자 analytics)도 교사 노트에서 제외.
+
+**버전 동기화**: package.json·package-lock·landing config/layout·Sidebar·모바일 Settings/More 6+lock = 2.1.1. KB Q&A 6건 신규(서명·협업보드·복합설문·위젯·교실약속). 다음: 커밋 → Windows 5단계 빌드 → macOS GHA → GitHub 릴리즈 + KB ingest + 노션 갱신.
+
 ## Recently completed (다음 릴리즈 묶음 후보)
 
 - 🛡️ **Dependabot 취약점 12건 일괄 처리 (2026-06-11)** — v2.0.x security-hardening 잔여 패시브("npm audit 게이트 승격") 일부 해소. **루트**: shell-quote 1.8.3→1.8.4(critical, concurrently가 exact pin → `overrides` 필요) + tmp 0.2.5→0.2.7(high, `npm audit fix`) + uuid 8.3.2→11.1.1(moderate, @blocknote/exceljs 경유 → `overrides` — 취약점은 v3/v5/v6+buf 전용이라 v4만 쓰는 양쪽 모두 무영향, Excel/Xlsx exporter 테스트로 실증) / **file-type(moderate)은 수정판 없음** — jimp 0.22(nut-js)가 16.x exact pin + 17+는 ESM-only라 강제 시 스티커 자동 붙여넣기 파손 → GitHub alert #21 `tolerable_risk` dismiss(입력이 로컬 전용). **landing**: next 16.1.6→16.2.9(high 1+moderate 다수, 동일 마이너) + 중첩 postcss 8.4.31→8.5.15(`overrides`) → `npm audit` 0건 + tsc 0 + next build 통과. **spike(s1-cdn-poc)**: ws 8.21.0 lockfile-only 갱신. **사고 1건 복구**: 클린 재설치 중 실행 중인 Electron dev 앱이 `electron/dist` 잠금 → rm 중단 → exceljs 중첩 bluebird 손상(테스트 4파일 로드 실패)으로 발현 → exceljs 서브트리 재설치로 정상화. ⚠️ 교훈: **클린 재설치 전 Electron dev 앱 종료 확인 필수**. 검증: tsc 0 / lint 0 errors / vitest 164 files 2097 passed / regression 34/34 / build-electron OK / landing build OK. 남은 audit: 루트 moderate 7건 전부 file-type 사슬(수정 불가, dismiss 처리).
