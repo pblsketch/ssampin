@@ -26,6 +26,8 @@ import {
 } from '@adapters/multiSurvey/live/liveBridge';
 import { LiveSessionClient } from '@infrastructure/supabase/LiveSessionClient';
 import { TeacherConsole } from './TeacherConsole';
+import type { StudentInteraction } from '@domain/entities/multiSurvey/LiveSession';
+import { buildShareSnapshot } from '../Share/shareSnapshot';
 
 interface LiveConsoleContainerProps {
   /** 라이브 종료 후 메이커로 복귀 */
@@ -42,6 +44,9 @@ export function LiveConsoleContainer({ onExit }: LiveConsoleContainerProps): JSX
   const startLive = useMultiSurveyV2Store((s) => s.startLive);
   const appendStudent = useMultiSurveyV2Store((s) => s.appendStudent);
   const appendResponse = useMultiSurveyV2Store((s) => s.appendResponse);
+  const appendInteraction = useMultiSurveyV2Store((s) => s.appendInteraction);
+  const setFocusModeActive = useMultiSurveyV2Store((s) => s.setFocusModeActive);
+  const focusModeActive = useMultiSurveyV2Store((s) => s.liveSession?.focusModeActive ?? false);
 
   const [status, setStatus] = useState<BootStatus>('starting');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -156,10 +161,21 @@ export function LiveConsoleContainer({ onExit }: LiveConsoleContainerProps): JSX
     });
     if (unsubAnswered) unsubs.push(unsubAnswered);
 
+    // DN-03: 학생 wave → store appendInteraction (메모리 전용 누적)
+    const unsubWave = api.onLiveMultiSurveyStudentWave?.((data) => {
+      const interaction: StudentInteraction = {
+        studentId: data.studentId,
+        kind: 'wave',
+        at: new Date().toISOString(),
+      };
+      appendInteraction(interaction);
+    });
+    if (unsubWave) unsubs.push(unsubWave);
+
     return () => {
       unsubs.forEach((u) => u());
     };
-  }, [liveId, appendStudent, appendResponse]);
+  }, [liveId, appendStudent, appendResponse, appendInteraction]);
 
   // ── phase 전이: 학생 페이지 IPC 동기화 + store nextPhase ──
   const handleAdvance = useCallback(() => {
@@ -205,6 +221,40 @@ export function LiveConsoleContainer({ onExit }: LiveConsoleContainerProps): JSX
     void window.electronAPI?.stopLiveMultiSurvey?.();
     endLive();
   }, [endLive]);
+
+  // ── DN-06: 집중 모드 토글 ──
+  const handleToggleFocusMode = useCallback(
+    (active: boolean) => {
+      void window.electronAPI?.liveMultiSurveyToggleFocusMode?.(active);
+      setFocusModeActive(active);
+    },
+    [setFocusModeActive],
+  );
+
+  // ── 작업 1: Share window 스냅샷 push ──
+  // liveSession 또는 survey 변경 시마다 Share window로 스냅샷 전송.
+  // Share window가 없으면 main process 핸들러가 silently drop.
+  const liveSessionForSnapshot = useMultiSurveyV2Store((s) => s.liveSession);
+  const surveyForSnapshot = useMultiSurveyV2Store(selectActiveLiveSurvey);
+  const entryUrlRef = useRef<string>('');
+  // entryUrl state를 ref로 동기화 (effect 의존성 없이 최신값 참조)
+  useEffect(() => {
+    entryUrlRef.current = entryUrl ?? '';
+  });
+  useEffect(() => {
+    if (!liveSessionForSnapshot || !surveyForSnapshot) return;
+    const snapshot = buildShareSnapshot(
+      liveSessionForSnapshot,
+      surveyForSnapshot,
+      entryUrlRef.current,
+    );
+    window.electronAPI?.sendMultiSurveyShareSnapshot?.(snapshot);
+  }, [liveSessionForSnapshot, surveyForSnapshot]);
+
+  // ── 작업 1: [교실 화면 열기] 버튼 핸들러 ──
+  const handleOpenShareWindow = useCallback(() => {
+    void window.electronAPI?.openMultiSurveyShareWindow?.(entryUrlRef.current);
+  }, []);
 
   // ── "다시 하기" — 같은 설문으로 새 라이브 세션 재기동 ──
   // liveId 변경 → 기동 effect cleanup(서버 정리) 후 재실행
@@ -267,6 +317,9 @@ export function LiveConsoleContainer({ onExit }: LiveConsoleContainerProps): JSX
       onEnd={handleEnd}
       onRestart={handleRestart}
       onExit={onExit}
+      focusModeActive={focusModeActive}
+      onToggleFocusMode={handleToggleFocusMode}
+      onOpenShareWindow={handleOpenShareWindow}
     />
   );
 }

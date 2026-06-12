@@ -509,6 +509,23 @@ interface ElectronAPI {
       entries: Array<{ sessionId: string; nickname: string; text: string }>;
     }) => void,
   ) => () => void;
+  // DN-03: 학생 wave 이벤트 수신 (교사 콘솔 아바타 pulse)
+  onLiveMultiSurveyStudentWave: (
+    callback: (data: { sessionId: string; studentId: string }) => void,
+  ) => () => void;
+  // DN-06: 교사 집중 모드 토글 → 학생 WebSocket broadcast
+  liveMultiSurveyToggleFocusMode: (active: boolean) => Promise<void>;
+  // 작업 1: MultiSurvey Share view (교실 화면 별도 창)
+  openMultiSurveyShareWindow: (entryUrl: string) => Promise<void>;
+  closeMultiSurveyShareWindow: () => Promise<void>;
+  sendMultiSurveyShareSnapshot: (
+    snapshot: import('./adapters/components/MultiSurvey/v2/Share/shareSnapshot').ShareSnapshot,
+  ) => void;
+  onMultiSurveyShareSnapshot: (
+    callback: (
+      snapshot: import('./adapters/components/MultiSurvey/v2/Share/shareSnapshot').ShareSnapshot,
+    ) => void,
+  ) => () => void;
   // Live Word Cloud
   startLiveWordCloud: (data: {
     question: string;

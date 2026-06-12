@@ -15,9 +15,11 @@ import { StudentAvatarGrid } from './StudentAvatarGrid';
 interface LobbyViewProps {
   readonly entryUrl: string;
   readonly students: readonly StudentProfile[];
+  /** DN-03: 최근 wave 보낸 학생 ID 집합 (pulse 표시용) */
+  readonly recentWaveStudentIds?: ReadonlySet<string>;
 }
 
-function LobbyViewImpl({ entryUrl, students }: LobbyViewProps): JSX.Element {
+function LobbyViewImpl({ entryUrl, students, recentWaveStudentIds }: LobbyViewProps): JSX.Element {
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -84,7 +86,7 @@ function LobbyViewImpl({ entryUrl, students }: LobbyViewProps): JSX.Element {
             아직 입장한 학생이 없습니다.
           </div>
         ) : (
-          <StudentAvatarGrid students={students} />
+          <StudentAvatarGrid students={students} recentWaveStudentIds={recentWaveStudentIds} />
         )}
       </section>
     </div>

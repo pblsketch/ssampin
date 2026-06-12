@@ -31,6 +31,7 @@ import type {
   StudentInteraction,
 } from '@domain/entities/multiSurvey/LiveSession';
 import type { Response as MultiSurveyResponse } from '@domain/entities/multiSurvey/Response';
+import { calcSessionScore } from '@domain/rules/multiSurveyRules';
 
 // ────────────────────────────────────────────────
 // 기본값 (Plan §5.2 D11 — 학습 모드 ON / 설문(퀴즈) 메카닉 OFF)
@@ -108,6 +109,20 @@ interface MultiSurveyV2StoreState {
   // ── 활성 라이브 세션 (단일) ──
   readonly liveSession: LiveSession | null;
 
+  /**
+   * 문항별 open 진입 시각 (ISO 8601). persist 제외 — 메모리 전용.
+   * key: currentQuestionIndex (number), value: ISO string
+   * fastSolveBonus 계산 기준점으로 사용.
+   */
+  readonly questionOpenedAt: Record<number, string>;
+
+  /**
+   * 랜덤 보너스용 rng 주입 포인트 (테스트에서 대체 가능).
+   * 미지정 시 () => Math.random() 사용 (adapter 경계 — domain 아님).
+   * @internal 테스트 전용 — 프로덕션에서는 교체 불필요.
+   */
+  _rng?: () => number;
+
   // ── Actions: flag ──
   setRealtimeToolV2Enabled: (enabled: boolean) => void;
   setMigrationStatus: (status: MultiSurveyV2StoreState['migrationStatus']) => void;
@@ -174,6 +189,7 @@ export const useMultiSurveyV2Store = create<MultiSurveyV2StoreState>()(
       loaded: false,
       selectedSessionId: null,
       liveSession: null,
+      questionOpenedAt: {},
 
       // ── Flag actions ──
       setRealtimeToolV2Enabled(enabled) {
@@ -292,7 +308,7 @@ export const useMultiSurveyV2Store = create<MultiSurveyV2StoreState>()(
           focusModeActive: survey.displayOpts.teacherFocusMode,
           startedAt: new Date().toISOString(),
         };
-        set({ liveSession: live });
+        set({ liveSession: live, questionOpenedAt: {} });
         return live;
       },
 
@@ -309,15 +325,24 @@ export const useMultiSurveyV2Store = create<MultiSurveyV2StoreState>()(
         const advancesQuestion =
           (live.phase === 'revealed' || live.phase === 'round_result') && next === 'open';
 
+        const newQuestionIndex = advancesQuestion
+          ? live.currentQuestionIndex + 1
+          : live.currentQuestionIndex;
+
+        // open 진입 시 해당 문항 open 시각 기록 (fastSolveBonus 계산 기준점)
+        const updatedOpenedAt =
+          next === 'open'
+            ? { ...get().questionOpenedAt, [newQuestionIndex]: new Date().toISOString() }
+            : get().questionOpenedAt;
+
         set({
           liveSession: {
             ...live,
             phase: next,
-            currentQuestionIndex: advancesQuestion
-              ? live.currentQuestionIndex + 1
-              : live.currentQuestionIndex,
+            currentQuestionIndex: newQuestionIndex,
             endedAt: next === 'end' ? new Date().toISOString() : live.endedAt,
           },
+          questionOpenedAt: updatedOpenedAt,
         });
       },
 
@@ -334,20 +359,70 @@ export const useMultiSurveyV2Store = create<MultiSurveyV2StoreState>()(
       },
 
       exitLive() {
-        set({ liveSession: null });
+        set({ liveSession: null, questionOpenedAt: {} });
       },
 
       appendResponse(response) {
         const live = get().liveSession;
         if (!live) return;
+
+        // 세션 점수 보너스 재계산: 해당 survey의 문항 + responseOpts 필요
+        const state = get();
+        const activeSurvey = state.sessions.find((s) => s.id === live.surveyId);
+        const question = activeSurvey?.questions.find((q) => q.id === response.questionId);
+
+        let enrichedResponse = response;
+        if (activeSurvey && question) {
+          // 해당 문항의 questionIndex 탐색 (questionOpenedAt 키가 index 기반)
+          const questionIndex = activeSurvey.questions.findIndex((q) => q.id === question.id);
+          const openedAt = state.questionOpenedAt[questionIndex] ?? response.submittedAt;
+
+          // 직전까지 연속 정답 수: 해당 학생의 이전 문항 응답을 역순으로 탐색
+          // 재제출 시에도 기존 응답(교체 전)을 기준으로 streak 계산 → 교체 전 목록 사용
+          const prevResponses = live.responses.filter(
+            (r) => r.studentId === response.studentId && r.questionId !== response.questionId,
+          );
+          // 문항 순서(index) 기준으로 현재 문항 직전까지만 포함
+          const orderedPrev = prevResponses
+            .map((r) => {
+              const idx = activeSurvey.questions.findIndex((q) => q.id === r.questionId);
+              return { r, idx };
+            })
+            .filter(({ idx }) => idx >= 0 && idx < questionIndex)
+            .sort((a, b) => b.idx - a.idx); // 내림차순: 직전 문항부터
+
+          let currentStreak = 0;
+          for (const { r: prevR } of orderedPrev) {
+            if (prevR.isCorrect === true) {
+              currentStreak++;
+            } else {
+              break; // 연속 정답 끊김
+            }
+          }
+
+          const rng = state._rng ?? (() => Math.random());
+          const breakdown = calcSessionScore({
+            question,
+            response,
+            questionOpenedAt: openedAt,
+            currentStreak,
+            opts: activeSurvey.responseOpts,
+            rng,
+          });
+
+          enrichedResponse = { ...response, scoreEarned: breakdown.total };
+        }
+
         // 학생 재제출(서버가 덮어쓰기 허용) 시 같은 학생·문항 응답은 교체 — 카운트 중복 방지
         const existingIdx = live.responses.findIndex(
-          (r) => r.studentId === response.studentId && r.questionId === response.questionId,
+          (r) =>
+            r.studentId === enrichedResponse.studentId &&
+            r.questionId === enrichedResponse.questionId,
         );
         const responses =
           existingIdx >= 0
-            ? live.responses.map((r, i) => (i === existingIdx ? response : r))
-            : [...live.responses, response];
+            ? live.responses.map((r, i) => (i === existingIdx ? enrichedResponse : r))
+            : [...live.responses, enrichedResponse];
         set({
           liveSession: {
             ...live,

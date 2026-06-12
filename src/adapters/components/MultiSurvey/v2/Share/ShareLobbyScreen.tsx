@@ -1,7 +1,8 @@
 /**
  * ShareLobbyScreen — 학생 입장 대기 화면.
  *
- * 구성: QR(256px) + 6자리 코드(64px Bold) + 학생 아바타 그리드.
+ * 구성: QR(256px) + 입장 URL 텍스트 + 학생 아바타 그리드.
+ * entryCode 는 폐기 (2026-06-12) — QR+URL 전용.
  * 학생 추가 시 fade-in (prefers-reduced-motion 시 즉시 표시).
  * sp-* 토큰: sp-bg / sp-card / sp-text / sp-accent
  */
@@ -11,17 +12,12 @@ import QRCode from 'qrcode';
 import type { StudentProfile } from '@domain/entities/multiSurvey/LiveSession';
 
 interface ShareLobbyScreenProps {
-  readonly entryCode: string;
   /** 학생 입장 URL (QR 인코딩 대상) */
   readonly entryUrl: string;
   readonly students: readonly StudentProfile[];
 }
 
-function ShareLobbyScreenImpl({
-  entryCode,
-  entryUrl,
-  students,
-}: ShareLobbyScreenProps): JSX.Element {
+function ShareLobbyScreenImpl({ entryUrl, students }: ShareLobbyScreenProps): JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
@@ -42,27 +38,24 @@ function ShareLobbyScreenImpl({
     >
       <div className="flex w-full items-center justify-center gap-16">
         {/* QR */}
-        <div className="flex flex-col items-center gap-4 rounded-sp-xl bg-sp-card p-8 shadow-sp-md">
+        <div className="flex flex-col items-center gap-4 rounded-xl bg-sp-card p-8 shadow-sp-md">
           <canvas ref={canvasRef} width={256} height={256} aria-label="학생 입장 QR 코드" />
           <span className="font-sp-medium text-sp-text" style={{ fontSize: 24 }}>
             휴대전화로 QR을 찍어 입장
           </span>
         </div>
 
-        {/* 입장 코드 큰 표시 */}
+        {/* 입장 URL */}
         <div className="flex flex-col items-center gap-4">
           <span className="font-sp-medium text-sp-text" style={{ fontSize: 32 }}>
-            입장 코드
+            또는 아래 주소로 접속
           </span>
           <span
-            className="font-sp-bold tracking-[0.25em] text-sp-accent"
-            style={{ fontSize: 64 }}
-            aria-label={`입장 코드 ${entryCode.split('').join(' ')}`}
+            className="font-sp-bold text-sp-accent"
+            style={{ fontSize: 36, wordBreak: 'break-all', maxWidth: 560, textAlign: 'center' }}
+            aria-label={`입장 주소 ${entryUrl}`}
           >
-            {entryCode}
-          </span>
-          <span className="font-sp-medium text-sp-text" style={{ fontSize: 24 }}>
-            웹 주소로 직접 입력해도 됩니다
+            {entryUrl}
           </span>
         </div>
       </div>
@@ -81,11 +74,11 @@ function ShareLobbyScreenImpl({
             <div
               key={student.studentId}
               role="listitem"
-              className="flex flex-col items-center gap-2 rounded-sp-xl bg-sp-card px-6 py-4 shadow-sp-sm animate-fade-in"
+              className="flex flex-col items-center gap-2 rounded-xl bg-sp-card px-6 py-4 shadow-sp-sm animate-fade-in"
               style={{ minWidth: 140 }}
             >
               <div
-                className="flex items-center justify-center rounded-sp-pill bg-sp-accent font-sp-bold"
+                className="flex items-center justify-center rounded-full bg-sp-accent font-sp-bold"
                 style={{
                   width: 72,
                   height: 72,

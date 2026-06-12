@@ -16,6 +16,14 @@ interface ConsoleHeaderProps {
   readonly phase: LivePhase;
   readonly onPause?: () => void;
   readonly onEnd?: () => void;
+  /** DN-06: 집중 모드 현재 활성 상태 */
+  readonly focusModeActive?: boolean;
+  /** DN-06: 집중 모드 토글 콜백 */
+  readonly onToggleFocusMode?: (active: boolean) => void;
+  /** DN-06: displayOpts.teacherFocusMode 토글 ON 시에만 버튼 노출 */
+  readonly showFocusModeButton?: boolean;
+  /** 작업 1: [교실 화면 열기] 버튼 콜백 */
+  readonly onOpenShareWindow?: () => void;
 }
 
 function ConsoleHeaderImpl({
@@ -23,6 +31,10 @@ function ConsoleHeaderImpl({
   phase,
   onPause,
   onEnd,
+  focusModeActive = false,
+  onToggleFocusMode,
+  showFocusModeButton = false,
+  onOpenShareWindow,
 }: ConsoleHeaderProps): JSX.Element {
   const canPause = phase === 'open';
   return (
@@ -37,6 +49,35 @@ function ConsoleHeaderImpl({
         </span>
       </div>
       <div className="flex items-center gap-2">
+        {/* 작업 1: 교실 화면 열기 버튼 */}
+        {onOpenShareWindow && (
+          <button
+            type="button"
+            onClick={onOpenShareWindow}
+            className="rounded-lg border border-sp-border bg-sp-surface px-4 py-2 font-sp-medium text-sp-text hover:border-sp-muted transition-colors duration-sp-base"
+            style={{ fontSize: 14 }}
+            aria-label="교실 화면 열기"
+          >
+            교실 화면 열기
+          </button>
+        )}
+        {/* DN-06: 집중 모드 버튼 — displayOpts.teacherFocusMode ON 시만 노출 */}
+        {showFocusModeButton && onToggleFocusMode && (
+          <button
+            type="button"
+            onClick={() => onToggleFocusMode(!focusModeActive)}
+            className={
+              focusModeActive
+                ? 'rounded-lg border border-sp-accent bg-sp-accent px-4 py-2 font-sp-semibold text-[color:var(--sp-accent-fg)] transition-colors duration-sp-base'
+                : 'rounded-lg border border-sp-border bg-sp-surface px-4 py-2 font-sp-medium text-sp-text hover:border-sp-muted transition-colors duration-sp-base'
+            }
+            style={{ fontSize: 14 }}
+            aria-label={focusModeActive ? '집중 모드 끄기' : '집중 모드 켜기'}
+            aria-pressed={focusModeActive}
+          >
+            👀 집중 모드
+          </button>
+        )}
         {onPause && (
           <button
             type="button"

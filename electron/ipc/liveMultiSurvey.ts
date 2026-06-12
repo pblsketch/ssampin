@@ -129,6 +129,12 @@ interface LiveMultiSurveySession {
 
   // 하위호환(scroll 모드) 전용 상태
   submissions: Map<string, string>; // sessionToken → answers JSON
+
+  // DN-06: 집중 모드 현재 활성 상태 (새 join 시 즉시 송신용)
+  focusModeActive: boolean;
+
+  // DN-03: wave 스로틀 (ws → 마지막 wave 수신 시각 ms)
+  waveThrottle: Map<WebSocket, number>;
 }
 
 /** 현재 실행 중인 복수 설문 세션 (하나만 허용) */
@@ -469,6 +475,8 @@ export function registerLiveMultiSurveyHandlers(mainWindow: BrowserWindow): void
           participants: new Map(),
           clients: new Map(),
           submissions: new Map(),
+          focusModeActive: false,
+          waveThrottle: new Map(),
         };
 
         wss.on('connection', (ws: WebSocket) => {
@@ -562,6 +570,14 @@ export function registerLiveMultiSurveyHandlers(mainWindow: BrowserWindow): void
 
                 // 신규 연결자에게 현재 state 즉시 송신 (late-join 대응)
                 sendStateToClient(session, ws);
+                // DN-06: 현재 집중 모드 상태를 신규 참가자에게 즉시 송신
+                if (session.focusModeActive && ws.readyState === WebSocket.OPEN) {
+                  try {
+                    ws.send(JSON.stringify({ type: 'focus-mode', active: true }));
+                  } catch {
+                    // 무시
+                  }
+                }
                 // 나머지 클라이언트에게도 totalConnected/roster 갱신 반영
                 broadcastState(session);
                 emitRoster(mainWindow, session);
@@ -649,7 +665,22 @@ export function registerLiveMultiSurveyHandlers(mainWindow: BrowserWindow): void
                 return;
               }
 
-              // stepMode=true에서는 그 외 메시지는 무시 (join/answer 외엔 없음)
+              // DN-03: wave — 학생이 대기 화면 아바타 탭 시 교사 콘솔 강조
+              if (type === 'wave') {
+                const sid = session.clients.get(ws) ?? '';
+                if (!sid) return; // join 전 wave는 무시
+                const now = Date.now();
+                const last = session.waveThrottle.get(ws) ?? 0;
+                if (now - last < 2000) return; // 2초 스로틀
+                session.waveThrottle.set(ws, now);
+                sendToMain(mainWindow, 'live-multi-survey:student-wave', {
+                  sessionId: session.clients.get(ws) ?? '',
+                  studentId: sid,
+                });
+                return;
+              }
+
+              // stepMode=true에서는 그 외 메시지는 무시 (join/answer/wave 외엔 없음)
               return;
             }
 
@@ -726,6 +757,7 @@ export function registerLiveMultiSurveyHandlers(mainWindow: BrowserWindow): void
           ws.on('close', () => {
             if (!session) return;
             session.clients.delete(ws);
+            session.waveThrottle.delete(ws);
 
             // participants 는 유지 (재연결 가능)
             emitConnectionCount(mainWindow, session);
@@ -896,5 +928,37 @@ export function registerLiveMultiSurveyHandlers(mainWindow: BrowserWindow): void
     if (!address || typeof address === 'string') throw new Error('서버가 준비되지 않았습니다');
     const tunnelUrl = await openTunnel(address.port);
     return { tunnelUrl };
+  });
+
+  /**
+   * live-multi-survey:toggle-focus-mode — DN-06 교사 집중 모드 broadcast
+   *
+   * payload: { active: boolean }
+   * - active=true : 모든 학생 화면에 집중 모드 오버레이 표시
+   * - active=false: 오버레이 제거
+   * - 라이브 서버 미기동 시 안전 no-op
+   */
+  ipcMain.handle('live-multi-survey:toggle-focus-mode', (_event, payload: unknown): void => {
+    // payload 검증
+    if (typeof payload !== 'object' || payload === null) return;
+    const p = payload as Record<string, unknown>;
+    if (typeof p['active'] !== 'boolean') return;
+    const active = p['active'];
+
+    // 라이브 서버 미기동 시 no-op
+    if (!session) return;
+
+    // 서버 측 상태 갱신 (신규 join 시 late-delivery 용)
+    session.focusModeActive = active;
+
+    // 모든 연결된 클라이언트에 broadcast
+    for (const [ws] of session.clients) {
+      if (ws.readyState !== WebSocket.OPEN) continue;
+      try {
+        ws.send(JSON.stringify({ type: 'focus-mode', active }));
+      } catch {
+        // 개별 송신 실패 무시
+      }
+    }
   });
 }

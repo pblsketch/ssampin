@@ -10,11 +10,12 @@
  * sp-* 토큰: sp-bg (배경) / sp-border (구획선)
  */
 
-import { memo, useEffect, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import type { MultiSurveyV2 } from '@domain/entities/multiSurvey/MultiSurveyV2';
 import type { LiveSession, LivePhase } from '@domain/entities/multiSurvey/LiveSession';
 import type { Question } from '@domain/entities/multiSurvey/Question';
 import type { Response } from '@domain/entities/multiSurvey/Response';
+import { isAutoAdvanceEnabled } from '@domain/rules/multiSurveyRules';
 import {
   useMultiSurveyV2Store,
   selectActiveLiveSurvey,
@@ -29,6 +30,7 @@ import { AnswerReveal } from './AnswerReveal';
 import { RoundResultTable } from './RoundResultTable';
 import { Podium } from './Podium';
 import { SidePanelConsole } from './SidePanelConsole';
+import { useQuestionCountdown } from './useQuestionCountdown';
 
 interface TeacherConsoleProps {
   /** 학생 입장 URL (QR/LobbyView 전달용) */
@@ -46,6 +48,12 @@ interface TeacherConsoleProps {
   readonly onRestart?: () => void;
   /** 메이커로 복귀 콜백 (end phase) */
   readonly onExit?: () => void;
+  /** DN-06: 집중 모드 현재 활성 상태 (LiveConsoleContainer 주입) */
+  readonly focusModeActive?: boolean;
+  /** DN-06: 집중 모드 토글 콜백 (LiveConsoleContainer 주입) */
+  readonly onToggleFocusMode?: (active: boolean) => void;
+  /** 작업 1: [교실 화면 열기] 버튼 콜백 (LiveConsoleContainer 주입) */
+  readonly onOpenShareWindow?: () => void;
 }
 
 function usePrefersReducedMotion(): boolean {
@@ -76,10 +84,49 @@ function TeacherConsoleImpl({
   onEnd,
   onRestart,
   onExit,
+  focusModeActive = false,
+  onToggleFocusMode,
+  onOpenShareWindow,
 }: TeacherConsoleProps): JSX.Element {
   const live = useMultiSurveyV2Store((s) => s.liveSession);
   const survey = useMultiSurveyV2Store(selectActiveLiveSurvey);
   const reducedMotion = usePrefersReducedMotion();
+
+  // DN-03: 최근 3초 이내 wave 보낸 학생 ID 집합 (pulse 표시용)
+  const recentWaveStudentIds = useMemo<ReadonlySet<string>>(() => {
+    if (!live) return new Set();
+    const cutoff = Date.now() - 3000;
+    const ids = new Set<string>();
+    for (const interaction of live.studentInteractions) {
+      if (interaction.kind === 'wave' && new Date(interaction.at).getTime() >= cutoff) {
+        ids.add(interaction.studentId);
+      }
+    }
+    return ids;
+  }, [live]);
+
+  // ── 문항 타이머 카운트다운 ──
+  // survey/live가 null일 수 있으므로 훅은 항상 호출하되 비활성 상태로 둠 (Hooks 규칙 준수)
+  const phase: LivePhase = live?.phase ?? 'lobby';
+  const question = live && survey ? currentQuestion(survey, live) : undefined;
+  const autoAdvanceEnabled =
+    survey && question
+      ? isAutoAdvanceEnabled(
+          {
+            autoAdvance: survey.responseOpts.autoAdvance,
+            showPerQuestionScore: survey.displayOpts.showPerQuestionScore,
+          },
+          question,
+        )
+      : false;
+
+  const { remainingSeconds } = useQuestionCountdown({
+    phase,
+    questionIndex: live?.currentQuestionIndex ?? 0,
+    timerSeconds: question?.timerSeconds ?? 0,
+    enabled: autoAdvanceEnabled,
+    onExpire: onAdvance ?? (() => undefined),
+  });
 
   if (!live || !survey) {
     return (
@@ -94,8 +141,6 @@ function TeacherConsoleImpl({
     );
   }
 
-  const phase: LivePhase = live.phase;
-  const question = currentQuestion(survey, live);
   const responsesForQuestion = currentResponses(live, question);
   const expectedCount = live.students.length;
   const fadeStyle = reducedMotion
@@ -109,7 +154,16 @@ function TeacherConsoleImpl({
       aria-label="교사 진행 콘솔"
     >
       <div className="col-span-2">
-        <ConsoleHeader surveyTitle={survey.title} phase={phase} onPause={onPause} onEnd={onEnd} />
+        <ConsoleHeader
+          surveyTitle={survey.title}
+          phase={phase}
+          onPause={onPause}
+          onEnd={onEnd}
+          focusModeActive={focusModeActive}
+          onToggleFocusMode={onToggleFocusMode}
+          showFocusModeButton={survey.displayOpts.teacherFocusMode}
+          onOpenShareWindow={onOpenShareWindow}
+        />
       </div>
       <div className="col-span-2 border-b border-sp-border">
         <PhaseIndicator
@@ -124,7 +178,13 @@ function TeacherConsoleImpl({
         style={{ ...fadeStyle, opacity: 1 }}
         aria-live="polite"
       >
-        {phase === 'lobby' && <LobbyView entryUrl={entryUrl} students={live.students} />}
+        {phase === 'lobby' && (
+          <LobbyView
+            entryUrl={entryUrl}
+            students={live.students}
+            recentWaveStudentIds={recentWaveStudentIds}
+          />
+        )}
 
         {phase === 'open' && question && (
           <div className="flex flex-col gap-6">
@@ -136,10 +196,7 @@ function TeacherConsoleImpl({
             />
             {/* 자동 넘김 OFF면 타이머 비표시 — 교사 주도 진행 (2026-06-11 사용자 결정) */}
             {survey.responseOpts.autoAdvance && (
-              <TimerBar
-                totalSeconds={question.timerSeconds}
-                remainingSeconds={question.timerSeconds}
-              />
+              <TimerBar totalSeconds={question.timerSeconds} remainingSeconds={remainingSeconds} />
             )}
             <ResponseCounter
               responseCount={responsesForQuestion.length}

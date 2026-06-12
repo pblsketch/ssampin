@@ -34,6 +34,7 @@ import { registerClassroomAgreementHandlers } from './ipc/classroomAgreement';
 import { registerRealtimeWallLinkPreviewHandler } from './ipc/realtimeWallLinkPreview';
 import { registerRealtimeWallPdfHandlers } from './ipc/realtimeWallPdf';
 import { registerBoardHandlers, endActiveBoardSessionSync } from './ipc/board';
+import { registerMultiSurveyShareHandlers } from './ipc/multiSurveyShare';
 import {
   registerRealtimeWallBoardHandlers,
   saveDirtyWallBoardsSync,
@@ -4606,6 +4607,7 @@ if (!gotTheLock) {
     registerLiveSurveyHandlers(mainWindow!);
     registerLiveWordCloudHandlers(mainWindow!);
     registerLiveMultiSurveyHandlers(mainWindow!);
+    registerMultiSurveyShareHandlers(mainWindow!);
     registerLiveDiscussionHandlers(mainWindow!);
     registerRealtimeWallHandlers(mainWindow!);
     registerClassroomAgreementHandlers(mainWindow!);

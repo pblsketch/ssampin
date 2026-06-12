@@ -758,11 +758,97 @@ export function generateMultiSurveyHTML(
       font-size: 64px;
       line-height: 1;
     }
+
+    /* ── DN-03: lobby avatar wave tap feedback ── */
+    #lobby-avatar-btn {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      padding: 8px;
+      border-radius: 12px;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+      transition: transform 0.1s ease;
+    }
+
+    #lobby-avatar-btn:active {
+      transform: scale(0.9);
+    }
+
+    #lobby-avatar-btn.wave-anim {
+      animation: waveScale 0.35s ease-out;
+    }
+
+    @keyframes waveScale {
+      0%   { transform: scale(1); }
+      40%  { transform: scale(1.25); }
+      70%  { transform: scale(0.95); }
+      100% { transform: scale(1); }
+    }
+
+    .lobby-avatar-circle {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      background: #3b82f6;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 26px;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .lobby-avatar-name {
+      font-size: 13px;
+      color: #94a3b8;
+    }
+
+    /* ── DN-06: focus-mode overlay ── */
+    #focus-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.82);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      z-index: 9999;
+      pointer-events: all;
+    }
+
+    #focus-overlay[hidden] {
+      display: none !important;
+    }
+
+    .focus-overlay-emoji {
+      font-size: 64px;
+      line-height: 1;
+    }
+
+    .focus-overlay-text {
+      font-size: 22px;
+      font-weight: 700;
+      color: #e2e8f0;
+      text-align: center;
+      padding: 0 24px;
+    }
+
 ${getConnectionChipCSS()}
   </style>
 </head>
 <body>
   ${getConnectionChipHTML()}
+  <!-- DN-06: 집중 모드 오버레이 — 교사가 활성화 시 전체 화면 덮음 -->
+  <div id="focus-overlay" hidden aria-live="assertive" role="alert">
+    <div class="focus-overlay-emoji">👀</div>
+    <div class="focus-overlay-text">선생님을 봐 주세요</div>
+  </div>
   <script>${getConnectionChipJS({ submitButtonSelectors: ['#submit-btn', '#sm-answer-submit'] })}</script>
   <div id="app">
     <div id="header">
@@ -789,6 +875,11 @@ ${getConnectionChipCSS()}
 
     <div id="lobby-view" hidden class="state-view">
       <div class="sm-title" id="lobby-greeting">📌 선생님이 시작하기를 기다리는 중…</div>
+      <!-- DN-03: 아바타 탭 → wave 발신 -->
+      <button type="button" id="lobby-avatar-btn" aria-label="내 아바타 탭 (선생님에게 인사)">
+        <div class="lobby-avatar-circle" id="lobby-avatar-initial">?</div>
+        <div class="lobby-avatar-name" id="lobby-avatar-name"></div>
+      </button>
       <div class="sm-spinner"></div>
       <div class="sm-subtitle" id="lobby-count">연결된 친구들: 0명</div>
     </div>
@@ -1138,6 +1229,44 @@ ${getConnectionChipCSS()}
           }
         }
 
+        /* ── DN-03: wave 발신 (클라이언트 측 2초 스로틀) ── */
+        var waveLastSentAt = 0;
+        function sendWave() {
+          if (!ws || ws.readyState !== WebSocket.OPEN) return;
+          var now = Date.now();
+          if (now - waveLastSentAt < 2000) return;
+          waveLastSentAt = now;
+          try {
+            ws.send(JSON.stringify({ type: 'wave' }));
+          } catch (e) {}
+        }
+
+        /* ── DN-03: 로비 아바타 버튼 바인딩 ── */
+        (function bindLobbyAvatarBtn() {
+          var btn = document.getElementById('lobby-avatar-btn');
+          if (!btn || btn.dataset.bound) return;
+          btn.dataset.bound = '1';
+          btn.addEventListener('click', function () {
+            sendWave();
+            // 시각 피드백: wave 애니메이션
+            btn.classList.remove('wave-anim');
+            // reflow 트릭으로 애니메이션 재시작
+            void btn.offsetWidth;
+            btn.classList.add('wave-anim');
+            btn.addEventListener('animationend', function onEnd() {
+              btn.classList.remove('wave-anim');
+              btn.removeEventListener('animationend', onEnd);
+            });
+          });
+        })();
+
+        /* ── DN-06: 집중 모드 오버레이 토글 ── */
+        function setFocusOverlay(active) {
+          var overlay = document.getElementById('focus-overlay');
+          if (!overlay) return;
+          overlay.hidden = !active;
+        }
+
         /* ── Nickname view ── */
         function renderNicknameView(errorMsg) {
           var input = document.getElementById('nickname-input');
@@ -1193,6 +1322,11 @@ ${getConnectionChipCSS()}
           if (countEl) {
             countEl.textContent = '연결된 친구들: ' + (state.totalConnected || 0) + '명';
           }
+          // DN-03: 아바타 버튼 초기 이름 반영
+          var avatarInitial = document.getElementById('lobby-avatar-initial');
+          var avatarName = document.getElementById('lobby-avatar-name');
+          if (avatarInitial) avatarInitial.textContent = myName ? myName.slice(0, 1) : '?';
+          if (avatarName) avatarName.textContent = myName || '';
           show('lobby-view');
         }
 
@@ -1717,12 +1851,17 @@ ${getConnectionChipCSS()}
               }
             } else if (msg.type === 'closed') {
               show('closed');
+            } else if (msg.type === 'focus-mode') {
+              // DN-06: 교사 집중 모드 broadcast 수신
+              setFocusOverlay(!!msg.active);
             }
           };
 
           ws.onclose = function () {
             ws = null;
             if (window.spConnSetState) window.spConnSetState('disconnected');
+            // 연결 끊기면 focus overlay 도 해제 (안전)
+            setFocusOverlay(false);
             if (wasConnected && currentState && currentState.phase !== 'ended') {
               show('disconnected');
             }

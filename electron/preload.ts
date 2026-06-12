@@ -781,6 +781,34 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.removeListener('live-multi-survey:text-answer-detail', handler);
     };
   },
+  // DN-03: 학생 wave 이벤트 수신 (교사 콘솔 아바타 pulse)
+  onLiveMultiSurveyStudentWave: (
+    callback: (data: { sessionId: string; studentId: string }) => void,
+  ): (() => void) => {
+    const handler = (_event: unknown, data: { sessionId: string; studentId: string }) =>
+      callback(data);
+    ipcRenderer.on('live-multi-survey:student-wave', handler);
+    return () => {
+      ipcRenderer.removeListener('live-multi-survey:student-wave', handler);
+    };
+  },
+  // DN-06: 교사 집중 모드 토글 → 학생 WebSocket broadcast
+  liveMultiSurveyToggleFocusMode: (active: boolean): Promise<void> =>
+    ipcRenderer.invoke('live-multi-survey:toggle-focus-mode', { active }),
+  // 작업 1: MultiSurvey Share view (교실 화면 별도 창)
+  openMultiSurveyShareWindow: (entryUrl: string): Promise<void> =>
+    ipcRenderer.invoke('multi-survey-share:open', { entryUrl }),
+  closeMultiSurveyShareWindow: (): Promise<void> => ipcRenderer.invoke('multi-survey-share:close'),
+  sendMultiSurveyShareSnapshot: (snapshot: unknown): void => {
+    ipcRenderer.send('multi-survey-share:snapshot', snapshot);
+  },
+  onMultiSurveyShareSnapshot: (callback: (snapshot: unknown) => void): (() => void) => {
+    const handler = (_event: unknown, s: unknown) => callback(s);
+    ipcRenderer.on('multi-survey-share:snapshot', handler);
+    return () => {
+      ipcRenderer.removeListener('multi-survey-share:snapshot', handler);
+    };
+  },
   // Live Word Cloud
   startLiveWordCloud: (data: {
     question: string;

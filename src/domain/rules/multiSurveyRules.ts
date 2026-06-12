@@ -17,6 +17,59 @@ import {
 import type { Response } from '../entities/multiSurvey/Response';
 
 // ──────────────────────────────────────────────
+// normalizeHangulInitial
+// ──────────────────────────────────────────────
+
+/**
+ * 초성 변환에 필요한 상수.
+ * signatureNameSearch.ts의 로직을 domain 레이어에 복제 (의존성 역방향 위반 방지).
+ * 19자 초성 목록 (ㄱ~ㅎ), HANGUL_BASE 0xAC00, 음절당 588개.
+ */
+const _CHOSUNG_LIST = [
+  'ㄱ',
+  'ㄲ',
+  'ㄴ',
+  'ㄷ',
+  'ㄸ',
+  'ㄹ',
+  'ㅁ',
+  'ㅂ',
+  'ㅃ',
+  'ㅅ',
+  'ㅆ',
+  'ㅇ',
+  'ㅈ',
+  'ㅉ',
+  'ㅊ',
+  'ㅋ',
+  'ㅌ',
+  'ㅍ',
+  'ㅎ',
+] as const;
+
+const _HANGUL_BASE = 0xac00;
+const _HANGUL_LAST = 0xd7a3;
+/** 한 초성당 음절 개수 (중성 21 × 종성 28) */
+const _SYLLABLES_PER_CHOSUNG = 588;
+
+/**
+ * 완성형 한글 문자열을 초성 시퀀스로 변환.
+ * 예: "한국" → "ㅎㄱ", "안녕하세요" → "ㅇㄴㅎㅅㅇ".
+ * 비한글 문자(영문·숫자·기호)는 그대로 통과.
+ * 이미 초성인 문자(ㄱ~ㅎ)도 그대로 통과.
+ */
+export function normalizeHangulInitial(s: string): string {
+  return [...s]
+    .map((char) => {
+      const code = char.charCodeAt(0);
+      // 완성형 한글 음절 범위(AC00~D7A3)만 초성으로 변환
+      if (code < _HANGUL_BASE || code > _HANGUL_LAST) return char;
+      return _CHOSUNG_LIST[Math.floor((code - _HANGUL_BASE) / _SYLLABLES_PER_CHOSUNG)] ?? char;
+    })
+    .join('');
+}
+
+// ──────────────────────────────────────────────
 // validateSession
 // ──────────────────────────────────────────────
 
@@ -158,8 +211,15 @@ export function isAnswerCorrect(
     }
     case 'blank': {
       if (typeof answer !== 'string') return false;
-      // TODO(Phase B): 초성 비교 helper Phase B — isHangulInitial === true 시
-      // normalizeHangulInitial(answer)와 acceptedAnswers를 비교. 현재는 plain string match.
+      // isHangulInitial === true: 초성 정규화 후 비교.
+      // 양쪽(학생 답·acceptedAnswers)을 공백 제거 후 초성으로 변환해 일치 여부 확인.
+      // 완성형 입력("한국")도 초성화되므로 "ㅎㄱ"과 "한국" 모두 정답 처리됨.
+      if (question.isHangulInitial) {
+        const normAnswer = normalizeHangulInitial(answer.replace(/\s+/g, ''));
+        return question.acceptedAnswers.some(
+          (a) => normalizeHangulInitial(a.replace(/\s+/g, '')) === normAnswer,
+        );
+      }
       return question.acceptedAnswers.some((a) => answer === a);
     }
     case 'description': {
@@ -295,6 +355,94 @@ export function calcAccuracy(responses: readonly Response[]): number {
   if (quizResponses.length === 0) return 0;
   const correctCount = quizResponses.filter((r) => r.isCorrect === true).length;
   return correctCount / quizResponses.length;
+}
+
+// ──────────────────────────────────────────────
+// calcSessionScore
+// ──────────────────────────────────────────────
+
+/**
+ * 세션 점수 계산 컨텍스트 — 호출자(adapter)가 누적 상태를 주입.
+ * domain 규칙: Date.now()/Math.random() 직접 호출 금지. rng·시각은 주입식.
+ */
+export interface SessionScoreContext {
+  readonly question: Question;
+  /** isCorrect 이미 계산된 Response */
+  readonly response: Response;
+  /** 문항 open 시각 (ISO 8601) — 빠른 풀이 측정 기준 */
+  readonly questionOpenedAt: string;
+  /** 직전까지 연속 정답 수 (이번 문항 정답 전 누적) */
+  readonly currentStreak: number;
+  /** 응답 설정 토글 — fastSolveBonus/streakBonus/randomBonus 확인용 */
+  readonly opts: ResponseOpts;
+  /**
+   * 랜덤 보너스용 주입식 rng. 0~1 반환.
+   * 미지정 시 () => 0 처리 → random 보너스 0 (테스트 결정성 보장).
+   */
+  readonly rng?: () => number;
+}
+
+/** 세션 점수 분해 내역 */
+export interface SessionScoreBreakdown {
+  /** 정답이면 question.score, 아니면 0 */
+  readonly base: number;
+  /** 빠른 풀이 보너스 (opts.fastSolveBonus ON 시) */
+  readonly fastSolve: number;
+  /** 연속 정답 보너스 (opts.streakBonus ON 시) */
+  readonly streak: number;
+  /** 랜덤 보너스 (opts.randomBonus ON 시) */
+  readonly random: number;
+  readonly total: number;
+}
+
+/**
+ * 세션 점수 계산 (Phase B 작업 3).
+ *
+ * 산식:
+ * - base: 정답이면 question.score, 오답/survey 타입이면 0. 오답이면 보너스 전부 0 조기 반환.
+ * - fastSolve (opts.fastSolveBonus ON):
+ *     elapsed = (submittedAt - questionOpenedAt) / 1000 (초)
+ *     ratio   = clamp(1 - elapsed / timerSeconds, 0, 1)
+ *     결과    = round(question.score × 0.5 × ratio)  ← 최대 base의 50%
+ *     timerSeconds ≤ 0이면 0
+ * - streak (opts.streakBonus ON): min(currentStreak, 5) × 2  ← 최대 +10
+ * - random (opts.randomBonus ON): floor((rng() ?? 0) × 6) → 0~5점
+ * - total: base + fastSolve + streak + random
+ */
+export function calcSessionScore(ctx: SessionScoreContext): SessionScoreBreakdown {
+  const { question, response, questionOpenedAt, currentStreak, opts, rng } = ctx;
+
+  // survey 타입이거나 오답이면 보너스 포함 전부 0
+  if (!isQuizType(question.type) || response.isCorrect !== true) {
+    return { base: 0, fastSolve: 0, streak: 0, random: 0, total: 0 };
+  }
+
+  const base = question.score;
+
+  // ── fastSolve ──────────────────────────────
+  let fastSolve = 0;
+  if (opts.fastSolveBonus && question.timerSeconds > 0) {
+    const openedMs = Date.parse(questionOpenedAt);
+    const submittedMs = Date.parse(response.submittedAt);
+    if (!isNaN(openedMs) && !isNaN(submittedMs)) {
+      // elapsed(초), ratio: 0초 경과 → 1.0, timer 초과 → 0
+      const elapsed = (submittedMs - openedMs) / 1000;
+      const ratio = Math.max(0, Math.min(1, 1 - elapsed / question.timerSeconds));
+      fastSolve = Math.round(question.score * 0.5 * ratio);
+    }
+    // openedAt 파싱 실패(NaN)면 fastSolve 0 유지
+  }
+
+  // ── streak ────────────────────────────────
+  // currentStreak는 이번 정답 직전까지 누적. 상한 5회(최대 +10점)
+  const streak = opts.streakBonus ? Math.min(currentStreak, 5) * 2 : 0;
+
+  // ── random ────────────────────────────────
+  // rng 미지정 시 0 → random 0 (테스트 결정성)
+  const random = opts.randomBonus ? Math.floor((rng?.() ?? 0) * 6) : 0;
+
+  const total = base + fastSolve + streak + random;
+  return { base, fastSolve, streak, random, total };
 }
 
 // Re-export helpers needed by consumers

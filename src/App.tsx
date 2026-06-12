@@ -111,6 +111,7 @@ import { NeisSyncSuggestionBanner } from '@adapters/components/Calendar/NeisSync
 import { ShareModal } from '@adapters/components/Share/ShareModal';
 import { SharePromptOverlay } from '@adapters/components/Share/SharePromptOverlay';
 import { recordActiveDay } from '@adapters/stores/useShareStore';
+import { ShareWindowApp } from '@adapters/components/MultiSurvey/v2/Share/ShareWindowApp';
 
 function isWidgetMode(): boolean {
   const params = new URLSearchParams(window.location.search);
@@ -132,6 +133,11 @@ function isStickerPickerMode(): boolean {
 function isIconMode(): boolean {
   const params = new URLSearchParams(window.location.search);
   return params.get('mode') === 'icon';
+}
+
+function isMultiSurveyShareMode(): boolean {
+  const params = new URLSearchParams(window.location.search);
+  return params.get('mode') === 'msShare';
 }
 
 function getQuickAddKindFromUrl(): QuickAddKind {
@@ -456,6 +462,9 @@ export function App() {
   }
   if (isWidgetMode()) {
     return <WidgetApp />;
+  }
+  if (isMultiSurveyShareMode()) {
+    return <ShareWindowApp />;
   }
   return <MainApp />;
 }

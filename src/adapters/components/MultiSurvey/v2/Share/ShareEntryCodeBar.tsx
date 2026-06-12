@@ -1,10 +1,11 @@
 /**
- * ShareEntryCodeBar — 교실 모니터 상단 고정 입장코드 배너.
+ * ShareEntryCodeBar — 교실 모니터 상단 고정 입장 URL 배너.
  *
  * - 높이: 64px 고정 (component-tree §4)
  * - 텍스트: 36px Bold (4m 거리 가독성)
- * - sp-* 토큰: sp-surface (배경) / sp-text (라벨) / sp-accent (코드 강조)
+ * - sp-* 토큰: sp-surface (배경) / sp-text (라벨) / sp-accent (URL 강조)
  *
+ * entryCode 는 폐기 (2026-06-12) — QR+URL 전용.
  * lobby phase 외에도 학생이 중간 입장할 수 있을 때 노출되므로
  * 부모(ClassroomShareView)가 phase 기반으로 표시 제어한다.
  */
@@ -12,30 +13,33 @@
 import { memo } from 'react';
 
 interface ShareEntryCodeBarProps {
-  /** 6자리 입장 코드 (예: "AB12CD") */
-  readonly entryCode: string;
+  /** 학생 입장 URL */
+  readonly entryUrl: string;
   /** 현재 입장 학생 수 */
   readonly studentCount: number;
 }
 
-function ShareEntryCodeBarImpl({ entryCode, studentCount }: ShareEntryCodeBarProps): JSX.Element {
+function ShareEntryCodeBarImpl({ entryUrl, studentCount }: ShareEntryCodeBarProps): JSX.Element {
+  // URL이 길면 표시용으로 짧게 자름 (도메인+경로 최대 40자)
+  const displayUrl = entryUrl.length > 40 ? `${entryUrl.slice(0, 40)}…` : entryUrl;
+
   return (
     <header
       className="flex items-center justify-between bg-sp-surface px-12 text-sp-text"
       style={{ height: 64 }}
       role="banner"
-      aria-label="입장 코드 배너"
+      aria-label="입장 URL 배너"
     >
       <div className="flex items-baseline gap-6">
         <span className="font-sp-medium" style={{ fontSize: 28 }}>
-          입장 코드
+          참여 주소
         </span>
         <span
-          className="font-sp-bold tracking-[0.3em] text-sp-accent"
-          style={{ fontSize: 36 }}
-          aria-label={`입장 코드 ${entryCode.split('').join(' ')}`}
+          className="font-sp-bold text-sp-accent"
+          style={{ fontSize: 28 }}
+          aria-label={`입장 주소 ${entryUrl}`}
         >
-          {entryCode}
+          {displayUrl}
         </span>
       </div>
       <div

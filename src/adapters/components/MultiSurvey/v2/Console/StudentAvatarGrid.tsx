@@ -12,6 +12,8 @@ import type { StudentProfile } from '@domain/entities/multiSurvey/LiveSession';
 
 interface StudentAvatarGridProps {
   readonly students: readonly StudentProfile[];
+  /** DN-03: 최근 wave 보낸 학생 ID 집합. 포함된 학생 아바타에 pulse 효과. */
+  readonly recentWaveStudentIds?: ReadonlySet<string>;
 }
 
 function usePrefersReducedMotion(): boolean {
@@ -29,9 +31,11 @@ function usePrefersReducedMotion(): boolean {
 function AvatarCard({
   student,
   animate,
+  isWaving,
 }: {
   readonly student: StudentProfile;
   readonly animate: boolean;
+  readonly isWaving: boolean;
 }): JSX.Element {
   const [mounted, setMounted] = useState(!animate);
   useEffect(() => {
@@ -53,10 +57,10 @@ function AvatarCard({
     <div
       className="flex flex-col items-center gap-2 rounded-xl border border-sp-border bg-sp-card p-4"
       style={style}
-      aria-label={`참여 학생 ${student.nickname}`}
+      aria-label={`참여 학생 ${student.nickname}${isWaving ? ' (인사 중)' : ''}`}
     >
       <div
-        className="flex h-16 w-16 items-center justify-center rounded-full bg-sp-accent text-[color:var(--sp-accent-fg)] font-sp-bold"
+        className={`flex h-16 w-16 items-center justify-center rounded-full bg-sp-accent text-[color:var(--sp-accent-fg)] font-sp-bold${isWaving ? ' animate-pulse' : ''}`}
         style={{ fontSize: 24 }}
         aria-hidden="true"
       >
@@ -69,7 +73,10 @@ function AvatarCard({
   );
 }
 
-function StudentAvatarGridImpl({ students }: StudentAvatarGridProps): JSX.Element {
+function StudentAvatarGridImpl({
+  students,
+  recentWaveStudentIds,
+}: StudentAvatarGridProps): JSX.Element {
   const reducedMotion = usePrefersReducedMotion();
   const seenIdsRef = useRef<Set<string>>(new Set());
 
@@ -90,9 +97,10 @@ function StudentAvatarGridImpl({ students }: StudentAvatarGridProps): JSX.Elemen
         const isNew = !seenIdsRef.current.has(s.studentId);
         if (isNew) seenIdsRef.current.add(s.studentId);
         const animate = !reducedMotion && isNew;
+        const isWaving = recentWaveStudentIds?.has(s.studentId) ?? false;
         return (
           <li key={s.studentId}>
-            <AvatarCard student={s} animate={animate} />
+            <AvatarCard student={s} animate={animate} isWaving={isWaving} />
           </li>
         );
       })}
