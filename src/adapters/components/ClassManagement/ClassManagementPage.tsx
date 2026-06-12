@@ -38,6 +38,7 @@ export function ClassManagementPage() {
   const selectedClassId = useTeachingClassStore((s) => s.selectedClassId);
   const [activeTab, setActiveTab] = useState<TabId>('roster');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [isClassPanelCollapsed, setIsClassPanelCollapsed] = useState(false);
   const [recordInitialStudentView, setRecordInitialStudentView] = useState<'list' | 'seating'>(
     'list',
   );
@@ -86,13 +87,43 @@ export function ClassManagementPage() {
 
       {/* 본문 */}
       <div className="flex-1 flex gap-6 min-h-0 p-8">
-        {/* 왼쪽: 학급 리스트 */}
-        <div className="w-72 shrink-0 bg-sp-card border border-sp-border rounded-xl overflow-hidden flex flex-col">
-          <ClassList
-            onAddClass={() => setShowAddModal(true)}
-            onBeforeSelect={handleBeforeClassSwitch}
-          />
-        </div>
+        {/* 왼쪽: 학급 리스트 (접기/펼치기) */}
+        {isClassPanelCollapsed ? (
+          <div className="w-12 shrink-0 bg-sp-card border border-sp-border rounded-xl flex flex-col items-center py-3 gap-3">
+            <button
+              onClick={() => setIsClassPanelCollapsed(false)}
+              title="학급 목록 펼치기"
+              aria-label="학급 목록 펼치기"
+              className="p-1.5 rounded-lg text-sp-muted hover:text-sp-text hover:bg-sp-text/5 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-sp-accent"
+            >
+              <span className="material-symbols-outlined text-lg">chevron_right</span>
+            </button>
+            <span className="material-symbols-outlined text-sp-muted text-lg">menu_book</span>
+            <span className="text-xs text-sp-muted font-medium [writing-mode:vertical-rl] tracking-wide">
+              학급 목록
+            </span>
+          </div>
+        ) : (
+          <div className="w-72 shrink-0 bg-sp-card border border-sp-border rounded-xl overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between px-3 py-2 border-b border-sp-border">
+              <span className="text-xs font-sp-semibold text-sp-muted">학급 목록</span>
+              <button
+                onClick={() => setIsClassPanelCollapsed(true)}
+                title="학급 목록 접기"
+                aria-label="학급 목록 접기"
+                className="p-1 rounded-lg text-sp-muted hover:text-sp-text hover:bg-sp-text/5 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-sp-accent"
+              >
+                <span className="material-symbols-outlined text-lg">chevron_left</span>
+              </button>
+            </div>
+            <div className="flex-1 min-h-0">
+              <ClassList
+                onAddClass={() => setShowAddModal(true)}
+                onBeforeSelect={handleBeforeClassSwitch}
+              />
+            </div>
+          </div>
+        )}
 
         {/* 오른쪽: 탭 콘텐츠 */}
         <div className="flex-1 flex flex-col min-w-0">

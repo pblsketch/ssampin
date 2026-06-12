@@ -627,7 +627,15 @@ interface ElectronAPI {
   // === 협업 보드 (collab-board) — Design §4.1 ===
   collabBoard?: {
     list: () => Promise<CollabBoardMeta[]>;
-    create: (args: { name?: string }) => Promise<CollabBoardMeta>;
+    create: (args: {
+      name?: string;
+      templateId?: string;
+      userTemplateId?: string;
+    }) => Promise<CollabBoardMeta>;
+    /** PDCA-4 (G006): 내 템플릿 */
+    userTemplateList: () => Promise<CollabBoardUserTemplateMeta[]>;
+    userTemplateSave: (args: { id: string; name?: string }) => Promise<CollabBoardUserTemplateMeta>;
+    userTemplateDelete: (args: { id: string }) => Promise<{ ok: true }>;
     rename: (args: { id: string; name: string }) => Promise<CollabBoardMeta>;
     delete: (args: { id: string }) => Promise<{ ok: true }>;
     startSession: (args: { id: string }) => Promise<CollabBoardSessionStart>;
@@ -827,9 +835,20 @@ interface BackupElectronAPI {
   }>;
 }
 
+/** 내 템플릿 메타 (PDCA-4 / G006) — UserTemplateMeta 직렬화 형태 */
+interface CollabBoardUserTemplateMeta {
+  id: string;
+  name: string;
+  createdAt: number;
+  versionSchema: string;
+  elementCount: number;
+}
+
 /** 협업 보드 메타데이터 (Board 엔티티의 renderer-facing 뷰) */
 interface CollabBoardMeta {
   id: string;
+  /** 생성 시 선택한 학습 활동 템플릿 (PDCA-3 / G005). 이전 보드는 없음 */
+  templateId?: string | null;
   name: string;
   createdAt: number;
   updatedAt: number;
