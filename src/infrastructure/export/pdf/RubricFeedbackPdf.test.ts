@@ -6,7 +6,8 @@
  */
 import { describe, it, expect, beforeAll } from 'vitest';
 import { PDFDocument } from 'pdf-lib';
-import type { RubricFeedbackDoc } from '@domain/rules/rubricRules';
+import type { Rubric, RubricGrading } from '@domain/entities/Rubric';
+import { buildRubricFeedbackDocs, type RubricFeedbackDoc } from '@domain/rules/rubricRules';
 import { __resetFontCache, loadKoreanFontBuffers } from './FontRegistry';
 import { exportRubricFeedbackToPdf } from './RubricFeedbackPdf';
 
@@ -101,9 +102,120 @@ describe('exportRubricFeedbackToPdf', () => {
     },
   );
 
+  // 사용자 신고 회귀 가드 (2026-06-12): 점수 포함 해제 시 출력 오류
+  it(
+    '점수 숨김(전 score/total/maxScore null) 문서도 유효한 PDF 를 만든다',
+    { timeout: 30_000 },
+    async () => {
+      const hidden: RubricFeedbackDoc = {
+        ...DOC_GRADED,
+        blocks: DOC_GRADED.blocks.map((b) => ({
+          ...b,
+          levels: b.levels.map((l) => ({ ...l, score: null })),
+        })),
+        total: null,
+        maxScore: null,
+      };
+      const buffer = await exportRubricFeedbackToPdf({
+        title: '점수 숨김',
+        className: '2학년 3반 국어',
+        docs: [hidden],
+      });
+      const loaded = await PDFDocument.load(buffer);
+      expect(loaded.getPageCount()).toBeGreaterThanOrEqual(1);
+    },
+  );
+
   it('빈 대상 목록도 유효한 PDF (1페이지)', { timeout: 30_000 }, async () => {
     const buffer = await exportRubricFeedbackToPdf({ title: '빈 문서', docs: [] });
     const loaded = await PDFDocument.load(buffer);
     expect(loaded.getPageCount()).toBe(1);
   });
+
+  // 모달과 동일한 풀 파이프라인 (도메인 빌더 → 렌더러) — 점수 포함 ON/OFF 모두
+  it(
+    '도메인 buildRubricFeedbackDocs 결과를 점수 ON/OFF 양쪽 다 렌더한다 (완료/부분/결시/미채점 혼합)',
+    { timeout: 30_000 },
+    async () => {
+      const rubric: Rubric = {
+        id: 'r1',
+        classId: 'c1',
+        title: '예시',
+        criteria: [
+          {
+            id: 'cr1',
+            name: '111',
+            order: 0,
+            levels: [
+              { id: 'l1', name: '탁월함', score: 10 },
+              { id: 'l2', name: '잘함', score: 8, description: '근거가 충분함' },
+              { id: 'l3', name: '보통', score: 6 },
+              { id: 'l4', name: '노력 필요', score: 4 },
+            ],
+          },
+          {
+            id: 'cr2',
+            name: '222',
+            order: 1,
+            levels: [
+              { id: 'l5', name: '상', score: 5 },
+              { id: 'l6', name: '하', score: 2 },
+            ],
+          },
+        ],
+        createdAt: '2026-06-12T00:00:00.000Z',
+        updatedAt: '2026-06-12T00:00:00.000Z',
+      };
+      const gradings: RubricGrading[] = [
+        {
+          id: 'g1',
+          rubricId: 'r1',
+          classId: 'c1',
+          studentId: 's1',
+          status: 'graded',
+          marks: { cr1: 'l1', cr2: 'l5' },
+          criterionNotes: { cr1: '발표 태도 좋음' },
+          overallFeedback: '한 학기 동안 성장이 큽니다.',
+          gradedAt: '2026-06-12T00:00:00.000Z',
+        },
+        {
+          id: 'g2',
+          rubricId: 'r1',
+          classId: 'c1',
+          studentId: 's2',
+          status: 'partial',
+          marks: { cr1: 'l2' },
+          criterionNotes: {},
+          gradedAt: '2026-06-12T00:00:00.000Z',
+        },
+        {
+          id: 'g3',
+          rubricId: 'r1',
+          classId: 'c1',
+          studentId: 's3',
+          status: 'absent',
+          marks: {},
+          criterionNotes: {},
+          gradedAt: '2026-06-12T00:00:00.000Z',
+        },
+      ];
+      const students = [
+        { key: 's1', number: 1, name: '김민지' },
+        { key: 's2', number: 2, name: '이서연' },
+        { key: 's3', number: 3, name: '박지민' },
+        { key: 's4', number: 4, name: '최예은' }, // 기록 없음(미채점)
+      ];
+
+      for (const includeScores of [true, false]) {
+        const docs = buildRubricFeedbackDocs(rubric, gradings, students, includeScores);
+        const buffer = await exportRubricFeedbackToPdf({
+          title: rubric.title,
+          className: '2학년 3반 국어',
+          docs,
+        });
+        const loaded = await PDFDocument.load(buffer);
+        expect(loaded.getPageCount()).toBeGreaterThanOrEqual(4);
+      }
+    },
+  );
 });
