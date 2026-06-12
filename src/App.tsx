@@ -90,6 +90,7 @@ import { useDDayStore } from '@adapters/stores/useDDayStore';
 import { useConsultationStore } from '@adapters/stores/useConsultationStore';
 import { useMealStore } from '@adapters/stores/useMealStore';
 import { useStickerStore } from '@adapters/stores/useStickerStore';
+import { useRubricStore } from '@adapters/stores/useRubricStore';
 import { PinGuard } from '@adapters/components/common/PinGuard';
 import { useAutoSync } from '@adapters/hooks/useAutoSync';
 import { useTasksAutoSync } from '@adapters/hooks/useTasksAutoSync';
@@ -984,6 +985,8 @@ function MainApp() {
       'note-notebooks': (cb) => useNoteStore.subscribe(cb),
       // 내 이모티콘 — stickers-meta.json 단일 키.
       stickers: (cb) => useStickerStore.subscribe(cb),
+      // 수행평가 채점 — 루브릭 + 채점 기록 단일 키.
+      rubrics: (cb) => useRubricStore.subscribe(cb),
     };
 
     const unsubscribers: Array<() => void> = [];

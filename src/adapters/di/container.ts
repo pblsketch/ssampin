@@ -33,6 +33,7 @@ import type { ISignaturePort } from '@domain/ports/ISignaturePort';
 import type { IGoogleSheetPort } from '@domain/ports/IGoogleSheetPort';
 import type { IConsultationRepository } from '@domain/repositories/IConsultationRepository';
 import type { ISurveyRepository } from '@domain/repositories/ISurveyRepository';
+import type { IRubricRepository } from '@domain/repositories/IRubricRepository';
 import type { IDriveSyncPort } from '@domain/ports/IDriveSyncPort';
 import type { IDriveSyncRepository } from '@domain/repositories/IDriveSyncRepository';
 import type { IManualMealRepository } from '@domain/repositories/IManualMealRepository';
@@ -47,6 +48,7 @@ import type { IWallBoardRepository } from '@domain/repositories/IWallBoardReposi
 import type { IStickerRepository } from '@domain/repositories/IStickerRepository';
 import type { IClassroomAgreementRepository } from '@domain/repositories/IClassroomAgreementRepository';
 import type { IMemoShareClient } from '@domain/ports/IMemoShareClient';
+import type { IMemoSharePresencePort } from '@domain/ports/IMemoSharePresencePort';
 import type { IThumbnailer, IPreviewExtractor, IPrinterAdapter } from '@domain/ports/IFormPorts';
 
 import { ElectronStorageAdapter } from '@infrastructure/storage/ElectronStorageAdapter';
@@ -61,6 +63,7 @@ import { AssignmentSupabaseClient } from '@infrastructure/supabase/AssignmentSup
 import { SignatureSupabaseClient } from '@infrastructure/supabase/SignatureSupabaseClient';
 import { GoogleSheetClient } from '@infrastructure/google/GoogleSheetClient';
 import { ShortLinkClient } from '@infrastructure/supabase/ShortLinkClient';
+import { MemoSharePresenceClient } from '@infrastructure/supabase/MemoSharePresenceClient';
 // 협업 보드 infrastructure는 Node-only(yjs/ws/y-websocket/fs) 의존성을 가지므로
 // renderer 번들에 포함되면 Vite 빌드 실패. 따라서 container.ts에서 import하지 않고
 // electron/ipc/board.ts가 직접 조립한다 (기존 5개 라이브 도구와 동일 패턴).
@@ -86,6 +89,7 @@ import { JsonDDayRepository } from '@adapters/repositories/JsonDDayRepository';
 import { JsonAssignmentRepository } from '@adapters/repositories/JsonAssignmentRepository';
 import { JsonConsultationRepository } from '@adapters/repositories/JsonConsultationRepository';
 import { JsonSurveyRepository } from '@adapters/repositories/JsonSurveyRepository';
+import { JsonRubricRepository } from '@adapters/repositories/JsonRubricRepository';
 import { JsonDriveSyncRepository } from '@adapters/repositories/JsonDriveSyncRepository';
 import { JsonManualMealRepository } from '@adapters/repositories/JsonManualMealRepository';
 import { JsonImageWidgetRepository } from '@adapters/repositories/JsonImageWidgetRepository';
@@ -119,6 +123,8 @@ import { GetAssignments } from '@usecases/assignment/GetAssignments';
 import { GetSubmissions } from '@usecases/assignment/GetSubmissions';
 import { DeleteAssignment } from '@usecases/assignment/DeleteAssignment';
 import { CopyMissingList } from '@usecases/assignment/CopyMissingList';
+
+import { ManageRubrics } from '@usecases/rubric/ManageRubrics';
 
 import { PublishSignatureSession } from '@usecases/signature/PublishSignatureSession';
 import { SubmitMonitorSignature } from '@usecases/signature/SubmitMonitorSignature';
@@ -323,6 +329,12 @@ export const consultationSupabaseClient = new ConsultationSupabaseClient();
 
 export const surveyRepository: ISurveyRepository = new JsonSurveyRepository(storage);
 
+// === 수행평가 채점 (rubric-grading) ===
+
+export const rubricRepository: IRubricRepository = new JsonRubricRepository(storage);
+
+export const manageRubrics = new ManageRubrics(rubricRepository);
+
 export const surveySupabaseClient = new SurveySupabaseClient();
 
 export function resetGoogleDriveClient(): void {
@@ -350,6 +362,12 @@ export async function getMemoShareClient(
 export function resetMemoShareClient(): void {
   _memoShareClient = null;
 }
+
+/**
+ * 교실 화면 수신 확인증 읽기 클라이언트 — 토큰 불필요(anon key) → 즉시 생성.
+ * 메타데이터만 조회(ADR-012), 메모 내용 무전송.
+ */
+export const memoSharePresenceClient: IMemoSharePresencePort = new MemoSharePresenceClient();
 
 // === Google Drive 동기화 ===
 

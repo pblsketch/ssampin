@@ -291,6 +291,15 @@ export const SYNC_REGISTRY: SyncDomain[] = [
       await useStickerStore.getState().load();
     },
   },
+  // 26. rubrics ─ 수행평가 채점 (루브릭 + 채점 기록)
+  {
+    fileName: 'rubrics',
+    reload: async () => {
+      const { useRubricStore } = await import('@adapters/stores/useRubricStore');
+      useRubricStore.setState({ loaded: false });
+      await useRubricStore.getState().load();
+    },
+  },
 ];
 
 /**
@@ -299,8 +308,8 @@ export const SYNC_REGISTRY: SyncDomain[] = [
  *
  * isDynamic 도메인은 정적 목록에서 제외 (런타임 enumerateDynamic으로 합집합).
  */
-export const SYNC_FILES: readonly string[] = SYNC_REGISTRY
-  .filter(d => !d.isDynamic)
-  .map(d => d.fileName);
+export const SYNC_FILES: readonly string[] = SYNC_REGISTRY.filter((d) => !d.isDynamic).map(
+  (d) => d.fileName,
+);
 
 export type SyncFileName = (typeof SYNC_FILES)[number];

@@ -6,6 +6,7 @@ import type { Student } from '@domain/entities/Student';
 import type { StudentRecord } from '@domain/entities/StudentRecord';
 import type { RecordCategoryItem } from '@domain/valueObjects/RecordCategory';
 import type { GroupResult } from '@domain/rules/groupingRules';
+import type { RubricFeedbackDoc } from '@domain/rules/rubricRules';
 import {
   getAttendanceStats,
   sortByDateDesc,
@@ -1214,6 +1215,110 @@ export async function exportGroupingToHwpx(groups: readonly GroupResult[]): Prom
         applyCellStyle(table, r + 2, c, { charPrId: leaderCharId });
       }
     }
+  }
+
+  return doc.save();
+}
+
+/**
+ * 수행평가 피드백 문서 → HWPX (FR-6, rubric-grading Phase 4).
+ *
+ * R-1 스파이크 결론: exportStudentRecordsToHwpx 가 검증한 "학생별 반복 +
+ * 문단 + 소형 테이블 + 셀 스타일" 패턴으로 요소 단위 블록(D7)을 표현한다.
+ * - 요소마다 수준 개수가 달라 단일 대형 표 불가 → 요소당 소형 표 1개
+ * - 체크 표시는 글리프 호환이 안전한 ●/○ 텍스트 (✓류는 폰트 누락 위험)
+ * - 점수 표시는 도메인 데이터(buildRubricFeedbackDocs)가 결정 — score 가
+ *   null 이면 이 렌더러는 점수를 그릴 수 없다 (점수 숨김 토글 보장)
+ * - hwpxcore 에 페이지 브레이크 API 가 없어 학생 사이는 구분 문단으로 분리
+ *   (한글에서 인쇄 전 편집이 쉬운 연속 흐름 — PDF 는 학생당 1페이지 보장)
+ */
+export async function exportRubricFeedbackToHwpx(input: {
+  title: string;
+  className?: string;
+  docs: readonly RubricFeedbackDoc[];
+}): Promise<Uint8Array> {
+  const doc = await createDoc();
+
+  const titleCharId = doc.ensureRunStyle({ bold: true, fontSize: 15 });
+  const studentCharId = doc.ensureRunStyle({ bold: true, fontSize: 12 });
+  const critCharId = doc.ensureRunStyle({ bold: true, fontSize: 11 });
+  const bodyCharId = doc.ensureRunStyle({ fontSize: 10 });
+  const checkedCharId = doc.ensureRunStyle({ bold: true, fontSize: 10 });
+  const mutedCharId = doc.ensureRunStyle({ fontSize: 9 });
+  const centerParaId = doc.ensureParaStyle({ alignment: 'CENTER' });
+
+  while (doc.paragraphs.length > 0) {
+    doc.removeParagraph(0, 0);
+  }
+
+  for (const [docIndex, feedback] of input.docs.entries()) {
+    if (docIndex > 0) {
+      // 학생 구분 — 자르는 선 역할의 빈 문단 + 구분 문단
+      doc.addParagraph();
+      doc.addParagraph('─'.repeat(40), { charPrIdRef: mutedCharId, paraPrIdRef: centerParaId });
+      doc.addParagraph();
+    }
+
+    doc.addParagraph(input.title, { charPrIdRef: titleCharId });
+    const studentLine =
+      input.className !== undefined && input.className.length > 0
+        ? `${input.className} · ${feedback.studentNumber}번 ${feedback.studentName}`
+        : `${feedback.studentNumber}번 ${feedback.studentName}`;
+    doc.addParagraph(studentLine, { charPrIdRef: studentCharId });
+    doc.addParagraph();
+
+    if (feedback.isAbsent) {
+      doc.addParagraph('결시 — 이 평가에 응시하지 않았습니다.', { charPrIdRef: bodyCharId });
+      continue;
+    }
+
+    for (const [blockIndex, block] of feedback.blocks.entries()) {
+      doc.addParagraph(`${blockIndex + 1}. ${block.criterionName}`, { charPrIdRef: critCharId });
+
+      // 요소당 소형 표: [체크 | 수준(배점) | 성취 설명] × 수준 수 (요소별 독립, D7)
+      const rows = block.levels.length;
+      const tablePara = doc.addParagraph();
+      const table = tablePara.addTable(rows, 3);
+      for (const [levelIndex, level] of block.levels.entries()) {
+        const scoreText = level.score !== null ? ` (${level.score}점)` : '';
+        table.setCellText(levelIndex, 0, level.checked ? '●' : '○');
+        table.setCellText(levelIndex, 1, `${level.name}${scoreText}`);
+        table.setCellText(levelIndex, 2, level.description ?? '');
+      }
+      applyStyleToAllCells(table, rows, 3, { charPrId: bodyCharId });
+      for (const [levelIndex, level] of block.levels.entries()) {
+        applyCellStyle(table, levelIndex, 0, { paraPrId: centerParaId });
+        if (level.checked) {
+          for (let c = 0; c < 3; c++) {
+            applyCellStyle(table, levelIndex, c, {
+              charPrId: checkedCharId,
+              ...(c === 0 ? { paraPrId: centerParaId } : {}),
+            });
+          }
+        }
+      }
+
+      if (block.note !== undefined) {
+        doc.addParagraph(`메모: ${block.note}`, { charPrIdRef: bodyCharId });
+      }
+      doc.addParagraph();
+    }
+
+    if (feedback.overallFeedback !== undefined) {
+      doc.addParagraph('총평', { charPrIdRef: critCharId });
+      doc.addParagraph(feedback.overallFeedback, { charPrIdRef: bodyCharId });
+      doc.addParagraph();
+    }
+
+    if (feedback.total !== null && feedback.maxScore !== null) {
+      doc.addParagraph(`합계 ${feedback.total}점 / 만점 ${feedback.maxScore}점`, {
+        charPrIdRef: studentCharId,
+      });
+    }
+  }
+
+  if (input.docs.length === 0) {
+    doc.addParagraph('출력할 학생이 없습니다.', { charPrIdRef: bodyCharId });
   }
 
   return doc.save();

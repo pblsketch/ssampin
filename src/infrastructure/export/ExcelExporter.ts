@@ -40,6 +40,7 @@ import {
   completionRate,
 } from '@domain/rules/toolResultAggregation';
 import { serializeAnswerCell, formatSubmissionLabel } from '@domain/rules/toolResultSerialization';
+import type { RubricExportRow } from '@domain/rules/rubricRules';
 
 const DAYS = ['월', '화', '수', '목', '금'] as const;
 
@@ -723,9 +724,7 @@ export async function exportRosterToExcel(
   return buffer as ArrayBuffer;
 }
 
-export async function parseRosterFromExcel(
-  buffer: ArrayBuffer,
-): Promise<
+export async function parseRosterFromExcel(buffer: ArrayBuffer): Promise<
   Array<{
     name: string;
     studentNumber: number;
@@ -2293,5 +2292,83 @@ export async function exportToolResultToExcel(
     case 'trafficlight-discussion':
       throw new Error(`이 도구 타입은 엑셀 내보내기를 아직 지원하지 않습니다: ${d.type}`);
   }
+  return (await workbook.xlsx.writeBuffer()) as ArrayBuffer;
+}
+
+/* ──────────────── 수행평가 루브릭 (rubric-grading FR-5) ──────────────── */
+
+export interface RubricExcelParams {
+  /** 루브릭 제목 — 시트 이름에 사용 */
+  readonly title: string;
+  /** 평가 요소 이름 (순서 = rows[].scores 순서) */
+  readonly criterionNames: readonly string[];
+  /** 도메인 buildRubricExportRows 결과 */
+  readonly rows: readonly RubricExportRow[];
+  /** 요소별 메모 열 포함 여부 (기본 미포함 — 나이스 입력용은 점수만) */
+  readonly includeNotes: boolean;
+}
+
+/**
+ * 수행평가 채점 결과를 엑셀로 내보낸다.
+ * 열: 번호 / 이름 / 요소별 점수 / 합계 / [요소별 메모] / 비고.
+ * 미채점·결시 점수 칸은 빈칸(0점 강제 금지, D8) — 도메인 행 빌더가 보장한 null을
+ * 빈 문자열 셀로 옮긴다. 결시 학생은 비고에 '결시'.
+ */
+export async function exportRubricToExcel(params: RubricExcelParams): Promise<ArrayBuffer> {
+  const workbook = new ExcelJS.Workbook();
+  // 시트 이름 금지 문자 제거 + 31자 제한 (엑셀 규격)
+  const sheetName =
+    params.title
+      .replace(/[\\/*?:[\]]/g, ' ')
+      .trim()
+      .slice(0, 31) || '수행평가';
+  const ws = workbook.addWorksheet(sheetName);
+
+  const headers = [
+    '번호',
+    '이름',
+    ...params.criterionNames,
+    '합계',
+    ...(params.includeNotes ? params.criterionNames.map((name) => `${name} 메모`) : []),
+    '비고',
+  ];
+  const headerRow = ws.addRow(headers);
+  headerRow.eachCell((cell) => applyHeaderStyle(cell));
+
+  ws.getColumn(1).width = 6;
+  ws.getColumn(2).width = 12;
+  params.criterionNames.forEach((_, i) => {
+    ws.getColumn(3 + i).width = 12;
+  });
+  const totalCol = 3 + params.criterionNames.length;
+  ws.getColumn(totalCol).width = 8;
+  if (params.includeNotes) {
+    params.criterionNames.forEach((_, i) => {
+      ws.getColumn(totalCol + 1 + i).width = 24;
+    });
+  }
+  const remarkCol = totalCol + (params.includeNotes ? params.criterionNames.length : 0) + 1;
+  ws.getColumn(remarkCol).width = 10;
+
+  for (const row of params.rows) {
+    const values: Array<string | number> = [
+      row.number,
+      row.name,
+      ...row.scores.map((score) => (score === null ? '' : score)),
+      row.total === null ? '' : row.total,
+      ...(params.includeNotes ? row.notes : []),
+      row.remark,
+    ];
+    const added = ws.addRow(values);
+    added.eachCell((cell, colNum) => {
+      applyCellStyle(cell);
+      // 이름·메모는 좌측 정렬이 읽기 편하다
+      const isNoteCol = params.includeNotes && colNum > totalCol && colNum < remarkCol;
+      if (colNum === 2 || isNoteCol) {
+        cell.alignment = { horizontal: 'left', vertical: 'middle' };
+      }
+    });
+  }
+
   return (await workbook.xlsx.writeBuffer()) as ArrayBuffer;
 }
