@@ -176,6 +176,51 @@ function applyStyleToAllCells(
   }
 }
 
+/** 표 element 아래에서 localName이 일치하는 모든 자손 요소를 재귀 수집 */
+function collectDescendantsByLocalName(root: Element, name: string): Element[] {
+  const out: Element[] = [];
+  const stack: Element[] = [root];
+  while (stack.length > 0) {
+    const el = stack.pop();
+    if (el === undefined) continue;
+    const kids = el.childNodes;
+    for (let i = 0; i < kids.length; i++) {
+      const child = kids.item(i);
+      if (child && child.nodeType === 1) {
+        const elem = child as Element;
+        const local = elem.localName || elem.tagName.split(':').pop() || elem.tagName;
+        if (local === name) out.push(elem);
+        stack.push(elem);
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * 본문 흐름 표를 "쪽 경계에서 이어지게" + 행 높이 축소 (rubric-grading 사용자 신고 대응).
+ * - treatAsChar="0": '글자처럼 취급' 해제 → 표를 한 덩어리로 다음 쪽에 통째로 밀어내지 않고,
+ *   pageBreak="CELL"(셀 단위 나눔)과 결합해 쪽을 넘어가며 이어서 렌더된다.
+ * - 모든 cellSz height를 rowHeight로 낮춰 표가 세로로 덜 길어진다(한글이 내용에 맞게 재계산하므로
+ *   2줄 셀은 자동으로 늘어남 — rowHeight는 최소 높이 역할).
+ * - repeatHeader: true면 표가 다음 쪽으로 이어질 때 헤더 행을 반복 표시.
+ */
+function configureRubricFlowTable(
+  tableElement: Element,
+  rowHeight: number,
+  repeatHeader: boolean,
+): void {
+  tableElement.setAttribute('pageBreak', 'CELL');
+  tableElement.setAttribute('repeatHeader', repeatHeader ? '1' : '0');
+  const pos = collectDescendantsByLocalName(tableElement, 'pos')[0];
+  if (pos !== undefined) {
+    pos.setAttribute('treatAsChar', '0');
+  }
+  for (const cellSz of collectDescendantsByLocalName(tableElement, 'cellSz')) {
+    cellSz.setAttribute('height', String(rowHeight));
+  }
+}
+
 /**
  * Configure a table element for absolute positioning on the page.
  * Sets textWrap, noAdjust attributes on the <tbl> element and
@@ -1233,9 +1278,17 @@ export async function exportGroupingToHwpx(groups: readonly GroupResult[]): Prom
  *   → 총평 문단.
  * - 점수 숨김 토글 OFF 데이터에는 점수가 없어 배점/받은 점수 열 자체가 생략된다.
  * - 체크 표시는 글리프 호환이 안전한 ●/○ 텍스트 (✓류는 폰트 누락 위험).
+ * - 표 너비: 기본값(좁은 폭)이 아니라 **본문 폭에 꽉 차게** 열 너비를 지정한다.
+ *   skeleton A4 세로 page width 59528 − 좌우 여백 8504×2 = 본문 폭 42520 hwpUnit.
+ *   미지정 시 표가 좁게 그려져 인쇄 시 한쪽으로 치우치는 문제가 있었다(사용자 신고).
  * - hwpxcore 에 페이지 브레이크 API 가 없어 학생 사이는 구분 문단으로 분리
  *   (한글에서 인쇄 전 편집이 쉬운 연속 흐름 — PDF 는 학생당 1페이지 보장)
  */
+/** A4 세로 본문 폭 (hwpUnit) — skeleton page width − 좌우 여백. 표 전체 폭 기준. */
+const RUBRIC_HWPX_CONTENT_WIDTH = 42520;
+/** 표 행 최소 높이 (hwpUnit) — 기본값 3600(~12.7mm)이 너무 높아 9pt 한 줄에 맞춰 축소. */
+const RUBRIC_HWPX_ROW_HEIGHT = 1800;
+
 export async function exportRubricFeedbackToHwpx(input: {
   title: string;
   className?: string;
@@ -1275,13 +1328,19 @@ export async function exportRubricFeedbackToHwpx(input: {
     });
     doc.addParagraph();
 
-    // ── 인적사항 표 (수업반 | 번호 | 이름) ──
+    // ── 인적사항 표 (수업반 | 번호 | 이름) ── 본문 폭에 맞춰 열 너비 지정
     const infoPara = doc.addParagraph();
-    const infoTable = infoPara.addTable(1, 3);
+    const infoTable = infoPara.addTable(1, 3, { width: RUBRIC_HWPX_CONTENT_WIDTH });
+    // 수업반(과목명 포함) 넓게 / 번호 / 이름 — 합 = 42520
+    infoTable.setColumnWidth(0, 19134);
+    infoTable.setColumnWidth(1, 10630);
+    infoTable.setColumnWidth(2, 12756);
     infoTable.setCellText(0, 0, `수업반  ${input.className ?? ''}`);
     infoTable.setCellText(0, 1, `번호  ${feedback.studentNumber}번`);
     infoTable.setCellText(0, 2, `이름  ${feedback.studentName}`);
     applyStyleToAllCells(infoTable, 1, 3, { charPrId: headerCharId });
+    // 글자처럼 취급 해제 + 행 높이 축소 (인적사항은 단일 행이라 헤더 반복 불필요)
+    configureRubricFlowTable(infoTable.element, RUBRIC_HWPX_ROW_HEIGHT, false);
     doc.addParagraph();
 
     // ── 본문 표: 헤더 + (요소 × 수준 + 메모) 행 + 합계 행 ──
@@ -1291,7 +1350,17 @@ export async function exportRubricFeedbackToHwpx(input: {
     );
     const totalRows = 1 + bodyRowCount + (includeScores ? 1 : 0);
     const tablePara = doc.addParagraph();
-    const table = tablePara.addTable(totalRows, cols);
+    const table = tablePara.addTable(totalRows, cols, { width: RUBRIC_HWPX_CONTENT_WIDTH });
+    // 본문 폭에 맞춘 열 너비 (합 = 42520). 평가 기준 칸을 가장 넓게.
+    if (includeScores) {
+      table.setColumnWidth(0, 7000); // 평가 요소
+      table.setColumnWidth(1, 24760); // 평가 기준
+      table.setColumnWidth(2, 5380); // 배점
+      table.setColumnWidth(3, 5380); // 받은 점수
+    } else {
+      table.setColumnWidth(0, 8500); // 평가 요소
+      table.setColumnWidth(1, 34020); // 평가 기준
+    }
 
     // 헤더 행
     table.setCellText(0, 0, '평가 요소');
@@ -1381,6 +1450,9 @@ export async function exportRubricFeedbackToHwpx(input: {
         if (block.note !== undefined) r++;
       }
     }
+
+    // 글자처럼 취급 해제 + 행 높이 축소 + 쪽 넘어갈 때 헤더 반복 (본문 표는 길어질 수 있음)
+    configureRubricFlowTable(table.element, RUBRIC_HWPX_ROW_HEIGHT, true);
 
     if (feedback.isAbsent) {
       doc.addParagraph('※ 결시 — 이 평가에 응시하지 않았습니다.', { charPrIdRef: mutedCharId });
