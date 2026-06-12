@@ -1221,14 +1221,18 @@ export async function exportGroupingToHwpx(groups: readonly GroupResult[]): Prom
 }
 
 /**
- * 수행평가 피드백 문서 → HWPX (FR-6, rubric-grading Phase 4).
+ * 수행평가 학생 평가지 → HWPX (FR-6, rubric-grading Phase 4).
  *
- * R-1 스파이크 결론: exportStudentRecordsToHwpx 가 검증한 "학생별 반복 +
- * 문단 + 소형 테이블 + 셀 스타일" 패턴으로 요소 단위 블록(D7)을 표현한다.
- * - 요소마다 수준 개수가 달라 단일 대형 표 불가 → 요소당 소형 표 1개
- * - 체크 표시는 글리프 호환이 안전한 ●/○ 텍스트 (✓류는 폰트 누락 위험)
- * - 점수 표시는 도메인 데이터(buildRubricFeedbackDocs)가 결정 — score 가
- *   null 이면 이 렌더러는 점수를 그릴 수 없다 (점수 숨김 토글 보장)
+ * 학교 현장의 수행평가 채점기준표 양식을 단일 표로 구성한다:
+ *   제목/부제 → 인적사항 표(수업반|번호|이름) →
+ *   본문 표 [평가 요소 | 평가 기준 | 배점 | 받은 점수]
+ *     · 요소마다 수준 개수가 달라(D7) "요소 × 수준" 평면 행으로 전개,
+ *       요소 이름은 첫 수준 행에만 표기 (hwpxcore 셀 병합 미지원 대응)
+ *     · 받은 수준 행은 볼드 + ● 표시, 메모는 요소 아래 행으로
+ *     · 마지막 합계 행 (배점 합 = 만점 / 받은 점수 합, 결시는 '결시')
+ *   → 총평 문단.
+ * - 점수 숨김 토글 OFF 데이터에는 점수가 없어 배점/받은 점수 열 자체가 생략된다.
+ * - 체크 표시는 글리프 호환이 안전한 ●/○ 텍스트 (✓류는 폰트 누락 위험).
  * - hwpxcore 에 페이지 브레이크 API 가 없어 학생 사이는 구분 문단으로 분리
  *   (한글에서 인쇄 전 편집이 쉬운 연속 흐름 — PDF 는 학생당 1페이지 보장)
  */
@@ -1239,11 +1243,12 @@ export async function exportRubricFeedbackToHwpx(input: {
 }): Promise<Uint8Array> {
   const doc = await createDoc();
 
-  const titleCharId = doc.ensureRunStyle({ bold: true, fontSize: 15 });
-  const studentCharId = doc.ensureRunStyle({ bold: true, fontSize: 12 });
-  const critCharId = doc.ensureRunStyle({ bold: true, fontSize: 11 });
-  const bodyCharId = doc.ensureRunStyle({ fontSize: 10 });
-  const checkedCharId = doc.ensureRunStyle({ bold: true, fontSize: 10 });
+  const titleCharId = doc.ensureRunStyle({ bold: true, fontSize: 16 });
+  const subTitleCharId = doc.ensureRunStyle({ fontSize: 10 });
+  const headerCharId = doc.ensureRunStyle({ bold: true, fontSize: 10 });
+  const bodyCharId = doc.ensureRunStyle({ fontSize: 9 });
+  const checkedCharId = doc.ensureRunStyle({ bold: true, fontSize: 9 });
+  const sectionCharId = doc.ensureRunStyle({ bold: true, fontSize: 11 });
   const mutedCharId = doc.ensureRunStyle({ fontSize: 9 });
   const centerParaId = doc.ensureParaStyle({ alignment: 'CENTER' });
 
@@ -1259,62 +1264,132 @@ export async function exportRubricFeedbackToHwpx(input: {
       doc.addParagraph();
     }
 
-    doc.addParagraph(input.title, { charPrIdRef: titleCharId });
-    const studentLine =
-      input.className !== undefined && input.className.length > 0
-        ? `${input.className} · ${feedback.studentNumber}번 ${feedback.studentName}`
-        : `${feedback.studentNumber}번 ${feedback.studentName}`;
-    doc.addParagraph(studentLine, { charPrIdRef: studentCharId });
+    const includeScores = feedback.maxScore !== null;
+    const cols = includeScores ? 4 : 2;
+
+    // ── 제목 ──
+    doc.addParagraph(input.title, { charPrIdRef: titleCharId, paraPrIdRef: centerParaId });
+    doc.addParagraph('수행평가 평가지', {
+      charPrIdRef: subTitleCharId,
+      paraPrIdRef: centerParaId,
+    });
     doc.addParagraph();
 
-    if (feedback.isAbsent) {
-      doc.addParagraph('결시 — 이 평가에 응시하지 않았습니다.', { charPrIdRef: bodyCharId });
-      continue;
+    // ── 인적사항 표 (수업반 | 번호 | 이름) ──
+    const infoPara = doc.addParagraph();
+    const infoTable = infoPara.addTable(1, 3);
+    infoTable.setCellText(0, 0, `수업반  ${input.className ?? ''}`);
+    infoTable.setCellText(0, 1, `번호  ${feedback.studentNumber}번`);
+    infoTable.setCellText(0, 2, `이름  ${feedback.studentName}`);
+    applyStyleToAllCells(infoTable, 1, 3, { charPrId: headerCharId });
+    doc.addParagraph();
+
+    // ── 본문 표: 헤더 + (요소 × 수준 + 메모) 행 + 합계 행 ──
+    const bodyRowCount = feedback.blocks.reduce(
+      (sum, block) => sum + block.levels.length + (block.note !== undefined ? 1 : 0),
+      0,
+    );
+    const totalRows = 1 + bodyRowCount + (includeScores ? 1 : 0);
+    const tablePara = doc.addParagraph();
+    const table = tablePara.addTable(totalRows, cols);
+
+    // 헤더 행
+    table.setCellText(0, 0, '평가 요소');
+    table.setCellText(0, 1, '평가 기준');
+    if (includeScores) {
+      table.setCellText(0, 2, '배점');
+      table.setCellText(0, 3, '받은 점수');
     }
 
-    for (const [blockIndex, block] of feedback.blocks.entries()) {
-      doc.addParagraph(`${blockIndex + 1}. ${block.criterionName}`, { charPrIdRef: critCharId });
-
-      // 요소당 소형 표: [체크 | 수준(배점) | 성취 설명] × 수준 수 (요소별 독립, D7)
-      const rows = block.levels.length;
-      const tablePara = doc.addParagraph();
-      const table = tablePara.addTable(rows, 3);
+    let row = 1;
+    for (const block of feedback.blocks) {
       for (const [levelIndex, level] of block.levels.entries()) {
-        const scoreText = level.score !== null ? ` (${level.score}점)` : '';
-        table.setCellText(levelIndex, 0, level.checked ? '●' : '○');
-        table.setCellText(levelIndex, 1, `${level.name}${scoreText}`);
-        table.setCellText(levelIndex, 2, level.description ?? '');
-      }
-      applyStyleToAllCells(table, rows, 3, { charPrId: bodyCharId });
-      for (const [levelIndex, level] of block.levels.entries()) {
-        applyCellStyle(table, levelIndex, 0, { paraPrId: centerParaId });
+        const mark = level.checked ? '●' : '○';
+        const standard =
+          level.description !== undefined
+            ? `${mark} ${level.name} — ${level.description}`
+            : `${mark} ${level.name}`;
+        table.setCellText(row, 0, levelIndex === 0 ? block.criterionName : '');
+        table.setCellText(row, 1, standard);
+        if (includeScores) {
+          table.setCellText(row, 2, level.score !== null ? String(level.score) : '');
+          table.setCellText(
+            row,
+            3,
+            level.checked && level.score !== null ? String(level.score) : '',
+          );
+        }
         if (level.checked) {
-          for (let c = 0; c < 3; c++) {
-            applyCellStyle(table, levelIndex, c, {
-              charPrId: checkedCharId,
-              ...(c === 0 ? { paraPrId: centerParaId } : {}),
-            });
+          for (let c = 0; c < cols; c++) {
+            applyCellStyle(table, row, c, { charPrId: checkedCharId });
           }
         }
+        row++;
       }
-
       if (block.note !== undefined) {
-        doc.addParagraph(`메모: ${block.note}`, { charPrIdRef: bodyCharId });
+        table.setCellText(row, 0, '');
+        table.setCellText(row, 1, `메모: ${block.note}`);
+        if (includeScores) {
+          table.setCellText(row, 2, '');
+          table.setCellText(row, 3, '');
+        }
+        row++;
       }
-      doc.addParagraph();
     }
 
-    if (feedback.overallFeedback !== undefined) {
-      doc.addParagraph('총평', { charPrIdRef: critCharId });
-      doc.addParagraph(feedback.overallFeedback, { charPrIdRef: bodyCharId });
-      doc.addParagraph();
+    // 합계 행
+    if (includeScores) {
+      table.setCellText(row, 0, '합계');
+      table.setCellText(row, 1, '');
+      table.setCellText(row, 2, String(feedback.maxScore ?? ''));
+      table.setCellText(
+        row,
+        3,
+        feedback.isAbsent ? '결시' : feedback.total !== null ? String(feedback.total) : '',
+      );
     }
 
-    if (feedback.total !== null && feedback.maxScore !== null) {
-      doc.addParagraph(`합계 ${feedback.total}점 / 만점 ${feedback.maxScore}점`, {
-        charPrIdRef: studentCharId,
-      });
+    // 기본 스타일: 본문 9pt, 헤더/합계 행 볼드 + 가운데, 점수 열 가운데
+    applyStyleToAllCells(table, totalRows, cols, { charPrId: bodyCharId });
+    for (let c = 0; c < cols; c++) {
+      applyCellStyle(table, 0, c, { charPrId: headerCharId, paraPrId: centerParaId });
+      if (includeScores) {
+        applyCellStyle(table, totalRows - 1, c, { charPrId: headerCharId, paraPrId: centerParaId });
+      }
     }
+    if (includeScores) {
+      for (let r = 1; r < totalRows; r++) {
+        applyCellStyle(table, r, 2, { paraPrId: centerParaId });
+        applyCellStyle(table, r, 3, { paraPrId: centerParaId });
+      }
+    }
+    // 받은 수준 행 볼드를 합계/헤더 스타일 적용 후 재보강
+    {
+      let r = 1;
+      for (const block of feedback.blocks) {
+        for (const level of block.levels) {
+          if (level.checked) {
+            applyCellStyle(table, r, 0, { charPrId: checkedCharId });
+            applyCellStyle(table, r, 1, { charPrId: checkedCharId });
+            if (includeScores) {
+              applyCellStyle(table, r, 2, { charPrId: checkedCharId, paraPrId: centerParaId });
+              applyCellStyle(table, r, 3, { charPrId: checkedCharId, paraPrId: centerParaId });
+            }
+          }
+          r++;
+        }
+        if (block.note !== undefined) r++;
+      }
+    }
+
+    if (feedback.isAbsent) {
+      doc.addParagraph('※ 결시 — 이 평가에 응시하지 않았습니다.', { charPrIdRef: mutedCharId });
+    }
+    doc.addParagraph();
+
+    // ── 총평 ──
+    doc.addParagraph('총평', { charPrIdRef: sectionCharId });
+    doc.addParagraph(feedback.overallFeedback ?? '', { charPrIdRef: bodyCharId });
   }
 
   if (input.docs.length === 0) {

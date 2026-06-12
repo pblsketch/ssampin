@@ -70,6 +70,25 @@ export function RubricGradingView({ rubric, classId, onBack }: RubricGradingView
   const [selectedKey, setSelectedKey] = useState<string | null>(students[0]?.key ?? null);
   const [showExportModal, setShowExportModal] = useState(false);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  /** 메모 입력칸을 펼친 요소 — 기본 접힘(밀도 우선), 내용이 있으면 항상 표시 */
+  const [openNoteIds, setOpenNoteIds] = useState<ReadonlySet<string>>(new Set());
+
+  useEffect(() => {
+    // 학생 전환 시 빈 메모 입력칸은 다시 접는다
+    setOpenNoteIds(new Set());
+  }, [selectedKey]);
+
+  function toggleNoteOpen(criterionId: string) {
+    setOpenNoteIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(criterionId)) {
+        next.delete(criterionId);
+      } else {
+        next.add(criterionId);
+      }
+      return next;
+    });
+  }
 
   const selectedIndex = students.findIndex((s) => s.key === selectedKey);
   const selectedStudent = selectedIndex >= 0 ? students[selectedIndex] : undefined;
@@ -156,7 +175,7 @@ export function RubricGradingView({ rubric, classId, onBack }: RubricGradingView
             className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-sp-border text-xs text-sp-text hover:border-sp-accent transition-colors"
           >
             <span className="material-symbols-outlined text-sm">print</span>
-            피드백 출력
+            평가지 출력
           </button>
         </div>
       </div>
@@ -239,9 +258,9 @@ export function RubricGradingView({ rubric, classId, onBack }: RubricGradingView
               왼쪽 명단에서 학생을 선택해주세요
             </div>
           ) : (
-            <div className="flex flex-col gap-4 pb-4">
-              {/* 학생 헤더 */}
-              <div className="flex items-center justify-between gap-2 bg-sp-card border border-sp-border rounded-xl px-4 py-3">
+            <div className="flex flex-col gap-3 pb-4">
+              {/* 학생 헤더 — 합계 상시 표시 (스크롤 없이 확인) */}
+              <div className="flex items-center justify-between gap-2 bg-sp-card border border-sp-border rounded-xl px-4 py-2.5">
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="text-xs text-sp-muted shrink-0">{selectedStudent.number}번</span>
                   <h4 className="text-base font-bold text-sp-text truncate">
@@ -254,6 +273,12 @@ export function RubricGradingView({ rubric, classId, onBack }: RubricGradingView
                   )}
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
+                  {!isAbsent && (
+                    <span className="text-sm text-sp-text mr-1.5 whitespace-nowrap">
+                      합계 <span className="text-base font-bold text-sp-accent">{total ?? 0}</span>
+                      <span className="text-sp-muted"> / {maxScore}점</span>
+                    </span>
+                  )}
                   <button
                     type="button"
                     onClick={() =>
@@ -292,118 +317,147 @@ export function RubricGradingView({ rubric, classId, onBack }: RubricGradingView
                 </div>
               </div>
 
-              {/* 요소 블록 (D7) */}
-              {rubric.criteria.map((criterion, index) => {
-                const checkedLevelId = selectedGrading?.marks[criterion.id];
-                const checkedLevel = criterion.levels.find((l) => l.id === checkedLevelId);
-                return (
-                  <div
-                    key={criterion.id}
-                    className={`bg-sp-card border border-sp-border rounded-xl p-4 flex flex-col gap-3 ${
-                      isAbsent ? 'opacity-50' : ''
-                    }`}
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <span
-                        aria-hidden="true"
-                        className="w-6 h-6 shrink-0 rounded-lg bg-sp-surface border border-sp-border text-sp-accent text-xs font-bold flex items-center justify-center"
-                      >
-                        {index + 1}
-                      </span>
-                      <h5 className="text-sm font-semibold text-sp-text flex-1 min-w-0 truncate">
-                        {criterion.name}
-                      </h5>
-                      {checkedLevel !== undefined && (
-                        <span className="text-xs text-sp-accent font-semibold shrink-0">
-                          {checkedLevel.score}점
+              {/* 요소 목록 (D7) — 한 카드 안의 압축 행: 모든 평가 요소가 한 화면에 들어온다.
+                  행 구성: [번호·요소명(고정폭)] [수준 버튼] [점수] [메모 토글]
+                  메모 입력칸은 기본 접힘 — 아이콘으로 펼치고, 내용이 있으면 항상 표시. */}
+              <div
+                className={`bg-sp-card border border-sp-border rounded-xl divide-y divide-sp-border ${
+                  isAbsent ? 'opacity-50' : ''
+                }`}
+              >
+                {rubric.criteria.map((criterion, index) => {
+                  const checkedLevelId = selectedGrading?.marks[criterion.id];
+                  const checkedLevel = criterion.levels.find((l) => l.id === checkedLevelId);
+                  const savedNote = selectedGrading?.criterionNotes[criterion.id] ?? '';
+                  const noteOpen = openNoteIds.has(criterion.id) || savedNote.length > 0;
+                  return (
+                    <div key={criterion.id} className="px-3 py-2 flex flex-col gap-1.5">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span
+                          aria-hidden="true"
+                          className="w-5 h-5 shrink-0 rounded-lg bg-sp-surface border border-sp-border text-sp-accent text-caption font-bold flex items-center justify-center"
+                        >
+                          {index + 1}
                         </span>
-                      )}
-                    </div>
+                        <h5
+                          className="text-sm font-semibold text-sp-text truncate w-36 shrink-0"
+                          title={criterion.name}
+                        >
+                          {criterion.name}
+                        </h5>
 
-                    {/* 수준 버튼 — 클릭 즉시 저장, 재클릭 시 해제 */}
-                    <div
-                      className="flex flex-wrap gap-2"
-                      role="group"
-                      aria-label={`${criterion.name} 수준 선택`}
-                    >
-                      {criterion.levels.map((level) => {
-                        const isChecked = level.id === checkedLevelId;
-                        return (
-                          <button
-                            key={level.id}
-                            type="button"
-                            disabled={isAbsent}
-                            aria-pressed={isChecked}
-                            title={level.description}
-                            onClick={() =>
-                              void toggleMark(
+                        {/* 수준 버튼 — 클릭 즉시 저장, 재클릭 시 해제 */}
+                        <div
+                          className="flex flex-wrap gap-1.5 flex-1 min-w-0"
+                          role="group"
+                          aria-label={`${criterion.name} 수준 선택`}
+                        >
+                          {criterion.levels.map((level) => {
+                            const isChecked = level.id === checkedLevelId;
+                            return (
+                              <button
+                                key={level.id}
+                                type="button"
+                                disabled={isAbsent}
+                                aria-pressed={isChecked}
+                                title={level.description}
+                                onClick={() =>
+                                  void toggleMark(
+                                    rubric.id,
+                                    classId,
+                                    selectedStudent.key,
+                                    criterion.id,
+                                    level.id,
+                                  )
+                                }
+                                className={`px-2.5 py-1 rounded-lg text-xs border transition-colors disabled:cursor-not-allowed ${
+                                  isChecked
+                                    ? 'bg-sp-accent border-sp-accent text-white font-semibold'
+                                    : 'bg-sp-surface border-sp-border text-sp-text hover:border-sp-accent'
+                                }`}
+                              >
+                                {level.name}{' '}
+                                <span className={isChecked ? 'text-white' : 'text-sp-muted'}>
+                                  {level.score}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        <span
+                          className={`text-xs font-semibold shrink-0 w-9 text-right ${
+                            checkedLevel !== undefined ? 'text-sp-accent' : 'text-sp-muted'
+                          }`}
+                        >
+                          {checkedLevel !== undefined ? `${checkedLevel.score}점` : '—'}
+                        </span>
+                        <button
+                          type="button"
+                          disabled={isAbsent}
+                          onClick={() => toggleNoteOpen(criterion.id)}
+                          aria-label={`${criterion.name} 특이사항 메모 ${noteOpen ? '접기' : '펼치기'}`}
+                          aria-expanded={noteOpen}
+                          title="특이사항 메모"
+                          className={`p-1 rounded-lg shrink-0 transition-colors disabled:cursor-not-allowed ${
+                            savedNote.length > 0
+                              ? 'text-sp-accent'
+                              : 'text-sp-muted hover:text-sp-text hover:bg-sp-surface'
+                          }`}
+                        >
+                          <span className="material-symbols-outlined text-base block">
+                            edit_note
+                          </span>
+                        </button>
+                      </div>
+
+                      {/* 체크된 수준의 성취 설명 (D5) — 있을 때만 한 줄 */}
+                      {checkedLevel?.description !== undefined && (
+                        <p className="text-caption text-sp-muted leading-relaxed pl-7">
+                          {checkedLevel.description}
+                        </p>
+                      )}
+
+                      {/* 요소별 특이사항 메모 — blur 시 저장, 기본 접힘 */}
+                      {noteOpen && (
+                        <input
+                          key={`note-${selectedStudent.key}-${criterion.id}`}
+                          type="text"
+                          defaultValue={savedNote}
+                          disabled={isAbsent}
+                          placeholder="특이사항 메모 (선택)"
+                          aria-label={`${criterion.name} 특이사항 메모`}
+                          onBlur={(e) => {
+                            const value = e.target.value;
+                            if (value !== savedNote) {
+                              void setCriterionNote(
                                 rubric.id,
                                 classId,
                                 selectedStudent.key,
                                 criterion.id,
-                                level.id,
-                              )
+                                value,
+                              );
                             }
-                            className={`px-3 py-2 rounded-lg text-sm border transition-colors disabled:cursor-not-allowed ${
-                              isChecked
-                                ? 'bg-sp-accent border-sp-accent text-white font-semibold'
-                                : 'bg-sp-surface border-sp-border text-sp-text hover:border-sp-accent'
-                            }`}
-                          >
-                            {level.name}{' '}
-                            <span className={isChecked ? 'text-white' : 'text-sp-muted'}>
-                              {level.score}점
-                            </span>
-                          </button>
-                        );
-                      })}
+                          }}
+                          className="w-full bg-sp-surface border border-sp-border rounded-lg px-2.5 py-1.5 text-xs text-sp-text placeholder:text-sp-muted outline-none focus:border-sp-accent disabled:cursor-not-allowed transition-colors ml-7 max-w-[calc(100%-1.75rem)]"
+                        />
+                      )}
                     </div>
+                  );
+                })}
+              </div>
 
-                    {/* 체크된 수준의 성취 설명 (D5) */}
-                    {checkedLevel?.description !== undefined && (
-                      <p className="text-xs text-sp-muted leading-relaxed">
-                        {checkedLevel.description}
-                      </p>
-                    )}
-
-                    {/* 요소별 특이사항 메모 — blur 시 저장 */}
-                    <input
-                      key={`note-${selectedStudent.key}-${criterion.id}`}
-                      type="text"
-                      defaultValue={selectedGrading?.criterionNotes[criterion.id] ?? ''}
-                      disabled={isAbsent}
-                      placeholder="특이사항 메모 (선택)"
-                      aria-label={`${criterion.name} 특이사항 메모`}
-                      onBlur={(e) => {
-                        const value = e.target.value;
-                        const prev = selectedGrading?.criterionNotes[criterion.id] ?? '';
-                        if (value !== prev) {
-                          void setCriterionNote(
-                            rubric.id,
-                            classId,
-                            selectedStudent.key,
-                            criterion.id,
-                            value,
-                          );
-                        }
-                      }}
-                      className="w-full bg-sp-surface border border-sp-border rounded-lg px-3 py-2 text-sm text-sp-text placeholder:text-sp-muted outline-none focus:border-sp-accent disabled:cursor-not-allowed transition-colors"
-                    />
-                  </div>
-                );
-              })}
-
-              {/* 총평 (D6) — blur 시 저장 */}
+              {/* 총평 (D6) — blur 시 저장. 합계는 학생 헤더에 상시 표시. */}
               <div
-                className={`bg-sp-card border border-sp-border rounded-xl p-4 flex flex-col gap-2 ${isAbsent ? 'opacity-50' : ''}`}
+                className={`bg-sp-card border border-sp-border rounded-xl px-3 py-2.5 flex flex-col gap-1.5 ${isAbsent ? 'opacity-50' : ''}`}
               >
                 <h5 className="text-sm font-semibold text-sp-text">총평</h5>
                 <textarea
                   key={`feedback-${selectedStudent.key}`}
                   defaultValue={selectedGrading?.overallFeedback ?? ''}
                   disabled={isAbsent}
-                  rows={3}
-                  placeholder="피드백 출력물의 마무리 문단으로 들어갑니다 (선택)"
+                  rows={2}
+                  placeholder="학생 평가지의 마무리 문단으로 들어갑니다 (선택)"
                   aria-label={`${selectedStudent.name} 총평`}
                   onBlur={(e) => {
                     const value = e.target.value;
@@ -412,21 +466,8 @@ export function RubricGradingView({ rubric, classId, onBack }: RubricGradingView
                       void setOverallFeedback(rubric.id, classId, selectedStudent.key, value);
                     }
                   }}
-                  className="w-full bg-sp-surface border border-sp-border rounded-lg px-3 py-2 text-sm text-sp-text placeholder:text-sp-muted outline-none focus:border-sp-accent resize-y disabled:cursor-not-allowed transition-colors"
+                  className="w-full bg-sp-surface border border-sp-border rounded-lg px-2.5 py-1.5 text-sm text-sp-text placeholder:text-sp-muted outline-none focus:border-sp-accent resize-y disabled:cursor-not-allowed transition-colors"
                 />
-              </div>
-
-              {/* 합계 (D1: 단순 합계만) */}
-              <div className="flex items-center justify-between bg-sp-card border border-sp-border rounded-xl px-4 py-3">
-                <span className="text-sm font-semibold text-sp-text">합계</span>
-                {isAbsent ? (
-                  <span className="text-sm text-sp-muted">결시 — 합계에서 제외</span>
-                ) : (
-                  <span className="text-sm text-sp-text">
-                    <span className="text-lg font-bold text-sp-accent">{total ?? 0}점</span>
-                    <span className="text-sp-muted"> / 만점 {maxScore}점</span>
-                  </span>
-                )}
               </div>
             </div>
           )}

@@ -1,8 +1,10 @@
 /**
- * 피드백 문서 출력 모달 (FR-6).
+ * 학생 평가지 출력 모달 (FR-6).
  *
+ * 현장에서 쓰는 수행평가 채점기준표 양식(괘선 표 — 평가 요소/평가 기준/배점/
+ * 받은 점수 + 합계 행 + 총평 칸)으로 출력한다.
  * - 대상 선택: 학생 1명 / 다중 / 전체 (체크박스 명단 — 결시 학생은 기본 해제)
- * - 형식: PDF(학생당 1페이지) 또는 HWPX(한글에서 편집 가능한 연속 흐름)
+ * - 형식: PDF(학생당 1페이지) 또는 HWPX(한글에서 편집 가능)
  * - 점수 포함 토글: 끄면 도메인 데이터 단계에서 점수가 제거되어 렌더러가
  *   점수를 그릴 수 없다 (형성평가용 점수 숨김 출력)
  * - 렌더러는 dynamic import — pdf-lib/hwpxcore 청크를 출력 시점에만 로드
@@ -99,7 +101,7 @@ export function RubricFeedbackModal({
     const meta = FORMAT_META[format];
     if (window.electronAPI) {
       const saved = await window.electronAPI.showSaveDialog({
-        title: '피드백 출력',
+        title: '평가지 출력',
         defaultPath: fileName,
         filters: [{ name: `${meta.label} 파일`, extensions: [meta.ext] }],
       });
@@ -134,7 +136,7 @@ export function RubricFeedbackModal({
         .replace(/[\\/:*?"<>|]/g, ' ')
         .trim()
         .slice(0, 40);
-      const fileName = `${safeTitle}_피드백.${FORMAT_META[format].ext}`;
+      const fileName = `${safeTitle}_평가지.${FORMAT_META[format].ext}`;
 
       if (format === 'pdf') {
         const { exportRubricFeedbackToPdf } =
@@ -159,7 +161,7 @@ export function RubricFeedbackModal({
         await saveFile(buffer, fileName);
       }
     } catch {
-      showToast('피드백 출력 중 오류가 발생했습니다', 'error');
+      showToast('평가지 출력 중 오류가 발생했습니다', 'error');
     } finally {
       setExporting(false);
     }
@@ -172,11 +174,11 @@ export function RubricFeedbackModal({
   };
 
   return (
-    <Modal isOpen onClose={onClose} title="피드백 출력" srOnlyTitle size="md">
+    <Modal isOpen onClose={onClose} title="학생 평가지 출력" srOnlyTitle size="md">
       <div className="flex flex-col flex-1 min-h-0 max-h-[80vh]">
         <div className="flex items-center justify-between p-4 border-b border-sp-border shrink-0">
           <div className="min-w-0">
-            <h3 className="text-sm font-bold text-sp-text">피드백 출력</h3>
+            <h3 className="text-sm font-bold text-sp-text">학생 평가지 출력</h3>
             <p className="text-xs text-sp-muted mt-0.5 truncate">{rubric.title}</p>
           </div>
           <IconButton icon="close" label="닫기" variant="ghost" size="sm" onClick={onClose} />

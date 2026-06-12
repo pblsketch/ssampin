@@ -163,7 +163,7 @@ function RubricRosterEmpty({ onGoToRosterTab }: { onGoToRosterTab?: () => void }
       </div>
       <h2 className="text-base font-bold text-sp-text">수행평가를 시작하려면 명단이 필요해요</h2>
       <p className="text-sm text-sp-muted leading-relaxed">
-        이 수업반의 학생을 먼저 등록하면 루브릭으로 채점하고 엑셀·피드백지로 내보낼 수 있어요.
+        이 수업반의 학생을 먼저 등록하면 루브릭으로 채점하고 엑셀·평가지로 내보낼 수 있어요.
       </p>
       {onGoToRosterTab !== undefined && (
         <button
