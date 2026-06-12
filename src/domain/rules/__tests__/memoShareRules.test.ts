@@ -389,9 +389,10 @@ describe('parseBoardFile — ttsVoice/attention 선택 필드', () => {
   };
   const base = { version: 1, title: '보드', updatedAt: '2026-06-12T00:00:00.000Z', items: [item] };
 
-  it('ttsVoice male/female을 보존하고, 그 외 값은 필드만 무시한다(보드는 유효)', () => {
-    expect(parseBoardFile({ ...base, ttsVoice: 'male' })?.ttsVoice).toBe('male');
-    expect(parseBoardFile({ ...base, ttsVoice: 'female' })?.ttsVoice).toBe('female');
+  it('ttsVoice는 default만 사용하고, 예전 male/female 값은 기본 음성으로 흡수한다', () => {
+    expect(parseBoardFile({ ...base, ttsVoice: 'default' })?.ttsVoice).toBe('default');
+    expect(parseBoardFile({ ...base, ttsVoice: 'male' })?.ttsVoice).toBe('default');
+    expect(parseBoardFile({ ...base, ttsVoice: 'female' })?.ttsVoice).toBe('default');
     const dropped = parseBoardFile({ ...base, ttsVoice: 'robot' });
     expect(dropped).not.toBeNull();
     expect(dropped?.ttsVoice).toBeUndefined();
@@ -454,13 +455,13 @@ describe('buildBoardFile — extras(ttsVoice/attention)', () => {
       nonce: 'n-5',
     };
     const file = buildBoardFile([memo], '보드', '2026-06-12T02:00:00.000Z', {
-      ttsVoice: 'male',
+      ttsVoice: 'default',
       attention,
     });
-    expect(file.ttsVoice).toBe('male');
+    expect(file.ttsVoice).toBe('default');
     expect(file.attention).toEqual(attention);
     const roundTrip = parseBoardFile(JSON.parse(JSON.stringify(file)));
-    expect(roundTrip?.ttsVoice).toBe('male');
+    expect(roundTrip?.ttsVoice).toBe('default');
     expect(roundTrip?.attention).toEqual(attention);
   });
 });

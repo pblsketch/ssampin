@@ -32,7 +32,7 @@ export interface MemoShareItemSnapshot {
 }
 
 /** 보드 기본 TTS 음성 (src/domain/entities/MemoShareItem.ts `MemoShareTtsVoice` 미러) */
-export type MemoTtsVoice = 'male' | 'female';
+export type MemoTtsVoice = 'default';
 
 /**
  * 교사 → 교실 화면 1회성 주목 신호 (domain `MemoShareAttention` 미러).
@@ -54,7 +54,7 @@ export interface MemoShareBoardFile {
   readonly title: string;
   readonly updatedAt: string;
   readonly items: readonly MemoShareItemSnapshot[];
-  /** 보드 기본 TTS 음성 — 없으면 페이지가 female 폴백 (하위 호환 optional) */
+  /** 보드 기본 TTS 음성 — 없으면 페이지가 기본 음성을 사용 (하위 호환 optional) */
   readonly ttsVoice?: MemoTtsVoice;
   /** 1회성 주목 신호 — 형식 위반 시 이 필드만 무시하고 보드는 유효 처리 */
   readonly attention?: MemoAttention;
@@ -261,9 +261,10 @@ export function parseBoardFile(raw: unknown): MemoShareBoardFile | null {
   };
 }
 
-/** 'male' | 'female' 외에는 undefined — 필드 단위 무시 (domain parseTtsVoice 미러) */
+/** 새 값은 'default'만 사용한다. 기존 'male'/'female' 보드는 기본 음성으로 흡수한다. */
 function parseTtsVoice(raw: unknown): MemoTtsVoice | undefined {
-  return raw === 'male' || raw === 'female' ? raw : undefined;
+  if (raw === 'default' || raw === 'male' || raw === 'female') return 'default';
+  return undefined;
 }
 
 /** 주목 신호 검증 — kind·nonce 필수, tts면 itemId 필수 (domain parseAttention 미러) */

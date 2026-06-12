@@ -92,7 +92,6 @@ export function MemoShareModal({ isOpen, onClose }: MemoShareModalProps) {
     dismissDeletedMemoNotice,
     retrySync,
     updateBoardMemos,
-    setBoardTtsVoice,
     triggerAttention,
     triggerTtsRead,
     startPresencePolling,
@@ -151,7 +150,7 @@ export function MemoShareModal({ isOpen, onClose }: MemoShareModalProps) {
         showToast('교실 화면 소리가 꺼져 있어요 — 🔔 버튼을 눌러 달라고 안내해 주세요', 'error');
         break;
       case 'fallback-voice':
-        showToast('남성 음성이 없어 다른 음성으로 읽었어요', 'info');
+        showToast('전자칠판 기본 음성으로 읽었어요', 'info');
         break;
       case 'timeout':
         showToast('재생 확인을 받지 못했어요 — 교실 화면이 켜져 있는지 확인해 주세요', 'error');
@@ -481,26 +480,12 @@ export function MemoShareModal({ isOpen, onClose }: MemoShareModalProps) {
                                 주목
                               </button>
 
-                              {/* 보드 기본 TTS 음성 — 남/여 세그먼트 */}
+                              {/* 보드 기본 TTS 음성 */}
                               <div className="flex items-center rounded-lg border border-sp-border bg-sp-card p-0.5">
                                 <span className="px-2 text-xs text-sp-muted">읽기 음성</span>
-                                {(['female', 'male'] as const).map((voice) => {
-                                  const active = (board.ttsVoice ?? 'female') === voice;
-                                  return (
-                                    <button
-                                      key={voice}
-                                      onClick={() => void setBoardTtsVoice(board.id, voice)}
-                                      aria-pressed={active}
-                                      className={`rounded-md px-2.5 py-1 text-xs font-sp-medium transition-all ${
-                                        active
-                                          ? 'bg-sp-accent text-white'
-                                          : 'text-sp-muted hover:text-sp-text'
-                                      }`}
-                                    >
-                                      {voice === 'female' ? '여성' : '남성'}
-                                    </button>
-                                  );
-                                })}
+                                <span className="rounded-md bg-sp-accent px-2.5 py-1 text-xs font-sp-medium text-white">
+                                  기본
+                                </span>
                               </div>
 
                               {/* 포스트잇 읽기 목록 접기/펼치기 */}
@@ -522,14 +507,6 @@ export function MemoShareModal({ isOpen, onClose }: MemoShareModalProps) {
                             <p className="mt-1.5 text-xs text-sp-muted">
                               전자칠판 화면에서 소리가 켜져 있어야 들려요 (🔔 버튼)
                             </p>
-                            {(board.ttsVoice ?? 'female') === 'male' && (
-                              <p className="mt-1 text-xs text-sp-muted">
-                                남성 음성은 전자칠판 브라우저가 <strong>Edge</strong>일 때 가장 잘
-                                지원돼요. Chrome은 기기에 따라 여성 음성만 있어서, 그 경우 다른
-                                음성으로 대신 읽고 화면에 안내가 표시돼요.
-                              </p>
-                            )}
-
                             {/* 공유 중 포스트잇 목록 — 항목별 TTS 읽기 */}
                             {readListBoardId === board.id && (
                               <div className="mt-2 flex flex-col gap-1.5">

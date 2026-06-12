@@ -217,6 +217,12 @@ async function persistBoards(boards: readonly MemoShareBoard[]): Promise<void> {
   await storage.write(STORAGE_KEY, data);
 }
 
+function normalizeStoredBoard(board: MemoShareBoard): MemoShareBoard {
+  const rawVoice = (board as { readonly ttsVoice?: unknown }).ttsVoice;
+  if (rawVoice === undefined || rawVoice === 'default') return board;
+  return { ...board, ttsVoice: 'default' };
+}
+
 /** 보드의 items 순서(sortOrder)대로 현재 메모를 모은다 — 로컬에서 사라진 메모는 제외 */
 function currentMemosForBoard(board: MemoShareBoard, memos: readonly Memo[]): readonly Memo[] {
   const byId = new Map(memos.map((memo) => [memo.id, memo]));
@@ -435,7 +441,7 @@ export const useMemoShareStore = create<MemoShareState>((set, get) => ({
         const { storage } = await loadContainer();
         const data = await storage.read<MemoShareBoardsData>(STORAGE_KEY);
         set({
-          boards: data?.boards ?? [],
+          boards: data?.boards.map(normalizeStoredBoard) ?? [],
           loaded: true,
           warningAcknowledged: readWarningAck(),
         });

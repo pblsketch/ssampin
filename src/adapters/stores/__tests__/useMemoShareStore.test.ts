@@ -459,7 +459,7 @@ describe('useMemoShareStore — updateBoardMemos (공유 중 보드 구성 편�
 describe('useMemoShareStore — 주목 (알림음/TTS 낭독)', () => {
   it('triggerAttention: debounce를 우회해 즉시 attention(chime)을 실어 업로드하고, 다음 일반 동기화에는 미포함(자연 소멸)', async () => {
     const m1 = makeMemo('m1');
-    const board = { ...makeBoard([m1]), ttsVoice: 'male' as const };
+    const board = { ...makeBoard([m1]), ttsVoice: 'default' as const };
     await seedAndInitialize(board, [m1]);
 
     const ok = await useMemoShareStore.getState().triggerAttention('file-1');
@@ -472,7 +472,7 @@ describe('useMemoShareStore — 주목 (알림음/TTS 낭독)', () => {
     expect(first?.attention?.nonce).toBeTruthy();
     expect(first?.attention?.itemId).toBeUndefined();
     // ttsVoice는 모든 동기화에 항상 실린다
-    expect(first?.ttsVoice).toBe('male');
+    expect(first?.ttsVoice).toBe('default');
 
     // 다음 일반 동기화(메모 수정) — attention 미포함, ttsVoice는 유지
     useMemoStore.setState({
@@ -483,7 +483,7 @@ describe('useMemoShareStore — 주목 (알림음/TTS 낭독)', () => {
     expect(fakes.client.updateBoard).toHaveBeenCalledTimes(2);
     const second = fakes.client.updateBoard.mock.calls[1]?.[1];
     expect(second?.attention).toBeUndefined();
-    expect(second?.ttsVoice).toBe('male');
+    expect(second?.ttsVoice).toBe('default');
   });
 
   it('triggerTtsRead: attention(kind=tts)에 itemId가 실리고, 보드에 없는 메모는 거부한다', async () => {
@@ -522,10 +522,10 @@ describe('useMemoShareStore — 주목 (알림음/TTS 낭독)', () => {
     const m1 = makeMemo('m1');
     await seedAndInitialize(makeBoard([m1]), [m1]);
 
-    await useMemoShareStore.getState().setBoardTtsVoice('file-1', 'male');
+    await useMemoShareStore.getState().setBoardTtsVoice('file-1', 'default');
 
     // 로컬 보드 갱신 + 영속
-    expect(useMemoShareStore.getState().boards[0]?.ttsVoice).toBe('male');
+    expect(useMemoShareStore.getState().boards[0]?.ttsVoice).toBe('default');
     expect(fakes.storage.write).toHaveBeenCalledWith(
       'memoShareBoards',
       expect.objectContaining({ boards: expect.any(Array) }),
@@ -535,7 +535,7 @@ describe('useMemoShareStore — 주목 (알림음/TTS 낭독)', () => {
     await vi.advanceTimersByTimeAsync(SYNC_DEBOUNCE_MS + 100);
     expect(fakes.client.updateBoard).toHaveBeenCalledTimes(1);
     const boardFile = fakes.client.updateBoard.mock.calls[0]?.[1];
-    expect(boardFile?.ttsVoice).toBe('male');
+    expect(boardFile?.ttsVoice).toBe('default');
     expect(boardFile?.attention).toBeUndefined();
     expect(useMemoShareStore.getState().syncStatus).toBe('idle');
   });

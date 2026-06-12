@@ -299,9 +299,10 @@ export function parseBoardFile(raw: unknown): MemoShareBoardFile | null {
   };
 }
 
-/** 'male' | 'female' 외에는 undefined (필드 단위 무시) */
+/** 새 값은 'default'만 사용한다. 기존 'male'/'female' 보드는 기본 음성으로 흡수한다. */
 function parseTtsVoice(raw: unknown): MemoShareTtsVoice | undefined {
-  return raw === 'male' || raw === 'female' ? raw : undefined;
+  if (raw === 'default' || raw === 'male' || raw === 'female') return 'default';
+  return undefined;
 }
 
 /** 주목 신호 검증 — kind·nonce 필수, tts면 itemId 필수 */

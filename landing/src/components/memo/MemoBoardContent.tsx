@@ -18,7 +18,6 @@ import type {
   MemoFontSize,
   MemoShareBoardFile,
   MemoShareItemSnapshot,
-  MemoTtsVoice,
 } from './driveBoardApi';
 import {
   DriveBoardError,
@@ -427,10 +426,10 @@ export function MemoBoardContent({ fileId }: MemoBoardContentProps) {
 
   /** kind='tts' — 팝업 열고 낭독, 끝나면(실패·타임아웃 포함) 팝업 자동 닫기 + 수신 확인 ack */
   const runTtsAttention = useCallback(
-    async (item: MemoShareItemSnapshot, voicePref: MemoTtsVoice, nonce: string) => {
+    async (item: MemoShareItemSnapshot, nonce: string) => {
       const session = ++ttsSessionRef.current;
       setExpandedId(item.id);
-      const result = await speakText(item.content, voicePref); // 진행 중 낭독은 내부에서 취소
+      const result = await speakText(item.content); // 진행 중 낭독은 내부에서 취소
       if (ttsSessionRef.current !== session) return; // 새 신호가 가로챘으면 후처리 중단
       if (result.spoken) {
         // 낭독 성공 시에만 ack — 실패(spoken=false)는 enum 3종에 해당 없어 미전송
@@ -442,11 +441,7 @@ export function MemoBoardContent({ fileId }: MemoBoardContentProps) {
         );
       }
       if (result.spoken && result.fallbackUsed) {
-        showToast(
-          voicePref === 'male'
-            ? '남성 음성이 없어 다른 음성으로 읽었어요'
-            : '여성 음성이 없어 다른 음성으로 읽었어요',
-        );
+        showToast('전자칠판 기본 음성으로 읽었어요');
       }
       setExpandedId((current) => (current === item.id ? null : current));
     },
@@ -473,7 +468,7 @@ export function MemoBoardContent({ fileId }: MemoBoardContentProps) {
         ? file.items.find((item) => item.id === attention.itemId)
         : undefined;
       if (!target) return;
-      void runTtsAttention(target, file.ttsVoice ?? 'female', attention.nonce);
+      void runTtsAttention(target, attention.nonce);
     },
     [fileId, triggerHeaderPulse, showToast, runTtsAttention],
   );

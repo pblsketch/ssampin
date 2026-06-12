@@ -19,14 +19,14 @@ export interface MemoShareBoardFile {
   readonly updatedAt: string;
   /** 최대 50개(MAX_ITEMS), sortOrder 오름차순 권장 */
   readonly items: readonly MemoShareItemSnapshot[];
-  /** 보드 기본 TTS 음성 (없으면 페이지가 여성 폴백) — v1 스키마 하위 호환 optional */
+  /** 보드 기본 TTS 음성 (없으면 페이지가 기본 음성 사용) — v1 스키마 하위 호환 optional */
   readonly ttsVoice?: MemoShareTtsVoice;
   /** 교사가 보낸 1회성 주목 신호 — 없거나 nonce가 같으면 페이지는 무시 */
   readonly attention?: MemoShareAttention;
 }
 
 /** 보드 기본 TTS 음성 */
-export type MemoShareTtsVoice = 'male' | 'female';
+export type MemoShareTtsVoice = 'default';
 
 /**
  * 교사 → 교실 화면 1회성 주목 신호.

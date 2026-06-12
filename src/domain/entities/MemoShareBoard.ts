@@ -34,7 +34,7 @@ export interface MemoShareBoard {
   /** ShortLinkClient 재사용 숏링크 (선택) — URL 문자열만 저장, 내용 아님 */
   readonly shortUrl?: string;
   readonly items: readonly MemoShareItemLink[];
-  /** 보드 기본 TTS 음성 (미설정 = 여성) — 보드 JSON에도 실림 */
+  /** 보드 기본 TTS 음성 (미설정 = 기본 음성) — 보드 JSON에도 실림 */
   readonly ttsVoice?: MemoShareTtsVoice;
   /** ISO 8601 */
   readonly createdAt: string;
