@@ -1,5 +1,12 @@
 import { create } from 'zustand';
-import type { MealInfo, SchoolSearchResult, ManualMealInfo, ManualMealData, MealSource, MealDish } from '@domain/entities/Meal';
+import type {
+  MealInfo,
+  SchoolSearchResult,
+  ManualMealInfo,
+  ManualMealData,
+  MealSource,
+  MealDish,
+} from '@domain/entities/Meal';
 import { NEIS_API_KEY } from '@domain/entities/Meal';
 import { neisPort, manualMealRepository } from '@adapters/di/container';
 import { GetMeals } from '@usecases/meal/GetMeals';
@@ -8,31 +15,54 @@ import { SearchSchool } from '@usecases/school/SearchSchool';
 const getMeals = new GetMeals(neisPort);
 const searchSchoolUseCase = new SearchSchool(neisPort);
 
-/** NEIS + 수동 급식 병합 (수동이 우선) */
-function mergeMeals(
+/** 끼니 표시 순서 (조식 → 중식 → 석식 → 간식 → 기타) */
+const MEAL_TYPE_ORDER = ['조식', '중식', '석식', '간식'] as const;
+
+function mealTypeRank(mealType: string): number {
+  const idx = (MEAL_TYPE_ORDER as readonly string[]).indexOf(mealType);
+  return idx === -1 ? MEAL_TYPE_ORDER.length : idx;
+}
+
+/** 수동 급식(ManualMealInfo) → 화면용 MealInfo 변환 */
+function manualToMealInfo(m: ManualMealInfo): MealInfo {
+  return {
+    date: m.date,
+    mealType: m.mealType,
+    dishes: m.dishes,
+    calorie: m.calorie ?? '',
+  };
+}
+
+/**
+ * NEIS + 수동 급식 병합
+ *
+ * - 'manual': 수동 입력만
+ * - 'neis': NEIS만 (받은 순서 유지)
+ * - 'merged': 끼니(mealType)별로 병합. 같은 끼니는 수동이 NEIS를 덮어쓰고,
+ *   수동에 없는 끼니의 NEIS 급식은 그대로 유지된다. 끼니 순서대로 정렬.
+ *   (예: NEIS 중식+석식 + 수동 간식 → 중식·석식·간식 모두 표시)
+ */
+export function mergeMeals(
   neisMeals: readonly MealInfo[],
   manualMeals: readonly ManualMealInfo[],
   source: MealSource,
 ): readonly MealInfo[] {
   if (source === 'manual') {
-    return manualMeals.map((m) => ({
-      date: m.date,
-      mealType: m.mealType,
-      dishes: m.dishes,
-      calorie: m.calorie ?? '',
-    }));
+    return manualMeals.map(manualToMealInfo);
   }
   if (source === 'neis') return neisMeals;
-  // merged: 수동이 있으면 수동, 없으면 NEIS
-  if (manualMeals.length > 0) {
-    return manualMeals.map((m) => ({
-      date: m.date,
-      mealType: m.mealType,
-      dishes: m.dishes,
-      calorie: m.calorie ?? '',
-    }));
+
+  // merged: 끼니별 병합 (수동이 같은 끼니만 덮어쓰기, 나머지 NEIS 끼니는 보존)
+  const byType = new Map<string, MealInfo>();
+  for (const meal of neisMeals) {
+    byType.set(meal.mealType, meal);
   }
-  return neisMeals;
+  for (const m of manualMeals) {
+    byType.set(m.mealType, manualToMealInfo(m));
+  }
+  return Array.from(byType.values()).sort(
+    (a, b) => mealTypeRank(a.mealType) - mealTypeRank(b.mealType),
+  );
 }
 
 /** CSV 파싱 */
@@ -46,13 +76,19 @@ function parseMealCSV(content: string): { meals: ManualMealInfo[]; errors: strin
     const line = lines[i]!;
     // CSV with possible quoted fields
     const parts = line.split(',');
-    if (parts.length < 3) { errors.push(`${i + 1}행: 형식 오류`); continue; }
+    if (parts.length < 3) {
+      errors.push(`${i + 1}행: 형식 오류`);
+      continue;
+    }
 
     const date = parts[0]!.trim().replace(/[^0-9]/g, '');
     const mealType = parts[1]!.trim();
     const menuStr = parts.slice(2).join(',').replace(/"/g, '').trim();
 
-    if (!/^\d{8}$/.test(date)) { errors.push(`${i + 1}행: 날짜 형식 오류 (YYYYMMDD)`); continue; }
+    if (!/^\d{8}$/.test(date)) {
+      errors.push(`${i + 1}행: 날짜 형식 오류 (YYYYMMDD)`);
+      continue;
+    }
 
     const dishes: MealDish[] = menuStr
       .split(',')
@@ -92,7 +128,12 @@ interface MealState {
   // Actions
   loadTodayMeals: (atptCode: string, schoolCode: string) => Promise<void>;
   loadMealsForDate: (atptCode: string, schoolCode: string, date: string) => Promise<void>;
-  loadWeekMeals: (atptCode: string, schoolCode: string, startDate: string, endDate: string) => Promise<void>;
+  loadWeekMeals: (
+    atptCode: string,
+    schoolCode: string,
+    startDate: string,
+    endDate: string,
+  ) => Promise<void>;
   searchSchools: (query: string) => Promise<void>;
   clearSearch: () => void;
 
@@ -179,7 +220,13 @@ export const useMealStore = create<MealState>((set, get) => ({
 
     set({ weekLoading: true });
     try {
-      const meals = await getMeals.executeRange(NEIS_API_KEY, atptCode, schoolCode, startDate, endDate);
+      const meals = await getMeals.executeRange(
+        NEIS_API_KEY,
+        atptCode,
+        schoolCode,
+        startDate,
+        endDate,
+      );
       // 캐시에도 저장
       const newCache: Record<string, readonly MealInfo[]> = {};
       for (const meal of meals) {
