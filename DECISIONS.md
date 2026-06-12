@@ -246,3 +246,59 @@
   - C (채택): 개인 Google Drive.
 
 - **검증**: 게이트 4/4 + guard PASS + Playwright 모의 E2E(반영 7초 실측). SC-4(교사 토큰 페이지 비전달)·SC-10(supabase 호출 부재) 메타테스트로 회귀 고정.
+
+## ADR-012: 협업보드 템플릿 주입 — 보드 생성 시점 서버 Y.Doc 시딩 (Teacher ExcalidrawBinding 미부착)
+
+- **상태**: active
+- **일자**: 2026-06-12
+- **컨텍스트**: collab-board-rb-parity G005(PDCA-3, 학습 활동 템플릿 4종). Plan AC-3.1 CAVEAT가 "teacher page는 initialData만 사용(ExcalidrawBinding 미부착) — 템플릿 삽입이 Y.Doc로 전파되려면 (A) teacher page에 binding 부착 / (B) Y.Doc 직접 조작 중 design 단계 결정"을 요구. Plan 작성(2026-05-22) 이후 2026-06-11 리팩토링으로 교사 캔버스 진입이 `?role=teacher` 학생 페이지(binding 이미 보유) 경로로 확정되어, plan이 전제한 "별도 teacher React 캔버스"가 존재하지 않음.
+
+- **결정**: **옵션 B 변형 채택 — 보드 생성 시점(`collab-board:create`)에 Electron main process에서 템플릿 요소를 y-excalidraw 저장 형식으로 Y.Doc에 직접 구성해 `.ybin` 스냅샷으로 저장**한다. 세션 시작 시 기존 initialState 적용 경로(YDocBoardServer 첫 연결 시 Y.applyUpdate)가 그대로 템플릿을 모든 클라이언트에 전파한다. Teacher page ExcalidrawBinding 별도 부착은 하지 않는다.
+
+- **근거**:
+  - SP-2 스파이크(정적 분석)로 y-excalidraw 2.0.12 저장 형식 확정: `Y.Array<Y.Map{pos: fractional-index, el: 평면 요소 객체}>`. main process는 이미 yjs를 의존하므로 동일 형식 생성 가능.
+  - 생성 시점 시딩은 클라이언트 레이스 0(접속 전 완결), 세션 횟수와 무관하게 1회만 실행, 신규 동기화 코드 0(기존 스냅샷 로드 경로 재사용).
+  - 교사용 React 캔버스 신설(옵션 A)은 Excalidraw 렌더러 renderer 측 중복 탑재(CDN/번들·이벤트·권한 전부 이중화)로 비용 대비 효익 없음 — `?role=teacher` 경로가 이미 전체 편집 권한 캔버스를 제공.
+
+- **트레이드오프/리스크**:
+  - (−) y-excalidraw 내부 형식에 결합 — 버전은 `constants.ts` `Y_EXCALIDRAW_VERSION=2.0.12`로 핀 고정되어 있고, 시더 메타테스트가 `pos/el` round-trip을 검증해 업그레이드 시 즉시 발화.
+  - (−) `pos` 키가 fractional-indexing 유효 형식이어야 클라이언트의 후속 append(`generateKeyBetween(last, null)`)가 깨지지 않음 → 클라이언트 CDN과 동일 버전 `fractional-indexing@3.2.0`(MIT, zero-dep)을 main 의존으로 추가해 호환 보장.
+  - (−) 시딩 요소는 클라이언트 `restore()`를 거치지 않고 binding `updateScene`으로 직행하므로 Excalidraw 0.17.6 요소 필드를 완전한 형태로 생성해야 함 → 시더가 전 필드를 명시 생성 + 실브라우저 E2E로 렌더 검증.
+  - (+) 잠금(locked=true) + 작성자 customData 미부여 조합으로 학생 선택 차단 가드(2026-06-11)와 자동 정합 — 학생은 템플릿 요소를 선택조차 불가.
+
+- **연계 결정 (AC-3.3)**: 템플릿 잠금 해제 토글은 권한 패널(PDCA-5 예정)이 아직 없으므로 학생 페이지 toolbar에 **교사(role=teacher) 전용 버튼**으로 제공 — `customData.boardTemplate` 마킹 요소의 locked 일괄 토글 + version bump로 전파.
+
+## ADR-013: 학생 페이지 공용 셸 — --sps-\* 네임스페이스 신설 (DN-10 토큰 불가침)
+
+- **상태**: active
+- **일자**: 2026-06-12
+- **컨텍스트**: student-pages-design-refactor — 학생/보호자 접속 페이지 8종(electron 인라인 HTML 6종 + landing 2종)이 폰트 미선언, "쌤핀 파랑" 3중 정의(#3b82f6/#2563eb/#60a5fa), radius 표류(16/14/12/10px), `user-scalable=no` 줌 차단으로 사실상 8개 서비스처럼 보임(2026-06-12 디자인 감사). `_studentPageChrome.ts`의 기존 `--color-*` 토큰(getDesignTokenDefaults)을 정정하려 했으나, 이 토큰은 MultiSurvey v2 학생 컴포넌트 14개의 SSOT(DN-10, 다른 세션 진행 중)로 광범위하게 fallback 참조됨을 발견.
+
+- **결정**:
+  - 도구 6종 학생 페이지의 디자인 단일 소스로 **`--sps-*` CSS 변수 + `.sps-` 클래스 네임스페이스를 신설**한다 (`getStudentBaseCSS`/`getStatusScreenHTML`/`getStudentFeedbackJS`/`getStudentViewportMeta`/`getStudentFontLinks`).
+  - 기존 `--color-*` 토큰(DN-10 SSOT)과 `sp-conn-*` 칩(REGRESSION #22)은 **한 줄도 수정하지 않는다**.
+  - **D1 파랑 단일화**: 다크 화면(도구 6종) `--sps-accent: #3b82f6`(본체 sp-accent와 동일), 라이트 화면(landing 2종)은 기존 `#2563eb` 유지 — 같은 브랜드 파랑의 다크/라이트 변형. MultiSurvey v2의 `#60a5fa`와의 최종 합치는 plan D3(복합 설문 조율) 시점에 결정.
+  - **D2 폰트**: CDN Pretendard(dynamic-subset) + `font-display: swap` + 시스템 폴백 스택('Pretendard Variable' → Pretendard → 'Noto Sans KR' → 시스템). CDN 실패 시 현 상태와 동일 — 악화 없음.
+  - **D4 카드색**: `--sps-card: #1a2332`(본체 sp-card·design-system.md 기준), radius 카드 12px/컨트롤 8px.
+  - viewport는 `user-scalable=no`/`maximum-scale` 금지(WCAG 1.4.4) + `viewport-fit=cover`.
+
+- **대안**:
+  - A (기각): getDesignTokenDefaults 값 정정(#60a5fa→#3b82f6 등) — MultiSurvey v2 학생 페이지(frontend-design 검수 S1/S2=0 통과한 팔레트)를 무단 변경, 다른 세션 충돌.
+  - B (채택): --sps-\* 네임스페이스 분리 — 충돌 0, 도구 6종 단일화 즉시 달성, 파랑 이원화는 D3에서 해소.
+  - C (기각): 페이지별 개별 수정 — 표류 재발 구조 그대로.
+
+- **검증**: `_studentPageChrome.shell.test.ts` 메타테스트(토큰값·줌 허용·DN-10 비침범·접근성 마크업) + REGRESSION #47(regression-grep-check.mjs).
+
+## ADR-012: 메모 교실 공유 수신 확인증 — "쌤핀 서버 무경유" 원칙의 메타데이터 예외
+
+- **상태**: active
+- **일자**: 2026-06-12
+- **컨텍스트**: ADR-011로 보드 내용은 선생님 개인 Google Drive에만 저장된다. 그러나 교실 페이지는 Drive 읽기 전용(anyone-with-link reader)이라 "재생됐다"는 답장을 쓸 수 없어, 교사가 교무실에서 주목/낭독의 실제 재생 여부와 교실 화면 생존을 확인할 방법이 없었다(사용자 질문 2026-06-12).
+- **결정**: Supabase 테이블 `memo_share_presence`(보드당 1행 upsert)를 수신 확인 채널로 추가한다. 사용자 명시 승인("이정도는 구현해도 좋을 거 같아").
+  - 담는 것: board_id(Drive fileId)·last_seen_at·sound_on·last_ack_nonce·last_ack_result('played'/'sound-off'/'fallback-voice')·last_ack_at — **메모 내용·제목 등 텍스트는 일절 없음**
+  - 교실 페이지: 60초 heartbeat + 재생 직후 ack upsert (fire-and-forget, 실패해도 보드 표시 무영향)
+  - 쌤핀 앱: 모달 열림 동안 10초 폴링 → "교실 화면 연결됨/안 보임" 칩 + 재생 확인 토스트(35초 timeout)
+  - RLS: anon insert/update/select 허용 + 길이·enum 가드. 링크를 아는 자의 spoof 가능하나 노출 정보가 "화면 켜짐/재생됨" 메타뿐이라 보드 내용(Drive) 이상 노출 없음
+  - 행이 보드당 1개라 증가·정리 불필요
+- **한계(고지)**: "브라우저가 재생함"까지 확인 — 전자칠판 자체 볼륨/음소거는 감지 불가
+- **영향**: SC-10 메타테스트("memoShare 경로 supabase 호출은 ShortLinkClient 한정")에 MemoSharePresenceClient 허용 추가. migration 037 prod 적용 + anon upsert/select/가드 curl 검증 완료(2026-06-12)
