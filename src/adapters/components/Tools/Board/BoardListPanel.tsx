@@ -8,6 +8,8 @@ import { useEffect, useState } from 'react';
 import { useBoardStore } from '@adapters/stores/useBoardStore';
 import { useBoardSessionStore } from '@adapters/stores/useBoardSessionStore';
 
+import { BoardNewBoardDialog, type BoardTemplateSelection } from './BoardNewBoardDialog';
+
 interface BoardListPanelProps {
   readonly selectedBoardId: string | null;
   readonly onSelect: (id: string) => void;
@@ -41,15 +43,22 @@ export function BoardListPanel({ selectedBoardId, onSelect }: BoardListPanelProp
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
+  // PDCA-3 (G005): 새 보드는 템플릿 선택 다이얼로그를 거친다
+  const [createOpen, setCreateOpen] = useState(false);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  async function handleCreate(): Promise<void> {
-    const board = await create();
+  async function handleCreate(name: string, selection: BoardTemplateSelection): Promise<void> {
+    const board = await create(
+      name.length > 0 ? name : undefined,
+      selection.kind === 'builtin' ? selection.id : undefined,
+      selection.kind === 'user' ? selection.id : undefined,
+    );
     if (board) {
       onSelect(board.id);
+      setCreateOpen(false);
     }
   }
 
@@ -83,12 +92,11 @@ export function BoardListPanel({ selectedBoardId, onSelect }: BoardListPanelProp
         <h3 className="text-sm font-bold text-sp-text">보드 목록</h3>
         <button
           type="button"
-          onClick={handleCreate}
+          onClick={() => setCreateOpen(true)}
           className="px-2 py-1 text-xs bg-sp-accent/20 text-sp-accent rounded-md hover:bg-sp-accent/30 flex items-center gap-1"
           title="새 보드"
         >
-          <span className="material-symbols-outlined text-icon-xs">add</span>
-          새 보드
+          <span className="material-symbols-outlined text-icon-xs">add</span>새 보드
         </button>
       </div>
 
@@ -100,7 +108,9 @@ export function BoardListPanel({ selectedBoardId, onSelect }: BoardListPanelProp
         )}
         {!loading && boards.length === 0 && (
           <div className="text-xs text-sp-muted text-center py-8">
-            아직 보드가 없습니다.<br />&quot;새 보드&quot;를 눌러 시작하세요.
+            아직 보드가 없습니다.
+            <br />
+            &quot;새 보드&quot;를 눌러 시작하세요.
           </div>
         )}
 
@@ -137,7 +147,10 @@ export function BoardListPanel({ selectedBoardId, onSelect }: BoardListPanelProp
                     onBlur={() => void commitRename(b.id)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') void commitRename(b.id);
-                      if (e.key === 'Escape') { setEditingId(null); setEditName(''); }
+                      if (e.key === 'Escape') {
+                        setEditingId(null);
+                        setEditName('');
+                      }
                     }}
                     className="flex-1 bg-sp-bg border border-sp-border/60 rounded px-2 py-1 text-sm text-sp-text"
                   />
@@ -154,14 +167,20 @@ export function BoardListPanel({ selectedBoardId, onSelect }: BoardListPanelProp
                 {editingId !== b.id && (
                   <div className="flex opacity-0 group-hover:opacity-100 transition">
                     <span
-                      onClick={(e) => { e.stopPropagation(); startRename(b.id, b.name); }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        startRename(b.id, b.name);
+                      }}
                       className="material-symbols-outlined text-icon-sm text-sp-muted hover:text-sp-text p-1"
                       title="이름 변경"
                     >
                       edit
                     </span>
                     <span
-                      onClick={(e) => { e.stopPropagation(); void handleDelete(b.id, b.name); }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void handleDelete(b.id, b.name);
+                      }}
                       className="material-symbols-outlined text-icon-sm text-sp-muted hover:text-red-400 p-1"
                       title="삭제"
                     >
@@ -174,6 +193,12 @@ export function BoardListPanel({ selectedBoardId, onSelect }: BoardListPanelProp
           );
         })}
       </div>
+
+      <BoardNewBoardDialog
+        isOpen={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreate={handleCreate}
+      />
     </div>
   );
 }

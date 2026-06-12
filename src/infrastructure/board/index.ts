@@ -5,5 +5,8 @@ export { BoardFilePersistence } from './BoardFilePersistence';
 export { FileBoardRepository } from './FileBoardRepository';
 export { YDocBoardServer } from './YDocBoardServer';
 export type { HtmlProvider } from './YDocBoardServer';
+export { BoardTemplateSeeder } from './BoardTemplateSeeder';
+export { BoardSnapshotCodec } from './boardSnapshotCodec';
+export { FileUserTemplateRepo } from './FileUserTemplateRepo';
 export { generateBoardHTML } from './generateBoardHTML';
 export type { GenerateBoardHtmlInput } from './generateBoardHTML';

@@ -50,6 +50,18 @@
     --sp-board-sticky-green: #d1fae5;
     --sp-board-sticky-purple: #ede9fe;
 
+    /* === Board Template Colors (PDCA-3 / G005) === */
+    /* 협업보드 학습 활동 템플릿 색. boardTemplateRules.ts TEMPLATE_COLORS 와 hex 동기.
+       캔버스(학생 페이지)는 라이트 테마 고정이라 도메인 상수는 라이트 값만 사용 —
+       다크 override 는 React 다이얼로그 미리보기 전용. */
+    --sp-board-template-cell: #f1f5f9;
+    --sp-board-group-r: #fee2e2;
+    --sp-board-group-b: #dbeafe;
+    --sp-board-group-y: #fef9c3;
+    --sp-board-group-g: #dcfce7;
+    --sp-board-group-p: #f3e8ff;
+    --sp-board-group-o: #ffedd5;
+
     /* === Radius scale === */
     --sp-radius-xs: 4px;
     --sp-radius-sm: 6px;
@@ -229,6 +241,15 @@ body {
   --sp-board-sticky-blue: #1e3a5f;
   --sp-board-sticky-green: #1f3d2a;
   --sp-board-sticky-purple: #3d2d5c;
+
+  /* Board template colors — dark theme overrides (다이얼로그 미리보기 전용) */
+  --sp-board-template-cell: #2a3441;
+  --sp-board-group-r: #4c2424;
+  --sp-board-group-b: #1e3a5f;
+  --sp-board-group-y: #4a4420;
+  --sp-board-group-g: #1f3d2a;
+  --sp-board-group-p: #3a2a4d;
+  --sp-board-group-o: #4a3320;
 }
 
 /* ─── Light Theme: Fix hover text & background visibility ─── */

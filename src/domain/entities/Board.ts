@@ -1,4 +1,5 @@
 import type { BoardId } from '../valueObjects/BoardId';
+import type { BoardTemplateId } from './BoardTemplate';
 
 /**
  * Board — 저장된 협업 보드 메타데이터
@@ -23,4 +24,9 @@ export interface Board {
   readonly participantHistory: readonly string[];
   /** 저장된 Y.Doc 스냅샷 존재 여부 (Repository 구현이 채움) */
   readonly hasSnapshot: boolean;
+  /**
+   * 생성 시 선택한 학습 활동 템플릿 (PDCA-3 / G005).
+   * 템플릿 없이 만든 보드와 G005 이전에 만든 기존 보드는 null/undefined.
+   */
+  readonly templateId?: BoardTemplateId | null;
 }

@@ -118,6 +118,9 @@ export function generateBoardHTML(input: GenerateBoardHtmlInput): string {
       overflow-y: auto;
     }
     #board-toolbar[hidden] { display: none !important; }
+    /* PDCA-3 (AC-3.3): 교사 전용 섹션 — .tool-section 의 display:flex 가 UA [hidden] 을
+       이기므로 명시 차단 (iter #4 의 #join-modal[hidden] 과 동일한 함정). */
+    #board-toolbar .tool-section[hidden] { display: none !important; }
     /* 접기 토글 헤더 — 접힌 상태에선 이 버튼만 남는다 */
     #board-toolbar .toolbar-collapse {
       width: 100%; height: 28px; border: 0; background: transparent;
@@ -243,6 +246,14 @@ export function generateBoardHTML(input: GenerateBoardHtmlInput): string {
       <button type="button" class="grid-toggle" data-grid-toggle aria-pressed="true" title="20px 격자 켜기/끄기 — 스티커가 격자에 자동 정렬">
         <span class="grid-dot" aria-hidden="true">⊞</span>
         <span>20px</span>
+      </button>
+    </div>
+    <!-- PDCA-3 (AC-3.3): 템플릿 잠금 토글 — 교사(?role=teacher) 입장 시에만 JS 가 표시 -->
+    <div class="tool-section" data-template-section hidden>
+      <div class="section-label">템플릿</div>
+      <button type="button" class="grid-toggle" data-template-lock-toggle aria-pressed="true" title="템플릿 밑그림 잠금/해제 — 풀면 선생님이 옮기거나 지울 수 있어요">
+        <span data-template-lock-icon aria-hidden="true">🔒</span>
+        <span data-template-lock-label>잠금</span>
       </button>
     </div>
   </div>
@@ -543,13 +554,18 @@ export function generateBoardHTML(input: GenerateBoardHtmlInput): string {
           const sel = (appState && appState.selectedElementIds) || {};
 
           // (1) 선택 차단 가드 (학생만). 선택은 로컬 상태라 원격과 충돌 없음.
+          //     PDCA-3: 템플릿 밑그림(customData.boardTemplate, 작성자 없음)은
+          //     교사가 잠금을 풀어도 학생에게는 선택 차단 — boardRules.canEditElement
+          //     의 "author 없는 요소 → student false" 의도와 동기.
           if (MY_ROLE === 'student') {
             let blocked = false;
             const nextSel = {};
             for (const el of elements) {
               if (el.isDeleted || !sel[el.id]) continue;
-              const author = el.customData && el.customData.authorAwarenessId;
-              if (author && !canEditElementInline(author, myAwarenessId, MY_ROLE)) {
+              const custom = el.customData || {};
+              const author = custom.authorAwarenessId;
+              const isTemplate = Boolean(custom.boardTemplate);
+              if ((author || isTemplate) && !canEditElementInline(author, myAwarenessId, MY_ROLE)) {
                 blocked = true;
               } else {
                 nextSel[el.id] = true;
@@ -840,6 +856,52 @@ export function generateBoardHTML(input: GenerateBoardHtmlInput): string {
             if (currentExcalidrawAPI) {
               currentExcalidrawAPI.updateScene({ appState: { gridSize: nextSize } });
             }
+          });
+        }
+
+        // PDCA-3 (AC-3.3): 교사 전용 템플릿 잠금 토글.
+        // 템플릿 요소 = customData.boardTemplate 마킹 (BoardTemplateSeeder 가 생성 시 부여).
+        // locked 플립 + version/versionNonce bump → y-excalidraw 가 변경으로 인식해
+        // 모든 클라이언트에 전파된다. 학생은 잠금이 풀려도 선택 차단 가드가 막는다.
+        const templateSection = toolbar.querySelector('[data-template-section]');
+        const templateLockBtn = toolbar.querySelector('[data-template-lock-toggle]');
+        if (IS_TEACHER && templateSection) {
+          templateSection.hidden = false;
+        }
+        if (IS_TEACHER && templateLockBtn) {
+          const lockIcon = templateLockBtn.querySelector('[data-template-lock-icon]');
+          const lockLabel = templateLockBtn.querySelector('[data-template-lock-label]');
+          templateLockBtn.addEventListener('click', () => {
+            if (!currentExcalidrawAPI) return;
+            const scene = currentExcalidrawAPI.getSceneElementsIncludingDeleted();
+            const hasTemplate = scene.some(
+              (el) => !el.isDeleted && el.customData && el.customData.boardTemplate
+            );
+            if (!hasTemplate) {
+              showToast('이 보드에는 템플릿 밑그림이 없어요');
+              return;
+            }
+            // 버튼 속성이 아니라 실제 요소 상태에서 유도 — 교사가 보드에 재입장해도
+            // (버튼은 초기값으로 돌아가도) 토글이 항상 현재 상태의 반대로 동작한다.
+            const anyLocked = scene.some(
+              (el) => !el.isDeleted && el.customData && el.customData.boardTemplate && el.locked
+            );
+            const lockNext = !anyLocked;
+            const updated = scene.map((el) => {
+              if (el.isDeleted || !el.customData || !el.customData.boardTemplate) return el;
+              return Object.assign({}, el, {
+                locked: lockNext,
+                version: el.version + 1,
+                versionNonce: randomVersionNonce(),
+              });
+            });
+            currentExcalidrawAPI.updateScene({ elements: updated, commitToHistory: false });
+            templateLockBtn.setAttribute('aria-pressed', lockNext ? 'true' : 'false');
+            if (lockIcon) lockIcon.textContent = lockNext ? '🔒' : '🔓';
+            if (lockLabel) lockLabel.textContent = lockNext ? '잠금' : '해제됨';
+            showToast(lockNext
+              ? '템플릿 밑그림을 잠갔어요'
+              : '템플릿 잠금을 풀었어요 — 이제 옮기거나 지울 수 있어요');
           });
         }
       }

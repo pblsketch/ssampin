@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { Memo } from '@domain/entities/Memo';
 import type { MemoShareBoard, MemoShareBoardsData } from '@domain/entities/MemoShareBoard';
 import type { MemoShareAttention, MemoShareTtsVoice } from '@domain/entities/MemoShareItem';
+import type { MemoShareAckResult, MemoSharePresence } from '@domain/ports/IMemoSharePresencePort';
 import { MAX_ITEMS } from '@domain/rules/memoShareRules';
 import { CreateShareBoard } from '@usecases/memoShare/CreateShareBoard';
 import { SyncShareBoard, type SyncShareBoardExtras } from '@usecases/memoShare/SyncShareBoard';
@@ -33,10 +34,21 @@ export const SYNC_RETRY_DELAYS_MS: readonly number[] = [1500, 3000, 6000];
 
 export type MemoShareSyncStatus = 'idle' | 'syncing' | 'pending';
 
+/** 교실 화면 presence 폴링 간격 — 모달이 열려 있는 동안만 */
+export const PRESENCE_POLL_INTERVAL_MS = 10_000;
+/** 주목 신호 재생 확인(ack) 대기 한도 — 초과 시 'timeout' 이벤트 */
+export const ATTENTION_ACK_TIMEOUT_MS = 35_000;
+
 /** 공유 중 메모 삭제 감지 — 교실 화면 반영 전 확인 플로우용 */
 export interface DeletedMemoNotice {
   readonly memoIds: readonly string[];
   readonly boardIds: readonly string[];
+}
+
+/** 주목 신호의 1회성 재생 확인 결과 이벤트 — 모달이 토스트로 소비 후 clear */
+export interface AttentionAckEvent {
+  readonly boardId: string;
+  readonly result: MemoShareAckResult | 'timeout';
 }
 
 interface MemoShareState {
@@ -52,6 +64,10 @@ interface MemoShareState {
   /** 공유 중 메모 삭제 감지 시 확인 플로우 상태 */
   deletedMemoNotice: DeletedMemoNotice | null;
   isCreating: boolean;
+  /** 교실 화면 생존/재생 확인 상태 (boardId → presence) — 폴링으로 갱신 */
+  presenceByBoardId: ReadonlyMap<string, MemoSharePresence>;
+  /** 주목 신호 재생 확인 1회성 이벤트 — 모달이 토스트로 소비 후 clearAttentionAckResult */
+  attentionAckResult: AttentionAckEvent | null;
 
   /** 영속 보드 로드 + useMemoStore 관찰 시작 (멱등) */
   initialize: () => Promise<void>;
@@ -81,6 +97,12 @@ interface MemoShareState {
   triggerAttention: (boardId: string) => Promise<boolean>;
   /** 포스트잇 TTS 낭독 1회 신호 — 교실 화면이 해당 포스트잇 팝업 + 낭독 */
   triggerTtsRead: (boardId: string, memoId: string) => Promise<boolean>;
+  /** 교실 화면 presence 폴링 시작 — 모달 열림 동안 10초 간격 (멱등, 보드 0개면 skip) */
+  startPresencePolling: () => void;
+  /** presence 폴링 중지 — 모달 닫힘 시 */
+  stopPresencePolling: () => void;
+  /** 1회성 ack 이벤트 소비 완료 표시 */
+  clearAttentionAckResult: () => void;
 }
 
 // ============================================================
@@ -112,6 +134,67 @@ const pendingAttention = new Map<string, MemoShareAttention>();
 /** ttsVoice 등 메타만 바뀐 보드 — 내용 diff가 없어도 업로드 강제 */
 const forceUploadBoardIds = new Set<string>();
 
+/** presence 폴링 인터벌 핸들 (모달 열림 동안만 활성) */
+let presenceTimer: ReturnType<typeof setInterval> | null = null;
+/** 재생 확인(ack)을 기다리는 신호 — 보드당 1건, 새 신호가 이전 대기를 덮어쓴다 */
+const awaitingAcks = new Map<string, { nonce: string; timer: ReturnType<typeof setTimeout> }>();
+
+/** 보낸 nonce의 재생 확인 대기 등록 — ATTENTION_ACK_TIMEOUT_MS 내 미확인 시 'timeout' 이벤트 */
+function registerAwaitingAck(boardId: string, nonce: string): void {
+  const existing = awaitingAcks.get(boardId);
+  if (existing !== undefined) clearTimeout(existing.timer);
+  const timer = setTimeout(() => {
+    awaitingAcks.delete(boardId);
+    useMemoShareStore.setState({ attentionAckResult: { boardId, result: 'timeout' } });
+  }, ATTENTION_ACK_TIMEOUT_MS);
+  awaitingAcks.set(boardId, { nonce, timer });
+}
+
+/** 폴링 결과에서 대기 중인 ack를 대조 — 내가 보낸 nonce와 일치할 때만 1회성 이벤트 발행 */
+function matchAwaitingAcks(presenceMap: ReadonlyMap<string, MemoSharePresence>): void {
+  for (const [boardId, awaiting] of awaitingAcks) {
+    const presence = presenceMap.get(boardId);
+    if (presence?.lastAckNonce !== awaiting.nonce) continue;
+    if (presence.lastAckResult === undefined) continue;
+    clearTimeout(awaiting.timer);
+    awaitingAcks.delete(boardId);
+    useMemoShareStore.setState({
+      attentionAckResult: { boardId, result: presence.lastAckResult },
+    });
+  }
+}
+
+/**
+ * presence 1회 조회 — 실패는 조용히 무시(마지막 상태 유지).
+ * 메타데이터만 조회(ADR-012): board_id·생존 시각·소리 토글·재생 결과, 내용 무전송.
+ */
+async function pollPresenceOnce(): Promise<void> {
+  const boardIds = useMemoShareStore.getState().boards.map((b) => b.id);
+  if (boardIds.length === 0) return;
+  try {
+    const { memoSharePresenceClient } = await loadContainer();
+    const presenceMap = await memoSharePresenceClient.fetchPresence(boardIds);
+    useMemoShareStore.setState({ presenceByBoardId: presenceMap });
+    matchAwaitingAcks(presenceMap);
+  } catch {
+    // 네트워크 일시 오류 — 다음 폴링에서 자연 회복
+  }
+}
+
+/**
+ * DI container 단일 lazy import (메모이즈).
+ *
+ * 배경: `import('@adapters/di/container')`를 여러 비동기 경로(폴링·트리거·flush)에서
+ * 각각 호출하면 vitest 환경에서 동시 dynamic import 경쟁 시 일부 호출이 **모킹되지 않은
+ * 실제 모듈**을 받는 사고가 실측됐다(2026-06-12, presence 테스트에서 재현).
+ * 첫 호출의 Promise를 공유해 모든 경로가 같은 모듈 인스턴스를 받도록 고정한다.
+ */
+let containerPromise: Promise<typeof import('@adapters/di/container')> | null = null;
+function loadContainer(): Promise<typeof import('@adapters/di/container')> {
+  containerPromise ??= import('@adapters/di/container');
+  return containerPromise;
+}
+
 function readWarningAck(): boolean {
   try {
     return window.localStorage.getItem(WARNING_ACK_KEY) === 'true';
@@ -129,7 +212,7 @@ function writeWarningAck(): void {
 }
 
 async function persistBoards(boards: readonly MemoShareBoard[]): Promise<void> {
-  const { storage } = await import('@adapters/di/container');
+  const { storage } = await loadContainer();
   const data: MemoShareBoardsData = { boards };
   await storage.write(STORAGE_KEY, data);
 }
@@ -178,7 +261,7 @@ async function flushSyncQueue(): Promise<void> {
 
   flushing = true;
   try {
-    const { authenticateGoogle, getMemoShareClient } = await import('@adapters/di/container');
+    const { authenticateGoogle, getMemoShareClient } = await loadContainer();
 
     // 구글 미로그인 게이트 — 큐 보존 + "동기화 대기 중"
     const connected = await authenticateGoogle.isConnected().catch(() => false);
@@ -343,11 +426,13 @@ export const useMemoShareStore = create<MemoShareState>((set, get) => ({
   warningAcknowledged: false,
   deletedMemoNotice: null,
   isCreating: false,
+  presenceByBoardId: new Map<string, MemoSharePresence>(),
+  attentionAckResult: null,
 
   initialize: async () => {
     if (!get().loaded) {
       try {
-        const { storage } = await import('@adapters/di/container');
+        const { storage } = await loadContainer();
         const data = await storage.read<MemoShareBoardsData>(STORAGE_KEY);
         set({
           boards: data?.boards ?? [],
@@ -367,7 +452,7 @@ export const useMemoShareStore = create<MemoShareState>((set, get) => ({
   },
 
   createBoard: async (memoIds, title) => {
-    const { authenticateGoogle, getMemoShareClient } = await import('@adapters/di/container');
+    const { authenticateGoogle, getMemoShareClient } = await loadContainer();
 
     // 구글 미로그인 게이트
     const connected = await authenticateGoogle.isConnected().catch(() => false);
@@ -409,7 +494,7 @@ export const useMemoShareStore = create<MemoShareState>((set, get) => ({
     const board = get().boards.find((b) => b.id === boardId);
     if (!board) return false;
     try {
-      const { authenticateGoogle, getMemoShareClient } = await import('@adapters/di/container');
+      const { authenticateGoogle, getMemoShareClient } = await loadContainer();
       const client = await getMemoShareClient(() => authenticateGoogle.getValidAccessToken());
       await new StopSharing(client).execute(board);
     } catch (err) {
@@ -424,6 +509,11 @@ export const useMemoShareStore = create<MemoShareState>((set, get) => ({
     desiredTitles.delete(boardId);
     pendingAttention.delete(boardId);
     forceUploadBoardIds.delete(boardId);
+    const awaiting = awaitingAcks.get(boardId);
+    if (awaiting !== undefined) {
+      clearTimeout(awaiting.timer);
+      awaitingAcks.delete(boardId);
+    }
     const boards = get().boards.filter((b) => b.id !== boardId);
     set((state) => ({
       boards,
@@ -443,7 +533,7 @@ export const useMemoShareStore = create<MemoShareState>((set, get) => ({
     if (!board || board.shortUrl !== undefined) return;
     try {
       // 숏링크는 URL 문자열만 저장하는 선택 기능 (공유 내용은 Drive에만 존재)
-      const { shortLinkClient } = await import('@adapters/di/container');
+      const { shortLinkClient } = await loadContainer();
       const result = await shortLinkClient.createShortLink(board.shareUrl);
       if (result === board.shareUrl) return;
       const boards = get().boards.map((b) => (b.id === boardId ? { ...b, shortUrl: result } : b));
@@ -556,6 +646,24 @@ export const useMemoShareStore = create<MemoShareState>((set, get) => ({
     }
     return triggerSignal(boardId, 'tts', memoId);
   },
+
+  startPresencePolling: () => {
+    if (presenceTimer !== null) return; // 멱등
+    void pollPresenceOnce(); // 열자마자 1회
+    presenceTimer = setInterval(() => {
+      void pollPresenceOnce();
+    }, PRESENCE_POLL_INTERVAL_MS);
+  },
+
+  stopPresencePolling: () => {
+    if (presenceTimer === null) return;
+    clearInterval(presenceTimer);
+    presenceTimer = null;
+  },
+
+  clearAttentionAckResult: () => {
+    set({ attentionAckResult: null });
+  },
 }));
 
 /**
@@ -581,7 +689,7 @@ async function triggerSignal(
   }
 
   // 구글 미로그인 게이트
-  const { authenticateGoogle } = await import('@adapters/di/container');
+  const { authenticateGoogle } = await loadContainer();
   const connected = await authenticateGoogle.isConnected().catch(() => false);
   if (!connected) {
     store.setState({ error: '구글 계정에 로그인한 뒤 사용할 수 있어요.' });
@@ -591,12 +699,15 @@ async function triggerSignal(
   // 프로젝트 공통 id 생성기 재사용 — 정적 import는 adapters→infrastructure 레이어 규칙
   // 위반(no-restricted-imports)이라 container와 동일하게 호출 시점 dynamic import 사용
   const { generateUUID } = await import('@infrastructure/utils/uuid');
+  const nonce = generateUUID();
   pendingAttention.set(boardId, {
     kind,
     ...(itemId !== undefined ? { itemId } : {}),
     requestedAt: new Date().toISOString(),
-    nonce: generateUUID(),
+    nonce,
   });
+  // 보낸 nonce를 기억 — presence 폴링이 교실의 재생 확인(ack)과 대조한다
+  registerAwaitingAck(boardId, nonce);
   store.setState((state) => ({
     error: null,
     pendingBoardIds: [...new Set([...state.pendingBoardIds, boardId])],
@@ -626,6 +737,14 @@ export function __resetMemoShareStoreForTests(): void {
   desiredTitles.clear();
   pendingAttention.clear();
   forceUploadBoardIds.clear();
+  if (presenceTimer !== null) {
+    clearInterval(presenceTimer);
+    presenceTimer = null;
+  }
+  for (const awaiting of awaitingAcks.values()) {
+    clearTimeout(awaiting.timer);
+  }
+  awaitingAcks.clear();
   useMemoShareStore.setState({
     boards: [],
     loaded: false,
@@ -635,5 +754,7 @@ export function __resetMemoShareStoreForTests(): void {
     warningAcknowledged: false,
     deletedMemoNotice: null,
     isCreating: false,
+    presenceByBoardId: new Map<string, MemoSharePresence>(),
+    attentionAckResult: null,
   });
 }

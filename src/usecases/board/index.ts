@@ -1,4 +1,5 @@
 export { ManageBoard } from './ManageBoard';
+export { ManageUserTemplates } from './ManageUserTemplates';
 export { StartBoardSession } from './StartBoardSession';
 export type {
   BoardSessionStartResult,

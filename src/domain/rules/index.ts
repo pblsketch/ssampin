@@ -5,6 +5,7 @@ export * from './studentRecordRules';
 export * from './shareRules';
 export * from './matchingRules';
 export * from './boardRules';
+export * from './boardTemplateRules';
 export * from './notebookRules';
 export * from './notePageRules';
 export * from './classroomAgreementRules';

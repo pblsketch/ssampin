@@ -13,15 +13,13 @@
 import crypto from 'crypto';
 
 import type { Board } from '@domain/entities/Board';
+import type { BoardTemplateId } from '@domain/entities/BoardTemplate';
 import type { BoardId } from '@domain/valueObjects/BoardId';
 import type { IBoardRepository } from '@domain/repositories/IBoardRepository';
 import { mergeParticipantHistory } from '@domain/rules/boardRules';
 
 import { BoardFilePersistence } from './BoardFilePersistence';
-import {
-  BOARD_ID_PREFIX,
-  BOARD_ID_SUFFIX_LENGTH,
-} from './constants';
+import { BOARD_ID_PREFIX, BOARD_ID_SUFFIX_LENGTH } from './constants';
 
 export class FileBoardRepository implements IBoardRepository {
   constructor(private readonly persistence: BoardFilePersistence) {}
@@ -34,7 +32,10 @@ export class FileBoardRepository implements IBoardRepository {
     return this.persistence.getMeta(id);
   }
 
-  async create(input: { readonly name: string }): Promise<Board> {
+  async create(input: {
+    readonly name: string;
+    readonly templateId?: BoardTemplateId | null;
+  }): Promise<Board> {
     const id = generateBoardId();
     const now = Date.now();
     const board: Board = {
@@ -45,6 +46,7 @@ export class FileBoardRepository implements IBoardRepository {
       lastSessionEndedAt: null,
       participantHistory: [],
       hasSnapshot: false,
+      templateId: input.templateId ?? null,
     };
     await this.persistence.saveMeta(board);
     return board;
@@ -84,10 +86,7 @@ export class FileBoardRepository implements IBoardRepository {
     return this.persistence.loadSnapshot(id);
   }
 
-  async appendParticipantHistory(
-    id: BoardId,
-    names: ReadonlyArray<string>,
-  ): Promise<void> {
+  async appendParticipantHistory(id: BoardId, names: ReadonlyArray<string>): Promise<void> {
     const current = await this.persistence.getMeta(id);
     if (!current) return;
     const merged = mergeParticipantHistory(current.participantHistory, names);

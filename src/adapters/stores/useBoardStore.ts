@@ -15,6 +15,8 @@ interface BoardMeta {
   lastSessionEndedAt: number | null;
   participantHistory: string[];
   hasSnapshot: boolean;
+  /** 생성 시 선택한 학습 활동 템플릿 (PDCA-3 / G005). 이전 보드는 없음 */
+  templateId?: string | null;
 }
 
 interface BoardStoreState {
@@ -23,7 +25,11 @@ interface BoardStoreState {
   error: string | null;
 
   load: () => Promise<void>;
-  create: (name?: string) => Promise<BoardMeta | null>;
+  create: (
+    name?: string,
+    templateId?: string,
+    userTemplateId?: string,
+  ) => Promise<BoardMeta | null>;
   rename: (id: string, name: string) => Promise<void>;
   remove: (id: string) => Promise<void>;
 }
@@ -52,11 +58,11 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
     }
   },
 
-  async create(name) {
+  async create(name, templateId, userTemplateId) {
     const api = getApi();
     if (!api) return null;
     try {
-      const board = await api.create({ name });
+      const board = await api.create({ name, templateId, userTemplateId });
       // 목록에 삽입 (최신순)
       set({ boards: [board, ...get().boards], error: null });
       return board;

@@ -73,6 +73,22 @@ const { fakes } = vi.hoisted(() => {
       shortLinkClient: {
         createShortLink: vi.fn(async (url: string) => url),
       },
+      presenceClient: {
+        fetchPresence: vi.fn(
+          async (_boardIds: readonly string[]) =>
+            new Map<
+              string,
+              {
+                boardId: string;
+                lastSeenAt: string;
+                soundOn: boolean;
+                lastAckNonce?: string;
+                lastAckResult?: 'played' | 'sound-off' | 'fallback-voice';
+                lastAckAt?: string;
+              }
+            >(),
+        ),
+      },
     },
   };
 });
@@ -85,6 +101,7 @@ vi.mock('@adapters/di/container', () => ({
   getMemoShareClient: vi.fn(async () => fakes.client),
   resetMemoShareClient: vi.fn(),
   shortLinkClient: fakes.shortLinkClient,
+  memoSharePresenceClient: fakes.presenceClient,
 }));
 
 import { useMemoStore } from '@adapters/stores/useMemoStore';
@@ -93,6 +110,8 @@ import {
   __resetMemoShareStoreForTests,
   SYNC_DEBOUNCE_MS,
   SYNC_RETRY_DELAYS_MS,
+  PRESENCE_POLL_INTERVAL_MS,
+  ATTENTION_ACK_TIMEOUT_MS,
 } from '@adapters/stores/useMemoShareStore';
 
 function makeMemo(id: string, overrides: Partial<Memo> = {}): Memo {
@@ -150,6 +169,8 @@ beforeEach(() => {
     updatedAt: '2026-06-11T01:00:00.000Z',
   }));
   fakes.authenticateGoogle.isConnected.mockImplementation(async () => true);
+  fakes.presenceClient.fetchPresence.mockClear();
+  fakes.presenceClient.fetchPresence.mockImplementation(async () => new Map());
   useMemoStore.setState({ memos: [], loaded: true });
 });
 
@@ -520,6 +541,110 @@ describe('useMemoShareStore — 주목 (알림음/TTS 낭독)', () => {
   });
 });
 
+describe('useMemoShareStore — presence 폴링 + 재생 확인(ack)', () => {
+  function presenceRow(
+    overrides: Partial<{
+      boardId: string;
+      lastSeenAt: string;
+      soundOn: boolean;
+      lastAckNonce: string;
+      lastAckResult: 'played' | 'sound-off' | 'fallback-voice';
+      lastAckAt: string;
+    }> = {},
+  ) {
+    return {
+      boardId: 'file-1',
+      lastSeenAt: new Date().toISOString(),
+      soundOn: true,
+      ...overrides,
+    };
+  }
+
+  it('폴링: 시작 즉시 1회 + 10초 간격 조회, 결과가 presenceByBoardId에 매핑되고, 중지 후 조회 없음', async () => {
+    const m1 = makeMemo('m1');
+    await seedAndInitialize(makeBoard([m1]), [m1]);
+    const row = presenceRow({ soundOn: false });
+    fakes.presenceClient.fetchPresence.mockImplementation(async () => new Map([['file-1', row]]));
+
+    useMemoShareStore.getState().startPresencePolling();
+    await vi.advanceTimersByTimeAsync(10); // 즉시 1회
+    expect(fakes.presenceClient.fetchPresence).toHaveBeenCalledTimes(1);
+    expect(fakes.presenceClient.fetchPresence).toHaveBeenCalledWith(['file-1']);
+    expect(useMemoShareStore.getState().presenceByBoardId.get('file-1')).toEqual(row);
+
+    await vi.advanceTimersByTimeAsync(PRESENCE_POLL_INTERVAL_MS + 10);
+    expect(fakes.presenceClient.fetchPresence).toHaveBeenCalledTimes(2);
+
+    useMemoShareStore.getState().stopPresencePolling();
+    await vi.advanceTimersByTimeAsync(PRESENCE_POLL_INTERVAL_MS * 3);
+    expect(fakes.presenceClient.fetchPresence).toHaveBeenCalledTimes(2);
+  });
+
+  it('ack 매칭: 내가 보낸 nonce가 presence에 나타나면 1회성 결과 이벤트(played) + 이후 timeout 없음', async () => {
+    const m1 = makeMemo('m1');
+    await seedAndInitialize(makeBoard([m1]), [m1]);
+    useMemoShareStore.getState().startPresencePolling();
+    await vi.advanceTimersByTimeAsync(10);
+
+    // 주목 전송 → 업로드된 nonce 캡처
+    expect(await useMemoShareStore.getState().triggerAttention('file-1')).toBe(true);
+    await vi.advanceTimersByTimeAsync(10);
+    const sentNonce = fakes.client.updateBoard.mock.calls[0]?.[1]?.attention?.nonce;
+    expect(sentNonce).toBeTruthy();
+
+    // 교실이 같은 nonce로 ack — 다음 폴링에서 매칭
+    fakes.presenceClient.fetchPresence.mockImplementation(
+      async () =>
+        new Map([
+          ['file-1', presenceRow({ lastAckNonce: sentNonce as string, lastAckResult: 'played' })],
+        ]),
+    );
+    await vi.advanceTimersByTimeAsync(PRESENCE_POLL_INTERVAL_MS + 10);
+
+    expect(useMemoShareStore.getState().attentionAckResult).toEqual({
+      boardId: 'file-1',
+      result: 'played',
+    });
+    useMemoShareStore.getState().clearAttentionAckResult();
+    expect(useMemoShareStore.getState().attentionAckResult).toBeNull();
+
+    // 매칭으로 대기가 해소됐으므로 35초가 지나도 timeout 이벤트가 없다
+    await vi.advanceTimersByTimeAsync(ATTENTION_ACK_TIMEOUT_MS + 1000);
+    expect(useMemoShareStore.getState().attentionAckResult).toBeNull();
+  });
+
+  it("다른 nonce(과거 ack)는 매칭하지 않고, 35초 내 미확인이면 'timeout' 이벤트", async () => {
+    const m1 = makeMemo('m1');
+    await seedAndInitialize(makeBoard([m1]), [m1]);
+    // 과거 신호의 ack가 남아 있는 상황
+    fakes.presenceClient.fetchPresence.mockImplementation(
+      async () =>
+        new Map([
+          ['file-1', presenceRow({ lastAckNonce: 'stale-nonce', lastAckResult: 'played' })],
+        ]),
+    );
+    useMemoShareStore.getState().startPresencePolling();
+
+    expect(await useMemoShareStore.getState().triggerAttention('file-1')).toBe(true);
+    await vi.advanceTimersByTimeAsync(PRESENCE_POLL_INTERVAL_MS * 2);
+    // stale nonce는 무시 — 아직 이벤트 없음
+    expect(useMemoShareStore.getState().attentionAckResult).toBeNull();
+
+    await vi.advanceTimersByTimeAsync(ATTENTION_ACK_TIMEOUT_MS);
+    expect(useMemoShareStore.getState().attentionAckResult).toEqual({
+      boardId: 'file-1',
+      result: 'timeout',
+    });
+  });
+
+  it('보드 0개면 폴링해도 presence 조회를 건너뛴다', async () => {
+    await useMemoShareStore.getState().initialize();
+    useMemoShareStore.getState().startPresencePolling();
+    await vi.advanceTimersByTimeAsync(PRESENCE_POLL_INTERVAL_MS + 10);
+    expect(fakes.presenceClient.fetchPresence).not.toHaveBeenCalled();
+  });
+});
+
 /* ──────────────────────────────────────────────────────────────────────────
  * 메타 테스트
  * ────────────────────────────────────────────────────────────────────────── */
@@ -563,31 +688,42 @@ describe('[메타] SC-10 무서버 저장 — memoShare 경로에 supabase 호�
     'src/adapters/components/Memo/MemoShareBadge.tsx',
     // 다른 세션이 병렬 작성 중 — 존재하면 함께 검사
     'src/infrastructure/google/MemoShareDriveClient.ts',
+    // 수신 확인증(presence) — ADR-012 예외 경로도 스캔 대상에 포함해 감시
+    'src/domain/ports/IMemoSharePresencePort.ts',
+    'src/infrastructure/supabase/MemoSharePresenceClient.ts',
   ] as const;
 
-  it('memoShare 경로 파일의 supabase 참조는 ShortLinkClient(숏링크) 한정이다', () => {
+  it('memoShare 경로 파일의 supabase 참조는 ShortLinkClient + MemoSharePresenceClient 한정이다', () => {
     const violations: string[] = [];
     for (const relPath of MEMO_SHARE_FILES) {
       const fullPath = resolve(ROOT, relPath);
       if (!existsSync(fullPath)) continue;
+      // 허용 2: MemoSharePresenceClient.ts 파일 전체 — ADR-012 사용자 승인 메타데이터
+      // 예외(2026-06-12)의 유일한 구현체. 내용 무전송: board_id·재생 결과·시각만 오간다
+      // (스키마: supabase/migrations/037_memo_share_presence.sql).
+      // 테이블/컬럼이 메모 내용을 담도록 확장되면 이 예외를 재심사할 것.
+      const isAdr012ExceptionFile = relPath.endsWith('MemoSharePresenceClient.ts');
       const lines = readFileSync(fullPath, 'utf8').split('\n');
       lines.forEach((line, index) => {
         if (!/supabase/i.test(line)) return;
-        // 허용: 숏링크(URL 문자열만 저장) 관련 라인
+        // 허용 1: 숏링크(URL 문자열만 저장) 관련 라인
         if (/shortlink/i.test(line)) return;
+        // 허용 2(계속): presence 참조 라인 (포트 주석·container import 등)
+        if (isAdr012ExceptionFile || /presence/i.test(line)) return;
         violations.push(`${relPath}:${index + 1} → ${line.trim()}`);
       });
     }
     expect(
       violations,
-      'memoShare 경로에서 ShortLinkClient 외 supabase 참조가 발견되었습니다 (무서버 저장 ' +
-        `원칙 SC-10 위반):\n${violations.join('\n')}`,
+      'memoShare 경로에서 허용 목록(ShortLinkClient·MemoSharePresenceClient) 외 supabase ' +
+        `참조가 발견되었습니다 (무서버 저장 원칙 SC-10 위반):\n${violations.join('\n')}`,
     ).toEqual([]);
   });
 
-  it('useMemoShareStore의 외부 클라이언트는 Drive 포트(getMemoShareClient)와 숏링크뿐이다', () => {
+  it('useMemoShareStore의 외부 클라이언트는 Drive 포트·숏링크·presence(ADR-012)뿐이다', () => {
     const source = readFileSync(resolve(ROOT, 'src/adapters/stores/useMemoShareStore.ts'), 'utf8');
     expect(source).toContain('getMemoShareClient');
+    expect(source).toContain('memoSharePresenceClient'); // ADR-012 메타데이터 읽기 전용
     // 다른 Supabase 클라이언트(과제수합/서명/설문 등) 사용 금지
     for (const banned of [
       'assignmentSupabaseClient',

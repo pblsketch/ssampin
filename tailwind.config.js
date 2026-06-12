@@ -56,6 +56,15 @@ export default {
           'board-sticky-blue': 'var(--sp-board-sticky-blue)',
           'board-sticky-green': 'var(--sp-board-sticky-green)',
           'board-sticky-purple': 'var(--sp-board-sticky-purple)',
+          /* PDCA-3 (G005): 협업보드 학습 활동 템플릿 토큰. light/dark 자동 대응.
+             boardTemplateRules.ts TEMPLATE_COLORS 의 hex 값과 동기 유지 필수. */
+          'board-template-cell': 'var(--sp-board-template-cell)',
+          'board-group-r': 'var(--sp-board-group-r)',
+          'board-group-b': 'var(--sp-board-group-b)',
+          'board-group-y': 'var(--sp-board-group-y)',
+          'board-group-g': 'var(--sp-board-group-g)',
+          'board-group-p': 'var(--sp-board-group-p)',
+          'board-group-o': 'var(--sp-board-group-o)',
         },
       },
       fontSize: {

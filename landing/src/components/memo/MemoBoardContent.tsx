@@ -29,6 +29,7 @@ import {
 } from './driveBoardApi';
 import { useMemoChime } from './useMemoChime';
 import { useMemoTts } from './useMemoTts';
+import { sendAttentionAck, sendHeartbeat } from './presenceApi';
 import styles from './memo.module.css';
 
 const POLL_INTERVAL_MS = 5000;
@@ -37,6 +38,7 @@ const FRESH_DURATION_MS = 2300;
 const PULSE_DURATION_MS = 1400;
 const LEAVE_DURATION_MS = 320;
 const HEADER_PULSE_DURATION_MS = 1700;
+const HEARTBEAT_INTERVAL_MS = 60000;
 const THEME_STORAGE_KEY = 'ssampin-memo-theme';
 
 type BoardStatus = 'loading' | 'ready' | 'gone' | 'config-error';
@@ -254,6 +256,26 @@ export function MemoBoardContent({ fileId }: MemoBoardContentProps) {
     return () => document.removeEventListener('visibilitychange', onVisibilityChange);
   }, [clearPollTimer]);
 
+  /* 수신 확인증 heartbeat — ready일 때 60초마다 + visible 복귀 직후 1회.
+     fire-and-forget(presenceApi) — 실패해도 보드 표시·폴링·재생에 영향 없음 */
+  useEffect(() => {
+    if (status !== 'ready') return;
+    const send = () => {
+      if (document.hidden) return; // hidden이면 중단 (폴링과 동일 규칙)
+      sendHeartbeat(fileId, soundOnRef.current);
+    };
+    send(); // ready 진입 직후 1회
+    const interval = setInterval(send, HEARTBEAT_INTERVAL_MS);
+    const onVisible = () => {
+      if (!document.hidden) send();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [status, fileId]);
+
   /* 테마 — localStorage 우선, 없으면 prefers-color-scheme */
   useEffect(() => {
     let stored: string | null = null;
@@ -403,13 +425,22 @@ export function MemoBoardContent({ fileId }: MemoBoardContentProps) {
     };
   }, []);
 
-  /** kind='tts' — 팝업 열고 낭독, 끝나면(실패·타임아웃 포함) 팝업 자동 닫기 */
+  /** kind='tts' — 팝업 열고 낭독, 끝나면(실패·타임아웃 포함) 팝업 자동 닫기 + 수신 확인 ack */
   const runTtsAttention = useCallback(
-    async (item: MemoShareItemSnapshot, voicePref: MemoTtsVoice) => {
+    async (item: MemoShareItemSnapshot, voicePref: MemoTtsVoice, nonce: string) => {
       const session = ++ttsSessionRef.current;
       setExpandedId(item.id);
       const result = await speakText(item.content, voicePref); // 진행 중 낭독은 내부에서 취소
       if (ttsSessionRef.current !== session) return; // 새 신호가 가로챘으면 후처리 중단
+      if (result.spoken) {
+        // 낭독 성공 시에만 ack — 실패(spoken=false)는 enum 3종에 해당 없어 미전송
+        sendAttentionAck(
+          fileId,
+          soundOnRef.current,
+          nonce,
+          result.fallbackUsed ? 'fallback-voice' : 'played',
+        );
+      }
       if (result.spoken && result.fallbackUsed) {
         showToast(
           voicePref === 'male'
@@ -419,20 +450,22 @@ export function MemoBoardContent({ fileId }: MemoBoardContentProps) {
       }
       setExpandedId((current) => (current === item.id ? null : current));
     },
-    [speakText, showToast],
+    [fileId, speakText, showToast],
   );
 
   const handleAttention = useCallback(
     (attention: MemoAttention, file: MemoShareBoardFile) => {
       if (!soundOnRef.current) {
-        // 오디오 정책상 토글 OFF면 재생 불가 — 시각 강조 + 안내
+        // 오디오 정책상 토글 OFF면 재생 불가 — 시각 강조 + 안내 + ack 'sound-off'
         triggerHeaderPulse();
         showToast('선생님이 주목 알림을 보냈어요 — 🔔 소리를 켜 주세요');
+        sendAttentionAck(fileId, false, attention.nonce, 'sound-off');
         return;
       }
       if (attention.kind === 'chime') {
         playChimeRef.current(true); // 교사의 명시적 호출 — 5초 스로틀 우회
         triggerHeaderPulse();
+        sendAttentionAck(fileId, true, attention.nonce, 'played');
         return;
       }
       // kind='tts' — 대상 항목이 보드에 없으면 무시 (parseAttention이 itemId 필수 보장)
@@ -440,9 +473,9 @@ export function MemoBoardContent({ fileId }: MemoBoardContentProps) {
         ? file.items.find((item) => item.id === attention.itemId)
         : undefined;
       if (!target) return;
-      void runTtsAttention(target, file.ttsVoice ?? 'female');
+      void runTtsAttention(target, file.ttsVoice ?? 'female', attention.nonce);
     },
-    [triggerHeaderPulse, showToast, runTtsAttention],
+    [fileId, triggerHeaderPulse, showToast, runTtsAttention],
   );
   handleAttentionRef.current = handleAttention;
 

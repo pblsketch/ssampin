@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import QRCode from 'qrcode';
 import type { Memo } from '@domain/entities/Memo';
 import type { MemoColor } from '@domain/valueObjects/MemoColor';
+import type { MemoSharePresence } from '@domain/ports/IMemoSharePresencePort';
 import { MAX_ITEMS } from '@domain/rules/memoShareRules';
 import { Modal } from '@adapters/components/common/Modal';
 import { Notice } from '@adapters/components/common/Notice';
@@ -27,6 +28,41 @@ const COLOR_DOT_BG: Record<MemoColor, string> = {
   blue: 'bg-blue-300',
 };
 
+/** 교실 화면 생존 판정 한도 — 페이지 heartbeat(60s) + 여유 */
+const PRESENCE_ALIVE_MS = 90_000;
+
+/**
+ * 교실 화면 상태 칩 — presence 메타데이터(ADR-012) 기반.
+ * 전부 sp 토큰 본문 + 점 색만 상태 표시 (amber 저대비 금지).
+ */
+function PresenceChip({ presence }: { presence: MemoSharePresence | undefined }) {
+  if (presence === undefined) {
+    return (
+      <span className="flex shrink-0 items-center gap-1.5 rounded-full border border-sp-border bg-sp-card px-2.5 py-1 text-xs font-sp-medium text-sp-muted">
+        <span className="h-2 w-2 rounded-full bg-sp-border" />
+        교실 화면 접속 기록 없음
+      </span>
+    );
+  }
+  const ageMs = Date.now() - new Date(presence.lastSeenAt).getTime();
+  if (ageMs <= PRESENCE_ALIVE_MS) {
+    return (
+      <span className="flex shrink-0 items-center gap-1.5 rounded-full border border-green-500/30 bg-sp-card px-2.5 py-1 text-xs font-sp-medium text-sp-text">
+        <span className="h-2 w-2 rounded-full bg-green-400" />
+        교실 화면 연결됨
+        {!presence.soundOn && <span className="text-sp-muted">· 🔕 소리 꺼짐</span>}
+      </span>
+    );
+  }
+  const minutesAgo = Math.max(1, Math.round(ageMs / 60_000));
+  return (
+    <span className="flex shrink-0 items-center gap-1.5 rounded-full border border-sp-border bg-sp-card px-2.5 py-1 text-xs font-sp-medium text-sp-text">
+      <span className="h-2 w-2 rounded-full bg-red-400" />
+      교실 화면 안 보임 (마지막 {minutesAgo}분 전)
+    </span>
+  );
+}
+
 interface MemoShareModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -45,6 +81,8 @@ export function MemoShareModal({ isOpen, onClose }: MemoShareModalProps) {
   const warningAcknowledged = useMemoShareStore((s) => s.warningAcknowledged);
   const deletedMemoNotice = useMemoShareStore((s) => s.deletedMemoNotice);
   const isCreating = useMemoShareStore((s) => s.isCreating);
+  const presenceByBoardId = useMemoShareStore((s) => s.presenceByBoardId);
+  const attentionAckResult = useMemoShareStore((s) => s.attentionAckResult);
   const {
     acknowledgeWarning,
     createBoard,
@@ -57,6 +95,9 @@ export function MemoShareModal({ isOpen, onClose }: MemoShareModalProps) {
     setBoardTtsVoice,
     triggerAttention,
     triggerTtsRead,
+    startPresencePolling,
+    stopPresencePolling,
+    clearAttentionAckResult,
   } = useMemoShareStore.getState();
 
   const memos = useMemoStore((s) => s.memos);
@@ -89,6 +130,35 @@ export function MemoShareModal({ isOpen, onClose }: MemoShareModalProps) {
     setSelectedIds(new Set());
     setTitle('');
   }, [isOpen]);
+
+  // 교실 화면 presence 폴링 — 모달이 열려 있는 동안만 (10초 간격)
+  useEffect(() => {
+    if (!isOpen) return;
+    startPresencePolling();
+    return () => {
+      stopPresencePolling();
+    };
+  }, [isOpen, startPresencePolling, stopPresencePolling]);
+
+  // 주목/낭독 재생 확인(ack) 1회성 이벤트 → 토스트로 소비
+  useEffect(() => {
+    if (attentionAckResult === null) return;
+    switch (attentionAckResult.result) {
+      case 'played':
+        showToast('교실에서 재생을 확인했어요 ✓', 'success');
+        break;
+      case 'sound-off':
+        showToast('교실 화면 소리가 꺼져 있어요 — 🔔 버튼을 눌러 달라고 안내해 주세요', 'error');
+        break;
+      case 'fallback-voice':
+        showToast('남성 음성이 없어 다른 음성으로 읽었어요', 'info');
+        break;
+      case 'timeout':
+        showToast('재생 확인을 받지 못했어요 — 교실 화면이 켜져 있는지 확인해 주세요', 'error');
+        break;
+    }
+    clearAttentionAckResult();
+  }, [attentionAckResult, showToast, clearAttentionAckResult]);
 
   // QR 생성 (ToolSignatureRoster 패턴)
   useEffect(() => {
@@ -300,7 +370,7 @@ export function MemoShareModal({ isOpen, onClose }: MemoShareModalProps) {
                           key={board.id}
                           className="rounded-xl border border-sp-border bg-sp-surface p-4"
                         >
-                          <div className="flex items-center justify-between gap-2">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
                             <div className="flex min-w-0 items-center gap-2">
                               <span className="truncate text-sm font-sp-semibold text-sp-text">
                                 {board.title}
@@ -309,31 +379,35 @@ export function MemoShareModal({ isOpen, onClose }: MemoShareModalProps) {
                                 포스트잇 {board.items.length}개
                               </span>
                             </div>
-                            {/* 동기화 상태 칩 */}
-                            {isPending ? (
-                              <button
-                                onClick={retrySync}
-                                className="flex shrink-0 items-center gap-1 rounded-full border border-amber-500/30 bg-sp-card px-2.5 py-1 text-xs font-sp-medium text-sp-text transition-all hover:bg-sp-surface"
-                                title="다시 동기화 시도"
-                              >
-                                <span className="material-symbols-outlined text-sm text-amber-500">
-                                  sync_problem
+                            <div className="flex flex-wrap items-center justify-end gap-1.5">
+                              {/* 교실 화면 생존/소리 상태 칩 (presence 메타데이터) */}
+                              <PresenceChip presence={presenceByBoardId.get(board.id)} />
+                              {/* 동기화 상태 칩 */}
+                              {isPending ? (
+                                <button
+                                  onClick={retrySync}
+                                  className="flex shrink-0 items-center gap-1 rounded-full border border-amber-500/30 bg-sp-card px-2.5 py-1 text-xs font-sp-medium text-sp-text transition-all hover:bg-sp-surface"
+                                  title="다시 동기화 시도"
+                                >
+                                  <span className="material-symbols-outlined text-sm text-amber-500">
+                                    sync_problem
+                                  </span>
+                                  동기화 대기 중
+                                </button>
+                              ) : syncStatus === 'syncing' ? (
+                                <span className="flex shrink-0 items-center gap-1 rounded-full bg-sp-card px-2.5 py-1 text-xs font-sp-medium text-sp-muted">
+                                  <span className="material-symbols-outlined animate-spin text-sm">
+                                    progress_activity
+                                  </span>
+                                  동기화 중
                                 </span>
-                                동기화 대기 중
-                              </button>
-                            ) : syncStatus === 'syncing' ? (
-                              <span className="flex shrink-0 items-center gap-1 rounded-full bg-sp-card px-2.5 py-1 text-xs font-sp-medium text-sp-muted">
-                                <span className="material-symbols-outlined animate-spin text-sm">
-                                  progress_activity
+                              ) : (
+                                <span className="flex shrink-0 items-center gap-1 rounded-full border border-green-500/30 bg-green-500/10 px-2.5 py-1 text-xs font-sp-medium text-green-400">
+                                  <span className="material-symbols-outlined text-sm">sensors</span>
+                                  공유 중
                                 </span>
-                                동기화 중
-                              </span>
-                            ) : (
-                              <span className="flex shrink-0 items-center gap-1 rounded-full border border-green-500/30 bg-green-500/10 px-2.5 py-1 text-xs font-sp-medium text-green-400">
-                                <span className="material-symbols-outlined text-sm">sensors</span>
-                                공유 중
-                              </span>
-                            )}
+                              )}
+                            </div>
                           </div>
 
                           {/* 링크 행 */}

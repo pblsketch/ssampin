@@ -50,6 +50,17 @@ export type {
 export type { SyncSettings } from './Settings';
 
 export type { Board } from './Board';
+export { BOARD_TEMPLATE_IDS, isBoardTemplateId } from './BoardTemplate';
+export type {
+  BoardTemplateId,
+  BoardTemplateInfo,
+  TemplateElementSkeleton,
+  TemplateLinearSkeleton,
+  TemplateShapeSkeleton,
+  TemplateTextSkeleton,
+} from './BoardTemplate';
+export { USER_TEMPLATE_NAME_MAX_LENGTH, sanitizeUserTemplateName } from './UserTemplate';
+export type { OpaqueBoardElement, UserTemplate, UserTemplateMeta } from './UserTemplate';
 export type { BoardSession, BoardSessionPhase } from './BoardSession';
 export type { BoardParticipant } from './BoardParticipant';
 export type {

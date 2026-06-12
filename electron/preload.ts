@@ -1001,8 +1001,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Design §4.1 14개 채널을 서브객체로 그루핑 (기존 flat 패턴과의 절충 — 채널 많음)
   collabBoard: {
     list: (): Promise<unknown[]> => ipcRenderer.invoke('collab-board:list'),
-    create: (args: { name?: string }): Promise<unknown> =>
-      ipcRenderer.invoke('collab-board:create', args),
+    create: (args: {
+      name?: string;
+      templateId?: string;
+      userTemplateId?: string;
+    }): Promise<unknown> => ipcRenderer.invoke('collab-board:create', args),
+    userTemplateList: (): Promise<unknown[]> =>
+      ipcRenderer.invoke('collab-board:user-template-list'),
+    userTemplateSave: (args: { id: string; name?: string }): Promise<unknown> =>
+      ipcRenderer.invoke('collab-board:user-template-save', args),
+    userTemplateDelete: (args: { id: string }): Promise<{ ok: true }> =>
+      ipcRenderer.invoke('collab-board:user-template-delete', args),
     rename: (args: { id: string; name: string }): Promise<unknown> =>
       ipcRenderer.invoke('collab-board:rename', args),
     delete: (args: { id: string }): Promise<{ ok: true }> =>

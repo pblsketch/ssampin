@@ -1,4 +1,5 @@
 import type { Board } from '../entities/Board';
+import type { BoardTemplateId } from '../entities/BoardTemplate';
 import type { BoardId } from '../valueObjects/BoardId';
 
 /**
@@ -12,8 +13,11 @@ export interface IBoardRepository {
   listAll(): Promise<Board[]>;
   /** 단일 보드 조회 */
   get(id: BoardId): Promise<Board | null>;
-  /** 새 보드 생성 (id는 구현체가 부여) */
-  create(input: { readonly name: string }): Promise<Board>;
+  /** 새 보드 생성 (id는 구현체가 부여). templateId 는 메타 기록용 — 스냅샷 시딩은 유스케이스 담당 */
+  create(input: {
+    readonly name: string;
+    readonly templateId?: BoardTemplateId | null;
+  }): Promise<Board>;
   /** 이름 변경 */
   rename(id: BoardId, name: string): Promise<Board>;
   /** 보드 삭제 (세션 실행 중이면 거부) */

@@ -16,6 +16,7 @@ import { app, BrowserWindow, ipcMain } from 'electron';
 
 import {
   ManageBoard,
+  ManageUserTemplates,
   StartBoardSession,
   EndBoardSession,
   SaveBoardSnapshot,
@@ -25,13 +26,19 @@ import {
 import {
   AUTO_SAVE_INTERVAL_MS,
   BoardFilePersistence,
+  BoardSnapshotCodec,
+  BoardTemplateSeeder,
   BoardTunnelCoordinator,
   FileBoardRepository,
+  FileUserTemplateRepo,
   YDocBoardServer,
   generateBoardHTML,
 } from '../../src/infrastructure/board';
 import type { BoardId } from '../../src/domain/valueObjects/BoardId';
 import type { Board } from '../../src/domain/entities/Board';
+import { isBoardTemplateId } from '../../src/domain/entities/BoardTemplate';
+import type { UserTemplateMeta } from '../../src/domain/entities/UserTemplate';
+import type { IUserTemplateRepo } from '../../src/domain/ports/IUserTemplateRepo';
 import type { IBoardRepository } from '../../src/domain/repositories/IBoardRepository';
 import type { IBoardServerPort } from '../../src/domain/ports/IBoardServerPort';
 import type { IBoardTunnelPort } from '../../src/domain/ports/IBoardTunnelPort';
@@ -50,7 +57,9 @@ const tunnelDriver = {
    * (Design §12 Q6 신설 예정)
    */
   subscribeExit: (_cb: (code: number | null) => void): (() => void) => {
-    return () => { /* no-op */ };
+    return () => {
+      /* no-op */
+    };
   },
 };
 
@@ -62,6 +71,7 @@ let persistence: BoardFilePersistence | null = null;
 let repo: IBoardRepository | null = null;
 let serverPort: IBoardServerPort | null = null;
 let tunnelPort: IBoardTunnelPort | null = null;
+let userTemplateRepo: IUserTemplateRepo | null = null;
 
 export function registerBoardHandlers(mainWindow: BrowserWindow): void {
   // idempotent 초기화 (main.ts에서 한 번만 호출되지만 방어적)
@@ -70,9 +80,20 @@ export function registerBoardHandlers(mainWindow: BrowserWindow): void {
     repo = new FileBoardRepository(persistence);
     serverPort = new YDocBoardServer((ctx) => generateBoardHTML(ctx));
     tunnelPort = new BoardTunnelCoordinator(tunnelDriver);
+    userTemplateRepo = new FileUserTemplateRepo(app.getPath('userData'));
   }
 
-  const manage = new ManageBoard(repo);
+  const snapshotCodec = new BoardSnapshotCodec();
+  const manage = new ManageBoard(
+    repo,
+    new BoardTemplateSeeder(),
+    userTemplateRepo ?? undefined,
+    snapshotCodec,
+  );
+  const userTemplates = new ManageUserTemplates(
+    userTemplateRepo as IUserTemplateRepo,
+    snapshotCodec,
+  );
   const start = new StartBoardSession(repo, serverPort, tunnelPort, AUTO_SAVE_INTERVAL_MS);
   const end = new EndBoardSession(repo, serverPort, tunnelPort);
   const saveSnapshot = new SaveBoardSnapshot(repo);
@@ -89,9 +110,59 @@ export function registerBoardHandlers(mainWindow: BrowserWindow): void {
     return manage.listAll();
   });
 
-  ipcMain.handle('collab-board:create', async (_e, args: { name?: string }): Promise<Board> => {
-    return manage.create(args.name);
+  ipcMain.handle(
+    'collab-board:create',
+    async (
+      _e,
+      args: { name?: string; templateId?: string; userTemplateId?: string },
+    ): Promise<Board> => {
+      // PDCA-4 (G006): "내 템플릿" 기반 생성이 우선
+      if (args.userTemplateId) {
+        return manage.createFromUserTemplate(args.name, args.userTemplateId);
+      }
+      // renderer 신뢰하지 않음 — 알려진 템플릿 id 만 시딩 (그 외는 빈 보드)
+      const templateId = isBoardTemplateId(args.templateId) ? args.templateId : null;
+      return manage.create(args.name, templateId);
+    },
+  );
+
+  // === R→M: 내 템플릿 (PDCA-4 / G006) ===
+
+  ipcMain.handle('collab-board:user-template-list', async (): Promise<UserTemplateMeta[]> => {
+    return userTemplates.listAll();
   });
+
+  ipcMain.handle(
+    'collab-board:user-template-save',
+    async (_e, args: { id: BoardId; name?: string }): Promise<UserTemplateMeta> => {
+      // 활성 세션 보드면 실시간 Y.Doc 에서 직접 인코딩 (30초 자동 저장 지연 회피),
+      // 아니면 저장된 .ybin 스냅샷 사용.
+      let snapshot: Uint8Array | null = null;
+      if (activeRuntime && activeRuntime.result.boardId === args.id) {
+        const live = activeRuntime.handle.encodeState();
+        if (live.byteLength > 0) snapshot = live;
+      }
+      if (!snapshot) {
+        snapshot = await (repo as IBoardRepository).loadSnapshot(args.id);
+      }
+      if (!snapshot) {
+        throw new Error('BOARD_SNAPSHOT_NOT_FOUND');
+      }
+      const { elements: _elements, ...meta } = await userTemplates.saveFromSnapshot(
+        args.name,
+        snapshot,
+      );
+      return meta;
+    },
+  );
+
+  ipcMain.handle(
+    'collab-board:user-template-delete',
+    async (_e, args: { id: string }): Promise<{ ok: true }> => {
+      await userTemplates.delete(args.id);
+      return { ok: true };
+    },
+  );
 
   ipcMain.handle(
     'collab-board:rename',
@@ -100,14 +171,17 @@ export function registerBoardHandlers(mainWindow: BrowserWindow): void {
     },
   );
 
-  ipcMain.handle('collab-board:delete', async (_e, args: { id: BoardId }): Promise<{ ok: true }> => {
-    // 활성 세션 보드는 먼저 종료해야 삭제 가능
-    if (activeRuntime && activeRuntime.result.boardId === args.id) {
-      throw new Error('BOARD_SESSION_ALREADY_RUNNING');
-    }
-    await manage.delete(args.id);
-    return { ok: true };
-  });
+  ipcMain.handle(
+    'collab-board:delete',
+    async (_e, args: { id: BoardId }): Promise<{ ok: true }> => {
+      // 활성 세션 보드는 먼저 종료해야 삭제 가능
+      if (activeRuntime && activeRuntime.result.boardId === args.id) {
+        throw new Error('BOARD_SESSION_ALREADY_RUNNING');
+      }
+      await manage.delete(args.id);
+      return { ok: true };
+    },
+  );
 
   // === R→M: 세션 기동·종료·조회·저장 ===
 
@@ -131,7 +205,7 @@ export function registerBoardHandlers(mainWindow: BrowserWindow): void {
         return result;
       } catch (err) {
         if (err instanceof TunnelBusyError) {
-          throw new Error(`BOARD_TUNNEL_BUSY:${err.existing}`);
+          throw new Error(`BOARD_TUNNEL_BUSY:${err.existing}`, { cause: err });
         }
         throw err;
       }
@@ -140,10 +214,7 @@ export function registerBoardHandlers(mainWindow: BrowserWindow): void {
 
   ipcMain.handle(
     'collab-board:end-session',
-    async (
-      _e,
-      args: { id: BoardId; forceSave: boolean },
-    ): Promise<{ ok: true }> => {
+    async (_e, args: { id: BoardId; forceSave: boolean }): Promise<{ ok: true }> => {
       if (!activeRuntime || activeRuntime.result.boardId !== args.id) {
         return { ok: true }; // idempotent
       }
