@@ -5,7 +5,9 @@
  *
  * - ko 음성 열거 → 이름 기반 남/여 분류 휴리스틱 (미분류는 여성 추정)
  * - 요청 성별 음성이 없으면 가용 ko 음성으로 폴백 (호출 측에 fallbackUsed 통지)
- * - voiceschanged 대응: 목록이 비어 있으면 이벤트/타임아웃까지 대기
+ * - voiceschanged 대응: 목록이 비어 있거나 **요청 성별이 아직 없으면** 이벤트/타임아웃까지 대기.
+ *   (Edge는 로컬 여성 Heami를 즉시 내놓고 온라인 남성 자연음성 InJoon 등은 늦게 도착 —
+ *    Heami만 보고 조기 반환하면 남성이 영영 안 잡히던 버그를 이 대기로 해소)
  * - rate 0.95 · lang 'ko-KR' · 낭독 길이 기반 watchdog 타임아웃(실패해도 반드시 resolve)
  * - unlockTts: 사용자 제스처 안에서 무음 발화 1회 → autoplay 정책 해제
  *   (AudioContext unlock과 별개 — speechSynthesis는 자체 제스처 요구)
@@ -15,6 +17,8 @@ import { useCallback, useEffect, useRef } from 'react';
 import type { MemoTtsVoice } from './driveBoardApi';
 
 const VOICES_WAIT_TIMEOUT_MS = 1500;
+/** 요청 성별 음성이 늦게 도착하는 경우(Edge 온라인 자연음성) 추가 대기 한도 */
+const PREFERRED_VOICE_WAIT_MS = 2500;
 const WATCHDOG_BASE_MS = 8000;
 const WATCHDOG_PER_CHAR_MS = 350;
 const WATCHDOG_MAX_MS = 120000;
@@ -101,22 +105,46 @@ function classifyVoiceGender(voice: SpeechSynthesisVoice): MemoTtsVoice {
   return 'female';
 }
 
-/** ko 음성 목록 — 비어 있으면 voiceschanged/타임아웃까지 대기 (목록 비동기 로드 대응) */
-function loadKoreanVoices(synth: SpeechSynthesis): Promise<SpeechSynthesisVoice[]> {
+/**
+ * ko 음성 목록 — 비동기 로드 대응으로 voiceschanged/타임아웃까지 대기.
+ *
+ * `wantGender`가 주어지면, 그 성별 음성이 목록에 나타날 때까지 기다린다.
+ * Edge는 로컬 여성(Heami)을 즉시, 온라인 남성 자연음성(InJoon 등)을 늦게 내놓으므로,
+ * 여성만 있다고 조기 반환하면 남성을 영영 못 잡는다. 대기 한도는 두 가지:
+ * - 목록이 아예 비어 있으면 VOICES_WAIT_TIMEOUT_MS(1.5s)
+ * - 목록은 있으나 원하는 성별이 아직 없으면 PREFERRED_VOICE_WAIT_MS(2.5s)
+ */
+function loadKoreanVoices(
+  synth: SpeechSynthesis,
+  wantGender?: MemoTtsVoice,
+): Promise<SpeechSynthesisVoice[]> {
+  const hasWanted = (list: readonly SpeechSynthesisVoice[]): boolean =>
+    wantGender === undefined || list.some((v) => classifyVoiceGender(v) === wantGender);
+
   const immediate = synth.getVoices().filter(isKoreanVoice);
-  if (immediate.length > 0) return Promise.resolve(immediate);
+  if (immediate.length > 0 && hasWanted(immediate)) {
+    return Promise.resolve(immediate);
+  }
+
+  // 목록이 비어 있으면 짧게, 원하는 성별만 없으면 조금 더 기다린다.
+  const timeoutMs = immediate.length === 0 ? VOICES_WAIT_TIMEOUT_MS : PREFERRED_VOICE_WAIT_MS;
 
   return new Promise((resolve) => {
     let settled = false;
     const finish = () => {
       if (settled) return;
       settled = true;
-      synth.removeEventListener('voiceschanged', finish);
+      synth.removeEventListener('voiceschanged', onChange);
       clearTimeout(timer);
       resolve(synth.getVoices().filter(isKoreanVoice));
     };
-    const timer = setTimeout(finish, VOICES_WAIT_TIMEOUT_MS);
-    synth.addEventListener('voiceschanged', finish);
+    const onChange = () => {
+      const list = synth.getVoices().filter(isKoreanVoice);
+      // 원하는 성별이 도착하면 즉시 종료 (남성 자연음성 늦게 도착하는 케이스)
+      if (list.length > 0 && hasWanted(list)) finish();
+    };
+    const timer = setTimeout(finish, timeoutMs);
+    synth.addEventListener('voiceschanged', onChange);
   });
 }
 
@@ -157,7 +185,7 @@ export function useMemoTts(): MemoTts {
 
       synth.cancel(); // 진행 중 낭독 취소 — 새 신호가 항상 우선
 
-      const koVoices = await loadKoreanVoices(synth);
+      const koVoices = await loadKoreanVoices(synth, preference);
       let voice = koVoices.find((v) => classifyVoiceGender(v) === preference) ?? null;
       let fallbackUsed = false;
       if (voice === null) {
