@@ -53,6 +53,7 @@ import { AssignmentTool } from '@adapters/components/Tools/Assignment/Assignment
 import { AssignmentDetail } from '@adapters/components/Tools/Assignment/AssignmentDetail';
 import { ToolChalkboard } from '@adapters/components/Tools/ToolChalkboard';
 import { ToolCollabBoard } from '@adapters/components/Tools/ToolCollabBoard';
+import { ToolMarkdownConvert } from '@adapters/components/Tools/ToolMarkdownConvert';
 import { ToolMyEmoji } from '@adapters/components/Tools/ToolMyEmoji';
 import { StickerPickerApp } from '@adapters/components/StickerPicker/StickerPickerApp';
 import { ToolValueLine, ToolTrafficLightDiscussion } from '@adapters/components/Tools/Discussion';
@@ -393,6 +394,11 @@ function renderPage(
   if (page === 'tool-sticker') {
     // 단일 모드 전용 (듀얼 모드 미지원). 모달이 많고 특정 흐름이 있어 좌우 분할 부적합.
     return <ToolMyEmoji onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />;
+  }
+  if (page === 'tool-markdown-convert') {
+    return wrap(
+      <ToolMarkdownConvert onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />,
+    );
   }
   if (page === 'tool-assignment') {
     return (

@@ -44,14 +44,12 @@ export const TOOLS: ToolCard[] = [
     emoji: '🤝',
     name: '교실 약속 정하기',
     description: '학생들과 만약-그러면 실행 약속을 함께 정합니다',
-    badge: 'NEW',
   },
   {
     id: 'tool-signature-roster',
     emoji: '✍️',
     name: '서명받기',
     description: '명단에 QR로 서명을 받아 구글시트 등록부로',
-    badge: 'BETA',
   },
   {
     id: 'tool-wordcloud',
@@ -85,14 +83,12 @@ export const TOOLS: ToolCard[] = [
     emoji: '🎨',
     name: '협업 보드',
     description: '학생들과 실시간 협업 작업하기',
-    badge: 'BETA',
   },
   {
     id: 'tool-sticker',
     emoji: '😎',
     name: '내 이모티콘',
     description: '단축키 한 번으로 어디든 붙여넣는 나만의 이모티콘',
-    badge: 'NEW',
   },
   // 실시간 담벼락: 다음 릴리즈 출시 예정 — BETA로 공개.
   {
@@ -100,11 +96,17 @@ export const TOOLS: ToolCard[] = [
     emoji: '🗂️',
     name: '실시간 담벼락',
     description: '학생 글을 실시간으로 모아 칸반형·자유 배치형으로 정리',
-    badge: 'BETA',
   },
   // 인터랙티브 슬라이드: v2.2.x 정식 출시 예정 — 완성도 보강 중이라 v2.0.6에서도 사용자 노출 일시 보류 (코드·라우팅·InteractiveSlides 폴더 모두 보존).
   // { id: 'tool-interactive-slides', emoji: '🎞️', name: '인터랙티브 슬라이드', description: 'Google Slides·PDF 위에 투표·텍스트·워드클라우드를 띄워 실시간 응답', badge: 'BETA' },
   { id: 'tool-forms', emoji: '📄', name: '서식', description: 'HWPX · PDF · Excel 서식 모아보기' },
+  {
+    id: 'tool-markdown-convert',
+    emoji: '📑',
+    name: '마크다운 변환기',
+    description: '한글·PDF·엑셀을 AI에 쓰기 좋은 글로 (개인정보 가리기)',
+    badge: 'NEW',
+  },
   {
     id: 'tool-supsori',
     emoji: '🌳',

@@ -23,10 +23,7 @@ export function MultiSurveyLiveBoardView({
   onClose,
 }: MultiSurveyLiveBoardViewProps) {
   // 텍스트 질문만 대상 (choice/scale은 워드월에 부적합)
-  const textQuestions = useMemo(
-    () => questions.filter((q) => q.type === 'text'),
-    [questions],
-  );
+  const textQuestions = useMemo(() => questions.filter((q) => q.type === 'text'), [questions]);
 
   const [selectedQuestionId, setSelectedQuestionId] = useState<string | null>(
     textQuestions[0]?.id ?? null,
@@ -84,7 +81,9 @@ export function MultiSurveyLiveBoardView({
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 bg-sp-bg p-8 text-center">
         <p className="text-lg font-semibold text-sp-text">피드백 월에 표시할 질문이 없어요</p>
-        <p className="text-sm text-sp-muted">텍스트(주관식) 질문이 하나 이상 있어야 라이브 월로 볼 수 있어요</p>
+        <p className="text-sm text-sp-muted">
+          텍스트(주관식) 질문이 하나 이상 있어야 라이브 월로 볼 수 있어요
+        </p>
         <button
           onClick={onClose}
           className="rounded-lg border border-sp-border bg-sp-card px-4 py-2 text-sm text-sp-text hover:border-sp-accent"
@@ -99,35 +98,13 @@ export function MultiSurveyLiveBoardView({
 
   return (
     <div className="flex h-full flex-col bg-sp-bg">
-      {/* 베타 안내 — Phase 1+2 범위 (프로젝터 풀스크린 모드에서는 숨김) */}
-      {!isFullscreen && (
-        <div className="shrink-0 bg-sp-card/60 border-b border-amber-400/30 px-5 py-2.5 flex items-start gap-2.5">
-          <span className="material-symbols-outlined text-amber-400 text-icon-sm mt-0.5">science</span>
-          <div className="text-[13px] text-sp-text leading-relaxed">
-            <span className="inline-block text-caption font-extrabold tracking-wider px-2 py-[3px] mr-2 rounded bg-amber-400 text-amber-950 align-middle">
-              BETA
-            </span>
-            "발제 피드백 응답 모아보기"는 아직 개선 중이에요. Phase 3(고급 필터·정렬 등)는 다음 업데이트에 포함 예정이며, 불편한 점은{' '}
-            <a
-              href="https://forms.gle/o1X4zLYocUpFKCzy7"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-amber-300 underline underline-offset-2 font-semibold hover:text-amber-200 transition-colors"
-            >
-              피드백 남기기
-            </a>
-            로 알려주세요.
-          </div>
-        </div>
-      )}
-
       {/* 상단 바 */}
       <div className="flex shrink-0 items-center justify-between gap-3 border-b border-sp-border bg-sp-card px-5 py-3">
         <div className="min-w-0 flex-1">
-          {title && (
-            <p className="truncate text-xs text-sp-muted">{title}</p>
-          )}
-          <p className={`truncate font-bold text-sp-text ${isFullscreen ? 'text-2xl' : 'text-base'}`}>
+          {title && <p className="truncate text-xs text-sp-muted">{title}</p>}
+          <p
+            className={`truncate font-bold text-sp-text ${isFullscreen ? 'text-2xl' : 'text-base'}`}
+          >
             📋 {selectedQuestion?.question ?? '피드백 월'}
           </p>
         </div>
@@ -154,19 +131,22 @@ export function MultiSurveyLiveBoardView({
                 key={q.id}
                 onClick={() => setSelectedQuestionId(q.id)}
                 className={`shrink-0 rounded-md px-3 py-1 text-xs font-medium transition ${
-                  active
-                    ? 'bg-sp-accent text-white'
-                    : 'text-sp-muted hover:text-sp-text'
+                  active ? 'bg-sp-accent text-white' : 'text-sp-muted hover:text-sp-text'
                 }`}
                 title={q.question}
               >
-                Q{questions.indexOf(q) + 1}. {q.question.length > 20 ? q.question.slice(0, 20) + '…' : q.question}
-                <span className="ml-1 opacity-70">({
-                  submissions.filter((s) => {
-                    const a = s.answers.find((aa) => aa.questionId === q.id);
-                    return a && typeof a.value === 'string' && a.value.trim() !== '';
-                  }).length
-                })</span>
+                Q{questions.indexOf(q) + 1}.{' '}
+                {q.question.length > 20 ? q.question.slice(0, 20) + '…' : q.question}
+                <span className="ml-1 opacity-70">
+                  (
+                  {
+                    submissions.filter((s) => {
+                      const a = s.answers.find((aa) => aa.questionId === q.id);
+                      return a && typeof a.value === 'string' && a.value.trim() !== '';
+                    }).length
+                  }
+                  )
+                </span>
               </button>
             );
           })}

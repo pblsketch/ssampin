@@ -12,11 +12,11 @@ function collectEntries(dir) {
     if (st.isDirectory()) {
       entries.push(...collectEntries(full));
     } else if (
-      st.isFile()
-      && full.endsWith('.ts')
-      && !full.endsWith('.d.ts')
-      && !full.endsWith('.test.ts')
-      && !full.endsWith('.spec.ts')
+      st.isFile() &&
+      full.endsWith('.ts') &&
+      !full.endsWith('.d.ts') &&
+      !full.endsWith('.test.ts') &&
+      !full.endsWith('.spec.ts')
     ) {
       entries.push(full);
     }
@@ -41,7 +41,9 @@ await build({
   // undici: Node 18+ 내장 모듈. 번들 불필요, 런타임에 node의 내장으로 로드.
   // koffi: native FFI 바인딩. .node 바이너리는 dlopen으로 로드되며, asar 내부에서
   //        require하면 packaged 환경에서 실패한다. asarUnpack과 함께 external 처리.
-  external: ['electron', 'electron-updater', 'y-leveldb', 'undici', 'koffi'],
+  // kordoc: 마크다운 변환기 파서. ESM 기반 + optional 네이티브 의존성(pdfjs-dist 등)을
+  //         가지므로 번들하지 않고 런타임에 node_modules(asar 내부)에서 require한다.
+  external: ['electron', 'electron-updater', 'y-leveldb', 'undici', 'koffi', 'kordoc'],
   sourcemap: false,
 });
 

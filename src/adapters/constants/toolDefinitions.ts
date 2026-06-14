@@ -83,6 +83,12 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
     externalUrl: 'https://pblsketch.xyz',
   },
   { id: 'tool-forms', name: '서식', icon: '📄', color: 'bg-indigo-500/20 text-indigo-600' },
+  {
+    id: 'tool-markdown-convert',
+    name: '마크다운 변환기',
+    icon: '📑',
+    color: 'bg-teal-500/20 text-teal-600',
+  },
 ];
 
 export const DEFAULT_FAVORITE_TOOLS: readonly string[] = [

@@ -997,6 +997,57 @@ contextBridge.exposeInMainWorld('electronAPI', {
     printPdf: (relPath: string): Promise<void> => ipcRenderer.invoke('forms:printPdf', { relPath }),
   },
 
+  // === 마크다운 변환기 (markdown-convert) ===
+  // 파일 선택 + kordoc 파싱을 메인에서 일괄 수행 (파일 경로·원본 bytes 미노출, 로컬 전용).
+  markdownConvert: {
+    pickAndParse: (): Promise<
+      | { status: 'canceled' }
+      | {
+          status: 'ok';
+          fileName: string;
+          markdown: string;
+          format: string;
+          isImageBased: boolean;
+          warnings: string[];
+        }
+      | { status: 'error'; code: string; message: string }
+    > => ipcRenderer.invoke('markdown-convert:pick-and-parse'),
+    pickAndParseMulti: (): Promise<
+      Array<
+        | {
+            status: 'ok';
+            fileName: string;
+            markdown: string;
+            format: string;
+            isImageBased: boolean;
+            warnings: string[];
+          }
+        | { status: 'error'; code: string; message: string }
+      >
+    > => ipcRenderer.invoke('markdown-convert:pick-and-parse-multi'),
+    parseBuffer: (
+      bytes: Uint8Array,
+      fileName: string,
+    ): Promise<
+      | { status: 'canceled' }
+      | {
+          status: 'ok';
+          fileName: string;
+          markdown: string;
+          format: string;
+          isImageBased: boolean;
+          warnings: string[];
+        }
+      | { status: 'error'; code: string; message: string }
+    > => ipcRenderer.invoke('markdown-convert:parse-buffer', { bytes, fileName }),
+    saveZip: (
+      files: Array<{ name: string; text: string }>,
+      zipName?: string,
+    ): Promise<
+      { status: 'canceled' } | { status: 'saved' } | { status: 'error'; message: string }
+    > => ipcRenderer.invoke('markdown-convert:save-zip', { files, zipName }),
+  },
+
   // === 협업 보드 (collab-board) ===
   // Design §4.1 14개 채널을 서브객체로 그루핑 (기존 flat 패턴과의 절충 — 채널 많음)
   collabBoard: {

@@ -20,6 +20,12 @@ files:
       # Phase 0 spike isolation: prototype/realtime-tool-spike/는 G001 산출물이며 main 빌드에서 격리한다.
       # Plan D8 + G002 A.7 결정 (builderFiles.meta.test가 이 라인 부재 시 fail).
       - '!prototype/**'
+      # 마크다운 변환기(kordoc) 수식 OCR용 optional 의존성은 미사용 — 설치파일에서 제외해 용량을 줄인다.
+      # parse()는 이들이 없어도 정상 동작한다(경고만 남김). sharp 는 쌤핀이 직접 쓰므로 제외하지 않는다.
+      - '!node_modules/onnxruntime-node/**'
+      - '!node_modules/onnxruntime-common/**'
+      - '!node_modules/@huggingface/**'
+      - '!node_modules/@hyzyla/**'
 # 네이티브 모듈은 asar 내부에서 require할 수 없으므로 언팩 필요.
 # @nut-tree-fork/nut-js (스티커 자동 붙여넣기용) → libnut-{win32,darwin,linux} 의
 # .node 바이너리가 OS dlopen으로 로드되어야 한다. 미언팩 시 win32에서

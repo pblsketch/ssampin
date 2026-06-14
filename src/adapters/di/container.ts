@@ -126,6 +126,14 @@ import { CopyMissingList } from '@usecases/assignment/CopyMissingList';
 
 import { ManageRubrics } from '@usecases/rubric/ManageRubrics';
 
+import type { IDocumentParserPort } from '@domain/ports/IDocumentParserPort';
+import type { IMaskMappingRepository } from '@domain/ports/IMaskMappingRepository';
+import { KordocParserAdapter } from '@infrastructure/parse/KordocParserAdapter';
+import { SecureMaskMappingRepository } from '@infrastructure/privacy/SecureMaskMappingRepository';
+import { ConvertDocument } from '@usecases/markdownConvert/ConvertDocument';
+import { MaskMarkdown } from '@usecases/markdownConvert/MaskMarkdown';
+import { ManageMaskSessions } from '@usecases/markdownConvert/ManageMaskSessions';
+
 import { PublishSignatureSession } from '@usecases/signature/PublishSignatureSession';
 import { SubmitMonitorSignature } from '@usecases/signature/SubmitMonitorSignature';
 import { ExportRegisterToSheet } from '@usecases/signature/ExportRegisterToSheet';
@@ -334,6 +342,15 @@ export const surveyRepository: ISurveyRepository = new JsonSurveyRepository(stor
 export const rubricRepository: IRubricRepository = new JsonRubricRepository(storage);
 
 export const manageRubrics = new ManageRubrics(rubricRepository);
+
+// === 마크다운 변환기 (markdown-convert) ===
+// 파싱은 KordocParserAdapter → IPC → kordoc(메인, 로컬). 복원표는 secureStorage 암호화 저장.
+// 주의: maskMappingRepository는 개인정보(실명↔별칭)이므로 syncRegistry에 등록하지 않는다(GDrive 제외).
+export const documentParserPort: IDocumentParserPort = new KordocParserAdapter();
+export const maskMappingRepository: IMaskMappingRepository = new SecureMaskMappingRepository();
+export const convertDocument = new ConvertDocument(documentParserPort);
+export const maskMarkdown = new MaskMarkdown();
+export const manageMaskSessions = new ManageMaskSessions(maskMappingRepository);
 
 export const surveySupabaseClient = new SurveySupabaseClient();
 

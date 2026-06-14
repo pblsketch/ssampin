@@ -624,6 +624,21 @@ interface ElectronAPI {
     printPdf: (relPath: string) => Promise<void>;
   };
 
+  // === 마크다운 변환기 (markdown-convert) ===
+  markdownConvert?: {
+    /** 파일 선택 다이얼로그 + kordoc 파싱(로컬). 결과 마크다운만 반환(경로·원본 미노출). */
+    pickAndParse: () => Promise<MarkdownConvertResult>;
+    /** 다중 선택 → 각각 파싱(여러 문서 동시 변환). 취소 시 빈 배열. */
+    pickAndParseMulti: () => Promise<MarkdownConvertResult[]>;
+    /** 드롭한 파일 bytes → kordoc 파싱(로컬). */
+    parseBuffer: (bytes: Uint8Array, fileName: string) => Promise<MarkdownConvertResult>;
+    /** 개별 저장 — 각 파일을 개별 .md 로 묶은 ZIP 한 개로 저장(저장창 1회). */
+    saveZip: (
+      files: Array<{ name: string; text: string }>,
+      zipName?: string,
+    ) => Promise<MarkdownSaveZipResult>;
+  };
+
   // === 협업 보드 (collab-board) — Design §4.1 ===
   collabBoard?: {
     list: () => Promise<CollabBoardMeta[]>;
@@ -866,6 +881,25 @@ interface CollabBoardSessionStart {
   qrDataUrl: string;
   startedAt: number;
 }
+
+/** 마크다운 변환기 파싱 결과 (markdownConvert.pickAndParse) — 파일 경로/원본 미포함 */
+type MarkdownConvertResult =
+  | { status: 'canceled' }
+  | {
+      status: 'ok';
+      fileName: string;
+      markdown: string;
+      format: string;
+      isImageBased: boolean;
+      warnings: string[];
+    }
+  | { status: 'error'; code: string; message: string };
+
+/** 개별 저장(ZIP) 결과 (markdownConvert.saveZip) */
+type MarkdownSaveZipResult =
+  | { status: 'canceled' }
+  | { status: 'saved' }
+  | { status: 'error'; message: string };
 
 interface Window {
   electronAPI?: ElectronAPI;

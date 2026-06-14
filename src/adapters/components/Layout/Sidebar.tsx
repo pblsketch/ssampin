@@ -44,6 +44,7 @@ export type PageId =
   | 'tool-traffic-discussion'
   | 'tool-collab-board'
   | 'tool-sticker'
+  | 'tool-markdown-convert'
   | 'dual-tool-view'
   | 'settings';
 
