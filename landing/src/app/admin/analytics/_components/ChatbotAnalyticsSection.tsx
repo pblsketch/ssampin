@@ -198,28 +198,66 @@ export function ChatbotAnalyticsSection({
         <div className="mt-6">
           <h3 className="text-sm text-gray-400 mb-3">최근 버그/기능 요청</h3>
           <div className="space-y-2">
-            {chatEscalations.slice(0, 5).map((e) => (
-              <div key={e.id} className="bg-gray-800/50 rounded-lg p-3">
-                <div className="flex items-center gap-2 mb-1">
-                  <span
-                    className={`text-xs px-2 py-0.5 rounded ${
-                      e.type === 'bug'
-                        ? 'bg-red-500/20 text-red-400'
-                        : e.type === 'feature'
-                          ? 'bg-blue-500/20 text-blue-400'
-                          : 'bg-gray-500/20 text-gray-400'
-                    }`}
-                  >
-                    {e.type === 'bug' ? 'BUG' : e.type === 'feature' ? 'FEATURE' : e.type}
-                  </span>
-                  <span className="text-xs text-gray-500">{e.created_at_kst}</span>
-                </div>
-                <p className="text-sm text-gray-300">{e.summary}</p>
-                {e.user_message_preview && (
-                  <p className="text-xs text-gray-500 mt-1">{e.user_message_preview}</p>
-                )}
-              </div>
-            ))}
+            {chatEscalations.slice(0, 5).map((e) => {
+              const context = e.conversation_context ?? [];
+              return (
+                <details key={e.id} className="group bg-gray-800/50 rounded-lg">
+                  <summary className="cursor-pointer list-none p-3 hover:bg-gray-800/70 rounded-lg">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span
+                        className={`text-xs px-2 py-0.5 rounded ${
+                          e.type === 'bug'
+                            ? 'bg-red-500/20 text-red-400'
+                            : e.type === 'feature'
+                              ? 'bg-blue-500/20 text-blue-400'
+                              : 'bg-gray-500/20 text-gray-400'
+                        }`}
+                      >
+                        {e.type === 'bug' ? 'BUG' : e.type === 'feature' ? 'FEATURE' : e.type}
+                      </span>
+                      <span className="text-xs text-gray-500">{e.created_at_kst}</span>
+                      <span className="ml-auto text-[10px] text-gray-500 group-open:text-blue-400">
+                        대화 보기 <span className="group-open:hidden">▾</span>
+                        <span className="hidden group-open:inline">▴</span>
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-300">{e.summary}</p>
+                    {e.user_message_preview && (
+                      <p className="text-xs text-gray-500 mt-1 group-open:hidden">
+                        {e.user_message_preview}
+                      </p>
+                    )}
+                  </summary>
+                  <div className="border-t border-gray-700/40 px-3 pb-3 pt-2 space-y-1.5">
+                    {context.length === 0 ? (
+                      <p className="text-xs text-gray-500">저장된 대화 맥락이 없습니다</p>
+                    ) : (
+                      context.map((m, i) => (
+                        <div
+                          key={i}
+                          className={`rounded px-2 py-1.5 text-xs ${
+                            m.role === 'user'
+                              ? 'bg-blue-900/20 text-blue-200'
+                              : 'bg-gray-900/60 text-gray-300'
+                          }`}
+                        >
+                          <span
+                            className={`text-[10px] font-bold mr-1.5 ${
+                              m.role === 'user' ? 'text-blue-300' : 'text-gray-400'
+                            }`}
+                          >
+                            {m.role === 'user' ? '질문' : '답변'}
+                          </span>
+                          <span className="whitespace-pre-wrap break-words leading-relaxed">
+                            {m.content}
+                          </span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </details>
+              );
+            })}
           </div>
         </div>
       )}

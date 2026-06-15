@@ -78,12 +78,22 @@ export interface ChatDepthRow {
   pct: number;
 }
 
+/** 에스컬레이션 신고 시점에 저장된 대화 맥락 한 줄 */
+export interface EscalationMessage {
+  role: string;
+  content: string;
+  created_at: string;
+}
+
 export interface ChatEscalationRow {
   id: string;
   type: string;
   summary: string;
   user_message_preview: string;
   created_at_kst: string;
+  session_id: string;
+  /** 신고 시점 대화 맥락 (ssampin-escalate 가 적재, 최근 메시지 순서대로) */
+  conversation_context: EscalationMessage[] | null;
 }
 
 export interface ChatConfidenceRow {
