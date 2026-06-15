@@ -300,6 +300,15 @@ export const SYNC_REGISTRY: SyncDomain[] = [
       await useRubricStore.getState().load();
     },
   },
+  // 27. observations ─ 학생별 수업 기록 (특기사항/관찰 기록)
+  {
+    fileName: 'observations',
+    reload: async () => {
+      const { useObservationStore } = await import('@adapters/stores/useObservationStore');
+      useObservationStore.setState({ loaded: false });
+      await useObservationStore.getState().load();
+    },
+  },
 ];
 
 /**

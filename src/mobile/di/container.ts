@@ -20,6 +20,7 @@ import type { IDDayRepository } from '@domain/repositories/IDDayRepository';
 import type { IGoogleAuthPort } from '@domain/ports/IGoogleAuthPort';
 import type { IDriveSyncPort } from '@domain/ports/IDriveSyncPort';
 import type { IDriveSyncRepository } from '@domain/repositories/IDriveSyncRepository';
+import type { IObservationRepository } from '@domain/repositories/IObservationRepository';
 
 import { IndexedDBStorageAdapter } from '@infrastructure/storage/IndexedDBStorageAdapter';
 import { NeisApiClient } from '@infrastructure/neis/NeisApiClient';
@@ -40,6 +41,7 @@ import { JsonTeachingClassRepository } from '@adapters/repositories/JsonTeaching
 import { JsonBookmarkRepository } from '@adapters/repositories/JsonBookmarkRepository';
 import { JsonDDayRepository } from '@adapters/repositories/JsonDDayRepository';
 import { JsonDriveSyncRepository } from '@adapters/repositories/JsonDriveSyncRepository';
+import { JsonObservationRepository } from '@adapters/repositories/JsonObservationRepository';
 import { AssignmentSupabaseClient } from '@infrastructure/supabase/AssignmentSupabaseClient';
 import { SurveySupabaseClient } from '@infrastructure/supabase/SurveySupabaseClient';
 
@@ -53,14 +55,20 @@ export const eventsRepository: IEventsRepository = new JsonEventsRepository(stor
 export const memoRepository: IMemoRepository = new JsonMemoRepository(storage);
 export const todoRepository: ITodoRepository = new JsonTodoRepository(storage);
 export const settingsRepository: ISettingsRepository = new JsonSettingsRepository(storage);
-export const studentRecordsRepository: IStudentRecordsRepository = new JsonStudentRecordsRepository(storage);
+export const studentRecordsRepository: IStudentRecordsRepository = new JsonStudentRecordsRepository(
+  storage,
+);
 export const messageRepository: IMessageRepository = new JsonMessageRepository(storage);
 export const studentRepository: IStudentRepository = new JsonStudentRepository(storage);
-export const seatConstraintsRepository: ISeatConstraintsRepository = new JsonSeatConstraintsRepository(storage);
-export const teachingClassRepository: ITeachingClassRepository = new JsonTeachingClassRepository(storage);
+export const seatConstraintsRepository: ISeatConstraintsRepository =
+  new JsonSeatConstraintsRepository(storage);
+export const teachingClassRepository: ITeachingClassRepository = new JsonTeachingClassRepository(
+  storage,
+);
 export const bookmarkRepository: IBookmarkRepository = new JsonBookmarkRepository(storage);
 export const ddayRepository: IDDayRepository = new JsonDDayRepository(storage);
 export const driveSyncRepository: IDriveSyncRepository = new JsonDriveSyncRepository(storage);
+export const observationRepository: IObservationRepository = new JsonObservationRepository(storage);
 
 // === Supabase Clients (과제/설문 실시간 조회용) ===
 export const assignmentSupabaseClient = new AssignmentSupabaseClient();
@@ -76,9 +84,7 @@ export const googleAuthPort: IGoogleAuthPort = new GoogleOAuthBrowserClient();
 let _driveSyncAdapter: DriveSyncAdapter | null = null;
 let _lastTokenGetter: (() => Promise<string>) | null = null;
 
-export function getDriveSyncAdapter(
-  getAccessToken: () => Promise<string>,
-): IDriveSyncPort {
+export function getDriveSyncAdapter(getAccessToken: () => Promise<string>): IDriveSyncPort {
   if (!_driveSyncAdapter || _lastTokenGetter !== getAccessToken) {
     _driveSyncAdapter = new DriveSyncAdapter(getAccessToken);
     _lastTokenGetter = getAccessToken;

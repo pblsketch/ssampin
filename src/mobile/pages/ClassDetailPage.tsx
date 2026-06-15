@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { ClassAttendanceTab } from '@mobile/components/Class/ClassAttendanceTab';
 import { ClassProgressTab } from '@mobile/components/Class/ClassProgressTab';
+import { ClassObservationTab } from '@mobile/components/Class/ClassObservationTab';
 
-type ClassSubTab = 'attendance' | 'progress';
+type ClassSubTab = 'attendance' | 'progress' | 'observation';
 
 interface ClassDetailPageProps {
   classId: string;
@@ -48,7 +49,7 @@ export function ClassDetailPage({
         role="tablist"
         aria-label="학급 서브탭"
       >
-        {(['attendance', 'progress'] as const).map((tab) => (
+        {(['attendance', 'progress', 'observation'] as const).map((tab) => (
           <button
             key={tab}
             role="tab"
@@ -63,7 +64,7 @@ export function ClassDetailPage({
             }`}
             style={{ minHeight: 44 }}
           >
-            {tab === 'attendance' ? '출결' : '진도'}
+            {tab === 'attendance' ? '출결' : tab === 'progress' ? '진도' : '특기사항'}
           </button>
         ))}
       </div>
@@ -80,6 +81,9 @@ export function ClassDetailPage({
         )}
         {activeSubTab === 'progress' && (
           <ClassProgressTab classId={classId} className={className} />
+        )}
+        {activeSubTab === 'observation' && (
+          <ClassObservationTab classId={classId} className={className} />
         )}
       </div>
     </div>

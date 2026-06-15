@@ -29,51 +29,54 @@ function getMobileDeviceId(): string {
 // 순환 의존 방지: 런타임에 동적으로 import
 async function reloadAllStores(): Promise<void> {
   try {
-  const [
-    { useMobileSettingsStore },
-    { useMobileScheduleStore },
-    { useMobileStudentStore },
-    { useMobileSeatingStore },
-    { useMobileEventsStore },
-    { useMobileMemoStore },
-    { useMobileTodoStore },
-    { useMobileAttendanceStore },
-    { useMobileTeachingClassStore },
-    { useMobileStudentRecordsStore },
-    { useMobileProgressStore },
-    { useMobileAssignmentStore },
-    { useMobileSurveyToolStore },
-  ] = await Promise.all([
-    import('@mobile/stores/useMobileSettingsStore'),
-    import('@mobile/stores/useMobileScheduleStore'),
-    import('@mobile/stores/useMobileStudentStore'),
-    import('@mobile/stores/useMobileSeatingStore'),
-    import('@mobile/stores/useMobileEventsStore'),
-    import('@mobile/stores/useMobileMemoStore'),
-    import('@mobile/stores/useMobileTodoStore'),
-    import('@mobile/stores/useMobileAttendanceStore'),
-    import('@mobile/stores/useMobileTeachingClassStore'),
-    import('@mobile/stores/useMobileStudentRecordsStore'),
-    import('@mobile/stores/useMobileProgressStore'),
-    import('@mobile/stores/useMobileAssignmentStore'),
-    import('@mobile/stores/useMobileSurveyToolStore'),
-  ]);
+    const [
+      { useMobileSettingsStore },
+      { useMobileScheduleStore },
+      { useMobileStudentStore },
+      { useMobileSeatingStore },
+      { useMobileEventsStore },
+      { useMobileMemoStore },
+      { useMobileTodoStore },
+      { useMobileAttendanceStore },
+      { useMobileTeachingClassStore },
+      { useMobileStudentRecordsStore },
+      { useMobileProgressStore },
+      { useMobileAssignmentStore },
+      { useMobileSurveyToolStore },
+      { useMobileObservationStore },
+    ] = await Promise.all([
+      import('@mobile/stores/useMobileSettingsStore'),
+      import('@mobile/stores/useMobileScheduleStore'),
+      import('@mobile/stores/useMobileStudentStore'),
+      import('@mobile/stores/useMobileSeatingStore'),
+      import('@mobile/stores/useMobileEventsStore'),
+      import('@mobile/stores/useMobileMemoStore'),
+      import('@mobile/stores/useMobileTodoStore'),
+      import('@mobile/stores/useMobileAttendanceStore'),
+      import('@mobile/stores/useMobileTeachingClassStore'),
+      import('@mobile/stores/useMobileStudentRecordsStore'),
+      import('@mobile/stores/useMobileProgressStore'),
+      import('@mobile/stores/useMobileAssignmentStore'),
+      import('@mobile/stores/useMobileSurveyToolStore'),
+      import('@mobile/stores/useMobileObservationStore'),
+    ]);
 
-  await Promise.all([
-    useMobileSettingsStore.getState().reload(),
-    useMobileScheduleStore.getState().reload(),
-    useMobileStudentStore.getState().reload(),
-    useMobileSeatingStore.getState().reload(),
-    useMobileEventsStore.getState().reload(),
-    useMobileMemoStore.getState().reload(),
-    useMobileTodoStore.getState().reload(),
-    useMobileAttendanceStore.getState().reload(),
-    useMobileTeachingClassStore.getState().reload(),
-    useMobileStudentRecordsStore.getState().reload(),
-    useMobileProgressStore.getState().reload(),
-    useMobileAssignmentStore.getState().reload(),
-    useMobileSurveyToolStore.getState().reload(),
-  ]);
+    await Promise.all([
+      useMobileSettingsStore.getState().reload(),
+      useMobileScheduleStore.getState().reload(),
+      useMobileStudentStore.getState().reload(),
+      useMobileSeatingStore.getState().reload(),
+      useMobileEventsStore.getState().reload(),
+      useMobileMemoStore.getState().reload(),
+      useMobileTodoStore.getState().reload(),
+      useMobileAttendanceStore.getState().reload(),
+      useMobileTeachingClassStore.getState().reload(),
+      useMobileStudentRecordsStore.getState().reload(),
+      useMobileProgressStore.getState().reload(),
+      useMobileAssignmentStore.getState().reload(),
+      useMobileSurveyToolStore.getState().reload(),
+      useMobileObservationStore.getState().reload(),
+    ]);
   } catch (e) {
     // 배포 후 이전 SW 캐시가 stale 청크를 참조하는 경우 새로고침으로 복구
     if (e instanceof Error && e.message.includes('Failed to fetch dynamically imported module')) {
@@ -152,7 +155,13 @@ export const useMobileDriveSyncStore = create<MobileDriveSyncState>((set, get) =
       if (!settingsState.loaded) await settingsState.load();
       const deviceId = getMobileDeviceId();
       const deviceName = settingsState.settings.teacherName || 'Mobile PWA';
-      const syncTo = new SyncToCloud(storage, getAdapter(), driveSyncRepository, deviceId, deviceName);
+      const syncTo = new SyncToCloud(
+        storage,
+        getAdapter(),
+        driveSyncRepository,
+        deviceId,
+        deviceName,
+      );
       const result = await syncTo.execute(({ current, total }) => {
         set({ progress: Math.round((current / total) * 100) });
       });
@@ -199,7 +208,14 @@ export const useMobileDriveSyncStore = create<MobileDriveSyncState>((set, get) =
       if (!settingsState.loaded) await settingsState.load();
       const deviceId = getMobileDeviceId();
       const deviceName = settingsState.settings.teacherName || 'Mobile PWA';
-      const syncFrom = new SyncFromCloud(storage, getAdapter(), driveSyncRepository, deviceId, deviceName, 'latest');
+      const syncFrom = new SyncFromCloud(
+        storage,
+        getAdapter(),
+        driveSyncRepository,
+        deviceId,
+        deviceName,
+        'latest',
+      );
       const result = await syncFrom.execute(({ current, total }) => {
         set({ progress: Math.round((current / total) * 100) });
       });
@@ -213,7 +229,7 @@ export const useMobileDriveSyncStore = create<MobileDriveSyncState>((set, get) =
           timestamp: now,
           downloaded: result.downloaded,
           skipped: result.skipped,
-          conflicts: result.conflicts.map(c => c.filename),
+          conflicts: result.conflicts.map((c) => c.filename),
         },
       });
       await reloadAllStores();
