@@ -4,7 +4,13 @@ import { convertDocument, maskMarkdown, manageMaskSessions } from '@adapters/di/
 import { useClassRosterStore } from '@adapters/stores/useClassRosterStore';
 import type { MaskConfig, MaskKind, MaskMapping, PatternConfig } from '@domain/privacy/types';
 import type { SavedMaskSession } from '@domain/ports/IMaskMappingRepository';
-import type { ParseOutcome } from '@domain/ports/IDocumentParserPort';
+import type {
+  ParseOutcome,
+  ParsedDocMetadata,
+  ParsedDocOutlineItem,
+  ParsedTextQuality,
+} from '@domain/ports/IDocumentParserPort';
+import { textQualityNotice } from './markdownConvertQuality';
 
 interface ToolMarkdownConvertProps {
   onBack: () => void;
@@ -107,6 +113,16 @@ interface ParsedDoc {
   format: string;
   isImageBased: boolean;
   warnings: string[];
+  metadata?: ParsedDocMetadata;
+  outline?: readonly ParsedDocOutlineItem[];
+  textQuality?: ParsedTextQuality;
+}
+
+/** 메타데이터 작성일 표시 정리 — ISO/날짜면 YYYY-MM-DD 만, 아니면 원문(최대 20자). */
+function formatDocDate(raw: string): string {
+  const m = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (m) return m[1]!;
+  return raw.length > 20 ? `${raw.slice(0, 20)}…` : raw;
 }
 
 export function ToolMarkdownConvert({ onBack, isFullscreen }: ToolMarkdownConvertProps) {
@@ -188,6 +204,9 @@ export function ToolMarkdownConvert({ onBack, isFullscreen }: ToolMarkdownConver
           format: o.document.format,
           isImageBased: o.document.isImageBased,
           warnings: [...o.document.warnings],
+          metadata: o.document.metadata,
+          outline: o.document.outline,
+          textQuality: o.document.textQuality,
         });
       } else if (o.status === 'error') {
         errs.push(o.message);
@@ -533,27 +552,76 @@ export function ToolMarkdownConvert({ onBack, isFullscreen }: ToolMarkdownConver
                         변환된 문서 {docs.length}개 — 하나의 마크다운으로 합쳐집니다
                       </p>
                     )}
-                    {docs.map((d, i) => (
-                      <div
-                        key={`${d.fileName}-${i}`}
-                        className="rounded-xl border border-sp-border bg-sp-surface/50 px-4 py-3"
-                      >
-                        <p className="text-sm text-sp-text flex items-center gap-2">
-                          <span className="material-symbols-outlined text-icon-sm text-sp-accent">
-                            description
-                          </span>
-                          <span className="font-sp-medium truncate">{d.fileName}</span>
-                          <span className="text-caption text-sp-muted uppercase">{d.format}</span>
-                        </p>
-                        {d.isImageBased && (
-                          <p className="mt-2 text-sm text-amber-500 flex items-start gap-1.5">
-                            <span className="material-symbols-outlined text-icon-sm">image</span>이
-                            문서는 사진(스캔)으로 되어 있어 글자를 읽지 못했어요. 글자가 들어 있는
-                            파일을 사용해 주세요.
+                    {docs.map((d, i) => {
+                      const notice = textQualityNotice(d.textQuality);
+                      const meta = d.metadata;
+                      const hasMeta =
+                        !!meta &&
+                        (meta.title ||
+                          meta.author ||
+                          meta.createdAt ||
+                          typeof meta.pageCount === 'number');
+                      return (
+                        <div
+                          key={`${d.fileName}-${i}`}
+                          className="rounded-xl border border-sp-border bg-sp-surface/50 px-4 py-3"
+                        >
+                          <p className="text-sm text-sp-text flex items-center gap-2">
+                            <span className="material-symbols-outlined text-icon-sm text-sp-accent">
+                              description
+                            </span>
+                            <span className="font-sp-medium truncate">{d.fileName}</span>
+                            <span className="text-caption text-sp-muted uppercase">{d.format}</span>
                           </p>
-                        )}
-                      </div>
-                    ))}
+
+                          {/* 문서 정보(있을 때만) — 표시 전용, 변환 본문에는 포함되지 않음 */}
+                          {hasMeta && meta && (
+                            <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-caption text-sp-muted">
+                              {meta.title && (
+                                <span className="truncate max-w-full">제목: {meta.title}</span>
+                              )}
+                              {meta.author && <span>작성자: {meta.author}</span>}
+                              {meta.createdAt && (
+                                <span>작성일: {formatDocDate(meta.createdAt)}</span>
+                              )}
+                              {typeof meta.pageCount === 'number' && (
+                                <span>분량: {meta.pageCount}쪽/시트</span>
+                              )}
+                            </div>
+                          )}
+
+                          {/* 문서 목차(있을 때만) — 접이식 */}
+                          {d.outline && d.outline.length > 0 && (
+                            <details className="mt-2">
+                              <summary className="text-caption text-sp-accent cursor-pointer select-none">
+                                문서 목차 {d.outline.length}개 보기
+                              </summary>
+                              <ul className="mt-1.5 space-y-0.5 max-h-40 overflow-auto">
+                                {d.outline.map((h, hi) => (
+                                  <li
+                                    key={`${h.text}-${hi}`}
+                                    className="text-caption text-sp-muted truncate"
+                                    style={{ paddingLeft: `${Math.max(0, h.level - 1) * 12}px` }}
+                                  >
+                                    {h.text}
+                                  </li>
+                                ))}
+                              </ul>
+                            </details>
+                          )}
+
+                          {/* 텍스트 추출 품질 안내(스캔/깨짐) */}
+                          {notice && (
+                            <p className="mt-2 text-sm text-amber-500 flex items-start gap-1.5">
+                              <span className="material-symbols-outlined text-icon-sm">
+                                {notice.tone === 'scan' ? 'image' : 'warning'}
+                              </span>
+                              {notice.message}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </section>

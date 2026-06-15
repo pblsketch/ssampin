@@ -1009,6 +1009,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
           format: string;
           isImageBased: boolean;
           warnings: string[];
+          metadata?: {
+            title?: string;
+            author?: string;
+            creator?: string;
+            createdAt?: string;
+            pageCount?: number;
+            version?: string;
+          };
+          outline?: Array<{ level: number; text: string }>;
+          textQuality?: {
+            needsReview: boolean;
+            reason?: 'image_based' | 'low_text' | 'high_pua' | 'high_control' | 'high_replacement';
+          };
         }
       | { status: 'error'; code: string; message: string }
     > => ipcRenderer.invoke('markdown-convert:pick-and-parse'),
@@ -1021,6 +1034,24 @@ contextBridge.exposeInMainWorld('electronAPI', {
             format: string;
             isImageBased: boolean;
             warnings: string[];
+            metadata?: {
+              title?: string;
+              author?: string;
+              creator?: string;
+              createdAt?: string;
+              pageCount?: number;
+              version?: string;
+            };
+            outline?: Array<{ level: number; text: string }>;
+            textQuality?: {
+              needsReview: boolean;
+              reason?:
+                | 'image_based'
+                | 'low_text'
+                | 'high_pua'
+                | 'high_control'
+                | 'high_replacement';
+            };
           }
         | { status: 'error'; code: string; message: string }
       >
@@ -1037,6 +1068,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
           format: string;
           isImageBased: boolean;
           warnings: string[];
+          metadata?: {
+            title?: string;
+            author?: string;
+            creator?: string;
+            createdAt?: string;
+            pageCount?: number;
+            version?: string;
+          };
+          outline?: Array<{ level: number; text: string }>;
+          textQuality?: {
+            needsReview: boolean;
+            reason?: 'image_based' | 'low_text' | 'high_pua' | 'high_control' | 'high_replacement';
+          };
         }
       | { status: 'error'; code: string; message: string }
     > => ipcRenderer.invoke('markdown-convert:parse-buffer', { bytes, fileName }),

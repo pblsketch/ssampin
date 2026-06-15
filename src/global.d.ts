@@ -892,6 +892,22 @@ type MarkdownConvertResult =
       format: string;
       isImageBased: boolean;
       warnings: string[];
+      /** 문서 정보(있으면). 표시 전용 — 마스킹 본문/저장에 미주입. */
+      metadata?: {
+        title?: string;
+        author?: string;
+        creator?: string;
+        createdAt?: string;
+        pageCount?: number;
+        version?: string;
+      };
+      /** 문서 목차(있으면). */
+      outline?: Array<{ level: number; text: string }>;
+      /** 텍스트 추출 품질 신호(주로 PDF). 없으면 양호로 간주. */
+      textQuality?: {
+        needsReview: boolean;
+        reason?: 'image_based' | 'low_text' | 'high_pua' | 'high_control' | 'high_replacement';
+      };
     }
   | { status: 'error'; code: string; message: string };
 

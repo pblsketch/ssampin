@@ -17,11 +17,41 @@
 import { BrowserWindow, dialog, ipcMain } from 'electron';
 import { readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename } from 'node:path';
-import { parse, type ParseResult } from 'kordoc';
+import { parse, type ParseResult, type DocumentMetadata, type OutlineItem } from 'kordoc';
 import { buildStoreZip, dedupeFilenames, sanitizeFilename } from '../lib/zipStore';
 
 const MAX_BYTES = 50 * 1024 * 1024; // 50MB
 const SUPPORTED_EXTENSIONS = ['hwp', 'hwpx', 'hwpml', 'pdf', 'xls', 'xlsx', 'docx'];
+const MAX_OUTLINE_ITEMS = 100;
+
+/** 문서 정보(존재값만). 표시 전용 — 마스킹 본문/저장 결과에 주입하지 않는다. */
+export interface MarkdownDocMetadata {
+  title?: string;
+  author?: string;
+  creator?: string;
+  createdAt?: string;
+  pageCount?: number;
+  version?: string;
+}
+
+/** 문서 목차 항목 */
+export interface MarkdownOutlineItem {
+  level: number;
+  text: string;
+}
+
+/** 텍스트 추출 품질 사유 — domain TextQualityReason 과 동일 어휘(IPC 경계용 재선언) */
+export type MarkdownTextQualityReason =
+  | 'image_based'
+  | 'low_text'
+  | 'high_pua'
+  | 'high_control'
+  | 'high_replacement';
+
+export interface MarkdownTextQuality {
+  needsReview: boolean;
+  reason?: MarkdownTextQualityReason;
+}
 
 /** renderer 로 반환하는 결과(파일 경로/원본 bytes 미포함) */
 export type PickAndParseResult =
@@ -33,13 +63,82 @@ export type PickAndParseResult =
       format: string;
       isImageBased: boolean;
       warnings: string[];
+      /** 문서 정보(있으면). 표시 전용. */
+      metadata?: MarkdownDocMetadata;
+      /** 문서 목차(있으면). */
+      outline?: MarkdownOutlineItem[];
+      /** 텍스트 추출 품질 신호(주로 PDF). 없으면 양호로 간주. */
+      textQuality?: MarkdownTextQuality;
     }
   | { status: 'error'; code: string; message: string };
+
+/** kordoc 메타데이터 → 표시용 DTO(존재값만). */
+function toDocMetadata(m: DocumentMetadata | undefined): MarkdownDocMetadata | undefined {
+  if (!m) return undefined;
+  const out: MarkdownDocMetadata = {};
+  if (m.title) out.title = m.title;
+  if (m.author) out.author = m.author;
+  if (m.creator) out.creator = m.creator;
+  if (m.createdAt) out.createdAt = m.createdAt;
+  if (typeof m.pageCount === 'number') out.pageCount = m.pageCount;
+  if (m.version) out.version = m.version;
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+/** kordoc outline → 목차 DTO(빈 텍스트 제거, 최대 MAX_OUTLINE_ITEMS). */
+function toOutline(o: OutlineItem[] | undefined): MarkdownOutlineItem[] | undefined {
+  if (!o || o.length === 0) return undefined;
+  const items = o
+    .filter((it) => typeof it.text === 'string' && it.text.trim().length > 0)
+    .slice(0, MAX_OUTLINE_ITEMS)
+    .map((it) => ({ level: Math.max(1, Math.min(6, it.level || 1)), text: it.text.trim() }));
+  return items.length > 0 ? items : undefined;
+}
+
+/** 추출 품질 신호 도출(이미지/저텍스트/깨짐). 양호하면 undefined. */
+function toTextQuality(
+  parsed: Extract<ParseResult, { success: true }>,
+): MarkdownTextQuality | undefined {
+  if (parsed.isImageBased) return { needsReview: true, reason: 'image_based' };
+  const summary = parsed.qualitySummary;
+  if (summary?.needsOcr) {
+    const firstReason = (parsed.pageQuality ?? []).find(
+      (p) => p.needsOcr && p.ocrReason,
+    )?.ocrReason;
+    const reason: MarkdownTextQualityReason =
+      firstReason ?? (summary.highPuaPageCount > 0 ? 'high_pua' : 'low_text');
+    return { needsReview: true, reason };
+  }
+  return undefined;
+}
+
+/**
+ * 에러 코드 → 친화 한국어 메시지. 민감 코드는 원시 메시지(파일 경로 echo 위험)를 노출하지 않고
+ * 자체 문구를 쓴다. 미매핑 코드는 fallback(원시 메시지) 유지.
+ */
+const FRIENDLY_ERROR: Partial<Record<string, string>> = {
+  ENCRYPTED:
+    '암호가 걸렸거나 배포용으로 잠긴 문서예요. Windows에서 한글(한컴오피스)이 설치돼 있으면 ‘문서 선택하기’로 다시 시도해 보세요.',
+  DRM_PROTECTED:
+    '배포용으로 잠긴 문서예요. Windows에서 한글(한컴오피스)이 설치돼 있으면 ‘문서 선택하기’로 다시 시도해 보세요.',
+  IMAGE_BASED_PDF:
+    '사진(스캔)으로 된 PDF라 글자를 읽지 못했어요. 글자가 들어 있는 파일을 사용해 주세요.',
+  UNSUPPORTED_FORMAT: '지원하지 않는 파일 형식이에요. (한글·PDF·엑셀·워드)',
+  CORRUPTED: '파일이 손상된 것 같아요. 다른 파일로 다시 시도해 주세요.',
+  ZIP_BOMB: '파일이 비정상적으로 커서 안전을 위해 변환을 멈췄어요.',
+  DECOMPRESSION_BOMB: '파일이 비정상적으로 커서 안전을 위해 변환을 멈췄어요.',
+  MISSING_DEPENDENCY: '이 파일을 읽는 데 필요한 구성요소를 찾지 못했어요.',
+};
+
+function friendlyError(code: string | undefined, fallback: string): string {
+  return (code ? FRIENDLY_ERROR[code] : undefined) ?? fallback;
+}
 
 /** ArrayBuffer → kordoc 파싱 → 결과 매핑(공통). 크기 검사 포함. */
 async function parseArrayBuffer(
   arrayBuffer: ArrayBuffer,
   fileName: string,
+  filePath?: string,
 ): Promise<PickAndParseResult> {
   try {
     if (arrayBuffer.byteLength > MAX_BYTES) {
@@ -49,9 +148,16 @@ async function parseArrayBuffer(
         message: `파일이 너무 큽니다. (최대 ${MAX_BYTES / 1024 / 1024}MB)`,
       };
     }
-    const parsed: ParseResult = await parse(arrayBuffer);
+    // filePath 는 메인 프로세스 내부 전용 — kordoc 의 배포용 한글 COM fallback 에만 쓰이고
+    // renderer 로는 반환하지 않는다(아래 결과에 fileName=basename 만 포함). 입력은 ArrayBuffer 라
+    // kordoc 이 디스크를 다시 읽지 않는다(filePath 는 COM 재시도에만 사용).
+    const parsed: ParseResult = await parse(arrayBuffer, filePath ? { filePath } : undefined);
     if (!parsed.success) {
-      return { status: 'error', code: parsed.code ?? 'PARSE_ERROR', message: parsed.error };
+      return {
+        status: 'error',
+        code: parsed.code ?? 'PARSE_ERROR',
+        message: friendlyError(parsed.code, parsed.error),
+      };
     }
     return {
       status: 'ok',
@@ -60,6 +166,9 @@ async function parseArrayBuffer(
       format: parsed.fileType,
       isImageBased: parsed.isImageBased ?? false,
       warnings: (parsed.warnings ?? []).map((w) => w.message),
+      metadata: toDocMetadata(parsed.metadata),
+      outline: toOutline(parsed.outline),
+      textQuality: toTextQuality(parsed),
     };
   } catch (e) {
     return {
@@ -109,8 +218,12 @@ export function registerMarkdownConvertHandlers(mainWindow: BrowserWindow | null
         message: e instanceof Error ? e.message : String(e),
       };
     }
-    const arrayBuffer = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
-    return parseArrayBuffer(arrayBuffer, basename(filePath));
+    const arrayBuffer = buf.buffer.slice(
+      buf.byteOffset,
+      buf.byteOffset + buf.byteLength,
+    ) as ArrayBuffer;
+    // filePath 전달 → 배포용 잠긴 한글의 한컴 COM fallback 활성화(Windows+한컴 설치 환경 전용).
+    return parseArrayBuffer(arrayBuffer, basename(filePath), filePath);
   });
 
   // 다중 선택 → 각각 파싱 (여러 문서 동시 변환)
@@ -145,8 +258,12 @@ export function registerMarkdownConvertHandlers(mainWindow: BrowserWindow | null
             continue;
           }
           const buf = readFileSync(filePath);
-          const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
-          out.push(await parseArrayBuffer(ab, basename(filePath)));
+          const ab = buf.buffer.slice(
+            buf.byteOffset,
+            buf.byteOffset + buf.byteLength,
+          ) as ArrayBuffer;
+          // filePath 전달 → 배포용 잠긴 한글 COM fallback 활성화(Windows+한컴 전용).
+          out.push(await parseArrayBuffer(ab, basename(filePath), filePath));
         } catch (e) {
           out.push({
             status: 'error',

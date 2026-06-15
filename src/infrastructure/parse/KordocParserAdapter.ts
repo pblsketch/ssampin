@@ -16,6 +16,19 @@ type RawResult =
       format: string;
       isImageBased: boolean;
       warnings: string[];
+      metadata?: {
+        title?: string;
+        author?: string;
+        creator?: string;
+        createdAt?: string;
+        pageCount?: number;
+        version?: string;
+      };
+      outline?: Array<{ level: number; text: string }>;
+      textQuality?: {
+        needsReview: boolean;
+        reason?: 'image_based' | 'low_text' | 'high_pua' | 'high_control' | 'high_replacement';
+      };
     }
   | { status: 'error'; code: string; message: string };
 
@@ -71,6 +84,9 @@ function mapResult(r: RawResult): ParseOutcome {
       format: r.format,
       isImageBased: r.isImageBased,
       warnings: r.warnings,
+      metadata: r.metadata,
+      outline: r.outline,
+      textQuality: r.textQuality,
     },
   };
 }
