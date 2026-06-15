@@ -27,7 +27,7 @@ const tier1 = [
 const tier2 = [
   {
     icon: '🛠️',
-    title: '쌤도구 16가지',
+    title: '쌤도구 28가지',
     description:
       '타이머, 투표, 워드클라우드, 랜덤 뽑기, QR코드, 점수판 등 수업 도구를 원클릭 실행.',
   },
@@ -48,6 +48,10 @@ const tier3Tags = [
   'Google Tasks 동기화',
   'Google Drive 앱 폴더 백업',
   '포스트잇 메모',
+  '협업 보드',
+  '실시간 담벼락',
+  '복합 설문',
+  '서명받기',
   '수업 관리',
   '과제 수합',
   'PIN 잠금',

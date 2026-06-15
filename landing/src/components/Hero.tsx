@@ -22,7 +22,7 @@ export default function Hero() {
               <div className="mb-7 inline-flex items-center gap-2 rounded-full border border-sp-border bg-sp-surface px-3.5 py-1.5">
                 <span className="text-xs text-sp-accent">●</span>
                 <span className="text-xs font-medium tracking-wide text-sp-muted">
-                  Windows 교사용 대시보드
+                  Windows · macOS 교사용 대시보드
                 </span>
               </div>
 
@@ -108,6 +108,11 @@ export default function Hero() {
               '급식 정보',
               '날씨 · 미세먼지',
               '쌤도구',
+              '협업 보드',
+              '복합 설문',
+              '실시간 담벼락',
+              '서명받기',
+              '모둠 편성',
               'PIN 잠금',
               '미니 창 모드',
               '담임메모',

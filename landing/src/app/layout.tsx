@@ -14,7 +14,7 @@ export const metadata: Metadata = {
   metadataBase: new URL('https://ssampin.com'),
   title: '쌤핀 (SsamPin) — 선생님의 대시보드',
   description:
-    '시간표, 학급 자리 배치, 일정, 급식, 날씨, 쌤도구까지 한 화면에서 관리하세요. 무료 Windows 앱.',
+    '시간표, 학급 자리 배치, 일정, 급식, 날씨, 쌤도구까지 한 화면에서 관리하세요. 무료 Windows·macOS 앱.',
   robots: {
     index: true,
     follow: true,
@@ -117,7 +117,7 @@ const softwareJsonLd = {
   description:
     '시간표, 학급 자리 배치, 일정, 급식, 날씨, 쌤도구까지 한 화면에서 관리하는 교사용 데스크톱 대시보드.',
   applicationCategory: 'EducationApplication',
-  operatingSystem: 'Windows 10, Windows 11',
+  operatingSystem: 'Windows 10, Windows 11, macOS',
   offers: {
     '@type': 'Offer',
     price: '0',
@@ -158,18 +158,26 @@ const faqJsonLd = {
     },
     {
       '@type': 'Question',
-      name: 'Mac에서도 쓸 수 있나요?',
+      name: '데이터는 어디에 저장되나요?',
       acceptedAnswer: {
         '@type': 'Answer',
-        text: '현재는 Windows만 지원해요. Mac 버전은 요청이 많으면 만들어볼게요!',
+        text: '내 컴퓨터에만 저장돼요. 서버로 전송되지 않아서 개인정보 유출 걱정이 없어요.',
       },
     },
     {
       '@type': 'Question',
-      name: '데이터는 어디에 저장되나요?',
+      name: '보안 경고가 뜨는데 괜찮은가요?',
       acceptedAnswer: {
         '@type': 'Answer',
-        text: '내 컴퓨터에만 저장돼요. 서버로 전송되지 않아요.',
+        text: '쌤핀은 안전한 프로그램이에요. 개인 개발 앱이라 아직 Microsoft 인증서가 없어서 경고가 뜰 수 있어요. "추가 정보 → 실행"을 클릭하시거나, 백신의 실시간 감시를 잠시 끄고 설치해보세요. 자세한 방법은 위의 "설치 안내" 섹션을 확인해주세요.',
+      },
+    },
+    {
+      '@type': 'Question',
+      name: 'Mac에서도 쓸 수 있나요?',
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: '네, macOS도 지원해요! 위의 다운로드 버튼에서 macOS용을 받으세요. Apple Silicon(M1~M4)과 Intel Mac 모두 지원합니다. 처음 실행 시 "개발자를 확인할 수 없음" 경고가 뜨면, 시스템 설정 → 개인정보 보호 및 보안에서 "확인 없이 열기"를 클릭하세요.',
       },
     },
     {
@@ -182,50 +190,18 @@ const faqJsonLd = {
     },
     {
       '@type': 'Question',
-      name: '급식 정보는 어떻게 나오나요?',
+      name: '구글 캘린더·드라이브 동기화가 안 돼요',
       acceptedAnswer: {
         '@type': 'Answer',
-        text: 'NEIS(나이스) 공식 API에서 자동으로 가져와요. 설정에서 학교만 검색하면 매일 급식이 표시돼요.',
+        text: '현재 구글 보안 심사가 진행 중이라 신규 사용자의 구글 연동이 일시적으로 제한되고 있어요. 심사가 완료되면 정상적으로 사용할 수 있습니다. 시간표, 좌석배치, 메모 등 핵심 기능은 구글 연동 없이도 모두 정상 동작하니 안심하고 사용해주세요! 심사 완료 시 앱 업데이트로 안내드릴게요.',
       },
     },
     {
       '@type': 'Question',
-      name: '쌤도구는 뭔가요?',
+      name: '학운위 심의를 받아야 하나요?',
       acceptedAnswer: {
         '@type': 'Answer',
-        text: '타이머, 랜덤 뽑기, 점수판, 룰렛, 주사위, 투표, QR코드 등 수업에 바로 쓸 수 있는 15가지 교실 도구예요.',
-      },
-    },
-    {
-      '@type': 'Question',
-      name: 'PIN 잠금은 왜 필요한가요?',
-      acceptedAnswer: {
-        '@type': 'Answer',
-        text: '학생이 볼 수 있는 상황에서 담임메모나 성적 같은 민감한 정보를 보호할 수 있어요. 기능별로 잠금을 설정할 수 있어요.',
-      },
-    },
-    {
-      '@type': 'Question',
-      name: '과제수합은 어떻게 사용하나요?',
-      acceptedAnswer: {
-        '@type': 'Answer',
-        text: '수업 관리 페이지에서 과제를 생성한 후, QR코드를 학생들에게 보여주면 스마트폰으로 바로 제출할 수 있어요. 파일과 텍스트 제출을 모두 지원해요.',
-      },
-    },
-    {
-      '@type': 'Question',
-      name: '과목 색상을 바꿀 수 있나요?',
-      acceptedAnswer: {
-        '@type': 'Answer',
-        text: '시간표에서 과목을 클릭하면 인라인 팔레트가 나타나요. 16가지 프리셋 색상 중 원하는 색을 선택하거나 기본값으로 되돌릴 수 있어요.',
-      },
-    },
-    {
-      '@type': 'Question',
-      name: '짝꿍 배치는 어떻게 하나요?',
-      acceptedAnswer: {
-        '@type': 'Answer',
-        text: '좌석배치 페이지에서 짝꿍 모드를 활성화하면 2인 1조 짝꿍 배치를 자동으로 생성할 수 있어요. 내보내기에도 반영돼요.',
+        text: '아니요. 쌤핀은 학생 개인정보를 수집·저장하지 않는 교사 개인용 도구예요. 모든 데이터는 선생님의 PC에만 저장되고 서버로 전송되지 않아요. 학운위 심의 대상은 "학생 개인정보를 수집·이용·제공·저장하는 소프트웨어"이므로, 쌤핀은 별도 심의 없이 사용 가능합니다.',
       },
     },
   ],
