@@ -1090,6 +1090,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ): Promise<
       { status: 'canceled' } | { status: 'saved' } | { status: 'error'; message: string }
     > => ipcRenderer.invoke('markdown-convert:save-zip', { files, zipName }),
+    saveHwpx: (
+      markdown: string,
+      suggestedName?: string,
+    ): Promise<
+      { status: 'canceled' } | { status: 'saved' } | { status: 'error'; message: string }
+    > => ipcRenderer.invoke('markdown-convert:save-hwpx', { markdown, suggestedName }),
+    saveHwpxZip: (
+      files: Array<{ name: string; markdown: string }>,
+      zipName?: string,
+    ): Promise<
+      { status: 'canceled' } | { status: 'saved' } | { status: 'error'; message: string }
+    > => ipcRenderer.invoke('markdown-convert:save-hwpx-zip', { files, zipName }),
   },
 
   // === 협업 보드 (collab-board) ===

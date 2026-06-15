@@ -637,6 +637,13 @@ interface ElectronAPI {
       files: Array<{ name: string; text: string }>,
       zipName?: string,
     ) => Promise<MarkdownSaveZipResult>;
+    /** 마크다운 → 한글(.hwpx) 1개 저장(kordoc markdownToHwpx, 데스크톱 전용). */
+    saveHwpx: (markdown: string, suggestedName?: string) => Promise<MarkdownSaveZipResult>;
+    /** 마크다운 여러 개 → 각 .hwpx 로 묶은 ZIP 1개 저장. */
+    saveHwpxZip: (
+      files: Array<{ name: string; markdown: string }>,
+      zipName?: string,
+    ) => Promise<MarkdownSaveZipResult>;
   };
 
   // === 협업 보드 (collab-board) — Design §4.1 ===

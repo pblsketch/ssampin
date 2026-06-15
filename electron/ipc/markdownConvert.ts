@@ -17,7 +17,14 @@
 import { BrowserWindow, dialog, ipcMain } from 'electron';
 import { readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename } from 'node:path';
-import { parse, type ParseResult, type DocumentMetadata, type OutlineItem } from 'kordoc';
+import {
+  parse,
+  markdownToHwpx,
+  type ParseResult,
+  type DocumentMetadata,
+  type OutlineItem,
+} from 'kordoc';
+import JSZip from 'jszip';
 import { buildStoreZip, dedupeFilenames, sanitizeFilename } from '../lib/zipStore';
 
 const MAX_BYTES = 50 * 1024 * 1024; // 50MB
@@ -132,6 +139,44 @@ const FRIENDLY_ERROR: Partial<Record<string, string>> = {
 
 function friendlyError(code: string | undefined, fallback: string): string {
   return (code ? FRIENDLY_ERROR[code] : undefined) ?? fallback;
+}
+
+/**
+ * kordoc markdownToHwpx 출력의 한글 줄나눔을 어절 단위로 교체.
+ * kordoc 기본값 breakNonLatinWord="BREAK_WORD"(글자 단위)는 '감격스/럽습니다'처럼 낱말 중간에서
+ * 끊겨 가독성이 나쁘다 → "KEEP_WORD"(어절 단위)로 바꾼다(header.xml 의 문단 스타일 정의).
+ * mimetype 을 맨 앞 + 비압축(STORE)으로 유지해 한글(한컴) 호환을 보존한다. 실패 시 원본 그대로.
+ */
+async function fixHwpxLineBreak(input: Uint8Array | ArrayBuffer): Promise<Uint8Array> {
+  const bytes = input instanceof Uint8Array ? input : new Uint8Array(input);
+  try {
+    const src = await JSZip.loadAsync(bytes);
+    const names = Object.keys(src.files);
+    const headerPath = names.find((p) => /Contents\/header\.xml$/i.test(p));
+    if (!headerPath) return bytes;
+    const headerFile = src.file(headerPath);
+    if (!headerFile) return bytes;
+    let headerXml = await headerFile.async('string');
+    if (!headerXml.includes('breakNonLatinWord="BREAK_WORD"')) return bytes;
+    headerXml = headerXml
+      .split('breakNonLatinWord="BREAK_WORD"')
+      .join('breakNonLatinWord="KEEP_WORD"');
+    const out = new JSZip();
+    for (const name of names) {
+      const f = src.files[name];
+      if (!f || f.dir) continue;
+      if (name === headerPath) {
+        out.file(name, headerXml);
+      } else if (name === 'mimetype') {
+        out.file(name, await f.async('uint8array'), { compression: 'STORE' });
+      } else {
+        out.file(name, await f.async('uint8array'));
+      }
+    }
+    return await out.generateAsync({ type: 'uint8array', compression: 'DEFLATE' });
+  } catch {
+    return bytes;
+  }
 }
 
 /** ArrayBuffer → kordoc 파싱 → 결과 매핑(공통). 크기 검사 포함. */
@@ -336,6 +381,100 @@ export function registerMarkdownConvertHandlers(mainWindow: BrowserWindow | null
           filename: names[i] ?? `converted_${i + 1}.md`,
           data: Buffer.from(typeof f.text === 'string' ? f.text : '', 'utf8'),
         }));
+        writeFileSync(result.filePath, buildStoreZip(entries));
+        return { status: 'saved' };
+      } catch (e) {
+        return { status: 'error', message: e instanceof Error ? e.message : String(e) };
+      }
+    },
+  );
+
+  // 마크다운 → 한글(.hwpx) 1개 저장 — kordoc markdownToHwpx 로 생성 후 저장 다이얼로그.
+  // markdownToHwpx 는 메인 전용(렌더러 미노출). 경로는 메인 내부에서만 사용.
+  ipcMain.handle(
+    'markdown-convert:save-hwpx',
+    async (
+      _event,
+      args: { markdown: string; suggestedName?: string },
+    ): Promise<
+      { status: 'canceled' } | { status: 'saved' } | { status: 'error'; message: string }
+    > => {
+      if (!args || typeof args.markdown !== 'string' || args.markdown.length === 0) {
+        return { status: 'error', message: '내보낼 내용이 없습니다.' };
+      }
+      const parent = mainWindow ?? BrowserWindow.getFocusedWindow();
+      const base =
+        typeof args.suggestedName === 'string' && args.suggestedName.trim().length > 0
+          ? args.suggestedName.trim()
+          : '변환결과.hwpx';
+      const defaultPath = base.toLowerCase().endsWith('.hwpx') ? base : `${base}.hwpx`;
+      const dialogOptions = {
+        title: '한글 문서로 저장',
+        defaultPath,
+        filters: [{ name: '한글 문서', extensions: ['hwpx'] }],
+      };
+      const result = parent
+        ? await dialog.showSaveDialog(parent, dialogOptions)
+        : await dialog.showSaveDialog(dialogOptions);
+      if (result.canceled || !result.filePath) return { status: 'canceled' };
+      try {
+        const bytes = await markdownToHwpx(args.markdown);
+        const fixed = await fixHwpxLineBreak(bytes);
+        writeFileSync(result.filePath, Buffer.from(fixed));
+        return { status: 'saved' };
+      } catch (e) {
+        return { status: 'error', message: e instanceof Error ? e.message : String(e) };
+      }
+    },
+  );
+
+  // 마크다운 여러 개 → 각각 .hwpx 로 변환해 묶은 ZIP 1개로 저장(저장창 1회).
+  ipcMain.handle(
+    'markdown-convert:save-hwpx-zip',
+    async (
+      _event,
+      args: { files: Array<{ name: string; markdown: string }>; zipName?: string },
+    ): Promise<
+      { status: 'canceled' } | { status: 'saved' } | { status: 'error'; message: string }
+    > => {
+      if (!args || !Array.isArray(args.files) || args.files.length === 0) {
+        return { status: 'error', message: '저장할 파일이 없습니다.' };
+      }
+      const parent = mainWindow ?? BrowserWindow.getFocusedWindow();
+      const baseZip =
+        typeof args.zipName === 'string' && args.zipName.trim().length > 0
+          ? args.zipName.trim()
+          : '변환결과(한글).zip';
+      const defaultPath = baseZip.toLowerCase().endsWith('.zip') ? baseZip : `${baseZip}.zip`;
+      const dialogOptions = {
+        title: 'ZIP 파일로 저장',
+        defaultPath,
+        filters: [{ name: 'ZIP', extensions: ['zip'] }],
+      };
+      const result = parent
+        ? await dialog.showSaveDialog(parent, dialogOptions)
+        : await dialog.showSaveDialog(dialogOptions);
+      if (result.canceled || !result.filePath) return { status: 'canceled' };
+      try {
+        const names = dedupeFilenames(
+          args.files.map((f) => {
+            const raw = sanitizeFilename(
+              typeof f.name === 'string' ? f.name : 'converted.hwpx',
+              'converted.hwpx',
+            );
+            return raw.toLowerCase().endsWith('.hwpx') ? raw : `${raw}.hwpx`;
+          }),
+        );
+        const entries: Array<{ filename: string; data: Buffer }> = [];
+        for (let i = 0; i < args.files.length; i++) {
+          const f = args.files[i]!;
+          const bytes = await markdownToHwpx(typeof f.markdown === 'string' ? f.markdown : '');
+          const fixed = await fixHwpxLineBreak(bytes);
+          entries.push({
+            filename: names[i] ?? `converted_${i + 1}.hwpx`,
+            data: Buffer.from(fixed),
+          });
+        }
         writeFileSync(result.filePath, buildStoreZip(entries));
         return { status: 'saved' };
       } catch (e) {

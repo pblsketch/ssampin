@@ -11,6 +11,7 @@ import type {
   ParsedTextQuality,
 } from '@domain/ports/IDocumentParserPort';
 import { textQualityNotice } from './markdownConvertQuality';
+import { toHwpxFileName } from './markdownConvertExport';
 
 interface ToolMarkdownConvertProps {
   onBack: () => void;
@@ -107,6 +108,36 @@ async function saveMarkdownZip(
   return 'unavailable';
 }
 
+/**
+ * 마크다운을 한글(.hwpx)로 저장. 변환은 메인 프로세스의 kordoc markdownToHwpx 가 수행하므로
+ * 데스크톱(Electron)에서만 가능 — 브라우저(dev)에서는 'unavailable'.
+ */
+async function saveHwpxFile(
+  markdown: string,
+  suggestedName: string,
+): Promise<'saved' | 'canceled' | 'unavailable' | 'error'> {
+  const api = typeof window !== 'undefined' ? window.electronAPI?.markdownConvert : undefined;
+  if (!api?.saveHwpx) return 'unavailable';
+  const r = await api.saveHwpx(markdown, suggestedName);
+  if (r.status === 'saved') return 'saved';
+  if (r.status === 'canceled') return 'canceled';
+  return 'error';
+}
+
+/** 여러 마크다운을 각 .hwpx 로 묶은 ZIP 1개로 저장(데스크톱 전용). */
+async function saveHwpxZip(
+  files: { name: string; markdown: string }[],
+  zipName = '변환결과(한글).zip',
+): Promise<'saved' | 'canceled' | 'unavailable' | 'error'> {
+  if (files.length === 0) return 'unavailable';
+  const api = typeof window !== 'undefined' ? window.electronAPI?.markdownConvert : undefined;
+  if (!api?.saveHwpxZip) return 'unavailable';
+  const r = await api.saveHwpxZip(files, zipName);
+  if (r.status === 'saved') return 'saved';
+  if (r.status === 'canceled') return 'canceled';
+  return 'error';
+}
+
 interface ParsedDoc {
   fileName: string;
   markdown: string;
@@ -154,6 +185,8 @@ export function ToolMarkdownConvert({ onBack, isFullscreen }: ToolMarkdownConver
   const [copied, setCopied] = useState(false);
   const [downloaded, setDownloaded] = useState(false);
   const [downloadedEach, setDownloadedEach] = useState(false);
+  const [hwpxBusy, setHwpxBusy] = useState(false);
+  const [hwpxSaved, setHwpxSaved] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   // 결과 보기 대상: 'all'(전체 합본) 또는 파일 인덱스
   const [resultView, setResultView] = useState<'all' | number>('all');
@@ -163,6 +196,7 @@ export function ToolMarkdownConvert({ onBack, isFullscreen }: ToolMarkdownConver
   const [restoreOutput, setRestoreOutput] = useState<string | null>(null);
   const [restoreCopied, setRestoreCopied] = useState(false);
   const [restoreDownloaded, setRestoreDownloaded] = useState(false);
+  const [restoreHwpxSaved, setRestoreHwpxSaved] = useState(false);
   const [savedSessions, setSavedSessions] = useState<readonly SavedMaskSession[]>([]);
   const [restoreSourceId, setRestoreSourceId] = useState<'current' | string>('current');
 
@@ -385,6 +419,59 @@ export function ToolMarkdownConvert({ onBack, isFullscreen }: ToolMarkdownConver
     }
   }, [masked, canCopy, maskedFiles]);
 
+  // 한글(.hwpx) 저장 결과 처리 공통 — 성공/없음/실패 메시지
+  const applyHwpxResult = useCallback((r: 'saved' | 'canceled' | 'unavailable' | 'error') => {
+    if (r === 'saved') {
+      setHwpxSaved(true);
+      window.setTimeout(() => setHwpxSaved(false), 2000);
+    } else if (r === 'unavailable') {
+      setSaveMsg('한글로 저장하기는 쌤핀 데스크톱 앱에서만 가능해요.');
+    } else if (r === 'error') {
+      setSaveMsg('한글로 저장하지 못했어요. 잠시 후 다시 시도해 주세요.');
+    }
+  }, []);
+
+  // 한글(.hwpx) 저장 — 현재 보기(단일 또는 선택 파일)
+  const handleSaveHwpx = useCallback(async () => {
+    if (masked === null || !canCopy || hwpxBusy) return;
+    setHwpxBusy(true);
+    setSaveMsg(null);
+    try {
+      applyHwpxResult(await saveHwpxFile(currentResult.text, toHwpxFileName(currentResult.name)));
+    } finally {
+      setHwpxBusy(false);
+    }
+  }, [masked, canCopy, hwpxBusy, currentResult, applyHwpxResult]);
+
+  // 통합 .hwpx 저장 (여러 파일 → 합본 1개)
+  const handleSaveHwpxCombined = useCallback(async () => {
+    if (masked === null || !canCopy || hwpxBusy) return;
+    setHwpxBusy(true);
+    setSaveMsg(null);
+    try {
+      applyHwpxResult(await saveHwpxFile(masked, '변환결과.hwpx'));
+    } finally {
+      setHwpxBusy(false);
+    }
+  }, [masked, canCopy, hwpxBusy, applyHwpxResult]);
+
+  // 개별 .hwpx 저장 — 파일마다 .hwpx 로 묶은 ZIP 한 개
+  const handleSaveHwpxEach = useCallback(async () => {
+    if (masked === null || !canCopy || hwpxBusy || maskedFiles.length === 0) return;
+    setHwpxBusy(true);
+    setSaveMsg(null);
+    try {
+      applyHwpxResult(
+        await saveHwpxZip(
+          maskedFiles.map((f) => ({ name: toHwpxFileName(f.fileName), markdown: f.text })),
+          '변환결과(한글).zip',
+        ),
+      );
+    } finally {
+      setHwpxBusy(false);
+    }
+  }, [masked, canCopy, hwpxBusy, maskedFiles, applyHwpxResult]);
+
   const handleSaveSession = useCallback(async () => {
     if (mappings.length === 0 || docs.length === 0) return;
     const now = Date.now();
@@ -430,6 +517,20 @@ export function ToolMarkdownConvert({ onBack, isFullscreen }: ToolMarkdownConver
       window.setTimeout(() => setRestoreDownloaded(false), 2000);
     }
   }, [restoreOutput]);
+
+  const handleRestoreSaveHwpx = useCallback(async () => {
+    if (restoreOutput === null || hwpxBusy) return;
+    setHwpxBusy(true);
+    try {
+      const r = await saveHwpxFile(restoreOutput, '복원결과.hwpx');
+      if (r === 'saved') {
+        setRestoreHwpxSaved(true);
+        window.setTimeout(() => setRestoreHwpxSaved(false), 2000);
+      }
+    } finally {
+      setHwpxBusy(false);
+    }
+  }, [restoreOutput, hwpxBusy]);
 
   const handleClearSaved = useCallback(async () => {
     await manageMaskSessions.clearAll();
@@ -879,6 +980,41 @@ export function ToolMarkdownConvert({ onBack, isFullscreen }: ToolMarkdownConver
                         </button>
                       </>
                     )}
+                    {docs.length <= 1 ? (
+                      <button
+                        type="button"
+                        onClick={() => void handleSaveHwpx()}
+                        disabled={!canCopy || hwpxBusy}
+                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-sp-border text-sp-text font-sp-medium hover:bg-sp-surface transition-all disabled:opacity-50"
+                        title="변환 결과를 한글(.hwpx) 문서로 저장"
+                      >
+                        <span className="material-symbols-outlined text-icon">article</span>
+                        {hwpxBusy ? '저장 중…' : hwpxSaved ? '저장됨!' : '한글(.hwpx)로 저장'}
+                      </button>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => void handleSaveHwpxCombined()}
+                          disabled={!canCopy || hwpxBusy}
+                          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-sp-border text-sp-text font-sp-medium hover:bg-sp-surface transition-all disabled:opacity-50"
+                          title="모든 문서를 하나의 한글(.hwpx) 파일로 저장"
+                        >
+                          <span className="material-symbols-outlined text-icon">article</span>
+                          {hwpxBusy ? '저장 중…' : hwpxSaved ? '저장됨!' : '통합 .hwpx 저장'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleSaveHwpxEach()}
+                          disabled={!canCopy || hwpxBusy}
+                          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-sp-border text-sp-text font-sp-medium hover:bg-sp-surface transition-all disabled:opacity-50"
+                          title="문서마다 개별 한글(.hwpx) 로 묶은 ZIP 한 개로 저장"
+                        >
+                          <span className="material-symbols-outlined text-icon">folder_zip</span>
+                          {hwpxBusy ? '저장 중…' : hwpxSaved ? '저장됨!' : '개별 .hwpx (ZIP)'}
+                        </button>
+                      </>
+                    )}
                     {maskOn && mappings.length > 0 && (
                       <button
                         type="button"
@@ -983,6 +1119,16 @@ export function ToolMarkdownConvert({ onBack, isFullscreen }: ToolMarkdownConver
                   >
                     <span className="material-symbols-outlined text-icon">download</span>
                     {restoreDownloaded ? '저장됨!' : 'md 파일로 저장'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleRestoreSaveHwpx()}
+                    disabled={hwpxBusy}
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-sp-border text-sp-text font-sp-medium hover:bg-sp-surface transition-all disabled:opacity-50"
+                    title="되돌린 결과를 한글(.hwpx) 문서로 저장"
+                  >
+                    <span className="material-symbols-outlined text-icon">article</span>
+                    {hwpxBusy ? '저장 중…' : restoreHwpxSaved ? '저장됨!' : '한글(.hwpx)로 저장'}
                   </button>
                 </div>
               </section>
