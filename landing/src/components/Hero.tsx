@@ -72,7 +72,7 @@ export default function Hero() {
             className="hidden flex-col gap-px overflow-hidden rounded-2xl border border-sp-border md:flex"
           >
             {[
-              { label: '핵심 기능', value: '15가지+', sub: '올인원' },
+              { label: '핵심 기능', value: '20가지+', sub: '올인원' },
               { label: '완전 무료', value: '₩0', sub: '광고 없음' },
               { label: '오프라인', value: '100%', sub: '로컬 저장' },
             ].map((stat, i) => (
@@ -113,9 +113,11 @@ export default function Hero() {
               '실시간 담벼락',
               '서명받기',
               '모둠 편성',
+              '마크다운 변환기',
               'PIN 잠금',
               '미니 창 모드',
               '담임메모',
+              '쌤핀 노트',
               '수업 관리',
               '과제 수합',
               '할 일',
