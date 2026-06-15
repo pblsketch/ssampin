@@ -1,15 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-
-interface VersionEntry {
-  app_version: string;
-  users: number;
-  last_seen: string;
-}
+import type { VersionRow } from './_lib/types';
 
 interface Props {
-  versions: VersionEntry[];
+  versions: VersionRow[];
 }
 
 type SortMode = 'users' | 'version';
@@ -24,7 +19,7 @@ function compareSemver(a: string, b: string): number {
   const pa = parseSemver(a);
   const pb = parseSemver(b);
   if (!pa && !pb) return 0;
-  if (!pa) return 1;  // unknowns to bottom
+  if (!pa) return 1; // unknowns to bottom
   if (!pb) return -1;
   for (let i = 0; i < 3; i++) {
     if (pa[i] !== pb[i]) return pa[i] - pb[i];

@@ -1,102 +1,9 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-
-// ── 한글 라벨 매핑 ──
-
-const EVENT_LABELS: Record<string, string> = {
-  app_open: '앱 열기',
-  app_close: '앱 종료',
-  page_view: '페이지 이동',
-  widget_open: '위젯 열기',
-  widget_close: '위젯 닫기',
-  timetable_edit: '시간표 수정',
-  seating_shuffle: '좌석 섞기',
-  seating_drag: '좌석 드래그',
-  event_create: '일정 생성',
-  memo_create: '메모 생성',
-  todo_toggle: '할일 체크',
-  tool_use: '도구 사용',
-  export: '내보내기',
-  share_import: '공유 가져오기',
-  chatbot_open: '챗봇 열기',
-  chatbot_message: '챗봇 메시지',
-  update_installed: '업데이트 설치',
-  onboarding_complete: '온보딩 완료',
-  school_set: '학교 설정',
-  class_set: '학급 설정',
-  error: '에러',
-  feature_discovery: '기능 발견',
-  session_start: '세션 시작',
-  assignment_create: '과제 생성',
-  assignment_share: '과제 공유',
-  assignment_view: '과제 조회',
-  consultation_create: '상담 생성',
-  consultation_update: '상담 수정',
-  bookmark_add: '즐겨찾기 추가',
-  bookmark_click: '즐겨찾기 클릭',
-  feedback_submit: '피드백 제출',
-  settings_change: '설정 변경',
-  timetable_neis_sync: 'NEIS 동기화',
-  widget_layout_change: '위젯 레이아웃 변경',
-  onboarding_roles_selected: '역할 선택',
-  onboarding_widget_preset: '위젯 프리셋 선택',
-  chatbot_feedback: '챗봇 피드백',
-  chatbot_escalate: '챗봇 에스컬레이션',
-  share_modal_open: '공유 모달 열기',
-  share_click: '공유 클릭',
-  share_prompt_shown: '공유 안내 표시',
-  share_prompt_action: '공유 안내 응답',
-};
-
-const TOOL_LABELS: Record<string, string> = {
-  timer: '타이머',
-  random_picker: '랜덤뽑기',
-  roulette: '룰렛',
-  scoreboard: '점수판',
-  traffic_light: '신호등',
-  dice: '주사위',
-  coin: '동전던지기',
-  qr: 'QR코드',
-  activity_symbol: '활동기호',
-  vote: '투표',
-  survey: '설문조사',
-  wordcloud: '워드클라우드',
-  seat_picker: '자리뽑기',
-  assignment: '과제',
-  class_seating: '자리배치',
-  poll: '투표',
-};
-
-const PAGE_LABELS: Record<string, string> = {
-  dashboard: '대시보드',
-  timetable: '시간표',
-  seating: '좌석배치',
-  schedule: '일정관리',
-  'student-records': '담임메모',
-  memo: '메모',
-  todo: '할일',
-  settings: '설정',
-  tools: '도구함',
-  'class-management': '수업관리',
-  'tool-timer': '타이머',
-  'tool-random-picker': '랜덤뽑기',
-  'tool-roulette': '룰렛',
-  'tool-scoreboard': '점수판',
-  'tool-traffic-light': '신호등',
-  'tool-dice': '주사위',
-  'tool-coin': '동전던지기',
-  'tool-qr': 'QR코드',
-  'tool-work-symbols': '활동기호',
-  'tool-vote': '투표',
-  'tool-survey': '설문조사',
-  'tool-wordcloud': '워드클라우드',
-  'tool-seat-picker': '자리뽑기',
-  'tool-poll': '투표',
-  'tool-assignment': '과제',
-  'tool-class-seating': '자리배치',
-  bookmarks: '즐겨찾기',
-};
+import { EVENT_LABELS, PAGE_LABELS, TOOL_LABELS } from './_lib/labels';
+import { formatDuration } from './_lib/format';
+import type { EventItem } from './_lib/types';
 
 // ── 카테고리 정의 ──
 
@@ -140,7 +47,23 @@ const CATEGORIES: CategoryDef[] = [
     color: 'text-amber-400',
     bgBar: 'bg-amber-500',
     pillClasses: 'bg-amber-900/60 text-amber-300 border-amber-700/50',
-    events: ['timetable_edit', 'seating_shuffle', 'seating_drag', 'event_create', 'memo_create', 'todo_toggle', 'export', 'share_import', 'assignment_create', 'assignment_share', 'assignment_view', 'consultation_create', 'consultation_update', 'bookmark_add', 'bookmark_click'],
+    events: [
+      'timetable_edit',
+      'seating_shuffle',
+      'seating_drag',
+      'event_create',
+      'memo_create',
+      'todo_toggle',
+      'export',
+      'share_import',
+      'assignment_create',
+      'assignment_share',
+      'assignment_view',
+      'consultation_create',
+      'consultation_update',
+      'bookmark_add',
+      'bookmark_click',
+    ],
   },
   {
     key: 'discover',
@@ -148,7 +71,27 @@ const CATEGORIES: CategoryDef[] = [
     color: 'text-purple-400',
     bgBar: 'bg-purple-500',
     pillClasses: 'bg-purple-900/60 text-purple-300 border-purple-700/50',
-    events: ['feature_discovery', 'onboarding_complete', 'update_installed', 'chatbot_open', 'chatbot_message', 'school_set', 'class_set', 'feedback_submit', 'settings_change', 'timetable_neis_sync', 'widget_layout_change', 'onboarding_roles_selected', 'onboarding_widget_preset', 'chatbot_feedback', 'chatbot_escalate', 'share_modal_open', 'share_click', 'share_prompt_shown', 'share_prompt_action'],
+    events: [
+      'feature_discovery',
+      'onboarding_complete',
+      'update_installed',
+      'chatbot_open',
+      'chatbot_message',
+      'school_set',
+      'class_set',
+      'feedback_submit',
+      'settings_change',
+      'timetable_neis_sync',
+      'widget_layout_change',
+      'onboarding_roles_selected',
+      'onboarding_widget_preset',
+      'chatbot_feedback',
+      'chatbot_escalate',
+      'share_modal_open',
+      'share_click',
+      'share_prompt_shown',
+      'share_prompt_action',
+    ],
   },
   {
     key: 'error',
@@ -162,16 +105,6 @@ const CATEGORIES: CategoryDef[] = [
 
 function getCategoryForEvent(event: string): CategoryDef {
   return CATEGORIES.find((c) => c.events.includes(event)) || CATEGORIES[4];
-}
-
-// ── 이벤트 아이템 타입 ──
-
-interface EventItem {
-  event: string;
-  properties: Record<string, unknown>;
-  device_id: string;
-  app_version: string;
-  created_at: string;
 }
 
 // ── 유틸리티 ──
@@ -215,14 +148,6 @@ function getEventShortLabel(e: EventItem): string {
   return EVENT_LABELS[e.event] || e.event;
 }
 
-function formatDuration(seconds: number): string {
-  if (seconds < 0 || !Number.isFinite(seconds)) return '-';
-  const m = Math.floor(seconds / 60);
-  const s = Math.round(seconds % 60);
-  if (m === 0) return `${s}초`;
-  return `${m}분 ${s}초`;
-}
-
 function getEventBadgeClass(event: string): string {
   if (event === 'error') return 'bg-red-900/60 text-red-300 border border-red-700/50';
   if (['app_open', 'app_close', 'session_start'].includes(event))
@@ -244,7 +169,11 @@ function formatProperties(event: string, properties: Record<string, unknown>): s
     return `⏱️ ${formatDuration(Number(properties.sessionDuration))}`;
   if (event === 'app_open' && properties.launchMode) {
     const mode = String(properties.launchMode);
-    const modeLabels: Record<string, string> = { widget: '위젯 모드', normal: '일반 모드', main: '메인 모드' };
+    const modeLabels: Record<string, string> = {
+      widget: '위젯 모드',
+      normal: '일반 모드',
+      main: '메인 모드',
+    };
     return `🚀 ${modeLabels[mode] || mode}`;
   }
   return keys
@@ -440,9 +369,7 @@ export default function EventLog({ events }: { events: EventItem[] }) {
         <button
           onClick={() => setTab('log')}
           className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-            tab === 'log'
-              ? 'bg-blue-600 text-white'
-              : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+            tab === 'log' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
           }`}
         >
           로그
@@ -459,7 +386,9 @@ export default function EventLog({ events }: { events: EventItem[] }) {
                 {insights.activeDevices}
                 <span className="text-sm text-gray-500 ml-1">대</span>
               </div>
-              <div className="text-[10px] text-gray-600 mt-0.5">최근 {insights.totalEvents}건 중</div>
+              <div className="text-[10px] text-gray-600 mt-0.5">
+                최근 {insights.totalEvents}건 중
+              </div>
             </div>
             <div className="bg-gray-800/50 rounded-lg p-3">
               <div className="text-xs text-gray-500 mb-1">총 이벤트</div>
@@ -583,9 +512,7 @@ export default function EventLog({ events }: { events: EventItem[] }) {
           <div>
             <h4 className="text-sm font-medium text-gray-300 mb-3">
               사용자 여정
-              <span className="text-xs text-gray-600 font-normal ml-2">
-                기기별 이벤트 흐름
-              </span>
+              <span className="text-xs text-gray-600 font-normal ml-2">기기별 이벤트 흐름</span>
             </h4>
             <div className="space-y-2">
               {insights.sessions.map((session) => {

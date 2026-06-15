@@ -1,15 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-
-interface ConversationMessage {
-  session_id: string;
-  role: string;
-  content: string;
-  created_at: string;
-  is_test: boolean;
-  sources: string[] | null;
-}
+import type { ConversationMessage } from './_lib/types';
 
 type FilterMode = 'real' | 'test' | 'all';
 
