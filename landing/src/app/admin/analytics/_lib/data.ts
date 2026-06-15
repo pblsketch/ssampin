@@ -158,8 +158,10 @@ export async function loadDashboardData({ dateFrom, dateTo }: DateRange): Promis
     fetchTable<ChatEscalationRow>('chatbot_recent_escalations', { order: 'created_at_kst.desc' }),
     fetchRpc<ChatConfidenceRow>('chatbot_confidence_stats_range', range),
     fetchChatConversations({ dateFrom, dateTo }),
-    fetchRpc<ChatFeedbackStatsRow>('chatbot_feedback_stats_range', range),
-    fetchRpc<ChatFeedbackEscalationRow>('chatbot_feedback_escalations_range', range),
+    // 피드백 해결률·에스컬레이션은 누적 품질 지표라 전체 기간 고정(뷰). 짧은 기간으로 자르면
+    // '해결됨' 0건처럼 오해를 부르므로 DateRangePicker 를 따르지 않는다.
+    fetchTable<ChatFeedbackStatsRow>('chatbot_feedback_stats'),
+    fetchTable<ChatFeedbackEscalationRow>('chatbot_feedback_escalations'),
   ]);
 
   return {

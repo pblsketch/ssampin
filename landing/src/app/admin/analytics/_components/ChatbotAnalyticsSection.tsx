@@ -58,7 +58,7 @@ export function ChatbotAnalyticsSection({
           const esc = chatFeedbackEscalations[0]?.escalation_count ?? 0;
           return (
             <div className="mb-6 rounded-lg bg-gray-800/50 p-4">
-              <h3 className="text-sm text-gray-400 mb-3">피드백 해결률</h3>
+              <h3 className="text-sm text-gray-400 mb-3">피드백 해결률 (전체 기간)</h3>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 sm:gap-4">
                 <div className="text-center">
                   <div className="text-xl sm:text-2xl font-bold text-emerald-400">
