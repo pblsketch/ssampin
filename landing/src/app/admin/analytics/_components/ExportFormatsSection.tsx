@@ -2,6 +2,9 @@ import { Section } from './primitives';
 import type { ExportFormatRow } from '../_lib/types';
 
 export function ExportFormatsSection({ exports }: { exports: ExportFormatRow[] }) {
+  // 막대 너비 기준 최댓값은 한 번만 계산(빈 배열이면 map 자체가 실행되지 않아 출력 동일).
+  const maxCount = Math.max(...exports.map((x) => x.count));
+
   return (
     <Section title="내보내기 형식">
       {exports.length === 0 ? (
@@ -15,7 +18,7 @@ export function ExportFormatsSection({ exports }: { exports: ExportFormatRow[] }
                 <div
                   className="bg-amber-500 h-full rounded-full flex items-center justify-end pr-2 text-xs font-medium"
                   style={{
-                    width: `${Math.min(100, (e.count / Math.max(...exports.map((x) => x.count))) * 100)}%`,
+                    width: `${Math.min(100, (e.count / maxCount) * 100)}%`,
                     minWidth: '2rem',
                   }}
                 >

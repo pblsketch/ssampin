@@ -26,6 +26,9 @@ export function ChatbotAnalyticsSection({
   chatFeedbackStats: ChatFeedbackStatsRow[];
   chatFeedbackEscalations: ChatFeedbackEscalationRow[];
 }) {
+  // 인기 주제 막대 기준 최댓값은 한 번만 계산(빈 배열이면 map 미실행 → 출력 동일).
+  const topicsMax = Math.max(...chatTopics.map((x) => x.mention_count));
+
   return (
     <Section title="AI 챗봇 분석">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
@@ -128,7 +131,7 @@ export function ChatbotAnalyticsSection({
                     <div
                       className="bg-purple-500 h-full rounded-full"
                       style={{
-                        width: `${(t.mention_count / Math.max(...chatTopics.map((x) => x.mention_count))) * 100}%`,
+                        width: `${(t.mention_count / topicsMax) * 100}%`,
                       }}
                     />
                   </div>

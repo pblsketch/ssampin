@@ -54,3 +54,42 @@ export async function fetchTable<T>(table: string, options?: FetchTableOptions):
   }
   return res.json();
 }
+
+/**
+ * Supabase RPC(PostgREST 함수)를 GET 으로 호출한다. 뷰로는 불가능한 임의 기간 집계용.
+ * null/빈 인자는 생략 → 함수의 DEFAULT(NULL) 가 적용된다(전체 기간).
+ * 환경 변수가 없거나 함수가 없으면(404) 빈 배열을 반환해 화면이 안전하게 동작한다.
+ */
+export async function fetchRpc<T>(
+  fn: string,
+  params?: Record<string, string | null | undefined>,
+): Promise<T[]> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!url || !key) return [];
+
+  const qs = new URLSearchParams();
+  if (params) {
+    for (const [k, v] of Object.entries(params)) {
+      if (v != null && v !== '') qs.set(k, v);
+    }
+  }
+  const query = qs.toString();
+  const queryUrl = `${url}/rest/v1/rpc/${fn}${query ? `?${query}` : ''}`;
+
+  const res = await fetch(queryUrl, {
+    headers: {
+      apikey: key,
+      Authorization: `Bearer ${key}`,
+      'Content-Type': 'application/json',
+    },
+    cache: 'no-store',
+  });
+
+  if (!res.ok) {
+    console.error(`[Analytics] RPC "${fn}" failed: ${res.status}`);
+    return [];
+  }
+  return res.json();
+}

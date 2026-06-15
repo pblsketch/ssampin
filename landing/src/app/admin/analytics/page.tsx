@@ -87,13 +87,13 @@ export default async function AdminAnalyticsPage({
             <WeeklySummarySection weekly={data.weekly} />
 
             <div className="grid md:grid-cols-2 gap-6">
-              <ToolRankingSection toolsWeekly={data.toolsWeekly} tools={data.tools} />
+              <ToolRankingSection toolsRanged={data.toolsRanged} tools={data.tools} />
               <ExportFormatsSection exports={data.exports} />
             </div>
 
             <SessionStatsSection sessions={data.sessions} />
 
-            <Section title="버전 분포 (최근 90일)">
+            <Section title="버전 분포">
               <VersionDistribution versions={data.versions} />
             </Section>
 
