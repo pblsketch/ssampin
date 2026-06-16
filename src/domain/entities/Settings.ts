@@ -254,6 +254,17 @@ export interface NeisSettings {
   readonly schoolCode: string; // SD_SCHUL_CODE
   readonly atptCode: string; // ATPT_OFCDC_SC_CODE
   readonly schoolName: string; // 선택된 학교명
+  /**
+   * 학교 도로명주소(NEIS ORG_RDNMA). 선택된 학교 확인 + 날씨 지역 자동설정 근거 표시용.
+   * 옵셔널 — 직접 입력(NEIS 미연동) 학교나 기존 사용자는 없을 수 있다(마이그레이션 불필요).
+   */
+  readonly address?: string;
+  /** 도로명 우편번호(ORG_RDNZC). 공문서·택배 확인/복사용 */
+  readonly postalCode?: string;
+  /** 대표 전화번호(ORG_TELNO) */
+  readonly tel?: string;
+  /** 팩스번호(ORG_FAXNO) */
+  readonly fax?: string;
   readonly autoSync?: NeisAutoSyncSettings;
 }
 
@@ -261,6 +272,18 @@ export interface WeatherLocation {
   readonly lat: number;
   readonly lon: number;
   readonly name: string; // 표시용 지역명 (예: "서울 강남구")
+}
+
+/**
+ * 학교알리미(schoolinfo) 학교 연결 (school-enrich ②-B).
+ *
+ * 온보딩/설정에서 NEIS 학교를 고를 때 학교명+주소로 학교알리미 식별자(shlIdfCd)를
+ * best-effort 매칭해 저장한다. 평가계획 불러오기(①)가 이 값이 있으면 학교 재검색
+ * 단계를 건너뛴다(없거나 모호하면 ① 수동검색 폴백 — 차단 없음, §13).
+ */
+export interface SchoolInfoLink {
+  readonly shlIdfCd: string;
+  readonly matchedName: string; // 매칭된 학교알리미 학교명(확인용)
 }
 
 export interface WeatherSettings {
@@ -344,6 +367,8 @@ export interface Settings {
   readonly fontSize: 'small' | 'medium' | 'large' | 'xlarge';
   readonly fontFamily?: FontFamily;
   readonly neis: NeisSettings;
+  /** 학교알리미 학교 연결 (평가계획 불러오기 학교 재검색 생략용, school-enrich ②-B) */
+  readonly schoolInfo?: SchoolInfoLink;
   readonly pin: PinSettings;
   readonly alarmSound: AlarmSoundSettings;
   readonly workSymbols: WorkSymbolsSettings;

@@ -4,9 +4,10 @@
  * - matchesQuery: AND 토큰 매칭 정책 유지
  * - "여러 날 출결" 명령(`multiDateAttendance.open`) 존재 + 키워드 매핑 보장 (FR-10)
  */
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi, afterEach } from 'vitest';
 import { buildDefaultCommands, matchesQuery } from './commandRegistry';
 import { useMultiDateAttendanceIntentStore } from '@adapters/stores/useMultiDateAttendanceIntentStore';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 
 describe('matchesQuery', () => {
   const cmd = {
@@ -100,5 +101,63 @@ describe('"여러 날 출결" 명령 (multiDateAttendance.open)', () => {
 
     // cleanup
     useMultiDateAttendanceIntentStore.getState().consume();
+  });
+});
+
+describe('학교 정보 빠른 복사 명령 (school-enrich)', () => {
+  const onNavigate = vi.fn();
+  const original = useSettingsStore.getState().settings;
+
+  afterEach(() => {
+    useSettingsStore.setState({ settings: original });
+  });
+
+  function setNeis(neis: Partial<(typeof original)['neis']>) {
+    useSettingsStore.setState({
+      settings: {
+        ...original,
+        neis: { schoolCode: 'X', atptCode: 'Y', schoolName: '서울고', ...neis },
+      },
+    });
+  }
+
+  it('학교 주소가 없으면 학교 정보 그룹 명령이 없다', () => {
+    setNeis({});
+    const cmds = buildDefaultCommands({ onNavigate });
+    expect(cmds.some((c) => c.group === '학교 정보')).toBe(false);
+  });
+
+  it('주소·전화·팩스가 있으면 각각 복사 명령이 학교 정보 그룹으로 등록된다', () => {
+    setNeis({
+      address: '서울특별시 서초구 효령로 197',
+      postalCode: '06669',
+      tel: '02-582-8151',
+      fax: '02-587-3933',
+    });
+    const cmds = buildDefaultCommands({ onNavigate });
+    const addr = cmds.find((c) => c.id === 'schoolInfo.copyAddress');
+    expect(addr?.group).toBe('학교 정보');
+    expect(addr?.icon).toBe('location_on');
+    expect(cmds.some((c) => c.id === 'schoolInfo.copyTel')).toBe(true);
+    expect(cmds.some((c) => c.id === 'schoolInfo.copyFax')).toBe(true);
+  });
+
+  it('전화·팩스가 없으면 해당 복사 명령은 빠진다(주소만)', () => {
+    setNeis({ address: '서울특별시 서초구 효령로 197' });
+    const cmds = buildDefaultCommands({ onNavigate });
+    expect(cmds.some((c) => c.id === 'schoolInfo.copyAddress')).toBe(true);
+    expect(cmds.some((c) => c.id === 'schoolInfo.copyTel')).toBe(false);
+    expect(cmds.some((c) => c.id === 'schoolInfo.copyFax')).toBe(false);
+  });
+
+  it('주소 복사 run() → "우편번호 주소"를 클립보드에 쓴다', () => {
+    setNeis({ address: '서울특별시 서초구 효령로 197', postalCode: '06669' });
+    const writeText = vi.fn(() => Promise.resolve());
+    Object.assign(navigator, { clipboard: { writeText } });
+
+    const cmds = buildDefaultCommands({ onNavigate });
+    cmds.find((c) => c.id === 'schoolInfo.copyAddress')!.run();
+
+    expect(writeText).toHaveBeenCalledWith('06669 서울특별시 서초구 효령로 197');
   });
 });

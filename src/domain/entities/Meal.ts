@@ -11,24 +11,30 @@ export interface MealDish {
 }
 
 export interface MealInfo {
-  readonly date: string;       // YYYYMMDD
-  readonly mealType: string;   // 중식, 석식 등 (MMEAL_SC_NM)
+  readonly date: string; // YYYYMMDD
+  readonly mealType: string; // 중식, 석식 등 (MMEAL_SC_NM)
   readonly dishes: readonly MealDish[];
-  readonly calorie: string;    // e.g. "693.2 Kcal"
+  readonly calorie: string; // e.g. "693.2 Kcal"
 }
 
 export interface SchoolSearchResult {
-  readonly schoolName: string;   // SCHUL_NM
-  readonly schoolCode: string;   // SD_SCHUL_CODE
-  readonly atptCode: string;     // ATPT_OFCDC_SC_CODE
-  readonly address: string;      // ORG_RDNMA (도로명주소)
-  readonly schoolType: string;   // SCHUL_KND_SC_NM (고등학교, 중학교 등)
+  readonly schoolName: string; // SCHUL_NM
+  readonly schoolCode: string; // SD_SCHUL_CODE
+  readonly atptCode: string; // ATPT_OFCDC_SC_CODE
+  readonly address: string; // ORG_RDNMA (도로명주소)
+  readonly schoolType: string; // SCHUL_KND_SC_NM (고등학교, 중학교 등)
+  /** 도로명 우편번호 (ORG_RDNZC). NEIS 미제공/직접입력 학교면 없음 — 공문서·택배 확인용 */
+  readonly postalCode?: string;
+  /** 대표 전화번호 (ORG_TELNO) */
+  readonly tel?: string;
+  /** 팩스번호 (ORG_FAXNO) */
+  readonly fax?: string;
 }
 
 /** 수동 입력 급식 */
 export interface ManualMealInfo {
-  readonly date: string;       // YYYYMMDD
-  readonly mealType: string;   // "중식", "간식" 등
+  readonly date: string; // YYYYMMDD
+  readonly mealType: string; // "중식", "간식" 등
   readonly dishes: readonly MealDish[];
   readonly calorie?: string;
   readonly source: 'manual';

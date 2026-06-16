@@ -129,6 +129,7 @@ import { ManageRubrics } from '@usecases/rubric/ManageRubrics';
 import type { IEvaluationPlanPort } from '@domain/ports/IEvaluationPlanPort';
 import { SchoolInfoEvaluationAdapter } from '@infrastructure/schoolinfo/SchoolInfoEvaluationAdapter';
 import { ImportEvaluationPlan } from '@usecases/evaluation/ImportEvaluationPlan';
+import { EnrichSchoolOnSelect } from '@usecases/school/EnrichSchoolOnSelect';
 
 import type { IDocumentParserPort } from '@domain/ports/IDocumentParserPort';
 import type { IMaskMappingRepository } from '@domain/ports/IMaskMappingRepository';
@@ -351,6 +352,10 @@ export const manageRubrics = new ManageRubrics(rubricRepository);
 // 통신/파싱은 electron main(safeFetch + kordoc)에 IPC 위임 → markdown 구조화는 순수 도메인 파서.
 export const evaluationPlanPort: IEvaluationPlanPort = new SchoolInfoEvaluationAdapter();
 export const importEvaluationPlan = new ImportEvaluationPlan(evaluationPlanPort);
+
+// === 온보딩 학교 보강 (school-enrich ②) ===
+// ②-A 날씨 좌표(순수·오프라인) + ②-B 학교알리미 식별자(① 검색 인프라 재사용, best-effort).
+export const enrichSchoolOnSelect = new EnrichSchoolOnSelect(evaluationPlanPort);
 
 // === 마크다운 변환기 (markdown-convert) ===
 // 파싱은 KordocParserAdapter → IPC → kordoc(메인, 로컬). 복원표는 secureStorage 암호화 저장.

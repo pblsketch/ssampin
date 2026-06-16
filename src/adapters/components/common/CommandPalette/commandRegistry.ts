@@ -3,9 +3,18 @@ import type { PageId } from '@adapters/components/Layout/Sidebar';
 import { useQuickAddStore } from '@adapters/stores/useQuickAddStore';
 import { useSettingsStore, DEFAULT_SHORTCUTS } from '@adapters/stores/useSettingsStore';
 import { useMultiDateAttendanceIntentStore } from '@adapters/stores/useMultiDateAttendanceIntentStore';
+import { useToastStore } from '@adapters/components/common/Toast';
 import { comboToDisplay, isMacOS } from '@adapters/hooks/shortcut/keyNormalize';
 
-export type CommandGroupLabel = '페이지' | '빠른 추가' | '설정';
+export type CommandGroupLabel = '페이지' | '빠른 추가' | '학교 정보' | '설정';
+
+/** 학교 정보(주소·우편번호·전화·팩스) 클립보드 복사 + 복사값 토스트 안내(확인 겸용) */
+function copySchoolInfo(text: string, label: string): void {
+  navigator.clipboard
+    .writeText(text)
+    .then(() => useToastStore.getState().show(`${label} 복사: ${text}`, 'success'))
+    .catch(() => useToastStore.getState().show('복사하지 못했어요', 'error'));
+}
 
 export interface Command {
   id: string;
@@ -129,6 +138,46 @@ export function buildDefaultCommands({ onNavigate }: BuildDefaultCommandsParams)
     },
   ];
 
+  // 학교 정보 빠른 복사 — 등록된 학교가 있을 때만 노출. 복사값을 토스트로 보여줘 확인도 겸한다.
+  const neis = useSettingsStore.getState().settings.neis;
+  const schoolInfoCommands: Command[] = [];
+  if (neis.address) {
+    schoolInfoCommands.push({
+      id: 'schoolInfo.copyAddress',
+      label: '학교 주소 복사',
+      group: '학교 정보' as const,
+      icon: 'location_on',
+      keywords: ['학교', '주소', '우편번호', '도로명', 'address', 'zip', 'copy', '복사', '공문'],
+      run: () => {
+        const n = useSettingsStore.getState().settings.neis;
+        copySchoolInfo(
+          `${n.postalCode ? `${n.postalCode} ` : ''}${n.address ?? ''}`.trim(),
+          '학교 주소',
+        );
+      },
+    });
+  }
+  if (neis.tel) {
+    schoolInfoCommands.push({
+      id: 'schoolInfo.copyTel',
+      label: '학교 전화번호 복사',
+      group: '학교 정보' as const,
+      icon: 'call',
+      keywords: ['학교', '전화', '전화번호', '연락처', 'tel', 'phone', '복사'],
+      run: () => copySchoolInfo(useSettingsStore.getState().settings.neis.tel ?? '', '전화번호'),
+    });
+  }
+  if (neis.fax) {
+    schoolInfoCommands.push({
+      id: 'schoolInfo.copyFax',
+      label: '학교 팩스번호 복사',
+      group: '학교 정보' as const,
+      icon: 'print',
+      keywords: ['학교', '팩스', 'fax', '복사'],
+      run: () => copySchoolInfo(useSettingsStore.getState().settings.neis.fax ?? '', '팩스번호'),
+    });
+  }
+
   const settingsCommands: Command[] = [
     {
       id: 'navigate-settings',
@@ -140,7 +189,7 @@ export function buildDefaultCommands({ onNavigate }: BuildDefaultCommandsParams)
     },
   ];
 
-  return [...pageCommands, ...quickAddCommands, ...settingsCommands];
+  return [...pageCommands, ...quickAddCommands, ...schoolInfoCommands, ...settingsCommands];
 }
 
 /** AND 토큰 검색: 쿼리 공백 구분 모든 토큰이 대상 문자열에 포함되면 매치 */
@@ -155,7 +204,7 @@ export function matchesQuery(command: Command, query: string): boolean {
 export function filterAndGroupCommands(commands: Command[], query: string): CommandGroup[] {
   const filtered = commands.filter((cmd) => matchesQuery(cmd, query));
 
-  const groupOrder: CommandGroupLabel[] = ['빠른 추가', '페이지', '설정'];
+  const groupOrder: CommandGroupLabel[] = ['빠른 추가', '학교 정보', '페이지', '설정'];
   const groups: CommandGroup[] = groupOrder
     .map((label) => ({
       label,

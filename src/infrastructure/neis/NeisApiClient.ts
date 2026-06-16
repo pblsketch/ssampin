@@ -35,7 +35,12 @@ function parseDishes(ddishNm: string): readonly MealDish[] {
 
 interface NeisApiResponse {
   readonly [key: string]: readonly [
-    { readonly head: readonly [{ readonly list_total_count: number }, { readonly RESULT: { readonly CODE: string; readonly MESSAGE: string } }] },
+    {
+      readonly head: readonly [
+        { readonly list_total_count: number },
+        { readonly RESULT: { readonly CODE: string; readonly MESSAGE: string } },
+      ];
+    },
     { readonly row: readonly Record<string, string>[] }?,
   ];
 }
@@ -44,14 +49,9 @@ const isElectron = typeof window !== 'undefined' && window.electronAPI != null;
 
 export class NeisApiClient implements INeisPort {
   /** Electron → 직접 호출, 브라우저 dev → Vite 프록시 경유 */
-  private readonly baseUrl = isElectron
-    ? 'https://open.neis.go.kr/hub'
-    : '/neis-api/hub';
+  private readonly baseUrl = isElectron ? 'https://open.neis.go.kr/hub' : '/neis-api/hub';
 
-  async searchSchool(
-    apiKey: string,
-    schoolName: string,
-  ): Promise<readonly SchoolSearchResult[]> {
+  async searchSchool(apiKey: string, schoolName: string): Promise<readonly SchoolSearchResult[]> {
     const params = new URLSearchParams({
       KEY: apiKey,
       Type: 'json',
@@ -66,7 +66,7 @@ export class NeisApiClient implements INeisPort {
       const res = await fetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-      const json = await res.json() as NeisApiResponse;
+      const json = (await res.json()) as NeisApiResponse;
       const data = json['schoolInfo'];
       if (!data || data.length < 2) return [];
 
@@ -84,6 +84,10 @@ export class NeisApiClient implements INeisPort {
         atptCode: row['ATPT_OFCDC_SC_CODE'] ?? '',
         address: row['ORG_RDNMA'] ?? row['ORG_RDNDA'] ?? '',
         schoolType: row['SCHUL_KND_SC_NM'] ?? '',
+        // 같은 응답에 포함된 우편번호·전화·팩스 (추가 호출 없음). 빈값은 undefined 로.
+        postalCode: (row['ORG_RDNZC'] ?? '').trim() || undefined,
+        tel: (row['ORG_TELNO'] ?? '').trim() || undefined,
+        fax: (row['ORG_FAXNO'] ?? '').trim() || undefined,
       }));
     } catch {
       return [];
@@ -137,7 +141,7 @@ export class NeisApiClient implements INeisPort {
       const res = await fetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-      const json = await res.json() as NeisApiResponse;
+      const json = (await res.json()) as NeisApiResponse;
       const data = json['mealServiceDietInfo'];
       if (!data || data.length < 2) return [];
 
@@ -184,7 +188,7 @@ export class NeisApiClient implements INeisPort {
 
     try {
       const res = await this.fetchWithTimeout(url);
-      const json = await res.json() as NeisApiResponse;
+      const json = (await res.json()) as NeisApiResponse;
       const data = json['classInfo'];
       if (!data || data.length < 2) {
         this.checkNeisError(json);
@@ -258,7 +262,7 @@ export class NeisApiClient implements INeisPort {
 
     try {
       const res = await this.fetchWithTimeout(url);
-      const json = await res.json() as NeisApiResponse;
+      const json = (await res.json()) as NeisApiResponse;
       const data = json[endpoint];
       if (!data || data.length < 2) {
         this.checkNeisError(json);
@@ -318,7 +322,7 @@ export class NeisApiClient implements INeisPort {
 
       try {
         const res = await this.fetchWithTimeout(url);
-        const json = await res.json() as NeisApiResponse;
+        const json = (await res.json()) as NeisApiResponse;
         const data = json['SchoolSchedule'];
 
         if (!data || data.length < 2) {
@@ -388,7 +392,10 @@ export class NeisApiClient implements INeisPort {
       return res;
     } catch (e) {
       if ((e as Error).name === 'AbortError') {
-        throw new NeisApiError('NETWORK_ERROR', '나이스 서버 응답이 느립니다. 잠시 후 다시 시도해주세요.');
+        throw new NeisApiError(
+          'NETWORK_ERROR',
+          '나이스 서버 응답이 느립니다. 잠시 후 다시 시도해주세요.',
+        );
       }
       throw e;
     } finally {
