@@ -278,7 +278,7 @@ export function parseScoringRubrics(
 /** 원문 줄에서 수행평가 항목 제목 추출 ("가./나./1) 제목", 보일러플레이트 제외, 없으면 null) */
 function extractTaskTitle(raw: string): string | null {
   const BOILERPLATE =
-    /성취\s*기준|평가\s*기준|채점\s*기준|평가\s*방법|성취\s*수준|반영\s*비율|유의|목적|점수|척도|역량|개요|편제/;
+    /성취\s*기준|평가\s*기준|채점\s*기준|평가\s*방법|성취\s*수준|반영\s*비율|유의|목적|점수|척도|역량|개요|편제|세부\s*계획|운영\s*계획|평가\s*계획/;
   const lines = raw.split('\n');
   for (let i = lines.length - 1; i >= 0; i--) {
     const m = lines[i]!.match(/^[\s\-•▪#*]*(?:[가-힣]|\d{1,2})\s*[.)]\s*(.{2,40})$/);

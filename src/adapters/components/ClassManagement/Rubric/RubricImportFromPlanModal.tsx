@@ -72,10 +72,12 @@ export function RubricImportFromPlanModal({
   const [docs, setDocs] = useState<readonly EvaluationPlanDoc[]>([]);
   const [docSearch, setDocSearch] = useState(classSubject ?? '');
 
-  // ③ 파싱 결과 + 선택 (과목 → 수행평가 항목(후보))
+  // ③ 파싱 결과 + 선택 (과목 → 수행평가 과제(후보) → 미리보기)
   const [parsed, setParsed] = useState<ParsedEvaluationPlan | null>(null);
   const [subject, setSubject] = useState('');
   const [candidateIdx, setCandidateIdx] = useState(0);
+  // 'select' = 과목·수행평가 과제 고르기, 'preview' = 고른 과제의 채점기준표 미리보기
+  const [reviewMode, setReviewMode] = useState<'select' | 'preview'>('select');
 
   // ②-B 자동 스킵: 저장된 학교(shlIdfCd)가 있으면 첫 진입 시 곧장 평가계획 목록을 불러온다.
   // 목록이 없거나 사용자가 '이전'을 누르면 학교 검색('school' 단계)으로 폴백한다(차단 없음).
@@ -146,10 +148,11 @@ export function RubricImportFromPlanModal({
         school.kind,
       );
       setParsed(result);
-      // 기본 선택: 수업반 과목과 매칭되는 과목 우선
+      // 기본 선택: 수업반 과목과 매칭되는 과목 우선. 과제 선택 단계(select)부터 시작.
       const subs = distinctSubjects(result.candidates);
       setSubject(pickDefaultSubject(subs, classSubject));
       setCandidateIdx(0);
+      setReviewMode('select');
       setStep('review');
     } catch (e) {
       setError(e instanceof Error ? e.message : '파일을 불러오지 못했어요.');
@@ -176,6 +179,13 @@ export function RubricImportFromPlanModal({
   function selectSubject(subj: string) {
     setSubject(subj);
     setCandidateIdx(0);
+    setReviewMode('select');
+  }
+
+  /** 수행평가 과제 선택 → 그 과제의 채점기준표 미리보기로 이동 */
+  function pickTask(i: number) {
+    setCandidateIdx(i);
+    setReviewMode('preview');
   }
 
   function handleImport() {
@@ -339,7 +349,7 @@ export function RubricImportFromPlanModal({
                     {parsed.markdown.slice(0, 20000) || '(표시할 내용이 없습니다)'}
                   </pre>
                 </div>
-              ) : (
+              ) : reviewMode === 'select' ? (
                 <>
                   {/* 과목 선택 (직접 선택 — 자동 확정 안 함) */}
                   <div className="flex items-center gap-2 flex-wrap">
@@ -362,68 +372,79 @@ export function RubricImportFromPlanModal({
                         {subject || subjects[0]}
                       </span>
                     )}
-                    {selectedCandidate && (
-                      <span className="text-caption text-sp-muted">
-                        {selectedCandidate.hasScores ? '배점 포함' : '배점은 직접 입력'}
-                      </span>
-                    )}
                   </div>
 
-                  {/* 수행평가 항목 선택 (해당 과목의 후보) */}
-                  {subjectCandidates.length > 1 && (
-                    <div className="flex flex-col gap-2">
-                      <span className="text-xs text-sp-muted">수행평가 항목</span>
-                      {subjectCandidates.map((c, i) => (
-                        <button
-                          key={`${c.title}-${i}`}
-                          type="button"
-                          onClick={() => setCandidateIdx(i)}
-                          className={`text-left px-3 py-2 rounded-lg bg-sp-surface border text-sm transition-colors ${
-                            i === candidateIdx
-                              ? 'border-sp-accent text-sp-text'
-                              : 'border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent'
-                          }`}
-                        >
-                          {c.title}{' '}
-                          <span className="text-caption text-sp-muted">
-                            · 평가요소 {c.criteria.length}개
+                  {/* 수행평가 과제 선택 — 과제마다 채점기준표가 따로 있다 */}
+                  <div className="flex flex-col gap-2">
+                    <span className="text-xs text-sp-muted">
+                      불러올 수행평가 과제를 선택하세요 ({subjectCandidates.length}개)
+                    </span>
+                    {subjectCandidates.map((c, i) => (
+                      <button
+                        key={`${c.title}-${i}`}
+                        type="button"
+                        onClick={() => pickTask(i)}
+                        className="text-left px-3 py-2.5 rounded-lg bg-sp-surface border border-sp-border hover:border-sp-accent transition-colors flex items-center gap-2"
+                      >
+                        <span className="material-symbols-outlined text-base text-sp-muted shrink-0">
+                          grading
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm text-sp-text truncate">{c.title}</span>
+                          <span className="block text-caption text-sp-muted mt-0.5">
+                            평가요소 {c.criteria.length}개 ·{' '}
+                            {c.hasScores ? '배점 포함' : '배점은 직접 입력'}
                           </span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* 선택 루브릭 미리보기 */}
-                  {selectedCandidate && (
-                    <div className="flex flex-col gap-2">
-                      <span className="text-xs text-sp-muted">
-                        미리보기 — {selectedCandidate.title}
-                      </span>
-                      {selectedCandidate.criteria.map((cri, ci) => (
-                        <div
-                          key={`${cri.name}-${ci}`}
-                          className="rounded-lg border border-sp-border bg-sp-surface p-3"
-                        >
-                          <p className="text-sm font-semibold text-sp-text">{cri.name}</p>
-                          <div className="flex flex-col gap-1 mt-1.5">
-                            {cri.levels.map((lv, li) => (
-                              <div key={li} className="flex items-start gap-2 text-xs">
-                                <span className="shrink-0 text-sp-accent font-semibold tabular-nums w-10 text-right">
-                                  {lv.score}점
-                                </span>
-                                <span className="text-sp-muted">
-                                  {lv.description && lv.description.length > 0
-                                    ? lv.description
-                                    : lv.name}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                        </span>
+                        <span className="material-symbols-outlined text-base text-sp-muted shrink-0">
+                          chevron_right
+                        </span>
+                      </button>
+                    ))}
+                    {subjectCandidates.length === 0 && (
+                      <p className="text-xs text-sp-muted py-4 text-center">
+                        이 과목에서 가져올 수행평가 과제가 없어요.
+                      </p>
+                    )}
+                  </div>
                 </>
+              ) : (
+                selectedCandidate && (
+                  <div className="flex flex-col gap-2">
+                    {/* 선택한 과제의 채점기준표 미리보기 */}
+                    <div className="flex items-baseline gap-2 flex-wrap">
+                      <span className="text-sm font-semibold text-sp-text">
+                        {selectedCandidate.title}
+                      </span>
+                      <span className="text-caption text-sp-muted">
+                        {subject} · 평가요소 {selectedCandidate.criteria.length}개 ·{' '}
+                        {selectedCandidate.hasScores ? '배점 포함' : '배점은 직접 입력'}
+                      </span>
+                    </div>
+                    {selectedCandidate.criteria.map((cri, ci) => (
+                      <div
+                        key={`${cri.name}-${ci}`}
+                        className="rounded-lg border border-sp-border bg-sp-surface p-3"
+                      >
+                        <p className="text-sm font-semibold text-sp-text">{cri.name}</p>
+                        <div className="flex flex-col gap-1 mt-1.5">
+                          {cri.levels.map((lv, li) => (
+                            <div key={li} className="flex items-start gap-2 text-xs">
+                              <span className="shrink-0 text-sp-accent font-semibold tabular-nums w-10 text-right">
+                                {lv.score}점
+                              </span>
+                              <span className="text-sp-muted">
+                                {lv.description && lv.description.length > 0
+                                  ? lv.description
+                                  : lv.name}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )
               )}
             </div>
           )}
@@ -436,6 +457,7 @@ export function RubricImportFromPlanModal({
             onClick={() => {
               setError(null);
               if (step === 'docs') setStep('school');
+              else if (step === 'review' && reviewMode === 'preview') setReviewMode('select');
               else if (step === 'review') setStep('docs');
               else onClose();
             }}
@@ -444,7 +466,7 @@ export function RubricImportFromPlanModal({
             {step === 'school' ? '취소' : '이전'}
           </button>
 
-          {step === 'review' && !showViewerFallback && (
+          {step === 'review' && reviewMode === 'preview' && !showViewerFallback && (
             <button
               type="button"
               onClick={handleImport}
@@ -453,7 +475,7 @@ export function RubricImportFromPlanModal({
             >
               {selectedCandidate
                 ? `이 루브릭 불러오기 (평가요소 ${selectedCandidate.criteria.length}개)`
-                : '항목을 선택하세요'}
+                : '과제를 선택하세요'}
             </button>
           )}
           {step === 'review' && showViewerFallback && (
