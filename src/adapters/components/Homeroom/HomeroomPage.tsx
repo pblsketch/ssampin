@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import type { CounselingMethod } from '@domain/entities/StudentRecord';
 import { HomeroomTabBar, type HomeroomTab } from './HomeroomTabBar';
+import { HOMEROOM_OPEN_TAB_EVENT, consumePendingHomeroomTab } from './homeroomTabIntent';
 import { RecordsTab } from './Records/RecordsTab';
 import { SurveyTab } from './Survey/SurveyTab';
 import { AssignmentTab } from './Assignment/AssignmentTab';
@@ -42,26 +43,34 @@ export function HomeroomPage() {
     setActiveTab('records');
   }, []);
 
-  // RosterEmptyState CTA → 명렬 관리 탭 자동 전환 리스너.
-  // 이미 homeroom 페이지에 있어 setCurrentPage('homeroom')만으로는 변화가 없을 때,
-  // 이 이벤트로 탭을 'roster'(명렬 관리)로 전환한다.
+  // 외부(명령 팔레트·RosterEmptyState CTA 등) → 담임 업무 하위 탭 전환 리스너.
+  // - 이미 담임 업무에 떠 있을 때: 이벤트로 즉시 전환(대기열도 비움).
+  // - 다른 페이지 → 담임 업무로 막 진입할 때: 마운트 시 대기 요청(consume)으로 보강.
   useEffect(() => {
+    const validTabs: readonly HomeroomTab[] = [
+      'roster',
+      'records',
+      'survey',
+      'assignment',
+      'consultation',
+      'seating',
+    ];
+
+    // 마운트 직전에 들어온 탭 요청 반영 (이벤트를 놓친 경우 대비)
+    const pending = consumePendingHomeroomTab();
+    if (pending && validTabs.includes(pending)) {
+      setActiveTab(pending);
+    }
+
     const handler = (e: Event) => {
       const detail = (e as CustomEvent<string>).detail;
-      const validTabs: readonly HomeroomTab[] = [
-        'roster',
-        'records',
-        'survey',
-        'assignment',
-        'consultation',
-        'seating',
-      ];
+      consumePendingHomeroomTab(); // 이벤트로 처리하므로 대기열 비움(stale 방지)
       if (validTabs.includes(detail as HomeroomTab)) {
         setActiveTab(detail as HomeroomTab);
       }
     };
-    window.addEventListener('ssampin:homeroom-open-tab', handler);
-    return () => window.removeEventListener('ssampin:homeroom-open-tab', handler);
+    window.addEventListener(HOMEROOM_OPEN_TAB_EVENT, handler);
+    return () => window.removeEventListener(HOMEROOM_OPEN_TAB_EVENT, handler);
   }, []);
 
   return (

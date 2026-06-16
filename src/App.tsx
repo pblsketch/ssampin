@@ -65,7 +65,7 @@ import { ModalCoordinator } from '@adapters/components/common/ModalCoordinator';
 import { FeedbackModal } from '@adapters/components/common/FeedbackModal';
 import { HelpChatPanel } from '@adapters/components/HelpChat';
 import { CloseActionDialog } from '@adapters/components/common/CloseActionDialog';
-import { CommandPalette } from '@adapters/components/common/CommandPalette';
+import { CommandPalette, CommandPaletteHint } from '@adapters/components/common/CommandPalette';
 import { QuickAddModal } from '@adapters/components/common/QuickAdd';
 import { useGlobalShortcuts } from '@adapters/hooks/useGlobalShortcuts';
 import { useQuickAddStore } from '@adapters/stores/useQuickAddStore';
@@ -1159,6 +1159,7 @@ function MainApp() {
         <OAuthModalsProvider />
         <NeisSyncSuggestionBanner />
         <CommandPalette onNavigate={setCurrentPage} />
+        <CommandPaletteHint />
         <QuickAddModal />
       </div>
     </div>

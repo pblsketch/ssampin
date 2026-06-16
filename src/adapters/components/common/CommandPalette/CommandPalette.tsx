@@ -4,6 +4,7 @@ import type { PageId } from '@adapters/components/Layout/Sidebar';
 import { buildDefaultCommands, filterAndGroupCommands } from './commandRegistry';
 import type { Command, CommandGroup } from './commandRegistry';
 import { useCommandPalette } from './useCommandPalette';
+import { useCommandRecentStore } from '@adapters/stores/useCommandRecentStore';
 
 interface CommandPaletteProps {
   onNavigate: (page: PageId) => void;
@@ -53,18 +54,14 @@ function CommandList({ groups, activeIndex, allFiltered, onSelect, onHover }: Co
                 onClick={() => onSelect(cmd)}
                 onMouseEnter={() => onHover(idx)}
                 className={`flex items-center gap-3 px-4 h-11 rounded-md mx-2 cursor-pointer w-[calc(100%-1rem)] text-left transition-colors duration-sp-quick ease-sp-out ${
-                  isActive
-                    ? 'bg-sp-accent/15 text-sp-text'
-                    : 'text-sp-text hover:bg-sp-text/5'
+                  isActive ? 'bg-sp-accent/15 text-sp-text' : 'text-sp-text hover:bg-sp-text/5'
                 }`}
               >
                 <span className="material-symbols-outlined text-icon-md text-sp-muted shrink-0">
                   {cmd.icon}
                 </span>
                 <span className="flex-1 text-sm font-sp-medium truncate">{cmd.label}</span>
-                {cmd.shortcut && (
-                  <Kbd>{cmd.shortcut}</Kbd>
-                )}
+                {cmd.shortcut && <Kbd>{cmd.shortcut}</Kbd>}
               </button>
             );
           })}
@@ -80,8 +77,11 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const recentIds = useCommandRecentStore((s) => s.recentIds);
+  const recordRecent = useCommandRecentStore((s) => s.record);
+
   const commands = buildDefaultCommands({ onNavigate });
-  const groups = filterAndGroupCommands(commands, query);
+  const groups = filterAndGroupCommands(commands, query, recentIds);
   const allFiltered = groups.flatMap((g) => g.commands);
 
   // 팔레트 열릴 때 상태 초기화 + 포커스
@@ -103,10 +103,11 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
 
   const handleSelect = useCallback(
     (cmd: Command) => {
+      recordRecent(cmd.id);
       cmd.run();
       close();
     },
-    [close],
+    [close, recordRecent],
   );
 
   const handleKeyDown = useCallback(
@@ -116,9 +117,7 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
         setActiveIndex((prev) => (prev + 1) % Math.max(allFiltered.length, 1));
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
-        setActiveIndex((prev) =>
-          prev <= 0 ? Math.max(allFiltered.length - 1, 0) : prev - 1,
-        );
+        setActiveIndex((prev) => (prev <= 0 ? Math.max(allFiltered.length - 1, 0) : prev - 1));
       } else if (e.key === 'Enter') {
         e.preventDefault();
         const cmd = allFiltered[activeIndex];

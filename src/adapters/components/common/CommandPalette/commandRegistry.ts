@@ -5,8 +5,16 @@ import { useSettingsStore, DEFAULT_SHORTCUTS } from '@adapters/stores/useSetting
 import { useMultiDateAttendanceIntentStore } from '@adapters/stores/useMultiDateAttendanceIntentStore';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { comboToDisplay, isMacOS } from '@adapters/hooks/shortcut/keyNormalize';
+import { toChosungString, isChosungQuery } from '@domain/services/hangulSearch';
+import { requestHomeroomTab } from '@adapters/components/Homeroom/homeroomTabIntent';
 
-export type CommandGroupLabel = '페이지' | '빠른 추가' | '학교 정보' | '설정';
+export type CommandGroupLabel =
+  | '최근'
+  | '빠른 추가'
+  | '담임 업무'
+  | '학교 정보'
+  | '페이지'
+  | '설정';
 
 /** 학교 정보(주소·우편번호·전화·팩스) 클립보드 복사 + 복사값 토스트 안내(확인 겸용) */
 function copySchoolInfo(text: string, label: string): void {
@@ -107,6 +115,15 @@ export function buildDefaultCommands({ onNavigate }: BuildDefaultCommandsParams)
       run: () => useQuickAddStore.getState().open('note'),
     },
     {
+      id: 'quickAdd.bookmark',
+      label: '즐겨찾기 빠른 추가',
+      group: '빠른 추가' as const,
+      icon: 'bookmark',
+      keywords: ['즐겨찾기', '북마크', 'bookmark', '링크', 'url', '추가', '빠른'],
+      shortcut: comboFor('quickAdd.bookmark'),
+      run: () => useQuickAddStore.getState().open('bookmark'),
+    },
+    {
       id: 'multiDateAttendance.open',
       label: '여러 날 출결 일괄 등록',
       group: '빠른 추가' as const,
@@ -134,6 +151,43 @@ export function buildDefaultCommands({ onNavigate }: BuildDefaultCommandsParams)
       run: () => {
         useMultiDateAttendanceIntentStore.getState().setIntent('multi');
         onNavigate('homeroom');
+      },
+    },
+  ];
+
+  // 담임 업무 하위 탭 바로가기 — 페이지 이동 후 탭 전환 요청. 자주 쓰는 3개만 노출.
+  const homeroomCommands: Command[] = [
+    {
+      id: 'homeroom.roster',
+      label: '명렬(학생 명단) 관리 열기',
+      group: '담임 업무' as const,
+      icon: 'groups',
+      keywords: ['명렬', '명단', '학생', '관리', 'roster', '반', '추가', '결번'],
+      run: () => {
+        onNavigate('homeroom');
+        requestHomeroomTab('roster');
+      },
+    },
+    {
+      id: 'homeroom.records',
+      label: '학생 기록 열기',
+      group: '담임 업무' as const,
+      icon: 'edit_note',
+      keywords: ['기록', '학생기록', 'records', '상담', '특기사항', '출결', '메모', '생활'],
+      run: () => {
+        onNavigate('homeroom');
+        requestHomeroomTab('records');
+      },
+    },
+    {
+      id: 'homeroom.seating',
+      label: '자리 배치 열기',
+      group: '담임 업무' as const,
+      icon: 'event_seat',
+      keywords: ['자리', '자리배치', '좌석', 'seating', '배치', '앉기', '셔플', '짝'],
+      run: () => {
+        onNavigate('homeroom');
+        requestHomeroomTab('seating');
       },
     },
   ];
@@ -189,28 +243,65 @@ export function buildDefaultCommands({ onNavigate }: BuildDefaultCommandsParams)
     },
   ];
 
-  return [...pageCommands, ...quickAddCommands, ...schoolInfoCommands, ...settingsCommands];
+  return [
+    ...pageCommands,
+    ...quickAddCommands,
+    ...homeroomCommands,
+    ...schoolInfoCommands,
+    ...settingsCommands,
+  ];
 }
 
-/** AND 토큰 검색: 쿼리 공백 구분 모든 토큰이 대상 문자열에 포함되면 매치 */
+/**
+ * AND 토큰 검색: 쿼리 공백 구분 모든 토큰이 대상 문자열에 포함되면 매치.
+ * 각 토큰은 (1) 부분 문자열 일치, 또는 (2) 토큰이 전부 초성일 때 초성 시퀀스 일치로 통과한다.
+ * 예: "ㅅㄱㅍ" → "시간표으로 이동" 매치.
+ */
 export function matchesQuery(command: Command, query: string): boolean {
   if (!query.trim()) return true;
   const haystack = [command.label, ...(command.keywords ?? [])].join(' ').toLowerCase();
+  const haystackChosung = toChosungString(haystack);
   const tokens = query.toLowerCase().split(/\s+/).filter(Boolean);
-  return tokens.every((token) => haystack.includes(token));
+  return tokens.every(
+    (token) =>
+      haystack.includes(token) || (isChosungQuery(token) && haystackChosung.includes(token)),
+  );
 }
 
-/** 그룹별로 커맨드를 정렬하고 필터링 결과를 그룹 단위로 반환 */
-export function filterAndGroupCommands(commands: Command[], query: string): CommandGroup[] {
+/**
+ * 그룹별로 커맨드를 정렬하고 필터링 결과를 그룹 단위로 반환한다.
+ * 검색어가 비어 있고 recentIds가 있으면 '최근' 그룹을 맨 위에 추가하며,
+ * 최근 그룹에 들어간 명령은 아래 그룹에서 제외해 중복(React key 충돌)을 막는다.
+ */
+export function filterAndGroupCommands(
+  commands: Command[],
+  query: string,
+  recentIds: string[] = [],
+): CommandGroup[] {
   const filtered = commands.filter((cmd) => matchesQuery(cmd, query));
 
-  const groupOrder: CommandGroupLabel[] = ['빠른 추가', '학교 정보', '페이지', '설정'];
-  const groups: CommandGroup[] = groupOrder
+  const groupOrder: CommandGroupLabel[] = ['빠른 추가', '담임 업무', '학교 정보', '페이지', '설정'];
+  const baseGroups: CommandGroup[] = groupOrder
     .map((label) => ({
       label,
       commands: filtered.filter((cmd) => cmd.group === label),
     }))
     .filter((g) => g.commands.length > 0);
 
-  return groups;
+  // 검색 중에는 '최근' 그룹을 숨겨 혼란을 막는다.
+  if (query.trim() || recentIds.length === 0) return baseGroups;
+
+  const byId = new Map(filtered.map((c) => [c.id, c]));
+  const recentCommands = recentIds
+    .map((id) => byId.get(id))
+    .filter((c): c is Command => Boolean(c));
+
+  if (recentCommands.length === 0) return baseGroups;
+
+  const recentSet = new Set(recentCommands.map((c) => c.id));
+  const dedupedGroups = baseGroups
+    .map((g) => ({ label: g.label, commands: g.commands.filter((c) => !recentSet.has(c.id)) }))
+    .filter((g) => g.commands.length > 0);
+
+  return [{ label: '최근', commands: recentCommands }, ...dedupedGroups];
 }

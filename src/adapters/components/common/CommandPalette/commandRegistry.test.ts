@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * Command Palette 회귀 메타테스트.
  *
@@ -5,7 +6,8 @@
  * - "여러 날 출결" 명령(`multiDateAttendance.open`) 존재 + 키워드 매핑 보장 (FR-10)
  */
 import { describe, expect, it, vi, afterEach } from 'vitest';
-import { buildDefaultCommands, matchesQuery } from './commandRegistry';
+import { buildDefaultCommands, matchesQuery, filterAndGroupCommands } from './commandRegistry';
+import type { Command } from './commandRegistry';
 import { useMultiDateAttendanceIntentStore } from '@adapters/stores/useMultiDateAttendanceIntentStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 
@@ -38,6 +40,55 @@ describe('matchesQuery', () => {
     expect(matchesQuery({ ...cmd, keywords: [...cmd.keywords, 'attendance'] }, 'ATTENDANCE')).toBe(
       true,
     );
+  });
+
+  it('초성 검색 — 전부 초성인 토큰은 초성 시퀀스로 매치', () => {
+    expect(matchesQuery(cmd, 'ㅊㄱ')).toBe(true); // 출결 → ㅊㄱ
+    expect(matchesQuery(cmd, 'ㅇㄹ')).toBe(true); // 여러 → ㅇㄹ
+    expect(matchesQuery(cmd, 'ㅋㅌ')).toBe(false); // 해당 초성 없음
+  });
+
+  it('초성 토큰과 일반 토큰 AND 조합', () => {
+    expect(matchesQuery(cmd, 'ㅊㄱ 일괄')).toBe(true); // 출결(초성) + 일괄(부분일치)
+    expect(matchesQuery(cmd, 'ㅊㄱ 메모')).toBe(false); // 메모 토큰 불일치
+  });
+});
+
+describe('filterAndGroupCommands - 최근 그룹', () => {
+  const cmds: Command[] = [
+    { id: 'a', label: '할일 빠른 추가', group: '빠른 추가', icon: 'x', run: () => {} },
+    { id: 'b', label: '메모 빠른 추가', group: '빠른 추가', icon: 'x', run: () => {} },
+    { id: 'c', label: '설정 열기', group: '설정', icon: 'x', run: () => {} },
+  ];
+
+  it('검색어가 없고 recentIds가 있으면 최근 그룹이 맨 위(입력 순서 유지)', () => {
+    const groups = filterAndGroupCommands(cmds, '', ['c', 'a']);
+    expect(groups[0]?.label).toBe('최근');
+    expect(groups[0]?.commands.map((c) => c.id)).toEqual(['c', 'a']);
+  });
+
+  it('최근에 들어간 명령은 아래 그룹에서 제외(중복 방지)', () => {
+    const groups = filterAndGroupCommands(cmds, '', ['a']);
+    const recent = groups.find((g) => g.label === '최근');
+    const quick = groups.find((g) => g.label === '빠른 추가');
+    expect(recent?.commands.map((c) => c.id)).toEqual(['a']);
+    expect(quick?.commands.map((c) => c.id)).toEqual(['b']); // a 제외됨
+  });
+
+  it('검색어가 있으면 최근 그룹을 노출하지 않는다', () => {
+    const groups = filterAndGroupCommands(cmds, '메모', ['a']);
+    expect(groups.some((g) => g.label === '최근')).toBe(false);
+  });
+
+  it('존재하지 않는 recentId는 무시', () => {
+    const groups = filterAndGroupCommands(cmds, '', ['zzz', 'b']);
+    const recent = groups.find((g) => g.label === '최근');
+    expect(recent?.commands.map((c) => c.id)).toEqual(['b']);
+  });
+
+  it('recentIds가 비면 최근 그룹 없음', () => {
+    const groups = filterAndGroupCommands(cmds, '', []);
+    expect(groups.some((g) => g.label === '최근')).toBe(false);
   });
 });
 
@@ -159,5 +210,51 @@ describe('학교 정보 빠른 복사 명령 (school-enrich)', () => {
     cmds.find((c) => c.id === 'schoolInfo.copyAddress')!.run();
 
     expect(writeText).toHaveBeenCalledWith('06669 서울특별시 서초구 효령로 197');
+  });
+});
+
+describe('동작 명령 — 즐겨찾기 빠른 추가 + 담임 업무 바로가기', () => {
+  const onNavigate = vi.fn();
+  const commands = buildDefaultCommands({ onNavigate });
+
+  it('즐겨찾기 빠른 추가 명령이 빠른 추가 그룹으로 등록', () => {
+    const c = commands.find((x) => x.id === 'quickAdd.bookmark');
+    expect(c?.group).toBe('빠른 추가');
+    expect(c?.icon).toBe('bookmark');
+  });
+
+  it('명렬/기록/자리배치 바로가기가 담임 업무 그룹으로 등록', () => {
+    (['homeroom.roster', 'homeroom.records', 'homeroom.seating'] as const).forEach((id) => {
+      expect(commands.find((c) => c.id === id)?.group).toBe('담임 업무');
+    });
+  });
+
+  it('자리 배치 검색 — "자리"·초성 "ㅈㄹㅂㅊ" 매치', () => {
+    const seating = commands.find((c) => c.id === 'homeroom.seating');
+    expect(seating).toBeDefined();
+    if (!seating) return;
+    expect(matchesQuery(seating, '자리')).toBe(true);
+    expect(matchesQuery(seating, 'ㅈㄹㅂㅊ')).toBe(true); // 자리배치
+  });
+
+  it('자리 배치 run() → homeroom 이동 + 탭 전환 이벤트(detail=seating) dispatch', () => {
+    const seating = commands.find((c) => c.id === 'homeroom.seating');
+    expect(seating).toBeDefined();
+    if (!seating) return;
+
+    const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
+    onNavigate.mockClear();
+    seating.run();
+
+    expect(onNavigate).toHaveBeenCalledWith('homeroom');
+    const tabEvent = dispatchSpy.mock.calls
+      .map((args) => args[0])
+      .find(
+        (evt): evt is CustomEvent =>
+          evt instanceof CustomEvent && evt.type === 'ssampin:homeroom-open-tab',
+      );
+    expect(tabEvent).toBeDefined();
+    expect(tabEvent?.detail).toBe('seating');
+    dispatchSpy.mockRestore();
   });
 });
