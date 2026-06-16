@@ -1141,6 +1141,22 @@ contextBridge.exposeInMainWorld('electronAPI', {
     > => ipcRenderer.invoke('schoolinfo-evaluation:download-doc', args),
   },
 
+  // === 학교알리미 공시 조회 (schoolinfo-disclosure) ===
+  // 학교알리미 OpenAPI(openApi.do) 지역 공시 조회 — main 의 safeFetch 경유. 인증키는 renderer 가 주입.
+  schoolinfoDisclosure: {
+    getAreaDisclosure: (args: {
+      apiKey: string;
+      apiType: string;
+      schulKndCode: string;
+      sidoCode: string;
+      sggCode: string;
+      pbanYr: string;
+    }): Promise<
+      | { status: 'ok'; list: Array<Record<string, unknown>> }
+      | { status: 'error'; message: string }
+    > => ipcRenderer.invoke('schoolinfo-disclosure:get-area', args),
+  },
+
   // === 협업 보드 (collab-board) ===
   // Design §4.1 14개 채널을 서브객체로 그루핑 (기존 flat 패턴과의 절충 — 채널 많음)
   collabBoard: {

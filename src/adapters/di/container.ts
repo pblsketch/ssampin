@@ -128,6 +128,8 @@ import { ManageRubrics } from '@usecases/rubric/ManageRubrics';
 
 import type { IEvaluationPlanPort } from '@domain/ports/IEvaluationPlanPort';
 import { SchoolInfoEvaluationAdapter } from '@infrastructure/schoolinfo/SchoolInfoEvaluationAdapter';
+import type { ISchoolDisclosurePort } from '@domain/ports/ISchoolDisclosurePort';
+import { SchoolDisclosureAdapter } from '@infrastructure/schoolinfo/SchoolDisclosureAdapter';
 import { ImportEvaluationPlan } from '@usecases/evaluation/ImportEvaluationPlan';
 import { EnrichSchoolOnSelect } from '@usecases/school/EnrichSchoolOnSelect';
 
@@ -352,6 +354,10 @@ export const manageRubrics = new ManageRubrics(rubricRepository);
 // 통신/파싱은 electron main(safeFetch + kordoc)에 IPC 위임 → markdown 구조화는 순수 도메인 파서.
 export const evaluationPlanPort: IEvaluationPlanPort = new SchoolInfoEvaluationAdapter();
 export const importEvaluationPlan = new ImportEvaluationPlan(evaluationPlanPort);
+
+// === 학교알리미 공시 조회 (school-announcements) ===
+// 통신은 electron main(safeFetch + openApi.do)에 IPC 위임. 인증키는 어댑터가 빌드 env로 주입.
+export const schoolDisclosurePort: ISchoolDisclosurePort = new SchoolDisclosureAdapter();
 
 // === 온보딩 학교 보강 (school-enrich ②) ===
 // ②-A 날씨 좌표(순수·오프라인) + ②-B 학교알리미 식별자(① 검색 인프라 재사용, best-effort).

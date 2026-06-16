@@ -35,6 +35,7 @@ import { registerRealtimeWallLinkPreviewHandler } from './ipc/realtimeWallLinkPr
 import { registerRealtimeWallPdfHandlers } from './ipc/realtimeWallPdf';
 import { registerMarkdownConvertHandlers } from './ipc/markdownConvert';
 import { registerSchoolinfoEvaluationHandlers } from './ipc/schoolinfoEvaluation';
+import { registerSchoolinfoDisclosureHandlers } from './ipc/schoolinfoDisclosure';
 import { registerBoardHandlers, endActiveBoardSessionSync } from './ipc/board';
 import { registerMultiSurveyShareHandlers } from './ipc/multiSurveyShare';
 import {
@@ -4619,6 +4620,7 @@ if (!gotTheLock) {
     registerRealtimeWallPdfHandlers();
     registerMarkdownConvertHandlers(mainWindow);
     registerSchoolinfoEvaluationHandlers();
+    registerSchoolinfoDisclosureHandlers();
     registerBoardHandlers(mainWindow!);
     registerRealtimeWallBoardHandlers();
     // 글로벌 퀵애드 단축키 IPC

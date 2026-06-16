@@ -22,6 +22,7 @@ const NotePage = React.lazy(() =>
 );
 import { ToolsGrid } from '@adapters/components/Tools/ToolsGrid';
 import { BookmarksPage } from '@adapters/components/Tools/BookmarksPage';
+import { SchoolAnnouncementsPage } from '@adapters/components/SchoolAnnouncements/SchoolAnnouncementsPage';
 import { DualToolContainer } from '@adapters/components/Tools/DualToolContainer';
 import {
   ToolServicesContext,
@@ -287,6 +288,9 @@ function renderPage(
         <BookmarksPage />
       </PinGuard>
     );
+  }
+  if (page === 'school-announcements') {
+    return <SchoolAnnouncementsPage />;
   }
   if (page === 'tools') {
     return <ToolsGrid onNavigate={onNavigate} />;

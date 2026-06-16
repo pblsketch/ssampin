@@ -24,6 +24,17 @@ export default defineConfig(({ mode }) => {
     }
   }
 
+  // 학교 알리미 — 학교알리미 OpenAPI 인증키. 옵셔널(없으면 학교현황·동아리·옆학교비교 탭만
+  // 비활성, 학사일정·평가계획은 정상)이라 throw 가 아닌 경고. 출시 빌드 전 .env 설정 권장.
+  const schoolinfoKey = (env.VITE_SCHOOLINFO_API_KEY || '').trim();
+  if (mode === 'production' && !schoolinfoKey) {
+    console.warn(
+      '[vite] 경고: VITE_SCHOOLINFO_API_KEY 가 비어있어 학교 알리미 공시 탭' +
+        '(학교현황·동아리·옆학교비교)이 비활성화됩니다. 학사일정·평가계획은 정상 동작합니다.\n' +
+        '.env 에 학교알리미 OpenAPI 인증키를 설정하세요.',
+    );
+  }
+
   return {
     plugins: [react()],
     resolve: {

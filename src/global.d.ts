@@ -666,6 +666,21 @@ interface ElectronAPI {
     }) => Promise<SchoolinfoDownloadResult>;
   };
 
+  // === 학교알리미 공시 조회 (schoolinfo-disclosure) ===
+  schoolinfoDisclosure?: {
+    getAreaDisclosure: (args: {
+      apiKey: string;
+      apiType: string;
+      schulKndCode: string;
+      sidoCode: string;
+      sggCode: string;
+      pbanYr: string;
+    }) => Promise<
+      | { status: 'ok'; list: Array<Record<string, unknown>> }
+      | { status: 'error'; message: string }
+    >;
+  };
+
   // === 협업 보드 (collab-board) — Design §4.1 ===
   collabBoard?: {
     list: () => Promise<CollabBoardMeta[]>;
