@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { planToRubricDraft } from './evaluationPlanMapping';
+import { planToRubricDraft, candidateToRubric, gradesToCandidates } from './evaluationPlanMapping';
 import { validateRubric, MIN_LEVELS_PER_CRITERION } from '../rules/rubricRules';
+import type { RubricCandidate, EvaluationPlanGrade } from '../entities/EvaluationPlan';
 
 /** 결정적 id 생성기 (테스트용) */
 function makeSeqId(): () => string {
@@ -107,5 +108,67 @@ describe('planToRubricDraft', () => {
     // 기본 수준 배점은 빌더가 새 요소에 부여하는 표준값과 동일(교사가 수정).
     const scores = rubric.criteria[0]!.levels.map((l) => l.score);
     expect(scores).toEqual([10, 8, 6, 4]);
+  });
+});
+
+describe('candidateToRubric', () => {
+  it('채점기준표 후보(점수 포함)를 그대로 Rubric 으로 옮기고 validateRubric 통과', () => {
+    const candidate: RubricCandidate = {
+      subject: '기술·가정',
+      grade: 3,
+      title: '진로 설계 발표',
+      hasScores: true,
+      criteria: [
+        {
+          name: '교과내용',
+          levels: [
+            { name: '15점', score: 15, description: '모두 설명한 경우' },
+            { name: '10점', score: 10, description: '한 가지만' },
+            { name: '5점', score: 5, description: '안 한 경우' },
+          ],
+        },
+      ],
+    };
+    const rubric = candidateToRubric(candidate, 'class-1', makeSeqId(), NOW);
+    expect(rubric.classId).toBe('class-1');
+    expect(rubric.title).toBe('진로 설계 발표');
+    expect(rubric.criteria[0]!.name).toBe('교과내용');
+    expect(rubric.criteria[0]!.levels.map((l) => l.score)).toEqual([15, 10, 5]);
+    expect(rubric.criteria[0]!.levels[0]!.description).toBe('모두 설명한 경우');
+    expect(validateRubric({ title: rubric.title, criteria: rubric.criteria })).toEqual([]);
+  });
+
+  it('수준이 비어 있으면 빌더 기본 수준으로 채운다', () => {
+    const candidate: RubricCandidate = {
+      subject: '국어',
+      grade: 1,
+      title: '국어 수행평가',
+      hasScores: false,
+      criteria: [{ name: '읽기', levels: [] }],
+    };
+    const rubric = candidateToRubric(candidate, 'c', makeSeqId(), NOW);
+    expect(rubric.criteria[0]!.levels.length).toBeGreaterThanOrEqual(MIN_LEVELS_PER_CRITERION);
+  });
+});
+
+describe('gradesToCandidates', () => {
+  it('단순 평가영역 → 과목별 후보(기본 수준, hasScores=false)', () => {
+    const grades: EvaluationPlanGrade[] = [
+      {
+        grade: 1,
+        label: '1학년',
+        subjects: ['국어'],
+        areasBySubject: { 국어: [{ name: '읽기' }, { name: '쓰기' }] },
+      },
+    ];
+    const candidates = gradesToCandidates(grades);
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]!.subject).toBe('국어');
+    expect(candidates[0]!.title).toBe('1학년 국어 수행평가');
+    expect(candidates[0]!.hasScores).toBe(false);
+    expect(candidates[0]!.criteria.map((c) => c.name)).toEqual(['읽기', '쓰기']);
+    expect(candidates[0]!.criteria[0]!.levels.length).toBeGreaterThanOrEqual(
+      MIN_LEVELS_PER_CRITERION,
+    );
   });
 });

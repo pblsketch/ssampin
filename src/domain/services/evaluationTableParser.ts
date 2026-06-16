@@ -57,11 +57,14 @@ const HEADER_CELL_RE =
   /평가\s*영역|^영역|평가\s*요소|평가\s*항목|평가\s*내용|반영\s*비율|^비율$|배점|평가\s*방법|성취\s*기준|평가\s*기준|학기|평가\s*시기|^시기$|^교과|^과목|평가\s*종류|^지필$|^수행$|^구분$/;
 /** 합계/소계 등 비-영역 행 */
 const TOTAL_ROW_RE = /^(합\s*계|소\s*계|총\s*계|계|총\s*점|합\s*산)$/;
+/** 평가영역이 아님 — 잘못된 열을 영역으로 오인했을 때 거르는 안전망(유의점/비고/방법 등) */
+const NON_AREA_RE =
+  /^(유의\s*점|유의\s*사항|비\s*고|기\s*타|평가\s*방법|평가\s*시기|평가\s*기간|반영\s*비율|성취\s*기준|배\s*점|만\s*점|구\s*분|학\s*기)$/;
 
 /* ──────────────── HTML/GFM 표 → 텍스트 grid ──────────────── */
 
-/** 태그 제거 + 엔티티/공백 정리 */
-function plainText(s: string): string {
+/** 태그 제거 + 엔티티/공백 정리 (채점기준표 파서와 공유) */
+export function plainText(s: string): string {
   return s
     .replace(/<br\s*\/?>/gi, ' ')
     .replace(/<[^>]+>/g, ' ')
@@ -208,8 +211,10 @@ function splitGfmRow(line: string): string[] {
     .map((c) => c.trim());
 }
 
-/** markdown 전체에서 표를 등장 순서대로(grid + 위치) 추출 */
-function extractAllTables(md: string): { grid: string[][]; index: number; endIndex: number }[] {
+/** markdown 전체에서 표를 등장 순서대로(grid + 위치) 추출 (채점기준표 파서와 공유) */
+export function extractAllTables(
+  md: string,
+): { grid: string[][]; index: number; endIndex: number }[] {
   const html = topLevelHtmlTables(md).map((t) => ({
     grid: htmlTableToGrid(t.html),
     index: t.index,
@@ -241,20 +246,39 @@ function subjectInText(text: string): string | null {
   return null;
 }
 
+/**
+ * 텍스트에서 학년(1~maxGrade)을 추출 — 범위 내 마지막 매칭.
+ * 핵심 방어:
+ * - `(?<!\d)`: 앞에 숫자가 있으면 무시 → "2026학년도"의 "…26학년…"을 6학년으로 오인하지 않음
+ * - `(?!도)`: 뒤가 '도'면 무시 → "학년도"(academic year)를 학년으로 오인하지 않음
+ * - maxGrade 클램프: 중·고는 1~3학년뿐이므로 본문에 섞인 "6학년" 등 학교급 밖 숫자를 배제
+ */
+function pickGradeInText(text: string, re: RegExp, maxGrade: number): number | null {
+  let last: number | null = null;
+  for (const m of text.matchAll(re)) {
+    const g = Number(m[1]);
+    if (g >= 1 && g <= maxGrade) last = g;
+  }
+  return last;
+}
+
 /** 표 직전 텍스트에서 학년 라벨 추론 ('N학년 … 평가/운영/교과') */
-function gradeBefore(text: string): { grade: number | null; label: string } {
-  const cap = [...text.matchAll(/([1-6])\s*학년[^0-9]{0,12}(?:평가|운영|교과|과목)/g)];
-  if (cap.length) {
-    const g = Number(cap[cap.length - 1]![1]);
-    return { grade: g, label: `${g}학년` };
-  }
-  // 폴백: 가장 마지막 'N학년' 언급
-  const any = [...text.matchAll(/([1-6])\s*학년/g)];
-  if (any.length) {
-    const g = Number(any[any.length - 1]![1]);
-    return { grade: g, label: `${g}학년` };
-  }
-  return { grade: null, label: '' };
+function gradeBefore(text: string, maxGrade: number): { grade: number | null; label: string } {
+  const g =
+    pickGradeInText(
+      text,
+      /(?<!\d)([1-6])\s*학년(?!도)[^0-9]{0,12}(?:평가|운영|교과|과목)/g,
+      maxGrade,
+    ) ??
+    // 폴백: 'N학년' 언급 (학년도/연도 오인 방어 동일 적용)
+    pickGradeInText(text, /(?<!\d)([1-6])\s*학년(?!도)/g, maxGrade);
+  return g !== null ? { grade: g, label: `${g}학년` } : { grade: null, label: '' };
+}
+
+/** 파일명에서 학년 추출 — 통합 1파일(학년별)은 파일명이 가장 신뢰할 학년 신호 */
+function gradeFromFilename(filename: string | undefined, maxGrade: number): number | null {
+  if (!filename) return null;
+  return pickGradeInText(filename, /(?<!\d)([1-6])\s*학년(?!도)/g, maxGrade);
 }
 
 function looksLikeEvalGrid(grid: string[][]): boolean {
@@ -340,6 +364,7 @@ function isValidAreaCell(cell: string): boolean {
   const t = cell.trim();
   if (t.length === 0 || t.length > 40) return false;
   if (HEADER_CELL_RE.test(t)) return false;
+  if (NON_AREA_RE.test(t)) return false;
   if (TOTAL_ROW_RE.test(t.replace(/\s/g, ''))) return false;
   // 한글 또는 영문자 1자 이상 포함 (순수 숫자/기호 행 제외)
   return /[가-힣A-Za-z]/.test(t);
@@ -366,24 +391,38 @@ export interface ParseEvaluationResult {
   readonly isSingleSubject: boolean;
 }
 
+export interface ParseEvaluationOptions {
+  /** 원본 파일명 — 학년별 통합 1파일은 파일명("2학년…")이 가장 신뢰할 학년 신호 */
+  readonly filename?: string;
+  /** 학교급별 최고 학년 (초=6, 중·고=3). 본문에 섞인 학교급 밖 숫자 배제용. 기본 6. */
+  readonly maxGrade?: number;
+}
+
 /**
  * 평가계획 markdown 을 학년/과목/평가영역으로 구조화한다.
  * - 추출 0건이면 grades=[] (호출부는 원문 뷰어로 폴백 — AC4/AC7).
  * - isSingleSubject: 전체에서 식별된 과목이 1종이면 true(분리형 A), 여러 개면 false(통합형 B).
+ * - 학년: 캡션 > 파일명 순. 둘 다 maxGrade 로 클램프(학교급 밖 숫자·'학년도' 오인 방어).
  */
-export function parseEvaluationPlan(markdown: string): ParseEvaluationResult {
+export function parseEvaluationPlan(
+  markdown: string,
+  opts?: ParseEvaluationOptions,
+): ParseEvaluationResult {
   // 과대 문서(이상치)는 동기 정규식 스캔이 길어질 수 있어 구조화하지 않고 폴백.
   if (typeof markdown !== 'string' || markdown.length === 0 || markdown.length > 3_000_000) {
     return { grades: [], isSingleSubject: false };
   }
 
+  const maxGrade = opts?.maxGrade ?? 6;
   const tables = extractAllTables(markdown);
   if (tables.length === 0) return { grades: [], isSingleSubject: false };
 
   const accum = new Map<string, GradeAccum>();
   const allSubjects = new Set<string>();
-  let currentGrade: number | null = null;
-  let currentLabel = '';
+  // 파일명 학년을 기본값으로 — 캡션에 학년이 없는 표(통합 1파일의 과목별 표)에도 학년이 붙는다.
+  const filenameGrade = gradeFromFilename(opts?.filename, maxGrade);
+  let currentGrade: number | null = filenameGrade;
+  let currentLabel = filenameGrade !== null ? `${filenameGrade}학년` : '';
   let currentSubject: string | null = null;
   let lastIdx = 0;
 
@@ -424,7 +463,7 @@ export function parseEvaluationPlan(markdown: string): ParseEvaluationResult {
 
     // 캡션에서 학년/과목 갱신 (표보다 앞선 텍스트)
     const betweenText = plainText(between);
-    const gb = gradeBefore(betweenText);
+    const gb = gradeBefore(betweenText, maxGrade);
     if (gb.grade !== null) {
       currentGrade = gb.grade;
       currentLabel = gb.label;

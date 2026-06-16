@@ -21,11 +21,12 @@ export interface IEvaluationPlanPort {
     schoolName: string,
     year: number,
   ): Promise<readonly EvaluationPlanDoc[]>;
-  /** 특정 첨부파일 다운로드 + 파싱 + 평가영역 구조화. */
+  /** 특정 첨부파일 다운로드 + 파싱 + 평가영역 구조화. schoolKind 로 학년 상한을 정한다. */
   downloadAndParse(
     shlIdfCd: string,
     schoolName: string,
     year: number,
     doc: EvaluationPlanDoc,
+    schoolKind?: string,
   ): Promise<ParsedEvaluationPlan>;
 }

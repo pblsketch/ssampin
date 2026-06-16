@@ -12,6 +12,8 @@ import type {
   ParsedEvaluationPlan,
 } from '@domain/entities/EvaluationPlan';
 import { parseEvaluationPlan } from '@domain/services/evaluationTableParser';
+import { parseScoringRubrics } from '@domain/services/scoringRubricParser';
+import { gradesToCandidates } from '@domain/services/evaluationPlanMapping';
 
 function api() {
   const e = typeof window !== 'undefined' ? window.electronAPI?.schoolinfoEvaluation : undefined;
@@ -43,13 +45,30 @@ export class SchoolInfoEvaluationAdapter implements IEvaluationPlanPort {
     schoolName: string,
     year: number,
     doc: EvaluationPlanDoc,
+    schoolKind?: string,
   ): Promise<ParsedEvaluationPlan> {
     const r = await api().downloadDoc({ shlIdfCd, schoolName, year, seq: doc.seq });
     if (r.status === 'error') throw new Error(r.message || '파일을 불러오지 못했어요.');
-    const { grades, isSingleSubject } = parseEvaluationPlan(r.markdown);
+    const filename = r.fileName || doc.filename;
+    // 중·고는 1~3학년, 그 외(초/특수 등)는 1~6학년으로 학년 상한 클램프
+    const maxGrade = schoolKind === '중학교' || schoolKind === '고등학교' ? 3 : 6;
+
+    // 1순위: 채점기준표(=루브릭, 점수 포함). 없으면 단순 평가영역 목록을 후보로 변환.
+    const scoringCandidates = parseScoringRubrics(r.markdown, { filename, maxGrade });
+    let candidates = scoringCandidates;
+    let grades: ParsedEvaluationPlan['grades'] = [];
+    let isSingleSubject = false;
+    if (candidates.length === 0) {
+      const simple = parseEvaluationPlan(r.markdown, { filename, maxGrade });
+      grades = simple.grades;
+      isSingleSubject = simple.isSingleSubject;
+      candidates = gradesToCandidates(simple.grades);
+    }
+
     return {
-      filename: r.fileName || doc.filename,
+      filename,
       markdown: r.markdown,
+      candidates,
       grades,
       isSingleSubject,
       needsOcr: r.needsOcr,

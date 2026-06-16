@@ -55,12 +55,49 @@ export interface EvaluationPlanGrade {
   readonly areasBySubject: Readonly<Record<string, readonly EvaluationArea[]>>;
 }
 
+/* ──────────────── 루브릭 후보 (채점기준표 = 루브릭) ──────────────── */
+
+/** 루브릭 수준 초안 — 채점기준표의 한 채점 단계 (점수·설명 포함) */
+export interface RubricLevelDraft {
+  readonly name: string;
+  readonly score: number;
+  readonly description?: string;
+}
+
+/** 루브릭 평가요소(criterion) 초안 — 자기 수준 목록을 가진다 */
+export interface RubricCriterionDraft {
+  readonly name: string;
+  readonly levels: readonly RubricLevelDraft[];
+}
+
+/**
+ * 불러오기로 만들 루브릭 후보 1건.
+ * - 채점기준표 출처: criteria 의 levels 에 실제 배점·채점기준 설명이 채워진다(hasScores=true).
+ * - 평가영역 목록 출처(단순 양식): criteria 는 이름만, levels 는 빌더 기본 수준(hasScores=false).
+ */
+export interface RubricCandidate {
+  /** 과목 (성취기준 코드/캡션 기반, 미상이면 null) */
+  readonly subject: string | null;
+  /** 학년 (없으면 null) */
+  readonly grade: number | null;
+  /** 루브릭 제목 후보 (수행평가 항목명 또는 "${과목} 수행평가") */
+  readonly title: string;
+  readonly criteria: readonly RubricCriterionDraft[];
+  /** 채점기준표에서 점수까지 추출됐는지 (false면 교사가 배점 입력) */
+  readonly hasScores: boolean;
+}
+
 /** 다운로드+파싱된 평가계획 1건 */
 export interface ParsedEvaluationPlan {
   readonly filename: string;
   /** 뷰어 표시용 원문 markdown (parseBuffer 결과) */
   readonly markdown: string;
-  /** 구조화된 학년/과목/영역 (추출 실패 시 빈 배열 → 뷰어 폴백) */
+  /**
+   * 루브릭 후보 — 채점기준표(점수 포함) 우선, 없으면 단순 평가영역 목록을 후보로 변환.
+   * 비어 있으면 호출부는 원문 뷰어로 폴백(AC4/AC7).
+   */
+  readonly candidates: readonly RubricCandidate[];
+  /** 구조화된 학년/과목/영역 (단순 양식 — 진단/호환용) */
   readonly grades: readonly EvaluationPlanGrade[];
   /** 분리형(단일 과목) 문서 여부 */
   readonly isSingleSubject: boolean;

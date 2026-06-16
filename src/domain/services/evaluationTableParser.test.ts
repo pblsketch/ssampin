@@ -195,4 +195,61 @@ describe('parseEvaluationPlan — 폴백/방어 (AC4·AC7)', () => {
     const areas = grades[0]!.areasBySubject['과학']!;
     expect(areas.map((a) => a.name)).toEqual(['물질', '에너지']);
   });
+
+  it('유의점/비고 등 비-영역 값은 평가영역으로 채택하지 않음', () => {
+    const md = `
+## 1학년 국어 평가 운영 계획
+<table>
+<tr><th>평가 영역</th><th>반영 비율</th></tr>
+<tr><td>읽기</td><td>50%</td></tr>
+<tr><td>유의점</td><td>-</td></tr>
+<tr><td>비고</td><td>-</td></tr>
+</table>`;
+    const { grades } = parseEvaluationPlan(md);
+    expect(grades[0]!.areasBySubject['국어']!.map((a) => a.name)).toEqual(['읽기']);
+  });
+});
+
+describe('parseEvaluationPlan — 학년 추출 방어 (학년도 오인·학교급 클램프·파일명)', () => {
+  it('"2026학년도"(academic year)를 6학년으로 오인하지 않는다 (고등학교 2학년 통합 파일)', () => {
+    const md = `
+2026학년도 1학기 2학년 교과 교수학습 및 평가운영계획(수정)
+
+## 2학년 국어 평가 운영 계획
+<table>
+<tr><th>평가 영역</th><th>반영 비율</th></tr>
+<tr><td>읽기</td><td>40%</td></tr>
+<tr><td>쓰기</td><td>60%</td></tr>
+</table>`;
+    const { grades } = parseEvaluationPlan(md, { maxGrade: 3 });
+    expect(grades).toHaveLength(1);
+    expect(grades[0]!.grade).toBe(2);
+    expect(grades[0]!.label).toBe('2학년');
+  });
+
+  it('중·고(maxGrade=3)에서는 범위 밖 6학년 언급을 학년으로 채택하지 않는다', () => {
+    const md = `
+## 초등 6학년 과정과 연계한 1학년 국어 평가 운영 계획
+<table>
+<tr><th>평가 영역</th><th>반영 비율</th></tr>
+<tr><td>듣기</td><td>50%</td></tr>
+<tr><td>말하기</td><td>50%</td></tr>
+</table>`;
+    const { grades } = parseEvaluationPlan(md, { maxGrade: 3 });
+    expect(grades[0]!.grade).toBe(1);
+  });
+
+  it('캡션에 학년이 없으면 파일명 학년("2학년")을 사용한다', () => {
+    const md = `
+## 국어 평가 운영 계획
+<table>
+<tr><th>평가 영역</th><th>반영 비율</th></tr>
+<tr><td>읽기</td><td>100%</td></tr>
+</table>`;
+    const { grades } = parseEvaluationPlan(md, {
+      filename: '2026학년도 2학년 평가계획.pdf',
+      maxGrade: 3,
+    });
+    expect(grades[0]!.grade).toBe(2);
+  });
 });

@@ -8,29 +8,28 @@
  * - 이미지 문서/추출 실패는 원문 보기 폴백(AC4·AC7) — HTML 주입 방지 위해 markdown 을 텍스트로 표시.
  * - 점수는 평가계획에 없으므로 채우지 않는다(§14) — 초안의 배점은 빌더 기본값(교사 입력).
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Modal } from '@adapters/components/common/Modal';
 import { IconButton } from '@adapters/components/common/IconButton';
 import { useToastStore } from '@adapters/components/common/Toast';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { importEvaluationPlan } from '@adapters/di/container';
-import { planToRubricDraft } from '@domain/services/evaluationPlanMapping';
+import { candidateToRubric } from '@domain/services/evaluationPlanMapping';
 import { generateUUID } from '@infrastructure/utils/uuid';
 import type { Rubric } from '@domain/entities/Rubric';
 import type {
   EvaluationPlanDoc,
-  EvaluationPlanGrade,
   EvaluationSchool,
   ParsedEvaluationPlan,
+  RubricCandidate,
 } from '@domain/entities/EvaluationPlan';
 
 interface RubricImportFromPlanModalProps {
   classId: string;
   /** 수업반 과목 — 파일 검색 기본어 + 과목 기본 선택 */
   classSubject: string;
-  /** 수업반 학년(있으면 학년 기본 선택) */
-  classGrade: number | null;
   onClose: () => void;
-  /** 선택한 평가영역으로 만든 루브릭 초안 — 부모가 빌더에 prefill */
+  /** 선택한 채점기준표로 만든 루브릭 초안 — 부모가 빌더에 prefill */
   onImport: (draft: Rubric) => void;
 }
 
@@ -42,32 +41,49 @@ const YEAR_OPTIONS = [CURRENT_YEAR, CURRENT_YEAR - 1, CURRENT_YEAR - 2];
 export function RubricImportFromPlanModal({
   classId,
   classSubject,
-  classGrade,
   onClose,
   onImport,
 }: RubricImportFromPlanModalProps) {
   const showToast = useToastStore((s) => s.show);
 
-  const [step, setStep] = useState<Step>('school');
+  // ②-B: 온보딩/설정에서 학교알리미 식별자(shlIdfCd)를 미리 확보해 뒀으면
+  // 학교 검색 단계를 건너뛰고 바로 연도/파일 목록으로 시작한다(없으면 기존 수동검색).
+  const savedSchoolInfo = useSettingsStore((s) => s.settings.schoolInfo);
+  const prefilledSchool: EvaluationSchool | null = savedSchoolInfo?.shlIdfCd
+    ? {
+        shlIdfCd: savedSchoolInfo.shlIdfCd,
+        name: savedSchoolInfo.matchedName,
+        address: '',
+        kind: '',
+      }
+    : null;
+
+  const [step, setStep] = useState<Step>(prefilledSchool ? 'docs' : 'school');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // ① 학교
   const [schoolQuery, setSchoolQuery] = useState('');
   const [schools, setSchools] = useState<readonly EvaluationSchool[]>([]);
-  const [school, setSchool] = useState<EvaluationSchool | null>(null);
+  const [school, setSchool] = useState<EvaluationSchool | null>(prefilledSchool);
 
   // ② 문서
   const [year, setYear] = useState(CURRENT_YEAR);
   const [docs, setDocs] = useState<readonly EvaluationPlanDoc[]>([]);
   const [docSearch, setDocSearch] = useState(classSubject ?? '');
 
-  // ③ 파싱 결과 + 선택
+  // ③ 파싱 결과 + 선택 (과목 → 수행평가 항목(후보))
   const [parsed, setParsed] = useState<ParsedEvaluationPlan | null>(null);
-  const [gradeIdx, setGradeIdx] = useState(0);
   const [subject, setSubject] = useState('');
-  const [semesterFilter, setSemesterFilter] = useState<'all' | '1' | '2'>('all');
-  const [selectedAreas, setSelectedAreas] = useState<readonly string[]>([]);
+  const [candidateIdx, setCandidateIdx] = useState(0);
+
+  // ②-B 자동 스킵: 저장된 학교(shlIdfCd)가 있으면 첫 진입 시 곧장 평가계획 목록을 불러온다.
+  // 목록이 없거나 사용자가 '이전'을 누르면 학교 검색('school' 단계)으로 폴백한다(차단 없음).
+  useEffect(() => {
+    if (prefilledSchool) void loadDocs(prefilledSchool, CURRENT_YEAR);
+    // 최초 1회만 — 이후엔 사용자가 직접 학교/연도를 조작한다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /* ── ① 학교 검색 ── */
   async function handleSearchSchools() {
@@ -127,16 +143,13 @@ export function RubricImportFromPlanModal({
         school.name,
         year,
         doc,
+        school.kind,
       );
       setParsed(result);
-      // 기본 선택: 수업반 학년/과목과 매칭되는 항목 우선
-      const gi = pickDefaultGradeIdx(result.grades, classGrade);
-      setGradeIdx(gi);
-      const g = result.grades[gi];
-      const subj = pickDefaultSubject(g, classSubject);
-      setSubject(subj);
-      setSemesterFilter('all');
-      setSelectedAreas([]);
+      // 기본 선택: 수업반 과목과 매칭되는 과목 우선
+      const subs = distinctSubjects(result.candidates);
+      setSubject(pickDefaultSubject(subs, classSubject));
+      setCandidateIdx(0);
       setStep('review');
     } catch (e) {
       setError(e instanceof Error ? e.message : '파일을 불러오지 못했어요.');
@@ -151,55 +164,32 @@ export function RubricImportFromPlanModal({
     return docs.filter((d) => d.filename.replace(/\s/g, '').includes(q));
   }, [docs, docSearch]);
 
-  /* ── ③ 선택 영역 → 초안 ── */
-  const currentGrade: EvaluationPlanGrade | undefined = parsed?.grades[gradeIdx];
-  const subjectAreas = useMemo(
-    () => (currentGrade ? (currentGrade.areasBySubject[subject] ?? []) : []),
-    [currentGrade, subject],
+  /* ── ③ 과목 → 수행평가 항목(후보) → 루브릭 ── */
+  const candidates = useMemo(() => parsed?.candidates ?? [], [parsed]);
+  const subjects = useMemo(() => distinctSubjects(candidates), [candidates]);
+  const subjectCandidates = useMemo(
+    () => candidates.filter((c) => (c.subject ?? '과목 미상') === subject),
+    [candidates, subject],
   );
-  const hasSemesterInfo = useMemo(
-    () => subjectAreas.some((a) => a.semester === '1' || a.semester === '2'),
-    [subjectAreas],
-  );
-  const visibleAreas = useMemo(() => {
-    if (semesterFilter === 'all') return subjectAreas;
-    return subjectAreas.filter((a) => a.semester === semesterFilter);
-  }, [subjectAreas, semesterFilter]);
-
-  function toggleArea(name: string) {
-    setSelectedAreas((prev) =>
-      prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name],
-    );
-  }
-
-  function handleImport() {
-    if (selectedAreas.length === 0 || !currentGrade) return;
-    const draft = planToRubricDraft({
-      classId,
-      subject,
-      grade: currentGrade.grade,
-      areaNames: selectedAreas,
-      generateId: generateUUID,
-      now: new Date().toISOString(),
-    });
-    onImport(draft);
-  }
-
-  function selectGrade(idx: number) {
-    setGradeIdx(idx);
-    const g = parsed?.grades[idx];
-    setSubject(pickDefaultSubject(g, classSubject));
-    setSemesterFilter('all');
-    setSelectedAreas([]);
-  }
+  const selectedCandidate: RubricCandidate | undefined = subjectCandidates[candidateIdx];
 
   function selectSubject(subj: string) {
     setSubject(subj);
-    setSemesterFilter('all');
-    setSelectedAreas([]);
+    setCandidateIdx(0);
   }
 
-  const showViewerFallback = parsed !== null && (parsed.needsOcr || parsed.grades.length === 0);
+  function handleImport() {
+    if (!selectedCandidate) return;
+    const rubric = candidateToRubric(
+      selectedCandidate,
+      classId,
+      generateUUID,
+      new Date().toISOString(),
+    );
+    onImport(rubric);
+  }
+
+  const showViewerFallback = parsed !== null && (parsed.needsOcr || candidates.length === 0);
 
   return (
     <Modal isOpen onClose={onClose} title="평가계획에서 불러오기" srOnlyTitle size="lg">
@@ -351,106 +341,88 @@ export function RubricImportFromPlanModal({
                 </div>
               ) : (
                 <>
-                  {/* 학년·과목 선택 (통합형) / 라벨 (분리형) */}
+                  {/* 과목 선택 (직접 선택 — 자동 확정 안 함) */}
                   <div className="flex items-center gap-2 flex-wrap">
-                    {parsed.grades.length > 1 ? (
-                      <select
-                        value={gradeIdx}
-                        onChange={(e) => selectGrade(Number(e.target.value))}
-                        className="bg-sp-card border border-sp-border rounded-lg px-2.5 py-1.5 text-sm text-sp-text outline-none focus:border-sp-accent"
-                      >
-                        {parsed.grades.map((g, i) => (
-                          <option key={i} value={i}>
-                            {g.label}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <span className="text-sm font-semibold text-sp-text">
-                        {currentGrade?.label}
-                      </span>
-                    )}
-
-                    {currentGrade && currentGrade.subjects.length > 1 ? (
+                    <span className="text-xs text-sp-muted">과목</span>
+                    {subjects.length > 1 ? (
                       <select
                         value={subject}
                         onChange={(e) => selectSubject(e.target.value)}
+                        aria-label="과목 선택"
                         className="bg-sp-card border border-sp-border rounded-lg px-2.5 py-1.5 text-sm text-sp-text outline-none focus:border-sp-accent"
                       >
-                        {currentGrade.subjects.map((s) => (
+                        {subjects.map((s) => (
                           <option key={s} value={s}>
                             {s}
                           </option>
                         ))}
                       </select>
                     ) : (
-                      <span className="text-sm font-semibold text-sp-accent">{subject}</span>
+                      <span className="text-sm font-semibold text-sp-accent">
+                        {subject || subjects[0]}
+                      </span>
+                    )}
+                    {selectedCandidate && (
+                      <span className="text-caption text-sp-muted">
+                        {selectedCandidate.hasScores ? '배점 포함' : '배점은 직접 입력'}
+                      </span>
                     )}
                   </div>
 
-                  {/* 학기 칩 (인식된 경우만) */}
-                  {hasSemesterInfo ? (
-                    <div className="flex items-center gap-1.5">
-                      {(['all', '1', '2'] as const).map((s) => (
+                  {/* 수행평가 항목 선택 (해당 과목의 후보) */}
+                  {subjectCandidates.length > 1 && (
+                    <div className="flex flex-col gap-2">
+                      <span className="text-xs text-sp-muted">수행평가 항목</span>
+                      {subjectCandidates.map((c, i) => (
                         <button
-                          key={s}
+                          key={`${c.title}-${i}`}
                           type="button"
-                          onClick={() => setSemesterFilter(s)}
-                          className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
-                            semesterFilter === s
-                              ? 'bg-sp-accent text-white'
-                              : 'bg-sp-surface border border-sp-border text-sp-muted hover:text-sp-text'
+                          onClick={() => setCandidateIdx(i)}
+                          className={`text-left px-3 py-2 rounded-lg bg-sp-surface border text-sm transition-colors ${
+                            i === candidateIdx
+                              ? 'border-sp-accent text-sp-text'
+                              : 'border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent'
                           }`}
                         >
-                          {s === 'all' ? '전체' : `${s}학기`}
+                          {c.title}{' '}
+                          <span className="text-caption text-sp-muted">
+                            · 평가요소 {c.criteria.length}개
+                          </span>
                         </button>
                       ))}
                     </div>
-                  ) : (
-                    <p className="text-caption text-sp-muted">
-                      학기 구분이 명확하지 않아요. 항목을 직접 확인해 주세요.
-                    </p>
                   )}
 
-                  {/* 평가영역 체크 */}
-                  <div className="flex flex-col gap-2">
-                    {visibleAreas.map((area, i) => {
-                      const checked = selectedAreas.includes(area.name);
-                      return (
-                        <label
-                          key={`${area.name}-${i}`}
-                          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg bg-sp-surface border transition-colors cursor-pointer ${
-                            checked ? 'border-sp-accent' : 'border-sp-border hover:border-sp-accent'
-                          }`}
+                  {/* 선택 루브릭 미리보기 */}
+                  {selectedCandidate && (
+                    <div className="flex flex-col gap-2">
+                      <span className="text-xs text-sp-muted">
+                        미리보기 — {selectedCandidate.title}
+                      </span>
+                      {selectedCandidate.criteria.map((cri, ci) => (
+                        <div
+                          key={`${cri.name}-${ci}`}
+                          className="rounded-lg border border-sp-border bg-sp-surface p-3"
                         >
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() => toggleArea(area.name)}
-                            className="accent-sp-accent w-4 h-4 shrink-0"
-                          />
-                          <span className="min-w-0 flex-1">
-                            <span className="block text-sm text-sp-text truncate">{area.name}</span>
-                            {(area.ratio !== undefined || area.semester != null) && (
-                              <span className="block text-xs text-sp-muted mt-0.5">
-                                {[
-                                  area.ratio !== undefined ? `반영 ${area.ratio}` : '',
-                                  area.semester != null ? `${area.semester}학기` : '',
-                                ]
-                                  .filter((x) => x.length > 0)
-                                  .join(' · ')}
-                              </span>
-                            )}
-                          </span>
-                        </label>
-                      );
-                    })}
-                    {visibleAreas.length === 0 && (
-                      <p className="text-xs text-sp-muted py-4 text-center">
-                        이 조건에서 가져올 평가영역이 없어요.
-                      </p>
-                    )}
-                  </div>
+                          <p className="text-sm font-semibold text-sp-text">{cri.name}</p>
+                          <div className="flex flex-col gap-1 mt-1.5">
+                            {cri.levels.map((lv, li) => (
+                              <div key={li} className="flex items-start gap-2 text-xs">
+                                <span className="shrink-0 text-sp-accent font-semibold tabular-nums w-10 text-right">
+                                  {lv.score}점
+                                </span>
+                                <span className="text-sp-muted">
+                                  {lv.description && lv.description.length > 0
+                                    ? lv.description
+                                    : lv.name}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </>
               )}
             </div>
@@ -476,11 +448,11 @@ export function RubricImportFromPlanModal({
             <button
               type="button"
               onClick={handleImport}
-              disabled={selectedAreas.length === 0}
+              disabled={!selectedCandidate}
               className="px-4 py-2 bg-sp-accent text-white rounded-lg hover:brightness-110 text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed transition-all"
             >
-              {selectedAreas.length > 0
-                ? `${selectedAreas.length}개 항목 가져오기`
+              {selectedCandidate
+                ? `이 루브릭 불러오기 (평가요소 ${selectedCandidate.criteria.length}개)`
                 : '항목을 선택하세요'}
             </button>
           )}
@@ -504,20 +476,24 @@ export function RubricImportFromPlanModal({
 
 /* ──────────────── 기본 선택 헬퍼 ──────────────── */
 
-function pickDefaultGradeIdx(
-  grades: readonly EvaluationPlanGrade[],
-  classGrade: number | null,
-): number {
-  if (classGrade !== null) {
-    const i = grades.findIndex((g) => g.grade === classGrade);
-    if (i >= 0) return i;
+/** 후보들의 과목 목록(등장 순서, 중복 제거) */
+function distinctSubjects(candidates: readonly RubricCandidate[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const c of candidates) {
+    const s = c.subject ?? '과목 미상';
+    if (!seen.has(s)) {
+      seen.add(s);
+      out.push(s);
+    }
   }
-  return 0;
+  return out;
 }
 
-function pickDefaultSubject(grade: EvaluationPlanGrade | undefined, classSubject: string): string {
-  if (!grade || grade.subjects.length === 0) return '';
+/** 수업반 과목과 일치하는 과목 우선, 없으면 첫 과목 */
+function pickDefaultSubject(subjects: readonly string[], classSubject: string): string {
+  if (subjects.length === 0) return '';
   const norm = (s: string) => s.replace(/\s/g, '');
-  const match = grade.subjects.find((s) => norm(s) === norm(classSubject));
-  return match ?? grade.subjects[0]!;
+  const match = subjects.find((s) => norm(s) === norm(classSubject));
+  return match ?? subjects[0]!;
 }

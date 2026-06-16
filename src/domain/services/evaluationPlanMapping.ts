@@ -11,7 +11,17 @@
  * - 반영비율·학기 등 보조 정보는 모달 선택 단계에서만 쓰고, 루브릭 엔티티엔 담지 않는다.
  */
 import type { Rubric, RubricCriterion } from '../entities/Rubric';
-import { createDefaultLevels, type IdGenerator } from '../rules/rubricRules';
+import type {
+  EvaluationPlanGrade,
+  RubricCandidate,
+  RubricLevelDraft,
+} from '../entities/EvaluationPlan';
+import {
+  createDefaultLevels,
+  DEFAULT_LEVEL_PRESETS,
+  MAX_LEVELS_PER_CRITERION,
+  type IdGenerator,
+} from '../rules/rubricRules';
 
 export interface PlanToRubricDraftInput {
   readonly classId: string;
@@ -65,5 +75,71 @@ export function planToRubricDraft(input: PlanToRubricDraftInput): Rubric {
     criteria,
     createdAt: input.now,
     updatedAt: input.now,
+  };
+}
+
+/* ──────────────── 루브릭 후보(RubricCandidate) → Rubric ──────────────── */
+
+/** 빌더 표준 기본 수준 초안 (점수 미상 후보용 — 교사가 배점 입력) */
+function defaultLevelDrafts(): RubricLevelDraft[] {
+  return DEFAULT_LEVEL_PRESETS.map((p) => ({ name: p.name, score: p.score }));
+}
+
+/**
+ * 단순 평가영역 목록(EvaluationPlanGrade[]) → 루브릭 후보.
+ * 평가영역명만 있으므로 수준은 빌더 기본값으로 채우고 hasScores=false(교사 배점 입력).
+ */
+export function gradesToCandidates(grades: readonly EvaluationPlanGrade[]): RubricCandidate[] {
+  const out: RubricCandidate[] = [];
+  for (const g of grades) {
+    for (const subject of g.subjects) {
+      const areas = g.areasBySubject[subject] ?? [];
+      if (areas.length === 0) continue;
+      out.push({
+        subject,
+        grade: g.grade,
+        title: buildTitle(subject, g.grade),
+        criteria: areas.map((a) => ({ name: a.name, levels: defaultLevelDrafts() })),
+        hasScores: false,
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * 루브릭 후보(채점기준표/단순영역 공통) → 저장 가능한 Rubric 초안.
+ * criteria/levels 의 id 와 메타(classId/시각)를 채운다. 점수·설명은 후보 값 그대로.
+ */
+export function candidateToRubric(
+  candidate: RubricCandidate,
+  classId: string,
+  generateId: IdGenerator,
+  now: string,
+): Rubric {
+  const title = candidate.title.trim().length > 0 ? candidate.title.trim() : '수행평가 루브릭';
+  const criteria: RubricCriterion[] = candidate.criteria.map((c, index) => {
+    const levels = c.levels.slice(0, MAX_LEVELS_PER_CRITERION).map((l) => ({
+      id: generateId(),
+      name: l.name,
+      score: l.score,
+      ...(l.description !== undefined && l.description.length > 0
+        ? { description: l.description }
+        : {}),
+    }));
+    return {
+      id: generateId(),
+      name: c.name,
+      order: index,
+      levels: levels.length > 0 ? levels : createDefaultLevels(generateId),
+    };
+  });
+  return {
+    id: generateId(),
+    classId,
+    title,
+    criteria,
+    createdAt: now,
+    updatedAt: now,
   };
 }

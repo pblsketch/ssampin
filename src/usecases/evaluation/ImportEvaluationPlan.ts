@@ -32,7 +32,8 @@ export class ImportEvaluationPlan {
     schoolName: string,
     year: number,
     doc: EvaluationPlanDoc,
+    schoolKind?: string,
   ): Promise<ParsedEvaluationPlan> {
-    return this.port.downloadAndParse(shlIdfCd, schoolName, year, doc);
+    return this.port.downloadAndParse(shlIdfCd, schoolName, year, doc, schoolKind);
   }
 }

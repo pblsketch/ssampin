@@ -220,14 +220,6 @@ export function ClassRubricTab({ classId, onGoToRosterTab }: ClassRubricTabProps
   const rubricCount = countClassRubrics(rubrics, classId);
   const canAdd = canAddRubric(rubrics, classId);
 
-  /** 수업반 학년 기본값 — 활동 학생의 grade 에서 추론(없으면 null) */
-  const classGrade = useMemo(() => {
-    const raw = (currentClass?.students ?? []).find((s) => s.grade != null)?.grade;
-    if (raw == null) return null;
-    const n = parseInt(String(raw), 10);
-    return Number.isFinite(n) && n >= 1 && n <= 6 ? n : null;
-  }, [currentClass]);
-
   function handleNewRubric() {
     if (!canAdd) {
       showToast(
@@ -397,7 +389,6 @@ export function ClassRubricTab({ classId, onGoToRosterTab }: ClassRubricTabProps
         <RubricImportFromPlanModal
           classId={classId}
           classSubject={currentClass?.subject ?? ''}
-          classGrade={classGrade}
           onClose={() => setImportOpen(false)}
           onImport={(draft) => {
             setImportOpen(false);
