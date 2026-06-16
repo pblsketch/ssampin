@@ -1,0 +1,523 @@
+/**
+ * 학교 평가 운영계획에서 루브릭 초안 불러오기 모달.
+ *
+ * 계획서: docs/01-plan/features/evaluation-rubric-import.plan.md (§6 선택 UI 흐름)
+ * 흐름: ① 학교 검색·선택 → ② 학년도/파일 선택(다운로드+파싱) → ③ 학년·과목·학기·평가영역 선택
+ *       → 선택한 영역으로 루브릭 초안을 만들어 onImport 로 빌더에 prefill.
+ *
+ * - 이미지 문서/추출 실패는 원문 보기 폴백(AC4·AC7) — HTML 주입 방지 위해 markdown 을 텍스트로 표시.
+ * - 점수는 평가계획에 없으므로 채우지 않는다(§14) — 초안의 배점은 빌더 기본값(교사 입력).
+ */
+import { useMemo, useState } from 'react';
+import { Modal } from '@adapters/components/common/Modal';
+import { IconButton } from '@adapters/components/common/IconButton';
+import { useToastStore } from '@adapters/components/common/Toast';
+import { importEvaluationPlan } from '@adapters/di/container';
+import { planToRubricDraft } from '@domain/services/evaluationPlanMapping';
+import { generateUUID } from '@infrastructure/utils/uuid';
+import type { Rubric } from '@domain/entities/Rubric';
+import type {
+  EvaluationPlanDoc,
+  EvaluationPlanGrade,
+  EvaluationSchool,
+  ParsedEvaluationPlan,
+} from '@domain/entities/EvaluationPlan';
+
+interface RubricImportFromPlanModalProps {
+  classId: string;
+  /** 수업반 과목 — 파일 검색 기본어 + 과목 기본 선택 */
+  classSubject: string;
+  /** 수업반 학년(있으면 학년 기본 선택) */
+  classGrade: number | null;
+  onClose: () => void;
+  /** 선택한 평가영역으로 만든 루브릭 초안 — 부모가 빌더에 prefill */
+  onImport: (draft: Rubric) => void;
+}
+
+type Step = 'school' | 'docs' | 'review';
+
+const CURRENT_YEAR = new Date().getFullYear();
+const YEAR_OPTIONS = [CURRENT_YEAR, CURRENT_YEAR - 1, CURRENT_YEAR - 2];
+
+export function RubricImportFromPlanModal({
+  classId,
+  classSubject,
+  classGrade,
+  onClose,
+  onImport,
+}: RubricImportFromPlanModalProps) {
+  const showToast = useToastStore((s) => s.show);
+
+  const [step, setStep] = useState<Step>('school');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // ① 학교
+  const [schoolQuery, setSchoolQuery] = useState('');
+  const [schools, setSchools] = useState<readonly EvaluationSchool[]>([]);
+  const [school, setSchool] = useState<EvaluationSchool | null>(null);
+
+  // ② 문서
+  const [year, setYear] = useState(CURRENT_YEAR);
+  const [docs, setDocs] = useState<readonly EvaluationPlanDoc[]>([]);
+  const [docSearch, setDocSearch] = useState(classSubject ?? '');
+
+  // ③ 파싱 결과 + 선택
+  const [parsed, setParsed] = useState<ParsedEvaluationPlan | null>(null);
+  const [gradeIdx, setGradeIdx] = useState(0);
+  const [subject, setSubject] = useState('');
+  const [semesterFilter, setSemesterFilter] = useState<'all' | '1' | '2'>('all');
+  const [selectedAreas, setSelectedAreas] = useState<readonly string[]>([]);
+
+  /* ── ① 학교 검색 ── */
+  async function handleSearchSchools() {
+    const q = schoolQuery.trim();
+    if (q.length < 2) {
+      setError('학교 이름을 2글자 이상 입력해 주세요.');
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const hits = await importEvaluationPlan.searchSchools(q);
+      setSchools(hits);
+      if (hits.length === 0) setError('검색 결과가 없어요. 학교 이름을 다시 확인해 주세요.');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '학교 검색에 실패했어요.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function pickSchool(s: EvaluationSchool) {
+    setSchool(s);
+    setStep('docs');
+    await loadDocs(s, year);
+  }
+
+  /* ── ② 문서 목록 ── */
+  async function loadDocs(s: EvaluationSchool, y: number) {
+    setBusy(true);
+    setError(null);
+    setDocs([]);
+    try {
+      const list = await importEvaluationPlan.listDocs(s.shlIdfCd, s.name, y);
+      setDocs(list);
+      if (list.length === 0)
+        setError(`${y}년도 평가계획 파일을 찾지 못했어요. 다른 연도를 골라보세요.`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '평가계획 목록을 불러오지 못했어요.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function changeYear(y: number) {
+    setYear(y);
+    if (school) await loadDocs(school, y);
+  }
+
+  async function pickDoc(doc: EvaluationPlanDoc) {
+    if (!school) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await importEvaluationPlan.downloadAndParse(
+        school.shlIdfCd,
+        school.name,
+        year,
+        doc,
+      );
+      setParsed(result);
+      // 기본 선택: 수업반 학년/과목과 매칭되는 항목 우선
+      const gi = pickDefaultGradeIdx(result.grades, classGrade);
+      setGradeIdx(gi);
+      const g = result.grades[gi];
+      const subj = pickDefaultSubject(g, classSubject);
+      setSubject(subj);
+      setSemesterFilter('all');
+      setSelectedAreas([]);
+      setStep('review');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '파일을 불러오지 못했어요.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const filteredDocs = useMemo(() => {
+    const q = docSearch.trim().replace(/\s/g, '');
+    if (q.length === 0) return docs;
+    return docs.filter((d) => d.filename.replace(/\s/g, '').includes(q));
+  }, [docs, docSearch]);
+
+  /* ── ③ 선택 영역 → 초안 ── */
+  const currentGrade: EvaluationPlanGrade | undefined = parsed?.grades[gradeIdx];
+  const subjectAreas = useMemo(
+    () => (currentGrade ? (currentGrade.areasBySubject[subject] ?? []) : []),
+    [currentGrade, subject],
+  );
+  const hasSemesterInfo = useMemo(
+    () => subjectAreas.some((a) => a.semester === '1' || a.semester === '2'),
+    [subjectAreas],
+  );
+  const visibleAreas = useMemo(() => {
+    if (semesterFilter === 'all') return subjectAreas;
+    return subjectAreas.filter((a) => a.semester === semesterFilter);
+  }, [subjectAreas, semesterFilter]);
+
+  function toggleArea(name: string) {
+    setSelectedAreas((prev) =>
+      prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name],
+    );
+  }
+
+  function handleImport() {
+    if (selectedAreas.length === 0 || !currentGrade) return;
+    const draft = planToRubricDraft({
+      classId,
+      subject,
+      grade: currentGrade.grade,
+      areaNames: selectedAreas,
+      generateId: generateUUID,
+      now: new Date().toISOString(),
+    });
+    onImport(draft);
+  }
+
+  function selectGrade(idx: number) {
+    setGradeIdx(idx);
+    const g = parsed?.grades[idx];
+    setSubject(pickDefaultSubject(g, classSubject));
+    setSemesterFilter('all');
+    setSelectedAreas([]);
+  }
+
+  function selectSubject(subj: string) {
+    setSubject(subj);
+    setSemesterFilter('all');
+    setSelectedAreas([]);
+  }
+
+  const showViewerFallback = parsed !== null && (parsed.needsOcr || parsed.grades.length === 0);
+
+  return (
+    <Modal isOpen onClose={onClose} title="평가계획에서 불러오기" srOnlyTitle size="lg">
+      <div className="flex flex-col flex-1 min-h-0 max-h-[80vh]">
+        {/* 헤더 */}
+        <div className="flex items-center justify-between p-4 border-b border-sp-border shrink-0">
+          <div className="min-w-0">
+            <h3 className="text-sm font-bold text-sp-text flex items-center gap-2">
+              <span className="material-symbols-outlined text-base text-sp-accent">
+                cloud_download
+              </span>
+              평가계획에서 불러오기
+            </h3>
+            <p className="text-xs text-sp-muted mt-0.5 truncate">
+              {step === 'school' && '학교를 검색해 평가 운영계획 파일을 가져옵니다'}
+              {step === 'docs' && school && `${school.name} · ${year}년도 평가계획`}
+              {step === 'review' && parsed && parsed.filename}
+            </p>
+          </div>
+          <IconButton icon="close" label="닫기" variant="ghost" size="sm" onClick={onClose} />
+        </div>
+
+        {/* 본문 */}
+        <div className="flex-1 min-h-0 overflow-y-auto p-4 flex flex-col gap-3">
+          {error !== null && (
+            <div className="rounded-lg bg-red-500/10 border border-red-400/30 px-3 py-2 text-xs text-red-300">
+              {error}
+            </div>
+          )}
+
+          {/* ① 학교 검색 */}
+          {step === 'school' && (
+            <div className="flex flex-col gap-3">
+              <p className="text-xs text-sp-muted leading-relaxed">
+                학교알리미에 공시된 우리 학교 평가 운영계획을 자동으로 찾아 평가영역을 루브릭
+                초안으로 채워줘요. (데이터 출처: 학교알리미 · 공공누리 제1유형)
+              </p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={schoolQuery}
+                  onChange={(e) => setSchoolQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') void handleSearchSchools();
+                  }}
+                  placeholder="학교 이름 (예: 한울중학교)"
+                  aria-label="학교 이름 검색"
+                  className="flex-1 min-w-0 bg-sp-card border border-sp-border rounded-lg px-3 py-2 text-sm text-sp-text placeholder:text-sp-muted outline-none focus:border-sp-accent transition-colors"
+                />
+                <button
+                  type="button"
+                  onClick={() => void handleSearchSchools()}
+                  disabled={busy}
+                  className="px-4 py-2 bg-sp-accent text-white rounded-lg hover:brightness-110 text-sm font-medium disabled:opacity-40 transition-all shrink-0"
+                >
+                  {busy ? '검색 중...' : '검색'}
+                </button>
+              </div>
+              <div className="flex flex-col gap-2">
+                {schools.map((s) => (
+                  <button
+                    key={s.shlIdfCd}
+                    type="button"
+                    onClick={() => void pickSchool(s)}
+                    disabled={busy}
+                    className="text-left px-3 py-2.5 rounded-lg bg-sp-surface border border-sp-border hover:border-sp-accent transition-colors disabled:opacity-40"
+                  >
+                    <p className="text-sm text-sp-text font-medium">{s.name}</p>
+                    <p className="text-xs text-sp-muted mt-0.5 truncate">
+                      {[s.kind, s.address].filter((x) => x.length > 0).join(' · ')}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ② 연도 + 파일 목록 */}
+          {step === 'docs' && (
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center gap-2 flex-wrap">
+                <label className="text-xs text-sp-muted">학년도</label>
+                <select
+                  value={year}
+                  onChange={(e) => void changeYear(Number(e.target.value))}
+                  disabled={busy}
+                  className="bg-sp-card border border-sp-border rounded-lg px-2.5 py-1.5 text-sm text-sp-text outline-none focus:border-sp-accent"
+                >
+                  {YEAR_OPTIONS.map((y) => (
+                    <option key={y} value={y}>
+                      {y}년
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="text"
+                  value={docSearch}
+                  onChange={(e) => setDocSearch(e.target.value)}
+                  placeholder="파일명 검색 (예: 국어)"
+                  aria-label="파일명 검색"
+                  className="flex-1 min-w-[8rem] bg-sp-card border border-sp-border rounded-lg px-3 py-1.5 text-sm text-sp-text placeholder:text-sp-muted outline-none focus:border-sp-accent transition-colors"
+                />
+              </div>
+              {busy ? (
+                <p className="text-sm text-sp-muted py-6 text-center">불러오는 중...</p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {filteredDocs.map((d) => (
+                    <button
+                      key={d.seq}
+                      type="button"
+                      onClick={() => void pickDoc(d)}
+                      className="text-left px-3 py-2.5 rounded-lg bg-sp-surface border border-sp-border hover:border-sp-accent transition-colors flex items-center gap-2"
+                    >
+                      <span className="material-symbols-outlined text-base text-sp-muted shrink-0">
+                        description
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm text-sp-text truncate">{d.filename}</span>
+                        {d.sizeKB !== undefined && (
+                          <span className="block text-xs text-sp-muted mt-0.5">{d.sizeKB} KB</span>
+                        )}
+                      </span>
+                    </button>
+                  ))}
+                  {filteredDocs.length === 0 && docs.length > 0 && (
+                    <p className="text-xs text-sp-muted py-4 text-center">
+                      검색어와 맞는 파일이 없어요.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ③ 파싱 결과: 뷰어 폴백 또는 선택 */}
+          {step === 'review' && parsed && (
+            <div className="flex flex-col gap-3">
+              {showViewerFallback ? (
+                <div className="flex flex-col gap-2">
+                  <div className="rounded-lg bg-sp-card border border-sp-border border-l-4 border-l-amber-400 px-3 py-2 text-xs text-sp-text">
+                    {parsed.needsOcr
+                      ? '이미지로 된 문서라 평가영역을 자동으로 읽지 못했어요. 아래 원문을 보고 직접 입력해 주세요.'
+                      : '평가영역을 자동으로 찾지 못했어요. 아래 원문을 확인해 주세요.'}
+                  </div>
+                  <pre className="text-xs text-sp-text bg-sp-card border border-sp-border rounded-lg p-3 max-h-[40vh] overflow-auto whitespace-pre-wrap break-words">
+                    {parsed.markdown.slice(0, 20000) || '(표시할 내용이 없습니다)'}
+                  </pre>
+                </div>
+              ) : (
+                <>
+                  {/* 학년·과목 선택 (통합형) / 라벨 (분리형) */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {parsed.grades.length > 1 ? (
+                      <select
+                        value={gradeIdx}
+                        onChange={(e) => selectGrade(Number(e.target.value))}
+                        className="bg-sp-card border border-sp-border rounded-lg px-2.5 py-1.5 text-sm text-sp-text outline-none focus:border-sp-accent"
+                      >
+                        {parsed.grades.map((g, i) => (
+                          <option key={i} value={i}>
+                            {g.label}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className="text-sm font-semibold text-sp-text">
+                        {currentGrade?.label}
+                      </span>
+                    )}
+
+                    {currentGrade && currentGrade.subjects.length > 1 ? (
+                      <select
+                        value={subject}
+                        onChange={(e) => selectSubject(e.target.value)}
+                        className="bg-sp-card border border-sp-border rounded-lg px-2.5 py-1.5 text-sm text-sp-text outline-none focus:border-sp-accent"
+                      >
+                        {currentGrade.subjects.map((s) => (
+                          <option key={s} value={s}>
+                            {s}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className="text-sm font-semibold text-sp-accent">{subject}</span>
+                    )}
+                  </div>
+
+                  {/* 학기 칩 (인식된 경우만) */}
+                  {hasSemesterInfo ? (
+                    <div className="flex items-center gap-1.5">
+                      {(['all', '1', '2'] as const).map((s) => (
+                        <button
+                          key={s}
+                          type="button"
+                          onClick={() => setSemesterFilter(s)}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                            semesterFilter === s
+                              ? 'bg-sp-accent text-white'
+                              : 'bg-sp-surface border border-sp-border text-sp-muted hover:text-sp-text'
+                          }`}
+                        >
+                          {s === 'all' ? '전체' : `${s}학기`}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-caption text-sp-muted">
+                      학기 구분이 명확하지 않아요. 항목을 직접 확인해 주세요.
+                    </p>
+                  )}
+
+                  {/* 평가영역 체크 */}
+                  <div className="flex flex-col gap-2">
+                    {visibleAreas.map((area, i) => {
+                      const checked = selectedAreas.includes(area.name);
+                      return (
+                        <label
+                          key={`${area.name}-${i}`}
+                          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg bg-sp-surface border transition-colors cursor-pointer ${
+                            checked ? 'border-sp-accent' : 'border-sp-border hover:border-sp-accent'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleArea(area.name)}
+                            className="accent-sp-accent w-4 h-4 shrink-0"
+                          />
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-sm text-sp-text truncate">{area.name}</span>
+                            {(area.ratio !== undefined || area.semester != null) && (
+                              <span className="block text-xs text-sp-muted mt-0.5">
+                                {[
+                                  area.ratio !== undefined ? `반영 ${area.ratio}` : '',
+                                  area.semester != null ? `${area.semester}학기` : '',
+                                ]
+                                  .filter((x) => x.length > 0)
+                                  .join(' · ')}
+                              </span>
+                            )}
+                          </span>
+                        </label>
+                      );
+                    })}
+                    {visibleAreas.length === 0 && (
+                      <p className="text-xs text-sp-muted py-4 text-center">
+                        이 조건에서 가져올 평가영역이 없어요.
+                      </p>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* 푸터 */}
+        <div className="p-4 border-t border-sp-border shrink-0 flex items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={() => {
+              setError(null);
+              if (step === 'docs') setStep('school');
+              else if (step === 'review') setStep('docs');
+              else onClose();
+            }}
+            className="px-3 py-2 text-sm text-sp-muted hover:text-sp-text rounded-lg hover:bg-sp-surface transition-colors"
+          >
+            {step === 'school' ? '취소' : '이전'}
+          </button>
+
+          {step === 'review' && !showViewerFallback && (
+            <button
+              type="button"
+              onClick={handleImport}
+              disabled={selectedAreas.length === 0}
+              className="px-4 py-2 bg-sp-accent text-white rounded-lg hover:brightness-110 text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+            >
+              {selectedAreas.length > 0
+                ? `${selectedAreas.length}개 항목 가져오기`
+                : '항목을 선택하세요'}
+            </button>
+          )}
+          {step === 'review' && showViewerFallback && (
+            <button
+              type="button"
+              onClick={() => {
+                showToast('원문을 참고해 직접 루브릭을 만들어 주세요', 'info');
+                onClose();
+              }}
+              className="px-4 py-2 bg-sp-surface border border-sp-border text-sp-text rounded-lg hover:border-sp-accent text-sm font-medium transition-all"
+            >
+              닫기
+            </button>
+          )}
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+/* ──────────────── 기본 선택 헬퍼 ──────────────── */
+
+function pickDefaultGradeIdx(
+  grades: readonly EvaluationPlanGrade[],
+  classGrade: number | null,
+): number {
+  if (classGrade !== null) {
+    const i = grades.findIndex((g) => g.grade === classGrade);
+    if (i >= 0) return i;
+  }
+  return 0;
+}
+
+function pickDefaultSubject(grade: EvaluationPlanGrade | undefined, classSubject: string): string {
+  if (!grade || grade.subjects.length === 0) return '';
+  const norm = (s: string) => s.replace(/\s/g, '');
+  const match = grade.subjects.find((s) => norm(s) === norm(classSubject));
+  return match ?? grade.subjects[0]!;
+}

@@ -646,6 +646,26 @@ interface ElectronAPI {
     ) => Promise<MarkdownSaveZipResult>;
   };
 
+  // === 학교 평가 운영계획 불러오기 (schoolinfo-evaluation) ===
+  // 학교알리미 평가계획 hwp 자동 다운로드 + kordoc 파싱(메인, 로컬). 결과 markdown 만 반환.
+  schoolinfoEvaluation?: {
+    /** 학교명 전국 검색 → SHL_IDF_CD 확보(인증키 불필요). */
+    searchSchools: (word: string) => Promise<SchoolinfoSearchResult>;
+    /** 연도별 평가계획 첨부파일 목록(downloadParams 는 main 캐시 보관). */
+    listDocs: (args: {
+      shlIdfCd: string;
+      schoolName: string;
+      year: number;
+    }) => Promise<SchoolinfoListResult>;
+    /** 특정 첨부파일 다운로드 + kordoc 파싱 → markdown 반환. */
+    downloadDoc: (args: {
+      shlIdfCd: string;
+      schoolName: string;
+      year: number;
+      seq: string;
+    }) => Promise<SchoolinfoDownloadResult>;
+  };
+
   // === 협업 보드 (collab-board) — Design §4.1 ===
   collabBoard?: {
     list: () => Promise<CollabBoardMeta[]>;
@@ -923,6 +943,31 @@ type MarkdownSaveZipResult =
   | { status: 'canceled' }
   | { status: 'saved' }
   | { status: 'error'; message: string };
+
+/** 학교 검색 결과 (schoolinfoEvaluation.searchSchools) */
+type SchoolinfoSearchResult =
+  | {
+      status: 'ok';
+      hits: Array<{ shlIdfCd: string; name: string; address: string; kind: string }>;
+    }
+  | { status: 'error'; message: string };
+
+/** 평가계획 목록 결과 (schoolinfoEvaluation.listDocs) */
+type SchoolinfoListResult =
+  | { status: 'ok'; docs: Array<{ seq: string; filename: string; sizeKB?: number }> }
+  | { status: 'error'; message: string };
+
+/** 평가계획 다운로드+파싱 결과 (schoolinfoEvaluation.downloadDoc) — 경로/원본 미포함 */
+type SchoolinfoDownloadResult =
+  | {
+      status: 'ok';
+      fileName: string;
+      markdown: string;
+      isImageBased: boolean;
+      /** isImageBased 또는 추출 품질 저하 — 뷰어 폴백 신호 */
+      needsOcr: boolean;
+    }
+  | { status: 'error'; code: string; message: string };
 
 interface Window {
   electronAPI?: ElectronAPI;

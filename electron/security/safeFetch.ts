@@ -326,3 +326,241 @@ export async function safeFetchText(rawUrl: string, opts?: SafeFetchOptions): Pr
   // ICS/텍스트는 UTF-8 가정 (한국 캘린더 서버 포함 — RFC 5545 권장 인코딩이 UTF-8).
   return new TextDecoder('utf-8', { fatal: false }).decode(result.body);
 }
+
+/* ──────────────── 바이너리/POST 페치 (safeFetchBytes) ──────────────── */
+
+export interface SafeFetchBytesOptions {
+  /** HTTP 메서드. 기본 GET. (POST 는 학교알리미 목록/검색 AJAX 용) */
+  method?: 'GET' | 'POST';
+  /** 요청 본문(POST 전용). x-www-form-urlencoded 등은 extraHeaders 로 Content-Type 지정. */
+  body?: string | Uint8Array;
+  /** 응답 본문 최대 바이트. 기본 1 MiB. 초과분은 잘려 들어옴(스트림 중단). */
+  maxBytes?: number;
+  /** 최대 리다이렉트 hop. 기본 3. */
+  maxRedirects?: number;
+  /** 연결/헤더/본문 각 단계 timeout(ms). 기본 30_000. */
+  timeoutMs?: number;
+  /** Accept 헤더. 기본 '*&#47;*'. */
+  acceptHeader?: string;
+  /** 추가 요청 헤더(Referer / X-Requested-With / Content-Type 등). */
+  extraHeaders?: Record<string, string>;
+  /**
+   * 호스트 화이트리스트(소문자 정확 일치). 지정 시 매 hop 의 hostname 이 목록에 없으면 차단.
+   * SSRF 방어(공인 IP 검증)에 더해, 외부 통신 대상을 알려진 호스트로 한정한다.
+   */
+  allowedHosts?: readonly string[];
+  /** 허용 Content-Type prefix(소문자, `;` 앞 비교). 미지정 시 검사 안 함. */
+  allowedContentTypes?: string[];
+}
+
+export interface SafeFetchBytesResult {
+  readonly body: Uint8Array;
+  readonly contentType: string;
+  /** Content-Disposition 헤더 원문(있으면). 다운로드 파일명 추출용. */
+  readonly contentDisposition: string | null;
+  readonly finalUrl: string;
+  readonly status: number;
+}
+
+/** 단일 hop — vetted dispatcher 로 method/body 를 보낸다. 리다이렉트는 호출자가 처리. */
+async function fetchSingleHopBytes(
+  url: URL,
+  opts: {
+    method: 'GET' | 'POST';
+    body?: string | Uint8Array;
+    timeoutMs: number;
+    maxBytes: number;
+    acceptHeader: string;
+    extraHeaders?: Record<string, string>;
+    allowedHosts?: readonly string[];
+  },
+): Promise<{
+  status: number;
+  location: string | null;
+  contentType: string;
+  contentDisposition: string | null;
+  body: Uint8Array | null;
+}> {
+  // 호스트 화이트리스트 — DNS 조회/연결 전에 먼저 차단.
+  if (opts.allowedHosts && opts.allowedHosts.length > 0) {
+    const host = normalizeHostname(url.hostname);
+    if (!opts.allowedHosts.some((h) => normalizeHostname(h) === host)) {
+      throw new Error('Blocked: host not in allowlist');
+    }
+  }
+  const vetted = await resolveAndVetHost(url.hostname);
+  const dispatcher = pinDispatcher(vetted, opts.timeoutMs);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), opts.timeoutMs);
+
+  try {
+    const headers: Record<string, string> = {
+      'User-Agent': BROWSER_UA,
+      Accept: opts.acceptHeader,
+      'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
+      ...(opts.extraHeaders ?? {}),
+    };
+    const response = await fetch(url.toString(), {
+      method: opts.method,
+      redirect: 'manual',
+      signal: controller.signal,
+      headers,
+      ...(opts.method === 'POST' && opts.body !== undefined ? { body: opts.body } : {}),
+      // @ts-expect-error — undici dispatcher 는 Node fetch 확장 옵션
+      dispatcher,
+    });
+
+    const contentType = response.headers.get('content-type') ?? '';
+    const contentDisposition = response.headers.get('content-disposition');
+    const location = response.headers.get('location');
+
+    if (response.status >= 300 && response.status < 400) {
+      return {
+        status: response.status,
+        location,
+        contentType,
+        contentDisposition: null,
+        body: null,
+      };
+    }
+    if (!response.ok) {
+      return {
+        status: response.status,
+        location: null,
+        contentType,
+        contentDisposition: null,
+        body: null,
+      };
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) {
+      return {
+        status: response.status,
+        location: null,
+        contentType,
+        contentDisposition,
+        body: new Uint8Array(0),
+      };
+    }
+
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+    while (total < opts.maxBytes) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      total += value.byteLength;
+      if (total >= opts.maxBytes) {
+        await reader.cancel().catch(() => undefined);
+        break;
+      }
+    }
+
+    const buf = new Uint8Array(Math.min(total, opts.maxBytes));
+    let offset = 0;
+    for (const c of chunks) {
+      if (offset >= opts.maxBytes) break;
+      const slice = c.subarray(0, Math.min(c.byteLength, opts.maxBytes - offset));
+      buf.set(slice, offset);
+      offset += slice.byteLength;
+    }
+
+    return { status: response.status, location: null, contentType, contentDisposition, body: buf };
+  } finally {
+    clearTimeout(timer);
+    dispatcher.close().catch(() => undefined);
+  }
+}
+
+/**
+ * SSRF-안전 바이너리/POST 페치 — 메인 프로세스 전용.
+ *
+ * `safeFetchText` 와 동일한 SSRF 코어(`resolveAndVetHost`/`pinDispatcher`)를 재사용하되,
+ * (1) GET 외 POST + body, (2) 호스트 화이트리스트, (3) 바이너리(Uint8Array) 반환,
+ * (4) Content-Disposition 노출을 지원한다. 학교알리미 평가계획 목록(POST·EUC-KR HTML)과
+ * 첨부파일 다운로드(GET·바이너리 ≤50MB)에 쓰인다.
+ *
+ * - http/https 만, 매 hop hostname 화이트리스트 + DNS resolve → 모든 A/AAAA 공인 IP 검증 → 핀(rebinding 차단)
+ * - 최대 N hop(303/POST 리다이렉트는 GET 으로 전환), 응답 maxBytes 초과 시 중단
+ * - 실패(차단·비-2xx·네트워크 에러) 시 throw — 호출부가 catch.
+ */
+export async function safeFetchBytes(
+  rawUrl: string,
+  opts?: SafeFetchBytesOptions,
+): Promise<SafeFetchBytesResult> {
+  const timeoutMs = opts?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const maxBytes = opts?.maxBytes ?? DEFAULT_MAX_BYTES;
+  const maxRedirects = opts?.maxRedirects ?? DEFAULT_MAX_REDIRECTS;
+  const acceptHeader = opts?.acceptHeader ?? '*/*';
+
+  if (typeof rawUrl !== 'string' || rawUrl.length === 0 || rawUrl.length > 4096) {
+    throw new Error('Invalid URL');
+  }
+
+  let currentUrl: URL;
+  try {
+    currentUrl = new URL(rawUrl);
+  } catch {
+    throw new Error('Invalid URL');
+  }
+  if (currentUrl.protocol !== 'http:' && currentUrl.protocol !== 'https:') {
+    throw new Error('Unsupported protocol');
+  }
+
+  let method: 'GET' | 'POST' = opts?.method ?? 'GET';
+  let body = opts?.body;
+
+  let hop = 0;
+  for (;;) {
+    const result = await fetchSingleHopBytes(currentUrl, {
+      method,
+      body,
+      timeoutMs,
+      maxBytes,
+      acceptHeader,
+      extraHeaders: opts?.extraHeaders,
+      allowedHosts: opts?.allowedHosts,
+    });
+
+    if (result.status >= 300 && result.status < 400) {
+      if (!result.location || hop >= maxRedirects) {
+        throw new Error('Too many redirects or missing Location');
+      }
+      let next: URL;
+      try {
+        next = new URL(result.location, currentUrl);
+      } catch {
+        throw new Error('Invalid redirect target');
+      }
+      if (next.protocol !== 'http:' && next.protocol !== 'https:') {
+        throw new Error('Unsupported redirect protocol');
+      }
+      // 303(See Other) 또는 POST 의 301/302 → GET 으로 전환하고 body 제거 (브라우저/HTTP 표준 동작)
+      if (
+        result.status === 303 ||
+        (method === 'POST' && (result.status === 301 || result.status === 302))
+      ) {
+        method = 'GET';
+        body = undefined;
+      }
+      currentUrl = next;
+      hop++;
+      continue;
+    }
+
+    if (result.status < 200 || result.status >= 300 || result.body === null) {
+      throw new Error(`HTTP ${result.status}`);
+    }
+    if (!contentTypeAllowed(result.contentType, opts?.allowedContentTypes)) {
+      throw new Error(`Disallowed content-type: ${result.contentType}`);
+    }
+    return {
+      body: result.body,
+      contentType: result.contentType,
+      contentDisposition: result.contentDisposition,
+      finalUrl: currentUrl.toString(),
+      status: result.status,
+    };
+  }
+}

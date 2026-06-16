@@ -1104,6 +1104,43 @@ contextBridge.exposeInMainWorld('electronAPI', {
     > => ipcRenderer.invoke('markdown-convert:save-hwpx-zip', { files, zipName }),
   },
 
+  // === 학교 평가 운영계획 불러오기 (schoolinfo-evaluation) ===
+  // 학교알리미 평가계획 hwp 자동 다운로드 + kordoc 파싱(메인, 로컬). 결과 markdown 만 반환.
+  schoolinfoEvaluation: {
+    searchSchools: (
+      word: string,
+    ): Promise<
+      | {
+          status: 'ok';
+          hits: Array<{ shlIdfCd: string; name: string; address: string; kind: string }>;
+        }
+      | { status: 'error'; message: string }
+    > => ipcRenderer.invoke('schoolinfo-evaluation:search-schools', { word }),
+    listDocs: (args: {
+      shlIdfCd: string;
+      schoolName: string;
+      year: number;
+    }): Promise<
+      | { status: 'ok'; docs: Array<{ seq: string; filename: string; sizeKB?: number }> }
+      | { status: 'error'; message: string }
+    > => ipcRenderer.invoke('schoolinfo-evaluation:list-docs', args),
+    downloadDoc: (args: {
+      shlIdfCd: string;
+      schoolName: string;
+      year: number;
+      seq: string;
+    }): Promise<
+      | {
+          status: 'ok';
+          fileName: string;
+          markdown: string;
+          isImageBased: boolean;
+          needsOcr: boolean;
+        }
+      | { status: 'error'; code: string; message: string }
+    > => ipcRenderer.invoke('schoolinfo-evaluation:download-doc', args),
+  },
+
   // === 협업 보드 (collab-board) ===
   // Design §4.1 14개 채널을 서브객체로 그루핑 (기존 flat 패턴과의 절충 — 채널 많음)
   collabBoard: {

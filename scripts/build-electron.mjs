@@ -43,7 +43,17 @@ await build({
   //        require하면 packaged 환경에서 실패한다. asarUnpack과 함께 external 처리.
   // kordoc: 마크다운 변환기 파서. ESM 기반 + optional 네이티브 의존성(pdfjs-dist 등)을
   //         가지므로 번들하지 않고 런타임에 node_modules(asar 내부)에서 require한다.
-  external: ['electron', 'electron-updater', 'y-leveldb', 'undici', 'koffi', 'kordoc'],
+  // iconv-lite: 학교알리미 평가계획 EUC-KR HTML 디코딩(ipc/schoolinfoEvaluation.ts)용.
+  //             CJS + 동적 인코딩 require 를 가지므로 번들하지 않고 런타임에 require(asar 내부).
+  external: [
+    'electron',
+    'electron-updater',
+    'y-leveldb',
+    'undici',
+    'koffi',
+    'kordoc',
+    'iconv-lite',
+  ],
   sourcemap: false,
 });
 

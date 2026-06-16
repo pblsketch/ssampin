@@ -24,6 +24,7 @@ import {
 import { RubricBuilderModal } from './RubricBuilderModal';
 import { RubricGradingView } from './RubricGradingView';
 import { RubricCopyModal } from './RubricCopyModal';
+import { RubricImportFromPlanModal } from './RubricImportFromPlanModal';
 
 /* ──────────────── RubricCard ──────────────── */
 
@@ -192,6 +193,10 @@ export function ClassRubricTab({ classId, onGoToRosterTab }: ClassRubricTabProps
   const showToast = useToastStore((s) => s.show);
 
   const [builderTarget, setBuilderTarget] = useState<'new' | Rubric | null>(null);
+  /** 평가계획에서 불러온 초안 — 빌더에 prefill (createRubric 경로) */
+  const [importDraft, setImportDraft] = useState<Rubric | null>(null);
+  /** 평가계획 불러오기 모달 열림 */
+  const [importOpen, setImportOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Rubric | null>(null);
   /** 채점 화면으로 연 루브릭 id (Phase 2) */
   const [gradingRubricId, setGradingRubricId] = useState<string | null>(null);
@@ -215,6 +220,14 @@ export function ClassRubricTab({ classId, onGoToRosterTab }: ClassRubricTabProps
   const rubricCount = countClassRubrics(rubrics, classId);
   const canAdd = canAddRubric(rubrics, classId);
 
+  /** 수업반 학년 기본값 — 활동 학생의 grade 에서 추론(없으면 null) */
+  const classGrade = useMemo(() => {
+    const raw = (currentClass?.students ?? []).find((s) => s.grade != null)?.grade;
+    if (raw == null) return null;
+    const n = parseInt(String(raw), 10);
+    return Number.isFinite(n) && n >= 1 && n <= 6 ? n : null;
+  }, [currentClass]);
+
   function handleNewRubric() {
     if (!canAdd) {
       showToast(
@@ -224,6 +237,17 @@ export function ClassRubricTab({ classId, onGoToRosterTab }: ClassRubricTabProps
       return;
     }
     setBuilderTarget('new');
+  }
+
+  function handleImportFromPlan() {
+    if (!canAdd) {
+      showToast(
+        `한 수업반에는 루브릭을 최대 ${MAX_RUBRICS_PER_CLASS}개까지 만들 수 있습니다.`,
+        'error',
+      );
+      return;
+    }
+    setImportOpen(true);
   }
 
   async function handleDelete() {
@@ -287,15 +311,33 @@ export function ClassRubricTab({ classId, onGoToRosterTab }: ClassRubricTabProps
             </span>
           )}
         </h3>
-        <button
-          type="button"
-          onClick={handleNewRubric}
-          disabled={!canAdd}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sp-accent text-white text-xs font-medium hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-          title={canAdd ? undefined : `수업반당 최대 ${MAX_RUBRICS_PER_CLASS}개까지 만들 수 있어요`}
-        >
-          <span className="material-symbols-outlined text-sm">add</span>새 루브릭
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleImportFromPlan}
+            disabled={!canAdd}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sp-surface border border-sp-border text-sp-text text-xs font-medium hover:border-sp-accent disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+            title={
+              canAdd
+                ? '학교 평가계획에서 평가영역 불러오기'
+                : `수업반당 최대 ${MAX_RUBRICS_PER_CLASS}개까지 만들 수 있어요`
+            }
+          >
+            <span className="material-symbols-outlined text-sm">cloud_download</span>평가계획에서
+            불러오기
+          </button>
+          <button
+            type="button"
+            onClick={handleNewRubric}
+            disabled={!canAdd}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sp-accent text-white text-xs font-medium hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+            title={
+              canAdd ? undefined : `수업반당 최대 ${MAX_RUBRICS_PER_CLASS}개까지 만들 수 있어요`
+            }
+          >
+            <span className="material-symbols-outlined text-sm">add</span>새 루브릭
+          </button>
+        </div>
       </div>
 
       {/* 목록 */}
@@ -307,8 +349,18 @@ export function ClassRubricTab({ classId, onGoToRosterTab }: ClassRubricTabProps
             <p className="text-xs text-center leading-relaxed">
               루브릭은 평가 요소와 수준(배점)으로 이루어진 채점 기준표예요.
               <br />
-              &quot;새 루브릭&quot; 버튼으로 첫 기준표를 만들어보세요.
+              &quot;새 루브릭&quot;으로 직접 만들거나, 학교 평가계획에서 평가영역을 불러올 수
+              있어요.
             </p>
+            <button
+              type="button"
+              onClick={handleImportFromPlan}
+              disabled={!canAdd}
+              className="mt-1 flex items-center gap-1.5 px-4 py-2 rounded-lg bg-sp-surface border border-sp-border text-sp-text text-xs font-medium hover:border-sp-accent disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+            >
+              <span className="material-symbols-outlined text-sm">cloud_download</span>평가계획에서
+              불러오기
+            </button>
           </div>
         ) : (
           <div className="flex flex-col gap-3">
@@ -327,12 +379,30 @@ export function ClassRubricTab({ classId, onGoToRosterTab }: ClassRubricTabProps
         )}
       </div>
 
-      {/* 빌더 모달 */}
-      {builderTarget !== null && (
+      {/* 빌더 모달 — builderTarget(새/수정) 또는 importDraft(평가계획 초안) */}
+      {(builderTarget !== null || importDraft !== null) && (
         <RubricBuilderModal
           classId={classId}
-          rubric={builderTarget === 'new' ? undefined : builderTarget}
-          onClose={() => setBuilderTarget(null)}
+          rubric={builderTarget !== null && builderTarget !== 'new' ? builderTarget : undefined}
+          draft={importDraft ?? undefined}
+          onClose={() => {
+            setBuilderTarget(null);
+            setImportDraft(null);
+          }}
+        />
+      )}
+
+      {/* 평가계획에서 불러오기 모달 */}
+      {importOpen && (
+        <RubricImportFromPlanModal
+          classId={classId}
+          classSubject={currentClass?.subject ?? ''}
+          classGrade={classGrade}
+          onClose={() => setImportOpen(false)}
+          onImport={(draft) => {
+            setImportOpen(false);
+            setImportDraft(draft);
+          }}
         />
       )}
 

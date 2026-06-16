@@ -179,8 +179,12 @@ async function fixHwpxLineBreak(input: Uint8Array | ArrayBuffer): Promise<Uint8A
   }
 }
 
-/** ArrayBuffer → kordoc 파싱 → 결과 매핑(공통). 크기 검사 포함. */
-async function parseArrayBuffer(
+/**
+ * ArrayBuffer → kordoc 파싱 → 결과 매핑(공통). 크기 검사 포함.
+ * 평가계획 불러오기(`ipc/schoolinfoEvaluation.ts`)가 다운로드한 hwp bytes 파싱에 재사용한다 —
+ * 파싱 경로를 단일화해 markdown/isImageBased/textQuality 도출 규칙을 한 곳에서 관리한다.
+ */
+export async function parseArrayBuffer(
   arrayBuffer: ArrayBuffer,
   fileName: string,
   filePath?: string,

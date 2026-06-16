@@ -106,21 +106,29 @@ interface RubricBuilderModalProps {
   classId: string;
   /** 있으면 수정 모드, 없으면 새 루브릭 */
   rubric?: Rubric;
+  /**
+   * 초안 prefill(생성 모드) — 평가계획에서 불러온 루브릭 초안.
+   * rubric(수정)과 달리 저장 시 createRubric 경로(미저장→신규 생성)를 탄다.
+   * rubric 이 함께 주어지면 rubric(수정)이 우선한다.
+   */
+  draft?: Rubric;
   onClose: () => void;
 }
 
-export function RubricBuilderModal({ classId, rubric, onClose }: RubricBuilderModalProps) {
+export function RubricBuilderModal({ classId, rubric, draft, onClose }: RubricBuilderModalProps) {
   const showToast = useToastStore((s) => s.show);
   const createRubric = useRubricStore((s) => s.createRubric);
   const updateRubric = useRubricStore((s) => s.updateRubric);
   const gradings = useRubricStore((s) => s.gradings);
 
+  // 수정 모드는 rubric 이 있을 때만. draft 는 생성 모드의 초기값(저장 시 createRubric).
   const isEdit = rubric !== undefined;
+  const seed = rubric ?? draft;
 
-  const [title, setTitle] = useState(rubric?.title ?? '');
-  const [description, setDescription] = useState(rubric?.description ?? '');
+  const [title, setTitle] = useState(seed?.title ?? '');
+  const [description, setDescription] = useState(seed?.description ?? '');
   const [drafts, setDrafts] = useState<DraftCriterion[]>(() =>
-    rubric !== undefined ? rubricToDrafts(rubric) : [makeDraftCriterion()],
+    seed !== undefined ? rubricToDrafts(seed) : [makeDraftCriterion()],
   );
   const [saving, setSaving] = useState(false);
   /** 구조 변경 경고 단계 — 영향받는 기록 수와 함께 확인을 요구 */

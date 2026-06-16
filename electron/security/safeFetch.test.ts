@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { isPrivateIP, normalizeHostname, resolveAndVetHost, safeFetchText } from './safeFetch';
+import {
+  isPrivateIP,
+  normalizeHostname,
+  resolveAndVetHost,
+  safeFetchBytes,
+  safeFetchText,
+} from './safeFetch';
 
 describe('safeFetch — isPrivateIP', () => {
   it('사설/예약 IPv4 대역을 차단', () => {
@@ -79,5 +85,39 @@ describe('safeFetch — safeFetchText input validation', () => {
   it('빈/과대 URL 거부', async () => {
     await expect(safeFetchText('')).rejects.toThrow();
     await expect(safeFetchText('http://example.com/' + 'a'.repeat(5000))).rejects.toThrow();
+  });
+});
+
+describe('safeFetch — safeFetchBytes SSRF/입력 검증 (평가계획 다운로드)', () => {
+  it('비-http(s) 프로토콜 거부', async () => {
+    await expect(safeFetchBytes('file:///etc/passwd')).rejects.toThrow();
+    await expect(safeFetchBytes('ftp://example.com/x')).rejects.toThrow();
+  });
+
+  it('localhost / 사설 IP / 메타데이터 호스트 거부 (네트워크 도달 전 차단)', async () => {
+    await expect(safeFetchBytes('http://localhost:8080/x')).rejects.toThrow();
+    await expect(safeFetchBytes('http://127.0.0.1/x')).rejects.toThrow();
+    await expect(safeFetchBytes('http://169.254.169.254/latest/meta-data/')).rejects.toThrow();
+    await expect(safeFetchBytes('http://192.168.1.1/x')).rejects.toThrow();
+  });
+
+  it('빈/과대 URL 거부', async () => {
+    await expect(safeFetchBytes('')).rejects.toThrow();
+    await expect(safeFetchBytes('http://example.com/' + 'a'.repeat(5000))).rejects.toThrow();
+  });
+
+  it('호스트 화이트리스트 밖 도메인 거부 (AC6 — DNS 조회 전 차단)', async () => {
+    await expect(
+      safeFetchBytes('https://example.com/x', { allowedHosts: ['www.schoolinfo.go.kr'] }),
+    ).rejects.toThrow();
+    await expect(
+      safeFetchBytes('https://evil.schoolinfo.go.kr.attacker.com/x', {
+        allowedHosts: ['www.schoolinfo.go.kr'],
+      }),
+    ).rejects.toThrow();
+    // 화이트리스트 밖 사설IP 호스트도 당연히 거부
+    await expect(
+      safeFetchBytes('http://10.0.0.5/x', { allowedHosts: ['www.schoolinfo.go.kr'] }),
+    ).rejects.toThrow();
   });
 });
