@@ -121,14 +121,25 @@ function gradeFromFilename(filename: string | undefined, maxGrade: number): numb
   return last;
 }
 
-/** 채점기준표 grid 인지 — "평가 요소및 채점 기준" 라벨 셀로 식별 */
+/** 평가요소(=criterion) 열 헤더 셀인지 — "평가 요소및 채점 기준" 라벨은 제외(및 포함) */
+function isElementHeader(cell: string): boolean {
+  return /평가\s*요소|채점\s*요소/.test(cell) && !/및/.test(cell) && !/채점\s*기준/.test(cell);
+}
+/** 채점기준/평가척도/배점 등 점수·설명 열 헤더 셀인지 (라벨 제외) */
+function isScoreHeader(cell: string): boolean {
+  if (/및/.test(cell)) return false; // "평가 요소및 채점 기준" 라벨 제외
+  return /채점\s*기준/.test(cell) || /평가\s*척도/.test(cell) || /^\s*배점\s*$/.test(cell);
+}
+
+/**
+ * 채점기준표 grid 인지 — **헤더행을 직접 탐색**한다(라벨이 별도 행/병합이어도 동작).
+ * 헤더행 = 평가요소(채점요소) 열과 채점기준/평가척도/배점 열이 함께 있는 행.
+ * 지필 종합표·성취기준표 등은 이 조합이 없어 자연히 제외된다.
+ */
 function isScoringGrid(grid: string[][]): { headerRow: number } | null {
   for (let r = 0; r < grid.length; r++) {
-    if (grid[r]!.some((c) => /평가\s*요소\s*및|평가\s*요소및/.test(c))) {
-      // 같은 행에 '평가요소'/'채점기준' 하위 헤더가 있어야 채점기준표로 인정
-      const joined = grid[r]!.join(' ');
-      if (/평가\s*요소/.test(joined) && /채점\s*기준/.test(joined)) return { headerRow: r };
-    }
+    const row = grid[r]!;
+    if (row.some(isElementHeader) && row.some(isScoreHeader)) return { headerRow: r };
   }
   return null;
 }
@@ -144,10 +155,10 @@ function detectScoringColumns(grid: string[][], headerRow: number): ScoringColum
   const header = grid[headerRow]!;
   const colCount = Math.max(...grid.map((r) => r.length));
 
-  // 평가요소(가장 오른쪽 '평가 요소' 헤더 = 가장 세분 요소)
+  // 평가요소(가장 오른쪽 element 헤더 = 가장 세분 요소). "(채점요소)" 등 접미사 허용, 라벨 제외.
   let elementCol = -1;
   for (let c = 0; c < colCount; c++) {
-    if (/^평가\s*요소$/.test((header[c] ?? '').trim())) elementCol = c;
+    if (isElementHeader((header[c] ?? '').trim())) elementCol = c;
   }
   if (elementCol < 0) return null;
 
@@ -159,26 +170,33 @@ function detectScoringColumns(grid: string[][], headerRow: number): ScoringColum
   };
   const totalCol = findHeader(/^배점$/);
   const scaleCol = findHeader(/평가\s*척도/);
-  // 정확 일치 — 라벨 "평가 요소및 채점 기준"이 채점기준 열로 오탐되지 않게
+  // 채점기준 열 — 라벨('및' 포함)·평가요소 열은 제외
   const descCols: number[] = [];
   for (let c = 0; c < colCount; c++) {
-    if (/^채점\s*기준$/.test((header[c] ?? '').trim())) descCols.push(c);
+    const cell = (header[c] ?? '').trim();
+    if (/채점\s*기준/.test(cell) && !/및/.test(cell) && c !== elementCol) descCols.push(c);
   }
 
-  // 수준별 점수 열: 평가척도 > 끝 숫자열(배점 제외) > 배점
-  let perLevelScoreCol = scaleCol ?? -1;
+  // 수준별 점수 열은 반드시 **숫자 데이터**여야 한다(평가척도가 상/중/하면 폴백).
+  // 우선순위: 숫자인 평가척도 > 끝 숫자열(배점 제외) > 숫자인 배점.
+  const dataRows = grid.slice(headerRow + 1);
+  const numericCount = (c: number) => dataRows.filter((r) => isNumericCell(r[c] ?? '')).length;
+  let perLevelScoreCol = -1;
+  if (scaleCol !== null && numericCount(scaleCol) >= 2) {
+    perLevelScoreCol = scaleCol;
+  }
   if (perLevelScoreCol < 0) {
-    const dataRows = grid.slice(headerRow + 1);
     for (let c = colCount - 1; c >= 0; c--) {
       if (c === totalCol) continue;
-      const numericRows = dataRows.filter((r) => isNumericCell(r[c] ?? '')).length;
-      if (numericRows >= 2) {
+      if (numericCount(c) >= 2) {
         perLevelScoreCol = c;
         break;
       }
     }
   }
-  if (perLevelScoreCol < 0) perLevelScoreCol = totalCol ?? -1;
+  if (perLevelScoreCol < 0 && totalCol !== null && numericCount(totalCol) >= 2) {
+    perLevelScoreCol = totalCol;
+  }
   if (perLevelScoreCol < 0) return null;
 
   const cleanedDescCols = descCols.filter((c) => c !== perLevelScoreCol && c !== totalCol);
@@ -272,7 +290,16 @@ export function parseScoringRubrics(
     currentTitle = null; // 이 항목 제목 소비 — 다음 항목은 자기 제목을 다시 찾는다
   }
 
-  return candidates;
+  // 일부 학교 문서는 같은 내용이 반복 수록된다 → 동일 후보(과목·제목·평가요소·점수) 중복 제거.
+  const seen = new Set<string>();
+  return candidates.filter((c) => {
+    const sig =
+      `${c.subject}|${c.title}|` +
+      c.criteria.map((cr) => `${cr.name}:${cr.levels.map((l) => l.score).join(',')}`).join('|');
+    if (seen.has(sig)) return false;
+    seen.add(sig);
+    return true;
+  });
 }
 
 /** 원문 줄에서 수행평가 항목 제목 추출 ("가./나./1) 제목", 보일러플레이트 제외, 없으면 null) */
