@@ -12,10 +12,19 @@ import { ProgressTab } from './ProgressTab';
 import { ClassSurveyTab } from './ClassSurveyTab';
 import { ClassAssignmentTab } from './ClassAssignmentTab';
 import { ClassRubricTab } from './Rubric/ClassRubricTab';
+import { ClassAssessmentManagementTab } from './GradeAnalysis/ClassAssessmentManagementTab';
 import { AddClassModal } from './AddClassModal';
 import { PageHeader } from '@adapters/components/common/PageHeader';
 
-type TabId = 'roster' | 'record' | 'seating' | 'progress' | 'survey' | 'assignment' | 'rubric';
+type TabId =
+  | 'roster'
+  | 'record'
+  | 'seating'
+  | 'progress'
+  | 'survey'
+  | 'assignment'
+  | 'rubric'
+  | 'assessment';
 
 interface TabConfig {
   id: TabId;
@@ -31,6 +40,7 @@ const TABS: readonly TabConfig[] = [
   { id: 'survey', label: '설문/체크', icon: 'checklist' },
   { id: 'assignment', label: '과제 수합', icon: 'attach_file' },
   { id: 'rubric', label: '수행평가', icon: 'grading' },
+  { id: 'assessment', label: '성적', icon: 'analytics' },
 ] as const;
 
 export function ClassManagementPage() {
@@ -176,6 +186,13 @@ export function ClassManagementPage() {
                   <ClassRubricTab
                     classId={selectedClassId}
                     onGoToRosterTab={() => setActiveTab('roster')}
+                  />
+                )}
+                {activeTab === 'assessment' && (
+                  <ClassAssessmentManagementTab
+                    classId={selectedClassId}
+                    onGoToRosterTab={() => setActiveTab('roster')}
+                    onGoToRubricTab={() => setActiveTab('rubric')}
                   />
                 )}
               </div>

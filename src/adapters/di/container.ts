@@ -34,6 +34,7 @@ import type { IGoogleSheetPort } from '@domain/ports/IGoogleSheetPort';
 import type { IConsultationRepository } from '@domain/repositories/IConsultationRepository';
 import type { ISurveyRepository } from '@domain/repositories/ISurveyRepository';
 import type { IRubricRepository } from '@domain/repositories/IRubricRepository';
+import type { IGradeAnalysisRepository } from '@domain/repositories/IGradeAnalysisRepository';
 import type { IDriveSyncPort } from '@domain/ports/IDriveSyncPort';
 import type { IDriveSyncRepository } from '@domain/repositories/IDriveSyncRepository';
 import type { IManualMealRepository } from '@domain/repositories/IManualMealRepository';
@@ -90,6 +91,7 @@ import { JsonAssignmentRepository } from '@adapters/repositories/JsonAssignmentR
 import { JsonConsultationRepository } from '@adapters/repositories/JsonConsultationRepository';
 import { JsonSurveyRepository } from '@adapters/repositories/JsonSurveyRepository';
 import { JsonRubricRepository } from '@adapters/repositories/JsonRubricRepository';
+import { JsonGradeAnalysisRepository } from '@adapters/repositories/JsonGradeAnalysisRepository';
 import { JsonDriveSyncRepository } from '@adapters/repositories/JsonDriveSyncRepository';
 import { JsonManualMealRepository } from '@adapters/repositories/JsonManualMealRepository';
 import { JsonImageWidgetRepository } from '@adapters/repositories/JsonImageWidgetRepository';
@@ -125,6 +127,7 @@ import { DeleteAssignment } from '@usecases/assignment/DeleteAssignment';
 import { CopyMissingList } from '@usecases/assignment/CopyMissingList';
 
 import { ManageRubrics } from '@usecases/rubric/ManageRubrics';
+import { ManageGradeAnalysis } from '@usecases/gradeAnalysis/ManageGradeAnalysis';
 
 import type { IEvaluationPlanPort } from '@domain/ports/IEvaluationPlanPort';
 import { SchoolInfoEvaluationAdapter } from '@infrastructure/schoolinfo/SchoolInfoEvaluationAdapter';
@@ -349,6 +352,13 @@ export const surveyRepository: ISurveyRepository = new JsonSurveyRepository(stor
 export const rubricRepository: IRubricRepository = new JsonRubricRepository(storage);
 
 export const manageRubrics = new ManageRubrics(rubricRepository);
+
+// === 성적 분석 (grade-analysis) — 로컬 전용, syncRegistry 제외 ===
+export const gradeAnalysisRepository: IGradeAnalysisRepository = new JsonGradeAnalysisRepository(
+  storage,
+);
+export const manageGradeAnalysis = new ManageGradeAnalysis(gradeAnalysisRepository);
+export { parseGradeExcel } from '@infrastructure/parse/NeisGradeExcelParser';
 
 // === 학교 평가 운영계획 불러오기 (evaluation-rubric-import) ===
 // 통신/파싱은 electron main(safeFetch + kordoc)에 IPC 위임 → markdown 구조화는 순수 도메인 파서.
