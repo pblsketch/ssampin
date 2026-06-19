@@ -1,10 +1,10 @@
-import { useSchoolIdentity } from './useSchoolDisclosure';
+import { useSelectedSchool } from './SchoolDisclosureContext';
 import { DisclosureSection } from './DisclosureSection';
 import { EmptyNotice } from './EmptyNotice';
 
 /** 동아리·방과후·상담 탭 — 동아리(56)·방과후(59)·상담(61)·학교폭력 예방교육(94). */
 export function ActivitiesTab() {
-  const identity = useSchoolIdentity();
+  const identity = useSelectedSchool();
   if (!identity) {
     return (
       <EmptyNotice

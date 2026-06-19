@@ -6,6 +6,7 @@ import {
   isSameSchoolName,
   type SchoolDisclosureIdentity,
 } from '@domain/services/schoolIdentify';
+import { useSelectedSchool } from './SchoolDisclosureContext';
 
 /**
  * 학교알리미 공시(apiType)를 우리 학교 기준으로 조회하는 훅.
@@ -53,7 +54,8 @@ function cacheStorageKey(
 }
 
 export function useSchoolDisclosure(apiType: string): UseSchoolDisclosureResult {
-  const identity = useSchoolIdentity();
+  // 선택된 학교(Context) 기준으로 조회 — 기본은 우리 학교, 검색 시 다른 학교
+  const identity = useSelectedSchool();
   const [state, setState] = useState<DisclosureState>('loading');
   const [allRows, setAllRows] = useState<readonly Row[]>([]);
   const [isStale, setIsStale] = useState(false);

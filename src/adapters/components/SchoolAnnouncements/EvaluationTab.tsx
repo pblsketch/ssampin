@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { importEvaluationPlan } from '@adapters/di/container';
 import { EmptyNotice } from './EmptyNotice';
+import { EvaluationPlanGradeView } from './EvaluationPlanGradeView';
 import type {
   EvaluationPlanDoc,
   EvaluationSchool,
@@ -240,11 +241,13 @@ export function EvaluationTab() {
         </div>
       )}
 
-      {/* 원문 보기 */}
+      {/* 학년별 평가계획 보기 (구조화 실패 시 원문 폴백) */}
       {step === 'view' && parsed && (
         <div className="flex flex-col gap-3">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-sp-semibold text-sp-text truncate">{parsed.filename}</span>
+            <span className="text-sm font-sp-semibold text-sp-text truncate">
+              {parsed.filename}
+            </span>
             <button
               type="button"
               onClick={() => {
@@ -257,14 +260,7 @@ export function EvaluationTab() {
               ← 파일 목록
             </button>
           </div>
-          {parsed.needsOcr && (
-            <div className="rounded-lg bg-sp-card border border-sp-border border-l-4 border-l-amber-400 px-3 py-2 text-xs text-sp-text">
-              이미지로 된 문서라 글자를 자동으로 읽지 못했어요. 원문을 참고해 주세요.
-            </div>
-          )}
-          <pre className="text-xs text-sp-text bg-sp-card border border-sp-border rounded-lg p-4 max-h-[60vh] overflow-auto whitespace-pre-wrap break-words leading-relaxed">
-            {parsed.markdown.slice(0, 50000) || '(표시할 내용이 없습니다)'}
-          </pre>
+          <EvaluationPlanGradeView parsed={parsed} />
         </div>
       )}
     </div>

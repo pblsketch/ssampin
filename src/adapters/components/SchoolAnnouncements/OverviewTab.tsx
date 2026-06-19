@@ -1,10 +1,11 @@
-import { useSchoolIdentity } from './useSchoolDisclosure';
+import { useSelectedSchool } from './SchoolDisclosureContext';
 import { DisclosureSection } from './DisclosureSection';
+import { SchoolSummaryCards } from './SchoolSummaryCards';
 import { EmptyNotice } from './EmptyNotice';
 
 /** 학교 현황 탭 — 학생수(09)·학교현황(62)·급식 운영(34). */
 export function OverviewTab() {
-  const identity = useSchoolIdentity();
+  const identity = useSelectedSchool();
   if (!identity) {
     return (
       <EmptyNotice
@@ -15,9 +16,10 @@ export function OverviewTab() {
   }
   return (
     <div className="space-y-8">
-      <p className="text-sm font-sp-semibold text-sp-text">{identity.schoolName}</p>
+      <SchoolSummaryCards />
       <DisclosureSection apiType="09" title="학년별·학급별 학생수" icon="groups" />
       <DisclosureSection apiType="62" title="학교 현황" icon="apartment" />
+      <DisclosureSection apiType="10" title="전·출입 및 학업중단" icon="swap_horiz" hideZero />
       <DisclosureSection apiType="34" title="급식 운영 현황" icon="restaurant" />
     </div>
   );

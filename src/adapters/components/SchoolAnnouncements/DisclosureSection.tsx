@@ -10,10 +10,13 @@ export function DisclosureSection({
   apiType,
   title,
   icon,
+  hideZero,
 }: {
   apiType: string;
   title: string;
   icon: string;
+  /** 교원·전출입처럼 0이 대부분인 항목은 0 값을 숨겨 핵심만 보여준다. */
+  hideZero?: boolean;
 }) {
   const { state, ourRows, isStale, cachedAt } = useSchoolDisclosure(apiType);
 
@@ -37,20 +40,30 @@ export function DisclosureSection({
         <p className="text-sm text-sp-muted py-3">공시된 데이터가 없어요.</p>
       )}
       {state === 'loaded' &&
-        ourRows.map((row, i) => <DisclosureCard key={i} apiType={apiType} row={row} />)}
+        ourRows.map((row, i) => (
+          <DisclosureCard key={i} apiType={apiType} row={row} hideZero={hideZero} />
+        ))}
     </section>
   );
 }
 
-function DisclosureCard({ apiType, row }: { apiType: string; row: Record<string, unknown> }) {
-  const pairs = labelizeRow(apiType, row);
+function DisclosureCard({
+  apiType,
+  row,
+  hideZero,
+}: {
+  apiType: string;
+  row: Record<string, unknown>;
+  hideZero?: boolean;
+}) {
+  const pairs = labelizeRow(apiType, row, { hideZero });
   if (pairs.length === 0) return null;
   return (
-    <dl className="rounded-xl border border-sp-border bg-sp-card p-4 grid grid-cols-2 sm:grid-cols-3 gap-x-5 gap-y-2.5">
+    <dl className="rounded-xl border border-sp-border bg-sp-card p-5 grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-4">
       {pairs.map(({ label, value }, i) => (
-        <div key={i} className="min-w-0">
+        <div key={i} className="min-w-0 flex flex-col gap-0.5">
           <dt className="text-caption text-sp-muted truncate">{label}</dt>
-          <dd className="text-sm text-sp-text">{value}</dd>
+          <dd className="text-sm font-sp-semibold text-sp-text tabular-nums">{value}</dd>
         </div>
       ))}
     </dl>
