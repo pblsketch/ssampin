@@ -103,11 +103,16 @@ async function main() {
   ws.addRow(subjectHeader);
 
   // 3행: 세부 헤더
-  // ⚠️ 헤더 "원점수/과목평균(표준편차)" 는 파서가 '표준편차' 열로 오인(fieldOf 우선순위).
-  //   → 헤더는 "원점수" 로 두고, 평균·편차는 결합 셀 값 "95/72.5(12.4)" 에서 분해되게 한다.
+  // 헤더 "원점수/과목평균(표준편차)" — 실제 NEIS 결합 헤더. 파서가 원점수 열로 인식하고
+  // 셀 값 "95/72.5(12.4)"를 원점수/평균/편차로 분해한다(fieldOf 원점수 우선순위 수정 반영).
   const detailHeader = ['번호', '성명'];
   for (const _subj of SUBJECTS) {
-    detailHeader.push('원점수', '성취도(수강자수)', '석차(동석차수)', '석차등급');
+    detailHeader.push(
+      '원점수/과목평균(표준편차)',
+      '성취도(수강자수)',
+      '석차(동석차수)',
+      '석차등급',
+    );
   }
   ws.addRow(detailHeader);
 

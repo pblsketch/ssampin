@@ -73,9 +73,11 @@ export function fieldOf(cell: unknown): TranscriptFieldKey | null {
   // '성취도(수강자수)' 결합 헤더는 성취도로 본다(수강자수는 셀 값에서 분해) → 수강자수보다 먼저 검사.
   if (n.includes('성취도') && !n.includes('분포')) return '성취도';
   if (n.includes('수강자')) return '수강자수';
+  // '원점수/과목평균(표준편차)' 결합 헤더는 원점수 열이다(셀 값 "85/72.3(12.1)"을 parseScoreCell이
+  // 분해). 표준편차·과목평균보다 먼저 검사해야 결합 헤더를 표준편차로 오인하지 않는다.
+  if (n.includes('원점수') || n === '원점' || n === '점수') return '원점수';
   if (n.includes('표준편차') || n === '편차') return '표준편차';
   if (n.includes('과목평균') || n === '평균') return '과목평균';
-  if (n.includes('원점수') || n === '원점' || n === '점수') return '원점수';
   return null;
 }
 

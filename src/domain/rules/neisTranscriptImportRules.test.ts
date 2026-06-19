@@ -49,6 +49,11 @@ describe('fieldOf', () => {
     expect(fieldOf('표준편차')).toBe('표준편차');
     expect(fieldOf('수강자수')).toBe('수강자수');
   });
+
+  it('결합 헤더 "원점수/과목평균(표준편차)"는 원점수로 인식(표준편차 오인 금지)', () => {
+    expect(fieldOf('원점수/과목평균(표준편차)')).toBe('원점수');
+    expect(fieldOf('원점수/과목평균')).toBe('원점수');
+  });
 });
 
 describe('결합 셀 분해', () => {

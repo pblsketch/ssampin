@@ -2372,3 +2372,98 @@ export async function exportRubricToExcel(params: RubricExcelParams): Promise<Ar
 
   return (await workbook.xlsx.writeBuffer()) as ArrayBuffer;
 }
+
+/* ──────────────── 성적 요약 내보내기 (개인 점수 미포함) ──────────────── */
+
+export interface GradeSummaryExcelParams {
+  /** 수업반 이름(예: "2학년 1반 수학"). */
+  readonly className: string;
+  /** 학기 표기(예: "1"). */
+  readonly semester: string;
+  /** 분할 방식 라벨(예: "고정분할 90/80/70/60" / "추정분할 88/76/64/52"). */
+  readonly cutLabel: string;
+  /** 확정 여부 표기(미확정이면 undefined). */
+  readonly confirmedAt?: string;
+  /** 평가 항목 메타(개인 점수 없음). */
+  readonly plans: ReadonlyArray<{
+    readonly title: string;
+    readonly kind: string;
+    readonly fullScore: number;
+    readonly weightPercent: number;
+  }>;
+  /** 통계 요약. */
+  readonly stats: {
+    readonly count: number;
+    readonly mean: number;
+    readonly stdev: number;
+    readonly min: number;
+    readonly max: number;
+  };
+  /** 성취도 분포(A~E 등 인원). */
+  readonly distribution: ReadonlyArray<{ readonly grade: string; readonly count: number }>;
+}
+
+/**
+ * 성적 요약을 엑셀로 내보낸다. **개인 학생 이름·점수는 포함하지 않는다**(개인정보 보호).
+ * 평가 항목 메타 + 통계 + 성취도 분포만 담는다.
+ */
+export async function exportGradeSummaryToExcel(
+  params: GradeSummaryExcelParams,
+): Promise<ArrayBuffer> {
+  const workbook = new ExcelJS.Workbook();
+  const ws = workbook.addWorksheet('성적 요약');
+  ws.getColumn(1).width = 18;
+  ws.getColumn(2).width = 16;
+  ws.getColumn(3).width = 12;
+  ws.getColumn(4).width = 12;
+  ws.getColumn(5).width = 12;
+
+  // 제목
+  const titleRow = ws.addRow([`${params.className} ${params.semester}학기 성적 요약`]);
+  titleRow.getCell(1).font = { bold: true, size: 14 };
+  ws.addRow([
+    params.confirmedAt
+      ? `확정 (${params.confirmedAt}) · 개인 점수 미포함`
+      : '추정 · 미확정 · 개인 점수 미포함',
+  ]);
+  ws.addRow([`분할 방식: ${params.cutLabel}`]);
+  ws.addRow([]);
+
+  // 평가 항목 (메타만)
+  ws.addRow(['[평가 항목]']).getCell(1).font = { bold: true, color: { argb: 'FF3B82F6' } };
+  const planHeader = ws.addRow(['평가명', '종류', '만점', '반영비율(%)']);
+  planHeader.eachCell((cell) => applyHeaderStyle(cell));
+  for (const plan of params.plans) {
+    const row = ws.addRow([plan.title, plan.kind, plan.fullScore, plan.weightPercent]);
+    row.eachCell((cell) => applyCellStyle(cell));
+    row.getCell(1).alignment = { horizontal: 'left', vertical: 'middle' };
+  }
+  ws.addRow([]);
+
+  // 통계
+  ws.addRow(['[통계 요약]']).getCell(1).font = { bold: true, color: { argb: 'FF3B82F6' } };
+  const statHeader = ws.addRow(['인원', '평균', '표준편차', '최저', '최고']);
+  statHeader.eachCell((cell) => applyHeaderStyle(cell));
+  const statRow = ws.addRow([
+    params.stats.count,
+    params.stats.mean,
+    params.stats.stdev,
+    params.stats.min,
+    params.stats.max,
+  ]);
+  statRow.eachCell((cell) => applyCellStyle(cell));
+  ws.addRow([]);
+
+  // 성취도 분포
+  ws.addRow(['[성취도 분포]']).getCell(1).font = { bold: true, color: { argb: 'FF3B82F6' } };
+  const distHeader = ws.addRow(['성취도', '인원', '비율(%)']);
+  distHeader.eachCell((cell) => applyHeaderStyle(cell));
+  const distTotal = params.distribution.reduce((acc, d) => acc + d.count, 0);
+  for (const d of params.distribution) {
+    const pct = distTotal > 0 ? Math.round((d.count / distTotal) * 1000) / 10 : 0;
+    const row = ws.addRow([d.grade, d.count, pct]);
+    row.eachCell((cell) => applyCellStyle(cell));
+  }
+
+  return (await workbook.xlsx.writeBuffer()) as ArrayBuffer;
+}

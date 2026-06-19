@@ -30,6 +30,7 @@ import { parseGradeExcel } from '@adapters/di/container';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { useRubricStore } from '@adapters/stores/useRubricStore';
 import { calculateTotal, calculateMaxScore, findGrading } from '@domain/rules/rubricRules';
+import { exportGradeSummaryToExcel } from '@infrastructure/export/ExcelExporter';
 import { GradeImportMappingModal } from './GradeImportMappingModal';
 
 interface ClassAssessmentManagementTabProps {
@@ -75,6 +76,38 @@ function saveCutSettings(all: Record<string, CutSetting>): void {
   }
 }
 
+/** 성적 확정 표시(반·학기별, 로컬). confirmedAt 있으면 확정. */
+const CONFIRM_STORAGE_KEY = 'ssampin:grade-confirm-v1';
+
+function loadConfirmSettings(): Record<string, { confirmedAt: string }> {
+  try {
+    const raw = localStorage.getItem(CONFIRM_STORAGE_KEY);
+    if (raw === null) return {};
+    const parsed = JSON.parse(raw) as unknown;
+    return parsed !== null && typeof parsed === 'object'
+      ? (parsed as Record<string, { confirmedAt: string }>)
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveConfirmSettings(all: Record<string, { confirmedAt: string }>): void {
+  try {
+    localStorage.setItem(CONFIRM_STORAGE_KEY, JSON.stringify(all));
+  } catch {
+    // 저장 실패는 무시.
+  }
+}
+
+/** YYYY-MM-DD (확정 일자 표기). */
+function todayStr(): string {
+  const d = new Date();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${m}-${day}`;
+}
+
 export function ClassAssessmentManagementTab({
   classId,
   onGoToRosterTab,
@@ -101,6 +134,9 @@ export function ClassAssessmentManagementTab({
   const [fullScore, setFullScore] = useState(100);
   const [weightPercent, setWeightPercent] = useState(30);
   const [cutSettingsAll, setCutSettingsAll] = useState<Record<string, CutSetting>>(loadCutSettings);
+  const [confirmAll, setConfirmAll] =
+    useState<Record<string, { confirmedAt: string }>>(loadConfirmSettings);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     if (!loaded) void load();
@@ -142,6 +178,84 @@ export function ClassAssessmentManagementTab({
   function setCutField(field: keyof Cut5, value: number) {
     const cur = cutSettingsAll[cutKey] ?? { mode: 'custom' as CutMode, cut: FIXED_CUT5 };
     updateCutSetting({ mode: 'custom', cut: { ...cur.cut, [field]: value } });
+  }
+
+  // 분할 라벨(표시·내보내기용) + 확정 상태(반·학기별).
+  const cutLabel =
+    cutSetting.mode === 'custom'
+      ? `추정분할 ${activeCut.A}/${activeCut.B}/${activeCut.C}/${activeCut.D}`
+      : '고정분할 90/80/70/60';
+  const confirmedAt = confirmAll[cutKey]?.confirmedAt;
+
+  function toggleConfirm() {
+    setConfirmAll((prev) => {
+      const next = { ...prev };
+      if (next[cutKey] !== undefined) delete next[cutKey];
+      else next[cutKey] = { confirmedAt: todayStr() };
+      saveConfirmSettings(next);
+      return next;
+    });
+  }
+
+  async function saveExcelFile(buffer: ArrayBuffer, fileName: string) {
+    if (window.electronAPI) {
+      const saved = await window.electronAPI.showSaveDialog({
+        title: '성적 요약 내보내기',
+        defaultPath: fileName,
+        filters: [{ name: 'Excel 파일', extensions: ['xlsx'] }],
+      });
+      if (saved) {
+        await window.electronAPI.writeFile(saved.handle, buffer);
+        showToast('요약 파일이 저장되었어요.', 'success', {
+          label: '파일 열기',
+          onClick: () => window.electronAPI?.openFile(saved.handle),
+        });
+      }
+      return;
+    }
+    const blob = new Blob([buffer], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    link.click();
+    URL.revokeObjectURL(url);
+    showToast('요약 파일이 다운로드되었어요.', 'success');
+  }
+
+  /** 요약(개인 점수 미포함) 엑셀 내보내기. 통계/분포는 화면 계산값을 그대로 받는다. */
+  async function handleExportSummary(
+    stats: { count: number; mean: number; stdev: number; min: number; max: number },
+    dist: Record<string, number>,
+  ) {
+    if (exporting || currentClass === undefined) return;
+    setExporting(true);
+    try {
+      const buffer = await exportGradeSummaryToExcel({
+        className: `${currentClass.name} ${currentClass.subject}`.trim(),
+        semester,
+        cutLabel,
+        ...(confirmedAt !== undefined ? { confirmedAt } : {}),
+        plans: classPlans.map((p) => ({
+          title: p.title,
+          kind: KIND_LABEL[p.kind],
+          fullScore: p.fullScore,
+          weightPercent: p.weightPercent,
+        })),
+        stats,
+        distribution: (['A', 'B', 'C', 'D', 'E'] as const).map((g) => ({
+          grade: g,
+          count: dist[g] ?? 0,
+        })),
+      });
+      await saveExcelFile(buffer, `${currentClass.name}_${semester}학기_성적요약.xlsx`);
+    } catch {
+      showToast('내보내기 중 오류가 발생했어요.', 'error');
+    } finally {
+      setExporting(false);
+    }
   }
 
   // 학교급 → 성취도 표시 여부 (초등=성취수준 서술, 정량 성취도 미산출)
@@ -395,11 +509,18 @@ export function ClassAssessmentManagementTab({
         </div>
       </div>
 
-      {/* 확정 안내 */}
-      <div className="bg-sp-highlight/10 border border-sp-highlight/30 rounded-lg px-3 py-2 text-xs text-sp-text/90">
-        여기 표시되는 성취도·원점수는 <b>추정값</b>입니다. 교사 확인 전에는 확정 성적으로 사용하지
-        마세요. 점수는 이 PC에만 저장되며 외부로 전송되지 않습니다.
-      </div>
+      {/* 확정/추정 안내 */}
+      {confirmedAt !== undefined ? (
+        <div className="bg-green-500/10 border border-green-500/30 rounded-lg px-3 py-2 text-xs text-sp-text/90">
+          이 성적은 <b>확정</b>되었습니다 ({confirmedAt}). 점수는 이 PC에만 저장되며 외부로 전송되지
+          않습니다.
+        </div>
+      ) : (
+        <div className="bg-sp-highlight/10 border border-sp-highlight/30 rounded-lg px-3 py-2 text-xs text-sp-text/90">
+          여기 표시되는 성취도·원점수는 <b>추정값</b>입니다. 교사 확인 전에는 확정 성적으로 사용하지
+          마세요. 점수는 이 PC에만 저장되며 외부로 전송되지 않습니다.
+        </div>
+      )}
 
       {/* 평가 목록 */}
       <div className="bg-sp-card border border-sp-border rounded-xl p-4">
@@ -672,34 +793,58 @@ export function ClassAssessmentManagementTab({
             <p className="text-sm font-semibold text-sp-text">
               성취도 분포{' '}
               <span className="text-xs font-normal text-sp-muted">
-                (추정 ·{' '}
+                ({confirmedAt !== undefined ? '확정' : '추정'} ·{' '}
                 {cutSetting.mode === 'custom'
                   ? '추정분할(단위학교 산출 컷)'
                   : '고정분할 90/80/70/60'}
                 )
               </span>
             </p>
-            {/* 분할 방식 선택 */}
-            <div className="flex items-center gap-1 bg-sp-surface border border-sp-border rounded-lg p-0.5">
-              {(
-                [
-                  ['fixed', '고정분할'],
-                  ['custom', '추정분할'],
-                ] as const
-              ).map(([m, label]) => (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={() => updateCutSetting({ mode: m })}
-                  className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
-                    cutSetting.mode === m
-                      ? 'bg-sp-accent text-white'
-                      : 'text-sp-muted hover:text-sp-text'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => void handleExportSummary(summary, distribution)}
+                disabled={!canShowAchievement || exporting}
+                title="개인 점수 없이 통계·분포만 엑셀로 내보냅니다"
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-sp-border text-sp-text text-xs font-medium hover:border-sp-accent disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              >
+                <span className="material-symbols-outlined text-sm">download</span>
+                {exporting ? '내보내는 중...' : '요약 내보내기'}
+              </button>
+              <button
+                type="button"
+                onClick={toggleConfirm}
+                disabled={!canShowAchievement && confirmedAt === undefined}
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                  confirmedAt !== undefined
+                    ? 'border border-green-500/40 text-green-500 hover:bg-green-500/10'
+                    : 'bg-sp-accent text-white hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed'
+                }`}
+              >
+                {confirmedAt !== undefined ? '확정 해제' : '성적 확정'}
+              </button>
+              {/* 분할 방식 선택 */}
+              <div className="flex items-center gap-1 bg-sp-surface border border-sp-border rounded-lg p-0.5">
+                {(
+                  [
+                    ['fixed', '고정분할'],
+                    ['custom', '추정분할'],
+                  ] as const
+                ).map(([m, label]) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => updateCutSetting({ mode: m })}
+                    className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                      cutSetting.mode === m
+                        ? 'bg-sp-accent text-white'
+                        : 'text-sp-muted hover:text-sp-text'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -774,7 +919,10 @@ export function ClassAssessmentManagementTab({
       {/* 산출 미리보기 */}
       <div className="bg-sp-card border border-sp-border rounded-xl p-4">
         <p className="text-sm font-semibold text-sp-text mb-2">
-          산출 미리보기 <span className="text-xs font-normal text-sp-muted">(추정 · 미확정)</span>
+          산출 미리보기{' '}
+          <span className="text-xs font-normal text-sp-muted">
+            {confirmedAt !== undefined ? `(확정 · ${confirmedAt})` : '(추정 · 미확정)'}
+          </span>
         </p>
         <div className="max-h-80 overflow-y-auto">
           <table className="w-full text-sm">
