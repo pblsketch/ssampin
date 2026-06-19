@@ -89,6 +89,12 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
     icon: '📑',
     color: 'bg-teal-500/20 text-teal-600',
   },
+  {
+    id: 'tool-score-allocator',
+    name: '배점 계산기',
+    icon: '🧮',
+    color: 'bg-emerald-500/20 text-emerald-600',
+  },
 ];
 
 export const DEFAULT_FAVORITE_TOOLS: readonly string[] = [

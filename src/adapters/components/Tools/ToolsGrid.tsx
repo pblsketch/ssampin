@@ -108,6 +108,20 @@ export const TOOLS: ToolCard[] = [
     badge: 'NEW',
   },
   {
+    id: 'tool-school-announcements',
+    emoji: '🏫',
+    name: '학교 알리미',
+    description: '우리 학교·다른 학교 공시, 학사일정, 평가계획을 한 곳에서',
+    badge: 'NEW',
+  },
+  {
+    id: 'tool-score-allocator',
+    emoji: '🧮',
+    name: '배점 계산기',
+    description: '지필평가 문항 배점을 만점에 맞춰 설계',
+    badge: 'NEW',
+  },
+  {
     id: 'tool-supsori',
     emoji: '🌳',
     name: '숲소리',

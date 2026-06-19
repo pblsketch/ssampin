@@ -8,7 +8,6 @@ export type PageId =
   | 'homeroom'
   | 'student-records'
   | 'meal'
-  | 'school-announcements'
   | 'memo'
   | 'note'
   | 'todo'
@@ -46,6 +45,8 @@ export type PageId =
   | 'tool-collab-board'
   | 'tool-sticker'
   | 'tool-markdown-convert'
+  | 'tool-school-announcements'
+  | 'tool-score-allocator'
   | 'dual-tool-view'
   | 'settings';
 
@@ -90,7 +91,6 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'bookmarks', label: '즐겨찾기', icon: 'bookmark' },
   { id: 'tools', label: '쌤도구', icon: 'construction' },
   { id: 'meal', label: '급식', icon: 'restaurant' },
-  { id: 'school-announcements', label: '학교 알리미', icon: 'campaign' },
   { id: 'export', label: '내보내기', icon: 'ios_share' },
 ];
 
@@ -139,7 +139,7 @@ const NON_PROTECTABLE: ReadonlySet<PageId> = new Set([
   'tool-classroom-agreement',
   'tool-seat-picker',
   'tool-sticker',
-  'school-announcements',
+  'tool-school-announcements',
   'settings',
 ]);
 

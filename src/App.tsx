@@ -55,6 +55,7 @@ import { AssignmentDetail } from '@adapters/components/Tools/Assignment/Assignme
 import { ToolChalkboard } from '@adapters/components/Tools/ToolChalkboard';
 import { ToolCollabBoard } from '@adapters/components/Tools/ToolCollabBoard';
 import { ToolMarkdownConvert } from '@adapters/components/Tools/ToolMarkdownConvert';
+import { ToolScoreAllocator } from '@adapters/components/Tools/ToolScoreAllocator';
 import { ToolMyEmoji } from '@adapters/components/Tools/ToolMyEmoji';
 import { StickerPickerApp } from '@adapters/components/StickerPicker/StickerPickerApp';
 import { ToolValueLine, ToolTrafficLightDiscussion } from '@adapters/components/Tools/Discussion';
@@ -289,8 +290,8 @@ function renderPage(
       </PinGuard>
     );
   }
-  if (page === 'school-announcements') {
-    return <SchoolAnnouncementsPage />;
+  if (page === 'tool-school-announcements') {
+    return <SchoolAnnouncementsPage onBack={() => onNavigate('tools')} />;
   }
   if (page === 'tools') {
     return <ToolsGrid onNavigate={onNavigate} />;
@@ -403,6 +404,11 @@ function renderPage(
   if (page === 'tool-markdown-convert') {
     return wrap(
       <ToolMarkdownConvert onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />,
+    );
+  }
+  if (page === 'tool-score-allocator') {
+    return wrap(
+      <ToolScoreAllocator onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />,
     );
   }
   if (page === 'tool-assignment') {

@@ -32,3 +32,30 @@ describe('classroom agreement tool registration', () => {
     expect(appSource).toContain('ToolClassroomAgreement');
   });
 });
+
+describe('exam score allocator tool registration', () => {
+  const pageId: PageId = 'tool-score-allocator';
+
+  it('registers the tool in the grid and favorite-tool definitions', () => {
+    const gridCard = TOOLS.find((tool) => tool.id === pageId);
+    const favoriteDefinition = getToolDefinition(pageId);
+
+    expect(gridCard).toMatchObject({
+      id: pageId,
+      name: '배점 계산기',
+    });
+    expect(gridCard?.externalUrl).toBeUndefined();
+    expect(favoriteDefinition).toMatchObject({
+      id: pageId,
+      name: '배점 계산기',
+    });
+    expect(TOOL_DEFINITIONS.map((tool) => tool.id)).toContain(pageId);
+  });
+
+  it('has a teacher app render branch for the registered PageId', () => {
+    const appSource = readFileSync('src/App.tsx', 'utf8');
+
+    expect(appSource).toContain("page === 'tool-score-allocator'");
+    expect(appSource).toContain('ToolScoreAllocator');
+  });
+});

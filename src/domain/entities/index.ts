@@ -101,3 +101,17 @@ export type {
 export { SIGNATURE_SCHEMA_VERSION } from './SignatureSession';
 
 export type { SignatureEntry, SignatureStatusRow } from './SignatureEntry';
+
+export type { ItemType, ItemDifficulty, ExamItem, ExamPaper } from './ExamPaper';
+export { ITEM_TYPE_LABELS, WRITTEN_TYPES, DEFAULT_FULL_SCORE } from './ExamPaper';
+
+export type {
+  AssessmentKind,
+  AssessmentStatus,
+  AbsenceCode,
+  AssessmentPlanItem,
+  WrittenExamResult,
+  PerformanceAssessmentResult,
+  SemesterGradeResult,
+  GradeAnalysisData,
+} from './GradeAnalysis';
