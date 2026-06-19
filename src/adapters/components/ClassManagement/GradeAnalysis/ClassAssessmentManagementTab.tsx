@@ -13,7 +13,7 @@ import { useGradeAnalysisStore } from '@adapters/stores/useGradeAnalysisStore';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { isStudentActive } from '@domain/rules/studentActivity';
 import { studentKey } from '@domain/entities/TeachingClass';
-import type { AssessmentKind } from '@domain/entities/GradeAnalysis';
+import type { AssessmentKind, AssessmentPlanItem } from '@domain/entities/GradeAnalysis';
 import {
   convertedScore,
   sumConverted,
@@ -21,7 +21,7 @@ import {
   isWeightComplete,
 } from '@domain/rules/gradeCalculationRules';
 import { scaleFor, achievementOf, FIXED_CUT5 } from '@domain/rules/gradeStandardRules';
-import type { GradeSchoolLevel } from '@domain/rules/gradeStandardRules';
+import type { GradeSchoolLevel, Cut5 } from '@domain/rules/gradeStandardRules';
 import { parseScoreRows } from '@domain/rules/gradeImportRules';
 import type { DetectedGradeColumns, ParsedScoreRow } from '@domain/rules/gradeImportRules';
 import { summarizeScores, achievementDistribution } from '@domain/services/gradeAnalysisSummary';
@@ -43,6 +43,38 @@ const KIND_LABEL: Record<AssessmentKind, string> = {
   performance: '수행평가',
 };
 
+/** 성취도 분할 방식: 고정분할(90/80/70/60) vs 추정분할(단위학교 산출 컷 직접 입력). */
+type CutMode = 'fixed' | 'custom';
+interface CutSetting {
+  readonly mode: CutMode;
+  /** 추정분할용 직접 입력 컷(원점수 이상). */
+  readonly cut: Cut5;
+}
+
+const CUT_STORAGE_KEY = 'ssampin:grade-cut-settings-v1';
+
+/** 반·학기별 분할 설정을 로컬에 보관(경량 — 도메인 entity 미오염). */
+function loadCutSettings(): Record<string, CutSetting> {
+  try {
+    const raw = localStorage.getItem(CUT_STORAGE_KEY);
+    if (raw === null) return {};
+    const parsed = JSON.parse(raw) as unknown;
+    return parsed !== null && typeof parsed === 'object'
+      ? (parsed as Record<string, CutSetting>)
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveCutSettings(all: Record<string, CutSetting>): void {
+  try {
+    localStorage.setItem(CUT_STORAGE_KEY, JSON.stringify(all));
+  } catch {
+    // 저장 실패는 무시(시크릿 모드 등).
+  }
+}
+
 export function ClassAssessmentManagementTab({
   classId,
   onGoToRosterTab,
@@ -63,10 +95,12 @@ export function ClassAssessmentManagementTab({
   const [semester, setSemester] = useState<'1' | '2'>('1');
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
+  const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
   const [title, setTitle] = useState('');
   const [kind, setKind] = useState<AssessmentKind>('written-exam');
   const [fullScore, setFullScore] = useState(100);
   const [weightPercent, setWeightPercent] = useState(30);
+  const [cutSettingsAll, setCutSettingsAll] = useState<Record<string, CutSetting>>(loadCutSettings);
 
   useEffect(() => {
     if (!loaded) void load();
@@ -88,6 +122,27 @@ export function ClassAssessmentManagementTab({
 
   const weightSum = totalWeightPercent(classPlans.map((p) => p.weightPercent));
   const weightOk = isWeightComplete(classPlans.map((p) => p.weightPercent));
+
+  // 성취도 분할 방식(반·학기별). 기본 고정분할. 추정분할이면 직접 입력 컷 사용.
+  const cutKey = `${classId}:${semester}`;
+  const cutSetting: CutSetting = cutSettingsAll[cutKey] ?? { mode: 'fixed', cut: FIXED_CUT5 };
+  const activeCut: Cut5 = cutSetting.mode === 'custom' ? cutSetting.cut : FIXED_CUT5;
+  const cutDescending =
+    activeCut.A > activeCut.B && activeCut.B > activeCut.C && activeCut.C > activeCut.D;
+
+  function updateCutSetting(patch: Partial<CutSetting>) {
+    setCutSettingsAll((prev) => {
+      const cur = prev[cutKey] ?? { mode: 'fixed' as CutMode, cut: FIXED_CUT5 };
+      const next = { ...prev, [cutKey]: { ...cur, ...patch } };
+      saveCutSettings(next);
+      return next;
+    });
+  }
+
+  function setCutField(field: keyof Cut5, value: number) {
+    const cur = cutSettingsAll[cutKey] ?? { mode: 'custom' as CutMode, cut: FIXED_CUT5 };
+    updateCutSetting({ mode: 'custom', cut: { ...cur.cut, [field]: value } });
+  }
 
   // 학교급 → 성취도 표시 여부 (초등=성취수준 서술, 정량 성취도 미산출)
   const schoolLevel = useSettingsStore((s) => s.settings.schoolLevel);
@@ -135,19 +190,53 @@ export function ClassAssessmentManagementTab({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [students, classPlans, writtenResults, performanceResults]);
 
-  async function handleAddPlan() {
+  async function handleSavePlan() {
     const trimmed = title.trim();
     if (trimmed.length === 0) return;
-    await upsertPlan({
-      teachingClassId: classId,
-      semester,
-      subject: currentClass?.subject ?? '',
-      title: trimmed,
-      kind,
-      areaName: trimmed,
-      fullScore,
-      weightPercent,
-    });
+    await upsertPlan(
+      {
+        teachingClassId: classId,
+        semester,
+        subject: currentClass?.subject ?? '',
+        title: trimmed,
+        kind,
+        areaName: trimmed,
+        fullScore,
+        weightPercent,
+      },
+      editingPlanId ?? undefined, // id 있으면 수정, 없으면 신규
+    );
+    setTitle('');
+    setEditingPlanId(null);
+    setShowAdd(false);
+  }
+
+  /** 새 평가 추가 폼 열기(편집 상태·입력값 초기화). */
+  function openAddForm() {
+    if (showAdd && editingPlanId === null) {
+      setShowAdd(false);
+      return;
+    }
+    setEditingPlanId(null);
+    setTitle('');
+    setKind('written-exam');
+    setFullScore(100);
+    setWeightPercent(30);
+    setShowAdd(true);
+  }
+
+  /** 기존 평가 편집 — 폼에 현재 값을 채워 연다. */
+  function startEditPlan(plan: AssessmentPlanItem) {
+    setEditingPlanId(plan.id);
+    setTitle(plan.title);
+    setKind(plan.kind);
+    setFullScore(plan.fullScore);
+    setWeightPercent(plan.weightPercent);
+    setShowAdd(true);
+  }
+
+  function cancelPlanForm() {
+    setEditingPlanId(null);
     setTitle('');
     setShowAdd(false);
   }
@@ -281,7 +370,7 @@ export function ClassAssessmentManagementTab({
     .map((p) => p.raw);
   const canShowAchievement = showAchievement && weightOk && fullScores.length > 0;
   const summary = summarizeScores(fullScores);
-  const distribution = achievementDistribution(fullScores, FIXED_CUT5);
+  const distribution = achievementDistribution(fullScores, activeCut);
 
   return (
     <div className="flex-1 flex flex-col min-h-0 gap-4">
@@ -325,7 +414,7 @@ export function ClassAssessmentManagementTab({
           </p>
           <button
             type="button"
-            onClick={() => setShowAdd((v) => !v)}
+            onClick={openAddForm}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sp-accent text-white text-xs font-medium hover:brightness-110 transition-all"
           >
             <span className="material-symbols-outlined text-sm">add</span>평가 추가
@@ -334,6 +423,9 @@ export function ClassAssessmentManagementTab({
 
         {showAdd && (
           <div className="flex flex-wrap items-end gap-2 mb-3 p-3 bg-sp-surface rounded-lg border border-sp-border">
+            <p className="w-full text-xs font-semibold text-sp-text">
+              {editingPlanId !== null ? '평가 수정' : '새 평가 추가'}
+            </p>
             <label className="flex flex-col gap-1">
               <span className="text-xs text-sp-muted">평가명</span>
               <input
@@ -378,10 +470,17 @@ export function ClassAssessmentManagementTab({
             </label>
             <button
               type="button"
-              onClick={() => void handleAddPlan()}
+              onClick={() => void handleSavePlan()}
               className="px-4 py-2 rounded-lg bg-sp-accent text-white text-sm font-medium hover:brightness-110 transition-all active:scale-95"
             >
-              추가
+              {editingPlanId !== null ? '저장' : '추가'}
+            </button>
+            <button
+              type="button"
+              onClick={cancelPlanForm}
+              className="px-4 py-2 rounded-lg border border-sp-border text-sp-muted text-sm font-medium hover:text-sp-text hover:bg-sp-card transition-all"
+            >
+              취소
             </button>
           </div>
         )}
@@ -406,6 +505,24 @@ export function ClassAssessmentManagementTab({
                 <span className="font-semibold text-sp-text">{plan.title}</span>
                 <span className="text-sp-muted">
                   {KIND_LABEL[plan.kind]} · {plan.fullScore}점 · {plan.weightPercent}%
+                </span>
+                <span
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`${plan.title} 수정`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    startEditPlan(plan);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.stopPropagation();
+                      startEditPlan(plan);
+                    }
+                  }}
+                  className="material-symbols-outlined text-sm text-sp-muted hover:text-sp-accent"
+                >
+                  edit
                 </span>
                 <span
                   role="button"
@@ -551,10 +668,65 @@ export function ClassAssessmentManagementTab({
       {/* 성취도 분포 요약 */}
       {showAchievement ? (
         <div className="bg-sp-card border border-sp-border rounded-xl p-4">
-          <p className="text-sm font-semibold text-sp-text mb-2">
-            성취도 분포{' '}
-            <span className="text-xs font-normal text-sp-muted">(추정 · 고정분할 90/80/70/60)</span>
-          </p>
+          <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+            <p className="text-sm font-semibold text-sp-text">
+              성취도 분포{' '}
+              <span className="text-xs font-normal text-sp-muted">
+                (추정 ·{' '}
+                {cutSetting.mode === 'custom'
+                  ? '추정분할(단위학교 산출 컷)'
+                  : '고정분할 90/80/70/60'}
+                )
+              </span>
+            </p>
+            {/* 분할 방식 선택 */}
+            <div className="flex items-center gap-1 bg-sp-surface border border-sp-border rounded-lg p-0.5">
+              {(
+                [
+                  ['fixed', '고정분할'],
+                  ['custom', '추정분할'],
+                ] as const
+              ).map(([m, label]) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => updateCutSetting({ mode: m })}
+                  className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                    cutSetting.mode === m
+                      ? 'bg-sp-accent text-white'
+                      : 'text-sp-muted hover:text-sp-text'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {cutSetting.mode === 'custom' && (
+            <div className="flex flex-wrap items-end gap-2 mb-3 p-3 bg-sp-surface rounded-lg border border-sp-border">
+              <span className="text-xs text-sp-muted self-center">분할점수(원점수 이상)</span>
+              {(['A', 'B', 'C', 'D'] as const).map((g) => (
+                <label key={g} className="flex flex-col gap-0.5">
+                  <span className="text-[11px] text-sp-muted">{g} 이상</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={cutSetting.cut[g]}
+                    onChange={(e) => setCutField(g, Number(e.target.value) || 0)}
+                    className="w-16 bg-sp-card border border-sp-border rounded-md px-2 py-1 text-sp-text text-sm focus:border-sp-accent outline-none"
+                  />
+                </label>
+              ))}
+              <span className="text-[11px] text-sp-muted self-center">D 미만 = E</span>
+              {!cutDescending && (
+                <span className="text-[11px] text-red-400 self-center">
+                  컷은 A&gt;B&gt;C&gt;D 순으로 내려가야 합니다.
+                </span>
+              )}
+            </div>
+          )}
           {canShowAchievement ? (
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
               <div className="flex items-center gap-3 text-sm">
@@ -622,7 +794,7 @@ export function ClassAssessmentManagementTab({
                   classPlans.length > 0 && row !== undefined && row.counted === classPlans.length;
                 const achievement =
                   showAchievement && weightOk && fullyEntered && row !== undefined
-                    ? achievementOf(row.raw, FIXED_CUT5)
+                    ? achievementOf(row.raw, activeCut)
                     : null;
                 return (
                   <tr key={studentKey(student)} className="border-b border-sp-border/50">
