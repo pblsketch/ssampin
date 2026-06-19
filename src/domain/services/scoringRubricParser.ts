@@ -97,6 +97,22 @@ export function subjectByCode(text: string): string | null {
   return best;
 }
 
+/**
+ * 과목 섹션 헤딩에서 과목명 추출 — 가장 신뢰도 높은 신호.
+ * 예: "2026학년도 1학년 1학기 [공통국어1]" / "2026학년도 3학년 1학기 [영어독해와 작문]".
+ * 대괄호 안 전체 과목명을 그대로 쓰므로 코드 약칭 추측이 불필요하다(2022 개정·실험과목 포함).
+ * 마지막(가장 가까운) 매칭을 채택. 성취기준 코드 [12언매..]는 '학년도' 앵커가 없어 매칭 안 됨.
+ */
+function subjectFromHeader(text: string): string | null {
+  const re = /20\d{2}\s*학년도[^\n[]{0,24}\[([^\]\n]{2,25})\]/g;
+  let last: string | null = null;
+  for (const m of text.matchAll(re)) {
+    const name = m[1]!.replace(/\s+/g, ' ').trim();
+    if (name.length >= 2) last = name;
+  }
+  return last;
+}
+
 /* ──────────────── 헬퍼 ──────────────── */
 
 /** 셀 앞머리 글머리표(∙ § □ ☑ ▪ · - 등)·공백 제거 */
@@ -246,9 +262,11 @@ export function parseScoringRubrics(
   const tables = extractAllTables(markdown);
   const candidates: RubricCandidate[] = [];
   let prevEnd = 0;
-  let titleSeq = 0;
-  // running 상태 — 과목/항목명은 채점기준표보다 앞선 표(성취기준표)·텍스트에서 결정된다.
-  let currentSubject: string | null = null;
+  const subjectSeq = new Map<string, number>(); // 과목별 일반제목 번호
+  // running 상태 — 과목은 섹션 헤딩 "[과목명]"(전체명)을 우선하고, 코드는 폴백.
+  // 헤딩 과목을 코드가 덮어쓰지 못하도록 둘을 분리한다(섹션마다 헤딩이 새로 갱신됨).
+  let headerSubject: string | null = null;
+  let codeSubject: string | null = null;
   let currentTitle: string | null = null;
 
   for (const { grid, index, endIndex } of tables) {
@@ -256,49 +274,72 @@ export function parseScoringRubrics(
     const betweenText = plainText(betweenRaw);
     prevEnd = endIndex;
 
-    // 과목: 직전 구간 텍스트의 성취기준 코드
-    const sBetween = subjectByCode(betweenText);
-    if (sBetween) currentSubject = sBetween;
+    const sHeader = subjectFromHeader(betweenText);
+    if (sHeader) headerSubject = sHeader;
+    const sCode = subjectByCode(betweenText);
+    if (sCode) codeSubject = sCode;
     // 항목명: 직전 구간의 "가./나./1) 제목"(보일러플레이트 제외) — 원문 줄 단위
     const tBetween = extractTaskTitle(betweenRaw);
     if (tBetween) currentTitle = tBetween;
 
     const detected = isScoringGrid(grid);
     if (!detected) {
-      // 비-채점기준표(성취기준표 등): 표 안 성취기준 코드로 과목 갱신
+      // 비-채점기준표(성취기준표 등): 표 안 성취기준 코드로 과목 폴백 갱신
       const sGrid = subjectByCode(grid.map((r) => r.join(' ')).join(' '));
-      if (sGrid) currentSubject = sGrid;
+      if (sGrid) codeSubject = sGrid;
       continue;
     }
+    const currentSubject = headerSubject ?? codeSubject;
     const cols = detectScoringColumns(grid, detected.headerRow);
     if (!cols) continue;
 
     const criteria = buildCriteria(grid, detected.headerRow, cols);
     if (criteria.length === 0) continue;
 
-    titleSeq++;
-    const title =
-      currentTitle ??
-      `${currentSubject ? currentSubject + ' ' : ''}수행평가${titleSeq > 1 ? ` ${titleSeq}` : ''}`;
+    // 제목은 추출된 항목명만 우선 보관(일반 번호는 dedup 후에 매긴다).
     candidates.push({
       subject: currentSubject,
       grade: filenameGrade,
-      title,
+      title: currentTitle ?? '',
       criteria,
       hasScores: true,
     });
     currentTitle = null; // 이 항목 제목 소비 — 다음 항목은 자기 제목을 다시 찾는다
   }
 
-  // 일부 학교 문서는 같은 내용이 반복 수록된다 → 동일 후보(과목·제목·평가요소·점수) 중복 제거.
-  const seen = new Set<string>();
-  return candidates.filter((c) => {
-    const sig =
-      `${c.subject}|${c.title}|` +
-      c.criteria.map((cr) => `${cr.name}:${cr.levels.map((l) => l.score).join(',')}`).join('|');
-    if (seen.has(sig)) return false;
-    seen.add(sig);
-    return true;
+  // 1) 중복 제거 — **내용(평가요소·점수·설명)** 만으로 식별(과목/제목 제외).
+  //    문서가 반복 수록되며 한 사본은 헤딩 과목(전체명), 다른 사본은 코드 약칭이 될 수 있으므로
+  //    같은 내용의 중복 중 **더 나은 후보(전체 과목명 + 실제 항목명)**를 남긴다.
+  const contentSig = (c: RubricCandidate) =>
+    c.criteria
+      .map(
+        (cr) =>
+          `${cr.name}:` +
+          cr.levels.map((l) => `${l.score}/${(l.description ?? '').slice(0, 24)}`).join(','),
+      )
+      .join('|');
+  const isBetter = (a: RubricCandidate, b: RubricCandidate) => {
+    // 과목명이 더 긴(전체명) 쪽 우선, 동률이면 실제 항목명이 있는 쪽 우선
+    const al = (a.subject ?? '').length;
+    const bl = (b.subject ?? '').length;
+    if (al !== bl) return al > bl;
+    return a.title.length > 0 && b.title.length === 0;
+  };
+  const byContent = new Map<string, RubricCandidate>();
+  for (const c of candidates) {
+    const sig = contentSig(c);
+    const cur = byContent.get(sig);
+    if (!cur || isBetter(c, cur)) byContent.set(sig, c);
+  }
+  const deduped = [...byContent.values()];
+
+  // 2) 항목명이 없는 후보에 과목별 번호 부여(dedup 후라 번호가 안정적).
+  return deduped.map((c) => {
+    if (c.title.length > 0) return c;
+    const key = c.subject ?? '';
+    const n = (subjectSeq.get(key) ?? 0) + 1;
+    subjectSeq.set(key, n);
+    return { ...c, title: `${c.subject ? c.subject + ' ' : ''}수행평가 ${n}` };
   });
 }
 
@@ -307,6 +348,13 @@ function extractTaskTitle(raw: string): string | null {
   const BOILERPLATE =
     /성취\s*기준|평가\s*기준|채점\s*기준|평가\s*방법|성취\s*수준|반영\s*비율|유의|목적|점수|척도|역량|개요|편제|세부\s*계획|운영\s*계획|평가\s*계획/;
   const lines = raw.split('\n');
+  // 1순위: "(수행평가) ○○○" 형태의 명시적 과제명 (교수·학습 운영표 등에서 흘러나온 텍스트)
+  const perf = [...raw.matchAll(/\(\s*수행평가\s*\)\s*([^\n,.()]{2,40})/g)];
+  if (perf.length > 0) {
+    const t = perf[perf.length - 1]![1]!.trim().replace(/\s+/g, ' ');
+    if (t.length >= 2 && !BOILERPLATE.test(t)) return t;
+  }
+  // 2순위: "가./나./1) 제목" 형태의 항목 헤딩 (가장 가까운 것)
   for (let i = lines.length - 1; i >= 0; i--) {
     const m = lines[i]!.match(/^[\s\-•▪#*]*(?:[가-힣]|\d{1,2})\s*[.)]\s*(.{2,40})$/);
     if (!m) continue;
@@ -327,17 +375,38 @@ function buildCriteria(
 
   let i = 0;
   while (i < dataRows.length) {
-    const name = stripBullet((dataRows[i]![cols.elementCol] ?? '').trim());
-    // 같은 평가요소(rowspan 펼침으로 동일 값 반복)의 연속 행을 한 묶음으로
+    // 그룹 기준은 평가요소 열 값(rowspan 펼침으로 동일 값 반복) — 점수 의미 보존
+    const groupKey = stripBullet((dataRows[i]![cols.elementCol] ?? '').trim());
     let j = i;
     while (
       j < dataRows.length &&
-      stripBullet((dataRows[j]![cols.elementCol] ?? '').trim()) === name
+      stripBullet((dataRows[j]![cols.elementCol] ?? '').trim()) === groupKey
     ) {
       j++;
     }
     const groupRows = dataRows.slice(i, j);
     i = j;
+
+    // 표시 이름: 평가요소 값이 "§ A § B …" facet 목록이거나 과도하게 길면
+    // 왼쪽의 짧은 그룹 라벨(평가항목, 예: '적절성')을 이름으로 채택한다.
+    // (facet들은 하나의 점수밴드를 공유하므로 별도 criterion 으로 쪼개면 만점이 부풀려져 틀림)
+    let name = groupKey;
+    if (name.includes('§') || name.length > 30) {
+      for (let lc = cols.elementCol - 1; lc >= 0; lc--) {
+        const cand = stripBullet((groupRows[0]![lc] ?? '').trim());
+        if (
+          cand.length >= 2 &&
+          cand.length <= 25 &&
+          !cand.includes('§') &&
+          /[가-힣A-Za-z]/.test(cand) &&
+          !/^(평가|채점|배점|점수|척도|영역|만점|구분|성취)/.test(cand)
+        ) {
+          name = cand;
+          break;
+        }
+      }
+      name = name.replace(/\s*§\s*/g, ' / ').trim(); // 그래도 facet 목록이면 가독성 정리
+    }
 
     if (name.length === 0 || name.length > 40) continue;
     if (/^(유의|비고|기타|합\s*계|소\s*계|평가\s*방법|교과\s*역량)/.test(name)) continue;

@@ -131,3 +131,40 @@ describe('parseScoringRubrics — 폴백', () => {
     expect(parseScoringRubrics('')).toEqual([]);
   });
 });
+
+describe('parseScoringRubrics — 정확도 개선(①②③)', () => {
+  it('① 섹션 헤딩 [과목명]이 성취기준 코드 약칭을 덮어쓴다', () => {
+    // 헤딩이 "공통국어1", 성취기준 코드는 가정(→기술·가정). 헤딩이 우선해야 함.
+    const md = '2026학년도 1학년 1학기 [공통국어1]\n' + FIXTURE_GAJEONG;
+    const c = parseScoringRubrics(md, OPTS);
+    expect(c[0]!.subject).toBe('공통국어1');
+  });
+
+  // ②(수행평가)○○ 제목 + ③ §-목록 평가요소 → 왼쪽 그룹 라벨('적절성')을 이름으로
+  const FIXTURE_FACET = `
+(수행평가) 매체 비평하기
+[12언매03-01] 매체 분석
+
+<table>
+<tr><th>평가시기</th><th>3월</th><th>반영비율</th><th>30%</th><th>영역만점</th><th>100점</th></tr>
+<tr><td rowspan="4">평가 요소및<br>채점 기준</td><td>평가항목</td><td>평가요소</td><td>채점기준</td><td>평가척도</td><td>배점</td><td></td></tr>
+<tr><td rowspan="3">적절성</td><td rowspan="3">§ 현실적 문제해결<br>§ 논리설계<br>§ 창의성</td><td>3가지 포함</td><td>30</td><td rowspan="3">30</td></tr>
+<tr><td>2가지 포함</td><td>20</td></tr>
+<tr><td>1가지 포함</td><td>10</td></tr>
+</table>
+`;
+
+  it('② "(수행평가) ○○" 패턴을 제목으로 추출', () => {
+    const c = parseScoringRubrics(FIXTURE_FACET, OPTS);
+    expect(c).toHaveLength(1);
+    expect(c[0]!.subject).toBe('언어와 매체');
+    expect(c[0]!.title).toBe('매체 비평하기');
+  });
+
+  it('③ §-목록 평가요소는 분리하지 않고 왼쪽 그룹 라벨을 criterion 이름으로', () => {
+    const cri = parseScoringRubrics(FIXTURE_FACET, OPTS)[0]!.criteria;
+    expect(cri).toHaveLength(1);
+    expect(cri[0]!.name).toBe('적절성'); // §-목록(긴 텍스트) 대신 그룹 라벨
+    expect(cri[0]!.levels.map((l) => l.score)).toEqual([30, 20, 10]); // 점수밴드 1개 보존(분리 X)
+  });
+});
