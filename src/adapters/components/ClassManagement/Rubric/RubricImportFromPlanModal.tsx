@@ -70,7 +70,9 @@ export function RubricImportFromPlanModal({
   // ② 문서
   const [year, setYear] = useState(CURRENT_YEAR);
   const [docs, setDocs] = useState<readonly EvaluationPlanDoc[]>([]);
-  const [docSearch, setDocSearch] = useState(classSubject ?? '');
+  // 파일명 검색 기본값은 비워둔다 — 학교마다 파일 구성(학년별 통합/과목별 분리)이 제각각이라
+  // 과목명을 미리 넣어두면 오히려 결과를 가린다. 교사가 필요할 때 직접 입력.
+  const [docSearch, setDocSearch] = useState('');
 
   // ③ 파싱 결과 + 선택 (과목 → 수행평가 과제(후보) → 미리보기)
   const [parsed, setParsed] = useState<ParsedEvaluationPlan | null>(null);
