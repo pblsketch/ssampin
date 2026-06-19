@@ -5,6 +5,7 @@ import {
   achievement3Of,
   rankGradeOf,
   cumulativeRatio,
+  peopleToNextGrade,
   FIXED_CUT5,
   FIXED_CUT3,
 } from './gradeStandardRules';
@@ -92,5 +93,34 @@ describe('cumulativeRatio — 석차 누적 비율', () => {
 
   it('전체 인원 0이면 0', () => {
     expect(cumulativeRatio(1, 1, 0)).toBe(0);
+  });
+});
+
+describe('peopleToNextGrade — 한 등급 상승에 필요한 인원', () => {
+  it('5등급: 35등/100명(3등급)은 2등급까지 1명', () => {
+    expect(peopleToNextGrade(35, 1, 100, 'rank5')).toBe(1);
+  });
+
+  it('9등급: 12등/100명(3등급)은 2등급까지 1명', () => {
+    expect(peopleToNextGrade(12, 1, 100, 'rank9')).toBe(1);
+  });
+
+  it('이미 1등급이면 0', () => {
+    expect(peopleToNextGrade(5, 1, 100, 'rank5')).toBe(0);
+  });
+
+  it('전체 인원 0이면 0', () => {
+    expect(peopleToNextGrade(1, 1, 0, 'rank5')).toBe(0);
+  });
+
+  it('currentGrade를 주면 기관 산출 등급을 현재 등급으로 삼아(표시값과 일치) 계산한다', () => {
+    // rank 68/100: 누적비율 0.68 → 추정 4등급(0.66 초과). 기관 산출이 3등급이면
+    // 3등급 기준으로 2등급(0.34 컷=34명)까지 68-34=34명.
+    expect(peopleToNextGrade(68, 1, 100, 'rank5')).toBe(2); // 추정 4등급 기준(하위호환)
+    expect(peopleToNextGrade(68, 1, 100, 'rank5', 3)).toBe(34); // 기관 산출 3등급 기준
+  });
+
+  it('currentGrade가 1이면 0', () => {
+    expect(peopleToNextGrade(30, 1, 100, 'rank5', 1)).toBe(0);
   });
 });

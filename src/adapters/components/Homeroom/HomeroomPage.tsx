@@ -8,6 +8,7 @@ import { AssignmentTab } from './Assignment/AssignmentTab';
 import { ConsultationTab } from './Consultation/ConsultationTab';
 import { Seating } from '@adapters/components/Seating/Seating';
 import { RosterManagementTab } from './RosterManagementTab';
+import { HomeroomGradeOverviewTab } from './GradeOverview/HomeroomGradeOverviewTab';
 import { PageHeader } from '@adapters/components/common/PageHeader';
 import { SampleRosterWarningBanner } from '@adapters/components/common/SampleRosterWarningBanner';
 import { useSampleBannerStore } from '@adapters/stores/useSampleBannerStore';
@@ -91,6 +92,7 @@ export function HomeroomPage() {
         {activeTab === 'assignment' && <AssignmentTab />}
         {activeTab === 'consultation' && <ConsultationTab onWriteRecord={handleWriteRecord} />}
         {activeTab === 'seating' && <Seating embedded />}
+        {activeTab === 'grades' && <HomeroomGradeOverviewTab />}
       </div>
     </div>
   );

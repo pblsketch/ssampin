@@ -1,4 +1,11 @@
-export type HomeroomTab = 'roster' | 'records' | 'survey' | 'assignment' | 'consultation' | 'seating';
+export type HomeroomTab =
+  | 'roster'
+  | 'records'
+  | 'survey'
+  | 'assignment'
+  | 'consultation'
+  | 'seating'
+  | 'grades';
 
 const TABS: { id: HomeroomTab; icon: string; label: string }[] = [
   { id: 'roster', icon: '👥', label: '명렬 관리' },
@@ -7,6 +14,7 @@ const TABS: { id: HomeroomTab; icon: string; label: string }[] = [
   { id: 'assignment', icon: '📎', label: '과제 수합' },
   { id: 'consultation', icon: '📅', label: '상담 예약' },
   { id: 'seating', icon: '🪑', label: '자리배치' },
+  { id: 'grades', icon: '📊', label: '학급 성적' },
 ];
 
 interface HomeroomTabBarProps {
@@ -24,9 +32,7 @@ export function HomeroomTabBar({ activeTab, onChange }: HomeroomTabBarProps) {
           aria-selected={activeTab === tab.id}
           onClick={() => onChange(tab.id)}
           className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
-            activeTab === tab.id
-              ? 'bg-sp-accent text-white'
-              : 'text-sp-muted hover:text-sp-text'
+            activeTab === tab.id ? 'bg-sp-accent text-white' : 'text-sp-muted hover:text-sp-text'
           }`}
         >
           <span>{tab.icon}</span>

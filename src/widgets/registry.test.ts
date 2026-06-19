@@ -20,8 +20,12 @@ const allDefs = WIDGET_DEFINITIONS;
 const NO_MODAL_WIDGETS = new Set<string>(['desktop-organize']);
 
 describe('WIDGET_DEFINITIONS', () => {
-  it('전체 엔트리 수 21개 (memo-focus 제거 후)', () => {
-    expect(allDefs).toHaveLength(21);
+  it('전체 엔트리 수 22개 (grade-summary 추가)', () => {
+    expect(allDefs).toHaveLength(22);
+  });
+
+  it('grade-summary(성적 현황) 위젯이 존재한다', () => {
+    expect(allDefs.find((d) => d.id === 'grade-summary')).toBeDefined();
   });
 
   it('memo-focus 가 레지스트리에 존재하지 않음', () => {

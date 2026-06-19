@@ -113,3 +113,30 @@ export function cumulativeRatio(rank: number, tieCount: number, total: number): 
   const lastRank = rank + Math.max(tieCount, 1) - 1;
   return lastRank / total;
 }
+
+/**
+ * 한 등급 위로 올라가는 데 필요한 인원(석차 기준). 석차제(rank5|rank9)만 의미가 있다.
+ * 현재 누적석차가 상위 등급 상한 인원보다 많은 만큼을 돌려준다.
+ * 이미 1등급이거나 전체 인원이 0이면 0.
+ *
+ * currentGrade(기관 산출 석차등급)를 주면 그 등급을 "현재 등급"으로 삼는다.
+ * 화면이 기관 산출 등급을 표시하므로, 표시값과 "한 등급 상승 N명"을 일치시키기 위함이다.
+ * (미지정 시 rank/total 누적비율로 등급을 추정해 하위호환.)
+ */
+export function peopleToNextGrade(
+  rank: number,
+  tieCount: number,
+  total: number,
+  scale: 'rank5' | 'rank9',
+  currentGrade?: number,
+): number {
+  if (total <= 0) return 0;
+  const cuts = scale === 'rank9' ? RANK9_CUTS : RANK5_CUTS;
+  const lastRank = rank + Math.max(tieCount, 1) - 1;
+  const grade = currentGrade ?? rankGradeOf(lastRank / total, scale);
+  if (grade <= 1) return 0;
+  const cutForNext = cuts[grade - 2];
+  if (cutForNext === undefined) return 0;
+  const maxRankForNext = Math.floor(cutForNext * total);
+  return Math.max(0, lastRank - maxRankForNext);
+}

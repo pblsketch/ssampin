@@ -24,6 +24,7 @@ import {
   ImageSticker4,
 } from './items/ImageStickerWidget';
 import { DesktopOrganize } from './items/DesktopOrganize';
+import { Grades } from './items/Grades';
 
 /**
  * 전체 위젯 정의 레지스트리
@@ -142,6 +143,24 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
     modalSize: 'lg',
     modalMode: 'view+edit',
     requiresExplicitCancel: true,
+  },
+  {
+    id: 'grade-summary',
+    name: '성적 현황',
+    icon: '📊',
+    description: '점수 미입력·반영비율 미완성 평가를 한눈에 (개인 점수 미표시)',
+    category: 'class',
+    defaultSize: { w: 1, h: 4 },
+    minSize: { w: 1, h: 2 },
+    availableFor: {
+      schoolLevel: ['middle', 'high', 'custom'],
+      role: ['subject', 'homeroom', 'admin'],
+    },
+    component: Grades,
+    navigateTo: 'class-management',
+    navigateLabel: '수업 관리 보기',
+    modalSize: 'lg',
+    modalMode: 'expanded',
   },
 
   // ─── 정보 카테고리 ───
