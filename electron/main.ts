@@ -39,6 +39,7 @@ import { registerSchoolinfoDisclosureHandlers } from './ipc/schoolinfoDisclosure
 import { registerBoardHandlers, endActiveBoardSessionSync } from './ipc/board';
 import { registerMultiSurveyShareHandlers } from './ipc/multiSurveyShare';
 import { registerAiBridgeHandlers } from './ipc/aiBridge';
+import { registerLiveSyncHost, type LiveSyncHost } from './ipc/aiBridgeLiveSyncHost';
 import {
   registerRealtimeWallBoardHandlers,
   saveDirtyWallBoardsSync,
@@ -60,6 +61,7 @@ declare const __dirname: string;
 
 let mainWindow: BrowserWindow | null = null;
 let widgetWindow: BrowserWindow | null = null;
+let liveSyncHost: LiveSyncHost | null = null;
 let quickAddWindow: BrowserWindow | null = null;
 let stickerPickerWindow: BrowserWindow | null = null;
 let widgetWasActive = false;
@@ -4625,6 +4627,8 @@ if (!gotTheLock) {
     registerBoardHandlers(mainWindow!);
     registerRealtimeWallBoardHandlers();
     registerAiBridgeHandlers();
+    // AI 브릿지 live-sync 쓰기 호스트 — capability.allowWrite 가 켜진 경우에만 loopback 서버 시작(기본 OFF).
+    liveSyncHost = registerLiveSyncHost({ getMainWindow: () => mainWindow, dataDir: getDataDir() });
     // 글로벌 퀵애드 단축키 IPC
     ipcMain.handle('shortcuts:sync', (_event, config: ShortcutSyncConfig) => {
       return applyGlobalShortcuts(config);
@@ -4790,6 +4794,8 @@ app.on('will-quit', () => {
   globalShortcut.unregisterAll();
   destroyQuickAddWindow();
   destroyStickerPickerWindow();
+  // live-sync loopback 서버 정리(control.json 제거). 비동기지만 best-effort.
+  void liveSyncHost?.stop();
 });
 
 app.on('before-quit', () => {

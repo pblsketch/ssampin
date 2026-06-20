@@ -70,6 +70,7 @@ import { CloseActionDialog } from '@adapters/components/common/CloseActionDialog
 import { CommandPalette, CommandPaletteHint } from '@adapters/components/common/CommandPalette';
 import { QuickAddModal } from '@adapters/components/common/QuickAdd';
 import { useGlobalShortcuts } from '@adapters/hooks/useGlobalShortcuts';
+import { useAiBridgeLiveSync } from '@adapters/hooks/useAiBridgeLiveSync';
 import { useQuickAddStore } from '@adapters/stores/useQuickAddStore';
 import type { QuickAddKind } from '@adapters/stores/useQuickAddStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
@@ -883,6 +884,9 @@ function MainApp() {
 
     return unsubscribe;
   }, []);
+
+  // AI 브릿지 live-sync 쓰기 수신(메인 창) — 외부 AI 의 일정·할일 쓰기를 store 액션으로 적용
+  useAiBridgeLiveSync();
 
   // 위젯 내 도구 클릭 → 해당 도구 페이지로 네비게이션
   useEffect(() => {

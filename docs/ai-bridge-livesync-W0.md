@@ -37,15 +37,26 @@
 
 ## 남은 작업
 
-### A. 배선(본체, 라이브 실행 필요)
+### A. 배선 ✅ 구현 완료 (라이브 실행 검증만 남음)
 
-- `electron/main.ts`: 앱 시작 시 `startLiveSyncServer({ dataDir, applyWrite })` 호출. `applyWrite` 델리게이트 =
-  단일 메인 창에 `webContents.send('aiBridge:apply-write', req)` → 응답 await(ACK=렌더러 store→data:write 완료).
-- `electron/preload.ts`: `onAiBridgeApplyWrite(cb)` 노출(렌더러 수신) + 결과 회신 채널.
-- `src/App.tsx`(또는 전용 usecase): 수신 핸들러 — todos/events store 의 add/update/complete/delete 액션 호출 → 결과 반환.
-- Settings 'AI 연결' 카드: 쓰기/내용 토글 → `writeCapability(dataDir, …)`.
+- `electron/ipc/aiBridgeLiveSyncHost.ts`(신규): 서버 수명 + 단일 메인 창 위임(`applyWrite`) + 멱등성 인메모리
+  dedup + ipcMain 토글(`aiBridge:setLiveSync`)·상태(`aiBridge:liveSyncStatus`)·결과회신(`aiBridge:apply-write-result`).
+  **서버는 capability.allowWrite 가 켜진 경우에만 시작(기본 OFF → 완전 무동작).**
+- `electron/main.ts`: `registerLiveSyncHost({ getMainWindow:()=>mainWindow, dataDir })` 1줄 + will-quit 정리.
+- `electron/preload.ts`: `aiBridge.onApplyWrite/setLiveSync/liveSyncStatus` 노출. `src/global.d.ts` 타입.
+- `src/usecases/aiBridge/applyLiveSyncWrite.ts`(+test 9): 검증된 쓰기 → store 액션 매핑(순수, 단위테스트).
+- `src/adapters/hooks/useAiBridgeLiveSync.ts` + `App.tsx`: 메인 창에서 수신 핸들러 등록 → todos/events store 적용.
+- 검증: usecase 9 + W0 27 테스트 통과, src tsc 0(내 파일), electron tsc 신규 에러 0, lint·regression 35/35.
+- 남음: **Settings 'AI 연결' 카드의 쓰기 토글 UI**(현재는 `aiBridge.setLiveSync(true)` IPC 로만 on).
 
-### B. 라이브 실증(준일님 앱 실행)
+### B. 라이브 실증(준일님 앱 실행) — 테스트 방법
+
+1. 쌤핀 실행 → DevTools 콘솔에서 `await window.electronAPI.aiBridge.setLiveSync(true)` (또는 추후 설정 토글).
+   → `%APPDATA%/쌤핀/data/.ssampin-aibridge/control.json` 생성 확인(port·token·pid·heartbeat).
+2. control.json 의 port·token 으로 loopback 에 POST(예: curl 또는 W1 의 create_todo):
+   `POST http://127.0.0.1:<port>/  header x-ssampin-token:<token>  body {"domain":"todos","op":"create","idempotencyKey":"t1","data":{"text":"테스트 할일"}}`
+   → ① 할일 목록에 **즉시** 등장 ② 직후 다른 저장(예: 메모 수정)에도 보존(덮어쓰기 0) 확인.
+3. `setLiveSync(false)` → control.json 제거 + 서버 정지 확인.
 
 - 쌤핀 켠 상태에서 loopback 에 todo create POST → ① 목록 즉시 등장 ② 직후 다른 저장에도 보존(덮어쓰기 0) ③ 충돌·롤백.
 - 앱 닫힘 → 직접쓰기 폴백 / 실행 의심 → 거부.

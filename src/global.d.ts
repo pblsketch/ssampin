@@ -138,6 +138,11 @@ interface AiBridgeElectronAPI {
   status: (client: AiBridgeClient) => Promise<AiBridgeStatus>;
   statusAll: () => Promise<AiBridgeStatus[]>;
   paths: () => Promise<AiBridgePaths>;
+  /** live-sync 쓰기 허용 토글(capability 기록 + loopback 서버 시작/정지). */
+  setLiveSync: (enabled: boolean) => Promise<{ running: boolean }>;
+  liveSyncStatus: () => Promise<{ running: boolean; allowWrite: boolean }>;
+  /** main → 렌더러 쓰기 위임 수신. handler(req)→결과. cleanup 반환. */
+  onApplyWrite: (handler: (req: unknown) => Promise<unknown>) => () => void;
 }
 
 interface ElectronAPI {

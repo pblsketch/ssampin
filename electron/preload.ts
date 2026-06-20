@@ -31,6 +31,30 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('aiBridge:status', client),
     statusAll: (): Promise<unknown> => ipcRenderer.invoke('aiBridge:statusAll'),
     paths: (): Promise<unknown> => ipcRenderer.invoke('aiBridge:paths'),
+    // live-sync 쓰기: 설정 토글(쓰기 허용 on/off → capability 기록 + loopback 서버 시작/정지)
+    setLiveSync: (enabled: boolean): Promise<{ running: boolean }> =>
+      ipcRenderer.invoke('aiBridge:setLiveSync', enabled),
+    liveSyncStatus: (): Promise<{ running: boolean; allowWrite: boolean }> =>
+      ipcRenderer.invoke('aiBridge:liveSyncStatus'),
+    // main → 렌더러 쓰기 위임 수신. handler(req)→결과를 회신 채널로 돌려준다. cleanup 함수 반환.
+    onApplyWrite: (handler: (req: unknown) => Promise<unknown>): (() => void) => {
+      const listener = (_e: unknown, payload: { requestId: string; req: unknown }): void => {
+        Promise.resolve(handler(payload.req)).then(
+          (result) =>
+            ipcRenderer.send('aiBridge:apply-write-result', {
+              requestId: payload.requestId,
+              result,
+            }),
+          () =>
+            ipcRenderer.send('aiBridge:apply-write-result', {
+              requestId: payload.requestId,
+              result: { ok: false, status: 500, error: '렌더러 핸들러 오류' },
+            }),
+        );
+      };
+      ipcRenderer.on('aiBridge:apply-write', listener);
+      return () => ipcRenderer.removeListener('aiBridge:apply-write', listener);
+    },
   },
   setAlwaysOnTop: (flag: boolean): Promise<void> =>
     ipcRenderer.invoke('window:setAlwaysOnTop', flag),
