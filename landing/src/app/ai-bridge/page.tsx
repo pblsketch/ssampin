@@ -12,7 +12,7 @@ type ToolGroup = {
   icon: string;
   title: string;
   summary: string;
-  tools: { label: string; code: string; gate?: '쓰기' | '동의' }[];
+  tools: { label: string; code: string; gate?: '쓰기' | '동의' | '실시간' }[];
 };
 
 const TOOL_GROUPS: ToolGroup[] = [
@@ -30,13 +30,20 @@ const TOOL_GROUPS: ToolGroup[] = [
     icon: '🗓️',
     title: '수업 · 학급 운영',
     summary:
-      '급식·시간표·일정·디데이·할 일을 한눈에. 날짜·상태 같은 기본 정보는 그대로, 제목·내용은 동의를 켤 때만 보여요.',
+      '급식·시간표·일정·디데이·할 일을 한눈에. 날짜·상태는 그대로 읽고, 제목·내용은 동의를 켤 때만. 일정·할 일은 추가·수정·삭제까지 됩니다(실시간 쓰기를 켤 때, 쌤핀이 켜져 있을 때만 반영).',
     tools: [
       { label: '급식 식단', code: 'get_meals' },
       { label: '시간표', code: 'get_schedule' },
       { label: '학사·학급 일정', code: 'get_events' },
       { label: '디데이', code: 'get_ddays' },
       { label: '할 일', code: 'get_todos' },
+      { label: '일정 추가', code: 'create_event', gate: '실시간' },
+      { label: '일정 수정', code: 'update_event', gate: '실시간' },
+      { label: '일정 삭제', code: 'delete_event', gate: '실시간' },
+      { label: '할 일 추가', code: 'create_todo', gate: '실시간' },
+      { label: '할 일 완료', code: 'complete_todo', gate: '실시간' },
+      { label: '할 일 수정', code: 'update_todo', gate: '실시간' },
+      { label: '할 일 삭제', code: 'delete_todo', gate: '실시간' },
     ],
   },
   {
@@ -78,7 +85,7 @@ type Scenario = {
   icon: string;
   title: string;
   who: string;
-  gate: '읽기' | '동의' | '쓰기';
+  gate: '읽기' | '동의' | '쓰기' | '실시간';
   say: string;
   tools: string[];
   note: string;
@@ -121,6 +128,15 @@ const SCENARIOS: Scenario[] = [
     tools: ['get_events', 'get_ddays', 'get_todos'],
     note: '설정을 안 켜도 날짜·상태는 바로 읽혀요.',
   },
+  {
+    icon: '⚡',
+    title: '할 일·일정도 말로 바로 추가',
+    who: '담임·교과',
+    gate: '실시간',
+    say: '다음 주 수요일 학년 체육대회 일정 넣고, 시험지 인쇄 할 일도 금요일 마감으로 추가해줘.',
+    tools: ['create_event', 'create_todo'],
+    note: '쌤핀이 켜져 있을 때 바로 반영돼요. (실시간 쓰기를 켰을 때만)',
+  },
 ];
 
 const SAFEGUARDS = [
@@ -132,7 +148,7 @@ const SAFEGUARDS = [
   {
     icon: '🔒',
     title: '민감한 내용은 기본 잠금',
-    body: '관찰 원문 보기와 기록 쓰기는 처음엔 꺼져 있어요. 선생님이 직접 켤 때만 열립니다. 안 켜면 명단·자리 같은 기본 정보만 다뤄요.',
+    body: '일정·할일·노트·메모·관찰 기록의 원문 보기와, 기록을 바꾸는 쓰기는 처음엔 모두 꺼져 있어요. 선생님이 직접 켤 때만 열립니다. 안 켜면 명단·자리·날짜 같은 기본 정보만 다뤄요.',
   },
   {
     icon: '🤝',
@@ -357,9 +373,9 @@ export default function AiBridgePage() {
               <p className="mt-3 text-[0.7rem] leading-relaxed text-sp-muted/80">
                 데이터 폴더를 못 찾으면{' '}
                 <code className="text-sp-text">--data-dir &quot;%APPDATA%/쌤핀/data&quot;</code> 를
-                덧붙이세요. 관찰 내용 보기는 <code className="text-sp-text">--allow-content</code>,
-                쓰기는 <code className="text-sp-text">--allow-write</code> 로 켭니다(기본은 둘 다
-                꺼짐).
+                덧붙이세요. 원문(제목·내용) 보기는{' '}
+                <code className="text-sp-text">--allow-content</code>, 쓰기는{' '}
+                <code className="text-sp-text">--allow-write</code> 로 켭니다(기본은 둘 다 꺼짐).
               </p>
             </div>
           </details>
@@ -393,7 +409,7 @@ export default function AiBridgePage() {
                   </span>
                   <span
                     className={`rounded-full px-2 py-0.5 text-[0.62rem] font-semibold ${
-                      s.gate === '쓰기'
+                      s.gate === '쓰기' || s.gate === '실시간'
                         ? 'bg-sp-highlight/15 text-sp-highlight'
                         : s.gate === '동의'
                           ? 'bg-sp-accent/15 text-sp-accent'
@@ -431,13 +447,17 @@ export default function AiBridgePage() {
           <p className="mb-2 text-[0.7rem] font-semibold uppercase tracking-widest text-sp-accent">
             무엇을 할 수 있나요
           </p>
-          <h2 className="text-2xl font-bold text-sp-text">AI가 쓸 수 있는 도구 19가지</h2>
+          <h2 className="text-2xl font-bold text-sp-text">AI가 쓸 수 있는 도구 26가지</h2>
           <p className="mt-3 text-sm leading-relaxed text-sp-muted">
             쓰임새별로 묶어 봤어요.{' '}
             <span className="rounded bg-sp-highlight/15 px-1 text-[0.72rem] font-semibold text-sp-highlight">
               쓰기
             </span>{' '}
-            표시가 붙은 도구만 기록을 바꾸고(기본 꺼짐),{' '}
+            ·{' '}
+            <span className="rounded bg-sp-highlight/15 px-1 text-[0.72rem] font-semibold text-sp-highlight">
+              실시간
+            </span>{' '}
+            표시가 붙은 도구만 기록을 바꾸고(기본 꺼짐, 실시간은 쌤핀이 켜져 있을 때만 반영),{' '}
             <span className="rounded bg-sp-accent/15 px-1 text-[0.72rem] font-semibold text-sp-accent">
               동의
             </span>{' '}
@@ -470,9 +490,9 @@ export default function AiBridgePage() {
                       {t.gate && (
                         <span
                           className={`rounded px-1 text-[0.6rem] font-semibold ${
-                            t.gate === '쓰기'
-                              ? 'bg-sp-highlight/15 text-sp-highlight'
-                              : 'bg-sp-accent/15 text-sp-accent'
+                            t.gate === '동의'
+                              ? 'bg-sp-accent/15 text-sp-accent'
+                              : 'bg-sp-highlight/15 text-sp-highlight'
                           }`}
                         >
                           {t.gate}
