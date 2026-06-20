@@ -10,6 +10,7 @@ import {
   isHeartbeatFresh,
   writeCapability,
   readCapability,
+  mergeCapability,
   authorizeWriteRequest,
   validateApplyWrite,
   controlPath,
@@ -117,6 +118,37 @@ describe('capability (fail-closed 기본 OFF)', () => {
     fs.writeFileSync(capabilityPath(dir), 'nope', 'utf-8');
     expect(readCapability(dir).allowWrite).toBe(false);
     expect(readCapability(dir).allowGradeWrite).toBe(false);
+  });
+});
+
+describe('mergeCapability (부분 갱신 + 미지 필드 보존)', () => {
+  it('지정한 토글만 바꾸고 나머지는 보존', () => {
+    writeCapability(dir, { allowWrite: true, allowContent: false, allowGradeWrite: false, updatedAt: 1 });
+    const after = mergeCapability(dir, { allowContent: true });
+    expect(after.allowContent).toBe(true);
+    expect(after.allowWrite).toBe(true); // 보존
+    expect(after.allowGradeWrite).toBe(false);
+  });
+  it('false 명시도 반영(끄기)', () => {
+    writeCapability(dir, { allowWrite: true, allowContent: true, allowGradeWrite: true, updatedAt: 1 });
+    expect(mergeCapability(dir, { allowWrite: false }).allowWrite).toBe(false);
+  });
+  it('이 타입이 모르는 필드(allowRecordWrite)도 보존 — 토글 한 번에 다른 기능 안 꺼짐 (codex MED #4)', () => {
+    // 다른 기능(생기부 초안 쓰기)이 켠 토글을 시뮬레이션.
+    fs.mkdirSync(path.dirname(capabilityPath(dir)), { recursive: true });
+    fs.writeFileSync(
+      capabilityPath(dir),
+      JSON.stringify({ allowWrite: false, allowContent: false, allowGradeWrite: false, allowRecordWrite: true, updatedAt: 1 }),
+      'utf-8',
+    );
+    mergeCapability(dir, { allowContent: true }); // 읽기만 토글
+    const rawAfter = JSON.parse(fs.readFileSync(capabilityPath(dir), 'utf-8'));
+    expect(rawAfter.allowRecordWrite).toBe(true); // 보존됨(클로버 방지)
+    expect(rawAfter.allowContent).toBe(true);
+  });
+  it('파일 없으면 미지정 토글은 false 로 생성(fail-closed)', () => {
+    const after = mergeCapability(dir, { allowGradeWrite: true });
+    expect(after).toMatchObject({ allowWrite: false, allowContent: false, allowGradeWrite: true });
   });
 });
 

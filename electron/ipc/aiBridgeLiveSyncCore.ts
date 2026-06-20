@@ -119,6 +119,35 @@ export function writeCapability(dataDir: string, caps: Capability): void {
   atomicWriteJson(capabilityPath(dataDir), caps);
 }
 
+/** setCapability 부분 갱신 입력 — 지정한 키만 바꾸고 나머지는 보존한다. */
+export type CapabilityPatch = Partial<Pick<Capability, 'allowWrite' | 'allowContent' | 'allowGradeWrite'>>;
+
+/**
+ * capability.json 부분 갱신(병합 쓰기). 지정한 토글만 바꾸고 나머지는 이전 값으로 보존하되,
+ * **이 타입이 모르는 필드도 그대로 보존**한다(예: 생기부 초안 쓰기 토글 allowRecordWrite — 다른 기능 소유).
+ * 토글 하나를 바꿔 다른 기능의 토글을 조용히 끄는 사고(클로버)를 막는다. 갱신된 Capability 를 반환.
+ */
+export function mergeCapability(dataDir: string, patch: CapabilityPatch): Capability {
+  let raw: Record<string, unknown> = {};
+  try {
+    const parsed = JSON.parse(fs.readFileSync(capabilityPath(dataDir), 'utf-8'));
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      raw = parsed as Record<string, unknown>;
+    }
+  } catch {
+    /* 없거나 손상 → 빈 객체에서 시작(fail-closed: 미지정 토글은 false 로) */
+  }
+  const next: Record<string, unknown> = {
+    ...raw, // 알 수 없는 필드(allowRecordWrite 등) 보존
+    allowWrite: patch.allowWrite ?? raw['allowWrite'] === true,
+    allowContent: patch.allowContent ?? raw['allowContent'] === true,
+    allowGradeWrite: patch.allowGradeWrite ?? raw['allowGradeWrite'] === true,
+    updatedAt: Date.now(),
+  };
+  atomicWriteJson(capabilityPath(dataDir), next);
+  return readCapability(dataDir);
+}
+
 /**
  * capability.json 읽기. 없거나 손상이면 모든 권한 OFF(fail-closed) 반환 —
  * 설정에서 명시적으로 켜야만 쓰기/내용 노출이 허용된다.

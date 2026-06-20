@@ -17,7 +17,7 @@ import {
   type ApplyWriteResult,
   type LiveSyncServerHandle,
 } from './aiBridgeLiveSync';
-import { readCapability, writeCapability, type ApplyWriteRequest } from './aiBridgeLiveSyncCore';
+import { readCapability, mergeCapability, type ApplyWriteRequest } from './aiBridgeLiveSyncCore';
 
 const APPLY_TIMEOUT_MS = 10_000;
 const IDEMPOTENCY_WINDOW_MS = 60_000;
@@ -126,14 +126,8 @@ export function registerLiveSyncHost(deps: LiveSyncHostDeps): LiveSyncHost {
     allowContent?: boolean;
     allowGradeWrite?: boolean;
   }): Promise<CapabilityStatus> {
-    const prev = readCapability(deps.dataDir);
-    const next = {
-      allowWrite: partial.allowWrite ?? prev.allowWrite,
-      allowContent: partial.allowContent ?? prev.allowContent,
-      allowGradeWrite: partial.allowGradeWrite ?? prev.allowGradeWrite,
-      updatedAt: Date.now(),
-    };
-    writeCapability(deps.dataDir, next);
+    // 부분 갱신 — 다른 기능의 토글(allowRecordWrite 등 이 타입이 모르는 필드)도 보존(클로버 방지).
+    const next = mergeCapability(deps.dataDir, partial);
     if (next.allowWrite) await startServer();
     else await stopServer();
     return capabilityStatus();
