@@ -8,6 +8,8 @@ import {
   registerFileClient,
   registerCodex,
   codexAddArgs,
+  codexConfigPath,
+  codexClientStatus,
   shellQuote,
   winQuote,
   fileClientStatus,
@@ -202,5 +204,50 @@ describe('fileClientStatus', () => {
   });
   it('파일 없음 → false', () => {
     expect(fileClientStatus('claude', path.join(dir, 'none.json'))).toBe(false);
+  });
+});
+
+describe('codexConfigPath / codexClientStatus', () => {
+  it('codexConfigPath — 기본 ~/.codex/config.toml, CODEX_HOME 우선', () => {
+    expect(codexConfigPath({} as NodeJS.ProcessEnv, 'C:/home')).toBe(
+      path.join('C:/home', '.codex', 'config.toml'),
+    );
+    expect(codexConfigPath({ CODEX_HOME: 'D:/cx' } as NodeJS.ProcessEnv, 'C:/home')).toBe(
+      path.join('D:/cx', 'config.toml'),
+    );
+  });
+
+  it('ssampin 섹션 있으면 true (다른 서버와 공존)', () => {
+    const cfg = path.join(dir, 'config.toml');
+    fs.writeFileSync(
+      cfg,
+      '[mcp_servers.other]\ncommand = "x"\n\n[mcp_servers.ssampin]\ncommand = "쌤핀.exe"\nargs = ["index.mjs"]\n',
+    );
+    expect(codexClientStatus(cfg)).toBe(true);
+  });
+
+  it('따옴표 변형 [mcp_servers."ssampin"] 도 true', () => {
+    const cfg = path.join(dir, 'q.toml');
+    fs.writeFileSync(cfg, '[mcp_servers."ssampin"]\ncommand = "x"\n');
+    expect(codexClientStatus(cfg)).toBe(true);
+  });
+
+  it('파일은 있으나 ssampin 섹션 없으면 false', () => {
+    const cfg = path.join(dir, 'no.toml');
+    fs.writeFileSync(cfg, '[mcp_servers.other]\ncommand = "x"\n');
+    expect(codexClientStatus(cfg)).toBe(false);
+  });
+
+  it('주석·유사 이름(ssampin2)은 오탐 안 함 → false', () => {
+    const cfg = path.join(dir, 'near.toml');
+    fs.writeFileSync(
+      cfg,
+      '# [mcp_servers.ssampin] 예시 주석\n[mcp_servers.ssampin2]\ncommand = "x"\n',
+    );
+    expect(codexClientStatus(cfg)).toBe(false);
+  });
+
+  it('파일 없음 → null(확인 불가, 미연결로 오표시 안 함)', () => {
+    expect(codexClientStatus(path.join(dir, 'missing.toml'))).toBeNull();
   });
 });

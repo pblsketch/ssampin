@@ -222,7 +222,7 @@ export function safeErrorMessage(err: unknown): string {
 
 export interface AiBridgeStatus {
   readonly client: AiBridgeClient;
-  /** true=등록됨, false=미등록, null=확인 불가(codex) */
+  /** true=등록됨, false=미등록, null=확인 불가(설정 파일 없음/읽기 실패) */
   readonly registered: boolean | null;
 }
 
@@ -241,4 +241,40 @@ export function fileClientStatus(client: 'claude' | 'antigravity', configPath: s
   } catch {
     return false;
   }
+}
+
+/** codex 의 MCP 설정 파일 경로(config.toml). CODEX_HOME 우선, 기본 ~/.codex. */
+export function codexConfigPath(
+  env: NodeJS.ProcessEnv = process.env,
+  home: string = os.homedir(),
+): string {
+  const base = env['CODEX_HOME'] ?? path.join(home, '.codex');
+  return path.join(base, 'config.toml');
+}
+
+/**
+ * codex 의 config.toml 에 ssampin MCP 서버 섹션이 등록돼 있는지 조회.
+ * codex 는 JSON 이 아닌 자체 TOML 설정에 저장하므로, 점-키 섹션 헤더
+ * `[mcp_servers.ssampin]`(따옴표 변형 포함) 존재로 판정한다. 형식이 달라 못 읽으면
+ * 미연결로 오표시하지 않도록 null(확인 불가)을 돌려준다.
+ * - true  = 등록됨
+ * - false = 파일은 있으나 미등록
+ * - null  = 파일 없음/읽기 실패(확인 불가 — codex 미설치 등)
+ */
+export function codexClientStatus(configPath: string): boolean | null {
+  let raw: string;
+  try {
+    if (!fs.existsSync(configPath)) return null;
+    raw = fs.readFileSync(configPath, 'utf-8');
+  } catch {
+    return null;
+  }
+  // TOML 점-키 섹션 헤더만 매칭(주석 `# [...]`·유사 이름 `ssampin2` 오탐 차단).
+  // `\s` 는 줄바꿈도 포함해 다른 줄로 새므로, 줄 내부 공백은 수평 공백 [\t ] 로만 허용한다.
+  const name = SERVER_NAME.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(
+    `^[\\t ]*\\[[\\t ]*mcp_servers[\\t ]*\\.[\\t ]*(?:${name}|"${name}")[\\t ]*\\][\\t ]*$`,
+    'm',
+  );
+  return re.test(raw);
 }

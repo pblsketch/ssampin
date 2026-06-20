@@ -16,6 +16,8 @@ import path from 'node:path';
 import {
   buildEntry,
   clientConfigPath,
+  codexClientStatus,
+  codexConfigPath,
   fileClientStatus,
   registerCodex,
   registerFileClient,
@@ -69,11 +71,14 @@ function doRegister(client: AiBridgeClient, opts: AiBridgeRegisterOptions): AiBr
 }
 
 function getStatus(client: AiBridgeClient): AiBridgeStatus {
-  if (client === 'codex') return { client, registered: null };
   try {
+    if (client === 'codex') {
+      // codex 는 자체 TOML 설정에 저장 — 섹션 헤더로 등록 여부 확인(못 읽으면 null).
+      return { client, registered: codexClientStatus(codexConfigPath()) };
+    }
     return { client, registered: fileClientStatus(client, clientConfigPath(client)) };
   } catch {
-    return { client, registered: false };
+    return { client, registered: client === 'codex' ? null : false };
   }
 }
 
