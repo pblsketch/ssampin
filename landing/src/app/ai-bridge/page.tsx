@@ -99,7 +99,7 @@ const SCENARIOS: Scenario[] = [
     title: '세특에 쓸 역량·태도 정리',
     who: '교과',
     gate: '동의',
-    say: '내 수업반 7번 학생 수행평가랑 성적 보고, 세특에 들어갈 역량·태도 정리해줘. 점수는 빼고.',
+    say: '내 수업반 7번 학생 수행평가랑 성적 보고, 세특에 들어갈 역량·태도 정리해줘.',
     tools: ['list_students', 'get_performance_feedback', 'get_grade_summary'],
     note: '점수·석차는 빼고 도달 수준·성취도 같은 질적 근거만 모아요.',
   },
