@@ -8,22 +8,48 @@ interface TabDef {
 }
 
 const TABS: TabDef[] = [
-  { id: 'google',   icon: 'hub',                   label: 'Google 연동', color: 'bg-purple-500/10 text-purple-400' },
-  { id: 'school',   icon: 'school',                label: '학교 정보',  color: 'bg-blue-500/10 text-blue-400' },
-  { id: 'period',   icon: 'schedule',              label: '교시 시간',  color: 'bg-emerald-500/10 text-emerald-400' },
-  { id: 'widget',   icon: 'widgets',               label: '위젯',      color: 'bg-indigo-500/10 text-indigo-400' },
-  { id: 'seat',     icon: 'chair',                 label: '좌석',      color: 'bg-orange-500/10 text-orange-400' },
-  { id: 'security', icon: 'lock',                  label: '보안',      color: 'bg-red-500/10 text-red-400' },
-  { id: 'calendar', icon: 'event',                 label: '일정',      color: 'bg-pink-500/10 text-pink-400' },
-  { id: 'weather',  icon: 'cloud',                 label: '날씨',      color: 'bg-sky-500/10 text-sky-500' },
-  { id: 'display',  icon: 'palette',               label: '디스플레이', color: 'bg-yellow-500/10 text-yellow-500' },
-  { id: 'sidebar',  icon: 'menu',                  label: '사이드바',   color: 'bg-sp-surface text-sp-muted' },
-  { id: 'todo',     icon: 'checklist',             label: '할 일',     color: 'bg-green-500/10 text-green-400' },
-  { id: 'tools',    icon: 'build',                 label: '도구',      color: 'bg-purple-500/10 text-purple-400' },
-  { id: 'shortcuts',icon: 'keyboard',              label: '단축키',     color: 'bg-teal-500/10 text-teal-400' },
-  { id: 'system',   icon: 'settings_applications', label: '시스템',     color: 'bg-gray-500/10 text-gray-400' },
-  { id: 'backup',   icon: 'cloud_download',        label: '백업/복원',  color: 'bg-emerald-500/10 text-emerald-400' },
-  { id: 'about',    icon: 'info',                  label: '앱 정보',   color: 'bg-violet-500/10 text-violet-400' },
+  { id: 'google', icon: 'hub', label: 'Google 연동', color: 'bg-purple-500/10 text-purple-400' },
+  { id: 'school', icon: 'school', label: '학교 정보', color: 'bg-blue-500/10 text-blue-400' },
+  {
+    id: 'period',
+    icon: 'schedule',
+    label: '교시 시간',
+    color: 'bg-emerald-500/10 text-emerald-400',
+  },
+  { id: 'widget', icon: 'widgets', label: '위젯', color: 'bg-indigo-500/10 text-indigo-400' },
+  { id: 'seat', icon: 'chair', label: '좌석', color: 'bg-orange-500/10 text-orange-400' },
+  { id: 'security', icon: 'lock', label: '보안', color: 'bg-red-500/10 text-red-400' },
+  { id: 'calendar', icon: 'event', label: '일정', color: 'bg-pink-500/10 text-pink-400' },
+  { id: 'weather', icon: 'cloud', label: '날씨', color: 'bg-sky-500/10 text-sky-500' },
+  {
+    id: 'display',
+    icon: 'palette',
+    label: '디스플레이',
+    color: 'bg-yellow-500/10 text-yellow-500',
+  },
+  { id: 'sidebar', icon: 'menu', label: '사이드바', color: 'bg-sp-surface text-sp-muted' },
+  { id: 'todo', icon: 'checklist', label: '할 일', color: 'bg-green-500/10 text-green-400' },
+  { id: 'tools', icon: 'build', label: '도구', color: 'bg-purple-500/10 text-purple-400' },
+  { id: 'shortcuts', icon: 'keyboard', label: '단축키', color: 'bg-teal-500/10 text-teal-400' },
+  {
+    id: 'system',
+    icon: 'settings_applications',
+    label: '시스템',
+    color: 'bg-gray-500/10 text-gray-400',
+  },
+  {
+    id: 'backup',
+    icon: 'cloud_download',
+    label: '백업/복원',
+    color: 'bg-emerald-500/10 text-emerald-400',
+  },
+  {
+    id: 'ai-bridge',
+    icon: 'linked_services',
+    label: 'AI 연결',
+    color: 'bg-cyan-500/10 text-cyan-400',
+  },
+  { id: 'about', icon: 'info', label: '앱 정보', color: 'bg-violet-500/10 text-violet-400' },
 ];
 
 export { TABS };
@@ -35,7 +61,10 @@ interface Props {
 
 export function SettingsSidebar({ activeTab, onTabChange }: Props) {
   return (
-    <nav aria-label="설정 메뉴" className="w-56 shrink-0 border-r border-sp-border bg-sp-card/50 overflow-y-auto py-4 px-3 h-full">
+    <nav
+      aria-label="설정 메뉴"
+      className="w-56 shrink-0 border-r border-sp-border bg-sp-card/50 overflow-y-auto py-4 px-3 h-full"
+    >
       <div role="tablist" className="space-y-1">
         {TABS.map((tab) => {
           const isActive = activeTab === tab.id;
@@ -52,7 +81,9 @@ export function SettingsSidebar({ activeTab, onTabChange }: Props) {
                   : 'text-sp-muted hover:bg-sp-text/5 hover:text-sp-text'
               }`}
             >
-              <div className={`p-1.5 rounded-md ${isActive ? 'bg-sp-accent/15 text-sp-accent' : tab.color}`}>
+              <div
+                className={`p-1.5 rounded-md ${isActive ? 'bg-sp-accent/15 text-sp-accent' : tab.color}`}
+              >
                 <span className="material-symbols-outlined text-icon-md">{tab.icon}</span>
               </div>
               <span className={`text-sm font-medium ${isActive ? 'text-sp-accent' : ''}`}>

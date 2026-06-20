@@ -8,6 +8,10 @@ directories:
 extraResources:
   - from: 'build/icon.ico'
     to: 'icon.ico'
+  # AI 브릿지 동봉 서버(self-contained 번들). 사용자 PC에 Node 미설치여도 쌤핀 실행파일을
+  # ELECTRON_RUN_AS_NODE 로 노드 삼아 띄운다(설정 > AI 연결). 재생성: electron/ai-bridge/README.md 참조.
+  - from: 'electron/ai-bridge'
+    to: 'ai-bridge'
 files:
   - from: '.'
     to: '.'

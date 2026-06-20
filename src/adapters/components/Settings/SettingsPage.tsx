@@ -7,8 +7,23 @@ import type { Settings } from '@domain/entities/Settings';
 import { SettingsLayout } from './SettingsLayout';
 
 export type SettingsTabId =
-  | 'google' | 'school' | 'period' | 'widget' | 'seat' | 'security'
-  | 'calendar' | 'weather' | 'display' | 'sidebar' | 'todo' | 'tools' | 'shortcuts' | 'system' | 'backup' | 'about';
+  | 'google'
+  | 'school'
+  | 'period'
+  | 'widget'
+  | 'seat'
+  | 'security'
+  | 'calendar'
+  | 'weather'
+  | 'display'
+  | 'sidebar'
+  | 'todo'
+  | 'tools'
+  | 'shortcuts'
+  | 'system'
+  | 'backup'
+  | 'ai-bridge'
+  | 'about';
 
 interface SettingsPageProps {
   /**
@@ -36,8 +51,13 @@ export function SettingsPage({ initialTab }: SettingsPageProps = {}) {
     if (initialTab) setActiveTab(initialTab);
   }, [initialTab]);
 
-  useEffect(() => { load(); loadEvents(); }, [load, loadEvents]);
-  useEffect(() => { if (loaded) setDraft(settings); }, [loaded, settings]);
+  useEffect(() => {
+    load();
+    loadEvents();
+  }, [load, loadEvents]);
+  useEffect(() => {
+    if (loaded) setDraft(settings);
+  }, [loaded, settings]);
 
   const patch = useCallback((p: Partial<Settings>) => {
     setDraft((prev) => ({ ...prev, ...p }));

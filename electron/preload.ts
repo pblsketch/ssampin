@@ -21,6 +21,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
   writeData: (filename: string, data: string): Promise<void> =>
     ipcRenderer.invoke('data:write', filename, data),
   removeData: (filename: string): Promise<void> => ipcRenderer.invoke('data:remove', filename),
+  // AI 브릿지 — 외부 AI(Claude/Codex/Antigravity) 연결
+  aiBridge: {
+    register: (
+      client: 'claude' | 'codex' | 'antigravity',
+      opts?: { allowContent?: boolean; allowWrite?: boolean },
+    ): Promise<unknown> => ipcRenderer.invoke('aiBridge:register', client, opts),
+    status: (client: 'claude' | 'codex' | 'antigravity'): Promise<unknown> =>
+      ipcRenderer.invoke('aiBridge:status', client),
+    statusAll: (): Promise<unknown> => ipcRenderer.invoke('aiBridge:statusAll'),
+    paths: (): Promise<unknown> => ipcRenderer.invoke('aiBridge:paths'),
+  },
   setAlwaysOnTop: (flag: boolean): Promise<void> =>
     ipcRenderer.invoke('window:setAlwaysOnTop', flag),
   setWidget: (options: {
@@ -1152,8 +1163,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       sggCode: string;
       pbanYr: string;
     }): Promise<
-      | { status: 'ok'; list: Array<Record<string, unknown>> }
-      | { status: 'error'; message: string }
+      { status: 'ok'; list: Array<Record<string, unknown>> } | { status: 'error'; message: string }
     > => ipcRenderer.invoke('schoolinfo-disclosure:get-area', args),
   },
 

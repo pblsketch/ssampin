@@ -38,6 +38,7 @@ import { registerSchoolinfoEvaluationHandlers } from './ipc/schoolinfoEvaluation
 import { registerSchoolinfoDisclosureHandlers } from './ipc/schoolinfoDisclosure';
 import { registerBoardHandlers, endActiveBoardSessionSync } from './ipc/board';
 import { registerMultiSurveyShareHandlers } from './ipc/multiSurveyShare';
+import { registerAiBridgeHandlers } from './ipc/aiBridge';
 import {
   registerRealtimeWallBoardHandlers,
   saveDirtyWallBoardsSync,
@@ -4623,6 +4624,7 @@ if (!gotTheLock) {
     registerSchoolinfoDisclosureHandlers();
     registerBoardHandlers(mainWindow!);
     registerRealtimeWallBoardHandlers();
+    registerAiBridgeHandlers();
     // 글로벌 퀵애드 단축키 IPC
     ipcMain.handle('shortcuts:sync', (_event, config: ShortcutSyncConfig) => {
       return applyGlobalShortcuts(config);

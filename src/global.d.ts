@@ -112,10 +112,39 @@ interface StickerElectronAPI {
   cancelSheetSession?: (sessionId: string) => Promise<{ ok: boolean }>;
 }
 
+type AiBridgeClient = 'claude' | 'codex' | 'antigravity';
+interface AiBridgeRegisterResult {
+  ok: boolean;
+  client: AiBridgeClient;
+  registered: boolean;
+  /** codex CLI 미설치 — 사용자가 직접 실행할 명령(command) 안내 */
+  cliMissing?: boolean;
+  command?: string;
+  error?: string;
+}
+interface AiBridgeStatus {
+  client: AiBridgeClient;
+  /** true=등록됨, false=미등록, null=확인 불가(codex) */
+  registered: boolean | null;
+}
+interface AiBridgePaths {
+  serverExists: boolean;
+}
+interface AiBridgeElectronAPI {
+  register: (
+    client: AiBridgeClient,
+    opts?: { allowContent?: boolean; allowWrite?: boolean },
+  ) => Promise<AiBridgeRegisterResult>;
+  status: (client: AiBridgeClient) => Promise<AiBridgeStatus>;
+  statusAll: () => Promise<AiBridgeStatus[]>;
+  paths: () => Promise<AiBridgePaths>;
+}
+
 interface ElectronAPI {
   readData: (filename: string) => Promise<string | null>;
   writeData: (filename: string, data: string) => Promise<void>;
   removeData: (filename: string) => Promise<void>;
+  aiBridge: AiBridgeElectronAPI;
   setAlwaysOnTop: (flag: boolean) => Promise<void>;
   setWidget: (options: {
     width: number;
@@ -676,8 +705,7 @@ interface ElectronAPI {
       sggCode: string;
       pbanYr: string;
     }) => Promise<
-      | { status: 'ok'; list: Array<Record<string, unknown>> }
-      | { status: 'error'; message: string }
+      { status: 'ok'; list: Array<Record<string, unknown>> } | { status: 'error'; message: string }
     >;
   };
 

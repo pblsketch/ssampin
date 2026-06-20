@@ -16,6 +16,7 @@ import { SystemTab } from './tabs/SystemTab';
 import { BackupTab } from './tabs/BackupTab';
 import { AboutTab } from './tabs/AboutTab';
 import { GoogleIntegrationTab } from './tabs/GoogleIntegrationTab';
+import { AiBridgeTab } from './tabs/AiBridgeTab';
 import { TodoTab } from './tabs/TodoTab';
 import { ToolsTab } from './tabs/ToolsTab';
 import { ShortcutsTab } from './tabs/ShortcutsTab';
@@ -35,8 +36,16 @@ interface Props {
 }
 
 export function SettingsLayout({
-  activeTab, onTabChange, draft, patch, setDraft,
-  saving, onSave, onReset, showReset, setShowReset,
+  activeTab,
+  onTabChange,
+  draft,
+  patch,
+  setDraft,
+  saving,
+  onSave,
+  onReset,
+  showReset,
+  setShowReset,
 }: Props) {
   const contentRef = useRef<HTMLDivElement>(null);
 
@@ -131,29 +140,53 @@ export function SettingsLayout({
   );
 }
 
-function TabContent({ activeTab, draft, patch, setDraft }: {
+function TabContent({
+  activeTab,
+  draft,
+  patch,
+  setDraft,
+}: {
   activeTab: SettingsTabId;
   draft: Settings;
   patch: (p: Partial<Settings>) => void;
   setDraft: React.Dispatch<React.SetStateAction<Settings>>;
 }) {
   switch (activeTab) {
-    case 'google':    return <GoogleIntegrationTab />;
-    case 'school':    return <SchoolTab draft={draft} patch={patch} />;
-    case 'period':    return <PeriodTab draft={draft} patch={patch} />;
-    case 'widget':    return <WidgetTab draft={draft} patch={patch} />;
-    case 'seat':      return <SeatTab draft={draft} patch={patch} />;
-    case 'security':  return <SecurityTab draft={draft} patch={patch} />;
-    case 'calendar':  return <CalendarTab draft={draft} patch={patch} />;
-    case 'weather':   return <WeatherTab draft={draft} patch={patch} />;
-    case 'display':   return <DisplayTab draft={draft} patch={patch} />;
-    case 'sidebar':   return <SidebarTab draft={draft} patch={patch} />;
-    case 'todo':      return <TodoTab draft={draft} patch={patch} />;
-    case 'tools':     return <ToolsTab />;
-    case 'shortcuts': return <ShortcutsTab />;
-    case 'system':    return <SystemTab draft={draft} patch={patch} setDraft={setDraft} />;
-    case 'backup':    return <BackupTab />;
-    case 'about':     return <AboutTab />;
-    default:          return null;
+    case 'google':
+      return <GoogleIntegrationTab />;
+    case 'school':
+      return <SchoolTab draft={draft} patch={patch} />;
+    case 'period':
+      return <PeriodTab draft={draft} patch={patch} />;
+    case 'widget':
+      return <WidgetTab draft={draft} patch={patch} />;
+    case 'seat':
+      return <SeatTab draft={draft} patch={patch} />;
+    case 'security':
+      return <SecurityTab draft={draft} patch={patch} />;
+    case 'calendar':
+      return <CalendarTab draft={draft} patch={patch} />;
+    case 'weather':
+      return <WeatherTab draft={draft} patch={patch} />;
+    case 'display':
+      return <DisplayTab draft={draft} patch={patch} />;
+    case 'sidebar':
+      return <SidebarTab draft={draft} patch={patch} />;
+    case 'todo':
+      return <TodoTab draft={draft} patch={patch} />;
+    case 'tools':
+      return <ToolsTab />;
+    case 'shortcuts':
+      return <ShortcutsTab />;
+    case 'system':
+      return <SystemTab draft={draft} patch={patch} setDraft={setDraft} />;
+    case 'backup':
+      return <BackupTab />;
+    case 'ai-bridge':
+      return <AiBridgeTab />;
+    case 'about':
+      return <AboutTab />;
+    default:
+      return null;
   }
 }
