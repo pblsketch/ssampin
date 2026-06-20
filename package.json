@@ -79,7 +79,7 @@
     "react-dom": "^18.3.1",
     "react-markdown": "^9.1.0",
     "react-rnd": "^10.5.3",
-    "undici": "^6.25.0",
+    "undici": "^6.27.0",
     "ws": "^8.19.0",
     "y-websocket": "^2.1.0",
     "yjs": "^13.6.19",
