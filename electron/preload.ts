@@ -1131,6 +1131,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       shlIdfCd: string;
       schoolName: string;
       year: number;
+      item?: 'evaluation' | 'curriculum';
     }): Promise<
       | { status: 'ok'; docs: Array<{ seq: string; filename: string; sizeKB?: number }> }
       | { status: 'error'; message: string }
@@ -1140,6 +1141,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       schoolName: string;
       year: number;
       seq: string;
+      item?: 'evaluation' | 'curriculum';
     }): Promise<
       | {
           status: 'ok';

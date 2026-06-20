@@ -685,6 +685,7 @@ interface ElectronAPI {
       shlIdfCd: string;
       schoolName: string;
       year: number;
+      item?: 'evaluation' | 'curriculum';
     }) => Promise<SchoolinfoListResult>;
     /** 특정 첨부파일 다운로드 + kordoc 파싱 → markdown 반환. */
     downloadDoc: (args: {
@@ -692,6 +693,7 @@ interface ElectronAPI {
       schoolName: string;
       year: number;
       seq: string;
+      item?: 'evaluation' | 'curriculum';
     }) => Promise<SchoolinfoDownloadResult>;
   };
 

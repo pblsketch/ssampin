@@ -148,9 +148,7 @@ export function SchoolAnnouncementsPage({ onBack }: SchoolAnnouncementsPageProps
           {activeTab === 'overview' && <OverviewTab />}
           {activeTab === 'staff' && <StaffTab />}
           {activeTab === 'activities' && <ActivitiesTab />}
-          {activeTab === 'curriculum' && (
-            <CurriculumTab onGoToEvaluation={() => setActiveTab('evaluation')} />
-          )}
+          {activeTab === 'curriculum' && <CurriculumTab />}
           {activeTab === 'compare' && <CompareTab />}
           {activeTab === 'schedule' && <ScheduleTab />}
           {activeTab === 'evaluation' && <EvaluationTab />}

@@ -23,8 +23,9 @@ export class ImportEvaluationPlan {
     shlIdfCd: string,
     schoolName: string,
     year: number,
+    item?: 'evaluation' | 'curriculum',
   ): Promise<readonly EvaluationPlanDoc[]> {
-    return this.port.listDocs(shlIdfCd, schoolName, year);
+    return this.port.listDocs(shlIdfCd, schoolName, year, item);
   }
 
   downloadAndParse(
@@ -35,5 +36,15 @@ export class ImportEvaluationPlan {
     schoolKind?: string,
   ): Promise<ParsedEvaluationPlan> {
     return this.port.downloadAndParse(shlIdfCd, schoolName, year, doc, schoolKind);
+  }
+
+  /** 편제표(학교교육과정 편성·운영) 다운로드 → 마크다운(HTML 표) 반환. */
+  downloadCurriculumDoc(
+    shlIdfCd: string,
+    schoolName: string,
+    year: number,
+    doc: EvaluationPlanDoc,
+  ): Promise<{ filename: string; markdown: string; needsOcr: boolean }> {
+    return this.port.downloadCurriculumDoc(shlIdfCd, schoolName, year, doc);
   }
 }

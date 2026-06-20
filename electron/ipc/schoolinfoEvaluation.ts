@@ -27,8 +27,6 @@ const ALLOWED_HOSTS = ['www.schoolinfo.go.kr'] as const;
 const NAME_SEARCH_URL = `${BASE}/ei/ss/pneiss_a04_s0/getSchoolList.do`;
 const NAME_SEARCH_REFERER = `${BASE}/ei/ss/pneiss_a03_s0.do`;
 
-/** 평가계획 목록(POST b43) 엔드포인트 */
-const EVAL_LIST_URL = `${BASE}/ei/pp/Pneipp_b43_s0p.do`;
 const EVAL_LIST_REFERER = `${BASE}/ei/ss/Pneiss_b01_s0.do`;
 /** 첨부파일 다운로드(GET) 엔드포인트 */
 const FILE_DOWNLOAD_URL = `${BASE}/servlets/EiFileDownLoad.do`;
@@ -40,18 +38,52 @@ const MAX_LIST_BYTES = 4 * 1024 * 1024; // 4MB
 const PARAMS_CACHE_TTL_MS = 10 * 60 * 1000; // 10분
 
 /**
- * "교과별(학년별) 교수ㆍ학습 및 평가계획에 관한 사항" 공시항목 고정 코드.
- * (학교알리미 공시항목 자체의 분류 코드 — 모든 학교 공통)
+ * 학교알리미 공시항목별 고정 코드세트 (모든 학교 공통).
+ * b01 페이지(`Pneiss_b01_s0.do?SHL_IDF_CD=`)의 hanmok 객체에서 확인.
+ *  - evaluation: 교과별(학년별) 교수ㆍ학습 및 평가계획 → Pneipp_b43, getEiFile43
+ *  - curriculum: 학교교육과정 편성ㆍ운영 및 평가(편제표) → Pneipp_b14, getEiFile14
  */
-const EVAL_ITEM: Record<string, string> = {
-  GS_HANGMOK_CD: '43',
-  GS_HANGMOK_NO: '4-가',
-  GS_HANGMOK_NM: '교과별(학년별) 교수ㆍ학습 및 평가계획에 관한 사항',
-  GS_BURYU_CD: 'JG110',
-  JG_BURYU_CD: 'JG040',
-  JG_HANGMOK_CD: '14',
-  JG_GUBUN: '1',
+export type DisclosureItemKey = 'evaluation' | 'curriculum';
+
+interface DisclosureItemConfig {
+  readonly listUrl: string;
+  /** getEiFile{cd}( 의 코드 — 첨부 목록 파싱용 */
+  readonly fileFnCd: string;
+  readonly form: Record<string, string>;
+}
+
+const DISCLOSURE_ITEMS: Record<DisclosureItemKey, DisclosureItemConfig> = {
+  evaluation: {
+    listUrl: `${BASE}/ei/pp/Pneipp_b43_s0p.do`,
+    fileFnCd: '43',
+    form: {
+      GS_HANGMOK_CD: '43',
+      GS_HANGMOK_NO: '4-가',
+      GS_HANGMOK_NM: '교과별(학년별) 교수ㆍ학습 및 평가계획에 관한 사항',
+      GS_BURYU_CD: 'JG110',
+      JG_BURYU_CD: 'JG040',
+      JG_HANGMOK_CD: '14',
+      JG_GUBUN: '1',
+    },
+  },
+  curriculum: {
+    listUrl: `${BASE}/ei/pp/Pneipp_b14_s0p.do`,
+    fileFnCd: '14',
+    form: {
+      GS_HANGMOK_CD: '14',
+      GS_HANGMOK_NO: '2-가',
+      GS_HANGMOK_NM: '학교교육과정 편성ㆍ운영 및 평가에 관한 사항',
+      GS_BURYU_CD: 'JG100',
+      JG_BURYU_CD: 'JG020',
+      JG_HANGMOK_CD: '05',
+      JG_GUBUN: '1',
+    },
+  },
 };
+
+function resolveItem(item?: string): DisclosureItemConfig {
+  return item === 'curriculum' ? DISCLOSURE_ITEMS.curriculum : DISCLOSURE_ITEMS.evaluation;
+}
 
 /* ──────────────── renderer 반환 타입 (preload/global.d.ts 와 일치) ──────────────── */
 
@@ -151,10 +183,12 @@ async function fetchEvaluationList(
   shlIdfCd: string,
   schoolName: string,
   year: number,
+  itemKey?: string,
 ): Promise<EvaluationListData> {
   if (!shlIdfCd) throw new Error('학교고유식별코드(SHL_IDF_CD)가 없습니다.');
+  const item = resolveItem(itemKey);
   const body = new URLSearchParams({
-    ...EVAL_ITEM,
+    ...item.form,
     HG_NM: schoolName,
     SHL_IDF_CD: shlIdfCd,
     GS_TYPE: 'Y',
@@ -165,7 +199,7 @@ async function fetchEvaluationList(
     LOAD_TYPE: 'single',
   });
 
-  const result = await safeFetchBytes(EVAL_LIST_URL, {
+  const result = await safeFetchBytes(item.listUrl, {
     method: 'POST',
     body: body.toString(),
     maxBytes: MAX_LIST_BYTES,
@@ -179,17 +213,20 @@ async function fetchEvaluationList(
   });
 
   const html = iconv.decode(Buffer.from(result.body), 'euc-kr');
-  const docs = sortDocs(parseFileList(html));
-  const downloadParams = parseDownloadParams(html, shlIdfCd, year);
+  const docs = sortDocs(parseFileList(html, item.fileFnCd));
+  const downloadParams = parseDownloadParams(html, shlIdfCd, year, item);
   return { docs, downloadParams };
 }
 
-/** 첨부파일 목록 파싱: getEiFile43('N') + 파일명.확장자(NN KB) */
-function parseFileList(html: string): SchoolinfoEvaluationDoc[] {
+/** 첨부파일 목록 파싱: getEiFile{cd}('N') + 파일명.확장자(NN KB) */
+function parseFileList(html: string, fileFnCd: string): SchoolinfoEvaluationDoc[] {
   const files: SchoolinfoEvaluationDoc[] = [];
   const seen = new Set<string>();
-  const re =
-    /onclick=["'][^"']*getEiFile43\(\s*['"]?(\d+)['"]?\s*\)[^"']*["'][^>]*>\s*([^<]*?\.(?:hwpx|hwp|pdf|docx|xlsx))\s*(?:\(\s*([\d.,]+)\s*([KM]B)\s*\))?/gi;
+  const fn = `getEiFile${fileFnCd}`;
+  const re = new RegExp(
+    `onclick=["'][^"']*${fn}\\(\\s*['"]?(\\d+)['"]?\\s*\\)[^"']*["'][^>]*>\\s*([^<]*?\\.(?:hwpx|hwp|pdf|docx|xlsx))\\s*(?:\\(\\s*([\\d.,]+)\\s*([KM]B)\\s*\\))?`,
+    'gi',
+  );
   let m: RegExpExecArray | null;
   while ((m = re.exec(html))) {
     if (seen.has(m[1]!)) continue;
@@ -198,7 +235,9 @@ function parseFileList(html: string): SchoolinfoEvaluationDoc[] {
   }
   // 폴백: onclick 과 파일명이 분리된 비표준 구조 — 개수 일치 시에만 신뢰
   if (files.length === 0) {
-    const seqs = [...html.matchAll(/getEiFile43\(\s*['"]?(\d+)['"]?\s*\)/g)].map((x) => x[1]!);
+    const seqs = [...html.matchAll(new RegExp(`${fn}\\(\\s*['"]?(\\d+)['"]?\\s*\\)`, 'g'))].map(
+      (x) => x[1]!,
+    );
     const names = [
       ...html.matchAll(
         /([^>\s][^<>]*?\.(?:hwpx|hwp|pdf|docx|xlsx))\s*(?:\(\s*([\d.,]+)\s*([KM]B)\s*\))?/gi,
@@ -234,7 +273,12 @@ function toKB(num?: string, unit?: string): number | undefined {
 }
 
 /** 다운로드 폼 파라미터(eiFileDownForm hidden) 추출 + 필수값 보강 */
-function parseDownloadParams(html: string, shlIdfCd: string, year: number): Record<string, string> {
+function parseDownloadParams(
+  html: string,
+  shlIdfCd: string,
+  year: number,
+  item: DisclosureItemConfig,
+): Record<string, string> {
   const params: Record<string, string> = {};
   const formIdx = html.indexOf('eiFileDownForm');
   let seg = html;
@@ -249,18 +293,19 @@ function parseDownloadParams(html: string, shlIdfCd: string, year: number): Reco
     if (!(m[1]! in params) && /^[\w.-]*$/.test(m[2]!)) params[m[1]!] = m[2]!;
   }
   params.SHL_IDF_CD ??= shlIdfCd;
-  params.JG_BURYU_CD ??= EVAL_ITEM.JG_BURYU_CD!;
-  params.JG_HANGMOK_CD ??= EVAL_ITEM.JG_HANGMOK_CD!;
-  params.JG_GUBUN ??= EVAL_ITEM.JG_GUBUN!;
+  params.JG_BURYU_CD ??= item.form.JG_BURYU_CD!;
+  params.JG_HANGMOK_CD ??= item.form.JG_HANGMOK_CD!;
+  params.JG_GUBUN ??= item.form.JG_GUBUN!;
   params.JG_YEAR ??= String(year);
   params.JG_CHASU ??= '1';
   params.PRE_JG_YEAR ??= String(year);
   return params;
 }
 
-/** 파일명 기반 수행평가 관련성 점수 (낮을수록 우선) */
+/** 파일명 기반 관련성 점수 (낮을수록 우선) — 편제표/평가계획 본문을 맨 앞으로 */
 function evalScore(filename: string): number {
-  if (/교수.?학습|평가\s*계획|평가\s*운영/.test(filename)) return 0;
+  if (/편제표|교육과정\s*편성/.test(filename)) return 0; // 편제표 항목
+  if (/교수.?학습|평가\s*계획|평가\s*운영/.test(filename)) return 0; // 평가계획 항목
   if (/학업성적관리/.test(filename)) return 2;
   return 1;
 }
@@ -277,6 +322,7 @@ function sortDocs(files: SchoolinfoEvaluationDoc[]): SchoolinfoEvaluationDoc[] {
 async function downloadEvaluationFile(
   downloadParams: Record<string, string>,
   seq: string,
+  refererUrl: string,
 ): Promise<{ buffer: ArrayBuffer; filename: string }> {
   if (!/^\d+$/.test(seq)) throw new Error('잘못된 파일 식별자입니다.');
   const qs = new URLSearchParams({ ...downloadParams, FILE_SEQ: seq });
@@ -285,7 +331,7 @@ async function downloadEvaluationFile(
     maxBytes: MAX_DOWNLOAD_BYTES,
     timeoutMs: FETCH_TIMEOUT,
     allowedHosts: ALLOWED_HOSTS,
-    extraHeaders: { Referer: EVAL_LIST_URL },
+    extraHeaders: { Referer: refererUrl },
   });
 
   const bytes = result.body;
@@ -316,21 +362,22 @@ interface CachedParams {
 }
 const paramsCache = new Map<string, CachedParams>();
 
-function paramsKey(shlIdfCd: string, year: number): string {
-  return `${shlIdfCd}:${year}`;
+function paramsKey(shlIdfCd: string, year: number, itemKey: string): string {
+  return `${itemKey}:${shlIdfCd}:${year}`;
 }
 
 async function getDownloadParams(
   shlIdfCd: string,
   schoolName: string,
   year: number,
+  itemKey: string,
 ): Promise<Record<string, string>> {
-  const key = paramsKey(shlIdfCd, year);
+  const key = paramsKey(shlIdfCd, year, itemKey);
   const cached = paramsCache.get(key);
   if (cached && Date.now() - cached.at < PARAMS_CACHE_TTL_MS) {
     return cached.params;
   }
-  const { downloadParams } = await fetchEvaluationList(shlIdfCd, schoolName, year);
+  const { downloadParams } = await fetchEvaluationList(shlIdfCd, schoolName, year, itemKey);
   paramsCache.set(key, { params: downloadParams, at: Date.now() });
   return downloadParams;
 }
@@ -356,15 +403,16 @@ export function registerSchoolinfoEvaluationHandlers(): void {
     'schoolinfo-evaluation:list-docs',
     async (
       _event,
-      args: { shlIdfCd: string; schoolName: string; year: number },
+      args: { shlIdfCd: string; schoolName: string; year: number; item?: string },
     ): Promise<SchoolinfoListResult> => {
       try {
         const { docs, downloadParams } = await fetchEvaluationList(
           args.shlIdfCd,
           args.schoolName,
           args.year,
+          args.item,
         );
-        paramsCache.set(paramsKey(args.shlIdfCd, args.year), {
+        paramsCache.set(paramsKey(args.shlIdfCd, args.year, args.item ?? 'evaluation'), {
           params: downloadParams,
           at: Date.now(),
         });
@@ -380,11 +428,16 @@ export function registerSchoolinfoEvaluationHandlers(): void {
     'schoolinfo-evaluation:download-doc',
     async (
       _event,
-      args: { shlIdfCd: string; schoolName: string; year: number; seq: string },
+      args: { shlIdfCd: string; schoolName: string; year: number; seq: string; item?: string },
     ): Promise<SchoolinfoDownloadResult> => {
       try {
-        const params = await getDownloadParams(args.shlIdfCd, args.schoolName, args.year);
-        const { buffer, filename } = await downloadEvaluationFile(params, args.seq);
+        const itemKey = args.item ?? 'evaluation';
+        const params = await getDownloadParams(args.shlIdfCd, args.schoolName, args.year, itemKey);
+        const { buffer, filename } = await downloadEvaluationFile(
+          params,
+          args.seq,
+          resolveItem(itemKey).listUrl,
+        );
         const parsed = await parseArrayBuffer(buffer, filename);
         if (parsed.status === 'canceled') {
           return { status: 'error', code: 'CANCELED', message: '다운로드가 취소되었습니다.' };

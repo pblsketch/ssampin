@@ -34,10 +34,29 @@ export class SchoolInfoEvaluationAdapter implements IEvaluationPlanPort {
     shlIdfCd: string,
     schoolName: string,
     year: number,
+    item?: 'evaluation' | 'curriculum',
   ): Promise<readonly EvaluationPlanDoc[]> {
-    const r = await api().listDocs({ shlIdfCd, schoolName, year });
-    if (r.status === 'error') throw new Error(r.message || '평가계획 목록을 불러오지 못했어요.');
+    const r = await api().listDocs({ shlIdfCd, schoolName, year, item });
+    if (r.status === 'error') throw new Error(r.message || '목록을 불러오지 못했어요.');
     return r.docs;
+  }
+
+  /** 편제표(학교교육과정 편성·운영) hwp 다운로드 → 마크다운(HTML 표) 반환. 파싱·구조화는 안 함. */
+  async downloadCurriculumDoc(
+    shlIdfCd: string,
+    schoolName: string,
+    year: number,
+    doc: EvaluationPlanDoc,
+  ): Promise<{ filename: string; markdown: string; needsOcr: boolean }> {
+    const r = await api().downloadDoc({
+      shlIdfCd,
+      schoolName,
+      year,
+      seq: doc.seq,
+      item: 'curriculum',
+    });
+    if (r.status === 'error') throw new Error(r.message || '편제표를 불러오지 못했어요.');
+    return { filename: r.fileName || doc.filename, markdown: r.markdown, needsOcr: r.needsOcr };
   }
 
   async downloadAndParse(
