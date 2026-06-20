@@ -161,10 +161,10 @@ export function AiBridgeCard() {
       <div className="mt-4 rounded-lg border border-sp-accent/30 bg-sp-surface/60 p-3 text-xs leading-relaxed text-sp-muted">
         <p>
           실명·연락처는 토큰으로 가려서 내보냅니다. 다만{' '}
-          <strong className="text-sp-text">읽기</strong>를 켜면 관찰 기록{' '}
-          <strong className="text-sp-text">원문</strong>이 외부 AI로 전달되어 맥락으로 재식별될 수
-          있습니다. 꼭 필요할 때만 켜세요. 생기부는 법정 기록이며 모든 문장은 교사가 직접 확인해야
-          합니다.
+          <strong className="text-sp-text">읽기</strong>를 켜면 일정·할일·노트·메모·관찰 기록 등의{' '}
+          <strong className="text-sp-text">원문</strong>(제목·내용·장소)이 외부 AI로 전달되어
+          맥락으로 재식별될 수 있습니다. 꼭 필요할 때만 켜세요. 생기부 같은 기록은 법정 자료이며
+          모든 문장은 교사가 직접 확인해야 합니다.
         </p>
       </div>
 
@@ -172,13 +172,13 @@ export function AiBridgeCard() {
       <div className="mt-4 space-y-2">
         <GateRow
           label="읽기 허용"
-          hint="get_observations — 관찰 기록 원문을 외부 AI가 읽도록 허용"
+          hint="일정·할일·노트·메모·북마크·관찰 기록의 원문(제목·내용·장소)까지 노출 — 끄면 날짜·개수 같은 비식별 정보만"
           checked={allowContent}
           onChange={setAllowContent}
         />
         <GateRow
           label="쓰기 허용"
-          hint="add_observation — 외부 AI가 관찰 기록을 추가하도록 허용"
+          hint="add_observation — 외부 AI가 관찰 기록을 추가하도록 허용(쌤핀을 닫은 상태 권장). 일정·할일 추가·수정은 아래 '실시간 AI 쓰기'에서"
           checked={allowWrite}
           onChange={setAllowWrite}
         />
@@ -208,8 +208,8 @@ export function AiBridgeCard() {
               )}
             </span>
             <span className="block text-[0.7rem] text-sp-muted/70">
-              create_todo·create_event — 쌤핀이 켜져 있을 때 외부 AI가 일정·할일을 추가하도록 허용
-              (즉시 적용, 앱이 꺼져 있으면 거부)
+              일정·할일을 외부 AI가 추가·수정·완료·삭제하도록 허용 — 쌤핀이 켜져 있을 때 즉시 반영,
+              꺼져 있으면 거부
             </span>
           </span>
         </label>
