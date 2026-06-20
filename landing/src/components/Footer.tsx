@@ -75,6 +75,10 @@ export default function Footer() {
               개발자 소개
             </a>
             <span className="text-sp-muted/40">·</span>
+            <a href="/ai-bridge" className="transition-colors hover:text-sp-text">
+              AI 연결
+            </a>
+            <span className="text-sp-muted/40">·</span>
             <a href="/privacy" className="transition-colors hover:text-sp-text">
               개인정보처리방침
             </a>

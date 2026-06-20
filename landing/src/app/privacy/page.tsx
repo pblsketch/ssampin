@@ -280,6 +280,51 @@ const koContent = {
         </>
       ),
     },
+    {
+      number: '10',
+      title: 'AI 브릿지 (외부 AI 연동)',
+      content: (
+        <>
+          <p>
+            쌤핀은 사용자가 <strong>AI 브릿지 기능을 명시적으로 연결한 경우에 한해</strong>, 내
+            컴퓨터에 저장된 학생·자리·관찰 데이터를 외부 AI 도구(Claude, Codex/GPT,
+            Antigravity/Gemini 등 MCP 클라이언트)와 연결합니다. 이 데이터는{' '}
+            <strong>쌤핀 서버를 거치지 않고</strong> 내 컴퓨터에서 외부 AI 도구로 직접 전달됩니다.
+          </p>
+          <ul>
+            <li>
+              외부 AI에 보내기 전에{' '}
+              <strong>실명·연락처·생년월일 등 신원 정보는 불투명 토큰으로 치환</strong>됩니다. 단,
+              토큰화만으로 완전한 익명이 보장되지는 않으며, 관찰 내용의 맥락으로 재식별될 수
+              있습니다.
+            </li>
+            <li>
+              <strong>
+                관찰 내용 원문 노출(get_observations)과 쓰기(add_observation)는 기본적으로 비활성
+              </strong>
+              이며, 사용자가 게이트(또는 학생·기간·목적별 동의)를 명시적으로 켠 경우에만 동작합니다.
+              켜진 경우, 관찰 내용 원문(민감 정보 포함 가능)이 외부 AI로 전달될 수 있습니다.
+            </li>
+            <li>
+              연결한 외부 AI 도구에 전달된 데이터에는{' '}
+              <strong>해당 제공자(Anthropic·OpenAI·Google 등)의 처리 정책</strong>이 적용됩니다.
+              쌤핀은 외부 AI 제공자의 데이터 처리에 관여하지 않습니다.
+            </li>
+            <li>
+              브릿지의 모든 접근은 로컬 감사 로그에 기록되며(원본 값은 기록하지 않음), 동의는 언제든
+              철회할 수 있습니다.
+            </li>
+          </ul>
+          <p>
+            자세한 내용은{' '}
+            <a href="/ai-bridge" target="_blank" rel="noopener noreferrer">
+              AI 브릿지 안내 페이지
+            </a>
+            를 참고하세요.
+          </p>
+        </>
+      ),
+    },
   ],
 };
 
