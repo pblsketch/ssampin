@@ -5,7 +5,7 @@ import BridgeDiagram from './BridgeDiagram';
 const points = [
   { icon: '🎭', text: '실명·연락처는 익명 토큰으로 가려요' },
   { icon: '🔒', text: '민감한 내용은 기본 잠금 — 켤 때만 열려요' },
-  { icon: '🏫', text: '쌤핀 서버를 안 거치고 내 PC 안에서' },
+  { icon: '🏫', text: '외부 서버를 안 거치고 내 PC 안에서' },
 ];
 
 export default function AiBridgeTeaser() {

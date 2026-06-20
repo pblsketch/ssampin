@@ -289,7 +289,7 @@ const koContent = {
             쌤핀은 사용자가 <strong>AI 브릿지 기능을 명시적으로 연결한 경우에 한해</strong>, 내
             컴퓨터에 저장된 학생·자리·관찰 데이터를 외부 AI 도구(Claude, Codex/GPT,
             Antigravity/Gemini 등 MCP 클라이언트)와 연결합니다. 이 데이터는{' '}
-            <strong>쌤핀 서버를 거치지 않고</strong> 내 컴퓨터에서 외부 AI 도구로 직접 전달됩니다.
+            <strong>외부 서버를 거치지 않고</strong> 내 컴퓨터에서 외부 AI 도구로 직접 전달됩니다.
           </p>
           <ul>
             <li>
