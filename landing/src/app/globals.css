@@ -41,6 +41,90 @@ body {
     animate-in-slide-from-bottom 200ms ease-out;
 }
 
+/* AI 브릿지 다이어그램 — 다리 위를 흐르는 데이터 입자 */
+@keyframes bridge-flow {
+  0% {
+    left: 2%;
+    opacity: 0;
+    transform: translateY(-50%) scale(0.6);
+  }
+  12% {
+    opacity: 1;
+    transform: translateY(-50%) scale(1);
+  }
+  88% {
+    opacity: 1;
+    transform: translateY(-50%) scale(1);
+  }
+  100% {
+    left: 98%;
+    opacity: 0;
+    transform: translateY(-50%) scale(0.6);
+  }
+}
+.bridge-particle {
+  animation: bridge-flow 2.8s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
+/* 노드 부드러운 펄스(연결 살아있음 느낌) */
+@keyframes node-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.28);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(37, 99, 235, 0);
+  }
+}
+.node-pulse {
+  animation: node-pulse 2.6s ease-out infinite;
+}
+
+/* 살짝 떠 있는 카드/아이콘 */
+@keyframes float-soft {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+.float-soft {
+  animation: float-soft 4s ease-in-out infinite;
+}
+
+/* 점선 트랙 흐름 */
+@keyframes dash-flow {
+  to {
+    background-position: 24px 0;
+  }
+}
+.dash-track {
+  background-image: linear-gradient(90deg, var(--color-sp-accent) 0 8px, transparent 8px 16px);
+  background-size: 16px 100%;
+  background-repeat: repeat-x;
+  animation: dash-flow 0.9s linear infinite;
+}
+
+/* 접근성 — 모션 최소화 선호 시 정지 */
+@media (prefers-reduced-motion: reduce) {
+  .bridge-particle,
+  .node-pulse,
+  .float-soft,
+  .dash-track {
+    animation: none !important;
+  }
+}
+
+/* details 펼침 아이콘 회전 */
+details[open] .details-chevron {
+  transform: rotate(180deg);
+}
+.details-chevron {
+  transition: transform 0.2s ease;
+}
+
 /* 채팅 메시지 스크롤바 */
 .overflow-y-auto::-webkit-scrollbar {
   width: 4px;

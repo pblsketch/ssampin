@@ -6,6 +6,7 @@ import Testimonials from '@/components/Testimonials';
 import MidCTA from '@/components/MidCTA';
 import Anywhere from '@/components/Anywhere';
 import TrustAndUtility from '@/components/TrustAndUtility';
+import AiBridgeTeaser from '@/components/AiBridgeTeaser';
 import InstallGuide from '@/components/InstallGuide';
 import FAQ from '@/components/FAQ';
 import Footer from '@/components/Footer';
@@ -21,6 +22,7 @@ export default function Home() {
       <MidCTA />
       <Anywhere />
       <TrustAndUtility />
+      <AiBridgeTeaser />
       <InstallGuide />
       <FAQ />
       <Footer />
