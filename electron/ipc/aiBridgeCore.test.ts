@@ -9,6 +9,7 @@ import {
   registerCodex,
   codexAddArgs,
   shellQuote,
+  winQuote,
   fileClientStatus,
   safeErrorMessage,
   type ServerEntry,
@@ -140,6 +141,14 @@ describe('codex 등록', () => {
     expect(shellQuote('C:/쌤핀/data')).toBe('C:/쌤핀/data');
     expect(shellQuote('a;b')).toBe('"a;b"');
     expect(shellQuote('$(x)')).toBe('"\\$(x)"');
+  });
+  it('winQuote — 안전한 인자는 그대로, 공백·비ASCII·메타문자는 큰따옴표(Windows shell 실행용)', () => {
+    expect(winQuote('mcp')).toBe('mcp');
+    expect(winQuote('--')).toBe('--');
+    expect(winQuote('ELECTRON_RUN_AS_NODE=1')).toBe('ELECTRON_RUN_AS_NODE=1'); // alnum+= 는 안전
+    expect(winQuote('C:/path with space/x')).toBe('"C:/path with space/x"'); // 공백 → 따옴표
+    expect(winQuote('SSAMPIN_DATA_DIR=C:/쌤핀/data')).toBe('"SSAMPIN_DATA_DIR=C:/쌤핀/data"'); // 비ASCII → 따옴표
+    expect(winQuote('a&b')).toBe('"a&b"'); // cmd 메타문자 차단
   });
   it('미설치(ENOENT) → cliMissing, throw 안 함', () => {
     const r = registerCodex(entry, () => ({

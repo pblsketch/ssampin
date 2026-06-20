@@ -143,6 +143,13 @@ export function shellQuote(s: string): string {
   return safe ? s : `"${s.replace(/(["\\$`])/g, '\\$1')}"`;
 }
 
+/** Windows cmd.exe 안전 따옴표 — 공백·특수문자 포함 시 큰따옴표로 감싼다(내부 " 는 "" 로). */
+const WIN_SAFE = /^[A-Za-z0-9._:/=\\@+-]+$/;
+export function winQuote(s: string): string {
+  if (s.length > 0 && WIN_SAFE.test(s)) return s;
+  return `"${s.replace(/"/g, '""')}"`;
+}
+
 export function codexAddArgs(entry: ServerEntry): string[] {
   const args = ['mcp', 'add', SERVER_NAME];
   for (const [k, v] of Object.entries(entry.env)) args.push('--env', `${k}=${v}`);
@@ -165,6 +172,23 @@ export interface CodexRunResult {
 export function registerCodex(
   entry: ServerEntry,
   runner: (argv: string[]) => CodexRunResult = (argv) => {
+    // Windows: npm 전역 bin 은 codex.cmd 라 spawnSync('codex') 가 ENOENT(.exe 만 자동탐색).
+    // → where 로 존재 확인(where.exe 는 실제 실행파일) 후, shell 로 실행(.cmd 해석, 인자는 winQuote).
+    if (process.platform === 'win32') {
+      const probe = spawnSync('where', ['codex'], { encoding: 'utf-8' });
+      if ((probe.status ?? 1) !== 0 || (probe.stdout ?? '').trim().length === 0) {
+        const err = new Error('codex CLI를 PATH에서 찾지 못했습니다.') as Error & { code?: string };
+        err.code = 'ENOENT';
+        return { status: null, error: err };
+      }
+      const cmd = ['codex', ...argv.map(winQuote)].join(' ');
+      const r = spawnSync(cmd, { encoding: 'utf-8', shell: true });
+      const out: { status: number | null; error?: Error & { code?: string } } = {
+        status: r.status,
+      };
+      if (r.error) out.error = r.error as Error & { code?: string };
+      return out;
+    }
     const r = spawnSync('codex', argv, { encoding: 'utf-8' });
     const out: { status: number | null; error?: Error & { code?: string } } = { status: r.status };
     if (r.error) out.error = r.error as Error & { code?: string };
