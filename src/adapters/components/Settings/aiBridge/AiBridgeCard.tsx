@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, type ReactNode } from 'react';
 import { useToastStore } from '@adapters/components/common/Toast';
 
 type Client = 'claude' | 'codex' | 'antigravity';
@@ -37,10 +37,17 @@ const CLIENTS: ClientDef[] = [
 
 type StatusMap = Record<Client, boolean | null | undefined>;
 
+/** setCapability 부분 갱신 인자 */
+type CapPartial = { allowWrite?: boolean; allowContent?: boolean; allowGradeWrite?: boolean };
+
 export function AiBridgeCard() {
   const showToast = useToastStore((s) => s.show);
+  // 게이트 상태는 capability.json 의 실제 값으로 동기화한다(로컬 추정 아님).
   const [allowContent, setAllowContent] = useState(false);
   const [allowWrite, setAllowWrite] = useState(false);
+  const [allowGradeWrite, setAllowGradeWrite] = useState(false);
+  const [liveServerRunning, setLiveServerRunning] = useState(false);
+  const [capBusy, setCapBusy] = useState(false);
   const [status, setStatus] = useState<StatusMap>({
     claude: undefined,
     codex: undefined,
@@ -49,8 +56,6 @@ export function AiBridgeCard() {
   const [busy, setBusy] = useState<Client | null>(null);
   const [serverReady, setServerReady] = useState<boolean | null>(null);
   const [codexCommand, setCodexCommand] = useState<string | null>(null);
-  const [liveSyncOn, setLiveSyncOn] = useState(false);
-  const [liveSyncBusy, setLiveSyncBusy] = useState(false);
 
   const refreshStatus = useCallback(async () => {
     const api = window.electronAPI?.aiBridge;
@@ -71,34 +76,39 @@ export function AiBridgeCard() {
       ?.paths()
       .then((p) => setServerReady(p.serverExists))
       .catch(() => setServerReady(null));
+    // 게이트 초기값을 capability.json 실제 상태로 반영(토글 ON/OFF 가 화면과 일치).
     void window.electronAPI?.aiBridge
       ?.liveSyncStatus?.()
-      .then((s) => setLiveSyncOn(s.allowWrite))
+      .then((s) => {
+        setAllowContent(s.allowContent);
+        setAllowWrite(s.allowWrite);
+        setAllowGradeWrite(s.allowGradeWrite);
+        setLiveServerRunning(s.running);
+      })
       .catch(() => {
         /* 미지원/구버전 — OFF 로 둠 */
       });
   }, [refreshStatus]);
 
-  const toggleLiveSync = async (enabled: boolean) => {
+  /** 게이트 토글을 capability 에 즉시 기록(재연결·재시작 불필요). 응답의 실제 상태로 화면을 갱신한다. */
+  const applyCapability = async (partial: CapPartial, successMsg: string) => {
     const api = window.electronAPI?.aiBridge;
-    if (!api?.setLiveSync) {
+    if (!api?.setCapability) {
       showToast('이 기능은 데스크톱 앱에서만 사용할 수 있습니다.', 'error');
       return;
     }
-    setLiveSyncBusy(true);
+    setCapBusy(true);
     try {
-      await api.setLiveSync(enabled);
-      setLiveSyncOn(enabled);
-      showToast(
-        enabled
-          ? '실시간 AI 쓰기를 켰습니다(쌤핀 실행 중에만 적용).'
-          : '실시간 AI 쓰기를 껐습니다.',
-        'success',
-      );
+      const s = await api.setCapability(partial);
+      setAllowContent(s.allowContent);
+      setAllowWrite(s.allowWrite);
+      setAllowGradeWrite(s.allowGradeWrite);
+      setLiveServerRunning(s.running);
+      showToast(successMsg, 'success');
     } catch (err) {
       showToast(`설정 실패: ${err instanceof Error ? err.message : String(err)}`, 'error');
     } finally {
-      setLiveSyncBusy(false);
+      setCapBusy(false);
     }
   };
 
@@ -110,7 +120,8 @@ export function AiBridgeCard() {
     }
     setBusy(client);
     try {
-      const result = await api.register(client, { allowContent, allowWrite });
+      // 게이트는 위 토글이 capability.json 에 직접 기록한다 — 연결 시점 env 로 굽지 않는다(토글 즉시 적용).
+      const result = await api.register(client);
       setCodexCommand(null);
       if (!result.ok) {
         showToast(`연결 실패: ${result.error ?? '알 수 없는 오류'}`, 'error');
@@ -131,7 +142,7 @@ export function AiBridgeCard() {
 
   const statusChip = (client: Client) => {
     const s = status[client];
-    if (client === 'codex' || s === null || s === undefined) {
+    if (s === null || s === undefined) {
       return <span className="text-xs text-sp-muted/70">연결 후 재시작 필요</span>;
     }
     return s ? (
@@ -168,51 +179,55 @@ export function AiBridgeCard() {
         </p>
       </div>
 
-      {/* 게이트 토글 */}
+      {/* 게이트 토글 — 켜는 즉시 capability 에 기록되어 연결된 AI에 바로 반영(재연결 불필요) */}
       <div className="mt-4 space-y-2">
         <GateRow
           label="읽기 허용"
           hint="일정·할일·노트·메모·북마크·관찰 기록의 원문(제목·내용·장소)까지 노출 — 끄면 날짜·개수 같은 비식별 정보만"
           checked={allowContent}
-          onChange={setAllowContent}
+          disabled={capBusy}
+          onChange={(v) =>
+            void applyCapability(
+              { allowContent: v },
+              v ? '읽기를 켰습니다(바로 적용).' : '읽기를 껐습니다(바로 적용).',
+            )
+          }
         />
         <GateRow
           label="쓰기 허용"
-          hint="add_observation — 외부 AI가 관찰 기록을 추가하도록 허용(쌤핀을 닫은 상태 권장). 일정·할일 추가·수정은 아래 '실시간 AI 쓰기'에서"
+          hint="외부 AI가 일정·할일·관찰 기록을 추가·수정 — 쌤핀이 켜져 있으면 즉시 반영, 닫혀 있으면 파일에 직접 기록"
           checked={allowWrite}
-          onChange={setAllowWrite}
+          disabled={capBusy}
+          badge={
+            allowWrite && liveServerRunning ? (
+              <span className="ml-2 inline-flex items-center gap-1 text-[0.7rem] font-medium text-emerald-400">
+                <span className="material-symbols-outlined text-icon-sm">bolt</span>실시간 켜짐
+              </span>
+            ) : null
+          }
+          onChange={(v) =>
+            void applyCapability(
+              { allowWrite: v },
+              v ? '쓰기를 켰습니다(바로 적용).' : '쓰기를 껐습니다(바로 적용).',
+            )
+          }
+        />
+        <GateRow
+          label="채점 쓰기 허용"
+          hint="외부 AI가 수행평가 채점(도달 수준 선택)을 입력하도록 허용 — 공식 성적 기록이라 별도 고위험 토글, 쌤핀을 닫은 상태 권장"
+          checked={allowGradeWrite}
+          disabled={capBusy}
+          onChange={(v) =>
+            void applyCapability(
+              { allowGradeWrite: v },
+              v ? '채점 쓰기를 켰습니다(바로 적용).' : '채점 쓰기를 껐습니다(바로 적용).',
+            )
+          }
         />
         <p className="text-[0.7rem] text-sp-muted/70">
-          토글은 <strong>다음에 연결할 때</strong> 적용됩니다. 끈 상태로 연결하면 명단·자리 같은
-          토큰 정보만 다룹니다.
+          토글은 <strong>켜는 즉시</strong> 적용됩니다 — 연결된 AI에서 바로 반영되며 재연결·재시작이
+          필요 없습니다. 모두 끄면 명단·자리 같은 토큰 정보만 다룹니다.
         </p>
-      </div>
-
-      {/* 실시간 쓰기 (live-sync) — 즉시 적용, 쌤핀 실행 중에만 동작 */}
-      <div className="mt-4 rounded-lg border border-sp-border p-3">
-        <label className="flex items-center gap-3 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={liveSyncOn}
-            disabled={liveSyncBusy}
-            onChange={(e) => void toggleLiveSync(e.target.checked)}
-            className="h-4 w-4 accent-sp-accent disabled:opacity-50"
-          />
-          <span className="flex-1 min-w-0">
-            <span className="text-sm text-sp-text">
-              실시간 AI 쓰기 허용
-              {liveSyncOn && (
-                <span className="ml-2 inline-flex items-center gap-1 text-[0.7rem] font-medium text-emerald-400">
-                  <span className="material-symbols-outlined text-icon-sm">bolt</span>켜짐
-                </span>
-              )}
-            </span>
-            <span className="block text-[0.7rem] text-sp-muted/70">
-              일정·할일을 외부 AI가 추가·수정·완료·삭제하도록 허용 — 쌤핀이 켜져 있을 때 즉시 반영,
-              꺼져 있으면 거부
-            </span>
-          </span>
-        </label>
       </div>
 
       {/* 클라이언트별 연결 */}
@@ -275,22 +290,30 @@ function GateRow({
   hint,
   checked,
   onChange,
+  disabled,
+  badge,
 }: {
   label: string;
   hint: string;
   checked: boolean;
   onChange: (v: boolean) => void;
+  disabled?: boolean;
+  badge?: ReactNode;
 }) {
   return (
-    <label className="flex items-center gap-3 cursor-pointer">
+    <label className={`flex items-center gap-3 ${disabled ? 'cursor-wait' : 'cursor-pointer'}`}>
       <input
         type="checkbox"
         checked={checked}
+        disabled={disabled}
         onChange={(e) => onChange(e.target.checked)}
-        className="h-4 w-4 accent-sp-accent"
+        className="h-4 w-4 accent-sp-accent disabled:opacity-50"
       />
       <span className="flex-1 min-w-0">
-        <span className="text-sm text-sp-text">{label}</span>
+        <span className="text-sm text-sp-text">
+          {label}
+          {badge}
+        </span>
         <span className="block text-[0.7rem] text-sp-muted/70">{hint}</span>
       </span>
     </label>

@@ -110,6 +110,8 @@ export function isHeartbeatFresh(info: ControlInfo, now: number, maxAgeMs: numbe
 export interface Capability {
   readonly allowWrite: boolean;
   readonly allowContent: boolean;
+  /** 수행평가 채점 쓰기(공식 성적기록) — allowWrite 와 독립한 별도 고위험 토글. fail-closed 기본 OFF. */
+  readonly allowGradeWrite: boolean;
   readonly updatedAt: number;
 }
 
@@ -122,7 +124,12 @@ export function writeCapability(dataDir: string, caps: Capability): void {
  * 설정에서 명시적으로 켜야만 쓰기/내용 노출이 허용된다.
  */
 export function readCapability(dataDir: string): Capability {
-  const off: Capability = { allowWrite: false, allowContent: false, updatedAt: 0 };
+  const off: Capability = {
+    allowWrite: false,
+    allowContent: false,
+    allowGradeWrite: false,
+    updatedAt: 0,
+  };
   let parsed: unknown;
   try {
     parsed = JSON.parse(fs.readFileSync(capabilityPath(dataDir), 'utf-8'));
@@ -134,6 +141,7 @@ export function readCapability(dataDir: string): Capability {
   return {
     allowWrite: o['allowWrite'] === true,
     allowContent: o['allowContent'] === true,
+    allowGradeWrite: o['allowGradeWrite'] === true,
     updatedAt: typeof o['updatedAt'] === 'number' ? o['updatedAt'] : 0,
   };
 }

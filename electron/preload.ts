@@ -31,11 +31,27 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('aiBridge:status', client),
     statusAll: (): Promise<unknown> => ipcRenderer.invoke('aiBridge:statusAll'),
     paths: (): Promise<unknown> => ipcRenderer.invoke('aiBridge:paths'),
-    // live-sync 쓰기: 설정 토글(쓰기 허용 on/off → capability 기록 + loopback 서버 시작/정지)
+    // 게이트 토글(읽기/쓰기/채점쓰기) 즉시 capability 기록 — [연결] 재등록·클라 재시작 없이 반영(#11).
+    // 부분 갱신: 지정한 키만 바꾸고 나머지는 보존. allowWrite 면 loopback 서버 시작/정지.
+    setCapability: (partial: {
+      allowWrite?: boolean;
+      allowContent?: boolean;
+      allowGradeWrite?: boolean;
+    }): Promise<{
+      running: boolean;
+      allowWrite: boolean;
+      allowContent: boolean;
+      allowGradeWrite: boolean;
+    }> => ipcRenderer.invoke('aiBridge:setCapability', partial),
+    // 하위호환: 쓰기 허용 토글(= setCapability({allowWrite}))
     setLiveSync: (enabled: boolean): Promise<{ running: boolean }> =>
       ipcRenderer.invoke('aiBridge:setLiveSync', enabled),
-    liveSyncStatus: (): Promise<{ running: boolean; allowWrite: boolean }> =>
-      ipcRenderer.invoke('aiBridge:liveSyncStatus'),
+    liveSyncStatus: (): Promise<{
+      running: boolean;
+      allowWrite: boolean;
+      allowContent: boolean;
+      allowGradeWrite: boolean;
+    }> => ipcRenderer.invoke('aiBridge:liveSyncStatus'),
     // main → 렌더러 쓰기 위임 수신. handler(req)→결과를 회신 채널로 돌려준다. cleanup 함수 반환.
     onApplyWrite: (handler: (req: unknown) => Promise<unknown>): (() => void) => {
       const listener = (_e: unknown, payload: { requestId: string; req: unknown }): void => {

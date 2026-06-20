@@ -76,17 +76,47 @@ describe('isHeartbeatFresh (fail-closed)', () => {
 
 describe('capability (fail-closed 기본 OFF)', () => {
   it('파일 없으면 모두 false', () => {
-    expect(readCapability(dir)).toEqual({ allowWrite: false, allowContent: false, updatedAt: 0 });
+    expect(readCapability(dir)).toEqual({
+      allowWrite: false,
+      allowContent: false,
+      allowGradeWrite: false,
+      updatedAt: 0,
+    });
   });
   it('write→read 반영, 경로 확인', () => {
-    writeCapability(dir, { allowWrite: true, allowContent: false, updatedAt: 123 });
+    writeCapability(dir, {
+      allowWrite: true,
+      allowContent: false,
+      allowGradeWrite: false,
+      updatedAt: 123,
+    });
     expect(capabilityPath(dir)).toBe(path.join(dir, '.ssampin-aibridge', 'capability.json'));
-    expect(readCapability(dir)).toEqual({ allowWrite: true, allowContent: false, updatedAt: 123 });
+    expect(readCapability(dir)).toEqual({
+      allowWrite: true,
+      allowContent: false,
+      allowGradeWrite: false,
+      updatedAt: 123,
+    });
+  });
+  it('채점쓰기(allowGradeWrite) 독립 토글 round-trip (#11)', () => {
+    writeCapability(dir, {
+      allowWrite: false,
+      allowContent: true,
+      allowGradeWrite: true,
+      updatedAt: 7,
+    });
+    expect(readCapability(dir)).toEqual({
+      allowWrite: false,
+      allowContent: true,
+      allowGradeWrite: true,
+      updatedAt: 7,
+    });
   });
   it('손상 파일 → fail-closed', () => {
     fs.mkdirSync(path.dirname(capabilityPath(dir)), { recursive: true });
     fs.writeFileSync(capabilityPath(dir), 'nope', 'utf-8');
     expect(readCapability(dir).allowWrite).toBe(false);
+    expect(readCapability(dir).allowGradeWrite).toBe(false);
   });
 });
 

@@ -99,27 +99,72 @@ export function registerLiveSyncHost(deps: LiveSyncHostDeps): LiveSyncHost {
     if (h) await h.stop();
   }
 
-  // 토글: 설정에서 쓰기 허용을 켜고/끄면 capability 기록 + 서버 시작/정지.
+  /** capability 상태 + 서버 가동 여부(렌더러 응답 공통 형태). */
+  type CapabilityStatus = {
+    running: boolean;
+    allowWrite: boolean;
+    allowContent: boolean;
+    allowGradeWrite: boolean;
+  };
+  function capabilityStatus(): CapabilityStatus {
+    const caps = readCapability(deps.dataDir);
+    return {
+      running: handle !== null,
+      allowWrite: caps.allowWrite,
+      allowContent: caps.allowContent,
+      allowGradeWrite: caps.allowGradeWrite,
+    };
+  }
+
+  /**
+   * 게이트 토글을 capability.json 에 즉시 기록(설정 카드의 읽기/쓰기/채점쓰기 공통 창구). 부분 갱신을
+   * 이전 값과 병합해 쓴다. 브릿지는 매 호출 capability 를 새로 읽으므로 [연결] 재등록·클라 재시작 없이
+   * 즉시 반영된다(#11). allowWrite 가 켜지면 loopback 서버를 시작(실시간 일정·할일 쓰기), 꺼지면 정지한다.
+   */
+  async function applyCapability(partial: {
+    allowWrite?: boolean;
+    allowContent?: boolean;
+    allowGradeWrite?: boolean;
+  }): Promise<CapabilityStatus> {
+    const prev = readCapability(deps.dataDir);
+    const next = {
+      allowWrite: partial.allowWrite ?? prev.allowWrite,
+      allowContent: partial.allowContent ?? prev.allowContent,
+      allowGradeWrite: partial.allowGradeWrite ?? prev.allowGradeWrite,
+      updatedAt: Date.now(),
+    };
+    writeCapability(deps.dataDir, next);
+    if (next.allowWrite) await startServer();
+    else await stopServer();
+    return capabilityStatus();
+  }
+
+  // 토글: 읽기/쓰기/채점쓰기를 capability 에 즉시 기록(부분 갱신). true 일 때만 게이트를 켠다(런타임 타입 방어).
   ipcMain.handle(
-    'aiBridge:setLiveSync',
-    async (_e, enabled: unknown): Promise<{ running: boolean }> => {
-      const allowWrite = enabled === true;
-      const prev = readCapability(deps.dataDir);
-      writeCapability(deps.dataDir, {
-        allowWrite,
-        allowContent: prev.allowContent,
-        updatedAt: Date.now(),
-      });
-      if (allowWrite) await startServer();
-      else await stopServer();
-      return { running: handle !== null };
+    'aiBridge:setCapability',
+    async (
+      _e,
+      partial: { allowWrite?: unknown; allowContent?: unknown; allowGradeWrite?: unknown },
+    ): Promise<CapabilityStatus> => {
+      const p: { allowWrite?: boolean; allowContent?: boolean; allowGradeWrite?: boolean } = {};
+      if (typeof partial?.allowWrite === 'boolean') p.allowWrite = partial.allowWrite;
+      if (typeof partial?.allowContent === 'boolean') p.allowContent = partial.allowContent;
+      if (typeof partial?.allowGradeWrite === 'boolean')
+        p.allowGradeWrite = partial.allowGradeWrite;
+      return applyCapability(p);
     },
   );
 
-  ipcMain.handle('aiBridge:liveSyncStatus', (): { running: boolean; allowWrite: boolean } => ({
-    running: handle !== null,
-    allowWrite: readCapability(deps.dataDir).allowWrite,
-  }));
+  // 하위호환: 기존 setLiveSync(enabled) = 쓰기 허용 토글. setCapability 로 위임.
+  ipcMain.handle(
+    'aiBridge:setLiveSync',
+    async (_e, enabled: unknown): Promise<{ running: boolean }> => {
+      const status = await applyCapability({ allowWrite: enabled === true });
+      return { running: status.running };
+    },
+  );
+
+  ipcMain.handle('aiBridge:liveSyncStatus', (): CapabilityStatus => capabilityStatus());
 
   // 시작 시 capability 가 이미 켜져 있으면 서버 자동 시작(기본 OFF 라 보통은 무동작).
   if (readCapability(deps.dataDir).allowWrite) void startServer();
