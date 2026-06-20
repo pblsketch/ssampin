@@ -18,11 +18,54 @@ const LABELS = LABELS_DATA as Record<string, Record<string, string>>;
  */
 const SCHOOL_LEVEL_PREFIX = /^(유초등부|초등부|중등부|고등부)\s*-?\s*/;
 
+/**
+ * 라벨만으로 값의 의미가 모호한 항목의 라벨 보강(apiType별).
+ * 08(수업일수·수업시수)의 COL_1~6 은 학년별 '수업일수'인데 기본 라벨이 "1학년"뿐이라,
+ * 값(예: 233)이 무엇인지 알기 어렵다 → "1학년 수업일수"처럼 명시한다.
+ */
+const LABEL_OVERRIDES: Record<string, Record<string, string>> = {
+  '08': {
+    COL_1: '1학년 수업일수',
+    COL_2: '2학년 수업일수',
+    COL_3: '3학년 수업일수',
+    COL_4: '4학년 수업일수',
+    COL_5: '5학년 수업일수',
+    COL_6: '6학년 수업일수',
+    WEEK_TOT_ITRT_HR_FGR: '주당 수업시수(학교 전체)',
+    PER_STUDAY_DAY: '교사 1인당 주당 수업시수',
+    ITRT_TCR_TOT_FGR: '수업 교원수',
+  },
+};
+
+/** 숫자 값 뒤에 붙일 단위(apiType+컬럼별). 텍스트 값('주간' 등)에는 붙이지 않는다. */
+const VALUE_UNITS: Record<string, Record<string, string>> = {
+  '08': {
+    COL_1: '일',
+    COL_2: '일',
+    COL_3: '일',
+    COL_4: '일',
+    COL_5: '일',
+    COL_6: '일',
+    WEEK_TOT_ITRT_HR_FGR: '시간',
+    PER_STUDAY_DAY: '시간',
+    ITRT_TCR_TOT_FGR: '명',
+  },
+};
+
 /** apiType + 컬럼ID → 한글 라벨(학교급 접두어 제거). 매핑이 없으면 컬럼ID를 그대로 돌려준다. */
 export function disclosureLabel(apiType: string, colId: string): string {
+  const override = LABEL_OVERRIDES[apiType]?.[colId];
+  if (override) return override;
   const raw = LABELS[apiType]?.[colId] ?? colId;
   const stripped = raw.replace(SCHOOL_LEVEL_PREFIX, '');
   return stripped.length > 0 ? stripped : raw;
+}
+
+/** 숫자 값에 단위를 붙여 표시용 문자열로(단위 미지정·비숫자면 원본 그대로). */
+function withUnit(apiType: string, colId: string, value: string): string {
+  const unit = VALUE_UNITS[apiType]?.[colId];
+  if (unit && /^[\d,]+(\.\d+)?$/.test(value)) return `${value}${unit}`;
+  return value;
 }
 
 /** 표시에서 숨길 코드성/내부 컬럼 + 모든 섹션에 반복되는 공통 메타(학교명·지역·교육청·설립 등) */
@@ -78,7 +121,7 @@ export function labelizeRow(
     if (opts?.hideZero && isZeroValue(value)) continue;
     const label = disclosureLabel(apiType, colId);
     if (!includeUnlabeled && label === colId) continue;
-    out.push({ label, value });
+    out.push({ label, value: withUnit(apiType, colId, value) });
   }
   return out;
 }

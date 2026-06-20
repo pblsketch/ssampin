@@ -23,7 +23,7 @@ export function DisclosureSection({
   return (
     <section>
       <h3 className="text-sm font-sp-semibold text-sp-text mb-3 flex items-center gap-1.5 flex-wrap">
-        <span className="material-symbols-outlined text-icon text-sp-muted">{icon}</span>
+        <span className="material-symbols-outlined text-icon text-sp-accent">{icon}</span>
         {title}
         {isStale && <OfflineBadge cachedAt={cachedAt} />}
       </h3>
@@ -62,8 +62,8 @@ function DisclosureCard({
     <dl className="rounded-xl border border-sp-border bg-sp-card p-5 grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-4">
       {pairs.map(({ label, value }, i) => (
         <div key={i} className="min-w-0 flex flex-col gap-0.5">
-          <dt className="text-caption text-sp-muted truncate">{label}</dt>
-          <dd className="text-sm font-sp-semibold text-sp-text tabular-nums">{value}</dd>
+          <dt className="text-caption text-sp-muted leading-tight break-keep">{label}</dt>
+          <dd className="text-sm font-sp-semibold text-sp-text tabular-nums break-keep">{value}</dd>
         </div>
       ))}
     </dl>

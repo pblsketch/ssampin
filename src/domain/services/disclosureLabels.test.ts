@@ -52,3 +52,26 @@ describe('labelizeRow', () => {
     expect(pairs.some((p) => p.value === '0명')).toBe(false);
   });
 });
+
+describe('08 수업일수·수업시수 — 라벨 보강 + 단위', () => {
+  it('학년별 COL_1~3 을 "N학년 수업일수"로 명시', () => {
+    expect(disclosureLabel('08', 'COL_1')).toBe('1학년 수업일수');
+    expect(disclosureLabel('08', 'COL_2')).toBe('2학년 수업일수');
+    expect(disclosureLabel('08', 'COL_3')).toBe('3학년 수업일수');
+  });
+  it('숫자 값에 단위(일/시간/명)를 붙여 의미를 분명히 한다', () => {
+    const pairs = labelizeRow('08', {
+      COL_1: '233',
+      WEEK_TOT_ITRT_HR_FGR: '1,061',
+      PER_STUDAY_DAY: '16.3',
+      ITRT_TCR_TOT_FGR: '65',
+    });
+    expect(pairs).toContainEqual({ label: '1학년 수업일수', value: '233일' });
+    expect(pairs).toContainEqual({ label: '주당 수업시수(학교 전체)', value: '1,061시간' });
+    expect(pairs).toContainEqual({ label: '교사 1인당 주당 수업시수', value: '16.3시간' });
+    expect(pairs).toContainEqual({ label: '수업 교원수', value: '65명' });
+  });
+  it('다른 apiType 라벨은 영향 없음 (62 COL_1 = 1학년 그대로)', () => {
+    expect(disclosureLabel('62', 'COL_1')).toBe('1학년');
+  });
+});
