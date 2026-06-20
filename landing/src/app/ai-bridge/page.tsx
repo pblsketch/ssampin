@@ -8,42 +8,69 @@ export const metadata: Metadata = {
     '평소 쓰는 AI 챗봇(클로드·GPT·제미나이)에게 쌤핀의 우리 학생들 자료를 안전하게 건네는 다리. API 키 없이, 내 컴퓨터 안에서. 실명은 가리고, 민감한 내용은 동의·게이트로 통제합니다.',
 };
 
-const TOOLS = [
+type ToolGroup = {
+  icon: string;
+  title: string;
+  summary: string;
+  tools: { label: string; code: string; gate?: '쓰기' | '동의' }[];
+};
+
+const TOOL_GROUPS: ToolGroup[] = [
   {
     icon: '🧑‍🎓',
-    label: '학생 명단 보기',
-    code: 'list_students',
-    desc: '학생 명단을 "학번 + 익명 토큰"으로 봅니다. 실명·연락처·생일은 빠져요.',
+    title: '학생 · 자리',
+    summary: '명단·수업반·좌석을 익명 토큰으로 봐요. 실명·연락처·생일은 빠집니다.',
+    tools: [
+      { label: '수업반 목록', code: 'list_classes' },
+      { label: '학생 명단', code: 'list_students' },
+      { label: '자리 배치', code: 'get_seating' },
+    ],
   },
   {
-    icon: '🪑',
-    label: '자리 배치 보기',
-    code: 'get_seating',
-    desc: '누가 어디 앉는지 구조만 봅니다. 이름은 토큰으로 표시돼요.',
+    icon: '🗓️',
+    title: '수업 · 학급 운영',
+    summary:
+      '급식·시간표·일정·디데이·할 일을 한눈에. 날짜·상태 같은 기본 정보는 그대로, 제목·내용은 동의를 켤 때만 보여요.',
+    tools: [
+      { label: '급식 식단', code: 'get_meals' },
+      { label: '시간표', code: 'get_schedule' },
+      { label: '학사·학급 일정', code: 'get_events' },
+      { label: '디데이', code: 'get_ddays' },
+      { label: '할 일', code: 'get_todos' },
+    ],
   },
   {
-    icon: '✍️',
-    label: '관찰 기록 남기기',
-    code: 'add_observation',
-    desc: 'AI와 정리한 관찰 내용을 기록으로 추가합니다. (쓰기를 켰을 때만)',
+    icon: '📝',
+    title: '노트 · 메모 · 북마크',
+    summary: '노트 구조·포스트잇·북마크를 정리해요. 본문·내용은 동의를 켤 때만 열립니다.',
+    tools: [
+      { label: '노트 구조', code: 'get_notes' },
+      { label: '포스트잇 메모', code: 'get_memos' },
+      { label: '북마크', code: 'get_bookmarks' },
+    ],
   },
   {
-    icon: '📋',
-    label: '관찰 기록 불러오기',
-    code: 'get_observations',
-    desc: '학생의 관찰 기록을 불러옵니다. (내용 보기를 켜거나 동의가 있을 때만)',
+    icon: '🔍',
+    title: '관찰 기록 · 생기부',
+    summary:
+      '관찰을 모으고, 생기부 초안이 관찰 기록에 근거하는지 점검해요. 최종 판단은 선생님 몫이에요.',
+    tools: [
+      { label: '관찰 기록 남기기', code: 'add_observation', gate: '쓰기' },
+      { label: '관찰 기록 불러오기', code: 'get_observations', gate: '동의' },
+      { label: '생기부 초안 점검', code: 'check_record_draft' },
+      { label: '기재요령 확인', code: 'get_record_guidelines' },
+    ],
   },
   {
-    icon: '✅',
-    label: '생기부 초안 점검',
-    code: 'check_record_draft',
-    desc: '초안 문장이 관찰 기록에 근거하는지 확인합니다. 최종 판단은 선생님 몫이에요.',
-  },
-  {
-    icon: '📖',
-    label: '기재요령 확인',
-    code: 'get_record_guidelines',
-    desc: '학교생활기록부 기재요령(학교급·연도별)을 출처와 함께 알려줘요.',
+    icon: '🏅',
+    title: '수행평가 · 성적',
+    summary: '점수·석차는 빼고 도달 수준·성취도 같은 질적 자료만. 세특 서술 근거로 써요.',
+    tools: [
+      { label: '평가표 구조', code: 'get_rubric' },
+      { label: '수행평가 피드백', code: 'get_performance_feedback', gate: '동의' },
+      { label: '성적 질적 요약', code: 'get_grade_summary', gate: '동의' },
+      { label: '수행평가 채점 입력', code: 'set_rubric_grading', gate: '쓰기' },
+    ],
   },
 ];
 
@@ -289,24 +316,61 @@ export default function AiBridgePage() {
           </details>
         </section>
 
-        {/* 6가지 도구 */}
+        {/* 도구 — 쓰임새별 묶음 */}
         <section className="mt-14">
           <p className="mb-2 text-[0.7rem] font-semibold uppercase tracking-widest text-sp-accent">
             무엇을 할 수 있나요
           </p>
-          <h2 className="text-2xl font-bold text-sp-text">AI가 쓸 수 있는 6가지 도구</h2>
-          <div className="mt-6 grid gap-3 sm:grid-cols-2">
-            {TOOLS.map((t) => (
+          <h2 className="text-2xl font-bold text-sp-text">AI가 쓸 수 있는 도구 19가지</h2>
+          <p className="mt-3 text-sm leading-relaxed text-sp-muted">
+            쓰임새별로 묶어 봤어요.{' '}
+            <span className="rounded bg-sp-highlight/15 px-1 text-[0.72rem] font-semibold text-sp-highlight">
+              쓰기
+            </span>{' '}
+            표시가 붙은 도구만 기록을 바꾸고(기본 꺼짐),{' '}
+            <span className="rounded bg-sp-accent/15 px-1 text-[0.72rem] font-semibold text-sp-accent">
+              동의
+            </span>{' '}
+            표시는 내용 노출을 허락했을 때만 열립니다.
+          </p>
+          <div className="mt-6 grid items-start gap-4 md:grid-cols-2">
+            {TOOL_GROUPS.map((g) => (
               <div
-                key={t.code}
+                key={g.title}
                 className="rounded-xl border border-sp-border bg-sp-card p-5 shadow-sm"
               >
                 <div className="flex items-center gap-2.5">
-                  <span className="text-xl">{t.icon}</span>
-                  <h3 className="text-sm font-bold text-sp-text">{t.label}</h3>
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sp-accent/10 text-lg">
+                    {g.icon}
+                  </span>
+                  <h3 className="text-sm font-bold text-sp-text">{g.title}</h3>
+                  <span className="ml-auto text-[0.65rem] font-medium text-sp-muted/60">
+                    {g.tools.length}개
+                  </span>
                 </div>
-                <p className="mt-2.5 text-sm leading-relaxed text-sp-muted">{t.desc}</p>
-                <code className="mt-3 inline-block text-[0.68rem] text-sp-muted/60">{t.code}</code>
+                <p className="mt-2.5 text-sm leading-relaxed text-sp-muted">{g.summary}</p>
+                <div className="mt-3.5 flex flex-wrap gap-1.5">
+                  {g.tools.map((t) => (
+                    <span
+                      key={t.code}
+                      title={t.code}
+                      className="inline-flex items-center gap-1 rounded-md border border-sp-border bg-sp-surface/60 px-2 py-1 text-[0.72rem] text-sp-text"
+                    >
+                      {t.label}
+                      {t.gate && (
+                        <span
+                          className={`rounded px-1 text-[0.6rem] font-semibold ${
+                            t.gate === '쓰기'
+                              ? 'bg-sp-highlight/15 text-sp-highlight'
+                              : 'bg-sp-accent/15 text-sp-accent'
+                          }`}
+                        >
+                          {t.gate}
+                        </span>
+                      )}
+                    </span>
+                  ))}
+                </div>
               </div>
             ))}
           </div>
@@ -319,7 +383,7 @@ export default function AiBridgePage() {
           </p>
           <h2 className="text-2xl font-bold text-sp-text">세 가지 AI를 똑같이 지원</h2>
           <p className="mt-3 text-sm leading-relaxed text-sp-muted">
-            연결 버튼만 다를 뿐, 똑같은 6가지 기능과 똑같은 개인정보 보호가 적용됩니다.
+            연결 버튼만 다를 뿐, 똑같은 도구와 똑같은 개인정보 보호가 적용됩니다.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
             {[
