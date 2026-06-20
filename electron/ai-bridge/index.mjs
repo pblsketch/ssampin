@@ -6935,6 +6935,7 @@ function $constructor(name, initializer3, params) {
   Object.defineProperty(_, "name", { value: name });
   return _;
 }
+var $brand = Symbol("zod_brand");
 var $ZodAsyncError = class extends Error {
   constructor() {
     super(`Encountered Promise during synchronous parse. Use .parseAsync() instead.`);
@@ -9438,6 +9439,8 @@ function en_default() {
 }
 
 // ../ssampin-ai-bridge/node_modules/.pnpm/zod@3.25.76/node_modules/zod/v4/core/registries.js
+var $output = Symbol("ZodOutput");
+var $input = Symbol("ZodInput");
 var $ZodRegistry = class {
   constructor() {
     this._map = /* @__PURE__ */ new Map();
@@ -10362,7 +10365,6 @@ var JSONSchemaGenerator = class {
             _json.readOnly = true;
             break;
           }
-          // passthrough types
           case "promise": {
             this.process(def.innerType, params);
             result.ref = def.innerType;
@@ -10655,7 +10657,6 @@ function isTransforming(_schema, _ctx) {
     case "set": {
       return isTransforming(def.valueType, ctx);
     }
-    // inner types
     case "promise":
     case "optional":
     case "nonoptional":
@@ -10791,10 +10792,10 @@ var ZodType = /* @__PURE__ */ $constructor("ZodType", (inst, def) => {
   };
   inst.clone = (def2, params) => clone(inst, def2, params);
   inst.brand = () => inst;
-  inst.register = ((reg, meta) => {
+  inst.register = (reg, meta) => {
     reg.add(inst, meta);
     return inst;
-  });
+  };
   inst.parse = (data, params) => parse2(inst, data, params, { callee: inst.parse });
   inst.safeParse = (data, params) => safeParse2(inst, data, params);
   inst.parseAsync = async (data, params) => parseAsync2(inst, data, params, { callee: inst.parseAsync });
@@ -12764,13 +12765,11 @@ function assertCompleteRequestPrompt(request) {
   if (request.params.ref.type !== "ref/prompt") {
     throw new TypeError(`Expected CompleteRequestPrompt, but got ${request.params.ref.type}`);
   }
-  void request;
 }
 function assertCompleteRequestResourceTemplate(request) {
   if (request.params.ref.type !== "ref/resource") {
     throw new TypeError(`Expected CompleteRequestResourceTemplate, but got ${request.params.ref.type}`);
   }
-  void request;
 }
 var CompleteResultSchema = ResultSchema.extend({
   completion: looseObject({
@@ -16834,7 +16833,7 @@ ZodNaN.create = (params) => {
     ...processCreateParams(params)
   });
 };
-var BRAND = /* @__PURE__ */ Symbol("zod_brand");
+var BRAND = Symbol("zod_brand");
 var ZodBranded = class extends ZodType2 {
   _parse(input) {
     const { ctx } = this._processInputParams(input);
@@ -17036,14 +17035,14 @@ var ostring = () => stringType().optional();
 var onumber = () => numberType().optional();
 var oboolean = () => booleanType().optional();
 var coerce = {
-  string: ((arg) => ZodString2.create({ ...arg, coerce: true })),
-  number: ((arg) => ZodNumber2.create({ ...arg, coerce: true })),
-  boolean: ((arg) => ZodBoolean2.create({
+  string: (arg) => ZodString2.create({ ...arg, coerce: true }),
+  number: (arg) => ZodNumber2.create({ ...arg, coerce: true }),
+  boolean: (arg) => ZodBoolean2.create({
     ...arg,
     coerce: true
-  })),
-  bigint: ((arg) => ZodBigInt.create({ ...arg, coerce: true })),
-  date: ((arg) => ZodDate.create({ ...arg, coerce: true }))
+  }),
+  bigint: (arg) => ZodBigInt.create({ ...arg, coerce: true }),
+  date: (arg) => ZodDate.create({ ...arg, coerce: true })
 };
 var NEVER2 = INVALID;
 
@@ -17071,10 +17070,10 @@ var ZodMiniType = /* @__PURE__ */ $constructor("ZodMiniType", (inst, def) => {
   };
   inst.clone = (_def, params) => clone(inst, _def, params);
   inst.brand = () => inst;
-  inst.register = ((reg, meta) => {
+  inst.register = (reg, meta) => {
     reg.add(inst, meta);
     return inst;
-  });
+  };
 });
 var ZodMiniObject = /* @__PURE__ */ $constructor("ZodMiniObject", (inst, def) => {
   $ZodObject.init(inst, def);
@@ -17243,7 +17242,7 @@ function isTerminal(status) {
 }
 
 // ../ssampin-ai-bridge/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@3.25.76/node_modules/zod-to-json-schema/dist/esm/Options.js
-var ignoreOverride = /* @__PURE__ */ Symbol("Let zodToJsonSchema decide on which parser to use");
+var ignoreOverride = Symbol("Let zodToJsonSchema decide on which parser to use");
 var defaultOptions = {
   name: void 0,
   $refStrategy: "root",
@@ -20219,7 +20218,7 @@ var Server = class extends Protocol {
 };
 
 // ../ssampin-ai-bridge/node_modules/.pnpm/@modelcontextprotocol+sdk@1.29.0_zod@3.25.76/node_modules/@modelcontextprotocol/sdk/dist/esm/server/completable.js
-var COMPLETABLE_SYMBOL = /* @__PURE__ */ Symbol.for("mcp.completable");
+var COMPLETABLE_SYMBOL = Symbol.for("mcp.completable");
 function isCompletable(schema) {
   return !!schema && typeof schema === "object" && COMPLETABLE_SYMBOL in schema;
 }
@@ -23226,6 +23225,9 @@ async function appendObservation(dataDir, input) {
   const file = resolveDataFile(dataDir, "observations");
   assertNoSymlinkEscape(baseReal, file);
   return withLock(dataDir, () => {
+    if (decideWritePath(dataDir).path !== "direct") {
+      throw new WriteConflictError("\uC324\uD540\uC774 \uC2E4\uD589 \uC911\uC774\uAC70\uB098 \uC0C1\uD0DC\uAC00 \uBD88\uD655\uC2E4\uD558\uC5EC \uC9C1\uC811\uC4F0\uAE30\uB97C \uC911\uB2E8\uD588\uC2B5\uB2C8\uB2E4. \uC324\uD540\uC744 \uB2EB\uACE0 \uB2E4\uC2DC \uC2DC\uB3C4\uD558\uC138\uC694.");
+    }
     const baseRaw = fs6.existsSync(file) ? fs6.readFileSync(file, "utf-8") : "";
     const data = parseObservations(baseRaw.length > 0 ? JSON.parse(baseRaw) : { records: [] });
     if (input.clientKey) {
@@ -23315,6 +23317,9 @@ async function setRubricGrading(dataDir, input) {
     throw new WriteValidationError("marks \uB294 \uBC30\uC5F4\uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4.");
   let result;
   await safeRewrite(dataDir, "rubrics", (parsed) => {
+    if (decideWritePath(dataDir).path !== "direct") {
+      throw new WriteConflictError("\uC324\uD540\uC774 \uC2E4\uD589 \uC911\uC774\uAC70\uB098 \uC0C1\uD0DC\uAC00 \uBD88\uD655\uC2E4\uD558\uC5EC \uCC44\uC810 \uC9C1\uC811\uC4F0\uAE30\uB97C \uC911\uB2E8\uD588\uC2B5\uB2C8\uB2E4. \uC324\uD540\uC744 \uB2EB\uACE0 \uB2E4\uC2DC \uC2DC\uB3C4\uD558\uC138\uC694.");
+    }
     const root = asObj(parsed) ?? {};
     const rubrics = Array.isArray(root["rubrics"]) ? root["rubrics"] : [];
     const rubric = asObj(rubrics.find((r) => asObj(r)?.["id"] === input.rubricId));
