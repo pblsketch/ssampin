@@ -74,6 +74,55 @@ const TOOL_GROUPS: ToolGroup[] = [
   },
 ];
 
+type Scenario = {
+  icon: string;
+  title: string;
+  who: string;
+  gate: '읽기' | '동의' | '쓰기';
+  say: string;
+  tools: string[];
+  note: string;
+};
+
+const SCENARIOS: Scenario[] = [
+  {
+    icon: '📝',
+    title: '생기부 초안, 근거부터 잡기',
+    who: '담임',
+    gate: '동의',
+    say: '3번 학생 이번 학기 관찰 기록 모아서 행동특성 초안 잡아주고, 기재요령에 안 맞는 표현 있으면 짚어줘.',
+    tools: ['get_observations', 'check_record_draft', 'get_record_guidelines'],
+    note: 'AI가 쓴 문장이 실제 관찰 기록에 근거하는지까지 점검해요. 최종 확인은 선생님 몫.',
+  },
+  {
+    icon: '🏅',
+    title: '세특에 쓸 역량·태도 정리',
+    who: '교과',
+    gate: '동의',
+    say: '내 수업반 김OO 수행평가랑 성적 보고, 세특에 들어갈 역량·태도 정리해줘. 점수는 빼고.',
+    tools: ['list_students', 'get_performance_feedback', 'get_grade_summary'],
+    note: '점수·석차는 빼고 도달 수준·성취도 같은 질적 근거만 모아요.',
+  },
+  {
+    icon: '✍️',
+    title: '관찰 기록을 말 한마디로',
+    who: '담임·교과',
+    gate: '쓰기',
+    say: '오늘 5번 학생이 모둠 토론에서 친구 의견을 끝까지 경청했어. 관찰 기록 남겨줘.',
+    tools: ['list_students', 'add_observation'],
+    note: '수업 끝나고 떠오른 순간을 바로 기록으로. (쓰기를 켰을 때만)',
+  },
+  {
+    icon: '🗓️',
+    title: '이번 주 알림장 초안 만들기',
+    who: '담임',
+    gate: '읽기',
+    say: '이번 주 우리 반 일정·디데이·마감 할 일 정리해서 학부모 알림장 초안 만들어줘.',
+    tools: ['get_events', 'get_ddays', 'get_todos'],
+    note: '설정을 안 켜도 날짜·상태는 바로 읽혀요.',
+  },
+];
+
 const SAFEGUARDS = [
   {
     icon: '🎭',
@@ -314,6 +363,67 @@ export default function AiBridgePage() {
               </p>
             </div>
           </details>
+        </section>
+
+        {/* 활용 시나리오 */}
+        <section className="mt-14">
+          <p className="mb-2 text-[0.7rem] font-semibold uppercase tracking-widest text-sp-accent">
+            이렇게 써요
+          </p>
+          <h2 className="text-2xl font-bold text-sp-text">AI 챗봇에게 이렇게 말해 보세요</h2>
+          <p className="mt-3 text-sm leading-relaxed text-sp-muted">
+            명령어를 외울 필요 없어요. 평소 말투로 부탁하면, 쌤핀이 알아서 필요한 자료를 챙겨
+            줍니다.
+          </p>
+          <div className="mt-6 grid gap-4 md:grid-cols-2">
+            {SCENARIOS.map((s) => (
+              <div
+                key={s.title}
+                className="flex flex-col rounded-xl border border-sp-border bg-sp-card p-5 shadow-sm"
+              >
+                <div className="flex items-center gap-2.5">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sp-accent/10 text-lg">
+                    {s.icon}
+                  </span>
+                  <h3 className="text-sm font-bold text-sp-text">{s.title}</h3>
+                </div>
+                <div className="mt-2.5 flex flex-wrap gap-1.5">
+                  <span className="rounded-full border border-sp-border bg-sp-surface/60 px-2 py-0.5 text-[0.62rem] font-medium text-sp-muted">
+                    {s.who}
+                  </span>
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-[0.62rem] font-semibold ${
+                      s.gate === '쓰기'
+                        ? 'bg-sp-highlight/15 text-sp-highlight'
+                        : s.gate === '동의'
+                          ? 'bg-sp-accent/15 text-sp-accent'
+                          : 'border border-sp-border bg-sp-surface/60 text-sp-muted'
+                    }`}
+                  >
+                    {s.gate}
+                  </span>
+                </div>
+                <div className="mt-3.5 rounded-2xl rounded-tl-sm border border-sp-accent/20 bg-sp-accent/5 px-4 py-3">
+                  <p className="text-sm leading-relaxed text-sp-text">
+                    <span className="mr-1 select-none">💬</span>“{s.say}”
+                  </p>
+                </div>
+                <p className="mt-3 text-xs leading-relaxed text-sp-muted">{s.note}</p>
+                <div className="mt-auto flex flex-wrap items-center gap-y-1 pt-3.5 text-[0.68rem] text-sp-muted/70">
+                  {s.tools.map((t, i) => (
+                    <span key={t} className="inline-flex items-center">
+                      <code className="text-sp-muted/80">{t}</code>
+                      {i < s.tools.length - 1 && (
+                        <span className="mx-1 text-sp-accent/40" aria-hidden="true">
+                          →
+                        </span>
+                      )}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
         </section>
 
         {/* 도구 — 쓰임새별 묶음 */}
