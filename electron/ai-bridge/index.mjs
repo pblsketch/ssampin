@@ -3644,8 +3644,8 @@ var require_utils = __commonJS({
       }
       return ind;
     }
-    function removeDotSegments(path6) {
-      let input = path6;
+    function removeDotSegments(path7) {
+      let input = path7;
       const output = [];
       let nextSlash = -1;
       let len = 0;
@@ -3900,8 +3900,8 @@ var require_schemes = __commonJS({
         wsComponent.secure = void 0;
       }
       if (wsComponent.resourceName) {
-        const [path6, query] = wsComponent.resourceName.split('?');
-        wsComponent.path = path6 && path6 !== '/' ? path6 : void 0;
+        const [path7, query] = wsComponent.resourceName.split('?');
+        wsComponent.path = path7 && path7 !== '/' ? path7 : void 0;
         wsComponent.query = query;
         wsComponent.resourceName = void 0;
       }
@@ -3960,7 +3960,7 @@ var require_schemes = __commonJS({
       urnComponent.nss = (uuidComponent.uuid || '').toLowerCase();
       return urnComponent;
     }
-    var http =
+    var http2 =
       /** @type {SchemeHandler} */
       {
         scheme: 'http',
@@ -3972,7 +3972,7 @@ var require_schemes = __commonJS({
       /** @type {SchemeHandler} */
       {
         scheme: 'https',
-        domainHost: http.domainHost,
+        domainHost: http2.domainHost,
         parse: httpParse,
         serialize: httpSerialize,
       };
@@ -4011,7 +4011,7 @@ var require_schemes = __commonJS({
     var SCHEMES =
       /** @type {Record<SchemeName, SchemeHandler>} */
       {
-        http,
+        http: http2,
         https,
         ws,
         wss,
@@ -7639,13 +7639,13 @@ var require_dist = __commonJS({
       if (!f) throw new Error(`Unknown format "${name}"`);
       return f;
     };
-    function addFormats(ajv, list, fs7, exportName) {
+    function addFormats(ajv, list, fs9, exportName) {
       var _a;
       var _b;
       (_a = (_b = ajv.opts.code).formats) !== null && _a !== void 0
         ? _a
         : (_b.formats = (0, codegen_1._)`require("ajv-formats/dist/formats").${exportName}`);
-      for (const f of list) ajv.addFormat(f, fs7[f]);
+      for (const f of list) ajv.addFormat(f, fs9[f]);
     }
     module.exports = exports = formatsPlugin;
     Object.defineProperty(exports, '__esModule', { value: true });
@@ -7846,9 +7846,9 @@ function assignProp(target, prop, value) {
     configurable: true,
   });
 }
-function getElementAtPath(obj, path6) {
-  if (!path6) return obj;
-  return path6.reduce((acc, key) => acc?.[key], obj);
+function getElementAtPath(obj, path7) {
+  if (!path7) return obj;
+  return path7.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -8175,11 +8175,11 @@ function aborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path6, issues) {
+function prefixIssues(path7, issues) {
   return issues.map((iss) => {
     var _a;
     (_a = iss).path ?? (_a.path = []);
-    iss.path.unshift(path6);
+    iss.path.unshift(path7);
     return iss;
   });
 }
@@ -14342,8 +14342,8 @@ function getErrorMap() {
 
 // ../ssampin-ai-bridge/node_modules/.pnpm/zod@3.25.76/node_modules/zod/v3/helpers/parseUtil.js
 var makeIssue = (params) => {
-  const { data, path: path6, errorMaps, issueData } = params;
-  const fullPath = [...path6, ...(issueData.path || [])];
+  const { data, path: path7, errorMaps, issueData } = params;
+  const fullPath = [...path7, ...(issueData.path || [])];
   const fullIssue = {
     ...issueData,
     path: fullPath,
@@ -14454,11 +14454,11 @@ var errorUtil;
 
 // ../ssampin-ai-bridge/node_modules/.pnpm/zod@3.25.76/node_modules/zod/v3/types.js
 var ParseInputLazyPath = class {
-  constructor(parent, value, path6, key) {
+  constructor(parent, value, path7, key) {
     this._cachedPath = [];
     this.parent = parent;
     this.data = value;
-    this._path = path6;
+    this._path = path7;
     this._key = key;
   }
   get path() {
@@ -22812,6 +22812,604 @@ function parseTeachingClasses(raw) {
   return { classes };
 }
 
+// ../ssampin-ai-bridge/packages/core/dist/entities/rubric.js
+function asString4(v) {
+  return typeof v === 'string' ? v : void 0;
+}
+function asNumber4(v) {
+  return typeof v === 'number' && Number.isFinite(v) ? v : void 0;
+}
+function setIf4(target, key, value) {
+  if (value !== void 0) target[key] = value;
+}
+function asStringRecord(v) {
+  if (!v || typeof v !== 'object') return {};
+  const out = {};
+  for (const [k, val] of Object.entries(v)) {
+    if (typeof val === 'string') out[k] = val;
+  }
+  return out;
+}
+function normalizeLevel(o) {
+  if (typeof o['id'] !== 'string' || typeof o['name'] !== 'string') return null;
+  const lv = { id: o['id'], name: o['name'] };
+  setIf4(lv, 'description', asString4(o['description']));
+  return lv;
+}
+function normalizeCriterion(o) {
+  if (typeof o['id'] !== 'string' || typeof o['name'] !== 'string') return null;
+  const levels = [];
+  if (Array.isArray(o['levels'])) {
+    for (const item of o['levels']) {
+      if (item && typeof item === 'object') {
+        const lv = normalizeLevel(item);
+        if (lv) levels.push(lv);
+      }
+    }
+  }
+  return { id: o['id'], name: o['name'], order: asNumber4(o['order']) ?? 0, levels };
+}
+function normalizeRubric(o) {
+  if (
+    typeof o['id'] !== 'string' ||
+    typeof o['classId'] !== 'string' ||
+    typeof o['title'] !== 'string'
+  ) {
+    return null;
+  }
+  const criteria = [];
+  if (Array.isArray(o['criteria'])) {
+    for (const item of o['criteria']) {
+      if (item && typeof item === 'object') {
+        const c = normalizeCriterion(item);
+        if (c) criteria.push(c);
+      }
+    }
+  }
+  const r = { id: o['id'], classId: o['classId'], title: o['title'], criteria };
+  setIf4(r, 'description', asString4(o['description']));
+  return r;
+}
+function normalizeGrading(o) {
+  if (
+    typeof o['id'] !== 'string' ||
+    typeof o['rubricId'] !== 'string' ||
+    typeof o['classId'] !== 'string' ||
+    typeof o['studentId'] !== 'string'
+  ) {
+    return null;
+  }
+  const status = o['status'] === 'graded' || o['status'] === 'absent' ? o['status'] : 'partial';
+  const g = {
+    id: o['id'],
+    rubricId: o['rubricId'],
+    classId: o['classId'],
+    studentId: o['studentId'],
+    status,
+    marks: asStringRecord(o['marks']),
+    criterionNotes: asStringRecord(o['criterionNotes']),
+    gradedAt: asString4(o['gradedAt']) ?? '',
+  };
+  setIf4(g, 'overallFeedback', asString4(o['overallFeedback']));
+  return g;
+}
+function parseRubrics(raw) {
+  const o = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+  const rubrics = [];
+  if (Array.isArray(o['rubrics'])) {
+    for (const item of o['rubrics']) {
+      if (item && typeof item === 'object') {
+        const r = normalizeRubric(item);
+        if (r) rubrics.push(r);
+      }
+    }
+  }
+  const gradings = [];
+  if (Array.isArray(o['gradings'])) {
+    for (const item of o['gradings']) {
+      if (item && typeof item === 'object') {
+        const g = normalizeGrading(item);
+        if (g) gradings.push(g);
+      }
+    }
+  }
+  return { rubrics, gradings };
+}
+
+// ../ssampin-ai-bridge/packages/core/dist/entities/gradeAnalysis.js
+function gradeStudentKey(ref) {
+  const name = ref.name.replace(/\s/g, '');
+  if (ref.grade != null && ref.classNum != null) {
+    return [ref.grade, ref.classNum, ref.number, name].join('-');
+  }
+  return [ref.number, name].join('-');
+}
+function asString5(v) {
+  return typeof v === 'string' ? v : void 0;
+}
+function setIf5(target, key, value) {
+  if (value !== void 0) target[key] = value;
+}
+function asAbsence(v) {
+  return v === 'absent' || v === 'recognized' || v === 'exempt' || v === 'none' ? v : void 0;
+}
+function normalizePlan(o) {
+  if (
+    typeof o['id'] !== 'string' ||
+    typeof o['teachingClassId'] !== 'string' ||
+    typeof o['title'] !== 'string'
+  ) {
+    return null;
+  }
+  const kind = o['kind'] === 'written-exam' ? 'written-exam' : 'performance';
+  const p = {
+    id: o['id'],
+    teachingClassId: o['teachingClassId'],
+    semester: asString5(o['semester']) ?? '',
+    subject: asString5(o['subject']) ?? '',
+    title: o['title'],
+    kind,
+    areaName: asString5(o['areaName']) ?? '',
+  };
+  setIf5(p, 'method', asString5(o['method']));
+  return p;
+}
+function normalizeWritten(o) {
+  if (
+    typeof o['id'] !== 'string' ||
+    typeof o['assessmentId'] !== 'string' ||
+    typeof o['studentKey'] !== 'string'
+  ) {
+    return null;
+  }
+  const w = {
+    id: o['id'],
+    assessmentId: o['assessmentId'],
+    studentKey: o['studentKey'],
+    scorePresent: typeof o['score'] === 'number' && Number.isFinite(o['score']),
+    confirmed: o['confirmed'] === true,
+  };
+  setIf5(w, 'absenceCode', asAbsence(o['absenceCode']));
+  setIf5(w, 'memo', asString5(o['memo']));
+  return w;
+}
+function normalizePerformance(o) {
+  if (
+    typeof o['id'] !== 'string' ||
+    typeof o['assessmentId'] !== 'string' ||
+    typeof o['studentKey'] !== 'string'
+  ) {
+    return null;
+  }
+  const p = {
+    id: o['id'],
+    assessmentId: o['assessmentId'],
+    studentKey: o['studentKey'],
+    scorePresent: typeof o['score'] === 'number' && Number.isFinite(o['score']),
+    confirmed: o['confirmed'] === true,
+  };
+  setIf5(p, 'rubricGradingId', asString5(o['rubricGradingId']));
+  setIf5(p, 'evidenceNote', asString5(o['evidenceNote']));
+  setIf5(p, 'memo', asString5(o['memo']));
+  return p;
+}
+function normalizeSemester(o) {
+  if (
+    typeof o['id'] !== 'string' ||
+    typeof o['teachingClassId'] !== 'string' ||
+    typeof o['studentKey'] !== 'string'
+  ) {
+    return null;
+  }
+  const s = {
+    id: o['id'],
+    teachingClassId: o['teachingClassId'],
+    semester: asString5(o['semester']) ?? '',
+    studentKey: o['studentKey'],
+    confirmed: o['confirmed'] === true,
+  };
+  setIf5(s, 'achievementLevel', asString5(o['achievementLevel']));
+  return s;
+}
+function collect(raw, key, fn) {
+  const o = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+  const out = [];
+  if (Array.isArray(o[key])) {
+    for (const item of o[key]) {
+      if (item && typeof item === 'object') {
+        const v = fn(item);
+        if (v) out.push(v);
+      }
+    }
+  }
+  return out;
+}
+function parseGradeAnalysis(raw) {
+  return {
+    plans: collect(raw, 'plans', normalizePlan),
+    writtenResults: collect(raw, 'writtenResults', normalizeWritten),
+    performanceResults: collect(raw, 'performanceResults', normalizePerformance),
+    semesterResults: collect(raw, 'semesterResults', normalizeSemester),
+  };
+}
+
+// ../ssampin-ai-bridge/packages/core/dist/entities/meal.js
+function asString6(v) {
+  return typeof v === 'string' ? v : void 0;
+}
+function parseDishes(raw) {
+  if (!Array.isArray(raw)) return [];
+  const dishes = [];
+  for (const d of raw) {
+    if (!d || typeof d !== 'object') continue;
+    const o = d;
+    const name = asString6(o['name']);
+    if (name === void 0 || name.length === 0) continue;
+    const allergensRaw = o['allergens'];
+    const allergens = Array.isArray(allergensRaw)
+      ? allergensRaw.filter((n) => typeof n === 'number' && Number.isFinite(n))
+      : [];
+    dishes.push({ name, allergens });
+  }
+  return dishes;
+}
+function normalizeMeal(date3, raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const o = raw;
+  const ownDate = asString6(o['date']);
+  const mealType = asString6(o['mealType']) ?? '';
+  const dishes = parseDishes(o['dishes']);
+  const calorie = asString6(o['calorie']);
+  const entry = {
+    date: ownDate && ownDate.length > 0 ? ownDate : date3,
+    mealType,
+    dishes,
+  };
+  if (calorie !== void 0) entry['calorie'] = calorie;
+  return entry;
+}
+function parseManualMeals(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return [];
+  const byDate = raw;
+  const out = [];
+  for (const date3 of Object.keys(byDate)) {
+    const arr = byDate[date3];
+    if (!Array.isArray(arr)) continue;
+    for (const item of arr) {
+      const meal = normalizeMeal(date3, item);
+      if (meal) out.push(meal);
+    }
+  }
+  out.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  return out;
+}
+
+// ../ssampin-ai-bridge/packages/core/dist/entities/schoolEvent.js
+function asString7(v) {
+  return typeof v === 'string' ? v : void 0;
+}
+function asBool3(v) {
+  return typeof v === 'boolean' ? v : void 0;
+}
+function setIf6(target, key, value) {
+  if (value !== void 0) target[key] = value;
+}
+function normalizeEvent(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const o = raw;
+  if (o['isHidden'] === true) return null;
+  const date3 = asString7(o['date']);
+  const title = asString7(o['title']);
+  if (date3 === void 0 || date3.length === 0) return null;
+  const rec = { date: date3, title: title ?? '' };
+  setIf6(rec, 'id', asString7(o['id']));
+  setIf6(rec, 'endDate', asString7(o['endDate']));
+  setIf6(rec, 'category', asString7(o['category']));
+  setIf6(rec, 'time', asString7(o['time']));
+  setIf6(rec, 'startTime', asString7(o['startTime']));
+  setIf6(rec, 'endTime', asString7(o['endTime']));
+  setIf6(rec, 'period', asString7(o['period']));
+  setIf6(rec, 'periodEnd', asString7(o['periodEnd']));
+  setIf6(rec, 'recurrence', asString7(o['recurrence']));
+  setIf6(rec, 'isDDay', asBool3(o['isDDay']));
+  setIf6(rec, 'description', asString7(o['description']));
+  setIf6(rec, 'location', asString7(o['location']));
+  return rec;
+}
+function parseSchoolEvents(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return [];
+  const list = raw['events'];
+  if (!Array.isArray(list)) return [];
+  const out = [];
+  for (const item of list) {
+    const ev = normalizeEvent(item);
+    if (ev) out.push(ev);
+  }
+  out.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  return out;
+}
+
+// ../ssampin-ai-bridge/packages/core/dist/entities/dday.js
+function asString8(v) {
+  return typeof v === 'string' ? v : void 0;
+}
+function asBool4(v) {
+  return typeof v === 'boolean' ? v : void 0;
+}
+function setIf7(target, key, value) {
+  if (value !== void 0) target[key] = value;
+}
+function normalizeDday(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const o = raw;
+  const date3 = asString8(o['targetDate']);
+  if (date3 === void 0 || date3.length === 0) return null;
+  const rec = { date: date3, title: asString8(o['title']) ?? '' };
+  setIf7(rec, 'emoji', asString8(o['emoji']));
+  setIf7(rec, 'color', asString8(o['color']));
+  setIf7(rec, 'pinned', asBool4(o['pinned']));
+  return rec;
+}
+function parseDdays(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return [];
+  const list = raw['items'];
+  if (!Array.isArray(list)) return [];
+  const out = [];
+  for (const item of list) {
+    const d = normalizeDday(item);
+    if (d) out.push(d);
+  }
+  out.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  return out;
+}
+
+// ../ssampin-ai-bridge/packages/core/dist/entities/todo.js
+function asString9(v) {
+  return typeof v === 'string' ? v : void 0;
+}
+function asBool5(v) {
+  return v === true;
+}
+function setIf8(target, key, value) {
+  if (value !== void 0) target[key] = value;
+}
+function recurrenceType(v) {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return void 0;
+  return asString9(v['type']);
+}
+function normalizeTodo(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const o = raw;
+  const text = asString9(o['text']);
+  if (text === void 0) return null;
+  const rec = { text, completed: asBool5(o['completed']) };
+  setIf8(rec, 'id', asString9(o['id']));
+  setIf8(rec, 'dueDate', asString9(o['dueDate']));
+  setIf8(rec, 'startDate', asString9(o['startDate']));
+  setIf8(rec, 'time', asString9(o['time']));
+  setIf8(rec, 'priority', asString9(o['priority']));
+  setIf8(rec, 'category', asString9(o['category']));
+  setIf8(rec, 'status', asString9(o['status']));
+  setIf8(rec, 'recurrence', recurrenceType(o['recurrence']));
+  setIf8(rec, 'archivedAt', asString9(o['archivedAt']));
+  setIf8(rec, 'notes', asString9(o['notes']));
+  const subTasks = o['subTasks'];
+  if (Array.isArray(subTasks)) {
+    rec['subTaskCount'] = subTasks.length;
+    rec['subTaskDone'] = subTasks.filter(
+      (s) => s && typeof s === 'object' && s['completed'] === true,
+    ).length;
+  }
+  return rec;
+}
+function parseTodos(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return [];
+  const list = raw['todos'];
+  if (!Array.isArray(list)) return [];
+  const out = [];
+  for (const item of list) {
+    const t = normalizeTodo(item);
+    if (t) out.push(t);
+  }
+  out.sort((a, b) => {
+    const ad = a.dueDate ?? '\uFFFF';
+    const bd = b.dueDate ?? '\uFFFF';
+    return ad < bd ? -1 : ad > bd ? 1 : 0;
+  });
+  return out;
+}
+function effectiveTodoStatus(t) {
+  if (t.status === 'todo' || t.status === 'inProgress' || t.status === 'done') return t.status;
+  return t.completed ? 'done' : 'todo';
+}
+
+// ../ssampin-ai-bridge/packages/core/dist/entities/schedule.js
+function asString10(v) {
+  return typeof v === 'string' ? v : void 0;
+}
+function asNumber5(v) {
+  return typeof v === 'number' && Number.isFinite(v) ? v : void 0;
+}
+function setIf9(target, key, value) {
+  if (value !== void 0) target[key] = value;
+}
+function flattenDayMap(raw, build) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return [];
+  const byDay = raw;
+  const out = [];
+  for (const day of Object.keys(byDay)) {
+    const arr = byDay[day];
+    if (!Array.isArray(arr)) continue;
+    arr.forEach((slot, i) => {
+      if (!slot || typeof slot !== 'object' || Array.isArray(slot)) return;
+      const rec = build(day, i, slot);
+      if (rec) out.push(rec);
+    });
+  }
+  return out;
+}
+function parseClassSchedule(raw) {
+  return flattenDayMap(raw, (day, i, slot) => {
+    const subject = asString10(slot['subject']) ?? '';
+    if (subject.length === 0) return null;
+    const rec = { day, period: i + 1, subject };
+    const teacher = asString10(slot['teacher']);
+    if (teacher !== void 0 && teacher.length > 0) rec['teacher'] = teacher;
+    return rec;
+  });
+}
+function parseTeacherSchedule(raw) {
+  return flattenDayMap(raw, (day, i, slot) => {
+    const subject = asString10(slot['subject']) ?? '';
+    if (subject.length === 0) return null;
+    const rec = { day, period: i + 1, subject };
+    const classroom = asString10(slot['classroom']);
+    if (classroom !== void 0 && classroom.length > 0) rec['classroom'] = classroom;
+    return rec;
+  });
+}
+function parseTimetableOverrides(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return [];
+  const list = raw['overrides'];
+  if (!Array.isArray(list)) return [];
+  const out = [];
+  for (const item of list) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+    const o = item;
+    const date3 = asString10(o['date']);
+    const period = asNumber5(o['period']);
+    if (date3 === void 0 || period === void 0) continue;
+    const rec = { date: date3, period };
+    setIf9(rec, 'subject', asString10(o['subject']));
+    setIf9(rec, 'classroom', asString10(o['classroom']));
+    setIf9(rec, 'kind', asString10(o['kind']));
+    setIf9(rec, 'scope', asString10(o['scope']));
+    setIf9(rec, 'substituteTeacher', asString10(o['substituteTeacher']));
+    setIf9(rec, 'reason', asString10(o['reason']));
+    out.push(rec);
+  }
+  out.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.period - b.period));
+  return out;
+}
+
+// ../ssampin-ai-bridge/packages/core/dist/entities/note.js
+function asString11(v) {
+  return typeof v === 'string' ? v : void 0;
+}
+function asNumber6(v) {
+  return typeof v === 'number' && Number.isFinite(v) ? v : 0;
+}
+function asArray(raw) {
+  return Array.isArray(raw) ? raw : [];
+}
+function parseNotebooks(raw) {
+  const out = [];
+  for (const item of asArray(raw)) {
+    if (!item || typeof item !== 'object') continue;
+    const o = item;
+    const id = asString11(o['id']);
+    if (id === void 0) continue;
+    out.push({
+      id,
+      title: asString11(o['title']) ?? '',
+      archived: o['archived'] === true,
+      order: asNumber6(o['order']),
+    });
+  }
+  return out;
+}
+function parseNoteSections(raw) {
+  const out = [];
+  for (const item of asArray(raw)) {
+    if (!item || typeof item !== 'object') continue;
+    const o = item;
+    const id = asString11(o['id']);
+    const notebookId = asString11(o['notebookId']);
+    if (id === void 0 || notebookId === void 0) continue;
+    out.push({ id, notebookId, title: asString11(o['title']) ?? '', order: asNumber6(o['order']) });
+  }
+  return out;
+}
+function parseNotePages(raw) {
+  const out = [];
+  for (const item of asArray(raw)) {
+    if (!item || typeof item !== 'object') continue;
+    const o = item;
+    const id = asString11(o['id']);
+    const sectionId = asString11(o['sectionId']);
+    if (id === void 0 || sectionId === void 0) continue;
+    const tags = asArray(o['tags']).filter((t) => typeof t === 'string');
+    const rec = {
+      id,
+      sectionId,
+      title: asString11(o['title']) ?? '',
+      tags,
+      pinned: o['pinned'] === true,
+    };
+    const updatedAt = asString11(o['updatedAt']);
+    if (updatedAt !== void 0) rec['updatedAt'] = updatedAt;
+    out.push(rec);
+  }
+  return out;
+}
+
+// ../ssampin-ai-bridge/packages/core/dist/entities/memo.js
+function asString12(v) {
+  return typeof v === 'string' ? v : void 0;
+}
+function parseMemos(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return [];
+  const list = raw['memos'];
+  if (!Array.isArray(list)) return [];
+  const out = [];
+  for (const item of list) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+    const o = item;
+    const text = asString12(o['content']);
+    if (text === void 0) continue;
+    const rec = { text, archived: o['archived'] === true };
+    const color = asString12(o['color']);
+    if (color !== void 0) rec['color'] = color;
+    out.push(rec);
+  }
+  return out;
+}
+
+// ../ssampin-ai-bridge/packages/core/dist/entities/bookmark.js
+function asString13(v) {
+  return typeof v === 'string' ? v : void 0;
+}
+function asNumber7(v) {
+  return typeof v === 'number' && Number.isFinite(v) ? v : 0;
+}
+function parseBookmarks(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { groups: [], bookmarks: [] };
+  const o = raw;
+  const groups = [];
+  for (const g of Array.isArray(o['groups']) ? o['groups'] : []) {
+    if (!g || typeof g !== 'object') continue;
+    const go = g;
+    const id = asString13(go['id']);
+    if (id === void 0) continue;
+    groups.push({
+      id,
+      name: asString13(go['name']) ?? '',
+      archived: go['archived'] === true,
+      order: asNumber7(go['order']),
+    });
+  }
+  const bookmarks = [];
+  for (const b of Array.isArray(o['bookmarks']) ? o['bookmarks'] : []) {
+    if (!b || typeof b !== 'object') continue;
+    const bo = b;
+    const url = asString13(bo['url']);
+    const groupId = asString13(bo['groupId']);
+    if (url === void 0 || url.length === 0 || groupId === void 0) continue;
+    bookmarks.push({ groupId, name: asString13(bo['name']) ?? '', url });
+  }
+  return { groups, bookmarks };
+}
+
 // ../ssampin-ai-bridge/packages/core/dist/io.js
 function readRawJson(filename, dataDir = resolveDataDir()) {
   const filePath = resolveDataFile(dataDir, filename);
@@ -22847,11 +23445,56 @@ function readSeating(dataDir = resolveDataDir()) {
 function readTeachingClasses(dataDir = resolveDataDir()) {
   return parseTeachingClasses(readRawJson('teaching-classes', dataDir));
 }
+function readRubrics(dataDir = resolveDataDir()) {
+  return parseRubrics(readRawJson('rubrics', dataDir));
+}
+function readGradeAnalysis(dataDir = resolveDataDir()) {
+  return parseGradeAnalysis(readRawJson('grade-analysis', dataDir));
+}
+function readManualMeals(dataDir = resolveDataDir()) {
+  return parseManualMeals(readRawJson('manual-meals', dataDir));
+}
+function readEvents(dataDir = resolveDataDir()) {
+  return parseSchoolEvents(readRawJson('events', dataDir));
+}
+function readDdays(dataDir = resolveDataDir()) {
+  return parseDdays(readRawJson('dday', dataDir));
+}
+function readTodos(dataDir = resolveDataDir()) {
+  return parseTodos(readRawJson('todos', dataDir));
+}
+function readClassSchedule(dataDir = resolveDataDir()) {
+  return parseClassSchedule(readRawJson('class-schedule', dataDir));
+}
+function readTeacherSchedule(dataDir = resolveDataDir()) {
+  return parseTeacherSchedule(readRawJson('teacher-schedule', dataDir));
+}
+function readTimetableOverrides(dataDir = resolveDataDir()) {
+  return parseTimetableOverrides(readRawJson('timetable-overrides', dataDir));
+}
+function readNotebooks(dataDir = resolveDataDir()) {
+  return parseNotebooks(readRawJson('note-notebooks', dataDir));
+}
+function readNoteSections(dataDir = resolveDataDir()) {
+  return parseNoteSections(readRawJson('note-sections', dataDir));
+}
+function readNotePages(dataDir = resolveDataDir()) {
+  return parseNotePages(readRawJson('note-pages-meta', dataDir));
+}
+function readMemos(dataDir = resolveDataDir()) {
+  return parseMemos(readRawJson('memos', dataDir));
+}
+function readBookmarks(dataDir = resolveDataDir()) {
+  return parseBookmarks(readRawJson('bookmarks', dataDir));
+}
 
 // ../ssampin-ai-bridge/packages/core/dist/identity.js
 var TEACHING_PREFIX = 'tc:';
 var CLASS_PREFIX = 'class:';
 var OBSERVATION_PREFIX = 'obs:';
+var RUBRIC_PREFIX = 'rubric:';
+var TODO_PREFIX = 'todo:';
+var EVENT_PREFIX = 'evt:';
 function makeTeachingStudentIdentity(classId, studentKey2) {
   return `${TEACHING_PREFIX}${classId}:${studentKey2}`;
 }
@@ -22860,6 +23503,24 @@ function makeClassIdentity(classId) {
 }
 function makeObservationIdentity(observationId) {
   return `${OBSERVATION_PREFIX}${observationId}`;
+}
+function makeRubricIdentity(rubricId) {
+  return `${RUBRIC_PREFIX}${rubricId}`;
+}
+function makeTodoIdentity(todoId) {
+  return `${TODO_PREFIX}${todoId}`;
+}
+function parseTodoIdentity(resolved) {
+  return resolved.startsWith(TODO_PREFIX) ? resolved.slice(TODO_PREFIX.length) || null : null;
+}
+function makeEventIdentity(eventId) {
+  return `${EVENT_PREFIX}${eventId}`;
+}
+function parseEventIdentity(resolved) {
+  return resolved.startsWith(EVENT_PREFIX) ? resolved.slice(EVENT_PREFIX.length) || null : null;
+}
+function parseRubricIdentity(resolved) {
+  return resolved.startsWith(RUBRIC_PREFIX) ? resolved.slice(RUBRIC_PREFIX.length) || null : null;
 }
 function parseIdentity(resolved) {
   if (resolved.startsWith(TEACHING_PREFIX)) {
@@ -22882,7 +23543,7 @@ function parseIdentity(resolved) {
 import crypto from 'node:crypto';
 import fs3 from 'node:fs';
 import path2 from 'node:path';
-var TOKEN_RE = /^(?:stu|tcs|cls|obs)_[0-9a-f]{12}$/;
+var TOKEN_RE = /^(?:stu|tcs|cls|obs|rub)_[0-9a-f]{12}$/;
 function defaultRandomToken(prefix) {
   return `${prefix}_` + crypto.randomBytes(6).toString('hex');
 }
@@ -22975,6 +23636,9 @@ var SOURCES = {
   birthKorean: '(?:19|20)?\\d{2}\\s*\uB144\\s*\\d{1,2}\\s*\uC6D4\\s*\\d{1,2}\\s*\uC77C',
   // 20100315 (8자리 압축)
   birthCompact: '(?<!\\d)(?:19|20)\\d{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\\d|3[01])(?!\\d)',
+  // 이메일: local@domain.tld — 구글 캘린더 동기화가 일정 category·설명에 캘린더 ID(=이메일)를
+  // 넣는 등 자유서술 곳곳에 출현. 이메일은 어떤 맥락에서도 식별 정보이므로 항상 마스킹한다.
+  email: '[A-Za-z0-9._%+\\-]+@[A-Za-z0-9.\\-]+\\.[A-Za-z]{2,}',
 };
 function globalPattern(name) {
   return new RegExp(SOURCES[name], 'g');
@@ -22983,9 +23647,12 @@ function containsPii(value) {
   return Object.keys(SOURCES).some((name) => new RegExp(SOURCES[name]).test(value));
 }
 function containsContactPii(value) {
-  return ['phone', 'rrn'].some((name) => new RegExp(SOURCES[name]).test(value));
+  return ['phone', 'rrn', 'email'].some((name) => new RegExp(SOURCES[name]).test(value));
 }
 var MASK_ORDER = [
+  // 이메일을 가장 먼저 마스킹 — 로컬파트의 숫자열(예: id1212)이 전화/생일 패턴에 부분 매칭되어
+  // 손상되기 전에 통째로 [이메일]로 치환한다.
+  { name: 'email', label: '[\uC774\uBA54\uC77C]', stat: 'emails' },
   { name: 'rrn', label: '[\uC8FC\uBBFC\uBC88\uD638]', stat: 'rrns' },
   { name: 'phone', label: '[\uC804\uD654]', stat: 'phones' },
   { name: 'birthKorean', label: '[\uC0DD\uB144\uC6D4\uC77C]', stat: 'birthDates' },
@@ -22997,25 +23664,26 @@ var MASK_ORDER = [
 function escapeRegExp(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
+var NAME_SEP = '[\\s\\u00B7\\u2027\\u30FB\xB7]*';
+var INVISIBLE_RE = /[​‌‍﻿­]/g;
 function deidentify(content, roster) {
-  const stats = { names: 0, phones: 0, rrns: 0, birthDates: 0, studentNumbers: 0 };
-  let text = content.normalize('NFC');
+  const stats = {
+    names: 0,
+    phones: 0,
+    rrns: 0,
+    birthDates: 0,
+    studentNumbers: 0,
+    emails: 0,
+  };
+  let text = content.normalize('NFC').replace(INVISIBLE_RE, '');
   const nameReplacements = [];
   for (const entry of roster) {
     for (const n of entry.names) {
-      const needle = (n ?? '').normalize('NFC').trim();
+      const needle = (n ?? '').normalize('NFC').replace(INVISIBLE_RE, '').trim();
       if (needle.length > 0) nameReplacements.push({ needle, token: entry.token });
     }
   }
   nameReplacements.sort((a, b) => b.needle.length - a.needle.length);
-  for (const { needle, token } of nameReplacements) {
-    const spaced = needle.split('').map(escapeRegExp).join('\\s*');
-    const re = new RegExp(spaced, 'g');
-    text = text.replace(re, () => {
-      stats.names += 1;
-      return token;
-    });
-  }
   for (const { name, label, stat } of MASK_ORDER) {
     text = text.replace(globalPattern(name), () => {
       stats[stat] += 1;
@@ -23031,7 +23699,22 @@ function deidentify(content, roster) {
       });
     }
   }
+  for (const { needle, token } of nameReplacements) {
+    const spaced = needle.split('').map(escapeRegExp).join(NAME_SEP);
+    const re = new RegExp(spaced, 'g');
+    text = text.replace(re, () => {
+      stats.names += 1;
+      return token;
+    });
+  }
   return { text, stats };
+}
+function maskPatterns(value) {
+  let text = value.normalize('NFC').replace(INVISIBLE_RE, '');
+  for (const { name, label } of MASK_ORDER) {
+    text = text.replace(globalPattern(name), () => label);
+  }
+  return text;
 }
 
 // ../ssampin-ai-bridge/packages/core/dist/audit.js
@@ -23196,7 +23879,7 @@ function assertWriteEnabled(env = process.env) {
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
-function setIf4(target, key, value) {
+function setIf10(target, key, value) {
   if (value !== void 0) target[key] = value;
 }
 function validate(input) {
@@ -23238,7 +23921,7 @@ function buildRecord(input) {
     createdAt: now,
     updatedAt: now,
   };
-  setIf4(rec, 'classId', input.classId);
+  setIf10(rec, 'classId', input.classId);
   return rec;
 }
 function idemPath(dataDir) {
@@ -23348,7 +24031,7 @@ async function appendObservation(dataDir, input) {
     }
     const record2 = buildRecord(input);
     const nextData = { records: [...data.records, record2] };
-    setIf4(nextData, 'customTags', data.customTags);
+    setIf10(nextData, 'customTags', data.customTags);
     const nowRaw = fs5.existsSync(file) ? fs5.readFileSync(file, 'utf-8') : '';
     if (nowRaw !== baseRaw) {
       throw new WriteConflictError(
@@ -23367,6 +24050,441 @@ async function appendObservation(dataDir, input) {
       saveIdem(dataDir, idem);
     }
     return record2;
+  });
+}
+function isGradeWriteEnabled(env = process.env) {
+  return env['SSAMPIN_BRIDGE_ALLOW_GRADE_WRITE'] === '1';
+}
+function assertGradeWriteEnabled(env = process.env) {
+  if (!isGradeWriteEnabled(env)) {
+    throw new WriteDisabledError(
+      '\uC131\uC801\xB7\uC218\uD589\uD3C9\uAC00 \uC4F0\uAE30\uAC00 \uBE44\uD65C\uC131\uD654\uB418\uC5B4 \uC788\uC2B5\uB2C8\uB2E4. SSAMPIN_BRIDGE_ALLOW_GRADE_WRITE=1 \uB85C \uBA85\uC2DC\uC801\uC73C\uB85C \uD65C\uC131\uD654\uD558\uC138\uC694(\uC324\uD540\uC744 \uB2EB\uC740 \uC0C1\uD0DC \uD544\uC218 \u2014 \uACF5\uC2DD \uAE30\uB85D).',
+    );
+  }
+}
+function asObj(v) {
+  return v && typeof v === 'object' && !Array.isArray(v) ? v : void 0;
+}
+function asStringRecord2(v) {
+  const o = asObj(v);
+  if (!o) return {};
+  const out = {};
+  for (const [k, val] of Object.entries(o)) if (typeof val === 'string') out[k] = val;
+  return out;
+}
+var nfc = (s) => s.normalize('NFC');
+async function safeRewrite(dataDir, filename, transform2) {
+  const baseReal = realDir(dataDir);
+  const file = resolveDataFile(dataDir, filename);
+  assertNoSymlinkEscape(baseReal, file);
+  await withLock(dataDir, () => {
+    const baseRaw = fs5.existsSync(file) ? fs5.readFileSync(file, 'utf-8') : '';
+    const parsed = baseRaw.trim().length > 1 ? JSON.parse(baseRaw) : null;
+    const next = transform2(parsed);
+    const nowRaw = fs5.existsSync(file) ? fs5.readFileSync(file, 'utf-8') : '';
+    if (nowRaw !== baseRaw) {
+      throw new WriteConflictError(
+        '\uC4F0\uAE30 \uB3C4\uC911 \uB370\uC774\uD130\uAC00 \uBCC0\uACBD\uB418\uC5C8\uC2B5\uB2C8\uB2E4(\uC324\uD540 \uC2E4\uD589 \uC911\uC77C \uC218 \uC788\uC74C). \uB2E4\uC2DC \uC2DC\uB3C4\uD558\uC138\uC694.',
+      );
+    }
+    if (baseRaw.length > 10) fs5.writeFileSync(backupPathFor(file), baseRaw, 'utf-8');
+    const tmp = `${file}.tmp`;
+    fs5.writeFileSync(tmp, JSON.stringify(next, null, 2), 'utf-8');
+    fs5.renameSync(tmp, file);
+  });
+}
+async function setRubricGrading(dataDir, input) {
+  assertGradeWriteEnabled();
+  if (typeof input.classId !== 'string' || input.classId.length === 0) {
+    throw new WriteValidationError('classId \uAC00 \uBE44\uC5B4 \uC788\uC2B5\uB2C8\uB2E4.');
+  }
+  if (typeof input.studentKey !== 'string' || input.studentKey.length === 0) {
+    throw new WriteValidationError('studentKey \uAC00 \uBE44\uC5B4 \uC788\uC2B5\uB2C8\uB2E4.');
+  }
+  if (!Array.isArray(input.marks))
+    throw new WriteValidationError(
+      'marks \uB294 \uBC30\uC5F4\uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4.',
+    );
+  let result;
+  await safeRewrite(dataDir, 'rubrics', (parsed) => {
+    const root = asObj(parsed) ?? {};
+    const rubrics = Array.isArray(root['rubrics']) ? root['rubrics'] : [];
+    const rubric = asObj(rubrics.find((r) => asObj(r)?.['id'] === input.rubricId));
+    if (!rubric)
+      throw new WriteValidationError(
+        '\uD3C9\uAC00\uD45C\uB97C \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.',
+      );
+    if (rubric['classId'] !== input.classId) {
+      throw new WriteValidationError(
+        '\uD3C9\uAC00\uD45C\uAC00 \uC774 \uC218\uC5C5\uBC18\uC5D0 \uC18D\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.',
+      );
+    }
+    const criteria = Array.isArray(rubric['criteria']) ? rubric['criteria'] : [];
+    const reqStr = (v, what) => {
+      if (typeof v !== 'string' || v.length === 0)
+        throw new WriteValidationError(
+          `\uD3C9\uAC00\uD45C ${what} \uD615\uC2DD \uC624\uB958(\uC190\uC0C1 \uB370\uC774\uD130).`,
+        );
+      return v;
+    };
+    const findCriterion = (name) => {
+      const hits = criteria
+        .map(asObj)
+        .filter((c2) => !!c2 && typeof c2['name'] === 'string' && nfc(c2['name']) === nfc(name));
+      if (hits.length === 0)
+        throw new WriteValidationError(
+          `\uD3C9\uAC00\uC694\uC18C\uB97C \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4: ${name}`,
+        );
+      if (hits.length > 1)
+        throw new WriteValidationError(
+          `\uD3C9\uAC00\uC694\uC18C \uC774\uB984\uC774 \uBAA8\uD638\uD569\uB2C8\uB2E4: ${name}`,
+        );
+      const c = hits[0];
+      return {
+        id: reqStr(c['id'], 'criterion id'),
+        levels: Array.isArray(c['levels']) ? c['levels'] : [],
+      };
+    };
+    const newMarks = {};
+    for (const m of input.marks) {
+      const { id: critId, levels } = findCriterion(m.criterion);
+      const lv = levels
+        .map(asObj)
+        .filter((l) => !!l && typeof l['name'] === 'string' && nfc(l['name']) === nfc(m.level));
+      if (lv.length === 0)
+        throw new WriteValidationError(
+          `\uC218\uC900\uC744 \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4: ${m.criterion} > ${m.level}`,
+        );
+      if (lv.length > 1)
+        throw new WriteValidationError(
+          `\uC218\uC900 \uC774\uB984\uC774 \uBAA8\uD638\uD569\uB2C8\uB2E4: ${m.criterion} > ${m.level}`,
+        );
+      newMarks[critId] = reqStr(lv[0]['id'], 'level id');
+    }
+    const newNotes = {};
+    for (const n of input.criterionNotes ?? []) {
+      newNotes[findCriterion(n.criterion).id] = n.note;
+    }
+    const gradings = Array.isArray(root['gradings']) ? [...root['gradings']] : [];
+    const idx = gradings.findIndex((g) => {
+      const o = asObj(g);
+      return (
+        o?.['rubricId'] === input.rubricId &&
+        o['classId'] === input.classId &&
+        o['studentId'] === input.studentKey
+      );
+    });
+    const existing = idx >= 0 ? (asObj(gradings[idx]) ?? {}) : {};
+    const created = idx < 0;
+    const gradingId =
+      existing['id'] ?? `rg_${Date.now()}_${crypto3.randomBytes(4).toString('hex')}`;
+    const prevMarks = asStringRecord2(existing['marks']);
+    const prevNotes = asStringRecord2(existing['criterionNotes']);
+    const mergedMarks = { ...prevMarks, ...newMarks };
+    const mergedNotes = { ...prevNotes, ...newNotes };
+    const currentCritIds = new Set(
+      criteria.map((c) => asObj(c)?.['id']).filter((v) => typeof v === 'string'),
+    );
+    const coveredCount = Object.keys(mergedMarks).filter((k) => currentCritIds.has(k)).length;
+    const status =
+      input.status ??
+      (currentCritIds.size > 0 && coveredCount >= currentCritIds.size ? 'graded' : 'partial');
+    const sameJson = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+    const unchanged =
+      !created &&
+      sameJson(mergedMarks, prevMarks) &&
+      sameJson(mergedNotes, prevNotes) &&
+      existing['status'] === status &&
+      (input.overallFeedback === void 0 || existing['overallFeedback'] === input.overallFeedback);
+    const gradedAt =
+      unchanged && typeof existing['gradedAt'] === 'string'
+        ? existing['gradedAt']
+        : /* @__PURE__ */ new Date().toISOString();
+    const grading = {
+      ...existing,
+      id: gradingId,
+      rubricId: input.rubricId,
+      classId: input.classId,
+      studentId: input.studentKey,
+      status,
+      marks: mergedMarks,
+      criterionNotes: mergedNotes,
+      gradedAt,
+    };
+    if (input.overallFeedback !== void 0) grading['overallFeedback'] = input.overallFeedback;
+    if (idx >= 0) gradings[idx] = grading;
+    else gradings.push(grading);
+    result = {
+      gradingId,
+      status,
+      markedCount: coveredCount,
+      criterionCount: currentCritIds.size,
+      created,
+    };
+    return { ...root, rubrics, gradings };
+  });
+  if (!result)
+    throw new WriteValidationError(
+      '\uCC44\uC810 \uC800\uC7A5\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.',
+    );
+  return result;
+}
+
+// ../ssampin-ai-bridge/packages/core/dist/liveWrite.js
+import http from 'node:http';
+import fs6 from 'node:fs';
+import path5 from 'node:path';
+function controlPath(dataDir) {
+  return path5.join(bridgeStateDir(dataDir), 'control.json');
+}
+function capabilityPath(dataDir) {
+  return path5.join(bridgeStateDir(dataDir), 'capability.json');
+}
+function validateControl(parsed) {
+  if (!parsed || typeof parsed !== 'object') return null;
+  const o = parsed;
+  const { port, token, pid, heartbeatAt } = o;
+  if (
+    typeof port !== 'number' ||
+    !Number.isInteger(port) ||
+    port <= 0 ||
+    port > 65535 ||
+    typeof token !== 'string' ||
+    token.length === 0 ||
+    typeof pid !== 'number' ||
+    !Number.isInteger(pid) ||
+    pid <= 0 || // pid 0/음수/소수는 형식위반 → invalid(refuse). 0 은 프로세스그룹 신호라 특히 위험.
+    typeof heartbeatAt !== 'number' ||
+    !Number.isFinite(heartbeatAt)
+  ) {
+    return null;
+  }
+  return { port, token, pid, heartbeatAt };
+}
+function readControlState(dataDir = resolveDataDir()) {
+  const p = controlPath(dataDir);
+  if (!fs6.existsSync(p)) return { kind: 'absent' };
+  let raw;
+  try {
+    raw = fs6.readFileSync(p, 'utf-8');
+  } catch {
+    return { kind: 'invalid' };
+  }
+  if (raw.trim().length === 0) return { kind: 'invalid' };
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return { kind: 'invalid' };
+  }
+  const control = validateControl(parsed);
+  return control ? { kind: 'ok', control } : { kind: 'invalid' };
+}
+function readControlInfo(dataDir = resolveDataDir()) {
+  const s = readControlState(dataDir);
+  return s.kind === 'ok' ? s.control : null;
+}
+function readBridgeCapability(dataDir = resolveDataDir()) {
+  try {
+    const o = JSON.parse(fs6.readFileSync(capabilityPath(dataDir), 'utf-8'));
+    return { allowWrite: o['allowWrite'] === true, allowContent: o['allowContent'] === true };
+  } catch {
+    return { allowWrite: false, allowContent: false };
+  }
+}
+function pidAlive(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    return e.code === 'EPERM';
+  }
+}
+function isAppRunning(control, now = Date.now(), maxAgeMs = 15e3) {
+  if (!control) return false;
+  if (!pidAlive(control.pid)) return false;
+  const age = now - control.heartbeatAt;
+  return age >= -2e3 && age <= maxAgeMs;
+}
+function decideWritePath(dataDir = resolveDataDir(), now = Date.now()) {
+  const state = readControlState(dataDir);
+  if (state.kind === 'absent') return { path: 'direct', control: null };
+  if (state.kind === 'invalid') return { path: 'refuse', control: null };
+  const control = state.control;
+  if (isAppRunning(control, now)) return { path: 'loopback', control };
+  if (!pidAlive(control.pid)) return { path: 'direct', control };
+  return { path: 'refuse', control };
+}
+function postLoopback(control, payload, timeoutMs = 12e3) {
+  return new Promise((resolve) => {
+    const body = JSON.stringify(payload);
+    let settled = false;
+    const done = (r) => {
+      if (!settled) {
+        settled = true;
+        resolve(r);
+      }
+    };
+    const req = http.request(
+      {
+        host: '127.0.0.1',
+        port: control.port,
+        method: 'POST',
+        path: '/',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(body),
+          'x-ssampin-token': control.token,
+        },
+      },
+      (res) => {
+        let data = '';
+        res.on('data', (c) => (data += c));
+        res.on('end', () => {
+          let parsed = {};
+          try {
+            parsed = JSON.parse(data);
+          } catch {}
+          const status = res.statusCode ?? 0;
+          const result = {
+            ok: status === 200 && parsed['ok'] === true,
+            status,
+          };
+          if (typeof parsed['ref'] === 'string') result.ref = parsed['ref'];
+          if (typeof parsed['error'] === 'string') result.error = parsed['error'];
+          done(result);
+        });
+      },
+    );
+    req.on('error', () =>
+      done({
+        ok: false,
+        status: 0,
+        error: '\uC324\uD540 \uC5F0\uACB0 \uC2E4\uD328(\uC11C\uBC84 \uC751\uB2F5 \uC5C6\uC74C).',
+      }),
+    );
+    req.setTimeout(timeoutMs, () => {
+      req.destroy();
+      done({
+        ok: false,
+        status: 504,
+        error: '\uC324\uD540 \uC751\uB2F5 \uC2DC\uAC04\uCD08\uACFC.',
+      });
+    });
+    req.write(body);
+    req.end();
+  });
+}
+
+// ../ssampin-ai-bridge/packages/core/dist/directWrite.js
+import crypto4 from 'node:crypto';
+import fs7 from 'node:fs';
+function recordId(prefix, clientKey) {
+  if (clientKey) {
+    return `${prefix}_${crypto4.createHash('sha256').update(clientKey).digest('hex').slice(0, 16)}`;
+  }
+  return `${prefix}_${Date.now().toString(36)}_${crypto4.randomBytes(5).toString('hex')}`;
+}
+function setIf11(t, k, v) {
+  if (v !== void 0) t[k] = v;
+}
+function hasId(v, id) {
+  return !!v && typeof v === 'object' && v['id'] === id;
+}
+function readListRoot(parsed, key) {
+  if (parsed === null) return { root: {}, list: [] };
+  if (typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new WriteValidationError(
+      `${key}.json \uD615\uC2DD\uC774 \uC608\uC0C1\uACFC \uB2E4\uB985\uB2C8\uB2E4 \u2014 \uB370\uC774\uD130 \uBCF4\uD638\uB97C \uC704\uD574 \uC9C1\uC811\uC4F0\uAE30\uB97C \uC911\uB2E8\uD569\uB2C8\uB2E4.`,
+    );
+  }
+  const root = parsed;
+  const v = root[key];
+  if (v === void 0) return { root, list: [] };
+  if (!Array.isArray(v)) {
+    throw new WriteValidationError(
+      `${key}.json \uC758 ${key} \uAC00 \uBC30\uC5F4\uC774 \uC544\uB2D9\uB2C8\uB2E4 \u2014 \uC9C1\uC811\uC4F0\uAE30\uB97C \uC911\uB2E8\uD569\uB2C8\uB2E4(\uB370\uC774\uD130 \uBCF4\uD638).`,
+    );
+  }
+  return { root, list: v };
+}
+async function mutateDataFile(dataDir, filename, clientKey, mutate) {
+  if (!readBridgeCapability(dataDir).allowWrite) {
+    throw new WriteDisabledError(
+      '\uC9C1\uC811\uC4F0\uAE30\uAC00 \uBE44\uD65C\uC131\uD654\uB418\uC5B4 \uC788\uC2B5\uB2C8\uB2E4(\uC324\uD540 \uC124\uC815\uC758 "AI \uC5F0\uACB0" \uC4F0\uAE30 \uD1A0\uAE00).',
+    );
+  }
+  const baseReal = realDir(dataDir);
+  const file = resolveDataFile(dataDir, filename);
+  assertNoSymlinkEscape(baseReal, file);
+  return withLock(dataDir, () => {
+    if (decideWritePath(dataDir).path !== 'direct') {
+      throw new WriteConflictError(
+        '\uC324\uD540\uC774 \uC2DC\uC791\uB418\uC5C8\uAC70\uB098 \uC0C1\uD0DC\uAC00 \uBD88\uD655\uC2E4\uD558\uC5EC \uC9C1\uC811\uC4F0\uAE30\uB97C \uC911\uB2E8\uD588\uC2B5\uB2C8\uB2E4. \uB2E4\uC2DC \uC2DC\uB3C4\uD558\uC138\uC694.',
+      );
+    }
+    const baseRaw = fs7.existsSync(file) ? fs7.readFileSync(file, 'utf-8') : '';
+    if (clientKey) {
+      const existing = loadIdem(dataDir)[clientKey];
+      if (existing) return { ref: existing };
+    }
+    const parsed = baseRaw.trim().length > 0 ? JSON.parse(baseRaw) : null;
+    const { next, ref } = mutate(parsed);
+    const nowRaw = fs7.existsSync(file) ? fs7.readFileSync(file, 'utf-8') : '';
+    if (nowRaw !== baseRaw) {
+      throw new WriteConflictError(
+        '\uC4F0\uAE30 \uB3C4\uC911 \uB370\uC774\uD130\uAC00 \uBCC0\uACBD\uB418\uC5C8\uC2B5\uB2C8\uB2E4(\uC324\uD540\uC774 \uC2E4\uD589 \uC911\uC77C \uC218 \uC788\uC74C). \uB2E4\uC2DC \uC2DC\uB3C4\uD558\uC138\uC694.',
+      );
+    }
+    if (baseRaw.length > 10) fs7.writeFileSync(backupPathFor(file), baseRaw, 'utf-8');
+    const tmp = `${file}.tmp`;
+    fs7.writeFileSync(tmp, JSON.stringify(next, null, 2), 'utf-8');
+    fs7.renameSync(tmp, file);
+    if (clientKey) {
+      const idem = loadIdem(dataDir);
+      idem[clientKey] = ref;
+      saveIdem(dataDir, idem);
+    }
+    return { ref };
+  });
+}
+function appendTodoDirect(dataDir, input, clientKey) {
+  return mutateDataFile(dataDir, 'todos', clientKey, (parsed) => {
+    const { root, list } = readListRoot(parsed, 'todos');
+    const id = recordId('td', clientKey);
+    if (list.some((t) => hasId(t, id))) return { next: { ...root, todos: list }, ref: id };
+    const now = /* @__PURE__ */ new Date().toISOString();
+    const todo = {
+      id,
+      text: input.text,
+      completed: false,
+      createdAt: now,
+      updatedAt: now,
+      pendingRemoteOp: 'create',
+      priority: input.priority ?? 'none',
+    };
+    setIf11(todo, 'dueDate', input.dueDate);
+    setIf11(todo, 'category', input.category);
+    setIf11(todo, 'time', input.time);
+    return { next: { ...root, todos: [...list, todo] }, ref: id };
+  });
+}
+function appendEventDirect(dataDir, input, clientKey) {
+  return mutateDataFile(dataDir, 'events', clientKey, (parsed) => {
+    const { root, list } = readListRoot(parsed, 'events');
+    const id = recordId('ev', clientKey);
+    if (list.some((e) => hasId(e, id))) return { next: { ...root, events: list }, ref: id };
+    const ev = {
+      id,
+      title: input.title,
+      date: input.date,
+      category: input.category ?? 'etc',
+      source: 'ssampin',
+    };
+    setIf11(ev, 'time', input.time);
+    setIf11(ev, 'location', input.location);
+    return { next: { ...root, events: [...list, ev] }, ref: id };
   });
 }
 
@@ -23767,10 +24885,137 @@ function rosterForIdentity(dataDir, identity, store) {
   return [];
 }
 
+// ../ssampin-ai-bridge/packages/core/dist/assessments.js
+var NUM =
+  '\\d[\\d,]*(?:\\.\\d+)?(?:\\s*[~\u223C\u301C\u2010\u2011\u2013\u2014\\-]\\s*\\d[\\d,]*(?:\\.\\d+)?)?';
+var SCORE_RULES = [
+  [new RegExp(`${NUM}\\s*\uBD84\uC758\\s*${NUM}`, 'g'), '[\uC810\uC218]'],
+  // 한국어 분수 'N분의 M'
+  [new RegExp(`${NUM}\\s*/\\s*${NUM}`, 'g'), '[\uC810\uC218]'],
+  // 'M/N'
+  [new RegExp(`${NUM}\\s*\uC810\\s*\uB9CC\uC810`, 'g'), '[\uB9CC\uC810]'],
+  [new RegExp(`${NUM}\\s*\uB9CC\uC810`, 'g'), '[\uB9CC\uC810]'],
+  // '점' 없는 만점(100만점/5 만점)
+  [new RegExp(`${NUM}\\s*\uC810`, 'g'), '[\uC810\uC218]'],
+  [new RegExp(`${NUM}\\s*\uB4F1\uAE09`, 'g'), '[\uB4F1\uAE09]'],
+  // 라벨형: 석차/순위/등수 + (콜론·공백) + 숫자(+등) — '석차: 2'·'순위: 1'·'등수 3'·'학급석차: 4'
+  [
+    new RegExp(
+      `(?:\uC11D\uCC28|\uC21C\uC704|\uB4F1\uC218)\\s*[:\uFF1A]?\\s*${NUM}\\s*\uB4F1?`,
+      'g',
+    ),
+    '[\uC11D\uCC28]',
+  ],
+  [new RegExp(`${NUM}\\s*\uC21C\uC704`, 'g'), '[\uC11D\uCC28]'],
+  // 숫자-선행 '1순위'
+  // 숫자+등/위(석차)는 모두 마스킹. 무공백 합성(3등분야/3위로/100위안)을 정규식으로 완벽 구분 불가 →
+  // 누출 0 우선 전부 치환(등급은 위에서 선처리, 숫자 없는 등교/위원 등은 미매칭 보존).
+  [new RegExp(`${NUM}\\s*\uB4F1`, 'g'), '[\uC11D\uCC28]'],
+  [new RegExp(`${NUM}\\s*\uC704`, 'g'), '[\uC11D\uCC28]'],
+  [new RegExp(`${NUM}\\s*(?:%|\uFF05|\uD37C\uC13C\uD2B8|\uD504\uB85C)`, 'g'), '[\uBE44\uC728]'],
+];
+function maskScores(text) {
+  let out = text;
+  for (const [re, rep] of SCORE_RULES) out = out.replace(re, rep);
+  return out;
+}
+function safeAchievement(level) {
+  if (level === void 0) return void 0;
+  const t = level.trim();
+  if (t.length === 0 || t.length > 4 || /\d/.test(t)) return void 0;
+  return t;
+}
+function setIf12(target, key, value) {
+  if (value !== void 0 && value !== '') target[key] = value;
+}
+function getRubricFeedback(dataDir, classId, studentKey2, maskText) {
+  const scrub = (s) => maskScores(maskText(s));
+  const { rubrics, gradings } = readRubrics(dataDir);
+  const rubricById = new Map(rubrics.map((r) => [r.id, r]));
+  return gradings
+    .filter((g) => g.classId === classId && g.studentId === studentKey2)
+    .map((g) => {
+      const found = rubricById.get(g.rubricId);
+      const rubric = found && found.classId === classId ? found : void 0;
+      const criteria = (rubric?.criteria ?? [])
+        .slice()
+        .sort((a, b) => a.order - b.order)
+        .map((c) => {
+          const levelId = g.marks[c.id];
+          const level = levelId ? c.levels.find((l) => l.id === levelId) : void 0;
+          const fb = {
+            criterion: c.name,
+            achievedLevel: level?.name ?? null,
+          };
+          if (level?.description) setIf12(fb, 'levelDescription', scrub(level.description));
+          const note = g.criterionNotes[c.id];
+          if (note) setIf12(fb, 'note', scrub(note));
+          return fb;
+        });
+      const view = {
+        rubricTitle: rubric?.title ?? '(\uC0AD\uC81C\uB41C \uD3C9\uAC00\uD45C)',
+        status: g.status,
+        criteria,
+        date: g.gradedAt,
+      };
+      if (g.overallFeedback) setIf12(view, 'overallFeedback', scrub(g.overallFeedback));
+      return view;
+    });
+}
+function writtenParticipation(absence, scorePresent) {
+  if (absence === 'absent') return '\uACB0\uC2DC';
+  if (absence === 'recognized') return '\uC778\uC815';
+  if (absence === 'exempt') return '\uBA74\uC81C';
+  return scorePresent ? '\uC751\uC2DC' : '\uBBF8\uC785\uB825';
+}
+function getGradeSummary(dataDir, classId, studentKey2, maskText) {
+  const scrub = (s) => maskScores(maskText(s));
+  const cls = readTeachingClasses(dataDir).classes.find((c) => c.id === classId);
+  const student = cls?.students.find((s) => studentKey(s) === studentKey2);
+  if (!student) return { achievement: [], assessments: [] };
+  const gKey = gradeStudentKey(student);
+  const ga = readGradeAnalysis(dataDir);
+  const achievement = [];
+  for (const r of ga.semesterResults) {
+    if (r.teachingClassId !== classId || r.studentKey !== gKey) continue;
+    const level = safeAchievement(r.achievementLevel);
+    if (level) achievement.push({ semester: r.semester, level, confirmed: r.confirmed });
+  }
+  const plans = ga.plans.filter((p) => p.teachingClassId === classId);
+  const assessments = plans.map((p) => {
+    const summary = {
+      area: p.areaName,
+      kind: p.kind === 'written-exam' ? '\uC9C0\uD544' : '\uC218\uD589',
+      title: p.title,
+      participation: '\uBBF8\uC785\uB825',
+      confirmed: false,
+    };
+    if (p.method) setIf12(summary, 'method', scrub(p.method));
+    if (p.kind === 'written-exam') {
+      const w = ga.writtenResults.find((x) => x.assessmentId === p.id && x.studentKey === gKey);
+      if (w) {
+        summary['participation'] = writtenParticipation(w.absenceCode, w.scorePresent);
+        summary['confirmed'] = w.confirmed;
+      }
+    } else {
+      const pr = ga.performanceResults.find(
+        (x) => x.assessmentId === p.id && x.studentKey === gKey,
+      );
+      if (pr) {
+        summary['participation'] = pr.scorePresent ? '\uC751\uC2DC' : '\uBBF8\uC785\uB825';
+        summary['confirmed'] = pr.confirmed;
+        if (pr.evidenceNote) setIf12(summary, 'evidenceNote', scrub(pr.evidenceNote));
+      }
+    }
+    return summary;
+  });
+  return { achievement, assessments };
+}
+
 // ../ssampin-ai-bridge/packages/core/dist/consent.js
-import crypto4 from 'node:crypto';
-import fs6 from 'node:fs';
-import path5 from 'node:path';
+import crypto5 from 'node:crypto';
+import fs8 from 'node:fs';
+import path6 from 'node:path';
 var DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 var PURPOSE_MAX = 100;
 var OBSERVATION_READ_PURPOSE = 'observation_read';
@@ -23779,6 +25024,13 @@ var ConsentValidationError = class extends Error {
 };
 function nowIso() {
   return /* @__PURE__ */ new Date().toISOString();
+}
+var CONSENT_ID_ALPHABET = 'abcdefghijklmnopqrstuvwxyz';
+function defaultConsentId() {
+  const bytes = crypto5.randomBytes(16);
+  let s = '';
+  for (const b of bytes) s += CONSENT_ID_ALPHABET[b % 26];
+  return `cs_${s}`;
 }
 function notExpired(rec, t) {
   if (rec.expiresAt === void 0) return true;
@@ -23804,15 +25056,15 @@ var ConsentStore = class {
   lockTimeoutMs;
   constructor(opts = {}) {
     const base = opts.dir ?? resolveDataDir();
-    this.filePath = path5.join(bridgeStateDir(base), 'consents.json');
-    this.genId = opts.genId ?? (() => `cs_${crypto4.randomBytes(8).toString('hex')}`);
+    this.filePath = path6.join(bridgeStateDir(base), 'consents.json');
+    this.genId = opts.genId ?? defaultConsentId;
     this.lockTimeoutMs = opts.lockTimeoutMs ?? 3e3;
   }
   /** 파일을 새로 읽어 유효 레코드만 반환(손상 항목은 조용히 폐기). */
   read() {
     let parsed;
     try {
-      parsed = JSON.parse(fs6.readFileSync(this.filePath, 'utf-8'));
+      parsed = JSON.parse(fs8.readFileSync(this.filePath, 'utf-8'));
     } catch {
       return [];
     }
@@ -23845,22 +25097,22 @@ var ConsentStore = class {
   reclaimIfStale(lockDir, ownerFile) {
     let owner;
     try {
-      owner = JSON.parse(fs6.readFileSync(ownerFile, 'utf-8'));
+      owner = JSON.parse(fs8.readFileSync(ownerFile, 'utf-8'));
     } catch {
       owner = void 0;
     }
     if (owner && typeof owner.pid === 'number') {
       if (this.pidAlive(owner.pid)) return false;
       try {
-        fs6.rmSync(lockDir, { recursive: true, force: true });
+        fs8.rmSync(lockDir, { recursive: true, force: true });
         return true;
       } catch {
         return false;
       }
     }
     try {
-      if (Date.now() - fs6.statSync(lockDir).mtimeMs > 3e4) {
-        fs6.rmSync(lockDir, { recursive: true, force: true });
+      if (Date.now() - fs8.statSync(lockDir).mtimeMs > 3e4) {
+        fs8.rmSync(lockDir, { recursive: true, force: true });
         return true;
       }
     } catch {}
@@ -23874,14 +25126,14 @@ var ConsentStore = class {
    */
   withLock(fn) {
     const lockDir = `${this.filePath}.lock`;
-    const ownerFile = path5.join(lockDir, 'owner.json');
-    const myNonce = `${process.pid}.${crypto4.randomBytes(6).toString('hex')}`;
+    const ownerFile = path6.join(lockDir, 'owner.json');
+    const myNonce = `${process.pid}.${crypto5.randomBytes(6).toString('hex')}`;
     const deadlineMs = Date.now() + this.lockTimeoutMs;
-    fs6.mkdirSync(path5.dirname(this.filePath), { recursive: true });
+    fs8.mkdirSync(path6.dirname(this.filePath), { recursive: true });
     for (;;) {
       try {
-        fs6.mkdirSync(lockDir);
-        fs6.writeFileSync(ownerFile, JSON.stringify({ pid: process.pid, nonce: myNonce }), 'utf-8');
+        fs8.mkdirSync(lockDir);
+        fs8.writeFileSync(ownerFile, JSON.stringify({ pid: process.pid, nonce: myNonce }), 'utf-8');
         break;
       } catch {
         if (this.reclaimIfStale(lockDir, ownerFile)) continue;
@@ -23897,19 +25149,19 @@ var ConsentStore = class {
       return fn();
     } finally {
       try {
-        const owner = JSON.parse(fs6.readFileSync(ownerFile, 'utf-8'));
-        if (owner.nonce === myNonce) fs6.rmSync(lockDir, { recursive: true, force: true });
+        const owner = JSON.parse(fs8.readFileSync(ownerFile, 'utf-8'));
+        if (owner.nonce === myNonce) fs8.rmSync(lockDir, { recursive: true, force: true });
       } catch {}
     }
   }
   /** 고유 tmp + 원자적 rename(잠금 보유 중 호출). 고정 tmp 경로 충돌을 피한다. */
   persist(records) {
-    const dir = path5.dirname(this.filePath);
-    fs6.mkdirSync(dir, { recursive: true });
-    const tmp = `${this.filePath}.${process.pid}.${crypto4.randomBytes(4).toString('hex')}.tmp`;
+    const dir = path6.dirname(this.filePath);
+    fs8.mkdirSync(dir, { recursive: true });
+    const tmp = `${this.filePath}.${process.pid}.${crypto5.randomBytes(4).toString('hex')}.tmp`;
     const body = { records: [...records] };
-    fs6.writeFileSync(tmp, JSON.stringify(body, null, 2), 'utf-8');
-    fs6.renameSync(tmp, this.filePath);
+    fs8.writeFileSync(tmp, JSON.stringify(body, null, 2), 'utf-8');
+    fs8.renameSync(tmp, this.filePath);
   }
   /** 잠금 하에서 read → 변형 → write 를 원자적으로 수행(갱신 손실 방지). */
   mutate(fn) {
@@ -24077,13 +25329,52 @@ function createContext(dataDir = resolveDataDir()) {
 }
 
 // ../ssampin-ai-bridge/packages/mcp/dist/tools.js
+function looksLikeToken(seg) {
+  if (/^[0-9a-fA-F]{16,}$/.test(seg)) return true;
+  if (/^eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)?$/.test(seg)) return true;
+  if (/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(seg))
+    return true;
+  if (seg.length >= 16 && /^[A-Za-z0-9_-]+$/.test(seg)) {
+    const mixedAlnum = /[A-Za-z]/.test(seg) && /[0-9]/.test(seg);
+    const mixedCase = /[a-z]/.test(seg) && /[A-Z]/.test(seg);
+    if (mixedAlnum || mixedCase) return true;
+  }
+  return false;
+}
+function redactPathTokens(pathname) {
+  return pathname
+    .split('/')
+    .map((seg) => (looksLikeToken(seg) ? '[\uD1A0\uD070]' : seg))
+    .join('/');
+}
+function stripUrlSecrets(url) {
+  try {
+    const u = new URL(url);
+    return `${u.protocol}//${u.host}${redactPathTokens(u.pathname)}`;
+  } catch {
+    const noFrag = url.split('#')[0] ?? url;
+    const noQuery = noFrag.split('?')[0] ?? noFrag;
+    return redactPathTokens(noQuery);
+  }
+}
+function makeDeider(roster) {
+  let masked = 0;
+  return {
+    deid: (s) => {
+      const r = deidentify(s, roster);
+      masked += sumDeid(r.stats);
+      return r.text;
+    },
+    masked: () => masked,
+  };
+}
 var UnknownTokenError = class extends Error {
   name = 'UnknownTokenError';
 };
 function resolveStudentTarget(ctx, token) {
-  if (/^(?:cls|obs)_/.test(token)) {
+  if (/^(?:cls|obs|rub)_/.test(token)) {
     throw new UnknownTokenError(
-      '\uD559\uC0DD \uD1A0\uD070\uC774 \uC544\uB2D9\uB2C8\uB2E4(\uC218\uC5C5\uBC18/\uAD00\uCC30 \uD1A0\uD070). list_students \uC758 \uD559\uC0DD token \uC744 \uC4F0\uC138\uC694.',
+      '\uD559\uC0DD \uD1A0\uD070\uC774 \uC544\uB2D9\uB2C8\uB2E4(\uC218\uC5C5\uBC18/\uAD00\uCC30/\uD3C9\uAC00\uD45C \uD1A0\uD070). list_students \uC758 \uD559\uC0DD token \uC744 \uC4F0\uC138\uC694.',
     );
   }
   const resolved = ctx.store.resolveToken(token);
@@ -24096,6 +25387,14 @@ function resolveStudentTarget(ctx, token) {
   if (identity.kind === 'class') {
     throw new UnknownTokenError(
       '\uC218\uC5C5\uBC18 \uD1A0\uD070\uC744 \uD559\uC0DD \uD1A0\uD070 \uC790\uB9AC\uC5D0 \uC0AC\uC6A9\uD588\uC2B5\uB2C8\uB2E4. list_students \uC758 \uD559\uC0DD token \uC744 \uC4F0\uC138\uC694.',
+    );
+  }
+  if (
+    (token.startsWith('stu_') && identity.kind !== 'homeroom') ||
+    (token.startsWith('tcs_') && identity.kind !== 'teaching')
+  ) {
+    throw new UnknownTokenError(
+      '\uD1A0\uD070 \uC885\uB958\uAC00 \uC77C\uCE58\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4(\uC190\uC0C1\uB41C \uD1A0\uD070). list_students \uB85C \uB2E4\uC2DC \uD1A0\uD070\uC744 \uBC1B\uC73C\uC138\uC694.',
     );
   }
   return { resolved, identity };
@@ -24165,6 +25464,321 @@ function getSeating(ctx) {
   ctx.audit.append({ tool: 'get_seating', redactionStats: { students: seated } });
   return { rows: seating.rows, cols: seating.cols, seats };
 }
+function isYmd(v) {
+  return typeof v === 'string' && /^\d{8}$/.test(v);
+}
+function getMeals(ctx, args = {}) {
+  const all = readManualMeals(ctx.dataDir);
+  const from = isYmd(args.from) ? args.from : void 0;
+  const to = isYmd(args.to) ? args.to : void 0;
+  const meals = all.filter((m) => {
+    if (from !== void 0 && m.date < from) return false;
+    if (to !== void 0 && m.date > to) return false;
+    return true;
+  });
+  ctx.audit.append({ tool: 'get_meals', redactionStats: { items: meals.length } });
+  return { count: meals.length, meals };
+}
+var CONTENT_GATE_NOTICE =
+  '\uC81C\uBAA9\xB7\uC124\uBA85\xB7\uC7A5\uC18C \uB4F1 \uC790\uC720\uC11C\uC220\uC740 SSAMPIN_BRIDGE_ALLOW_CONTENT=1 \uB9C8\uC2A4\uD130 \uC2A4\uC704\uCE58\uAC00 \uCF1C\uC9C4 \uACBD\uC6B0\uC5D0\uB9CC \uB178\uCD9C\uB429\uB2C8\uB2E4(\uD604\uC7AC \uBBF8\uB178\uCD9C). \uB0A0\uC9DC\xB7\uAD50\uC2DC \uB4F1 \uBE44\uC2DD\uBCC4 \uBA54\uD0C0\uB9CC \uBC18\uD658\uD588\uC2B5\uB2C8\uB2E4.';
+var CONTENT_SHOWN_NOTICE =
+  '\uC790\uC720\uC11C\uC220\uC774 \uD3EC\uD568\uB418\uC5B4 \uC788\uC2B5\uB2C8\uB2E4. \uD559\uC0DD \uC2E4\uBA85\xB7\uC5F0\uB77D\uCC98\xB7\uC0DD\uC77C\uC740 \uB9C8\uC2A4\uD0B9\uB418\uC9C0\uB9CC \uB9E5\uB77D\uC73C\uB85C \uC7AC\uC2DD\uBCC4\uB420 \uC218 \uC788\uC73C\uBBC0\uB85C \uAD50\uC0AC \uAC80\uD1A0\uAC00 \uD544\uC694\uD569\uB2C8\uB2E4.';
+function sumDeid(stats) {
+  return (
+    stats.names + stats.phones + stats.rrns + stats.birthDates + stats.studentNumbers + stats.emails
+  );
+}
+function buildFullRoster(ctx) {
+  const entries = [];
+  for (const s of readStudents(ctx.dataDir)) {
+    if (!s.name) continue;
+    const e = {
+      token: ctx.store.getToken(s.id),
+      names: [s.name],
+    };
+    if (s.studentNumber !== void 0) e.studentNumber = s.studentNumber;
+    entries.push(e);
+  }
+  for (const c of readTeachingClasses(ctx.dataDir).classes) {
+    for (const st of c.students) {
+      if (!st.name) continue;
+      const e = {
+        token: ctx.store.getToken(makeTeachingStudentIdentity(c.id, studentKey(st)), {
+          prefix: 'tcs',
+        }),
+        names: [st.name],
+      };
+      if (st.number !== void 0) e.studentNumber = st.number;
+      entries.push(e);
+    }
+  }
+  return entries;
+}
+function isYmdDash(v) {
+  return typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
+}
+function safeEventView(e) {
+  const v = { date: e.date };
+  const copy = (k) => {
+    const val = e[k];
+    if (val !== void 0) v[k] = val;
+  };
+  copy('endDate');
+  if (e.category !== void 0) v['category'] = maskPatterns(e.category);
+  copy('time');
+  copy('startTime');
+  copy('endTime');
+  copy('period');
+  copy('periodEnd');
+  copy('recurrence');
+  copy('isDDay');
+  return v;
+}
+function getEvents(ctx, args = {}) {
+  const all = readEvents(ctx.dataDir);
+  const from = isYmdDash(args.from) ? args.from : void 0;
+  const to = isYmdDash(args.to) ? args.to : void 0;
+  const filtered = all.filter((e) => {
+    const end = e.endDate ?? e.date;
+    if (from !== void 0 && end < from) return false;
+    if (to !== void 0 && e.date > to) return false;
+    return true;
+  });
+  const contentOn = isContentExposureEnabled();
+  const roster = contentOn ? buildFullRoster(ctx) : [];
+  let masked = 0;
+  const events = filtered.map((e) => {
+    const v = safeEventView(e);
+    if (e.id !== void 0)
+      v['eventToken'] = ctx.store.getToken(makeEventIdentity(e.id), { prefix: 'evt' });
+    if (contentOn) {
+      const t = deidentify(e.title, roster);
+      masked += sumDeid(t.stats);
+      v['title'] = t.text;
+      if (e.description !== void 0) {
+        const d = deidentify(e.description, roster);
+        masked += sumDeid(d.stats);
+        v['description'] = d.text;
+      }
+      if (e.location !== void 0) {
+        const l = deidentify(e.location, roster);
+        masked += sumDeid(l.stats);
+        v['location'] = l.text;
+      }
+    }
+    return v;
+  });
+  ctx.audit.append({ tool: 'get_events', redactionStats: { items: events.length, names: masked } });
+  return {
+    count: events.length,
+    contentIncluded: contentOn,
+    notice: contentOn ? CONTENT_SHOWN_NOTICE : CONTENT_GATE_NOTICE,
+    events,
+  };
+}
+function getDdays(ctx) {
+  const all = readDdays(ctx.dataDir);
+  const contentOn = isContentExposureEnabled();
+  const roster = contentOn ? buildFullRoster(ctx) : [];
+  let masked = 0;
+  const ddays = all.map((d) => {
+    const v = { date: d.date };
+    if (d.emoji !== void 0) v['emoji'] = d.emoji;
+    if (d.color !== void 0) v['color'] = d.color;
+    if (d.pinned !== void 0) v['pinned'] = d.pinned;
+    if (contentOn) {
+      const t = deidentify(d.title, roster);
+      masked += sumDeid(t.stats);
+      v['title'] = t.text;
+    }
+    return v;
+  });
+  ctx.audit.append({ tool: 'get_ddays', redactionStats: { items: ddays.length, names: masked } });
+  return {
+    count: ddays.length,
+    contentIncluded: contentOn,
+    notice: contentOn ? CONTENT_SHOWN_NOTICE : CONTENT_GATE_NOTICE,
+    ddays,
+  };
+}
+function safeTodoView(t) {
+  const v = {
+    status: effectiveTodoStatus(t),
+    completed: t.completed,
+  };
+  const copy = (k) => {
+    const val = t[k];
+    if (val !== void 0) v[k] = val;
+  };
+  copy('dueDate');
+  copy('startDate');
+  copy('time');
+  copy('priority');
+  if (t.category !== void 0) v['category'] = maskPatterns(t.category);
+  copy('recurrence');
+  copy('archivedAt');
+  copy('subTaskCount');
+  copy('subTaskDone');
+  return v;
+}
+function getTodos(ctx, args = {}) {
+  const all = readTodos(ctx.dataDir);
+  const dueBefore = isYmdDash(args.dueBefore) ? args.dueBefore : void 0;
+  const statusFilter =
+    args.status === 'todo' || args.status === 'inProgress' || args.status === 'done'
+      ? args.status
+      : void 0;
+  const filtered = all.filter((t) => {
+    if (!args.includeArchived && t.archivedAt !== void 0) return false;
+    if (statusFilter !== void 0 && effectiveTodoStatus(t) !== statusFilter) return false;
+    if (dueBefore !== void 0 && (t.dueDate === void 0 || t.dueDate > dueBefore)) return false;
+    return true;
+  });
+  const contentOn = isContentExposureEnabled();
+  const roster = contentOn ? buildFullRoster(ctx) : [];
+  let masked = 0;
+  const todos = filtered.map((t) => {
+    const v = safeTodoView(t);
+    if (t.id !== void 0)
+      v['todoToken'] = ctx.store.getToken(makeTodoIdentity(t.id), { prefix: 'todo' });
+    if (contentOn) {
+      const tx = deidentify(t.text, roster);
+      masked += sumDeid(tx.stats);
+      v['text'] = tx.text;
+      if (t.notes !== void 0) {
+        const n = deidentify(t.notes, roster);
+        masked += sumDeid(n.stats);
+        v['notes'] = n.text;
+      }
+    }
+    return v;
+  });
+  ctx.audit.append({ tool: 'get_todos', redactionStats: { items: todos.length, names: masked } });
+  return {
+    count: todos.length,
+    contentIncluded: contentOn,
+    notice: contentOn ? CONTENT_SHOWN_NOTICE : CONTENT_GATE_NOTICE,
+    todos,
+  };
+}
+function getSchedule(ctx, args) {
+  const kind = args.kind;
+  if (kind === 'class') {
+    const slots2 = readClassSchedule(ctx.dataDir);
+    ctx.audit.append({ tool: 'get_schedule', redactionStats: { items: slots2.length } });
+    return { kind, count: slots2.length, slots: slots2 };
+  }
+  if (kind === 'teacher') {
+    const slots2 = readTeacherSchedule(ctx.dataDir);
+    ctx.audit.append({ tool: 'get_schedule', redactionStats: { items: slots2.length } });
+    return { kind, count: slots2.length, slots: slots2 };
+  }
+  const all = readTimetableOverrides(ctx.dataDir);
+  const contentOn = isContentExposureEnabled();
+  const roster = contentOn ? buildFullRoster(ctx) : [];
+  let masked = 0;
+  const slots = all.map((o) => {
+    const v = { date: o.date, period: o.period };
+    if (o.subject !== void 0) v['subject'] = o.subject;
+    if (o.classroom !== void 0) v['classroom'] = o.classroom;
+    if (o.kind !== void 0) v['kind'] = o.kind;
+    if (o.scope !== void 0) v['scope'] = o.scope;
+    if (o.substituteTeacher !== void 0) v['substituteTeacher'] = o.substituteTeacher;
+    if (contentOn && o.reason !== void 0) {
+      const r = deidentify(o.reason, roster);
+      masked += sumDeid(r.stats);
+      v['reason'] = r.text;
+    }
+    return v;
+  });
+  ctx.audit.append({
+    tool: 'get_schedule',
+    redactionStats: { items: slots.length, names: masked },
+  });
+  return {
+    kind,
+    count: slots.length,
+    contentIncluded: contentOn,
+    notice: contentOn ? CONTENT_SHOWN_NOTICE : CONTENT_GATE_NOTICE,
+    slots,
+  };
+}
+function getNotes(ctx) {
+  const notebooks = readNotebooks(ctx.dataDir).filter((n) => !n.archived);
+  const sections = readNoteSections(ctx.dataDir);
+  const pages = readNotePages(ctx.dataDir);
+  const counts = { notebooks: notebooks.length, sections: sections.length, pages: pages.length };
+  if (!isContentExposureEnabled()) {
+    ctx.audit.append({ tool: 'get_notes', redactionStats: { items: pages.length } });
+    return { contentIncluded: false, notice: CONTENT_GATE_NOTICE, counts };
+  }
+  const { deid, masked } = makeDeider(buildFullRoster(ctx));
+  const pagesBySection = /* @__PURE__ */ new Map();
+  for (const p of pages) {
+    const view = {
+      title: deid(p.title),
+      tags: p.tags.map(deid),
+      pinned: p.pinned,
+      ...(p.updatedAt !== void 0 ? { updatedAt: p.updatedAt } : {}),
+    };
+    const arr = pagesBySection.get(p.sectionId) ?? [];
+    arr.push(view);
+    pagesBySection.set(p.sectionId, arr);
+  }
+  const sectionsByNotebook = /* @__PURE__ */ new Map();
+  for (const s of [...sections].sort((a, b) => a.order - b.order)) {
+    const arr = sectionsByNotebook.get(s.notebookId) ?? [];
+    arr.push({ title: deid(s.title), pages: pagesBySection.get(s.id) ?? [] });
+    sectionsByNotebook.set(s.notebookId, arr);
+  }
+  const notebookViews = [...notebooks]
+    .sort((a, b) => a.order - b.order)
+    .map((n) => ({ title: deid(n.title), sections: sectionsByNotebook.get(n.id) ?? [] }));
+  ctx.audit.append({ tool: 'get_notes', redactionStats: { items: pages.length, names: masked() } });
+  return { contentIncluded: true, notice: CONTENT_SHOWN_NOTICE, counts, notebooks: notebookViews };
+}
+function getMemos(ctx) {
+  const memos = readMemos(ctx.dataDir).filter((m) => !m.archived);
+  if (!isContentExposureEnabled()) {
+    ctx.audit.append({ tool: 'get_memos', redactionStats: { items: memos.length } });
+    return { contentIncluded: false, notice: CONTENT_GATE_NOTICE, count: memos.length };
+  }
+  const { deid, masked } = makeDeider(buildFullRoster(ctx));
+  const views = memos.map((m) => ({
+    text: deid(m.text),
+    ...(m.color !== void 0 ? { color: m.color } : {}),
+  }));
+  ctx.audit.append({ tool: 'get_memos', redactionStats: { items: memos.length, names: masked() } });
+  return { contentIncluded: true, notice: CONTENT_SHOWN_NOTICE, count: memos.length, memos: views };
+}
+function getBookmarks(ctx) {
+  const { groups, bookmarks } = readBookmarks(ctx.dataDir);
+  const activeGroups = groups.filter((g) => !g.archived);
+  if (!isContentExposureEnabled()) {
+    ctx.audit.append({ tool: 'get_bookmarks', redactionStats: { items: bookmarks.length } });
+    return { contentIncluded: false, notice: CONTENT_GATE_NOTICE, count: bookmarks.length };
+  }
+  const { deid, masked } = makeDeider(buildFullRoster(ctx));
+  const byGroup = /* @__PURE__ */ new Map();
+  for (const b of bookmarks) {
+    const arr = byGroup.get(b.groupId) ?? [];
+    arr.push({ name: deid(b.name), url: deid(stripUrlSecrets(b.url)) });
+    byGroup.set(b.groupId, arr);
+  }
+  const groupViews = [...activeGroups]
+    .sort((a, b) => a.order - b.order)
+    .map((g) => ({ name: deid(g.name), bookmarks: byGroup.get(g.id) ?? [] }));
+  ctx.audit.append({
+    tool: 'get_bookmarks',
+    redactionStats: { items: bookmarks.length, names: masked() },
+  });
+  return {
+    contentIncluded: true,
+    notice: CONTENT_SHOWN_NOTICE,
+    count: bookmarks.length,
+    groups: groupViews,
+  };
+}
 async function addObservation(ctx, args) {
   assertWriteEnabled();
   const { identity } = resolveStudentTarget(ctx, args.studentToken);
@@ -24211,7 +25825,7 @@ function getObservations(ctx, args) {
   let masked = 0;
   const observations = records.map((r) => {
     const { text, stats } = deidentify(r.content, roster);
-    masked += stats.names + stats.phones + stats.rrns + stats.birthDates + stats.studentNumbers;
+    masked += sumDeid(stats);
     const tags = r.tags.map((t) => deidentify(t, roster).text);
     return {
       observationId: ctx.store.getToken(makeObservationIdentity(r.id), { prefix: 'obs' }),
@@ -24251,11 +25865,403 @@ function checkRecordDraft(ctx, args) {
   });
   return report;
 }
+var ASSESSMENT_NOTICE =
+  '\uC810\uC218\xB7\uC11D\uCC28\xB7\uD658\uC0B0\uC810\uC740 \uC81C\uC678\uB41C \uC9C8\uC801 \uC815\uBCF4\uC785\uB2C8\uB2E4(\uC0DD\uAE30\uBD80 \uC785\uB825 \uAE08\uC9C0 \uD56D\uBAA9). \uB3C4\uB2EC \uC218\uC900\xB7\uC131\uCDE8\uB3C4\xB7\uBA54\uBAA8\uB294 \uC11C\uC220\uD615 \uC5ED\uB7C9\xB7\uD0DC\uB3C4 \uD45C\uD604\uC758 \uADFC\uAC70\uB85C\uB9CC \uD65C\uC6A9\uD558\uACE0, \uC810\uC218/\uC11D\uCC28\uB97C \uC0DD\uAE30\uBD80\uC5D0 \uC801\uC9C0 \uB9C8\uC138\uC694. \uAD50\uC0AC \uCD5C\uC885 \uAC80\uD1A0 \uD544\uC694.';
+function resolveTeachingTarget(ctx, token) {
+  const { resolved, identity } = resolveStudentTarget(ctx, token);
+  if (identity.kind !== 'teaching') {
+    throw new UnknownTokenError(
+      '\uC218\uD589\uD3C9\uAC00\xB7\uC131\uC801\uC740 \uC218\uC5C5\uBC18 \uD559\uC0DD \uD1A0\uD070\uC73C\uB85C \uC870\uD68C\uD558\uC138\uC694. list_classes \u2192 list_students(classToken) \uC758 token \uC744 \uC4F0\uC138\uC694.',
+    );
+  }
+  return { classId: identity.classId, studentKey: identity.studentKey, resolved };
+}
+function getPerformanceFeedback(ctx, args) {
+  const {
+    classId,
+    studentKey: studentKey2,
+    resolved,
+  } = resolveTeachingTarget(ctx, args.studentToken);
+  const access = assertContentAccess({
+    studentId: resolved,
+    purpose: OBSERVATION_READ_PURPOSE,
+    consent: ctx.consent,
+  });
+  const roster = rosterForIdentity(
+    ctx.dataDir,
+    { kind: 'teaching', classId, studentKey: studentKey2 },
+    ctx.store,
+  );
+  const items = getRubricFeedback(
+    ctx.dataDir,
+    classId,
+    studentKey2,
+    (s) => deidentify(s, roster).text,
+  );
+  ctx.audit.append({
+    tool: 'get_performance_feedback',
+    ...(access.via === 'consent' ? { consentId: access.consents.map((c) => c.id).join(',') } : {}),
+    redactionStats: { observations: items.length },
+  });
+  return { count: items.length, items, notice: ASSESSMENT_NOTICE };
+}
+function getGradeSummaryTool(ctx, args) {
+  const {
+    classId,
+    studentKey: studentKey2,
+    resolved,
+  } = resolveTeachingTarget(ctx, args.studentToken);
+  const access = assertContentAccess({
+    studentId: resolved,
+    purpose: OBSERVATION_READ_PURPOSE,
+    consent: ctx.consent,
+  });
+  const roster = rosterForIdentity(
+    ctx.dataDir,
+    { kind: 'teaching', classId, studentKey: studentKey2 },
+    ctx.store,
+  );
+  const summary = getGradeSummary(
+    ctx.dataDir,
+    classId,
+    studentKey2,
+    (s) => deidentify(s, roster).text,
+  );
+  ctx.audit.append({
+    tool: 'get_grade_summary',
+    ...(access.via === 'consent' ? { consentId: access.consents.map((c) => c.id).join(',') } : {}),
+    redactionStats: { observations: summary.assessments.length },
+  });
+  return { ...summary, notice: ASSESSMENT_NOTICE };
+}
+function getRubric(ctx, args) {
+  const cls = resolveClass(ctx, args.classToken);
+  const rubrics = readRubrics(ctx.dataDir).rubrics.filter((r) => r.classId === cls.id);
+  const views = rubrics.map((r) => ({
+    rubricToken: ctx.store.getToken(makeRubricIdentity(r.id), { prefix: 'rub' }),
+    title: r.title,
+    criteria: [...r.criteria]
+      .sort((a, b) => a.order - b.order)
+      .map((c) => ({ criterion: c.name, levels: c.levels.map((l) => l.name) })),
+  }));
+  ctx.audit.append({ tool: 'get_rubric', redactionStats: { items: views.length } });
+  return { count: views.length, rubrics: views };
+}
+async function setRubricGradingTool(ctx, args) {
+  const { identity } = resolveStudentTarget(ctx, args.studentToken);
+  if (identity.kind !== 'teaching') {
+    throw new UnknownTokenError(
+      '\uC218\uD589\uD3C9\uAC00 \uCC44\uC810\uC740 \uC218\uC5C5\uBC18 \uD559\uC0DD \uD1A0\uD070\uC73C\uB85C \uD558\uC138\uC694. list_classes \u2192 list_students(classToken).',
+    );
+  }
+  if (!/^rub_/.test(args.rubricToken)) {
+    throw new UnknownTokenError(
+      '\uD3C9\uAC00\uD45C \uD1A0\uD070\uC774 \uC544\uB2D9\uB2C8\uB2E4(rub_). get_rubric \uC758 rubricToken \uC744 \uC4F0\uC138\uC694.',
+    );
+  }
+  const resolved = ctx.store.resolveToken(args.rubricToken);
+  if (!resolved)
+    throw new UnknownTokenError(
+      '\uC54C \uC218 \uC5C6\uB294 \uD3C9\uAC00\uD45C \uD1A0\uD070\uC785\uB2C8\uB2E4. get_rubric \uB85C \uD655\uC778\uD558\uC138\uC694.',
+    );
+  const rubricId = parseRubricIdentity(resolved);
+  if (!rubricId)
+    throw new UnknownTokenError(
+      '\uD3C9\uAC00\uD45C \uD1A0\uD070\uC774 \uC544\uB2D9\uB2C8\uB2E4. get_rubric \uC758 rubricToken \uC744 \uC4F0\uC138\uC694.',
+    );
+  const input = {
+    classId: identity.classId,
+    studentKey: identity.studentKey,
+    rubricId,
+    marks: args.marks,
+    ...(args.status !== void 0 ? { status: args.status } : {}),
+    ...(args.overallFeedback !== void 0 ? { overallFeedback: args.overallFeedback } : {}),
+    ...(args.criterionNotes !== void 0 ? { criterionNotes: args.criterionNotes } : {}),
+  };
+  const res = await setRubricGrading(ctx.dataDir, input);
+  ctx.audit.append({
+    tool: 'set_rubric_grading',
+    recordIds: [res.gradingId],
+    redactionStats: { observations: 1 },
+  });
+  return res;
+}
 function getRecordGuidelines(args = {}) {
   const rulePack = {};
   if (args.level !== void 0) rulePack.level = args.level;
   if (args.year !== void 0) rulePack.year = args.year;
   return recordGuidelines(rulePack);
+}
+
+// ../ssampin-ai-bridge/packages/mcp/dist/writeTools.js
+import crypto6 from 'node:crypto';
+var DATE_RE2 = /^\d{4}-\d{2}-\d{2}$/;
+var TIME_RE = /^\d{2}:\d{2}$/;
+var PRIORITIES = /* @__PURE__ */ new Set(['high', 'medium', 'low', 'none']);
+function asStr(v) {
+  return typeof v === 'string' && v.trim().length > 0 ? v : void 0;
+}
+function assertWriteAllowed(ctx) {
+  if (readBridgeCapability(ctx.dataDir).allowWrite) return;
+  throw new WriteDisabledError(
+    '\uC4F0\uAE30\uAC00 \uBE44\uD65C\uC131\uD654\uB418\uC5B4 \uC788\uC2B5\uB2C8\uB2E4. \uC324\uD540 \uC124\uC815\uC758 "AI \uC5F0\uACB0"\uC5D0\uC11C \uC4F0\uAE30\uB97C \uCF1C\uC138\uC694.',
+  );
+}
+function deriveIdemKey(domain, op, data, provided) {
+  const p = asStr(provided);
+  if (p) return p;
+  const h = crypto6
+    .createHash('sha256')
+    .update(`${domain}:${op}:${JSON.stringify(data)}`)
+    .digest('hex')
+    .slice(0, 16);
+  return `${domain}-${h}`;
+}
+function resolveTodoId(ctx, todoToken) {
+  const resolved = ctx.store.resolveToken(todoToken);
+  if (!resolved) {
+    throw new WriteValidationError(
+      '\uC54C \uC218 \uC5C6\uB294 \uD560\uC77C \uD1A0\uD070\uC785\uB2C8\uB2E4. get_todos \uC758 todoToken \uC744 \uC4F0\uC138\uC694.',
+    );
+  }
+  const id = parseTodoIdentity(resolved);
+  if (!id)
+    throw new WriteValidationError(
+      '\uD560\uC77C \uD1A0\uD070\uC774 \uC544\uB2D9\uB2C8\uB2E4. get_todos \uC758 todoToken \uC744 \uC4F0\uC138\uC694.',
+    );
+  return id;
+}
+async function delegate(ctx, op, domain, idempotencyKey, data) {
+  const control = readControlInfo(ctx.dataDir);
+  if (!isAppRunning(control)) {
+    throw new WriteConflictError(
+      '\uC324\uD540\uC774 \uC2E4\uD589 \uC911\uC774 \uC544\uB2D9\uB2C8\uB2E4. \uC324\uD540\uC744 \uCF1C\uACE0 "AI \uC5F0\uACB0" \uC4F0\uAE30\uB97C \uD65C\uC131\uD654\uD55C \uB4A4 \uB2E4\uC2DC \uC2DC\uB3C4\uD558\uC138\uC694(\uC2E4\uD589 \uC911\uC5D0\uB9CC \uC548\uC804\uD558\uAC8C \uC501\uB2C8\uB2E4).',
+    );
+  }
+  const result = await postLoopback(control, { domain, op, idempotencyKey, data });
+  if (!result.ok) {
+    throw new WriteConflictError(
+      result.error ??
+        '\uC324\uD540\uC5D0 \uC4F0\uAE30\uB97C \uC801\uC6A9\uD558\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.',
+    );
+  }
+  return { ref: result.ref ?? idempotencyKey };
+}
+async function createVia(ctx, domain, data, idempotencyKey, directAppend) {
+  const decision = decideWritePath(ctx.dataDir);
+  if (decision.path === 'loopback') {
+    const result = await postLoopback(decision.control, {
+      domain,
+      op: 'create',
+      idempotencyKey,
+      data,
+    });
+    if (!result.ok)
+      throw new WriteConflictError(
+        result.error ??
+          '\uC324\uD540\uC5D0 \uC4F0\uAE30\uB97C \uC801\uC6A9\uD558\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.',
+      );
+    return { ref: result.ref ?? idempotencyKey, via: 'app' };
+  }
+  if (decision.path === 'direct') {
+    const r = await directAppend();
+    return { ref: r.ref, via: 'file' };
+  }
+  throw new WriteConflictError(
+    '\uC324\uD540 \uC0C1\uD0DC\uAC00 \uBD88\uD655\uC2E4\uD569\uB2C8\uB2E4(\uC2DC\uC791 \uC911\uC774\uAC70\uB098 \uC751\uB2F5 \uC5C6\uC74C). \uC7A0\uC2DC \uD6C4 \uB2E4\uC2DC \uC2DC\uB3C4\uD558\uC138\uC694.',
+  );
+}
+async function createTodo(ctx, args) {
+  assertWriteAllowed(ctx);
+  const text = asStr(args.text);
+  if (!text) throw new WriteValidationError('text \uAC00 \uD544\uC694\uD569\uB2C8\uB2E4.');
+  if (text.length > 500)
+    throw new WriteValidationError(
+      `text \uB294 \uCD5C\uB300 500\uC790\uC785\uB2C8\uB2E4(\uD604\uC7AC ${text.length}).`,
+    );
+  const data = { text };
+  const dueDate = asStr(args.dueDate);
+  if (dueDate !== void 0) {
+    if (!DATE_RE2.test(dueDate))
+      throw new WriteValidationError(
+        'dueDate \uB294 YYYY-MM-DD \uD615\uC2DD\uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4.',
+      );
+    data['dueDate'] = dueDate;
+  }
+  const priority = asStr(args.priority);
+  if (priority !== void 0) {
+    if (!PRIORITIES.has(priority))
+      throw new WriteValidationError(
+        'priority \uB294 high|medium|low|none \uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4.',
+      );
+    data['priority'] = priority;
+  }
+  const category = asStr(args.category);
+  if (category !== void 0) data['category'] = category;
+  const time3 = asStr(args.time);
+  if (time3 !== void 0) {
+    if (!TIME_RE.test(time3))
+      throw new WriteValidationError(
+        'time \uC740 HH:mm \uD615\uC2DD\uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4.',
+      );
+    data['time'] = time3;
+  }
+  const idempotencyKey = deriveIdemKey('todos', 'create', data, args.idempotencyKey);
+  const { ref, via } = await createVia(ctx, 'todos', data, idempotencyKey, () =>
+    appendTodoDirect(ctx.dataDir, data, idempotencyKey),
+  );
+  ctx.audit.append({ tool: 'create_todo', redactionStats: { items: 1 } });
+  return { ok: true, ref, via };
+}
+async function createEvent(ctx, args) {
+  assertWriteAllowed(ctx);
+  const title = asStr(args.title);
+  const date3 = asStr(args.date);
+  if (!title) throw new WriteValidationError('title \uC774 \uD544\uC694\uD569\uB2C8\uB2E4.');
+  if (title.length > 200)
+    throw new WriteValidationError(
+      `title \uC740 \uCD5C\uB300 200\uC790\uC785\uB2C8\uB2E4(\uD604\uC7AC ${title.length}).`,
+    );
+  if (!date3 || !DATE_RE2.test(date3))
+    throw new WriteValidationError(
+      'date \uB294 YYYY-MM-DD \uD615\uC2DD\uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4.',
+    );
+  const data = { title, date: date3 };
+  const category = asStr(args.category);
+  if (category !== void 0) data['category'] = category;
+  const time3 = asStr(args.time);
+  if (time3 !== void 0) data['time'] = time3;
+  const location = asStr(args.location);
+  if (location !== void 0) data['location'] = location;
+  const idempotencyKey = deriveIdemKey('events', 'create', data, args.idempotencyKey);
+  const { ref, via } = await createVia(ctx, 'events', data, idempotencyKey, () =>
+    appendEventDirect(ctx.dataDir, data, idempotencyKey),
+  );
+  ctx.audit.append({ tool: 'create_event', redactionStats: { items: 1 } });
+  return { ok: true, ref, via };
+}
+async function mutateTodo(ctx, op, todoToken, extra, provided, tool) {
+  assertWriteAllowed(ctx);
+  const id = resolveTodoId(ctx, todoToken);
+  const data = { id, ...extra };
+  const idempotencyKey = deriveIdemKey('todos', op, data, provided);
+  const { ref } = await delegate(ctx, op, 'todos', idempotencyKey, data);
+  ctx.audit.append({ tool, redactionStats: { items: 1 } });
+  return { ok: true, ref, via: 'app' };
+}
+function completeTodo(ctx, args) {
+  return mutateTodo(ctx, 'complete', args.todoToken, {}, args.idempotencyKey, 'complete_todo');
+}
+function deleteTodo(ctx, args) {
+  return mutateTodo(ctx, 'delete', args.todoToken, {}, args.idempotencyKey, 'delete_todo');
+}
+async function updateTodo(ctx, args) {
+  const changes = {};
+  const text = asStr(args.text);
+  if (text !== void 0) {
+    if (text.length > 500)
+      throw new WriteValidationError(
+        `text \uB294 \uCD5C\uB300 500\uC790\uC785\uB2C8\uB2E4(\uD604\uC7AC ${text.length}).`,
+      );
+    changes['text'] = text;
+  }
+  const dueDate = asStr(args.dueDate);
+  if (dueDate !== void 0) {
+    if (!DATE_RE2.test(dueDate))
+      throw new WriteValidationError(
+        'dueDate \uB294 YYYY-MM-DD \uD615\uC2DD\uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4.',
+      );
+    changes['dueDate'] = dueDate;
+  }
+  const priority = asStr(args.priority);
+  if (priority !== void 0) {
+    if (!PRIORITIES.has(priority))
+      throw new WriteValidationError(
+        'priority \uB294 high|medium|low|none \uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4.',
+      );
+    changes['priority'] = priority;
+  }
+  const category = asStr(args.category);
+  if (category !== void 0) changes['category'] = category;
+  const time3 = asStr(args.time);
+  if (time3 !== void 0) {
+    if (!TIME_RE.test(time3))
+      throw new WriteValidationError(
+        'time \uC740 HH:mm \uD615\uC2DD\uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4.',
+      );
+    changes['time'] = time3;
+  }
+  const status = asStr(args.status);
+  if (status !== void 0) {
+    if (!['todo', 'inProgress', 'done'].includes(status))
+      throw new WriteValidationError(
+        'status \uB294 todo|inProgress|done \uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4.',
+      );
+    changes['status'] = status;
+  }
+  if (Object.keys(changes).length === 0)
+    throw new WriteValidationError(
+      '\uBCC0\uACBD\uD560 \uD544\uB4DC\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.',
+    );
+  return mutateTodo(ctx, 'update', args.todoToken, changes, args.idempotencyKey, 'update_todo');
+}
+function resolveEventId(ctx, eventToken) {
+  const resolved = ctx.store.resolveToken(eventToken);
+  if (!resolved)
+    throw new WriteValidationError(
+      '\uC54C \uC218 \uC5C6\uB294 \uC77C\uC815 \uD1A0\uD070\uC785\uB2C8\uB2E4. get_events \uC758 eventToken \uC744 \uC4F0\uC138\uC694.',
+    );
+  const id = parseEventIdentity(resolved);
+  if (!id)
+    throw new WriteValidationError(
+      '\uC77C\uC815 \uD1A0\uD070\uC774 \uC544\uB2D9\uB2C8\uB2E4. get_events \uC758 eventToken \uC744 \uC4F0\uC138\uC694.',
+    );
+  return id;
+}
+async function updateEvent(ctx, args) {
+  const changes = {};
+  const title = asStr(args.title);
+  if (title !== void 0) {
+    if (title.length > 200)
+      throw new WriteValidationError(
+        `title \uC740 \uCD5C\uB300 200\uC790\uC785\uB2C8\uB2E4(\uD604\uC7AC ${title.length}).`,
+      );
+    changes['title'] = title;
+  }
+  const date3 = asStr(args.date);
+  if (date3 !== void 0) {
+    if (!DATE_RE2.test(date3))
+      throw new WriteValidationError(
+        'date \uB294 YYYY-MM-DD \uD615\uC2DD\uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4.',
+      );
+    changes['date'] = date3;
+  }
+  const category = asStr(args.category);
+  if (category !== void 0) changes['category'] = category;
+  const time3 = asStr(args.time);
+  if (time3 !== void 0) changes['time'] = time3;
+  const location = asStr(args.location);
+  if (location !== void 0) changes['location'] = location;
+  if (Object.keys(changes).length === 0)
+    throw new WriteValidationError(
+      '\uBCC0\uACBD\uD560 \uD544\uB4DC\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.',
+    );
+  assertWriteAllowed(ctx);
+  const id = resolveEventId(ctx, args.eventToken);
+  const data = { id, ...changes };
+  const idempotencyKey = deriveIdemKey('events', 'update', data, args.idempotencyKey);
+  const { ref } = await delegate(ctx, 'update', 'events', idempotencyKey, data);
+  ctx.audit.append({ tool: 'update_event', redactionStats: { items: 1 } });
+  return { ok: true, ref, via: 'app' };
+}
+async function deleteEvent(ctx, args) {
+  assertWriteAllowed(ctx);
+  const id = resolveEventId(ctx, args.eventToken);
+  const data = { id };
+  const idempotencyKey = deriveIdemKey('events', 'delete', data, args.idempotencyKey);
+  const { ref } = await delegate(ctx, 'delete', 'events', idempotencyKey, data);
+  ctx.audit.append({ tool: 'delete_event', redactionStats: { items: 1 } });
+  return { ok: true, ref, via: 'app' };
 }
 
 // ../ssampin-ai-bridge/packages/mcp/dist/server.js
@@ -24320,6 +26326,137 @@ function createSsampinMcpServer(opts = {}) {
       annotations: { readOnlyHint: true },
     },
     async () => runTool('get_seating', () => getSeating(ctx)),
+  );
+  server.registerTool(
+    'get_meals',
+    {
+      title: '\uAE09\uC2DD \uC2DD\uB2E8(\uBA54\uB274\xB7\uC54C\uB808\uB974\uAE30)',
+      description:
+        '\uC218\uB3D9 \uC785\uB825 \uAE09\uC2DD \uC2DD\uB2E8\uC744 \uB0A0\uC9DC\xB7\uB07C\uB2C8\uBCC4 \uBA54\uB274\uC640 \uC54C\uB808\uB974\uAE30 \uCF54\uB4DC\uB85C \uBC18\uD658\uD569\uB2C8\uB2E4. \uD559\uC0DD \uAC1C\uC778\uC815\uBCF4\uB294 \uD3EC\uD568\uD558\uC9C0 \uC54A\uC73C\uBA70(\uBA54\uB274 \uC815\uBCF4\uB9CC), \uB3D9\uC758\xB7\uAC8C\uC774\uD2B8 \uC5C6\uC774 \uC77D\uC744 \uC218 \uC788\uC2B5\uB2C8\uB2E4. from/to \uB294 YYYYMMDD(8\uC790\uB9AC). \uC77D\uAE30 \uC804\uC6A9.',
+      inputSchema: {
+        from: external_exports
+          .string()
+          .regex(/^\d{8}$/)
+          .optional()
+          .describe('\uC2DC\uC791\uC77C YYYYMMDD(\uD3EC\uD568)'),
+        to: external_exports
+          .string()
+          .regex(/^\d{8}$/)
+          .optional()
+          .describe('\uC885\uB8CC\uC77C YYYYMMDD(\uD3EC\uD568)'),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    async (args) => runTool('get_meals', () => getMeals(ctx, args)),
+  );
+  server.registerTool(
+    'get_events',
+    {
+      title: '\uD559\uC0AC\xB7\uD559\uAE09 \uC77C\uC815',
+      description:
+        '\uC77C\uC815\uC744 \uB0A0\uC9DC\xB7\uAD50\uC2DC\xB7\uCE74\uD14C\uACE0\uB9AC \uB4F1 \uBE44\uC2DD\uBCC4 \uBA54\uD0C0\uB85C \uBC18\uD658\uD569\uB2C8\uB2E4. \uC81C\uBAA9\xB7\uC124\uBA85\xB7\uC7A5\uC18C \uB4F1 \uC790\uC720\uC11C\uC220\uC740 SSAMPIN_BRIDGE_ALLOW_CONTENT=1 \uB9C8\uC2A4\uD130 \uC2A4\uC704\uCE58\uAC00 \uCF1C\uC9C4 \uACBD\uC6B0\uC5D0\uB9CC \uD559\uC0DD \uC2E4\uBA85 \uD0C8\uC2DD\uBCC4 \uD6C4 \uD3EC\uD568\uB429\uB2C8\uB2E4(\uB9E5\uB77D \uC7AC\uC2DD\uBCC4 \uAC00\uB2A5 \u2014 \uAD50\uC0AC \uAC80\uD1A0 \uD544\uC694). from/to \uB294 YYYY-MM-DD. \uC77D\uAE30 \uC804\uC6A9.',
+      inputSchema: {
+        from: external_exports
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/)
+          .optional()
+          .describe('\uC2DC\uC791\uC77C YYYY-MM-DD(\uD3EC\uD568)'),
+        to: external_exports
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/)
+          .optional()
+          .describe('\uC885\uB8CC\uC77C YYYY-MM-DD(\uD3EC\uD568)'),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    async (args) => runTool('get_events', () => getEvents(ctx, args)),
+  );
+  server.registerTool(
+    'get_ddays',
+    {
+      title: '\uB514\uB370\uC774(D-Day) \uBAA9\uB85D',
+      description:
+        '\uB514\uB370\uC774 \uD56D\uBAA9\uC744 \uBAA9\uD45C\uC77C\xB7\uC774\uBAA8\uC9C0\xB7\uC0C9\uC0C1\uC73C\uB85C \uBC18\uD658\uD569\uB2C8\uB2E4. \uC81C\uBAA9(\uC790\uC720\uC11C\uC220)\uC740 SSAMPIN_BRIDGE_ALLOW_CONTENT=1 \uC77C \uB54C\uB9CC \uD0C8\uC2DD\uBCC4 \uD6C4 \uD3EC\uD568\uB429\uB2C8\uB2E4. \uC77D\uAE30 \uC804\uC6A9.',
+      inputSchema: {},
+      annotations: { readOnlyHint: true },
+    },
+    async () => runTool('get_ddays', () => getDdays(ctx)),
+  );
+  server.registerTool(
+    'get_todos',
+    {
+      title: '\uD560\uC77C(To-do) \uBAA9\uB85D',
+      description:
+        '\uD560\uC77C\uC744 \uC0C1\uD0DC\xB7\uB9C8\uAC10\uC77C\xB7\uC6B0\uC120\uC21C\uC704\xB7\uCE74\uD14C\uACE0\uB9AC \uB4F1 \uBE44\uC2DD\uBCC4 \uBA54\uD0C0\uB85C \uBC18\uD658\uD569\uB2C8\uB2E4. \uD560\uC77C \uB0B4\uC6A9(text)\xB7\uBA54\uBAA8(notes)\uB294 SSAMPIN_BRIDGE_ALLOW_CONTENT=1 \uB9C8\uC2A4\uD130 \uC2A4\uC704\uCE58\uAC00 \uCF1C\uC9C4 \uACBD\uC6B0\uC5D0\uB9CC \uD559\uC0DD \uC2E4\uBA85 \uD0C8\uC2DD\uBCC4 \uD6C4 \uD3EC\uD568\uB429\uB2C8\uB2E4. status(todo|inProgress|done)\uB85C \uC0C1\uD0DC \uD544\uD130, dueBefore(YYYY-MM-DD)\uB85C \uB9C8\uAC10 \uC784\uBC15 \uD544\uD130. \uC544\uCE74\uC774\uBE0C \uD56D\uBAA9\uC740 \uAE30\uBCF8 \uC81C\uC678. \uC77D\uAE30 \uC804\uC6A9.',
+      inputSchema: {
+        status: external_exports
+          .enum(['todo', 'inProgress', 'done'])
+          .optional()
+          .describe('\uC0C1\uD0DC \uD544\uD130'),
+        dueBefore: external_exports
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/)
+          .optional()
+          .describe('\uC774 \uB0A0\uC9DC \uC774\uC804(\uD3EC\uD568) \uB9C8\uAC10\uB9CC'),
+        includeArchived: external_exports
+          .boolean()
+          .optional()
+          .describe('\uC544\uCE74\uC774\uBE0C \uD3EC\uD568(\uAE30\uBCF8 false)'),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    async (args) => runTool('get_todos', () => getTodos(ctx, args)),
+  );
+  server.registerTool(
+    'get_schedule',
+    {
+      title: '\uC2DC\uAC04\uD45C\xB7\uC77C\uACFC',
+      description:
+        '\uC2DC\uAC04\uD45C\uB97C \uC885\uB958\uBCC4\uB85C \uBC18\uD658\uD569\uB2C8\uB2E4. kind=class(\uC6B0\uB9AC \uBC18 \uC2DC\uAC04\uD45C: \uC694\uC77C\xB7\uAD50\uC2DC\xB7\uACFC\uBAA9\xB7\uAD50\uC0AC), teacher(\uB0B4 \uC2DC\uAC04\uD45C: \uC694\uC77C\xB7\uAD50\uC2DC\xB7\uACFC\uBAA9\xB7\uAD50\uC2E4), overrides(\uBCC0\uB3D9 \uC2DC\uAC04\uD45C: \uB0A0\uC9DC\xB7\uAD50\uC2DC\xB7\uACFC\uBAA9\xB7\uC885\uB958\xB7\uBCF4\uAC15\uAD50\uC0AC). class/teacher \uB294 \uAC8C\uC774\uD2B8 \uC5C6\uC774 \uC77D\uD788\uBA70, overrides \uC758 \uBCC0\uACBD \uC0AC\uC720(reason)\uB9CC SSAMPIN_BRIDGE_ALLOW_CONTENT=1 \uC77C \uB54C \uD0C8\uC2DD\uBCC4 \uD6C4 \uD3EC\uD568\uB429\uB2C8\uB2E4. \uC77D\uAE30 \uC804\uC6A9.',
+      inputSchema: {
+        kind: external_exports
+          .enum(['class', 'teacher', 'overrides'])
+          .describe(
+            'class=\uC6B0\uB9AC \uBC18 | teacher=\uB0B4 \uC2DC\uAC04\uD45C | overrides=\uBCC0\uB3D9',
+          ),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    async (args) => runTool('get_schedule', () => getSchedule(ctx, args)),
+  );
+  server.registerTool(
+    'get_notes',
+    {
+      title:
+        '\uB178\uD2B8 \uAD6C\uC870(\uB178\uD2B8\uBD81\xB7\uC139\uC158\xB7\uD398\uC774\uC9C0 \uC81C\uBAA9)',
+      description:
+        '\uB178\uD2B8\uC758 \uAD6C\uC870(\uB178\uD2B8\uBD81\u2192\uC139\uC158\u2192\uD398\uC774\uC9C0)\uC640 \uC81C\uBAA9\xB7\uD0DC\uADF8\uB97C \uBC18\uD658\uD569\uB2C8\uB2E4. \uBCF8\uBB38\uC740 \uD3EC\uD568\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4. \uC81C\uBAA9\xB7\uD0DC\uADF8\uB294 \uC790\uC720\uC11C\uC220\uC774\uB77C SSAMPIN_BRIDGE_ALLOW_CONTENT=1 \uB9C8\uC2A4\uD130 \uC2A4\uC704\uCE58\uAC00 \uCF1C\uC9C4 \uACBD\uC6B0\uC5D0\uB9CC \uD559\uC0DD \uC2E4\uBA85 \uD0C8\uC2DD\uBCC4 \uD6C4 \uB178\uCD9C\uB418\uACE0, \uAEBC\uC838 \uC788\uC73C\uBA74 \uAC1C\uC218\uB9CC \uBC18\uD658\uD569\uB2C8\uB2E4. \uC77D\uAE30 \uC804\uC6A9.',
+      inputSchema: {},
+      annotations: { readOnlyHint: true },
+    },
+    async () => runTool('get_notes', () => getNotes(ctx)),
+  );
+  server.registerTool(
+    'get_memos',
+    {
+      title: '\uD3EC\uC2A4\uD2B8\uC787 \uBA54\uBAA8',
+      description:
+        '\uD3EC\uC2A4\uD2B8\uC787 \uBA54\uBAA8\uB97C \uBC18\uD658\uD569\uB2C8\uB2E4(\uC544\uCE74\uC774\uBE0C \uC81C\uC678). \uBA54\uBAA8 \uBCF8\uBB38\uC740 SSAMPIN_BRIDGE_ALLOW_CONTENT=1 \uC77C \uB54C\uB9CC \uD559\uC0DD \uC2E4\uBA85 \uD0C8\uC2DD\uBCC4 \uD6C4 \uB178\uCD9C\uB418\uACE0, \uAEBC\uC838 \uC788\uC73C\uBA74 \uAC1C\uC218\uB9CC \uBC18\uD658\uD569\uB2C8\uB2E4. \uC77D\uAE30 \uC804\uC6A9.',
+      inputSchema: {},
+      annotations: { readOnlyHint: true },
+    },
+    async () => runTool('get_memos', () => getMemos(ctx)),
+  );
+  server.registerTool(
+    'get_bookmarks',
+    {
+      title: '\uBD81\uB9C8\uD06C(\uB9C1\uD06C \uBAA8\uC74C)',
+      description:
+        '\uBD81\uB9C8\uD06C\uB97C \uADF8\uB8F9\uBCC4\uB85C \uBC18\uD658\uD569\uB2C8\uB2E4(\uC544\uCE74\uC774\uBE0C \uADF8\uB8F9 \uC81C\uC678). \uC774\uB984\xB7URL \uC740 \uBBFC\uAC10\uD560 \uC218 \uC788\uC5B4(URL \uC5D0 \uD1A0\uD070\xB7\uD0A4 \uD3EC\uD568 \uAC00\uB2A5) SSAMPIN_BRIDGE_ALLOW_CONTENT=1 \uC77C \uB54C\uB9CC \uD0C8\uC2DD\uBCC4 \uD6C4 \uB178\uCD9C\uB418\uACE0, \uAEBC\uC838 \uC788\uC73C\uBA74 \uAC1C\uC218\uB9CC \uBC18\uD658\uD569\uB2C8\uB2E4. \uC77D\uAE30 \uC804\uC6A9.',
+      inputSchema: {},
+      annotations: { readOnlyHint: true },
+    },
+    async () => runTool('get_bookmarks', () => getBookmarks(ctx)),
   );
   server.registerTool(
     'add_observation',
@@ -24427,6 +26564,103 @@ function createSsampinMcpServer(opts = {}) {
     async (args) => runTool('check_record_draft', () => checkRecordDraft(ctx, args)),
   );
   server.registerTool(
+    'get_performance_feedback',
+    {
+      title: '\uC218\uD589\uD3C9\uAC00 \uC9C8\uC801 \uD53C\uB4DC\uBC31(\uC810\uC218 \uC81C\uC678)',
+      description:
+        '\uC218\uC5C5\uBC18 \uD559\uC0DD\uC758 \uC218\uD589\uD3C9\uAC00(\uB8E8\uBE0C\uB9AD) \uCC44\uC810\uC744 "\uB3C4\uB2EC \uC218\uC900 \uC774\uB984\xB7\uC131\uCDE8 \uC124\uBA85\xB7\uC694\uC18C \uBA54\uBAA8\xB7\uCD1D\uD3C9"\uC73C\uB85C \uBC18\uD658\uD569\uB2C8\uB2E4. \uC810\uC218\xB7\uBC30\uC810\xB7\uD569\uACC4\uB294 \uD3EC\uD568\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4(\uC0DD\uAE30\uBD80 \uC785\uB825 \uAE08\uC9C0 \uD56D\uBAA9). \uC138\uD2B9\uC758 \uC11C\uC220\uD615 \uC5ED\uB7C9\xB7\uD0DC\uB3C4 \uADFC\uAC70\uB85C\uB9CC \uD65C\uC6A9\uD558\uC138\uC694. list_students(classToken) \uAC00 \uC900 \uD559\uC0DD token \uC744 \uC4F0\uBA70, \uB3D9\uAE09\uC0DD \uC2E4\uBA85\uC740 \uD0C8\uC2DD\uBCC4\uB429\uB2C8\uB2E4. \uB0B4\uC6A9 \uB178\uCD9C \uB3D9\uC758(\uB610\uB294 \uB9C8\uC2A4\uD130 \uC2A4\uC704\uCE58) \uD544\uC694. \uC77D\uAE30 \uC804\uC6A9.',
+      inputSchema: {
+        studentToken: external_exports
+          .string()
+          .describe(
+            'list_students(classToken) \uAC00 \uBC18\uD658\uD55C \uC218\uC5C5\uBC18 \uD559\uC0DD \uD1A0\uD070',
+          ),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    async (args) => runTool('get_performance_feedback', () => getPerformanceFeedback(ctx, args)),
+  );
+  server.registerTool(
+    'get_grade_summary',
+    {
+      title: '\uC131\uC801 \uC9C8\uC801 \uC694\uC57D(\uC810\uC218\xB7\uC11D\uCC28 \uC81C\uC678)',
+      description:
+        '\uC218\uC5C5\uBC18 \uD559\uC0DD\uC758 \uC131\uC801\uC744 "\uC131\uCDE8\uB3C4(A~E)\xB7\uD3C9\uAC00\uC601\uC5ED\xB7\uD3C9\uAC00\uBC29\uBC95\xB7\uC751\uC2DC\uC5EC\uBD80\xB7\uC218\uD589 \uC99D\uBE59 \uBA54\uBAA8"\uB85C \uC694\uC57D\uD574 \uBC18\uD658\uD569\uB2C8\uB2E4. \uC6D0\uC810\uC218\xB7\uD658\uC0B0\uC810\xB7\uC11D\uCC28\uB294 \uD3EC\uD568\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4(\uC0DD\uAE30\uBD80 \uC785\uB825 \uAE08\uC9C0 \uD56D\uBAA9). \uC11C\uC220\uD615 \uADFC\uAC70\uB85C\uB9CC \uD65C\uC6A9\uD558\uACE0 \uC810\uC218/\uC11D\uCC28\uB294 \uC0DD\uAE30\uBD80\uC5D0 \uC801\uC9C0 \uB9C8\uC138\uC694. list_students(classToken) \uC758 \uD559\uC0DD token \uC744 \uC4F0\uBA70 \uB0B4\uC6A9 \uB178\uCD9C \uB3D9\uC758 \uD544\uC694. \uC77D\uAE30 \uC804\uC6A9.',
+      inputSchema: {
+        studentToken: external_exports
+          .string()
+          .describe(
+            'list_students(classToken) \uAC00 \uBC18\uD658\uD55C \uC218\uC5C5\uBC18 \uD559\uC0DD \uD1A0\uD070',
+          ),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    async (args) => runTool('get_grade_summary', () => getGradeSummaryTool(ctx, args)),
+  );
+  server.registerTool(
+    'get_rubric',
+    {
+      title: '\uC218\uD589\uD3C9\uAC00 \uD3C9\uAC00\uD45C \uAD6C\uC870',
+      description:
+        '\uC218\uC5C5\uBC18\uC758 \uC218\uD589\uD3C9\uAC00 \uD3C9\uAC00\uD45C(\uB8E8\uBE0C\uB9AD)\uB97C \uD3C9\uAC00\uC694\uC18C\xB7\uC218\uC900 \uC774\uB984\uC73C\uB85C \uBC18\uD658\uD569\uB2C8\uB2E4(\uBC30\uC810 \uC22B\uC790\xB7\uD559\uC0DD \uCC44\uC810 \uBBF8\uD3EC\uD568). \uCC44\uC810\uC744 \uC785\uB825\uD558\uAE30 \uC804\uC5D0 \uC774 \uB3C4\uAD6C\uB85C rubricToken\xB7\uD3C9\uAC00\uC694\uC18C\xB7\uC218\uC900 \uC774\uB984\uC744 \uD655\uC778\uD558\uC138\uC694. \uC77D\uAE30 \uC804\uC6A9.',
+      inputSchema: {
+        classToken: external_exports
+          .string()
+          .describe('list_classes \uAC00 \uBC18\uD658\uD55C \uC218\uC5C5\uBC18 \uD1A0\uD070'),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    async (args) => runTool('get_rubric', () => getRubric(ctx, args)),
+  );
+  server.registerTool(
+    'set_rubric_grading',
+    {
+      title: '\uC218\uD589\uD3C9\uAC00 \uCC44\uC810 \uC785\uB825(\uB3C4\uB2EC \uC218\uC900)',
+      description:
+        '\uC218\uC5C5\uBC18 \uD559\uC0DD\uC758 \uC218\uD589\uD3C9\uAC00 \uCC44\uC810\uC744 \uD3C9\uAC00\uC694\uC18C\uBCC4 "\uB3C4\uB2EC \uC218\uC900 \uC120\uD0DD"\uC73C\uB85C \uC800\uC7A5\uD569\uB2C8\uB2E4(\uC810\uC218\uAC00 \uC544\uB2C8\uB77C \uC218\uC900 \uC774\uB984). marks \uB294 get_rubric \uC758 \uD3C9\uAC00\uC694\uC18C\xB7\uC218\uC900 \uC774\uB984\uC744 \uC4F0\uBA70 \uAE30\uC874 \uCC44\uC810\uACFC \uBCD1\uD569\uB429\uB2C8\uB2E4. \uC4F0\uAE30\uB294 SSAMPIN_BRIDGE_ALLOW_GRADE_WRITE=1(\uBCC4\uB3C4 \uACE0\uC704\uD5D8 \uAC8C\uC774\uD2B8)\uC77C \uB54C\uB9CC \uD65C\uC131\uC774\uBA70, \uACF5\uC2DD \uAE30\uB85D\uC774\uBBC0\uB85C \uC324\uD540\uC744 \uB2EB\uC740 \uC0C1\uD0DC\uC5D0\uC11C\uB9CC \uC4F0\uC138\uC694. \uC778\uC790\uB294 \uD1A0\uD070\xB7\uC774\uB984\uB9CC \uBC1B\uC2B5\uB2C8\uB2E4.',
+      inputSchema: {
+        studentToken: external_exports
+          .string()
+          .describe(
+            'list_students(classToken) \uAC00 \uBC18\uD658\uD55C \uC218\uC5C5\uBC18 \uD559\uC0DD \uD1A0\uD070',
+          ),
+        rubricToken: external_exports
+          .string()
+          .describe('get_rubric \uAC00 \uBC18\uD658\uD55C \uD3C9\uAC00\uD45C \uD1A0\uD070'),
+        marks: external_exports
+          .array(
+            external_exports.object({
+              criterion: external_exports.string(),
+              level: external_exports.string(),
+            }),
+          )
+          .describe(
+            '\uD3C9\uAC00\uC694\uC18C\uBCC4 \uB3C4\uB2EC \uC218\uC900(\uC774\uB984). \uC608: [{criterion:"\uC8FC\uC7A5\uC758 \uBA85\uD655\uC131", level:"\uD0C1\uC6D4\uD568"}]',
+          ),
+        status: external_exports
+          .enum(['graded', 'partial', 'absent'])
+          .optional()
+          .describe(
+            '\uBBF8\uC9C0\uC815 \uC2DC \uC790\uB3D9(\uC804 \uC694\uC18C \uCC44\uC810=graded). \uACB0\uC2DC\uB294 absent',
+          ),
+        overallFeedback: external_exports
+          .string()
+          .optional()
+          .describe('\uCD1D\uD3C9(\uC120\uD0DD)'),
+        criterionNotes: external_exports
+          .array(
+            external_exports.object({
+              criterion: external_exports.string(),
+              note: external_exports.string(),
+            }),
+          )
+          .optional(),
+      },
+      annotations: { readOnlyHint: false },
+    },
+    async (args) => runTool('set_rubric_grading', () => setRubricGradingTool(ctx, args)),
+  );
+  server.registerTool(
     'get_record_guidelines',
     {
       title: '\uC0DD\uAE30\uBD80 \uC791\uC131 \uCC38\uC870 \uC6D0\uCE59',
@@ -24455,6 +26689,168 @@ function createSsampinMcpServer(opts = {}) {
       annotations: { readOnlyHint: true },
     },
     async (args) => runTool('get_record_guidelines', () => getRecordGuidelines(args)),
+  );
+  server.registerTool(
+    'create_todo',
+    {
+      title: '\uD560\uC77C \uCD94\uAC00',
+      description:
+        '\uC324\uD540\uC5D0 \uD560\uC77C\uC744 \uCD94\uAC00\uD569\uB2C8\uB2E4. \uC324\uD540\uC774 \uC2E4\uD589 \uC911\uC77C \uB54C\uB9CC \uC548\uC804\uD558\uAC8C \uC801\uC6A9\uB418\uBA70(\uC2E4\uD589 \uC911\uC774 \uC544\uB2C8\uBA74 \uAC70\uBD80), \uC4F0\uAE30\uB294 \uC324\uD540 \uC124\uC815\uC758 "AI \uC5F0\uACB0"\uC5D0\uC11C \uCF1C\uC57C \uD65C\uC131\uD654\uB429\uB2C8\uB2E4(\uB610\uB294 SSAMPIN_BRIDGE_ALLOW_WRITE=1). \uAC19\uC740 idempotencyKey \uC7AC\uC694\uCCAD\uC740 \uC911\uBCF5 \uC0DD\uC131\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.',
+      inputSchema: {
+        text: external_exports.string().min(1).max(500).describe('\uD560\uC77C \uB0B4\uC6A9'),
+        dueDate: external_exports
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/)
+          .optional()
+          .describe('\uB9C8\uAC10\uC77C YYYY-MM-DD'),
+        priority: external_exports
+          .enum(['high', 'medium', 'low', 'none'])
+          .optional()
+          .describe('\uC6B0\uC120\uC21C\uC704'),
+        category: external_exports
+          .string()
+          .optional()
+          .describe('\uCE74\uD14C\uACE0\uB9AC(class/admin/student/meeting/etc \uB4F1)'),
+        time: external_exports
+          .string()
+          .regex(/^\d{2}:\d{2}$/)
+          .optional()
+          .describe('\uC2DC\uAC04 HH:mm'),
+        idempotencyKey: external_exports
+          .string()
+          .optional()
+          .describe('\uC7AC\uC2DC\uB3C4 \uC911\uBCF5 \uBC29\uC9C0 \uD0A4'),
+      },
+      annotations: { readOnlyHint: false },
+    },
+    async (args) => runTool('create_todo', () => createTodo(ctx, args)),
+  );
+  server.registerTool(
+    'create_event',
+    {
+      title: '\uC77C\uC815 \uCD94\uAC00',
+      description:
+        '\uC324\uD540\uC5D0 \uC77C\uC815\uC744 \uCD94\uAC00\uD569\uB2C8\uB2E4. \uC324\uD540\uC774 \uC2E4\uD589 \uC911\uC77C \uB54C\uB9CC \uC548\uC804\uD558\uAC8C \uC801\uC6A9\uB429\uB2C8\uB2E4(\uC2E4\uD589 \uC911\uC774 \uC544\uB2C8\uBA74 \uAC70\uBD80). \uC4F0\uAE30 \uD65C\uC131\uD654 \uD544\uC694. \uAC19\uC740 idempotencyKey \uC7AC\uC694\uCCAD\uC740 \uC911\uBCF5 \uC0DD\uC131\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.',
+      inputSchema: {
+        title: external_exports.string().min(1).max(200).describe('\uC77C\uC815 \uC81C\uBAA9'),
+        date: external_exports
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/)
+          .describe('\uB0A0\uC9DC YYYY-MM-DD'),
+        category: external_exports.string().optional().describe('\uCE74\uD14C\uACE0\uB9AC'),
+        time: external_exports
+          .string()
+          .optional()
+          .describe('\uC2DC\uAC04(\uC608: 09:00 \uB610\uB294 09:00 - 10:00)'),
+        location: external_exports.string().optional().describe('\uC7A5\uC18C'),
+        idempotencyKey: external_exports
+          .string()
+          .optional()
+          .describe('\uC7AC\uC2DC\uB3C4 \uC911\uBCF5 \uBC29\uC9C0 \uD0A4'),
+      },
+      annotations: { readOnlyHint: false },
+    },
+    async (args) => runTool('create_event', () => createEvent(ctx, args)),
+  );
+  server.registerTool(
+    'complete_todo',
+    {
+      title: '\uD560\uC77C \uC644\uB8CC \uCC98\uB9AC',
+      description:
+        'get_todos \uC758 todoToken \uC73C\uB85C \uC9C0\uC815\uD55C \uD560\uC77C\uC744 \uC644\uB8CC \uCC98\uB9AC\uD569\uB2C8\uB2E4. \uC324\uD540 \uC2E4\uD589 \uC911\uC5D0\uB9CC \uC801\uC6A9(\uBBF8\uC2E4\uD589 \uC2DC \uAC70\uBD80), \uC4F0\uAE30 \uD65C\uC131\uD654 \uD544\uC694.',
+      inputSchema: {
+        todoToken: external_exports
+          .string()
+          .describe('get_todos \uAC00 \uBC18\uD658\uD55C \uD560\uC77C \uD1A0\uD070'),
+        idempotencyKey: external_exports.string().optional(),
+      },
+      annotations: { readOnlyHint: false },
+    },
+    async (args) => runTool('complete_todo', () => completeTodo(ctx, args)),
+  );
+  server.registerTool(
+    'update_todo',
+    {
+      title: '\uD560\uC77C \uC218\uC815',
+      description:
+        'get_todos \uC758 todoToken \uC73C\uB85C \uC9C0\uC815\uD55C \uD560\uC77C\uC758 \uB0B4\uC6A9\xB7\uB9C8\uAC10\xB7\uC6B0\uC120\uC21C\uC704 \uB4F1\uC744 \uC218\uC815\uD569\uB2C8\uB2E4(\uC9C0\uC815\uD55C \uD544\uB4DC\uB9CC). \uC324\uD540 \uC2E4\uD589 \uC911\uC5D0\uB9CC \uC801\uC6A9, \uC4F0\uAE30 \uD65C\uC131\uD654 \uD544\uC694.',
+      inputSchema: {
+        todoToken: external_exports
+          .string()
+          .describe('get_todos \uAC00 \uBC18\uD658\uD55C \uD560\uC77C \uD1A0\uD070'),
+        text: external_exports.string().min(1).max(500).optional(),
+        dueDate: external_exports
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/)
+          .optional(),
+        priority: external_exports.enum(['high', 'medium', 'low', 'none']).optional(),
+        category: external_exports.string().optional(),
+        time: external_exports
+          .string()
+          .regex(/^\d{2}:\d{2}$/)
+          .optional(),
+        status: external_exports.enum(['todo', 'inProgress', 'done']).optional(),
+        idempotencyKey: external_exports.string().optional(),
+      },
+      annotations: { readOnlyHint: false },
+    },
+    async (args) => runTool('update_todo', () => updateTodo(ctx, args)),
+  );
+  server.registerTool(
+    'delete_todo',
+    {
+      title: '\uD560\uC77C \uC0AD\uC81C',
+      description:
+        'get_todos \uC758 todoToken \uC73C\uB85C \uC9C0\uC815\uD55C \uD560\uC77C\uC744 \uC0AD\uC81C\uD569\uB2C8\uB2E4. \uC324\uD540 \uC2E4\uD589 \uC911\uC5D0\uB9CC \uC801\uC6A9(\uBBF8\uC2E4\uD589 \uC2DC \uAC70\uBD80), \uC4F0\uAE30 \uD65C\uC131\uD654 \uD544\uC694.',
+      inputSchema: {
+        todoToken: external_exports
+          .string()
+          .describe('get_todos \uAC00 \uBC18\uD658\uD55C \uD560\uC77C \uD1A0\uD070'),
+        idempotencyKey: external_exports.string().optional(),
+      },
+      annotations: { readOnlyHint: false },
+    },
+    async (args) => runTool('delete_todo', () => deleteTodo(ctx, args)),
+  );
+  server.registerTool(
+    'update_event',
+    {
+      title: '\uC77C\uC815 \uC218\uC815',
+      description:
+        'get_events \uC758 eventToken \uC73C\uB85C \uC9C0\uC815\uD55C \uC77C\uC815\uC758 \uC81C\uBAA9\xB7\uB0A0\uC9DC\xB7\uC7A5\uC18C \uB4F1\uC744 \uC218\uC815\uD569\uB2C8\uB2E4(\uC9C0\uC815\uD55C \uD544\uB4DC\uB9CC). \uC324\uD540 \uC2E4\uD589 \uC911\uC5D0\uB9CC \uC801\uC6A9, \uC4F0\uAE30 \uD65C\uC131\uD654 \uD544\uC694.',
+      inputSchema: {
+        eventToken: external_exports
+          .string()
+          .describe('get_events \uAC00 \uBC18\uD658\uD55C \uC77C\uC815 \uD1A0\uD070'),
+        title: external_exports.string().min(1).max(200).optional(),
+        date: external_exports
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/)
+          .optional(),
+        category: external_exports.string().optional(),
+        time: external_exports.string().optional(),
+        location: external_exports.string().optional(),
+        idempotencyKey: external_exports.string().optional(),
+      },
+      annotations: { readOnlyHint: false },
+    },
+    async (args) => runTool('update_event', () => updateEvent(ctx, args)),
+  );
+  server.registerTool(
+    'delete_event',
+    {
+      title: '\uC77C\uC815 \uC0AD\uC81C',
+      description:
+        'get_events \uC758 eventToken \uC73C\uB85C \uC9C0\uC815\uD55C \uC77C\uC815\uC744 \uC0AD\uC81C\uD569\uB2C8\uB2E4. \uC324\uD540 \uC2E4\uD589 \uC911\uC5D0\uB9CC \uC801\uC6A9(\uBBF8\uC2E4\uD589 \uC2DC \uAC70\uBD80), \uC4F0\uAE30 \uD65C\uC131\uD654 \uD544\uC694.',
+      inputSchema: {
+        eventToken: external_exports
+          .string()
+          .describe('get_events \uAC00 \uBC18\uD658\uD55C \uC77C\uC815 \uD1A0\uD070'),
+        idempotencyKey: external_exports.string().optional(),
+      },
+      annotations: { readOnlyHint: false },
+    },
+    async (args) => runTool('delete_event', () => deleteEvent(ctx, args)),
   );
   return server;
 }
