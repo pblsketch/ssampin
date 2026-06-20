@@ -22,7 +22,7 @@ export default function AiBridgeTeaser() {
             </p>
           </div>
           <h2 className="mt-3 text-3xl font-bold text-sp-text md:text-4xl">
-            쓰던 AI 챗봇에게 우리 반 자료를 맡기세요
+            쓰던 AI 챗봇에게 우리 학생들 자료를 맡기세요
           </h2>
           <p className="mt-3 max-w-2xl text-base leading-relaxed text-sp-muted">
             클로드·GPT·제미나이 같은 AI 챗봇과 쌤핀을 안전하게 잇습니다. 복잡한 설정도 API 키도
