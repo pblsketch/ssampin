@@ -441,7 +441,7 @@ export default function AiBridgePage() {
             <span className="rounded bg-sp-accent/15 px-1 text-[0.72rem] font-semibold text-sp-accent">
               동의
             </span>{' '}
-            표시는 내용 노출을 허락했을 때만 열립니다.
+            표시는 읽기를 허락했을 때만 열립니다.
           </p>
           <div className="mt-6 grid items-start gap-4 md:grid-cols-2">
             {TOOL_GROUPS.map((g) => (

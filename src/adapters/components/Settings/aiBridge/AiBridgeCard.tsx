@@ -161,7 +161,7 @@ export function AiBridgeCard() {
       <div className="mt-4 rounded-lg border border-sp-accent/30 bg-sp-surface/60 p-3 text-xs leading-relaxed text-sp-muted">
         <p>
           실명·연락처는 토큰으로 가려서 내보냅니다. 다만{' '}
-          <strong className="text-sp-text">내용 노출</strong>을 켜면 관찰 기록{' '}
+          <strong className="text-sp-text">읽기</strong>를 켜면 관찰 기록{' '}
           <strong className="text-sp-text">원문</strong>이 외부 AI로 전달되어 맥락으로 재식별될 수
           있습니다. 꼭 필요할 때만 켜세요. 생기부는 법정 기록이며 모든 문장은 교사가 직접 확인해야
           합니다.
@@ -171,7 +171,7 @@ export function AiBridgeCard() {
       {/* 게이트 토글 */}
       <div className="mt-4 space-y-2">
         <GateRow
-          label="내용 노출 허용"
+          label="읽기 허용"
           hint="get_observations — 관찰 기록 원문을 외부 AI가 읽도록 허용"
           checked={allowContent}
           onChange={setAllowContent}
