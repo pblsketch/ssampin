@@ -66,6 +66,31 @@ body {
   animation: bridge-flow 2.8s cubic-bezier(0.45, 0, 0.55, 1) infinite;
 }
 
+/* 역방향(AI → 쌤핀) — 양방향 흐름 표현 */
+@keyframes bridge-flow-reverse {
+  0% {
+    left: 98%;
+    opacity: 0;
+    transform: translateY(-50%) scale(0.6);
+  }
+  12% {
+    opacity: 1;
+    transform: translateY(-50%) scale(1);
+  }
+  88% {
+    opacity: 1;
+    transform: translateY(-50%) scale(1);
+  }
+  100% {
+    left: 2%;
+    opacity: 0;
+    transform: translateY(-50%) scale(0.6);
+  }
+}
+.bridge-particle-reverse {
+  animation: bridge-flow-reverse 2.8s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
 /* 노드 부드러운 펄스(연결 살아있음 느낌) */
 @keyframes node-pulse {
   0%,
@@ -110,6 +135,7 @@ body {
 /* 접근성 — 모션 최소화 선호 시 정지 */
 @media (prefers-reduced-motion: reduce) {
   .bridge-particle,
+  .bridge-particle-reverse,
   .node-pulse,
   .float-soft,
   .dash-track {

@@ -246,11 +246,20 @@ function Track() {
   return (
     <div className="relative mt-7 h-0.5 flex-1 self-start" aria-hidden="true">
       <div className="absolute inset-x-0 top-1/2 h-0.5 -translate-y-1/2 rounded-full bg-sp-border" />
-      {[0, 0.95, 1.9].map((delay, i) => (
+      {/* 정방향(쌤핀 → AI) — 위 레인 */}
+      {[0, 1.4].map((delay, i) => (
         <span
-          key={i}
-          className="bridge-particle absolute top-1/2 h-2 w-2 rounded-full bg-sp-accent shadow-[0_0_8px_rgba(37,99,235,0.6)]"
-          style={{ animationDelay: `${delay}s` }}
+          key={`f${i}`}
+          className="bridge-particle absolute h-2 w-2 rounded-full bg-sp-accent shadow-[0_0_8px_rgba(37,99,235,0.6)]"
+          style={{ top: 'calc(50% - 5px)', animationDelay: `${delay}s` }}
+        />
+      ))}
+      {/* 역방향(AI → 쌤핀) — 아래 레인 */}
+      {[0.7, 2.1].map((delay, i) => (
+        <span
+          key={`r${i}`}
+          className="bridge-particle-reverse absolute h-2 w-2 rounded-full bg-sp-accent/70 shadow-[0_0_8px_rgba(37,99,235,0.5)]"
+          style={{ top: 'calc(50% + 5px)', animationDelay: `${delay}s` }}
         />
       ))}
     </div>
