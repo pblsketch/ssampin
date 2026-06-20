@@ -49,6 +49,8 @@ export function AiBridgeCard() {
   const [busy, setBusy] = useState<Client | null>(null);
   const [serverReady, setServerReady] = useState<boolean | null>(null);
   const [codexCommand, setCodexCommand] = useState<string | null>(null);
+  const [liveSyncOn, setLiveSyncOn] = useState(false);
+  const [liveSyncBusy, setLiveSyncBusy] = useState(false);
 
   const refreshStatus = useCallback(async () => {
     const api = window.electronAPI?.aiBridge;
@@ -69,7 +71,36 @@ export function AiBridgeCard() {
       ?.paths()
       .then((p) => setServerReady(p.serverExists))
       .catch(() => setServerReady(null));
+    void window.electronAPI?.aiBridge
+      ?.liveSyncStatus?.()
+      .then((s) => setLiveSyncOn(s.allowWrite))
+      .catch(() => {
+        /* 미지원/구버전 — OFF 로 둠 */
+      });
   }, [refreshStatus]);
+
+  const toggleLiveSync = async (enabled: boolean) => {
+    const api = window.electronAPI?.aiBridge;
+    if (!api?.setLiveSync) {
+      showToast('이 기능은 데스크톱 앱에서만 사용할 수 있습니다.', 'error');
+      return;
+    }
+    setLiveSyncBusy(true);
+    try {
+      await api.setLiveSync(enabled);
+      setLiveSyncOn(enabled);
+      showToast(
+        enabled
+          ? '실시간 AI 쓰기를 켰습니다(쌤핀 실행 중에만 적용).'
+          : '실시간 AI 쓰기를 껐습니다.',
+        'success',
+      );
+    } catch (err) {
+      showToast(`설정 실패: ${err instanceof Error ? err.message : String(err)}`, 'error');
+    } finally {
+      setLiveSyncBusy(false);
+    }
+  };
 
   const handleConnect = async (client: Client) => {
     const api = window.electronAPI?.aiBridge;
@@ -155,6 +186,33 @@ export function AiBridgeCard() {
           토글은 <strong>다음에 연결할 때</strong> 적용됩니다. 끈 상태로 연결하면 명단·자리 같은
           토큰 정보만 다룹니다.
         </p>
+      </div>
+
+      {/* 실시간 쓰기 (live-sync) — 즉시 적용, 쌤핀 실행 중에만 동작 */}
+      <div className="mt-4 rounded-lg border border-sp-border p-3">
+        <label className="flex items-center gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={liveSyncOn}
+            disabled={liveSyncBusy}
+            onChange={(e) => void toggleLiveSync(e.target.checked)}
+            className="h-4 w-4 accent-sp-accent disabled:opacity-50"
+          />
+          <span className="flex-1 min-w-0">
+            <span className="text-sm text-sp-text">
+              실시간 AI 쓰기 허용
+              {liveSyncOn && (
+                <span className="ml-2 inline-flex items-center gap-1 text-[0.7rem] font-medium text-emerald-400">
+                  <span className="material-symbols-outlined text-icon-sm">bolt</span>켜짐
+                </span>
+              )}
+            </span>
+            <span className="block text-[0.7rem] text-sp-muted/70">
+              create_todo·create_event — 쌤핀이 켜져 있을 때 외부 AI가 일정·할일을 추가하도록 허용
+              (즉시 적용, 앱이 꺼져 있으면 거부)
+            </span>
+          </span>
+        </label>
       </div>
 
       {/* 클라이언트별 연결 */}
