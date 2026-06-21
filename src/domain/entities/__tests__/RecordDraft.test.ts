@@ -8,8 +8,10 @@ import {
   isRecordArea,
   homeroomStudentRef,
   teachingStudentRef,
+  coerceSchoolLevel,
   RECORD_AREA_LABELS,
 } from '../RecordDraft';
+import { studentKey } from '../TeachingClass';
 
 describe('neisByteLength (브릿지 미러)', () => {
   it('한글 3B / 영문·숫자·공백·개행 1B', () => {
@@ -63,6 +65,27 @@ describe('studentRef 헬퍼 (브릿지 identity 미러)', () => {
   it('담임=Student.id, 수업반=tc:{classId}:{studentKey}', () => {
     expect(homeroomStudentRef('stu-1')).toBe('stu-1');
     expect(teachingStudentRef('c1', '3-2-5')).toBe('tc:c1:3-2-5');
+  });
+  it('수업반 studentRef 는 studentKey() 합성과 정확히 일치(브릿지 loopback 매핑 정합)', () => {
+    // 학년·반 있는 학생: studentKey = '3-2-5'
+    expect(teachingStudentRef('c1', studentKey({ number: 5, grade: 3, classNum: 2 }))).toBe(
+      'tc:c1:3-2-5',
+    );
+    // 학년·반 없는 학생: studentKey = '5'
+    expect(teachingStudentRef('c1', studentKey({ number: 5 }))).toBe('tc:c1:5');
+  });
+});
+
+describe('coerceSchoolLevel (설정 학교급 보정)', () => {
+  it('elementary|middle|high 는 그대로', () => {
+    expect(coerceSchoolLevel('elementary')).toBe('elementary');
+    expect(coerceSchoolLevel('middle')).toBe('middle');
+    expect(coerceSchoolLevel('high')).toBe('high');
+  });
+  it('custom·미지값은 보수적으로 high', () => {
+    expect(coerceSchoolLevel('custom')).toBe('high');
+    expect(coerceSchoolLevel('')).toBe('high');
+    expect(coerceSchoolLevel('초등학교')).toBe('high'); // 한국어 라벨은 설정값 아님 → 보정
   });
 });
 
