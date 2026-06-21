@@ -3,6 +3,7 @@ import type { CounselingMethod } from '@domain/entities/StudentRecord';
 import { HomeroomTabBar, type HomeroomTab } from './HomeroomTabBar';
 import { HOMEROOM_OPEN_TAB_EVENT, consumePendingHomeroomTab } from './homeroomTabIntent';
 import { RecordsTab } from './Records/RecordsTab';
+import { HomeroomRecordDraftTab } from './Records/HomeroomRecordDraftTab';
 import { SurveyTab } from './Survey/SurveyTab';
 import { AssignmentTab } from './Assignment/AssignmentTab';
 import { ConsultationTab } from './Consultation/ConsultationTab';
@@ -88,6 +89,7 @@ export function HomeroomPage() {
         {activeTab === 'records' && (
           <RecordsTab prefill={prefillRecord} onPrefillConsumed={() => setPrefillRecord(null)} />
         )}
+        {activeTab === 'recordDraft' && <HomeroomRecordDraftTab />}
         {activeTab === 'survey' && <SurveyTab />}
         {activeTab === 'assignment' && <AssignmentTab />}
         {activeTab === 'consultation' && <ConsultationTab onWriteRecord={handleWriteRecord} />}

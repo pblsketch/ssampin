@@ -112,6 +112,8 @@ export interface Capability {
   readonly allowContent: boolean;
   /** 수행평가 채점 쓰기(공식 성적기록) — allowWrite 와 독립한 별도 고위험 토글. fail-closed 기본 OFF. */
   readonly allowGradeWrite: boolean;
+  /** 생기부 초안 쓰기(법정 공식기록) — allowWrite 와 독립한 별도 고위험 토글. fail-closed 기본 OFF. */
+  readonly allowRecordWrite: boolean;
   readonly updatedAt: number;
 }
 
@@ -120,12 +122,14 @@ export function writeCapability(dataDir: string, caps: Capability): void {
 }
 
 /** setCapability 부분 갱신 입력 — 지정한 키만 바꾸고 나머지는 보존한다. */
-export type CapabilityPatch = Partial<Pick<Capability, 'allowWrite' | 'allowContent' | 'allowGradeWrite'>>;
+export type CapabilityPatch = Partial<
+  Pick<Capability, 'allowWrite' | 'allowContent' | 'allowGradeWrite' | 'allowRecordWrite'>
+>;
 
 /**
  * capability.json 부분 갱신(병합 쓰기). 지정한 토글만 바꾸고 나머지는 이전 값으로 보존하되,
- * **이 타입이 모르는 필드도 그대로 보존**한다(예: 생기부 초안 쓰기 토글 allowRecordWrite — 다른 기능 소유).
- * 토글 하나를 바꿔 다른 기능의 토글을 조용히 끄는 사고(클로버)를 막는다. 갱신된 Capability 를 반환.
+ * **이 타입이 모르는 필드도 그대로 보존**한다(다른 기능 소유 토글). 토글 하나를 바꿔 다른 기능의
+ * 토글을 조용히 끄는 사고(클로버)를 막는다. 갱신된 Capability 를 반환.
  */
 export function mergeCapability(dataDir: string, patch: CapabilityPatch): Capability {
   let raw: Record<string, unknown> = {};
@@ -138,10 +142,11 @@ export function mergeCapability(dataDir: string, patch: CapabilityPatch): Capabi
     /* 없거나 손상 → 빈 객체에서 시작(fail-closed: 미지정 토글은 false 로) */
   }
   const next: Record<string, unknown> = {
-    ...raw, // 알 수 없는 필드(allowRecordWrite 등) 보존
+    ...raw, // 알 수 없는 필드 보존
     allowWrite: patch.allowWrite ?? raw['allowWrite'] === true,
     allowContent: patch.allowContent ?? raw['allowContent'] === true,
     allowGradeWrite: patch.allowGradeWrite ?? raw['allowGradeWrite'] === true,
+    allowRecordWrite: patch.allowRecordWrite ?? raw['allowRecordWrite'] === true,
     updatedAt: Date.now(),
   };
   atomicWriteJson(capabilityPath(dataDir), next);
@@ -157,6 +162,7 @@ export function readCapability(dataDir: string): Capability {
     allowWrite: false,
     allowContent: false,
     allowGradeWrite: false,
+    allowRecordWrite: false,
     updatedAt: 0,
   };
   let parsed: unknown;
@@ -171,6 +177,7 @@ export function readCapability(dataDir: string): Capability {
     allowWrite: o['allowWrite'] === true,
     allowContent: o['allowContent'] === true,
     allowGradeWrite: o['allowGradeWrite'] === true,
+    allowRecordWrite: o['allowRecordWrite'] === true,
     updatedAt: typeof o['updatedAt'] === 'number' ? o['updatedAt'] : 0,
   };
 }
@@ -215,11 +222,21 @@ export function authorizeWriteRequest(input: {
 
 // ─────────────────────────── 쓰기 페이로드 검증 ───────────────────────────
 
-export type WriteDomain = 'todos' | 'events';
+export type WriteDomain = 'todos' | 'events' | 'recordDrafts';
 export type WriteOp = 'create' | 'update' | 'complete' | 'delete';
 
-const DOMAINS: ReadonlySet<string> = new Set(['todos', 'events']);
+const DOMAINS: ReadonlySet<string> = new Set(['todos', 'events', 'recordDrafts']);
 const OPS: ReadonlySet<string> = new Set(['create', 'update', 'complete', 'delete']);
+
+const RECORD_AREAS: ReadonlySet<string> = new Set([
+  'autonomy',
+  'career',
+  'behavior',
+  'subject',
+  'individualSubject',
+  'club',
+  'subjectDev',
+]);
 
 export interface ApplyWriteRequest {
   readonly domain: WriteDomain;
@@ -260,6 +277,10 @@ export function validateApplyWrite(raw: unknown): ValidateResult {
     return { ok: false, reason: 'data 는 객체여야 합니다.' };
   }
   const d = data as Record<string, unknown>;
+  // 생기부 초안은 create(upsert)만 지원 — 수정·삭제는 본체 UI 에서 한다(법정기록 보수화).
+  if (domain === 'recordDrafts' && op !== 'create') {
+    return { ok: false, reason: '생기부 초안은 create(저장)만 지원합니다.' };
+  }
   if (op === 'create') {
     if (domain === 'todos' && (typeof d['text'] !== 'string' || d['text'].trim().length === 0)) {
       return { ok: false, reason: '할일 생성에는 text 가 필요합니다.' };
@@ -270,6 +291,17 @@ export function validateApplyWrite(raw: unknown): ValidateResult {
       }
       if (typeof d['date'] !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(d['date'])) {
         return { ok: false, reason: '일정 생성에는 date(YYYY-MM-DD)가 필요합니다.' };
+      }
+    }
+    if (domain === 'recordDrafts') {
+      if (typeof d['area'] !== 'string' || !RECORD_AREAS.has(d['area'])) {
+        return { ok: false, reason: '생기부 초안 저장에는 유효한 area 가 필요합니다.' };
+      }
+      if (typeof d['studentRef'] !== 'string' || d['studentRef'].trim().length === 0) {
+        return { ok: false, reason: '생기부 초안 저장에는 studentRef 가 필요합니다.' };
+      }
+      if (typeof d['content'] !== 'string' || d['content'].trim().length === 0) {
+        return { ok: false, reason: '생기부 초안 저장에는 content 가 필요합니다.' };
       }
     }
   }

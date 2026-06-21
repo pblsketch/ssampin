@@ -25,6 +25,9 @@ beforeEach(() => {
       delete: rec('events.delete') as LiveSyncWriteDeps['events']['delete'],
       exists: vi.fn((id: string) => id === 'ev-1'),
     },
+    recordDrafts: {
+      upsert: rec('recordDrafts.upsert') as LiveSyncWriteDeps['recordDrafts']['upsert'],
+    },
   };
 });
 
@@ -140,6 +143,117 @@ describe('applyLiveSyncWrite — events', () => {
         )
       ).ok,
     ).toBe(false);
+  });
+});
+
+describe('applyLiveSyncWrite — recordDrafts', () => {
+  it('create → recordDrafts.upsert(안전 필드), ok+ref(멱등키)', async () => {
+    const r = await applyLiveSyncWrite(
+      {
+        domain: 'recordDrafts',
+        op: 'create',
+        idempotencyKey: 'rd1',
+        data: {
+          area: 'career',
+          studentRef: 's1',
+          studentId: 's1',
+          content: '진로 탐색 활동에 적극 참여함',
+          byteLength: 36,
+          basisObservationIds: ['o1', 'o2'],
+          groundingFlags: ['low_overlap'],
+          status: 'reviewing',
+          requiresTeacherReview: true,
+        },
+      },
+      deps,
+    );
+    expect(r).toEqual({ ok: true, ref: 'rd1' });
+    expect(calls[0]).toMatchObject({
+      fn: 'recordDrafts.upsert',
+      args: [
+        {
+          area: 'career',
+          studentRef: 's1',
+          studentId: 's1',
+          content: '진로 탐색 활동에 적극 참여함',
+          basisObservationIds: ['o1', 'o2'],
+          groundingFlags: ['low_overlap'],
+          status: 'reviewing',
+        },
+      ],
+    });
+  });
+
+  it('teaching: classId+studentKey+subject 전달', async () => {
+    await applyLiveSyncWrite(
+      {
+        domain: 'recordDrafts',
+        op: 'create',
+        idempotencyKey: 'rd2',
+        data: {
+          area: 'subject',
+          studentRef: 'tc:c1:5',
+          classId: 'c1',
+          studentKey: '5',
+          subject: '통합사회',
+          content: '수업 활동에서 통찰을 보임',
+        },
+      },
+      deps,
+    );
+    expect(calls[0]?.args[0]).toMatchObject({
+      area: 'subject',
+      studentRef: 'tc:c1:5',
+      classId: 'c1',
+      studentKey: '5',
+      subject: '통합사회',
+    });
+  });
+
+  it('잘못된 area / studentRef·content 누락 → 400, 액션 미호출', async () => {
+    expect(
+      (
+        await applyLiveSyncWrite(
+          {
+            domain: 'recordDrafts',
+            op: 'create',
+            idempotencyKey: 'k',
+            data: { area: 'bogus', studentRef: 's', content: 'x' },
+          },
+          deps,
+        )
+      ).status,
+    ).toBe(400);
+    expect(
+      (
+        await applyLiveSyncWrite(
+          {
+            domain: 'recordDrafts',
+            op: 'create',
+            idempotencyKey: 'k',
+            data: { area: 'career', content: 'x' },
+          },
+          deps,
+        )
+      ).status,
+    ).toBe(400);
+    expect(calls).toHaveLength(0);
+  });
+
+  it('update/delete 는 미지원(400)', async () => {
+    expect(
+      (
+        await applyLiveSyncWrite(
+          {
+            domain: 'recordDrafts',
+            op: 'update',
+            idempotencyKey: 'k',
+            data: { area: 'career', studentRef: 's', content: 'x' },
+          },
+          deps,
+        )
+      ).status,
+    ).toBe(400);
   });
 });
 

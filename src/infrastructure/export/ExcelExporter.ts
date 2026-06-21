@@ -41,6 +41,8 @@ import {
 } from '@domain/rules/toolResultAggregation';
 import { serializeAnswerCell, formatSubmissionLabel } from '@domain/rules/toolResultSerialization';
 import type { RubricExportRow } from '@domain/rules/rubricRules';
+import type { RecordDraft, RecordArea, SchoolLevel } from '@domain/entities/RecordDraft';
+import { RECORD_AREA_LABELS, resolveAreaLimit } from '@domain/entities/RecordDraft';
 
 const DAYS = ['월', '화', '수', '목', '금'] as const;
 
@@ -2368,6 +2370,131 @@ export async function exportRubricToExcel(params: RubricExcelParams): Promise<Ar
         cell.alignment = { horizontal: 'left', vertical: 'middle' };
       }
     });
+  }
+
+  return (await workbook.xlsx.writeBuffer()) as ArrayBuffer;
+}
+
+/* ──────────────────────────────────────────────────────────── */
+/* 생활기록부 초안(RecordDraft) 엑셀 내보내기 (RD-4)            */
+/* ──────────────────────────────────────────────────────────── */
+
+/** 한도 초과 셀 경고 색상 (연한 빨강) */
+const RECORD_DRAFT_OVER_LIMIT_FILL = 'FFFFF0F0';
+
+export interface RecordDraftStudentRef {
+  readonly id?: string;
+  readonly studentKey?: string;
+  readonly number?: number;
+  readonly name: string;
+  readonly studentRef: string;
+}
+
+/**
+ * 생활기록부 초안을 엑셀로 내보낸다.
+ *
+ * 구조: 학생(행) × 영역(열) 매트릭스, 시트 1장.
+ * - 1열: 번호 + 이름
+ * - 이후 열: 영역별 내용(draft.content). 해당 학생+영역 초안 없으면 빈칸.
+ * - 한도 초과 셀: 연한 빨강 배경.
+ * - confirmedOnly=true 이면 status==='confirmed' 초안만 포함.
+ * - includeMeta=true 이면 셀 내용 뒤에 "({byteLength}/{limit}B [{status}])" 메타 추가.
+ */
+export async function exportRecordDraftsToExcel(
+  drafts: readonly RecordDraft[],
+  students: ReadonlyArray<RecordDraftStudentRef>,
+  areas: readonly RecordArea[],
+  opts?: { level?: SchoolLevel; includeMeta?: boolean; confirmedOnly?: boolean },
+): Promise<ArrayBuffer> {
+  const level: SchoolLevel = opts?.level ?? 'high';
+  const includeMeta = opts?.includeMeta ?? false;
+  const confirmedOnly = opts?.confirmedOnly ?? false;
+
+  // confirmedOnly 필터 적용
+  const activeDrafts = confirmedOnly ? drafts.filter((d) => d.status === 'confirmed') : drafts;
+
+  // (studentRef, area) → draft 매핑 (같은 키 복수 시 최신 updatedAt 우선)
+  const draftMap = new Map<string, RecordDraft>();
+  for (const draft of activeDrafts) {
+    const key = `${draft.studentRef}::${draft.area}`;
+    const existing = draftMap.get(key);
+    if (!existing || draft.updatedAt > existing.updatedAt) {
+      draftMap.set(key, draft);
+    }
+  }
+
+  // 영역별 한도 — 해당 level에 없는 영역은 열에서 제외
+  const validAreas: RecordArea[] = [];
+  const areaLimits = new Map<RecordArea, number>();
+  for (const area of areas) {
+    try {
+      const limit = resolveAreaLimit(area, level);
+      validAreas.push(area);
+      areaLimits.set(area, limit);
+    } catch {
+      // 학교급에 없는 영역 skip
+    }
+  }
+
+  const workbook = new ExcelJS.Workbook();
+  const ws = workbook.addWorksheet('생활기록부 초안');
+
+  // 헤더 행: 번호/이름 + 영역 라벨들
+  const headerRow = ws.addRow(['번호/이름', ...validAreas.map((a) => RECORD_AREA_LABELS[a])]);
+  headerRow.eachCell((cell) => applyHeaderStyle(cell));
+
+  // 열 너비: 번호/이름 16, 영역 열 50 (긴 텍스트)
+  ws.getColumn(1).width = 16;
+  for (let i = 2; i <= validAreas.length + 1; i++) {
+    ws.getColumn(i).width = 50;
+  }
+
+  // 1행 고정 (freeze panes)
+  ws.views = [{ state: 'frozen', xSplit: 0, ySplit: 1 }];
+
+  // 데이터 행: 학생별
+  for (const student of students) {
+    const numStr = student.number != null ? String(student.number).padStart(2, '0') : '';
+    const studentLabel = numStr ? `${numStr}번 ${student.name}` : student.name;
+
+    const rowValues: string[] = [studentLabel];
+
+    for (const area of validAreas) {
+      const key = `${student.studentRef}::${area}`;
+      const draft = draftMap.get(key);
+      if (!draft) {
+        rowValues.push('');
+      } else if (includeMeta) {
+        const limit = areaLimits.get(area) ?? 0;
+        const statusLabel =
+          draft.status === 'confirmed' ? '확정' : draft.status === 'reviewing' ? '검토중' : '초안';
+        rowValues.push(`${draft.content}\n(${draft.byteLength}/${limit}B [${statusLabel}])`);
+      } else {
+        rowValues.push(draft.content);
+      }
+    }
+
+    const dataRow = ws.addRow(rowValues);
+
+    // 번호/이름 열
+    applyCellStyle(dataRow.getCell(1));
+    dataRow.getCell(1).font = { bold: true };
+
+    // 영역 열: 스타일 + 한도 초과 경고
+    for (let ci = 0; ci < validAreas.length; ci++) {
+      const area = validAreas[ci]!;
+      const cell = dataRow.getCell(ci + 2);
+      const key = `${student.studentRef}::${area}`;
+      const draft = draftMap.get(key);
+      const limit = areaLimits.get(area) ?? 0;
+
+      if (draft !== undefined && draft.byteLength > limit) {
+        applyCellStyle(cell, RECORD_DRAFT_OVER_LIMIT_FILL);
+      } else {
+        applyCellStyle(cell);
+      }
+      cell.alignment = { horizontal: 'left', vertical: 'top', wrapText: true };
+    }
   }
 
   return (await workbook.xlsx.writeBuffer()) as ArrayBuffer;

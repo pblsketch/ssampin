@@ -62,6 +62,15 @@ export function registerLiveSyncHost(deps: LiveSyncHostDeps): LiveSyncHost {
     for (const [k, t] of recentKeys) if (now - t > IDEMPOTENCY_WINDOW_MS) recentKeys.delete(k);
     if (recentKeys.has(req.idempotencyKey)) return { ok: true, ref: req.idempotencyKey };
 
+    // 도메인별 게이트 재강제(fail-closed) — 서버는 allowWrite 또는 allowRecordWrite 중 하나만 켜져도
+    // 뜨므로, "서버 가동"이 곧 "이 쓰기 허용"을 뜻하지 않는다. 생기부 초안은 allowRecordWrite,
+    // 그 외(할일·일정)는 allowWrite 가 켜진 경우에만 적용한다(꺼진 권한으로의 우회 차단).
+    const caps = readCapability(deps.dataDir);
+    const domainAllowed = req.domain === 'recordDrafts' ? caps.allowRecordWrite : caps.allowWrite;
+    if (!domainAllowed) {
+      return { ok: false, status: 403, error: '이 쓰기 권한이 비활성화되어 있습니다.' };
+    }
+
     const win = deps.getMainWindow();
     if (!win || win.isDestroyed()) return { ok: false, status: 503, error: '메인 창이 없습니다.' };
 
@@ -105,6 +114,7 @@ export function registerLiveSyncHost(deps: LiveSyncHostDeps): LiveSyncHost {
     allowWrite: boolean;
     allowContent: boolean;
     allowGradeWrite: boolean;
+    allowRecordWrite: boolean;
   };
   function capabilityStatus(): CapabilityStatus {
     const caps = readCapability(deps.dataDir);
@@ -113,38 +123,54 @@ export function registerLiveSyncHost(deps: LiveSyncHostDeps): LiveSyncHost {
       allowWrite: caps.allowWrite,
       allowContent: caps.allowContent,
       allowGradeWrite: caps.allowGradeWrite,
+      allowRecordWrite: caps.allowRecordWrite,
     };
   }
 
   /**
-   * 게이트 토글을 capability.json 에 즉시 기록(설정 카드의 읽기/쓰기/채점쓰기 공통 창구). 부분 갱신을
-   * 이전 값과 병합해 쓴다. 브릿지는 매 호출 capability 를 새로 읽으므로 [연결] 재등록·클라 재시작 없이
-   * 즉시 반영된다(#11). allowWrite 가 켜지면 loopback 서버를 시작(실시간 일정·할일 쓰기), 꺼지면 정지한다.
+   * 게이트 토글을 capability.json 에 즉시 기록(설정 카드의 읽기/쓰기/채점쓰기/생기부쓰기 공통 창구). 부분
+   * 갱신을 이전 값과 병합해 쓴다. 브릿지는 매 호출 capability 를 새로 읽으므로 [연결] 재등록·클라 재시작
+   * 없이 즉시 반영된다(#11). 쓰기(allowWrite) 또는 생기부 쓰기(allowRecordWrite)가 켜지면 loopback 서버를
+   * 시작한다 — 서버가 control.json 을 광고해야 브릿지가 "앱 실행 중"을 인지하고 loopback 위임(메모리 반영)
+   * 으로 안전하게 쓴다(서버가 없으면 브릿지가 앱을 닫힘으로 보고 직접 파일쓰기 → 실행 중 덮어쓰기 위험).
    */
   async function applyCapability(partial: {
     allowWrite?: boolean;
     allowContent?: boolean;
     allowGradeWrite?: boolean;
+    allowRecordWrite?: boolean;
   }): Promise<CapabilityStatus> {
-    // 부분 갱신 — 다른 기능의 토글(allowRecordWrite 등 이 타입이 모르는 필드)도 보존(클로버 방지).
+    // 부분 갱신 — 다른 기능의 토글(이 함수가 모르는 필드)도 보존(클로버 방지).
     const next = mergeCapability(deps.dataDir, partial);
-    if (next.allowWrite) await startServer();
+    if (next.allowWrite || next.allowRecordWrite) await startServer();
     else await stopServer();
     return capabilityStatus();
   }
 
-  // 토글: 읽기/쓰기/채점쓰기를 capability 에 즉시 기록(부분 갱신). true 일 때만 게이트를 켠다(런타임 타입 방어).
+  // 토글: 읽기/쓰기/채점쓰기/생기부쓰기를 capability 에 즉시 기록(부분 갱신). true 일 때만 게이트 ON(런타임 타입 방어).
   ipcMain.handle(
     'aiBridge:setCapability',
     async (
       _e,
-      partial: { allowWrite?: unknown; allowContent?: unknown; allowGradeWrite?: unknown },
+      partial: {
+        allowWrite?: unknown;
+        allowContent?: unknown;
+        allowGradeWrite?: unknown;
+        allowRecordWrite?: unknown;
+      },
     ): Promise<CapabilityStatus> => {
-      const p: { allowWrite?: boolean; allowContent?: boolean; allowGradeWrite?: boolean } = {};
+      const p: {
+        allowWrite?: boolean;
+        allowContent?: boolean;
+        allowGradeWrite?: boolean;
+        allowRecordWrite?: boolean;
+      } = {};
       if (typeof partial?.allowWrite === 'boolean') p.allowWrite = partial.allowWrite;
       if (typeof partial?.allowContent === 'boolean') p.allowContent = partial.allowContent;
       if (typeof partial?.allowGradeWrite === 'boolean')
         p.allowGradeWrite = partial.allowGradeWrite;
+      if (typeof partial?.allowRecordWrite === 'boolean')
+        p.allowRecordWrite = partial.allowRecordWrite;
       return applyCapability(p);
     },
   );
@@ -161,7 +187,10 @@ export function registerLiveSyncHost(deps: LiveSyncHostDeps): LiveSyncHost {
   ipcMain.handle('aiBridge:liveSyncStatus', (): CapabilityStatus => capabilityStatus());
 
   // 시작 시 capability 가 이미 켜져 있으면 서버 자동 시작(기본 OFF 라 보통은 무동작).
-  if (readCapability(deps.dataDir).allowWrite) void startServer();
+  {
+    const caps = readCapability(deps.dataDir);
+    if (caps.allowWrite || caps.allowRecordWrite) void startServer();
+  }
 
   return { stop: stopServer };
 }

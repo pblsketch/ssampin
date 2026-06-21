@@ -1,16 +1,27 @@
 import { useEffect } from 'react';
 import { useTodoStore } from '@adapters/stores/useTodoStore';
 import { useEventsStore } from '@adapters/stores/useEventsStore';
+import { useRecordDraftsStore } from '@adapters/stores/useRecordDraftsStore';
 import {
   applyLiveSyncWrite,
   type LiveSyncWriteRequest,
 } from '@usecases/aiBridge/applyLiveSyncWrite';
 import type { Todo, TodoPriority } from '@domain/entities/Todo';
 import type { SchoolEvent } from '@domain/entities/SchoolEvent';
+import {
+  isRecordArea,
+  type RecordArea,
+  type RecordDraftStatus,
+} from '@domain/entities/RecordDraft';
 
 const PRIORITIES: readonly string[] = ['high', 'medium', 'low', 'none'];
 function coercePriority(v: string | undefined): TodoPriority | undefined {
   return v !== undefined && PRIORITIES.includes(v) ? (v as TodoPriority) : undefined;
+}
+
+const RECORD_STATUSES: readonly string[] = ['draft', 'reviewing', 'confirmed'];
+function coerceRecordStatus(v: string | undefined): RecordDraftStatus | undefined {
+  return v !== undefined && RECORD_STATUSES.includes(v) ? (v as RecordDraftStatus) : undefined;
 }
 
 type TodoChanges = Partial<
@@ -32,6 +43,7 @@ export function useAiBridgeLiveSync(): void {
       const req = raw as LiveSyncWriteRequest;
       const todo = useTodoStore.getState();
       const ev = useEventsStore.getState();
+      const rd = useRecordDraftsStore.getState();
       return applyLiveSyncWrite(req, {
         todos: {
           add: (text, opts) =>
@@ -64,6 +76,31 @@ export function useAiBridgeLiveSync(): void {
           },
           delete: (id) => ev.deleteEvent(id),
           exists: (id) => ev.events.some((e) => e.id === id),
+        },
+        recordDrafts: {
+          upsert: (input) => {
+            // area 는 applyLiveSyncWrite 가 이미 화이트리스트 검증함(방어적으로 재확인).
+            if (!isRecordArea(input.area)) return Promise.resolve();
+            const status = coerceRecordStatus(input.status);
+            return rd
+              .upsert({
+                area: input.area as RecordArea,
+                studentRef: input.studentRef,
+                content: input.content,
+                ...(input.classId !== undefined ? { classId: input.classId } : {}),
+                ...(input.studentKey !== undefined ? { studentKey: input.studentKey } : {}),
+                ...(input.studentId !== undefined ? { studentId: input.studentId } : {}),
+                ...(input.subject !== undefined ? { subject: input.subject } : {}),
+                ...(input.basisObservationIds !== undefined
+                  ? { basisObservationIds: input.basisObservationIds }
+                  : {}),
+                ...(input.groundingFlags !== undefined
+                  ? { groundingFlags: input.groundingFlags }
+                  : {}),
+                ...(status !== undefined ? { status } : {}),
+              })
+              .then(() => undefined);
+          },
         },
       });
     });

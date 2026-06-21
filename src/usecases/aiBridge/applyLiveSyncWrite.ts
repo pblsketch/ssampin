@@ -8,10 +8,24 @@
  */
 
 export interface LiveSyncWriteRequest {
-  readonly domain: 'todos' | 'events';
+  readonly domain: 'todos' | 'events' | 'recordDrafts';
   readonly op: 'create' | 'update' | 'complete' | 'delete';
   readonly idempotencyKey: string;
   readonly data: Record<string, unknown>;
+}
+
+/** 생기부 초안 upsert 입력(store 액션 주입용 — 식별·내부 메타 제외, 안전 필드만). */
+export interface LiveSyncRecordDraftInput {
+  readonly area: string;
+  readonly studentRef: string;
+  readonly classId?: string;
+  readonly studentKey?: string;
+  readonly studentId?: string;
+  readonly subject?: string;
+  readonly content: string;
+  readonly basisObservationIds?: readonly string[];
+  readonly groundingFlags?: readonly string[];
+  readonly status?: string;
 }
 
 export interface LiveSyncWriteResult {
@@ -51,6 +65,10 @@ export interface LiveSyncWriteDeps {
     readonly update: (id: string, changes: Record<string, unknown>) => Promise<void>;
     readonly delete: (id: string) => Promise<void>;
     readonly exists: (id: string) => boolean;
+  };
+  readonly recordDrafts: {
+    /** (area+studentRef+subject) 키 upsert. 호출자는 useRecordDraftsStore.upsert 를 넘긴다. */
+    readonly upsert: (input: LiveSyncRecordDraftInput) => Promise<void>;
   };
 }
 
@@ -165,6 +183,65 @@ async function applyEvents(
   return ok(req.idempotencyKey);
 }
 
+const RECORD_AREAS: ReadonlySet<string> = new Set([
+  'autonomy',
+  'career',
+  'behavior',
+  'subject',
+  'individualSubject',
+  'club',
+  'subjectDev',
+]);
+
+async function applyRecordDrafts(
+  req: LiveSyncWriteRequest,
+  deps: LiveSyncWriteDeps,
+): Promise<LiveSyncWriteResult> {
+  // 생기부 초안은 create(upsert)만 — 수정·삭제는 본체 UI 에서만(법정기록 보수화).
+  if (req.op !== 'create') return bad('생기부 초안은 저장(create)만 지원합니다.');
+  const d = req.data;
+  const area = asStr(d['area']);
+  const studentRef = asStr(d['studentRef']);
+  const content = asStr(d['content']);
+  if (!area || !RECORD_AREAS.has(area)) return bad('유효한 area 가 필요합니다.');
+  if (!studentRef) return bad('studentRef 가 필요합니다.');
+  if (!content) return bad('content 가 필요합니다.');
+
+  const input: {
+    area: string;
+    studentRef: string;
+    content: string;
+    classId?: string;
+    studentKey?: string;
+    studentId?: string;
+    subject?: string;
+    basisObservationIds?: readonly string[];
+    groundingFlags?: readonly string[];
+    status?: string;
+  } = { area, studentRef, content };
+  const classId = asStr(d['classId']);
+  if (classId !== undefined) input.classId = classId;
+  const studentKey = asStr(d['studentKey']);
+  if (studentKey !== undefined) input.studentKey = studentKey;
+  const studentId = asStr(d['studentId']);
+  if (studentId !== undefined) input.studentId = studentId;
+  const subject = asStr(d['subject']);
+  if (subject !== undefined) input.subject = subject;
+  const status = asStr(d['status']);
+  if (status !== undefined) input.status = status;
+  if (Array.isArray(d['basisObservationIds'])) {
+    input.basisObservationIds = d['basisObservationIds'].filter(
+      (x): x is string => typeof x === 'string',
+    );
+  }
+  if (Array.isArray(d['groundingFlags'])) {
+    input.groundingFlags = d['groundingFlags'].filter((x): x is string => typeof x === 'string');
+  }
+
+  await deps.recordDrafts.upsert(input);
+  return ok(req.idempotencyKey);
+}
+
 /**
  * 검증된 live-sync 쓰기를 store 액션으로 적용. 도메인/연산별로 분기하며, 실패는 상태코드와 함께 반환.
  * (페이로드 형태는 main 의 validateApplyWrite 가 1차 검증하지만, 여기서도 data 필드를 방어적으로 본다.)
@@ -176,6 +253,7 @@ export async function applyLiveSyncWrite(
   try {
     if (req.domain === 'todos') return await applyTodos(req, deps);
     if (req.domain === 'events') return await applyEvents(req, deps);
+    if (req.domain === 'recordDrafts') return await applyRecordDrafts(req, deps);
     return bad('지원하지 않는 도메인입니다.');
   } catch {
     return { ok: false, status: 500, error: '쓰기 적용 중 오류가 발생했습니다.' };

@@ -309,6 +309,15 @@ export const SYNC_REGISTRY: SyncDomain[] = [
       await useObservationStore.getState().load();
     },
   },
+  // 28. record-drafts ─ AI 브릿지 생기부 초안 (영역별 write-back 수신)
+  {
+    fileName: 'record-drafts',
+    reload: async () => {
+      const { useRecordDraftsStore } = await import('@adapters/stores/useRecordDraftsStore');
+      useRecordDraftsStore.setState({ loaded: false });
+      await useRecordDraftsStore.getState().load();
+    },
+  },
 ];
 
 /**

@@ -44,6 +44,7 @@ import type { IWordCloudRepository } from '@domain/repositories/IWordCloudReposi
 import type { IToolTemplateRepository } from '@domain/repositories/IToolTemplateRepository';
 import type { IToolResultRepository } from '@domain/repositories/IToolResultRepository';
 import type { IObservationRepository } from '@domain/repositories/IObservationRepository';
+import type { IRecordDraftsRepository } from '@domain/repositories/IRecordDraftsRepository';
 import type { IFormTemplateRepository } from '@domain/repositories/IFormTemplateRepository';
 import type { INotebookRepository } from '@domain/repositories/INotebookRepository';
 import type { IWallBoardRepository } from '@domain/repositories/IWallBoardRepository';
@@ -101,6 +102,7 @@ import { JsonWordCloudRepository } from '@adapters/repositories/JsonWordCloudRep
 import { JsonToolTemplateRepository } from '@adapters/repositories/JsonToolTemplateRepository';
 import { JsonToolResultRepository } from '@adapters/repositories/JsonToolResultRepository';
 import { JsonObservationRepository } from '@adapters/repositories/JsonObservationRepository';
+import { JsonRecordDraftsRepository } from '@adapters/repositories/JsonRecordDraftsRepository';
 import { JsonFormTemplateRepository } from '@adapters/repositories/JsonFormTemplateRepository';
 import { JsonNotebookRepository } from '@adapters/repositories/JsonNotebookRepository';
 import { JsonWallBoardRepository } from '@adapters/repositories/JsonWallBoardRepository';
@@ -216,6 +218,10 @@ export const toolTemplateRepository: IToolTemplateRepository = new JsonToolTempl
 export const toolResultRepository: IToolResultRepository = new JsonToolResultRepository(storage);
 
 export const observationRepository: IObservationRepository = new JsonObservationRepository(storage);
+
+export const recordDraftsRepository: IRecordDraftsRepository = new JsonRecordDraftsRepository(
+  storage,
+);
 
 export const noteRepository: INotebookRepository = new JsonNotebookRepository(storage);
 

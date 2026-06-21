@@ -2,13 +2,15 @@ import { useState } from 'react';
 import { ClassRecordInputView } from './ClassRecordInputView';
 import { ClassRecordStatsView } from './ClassRecordStatsView';
 import { ClassRecordSearchView } from './ClassRecordSearchView';
+import { ClassRecordDraftView } from './ClassRecordDraftView';
 
-type RecordViewMode = 'input' | 'stats' | 'search';
+type RecordViewMode = 'input' | 'stats' | 'search' | 'draft';
 
 const VIEW_TABS: { id: RecordViewMode; icon: string; label: string }[] = [
   { id: 'input', icon: '✏️', label: '입력' },
   { id: 'stats', icon: '📊', label: '통계' },
   { id: 'search', icon: '🔍', label: '조회' },
+  { id: 'draft', icon: '📑', label: '생기부 초안' },
 ];
 
 interface ClassRecordTabProps {
@@ -64,6 +66,7 @@ export function ClassRecordTab({
         )}
         {viewMode === 'stats' && <ClassRecordStatsView classId={classId} />}
         {viewMode === 'search' && <ClassRecordSearchView classId={classId} />}
+        {viewMode === 'draft' && <ClassRecordDraftView classId={classId} />}
       </div>
     </div>
   );

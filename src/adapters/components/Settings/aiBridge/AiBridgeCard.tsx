@@ -38,7 +38,12 @@ const CLIENTS: ClientDef[] = [
 type StatusMap = Record<Client, boolean | null | undefined>;
 
 /** setCapability 부분 갱신 인자 */
-type CapPartial = { allowWrite?: boolean; allowContent?: boolean; allowGradeWrite?: boolean };
+type CapPartial = {
+  allowWrite?: boolean;
+  allowContent?: boolean;
+  allowGradeWrite?: boolean;
+  allowRecordWrite?: boolean;
+};
 
 export function AiBridgeCard() {
   const showToast = useToastStore((s) => s.show);
@@ -46,6 +51,7 @@ export function AiBridgeCard() {
   const [allowContent, setAllowContent] = useState(false);
   const [allowWrite, setAllowWrite] = useState(false);
   const [allowGradeWrite, setAllowGradeWrite] = useState(false);
+  const [allowRecordWrite, setAllowRecordWrite] = useState(false);
   const [liveServerRunning, setLiveServerRunning] = useState(false);
   const [capBusy, setCapBusy] = useState(false);
   const [status, setStatus] = useState<StatusMap>({
@@ -83,6 +89,7 @@ export function AiBridgeCard() {
         setAllowContent(s.allowContent);
         setAllowWrite(s.allowWrite);
         setAllowGradeWrite(s.allowGradeWrite);
+        setAllowRecordWrite(s.allowRecordWrite);
         setLiveServerRunning(s.running);
       })
       .catch(() => {
@@ -103,6 +110,7 @@ export function AiBridgeCard() {
       setAllowContent(s.allowContent);
       setAllowWrite(s.allowWrite);
       setAllowGradeWrite(s.allowGradeWrite);
+      setAllowRecordWrite(s.allowRecordWrite);
       setLiveServerRunning(s.running);
       showToast(successMsg, 'success');
     } catch (err) {
@@ -221,6 +229,20 @@ export function AiBridgeCard() {
             void applyCapability(
               { allowGradeWrite: v },
               v ? '채점 쓰기를 켰습니다(바로 적용).' : '채점 쓰기를 껐습니다(바로 적용).',
+            )
+          }
+        />
+        <GateRow
+          label="생기부 초안 쓰기 허용"
+          hint="외부 AI가 NEIS 영역별 생활기록부 초안을 쌤핀 작성란에 저장하도록 허용 — 법정 공식기록이라 별도 고위험 토글, 모든 초안은 교사 검토가 필요한 상태로 저장됩니다"
+          checked={allowRecordWrite}
+          disabled={capBusy}
+          onChange={(v) =>
+            void applyCapability(
+              { allowRecordWrite: v },
+              v
+                ? '생기부 초안 쓰기를 켰습니다(바로 적용).'
+                : '생기부 초안 쓰기를 껐습니다(바로 적용).',
             )
           }
         />

@@ -37,11 +37,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
       allowWrite?: boolean;
       allowContent?: boolean;
       allowGradeWrite?: boolean;
+      allowRecordWrite?: boolean;
     }): Promise<{
       running: boolean;
       allowWrite: boolean;
       allowContent: boolean;
       allowGradeWrite: boolean;
+      allowRecordWrite: boolean;
     }> => ipcRenderer.invoke('aiBridge:setCapability', partial),
     // 하위호환: 쓰기 허용 토글(= setCapability({allowWrite}))
     setLiveSync: (enabled: boolean): Promise<{ running: boolean }> =>
@@ -51,6 +53,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       allowWrite: boolean;
       allowContent: boolean;
       allowGradeWrite: boolean;
+      allowRecordWrite: boolean;
     }> => ipcRenderer.invoke('aiBridge:liveSyncStatus'),
     // main → 렌더러 쓰기 위임 수신. handler(req)→결과를 회신 채널로 돌려준다. cleanup 함수 반환.
     onApplyWrite: (handler: (req: unknown) => Promise<unknown>): (() => void) => {

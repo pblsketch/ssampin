@@ -1,6 +1,7 @@
 export type HomeroomTab =
   | 'roster'
   | 'records'
+  | 'recordDraft'
   | 'survey'
   | 'assignment'
   | 'consultation'
@@ -10,6 +11,7 @@ export type HomeroomTab =
 const TABS: { id: HomeroomTab; icon: string; label: string }[] = [
   { id: 'roster', icon: '👥', label: '명렬 관리' },
   { id: 'records', icon: '📝', label: '기록' },
+  { id: 'recordDraft', icon: '📑', label: '생기부 초안' },
   { id: 'survey', icon: '📋', label: '설문/체크리스트' },
   { id: 'assignment', icon: '📎', label: '과제 수합' },
   { id: 'consultation', icon: '📅', label: '상담 예약' },

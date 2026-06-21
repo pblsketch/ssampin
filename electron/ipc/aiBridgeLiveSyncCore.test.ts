@@ -81,6 +81,7 @@ describe('capability (fail-closed 기본 OFF)', () => {
       allowWrite: false,
       allowContent: false,
       allowGradeWrite: false,
+      allowRecordWrite: false,
       updatedAt: 0,
     });
   });
@@ -89,6 +90,7 @@ describe('capability (fail-closed 기본 OFF)', () => {
       allowWrite: true,
       allowContent: false,
       allowGradeWrite: false,
+      allowRecordWrite: false,
       updatedAt: 123,
     });
     expect(capabilityPath(dir)).toBe(path.join(dir, '.ssampin-aibridge', 'capability.json'));
@@ -96,6 +98,7 @@ describe('capability (fail-closed 기본 OFF)', () => {
       allowWrite: true,
       allowContent: false,
       allowGradeWrite: false,
+      allowRecordWrite: false,
       updatedAt: 123,
     });
   });
@@ -104,13 +107,31 @@ describe('capability (fail-closed 기본 OFF)', () => {
       allowWrite: false,
       allowContent: true,
       allowGradeWrite: true,
+      allowRecordWrite: false,
       updatedAt: 7,
     });
     expect(readCapability(dir)).toEqual({
       allowWrite: false,
       allowContent: true,
       allowGradeWrite: true,
+      allowRecordWrite: false,
       updatedAt: 7,
+    });
+  });
+  it('생기부 초안 쓰기(allowRecordWrite) 독립 토글 round-trip', () => {
+    writeCapability(dir, {
+      allowWrite: false,
+      allowContent: false,
+      allowGradeWrite: false,
+      allowRecordWrite: true,
+      updatedAt: 9,
+    });
+    expect(readCapability(dir)).toEqual({
+      allowWrite: false,
+      allowContent: false,
+      allowGradeWrite: false,
+      allowRecordWrite: true,
+      updatedAt: 9,
     });
   });
   it('손상 파일 → fail-closed', () => {
@@ -123,14 +144,26 @@ describe('capability (fail-closed 기본 OFF)', () => {
 
 describe('mergeCapability (부분 갱신 + 미지 필드 보존)', () => {
   it('지정한 토글만 바꾸고 나머지는 보존', () => {
-    writeCapability(dir, { allowWrite: true, allowContent: false, allowGradeWrite: false, updatedAt: 1 });
+    writeCapability(dir, {
+      allowWrite: true,
+      allowContent: false,
+      allowGradeWrite: false,
+      allowRecordWrite: false,
+      updatedAt: 1,
+    });
     const after = mergeCapability(dir, { allowContent: true });
     expect(after.allowContent).toBe(true);
     expect(after.allowWrite).toBe(true); // 보존
     expect(after.allowGradeWrite).toBe(false);
   });
   it('false 명시도 반영(끄기)', () => {
-    writeCapability(dir, { allowWrite: true, allowContent: true, allowGradeWrite: true, updatedAt: 1 });
+    writeCapability(dir, {
+      allowWrite: true,
+      allowContent: true,
+      allowGradeWrite: true,
+      allowRecordWrite: false,
+      updatedAt: 1,
+    });
     expect(mergeCapability(dir, { allowWrite: false }).allowWrite).toBe(false);
   });
   it('이 타입이 모르는 필드(allowRecordWrite)도 보존 — 토글 한 번에 다른 기능 안 꺼짐 (codex MED #4)', () => {
@@ -138,7 +171,13 @@ describe('mergeCapability (부분 갱신 + 미지 필드 보존)', () => {
     fs.mkdirSync(path.dirname(capabilityPath(dir)), { recursive: true });
     fs.writeFileSync(
       capabilityPath(dir),
-      JSON.stringify({ allowWrite: false, allowContent: false, allowGradeWrite: false, allowRecordWrite: true, updatedAt: 1 }),
+      JSON.stringify({
+        allowWrite: false,
+        allowContent: false,
+        allowGradeWrite: false,
+        allowRecordWrite: true,
+        updatedAt: 1,
+      }),
       'utf-8',
     );
     mergeCapability(dir, { allowContent: true }); // 읽기만 토글
@@ -243,5 +282,43 @@ describe('validateApplyWrite', () => {
       validateApplyWrite({ domain: 'todos', op: 'create', idempotencyKey: 'k', data: {} }).ok,
     ).toBe(false);
     expect(validateApplyWrite(null).ok).toBe(false);
+  });
+  it('정상 recordDrafts create(area+studentRef+content 필수)', () => {
+    expect(
+      validateApplyWrite({
+        domain: 'recordDrafts',
+        op: 'create',
+        idempotencyKey: 'k',
+        data: { area: 'career', studentRef: 's1', content: '진로 탐색' },
+      }).ok,
+    ).toBe(true);
+  });
+  it('recordDrafts: 잘못된 area / studentRef·content 누락 거부', () => {
+    expect(
+      validateApplyWrite({
+        domain: 'recordDrafts',
+        op: 'create',
+        idempotencyKey: 'k',
+        data: { area: 'bogus', studentRef: 's1', content: 'x' },
+      }).ok,
+    ).toBe(false);
+    expect(
+      validateApplyWrite({
+        domain: 'recordDrafts',
+        op: 'create',
+        idempotencyKey: 'k',
+        data: { area: 'career', content: 'x' },
+      }).ok,
+    ).toBe(false);
+  });
+  it('recordDrafts: create 외 연산(update/delete) 거부', () => {
+    expect(
+      validateApplyWrite({
+        domain: 'recordDrafts',
+        op: 'update',
+        idempotencyKey: 'k',
+        data: { area: 'career', studentRef: 's1', content: 'x' },
+      }).ok,
+    ).toBe(false);
   });
 });

@@ -7,6 +7,9 @@ import type { StudentRecord } from '@domain/entities/StudentRecord';
 import type { RecordCategoryItem } from '@domain/valueObjects/RecordCategory';
 import type { GroupResult } from '@domain/rules/groupingRules';
 import type { RubricFeedbackDoc } from '@domain/rules/rubricRules';
+import type { RecordDraft, RecordArea, SchoolLevel } from '@domain/entities/RecordDraft';
+import { RECORD_AREA_LABELS, resolveAreaLimit } from '@domain/entities/RecordDraft';
+import type { RecordDraftStudentRef } from '@infrastructure/export/ExcelExporter';
 import {
   getAttendanceStats,
   sortByDateDesc,
@@ -1465,6 +1468,122 @@ export async function exportRubricFeedbackToHwpx(input: {
   }
 
   if (input.docs.length === 0) {
+    doc.addParagraph('출력할 학생이 없습니다.', { charPrIdRef: bodyCharId });
+  }
+
+  return doc.save();
+}
+
+/* ──────────────────────────────────────────────────────────── */
+/* 생활기록부 초안(RecordDraft) HWPX 내보내기 (RD-4)            */
+/* ──────────────────────────────────────────────────────────── */
+
+/**
+ * 생활기록부 초안을 HWPX(한글)로 내보낸다.
+ *
+ * 구조: 학생 1인당 1섹션(구분 문단으로 분리).
+ * 각 영역: 영역 제목 문단 + 내용 문단 + 바이트 표기(byteLength/limitB).
+ * - confirmedOnly=true 이면 status==='confirmed' 초안만 포함.
+ * - 해당 학교급에 없는 영역은 skip.
+ */
+export async function exportRecordDraftsToHwpx(
+  drafts: readonly RecordDraft[],
+  students: ReadonlyArray<RecordDraftStudentRef>,
+  areas: readonly RecordArea[],
+  meta: { className?: string },
+  opts?: { level?: SchoolLevel; confirmedOnly?: boolean },
+): Promise<Uint8Array> {
+  const level: SchoolLevel = opts?.level ?? 'high';
+  const confirmedOnly = opts?.confirmedOnly ?? false;
+
+  const activeDrafts = confirmedOnly ? drafts.filter((d) => d.status === 'confirmed') : drafts;
+
+  // (studentRef, area) → draft 매핑 (최신 updatedAt 우선)
+  const draftMap = new Map<string, RecordDraft>();
+  for (const draft of activeDrafts) {
+    const key = `${draft.studentRef}::${draft.area}`;
+    const existing = draftMap.get(key);
+    if (!existing || draft.updatedAt > existing.updatedAt) {
+      draftMap.set(key, draft);
+    }
+  }
+
+  // 영역별 한도 — 해당 level에 없는 영역은 skip
+  const validAreas: RecordArea[] = [];
+  const areaLimits = new Map<RecordArea, number>();
+  for (const area of areas) {
+    try {
+      const limit = resolveAreaLimit(area, level);
+      validAreas.push(area);
+      areaLimits.set(area, limit);
+    } catch {
+      // 학교급에 없는 영역 skip
+    }
+  }
+
+  const doc = await createDoc();
+
+  const titleCharId = doc.ensureRunStyle({ bold: true, fontSize: 16 });
+  const centerParaId = doc.ensureParaStyle({ alignment: 'CENTER' });
+  const subHeaderCharId = doc.ensureRunStyle({ bold: true, fontSize: 12 });
+  const areaHeaderCharId = doc.ensureRunStyle({ bold: true, fontSize: 10 });
+  const bodyCharId = doc.ensureRunStyle({ fontSize: 10 });
+  const metaCharId = doc.ensureRunStyle({ fontSize: 9 });
+  const mutedCharId = doc.ensureRunStyle({ fontSize: 9 });
+
+  while (doc.paragraphs.length > 0) {
+    doc.removeParagraph(0, 0);
+  }
+
+  // 제목 페이지
+  const titleText = meta.className ? `${meta.className} 생활기록부 초안` : '생활기록부 초안';
+  doc.addParagraph(titleText, { charPrIdRef: titleCharId, paraPrIdRef: centerParaId });
+  doc.addParagraph();
+
+  let isFirstStudent = true;
+
+  for (const student of students) {
+    // 학생 구분선 (첫 학생 제외)
+    if (!isFirstStudent) {
+      doc.addParagraph();
+      doc.addParagraph('─'.repeat(40), { charPrIdRef: mutedCharId, paraPrIdRef: centerParaId });
+      doc.addParagraph();
+    }
+    isFirstStudent = false;
+
+    // 학생 이름 헤더
+    const numStr = student.number != null ? `${String(student.number).padStart(2, '0')}번 ` : '';
+    doc.addParagraph(`${numStr}${student.name}`, { charPrIdRef: subHeaderCharId });
+    doc.addParagraph();
+
+    let hasDraft = false;
+
+    for (const area of validAreas) {
+      const key = `${student.studentRef}::${area}`;
+      const draft = draftMap.get(key);
+      if (!draft) continue;
+
+      hasDraft = true;
+      const limit = areaLimits.get(area) ?? 0;
+      const areaLabel = RECORD_AREA_LABELS[area];
+      const overLimit = draft.byteLength > limit;
+      const overMark = overLimit ? ' [한도초과]' : '';
+
+      // 영역 제목
+      doc.addParagraph(`[${areaLabel}]${overMark}`, { charPrIdRef: areaHeaderCharId });
+      // 내용
+      doc.addParagraph(draft.content, { charPrIdRef: bodyCharId });
+      // 바이트 표기
+      doc.addParagraph(`${draft.byteLength} / ${limit}B`, { charPrIdRef: metaCharId });
+      doc.addParagraph();
+    }
+
+    if (!hasDraft) {
+      doc.addParagraph('작성된 초안이 없습니다.', { charPrIdRef: mutedCharId });
+    }
+  }
+
+  if (students.length === 0) {
     doc.addParagraph('출력할 학생이 없습니다.', { charPrIdRef: bodyCharId });
   }
 

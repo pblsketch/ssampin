@@ -138,11 +138,12 @@ interface AiBridgeElectronAPI {
   status: (client: AiBridgeClient) => Promise<AiBridgeStatus>;
   statusAll: () => Promise<AiBridgeStatus[]>;
   paths: () => Promise<AiBridgePaths>;
-  /** 게이트 토글(읽기/쓰기/채점쓰기) 즉시 capability 기록 — 부분 갱신, allowWrite 면 서버 시작/정지(#11). */
+  /** 게이트 토글(읽기/쓰기/채점쓰기/생기부쓰기) 즉시 capability 기록 — 부분 갱신, 쓰기 계열이 켜지면 서버 시작/정지(#11). */
   setCapability: (partial: {
     allowWrite?: boolean;
     allowContent?: boolean;
     allowGradeWrite?: boolean;
+    allowRecordWrite?: boolean;
   }) => Promise<AiBridgeCapabilityStatus>;
   /** 하위호환: 쓰기 허용 토글(= setCapability({ allowWrite })). */
   setLiveSync: (enabled: boolean) => Promise<{ running: boolean }>;
@@ -156,6 +157,7 @@ interface AiBridgeCapabilityStatus {
   allowWrite: boolean;
   allowContent: boolean;
   allowGradeWrite: boolean;
+  allowRecordWrite: boolean;
 }
 
 interface ElectronAPI {
