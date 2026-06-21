@@ -270,3 +270,138 @@ describe('applyLiveSyncWrite — 방어', () => {
     expect(r).toMatchObject({ ok: false, status: 500 });
   });
 });
+
+describe('applyLiveSyncWrite — 멱등 가드(#2/#7)', () => {
+  function memIdem(): NonNullable<LiveSyncWriteDeps['idempotency']> {
+    const committed = new Set<string>();
+    const live = new Set<string>();
+    const ck = (k: string, f: string): string => `${k}:${f}`;
+    return {
+      reserve: (k, f) =>
+        committed.has(ck(k, f)) || live.has(ck(k, f))
+          ? 'duplicate'
+          : (live.add(ck(k, f)), 'proceed'),
+      settle: (k, f, ok) => {
+        live.delete(ck(k, f));
+        if (ok) committed.add(ck(k, f));
+      },
+    };
+  }
+  function addCount(): number {
+    return calls.filter((c) => c.fn === 'todos.add').length;
+  }
+
+  it('#2 같은 키+같은 내용 재적용 → 두 번째는 add 안 함(타임아웃 후 재시도 중복 차단)', async () => {
+    const d: LiveSyncWriteDeps = { ...deps, idempotency: memIdem() };
+    const req = {
+      domain: 'todos',
+      op: 'create',
+      idempotencyKey: 'k',
+      data: { text: '시험지' },
+    } as const;
+    const r1 = await applyLiveSyncWrite(req, d);
+    const r2 = await applyLiveSyncWrite(req, d);
+    expect(r1).toEqual({ ok: true, ref: 'k' });
+    expect(r2).toEqual({ ok: true, ref: 'k' }); // ok 지만 재적용은 안 함
+    expect(addCount()).toBe(1); // 레코드 1개
+  });
+
+  it('#7 같은 키 + 다른 내용 → 두 번째도 적용(삼키지 않음)', async () => {
+    const d: LiveSyncWriteDeps = { ...deps, idempotency: memIdem() };
+    await applyLiveSyncWrite(
+      { domain: 'todos', op: 'create', idempotencyKey: 'k', data: { text: 'A' } },
+      d,
+    );
+    await applyLiveSyncWrite(
+      { domain: 'todos', op: 'create', idempotencyKey: 'k', data: { text: 'B' } },
+      d,
+    );
+    expect(addCount()).toBe(2); // 내용이 다르므로 둘 다 적용됨
+  });
+
+  it('실패한 적용은 기록하지 않음 — 재시도가 새로 적용됨', async () => {
+    let failFirst = true;
+    const d: LiveSyncWriteDeps = {
+      ...deps,
+      idempotency: memIdem(),
+      todos: {
+        ...deps.todos,
+        add: () => {
+          if (failFirst) {
+            failFirst = false;
+            return Promise.reject(new Error('boom'));
+          }
+          return Promise.resolve();
+        },
+      },
+    };
+    const req = {
+      domain: 'todos',
+      op: 'create',
+      idempotencyKey: 'k',
+      data: { text: 'x' },
+    } as const;
+    const r1 = await applyLiveSyncWrite(req, d); // 실패(500) → 멱등 미기록
+    const r2 = await applyLiveSyncWrite(req, d); // 재시도 → 정상 적용
+    expect(r1.ok).toBe(false);
+    expect(r2.ok).toBe(true);
+  });
+
+  it('#2 in-flight 동시 재시도도 1회만 적용(첫 적용 진행 중 중복 차단)', async () => {
+    // add 를 수동 resolve 로 느리게 만들어, 첫 적용이 끝나기 전에 같은 키 재시도가 들어오게 한다(타임아웃 상황).
+    let release!: () => void;
+    const slow = new Promise<void>((r) => {
+      release = r;
+    });
+    const d: LiveSyncWriteDeps = {
+      ...deps,
+      idempotency: memIdem(),
+      todos: {
+        ...deps.todos,
+        add: ((...args: unknown[]) => {
+          calls.push({ fn: 'todos.add', args });
+          return slow;
+        }) as LiveSyncWriteDeps['todos']['add'],
+      },
+    };
+    const req = {
+      domain: 'todos',
+      op: 'create',
+      idempotencyKey: 'k',
+      data: { text: 'x' },
+    } as const;
+    const p1 = applyLiveSyncWrite(req, d); // in-flight (add 미완료)
+    const r2 = await applyLiveSyncWrite(req, d); // 진행 중 동시 재시도 → reserve='duplicate' → 즉시 ok
+    expect(r2).toEqual({ ok: true, ref: 'k' });
+    expect(addCount()).toBe(1); // 재시도는 add 안 함
+    release();
+    await p1;
+    expect(addCount()).toBe(1); // 첫 적용만 반영
+  });
+});
+
+describe('applyLiveSyncWrite — #5 update 필드 정렬(브리지 스키마)', () => {
+  it('completed(todos)·description(events)는 적용되지 않음', async () => {
+    await applyLiveSyncWrite(
+      {
+        domain: 'todos',
+        op: 'update',
+        idempotencyKey: 'k',
+        data: { id: 'todo-1', completed: true, text: 't' },
+      },
+      deps,
+    );
+    expect(calls[0]?.args[1]).toEqual({ text: 't' }); // completed 제외(complete op 전용)
+    calls.length = 0;
+    await applyLiveSyncWrite(
+      {
+        domain: 'events',
+        op: 'update',
+        idempotencyKey: 'k',
+        data: { id: 'ev-1', description: 'd', title: 'T' },
+      },
+      deps,
+    );
+    expect(calls[0]?.args[1]).toEqual({ title: 'T' }); // description 제외(브리지에 없음)
+  });
+});

@@ -7,14 +7,17 @@ import {
   writeControlFile,
   readControlFile,
   removeControlFile,
+  removeControlFileIfOwned,
   isHeartbeatFresh,
   writeCapability,
   readCapability,
   mergeCapability,
+  isDomainWriteAllowed,
   authorizeWriteRequest,
   validateApplyWrite,
   controlPath,
   capabilityPath,
+  type Capability,
   type ControlInfo,
 } from './aiBridgeLiveSyncCore';
 
@@ -58,6 +61,31 @@ describe('control 파일 round-trip', () => {
     writeControlFile(dir, sampleControl);
     removeControlFile(dir);
     expect(readControlFile(dir)).toBeNull();
+  });
+  it.skipIf(process.platform === 'win32')('POSIX: control.json 은 소유자 전용 0600 (#8)', () => {
+    // 인증 토큰이 평문으로 담기는 파일 → 소유자만 읽기/쓰기. Windows 는 권한비트 무시라 skip(best-effort).
+    writeControlFile(dir, sampleControl);
+    expect(fs.statSync(controlPath(dir)).mode & 0o777).toBe(0o600);
+  });
+});
+
+describe('removeControlFileIfOwned (#3 재시작 레이스 방어)', () => {
+  it('내 token 이면 제거, 다른(새 서버) token 이면 보존', () => {
+    writeControlFile(dir, sampleControl); // token 'abc123'
+    removeControlFileIfOwned(dir, 'NEW-SERVER-TOKEN'); // 다른 서버 소유 → 보존
+    expect(readControlFile(dir)?.token).toBe('abc123');
+    removeControlFileIfOwned(dir, 'abc123'); // 내 것 → 제거
+    expect(readControlFile(dir)).toBeNull();
+  });
+  it('control 없으면 무동작(throw 없음)', () => {
+    expect(() => removeControlFileIfOwned(dir, 'x')).not.toThrow();
+    expect(readControlFile(dir)).toBeNull();
+  });
+  it('손상된 control 은 보존(fail-closed) — 소유 판별 불가', () => {
+    fs.mkdirSync(path.dirname(controlPath(dir)), { recursive: true });
+    fs.writeFileSync(controlPath(dir), '{ corrupt', 'utf-8');
+    removeControlFileIfOwned(dir, 'any-token');
+    expect(fs.existsSync(controlPath(dir))).toBe(true); // 손상이라도 함부로 지우지 않음(새 서버가 쓰는 중일 수 있음)
   });
 });
 
@@ -191,6 +219,29 @@ describe('mergeCapability (부분 갱신 + 미지 필드 보존)', () => {
   });
 });
 
+describe('isDomainWriteAllowed (도메인별 게이트 fail-closed)', () => {
+  const caps = (p: Partial<Capability>): Capability => ({
+    allowWrite: false,
+    allowContent: false,
+    allowGradeWrite: false,
+    allowRecordWrite: false,
+    updatedAt: 0,
+    ...p,
+  });
+  it('생기부 초안(recordDrafts)은 allowRecordWrite 만 본다 — allowWrite ON 이어도 거부', () => {
+    // ★ 핵심 회귀 방어: 서버가 allowWrite 로 떠 있어도 생기부 쓰기는 allowRecordWrite 없이는 거부.
+    expect(isDomainWriteAllowed('recordDrafts', caps({ allowWrite: true }))).toBe(false);
+    expect(isDomainWriteAllowed('recordDrafts', caps({ allowRecordWrite: true }))).toBe(true);
+    expect(isDomainWriteAllowed('recordDrafts', caps({}))).toBe(false);
+  });
+  it('할일·일정(todos/events)은 allowWrite 만 본다 — allowRecordWrite ON 이어도 거부', () => {
+    expect(isDomainWriteAllowed('todos', caps({ allowRecordWrite: true }))).toBe(false);
+    expect(isDomainWriteAllowed('events', caps({ allowRecordWrite: true }))).toBe(false);
+    expect(isDomainWriteAllowed('todos', caps({ allowWrite: true }))).toBe(true);
+    expect(isDomainWriteAllowed('events', caps({ allowWrite: true }))).toBe(true);
+  });
+});
+
 describe('authorizeWriteRequest', () => {
   const expectedToken = 'secret-token-xyz';
   it('POST + 토큰일치 + Origin 없음 → ok', () => {
@@ -221,10 +272,26 @@ describe('authorizeWriteRequest', () => {
     });
     expect(r).toMatchObject({ ok: false, status: 403 });
   });
-  it('Origin 이 null/빈문자면 허용(일부 클라이언트)', () => {
+  it('Origin 이 null/빈문자여도 거부 — 없을 때만 허용 (#9)', () => {
+    // 'null' Origin(샌드박스 iframe·file: 컨텍스트)도 브라우저발이므로 차단. 헤더 부재(undefined)만 통과.
     expect(
-      authorizeWriteRequest({ method: 'POST', token: expectedToken, expectedToken, origin: 'null' })
-        .ok,
+      authorizeWriteRequest({
+        method: 'POST',
+        token: expectedToken,
+        expectedToken,
+        origin: 'null',
+      }),
+    ).toMatchObject({ ok: false, status: 403 });
+    expect(
+      authorizeWriteRequest({ method: 'POST', token: expectedToken, expectedToken, origin: '' }),
+    ).toMatchObject({ ok: false, status: 403 });
+    expect(
+      authorizeWriteRequest({
+        method: 'POST',
+        token: expectedToken,
+        expectedToken,
+        origin: undefined,
+      }).ok,
     ).toBe(true);
   });
   it('토큰 불일치/누락 → 401', () => {
@@ -320,5 +387,116 @@ describe('validateApplyWrite', () => {
         data: { area: 'career', studentRef: 's1', content: 'x' },
       }).ok,
     ).toBe(false);
+  });
+
+  it('#5 todos update: out-of-spec 필드값 거부(브릿지와 동일 강도)', () => {
+    const base = { domain: 'todos', op: 'update', idempotencyKey: 'k' } as const;
+    expect(validateApplyWrite({ ...base, data: { id: 't', priority: 'urgent' } }).ok).toBe(false);
+    expect(validateApplyWrite({ ...base, data: { id: 't', status: 'archived' } }).ok).toBe(false);
+    expect(validateApplyWrite({ ...base, data: { id: 't', dueDate: '2026/06/25' } }).ok).toBe(
+      false,
+    );
+    expect(validateApplyWrite({ ...base, data: { id: 't', time: '9시' } }).ok).toBe(false);
+    expect(validateApplyWrite({ ...base, data: { id: 't', text: 'x'.repeat(501) } }).ok).toBe(
+      false,
+    );
+    // 정상 update 는 통과(존재하는 필드만 검사 — id 필수는 렌더러가 본다)
+    expect(
+      validateApplyWrite({ ...base, data: { id: 't', priority: 'low', status: 'done' } }).ok,
+    ).toBe(true);
+  });
+
+  it('#5 events update: title>200·잘못된 date 거부, 정상은 통과', () => {
+    const base = { domain: 'events', op: 'update', idempotencyKey: 'k' } as const;
+    expect(validateApplyWrite({ ...base, data: { id: 'e', title: '가'.repeat(201) } }).ok).toBe(
+      false,
+    );
+    expect(validateApplyWrite({ ...base, data: { id: 'e', date: '20260625' } }).ok).toBe(false);
+    expect(
+      validateApplyWrite({ ...base, data: { id: 'e', title: '수정', date: '2026-06-25' } }).ok,
+    ).toBe(true);
+  });
+
+  it('#5 create 도 필드값 검증: priority enum 위반 거부', () => {
+    expect(
+      validateApplyWrite({
+        domain: 'todos',
+        op: 'create',
+        idempotencyKey: 'k',
+        data: { text: '시험지', priority: 'boom' },
+      }).ok,
+    ).toBe(false);
+  });
+
+  it('#5 out-of-spec 필드 거부(strict allowlist) — unknown / startDate / completed / description', () => {
+    // 브리지 스키마 밖 필드는 서버에서 거부(렌더러 drop 에만 의존하지 않음).
+    expect(
+      validateApplyWrite({
+        domain: 'todos',
+        op: 'create',
+        idempotencyKey: 'k',
+        data: { text: 'x', evil: '1' },
+      }).ok,
+    ).toBe(false);
+    expect(
+      validateApplyWrite({
+        domain: 'todos',
+        op: 'create',
+        idempotencyKey: 'k',
+        data: { text: 'x', startDate: '2026-06-25' },
+      }).ok,
+    ).toBe(false);
+    expect(
+      validateApplyWrite({
+        domain: 'todos',
+        op: 'update',
+        idempotencyKey: 'k',
+        data: { id: 't', completed: true },
+      }).ok,
+    ).toBe(false);
+    expect(
+      validateApplyWrite({
+        domain: 'events',
+        op: 'update',
+        idempotencyKey: 'k',
+        data: { id: 'e', description: 'd' },
+      }).ok,
+    ).toBe(false);
+    // 허용 필드만이면 통과
+    expect(
+      validateApplyWrite({
+        domain: 'todos',
+        op: 'create',
+        idempotencyKey: 'k',
+        data: { text: 'x', dueDate: '2026-06-25' },
+      }).ok,
+    ).toBe(true);
+    expect(
+      validateApplyWrite({
+        domain: 'events',
+        op: 'update',
+        idempotencyKey: 'k',
+        data: { id: 'e', location: '운동장' },
+      }).ok,
+    ).toBe(true);
+  });
+
+  it('#7 idempotencyKey 길이 상한(256) — 렌더러 localStorage 용량 bounded', () => {
+    expect(
+      validateApplyWrite({
+        domain: 'todos',
+        op: 'create',
+        idempotencyKey: 'k'.repeat(257),
+        data: { text: 'x' },
+      }).ok,
+    ).toBe(false);
+    expect(
+      validateApplyWrite({
+        domain: 'todos',
+        op: 'create',
+        idempotencyKey: 'k'.repeat(256),
+        data: { text: 'x' },
+      }).ok,
+    ).toBe(true);
   });
 });

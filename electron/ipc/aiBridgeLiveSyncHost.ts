@@ -11,16 +11,29 @@
  *  - 게이트: env 가 아니라 capability 파일(설정 토글이 기록)로 통제.
  */
 import { ipcMain, type BrowserWindow } from 'electron';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 import {
   startLiveSyncServer,
   type ApplyWriteResult,
   type LiveSyncServerHandle,
 } from './aiBridgeLiveSync';
-import { readCapability, mergeCapability, type ApplyWriteRequest } from './aiBridgeLiveSyncCore';
+import {
+  readCapability,
+  mergeCapability,
+  isDomainWriteAllowed,
+  type ApplyWriteRequest,
+} from './aiBridgeLiveSyncCore';
 
 const APPLY_TIMEOUT_MS = 10_000;
 const IDEMPOTENCY_WINDOW_MS = 60_000;
+
+/** 멱등 dedup 의 내용 결합용 해시 — 같은 키라도 내용이 다르면 다른 hash → 삼키지 않는다(#7). */
+function idemHash(req: ApplyWriteRequest): string {
+  return createHash('sha256')
+    .update(`${req.domain}:${req.op}:${JSON.stringify(req.data)}`)
+    .digest('hex')
+    .slice(0, 16);
+}
 
 export interface LiveSyncHostDeps {
   /** 현재 메인 창(없으면 null). 위임은 항상 이 단일 창으로만 보낸다. */
@@ -38,7 +51,7 @@ export interface LiveSyncHost {
  */
 export function registerLiveSyncHost(deps: LiveSyncHostDeps): LiveSyncHost {
   const pending = new Map<string, (r: ApplyWriteResult) => void>();
-  const recentKeys = new Map<string, number>();
+  const recentKeys = new Map<string, { at: number; hash: string }>();
   let handle: LiveSyncServerHandle | null = null;
   let starting = false;
 
@@ -59,15 +72,16 @@ export function registerLiveSyncHost(deps: LiveSyncHostDeps): LiveSyncHost {
 
   const applyWrite = async (req: ApplyWriteRequest): Promise<ApplyWriteResult> => {
     const now = Date.now();
-    for (const [k, t] of recentKeys) if (now - t > IDEMPOTENCY_WINDOW_MS) recentKeys.delete(k);
-    if (recentKeys.has(req.idempotencyKey)) return { ok: true, ref: req.idempotencyKey };
+    for (const [k, v] of recentKeys) if (now - v.at > IDEMPOTENCY_WINDOW_MS) recentKeys.delete(k);
+    // #7: 같은 키라도 내용(payloadHash)이 다르면 dedup 하지 않는다 — 같은 키 + 다른 내용을 "이미 처리됨"
+    //   으로 삼키지 않게(토큰 보유 로컬 호출자가 키를 재사용해도 정상 쓰기가 통과).
+    const hash = idemHash(req);
+    const seen = recentKeys.get(req.idempotencyKey);
+    if (seen && seen.hash === hash) return { ok: true, ref: req.idempotencyKey };
 
     // 도메인별 게이트 재강제(fail-closed) — 서버는 allowWrite 또는 allowRecordWrite 중 하나만 켜져도
-    // 뜨므로, "서버 가동"이 곧 "이 쓰기 허용"을 뜻하지 않는다. 생기부 초안은 allowRecordWrite,
-    // 그 외(할일·일정)는 allowWrite 가 켜진 경우에만 적용한다(꺼진 권한으로의 우회 차단).
-    const caps = readCapability(deps.dataDir);
-    const domainAllowed = req.domain === 'recordDrafts' ? caps.allowRecordWrite : caps.allowWrite;
-    if (!domainAllowed) {
+    // 뜨므로, "서버 가동"이 곧 "이 쓰기 허용"을 뜻하지 않는다(isDomainWriteAllowed 단일 판정).
+    if (!isDomainWriteAllowed(req.domain, readCapability(deps.dataDir))) {
       return { ok: false, status: 403, error: '이 쓰기 권한이 비활성화되어 있습니다.' };
     }
 
@@ -86,7 +100,7 @@ export function registerLiveSyncHost(deps: LiveSyncHostDeps): LiveSyncHost {
       });
       win.webContents.send('aiBridge:apply-write', { requestId, req });
     });
-    if (result.ok) recentKeys.set(req.idempotencyKey, now);
+    if (result.ok) recentKeys.set(req.idempotencyKey, { at: now, hash });
     return result;
   };
 

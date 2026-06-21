@@ -49,15 +49,29 @@ export function generateControlToken(): string {
   return crypto.randomBytes(24).toString('base64url');
 }
 
-function atomicWriteJson(filePath: string, value: unknown): void {
+function atomicWriteJson(filePath: string, value: unknown, mode?: number): void {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   const tmp = `${filePath}.${process.pid}.${crypto.randomBytes(4).toString('hex')}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(value), 'utf-8');
+  // mode 지정 시 생성 시점부터 소유자 전용으로 만든다(umask 영향이 남을 수 있어 rename 후 chmod 로 재강제).
+  fs.writeFileSync(
+    tmp,
+    JSON.stringify(value),
+    mode === undefined ? { encoding: 'utf-8' } : { encoding: 'utf-8', mode },
+  );
   fs.renameSync(tmp, filePath);
+  if (mode !== undefined) {
+    // #8: 인증 토큰이 평문으로 담기는 control.json 은 소유자 전용(0600). POSIX 에선 권한이 적용되고,
+    //   Windows 는 POSIX 권한 비트를 무시하므로 best-effort 다(NTFS ACL 은 OS 기본값에 맡김) — 실패 무시.
+    try {
+      fs.chmodSync(filePath, mode);
+    } catch {
+      /* Windows 등 미지원 플랫폼 — best-effort */
+    }
+  }
 }
 
 export function writeControlFile(dataDir: string, info: ControlInfo): void {
-  atomicWriteJson(controlPath(dataDir), info);
+  atomicWriteJson(controlPath(dataDir), info, 0o600); // #8: 토큰 파일이라 소유자 전용
 }
 
 /** control.json 파싱(없거나 손상/형식위반이면 null). */
@@ -93,6 +107,25 @@ export function removeControlFile(dataDir: string): void {
   } catch {
     /* 이미 없음 */
   }
+}
+
+/**
+ * control.json 이 이 서버(token 일치)의 것일 때만 제거(#3 재시작 레이스 방어).
+ * off→on 토글로 새 서버가 이미 control 을 자기 token 으로 덮어썼다면, 종료 중인 이전 서버의 close 콜백이
+ * 그것을 지우지 않게 한다 — 새 서버가 listen 중인데 control 이 absent 가 되어(브릿지가 "앱 닫힘"으로 오판해
+ * 직접 파일쓰기로 덮어쓰는) 위험을 막는다. token 부재/일치면 제거(자기 것 또는 미상).
+ */
+export function removeControlFileIfOwned(dataDir: string, token: string): void {
+  const cur = readControlFile(dataDir);
+  if (cur) {
+    if (cur.token !== token) return; // 다른(새) 서버가 소유 중 → 보존
+    removeControlFile(dataDir); // 내 것 → 제거
+    return;
+  }
+  // cur=null: 파일이 손상(존재하나 파싱 불가)이면 소유 판별이 불가능하므로 fail-closed 로 보존한다
+  //   (새 서버가 막 쓰는 중일 수 있음). 아예 없으면 지울 것도 없다.
+  if (fs.existsSync(controlPath(dataDir))) return; // 손상 → 건드리지 않음
+  removeControlFile(dataDir); // 파일 없음 → no-op
 }
 
 /**
@@ -210,8 +243,10 @@ export function authorizeWriteRequest(input: {
   if ((input.method ?? '').toUpperCase() !== 'POST') {
     return { ok: false, status: 405, reason: 'POST 만 허용됩니다.' };
   }
-  const origin = input.origin;
-  if (origin !== undefined && origin !== '' && origin.toLowerCase() !== 'null') {
+  // #9: Origin 헤더가 조금이라도 있으면 거부한다('null'·빈문자 포함). 정상 경로인 Node/MCP 로컬
+  //   요청은 Origin 헤더 자체가 없다(undefined). 'null' Origin(샌드박스 iframe·file: 컨텍스트 등)도
+  //   브라우저발 요청이므로 허용하면 SSRF 우회 표면이 된다 — 없을 때만 통과시킨다.
+  if (input.origin !== undefined) {
     return { ok: false, status: 403, reason: 'Origin 헤더가 있는 요청(브라우저)은 거부됩니다.' };
   }
   if (!input.token || !timingSafeEqualStr(input.token, input.expectedToken)) {
@@ -225,6 +260,15 @@ export function authorizeWriteRequest(input: {
 export type WriteDomain = 'todos' | 'events' | 'recordDrafts';
 export type WriteOp = 'create' | 'update' | 'complete' | 'delete';
 
+/**
+ * 도메인별 쓰기 게이트 판정(fail-closed) — loopback 서버는 allowWrite 또는 allowRecordWrite 중
+ * 하나만 켜져도 가동하므로 "서버 가동"이 곧 "이 쓰기 허용"이 아니다. 생기부 초안은 allowRecordWrite,
+ * 그 외(할일·일정)는 allowWrite 가 켜진 경우에만 허용한다(꺼진 권한으로의 우회 차단).
+ */
+export function isDomainWriteAllowed(domain: WriteDomain, caps: Capability): boolean {
+  return domain === 'recordDrafts' ? caps.allowRecordWrite : caps.allowWrite;
+}
+
 const DOMAINS: ReadonlySet<string> = new Set(['todos', 'events', 'recordDrafts']);
 const OPS: ReadonlySet<string> = new Set(['create', 'update', 'complete', 'delete']);
 
@@ -237,6 +281,89 @@ const RECORD_AREAS: ReadonlySet<string> = new Set([
   'club',
   'subjectDev',
 ]);
+
+// #5: 앱 측(서버) 검증을 브릿지 writeTools 와 동일 강도로 — 토큰을 가진 로컬 호출자가 브릿지의
+//   길이/형식/enum 검증을 건너뛰고 잘못된 값을 주입하는 것을 서버에서도 막는다(서버가 클라를 신뢰하지 않음).
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const TIME_RE = /^\d{2}:\d{2}$/; // 할일 시간(일정 time 은 '09:00 - 10:00' 등 자유서술 — 브릿지와 동일하게 미강제)
+const PRIORITIES: ReadonlySet<string> = new Set(['high', 'medium', 'low', 'none']);
+const TODO_STATUS: ReadonlySet<string> = new Set(['todo', 'inProgress', 'done']);
+
+/** todos data 필드값 검증(create·update 공통). 위반 시 사유 문자열, 정상이면 null. */
+function checkTodoFields(d: Record<string, unknown>): string | null {
+  if (d['text'] !== undefined) {
+    if (typeof d['text'] !== 'string') return 'text 는 문자열이어야 합니다.';
+    if (d['text'].length > 500) return 'text 는 최대 500자입니다.';
+  }
+  if (
+    d['dueDate'] !== undefined &&
+    (typeof d['dueDate'] !== 'string' || !DATE_RE.test(d['dueDate']))
+  ) {
+    return 'dueDate 는 YYYY-MM-DD 형식이어야 합니다.';
+  }
+  if (
+    d['priority'] !== undefined &&
+    (typeof d['priority'] !== 'string' || !PRIORITIES.has(d['priority']))
+  ) {
+    return 'priority 는 high|medium|low|none 이어야 합니다.';
+  }
+  if (d['time'] !== undefined && (typeof d['time'] !== 'string' || !TIME_RE.test(d['time']))) {
+    return 'time 은 HH:mm 형식이어야 합니다.';
+  }
+  if (
+    d['status'] !== undefined &&
+    (typeof d['status'] !== 'string' || !TODO_STATUS.has(d['status']))
+  ) {
+    return 'status 는 todo|inProgress|done 이어야 합니다.';
+  }
+  if (d['category'] !== undefined && typeof d['category'] !== 'string') {
+    return 'category 는 문자열이어야 합니다.';
+  }
+  // completed 는 브리지 update 스키마에 없고 complete op 전용이라 검증 집합에서 제외(렌더러도 적용 안 함, #5).
+  return null;
+}
+
+/** events data 필드값 검증(create·update 공통). 위반 시 사유 문자열, 정상이면 null. (브리지와 동일하게 description 미지원.) */
+function checkEventFields(d: Record<string, unknown>): string | null {
+  if (d['title'] !== undefined) {
+    if (typeof d['title'] !== 'string') return 'title 은 문자열이어야 합니다.';
+    if (d['title'].length > 200) return 'title 은 최대 200자입니다.';
+  }
+  if (d['date'] !== undefined && (typeof d['date'] !== 'string' || !DATE_RE.test(d['date']))) {
+    return 'date 는 YYYY-MM-DD 형식이어야 합니다.';
+  }
+  for (const k of ['category', 'time', 'location'] as const) {
+    if (d[k] !== undefined && typeof d[k] !== 'string') return `${k} 는 문자열이어야 합니다.`;
+  }
+  return null;
+}
+
+// #5: (도메인×연산)별 허용 필드 — 브리지 writeTools 의 args 와 1:1 정렬. data 에 이 밖의 필드가 있으면 거부
+//   ("out-of-spec 필드 거부" — 토큰 보유 로컬 호출자가 브리지 스키마 밖 필드를 주입하지 못하게). complete/delete
+//   는 대상 id 만. (startDate·completed·description 등은 브리지에 없어 제외 → 자동으로 거부된다.)
+const TODO_FIELDS: Readonly<Record<WriteOp, ReadonlySet<string>>> = {
+  create: new Set(['text', 'dueDate', 'priority', 'category', 'time']),
+  update: new Set(['id', 'text', 'dueDate', 'priority', 'category', 'time', 'status']),
+  complete: new Set(['id']),
+  delete: new Set(['id']),
+};
+const EVENT_FIELDS: Readonly<Record<WriteOp, ReadonlySet<string>>> = {
+  create: new Set(['title', 'date', 'category', 'time', 'location']),
+  update: new Set(['id', 'title', 'date', 'category', 'time', 'location']),
+  complete: new Set(['id']), // events 는 complete 미지원 — 필드검사는 통과시키되 적용 단계에서 거부
+  delete: new Set(['id']),
+};
+
+/** data 에 (도메인×연산) 허용 밖 필드가 있으면 사유 반환(필드명은 echo 하지 않음 — 임의 문자열 누출 방지). 정상이면 null. */
+function checkAllowedFields(
+  allowed: ReadonlySet<string>,
+  d: Record<string, unknown>,
+): string | null {
+  for (const k of Object.keys(d)) {
+    if (!allowed.has(k)) return '허용되지 않은 필드가 포함되어 있습니다.';
+  }
+  return null;
+}
 
 export interface ApplyWriteRequest {
   readonly domain: WriteDomain;
@@ -273,10 +400,24 @@ export function validateApplyWrite(raw: unknown): ValidateResult {
   if (typeof idempotencyKey !== 'string' || idempotencyKey.trim().length === 0) {
     return { ok: false, reason: 'idempotencyKey 가 필요합니다.' };
   }
+  // 길이 상한 — 멱등키는 렌더러 영속 가드의 합성키(localStorage)에 쓰이므로, 무한 길이를 막아
+  //   저장 용량을 bounded 하게 유지한다(#7). 정상 경로(브리지 파생키)는 수십 자 수준.
+  if (idempotencyKey.length > 256) {
+    return { ok: false, reason: 'idempotencyKey 가 너무 깁니다(최대 256자).' };
+  }
   if (!data || typeof data !== 'object' || Array.isArray(data)) {
     return { ok: false, reason: 'data 는 객체여야 합니다.' };
   }
   const d = data as Record<string, unknown>;
+  // #5: 브리지와 동일 강도 — (1) 허용 밖 필드 거부(strict allowlist) + (2) 존재 필드의 형식·길이·enum 검증.
+  //   둘 다 op 와 무관하게 적용된다(필수 여부는 아래 op 별 분기에서).
+  if (domain === 'todos' || domain === 'events') {
+    const allowed = (domain === 'todos' ? TODO_FIELDS : EVENT_FIELDS)[op as WriteOp];
+    const fieldErr = checkAllowedFields(allowed, d);
+    if (fieldErr) return { ok: false, reason: fieldErr };
+    const valErr = domain === 'todos' ? checkTodoFields(d) : checkEventFields(d);
+    if (valErr) return { ok: false, reason: valErr };
+  }
   // 생기부 초안은 create(upsert)만 지원 — 수정·삭제는 본체 UI 에서 한다(법정기록 보수화).
   if (domain === 'recordDrafts' && op !== 'create') {
     return { ok: false, reason: '생기부 초안은 create(저장)만 지원합니다.' };

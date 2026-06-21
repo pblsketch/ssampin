@@ -12,7 +12,7 @@ import http from 'node:http';
 import {
   authorizeWriteRequest,
   generateControlToken,
-  removeControlFile,
+  removeControlFileIfOwned,
   validateApplyWrite,
   writeControlFile,
   type ApplyWriteRequest,
@@ -67,11 +67,18 @@ function handleRequest(
     return;
   }
 
-  let body = '';
+  // #6: 본문은 Buffer 로 누적하고 한도는 '바이트' 기준으로 검사한다(글자수 아님).
+  //   - body.length(UTF-16 글자수)로 비교하면 한글(글자당 3바이트)이 64KB 한도를 우회한다.
+  //   - chunk.toString() 을 청크마다 부르면 멀티바이트 문자가 청크 경계에서 깨질 수 있어(mojibake),
+  //     decode 는 end 에서 Buffer.concat 후 한 번만 한다.
+  const chunks: Buffer[] = [];
+  let bodyBytes = 0;
   let aborted = false;
   req.on('data', (chunk: Buffer) => {
-    body += chunk.toString('utf-8');
-    if (body.length > MAX_BODY_BYTES) {
+    if (aborted) return;
+    chunks.push(chunk);
+    bodyBytes += chunk.length;
+    if (bodyBytes > MAX_BODY_BYTES) {
       aborted = true;
       sendJson(res, 413, { error: '본문이 너무 큽니다.' });
       req.destroy();
@@ -79,6 +86,7 @@ function handleRequest(
   });
   req.on('end', () => {
     if (aborted) return;
+    const body = Buffer.concat(chunks).toString('utf-8');
     let parsed: unknown;
     try {
       parsed = JSON.parse(body);
@@ -136,8 +144,15 @@ export function startLiveSyncServer(opts: {
         stop: () =>
           new Promise<void>((done) => {
             clearInterval(interval);
-            removeControlFile(opts.dataDir);
-            server.close(() => done());
+            // #3: 서버를 먼저 닫아(새 쓰기 유입 차단) control 을 나중에 제거한다.
+            //   control 을 먼저 지우면 브릿지가 'absent→직접 파일쓰기'로 오판하고, 종료 중 아직
+            //   살아있는 렌더러의 마지막 저장(CAS 없음)이 그 직접쓰기를 덮어써 "추가됨"으로 안내한
+            //   항목이 소리 없이 유실될 수 있다. 또한 제거는 '내 token 일 때만' 한다 — off→on 재시작 레이스에서
+            //   이미 뜬 새 서버의 control 을 지워 absent 로 만들지 않게(removeControlFileIfOwned).
+            server.close(() => {
+              removeControlFileIfOwned(opts.dataDir, token);
+              done();
+            });
           }),
       });
     });

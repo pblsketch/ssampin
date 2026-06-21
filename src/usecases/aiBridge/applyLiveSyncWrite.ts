@@ -70,6 +70,41 @@ export interface LiveSyncWriteDeps {
     /** (area+studentRef+subject) 키 upsert. 호출자는 useRecordDraftsStore.upsert 를 넘긴다. */
     readonly upsert: (input: LiveSyncRecordDraftInput) => Promise<void>;
   };
+  /**
+   * 멱등 가드(주입, 선택) — 같은 (idempotencyKey, fingerprint) 쓰기의 중복 적용을 막는다.
+   *  - reserve: 'duplicate'=이미 적용됐거나(영속) 적용 진행 중(in-flight) → 호출자는 재적용 없이 ok.
+   *            'proceed'=예약 성공 → 적용을 진행하고 끝나면 반드시 settle 한다.
+   *  - settle: ok 면 영속 기록(이후에도 dedup), 실패면 예약 해제(재시도가 새로 적용되도록). 항상 in-flight 해제.
+   *
+   * 호스트는 렌더러 응답이 timeout(504)이면 멱등키를 기록하지 못하는데, 그 사이 렌더러는 적용 중이거나
+   * 막 끝냈을 수 있다. AI 가 같은 키로 재시도하면 또 add 되어 중복이 생기므로(#2), reserve 의 in-flight 예약이
+   * "적용 진행 중" 동시 재시도까지 막고, 영속 기록이 "완료 후" 재시도를 막는다. fingerprint 까지 비교하므로
+   * 같은 키+다른 내용은 삼키지 않는다(#7). 미주입 시 무동작(하위호환).
+   */
+  readonly idempotency?: {
+    readonly reserve: (key: string, fingerprint: string) => 'duplicate' | 'proceed';
+    readonly settle: (key: string, fingerprint: string, ok: boolean) => void;
+  };
+}
+
+/**
+ * payload 지문 — domain·op·data 정규 문자열의 cyrb53(53비트) 해시. 32비트 FNV 의 충돌 위험은 없애고
+ * (#7), 원문을 그대로 저장할 때의 localStorage 용량 회귀도 피한다(컴팩트). 지문은 같은 멱등키 안에서만
+ * 비교되고 멱등키 자체가 내용에 결합돼 있어, 53비트로도 잘못된 dedup 은 사실상 불가능하다. data 는
+ * JSON.parse 결과라 같은 요청이면 키 순서도 같아 같은 지문이 된다.
+ */
+function payloadFingerprint(req: LiveSyncWriteRequest): string {
+  const s = `${req.domain}:${req.op}:${JSON.stringify(req.data)}`;
+  let h1 = 0xdeadbeef ^ s.length;
+  let h2 = 0x41c6ce57 ^ s.length;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(16);
 }
 
 function asStr(v: unknown): string | undefined {
@@ -91,12 +126,12 @@ async function applyTodos(
   if (req.op === 'create') {
     const text = asStr(d['text']);
     if (!text) return bad('text 가 필요합니다.');
+    // #5: 브리지 createTodo 스키마와 정렬 — startDate 는 브리지에 없어 제외.
     const opts: {
       dueDate?: string;
       priority?: string;
       category?: string;
       time?: string;
-      startDate?: string;
     } = {};
     const dueDate = asStr(d['dueDate']);
     if (dueDate !== undefined) opts.dueDate = dueDate;
@@ -106,8 +141,6 @@ async function applyTodos(
     if (category !== undefined) opts.category = category;
     const time = asStr(d['time']);
     if (time !== undefined) opts.time = time;
-    const startDate = asStr(d['startDate']);
-    if (startDate !== undefined) opts.startDate = startDate;
     await deps.todos.add(text, opts);
     return ok(req.idempotencyKey);
   }
@@ -122,18 +155,9 @@ async function applyTodos(
     await deps.todos.delete(id);
     return ok(req.idempotencyKey);
   }
-  // update — 안전 필드만 통과
+  // update — 안전 필드만 통과(#5: 브리지 updateTodo 스키마와 정렬 — completed(complete op 전용)·startDate(미지원) 제외).
   const changes: Record<string, unknown> = {};
-  for (const k of [
-    'text',
-    'priority',
-    'category',
-    'dueDate',
-    'startDate',
-    'time',
-    'status',
-    'completed',
-  ] as const) {
+  for (const k of ['text', 'priority', 'category', 'dueDate', 'time', 'status'] as const) {
     if (d[k] !== undefined) changes[k] = d[k];
   }
   if (Object.keys(changes).length === 0) return bad('변경할 필드가 없습니다.');
@@ -174,8 +198,9 @@ async function applyEvents(
     return ok(req.idempotencyKey);
   }
   if (req.op === 'complete') return bad('일정은 complete 연산을 지원하지 않습니다.');
+  // #5: 브리지 updateEvent 스키마와 정렬 — description 은 브리지에 없어 제외.
   const changes: Record<string, unknown> = {};
-  for (const k of ['title', 'date', 'category', 'time', 'location', 'description'] as const) {
+  for (const k of ['title', 'date', 'category', 'time', 'location'] as const) {
     if (d[k] !== undefined) changes[k] = d[k];
   }
   if (Object.keys(changes).length === 0) return bad('변경할 필드가 없습니다.');
@@ -250,12 +275,36 @@ export async function applyLiveSyncWrite(
   req: LiveSyncWriteRequest,
   deps: LiveSyncWriteDeps,
 ): Promise<LiveSyncWriteResult> {
-  try {
-    if (req.domain === 'todos') return await applyTodos(req, deps);
-    if (req.domain === 'events') return await applyEvents(req, deps);
-    if (req.domain === 'recordDrafts') return await applyRecordDrafts(req, deps);
-    return bad('지원하지 않는 도메인입니다.');
-  } catch {
-    return { ok: false, status: 500, error: '쓰기 적용 중 오류가 발생했습니다.' };
+  const idem = deps.idempotency;
+  const fp = idem ? payloadFingerprint(req) : '';
+  // #2: 같은 (멱등키, 내용)이 이미 적용됐거나 적용 진행 중이면 재적용하지 않는다(타임아웃 후/중 재시도 중복 차단).
+  //   가드 자체의 예외는 삼켜 쓰기를 깨지 않는다 — 가드는 안전망일 뿐이라, 막혀도 최악은 드문 중복뿐이다.
+  let reserved = false;
+  if (idem) {
+    try {
+      if (idem.reserve(req.idempotencyKey, fp) === 'duplicate') return ok(req.idempotencyKey);
+      reserved = true;
+    } catch {
+      /* 가드 오류 → 예약 없이 진행 */
+    }
   }
+
+  let result: LiveSyncWriteResult;
+  try {
+    if (req.domain === 'todos') result = await applyTodos(req, deps);
+    else if (req.domain === 'events') result = await applyEvents(req, deps);
+    else if (req.domain === 'recordDrafts') result = await applyRecordDrafts(req, deps);
+    else result = bad('지원하지 않는 도메인입니다.');
+  } catch {
+    result = { ok: false, status: 500, error: '쓰기 적용 중 오류가 발생했습니다.' };
+  }
+  // 예약했을 때만 settle — 성공이면 영속 기록(이후 dedup), 실패/미지원이면 예약 해제(재시도가 새로 적용).
+  if (idem && reserved) {
+    try {
+      idem.settle(req.idempotencyKey, fp, result.ok);
+    } catch {
+      /* 가드 오류 무시 */
+    }
+  }
+  return result;
 }
