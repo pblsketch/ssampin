@@ -173,11 +173,25 @@ const TOOL_GROUPS: ToolGroup[] = [
   {
     icon: 'file-text',
     title: '노트 · 메모 · 북마크',
-    summary: '노트 구조·포스트잇·북마크를 정리해요. 본문·내용은 동의를 켤 때만 열립니다.',
+    wide: true,
+    summary:
+      '노트·포스트잇·북마크를 읽는 것뿐 아니라 추가·수정·삭제까지 됩니다. 본문·내용은 동의를 켤 때 열리고, 추가·수정·삭제는 실시간 쓰기를 켤 때(쌤핀이 켜져 있을 때) 반영됩니다.',
     tools: [
       { label: '노트 구조', code: 'get_notes' },
       { label: '포스트잇 메모', code: 'get_memos' },
       { label: '북마크', code: 'get_bookmarks' },
+      { label: '메모 추가', code: 'create_memo', gate: '실시간' },
+      { label: '메모 수정', code: 'update_memo', gate: '실시간' },
+      { label: '메모 삭제', code: 'delete_memo', gate: '실시간' },
+      { label: '북마크 그룹 추가', code: 'create_bookmark_group', gate: '실시간' },
+      { label: '북마크 추가', code: 'create_bookmark', gate: '실시간' },
+      { label: '북마크 수정', code: 'update_bookmark', gate: '실시간' },
+      { label: '북마크 삭제', code: 'delete_bookmark', gate: '실시간' },
+      { label: '노트북 추가', code: 'create_notebook', gate: '실시간' },
+      { label: '노트 섹션 추가', code: 'create_note_section', gate: '실시간' },
+      { label: '노트 페이지 추가', code: 'create_note_page', gate: '실시간' },
+      { label: '노트 페이지 수정', code: 'update_note_page', gate: '실시간' },
+      { label: '노트 페이지 삭제', code: 'delete_note_page', gate: '실시간' },
     ],
   },
   {
@@ -630,7 +644,7 @@ export default function AiBridgePage() {
         <section className="mt-14">
           <SectionHead
             eyebrow="무엇을 할 수 있나요"
-            title="AI가 쓸 수 있는 도구 28가지"
+            title="AI가 쓸 수 있는 도구 40가지"
             desc={
               <>
                 쓰임새별로 묶어 봤어요.{' '}
