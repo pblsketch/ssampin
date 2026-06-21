@@ -8,7 +8,7 @@
  */
 
 export interface LiveSyncWriteRequest {
-  readonly domain: 'todos' | 'events' | 'recordDrafts';
+  readonly domain: 'todos' | 'events' | 'recordDrafts' | 'memos' | 'bookmarks' | 'notes';
   readonly op: 'create' | 'update' | 'complete' | 'delete';
   readonly idempotencyKey: string;
   readonly data: Record<string, unknown>;
@@ -69,6 +69,46 @@ export interface LiveSyncWriteDeps {
   readonly recordDrafts: {
     /** (area+studentRef+subject) 키 upsert. 호출자는 useRecordDraftsStore.upsert 를 넘긴다. */
     readonly upsert: (input: LiveSyncRecordDraftInput) => Promise<void>;
+  };
+  readonly memos: {
+    readonly add: (content: string, color?: string) => Promise<void>;
+    readonly update: (
+      id: string,
+      changes: { readonly content?: string; readonly color?: string; readonly archived?: boolean },
+    ) => Promise<void>;
+    readonly delete: (id: string) => Promise<void>;
+    readonly exists: (id: string) => boolean;
+  };
+  readonly bookmarks: {
+    readonly addBookmark: (input: {
+      readonly name: string;
+      readonly url: string;
+      readonly groupId: string;
+    }) => Promise<void>;
+    readonly addGroup: (input: { readonly name: string; readonly emoji?: string }) => Promise<void>;
+    readonly update: (
+      id: string,
+      changes: { readonly name?: string; readonly url?: string },
+    ) => Promise<void>;
+    readonly delete: (id: string) => Promise<void>;
+    /** 북마크 항목 존재 확인(update/delete 대상). */
+    readonly exists: (id: string) => boolean;
+    /** 대상 그룹 존재 확인(create bookmark 대상). */
+    readonly groupExists: (id: string) => boolean;
+  };
+  readonly notes: {
+    readonly createNotebook: (title: string) => Promise<void>;
+    readonly createSection: (notebookId: string, title: string) => Promise<void>;
+    /** bodyText 는 평문 — 어댑터가 BlockNote 문서로 변환해 저장. */
+    readonly createPage: (sectionId: string, title: string, bodyText?: string) => Promise<void>;
+    readonly updatePage: (
+      id: string,
+      changes: { readonly title?: string; readonly bodyText?: string; readonly pinned?: boolean },
+    ) => Promise<void>;
+    readonly deletePage: (id: string) => Promise<void>;
+    readonly notebookExists: (id: string) => boolean;
+    readonly sectionExists: (id: string) => boolean;
+    readonly pageExists: (id: string) => boolean;
   };
   /**
    * 멱등 가드(주입, 선택) — 같은 (idempotencyKey, fingerprint) 쓰기의 중복 적용을 막는다.
@@ -267,6 +307,126 @@ async function applyRecordDrafts(
   return ok(req.idempotencyKey);
 }
 
+async function applyMemos(
+  req: LiveSyncWriteRequest,
+  deps: LiveSyncWriteDeps,
+): Promise<LiveSyncWriteResult> {
+  const d = req.data;
+  if (req.op === 'create') {
+    const content = asStr(d['content']);
+    if (!content) return bad('content 가 필요합니다.');
+    const color = asStr(d['color']);
+    await deps.memos.add(content, color);
+    return ok(req.idempotencyKey);
+  }
+  if (req.op === 'complete') return bad('메모는 complete 연산을 지원하지 않습니다.');
+  const id = asStr(d['id']);
+  if (!id) return bad('대상 id 가 필요합니다.');
+  if (!deps.memos.exists(id)) return bad('메모를 찾을 수 없습니다.', 404);
+  if (req.op === 'delete') {
+    await deps.memos.delete(id);
+    return ok(req.idempotencyKey);
+  }
+  // update — 안전 필드만 통과(content/color/archived).
+  const changes: { content?: string; color?: string; archived?: boolean } = {};
+  if (typeof d['content'] === 'string') changes.content = d['content'];
+  if (typeof d['color'] === 'string') changes.color = d['color'];
+  if (typeof d['archived'] === 'boolean') changes.archived = d['archived'];
+  if (Object.keys(changes).length === 0) return bad('변경할 필드가 없습니다.');
+  await deps.memos.update(id, changes);
+  return ok(req.idempotencyKey);
+}
+
+async function applyBookmarks(
+  req: LiveSyncWriteRequest,
+  deps: LiveSyncWriteDeps,
+): Promise<LiveSyncWriteResult> {
+  const d = req.data;
+  if (req.op === 'create') {
+    const kind = asStr(d['kind']);
+    const name = asStr(d['name']);
+    if (!name) return bad('name 이 필요합니다.');
+    if (kind === 'group') {
+      const emoji = asStr(d['emoji']);
+      await deps.bookmarks.addGroup({ name, ...(emoji !== undefined ? { emoji } : {}) });
+      return ok(req.idempotencyKey);
+    }
+    if (kind === 'bookmark') {
+      const url = asStr(d['url']);
+      const groupId = asStr(d['groupId']);
+      if (!url) return bad('url 이 필요합니다.');
+      if (!groupId) return bad('groupId 가 필요합니다.');
+      if (!deps.bookmarks.groupExists(groupId)) return bad('대상 그룹을 찾을 수 없습니다.', 404);
+      await deps.bookmarks.addBookmark({ name, url, groupId });
+      return ok(req.idempotencyKey);
+    }
+    return bad('kind 는 bookmark|group 이어야 합니다.');
+  }
+  if (req.op === 'complete') return bad('북마크는 complete 연산을 지원하지 않습니다.');
+  const id = asStr(d['id']);
+  if (!id) return bad('대상 id 가 필요합니다.');
+  if (!deps.bookmarks.exists(id)) return bad('북마크를 찾을 수 없습니다.', 404);
+  if (req.op === 'delete') {
+    await deps.bookmarks.delete(id);
+    return ok(req.idempotencyKey);
+  }
+  // update — 북마크 항목의 name/url 만.
+  const changes: { name?: string; url?: string } = {};
+  if (typeof d['name'] === 'string') changes.name = d['name'];
+  if (typeof d['url'] === 'string') changes.url = d['url'];
+  if (Object.keys(changes).length === 0) return bad('변경할 필드가 없습니다.');
+  await deps.bookmarks.update(id, changes);
+  return ok(req.idempotencyKey);
+}
+
+async function applyNotes(
+  req: LiveSyncWriteRequest,
+  deps: LiveSyncWriteDeps,
+): Promise<LiveSyncWriteResult> {
+  const d = req.data;
+  if (req.op === 'create') {
+    const kind = asStr(d['kind']);
+    const title = asStr(d['title']);
+    if (!title) return bad('title 이 필요합니다.');
+    if (kind === 'notebook') {
+      await deps.notes.createNotebook(title);
+      return ok(req.idempotencyKey);
+    }
+    if (kind === 'section') {
+      const notebookId = asStr(d['notebookId']);
+      if (!notebookId) return bad('notebookId 가 필요합니다.');
+      if (!deps.notes.notebookExists(notebookId)) return bad('노트북을 찾을 수 없습니다.', 404);
+      await deps.notes.createSection(notebookId, title);
+      return ok(req.idempotencyKey);
+    }
+    if (kind === 'page') {
+      const sectionId = asStr(d['sectionId']);
+      if (!sectionId) return bad('sectionId 가 필요합니다.');
+      if (!deps.notes.sectionExists(sectionId)) return bad('섹션을 찾을 수 없습니다.', 404);
+      const bodyText = typeof d['body'] === 'string' ? d['body'] : undefined;
+      await deps.notes.createPage(sectionId, title, bodyText);
+      return ok(req.idempotencyKey);
+    }
+    return bad('kind 는 notebook|section|page 이어야 합니다.');
+  }
+  if (req.op === 'complete') return bad('노트는 complete 연산을 지원하지 않습니다.');
+  const id = asStr(d['id']);
+  if (!id) return bad('대상 id 가 필요합니다.');
+  if (!deps.notes.pageExists(id)) return bad('페이지를 찾을 수 없습니다.', 404);
+  if (req.op === 'delete') {
+    await deps.notes.deletePage(id);
+    return ok(req.idempotencyKey);
+  }
+  // update — 페이지 제목/본문/고정. body 는 빈 문자열도 허용(본문 비우기).
+  const changes: { title?: string; bodyText?: string; pinned?: boolean } = {};
+  if (typeof d['title'] === 'string') changes.title = d['title'];
+  if (typeof d['body'] === 'string') changes.bodyText = d['body'];
+  if (typeof d['pinned'] === 'boolean') changes.pinned = d['pinned'];
+  if (Object.keys(changes).length === 0) return bad('변경할 필드가 없습니다.');
+  await deps.notes.updatePage(id, changes);
+  return ok(req.idempotencyKey);
+}
+
 /**
  * 검증된 live-sync 쓰기를 store 액션으로 적용. 도메인/연산별로 분기하며, 실패는 상태코드와 함께 반환.
  * (페이로드 형태는 main 의 validateApplyWrite 가 1차 검증하지만, 여기서도 data 필드를 방어적으로 본다.)
@@ -294,6 +454,9 @@ export async function applyLiveSyncWrite(
     if (req.domain === 'todos') result = await applyTodos(req, deps);
     else if (req.domain === 'events') result = await applyEvents(req, deps);
     else if (req.domain === 'recordDrafts') result = await applyRecordDrafts(req, deps);
+    else if (req.domain === 'memos') result = await applyMemos(req, deps);
+    else if (req.domain === 'bookmarks') result = await applyBookmarks(req, deps);
+    else if (req.domain === 'notes') result = await applyNotes(req, deps);
     else result = bad('지원하지 않는 도메인입니다.');
   } catch {
     result = { ok: false, status: 500, error: '쓰기 적용 중 오류가 발생했습니다.' };

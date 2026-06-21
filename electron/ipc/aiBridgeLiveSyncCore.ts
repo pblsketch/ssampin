@@ -257,19 +257,26 @@ export function authorizeWriteRequest(input: {
 
 // ─────────────────────────── 쓰기 페이로드 검증 ───────────────────────────
 
-export type WriteDomain = 'todos' | 'events' | 'recordDrafts';
+export type WriteDomain = 'todos' | 'events' | 'recordDrafts' | 'memos' | 'bookmarks' | 'notes';
 export type WriteOp = 'create' | 'update' | 'complete' | 'delete';
 
 /**
  * 도메인별 쓰기 게이트 판정(fail-closed) — loopback 서버는 allowWrite 또는 allowRecordWrite 중
  * 하나만 켜져도 가동하므로 "서버 가동"이 곧 "이 쓰기 허용"이 아니다. 생기부 초안은 allowRecordWrite,
- * 그 외(할일·일정)는 allowWrite 가 켜진 경우에만 허용한다(꺼진 권한으로의 우회 차단).
+ * 그 외(할일·일정·메모·북마크·노트)는 allowWrite 가 켜진 경우에만 허용한다(꺼진 권한으로의 우회 차단).
  */
 export function isDomainWriteAllowed(domain: WriteDomain, caps: Capability): boolean {
   return domain === 'recordDrafts' ? caps.allowRecordWrite : caps.allowWrite;
 }
 
-const DOMAINS: ReadonlySet<string> = new Set(['todos', 'events', 'recordDrafts']);
+const DOMAINS: ReadonlySet<string> = new Set([
+  'todos',
+  'events',
+  'recordDrafts',
+  'memos',
+  'bookmarks',
+  'notes',
+]);
 const OPS: ReadonlySet<string> = new Set(['create', 'update', 'complete', 'delete']);
 
 const RECORD_AREAS: ReadonlySet<string> = new Set([
@@ -338,6 +345,95 @@ function checkEventFields(d: Record<string, unknown>): string | null {
   return null;
 }
 
+const MEMO_COLORS: ReadonlySet<string> = new Set(['yellow', 'pink', 'green', 'blue']);
+const MEMO_MAX = 2000;
+
+/** memos data 필드값 검증(create·update 공통). 위반 시 사유 문자열, 정상이면 null. (브리지 memoTools 와 동일 강도.) */
+function checkMemoFields(d: Record<string, unknown>): string | null {
+  if (d['content'] !== undefined) {
+    if (typeof d['content'] !== 'string') return 'content 는 문자열이어야 합니다.';
+    if (d['content'].length > MEMO_MAX) return `content 는 최대 ${MEMO_MAX}자입니다.`;
+  }
+  if (
+    d['color'] !== undefined &&
+    (typeof d['color'] !== 'string' || !MEMO_COLORS.has(d['color']))
+  ) {
+    return 'color 는 yellow|pink|green|blue 여야 합니다.';
+  }
+  if (d['archived'] !== undefined && typeof d['archived'] !== 'boolean') {
+    return 'archived 는 boolean 이어야 합니다.';
+  }
+  return null;
+}
+
+const BOOKMARK_NAME_MAX = 200;
+const BOOKMARK_URL_MAX = 2048;
+const BOOKMARK_EMOJI_MAX = 16;
+const BOOKMARK_KINDS: ReadonlySet<string> = new Set(['bookmark', 'group']);
+
+/** http/https URL 만 허용(쌤핀 validateBookmarkUrl 미러). */
+function isHttpUrl(url: string): boolean {
+  try {
+    const u = new URL(url);
+    return u.protocol === 'http:' || u.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+/** bookmarks data 필드값 검증(create·update 공통). 위반 시 사유 문자열, 정상이면 null. (브리지 bookmarkTools 와 동일 강도.) */
+function checkBookmarkFields(d: Record<string, unknown>): string | null {
+  if (
+    d['kind'] !== undefined &&
+    (typeof d['kind'] !== 'string' || !BOOKMARK_KINDS.has(d['kind']))
+  ) {
+    return 'kind 는 bookmark|group 이어야 합니다.';
+  }
+  if (d['name'] !== undefined) {
+    if (typeof d['name'] !== 'string') return 'name 은 문자열이어야 합니다.';
+    if (d['name'].length > BOOKMARK_NAME_MAX) return `name 은 최대 ${BOOKMARK_NAME_MAX}자입니다.`;
+  }
+  if (d['url'] !== undefined) {
+    if (typeof d['url'] !== 'string') return 'url 은 문자열이어야 합니다.';
+    if (d['url'].length > BOOKMARK_URL_MAX) return `url 은 최대 ${BOOKMARK_URL_MAX}자입니다.`;
+    if (!isHttpUrl(d['url'])) return 'url 은 http:// 또는 https:// 로 시작해야 합니다.';
+  }
+  if (d['groupId'] !== undefined && typeof d['groupId'] !== 'string')
+    return 'groupId 는 문자열이어야 합니다.';
+  if (d['emoji'] !== undefined) {
+    if (typeof d['emoji'] !== 'string') return 'emoji 는 문자열이어야 합니다.';
+    if (d['emoji'].length > BOOKMARK_EMOJI_MAX)
+      return `emoji 는 최대 ${BOOKMARK_EMOJI_MAX}자입니다.`;
+  }
+  return null;
+}
+
+const NOTE_TITLE_MAX = 200;
+const NOTE_BODY_MAX = 100_000;
+const NOTE_KINDS: ReadonlySet<string> = new Set(['notebook', 'section', 'page']);
+
+/** notes data 필드값 검증(create·update 공통). 위반 시 사유 문자열, 정상이면 null. (브리지 noteTools 와 동일 강도.) */
+function checkNoteFields(d: Record<string, unknown>): string | null {
+  if (d['kind'] !== undefined && (typeof d['kind'] !== 'string' || !NOTE_KINDS.has(d['kind']))) {
+    return 'kind 는 notebook|section|page 이어야 합니다.';
+  }
+  if (d['title'] !== undefined) {
+    if (typeof d['title'] !== 'string') return 'title 은 문자열이어야 합니다.';
+    if (d['title'].length > NOTE_TITLE_MAX) return `title 은 최대 ${NOTE_TITLE_MAX}자입니다.`;
+  }
+  if (d['body'] !== undefined) {
+    if (typeof d['body'] !== 'string') return 'body 는 문자열이어야 합니다.';
+    if (d['body'].length > NOTE_BODY_MAX) return `body 는 최대 ${NOTE_BODY_MAX}자입니다.`;
+  }
+  if (d['notebookId'] !== undefined && typeof d['notebookId'] !== 'string')
+    return 'notebookId 는 문자열이어야 합니다.';
+  if (d['sectionId'] !== undefined && typeof d['sectionId'] !== 'string')
+    return 'sectionId 는 문자열이어야 합니다.';
+  if (d['pinned'] !== undefined && typeof d['pinned'] !== 'boolean')
+    return 'pinned 는 boolean 이어야 합니다.';
+  return null;
+}
+
 // #5: (도메인×연산)별 허용 필드 — 브리지 writeTools 의 args 와 1:1 정렬. data 에 이 밖의 필드가 있으면 거부
 //   ("out-of-spec 필드 거부" — 토큰 보유 로컬 호출자가 브리지 스키마 밖 필드를 주입하지 못하게). complete/delete
 //   는 대상 id 만. (startDate·completed·description 등은 브리지에 없어 제외 → 자동으로 거부된다.)
@@ -351,6 +447,26 @@ const EVENT_FIELDS: Readonly<Record<WriteOp, ReadonlySet<string>>> = {
   create: new Set(['title', 'date', 'category', 'time', 'location']),
   update: new Set(['id', 'title', 'date', 'category', 'time', 'location']),
   complete: new Set(['id']), // events 는 complete 미지원 — 필드검사는 통과시키되 적용 단계에서 거부
+  delete: new Set(['id']),
+};
+const MEMO_FIELDS: Readonly<Record<WriteOp, ReadonlySet<string>>> = {
+  create: new Set(['content', 'color']),
+  update: new Set(['id', 'content', 'color', 'archived']),
+  complete: new Set(['id']), // memos 는 complete 미지원 — 필드검사는 통과, 적용 단계에서 거부
+  delete: new Set(['id']),
+};
+const BOOKMARK_FIELDS: Readonly<Record<WriteOp, ReadonlySet<string>>> = {
+  // create 는 kind 로 분기(bookmark=name/url/groupId, group=name/emoji) — 둘의 합집합을 허용.
+  create: new Set(['kind', 'name', 'url', 'groupId', 'emoji']),
+  update: new Set(['id', 'name', 'url']), // 북마크 항목 수정만(그룹 수정은 본체 UI)
+  complete: new Set(['id']), // bookmarks 는 complete 미지원 — 적용 단계에서 거부
+  delete: new Set(['id']),
+};
+const NOTE_FIELDS: Readonly<Record<WriteOp, ReadonlySet<string>>> = {
+  // create 는 kind 로 분기(notebook=title, section=notebookId/title, page=sectionId/title/body) — 합집합 허용.
+  create: new Set(['kind', 'title', 'notebookId', 'sectionId', 'body']),
+  update: new Set(['id', 'title', 'body', 'pinned']), // 페이지 수정만(노트북·섹션 수정은 본체 UI)
+  complete: new Set(['id']), // notes 는 complete 미지원 — 적용 단계에서 거부
   delete: new Set(['id']),
 };
 
@@ -392,7 +508,10 @@ export function validateApplyWrite(raw: unknown): ValidateResult {
   const idempotencyKey = o['idempotencyKey'];
   const data = o['data'];
   if (typeof domain !== 'string' || !DOMAINS.has(domain)) {
-    return { ok: false, reason: 'domain 은 todos|events 여야 합니다.' };
+    return {
+      ok: false,
+      reason: 'domain 은 todos|events|recordDrafts|memos|bookmarks|notes 여야 합니다.',
+    };
   }
   if (typeof op !== 'string' || !OPS.has(op)) {
     return { ok: false, reason: 'op 은 create|update|complete|delete 여야 합니다.' };
@@ -411,11 +530,35 @@ export function validateApplyWrite(raw: unknown): ValidateResult {
   const d = data as Record<string, unknown>;
   // #5: 브리지와 동일 강도 — (1) 허용 밖 필드 거부(strict allowlist) + (2) 존재 필드의 형식·길이·enum 검증.
   //   둘 다 op 와 무관하게 적용된다(필수 여부는 아래 op 별 분기에서).
-  if (domain === 'todos' || domain === 'events') {
-    const allowed = (domain === 'todos' ? TODO_FIELDS : EVENT_FIELDS)[op as WriteOp];
-    const fieldErr = checkAllowedFields(allowed, d);
+  if (
+    domain === 'todos' ||
+    domain === 'events' ||
+    domain === 'memos' ||
+    domain === 'bookmarks' ||
+    domain === 'notes'
+  ) {
+    const fieldMap =
+      domain === 'todos'
+        ? TODO_FIELDS
+        : domain === 'events'
+          ? EVENT_FIELDS
+          : domain === 'memos'
+            ? MEMO_FIELDS
+            : domain === 'bookmarks'
+              ? BOOKMARK_FIELDS
+              : NOTE_FIELDS;
+    const fieldErr = checkAllowedFields(fieldMap[op as WriteOp], d);
     if (fieldErr) return { ok: false, reason: fieldErr };
-    const valErr = domain === 'todos' ? checkTodoFields(d) : checkEventFields(d);
+    const valErr =
+      domain === 'todos'
+        ? checkTodoFields(d)
+        : domain === 'events'
+          ? checkEventFields(d)
+          : domain === 'memos'
+            ? checkMemoFields(d)
+            : domain === 'bookmarks'
+              ? checkBookmarkFields(d)
+              : checkNoteFields(d);
     if (valErr) return { ok: false, reason: valErr };
   }
   // 생기부 초안은 create(upsert)만 지원 — 수정·삭제는 본체 UI 에서 한다(법정기록 보수화).
@@ -425,6 +568,50 @@ export function validateApplyWrite(raw: unknown): ValidateResult {
   if (op === 'create') {
     if (domain === 'todos' && (typeof d['text'] !== 'string' || d['text'].trim().length === 0)) {
       return { ok: false, reason: '할일 생성에는 text 가 필요합니다.' };
+    }
+    if (
+      domain === 'memos' &&
+      (typeof d['content'] !== 'string' || d['content'].trim().length === 0)
+    ) {
+      return { ok: false, reason: '메모 생성에는 content 가 필요합니다.' };
+    }
+    if (domain === 'bookmarks') {
+      const kind = d['kind'];
+      if (kind !== 'bookmark' && kind !== 'group') {
+        return { ok: false, reason: '북마크 생성에는 kind(bookmark|group)가 필요합니다.' };
+      }
+      if (typeof d['name'] !== 'string' || d['name'].trim().length === 0) {
+        return { ok: false, reason: '북마크 생성에는 name 이 필요합니다.' };
+      }
+      if (kind === 'bookmark') {
+        if (typeof d['url'] !== 'string' || !isHttpUrl(d['url'])) {
+          return { ok: false, reason: '북마크 생성에는 url(http/https)이 필요합니다.' };
+        }
+        if (typeof d['groupId'] !== 'string' || d['groupId'].trim().length === 0) {
+          return { ok: false, reason: '북마크 생성에는 groupId 가 필요합니다.' };
+        }
+      }
+    }
+    if (domain === 'notes') {
+      const kind = d['kind'];
+      if (kind !== 'notebook' && kind !== 'section' && kind !== 'page') {
+        return { ok: false, reason: '노트 생성에는 kind(notebook|section|page)가 필요합니다.' };
+      }
+      if (typeof d['title'] !== 'string' || d['title'].trim().length === 0) {
+        return { ok: false, reason: '노트 생성에는 title 이 필요합니다.' };
+      }
+      if (
+        kind === 'section' &&
+        (typeof d['notebookId'] !== 'string' || d['notebookId'].trim().length === 0)
+      ) {
+        return { ok: false, reason: '섹션 생성에는 notebookId 가 필요합니다.' };
+      }
+      if (
+        kind === 'page' &&
+        (typeof d['sectionId'] !== 'string' || d['sectionId'].trim().length === 0)
+      ) {
+        return { ok: false, reason: '페이지 생성에는 sectionId 가 필요합니다.' };
+      }
     }
     if (domain === 'events') {
       if (typeof d['title'] !== 'string' || d['title'].trim().length === 0) {

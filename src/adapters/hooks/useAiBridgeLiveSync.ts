@@ -2,21 +2,48 @@ import { useEffect } from 'react';
 import { useTodoStore } from '@adapters/stores/useTodoStore';
 import { useEventsStore } from '@adapters/stores/useEventsStore';
 import { useRecordDraftsStore } from '@adapters/stores/useRecordDraftsStore';
+import { useMemoStore } from '@adapters/stores/useMemoStore';
+import { useBookmarkStore } from '@adapters/stores/useBookmarkStore';
+import { useNoteStore } from '@adapters/stores/useNoteStore';
 import {
   applyLiveSyncWrite,
   type LiveSyncWriteRequest,
 } from '@usecases/aiBridge/applyLiveSyncWrite';
 import type { Todo, TodoPriority } from '@domain/entities/Todo';
 import type { SchoolEvent } from '@domain/entities/SchoolEvent';
+import type { NotePageBody } from '@domain/entities/NotePage';
+import { MEMO_COLORS, type MemoColor } from '@domain/valueObjects/MemoColor';
+import { ManageNotes } from '@usecases/note/ManageNotes';
+import { createEmptyNotePageBody, fromEditorDocument } from '@adapters/presenters/notePresenter';
+import { noteRepository } from '@adapters/di/container';
+import { generateUUID } from '@infrastructure/utils/uuid';
 import {
   isRecordArea,
   type RecordArea,
   type RecordDraftStatus,
 } from '@domain/entities/RecordDraft';
 
+// 노트 쓰기는 store 액션이 제목/본문 인자를 받지 않으므로 usecase 를 직접 쓴다(파일 영속).
+// ManageNotes 는 매 쓰기 전에 저장소에서 현재 상태를 다시 읽어 병합하므로, 앱 메모리 스냅샷이
+// 잠시 stale 해도 데이터를 덮어쓰지 않는다(UI 갱신은 쓰기 후 useNoteStore.load(true) 로 반영).
+const manageNotes = new ManageNotes(noteRepository, generateUUID);
+
+/** 평문 → BlockNote 문서(NotePageBody). 줄바꿈을 문단으로 나눈다(빈 문자열 → 빈 본문). */
+function textToNotePageBody(text: string): NotePageBody {
+  if (text.length === 0) return createEmptyNotePageBody();
+  const document = text.split('\n').map((line) => ({ type: 'paragraph', content: line }));
+  return fromEditorDocument(document);
+}
+
 const PRIORITIES: readonly string[] = ['high', 'medium', 'low', 'none'];
 function coercePriority(v: string | undefined): TodoPriority | undefined {
   return v !== undefined && PRIORITIES.includes(v) ? (v as TodoPriority) : undefined;
+}
+
+function coerceMemoColor(v: string | undefined): MemoColor {
+  return v !== undefined && (MEMO_COLORS as readonly string[]).includes(v)
+    ? (v as MemoColor)
+    : 'yellow';
 }
 
 const RECORD_STATUSES: readonly string[] = ['draft', 'reviewing', 'confirmed'];
@@ -90,11 +117,19 @@ export function useAiBridgeLiveSync(): void {
   useEffect(() => {
     const api = window.electronAPI;
     if (!api?.aiBridge?.onApplyWrite) return;
+    // 메모·북마크·노트 store 는 위젯을 열어야 로드되므로, live-sync 수정·삭제(exists 검사)가 빈 상태로 404
+    // 나지 않게 메인 창 마운트 시 미리 로드해 둔다(load 는 멱등 — 이미 로드됐으면 no-op).
+    void useMemoStore.getState().load();
+    void useBookmarkStore.getState().loadAll();
+    void useNoteStore.getState().load();
     return api.aiBridge.onApplyWrite((raw) => {
       const req = raw as LiveSyncWriteRequest;
       const todo = useTodoStore.getState();
       const ev = useEventsStore.getState();
       const rd = useRecordDraftsStore.getState();
+      const memo = useMemoStore.getState();
+      const bk = useBookmarkStore.getState();
+      const ns = useNoteStore.getState();
       return applyLiveSyncWrite(req, {
         todos: {
           add: (text, opts) =>
@@ -153,6 +188,79 @@ export function useAiBridgeLiveSync(): void {
               })
               .then(() => undefined);
           },
+        },
+        memos: {
+          add: (content, color) => memo.addMemo(content, coerceMemoColor(color)),
+          update: async (id, changes) => {
+            // 메모 store 는 필드별 액션이 분리돼 있어 변경분만 순차 반영(각각 영속 저장).
+            if (changes.content !== undefined) await memo.updateMemo(id, changes.content);
+            if (changes.color !== undefined)
+              await memo.updateColor(id, coerceMemoColor(changes.color));
+            if (changes.archived === true) await memo.archiveMemo(id);
+            else if (changes.archived === false) await memo.unarchiveMemo(id);
+          },
+          delete: (id) => memo.deleteMemo(id),
+          exists: (id) => memo.memos.some((m) => m.id === id),
+        },
+        bookmarks: {
+          addBookmark: async ({ name, url, groupId }) => {
+            // store.addBookmark 은 order·icon 을 호출자가 채워야 하므로 기본값을 구성한다(🔗 이모지·그룹 내 마지막 순서).
+            const order =
+              Math.max(
+                -1,
+                ...bk.bookmarks.filter((b) => b.groupId === groupId).map((b) => b.order),
+              ) + 1;
+            await bk.addBookmark({
+              name,
+              url,
+              groupId,
+              order,
+              iconType: 'emoji',
+              iconValue: '🔗',
+              type: 'url',
+            });
+          },
+          addGroup: async ({ name, emoji }) => {
+            const order = Math.max(-1, ...bk.groups.map((g) => g.order)) + 1;
+            await bk.addGroup({ name, emoji: emoji ?? '🔖', order, collapsed: false });
+          },
+          update: (id, changes) => bk.updateBookmark(id, changes),
+          delete: (id) => bk.deleteBookmark(id),
+          exists: (id) => bk.bookmarks.some((b) => b.id === id),
+          groupExists: (id) => bk.groups.some((g) => g.id === id),
+        },
+        notes: {
+          createNotebook: async (title) => {
+            await manageNotes.createNotebook({ title, initialPageBody: createEmptyNotePageBody() });
+            await useNoteStore.getState().load(true);
+          },
+          createSection: async (notebookId, title) => {
+            await manageNotes.createSection(notebookId, title);
+            await useNoteStore.getState().load(true);
+          },
+          createPage: async (sectionId, title, bodyText) => {
+            const body =
+              bodyText !== undefined ? textToNotePageBody(bodyText) : createEmptyNotePageBody();
+            await manageNotes.createPage(sectionId, title, body);
+            await useNoteStore.getState().load(true);
+          },
+          updatePage: async (id, changes) => {
+            if (changes.title !== undefined) await manageNotes.renamePage(id, changes.title);
+            if (changes.bodyText !== undefined)
+              await manageNotes.updatePageBody(id, textToNotePageBody(changes.bodyText));
+            if (changes.pinned !== undefined) {
+              const current = ns.pagesMeta.find((p) => p.id === id);
+              if (current && current.pinned !== changes.pinned) await manageNotes.togglePagePin(id);
+            }
+            await useNoteStore.getState().load(true);
+          },
+          deletePage: async (id) => {
+            await manageNotes.deletePage(id);
+            await useNoteStore.getState().load(true);
+          },
+          notebookExists: (id) => ns.notebooks.some((n) => n.id === id),
+          sectionExists: (id) => ns.sections.some((s) => s.id === id),
+          pageExists: (id) => ns.pagesMeta.some((p) => p.id === id),
         },
       });
     });

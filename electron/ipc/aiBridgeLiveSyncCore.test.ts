@@ -240,6 +240,21 @@ describe('isDomainWriteAllowed (도메인별 게이트 fail-closed)', () => {
     expect(isDomainWriteAllowed('todos', caps({ allowWrite: true }))).toBe(true);
     expect(isDomainWriteAllowed('events', caps({ allowWrite: true }))).toBe(true);
   });
+  it('메모(memos)는 allowWrite 만 본다 — allowRecordWrite ON 이어도 거부', () => {
+    expect(isDomainWriteAllowed('memos', caps({ allowRecordWrite: true }))).toBe(false);
+    expect(isDomainWriteAllowed('memos', caps({ allowWrite: true }))).toBe(true);
+    expect(isDomainWriteAllowed('memos', caps({}))).toBe(false);
+  });
+  it('북마크(bookmarks)는 allowWrite 만 본다 — allowRecordWrite ON 이어도 거부', () => {
+    expect(isDomainWriteAllowed('bookmarks', caps({ allowRecordWrite: true }))).toBe(false);
+    expect(isDomainWriteAllowed('bookmarks', caps({ allowWrite: true }))).toBe(true);
+    expect(isDomainWriteAllowed('bookmarks', caps({}))).toBe(false);
+  });
+  it('노트(notes)는 allowWrite 만 본다 — allowRecordWrite ON 이어도 거부', () => {
+    expect(isDomainWriteAllowed('notes', caps({ allowRecordWrite: true }))).toBe(false);
+    expect(isDomainWriteAllowed('notes', caps({ allowWrite: true }))).toBe(true);
+    expect(isDomainWriteAllowed('notes', caps({}))).toBe(false);
+  });
 });
 
 describe('authorizeWriteRequest', () => {
@@ -498,5 +513,145 @@ describe('validateApplyWrite', () => {
         data: { text: 'x' },
       }).ok,
     ).toBe(true);
+  });
+
+  it('memos create: content 필수 + color enum + 2000자 상한 + out-of-spec 거부', () => {
+    const base = { domain: 'memos', op: 'create', idempotencyKey: 'k' } as const;
+    expect(validateApplyWrite({ ...base, data: {} }).ok).toBe(false); // content 누락
+    expect(validateApplyWrite({ ...base, data: { content: '   ' } }).ok).toBe(false); // 공백만
+    expect(validateApplyWrite({ ...base, data: { content: '메모', color: 'purple' } }).ok).toBe(
+      false,
+    ); // color enum
+    expect(validateApplyWrite({ ...base, data: { content: 'x'.repeat(2001) } }).ok).toBe(false); // 길이
+    expect(validateApplyWrite({ ...base, data: { content: 'x', evil: '1' } }).ok).toBe(false); // out-of-spec
+    expect(validateApplyWrite({ ...base, data: { content: '회의 메모', color: 'green' } }).ok).toBe(
+      true,
+    );
+  });
+
+  it('memos update: id 핸들 + content/color/archived 만 허용, archived 타입 검증', () => {
+    const base = { domain: 'memos', op: 'update', idempotencyKey: 'k' } as const;
+    expect(validateApplyWrite({ ...base, data: { id: 'm', archived: 'yes' } }).ok).toBe(false); // boolean 아님
+    expect(validateApplyWrite({ ...base, data: { id: 'm', evil: 1 } }).ok).toBe(false); // out-of-spec
+    expect(
+      validateApplyWrite({ ...base, data: { id: 'm', content: '수정', archived: true } }).ok,
+    ).toBe(true);
+  });
+
+  it('memos delete: id 핸들만 허용', () => {
+    expect(
+      validateApplyWrite({ domain: 'memos', op: 'delete', idempotencyKey: 'k', data: { id: 'm' } })
+        .ok,
+    ).toBe(true);
+    expect(
+      validateApplyWrite({
+        domain: 'memos',
+        op: 'delete',
+        idempotencyKey: 'k',
+        data: { id: 'm', content: 'x' },
+      }).ok,
+    ).toBe(false);
+  });
+
+  it('bookmarks create(group): kind+name 필수', () => {
+    const base = { domain: 'bookmarks', op: 'create', idempotencyKey: 'k' } as const;
+    expect(validateApplyWrite({ ...base, data: { name: '업무' } }).ok).toBe(false); // kind 누락
+    expect(validateApplyWrite({ ...base, data: { kind: 'group' } }).ok).toBe(false); // name 누락
+    expect(
+      validateApplyWrite({ ...base, data: { kind: 'group', name: '업무', emoji: '💼' } }).ok,
+    ).toBe(true);
+  });
+
+  it('bookmarks create(bookmark): name+url(http)+groupId 필수, 비-http 거부', () => {
+    const base = { domain: 'bookmarks', op: 'create', idempotencyKey: 'k' } as const;
+    expect(
+      validateApplyWrite({ ...base, data: { kind: 'bookmark', name: 'x', url: 'https://x.com' } })
+        .ok,
+    ).toBe(false); // groupId 누락
+    expect(
+      validateApplyWrite({
+        ...base,
+        data: { kind: 'bookmark', name: 'x', url: 'ftp://x', groupId: 'g' },
+      }).ok,
+    ).toBe(false); // 비-http
+    expect(
+      validateApplyWrite({
+        ...base,
+        data: { kind: 'bookmark', name: 'x', url: 'https://x.com', groupId: 'g' },
+      }).ok,
+    ).toBe(true);
+  });
+
+  it('bookmarks update: id + name/url(http) 만 허용, out-of-spec 거부', () => {
+    const base = { domain: 'bookmarks', op: 'update', idempotencyKey: 'k' } as const;
+    expect(validateApplyWrite({ ...base, data: { id: 'b', url: 'notaurl' } }).ok).toBe(false);
+    expect(validateApplyWrite({ ...base, data: { id: 'b', groupId: 'g2' } }).ok).toBe(false); // groupId 는 update 불가
+    expect(
+      validateApplyWrite({ ...base, data: { id: 'b', name: '새이름', url: 'https://y.com' } }).ok,
+    ).toBe(true);
+  });
+
+  it('bookmarks delete: id 핸들만 허용', () => {
+    expect(
+      validateApplyWrite({
+        domain: 'bookmarks',
+        op: 'delete',
+        idempotencyKey: 'k',
+        data: { id: 'b' },
+      }).ok,
+    ).toBe(true);
+    expect(
+      validateApplyWrite({
+        domain: 'bookmarks',
+        op: 'delete',
+        idempotencyKey: 'k',
+        data: { id: 'b', name: 'x' },
+      }).ok,
+    ).toBe(false);
+  });
+
+  it('notes create: kind별 필수 필드(notebook=title, section=+notebookId, page=+sectionId)', () => {
+    const base = { domain: 'notes', op: 'create', idempotencyKey: 'k' } as const;
+    expect(validateApplyWrite({ ...base, data: { title: 'x' } }).ok).toBe(false); // kind 누락
+    expect(validateApplyWrite({ ...base, data: { kind: 'notebook' } }).ok).toBe(false); // title 누락
+    expect(validateApplyWrite({ ...base, data: { kind: 'notebook', title: '상담일지' } }).ok).toBe(
+      true,
+    );
+    expect(validateApplyWrite({ ...base, data: { kind: 'section', title: '6월' } }).ok).toBe(false); // notebookId 누락
+    expect(
+      validateApplyWrite({ ...base, data: { kind: 'section', title: '6월', notebookId: 'n' } }).ok,
+    ).toBe(true);
+    expect(validateApplyWrite({ ...base, data: { kind: 'page', title: '오늘' } }).ok).toBe(false); // sectionId 누락
+    expect(
+      validateApplyWrite({
+        ...base,
+        data: { kind: 'page', title: '오늘', sectionId: 's', body: '내용' },
+      }).ok,
+    ).toBe(true);
+  });
+
+  it('notes update: id + title/body/pinned 만 허용, out-of-spec·타입 위반 거부', () => {
+    const base = { domain: 'notes', op: 'update', idempotencyKey: 'k' } as const;
+    expect(validateApplyWrite({ ...base, data: { id: 'p', pinned: 'yes' } }).ok).toBe(false); // boolean 아님
+    expect(validateApplyWrite({ ...base, data: { id: 'p', sectionId: 's2' } }).ok).toBe(false); // 이동 불가
+    expect(
+      validateApplyWrite({ ...base, data: { id: 'p', title: '제목', body: '본문', pinned: true } })
+        .ok,
+    ).toBe(true);
+  });
+
+  it('notes delete: id 핸들만 허용', () => {
+    expect(
+      validateApplyWrite({ domain: 'notes', op: 'delete', idempotencyKey: 'k', data: { id: 'p' } })
+        .ok,
+    ).toBe(true);
+    expect(
+      validateApplyWrite({
+        domain: 'notes',
+        op: 'delete',
+        idempotencyKey: 'k',
+        data: { id: 'p', title: 'x' },
+      }).ok,
+    ).toBe(false);
   });
 });

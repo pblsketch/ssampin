@@ -28,6 +28,30 @@ beforeEach(() => {
     recordDrafts: {
       upsert: rec('recordDrafts.upsert') as LiveSyncWriteDeps['recordDrafts']['upsert'],
     },
+    memos: {
+      add: rec('memos.add') as LiveSyncWriteDeps['memos']['add'],
+      update: rec('memos.update') as LiveSyncWriteDeps['memos']['update'],
+      delete: rec('memos.delete') as LiveSyncWriteDeps['memos']['delete'],
+      exists: vi.fn((id: string) => id === 'memo-1'),
+    },
+    bookmarks: {
+      addBookmark: rec('bookmarks.addBookmark') as LiveSyncWriteDeps['bookmarks']['addBookmark'],
+      addGroup: rec('bookmarks.addGroup') as LiveSyncWriteDeps['bookmarks']['addGroup'],
+      update: rec('bookmarks.update') as LiveSyncWriteDeps['bookmarks']['update'],
+      delete: rec('bookmarks.delete') as LiveSyncWriteDeps['bookmarks']['delete'],
+      exists: vi.fn((id: string) => id === 'bm-1'),
+      groupExists: vi.fn((id: string) => id === 'g-1'),
+    },
+    notes: {
+      createNotebook: rec('notes.createNotebook') as LiveSyncWriteDeps['notes']['createNotebook'],
+      createSection: rec('notes.createSection') as LiveSyncWriteDeps['notes']['createSection'],
+      createPage: rec('notes.createPage') as LiveSyncWriteDeps['notes']['createPage'],
+      updatePage: rec('notes.updatePage') as LiveSyncWriteDeps['notes']['updatePage'],
+      deletePage: rec('notes.deletePage') as LiveSyncWriteDeps['notes']['deletePage'],
+      notebookExists: vi.fn((id: string) => id === 'nb-1'),
+      sectionExists: vi.fn((id: string) => id === 'sec-1'),
+      pageExists: vi.fn((id: string) => id === 'pg-1'),
+    },
   };
 });
 
@@ -254,6 +278,295 @@ describe('applyLiveSyncWrite — recordDrafts', () => {
         )
       ).status,
     ).toBe(400);
+  });
+});
+
+describe('applyLiveSyncWrite — memos', () => {
+  it('create → memos.add(content, color), ok+ref(멱등키)', async () => {
+    const r = await applyLiveSyncWrite(
+      {
+        domain: 'memos',
+        op: 'create',
+        idempotencyKey: 'm1',
+        data: { content: '교무회의 자료', color: 'green' },
+      },
+      deps,
+    );
+    expect(r).toEqual({ ok: true, ref: 'm1' });
+    expect(calls[0]).toEqual({ fn: 'memos.add', args: ['교무회의 자료', 'green'] });
+  });
+
+  it('create without content → 400, 액션 미호출', async () => {
+    const r = await applyLiveSyncWrite(
+      { domain: 'memos', op: 'create', idempotencyKey: 'k', data: {} },
+      deps,
+    );
+    expect(r).toMatchObject({ ok: false, status: 400 });
+    expect(calls).toHaveLength(0);
+  });
+
+  it('update → memos.update(id, 변경분만), 없는 id → 404', async () => {
+    const r = await applyLiveSyncWrite(
+      {
+        domain: 'memos',
+        op: 'update',
+        idempotencyKey: 'k',
+        data: { id: 'memo-1', content: '수정', archived: true },
+      },
+      deps,
+    );
+    expect(r.ok).toBe(true);
+    expect(calls[0]).toEqual({
+      fn: 'memos.update',
+      args: ['memo-1', { content: '수정', archived: true }],
+    });
+    const miss = await applyLiveSyncWrite(
+      { domain: 'memos', op: 'update', idempotencyKey: 'k', data: { id: 'nope', content: 'x' } },
+      deps,
+    );
+    expect(miss).toMatchObject({ ok: false, status: 404 });
+  });
+
+  it('delete → memos.delete(id)', async () => {
+    const r = await applyLiveSyncWrite(
+      { domain: 'memos', op: 'delete', idempotencyKey: 'k', data: { id: 'memo-1' } },
+      deps,
+    );
+    expect(r.ok).toBe(true);
+    expect(calls[0]).toEqual({ fn: 'memos.delete', args: ['memo-1'] });
+  });
+
+  it('complete → 400(미지원)', async () => {
+    const r = await applyLiveSyncWrite(
+      { domain: 'memos', op: 'complete', idempotencyKey: 'k', data: { id: 'memo-1' } },
+      deps,
+    );
+    expect(r.ok).toBe(false);
+  });
+
+  it('update without changes → 400', async () => {
+    const r = await applyLiveSyncWrite(
+      { domain: 'memos', op: 'update', idempotencyKey: 'k', data: { id: 'memo-1' } },
+      deps,
+    );
+    expect(r).toMatchObject({ ok: false, status: 400 });
+  });
+});
+
+describe('applyLiveSyncWrite — bookmarks', () => {
+  it('create kind=group → addGroup({name,emoji})', async () => {
+    const r = await applyLiveSyncWrite(
+      {
+        domain: 'bookmarks',
+        op: 'create',
+        idempotencyKey: 'b1',
+        data: { kind: 'group', name: '수업도구', emoji: '🛠️' },
+      },
+      deps,
+    );
+    expect(r).toEqual({ ok: true, ref: 'b1' });
+    expect(calls[0]).toEqual({
+      fn: 'bookmarks.addGroup',
+      args: [{ name: '수업도구', emoji: '🛠️' }],
+    });
+  });
+
+  it('create kind=bookmark → 그룹 존재 시 addBookmark', async () => {
+    const r = await applyLiveSyncWrite(
+      {
+        domain: 'bookmarks',
+        op: 'create',
+        idempotencyKey: 'b2',
+        data: { kind: 'bookmark', name: 'EBS', url: 'https://ebs.co.kr', groupId: 'g-1' },
+      },
+      deps,
+    );
+    expect(r.ok).toBe(true);
+    expect(calls[0]).toEqual({
+      fn: 'bookmarks.addBookmark',
+      args: [{ name: 'EBS', url: 'https://ebs.co.kr', groupId: 'g-1' }],
+    });
+  });
+
+  it('create kind=bookmark: 없는 그룹 → 404', async () => {
+    const r = await applyLiveSyncWrite(
+      {
+        domain: 'bookmarks',
+        op: 'create',
+        idempotencyKey: 'k',
+        data: { kind: 'bookmark', name: 'x', url: 'https://x.com', groupId: 'nope' },
+      },
+      deps,
+    );
+    expect(r).toMatchObject({ ok: false, status: 404 });
+    expect(calls).toHaveLength(0);
+  });
+
+  it('create: kind 누락 → 400', async () => {
+    const r = await applyLiveSyncWrite(
+      {
+        domain: 'bookmarks',
+        op: 'create',
+        idempotencyKey: 'k',
+        data: { name: 'x', url: 'https://x.com', groupId: 'g-1' },
+      },
+      deps,
+    );
+    expect(r).toMatchObject({ ok: false, status: 400 });
+  });
+
+  it('update → bookmarks.update(id, {name,url}), 없는 id → 404', async () => {
+    const r = await applyLiveSyncWrite(
+      {
+        domain: 'bookmarks',
+        op: 'update',
+        idempotencyKey: 'k',
+        data: { id: 'bm-1', name: '새이름' },
+      },
+      deps,
+    );
+    expect(r.ok).toBe(true);
+    expect(calls[0]).toEqual({ fn: 'bookmarks.update', args: ['bm-1', { name: '새이름' }] });
+    const miss = await applyLiveSyncWrite(
+      { domain: 'bookmarks', op: 'update', idempotencyKey: 'k', data: { id: 'nope', name: 'x' } },
+      deps,
+    );
+    expect(miss).toMatchObject({ ok: false, status: 404 });
+  });
+
+  it('delete → bookmarks.delete(id)', async () => {
+    const r = await applyLiveSyncWrite(
+      { domain: 'bookmarks', op: 'delete', idempotencyKey: 'k', data: { id: 'bm-1' } },
+      deps,
+    );
+    expect(r.ok).toBe(true);
+    expect(calls[0]).toEqual({ fn: 'bookmarks.delete', args: ['bm-1'] });
+  });
+
+  it('complete → 400(미지원)', async () => {
+    const r = await applyLiveSyncWrite(
+      { domain: 'bookmarks', op: 'complete', idempotencyKey: 'k', data: { id: 'bm-1' } },
+      deps,
+    );
+    expect(r.ok).toBe(false);
+  });
+});
+
+describe('applyLiveSyncWrite — notes', () => {
+  it('create kind=notebook → createNotebook(title)', async () => {
+    const r = await applyLiveSyncWrite(
+      {
+        domain: 'notes',
+        op: 'create',
+        idempotencyKey: 'n1',
+        data: { kind: 'notebook', title: '상담일지' },
+      },
+      deps,
+    );
+    expect(r).toEqual({ ok: true, ref: 'n1' });
+    expect(calls[0]).toEqual({ fn: 'notes.createNotebook', args: ['상담일지'] });
+  });
+
+  it('create kind=section → 노트북 존재 시 createSection(notebookId,title)', async () => {
+    const r = await applyLiveSyncWrite(
+      {
+        domain: 'notes',
+        op: 'create',
+        idempotencyKey: 'k',
+        data: { kind: 'section', notebookId: 'nb-1', title: '6월' },
+      },
+      deps,
+    );
+    expect(r.ok).toBe(true);
+    expect(calls[0]).toEqual({ fn: 'notes.createSection', args: ['nb-1', '6월'] });
+  });
+
+  it('create kind=section: 없는 노트북 → 404', async () => {
+    const r = await applyLiveSyncWrite(
+      {
+        domain: 'notes',
+        op: 'create',
+        idempotencyKey: 'k',
+        data: { kind: 'section', notebookId: 'nope', title: 'x' },
+      },
+      deps,
+    );
+    expect(r).toMatchObject({ ok: false, status: 404 });
+  });
+
+  it('create kind=page → 섹션 존재 시 createPage(sectionId,title,bodyText)', async () => {
+    const r = await applyLiveSyncWrite(
+      {
+        domain: 'notes',
+        op: 'create',
+        idempotencyKey: 'k',
+        data: { kind: 'page', sectionId: 'sec-1', title: '오늘', body: '상담 내용' },
+      },
+      deps,
+    );
+    expect(r.ok).toBe(true);
+    expect(calls[0]).toEqual({ fn: 'notes.createPage', args: ['sec-1', '오늘', '상담 내용'] });
+  });
+
+  it('create kind=page: 없는 섹션 → 404', async () => {
+    const r = await applyLiveSyncWrite(
+      {
+        domain: 'notes',
+        op: 'create',
+        idempotencyKey: 'k',
+        data: { kind: 'page', sectionId: 'nope', title: 'x' },
+      },
+      deps,
+    );
+    expect(r).toMatchObject({ ok: false, status: 404 });
+  });
+
+  it('update → updatePage(id, 변경분), 없는 페이지 → 404', async () => {
+    const r = await applyLiveSyncWrite(
+      {
+        domain: 'notes',
+        op: 'update',
+        idempotencyKey: 'k',
+        data: { id: 'pg-1', title: '제목변경', pinned: true },
+      },
+      deps,
+    );
+    expect(r.ok).toBe(true);
+    expect(calls[0]).toEqual({
+      fn: 'notes.updatePage',
+      args: ['pg-1', { title: '제목변경', pinned: true }],
+    });
+    const miss = await applyLiveSyncWrite(
+      { domain: 'notes', op: 'update', idempotencyKey: 'k', data: { id: 'nope', title: 'x' } },
+      deps,
+    );
+    expect(miss).toMatchObject({ ok: false, status: 404 });
+  });
+
+  it('update: body 빈 문자열도 변경으로 인정(본문 비우기)', async () => {
+    const r = await applyLiveSyncWrite(
+      { domain: 'notes', op: 'update', idempotencyKey: 'k', data: { id: 'pg-1', body: '' } },
+      deps,
+    );
+    expect(r.ok).toBe(true);
+    expect(calls[0]).toEqual({ fn: 'notes.updatePage', args: ['pg-1', { bodyText: '' }] });
+  });
+
+  it('delete → deletePage(id)', async () => {
+    const r = await applyLiveSyncWrite(
+      { domain: 'notes', op: 'delete', idempotencyKey: 'k', data: { id: 'pg-1' } },
+      deps,
+    );
+    expect(r.ok).toBe(true);
+    expect(calls[0]).toEqual({ fn: 'notes.deletePage', args: ['pg-1'] });
+  });
+
+  it('complete → 400(미지원)', async () => {
+    const r = await applyLiveSyncWrite(
+      { domain: 'notes', op: 'complete', idempotencyKey: 'k', data: { id: 'pg-1' } },
+      deps,
+    );
+    expect(r.ok).toBe(false);
   });
 });
 
