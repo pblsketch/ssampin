@@ -34,7 +34,13 @@ export interface InlineBold {
   value: string;
 }
 
-export type InlineNode = InlineText | InlineBold;
+export interface InlineLink {
+  kind: 'link';
+  value: string;
+  href: string;
+}
+
+export type InlineNode = InlineText | InlineBold | InlineLink;
 
 // ── 슬롯 노드 ───────────────────────────────────────────────────────────────
 
@@ -63,23 +69,29 @@ const BULLET_L2_RE = /^ {2}◦ /; // 들여쓰기 2칸 + U+25E6 + 공백
 // ── 파서 ────────────────────────────────────────────────────────────────────
 
 /**
- * "텍스트 **bold** 텍스트" 형식을 InlineNode[] 배열로 변환.
+ * "텍스트 **bold** [링크](https://...) 텍스트" 형식을 InlineNode[] 배열로 변환.
  *
- * - 중첩 bold 비지원 (단일 패스 정규식)
- * - bold 매치가 없으면 단일 text 노드 반환
+ * - bold(`**..**`)와 마크다운 링크(`[텍스트](http..)`)를 단일 패스로 처리
+ * - 중첩 비지원 (bold 안의 링크 등은 인식하지 않음)
+ * - 매치가 없으면 단일 text 노드 반환
  * - 빈 문자열이면 빈 text 1개 반환 (호출 측에서 noop 처리)
  */
 export function parseInlineMarks(text: string): InlineNode[] {
   const result: InlineNode[] = [];
-  const boldRe = /\*\*(.+?)\*\*/g;
+  // bold(그룹1) 또는 링크(그룹2=라벨, 그룹3=URL) — 등장 순서대로 단일 패스 스캔
+  const re = /\*\*(.+?)\*\*|\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
   let lastIdx = 0;
   let match: RegExpExecArray | null;
 
-  while ((match = boldRe.exec(text)) !== null) {
+  while ((match = re.exec(text)) !== null) {
     if (match.index > lastIdx) {
       result.push({ kind: 'text', value: text.slice(lastIdx, match.index) });
     }
-    result.push({ kind: 'bold', value: match[1] ?? '' });
+    if (match[1] !== undefined) {
+      result.push({ kind: 'bold', value: match[1] });
+    } else if (match[2] !== undefined && match[3] !== undefined) {
+      result.push({ kind: 'link', value: match[2], href: match[3] });
+    }
     lastIdx = match.index + match[0].length;
   }
 
@@ -112,9 +124,7 @@ export function parseDescription(description: string | null | undefined): Descri
 
   return slots.map((slot): DescriptionNode => {
     const lines = slot.split('\n');
-    const allBullets = lines.every(
-      (l) => BULLET_L1_RE.test(l) || BULLET_L2_RE.test(l),
-    );
+    const allBullets = lines.every((l) => BULLET_L1_RE.test(l) || BULLET_L2_RE.test(l));
 
     if (allBullets) {
       return {

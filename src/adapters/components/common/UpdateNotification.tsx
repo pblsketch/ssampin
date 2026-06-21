@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { Modal } from '@adapters/components/common/Modal';
-import { DescriptionRenderer } from '@adapters/components/common/DescriptionRenderer';
+import { DescriptionRenderer, InlineMarkup } from '@adapters/components/common/DescriptionRenderer';
 import { LaterDropdown } from '@adapters/components/common/LaterDropdown';
 import {
   useUpdatePreferencesStore,
@@ -275,6 +275,7 @@ export function UpdateNotification() {
       size="sm"
       closeOnEsc={!isDownloading}
       closeOnBackdrop={!isDownloading}
+      panelClassName={status === 'available' && changesOpen ? 'h-[min(86vh,760px)]' : ''}
     >
       {/* ── 업데이트 가능 ── */}
       {status === 'available' && info && (
@@ -317,16 +318,24 @@ export function UpdateNotification() {
             </button>
           </div>
 
-          {/* Highlights — 4슬롯 가이드(v2.0.4)에 맞춰 배열 풀 노출 */}
+          {/* Highlights — 4슬롯 가이드(v2.0.4)에 맞춰 배열 풀 노출.
+              변경 내역을 펼치면 요약 영역을 압축(스크롤)해 아래 패널에 높이를 양보 */}
           {releaseNotes[0]?.highlights && releaseNotes[0].highlights.length > 0 && (
-            <div className="px-6 pb-3 shrink-0">
+            <div
+              className={[
+                'px-6 pb-3 shrink-0 transition-[max-height] duration-200',
+                changesOpen ? 'max-h-28 overflow-y-auto' : '',
+              ].join(' ')}
+            >
               <ul className="list-none space-y-1.5" aria-label="주요 변경사항">
                 {releaseNotes[0].highlights.map((h, i) => (
                   <li key={i} className="flex items-start gap-2 text-sm text-sp-text/85">
                     <span className="text-sp-accent mt-0.5 shrink-0" aria-hidden="true">
                       ·
                     </span>
-                    <span className="leading-relaxed">{h}</span>
+                    <span className="leading-relaxed">
+                      <InlineMarkup text={h} boldClassName="font-semibold text-sp-text" />
+                    </span>
                   </li>
                 ))}
               </ul>

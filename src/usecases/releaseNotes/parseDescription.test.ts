@@ -35,10 +35,7 @@ describe('parseDescription', () => {
 
   // TC-3: 종속 불릿 level=2 (◦)
   it('TC-3: 종속 불릿 level=2 파싱', () => {
-    const input = [
-      '리드 텍스트.',
-      '· 1단계 불릿\n  ◦ 종속 불릿 A\n  ◦ 종속 불릿 B',
-    ].join('\n\n');
+    const input = ['리드 텍스트.', '· 1단계 불릿\n  ◦ 종속 불릿 A\n  ◦ 종속 불릿 B'].join('\n\n');
     const result = parseDescription(input);
     const second = result[1];
     expect(second?.type).toBe('bulletList');
@@ -76,7 +73,9 @@ describe('parseDescription', () => {
 
   // TC-6: em-dash 보존
   it('TC-6: em-dash(—) 포함 텍스트 원형 보존', () => {
-    const input = ['Drive 동기화 — 평소 자동 sync용으로 사용하세요.', '· 백업 센터와 보완적'].join('\n\n');
+    const input = ['Drive 동기화 — 평소 자동 sync용으로 사용하세요.', '· 백업 센터와 보완적'].join(
+      '\n\n',
+    );
     const result = parseDescription(input);
     const first = result[0];
 
@@ -102,5 +101,38 @@ describe('parseInlineMarks', () => {
     expect(result[0]).toEqual({ kind: 'bold', value: 'A' });
     expect(result[1]).toEqual({ kind: 'text', value: ' 일반 ' });
     expect(result[2]).toEqual({ kind: 'bold', value: 'B' });
+  });
+
+  it('마크다운 링크를 link 노드로 파싱', () => {
+    const result = parseInlineMarks(
+      '자세한 안내: [안내 페이지](https://www.ssampin.com/ai-bridge)',
+    );
+    expect(result).toHaveLength(2);
+    expect(result[0]).toEqual({ kind: 'text', value: '자세한 안내: ' });
+    expect(result[1]).toEqual({
+      kind: 'link',
+      value: '안내 페이지',
+      href: 'https://www.ssampin.com/ai-bridge',
+    });
+  });
+
+  it('링크 URL은 닫는 괄호에서 끊기고 뒤 괄호는 텍스트로 보존', () => {
+    const result = parseInlineMarks('(안내: [링크](https://ssampin.com/ai-bridge))');
+    expect(result[0]).toEqual({ kind: 'text', value: '(안내: ' });
+    expect(result[1]).toEqual({
+      kind: 'link',
+      value: '링크',
+      href: 'https://ssampin.com/ai-bridge',
+    });
+    expect(result[2]).toEqual({ kind: 'text', value: ')' });
+  });
+
+  it('bold와 링크가 섞여도 등장 순서대로 파싱', () => {
+    const result = parseInlineMarks('**굵게** 그리고 [링크](https://ssampin.com) 끝');
+    expect(result).toHaveLength(4);
+    expect(result[0]).toEqual({ kind: 'bold', value: '굵게' });
+    expect(result[1]).toEqual({ kind: 'text', value: ' 그리고 ' });
+    expect(result[2]).toEqual({ kind: 'link', value: '링크', href: 'https://ssampin.com' });
+    expect(result[3]).toEqual({ kind: 'text', value: ' 끝' });
   });
 });

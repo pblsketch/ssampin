@@ -1,4 +1,4 @@
-import { parseDescription } from '@usecases/releaseNotes/parseDescription';
+import { parseDescription, parseInlineMarks } from '@usecases/releaseNotes/parseDescription';
 import type { InlineNode } from '@usecases/releaseNotes/parseDescription';
 
 interface DescriptionRendererProps {
@@ -60,15 +60,43 @@ interface InlineNodesProps {
 function InlineNodes({ nodes, boldClassName }: InlineNodesProps) {
   return (
     <>
-      {nodes.map((inline, k) =>
-        inline.kind === 'bold' ? (
-          <strong key={k} className={boldClassName}>
-            {inline.value}
-          </strong>
-        ) : (
-          <span key={k}>{inline.value}</span>
-        ),
-      )}
+      {nodes.map((inline, k) => {
+        if (inline.kind === 'bold') {
+          return (
+            <strong key={k} className={boldClassName}>
+              {inline.value}
+            </strong>
+          );
+        }
+        if (inline.kind === 'link') {
+          return (
+            <a
+              key={k}
+              href={inline.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sp-accent underline underline-offset-2 hover:opacity-80 break-all"
+            >
+              {inline.value}
+            </a>
+          );
+        }
+        return <span key={k}>{inline.value}</span>;
+      })}
     </>
   );
+}
+
+/**
+ * 한 줄 텍스트(하이라이트 등)를 bold·링크 인라인 마크업으로 렌더.
+ * UpdateNotification·AppInfoSection 의 하이라이트 항목이 공유한다.
+ */
+export function InlineMarkup({
+  text,
+  boldClassName = 'font-semibold',
+}: {
+  text: string;
+  boldClassName?: string;
+}) {
+  return <InlineNodes nodes={parseInlineMarks(text)} boldClassName={boldClassName} />;
 }
