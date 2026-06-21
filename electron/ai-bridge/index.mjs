@@ -23381,9 +23381,10 @@ function parseMemos(raw) {
   for (const item of list) {
     if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
     const o = item;
+    const id = asString12(o['id']);
     const text = asString12(o['content']);
-    if (text === void 0) continue;
-    const rec = { text, archived: o['archived'] === true };
+    if (id === void 0 || text === void 0) continue;
+    const rec = { id, text, archived: o['archived'] === true };
     const color = asString12(o['color']);
     if (color !== void 0) rec['color'] = color;
     out.push(rec);
@@ -23418,10 +23419,11 @@ function parseBookmarks(raw) {
   for (const b of Array.isArray(o['bookmarks']) ? o['bookmarks'] : []) {
     if (!b || typeof b !== 'object') continue;
     const bo = b;
+    const id = asString13(bo['id']);
     const url = asString13(bo['url']);
     const groupId = asString13(bo['groupId']);
-    if (url === void 0 || url.length === 0 || groupId === void 0) continue;
-    bookmarks.push({ groupId, name: asString13(bo['name']) ?? '', url });
+    if (id === void 0 || url === void 0 || url.length === 0 || groupId === void 0) continue;
+    bookmarks.push({ id, groupId, name: asString13(bo['name']) ?? '', url });
   }
   return { groups, bookmarks };
 }
@@ -23597,6 +23599,12 @@ var RUBRIC_PREFIX = 'rubric:';
 var TODO_PREFIX = 'todo:';
 var EVENT_PREFIX = 'evt:';
 var RECORD_DRAFT_PREFIX = 'recordDraft:';
+var MEMO_PREFIX = 'memo:';
+var BOOKMARK_PREFIX = 'bm:';
+var BOOKMARK_GROUP_PREFIX = 'bmg:';
+var NOTEBOOK_PREFIX = 'nb:';
+var NOTE_SECTION_PREFIX = 'nsec:';
+var NOTE_PAGE_PREFIX = 'npg:';
 function makeTeachingStudentIdentity(classId, studentKey2) {
   return `${TEACHING_PREFIX}${classId}:${studentKey2}`;
 }
@@ -23632,6 +23640,53 @@ function parseObservationIdentity(resolved) {
 function makeRecordDraftIdentity(draftId) {
   return `${RECORD_DRAFT_PREFIX}${draftId}`;
 }
+function makeMemoIdentity(memoId) {
+  return `${MEMO_PREFIX}${memoId}`;
+}
+function parseMemoIdentity(resolved) {
+  return resolved.startsWith(MEMO_PREFIX) ? resolved.slice(MEMO_PREFIX.length) || null : null;
+}
+function makeBookmarkIdentity(bookmarkId) {
+  return `${BOOKMARK_PREFIX}${bookmarkId}`;
+}
+function parseBookmarkIdentity(resolved) {
+  if (resolved.startsWith(BOOKMARK_GROUP_PREFIX)) return null;
+  return resolved.startsWith(BOOKMARK_PREFIX)
+    ? resolved.slice(BOOKMARK_PREFIX.length) || null
+    : null;
+}
+function makeBookmarkGroupIdentity(groupId) {
+  return `${BOOKMARK_GROUP_PREFIX}${groupId}`;
+}
+function parseBookmarkGroupIdentity(resolved) {
+  return resolved.startsWith(BOOKMARK_GROUP_PREFIX)
+    ? resolved.slice(BOOKMARK_GROUP_PREFIX.length) || null
+    : null;
+}
+function makeNotebookIdentity(notebookId) {
+  return `${NOTEBOOK_PREFIX}${notebookId}`;
+}
+function parseNotebookIdentity(resolved) {
+  return resolved.startsWith(NOTEBOOK_PREFIX)
+    ? resolved.slice(NOTEBOOK_PREFIX.length) || null
+    : null;
+}
+function makeNoteSectionIdentity(sectionId) {
+  return `${NOTE_SECTION_PREFIX}${sectionId}`;
+}
+function parseNoteSectionIdentity(resolved) {
+  return resolved.startsWith(NOTE_SECTION_PREFIX)
+    ? resolved.slice(NOTE_SECTION_PREFIX.length) || null
+    : null;
+}
+function makeNotePageIdentity(pageId) {
+  return `${NOTE_PAGE_PREFIX}${pageId}`;
+}
+function parseNotePageIdentity(resolved) {
+  return resolved.startsWith(NOTE_PAGE_PREFIX)
+    ? resolved.slice(NOTE_PAGE_PREFIX.length) || null
+    : null;
+}
 function parseIdentity(resolved) {
   if (resolved.startsWith(TEACHING_PREFIX)) {
     const rest = resolved.slice(TEACHING_PREFIX.length);
@@ -23653,7 +23708,7 @@ function parseIdentity(resolved) {
 import crypto from 'node:crypto';
 import fs3 from 'node:fs';
 import path2 from 'node:path';
-var TOKEN_RE = /^(?:stu|tcs|cls|obs|rub|todo|evt|rd)_[0-9a-f]{12}$/;
+var TOKEN_RE = /^(?:stu|tcs|cls|obs|rub|todo|evt|rd|memo|bm|bmg|nb|nsec|npg)_[0-9a-f]{12}$/;
 function defaultRandomToken(prefix) {
   return `${prefix}_` + crypto.randomBytes(6).toString('hex');
 }
@@ -25208,6 +25263,86 @@ function appendEventDirect(dataDir, input, clientKey) {
     return { next: { ...root, events: [...list, ev] }, ref: id };
   });
 }
+var MEMO_DEFAULT_WIDTH = 280;
+var MEMO_DEFAULT_HEIGHT = 220;
+var MEMO_DEFAULT_COLOR = 'yellow';
+function appendMemoDirect(dataDir, input, clientKey) {
+  return mutateDataFile(dataDir, 'memos', clientKey, (parsed) => {
+    const { root, list } = readListRoot(parsed, 'memos');
+    const id = recordId('memo', clientKey);
+    if (list.some((m) => hasId(m, id))) return { next: { ...root, memos: list }, ref: id };
+    const now = /* @__PURE__ */ new Date().toISOString();
+    const x = 40 + (list.length % 4) * 220;
+    const y = 40 + Math.floor(list.length / 4) * 200;
+    const memo = {
+      id,
+      content: input.content,
+      color: input.color ?? MEMO_DEFAULT_COLOR,
+      x,
+      y,
+      width: MEMO_DEFAULT_WIDTH,
+      height: MEMO_DEFAULT_HEIGHT,
+      rotation: 0,
+      createdAt: now,
+      updatedAt: now,
+      archived: false,
+    };
+    return { next: { ...root, memos: [...list, memo] }, ref: id };
+  });
+}
+var BOOKMARK_DEFAULT_ICON = '\u{1F517}';
+var BOOKMARK_GROUP_DEFAULT_EMOJI = '\u{1F516}';
+function nextOrderIn(list, predicate) {
+  let max = -1;
+  for (const item of list) {
+    if (!item || typeof item !== 'object') continue;
+    const o = item;
+    if (!predicate(o)) continue;
+    const ord = typeof o['order'] === 'number' && Number.isFinite(o['order']) ? o['order'] : -1;
+    if (ord > max) max = ord;
+  }
+  return max + 1;
+}
+function appendBookmarkDirect(dataDir, input, clientKey) {
+  return mutateDataFile(dataDir, 'bookmarks', clientKey, (parsed) => {
+    const { root, list } = readListRoot(parsed, 'bookmarks');
+    const id = recordId('bm', clientKey);
+    if (list.some((b) => hasId(b, id))) return { next: { ...root, bookmarks: list }, ref: id };
+    const now = /* @__PURE__ */ new Date().toISOString();
+    const order = nextOrderIn(list, (o) => o['groupId'] === input.groupId);
+    const bookmark = {
+      id,
+      name: input.name,
+      url: input.url,
+      type: 'url',
+      iconType: 'emoji',
+      iconValue: BOOKMARK_DEFAULT_ICON,
+      groupId: input.groupId,
+      order,
+      createdAt: now,
+      updatedAt: now,
+    };
+    return { next: { ...root, bookmarks: [...list, bookmark] }, ref: id };
+  });
+}
+function appendBookmarkGroupDirect(dataDir, input, clientKey) {
+  return mutateDataFile(dataDir, 'bookmarks', clientKey, (parsed) => {
+    const { root, list } = readListRoot(parsed, 'groups');
+    const id = recordId('bmg', clientKey);
+    if (list.some((g) => hasId(g, id))) return { next: { ...root, groups: list }, ref: id };
+    const now = /* @__PURE__ */ new Date().toISOString();
+    const order = nextOrderIn(list, () => true);
+    const group = {
+      id,
+      name: input.name,
+      emoji: input.emoji ?? BOOKMARK_GROUP_DEFAULT_EMOJI,
+      order,
+      collapsed: false,
+      createdAt: now,
+    };
+    return { next: { ...root, groups: [...list, group] }, ref: id };
+  });
+}
 
 // ../ssampin-ai-bridge/packages/core/dist/access.js
 function getObservationsForIdentity(dataDir, identity, query = {}) {
@@ -26064,6 +26199,7 @@ function getNotes(ctx) {
   const pagesBySection = /* @__PURE__ */ new Map();
   for (const p of pages) {
     const view = {
+      pageToken: ctx.store.getToken(makeNotePageIdentity(p.id), { prefix: 'npg' }),
       title: deid(p.title),
       tags: p.tags.map(deid),
       pinned: p.pinned,
@@ -26076,12 +26212,20 @@ function getNotes(ctx) {
   const sectionsByNotebook = /* @__PURE__ */ new Map();
   for (const s of [...sections].sort((a, b) => a.order - b.order)) {
     const arr = sectionsByNotebook.get(s.notebookId) ?? [];
-    arr.push({ title: deid(s.title), pages: pagesBySection.get(s.id) ?? [] });
+    arr.push({
+      sectionToken: ctx.store.getToken(makeNoteSectionIdentity(s.id), { prefix: 'nsec' }),
+      title: deid(s.title),
+      pages: pagesBySection.get(s.id) ?? [],
+    });
     sectionsByNotebook.set(s.notebookId, arr);
   }
   const notebookViews = [...notebooks]
     .sort((a, b) => a.order - b.order)
-    .map((n) => ({ title: deid(n.title), sections: sectionsByNotebook.get(n.id) ?? [] }));
+    .map((n) => ({
+      notebookToken: ctx.store.getToken(makeNotebookIdentity(n.id), { prefix: 'nb' }),
+      title: deid(n.title),
+      sections: sectionsByNotebook.get(n.id) ?? [],
+    }));
   ctx.audit.append({ tool: 'get_notes', redactionStats: { items: pages.length, names: masked() } });
   return { contentIncluded: true, notice: CONTENT_SHOWN_NOTICE, counts, notebooks: notebookViews };
 }
@@ -26093,6 +26237,7 @@ function getMemos(ctx) {
   }
   const { deid, masked } = makeDeider(buildFullRoster(ctx));
   const views = memos.map((m) => ({
+    memoToken: ctx.store.getToken(makeMemoIdentity(m.id), { prefix: 'memo' }),
     text: deid(m.text),
     ...(m.color !== void 0 ? { color: m.color } : {}),
   }));
@@ -26110,12 +26255,20 @@ function getBookmarks(ctx) {
   const byGroup = /* @__PURE__ */ new Map();
   for (const b of bookmarks) {
     const arr = byGroup.get(b.groupId) ?? [];
-    arr.push({ name: deid(b.name), url: deid(stripUrlSecrets(b.url)) });
+    arr.push({
+      bookmarkToken: ctx.store.getToken(makeBookmarkIdentity(b.id), { prefix: 'bm' }),
+      name: deid(b.name),
+      url: deid(stripUrlSecrets(b.url)),
+    });
     byGroup.set(b.groupId, arr);
   }
   const groupViews = [...activeGroups]
     .sort((a, b) => a.order - b.order)
-    .map((g) => ({ name: deid(g.name), bookmarks: byGroup.get(g.id) ?? [] }));
+    .map((g) => ({
+      groupToken: ctx.store.getToken(makeBookmarkGroupIdentity(g.id), { prefix: 'bmg' }),
+      name: deid(g.name),
+      bookmarks: byGroup.get(g.id) ?? [],
+    }));
   ctx.audit.append({
     tool: 'get_bookmarks',
     redactionStats: { items: bookmarks.length, names: masked() },
@@ -26743,6 +26896,358 @@ function getRecordDrafts(ctx, args) {
     });
   ctx.audit.append({ tool: 'get_record_drafts', redactionStats: { items: drafts.length } });
   return { count: drafts.length, studentToken: args.studentToken, drafts, notice: DRAFT_NOTICE };
+}
+
+// ../ssampin-ai-bridge/packages/mcp/dist/memoTools.js
+var MEMO_COLORS = /* @__PURE__ */ new Set(['yellow', 'pink', 'green', 'blue']);
+var MEMO_MAX = 2e3;
+function resolveMemoId(ctx, memoToken) {
+  const resolved = ctx.store.resolveToken(memoToken);
+  if (!resolved) {
+    throw new WriteValidationError(
+      '\uC54C \uC218 \uC5C6\uB294 \uBA54\uBAA8 \uD1A0\uD070\uC785\uB2C8\uB2E4. get_memos \uC758 memoToken \uC744 \uC4F0\uC138\uC694(\uBCF8\uBB38 \uC77D\uAE30 \uD1A0\uAE00 \uD544\uC694).',
+    );
+  }
+  const id = parseMemoIdentity(resolved);
+  if (!id)
+    throw new WriteValidationError(
+      '\uBA54\uBAA8 \uD1A0\uD070\uC774 \uC544\uB2D9\uB2C8\uB2E4. get_memos \uC758 memoToken \uC744 \uC4F0\uC138\uC694.',
+    );
+  return id;
+}
+function validateColor(color) {
+  if (!MEMO_COLORS.has(color)) {
+    throw new WriteValidationError(
+      'color \uB294 yellow|pink|green|blue \uC5EC\uC57C \uD569\uB2C8\uB2E4.',
+    );
+  }
+}
+async function createMemo(ctx, args) {
+  assertWriteAllowed(ctx);
+  const content = asStr2(args.content);
+  if (!content) throw new WriteValidationError('content \uAC00 \uD544\uC694\uD569\uB2C8\uB2E4.');
+  if (content.length > MEMO_MAX)
+    throw new WriteValidationError(
+      `content \uB294 \uCD5C\uB300 ${MEMO_MAX}\uC790\uC785\uB2C8\uB2E4(\uD604\uC7AC ${content.length}).`,
+    );
+  const data = { content };
+  const color = asStr2(args.color);
+  if (color !== void 0) {
+    validateColor(color);
+    data['color'] = color;
+  }
+  const idempotencyKey = deriveIdemKey('memos', 'create', data, args.idempotencyKey);
+  const { ref, via } = await createVia(ctx, 'memos', data, idempotencyKey, () =>
+    appendMemoDirect(ctx.dataDir, data, idempotencyKey),
+  );
+  ctx.audit.append({ tool: 'create_memo', redactionStats: { items: 1 } });
+  return { ok: true, ref, via };
+}
+async function updateMemo(ctx, args) {
+  const changes = {};
+  const content = asStr2(args.content);
+  if (content !== void 0) {
+    if (content.length > MEMO_MAX)
+      throw new WriteValidationError(
+        `content \uB294 \uCD5C\uB300 ${MEMO_MAX}\uC790\uC785\uB2C8\uB2E4(\uD604\uC7AC ${content.length}).`,
+      );
+    changes['content'] = content;
+  }
+  const color = asStr2(args.color);
+  if (color !== void 0) {
+    validateColor(color);
+    changes['color'] = color;
+  }
+  if (typeof args.archived === 'boolean') changes['archived'] = args.archived;
+  if (Object.keys(changes).length === 0)
+    throw new WriteValidationError(
+      '\uBCC0\uACBD\uD560 \uD544\uB4DC\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.',
+    );
+  assertWriteAllowed(ctx);
+  const id = resolveMemoId(ctx, args.memoToken);
+  const data = { id, ...changes };
+  const idempotencyKey = deriveIdemKey('memos', 'update', data, args.idempotencyKey);
+  const { ref } = await delegate(ctx, 'update', 'memos', idempotencyKey, data);
+  ctx.audit.append({ tool: 'update_memo', redactionStats: { items: 1 } });
+  return { ok: true, ref, via: 'app' };
+}
+async function deleteMemo(ctx, args) {
+  assertWriteAllowed(ctx);
+  const id = resolveMemoId(ctx, args.memoToken);
+  const data = { id };
+  const idempotencyKey = deriveIdemKey('memos', 'delete', data, args.idempotencyKey);
+  const { ref } = await delegate(ctx, 'delete', 'memos', idempotencyKey, data);
+  ctx.audit.append({ tool: 'delete_memo', redactionStats: { items: 1 } });
+  return { ok: true, ref, via: 'app' };
+}
+
+// ../ssampin-ai-bridge/packages/mcp/dist/bookmarkTools.js
+var NAME_MAX = 200;
+var URL_MAX = 2048;
+var EMOJI_MAX = 16;
+function isHttpUrl(url) {
+  try {
+    const u = new URL(url);
+    return u.protocol === 'http:' || u.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+function resolveGroupId(ctx, groupToken) {
+  const resolved = ctx.store.resolveToken(groupToken);
+  if (!resolved) {
+    throw new WriteValidationError(
+      '\uC54C \uC218 \uC5C6\uB294 \uADF8\uB8F9 \uD1A0\uD070\uC785\uB2C8\uB2E4. get_bookmarks \uC758 groupToken \uC744 \uC4F0\uC138\uC694(\uBCF8\uBB38 \uC77D\uAE30 \uD1A0\uAE00 \uD544\uC694).',
+    );
+  }
+  const id = parseBookmarkGroupIdentity(resolved);
+  if (!id)
+    throw new WriteValidationError(
+      '\uADF8\uB8F9 \uD1A0\uD070\uC774 \uC544\uB2D9\uB2C8\uB2E4(create_bookmark \uB294 groupToken \uC774 \uD544\uC694). get_bookmarks \uC758 groupToken \uC744 \uC4F0\uC138\uC694.',
+    );
+  return id;
+}
+function resolveBookmarkId(ctx, bookmarkToken) {
+  const resolved = ctx.store.resolveToken(bookmarkToken);
+  if (!resolved) {
+    throw new WriteValidationError(
+      '\uC54C \uC218 \uC5C6\uB294 \uBD81\uB9C8\uD06C \uD1A0\uD070\uC785\uB2C8\uB2E4. get_bookmarks \uC758 bookmarkToken \uC744 \uC4F0\uC138\uC694(\uBCF8\uBB38 \uC77D\uAE30 \uD1A0\uAE00 \uD544\uC694).',
+    );
+  }
+  const id = parseBookmarkIdentity(resolved);
+  if (!id)
+    throw new WriteValidationError(
+      '\uBD81\uB9C8\uD06C \uD1A0\uD070\uC774 \uC544\uB2D9\uB2C8\uB2E4. get_bookmarks \uC758 bookmarkToken \uC744 \uC4F0\uC138\uC694.',
+    );
+  return id;
+}
+async function createBookmark(ctx, args) {
+  assertWriteAllowed(ctx);
+  const name = asStr2(args.name);
+  const url = asStr2(args.url);
+  if (!name) throw new WriteValidationError('name \uC774 \uD544\uC694\uD569\uB2C8\uB2E4.');
+  if (name.length > NAME_MAX)
+    throw new WriteValidationError(`name \uC740 \uCD5C\uB300 ${NAME_MAX}\uC790\uC785\uB2C8\uB2E4.`);
+  if (!url) throw new WriteValidationError('url \uC774 \uD544\uC694\uD569\uB2C8\uB2E4.');
+  if (url.length > URL_MAX)
+    throw new WriteValidationError(`url \uC740 \uCD5C\uB300 ${URL_MAX}\uC790\uC785\uB2C8\uB2E4.`);
+  if (!isHttpUrl(url))
+    throw new WriteValidationError(
+      'url \uC740 http:// \uB610\uB294 https:// \uB85C \uC2DC\uC791\uD574\uC57C \uD569\uB2C8\uB2E4.',
+    );
+  const groupId = resolveGroupId(ctx, args.groupToken);
+  const data = { kind: 'bookmark', name, url, groupId };
+  const idempotencyKey = deriveIdemKey('bookmarks', 'create', data, args.idempotencyKey);
+  const { ref, via } = await createVia(ctx, 'bookmarks', data, idempotencyKey, () =>
+    appendBookmarkDirect(ctx.dataDir, { name, url, groupId }, idempotencyKey),
+  );
+  ctx.audit.append({ tool: 'create_bookmark', redactionStats: { items: 1 } });
+  return { ok: true, ref, via };
+}
+async function createBookmarkGroup(ctx, args) {
+  assertWriteAllowed(ctx);
+  const name = asStr2(args.name);
+  if (!name) throw new WriteValidationError('name \uC774 \uD544\uC694\uD569\uB2C8\uB2E4.');
+  if (name.length > NAME_MAX)
+    throw new WriteValidationError(`name \uC740 \uCD5C\uB300 ${NAME_MAX}\uC790\uC785\uB2C8\uB2E4.`);
+  const data = { kind: 'group', name };
+  const emoji2 = asStr2(args.emoji);
+  if (emoji2 !== void 0) {
+    if (emoji2.length > EMOJI_MAX)
+      throw new WriteValidationError(
+        `emoji \uB294 \uCD5C\uB300 ${EMOJI_MAX}\uC790\uC785\uB2C8\uB2E4.`,
+      );
+    data['emoji'] = emoji2;
+  }
+  const idempotencyKey = deriveIdemKey('bookmarks', 'create', data, args.idempotencyKey);
+  const { ref, via } = await createVia(ctx, 'bookmarks', data, idempotencyKey, () =>
+    appendBookmarkGroupDirect(
+      ctx.dataDir,
+      { name, ...(emoji2 !== void 0 ? { emoji: emoji2 } : {}) },
+      idempotencyKey,
+    ),
+  );
+  ctx.audit.append({ tool: 'create_bookmark_group', redactionStats: { items: 1 } });
+  return { ok: true, ref, via };
+}
+async function updateBookmark(ctx, args) {
+  const changes = {};
+  const name = asStr2(args.name);
+  if (name !== void 0) {
+    if (name.length > NAME_MAX)
+      throw new WriteValidationError(
+        `name \uC740 \uCD5C\uB300 ${NAME_MAX}\uC790\uC785\uB2C8\uB2E4.`,
+      );
+    changes['name'] = name;
+  }
+  const url = asStr2(args.url);
+  if (url !== void 0) {
+    if (url.length > URL_MAX)
+      throw new WriteValidationError(`url \uC740 \uCD5C\uB300 ${URL_MAX}\uC790\uC785\uB2C8\uB2E4.`);
+    if (!isHttpUrl(url))
+      throw new WriteValidationError(
+        'url \uC740 http:// \uB610\uB294 https:// \uB85C \uC2DC\uC791\uD574\uC57C \uD569\uB2C8\uB2E4.',
+      );
+    changes['url'] = url;
+  }
+  if (Object.keys(changes).length === 0)
+    throw new WriteValidationError(
+      '\uBCC0\uACBD\uD560 \uD544\uB4DC\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.',
+    );
+  assertWriteAllowed(ctx);
+  const id = resolveBookmarkId(ctx, args.bookmarkToken);
+  const data = { id, ...changes };
+  const idempotencyKey = deriveIdemKey('bookmarks', 'update', data, args.idempotencyKey);
+  const { ref } = await delegate(ctx, 'update', 'bookmarks', idempotencyKey, data);
+  ctx.audit.append({ tool: 'update_bookmark', redactionStats: { items: 1 } });
+  return { ok: true, ref, via: 'app' };
+}
+async function deleteBookmark(ctx, args) {
+  assertWriteAllowed(ctx);
+  const id = resolveBookmarkId(ctx, args.bookmarkToken);
+  const data = { id };
+  const idempotencyKey = deriveIdemKey('bookmarks', 'delete', data, args.idempotencyKey);
+  const { ref } = await delegate(ctx, 'delete', 'bookmarks', idempotencyKey, data);
+  ctx.audit.append({ tool: 'delete_bookmark', redactionStats: { items: 1 } });
+  return { ok: true, ref, via: 'app' };
+}
+
+// ../ssampin-ai-bridge/packages/mcp/dist/noteTools.js
+var TITLE_MAX = 200;
+var BODY_MAX = 1e5;
+function resolveNotebookId(ctx, token) {
+  const resolved = ctx.store.resolveToken(token);
+  if (!resolved)
+    throw new WriteValidationError(
+      '\uC54C \uC218 \uC5C6\uB294 \uB178\uD2B8\uBD81 \uD1A0\uD070\uC785\uB2C8\uB2E4. get_notes \uC758 notebookToken \uC744 \uC4F0\uC138\uC694(\uBCF8\uBB38 \uC77D\uAE30 \uD1A0\uAE00 \uD544\uC694).',
+    );
+  const id = parseNotebookIdentity(resolved);
+  if (!id)
+    throw new WriteValidationError(
+      '\uB178\uD2B8\uBD81 \uD1A0\uD070\uC774 \uC544\uB2D9\uB2C8\uB2E4. get_notes \uC758 notebookToken \uC744 \uC4F0\uC138\uC694.',
+    );
+  return id;
+}
+function resolveSectionId(ctx, token) {
+  const resolved = ctx.store.resolveToken(token);
+  if (!resolved)
+    throw new WriteValidationError(
+      '\uC54C \uC218 \uC5C6\uB294 \uC139\uC158 \uD1A0\uD070\uC785\uB2C8\uB2E4. get_notes \uC758 sectionToken \uC744 \uC4F0\uC138\uC694(\uBCF8\uBB38 \uC77D\uAE30 \uD1A0\uAE00 \uD544\uC694).',
+    );
+  const id = parseNoteSectionIdentity(resolved);
+  if (!id)
+    throw new WriteValidationError(
+      '\uC139\uC158 \uD1A0\uD070\uC774 \uC544\uB2D9\uB2C8\uB2E4. get_notes \uC758 sectionToken \uC744 \uC4F0\uC138\uC694.',
+    );
+  return id;
+}
+function resolvePageId(ctx, token) {
+  const resolved = ctx.store.resolveToken(token);
+  if (!resolved)
+    throw new WriteValidationError(
+      '\uC54C \uC218 \uC5C6\uB294 \uD398\uC774\uC9C0 \uD1A0\uD070\uC785\uB2C8\uB2E4. get_notes \uC758 pageToken \uC744 \uC4F0\uC138\uC694(\uBCF8\uBB38 \uC77D\uAE30 \uD1A0\uAE00 \uD544\uC694).',
+    );
+  const id = parseNotePageIdentity(resolved);
+  if (!id)
+    throw new WriteValidationError(
+      '\uD398\uC774\uC9C0 \uD1A0\uD070\uC774 \uC544\uB2D9\uB2C8\uB2E4. get_notes \uC758 pageToken \uC744 \uC4F0\uC138\uC694.',
+    );
+  return id;
+}
+async function createNotebook(ctx, args) {
+  assertWriteAllowed(ctx);
+  const title = asStr2(args.title);
+  if (!title) throw new WriteValidationError('title \uC774 \uD544\uC694\uD569\uB2C8\uB2E4.');
+  if (title.length > TITLE_MAX)
+    throw new WriteValidationError(
+      `title \uC740 \uCD5C\uB300 ${TITLE_MAX}\uC790\uC785\uB2C8\uB2E4.`,
+    );
+  const data = { kind: 'notebook', title };
+  const idempotencyKey = deriveIdemKey('notes', 'create', data, args.idempotencyKey);
+  const { ref } = await delegate(ctx, 'create', 'notes', idempotencyKey, data);
+  ctx.audit.append({ tool: 'create_notebook', redactionStats: { items: 1 } });
+  return { ok: true, ref, via: 'app' };
+}
+async function createNoteSection(ctx, args) {
+  assertWriteAllowed(ctx);
+  const title = asStr2(args.title);
+  if (!title) throw new WriteValidationError('title \uC774 \uD544\uC694\uD569\uB2C8\uB2E4.');
+  if (title.length > TITLE_MAX)
+    throw new WriteValidationError(
+      `title \uC740 \uCD5C\uB300 ${TITLE_MAX}\uC790\uC785\uB2C8\uB2E4.`,
+    );
+  const notebookId = resolveNotebookId(ctx, args.notebookToken);
+  const data = { kind: 'section', notebookId, title };
+  const idempotencyKey = deriveIdemKey('notes', 'create', data, args.idempotencyKey);
+  const { ref } = await delegate(ctx, 'create', 'notes', idempotencyKey, data);
+  ctx.audit.append({ tool: 'create_note_section', redactionStats: { items: 1 } });
+  return { ok: true, ref, via: 'app' };
+}
+async function createNotePage(ctx, args) {
+  assertWriteAllowed(ctx);
+  const title = asStr2(args.title);
+  if (!title) throw new WriteValidationError('title \uC774 \uD544\uC694\uD569\uB2C8\uB2E4.');
+  if (title.length > TITLE_MAX)
+    throw new WriteValidationError(
+      `title \uC740 \uCD5C\uB300 ${TITLE_MAX}\uC790\uC785\uB2C8\uB2E4.`,
+    );
+  const sectionId = resolveSectionId(ctx, args.sectionToken);
+  const data = { kind: 'page', sectionId, title };
+  const body = asStr2(args.body);
+  if (body !== void 0) {
+    if (body.length > BODY_MAX)
+      throw new WriteValidationError(
+        `body \uB294 \uCD5C\uB300 ${BODY_MAX}\uC790\uC785\uB2C8\uB2E4.`,
+      );
+    data['body'] = body;
+  }
+  const idempotencyKey = deriveIdemKey('notes', 'create', data, args.idempotencyKey);
+  const { ref } = await delegate(ctx, 'create', 'notes', idempotencyKey, data);
+  ctx.audit.append({ tool: 'create_note_page', redactionStats: { items: 1 } });
+  return { ok: true, ref, via: 'app' };
+}
+async function updateNotePage(ctx, args) {
+  const changes = {};
+  const title = asStr2(args.title);
+  if (title !== void 0) {
+    if (title.length > TITLE_MAX)
+      throw new WriteValidationError(
+        `title \uC740 \uCD5C\uB300 ${TITLE_MAX}\uC790\uC785\uB2C8\uB2E4.`,
+      );
+    changes['title'] = title;
+  }
+  if (args.body !== void 0) {
+    if (typeof args.body !== 'string')
+      throw new WriteValidationError(
+        'body \uB294 \uBB38\uC790\uC5F4\uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4.',
+      );
+    if (args.body.length > BODY_MAX)
+      throw new WriteValidationError(
+        `body \uB294 \uCD5C\uB300 ${BODY_MAX}\uC790\uC785\uB2C8\uB2E4.`,
+      );
+    changes['body'] = args.body;
+  }
+  if (typeof args.pinned === 'boolean') changes['pinned'] = args.pinned;
+  if (Object.keys(changes).length === 0)
+    throw new WriteValidationError(
+      '\uBCC0\uACBD\uD560 \uD544\uB4DC\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.',
+    );
+  assertWriteAllowed(ctx);
+  const id = resolvePageId(ctx, args.pageToken);
+  const data = { id, ...changes };
+  const idempotencyKey = deriveIdemKey('notes', 'update', data, args.idempotencyKey);
+  const { ref } = await delegate(ctx, 'update', 'notes', idempotencyKey, data);
+  ctx.audit.append({ tool: 'update_note_page', redactionStats: { items: 1 } });
+  return { ok: true, ref, via: 'app' };
+}
+async function deleteNotePage(ctx, args) {
+  assertWriteAllowed(ctx);
+  const id = resolvePageId(ctx, args.pageToken);
+  const data = { id };
+  const idempotencyKey = deriveIdemKey('notes', 'delete', data, args.idempotencyKey);
+  const { ref } = await delegate(ctx, 'delete', 'notes', idempotencyKey, data);
+  ctx.audit.append({ tool: 'delete_note_page', redactionStats: { items: 1 } });
+  return { ok: true, ref, via: 'app' };
 }
 
 // ../ssampin-ai-bridge/packages/mcp/dist/server.js
@@ -27418,6 +27923,267 @@ function createSsampinMcpServer(opts = {}) {
       annotations: { readOnlyHint: false },
     },
     async (args) => runTool('delete_event', () => deleteEvent(ctx, args)),
+  );
+  server.registerTool(
+    'create_memo',
+    {
+      title: '\uD3EC\uC2A4\uD2B8\uC787 \uBA54\uBAA8 \uCD94\uAC00',
+      description:
+        '\uC324\uD540(ssampin)\uC5D0 \uD3EC\uC2A4\uD2B8\uC787 \uBA54\uBAA8\uB97C \uCD94\uAC00\uD569\uB2C8\uB2E4. \uC4F0\uAE30\uB294 \uC324\uD540 \uC124\uC815 "AI \uC5F0\uACB0"\uC5D0\uC11C \uC4F0\uAE30\uB97C \uCF1C\uC57C \uD65C\uC131\uD654\uB429\uB2C8\uB2E4. \uC324\uD540\uC774 \uC2E4\uD589 \uC911\uC774\uBA74 \uC989\uC2DC \uBC18\uC601\uB418\uACE0, \uB2EB\uD600 \uC788\uC73C\uBA74 \uD30C\uC77C\uC5D0 \uC9C1\uC811 \uC800\uC7A5\uB429\uB2C8\uB2E4. \uAC19\uC740 idempotencyKey \uC7AC\uC694\uCCAD\uC740 \uC911\uBCF5 \uC0DD\uC131\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.',
+      inputSchema: {
+        content: external_exports
+          .string()
+          .min(1)
+          .max(2e3)
+          .describe('\uBA54\uBAA8 \uBCF8\uBB38(\uCD5C\uB300 2000\uC790)'),
+        color: external_exports
+          .enum(['yellow', 'pink', 'green', 'blue'])
+          .optional()
+          .describe('\uBA54\uBAA8 \uC0C9\uC0C1(\uAE30\uBCF8 yellow)'),
+        idempotencyKey: external_exports
+          .string()
+          .optional()
+          .describe('\uC7AC\uC2DC\uB3C4 \uC911\uBCF5 \uBC29\uC9C0 \uD0A4'),
+      },
+      annotations: { readOnlyHint: false },
+    },
+    async (args) => runTool('create_memo', () => createMemo(ctx, args)),
+  );
+  server.registerTool(
+    'update_memo',
+    {
+      title: '\uD3EC\uC2A4\uD2B8\uC787 \uBA54\uBAA8 \uC218\uC815',
+      description:
+        'get_memos \uC758 memoToken \uC73C\uB85C \uC9C0\uC815\uD55C \uD3EC\uC2A4\uD2B8\uC787\uC758 \uBCF8\uBB38\xB7\uC0C9\uC0C1\xB7\uBCF4\uAD00 \uC5EC\uBD80\uB97C \uC218\uC815\uD569\uB2C8\uB2E4(\uC9C0\uC815\uD55C \uD544\uB4DC\uB9CC). memoToken \uC740 \uBCF8\uBB38 \uC77D\uAE30 \uD1A0\uAE00\uC774 \uCF1C\uC9C4 \uC0C1\uD0DC\uC758 get_memos \uAC00 \uBC1C\uAE09\uD569\uB2C8\uB2E4. \uC324\uD540 \uC2E4\uD589 \uC911\uC5D0\uB9CC \uC801\uC6A9(\uBBF8\uC2E4\uD589 \uC2DC \uAC70\uBD80), \uC4F0\uAE30 \uD65C\uC131\uD654 \uD544\uC694.',
+      inputSchema: {
+        memoToken: external_exports
+          .string()
+          .describe('get_memos \uAC00 \uBC18\uD658\uD55C \uBA54\uBAA8 \uD1A0\uD070'),
+        content: external_exports
+          .string()
+          .min(1)
+          .max(2e3)
+          .optional()
+          .describe('\uC0C8 \uBCF8\uBB38'),
+        color: external_exports
+          .enum(['yellow', 'pink', 'green', 'blue'])
+          .optional()
+          .describe('\uC0C8 \uC0C9\uC0C1'),
+        archived: external_exports
+          .boolean()
+          .optional()
+          .describe('\uBCF4\uAD00(true)/\uBCF5\uC6D0(false)'),
+        idempotencyKey: external_exports.string().optional(),
+      },
+      annotations: { readOnlyHint: false },
+    },
+    async (args) => runTool('update_memo', () => updateMemo(ctx, args)),
+  );
+  server.registerTool(
+    'delete_memo',
+    {
+      title: '\uD3EC\uC2A4\uD2B8\uC787 \uBA54\uBAA8 \uC0AD\uC81C',
+      description:
+        'get_memos \uC758 memoToken \uC73C\uB85C \uC9C0\uC815\uD55C \uD3EC\uC2A4\uD2B8\uC787\uC744 \uC0AD\uC81C\uD569\uB2C8\uB2E4. \uC324\uD540 \uC2E4\uD589 \uC911\uC5D0\uB9CC \uC801\uC6A9(\uBBF8\uC2E4\uD589 \uC2DC \uAC70\uBD80), \uC4F0\uAE30 \uD65C\uC131\uD654 \uD544\uC694.',
+      inputSchema: {
+        memoToken: external_exports
+          .string()
+          .describe('get_memos \uAC00 \uBC18\uD658\uD55C \uBA54\uBAA8 \uD1A0\uD070'),
+        idempotencyKey: external_exports.string().optional(),
+      },
+      annotations: { readOnlyHint: false },
+    },
+    async (args) => runTool('delete_memo', () => deleteMemo(ctx, args)),
+  );
+  server.registerTool(
+    'create_bookmark_group',
+    {
+      title: '\uBD81\uB9C8\uD06C \uADF8\uB8F9 \uCD94\uAC00',
+      description:
+        '\uC324\uD540(ssampin)\uC5D0 \uBD81\uB9C8\uD06C \uADF8\uB8F9(\uD3F4\uB354)\uC744 \uCD94\uAC00\uD569\uB2C8\uB2E4. \uBD81\uB9C8\uD06C\uB97C \uCD94\uAC00\uD558\uB824\uBA74 \uBA3C\uC800 \uADF8\uB8F9\uC774 \uC788\uC5B4\uC57C \uD558\uBA70, get_bookmarks \uB85C \uAE30\uC874 \uADF8\uB8F9\uC758 groupToken \uC744 \uD655\uC778\uD558\uAC70\uB098 \uC774 \uB3C4\uAD6C\uB85C \uC0C8 \uADF8\uB8F9\uC744 \uB9CC\uB4DC\uC138\uC694. \uC4F0\uAE30 \uD65C\uC131\uD654 \uD544\uC694. \uC324\uD540 \uC2E4\uD589 \uC911\uC774\uBA74 \uC989\uC2DC \uBC18\uC601, \uB2EB\uD600 \uC788\uC73C\uBA74 \uD30C\uC77C\uC5D0 \uC9C1\uC811 \uC800\uC7A5.',
+      inputSchema: {
+        name: external_exports.string().min(1).max(200).describe('\uADF8\uB8F9 \uC774\uB984'),
+        emoji: external_exports
+          .string()
+          .max(16)
+          .optional()
+          .describe('\uADF8\uB8F9 \uC774\uBAA8\uC9C0(\uAE30\uBCF8 \u{1F516})'),
+        idempotencyKey: external_exports
+          .string()
+          .optional()
+          .describe('\uC7AC\uC2DC\uB3C4 \uC911\uBCF5 \uBC29\uC9C0 \uD0A4'),
+      },
+      annotations: { readOnlyHint: false },
+    },
+    async (args) => runTool('create_bookmark_group', () => createBookmarkGroup(ctx, args)),
+  );
+  server.registerTool(
+    'create_bookmark',
+    {
+      title: '\uBD81\uB9C8\uD06C(\uB9C1\uD06C) \uCD94\uAC00',
+      description:
+        '\uC324\uD540(ssampin)\uC5D0 \uBD81\uB9C8\uD06C(\uB9C1\uD06C)\uB97C \uCD94\uAC00\uD569\uB2C8\uB2E4. groupToken \uC740 get_bookmarks(\uBCF8\uBB38 \uC77D\uAE30 \uD1A0\uAE00 ON)\uAC00 \uBC1C\uAE09\uD55C \uB300\uC0C1 \uADF8\uB8F9 \uD1A0\uD070\uC774\uBA70, \uADF8\uB8F9\uC774 \uC5C6\uC73C\uBA74 create_bookmark_group \uC73C\uB85C \uBA3C\uC800 \uB9CC\uB4DC\uC138\uC694. url \uC740 http/https \uB9CC \uD5C8\uC6A9\uD569\uB2C8\uB2E4. \uC4F0\uAE30 \uD65C\uC131\uD654 \uD544\uC694. \uC324\uD540 \uC2E4\uD589 \uC911\uC774\uBA74 \uC989\uC2DC \uBC18\uC601, \uB2EB\uD600 \uC788\uC73C\uBA74 \uD30C\uC77C\uC5D0 \uC9C1\uC811 \uC800\uC7A5.',
+      inputSchema: {
+        groupToken: external_exports
+          .string()
+          .describe(
+            'get_bookmarks \uAC00 \uBC18\uD658\uD55C \uB300\uC0C1 \uADF8\uB8F9 \uD1A0\uD070',
+          ),
+        name: external_exports.string().min(1).max(200).describe('\uBD81\uB9C8\uD06C \uC774\uB984'),
+        url: external_exports.string().min(1).max(2048).describe('\uB9C1\uD06C URL(http/https)'),
+        idempotencyKey: external_exports
+          .string()
+          .optional()
+          .describe('\uC7AC\uC2DC\uB3C4 \uC911\uBCF5 \uBC29\uC9C0 \uD0A4'),
+      },
+      annotations: { readOnlyHint: false },
+    },
+    async (args) => runTool('create_bookmark', () => createBookmark(ctx, args)),
+  );
+  server.registerTool(
+    'update_bookmark',
+    {
+      title: '\uBD81\uB9C8\uD06C \uC218\uC815',
+      description:
+        'get_bookmarks \uC758 bookmarkToken \uC73C\uB85C \uC9C0\uC815\uD55C \uBD81\uB9C8\uD06C\uC758 \uC774\uB984\xB7URL \uC744 \uC218\uC815\uD569\uB2C8\uB2E4(\uC9C0\uC815\uD55C \uD544\uB4DC\uB9CC). bookmarkToken \uC740 \uBCF8\uBB38 \uC77D\uAE30 \uD1A0\uAE00\uC774 \uCF1C\uC9C4 get_bookmarks \uAC00 \uBC1C\uAE09\uD569\uB2C8\uB2E4. url \uC740 http/https \uB9CC \uD5C8\uC6A9. \uC324\uD540 \uC2E4\uD589 \uC911\uC5D0\uB9CC \uC801\uC6A9(\uBBF8\uC2E4\uD589 \uC2DC \uAC70\uBD80), \uC4F0\uAE30 \uD65C\uC131\uD654 \uD544\uC694.',
+      inputSchema: {
+        bookmarkToken: external_exports
+          .string()
+          .describe('get_bookmarks \uAC00 \uBC18\uD658\uD55C \uBD81\uB9C8\uD06C \uD1A0\uD070'),
+        name: external_exports.string().min(1).max(200).optional().describe('\uC0C8 \uC774\uB984'),
+        url: external_exports
+          .string()
+          .min(1)
+          .max(2048)
+          .optional()
+          .describe('\uC0C8 URL(http/https)'),
+        idempotencyKey: external_exports.string().optional(),
+      },
+      annotations: { readOnlyHint: false },
+    },
+    async (args) => runTool('update_bookmark', () => updateBookmark(ctx, args)),
+  );
+  server.registerTool(
+    'delete_bookmark',
+    {
+      title: '\uBD81\uB9C8\uD06C \uC0AD\uC81C',
+      description:
+        'get_bookmarks \uC758 bookmarkToken \uC73C\uB85C \uC9C0\uC815\uD55C \uBD81\uB9C8\uD06C\uB97C \uC0AD\uC81C\uD569\uB2C8\uB2E4. \uC324\uD540 \uC2E4\uD589 \uC911\uC5D0\uB9CC \uC801\uC6A9(\uBBF8\uC2E4\uD589 \uC2DC \uAC70\uBD80), \uC4F0\uAE30 \uD65C\uC131\uD654 \uD544\uC694.',
+      inputSchema: {
+        bookmarkToken: external_exports
+          .string()
+          .describe('get_bookmarks \uAC00 \uBC18\uD658\uD55C \uBD81\uB9C8\uD06C \uD1A0\uD070'),
+        idempotencyKey: external_exports.string().optional(),
+      },
+      annotations: { readOnlyHint: false },
+    },
+    async (args) => runTool('delete_bookmark', () => deleteBookmark(ctx, args)),
+  );
+  server.registerTool(
+    'create_notebook',
+    {
+      title: '\uB178\uD2B8\uBD81 \uCD94\uAC00',
+      description:
+        '\uC324\uD540(ssampin) \uB178\uD2B8\uC5D0 \uC0C8 \uB178\uD2B8\uBD81\uC744 \uCD94\uAC00\uD569\uB2C8\uB2E4(\uAE30\uBCF8 \uC139\uC158\xB7\uCCAB \uD398\uC774\uC9C0 \uC790\uB3D9 \uC0DD\uC131). \uB178\uD2B8 \uC4F0\uAE30\uB294 \uC324\uD540\uC774 \uC2E4\uD589 \uC911\uC77C \uB54C\uB9CC \uB3D9\uC791\uD558\uBA70(\uB2EB\uD600 \uC788\uC73C\uBA74 \uAC70\uBD80), \uC4F0\uAE30 \uD65C\uC131\uD654\uAC00 \uD544\uC694\uD569\uB2C8\uB2E4. get_notes \uB85C \uAE30\uC874 \uB178\uD2B8\uBD81\uC758 notebookToken \uC744 \uD655\uC778\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.',
+      inputSchema: {
+        title: external_exports
+          .string()
+          .min(1)
+          .max(200)
+          .describe('\uB178\uD2B8\uBD81 \uC774\uB984'),
+        idempotencyKey: external_exports
+          .string()
+          .optional()
+          .describe('\uC7AC\uC2DC\uB3C4 \uC911\uBCF5 \uBC29\uC9C0 \uD0A4'),
+      },
+      annotations: { readOnlyHint: false },
+    },
+    async (args) => runTool('create_notebook', () => createNotebook(ctx, args)),
+  );
+  server.registerTool(
+    'create_note_section',
+    {
+      title: '\uB178\uD2B8 \uC139\uC158 \uCD94\uAC00',
+      description:
+        'get_notes \uC758 notebookToken \uC73C\uB85C \uC9C0\uC815\uD55C \uB178\uD2B8\uBD81\uC5D0 \uC139\uC158\uC744 \uCD94\uAC00\uD569\uB2C8\uB2E4. \uC324\uD540 \uC2E4\uD589 \uC911\uC5D0\uB9CC \uB3D9\uC791(\uBBF8\uC2E4\uD589 \uC2DC \uAC70\uBD80), \uC4F0\uAE30 \uD65C\uC131\uD654 \uD544\uC694.',
+      inputSchema: {
+        notebookToken: external_exports
+          .string()
+          .describe('get_notes \uAC00 \uBC18\uD658\uD55C \uB178\uD2B8\uBD81 \uD1A0\uD070'),
+        title: external_exports.string().min(1).max(200).describe('\uC139\uC158 \uC774\uB984'),
+        idempotencyKey: external_exports.string().optional(),
+      },
+      annotations: { readOnlyHint: false },
+    },
+    async (args) => runTool('create_note_section', () => createNoteSection(ctx, args)),
+  );
+  server.registerTool(
+    'create_note_page',
+    {
+      title: '\uB178\uD2B8 \uD398\uC774\uC9C0 \uCD94\uAC00',
+      description:
+        'get_notes \uC758 sectionToken \uC73C\uB85C \uC9C0\uC815\uD55C \uC139\uC158\uC5D0 \uD398\uC774\uC9C0\uB97C \uCD94\uAC00\uD569\uB2C8\uB2E4. body(\uBCF8\uBB38)\uB294 \uD3C9\uBB38\uC73C\uB85C \uBC1B\uC544 \uC324\uD540\uC774 \uB178\uD2B8 \uD615\uC2DD\uC73C\uB85C \uBCC0\uD658\uD558\uBA70, \uC904\uBC14\uAFC8\uC740 \uBB38\uB2E8\uC73C\uB85C \uB098\uB269\uB2C8\uB2E4. \uC324\uD540 \uC2E4\uD589 \uC911\uC5D0\uB9CC \uB3D9\uC791(\uBBF8\uC2E4\uD589 \uC2DC \uAC70\uBD80), \uC4F0\uAE30 \uD65C\uC131\uD654 \uD544\uC694.',
+      inputSchema: {
+        sectionToken: external_exports
+          .string()
+          .describe('get_notes \uAC00 \uBC18\uD658\uD55C \uC139\uC158 \uD1A0\uD070'),
+        title: external_exports
+          .string()
+          .min(1)
+          .max(200)
+          .describe('\uD398\uC774\uC9C0 \uC81C\uBAA9'),
+        body: external_exports
+          .string()
+          .max(1e5)
+          .optional()
+          .describe('\uD398\uC774\uC9C0 \uBCF8\uBB38(\uD3C9\uBB38, \uC120\uD0DD)'),
+        idempotencyKey: external_exports.string().optional(),
+      },
+      annotations: { readOnlyHint: false },
+    },
+    async (args) => runTool('create_note_page', () => createNotePage(ctx, args)),
+  );
+  server.registerTool(
+    'update_note_page',
+    {
+      title: '\uB178\uD2B8 \uD398\uC774\uC9C0 \uC218\uC815',
+      description:
+        'get_notes \uC758 pageToken \uC73C\uB85C \uC9C0\uC815\uD55C \uD398\uC774\uC9C0\uC758 \uC81C\uBAA9\xB7\uBCF8\uBB38\xB7\uACE0\uC815 \uC5EC\uBD80\uB97C \uC218\uC815\uD569\uB2C8\uB2E4(\uC9C0\uC815\uD55C \uD544\uB4DC\uB9CC). body \uB294 \uD3C9\uBB38(\uAE30\uC874 \uBCF8\uBB38\uC744 \uB300\uCCB4). \uC324\uD540 \uC2E4\uD589 \uC911\uC5D0\uB9CC \uB3D9\uC791(\uBBF8\uC2E4\uD589 \uC2DC \uAC70\uBD80), \uC4F0\uAE30 \uD65C\uC131\uD654 \uD544\uC694.',
+      inputSchema: {
+        pageToken: external_exports
+          .string()
+          .describe('get_notes \uAC00 \uBC18\uD658\uD55C \uD398\uC774\uC9C0 \uD1A0\uD070'),
+        title: external_exports.string().min(1).max(200).optional().describe('\uC0C8 \uC81C\uBAA9'),
+        body: external_exports
+          .string()
+          .max(1e5)
+          .optional()
+          .describe('\uC0C8 \uBCF8\uBB38(\uD3C9\uBB38, \uAE30\uC874 \uB300\uCCB4)'),
+        pinned: external_exports
+          .boolean()
+          .optional()
+          .describe('\uC0C1\uB2E8 \uACE0\uC815(true)/\uD574\uC81C(false)'),
+        idempotencyKey: external_exports.string().optional(),
+      },
+      annotations: { readOnlyHint: false },
+    },
+    async (args) => runTool('update_note_page', () => updateNotePage(ctx, args)),
+  );
+  server.registerTool(
+    'delete_note_page',
+    {
+      title: '\uB178\uD2B8 \uD398\uC774\uC9C0 \uC0AD\uC81C',
+      description:
+        'get_notes \uC758 pageToken \uC73C\uB85C \uC9C0\uC815\uD55C \uD398\uC774\uC9C0\uB97C \uBCF8\uBB38\uACFC \uD568\uAED8 \uC0AD\uC81C\uD569\uB2C8\uB2E4. \uC324\uD540 \uC2E4\uD589 \uC911\uC5D0\uB9CC \uB3D9\uC791(\uBBF8\uC2E4\uD589 \uC2DC \uAC70\uBD80), \uC4F0\uAE30 \uD65C\uC131\uD654 \uD544\uC694.',
+      inputSchema: {
+        pageToken: external_exports
+          .string()
+          .describe('get_notes \uAC00 \uBC18\uD658\uD55C \uD398\uC774\uC9C0 \uD1A0\uD070'),
+        idempotencyKey: external_exports.string().optional(),
+      },
+      annotations: { readOnlyHint: false },
+    },
+    async (args) => runTool('delete_note_page', () => deleteNotePage(ctx, args)),
   );
   return server;
 }
