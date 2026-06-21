@@ -444,7 +444,7 @@ export default function AiBridgePage() {
         <h1 className="text-3xl font-bold leading-snug text-sp-text md:text-[2.6rem]">
           구독으로 쓰던 AI 챗봇과
           <br />
-          <span className="text-sp-accent">우리 학생들 자료</span>를 안전하게 연결
+          <span className="text-sp-accent">내 쌤핀 데이터</span>를 안전하게 연결
         </h1>
         <p className="mt-5 text-base leading-relaxed text-sp-muted">
           평소 쓰는 클로드·GPT·제미나이에게 쌤핀의 자료를 맡겨 보세요.{' '}
