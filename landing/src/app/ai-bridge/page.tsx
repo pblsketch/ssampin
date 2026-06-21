@@ -189,6 +189,8 @@ const TOOL_GROUPS: ToolGroup[] = [
       { label: '관찰 기록 남기기', code: 'add_observation', gate: '쓰기' },
       { label: '관찰 기록 불러오기', code: 'get_observations', gate: '동의' },
       { label: '생기부 초안 점검', code: 'check_record_draft' },
+      { label: '생기부 초안 저장', code: 'write_record_draft', gate: '쓰기' },
+      { label: '생기부 초안 조회', code: 'get_record_drafts', gate: '동의' },
       { label: '기재요령 확인', code: 'get_record_guidelines' },
     ],
   },
@@ -440,7 +442,7 @@ export default function AiBridgePage() {
           AI 브릿지 · 베타
         </p>
         <h1 className="text-3xl font-bold leading-snug text-sp-text md:text-[2.6rem]">
-          쓰던 AI 챗봇과
+          구독으로 쓰던 AI 챗봇과
           <br />
           <span className="text-sp-accent">우리 학생들 자료</span>를 안전하게 연결
         </h1>
@@ -628,7 +630,7 @@ export default function AiBridgePage() {
         <section className="mt-14">
           <SectionHead
             eyebrow="무엇을 할 수 있나요"
-            title="AI가 쓸 수 있는 도구 26가지"
+            title="AI가 쓸 수 있는 도구 28가지"
             desc={
               <>
                 쓰임새별로 묶어 봤어요.{' '}
@@ -696,7 +698,7 @@ export default function AiBridgePage() {
         <section className="mt-14">
           <SectionHead
             eyebrow="한쪽에 치우치지 않아요"
-            title="세 가지 AI를 똑같이 지원"
+            title="세 가지 AI를 모두 지원"
             desc="연결 버튼만 다를 뿐, 똑같은 도구와 똑같은 개인정보 보호가 적용됩니다."
           />
           <div className="mt-6 flex flex-wrap gap-3">
