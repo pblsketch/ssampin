@@ -434,7 +434,7 @@ export function Sidebar({ currentPage, onNavigate, onFeedback }: SidebarProps) {
 
         {!sidebarCollapsed && (
           <p className="text-caption text-sp-muted text-center mt-2">
-            v2.1.3
+            v2.2.0
             {showUpdateBadge && newVersion && (
               <button
                 type="button"
