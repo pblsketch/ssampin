@@ -185,6 +185,17 @@ const TOOL_GROUPS: ToolGroup[] = [
     ],
   },
   {
+    icon: 'calendar',
+    title: '수업 출결',
+    summary:
+      '수업반의 날짜·교시별 출결을 학생 토큰 기준으로 조회하고, 쌤핀이 켜져 있을 때 등록·수정·삭제까지 반영해요. 사유·메모는 동의를 켤 때만 열립니다.',
+    tools: [
+      { label: '출결 조회', code: 'get_attendance_records' },
+      { label: '출결 등록·수정', code: 'set_attendance_record', gate: '실시간' },
+      { label: '출결 삭제', code: 'delete_attendance_record', gate: '실시간' },
+    ],
+  },
+  {
     icon: 'award',
     title: '수행평가 · 성적',
     summary: '점수·석차는 빼고 도달 수준·성취도 같은 질적 자료만. 세특 서술 근거로 써요.',
@@ -302,6 +313,15 @@ const SCENARIOS: Scenario[] = [
     say: '다음 주 수요일 학년 체육대회 일정 넣고, 시험지 인쇄 할 일도 금요일 마감으로 추가해줘.',
     tools: ['create_event', 'create_todo'],
     note: '쌤핀이 켜져 있을 때 바로 반영돼요. (실시간 쓰기를 켰을 때만)',
+  },
+  {
+    icon: 'calendar',
+    title: '수업 출결도 대화로 정리',
+    who: '교과',
+    gate: '실시간',
+    say: '오늘 3교시 2학년 1반 수업에서 4번은 지각, 12번은 조퇴로 기록하고 현재 출결도 보여줘.',
+    tools: ['list_classes', 'list_students', 'get_attendance_records', 'set_attendance_record'],
+    note: '학생 토큰으로 처리하고, 출결 사유·메모는 선생님이 동의를 켤 때만 열립니다.',
   },
 ];
 
@@ -644,7 +664,7 @@ export default function AiBridgePage() {
         <section className="mt-14">
           <SectionHead
             eyebrow="무엇을 할 수 있나요"
-            title="AI가 쓸 수 있는 도구 40가지"
+            title="AI가 쓸 수 있는 도구 45가지"
             desc={
               <>
                 쓰임새별로 묶어 봤어요.{' '}
