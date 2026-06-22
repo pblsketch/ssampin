@@ -1,7 +1,15 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { useObservationStore } from '@adapters/stores/useObservationStore';
+import { useObservationAttachmentStore } from '@adapters/stores/useObservationAttachmentStore';
 import { DEFAULT_OBSERVATION_TAGS } from '@domain/entities/Observation';
+import {
+  OBSERVATION_ATTACHMENT_LIMITS,
+  validateAttachmentFile,
+  canAddAttachment,
+  attachmentKindOf,
+} from '@domain/rules/observationAttachmentRules';
+import type { ObservationAttachmentSource } from '@domain/entities/ObservationAttachment';
 
 const DRAFT_TTL_MS = 5 * 60 * 1000;
 const DRAFT_LRU_MAX = 50;
@@ -45,6 +53,16 @@ export function ObservationForm({ classId, studentId }: ObservationFormProps) {
   const customTags = useObservationStore((s) => s.customTags);
   const allTags = useMemo(() => [...DEFAULT_OBSERVATION_TAGS, ...customTags], [customTags]);
 
+  const addAttachment = useObservationAttachmentStore((s) => s.addAttachment);
+  // 작성 중 담아두는 첨부(아직 미저장). '기록 저장' 또는 학생 전환 자동저장 시 생성된 기록에 커밋된다.
+  const [pendingFiles, setPendingFiles] = useState<
+    { file: File; source: ObservationAttachmentSource }[]
+  >([]);
+  const pendingFilesRef = useRef<{ file: File; source: ObservationAttachmentSource }[]>([]);
+  const attachInputRef = useRef<HTMLInputElement>(null);
+  const pendingSourceRef = useRef<ObservationAttachmentSource>('teacher');
+  const [dragOver, setDragOver] = useState(false);
+
   useEffect(() => {
     dateRef.current = date;
   }, [date]);
@@ -56,6 +74,60 @@ export function ObservationForm({ classId, studentId }: ObservationFormProps) {
   useEffect(() => {
     tagsRef.current = selectedTags;
   }, [selectedTags]);
+
+  useEffect(() => {
+    pendingFilesRef.current = pendingFiles;
+  }, [pendingFiles]);
+
+  // 생성된 기록에 대기 중 첨부를 커밋한다(개별 실패는 토스트로 안내, 나머지는 계속).
+  const commitPendingAttachments = useCallback(
+    async (
+      recordId: string,
+      files: { file: File; source: ObservationAttachmentSource }[],
+    ): Promise<void> => {
+      for (const { file, source } of files) {
+        try {
+          await addAttachment({ observationId: recordId, file, source });
+        } catch (e) {
+          useToastStore.getState().show(e instanceof Error ? e.message : '첨부 저장 실패', 'error');
+        }
+      }
+    },
+    [addAttachment],
+  );
+
+  const handleAddFiles = useCallback((files: File[], source: ObservationAttachmentSource) => {
+    setPendingFiles((prev) => {
+      const next = [...prev];
+      for (const f of files) {
+        if (!canAddAttachment(next.length)) {
+          useToastStore
+            .getState()
+            .show(
+              `첨부는 관찰 1건당 최대 ${OBSERVATION_ATTACHMENT_LIMITS.MAX_PER_OBSERVATION}개까지 가능합니다.`,
+              'error',
+            );
+          break;
+        }
+        const v = validateAttachmentFile(f.name, f.size);
+        if (!v.ok) {
+          useToastStore.getState().show(v.reason, 'error');
+          continue;
+        }
+        next.push({ file: f, source });
+      }
+      return next;
+    });
+  }, []);
+
+  const removePendingFile = useCallback((idx: number) => {
+    setPendingFiles((prev) => prev.filter((_, i) => i !== idx));
+  }, []);
+
+  const openAttachPicker = useCallback((source: ObservationAttachmentSource) => {
+    pendingSourceRef.current = source;
+    attachInputRef.current?.click();
+  }, []);
 
   const cleanupDrafts = useCallback(() => {
     const now = Date.now();
@@ -88,6 +160,9 @@ export function ObservationForm({ classId, studentId }: ObservationFormProps) {
 
       if (savedContent && savingRef.current !== prevId) {
         savingRef.current = prevId;
+        // 이전 학생의 대기 첨부를 캡처 후 즉시 비운다(학생 전환 race·중복 커밋 방지).
+        const filesToCommit = pendingFilesRef.current;
+        pendingFilesRef.current = [];
         addRecord({
           studentId: prevId,
           classId,
@@ -96,6 +171,7 @@ export function ObservationForm({ classId, studentId }: ObservationFormProps) {
           tags: savedTags,
         })
           .then((recordId) => {
+            void commitPendingAttachments(recordId, filesToCommit);
             const draft = draftMapRef.current.get(prevId);
             if (
               draft &&
@@ -127,11 +203,12 @@ export function ObservationForm({ classId, studentId }: ObservationFormProps) {
       setDate(nextDraft?.date ?? todayString());
       setContent(nextDraft?.content ?? '');
       setSelectedTags(nextDraft?.tags ?? []);
+      setPendingFiles([]);
       prevStudentIdRef.current = studentId;
     }
 
     textareaRef.current?.focus();
-  }, [addRecord, classId, cleanupDrafts, deleteRecord, studentId]);
+  }, [addRecord, classId, cleanupDrafts, deleteRecord, studentId, commitPendingAttachments]);
 
   useEffect(() => {
     return () => {
@@ -184,21 +261,24 @@ export function ObservationForm({ classId, studentId }: ObservationFormProps) {
     if (!trimmed) return;
     setSaving(true);
     try {
-      await addRecord({
+      const recordId = await addRecord({
         studentId,
         classId,
         date,
         content: trimmed.slice(0, 500),
         tags: selectedTags,
       });
+      await commitPendingAttachments(recordId, pendingFilesRef.current);
+      pendingFilesRef.current = [];
       draftMapRef.current.delete(studentId);
       setContent('');
       setSelectedTags([]);
       setDate(todayString());
+      setPendingFiles([]);
     } finally {
       setSaving(false);
     }
-  }, [content, date, selectedTags, studentId, classId, addRecord]);
+  }, [content, date, selectedTags, studentId, classId, addRecord, commitPendingAttachments]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -250,12 +330,90 @@ export function ObservationForm({ classId, studentId }: ObservationFormProps) {
         className="w-full bg-sp-bg border border-sp-border rounded-lg px-3 py-2 text-sm text-sp-text placeholder:text-sp-muted resize-none focus:outline-none focus:border-sp-accent"
       />
 
+      {/* 첨부 자료 (작성 중 담아두고 저장 시 함께 커밋) */}
+      <div
+        className={`rounded-lg border border-dashed px-2 py-1.5 transition-colors ${
+          dragOver ? 'border-sp-accent bg-sp-accent/5' : 'border-sp-border'
+        }`}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragOver(true);
+        }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragOver(false);
+          handleAddFiles(e.dataTransfer.files ? Array.from(e.dataTransfer.files) : [], 'teacher');
+        }}
+      >
+        {pendingFiles.length > 0 && (
+          <div className="mb-1.5 flex flex-wrap gap-1">
+            {pendingFiles.map((p, i) => (
+              <span
+                key={`${p.file.name}-${i}`}
+                className="flex items-center gap-1 rounded-lg border border-sp-border bg-sp-bg px-2 py-0.5 text-caption text-sp-text"
+              >
+                <span className="material-symbols-outlined text-sm text-sp-accent">
+                  {attachmentKindOf(p.file.name) === 'image' ? 'image' : 'description'}
+                </span>
+                <span className="max-w-[120px] truncate">{p.file.name}</span>
+                {p.source === 'student' && (
+                  <span className="rounded-full bg-sp-accent/10 px-1 text-[9px] text-sp-accent">
+                    학생
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => removePendingFile(i)}
+                  className="text-sp-muted hover:text-red-400"
+                  aria-label="첨부 제거"
+                >
+                  <span className="material-symbols-outlined text-icon">close</span>
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+        <input
+          ref={attachInputRef}
+          type="file"
+          multiple
+          className="hidden"
+          onChange={(e) => {
+            const files = e.target.files ? Array.from(e.target.files) : [];
+            handleAddFiles(files, pendingSourceRef.current);
+            e.target.value = '';
+          }}
+        />
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => openAttachPicker('teacher')}
+            className="flex items-center gap-1 text-caption text-sp-muted hover:text-sp-accent"
+          >
+            <span className="material-symbols-outlined text-sm">attach_file</span>내 자료
+          </button>
+          <button
+            type="button"
+            onClick={() => openAttachPicker('student')}
+            className="flex items-center gap-1 text-caption text-sp-muted hover:text-sp-accent"
+          >
+            <span className="material-symbols-outlined text-sm">backpack</span>학생 제출물
+          </button>
+          <span className="ml-auto text-[10px] text-sp-muted/70">이미지·문서 끌어다 놓기</span>
+        </div>
+      </div>
+
       <button
         onClick={() => void handleSave()}
         disabled={!content.trim() || saving}
         className="w-full py-1.5 bg-sp-accent text-white text-xs font-medium rounded-lg hover:bg-sp-accent/80 transition-colors disabled:opacity-40"
       >
-        {saving ? '저장 중...' : '기록 저장 (Ctrl+Enter)'}
+        {saving
+          ? '저장 중...'
+          : pendingFiles.length > 0
+            ? `기록 저장 (자료 ${pendingFiles.length}개 포함)`
+            : '기록 저장 (Ctrl+Enter)'}
       </button>
     </div>
   );

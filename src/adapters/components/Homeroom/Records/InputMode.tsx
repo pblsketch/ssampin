@@ -28,6 +28,17 @@ import {
 import { MultiDatePicker } from '@adapters/components/common/MultiDatePicker';
 import { Notice } from '@adapters/components/common/Notice';
 import { useMultiDateAttendanceIntentStore } from '@adapters/stores/useMultiDateAttendanceIntentStore';
+import { useObservationAttachmentStore } from '@adapters/stores/useObservationAttachmentStore';
+import {
+  PendingAttachmentArea,
+  type PendingAttachment,
+} from '@adapters/components/ClassManagement/PendingAttachmentArea';
+import {
+  OBSERVATION_ATTACHMENT_LIMITS,
+  validateAttachmentFile,
+  canAddAttachment,
+} from '@domain/rules/observationAttachmentRules';
+import type { ObservationAttachmentSource } from '@domain/entities/ObservationAttachment';
 
 export interface InputModeProps extends ModeProps {
   selectedDate: string;
@@ -70,6 +81,53 @@ function InputMode({
   const maxPeriods = useSettingsStore((s) => s.settings.maxPeriods);
   const periodCount = maxPeriods ?? 7;
   const showToast = useToastStore((s) => s.show);
+
+  // ── 첨부(작성 중 담아두고 단일 학생·비출결 저장 시 커밋) ──
+  const addAttachment = useObservationAttachmentStore((s) => s.addAttachment);
+  const [pendingFiles, setPendingFiles] = useState<PendingAttachment[]>([]);
+  const pendingFilesRef = useRef<PendingAttachment[]>([]);
+  useEffect(() => {
+    pendingFilesRef.current = pendingFiles;
+  }, [pendingFiles]);
+  const commitPendingAttachments = useCallback(
+    async (recordId: string): Promise<void> => {
+      for (const { file, source } of pendingFilesRef.current) {
+        try {
+          await addAttachment({ observationId: recordId, file, source });
+        } catch (e) {
+          showToast(e instanceof Error ? e.message : '첨부 저장 실패', 'error');
+        }
+      }
+    },
+    [addAttachment, showToast],
+  );
+  const handleAddPendingFiles = useCallback(
+    (files: File[], source: ObservationAttachmentSource) => {
+      setPendingFiles((prev) => {
+        const next = [...prev];
+        for (const f of files) {
+          if (!canAddAttachment(next.length)) {
+            showToast(
+              `첨부는 기록 1건당 최대 ${OBSERVATION_ATTACHMENT_LIMITS.MAX_PER_OBSERVATION}개까지 가능합니다.`,
+              'error',
+            );
+            break;
+          }
+          const v = validateAttachmentFile(f.name, f.size);
+          if (!v.ok) {
+            showToast(v.reason, 'error');
+            continue;
+          }
+          next.push({ file: f, source });
+        }
+        return next;
+      });
+    },
+    [showToast],
+  );
+  const removePendingFile = useCallback((idx: number) => {
+    setPendingFiles((prev) => prev.filter((_, i) => i !== idx));
+  }, []);
 
   const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
   const [editingContent, setEditingContent] = useState('');
@@ -260,14 +318,10 @@ function InputMode({
   }, []);
 
   const handleAttendanceTypeClick = useCallback((type: string) => {
-    setAttendanceType((prev) => {
-      if (prev === type) {
-        setSelectedSub((s) => (s?.categoryId === 'attendance' ? null : s));
-        return null;
-      }
-      setSelectedSub((s) => (s?.categoryId === 'attendance' ? null : s));
-      return type;
-    });
+    // 출결과 일반 기록(상담/생활/기타)은 상호 배타다. 출결 유형을 고르면 다른 카테고리 선택을
+    // 모두 해제하고(출결 사유도 리셋), 유형만 토글한다.
+    setSelectedSub(null);
+    setAttendanceType((prev) => (prev === type ? null : type));
   }, []);
 
   const handleAttendanceReasonClick = useCallback(
@@ -314,14 +368,15 @@ function InputMode({
 
   // 단일 날짜 저장 (기존 로직 + 출결 교시 fan-out)
   const saveForDate = useCallback(
-    async (date: string) => {
-      if (selectedStudents.size === 0 || selectedSub === null) return 0;
+    async (date: string): Promise<{ recordIds: string[]; affected: number }> => {
+      if (selectedStudents.size === 0 || selectedSub === null)
+        return { recordIds: [], affected: 0 };
 
       // ── 출결 카테고리: 교시별 fan-out 저장 ──
       if (selectedSub.categoryId === 'attendance' && attendanceType) {
         if (!className) {
           showToast('설정에서 담임반을 먼저 입력해주세요', 'info');
-          return 0;
+          return { recordIds: [], affected: 0 };
         }
         const periods =
           selectedPeriods.size > 0
@@ -373,7 +428,12 @@ function InputMode({
           const s = students.find((st) => st.id === id);
           return !!s?.studentNumber;
         }).length;
-        return affected;
+        // 출결도 학생+날짜당 'att-{studentId}-{date}' StudentRecord 로 미러링되므로
+        // (bridgeHomeroomDayAttendance), 단일 학생이면 그 결정론적 id 를 첨부 대상으로 반환한다.
+        const singleAttId =
+          selectedStudents.size === 1 ? Array.from(selectedStudents)[0] : undefined;
+        const attRecordIds = singleAttId ? [`att-${singleAttId}-${date}`] : [];
+        return { recordIds: attRecordIds, affected };
       }
 
       // ── 기존 경로 (상담/생활/기타) ──
@@ -395,24 +455,25 @@ function InputMode({
           .map((r) => r.studentId),
       );
       const newStudents = Array.from(selectedStudents).filter((id) => !existingSet.has(id));
-      if (newStudents.length === 0) return 0;
+      if (newStudents.length === 0) return { recordIds: [], affected: 0 };
 
-      const promises = newStudents.map((studentId) =>
-        addRecord(
-          studentId,
-          selectedSub.categoryId,
-          selectedSub.subcategory,
-          memo,
-          date,
-          method,
-          fu,
-          fuDate,
-          neisFlag,
-          docFlag,
+      const recordIds = await Promise.all(
+        newStudents.map((studentId) =>
+          addRecord(
+            studentId,
+            selectedSub.categoryId,
+            selectedSub.subcategory,
+            memo,
+            date,
+            method,
+            fu,
+            fuDate,
+            neisFlag,
+            docFlag,
+          ),
         ),
       );
-      await Promise.all(promises);
-      return newStudents.length;
+      return { recordIds, affected: recordIds.length };
     },
     [
       selectedStudents,
@@ -450,13 +511,18 @@ function InputMode({
     setDocumentSubmitted(false);
     setDateMode('single');
     setMultiDateSet(new Set());
+    setPendingFiles([]);
   }, []);
 
   // 단일 날짜 저장
   const handleSave = useCallback(async () => {
-    await saveForDate(selectedDate);
+    const { recordIds } = await saveForDate(selectedDate);
+    // 단일 학생·비출결 1건일 때만 첨부 커밋(대상 record 가 명확). 다중/출결이면 첨부 영역이 비활성이라 pending 이 비어있다.
+    if (pendingFilesRef.current.length > 0 && recordIds.length === 1) {
+      await commitPendingAttachments(recordIds[0]!);
+    }
     resetForm();
-  }, [saveForDate, selectedDate, resetForm]);
+  }, [saveForDate, selectedDate, resetForm, commitPendingAttachments]);
 
   // 여러 날 일괄 저장 (확인 모달에서 호출)
   const handleBatchSave = useCallback(async () => {
@@ -468,9 +534,9 @@ function InputMode({
     const newSkipped: string[] = [];
     for (let i = 0; i < rangeDates.length; i++) {
       const date = rangeDates[i]!;
-      const created = await saveForDate(date);
-      if (created === 0) newSkipped.push(date);
-      else totalCreated += created;
+      const { affected } = await saveForDate(date);
+      if (affected === 0) newSkipped.push(date);
+      else totalCreated += affected;
       setBatchProgress({ current: i + 1, total: rangeDates.length });
     }
     setBatchSaving(false);
@@ -609,6 +675,10 @@ function InputMode({
   const studentMap = useMemo(() => new Map(students.map((s) => [s.id, s])), [students]);
 
   const canSave = selectedStudents.size > 0 && selectedSub !== null && !rangeError;
+  // 첨부는 대상 record 가 1건으로 명확할 때만(학생 1명·단일 날짜). 출결도 'att-{studentId}-{date}'
+  // StudentRecord 로 미러링되므로 진단서·결석계 첨부가 가능하다.
+  const canAttachHere =
+    selectedStudents.size === 1 && dateMode === 'single' && selectedSub !== null;
 
   // 우측 패널에 표시할 학생 (1명 선택 시)
   const singleSelectedStudent = useMemo(() => {
@@ -928,6 +998,21 @@ function InputMode({
               >
                 <span className="material-symbols-outlined text-base">open_in_full</span>
               </button>
+            </div>
+
+            {/* 첨부 자료 (작성 중 담아두고 저장 시 함께 커밋) */}
+            <div className="mt-3">
+              <p className="text-xs text-sp-muted mb-1.5 flex items-center gap-1">
+                <span className="material-symbols-outlined text-sm">attach_file</span>
+                첨부 자료
+              </p>
+              <PendingAttachmentArea
+                pendingFiles={pendingFiles}
+                onAddFiles={handleAddPendingFiles}
+                onRemove={removePendingFile}
+                disabled={!canAttachHere}
+                disabledHint="학생 1명을 고르고 단일 날짜로 기록할 때 자료를 첨부할 수 있어요"
+              />
             </div>
 
             {/* 나이스 반영 & 서류 제출 체크 (출결일 때만) */}

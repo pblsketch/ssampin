@@ -6,6 +6,7 @@ import type { StudentRecord, AttendancePeriodEntry } from '@domain/entities/Stud
 import { validateAttendancePeriods } from '@domain/rules/attendanceRules';
 import { GRAY_COLOR, getSubcategoryChipClass } from './recordUtils';
 import { PeriodRowEditor } from './PeriodRowEditor';
+import { ObservationAttachmentList } from '@adapters/components/ClassManagement/ObservationAttachmentList';
 
 export interface InlineRecordEditorProps {
   record: StudentRecord;
@@ -34,6 +35,7 @@ export interface InlineRecordEditorProps {
 }
 
 export function InlineRecordEditor({
+  record,
   categories,
   editContent,
   setEditContent,
@@ -56,7 +58,10 @@ export function InlineRecordEditor({
   setAttendancePeriods,
   regularPeriodCount,
 }: InlineRecordEditorProps) {
-  const cat = useMemo(() => categories.find((c) => c.id === editCategory), [editCategory, categories]);
+  const cat = useMemo(
+    () => categories.find((c) => c.id === editCategory),
+    [editCategory, categories],
+  );
   const isAttendance = editCategory === 'attendance';
   const periodEditMode =
     isAttendance &&
@@ -77,7 +82,11 @@ export function InlineRecordEditor({
 
   // Initialize attendance state from editSubcategory when category switches to attendance
   useEffect(() => {
-    if (!isAttendance) { setLocalAttType(''); setLocalAttReason(''); return; }
+    if (!isAttendance) {
+      setLocalAttType('');
+      setLocalAttReason('');
+      return;
+    }
     const match = editSubcategory.match(/^(.+?)\s*\((.+?)\)$/);
     if (match) {
       setLocalAttType(match[1] ?? '');
@@ -93,10 +102,13 @@ export function InlineRecordEditor({
   const chipSize = compact ? 'text-detail px-2 py-0.5' : 'px-2.5 py-1 text-xs';
 
   return (
-    <div className={compact
-      ? 'bg-sp-surface/80 border border-sp-accent/30 rounded-lg p-2 space-y-1.5 animate-fade-in'
-      : 'bg-sp-surface/80 border border-sp-accent/30 rounded-xl p-3 space-y-2.5 animate-fade-in'
-    }>
+    <div
+      className={
+        compact
+          ? 'bg-sp-surface/80 border border-sp-accent/30 rounded-lg p-2 space-y-1.5 animate-fade-in'
+          : 'bg-sp-surface/80 border border-sp-accent/30 rounded-xl p-3 space-y-2.5 animate-fade-in'
+      }
+    >
       {/* 카테고리 */}
       <div>
         <p className={`text-sp-muted mb-1 ${compact ? 'text-caption' : 'text-detail'}`}>카테고리</p>
@@ -127,7 +139,9 @@ export function InlineRecordEditor({
       {/* 세부 항목 */}
       {cat && (
         <div>
-          <p className={`text-sp-muted mb-1 ${compact ? 'text-caption' : 'text-detail'}`}>세부 항목</p>
+          <p className={`text-sp-muted mb-1 ${compact ? 'text-caption' : 'text-detail'}`}>
+            세부 항목
+          </p>
           {periodEditMode ? (
             <PeriodRowEditor
               entries={attendancePeriods}
@@ -147,12 +161,15 @@ export function InlineRecordEditor({
                       setLocalAttReason('');
                       setEditSubcategory('');
                     }}
-                    className={getSubcategoryChipClass(cat.color, localAttType === t).replace(
-                      compact ? '' : '',
-                      ''
-                    ) + (compact ? ' !text-detail !px-2 !py-0.5' : '')}
+                    className={
+                      getSubcategoryChipClass(cat.color, localAttType === t).replace(
+                        compact ? '' : '',
+                        '',
+                      ) + (compact ? ' !text-detail !px-2 !py-0.5' : '')
+                    }
                   >
-                    {localAttType === t && <span className="mr-0.5">✓</span>}{t}
+                    {localAttType === t && <span className="mr-0.5">✓</span>}
+                    {t}
                   </button>
                 ))}
               </div>
@@ -170,9 +187,13 @@ export function InlineRecordEditor({
                             setLocalAttReason(r);
                             setEditSubcategory(`${localAttType} (${r})`);
                           }}
-                          className={getSubcategoryChipClass(cat.color, isReasonSelected) + (compact ? ' !text-detail !px-2 !py-0.5' : '')}
+                          className={
+                            getSubcategoryChipClass(cat.color, isReasonSelected) +
+                            (compact ? ' !text-detail !px-2 !py-0.5' : '')
+                          }
                         >
-                          {isReasonSelected && <span className="mr-0.5">✓</span>}{r}
+                          {isReasonSelected && <span className="mr-0.5">✓</span>}
+                          {r}
                         </button>
                       );
                     })}
@@ -188,9 +209,13 @@ export function InlineRecordEditor({
                   <button
                     key={sub}
                     onClick={() => setEditSubcategory(sub)}
-                    className={getSubcategoryChipClass(cat.color, isSelected) + (compact ? ' !text-detail !px-2 !py-0.5' : '')}
+                    className={
+                      getSubcategoryChipClass(cat.color, isSelected) +
+                      (compact ? ' !text-detail !px-2 !py-0.5' : '')
+                    }
                   >
-                    {isSelected && <span className="mr-0.5">✓</span>}{sub}
+                    {isSelected && <span className="mr-0.5">✓</span>}
+                    {sub}
                   </button>
                 );
               })}
@@ -211,6 +236,14 @@ export function InlineRecordEditor({
             compact ? 'min-h-[44px]' : 'min-h-[60px]'
           }`}
         />
+      </div>
+
+      {/* 첨부 자료 (이 기록에 연결) */}
+      <div>
+        <p className={`text-sp-muted mb-1 ${compact ? 'text-caption' : 'text-detail'}`}>
+          첨부 자료
+        </p>
+        <ObservationAttachmentList observationId={record.id} />
       </div>
 
       {/* 나이스 반영 & 서류 제출 체크 (출결일 때만) */}
@@ -246,7 +279,9 @@ export function InlineRecordEditor({
       {/* 후속 조치 */}
       {setEditFollowUp && (
         <div>
-          <p className={`text-sp-muted mb-1 ${compact ? 'text-caption' : 'text-detail'}`}>후속 조치</p>
+          <p className={`text-sp-muted mb-1 ${compact ? 'text-caption' : 'text-detail'}`}>
+            후속 조치
+          </p>
           <div className="flex gap-2">
             <input
               value={editFollowUp ?? ''}
@@ -271,12 +306,16 @@ export function InlineRecordEditor({
         <button
           onClick={onCancel}
           className="px-3 py-1.5 rounded-lg text-xs font-medium text-sp-muted hover:text-sp-text hover:bg-sp-surface"
-        >취소</button>
+        >
+          취소
+        </button>
         <button
           onClick={onSave}
           disabled={periodEditMode ? periodValidation !== null : !editSubcategory}
           className="px-3 py-1.5 rounded-lg text-xs font-medium bg-sp-accent text-white hover:bg-sp-accent/80 disabled:opacity-50 disabled:cursor-not-allowed"
-        >저장</button>
+        >
+          저장
+        </button>
       </div>
     </div>
   );

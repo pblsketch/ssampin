@@ -2,14 +2,16 @@ import { create } from 'zustand';
 import type {
   ObservationAttachment,
   ObservationAttachmentSource,
+  ObservationTextQuality,
 } from '@domain/entities/ObservationAttachment';
 import {
   OBSERVATION_ATTACHMENT_LIMITS,
   validateAttachmentFile,
   canAddAttachment,
   storageRefFor,
+  truncateExtractedText,
 } from '@domain/rules/observationAttachmentRules';
-import { observationAttachmentRepository } from '@adapters/di/container';
+import { observationAttachmentRepository, documentParserPort } from '@adapters/di/container';
 import { generateUUID } from '@infrastructure/utils/uuid';
 
 interface AddAttachmentParams {
@@ -64,6 +66,25 @@ export const useObservationAttachmentStore = create<ObservationAttachmentState>(
     const buffer = await file.arrayBuffer();
     const bytes = new Uint8Array(buffer);
     const id = generateUUID();
+
+    // 문서 첨부는 저장 시점에 텍스트를 추출한다(데스크톱 전용 kordoc). 원문 그대로 저장하고
+    // (마스킹하지 않음), AI 노출이 필요할 때 ai-bridge egress 에서 탈식별한다(관찰 content 와 동일 모델).
+    // 추출 실패(브라우저/모바일·파싱 오류)는 무시하고 첨부 자체는 저장한다.
+    let extractedText: string | undefined;
+    let textQuality: ObservationTextQuality | undefined;
+    if (validation.kind === 'document') {
+      try {
+        const outcome = await documentParserPort.parseBytes(bytes, file.name);
+        if (outcome.status === 'ok') {
+          const md = outcome.document.markdown.trim();
+          if (md.length > 0) extractedText = truncateExtractedText(md);
+          if (outcome.document.textQuality) textQuality = outcome.document.textQuality;
+        }
+      } catch {
+        // 추출 불가(데스크톱 아님) 또는 파싱 오류 — 첨부는 그대로 저장, 텍스트만 생략
+      }
+    }
+
     const attachment: ObservationAttachment = {
       id,
       observationId,
@@ -74,6 +95,8 @@ export const useObservationAttachmentStore = create<ObservationAttachmentState>(
       storageRef: storageRefFor(id, file.name),
       source,
       createdAt: new Date().toISOString(),
+      ...(extractedText !== undefined ? { extractedText } : {}),
+      ...(textQuality !== undefined ? { textQuality } : {}),
     };
 
     await observationAttachmentRepository.create(attachment, bytes);

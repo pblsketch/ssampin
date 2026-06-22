@@ -112,7 +112,7 @@ interface StudentRecordsState {
     followUpDate?: string,
     reportedToNeis?: boolean,
     documentSubmitted?: boolean,
-  ) => Promise<void>;
+  ) => Promise<string>;
   updateRecord: (record: StudentRecord) => Promise<void>;
   deleteRecord: (id: string) => Promise<void>;
   toggleFollowUpDone: (recordId: string) => Promise<void>;
@@ -213,6 +213,7 @@ export const useStudentRecordsStore = create<StudentRecordsState>((set, get) => 
       };
       await manageRecords.add(newRecord);
       set((state) => ({ records: [...state.records, newRecord] }));
+      return newRecord.id;
     },
 
     updateRecord: async (updated) => {
