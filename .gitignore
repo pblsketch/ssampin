@@ -78,3 +78,12 @@ docs/notion-guide/
 landing/supabase/
 scripts/__pycache__/
 meal-header-*.png
+
+# 로컬 빌드 산출물 / 도구 상태 / 런타임 (작업물 아님 — 추적 제외)
+bin/
+.hermes/
+.next/
+dist-mobile/
+.fablize/
+.omx/
+_nul_test.mjs
