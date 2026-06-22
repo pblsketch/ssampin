@@ -14,6 +14,7 @@ import type { StudentAttendance, AttendanceStatus } from '@domain/entities/Atten
 import { pickRepresentativeAttendance } from '@domain/rules/attendanceRules';
 import type { Student } from '@domain/entities/Student';
 import { useTeachingClassStore } from './useTeachingClassStore';
+import { useObservationAttachmentStore } from './useObservationAttachmentStore';
 
 /** 카테고리 색상 → Tailwind 클래스 매핑 */
 export const RECORD_COLOR_MAP: Record<
@@ -228,6 +229,8 @@ export const useStudentRecordsStore = create<StudentRecordsState>((set, get) => 
       set((state) => ({
         records: state.records.filter((r) => r.id !== id),
       }));
+      // 기록에 연결된 첨부(메타+바이너리)도 함께 정리(고아 방지)
+      await useObservationAttachmentStore.getState().deleteByObservationId(id);
     },
 
     toggleFollowUpDone: async (recordId) => {
@@ -360,10 +363,11 @@ export const useStudentRecordsStore = create<StudentRecordsState>((set, get) => 
         const existing = get().records.find((r) => r.id === bridgeId);
 
         if (rep == null) {
-          // 대표 없음(전부 present) → 기존 bridge 삭제
+          // 대표 없음(전부 present) → 기존 bridge 삭제 + 연결 첨부 정리
           if (existing) {
             await manageRecords.delete(bridgeId);
             set((s) => ({ records: s.records.filter((r) => r.id !== bridgeId) }));
+            await useObservationAttachmentStore.getState().deleteByObservationId(bridgeId);
           }
           continue;
         }

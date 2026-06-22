@@ -4,6 +4,7 @@ import { DEFAULT_OBSERVATION_TAGS } from '@domain/entities/Observation';
 import { observationRepository } from '@adapters/di/container';
 import { ManageObservations } from '@usecases/classManagement/ManageObservations';
 import { generateUUID } from '@infrastructure/utils/uuid';
+import { useObservationAttachmentStore } from './useObservationAttachmentStore';
 
 interface ObservationState {
   records: readonly ObservationRecord[];
@@ -77,11 +78,20 @@ export const useObservationStore = create<ObservationState>((set, get) => {
     deleteRecord: async (id) => {
       set((s) => ({ records: s.records.filter((r) => r.id !== id) }));
       await manage.delete(id);
+      // 기록에 연결된 첨부(메타+바이너리)도 함께 정리(고아 방지)
+      await useObservationAttachmentStore.getState().deleteByObservationId(id);
     },
 
     deleteByClassId: async (classId) => {
+      const removedIds = get()
+        .records.filter((r) => r.classId === classId)
+        .map((r) => r.id);
       set((s) => ({ records: s.records.filter((r) => r.classId !== classId) }));
       await manage.deleteByClassId(classId);
+      const attStore = useObservationAttachmentStore.getState();
+      for (const rid of removedIds) {
+        await attStore.deleteByObservationId(rid);
+      }
     },
 
     addCustomTag: async (tag) => {

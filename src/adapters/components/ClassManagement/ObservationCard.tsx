@@ -1,7 +1,6 @@
 import { useState, useCallback } from 'react';
 import type { ObservationRecord } from '@domain/entities/Observation';
 import { useObservationStore } from '@adapters/stores/useObservationStore';
-import { useObservationAttachmentStore } from '@adapters/stores/useObservationAttachmentStore';
 import { ObservationAttachmentList } from './ObservationAttachmentList';
 
 interface ObservationCardProps {
@@ -15,7 +14,6 @@ export function ObservationCard({ record }: ObservationCardProps) {
 
   const updateRecord = useObservationStore((s) => s.updateRecord);
   const deleteRecord = useObservationStore((s) => s.deleteRecord);
-  const deleteAttachmentsByObs = useObservationAttachmentStore((s) => s.deleteByObservationId);
 
   const handleSaveEdit = useCallback(async () => {
     const trimmed = editContent.trim();
@@ -25,11 +23,10 @@ export function ObservationCard({ record }: ObservationCardProps) {
   }, [editContent, record, updateRecord]);
 
   const handleDelete = useCallback(async () => {
-    // 기록 삭제 시 연결된 첨부(메타+바이너리)도 함께 정리
-    await deleteAttachmentsByObs(record.id);
+    // deleteRecord 가 연결된 첨부까지 함께 정리한다(store cascade)
     await deleteRecord(record.id);
     setShowDeleteConfirm(false);
-  }, [record.id, deleteRecord, deleteAttachmentsByObs]);
+  }, [record.id, deleteRecord]);
 
   const dateDisplay = record.date.replace(/^\d{4}-/, '').replace('-', '/');
 
