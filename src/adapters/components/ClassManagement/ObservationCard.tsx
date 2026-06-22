@@ -1,6 +1,8 @@
 import { useState, useCallback } from 'react';
 import type { ObservationRecord } from '@domain/entities/Observation';
 import { useObservationStore } from '@adapters/stores/useObservationStore';
+import { useObservationAttachmentStore } from '@adapters/stores/useObservationAttachmentStore';
+import { ObservationAttachmentList } from './ObservationAttachmentList';
 
 interface ObservationCardProps {
   record: ObservationRecord;
@@ -13,6 +15,7 @@ export function ObservationCard({ record }: ObservationCardProps) {
 
   const updateRecord = useObservationStore((s) => s.updateRecord);
   const deleteRecord = useObservationStore((s) => s.deleteRecord);
+  const deleteAttachmentsByObs = useObservationAttachmentStore((s) => s.deleteByObservationId);
 
   const handleSaveEdit = useCallback(async () => {
     const trimmed = editContent.trim();
@@ -22,9 +25,11 @@ export function ObservationCard({ record }: ObservationCardProps) {
   }, [editContent, record, updateRecord]);
 
   const handleDelete = useCallback(async () => {
+    // 기록 삭제 시 연결된 첨부(메타+바이너리)도 함께 정리
+    await deleteAttachmentsByObs(record.id);
     await deleteRecord(record.id);
     setShowDeleteConfirm(false);
-  }, [record.id, deleteRecord]);
+  }, [record.id, deleteRecord, deleteAttachmentsByObs]);
 
   const dateDisplay = record.date.replace(/^\d{4}-/, '').replace('-', '/');
 
@@ -94,6 +99,9 @@ export function ObservationCard({ record }: ObservationCardProps) {
       ) : (
         <p className="text-xs text-sp-text leading-relaxed whitespace-pre-wrap">{record.content}</p>
       )}
+
+      {/* 첨부 자료 */}
+      <ObservationAttachmentList observationId={record.id} />
 
       {/* 삭제 확인 */}
       {showDeleteConfirm && (

@@ -3351,10 +3351,27 @@ function registerIpcHandlers(): void {
     },
   );
 
-  // ─── forms:* 바이너리 IPC (서식관리 Phase 1) ───
-  // 보안 가드: 모든 relPath 는 userData 경계 안쪽이어야 하며,
-  // 파일 확장자는 화이트리스트(.hwpx/.pdf/.xlsx/.png)만 허용한다.
-  const FORMS_ALLOWED_EXT = new Set(['.hwpx', '.pdf', '.xlsx', '.png']);
+  // ─── forms:* 바이너리 IPC (서식관리 Phase 1 + 관찰 첨부) ───
+  // 보안 가드: 모든 relPath 는 userData 경계 안쪽이어야 하며, 확장자 화이트리스트만 허용한다.
+  // 서식(hwpx/pdf/xlsx/png) + 관찰 첨부(이미지·문서). exe/js 등 실행 파일은 화이트리스트에 없어 항상 차단된다.
+  const FORMS_ALLOWED_EXT = new Set([
+    // 서식 + 문서 첨부
+    '.hwpx',
+    '.hwp',
+    '.pdf',
+    '.xlsx',
+    '.docx',
+    '.doc',
+    '.pptx',
+    '.txt',
+    // 이미지 첨부
+    '.png',
+    '.jpg',
+    '.jpeg',
+    '.gif',
+    '.heic',
+    '.webp',
+  ]);
 
   function resolveFormsPath(relPath: string, requireFileExt: boolean): string {
     if (typeof relPath !== 'string' || relPath.length === 0) {
