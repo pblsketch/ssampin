@@ -15,4 +15,10 @@ export interface IObservationAttachmentRepository {
   deleteByObservationId(observationId: string): Promise<void>;
   /** 첨부 파일 바이너리 읽기. 메타/파일 미존재 시 null. */
   readFile(id: string): Promise<Uint8Array | null>;
+  /**
+   * Drive 동기화용 동적 바이너리 키 목록.
+   * 메타에 등록된 각 첨부의 storageRef 목록을 반환한다.
+   * 메타에 없는 고아 바이너리는 목록에 포함되지 않으므로 자연히 업로드 대상에서 제외된다.
+   */
+  listBinaryKeys(): Promise<string[]>;
 }

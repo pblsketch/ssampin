@@ -72,7 +72,8 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
     if (get().firstSyncRequired) return;
     set({ status: 'syncing', error: null, progress: null });
     try {
-      const { driveSyncRepository, getDriveSyncAdapter, authenticateGoogle, storage } = await import('@adapters/di/container');
+      const { driveSyncRepository, getDriveSyncAdapter, authenticateGoogle, storage } =
+        await import('@adapters/di/container');
       const { useSettingsStore } = await import('./useSettingsStore');
       const { SyncToCloud } = await import('@usecases/sync/SyncToCloud');
 
@@ -86,8 +87,10 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
       const getToken = () => authenticateGoogle.getValidAccessToken();
       const drivePort = getDriveSyncAdapter(getToken);
 
-      const { noteRepository } = await import('@adapters/di/container');
+      const { noteRepository, observationAttachmentRepository } =
+        await import('@adapters/di/container');
       const getDynamicSyncFiles = () => noteRepository.listPageBodyKeys();
+      const getBinaryDynamicSyncFiles = () => observationAttachmentRepository.listBinaryKeys();
 
       const useCase = new SyncToCloud(
         storage,
@@ -96,6 +99,7 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
         sync.deviceId,
         settings.teacherName || '내 기기',
         getDynamicSyncFiles,
+        getBinaryDynamicSyncFiles,
       );
 
       const result = await useCase.execute((p) => set({ progress: p }));
@@ -156,7 +160,8 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
     if (get().firstSyncRequired) return { downloaded: [], conflicts: [] };
     set({ status: 'syncing', error: null, progress: null });
     try {
-      const { driveSyncRepository, getDriveSyncAdapter, authenticateGoogle, storage } = await import('@adapters/di/container');
+      const { driveSyncRepository, getDriveSyncAdapter, authenticateGoogle, storage } =
+        await import('@adapters/di/container');
       const { useSettingsStore } = await import('./useSettingsStore');
       const { SyncFromCloud } = await import('@usecases/sync/SyncFromCloud');
 
@@ -170,8 +175,10 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
       const getToken = () => authenticateGoogle.getValidAccessToken();
       const drivePort = getDriveSyncAdapter(getToken);
 
-      const { noteRepository } = await import('@adapters/di/container');
+      const { noteRepository, observationAttachmentRepository } =
+        await import('@adapters/di/container');
       const getDynamicSyncFiles = () => noteRepository.listPageBodyKeys();
+      const getBinaryDynamicSyncFiles = () => observationAttachmentRepository.listBinaryKeys();
 
       const useCase = new SyncFromCloud(
         storage,
@@ -181,6 +188,7 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
         settings.teacherName || '내 기기',
         sync.conflictPolicy,
         getDynamicSyncFiles,
+        getBinaryDynamicSyncFiles,
       );
 
       const result = await useCase.execute((p) => set({ progress: p }));
@@ -197,11 +205,17 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
         timestamp: now,
         downloaded: result.downloaded,
         skipped: result.skipped,
-        conflicts: result.conflicts.map(c => c.filename),
+        conflicts: result.conflicts.map((c) => c.filename),
       };
 
       if (result.conflicts.length > 0) {
-        set({ status: 'conflict', conflicts: result.conflicts, lastSyncedAt: now, progress: null, lastSyncResult: syncResult });
+        set({
+          status: 'conflict',
+          conflicts: result.conflicts,
+          lastSyncedAt: now,
+          progress: null,
+          lastSyncResult: syncResult,
+        });
       } else {
         set({ status: 'success', lastSyncedAt: now, progress: null, lastSyncResult: syncResult });
         setTimeout(() => {
@@ -249,14 +263,11 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
       return { ok: false, code: 'UNKNOWN', message: '다른 동기화 작업이 진행 중입니다.' };
     }
     // ImportSettingsFromCloudError 클래스는 catch에서 instanceof로 쓰므로 try 바깥에서 import
-    const { ImportSettingsFromCloudError } = await import(
-      '@usecases/sync/ImportSettingsFromCloud'
-    );
+    const { ImportSettingsFromCloudError } = await import('@usecases/sync/ImportSettingsFromCloud');
     set({ status: 'syncing', error: null, progress: null });
     try {
-      const { createImportSettingsFromCloud, authenticateGoogle } = await import(
-        '@adapters/di/container'
-      );
+      const { createImportSettingsFromCloud, authenticateGoogle } =
+        await import('@adapters/di/container');
 
       const getToken = () => authenticateGoogle.getValidAccessToken();
       const useCase = createImportSettingsFromCloud(getToken);
@@ -293,8 +304,7 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
       const imported = err instanceof ImportSettingsFromCloudError ? err : null;
       const code: ImportSettingsFromCloudErrorCode = imported?.code ?? 'UNKNOWN';
       const message =
-        imported?.message ??
-        (err instanceof Error ? err.message : '설정 가져오기에 실패했습니다.');
+        imported?.message ?? (err instanceof Error ? err.message : '설정 가져오기에 실패했습니다.');
       set({ status: 'error', error: message, progress: null });
       setTimeout(() => {
         const s = get();
@@ -306,7 +316,8 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
 
   resolveConflict: async (conflict, resolution) => {
     try {
-      const { driveSyncRepository, getDriveSyncAdapter, authenticateGoogle, storage } = await import('@adapters/di/container');
+      const { driveSyncRepository, getDriveSyncAdapter, authenticateGoogle, storage } =
+        await import('@adapters/di/container');
       const { useSettingsStore } = await import('./useSettingsStore');
 
       const settings = useSettingsStore.getState().settings;
@@ -320,7 +331,7 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
       if (resolution === 'remote') {
         // 리모트 데이터를 로컬에 적용
         const remoteFiles = await drivePort.listSyncFiles(folder.id);
-        const driveFile = remoteFiles.find(f => f.name === `${conflict.filename}.json`);
+        const driveFile = remoteFiles.find((f) => f.name === `${conflict.filename}.json`);
         if (driveFile) {
           const content = await drivePort.downloadSyncFile(driveFile.id);
           const parsed = JSON.parse(content) as unknown;
@@ -330,7 +341,11 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
         // 로컬 데이터를 클라우드에 업로드
         const data = await storage.read<unknown>(conflict.filename);
         if (data !== null) {
-          await drivePort.uploadSyncFile(folder.id, `${conflict.filename}.json`, JSON.stringify(data));
+          await drivePort.uploadSyncFile(
+            folder.id,
+            `${conflict.filename}.json`,
+            JSON.stringify(data),
+          );
         }
       }
 
@@ -347,7 +362,7 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
 
       // 충돌 목록에서 제거
       set((s) => ({
-        conflicts: s.conflicts.filter(c => c.filename !== conflict.filename),
+        conflicts: s.conflicts.filter((c) => c.filename !== conflict.filename),
       }));
 
       // 모든 충돌 해결됐으면 success
@@ -369,7 +384,8 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
   deleteCloudData: async () => {
     set({ status: 'syncing', error: null });
     try {
-      const { driveSyncRepository, getDriveSyncAdapter, authenticateGoogle } = await import('@adapters/di/container');
+      const { driveSyncRepository, getDriveSyncAdapter, authenticateGoogle } =
+        await import('@adapters/di/container');
       const { useSettingsStore } = await import('./useSettingsStore');
 
       const settings = useSettingsStore.getState().settings;

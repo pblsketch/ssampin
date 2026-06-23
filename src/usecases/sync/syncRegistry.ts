@@ -318,6 +318,31 @@ export const SYNC_REGISTRY: SyncDomain[] = [
       await useRecordDraftsStore.getState().load();
     },
   },
+  // 29. observation-attachments ─ 관찰 첨부 메타(JSON). useObservationAttachmentStore 대표 키.
+  {
+    fileName: 'observation-attachments',
+    reload: async () => {
+      const { useObservationAttachmentStore } =
+        await import('@adapters/stores/useObservationAttachmentStore');
+      useObservationAttachmentStore.setState({ loaded: false });
+      await useObservationAttachmentStore.getState().load();
+    },
+  },
+  // 30. obs-attachment-binary ─ 관찰 첨부 바이너리 (동적, 첨부마다 1파일).
+  // 실제 동적 enumeration은 SyncToCloud/SyncFromCloud의 getDynamicSyncFiles 훅
+  // (useDriveSyncStore.ts에서 observationAttachmentRepository.listBinaryKeys() 래퍼로 주입)이 담당한다.
+  // 본 registry의 enumerateDynamic은 메타테스트(f) 정합성을 위한 placeholder이다.
+  // subscribeExcluded: true — 메타(#29)가 대표 구독 키이므로 중복 구독 방지.
+  {
+    fileName: 'obs-attachment-binary',
+    subscribeExcluded: true,
+    isDynamic: true,
+    enumerateDynamic: async () => [],
+    reload: async () => {
+      // 바이너리는 store 재로드 불필요 — 메타(#29) reload가 useObservationAttachmentStore를 갱신한다.
+      // 다운로드된 바이너리 파일은 IStoragePort.writeBinary로 직접 기록되며 store를 거치지 않는다.
+    },
+  },
 ];
 
 /**

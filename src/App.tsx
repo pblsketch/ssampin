@@ -97,6 +97,7 @@ import { useRecordDraftsStore } from '@adapters/stores/useRecordDraftsStore';
 import { useMealStore } from '@adapters/stores/useMealStore';
 import { useStickerStore } from '@adapters/stores/useStickerStore';
 import { useRubricStore } from '@adapters/stores/useRubricStore';
+import { useObservationAttachmentStore } from '@adapters/stores/useObservationAttachmentStore';
 import { PinGuard } from '@adapters/components/common/PinGuard';
 import { useAutoSync } from '@adapters/hooks/useAutoSync';
 import { useTasksAutoSync } from '@adapters/hooks/useTasksAutoSync';
@@ -1011,6 +1012,8 @@ function MainApp() {
       stickers: (cb) => useStickerStore.subscribe(cb),
       // 수행평가 채점 — 루브릭 + 채점 기록 단일 키.
       rubrics: (cb) => useRubricStore.subscribe(cb),
+      // 관찰 첨부 메타 — obs-attachment-binary(동적)는 subscribeExcluded:true이므로 제외.
+      'observation-attachments': (cb) => useObservationAttachmentStore.subscribe(cb),
     };
 
     const unsubscribers: Array<() => void> = [];

@@ -1,9 +1,19 @@
 import type { IStoragePort } from '@domain/ports/IStoragePort';
 import type { IDriveSyncPort } from '@domain/ports/IDriveSyncPort';
 import type { IDriveSyncRepository } from '@domain/repositories/IDriveSyncRepository';
-import type { DriveSyncManifest, DriveSyncConflict, DriveSyncFileInfo } from '@domain/entities/DriveSyncState';
+import type {
+  DriveSyncManifest,
+  DriveSyncConflict,
+  DriveSyncFileInfo,
+} from '@domain/entities/DriveSyncState';
 import type { StudentRecordsData, StudentRecord } from '@domain/entities/StudentRecord';
-import { SYNC_FILES, type SyncProgress, type GetDynamicSyncFiles } from './SyncToCloud';
+import {
+  SYNC_FILES,
+  type SyncProgress,
+  type GetDynamicSyncFiles,
+  type GetBinaryDynamicSyncFiles,
+} from './SyncToCloud';
+import { base64ToUint8 } from './binaryBase64';
 
 /** student-records를 record ID 기준으로 병합 (최신 createdAt 우선) */
 function mergeStudentRecords(
@@ -52,12 +62,13 @@ export class SyncFromCloud {
     private readonly deviceName: string,
     private readonly conflictPolicy: 'latest' | 'ask' = 'ask',
     private readonly getDynamicSyncFiles?: GetDynamicSyncFiles,
+    private readonly getBinaryDynamicSyncFiles?: GetBinaryDynamicSyncFiles,
   ) {}
 
-  async execute(
-    onProgress?: (progress: SyncProgress) => void,
-  ): Promise<SyncFromCloudResult> {
-    console.log(`[SyncFromCloud] ▶ 시작 | myDeviceId=${this.deviceId} | policy=${this.conflictPolicy}`);
+  async execute(onProgress?: (progress: SyncProgress) => void): Promise<SyncFromCloudResult> {
+    console.log(
+      `[SyncFromCloud] ▶ 시작 | myDeviceId=${this.deviceId} | policy=${this.conflictPolicy}`,
+    );
     const folder = await this.drivePort.getOrCreateSyncFolder();
     const remoteManifest = await this.drivePort.getSyncManifest(folder.id);
     if (!remoteManifest) {
@@ -65,13 +76,19 @@ export class SyncFromCloud {
       return { downloaded: [], conflicts: [], skipped: [...SYNC_FILES] };
     }
 
-    console.log(`[SyncFromCloud] 리모트 매니페스트: deviceId=${remoteManifest.deviceId} | deviceName=${remoteManifest.deviceName} | files=${Object.keys(remoteManifest.files).length}개`);
-    console.log(`[SyncFromCloud] deviceId 비교: remote(${remoteManifest.deviceId}) === my(${this.deviceId}) → ${remoteManifest.deviceId === this.deviceId ? '⚠️ 동일(스킵 가능)' : '✅ 다름(다운로드 가능)'}`);
+    console.log(
+      `[SyncFromCloud] 리모트 매니페스트: deviceId=${remoteManifest.deviceId} | deviceName=${remoteManifest.deviceName} | files=${Object.keys(remoteManifest.files).length}개`,
+    );
+    console.log(
+      `[SyncFromCloud] deviceId 비교: remote(${remoteManifest.deviceId}) === my(${this.deviceId}) → ${remoteManifest.deviceId === this.deviceId ? '⚠️ 동일(스킵 가능)' : '✅ 다름(다운로드 가능)'}`,
+    );
 
     const localManifest = await this.syncRepo.getLocalManifest();
-    console.log(`[SyncFromCloud] 로컬 매니페스트: ${localManifest ? `deviceId=${localManifest.deviceId} | files=${Object.keys(localManifest.files).length}개` : 'NONE'}`);
+    console.log(
+      `[SyncFromCloud] 로컬 매니페스트: ${localManifest ? `deviceId=${localManifest.deviceId} | files=${Object.keys(localManifest.files).length}개` : 'NONE'}`,
+    );
     const remoteFiles = await this.drivePort.listSyncFiles(folder.id);
-    console.log(`[SyncFromCloud] Drive 파일 목록: ${remoteFiles.map(f => f.name).join(', ')}`);
+    console.log(`[SyncFromCloud] Drive 파일 목록: ${remoteFiles.map((f) => f.name).join(', ')}`);
     const downloaded: string[] = [];
     const conflicts: DriveSyncConflict[] = [];
     const skipped: string[] = [];
@@ -103,7 +120,9 @@ export class SyncFromCloud {
         const localIsNewer = new Date(localInfo.lastModified) > new Date(remoteInfo.lastModified);
         const remoteIsNewer = !localIsNewer;
 
-        console.log(`[SyncFromCloud]   ${filename}: 충돌 감지 | local=${localInfo.checksum.slice(0, 8)}@${localInfo.lastModified} | remote=${remoteInfo.checksum.slice(0, 8)}@${remoteInfo.lastModified} | ${remoteIsNewer ? 'remote가 최신' : 'local이 최신'}`);
+        console.log(
+          `[SyncFromCloud]   ${filename}: 충돌 감지 | local=${localInfo.checksum.slice(0, 8)}@${localInfo.lastModified} | remote=${remoteInfo.checksum.slice(0, 8)}@${remoteInfo.lastModified} | ${remoteIsNewer ? 'remote가 최신' : 'local이 최신'}`,
+        );
 
         // 동일 기기가 마지막으로 수정했으면 충돌 아님 (로컬이 최신이면 스킵)
         if (remoteManifest.deviceId === this.deviceId) {
@@ -115,7 +134,7 @@ export class SyncFromCloud {
         // conflictPolicy에 따라 처리
         // student-records는 항상 record-level merge (데이터 손실 방지)
         if (filename === 'student-records') {
-          const driveFile = remoteFiles.find(f => f.name === `${filename}.json`);
+          const driveFile = remoteFiles.find((f) => f.name === `${filename}.json`);
           if (driveFile) {
             const content = await this.drivePort.downloadSyncFile(driveFile.id);
             const remoteData = JSON.parse(content) as StudentRecordsData;
@@ -124,7 +143,9 @@ export class SyncFromCloud {
             await this.storage.write(filename, merged);
             updatedFiles[filename] = remoteInfo;
             downloaded.push(filename);
-            console.log(`[SyncFromCloud]   ${filename}: ✅ MERGE (local=${localData?.records?.length ?? 0}건 + remote=${remoteData?.records?.length ?? 0}건 → ${merged.records.length}건)`);
+            console.log(
+              `[SyncFromCloud]   ${filename}: ✅ MERGE (local=${localData?.records?.length ?? 0}건 + remote=${remoteData?.records?.length ?? 0}건 → ${merged.records.length}건)`,
+            );
           }
           continue;
         }
@@ -132,7 +153,7 @@ export class SyncFromCloud {
         if (this.conflictPolicy === 'latest') {
           if (remoteIsNewer) {
             // 리모트가 최신 → 다운로드
-            const driveFile = remoteFiles.find(f => f.name === `${filename}.json`);
+            const driveFile = remoteFiles.find((f) => f.name === `${filename}.json`);
             if (driveFile) {
               const content = await this.drivePort.downloadSyncFile(driveFile.id);
               const parsed = JSON.parse(content) as unknown;
@@ -165,7 +186,7 @@ export class SyncFromCloud {
       // 이 경우 무조건 다운로드하면 사용자가 작성한 로컬 데이터가 silent하게 덮어쓰기됨.
       // student-records는 record-level merge가 자체 구현되어 있으므로 그대로 두고,
       // 그 외 도메인은 로컬 파일이 실제로 존재하면 충돌 다이얼로그로 회수한다.
-      const driveFile = remoteFiles.find(f => f.name === `${filename}.json`);
+      const driveFile = remoteFiles.find((f) => f.name === `${filename}.json`);
       if (driveFile) {
         if (filename !== 'student-records') {
           const localData = await this.storage.read<unknown>(filename);
@@ -187,7 +208,9 @@ export class SyncFromCloud {
               await this.storage.write(filename, parsed);
               updatedFiles[filename] = remoteInfo;
               downloaded.push(filename);
-              console.log(`[SyncFromCloud]   ${filename}: ⚠️ DOWNLOAD with CONFLICT REPORT (manifest 미등록 + 로컬 데이터 존재)`);
+              console.log(
+                `[SyncFromCloud]   ${filename}: ⚠️ DOWNLOAD with CONFLICT REPORT (manifest 미등록 + 로컬 데이터 존재)`,
+              );
               continue;
             }
 
@@ -199,7 +222,9 @@ export class SyncFromCloud {
               localDeviceName: this.deviceName,
               remoteDeviceName: remoteManifest.deviceName,
             });
-            console.log(`[SyncFromCloud]   ${filename}: 🔶 CONFLICT (manifest 미등록 + 로컬 데이터 존재, ask 정책)`);
+            console.log(
+              `[SyncFromCloud]   ${filename}: 🔶 CONFLICT (manifest 미등록 + 로컬 데이터 존재, ask 정책)`,
+            );
             continue;
           }
         }
@@ -210,7 +235,9 @@ export class SyncFromCloud {
           const localData = await this.storage.read<StudentRecordsData>(filename);
           const merged = mergeStudentRecords(localData, remoteData);
           await this.storage.write(filename, merged);
-          console.log(`[SyncFromCloud]   ${filename}: ✅ MERGE (first download, local=${localData?.records?.length ?? 0}건 + remote=${remoteData?.records?.length ?? 0}건 → ${merged.records.length}건)`);
+          console.log(
+            `[SyncFromCloud]   ${filename}: ✅ MERGE (first download, local=${localData?.records?.length ?? 0}건 + remote=${remoteData?.records?.length ?? 0}건 → ${merged.records.length}건)`,
+          );
         } else {
           const parsed = JSON.parse(content) as unknown;
           await this.storage.write(filename, parsed);
@@ -229,7 +256,7 @@ export class SyncFromCloud {
       // 동적 파일은 로컬 enumeration이 없을 수 있으므로 리모트 매니페스트의 키도 합집합 처리.
       const localDynamic = await this.getDynamicSyncFiles();
       const remoteDynamic = Object.keys(remoteManifest.files).filter(
-        (f) => f.startsWith('note-body--'),
+        (f) => f.startsWith('note-body--') || f.startsWith('obs-attachments/'),
       );
       const allDynamic = Array.from(new Set([...localDynamic, ...remoteDynamic]));
 
@@ -301,7 +328,9 @@ export class SyncFromCloud {
               await this.storage.write(filename, JSON.parse(content) as unknown);
               updatedFiles[filename] = remoteInfo;
               downloaded.push(filename);
-              console.log(`[SyncFromCloud]   ${filename}: ⚠️ DOWNLOAD with CONFLICT REPORT (동적, manifest 미등록 + 로컬 존재)`);
+              console.log(
+                `[SyncFromCloud]   ${filename}: ⚠️ DOWNLOAD with CONFLICT REPORT (동적, manifest 미등록 + 로컬 존재)`,
+              );
               continue;
             }
             conflicts.push({
@@ -311,7 +340,9 @@ export class SyncFromCloud {
               localDeviceName: this.deviceName,
               remoteDeviceName: remoteManifest.deviceName,
             });
-            console.log(`[SyncFromCloud]   ${filename}: 🔶 CONFLICT (동적, manifest 미등록 + 로컬 존재, ask 정책)`);
+            console.log(
+              `[SyncFromCloud]   ${filename}: 🔶 CONFLICT (동적, manifest 미등록 + 로컬 존재, ask 정책)`,
+            );
             continue;
           }
 
@@ -326,6 +357,76 @@ export class SyncFromCloud {
       }
     }
 
+    // 바이너리 동적 파일(예: obs-attachments/{id}.{ext}) 다운로드 — base64 JSON 래퍼 디코드
+    if (this.getBinaryDynamicSyncFiles) {
+      // 로컬 열거 + 리모트 매니페스트의 obs-attachments/ 키를 합집합 처리
+      const localBinaryKeys = await this.getBinaryDynamicSyncFiles();
+      const remoteBinaryKeys = Object.keys(remoteManifest.files).filter((f) =>
+        f.startsWith('obs-attachments/'),
+      );
+      const allBinaryKeys = Array.from(new Set([...localBinaryKeys, ...remoteBinaryKeys]));
+
+      for (const relPath of allBinaryKeys) {
+        const remoteInfo = remoteManifest.files[relPath];
+        const localInfo = localManifest?.files[relPath];
+
+        if (!remoteInfo) {
+          skipped.push(relPath);
+          continue;
+        }
+
+        if (localInfo && localInfo.checksum === remoteInfo.checksum) {
+          skipped.push(relPath);
+          continue;
+        }
+
+        // 동일 기기가 마지막으로 수정했으면 스킵
+        if (remoteManifest.deviceId === this.deviceId) {
+          skipped.push(relPath);
+          continue;
+        }
+
+        // 충돌(양쪽 다 변경) — 바이너리는 append-only id 기반이라 덮어쓰기 충돌 없음.
+        // latest 정책: 무조건 다운로드(리모트 우선). ask 정책: 마찬가지로 다운로드(바이너리 병합 불가).
+        // Drive 파일명: obs-attachments/x.png → obs-attachments__x.png.json
+        const driveFilename = `${relPath.replace(/\//g, '__')}.json`;
+        const driveFile = remoteFiles.find((f) => f.name === driveFilename);
+        if (!driveFile) {
+          skipped.push(relPath);
+          console.log(`[SyncFromCloud]   ${relPath}: SKIP (Drive 바이너리 래퍼 없음)`);
+          continue;
+        }
+
+        const content = await this.drivePort.downloadSyncFile(driveFile.id);
+        let wrapper: { __binaryBase64?: string; __relPath?: string };
+        try {
+          wrapper = JSON.parse(content) as { __binaryBase64?: string; __relPath?: string };
+        } catch {
+          console.warn(`[SyncFromCloud]   ${relPath}: SKIP (JSON 파싱 실패)`);
+          skipped.push(relPath);
+          continue;
+        }
+
+        if (typeof wrapper.__binaryBase64 !== 'string') {
+          console.warn(`[SyncFromCloud]   ${relPath}: SKIP (__binaryBase64 필드 없음)`);
+          skipped.push(relPath);
+          continue;
+        }
+
+        // base64 디코드 → writeBinary (대용량 안전 청크 디코드)
+        const bytes = base64ToUint8(wrapper.__binaryBase64);
+        await this.storage.writeBinary(relPath, bytes);
+        updatedFiles[relPath] = remoteInfo;
+        downloaded.push(relPath);
+        console.log(`[SyncFromCloud]   ${relPath}: ✅ DOWNLOAD binary`);
+      }
+    }
+
+    // 삭제 cascade 교차기기: 메타에 없는 고아 바이너리 정리
+    // (메타 동기화 후 useObservationAttachmentStore.load()가 갱신되면
+    //  다음 listBinaryKeys()에서 자연히 제외되므로 별도 정리 불필요.
+    //  append-only id 기반이라 덮어쓰기 충돌 없음 — P2 예방 유지.)
+
     // 로컬 매니페스트 업데이트
     if (downloaded.length > 0) {
       const newLocalManifest: DriveSyncManifest = {
@@ -338,7 +439,9 @@ export class SyncFromCloud {
       await this.syncRepo.saveLocalManifest(newLocalManifest);
     }
 
-    console.log(`[SyncFromCloud] ✅ 완료 | downloaded=${downloaded.length} conflicts=${conflicts.length} skipped=${skipped.length} | downloaded=[${downloaded.join(', ')}]`);
+    console.log(
+      `[SyncFromCloud] ✅ 완료 | downloaded=${downloaded.length} conflicts=${conflicts.length} skipped=${skipped.length} | downloaded=[${downloaded.join(', ')}]`,
+    );
     return { downloaded, conflicts, skipped };
   }
 }

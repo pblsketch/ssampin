@@ -57,4 +57,10 @@ export class JsonObservationAttachmentRepository implements IObservationAttachme
     if (!target) return null;
     return this.storage.readBinary(target.storageRef);
   }
+
+  async listBinaryKeys(): Promise<string[]> {
+    const all = await this.list();
+    // 메타에 등록된 storageRef만 반환 — 고아 바이너리는 자연히 제외된다.
+    return all.map((a) => a.storageRef);
+  }
 }
