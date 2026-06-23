@@ -2,6 +2,7 @@ import type { AttendanceStatus } from '@domain/entities/Attendance';
 import type { StudentRecord } from '@domain/entities/StudentRecord';
 import type { RecordCategoryItem } from '@domain/valueObjects/RecordCategory';
 import type { Student } from '@domain/entities/Student';
+import { ATTENDANCE_LABEL_TO_STATUS } from './attendanceStatusVariants';
 
 /**
  * 조회 화면 공용 표시 ViewModel.
@@ -26,6 +27,10 @@ export interface DisplayRecord {
   readonly kindLabel: string;
   /** 출결 상태(출결 기록일 때). */
   readonly status?: AttendanceStatus;
+  /** 출결 사유(질병/인정/미인정/기타). */
+  readonly reason?: string;
+  /** 출결 교시 라벨(조회/종례/N교시) — 수업 기록. */
+  readonly periodLabel?: string;
   /** 관찰 태그(특기사항일 때). */
   readonly tags?: readonly string[];
   /** 본문(전문). */
@@ -64,6 +69,15 @@ export function mixedRecordToDisplay(r: MixedDisplayInput): DisplayRecord {
       kind: 'attendance',
       kindLabel: '출결',
       status: r.status,
+      reason: r.reason,
+      periodLabel:
+        r.period == null
+          ? undefined
+          : r.period === 0
+            ? '조회'
+            : r.period === 9
+              ? '종례'
+              : `${r.period}교시`,
       content: r.memo ?? '',
     };
   }
@@ -95,6 +109,10 @@ export function studentRecordToDisplay(
   const isAttendance = r.category === 'attendance';
   const categoryName =
     ctx.categories.find((c) => c.id === r.category)?.name.split(' (')[0] ?? r.category;
+  // 담임 출결은 subcategory "결석 (질병)" 형태 — 유형(→상태 배지)과 사유를 파싱한다.
+  const attMatch = isAttendance
+    ? r.subcategory.match(/^(출석|결석|지각|조퇴|결과)\s*(?:\(([^)]+)\))?/)
+    : null;
   return {
     key: r.id,
     date: r.date,
@@ -103,6 +121,8 @@ export function studentRecordToDisplay(
     studentNumber: student?.studentNumber,
     kind: isAttendance ? 'attendance' : 'category',
     kindLabel: isAttendance ? '출결' : categoryName,
+    status: attMatch?.[1] ? ATTENDANCE_LABEL_TO_STATUS[attMatch[1]] : undefined,
+    reason: attMatch?.[2],
     content: r.content ?? '',
   };
 }

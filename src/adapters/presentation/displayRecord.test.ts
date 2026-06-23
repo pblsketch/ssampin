@@ -32,6 +32,8 @@ describe('mixedRecordToDisplay (수업)', () => {
     expect(d.studentName).toBe('홍길동');
     expect(d.studentNumber).toBe(5);
     expect(d.content).toBe('결석 확인서 제출');
+    expect(d.reason).toBe('질병');
+    expect(d.periodLabel).toBe('3교시');
     expect(d.key).toContain('attendance-2026-03-10-tc:c1:5');
   });
 
@@ -66,6 +68,8 @@ describe('mixedRecordToDisplay (수업)', () => {
     });
     expect(d.content).toBe('');
     expect(d.status).toBe('late');
+    expect(d.periodLabel).toBe('조회');
+    expect(d.reason).toBeUndefined();
   });
 });
 
@@ -110,6 +114,8 @@ describe('studentRecordToDisplay (담임)', () => {
     const d = studentRecordToDisplay(rec, { categories, studentMap });
     expect(d.kind).toBe('attendance');
     expect(d.kindLabel).toBe('출결');
+    expect(d.status).toBe('absent');
+    expect(d.reason).toBe('질병');
   });
 
   it('미등록 학생/카테고리 fallback', () => {

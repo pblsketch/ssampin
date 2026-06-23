@@ -62,6 +62,10 @@ export function RecordDetailModal({ isOpen, onClose, title, records }: RecordDet
                               {r.kindLabel}
                             </span>
                           )}
+                          {r.periodLabel && (
+                            <span className="text-xs text-sp-muted">{r.periodLabel}</span>
+                          )}
+                          {r.reason && <span className="text-xs text-sp-muted">({r.reason})</span>}
                           {r.tags?.map((t) => (
                             <span
                               key={t}
