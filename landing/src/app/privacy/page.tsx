@@ -17,7 +17,7 @@ const koContent = {
   lang: 'ko',
   title: '개인정보처리방침',
   subtitle: '쌤핀 (SsamPin)',
-  lastUpdated: '최종 수정일: 2026년 4월 13일',
+  lastUpdated: '최종 수정일: 2026년 6월 24일',
   switchLang: 'View in English',
   switchHref: '?lang=en',
   sections: [
@@ -161,10 +161,16 @@ const koContent = {
       content: (
         <>
           <ul>
-            <li>사용자 데이터를 제3자에게 제공, 판매, 공유하지 않습니다.</li>
             <li>
-              쌤핀은 Google Calendar API, Google Drive API, Google Tasks API와만 직접 통신하며, 그
-              외 어떤 외부 서비스에도 데이터를 전달하지 않습니다.
+              사용자 데이터를 제3자에게 판매하거나, 제3자가 자신의 목적으로 사용하도록 제공·공유하지
+              않습니다.
+            </li>
+            <li>
+              쌤핀은 Google Calendar·Drive·Tasks API와 직접 통신합니다. 또한 상담 예약·과제
+              수합·전자 서명·설문 등 <strong>온라인 협업 기능</strong>을 사용할 때는, 그 기능 제공에
+              필요한 범위에서 일부 데이터가 클라우드 백엔드(Supabase)로 전송·저장됩니다. 이는 제3자
+              제공이 아니라 기능 제공을 위한 <strong>처리위탁</strong>이며, 자세한 내용은 제11조에
+              따릅니다. 그 외 어떤 외부 서비스에도 데이터를 전달하지 않습니다.
             </li>
             <li>사용자 데이터를 광고주, 데이터 브로커 또는 정보 재판매자에게 이전하지 않습니다.</li>
             <li>
@@ -325,6 +331,54 @@ const koContent = {
         </>
       ),
     },
+    {
+      number: '11',
+      title: '처리위탁 (외부 서버를 사용하는 협업 기능)',
+      content: (
+        <>
+          <p>
+            쌤핀의 대부분 기능은 인터넷 없이 동작하며 데이터는 사용자 PC에만 저장됩니다. 다만
+            학생·학부모와 온라인으로 주고받아야 하는 일부 <strong>협업 기능</strong>을 사용할 때는,
+            해당 기능 제공에 필요한 범위에서 일부 데이터가 클라우드 백엔드(Supabase Inc.)로
+            전송·저장됩니다. 이는 제3자에게 정보를 제공·판매하는 것이 아니라, 기능 제공을 위한{' '}
+            <strong>처리위탁</strong>입니다. 아래 기능들은 교사가 명시적으로 사용할 때만 동작하며,
+            사용하지 않으면 어떤 데이터도 전송되지 않습니다.
+          </p>
+          <ul>
+            <li>
+              <strong>상담 예약</strong> — 상담 일정과 대상 학급·학생 번호, 예약 시 학생 번호.
+              예약자 연락처·메모는 사용자 단말에서 암호화한 뒤 전송·저장합니다.
+            </li>
+            <li>
+              <strong>과제 수합</strong> — 과제 정보와 제출 현황(학생 이름·번호). 제출물은 교사의
+              Google Drive 링크로 보관되며, 교사 본인 확인은 Google 계정으로 처리합니다.
+            </li>
+            <li>
+              <strong>전자 서명(서명받기)</strong> — 서명자 이름과 제출 항목, 서명 이미지(클라우드
+              저장). 접속 IP·기기정보(User-Agent)는 원문이 아니라 <strong>해시값</strong>으로만
+              저장합니다.
+            </li>
+            <li>
+              <strong>설문·체크리스트</strong> — 학생 번호와 응답 내용.
+            </li>
+            <li>
+              <strong>교실 화면 공유 수신 확인</strong> — 보드 식별자·접속 시각 등 기술 정보만
+              오가며, 메모 내용은 전송되지 않습니다.
+            </li>
+            <li>
+              <strong>Google 연동 토큰 보관</strong> — 교사 이메일과 암호화된 OAuth
+              토큰(AES-256-GCM).
+            </li>
+          </ul>
+          <p>
+            <strong>위탁받는 자:</strong> Supabase Inc.(클라우드 인프라).{' '}
+            <strong>위탁 목적:</strong> 위 협업 기능 제공. <strong>보관·삭제:</strong> 각 기능에서
+            자료를 삭제하거나 보관 기간(예: 실시간 링크 만료)이 지나면 삭제됩니다. 전송 구간은
+            HTTPS(TLS)로 암호화됩니다.
+          </p>
+        </>
+      ),
+    },
   ],
 };
 
@@ -332,7 +386,7 @@ const enContent = {
   lang: 'en',
   title: 'Privacy Policy',
   subtitle: 'SsamPin',
-  lastUpdated: 'Last updated: April 13, 2026',
+  lastUpdated: 'Last updated: June 24, 2026',
   switchLang: '한국어로 보기',
   switchHref: '?lang=ko',
   sections: [
@@ -484,10 +538,17 @@ const enContent = {
       content: (
         <>
           <ul>
-            <li>We do not share, sell, or provide your data to any third parties.</li>
             <li>
-              SsamPin only communicates directly with the Google Calendar, Google Drive, and Google
-              Tasks APIs, and no data is sent to any other external services.
+              We do not sell your data, or provide or share it for any third party&apos;s own
+              purposes.
+            </li>
+            <li>
+              SsamPin communicates directly with the Google Calendar, Drive, and Tasks APIs. In
+              addition, when you use <strong>online collaboration features</strong> (consultation
+              booking, assignment collection, e-signature, surveys, etc.), some data is transmitted
+              to and stored on a cloud backend (Supabase) as needed to provide those features. This
+              is a <strong>processing consignment</strong> for feature delivery, not third-party
+              provision; see Section 11 for details. No data is sent to any other external services.
             </li>
             <li>
               We do not transfer user data to advertisers, data brokers, or information resellers.
@@ -614,6 +675,106 @@ const enContent = {
         </>
       ),
     },
+    {
+      number: '10',
+      title: 'AI Bridge (External AI Integration)',
+      content: (
+        <>
+          <p>
+            Only when you explicitly connect the AI Bridge feature, SsamPin connects the student,
+            seating, and observation data stored on your computer with external AI tools (MCP
+            clients such as Claude, Codex/GPT, Antigravity/Gemini). This data is passed directly
+            from your computer to the external AI tool{' '}
+            <strong>without going through any intermediate server</strong>.
+          </p>
+          <ul>
+            <li>
+              Before being sent to an external AI, identifying information such as real names,
+              contact details, and dates of birth is <strong>replaced with opaque tokens</strong>.
+              However, tokenization alone does not guarantee complete anonymity, and individuals may
+              still be re-identified from the context of the observations.
+            </li>
+            <li>
+              <strong>
+                Exposing raw observation content (get_observations) and writing (add_observation)
+                are disabled by default
+              </strong>
+              , and operate only when you explicitly turn on the corresponding gate (or per-student,
+              per-period, per-purpose consent). When enabled, raw observation content (which may
+              include sensitive information) may be sent to the external AI.
+            </li>
+            <li>
+              Data passed to a connected external AI tool is subject to{' '}
+              <strong>that provider&apos;s policies (Anthropic, OpenAI, Google, etc.)</strong>.
+              SsamPin is not involved in the external AI provider&apos;s data processing.
+            </li>
+            <li>
+              All bridge access is recorded in a local audit log (raw values are not recorded), and
+              consent can be withdrawn at any time.
+            </li>
+          </ul>
+          <p>
+            For more details, see the{' '}
+            <a href="/ai-bridge" target="_blank" rel="noopener noreferrer">
+              AI Bridge information page
+            </a>
+            .
+          </p>
+        </>
+      ),
+    },
+    {
+      number: '11',
+      title: 'Processing Consignment (Collaboration Features Using External Servers)',
+      content: (
+        <>
+          <p>
+            Most SsamPin features work offline, with data stored only on your PC. However, when you
+            use certain <strong>collaboration features</strong> that must exchange information
+            online with students and guardians, some data is transmitted to and stored on a cloud
+            backend (Supabase Inc.) as needed to provide that feature. This is not the provision or
+            sale of information to a third party, but a <strong>processing consignment</strong> for
+            delivering the feature. These features operate only when a teacher explicitly uses them;
+            if not used, no data is transmitted.
+          </p>
+          <ul>
+            <li>
+              <strong>Consultation booking</strong> — the schedule and target class/student numbers,
+              and the student number at the time of booking. The booker&apos;s contact details and
+              memo are encrypted on your device before transmission and storage.
+            </li>
+            <li>
+              <strong>Assignment collection</strong> — assignment information and submission status
+              (student name and number); submissions are stored as links in the teacher&apos;s
+              Google Drive. Teacher identity is verified via the Google account.
+            </li>
+            <li>
+              <strong>E-signature</strong> — the signer&apos;s name, submitted fields, and the
+              signature image (cloud storage). Access IP and device information (User-Agent) are
+              stored only as <strong>hashes</strong>, not in raw form.
+            </li>
+            <li>
+              <strong>Surveys / checklists</strong> — student number and response content.
+            </li>
+            <li>
+              <strong>Classroom screen-share delivery receipts</strong> — only technical information
+              such as board identifiers and access timestamps; memo content is not transmitted.
+            </li>
+            <li>
+              <strong>Google integration token storage</strong> — the teacher&apos;s email and
+              encrypted OAuth tokens (AES-256-GCM).
+            </li>
+          </ul>
+          <p>
+            <strong>Consignee:</strong> Supabase Inc. (cloud infrastructure).{' '}
+            <strong>Purpose:</strong> providing the collaboration features above.{' '}
+            <strong>Retention/Deletion:</strong> data is deleted when you remove it within each
+            feature or when its retention period (e.g., real-time link expiry) passes. Data in
+            transit is encrypted via HTTPS (TLS).
+          </p>
+        </>
+      ),
+    },
   ],
 };
 
@@ -689,8 +850,8 @@ export default async function PrivacyPage({ searchParams }: PageProps) {
             </svg>
             <p className="text-sm leading-relaxed text-sp-muted">
               {isEnglish
-                ? 'SsamPin does not operate any server. All data is stored exclusively on your PC and is never transmitted to SsamPin developer servers. This privacy policy covers the Google integration features (Calendar, App-Data Backup on Drive, and Tasks).'
-                : '쌤핀은 개발자 서버를 운영하지 않습니다. 모든 데이터는 사용자의 PC에만 저장되며 쌤핀 개발자 서버로 전송되지 않습니다. 이 개인정보처리방침은 Google 연동 기능(캘린더, 앱 데이터 백업(Drive), Tasks)에 적용됩니다.'}
+                ? 'SsamPin does not operate its own server for storing user data, and all active data is stored on your PC by default. However, when you use Google integrations (Calendar, Drive backup, Tasks) or certain online collaboration features (consultation booking, assignment collection, e-signature, surveys, etc.), some data is transmitted to external services as needed to provide those features. See Sections 3, 5, and 11 below for details.'
+                : '쌤핀은 사용자 데이터를 저장하는 자체 서버를 운영하지 않으며, 모든 활성 데이터는 기본적으로 사용자 PC에 저장됩니다. 다만 Google 연동(캘린더·Drive 백업·Tasks)과 일부 온라인 협업 기능(상담 예약·과제 수합·전자 서명·설문 등)을 사용할 때는, 그 기능 제공에 필요한 범위에서 일부 데이터가 외부 서비스로 전송됩니다. 자세한 내용은 아래 제3조·제5조·제11조를 참고하세요.'}
             </p>
           </div>
         </div>
