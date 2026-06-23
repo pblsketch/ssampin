@@ -20,6 +20,7 @@ import {
   recordExportLabel,
 } from '@domain/rules/studentRecordRules';
 import { RecordCategoryManagementModal } from './RecordCategoryManagementModal';
+import { HomeroomTagManagementModal } from './HomeroomTagManagementModal';
 import { DateNavigator } from './DateNavigator';
 
 /* ──────────────────────── 유틸 ──────────────────────── */
@@ -162,6 +163,7 @@ export function StudentRecords() {
   const { records, loaded, load, viewMode, setViewMode, categories } = useStudentRecordsStore();
   const { students, load: loadStudents, loaded: studentsLoaded } = useStudentStore();
   const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [showTagModal, setShowTagModal] = useState(false);
   const [selectedDate, setSelectedDate] = useState(todayString());
 
   useEffect(() => {
@@ -200,6 +202,14 @@ export function StudentRecords() {
           >
             <span className="material-symbols-outlined text-base">tune</span>
             <span className="text-xs">카테고리 관리</span>
+          </button>
+          <button
+            onClick={() => setShowTagModal(true)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm text-sp-muted hover:text-sp-text hover:bg-sp-surface transition-all"
+            title="태그 관리"
+          >
+            <span className="material-symbols-outlined text-base">sell</span>
+            <span className="text-xs">태그 관리</span>
           </button>
           <div className="flex gap-1 bg-sp-surface rounded-lg p-1">
             {MODE_TABS.map((tab) => (
@@ -243,6 +253,7 @@ export function StudentRecords() {
         <SearchMode students={students} records={filteredRecords} categories={categories} />
       )}
 
+      {showTagModal && <HomeroomTagManagementModal onClose={() => setShowTagModal(false)} />}
       {showCategoryModal && (
         <RecordCategoryManagementModal onClose={() => setShowCategoryModal(false)} />
       )}

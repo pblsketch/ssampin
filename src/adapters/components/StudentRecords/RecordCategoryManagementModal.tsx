@@ -149,9 +149,13 @@ export function RecordCategoryManagementModal({ onClose }: Props) {
                   )}
                 </div>
 
-                {/* 서브카테고리 */}
+                {/* 서브카테고리 (고급 — 외부 AI 연결 계약용. 일반 분류는 '태그 관리' 사용) */}
                 {isExpanded && (
                   <div className="border-t border-sp-border px-4 py-3 space-y-2">
+                    <p className="text-caption text-sp-muted/70">
+                      세부항목은 외부 AI 연결 계약용입니다. 일반 분류는 상단 “태그 관리”를
+                      사용하세요.
+                    </p>
                     <div className="flex flex-wrap gap-2">
                       {cat.subcategories.map((sub) => (
                         <span

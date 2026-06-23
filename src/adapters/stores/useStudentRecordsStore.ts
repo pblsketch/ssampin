@@ -130,6 +130,11 @@ interface StudentRecordsState {
   addSubcategory: (categoryId: string, name: string) => Promise<void>;
   deleteSubcategory: (categoryId: string, name: string) => Promise<void>;
   renameSubcategory: (categoryId: string, oldName: string, newName: string) => Promise<void>;
+  /**
+   * Q2 태그 관리 카스케이드: 모든 레코드 tags 에서 oldTag 를 newTag 로 치환(rename) 또는
+   * 제거(newTag=null). 단일 영속(bulk). 영향받은 레코드 수 반환.
+   */
+  cascadeTagChange: (oldTag: string, newTag: string | null) => Promise<number>;
   bridgeHomeroomDayAttendance: (params: BridgeHomeroomDayParams) => Promise<void>;
   updateAttendanceRecord: (params: UpdateAttendanceRecordParams) => Promise<void>;
 
@@ -349,6 +354,27 @@ export const useStudentRecordsStore = create<StudentRecordsState>((set, get) => 
       set((state) => ({
         categories: state.categories.map((c) => (c.id === categoryId ? updated : c)),
       }));
+    },
+
+    cascadeTagChange: async (oldTag, newTag) => {
+      let affected = 0;
+      const next = get().records.map((r) => {
+        if (!r.tags || !r.tags.includes(oldTag)) return r;
+        affected += 1;
+        const replaced =
+          newTag === null
+            ? r.tags.filter((t) => t !== oldTag)
+            : r.tags.map((t) => (t === oldTag ? newTag : t));
+        // 중복 제거(치환 시 newTag 가 이미 있던 경우) + 빈 배열이면 undefined
+        const deduped = replaced.filter((t, i, a) => a.indexOf(t) === i);
+        return { ...r, tags: deduped.length > 0 ? deduped : undefined };
+      });
+      if (affected === 0) return 0;
+      // 단일 영속(envelope 보존) — categories 등 기존 봉투 유지.
+      const data = await studentRecordsRepository.getRecords();
+      await studentRecordsRepository.saveRecords({ ...(data ?? { records: [] }), records: next });
+      set({ records: next });
+      return affected;
     },
 
     bridgeHomeroomDayAttendance: async ({ date, recordsByPeriod, students }) => {
