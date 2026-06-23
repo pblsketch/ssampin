@@ -289,9 +289,9 @@ export function RecordDraftView({
               }`}
             >
               {RECORD_AREA_LABELS[area]}
-              {area === 'career' && (
-                <span className="text-[0.65rem] font-semibold text-amber-500">700자</span>
-              )}
+              <span className="text-[0.65rem] font-semibold text-sp-muted">
+                {Math.round(resolveAreaLimit(area, level) / 3)}자
+              </span>
               <span
                 className={`rounded-full px-1.5 py-0.5 text-[0.65rem] font-semibold ${on ? 'bg-sp-accent/15 text-sp-accent' : 'bg-sp-surface text-sp-muted'}`}
               >
