@@ -13,6 +13,7 @@ import {
   getRecordTagClass,
   getCategoryDotColor,
 } from './recordUtils';
+import { RecordEmptyState } from '@adapters/components/common/records/RecordEmptyState';
 
 interface StudentTimelineViewProps extends RecordEditProps {
   student: Student;
@@ -97,9 +98,7 @@ function StudentTimelineView({
       {/* 타임라인 */}
       <div className="flex-1 min-h-0 overflow-y-auto">
         {grouped.length === 0 ? (
-          <div className="flex items-center justify-center py-12">
-            <p className="text-sm text-sp-muted">기록이 없습니다</p>
-          </div>
+          <RecordEmptyState message="기록이 없습니다" />
         ) : (
           <div className="relative pl-6">
             {/* 세로선 */}

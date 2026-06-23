@@ -11,6 +11,8 @@ import {
   getSmartTagClass,
   METHOD_OPTIONS,
 } from './recordUtils';
+import { DateGroupHeader } from '@adapters/components/common/records/DateGroupHeader';
+import { RecordEmptyState } from '@adapters/components/common/records/RecordEmptyState';
 
 interface DefaultRecordListViewProps extends RecordEditProps {
   grouped: [string, StudentRecord[]][];
@@ -29,6 +31,8 @@ function DefaultRecordListView({
   grouped,
   categories,
   studentMap,
+  hasActiveFilters,
+  onResetFilters,
   onEdit,
   onDelete,
   onToggleFollowUp,
@@ -58,13 +62,15 @@ function DefaultRecordListView({
   return (
     <div className="flex-1 overflow-y-auto space-y-4">
       {grouped.length === 0 ? (
-        <div className="flex items-center justify-center py-12">
-          <p className="text-sm text-sp-muted">기록이 없습니다</p>
-        </div>
+        <RecordEmptyState
+          message={hasActiveFilters ? '조건에 맞는 기록이 없습니다' : '기록이 없습니다'}
+          hasActiveFilters={hasActiveFilters}
+          onReset={onResetFilters}
+        />
       ) : (
         grouped.map(([date, dateRecords]) => (
           <div key={date}>
-            <h4 className="text-xs font-semibold text-sp-muted mb-2">{formatDateKR(date)}</h4>
+            <DateGroupHeader date={date} count={dateRecords.length} />
             <div className="space-y-1.5">
               {dateRecords.map((record) => {
                 const student = studentMap.get(record.studentId);
