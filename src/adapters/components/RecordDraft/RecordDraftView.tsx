@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import {
   RECORD_AREA_LABELS,
   areasForContext,
@@ -14,6 +15,8 @@ import {
   useRecordDraftsStore,
   type RecordDraftUpsertInput,
 } from '@adapters/stores/useRecordDraftsStore';
+import { useObservationStore } from '@adapters/stores/useObservationStore';
+import type { ObservationRecord } from '@domain/entities/Observation';
 import { RecordDraftExportModal } from '@adapters/components/Homeroom/Records/RecordDraftExportModal';
 
 /** 작성주체(담임/교과) — 노출 영역 집합과 작성주체 결속을 결정. */
@@ -62,6 +65,20 @@ const NEXT_STATUS: Record<RecordDraftStatus, RecordDraftStatus> = {
   confirmed: 'draft',
 };
 
+/** AI 브릿지 검토 플래그 코드 → 교사용 한국어 라벨(현실 언어 일치). 미지값은 일반 라벨로 폴백. */
+const FLAG_LABELS: Record<string, string> = {
+  unverified_high_risk_term: '확인되지 않은 고위험 표현',
+  pii_leak: '개인정보 노출 우려',
+  low_overlap: '근거와 일치도 낮음',
+};
+const flagLabel = (flag: string): string => FLAG_LABELS[flag] ?? '기타 확인 필요 항목';
+
+/** 관찰기록 날짜(YYYY-MM-DD) → 'M/D'. */
+function formatObsDate(date: string): string {
+  const [, mm, dd] = date.split('-');
+  return mm && dd ? `${Number(mm)}/${Number(dd)}` : date;
+}
+
 /** subject 키가 필요한 영역(과목·개인세특·교과학습발달상황). 그 외(담임 영역·동아리)는 과목 없음. */
 function areaSubject(area: RecordArea, classSubject?: string): string | undefined {
   return area === 'subject' || area === 'individualSubject' || area === 'subjectDev'
@@ -82,6 +99,8 @@ export function RecordDraftView({
   const records = useRecordDraftsStore((s) => s.records);
   const load = useRecordDraftsStore((s) => s.load);
   const getDraft = useRecordDraftsStore((s) => s.getDraft);
+  const observations = useObservationStore((s) => s.records);
+  const loadObservations = useObservationStore((s) => s.load);
 
   const [activeArea, setActiveArea] = useState<RecordArea>(areas[0] ?? 'autonomy');
   const [filter, setFilter] = useState<DraftFilter>('all');
@@ -89,7 +108,15 @@ export function RecordDraftView({
 
   useEffect(() => {
     void load();
-  }, [load]);
+    void loadObservations();
+  }, [load, loadObservations]);
+
+  // 근거 ID → 관찰기록(날짜·내용) 역참조 맵. 교사용 표시를 위해 1회 구성.
+  const obsById = useMemo(() => {
+    const m = new Map<string, ObservationRecord>();
+    for (const o of observations) m.set(o.id, o);
+    return m;
+  }, [observations]);
 
   // 영역 집합이 바뀌면(학교급 변경 등) 활성 탭을 유효 범위로 보정.
   useEffect(() => {
@@ -113,20 +140,110 @@ export function RecordDraftView({
     return d === undefined || d.status !== 'confirmed'; // unreviewed
   });
 
+  // ── 파워유저 가속 ─────────────────────────────────────────
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const tablistRef = useRef<HTMLDivElement | null>(null);
+  const [copyMsg, setCopyMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const copyMsgTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(
+    () => () => {
+      if (copyMsgTimer.current) clearTimeout(copyMsgTimer.current);
+    },
+    [],
+  );
+
+  const flashCopyMsg = (text: string, ok: boolean): void => {
+    setCopyMsg({ text, ok });
+    if (copyMsgTimer.current) clearTimeout(copyMsgTimer.current);
+    copyMsgTimer.current = setTimeout(() => setCopyMsg(null), 2500);
+  };
+
+  // 현재 영역의 보이는 학생 중 작성된 초안을 표 형식(번호\t이름\t내용)으로 일괄 복사.
+  const copyAllVisible = async (): Promise<void> => {
+    const rows = visibleStudents
+      .map((s) => ({ s, content: (draftFor(s.studentRef)?.content ?? '').trim() }))
+      .filter((r) => r.content.length > 0);
+    if (rows.length === 0) {
+      flashCopyMsg('복사할 초안이 없습니다', false);
+      return;
+    }
+    const tsv = rows.map((r) => `${r.s.number}\t${r.s.name}\t${r.content}`).join('\n');
+    try {
+      await navigator.clipboard.writeText(tsv);
+      flashCopyMsg(`${rows.length}명 복사됨`, true);
+    } catch {
+      flashCopyMsg('복사 실패 — 브라우저 권한을 확인하세요', false);
+    }
+  };
+
+  // 같은 영역의 i번째 학생 입력창에 포커스(Ctrl+Enter 순차 작성).
+  const focusRowTextarea = (i: number): void => {
+    const el = listRef.current?.querySelector<HTMLTextAreaElement>(
+      `textarea[data-rd-index="${i}"]`,
+    );
+    if (!el) return;
+    el.focus();
+    el.setSelectionRange(el.value.length, el.value.length);
+  };
+
+  // 탭 키보드 내비게이션(ARIA tab 패턴) — ←/→/Home/End.
+  const onTabKeyDown = (e: ReactKeyboardEvent, idx: number): void => {
+    let nextIdx = idx;
+    if (e.key === 'ArrowRight') nextIdx = (idx + 1) % areas.length;
+    else if (e.key === 'ArrowLeft') nextIdx = (idx - 1 + areas.length) % areas.length;
+    else if (e.key === 'Home') nextIdx = 0;
+    else if (e.key === 'End') nextIdx = areas.length - 1;
+    else return;
+    e.preventDefault();
+    const nextArea = areas[nextIdx];
+    if (!nextArea) return;
+    setActiveArea(nextArea);
+    requestAnimationFrame(() => {
+      tablistRef.current?.querySelector<HTMLButtonElement>(`[data-rd-tab="${nextArea}"]`)?.focus();
+    });
+  };
+
   const ctxChip =
     context === 'homeroom'
-      ? { label: '🧑‍🏫 담임 작성 영역', cls: 'bg-sky-500/10 text-sky-500 ring-sky-500/20' }
-      : { label: '📘 교과 작성 영역', cls: 'bg-violet-500/10 text-violet-500 ring-violet-500/20' };
+      ? {
+          icon: 'co_present',
+          label: '담임 작성 영역',
+          cls: 'bg-sky-500/10 text-sky-500 ring-sky-500/20',
+        }
+      : {
+          icon: 'menu_book',
+          label: '교과 작성 영역',
+          cls: 'bg-violet-500/10 text-violet-500 ring-violet-500/20',
+        };
 
   return (
     <div className="h-full flex flex-col rounded-xl bg-sp-card ring-1 ring-sp-border overflow-hidden">
       {/* 상단 바 — breadcrumb + 내보내기 + 컨텍스트 칩 */}
       <div className="flex items-center gap-3 px-4 py-3 border-b border-sp-border">
-        <div className="text-sm text-sp-muted truncate">
-          {className ? <span className="font-semibold text-sp-text">{className}</span> : null}
-          <span className="mx-1.5">›</span>생활기록부 초안
+        <div className="flex items-center gap-1.5 truncate">
+          {className ? <span className="text-sm text-sp-muted">{className}</span> : null}
+          {className ? <span className="text-sm text-sp-muted">›</span> : null}
+          <h2 className="text-base font-bold text-sp-text">생활기록부 초안</h2>
         </div>
         <div className="flex-1" />
+        {copyMsg ? (
+          <span
+            role="status"
+            aria-live="polite"
+            className={`text-xs font-medium ${copyMsg.ok ? 'text-emerald-500' : 'text-sp-muted'}`}
+          >
+            {copyMsg.text}
+          </span>
+        ) : null}
+        <button
+          type="button"
+          onClick={() => void copyAllVisible()}
+          title="현재 영역의 작성된 초안을 한 번에 복사 (번호·이름·내용)"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-sp-muted ring-1 ring-sp-border hover:text-sp-text hover:bg-sp-surface transition-all"
+        >
+          <span className="material-symbols-outlined text-base">content_copy</span>영역 전체 복사
+        </button>
         <button
           type="button"
           onClick={() => setShowExport(true)}
@@ -137,17 +254,19 @@ export function RecordDraftView({
         <span
           className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ring-1 ${ctxChip.cls}`}
         >
+          <span className="material-symbols-outlined text-sm">{ctxChip.icon}</span>
           {ctxChip.label}
         </span>
       </div>
 
       {/* 유형(영역) 탭 */}
       <div
+        ref={tablistRef}
         className="flex gap-1 px-3 border-b border-sp-border overflow-x-auto"
         role="tablist"
         aria-label="생활기록부 영역"
       >
-        {areas.map((area) => {
+        {areas.map((area, idx) => {
           const cnt = students.filter(
             (s) =>
               (getDraft(area, s.studentRef, areaSubject(area, classSubject))?.content ?? '').trim()
@@ -159,7 +278,10 @@ export function RecordDraftView({
               key={area}
               role="tab"
               aria-selected={on}
+              tabIndex={on ? 0 : -1}
+              data-rd-tab={area}
               onClick={() => setActiveArea(area)}
+              onKeyDown={(e) => onTabKeyDown(e, idx)}
               className={`relative -mb-px flex items-center gap-2 whitespace-nowrap border-b-2 px-4 py-3 text-sm transition-colors ${
                 on
                   ? 'border-sp-accent font-bold text-sp-text'
@@ -183,7 +305,8 @@ export function RecordDraftView({
       {/* 영역 정보 바 */}
       <div className="flex flex-wrap items-center gap-3 px-4 py-2 bg-sp-surface/50 border-b border-sp-border text-xs text-sp-muted">
         <span>
-          📘 <b className="text-sp-text">{RECORD_AREA_LABELS[activeArea]}</b>
+          <span className="material-symbols-outlined text-sm align-middle mr-1">description</span>
+          <b className="text-sp-text">{RECORD_AREA_LABELS[activeArea]}</b>
           {subject ? <span className="text-sp-muted"> · {subject}</span> : null} · 한도{' '}
           <b className="text-amber-500">
             {Math.round(limit / 3)}자 / {limit.toLocaleString()}B
@@ -217,12 +340,25 @@ export function RecordDraftView({
         </div>
       </div>
 
+      {/* 입력창 안내 — 목록 전체에 1회만 노출(행마다 반복 제거) */}
+      <p className="flex flex-wrap items-center gap-x-2 gap-y-1 px-4 py-1.5 text-[0.7rem] text-sp-muted border-b border-sp-border">
+        <span className="inline-flex items-center gap-1">
+          <span className="material-symbols-outlined text-sm">open_in_full</span>
+          입력창 우하단을 끌어 크기를 조절할 수 있습니다.
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <span className="material-symbols-outlined text-sm">keyboard_return</span>
+          <kbd className="rounded bg-sp-surface px-1 font-semibold text-sp-text">Ctrl+Enter</kbd>로
+          다음 학생 칸으로 이동합니다.
+        </span>
+      </p>
+
       {/* 학생 세로 스크롤 리스트 */}
-      <div className="flex-1 min-h-0 overflow-y-auto">
+      <div ref={listRef} className="flex-1 min-h-0 overflow-y-auto">
         {visibleStudents.length === 0 ? (
           <p className="py-10 text-center text-sm text-sp-muted">표시할 학생이 없습니다.</p>
         ) : (
-          visibleStudents.map((s) => (
+          visibleStudents.map((s, i) => (
             <RecordDraftRow
               key={`${s.studentRef}:${activeArea}:${subject ?? ''}`}
               student={s}
@@ -231,6 +367,9 @@ export function RecordDraftView({
               subject={subject}
               classId={classId}
               draft={draftFor(s.studentRef)}
+              obsById={obsById}
+              index={i}
+              onJumpNext={() => focusRowTextarea(i + 1)}
             />
           ))
         )}
@@ -261,6 +400,9 @@ function RecordDraftRow({
   subject,
   classId,
   draft,
+  obsById,
+  index,
+  onJumpNext,
 }: {
   student: RecordDraftStudentRow;
   area: RecordArea;
@@ -268,6 +410,9 @@ function RecordDraftRow({
   subject?: string;
   classId?: string;
   draft?: RecordDraft;
+  obsById: ReadonlyMap<string, ObservationRecord>;
+  index: number;
+  onJumpNext: () => void;
 }) {
   const upsert = useRecordDraftsStore((s) => s.upsert);
   const setStatus = useRecordDraftsStore((s) => s.setStatus);
@@ -275,6 +420,7 @@ function RecordDraftRow({
   const [text, setText] = useState(draft?.content ?? '');
   const [focused, setFocused] = useState(false);
   const [showBasis, setShowBasis] = useState(false);
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
   const taRef = useRef<HTMLTextAreaElement | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -314,7 +460,10 @@ function RecordDraftRow({
       ...(student.studentId !== undefined ? { studentId: student.studentId } : {}),
       ...(subject !== undefined ? { subject } : {}),
     };
-    void upsert(input);
+    setSaveState('saving');
+    upsert(input)
+      .then(() => setSaveState('saved'))
+      .catch(() => setSaveState('idle'));
   };
 
   const onChange = (value: string): void => {
@@ -368,7 +517,7 @@ function RecordDraftRow({
             {STATUS_META[status].label}
           </button>
         ) : (
-          <span className="w-fit rounded-full bg-sp-surface px-2 py-0.5 text-[0.65rem] font-semibold text-sp-muted/70">
+          <span className="w-fit rounded-full bg-sp-surface px-2 py-0.5 text-[0.65rem] font-semibold text-sp-muted">
             초안 없음
           </span>
         )}
@@ -378,11 +527,13 @@ function RecordDraftRow({
             onClick={() => setShowBasis((v) => !v)}
             className="flex w-fit items-center gap-1 text-[0.65rem] text-sp-muted"
           >
-            🔗 근거{' '}
+            <span className="material-symbols-outlined text-xs">link</span>근거{' '}
             <span className="font-semibold text-sp-accent">
               {draft.basisObservationIds.length}건
             </span>
-            <span>{showBasis ? '▾' : '▸'}</span>
+            <span className="material-symbols-outlined text-xs">
+              {showBasis ? 'expand_more' : 'chevron_right'}
+            </span>
           </button>
         )}
       </div>
@@ -392,34 +543,64 @@ function RecordDraftRow({
         <textarea
           ref={taRef}
           value={text}
+          data-rd-index={index}
           onChange={(e) => onChange(e.target.value)}
           onFocus={() => setFocused(true)}
           onBlur={flush}
+          onKeyDown={(e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+              e.preventDefault();
+              onJumpNext(); // 다음 입력창으로 포커스 이동 → 현재 칸 blur+자동저장
+            }
+          }}
+          aria-label={`${student.name} ${RECORD_AREA_LABELS[area]} 초안`}
           placeholder="AI에게 초안을 요청하면 자동 입력됩니다 — 또는 직접 작성하세요"
-          className="min-h-[48px] w-full resize-y rounded-lg border border-sp-border bg-sp-card px-3 py-2 text-sm leading-relaxed text-sp-text focus:border-sp-accent focus:outline-none focus:ring-2 focus:ring-sp-accent/30"
+          className="min-h-[48px] w-full resize-y rounded-lg border border-sp-border bg-sp-surface px-3 py-2 text-sm leading-relaxed text-sp-text placeholder:text-sp-muted focus:border-sp-accent focus:outline-none focus:ring-2 focus:ring-sp-accent/30"
         />
-        <p className="flex items-center gap-1 text-[0.65rem] text-sp-muted/70">
-          입력창 우하단을 끌어 크기를 조절할 수 있습니다{' '}
-          <span className="font-bold text-sp-accent">⤡</span>
-        </p>
+        {saveState !== 'idle' && (
+          <span
+            className={`flex w-fit items-center gap-1 text-[0.65rem] ${
+              saveState === 'saved' ? 'text-emerald-500' : 'text-sp-muted'
+            }`}
+          >
+            <span className="material-symbols-outlined text-xs">
+              {saveState === 'saved' ? 'check_circle' : 'sync'}
+            </span>
+            {saveState === 'saved' ? '저장됨' : '저장 중…'}
+          </span>
+        )}
         {showBasis && draft && draft.basisObservationIds.length > 0 && (
           <div className="flex flex-wrap gap-1.5 text-[0.65rem] text-sp-muted">
-            {draft.basisObservationIds.map((id) => (
-              <span key={id} className="rounded-md bg-sp-surface px-2 py-1 ring-1 ring-sp-border">
-                {id.length > 14 ? `${id.slice(0, 8)}…${id.slice(-4)}` : id}
-              </span>
-            ))}
+            {draft.basisObservationIds.map((id, i) => {
+              const obs = obsById.get(id);
+              const snippet = obs
+                ? `${formatObsDate(obs.date)} · ${obs.content.slice(0, 18)}${obs.content.length > 18 ? '…' : ''}`
+                : `관찰기록 ${i + 1}`;
+              return (
+                <span
+                  key={id}
+                  className="rounded-md bg-sp-surface px-2 py-1 ring-1 ring-sp-border"
+                  {...(obs ? { title: obs.content } : {})}
+                >
+                  {snippet}
+                </span>
+              );
+            })}
           </div>
         )}
         {flags.length > 0 && (
           <div
-            className={`rounded-lg px-2.5 py-1.5 text-[0.7rem] leading-snug ring-1 ${
+            className={`flex items-start gap-1 rounded-lg px-2.5 py-1.5 text-[0.7rem] leading-snug ring-1 ${
               hasRisk
                 ? 'bg-red-500/5 text-red-500 ring-red-500/20'
                 : 'bg-amber-500/5 text-amber-600 ring-amber-500/20'
             }`}
           >
-            ⚠ 검토 필요 · {flags.join(', ')} — 모든 문장은 교사가 사실을 직접 확인해야 합니다.
+            <span className="material-symbols-outlined text-sm">warning</span>
+            <span>
+              검토 필요 · {flags.map(flagLabel).join(', ')} — 모든 문장은 교사가 사실을 직접
+              확인해야 합니다.
+            </span>
           </div>
         )}
       </div>
@@ -439,9 +620,9 @@ function RecordDraftRow({
           type="button"
           onClick={() => void copyNeis()}
           disabled={text.trim().length === 0}
-          className="rounded-lg bg-sp-accent/10 px-3 py-1.5 text-xs font-medium text-sp-accent ring-1 ring-sp-accent/20 transition-colors hover:bg-sp-accent/20 disabled:opacity-40"
+          className="flex items-center gap-1 rounded-lg bg-sp-accent/10 px-3 py-1.5 text-xs font-medium text-sp-accent ring-1 ring-sp-accent/20 transition-colors hover:bg-sp-accent/20 disabled:opacity-40"
         >
-          📋 복사
+          <span className="material-symbols-outlined text-sm">content_copy</span>복사
         </button>
       </div>
     </div>
