@@ -17,6 +17,7 @@ import {
   getCategorySummary,
   getWarningStudents,
   sortByDateDesc,
+  recordExportLabel,
 } from '@domain/rules/studentRecordRules';
 import { RecordCategoryManagementModal } from './RecordCategoryManagementModal';
 import { DateNavigator } from './DateNavigator';
@@ -69,7 +70,8 @@ function formatTimeKR(isoStr: string): string {
 const GRAY_COLOR = RECORD_COLOR_MAP['gray']!;
 
 function getSubcategoryChipClass(color: string, isSelected: boolean): string {
-  const base = 'px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer select-none';
+  const base =
+    'px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer select-none';
   const c = RECORD_COLOR_MAP[color] ?? GRAY_COLOR;
   return `${base} ${isSelected ? c.activeBg : c.inactiveBg}`;
 }
@@ -84,7 +86,10 @@ function getRecordTagClass(categoryId: string, categories: readonly RecordCatego
   return `px-2 py-0.5 rounded text-xs font-medium ${c.tagBg}`;
 }
 
-function getCategoryDotColor(categoryId: string, categories: readonly RecordCategoryItem[]): string {
+function getCategoryDotColor(
+  categoryId: string,
+  categories: readonly RecordCategoryItem[],
+): string {
   const cat = categories.find((c) => c.id === categoryId);
   const colorMap: Record<string, string> = {
     red: 'bg-red-400',
@@ -102,10 +107,10 @@ function getCategoryDotColor(categoryId: string, categories: readonly RecordCate
 
 /** 출결 유형별 태그 색상 (subcategory 파싱) */
 const ATTENDANCE_TAG_COLORS: Record<string, string> = {
-  '결석': 'bg-red-500/15 text-red-400',
-  '지각': 'bg-yellow-500/15 text-yellow-400',
-  '조퇴': 'bg-orange-500/15 text-orange-400',
-  '결과': 'bg-purple-500/15 text-purple-400',
+  결석: 'bg-red-500/15 text-red-400',
+  지각: 'bg-yellow-500/15 text-yellow-400',
+  조퇴: 'bg-orange-500/15 text-orange-400',
+  결과: 'bg-purple-500/15 text-purple-400',
 };
 
 function getAttendanceTypeFromSubcategory(subcategory: string): string | null {
@@ -114,7 +119,10 @@ function getAttendanceTypeFromSubcategory(subcategory: string): string | null {
 }
 
 /** 출결 레코드면 유형별 색상, 아니면 기존 카테고리 색상 */
-function getSmartTagClass(record: { category: string; subcategory: string }, categories: readonly RecordCategoryItem[]): string {
+function getSmartTagClass(
+  record: { category: string; subcategory: string },
+  categories: readonly RecordCategoryItem[],
+): string {
   if (record.category === 'attendance') {
     const attType = getAttendanceTypeFromSubcategory(record.subcategory);
     if (attType && ATTENDANCE_TAG_COLORS[attType]) {
@@ -126,10 +134,10 @@ function getSmartTagClass(record: { category: string; subcategory: string }, cat
 
 /** 출결 유형 정렬 우선순위 */
 const ATTENDANCE_SORT_ORDER: Record<string, number> = {
-  '결석': 0,
-  '지각': 1,
-  '조퇴': 2,
-  '결과': 3,
+  결석: 0,
+  지각: 1,
+  조퇴: 2,
+  결과: 3,
 };
 
 type RecordSortMode = 'time' | 'type' | 'studentNumber';
@@ -151,10 +159,8 @@ const MODE_TABS: { id: ViewMode; icon: string; label: string }[] = [
 ];
 
 export function StudentRecords() {
-  const { records, loaded, load, viewMode, setViewMode, categories } =
-    useStudentRecordsStore();
-  const { students, load: loadStudents, loaded: studentsLoaded } =
-    useStudentStore();
+  const { records, loaded, load, viewMode, setViewMode, categories } = useStudentRecordsStore();
+  const { students, load: loadStudents, loaded: studentsLoaded } = useStudentStore();
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [selectedDate, setSelectedDate] = useState(todayString());
 
@@ -164,10 +170,7 @@ export function StudentRecords() {
   }, [load, loadStudents]);
 
   // 담임 반 학생 ID로 필터링 — 다른 학급 학생 기록 제외
-  const studentIds = useMemo(
-    () => new Set(students.map((s) => s.id)),
-    [students],
-  );
+  const studentIds = useMemo(() => new Set(students.map((s) => s.id)), [students]);
   const filteredRecords = useMemo(
     () => records.filter((r) => studentIds.has(r.studentId)),
     [records, studentIds],
@@ -203,10 +206,11 @@ export function StudentRecords() {
               <button
                 key={tab.id}
                 onClick={() => setViewMode(tab.id)}
-                className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${viewMode === tab.id
-                  ? 'bg-sp-accent text-white'
-                  : 'text-sp-muted hover:text-sp-text'
-                  }`}
+                className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                  viewMode === tab.id
+                    ? 'bg-sp-accent text-white'
+                    : 'text-sp-muted hover:text-sp-text'
+                }`}
               >
                 <span>{tab.icon}</span>
                 <span>{tab.label}</span>
@@ -225,7 +229,12 @@ export function StudentRecords() {
       )}
 
       {viewMode === 'input' && (
-        <InputMode students={students} records={filteredRecords} categories={categories} selectedDate={selectedDate} />
+        <InputMode
+          students={students}
+          records={filteredRecords}
+          categories={categories}
+          selectedDate={selectedDate}
+        />
       )}
       {viewMode === 'progress' && (
         <ProgressMode students={students} records={filteredRecords} categories={categories} />
@@ -251,10 +260,11 @@ interface ClassTabProps {
 function ClassTab({ label, isActive }: ClassTabProps) {
   return (
     <button
-      className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${isActive
-        ? 'bg-sp-accent text-white'
-        : 'text-sp-muted hover:text-sp-text hover:bg-sp-surface'
-        }`}
+      className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+        isActive
+          ? 'bg-sp-accent text-white'
+          : 'text-sp-muted hover:text-sp-text hover:bg-sp-surface'
+      }`}
     >
       {label}
     </button>
@@ -324,35 +334,35 @@ function InputMode({ students, records, categories, selectedDate }: InputModePro
   const handleAttendanceTypeClick = useCallback((type: string) => {
     setAttendanceType((prev) => {
       if (prev === type) {
-        setSelectedSub((s) => s?.categoryId === 'attendance' ? null : s);
+        setSelectedSub((s) => (s?.categoryId === 'attendance' ? null : s));
         return null;
       }
-      setSelectedSub((s) => s?.categoryId === 'attendance' ? null : s);
+      setSelectedSub((s) => (s?.categoryId === 'attendance' ? null : s));
       return type;
     });
   }, []);
 
-  const handleAttendanceReasonClick = useCallback((reason: string) => {
-    if (!attendanceType) return;
-    const subcategory = `${attendanceType} (${reason})`;
-    setSelectedSub((prev) =>
-      prev?.categoryId === 'attendance' && prev.subcategory === subcategory
-        ? null
-        : { categoryId: 'attendance', subcategory },
-    );
-  }, [attendanceType]);
-
-  const handleSubcategoryClick = useCallback(
-    (categoryId: string, sub: string) => {
+  const handleAttendanceReasonClick = useCallback(
+    (reason: string) => {
+      if (!attendanceType) return;
+      const subcategory = `${attendanceType} (${reason})`;
       setSelectedSub((prev) =>
-        prev?.categoryId === categoryId && prev.subcategory === sub
+        prev?.categoryId === 'attendance' && prev.subcategory === subcategory
           ? null
-          : { categoryId, subcategory: sub },
+          : { categoryId: 'attendance', subcategory },
       );
-      setAttendanceType(null);
     },
-    [],
+    [attendanceType],
   );
+
+  const handleSubcategoryClick = useCallback((categoryId: string, sub: string) => {
+    setSelectedSub((prev) =>
+      prev?.categoryId === categoryId && prev.subcategory === sub
+        ? null
+        : { categoryId, subcategory: sub },
+    );
+    setAttendanceType(null);
+  }, []);
 
   // 2-2: 템플릿 적용
   const handleTemplateSelect = useCallback((templateId: string) => {
@@ -402,16 +412,22 @@ function InputMode({ students, records, categories, selectedDate }: InputModePro
     setShowFollowUp(false);
     setFollowUp('');
     setFollowUpDate('');
-  }, [selectedStudents, selectedSub, memo, selectedDate, selectedMethod, followUp, followUpDate, addRecord]);
+  }, [
+    selectedStudents,
+    selectedSub,
+    memo,
+    selectedDate,
+    selectedMethod,
+    followUp,
+    followUpDate,
+    addRecord,
+  ]);
 
   const dateRecords = useMemo(() => {
     return records.filter((r) => r.date === selectedDate);
   }, [records, selectedDate]);
 
-  const studentMap = useMemo(
-    () => new Map(students.map((s) => [s.id, s])),
-    [students],
-  );
+  const studentMap = useMemo(() => new Map(students.map((s) => [s.id, s])), [students]);
 
   const canSave = selectedStudents.size > 0 && selectedSub !== null;
 
@@ -423,9 +439,7 @@ function InputMode({ students, records, categories, selectedDate }: InputModePro
           <h3 className="text-sm font-bold text-sp-text flex items-center gap-2">
             <span className="material-symbols-outlined text-base">group</span>
             학생 선택
-            <span className="text-sp-muted font-normal">
-              ({selectedStudents.size}명 선택됨)
-            </span>
+            <span className="text-sp-muted font-normal">({selectedStudents.size}명 선택됨)</span>
           </h3>
           <div className="flex items-center gap-2">
             {/* 뷰 토글 */}
@@ -439,7 +453,9 @@ function InputMode({ students, records, categories, selectedDate }: InputModePro
                     : 'text-sp-muted hover:text-sp-text'
                 }`}
               >
-                <span className="material-symbols-outlined text-sm leading-none">format_list_numbered</span>
+                <span className="material-symbols-outlined text-sm leading-none">
+                  format_list_numbered
+                </span>
                 번호 순
               </button>
               <button
@@ -535,7 +551,7 @@ function InputMode({ students, records, categories, selectedDate }: InputModePro
                       <div>{student.name}</div>
                     </button>
                   );
-                })
+                }),
               )}
             </div>
           </div>
@@ -561,7 +577,9 @@ function InputMode({ students, records, categories, selectedDate }: InputModePro
             >
               <option value="">{'\uD83D\uDCDD'} 템플릿</option>
               {DEFAULT_TEMPLATES.map((tpl) => (
-                <option key={tpl.id} value={tpl.id}>{tpl.name}</option>
+                <option key={tpl.id} value={tpl.id}>
+                  {tpl.name}
+                </option>
               ))}
             </select>
           </div>
@@ -616,8 +634,7 @@ function InputMode({ students, records, categories, selectedDate }: InputModePro
                   <div className="flex flex-wrap gap-1.5">
                     {cat.subcategories.map((sub) => {
                       const isSelected =
-                        selectedSub?.categoryId === cat.id &&
-                        selectedSub.subcategory === sub;
+                        selectedSub?.categoryId === cat.id && selectedSub.subcategory === sub;
                       return (
                         <button
                           key={sub}
@@ -677,7 +694,9 @@ function InputMode({ students, records, categories, selectedDate }: InputModePro
               onClick={() => setShowFollowUp(!showFollowUp)}
               className="flex items-center gap-1.5 text-xs text-sp-muted hover:text-sp-text transition-colors"
             >
-              <span className={`material-symbols-outlined text-sm transition-transform ${showFollowUp ? 'rotate-180' : ''}`}>
+              <span
+                className={`material-symbols-outlined text-sm transition-transform ${showFollowUp ? 'rotate-180' : ''}`}
+              >
                 expand_more
               </span>
               {'\uD83D\uDCCC'} 후속 조치 추가
@@ -712,11 +731,16 @@ function InputMode({ students, records, categories, selectedDate }: InputModePro
                 const student = studentMap.get(record.studentId);
                 const isEditing = editingRecordId === record.id;
                 return (
-                  <div key={record.id} className={`group flex items-center gap-2 text-xs rounded-lg px-1.5 py-1 -mx-1.5 transition-colors ${
-                    isEditing ? 'bg-sp-accent/10 ring-1 ring-sp-accent/30' : 'hover:bg-sp-surface/50'
-                  }`}>
+                  <div
+                    key={record.id}
+                    className={`group flex items-center gap-2 text-xs rounded-lg px-1.5 py-1 -mx-1.5 transition-colors ${
+                      isEditing
+                        ? 'bg-sp-accent/10 ring-1 ring-sp-accent/30'
+                        : 'hover:bg-sp-surface/50'
+                    }`}
+                  >
                     <span className={getRecordTagClass(record.category, categories)}>
-                      {record.subcategory}
+                      {recordExportLabel(record)}
                     </span>
                     <span className="text-sp-text font-medium">{student?.name ?? '?'}</span>
                     {!isEditing && (
@@ -738,7 +762,10 @@ function InputMode({ students, records, categories, selectedDate }: InputModePro
                             <span className="material-symbols-outlined text-sm">edit</span>
                           </button>
                           <button
-                            onClick={() => { if (window.confirm('이 기록을 삭제하시겠습니까?')) void deleteRecord(record.id); }}
+                            onClick={() => {
+                              if (window.confirm('이 기록을 삭제하시겠습니까?'))
+                                void deleteRecord(record.id);
+                            }}
                             className="text-sp-muted hover:text-red-400 transition-colors"
                             title="삭제"
                           >
@@ -748,36 +775,44 @@ function InputMode({ students, records, categories, selectedDate }: InputModePro
                       </>
                     )}
                     {isEditing && (
-                      <span className="ml-auto text-caption text-sp-accent font-medium">수정 중</span>
+                      <span className="ml-auto text-caption text-sp-accent font-medium">
+                        수정 중
+                      </span>
                     )}
                   </div>
                 );
               })}
             </div>
             {/* 편집 에디터: 기록 리스트 바깥에 별도 카드로 렌더링 */}
-            {editingRecordId && (() => {
-              const editingRecord = dateRecords.find((r) => r.id === editingRecordId);
-              if (!editingRecord) return null;
-              return (
-                <div className="mt-2">
-                  <InlineRecordEditor
-                    record={editingRecord}
-                    categories={categories}
-                    editContent={editingContent}
-                    setEditContent={setEditingContent}
-                    editCategory={editingCategory}
-                    setEditCategory={setEditingCategory}
-                    editSubcategory={editingSubcat}
-                    setEditSubcategory={setEditingSubcat}
-                    onSave={() => {
-                      void updateRecord({ ...editingRecord, content: editingContent, category: editingCategory, subcategory: editingSubcat });
-                      setEditingRecordId(null);
-                    }}
-                    onCancel={() => setEditingRecordId(null)}
-                  />
-                </div>
-              );
-            })()}
+            {editingRecordId &&
+              (() => {
+                const editingRecord = dateRecords.find((r) => r.id === editingRecordId);
+                if (!editingRecord) return null;
+                return (
+                  <div className="mt-2">
+                    <InlineRecordEditor
+                      record={editingRecord}
+                      categories={categories}
+                      editContent={editingContent}
+                      setEditContent={setEditingContent}
+                      editCategory={editingCategory}
+                      setEditCategory={setEditingCategory}
+                      editSubcategory={editingSubcat}
+                      setEditSubcategory={setEditingSubcat}
+                      onSave={() => {
+                        void updateRecord({
+                          ...editingRecord,
+                          content: editingContent,
+                          category: editingCategory,
+                          subcategory: editingSubcat,
+                        });
+                        setEditingRecordId(null);
+                      }}
+                      onCancel={() => setEditingRecordId(null)}
+                    />
+                  </div>
+                );
+              })()}
           </div>
         )}
 
@@ -785,10 +820,11 @@ function InputMode({ students, records, categories, selectedDate }: InputModePro
         <button
           onClick={() => void handleSave()}
           disabled={!canSave}
-          className={`w-full py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${canSave
-            ? 'bg-sp-accent text-white hover:bg-sp-accent/90 shadow-lg shadow-sp-accent/20'
-            : 'bg-sp-surface text-sp-muted cursor-not-allowed'
-            }`}
+          className={`w-full py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${
+            canSave
+              ? 'bg-sp-accent text-white hover:bg-sp-accent/90 shadow-lg shadow-sp-accent/20'
+              : 'bg-sp-surface text-sp-muted cursor-not-allowed'
+          }`}
         >
           <span className="material-symbols-outlined text-base">save</span>
           저장하기
@@ -802,8 +838,18 @@ function InputMode({ students, records, categories, selectedDate }: InputModePro
 
 type StatsPeriod = 'week' | 'month' | 'custom' | 'all';
 type StatsTab = 'attendance' | 'counseling' | 'life' | 'all';
-type SortKey = 'number' | 'name' | 'absent' | 'late' | 'earlyLeave' | 'resultAbsent' | 'praise' | 'total'
-  | 'counseling_count' | 'life_count' | 'all_count';
+type SortKey =
+  | 'number'
+  | 'name'
+  | 'absent'
+  | 'late'
+  | 'earlyLeave'
+  | 'resultAbsent'
+  | 'praise'
+  | 'total'
+  | 'counseling_count'
+  | 'life_count'
+  | 'all_count';
 type SortDir = 'asc' | 'desc';
 
 function toDateInputString(d: Date): string {
@@ -860,42 +906,69 @@ function ProgressMode({ students, records }: ModeProps) {
     sorted.sort((a, b) => {
       let cmp = 0;
       switch (sortKey) {
-        case 'number': cmp = a.idx - b.idx; break;
-        case 'name': cmp = a.student.name.localeCompare(b.student.name); break;
-        case 'absent': cmp = a.stats.absent - b.stats.absent; break;
-        case 'late': cmp = a.stats.late - b.stats.late; break;
-        case 'earlyLeave': cmp = a.stats.earlyLeave - b.stats.earlyLeave; break;
-        case 'resultAbsent': cmp = a.stats.resultAbsent - b.stats.resultAbsent; break;
-        case 'praise': cmp = a.stats.praise - b.stats.praise; break;
-        case 'total': case 'all_count': cmp = a.totalRecords - b.totalRecords; break;
-        case 'counseling_count': cmp = a.counselingCount - b.counselingCount; break;
-        case 'life_count': cmp = a.lifeCount - b.lifeCount; break;
+        case 'number':
+          cmp = a.idx - b.idx;
+          break;
+        case 'name':
+          cmp = a.student.name.localeCompare(b.student.name);
+          break;
+        case 'absent':
+          cmp = a.stats.absent - b.stats.absent;
+          break;
+        case 'late':
+          cmp = a.stats.late - b.stats.late;
+          break;
+        case 'earlyLeave':
+          cmp = a.stats.earlyLeave - b.stats.earlyLeave;
+          break;
+        case 'resultAbsent':
+          cmp = a.stats.resultAbsent - b.stats.resultAbsent;
+          break;
+        case 'praise':
+          cmp = a.stats.praise - b.stats.praise;
+          break;
+        case 'total':
+        case 'all_count':
+          cmp = a.totalRecords - b.totalRecords;
+          break;
+        case 'counseling_count':
+          cmp = a.counselingCount - b.counselingCount;
+          break;
+        case 'life_count':
+          cmp = a.lifeCount - b.lifeCount;
+          break;
       }
       return sortDir === 'desc' ? -cmp : cmp;
     });
     return sorted;
   }, [students, filteredRecords, sortKey, sortDir]);
 
-  const handleSort = useCallback((key: SortKey) => {
-    if (sortKey === key) {
-      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
-    } else {
-      setSortKey(key);
-      setSortDir('asc');
-    }
-  }, [sortKey]);
+  const handleSort = useCallback(
+    (key: SortKey) => {
+      if (sortKey === key) {
+        setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+      } else {
+        setSortKey(key);
+        setSortDir('asc');
+      }
+    },
+    [sortKey],
+  );
 
-  const SortHeader = useCallback(({ label, sortId, className }: { label: string; sortId: SortKey; className?: string }) => (
-    <th
-      onClick={() => handleSort(sortId)}
-      className={`p-3 font-medium border-b cursor-pointer hover:text-sp-text transition-colors select-none ${className ?? ''}`}
-    >
-      {label}
-      {sortKey === sortId && (
-        <span className="ml-1 text-sp-accent">{sortDir === 'asc' ? '▲' : '▼'}</span>
-      )}
-    </th>
-  ), [handleSort, sortKey, sortDir]);
+  const SortHeader = useCallback(
+    ({ label, sortId, className }: { label: string; sortId: SortKey; className?: string }) => (
+      <th
+        onClick={() => handleSort(sortId)}
+        className={`p-3 font-medium border-b cursor-pointer hover:text-sp-text transition-colors select-none ${className ?? ''}`}
+      >
+        {label}
+        {sortKey === sortId && (
+          <span className="ml-1 text-sp-accent">{sortDir === 'asc' ? '▲' : '▼'}</span>
+        )}
+      </th>
+    ),
+    [handleSort, sortKey, sortDir],
+  );
 
   const STATS_TABS: { id: StatsTab; label: string }[] = [
     { id: 'attendance', label: '출결' },
@@ -908,9 +981,24 @@ function ProgressMode({ students, records }: ModeProps) {
     <div className="flex-1 flex flex-col gap-4 min-h-0">
       {/* 2-5: 요약 카드 */}
       <div className="grid grid-cols-4 gap-3">
-        <SummaryCard label="총 기록" value={summary.total} icon="description" color="text-sp-accent" />
-        <SummaryCard label="출결" value={summary.attendance} icon="event_busy" color="text-red-400" />
-        <SummaryCard label="상담" value={summary.counseling} icon="psychology" color="text-blue-400" />
+        <SummaryCard
+          label="총 기록"
+          value={summary.total}
+          icon="description"
+          color="text-sp-accent"
+        />
+        <SummaryCard
+          label="출결"
+          value={summary.attendance}
+          icon="event_busy"
+          color="text-red-400"
+        />
+        <SummaryCard
+          label="상담"
+          value={summary.counseling}
+          icon="psychology"
+          color="text-blue-400"
+        />
         <SummaryCard label="생활" value={summary.life} icon="school" color="text-green-400" />
       </div>
 
@@ -922,10 +1010,9 @@ function ProgressMode({ students, records }: ModeProps) {
             <button
               key={tab.id}
               onClick={() => setStatsTab(tab.id)}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${statsTab === tab.id
-                ? 'bg-sp-accent text-white'
-                : 'text-sp-muted hover:text-sp-text'
-                }`}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                statsTab === tab.id ? 'bg-sp-accent text-white' : 'text-sp-muted hover:text-sp-text'
+              }`}
             >
               {tab.label}
             </button>
@@ -933,19 +1020,22 @@ function ProgressMode({ students, records }: ModeProps) {
         </div>
 
         <div className="flex gap-1 bg-sp-surface rounded-lg p-1 ml-auto">
-          {([
-            { id: 'week', label: '이번 주' },
-            { id: 'month', label: '이번 달' },
-            { id: 'custom', label: '직접 설정' },
-            { id: 'all', label: '전체' },
-          ] as const).map((f) => (
+          {(
+            [
+              { id: 'week', label: '이번 주' },
+              { id: 'month', label: '이번 달' },
+              { id: 'custom', label: '직접 설정' },
+              { id: 'all', label: '전체' },
+            ] as const
+          ).map((f) => (
             <button
               key={f.id}
               onClick={() => setStatsPeriod(f.id)}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${statsPeriod === f.id
-                ? 'bg-sp-accent text-white'
-                : 'text-sp-muted hover:text-sp-text'
-                }`}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                statsPeriod === f.id
+                  ? 'bg-sp-accent text-white'
+                  : 'text-sp-muted hover:text-sp-text'
+              }`}
             >
               {f.label}
             </button>
@@ -989,10 +1079,18 @@ function ProgressMode({ students, records }: ModeProps) {
                 </>
               )}
               {statsTab === 'counseling' && (
-                <SortHeader label="상담 건수" sortId="counseling_count" className="text-center border-l" />
+                <SortHeader
+                  label="상담 건수"
+                  sortId="counseling_count"
+                  className="text-center border-l"
+                />
               )}
               {statsTab === 'life' && (
-                <SortHeader label="생활 건수" sortId="life_count" className="text-center border-l" />
+                <SortHeader
+                  label="생활 건수"
+                  sortId="life_count"
+                  className="text-center border-l"
+                />
               )}
               <SortHeader label="전체" sortId="total" className="text-center border-l" />
             </tr>
@@ -1004,18 +1102,32 @@ function ProgressMode({ students, records }: ModeProps) {
                 <td className="p-3 text-sp-text font-medium border-b">{student.name}</td>
                 {statsTab === 'attendance' && (
                   <>
-                    <td className="text-center p-3 border-b border-l"><StatBadge value={stats.absent} color="red" /></td>
-                    <td className="text-center p-3 border-b border-l"><StatBadge value={stats.late} color="orange" /></td>
-                    <td className="text-center p-3 border-b border-l"><StatBadge value={stats.earlyLeave} color="yellow" /></td>
-                    <td className="text-center p-3 border-b border-l"><StatBadge value={stats.resultAbsent} color="purple" /></td>
-                    <td className="text-center p-3 border-b border-l"><StatBadge value={stats.praise} color="green" /></td>
+                    <td className="text-center p-3 border-b border-l">
+                      <StatBadge value={stats.absent} color="red" />
+                    </td>
+                    <td className="text-center p-3 border-b border-l">
+                      <StatBadge value={stats.late} color="orange" />
+                    </td>
+                    <td className="text-center p-3 border-b border-l">
+                      <StatBadge value={stats.earlyLeave} color="yellow" />
+                    </td>
+                    <td className="text-center p-3 border-b border-l">
+                      <StatBadge value={stats.resultAbsent} color="purple" />
+                    </td>
+                    <td className="text-center p-3 border-b border-l">
+                      <StatBadge value={stats.praise} color="green" />
+                    </td>
                   </>
                 )}
                 {statsTab === 'counseling' && (
-                  <td className="text-center p-3 border-b border-l"><StatBadge value={counselingCount} color="blue" /></td>
+                  <td className="text-center p-3 border-b border-l">
+                    <StatBadge value={counselingCount} color="blue" />
+                  </td>
                 )}
                 {statsTab === 'life' && (
-                  <td className="text-center p-3 border-b border-l"><StatBadge value={lifeCount} color="green" /></td>
+                  <td className="text-center p-3 border-b border-l">
+                    <StatBadge value={lifeCount} color="green" />
+                  </td>
                 )}
                 <td className="text-center p-3 text-sp-muted border-b border-l">{totalRecords}</td>
               </tr>
@@ -1048,7 +1160,17 @@ function ProgressMode({ students, records }: ModeProps) {
   );
 }
 
-function SummaryCard({ label, value, icon, color }: { label: string; value: number; icon: string; color: string }) {
+function SummaryCard({
+  label,
+  value,
+  icon,
+  color,
+}: {
+  label: string;
+  value: number;
+  icon: string;
+  color: string;
+}) {
   return (
     <div className="rounded-xl bg-sp-card p-4 flex items-center gap-3">
       <span className={`material-symbols-outlined text-2xl ${color}`}>{icon}</span>
@@ -1078,7 +1200,9 @@ function StatBadge({ value, color }: StatBadgeProps) {
     blue: 'bg-blue-500/15 text-blue-400',
   };
   return (
-    <span className={`inline-block min-w-[24px] px-1.5 py-0.5 rounded text-xs font-semibold ${colorMap[color] ?? ''}`}>
+    <span
+      className={`inline-block min-w-[24px] px-1.5 py-0.5 rounded text-xs font-semibold ${colorMap[color] ?? ''}`}
+    >
       {value}
     </span>
   );
@@ -1122,10 +1246,7 @@ function SearchMode({ students, records, categories }: ModeProps) {
     timerRef.current = setTimeout(() => setDebouncedKeyword(val), 300);
   }, []);
 
-  const studentMap = useMemo(
-    () => new Map(students.map((s) => [s.id, s])),
-    [students],
-  );
+  const studentMap = useMemo(() => new Map(students.map((s) => [s.id, s])), [students]);
 
   // 선택된 카테고리의 서브카테고리 목록
   const subcategoryOptions = useMemo(() => {
@@ -1145,8 +1266,14 @@ function SearchMode({ students, records, categories }: ModeProps) {
   }, [selectedCategory, categories]);
 
   // 필터 적용 여부
-  const hasFilters = selectedStudentId || selectedCategory || selectedSubcategory ||
-    selectedMethod || debouncedKeyword || followUpOnly || periodFilter !== 'all';
+  const hasFilters =
+    selectedStudentId ||
+    selectedCategory ||
+    selectedSubcategory ||
+    selectedMethod ||
+    debouncedKeyword ||
+    followUpOnly ||
+    periodFilter !== 'all';
 
   const resetFilters = useCallback(() => {
     setSelectedStudentId('');
@@ -1189,7 +1316,16 @@ function SearchMode({ students, records, categories }: ModeProps) {
     }
 
     return sortByDateDesc(result);
-  }, [records, selectedStudentId, selectedCategory, selectedSubcategory, selectedMethod, debouncedKeyword, followUpOnly, periodFilter]);
+  }, [
+    records,
+    selectedStudentId,
+    selectedCategory,
+    selectedSubcategory,
+    selectedMethod,
+    debouncedKeyword,
+    followUpOnly,
+    periodFilter,
+  ]);
 
   // 날짜별 그룹핑 + 그룹 내 정렬
   const grouped = useMemo(() => {
@@ -1237,21 +1373,26 @@ function SearchMode({ students, records, categories }: ModeProps) {
     setEditSubcategory(record.subcategory);
   }, []);
 
-  const handleEditSave = useCallback(async (record: StudentRecord) => {
-    await updateRecord({
-      ...record,
-      content: editContent,
-      category: editCategory,
-      subcategory: editSubcategory,
-    });
-    setEditingId(null);
-    setEditContent('');
-    setEditCategory('');
-    setEditSubcategory('');
-  }, [editContent, editCategory, editSubcategory, updateRecord]);
+  const handleEditSave = useCallback(
+    async (record: StudentRecord) => {
+      await updateRecord({
+        ...record,
+        content: editContent,
+        category: editCategory,
+        subcategory: editSubcategory,
+      });
+      setEditingId(null);
+      setEditContent('');
+      setEditCategory('');
+      setEditSubcategory('');
+    },
+    [editContent, editCategory, editSubcategory, updateRecord],
+  );
 
   // 2-1: 타임라인 뷰 데이터 (학생 선택 시)
-  const selectedStudent = selectedStudentId ? students.find((s) => s.id === selectedStudentId) : null;
+  const selectedStudent = selectedStudentId
+    ? students.find((s) => s.id === selectedStudentId)
+    : null;
   const studentStats = useMemo(() => {
     if (!selectedStudentId) return null;
     const stats = getAttendanceStats(records, selectedStudentId);
@@ -1264,10 +1405,22 @@ function SearchMode({ students, records, categories }: ModeProps) {
     <div className="flex-1 flex flex-col gap-4 min-h-0">
       {/* 수정 안내 배너 (첫 방문 시) */}
       {!dismissedSearchGuide && (
-        <div className="flex items-center gap-2 bg-sp-accent/10 border border-sp-accent/30
-                        rounded-xl px-4 py-2.5 text-sm text-sp-accent">
+        <div
+          className="flex items-center gap-2 bg-sp-accent/10 border border-sp-accent/30
+                        rounded-xl px-4 py-2.5 text-sm text-sp-accent"
+        >
           <span className="material-symbols-outlined text-base">tips_and_updates</span>
-          <span>각 기록의 <span className="inline-flex items-center gap-0.5 mx-0.5"><span className="material-symbols-outlined text-sm">edit</span></span> 버튼으로 내용을 수정하고, <span className="inline-flex items-center gap-0.5 mx-0.5"><span className="material-symbols-outlined text-sm">delete</span></span> 버튼으로 삭제할 수 있습니다.</span>
+          <span>
+            각 기록의{' '}
+            <span className="inline-flex items-center gap-0.5 mx-0.5">
+              <span className="material-symbols-outlined text-sm">edit</span>
+            </span>{' '}
+            버튼으로 내용을 수정하고,{' '}
+            <span className="inline-flex items-center gap-0.5 mx-0.5">
+              <span className="material-symbols-outlined text-sm">delete</span>
+            </span>{' '}
+            버튼으로 삭제할 수 있습니다.
+          </span>
           <button
             onClick={() => {
               setDismissedSearchGuide(true);
@@ -1305,19 +1458,26 @@ function SearchMode({ students, records, categories }: ModeProps) {
         >
           <option value="">전체 학생</option>
           {students.map((s, idx) => (
-            <option key={s.id} value={s.id}>{idx + 1} {s.name}</option>
+            <option key={s.id} value={s.id}>
+              {idx + 1} {s.name}
+            </option>
           ))}
         </select>
 
         {/* 카테고리 필터 */}
         <select
           value={selectedCategory}
-          onChange={(e) => { setSelectedCategory(e.target.value); setSelectedSubcategory(''); }}
+          onChange={(e) => {
+            setSelectedCategory(e.target.value);
+            setSelectedSubcategory('');
+          }}
           className="bg-sp-surface border border-sp-border rounded-lg px-3 py-2 text-sm text-sp-text focus:outline-none focus:ring-1 focus:ring-sp-accent"
         >
           <option value="">전체 카테고리</option>
           {categories.map((cat) => (
-            <option key={cat.id} value={cat.id}>{cat.name}</option>
+            <option key={cat.id} value={cat.id}>
+              {cat.name}
+            </option>
           ))}
         </select>
 
@@ -1330,7 +1490,9 @@ function SearchMode({ students, records, categories }: ModeProps) {
           >
             <option value="">전체 하위</option>
             {subcategoryOptions.map((sub) => (
-              <option key={sub} value={sub}>{sub}</option>
+              <option key={sub} value={sub}>
+                {sub}
+              </option>
             ))}
           </select>
         )}
@@ -1343,7 +1505,9 @@ function SearchMode({ students, records, categories }: ModeProps) {
         >
           <option value="">전체 방법</option>
           {COUNSELING_METHODS.map((m) => (
-            <option key={m.value} value={m.value}>{m.label}</option>
+            <option key={m.value} value={m.value}>
+              {m.label}
+            </option>
           ))}
         </select>
 
@@ -1361,18 +1525,21 @@ function SearchMode({ students, records, categories }: ModeProps) {
 
         {/* 기간 필터 */}
         <div className="flex gap-1 bg-sp-surface rounded-lg p-1 ml-auto">
-          {([
-            { id: 'week', label: '이번 주' },
-            { id: 'month', label: '이번 달' },
-            { id: 'all', label: '전체' },
-          ] as const).map((f) => (
+          {(
+            [
+              { id: 'week', label: '이번 주' },
+              { id: 'month', label: '이번 달' },
+              { id: 'all', label: '전체' },
+            ] as const
+          ).map((f) => (
             <button
               key={f.id}
               onClick={() => setPeriodFilter(f.id)}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${periodFilter === f.id
-                ? 'bg-sp-accent text-white'
-                : 'text-sp-muted hover:text-sp-text'
-                }`}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                periodFilter === f.id
+                  ? 'bg-sp-accent text-white'
+                  : 'text-sp-muted hover:text-sp-text'
+              }`}
             >
               {f.label}
             </button>
@@ -1474,18 +1641,37 @@ interface StudentTimelineViewProps extends RecordEditProps {
   records: readonly StudentRecord[];
   categories: readonly RecordCategoryItem[];
   studentMap: Map<string, Student>;
-  stats: { absent: number; late: number; earlyLeave: number; resultAbsent: number; praise: number; counseling: number; total: number } | null;
+  stats: {
+    absent: number;
+    late: number;
+    earlyLeave: number;
+    resultAbsent: number;
+    praise: number;
+    counseling: number;
+    total: number;
+  } | null;
   onEdit: (record: StudentRecord) => void;
   onDelete: (id: string) => Promise<void>;
   onToggleFollowUp: (id: string) => Promise<void>;
 }
 
 function StudentTimelineView({
-  student, records, categories, stats,
-  onEdit, onDelete, onToggleFollowUp,
-  editingId, editContent, setEditContent,
-  editCategory, setEditCategory, editSubcategory, setEditSubcategory,
-  onEditSave, onEditCancel,
+  student,
+  records,
+  categories,
+  stats,
+  onEdit,
+  onDelete,
+  onToggleFollowUp,
+  editingId,
+  editContent,
+  setEditContent,
+  editCategory,
+  setEditCategory,
+  editSubcategory,
+  setEditSubcategory,
+  onEditSave,
+  onEditCancel,
 }: StudentTimelineViewProps) {
   const studentIdx = student.studentNumber ?? 0;
 
@@ -1509,7 +1695,9 @@ function StudentTimelineView({
         </div>
         <div>
           <h3 className="text-lg font-bold text-sp-text">{student.name}</h3>
-          <p className="text-xs text-sp-muted">{studentIdx}번 · 총 {records.length}건 기록</p>
+          <p className="text-xs text-sp-muted">
+            {studentIdx}번 · 총 {records.length}건 기록
+          </p>
         </div>
       </div>
 
@@ -1540,14 +1728,18 @@ function StudentTimelineView({
                     return (
                       <div key={record.id} className="relative">
                         {/* 도트 */}
-                        <div className={`absolute -left-[23px] top-3 w-2.5 h-2.5 rounded-full ${getCategoryDotColor(record.category, categories)} z-10`} />
+                        <div
+                          className={`absolute -left-[23px] top-3 w-2.5 h-2.5 rounded-full ${getCategoryDotColor(record.category, categories)} z-10`}
+                        />
 
-                        <div className={`group rounded-lg bg-sp-card p-3 hover:bg-sp-card/80 transition-all ${
-                          isEditing ? 'ring-1 ring-sp-accent/40' : editingId ? 'opacity-60' : ''
-                        }`}>
+                        <div
+                          className={`group rounded-lg bg-sp-card p-3 hover:bg-sp-card/80 transition-all ${
+                            isEditing ? 'ring-1 ring-sp-accent/40' : editingId ? 'opacity-60' : ''
+                          }`}
+                        >
                           <div className="flex items-center gap-2 mb-1">
                             <span className={getSmartTagClass(record, categories)}>
-                              {record.subcategory}
+                              {recordExportLabel(record)}
                             </span>
                             {record.method && (
                               <span className="text-xs text-sp-muted">
@@ -1584,9 +1776,13 @@ function StudentTimelineView({
                               )}
                               {record.followUp && (
                                 <div className="mt-1 flex items-center gap-2 text-xs">
-                                  <span className="text-sp-muted">{'\uD83D\uDCCC'} {record.followUp}</span>
+                                  <span className="text-sp-muted">
+                                    {'\uD83D\uDCCC'} {record.followUp}
+                                  </span>
                                   {record.followUpDate && (
-                                    <span className="text-sp-muted">({formatDateKR(record.followUpDate)})</span>
+                                    <span className="text-sp-muted">
+                                      ({formatDateKR(record.followUpDate)})
+                                    </span>
                                   )}
                                   <button
                                     onClick={() => void onToggleFollowUp(record.id)}
@@ -1609,7 +1805,10 @@ function StudentTimelineView({
                                   <span className="material-symbols-outlined text-sm">edit</span>
                                 </button>
                                 <button
-                                  onClick={() => { if (window.confirm('이 기록을 삭제하시겠습니까?')) void onDelete(record.id); }}
+                                  onClick={() => {
+                                    if (window.confirm('이 기록을 삭제하시겠습니까?'))
+                                      void onDelete(record.id);
+                                  }}
                                   className="p-0.5 rounded text-sp-muted/50 hover:text-red-400 hover:bg-red-500/10 transition-colors"
                                   title="삭제"
                                 >
@@ -1657,11 +1856,21 @@ interface DefaultRecordListViewProps extends RecordEditProps {
 }
 
 function DefaultRecordListView({
-  grouped, categories, studentMap,
-  onEdit, onDelete, onToggleFollowUp,
-  editingId, editContent, setEditContent,
-  editCategory, setEditCategory, editSubcategory, setEditSubcategory,
-  onEditSave, onEditCancel,
+  grouped,
+  categories,
+  studentMap,
+  onEdit,
+  onDelete,
+  onToggleFollowUp,
+  editingId,
+  editContent,
+  setEditContent,
+  editCategory,
+  setEditCategory,
+  editSubcategory,
+  setEditSubcategory,
+  onEditSave,
+  onEditCancel,
 }: DefaultRecordListViewProps) {
   return (
     <div className="flex-1 overflow-y-auto space-y-4">
@@ -1672,9 +1881,7 @@ function DefaultRecordListView({
       ) : (
         grouped.map(([date, dateRecords]) => (
           <div key={date}>
-            <h4 className="text-xs font-semibold text-sp-muted mb-2">
-              {formatDateKR(date)}
-            </h4>
+            <h4 className="text-xs font-semibold text-sp-muted mb-2">{formatDateKR(date)}</h4>
             <div className="space-y-1.5">
               {dateRecords.map((record) => {
                 const student = studentMap.get(record.studentId);
@@ -1693,10 +1900,13 @@ function DefaultRecordListView({
                       {formatTimeKR(record.createdAt)}
                     </span>
                     <span className={getSmartTagClass(record, categories)}>
-                      {record.subcategory}
+                      {recordExportLabel(record)}
                     </span>
                     {record.method && (
-                      <span className="text-xs text-sp-muted" title={METHOD_OPTIONS.find((m) => m.value === record.method)?.label}>
+                      <span
+                        className="text-xs text-sp-muted"
+                        title={METHOD_OPTIONS.find((m) => m.value === record.method)?.label}
+                      >
                         {getMethodIcon(record.method)}
                       </span>
                     )}
@@ -1742,7 +1952,10 @@ function DefaultRecordListView({
                             <span className="material-symbols-outlined text-sm">edit</span>
                           </button>
                           <button
-                            onClick={() => { if (window.confirm('이 기록을 삭제하시겠습니까?')) void onDelete(record.id); }}
+                            onClick={() => {
+                              if (window.confirm('이 기록을 삭제하시겠습니까?'))
+                                void onDelete(record.id);
+                            }}
                             className="p-1 rounded text-sp-muted/50 hover:text-red-400 hover:bg-red-500/10 transition-colors"
                             title="삭제"
                           >
@@ -1807,7 +2020,10 @@ function InlineRecordEditor({
   onCancel,
   compact,
 }: InlineRecordEditorProps) {
-  const cat = useMemo(() => categories.find((c) => c.id === editCategory), [editCategory, categories]);
+  const cat = useMemo(
+    () => categories.find((c) => c.id === editCategory),
+    [editCategory, categories],
+  );
   const isAttendance = editCategory === 'attendance';
 
   // Local attendance 2-level state
@@ -1816,7 +2032,11 @@ function InlineRecordEditor({
 
   // Initialize attendance state from editSubcategory when category switches to attendance
   useEffect(() => {
-    if (!isAttendance) { setLocalAttType(''); setLocalAttReason(''); return; }
+    if (!isAttendance) {
+      setLocalAttType('');
+      setLocalAttReason('');
+      return;
+    }
     const match = editSubcategory.match(/^(.+?)\s*\((.+?)\)$/);
     if (match) {
       setLocalAttType(match[1] ?? '');
@@ -1832,10 +2052,13 @@ function InlineRecordEditor({
   const chipSize = compact ? 'text-detail px-2 py-0.5' : 'px-2.5 py-1 text-xs';
 
   return (
-    <div className={compact
-      ? 'bg-sp-surface/80 border border-sp-accent/30 rounded-lg p-2 space-y-1.5 animate-fade-in'
-      : 'bg-sp-surface/80 border border-sp-accent/30 rounded-xl p-3 space-y-2.5 animate-fade-in'
-    }>
+    <div
+      className={
+        compact
+          ? 'bg-sp-surface/80 border border-sp-accent/30 rounded-lg p-2 space-y-1.5 animate-fade-in'
+          : 'bg-sp-surface/80 border border-sp-accent/30 rounded-xl p-3 space-y-2.5 animate-fade-in'
+      }
+    >
       {/* 카테고리 */}
       <div>
         <p className={`text-sp-muted mb-1 ${compact ? 'text-caption' : 'text-detail'}`}>카테고리</p>
@@ -1866,7 +2089,9 @@ function InlineRecordEditor({
       {/* 세부 항목 */}
       {cat && (
         <div>
-          <p className={`text-sp-muted mb-1 ${compact ? 'text-caption' : 'text-detail'}`}>세부 항목</p>
+          <p className={`text-sp-muted mb-1 ${compact ? 'text-caption' : 'text-detail'}`}>
+            세부 항목
+          </p>
           {isAttendance ? (
             <div className="space-y-1.5">
               {/* 출결 유형 */}
@@ -1879,12 +2104,15 @@ function InlineRecordEditor({
                       setLocalAttReason('');
                       setEditSubcategory('');
                     }}
-                    className={getSubcategoryChipClass(cat.color, localAttType === t).replace(
-                      compact ? '' : '',
-                      ''
-                    ) + (compact ? ' !text-detail !px-2 !py-0.5' : '')}
+                    className={
+                      getSubcategoryChipClass(cat.color, localAttType === t).replace(
+                        compact ? '' : '',
+                        '',
+                      ) + (compact ? ' !text-detail !px-2 !py-0.5' : '')
+                    }
                   >
-                    {localAttType === t && <span className="mr-0.5">✓</span>}{t}
+                    {localAttType === t && <span className="mr-0.5">✓</span>}
+                    {t}
                   </button>
                 ))}
               </div>
@@ -1902,9 +2130,13 @@ function InlineRecordEditor({
                             setLocalAttReason(r);
                             setEditSubcategory(`${localAttType} (${r})`);
                           }}
-                          className={getSubcategoryChipClass(cat.color, isReasonSelected) + (compact ? ' !text-detail !px-2 !py-0.5' : '')}
+                          className={
+                            getSubcategoryChipClass(cat.color, isReasonSelected) +
+                            (compact ? ' !text-detail !px-2 !py-0.5' : '')
+                          }
                         >
-                          {isReasonSelected && <span className="mr-0.5">✓</span>}{r}
+                          {isReasonSelected && <span className="mr-0.5">✓</span>}
+                          {r}
                         </button>
                       );
                     })}
@@ -1920,9 +2152,13 @@ function InlineRecordEditor({
                   <button
                     key={sub}
                     onClick={() => setEditSubcategory(sub)}
-                    className={getSubcategoryChipClass(cat.color, isSelected) + (compact ? ' !text-detail !px-2 !py-0.5' : '')}
+                    className={
+                      getSubcategoryChipClass(cat.color, isSelected) +
+                      (compact ? ' !text-detail !px-2 !py-0.5' : '')
+                    }
                   >
-                    {isSelected && <span className="mr-0.5">✓</span>}{sub}
+                    {isSelected && <span className="mr-0.5">✓</span>}
+                    {sub}
                   </button>
                 );
               })}
@@ -1947,12 +2183,16 @@ function InlineRecordEditor({
         <button
           onClick={onCancel}
           className="px-3 py-1.5 rounded-lg text-xs font-medium text-sp-muted hover:text-sp-text hover:bg-sp-surface"
-        >취소</button>
+        >
+          취소
+        </button>
         <button
           onClick={onSave}
           disabled={!editSubcategory}
           className="px-3 py-1.5 rounded-lg text-xs font-medium bg-sp-accent text-white hover:bg-sp-accent/80 disabled:opacity-50 disabled:cursor-not-allowed"
-        >저장</button>
+        >
+          저장
+        </button>
       </div>
     </div>
   );

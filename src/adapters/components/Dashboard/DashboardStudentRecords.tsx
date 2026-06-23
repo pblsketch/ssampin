@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useStudentRecordsStore, RECORD_COLOR_MAP } from '@adapters/stores/useStudentRecordsStore';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
-import { sortByDateDesc } from '@domain/rules/studentRecordRules';
+import { sortByDateDesc, recordExportLabel } from '@domain/rules/studentRecordRules';
 import { isStudentActive } from '@domain/rules/studentActivity';
 import { StudentRecordsEditor } from '../Homeroom/Records/StudentRecordsEditor';
 
@@ -216,7 +216,7 @@ function DashboardStudentRecordsCompact() {
               return (
                 <li key={record.id} className="flex items-center gap-2 rounded-lg px-2 py-1.5">
                   <span className={getTagClass(categoryColorMap.get(record.category) ?? 'gray')}>
-                    {record.subcategory}
+                    {recordExportLabel(record)}
                   </span>
                   <span className="text-sm text-sp-text font-medium">{student?.name ?? '?'}</span>
                   {record.content && (

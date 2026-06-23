@@ -1653,9 +1653,15 @@ function RecordsSubTab({ studentId }: { studentId: string; studentName: string }
                       <span className="text-xs px-1.5 py-0.5 rounded-full bg-white/5 text-sp-muted">
                         {cat?.name.split('(')[0]?.trim() ?? rec.category}
                       </span>
-                      {rec.subcategory && (
-                        <span className="text-xs text-sp-muted/70">{rec.subcategory}</span>
-                      )}
+                      {/* Q2: 출결은 subcategory, 비출결은 태그(있을 때만 — 카테고리명은 위에 이미 표시). */}
+                      {rec.category === 'attendance'
+                        ? rec.subcategory && (
+                            <span className="text-xs text-sp-muted/70">{rec.subcategory}</span>
+                          )
+                        : rec.tags &&
+                          rec.tags.length > 0 && (
+                            <span className="text-xs text-sp-muted/70">{rec.tags.join(' · ')}</span>
+                          )}
                     </div>
                     <p className="text-sp-text text-sm">{rec.content}</p>
                   </div>
