@@ -4967,15 +4967,98 @@ async function deleteNotePage(ctx, args) {
 
 // ../ssampin-ai-bridge/packages/mcp/dist/attendanceTools.js
 var DATE_RE3 = /^\d{4}-\d{2}-\d{2}$/;
+var OUT_OF_CURRENT_SCHOOL_YEAR_CONFIRM_FIELD = 'confirmOutOfCurrentSchoolYearDate';
+function parseDateOnly(date) {
+  const match = DATE_RE3.exec(date);
+  if (match === null) return null;
+  const [yearText, monthText, dayText] = [date.slice(0, 4), date.slice(5, 7), date.slice(8, 10)];
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return null;
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  if (
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() !== month - 1 ||
+    parsed.getUTCDate() !== day
+  ) {
+    return null;
+  }
+  return { year, month, day };
+}
+function todayInKorea(now = /* @__PURE__ */ new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now);
+  const values = new Map(parts.map((part) => [part.type, part.value]));
+  const year = values.get('year');
+  const month = values.get('month');
+  const day = values.get('day');
+  if (year === void 0 || month === void 0 || day === void 0) {
+    return now.toISOString().slice(0, 10);
+  }
+  return `${year}-${month}-${day}`;
+}
+function academicYearForDate(date) {
+  const parts = parseDateOnly(date);
+  if (parts === null) return null;
+  return parts.month >= 3 ? parts.year : parts.year - 1;
+}
+function schoolYearRangeText(schoolYear) {
+  return `${schoolYear}-03-01~${schoolYear + 1}-02-28`;
+}
+function describeCurrentSchoolYearDateRequirement(today = todayInKorea()) {
+  const schoolYear = academicYearForDate(today);
+  if (schoolYear === null) {
+    return '\uB0A0\uC9DC YYYY-MM-DD. \uD604\uC7AC \uD559\uB144\uB3C4 \uBC16 \uB0A0\uC9DC\uB294 \uC800\uC7A5 \uC804 \uC0AC\uC6A9\uC790 \uD655\uC778\uC774 \uD544\uC694\uD569\uB2C8\uB2E4.';
+  }
+  return `\uB0A0\uC9DC YYYY-MM-DD. \uD604\uC7AC \uAE30\uC900\uC77C(${today}, Asia/Seoul)\uC758 ${schoolYear}\uD559\uB144\uB3C4(${schoolYearRangeText(schoolYear)}) \uBC16 \uB0A0\uC9DC\uB294 \uC800\uC7A5 \uC804 \uC0AC\uC6A9\uC790 \uD655\uC778\uC774 \uD544\uC694\uD569\uB2C8\uB2E4. \uD655\uC778\uBC1B\uC740 \uACBD\uC6B0\uC5D0\uB9CC ${OUT_OF_CURRENT_SCHOOL_YEAR_CONFIRM_FIELD}\uC5D0 \uAC19\uC740 \uB0A0\uC9DC\uB97C \uB123\uC73C\uC138\uC694.`;
+}
+function outOfCurrentSchoolYearConfirmationMessage(date) {
+  const schoolYear = academicYearForDate(date);
+  if (schoolYear === null) {
+    return 'date \uB294 \uC2E4\uC81C \uB2EC\uB825 \uB0A0\uC9DC YYYY-MM-DD \uC5EC\uC57C \uD569\uB2C8\uB2E4.';
+  }
+  const today = todayInKorea();
+  const currentSchoolYear = academicYearForDate(today);
+  if (currentSchoolYear === null) {
+    return '\uD604\uC7AC \uB0A0\uC9DC\uB97C \uD655\uC778\uD560 \uC218 \uC5C6\uC5B4 \uCD9C\uACB0 \uB0A0\uC9DC\uB97C \uAC80\uC99D\uD558\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.';
+  }
+  if (schoolYear !== currentSchoolYear) {
+    return `\uC785\uB825\uD55C \uCD9C\uACB0 \uB0A0\uC9DC ${date}\uB294 \uD604\uC7AC \uAE30\uC900\uC77C(${today}, Asia/Seoul)\uC758 ${currentSchoolYear}\uD559\uB144\uB3C4(${schoolYearRangeText(currentSchoolYear)}) \uBC16\uC785\uB2C8\uB2E4. \uC800\uC7A5 \uC804 \uC0AC\uC6A9\uC790\uC5D0\uAC8C "${date} \uCD9C\uACB0\uC744 \uC815\uB9D0 \uCD94\uAC00/\uC218\uC815\uD560\uAE4C\uC694?"\uB77C\uACE0 \uD655\uC778\uBC1B\uACE0, \uD655\uC778\uBC1B\uC740 \uACBD\uC6B0\uC5D0\uB9CC ${OUT_OF_CURRENT_SCHOOL_YEAR_CONFIRM_FIELD}="${date}"\uB85C \uB2E4\uC2DC \uD638\uCD9C\uD558\uC138\uC694.`;
+  }
+  return null;
+}
+function requireCurrentSchoolYearDateConfirmation(date, confirmationDate) {
+  if (academicYearForDate(date) === null) {
+    throw new WriteValidationError(
+      'date \uB294 \uC2E4\uC81C \uB2EC\uB825 \uB0A0\uC9DC YYYY-MM-DD \uC5EC\uC57C \uD569\uB2C8\uB2E4.',
+    );
+  }
+  const message = outOfCurrentSchoolYearConfirmationMessage(date);
+  if (message === null) return;
+  if (confirmationDate === date) return;
+  throw new WriteValidationError(message);
+}
+function appendSchoolYearConfirmation(data, confirmationDate) {
+  if (confirmationDate !== void 0) {
+    data[OUT_OF_CURRENT_SCHOOL_YEAR_CONFIRM_FIELD] = confirmationDate;
+  }
+}
 var ATTENDANCE_CONTENT_GATE_NOTICE =
   '\uCD9C\uACB0 \uC0AC\uC720\xB7\uBA54\uBAA8\uB294 SSAMPIN_BRIDGE_ALLOW_CONTENT=1 \uB610\uB294 \uC324\uD540 AI \uC5F0\uACB0 \uC77D\uAE30 \uD5C8\uC6A9\uC774 \uCF1C\uC9C4 \uACBD\uC6B0\uC5D0\uB9CC \uB178\uCD9C\uB429\uB2C8\uB2E4(\uD604\uC7AC \uBBF8\uB178\uCD9C). \uB0A0\uC9DC\xB7\uAD50\uC2DC\xB7\uC0C1\uD0DC \uB4F1 \uCD5C\uC18C \uBA54\uD0C0\uB9CC \uBC18\uD658\uD588\uC2B5\uB2C8\uB2E4.';
 var ATTENDANCE_CONTENT_SHOWN_NOTICE =
   '\uCD9C\uACB0 \uC0AC\uC720\xB7\uBA54\uBAA8\uAC00 \uD3EC\uD568\uB418\uC5B4 \uC788\uC2B5\uB2C8\uB2E4. \uD559\uC0DD \uC2E4\uBA85\xB7\uC5F0\uB77D\uCC98\xB7\uC0DD\uC77C\uC740 \uB9C8\uC2A4\uD0B9\uB418\uC9C0\uB9CC \uAC74\uAC15\xB7\uC0C1\uB2F4 \uB4F1 \uBBFC\uAC10 \uB9E5\uB77D\uC740 \uAD50\uC0AC \uAC80\uD1A0\uAC00 \uD544\uC694\uD569\uB2C8\uB2E4.';
-function validateDatePeriod(date, period) {
+function validateDatePeriod(date, period, confirmationDate) {
   if (!DATE_RE3.test(date))
     throw new WriteValidationError(
       'date \uB294 YYYY-MM-DD \uD615\uC2DD\uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4.',
     );
+  requireCurrentSchoolYearDateConfirmation(date, confirmationDate);
   if (!Number.isInteger(period) || period < 0 || period > 20) {
     throw new WriteValidationError(
       'period \uB294 0 \uC774\uC0C1 20 \uC774\uD558\uC758 \uC815\uC218\uC5EC\uC57C \uD569\uB2C8\uB2E4.',
@@ -5116,7 +5199,7 @@ function parseStudentAttendance(ctx, cls, input) {
 }
 function toRecordInput(ctx, args) {
   const cls = resolveClass(ctx, args.classToken);
-  validateDatePeriod(args.date, args.period);
+  validateDatePeriod(args.date, args.period, args.confirmOutOfCurrentSchoolYearDate);
   const record = {
     classId: cls.id,
     date: args.date,
@@ -5124,6 +5207,9 @@ function toRecordInput(ctx, args) {
     students: args.students.map((student) => parseStudentAttendance(ctx, cls, student)),
   };
   if (cls.groupId !== void 0) record.groupId = cls.groupId;
+  if (args.confirmOutOfCurrentSchoolYearDate !== void 0) {
+    record.confirmOutOfCurrentSchoolYearDate = args.confirmOutOfCurrentSchoolYearDate;
+  }
   const seen = /* @__PURE__ */ new Set();
   for (const student of record.students) {
     const key = studentKey(student);
@@ -5137,10 +5223,25 @@ function toRecordInput(ctx, args) {
 }
 function toDeleteInput(ctx, args) {
   const cls = resolveClass(ctx, args.classToken);
-  validateDatePeriod(args.date, args.period);
+  validateDatePeriod(args.date, args.period, args.confirmOutOfCurrentSchoolYearDate);
   return cls.groupId === void 0
-    ? { classId: cls.id, date: args.date, period: args.period }
-    : { classId: cls.id, groupId: cls.groupId, date: args.date, period: args.period };
+    ? {
+        classId: cls.id,
+        date: args.date,
+        period: args.period,
+        ...(args.confirmOutOfCurrentSchoolYearDate !== void 0
+          ? { confirmOutOfCurrentSchoolYearDate: args.confirmOutOfCurrentSchoolYearDate }
+          : {}),
+      }
+    : {
+        classId: cls.id,
+        groupId: cls.groupId,
+        date: args.date,
+        period: args.period,
+        ...(args.confirmOutOfCurrentSchoolYearDate !== void 0
+          ? { confirmOutOfCurrentSchoolYearDate: args.confirmOutOfCurrentSchoolYearDate }
+          : {}),
+      };
 }
 async function writeAttendanceVia(ctx, op, data, idempotencyKey, directWrite) {
   const decision = decideWritePath(ctx.dataDir);
@@ -5180,6 +5281,7 @@ async function setAttendanceRecord(ctx, args) {
     students: input.students,
   };
   if (input.groupId !== void 0) data['groupId'] = input.groupId;
+  appendSchoolYearConfirmation(data, input.confirmOutOfCurrentSchoolYearDate);
   const idempotencyKey = deriveIdemKey('attendance', 'create', data, args.idempotencyKey);
   const { ref, via } = await writeAttendanceVia(ctx, 'create', data, idempotencyKey, () =>
     upsertAttendanceDirect(ctx.dataDir, input, idempotencyKey),
@@ -5199,6 +5301,7 @@ async function deleteAttendanceRecord(ctx, args) {
     period: input.period,
   };
   if (input.groupId !== void 0) data['groupId'] = input.groupId;
+  appendSchoolYearConfirmation(data, input.confirmOutOfCurrentSchoolYearDate);
   const idempotencyKey = deriveIdemKey('attendance', 'delete', data, args.idempotencyKey);
   const { ref, via } = await writeAttendanceVia(ctx, 'delete', data, idempotencyKey, () =>
     deleteAttendanceDirect(ctx.dataDir, input, idempotencyKey),
@@ -5268,6 +5371,7 @@ async function setHomeroomAttendance(ctx, args) {
       'date \uB294 YYYY-MM-DD \uD615\uC2DD\uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4.',
     );
   }
+  requireCurrentSchoolYearDateConfirmation(args.date, args.confirmOutOfCurrentSchoolYearDate);
   const hasAllDay = args.allDay !== void 0;
   const hasPeriods = args.periods !== void 0;
   if (hasAllDay === hasPeriods) {
@@ -5302,6 +5406,7 @@ async function setHomeroomAttendance(ctx, args) {
     studentEntry['periods'] = periods;
   }
   const data = { date: args.date, students: [studentEntry] };
+  appendSchoolYearConfirmation(data, args.confirmOutOfCurrentSchoolYearDate);
   const decision = decideWritePath(ctx.dataDir);
   if (decision.path !== 'loopback' || decision.control === null) {
     throw new WriteConflictError(
@@ -5445,6 +5550,8 @@ async function runTool(label, produce) {
 function createSsampinMcpServer(opts = {}) {
   const ctx = createContext(opts.dataDir);
   const server = new McpServer({ name: 'ssampin-ai-bridge', version: '0.0.0' });
+  const attendanceDateDescription = describeCurrentSchoolYearDateRequirement();
+  const attendanceDateConfirmationDescription = `\uD604\uC7AC \uD559\uB144\uB3C4 \uBC16 \uCD9C\uACB0 \uB0A0\uC9DC\uB97C \uC0AC\uC6A9\uC790\uC5D0\uAC8C \uBA85\uC2DC \uD655\uC778\uBC1B\uC740 \uACBD\uC6B0\uC5D0\uB9CC date\uC640 \uAC19\uC740 YYYY-MM-DD \uAC12\uC744 \uB123\uC2B5\uB2C8\uB2E4. \uD544\uB4DC\uBA85: ${OUT_OF_CURRENT_SCHOOL_YEAR_CONFIRM_FIELD}`;
   server.registerTool(
     'list_classes',
     {
@@ -5982,8 +6089,12 @@ function createSsampinMcpServer(opts = {}) {
         date: z
           .string()
           .regex(/^\d{4}-\d{2}-\d{2}$/)
-          .describe('\uB0A0\uC9DC YYYY-MM-DD'),
+          .describe(attendanceDateDescription),
         period: z.number().int().min(0).max(20).describe('\uAD50\uC2DC'),
+        confirmOutOfCurrentSchoolYearDate: z
+          .string()
+          .optional()
+          .describe(attendanceDateConfirmationDescription),
         students: z
           .array(
             z.object({
@@ -6022,8 +6133,12 @@ function createSsampinMcpServer(opts = {}) {
         date: z
           .string()
           .regex(/^\d{4}-\d{2}-\d{2}$/)
-          .describe('\uB0A0\uC9DC YYYY-MM-DD'),
+          .describe(attendanceDateDescription),
         period: z.number().int().min(0).max(20).describe('\uAD50\uC2DC'),
+        confirmOutOfCurrentSchoolYearDate: z
+          .string()
+          .optional()
+          .describe(attendanceDateConfirmationDescription),
         idempotencyKey: z
           .string()
           .optional()
@@ -6048,7 +6163,11 @@ function createSsampinMcpServer(opts = {}) {
         date: z
           .string()
           .regex(/^\d{4}-\d{2}-\d{2}$/)
-          .describe('\uB0A0\uC9DC YYYY-MM-DD'),
+          .describe(attendanceDateDescription),
+        confirmOutOfCurrentSchoolYearDate: z
+          .string()
+          .optional()
+          .describe(attendanceDateConfirmationDescription),
         allDay: z
           .object({
             status: z.enum(['present', 'absent', 'late', 'earlyLeave', 'classAbsence']),

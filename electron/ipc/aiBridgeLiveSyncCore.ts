@@ -303,6 +303,74 @@ const ATTENDANCE_STATUSES: ReadonlySet<string> = new Set([
 ]);
 const ATTENDANCE_REASONS: ReadonlySet<string> = new Set(['질병', '인정', '미인정', '기타']);
 const MEMO_ATT_MAX = 500;
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const OUT_OF_CURRENT_SCHOOL_YEAR_CONFIRM_FIELD = 'confirmOutOfCurrentSchoolYearDate';
+
+interface DateParts {
+  readonly year: number;
+  readonly month: number;
+  readonly day: number;
+}
+
+function parseDateOnly(date: string): DateParts | null {
+  const match = DATE_RE.exec(date);
+  if (match === null) return null;
+  const year = Number(date.slice(0, 4));
+  const month = Number(date.slice(5, 7));
+  const day = Number(date.slice(8, 10));
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return null;
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  if (
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() !== month - 1 ||
+    parsed.getUTCDate() !== day
+  ) {
+    return null;
+  }
+  return { year, month, day };
+}
+
+function todayInKorea(now: Date = new Date()): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now);
+  const values = new Map(parts.map((part) => [part.type, part.value]));
+  const year = values.get('year');
+  const month = values.get('month');
+  const day = values.get('day');
+  if (year === undefined || month === undefined || day === undefined) {
+    return now.toISOString().slice(0, 10);
+  }
+  return `${year}-${month}-${day}`;
+}
+
+function academicYearForDate(date: string): number | null {
+  const parts = parseDateOnly(date);
+  if (parts === null) return null;
+  return parts.month >= 3 ? parts.year : parts.year - 1;
+}
+
+function schoolYearRangeText(schoolYear: number): string {
+  return `${schoolYear}-03-01~${schoolYear + 1}-02-28`;
+}
+
+function checkCurrentSchoolYearDate(date: string, confirmationDate: unknown): string | null {
+  const schoolYear = academicYearForDate(date);
+  if (schoolYear === null) return 'date 는 실제 달력 날짜 YYYY-MM-DD 여야 합니다.';
+  const today = todayInKorea();
+  const currentSchoolYear = academicYearForDate(today);
+  if (currentSchoolYear === null)
+    return '현재 날짜를 확인할 수 없어 출결 날짜를 검증하지 못했습니다.';
+  if (schoolYear !== currentSchoolYear) {
+    if (confirmationDate === date) return null;
+    return `입력한 출결 날짜 ${date}는 현재 기준일(${today}, Asia/Seoul)의 ${currentSchoolYear}학년도(${schoolYearRangeText(currentSchoolYear)}) 밖입니다. 저장 전 사용자에게 "${date} 출결을 정말 추가/수정할까요?"라고 확인받고, 확인받은 경우에만 ${OUT_OF_CURRENT_SCHOOL_YEAR_CONFIRM_FIELD}="${date}"로 다시 호출하세요.`;
+  }
+  return null;
+}
 
 /** 출결 학생 1명(교시별 단건)의 status/reason/memo 검증. 정상이면 null. */
 function checkAttendanceStudentFields(s: unknown, requireNumber: boolean): string | null {
@@ -337,9 +405,15 @@ function checkAttendancePayload(op: string, d: Record<string, unknown>): string 
   if (d['groupId'] !== undefined && typeof d['groupId'] !== 'string') {
     return 'groupId 는 문자열이어야 합니다.';
   }
-  if (typeof d['date'] !== 'string' || !DATE_RE.test(d['date'])) {
+  const date = d['date'];
+  if (typeof date !== 'string' || !DATE_RE.test(date)) {
     return 'date 는 YYYY-MM-DD 형식이어야 합니다.';
   }
+  const schoolYearErr = checkCurrentSchoolYearDate(
+    date,
+    d[OUT_OF_CURRENT_SCHOOL_YEAR_CONFIRM_FIELD],
+  );
+  if (schoolYearErr) return schoolYearErr;
   if (
     typeof d['period'] !== 'number' ||
     !Number.isInteger(d['period']) ||
@@ -360,9 +434,15 @@ function checkAttendancePayload(op: string, d: Record<string, unknown>): string 
 
 /** 담임 일일 출결(homeroomAttendance) payload 검증. create 만 지원. 학생별 allDay 또는 periods. */
 function checkHomeroomAttendancePayload(d: Record<string, unknown>): string | null {
-  if (typeof d['date'] !== 'string' || !DATE_RE.test(d['date'])) {
+  const date = d['date'];
+  if (typeof date !== 'string' || !DATE_RE.test(date)) {
     return 'date 는 YYYY-MM-DD 형식이어야 합니다.';
   }
+  const schoolYearErr = checkCurrentSchoolYearDate(
+    date,
+    d[OUT_OF_CURRENT_SCHOOL_YEAR_CONFIRM_FIELD],
+  );
+  if (schoolYearErr) return schoolYearErr;
   if (!Array.isArray(d['students']) || d['students'].length === 0) {
     return 'homeroomAttendance 에는 students 배열(1명 이상)이 필요합니다.';
   }
@@ -416,7 +496,6 @@ const RECORD_AREAS: ReadonlySet<string> = new Set([
 
 // #5: 앱 측(서버) 검증을 브릿지 writeTools 와 동일 강도로 — 토큰을 가진 로컬 호출자가 브릿지의
 //   길이/형식/enum 검증을 건너뛰고 잘못된 값을 주입하는 것을 서버에서도 막는다(서버가 클라를 신뢰하지 않음).
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_RE = /^\d{2}:\d{2}$/; // 할일 시간(일정 time 은 '09:00 - 10:00' 등 자유서술 — 브릿지와 동일하게 미강제)
 const PRIORITIES: ReadonlySet<string> = new Set(['high', 'medium', 'low', 'none']);
 const TODO_STATUS: ReadonlySet<string> = new Set(['todo', 'inProgress', 'done']);

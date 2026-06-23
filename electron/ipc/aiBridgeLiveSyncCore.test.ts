@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import os from 'node:os';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -696,6 +696,39 @@ describe('validateApplyWrite', () => {
     ).toBe(false); // date 형식 위반
   });
 
+  it('attendance: 현재 학년도 밖 날짜는 확인 요청 후 확인값이 있으면 허용', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-06-24T00:00:00+09:00'));
+    try {
+      const base = { domain: 'attendance', op: 'create', idempotencyKey: 'k' } as const;
+      const data = {
+        classId: 'c1',
+        date: '2025-06-22',
+        period: 3,
+        students: [{ number: 5, status: 'present' }],
+      };
+      const first = validateApplyWrite({ ...base, data });
+      expect(first.ok).toBe(false);
+      expect(first.ok === false ? first.reason : '').toContain(
+        'confirmOutOfCurrentSchoolYearDate="2025-06-22"',
+      );
+      expect(
+        validateApplyWrite({
+          ...base,
+          data: { ...data, confirmOutOfCurrentSchoolYearDate: '2025-06-22' },
+        }).ok,
+      ).toBe(true);
+      expect(
+        validateApplyWrite({
+          ...base,
+          data: { ...data, confirmOutOfCurrentSchoolYearDate: '2025-06-21' },
+        }).ok,
+      ).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('attendance: create/delete 만 지원(update 거부)', () => {
     expect(
       validateApplyWrite({
@@ -758,6 +791,31 @@ describe('validateApplyWrite', () => {
         data: { date: '2026-06-01', students: [{ number: 1, allDay: { status: 'xxx' } }] },
       }).ok,
     ).toBe(false); // status enum 위반
+  });
+
+  it('homeroomAttendance: 현재 학년도 밖 날짜는 확인 요청 후 확인값이 있으면 허용', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-06-24T00:00:00+09:00'));
+    try {
+      const base = { domain: 'homeroomAttendance', op: 'create', idempotencyKey: 'k' } as const;
+      const data = {
+        date: '2025-06-22',
+        students: [{ number: 1, allDay: { status: 'absent', reason: '인정' } }],
+      };
+      const first = validateApplyWrite({ ...base, data });
+      expect(first.ok).toBe(false);
+      expect(first.ok === false ? first.reason : '').toContain(
+        'confirmOutOfCurrentSchoolYearDate="2025-06-22"',
+      );
+      expect(
+        validateApplyWrite({
+          ...base,
+          data: { ...data, confirmOutOfCurrentSchoolYearDate: '2025-06-22' },
+        }).ok,
+      ).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('homeroomAttendance: create 만 지원(delete 거부)', () => {
