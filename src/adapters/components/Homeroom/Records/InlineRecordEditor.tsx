@@ -1,6 +1,10 @@
 import { useEffect, useState, useMemo } from 'react';
 import { RECORD_COLOR_MAP } from '@adapters/stores/useStudentRecordsStore';
-import { ATTENDANCE_TYPES, ATTENDANCE_REASONS } from '@domain/valueObjects/RecordCategory';
+import {
+  ATTENDANCE_TYPES,
+  ATTENDANCE_REASONS,
+  synthesizeSubcategory,
+} from '@domain/valueObjects/RecordCategory';
 import type { RecordCategoryItem } from '@domain/valueObjects/RecordCategory';
 import type { StudentRecord, AttendancePeriodEntry } from '@domain/entities/StudentRecord';
 import { validateAttendancePeriods } from '@domain/rules/attendanceRules';
@@ -32,6 +36,14 @@ export interface InlineRecordEditorProps {
   attendancePeriods?: readonly AttendancePeriodEntry[];
   setAttendancePeriods?: (next: AttendancePeriodEntry[]) => void;
   regularPeriodCount?: number;
+  /**
+   * Q2: 비출결 편집 시 세부 분류를 **태그**로 편집한다(서브카테고리 직접편집 대체).
+   * 제공되면 비출결에서 서브카테고리 칩 대신 태그 칩을 노출하고, subcategory 는 sentinel 로 자동 유지.
+   * 미제공(기존 호출자)이면 종전 서브카테고리 칩 동작.
+   */
+  editTags?: readonly string[];
+  setEditTags?: (next: string[]) => void;
+  availableTags?: readonly string[];
 }
 
 export function InlineRecordEditor({
@@ -57,7 +69,11 @@ export function InlineRecordEditor({
   attendancePeriods,
   setAttendancePeriods,
   regularPeriodCount,
+  editTags,
+  setEditTags,
+  availableTags,
 }: InlineRecordEditorProps) {
+  const tagEditMode = !!editTags && !!setEditTags;
   const cat = useMemo(
     () => categories.find((c) => c.id === editCategory),
     [editCategory, categories],
@@ -121,7 +137,8 @@ export function InlineRecordEditor({
                 key={c.id}
                 onClick={() => {
                   setEditCategory(c.id);
-                  setEditSubcategory('');
+                  // Q2: 비출결은 subcategory 를 sentinel 로 자동 유지(세부는 태그로). 출결은 유형 선택까지 빈값.
+                  setEditSubcategory(c.id === 'attendance' ? '' : synthesizeSubcategory(c.id));
                   setLocalAttType('');
                   setLocalAttReason('');
                 }}
@@ -136,11 +153,11 @@ export function InlineRecordEditor({
         </div>
       </div>
 
-      {/* 세부 항목 */}
+      {/* 세부 항목 / 태그 */}
       {cat && (
         <div>
           <p className={`text-sp-muted mb-1 ${compact ? 'text-caption' : 'text-detail'}`}>
-            세부 항목
+            {!isAttendance && tagEditMode ? '태그' : '세부 항목'}
           </p>
           {periodEditMode ? (
             <PeriodRowEditor
@@ -149,6 +166,35 @@ export function InlineRecordEditor({
               regularPeriodCount={regularPeriodCount}
               compact={compact}
             />
+          ) : !isAttendance && tagEditMode ? (
+            // Q2: 비출결 세부 분류를 태그(다중 선택)로 편집. subcategory 는 sentinel 로 자동 유지.
+            <div className="flex flex-wrap gap-1.5">
+              {(availableTags ?? []).map((tag) => {
+                const isSelected = editTags!.includes(tag);
+                return (
+                  <button
+                    key={tag}
+                    type="button"
+                    aria-pressed={isSelected}
+                    onClick={() =>
+                      setEditTags!(
+                        isSelected ? editTags!.filter((t) => t !== tag) : [...editTags!, tag],
+                      )
+                    }
+                    className={
+                      getSubcategoryChipClass(cat.color, isSelected) +
+                      (compact ? ' !text-detail !px-2 !py-0.5' : '')
+                    }
+                  >
+                    {isSelected && <span className="mr-0.5">✓</span>}
+                    {tag}
+                  </button>
+                );
+              })}
+              {(availableTags ?? []).length === 0 && (
+                <span className="text-detail text-sp-muted">사용 가능한 태그가 없습니다</span>
+              )}
+            </div>
           ) : isAttendance ? (
             <div className="space-y-1.5">
               {/* 출결 유형 */}

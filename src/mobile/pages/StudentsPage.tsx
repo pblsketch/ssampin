@@ -284,6 +284,8 @@ export function StudentsPage() {
         content: memo,
         date: selectedDateStr,
         createdAt: new Date().toISOString(),
+        // Q2: 칭찬을 태그로도 기록(통계 영구 이중기준 + 표시 tags 정합). subcategory='칭찬'은 호환 유지.
+        tags: ['칭찬'],
       });
       useSwipeUndoStore
         .getState()

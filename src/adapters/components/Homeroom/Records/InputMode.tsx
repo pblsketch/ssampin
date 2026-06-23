@@ -158,6 +158,7 @@ function InputMode({
   const [editingContent, setEditingContent] = useState('');
   const [editingCategory, setEditingCategory] = useState('');
   const [editingSubcat, setEditingSubcat] = useState('');
+  const [editingTags, setEditingTags] = useState<string[]>([]);
   const [editingReportedToNeis, setEditingReportedToNeis] = useState(false);
   const [editingDocumentSubmitted, setEditingDocumentSubmitted] = useState(false);
   const [editingAttendancePeriods, setEditingAttendancePeriods] = useState<AttendancePeriodEntry[]>(
@@ -1540,6 +1541,11 @@ function InputMode({
                             : undefined
                         }
                         regularPeriodCount={periodCount}
+                        editTags={editingRecord.category === 'attendance' ? undefined : editingTags}
+                        setEditTags={
+                          editingRecord.category === 'attendance' ? undefined : setEditingTags
+                        }
+                        availableTags={allHomeroomTags}
                         onSave={async () => {
                           if (editingRecord.category === 'attendance') {
                             const student = students.find((s) => s.id === editingRecord.studentId);
@@ -1584,23 +1590,27 @@ function InputMode({
                               return;
                             }
                           } else {
+                            // Q2: 비출결은 category + tags 편집. subcategory 는 sentinel 로 자동 유지(편집기에서 보존).
                             await updateRecord({
                               ...editingRecord,
                               content: editingContent,
                               category: editingCategory,
                               subcategory: editingSubcat,
+                              tags: editingTags.length > 0 ? [...editingTags] : undefined,
                             });
                           }
                           setEditingRecordId(null);
                           setEditingReportedToNeis(false);
                           setEditingDocumentSubmitted(false);
                           setEditingAttendancePeriods([]);
+                          setEditingTags([]);
                         }}
                         onCancel={() => {
                           setEditingRecordId(null);
                           setEditingReportedToNeis(false);
                           setEditingDocumentSubmitted(false);
                           setEditingAttendancePeriods([]);
+                          setEditingTags([]);
                         }}
                       />
                     );
@@ -1649,6 +1659,7 @@ function InputMode({
                                   setEditingContent(record.content);
                                   setEditingCategory(record.category);
                                   setEditingSubcat(record.subcategory);
+                                  setEditingTags([...(record.tags ?? [])]);
                                   setEditingReportedToNeis(record.reportedToNeis ?? false);
                                   setEditingDocumentSubmitted(record.documentSubmitted ?? false);
                                   if (record.category === 'attendance') {
