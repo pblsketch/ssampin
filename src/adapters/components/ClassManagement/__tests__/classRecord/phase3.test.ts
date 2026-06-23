@@ -11,6 +11,8 @@ const gridSource = () =>
   readFileSync('src/adapters/components/ClassManagement/ClassRecordStudentGrid.tsx', 'utf8');
 const tabSource = () =>
   readFileSync('src/adapters/components/ClassManagement/ClassRecordTab.tsx', 'utf8');
+const emptyStateSource = () =>
+  readFileSync('src/adapters/components/common/records/RecordEmptyState.tsx', 'utf8');
 
 describe('class record phase 3 ux safeguards', () => {
   it('keeps stale selected student cleanup and roster next action while defaulting unmarked students to present', () => {
@@ -34,7 +36,11 @@ describe('class record phase 3 ux safeguards', () => {
     expect(source).toContain('getInitialPeriodFilter');
     expect(source).toContain('month === 7 || month === 12');
     expect(source).toContain('handleResetFilters');
-    expect(source).toContain('필터 초기화');
+    // 빈결과 초기화 동작은 공용 RecordEmptyState 부품으로 추출됨(Phase B) — 배선으로 검증
+    expect(source).toContain('RecordEmptyState');
+    expect(source).toContain('onReset={handleResetFilters}');
+    // 실제 [필터 초기화] 텍스트는 부품에 존재
+    expect(emptyStateSource()).toContain('필터 초기화');
   });
 
   it('adds stats skeleton placeholders for loading/empty class transitions', () => {

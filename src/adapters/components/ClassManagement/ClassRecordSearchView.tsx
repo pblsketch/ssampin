@@ -5,20 +5,18 @@ import { useToastStore } from '@adapters/components/common/Toast';
 import { studentKey } from '@domain/entities/TeachingClass';
 import { isStudentActive } from '@domain/rules/studentActivity';
 import type { AttendanceStatus } from '@domain/entities/Attendance';
-import { ATTENDANCE_BADGE, ATTENDANCE_LABEL } from '@adapters/presentation/attendanceStatusStyle';
 import { DEFAULT_OBSERVATION_TAGS } from '@domain/entities/Observation';
-import { formatDateKR } from '@adapters/components/common/calendarUtils';
 import {
   mapMixedRecordsToFlatRows,
   type MixedExcelRow,
 } from '@adapters/presentation/mixedRecordExcelMapper';
-import { previewContent } from '@adapters/presentation/recordContentPreview';
+import { ExpandableRecordContent } from '@adapters/components/common/records/ExpandableRecordContent';
+import { AttendanceStatusBadge } from '@adapters/components/common/records/AttendanceStatusBadge';
+import { DateGroupHeader } from '@adapters/components/common/records/DateGroupHeader';
+import { RecordEmptyState } from '@adapters/components/common/records/RecordEmptyState';
 /* eslint-disable no-restricted-imports */
 import { exportMixedRecordsToExcel } from '@infrastructure/export/ExcelExporter';
 /* eslint-enable no-restricted-imports */
-
-const STATUS_BADGE = ATTENDANCE_BADGE;
-const STATUS_LABEL = ATTENDANCE_LABEL;
 
 type CategoryFilter = 'all' | 'attendance' | 'observation';
 
@@ -31,9 +29,6 @@ const PERIOD_LABEL: Record<PeriodFilter, string> = {
   week: '이번 주',
   custom: '직접 설정',
 };
-
-/** 내용 미리보기 최대 길이 — 초과 시 [더보기]로 펼친다. */
-const CONTENT_PREVIEW_LIMIT = 100;
 
 function getInitialPeriodFilter(): PeriodFilter {
   const month = new Date().getMonth() + 1;
@@ -74,7 +69,6 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
   const [tagFilter, setTagFilter] = useState<string[]>([]);
   const [keyword, setKeyword] = useState('');
   const [debouncedKeyword, setDebouncedKeyword] = useState('');
-  const [expandedIds, setExpandedIds] = useState<ReadonlySet<string>>(() => new Set());
   const [periodFilter, setPeriodFilter] = useState<PeriodFilter>(getInitialPeriodFilter);
   const [customStart, setCustomStart] = useState(() => {
     const d = new Date();
@@ -112,15 +106,6 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
     },
     [],
   );
-
-  const toggleExpand = useCallback((id: string) => {
-    setExpandedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
 
   const cls = useMemo(() => classes.find((c) => c.id === classId), [classes, classId]);
   const students = useMemo(() => {
@@ -251,6 +236,13 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
     }
     return groups;
   }, [filtered]);
+
+  const hasActiveFilters =
+    studentFilter !== '' ||
+    categoryFilter !== 'all' ||
+    tagFilter.length > 0 ||
+    debouncedKeyword.trim() !== '' ||
+    periodFilter !== 'all';
 
   const handleResetFilters = () => {
     // 대기 중 디바운스 타이머를 먼저 취소 — 안 하면 곧 발화해 방금 지운 키워드가 부활(레이스)
@@ -447,22 +439,11 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
       {/* 타임라인 */}
       <div className="space-y-4">
         {grouped.length === 0 ? (
-          <div className="py-12 text-center text-sm text-sp-muted">
-            <p>조건에 맞는 기록이 없습니다</p>
-            <button
-              type="button"
-              onClick={handleResetFilters}
-              className="mt-3 px-3 py-1.5 rounded-lg bg-sp-accent text-white text-xs font-medium hover:brightness-110 transition-all"
-            >
-              필터 초기화
-            </button>
-          </div>
+          <RecordEmptyState hasActiveFilters={hasActiveFilters} onReset={handleResetFilters} />
         ) : (
           grouped.map((group) => (
             <div key={group.date}>
-              <div className="text-xs text-sp-muted font-medium mb-1.5 px-1">
-                {formatDateKR(group.date)}
-              </div>
+              <DateGroupHeader date={group.date} count={group.records.length} />
               <div className="space-y-1.5">
                 {group.records.map((r) => (
                   <div
@@ -484,11 +465,7 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
                       </span>
                       {r.type === 'attendance' && r.status && (
                         <>
-                          <span
-                            className={`px-1.5 py-0.5 rounded text-xs font-medium ${STATUS_BADGE[r.status]}`}
-                          >
-                            {STATUS_LABEL[r.status]}
-                          </span>
+                          <AttendanceStatusBadge status={r.status} />
                           {r.period && (
                             <span className="text-xs text-sp-muted">{r.period}교시</span>
                           )}
@@ -511,31 +488,11 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
                     {r.type === 'attendance' && r.memo && (
                       <p className="text-xs text-sp-muted pl-1">{r.memo}</p>
                     )}
-                    {r.type === 'observation' &&
-                      r.content &&
-                      (() => {
-                        const { text, showToggle } = previewContent(
-                          r.content,
-                          expandedIds.has(r.id),
-                          CONTENT_PREVIEW_LIMIT,
-                        );
-                        return (
-                          <div className="pl-1">
-                            <p className="text-sm text-sp-text leading-relaxed whitespace-pre-wrap">
-                              {text}
-                            </p>
-                            {showToggle && (
-                              <button
-                                type="button"
-                                onClick={() => toggleExpand(r.id)}
-                                className="mt-0.5 text-xs text-sp-accent hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-sp-accent"
-                              >
-                                {expandedIds.has(r.id) ? '접기' : '더보기'}
-                              </button>
-                            )}
-                          </div>
-                        );
-                      })()}
+                    {r.type === 'observation' && r.content && (
+                      <div className="pl-1">
+                        <ExpandableRecordContent content={r.content} />
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
