@@ -592,18 +592,33 @@ serve(async (req: Request): Promise<Response> => {
     }
 
     // 7. 일반 답변 반환
-    const sources = matchedDocs
-      .filter((d) => d.similarity > 0.55)
-      .map((d) => d.metadata?.title ?? d.metadata?.source ?? '문서');
 
-    // 답변에 hedging 표현이 있으면 confidence 하향 조정
+    // 답변이 "정보 없음"을 자인하는 표현(hedging)을 쓰면 신뢰도/출처를 보수적으로 처리
     const hedgingPatterns = ['정보가 없', '모르', '확인이 어렵', '아직 지원하지', '잘 모르'];
     const hasHedging = hedgingPatterns.some((p) => llmResponse.includes(p));
 
-    const confidence =
-      matchedDocs.length > 0
-        ? Math.min(matchedDocs[0].similarity * (hasHedging ? 0.6 : 1), 1)
-        : 0.3;
+    // 출처(참고 문서) 목록.
+    // ⚠️ hybrid_search 가 돌려주는 similarity 는 코사인 유사도가 아니라 순위 융합(RRF) 점수
+    // (대략 0.01~0.03)다. 따라서 코사인 기준값(0.55)으로 거르면 출처가 항상 비어 화면의
+    // "📚 참고" 줄이 영영 안 뜬다. matchedDocs 는 이미 LLM 리랭킹으로 관련도 상위만 추려진
+    // 상태이므로 상위 문서 제목을 그대로 출처로 쓴다. 단 답변이 정보 없음을 자인한 경우엔
+    // 잘못된 출처 표기를 막기 위해 비운다.
+    const sources = hasHedging
+      ? []
+      : [
+          ...new Set(
+            matchedDocs
+              .slice(0, 3)
+              .map((d) => d.metadata?.title ?? d.metadata?.source ?? '')
+              .filter((t): t is string => t.length > 0),
+          ),
+        ];
+
+    // 신뢰도: RRF 점수는 0~1 신뢰도로 직접 환산할 수 없으므로(스케일이 ~0.01) 점수 크기 대신
+    // "근거 문서 검색 성공 여부 + hedging" 으로 판정한다. 낮은 신뢰도 안내 배너는 0.45 미만에서
+    // 노출되므로, 근거가 있고 답변이 자신 있을 때(0.85)는 배너가 뜨지 않고, 근거가 없거나(0.3)
+    // 답변이 정보 없음을 자인할 때(0.35)만 배너가 노출된다.
+    const confidence = matchedDocs.length === 0 ? 0.3 : hasHedging ? 0.35 : 0.85;
 
     // 대화 로그 저장
     await saveConversation(
@@ -618,7 +633,7 @@ serve(async (req: Request): Promise<Response> => {
     return jsonResponse({
       type: 'answer',
       message: llmResponse,
-      sources: [...new Set(sources)],
+      sources,
       confidence,
     } satisfies ChatResponseAnswer);
   } catch (error) {
