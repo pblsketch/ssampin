@@ -9,6 +9,7 @@ import { DEFAULT_RECORD_CATEGORIES } from '@domain/valueObjects/RecordCategory';
 import { studentRecordsRepository } from '@adapters/di/container';
 import { ManageStudentRecords } from '@usecases/studentRecords/ManageStudentRecords';
 import { updateAttendancePeriods } from '@usecases/studentRecords/UpdateAttendancePeriods';
+import { migrateStudentRecordsOnLoad } from '@usecases/studentRecords/MigrateStudentRecordsSubcatToTags';
 import { generateUUID } from '@infrastructure/utils/uuid';
 import type { StudentAttendance, AttendanceStatus } from '@domain/entities/Attendance';
 import { pickRepresentativeAttendance } from '@domain/rules/attendanceRules';
@@ -173,11 +174,14 @@ export const useStudentRecordsStore = create<StudentRecordsState>((set, get) => 
     load: async () => {
       if (get().loaded) return;
       try {
-        const [records, categories] = await Promise.all([
-          manageRecords.getAll(),
-          manageRecords.getCategories(),
-        ]);
-        set({ records, categories, loaded: true });
+        // Q2: 로드 시 멱등 정규화(비출결 subcategory→tags). 변경 있으면 1회 백업 후 영속,
+        //   변경 없으면 순수 read no-op. 동기화 후 reload 에서도 재실행되어 자가 치유한다.
+        const outcome = await migrateStudentRecordsOnLoad(studentRecordsRepository);
+        set({
+          records: outcome.records,
+          categories: outcome.categories ?? [...DEFAULT_RECORD_CATEGORIES],
+          loaded: true,
+        });
       } catch {
         set({ loaded: true });
       }

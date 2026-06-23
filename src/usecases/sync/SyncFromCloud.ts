@@ -15,8 +15,13 @@ import {
 } from './SyncToCloud';
 import { base64ToUint8 } from './binaryBase64';
 
+/** Q2: 마이그레이션 여부 판별 보조 — tags 가 많을수록 정규화된 쪽으로 본다. */
+function recordTagCount(r: StudentRecord): number {
+  return r.tags?.length ?? 0;
+}
+
 /** student-records를 record ID 기준으로 병합 (최신 createdAt 우선) */
-function mergeStudentRecords(
+export function mergeStudentRecords(
   local: StudentRecordsData | null,
   remote: StudentRecordsData,
 ): StudentRecordsData {
@@ -31,7 +36,14 @@ function mergeStudentRecords(
   // 리모트 레코드로 업데이트 (같은 ID면 createdAt이 더 최신인 것 사용)
   for (const r of remoteRecords) {
     const existing = map.get(r.id);
-    if (!existing || r.createdAt >= existing.createdAt) {
+    if (!existing || r.createdAt > existing.createdAt) {
+      map.set(r.id, r);
+    } else if (
+      r.createdAt === existing.createdAt &&
+      recordTagCount(r) >= recordTagCount(existing)
+    ) {
+      // Q2: createdAt 동률(정규화는 createdAt 불변)일 때 tags 가 더(또는 같이) 많은 쪽 우선.
+      //   미변환(tags 적은) 레코드가 변환본을 덮어 "좀비 부활"하는 것을 막는다(remote 우선 기본은 보존).
       map.set(r.id, r);
     }
   }

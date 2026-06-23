@@ -1,8 +1,10 @@
 import { create } from 'zustand';
 import type { StudentRecord } from '@domain/entities/StudentRecord';
 import type { RecordCategoryItem } from '@domain/valueObjects/RecordCategory';
+import { DEFAULT_RECORD_CATEGORIES } from '@domain/valueObjects/RecordCategory';
 import type { AttendanceStatus, AttendanceReason } from '@domain/entities/Attendance';
 import { ManageStudentRecords } from '@usecases/studentRecords/ManageStudentRecords';
+import { migrateStudentRecordsOnLoad } from '@usecases/studentRecords/MigrateStudentRecordsSubcatToTags';
 import { studentRecordsRepository } from '@mobile/di/container';
 import { useMobileDriveSyncStore } from '@mobile/stores/useMobileDriveSyncStore';
 import { useMobileAttendanceStore } from '@mobile/stores/useMobileAttendanceStore';
@@ -46,11 +48,13 @@ export const useMobileStudentRecordsStore = create<MobileStudentRecordsState>((s
   load: async () => {
     if (get().loaded) return;
     try {
-      const [records, categories] = await Promise.all([
-        manageRecords.getAll(),
-        manageRecords.getCategories(),
-      ]);
-      set({ records, categories, loaded: true });
+      // Q2: 모바일 단독 사용자도 로드 시 멱등 정규화(비출결 subcategory→tags). 데스크톱과 동일 경로.
+      const outcome = await migrateStudentRecordsOnLoad(studentRecordsRepository);
+      set({
+        records: outcome.records,
+        categories: outcome.categories ?? [...DEFAULT_RECORD_CATEGORIES],
+        loaded: true,
+      });
     } catch {
       set({ loaded: true });
     }
