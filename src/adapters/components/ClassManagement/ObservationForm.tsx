@@ -47,6 +47,7 @@ export function ObservationForm({ classId, studentId }: ObservationFormProps) {
     DEFAULT_OBSERVATION_CATEGORIES[0],
   );
   const [newCategoryInput, setNewCategoryInput] = useState('');
+  const [newTagInput, setNewTagInput] = useState('');
   const [saving, setSaving] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const prevStudentIdRef = useRef(studentId);
@@ -60,6 +61,7 @@ export function ObservationForm({ classId, studentId }: ObservationFormProps) {
   const addRecord = useObservationStore((s) => s.addRecord);
   const deleteRecord = useObservationStore((s) => s.deleteRecord);
   const customTags = useObservationStore((s) => s.customTags);
+  const addCustomTag = useObservationStore((s) => s.addCustomTag);
   const allTags = useMemo(() => [...DEFAULT_OBSERVATION_TAGS, ...customTags], [customTags]);
   const customCategories = useObservationStore((s) => s.customCategories);
   const addCustomCategory = useObservationStore((s) => s.addCustomCategory);
@@ -373,7 +375,7 @@ export function ObservationForm({ classId, studentId }: ObservationFormProps) {
         />
       </div>
 
-      <div className="flex flex-wrap gap-1">
+      <div className="flex flex-wrap items-center gap-1">
         {allTags.map((tag) => (
           <button
             key={tag}
@@ -387,6 +389,24 @@ export function ObservationForm({ classId, studentId }: ObservationFormProps) {
             {tag}
           </button>
         ))}
+        <input
+          type="text"
+          value={newTagInput}
+          onChange={(e) => setNewTagInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              const v = newTagInput.trim();
+              if (!v) return;
+              if (!allTags.includes(v)) void addCustomTag(v);
+              if (!selectedTags.includes(v)) toggleTag(v);
+              setNewTagInput('');
+            }
+          }}
+          placeholder="+ 태그"
+          aria-label="태그 직접 추가"
+          className="w-16 px-2 py-0.5 rounded-full text-caption bg-sp-surface border border-dashed border-sp-border text-sp-text placeholder:text-sp-muted focus:outline-none focus:border-sp-accent focus:w-24 transition-all"
+        />
       </div>
 
       <textarea
