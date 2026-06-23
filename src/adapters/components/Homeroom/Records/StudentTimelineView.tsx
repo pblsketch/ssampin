@@ -19,7 +19,15 @@ interface StudentTimelineViewProps extends RecordEditProps {
   records: readonly StudentRecord[];
   categories: readonly RecordCategoryItem[];
   studentMap: Map<string, Student>;
-  stats: { absent: number; late: number; earlyLeave: number; resultAbsent: number; praise: number; counseling: number; total: number } | null;
+  stats: {
+    absent: number;
+    late: number;
+    earlyLeave: number;
+    resultAbsent: number;
+    praise: number;
+    counseling: number;
+    total: number;
+  } | null;
   onEdit: (record: StudentRecord) => void;
   onDelete: (id: string) => Promise<void>;
   onToggleFollowUp: (id: string) => Promise<void>;
@@ -28,15 +36,35 @@ interface StudentTimelineViewProps extends RecordEditProps {
 }
 
 function StudentTimelineView({
-  student, records, categories, stats,
-  onEdit, onDelete, onToggleFollowUp, onToggleNeisReport, onToggleDocumentSubmitted,
-  editingId, editContent, setEditContent,
-  editCategory, setEditCategory, editSubcategory, setEditSubcategory,
-  editReportedToNeis, setEditReportedToNeis,
-  editDocumentSubmitted, setEditDocumentSubmitted,
-  editFollowUp, setEditFollowUp, editFollowUpDate, setEditFollowUpDate,
-  editAttendancePeriods, setEditAttendancePeriods, regularPeriodCount,
-  onEditSave, onEditCancel,
+  student,
+  records,
+  categories,
+  stats,
+  onEdit,
+  onDelete,
+  onToggleFollowUp,
+  onToggleNeisReport,
+  onToggleDocumentSubmitted,
+  editingId,
+  editContent,
+  setEditContent,
+  editCategory,
+  setEditCategory,
+  editSubcategory,
+  setEditSubcategory,
+  editReportedToNeis,
+  setEditReportedToNeis,
+  editDocumentSubmitted,
+  setEditDocumentSubmitted,
+  editFollowUp,
+  setEditFollowUp,
+  editFollowUpDate,
+  setEditFollowUpDate,
+  editAttendancePeriods,
+  setEditAttendancePeriods,
+  regularPeriodCount,
+  onEditSave,
+  onEditCancel,
 }: StudentTimelineViewProps) {
   const studentIdx = student.studentNumber ?? 0;
 
@@ -60,7 +88,9 @@ function StudentTimelineView({
         </div>
         <div>
           <h3 className="text-lg font-bold text-sp-text">{student.name}</h3>
-          <p className="text-xs text-sp-muted">{studentIdx}번 · 총 {records.length}건 기록</p>
+          <p className="text-xs text-sp-muted">
+            {studentIdx}번 · 총 {records.length}건 기록
+          </p>
         </div>
       </div>
 
@@ -88,17 +118,22 @@ function StudentTimelineView({
                 <div className="space-y-2 ml-2">
                   {dateRecords.map((record) => {
                     const isEditing = editingId === record.id;
-                    const periodLines = record.category === 'attendance'
-                      ? formatAttendancePeriodLines(record.attendancePeriods)
-                      : [];
+                    const periodLines =
+                      record.category === 'attendance'
+                        ? formatAttendancePeriodLines(record.attendancePeriods)
+                        : [];
                     return (
                       <div key={record.id} className="relative">
-                        {/* 도트 */}
-                        <div className={`absolute -left-[23px] top-3 w-2.5 h-2.5 rounded-full ${getCategoryDotColor(record.category, categories)} z-10`} />
+                        {/* 도트 — 세로선(중심 x=12px) 정중앙에 오도록 정렬 */}
+                        <div
+                          className={`absolute -left-[25px] top-3 w-2.5 h-2.5 rounded-full ${getCategoryDotColor(record.category, categories)} z-10`}
+                        />
 
-                        <div className={`group rounded-lg bg-sp-card p-3 hover:bg-sp-card/80 transition-all ${
-                          isEditing ? 'ring-1 ring-sp-accent/40' : editingId ? 'opacity-60' : ''
-                        }`}>
+                        <div
+                          className={`group rounded-lg bg-sp-card p-3 hover:bg-sp-card/80 transition-all ${
+                            isEditing ? 'ring-1 ring-sp-accent/40' : editingId ? 'opacity-60' : ''
+                          }`}
+                        >
                           <div className="flex items-center gap-2 mb-1">
                             <span className={getRecordTagClass(record.category, categories)}>
                               {record.subcategory}
@@ -124,13 +159,20 @@ function StudentTimelineView({
                             {record.category === 'attendance' && (
                               <>
                                 <button
-                                  onClick={(e) => { e.stopPropagation(); void onToggleNeisReport(record.id); }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    void onToggleNeisReport(record.id);
+                                  }}
                                   className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium transition-colors cursor-pointer ${
                                     record.reportedToNeis
                                       ? 'bg-green-500/15 text-green-400 hover:bg-green-500/25'
                                       : 'bg-red-500/10 text-red-400/70 hover:bg-red-500/20'
                                   }`}
-                                  title={record.reportedToNeis ? '나이스 반영 완료 (클릭하여 취소)' : '나이스 미반영 (클릭하여 반영 처리)'}
+                                  title={
+                                    record.reportedToNeis
+                                      ? '나이스 반영 완료 (클릭하여 취소)'
+                                      : '나이스 미반영 (클릭하여 반영 처리)'
+                                  }
                                 >
                                   <span className="material-symbols-outlined text-icon-xs">
                                     {record.reportedToNeis ? 'check_circle' : 'pending'}
@@ -138,13 +180,20 @@ function StudentTimelineView({
                                   {record.reportedToNeis ? '나이스' : '미반영'}
                                 </button>
                                 <button
-                                  onClick={(e) => { e.stopPropagation(); void onToggleDocumentSubmitted(record.id); }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    void onToggleDocumentSubmitted(record.id);
+                                  }}
                                   className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium transition-colors cursor-pointer ${
                                     record.documentSubmitted
                                       ? 'bg-green-500/15 text-green-400 hover:bg-green-500/25'
                                       : 'bg-orange-500/10 text-orange-400/70 hover:bg-orange-500/20'
                                   }`}
-                                  title={record.documentSubmitted ? '서류 제출 완료 (클릭하여 취소)' : '서류 미제출 (클릭하여 제출 처리)'}
+                                  title={
+                                    record.documentSubmitted
+                                      ? '서류 제출 완료 (클릭하여 취소)'
+                                      : '서류 미제출 (클릭하여 제출 처리)'
+                                  }
                                 >
                                   <span className="material-symbols-outlined text-icon-xs">
                                     {record.documentSubmitted ? 'description' : 'draft'}
@@ -180,7 +229,9 @@ function StudentTimelineView({
                                 record.category === 'attendance' ? editAttendancePeriods : undefined
                               }
                               setAttendancePeriods={
-                                record.category === 'attendance' ? setEditAttendancePeriods : undefined
+                                record.category === 'attendance'
+                                  ? setEditAttendancePeriods
+                                  : undefined
                               }
                               regularPeriodCount={regularPeriodCount}
                               onSave={() => void onEditSave(record)}
@@ -193,9 +244,13 @@ function StudentTimelineView({
                               )}
                               {record.followUp && (
                                 <div className="mt-1 flex items-center gap-2 text-xs">
-                                  <span className="text-sp-muted">{'\uD83D\uDCCC'} {record.followUp}</span>
+                                  <span className="text-sp-muted">
+                                    {'\uD83D\uDCCC'} {record.followUp}
+                                  </span>
                                   {record.followUpDate && (
-                                    <span className="text-sp-muted">({formatDateKR(record.followUpDate)})</span>
+                                    <span className="text-sp-muted">
+                                      ({formatDateKR(record.followUpDate)})
+                                    </span>
                                   )}
                                   <button
                                     onClick={() => void onToggleFollowUp(record.id)}
@@ -218,7 +273,10 @@ function StudentTimelineView({
                                   <span className="material-symbols-outlined text-sm">edit</span>
                                 </button>
                                 <button
-                                  onClick={() => { if (window.confirm('이 기록을 삭제하시겠습니까?')) void onDelete(record.id); }}
+                                  onClick={() => {
+                                    if (window.confirm('이 기록을 삭제하시겠습니까?'))
+                                      void onDelete(record.id);
+                                  }}
                                   className="p-0.5 rounded text-sp-muted/50 hover:text-red-400 hover:bg-red-500/10 transition-colors"
                                   title="삭제"
                                 >
