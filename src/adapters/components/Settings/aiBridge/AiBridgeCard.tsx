@@ -1,5 +1,12 @@
-import { useEffect, useState, useCallback, type ReactNode } from 'react';
+import { useEffect, useState, useCallback, type ReactNode, type MouseEvent } from 'react';
 import { useToastStore } from '@adapters/components/common/Toast';
+import { SITE_URL } from '@config/siteUrl';
+import {
+  useAiBridgeConsentStore,
+  academicTerm,
+  needsConsent,
+  type HighRiskGate,
+} from '@adapters/stores/useAiBridgeConsentStore';
 
 type Client = 'claude' | 'codex' | 'antigravity';
 
@@ -45,6 +52,37 @@ type CapPartial = {
   allowRecordWrite?: boolean;
 };
 
+/** 고위험 게이트(채점·생기부 쓰기) 토글 토스트 문구 — confirm/handler 가 공유. */
+const GATE_ON_MSG: Record<HighRiskGate, string> = {
+  allowGradeWrite: '채점 쓰기를 켰습니다(바로 적용).',
+  allowRecordWrite: '생기부 초안 쓰기를 켰습니다(바로 적용).',
+};
+const GATE_OFF_MSG: Record<HighRiskGate, string> = {
+  allowGradeWrite: '채점 쓰기를 껐습니다(바로 적용).',
+  allowRecordWrite: '생기부 초안 쓰기를 껐습니다(바로 적용).',
+};
+
+/** 고위험 게이트 키 → CapPartial(타입 안전 — 컴퓨티드 키 인덱스 시그니처 회피). */
+function highRiskPartial(gate: HighRiskGate, value: boolean): CapPartial {
+  return gate === 'allowGradeWrite' ? { allowGradeWrite: value } : { allowRecordWrite: value };
+}
+
+/** 학생·학부모 고지문 양식 페이지 URL. */
+const NOTICE_URL = `${SITE_URL}/ai-bridge#notice`;
+
+/**
+ * 고지문 양식 링크 클릭 처리.
+ * Electron 은 보안 가드(setWindowOpenHandler deny)로 일반 링크/새 창을 막으므로, 반드시
+ * shell:openExternal IPC(window.electronAPI.openExternal)로 기본 브라우저에서 열어야 한다.
+ * 브라우저(웹 dev) 모드에서는 electronAPI 가 없어 기본 anchor 동작을 그대로 둔다.
+ */
+function handleNoticeClick(e: MouseEvent<HTMLAnchorElement>): void {
+  if (window.electronAPI?.openExternal) {
+    e.preventDefault();
+    void window.electronAPI.openExternal(NOTICE_URL);
+  }
+}
+
 export function AiBridgeCard() {
   const showToast = useToastStore((s) => s.show);
   // 게이트 상태는 capability.json 의 실제 값으로 동기화한다(로컬 추정 아님).
@@ -62,6 +100,11 @@ export function AiBridgeCard() {
   const [busy, setBusy] = useState<Client | null>(null);
   const [serverReady, setServerReady] = useState<boolean | null>(null);
   const [codexCommand, setCodexCommand] = useState<string | null>(null);
+  // 고위험 게이트(채점·생기부 쓰기)를 미확인 상태에서 켜려 할 때, 해당 토글 아래 인라인 고지 확인을 띄운다.
+  const [pendingGate, setPendingGate] = useState<HighRiskGate | null>(null);
+  const [pendingChecked, setPendingChecked] = useState(false);
+  const consentAcks = useAiBridgeConsentStore((s) => s.acks);
+  const acknowledgeConsent = useAiBridgeConsentStore((s) => s.acknowledge);
 
   const refreshStatus = useCallback(async () => {
     const api = window.electronAPI?.aiBridge;
@@ -118,6 +161,38 @@ export function AiBridgeCard() {
     } finally {
       setCapBusy(false);
     }
+  };
+
+  /**
+   * 고위험 게이트(채점·생기부 쓰기) 토글. 끄기와 "이번 학기 이미 확인함"은 즉시 적용하고,
+   * 미확인 상태에서 켜려 하면 토글 아래 인라인 고지 확인을 띄운다(켜지 않고 대기).
+   */
+  const handleHighRiskToggle = (gate: HighRiskGate, value: boolean) => {
+    if (!value) {
+      void applyCapability(highRiskPartial(gate, false), GATE_OFF_MSG[gate]);
+      return;
+    }
+    if (!needsConsent(gate, consentAcks)) {
+      void applyCapability(highRiskPartial(gate, true), GATE_ON_MSG[gate]);
+      return;
+    }
+    setPendingGate(gate);
+    setPendingChecked(false);
+  };
+
+  /** 인라인 고지 확인 완료 → 이번 학기 확인 기록 후 게이트 ON. */
+  const confirmPendingGate = () => {
+    if (!pendingGate || !pendingChecked) return;
+    const gate = pendingGate;
+    acknowledgeConsent(gate, academicTerm());
+    setPendingGate(null);
+    setPendingChecked(false);
+    void applyCapability(highRiskPartial(gate, true), GATE_ON_MSG[gate]);
+  };
+
+  const cancelPendingGate = () => {
+    setPendingGate(null);
+    setPendingChecked(false);
   };
 
   const handleConnect = async (client: Client) => {
@@ -185,6 +260,19 @@ export function AiBridgeCard() {
           맥락으로 재식별될 수 있습니다. 꼭 필요할 때만 켜세요. 생기부 같은 기록은 법정 자료이며
           모든 문장은 교사가 직접 확인해야 합니다.
         </p>
+        <p className="mt-2">
+          외부 AI에 자료를 활용하기 전, 학생·학부모에게 고지·동의를 확인하세요(인공지능기본법).
+          학생·학부모는 AI 활용을 거부하거나 설명을 요구할 권리가 있습니다.{' '}
+          <a
+            href={NOTICE_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={handleNoticeClick}
+            className="font-medium text-sp-accent hover:underline"
+          >
+            학생·학부모 고지문 양식 보기
+          </a>
+        </p>
       </div>
 
       {/* 게이트 토글 — 켜는 즉시 capability 에 기록되어 연결된 AI에 바로 반영(재연결 불필요) */}
@@ -225,27 +313,33 @@ export function AiBridgeCard() {
           hint="외부 AI가 수행평가 채점(도달 수준 선택)을 입력하도록 허용 — 공식 성적 기록이라 별도 고위험 토글, 쌤핀을 닫은 상태 권장"
           checked={allowGradeWrite}
           disabled={capBusy}
-          onChange={(v) =>
-            void applyCapability(
-              { allowGradeWrite: v },
-              v ? '채점 쓰기를 켰습니다(바로 적용).' : '채점 쓰기를 껐습니다(바로 적용).',
-            )
-          }
+          onChange={(v) => handleHighRiskToggle('allowGradeWrite', v)}
         />
+        {pendingGate === 'allowGradeWrite' && (
+          <GateConsentRow
+            checked={pendingChecked}
+            onCheck={setPendingChecked}
+            onConfirm={confirmPendingGate}
+            onCancel={cancelPendingGate}
+            busy={capBusy}
+          />
+        )}
         <GateRow
           label="생기부 초안 쓰기 허용"
           hint="외부 AI가 NEIS 영역별 생활기록부 초안을 쌤핀 작성란에 저장하도록 허용 — 법정 공식기록이라 별도 고위험 토글, 모든 초안은 교사 검토가 필요한 상태로 저장됩니다"
           checked={allowRecordWrite}
           disabled={capBusy}
-          onChange={(v) =>
-            void applyCapability(
-              { allowRecordWrite: v },
-              v
-                ? '생기부 초안 쓰기를 켰습니다(바로 적용).'
-                : '생기부 초안 쓰기를 껐습니다(바로 적용).',
-            )
-          }
+          onChange={(v) => handleHighRiskToggle('allowRecordWrite', v)}
         />
+        {pendingGate === 'allowRecordWrite' && (
+          <GateConsentRow
+            checked={pendingChecked}
+            onCheck={setPendingChecked}
+            onConfirm={confirmPendingGate}
+            onCancel={cancelPendingGate}
+            busy={capBusy}
+          />
+        )}
         <p className="text-[0.7rem] text-sp-muted/70">
           토글은 <strong>켜는 즉시</strong> 적용됩니다 — 연결된 AI에서 바로 반영되며 재연결·재시작이
           필요 없습니다. 모두 끄면 명단·자리 같은 토큰 정보만 다룹니다.
@@ -339,5 +433,77 @@ function GateRow({
         <span className="block text-[0.7rem] text-sp-muted/70">{hint}</span>
       </span>
     </label>
+  );
+}
+
+/**
+ * 고위험 게이트(채점·생기부 쓰기)를 처음 켤 때 한 번 뜨는 인라인 고지 확인.
+ * 별도 모달이 아니라 토글 아래 펼침으로 구현해 ModalCoordinator 스택·focus-trap 의존을 피한다.
+ * 체크해야 [켜기]가 활성화되며, 확인하면 학기 단위로 기록되어 같은 학기엔 다시 뜨지 않는다.
+ */
+function GateConsentRow({
+  checked,
+  onCheck,
+  onConfirm,
+  onCancel,
+  busy,
+}: {
+  checked: boolean;
+  onCheck: (v: boolean) => void;
+  onConfirm: () => void;
+  onCancel: () => void;
+  busy?: boolean;
+}) {
+  return (
+    <div className="ml-7 space-y-2.5 rounded-lg border border-sp-highlight/40 bg-sp-highlight/5 p-3">
+      <p className="text-xs font-bold text-sp-text">외부 AI로 학생 자료를 내보내기 전에</p>
+      <p className="text-[0.7rem] leading-relaxed text-sp-muted">
+        이 기능은 학생 평가에 쓰이는 ‘고영향 AI’에 해당할 수 있습니다. 인공지능기본법에 따라 교사는
+        외부 AI 활용 사실을 학생·학부모에게 알려야 하고, 학생·학부모는 거부·설명을 요구할 권리가
+        있습니다.{' '}
+        <strong className="text-sp-text">
+          쌤핀은 자료를 토큰으로 가려 전달할 뿐, 고지·동의를 대신하지 않습니다.
+        </strong>{' '}
+        생기부·채점의 모든 문장은 선생님이 직접 확인해야 합니다.
+      </p>
+      <label className="flex cursor-pointer items-start gap-2">
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={(e) => onCheck(e.target.checked)}
+          className="mt-0.5 h-4 w-4 accent-sp-accent"
+        />
+        <span className="text-[0.7rem] text-sp-text">
+          위 내용을 확인했고, 학생·학부모 고지·동의는 교사 책임으로 진행하겠습니다.
+        </span>
+      </label>
+      <div className="flex items-center gap-2">
+        <a
+          href={NOTICE_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={handleNoticeClick}
+          className="text-[0.7rem] font-medium text-sp-accent hover:underline"
+        >
+          고지문 양식 보기
+        </a>
+        <span className="flex-1" />
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded-md px-2.5 py-1 text-xs text-sp-muted transition-colors hover:text-sp-text"
+        >
+          취소
+        </button>
+        <button
+          type="button"
+          disabled={!checked || busy}
+          onClick={onConfirm}
+          className="rounded-md bg-sp-accent px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-sp-accent/90 disabled:pointer-events-none disabled:opacity-50"
+        >
+          켜기
+        </button>
+      </div>
+    </div>
   );
 }

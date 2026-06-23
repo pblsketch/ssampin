@@ -394,6 +394,22 @@ const FAQS = [
   },
 ];
 
+/** 교사가 복사해 가정통신문·문자·알림장에 활용할 학생·학부모 고지문 예시(참고용, 법적 자문 아님). */
+const NOTICE_TEMPLATE = `[가정통신문] 학생 기록 업무에 인공지능(AI) 보조 도구 활용 안내
+
+안녕하세요. ○학년 ○반 담임(○○ 교과 담당) ○○○입니다.
+
+우리 반(수업)에서는 학생 관찰·평가 기록 업무의 보조 수단으로 외부 인공지능(AI) 도구를 활용할 수 있어 다음과 같이 안내드립니다.
+
+1. 활용 범위: 관찰 기록 정리, 생활기록부·세부능력 및 특기사항 초안 작성 보조 등
+2. 개인정보 보호: 학생의 이름·연락처 등 신원 정보는 가린(익명 처리) 상태로만 활용하며, 자료는 별도의 외부 서버에 저장되지 않습니다.
+3. 교사 책임: 모든 기록의 최종 작성·판단·확인은 교사가 직접 하며, AI가 생성한 문장을 그대로 사용하지 않습니다.
+4. 권리 안내: 학생과 학부모는 AI를 활용한 처리를 거부하거나 그에 대한 설명을 요청할 수 있습니다.
+
+문의 사항이나 거부 의사가 있으신 경우 언제든 담임(교과 교사)에게 알려 주시기 바랍니다.
+
+○○학교 / ○○○ 드림`;
+
 function BackHeader() {
   return (
     <header className="border-b border-sp-border bg-sp-surface/80 backdrop-blur-sm">
@@ -787,6 +803,28 @@ export default function AiBridgePage() {
                 </p>
               </details>
             ))}
+          </div>
+        </section>
+
+        {/* 학생·학부모 고지문 양식 */}
+        <section id="notice" className="mt-14 scroll-mt-8">
+          <SectionHead
+            eyebrow="고지 의무 안내"
+            title="학생·학부모 고지문 양식"
+            desc={
+              <>
+                AI를 학생 평가·기록에 활용할 때, 교사는 학생·학부모에게 그 사실을 알릴 의무가
+                있고(인공지능기본법), 학생·학부모는 이를 거부하거나 설명을 요구할 권리가 있습니다.
+                아래 예시 안내문을 복사해 가정통신문·문자·알림장에 활용하세요.{' '}
+                <strong className="text-sp-text">학교·학급 상황에 맞게 고쳐 쓰시고</strong>, 본
+                양식은 참고용이며 법적 자문이 아닙니다.
+              </>
+            }
+          />
+          <div className="mt-6 rounded-xl border border-sp-border bg-sp-card p-5 shadow-sm md:p-6">
+            <p className="whitespace-pre-line text-sm leading-relaxed text-sp-text">
+              {NOTICE_TEMPLATE}
+            </p>
           </div>
         </section>
 
