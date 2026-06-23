@@ -15,7 +15,7 @@ import type {
 import { PERIOD_CLOSING, PERIOD_MORNING } from '@domain/entities/Attendance';
 import type { StudentRecord } from '@domain/entities/StudentRecord';
 import { PeriodChipGroup, type AccentColor } from './PeriodChipGroup';
-import { formatAttendancePeriodLines } from './recordUtils';
+import { formatAttendancePeriodLines, getRecordChipLabel } from './recordUtils';
 
 function todayString(): string {
   const d = new Date();
@@ -422,11 +422,11 @@ export function StudentRecordsEditor() {
                   <span className="text-caption text-sp-muted whitespace-nowrap mt-0.5 w-8 shrink-0">
                     {formatDateKR(record.date)}
                   </span>
-                  {/* 세부 카테고리 태그 */}
+                  {/* 분류/태그 (Q2: 비출결은 태그, 출결은 subcategory) */}
                   <span
                     className={`px-1.5 py-0.5 rounded text-caption font-medium whitespace-nowrap shrink-0 ${cs.tagBg}`}
                   >
-                    {record.subcategory}
+                    {getRecordChipLabel(record, categories)}
                   </span>
                   {/* 학생 이름 */}
                   <span className="text-sm text-sp-text font-medium whitespace-nowrap shrink-0">

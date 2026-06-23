@@ -18,6 +18,7 @@ import {
   METHOD_OPTIONS,
   formatDateKR,
   getAttendanceTypeFromSubcategory,
+  getRecordChipLabel,
 } from './recordUtils';
 import { studentRecordToDisplay, type DisplayRecord } from '@adapters/presentation/displayRecord';
 import { RecordDetailModal } from '@adapters/components/common/records/RecordDetailModal';
@@ -423,7 +424,7 @@ function ProgressMode({ students, records, categories }: ModeProps) {
                         key={r.id}
                         className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400"
                       >
-                        {formatDateKR(r.date)} {r.subcategory}
+                        {formatDateKR(r.date)} {getRecordChipLabel(r, categories)}
                       </span>
                     ))}
                   </div>
@@ -482,7 +483,7 @@ function ProgressMode({ students, records, categories }: ModeProps) {
                         key={r.id}
                         className="px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-400"
                       >
-                        {formatDateKR(r.date)} {r.subcategory}
+                        {formatDateKR(r.date)} {getRecordChipLabel(r, categories)}
                       </span>
                     ))}
                   </div>
