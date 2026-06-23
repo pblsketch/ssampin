@@ -14,6 +14,8 @@ import { ExpandableRecordContent } from '@adapters/components/common/records/Exp
 import { AttendanceStatusBadge } from '@adapters/components/common/records/AttendanceStatusBadge';
 import { DateGroupHeader } from '@adapters/components/common/records/DateGroupHeader';
 import { RecordEmptyState } from '@adapters/components/common/records/RecordEmptyState';
+import { RecordResultSummary } from '@adapters/components/common/records/RecordResultSummary';
+import { mixedRecordToDisplay } from '@adapters/presentation/displayRecord';
 /* eslint-disable no-restricted-imports */
 import { exportMixedRecordsToExcel } from '@infrastructure/export/ExcelExporter';
 /* eslint-enable no-restricted-imports */
@@ -237,6 +239,8 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
     return groups;
   }, [filtered]);
 
+  const displayRecords = useMemo(() => filtered.map((r) => mixedRecordToDisplay(r)), [filtered]);
+
   const hasActiveFilters =
     studentFilter !== '' ||
     categoryFilter !== 'all' ||
@@ -435,6 +439,9 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
           </div>
         )}
       </div>
+
+      {/* 결과 요약 (구분 분포·상위 학생·날짜 범위) */}
+      <RecordResultSummary records={displayRecords} />
 
       {/* 타임라인 */}
       <div className="space-y-4">
