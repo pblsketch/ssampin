@@ -16,6 +16,8 @@ interface DefaultRecordListViewProps extends RecordEditProps {
   grouped: [string, StudentRecord[]][];
   categories: readonly RecordCategoryItem[];
   studentMap: Map<string, Student>;
+  hasActiveFilters?: boolean;
+  onResetFilters?: () => void;
   onEdit: (record: StudentRecord) => void;
   onDelete: (id: string) => Promise<void>;
   onToggleFollowUp: (id: string) => Promise<void>;
@@ -24,15 +26,34 @@ interface DefaultRecordListViewProps extends RecordEditProps {
 }
 
 function DefaultRecordListView({
-  grouped, categories, studentMap,
-  onEdit, onDelete, onToggleFollowUp, onToggleNeisReport, onToggleDocumentSubmitted,
-  editingId, editContent, setEditContent,
-  editCategory, setEditCategory, editSubcategory, setEditSubcategory,
-  editReportedToNeis, setEditReportedToNeis,
-  editDocumentSubmitted, setEditDocumentSubmitted,
-  editFollowUp, setEditFollowUp, editFollowUpDate, setEditFollowUpDate,
-  editAttendancePeriods, setEditAttendancePeriods, regularPeriodCount,
-  onEditSave, onEditCancel,
+  grouped,
+  categories,
+  studentMap,
+  onEdit,
+  onDelete,
+  onToggleFollowUp,
+  onToggleNeisReport,
+  onToggleDocumentSubmitted,
+  editingId,
+  editContent,
+  setEditContent,
+  editCategory,
+  setEditCategory,
+  editSubcategory,
+  setEditSubcategory,
+  editReportedToNeis,
+  setEditReportedToNeis,
+  editDocumentSubmitted,
+  setEditDocumentSubmitted,
+  editFollowUp,
+  setEditFollowUp,
+  editFollowUpDate,
+  setEditFollowUpDate,
+  editAttendancePeriods,
+  setEditAttendancePeriods,
+  regularPeriodCount,
+  onEditSave,
+  onEditCancel,
 }: DefaultRecordListViewProps) {
   return (
     <div className="flex-1 overflow-y-auto space-y-4">
@@ -43,21 +64,22 @@ function DefaultRecordListView({
       ) : (
         grouped.map(([date, dateRecords]) => (
           <div key={date}>
-            <h4 className="text-xs font-semibold text-sp-muted mb-2">
-              {formatDateKR(date)}
-            </h4>
+            <h4 className="text-xs font-semibold text-sp-muted mb-2">{formatDateKR(date)}</h4>
             <div className="space-y-1.5">
               {dateRecords.map((record) => {
                 const student = studentMap.get(record.studentId);
                 const isEditing = editingId === record.id;
-                const periodLines = record.category === 'attendance'
-                  ? formatAttendancePeriodLines(record.attendancePeriods)
-                  : [];
+                const periodLines =
+                  record.category === 'attendance'
+                    ? formatAttendancePeriodLines(record.attendancePeriods)
+                    : [];
                 return (
                   <div
                     key={record.id}
                     className={`group rounded-lg bg-sp-card p-3 hover:bg-sp-card/80 transition-all ${
-                      isEditing ? 'ring-1 ring-sp-accent/40 flex flex-col gap-2' : `flex items-center gap-3 ${editingId ? 'opacity-60' : ''}`
+                      isEditing
+                        ? 'ring-1 ring-sp-accent/40 flex flex-col gap-2'
+                        : `flex items-center gap-3 ${editingId ? 'opacity-60' : ''}`
                     }`}
                   >
                     {/* 메타 정보 행 */}
@@ -80,7 +102,10 @@ function DefaultRecordListView({
                         </span>
                       )}
                       {record.method && (
-                        <span className="text-xs text-sp-muted" title={METHOD_OPTIONS.find((m) => m.value === record.method)?.label}>
+                        <span
+                          className="text-xs text-sp-muted"
+                          title={METHOD_OPTIONS.find((m) => m.value === record.method)?.label}
+                        >
                           {getMethodIcon(record.method)}
                         </span>
                       )}
@@ -96,13 +121,20 @@ function DefaultRecordListView({
                       {record.category === 'attendance' && (
                         <>
                           <button
-                            onClick={(e) => { e.stopPropagation(); void onToggleNeisReport(record.id); }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void onToggleNeisReport(record.id);
+                            }}
                             className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium transition-colors cursor-pointer flex-shrink-0 ${
                               record.reportedToNeis
                                 ? 'bg-green-500/15 text-green-400 hover:bg-green-500/25'
                                 : 'bg-red-500/10 text-red-400/70 hover:bg-red-500/20'
                             }`}
-                            title={record.reportedToNeis ? '나이스 반영 완료 (클릭하여 취소)' : '나이스 미반영 (클릭하여 반영 처리)'}
+                            title={
+                              record.reportedToNeis
+                                ? '나이스 반영 완료 (클릭하여 취소)'
+                                : '나이스 미반영 (클릭하여 반영 처리)'
+                            }
                           >
                             <span className="material-symbols-outlined text-icon-xs">
                               {record.reportedToNeis ? 'check_circle' : 'pending'}
@@ -110,13 +142,20 @@ function DefaultRecordListView({
                             {record.reportedToNeis ? '나이스' : '미반영'}
                           </button>
                           <button
-                            onClick={(e) => { e.stopPropagation(); void onToggleDocumentSubmitted(record.id); }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void onToggleDocumentSubmitted(record.id);
+                            }}
                             className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium transition-colors cursor-pointer flex-shrink-0 ${
                               record.documentSubmitted
                                 ? 'bg-green-500/15 text-green-400 hover:bg-green-500/25'
                                 : 'bg-orange-500/10 text-orange-400/70 hover:bg-orange-500/20'
                             }`}
-                            title={record.documentSubmitted ? '서류 제출 완료 (클릭하여 취소)' : '서류 미제출 (클릭하여 제출 처리)'}
+                            title={
+                              record.documentSubmitted
+                                ? '서류 제출 완료 (클릭하여 취소)'
+                                : '서류 미제출 (클릭하여 제출 처리)'
+                            }
                           >
                             <span className="material-symbols-outlined text-icon-xs">
                               {record.documentSubmitted ? 'description' : 'draft'}
@@ -174,7 +213,10 @@ function DefaultRecordListView({
                             <span className="material-symbols-outlined text-sm">edit</span>
                           </button>
                           <button
-                            onClick={() => { if (window.confirm('이 기록을 삭제하시겠습니까?')) void onDelete(record.id); }}
+                            onClick={() => {
+                              if (window.confirm('이 기록을 삭제하시겠습니까?'))
+                                void onDelete(record.id);
+                            }}
                             className="p-1 rounded text-sp-muted/50 hover:text-red-400 hover:bg-red-500/10 transition-colors"
                             title="삭제"
                           >

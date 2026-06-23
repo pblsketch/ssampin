@@ -92,7 +92,7 @@ export interface BridgeHomeroomDayParams {
 }
 
 type ViewMode = 'input' | 'progress' | 'search';
-type PeriodFilter = 'week' | 'month' | 'all' | 'custom';
+type PeriodFilter = 'week' | 'month' | 'all' | 'custom' | 'semester';
 
 interface StudentRecordsState {
   records: readonly StudentRecord[];

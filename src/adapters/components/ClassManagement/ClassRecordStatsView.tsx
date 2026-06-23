@@ -4,6 +4,7 @@ import { useObservationStore } from '@adapters/stores/useObservationStore';
 import { studentKey } from '@domain/entities/TeachingClass';
 import { isStudentActive } from '@domain/rules/studentActivity';
 import type { AttendanceStatus } from '@domain/entities/Attendance';
+import { ATTENDANCE_TEXT } from '@adapters/presentation/attendanceStatusVariants';
 import { DEFAULT_OBSERVATION_TAGS } from '@domain/entities/Observation';
 
 type PeriodFilter = 'all' | 'semester' | 'month' | 'week' | 'custom';
@@ -49,11 +50,11 @@ function getFilterRange(filter: PeriodFilter): { start: string | null; end: stri
 }
 
 const ATT_STATUSES: { key: AttendanceStatus; label: string; color: string }[] = [
-  { key: 'present', label: '출석', color: 'text-green-400' },
-  { key: 'absent', label: '결석', color: 'text-red-400' },
-  { key: 'late', label: '지각', color: 'text-amber-400' },
-  { key: 'earlyLeave', label: '조퇴', color: 'text-orange-400' },
-  { key: 'classAbsence', label: '결과', color: 'text-purple-400' },
+  { key: 'present', label: '출석', color: ATTENDANCE_TEXT.present },
+  { key: 'absent', label: '결석', color: ATTENDANCE_TEXT.absent },
+  { key: 'late', label: '지각', color: ATTENDANCE_TEXT.late },
+  { key: 'earlyLeave', label: '조퇴', color: ATTENDANCE_TEXT.earlyLeave },
+  { key: 'classAbsence', label: '결과', color: ATTENDANCE_TEXT.classAbsence },
 ];
 
 const skeletonRows = Array.from({ length: 4 }, (_, index) => index);

@@ -7,7 +7,14 @@ import type {
   AttendancePeriodEntry,
 } from '@domain/entities/StudentRecord';
 import { formatPeriodLabel } from '@domain/entities/Attendance';
-import { enumerateRange } from '@adapters/components/common/calendarUtils';
+import {
+  enumerateRange,
+  formatDateKR as formatDateKRBase,
+} from '@adapters/components/common/calendarUtils';
+import {
+  ATTENDANCE_BADGE,
+  ATTENDANCE_LABEL_TO_STATUS,
+} from '@adapters/presentation/attendanceStatusVariants';
 
 /* ──────────────────────── 공유 타입 ──────────────────────── */
 
@@ -115,9 +122,29 @@ export function createDateRange(start: string, end: string): string[] {
   return enumerateRange(start, end);
 }
 
-export function formatDateKR(dateStr: string): string {
-  const d = new Date(dateStr + 'T00:00:00');
-  return `${d.getMonth() + 1}월 ${d.getDate()}일`;
+function dateYear(dateStr: string): number {
+  return new Date(`${dateStr}T00:00:00`).getFullYear();
+}
+
+function formatDateKRWithYear(dateStr: string): string {
+  return `${dateYear(dateStr)}년 ${formatDateKRBase(dateStr)}`;
+}
+
+/**
+ * 기록 조회에서는 작년 기록도 함께 보이므로, 현재 연도가 아닌 날짜는 연도를 드러낸다.
+ */
+export function formatDateKR(dateStr: string, baseDate: Date = new Date()): string {
+  return dateYear(dateStr) === baseDate.getFullYear()
+    ? formatDateKRBase(dateStr)
+    : formatDateKRWithYear(dateStr);
+}
+
+export function formatDateRangeKR(startDate: string, endDate: string): string {
+  if (startDate === endDate) return formatDateKR(startDate);
+  if (dateYear(startDate) !== dateYear(endDate)) {
+    return `${formatDateKRWithYear(startDate)} ~ ${formatDateKRWithYear(endDate)}`;
+  }
+  return `${formatDateKR(startDate)} ~ ${formatDateKR(endDate)}`;
 }
 
 export function formatTimeKR(isoStr: string): string {
@@ -179,12 +206,15 @@ export function getCategoryDotColor(
 
 /* ──────────────────────── 출결 유형별 태그 색상 ──────────────────────── */
 
-const ATTENDANCE_TAG_COLORS: Record<string, string> = {
-  결석: 'bg-red-500/15 text-red-400',
-  지각: 'bg-yellow-500/15 text-yellow-400',
-  조퇴: 'bg-orange-500/15 text-orange-400',
-  결과: 'bg-purple-500/15 text-purple-400',
-};
+/**
+ * 출결 유형 라벨("결석/지각/조퇴/결과") → 배지 색상.
+ * 공용 `ATTENDANCE_BADGE`(단일 소스, /20·지각 amber)에서 색을 끌어온다.
+ * 기존 로컬 정의(/15·지각 yellow)를 대체해 다른 조회 화면과 색을 통일한다.
+ */
+function getAttendanceTagColor(label: string): string | null {
+  const status = ATTENDANCE_LABEL_TO_STATUS[label];
+  return status ? ATTENDANCE_BADGE[status] : null;
+}
 
 export function getAttendanceTypeFromSubcategory(subcategory: string): string | null {
   const match = subcategory.match(/^(결석|지각|조퇴|결과)/);
@@ -198,8 +228,9 @@ export function getSmartTagClass(
 ): string {
   if (record.category === 'attendance') {
     const attType = getAttendanceTypeFromSubcategory(record.subcategory);
-    if (attType && ATTENDANCE_TAG_COLORS[attType]) {
-      return `px-2 py-0.5 rounded text-xs font-medium ${ATTENDANCE_TAG_COLORS[attType]}`;
+    const tagColor = attType ? getAttendanceTagColor(attType) : null;
+    if (tagColor) {
+      return `px-2 py-0.5 rounded text-xs font-medium ${tagColor}`;
     }
   }
   return getRecordTagClass(record.category, categories);
@@ -268,13 +299,73 @@ export const ATTENDANCE_SORT_ORDER: Record<string, number> = {
   결과: 3,
 };
 
-export type RecordSortMode = 'time' | 'type' | 'studentNumber';
+export type RecordSortMode = 'occurredAt' | 'type' | 'studentNumber';
 
 export const RECORD_SORT_OPTIONS: { mode: RecordSortMode; label: string; icon: string }[] = [
-  { mode: 'time', label: '입력 시간', icon: 'schedule' },
+  { mode: 'occurredAt', label: '최근 일시', icon: 'event' },
   { mode: 'type', label: '유형별', icon: 'filter_list' },
   { mode: 'studentNumber', label: '학번순', icon: 'format_list_numbered' },
 ];
+
+function latestAttendancePeriod(record: StudentRecord): number {
+  if (record.category !== 'attendance' || !record.attendancePeriods?.length) return -1;
+  return Math.max(...record.attendancePeriods.map((entry) => entry.period));
+}
+
+function studentNumberOf(record: StudentRecord, studentMap: ReadonlyMap<string, Student>): number {
+  return studentMap.get(record.studentId)?.studentNumber ?? 9999;
+}
+
+function compareStudentNumber(
+  a: StudentRecord,
+  b: StudentRecord,
+  studentMap: ReadonlyMap<string, Student>,
+): number {
+  const byNumber = studentNumberOf(a, studentMap) - studentNumberOf(b, studentMap);
+  if (byNumber !== 0) return byNumber;
+  return a.studentId.localeCompare(b.studentId);
+}
+
+function compareOccurredAtWithinDateDesc(
+  a: StudentRecord,
+  b: StudentRecord,
+  studentMap: ReadonlyMap<string, Student>,
+): number {
+  const byPeriod = latestAttendancePeriod(b) - latestAttendancePeriod(a);
+  if (byPeriod !== 0) return byPeriod;
+  return compareStudentNumber(a, b, studentMap);
+}
+
+export function sortRecordsInDateGroup(
+  records: readonly StudentRecord[],
+  sortMode: RecordSortMode,
+  studentMap: ReadonlyMap<string, Student>,
+): StudentRecord[] {
+  return [...records].sort((a, b) => {
+    if (sortMode === 'type') {
+      const aType = getAttendanceTypeFromSubcategory(a.subcategory);
+      const bType = getAttendanceTypeFromSubcategory(b.subcategory);
+      const aOrder = aType ? (ATTENDANCE_SORT_ORDER[aType] ?? 99) : 99;
+      const bOrder = bType ? (ATTENDANCE_SORT_ORDER[bType] ?? 99) : 99;
+      if (aOrder !== bOrder) return aOrder - bOrder;
+      const bySubcategory = a.subcategory.localeCompare(b.subcategory);
+      if (bySubcategory !== 0) return bySubcategory;
+      return compareStudentNumber(a, b, studentMap);
+    }
+
+    if (sortMode === 'studentNumber') {
+      const byStudent = compareStudentNumber(a, b, studentMap);
+      if (byStudent !== 0) return byStudent;
+      const aType = getAttendanceTypeFromSubcategory(a.subcategory);
+      const bType = getAttendanceTypeFromSubcategory(b.subcategory);
+      const aOrder = aType ? (ATTENDANCE_SORT_ORDER[aType] ?? 99) : 99;
+      const bOrder = bType ? (ATTENDANCE_SORT_ORDER[bType] ?? 99) : 99;
+      return aOrder - bOrder;
+    }
+
+    return compareOccurredAtWithinDateDesc(a, b, studentMap);
+  });
+}
 
 /* ──────────────────────── 상담 방법 ──────────────────────── */
 

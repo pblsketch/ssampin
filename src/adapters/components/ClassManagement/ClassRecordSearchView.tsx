@@ -1,11 +1,21 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { useObservationStore } from '@adapters/stores/useObservationStore';
+import { useToastStore } from '@adapters/components/common/Toast';
 import { studentKey } from '@domain/entities/TeachingClass';
 import { isStudentActive } from '@domain/rules/studentActivity';
 import type { AttendanceStatus } from '@domain/entities/Attendance';
 import { ATTENDANCE_BADGE, ATTENDANCE_LABEL } from '@adapters/presentation/attendanceStatusStyle';
 import { DEFAULT_OBSERVATION_TAGS } from '@domain/entities/Observation';
+import { formatDateKR } from '@adapters/components/common/calendarUtils';
+import {
+  mapMixedRecordsToFlatRows,
+  type MixedExcelRow,
+} from '@adapters/presentation/mixedRecordExcelMapper';
+import { previewContent } from '@adapters/presentation/recordContentPreview';
+/* eslint-disable no-restricted-imports */
+import { exportMixedRecordsToExcel } from '@infrastructure/export/ExcelExporter';
+/* eslint-enable no-restricted-imports */
 
 const STATUS_BADGE = ATTENDANCE_BADGE;
 const STATUS_LABEL = ATTENDANCE_LABEL;
@@ -13,6 +23,17 @@ const STATUS_LABEL = ATTENDANCE_LABEL;
 type CategoryFilter = 'all' | 'attendance' | 'observation';
 
 type PeriodFilter = 'all' | 'semester' | 'month' | 'week' | 'custom';
+
+const PERIOD_LABEL: Record<PeriodFilter, string> = {
+  all: '전체',
+  semester: '이번 학기',
+  month: '이번 달',
+  week: '이번 주',
+  custom: '직접 설정',
+};
+
+/** 내용 미리보기 최대 길이 — 초과 시 [더보기]로 펼친다. */
+const CONTENT_PREVIEW_LIMIT = 100;
 
 function getInitialPeriodFilter(): PeriodFilter {
   const month = new Date().getMonth() + 1;
@@ -52,6 +73,8 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
   const [tagFilter, setTagFilter] = useState<string[]>([]);
   const [keyword, setKeyword] = useState('');
+  const [debouncedKeyword, setDebouncedKeyword] = useState('');
+  const [expandedIds, setExpandedIds] = useState<ReadonlySet<string>>(() => new Set());
   const [periodFilter, setPeriodFilter] = useState<PeriodFilter>(getInitialPeriodFilter);
   const [customStart, setCustomStart] = useState(() => {
     const d = new Date();
@@ -62,6 +85,8 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   });
 
+  const showToast = useToastStore((s) => s.show);
+
   const classes = useTeachingClassStore((s) => s.classes);
   const attendanceRecords = useTeachingClassStore((s) => s.attendanceRecords);
   const observationRecords = useObservationStore((s) => s.records);
@@ -71,6 +96,31 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
   useEffect(() => {
     void loadObs();
   }, [loadObs]);
+
+  // 키워드 디바운스 (300ms) — 대량 기록에서 타이핑 렉 방지
+  const keywordTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleKeywordChange = useCallback((val: string) => {
+    setKeyword(val);
+    if (keywordTimer.current) clearTimeout(keywordTimer.current);
+    keywordTimer.current = setTimeout(() => setDebouncedKeyword(val), 300);
+  }, []);
+
+  // 언마운트 시 대기 중 디바운스 타이머 정리(잔여 타이머 발화 방지)
+  useEffect(
+    () => () => {
+      if (keywordTimer.current) clearTimeout(keywordTimer.current);
+    },
+    [],
+  );
+
+  const toggleExpand = useCallback((id: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
 
   const cls = useMemo(() => classes.find((c) => c.id === classId), [classes, classId]);
   const students = useMemo(() => {
@@ -176,8 +226,8 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
         (r) => r.type === 'observation' && r.tags?.some((t) => tagFilter.includes(t)),
       );
     }
-    if (keyword.trim()) {
-      const kw = keyword.trim().toLowerCase();
+    if (debouncedKeyword.trim()) {
+      const kw = debouncedKeyword.trim().toLowerCase();
       result = result.filter(
         (r) =>
           r.studentName.toLowerCase().includes(kw) ||
@@ -186,7 +236,7 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
       );
     }
     return result;
-  }, [mixedRecords, studentFilter, tagFilter, keyword, dateRange.start, dateRange.end]);
+  }, [mixedRecords, studentFilter, tagFilter, debouncedKeyword, dateRange.start, dateRange.end]);
 
   /* 날짜별 그룹핑 */
   const grouped = useMemo(() => {
@@ -203,12 +253,73 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
   }, [filtered]);
 
   const handleResetFilters = () => {
+    // 대기 중 디바운스 타이머를 먼저 취소 — 안 하면 곧 발화해 방금 지운 키워드가 부활(레이스)
+    if (keywordTimer.current) clearTimeout(keywordTimer.current);
     setStudentFilter('');
     setCategoryFilter('all');
     setTagFilter([]);
     setKeyword('');
+    setDebouncedKeyword('');
     setPeriodFilter('all');
   };
+
+  /* 현재 필터 결과를 Excel로 내보내기 (안 Y: 표현 매퍼 → infra 직렬화) */
+  const handleExport = useCallback(async () => {
+    if (filtered.length === 0) return;
+    const rows: MixedExcelRow[] = filtered.map((r) =>
+      r.type === 'attendance'
+        ? {
+            type: 'attendance',
+            date: r.date,
+            studentNumber: r.studentNumber,
+            studentName: r.studentName,
+            period: r.period,
+            status: r.status,
+            reason: r.reason,
+            memo: r.memo,
+          }
+        : {
+            type: 'observation',
+            date: r.date,
+            studentNumber: r.studentNumber,
+            studentName: r.studentName,
+            tags: r.tags,
+            content: r.content,
+          },
+    );
+
+    try {
+      const buffer = await exportMixedRecordsToExcel(mapMixedRecordsToFlatRows(rows), {
+        periodLabel: PERIOD_LABEL[periodFilter],
+      });
+
+      if (window.electronAPI) {
+        const saved = await window.electronAPI.showSaveDialog({
+          title: '내보내기',
+          defaultPath: '수업기록_조회결과.xlsx',
+          filters: [{ name: 'Excel 파일', extensions: ['xlsx'] }],
+        });
+        if (saved) {
+          await window.electronAPI.writeFile(saved.handle, buffer);
+          showToast('파일이 저장되었습니다', 'success', {
+            label: '파일 열기',
+            onClick: () => window.electronAPI?.openFile(saved.handle),
+          });
+        }
+      } else {
+        const blob = new Blob([buffer], { type: 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = '수업기록_조회결과.xlsx';
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast('Excel 파일을 다운로드했습니다', 'success');
+      }
+    } catch {
+      showToast('내보내기 중 오류가 발생했습니다', 'error');
+    }
+  }, [filtered, periodFilter, showToast]);
 
   return (
     <div className="space-y-3">
@@ -217,7 +328,7 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
         <select
           value={studentFilter}
           onChange={(e) => setStudentFilter(e.target.value)}
-          className="bg-sp-bg border border-sp-border rounded-lg px-2 py-1.5 text-xs text-sp-text focus:outline-none focus:border-sp-accent"
+          className="bg-sp-surface border border-sp-border rounded-lg px-2 py-1.5 text-xs text-sp-text focus:outline-none focus:border-sp-accent"
         >
           <option value="">전체 학생</option>
           {students.map((s) => (
@@ -272,12 +383,23 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
         <input
           type="text"
           value={keyword}
-          onChange={(e) => setKeyword(e.target.value)}
+          onChange={(e) => handleKeywordChange(e.target.value)}
           placeholder="키워드 검색..."
-          className="bg-sp-bg border border-sp-border rounded-lg px-2 py-1.5 text-xs text-sp-text placeholder:text-sp-muted focus:outline-none focus:border-sp-accent w-40"
+          className="bg-sp-surface border border-sp-border rounded-lg px-2 py-1.5 text-xs text-sp-text placeholder:text-sp-muted focus:outline-none focus:border-sp-accent w-40"
         />
 
         <span className="text-xs text-sp-muted">{filtered.length}건</span>
+
+        {filtered.length > 0 && (
+          <button
+            type="button"
+            onClick={() => void handleExport()}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs text-sp-muted hover:text-sp-text hover:bg-sp-surface border border-sp-border transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-sp-accent"
+          >
+            <span className="material-symbols-outlined text-sm">download</span>
+            Excel 내보내기
+          </button>
+        )}
       </div>
 
       {/* 기간 필터 */}
@@ -307,7 +429,7 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
               type="date"
               value={customStart}
               onChange={(e) => setCustomStart(e.target.value)}
-              className="bg-sp-bg border border-sp-border rounded-lg px-2 py-1 text-xs text-sp-text focus:outline-none focus:border-sp-accent"
+              className="bg-sp-surface border border-sp-border rounded-lg px-2 py-1 text-xs text-sp-text focus:outline-none focus:border-sp-accent"
               style={{ colorScheme: 'dark' }}
             />
             <span className="text-xs text-sp-muted">~</span>
@@ -315,7 +437,7 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
               type="date"
               value={customEnd}
               onChange={(e) => setCustomEnd(e.target.value)}
-              className="bg-sp-bg border border-sp-border rounded-lg px-2 py-1 text-xs text-sp-text focus:outline-none focus:border-sp-accent"
+              className="bg-sp-surface border border-sp-border rounded-lg px-2 py-1 text-xs text-sp-text focus:outline-none focus:border-sp-accent"
               style={{ colorScheme: 'dark' }}
             />
           </div>
@@ -339,13 +461,13 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
           grouped.map((group) => (
             <div key={group.date}>
               <div className="text-xs text-sp-muted font-medium mb-1.5 px-1">
-                {group.date.replace(/^\d{4}-/, '').replace('-', '/')}
+                {formatDateKR(group.date)}
               </div>
               <div className="space-y-1.5">
                 {group.records.map((r) => (
                   <div
                     key={`${r.type}-${r.date}-${r.studentKey}-${r.type === 'attendance' ? r.period : r.id}`}
-                    className="bg-sp-surface border border-sp-border rounded-xl px-3 py-2.5"
+                    className="bg-sp-card border border-sp-border rounded-xl px-3 py-2.5"
                   >
                     <div className="flex items-center gap-2 mb-1">
                       <span
@@ -389,11 +511,31 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
                     {r.type === 'attendance' && r.memo && (
                       <p className="text-xs text-sp-muted pl-1">{r.memo}</p>
                     )}
-                    {r.type === 'observation' && r.content && (
-                      <p className="text-xs text-sp-text leading-relaxed whitespace-pre-wrap pl-1">
-                        {r.content.length > 100 ? r.content.slice(0, 100) + '…' : r.content}
-                      </p>
-                    )}
+                    {r.type === 'observation' &&
+                      r.content &&
+                      (() => {
+                        const { text, showToggle } = previewContent(
+                          r.content,
+                          expandedIds.has(r.id),
+                          CONTENT_PREVIEW_LIMIT,
+                        );
+                        return (
+                          <div className="pl-1">
+                            <p className="text-sm text-sp-text leading-relaxed whitespace-pre-wrap">
+                              {text}
+                            </p>
+                            {showToggle && (
+                              <button
+                                type="button"
+                                onClick={() => toggleExpand(r.id)}
+                                className="mt-0.5 text-xs text-sp-accent hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-sp-accent"
+                              >
+                                {expandedIds.has(r.id) ? '접기' : '더보기'}
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })()}
                   </div>
                 ))}
               </div>

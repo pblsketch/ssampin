@@ -3,7 +3,7 @@ import type { StudentRecord } from '@domain/entities/StudentRecord';
 import type { Student } from '@domain/entities/Student';
 import type { RecordCategoryItem } from '@domain/valueObjects/RecordCategory';
 import { RECORD_COLOR_MAP } from '@adapters/stores/useStudentRecordsStore';
-import { formatDateKR } from './recordUtils';
+import { formatDateKR, formatDateRangeKR } from './recordUtils';
 
 interface FilterSummaryStripProps {
   filtered: readonly StudentRecord[];
@@ -12,7 +12,12 @@ interface FilterSummaryStripProps {
   onCategoryClick: (categoryId: string) => void;
 }
 
-export function FilterSummaryStrip({ filtered, students, categories, onCategoryClick }: FilterSummaryStripProps) {
+export function FilterSummaryStrip({
+  filtered,
+  students,
+  categories,
+  onCategoryClick,
+}: FilterSummaryStripProps) {
   // Category distribution
   const categoryDist = useMemo(() => {
     const counts = new Map<string, number>();
@@ -20,7 +25,12 @@ export function FilterSummaryStrip({ filtered, students, categories, onCategoryC
       counts.set(r.category, (counts.get(r.category) ?? 0) + 1);
     }
     return categories
-      .map((c) => ({ id: c.id, name: c.name.split(' (')[0], color: c.color, count: counts.get(c.id) ?? 0 }))
+      .map((c) => ({
+        id: c.id,
+        name: c.name.split(' (')[0],
+        color: c.color,
+        count: counts.get(c.id) ?? 0,
+      }))
       .filter((c) => c.count > 0);
   }, [filtered, categories]);
 
@@ -30,8 +40,7 @@ export function FilterSummaryStrip({ filtered, students, categories, onCategoryC
     for (const r of filtered) {
       counts.set(r.studentId, (counts.get(r.studentId) ?? 0) + 1);
     }
-    const sorted = Array.from(counts.entries())
-      .sort((a, b) => b[1] - a[1]);
+    const sorted = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
     const studentMap = new Map(students.map((s) => [s.id, s]));
     const top = sorted.slice(0, 2).map(([id, count]) => ({
       name: studentMap.get(id)?.name ?? '?',
@@ -49,7 +58,7 @@ export function FilterSummaryStrip({ filtered, students, categories, onCategoryC
     const first = dates[0];
     const last = dates[dates.length - 1];
     if (first === last) return formatDateKR(first!);
-    return `${formatDateKR(first!)} ~ ${formatDateKR(last!)}`;
+    return formatDateRangeKR(first!, last!);
   }, [filtered]);
 
   if (filtered.length === 0) return null;

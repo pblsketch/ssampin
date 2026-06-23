@@ -2500,6 +2500,114 @@ export async function exportRecordDraftsToExcel(
   return (await workbook.xlsx.writeBuffer()) as ArrayBuffer;
 }
 
+/* ──────────── 수업 조회 통합 기록 내보내기 (US-005) ──────────────────── */
+
+/**
+ * 엑셀 한 행으로 직렬화된 평탄한 데이터.
+ *
+ * 인프라(ExcelExporter)가 소비하는 입력 계약이므로 여기(infra)가 정본이다.
+ * (인프라가 adapters/presentation 을 import 하면 레이어 위반 error 가 나므로 타입을 이쪽에 둔다.
+ *  변환 매퍼 `mapMixedRecordsToFlatRows`(adapters/presentation)가 이 타입을 import 해서 사용한다.)
+ */
+export interface MixedRecordFlatRow {
+  /** YYYY-MM-DD */
+  readonly date: string;
+  /** '출결' | '특기사항' */
+  readonly category: string;
+  readonly studentNumber: number;
+  readonly studentName: string;
+  /**
+   * 출결: 한글 상태 라벨 (결석·지각·조퇴·결과)
+   * 특기사항: 태그 쉼표 구분 문자열
+   */
+  readonly statusOrTags: string;
+  /**
+   * 출결: 사유 (질병·인정·미인정·기타)
+   * 특기사항: 빈 문자열
+   */
+  readonly reason: string;
+  /**
+   * 출결: 메모
+   * 특기사항: 관찰 내용
+   */
+  readonly content: string;
+  /** 출결: 교시 라벨 ("1교시" / "조회" / "종례"), 특기사항: 빈 문자열 */
+  readonly periodLabel: string;
+}
+
+/**
+ * 수업 기록 조회 화면(ClassRecordSearchView)의 통합 기록을 엑셀로 내보낸다.
+ *
+ * 입력은 `mapMixedRecordsToFlatRows()`가 반환한 평탄 행 배열.
+ * 호출처(Wave 2)는 MixedExcelRow[] → mapMixedRecordsToFlatRows() → 이 함수 순으로 연결한다.
+ *
+ * 시트 구조:
+ *   날짜 | 구분 | 번호 | 이름 | 교시 | 상태/태그 | 사유 | 내용
+ *
+ * @param rows    mapMixedRecordsToFlatRows() 결과
+ * @param meta    선택적 메타정보 (수업반 이름, 조회 기간)
+ */
+export async function exportMixedRecordsToExcel(
+  rows: readonly MixedRecordFlatRow[],
+  meta?: { className?: string; periodLabel?: string },
+): Promise<ArrayBuffer> {
+  const workbook = new ExcelJS.Workbook();
+
+  const sheetTitle =
+    [meta?.className, meta?.periodLabel].filter(Boolean).join(' ') || '수업 기록 조회';
+  const ws = workbook.addWorksheet(sheetTitle.slice(0, 31));
+
+  // 헤더
+  const headers = ['날짜', '구분', '번호', '이름', '교시', '상태/태그', '사유', '내용'];
+  const headerRow = ws.addRow(headers);
+  headerRow.eachCell((cell) => applyHeaderStyle(cell));
+
+  // 열 너비
+  ws.getColumn(1).width = 12; // 날짜
+  ws.getColumn(2).width = 10; // 구분
+  ws.getColumn(3).width = 6; // 번호
+  ws.getColumn(4).width = 10; // 이름
+  ws.getColumn(5).width = 8; // 교시
+  ws.getColumn(6).width = 16; // 상태/태그
+  ws.getColumn(7).width = 10; // 사유
+  ws.getColumn(8).width = 50; // 내용
+
+  // 행 색상: 출결=연분홍, 특기사항=연파랑
+  const BG_ATTENDANCE = 'FFFEE2E2';
+  const BG_OBSERVATION = 'FFDBEAFE';
+
+  for (const row of rows) {
+    const isAttendance = row.category === '출결';
+    const bg = isAttendance ? BG_ATTENDANCE : BG_OBSERVATION;
+
+    const added = ws.addRow([
+      row.date,
+      row.category,
+      row.studentNumber,
+      row.studentName,
+      row.periodLabel,
+      row.statusOrTags,
+      row.reason,
+      row.content,
+    ]);
+
+    added.eachCell((cell, colNum) => {
+      applyCellStyle(cell, bg);
+      if (colNum === 8) {
+        // 내용 열: 왼쪽 정렬 + 자동 줄바꿈
+        cell.alignment = { horizontal: 'left', vertical: 'top', wrapText: true };
+      }
+    });
+  }
+
+  const out = await workbook.xlsx.writeBuffer();
+  // exceljs: 브라우저/Electron 렌더러는 ArrayBuffer, Node(테스트)는 Buffer(Uint8Array) 반환
+  // → 항상 진짜 ArrayBuffer로 정규화(담임 export 경로와 일관, 다운로드/IPC 양쪽 안전).
+  if (out instanceof ArrayBuffer) return out;
+  const u8 = out as unknown as Uint8Array;
+  return u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength) as ArrayBuffer;
+}
+
 /* ──────────────── 성적 요약 내보내기 (개인 점수 미포함) ──────────────── */
 
 export interface GradeSummaryExcelParams {

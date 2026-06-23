@@ -20,7 +20,7 @@ describe('수업 기록 리디자인 Phase 0/1 baseline', () => {
     expect(classRecordSearchSource).toContain('dateRange.start');
     expect(classRecordSearchSource).toContain('dateRange.end');
     expect(classRecordSearchSource).toContain(
-      '[mixedRecords, studentFilter, tagFilter, keyword, dateRange.start, dateRange.end]',
+      '[mixedRecords, studentFilter, tagFilter, debouncedKeyword, dateRange.start, dateRange.end]',
     );
   });
 
