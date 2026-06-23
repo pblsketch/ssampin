@@ -33,7 +33,7 @@ export function HomeroomTabBar({ activeTab, onChange }: HomeroomTabBarProps) {
           role="tab"
           aria-selected={activeTab === tab.id}
           onClick={() => onChange(tab.id)}
-          className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap focus-visible:outline focus-visible:outline-2 focus-visible:outline-sp-accent ${
             activeTab === tab.id ? 'bg-sp-accent text-white' : 'text-sp-muted hover:text-sp-text'
           }`}
         >

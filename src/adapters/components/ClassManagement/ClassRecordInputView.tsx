@@ -13,6 +13,7 @@ import type {
   StudentAttendance,
   AttendanceRecord,
 } from '@domain/entities/Attendance';
+import { ATTENDANCE_BADGE, ATTENDANCE_LABEL } from '@adapters/presentation/attendanceStatusStyle';
 import { ATTENDANCE_REASONS } from '@domain/entities/Attendance';
 import { isSubjectMatch } from '@domain/rules/matchingRules';
 import { isStudentActive } from '@domain/rules/studentActivity';
@@ -63,21 +64,8 @@ const STATUS_OPTIONS: { key: AttendanceStatus; label: string; icon: string; colo
   },
 ];
 
-const STATUS_BADGE: Record<AttendanceStatus, string> = {
-  present: 'bg-green-500/20 text-green-400',
-  absent: 'bg-red-500/20 text-red-400',
-  late: 'bg-amber-500/20 text-amber-400',
-  earlyLeave: 'bg-orange-500/20 text-orange-400',
-  classAbsence: 'bg-purple-500/20 text-purple-400',
-};
-
-const STATUS_LABEL: Record<AttendanceStatus, string> = {
-  present: '출석',
-  absent: '결석',
-  late: '지각',
-  earlyLeave: '조퇴',
-  classAbsence: '결과',
-};
+const STATUS_BADGE = ATTENDANCE_BADGE;
+const STATUS_LABEL = ATTENDANCE_LABEL;
 
 const PERIODS = [1, 2, 3, 4, 5, 6, 7, 8] as const;
 

@@ -83,12 +83,18 @@ export function RecordsTab({ prefill, onPrefillConsumed }: RecordsTabProps) {
     <div className="h-full flex flex-col">
       {/* 서브탭 + 카테고리 관리 */}
       <div className="mb-4 flex items-center justify-between">
-        <div className="flex gap-1 bg-sp-surface rounded-lg p-1">
+        <div
+          className="flex gap-1 bg-sp-surface rounded-lg p-1"
+          role="tablist"
+          aria-label="기록 보기 선택"
+        >
           {MODE_TABS.map((tab) => (
             <button
               key={tab.id}
+              role="tab"
+              aria-selected={viewMode === tab.id}
               onClick={() => setViewMode(tab.id)}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-sp-accent ${
                 viewMode === tab.id ? 'bg-sp-accent text-white' : 'text-sp-muted hover:text-sp-text'
               }`}
             >

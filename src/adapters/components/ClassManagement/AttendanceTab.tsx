@@ -8,6 +8,7 @@ import type {
   StudentAttendance,
   AttendanceRecord,
 } from '@domain/entities/Attendance';
+import { ATTENDANCE_BADGE, ATTENDANCE_LABEL } from '@adapters/presentation/attendanceStatusStyle';
 import { PERIOD_MORNING, PERIOD_CLOSING, formatPeriodShort } from '@domain/entities/Attendance';
 import { studentKey } from '@domain/entities/TeachingClass';
 import { isStudentActive } from '@domain/rules/studentActivity';
@@ -36,11 +37,23 @@ function computeAutoPeriod(periodTimes: readonly PeriodTime[], targetDate: strin
 }
 
 const STATUS_CONFIG: Record<AttendanceStatus, { label: string; icon: string; badge: string }> = {
-  present: { label: '출석', icon: 'check_circle', badge: 'bg-green-500/20 text-green-400' },
-  absent: { label: '결석', icon: 'cancel', badge: 'bg-red-500/20 text-red-400' },
-  late: { label: '지각', icon: 'schedule', badge: 'bg-amber-500/20 text-amber-400' },
-  earlyLeave: { label: '조퇴', icon: 'exit_to_app', badge: 'bg-orange-500/20 text-orange-400' },
-  classAbsence: { label: '결과', icon: 'event_busy', badge: 'bg-purple-500/20 text-purple-400' },
+  present: {
+    label: ATTENDANCE_LABEL.present,
+    icon: 'check_circle',
+    badge: ATTENDANCE_BADGE.present,
+  },
+  absent: { label: ATTENDANCE_LABEL.absent, icon: 'cancel', badge: ATTENDANCE_BADGE.absent },
+  late: { label: ATTENDANCE_LABEL.late, icon: 'schedule', badge: ATTENDANCE_BADGE.late },
+  earlyLeave: {
+    label: ATTENDANCE_LABEL.earlyLeave,
+    icon: 'exit_to_app',
+    badge: ATTENDANCE_BADGE.earlyLeave,
+  },
+  classAbsence: {
+    label: ATTENDANCE_LABEL.classAbsence,
+    icon: 'event_busy',
+    badge: ATTENDANCE_BADGE.classAbsence,
+  },
 };
 
 const STATUS_CYCLE: Record<AttendanceStatus, AttendanceStatus> = {
