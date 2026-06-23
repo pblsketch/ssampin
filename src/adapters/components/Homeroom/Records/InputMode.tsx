@@ -3,7 +3,11 @@ import { useStudentRecordsStore } from '@adapters/stores/useStudentRecordsStore'
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useToastStore } from '@adapters/components/common/Toast';
-import { ATTENDANCE_TYPES, ATTENDANCE_REASONS } from '@domain/valueObjects/RecordCategory';
+import {
+  ATTENDANCE_TYPES,
+  ATTENDANCE_REASONS,
+  synthesizeSubcategory,
+} from '@domain/valueObjects/RecordCategory';
 import type {
   StudentAttendance,
   AttendanceStatus,
@@ -320,8 +324,20 @@ function InputMode({
       setSelectedStudents(new Set([student.id]));
     }
 
-    // 카테고리 + 서브카테고리 설정
-    setSelectedSub({ categoryId: prefill.category, subcategory: prefill.subcategory });
+    // 카테고리 설정 (Q2: 비출결은 분류만 — prefill 의 세부 분류는 태그로 흡수)
+    if (prefill.category === 'attendance') {
+      setSelectedSub({ categoryId: prefill.category, subcategory: prefill.subcategory });
+    } else {
+      setSelectedSub({
+        categoryId: prefill.category,
+        subcategory: synthesizeSubcategory(prefill.category),
+      });
+      if (prefill.subcategory && prefill.subcategory.trim()) {
+        setSelectedTags((prev) =>
+          prev.includes(prefill.subcategory) ? prev : [...prev, prefill.subcategory],
+        );
+      }
+    }
     setAttendanceType(null);
 
     // 상담 방법 설정
@@ -375,12 +391,14 @@ function InputMode({
     [attendanceType, markDirty],
   );
 
-  const handleSubcategoryClick = useCallback(
-    (categoryId: string, sub: string) => {
+  const handleCategoryClick = useCallback(
+    (categoryId: string) => {
+      // Q2: 비출결은 분류만 선택 — subcategory 는 카테고리별 sentinel 로 합성("보이지 않는 MCP 계약 슬롯").
+      //   세부 분류는 아래 태그로 입력한다(category + tags 2축).
       setSelectedSub((prev) =>
-        prev?.categoryId === categoryId && prev.subcategory === sub
+        prev?.categoryId === categoryId
           ? null
-          : { categoryId, subcategory: sub },
+          : { categoryId, subcategory: synthesizeSubcategory(categoryId) },
       );
       setAttendanceType(null);
       markDirty();
@@ -485,14 +503,19 @@ function InputMode({
       const neisFlag = selectedSub.categoryId === 'attendance' ? reportedToNeis : undefined;
       const docFlag = selectedSub.categoryId === 'attendance' ? documentSubmitted : undefined;
 
-      // 중복 감지: 해당 날짜에 같은 학생+카테고리+서브카테고리 기록이 있으면 건너뜀
+      // 중복 감지(Q2): 비출결 subcategory 는 sentinel 단일값이라 분류만으로는 dedup 불가.
+      //   같은 학생·날짜·분류에서 **내용과 태그가 동일**한 기록만 중복으로 본다(정확한 이중제출만 차단,
+      //   내용·태그가 다르면 같은 분류라도 2건 허용 — false-dedup 방지).
+      const memoTrim = memo.trim();
+      const dedupTagKey = [...selectedTags].sort().join('');
       const existingSet = new Set(
         records
           .filter(
             (r) =>
               r.date === date &&
               r.category === selectedSub.categoryId &&
-              r.subcategory === selectedSub.subcategory,
+              r.content.trim() === memoTrim &&
+              [...(r.tags ?? [])].sort().join('') === dedupTagKey,
           )
           .map((r) => r.studentId),
       );
@@ -936,12 +959,16 @@ function InputMode({
 
             {/* 카테고리 목록 */}
             <div className="space-y-3">
-              {categories.map((cat) => (
-                <div key={cat.id}>
-                  <p className={`text-xs font-semibold mb-1.5 ${getCategoryLabelColor(cat.color)}`}>
-                    {cat.name}
-                  </p>
-                  {cat.id === 'attendance' ? (
+              {/* 출결 — 유형·사유·교시(구조 그대로 유지) */}
+              {categories
+                .filter((cat) => cat.id === 'attendance')
+                .map((cat) => (
+                  <div key={cat.id}>
+                    <p
+                      className={`text-xs font-semibold mb-1.5 ${getCategoryLabelColor(cat.color)}`}
+                    >
+                      {cat.name}
+                    </p>
                     <div className="space-y-2">
                       <div className="flex flex-wrap gap-1.5">
                         {ATTENDANCE_TYPES.map((type) => {
@@ -994,26 +1021,30 @@ function InputMode({
                         </div>
                       )}
                     </div>
-                  ) : (
-                    <div className="flex flex-wrap gap-1.5">
-                      {cat.subcategories.map((sub) => {
-                        const isSelected =
-                          selectedSub?.categoryId === cat.id && selectedSub.subcategory === sub;
-                        return (
-                          <button
-                            key={sub}
-                            onClick={() => handleSubcategoryClick(cat.id, sub)}
-                            className={getSubcategoryChipClass(cat.color, isSelected)}
-                          >
-                            {isSelected && <span className="mr-1">✓</span>}
-                            {sub}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
+                  </div>
+                ))}
+
+              {/* 비출결 분류 — 단일 선택(Q2: 서브카테고리 칩 → 분류 선택, 세부는 아래 태그로) */}
+              <div>
+                <p className="text-xs font-semibold mb-1.5 text-sp-muted">분류</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {categories
+                    .filter((cat) => cat.id !== 'attendance')
+                    .map((cat) => {
+                      const isSelected = selectedSub?.categoryId === cat.id;
+                      return (
+                        <button
+                          key={cat.id}
+                          onClick={() => handleCategoryClick(cat.id)}
+                          className={getSubcategoryChipClass(cat.color, isSelected)}
+                        >
+                          {isSelected && <span className="mr-1">✓</span>}
+                          {cat.name.split(' (')[0]}
+                        </button>
+                      );
+                    })}
                 </div>
-              ))}
+              </div>
             </div>
 
             {/* 구분선 */}
