@@ -265,7 +265,9 @@ export type WriteDomain =
   | 'bookmarks'
   | 'notes'
   | 'attendance'
-  | 'homeroomAttendance';
+  | 'homeroomAttendance'
+  | 'observations'
+  | 'recordNote';
 export type WriteOp = 'create' | 'update' | 'complete' | 'delete';
 
 /**
@@ -286,6 +288,8 @@ const DOMAINS: ReadonlySet<string> = new Set([
   'notes',
   'attendance',
   'homeroomAttendance',
+  'observations',
+  'recordNote',
 ]);
 const OPS: ReadonlySet<string> = new Set(['create', 'update', 'complete', 'delete']);
 
@@ -615,6 +619,83 @@ export type ValidateResult =
   | { readonly ok: true; readonly value: ApplyWriteRequest }
   | { readonly ok: false; readonly reason: string };
 
+const OBSERVATION_CONTENT_MAX = 500;
+const OBSERVATION_FIELDS: ReadonlySet<string> = new Set([
+  'studentId',
+  'content',
+  'date',
+  'tags',
+  'classId',
+]);
+
+/** 관찰기록(observations) create payload 검증(형태만). 정상이면 null. (수업반 학생 대상.) */
+function checkObservationPayload(d: Record<string, unknown>): string | null {
+  for (const k of Object.keys(d)) {
+    if (!OBSERVATION_FIELDS.has(k)) return '허용되지 않은 필드가 포함되어 있습니다.';
+  }
+  if (typeof d['studentId'] !== 'string' || d['studentId'].trim().length === 0) {
+    return 'studentId 가 필요합니다.';
+  }
+  if (typeof d['content'] !== 'string' || d['content'].trim().length === 0) {
+    return '관찰 내용(content)이 필요합니다.';
+  }
+  if (d['content'].length > OBSERVATION_CONTENT_MAX) {
+    return `content 는 최대 ${OBSERVATION_CONTENT_MAX}자입니다.`;
+  }
+  if (d['date'] !== undefined && (typeof d['date'] !== 'string' || !DATE_RE.test(d['date']))) {
+    return 'date 는 YYYY-MM-DD 형식이어야 합니다.';
+  }
+  if (d['classId'] !== undefined && typeof d['classId'] !== 'string') {
+    return 'classId 는 문자열이어야 합니다.';
+  }
+  if (
+    d['tags'] !== undefined &&
+    (!Array.isArray(d['tags']) || d['tags'].some((t) => typeof t !== 'string'))
+  ) {
+    return 'tags 는 문자열 배열이어야 합니다.';
+  }
+  return null;
+}
+
+const RECORD_NOTE_CONTENT_MAX = 2000;
+const RECORD_NOTE_FIELDS: ReadonlySet<string> = new Set([
+  'studentId',
+  'content',
+  'categoryId',
+  'subcategory',
+  'date',
+]);
+
+/**
+ * 담임 노트(recordNote) create payload 검증(형태만). 정상이면 null. 담임 학생 대상.
+ * 카테고리/세부항목의 진위(존재·attendance 제외·멤버십)는 렌더러가 라이브 store(useStudentRecordsStore)로
+ * 재검증한다 — main process 는 렌더러 store 에 접근할 수 없어 형태만 본다(서버가 클라를 신뢰하지 않음, #5).
+ */
+function checkRecordNotePayload(d: Record<string, unknown>): string | null {
+  for (const k of Object.keys(d)) {
+    if (!RECORD_NOTE_FIELDS.has(k)) return '허용되지 않은 필드가 포함되어 있습니다.';
+  }
+  if (typeof d['studentId'] !== 'string' || d['studentId'].trim().length === 0) {
+    return 'studentId 가 필요합니다.';
+  }
+  if (typeof d['content'] !== 'string' || d['content'].trim().length === 0) {
+    return '노트 내용(content)이 필요합니다.';
+  }
+  if (d['content'].length > RECORD_NOTE_CONTENT_MAX) {
+    return `content 는 최대 ${RECORD_NOTE_CONTENT_MAX}자입니다.`;
+  }
+  if (typeof d['categoryId'] !== 'string' || d['categoryId'].trim().length === 0) {
+    return 'categoryId 가 필요합니다.';
+  }
+  if (typeof d['subcategory'] !== 'string' || d['subcategory'].trim().length === 0) {
+    return 'subcategory 가 필요합니다.';
+  }
+  if (d['date'] !== undefined && (typeof d['date'] !== 'string' || !DATE_RE.test(d['date']))) {
+    return 'date 는 YYYY-MM-DD 형식이어야 합니다.';
+  }
+  return null;
+}
+
 /**
  * 위임 쓰기 페이로드 검증. 허용 도메인·연산만, 멱등키 필수, create 는 도메인별 필수 필드 확인.
  * (실제 store 적용은 렌더러가 하며, 여기서는 형태·범위만 본다.)
@@ -701,6 +782,22 @@ export function validateApplyWrite(raw: unknown): ValidateResult {
       return { ok: false, reason: '담임 출결은 create(저장)만 지원합니다.' };
     }
     const err = checkHomeroomAttendancePayload(d);
+    if (err) return { ok: false, reason: err };
+  }
+  // 관찰기록(observations) — create 전용(append). 수업반 학생 대상.
+  if (domain === 'observations') {
+    if (op !== 'create') {
+      return { ok: false, reason: '관찰기록은 create(저장)만 지원합니다.' };
+    }
+    const err = checkObservationPayload(d);
+    if (err) return { ok: false, reason: err };
+  }
+  // 담임 노트(recordNote) — create 전용. 담임 학생 대상. 카테고리 진위는 렌더러가 라이브 검증.
+  if (domain === 'recordNote') {
+    if (op !== 'create') {
+      return { ok: false, reason: '담임 노트는 create(저장)만 지원합니다.' };
+    }
+    const err = checkRecordNotePayload(d);
     if (err) return { ok: false, reason: err };
   }
   if (op === 'create') {

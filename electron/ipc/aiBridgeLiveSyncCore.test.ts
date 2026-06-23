@@ -770,4 +770,118 @@ describe('validateApplyWrite', () => {
       }).ok,
     ).toBe(false);
   });
+
+  it('observations create: studentId+content 필수, 길이·필드·형식 검증', () => {
+    const base = { domain: 'observations', op: 'create', idempotencyKey: 'k' } as const;
+    expect(
+      validateApplyWrite({ ...base, data: { studentId: 's1', content: '발표 잘함' } }).ok,
+    ).toBe(true);
+    expect(
+      validateApplyWrite({
+        ...base,
+        data: { studentId: 's1', content: 'x', classId: 'c1', tags: ['a'], date: '2026-06-22' },
+      }).ok,
+    ).toBe(true);
+    expect(validateApplyWrite({ ...base, data: { content: 'x' } }).ok).toBe(false); // studentId 누락
+    expect(validateApplyWrite({ ...base, data: { studentId: 's1' } }).ok).toBe(false); // content 누락
+    expect(
+      validateApplyWrite({ ...base, data: { studentId: 's1', content: 'a'.repeat(501) } }).ok,
+    ).toBe(false); // 길이 초과
+    expect(
+      validateApplyWrite({ ...base, data: { studentId: 's1', content: 'x', tags: [1] } }).ok,
+    ).toBe(false); // tags 비문자열
+    expect(
+      validateApplyWrite({ ...base, data: { studentId: 's1', content: 'x', date: '2026/06/22' } })
+        .ok,
+    ).toBe(false); // date 형식
+    expect(
+      validateApplyWrite({ ...base, data: { studentId: 's1', content: 'x', foo: 1 } }).ok,
+    ).toBe(false); // out-of-spec 필드
+  });
+
+  it('observations: create 만 지원(delete 거부)', () => {
+    expect(
+      validateApplyWrite({
+        domain: 'observations',
+        op: 'delete',
+        idempotencyKey: 'k',
+        data: { studentId: 's1', content: 'x' },
+      }).ok,
+    ).toBe(false);
+  });
+
+  it('recordNote create: 형태 검증(studentId·categoryId·subcategory 필수, content≤2000, 필드제한)', () => {
+    const base = { domain: 'recordNote', op: 'create', idempotencyKey: 'k' } as const;
+    expect(
+      validateApplyWrite({
+        ...base,
+        data: {
+          studentId: 's1',
+          categoryId: 'life',
+          subcategory: '칭찬',
+          content: '분리수거 정리',
+        },
+      }).ok,
+    ).toBe(true);
+    expect(
+      validateApplyWrite({
+        ...base,
+        data: {
+          studentId: 's1',
+          categoryId: 'life',
+          subcategory: '칭찬',
+          content: 'x',
+          date: '2026-06-22',
+        },
+      }).ok,
+    ).toBe(true);
+    expect(
+      validateApplyWrite({
+        ...base,
+        data: { categoryId: 'life', subcategory: '칭찬', content: 'x' },
+      }).ok,
+    ).toBe(false); // studentId 누락
+    expect(
+      validateApplyWrite({ ...base, data: { studentId: 's1', subcategory: '칭찬', content: 'x' } })
+        .ok,
+    ).toBe(false); // categoryId 누락
+    expect(
+      validateApplyWrite({ ...base, data: { studentId: 's1', categoryId: 'life', content: 'x' } })
+        .ok,
+    ).toBe(false); // subcategory 누락
+    expect(
+      validateApplyWrite({
+        ...base,
+        data: { studentId: 's1', categoryId: 'life', subcategory: '칭찬' },
+      }).ok,
+    ).toBe(false); // content 누락
+    expect(
+      validateApplyWrite({
+        ...base,
+        data: {
+          studentId: 's1',
+          categoryId: 'life',
+          subcategory: '칭찬',
+          content: 'a'.repeat(2001),
+        },
+      }).ok,
+    ).toBe(false); // 길이 초과
+    expect(
+      validateApplyWrite({
+        ...base,
+        data: { studentId: 's1', categoryId: 'life', subcategory: '칭찬', content: 'x', bar: 1 },
+      }).ok,
+    ).toBe(false); // out-of-spec 필드
+  });
+
+  it('recordNote: create 만 지원(delete 거부)', () => {
+    expect(
+      validateApplyWrite({
+        domain: 'recordNote',
+        op: 'delete',
+        idempotencyKey: 'k',
+        data: { studentId: 's1', categoryId: 'life', subcategory: '칭찬', content: 'x' },
+      }).ok,
+    ).toBe(false);
+  });
 });

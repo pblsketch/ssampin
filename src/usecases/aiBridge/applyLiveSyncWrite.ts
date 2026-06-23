@@ -22,7 +22,9 @@ export interface LiveSyncWriteRequest {
     | 'bookmarks'
     | 'notes'
     | 'attendance'
-    | 'homeroomAttendance';
+    | 'homeroomAttendance'
+    | 'observations'
+    | 'recordNote';
   readonly op: 'create' | 'update' | 'complete' | 'delete';
   readonly idempotencyKey: string;
   readonly data: Record<string, unknown>;
@@ -151,6 +153,34 @@ export interface LiveSyncWriteDeps {
     readonly regularPeriodCount: number;
     /** 담임 일일 출결 위임 — 대상 학생만 갱신(subcategory 계산·교과반 미러링은 store 가 처리). */
     readonly save: (input: LiveSyncHomeroomAttendanceInput) => Promise<void>;
+  };
+  readonly observations: {
+    /** 수업반 관찰기록 append — 호출자는 useObservationStore.addRecord 를 넘긴다. */
+    readonly add: (input: {
+      readonly studentId: string;
+      readonly classId?: string;
+      readonly date?: string;
+      readonly content: string;
+      readonly tags?: readonly string[];
+    }) => Promise<void>;
+  };
+  readonly recordNote: {
+    /** 담임 학생 기록(student-records) append — 호출자는 useStudentRecordsStore.addRecord 를 넘긴다. */
+    readonly add: (input: {
+      readonly studentId: string;
+      readonly categoryId: string;
+      readonly subcategory: string;
+      readonly content: string;
+      readonly date?: string;
+    }) => Promise<void>;
+    /**
+     * 라이브 카테고리 목록(렌더러 store 의 신뢰 가능한 단일 진실) — categoryId 존재·attendance 제외·
+     * subcategory 멤버십을 적용 직전 재검증한다. 사용자 커스텀 카테고리도 그대로 통과(하드코딩 화이트리스트 금지).
+     */
+    readonly categories: () => readonly {
+      readonly id: string;
+      readonly subcategories: readonly string[];
+    }[];
   };
   /**
    * 멱등 가드(주입, 선택) — 같은 (idempotencyKey, fingerprint) 쓰기의 중복 적용을 막는다.
@@ -552,6 +582,86 @@ async function applyHomeroomAttendance(
   return ok(req.idempotencyKey);
 }
 
+/** 수업반 관찰기록 — create(append)만. studentId+content 필수, classId/date/tags 선택. */
+async function applyObservations(
+  req: LiveSyncWriteRequest,
+  deps: LiveSyncWriteDeps,
+): Promise<LiveSyncWriteResult> {
+  if (req.op !== 'create') return bad('관찰기록은 저장(create)만 지원합니다.');
+  const d = req.data;
+  const studentId = asStr(d['studentId']);
+  const content = asStr(d['content']);
+  if (!studentId) return bad('studentId 가 필요합니다.');
+  if (!content) return bad('content 가 필요합니다.');
+  const input: {
+    studentId: string;
+    content: string;
+    classId?: string;
+    date?: string;
+    tags?: readonly string[];
+  } = { studentId, content };
+  const classId = asStr(d['classId']);
+  if (classId !== undefined) input.classId = classId;
+  const date = asStr(d['date']);
+  if (date !== undefined) input.date = date;
+  if (Array.isArray(d['tags'])) {
+    input.tags = d['tags'].filter((x): x is string => typeof x === 'string');
+  }
+  await deps.observations.add(input);
+  return ok(req.idempotencyKey);
+}
+
+/**
+ * 담임 노트 — create 전용. 카테고리/세부항목의 진위를 **렌더러 라이브 store**(deps.recordNote.categories)로
+ * 적용 직전 재검증한다(신뢰 가능한 단일 진실 — 사용자 커스텀 카테고리도 통과, attendance 는 출결 전용이라 거부).
+ */
+async function applyRecordNote(
+  req: LiveSyncWriteRequest,
+  deps: LiveSyncWriteDeps,
+): Promise<LiveSyncWriteResult> {
+  if (req.op !== 'create') return bad('담임 노트는 저장(create)만 지원합니다.');
+  const d = req.data;
+  const studentId = asStr(d['studentId']);
+  const content = asStr(d['content']);
+  const categoryId = asStr(d['categoryId']);
+  const subcategory = asStr(d['subcategory']);
+  if (!studentId) return bad('studentId 가 필요합니다.');
+  if (!content) return bad('content 가 필요합니다.');
+  if (!categoryId) return bad('categoryId 가 필요합니다.');
+  if (!subcategory) return bad('subcategory 가 필요합니다.');
+  // 출결은 합성 id 의 별도 트랙 — 노트가 침범하지 않는다(출결은 출결 도구로 등록).
+  if (categoryId === 'attendance') {
+    return bad('출결 카테고리에는 노트를 쓸 수 없습니다(출결은 출결 도구를 쓰세요).');
+  }
+  // 라이브 카테고리 진위 — 하드코딩 화이트리스트가 아니라 렌더러 store 의 현재 목록과 대조.
+  const categories = deps.recordNote.categories();
+  const category = categories.find((c) => c.id === categoryId);
+  if (!category) {
+    const allowed = categories
+      .filter((c) => c.id !== 'attendance')
+      .map((c) => c.id)
+      .join(', ');
+    return bad(`categoryId 를 찾을 수 없습니다. 허용된 카테고리: ${allowed}`);
+  }
+  if (category.subcategories.length === 0) {
+    return bad('이 카테고리는 노트 대상이 아닙니다(세부항목이 없는 카테고리).');
+  }
+  if (!category.subcategories.includes(subcategory)) {
+    return bad(`subcategory 가 올바르지 않습니다. 허용: ${category.subcategories.join(', ')}`);
+  }
+  const input: {
+    studentId: string;
+    categoryId: string;
+    subcategory: string;
+    content: string;
+    date?: string;
+  } = { studentId, categoryId, subcategory, content };
+  const date = asStr(d['date']);
+  if (date !== undefined) input.date = date;
+  await deps.recordNote.add(input);
+  return ok(req.idempotencyKey);
+}
+
 /**
  * 검증된 live-sync 쓰기를 store 액션으로 적용. 도메인/연산별로 분기하며, 실패는 상태코드와 함께 반환.
  * (페이로드 형태는 main 의 validateApplyWrite 가 1차 검증하지만, 여기서도 data 필드를 방어적으로 본다.)
@@ -584,6 +694,8 @@ export async function applyLiveSyncWrite(
     else if (req.domain === 'notes') result = await applyNotes(req, deps);
     else if (req.domain === 'attendance') result = await applyAttendance(req, deps);
     else if (req.domain === 'homeroomAttendance') result = await applyHomeroomAttendance(req, deps);
+    else if (req.domain === 'observations') result = await applyObservations(req, deps);
+    else if (req.domain === 'recordNote') result = await applyRecordNote(req, deps);
     else result = bad('지원하지 않는 도메인입니다.');
   } catch {
     result = { ok: false, status: 500, error: '쓰기 적용 중 오류가 발생했습니다.' };

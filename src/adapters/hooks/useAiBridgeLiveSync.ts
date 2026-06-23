@@ -7,6 +7,7 @@ import { useBookmarkStore } from '@adapters/stores/useBookmarkStore';
 import { useNoteStore } from '@adapters/stores/useNoteStore';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { useStudentRecordsStore } from '@adapters/stores/useStudentRecordsStore';
+import { useObservationStore } from '@adapters/stores/useObservationStore';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import {
@@ -127,6 +128,9 @@ export function useAiBridgeLiveSync(): void {
     void useMemoStore.getState().load();
     void useBookmarkStore.getState().loadAll();
     void useNoteStore.getState().load();
+    // 관찰기록·담임 기록 store 선로딩 — 라이브싱크 쓰기 대상이며, recordNote 의 라이브 카테고리 검증에도 쓰인다.
+    void useObservationStore.getState().load();
+    void useStudentRecordsStore.getState().load();
     return api.aiBridge.onApplyWrite((raw) => {
       const req = raw as LiveSyncWriteRequest;
       const todo = useTodoStore.getState();
@@ -137,6 +141,7 @@ export function useAiBridgeLiveSync(): void {
       const ns = useNoteStore.getState();
       const tc = useTeachingClassStore.getState();
       const sr = useStudentRecordsStore.getState();
+      const obs = useObservationStore.getState();
       return applyLiveSyncWrite(req, {
         todos: {
           add: (text, opts) =>
@@ -308,6 +313,34 @@ export function useAiBridgeLiveSync(): void {
               students,
             });
           },
+        },
+        observations: {
+          // 수업반 관찰기록 append — store 가 메모리 반영 + 파일 저장을 일원화한다(visibility 는 store 가 private 고정).
+          add: (obsInput) =>
+            obs
+              .addRecord({
+                studentId: obsInput.studentId,
+                classId: obsInput.classId ?? '',
+                date: obsInput.date ?? new Date().toISOString().slice(0, 10),
+                content: obsInput.content,
+                tags: obsInput.tags ? [...obsInput.tags] : [],
+              })
+              .then(() => undefined),
+        },
+        recordNote: {
+          // 담임 학생 기록 append — addRecord(studentId, categoryId, subcategory, content, date).
+          add: (noteInput) =>
+            sr
+              .addRecord(
+                noteInput.studentId,
+                noteInput.categoryId,
+                noteInput.subcategory,
+                noteInput.content,
+                noteInput.date ?? new Date().toISOString().slice(0, 10),
+              )
+              .then(() => undefined),
+          // 라이브 카테고리(렌더러 store 의 단일 진실) — applyRecordNote 가 categoryId/subcategory 재검증에 쓴다.
+          categories: () => useStudentRecordsStore.getState().categories,
         },
       });
     });

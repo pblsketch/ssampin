@@ -59,6 +59,20 @@ beforeEach(() => {
       regularPeriodCount: 7,
       save: rec('homeroomAttendance.save') as LiveSyncWriteDeps['homeroomAttendance']['save'],
     },
+    observations: {
+      add: rec('observations.add') as LiveSyncWriteDeps['observations']['add'],
+    },
+    recordNote: {
+      add: rec('recordNote.add') as LiveSyncWriteDeps['recordNote']['add'],
+      // 라이브 카테고리(렌더러 store mock) — attendance(빈 subcategories) + 기본 3종 + 커스텀 UUID.
+      categories: () => [
+        { id: 'attendance', subcategories: [] },
+        { id: 'counseling', subcategories: ['학부모상담', '학생상담', '교우관계'] },
+        { id: 'life', subcategories: ['건강', '생활지도', '학습', '칭찬'] },
+        { id: 'etc', subcategories: ['진로', '가정연락', '기타'] },
+        { id: 'custom-uuid-1234', subcategories: ['우리반행사', '봉사'] },
+      ],
+    },
   };
 });
 
@@ -845,5 +859,140 @@ describe('applyLiveSyncWrite — homeroomAttendance(담임)', () => {
     expect(arg.recordsByPeriod.get(1)).toEqual([
       { number: 7, status: 'absent', reason: '인정', memo: '현장체험학습' },
     ]);
+  });
+});
+
+describe('applyLiveSyncWrite — observations(관찰기록)', () => {
+  it('create: studentId+content → add 위임(classId·tags 포함)', async () => {
+    const res = await applyLiveSyncWrite(
+      {
+        domain: 'observations',
+        op: 'create',
+        idempotencyKey: 'o1',
+        data: { studentId: 's1', classId: 'c1', content: '발표 잘함', tags: ['수업태도'] },
+      },
+      deps,
+    );
+    expect(res).toEqual({ ok: true, ref: 'o1' });
+    expect(calls[0]?.fn).toBe('observations.add');
+    expect(calls[0]?.args[0]).toMatchObject({
+      studentId: 's1',
+      classId: 'c1',
+      content: '발표 잘함',
+      tags: ['수업태도'],
+    });
+  });
+
+  it('content 누락 거부', async () => {
+    const res = await applyLiveSyncWrite(
+      { domain: 'observations', op: 'create', idempotencyKey: 'o2', data: { studentId: 's1' } },
+      deps,
+    );
+    expect(res.ok).toBe(false);
+    expect(calls.length).toBe(0);
+  });
+
+  it('create 외 op 거부', async () => {
+    const res = await applyLiveSyncWrite(
+      {
+        domain: 'observations',
+        op: 'delete',
+        idempotencyKey: 'o3',
+        data: { studentId: 's1', content: 'x' },
+      },
+      deps,
+    );
+    expect(res.ok).toBe(false);
+  });
+});
+
+describe('applyLiveSyncWrite — recordNote(담임 노트)', () => {
+  const base = { domain: 'recordNote', op: 'create', idempotencyKey: 'n1' } as const;
+
+  it('기본 카테고리(life>칭찬) 통과 → add 위임', async () => {
+    const res = await applyLiveSyncWrite(
+      {
+        ...base,
+        data: {
+          studentId: 's1',
+          categoryId: 'life',
+          subcategory: '칭찬',
+          content: '분리수거 정리',
+        },
+      },
+      deps,
+    );
+    expect(res).toEqual({ ok: true, ref: 'n1' });
+    expect(calls[0]?.fn).toBe('recordNote.add');
+    expect(calls[0]?.args[0]).toMatchObject({
+      studentId: 's1',
+      categoryId: 'life',
+      subcategory: '칭찬',
+      content: '분리수거 정리',
+    });
+  });
+
+  it('커스텀 UUID 카테고리 통과(하드코딩 화이트리스트 회귀 방지)', async () => {
+    const res = await applyLiveSyncWrite(
+      {
+        ...base,
+        data: {
+          studentId: 's1',
+          categoryId: 'custom-uuid-1234',
+          subcategory: '봉사',
+          content: 'x',
+        },
+      },
+      deps,
+    );
+    expect(res.ok).toBe(true);
+    expect(calls[0]?.fn).toBe('recordNote.add');
+  });
+
+  it('attendance 카테고리 거부(출결 트랙 침범 금지)', async () => {
+    const res = await applyLiveSyncWrite(
+      {
+        ...base,
+        data: { studentId: 's1', categoryId: 'attendance', subcategory: 'x', content: 'x' },
+      },
+      deps,
+    );
+    expect(res.ok).toBe(false);
+    expect(calls.length).toBe(0);
+  });
+
+  it('미존재 categoryId 거부 + 허용목록 회신', async () => {
+    const res = await applyLiveSyncWrite(
+      { ...base, data: { studentId: 's1', categoryId: 'nope', subcategory: 'x', content: 'x' } },
+      deps,
+    );
+    expect(res.ok).toBe(false);
+    expect(res.error).toContain('life');
+    expect(calls.length).toBe(0);
+  });
+
+  it('subcategory 불일치 거부 + 허용목록 회신', async () => {
+    const res = await applyLiveSyncWrite(
+      {
+        ...base,
+        data: { studentId: 's1', categoryId: 'life', subcategory: '없는세부', content: 'x' },
+      },
+      deps,
+    );
+    expect(res.ok).toBe(false);
+    expect(res.error).toContain('칭찬');
+    expect(calls.length).toBe(0);
+  });
+
+  it('create 외 op 거부', async () => {
+    const res = await applyLiveSyncWrite(
+      {
+        ...base,
+        op: 'delete',
+        data: { studentId: 's1', categoryId: 'life', subcategory: '칭찬', content: 'x' },
+      },
+      deps,
+    );
+    expect(res.ok).toBe(false);
   });
 });

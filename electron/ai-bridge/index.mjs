@@ -3505,6 +3505,276 @@ function createContext(dataDir = resolveDataDir()) {
   };
 }
 
+// ../ssampin-ai-bridge/packages/mcp/dist/writeTools.js
+import crypto6 from 'node:crypto';
+var DATE_RE2 = /^\d{4}-\d{2}-\d{2}$/;
+var TIME_RE = /^\d{2}:\d{2}$/;
+var PRIORITIES = /* @__PURE__ */ new Set(['high', 'medium', 'low', 'none']);
+function asStr2(v) {
+  return typeof v === 'string' && v.trim().length > 0 ? v : void 0;
+}
+function assertWriteAllowed(ctx) {
+  if (readBridgeCapability(ctx.dataDir).allowWrite) return;
+  throw new WriteDisabledError(
+    '\uC4F0\uAE30\uAC00 \uBE44\uD65C\uC131\uD654\uB418\uC5B4 \uC788\uC2B5\uB2C8\uB2E4. \uC324\uD540 \uC124\uC815\uC758 "AI \uC5F0\uACB0"\uC5D0\uC11C \uC4F0\uAE30\uB97C \uCF1C\uC138\uC694.',
+  );
+}
+function deriveIdemKey(domain, op, data, provided) {
+  const h = crypto6
+    .createHash('sha256')
+    .update(`${domain}:${op}:${JSON.stringify(data)}`)
+    .digest('hex')
+    .slice(0, 16);
+  const p = asStr2(provided);
+  return p ? `${p}.${h}` : `${domain}-${h}`;
+}
+function resolveTodoId(ctx, todoToken) {
+  const resolved = ctx.store.resolveToken(todoToken);
+  if (!resolved) {
+    throw new WriteValidationError(
+      '\uC54C \uC218 \uC5C6\uB294 \uD560\uC77C \uD1A0\uD070\uC785\uB2C8\uB2E4. get_todos \uC758 todoToken \uC744 \uC4F0\uC138\uC694.',
+    );
+  }
+  const id = parseTodoIdentity(resolved);
+  if (!id)
+    throw new WriteValidationError(
+      '\uD560\uC77C \uD1A0\uD070\uC774 \uC544\uB2D9\uB2C8\uB2E4. get_todos \uC758 todoToken \uC744 \uC4F0\uC138\uC694.',
+    );
+  return id;
+}
+async function delegate(ctx, op, domain, idempotencyKey, data) {
+  const control = readControlInfo(ctx.dataDir);
+  if (!isAppRunning(control)) {
+    throw new WriteConflictError(
+      '\uC324\uD540\uC774 \uC2E4\uD589 \uC911\uC774 \uC544\uB2D9\uB2C8\uB2E4. \uC324\uD540\uC744 \uCF1C\uACE0 "AI \uC5F0\uACB0" \uC4F0\uAE30\uB97C \uD65C\uC131\uD654\uD55C \uB4A4 \uB2E4\uC2DC \uC2DC\uB3C4\uD558\uC138\uC694(\uC2E4\uD589 \uC911\uC5D0\uB9CC \uC548\uC804\uD558\uAC8C \uC501\uB2C8\uB2E4).',
+    );
+  }
+  const result = await postLoopback(control, { domain, op, idempotencyKey, data });
+  if (!result.ok) {
+    throw new WriteConflictError(
+      result.error ??
+        '\uC324\uD540\uC5D0 \uC4F0\uAE30\uB97C \uC801\uC6A9\uD558\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.',
+    );
+  }
+  return { ref: result.ref ?? idempotencyKey };
+}
+async function createVia(ctx, domain, data, idempotencyKey, directAppend) {
+  const decision = decideWritePath(ctx.dataDir);
+  if (decision.path === 'loopback') {
+    const result = await postLoopback(decision.control, {
+      domain,
+      op: 'create',
+      idempotencyKey,
+      data,
+    });
+    if (!result.ok)
+      throw new WriteConflictError(
+        result.error ??
+          '\uC324\uD540\uC5D0 \uC4F0\uAE30\uB97C \uC801\uC6A9\uD558\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.',
+      );
+    return { ref: result.ref ?? idempotencyKey, via: 'app' };
+  }
+  if (decision.path === 'direct') {
+    await directAppend();
+    return { ref: idempotencyKey, via: 'file' };
+  }
+  throw new WriteConflictError(
+    '\uC324\uD540 \uC0C1\uD0DC\uAC00 \uBD88\uD655\uC2E4\uD569\uB2C8\uB2E4(\uC2DC\uC791 \uC911\uC774\uAC70\uB098 \uC751\uB2F5 \uC5C6\uC74C). \uC7A0\uC2DC \uD6C4 \uB2E4\uC2DC \uC2DC\uB3C4\uD558\uC138\uC694.',
+  );
+}
+async function createTodo(ctx, args) {
+  assertWriteAllowed(ctx);
+  const text = asStr2(args.text);
+  if (!text) throw new WriteValidationError('text \uAC00 \uD544\uC694\uD569\uB2C8\uB2E4.');
+  if (text.length > 500)
+    throw new WriteValidationError(
+      `text \uB294 \uCD5C\uB300 500\uC790\uC785\uB2C8\uB2E4(\uD604\uC7AC ${text.length}).`,
+    );
+  const data = { text };
+  const dueDate = asStr2(args.dueDate);
+  if (dueDate !== void 0) {
+    if (!DATE_RE2.test(dueDate))
+      throw new WriteValidationError(
+        'dueDate \uB294 YYYY-MM-DD \uD615\uC2DD\uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4.',
+      );
+    data['dueDate'] = dueDate;
+  }
+  const priority = asStr2(args.priority);
+  if (priority !== void 0) {
+    if (!PRIORITIES.has(priority))
+      throw new WriteValidationError(
+        'priority \uB294 high|medium|low|none \uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4.',
+      );
+    data['priority'] = priority;
+  }
+  const category = asStr2(args.category);
+  if (category !== void 0) data['category'] = category;
+  const time = asStr2(args.time);
+  if (time !== void 0) {
+    if (!TIME_RE.test(time))
+      throw new WriteValidationError(
+        'time \uC740 HH:mm \uD615\uC2DD\uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4.',
+      );
+    data['time'] = time;
+  }
+  const idempotencyKey = deriveIdemKey('todos', 'create', data, args.idempotencyKey);
+  const { ref, via } = await createVia(ctx, 'todos', data, idempotencyKey, () =>
+    appendTodoDirect(ctx.dataDir, data, idempotencyKey),
+  );
+  ctx.audit.append({ tool: 'create_todo', redactionStats: { items: 1 } });
+  return { ok: true, ref, via };
+}
+async function createEvent(ctx, args) {
+  assertWriteAllowed(ctx);
+  const title = asStr2(args.title);
+  const date = asStr2(args.date);
+  if (!title) throw new WriteValidationError('title \uC774 \uD544\uC694\uD569\uB2C8\uB2E4.');
+  if (title.length > 200)
+    throw new WriteValidationError(
+      `title \uC740 \uCD5C\uB300 200\uC790\uC785\uB2C8\uB2E4(\uD604\uC7AC ${title.length}).`,
+    );
+  if (!date || !DATE_RE2.test(date))
+    throw new WriteValidationError(
+      'date \uB294 YYYY-MM-DD \uD615\uC2DD\uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4.',
+    );
+  const data = { title, date };
+  const category = asStr2(args.category);
+  if (category !== void 0) data['category'] = category;
+  const time = asStr2(args.time);
+  if (time !== void 0) data['time'] = time;
+  const location = asStr2(args.location);
+  if (location !== void 0) data['location'] = location;
+  const idempotencyKey = deriveIdemKey('events', 'create', data, args.idempotencyKey);
+  const { ref, via } = await createVia(ctx, 'events', data, idempotencyKey, () =>
+    appendEventDirect(ctx.dataDir, data, idempotencyKey),
+  );
+  ctx.audit.append({ tool: 'create_event', redactionStats: { items: 1 } });
+  return { ok: true, ref, via };
+}
+async function mutateTodo(ctx, op, todoToken, extra, provided, tool) {
+  assertWriteAllowed(ctx);
+  const id = resolveTodoId(ctx, todoToken);
+  const data = { id, ...extra };
+  const idempotencyKey = deriveIdemKey('todos', op, data, provided);
+  const { ref } = await delegate(ctx, op, 'todos', idempotencyKey, data);
+  ctx.audit.append({ tool, redactionStats: { items: 1 } });
+  return { ok: true, ref, via: 'app' };
+}
+function completeTodo(ctx, args) {
+  return mutateTodo(ctx, 'complete', args.todoToken, {}, args.idempotencyKey, 'complete_todo');
+}
+function deleteTodo(ctx, args) {
+  return mutateTodo(ctx, 'delete', args.todoToken, {}, args.idempotencyKey, 'delete_todo');
+}
+async function updateTodo(ctx, args) {
+  const changes = {};
+  const text = asStr2(args.text);
+  if (text !== void 0) {
+    if (text.length > 500)
+      throw new WriteValidationError(
+        `text \uB294 \uCD5C\uB300 500\uC790\uC785\uB2C8\uB2E4(\uD604\uC7AC ${text.length}).`,
+      );
+    changes['text'] = text;
+  }
+  const dueDate = asStr2(args.dueDate);
+  if (dueDate !== void 0) {
+    if (!DATE_RE2.test(dueDate))
+      throw new WriteValidationError(
+        'dueDate \uB294 YYYY-MM-DD \uD615\uC2DD\uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4.',
+      );
+    changes['dueDate'] = dueDate;
+  }
+  const priority = asStr2(args.priority);
+  if (priority !== void 0) {
+    if (!PRIORITIES.has(priority))
+      throw new WriteValidationError(
+        'priority \uB294 high|medium|low|none \uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4.',
+      );
+    changes['priority'] = priority;
+  }
+  const category = asStr2(args.category);
+  if (category !== void 0) changes['category'] = category;
+  const time = asStr2(args.time);
+  if (time !== void 0) {
+    if (!TIME_RE.test(time))
+      throw new WriteValidationError(
+        'time \uC740 HH:mm \uD615\uC2DD\uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4.',
+      );
+    changes['time'] = time;
+  }
+  const status = asStr2(args.status);
+  if (status !== void 0) {
+    if (!['todo', 'inProgress', 'done'].includes(status))
+      throw new WriteValidationError(
+        'status \uB294 todo|inProgress|done \uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4.',
+      );
+    changes['status'] = status;
+  }
+  if (Object.keys(changes).length === 0)
+    throw new WriteValidationError(
+      '\uBCC0\uACBD\uD560 \uD544\uB4DC\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.',
+    );
+  return mutateTodo(ctx, 'update', args.todoToken, changes, args.idempotencyKey, 'update_todo');
+}
+function resolveEventId(ctx, eventToken) {
+  const resolved = ctx.store.resolveToken(eventToken);
+  if (!resolved)
+    throw new WriteValidationError(
+      '\uC54C \uC218 \uC5C6\uB294 \uC77C\uC815 \uD1A0\uD070\uC785\uB2C8\uB2E4. get_events \uC758 eventToken \uC744 \uC4F0\uC138\uC694.',
+    );
+  const id = parseEventIdentity(resolved);
+  if (!id)
+    throw new WriteValidationError(
+      '\uC77C\uC815 \uD1A0\uD070\uC774 \uC544\uB2D9\uB2C8\uB2E4. get_events \uC758 eventToken \uC744 \uC4F0\uC138\uC694.',
+    );
+  return id;
+}
+async function updateEvent(ctx, args) {
+  const changes = {};
+  const title = asStr2(args.title);
+  if (title !== void 0) {
+    if (title.length > 200)
+      throw new WriteValidationError(
+        `title \uC740 \uCD5C\uB300 200\uC790\uC785\uB2C8\uB2E4(\uD604\uC7AC ${title.length}).`,
+      );
+    changes['title'] = title;
+  }
+  const date = asStr2(args.date);
+  if (date !== void 0) {
+    if (!DATE_RE2.test(date))
+      throw new WriteValidationError(
+        'date \uB294 YYYY-MM-DD \uD615\uC2DD\uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4.',
+      );
+    changes['date'] = date;
+  }
+  const category = asStr2(args.category);
+  if (category !== void 0) changes['category'] = category;
+  const time = asStr2(args.time);
+  if (time !== void 0) changes['time'] = time;
+  const location = asStr2(args.location);
+  if (location !== void 0) changes['location'] = location;
+  if (Object.keys(changes).length === 0)
+    throw new WriteValidationError(
+      '\uBCC0\uACBD\uD560 \uD544\uB4DC\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.',
+    );
+  assertWriteAllowed(ctx);
+  const id = resolveEventId(ctx, args.eventToken);
+  const data = { id, ...changes };
+  const idempotencyKey = deriveIdemKey('events', 'update', data, args.idempotencyKey);
+  const { ref } = await delegate(ctx, 'update', 'events', idempotencyKey, data);
+  ctx.audit.append({ tool: 'update_event', redactionStats: { items: 1 } });
+  return { ok: true, ref, via: 'app' };
+}
+async function deleteEvent(ctx, args) {
+  assertWriteAllowed(ctx);
+  const id = resolveEventId(ctx, args.eventToken);
+  const data = { id };
+  const idempotencyKey = deriveIdemKey('events', 'delete', data, args.idempotencyKey);
+  const { ref } = await delegate(ctx, 'delete', 'events', idempotencyKey, data);
+  ctx.audit.append({ tool: 'delete_event', redactionStats: { items: 1 } });
+  return { ok: true, ref, via: 'app' };
+}
+
 // ../ssampin-ai-bridge/packages/mcp/dist/tools.js
 function looksLikeToken(seg) {
   if (/^[0-9a-fA-F]{16,}$/.test(seg)) return true;
@@ -3977,29 +4247,24 @@ function getBookmarks(ctx) {
 async function addObservation(ctx, args) {
   assertWriteEnabled(process.env, ctx.dataDir);
   const { identity } = resolveStudentTarget(ctx, args.studentToken);
-  const input = { content: args.content };
+  const data = { content: args.content };
   if (identity.kind === 'teaching') {
-    input['studentId'] = identity.studentKey;
-    input['classId'] = identity.classId;
+    data['studentId'] = identity.studentKey;
+    data['classId'] = identity.classId;
   } else {
-    input['studentId'] = identity.studentId;
+    data['studentId'] = identity.studentId;
   }
-  if (args.tags !== void 0) input['tags'] = args.tags;
-  if (args.date !== void 0) input['date'] = args.date;
-  if (args.idempotencyKey !== void 0) input['clientKey'] = args.idempotencyKey;
-  const record = await appendObservation(ctx.dataDir, input);
-  ctx.audit.append({
-    tool: 'add_observation',
-    recordIds: [record.id],
-    redactionStats: { observations: 1 },
-  });
-  return {
-    ok: true,
-    token: args.studentToken,
-    observationRef: ctx.audit.hashRecordId(record.id),
-    date: record.date,
-    contentLength: record.content.length,
-  };
+  if (args.tags !== void 0) data['tags'] = args.tags;
+  if (args.date !== void 0) data['date'] = args.date;
+  const idempotencyKey = deriveIdemKey('observations', 'create', data, args.idempotencyKey);
+  const { ref, via } = await createVia(ctx, 'observations', data, idempotencyKey, () =>
+    appendObservation(ctx.dataDir, {
+      ...data,
+      clientKey: idempotencyKey,
+    }).then((r) => ({ ref: ctx.audit.hashRecordId(r.id) })),
+  );
+  ctx.audit.append({ tool: 'add_observation', redactionStats: { observations: 1 } });
+  return { ok: true, token: args.studentToken, observationRef: ref, via };
 }
 var SENSITIVE_NOTICE =
   '\uB3D9\uC758 \uD558\uC5D0 \uB178\uCD9C\uB41C \uBBFC\uAC10 \uADFC\uAC70 \uC6D0\uBB38\uC785\uB2C8\uB2E4. \uC9C1\uC811 \uC2DD\uBCC4\uC790(\uC2E4\uBA85/\uC5F0\uB77D\uCC98/\uC0DD\uC77C/\uD559\uBC88)\uB9CC \uB9C8\uC2A4\uD0B9\uB418\uBA70, \uC8FC\uC18C\xB7\uAC00\uC871\uAD00\uACC4\xB7\uAC74\uAC15\xB7\uC0C1\uB2F4\xB7\uD2B9\uC815 \uD65C\uB3D9/\uC7A5\uC18C \uB4F1 \uB9E5\uB77D\uC73C\uB85C \uC7AC\uC2DD\uBCC4\uB420 \uC218 \uC788\uC2B5\uB2C8\uB2E4. \uC775\uBA85\uD654\uB41C \uB370\uC774\uD130\uAC00 \uC544\uB2C8\uBBC0\uB85C \uAD50\uC0AC \uAC80\uD1A0\uAC00 \uD544\uC694\uD569\uB2C8\uB2E4.';
@@ -4215,276 +4480,6 @@ function getRecordGuidelines(args = {}) {
   if (args.level !== void 0) rulePack.level = args.level;
   if (args.year !== void 0) rulePack.year = args.year;
   return recordGuidelines(rulePack);
-}
-
-// ../ssampin-ai-bridge/packages/mcp/dist/writeTools.js
-import crypto6 from 'node:crypto';
-var DATE_RE2 = /^\d{4}-\d{2}-\d{2}$/;
-var TIME_RE = /^\d{2}:\d{2}$/;
-var PRIORITIES = /* @__PURE__ */ new Set(['high', 'medium', 'low', 'none']);
-function asStr2(v) {
-  return typeof v === 'string' && v.trim().length > 0 ? v : void 0;
-}
-function assertWriteAllowed(ctx) {
-  if (readBridgeCapability(ctx.dataDir).allowWrite) return;
-  throw new WriteDisabledError(
-    '\uC4F0\uAE30\uAC00 \uBE44\uD65C\uC131\uD654\uB418\uC5B4 \uC788\uC2B5\uB2C8\uB2E4. \uC324\uD540 \uC124\uC815\uC758 "AI \uC5F0\uACB0"\uC5D0\uC11C \uC4F0\uAE30\uB97C \uCF1C\uC138\uC694.',
-  );
-}
-function deriveIdemKey(domain, op, data, provided) {
-  const h = crypto6
-    .createHash('sha256')
-    .update(`${domain}:${op}:${JSON.stringify(data)}`)
-    .digest('hex')
-    .slice(0, 16);
-  const p = asStr2(provided);
-  return p ? `${p}.${h}` : `${domain}-${h}`;
-}
-function resolveTodoId(ctx, todoToken) {
-  const resolved = ctx.store.resolveToken(todoToken);
-  if (!resolved) {
-    throw new WriteValidationError(
-      '\uC54C \uC218 \uC5C6\uB294 \uD560\uC77C \uD1A0\uD070\uC785\uB2C8\uB2E4. get_todos \uC758 todoToken \uC744 \uC4F0\uC138\uC694.',
-    );
-  }
-  const id = parseTodoIdentity(resolved);
-  if (!id)
-    throw new WriteValidationError(
-      '\uD560\uC77C \uD1A0\uD070\uC774 \uC544\uB2D9\uB2C8\uB2E4. get_todos \uC758 todoToken \uC744 \uC4F0\uC138\uC694.',
-    );
-  return id;
-}
-async function delegate(ctx, op, domain, idempotencyKey, data) {
-  const control = readControlInfo(ctx.dataDir);
-  if (!isAppRunning(control)) {
-    throw new WriteConflictError(
-      '\uC324\uD540\uC774 \uC2E4\uD589 \uC911\uC774 \uC544\uB2D9\uB2C8\uB2E4. \uC324\uD540\uC744 \uCF1C\uACE0 "AI \uC5F0\uACB0" \uC4F0\uAE30\uB97C \uD65C\uC131\uD654\uD55C \uB4A4 \uB2E4\uC2DC \uC2DC\uB3C4\uD558\uC138\uC694(\uC2E4\uD589 \uC911\uC5D0\uB9CC \uC548\uC804\uD558\uAC8C \uC501\uB2C8\uB2E4).',
-    );
-  }
-  const result = await postLoopback(control, { domain, op, idempotencyKey, data });
-  if (!result.ok) {
-    throw new WriteConflictError(
-      result.error ??
-        '\uC324\uD540\uC5D0 \uC4F0\uAE30\uB97C \uC801\uC6A9\uD558\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.',
-    );
-  }
-  return { ref: result.ref ?? idempotencyKey };
-}
-async function createVia(ctx, domain, data, idempotencyKey, directAppend) {
-  const decision = decideWritePath(ctx.dataDir);
-  if (decision.path === 'loopback') {
-    const result = await postLoopback(decision.control, {
-      domain,
-      op: 'create',
-      idempotencyKey,
-      data,
-    });
-    if (!result.ok)
-      throw new WriteConflictError(
-        result.error ??
-          '\uC324\uD540\uC5D0 \uC4F0\uAE30\uB97C \uC801\uC6A9\uD558\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.',
-      );
-    return { ref: result.ref ?? idempotencyKey, via: 'app' };
-  }
-  if (decision.path === 'direct') {
-    await directAppend();
-    return { ref: idempotencyKey, via: 'file' };
-  }
-  throw new WriteConflictError(
-    '\uC324\uD540 \uC0C1\uD0DC\uAC00 \uBD88\uD655\uC2E4\uD569\uB2C8\uB2E4(\uC2DC\uC791 \uC911\uC774\uAC70\uB098 \uC751\uB2F5 \uC5C6\uC74C). \uC7A0\uC2DC \uD6C4 \uB2E4\uC2DC \uC2DC\uB3C4\uD558\uC138\uC694.',
-  );
-}
-async function createTodo(ctx, args) {
-  assertWriteAllowed(ctx);
-  const text = asStr2(args.text);
-  if (!text) throw new WriteValidationError('text \uAC00 \uD544\uC694\uD569\uB2C8\uB2E4.');
-  if (text.length > 500)
-    throw new WriteValidationError(
-      `text \uB294 \uCD5C\uB300 500\uC790\uC785\uB2C8\uB2E4(\uD604\uC7AC ${text.length}).`,
-    );
-  const data = { text };
-  const dueDate = asStr2(args.dueDate);
-  if (dueDate !== void 0) {
-    if (!DATE_RE2.test(dueDate))
-      throw new WriteValidationError(
-        'dueDate \uB294 YYYY-MM-DD \uD615\uC2DD\uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4.',
-      );
-    data['dueDate'] = dueDate;
-  }
-  const priority = asStr2(args.priority);
-  if (priority !== void 0) {
-    if (!PRIORITIES.has(priority))
-      throw new WriteValidationError(
-        'priority \uB294 high|medium|low|none \uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4.',
-      );
-    data['priority'] = priority;
-  }
-  const category = asStr2(args.category);
-  if (category !== void 0) data['category'] = category;
-  const time = asStr2(args.time);
-  if (time !== void 0) {
-    if (!TIME_RE.test(time))
-      throw new WriteValidationError(
-        'time \uC740 HH:mm \uD615\uC2DD\uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4.',
-      );
-    data['time'] = time;
-  }
-  const idempotencyKey = deriveIdemKey('todos', 'create', data, args.idempotencyKey);
-  const { ref, via } = await createVia(ctx, 'todos', data, idempotencyKey, () =>
-    appendTodoDirect(ctx.dataDir, data, idempotencyKey),
-  );
-  ctx.audit.append({ tool: 'create_todo', redactionStats: { items: 1 } });
-  return { ok: true, ref, via };
-}
-async function createEvent(ctx, args) {
-  assertWriteAllowed(ctx);
-  const title = asStr2(args.title);
-  const date = asStr2(args.date);
-  if (!title) throw new WriteValidationError('title \uC774 \uD544\uC694\uD569\uB2C8\uB2E4.');
-  if (title.length > 200)
-    throw new WriteValidationError(
-      `title \uC740 \uCD5C\uB300 200\uC790\uC785\uB2C8\uB2E4(\uD604\uC7AC ${title.length}).`,
-    );
-  if (!date || !DATE_RE2.test(date))
-    throw new WriteValidationError(
-      'date \uB294 YYYY-MM-DD \uD615\uC2DD\uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4.',
-    );
-  const data = { title, date };
-  const category = asStr2(args.category);
-  if (category !== void 0) data['category'] = category;
-  const time = asStr2(args.time);
-  if (time !== void 0) data['time'] = time;
-  const location = asStr2(args.location);
-  if (location !== void 0) data['location'] = location;
-  const idempotencyKey = deriveIdemKey('events', 'create', data, args.idempotencyKey);
-  const { ref, via } = await createVia(ctx, 'events', data, idempotencyKey, () =>
-    appendEventDirect(ctx.dataDir, data, idempotencyKey),
-  );
-  ctx.audit.append({ tool: 'create_event', redactionStats: { items: 1 } });
-  return { ok: true, ref, via };
-}
-async function mutateTodo(ctx, op, todoToken, extra, provided, tool) {
-  assertWriteAllowed(ctx);
-  const id = resolveTodoId(ctx, todoToken);
-  const data = { id, ...extra };
-  const idempotencyKey = deriveIdemKey('todos', op, data, provided);
-  const { ref } = await delegate(ctx, op, 'todos', idempotencyKey, data);
-  ctx.audit.append({ tool, redactionStats: { items: 1 } });
-  return { ok: true, ref, via: 'app' };
-}
-function completeTodo(ctx, args) {
-  return mutateTodo(ctx, 'complete', args.todoToken, {}, args.idempotencyKey, 'complete_todo');
-}
-function deleteTodo(ctx, args) {
-  return mutateTodo(ctx, 'delete', args.todoToken, {}, args.idempotencyKey, 'delete_todo');
-}
-async function updateTodo(ctx, args) {
-  const changes = {};
-  const text = asStr2(args.text);
-  if (text !== void 0) {
-    if (text.length > 500)
-      throw new WriteValidationError(
-        `text \uB294 \uCD5C\uB300 500\uC790\uC785\uB2C8\uB2E4(\uD604\uC7AC ${text.length}).`,
-      );
-    changes['text'] = text;
-  }
-  const dueDate = asStr2(args.dueDate);
-  if (dueDate !== void 0) {
-    if (!DATE_RE2.test(dueDate))
-      throw new WriteValidationError(
-        'dueDate \uB294 YYYY-MM-DD \uD615\uC2DD\uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4.',
-      );
-    changes['dueDate'] = dueDate;
-  }
-  const priority = asStr2(args.priority);
-  if (priority !== void 0) {
-    if (!PRIORITIES.has(priority))
-      throw new WriteValidationError(
-        'priority \uB294 high|medium|low|none \uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4.',
-      );
-    changes['priority'] = priority;
-  }
-  const category = asStr2(args.category);
-  if (category !== void 0) changes['category'] = category;
-  const time = asStr2(args.time);
-  if (time !== void 0) {
-    if (!TIME_RE.test(time))
-      throw new WriteValidationError(
-        'time \uC740 HH:mm \uD615\uC2DD\uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4.',
-      );
-    changes['time'] = time;
-  }
-  const status = asStr2(args.status);
-  if (status !== void 0) {
-    if (!['todo', 'inProgress', 'done'].includes(status))
-      throw new WriteValidationError(
-        'status \uB294 todo|inProgress|done \uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4.',
-      );
-    changes['status'] = status;
-  }
-  if (Object.keys(changes).length === 0)
-    throw new WriteValidationError(
-      '\uBCC0\uACBD\uD560 \uD544\uB4DC\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.',
-    );
-  return mutateTodo(ctx, 'update', args.todoToken, changes, args.idempotencyKey, 'update_todo');
-}
-function resolveEventId(ctx, eventToken) {
-  const resolved = ctx.store.resolveToken(eventToken);
-  if (!resolved)
-    throw new WriteValidationError(
-      '\uC54C \uC218 \uC5C6\uB294 \uC77C\uC815 \uD1A0\uD070\uC785\uB2C8\uB2E4. get_events \uC758 eventToken \uC744 \uC4F0\uC138\uC694.',
-    );
-  const id = parseEventIdentity(resolved);
-  if (!id)
-    throw new WriteValidationError(
-      '\uC77C\uC815 \uD1A0\uD070\uC774 \uC544\uB2D9\uB2C8\uB2E4. get_events \uC758 eventToken \uC744 \uC4F0\uC138\uC694.',
-    );
-  return id;
-}
-async function updateEvent(ctx, args) {
-  const changes = {};
-  const title = asStr2(args.title);
-  if (title !== void 0) {
-    if (title.length > 200)
-      throw new WriteValidationError(
-        `title \uC740 \uCD5C\uB300 200\uC790\uC785\uB2C8\uB2E4(\uD604\uC7AC ${title.length}).`,
-      );
-    changes['title'] = title;
-  }
-  const date = asStr2(args.date);
-  if (date !== void 0) {
-    if (!DATE_RE2.test(date))
-      throw new WriteValidationError(
-        'date \uB294 YYYY-MM-DD \uD615\uC2DD\uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4.',
-      );
-    changes['date'] = date;
-  }
-  const category = asStr2(args.category);
-  if (category !== void 0) changes['category'] = category;
-  const time = asStr2(args.time);
-  if (time !== void 0) changes['time'] = time;
-  const location = asStr2(args.location);
-  if (location !== void 0) changes['location'] = location;
-  if (Object.keys(changes).length === 0)
-    throw new WriteValidationError(
-      '\uBCC0\uACBD\uD560 \uD544\uB4DC\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.',
-    );
-  assertWriteAllowed(ctx);
-  const id = resolveEventId(ctx, args.eventToken);
-  const data = { id, ...changes };
-  const idempotencyKey = deriveIdemKey('events', 'update', data, args.idempotencyKey);
-  const { ref } = await delegate(ctx, 'update', 'events', idempotencyKey, data);
-  ctx.audit.append({ tool: 'update_event', redactionStats: { items: 1 } });
-  return { ok: true, ref, via: 'app' };
-}
-async function deleteEvent(ctx, args) {
-  assertWriteAllowed(ctx);
-  const id = resolveEventId(ctx, args.eventToken);
-  const data = { id };
-  const idempotencyKey = deriveIdemKey('events', 'delete', data, args.idempotencyKey);
-  const { ref } = await delegate(ctx, 'delete', 'events', idempotencyKey, data);
-  ctx.audit.append({ tool: 'delete_event', redactionStats: { items: 1 } });
-  return { ok: true, ref, via: 'app' };
 }
 
 // ../ssampin-ai-bridge/packages/mcp/dist/recordDraftTools.js
@@ -5329,6 +5324,104 @@ async function setHomeroomAttendance(ctx, args) {
   ctx.audit.append({ tool: 'set_homeroom_attendance', redactionStats: { students: 1 } });
   return { ok: true, ref: result.ref ?? idempotencyKey, via: 'app' };
 }
+var NOTE_CONTENT_GATE_NOTICE =
+  '\uB178\uD2B8 \uB0B4\uC6A9\uC740 SSAMPIN_BRIDGE_ALLOW_CONTENT=1 \uB610\uB294 \uC324\uD540 AI \uC5F0\uACB0 \uC77D\uAE30 \uD5C8\uC6A9\uC774 \uCF1C\uC9C4 \uACBD\uC6B0\uC5D0\uB9CC \uB178\uCD9C\uB429\uB2C8\uB2E4(\uD604\uC7AC \uBBF8\uB178\uCD9C). \uB0A0\uC9DC\xB7\uCE74\uD14C\uACE0\uB9AC\xB7\uC138\uBD80\uD56D\uBAA9 \uBA54\uD0C0\uB9CC \uBC18\uD658\uD588\uC2B5\uB2C8\uB2E4.';
+var NOTE_CONTENT_SHOWN_NOTICE =
+  '\uB178\uD2B8 \uB0B4\uC6A9\uC774 \uD3EC\uD568\uB418\uC5B4 \uC788\uC2B5\uB2C8\uB2E4. \uD559\uC0DD \uC2E4\uBA85\xB7\uC5F0\uB77D\uCC98\xB7\uC0DD\uC77C\uC740 \uB9C8\uC2A4\uD0B9\uB418\uC9C0\uB9CC \uC0C1\uB2F4\xB7\uC0DD\uD65C \uB4F1 \uBBFC\uAC10 \uB9E5\uB77D\uC740 \uAD50\uC0AC \uAC80\uD1A0\uAC00 \uD544\uC694\uD569\uB2C8\uB2E4.';
+var NOTE_CONTENT_MAX = 2e3;
+function getHomeroomNotes(ctx, args) {
+  const { identity } = resolveStudentTarget(ctx, args.studentToken);
+  if (identity.kind !== 'homeroom') {
+    throw new WriteValidationError(
+      '\uB2F4\uC784 \uD559\uC0DD \uD1A0\uD070(stu_)\uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4. list_students(classToken \uBBF8\uC9C0\uC815)\uC758 token \uC744 \uC4F0\uC138\uC694.',
+    );
+  }
+  const includeContent = isContentExposureEnabled(process.env, ctx.dataDir);
+  const roster = buildRoster(ctx);
+  const records = readStudentRecords(ctx.dataDir)
+    .records.filter((r) => r.studentId === identity.studentId && r.category !== 'attendance')
+    .filter((r) => (args.from === void 0 ? true : r.date >= args.from))
+    .filter((r) => (args.to === void 0 ? true : r.date <= args.to));
+  const notes = records.map((r) => {
+    const note = {
+      date: r.date,
+      categoryId: r.category,
+      subcategory: r.subcategory,
+    };
+    if (includeContent && r.content.length > 0) note.content = deidentify(r.content, roster).text;
+    return note;
+  });
+  ctx.audit.append({ tool: 'get_homeroom_notes', redactionStats: { items: notes.length } });
+  return {
+    count: notes.length,
+    contentIncluded: includeContent,
+    notice: includeContent ? NOTE_CONTENT_SHOWN_NOTICE : NOTE_CONTENT_GATE_NOTICE,
+    notes,
+  };
+}
+async function setHomeroomNote(ctx, args) {
+  assertWriteAllowed(ctx);
+  const { identity } = resolveStudentTarget(ctx, args.studentToken);
+  if (identity.kind !== 'homeroom') {
+    throw new WriteValidationError(
+      '\uB2F4\uC784 \uD559\uC0DD \uD1A0\uD070(stu_)\uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4. list_students(classToken \uBBF8\uC9C0\uC815)\uC758 token \uC744 \uC4F0\uC138\uC694.',
+    );
+  }
+  if (typeof args.content !== 'string' || args.content.trim().length === 0) {
+    throw new WriteValidationError('content \uAC00 \uBE44\uC5B4 \uC788\uC2B5\uB2C8\uB2E4.');
+  }
+  if (args.content.length > NOTE_CONTENT_MAX) {
+    throw new WriteValidationError(
+      `content \uB294 \uCD5C\uB300 ${NOTE_CONTENT_MAX}\uC790\uC785\uB2C8\uB2E4.`,
+    );
+  }
+  if (typeof args.categoryId !== 'string' || args.categoryId.trim().length === 0) {
+    throw new WriteValidationError('categoryId \uAC00 \uD544\uC694\uD569\uB2C8\uB2E4.');
+  }
+  if (args.categoryId === 'attendance') {
+    throw new WriteValidationError(
+      '\uCD9C\uACB0 \uCE74\uD14C\uACE0\uB9AC\uC5D0\uB294 \uB178\uD2B8\uB97C \uC4F8 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4. \uCD9C\uACB0\uC740 set_homeroom_attendance \uB97C \uC4F0\uC138\uC694.',
+    );
+  }
+  if (typeof args.subcategory !== 'string' || args.subcategory.trim().length === 0) {
+    throw new WriteValidationError(
+      'subcategory(\uC138\uBD80\uD56D\uBAA9)\uAC00 \uD544\uC694\uD569\uB2C8\uB2E4.',
+    );
+  }
+  if (args.date !== void 0 && !DATE_RE3.test(args.date)) {
+    throw new WriteValidationError(
+      'date \uB294 YYYY-MM-DD \uD615\uC2DD\uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4.',
+    );
+  }
+  const data = {
+    studentId: identity.studentId,
+    categoryId: args.categoryId,
+    subcategory: args.subcategory,
+    content: args.content,
+  };
+  if (args.date !== void 0) data['date'] = args.date;
+  const decision = decideWritePath(ctx.dataDir);
+  if (decision.path !== 'loopback' || decision.control === null) {
+    throw new WriteConflictError(
+      '\uB2F4\uC784 \uB178\uD2B8 \uB4F1\uB85D\uC740 \uC324\uD540 \uC571\uC774 \uCF1C\uC9C4 \uC0C1\uD0DC\uC5D0\uC11C\uB9CC \uAC00\uB2A5\uD569\uB2C8\uB2E4. \uC324\uD540\uC744 \uC2E4\uD589\uD55C \uB4A4 \uB2E4\uC2DC \uC2DC\uB3C4\uD558\uC138\uC694.',
+    );
+  }
+  const idempotencyKey = deriveIdemKey('recordNote', 'create', data, args.idempotencyKey);
+  const result = await postLoopback(decision.control, {
+    domain: 'recordNote',
+    op: 'create',
+    idempotencyKey,
+    data,
+  });
+  if (!result.ok) {
+    throw new WriteConflictError(
+      result.error ??
+        '\uC324\uD540\uC5D0 \uB2F4\uC784 \uB178\uD2B8 \uC4F0\uAE30\uB97C \uC801\uC6A9\uD558\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.',
+    );
+  }
+  ctx.audit.append({ tool: 'set_homeroom_note', redactionStats: { items: 1 } });
+  return { ok: true, ref: result.ref ?? idempotencyKey, via: 'app' };
+}
 
 // ../ssampin-ai-bridge/packages/mcp/dist/server.js
 async function runTool(label, produce) {
@@ -5339,15 +5432,14 @@ async function runTool(label, produce) {
     process.stderr
       .write(`[ssampin-mcp] tool '${label}' \uC2E4\uD328: ${err instanceof Error ? err.name : 'Error'}
 `);
-    return {
-      content: [
-        {
-          type: 'text',
-          text: '\uB3C4\uAD6C \uC2E4\uD589 \uC911 \uC624\uB958\uAC00 \uBC1C\uC0DD\uD588\uC2B5\uB2C8\uB2E4.',
-        },
-      ],
-      isError: true,
-    };
+    const known =
+      err instanceof WriteConflictError ||
+      err instanceof WriteDisabledError ||
+      err instanceof WriteValidationError;
+    const text = known
+      ? err.message
+      : '\uB3C4\uAD6C \uC2E4\uD589 \uC911 \uC624\uB958\uAC00 \uBC1C\uC0DD\uD588\uC2B5\uB2C8\uB2E4.';
+    return { content: [{ type: 'text', text }], isError: true };
   }
 }
 function createSsampinMcpServer(opts = {}) {
@@ -5443,6 +5535,34 @@ function createSsampinMcpServer(opts = {}) {
       annotations: { readOnlyHint: true },
     },
     async (args) => runTool('get_homeroom_attendance', () => getHomeroomAttendance(ctx, args)),
+  );
+  server.registerTool(
+    'get_homeroom_notes',
+    {
+      title:
+        '\uB2F4\uC784 \uD559\uAE09 \uAE30\uB85D \uC870\uD68C(\uC0C1\uB2F4\xB7\uC0DD\uD65C \uB4F1)',
+      description:
+        '\uB2F4\uC784 \uD559\uAE09(\uC6B0\uB9AC \uBC18) \uD559\uC0DD\uC758 \uC77C\uC77C \uAE30\uB85D(\uC0C1\uB2F4\xB7\uC0DD\uD65C\xB7\uAE30\uD0C0 \u2014 \uCD9C\uACB0 \uC81C\uC678)\uC744 \uD559\uC0DD \uAE30\uB85D\uBD80\uC5D0\uC11C \uC870\uD68C\uD569\uB2C8\uB2E4. studentToken \uC740 list_students(classToken \uBBF8\uC9C0\uC815)\uAC00 \uBC18\uD658\uD55C \uB2F4\uC784 \uD559\uC0DD \uD1A0\uD070(stu_)\uC785\uB2C8\uB2E4. \uB0A0\uC9DC\xB7\uCE74\uD14C\uACE0\uB9AC\xB7\uC138\uBD80\uD56D\uBAA9 \uBA54\uD0C0\uB294 \uD56D\uC0C1, \uB0B4\uC6A9(content)\uC740 \uC324\uD540 \uC124\uC815 AI \uC5F0\uACB0 \uC77D\uAE30 \uD1A0\uAE00(\uC989\uC2DC \uC801\uC6A9) \uB610\uB294 SSAMPIN_BRIDGE_ALLOW_CONTENT=1 \uC77C \uB54C\uB9CC \uD0C8\uC2DD\uBCC4 \uD6C4 \uD3EC\uD568\uB429\uB2C8\uB2E4. from/to \uB294 YYYY-MM-DD. \uC77D\uAE30 \uC804\uC6A9.',
+      inputSchema: {
+        studentToken: z
+          .string()
+          .describe(
+            'list_students(classToken \uBBF8\uC9C0\uC815)\uC758 \uB2F4\uC784 \uD559\uC0DD \uD1A0\uD070(stu_)',
+          ),
+        from: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/)
+          .optional()
+          .describe('\uC2DC\uC791\uC77C YYYY-MM-DD(\uD3EC\uD568)'),
+        to: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/)
+          .optional()
+          .describe('\uC885\uB8CC\uC77C YYYY-MM-DD(\uD3EC\uD568)'),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    async (args) => runTool('get_homeroom_notes', () => getHomeroomNotes(ctx, args)),
   );
   server.registerTool(
     'get_meals',
@@ -5969,6 +6089,50 @@ function createSsampinMcpServer(opts = {}) {
       annotations: { readOnlyHint: false },
     },
     async (args) => runTool('set_homeroom_attendance', () => setHomeroomAttendance(ctx, args)),
+  );
+  server.registerTool(
+    'set_homeroom_note',
+    {
+      title:
+        '\uB2F4\uC784 \uD559\uAE09 \uAE30\uB85D \uC785\uB825(\uC0C1\uB2F4\xB7\uC0DD\uD65C \uB4F1)',
+      description:
+        '\uB2F4\uC784 \uD559\uAE09(\uC6B0\uB9AC \uBC18) \uD559\uC0DD\uC5D0 \uB300\uD55C \uC77C\uC77C \uAE30\uB85D(\uC0C1\uB2F4\xB7\uC0DD\uD65C\xB7\uAE30\uD0C0)\uC744 \uD559\uC0DD \uAE30\uB85D\uBD80\uC5D0 \uCD94\uAC00\uD569\uB2C8\uB2E4. studentToken \uC740 \uB2F4\uC784 \uD559\uC0DD \uD1A0\uD070(stu_)\uC785\uB2C8\uB2E4. \uB0B4\uC6A9\uC5D0 \uB9DE\uB294 categoryId \uC640 subcategory(\uC138\uBD80\uD56D\uBAA9)\uB97C \uACE0\uB974\uC138\uC694 \u2014 \uAE30\uBCF8 \uCE74\uD14C\uACE0\uB9AC: counseling(\uD559\uBD80\uBAA8\uC0C1\uB2F4\xB7\uD559\uC0DD\uC0C1\uB2F4\xB7\uAD50\uC6B0\uAD00\uACC4), life(\uAC74\uAC15\xB7\uC0DD\uD65C\uC9C0\uB3C4\xB7\uD559\uC2B5\xB7\uCE6D\uCC2C), etc(\uC9C4\uB85C\xB7\uAC00\uC815\uC5F0\uB77D\xB7\uAE30\uD0C0). \uCD9C\uACB0(attendance)\uC740 \uC774 \uB3C4\uAD6C\uB85C \uC4F8 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4(set_homeroom_attendance \uC0AC\uC6A9). \uAD50\uC0AC\uAC00 \uB9CC\uB4E0 \uCEE4\uC2A4\uD140 \uCE74\uD14C\uACE0\uB9AC\uB3C4 \uC4F8 \uC218 \uC788\uACE0, categoryId/subcategory \uAC00 \uAD50\uC0AC\uC758 \uC2E4\uC81C \uCE74\uD14C\uACE0\uB9AC \uBAA9\uB85D\uACFC \uB9DE\uC9C0 \uC54A\uC73C\uBA74 \uD5C8\uC6A9 \uBAA9\uB85D\uACFC \uD568\uAED8 \uAC70\uBD80\uB429\uB2C8\uB2E4. \uAD00\uCC30\uAE30\uB85D(add_observation)\uC740 \uC218\uC5C5\uBC18 \uD559\uC0DD \uC804\uC6A9, \uC774 \uB3C4\uAD6C\uB294 \uB2F4\uC784 \uD559\uC0DD \uC804\uC6A9\uC785\uB2C8\uB2E4. \uC324\uD540 \uC571\uC774 \uCF1C\uC9C4 \uC0C1\uD0DC\uC5D0\uC11C\uB9CC \uB3D9\uC791\uD569\uB2C8\uB2E4(\uD559\uC0DD \uAE30\uB85D\uBD80 \uC6D0\uBCF8 \uBCF4\uD638 \u2014 \uC571 \uB2EB\uD798 \uC9C1\uC811\uC4F0\uAE30 \uBBF8\uC9C0\uC6D0).',
+      inputSchema: {
+        studentToken: z
+          .string()
+          .describe(
+            'list_students(classToken \uBBF8\uC9C0\uC815)\uC758 \uB2F4\uC784 \uD559\uC0DD \uD1A0\uD070(stu_)',
+          ),
+        categoryId: z
+          .string()
+          .min(1)
+          .describe(
+            '\uCE74\uD14C\uACE0\uB9AC id(\uC608: counseling|life|etc \uB610\uB294 \uAD50\uC0AC \uCEE4\uC2A4\uD140). attendance \uB294 \uBD88\uAC00',
+          ),
+        subcategory: z
+          .string()
+          .min(1)
+          .describe(
+            '\uC138\uBD80\uD56D\uBAA9(\uC608: \uCE6D\uCC2C\xB7\uC0DD\uD65C\uC9C0\uB3C4\xB7\uD559\uC0DD\uC0C1\uB2F4 \uB4F1). \uD574\uB2F9 \uCE74\uD14C\uACE0\uB9AC\uC758 \uC138\uBD80\uD56D\uBAA9\uACFC \uC77C\uCE58\uD574\uC57C \uD568',
+          ),
+        content: z
+          .string()
+          .min(1)
+          .max(2e3)
+          .describe('\uAE30\uB85D \uB0B4\uC6A9(\uCD5C\uB300 2000\uC790)'),
+        date: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/)
+          .optional()
+          .describe('\uB0A0\uC9DC YYYY-MM-DD(\uBBF8\uC9C0\uC815 \uC2DC \uC624\uB298)'),
+        idempotencyKey: z
+          .string()
+          .optional()
+          .describe('\uC7AC\uC2DC\uB3C4 \uC911\uBCF5 \uBC29\uC9C0 \uD0A4'),
+      },
+      annotations: { readOnlyHint: false },
+    },
+    async (args) => runTool('set_homeroom_note', () => setHomeroomNote(ctx, args)),
   );
   server.registerTool(
     'write_record_draft',
