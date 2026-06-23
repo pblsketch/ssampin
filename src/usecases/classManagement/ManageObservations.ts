@@ -42,6 +42,12 @@ export class ManageObservations {
     await this.repository.saveObservations(updated);
   }
 
+  async saveCustomCategories(categories: readonly string[]): Promise<void> {
+    const data = await this.getAll();
+    const updated: ObservationData = { ...data, customCategories: categories };
+    await this.repository.saveObservations(updated);
+  }
+
   async deleteByClassId(classId: string): Promise<void> {
     const data = await this.getAll();
     const updated: ObservationData = {

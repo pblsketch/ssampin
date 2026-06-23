@@ -353,6 +353,8 @@ export interface Settings {
   readonly grade?: string;
   readonly className: string;
   readonly teacherName: string;
+  /** 담임 누가기록 통합 입력(S4) 사용자 추가 태그 — DEFAULT_HOMEROOM_RECORD_TAGS 외 직접 추가분. */
+  readonly homeroomRecordTags?: readonly string[];
   readonly subject: string;
   readonly schoolLevel: SchoolLevel;
   /** 직접 설정 시 수업 시간(분). schoolLevel이 'custom'일 때 사용 */

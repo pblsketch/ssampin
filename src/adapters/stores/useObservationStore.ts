@@ -9,6 +9,7 @@ import { useObservationAttachmentStore } from './useObservationAttachmentStore';
 interface ObservationState {
   records: readonly ObservationRecord[];
   customTags: readonly string[];
+  customCategories: readonly string[];
   loaded: boolean;
 
   load: () => Promise<void>;
@@ -26,6 +27,7 @@ interface ObservationState {
   deleteByClassId: (classId: string) => Promise<void>;
   addCustomTag: (tag: string) => Promise<void>;
   removeCustomTag: (tag: string) => Promise<void>;
+  addCustomCategory: (category: string) => Promise<void>;
 
   // 파생 조회
   getByStudent: (studentId: string, classId: string) => readonly ObservationRecord[];
@@ -39,13 +41,19 @@ export const useObservationStore = create<ObservationState>((set, get) => {
   return {
     records: [],
     customTags: [],
+    customCategories: [],
     loaded: false,
 
     load: async () => {
       if (get().loaded) return;
       try {
         const data = await manage.getAll();
-        set({ records: data.records, customTags: data.customTags ?? [], loaded: true });
+        set({
+          records: data.records,
+          customTags: data.customTags ?? [],
+          customCategories: data.customCategories ?? [],
+          loaded: true,
+        });
       } catch (err) {
         console.error('[ObservationStore] load failed:', err);
         set({ loaded: true });
@@ -112,6 +120,16 @@ export const useObservationStore = create<ObservationState>((set, get) => {
       const updated = get().customTags.filter((t) => t !== tag);
       set({ customTags: updated });
       await manage.saveCustomTags(updated);
+    },
+
+    addCustomCategory: async (category) => {
+      const trimmed = category.trim();
+      if (!trimmed) return;
+      const current = get().customCategories;
+      if (current.includes(trimmed)) return;
+      const updated = [...current, trimmed];
+      set({ customCategories: updated });
+      await manage.saveCustomCategories(updated);
     },
 
     getByStudent: (studentId, classId) => {

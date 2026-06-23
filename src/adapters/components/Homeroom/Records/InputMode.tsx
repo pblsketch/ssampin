@@ -84,6 +84,12 @@ function InputMode({
   const bridgeHomeroomDayAttendance = useStudentRecordsStore((s) => s.bridgeHomeroomDayAttendance);
   const className = useSettingsStore((s) => s.settings.className);
   const maxPeriods = useSettingsStore((s) => s.settings.maxPeriods);
+  const customHomeroomTags = useSettingsStore((s) => s.settings.homeroomRecordTags);
+  const updateSettings = useSettingsStore((s) => s.update);
+  const allHomeroomTags = useMemo(
+    () => [...DEFAULT_HOMEROOM_RECORD_TAGS, ...(customHomeroomTags ?? [])],
+    [customHomeroomTags],
+  );
   const periodCount = maxPeriods ?? 7;
   const showToast = useToastStore((s) => s.show);
 
@@ -179,6 +185,7 @@ function InputMode({
   const [memo, setMemo] = useState('');
   // 통합 입력 태그(S4, 비출결 누가기록) — StudentRecord.tags? 에 저장. 분류(category)와 직교(P3).
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [newTagInput, setNewTagInput] = useState('');
   const [selectedMethod, setSelectedMethod] = useState<CounselingMethod | undefined>(undefined);
   const [showFollowUp, setShowFollowUp] = useState(false);
   const [followUp, setFollowUp] = useState('');
@@ -1040,8 +1047,8 @@ function InputMode({
             {selectedSub && selectedSub.categoryId !== 'attendance' && (
               <div className="mb-3">
                 <p className="text-xs text-sp-muted mb-1.5">태그 (선택)</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {DEFAULT_HOMEROOM_RECORD_TAGS.map((tag) => {
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {allHomeroomTags.map((tag) => {
                     const isSelected = selectedTags.includes(tag);
                     return (
                       <button
@@ -1064,6 +1071,29 @@ function InputMode({
                       </button>
                     );
                   })}
+                  <input
+                    type="text"
+                    value={newTagInput}
+                    onChange={(e) => setNewTagInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const v = newTagInput.trim();
+                        if (!v) return;
+                        if (!allHomeroomTags.includes(v)) {
+                          void updateSettings({
+                            homeroomRecordTags: [...(customHomeroomTags ?? []), v],
+                          });
+                        }
+                        setSelectedTags((prev) => (prev.includes(v) ? prev : [...prev, v]));
+                        setNewTagInput('');
+                        markDirty();
+                      }
+                    }}
+                    placeholder="+ 태그"
+                    aria-label="태그 직접 추가"
+                    className="w-16 px-2 py-1 rounded-lg text-xs bg-sp-surface border border-dashed border-sp-border text-sp-text placeholder:text-sp-muted focus:outline-none focus:border-sp-accent focus:w-24 transition-all"
+                  />
                 </div>
               </div>
             )}

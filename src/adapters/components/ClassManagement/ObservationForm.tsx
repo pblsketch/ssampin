@@ -46,6 +46,7 @@ export function ObservationForm({ classId, studentId }: ObservationFormProps) {
   const [selectedCategory, setSelectedCategory] = useState<string>(
     DEFAULT_OBSERVATION_CATEGORIES[0],
   );
+  const [newCategoryInput, setNewCategoryInput] = useState('');
   const [saving, setSaving] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const prevStudentIdRef = useRef(studentId);
@@ -60,6 +61,12 @@ export function ObservationForm({ classId, studentId }: ObservationFormProps) {
   const deleteRecord = useObservationStore((s) => s.deleteRecord);
   const customTags = useObservationStore((s) => s.customTags);
   const allTags = useMemo(() => [...DEFAULT_OBSERVATION_TAGS, ...customTags], [customTags]);
+  const customCategories = useObservationStore((s) => s.customCategories);
+  const addCustomCategory = useObservationStore((s) => s.addCustomCategory);
+  const allCategories = useMemo(
+    () => [...DEFAULT_OBSERVATION_CATEGORIES, ...customCategories],
+    [customCategories],
+  );
 
   const addAttachment = useObservationAttachmentStore((s) => s.addAttachment);
   // 작성 중 담아두는 첨부(아직 미저장). '기록 저장' 또는 학생 전환 자동저장 시 생성된 기록에 커밋된다.
@@ -328,10 +335,10 @@ export function ObservationForm({ classId, studentId }: ObservationFormProps) {
         <span className="text-caption text-sp-muted">{content.length}/500</span>
       </div>
 
-      {/* 분류 (S4 통합 입력 — 단일 선택, 태그와 별도 축) */}
+      {/* 분류 (S4 통합 입력 — 단일 선택, 태그와 별도 축. 사용자 추가 가능) */}
       <div className="flex flex-wrap items-center gap-1">
         <span className="text-caption text-sp-muted mr-0.5">분류</span>
-        {DEFAULT_OBSERVATION_CATEGORIES.map((cat) => (
+        {allCategories.map((cat) => (
           <button
             key={cat}
             type="button"
@@ -346,6 +353,24 @@ export function ObservationForm({ classId, studentId }: ObservationFormProps) {
             {cat}
           </button>
         ))}
+        <input
+          type="text"
+          value={newCategoryInput}
+          onChange={(e) => setNewCategoryInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              const v = newCategoryInput.trim();
+              if (!v) return;
+              void addCustomCategory(v);
+              setSelectedCategory(v);
+              setNewCategoryInput('');
+            }
+          }}
+          placeholder="+ 분류"
+          aria-label="분류 직접 추가"
+          className="w-16 px-2 py-0.5 rounded-full text-caption bg-sp-surface border border-dashed border-sp-border text-sp-text placeholder:text-sp-muted focus:outline-none focus:border-sp-accent focus:w-24 transition-all"
+        />
       </div>
 
       <div className="flex flex-wrap gap-1">

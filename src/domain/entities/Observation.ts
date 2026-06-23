@@ -16,6 +16,8 @@ export interface ObservationRecord {
 export interface ObservationData {
   readonly records: readonly ObservationRecord[];
   readonly customTags?: readonly string[];
+  /** 통합 입력 분류(S4) 사용자 추가 목록 — DEFAULT_OBSERVATION_CATEGORIES 외 직접 추가분. */
+  readonly customCategories?: readonly string[];
 }
 
 export const DEFAULT_OBSERVATION_TAGS = ['교과역량', '학습태도', '진로흥미', '특이사항'] as const;
