@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { VERSION, MOBILE_URL } from '@/config';
+import { VERSION, GUIDE_URL, MOBILE_URL } from '@/config';
 import FadeIn from './FadeIn';
 import DownloadButton from './DownloadButton';
 
@@ -53,12 +53,7 @@ export default function Footer() {
             aria-label="푸터 링크"
             className="mt-3 flex items-center justify-center gap-4 text-sm text-sp-muted/80"
           >
-            <a
-              href="https://supsori.notion.site/SsamPin-32176e6c2ab781dc905ce780e03c5be4"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="transition-colors hover:text-sp-text"
-            >
+            <a href={GUIDE_URL} className="transition-colors hover:text-sp-text">
               사용 가이드
             </a>
             <span className="text-sp-muted/40">·</span>

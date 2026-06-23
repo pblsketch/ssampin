@@ -43,6 +43,14 @@ npm run test              # Vitest 통과
 npm run regression-check  # 회귀 체크
 ```
 
+## 릴리즈 문서 규칙
+
+- 새 버전, 핫픽스, 기능 공개 릴리즈 작업 시 Notion 사용자 가이드는 갱신 대상이 아니다.
+- 공개 사용자 가이드는 `https://www.ssampin.com/docs`이며 소스는 `landing/src/content/docs.ts`, 이미지 자료는 `landing/public/docs/screenshots/`에 둔다.
+- 사용자 행동, 설정, 문제 해결, FAQ가 바뀌면 같은 작업 단위에서 `/docs` 사용자 가이드를 최신화한다.
+- 앱과 랜딩의 사용자 가이드 링크는 `landing/src/config.ts`의 `GUIDE_URL` 또는 `https://www.ssampin.com/docs`만 사용한다. `supsori.notion.site` 사용자 가이드 링크는 재도입하지 않는다.
+- 릴리즈 전 `cd landing && npm run docs:check && npm run build` 결과를 확인한다.
+
 ## 개발 명령어
 
 ```bash

@@ -1,7 +1,18 @@
-import type { NextConfig } from "next";
+import type { NextConfig } from 'next';
+
+const WINDOWS_DOWNLOAD_URL =
+  'https://github.com/pblsketch/ssampin/releases/latest/download/ssampin-Setup.exe';
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  async redirects() {
+    return [
+      {
+        source: '/docs/troubleshooting/download',
+        destination: WINDOWS_DOWNLOAD_URL,
+        permanent: false,
+      },
+    ];
+  },
 };
 
 export default nextConfig;

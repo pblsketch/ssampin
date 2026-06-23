@@ -1,6 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
+import { GUIDE_URL } from '@/config';
 import DownloadButton from './DownloadButton';
 
 export default function Hero() {
@@ -51,9 +52,7 @@ export default function Hero() {
               <DownloadButton showSmartScreenFaq />
               <div className="mt-5 flex items-center gap-4">
                 <a
-                  href="https://supsori.notion.site/SsamPin-32176e6c2ab781dc905ce780e03c5be4"
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  href={GUIDE_URL}
                   className="inline-flex items-center gap-2 text-sm font-medium text-sp-muted transition-colors hover:text-sp-text"
                 >
                   <span className="text-base">📖</span>

@@ -1,0 +1,1411 @@
+﻿export type DocCategory = 'start' | 'features' | 'sync' | 'troubleshooting' | 'reference';
+
+export interface DocImage {
+  readonly src: string;
+  readonly alt: string;
+}
+
+export interface DocCallout {
+  readonly title: string;
+  readonly body: string;
+  readonly tone?: 'info' | 'warning' | 'success';
+}
+
+export interface DocSection {
+  readonly id: string;
+  readonly title: string;
+  readonly body?: readonly string[];
+  readonly steps?: readonly string[];
+  readonly bullets?: readonly string[];
+  readonly callout?: DocCallout;
+  readonly image?: DocImage;
+}
+
+export interface DocArticle {
+  readonly slug: string;
+  readonly title: string;
+  readonly description: string;
+  readonly category: DocCategory;
+  readonly lastUpdated: string;
+  readonly image?: DocImage;
+  readonly quickLinks?: readonly { readonly title: string; readonly href: string }[];
+  readonly sections: readonly DocSection[];
+  readonly related?: readonly string[];
+}
+
+export interface DocNavGroup {
+  readonly title: string;
+  readonly items: readonly string[];
+}
+
+export const docsNavGroups: readonly DocNavGroup[] = [
+  {
+    title: '시작하기',
+    items: [
+      'start',
+      'start/install-windows',
+      'start/install-macos',
+      'start/first-run',
+      'start/school-neis',
+      'start/data-safety',
+    ],
+  },
+  {
+    title: '주요 기능',
+    items: [
+      'features/dashboard',
+      'features/timetable',
+      'features/schedule',
+      'features/homeroom',
+      'features/class-management',
+      'features/seating',
+      'features/memo',
+      'features/todo',
+      'features/meals',
+      'features/tools',
+      'features/bookmarks-export',
+      'features/settings',
+      'features/security-pin',
+      'features/widget-mode',
+      'features/mobile',
+      'features/ai-bridge',
+      'features/markdown-converter',
+      'features/attachments',
+    ],
+  },
+  {
+    title: '백업과 연동',
+    items: ['sync/google-drive', 'sync/google-calendar', 'sync/google-tasks', 'sync/data-location'],
+  },
+  {
+    title: '문제 해결',
+    items: [
+      'troubleshooting',
+      'troubleshooting/download-help',
+      'troubleshooting/windows-smartscreen',
+      'troubleshooting/windows-smart-app-control',
+      'troubleshooting/v3-antivirus',
+      'troubleshooting/macos-security',
+      'troubleshooting/neis',
+      'troubleshooting/google-sync',
+      'troubleshooting/display-widget',
+    ],
+  },
+  {
+    title: '참고',
+    items: ['faq', 'releases', 'contact'],
+  },
+];
+
+export const docsArticles: readonly DocArticle[] = [
+  {
+    slug: 'start',
+    title: '쌤핀 시작하기',
+    description: '설치, 첫 실행, 학교 설정, 데이터 보관 방식을 처음부터 차근차근 안내합니다.',
+    category: 'start',
+    lastUpdated: '2026-06-23',
+    image: { src: '/docs/screenshots/dashboard.png', alt: '쌤핀 대시보드 첫 화면' },
+    quickLinks: [
+      { title: 'Windows 설치', href: '/docs/start/install-windows' },
+      { title: 'macOS 설치', href: '/docs/start/install-macos' },
+      { title: '학교와 NEIS 설정', href: '/docs/start/school-neis' },
+      { title: '데이터는 어디에 저장되나요?', href: '/docs/start/data-safety' },
+    ],
+    sections: [
+      {
+        id: 'what-is-ssampin',
+        title: '쌤핀은 어떤 앱인가요?',
+        body: [
+          '쌤핀은 시간표, 좌석배치, 일정, 메모, 할 일, 담임 기록, 수업 관리, 급식, 날씨, 쌤도구를 한곳에 모아 두는 교사용 데스크톱 대시보드입니다.',
+          '기본 데이터는 선생님 컴퓨터에 저장됩니다. Google Drive 동기화를 켠 경우에만 선생님이 연결한 Google 계정으로 백업과 기기 간 동기화가 진행됩니다.',
+        ],
+      },
+      {
+        id: 'first-path',
+        title: '처음 사용 순서',
+        steps: [
+          'PC 또는 Mac에 쌤핀을 설치합니다.',
+          '첫 실행에서 학교, 학년, 반 정보를 입력합니다.',
+          'NEIS에서 시간표, 급식, 학사일정을 가져올지 선택합니다.',
+          '담임 업무와 수업 관리에 학생 명단을 넣습니다.',
+          '대시보드에서 자주 보는 위젯을 켜고 순서를 정리합니다.',
+        ],
+      },
+      {
+        id: 'works-offline',
+        title: '인터넷 없이도 쓸 수 있는 범위',
+        body: [
+          '시간표 직접 입력, 좌석배치, 메모, 할 일, 담임 기록, 수업 기록, 내보내기, PIN 잠금은 인터넷 없이도 사용할 수 있습니다.',
+          '날씨, 급식 자동 조회, NEIS 불러오기, Google Drive/Calendar/Tasks 연동, 공유 링크가 필요한 기능은 인터넷 연결이 필요합니다.',
+        ],
+      },
+    ],
+    related: ['features/dashboard', 'start/install-windows', 'start/data-safety'],
+  },
+  {
+    slug: 'start/install-windows',
+    title: 'Windows에 설치하기',
+    description: 'Windows 10/11에서 쌤핀을 다운로드하고 보안 경고를 지나 설치하는 방법입니다.',
+    category: 'start',
+    lastUpdated: '2026-06-23',
+    sections: [
+      {
+        id: 'download',
+        title: '설치 파일 받기',
+        steps: [
+          'ssampin.com에서 Windows 다운로드 버튼을 누릅니다.',
+          '파일 이름이 `ssampin-Setup.exe`인지 확인합니다.',
+          '다운로드가 끝나면 설치 파일을 실행합니다.',
+        ],
+      },
+      {
+        id: 'smartscreen',
+        title: 'Microsoft Windows의 PC 보호 화면이 뜰 때',
+        body: [
+          '개인 개발 앱은 Microsoft 인증서가 아직 없으면 SmartScreen 경고가 보일 수 있습니다.',
+          '쌤핀 공식 홈페이지에서 받은 설치 파일이라면 `추가 정보`를 누른 뒤 `실행`을 선택합니다.',
+        ],
+        callout: {
+          tone: 'warning',
+          title: '설치 파일 출처 확인',
+          body: '메신저나 블로그에서 받은 파일이 아니라 ssampin.com 또는 GitHub Releases에서 받은 파일인지 먼저 확인하세요.',
+        },
+      },
+      {
+        id: 'silent-block',
+        title: '더블클릭해도 아무 반응이 없을 때',
+        body: [
+          'V3, 알약 같은 백신이 설치 파일을 조용히 차단한 경우가 많습니다.',
+          '백신의 실시간 감시를 잠시 중지하고 설치한 뒤, 설치가 끝나면 다시 켜 주세요.',
+        ],
+      },
+    ],
+    related: [
+      'troubleshooting/download-help',
+      'troubleshooting/windows-smartscreen',
+      'troubleshooting/v3-antivirus',
+    ],
+  },
+  {
+    slug: 'start/install-macos',
+    title: 'macOS에 설치하기',
+    description: 'Apple Silicon과 Intel Mac에서 DMG 파일을 설치하고 Gatekeeper 경고를 해결합니다.',
+    category: 'start',
+    lastUpdated: '2026-06-23',
+    sections: [
+      {
+        id: 'choose-file',
+        title: '내 Mac에 맞는 파일 고르기',
+        bullets: [
+          'M1, M2, M3, M4 Mac: Apple Silicon용 DMG 파일을 받습니다.',
+          'Intel Mac: Intel 버전 받기 링크를 사용합니다.',
+        ],
+      },
+      {
+        id: 'gatekeeper',
+        title: '개발자를 확인할 수 없음 경고',
+        steps: [
+          '쌤핀 아이콘을 Control 키를 누른 채 클릭합니다.',
+          '메뉴에서 열기를 선택합니다.',
+          '다시 경고가 나오면 열기를 한 번 더 선택합니다.',
+        ],
+      },
+      {
+        id: 'privacy',
+        title: '시스템 설정에서 허용하기',
+        body: [
+          'Control+클릭으로도 열리지 않으면 시스템 설정의 개인정보 보호 및 보안에서 쌤핀 실행을 허용합니다.',
+        ],
+      },
+    ],
+    related: ['troubleshooting/macos-security', 'start/data-safety'],
+  },
+  {
+    slug: 'start/first-run',
+    title: '첫 실행과 온보딩',
+    description: '처음 켰을 때 학교, 학급, 시간표를 설정하는 흐름입니다.',
+    category: 'start',
+    lastUpdated: '2026-06-23',
+    sections: [
+      {
+        id: 'wizard',
+        title: '온보딩에서 정하는 것',
+        bullets: [
+          '학교 정보: 급식, 학사일정, NEIS 시간표 자동 불러오기에 사용합니다.',
+          '학년/반: 학급 시간표와 담임 업무의 기본 기준이 됩니다.',
+          '기본 위젯: 대시보드에서 처음 보여줄 정보를 정합니다.',
+        ],
+      },
+      {
+        id: 'skip',
+        title: '나중에 바꿀 수 있나요?',
+        body: [
+          '학교, 학급, 시간표, 테마, 위젯은 모두 설정에서 다시 바꿀 수 있습니다. 처음부터 완벽히 입력하지 않아도 괜찮습니다.',
+        ],
+      },
+    ],
+    related: ['start/school-neis', 'features/settings', 'features/dashboard'],
+  },
+  {
+    slug: 'start/school-neis',
+    title: '학교와 NEIS 설정',
+    description: '학교 검색, 학급 시간표, 급식, 학사일정 자동 연동의 기준을 설정합니다.',
+    category: 'start',
+    lastUpdated: '2026-06-23',
+    sections: [
+      {
+        id: 'school',
+        title: '학교 검색',
+        body: [
+          '설정에서 학교명을 검색하면 NEIS에 등록된 학교를 찾을 수 있습니다. 지역과 학교급을 함께 확인하면 같은 이름의 학교를 구분하기 쉽습니다.',
+        ],
+      },
+      {
+        id: 'neis-range',
+        title: 'NEIS로 가져올 수 있는 것',
+        bullets: ['학급 시간표', '급식 정보', '학사일정'],
+        callout: {
+          tone: 'info',
+          title: '교사 개인 시간표',
+          body: '교사 개인 시간표는 NEIS 공개 API에서 제공되지 않습니다. 교사 탭에서 직접 입력하거나 엑셀 업로드를 사용하세요.',
+        },
+      },
+      {
+        id: 'manual-school',
+        title: '학교가 검색되지 않을 때',
+        body: [
+          '유치원, 학원, 일부 대안학교처럼 NEIS에 등록되지 않은 기관은 직접 입력으로 사용할 수 있습니다. 이 경우 NEIS 자동 조회 기능은 제한됩니다.',
+        ],
+      },
+    ],
+    related: ['features/timetable', 'features/meals', 'troubleshooting/neis'],
+  },
+  {
+    slug: 'start/data-safety',
+    title: '데이터 저장과 개인정보',
+    description: '쌤핀 데이터가 어디에 저장되고, 언제 외부 서비스와 연결되는지 설명합니다.',
+    category: 'start',
+    lastUpdated: '2026-06-23',
+    sections: [
+      {
+        id: 'local-first',
+        title: '기본은 내 컴퓨터 저장',
+        body: [
+          '쌤핀의 기본 데이터는 선생님 PC 안에 저장됩니다. 쌤핀 자체 서버로 학생 이름, 상담 내용, 기록을 전송하지 않습니다.',
+        ],
+      },
+      {
+        id: 'google-exception',
+        title: 'Google 연동을 켰을 때',
+        body: [
+          'Google Drive 동기화를 켜면 선생님 Google Drive에 백업 파일이 저장됩니다. Google Calendar나 Tasks를 연결하면 일정과 할 일이 해당 Google 서비스와 동기화됩니다.',
+        ],
+      },
+      {
+        id: 'attachments',
+        title: '첨부 파일',
+        body: [
+          '관찰 기록과 출결 증빙 첨부는 기본적으로 로컬에 저장됩니다. Drive 동기화를 켜면 첨부 메타와 바이너리도 동기화 대상에 포함됩니다.',
+        ],
+      },
+    ],
+    related: ['sync/data-location', 'sync/google-drive', 'features/security-pin'],
+  },
+  {
+    slug: 'features/dashboard',
+    title: '대시보드',
+    description: '오늘 필요한 정보를 한 화면에서 확인하고 위젯을 정리합니다.',
+    category: 'features',
+    lastUpdated: '2026-06-23',
+    image: { src: '/docs/screenshots/dashboard.png', alt: '쌤핀 대시보드 화면' },
+    sections: [
+      {
+        id: 'overview',
+        title: '대시보드에서 보는 것',
+        body: [
+          '시간표, 일정, 할 일, 급식, 날씨, 학급 정보, 메시지 배너, 자주 쓰는 쌤도구를 한 화면에서 볼 수 있습니다.',
+        ],
+      },
+      {
+        id: 'widgets',
+        title: '위젯 정리',
+        steps: [
+          '대시보드에서 편집 모드를 켭니다.',
+          '필요한 위젯을 추가하거나 숨깁니다.',
+          '드래그해서 자주 보는 정보를 위쪽으로 옮깁니다.',
+          '글씨 크기와 표시 옵션을 조정합니다.',
+        ],
+      },
+      {
+        id: 'message',
+        title: '오늘의 메시지 배너',
+        body: [
+          '조회, 종례, 수업 안내처럼 학생에게 보여줄 문장을 대시보드 상단에 크게 띄울 수 있습니다.',
+        ],
+      },
+    ],
+    related: ['features/widget-mode', 'features/timetable', 'features/todo'],
+  },
+  {
+    slug: 'features/timetable',
+    title: '시간표',
+    description: '학급 시간표와 교사 시간표를 입력하고 NEIS, 엑셀, 색상, 변동 시간표를 관리합니다.',
+    category: 'features',
+    lastUpdated: '2026-06-23',
+    image: { src: '/docs/screenshots/timetable.png', alt: '쌤핀 시간표 화면' },
+    sections: [
+      {
+        id: 'tabs',
+        title: '학급 시간표와 교사 시간표',
+        body: [
+          '학급 탭은 NEIS 자동 불러오기를 사용할 수 있습니다. 교사 개인 시간표는 직접 입력하거나 엑셀 업로드로 채웁니다.',
+        ],
+      },
+      {
+        id: 'edit',
+        title: '바로 편집하기',
+        bullets: [
+          '과목 칸을 눌러 과목명을 수정합니다.',
+          '교시 시간 영역을 눌러 시작과 종료 시간을 조정합니다.',
+          '점심 위치는 표 안의 이동 버튼으로 바꿀 수 있습니다.',
+          '보기 모드에서도 과목 색상을 빠르게 바꿀 수 있습니다.',
+        ],
+      },
+      {
+        id: 'override',
+        title: '변동 시간표',
+        body: [
+          '행사, 시험, 단축수업처럼 특정 날짜만 달라지는 시간표는 변동 시간표로 관리합니다. 기본 시간표를 바꾸지 않고 해당 날짜에만 다르게 표시할 수 있습니다.',
+        ],
+      },
+    ],
+    related: ['start/school-neis', 'features/dashboard', 'troubleshooting/neis'],
+  },
+  {
+    slug: 'features/schedule',
+    title: '일정 관리',
+    description: '학교 일정, 개인 일정, D-Day, Google Calendar 연동을 함께 관리합니다.',
+    category: 'features',
+    lastUpdated: '2026-06-23',
+    image: { src: '/docs/screenshots/schedule.png', alt: '쌤핀 일정 관리 화면' },
+    sections: [
+      {
+        id: 'views',
+        title: '일정 보기 방식',
+        body: [
+          '월간, 목록, 검색 흐름으로 일정을 확인합니다. 같은 날짜의 일정은 수동으로 순서를 정리할 수 있습니다.',
+        ],
+      },
+      {
+        id: 'sources',
+        title: '일정 출처',
+        bullets: ['직접 입력한 일정', 'NEIS 학사일정', 'Google Calendar 일정', '학생 생일과 D-Day'],
+      },
+      {
+        id: 'google-write',
+        title: 'Google Calendar와의 관계',
+        body: [
+          '현재 쌤핀은 Google Calendar 일정을 가져오는 것뿐 아니라, 연결된 상태에서 일정 생성, 수정, 삭제도 동기화합니다.',
+        ],
+        callout: {
+          tone: 'success',
+          title: '일정 동기화 범위',
+          body: 'Google Calendar를 연결하면 쌤핀에서 만든 일정 변경 사항도 함께 반영됩니다.',
+        },
+      },
+    ],
+    related: ['sync/google-calendar', 'troubleshooting/google-sync', 'features/todo'],
+  },
+  {
+    slug: 'features/homeroom',
+    title: '담임 업무',
+    description: '학생 기록, 설문/체크리스트, 상담 예약, 출결, 담임 좌석을 관리합니다.',
+    category: 'features',
+    lastUpdated: '2026-06-23',
+    image: { src: '/docs/screenshots/homeroom.png', alt: '쌤핀 담임 업무 화면' },
+    sections: [
+      {
+        id: 'records',
+        title: '학생 기록',
+        body: [
+          '상담, 행동, 학업, 출결 관련 기록을 학생별로 남깁니다. 입력 모드, 통계 모드, 조회 모드로 나누어 기록 작성과 점검을 할 수 있습니다.',
+        ],
+      },
+      {
+        id: 'survey-booking',
+        title: '설문과 상담 예약',
+        bullets: [
+          '설문/체크리스트는 교사가 직접 체크하거나 학생 공유 링크로 응답을 받을 수 있습니다.',
+          '상담 예약은 상담 유형, 시간대, 예약자 정보를 단계별로 설정합니다.',
+          '시간표와 겹치는 시간은 자동으로 막아 상담 시간을 잡기 쉽게 합니다.',
+        ],
+      },
+      {
+        id: 'attendance',
+        title: '담임 출결',
+        body: [
+          '조회, 교시, 종례 시간대를 기준으로 결석, 지각, 조퇴, 결과를 기록하고 내보낼 수 있습니다.',
+        ],
+      },
+    ],
+    related: ['features/attachments', 'features/security-pin', 'features/seating'],
+  },
+  {
+    slug: 'features/class-management',
+    title: '수업 관리',
+    description: '수업반별 명렬표, 좌석, 진도, 출석부, 과제수합, 성적 분석, 루브릭을 관리합니다.',
+    category: 'features',
+    lastUpdated: '2026-06-23',
+    image: { src: '/docs/screenshots/class-management.png', alt: '쌤핀 수업 관리 화면' },
+    sections: [
+      {
+        id: 'class',
+        title: '수업반 만들기',
+        body: [
+          '과목이나 반 단위로 수업반을 만들고, 명렬표를 넣으면 수업반 전용 좌석배치, 진도, 출결, 기록을 관리할 수 있습니다.',
+        ],
+      },
+      {
+        id: 'progress-attendance',
+        title: '진도와 출결',
+        bullets: [
+          '진도 관리는 날짜, 교시, 단원, 차시, 상태를 기록합니다.',
+          '출석부는 학생과 교시를 연결해 수업 시간별 출결을 입력합니다.',
+          'NEIS 대표값 변환과 Excel 내보내기를 지원합니다.',
+        ],
+      },
+      {
+        id: 'assessment',
+        title: '성적 분석과 루브릭',
+        body: [
+          '지필 성적 분석, 배점 계산, 수행평가 루브릭 만들기와 채점을 수업반 안에서 이어서 사용할 수 있습니다.',
+        ],
+      },
+    ],
+    related: ['features/attachments', 'features/tools', 'features/seating'],
+  },
+  {
+    slug: 'features/seating',
+    title: '좌석배치',
+    description: '담임 교실과 수업반 좌석을 만들고, 제약 조건과 히스토리를 활용합니다.',
+    category: 'features',
+    lastUpdated: '2026-06-23',
+    image: { src: '/docs/screenshots/seating.png', alt: '쌤핀 좌석배치 화면' },
+    sections: [
+      {
+        id: 'modes',
+        title: '좌석 보기 방식',
+        bullets: ['격자 좌석배치', '모둠 레이아웃', '명렬표 보기', '교사 시점 보기'],
+      },
+      {
+        id: 'random',
+        title: '랜덤 배치와 조건',
+        body: [
+          '분리, 인접, 영역 고정, 고정 좌석 조건을 설정해 두면 랜덤 배치 때 자동으로 반영됩니다.',
+        ],
+      },
+      {
+        id: 'history',
+        title: '이전 자리 피하기',
+        body: [
+          '자리배치 히스토리를 활용하면 직전 자리와 너무 비슷한 배치를 피할 수 있습니다. 이름 학습 모드와 자유 배치 모드도 함께 사용할 수 있습니다.',
+        ],
+      },
+    ],
+    related: ['features/homeroom', 'features/class-management', 'features/bookmarks-export'],
+  },
+  {
+    slug: 'features/memo',
+    title: '메모',
+    description: '포스트잇처럼 메모를 만들고, 이미지, 링크, 리치 텍스트, 공유 보드를 사용합니다.',
+    category: 'features',
+    lastUpdated: '2026-06-23',
+    image: { src: '/docs/screenshots/memo.png', alt: '쌤핀 메모 화면' },
+    sections: [
+      {
+        id: 'basic',
+        title: '메모 만들기',
+        body: [
+          '메모 화면에서 새 메모를 추가하고 위치, 크기, 색상, 글자 크기를 조정합니다. 리치 텍스트, 이미지 첨부, 링크 삽입을 지원합니다.',
+        ],
+      },
+      {
+        id: 'archive',
+        title: '보관과 정리',
+        body: [
+          '지금은 필요 없지만 지우고 싶지 않은 메모는 보관할 수 있습니다. 격자 정렬로 흩어진 메모를 빠르게 정리할 수도 있습니다.',
+        ],
+      },
+      {
+        id: 'share',
+        title: '교실 화면에 공유',
+        body: [
+          '메모 공유 보드를 만들면 전자칠판이나 TV에 고정 링크로 메모를 띄울 수 있습니다. 공유 데이터는 선생님 Google Drive에 저장됩니다.',
+        ],
+      },
+    ],
+    related: ['sync/google-drive', 'features/widget-mode'],
+  },
+  {
+    slug: 'features/todo',
+    title: '할 일',
+    description: '기본 할 일, 날짜별 정리, 통합 보기, 프로 모드, Google Tasks 동기화를 사용합니다.',
+    category: 'features',
+    lastUpdated: '2026-06-23',
+    image: { src: '/docs/screenshots/todo.png', alt: '쌤핀 할 일 화면' },
+    sections: [
+      {
+        id: 'basic',
+        title: '기본 할 일 관리',
+        bullets: [
+          '마감일, 시간, 중요도, 카테고리를 설정합니다.',
+          '오늘, 예정, 날짜별 그룹으로 확인합니다.',
+          '드래그해서 순서를 바꾸거나 D-Day 순으로 정렬합니다.',
+        ],
+      },
+      {
+        id: 'timeline',
+        title: '통합 보기',
+        body: [
+          '할 일 화면에서 수업과 일정을 함께 켜면 오늘의 흐름을 시간순으로 볼 수 있습니다. 대시보드 위젯에서도 같은 흐름을 확인할 수 있습니다.',
+        ],
+      },
+      {
+        id: 'pro',
+        title: '프로 모드',
+        body: [
+          '칸반, 테이블, 타임라인 뷰로 복잡한 프로젝트를 관리합니다. 프로 모드를 켜고 끄더라도 기존 할 일 데이터는 유지됩니다.',
+        ],
+      },
+      {
+        id: 'tasks',
+        title: 'Google Tasks 연동',
+        body: [
+          'Google Tasks와 양방향으로 동기화하면 쌤핀에서 만든 할 일을 Google Tasks에서도 볼 수 있고, Google Tasks에서 삭제한 항목은 쌤핀에도 반영됩니다.',
+        ],
+      },
+    ],
+    related: ['sync/google-tasks', 'features/schedule', 'features/dashboard'],
+  },
+  {
+    slug: 'features/meals',
+    title: '급식',
+    description: 'NEIS 급식과 직접 입력 급식을 함께 확인합니다.',
+    category: 'features',
+    lastUpdated: '2026-06-23',
+    image: { src: '/docs/screenshots/meal.png', alt: '쌤핀 급식 화면' },
+    sections: [
+      {
+        id: 'neis',
+        title: '자동 급식',
+        body: [
+          '학교 정보가 설정되어 있으면 NEIS 공식 API에서 급식 정보를 가져옵니다. 중식뿐 아니라 학교가 등록한 조식, 석식도 표시합니다.',
+        ],
+      },
+      {
+        id: 'manual',
+        title: '수동 입력',
+        body: [
+          'NEIS에 등록되지 않은 급식이나 간식은 직접 입력할 수 있습니다. 자동 급식과 수동 급식을 함께 보는 모드도 지원합니다.',
+        ],
+      },
+    ],
+    related: ['start/school-neis', 'troubleshooting/neis'],
+  },
+  {
+    slug: 'features/tools',
+    title: '쌤도구',
+    description: '수업 중 바로 쓰는 27가지 교실 도구를 정리하고 실행합니다.',
+    category: 'features',
+    lastUpdated: '2026-06-23',
+    image: { src: '/docs/screenshots/tools-grid.png', alt: '쌤핀 쌤도구 목록 화면' },
+    sections: [
+      {
+        id: 'count',
+        title: '현재 도구 수',
+        body: ['쌤도구에는 수업 중 바로 실행할 수 있는 교실 도구 27가지가 들어 있습니다.'],
+      },
+      {
+        id: 'list',
+        title: '도구 목록',
+        bullets: [
+          '자리뽑기, 랜덤뽑기, 타이머, 활동기호, 룰렛, QR코드, 워드클라우드',
+          '주사위, 객관식 설문, 점수판, 신호등, 주관식 설문, 복합 유형 설문',
+          '교실약속정하기, 과제수합, 동전던지기, 모둠 편성기',
+          '가치수직선 토론, 신호등 토론, 칠판, 협업 보드',
+          '숲소리, PBL스케치, 서식, 마크다운 변환기, 배점 계산기',
+        ],
+      },
+      {
+        id: 'organize',
+        title: '자주 쓰는 도구 정리',
+        body: [
+          '쌤도구 페이지에서 순서를 바꾸거나 숨길 수 있고, 대시보드와 위젯에는 자주 쓰는 도구를 바로 꺼낼 수 있습니다.',
+        ],
+      },
+    ],
+    related: ['features/markdown-converter', 'features/class-management'],
+  },
+  {
+    slug: 'features/bookmarks-export',
+    title: '즐겨찾기와 내보내기',
+    description: '웹사이트와 PC 폴더를 저장하고 시간표, 좌석, 기록을 파일로 내보냅니다.',
+    category: 'features',
+    lastUpdated: '2026-06-23',
+    image: { src: '/docs/screenshots/bookmarks.png', alt: '쌤핀 즐겨찾기 화면' },
+    sections: [
+      {
+        id: 'bookmarks',
+        title: '즐겨찾기',
+        body: [
+          '자주 쓰는 웹사이트와 PC 폴더를 그룹별로 저장합니다. 링크 미리보기, 검색, 아카이브로 오래된 즐겨찾기를 정리할 수 있습니다.',
+        ],
+      },
+      {
+        id: 'export',
+        title: '내보내기',
+        body: [
+          '좌석배치표, 시간표, 담임메모 등 주요 자료를 Excel, PDF, HWPX 형식으로 내보낼 수 있습니다.',
+        ],
+        image: { src: '/docs/screenshots/export.png', alt: '쌤핀 내보내기 화면' },
+      },
+    ],
+    related: ['features/seating', 'features/timetable', 'features/homeroom'],
+  },
+  {
+    slug: 'features/settings',
+    title: '설정',
+    description: '학교, Google 연동, 위젯, 좌석, 보안, 화면, 사이드바, 앱 정보를 관리합니다.',
+    category: 'features',
+    lastUpdated: '2026-06-23',
+    image: { src: '/docs/screenshots/settings.png', alt: '쌤핀 설정 화면' },
+    sections: [
+      {
+        id: 'tabs',
+        title: '설정에서 관리하는 것',
+        bullets: [
+          '일반, 학교 정보, 교시 시간, 위젯, 좌석 설정, 보안',
+          'Google 연동: 계정, 백업, Calendar, Tasks',
+          '날씨, 화면, 사이드바, 일정, 데이터 관리, 앱 정보',
+        ],
+      },
+      {
+        id: 'display',
+        title: '화면과 테마',
+        body: [
+          '밝은 테마와 어두운 테마, 여러 프리셋, 글꼴, 위젯 스타일을 조정합니다. 쌤핀은 한국어 글꼴 가독성을 우선합니다.',
+        ],
+      },
+    ],
+    related: ['sync/google-drive', 'features/security-pin', 'features/widget-mode'],
+  },
+  {
+    slug: 'features/security-pin',
+    title: '보안과 PIN',
+    description: '학생 기록, 성적, 민감한 메뉴를 PIN으로 보호합니다.',
+    category: 'features',
+    lastUpdated: '2026-06-23',
+    image: { src: '/docs/screenshots/settings-security.png', alt: '쌤핀 보안 설정 화면' },
+    sections: [
+      {
+        id: 'why',
+        title: 'PIN이 필요한 상황',
+        body: [
+          '교실 TV나 프로젝터에 쌤핀을 띄워둔 상태에서 학생 기록, 상담 메모, 성적 같은 민감한 화면이 보이지 않도록 막을 수 있습니다.',
+        ],
+      },
+      {
+        id: 'setup',
+        title: 'PIN 설정',
+        steps: [
+          '설정으로 이동합니다.',
+          '보안 탭을 엽니다.',
+          'PIN을 만들고 보호할 메뉴를 선택합니다.',
+          '학생이 볼 수 있는 화면과 교사용 화면을 분리해 사용합니다.',
+        ],
+      },
+    ],
+    related: ['start/data-safety', 'features/homeroom', 'features/class-management'],
+  },
+  {
+    slug: 'features/widget-mode',
+    title: '위젯 모드',
+    description: '대시보드를 작은 창, 아이콘 모드, 바탕화면 아래 모드로 띄웁니다.',
+    category: 'features',
+    lastUpdated: '2026-06-23',
+    image: { src: '/docs/screenshots/settings-widget.png', alt: '쌤핀 위젯 설정 화면' },
+    sections: [
+      {
+        id: 'modes',
+        title: '위젯 표시 방식',
+        bullets: [
+          '일반 위젯 모드: 작은 창으로 대시보드를 띄웁니다.',
+          '항상 위에: 다른 창 위에 고정합니다.',
+          '아이콘 모드: 필요할 때 빠르게 펼칩니다.',
+          '바탕화면 아이콘 아래 모드: Windows에서 바탕화면 일부처럼 씁니다.',
+        ],
+      },
+      {
+        id: 'sync',
+        title: '메인 앱과 실시간 동기화',
+        body: ['위젯에서 메모, 할 일, 일정 등을 수정하면 메인 앱에도 즉시 반영됩니다.'],
+      },
+      {
+        id: 'lost',
+        title: '화면 밖으로 사라졌을 때',
+        body: [
+          '설정의 위젯 위치 보정 또는 표시 초기화를 사용하면 보이지 않는 위치로 이동한 위젯을 다시 화면 안으로 가져올 수 있습니다.',
+        ],
+      },
+    ],
+    related: ['troubleshooting/display-widget', 'features/dashboard', 'features/memo'],
+  },
+  {
+    slug: 'features/mobile',
+    title: '쌤핀 모바일',
+    description: 'm.ssampin.com에서 PC 데이터를 휴대폰으로 확인하고 일부 기록을 작성합니다.',
+    category: 'features',
+    lastUpdated: '2026-06-23',
+    sections: [
+      {
+        id: 'install',
+        title: '모바일 시작 순서',
+        steps: [
+          'PC 쌤핀에서 Google Drive 동기화를 먼저 설정합니다.',
+          '휴대폰에서 m.ssampin.com에 접속합니다.',
+          'PC와 같은 Google 계정으로 로그인합니다.',
+          '홈 화면에 추가하면 앱처럼 사용할 수 있습니다.',
+        ],
+      },
+      {
+        id: 'features',
+        title: '모바일에서 할 수 있는 것',
+        bullets: [
+          '시간표, 일정, 메모, 할 일 확인',
+          '수업 탭에서 출결과 진도 확인',
+          '학생 연락처 조회와 전화 걸기',
+          '학생 수업 기록 작성과 동기화',
+        ],
+      },
+    ],
+    related: ['sync/google-drive', 'troubleshooting/google-sync'],
+  },
+  {
+    slug: 'features/ai-bridge',
+    title: 'AI 브릿지',
+    description: '쌤핀 데이터를 외부 AI 챗봇과 안전하게 연결해 질문하고 작업합니다.',
+    category: 'features',
+    lastUpdated: '2026-06-23',
+    sections: [
+      {
+        id: 'what',
+        title: 'AI 브릿지는 무엇인가요?',
+        body: [
+          '클로드, GPT, 제미나이 같은 외부 AI 챗봇이 쌤핀의 데이터를 읽거나 일부 항목을 쓸 수 있게 연결하는 통로입니다.',
+          '쌤핀이 켜져 있을 때, 선생님이 허용한 범위 안에서만 동작합니다.',
+        ],
+      },
+      {
+        id: 'scope',
+        title: '연결 가능한 데이터',
+        bullets: [
+          '시간표, 일정, D-Day, 할 일',
+          '담임 학생 기록과 수업반 기록',
+          '출결 현황 조회와 등록',
+          '메모, 노트, 북마크',
+        ],
+      },
+      {
+        id: 'control',
+        title: '선생님이 제어하는 것',
+        body: [
+          '실명, 민감한 내용, 쓰기 권한은 별도 동의와 설정을 거쳐야 열립니다. 외부 AI에는 도구가 돌려준 정보가 전달되므로 사용하는 AI 서비스의 처리 정책도 함께 확인하세요.',
+        ],
+      },
+    ],
+    related: ['features/attachments', 'features/schedule', 'features/todo'],
+  },
+  {
+    slug: 'features/markdown-converter',
+    title: '마크다운 변환기',
+    description: 'AI가 만든 마크다운 문서를 수업 자료로 다듬어 복사하거나 내보냅니다.',
+    category: 'features',
+    lastUpdated: '2026-06-23',
+    sections: [
+      {
+        id: 'use',
+        title: '언제 쓰나요?',
+        body: [
+          'AI 챗봇이 만들어 준 마크다운 표, 목록, 제목 구조를 수업 자료나 안내문에 붙이기 좋게 정리할 때 사용합니다.',
+        ],
+      },
+      {
+        id: 'flow',
+        title: '기본 흐름',
+        steps: [
+          '쌤도구에서 마크다운 변환기를 엽니다.',
+          '마크다운 원문을 붙여넣습니다.',
+          '미리보기로 결과를 확인합니다.',
+          '필요한 형식으로 복사하거나 내보냅니다.',
+        ],
+      },
+    ],
+    related: ['features/tools', 'features/ai-bridge'],
+  },
+  {
+    slug: 'features/attachments',
+    title: '관찰 기록과 출결 첨부',
+    description: '수업 기록, 담임 기록, 출결 증빙에 사진과 문서를 붙입니다.',
+    category: 'features',
+    lastUpdated: '2026-06-23',
+    sections: [
+      {
+        id: 'what',
+        title: '첨부할 수 있는 자료',
+        body: [
+          '사진, PDF, 한글, 엑셀 같은 문서를 기록 작성 중에 함께 담아둘 수 있습니다. 이미지는 썸네일로, 문서는 파일칩으로 표시됩니다.',
+        ],
+      },
+      {
+        id: 'record',
+        title: '기록 작성 중 첨부',
+        steps: [
+          '수업 관리 또는 담임 기록 작성 화면을 엽니다.',
+          '학생과 날짜를 선택합니다.',
+          '첨부 영역에 파일을 끌어다 놓거나 파일 선택을 누릅니다.',
+          '기록을 저장하면 첨부도 함께 저장됩니다.',
+        ],
+      },
+      {
+        id: 'privacy',
+        title: '저장 위치',
+        body: [
+          '첨부 파일은 기본적으로 내 컴퓨터에 저장됩니다. Google Drive 동기화를 켠 경우 첨부 메타와 파일도 동기화 대상에 포함됩니다.',
+        ],
+      },
+    ],
+    related: ['features/homeroom', 'features/class-management', 'sync/google-drive'],
+  },
+  {
+    slug: 'sync/google-drive',
+    title: 'Google Drive 동기화',
+    description: 'PC, 새 컴퓨터, 모바일에서 같은 쌤핀 데이터를 이어서 사용합니다.',
+    category: 'sync',
+    lastUpdated: '2026-06-23',
+    sections: [
+      {
+        id: 'setup',
+        title: '처음 설정',
+        steps: [
+          '설정의 Google 연동 탭으로 이동합니다.',
+          'Google 계정을 연결합니다.',
+          '백업 또는 Drive 동기화 카드를 엽니다.',
+          '클라우드로 업로드하거나 자동 동기화를 켭니다.',
+        ],
+      },
+      {
+        id: 'included',
+        title: '동기화되는 데이터',
+        body: [
+          '현재 동기화 단일 소스에는 설정, 시간표, 학생, 좌석, 일정, 메모, 할 일, 학생 기록, 북마크, 설문, 과제, 수업반, 진도, 출결, 급식 수동 입력, 노트, 이모티콘, 루브릭, 관찰 기록, 생기부 초안, 관찰 첨부 메타와 첨부 파일이 포함됩니다.',
+        ],
+      },
+      {
+        id: 'first-sync',
+        title: '새 기기에서 열 때',
+        body: [
+          'Drive 백업이 발견되면 클라우드 데이터로 시작, 로컬 우선, 새로 시작 중에서 선택하는 확인 창이 뜹니다. 덮어쓰기 사고를 막기 위한 단계입니다.',
+        ],
+      },
+    ],
+    related: ['sync/data-location', 'features/mobile', 'troubleshooting/google-sync'],
+  },
+  {
+    slug: 'sync/google-calendar',
+    title: 'Google Calendar 연동',
+    description:
+      'Google Calendar 일정을 쌤핀 일정과 함께 보고, 쌤핀 일정 변경을 Google에도 반영합니다.',
+    category: 'sync',
+    lastUpdated: '2026-06-23',
+    sections: [
+      {
+        id: 'connect',
+        title: '연결하기',
+        steps: [
+          '설정의 Google 연동 탭에서 계정을 연결합니다.',
+          'Calendar 카드를 열고 권한을 허용합니다.',
+          '일정 관리에서 Google 일정이 함께 보이는지 확인합니다.',
+        ],
+      },
+      {
+        id: 'sync',
+        title: '동기화 범위',
+        body: [
+          '쌤핀에서 일정을 추가, 수정, 삭제하면 Google Calendar와도 동기화됩니다. NEIS 학사일정을 Google Calendar에 보내는 제안 기능도 제공합니다.',
+        ],
+      },
+    ],
+    related: ['features/schedule', 'troubleshooting/google-sync'],
+  },
+  {
+    slug: 'sync/google-tasks',
+    title: 'Google Tasks 동기화',
+    description: '쌤핀 할 일을 Google Tasks와 양방향으로 맞춥니다.',
+    category: 'sync',
+    lastUpdated: '2026-06-23',
+    sections: [
+      {
+        id: 'setup',
+        title: '설정하기',
+        steps: [
+          '설정의 Google 연동 탭에서 계정을 연결합니다.',
+          'Tasks 카드를 열고 Google Tasks 권한을 허용합니다.',
+          '사용할 Task List를 선택합니다.',
+          '동기화가 끝나면 할 일 옆에 연동 상태가 표시됩니다.',
+        ],
+      },
+      {
+        id: 'rules',
+        title: '동기화 규칙',
+        bullets: [
+          '쌤핀에서 만든 할 일은 Google Tasks에 생성됩니다.',
+          'Google Tasks에서 삭제한 할 일은 쌤핀에서도 삭제됩니다.',
+          '자동 동기화는 앱 시작, 창 포커스 복귀, 할 일 변경 후, 주기적 실행 시점에 일어납니다.',
+          'Google Tasks 일일 한도에 도달하면 자동 동기화를 잠시 멈추고 다음 날 재시도합니다.',
+        ],
+      },
+    ],
+    related: ['features/todo', 'troubleshooting/google-sync'],
+  },
+  {
+    slug: 'sync/data-location',
+    title: '데이터 위치와 백업',
+    description: '로컬 저장 위치, 수동 백업, Drive 백업의 차이를 이해합니다.',
+    category: 'sync',
+    lastUpdated: '2026-06-23',
+    sections: [
+      {
+        id: 'local',
+        title: '로컬 데이터',
+        body: [
+          'Windows에서는 사용자 AppData 아래 쌤핀 데이터 폴더에 저장됩니다. 앱을 삭제해도 데이터 폴더는 별도로 남아 있어 재설치 후 다시 사용할 수 있습니다.',
+        ],
+      },
+      {
+        id: 'backup',
+        title: '백업 방법',
+        bullets: [
+          'Google Drive 동기화로 클라우드에 백업합니다.',
+          '내보내기 기능으로 필요한 자료를 Excel, PDF, HWPX로 저장합니다.',
+          '문제 발생 전에는 데이터 폴더를 통째로 복사해 두는 것도 가능합니다.',
+        ],
+      },
+    ],
+    related: ['sync/google-drive', 'start/data-safety'],
+  },
+  {
+    slug: 'troubleshooting',
+    title: '문제 해결',
+    description: '설치, 보안 경고, NEIS, Google 연동, 위젯 문제를 증상별로 해결합니다.',
+    category: 'troubleshooting',
+    lastUpdated: '2026-06-23',
+    quickLinks: [
+      { title: '다운로드가 안 돼요', href: '/docs/troubleshooting/download-help' },
+      { title: 'Windows 보안 경고', href: '/docs/troubleshooting/windows-smartscreen' },
+      { title: 'V3 백신 차단', href: '/docs/troubleshooting/v3-antivirus' },
+      { title: 'Google 연동 문제', href: '/docs/troubleshooting/google-sync' },
+    ],
+    sections: [
+      {
+        id: 'first-check',
+        title: '먼저 확인할 것',
+        bullets: [
+          '공식 홈페이지 또는 GitHub Releases에서 받은 파일인지 확인합니다.',
+          '학교 네트워크가 다운로드, Google, NEIS 접속을 막고 있지 않은지 확인합니다.',
+          '앱이 최신 버전인지 확인합니다.',
+          '문제가 반복되면 발생한 화면, 시간, 누른 버튼을 함께 기록해 둡니다.',
+        ],
+      },
+    ],
+    related: ['faq', 'contact'],
+  },
+  {
+    slug: 'troubleshooting/windows-smartscreen',
+    title: 'Windows 보안 경고 해결',
+    description: 'Microsoft Windows의 PC 보호 화면에서 설치를 계속하는 방법입니다.',
+    category: 'troubleshooting',
+    lastUpdated: '2026-06-23',
+    sections: [
+      {
+        id: 'steps',
+        title: '해결 순서',
+        steps: [
+          '설치 파일 이름과 출처를 확인합니다.',
+          '파란 화면에서 추가 정보를 누릅니다.',
+          '실행 버튼을 누릅니다.',
+          '설치가 끝나면 시작 메뉴에서 쌤핀을 실행합니다.',
+        ],
+      },
+      {
+        id: 'why',
+        title: '왜 보이나요?',
+        body: [
+          '쌤핀이 위험해서가 아니라, 개인 개발 앱이라 Microsoft 인증서와 평판 데이터가 아직 충분하지 않을 때 표시될 수 있습니다.',
+        ],
+      },
+    ],
+    related: ['start/install-windows', 'troubleshooting/download-help'],
+  },
+  {
+    slug: 'troubleshooting/windows-smart-app-control',
+    title: '스마트 앱 컨트롤 차단 해결',
+    description: 'Windows 11의 스마트 앱 컨트롤이 설치 파일을 막을 때 해결합니다.',
+    category: 'troubleshooting',
+    lastUpdated: '2026-06-23',
+    sections: [
+      {
+        id: 'unblock',
+        title: '차단 해제',
+        steps: [
+          '설치 파일을 마우스 오른쪽 버튼으로 클릭합니다.',
+          '속성을 엽니다.',
+          '하단의 차단 해제를 체크합니다.',
+          '확인을 누르고 설치 파일을 다시 실행합니다.',
+        ],
+      },
+    ],
+    related: ['start/install-windows', 'troubleshooting/windows-smartscreen'],
+  },
+  {
+    slug: 'troubleshooting/v3-antivirus',
+    title: 'V3 또는 백신이 설치를 막을 때',
+    description: '백신이 설치 파일을 삭제하거나 실행을 막는 문제를 해결합니다.',
+    category: 'troubleshooting',
+    lastUpdated: '2026-06-23',
+    sections: [
+      {
+        id: 'v3',
+        title: 'V3 실시간 감시',
+        steps: [
+          'V3 트레이 아이콘을 마우스 오른쪽 버튼으로 클릭합니다.',
+          '실시간 검사 일시 중지를 선택합니다.',
+          '쌤핀 설치 파일을 다시 실행합니다.',
+          '설치가 끝나면 실시간 검사를 다시 켭니다.',
+        ],
+      },
+      {
+        id: 'other',
+        title: '다른 백신도 비슷합니다',
+        body: [
+          '알약 등 다른 백신도 개인 개발 앱을 오탐할 수 있습니다. 실시간 감시를 잠시 멈추고 공식 설치 파일을 실행한 뒤 다시 켜 주세요.',
+        ],
+      },
+    ],
+    related: ['troubleshooting/download-help', 'troubleshooting/windows-smartscreen'],
+  },
+  {
+    slug: 'troubleshooting/macos-security',
+    title: 'macOS 보안 경고 해결',
+    description: 'macOS에서 개발자를 확인할 수 없음, DMG가 열리지 않음 문제를 해결합니다.',
+    category: 'troubleshooting',
+    lastUpdated: '2026-06-23',
+    sections: [
+      {
+        id: 'open',
+        title: '개발자를 확인할 수 없음',
+        steps: [
+          '쌤핀 앱을 Control+클릭합니다.',
+          '열기를 선택합니다.',
+          '확인 창에서 다시 열기를 선택합니다.',
+        ],
+      },
+      {
+        id: 'dmg',
+        title: 'DMG가 열리지 않을 때',
+        body: [
+          '다운로드 보안 속성 때문에 열리지 않을 수 있습니다. 터미널에서 `xattr -cr ~/Downloads/ssampin-arm64.dmg` 명령을 실행한 뒤 다시 열어 보세요.',
+        ],
+      },
+    ],
+    related: ['start/install-macos'],
+  },
+  {
+    slug: 'troubleshooting/download-help',
+    title: '다운로드 문제 해결',
+    description: '다운로드가 막히거나 설치 파일이 사라질 때 확인할 순서입니다.',
+    category: 'troubleshooting',
+    lastUpdated: '2026-06-23',
+    sections: [
+      {
+        id: 'browser',
+        title: '브라우저 다운로드 차단',
+        bullets: [
+          '브라우저 하단 또는 다운로드 목록에서 보관, 계속 다운로드, 허용 같은 버튼이 있는지 확인합니다.',
+          '학교 네트워크에서는 GitHub 다운로드가 막힐 수 있습니다. 다른 네트워크에서 다시 시도해 보세요.',
+          '다운로드는 됐는데 파일이 사라졌다면 백신 격리함을 확인합니다.',
+        ],
+      },
+      {
+        id: 'reinstall',
+        title: '재설치해도 데이터는 유지되나요?',
+        body: [
+          '쌤핀 데이터는 설치 파일과 별도 위치에 저장됩니다. 일반적인 재설치나 업데이트로 데이터가 지워지지 않습니다.',
+        ],
+      },
+    ],
+    related: ['start/install-windows', 'troubleshooting/v3-antivirus'],
+  },
+  {
+    slug: 'troubleshooting/neis',
+    title: 'NEIS 연동 문제',
+    description: '학교 검색, 시간표, 급식, 학사일정이 나오지 않을 때 확인합니다.',
+    category: 'troubleshooting',
+    lastUpdated: '2026-06-23',
+    sections: [
+      {
+        id: 'school',
+        title: '학교가 검색되지 않음',
+        body: [
+          '학교명, 지역, 학교급을 다시 확인합니다. NEIS에 등록되지 않은 기관은 직접 입력으로 사용해야 합니다.',
+        ],
+      },
+      {
+        id: 'timetable',
+        title: '시간표가 나오지 않음',
+        bullets: [
+          '학년도, 학년, 반이 맞는지 확인합니다.',
+          'NEIS에 아직 시간표가 공개되지 않았을 수 있습니다.',
+          '교사 개인 시간표는 NEIS에서 자동으로 가져올 수 없습니다.',
+        ],
+      },
+      {
+        id: 'meal',
+        title: '급식이 나오지 않음',
+        body: [
+          '학교가 해당 날짜 급식을 NEIS에 등록하지 않았을 수 있습니다. 필요한 경우 수동 입력을 사용하세요.',
+        ],
+      },
+    ],
+    related: ['start/school-neis', 'features/timetable', 'features/meals'],
+  },
+  {
+    slug: 'troubleshooting/google-sync',
+    title: 'Google 연동 문제',
+    description: 'Drive, Calendar, Tasks 연결과 동기화 오류를 해결합니다.',
+    category: 'troubleshooting',
+    lastUpdated: '2026-06-23',
+    sections: [
+      {
+        id: 'connect',
+        title: '연결이 안 될 때',
+        steps: [
+          '인터넷 연결을 확인합니다.',
+          '학교 네트워크가 Google 로그인을 막고 있지 않은지 확인합니다.',
+          '설정의 Google 연동 탭에서 연결 해제 후 다시 연결합니다.',
+          '다른 브라우저 또는 다른 네트워크에서 다시 시도합니다.',
+        ],
+      },
+      {
+        id: 'browser',
+        title: '카카오톡이나 네이버 앱에서 로그인 실패',
+        body: [
+          '인앱 브라우저에서는 Google 보안 정책 때문에 로그인이 막힐 수 있습니다. 링크를 길게 눌러 외부 브라우저로 열거나 Chrome/Safari에서 직접 접속하세요.',
+        ],
+      },
+      {
+        id: 'tasks',
+        title: 'Tasks 경고 또는 한도',
+        body: [
+          'Google Tasks 권한 추가 과정에서 계정 환경에 따라 추가 확인 화면이 보일 수 있습니다. 또한 일일 API 한도에 도달하면 쌤핀이 자동 동기화를 잠시 멈췄다가 다음 날 다시 시도합니다.',
+        ],
+      },
+    ],
+    related: ['sync/google-drive', 'sync/google-calendar', 'sync/google-tasks'],
+  },
+  {
+    slug: 'troubleshooting/display-widget',
+    title: '화면과 위젯 문제',
+    description: '화면 배율, 위젯 위치, 글씨 크기 문제를 해결합니다.',
+    category: 'troubleshooting',
+    lastUpdated: '2026-06-23',
+    sections: [
+      {
+        id: 'scale',
+        title: '화면이 너무 작거나 커요',
+        body: [
+          '설정의 화면 또는 디스플레이 항목에서 글씨 크기와 위젯 스타일을 조정합니다. Windows 자체 배율이 너무 높으면 앱 전체 크기도 함께 커질 수 있습니다.',
+        ],
+      },
+      {
+        id: 'widget-out',
+        title: '위젯이 화면 밖으로 사라졌어요',
+        body: [
+          '설정에서 위젯 위치 보정 또는 초기화를 실행해 보세요. 다중 모니터를 쓰다가 모니터를 뺐을 때 자주 발생합니다.',
+        ],
+      },
+    ],
+    related: ['features/widget-mode', 'features/settings'],
+  },
+  {
+    slug: 'faq',
+    title: '자주 묻는 질문',
+    description: '설치, 데이터, 오프라인, 학운위, 업데이트, 모바일 관련 질문을 모았습니다.',
+    category: 'reference',
+    lastUpdated: '2026-06-23',
+    sections: [
+      {
+        id: 'free',
+        title: '무료인가요?',
+        body: ['네. 쌤핀은 무료이며 광고가 없습니다.'],
+      },
+      {
+        id: 'offline',
+        title: '인터넷 없이도 되나요?',
+        body: [
+          '핵심 기능은 오프라인에서 동작합니다. 다만 날씨, 급식 자동 조회, NEIS, Google 연동, 공유 링크가 필요한 기능은 인터넷이 필요합니다.',
+        ],
+      },
+      {
+        id: 'school-approval',
+        title: '학운위 심의를 받아야 하나요?',
+        body: [
+          '쌤핀은 교사 개인 PC에 데이터를 저장하는 도구이며, 쌤핀 서버가 학생 개인정보를 수집하거나 저장하지 않습니다. 학교 내부 기준이 별도로 있다면 그 기준에 따라 확인하세요.',
+        ],
+      },
+      {
+        id: 'mobile',
+        title: '모바일에서도 쓸 수 있나요?',
+        body: [
+          'm.ssampin.com에서 사용할 수 있습니다. PC 쌤핀에서 Google Drive 동기화를 먼저 설정하고 같은 Google 계정으로 로그인해야 합니다.',
+        ],
+      },
+      {
+        id: 'bulk-delete-events',
+        title: '일정을 한꺼번에 삭제할 수 있나요?',
+        body: [
+          '일정 관리의 일괄 삭제 기능을 사용하면 특정 출처나 기간의 일정을 정리할 수 있습니다. NEIS나 Google 연동 일정은 삭제 범위와 원본 반영 여부를 확인한 뒤 진행하세요.',
+        ],
+      },
+      {
+        id: 'favorite-tools',
+        title: '자주 쓰는 쌤도구를 바로 실행할 수 있나요?',
+        body: [
+          '설정과 쌤도구 정리 기능에서 자주 쓰는 도구를 앞쪽에 배치하면 대시보드와 위젯에서도 빠르게 실행할 수 있습니다.',
+        ],
+      },
+      {
+        id: 'folder-bookmark',
+        title: '즐겨찾기에 PC 폴더도 추가할 수 있나요?',
+        body: [
+          '웹사이트뿐 아니라 자주 여는 PC 폴더도 즐겨찾기에 추가할 수 있습니다. 수업 자료 폴더나 학급 업무 폴더를 등록해두면 바로 열 수 있습니다.',
+        ],
+      },
+      {
+        id: 'zero-responses',
+        title: '학생이 응답했는데 교사 화면에 0명으로 보여요',
+        body: [
+          '공유 도구에서 학생 화면과 교사 화면이 같은 세션인지 확인하세요. 학교 네트워크가 실시간 연결을 막는 경우 새 링크를 만들거나 다른 네트워크에서 다시 시도하면 해결되는 경우가 있습니다.',
+        ],
+      },
+      {
+        id: 'sample-students',
+        title: '설치했더니 모르는 학생이 보이나요?',
+        body: [
+          '현재 버전에서는 신규 설치 시 샘플 학생 35명을 자동으로 넣지 않습니다. 오래된 데이터가 남아 있다면 데이터 관리에서 현재 데이터 위치와 백업 상태를 먼저 확인하세요.',
+        ],
+      },
+      {
+        id: 'avoid-previous-seat',
+        title: '자리 배치를 이전과 다르게 하고 싶어요',
+        body: [
+          '좌석배치 히스토리와 이전 자리 피하기 옵션을 사용하세요. 완전히 다른 배치를 보장하는 기능이라기보다 직전 배치와 너무 비슷한 결과를 줄이는 보조 장치입니다.',
+        ],
+      },
+    ],
+    related: ['troubleshooting', 'start/data-safety', 'features/mobile'],
+  },
+  {
+    slug: 'releases',
+    title: '업데이트 내역',
+    description: '최신 버전에서 달라진 점과 주요 기능입니다.',
+    category: 'reference',
+    lastUpdated: '2026-06-23',
+    sections: [
+      {
+        id: 'current',
+        title: '지원 기준 버전',
+        body: ['이 가이드는 쌤핀 v2.2.2에서 사용할 수 있는 기능을 기준으로 정리했습니다.'],
+      },
+      {
+        id: 'recent',
+        title: '최근 반영된 주요 기능',
+        bullets: [
+          '관찰 기록과 출결에 자료 첨부',
+          'AI 브릿지 출결 현황 연결',
+          'Google Drive 동기화 대상 확대',
+          'Google Tasks 양방향 동기화',
+          '성적 분석, 루브릭, 마크다운 변환기, 배점 계산기',
+        ],
+      },
+    ],
+    related: ['features/attachments', 'features/ai-bridge', 'features/tools'],
+  },
+  {
+    slug: 'contact',
+    title: '도움 요청과 피드백',
+    description: '문제가 해결되지 않을 때 어떤 정보를 보내면 좋은지 안내합니다.',
+    category: 'reference',
+    lastUpdated: '2026-06-23',
+    sections: [
+      {
+        id: 'before',
+        title: '보내기 전에 확인할 것',
+        bullets: [
+          '사용 중인 운영체제와 쌤핀 버전',
+          '문제가 생긴 화면',
+          '누른 버튼과 에러 문구',
+          '반복해서 재현되는지 여부',
+        ],
+      },
+      {
+        id: 'where',
+        title: '보내는 곳',
+        body: [
+          '공식 사이트의 피드백 버튼이나 앱 안 도움말을 통해 문의를 보낼 수 있습니다. 설치 문제라면 보안 경고 화면 캡처를 함께 보내면 더 빠르게 확인할 수 있습니다.',
+        ],
+      },
+    ],
+    related: ['troubleshooting', 'faq'],
+  },
+];
+
+export const docsBySlug = new Map(docsArticles.map((article) => [article.slug, article]));
+
+export function getDocArticle(slug: string): DocArticle | undefined {
+  return docsBySlug.get(slug);
+}
+
+export function getDocPath(slug: string): string {
+  return `/docs/${slug}`;
+}
+
+export function getRelatedArticles(article: DocArticle): readonly DocArticle[] {
+  return (article.related ?? [])
+    .map((slug) => getDocArticle(slug))
+    .filter((item): item is DocArticle => Boolean(item));
+}
+
+export function getDocsSearchText(article: DocArticle): string {
+  const sectionText = article.sections
+    .flatMap((section) => [
+      section.title,
+      ...(section.body ?? []),
+      ...(section.steps ?? []),
+      ...(section.bullets ?? []),
+      section.callout?.title ?? '',
+      section.callout?.body ?? '',
+    ])
+    .join(' ');
+
+  return [article.title, article.description, article.category, sectionText].join(' ');
+}

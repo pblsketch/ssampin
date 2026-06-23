@@ -110,7 +110,7 @@ interface ChangeItem {
   type: ChangeType;
   title: string;
   description?: string;
-  /** 옵션: 노션 가이드 deep link. 있을 때 [📖 자세히 보기 ↗] 인라인 링크 노출. */
+  /** 옵션: 사용 가이드 deep link. 있을 때 [자세히 보기] 인라인 링크 노출. */
   notionUrl?: string;
 }
 
@@ -442,7 +442,7 @@ export function AppInfoSection() {
                                       rel="noopener noreferrer"
                                       className="inline-flex items-center gap-1 mt-1 text-detail text-sp-accent hover:underline"
                                     >
-                                      📖 자세히 보기
+                                      자세히 보기
                                       <span
                                         className="material-symbols-outlined text-[11px]"
                                         aria-hidden="true"

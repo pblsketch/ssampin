@@ -4,12 +4,28 @@ import { useState } from 'react';
 import type { ChatMessage as ChatMessageType } from '../../types/chat';
 import ChatFeedback from './ChatFeedback';
 
+const OFFICIAL_GUIDE_URL = 'https://www.ssampin.com/docs';
+const OFFICIAL_GUIDE_TEXT = `더 자세한 설명은 공식 사용자 가이드에서 확인할 수 있어요: ${OFFICIAL_GUIDE_URL}`;
+const OFFICIAL_GUIDE_FOOTER = `\n\n${OFFICIAL_GUIDE_TEXT}`;
+const OFFICIAL_GUIDE_LINK = `<a href="${OFFICIAL_GUIDE_URL}" target="_blank" rel="noreferrer" class="font-semibold text-sp-accent underline underline-offset-2">${OFFICIAL_GUIDE_URL}</a>`;
+
 interface Props {
   message: ChatMessageType;
   onFeedbackResolved?: (messageId: string) => void;
   onFeedbackUnresolved?: (messageId: string) => void;
   onFeedbackAskMore?: () => void;
   onFeedbackEscalate?: (messageId: string) => void;
+}
+
+function splitOfficialGuideFooter(content: string): { body: string; hasGuideFooter: boolean } {
+  const trimmed = content.trimEnd();
+  if (!trimmed.endsWith(OFFICIAL_GUIDE_TEXT)) {
+    return { body: content, hasGuideFooter: false };
+  }
+  return {
+    body: trimmed.slice(0, -OFFICIAL_GUIDE_FOOTER.length).trimEnd(),
+    hasGuideFooter: true,
+  };
 }
 
 export default function ChatMessage({
@@ -21,6 +37,9 @@ export default function ChatMessage({
 }: Props) {
   const isUser = message.role === 'user';
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+  const guideContent = isUser
+    ? { body: message.content, hasGuideFooter: false }
+    : splitOfficialGuideFooter(message.content);
 
   return (
     <>
@@ -43,10 +62,10 @@ export default function ChatMessage({
           }`}
         >
           {/* 마크다운 기본 렌더링 */}
-          {message.content && (
+          {guideContent.body && (
             <div
               className="whitespace-pre-wrap break-words [&_strong]:font-semibold"
-              dangerouslySetInnerHTML={{ __html: renderSimpleMarkdown(message.content) }}
+              dangerouslySetInnerHTML={{ __html: renderSimpleMarkdown(guideContent.body) }}
             />
           )}
 
@@ -78,6 +97,21 @@ export default function ChatMessage({
               <p className={`text-[0.65rem] ${isUser ? 'text-white/80' : 'text-sp-muted'}`}>
                 📚 참고: {message.sources.join(', ')}
               </p>
+            </div>
+          )}
+
+          {!isUser && guideContent.hasGuideFooter && (
+            <div className="mt-2 border-t border-sp-border/70 pt-2 text-[0.72rem] leading-relaxed text-sp-muted">
+              더 자세한 설명은{' '}
+              <a
+                href={OFFICIAL_GUIDE_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="font-semibold text-sp-accent underline underline-offset-2"
+              >
+                공식 사용자 가이드
+              </a>
+              에서 확인할 수 있어요.
             </div>
           )}
 
@@ -128,8 +162,12 @@ export default function ChatMessage({
 }
 
 /** 간단한 마크다운 → HTML 변환 (XSS 방지 포함) */
+function linkOfficialGuideUrl(html: string): string {
+  return html.split(OFFICIAL_GUIDE_URL).join(OFFICIAL_GUIDE_LINK);
+}
+
 function renderSimpleMarkdown(text: string): string {
-  return text
+  const html = text
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -137,4 +175,5 @@ function renderSimpleMarkdown(text: string): string {
     .replace(/`(.+?)`/g, '<code class="rounded bg-sp-bg px-1 py-0.5 text-xs">$1</code>')
     .replace(/^- (.+)$/gm, '• $1')
     .replace(/^\d+\. (.+)$/gm, '  $1');
+  return linkOfficialGuideUrl(html);
 }

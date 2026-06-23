@@ -1,4 +1,5 @@
 import MigrationBanner from '@/components/MigrationBanner';
+import LandingNav from '@/components/LandingNav';
 import Hero from '@/components/Hero';
 import Screenshot from '@/components/Screenshot';
 import Features from '@/components/Features';
@@ -15,15 +16,24 @@ export default function Home() {
   return (
     <main>
       <MigrationBanner />
+      <LandingNav />
       <Hero />
       <Screenshot />
-      <Features />
+      <div id="features" className="scroll-mt-20">
+        <Features />
+      </div>
       <Testimonials />
       <MidCTA />
-      <Anywhere />
+      <div id="mobile" className="scroll-mt-20">
+        <Anywhere />
+      </div>
       <TrustAndUtility />
-      <AiBridgeTeaser />
-      <InstallGuide />
+      <div id="ai-bridge" className="scroll-mt-20">
+        <AiBridgeTeaser />
+      </div>
+      <div id="download" className="scroll-mt-20">
+        <InstallGuide />
+      </div>
       <FAQ />
       <Footer />
     </main>

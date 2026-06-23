@@ -17,6 +17,8 @@ const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '';
 
 const CHAT_ENDPOINT = `${SUPABASE_URL}/functions/v1/ssampin-chat`;
 const ESCALATE_ENDPOINT = `${SUPABASE_URL}/functions/v1/ssampin-escalate`;
+const OFFICIAL_GUIDE_URL = 'https://www.ssampin.com/docs';
+const OFFICIAL_GUIDE_FOOTER = `\n\n더 자세한 설명은 공식 사용자 가이드에서 확인할 수 있어요: ${OFFICIAL_GUIDE_URL}`;
 
 function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -32,6 +34,16 @@ function getSessionId(): string {
     sessionStorage.setItem(KEY, id);
   }
   return id;
+}
+
+function appendOfficialGuideLink(content: string): string {
+  const trimmed = content.trimEnd();
+  if (trimmed.endsWith(OFFICIAL_GUIDE_URL)) return content;
+  return `${trimmed}${OFFICIAL_GUIDE_FOOTER}`;
+}
+
+function stripOfficialGuideLink(content: string): string {
+  return content.replace(OFFICIAL_GUIDE_FOOTER, '').trimEnd();
 }
 
 const WELCOME_MESSAGE: ChatMessage = {
@@ -55,11 +67,15 @@ export function useChatbot() {
     return sessionIdRef.current;
   }, []);
 
-  function addAssistantMessage(content: string, extra?: Partial<ChatMessage>) {
+  function addAssistantMessage(
+    content: string,
+    extra?: Partial<ChatMessage>,
+    withGuideLink = true,
+  ) {
     const msg: ChatMessage = {
       id: generateId(),
       role: 'assistant',
-      content,
+      content: withGuideLink ? appendOfficialGuideLink(content) : content,
       timestamp: new Date(),
       feedbackState: 'pending',
       ...extra,
@@ -100,7 +116,7 @@ export function useChatbot() {
         },
         body: JSON.stringify({
           type: 'other',
-          message: `[챗봇 미해결 피드백]\nQ: ${lastUser?.content ?? '(없음)'}\nA: ${lastBot?.content?.slice(0, 500) ?? '(없음)'}`,
+          message: `[챗봇 미해결 피드백]\nQ: ${lastUser?.content ?? '(없음)'}\nA: ${lastBot ? stripOfficialGuideLink(lastBot.content).slice(0, 500) : '(없음)'}`,
           sessionId: getSession(),
         }),
       });
@@ -162,7 +178,10 @@ export function useChatbot() {
         const history = messages
           .filter((m) => m.id !== 'welcome')
           .slice(-6)
-          .map((m) => ({ role: m.role, content: m.content }));
+          .map((m) => ({
+            role: m.role,
+            content: m.role === 'assistant' ? stripOfficialGuideLink(m.content) : m.content,
+          }));
 
         // API용 이미지 데이터
         const apiImages = chatImages?.map((img) => ({
@@ -207,7 +226,7 @@ export function useChatbot() {
           const assistantMsg: ChatMessage = {
             id: generateId(),
             role: 'assistant',
-            content: data.message,
+            content: appendOfficialGuideLink(data.message),
             timestamp: new Date(),
             sources: data.sources,
             confidence: data.confidence,
@@ -221,7 +240,7 @@ export function useChatbot() {
         setStatus('error');
       }
     },
-    [messages, status, getSession, convertFilesToChatImages, hideAllPendingFeedback]
+    [messages, status, getSession, convertFilesToChatImages, hideAllPendingFeedback],
   );
 
   /** 에스컬레이션 제출 */
@@ -258,23 +277,29 @@ export function useChatbot() {
         addAssistantMessage(
           result.ok
             ? '✅ 전달 완료! 빠르게 확인하겠습니다. 다른 질문이 있으면 편하게 물어보세요!'
-            : '전달 중 문제가 발생했어요. 나중에 다시 시도해 주세요.'
+            : '전달 중 문제가 발생했어요. 나중에 다시 시도해 주세요.',
+          undefined,
+          false,
         );
         setEscalationType(null);
         setStatus('idle');
       } catch {
-        addAssistantMessage('전달 중 오류가 발생했어요. 나중에 다시 시도해 주세요.');
+        addAssistantMessage(
+          '전달 중 오류가 발생했어요. 나중에 다시 시도해 주세요.',
+          undefined,
+          false,
+        );
         setStatus('error');
       }
     },
-    [getSession, convertFilesToChatImages]
+    [getSession, convertFilesToChatImages],
   );
 
   /** 에스컬레이션 취소 */
   const cancelEscalation = useCallback(() => {
     setEscalationType(null);
     setStatus('idle');
-    addAssistantMessage('알겠어요! 다른 궁금한 점이 있으면 물어보세요 😊');
+    addAssistantMessage('알겠어요! 다른 궁금한 점이 있으면 물어보세요 😊', undefined, false);
   }, []);
 
   /** 대화 초기화 */

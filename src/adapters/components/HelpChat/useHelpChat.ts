@@ -16,9 +16,21 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string | und
 
 const CHAT_ENDPOINT = SUPABASE_URL ? `${SUPABASE_URL}/functions/v1/ssampin-chat` : '';
 const ESCALATE_ENDPOINT = SUPABASE_URL ? `${SUPABASE_URL}/functions/v1/ssampin-escalate` : '';
+const OFFICIAL_GUIDE_URL = 'https://www.ssampin.com/docs';
+const OFFICIAL_GUIDE_FOOTER = `\n\n더 자세한 설명은 공식 사용자 가이드에서 확인할 수 있어요: ${OFFICIAL_GUIDE_URL}`;
 
 function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function appendOfficialGuideLink(content: string): string {
+  const trimmed = content.trimEnd();
+  if (trimmed.endsWith(OFFICIAL_GUIDE_URL)) return content;
+  return `${trimmed}${OFFICIAL_GUIDE_FOOTER}`;
+}
+
+function stripOfficialGuideLink(content: string): string {
+  return content.replace(OFFICIAL_GUIDE_FOOTER, '').trimEnd();
 }
 
 /** 페이지 ID → 한국어 이름 매핑 */
@@ -111,17 +123,20 @@ export function useHelpChat() {
   }, []);
 
   /** 어시스턴트 메시지 추가 (피드백 상태 포함) */
-  const addAssistantMessage = useCallback((content: string, extra?: Partial<HelpChatMessage>) => {
-    const msg: HelpChatMessage = {
-      id: generateId(),
-      role: 'assistant',
-      content,
-      timestamp: Date.now(),
-      feedbackState: 'pending',
-      ...extra,
-    };
-    setMessages((prev) => [...prev, msg]);
-  }, []);
+  const addAssistantMessage = useCallback(
+    (content: string, extra?: Partial<HelpChatMessage>, withGuideLink = true) => {
+      const msg: HelpChatMessage = {
+        id: generateId(),
+        role: 'assistant',
+        content: withGuideLink ? appendOfficialGuideLink(content) : content,
+        timestamp: Date.now(),
+        feedbackState: 'pending',
+        ...extra,
+      };
+      setMessages((prev) => [...prev, msg]);
+    },
+    [],
+  );
 
   /** 메시지의 피드백 상태 변경 */
   const setMessageFeedback = useCallback((messageId: string, state: FeedbackState) => {
@@ -156,7 +171,7 @@ export function useHelpChat() {
         },
         body: JSON.stringify({
           type: 'other',
-          message: `[챗봇 미해결 피드백]\nQ: ${lastUser?.content ?? '(없음)'}\nA: ${lastBot?.content?.slice(0, 500) ?? '(없음)'}`,
+          message: `[챗봇 미해결 피드백]\nQ: ${lastUser?.content ?? '(없음)'}\nA: ${lastBot ? stripOfficialGuideLink(lastBot.content).slice(0, 500) : '(없음)'}`,
           sessionId: sessionIdRef.current,
           appVersion: typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : undefined,
           appSettings: getAppContext().summary,
@@ -268,7 +283,10 @@ export function useHelpChat() {
         const history = messages
           .filter((m) => m.id !== 'welcome')
           .slice(-6)
-          .map((m) => ({ role: m.role, content: m.content }));
+          .map((m) => ({
+            role: m.role,
+            content: m.role === 'assistant' ? stripOfficialGuideLink(m.content) : m.content,
+          }));
 
         // API용 이미지 데이터 (base64 순수 데이터만 전송)
         const apiImages = chatImages?.map((img) => ({
@@ -358,6 +376,7 @@ export function useHelpChat() {
         addAssistantMessage(
           '오프라인 상태에서는 전달이 어려워요. 인터넷에 연결한 후 다시 시도해 주세요.',
           { isOffline: true },
+          false,
         );
         setEscalationType(null);
         setStatus('idle');
@@ -398,11 +417,17 @@ export function useHelpChat() {
           result.ok
             ? '✅ 전달 완료! 빠르게 확인하겠습니다. 다른 질문이 있으면 편하게 물어보세요!'
             : '전달 중 문제가 발생했어요. 나중에 다시 시도해 주세요.',
+          undefined,
+          false,
         );
         setEscalationType(null);
         setStatus('idle');
       } catch {
-        addAssistantMessage('전달 중 오류가 발생했어요. 나중에 다시 시도해 주세요.');
+        addAssistantMessage(
+          '전달 중 오류가 발생했어요. 나중에 다시 시도해 주세요.',
+          undefined,
+          false,
+        );
         setStatus('error');
       }
     },
@@ -413,7 +438,7 @@ export function useHelpChat() {
   const cancelEscalation = useCallback(() => {
     setEscalationType(null);
     setStatus('idle');
-    addAssistantMessage('알겠어요! 다른 궁금한 점이 있으면 물어보세요 😊');
+    addAssistantMessage('알겠어요! 다른 궁금한 점이 있으면 물어보세요 😊', undefined, false);
   }, [addAssistantMessage]);
 
   /** 대화 초기화 */

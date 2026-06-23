@@ -12,7 +12,7 @@ v2.1.0(2026-06-01) 이후 미배포 커밋 묶음. 검증 게이트 4/4 통과(t
 
 **노출 제외(사용자 결정)**: AI 챗봇 안정화·보안 취약점 12건 패치 — 내부 작업이라 release-notes에서 제외. 챗봇 대화 원문 전체 보기(관리자 analytics)도 교사 노트에서 제외.
 
-**버전 동기화**: package.json·package-lock·landing config/layout·Sidebar·모바일 Settings/More 6+lock = 2.1.1. KB Q&A 6건 신규(서명·협업보드·복합설문·위젯·교실약속). 다음: 커밋 → Windows 5단계 빌드 → macOS GHA → GitHub 릴리즈 + KB ingest + 노션 갱신.
+**버전 동기화**: package.json·package-lock·landing config/layout·Sidebar·모바일 Settings/More 6+lock = 2.1.1. KB Q&A 6건 신규(서명·협업보드·복합설문·위젯·교실약속). 다음: 커밋 → Windows 5단계 빌드 → macOS GHA → GitHub 릴리즈 + KB ingest + 새 웹 사용자 가이드(`/docs`) 갱신.
 
 ## In progress (PDCA)
 

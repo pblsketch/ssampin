@@ -2,6 +2,11 @@ import { useState } from 'react';
 import type { HelpChatMessage as MessageType } from './types';
 import { ChatFeedback } from './ChatFeedback';
 
+const OFFICIAL_GUIDE_URL = 'https://www.ssampin.com/docs';
+const OFFICIAL_GUIDE_TEXT = `더 자세한 설명은 공식 사용자 가이드에서 확인할 수 있어요: ${OFFICIAL_GUIDE_URL}`;
+const OFFICIAL_GUIDE_FOOTER = `\n\n${OFFICIAL_GUIDE_TEXT}`;
+const OFFICIAL_GUIDE_LINK = `<a href="${OFFICIAL_GUIDE_URL}" target="_blank" rel="noreferrer" class="font-semibold text-sp-accent underline underline-offset-2">${OFFICIAL_GUIDE_URL}</a>`;
+
 interface Props {
   readonly message: MessageType;
   readonly onFeedbackResolved?: (messageId: string) => void;
@@ -11,8 +16,23 @@ interface Props {
 }
 
 /** 간단한 마크다운 → HTML 변환 (XSS 방지 포함) */
+function splitOfficialGuideFooter(content: string): { body: string; hasGuideFooter: boolean } {
+  const trimmed = content.trimEnd();
+  if (!trimmed.endsWith(OFFICIAL_GUIDE_TEXT)) {
+    return { body: content, hasGuideFooter: false };
+  }
+  return {
+    body: trimmed.slice(0, -OFFICIAL_GUIDE_FOOTER.length).trimEnd(),
+    hasGuideFooter: true,
+  };
+}
+
+function linkOfficialGuideUrl(html: string): string {
+  return html.split(OFFICIAL_GUIDE_URL).join(OFFICIAL_GUIDE_LINK);
+}
+
 function renderSimpleMarkdown(text: string): string {
-  return text
+  const html = text
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -20,6 +40,7 @@ function renderSimpleMarkdown(text: string): string {
     .replace(/`(.+?)`/g, '<code class="rounded bg-white/10 px-1 py-0.5 text-xs">$1</code>')
     .replace(/^- (.+)$/gm, '• $1')
     .replace(/^\d+\. (.+)$/gm, '  $1');
+  return linkOfficialGuideUrl(html);
 }
 
 /** 이미지 확대 모달 */
@@ -53,6 +74,9 @@ export function HelpChatMessage({
 }: Props) {
   const isUser = message.role === 'user';
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+  const guideContent = isUser
+    ? { body: message.content, hasGuideFooter: false }
+    : splitOfficialGuideFooter(message.content);
 
   return (
     <>
@@ -75,10 +99,10 @@ export function HelpChatMessage({
           }`}
         >
           {/* 텍스트 콘텐츠 */}
-          {message.content && (
+          {guideContent.body && (
             <div
               className="whitespace-pre-wrap break-words [&_strong]:font-semibold"
-              dangerouslySetInnerHTML={{ __html: renderSimpleMarkdown(message.content) }}
+              dangerouslySetInnerHTML={{ __html: renderSimpleMarkdown(guideContent.body) }}
             />
           )}
 
@@ -110,42 +134,61 @@ export function HelpChatMessage({
           {/* 소스 표시 */}
           {!isUser && message.sources && message.sources.length > 0 && (
             <div className="mt-2 border-t border-white/10 pt-2">
-              <p className="text-[0.65rem] text-sp-muted">
-                📚 참고: {message.sources.join(', ')}
-              </p>
+              <p className="text-[0.65rem] text-sp-muted">📚 참고: {message.sources.join(', ')}</p>
             </div>
           )}
 
           {/* 낮은 신뢰도 안내 */}
-          {!isUser && message.confidence !== undefined && message.confidence < 0.45 && message.confidence > 0 && (
-            <div className="mt-2 rounded-lg bg-amber-500/10 border border-amber-500/20 px-2.5 py-2">
-              <p className="text-[0.65rem] text-amber-400">
-                ⚠️ 이 답변은 정확하지 않을 수 있어요. 더 구체적으로 질문하시면 더 좋은 답변을 드릴 수 있어요!
-              </p>
+          {!isUser &&
+            message.confidence !== undefined &&
+            message.confidence < 0.45 &&
+            message.confidence > 0 && (
+              <div className="mt-2 rounded-lg bg-amber-500/10 border border-amber-500/20 px-2.5 py-2">
+                <p className="text-[0.65rem] text-amber-400">
+                  ⚠️ 이 답변은 정확하지 않을 수 있어요. 더 구체적으로 질문하시면 더 좋은 답변을 드릴
+                  수 있어요!
+                </p>
+              </div>
+            )}
+
+          {!isUser && guideContent.hasGuideFooter && (
+            <div className="mt-2 border-t border-white/10 pt-2 text-[0.72rem] leading-relaxed text-sp-muted">
+              더 자세한 설명은{' '}
+              <a
+                href={OFFICIAL_GUIDE_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="font-semibold text-sp-accent underline underline-offset-2"
+              >
+                공식 사용자 가이드
+              </a>
+              에서 확인할 수 있어요.
             </div>
           )}
 
           {/* 피드백 버튼 (어시스턴트 답변에만, welcome 제외) */}
-          {!isUser && message.id !== 'welcome' && message.feedbackState && onFeedbackResolved && onFeedbackUnresolved && onFeedbackAskMore && onFeedbackEscalate && (
-            <ChatFeedback
-              messageId={message.id}
-              feedbackState={message.feedbackState}
-              onResolved={onFeedbackResolved}
-              onUnresolved={onFeedbackUnresolved}
-              onAskMore={onFeedbackAskMore}
-              onEscalate={onFeedbackEscalate}
-            />
-          )}
+          {!isUser &&
+            message.id !== 'welcome' &&
+            message.feedbackState &&
+            onFeedbackResolved &&
+            onFeedbackUnresolved &&
+            onFeedbackAskMore &&
+            onFeedbackEscalate && (
+              <ChatFeedback
+                messageId={message.id}
+                feedbackState={message.feedbackState}
+                onResolved={onFeedbackResolved}
+                onUnresolved={onFeedbackUnresolved}
+                onAskMore={onFeedbackAskMore}
+                onEscalate={onFeedbackEscalate}
+              />
+            )}
         </div>
       </div>
 
       {/* 이미지 확대 모달 */}
       {lightboxSrc && (
-        <ImageLightbox
-          src={lightboxSrc}
-          alt="첨부 이미지"
-          onClose={() => setLightboxSrc(null)}
-        />
+        <ImageLightbox src={lightboxSrc} alt="첨부 이미지" onClose={() => setLightboxSrc(null)} />
       )}
     </>
   );

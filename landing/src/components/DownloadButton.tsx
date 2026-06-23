@@ -176,8 +176,8 @@ export default function DownloadButton({
           다운로드가 안 되시나요?{' '}
           <a
             href={FALLBACK_DOWNLOAD_URL}
-            target="_blank"
-            rel="noopener noreferrer"
+            target={FALLBACK_DOWNLOAD_URL.startsWith('http') ? '_blank' : undefined}
+            rel={FALLBACK_DOWNLOAD_URL.startsWith('http') ? 'noopener noreferrer' : undefined}
             className={`underline underline-offset-2 hover:opacity-100 transition-opacity ${
               isPrimary
                 ? 'text-sp-muted/80 hover:text-sp-muted'

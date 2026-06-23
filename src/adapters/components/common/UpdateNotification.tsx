@@ -9,7 +9,7 @@ import {
 } from '@adapters/stores/useUpdatePreferencesStore';
 import { useRegisterModal } from '@adapters/hooks/useRegisterModal';
 
-const NOTION_GUIDE_URL = 'https://supsori.notion.site/31676e6c2ab7809ab08eca1f9f307a97';
+const GUIDE_URL = 'https://www.ssampin.com/docs';
 const FEEDBACK_FORM_URL = 'https://forms.gle/o1X4zLYocUpFKCzy7';
 
 interface UpdateInfo {
@@ -25,7 +25,7 @@ interface ChangeItem {
   type: ChangeType;
   title: string;
   description?: string;
-  /** 옵션: 노션 가이드 deep link. 있을 때 [📖 자세히 보기 ↗] 인라인 링크 노출. */
+  /** 옵션: 사용 가이드 deep link. 있을 때 [자세히 보기] 인라인 링크 노출. */
   notionUrl?: string;
 }
 
@@ -407,7 +407,7 @@ export function UpdateNotification() {
                               }
                               className="inline-flex items-center gap-1 mt-1.5 text-detail text-sp-accent hover:underline"
                             >
-                              📖 자세히 보기
+                              자세히 보기
                               <span
                                 className="material-symbols-outlined text-[11px]"
                                 aria-hidden="true"
@@ -441,12 +441,12 @@ export function UpdateNotification() {
           <div className="flex items-center justify-between gap-2 px-6 py-3 border-t border-sp-border/50 shrink-0">
             <div className="flex items-center gap-3">
               <a
-                href={NOTION_GUIDE_URL}
+                href={GUIDE_URL}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-1 text-xs text-sp-muted hover:text-sp-text transition-colors"
               >
-                노션 가이드
+                사용 가이드
                 <span className="material-symbols-outlined text-[12px]" aria-hidden="true">
                   open_in_new
                 </span>

@@ -16,6 +16,7 @@ export default function ChatWidget() {
   const isClassroomDisplay = ['/memo', '/submit', '/check', '/sign'].some(
     (prefix) => pathname?.startsWith(prefix) ?? false,
   );
+  const isDocsPage = pathname?.startsWith('/docs') ?? false;
   const chat = useChatbot();
 
   // 웰컴 메시지 후 3초 뒤 알림 뱃지 표시
@@ -82,7 +83,12 @@ export default function ChatWidget() {
     <>
       {/* 채팅 윈도우 */}
       {isOpen && (
-        <div className="fixed bottom-20 right-4 z-50 h-[min(600px,calc(100dvh-120px))] w-[min(400px,calc(100vw-32px))] animate-in fade-in slide-in-from-bottom-4 duration-200 sm:right-6">
+        <div
+          className={[
+            'fixed bottom-20 right-4 z-50 h-[min(600px,calc(100dvh-120px))] w-[min(400px,calc(100vw-32px))] animate-in fade-in slide-in-from-bottom-4 duration-200 sm:right-6',
+            isDocsPage ? 'hidden sm:block' : '',
+          ].join(' ')}
+        >
           <ChatWindow
             messages={chat.messages}
             status={chat.status}
@@ -103,7 +109,10 @@ export default function ChatWidget() {
       {/* 플로팅 버튼 */}
       <button
         onClick={isOpen ? handleClose : handleOpen}
-        className="fixed bottom-4 right-4 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-sp-accent shadow-lg shadow-sp-accent/30 transition-all duration-200 hover:scale-105 hover:bg-sp-accent-hover active:scale-95 sm:right-6"
+        className={[
+          'fixed bottom-4 right-4 z-50 h-14 w-14 items-center justify-center rounded-full bg-sp-accent shadow-lg shadow-sp-accent/30 transition-all duration-200 hover:scale-105 hover:bg-sp-accent-hover active:scale-95 sm:right-6',
+          isDocsPage ? 'hidden sm:flex' : 'flex',
+        ].join(' ')}
         aria-label={isOpen ? '채팅 닫기' : '쌤핀 AI에게 물어보기'}
       >
         {isOpen ? (

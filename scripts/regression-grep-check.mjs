@@ -313,6 +313,17 @@ const absenceChecks = [
     patterns: [/async function sha256Hex\b/],
     fileFilter: (path) => !path.includes(`${sep}_shared${sep}`),
   },
+  {
+    name: 'REGRESSION #48: active product source must not send users to the old Notion guide',
+    roots: ['src', 'landing/src', 'public', 'scripts'],
+    extensions: ['.ts', '.tsx', '.mjs', '.json'],
+    patterns: [
+      /supsori\.notion\.site\/SsamPin/,
+      /노션\s*가이드/,
+      /노션\s*사용자\s*가이드/,
+      /Notion\s*사용자\s*가이드/,
+    ],
+  },
 ];
 
 // ============================================================
