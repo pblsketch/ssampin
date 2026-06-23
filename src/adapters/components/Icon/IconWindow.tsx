@@ -17,19 +17,18 @@ import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useEventsStore } from '@adapters/stores/useEventsStore';
 import { useTodoStore } from '@adapters/stores/useTodoStore';
 import { useMemoStore } from '@adapters/stores/useMemoStore';
-import { getCurrentPeriod, getDayOfWeek } from '@domain/rules/periodRules';
-import { IconTooltip } from './IconTooltip';
 import { IconContextMenu } from './IconContextMenu';
 import { CoachMark } from './CoachMark';
 import { PinDisc } from './PinDisc';
+import { PinBubble } from './PinBubble';
+import { derivePinInfo, decidePeek, buildSummary, hasPinAlert, type PinState } from './pinPresence';
 
 const DOUBLE_CLICK_THRESHOLD_MS = 250;
 const HOVER_TOOLTIP_DELAY_MS = 100;
 
-interface PeriodInfo {
-  number: number;
-  subject: string;
-}
+// 능동 말풍선 노출 시간 / 축하 동작 지속 시간
+const PEEK_VISIBLE_MS = 6000;
+const CELEBRATE_MS = 4500;
 
 export function IconWindow() {
   const { settings, load: loadSettings, update: updateSettings } = useSettingsStore();
@@ -42,6 +41,14 @@ export function IconWindow() {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [now, setNow] = useState(new Date());
   const [showCoachMark, setShowCoachMark] = useState(false);
+
+  // 펫 알림 상태 — 능동 말풍선 + 축하 동작
+  const [peek, setPeek] = useState<{ state: PinState; text: string } | null>(null);
+  const [celebrating, setCelebrating] = useState(false);
+  const lastPeekKeyRef = useRef<string | null>(null);
+  const peekTimerRef = useRef<number | null>(null);
+  const celebrateTimerRef = useRef<number | null>(null);
+  const prevDueCountRef = useRef<number | null>(null);
 
   const hoverTimerRef = useRef<number | null>(null);
   const lastClickAtRef = useRef<number>(0);
@@ -178,13 +185,48 @@ export function IconWindow() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings.widget.icon?.showCoachMark]);
 
-  // 현재 교시 + 다음 교시 계산
-  const periodInfo = computePeriodInfo(now, settings, teacherSchedule);
+  // 펫이 알 정보(다음 수업 과목+교실 · 마감 할 일 · 다가오는 일정) 계산
+  const pinInfo = derivePinInfo({
+    now,
+    periodTimes: settings.periodTimes,
+    teacherSchedule,
+    todos,
+    events,
+  });
+  const peekCandidate = decidePeek(pinInfo);
+  const dueCount = pinInfo.dueTodos.count;
+  const peekKey = peekCandidate ? `${peekCandidate.state}:${peekCandidate.text}` : null;
 
-  // 알림: 미확인 일정 + 미완료 할일 (간단 휴리스틱)
-  const hasAlert =
-    events.some((e) => isUpcomingWithinMinutes(e.date, now, 5)) ||
-    todos.some((t) => !t.completed && t.dueDate && isPast(t.dueDate, now));
+  // 할 일을 모두 끝낸 순간(미완료 마감 > 0 → 0)에 축하 동작 1회
+  useEffect(() => {
+    const prev = prevDueCountRef.current;
+    if (prev != null && prev > 0 && dueCount === 0) {
+      setCelebrating(true);
+      if (celebrateTimerRef.current) window.clearTimeout(celebrateTimerRef.current);
+      celebrateTimerRef.current = window.setTimeout(() => setCelebrating(false), CELEBRATE_MS);
+    }
+    prevDueCountRef.current = dueCount;
+  }, [dueCount]);
+
+  // 능동 말풍선 — 새 알림이 생겼을 때만 먼저 띄움(같은 메시지 반복 안 함)
+  useEffect(() => {
+    if (!peekKey) return;
+    if (lastPeekKeyRef.current === peekKey) return;
+    lastPeekKeyRef.current = peekKey;
+    setPeek(peekCandidate);
+    if (peekTimerRef.current) window.clearTimeout(peekTimerRef.current);
+    peekTimerRef.current = window.setTimeout(() => setPeek(null), PEEK_VISIBLE_MS);
+    // peekCandidate 는 peekKey 와 1:1 대응 — key 변할 때만 실행하면 충분
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [peekKey]);
+
+  // 호버 요약 + 주황 알림 링 + 현재 펫 동작 결정
+  const summary = buildSummary(pinInfo);
+  const hasAlert = hasPinAlert(pinInfo);
+  let pinState: PinState = 'idle';
+  if (hovered) pinState = 'wave';
+  else if (celebrating) pinState = 'celebrate';
+  else if (peek) pinState = peek.state;
 
   // 클릭 vs 드래그 판정 임계
   const CLICK_MAX_DURATION_MS = 250;
@@ -363,12 +405,14 @@ export function IconWindow() {
     }
   };
 
-  // 컴포넌트 unmount 시 누수 방지 — drag 중이면 강제 종료
+  // 컴포넌트 unmount 시 누수 방지 — drag 중이면 강제 종료 + 펫 알림 타이머 정리
   useEffect(() => {
     return () => {
       if (globalUpHandlerRef.current) {
         sendEndDrag('unmount');
       }
+      if (peekTimerRef.current) window.clearTimeout(peekTimerRef.current);
+      if (celebrateTimerRef.current) window.clearTimeout(celebrateTimerRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -422,9 +466,15 @@ export function IconWindow() {
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >
-        <PinDisc hasAlert={hasAlert} hovered={hovered} />
+        <PinDisc hasAlert={hasAlert} state={pinState} />
       </div>
-      {hovered && periodInfo && <IconTooltip current={periodInfo.current} next={periodInfo.next} />}
+      {hovered ? (
+        <PinBubble title={summary.title} lines={summary.lines} />
+      ) : celebrating ? (
+        <PinBubble title="할 일 다 끝냈어요! 🎉" />
+      ) : peek ? (
+        <PinBubble title={peek.text} />
+      ) : null}
       {contextMenu && (
         <IconContextMenu x={contextMenu.x} y={contextMenu.y} onClose={() => setContextMenu(null)} />
       )}
@@ -433,76 +483,4 @@ export function IconWindow() {
   );
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────
-
-interface PeriodInfoResult {
-  current: PeriodInfo | null;
-  next: PeriodInfo | null;
-}
-
-function computePeriodInfo(
-  now: Date,
-  settings: ReturnType<typeof useSettingsStore.getState>['settings'],
-  teacherSchedule: ReturnType<typeof useScheduleStore.getState>['teacherSchedule'],
-): PeriodInfoResult | null {
-  const day = getDayOfWeek(now);
-  if (day === null) return { current: null, next: null }; // 주말
-
-  const periodTimes = settings.periodTimes;
-  if (!periodTimes || periodTimes.length === 0) return null;
-
-  const currentPeriodNum = getCurrentPeriod(periodTimes, now);
-
-  // teacher schedule에서 해당 일·교시의 과목 추출
-  // TeacherScheduleData = { [day: '월'~'금'~'토'~'일']: readonly (TeacherPeriod | null)[] }
-  const getSubject = (period: number): string => {
-    if (!teacherSchedule) return '';
-    const daySlots = teacherSchedule[day];
-    if (!daySlots) return '';
-    const slot = daySlots[period - 1];
-    return slot?.subject ?? '';
-  };
-
-  const current: PeriodInfo | null = currentPeriodNum
-    ? { number: currentPeriodNum, subject: getSubject(currentPeriodNum) }
-    : null;
-
-  // 다음 교시 — currentPeriodNum + 1, 또는 (현재 쉬는 시간이면) 다음 시작 교시
-  let nextPeriodNum: number | null = null;
-  if (currentPeriodNum) {
-    nextPeriodNum = currentPeriodNum + 1;
-  } else {
-    // 현재 어떤 교시도 진행 중이 아니면, 가장 가까운 미래 교시 찾기
-    const nowMinutes = now.getHours() * 60 + now.getMinutes();
-    for (let i = 0; i < periodTimes.length; i++) {
-      const pt = periodTimes[i];
-      if (!pt) continue;
-      const [h, m] = pt.start.split(':').map(Number);
-      if (h === undefined || m === undefined) continue;
-      if (h * 60 + m > nowMinutes) {
-        nextPeriodNum = i + 1;
-        break;
-      }
-    }
-  }
-
-  const next: PeriodInfo | null =
-    nextPeriodNum && nextPeriodNum <= periodTimes.length
-      ? { number: nextPeriodNum, subject: getSubject(nextPeriodNum) }
-      : null;
-
-  return { current, next };
-}
-
-function isUpcomingWithinMinutes(startDate: string | Date, now: Date, minutes: number): boolean {
-  const start = typeof startDate === 'string' ? new Date(startDate) : startDate;
-  if (Number.isNaN(start.getTime())) return false;
-  const diff = start.getTime() - now.getTime();
-  return diff >= 0 && diff <= minutes * 60 * 1000;
-}
-
-function isPast(dueDate: string | Date, now: Date): boolean {
-  const d = typeof dueDate === 'string' ? new Date(dueDate) : dueDate;
-  if (Number.isNaN(d.getTime())) return false;
-  return d.getTime() < now.getTime();
-}
+// 펫 알림 로직(다음 수업·할 일·일정 계산, 동작 결정)은 ./pinPresence 로 분리됨.

@@ -141,6 +141,8 @@ export default {
         // v2.0.3 — 아이콘 모드 idle 애니메이션 (귀여운 흔들림)
         'pin-idle': 'pinIdle 3s ease-in-out infinite',
         'pin-hover-bounce': 'pinHoverBounce 0.6s ease-in-out infinite',
+        // v2.2.3 — 펫 말풍선 등장(살짝 떠오르며 페이드인)
+        'pin-bubble-pop': 'pinBubblePop 0.18s ease-out',
       },
       keyframes: {
         slideInRight: {
@@ -170,6 +172,11 @@ export default {
         pinHoverBounce: {
           '0%, 100%': { transform: 'translateY(0px) scale(1)' },
           '50%': { transform: 'translateY(-4px) scale(1.05)' },
+        },
+        // v2.2.3 — 펫 말풍선 등장 (아래에서 살짝 떠오르며 페이드인)
+        pinBubblePop: {
+          '0%': { transform: 'translateY(4px)', opacity: '0' },
+          '100%': { transform: 'translateY(0)', opacity: '1' },
         },
         // v2.1 (Phase A-A1) — FAB 잠금 시 호버 진동
         fabJiggle: {
