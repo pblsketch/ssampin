@@ -15,6 +15,7 @@ import {
   filterByStudent,
   filterByCategory,
   sortByDateDesc,
+  recordExportLabel,
 } from '@domain/rules/studentRecordRules';
 import { buildPairGroups, adjustPairGroupsForRow } from '@domain/rules/seatingLayoutRules';
 import { isStudentActive } from '@domain/rules/studentActivity';
@@ -1103,7 +1104,7 @@ export async function exportStudentRecordsToExcel(
       record.date,
       studentName,
       categoryName,
-      record.subcategory,
+      recordExportLabel(record),
       method,
       record.content,
       '',
@@ -1378,7 +1379,7 @@ export async function exportRecordsForSchoolReport(
 
       for (const rec of counselingRecords) {
         const method = rec.method ? (COUNSELING_METHOD_MAP[rec.method] ?? '') : '';
-        const cRow = ws.addRow([rec.date, rec.subcategory, method, rec.content, '']);
+        const cRow = ws.addRow([rec.date, recordExportLabel(rec), method, rec.content, '']);
         cRow.eachCell((cell) => applyCellStyle(cell, CATEGORY_ROW_COLORS['counseling']));
         ws.getCell(cRow.number, 4).alignment = {
           horizontal: 'left',
@@ -1404,7 +1405,7 @@ export async function exportRecordsForSchoolReport(
       lHeaders.eachCell((cell) => applyHeaderStyle(cell));
 
       for (const rec of lifeRecords) {
-        const lRow = ws.addRow([rec.date, rec.subcategory, rec.content]);
+        const lRow = ws.addRow([rec.date, recordExportLabel(rec), rec.content]);
         lRow.eachCell((cell) => applyCellStyle(cell, CATEGORY_ROW_COLORS['life']));
         ws.getCell(lRow.number, 3).alignment = {
           horizontal: 'left',
@@ -1434,7 +1435,7 @@ export async function exportRecordsForSchoolReport(
 
       for (const rec of otherRecords) {
         const catName = categoryMap.get(rec.category) ?? rec.category;
-        const eRow = ws.addRow([rec.date, `${catName} - ${rec.subcategory}`, rec.content]);
+        const eRow = ws.addRow([rec.date, `${catName} - ${recordExportLabel(rec)}`, rec.content]);
         eRow.eachCell((cell) => applyCellStyle(cell, 'FFF3F4F6'));
         ws.getCell(eRow.number, 3).alignment = {
           horizontal: 'left',

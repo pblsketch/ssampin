@@ -1,6 +1,20 @@
 import type { StudentRecord, AttendanceStats } from '../entities/StudentRecord';
 import type { Student } from '../entities/Student';
 
+/**
+ * Q2: 내보내기/표시용 비출결 라벨 — 태그(', ' 결합), 없으면 subcategory fallback.
+ * 출결은 subcategory("결석 (질병)") 그대로. (도메인 순수 — 인프라 내보내기에서 재사용.)
+ */
+export function recordExportLabel(record: {
+  readonly category: string;
+  readonly subcategory: string;
+  readonly tags?: readonly string[];
+}): string {
+  if (record.category === 'attendance') return record.subcategory;
+  if (record.tags && record.tags.length > 0) return record.tags.join(', ');
+  return record.subcategory;
+}
+
 export interface NormalizeSubcatResult {
   readonly records: readonly StudentRecord[];
   /** 실제로 tags 가 갱신된 레코드 수(0이면 저장 불필요 — 멱등 no-op). */

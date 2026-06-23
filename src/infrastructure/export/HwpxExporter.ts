@@ -15,6 +15,7 @@ import {
   sortByDateDesc,
   filterByStudent,
   filterByCategory,
+  recordExportLabel,
 } from '@domain/rules/studentRecordRules';
 import { buildPairGroups, adjustPairGroupsForRow } from '@domain/rules/seatingLayoutRules';
 import { isStudentActive } from '@domain/rules/studentActivity';
@@ -1127,7 +1128,7 @@ export async function exportStudentRecordsToHwpx(
         const r = i + 1;
         const methodLabel = rec.method ? (COUNSELING_METHOD_LABELS[rec.method] ?? '') : '';
         table.setCellText(r, 0, rec.date);
-        table.setCellText(r, 1, rec.subcategory);
+        table.setCellText(r, 1, recordExportLabel(rec));
         table.setCellText(r, 2, rec.content);
         table.setCellText(r, 3, methodLabel);
         table.setCellText(r, 4, '');

@@ -4,6 +4,7 @@ import type { ClassScheduleData, TeacherScheduleData } from '@domain/entities/Ti
 import type { Student } from '@domain/entities/Student';
 import type { StudentRecord } from '@domain/entities/StudentRecord';
 import type { RecordCategoryItem } from '@domain/valueObjects/RecordCategory';
+import { recordExportLabel } from '@domain/rules/studentRecordRules';
 import { DAYS_OF_WEEK } from '@domain/valueObjects/DayOfWeek';
 import {
   createPdfContext,
@@ -344,7 +345,7 @@ export async function exportStudentRecordsToPdf(
       student
         ? `${String(student.studentNumber ?? '').padStart(2, '0')} ${student.name}`
         : '미등록 학생',
-      r.subcategory ? `${catName} / ${r.subcategory}` : catName,
+      recordExportLabel(r) ? `${catName} / ${recordExportLabel(r)}` : catName,
       r.content || (r.followUp ?? ''),
     ];
     let x = tableLeft;
