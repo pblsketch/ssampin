@@ -12,6 +12,7 @@
  */
 import type { StudentRecord } from '../entities/StudentRecord';
 import type { ObservationRecord } from '../entities/Observation';
+import { synthesizeSubcategory } from './RecordCategory';
 
 // ─── 통합 입력 모델 ──────────────────────────────────────────────────────────
 
@@ -69,9 +70,16 @@ export const DEFAULT_TEACHING_CATEGORY = '수업 관찰';
 export function toStudentRecord(
   draft: UnifiedRecordDraft,
 ): Omit<StudentRecord, 'id' | 'studentId' | 'createdAt'> {
+  // Q2: 비출결은 subcategory 가 비면 카테고리별 sentinel 로 합성("보이지 않는 MCP 계약 슬롯").
+  //   출결은 호출자가 구조적 subcategory("결석 (질병)")를 명시하므로 그대로 둔다.
+  const sub = draft.subcategory?.trim()
+    ? draft.subcategory
+    : draft.category === 'attendance'
+      ? (draft.subcategory ?? '')
+      : synthesizeSubcategory(draft.category);
   return {
     category: draft.category,
-    subcategory: draft.subcategory ?? '',
+    subcategory: sub,
     content: draft.content,
     date: draft.date,
     tags: draft.tags.length > 0 ? [...draft.tags] : undefined,

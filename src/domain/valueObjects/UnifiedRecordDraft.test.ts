@@ -61,10 +61,11 @@ describe('UT-2 toStudentRecord — 무손실 변환', () => {
     expect(result.tags).toBeUndefined();
   });
 
-  it('subcategory 없으면 빈 문자열 기본값', () => {
+  it('subcategory 없으면 비출결은 카테고리 sentinel 합성(Q2)', () => {
+    // homeroomDraft.category === 'life' → sentinel '일반'
     const draft: UnifiedRecordDraft = { ...homeroomDraft, subcategory: undefined };
     const result = toStudentRecord(draft);
-    expect(result.subcategory).toBe('');
+    expect(result.subcategory).toBe('일반');
   });
 
   it('반환값에 id / studentId / createdAt 없음(어댑터가 채움)', () => {

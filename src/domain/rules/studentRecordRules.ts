@@ -1,6 +1,35 @@
 import type { StudentRecord, AttendanceStats } from '../entities/StudentRecord';
 import type { Student } from '../entities/Student';
 
+export interface NormalizeSubcatResult {
+  readonly records: readonly StudentRecord[];
+  /** 실제로 tags 가 갱신된 레코드 수(0이면 저장 불필요 — 멱등 no-op). */
+  readonly changedCount: number;
+}
+
+/**
+ * Q2 마이그레이션(멱등 정규화): 비출결 레코드의 subcategory 값을 tags 로 **복사**한다(이전·삭제 아님).
+ *  - 대상: category!=='attendance' && subcategory 비어있지않음 && tags 에 아직 미포함.
+ *  - subcategory 는 **보존**(MCP 읽기 표면 안정). 출결은 절대 건드리지 않는다.
+ *  - 멱등: 이미 tags 에 포함된 레코드는 스킵(변경 0). load() 마다 호출해도 안전(변경 시만 저장).
+ *  - P4 엣지: category 가 비출결인데 subcategory 가 "결석 (질병)" 형태여도 category 기준 verbatim 복사.
+ * 설계: §4-나
+ */
+export function normalizeStudentRecordsSubcatToTags(
+  records: readonly StudentRecord[],
+): NormalizeSubcatResult {
+  let changedCount = 0;
+  const next = records.map((r) => {
+    if (r.category === 'attendance') return r;
+    const sub = r.subcategory?.trim();
+    if (!sub) return r;
+    if (r.tags?.includes(sub)) return r;
+    changedCount += 1;
+    return { ...r, tags: [...(r.tags ?? []), sub] };
+  });
+  return changedCount > 0 ? { records: next, changedCount } : { records, changedCount: 0 };
+}
+
 /**
  * 학생별 기록 필터
  */
@@ -68,13 +97,9 @@ export function getAttendanceStats(
   const studentRecords = records.filter((r) => r.studentId === studentId);
   const attendance = studentRecords.filter((r) => r.category === 'attendance');
 
-  const absent = attendance.filter(
-    (r) => extractAttendanceType(r.subcategory) === '결석',
-  ).length;
+  const absent = attendance.filter((r) => extractAttendanceType(r.subcategory) === '결석').length;
 
-  const late = attendance.filter(
-    (r) => extractAttendanceType(r.subcategory) === '지각',
-  ).length;
+  const late = attendance.filter((r) => extractAttendanceType(r.subcategory) === '지각').length;
 
   const earlyLeave = attendance.filter(
     (r) => extractAttendanceType(r.subcategory) === '조퇴',
@@ -84,8 +109,10 @@ export function getAttendanceStats(
     (r) => extractAttendanceType(r.subcategory) === '결과',
   ).length;
 
+  // Q2: '칭찬'은 분류 축에서 태그로 이전됨. 단 모바일 칭찬 메모(StudentsPage)는 영구적으로
+  //   subcategory='칭찬'(tags 없음)을 생산하므로, tags/subcategory **영구 이중기준**으로 집계한다.
   const praise = studentRecords.filter(
-    (r) => r.category === 'life' && r.subcategory === '칭찬',
+    (r) => r.category === 'life' && (r.tags?.includes('칭찬') === true || r.subcategory === '칭찬'),
   ).length;
 
   return { absent, late, earlyLeave, resultAbsent, praise };
@@ -94,9 +121,7 @@ export function getAttendanceStats(
 /**
  * 기록을 날짜 최신순으로 정렬
  */
-export function sortByDateDesc(
-  records: readonly StudentRecord[],
-): readonly StudentRecord[] {
+export function sortByDateDesc(records: readonly StudentRecord[]): readonly StudentRecord[] {
   return [...records].sort((a, b) => {
     if (a.date !== b.date) return b.date.localeCompare(a.date);
     return b.createdAt.localeCompare(a.createdAt);
@@ -125,9 +150,7 @@ export interface CategorySummary {
   readonly etc: number;
 }
 
-export function getCategorySummary(
-  records: readonly StudentRecord[],
-): CategorySummary {
+export function getCategorySummary(records: readonly StudentRecord[]): CategorySummary {
   let attendance = 0;
   let counseling = 0;
   let life = 0;
