@@ -6,6 +6,8 @@ import { isStudentActive } from '@domain/rules/studentActivity';
 import type { AttendanceStatus } from '@domain/entities/Attendance';
 import { ATTENDANCE_TEXT } from '@adapters/presentation/attendanceStatusVariants';
 import { DEFAULT_OBSERVATION_TAGS } from '@domain/entities/Observation';
+import { mixedRecordToDisplay, type DisplayRecord } from '@adapters/presentation/displayRecord';
+import { RecordDetailModal } from '@adapters/components/common/records/RecordDetailModal';
 
 type PeriodFilter = 'all' | 'semester' | 'month' | 'week' | 'custom';
 
@@ -130,6 +132,81 @@ export function ClassRecordStatsView({ classId }: ClassRecordStatsViewProps) {
     return stats;
   }, [observationRecords, classId, students, dateRange]);
 
+  /* 셀 클릭 상세 — 기간/반 필터된 원본 기록(상세 모달용) */
+  const filteredAttendance = useMemo(
+    () =>
+      attendanceRecords.filter(
+        (r) =>
+          r.classId === classId &&
+          (!dateRange.start || r.date >= dateRange.start) &&
+          (!dateRange.end || r.date <= dateRange.end),
+      ),
+    [attendanceRecords, classId, dateRange],
+  );
+  const filteredObs = useMemo(
+    () =>
+      observationRecords.filter(
+        (r) =>
+          r.classId === classId &&
+          (!dateRange.start || r.date >= dateRange.start) &&
+          (!dateRange.end || r.date <= dateRange.end),
+      ),
+    [observationRecords, classId, dateRange],
+  );
+
+  const [detail, setDetail] = useState<{ title: string; records: DisplayRecord[] } | null>(null);
+
+  const openAttendanceDetail = (
+    s: (typeof students)[number],
+    status: AttendanceStatus,
+    label: string,
+  ) => {
+    const sKey = studentKey(s);
+    const records: DisplayRecord[] = [];
+    for (const ar of filteredAttendance) {
+      for (const sa of ar.students) {
+        if (studentKey(sa) === sKey && sa.status === status) {
+          records.push(
+            mixedRecordToDisplay({
+              type: 'attendance',
+              date: ar.date,
+              studentKey: sKey,
+              studentName: s.name,
+              studentNumber: s.number,
+              status: sa.status,
+              period: ar.period,
+              reason: sa.reason,
+              memo: sa.memo,
+            }),
+          );
+        }
+      }
+    }
+    setDetail({ title: `${s.name} · ${label} ${records.length}건`, records });
+  };
+
+  const openObsDetail = (s: (typeof students)[number], tag?: string) => {
+    const sKey = studentKey(s);
+    const records: DisplayRecord[] = filteredObs
+      .filter((r) => r.studentId === sKey && (!tag || r.tags.includes(tag)))
+      .map((r) =>
+        mixedRecordToDisplay({
+          type: 'observation',
+          date: r.date,
+          studentKey: sKey,
+          studentName: s.name,
+          studentNumber: s.number,
+          id: r.id,
+          tags: r.tags,
+          content: r.content,
+        }),
+      );
+    setDetail({
+      title: `${s.name} · 특기사항${tag ? ` (${tag})` : ''} ${records.length}건`,
+      records,
+    });
+  };
+
   if (!cls) {
     return (
       <div className="space-y-3 animate-pulse" aria-label="통계를 불러오는 중입니다">
@@ -214,11 +291,28 @@ export function ClassRecordStatsView({ classId }: ClassRecordStatsViewProps) {
                   <tr key={sKey} className="hover:bg-sp-text/[0.02]">
                     <td className="px-4 py-2 text-sp-muted">{s.number}</td>
                     <td className="px-4 py-2 text-sp-text">{s.name}</td>
-                    {ATT_STATUSES.map((as) => (
-                      <td key={as.key} className={`px-3 py-2 text-center ${as.color} font-medium`}>
-                        {stat?.[as.key] ?? 0}
-                      </td>
-                    ))}
+                    {ATT_STATUSES.map((as) => {
+                      const count = stat?.[as.key] ?? 0;
+                      return (
+                        <td
+                          key={as.key}
+                          className={`px-3 py-2 text-center ${as.color} font-medium`}
+                        >
+                          {count > 0 ? (
+                            <button
+                              type="button"
+                              onClick={() => openAttendanceDetail(s, as.key, as.label)}
+                              className="hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-sp-accent rounded"
+                              title={`${s.name} ${as.label} 상세 보기`}
+                            >
+                              {count}
+                            </button>
+                          ) : (
+                            count
+                          )}
+                        </td>
+                      );
+                    })}
                   </tr>
                 );
               })}
@@ -258,13 +352,38 @@ export function ClassRecordStatsView({ classId }: ClassRecordStatsViewProps) {
                     <td className="px-4 py-2 text-sp-muted">{s.number}</td>
                     <td className="px-4 py-2 text-sp-text">{s.name}</td>
                     <td className="px-3 py-2 text-center text-sp-accent font-medium">
-                      {stat?.total ?? 0}
+                      {(stat?.total ?? 0) > 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => openObsDetail(s)}
+                          className="hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-sp-accent rounded"
+                          title={`${s.name} 특기사항 상세 보기`}
+                        >
+                          {stat?.total ?? 0}
+                        </button>
+                      ) : (
+                        (stat?.total ?? 0)
+                      )}
                     </td>
-                    {DEFAULT_OBSERVATION_TAGS.map((tag) => (
-                      <td key={tag} className="px-3 py-2 text-center text-sp-muted">
-                        {stat?.tags[tag] ?? 0}
-                      </td>
-                    ))}
+                    {DEFAULT_OBSERVATION_TAGS.map((tag) => {
+                      const count = stat?.tags[tag] ?? 0;
+                      return (
+                        <td key={tag} className="px-3 py-2 text-center text-sp-muted">
+                          {count > 0 ? (
+                            <button
+                              type="button"
+                              onClick={() => openObsDetail(s, tag)}
+                              className="hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-sp-accent rounded"
+                              title={`${s.name} ${tag} 상세 보기`}
+                            >
+                              {count}
+                            </button>
+                          ) : (
+                            count
+                          )}
+                        </td>
+                      );
+                    })}
                   </tr>
                 );
               })}
@@ -272,6 +391,15 @@ export function ClassRecordStatsView({ classId }: ClassRecordStatsViewProps) {
           </table>
         </div>
       </div>
+
+      {detail && (
+        <RecordDetailModal
+          isOpen
+          onClose={() => setDetail(null)}
+          title={detail.title}
+          records={detail.records}
+        />
+      )}
     </div>
   );
 }
