@@ -10,10 +10,31 @@ import {
   formatDateKR,
   formatDateRangeKR,
   sortRecordsInDateGroup,
+  getRecordChipLabel,
 } from './recordUtils';
 import { enumerateRange } from '@adapters/components/common/calendarUtils';
+import { DEFAULT_RECORD_CATEGORIES } from '@domain/valueObjects/RecordCategory';
 import type { StudentRecord } from '@domain/entities/StudentRecord';
 import type { Student } from '@domain/entities/Student';
+
+describe('getRecordChipLabel (Q2 표시 칩 라벨)', () => {
+  const cats = DEFAULT_RECORD_CATEGORIES;
+  it('출결은 subcategory 그대로', () => {
+    expect(getRecordChipLabel({ category: 'attendance', subcategory: '결석 (질병)' }, cats)).toBe(
+      '결석 (질병)',
+    );
+  });
+  it('비출결 + 태그 → 가운뎃점 결합', () => {
+    expect(
+      getRecordChipLabel({ category: 'life', subcategory: '일반', tags: ['칭찬', '성실'] }, cats),
+    ).toBe('칭찬 · 성실');
+  });
+  it('비출결 + 태그 없음 → 카테고리명 fallback(subcategory 미노출)', () => {
+    expect(getRecordChipLabel({ category: 'counseling', subcategory: '일반' }, cats)).toBe(
+      '상담 / 관계',
+    );
+  });
+});
 
 describe('createDateRange (compat alias)', () => {
   it('enumerateRange 와 동일한 결과 — inclusive 범위', () => {

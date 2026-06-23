@@ -123,6 +123,8 @@ export function studentRecordToDisplay(
     kindLabel: isAttendance ? '출결' : categoryName,
     status: attMatch?.[1] ? ATTENDANCE_LABEL_TO_STATUS[attMatch[1]] : undefined,
     reason: attMatch?.[2],
+    // Q2: 비출결 표시에 태그를 함께 노출(분류 + 태그 2축). 출결은 태그 미사용.
+    tags: isAttendance ? undefined : r.tags,
     content: r.content ?? '',
   };
 }

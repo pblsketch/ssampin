@@ -8,7 +8,11 @@
  * 설계: docs/02-design/features/record-system-unification-q2-subcategory-to-tags.design.md §4-가·나·라
  */
 import { describe, it, expect } from 'vitest';
-import { normalizeStudentRecordsSubcatToTags, getAttendanceStats } from './studentRecordRules';
+import {
+  normalizeStudentRecordsSubcatToTags,
+  getAttendanceStats,
+  recordExportLabel,
+} from './studentRecordRules';
 import {
   DEFAULT_RECORD_CATEGORIES,
   DEFAULT_SUBCATEGORY_SENTINEL,
@@ -121,6 +125,26 @@ describe('normalizeStudentRecordsSubcatToTags — 멱등·무손실 마이그레
     const { records, changedCount } = normalizeStudentRecordsSubcatToTags(input);
     expect(changedCount).toBe(1);
     expect(records[0]!.tags).toEqual(['결석 (질병)']);
+  });
+});
+
+describe('recordExportLabel — 표시/내보내기 라벨', () => {
+  it('출결은 subcategory 그대로', () => {
+    expect(recordExportLabel({ category: 'attendance', subcategory: '결석 (질병)' })).toBe(
+      '결석 (질병)',
+    );
+  });
+
+  it('비출결 + 태그 → 콤마 결합', () => {
+    expect(
+      recordExportLabel({ category: 'life', subcategory: '일반', tags: ['칭찬', '성실'] }),
+    ).toBe('칭찬, 성실');
+  });
+
+  it('비출결 + 태그 없음 → subcategory fallback', () => {
+    expect(recordExportLabel({ category: 'counseling', subcategory: '학부모상담' })).toBe(
+      '학부모상담',
+    );
   });
 });
 
