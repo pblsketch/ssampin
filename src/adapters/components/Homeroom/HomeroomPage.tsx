@@ -26,6 +26,8 @@ export interface RecordPrefill {
 export function HomeroomPage() {
   const [activeTab, setActiveTab] = useState<HomeroomTab>('records');
   const [prefillRecord, setPrefillRecord] = useState<RecordPrefill | null>(null);
+  // S3 저장 시맨틱 통일 — 담임 기록 입력 dirty 상태 (이탈 경고용)
+  const [recordInputDirty, setRecordInputDirty] = useState(false);
 
   // roster-sample-data-removal Phase 2 — 샘플 의심 배너 노출 판정.
   // 세션 store가 'banner' 결과를 보유하고, 사용자가 3일 안에 닫지 않았으면 표시.
@@ -44,6 +46,33 @@ export function HomeroomPage() {
     setPrefillRecord(prefill);
     setActiveTab('records');
   }, []);
+
+  // S3 — 미저장 상태로 화면 이탈 시 경고 (ClassManagementPage:60-79 패턴 확장)
+  useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!recordInputDirty) return;
+      event.preventDefault();
+      event.returnValue = '기록이 아직 저장되지 않았습니다';
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [recordInputDirty]);
+
+  const handleTabChange = useCallback(
+    (tab: HomeroomTab) => {
+      if (recordInputDirty && activeTab === 'records' && tab !== 'records') {
+        if (
+          !window.confirm(
+            '기록이 아직 저장되지 않았습니다. 탭을 이동하면 변경 내용이 사라질 수 있습니다. 이동할까요?',
+          )
+        ) {
+          return;
+        }
+      }
+      setActiveTab(tab);
+    },
+    [recordInputDirty, activeTab],
+  );
 
   // 외부(명령 팔레트·RosterEmptyState CTA 등) → 담임 업무 하위 탭 전환 리스너.
   // - 이미 담임 업무에 떠 있을 때: 이벤트로 즉시 전환(대기열도 비움).
@@ -81,13 +110,17 @@ export function HomeroomPage() {
         icon="school"
         iconIsMaterial
         title="담임 업무"
-        rightActions={<HomeroomTabBar activeTab={activeTab} onChange={setActiveTab} />}
+        rightActions={<HomeroomTabBar activeTab={activeTab} onChange={handleTabChange} />}
       />
       {showBanner && <SampleRosterWarningBanner />}
       <div className="flex-1 min-h-0 p-8 overflow-y-auto">
         {activeTab === 'roster' && <RosterManagementTab />}
         {activeTab === 'records' && (
-          <RecordsTab prefill={prefillRecord} onPrefillConsumed={() => setPrefillRecord(null)} />
+          <RecordsTab
+            prefill={prefillRecord}
+            onPrefillConsumed={() => setPrefillRecord(null)}
+            onRecordDirtyChange={setRecordInputDirty}
+          />
         )}
         {activeTab === 'recordDraft' && <HomeroomRecordDraftTab />}
         {activeTab === 'survey' && <SurveyTab />}

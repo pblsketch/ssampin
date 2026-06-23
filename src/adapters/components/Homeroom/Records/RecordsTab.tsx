@@ -22,9 +22,11 @@ const MODE_TABS: { id: ViewMode; icon: string; label: string }[] = [
 interface RecordsTabProps {
   prefill?: RecordPrefill | null;
   onPrefillConsumed?: () => void;
+  /** 담임 기록 입력 dirty 상태 변경 콜백 — 이탈 경고용 */
+  onRecordDirtyChange?: (dirty: boolean) => void;
 }
 
-export function RecordsTab({ prefill, onPrefillConsumed }: RecordsTabProps) {
+export function RecordsTab({ prefill, onPrefillConsumed, onRecordDirtyChange }: RecordsTabProps) {
   const { records, loaded, load, viewMode, setViewMode, categories } = useStudentRecordsStore();
   const {
     students,
@@ -135,6 +137,7 @@ export function RecordsTab({ prefill, onPrefillConsumed }: RecordsTabProps) {
           selectedDate={selectedDate}
           prefill={prefill}
           onPrefillConsumed={onPrefillConsumed}
+          onDirtyChange={onRecordDirtyChange}
         />
       )}
       {viewMode === 'progress' && (

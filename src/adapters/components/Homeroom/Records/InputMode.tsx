@@ -11,6 +11,7 @@ import type {
 } from '@domain/entities/Attendance';
 import type { CounselingMethod, AttendancePeriodEntry } from '@domain/entities/StudentRecord';
 import type { RecordPrefill } from '../HomeroomPage';
+import { useRecordSaveStatus } from '@adapters/hooks/useRecordSaveStatus';
 import { DEFAULT_TEMPLATES } from '@domain/valueObjects/DefaultTemplates';
 import { InlineRecordEditor } from './InlineRecordEditor';
 import { StudentRecordReferencePanel } from './StudentRecordReferencePanel';
@@ -45,6 +46,8 @@ export interface InputModeProps extends ModeProps {
   onDateChange?: (date: string) => void;
   prefill?: RecordPrefill | null;
   onPrefillConsumed?: () => void;
+  /** dirty(미저장 변경) 상태가 바뀔 때 호출 — 이탈 경고용 */
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 type RightTab = 'today' | 'history';
@@ -72,6 +75,7 @@ function InputMode({
   selectedDate,
   prefill,
   onPrefillConsumed,
+  onDirtyChange,
 }: InputModeProps) {
   const { addRecord, deleteRecord, updateRecord, updateAttendanceRecord } =
     useStudentRecordsStore();
@@ -81,6 +85,20 @@ function InputMode({
   const maxPeriods = useSettingsStore((s) => s.settings.maxPeriods);
   const periodCount = maxPeriods ?? 7;
   const showToast = useToastStore((s) => s.show);
+
+  // ── 저장 상태 머신 (S3 저장 시맨틱 통일) ──
+  const {
+    saveStatus,
+    markDirty,
+    wrapSave,
+    reset: resetSaveStatus,
+    isDirty,
+  } = useRecordSaveStatus();
+
+  // dirty 상태 변경을 부모에게 알림 (이탈 경고용)
+  useEffect(() => {
+    onDirtyChange?.(isDirty());
+  }, [saveStatus, isDirty, onDirtyChange]);
 
   // ── 첨부(작성 중 담아두고 단일 학생·비출결 저장 시 커밋) ──
   const addAttachment = useObservationAttachmentStore((s) => s.addAttachment);
@@ -304,25 +322,33 @@ function InputMode({
     onPrefillConsumed?.();
   }, [prefill, students, onPrefillConsumed]);
 
-  const toggleStudent = useCallback((id: string) => {
-    setSelectedStudents((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
+  const toggleStudent = useCallback(
+    (id: string) => {
+      setSelectedStudents((prev) => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        return next;
+      });
+      markDirty();
+    },
+    [markDirty],
+  );
 
   const clearAll = useCallback(() => {
     setSelectedStudents(new Set());
   }, []);
 
-  const handleAttendanceTypeClick = useCallback((type: string) => {
-    // 출결과 일반 기록(상담/생활/기타)은 상호 배타다. 출결 유형을 고르면 다른 카테고리 선택을
-    // 모두 해제하고(출결 사유도 리셋), 유형만 토글한다.
-    setSelectedSub(null);
-    setAttendanceType((prev) => (prev === type ? null : type));
-  }, []);
+  const handleAttendanceTypeClick = useCallback(
+    (type: string) => {
+      // 출결과 일반 기록(상담/생활/기타)은 상호 배타다. 출결 유형을 고르면 다른 카테고리 선택을
+      // 모두 해제하고(출결 사유도 리셋), 유형만 토글한다.
+      setSelectedSub(null);
+      setAttendanceType((prev) => (prev === type ? null : type));
+      markDirty();
+    },
+    [markDirty],
+  );
 
   const handleAttendanceReasonClick = useCallback(
     (reason: string) => {
@@ -333,18 +359,23 @@ function InputMode({
           ? null
           : { categoryId: 'attendance', subcategory },
       );
+      markDirty();
     },
-    [attendanceType],
+    [attendanceType, markDirty],
   );
 
-  const handleSubcategoryClick = useCallback((categoryId: string, sub: string) => {
-    setSelectedSub((prev) =>
-      prev?.categoryId === categoryId && prev.subcategory === sub
-        ? null
-        : { categoryId, subcategory: sub },
-    );
-    setAttendanceType(null);
-  }, []);
+  const handleSubcategoryClick = useCallback(
+    (categoryId: string, sub: string) => {
+      setSelectedSub((prev) =>
+        prev?.categoryId === categoryId && prev.subcategory === sub
+          ? null
+          : { categoryId, subcategory: sub },
+      );
+      setAttendanceType(null);
+      markDirty();
+    },
+    [markDirty],
+  );
 
   // 2-2: 템플릿 적용
   const handleTemplateSelect = useCallback((templateId: string) => {
@@ -512,46 +543,52 @@ function InputMode({
     setDateMode('single');
     setMultiDateSet(new Set());
     setPendingFiles([]);
-  }, []);
+    resetSaveStatus();
+  }, [resetSaveStatus]);
 
   // 단일 날짜 저장
   const handleSave = useCallback(async () => {
-    const { recordIds } = await saveForDate(selectedDate);
-    // 단일 학생·비출결 1건일 때만 첨부 커밋(대상 record 가 명확). 다중/출결이면 첨부 영역이 비활성이라 pending 이 비어있다.
-    if (pendingFilesRef.current.length > 0 && recordIds.length === 1) {
-      await commitPendingAttachments(recordIds[0]!);
-    }
+    await wrapSave(async () => {
+      const { recordIds } = await saveForDate(selectedDate);
+      // 단일 학생·비출결 1건일 때만 첨부 커밋(대상 record 가 명확). 다중/출결이면 첨부 영역이 비활성이라 pending 이 비어있다.
+      if (pendingFilesRef.current.length > 0 && recordIds.length === 1) {
+        await commitPendingAttachments(recordIds[0]!);
+      }
+    });
     resetForm();
-  }, [saveForDate, selectedDate, resetForm, commitPendingAttachments]);
+  }, [saveForDate, selectedDate, resetForm, commitPendingAttachments, wrapSave]);
 
   // 여러 날 일괄 저장 (확인 모달에서 호출)
+  // 일괄([적용])은 자동저장 대상 아님 — 명시 [적용]=확정=저장으로 유지
   const handleBatchSave = useCallback(async () => {
     if (rangeDates.length === 0 || rangeError) return;
-    setBatchSaving(true);
-    setBatchProgress({ current: 0, total: rangeDates.length });
-    setSkippedDates([]);
-    let totalCreated = 0;
-    const newSkipped: string[] = [];
-    for (let i = 0; i < rangeDates.length; i++) {
-      const date = rangeDates[i]!;
-      const { affected } = await saveForDate(date);
-      if (affected === 0) newSkipped.push(date);
-      else totalCreated += affected;
-      setBatchProgress({ current: i + 1, total: rangeDates.length });
-    }
-    setBatchSaving(false);
-    setBatchProgress(null);
-    setSkippedDates(newSkipped);
-    setShowBatchConfirm(false);
-    resetForm();
+    await wrapSave(async () => {
+      setBatchSaving(true);
+      setBatchProgress({ current: 0, total: rangeDates.length });
+      setSkippedDates([]);
+      let totalCreated = 0;
+      const newSkipped: string[] = [];
+      for (let i = 0; i < rangeDates.length; i++) {
+        const date = rangeDates[i]!;
+        const { affected } = await saveForDate(date);
+        if (affected === 0) newSkipped.push(date);
+        else totalCreated += affected;
+        setBatchProgress({ current: i + 1, total: rangeDates.length });
+      }
+      setBatchSaving(false);
+      setBatchProgress(null);
+      setSkippedDates(newSkipped);
+      setShowBatchConfirm(false);
+      resetForm();
 
-    const registeredDays = rangeDates.length - newSkipped.length;
-    const msg =
-      newSkipped.length > 0
-        ? `${rangeDates.length}일 중 ${registeredDays}일 등록 완료 (중복 ${newSkipped.length}일 제외)`
-        : `${rangeDates.length}일 출결이 등록되었습니다`;
-    showToast(msg, totalCreated > 0 ? 'success' : 'info');
-  }, [rangeDates, rangeError, saveForDate, resetForm, showToast]);
+      const registeredDays = rangeDates.length - newSkipped.length;
+      const msg =
+        newSkipped.length > 0
+          ? `${rangeDates.length}일 중 ${registeredDays}일 등록 완료 (중복 ${newSkipped.length}일 제외)`
+          : `${rangeDates.length}일 출결이 등록되었습니다`;
+      showToast(msg, totalCreated > 0 ? 'success' : 'info');
+    });
+  }, [rangeDates, rangeError, saveForDate, resetForm, showToast, wrapSave]);
 
   // 저장 버튼 클릭 핸들러: 다중/범위 모드면 확인 모달, 아니면 바로 저장
   const handleSaveClick = useCallback(() => {
@@ -987,7 +1024,10 @@ function InputMode({
             <div className="relative">
               <textarea
                 value={memo}
-                onChange={(e) => setMemo(e.target.value)}
+                onChange={(e) => {
+                  setMemo(e.target.value);
+                  markDirty();
+                }}
                 placeholder="메모 입력 (선택사항)"
                 className="w-full h-20 bg-sp-surface border border-sp-border rounded-lg p-3 pr-9 text-sm text-sp-text placeholder-sp-muted resize-none focus:outline-none focus:ring-1 focus:ring-sp-accent"
               />
@@ -1193,18 +1233,54 @@ function InputMode({
             </div>
           </div>
 
-          {/* 저장 버튼 (sticky) */}
-          <div className="sticky bottom-0 bg-gradient-to-t from-sp-card to-transparent pt-6 pb-1 px-5 -mt-16 rounded-b-xl">
+          {/* 저장 버튼 + 상태칩 (sticky) */}
+          <div className="sticky bottom-0 bg-gradient-to-t from-sp-card to-transparent pt-6 pb-1 px-5 -mt-16 rounded-b-xl space-y-1.5">
+            {/* 저장 상태칩 — idle 이면 비노출 */}
+            {saveStatus !== 'idle' && (
+              <div
+                aria-live="polite"
+                className={`flex items-center justify-center gap-1 text-xs font-medium py-1 rounded-lg transition-all ${
+                  saveStatus === 'saved'
+                    ? 'text-green-400 bg-green-500/10'
+                    : saveStatus === 'saving'
+                      ? 'text-sp-muted bg-sp-surface/60'
+                      : saveStatus === 'error'
+                        ? 'text-red-400 bg-red-500/10'
+                        : 'text-sp-accent bg-sp-accent/10'
+                }`}
+              >
+                <span className="material-symbols-outlined text-sm">
+                  {saveStatus === 'saved'
+                    ? 'check_circle'
+                    : saveStatus === 'saving'
+                      ? 'progress_activity'
+                      : saveStatus === 'error'
+                        ? 'error'
+                        : 'edit'}
+                </span>
+                {saveStatus === 'saved'
+                  ? '저장됨 ✓'
+                  : saveStatus === 'saving'
+                    ? '저장 중...'
+                    : saveStatus === 'error'
+                      ? '저장 실패 — 다시 시도하세요'
+                      : '변경됨'}
+              </div>
+            )}
             <button
               onClick={handleSaveClick}
-              disabled={!canSave}
+              disabled={!canSave || saveStatus === 'saving'}
               className={`w-full py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${
-                canSave
+                canSave && saveStatus !== 'saving'
                   ? 'bg-sp-accent text-white hover:bg-sp-accent/90 shadow-lg shadow-sp-accent/20'
                   : 'bg-sp-surface text-sp-muted cursor-not-allowed'
               }`}
             >
-              <span className="material-symbols-outlined text-base">save</span>
+              <span
+                className={`material-symbols-outlined text-base ${saveStatus === 'saving' ? 'animate-spin' : ''}`}
+              >
+                {saveStatus === 'saving' ? 'progress_activity' : 'save'}
+              </span>
               {dateRangeMode && rangeDates.length > 1
                 ? `${rangeDates.length}일 일괄 저장`
                 : '저장하기'}
