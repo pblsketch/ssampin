@@ -7,11 +7,43 @@
  * 순수 로직(주입된 store 액션 deps 만 사용) — 단위 테스트 가능. IPC/electron 글루는 호출자가 담당.
  */
 
+import type {
+  AttendanceReason,
+  AttendanceStatus,
+  StudentAttendance,
+} from '@domain/entities/Attendance';
+
 export interface LiveSyncWriteRequest {
-  readonly domain: 'todos' | 'events' | 'recordDrafts' | 'memos' | 'bookmarks' | 'notes';
+  readonly domain:
+    | 'todos'
+    | 'events'
+    | 'recordDrafts'
+    | 'memos'
+    | 'bookmarks'
+    | 'notes'
+    | 'attendance'
+    | 'homeroomAttendance';
   readonly op: 'create' | 'update' | 'complete' | 'delete';
   readonly idempotencyKey: string;
   readonly data: Record<string, unknown>;
+}
+
+/** 교과반 출결 upsert 입력(store 액션 주입용). 브릿지 attendance payload 와 1:1. */
+export interface LiveSyncAttendanceInput {
+  readonly classId: string;
+  readonly groupId?: string;
+  readonly date: string;
+  readonly period: number;
+  readonly students: readonly StudentAttendance[];
+}
+
+/** 담임 일일 출결 위임 입력 — 펼침(allDay→교시) 후 교시별 맵 + 대상 학생번호. */
+export interface LiveSyncHomeroomAttendanceInput {
+  readonly date: string;
+  /** period → 해당 교시 이상출결 학생 목록(번호 기준). present 는 포함하지 않는다. */
+  readonly recordsByPeriod: ReadonlyMap<number, readonly StudentAttendance[]>;
+  /** 이번 쓰기 대상 학생 번호(담임 명단에서 이 학생만 갱신, 나머지 보존). */
+  readonly studentNumbers: readonly number[];
 }
 
 /** 생기부 초안 upsert 입력(store 액션 주입용 — 식별·내부 메타 제외, 안전 필드만). */
@@ -109,6 +141,16 @@ export interface LiveSyncWriteDeps {
     readonly notebookExists: (id: string) => boolean;
     readonly sectionExists: (id: string) => boolean;
     readonly pageExists: (id: string) => boolean;
+  };
+  readonly attendance: {
+    /** 교과반 출결 (classId, date, period) 단건 upsert. delete 는 students:[] 로 비운다(출결 제거). */
+    readonly save: (input: LiveSyncAttendanceInput) => Promise<void>;
+  };
+  readonly homeroomAttendance: {
+    /** 정규 교시 수(settings.maxPeriods) — allDay(하루 전체)를 조회0+정규1~N+종례9 로 펼칠 때 사용. */
+    readonly regularPeriodCount: number;
+    /** 담임 일일 출결 위임 — 대상 학생만 갱신(subcategory 계산·교과반 미러링은 store 가 처리). */
+    readonly save: (input: LiveSyncHomeroomAttendanceInput) => Promise<void>;
   };
   /**
    * 멱등 가드(주입, 선택) — 같은 (idempotencyKey, fingerprint) 쓰기의 중복 적용을 막는다.
@@ -427,6 +469,89 @@ async function applyNotes(
   return ok(req.idempotencyKey);
 }
 
+/** raw 출결 학생 → StudentAttendance. 검증은 main validateApplyWrite 가 완료(방어적 캐스팅). */
+function toStudentAttendance(raw: Record<string, unknown>): StudentAttendance {
+  const s: { number: number; status: AttendanceStatus; reason?: AttendanceReason; memo?: string } =
+    {
+      number: raw['number'] as number,
+      status: raw['status'] as AttendanceStatus,
+    };
+  if (typeof raw['reason'] === 'string') s.reason = raw['reason'] as AttendanceReason;
+  if (typeof raw['memo'] === 'string') s.memo = raw['memo'] as string;
+  return s;
+}
+
+/** 교과반 출결 — create=upsert, delete=students 비우기(해당 교시 출결 제거). */
+async function applyAttendance(
+  req: LiveSyncWriteRequest,
+  deps: LiveSyncWriteDeps,
+): Promise<LiveSyncWriteResult> {
+  const d = req.data;
+  const classId = d['classId'];
+  const date = d['date'];
+  const period = d['period'];
+  if (typeof classId !== 'string' || typeof date !== 'string' || typeof period !== 'number') {
+    return bad('출결 payload 가 올바르지 않습니다.');
+  }
+  const groupId = typeof d['groupId'] === 'string' ? d['groupId'] : undefined;
+  const students =
+    req.op === 'create' && Array.isArray(d['students'])
+      ? d['students'].map((s) => toStudentAttendance(s as Record<string, unknown>))
+      : [];
+  await deps.attendance.save({
+    classId,
+    date,
+    period,
+    students,
+    ...(groupId !== undefined ? { groupId } : {}),
+  });
+  return ok(req.idempotencyKey);
+}
+
+/** 담임 일일 출결 — allDay(하루 전체)는 조회0+정규1~N+종례9 로 펼쳐 교시별 맵 구성 후 위임. */
+async function applyHomeroomAttendance(
+  req: LiveSyncWriteRequest,
+  deps: LiveSyncWriteDeps,
+): Promise<LiveSyncWriteResult> {
+  const d = req.data;
+  const date = d['date'];
+  const rawStudents = d['students'];
+  if (typeof date !== 'string' || !Array.isArray(rawStudents)) {
+    return bad('담임 출결 payload 가 올바르지 않습니다.');
+  }
+  const n = deps.homeroomAttendance.regularPeriodCount;
+  // 하루 전체 펼침 교시: 조회(0) + 정규(1..n) + 종례(9)
+  const allDayPeriods = [0, ...Array.from({ length: Math.max(0, n) }, (_, i) => i + 1), 9];
+  const recordsByPeriod = new Map<number, StudentAttendance[]>();
+  const studentNumbers: number[] = [];
+  const pushAt = (period: number, sa: StudentAttendance): void => {
+    const arr = recordsByPeriod.get(period);
+    if (arr) arr.push(sa);
+    else recordsByPeriod.set(period, [sa]);
+  };
+  for (const raw of rawStudents) {
+    if (!raw || typeof raw !== 'object') continue;
+    const o = raw as Record<string, unknown>;
+    const number = o['number'];
+    if (typeof number !== 'number') continue;
+    studentNumbers.push(number);
+    if (o['allDay'] !== undefined && o['allDay'] !== null) {
+      const base = toStudentAttendance({ ...(o['allDay'] as Record<string, unknown>), number });
+      for (const p of allDayPeriods) pushAt(p, base);
+    } else if (Array.isArray(o['periods'])) {
+      for (const pe of o['periods']) {
+        if (!pe || typeof pe !== 'object') continue;
+        const peo = pe as Record<string, unknown>;
+        const period = peo['period'];
+        if (typeof period !== 'number') continue;
+        pushAt(period, toStudentAttendance({ ...peo, number }));
+      }
+    }
+  }
+  await deps.homeroomAttendance.save({ date, recordsByPeriod, studentNumbers });
+  return ok(req.idempotencyKey);
+}
+
 /**
  * 검증된 live-sync 쓰기를 store 액션으로 적용. 도메인/연산별로 분기하며, 실패는 상태코드와 함께 반환.
  * (페이로드 형태는 main 의 validateApplyWrite 가 1차 검증하지만, 여기서도 data 필드를 방어적으로 본다.)
@@ -457,6 +582,8 @@ export async function applyLiveSyncWrite(
     else if (req.domain === 'memos') result = await applyMemos(req, deps);
     else if (req.domain === 'bookmarks') result = await applyBookmarks(req, deps);
     else if (req.domain === 'notes') result = await applyNotes(req, deps);
+    else if (req.domain === 'attendance') result = await applyAttendance(req, deps);
+    else if (req.domain === 'homeroomAttendance') result = await applyHomeroomAttendance(req, deps);
     else result = bad('지원하지 않는 도메인입니다.');
   } catch {
     result = { ok: false, status: 500, error: '쓰기 적용 중 오류가 발생했습니다.' };

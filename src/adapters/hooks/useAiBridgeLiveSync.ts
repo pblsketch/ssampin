@@ -5,12 +5,17 @@ import { useRecordDraftsStore } from '@adapters/stores/useRecordDraftsStore';
 import { useMemoStore } from '@adapters/stores/useMemoStore';
 import { useBookmarkStore } from '@adapters/stores/useBookmarkStore';
 import { useNoteStore } from '@adapters/stores/useNoteStore';
+import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
+import { useStudentRecordsStore } from '@adapters/stores/useStudentRecordsStore';
+import { useStudentStore } from '@adapters/stores/useStudentStore';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import {
   applyLiveSyncWrite,
   type LiveSyncWriteRequest,
 } from '@usecases/aiBridge/applyLiveSyncWrite';
 import type { Todo, TodoPriority } from '@domain/entities/Todo';
 import type { SchoolEvent } from '@domain/entities/SchoolEvent';
+import type { StudentAttendance } from '@domain/entities/Attendance';
 import type { NotePageBody } from '@domain/entities/NotePage';
 import { MEMO_COLORS, type MemoColor } from '@domain/valueObjects/MemoColor';
 import { ManageNotes } from '@usecases/note/ManageNotes';
@@ -130,6 +135,8 @@ export function useAiBridgeLiveSync(): void {
       const memo = useMemoStore.getState();
       const bk = useBookmarkStore.getState();
       const ns = useNoteStore.getState();
+      const tc = useTeachingClassStore.getState();
+      const sr = useStudentRecordsStore.getState();
       return applyLiveSyncWrite(req, {
         todos: {
           add: (text, opts) =>
@@ -261,6 +268,46 @@ export function useAiBridgeLiveSync(): void {
           notebookExists: (id) => ns.notebooks.some((n) => n.id === id),
           sectionExists: (id) => ns.sections.some((s) => s.id === id),
           pageExists: (id) => ns.pagesMeta.some((p) => p.id === id),
+        },
+        attendance: {
+          // 교과반 출결 (classId, date, period) 단건 upsert — store 가 groupId 미러링 처리.
+          save: (input) => tc.saveAttendanceRecord(input),
+        },
+        homeroomAttendance: {
+          // 정규 교시 수(settings.maxPeriods, 기본 7) — usecase 가 allDay 펼침에 사용.
+          regularPeriodCount: useSettingsStore.getState().settings.maxPeriods ?? 7,
+          save: async (input) => {
+            const className = useSettingsStore.getState().settings.className ?? '';
+            // 대상 학생만 갱신(나머지 보존). 담임 명단(students.json)에서 번호로 매칭.
+            const target = new Set(input.studentNumbers);
+            const students = useStudentStore
+              .getState()
+              .students.filter((s) => s.studentNumber != null && target.has(s.studentNumber));
+            // (1) 출결부(attendance.json) 미러 — 본체 InputMode 와 동일하게 saveDayAttendance 도 호출.
+            //     단 saveDayAttendance 는 그 날 출결을 통째 교체하므로, 기존 출결을 읽어 대상 학생만
+            //     교체하고 나머지 학생은 보존한다(부분 등록이 다른 학생 출결을 지우지 않게).
+            const existing = tc.getDayAttendance(className, input.date);
+            const mergedMap = new Map<number, StudentAttendance[]>();
+            for (const r of existing) {
+              mergedMap.set(
+                r.period,
+                r.students.filter((sa) => !target.has(sa.number)),
+              );
+            }
+            for (const [period, sas] of input.recordsByPeriod) {
+              const arr = mergedMap.get(period) ?? [];
+              for (const sa of sas) arr.push(sa);
+              mergedMap.set(period, arr);
+            }
+            await tc.saveDayAttendance(className, input.date, mergedMap);
+            // (2) 기록부(student-records) 미러 — subcategory 자동계산 + att-{id}-{date}.
+            await sr.bridgeHomeroomDayAttendance({
+              className,
+              date: input.date,
+              recordsByPeriod: input.recordsByPeriod,
+              students,
+            });
+          },
         },
       });
     });

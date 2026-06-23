@@ -257,7 +257,15 @@ export function authorizeWriteRequest(input: {
 
 // ─────────────────────────── 쓰기 페이로드 검증 ───────────────────────────
 
-export type WriteDomain = 'todos' | 'events' | 'recordDrafts' | 'memos' | 'bookmarks' | 'notes';
+export type WriteDomain =
+  | 'todos'
+  | 'events'
+  | 'recordDrafts'
+  | 'memos'
+  | 'bookmarks'
+  | 'notes'
+  | 'attendance'
+  | 'homeroomAttendance';
 export type WriteOp = 'create' | 'update' | 'complete' | 'delete';
 
 /**
@@ -276,8 +284,121 @@ const DOMAINS: ReadonlySet<string> = new Set([
   'memos',
   'bookmarks',
   'notes',
+  'attendance',
+  'homeroomAttendance',
 ]);
 const OPS: ReadonlySet<string> = new Set(['create', 'update', 'complete', 'delete']);
+
+// 출결 enum — 브릿지 entities/attendance 와 동일(서버가 클라를 신뢰하지 않고 재검증).
+const ATTENDANCE_STATUSES: ReadonlySet<string> = new Set([
+  'present',
+  'absent',
+  'late',
+  'earlyLeave',
+  'classAbsence',
+]);
+const ATTENDANCE_REASONS: ReadonlySet<string> = new Set(['질병', '인정', '미인정', '기타']);
+const MEMO_ATT_MAX = 500;
+
+/** 출결 학생 1명(교시별 단건)의 status/reason/memo 검증. 정상이면 null. */
+function checkAttendanceStudentFields(s: unknown, requireNumber: boolean): string | null {
+  if (!s || typeof s !== 'object' || Array.isArray(s)) return 'students 항목은 객체여야 합니다.';
+  const o = s as Record<string, unknown>;
+  if (requireNumber && (typeof o['number'] !== 'number' || !Number.isInteger(o['number']))) {
+    return 'students.number 는 정수여야 합니다.';
+  }
+  if (typeof o['status'] !== 'string' || !ATTENDANCE_STATUSES.has(o['status'])) {
+    return 'students.status 는 present|absent|late|earlyLeave|classAbsence 여야 합니다.';
+  }
+  if (
+    o['reason'] !== undefined &&
+    (typeof o['reason'] !== 'string' || !ATTENDANCE_REASONS.has(o['reason']))
+  ) {
+    return 'students.reason 은 질병|인정|미인정|기타 여야 합니다.';
+  }
+  if (
+    o['memo'] !== undefined &&
+    (typeof o['memo'] !== 'string' || o['memo'].length > MEMO_ATT_MAX)
+  ) {
+    return `students.memo 는 최대 ${MEMO_ATT_MAX}자 문자열이어야 합니다.`;
+  }
+  return null;
+}
+
+/** 교과반 출결(attendance) payload 검증. create/delete 공통 키 + create 의 students 검증. */
+function checkAttendancePayload(op: string, d: Record<string, unknown>): string | null {
+  if (typeof d['classId'] !== 'string' || d['classId'].trim().length === 0) {
+    return 'attendance 에는 classId 가 필요합니다.';
+  }
+  if (d['groupId'] !== undefined && typeof d['groupId'] !== 'string') {
+    return 'groupId 는 문자열이어야 합니다.';
+  }
+  if (typeof d['date'] !== 'string' || !DATE_RE.test(d['date'])) {
+    return 'date 는 YYYY-MM-DD 형식이어야 합니다.';
+  }
+  if (
+    typeof d['period'] !== 'number' ||
+    !Number.isInteger(d['period']) ||
+    d['period'] < 0 ||
+    d['period'] > 20
+  ) {
+    return 'period 는 0 이상 20 이하의 정수여야 합니다.';
+  }
+  if (op === 'create') {
+    if (!Array.isArray(d['students'])) return 'attendance 생성에는 students 배열이 필요합니다.';
+    for (const s of d['students']) {
+      const err = checkAttendanceStudentFields(s, true);
+      if (err) return err;
+    }
+  }
+  return null;
+}
+
+/** 담임 일일 출결(homeroomAttendance) payload 검증. create 만 지원. 학생별 allDay 또는 periods. */
+function checkHomeroomAttendancePayload(d: Record<string, unknown>): string | null {
+  if (typeof d['date'] !== 'string' || !DATE_RE.test(d['date'])) {
+    return 'date 는 YYYY-MM-DD 형식이어야 합니다.';
+  }
+  if (!Array.isArray(d['students']) || d['students'].length === 0) {
+    return 'homeroomAttendance 에는 students 배열(1명 이상)이 필요합니다.';
+  }
+  for (const s of d['students']) {
+    if (!s || typeof s !== 'object' || Array.isArray(s)) return 'students 항목은 객체여야 합니다.';
+    const o = s as Record<string, unknown>;
+    if (typeof o['number'] !== 'number' || !Number.isInteger(o['number'])) {
+      return 'students.number(학생 번호) 는 정수여야 합니다.';
+    }
+    const hasAllDay = o['allDay'] !== undefined;
+    const hasPeriods = o['periods'] !== undefined;
+    if (hasAllDay === hasPeriods) {
+      return 'students 각 항목은 allDay 또는 periods 중 하나만 가져야 합니다.';
+    }
+    if (hasAllDay) {
+      const err = checkAttendanceStudentFields(o['allDay'], false);
+      if (err) return err;
+    } else {
+      if (!Array.isArray(o['periods']) || o['periods'].length === 0) {
+        return 'students.periods 는 1개 이상의 배열이어야 합니다.';
+      }
+      for (const p of o['periods']) {
+        if (!p || typeof p !== 'object' || Array.isArray(p))
+          return 'periods 항목은 객체여야 합니다.';
+        const po = p as Record<string, unknown>;
+        if (
+          typeof po['period'] !== 'number' ||
+          !Number.isInteger(po['period']) ||
+          po['period'] < 0 ||
+          po['period'] > 20
+        ) {
+          return 'periods.period 는 0 이상 20 이하의 정수여야 합니다.';
+        }
+        const err = checkAttendanceStudentFields(po, false);
+        if (err) return err;
+      }
+    }
+  }
+  return null;
+}
 
 const RECORD_AREAS: ReadonlySet<string> = new Set([
   'autonomy',
@@ -510,7 +631,8 @@ export function validateApplyWrite(raw: unknown): ValidateResult {
   if (typeof domain !== 'string' || !DOMAINS.has(domain)) {
     return {
       ok: false,
-      reason: 'domain 은 todos|events|recordDrafts|memos|bookmarks|notes 여야 합니다.',
+      reason:
+        'domain 은 todos|events|recordDrafts|memos|bookmarks|notes|attendance|homeroomAttendance 여야 합니다.',
     };
   }
   if (typeof op !== 'string' || !OPS.has(op)) {
@@ -564,6 +686,22 @@ export function validateApplyWrite(raw: unknown): ValidateResult {
   // 생기부 초안은 create(upsert)만 지원 — 수정·삭제는 본체 UI 에서 한다(법정기록 보수화).
   if (domain === 'recordDrafts' && op !== 'create') {
     return { ok: false, reason: '생기부 초안은 create(저장)만 지원합니다.' };
+  }
+  // 교과반 출결 — create(upsert)/delete 지원, 중첩 students 검증.
+  if (domain === 'attendance') {
+    if (op !== 'create' && op !== 'delete') {
+      return { ok: false, reason: '출결은 create(저장) 또는 delete(삭제)만 지원합니다.' };
+    }
+    const err = checkAttendancePayload(op, d);
+    if (err) return { ok: false, reason: err };
+  }
+  // 담임 일일 출결 — create(upsert)만. 학생별 allDay/periods 검증.
+  if (domain === 'homeroomAttendance') {
+    if (op !== 'create') {
+      return { ok: false, reason: '담임 출결은 create(저장)만 지원합니다.' };
+    }
+    const err = checkHomeroomAttendancePayload(d);
+    if (err) return { ok: false, reason: err };
   }
   if (op === 'create') {
     if (domain === 'todos' && (typeof d['text'] !== 'string' || d['text'].trim().length === 0)) {

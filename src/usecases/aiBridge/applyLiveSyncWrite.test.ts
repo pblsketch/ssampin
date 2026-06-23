@@ -52,6 +52,13 @@ beforeEach(() => {
       sectionExists: vi.fn((id: string) => id === 'sec-1'),
       pageExists: vi.fn((id: string) => id === 'pg-1'),
     },
+    attendance: {
+      save: rec('attendance.save') as LiveSyncWriteDeps['attendance']['save'],
+    },
+    homeroomAttendance: {
+      regularPeriodCount: 7,
+      save: rec('homeroomAttendance.save') as LiveSyncWriteDeps['homeroomAttendance']['save'],
+    },
   };
 });
 
@@ -716,5 +723,127 @@ describe('applyLiveSyncWrite — #5 update 필드 정렬(브리지 스키마)', 
       deps,
     );
     expect(calls[0]?.args[1]).toEqual({ title: 'T' }); // description 제외(브리지에 없음)
+  });
+});
+
+describe('applyLiveSyncWrite — attendance(교과반)', () => {
+  it('create → attendance.save(classId,date,period,students), ok+ref', async () => {
+    const r = await applyLiveSyncWrite(
+      {
+        domain: 'attendance',
+        op: 'create',
+        idempotencyKey: 'a1',
+        data: {
+          classId: 'c-1',
+          date: '2026-06-02',
+          period: 3,
+          students: [{ number: 5, status: 'late', reason: '미인정' }],
+        },
+      },
+      deps,
+    );
+    expect(r).toEqual({ ok: true, ref: 'a1' });
+    expect(calls[0]?.fn).toBe('attendance.save');
+    const arg = calls[0]?.args[0] as {
+      classId: string;
+      period: number;
+      students: { number: number; status: string; reason?: string }[];
+    };
+    expect(arg.classId).toBe('c-1');
+    expect(arg.period).toBe(3);
+    expect(arg.students).toEqual([{ number: 5, status: 'late', reason: '미인정' }]);
+  });
+
+  it('delete → attendance.save 에 students:[] (해당 교시 출결 비움)', async () => {
+    const r = await applyLiveSyncWrite(
+      {
+        domain: 'attendance',
+        op: 'delete',
+        idempotencyKey: 'a2',
+        data: { classId: 'c-1', date: '2026-06-02', period: 3 },
+      },
+      deps,
+    );
+    expect(r.ok).toBe(true);
+    const arg = calls[0]?.args[0] as { students: unknown[] };
+    expect(arg.students).toEqual([]);
+  });
+});
+
+describe('applyLiveSyncWrite — homeroomAttendance(담임)', () => {
+  it('periods 지정 → 지정 교시만 recordsByPeriod 에 반영', async () => {
+    const r = await applyLiveSyncWrite(
+      {
+        domain: 'homeroomAttendance',
+        op: 'create',
+        idempotencyKey: 'h1',
+        data: {
+          date: '2026-06-02',
+          students: [{ number: 13, periods: [{ period: 0, status: 'late', reason: '미인정' }] }],
+        },
+      },
+      deps,
+    );
+    expect(r).toEqual({ ok: true, ref: 'h1' });
+    expect(calls[0]?.fn).toBe('homeroomAttendance.save');
+    const arg = calls[0]?.args[0] as {
+      date: string;
+      recordsByPeriod: Map<number, { number: number; status: string; reason?: string }[]>;
+      studentNumbers: number[];
+    };
+    expect(arg.date).toBe('2026-06-02');
+    expect(arg.studentNumbers).toEqual([13]);
+    expect([...arg.recordsByPeriod.keys()]).toEqual([0]);
+    expect(arg.recordsByPeriod.get(0)).toEqual([{ number: 13, status: 'late', reason: '미인정' }]);
+  });
+
+  it('allDay → 조회0+정규1~7+종례9 전부 펼침', async () => {
+    const r = await applyLiveSyncWrite(
+      {
+        domain: 'homeroomAttendance',
+        op: 'create',
+        idempotencyKey: 'h2',
+        data: {
+          date: '2026-06-01',
+          students: [{ number: 1, allDay: { status: 'absent', reason: '질병' } }],
+        },
+      },
+      deps,
+    );
+    expect(r.ok).toBe(true);
+    const arg = calls[0]?.args[0] as {
+      recordsByPeriod: Map<number, { number: number; status: string; reason?: string }[]>;
+    };
+    expect([...arg.recordsByPeriod.keys()].sort((a, b) => a - b)).toEqual([
+      0, 1, 2, 3, 4, 5, 6, 7, 9,
+    ]);
+    expect(arg.recordsByPeriod.get(0)).toEqual([{ number: 1, status: 'absent', reason: '질병' }]);
+    expect(arg.recordsByPeriod.get(9)).toEqual([{ number: 1, status: 'absent', reason: '질병' }]);
+  });
+
+  it('교외체험학습(absent+인정+memo)도 allDay 펼침에 반영', async () => {
+    await applyLiveSyncWrite(
+      {
+        domain: 'homeroomAttendance',
+        op: 'create',
+        idempotencyKey: 'h3',
+        data: {
+          date: '2026-06-08',
+          students: [
+            { number: 7, allDay: { status: 'absent', reason: '인정', memo: '현장체험학습' } },
+          ],
+        },
+      },
+      deps,
+    );
+    const arg = calls[0]?.args[0] as {
+      recordsByPeriod: Map<
+        number,
+        { number: number; status: string; reason?: string; memo?: string }[]
+      >;
+    };
+    expect(arg.recordsByPeriod.get(1)).toEqual([
+      { number: 7, status: 'absent', reason: '인정', memo: '현장체험학습' },
+    ]);
   });
 });

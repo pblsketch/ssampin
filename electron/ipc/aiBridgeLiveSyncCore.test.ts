@@ -654,4 +654,120 @@ describe('validateApplyWrite', () => {
       }).ok,
     ).toBe(false);
   });
+
+  it('attendance create: classId/date/period + students enum 검증', () => {
+    const base = { domain: 'attendance', op: 'create', idempotencyKey: 'k' } as const;
+    expect(
+      validateApplyWrite({
+        ...base,
+        data: {
+          classId: 'c1',
+          date: '2026-06-02',
+          period: 3,
+          students: [{ number: 5, status: 'late', reason: '미인정' }],
+        },
+      }).ok,
+    ).toBe(true);
+    expect(
+      validateApplyWrite({
+        ...base,
+        data: {
+          classId: 'c1',
+          date: '2026-06-02',
+          period: 3,
+          students: [{ number: 5, status: '결석' }],
+        },
+      }).ok,
+    ).toBe(false); // status enum 위반
+    expect(
+      validateApplyWrite({
+        ...base,
+        data: { classId: 'c1', date: '2026-06-02', period: 21, students: [] },
+      }).ok,
+    ).toBe(false); // period 범위 위반
+    expect(
+      validateApplyWrite({ ...base, data: { date: '2026-06-02', period: 3, students: [] } }).ok,
+    ).toBe(false); // classId 누락
+    expect(
+      validateApplyWrite({
+        ...base,
+        data: { classId: 'c1', date: '20260602', period: 3, students: [] },
+      }).ok,
+    ).toBe(false); // date 형식 위반
+  });
+
+  it('attendance: create/delete 만 지원(update 거부)', () => {
+    expect(
+      validateApplyWrite({
+        domain: 'attendance',
+        op: 'delete',
+        idempotencyKey: 'k',
+        data: { classId: 'c1', date: '2026-06-02', period: 3 },
+      }).ok,
+    ).toBe(true);
+    expect(
+      validateApplyWrite({
+        domain: 'attendance',
+        op: 'update',
+        idempotencyKey: 'k',
+        data: { classId: 'c1', date: '2026-06-02', period: 3 },
+      }).ok,
+    ).toBe(false);
+  });
+
+  it('homeroomAttendance create: allDay 또는 periods (둘 다/둘 다아님 거부)', () => {
+    const base = { domain: 'homeroomAttendance', op: 'create', idempotencyKey: 'k' } as const;
+    expect(
+      validateApplyWrite({
+        ...base,
+        data: {
+          date: '2026-06-01',
+          students: [{ number: 1, allDay: { status: 'absent', reason: '질병' } }],
+        },
+      }).ok,
+    ).toBe(true);
+    expect(
+      validateApplyWrite({
+        ...base,
+        data: {
+          date: '2026-06-02',
+          students: [{ number: 13, periods: [{ period: 0, status: 'late', reason: '미인정' }] }],
+        },
+      }).ok,
+    ).toBe(true);
+    expect(
+      validateApplyWrite({
+        ...base,
+        data: {
+          date: '2026-06-01',
+          students: [
+            { number: 1, allDay: { status: 'absent' }, periods: [{ period: 1, status: 'late' }] },
+          ],
+        },
+      }).ok,
+    ).toBe(false); // allDay + periods 동시
+    expect(
+      validateApplyWrite({ ...base, data: { date: '2026-06-01', students: [{ number: 1 }] } }).ok,
+    ).toBe(false); // 둘 다 없음
+    expect(validateApplyWrite({ ...base, data: { date: '2026-06-01', students: [] } }).ok).toBe(
+      false,
+    ); // students 빈 배열
+    expect(
+      validateApplyWrite({
+        ...base,
+        data: { date: '2026-06-01', students: [{ number: 1, allDay: { status: 'xxx' } }] },
+      }).ok,
+    ).toBe(false); // status enum 위반
+  });
+
+  it('homeroomAttendance: create 만 지원(delete 거부)', () => {
+    expect(
+      validateApplyWrite({
+        domain: 'homeroomAttendance',
+        op: 'delete',
+        idempotencyKey: 'k',
+        data: { date: '2026-06-01', students: [{ number: 1, allDay: { status: 'absent' } }] },
+      }).ok,
+    ).toBe(false);
+  });
 });
