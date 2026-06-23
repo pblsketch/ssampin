@@ -10,6 +10,7 @@ import type {
   AttendanceReason,
 } from '@domain/entities/Attendance';
 import type { CounselingMethod, AttendancePeriodEntry } from '@domain/entities/StudentRecord';
+import { DEFAULT_HOMEROOM_RECORD_TAGS } from '@domain/entities/StudentRecord';
 import type { RecordPrefill } from '../HomeroomPage';
 import { useRecordSaveStatus } from '@adapters/hooks/useRecordSaveStatus';
 import { DEFAULT_TEMPLATES } from '@domain/valueObjects/DefaultTemplates';
@@ -176,6 +177,8 @@ function InputMode({
     return new Set();
   });
   const [memo, setMemo] = useState('');
+  // 통합 입력 태그(S4, 비출결 누가기록) — StudentRecord.tags? 에 저장. 분류(category)와 직교(P3).
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [selectedMethod, setSelectedMethod] = useState<CounselingMethod | undefined>(undefined);
   const [showFollowUp, setShowFollowUp] = useState(false);
   const [followUp, setFollowUp] = useState('');
@@ -504,6 +507,17 @@ function InputMode({
           ),
         ),
       );
+      // 통합 입력 태그(S4): 생성된 누가기록에 tags 를 patch한다.
+      // 기존 addRecord 시그니처(useStudentRecordsStore)는 보존 — 별도 updateRecord 로만 추가(다른 세션 store 무수정).
+      if (selectedTags.length > 0 && recordIds.length > 0) {
+        const sr = useStudentRecordsStore.getState();
+        await Promise.all(
+          recordIds.map(async (rid) => {
+            const rec = sr.records.find((r) => r.id === rid);
+            if (rec) await sr.updateRecord({ ...rec, tags: [...selectedTags] });
+          }),
+        );
+      }
       return { recordIds, affected: recordIds.length };
     },
     [
@@ -518,6 +532,7 @@ function InputMode({
       saveDayAttendance,
       bridgeHomeroomDayAttendance,
       memo,
+      selectedTags,
       records,
       selectedMethod,
       followUp,
@@ -534,6 +549,7 @@ function InputMode({
     setSelectedSub(null);
     setAttendanceType(null);
     setMemo('');
+    setSelectedTags([]);
     setSelectedMethod(undefined);
     setShowFollowUp(false);
     setFollowUp('');
@@ -1013,6 +1029,38 @@ function InputMode({
                         }`}
                       >
                         {opt.icon} {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* 태그 (S4 통합 입력 — 비출결 누가기록, 다중 선택, 분류와 별도 축) */}
+            {selectedSub && selectedSub.categoryId !== 'attendance' && (
+              <div className="mb-3">
+                <p className="text-xs text-sp-muted mb-1.5">태그 (선택)</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {DEFAULT_HOMEROOM_RECORD_TAGS.map((tag) => {
+                    const isSelected = selectedTags.includes(tag);
+                    return (
+                      <button
+                        key={tag}
+                        type="button"
+                        aria-pressed={isSelected}
+                        onClick={() => {
+                          setSelectedTags((prev) =>
+                            prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag],
+                          );
+                          markDirty();
+                        }}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                          isSelected
+                            ? 'bg-sp-accent text-white'
+                            : 'bg-sp-surface text-sp-muted hover:text-sp-text hover:bg-sp-surface/80'
+                        }`}
+                      >
+                        {tag}
                       </button>
                     );
                   })}

@@ -18,6 +18,8 @@ interface ObservationState {
     date: string;
     content: string;
     tags: string[];
+    /** 통합 입력 분류 (S4) — ObservationRecord.category? 에 저장. tags 와 별도(P3). */
+    category?: string;
   }) => Promise<string>;
   updateRecord: (record: ObservationRecord) => Promise<void>;
   deleteRecord: (id: string) => Promise<void>;
@@ -50,7 +52,7 @@ export const useObservationStore = create<ObservationState>((set, get) => {
       }
     },
 
-    addRecord: async ({ studentId, classId, date, content, tags }) => {
+    addRecord: async ({ studentId, classId, date, content, tags, category }) => {
       const now = Date.now();
       const record: ObservationRecord = {
         id: generateUUID(),
@@ -63,6 +65,8 @@ export const useObservationStore = create<ObservationState>((set, get) => {
         visibility: 'private',
         createdAt: now,
         updatedAt: now,
+        // 분류는 tags 에 섞지 않고 별도 필드로 보존(P3). 미지정이면 생략(additive).
+        ...(category ? { category } : {}),
       };
       set((s) => ({ records: [...s.records, record] }));
       await manage.add(record);

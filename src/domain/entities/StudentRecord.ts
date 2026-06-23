@@ -31,6 +31,8 @@ export interface StudentRecord {
   readonly documentSubmitted?: boolean;
   /** 출결 카테고리 전용: 어떤 교시에 어떤 상태가 있었는지 보존 (period 오름차순) */
   readonly attendancePeriods?: readonly AttendancePeriodEntry[];
+  /** 통합 입력 폼(S4)에서 부여하는 태그 목록. 기존 레코드는 undefined — additive optional. */
+  readonly tags?: readonly string[];
 }
 
 export interface StudentRecordsData {
@@ -45,3 +47,14 @@ export interface AttendanceStats {
   readonly resultAbsent: number;
   readonly praise: number;
 }
+
+/**
+ * 담임 누가기록 통합 입력(S4)의 태그 후보.
+ * 교과 관찰 태그(DEFAULT_OBSERVATION_TAGS)에 대응하는 담임 맥락 서술 라벨 — 분류(category)와 직교(P3).
+ */
+export const DEFAULT_HOMEROOM_RECORD_TAGS = [
+  '수업태도',
+  '교우관계',
+  '생활습관',
+  '특이사항',
+] as const;

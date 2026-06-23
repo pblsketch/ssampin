@@ -2,7 +2,10 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { useObservationStore } from '@adapters/stores/useObservationStore';
 import { useObservationAttachmentStore } from '@adapters/stores/useObservationAttachmentStore';
-import { DEFAULT_OBSERVATION_TAGS } from '@domain/entities/Observation';
+import {
+  DEFAULT_OBSERVATION_TAGS,
+  DEFAULT_OBSERVATION_CATEGORIES,
+} from '@domain/entities/Observation';
 import {
   OBSERVATION_ATTACHMENT_LIMITS,
   validateAttachmentFile,
@@ -39,6 +42,10 @@ export function ObservationForm({ classId, studentId }: ObservationFormProps) {
   const [date, setDate] = useState(todayString);
   const [content, setContent] = useState('');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  // 통합 입력 분류(S4) — ObservationRecord.category? 에 저장. tags 와 직교(P3). 기본 '수업 관찰'.
+  const [selectedCategory, setSelectedCategory] = useState<string>(
+    DEFAULT_OBSERVATION_CATEGORIES[0],
+  );
   const [saving, setSaving] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const prevStudentIdRef = useRef(studentId);
@@ -46,6 +53,7 @@ export function ObservationForm({ classId, studentId }: ObservationFormProps) {
   const dateRef = useRef(date);
   const contentRef = useRef(content);
   const tagsRef = useRef(selectedTags);
+  const categoryRef = useRef(selectedCategory);
   const draftMapRef = useRef<Map<string, ObservationDraft>>(new Map());
 
   const addRecord = useObservationStore((s) => s.addRecord);
@@ -74,6 +82,10 @@ export function ObservationForm({ classId, studentId }: ObservationFormProps) {
   useEffect(() => {
     tagsRef.current = selectedTags;
   }, [selectedTags]);
+
+  useEffect(() => {
+    categoryRef.current = selectedCategory;
+  }, [selectedCategory]);
 
   useEffect(() => {
     pendingFilesRef.current = pendingFiles;
@@ -169,6 +181,7 @@ export function ObservationForm({ classId, studentId }: ObservationFormProps) {
           date: savedDate,
           content: savedContent,
           tags: savedTags,
+          category: categoryRef.current,
         })
           .then((recordId) => {
             void commitPendingAttachments(recordId, filesToCommit);
@@ -203,6 +216,7 @@ export function ObservationForm({ classId, studentId }: ObservationFormProps) {
       setDate(nextDraft?.date ?? todayString());
       setContent(nextDraft?.content ?? '');
       setSelectedTags(nextDraft?.tags ?? []);
+      setSelectedCategory(DEFAULT_OBSERVATION_CATEGORIES[0]);
       setPendingFiles([]);
       prevStudentIdRef.current = studentId;
     }
@@ -267,18 +281,29 @@ export function ObservationForm({ classId, studentId }: ObservationFormProps) {
         date,
         content: trimmed.slice(0, 500),
         tags: selectedTags,
+        category: selectedCategory,
       });
       await commitPendingAttachments(recordId, pendingFilesRef.current);
       pendingFilesRef.current = [];
       draftMapRef.current.delete(studentId);
       setContent('');
       setSelectedTags([]);
+      setSelectedCategory(DEFAULT_OBSERVATION_CATEGORIES[0]);
       setDate(todayString());
       setPendingFiles([]);
     } finally {
       setSaving(false);
     }
-  }, [content, date, selectedTags, studentId, classId, addRecord, commitPendingAttachments]);
+  }, [
+    content,
+    date,
+    selectedTags,
+    selectedCategory,
+    studentId,
+    classId,
+    addRecord,
+    commitPendingAttachments,
+  ]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -301,6 +326,26 @@ export function ObservationForm({ classId, studentId }: ObservationFormProps) {
         />
         <div className="flex-1" />
         <span className="text-caption text-sp-muted">{content.length}/500</span>
+      </div>
+
+      {/* 분류 (S4 통합 입력 — 단일 선택, 태그와 별도 축) */}
+      <div className="flex flex-wrap items-center gap-1">
+        <span className="text-caption text-sp-muted mr-0.5">분류</span>
+        {DEFAULT_OBSERVATION_CATEGORIES.map((cat) => (
+          <button
+            key={cat}
+            type="button"
+            onClick={() => setSelectedCategory(cat)}
+            aria-pressed={selectedCategory === cat}
+            className={`px-2 py-0.5 rounded-full text-caption font-medium transition-colors ${
+              selectedCategory === cat
+                ? 'bg-sp-accent text-white'
+                : 'bg-sp-surface text-sp-muted hover:text-sp-text'
+            }`}
+          >
+            {cat}
+          </button>
+        ))}
       </div>
 
       <div className="flex flex-wrap gap-1">
