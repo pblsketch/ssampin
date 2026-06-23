@@ -29,6 +29,7 @@ import {
   getSubcategoryChipClass,
   getCategoryLabelColor,
   getRecordTagClass,
+  getRecordChipLabel,
   initEditAttendancePeriods,
 } from './recordUtils';
 import { MultiDatePicker } from '@adapters/components/common/MultiDatePicker';
@@ -1675,7 +1676,7 @@ function InputMode({
                             className="group flex items-center gap-2 text-xs rounded-lg px-1.5 py-1 -mx-1.5 transition-colors hover:bg-sp-surface/50 focus-within:bg-sp-surface/50"
                           >
                             <span className={getRecordTagClass(record.category, categories)}>
-                              {record.subcategory}
+                              {getRecordChipLabel(record, categories)}
                             </span>
                             <span className="text-sp-text font-medium">{student?.name ?? '?'}</span>
                             {record.content && (

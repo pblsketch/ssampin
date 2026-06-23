@@ -11,6 +11,7 @@ import {
   formatAttendancePeriodLines,
   getMethodIcon,
   getRecordTagClass,
+  getRecordChipLabel,
   getCategoryDotColor,
 } from './recordUtils';
 import { RecordEmptyState } from '@adapters/components/common/records/RecordEmptyState';
@@ -135,7 +136,7 @@ function StudentTimelineView({
                         >
                           <div className="flex items-center gap-2 mb-1">
                             <span className={getRecordTagClass(record.category, categories)}>
-                              {record.subcategory}
+                              {getRecordChipLabel(record, categories)}
                             </span>
                             {periodLines.length > 0 && (
                               <span

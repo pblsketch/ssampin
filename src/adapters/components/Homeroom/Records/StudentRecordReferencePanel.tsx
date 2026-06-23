@@ -10,6 +10,7 @@ import {
   formatTimeKR,
   getMethodIcon,
   getRecordTagClass,
+  getRecordChipLabel,
   getCategoryDotColor,
 } from './recordUtils';
 
@@ -125,7 +126,7 @@ export function StudentRecordReferencePanel({
                           className="w-full flex items-center gap-2 p-2.5 text-left"
                         >
                           <span className={getRecordTagClass(record.category, categories)}>
-                            {record.subcategory}
+                            {getRecordChipLabel(record, categories)}
                           </span>
                           {record.method && (
                             <span className="text-xs text-sp-muted">

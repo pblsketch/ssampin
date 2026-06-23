@@ -9,6 +9,7 @@ import {
   formatAttendancePeriodLines,
   getMethodIcon,
   getSmartTagClass,
+  getRecordChipLabel,
   METHOD_OPTIONS,
 } from './recordUtils';
 import { DateGroupHeader } from '@adapters/components/common/records/DateGroupHeader';
@@ -97,7 +98,7 @@ function DefaultRecordListView({
                         {formatTimeKR(record.createdAt)}
                       </span>
                       <span className={getSmartTagClass(record, categories)}>
-                        {record.subcategory}
+                        {getRecordChipLabel(record, categories)}
                       </span>
                       {periodLines.length > 0 && (
                         <span

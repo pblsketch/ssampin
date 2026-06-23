@@ -185,6 +185,21 @@ export function getRecordTagClass(
   return `px-2 py-0.5 rounded text-xs font-medium ${c.tagBg}`;
 }
 
+/**
+ * Q2: 기록 칩에 표시할 라벨.
+ *  - 출결: subcategory("결석 (질병)") 그대로(구조적 데이터).
+ *  - 비출결: 태그(있으면 ' · ' 결합), 없으면 카테고리명 fallback.
+ *    (subcategory 는 sentinel 이라 화면에 노출하지 않는다 — category + tags 2축.)
+ */
+export function getRecordChipLabel(
+  record: { category: string; subcategory: string; tags?: readonly string[] },
+  categories: readonly RecordCategoryItem[],
+): string {
+  if (record.category === 'attendance') return record.subcategory;
+  if (record.tags && record.tags.length > 0) return record.tags.join(' · ');
+  return categories.find((c) => c.id === record.category)?.name.split(' (')[0] ?? record.subcategory;
+}
+
 export function getCategoryDotColor(
   categoryId: string,
   categories: readonly RecordCategoryItem[],
