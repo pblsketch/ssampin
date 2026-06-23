@@ -894,7 +894,7 @@ body {
 
 .ssampin-note-editor .bn-editor {
   /* 에디터 카드 폭 전체 사용. 좌우 여백은 패딩으로만 제어. */
-  padding: 2rem 1.5rem 3rem;
+  padding: 2rem 1.5rem 3rem !important;
   max-width: none;
   width: 100%;
   margin: 0;
@@ -907,8 +907,38 @@ body {
 /* 큰 화면에서는 상하 여백만 살짝 더 */
 @media (min-width: 1280px) {
   .ssampin-note-editor .bn-editor {
-    padding: 2.5rem 2rem 4rem;
+    padding: 2.5rem 2rem 4rem !important;
   }
+}
+
+.ssampin-note-editor .bn-side-menu {
+  gap: 2px;
+  transform: translateX(18px);
+}
+
+.ssampin-note-editor .bn-side-menu .bn-ak-button {
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  min-height: 24px;
+  padding: 0;
+  color: var(--sp-muted);
+  background: transparent;
+  border-radius: 6px;
+  box-shadow: none;
+}
+
+.ssampin-note-editor .bn-side-menu .bn-ak-button:hover,
+.ssampin-note-editor .bn-side-menu .bn-ak-button[data-focus-visible] {
+  color: var(--sp-text);
+  background: var(--sp-card);
+}
+
+.ssampin-note-editor .bn-side-menu .bn-ak-button svg {
+  display: block;
+  width: 18px;
+  height: 18px;
+  color: currentColor;
 }
 
 /* 긴 연속 문자열(e.g. eeeeeee…)이 가로 스크롤을 만들지 않도록 강제 래핑 */
