@@ -55,7 +55,7 @@ export function WeeklyReviewCard(): JSX.Element {
         <span className="flex items-center gap-3 text-xs text-sp-muted">
           <span>완료 {summary.completedCount}</span>
           {summary.upcomingSoon > 0 && (
-            <span className="text-amber-400">임박 {summary.upcomingSoon}</span>
+            <span className="text-sp-warning">임박 {summary.upcomingSoon}</span>
           )}
           <span className="material-symbols-outlined text-icon">
             {open ? 'expand_less' : 'expand_more'}

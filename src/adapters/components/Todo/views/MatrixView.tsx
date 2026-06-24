@@ -27,9 +27,9 @@ const QUADRANT_ORDER: EisenhowerQuadrant[] = ['q1', 'q2', 'q3', 'q4'];
 
 /** 분면별 강조 색(sp 토큰 기반 ring/bg) — 데이터 아님, 표시용. */
 const QUADRANT_ACCENT: Record<EisenhowerQuadrant, string> = {
-  q1: 'ring-red-500/40',
+  q1: 'ring-sp-error/40',
   q2: 'ring-sp-accent/40',
-  q3: 'ring-amber-500/40',
+  q3: 'ring-sp-warning/40',
   q4: 'ring-sp-border',
 };
 

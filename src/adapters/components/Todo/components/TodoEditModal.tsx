@@ -8,7 +8,22 @@ import { toLocalDateString } from '@shared/utils/localDate';
 interface TodoEditModalProps {
   todo: Todo;
   categories: readonly TodoCategory[];
-  onUpdate: (id: string, changes: Partial<Pick<Todo, 'text' | 'priority' | 'category' | 'dueDate' | 'startDate' | 'time' | 'status' | 'recurrence'>>) => void;
+  onUpdate: (
+    id: string,
+    changes: Partial<
+      Pick<
+        Todo,
+        | 'text'
+        | 'priority'
+        | 'category'
+        | 'dueDate'
+        | 'startDate'
+        | 'time'
+        | 'status'
+        | 'recurrence'
+      >
+    >,
+  ) => void;
   onClose: () => void;
 }
 
@@ -30,7 +45,10 @@ export function TodoEditModal({ todo, categories, onUpdate, onClose }: TodoEditM
   const [recurrenceIdx, setRecurrenceIdx] = useState(() => {
     if (!todo.recurrence) return 0;
     const idx = RECURRENCE_PRESETS.findIndex(
-      (p) => p.value && p.value.type === todo.recurrence!.type && p.value.interval === todo.recurrence!.interval,
+      (p) =>
+        p.value &&
+        p.value.type === todo.recurrence!.type &&
+        p.value.interval === todo.recurrence!.interval,
     );
     return idx >= 0 ? idx : 0;
   });
@@ -53,13 +71,43 @@ export function TodoEditModal({ todo, categories, onUpdate, onClose }: TodoEditM
     }
 
     if (Object.keys(changes).length > 0) {
-      onUpdate(todo.id, changes as Partial<Pick<Todo, 'text' | 'priority' | 'category' | 'dueDate' | 'startDate' | 'time' | 'status' | 'recurrence'>>);
+      onUpdate(
+        todo.id,
+        changes as Partial<
+          Pick<
+            Todo,
+            | 'text'
+            | 'priority'
+            | 'category'
+            | 'dueDate'
+            | 'startDate'
+            | 'time'
+            | 'status'
+            | 'recurrence'
+          >
+        >,
+      );
     }
     onClose();
-  }, [text, dueDate, startDate, time, priority, category, status, recurrenceIdx, todo, onUpdate, onClose]);
+  }, [
+    text,
+    dueDate,
+    startDate,
+    time,
+    priority,
+    category,
+    status,
+    recurrenceIdx,
+    todo,
+    onUpdate,
+    onClose,
+  ]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      onClick={onClose}
+    >
       <div
         className="bg-sp-card rounded-2xl ring-1 ring-sp-border shadow-2xl w-full max-w-md mx-4 p-5"
         onClick={(e) => e.stopPropagation()}
@@ -67,7 +115,11 @@ export function TodoEditModal({ todo, categories, onUpdate, onClose }: TodoEditM
         {/* 헤더 */}
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-bold text-sp-text">할 일 수정</h3>
-          <button type="button" onClick={onClose} className="text-sp-muted hover:text-sp-text transition-colors">
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-sp-muted hover:text-sp-text transition-colors"
+          >
             <span className="material-symbols-outlined text-icon">close</span>
           </button>
         </div>
@@ -102,7 +154,9 @@ export function TodoEditModal({ todo, categories, onUpdate, onClose }: TodoEditM
             >
               {dueDate ? (
                 <div className="flex items-center gap-2 flex-1 px-3 py-2 bg-sp-surface rounded-lg border border-sp-border hover:border-sp-accent/50 transition-colors cursor-pointer text-sm text-sp-text">
-                  <span className="material-symbols-outlined text-base text-sp-accent">calendar_today</span>
+                  <span className="material-symbols-outlined text-base text-sp-accent">
+                    calendar_today
+                  </span>
                   <span>{startDate ? `${startDate} → ${dueDate}` : dueDate}</span>
                 </div>
               ) : (
@@ -115,8 +169,11 @@ export function TodoEditModal({ todo, categories, onUpdate, onClose }: TodoEditM
             {dueDate && (
               <button
                 type="button"
-                onClick={() => { setDueDate(''); setStartDate(''); }}
-                className="p-1.5 rounded-lg text-sp-muted hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                onClick={() => {
+                  setDueDate('');
+                  setStartDate('');
+                }}
+                className="p-1.5 rounded-lg text-sp-muted hover:text-sp-error hover:bg-sp-error/10 transition-colors"
                 title="기한 제거"
               >
                 <span className="material-symbols-outlined text-base">close</span>
@@ -152,7 +209,7 @@ export function TodoEditModal({ todo, categories, onUpdate, onClose }: TodoEditM
               <button
                 type="button"
                 onClick={() => setTime('')}
-                className="p-1.5 rounded-lg text-sp-muted hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                className="p-1.5 rounded-lg text-sp-muted hover:text-sp-error hover:bg-sp-error/10 transition-colors"
                 title="시간 제거"
               >
                 <span className="material-symbols-outlined text-base">close</span>
@@ -193,8 +250,10 @@ export function TodoEditModal({ todo, categories, onUpdate, onClose }: TodoEditM
             className="bg-sp-surface text-sp-text text-xs px-2 py-1.5 rounded-lg border border-sp-border focus:border-sp-accent focus:outline-none"
           >
             <option value="">없음</option>
-            {categories.map(c => (
-              <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
+            {categories.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.icon} {c.name}
+              </option>
             ))}
           </select>
         </div>
@@ -219,7 +278,7 @@ export function TodoEditModal({ todo, categories, onUpdate, onClose }: TodoEditM
         <div className="flex items-center gap-2 mb-4">
           <span className="text-xs text-sp-muted">상태</span>
           <div className="flex gap-1">
-            {STATUS_OPTIONS.map(s => (
+            {STATUS_OPTIONS.map((s) => (
               <button
                 key={s.key}
                 type="button"
@@ -238,10 +297,18 @@ export function TodoEditModal({ todo, categories, onUpdate, onClose }: TodoEditM
 
         {/* 버튼 */}
         <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg text-xs text-sp-muted hover:text-sp-text hover:bg-sp-surface transition-colors">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 rounded-lg text-xs text-sp-muted hover:text-sp-text hover:bg-sp-surface transition-colors"
+          >
             취소
           </button>
-          <button type="button" onClick={handleSave} className="px-4 py-2 rounded-lg text-xs font-bold bg-sp-accent hover:bg-blue-600 text-white transition-colors">
+          <button
+            type="button"
+            onClick={handleSave}
+            className="px-4 py-2 rounded-lg text-xs font-bold bg-sp-accent hover:bg-sp-accent/90 text-white transition-colors"
+          >
             저장
           </button>
         </div>

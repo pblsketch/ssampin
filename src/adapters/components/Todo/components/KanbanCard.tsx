@@ -21,14 +21,7 @@ export const KanbanCard = React.memo(function KanbanCard({
   onEdit,
   onToggleSubTask,
 }: KanbanCardProps) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: todo.id,
     data: { columnKey },
   });
@@ -39,27 +32,32 @@ export const KanbanCard = React.memo(function KanbanCard({
     opacity: isDragging ? 0.5 : 1,
   };
 
-  const priorityConfig = todo.priority && todo.priority !== 'none'
-    ? PRIORITY_CONFIG[todo.priority]
-    : null;
+  const priorityConfig =
+    todo.priority && todo.priority !== 'none' ? PRIORITY_CONFIG[todo.priority] : null;
 
-  const category = categories.find(c => c.id === todo.category);
+  const category = categories.find((c) => c.id === todo.category);
   const overdue = isOverdue(todo);
 
-  const borderColor = columnKey === 'done' ? 'border-l-green-500'
-    : columnKey === 'inProgress' ? 'border-l-yellow-500'
-    : 'border-l-blue-500';
+  const borderColor =
+    columnKey === 'done'
+      ? 'border-l-green-500'
+      : columnKey === 'inProgress'
+        ? 'border-l-yellow-500'
+        : 'border-l-blue-500';
 
-  const progressFillColor = columnKey === 'done' ? 'bg-green-500'
-    : columnKey === 'inProgress' ? 'bg-yellow-500'
-    : 'bg-blue-500';
+  const progressFillColor =
+    columnKey === 'done'
+      ? 'bg-green-500'
+      : columnKey === 'inProgress'
+        ? 'bg-yellow-500'
+        : 'bg-blue-500';
 
   const handleClick = () => {
     if (!isDragging && onEdit) onEdit(todo);
   };
 
   const subTasks = todo.subTasks ?? [];
-  const completedCount = subTasks.filter(s => s.completed).length;
+  const completedCount = subTasks.filter((s) => s.completed).length;
   const totalCount = subTasks.length;
   const progressPct = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
 
@@ -79,7 +77,7 @@ export const KanbanCard = React.memo(function KanbanCard({
 
   const handleProgressClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!isDragging) setIsPopoverOpen(prev => !prev);
+    if (!isDragging) setIsPopoverOpen((prev) => !prev);
   };
 
   return (
@@ -95,10 +93,10 @@ export const KanbanCard = React.memo(function KanbanCard({
     >
       {/* 우선순위 + 텍스트 */}
       <div className="flex items-start gap-2">
-        {priorityConfig && (
-          <span className="text-xs mt-0.5">{priorityConfig.icon}</span>
-        )}
-        <span className={`text-sm text-sp-text leading-snug flex-1 ${todo.completed ? 'line-through opacity-50' : ''}`}>
+        {priorityConfig && <span className="text-xs mt-0.5">{priorityConfig.icon}</span>}
+        <span
+          className={`text-sm text-sp-text leading-snug flex-1 ${todo.completed ? 'line-through opacity-50' : ''}`}
+        >
           {todo.text}
         </span>
       </div>
@@ -111,7 +109,7 @@ export const KanbanCard = React.memo(function KanbanCard({
           </span>
         )}
         {todo.dueDate && (
-          <span className={`text-xs ${overdue ? 'text-red-400' : 'text-sp-muted'}`}>
+          <span className={`text-xs ${overdue ? 'text-sp-error' : 'text-sp-muted'}`}>
             📅 {todo.dueDate.slice(5)}
           </span>
         )}
@@ -133,10 +131,14 @@ export const KanbanCard = React.memo(function KanbanCard({
           </div>
           <div className="flex items-center justify-between mt-1">
             <span className="text-caption text-sp-muted">
-              <span className="material-symbols-outlined text-caption align-middle mr-0.5">checklist</span>
+              <span className="material-symbols-outlined text-caption align-middle mr-0.5">
+                checklist
+              </span>
               하위 할 일
             </span>
-            <span className="text-caption text-sp-muted">{completedCount} / {totalCount} 완료</span>
+            <span className="text-caption text-sp-muted">
+              {completedCount} / {totalCount} 완료
+            </span>
           </div>
 
           {/* 팝오버 */}
@@ -148,7 +150,7 @@ export const KanbanCard = React.memo(function KanbanCard({
               <p className="text-xs font-medium text-sp-text mb-2 truncate">{todo.text}</p>
               <div className="border-t border-sp-border/50 mb-2" />
               <ul className="space-y-1.5">
-                {subTasks.map(st => (
+                {subTasks.map((st) => (
                   <li key={st.id} className="flex items-start gap-2">
                     <input
                       type="checkbox"
@@ -160,7 +162,9 @@ export const KanbanCard = React.memo(function KanbanCard({
                       onClick={(e) => e.stopPropagation()}
                       className="mt-0.5 accent-sp-accent cursor-pointer flex-shrink-0"
                     />
-                    <span className={`text-xs ${st.completed ? 'line-through opacity-50 text-sp-muted' : 'text-sp-text'}`}>
+                    <span
+                      className={`text-xs ${st.completed ? 'line-through opacity-50 text-sp-muted' : 'text-sp-text'}`}
+                    >
                       {st.text}
                     </span>
                   </li>

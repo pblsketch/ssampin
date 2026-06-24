@@ -133,7 +133,7 @@ export function TodoCategoryModal({ onClose }: TodoCategoryModalProps) {
               <button
                 type="button"
                 onClick={() => handleRemove(cat.id)}
-                className="p-1 rounded text-sp-muted hover:text-red-400 transition-colors"
+                className="p-1 rounded text-sp-muted hover:text-sp-error transition-colors"
               >
                 <span className="material-symbols-outlined text-icon">delete</span>
               </button>

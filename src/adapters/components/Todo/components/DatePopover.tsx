@@ -36,7 +36,12 @@ function getMonthDays(year: number, month: number, sundayStart: boolean) {
 
   // Previous month fill
   for (let i = startDow - 1; i >= 0; i--) {
-    cells.push({ day: daysInPrevMonth - i, month: month - 1, year: month === 0 ? year - 1 : year, isCurrentMonth: false });
+    cells.push({
+      day: daysInPrevMonth - i,
+      month: month - 1,
+      year: month === 0 ? year - 1 : year,
+      isCurrentMonth: false,
+    });
   }
   // Current month
   for (let d = 1; d <= daysInMonth; d++) {
@@ -45,7 +50,12 @@ function getMonthDays(year: number, month: number, sundayStart: boolean) {
   // Next month fill (up to 42 cells = 6 rows)
   const remaining = 42 - cells.length;
   for (let d = 1; d <= remaining; d++) {
-    cells.push({ day: d, month: month + 1, year: month === 11 ? year + 1 : year, isCurrentMonth: false });
+    cells.push({
+      day: d,
+      month: month + 1,
+      year: month === 11 ? year + 1 : year,
+      isCurrentMonth: false,
+    });
   }
   return cells;
 }
@@ -72,7 +82,17 @@ export function DatePopover({
   const [hasEndDate, setHasEndDate] = useState(!!endDate);
   const ref = useRef<HTMLDivElement>(null);
 
-  const parsed = useMemo(() => date ? parseYMD(date) : { year: new Date().getFullYear(), month: new Date().getMonth(), day: new Date().getDate() }, [date]);
+  const parsed = useMemo(
+    () =>
+      date
+        ? parseYMD(date)
+        : {
+            year: new Date().getFullYear(),
+            month: new Date().getMonth(),
+            day: new Date().getDate(),
+          },
+    [date],
+  );
   const [viewYear, setViewYear] = useState(parsed.year);
   const [viewMonth, setViewMonth] = useState(parsed.month);
 
@@ -99,7 +119,10 @@ export function DatePopover({
 
   const sundayStart = (useSettingsStore((s) => s.settings.weekdayStart) ?? 'sunday') === 'sunday';
   const dayNames = sundayStart ? DAY_NAMES_SUNDAY : DAY_NAMES_MONDAY;
-  const cells = useMemo(() => getMonthDays(viewYear, viewMonth, sundayStart), [viewYear, viewMonth, sundayStart]);
+  const cells = useMemo(
+    () => getMonthDays(viewYear, viewMonth, sundayStart),
+    [viewYear, viewMonth, sundayStart],
+  );
 
   const todayStr = useMemo(() => {
     const t = new Date();
@@ -107,12 +130,16 @@ export function DatePopover({
   }, []);
 
   const handlePrevMonth = () => {
-    if (viewMonth === 0) { setViewMonth(11); setViewYear(viewYear - 1); }
-    else setViewMonth(viewMonth - 1);
+    if (viewMonth === 0) {
+      setViewMonth(11);
+      setViewYear(viewYear - 1);
+    } else setViewMonth(viewMonth - 1);
   };
   const handleNextMonth = () => {
-    if (viewMonth === 11) { setViewMonth(0); setViewYear(viewYear + 1); }
-    else setViewMonth(viewMonth + 1);
+    if (viewMonth === 11) {
+      setViewMonth(0);
+      setViewYear(viewYear + 1);
+    } else setViewMonth(viewMonth + 1);
   };
   const handleToday = () => {
     const t = new Date();
@@ -153,24 +180,32 @@ export function DatePopover({
       </div>
 
       {open && (
-        <div className="absolute top-full left-0 mt-1 z-50 bg-white rounded-xl shadow-xl border border-gray-200 p-4 w-72">
+        <div className="absolute top-full left-0 mt-1 z-50 bg-sp-card rounded-xl shadow-xl ring-1 ring-sp-border p-4 w-72">
           {/* 월 네비게이션 */}
           <div className="flex items-center justify-between mb-3">
-            <span className="text-sm font-bold text-gray-800">
+            <span className="text-sm font-bold text-sp-text">
               {viewYear}년 {viewMonth + 1}월
             </span>
             <div className="flex items-center gap-1">
               <button
                 type="button"
                 onClick={handleToday}
-                className="text-xs text-blue-500 hover:text-blue-700 px-2 py-0.5 rounded hover:bg-blue-50 transition-colors"
+                className="text-xs text-sp-accent hover:bg-sp-accent/10 px-2 py-0.5 rounded transition-colors"
               >
                 오늘
               </button>
-              <button type="button" onClick={handlePrevMonth} className="p-1 text-gray-400 hover:text-gray-700 transition-colors">
+              <button
+                type="button"
+                onClick={handlePrevMonth}
+                className="p-1 text-sp-muted hover:text-sp-text transition-colors"
+              >
                 <span className="material-symbols-outlined text-icon">chevron_left</span>
               </button>
-              <button type="button" onClick={handleNextMonth} className="p-1 text-gray-400 hover:text-gray-700 transition-colors">
+              <button
+                type="button"
+                onClick={handleNextMonth}
+                className="p-1 text-sp-muted hover:text-sp-text transition-colors"
+              >
                 <span className="material-symbols-outlined text-icon">chevron_right</span>
               </button>
             </div>
@@ -178,8 +213,8 @@ export function DatePopover({
 
           {/* 요일 헤더 */}
           <div className="grid grid-cols-7 gap-0.5 mb-1">
-            {dayNames.map(d => (
-              <div key={d} className="text-center text-caption font-medium text-gray-400 py-1">
+            {dayNames.map((d) => (
+              <div key={d} className="text-center text-caption font-medium text-sp-muted py-1">
                 {d}
               </div>
             ))}
@@ -200,17 +235,17 @@ export function DatePopover({
                   type="button"
                   onClick={() => handleDayClick(cell)}
                   className={`text-xs h-7 w-full rounded-md transition-colors ${
-                    !cell.isCurrentMonth ? 'text-gray-300' : ''
+                    !cell.isCurrentMonth ? 'text-sp-muted/40' : ''
                   } ${
                     isSelected || isEndSelected
-                      ? 'bg-blue-500 text-white font-bold'
+                      ? 'bg-sp-accent text-sp-accent-fg font-bold'
                       : isToday
-                        ? 'bg-blue-100 text-blue-700 font-bold'
+                        ? 'bg-sp-accent/15 text-sp-accent font-bold'
                         : isInRange
-                          ? 'bg-blue-50 text-blue-600'
+                          ? 'bg-sp-accent/10 text-sp-accent'
                           : cell.isCurrentMonth
-                            ? 'text-gray-700 hover:bg-gray-100'
-                            : 'hover:bg-gray-50'
+                            ? 'text-sp-text hover:bg-sp-surface'
+                            : 'hover:bg-sp-surface/50'
                   }`}
                 >
                   {cell.day}
@@ -220,27 +255,29 @@ export function DatePopover({
           </div>
 
           {/* 옵션 */}
-          <div className="mt-3 pt-3 border-t border-gray-100 space-y-2">
+          <div className="mt-3 pt-3 border-t border-sp-border/50 space-y-2">
             {/* 종료일 토글 */}
             <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-600">종료일</span>
+              <span className="text-xs text-sp-muted">종료일</span>
               <button
                 type="button"
                 onClick={() => handleEndDateToggle(!hasEndDate)}
                 className={`w-9 h-5 rounded-full transition-colors relative ${
-                  hasEndDate ? 'bg-blue-500' : 'bg-gray-200'
+                  hasEndDate ? 'bg-sp-accent' : 'bg-sp-border'
                 }`}
               >
-                <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
-                  hasEndDate ? 'translate-x-4' : 'translate-x-0.5'
-                }`} />
+                <div
+                  className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
+                    hasEndDate ? 'translate-x-4' : 'translate-x-0.5'
+                  }`}
+                />
               </button>
             </div>
 
             {/* 기한 없음 (새 할 일 추가 시에만) */}
             {onNoDueDateChange && (
               <div className="flex items-center justify-between">
-                <span className="text-xs text-gray-600">기한 없음</span>
+                <span className="text-xs text-sp-muted">기한 없음</span>
                 <button
                   type="button"
                   onClick={() => {
@@ -248,20 +285,23 @@ export function DatePopover({
                     setOpen(false);
                   }}
                   className={`w-9 h-5 rounded-full transition-colors relative ${
-                    noDueDate ? 'bg-blue-500' : 'bg-gray-200'
+                    noDueDate ? 'bg-sp-accent' : 'bg-sp-border'
                   }`}
                 >
-                  <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
-                    noDueDate ? 'translate-x-4' : 'translate-x-0.5'
-                  }`} />
+                  <div
+                    className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
+                      noDueDate ? 'translate-x-4' : 'translate-x-0.5'
+                    }`}
+                  />
                 </button>
               </div>
             )}
 
             {/* 선택된 날짜 표시 */}
             {date && !noDueDate && (
-              <div className="text-caption text-gray-400 text-center pt-1">
-                {date}{hasEndDate && endDate ? ` → ${endDate}` : hasEndDate ? ' → (종료일 클릭)' : ''}
+              <div className="text-caption text-sp-muted text-center pt-1">
+                {date}
+                {hasEndDate && endDate ? ` → ${endDate}` : hasEndDate ? ' → (종료일 클릭)' : ''}
               </div>
             )}
           </div>

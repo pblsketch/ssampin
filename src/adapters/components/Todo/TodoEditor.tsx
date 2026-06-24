@@ -337,7 +337,7 @@ function EditorTodoItem({ todo, onToggle, onDelete, onUpdate }: EditorTodoItemPr
         <button
           type="button"
           onClick={handleDelete}
-          className="shrink-0 min-w-6 min-h-6 rounded p-1 text-sp-muted hover:text-red-400 hover:bg-red-400/10 transition-colors"
+          className="shrink-0 min-w-6 min-h-6 rounded p-1 text-sp-muted hover:text-sp-error hover:bg-sp-error/10 transition-colors"
           aria-label="삭제"
         >
           <svg viewBox="0 0 14 16" fill="none" className="h-3.5 w-3.5">
@@ -423,10 +423,10 @@ function DueDateBadge({ dueDate }: { dueDate: string }) {
 
   if (dueDate < todayStr) {
     text = '지남';
-    className = 'text-red-400 font-bold';
+    className = 'text-sp-error font-bold';
   } else if (dueDate === todayStr) {
     text = '오늘';
-    className = 'text-red-400';
+    className = 'text-sp-error';
   } else if (dueDate === tomorrowStr) {
     text = '내일';
     className = 'text-orange-400';

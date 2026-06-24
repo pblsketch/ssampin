@@ -25,13 +25,13 @@ export function TimelineBar({ todo, days, category, zoomLevel = 'day', onEdit }:
 
   const subTasks = todo.subTasks ?? [];
   const hasSubTasks = subTasks.length > 0;
-  const completedCount = subTasks.filter(s => s.completed).length;
+  const completedCount = subTasks.filter((s) => s.completed).length;
   const allDone = hasSubTasks && completedCount === subTasks.length;
 
   // 줌 레벨에 따라 날짜를 해당 기간 인덱스로 매핑
   const findPeriodIdx = (dateStr: string | undefined): number => {
     if (!dateStr) return -1;
-    if (zoomLevel === 'day') return days.findIndex(d => d === dateStr);
+    if (zoomLevel === 'day') return days.findIndex((d) => d === dateStr);
     // week/month: 해당 날짜가 속하는 기간 찾기
     for (let i = days.length - 1; i >= 0; i--) {
       if (days[i] !== undefined && dateStr >= days[i]!) return i;
@@ -43,9 +43,7 @@ export function TimelineBar({ todo, days, category, zoomLevel = 'day', onEdit }:
   const hasRange = !!todo.startDate;
   const startIdx = hasRange ? findPeriodIdx(todo.startDate) : -1;
 
-  const barColor = category
-    ? (CATEGORY_COLORS[category.color] ?? 'bg-sp-accent')
-    : 'bg-sp-accent';
+  const barColor = category ? (CATEGORY_COLORS[category.color] ?? 'bg-sp-accent') : 'bg-sp-accent';
 
   const todayStr = new Date().toISOString().slice(0, 10);
   const cellWidth = zoomLevel === 'day' ? 'w-12' : zoomLevel === 'week' ? 'w-16' : 'w-20';
@@ -71,9 +69,9 @@ export function TimelineBar({ todo, days, category, zoomLevel = 'day', onEdit }:
         <div className="absolute left-64 top-0 z-40 bg-sp-surface ring-1 ring-sp-border rounded-lg p-2.5 shadow-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity delay-300 min-w-[160px] max-w-[240px]">
           <div className="text-xs font-medium text-sp-text mb-1.5">하위 할 일</div>
           <div className="border-t border-sp-border/50 mb-1.5" />
-          {subTasks.map(sub => (
+          {subTasks.map((sub) => (
             <div key={sub.id} className="flex items-start gap-1 text-detail mb-0.5">
-              <span className={sub.completed ? 'text-green-400' : 'text-sp-muted'}>
+              <span className={sub.completed ? 'text-sp-success' : 'text-sp-muted'}>
                 {sub.completed ? '☑' : '☐'}
               </span>
               <span className={sub.completed ? 'text-sp-muted line-through' : 'text-sp-text'}>
@@ -89,12 +87,14 @@ export function TimelineBar({ todo, days, category, zoomLevel = 'day', onEdit }:
 
       {/* 타임라인 셀 */}
       {days.map((day, idx) => {
-        const isToday = zoomLevel === 'day'
-          ? day === todayStr
-          : zoomLevel === 'week'
-            ? todayStr >= day && todayStr < (days[idx + 1] ?? '9999-12-31')
-            : todayStr >= day && todayStr < (days[idx + 1] ?? '9999-12-31');
-        const isInRange = hasRange && dueDateIdx >= 0 && startIdx >= 0 && idx >= startIdx && idx <= dueDateIdx;
+        const isToday =
+          zoomLevel === 'day'
+            ? day === todayStr
+            : zoomLevel === 'week'
+              ? todayStr >= day && todayStr < (days[idx + 1] ?? '9999-12-31')
+              : todayStr >= day && todayStr < (days[idx + 1] ?? '9999-12-31');
+        const isInRange =
+          hasRange && dueDateIdx >= 0 && startIdx >= 0 && idx >= startIdx && idx <= dueDateIdx;
         const isDueDate = idx === dueDateIdx;
 
         return (
@@ -108,8 +108,8 @@ export function TimelineBar({ todo, days, category, zoomLevel = 'day', onEdit }:
             {isToday && (
               <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-sp-accent/30 z-10" />
             )}
-            {isInRange && (
-              hasSubTasks ? (
+            {isInRange &&
+              (hasSubTasks ? (
                 <div
                   className={`absolute top-1/2 -translate-y-1/2 h-4 flex gap-px ${
                     idx === startIdx ? 'left-1' : 'left-0'
@@ -132,22 +132,25 @@ export function TimelineBar({ todo, days, category, zoomLevel = 'day', onEdit }:
                     isDueDate ? 'right-0 rounded-r-full' : 'right-0'
                   }`}
                 />
-              )
-            )}
+              ))}
             {isDueDate && !isInRange && (
               <div className="absolute inset-0 flex items-center justify-center">
-                <div className={`w-2.5 h-2.5 rounded-full ${barColor} ${
-                  isDone ? 'opacity-40' : ''
-                } ring-2 ring-sp-card ${
-                  hasSubTasks && !allDone ? 'ring-current opacity-60' : ''
-                }`} />
+                <div
+                  className={`w-2.5 h-2.5 rounded-full ${barColor} ${
+                    isDone ? 'opacity-40' : ''
+                  } ring-2 ring-sp-card ${
+                    hasSubTasks && !allDone ? 'ring-current opacity-60' : ''
+                  }`}
+                />
               </div>
             )}
             {isDueDate && isInRange && (
               <div className="absolute inset-0 flex items-center justify-center">
-                <div className={`w-2.5 h-2.5 rounded-full ${barColor} ${
-                  isDone ? 'opacity-40' : ''
-                } ring-2 ring-sp-card z-10`} />
+                <div
+                  className={`w-2.5 h-2.5 rounded-full ${barColor} ${
+                    isDone ? 'opacity-40' : ''
+                  } ring-2 ring-sp-card z-10`}
+                />
               </div>
             )}
           </div>

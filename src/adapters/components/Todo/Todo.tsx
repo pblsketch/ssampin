@@ -88,7 +88,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   green: 'bg-green-500/20 text-green-400',
   yellow: 'bg-yellow-500/20 text-yellow-400',
   purple: 'bg-purple-500/20 text-purple-400',
-  red: 'bg-red-500/20 text-red-400',
+  red: 'bg-sp-error/20 text-sp-error',
   pink: 'bg-pink-500/20 text-pink-400',
   gray: 'bg-gray-500/20 text-gray-400',
 };
@@ -467,7 +467,7 @@ export function Todo() {
                   : 'border border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-surface'
               }`}
             >
-              <span className="text-base">🗃️</span>
+              <span className="material-symbols-outlined text-icon-md">inventory_2</span>
               <span className="hidden sm:inline">아카이브</span>
               {archivedTodos.length > 0 && (
                 <span className="text-xs opacity-70">({archivedTodos.length})</span>
@@ -487,31 +487,33 @@ export function Todo() {
               {/* 필터 탭 */}
               <div className="flex flex-col gap-3">
                 {/* 날짜 필터 + 정렬 모드 */}
-                <div className="flex gap-3 items-center">
+                <div className="flex gap-2 items-center">
                   {(Object.keys(FILTER_LABELS) as DateFilter[]).map((key) => (
                     <button
                       key={key}
                       type="button"
                       onClick={() => setFilter(key)}
-                      className={`px-5 py-2 rounded-full text-sm font-bold shadow-sm ring-1 transition-colors ${
+                      aria-pressed={filter === key}
+                      className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold ring-1 transition-colors focus-visible:ring-2 focus-visible:ring-sp-accent focus-visible:outline-none ${
                         filter === key
-                          ? 'bg-sp-accent text-white ring-sp-accent/30'
-                          : 'bg-sp-card hover:bg-sp-surface text-sp-muted ring-sp-border/50'
+                          ? 'bg-sp-accent text-white ring-transparent'
+                          : 'bg-sp-card hover:bg-sp-surface text-sp-muted ring-sp-border/60 hover:text-sp-text'
                       }`}
                     >
                       {FILTER_LABELS[key]}
                     </button>
                   ))}
 
-                  <span className="text-sp-border">|</span>
+                  <div className="w-px h-5 bg-sp-border/60" aria-hidden="true" />
 
                   <button
                     type="button"
                     onClick={() => setSortMode((m) => (m === 'priority' ? 'dueDate' : 'priority'))}
-                    className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-sm font-medium ring-1 transition-colors ${
+                    aria-pressed={sortMode === 'dueDate'}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium ring-1 transition-colors focus-visible:ring-2 focus-visible:ring-sp-accent focus-visible:outline-none ${
                       sortMode === 'dueDate'
-                        ? 'bg-sp-accent text-white ring-sp-accent/30'
-                        : 'bg-sp-card text-sp-muted ring-sp-border/50 hover:text-sp-text'
+                        ? 'bg-sp-accent text-white ring-transparent'
+                        : 'bg-sp-card text-sp-muted ring-sp-border/60 hover:text-sp-text hover:bg-sp-surface'
                     }`}
                     title={sortMode === 'dueDate' ? 'D-Day 순 정렬 중' : '우선순위 순 정렬 중'}
                   >
@@ -527,10 +529,11 @@ export function Todo() {
                   <button
                     type="button"
                     onClick={() => setCategoryFilter(null)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                    aria-pressed={categoryFilter === null}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium ring-1 transition-colors focus-visible:ring-2 focus-visible:ring-sp-accent focus-visible:outline-none ${
                       categoryFilter === null
-                        ? 'bg-sp-accent text-white'
-                        : 'bg-sp-card text-sp-muted hover:text-sp-text ring-1 ring-sp-border/50'
+                        ? 'bg-sp-accent text-white ring-transparent'
+                        : 'bg-sp-card text-sp-muted hover:text-sp-text hover:bg-sp-surface ring-sp-border/60'
                     }`}
                   >
                     전체
@@ -540,10 +543,11 @@ export function Todo() {
                       key={cat.id}
                       type="button"
                       onClick={() => setCategoryFilter(cat.id)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                      aria-pressed={categoryFilter === cat.id}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium ring-1 transition-colors focus-visible:ring-2 focus-visible:ring-sp-accent focus-visible:outline-none ${
                         categoryFilter === cat.id
-                          ? 'bg-sp-accent text-white'
-                          : 'bg-sp-card text-sp-muted hover:text-sp-text ring-1 ring-sp-border/50'
+                          ? 'bg-sp-accent text-white ring-transparent'
+                          : 'bg-sp-card text-sp-muted hover:text-sp-text hover:bg-sp-surface ring-sp-border/60'
                       }`}
                     >
                       {cat.icon} {cat.name}
@@ -761,7 +765,7 @@ export function Todo() {
                         type="button"
                         onClick={handleAdd}
                         disabled={!newText.trim()}
-                        className="flex items-center gap-2 bg-sp-accent hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed text-white px-5 py-2 rounded-xl transition-all shadow-lg shadow-sp-accent/20 text-sm font-bold"
+                        className="flex items-center gap-2 bg-sp-accent hover:bg-sp-accent/90 disabled:opacity-40 disabled:cursor-not-allowed text-white px-5 py-2 rounded-xl transition-all shadow-sp-md text-sm font-bold"
                       >
                         <span className="material-symbols-outlined text-icon-md">add</span>
                         추가
@@ -874,7 +878,7 @@ export function Todo() {
                         <button
                           type="button"
                           onClick={toggleQuickParse}
-                          className="text-sp-muted hover:text-red-400 transition-colors underline underline-offset-2"
+                          className="text-sp-muted hover:text-sp-error transition-colors underline underline-offset-2"
                           title="자연어 자동 인식을 끕니다"
                         >
                           인식 끄기
@@ -893,10 +897,15 @@ export function Todo() {
                     )}
 
                     {/* 두 번째 줄: 시간 + 우선순위 + 반복 + 카테고리 */}
-                    <div className="flex gap-3 items-center flex-wrap">
+                    <div className="flex gap-2.5 items-center flex-wrap">
                       {/* 시간 */}
                       <div className="flex items-center gap-1.5">
-                        <span className="text-xs text-sp-muted">⏰</span>
+                        <span
+                          className="material-symbols-outlined text-icon text-sp-muted"
+                          title="시간"
+                        >
+                          schedule
+                        </span>
                         <input
                           type="time"
                           value={newTime}
@@ -907,14 +916,15 @@ export function Todo() {
                           <button
                             type="button"
                             onClick={() => setNewTime('')}
-                            className="text-xs text-sp-muted hover:text-red-400 transition-colors"
+                            aria-label="시간 지우기"
+                            className="text-sp-muted hover:text-sp-error transition-colors"
                           >
-                            ✕
+                            <span className="material-symbols-outlined text-icon-sm">close</span>
                           </button>
                         )}
                       </div>
 
-                      <span className="text-sp-border">|</span>
+                      <div className="w-px h-5 bg-sp-border/60" aria-hidden="true" />
 
                       {/* 우선순위 */}
                       <div className="flex items-center gap-1">
@@ -926,26 +936,30 @@ export function Todo() {
                               key={p}
                               type="button"
                               onClick={() => setNewPriority(p)}
-                              className={`flex flex-col items-center px-2 py-1 rounded-md text-xs font-medium transition-colors ${
+                              aria-pressed={newPriority === p}
+                              className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-sp-accent focus-visible:outline-none ${
                                 newPriority === p
                                   ? `${config.bgColor || 'bg-sp-surface'} ${config.color} ring-1 ring-current`
-                                  : 'text-sp-muted hover:text-sp-text'
+                                  : 'text-sp-muted hover:text-sp-text hover:bg-sp-surface'
                               }`}
                             >
                               <span>{config.icon}</span>
-                              <span className="text-caption leading-tight mt-0.5">
-                                {config.label}
-                              </span>
+                              <span className="leading-tight">{config.label}</span>
                             </button>
                           );
                         })}
                       </div>
 
-                      <span className="text-sp-border">|</span>
+                      <div className="w-px h-5 bg-sp-border/60" aria-hidden="true" />
 
                       {/* 반복 */}
                       <div className="flex items-center gap-1.5">
-                        <span className="text-xs text-sp-muted">🔄</span>
+                        <span
+                          className="material-symbols-outlined text-icon text-sp-muted"
+                          title="반복"
+                        >
+                          repeat
+                        </span>
                         <select
                           value={newRecurrenceIdx}
                           onChange={(e) => setNewRecurrenceIdx(Number(e.target.value))}
@@ -959,11 +973,16 @@ export function Todo() {
                         </select>
                       </div>
 
-                      <span className="text-sp-border">|</span>
+                      <div className="w-px h-5 bg-sp-border/60" aria-hidden="true" />
 
                       {/* 카테고리 */}
                       <div className="flex items-center gap-1.5">
-                        <span className="text-xs text-sp-muted">📁</span>
+                        <span
+                          className="material-symbols-outlined text-icon text-sp-muted"
+                          title="카테고리"
+                        >
+                          folder
+                        </span>
                         <select
                           value={newCategory}
                           onChange={(e) => setNewCategory(e.target.value)}
@@ -1120,7 +1139,7 @@ export function Todo() {
                         onClick={handleArchiveCompleted}
                         className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-sp-muted hover:text-sp-text bg-sp-card hover:bg-sp-surface ring-1 ring-sp-border transition-colors"
                       >
-                        <span className="text-base">📦</span>
+                        <span className="material-symbols-outlined text-icon-md">archive</span>
                         완료 항목 모두 아카이브 ({completedCount}건)
                       </button>
                     </div>
@@ -1302,8 +1321,8 @@ function ArchiveView({
   }, [onDeleteAll]);
 
   const priorityDotColor: Record<string, string> = {
-    high: 'bg-red-400',
-    medium: 'bg-amber-400',
+    high: 'bg-sp-error',
+    medium: 'bg-sp-warning',
     low: 'bg-blue-400',
   };
 
@@ -1319,7 +1338,8 @@ function ArchiveView({
           <span className="material-symbols-outlined text-icon-lg">arrow_back</span>
         </button>
         <h3 className="text-sp-text text-lg font-bold flex items-center gap-2">
-          <span>🗃️</span> 아카이브
+          <span className="material-symbols-outlined text-icon-lg text-sp-muted">inventory_2</span>{' '}
+          아카이브
         </h3>
         <span className="text-sm text-sp-muted">({todos.length}건)</span>
       </div>
@@ -1558,11 +1578,11 @@ function ArchiveView({
                         {/* Actions */}
                         {isConfirming ? (
                           <div className="flex items-center gap-1 flex-shrink-0">
-                            <span className="text-xs text-red-400 mr-1">삭제?</span>
+                            <span className="text-xs text-sp-error mr-1">삭제?</span>
                             <button
                               type="button"
                               onClick={() => handleDeleteSingle(todo.id)}
-                              className="px-2 py-1 rounded-lg text-xs font-medium bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
+                              className="px-2 py-1 rounded-lg text-xs font-medium bg-sp-error/20 text-sp-error hover:bg-sp-error/30 transition-colors"
                             >
                               확인
                             </button>
@@ -1586,7 +1606,7 @@ function ArchiveView({
                             <button
                               type="button"
                               onClick={() => setConfirmDeleteId(todo.id)}
-                              className="px-2 py-1 rounded-lg text-xs font-medium text-red-400 hover:bg-red-400/10 transition-colors"
+                              className="px-2 py-1 rounded-lg text-xs font-medium text-sp-error hover:bg-sp-error/10 transition-colors"
                             >
                               삭제
                             </button>
@@ -1623,11 +1643,11 @@ function ArchiveView({
           </button>
           {confirmBatchDelete ? (
             <div className="flex items-center gap-1">
-              <span className="text-xs text-red-400">삭제?</span>
+              <span className="text-xs text-sp-error">삭제?</span>
               <button
                 type="button"
                 onClick={handleBatchDelete}
-                className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
+                className="px-3 py-1.5 rounded-lg text-xs font-medium bg-sp-error/20 text-sp-error hover:bg-sp-error/30 transition-colors"
               >
                 확인
               </button>
@@ -1643,7 +1663,7 @@ function ArchiveView({
             <button
               type="button"
               onClick={() => setConfirmBatchDelete(true)}
-              className="px-3 py-1.5 rounded-lg text-xs font-medium text-red-400 bg-red-400/10 hover:bg-red-400/20 transition-colors"
+              className="px-3 py-1.5 rounded-lg text-xs font-medium text-sp-error bg-sp-error/10 hover:bg-sp-error/20 transition-colors"
             >
               일괄 삭제
             </button>
@@ -1651,11 +1671,11 @@ function ArchiveView({
           <div className="w-px h-5 bg-sp-border" />
           {confirmDeleteAll ? (
             <div className="flex items-center gap-1">
-              <span className="text-xs text-red-400">전체?</span>
+              <span className="text-xs text-sp-error">전체?</span>
               <button
                 type="button"
                 onClick={handleDeleteAll}
-                className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
+                className="px-3 py-1.5 rounded-lg text-xs font-medium bg-sp-error/20 text-sp-error hover:bg-sp-error/30 transition-colors"
               >
                 확인
               </button>
@@ -1671,7 +1691,7 @@ function ArchiveView({
             <button
               type="button"
               onClick={() => setConfirmDeleteAll(true)}
-              className="px-3 py-1.5 rounded-lg text-xs font-medium text-red-400 hover:bg-red-400/10 ring-1 ring-red-400/30 transition-colors"
+              className="px-3 py-1.5 rounded-lg text-xs font-medium text-sp-error hover:bg-sp-error/10 ring-1 ring-sp-error/30 transition-colors"
             >
               <span className="material-symbols-outlined text-icon-sm align-middle mr-1">
                 delete_forever
@@ -1779,11 +1799,11 @@ function TodoGroup({
         <span
           className={`material-symbols-outlined text-icon-md transition-transform ${
             collapsed ? '' : 'rotate-90'
-          } ${isOverdueGroup ? 'text-red-400' : 'text-sp-muted'}`}
+          } ${isOverdueGroup ? 'text-sp-error' : 'text-sp-muted'}`}
         >
           chevron_right
         </span>
-        <span className={`text-sm font-bold ${isOverdueGroup ? 'text-red-400' : 'text-sp-text'}`}>
+        <span className={`text-sm font-bold ${isOverdueGroup ? 'text-sp-error' : 'text-sp-text'}`}>
           {label}
         </span>
         <span className="text-xs text-sp-muted ml-1">({totalCount})</span>
@@ -1827,11 +1847,11 @@ function TodoGroup({
                 className="w-full flex items-center gap-2 px-4 py-2 text-sp-muted hover:bg-sp-surface/30 transition-colors border-t border-sp-border/50"
               >
                 <span
-                  className={`text-caption transition-transform ${
+                  className={`material-symbols-outlined text-icon transition-transform ${
                     completedCollapsed ? '' : 'rotate-90'
                   }`}
                 >
-                  ▶
+                  chevron_right
                 </span>
                 <span className="text-xs font-medium">완료 {completedItems.length}건</span>
               </button>
@@ -1992,9 +2012,9 @@ function TodoItem({
   const dDayColor = useMemo(() => {
     if (!dDayText) return '';
     if (dDayText === 'D-Day') return 'text-sp-accent bg-sp-accent/10';
-    if (dDayText.startsWith('D+')) return 'text-red-400 bg-red-400/10';
+    if (dDayText.startsWith('D+')) return 'text-sp-error bg-sp-error/10';
     const num = parseInt(dDayText.replace('D-', ''), 10);
-    if (num <= 3) return 'text-amber-400 bg-amber-400/10';
+    if (num <= 3) return 'text-sp-warning bg-sp-warning/10';
     return 'text-sp-muted bg-sp-surface';
   }, [dDayText]);
 
@@ -2226,7 +2246,7 @@ function TodoItem({
             <button
               type="button"
               onClick={saveEdit}
-              className="px-3 py-1 rounded-lg text-xs font-bold bg-sp-accent hover:bg-blue-600 text-white transition-colors"
+              className="px-3 py-1 rounded-lg text-xs font-bold bg-sp-accent hover:bg-sp-accent/90 text-white transition-colors"
             >
               저장
             </button>
@@ -2257,20 +2277,25 @@ function TodoItem({
             {...dragHandleProps}
             onClick={(e) => e.stopPropagation()}
           >
-            <span className="text-sm leading-none select-none">⠿</span>
+            <span className="material-symbols-outlined text-icon-md leading-none select-none">
+              drag_indicator
+            </span>
           </button>
         )}
 
         {/* 체크박스 */}
-        <div
-          className="cursor-pointer"
+        <button
+          type="button"
+          className="cursor-pointer shrink-0 rounded focus-visible:ring-2 focus-visible:ring-sp-accent focus-visible:outline-none"
+          aria-label={todo.completed ? '완료 취소' : '완료'}
+          aria-pressed={todo.completed}
           onClick={() => {
             track('todo_toggle', { completed: !todo.completed });
             void onToggle(todo.id);
           }}
         >
           <Checkbox checked={todo.completed} />
-        </div>
+        </button>
 
         {/* 우선순위 dot */}
         {todo.priority && todo.priority !== 'none' && (
@@ -2290,8 +2315,11 @@ function TodoItem({
 
         {/* 반복 아이콘 */}
         {todo.recurrence && (
-          <span className="text-caption text-sp-muted" title={getRecurrenceLabel(todo.recurrence)}>
-            🔄
+          <span
+            className="material-symbols-outlined text-icon-sm text-sp-muted shrink-0"
+            title={getRecurrenceLabel(todo.recurrence)}
+          >
+            repeat
           </span>
         )}
 
@@ -2338,7 +2366,7 @@ function TodoItem({
           <span
             className={`text-xs font-medium px-2 py-0.5 rounded ${
               overdue
-                ? 'text-red-400 bg-red-400/10'
+                ? 'text-sp-error bg-sp-error/10'
                 : todo.completed
                   ? 'text-sp-muted/50'
                   : 'text-sp-muted'
@@ -2415,7 +2443,7 @@ function TodoItem({
               }`}
               title="날짜 미루기"
             >
-              <span className="text-sm">📅</span>
+              <span className="material-symbols-outlined text-icon">more_time</span>
             </button>
 
             {/* Postpone dropdown */}
@@ -2454,9 +2482,10 @@ function TodoItem({
                     <button
                       type="button"
                       onClick={(e) => e.stopPropagation()}
-                      className="w-full text-left px-2 py-1.5 text-xs text-sp-accent hover:bg-sp-surface transition-colors rounded"
+                      className="w-full flex items-center gap-1.5 text-left px-2 py-1.5 text-xs text-sp-accent hover:bg-sp-surface transition-colors rounded"
                     >
-                      📅 달력에서 선택...
+                      <span className="material-symbols-outlined text-icon-sm">calendar_month</span>
+                      달력에서 선택...
                     </button>
                   </DatePopover>
                 </div>
@@ -2473,7 +2502,7 @@ function TodoItem({
             void onDelete(todo.id);
           }}
           className={`p-1 rounded-lg transition-all ${
-            hovered ? 'opacity-100 text-red-400 hover:bg-red-400/10' : 'opacity-0'
+            hovered ? 'opacity-100 text-sp-error hover:bg-sp-error/10' : 'opacity-0'
           }`}
         >
           <span className="material-symbols-outlined text-icon-md">close</span>
@@ -2488,9 +2517,15 @@ function TodoItem({
               key={st.id}
               className="flex items-center gap-2 pl-8 pr-4 py-1.5 hover:bg-sp-surface/20 transition-colors group/sub"
             >
-              <div className="cursor-pointer" onClick={() => handleToggleSubTask(st.id)}>
+              <button
+                type="button"
+                className="cursor-pointer shrink-0 rounded focus-visible:ring-2 focus-visible:ring-sp-accent focus-visible:outline-none"
+                aria-label={st.completed ? '완료 취소' : '완료'}
+                aria-pressed={st.completed}
+                onClick={() => handleToggleSubTask(st.id)}
+              >
                 <Checkbox checked={st.completed} />
-              </div>
+              </button>
               <span
                 className={`flex-1 text-xs leading-tight ${
                   st.completed ? 'text-sp-muted line-through opacity-50' : 'text-sp-text/80'
@@ -2501,7 +2536,7 @@ function TodoItem({
               <button
                 type="button"
                 onClick={() => void onDeleteSubTask(todo.id, st.id)}
-                className="p-0.5 rounded text-red-400/60 hover:text-red-400 hover:bg-red-400/10 opacity-0 group-hover/sub:opacity-100 transition-all"
+                className="p-0.5 rounded text-sp-error/60 hover:text-sp-error hover:bg-sp-error/10 opacity-0 group-hover/sub:opacity-100 transition-all"
               >
                 <span className="material-symbols-outlined text-icon-sm">close</span>
               </button>
@@ -2513,7 +2548,9 @@ function TodoItem({
       {/* Subtask input */}
       {showSubTaskInput && (
         <div className="flex items-center gap-2 pl-8 pr-4 py-2 border-t border-sp-border/30 bg-sp-surface/20">
-          <span className="text-sp-muted text-xs">└</span>
+          <span className="material-symbols-outlined text-icon-sm text-sp-muted">
+            subdirectory_arrow_right
+          </span>
           <input
             type="text"
             value={subTaskText}
@@ -2527,7 +2564,7 @@ function TodoItem({
             type="button"
             onClick={handleAddSubTask}
             disabled={!subTaskText.trim()}
-            className="px-2 py-1 rounded-lg text-xs font-medium bg-sp-accent hover:bg-blue-600 disabled:opacity-40 text-white transition-colors"
+            className="px-2 py-1 rounded-lg text-xs font-medium bg-sp-accent hover:bg-sp-accent/90 disabled:opacity-40 text-white transition-colors"
           >
             추가
           </button>
