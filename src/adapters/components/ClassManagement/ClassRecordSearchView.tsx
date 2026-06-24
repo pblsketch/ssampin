@@ -4,8 +4,10 @@ import { useObservationStore } from '@adapters/stores/useObservationStore';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { studentKey } from '@domain/entities/TeachingClass';
 import { isStudentActive } from '@domain/rules/studentActivity';
-import type { AttendanceStatus } from '@domain/entities/Attendance';
+import type { AttendanceStatus, AttendanceReason } from '@domain/entities/Attendance';
+import { ATTENDANCE_REASONS } from '@domain/entities/Attendance';
 import { DEFAULT_OBSERVATION_TAGS } from '@domain/entities/Observation';
+import { mergeSingleStudentAttendance } from './shared/inlineAttendanceEdit';
 import {
   mapMixedRecordsToFlatRows,
   type MixedExcelRow,
@@ -91,6 +93,13 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
   // D1: 특기(관찰) 인라인 편집 상태
   const [editingObsId, setEditingObsId] = useState<string | null>(null);
   const [editObsContent, setEditObsContent] = useState('');
+
+  // D2: 출결 인라인 편집 상태(키=studentKey-date-period, 카드 1개만 식별)
+  const [editingAttKey, setEditingAttKey] = useState<string | null>(null);
+  const [editAttStatus, setEditAttStatus] = useState<AttendanceStatus>('absent');
+  const [editAttReason, setEditAttReason] = useState<AttendanceReason | ''>('');
+  const [editAttMemo, setEditAttMemo] = useState('');
+  const [attSaving, setAttSaving] = useState(false);
 
   const classes = useTeachingClassStore((s) => s.classes);
   const attendanceRecords = useTeachingClassStore((s) => s.attendanceRecords);
@@ -310,6 +319,8 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
     setPeriodFilter('all');
     setEditingObsId(null);
     setEditObsContent('');
+    setEditingAttKey(null);
+    setAttSaving(false);
   };
 
   // D1: 특기 인라인 편집 — 진입/취소/저장
@@ -341,6 +352,78 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
       showToast('저장에 실패했습니다', 'error');
     }
   }, [editObsContent, editingObsId, updateObservation, showToast]);
+
+  // D2: 출결 인라인 편집 — 진입/취소/저장(원본 재조회 → 한 학생만 안전 머지 → 저장)
+  const handleEditAtt = useCallback((r: AttendanceMixedRecord) => {
+    setEditingAttKey(`${r.studentKey}-${r.date}-${r.period}`);
+    setEditAttStatus(r.status);
+    setEditAttReason((r.reason as AttendanceReason | undefined) ?? '');
+    setEditAttMemo(r.memo ?? '');
+  }, []);
+
+  const handleCancelAttEdit = useCallback(() => {
+    setEditingAttKey(null);
+    setAttSaving(false);
+  }, []);
+
+  const handleSaveAtt = useCallback(
+    async (r: AttendanceMixedRecord) => {
+      setAttSaving(true);
+      const store = useTeachingClassStore.getState();
+      // 그룹반 우선조회로 원본 레코드(=같은 교시 전체 학생)를 다시 읽는다.
+      // 부분 뷰모델로 record를 재구성하면 같은 교시 다른 학생이 통째로 사라진다(데이터 손실).
+      const existing = store.getAttendanceRecord(classId, r.date, r.period);
+      if (!existing) {
+        setAttSaving(false);
+        showToast('원본 출결 기록을 찾을 수 없습니다', 'error');
+        return;
+      }
+      // 되돌리기용 스냅샷(편집 전 값)
+      const target = existing.students.find((sa) => studentKey(sa) === r.studentKey);
+      const snapshot = target
+        ? { status: target.status, reason: target.reason, memo: target.memo }
+        : null;
+      const patch =
+        editAttStatus === 'present'
+          ? { status: editAttStatus, reason: undefined, memo: undefined }
+          : {
+              status: editAttStatus,
+              reason: editAttReason || undefined,
+              memo: editAttMemo.trim() || undefined,
+            };
+      try {
+        await store.saveAttendanceRecord(
+          mergeSingleStudentAttendance(existing, r.studentKey, patch),
+        );
+        setEditingAttKey(null);
+        setAttSaving(false);
+        showToast(
+          '출결을 저장했습니다',
+          'success',
+          snapshot
+            ? {
+                label: '되돌리기',
+                onClick: () => {
+                  const cur = useTeachingClassStore
+                    .getState()
+                    .getAttendanceRecord(classId, r.date, r.period);
+                  if (!cur) return;
+                  void useTeachingClassStore
+                    .getState()
+                    .saveAttendanceRecord(
+                      mergeSingleStudentAttendance(cur, r.studentKey, snapshot),
+                    );
+                },
+              }
+            : undefined,
+        );
+      } catch {
+        setAttSaving(false);
+        showToast('저장에 실패했습니다', 'error');
+      }
+    },
+    [classId, editAttStatus, editAttReason, editAttMemo, showToast],
+  );
 
   /* 현재 필터 결과를 Excel로 내보내기 (안 Y: 표현 매퍼 → infra 직렬화) */
   const handleExport = useCallback(async () => {
@@ -536,12 +619,14 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
       />
 
       {/* 본문: 좌측 학생 점프 리스트 + 우측 타임라인 */}
-      <div className="flex-1 flex gap-3 min-h-0">
-        <RecordStudentJumpList
-          items={jumpItems}
-          selectedKey={studentFilter}
-          onSelect={setStudentFilter}
-        />
+      <div className="flex-1 flex flex-col lg:flex-row gap-3 min-h-0">
+        <div className="w-full lg:w-[180px] shrink-0">
+          <RecordStudentJumpList
+            items={jumpItems}
+            selectedKey={studentFilter}
+            onSelect={setStudentFilter}
+          />
+        </div>
 
         <div className="flex-1 min-w-0 overflow-y-auto">
           {/* 선택 학생 통계 헤더(건수만 — 비율 지표 미노출) */}
@@ -632,10 +717,106 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
                               <span className="material-symbols-outlined text-sm">edit</span>
                             </button>
                           )}
+                          {r.type === 'attendance' &&
+                            editingAttKey !== `${r.studentKey}-${r.date}-${r.period}` && (
+                              <button
+                                type="button"
+                                onClick={() => handleEditAtt(r)}
+                                className="ml-auto shrink-0 flex items-center px-1.5 py-0.5 rounded text-xs text-sp-muted opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 hover:text-sp-text transition-opacity focus-visible:outline focus-visible:outline-2 focus-visible:outline-sp-accent"
+                                title="수정"
+                                aria-label="출결 수정"
+                              >
+                                <span className="material-symbols-outlined text-sm">edit</span>
+                              </button>
+                            )}
                         </div>
-                        {r.type === 'attendance' && r.memo && (
-                          <p className="text-xs text-sp-muted pl-1">{r.memo}</p>
-                        )}
+                        {r.type === 'attendance' &&
+                          (editingAttKey === `${r.studentKey}-${r.date}-${r.period}` ? (
+                            <div className="mt-1 space-y-1.5 pl-1">
+                              {/* 상태(결석/지각/조퇴/결과 — 출석 전환은 비출결-only 원칙상 제외) */}
+                              <div className="flex flex-wrap items-center gap-1">
+                                {(
+                                  [
+                                    ['absent', '결석'],
+                                    ['late', '지각'],
+                                    ['earlyLeave', '조퇴'],
+                                    ['classAbsence', '결과'],
+                                  ] as const
+                                ).map(([st, label]) => (
+                                  <button
+                                    key={st}
+                                    type="button"
+                                    onClick={() => setEditAttStatus(st)}
+                                    className={`px-2 py-0.5 rounded-lg text-xs font-medium ${
+                                      editAttStatus === st
+                                        ? 'bg-sp-accent text-white'
+                                        : 'bg-sp-surface text-sp-muted hover:text-sp-text'
+                                    }`}
+                                  >
+                                    {label}
+                                  </button>
+                                ))}
+                              </div>
+                              {/* 사유 */}
+                              <div className="flex flex-wrap items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => setEditAttReason('')}
+                                  className={`px-2 py-0.5 rounded-lg text-xs ${
+                                    !editAttReason
+                                      ? 'bg-sp-accent text-white'
+                                      : 'bg-sp-surface text-sp-muted hover:text-sp-text'
+                                  }`}
+                                >
+                                  사유 없음
+                                </button>
+                                {ATTENDANCE_REASONS.map((rs) => (
+                                  <button
+                                    key={rs}
+                                    type="button"
+                                    onClick={() => setEditAttReason(rs)}
+                                    className={`px-2 py-0.5 rounded-lg text-xs ${
+                                      editAttReason === rs
+                                        ? 'bg-sp-accent text-white'
+                                        : 'bg-sp-surface text-sp-muted hover:text-sp-text'
+                                    }`}
+                                  >
+                                    {rs}
+                                  </button>
+                                ))}
+                              </div>
+                              {/* 메모 */}
+                              <textarea
+                                value={editAttMemo}
+                                onChange={(e) => setEditAttMemo(e.target.value)}
+                                rows={2}
+                                placeholder="메모(선택)"
+                                className="w-full bg-sp-surface border border-sp-border rounded-lg px-2 py-1.5 text-xs text-sp-text focus:outline-none focus:border-sp-accent resize-none"
+                              />
+                              <div className="flex items-center justify-end gap-1.5">
+                                {attSaving && (
+                                  <span className="mr-auto text-xs text-sp-muted">저장 중…</span>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={handleCancelAttEdit}
+                                  className="px-2.5 py-1 rounded-lg text-xs text-sp-muted hover:text-sp-text"
+                                >
+                                  취소
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => void handleSaveAtt(r)}
+                                  disabled={attSaving}
+                                  className="px-2.5 py-1 rounded-lg text-xs bg-sp-accent text-white hover:bg-sp-accent/80 disabled:opacity-40"
+                                >
+                                  저장
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            r.memo && <p className="text-xs text-sp-muted pl-1">{r.memo}</p>
+                          ))}
                         {r.type === 'observation' &&
                           (editingObsId === r.id ? (
                             <div className="pl-1 space-y-1.5">
