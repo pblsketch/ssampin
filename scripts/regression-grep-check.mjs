@@ -225,6 +225,18 @@ const presenceChecks = [
       /getStudentViewportMeta[\s\S]{0,600}?viewport-fit=cover[\s\S]*?--sps-accent:\s*#3b82f6/,
     name: 'REGRESSION #47: 학생 셸 줌 허용 viewport + --sps-accent 토큰 (student-pages-design-refactor)',
   },
+  // ────────────────────────────────────────────────────────────────────────
+  // REGRESSION #49 — record-viewing-unification Phase C 개인정보 hard gate (2026-06-24).
+  // recordIdentityAdapter 의 합성 학생키는 반드시 context(+classId)+rawKey 로 만들어져야 한다.
+  // 누군가 키를 rawKey 단독으로 "단순화"하면 담임/교과의 동일 키 학생이 한 그룹으로
+  // 오병합되어 엉뚱한 학생 기록이 섞이는 개인정보 사고가 재발한다.
+  // (단위테스트 C-AC3 와 이중 가드 — context 가 키 첫 축으로 남아있는지 grep.)
+  // ────────────────────────────────────────────────────────────────────────
+  {
+    file: 'src/adapters/presentation/recordIdentityAdapter.ts',
+    pattern: /surfaceKey:\s*JSON\.stringify\(\s*\[\s*context\s*,[\s\S]{0,60}?rawKey\s*\]\s*\)/,
+    name: 'REGRESSION #49: recordIdentityAdapter 합성키가 context+classId+rawKey 분리 키 유지 (개인정보 오병합 hard gate)',
+  },
 ];
 
 // ============================================================
@@ -323,6 +335,23 @@ const absenceChecks = [
       /노션\s*사용자\s*가이드/,
       /Notion\s*사용자\s*가이드/,
     ],
+  },
+  // ────────────────────────────────────────────────────────────────────────
+  // REGRESSION #50 — record-viewing-unification Phase C 개인정보 hard gate (2026-06-24).
+  // 식별 그룹핑 어댑터는 읽기 전용이어야 한다 — store import / write 메서드 0건.
+  // 쓰기 의존이 생기면 표시용 어댑터가 데이터를 변형·저장할 수 있어 불가침(읽기 전용)이 깨진다.
+  // (단위테스트 C-AC5 와 이중 가드. .test.ts 는 메서드명을 블랙리스트로 나열하므로 제외.)
+  // ────────────────────────────────────────────────────────────────────────
+  {
+    name: 'REGRESSION #50: recordIdentityAdapter 는 store write 의존이 없다 (읽기 전용 hard gate)',
+    roots: ['src/adapters/presentation'],
+    extensions: ['.ts'],
+    patterns: [
+      /from\s+['"]@adapters\/stores/,
+      /useStudentRecordsStore|useObservationStore|useTeachingClassStore/,
+      /\b(updateAttendanceRecord|saveDayAttendance|bridgeHomeroomDayAttendance)\b/,
+    ],
+    fileFilter: (path) => /recordIdentityAdapter\.ts$/.test(path) && !path.includes('.test.'),
   },
 ];
 
