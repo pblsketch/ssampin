@@ -4,8 +4,12 @@ import reactHooks from 'eslint-plugin-react-hooks';
 
 export default tseslint.config(
   {
-    // 생성 파일(직접 수정 금지) — lint 대상에서 제외. 정합은 scripts/check-contract-sync.mjs 가 본다.
-    ignores: ['src/domain/contracts/aiBridgeWriteContract.ts'],
+    // 생성 파일(직접 수정 금지) — lint 대상에서 제외(eslint --fix 가 헤더 디렉티브를 떼지 않도록).
+    // 정합은 scripts/check-contract-sync.mjs 가 본다.
+    ignores: [
+      'src/domain/contracts/aiBridgeWriteContract.ts',
+      'electron/ipc/_generated/aiBridgeWriteContract.ts',
+    ],
   },
   eslint.configs.recommended,
   ...tseslint.configs.recommended,

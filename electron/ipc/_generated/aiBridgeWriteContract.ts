@@ -1,4 +1,4 @@
- 
+/* eslint-disable */
 /**
  * 생성 파일 — 직접 수정 금지.
  * 원천: scripts/contract/aiBridgeWriteContract.def.mjs
