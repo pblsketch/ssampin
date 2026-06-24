@@ -12,20 +12,12 @@ import type {
   AttendanceStatus,
   StudentAttendance,
 } from '@domain/entities/Attendance';
+// 쓰기 도메인/연산 enum 은 단일 계약 def 에서 생성된 산출물에서만 파생한다(수기 중복 제거).
+import type { WriteDomain, WriteOp } from '@domain/contracts/aiBridgeWriteContract';
 
 export interface LiveSyncWriteRequest {
-  readonly domain:
-    | 'todos'
-    | 'events'
-    | 'recordDrafts'
-    | 'memos'
-    | 'bookmarks'
-    | 'notes'
-    | 'attendance'
-    | 'homeroomAttendance'
-    | 'observations'
-    | 'recordNote';
-  readonly op: 'create' | 'update' | 'complete' | 'delete';
+  readonly domain: WriteDomain;
+  readonly op: WriteOp;
   readonly idempotencyKey: string;
   readonly data: Record<string, unknown>;
 }
@@ -662,6 +654,32 @@ async function applyRecordNote(
   return ok(req.idempotencyKey);
 }
 
+/** 도메인별 핸들러 시그니처(모두 동일 — req+deps → 결과). */
+type LiveSyncHandler = (
+  req: LiveSyncWriteRequest,
+  deps: LiveSyncWriteDeps,
+) => Promise<LiveSyncWriteResult>;
+
+/**
+ * 도메인 → 핸들러 디스패치. `satisfies Record<WriteDomain, …>` 로 누락·잉여 도메인을 컴파일 타임에 강제한다
+ * (계약 def 에서 도메인을 빼면 핸들러가 남아 잉여 키 에러, 새 도메인을 더하면 핸들러 누락 에러 — exhaustiveness).
+ */
+const LIVE_SYNC_DISPATCH = {
+  todos: applyTodos,
+  events: applyEvents,
+  recordDrafts: applyRecordDrafts,
+  memos: applyMemos,
+  bookmarks: applyBookmarks,
+  notes: applyNotes,
+  attendance: applyAttendance,
+  homeroomAttendance: applyHomeroomAttendance,
+  observations: applyObservations,
+  recordNote: applyRecordNote,
+} satisfies Record<WriteDomain, LiveSyncHandler>;
+
+/** 디스패치가 실제로 다루는 도메인 키 — 계약 정렬 메타테스트가 WRITE_DOMAINS 와 일치 검증. */
+export const LIVE_SYNC_DISPATCH_DOMAINS = Object.keys(LIVE_SYNC_DISPATCH) as readonly WriteDomain[];
+
 /**
  * 검증된 live-sync 쓰기를 store 액션으로 적용. 도메인/연산별로 분기하며, 실패는 상태코드와 함께 반환.
  * (페이로드 형태는 main 의 validateApplyWrite 가 1차 검증하지만, 여기서도 data 필드를 방어적으로 본다.)
@@ -686,17 +704,9 @@ export async function applyLiveSyncWrite(
 
   let result: LiveSyncWriteResult;
   try {
-    if (req.domain === 'todos') result = await applyTodos(req, deps);
-    else if (req.domain === 'events') result = await applyEvents(req, deps);
-    else if (req.domain === 'recordDrafts') result = await applyRecordDrafts(req, deps);
-    else if (req.domain === 'memos') result = await applyMemos(req, deps);
-    else if (req.domain === 'bookmarks') result = await applyBookmarks(req, deps);
-    else if (req.domain === 'notes') result = await applyNotes(req, deps);
-    else if (req.domain === 'attendance') result = await applyAttendance(req, deps);
-    else if (req.domain === 'homeroomAttendance') result = await applyHomeroomAttendance(req, deps);
-    else if (req.domain === 'observations') result = await applyObservations(req, deps);
-    else if (req.domain === 'recordNote') result = await applyRecordNote(req, deps);
-    else result = bad('지원하지 않는 도메인입니다.');
+    // req.domain 은 WriteDomain 으로 검증돼 항상 핸들러가 있으나, 방어적으로 미지원 경로를 남긴다.
+    const handler = LIVE_SYNC_DISPATCH[req.domain] as LiveSyncHandler | undefined;
+    result = handler ? await handler(req, deps) : bad('지원하지 않는 도메인입니다.');
   } catch {
     result = { ok: false, status: 500, error: '쓰기 적용 중 오류가 발생했습니다.' };
   }

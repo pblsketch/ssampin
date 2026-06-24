@@ -1,0 +1,54 @@
+{
+  "WRITE_DOMAINS": [
+    "todos",
+    "events",
+    "recordDrafts",
+    "memos",
+    "bookmarks",
+    "notes",
+    "attendance",
+    "homeroomAttendance",
+    "observations",
+    "recordNote"
+  ],
+  "WRITE_OPS": [
+    "create",
+    "update",
+    "complete",
+    "delete"
+  ],
+  "OBSERVATION_FIELDS": [
+    "studentId",
+    "content",
+    "date",
+    "tags",
+    "classId"
+  ],
+  "OBSERVATION_CONTENT_MAX": 500,
+  "RECORD_NOTE_FIELDS": [
+    "studentId",
+    "content",
+    "categoryId",
+    "subcategory",
+    "date"
+  ],
+  "RECORD_NOTE_CONTENT_MAX": 2000,
+  "ATTENDANCE_STATUSES": [
+    "present",
+    "absent",
+    "late",
+    "earlyLeave",
+    "classAbsence"
+  ],
+  "ATTENDANCE_REASONS": [
+    "질병",
+    "인정",
+    "미인정",
+    "기타"
+  ],
+  "IDENTITY_KEY_CONTRACT": {
+    "homeroomStudentId": "Student.id",
+    "classObservationStudentKey": "grade-classNo-studentNo+classId",
+    "attendanceMatch": "studentNumber"
+  }
+}

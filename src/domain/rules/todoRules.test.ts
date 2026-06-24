@@ -13,7 +13,7 @@ import {
   syncStatusToCompleted,
   formatDate,
 } from './todoRules';
-import type { Todo } from '@domain/entities/Todo';
+import type { Todo, TodoRecurrence } from '@domain/entities/Todo';
 
 let seq = 0;
 function todo(extra: Partial<Todo> = {}): Todo {
@@ -196,6 +196,33 @@ describe('calculateNextDueDate', () => {
     const day = new Date(next + 'T00:00:00').getDay();
     expect(day).not.toBe(0);
     expect(day).not.toBe(6);
+  });
+
+  it('weekly + daysOfWeek — 같은 주 다음 요일로, 없으면 다음 주 첫 요일로 (WS3.5)', () => {
+    const mwf: TodoRecurrence = { type: 'weekly', interval: 1, daysOfWeek: [1, 3, 5] };
+    // 2026-03-10(화) → 같은 주 다음 요일 수(3) = 03-11
+    expect(calculateNextDueDate('2026-03-10', mwf)).toBe('2026-03-11');
+    // 2026-03-11(수) → 금(5) = 03-13
+    expect(calculateNextDueDate('2026-03-11', mwf)).toBe('2026-03-13');
+    // 2026-03-13(금) → 다음 주 월(1) = 03-16
+    expect(calculateNextDueDate('2026-03-13', mwf)).toBe('2026-03-16');
+  });
+
+  it('weekly + daysOfWeek + interval(격주) — 마지막 요일 후 interval 주 뒤 첫 요일 (WS3.5)', () => {
+    const biweekly: TodoRecurrence = { type: 'weekly', interval: 2, daysOfWeek: [1, 3, 5] };
+    // 2026-03-13(금) → (7-5)+1+7 = 10일 뒤 = 03-23(월)
+    const next = calculateNextDueDate('2026-03-13', biweekly);
+    expect(next).toBe('2026-03-23');
+    expect(new Date(next + 'T00:00:00').getDay()).toBe(1);
+  });
+
+  it('monthly — 말일 보정(짧은 달은 말일로 clamp) (WS3.5)', () => {
+    // 1/31 → 2/28(2026 평년)
+    expect(calculateNextDueDate('2026-01-31', { type: 'monthly', interval: 1 })).toBe('2026-02-28');
+    // 3/31 → 4/30
+    expect(calculateNextDueDate('2026-03-31', { type: 'monthly', interval: 1 })).toBe('2026-04-30');
+    // 윤년: 2028-01-31 → 2/29
+    expect(calculateNextDueDate('2028-01-31', { type: 'monthly', interval: 1 })).toBe('2028-02-29');
   });
 });
 

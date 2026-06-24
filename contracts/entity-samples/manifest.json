@@ -1,0 +1,117 @@
+{
+  "entities": {
+    "observation": {
+      "file": "src/domain/entities/Observation.ts",
+      "interfaces": {
+        "ObservationRecord": {
+          "mirrored": [
+            "id",
+            "studentId",
+            "classId",
+            "authorId",
+            "date",
+            "content",
+            "tags",
+            "visibility",
+            "createdAt",
+            "updatedAt"
+          ],
+          "notMirrored": ["category"]
+        }
+      }
+    },
+    "studentRecord": {
+      "file": "src/domain/entities/StudentRecord.ts",
+      "interfaces": {
+        "StudentRecord": {
+          "mirrored": [
+            "id",
+            "studentId",
+            "category",
+            "subcategory",
+            "content",
+            "date",
+            "attendancePeriods",
+            "reportedToNeis",
+            "documentSubmitted",
+            "tags"
+          ],
+          "notMirrored": ["createdAt", "method", "followUp", "followUpDate", "followUpDone"]
+        },
+        "AttendancePeriodEntry": {
+          "mirrored": ["period", "status", "reason", "memo"],
+          "notMirrored": []
+        }
+      }
+    },
+    "attendance": {
+      "file": "src/domain/entities/Attendance.ts",
+      "interfaces": {
+        "AttendanceRecord": {
+          "mirrored": ["classId", "groupId", "date", "period", "students"],
+          "notMirrored": []
+        },
+        "StudentAttendance": {
+          "mirrored": ["number", "status", "reason", "memo", "grade", "classNum"],
+          "notMirrored": []
+        }
+      }
+    },
+    "teachingClass": {
+      "file": "src/domain/entities/TeachingClass.ts",
+      "interfaces": {
+        "TeachingClass": {
+          "mirrored": [
+            "id",
+            "name",
+            "subject",
+            "groupId",
+            "students",
+            "order",
+            "studentSyncMode",
+            "createdAt",
+            "updatedAt"
+          ],
+          "notMirrored": ["seating"]
+        },
+        "TeachingClassStudent": {
+          "mirrored": [
+            "number",
+            "name",
+            "memo",
+            "grade",
+            "classNum",
+            "isVacant",
+            "status",
+            "statusNote",
+            "statusChangedAt"
+          ],
+          "notMirrored": []
+        }
+      }
+    },
+    "student": {
+      "file": "src/domain/entities/Student.ts",
+      "interfaces": {
+        "Student": {
+          "mirrored": [
+            "id",
+            "name",
+            "studentNumber",
+            "phone",
+            "parentPhone",
+            "parentPhoneLabel",
+            "parentPhone2",
+            "parentPhone2Label",
+            "isVacant",
+            "birthDate",
+            "status",
+            "statusNote",
+            "statusChangedAt"
+          ],
+          "notMirrored": []
+        }
+      }
+    }
+  }
+}

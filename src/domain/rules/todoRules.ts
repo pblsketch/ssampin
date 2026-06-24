@@ -154,10 +154,7 @@ export function filterArchived(todos: readonly Todo[]): readonly Todo[] {
 }
 
 /** 반복 할 일의 다음 마감일 계산 */
-export function calculateNextDueDate(
-  currentDate: string,
-  recurrence: TodoRecurrence,
-): string {
+export function calculateNextDueDate(currentDate: string, recurrence: TodoRecurrence): string {
   const date = new Date(currentDate + 'T00:00:00');
 
   switch (recurrence.type) {
@@ -173,12 +170,33 @@ export function calculateNextDueDate(
       }
       break;
     }
-    case 'weekly':
-      date.setDate(date.getDate() + 7 * recurrence.interval);
+    case 'weekly': {
+      const days = recurrence.daysOfWeek;
+      if (days && days.length > 0) {
+        // 다중 요일: 같은 주 내 다음 요일로, 없으면 interval 주 뒤 첫 요일로.
+        const sorted = [...days].filter((d) => d >= 0 && d <= 6).sort((a, b) => a - b);
+        const cur = date.getDay();
+        const next = sorted.find((d) => d > cur);
+        if (next !== undefined) {
+          date.setDate(date.getDate() + (next - cur));
+        } else {
+          const first = sorted[0]!;
+          date.setDate(date.getDate() + (7 - cur) + first + 7 * (recurrence.interval - 1));
+        }
+      } else {
+        date.setDate(date.getDate() + 7 * recurrence.interval);
+      }
       break;
-    case 'monthly':
+    }
+    case 'monthly': {
+      // 말일 보정: 1일로 내린 뒤 달을 더하고, 대상 달 말일을 넘으면 말일로 clamp(1/31 → 2/28).
+      const targetDay = date.getDate();
+      date.setDate(1);
       date.setMonth(date.getMonth() + recurrence.interval);
+      const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+      date.setDate(Math.min(targetDay, lastDay));
       break;
+    }
     case 'yearly':
       date.setFullYear(date.getFullYear() + recurrence.interval);
       break;
@@ -196,14 +214,12 @@ export function inferStatus(todo: Todo): TodoStatus {
 }
 
 /** 프로 모드에서 상태 변경 시 양쪽 필드 모두 업데이트 */
-export function applyStatusChange(
-  todo: Todo,
-  newStatus: TodoStatus,
-): Partial<Todo> {
+export function applyStatusChange(todo: Todo, newStatus: TodoStatus): Partial<Todo> {
   const completed = newStatus === 'done';
-  const subTasks = (todo.subTasks && todo.subTasks.length > 0)
-    ? todo.subTasks.map((st) => ({ ...st, completed }))
-    : todo.subTasks;
+  const subTasks =
+    todo.subTasks && todo.subTasks.length > 0
+      ? todo.subTasks.map((st) => ({ ...st, completed }))
+      : todo.subTasks;
   return {
     status: newStatus,
     completed,
@@ -226,14 +242,14 @@ export function groupByCategory(
   const groups: Record<string, Todo[]> = {};
 
   for (const cat of categories) {
-    const items = todos.filter(t => t.category === cat.id);
+    const items = todos.filter((t) => t.category === cat.id);
     if (items.length > 0) {
       groups[`${cat.icon || '📁'} ${cat.name}`] = items;
     }
   }
 
-  const categoryIds = new Set(categories.map(c => c.id));
-  const uncategorized = todos.filter(t => !t.category || !categoryIds.has(t.category));
+  const categoryIds = new Set(categories.map((c) => c.id));
+  const uncategorized = todos.filter((t) => !t.category || !categoryIds.has(t.category));
   if (uncategorized.length > 0) {
     groups['📌 미분류'] = uncategorized;
   }
@@ -244,10 +260,10 @@ export function groupByCategory(
 /** 우선순위별 그룹핑 */
 export function groupByPriority(todos: readonly Todo[]): Record<string, readonly Todo[]> {
   const groups: Record<string, readonly Todo[]> = {};
-  const high = todos.filter(t => t.priority === 'high');
-  const medium = todos.filter(t => t.priority === 'medium');
-  const low = todos.filter(t => t.priority === 'low');
-  const none = todos.filter(t => !t.priority || t.priority === 'none');
+  const high = todos.filter((t) => t.priority === 'high');
+  const medium = todos.filter((t) => t.priority === 'medium');
+  const low = todos.filter((t) => t.priority === 'low');
+  const none = todos.filter((t) => !t.priority || t.priority === 'none');
 
   if (high.length > 0) groups['🔴 높음'] = high;
   if (medium.length > 0) groups['🟡 보통'] = medium;
@@ -260,9 +276,9 @@ export function groupByPriority(todos: readonly Todo[]): Record<string, readonly
 /** 상태별 그룹핑 */
 export function groupByStatus(todos: readonly Todo[]): Record<string, readonly Todo[]> {
   const groups: Record<string, readonly Todo[]> = {};
-  const todoItems = todos.filter(t => inferStatus(t) === 'todo');
-  const inProgressItems = todos.filter(t => inferStatus(t) === 'inProgress');
-  const doneItems = todos.filter(t => inferStatus(t) === 'done');
+  const todoItems = todos.filter((t) => inferStatus(t) === 'todo');
+  const inProgressItems = todos.filter((t) => inferStatus(t) === 'inProgress');
+  const doneItems = todos.filter((t) => inferStatus(t) === 'done');
 
   if (todoItems.length > 0) groups['📋 할 일'] = todoItems;
   if (inProgressItems.length > 0) groups['🔄 진행 중'] = inProgressItems;

@@ -10,6 +10,7 @@ const VIEW_OPTIONS: { key: TodoViewMode; label: string; icon: string }[] = [
   { key: 'kanban', label: '칸반', icon: 'view_kanban' },
   { key: 'list', label: '테이블', icon: 'table_rows' },
   { key: 'timeline', label: '타임라인', icon: 'timeline' },
+  { key: 'matrix', label: '매트릭스', icon: 'grid_view' },
 ];
 
 export function ViewToggle({ currentView, onViewChange }: ViewToggleProps) {
@@ -22,10 +23,10 @@ export function ViewToggle({ currentView, onViewChange }: ViewToggleProps) {
           onClick={() => onViewChange(key)}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors
             focus-visible:ring-2 focus-visible:ring-sp-accent focus-visible:outline-none ${
-            currentView === key
-              ? 'bg-sp-accent text-white'
-              : 'text-sp-muted hover:text-sp-text hover:bg-sp-card'
-          }`}
+              currentView === key
+                ? 'bg-sp-accent text-white'
+                : 'text-sp-muted hover:text-sp-text hover:bg-sp-card'
+            }`}
           title={label}
         >
           <span className="material-symbols-outlined text-icon">{icon}</span>

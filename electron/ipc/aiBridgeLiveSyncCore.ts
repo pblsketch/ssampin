@@ -16,6 +16,18 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import {
+  WRITE_DOMAINS,
+  WRITE_OPS,
+  OBSERVATION_FIELDS as CONTRACT_OBSERVATION_FIELDS,
+  OBSERVATION_CONTENT_MAX as CONTRACT_OBSERVATION_CONTENT_MAX,
+  RECORD_NOTE_FIELDS as CONTRACT_RECORD_NOTE_FIELDS,
+  RECORD_NOTE_CONTENT_MAX as CONTRACT_RECORD_NOTE_CONTENT_MAX,
+  ATTENDANCE_STATUSES as CONTRACT_ATTENDANCE_STATUSES,
+  ATTENDANCE_REASONS as CONTRACT_ATTENDANCE_REASONS,
+  type WriteDomain,
+  type WriteOp,
+} from './_generated/aiBridgeWriteContract';
 
 const STATE_DIR = '.ssampin-aibridge';
 const CONTROL_FILE = 'control.json';
@@ -257,18 +269,9 @@ export function authorizeWriteRequest(input: {
 
 // ─────────────────────────── 쓰기 페이로드 검증 ───────────────────────────
 
-export type WriteDomain =
-  | 'todos'
-  | 'events'
-  | 'recordDrafts'
-  | 'memos'
-  | 'bookmarks'
-  | 'notes'
-  | 'attendance'
-  | 'homeroomAttendance'
-  | 'observations'
-  | 'recordNote';
-export type WriteOp = 'create' | 'update' | 'complete' | 'delete';
+// 쓰기 도메인/연산 enum·필드 화이트리스트·출결 enum 은 단일 계약 def 에서 생성된 산출물에서만 파생한다
+//   (수기 중복 제거 — scripts/contract/aiBridgeWriteContract.def.mjs → _generated). rootDir:electron 준수.
+export type { WriteDomain, WriteOp };
 
 /**
  * 도메인별 쓰기 게이트 판정(fail-closed) — loopback 서버는 allowWrite 또는 allowRecordWrite 중
@@ -279,29 +282,12 @@ export function isDomainWriteAllowed(domain: WriteDomain, caps: Capability): boo
   return domain === 'recordDrafts' ? caps.allowRecordWrite : caps.allowWrite;
 }
 
-const DOMAINS: ReadonlySet<string> = new Set([
-  'todos',
-  'events',
-  'recordDrafts',
-  'memos',
-  'bookmarks',
-  'notes',
-  'attendance',
-  'homeroomAttendance',
-  'observations',
-  'recordNote',
-]);
-const OPS: ReadonlySet<string> = new Set(['create', 'update', 'complete', 'delete']);
+const DOMAINS: ReadonlySet<string> = new Set(WRITE_DOMAINS);
+const OPS: ReadonlySet<string> = new Set(WRITE_OPS);
 
-// 출결 enum — 브릿지 entities/attendance 와 동일(서버가 클라를 신뢰하지 않고 재검증).
-const ATTENDANCE_STATUSES: ReadonlySet<string> = new Set([
-  'present',
-  'absent',
-  'late',
-  'earlyLeave',
-  'classAbsence',
-]);
-const ATTENDANCE_REASONS: ReadonlySet<string> = new Set(['질병', '인정', '미인정', '기타']);
+// 출결 enum — 브릿지 entities/attendance 와 동일(서버가 클라를 신뢰하지 않고 재검증). 계약 def 에서 파생.
+const ATTENDANCE_STATUSES: ReadonlySet<string> = new Set(CONTRACT_ATTENDANCE_STATUSES);
+const ATTENDANCE_REASONS: ReadonlySet<string> = new Set(CONTRACT_ATTENDANCE_REASONS);
 const MEMO_ATT_MAX = 500;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const OUT_OF_CURRENT_SCHOOL_YEAR_CONFIRM_FIELD = 'confirmOutOfCurrentSchoolYearDate';
@@ -698,14 +684,8 @@ export type ValidateResult =
   | { readonly ok: true; readonly value: ApplyWriteRequest }
   | { readonly ok: false; readonly reason: string };
 
-const OBSERVATION_CONTENT_MAX = 500;
-const OBSERVATION_FIELDS: ReadonlySet<string> = new Set([
-  'studentId',
-  'content',
-  'date',
-  'tags',
-  'classId',
-]);
+const OBSERVATION_CONTENT_MAX = CONTRACT_OBSERVATION_CONTENT_MAX;
+const OBSERVATION_FIELDS: ReadonlySet<string> = new Set(CONTRACT_OBSERVATION_FIELDS);
 
 /** 관찰기록(observations) create payload 검증(형태만). 정상이면 null. (수업반 학생 대상.) */
 function checkObservationPayload(d: Record<string, unknown>): string | null {
@@ -736,14 +716,8 @@ function checkObservationPayload(d: Record<string, unknown>): string | null {
   return null;
 }
 
-const RECORD_NOTE_CONTENT_MAX = 2000;
-const RECORD_NOTE_FIELDS: ReadonlySet<string> = new Set([
-  'studentId',
-  'content',
-  'categoryId',
-  'subcategory',
-  'date',
-]);
+const RECORD_NOTE_CONTENT_MAX = CONTRACT_RECORD_NOTE_CONTENT_MAX;
+const RECORD_NOTE_FIELDS: ReadonlySet<string> = new Set(CONTRACT_RECORD_NOTE_FIELDS);
 
 /**
  * 담임 노트(recordNote) create payload 검증(형태만). 정상이면 null. 담임 학생 대상.

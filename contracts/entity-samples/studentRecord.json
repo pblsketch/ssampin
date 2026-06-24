@@ -1,0 +1,35 @@
+{
+  "records": [
+    {
+      "id": "rec-1",
+      "studentId": "stu-1",
+      "category": "life",
+      "subcategory": "일반",
+      "content": "청소 시간에 솔선수범함(합성 샘플).",
+      "date": "2026-06-01",
+      "createdAt": "2026-06-01T00:00:00.000Z",
+      "reportedToNeis": false,
+      "documentSubmitted": false,
+      "tags": ["칭찬"]
+    },
+    {
+      "id": "att-stu-1-2026-06-02",
+      "studentId": "stu-1",
+      "category": "attendance",
+      "subcategory": "결석 (질병)",
+      "content": "",
+      "date": "2026-06-02",
+      "createdAt": "2026-06-02T00:00:00.000Z",
+      "attendancePeriods": [
+        {
+          "period": 1,
+          "status": "absent",
+          "reason": "질병",
+          "memo": "병원 진료(합성)"
+        }
+      ],
+      "reportedToNeis": true,
+      "documentSubmitted": true
+    }
+  ]
+}

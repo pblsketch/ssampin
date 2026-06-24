@@ -1,0 +1,17 @@
+[
+  {
+    "id": "stu-1",
+    "name": "학생가",
+    "studentNumber": 10203,
+    "phone": "010-0000-0001",
+    "parentPhone": "010-0000-0002",
+    "parentPhoneLabel": "모",
+    "parentPhone2": "010-0000-0003",
+    "parentPhone2Label": "부",
+    "isVacant": false,
+    "birthDate": "2010-01-01",
+    "status": "active",
+    "statusNote": "",
+    "statusChangedAt": "2026-03-02"
+  }
+]

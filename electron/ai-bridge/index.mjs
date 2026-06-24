@@ -438,6 +438,10 @@ function normalizeRecord3(o) {
   }
   setIf5(rec, 'reportedToNeis', asBool3(o['reportedToNeis']));
   setIf5(rec, 'documentSubmitted', asBool3(o['documentSubmitted']));
+  if (Array.isArray(o['tags'])) {
+    const tags = o['tags'].filter((t) => typeof t === 'string');
+    if (tags.length > 0) rec['tags'] = tags;
+  }
   return rec;
 }
 function parseStudentRecords(raw) {
@@ -4482,6 +4486,91 @@ function getRecordGuidelines(args = {}) {
   return recordGuidelines(rulePack);
 }
 
+// ../ssampin-ai-bridge/packages/mcp/dist/summaryTools.js
+var SOON_DAYS = 3;
+var YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
+var GATE_NOTICE =
+  '\uC77D\uAE30(\uB0B4\uC6A9 \uB178\uCD9C) \uB9C8\uC2A4\uD130 \uC2A4\uC704\uCE58\uAC00 \uAEBC\uC838 \uC788\uC5B4 \uC8FC\uAC04 \uC694\uC57D\uC744 \uC81C\uACF5\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4. \uC324\uD540 \uC124\uC815\uC5D0\uC11C AI \uC5F0\uACB0 \uC77D\uAE30\uB97C \uCF1C\uAC70\uB098 SSAMPIN_BRIDGE_ALLOW_CONTENT=1 \uB85C \uD65C\uC131\uD654\uD558\uC138\uC694.';
+var OK_NOTICE =
+  '\uC9D1\uACC4 \uC218\uCE58\uC640 \uCE74\uD14C\uACE0\uB9AC\uBA85\uB9CC \uC81C\uACF5\uD569\uB2C8\uB2E4(\uD560\uC77C \uB0B4\uC6A9\xB7\uD559\uC0DD \uC2E4\uBA85 \uBBF8\uD3EC\uD568). \uD1B5\uACC4\uB294 \uC21C\uC218 \uC815\uBCF4 \uC81C\uACF5\uC774\uBA70 \uB204\uC801 \uBCF4\uC0C1\xB7\uC810\uC218\uAC00 \uC544\uB2D9\uB2C8\uB2E4.';
+function pad2(n) {
+  return String(n).padStart(2, '0');
+}
+function ymd(d) {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+function parseYmd(s) {
+  const [y, m, d] = s.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+function addDays(base, days) {
+  const d = new Date(base.getFullYear(), base.getMonth(), base.getDate());
+  d.setDate(d.getDate() + days);
+  return d;
+}
+function weekRange(today) {
+  const backToMon = (today.getDay() + 6) % 7;
+  const start = addDays(today, -backToMon);
+  const end = addDays(start, 6);
+  return { start: ymd(start), end: ymd(end) };
+}
+function bucketPriority(p) {
+  return p === 'high' || p === 'medium' || p === 'low' ? p : 'none';
+}
+function getWeeklySummary(ctx, args = {}) {
+  if (!isContentExposureEnabled(process.env, ctx.dataDir)) {
+    return { available: false, notice: GATE_NOTICE };
+  }
+  const today =
+    args.referenceDate && YMD_RE.test(args.referenceDate)
+      ? parseYmd(args.referenceDate)
+      : /* @__PURE__ */ new Date();
+  const todayStr = ymd(today);
+  const soonStr = ymd(addDays(today, SOON_DAYS));
+  const range = weekRange(today);
+  const todos = readTodos(ctx.dataDir);
+  const roster = buildFullRoster(ctx);
+  let activeTotal = 0;
+  let open = 0;
+  let completed = 0;
+  let overdue = 0;
+  let dueThisWeek = 0;
+  let dueSoon = 0;
+  const priority = { high: 0, medium: 0, low: 0, none: 0 };
+  const catMap = /* @__PURE__ */ new Map();
+  for (const t of todos) {
+    const active = t.archivedAt === void 0;
+    if (!active) continue;
+    activeTotal += 1;
+    const isOpen = effectiveTodoStatus(t) !== 'done' && !t.completed;
+    if (!isOpen) {
+      completed += 1;
+      continue;
+    }
+    open += 1;
+    priority[bucketPriority(t.priority)] += 1;
+    const cat =
+      t.category && t.category.trim() ? deidentify(t.category, roster).text : '\uBBF8\uBD84\uB958';
+    catMap.set(cat, (catMap.get(cat) ?? 0) + 1);
+    if (t.dueDate !== void 0) {
+      if (t.dueDate < todayStr) overdue += 1;
+      if (t.dueDate >= range.start && t.dueDate <= range.end) dueThisWeek += 1;
+      if (t.dueDate >= todayStr && t.dueDate <= soonStr) dueSoon += 1;
+    }
+  }
+  const byCategory = [...catMap.entries()]
+    .map(([category, count]) => ({ category, count }))
+    .sort((a, b) => b.count - a.count || a.category.localeCompare(b.category));
+  return {
+    available: true,
+    notice: OK_NOTICE,
+    range,
+    counts: { activeTotal, open, completed, overdue, dueThisWeek, dueSoon },
+    byPriority: priority,
+    byCategory,
+  };
+}
+
 // ../ssampin-ai-bridge/packages/mcp/dist/recordDraftTools.js
 var STATUSES = /* @__PURE__ */ new Set(['draft', 'reviewing', 'confirmed']);
 function asStr3(v) {
@@ -5453,6 +5542,7 @@ function getHomeroomNotes(ctx, args) {
       categoryId: r.category,
       subcategory: r.subcategory,
     };
+    if (r.tags && r.tags.length > 0) note.tags = [...r.tags];
     if (includeContent && r.content.length > 0) note.content = deidentify(r.content, roster).text;
     return note;
   });
@@ -5750,6 +5840,23 @@ function createSsampinMcpServer(opts = {}) {
       annotations: { readOnlyHint: true },
     },
     async (args) => runTool('get_todos', () => getTodos(ctx, args)),
+  );
+  server.registerTool(
+    'get_weekly_summary',
+    {
+      title: '\uC774\uBC88 \uC8FC \uD560\uC77C \uC694\uC57D(\uC9D1\uACC4)',
+      description:
+        '\uD560\uC77C\uC744 \uC9D1\uACC4 \uC218\uCE58\uB85C\uB9CC \uC694\uC57D\uD569\uB2C8\uB2E4(\uC5F4\uB9BC/\uC644\uB8CC/\uC9C0\uB09C \uB9C8\uAC10/\uC774\uBC88 \uC8FC \uB9C8\uAC10/\uB9C8\uAC10 \uC784\uBC15 + \uC6B0\uC120\uC21C\uC704\xB7\uCE74\uD14C\uACE0\uB9AC \uBD84\uD3EC). \uD560\uC77C \uB0B4\uC6A9\xB7\uD559\uC0DD \uC2E4\uBA85\xB7\uC790\uC720\uC11C\uC220\uC740 \uD3EC\uD568\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4. \uC77D\uAE30(\uB0B4\uC6A9 \uB178\uCD9C) \uB9C8\uC2A4\uD130 \uC2A4\uC704\uCE58\uAC00 \uCF1C\uC9C4 \uACBD\uC6B0\uC5D0\uB9CC \uB3D9\uC791\uD558\uBA70, \uAEBC\uC838 \uC788\uC73C\uBA74 \uC9D1\uACC4\uB3C4 \uBC18\uD658\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4(fail-closed). referenceDate(YYYY-MM-DD)\uB85C \uAE30\uC900\uC77C\uC744 \uC9C0\uC815\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4(\uBBF8\uC9C0\uC815 \uC2DC \uC624\uB298). \uD1B5\uACC4\uB294 \uC21C\uC218 \uC815\uBCF4 \uC81C\uACF5\uC785\uB2C8\uB2E4. \uC77D\uAE30 \uC804\uC6A9.',
+      inputSchema: {
+        referenceDate: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/)
+          .optional()
+          .describe('\uAE30\uC900\uC77C(YYYY-MM-DD, \uBBF8\uC9C0\uC815 \uC2DC \uC624\uB298)'),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    async (args) => runTool('get_weekly_summary', () => getWeeklySummary(ctx, args)),
   );
   server.registerTool(
     'get_schedule',

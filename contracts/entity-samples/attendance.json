@@ -1,0 +1,20 @@
+{
+  "records": [
+    {
+      "classId": "tc-1",
+      "groupId": "grp-1",
+      "date": "2026-06-01",
+      "period": 3,
+      "students": [
+        {
+          "number": 3,
+          "status": "late",
+          "reason": "인정",
+          "memo": "교통 지연(합성)",
+          "grade": 1,
+          "classNum": 2
+        }
+      ]
+    }
+  ]
+}

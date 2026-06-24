@@ -1,0 +1,32 @@
+{
+  "classes": [
+    {
+      "id": "tc-1",
+      "name": "샘플 통합과학 A",
+      "subject": "과학",
+      "groupId": "grp-1",
+      "order": 0,
+      "studentSyncMode": "shared",
+      "createdAt": "2026-03-02",
+      "updatedAt": "2026-06-01",
+      "students": [
+        {
+          "number": 3,
+          "name": "학생가",
+          "memo": "",
+          "grade": 1,
+          "classNum": 2,
+          "isVacant": false,
+          "status": "active",
+          "statusNote": "",
+          "statusChangedAt": "2026-03-02"
+        }
+      ],
+      "seating": {
+        "rows": 1,
+        "cols": 1,
+        "seats": [["1-2-3"]]
+      }
+    }
+  ]
+}

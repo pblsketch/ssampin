@@ -1,5 +1,5 @@
 export type TodoMode = 'default' | 'pro';
-export type TodoViewMode = 'todo' | 'kanban' | 'list' | 'timeline';
+export type TodoViewMode = 'todo' | 'kanban' | 'list' | 'timeline' | 'matrix';
 export type TodoProLayout = 'wide' | 'dual';
 
 export interface TodoSettings {

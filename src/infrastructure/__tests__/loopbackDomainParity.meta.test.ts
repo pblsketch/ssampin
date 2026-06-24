@@ -1,23 +1,20 @@
 /**
- * CT-enum 메타테스트 — loopback write 도메인 enum 3곳 정합 보장
+ * CT-enum 메타테스트 — loopback write 도메인 계약 단일 소스화 회귀 가드(WS1 이후).
  *
  * 설계서: docs/02-design/features/record-system-unification-phase1.design.md §4-라
  * 분석: docs/03-analysis/record-system-unification/T4 §5-5
+ * 계획: docs/01-plan/features/ai-bridge-contract-and-todo-enhance.plan.md (WS1)
  *
- * 근거:
- *   loopback 쓰기 도메인 union이 3곳에 수동 중복되어 있다:
- *     (a) electron/ipc/aiBridgeLiveSyncCore.ts — WriteDomain type + DOMAINS Set
- *     (b) src/usecases/aiBridge/applyLiveSyncWrite.ts — LiveSyncWriteRequest.domain union
+ * 배경(변경 전):
+ *   loopback 쓰기 도메인 union 이 3곳에 수동 중복되어, 한 곳만 바꾸면 silent 거부가 발생했다.
+ *   이 메타테스트는 두 소스의 도메인 리터럴을 정적 파싱해 정합을 확인했다.
  *
- *   한 곳만 바꾸면 silent 거부(400 또는 silently ignored)가 발생한다.
- *   이 메타테스트는 두 파일의 소스 텍스트를 정적으로 파싱하여
- *   동일한 도메인 집합을 선언하는지 확인한다.
- *
- *   브리지 레포(e:/github/ssampin-ai-bridge)는 별도 레포라 본체 내부 정합만 검사한다.
- *
- * 검증 방법:
- *   소스 파일에서 도메인 리터럴을 추출하여 두 파일의 집합이 일치하는지 단언.
- *   집합 불일치 시 즉시 실패하여 회귀를 차단한다.
+ * 배경(WS1 이후 — 현재):
+ *   도메인/연산 enum 은 단일 정의(scripts/contract/aiBridgeWriteContract.def.mjs)에서 생성된 산출물
+ *   (src/domain/contracts/aiBridgeWriteContract.ts · electron/ipc/_generated/...)에서만 파생한다.
+ *   따라서 "수동 중복"이 구조적으로 제거됐다. 이 파일은 그 단일화가 회귀로 되돌려지지 않도록
+ *   — 즉 누군가 다시 수기 enum 을 선언하지 않도록 — 가드한다. (값 정합은 aiBridgeWriteContract.contract.test.ts 가,
+ *   생성물 byte 정합은 scripts/check-contract-sync.mjs 가 본다.)
  */
 
 import { describe, it, expect } from 'vitest';
@@ -29,179 +26,47 @@ const ROOT = resolve(__dirname, '../../..');
 const LIVE_SYNC_CORE_PATH = resolve(ROOT, 'electron/ipc/aiBridgeLiveSyncCore.ts');
 const APPLY_LIVE_SYNC_PATH = resolve(ROOT, 'src/usecases/aiBridge/applyLiveSyncWrite.ts');
 
-/**
- * LiveSyncWriteRequest.domain union 에서 도메인 리터럴을 추출한다.
- *
- * applyLiveSyncWrite.ts 의 패턴:
- *   export interface LiveSyncWriteRequest {
- *     readonly domain:
- *       | 'todos'
- *       | 'events'
- *       ...
- *   }
- */
-function extractDomainsFromApply(src: string): Set<string> {
-  const found = new Set<string>();
-  // LiveSyncWriteRequest 인터페이스 내부의 domain union만 정확히 파싱
-  // "readonly domain:" 이후 세미콜론까지의 구간을 먼저 추출
-  const domainBlockMatch = src.match(/readonly domain:\s*([\s\S]*?);/);
-  if (!domainBlockMatch) return found;
-
-  const block = domainBlockMatch[1]!;
-  const pattern = /['"]([a-zA-Z][a-zA-Z0-9]+)['"]/g;
-  let m: RegExpExecArray | null;
-  while ((m = pattern.exec(block)) !== null) {
-    found.add(m[1]!);
-  }
-  return found;
-}
-
-describe('CT-enum — loopback 도메인 enum 3곳 정합 메타테스트', () => {
+describe('CT-enum — loopback 도메인 계약 단일 소스화 회귀 가드', () => {
   const coreSrc = readFileSync(LIVE_SYNC_CORE_PATH, 'utf-8');
   const applySrc = readFileSync(APPLY_LIVE_SYNC_PATH, 'utf-8');
 
-  // 알려진 도메인 목록 — 이 목록이 바뀌려면 테스트도 의도적으로 바꿔야 한다
-  const EXPECTED_DOMAINS = new Set([
-    'todos',
-    'events',
-    'recordDrafts',
-    'memos',
-    'bookmarks',
-    'notes',
-    'attendance',
-    'homeroomAttendance',
-    'observations',
-    'recordNote',
-  ]);
-
-  it('aiBridgeLiveSyncCore.ts WriteDomain type이 기대 도메인 10종을 모두 포함한다', () => {
-    // WriteDomain type 선언 블록만 추출
-    const writeDomainMatch = coreSrc.match(/export type WriteDomain\s*=([\s\S]*?);/);
+  it('aiBridgeLiveSyncCore.ts 는 생성된 계약(_generated)에서 enum 을 파생한다', () => {
     expect(
-      writeDomainMatch,
-      'aiBridgeLiveSyncCore.ts 에서 WriteDomain type 선언을 찾을 수 없습니다.',
-    ).not.toBeNull();
-
-    const block = writeDomainMatch![1]!;
-    const found = new Set<string>();
-    const pattern = /['"]([a-zA-Z][a-zA-Z0-9]+)['"]/g;
-    let m: RegExpExecArray | null;
-    while ((m = pattern.exec(block)) !== null) {
-      found.add(m[1]!);
-    }
-
-    for (const domain of EXPECTED_DOMAINS) {
-      expect(
-        found.has(domain),
-        `aiBridgeLiveSyncCore.ts WriteDomain에 '${domain}'이 없습니다. ` +
-          `현재 발견된 도메인: [${[...found].join(', ')}]`,
-      ).toBe(true);
-    }
+      coreSrc.includes("from './_generated/aiBridgeWriteContract'"),
+      'aiBridgeLiveSyncCore.ts 가 생성 계약(_generated/aiBridgeWriteContract)을 import 하지 않습니다. ' +
+        'WS1 단일 소스화가 회귀했을 수 있습니다.',
+    ).toBe(true);
+    // 런타임 Set 은 계약 상수에서 파생되어야 한다(수기 리터럴 재도입 방지).
+    expect(coreSrc).toMatch(/const DOMAINS:\s*ReadonlySet<string>\s*=\s*new Set\(WRITE_DOMAINS\)/);
+    expect(coreSrc).toMatch(/const OPS:\s*ReadonlySet<string>\s*=\s*new Set\(WRITE_OPS\)/);
   });
 
-  it('aiBridgeLiveSyncCore.ts DOMAINS Set이 기대 도메인 10종을 모두 포함한다', () => {
-    // DOMAINS Set 선언 블록 추출
-    const domainsSetMatch = coreSrc.match(/const DOMAINS[^=]*=\s*new Set\(\[([\s\S]*?)\]\)/);
+  it('aiBridgeLiveSyncCore.ts 에 수기 WriteDomain 도메인 union 선언이 없다(중복 재도입 차단)', () => {
+    // `export type WriteDomain = | 'todos' | ...` 형태의 인라인 리터럴 선언이 다시 생기면 실패.
+    const inlineUnion = /export type WriteDomain\s*=\s*\r?\n?\s*\|\s*['"]todos['"]/;
     expect(
-      domainsSetMatch,
-      'aiBridgeLiveSyncCore.ts 에서 DOMAINS Set 선언을 찾을 수 없습니다.',
-    ).not.toBeNull();
-
-    const block = domainsSetMatch![1]!;
-    const found = new Set<string>();
-    const pattern = /['"]([a-zA-Z][a-zA-Z0-9]+)['"]/g;
-    let m: RegExpExecArray | null;
-    while ((m = pattern.exec(block)) !== null) {
-      found.add(m[1]!);
-    }
-
-    for (const domain of EXPECTED_DOMAINS) {
-      expect(
-        found.has(domain),
-        `aiBridgeLiveSyncCore.ts DOMAINS Set에 '${domain}'이 없습니다. ` +
-          `현재 발견된 도메인: [${[...found].join(', ')}]`,
-      ).toBe(true);
-    }
+      inlineUnion.test(coreSrc),
+      'aiBridgeLiveSyncCore.ts 에 수기 WriteDomain 리터럴 union 이 재도입됐습니다(생성물에서 파생해야 함).',
+    ).toBe(false);
   });
 
-  it('applyLiveSyncWrite.ts LiveSyncWriteRequest.domain union이 기대 도메인 10종을 모두 포함한다', () => {
-    const found = extractDomainsFromApply(applySrc);
+  it('applyLiveSyncWrite.ts 는 생성된 계약에서 WriteDomain/WriteOp 타입을 import 한다', () => {
     expect(
-      found.size,
-      `LiveSyncWriteRequest.domain union을 파싱하지 못했습니다 (추출된 도메인 ${found.size}개).`,
-    ).toBeGreaterThan(0);
-
-    for (const domain of EXPECTED_DOMAINS) {
-      expect(
-        found.has(domain),
-        `applyLiveSyncWrite.ts LiveSyncWriteRequest.domain에 '${domain}'이 없습니다. ` +
-          `현재 발견된 도메인: [${[...found].join(', ')}]`,
-      ).toBe(true);
-    }
+      applySrc.includes("from '@domain/contracts/aiBridgeWriteContract'"),
+      'applyLiveSyncWrite.ts 가 생성 계약(@domain/contracts/aiBridgeWriteContract)을 import 하지 않습니다.',
+    ).toBe(true);
+    // LiveSyncWriteRequest.domain 이 다시 인라인 리터럴 union 으로 회귀하지 않았는지 확인.
+    const inlineDomainUnion = /readonly domain:\s*\r?\n?\s*\|\s*['"]todos['"]/;
+    expect(
+      inlineDomainUnion.test(applySrc),
+      'applyLiveSyncWrite.ts 의 domain 이 인라인 리터럴 union 으로 회귀했습니다(WriteDomain 타입을 써야 함).',
+    ).toBe(false);
   });
 
-  it('WriteDomain type ↔ DOMAINS Set — 두 선언의 도메인 집합이 정확히 일치한다', () => {
-    // WriteDomain type 블록
-    const writeDomainBlock = coreSrc.match(/export type WriteDomain\s*=([\s\S]*?);/)?.[1] ?? '';
-    const fromType = new Set<string>();
-    let m: RegExpExecArray | null;
-    const typePattern = /['"]([a-zA-Z][a-zA-Z0-9]+)['"]/g;
-    while ((m = typePattern.exec(writeDomainBlock)) !== null) {
-      fromType.add(m[1]!);
-    }
-
-    // DOMAINS Set 블록
-    const domainsSetBlock =
-      coreSrc.match(/const DOMAINS[^=]*=\s*new Set\(\[([\s\S]*?)\]\)/)?.[1] ?? '';
-    const fromSet = new Set<string>();
-    const setPattern = /['"]([a-zA-Z][a-zA-Z0-9]+)['"]/g;
-    while ((m = setPattern.exec(domainsSetBlock)) !== null) {
-      fromSet.add(m[1]!);
-    }
-
-    // 두 집합의 차집합 확인
-    const onlyInType = [...fromType].filter((d) => !fromSet.has(d));
-    const onlyInSet = [...fromSet].filter((d) => !fromType.has(d));
-
+  it('applyLiveSyncWrite.ts 는 satisfies Record<WriteDomain, …> 로 디스패치 exhaustiveness 를 강제한다', () => {
     expect(
-      onlyInType,
-      `WriteDomain type에는 있지만 DOMAINS Set에 없는 도메인: [${onlyInType.join(', ')}]. ` +
-        `두 선언의 도메인 집합이 일치해야 합니다.`,
-    ).toHaveLength(0);
-
-    expect(
-      onlyInSet,
-      `DOMAINS Set에는 있지만 WriteDomain type에 없는 도메인: [${onlyInSet.join(', ')}]. ` +
-        `두 선언의 도메인 집합이 일치해야 합니다.`,
-    ).toHaveLength(0);
-  });
-
-  it('WriteDomain type ↔ LiveSyncWriteRequest.domain — 두 파일의 도메인 집합이 정확히 일치한다', () => {
-    // WriteDomain type 블록
-    const writeDomainBlock = coreSrc.match(/export type WriteDomain\s*=([\s\S]*?);/)?.[1] ?? '';
-    const fromCore = new Set<string>();
-    let m: RegExpExecArray | null;
-    const corePattern = /['"]([a-zA-Z][a-zA-Z0-9]+)['"]/g;
-    while ((m = corePattern.exec(writeDomainBlock)) !== null) {
-      fromCore.add(m[1]!);
-    }
-
-    // applyLiveSyncWrite.ts LiveSyncWriteRequest.domain union
-    const fromApply = extractDomainsFromApply(applySrc);
-
-    const onlyInCore = [...fromCore].filter((d) => !fromApply.has(d));
-    const onlyInApply = [...fromApply].filter((d) => !fromCore.has(d));
-
-    expect(
-      onlyInCore,
-      `aiBridgeLiveSyncCore.ts WriteDomain에는 있지만 applyLiveSyncWrite.ts에 없는 도메인: ` +
-        `[${onlyInCore.join(', ')}]. 두 파일의 도메인 집합이 일치해야 합니다(T4 §5-5).`,
-    ).toHaveLength(0);
-
-    expect(
-      onlyInApply,
-      `applyLiveSyncWrite.ts에는 있지만 aiBridgeLiveSyncCore.ts WriteDomain에 없는 도메인: ` +
-        `[${onlyInApply.join(', ')}]. 두 파일의 도메인 집합이 일치해야 합니다(T4 §5-5).`,
-    ).toHaveLength(0);
+      /satisfies Record<WriteDomain,\s*LiveSyncHandler>/.test(applySrc),
+      'applyLiveSyncWrite.ts 디스패치가 satisfies Record<WriteDomain, …> 로 고정돼 있지 않습니다.',
+    ).toBe(true);
   });
 });

@@ -1,0 +1,18 @@
+{
+  "records": [
+    {
+      "id": "obs-1",
+      "studentId": "1-2-3",
+      "classId": "tc-1",
+      "authorId": "teacher-1",
+      "date": "2026-06-01",
+      "content": "수업 중 모둠 토의를 주도하며 근거를 들어 설명함(합성 샘플).",
+      "tags": ["학습태도", "교과역량"],
+      "visibility": "shared",
+      "createdAt": 1735689600000,
+      "updatedAt": 1735689600000,
+      "category": "수업 관찰"
+    }
+  ],
+  "customTags": ["발표력"]
+}

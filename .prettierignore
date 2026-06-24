@@ -12,3 +12,8 @@ landing/node_modules
 *.tsbuildinfo
 package-lock.json
 public/release-notes.json
+
+# AI 브릿지 쓰기 계약 — 생성 파일(직접 수정 금지, byte-단위 정합 검사 대상)
+src/domain/contracts/aiBridgeWriteContract.ts
+electron/ipc/_generated/aiBridgeWriteContract.ts
+contracts/aiBridgeWriteContract.json

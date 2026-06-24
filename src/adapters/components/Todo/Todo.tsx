@@ -12,11 +12,19 @@ import type { TodoViewMode } from '@domain/entities/TodoSettings';
 import { DEFAULT_TODO_SETTINGS } from '@domain/entities/TodoSettings';
 import type { TodoSortMode } from '@domain/rules/todoRules';
 import { ViewToggle } from './components/ViewToggle';
+import { WeeklyReviewCard } from './components/WeeklyReviewCard';
 
 // 프로 모드 뷰 — lazy 로딩 (기본 모드에서는 import 안 됨)
-const KanbanView = lazy(() => import('./views/KanbanView').then(m => ({ default: m.KanbanView })));
-const ListView = lazy(() => import('./views/ListView').then(m => ({ default: m.ListView })));
-const TimelineView = lazy(() => import('./views/TimelineView').then(m => ({ default: m.TimelineView })));
+const KanbanView = lazy(() =>
+  import('./views/KanbanView').then((m) => ({ default: m.KanbanView })),
+);
+const ListView = lazy(() => import('./views/ListView').then((m) => ({ default: m.ListView })));
+const TimelineView = lazy(() =>
+  import('./views/TimelineView').then((m) => ({ default: m.TimelineView })),
+);
+const MatrixView = lazy(() =>
+  import('./views/MatrixView').then((m) => ({ default: m.MatrixView })),
+);
 import {
   sortTodos,
   filterByDateRange,
@@ -29,6 +37,7 @@ import {
 import { getDayOfWeek } from '@domain/rules/periodRules';
 import { PRIORITY_CONFIG } from '@domain/valueObjects/TodoPriority';
 import { RECURRENCE_PRESETS, getRecurrenceLabel } from '@domain/valueObjects/TodoRecurrence';
+import { parseQuickInput, hasRecognizedTokens } from '@domain/rules/koreanDateParser';
 import { TodoCategoryModal } from './TodoCategoryModal';
 import { TodoEditModal } from './components/TodoEditModal';
 import { DatePopover } from './components/DatePopover';
@@ -113,7 +122,7 @@ function getPostponeOptions(): PostponeOption[] {
   // Next Monday
   const nextMonday = new Date(today);
   const dayOfWeek = nextMonday.getDay();
-  const daysUntilMonday = dayOfWeek === 0 ? 1 : (8 - dayOfWeek);
+  const daysUntilMonday = dayOfWeek === 0 ? 1 : 8 - dayOfWeek;
   nextMonday.setDate(nextMonday.getDate() + daysUntilMonday);
   const nextWeek = new Date(today);
   nextWeek.setDate(nextWeek.getDate() + 7);
@@ -141,7 +150,6 @@ interface TimelineItem {
   isCompleted?: boolean;
   originalId: string;
 }
-
 
 /* ─── Main Todo Component ─── */
 
@@ -181,6 +189,37 @@ export function Todo() {
   const [showEditHint, setShowEditHint] = useState(() => {
     return !localStorage.getItem('ssampin:todo-edit-hint-dismissed');
   });
+  // 자연어 빠른입력 인식(기본 ON). OFF 시 기존 동작과 100% 동일.
+  const [quickParseEnabled, setQuickParseEnabled] = useState(
+    () => localStorage.getItem('ssampin:todo-quickparse-off') !== '1',
+  );
+  const toggleQuickParse = useCallback(() => {
+    setQuickParseEnabled((prev) => {
+      const next = !prev;
+      if (next) localStorage.removeItem('ssampin:todo-quickparse-off');
+      else localStorage.setItem('ssampin:todo-quickparse-off', '1');
+      return next;
+    });
+  }, []);
+  // 입력 미리보기 파싱(인식 ON + 입력 있을 때만). 본문/메타는 handleAdd 에서 동일 규칙으로 적용.
+  const quickParse = useMemo(
+    () => (quickParseEnabled && newText.trim() ? parseQuickInput(newText, new Date()) : null),
+    [quickParseEnabled, newText],
+  );
+  const showQuickParse = quickParse !== null && hasRecognizedTokens(quickParse);
+  // 빠른입력 발견성: 예시 도움말(접이식) + 첫 방문 1회 안내.
+  const [showQuickParseHelp, setShowQuickParseHelp] = useState(false);
+  const [showQuickParseTip, setShowQuickParseTip] = useState(
+    () => localStorage.getItem('ssampin:todo-quickparse-tip-dismissed') !== '1',
+  );
+  const dismissQuickParseTip = useCallback(() => {
+    localStorage.setItem('ssampin:todo-quickparse-tip-dismissed', '1');
+    setShowQuickParseTip(false);
+  }, []);
+  // 예시 토큰을 입력창에 덧붙여, 미리보기 칩이 반응하는 걸 직접 보며 배우게 한다.
+  const appendQuickToken = useCallback((token: string) => {
+    setNewText((t) => (t.trim() ? `${t.trim()} ${token}` : token));
+  }, []);
 
   const tasksSyncing = useTasksSyncStore((s) => s.isSyncing);
   const tasksEnabled = useTasksSyncStore((s) => s.isEnabled);
@@ -198,10 +237,13 @@ export function Todo() {
     todoSettings.lastView ?? todoSettings.defaultView ?? 'todo',
   );
 
-  const handleProViewChange = useCallback((view: TodoViewMode) => {
-    setProViewMode(view);
-    void updateSettings({ todoSettings: { ...todoSettings, lastView: view } });
-  }, [todoSettings, updateSettings]);
+  const handleProViewChange = useCallback(
+    (view: TodoViewMode) => {
+      setProViewMode(view);
+      void updateSettings({ todoSettings: { ...todoSettings, lastView: view } });
+    },
+    [todoSettings, updateSettings],
+  );
 
   useEffect(() => {
     void load();
@@ -285,7 +327,9 @@ export function Todo() {
         );
       });
       for (const ev of todayEvents) {
-        const evTime = ev.startTime ?? (ev.time !== undefined ? ev.time.split(' - ')[0]?.trim() ?? null : null);
+        const evTime =
+          ev.startTime ??
+          (ev.time !== undefined ? (ev.time.split(' - ')[0]?.trim() ?? null) : null);
         items.push({
           id: `ev-${ev.id}`,
           type: 'event',
@@ -300,7 +344,15 @@ export function Todo() {
     }
 
     return items;
-  }, [settings.todoShowTimetable, settings.todoShowEvents, teacherSchedule, classSchedule, events, settings.periodTimes, now]);
+  }, [
+    settings.todoShowTimetable,
+    settings.todoShowEvents,
+    teacherSchedule,
+    classSchedule,
+    events,
+    settings.periodTimes,
+    now,
+  ]);
 
   // 진행률 (활성 항목만)
   const completedCount = activeTodos.filter((t) => t.completed).length;
@@ -308,18 +360,27 @@ export function Todo() {
   const progressPercent = totalCount === 0 ? 0 : Math.round((completedCount / totalCount) * 100);
 
   const handleAdd = useCallback(() => {
-    const text = newText.trim();
-    if (!text) return;
-    const recurrence = RECURRENCE_PRESETS[newRecurrenceIdx]?.value ?? undefined;
-    void addTodo(
-      text,
-      noDueDate ? undefined : (newDueDate || undefined),
-      newPriority,
-      newCategory || undefined,
-      recurrence ?? undefined,
-      newTime || undefined,
-      newStartDate,
-    );
+    const rawText = newText.trim();
+    if (!rawText) return;
+    // 자연어 인식: 토큰이 잡히면 해당 필드를 우선 적용하고, 못 잡은 필드는 기존 수동 컨트롤을 그대로 쓴다.
+    const parsed = quickParseEnabled ? parseQuickInput(newText, new Date()) : null;
+    const useParsed = parsed !== null && hasRecognizedTokens(parsed);
+    const text = useParsed ? parsed.text : rawText;
+    const matchedCategory =
+      useParsed && parsed.categoryHint
+        ? categories.find((c) => c.id === parsed.categoryHint || c.name === parsed.categoryHint)?.id
+        : undefined;
+    const manualRecurrence = RECURRENCE_PRESETS[newRecurrenceIdx]?.value ?? undefined;
+    const recurrence = useParsed && parsed.recurrence ? parsed.recurrence : manualRecurrence;
+    const dueDate = noDueDate
+      ? undefined
+      : useParsed && parsed.dueDate
+        ? parsed.dueDate
+        : newDueDate || undefined;
+    const priority = useParsed && parsed.priority ? parsed.priority : newPriority;
+    const category = matchedCategory ?? (newCategory || undefined);
+    const time = useParsed && parsed.time ? parsed.time : newTime || undefined;
+    void addTodo(text, dueDate, priority, category, recurrence ?? undefined, time, newStartDate);
     setNewText('');
     setNewPriority('none');
     setNewRecurrenceIdx(0);
@@ -329,7 +390,19 @@ export function Todo() {
     if (!noDueDate) {
       setNewDueDate(toLocalDateString());
     }
-  }, [newText, newDueDate, noDueDate, newPriority, newRecurrenceIdx, newCategory, newTime, newStartDate, addTodo]);
+  }, [
+    newText,
+    quickParseEnabled,
+    categories,
+    newDueDate,
+    noDueDate,
+    newPriority,
+    newRecurrenceIdx,
+    newCategory,
+    newTime,
+    newStartDate,
+    addTodo,
+  ]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -363,41 +436,45 @@ export function Todo() {
         icon="check_circle"
         iconIsMaterial
         title="할 일"
-        leftAddon={tasksEnabled && tasksSyncing ? (
-          <span className="inline-flex items-center gap-1 text-xs text-sp-muted">
-            <span className="material-symbols-outlined text-sm animate-spin">sync</span>
-            동기화 중
-          </span>
-        ) : undefined}
-        rightActions={<>
-          {/* 진행률 바 */}
-          <div className="flex items-center gap-2 xl:gap-3 mr-2">
-            <div className="w-32 xl:w-40 h-2 bg-sp-surface rounded-full overflow-hidden">
-              <div
-                className="h-full bg-sp-accent rounded-full transition-all duration-300"
-                style={{ width: `${progressPercent}%` }}
-              />
-            </div>
-            <span className="text-xs xl:text-sm text-sp-muted font-sp-medium whitespace-nowrap">
-              {completedCount}/{totalCount} ({progressPercent}%)
+        leftAddon={
+          tasksEnabled && tasksSyncing ? (
+            <span className="inline-flex items-center gap-1 text-xs text-sp-muted">
+              <span className="material-symbols-outlined text-sm animate-spin">sync</span>
+              동기화 중
             </span>
-          </div>
-          <button
-            type="button"
-            onClick={() => setViewMode(viewMode === 'active' ? 'archive' : 'active')}
-            className={`flex items-center gap-1.5 px-3 xl:px-4 py-2 xl:py-2.5 rounded-xl text-xs xl:text-sm font-sp-semibold transition-all duration-sp-base ease-sp-out active:scale-95 ${
-              viewMode === 'archive'
-                ? 'bg-sp-accent text-white'
-                : 'border border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-surface'
-            }`}
-          >
-            <span className="text-base">🗃️</span>
-            <span className="hidden sm:inline">아카이브</span>
-            {archivedTodos.length > 0 && (
-              <span className="text-xs opacity-70">({archivedTodos.length})</span>
-            )}
-          </button>
-        </>}
+          ) : undefined
+        }
+        rightActions={
+          <>
+            {/* 진행률 바 */}
+            <div className="flex items-center gap-2 xl:gap-3 mr-2">
+              <div className="w-32 xl:w-40 h-2 bg-sp-surface rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-sp-accent rounded-full transition-all duration-300"
+                  style={{ width: `${progressPercent}%` }}
+                />
+              </div>
+              <span className="text-xs xl:text-sm text-sp-muted font-sp-medium whitespace-nowrap">
+                {completedCount}/{totalCount} ({progressPercent}%)
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setViewMode(viewMode === 'active' ? 'archive' : 'active')}
+              className={`flex items-center gap-1.5 px-3 xl:px-4 py-2 xl:py-2.5 rounded-xl text-xs xl:text-sm font-sp-semibold transition-all duration-sp-base ease-sp-out active:scale-95 ${
+                viewMode === 'archive'
+                  ? 'bg-sp-accent text-white'
+                  : 'border border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-surface'
+              }`}
+            >
+              <span className="text-base">🗃️</span>
+              <span className="hidden sm:inline">아카이브</span>
+              {archivedTodos.length > 0 && (
+                <span className="text-xs opacity-70">({archivedTodos.length})</span>
+              )}
+            </button>
+          </>
+        }
       />
 
       {/* 콘텐츠 */}
@@ -405,6 +482,8 @@ export function Todo() {
         <div className="mx-auto flex flex-col gap-6 max-w-full">
           {viewMode === 'active' ? (
             <>
+              {/* 위클리 요약 KPI 카드 — 규칙 기반 순수 집계(접이식) */}
+              <WeeklyReviewCard />
               {/* 필터 탭 */}
               <div className="flex flex-col gap-3">
                 {/* 날짜 필터 + 정렬 모드 */}
@@ -428,7 +507,7 @@ export function Todo() {
 
                   <button
                     type="button"
-                    onClick={() => setSortMode((m) => m === 'priority' ? 'dueDate' : 'priority')}
+                    onClick={() => setSortMode((m) => (m === 'priority' ? 'dueDate' : 'priority'))}
                     className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-sm font-medium ring-1 transition-colors ${
                       sortMode === 'dueDate'
                         ? 'bg-sp-accent text-white ring-sp-accent/30'
@@ -486,377 +565,567 @@ export function Todo() {
                 )}
 
                 {/* 타임라인 통합 토글 (기본 모드 또는 프로 모드의 todo 뷰에서만) */}
-                {(!isProMode || proViewMode === 'todo') && <div className="flex items-center gap-3 text-xs">
-                  <span className="text-sp-muted">통합 보기</span>
-                  <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={settings.todoShowTimetable ?? false}
-                      onChange={(e) => void updateSettings({ todoShowTimetable: e.target.checked })}
-                      className="rounded border-sp-border text-sp-accent focus:ring-sp-accent/30 bg-sp-surface"
-                    />
-                    <span className="text-sp-muted hover:text-sp-text transition-colors">📚 수업</span>
-                  </label>
-                  <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={settings.todoShowEvents ?? false}
-                      onChange={(e) => void updateSettings({ todoShowEvents: e.target.checked })}
-                      className="rounded border-sp-border text-sp-accent focus:ring-sp-accent/30 bg-sp-surface"
-                    />
-                    <span className="text-sp-muted hover:text-sp-text transition-colors">📅 일정</span>
-                  </label>
-                </div>}
+                {(!isProMode || proViewMode === 'todo') && (
+                  <div className="flex items-center gap-3 text-xs">
+                    <span className="text-sp-muted">통합 보기</span>
+                    <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={settings.todoShowTimetable ?? false}
+                        onChange={(e) =>
+                          void updateSettings({ todoShowTimetable: e.target.checked })
+                        }
+                        className="rounded border-sp-border text-sp-accent focus:ring-sp-accent/30 bg-sp-surface"
+                      />
+                      <span className="text-sp-muted hover:text-sp-text transition-colors">
+                        📚 수업
+                      </span>
+                    </label>
+                    <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={settings.todoShowEvents ?? false}
+                        onChange={(e) => void updateSettings({ todoShowEvents: e.target.checked })}
+                        className="rounded border-sp-border text-sp-accent focus:ring-sp-accent/30 bg-sp-surface"
+                      />
+                      <span className="text-sp-muted hover:text-sp-text transition-colors">
+                        📅 일정
+                      </span>
+                    </label>
+                  </div>
+                )}
               </div>
 
               {/* 프로 모드 뷰 분기 */}
               {isProMode && proViewMode !== 'todo' ? (
                 proLayout === 'dual' ? (
                   <>
-                  <div className="flex gap-6 min-h-[500px]">
-                    <div className="flex-1 min-w-0">
-                      <Suspense fallback={<div className="flex items-center justify-center py-16 text-sp-muted">뷰 로딩 중...</div>}>
-                        {proViewMode === 'kanban' && <KanbanView categoryFilter={categoryFilter} />}
-                        {proViewMode === 'list' && <ListView categoryFilter={categoryFilter} />}
-                        {proViewMode === 'timeline' && <TimelineView categoryFilter={categoryFilter} />}
-                      </Suspense>
-                    </div>
-                    <div className="w-80 shrink-0 flex flex-col gap-4 bg-sp-card rounded-xl p-4 ring-1 ring-sp-border overflow-y-auto">
-                      <h3 className="text-sm font-bold text-sp-text flex items-center gap-2">
-                        <span className="material-symbols-outlined text-icon">list</span>
-                        할 일 목록
-                      </h3>
-                      {filtered.map(todo => (
-                        <div
-                          key={todo.id}
-                          onClick={() => setDualEditTodo(todo)}
-                          className={`flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs cursor-pointer ${
-                            todo.completed ? 'text-sp-muted line-through' : 'text-sp-text'
-                          } hover:bg-sp-surface transition-colors`}
+                    <div className="flex flex-col lg:flex-row gap-6 min-h-[500px]">
+                      <div className="flex-1 min-w-0">
+                        <Suspense
+                          fallback={
+                            <div className="flex items-center justify-center py-16 text-sp-muted">
+                              뷰 로딩 중...
+                            </div>
+                          }
                         >
-                          <input
-                            type="checkbox"
-                            checked={todo.completed}
-                            onChange={() => void toggleTodo(todo.id)}
-                            onClick={e => e.stopPropagation()}
-                            className="w-3.5 h-3.5 rounded border-sp-border text-sp-accent focus:ring-sp-accent shrink-0"
-                          />
-                          <span className="truncate">{todo.text}</span>
-                          {todo.googleTaskId && (
-                            <span className="material-symbols-outlined text-xs text-sp-muted/50 shrink-0" title="Google Tasks 연동됨">cloud_done</span>
+                          {proViewMode === 'kanban' && (
+                            <KanbanView categoryFilter={categoryFilter} />
                           )}
-                          {todo.dueDate && (
-                            <span className="shrink-0 text-sp-muted text-caption">
-                              {todo.dueDate.slice(5).replace('-', '/')}
-                            </span>
+                          {proViewMode === 'list' && <ListView categoryFilter={categoryFilter} />}
+                          {proViewMode === 'timeline' && (
+                            <TimelineView categoryFilter={categoryFilter} />
                           )}
-                        </div>
-                      ))}
+                          {proViewMode === 'matrix' && (
+                            <MatrixView categoryFilter={categoryFilter} />
+                          )}
+                        </Suspense>
+                      </div>
+                      <div className="w-full lg:w-80 lg:shrink-0 flex flex-col gap-4 bg-sp-card rounded-xl p-4 ring-1 ring-sp-border overflow-y-auto">
+                        <h3 className="text-sm font-bold text-sp-text flex items-center gap-2">
+                          <span className="material-symbols-outlined text-icon">list</span>할 일
+                          목록
+                        </h3>
+                        {filtered.map((todo) => (
+                          <div
+                            key={todo.id}
+                            onClick={() => setDualEditTodo(todo)}
+                            className={`flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs cursor-pointer ${
+                              todo.completed ? 'text-sp-muted line-through' : 'text-sp-text'
+                            } hover:bg-sp-surface transition-colors`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={todo.completed}
+                              onChange={() => void toggleTodo(todo.id)}
+                              onClick={(e) => e.stopPropagation()}
+                              className="w-3.5 h-3.5 rounded border-sp-border text-sp-accent focus:ring-sp-accent shrink-0"
+                            />
+                            <span className="truncate">{todo.text}</span>
+                            {todo.googleTaskId && (
+                              <span
+                                className="material-symbols-outlined text-xs text-sp-muted/50 shrink-0"
+                                title="Google Tasks 연동됨"
+                              >
+                                cloud_done
+                              </span>
+                            )}
+                            {todo.dueDate && (
+                              <span className="shrink-0 text-sp-muted text-caption">
+                                {todo.dueDate.slice(5).replace('-', '/')}
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                  {dualEditTodo && (
-                    <TodoEditModal
-                      todo={dualEditTodo}
-                      categories={categories}
-                      onUpdate={(id, changes) => { void updateTodo(id, changes); }}
-                      onClose={() => setDualEditTodo(null)}
-                    />
-                  )}
+                    {dualEditTodo && (
+                      <TodoEditModal
+                        todo={dualEditTodo}
+                        categories={categories}
+                        onUpdate={(id, changes) => {
+                          void updateTodo(id, changes);
+                        }}
+                        onClose={() => setDualEditTodo(null)}
+                      />
+                    )}
                   </>
                 ) : (
-                  <Suspense fallback={<div className="flex items-center justify-center py-16 text-sp-muted">뷰 로딩 중...</div>}>
+                  <Suspense
+                    fallback={
+                      <div className="flex items-center justify-center py-16 text-sp-muted">
+                        뷰 로딩 중...
+                      </div>
+                    }
+                  >
                     {proViewMode === 'kanban' && <KanbanView categoryFilter={categoryFilter} />}
                     {proViewMode === 'list' && <ListView categoryFilter={categoryFilter} />}
                     {proViewMode === 'timeline' && <TimelineView categoryFilter={categoryFilter} />}
+                    {proViewMode === 'matrix' && <MatrixView categoryFilter={categoryFilter} />}
                   </Suspense>
                 )
               ) : (
-
-              <>
-              {/* 추가 폼 */}
-              <div className="flex flex-col gap-3 bg-sp-card rounded-xl p-4 ring-1 ring-sp-border">
-                {/* 첫 번째 줄: 날짜 + 텍스트 + 추가 버튼 */}
-                <div className="flex gap-3 items-center">
-                  <DatePopover
-                    date={newDueDate}
-                    endDate={newStartDate ? newDueDate : undefined}
-                    noDueDate={noDueDate}
-                    onDateChange={(d) => {
-                      if (newStartDate) {
-                        setNewStartDate(d);
-                      } else {
-                        setNewDueDate(d);
-                        setNoDueDate(false);
-                      }
-                    }}
-                    onEndDateChange={(endDate) => {
-                      if (endDate) {
-                        setNewStartDate(newDueDate);
-                        setNewDueDate(endDate);
-                      } else {
-                        setNewStartDate(undefined);
-                      }
-                    }}
-                    onNoDueDateChange={(nd) => {
-                      setNoDueDate(nd);
-                      if (nd) { setNewDueDate(''); setNewStartDate(undefined); }
-                      else setNewDueDate(toLocalDateString());
-                    }}
-                  >
-                    <div className={`flex items-center gap-2 shrink-0 bg-sp-surface text-sm px-3 py-2 rounded-lg border border-sp-border hover:border-sp-accent transition-colors ${
-                      noDueDate ? 'opacity-40 text-sp-muted' : 'text-sp-text'
-                    }`}>
-                      <span className="material-symbols-outlined text-icon">calendar_today</span>
-                      {noDueDate ? '기한 없음' : newStartDate ? `${newStartDate} → ${newDueDate}` : (newDueDate || '날짜 선택')}
-                    </div>
-                  </DatePopover>
-                  <input
-                    type="text"
-                    value={newText}
-                    onChange={(e) => setNewText(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    placeholder="할 일을 입력하세요..."
-                    className="flex-1 bg-sp-surface text-sp-text text-sm px-4 py-2 rounded-lg border border-sp-border focus:border-sp-accent focus:outline-none transition-colors placeholder:text-sp-muted"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleAdd}
-                    disabled={!newText.trim()}
-                    className="flex items-center gap-2 bg-sp-accent hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed text-white px-5 py-2 rounded-xl transition-all shadow-lg shadow-sp-accent/20 text-sm font-bold"
-                  >
-                    <span className="material-symbols-outlined text-icon-md">add</span>
-                    추가
-                  </button>
-                </div>
-
-                {/* 두 번째 줄: 시간 + 우선순위 + 반복 + 카테고리 */}
-                <div className="flex gap-3 items-center flex-wrap">
-                  {/* 시간 */}
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs text-sp-muted">⏰</span>
-                    <input
-                      type="time"
-                      value={newTime}
-                      onChange={(e) => setNewTime(e.target.value)}
-                      className="bg-sp-surface text-sp-text text-xs px-2 py-1 rounded-lg border border-sp-border focus:border-sp-accent focus:outline-none transition-colors"
-                    />
-                    {newTime && (
-                      <button
-                        type="button"
-                        onClick={() => setNewTime('')}
-                        className="text-xs text-sp-muted hover:text-red-400 transition-colors"
+                <>
+                  {/* 추가 폼 */}
+                  <div className="flex flex-col gap-3 bg-sp-card rounded-xl p-4 ring-1 ring-sp-border">
+                    {/* 첫 번째 줄: 날짜 + 텍스트 + 추가 버튼 */}
+                    <div className="flex gap-3 items-center">
+                      <DatePopover
+                        date={newDueDate}
+                        endDate={newStartDate ? newDueDate : undefined}
+                        noDueDate={noDueDate}
+                        onDateChange={(d) => {
+                          if (newStartDate) {
+                            setNewStartDate(d);
+                          } else {
+                            setNewDueDate(d);
+                            setNoDueDate(false);
+                          }
+                        }}
+                        onEndDateChange={(endDate) => {
+                          if (endDate) {
+                            setNewStartDate(newDueDate);
+                            setNewDueDate(endDate);
+                          } else {
+                            setNewStartDate(undefined);
+                          }
+                        }}
+                        onNoDueDateChange={(nd) => {
+                          setNoDueDate(nd);
+                          if (nd) {
+                            setNewDueDate('');
+                            setNewStartDate(undefined);
+                          } else setNewDueDate(toLocalDateString());
+                        }}
                       >
-                        ✕
-                      </button>
-                    )}
-                  </div>
-
-                  <span className="text-sp-border">|</span>
-
-                  {/* 우선순위 */}
-                  <div className="flex items-center gap-1">
-                    <span className="text-xs text-sp-muted mr-1">우선순위</span>
-                    {PRIORITY_OPTIONS.map((p) => {
-                      const config = PRIORITY_CONFIG[p];
-                      return (
-                        <button
-                          key={p}
-                          type="button"
-                          onClick={() => setNewPriority(p)}
-                          className={`flex flex-col items-center px-2 py-1 rounded-md text-xs font-medium transition-colors ${
-                            newPriority === p
-                              ? `${config.bgColor || 'bg-sp-surface'} ${config.color} ring-1 ring-current`
-                              : 'text-sp-muted hover:text-sp-text'
+                        <div
+                          className={`flex items-center gap-2 shrink-0 bg-sp-surface text-sm px-3 py-2 rounded-lg border border-sp-border hover:border-sp-accent transition-colors ${
+                            noDueDate ? 'opacity-40 text-sp-muted' : 'text-sp-text'
                           }`}
                         >
-                          <span>{config.icon}</span>
-                          <span className="text-caption leading-tight mt-0.5">{config.label}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  <span className="text-sp-border">|</span>
-
-                  {/* 반복 */}
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs text-sp-muted">🔄</span>
-                    <select
-                      value={newRecurrenceIdx}
-                      onChange={(e) => setNewRecurrenceIdx(Number(e.target.value))}
-                      className="bg-sp-surface text-sp-text text-xs px-2 py-1 rounded-lg border border-sp-border focus:border-sp-accent focus:outline-none transition-colors"
-                    >
-                      {RECURRENCE_PRESETS.map((preset, idx) => (
-                        <option key={idx} value={idx}>
-                          {preset.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <span className="text-sp-border">|</span>
-
-                  {/* 카테고리 */}
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs text-sp-muted">📁</span>
-                    <select
-                      value={newCategory}
-                      onChange={(e) => setNewCategory(e.target.value)}
-                      className="bg-sp-surface text-sp-text text-xs px-2 py-1 rounded-lg border border-sp-border focus:border-sp-accent focus:outline-none transition-colors"
-                    >
-                      <option value="">없음</option>
-                      {categories.map((cat) => (
-                        <option key={cat.id} value={cat.id}>
-                          {cat.icon} {cat.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              {/* 타임라인 통합 아이템 (시간표/일정) — 할 일 유무와 무관하게 표시 */}
-              {timelineItems.length > 0 && (
-                <div className="bg-sp-card rounded-xl ring-1 ring-sp-border overflow-hidden">
-                  <div className="px-4 py-2 border-b border-sp-border/50 flex items-center gap-2">
-                    <span className="material-symbols-outlined text-icon text-sp-muted">timeline</span>
-                    <span className="text-xs font-medium text-sp-muted">오늘의 시간표 · 일정</span>
-                  </div>
-                  <div className="divide-y divide-sp-border/30">
-                    {[...timelineItems]
-                      .sort((a, b) => {
-                        if (a.time && b.time) return a.time.localeCompare(b.time);
-                        if (a.time && !b.time) return -1;
-                        if (!a.time && b.time) return 1;
-                        return 0;
-                      })
-                      .map((item) => (
-                        <div
-                          key={item.id}
-                          className="flex items-center gap-3 px-4 py-2 opacity-70"
-                        >
-                          <span className="text-detail text-sp-muted w-12 shrink-0 text-right font-mono">
-                            {item.time ?? '--:--'}
+                          <span className="material-symbols-outlined text-icon">
+                            calendar_today
                           </span>
-                          <span className="text-sm shrink-0">{item.icon}</span>
-                          <span className="text-sm text-sp-text truncate flex-1">
-                            {item.title}
-                          </span>
-                          {item.subtitle !== undefined && (
-                            <span className="text-detail text-sp-muted shrink-0">
-                              {item.subtitle}
-                            </span>
-                          )}
+                          {noDueDate
+                            ? '기한 없음'
+                            : newStartDate
+                              ? `${newStartDate} → ${newDueDate}`
+                              : newDueDate || '날짜 선택'}
                         </div>
-                      ))}
+                      </DatePopover>
+                      <input
+                        type="text"
+                        value={newText}
+                        onChange={(e) => setNewText(e.target.value)}
+                        onKeyDown={handleKeyDown}
+                        placeholder={
+                          quickParseEnabled
+                            ? '예: 내일 3시 회의 !높음 #업무 (자동 인식)'
+                            : '할 일을 입력하세요...'
+                        }
+                        className="flex-1 bg-sp-surface text-sp-text text-sm px-4 py-2 rounded-lg border border-sp-border focus:border-sp-accent focus:outline-none transition-colors placeholder:text-sp-muted"
+                      />
+                      {quickParseEnabled && (
+                        <button
+                          type="button"
+                          onClick={() => setShowQuickParseHelp((v) => !v)}
+                          title="빠른 입력 예시 보기"
+                          aria-label="빠른 입력 예시 보기"
+                          aria-expanded={showQuickParseHelp}
+                          className="shrink-0 w-9 h-9 flex items-center justify-center rounded-lg text-sp-muted hover:text-sp-text hover:bg-sp-surface border border-sp-border transition-colors"
+                        >
+                          <span className="material-symbols-outlined text-icon">help</span>
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={handleAdd}
+                        disabled={!newText.trim()}
+                        className="flex items-center gap-2 bg-sp-accent hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed text-white px-5 py-2 rounded-xl transition-all shadow-lg shadow-sp-accent/20 text-sm font-bold"
+                      >
+                        <span className="material-symbols-outlined text-icon-md">add</span>
+                        추가
+                      </button>
+                    </div>
+
+                    {/* 첫 방문 1회 안내 — 예시 클릭 시 입력창 채움 + 닫기 영구 기억 */}
+                    {quickParseEnabled && showQuickParseTip && !showQuickParse && (
+                      <div className="flex items-center gap-2 text-xs bg-sp-accent/10 text-sp-text rounded-lg ring-1 ring-sp-accent/30 px-3 py-2 -mt-1">
+                        <span>
+                          ✨ 한 줄로 빠르게! 예를 들어{' '}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setNewText('내일 3시 회의 !높음 #업무');
+                              dismissQuickParseTip();
+                            }}
+                            className="font-bold text-sp-accent underline underline-offset-2"
+                          >
+                            내일 3시 회의 !높음 #업무
+                          </button>{' '}
+                          처럼 입력하면 날짜·시간·우선순위·분류가 자동 인식돼요.
+                        </span>
+                        <button
+                          type="button"
+                          onClick={dismissQuickParseTip}
+                          aria-label="안내 닫기"
+                          className="ml-auto shrink-0 text-sp-muted hover:text-sp-text transition-colors"
+                        >
+                          <span className="material-symbols-outlined text-icon">close</span>
+                        </button>
+                      </div>
+                    )}
+
+                    {/* 빠른 입력 예시 도움말([?] 토글) — 칩을 누르면 입력창에 추가돼 미리보기 칩으로 학습 */}
+                    {quickParseEnabled && showQuickParseHelp && (
+                      <div className="flex flex-col gap-1.5 text-xs bg-sp-card rounded-lg ring-1 ring-sp-border p-3 -mt-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-sp-text">
+                            빠른 입력 예시 — 칩을 누르면 입력창에 추가돼요
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setShowQuickParseHelp(false)}
+                            className="text-sp-muted hover:text-sp-text transition-colors"
+                          >
+                            닫기
+                          </button>
+                        </div>
+                        {[
+                          {
+                            label: '📅 날짜',
+                            tokens: ['오늘', '내일', '모레', '다음주 월요일', '7월 3일'],
+                          },
+                          { label: '⏰ 시간', tokens: ['3시', '오후 2시', '14:30', '아침'] },
+                          { label: '❗ 우선순위', tokens: ['!높음', '!중간', '!낮음'] },
+                          { label: '#️⃣ 분류', tokens: ['#업무', '#수업'] },
+                          { label: '🔁 반복', tokens: ['매주 월수금', '격주', '매월'] },
+                        ].map((row) => (
+                          <div key={row.label} className="flex items-center gap-1.5 flex-wrap">
+                            <span className="w-16 shrink-0 text-sp-muted">{row.label}</span>
+                            {row.tokens.map((tok) => (
+                              <button
+                                key={tok}
+                                type="button"
+                                onClick={() => appendQuickToken(tok)}
+                                className="px-2 py-0.5 rounded-md bg-sp-surface border border-sp-border text-sp-text hover:border-sp-accent hover:text-sp-accent transition-colors"
+                              >
+                                {tok}
+                              </button>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* 자연어 빠른입력 미리보기 — 인식된 토큰을 칩으로 보여주고, 끄기 토글 제공 */}
+                    {showQuickParse && quickParse && (
+                      <div className="flex items-center gap-1.5 flex-wrap text-xs -mt-1">
+                        <span className="text-sp-muted">✨ 자동 인식</span>
+                        {quickParse.dueDate && (
+                          <span className="px-2 py-0.5 rounded-md bg-sp-surface border border-sp-border text-sp-text">
+                            📅 {quickParse.dueDate}
+                          </span>
+                        )}
+                        {quickParse.time && (
+                          <span className="px-2 py-0.5 rounded-md bg-sp-surface border border-sp-border text-sp-text">
+                            ⏰ {quickParse.time}
+                          </span>
+                        )}
+                        {quickParse.priority && (
+                          <span className="px-2 py-0.5 rounded-md bg-sp-surface border border-sp-border text-sp-text">
+                            {quickParse.priority === 'high'
+                              ? '🔴 높음'
+                              : quickParse.priority === 'medium'
+                                ? '🟡 중간'
+                                : '🔵 낮음'}
+                          </span>
+                        )}
+                        {quickParse.categoryHint && (
+                          <span className="px-2 py-0.5 rounded-md bg-sp-surface border border-sp-border text-sp-text">
+                            #{quickParse.categoryHint}
+                          </span>
+                        )}
+                        {quickParse.recurrence && (
+                          <span className="px-2 py-0.5 rounded-md bg-sp-surface border border-sp-border text-sp-text">
+                            🔁 {getRecurrenceLabel(quickParse.recurrence)}
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={toggleQuickParse}
+                          className="text-sp-muted hover:text-red-400 transition-colors underline underline-offset-2"
+                          title="자연어 자동 인식을 끕니다"
+                        >
+                          인식 끄기
+                        </button>
+                      </div>
+                    )}
+                    {!quickParseEnabled && (
+                      <button
+                        type="button"
+                        onClick={toggleQuickParse}
+                        className="self-start text-xs text-sp-muted hover:text-sp-accent transition-colors -mt-1"
+                        title="입력에서 날짜·시간·우선순위 등을 자동 인식합니다"
+                      >
+                        ✨ 자연어 인식 켜기
+                      </button>
+                    )}
+
+                    {/* 두 번째 줄: 시간 + 우선순위 + 반복 + 카테고리 */}
+                    <div className="flex gap-3 items-center flex-wrap">
+                      {/* 시간 */}
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-sp-muted">⏰</span>
+                        <input
+                          type="time"
+                          value={newTime}
+                          onChange={(e) => setNewTime(e.target.value)}
+                          className="bg-sp-surface text-sp-text text-xs px-2 py-1 rounded-lg border border-sp-border focus:border-sp-accent focus:outline-none transition-colors"
+                        />
+                        {newTime && (
+                          <button
+                            type="button"
+                            onClick={() => setNewTime('')}
+                            className="text-xs text-sp-muted hover:text-red-400 transition-colors"
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </div>
+
+                      <span className="text-sp-border">|</span>
+
+                      {/* 우선순위 */}
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs text-sp-muted mr-1">우선순위</span>
+                        {PRIORITY_OPTIONS.map((p) => {
+                          const config = PRIORITY_CONFIG[p];
+                          return (
+                            <button
+                              key={p}
+                              type="button"
+                              onClick={() => setNewPriority(p)}
+                              className={`flex flex-col items-center px-2 py-1 rounded-md text-xs font-medium transition-colors ${
+                                newPriority === p
+                                  ? `${config.bgColor || 'bg-sp-surface'} ${config.color} ring-1 ring-current`
+                                  : 'text-sp-muted hover:text-sp-text'
+                              }`}
+                            >
+                              <span>{config.icon}</span>
+                              <span className="text-caption leading-tight mt-0.5">
+                                {config.label}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <span className="text-sp-border">|</span>
+
+                      {/* 반복 */}
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-sp-muted">🔄</span>
+                        <select
+                          value={newRecurrenceIdx}
+                          onChange={(e) => setNewRecurrenceIdx(Number(e.target.value))}
+                          className="bg-sp-surface text-sp-text text-xs px-2 py-1 rounded-lg border border-sp-border focus:border-sp-accent focus:outline-none transition-colors"
+                        >
+                          {RECURRENCE_PRESETS.map((preset, idx) => (
+                            <option key={idx} value={idx}>
+                              {preset.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <span className="text-sp-border">|</span>
+
+                      {/* 카테고리 */}
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-sp-muted">📁</span>
+                        <select
+                          value={newCategory}
+                          onChange={(e) => setNewCategory(e.target.value)}
+                          className="bg-sp-surface text-sp-text text-xs px-2 py-1 rounded-lg border border-sp-border focus:border-sp-accent focus:outline-none transition-colors"
+                        >
+                          <option value="">없음</option>
+                          {categories.map((cat) => (
+                            <option key={cat.id} value={cat.id}>
+                              {cat.icon} {cat.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              )}
 
-              {/* 1회성 편집 안내 */}
-              {showEditHint && viewMode === 'active' && totalCount > 0 && (
-                <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-sp-accent/10 border border-sp-accent/20 text-xs text-sp-accent">
-                  <span className="material-symbols-outlined text-sm">lightbulb</span>
-                  <span>할 일을 더블클릭하면 내용, 날짜, 우선순위를 바로 수정할 수 있어요!</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowEditHint(false);
-                      localStorage.setItem('ssampin:todo-edit-hint-dismissed', 'true');
-                    }}
-                    className="ml-auto text-sp-accent/50 hover:text-sp-accent transition-colors"
-                  >
-                    <span className="material-symbols-outlined text-sm">close</span>
-                  </button>
-                </div>
-              )}
+                  {/* 타임라인 통합 아이템 (시간표/일정) — 할 일 유무와 무관하게 표시 */}
+                  {timelineItems.length > 0 && (
+                    <div className="bg-sp-card rounded-xl ring-1 ring-sp-border overflow-hidden">
+                      <div className="px-4 py-2 border-b border-sp-border/50 flex items-center gap-2">
+                        <span className="material-symbols-outlined text-icon text-sp-muted">
+                          timeline
+                        </span>
+                        <span className="text-xs font-medium text-sp-muted">
+                          오늘의 시간표 · 일정
+                        </span>
+                      </div>
+                      <div className="divide-y divide-sp-border/30">
+                        {[...timelineItems]
+                          .sort((a, b) => {
+                            if (a.time && b.time) return a.time.localeCompare(b.time);
+                            if (a.time && !b.time) return -1;
+                            if (!a.time && b.time) return 1;
+                            return 0;
+                          })
+                          .map((item) => (
+                            <div
+                              key={item.id}
+                              className="flex items-center gap-3 px-4 py-2 opacity-70"
+                            >
+                              <span className="text-detail text-sp-muted w-12 shrink-0 text-right font-mono">
+                                {item.time ?? '--:--'}
+                              </span>
+                              <span className="text-sm shrink-0">{item.icon}</span>
+                              <span className="text-sm text-sp-text truncate flex-1">
+                                {item.title}
+                              </span>
+                              {item.subtitle !== undefined && (
+                                <span className="text-detail text-sp-muted shrink-0">
+                                  {item.subtitle}
+                                </span>
+                              )}
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  )}
 
-              {/* 투두 리스트 */}
-              {totalCount === 0 && timelineItems.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 text-sp-muted">
-                  <span className="material-symbols-outlined text-5xl mb-3 opacity-40">
-                    checklist
-                  </span>
-                  <p className="text-lg">할 일이 없습니다</p>
-                  <p className="text-sm mt-1">위에서 새로운 할 일을 추가해보세요</p>
-                </div>
-              ) : totalCount === 0 ? (
-                null
-              ) : filtered.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 text-sp-muted">
-                  <span className="material-symbols-outlined text-5xl mb-3 opacity-40">
-                    filter_list
-                  </span>
-                  <p className="text-lg">필터에 해당하는 할 일이 없습니다</p>
-                </div>
-              ) : sortMode === 'priority' ? (
-                /* 우선순위 모드: 기존 그룹핑 뷰 */
-                <div className="flex flex-col gap-4">
-                  {GROUP_ORDER.map((groupKey) => {
-                    const items = groups[groupKey];
-                    if (!items || items.length === 0) return null;
+                  {/* 1회성 편집 안내 */}
+                  {showEditHint && viewMode === 'active' && totalCount > 0 && (
+                    <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-sp-accent/10 border border-sp-accent/20 text-xs text-sp-accent">
+                      <span className="material-symbols-outlined text-sm">lightbulb</span>
+                      <span>
+                        할 일을 더블클릭하면 내용, 날짜, 우선순위를 바로 수정할 수 있어요!
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowEditHint(false);
+                          localStorage.setItem('ssampin:todo-edit-hint-dismissed', 'true');
+                        }}
+                        className="ml-auto text-sp-accent/50 hover:text-sp-accent transition-colors"
+                      >
+                        <span className="material-symbols-outlined text-sm">close</span>
+                      </button>
+                    </div>
+                  )}
 
-                    const isCollapsed = collapsedGroups[groupKey] ?? false;
+                  {/* 투두 리스트 */}
+                  {totalCount === 0 && timelineItems.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-16 text-sp-muted">
+                      <span className="material-symbols-outlined text-5xl mb-3 opacity-40">
+                        checklist
+                      </span>
+                      <p className="text-lg">할 일이 없습니다</p>
+                      <p className="text-sm mt-1">위에서 새로운 할 일을 추가해보세요</p>
+                    </div>
+                  ) : totalCount === 0 ? null : filtered.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-16 text-sp-muted">
+                      <span className="material-symbols-outlined text-5xl mb-3 opacity-40">
+                        filter_list
+                      </span>
+                      <p className="text-lg">필터에 해당하는 할 일이 없습니다</p>
+                    </div>
+                  ) : sortMode === 'priority' ? (
+                    /* 우선순위 모드: 기존 그룹핑 뷰 */
+                    <div className="flex flex-col gap-4">
+                      {GROUP_ORDER.map((groupKey) => {
+                        const items = groups[groupKey];
+                        if (!items || items.length === 0) return null;
 
-                    return (
-                      <TodoGroup
-                        key={groupKey}
-                        groupKey={groupKey}
-                        label={GROUP_LABELS[groupKey] ?? groupKey}
-                        items={sortTodos(items, sortMode)}
-                        isOverdueGroup={groupKey === 'overdue'}
-                        collapsed={isCollapsed}
-                        onToggleCollapse={() => toggleGroup(groupKey)}
-                        categories={categories}
-                        now={now}
-                        onToggle={toggleTodo}
-                        onDelete={deleteTodo}
-                        onUpdate={updateTodo}
-                        onAddSubTask={addSubTask}
-                        onToggleSubTask={toggleSubTask}
-                        onDeleteSubTask={deleteSubTask}
-                        onReorder={reorderTodos}
-                      />
-                    );
-                  })}
-                </div>
-              ) : (
-                /* D-Day 순 모드: 플랫 리스트 */
-                <div className="bg-sp-card rounded-xl ring-1 ring-sp-border overflow-visible">
-                  <ul>
-                    {filtered.map((todo) => (
-                      <TodoItem
-                        key={todo.id}
-                        todo={todo}
-                        overdue={isOverdue(todo, now)}
-                        categories={categories}
-                        onToggle={toggleTodo}
-                        onDelete={deleteTodo}
-                        onUpdate={updateTodo}
-                        onAddSubTask={addSubTask}
-                        onToggleSubTask={toggleSubTask}
-                        onDeleteSubTask={deleteSubTask}
-                        showDDay
-                      />
-                    ))}
-                  </ul>
-                </div>
-              )}
+                        const isCollapsed = collapsedGroups[groupKey] ?? false;
 
-              {/* 완료 항목 아카이브 버튼 */}
-              {completedCount > 0 && (
-                <div className="flex justify-center">
-                  <button
-                    type="button"
-                    onClick={handleArchiveCompleted}
-                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-sp-muted hover:text-sp-text bg-sp-card hover:bg-sp-surface ring-1 ring-sp-border transition-colors"
-                  >
-                    <span className="text-base">📦</span>
-                    완료 항목 모두 아카이브 ({completedCount}건)
-                  </button>
-                </div>
-              )}
-            </>
+                        return (
+                          <TodoGroup
+                            key={groupKey}
+                            groupKey={groupKey}
+                            label={GROUP_LABELS[groupKey] ?? groupKey}
+                            items={sortTodos(items, sortMode)}
+                            isOverdueGroup={groupKey === 'overdue'}
+                            collapsed={isCollapsed}
+                            onToggleCollapse={() => toggleGroup(groupKey)}
+                            categories={categories}
+                            now={now}
+                            onToggle={toggleTodo}
+                            onDelete={deleteTodo}
+                            onUpdate={updateTodo}
+                            onAddSubTask={addSubTask}
+                            onToggleSubTask={toggleSubTask}
+                            onDeleteSubTask={deleteSubTask}
+                            onReorder={reorderTodos}
+                          />
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    /* D-Day 순 모드: 플랫 리스트 */
+                    <div className="bg-sp-card rounded-xl ring-1 ring-sp-border overflow-visible">
+                      <ul>
+                        {filtered.map((todo) => (
+                          <TodoItem
+                            key={todo.id}
+                            todo={todo}
+                            overdue={isOverdue(todo, now)}
+                            categories={categories}
+                            onToggle={toggleTodo}
+                            onDelete={deleteTodo}
+                            onUpdate={updateTodo}
+                            onAddSubTask={addSubTask}
+                            onToggleSubTask={toggleSubTask}
+                            onDeleteSubTask={deleteSubTask}
+                            showDDay
+                          />
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* 완료 항목 아카이브 버튼 */}
+                  {completedCount > 0 && (
+                    <div className="flex justify-center">
+                      <button
+                        type="button"
+                        onClick={handleArchiveCompleted}
+                        className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-sp-muted hover:text-sp-text bg-sp-card hover:bg-sp-surface ring-1 ring-sp-border transition-colors"
+                      >
+                        <span className="text-base">📦</span>
+                        완료 항목 모두 아카이브 ({completedCount}건)
+                      </button>
+                    </div>
+                  )}
+                </>
               )}
             </>
           ) : (
@@ -874,9 +1143,7 @@ export function Todo() {
       </div>
 
       {/* 카테고리 관리 모달 */}
-      {showCategoryModal && (
-        <TodoCategoryModal onClose={() => setShowCategoryModal(false)} />
-      )}
+      {showCategoryModal && <TodoCategoryModal onClose={() => setShowCategoryModal(false)} />}
     </div>
   );
 }
@@ -905,7 +1172,14 @@ function getArchiveDateGroup(archivedAt: string | undefined): ArchiveDateGroup {
 
 const ARCHIVE_GROUP_ORDER: ArchiveDateGroup[] = ['오늘', '이번 주', '이번 달', '그 이전'];
 
-function ArchiveView({ todos, categories, onRestore, onDelete, onDeleteAll, onBack }: ArchiveViewProps) {
+function ArchiveView({
+  todos,
+  categories,
+  onRestore,
+  onDelete,
+  onDeleteAll,
+  onBack,
+}: ArchiveViewProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -937,7 +1211,8 @@ function ArchiveView({ todos, categories, onRestore, onDelete, onDeleteAll, onBa
         if (dateFilter === 'thisMonth') return isThisMonth(date);
         if (dateFilter === 'custom') {
           const dateStr = t.archivedAt.slice(0, 10);
-          if (customDateFrom && customDateTo) return dateStr >= customDateFrom && dateStr <= customDateTo;
+          if (customDateFrom && customDateTo)
+            return dateStr >= customDateFrom && dateStr <= customDateTo;
           if (customDateFrom) return dateStr >= customDateFrom;
           if (customDateTo) return dateStr <= customDateTo;
         }
@@ -1007,15 +1282,18 @@ function ArchiveView({ todos, categories, onRestore, onDelete, onDeleteAll, onBa
     setConfirmBatchDelete(false);
   }, [selectedIds, onDelete]);
 
-  const handleDeleteSingle = useCallback((id: string) => {
-    onDelete(id);
-    setConfirmDeleteId(null);
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      next.delete(id);
-      return next;
-    });
-  }, [onDelete]);
+  const handleDeleteSingle = useCallback(
+    (id: string) => {
+      onDelete(id);
+      setConfirmDeleteId(null);
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    },
+    [onDelete],
+  );
 
   const handleDeleteAll = useCallback(() => {
     onDeleteAll();
@@ -1166,15 +1444,13 @@ function ArchiveView({ todos, categories, onRestore, onDelete, onDeleteAll, onBa
       {/* Content */}
       {filteredTodos.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-sp-muted">
-          <span className="material-symbols-outlined text-5xl mb-3 opacity-40">
-            inventory_2
-          </span>
+          <span className="material-symbols-outlined text-5xl mb-3 opacity-40">inventory_2</span>
           <p className="text-lg">
             {todos.length === 0
               ? '아카이브가 비어있습니다'
               : dateFilter !== 'all' || searchQuery || selectedCategoryId
-              ? '필터 조건에 맞는 항목이 없습니다'
-              : '검색 결과가 없습니다'}
+                ? '필터 조건에 맞는 항목이 없습니다'
+                : '검색 결과가 없습니다'}
           </p>
         </div>
       ) : (
@@ -1219,7 +1495,13 @@ function ArchiveView({ todos, categories, onRestore, onDelete, onDeleteAll, onBa
                           >
                             {selectedIds.has(todo.id) && (
                               <svg viewBox="0 0 10 8" fill="none" className="h-2.5 w-2.5">
-                                <path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                                <path
+                                  d="M1 4L3.5 6.5L9 1"
+                                  stroke="white"
+                                  strokeWidth="1.5"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                />
                               </svg>
                             )}
                           </div>
@@ -1227,7 +1509,9 @@ function ArchiveView({ todos, categories, onRestore, onDelete, onDeleteAll, onBa
 
                         {/* Priority dot */}
                         {todo.priority && todo.priority !== 'none' && (
-                          <span className={`h-2 w-2 rounded-full flex-shrink-0 ${priorityDotColor[todo.priority] ?? ''}`} />
+                          <span
+                            className={`h-2 w-2 rounded-full flex-shrink-0 ${priorityDotColor[todo.priority] ?? ''}`}
+                          />
                         )}
 
                         {/* Todo text */}
@@ -1238,27 +1522,36 @@ function ArchiveView({ todos, categories, onRestore, onDelete, onDeleteAll, onBa
                         {/* Subtask count */}
                         {subTaskCount > 0 && (
                           <span className="text-xs text-sp-muted/50 flex items-center gap-0.5 flex-shrink-0">
-                            <span className="material-symbols-outlined text-sm">subdirectory_arrow_right</span>
+                            <span className="material-symbols-outlined text-sm">
+                              subdirectory_arrow_right
+                            </span>
                             하위 {subTaskCount}건
                           </span>
                         )}
 
                         {/* Category badge */}
                         {cat && (
-                          <span className={`text-caption px-1.5 py-0.5 rounded flex-shrink-0 ${CATEGORY_COLORS[cat.color] ?? 'bg-gray-500/20 text-gray-400'}`}>
+                          <span
+                            className={`text-caption px-1.5 py-0.5 rounded flex-shrink-0 ${CATEGORY_COLORS[cat.color] ?? 'bg-gray-500/20 text-gray-400'}`}
+                          >
                             {cat.icon} {cat.name}
                           </span>
                         )}
 
                         {/* Due date */}
                         {todo.dueDate && (
-                          <span className="text-xs text-sp-muted/50 flex-shrink-0">{formatDueDate(todo.dueDate)}</span>
+                          <span className="text-xs text-sp-muted/50 flex-shrink-0">
+                            {formatDueDate(todo.dueDate)}
+                          </span>
                         )}
 
                         {/* Archived date */}
                         {todo.archivedAt && (
                           <span className="text-xs text-sp-muted/40 flex-shrink-0">
-                            {formatDistanceToNow(parseISO(todo.archivedAt), { addSuffix: true, locale: ko })}
+                            {formatDistanceToNow(parseISO(todo.archivedAt), {
+                              addSuffix: true,
+                              locale: ko,
+                            })}
                           </span>
                         )}
 
@@ -1380,7 +1673,9 @@ function ArchiveView({ todos, categories, onRestore, onDelete, onDeleteAll, onBa
               onClick={() => setConfirmDeleteAll(true)}
               className="px-3 py-1.5 rounded-lg text-xs font-medium text-red-400 hover:bg-red-400/10 ring-1 ring-red-400/30 transition-colors"
             >
-              <span className="material-symbols-outlined text-icon-sm align-middle mr-1">delete_forever</span>
+              <span className="material-symbols-outlined text-icon-sm align-middle mr-1">
+                delete_forever
+              </span>
               전체 삭제
             </button>
           )}
@@ -1403,7 +1698,22 @@ interface TodoGroupProps {
   now: Date;
   onToggle: (id: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
-  onUpdate: (id: string, changes: Partial<Pick<TodoType, 'text' | 'priority' | 'category' | 'recurrence' | 'dueDate' | 'startDate' | 'subTasks' | 'sortOrder'>>) => Promise<void>;
+  onUpdate: (
+    id: string,
+    changes: Partial<
+      Pick<
+        TodoType,
+        | 'text'
+        | 'priority'
+        | 'category'
+        | 'recurrence'
+        | 'dueDate'
+        | 'startDate'
+        | 'subTasks'
+        | 'sortOrder'
+      >
+    >,
+  ) => Promise<void>;
   onAddSubTask: (todoId: string, text: string) => Promise<void>;
   onToggleSubTask: (todoId: string, subTaskId: string) => Promise<void>;
   onDeleteSubTask: (todoId: string, subTaskId: string) => Promise<void>;
@@ -1473,11 +1783,7 @@ function TodoGroup({
         >
           chevron_right
         </span>
-        <span
-          className={`text-sm font-bold ${
-            isOverdueGroup ? 'text-red-400' : 'text-sp-text'
-          }`}
-        >
+        <span className={`text-sm font-bold ${isOverdueGroup ? 'text-red-400' : 'text-sp-text'}`}>
           {label}
         </span>
         <span className="text-xs text-sp-muted ml-1">({totalCount})</span>
@@ -1527,9 +1833,7 @@ function TodoGroup({
                 >
                   ▶
                 </span>
-                <span className="text-xs font-medium">
-                  완료 {completedItems.length}건
-                </span>
+                <span className="text-xs font-medium">완료 {completedItems.length}건</span>
               </button>
               {!completedCollapsed && (
                 <ul>
@@ -1565,21 +1869,31 @@ interface SortableTodoItemProps {
   categories: readonly TodoCategory[];
   onToggle: (id: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
-  onUpdate: (id: string, changes: Partial<Pick<TodoType, 'text' | 'priority' | 'category' | 'recurrence' | 'dueDate' | 'startDate' | 'subTasks' | 'sortOrder'>>) => Promise<void>;
+  onUpdate: (
+    id: string,
+    changes: Partial<
+      Pick<
+        TodoType,
+        | 'text'
+        | 'priority'
+        | 'category'
+        | 'recurrence'
+        | 'dueDate'
+        | 'startDate'
+        | 'subTasks'
+        | 'sortOrder'
+      >
+    >,
+  ) => Promise<void>;
   onAddSubTask: (todoId: string, text: string) => Promise<void>;
   onToggleSubTask: (todoId: string, subTaskId: string) => Promise<void>;
   onDeleteSubTask: (todoId: string, subTaskId: string) => Promise<void>;
 }
 
 function SortableTodoItem(props: SortableTodoItemProps) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: props.todo.id });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: props.todo.id,
+  });
 
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
@@ -1591,10 +1905,7 @@ function SortableTodoItem(props: SortableTodoItemProps) {
 
   return (
     <div ref={setNodeRef} style={style}>
-      <TodoItem
-        {...props}
-        dragHandleProps={{ ...attributes, ...listeners }}
-      />
+      <TodoItem {...props} dragHandleProps={{ ...attributes, ...listeners }} />
     </div>
   );
 }
@@ -1611,7 +1922,22 @@ interface TodoItemProps {
   categories: readonly TodoCategory[];
   onToggle: (id: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
-  onUpdate: (id: string, changes: Partial<Pick<TodoType, 'text' | 'priority' | 'category' | 'recurrence' | 'dueDate' | 'startDate' | 'subTasks' | 'sortOrder'>>) => Promise<void>;
+  onUpdate: (
+    id: string,
+    changes: Partial<
+      Pick<
+        TodoType,
+        | 'text'
+        | 'priority'
+        | 'category'
+        | 'recurrence'
+        | 'dueDate'
+        | 'startDate'
+        | 'subTasks'
+        | 'sortOrder'
+      >
+    >,
+  ) => Promise<void>;
   onAddSubTask: (todoId: string, text: string) => Promise<void>;
   onToggleSubTask: (todoId: string, subTaskId: string) => Promise<void>;
   onDeleteSubTask: (todoId: string, subTaskId: string) => Promise<void>;
@@ -1717,7 +2043,12 @@ function TodoItem({
     if (editTime !== (todo.time ?? '')) changes.time = editTime || undefined;
 
     if (Object.keys(changes).length > 0) {
-      void onUpdate(todo.id, changes as Partial<Pick<TodoType, 'text' | 'priority' | 'category' | 'dueDate' | 'startDate' | 'time'>>);
+      void onUpdate(
+        todo.id,
+        changes as Partial<
+          Pick<TodoType, 'text' | 'priority' | 'category' | 'dueDate' | 'startDate' | 'time'>
+        >,
+      );
     }
     setEditing(false);
   }, [editText, editPriority, editCategory, editDueDate, editStartDate, editTime, todo, onUpdate]);
@@ -1834,9 +2165,11 @@ function TodoItem({
                 }
               }}
             >
-              <div className={`flex items-center gap-1.5 bg-sp-surface text-xs px-2 py-1.5 rounded-lg border border-sp-border hover:border-sp-accent transition-colors cursor-pointer ${
-                editDueDate ? 'text-sp-text' : 'text-sp-muted'
-              }`}>
+              <div
+                className={`flex items-center gap-1.5 bg-sp-surface text-xs px-2 py-1.5 rounded-lg border border-sp-border hover:border-sp-accent transition-colors cursor-pointer ${
+                  editDueDate ? 'text-sp-text' : 'text-sp-muted'
+                }`}
+              >
                 <span className="material-symbols-outlined text-base">calendar_today</span>
                 {editStartDate ? `${editStartDate} → ${editDueDate}` : editDueDate || '기한 없음'}
               </div>
@@ -1948,7 +2281,9 @@ function TodoItem({
 
         {/* D-Day 뱃지 (dueDate 순 모드) */}
         {dDayText && (
-          <span className={`text-caption font-bold px-1.5 py-0.5 rounded ${dDayColor} shrink-0 tabular-nums`}>
+          <span
+            className={`text-caption font-bold px-1.5 py-0.5 rounded ${dDayColor} shrink-0 tabular-nums`}
+          >
             {dDayText}
           </span>
         )}
@@ -1963,9 +2298,7 @@ function TodoItem({
         {/* 텍스트 (double-click to edit) */}
         <span
           className={`flex-1 text-sm leading-tight transition-all ${
-            todo.completed
-              ? 'text-sp-muted line-through opacity-50'
-              : 'text-sp-text'
+            todo.completed ? 'text-sp-muted line-through opacity-50' : 'text-sp-text'
           }`}
           onDoubleClick={handleDoubleClick}
         >
@@ -1974,7 +2307,12 @@ function TodoItem({
 
         {/* Google Tasks 연동 아이콘 */}
         {todo.googleTaskId && (
-          <span className="material-symbols-outlined text-xs text-sp-muted/50 shrink-0" title="Google Tasks 연동됨">cloud_done</span>
+          <span
+            className="material-symbols-outlined text-xs text-sp-muted/50 shrink-0"
+            title="Google Tasks 연동됨"
+          >
+            cloud_done
+          </span>
         )}
 
         {/* Subtask progress */}
@@ -2135,9 +2473,7 @@ function TodoItem({
             void onDelete(todo.id);
           }}
           className={`p-1 rounded-lg transition-all ${
-            hovered
-              ? 'opacity-100 text-red-400 hover:bg-red-400/10'
-              : 'opacity-0'
+            hovered ? 'opacity-100 text-red-400 hover:bg-red-400/10' : 'opacity-0'
           }`}
         >
           <span className="material-symbols-outlined text-icon-md">close</span>
@@ -2152,10 +2488,7 @@ function TodoItem({
               key={st.id}
               className="flex items-center gap-2 pl-8 pr-4 py-1.5 hover:bg-sp-surface/20 transition-colors group/sub"
             >
-              <div
-                className="cursor-pointer"
-                onClick={() => handleToggleSubTask(st.id)}
-              >
+              <div className="cursor-pointer" onClick={() => handleToggleSubTask(st.id)}>
                 <Checkbox checked={st.completed} />
               </div>
               <span
