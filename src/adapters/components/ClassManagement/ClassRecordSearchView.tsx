@@ -88,11 +88,16 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
 
   const showToast = useToastStore((s) => s.show);
 
+  // D1: 특기(관찰) 인라인 편집 상태
+  const [editingObsId, setEditingObsId] = useState<string | null>(null);
+  const [editObsContent, setEditObsContent] = useState('');
+
   const classes = useTeachingClassStore((s) => s.classes);
   const attendanceRecords = useTeachingClassStore((s) => s.attendanceRecords);
   const observationRecords = useObservationStore((s) => s.records);
   const loadObs = useObservationStore((s) => s.load);
   const customTags = useObservationStore((s) => s.customTags);
+  const updateObservation = useObservationStore((s) => s.updateRecord);
 
   useEffect(() => {
     void loadObs();
@@ -303,7 +308,39 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
     setKeyword('');
     setDebouncedKeyword('');
     setPeriodFilter('all');
+    setEditingObsId(null);
+    setEditObsContent('');
   };
+
+  // D1: 특기 인라인 편집 — 진입/취소/저장
+  const handleEditObs = useCallback((id: string, content: string) => {
+    setEditingObsId(id);
+    setEditObsContent(content);
+  }, []);
+
+  const handleCancelObsEdit = useCallback(() => {
+    setEditingObsId(null);
+    setEditObsContent('');
+  }, []);
+
+  const handleSaveObs = useCallback(async () => {
+    const trimmed = editObsContent.trim();
+    if (!trimmed || !editingObsId) return;
+    // 부분 뷰모델이 아니라 store 원본을 조회해 spread — authorId/visibility/createdAt/tags/첨부 보존
+    const orig = useObservationStore.getState().records.find((r) => r.id === editingObsId);
+    if (!orig) {
+      showToast('원본 기록을 찾을 수 없습니다', 'error');
+      return;
+    }
+    try {
+      await updateObservation({ ...orig, content: trimmed.slice(0, 500) });
+      setEditingObsId(null);
+      setEditObsContent('');
+      showToast('특기사항을 저장했습니다', 'success');
+    } catch {
+      showToast('저장에 실패했습니다', 'error');
+    }
+  }, [editObsContent, editingObsId, updateObservation, showToast]);
 
   /* 현재 필터 결과를 Excel로 내보내기 (안 Y: 표현 매퍼 → infra 직렬화) */
   const handleExport = useCallback(async () => {
@@ -545,7 +582,7 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
                     {group.records.map((r) => (
                       <div
                         key={`${r.type}-${r.date}-${r.studentKey}-${r.type === 'attendance' ? r.period : r.id}`}
-                        className="bg-sp-card border border-sp-border rounded-xl px-3 py-2.5"
+                        className="group bg-sp-card border border-sp-border rounded-xl px-3 py-2.5"
                       >
                         <div className="flex items-center gap-2 mb-1">
                           <span
@@ -584,15 +621,57 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
                               ))}
                             </div>
                           )}
+                          {r.type === 'observation' && editingObsId !== r.id && (
+                            <button
+                              type="button"
+                              onClick={() => handleEditObs(r.id, r.content)}
+                              className="ml-auto shrink-0 flex items-center px-1.5 py-0.5 rounded text-xs text-sp-muted opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 hover:text-sp-text transition-opacity focus-visible:outline focus-visible:outline-2 focus-visible:outline-sp-accent"
+                              title="수정"
+                              aria-label="특기사항 수정"
+                            >
+                              <span className="material-symbols-outlined text-sm">edit</span>
+                            </button>
+                          )}
                         </div>
                         {r.type === 'attendance' && r.memo && (
                           <p className="text-xs text-sp-muted pl-1">{r.memo}</p>
                         )}
-                        {r.type === 'observation' && r.content && (
-                          <div className="pl-1">
-                            <ExpandableRecordContent content={r.content} />
-                          </div>
-                        )}
+                        {r.type === 'observation' &&
+                          (editingObsId === r.id ? (
+                            <div className="pl-1 space-y-1.5">
+                              <textarea
+                                value={editObsContent}
+                                onChange={(e) => setEditObsContent(e.target.value)}
+                                maxLength={500}
+                                rows={3}
+                                autoFocus
+                                className="w-full bg-sp-surface border border-sp-border rounded-lg px-2 py-1.5 text-sm text-sp-text focus:outline-none focus:border-sp-accent resize-none"
+                              />
+                              <div className="flex items-center justify-end gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={handleCancelObsEdit}
+                                  className="px-2.5 py-1 rounded-lg text-xs text-sp-muted hover:text-sp-text"
+                                >
+                                  취소
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => void handleSaveObs()}
+                                  disabled={!editObsContent.trim()}
+                                  className="px-2.5 py-1 rounded-lg text-xs bg-sp-accent text-white hover:bg-sp-accent/80 disabled:opacity-40"
+                                >
+                                  저장
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            r.content && (
+                              <div className="pl-1">
+                                <ExpandableRecordContent content={r.content} />
+                              </div>
+                            )
+                          ))}
                       </div>
                     ))}
                   </div>
