@@ -18,10 +18,12 @@ interface RetentionControlProps {
   readonly retentionPreset: SignatureRetentionPreset;
   readonly customRetentionDays: string;
   readonly closingSession: boolean;
+  readonly reopeningSession: boolean;
   readonly deletingSignatureImages: boolean;
   readonly onRetentionPresetChange: (preset: SignatureRetentionPreset) => void;
   readonly onCustomRetentionDaysChange: (value: string) => void;
   readonly onCloseSession: () => void;
+  readonly onReopenSession: () => void;
   readonly onDeleteSignatureImages: () => void;
 }
 
@@ -40,10 +42,12 @@ interface SharePanelProps {
   readonly retentionPreset: SignatureRetentionPreset;
   readonly customRetentionDays: string;
   readonly closingSession: boolean;
+  readonly reopeningSession: boolean;
   readonly deletingSignatureImages: boolean;
   readonly onRetentionPresetChange: (preset: SignatureRetentionPreset) => void;
   readonly onCustomRetentionDaysChange: (value: string) => void;
   readonly onCloseSession: () => void;
+  readonly onReopenSession: () => void;
   readonly onDeleteSignatureImages: () => void;
   readonly onDeleteSession: () => void;
 }
@@ -59,10 +63,12 @@ export function SharePanel({
   retentionPreset,
   customRetentionDays,
   closingSession,
+  reopeningSession,
   deletingSignatureImages,
   onRetentionPresetChange,
   onCustomRetentionDaysChange,
   onCloseSession,
+  onReopenSession,
   onDeleteSignatureImages,
   onDeleteSession,
 }: SharePanelProps) {
@@ -128,10 +134,12 @@ export function SharePanel({
         retentionPreset={retentionPreset}
         customRetentionDays={customRetentionDays}
         closingSession={closingSession}
+        reopeningSession={reopeningSession}
         deletingSignatureImages={deletingSignatureImages}
         onRetentionPresetChange={onRetentionPresetChange}
         onCustomRetentionDaysChange={onCustomRetentionDaysChange}
         onCloseSession={onCloseSession}
+        onReopenSession={onReopenSession}
         onDeleteSignatureImages={onDeleteSignatureImages}
       />
 
@@ -270,10 +278,12 @@ interface ExportPanelProps {
   readonly retentionPreset: SignatureRetentionPreset;
   readonly customRetentionDays: string;
   readonly closingSession: boolean;
+  readonly reopeningSession: boolean;
   readonly deletingSignatureImages: boolean;
   readonly onRetentionPresetChange: (preset: SignatureRetentionPreset) => void;
   readonly onCustomRetentionDaysChange: (value: string) => void;
   readonly onCloseSession: () => void;
+  readonly onReopenSession: () => void;
   readonly onDeleteSignatureImages: () => void;
   readonly onBackupReset: () => void;
   readonly onDeleteSession: () => void;
@@ -291,10 +301,12 @@ export function ExportPanel({
   retentionPreset,
   customRetentionDays,
   closingSession,
+  reopeningSession,
   deletingSignatureImages,
   onRetentionPresetChange,
   onCustomRetentionDaysChange,
   onCloseSession,
+  onReopenSession,
   onDeleteSignatureImages,
   onBackupReset,
   onDeleteSession,
@@ -362,10 +374,12 @@ export function ExportPanel({
         retentionPreset={retentionPreset}
         customRetentionDays={customRetentionDays}
         closingSession={closingSession}
+        reopeningSession={reopeningSession}
         deletingSignatureImages={deletingSignatureImages}
         onRetentionPresetChange={onRetentionPresetChange}
         onCustomRetentionDaysChange={onCustomRetentionDaysChange}
         onCloseSession={onCloseSession}
+        onReopenSession={onReopenSession}
         onDeleteSignatureImages={onDeleteSignatureImages}
       />
 
@@ -416,10 +430,12 @@ function SessionRetentionControl({
   retentionPreset,
   customRetentionDays,
   closingSession,
+  reopeningSession,
   deletingSignatureImages,
   onRetentionPresetChange,
   onCustomRetentionDaysChange,
   onCloseSession,
+  onReopenSession,
   onDeleteSignatureImages,
 }: RetentionControlProps) {
   const sessionClosed = session.status === 'closed';
@@ -438,8 +454,12 @@ function SessionRetentionControl({
                 : '마감 후 자동삭제 기간을 정해 주세요'}
           </h4>
           <p className="mt-2 max-w-2xl text-xs leading-5 text-sp-muted">
-            세션을 마감하면 학생은 더 이상 서명할 수 없습니다. 선생님은 보관기간 동안 현황 확인과
+            세션을 마감하면 참여자는 더 이상 서명할 수 없습니다. 선생님은 보관기간 동안 현황 확인과
             내보내기를 계속 할 수 있습니다.
+            {sessionClosed && !imagesDeleted
+              ? ' 다시 열면 참여 링크가 다시 유효해지고 자동삭제 예약은 취소됩니다.'
+              : ''}
+            {imagesDeleted ? ' 이미지를 삭제한 세션은 다시 열 수 없습니다.' : ''}
           </p>
         </div>
         <span className="rounded-full border border-sp-border bg-sp-card px-3 py-1 text-xs font-bold text-sp-muted">
@@ -520,8 +540,16 @@ function SessionRetentionControl({
           </p>
           <button
             type="button"
+            onClick={onReopenSession}
+            disabled={reopeningSession || deletingSignatureImages}
+            className="rounded-xl border border-sp-border px-4 py-2.5 text-sm font-bold text-sp-text transition hover:bg-sp-card disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {reopeningSession ? '다시 여는 중...' : '세션 다시 열기'}
+          </button>
+          <button
+            type="button"
             onClick={onDeleteSignatureImages}
-            disabled={deletingSignatureImages}
+            disabled={deletingSignatureImages || reopeningSession}
             className="rounded-xl border border-red-500/40 px-4 py-2.5 text-sm font-bold text-red-300 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {deletingSignatureImages ? '삭제하는 중...' : '서명 이미지만 삭제'}

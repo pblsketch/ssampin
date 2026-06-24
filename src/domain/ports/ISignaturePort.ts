@@ -97,6 +97,15 @@ export interface CloseSignatureSessionResult {
   readonly signatureImagesDeletedAt?: string;
 }
 
+/** 세션 다시 열기 결과 */
+export interface ReopenSignatureSessionResult {
+  readonly status: SignatureSessionStatus;
+  readonly closedAt?: string;
+  readonly signatureRetentionDays: number;
+  readonly signatureCleanupAfter?: string;
+  readonly signatureImagesDeletedAt?: string;
+}
+
 /** 서명 이미지만 삭제한 결과 */
 export interface DeleteSignatureImagesResult {
   readonly status: SignatureSessionStatus;
@@ -124,12 +133,15 @@ export interface ISignaturePort {
   /** 교사용 상세 현황 조회 (세션 상태·보관 일정 포함) */
   getStatusDetails(sessionId: string, adminKey: string): Promise<SignatureStatusResult>;
 
-  /** 세션 마감 (학생 추가 제출 차단 + 이미지 보관기간 시작) */
+  /** 세션 마감 (참여자 추가 제출 차단 + 이미지 보관기간 시작) */
   closeSession(
     sessionId: string,
     adminKey: string,
     retentionDays: number,
   ): Promise<CloseSignatureSessionResult>;
+
+  /** 마감된 세션 다시 열기 (이미지가 삭제된 세션은 복구 불가) */
+  reopenSession(sessionId: string, adminKey: string): Promise<ReopenSignatureSessionResult>;
 
   /** 마감된 세션의 서명 이미지만 삭제 (현황 행은 유지) */
   deleteSignatureImages(sessionId: string, adminKey: string): Promise<DeleteSignatureImagesResult>;

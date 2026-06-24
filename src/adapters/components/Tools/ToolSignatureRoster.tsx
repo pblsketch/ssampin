@@ -147,6 +147,7 @@ export function ToolSignatureRoster({ onBack, isFullscreen }: ToolSignatureRoste
   const [exporting, setExporting] = useState(false);
   const [exportingExcel, setExportingExcel] = useState(false);
   const [closingSession, setClosingSession] = useState(false);
+  const [reopeningSession, setReopeningSession] = useState(false);
   const [deletingSignatureImages, setDeletingSignatureImages] = useState(false);
   const [retentionPreset, setRetentionPreset] = useState<SignatureRetentionPreset>(() => {
     const days = initialSession?.signatureRetentionDays ?? 30;
@@ -579,7 +580,7 @@ export function ToolSignatureRoster({ onBack, isFullscreen }: ToolSignatureRoste
       return;
     }
     const ok = window.confirm(
-      `세션을 마감할까요?\n\n학생은 더 이상 서명할 수 없습니다. 서명 이미지는 마감 후 ${retentionDays}일 동안 보관한 뒤 자동 삭제됩니다.`,
+      `세션을 마감할까요?\n\n참여자는 더 이상 서명할 수 없습니다. 서명 이미지는 마감 후 ${retentionDays}일 동안 보관한 뒤 자동 삭제됩니다.`,
     );
     if (!ok) return;
 
@@ -607,6 +608,39 @@ export function ToolSignatureRoster({ onBack, isFullscreen }: ToolSignatureRoste
       setClosingSession(false);
     }
   }, [activeSession, customRetentionDays, retentionPreset, updateActiveSession]);
+
+  const handleReopenSession = useCallback(async () => {
+    if (!activeSession) return;
+    if (activeSession.signatureImagesDeletedAt) {
+      setError('서명 이미지가 이미 삭제된 세션은 다시 열 수 없습니다. 새 세션을 만들어 주세요.');
+      return;
+    }
+    const ok = window.confirm(
+      '세션을 다시 열까요?\n\n참여 링크가 다시 유효해지고 아직 서명하지 않은 참여자가 서명할 수 있습니다. 기존 서명 기록은 유지됩니다.',
+    );
+    if (!ok) return;
+
+    setError(null);
+    setReopeningSession(true);
+    try {
+      const result = await signaturePort.reopenSession(
+        activeSession.sessionId,
+        activeSession.adminKey,
+      );
+      updateActiveSession({
+        status: result.status,
+        closedAt: result.closedAt,
+        signatureRetentionDays: result.signatureRetentionDays,
+        signatureCleanupAfter: result.signatureCleanupAfter,
+        signatureImagesDeletedAt: result.signatureImagesDeletedAt,
+      });
+      setNotice('세션을 다시 열었습니다. 참여 링크로 서명을 이어서 받을 수 있습니다.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '세션 다시 열기에 실패했습니다.');
+    } finally {
+      setReopeningSession(false);
+    }
+  }, [activeSession, updateActiveSession]);
 
   const handleDeleteSignatureImages = useCallback(async () => {
     if (!activeSession) return;
@@ -1098,10 +1132,12 @@ export function ToolSignatureRoster({ onBack, isFullscreen }: ToolSignatureRoste
             retentionPreset={retentionPreset}
             customRetentionDays={customRetentionDays}
             closingSession={closingSession}
+            reopeningSession={reopeningSession}
             deletingSignatureImages={deletingSignatureImages}
             onRetentionPresetChange={setRetentionPreset}
             onCustomRetentionDaysChange={setCustomRetentionDays}
             onCloseSession={() => void handleCloseSession()}
+            onReopenSession={() => void handleReopenSession()}
             onDeleteSignatureImages={() => void handleDeleteSignatureImages()}
             onDeleteSession={() => void handleDeleteSession()}
           />
@@ -1121,10 +1157,12 @@ export function ToolSignatureRoster({ onBack, isFullscreen }: ToolSignatureRoste
             retentionPreset={retentionPreset}
             customRetentionDays={customRetentionDays}
             closingSession={closingSession}
+            reopeningSession={reopeningSession}
             deletingSignatureImages={deletingSignatureImages}
             onRetentionPresetChange={setRetentionPreset}
             onCustomRetentionDaysChange={setCustomRetentionDays}
             onCloseSession={() => void handleCloseSession()}
+            onReopenSession={() => void handleReopenSession()}
             onDeleteSignatureImages={() => void handleDeleteSignatureImages()}
             onBackupReset={handleBackupAndReset}
             onDeleteSession={() => void handleDeleteSession()}

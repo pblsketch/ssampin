@@ -35,6 +35,13 @@ export function canDeleteSignatureImages(status: SigV2SessionStatus): boolean {
   return status === 'closed';
 }
 
+export function canReopenSession(
+  status: SigV2SessionStatus,
+  signatureImagesDeletedAt: string | null | undefined,
+): boolean {
+  return status === 'closed' && !signatureImagesDeletedAt;
+}
+
 export function buildCloseMetadata(now: Date, retentionDays: number) {
   return {
     status: 'closed' as const,
@@ -43,6 +50,15 @@ export function buildCloseMetadata(now: Date, retentionDays: number) {
     signature_cleanup_after: new Date(
       now.getTime() + retentionDays * 24 * 60 * 60 * 1000,
     ).toISOString(),
+  };
+}
+
+export function buildReopenMetadata() {
+  return {
+    status: 'active' as const,
+    closed_at: null,
+    signature_cleanup_after: null,
+    signature_images_deleted_reason: null,
   };
 }
 

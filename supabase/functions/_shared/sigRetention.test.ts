@@ -1,7 +1,9 @@
 import { assert, assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import {
   buildCloseMetadata,
+  buildReopenMetadata,
   canDeleteSignatureImages,
+  canReopenSession,
   normalizeRetentionDays,
   planSignatureImageDeletion,
 } from './sigRetention.ts';
@@ -27,6 +29,14 @@ Deno.test('canDeleteSignatureImages allows closed sessions only', () => {
   assertEquals(canDeleteSignatureImages('closed'), true);
 });
 
+Deno.test('canReopenSession allows closed sessions only before image deletion', () => {
+  assertEquals(canReopenSession('active', null), false);
+  assertEquals(canReopenSession('draft', null), false);
+  assertEquals(canReopenSession('closed', null), true);
+  assertEquals(canReopenSession('closed', undefined), true);
+  assertEquals(canReopenSession('closed', '2026-06-24T00:00:00.000Z'), false);
+});
+
 Deno.test('buildCloseMetadata starts cleanup after the selected retention days', () => {
   const now = new Date('2026-06-24T00:00:00.000Z');
   const metadata = buildCloseMetadata(now, 30);
@@ -34,6 +44,15 @@ Deno.test('buildCloseMetadata starts cleanup after the selected retention days',
   assertEquals(metadata.closed_at, '2026-06-24T00:00:00.000Z');
   assertEquals(metadata.signature_retention_days, 30);
   assertEquals(metadata.signature_cleanup_after, '2026-07-24T00:00:00.000Z');
+});
+
+Deno.test('buildReopenMetadata restores active status and cancels cleanup schedule', () => {
+  assertEquals(buildReopenMetadata(), {
+    status: 'active',
+    closed_at: null,
+    signature_cleanup_after: null,
+    signature_images_deleted_reason: null,
+  });
 });
 
 Deno.test('planSignatureImageDeletion keeps exact session prefix and skips other sessions', () => {

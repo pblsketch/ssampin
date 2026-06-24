@@ -13,6 +13,8 @@
  *  - sig-submit         {sessionId,memberRef,signerName,rowData,signaturePngBase64,accessCode?}
  *                       → {entryId,signaturePublicUrl,signedAt}
  *  - sig-status         {sessionId,adminKey} → SignatureStatusRow[]
+ *  - sig-close-session  {sessionId,adminKey,retentionDays} → {ok,status,...}
+ *  - sig-reopen-session {sessionId,adminKey} → {ok,status,...}
  *  - sig-delete-session {sessionId,adminKey} → {ok}
  */
 import type { ColumnDef } from '@domain/entities/SignatureRoster';
@@ -23,6 +25,7 @@ import type {
   CreateSignatureSessionInput,
   CreateSignatureSessionResult,
   CloseSignatureSessionResult,
+  ReopenSignatureSessionResult,
   DeleteSignatureImagesResult,
   PublishSignatureSessionResult,
   SignatureStatusResult,
@@ -118,6 +121,15 @@ interface SigStatusResponse {
 }
 
 interface SigCloseSessionResponse {
+  ok: boolean;
+  status: 'draft' | 'active' | 'closed';
+  closedAt?: string;
+  signatureRetentionDays: number;
+  signatureCleanupAfter?: string;
+  signatureImagesDeletedAt?: string;
+}
+
+interface SigReopenSessionResponse {
   ok: boolean;
   status: 'draft' | 'active' | 'closed';
   closedAt?: string;
@@ -317,7 +329,7 @@ export class SignatureSupabaseClient implements ISignaturePort {
   }
 
   /**
-   * 세션 마감 — 학생 추가 제출 차단 + 이미지 보관기간 시작.
+   * 세션 마감 — 참여자 추가 제출 차단 + 이미지 보관기간 시작.
    */
   async closeSession(
     sessionId: string,
@@ -328,6 +340,23 @@ export class SignatureSupabaseClient implements ISignaturePort {
       sessionId,
       adminKey,
       retentionDays,
+    });
+    return {
+      status: res.status,
+      closedAt: res.closedAt,
+      signatureRetentionDays: res.signatureRetentionDays,
+      signatureCleanupAfter: res.signatureCleanupAfter,
+      signatureImagesDeletedAt: res.signatureImagesDeletedAt,
+    };
+  }
+
+  /**
+   * 마감된 세션 다시 열기 — 이미지가 남아 있을 때만 참여 링크를 다시 유효화.
+   */
+  async reopenSession(sessionId: string, adminKey: string): Promise<ReopenSignatureSessionResult> {
+    const res = await this.invoke<SigReopenSessionResponse>('sig-reopen-session', {
+      sessionId,
+      adminKey,
     });
     return {
       status: res.status,
