@@ -605,14 +605,16 @@ function SearchMode({ students, records, categories }: ModeProps) {
       </div>
 
       {/* 3-column body */}
-      <div className="flex-1 flex gap-3 min-h-0">
+      <div className="flex-1 flex flex-col lg:flex-row gap-3 min-h-0">
         {/* Left: StudentJumpList */}
-        <StudentJumpList
-          students={students}
-          records={records}
-          selectedStudentId={selectedStudentId}
-          onSelect={setSelectedStudentId}
-        />
+        <div className="w-full lg:w-[180px] lg:shrink-0">
+          <StudentJumpList
+            students={students}
+            records={records}
+            selectedStudentId={selectedStudentId}
+            onSelect={setSelectedStudentId}
+          />
+        </div>
 
         {/* Center: Record list */}
         <div className="flex-1 min-w-0 min-h-0">
@@ -702,13 +704,15 @@ function SearchMode({ students, records, categories }: ModeProps) {
 
         {/* Right: ActionDashboard (only when no student selected) */}
         {!selectedStudentId && (
-          <ActionDashboard
-            records={records}
-            students={students}
-            onFilterUnreported={() => setUnreportedOnly(true)}
-            onFilterDocUnsubmitted={() => setDocUnsubmittedOnly(true)}
-            onFilterFollowUp={() => setFollowUpOnly(true)}
-          />
+          <div className="w-full lg:w-[280px] lg:shrink-0">
+            <ActionDashboard
+              records={records}
+              students={students}
+              onFilterUnreported={() => setUnreportedOnly(true)}
+              onFilterDocUnsubmitted={() => setDocUnsubmittedOnly(true)}
+              onFilterFollowUp={() => setFollowUpOnly(true)}
+            />
+          </div>
         )}
       </div>
     </div>

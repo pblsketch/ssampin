@@ -459,11 +459,11 @@ export function ClassRecordInputView({
       </div>
 
       {/* 메인 영역 */}
-      <div className="flex-1 flex gap-3 min-h-0">
+      <div className="flex-1 flex flex-col lg:flex-row gap-3 min-h-0">
         {/* 왼쪽: 학생 선택 */}
         <div
           className={`${
-            studentViewMode === 'seating' ? 'w-[min(620px,60%)]' : 'w-[260px]'
+            studentViewMode === 'seating' ? 'w-full lg:w-[min(620px,60%)]' : 'w-full lg:w-[260px]'
           } shrink-0 bg-sp-card border border-sp-border rounded-xl overflow-hidden flex flex-col`}
         >
           <div className="px-4 py-2.5 border-b border-sp-border flex items-center justify-between gap-2">

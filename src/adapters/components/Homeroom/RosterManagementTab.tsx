@@ -532,9 +532,9 @@ export function RosterManagementTab() {
       ) : (
         /* 명렬표 */
         <div className="flex-1 overflow-y-auto">
-          <div className="w-full max-w-6xl mx-auto">
+          <div className="w-full max-w-6xl mx-auto overflow-x-auto">
             {/* 테이블 헤더 */}
-            <div className="grid grid-cols-[36px_36px_minmax(60px,1fr)_120px_64px_120px_64px_120px_96px_56px] gap-1.5 px-3 py-3 border-b border-sp-border text-xs font-bold text-sp-muted uppercase tracking-wider">
+            <div className="grid grid-cols-[36px_36px_minmax(60px,1fr)_120px_64px_120px_64px_120px_96px_56px] gap-1.5 px-3 py-3 border-b border-sp-border text-xs font-bold text-sp-muted uppercase tracking-wider min-w-[850px]">
               <span>번호</span>
               <span>학번</span>
               <span>이름</span>
@@ -548,7 +548,7 @@ export function RosterManagementTab() {
             </div>
 
             {/* 학생 목록 */}
-            <div className="divide-y divide-sp-border/50">
+            <div className="divide-y divide-sp-border/50 min-w-[850px]">
               {sortedStudents.map((student, idx) => {
                 const isVacant = isInactiveStatus(student.status) || !!student.isVacant;
                 const hasParent2 = showParent2.has(student.id);

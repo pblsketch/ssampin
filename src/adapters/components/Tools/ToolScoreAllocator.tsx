@@ -330,8 +330,8 @@ export function ToolScoreAllocator({ onBack, isFullscreen }: ToolScoreAllocatorP
           </div>
         </div>
 
-        {/* 유형별 소계 (확정된 문항 기준) */}
-        <div className="grid grid-cols-3 gap-3">
+        {/* 유형별 소계 (확정된 문항 기준) — 좁은 창에선 1열로 쌓아 카드 짓눌림 방지 (반응형 패턴 D) */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {TYPE_OPTIONS.map((type) => (
             <div key={type} className="bg-sp-surface border border-sp-border rounded-lg px-3 py-2">
               <p className="text-xs text-sp-muted">{ITEM_TYPE_LABELS[type]}</p>

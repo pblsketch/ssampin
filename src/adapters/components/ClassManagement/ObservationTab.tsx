@@ -41,9 +41,7 @@ export function ObservationTab({ classId }: ObservationTabProps) {
 
   const students = useMemo(() => {
     if (!cls) return [];
-    return [...cls.students]
-      .filter(isStudentActive)
-      .sort((a, b) => a.number - b.number);
+    return [...cls.students].filter(isStudentActive).sort((a, b) => a.number - b.number);
   }, [cls]);
 
   const recordCountMap = useMemo(() => {
@@ -70,9 +68,7 @@ export function ObservationTab({ classId }: ObservationTabProps) {
   const getFreshnessColor = (sid: string): string => {
     const lastDate = lastDateMap.get(sid);
     if (!lastDate) return '';
-    const diff = Math.floor(
-      (Date.now() - new Date(lastDate).getTime()) / (1000 * 60 * 60 * 24),
-    );
+    const diff = Math.floor((Date.now() - new Date(lastDate).getTime()) / (1000 * 60 * 60 * 24));
     if (diff <= 7) return 'bg-green-500/20 text-green-400';
     if (diff <= 14) return 'bg-amber-500/20 text-amber-400';
     return 'bg-red-500/20 text-red-400';
@@ -131,8 +127,18 @@ export function ObservationTab({ classId }: ObservationTabProps) {
               }`}
             >
               {/* person icon */}
-              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              <svg
+                className="h-3.5 w-3.5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                />
               </svg>
               학생별
             </button>
@@ -146,8 +152,18 @@ export function ObservationTab({ classId }: ObservationTabProps) {
               }`}
             >
               {/* timeline/list icon */}
-              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 10h16M4 14h10M4 18h6" />
+              <svg
+                className="h-3.5 w-3.5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M4 6h16M4 10h16M4 14h10M4 18h6"
+                />
               </svg>
               타임라인
             </button>
@@ -158,8 +174,18 @@ export function ObservationTab({ classId }: ObservationTabProps) {
           className="rounded-lg p-1.5 text-sp-muted transition-colors hover:bg-sp-accent/10 hover:text-sp-accent"
           title="내보내기"
         >
-          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
+          <svg
+            className="h-4 w-4"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"
+            />
           </svg>
         </button>
       </div>
@@ -183,9 +209,9 @@ export function ObservationTab({ classId }: ObservationTabProps) {
 
       {/* Body */}
       {viewMode === 'student' ? (
-        <div className="flex flex-1 gap-3 overflow-hidden">
+        <div className="flex flex-col lg:flex-row flex-1 gap-3 overflow-hidden">
           {/* Left: student list */}
-          <div className="flex flex-1 flex-col rounded-xl border border-sp-border bg-sp-card overflow-hidden">
+          <div className="flex flex-1 min-w-0 flex-col rounded-xl border border-sp-border bg-sp-card overflow-hidden">
             <div className="flex-1 overflow-y-auto p-2">
               {students.length === 0 ? (
                 <div className="flex h-full items-center justify-center text-xs text-sp-muted">
@@ -230,7 +256,7 @@ export function ObservationTab({ classId }: ObservationTabProps) {
 
           {/* Right: observation panel */}
           {selectedStudentId && (
-            <div className="w-[340px] shrink-0">
+            <div className="w-full lg:w-[340px] lg:shrink-0">
               <ObservationPanel
                 classId={classId}
                 studentId={selectedStudentId}

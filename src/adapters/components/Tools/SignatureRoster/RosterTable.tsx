@@ -70,63 +70,65 @@ export function RosterTable({ members, columns, onChange }: RosterTableProps) {
 
   return (
     <div>
-      <div className="max-h-72 overflow-auto rounded-xl border border-sp-border">
-        <table className="w-full min-w-[480px] border-separate border-spacing-0 text-sm">
-          <thead className="sticky top-0 z-10 bg-sp-card">
-            <tr>
-              <th className="border-b border-sp-border p-2 text-left text-xs font-bold text-sp-muted">
-                연번
-              </th>
-              {inputColumns.map((column) => (
-                <th
-                  key={column.key}
-                  className="border-b border-sp-border p-2 text-left text-xs font-bold text-sp-muted"
-                >
-                  {column.label}
+      <div className="w-full overflow-x-auto rounded-xl border border-sp-border">
+        <div className="max-h-72 overflow-y-auto">
+          <table className="w-full min-w-[480px] border-separate border-spacing-0 text-sm">
+            <thead className="sticky top-0 z-10 bg-sp-card">
+              <tr>
+                <th className="border-b border-sp-border p-2 text-left text-xs font-bold text-sp-muted">
+                  연번
                 </th>
-              ))}
-              <th className="w-10 border-b border-sp-border p-2" aria-label="행 삭제" />
-            </tr>
-          </thead>
-          <tbody>
-            {members.map((member, index) => (
-              <tr key={member.id} className="bg-sp-surface">
-                <td className="border-b border-sp-border/50 p-2 text-xs text-sp-muted">
-                  {member.fields.no ?? index + 1}
-                </td>
                 {inputColumns.map((column) => (
-                  <td key={column.key} className="border-b border-sp-border/50 p-1.5">
-                    <input
-                      value={cellValue(member, column.key)}
-                      onChange={(event) => {
-                        const value = event.target.value;
-                        if (column.key === 'name') {
-                          updateMember(member.id, { name: value });
-                        } else if (column.key === 'affiliation') {
-                          updateMember(member.id, { affiliation: value || undefined });
-                        } else {
-                          updateField(member.id, column.key, value);
-                        }
-                      }}
-                      placeholder={column.key === 'name' ? '이름' : undefined}
-                      className="w-full rounded-lg border border-transparent bg-transparent px-2 py-1.5 text-sm text-sp-text transition placeholder:text-sp-muted/60 hover:border-sp-border focus:border-sp-accent focus:bg-sp-card focus:outline-none"
-                    />
-                  </td>
-                ))}
-                <td className="border-b border-sp-border/50 p-1.5 text-center">
-                  <button
-                    type="button"
-                    onClick={() => removeMember(member.id)}
-                    title={`${member.name || '이 행'} 삭제`}
-                    className="rounded-lg p-1 text-sp-muted transition hover:bg-red-500/10 hover:text-red-300"
+                  <th
+                    key={column.key}
+                    className="border-b border-sp-border p-2 text-left text-xs font-bold text-sp-muted"
                   >
-                    <span className="material-symbols-outlined text-icon-sm">close</span>
-                  </button>
-                </td>
+                    {column.label}
+                  </th>
+                ))}
+                <th className="w-10 border-b border-sp-border p-2" aria-label="행 삭제" />
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {members.map((member, index) => (
+                <tr key={member.id} className="bg-sp-surface">
+                  <td className="border-b border-sp-border/50 p-2 text-xs text-sp-muted">
+                    {member.fields.no ?? index + 1}
+                  </td>
+                  {inputColumns.map((column) => (
+                    <td key={column.key} className="border-b border-sp-border/50 p-1.5">
+                      <input
+                        value={cellValue(member, column.key)}
+                        onChange={(event) => {
+                          const value = event.target.value;
+                          if (column.key === 'name') {
+                            updateMember(member.id, { name: value });
+                          } else if (column.key === 'affiliation') {
+                            updateMember(member.id, { affiliation: value || undefined });
+                          } else {
+                            updateField(member.id, column.key, value);
+                          }
+                        }}
+                        placeholder={column.key === 'name' ? '이름' : undefined}
+                        className="w-full rounded-lg border border-transparent bg-transparent px-2 py-1.5 text-sm text-sp-text transition placeholder:text-sp-muted/60 hover:border-sp-border focus:border-sp-accent focus:bg-sp-card focus:outline-none"
+                      />
+                    </td>
+                  ))}
+                  <td className="border-b border-sp-border/50 p-1.5 text-center">
+                    <button
+                      type="button"
+                      onClick={() => removeMember(member.id)}
+                      title={`${member.name || '이 행'} 삭제`}
+                      className="rounded-lg p-1 text-sp-muted transition hover:bg-red-500/10 hover:text-red-300"
+                    >
+                      <span className="material-symbols-outlined text-icon-sm">close</span>
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs text-sp-muted">

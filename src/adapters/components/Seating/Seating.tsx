@@ -20,6 +20,7 @@ import { ConstraintHintBadge } from './ConstraintHintBadge';
 import { SeatingHistoryPanel } from './SeatingHistoryPanel';
 import { NameLearningMode } from './NameLearningMode';
 import { RosterEmptyState } from '@adapters/components/common/RosterEmptyState';
+import { ScrollRow } from '@adapters/components/common/ScrollRow';
 import { buildPairGroups, adjustPairGroupsForRow } from '@domain/rules/seatingLayoutRules';
 
 /* ──────────────────────── 이름 글자 크기 매핑 ──────────────────────── */
@@ -483,7 +484,7 @@ export function Seating(props?: { embedded?: boolean }) {
         />
       )}
       <div className={embedded ? '' : 'p-8 flex flex-col flex-1 min-h-0'}>
-        <div className="flex items-center justify-end gap-2 flex-wrap mb-4">
+        <ScrollRow className="justify-end gap-2 mb-4">
           {/* 레이아웃 모드 스위치 */}
           <div className="flex items-center gap-0.5 bg-sp-surface rounded-lg p-0.5 shrink-0">
             <button
@@ -759,7 +760,7 @@ export function Seating(props?: { embedded?: boolean }) {
               </div>
             )}
           </div>
-        </div>
+        </ScrollRow>
 
         {/* 컨텐츠 영역 */}
         <div className="flex-1 overflow-y-auto flex flex-col items-center">
@@ -795,143 +796,117 @@ export function Seating(props?: { embedded?: boolean }) {
               )}
 
               {/* 좌석 그리드 */}
-              {layout === 'freestyle' ? (
-                <FreestyleSeatingView
-                  desks={seating.freestyleDesks ?? []}
-                  isTeacherView={isTeacherView}
-                  isEditing={isEditing}
-                />
-              ) : layout === 'group' ? (
-                <GroupSeatingView
-                  groups={seating.groups ?? []}
-                  isEditing={isEditing}
-                  onUpdateGroups={(groups) => void updateGroups(groups)}
-                  onShuffleGroups={(count, max) => void shuffleGroupSeating(count, max)}
-                />
-              ) : seating.pairMode ? (
-                /* ── 짝꿍 모드 그리드 ── */
-                <div className="w-full max-w-6xl mx-auto pb-8 flex flex-col gap-5">
-                  {Array.from({ length: seating.rows }, (_, vi) => {
-                    // 교사 시점: 행 반전
-                    const ri = isTeacherView ? seating.rows - 1 - vi : vi;
-                    const row = seating.seats[ri]!;
-                    const mode = seating.oddColumnMode ?? 'single';
-                    // buildPairGroups로 짝 그룹 생성
-                    const basePairs = buildPairGroups(
-                      seating.cols,
-                      seating.cols % 2 !== 0 ? mode : 'single',
-                    );
-                    // 짝수 열 + 3인짝 모드: 행별로 solo 학생을 이전 짝에 합류
-                    const pairs =
-                      mode === 'triple' && seating.cols % 2 === 0
-                        ? adjustPairGroupsForRow(basePairs, row)
-                        : basePairs;
-                    // 교사 시점: 짝 그룹 순서 반전
-                    const orderedPairs = isTeacherView ? [...pairs].reverse() : pairs;
+              <div className="w-full overflow-x-auto">
+                {layout === 'freestyle' ? (
+                  <FreestyleSeatingView
+                    desks={seating.freestyleDesks ?? []}
+                    isTeacherView={isTeacherView}
+                    isEditing={isEditing}
+                  />
+                ) : layout === 'group' ? (
+                  <GroupSeatingView
+                    groups={seating.groups ?? []}
+                    isEditing={isEditing}
+                    onUpdateGroups={(groups) => void updateGroups(groups)}
+                    onShuffleGroups={(count, max) => void shuffleGroupSeating(count, max)}
+                  />
+                ) : seating.pairMode ? (
+                  /* ── 짝꿍 모드 그리드 ── */
+                  <div className="w-full max-w-6xl mx-auto pb-8 flex flex-col gap-5">
+                    {Array.from({ length: seating.rows }, (_, vi) => {
+                      // 교사 시점: 행 반전
+                      const ri = isTeacherView ? seating.rows - 1 - vi : vi;
+                      const row = seating.seats[ri]!;
+                      const mode = seating.oddColumnMode ?? 'single';
+                      // buildPairGroups로 짝 그룹 생성
+                      const basePairs = buildPairGroups(
+                        seating.cols,
+                        seating.cols % 2 !== 0 ? mode : 'single',
+                      );
+                      // 짝수 열 + 3인짝 모드: 행별로 solo 학생을 이전 짝에 합류
+                      const pairs =
+                        mode === 'triple' && seating.cols % 2 === 0
+                          ? adjustPairGroupsForRow(basePairs, row)
+                          : basePairs;
+                      // 교사 시점: 짝 그룹 순서 반전
+                      const orderedPairs = isTeacherView ? [...pairs].reverse() : pairs;
 
-                    return (
-                      <div key={ri} className="flex items-stretch justify-center gap-6">
-                        {orderedPairs.map((pair, pi) => {
-                          const isSingleSeat = pair.startCol === pair.endCol;
-                          const isTriple = pair.endCol - pair.startCol === 2;
+                      return (
+                        <div key={ri} className="flex items-stretch justify-center gap-6">
+                          {orderedPairs.map((pair, pi) => {
+                            const isSingleSeat = pair.startCol === pair.endCol;
+                            const isTriple = pair.endCol - pair.startCol === 2;
 
-                          if (isTriple) {
-                            // 3인 그룹
-                            const colsInGroup = isTeacherView
-                              ? [pair.endCol, pair.startCol + 1, pair.startCol]
-                              : [pair.startCol, pair.startCol + 1, pair.endCol];
+                            if (isTriple) {
+                              // 3인 그룹
+                              const colsInGroup = isTeacherView
+                                ? [pair.endCol, pair.startCol + 1, pair.startCol]
+                                : [pair.startCol, pair.startCol + 1, pair.endCol];
+                              return (
+                                <div
+                                  key={pi}
+                                  className="flex bg-sp-card/30 rounded-lg"
+                                  style={{ minWidth: 420 }}
+                                >
+                                  {colsInGroup.map((c, ci) => (
+                                    <div key={c} className="flex-1">
+                                      <SeatCard
+                                        row={ri}
+                                        col={c}
+                                        studentId={row[c] ?? null}
+                                        isDragOver={
+                                          dragTarget !== null &&
+                                          dragTarget.row === ri &&
+                                          dragTarget.col === c
+                                        }
+                                        isDragSource={
+                                          dragSource !== null &&
+                                          dragSource.row === ri &&
+                                          dragSource.col === c
+                                        }
+                                        isEditing={isEditing}
+                                        isLeftOfPair={ci === 0}
+                                        isRightOfPair={ci === colsInGroup.length - 1}
+                                        onDragStart={handleDragStart}
+                                        onDragOver={handleDragOver}
+                                        onDragLeave={handleDragLeave}
+                                        onDrop={handleDrop}
+                                        onDragEnd={handleDragEnd}
+                                        onEditSave={handleEditSave}
+                                      />
+                                    </div>
+                                  ))}
+                                </div>
+                              );
+                            }
+
+                            // 교사 시점: 짝꿍 내부 좌우도 반전
+                            const leftCol = isTeacherView ? pair.endCol : pair.startCol;
+                            const rightCol = isTeacherView ? pair.startCol : pair.endCol;
                             return (
                               <div
                                 key={pi}
-                                className="flex bg-sp-card/30 rounded-lg"
-                                style={{ minWidth: 420 }}
+                                className={`flex ${isSingleSeat ? '' : 'bg-sp-card/30 rounded-lg'}`}
+                                style={{ minWidth: isSingleSeat ? 140 : 280 }}
                               >
-                                {colsInGroup.map((c, ci) => (
-                                  <div key={c} className="flex-1">
-                                    <SeatCard
-                                      row={ri}
-                                      col={c}
-                                      studentId={row[c] ?? null}
-                                      isDragOver={
-                                        dragTarget !== null &&
-                                        dragTarget.row === ri &&
-                                        dragTarget.col === c
-                                      }
-                                      isDragSource={
-                                        dragSource !== null &&
-                                        dragSource.row === ri &&
-                                        dragSource.col === c
-                                      }
-                                      isEditing={isEditing}
-                                      isLeftOfPair={ci === 0}
-                                      isRightOfPair={ci === colsInGroup.length - 1}
-                                      onDragStart={handleDragStart}
-                                      onDragOver={handleDragOver}
-                                      onDragLeave={handleDragLeave}
-                                      onDrop={handleDrop}
-                                      onDragEnd={handleDragEnd}
-                                      onEditSave={handleEditSave}
-                                    />
-                                  </div>
-                                ))}
-                              </div>
-                            );
-                          }
-
-                          // 교사 시점: 짝꿍 내부 좌우도 반전
-                          const leftCol = isTeacherView ? pair.endCol : pair.startCol;
-                          const rightCol = isTeacherView ? pair.startCol : pair.endCol;
-                          return (
-                            <div
-                              key={pi}
-                              className={`flex ${isSingleSeat ? '' : 'bg-sp-card/30 rounded-lg'}`}
-                              style={{ minWidth: isSingleSeat ? 140 : 280 }}
-                            >
-                              {/* 왼쪽 좌석 */}
-                              <div className="flex-1">
-                                <SeatCard
-                                  row={ri}
-                                  col={leftCol}
-                                  studentId={row[leftCol] ?? null}
-                                  isDragOver={
-                                    dragTarget !== null &&
-                                    dragTarget.row === ri &&
-                                    dragTarget.col === leftCol
-                                  }
-                                  isDragSource={
-                                    dragSource !== null &&
-                                    dragSource.row === ri &&
-                                    dragSource.col === leftCol
-                                  }
-                                  isEditing={isEditing}
-                                  isLeftOfPair={!isSingleSeat}
-                                  onDragStart={handleDragStart}
-                                  onDragOver={handleDragOver}
-                                  onDragLeave={handleDragLeave}
-                                  onDrop={handleDrop}
-                                  onDragEnd={handleDragEnd}
-                                  onEditSave={handleEditSave}
-                                />
-                              </div>
-                              {/* 오른쪽 좌석 (짝이 있을 때만) */}
-                              {!isSingleSeat && (
+                                {/* 왼쪽 좌석 */}
                                 <div className="flex-1">
                                   <SeatCard
                                     row={ri}
-                                    col={rightCol}
-                                    studentId={row[rightCol] ?? null}
+                                    col={leftCol}
+                                    studentId={row[leftCol] ?? null}
                                     isDragOver={
                                       dragTarget !== null &&
                                       dragTarget.row === ri &&
-                                      dragTarget.col === rightCol
+                                      dragTarget.col === leftCol
                                     }
                                     isDragSource={
                                       dragSource !== null &&
                                       dragSource.row === ri &&
-                                      dragSource.col === rightCol
+                                      dragSource.col === leftCol
                                     }
                                     isEditing={isEditing}
-                                    isRightOfPair
+                                    isLeftOfPair={!isSingleSeat}
                                     onDragStart={handleDragStart}
                                     onDragOver={handleDragOver}
                                     onDragLeave={handleDragLeave}
@@ -940,56 +915,84 @@ export function Seating(props?: { embedded?: boolean }) {
                                     onEditSave={handleEditSave}
                                   />
                                 </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                /* ── 일반 그리드 ── */
-                <div
-                  className="w-full max-w-6xl mx-auto pb-8"
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: `repeat(${seating.cols}, minmax(0, 1fr))`,
-                    gap: '1.25rem',
-                  }}
-                >
-                  {Array.from({ length: seating.rows }, (_, vi) =>
-                    Array.from({ length: seating.cols }, (_, vj) => {
-                      // 교사 시점: 상하좌우 반전 (180도 회전)
-                      const ri = isTeacherView ? seating.rows - 1 - vi : vi;
-                      const ci = isTeacherView ? seating.cols - 1 - vj : vj;
-                      const studentId = seating.seats[ri]?.[ci] ?? null;
-                      const isDragOver =
-                        dragTarget !== null && dragTarget.row === ri && dragTarget.col === ci;
-                      const isDragSource2 =
-                        dragSource !== null && dragSource.row === ri && dragSource.col === ci;
-
-                      return (
-                        <SeatCard
-                          key={`${ri}-${ci}`}
-                          row={ri}
-                          col={ci}
-                          studentId={studentId}
-                          isDragOver={isDragOver}
-                          isDragSource={isDragSource2}
-                          isEditing={isEditing}
-                          onDragStart={handleDragStart}
-                          onDragOver={handleDragOver}
-                          onDragLeave={handleDragLeave}
-                          onDrop={handleDrop}
-                          onDragEnd={handleDragEnd}
-                          onEditSave={handleEditSave}
-                        />
+                                {/* 오른쪽 좌석 (짝이 있을 때만) */}
+                                {!isSingleSeat && (
+                                  <div className="flex-1">
+                                    <SeatCard
+                                      row={ri}
+                                      col={rightCol}
+                                      studentId={row[rightCol] ?? null}
+                                      isDragOver={
+                                        dragTarget !== null &&
+                                        dragTarget.row === ri &&
+                                        dragTarget.col === rightCol
+                                      }
+                                      isDragSource={
+                                        dragSource !== null &&
+                                        dragSource.row === ri &&
+                                        dragSource.col === rightCol
+                                      }
+                                      isEditing={isEditing}
+                                      isRightOfPair
+                                      onDragStart={handleDragStart}
+                                      onDragOver={handleDragOver}
+                                      onDragLeave={handleDragLeave}
+                                      onDrop={handleDrop}
+                                      onDragEnd={handleDragEnd}
+                                      onEditSave={handleEditSave}
+                                    />
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
                       );
-                    }),
-                  )}
-                </div>
-              )}
+                    })}
+                  </div>
+                ) : (
+                  /* ── 일반 그리드 ── */
+                  <div
+                    className="w-full max-w-6xl mx-auto pb-8"
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: `repeat(${seating.cols}, minmax(90px, 1fr))`,
+                      gap: '1.25rem',
+                    }}
+                  >
+                    {Array.from({ length: seating.rows }, (_, vi) =>
+                      Array.from({ length: seating.cols }, (_, vj) => {
+                        // 교사 시점: 상하좌우 반전 (180도 회전)
+                        const ri = isTeacherView ? seating.rows - 1 - vi : vi;
+                        const ci = isTeacherView ? seating.cols - 1 - vj : vj;
+                        const studentId = seating.seats[ri]?.[ci] ?? null;
+                        const isDragOver =
+                          dragTarget !== null && dragTarget.row === ri && dragTarget.col === ci;
+                        const isDragSource2 =
+                          dragSource !== null && dragSource.row === ri && dragSource.col === ci;
+
+                        return (
+                          <SeatCard
+                            key={`${ri}-${ci}`}
+                            row={ri}
+                            col={ci}
+                            studentId={studentId}
+                            isDragOver={isDragOver}
+                            isDragSource={isDragSource2}
+                            isEditing={isEditing}
+                            onDragStart={handleDragStart}
+                            onDragOver={handleDragOver}
+                            onDragLeave={handleDragLeave}
+                            onDrop={handleDrop}
+                            onDragEnd={handleDragEnd}
+                            onEditSave={handleEditSave}
+                          />
+                        );
+                      }),
+                    )}
+                  </div>
+                )}
+              </div>
 
               {/* 교탁 (교사 시점: 아래) */}
               {isTeacherView && (

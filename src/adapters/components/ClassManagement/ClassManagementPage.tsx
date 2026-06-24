@@ -15,6 +15,7 @@ import { ClassRubricTab } from './Rubric/ClassRubricTab';
 import { ClassAssessmentManagementTab } from './GradeAnalysis/ClassAssessmentManagementTab';
 import { AddClassModal } from './AddClassModal';
 import { PageHeader } from '@adapters/components/common/PageHeader';
+import { ScrollRow } from '@adapters/components/common/ScrollRow';
 
 type TabId =
   | 'roster'
@@ -96,7 +97,7 @@ export function ClassManagementPage() {
       />
 
       {/* 본문 */}
-      <div className="flex-1 flex gap-6 min-h-0 p-8">
+      <div className="flex-1 flex gap-4 lg:gap-6 min-h-0 p-4 lg:p-8">
         {/* 왼쪽: 학급 리스트 (접기/펼치기) */}
         {isClassPanelCollapsed ? (
           <div className="w-12 shrink-0 bg-sp-card border border-sp-border rounded-xl flex flex-col items-center py-3 gap-3">
@@ -114,7 +115,7 @@ export function ClassManagementPage() {
             </span>
           </div>
         ) : (
-          <div className="w-72 shrink-0 bg-sp-card border border-sp-border rounded-xl overflow-hidden flex flex-col">
+          <div className="w-56 xl:w-72 shrink-0 bg-sp-card border border-sp-border rounded-xl overflow-hidden flex flex-col">
             <div className="flex items-center justify-between px-3 py-2 border-b border-sp-border">
               <span className="text-xs font-sp-semibold text-sp-muted">학급 목록</span>
               <button
@@ -139,15 +140,15 @@ export function ClassManagementPage() {
         <div className="flex-1 flex flex-col min-w-0">
           {selectedClassId ? (
             <>
-              {/* 탭 버튼 */}
-              <div className="flex gap-2 mb-4" role="tablist" aria-label="수업 관리 탭">
+              {/* 탭 버튼 — 좁은 창에서 찌그러지지 않고 가로 스크롤 (반응형 패턴 A) */}
+              <ScrollRow className="gap-2 mb-4" role="tablist" aria-label="수업 관리 탭">
                 {TABS.map((tab) => (
                   <button
                     key={tab.id}
                     role="tab"
                     aria-selected={activeTab === tab.id}
                     onClick={() => setActiveTab(tab.id)}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-sp-accent ${
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-sp-accent ${
                       activeTab === tab.id
                         ? 'bg-sp-accent text-white'
                         : 'text-sp-muted hover:text-sp-text hover:bg-sp-text/5'
@@ -157,7 +158,7 @@ export function ClassManagementPage() {
                     {tab.label}
                   </button>
                 ))}
-              </div>
+              </ScrollRow>
 
               {/* 탭 콘텐츠 */}
               <div className="flex-1 overflow-y-auto">

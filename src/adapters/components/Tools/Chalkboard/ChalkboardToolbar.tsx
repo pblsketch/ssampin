@@ -125,9 +125,13 @@ export function ChalkboardToolbar({
   };
 
   return (
-    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 bg-amber-50 rounded-2xl shadow-lg px-3 py-2 border border-amber-200 max-w-[95%] overflow-x-auto">
+    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 bg-amber-50 rounded-2xl shadow-lg px-3 py-2 border border-amber-200 max-w-[95%] overflow-x-auto scrollbar-hide">
       {/* 선택 */}
-      <ToolbarButton active={mode === 'select'} onClick={() => onModeChange('select')} title="선택/이동 (V)">
+      <ToolbarButton
+        active={mode === 'select'}
+        onClick={() => onModeChange('select')}
+        title="선택/이동 (V)"
+      >
         <span className="material-symbols-outlined text-icon-md">arrow_selector_tool</span>
         선택
       </ToolbarButton>
@@ -139,7 +143,11 @@ export function ChalkboardToolbar({
       </ToolbarButton>
 
       {/* 텍스트 입력 */}
-      <ToolbarButton active={mode === 'text'} onClick={() => onModeChange('text')} title="텍스트 입력 (T)">
+      <ToolbarButton
+        active={mode === 'text'}
+        onClick={() => onModeChange('text')}
+        title="텍스트 입력 (T)"
+      >
         <span className="text-base font-bold">Aa</span>
         텍스트
       </ToolbarButton>
@@ -199,7 +207,10 @@ export function ChalkboardToolbar({
       <div className="w-px h-8 bg-amber-300 mx-0.5 shrink-0" />
 
       {/* 칠판 색상 */}
-      <div className="flex items-center gap-0.5 bg-white rounded-xl px-2 py-1 border border-gray-200 shrink-0" title={'칠판: ' + (currentBoard?.name ?? '')}>
+      <div
+        className="flex items-center gap-0.5 bg-white rounded-xl px-2 py-1 border border-gray-200 shrink-0"
+        title={'칠판: ' + (currentBoard?.name ?? '')}
+      >
         <button
           onClick={() => cycleBoardColor(-1)}
           className="p-0.5 text-gray-500 hover:text-gray-800 transition-colors"
@@ -287,7 +298,10 @@ function EraserControl({
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
-  const [popoverStyle, setPopoverStyle] = useState<{ left: number; top: number }>({ left: 0, top: 0 });
+  const [popoverStyle, setPopoverStyle] = useState<{ left: number; top: number }>({
+    left: 0,
+    top: 0,
+  });
 
   const isEraserActive = mode === 'eraser' || mode === 'pixelEraser';
   const currentKind: 'object' | 'pixel' = mode === 'pixelEraser' ? 'pixel' : 'object';
@@ -360,82 +374,90 @@ function EraserControl({
         <span className="material-symbols-outlined text-icon-sm opacity-60">expand_more</span>
       </button>
 
-      {open && typeof document !== 'undefined' && createPortal(
-        <div
-          ref={popoverRef}
-          style={{ position: 'fixed', left: popoverStyle.left, top: popoverStyle.top, width: 240, zIndex: 10000 }}
-          className="bg-white rounded-xl shadow-xl border border-gray-200 p-3"
-        >
-          <div className="text-xs font-semibold text-gray-600 mb-2">지우개 종류</div>
-          <div className="grid grid-cols-2 gap-1.5 mb-2">
-            <button
-              onClick={() => onModeChange('eraser')}
-              className={`rounded-lg py-2 text-xs font-medium flex flex-col items-center gap-1 transition-colors ${
-                currentKind === 'object'
-                  ? 'bg-amber-100 text-amber-900 ring-1 ring-amber-400'
-                  : 'bg-gray-50 hover:bg-gray-100 text-gray-700'
-              }`}
-            >
-              <span className="material-symbols-outlined text-icon-md">ink_eraser</span>
-              <span>개체</span>
-              <span className="text-caption text-gray-500">클릭하여 통째로 삭제</span>
-            </button>
-            <button
-              onClick={() => onModeChange('pixelEraser')}
-              className={`rounded-lg py-2 text-xs font-medium flex flex-col items-center gap-1 transition-colors ${
-                currentKind === 'pixel'
-                  ? 'bg-amber-100 text-amber-900 ring-1 ring-amber-400'
-                  : 'bg-gray-50 hover:bg-gray-100 text-gray-700'
-              }`}
-            >
-              <span className="material-symbols-outlined text-icon-md">backspace</span>
-              <span>부분</span>
-              <span className="text-caption text-gray-500">드래그로 일부만 지우기</span>
-            </button>
-          </div>
+      {open &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            ref={popoverRef}
+            style={{
+              position: 'fixed',
+              left: popoverStyle.left,
+              top: popoverStyle.top,
+              width: 240,
+              zIndex: 10000,
+            }}
+            className="bg-white rounded-xl shadow-xl border border-gray-200 p-3"
+          >
+            <div className="text-xs font-semibold text-gray-600 mb-2">지우개 종류</div>
+            <div className="grid grid-cols-2 gap-1.5 mb-2">
+              <button
+                onClick={() => onModeChange('eraser')}
+                className={`rounded-lg py-2 text-xs font-medium flex flex-col items-center gap-1 transition-colors ${
+                  currentKind === 'object'
+                    ? 'bg-amber-100 text-amber-900 ring-1 ring-amber-400'
+                    : 'bg-gray-50 hover:bg-gray-100 text-gray-700'
+                }`}
+              >
+                <span className="material-symbols-outlined text-icon-md">ink_eraser</span>
+                <span>개체</span>
+                <span className="text-caption text-gray-500">클릭하여 통째로 삭제</span>
+              </button>
+              <button
+                onClick={() => onModeChange('pixelEraser')}
+                className={`rounded-lg py-2 text-xs font-medium flex flex-col items-center gap-1 transition-colors ${
+                  currentKind === 'pixel'
+                    ? 'bg-amber-100 text-amber-900 ring-1 ring-amber-400'
+                    : 'bg-gray-50 hover:bg-gray-100 text-gray-700'
+                }`}
+              >
+                <span className="material-symbols-outlined text-icon-md">backspace</span>
+                <span>부분</span>
+                <span className="text-caption text-gray-500">드래그로 일부만 지우기</span>
+              </button>
+            </div>
 
-          {currentKind === 'pixel' && (
-            <div className="pt-2 mt-2 border-t border-gray-100">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-semibold text-gray-600">지우개 크기</span>
-                <span className="text-xs font-bold text-gray-900 tabular-nums">{eraserSize}</span>
-              </div>
-              <input
-                type="range"
-                min={ERASER_SIZE_MIN}
-                max={ERASER_SIZE_MAX}
-                step={1}
-                value={eraserSize}
-                onChange={(e) => onEraserSizeChange(clampEraserSize(Number(e.target.value)))}
-                className="w-full accent-amber-500"
-              />
-              <div className="flex items-center justify-between mt-1 text-caption text-gray-400 tabular-nums">
-                <span>{ERASER_SIZE_MIN}</span>
-                <span>{ERASER_SIZE_MAX}</span>
-              </div>
-              <div className="mt-2">
-                <div className="text-caption text-gray-500 mb-1">빠른 선택</div>
-                <div className="flex items-center gap-1">
-                  {ERASER_SIZE_PRESETS.map((preset) => (
-                    <button
-                      key={preset}
-                      onClick={() => onEraserSizeChange(preset)}
-                      className={`flex-1 rounded-lg py-1.5 text-xs font-medium transition-colors ${
-                        eraserSize === preset
-                          ? 'bg-amber-100 text-amber-900 ring-1 ring-amber-400'
-                          : 'bg-gray-50 hover:bg-gray-100 text-gray-700'
-                      }`}
-                    >
-                      {preset}
-                    </button>
-                  ))}
+            {currentKind === 'pixel' && (
+              <div className="pt-2 mt-2 border-t border-gray-100">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-semibold text-gray-600">지우개 크기</span>
+                  <span className="text-xs font-bold text-gray-900 tabular-nums">{eraserSize}</span>
+                </div>
+                <input
+                  type="range"
+                  min={ERASER_SIZE_MIN}
+                  max={ERASER_SIZE_MAX}
+                  step={1}
+                  value={eraserSize}
+                  onChange={(e) => onEraserSizeChange(clampEraserSize(Number(e.target.value)))}
+                  className="w-full accent-amber-500"
+                />
+                <div className="flex items-center justify-between mt-1 text-caption text-gray-400 tabular-nums">
+                  <span>{ERASER_SIZE_MIN}</span>
+                  <span>{ERASER_SIZE_MAX}</span>
+                </div>
+                <div className="mt-2">
+                  <div className="text-caption text-gray-500 mb-1">빠른 선택</div>
+                  <div className="flex items-center gap-1">
+                    {ERASER_SIZE_PRESETS.map((preset) => (
+                      <button
+                        key={preset}
+                        onClick={() => onEraserSizeChange(preset)}
+                        className={`flex-1 rounded-lg py-1.5 text-xs font-medium transition-colors ${
+                          eraserSize === preset
+                            ? 'bg-amber-100 text-amber-900 ring-1 ring-amber-400'
+                            : 'bg-gray-50 hover:bg-gray-100 text-gray-700'
+                        }`}
+                      >
+                        {preset}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
-        </div>,
-        document.body,
-      )}
+            )}
+          </div>,
+          document.body,
+        )}
     </>
   );
 }
@@ -450,7 +472,10 @@ function PenSizeControl({
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
-  const [popoverStyle, setPopoverStyle] = useState<{ left: number; top: number }>({ left: 0, top: 0 });
+  const [popoverStyle, setPopoverStyle] = useState<{ left: number; top: number }>({
+    left: 0,
+    top: 0,
+  });
 
   useLayoutEffect(() => {
     if (!open || !triggerRef.current) return;
@@ -526,50 +551,58 @@ function PenSizeControl({
         </button>
       </div>
 
-      {open && typeof document !== 'undefined' && createPortal(
-        <div
-          ref={popoverRef}
-          style={{ position: 'fixed', left: popoverStyle.left, top: popoverStyle.top, width: 224, zIndex: 10000 }}
-          className="bg-white rounded-xl shadow-xl border border-gray-200 p-3"
-        >
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-gray-600">펜 굵기</span>
-            <span className="text-xs font-bold text-gray-900 tabular-nums">{penSize}</span>
-          </div>
-          <input
-            type="range"
-            min={PEN_SIZE_MIN}
-            max={PEN_SIZE_MAX}
-            step={1}
-            value={penSize}
-            onChange={(e) => onPenSizeChange(clampPenSize(Number(e.target.value)))}
-            className="w-full accent-amber-500"
-          />
-          <div className="flex items-center justify-between mt-1 text-caption text-gray-400 tabular-nums">
-            <span>{PEN_SIZE_MIN}</span>
-            <span>{PEN_SIZE_MAX}</span>
-          </div>
-          <div className="mt-3 pt-2 border-t border-gray-100">
-            <div className="text-caption text-gray-500 mb-1.5">빠른 선택</div>
-            <div className="flex items-center gap-1">
-              {PEN_SIZE_PRESETS.map((preset) => (
-                <button
-                  key={preset}
-                  onClick={() => onPenSizeChange(preset)}
-                  className={`flex-1 rounded-lg py-1.5 text-xs font-medium transition-colors ${
-                    penSize === preset
-                      ? 'bg-amber-100 text-amber-900 ring-1 ring-amber-400'
-                      : 'bg-gray-50 hover:bg-gray-100 text-gray-700'
-                  }`}
-                >
-                  {preset}
-                </button>
-              ))}
+      {open &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            ref={popoverRef}
+            style={{
+              position: 'fixed',
+              left: popoverStyle.left,
+              top: popoverStyle.top,
+              width: 224,
+              zIndex: 10000,
+            }}
+            className="bg-white rounded-xl shadow-xl border border-gray-200 p-3"
+          >
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-semibold text-gray-600">펜 굵기</span>
+              <span className="text-xs font-bold text-gray-900 tabular-nums">{penSize}</span>
             </div>
-          </div>
-        </div>,
-        document.body,
-      )}
+            <input
+              type="range"
+              min={PEN_SIZE_MIN}
+              max={PEN_SIZE_MAX}
+              step={1}
+              value={penSize}
+              onChange={(e) => onPenSizeChange(clampPenSize(Number(e.target.value)))}
+              className="w-full accent-amber-500"
+            />
+            <div className="flex items-center justify-between mt-1 text-caption text-gray-400 tabular-nums">
+              <span>{PEN_SIZE_MIN}</span>
+              <span>{PEN_SIZE_MAX}</span>
+            </div>
+            <div className="mt-3 pt-2 border-t border-gray-100">
+              <div className="text-caption text-gray-500 mb-1.5">빠른 선택</div>
+              <div className="flex items-center gap-1">
+                {PEN_SIZE_PRESETS.map((preset) => (
+                  <button
+                    key={preset}
+                    onClick={() => onPenSizeChange(preset)}
+                    className={`flex-1 rounded-lg py-1.5 text-xs font-medium transition-colors ${
+                      penSize === preset
+                        ? 'bg-amber-100 text-amber-900 ring-1 ring-amber-400'
+                        : 'bg-gray-50 hover:bg-gray-100 text-gray-700'
+                    }`}
+                  >
+                    {preset}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
     </>
   );
 }
@@ -588,7 +621,10 @@ function ShapeControl({
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
-  const [popoverStyle, setPopoverStyle] = useState<{ left: number; top: number }>({ left: 0, top: 0 });
+  const [popoverStyle, setPopoverStyle] = useState<{ left: number; top: number }>({
+    left: 0,
+    top: 0,
+  });
 
   const isShapeActive = mode === 'shape';
 
@@ -660,43 +696,59 @@ function ShapeControl({
         <span className="material-symbols-outlined text-icon-sm opacity-60">expand_more</span>
       </button>
 
-      {open && typeof document !== 'undefined' && createPortal(
-        <div
-          ref={popoverRef}
-          style={{ position: 'fixed', left: popoverStyle.left, top: popoverStyle.top, width: 320, zIndex: 10000 }}
-          className="bg-white rounded-xl shadow-xl border border-gray-200 p-3 space-y-2"
-        >
-          {SHAPE_CATEGORIES.map((cat) => (
-            <div key={cat.label}>
-              <div className="text-caption font-semibold text-gray-500 uppercase tracking-wider mb-1">{cat.label}</div>
-              <div className="grid grid-cols-4 gap-1.5">
-                {cat.kinds.map((kind) => (
-                  <button
-                    key={kind}
-                    onClick={() => {
-                      onShapeKindChange(kind);
-                      onModeChange('shape');
-                    }}
-                    className={`rounded-lg py-1.5 px-1 text-caption font-medium flex flex-col items-center gap-0.5 transition-colors ${
-                      shapeKind === kind
-                        ? 'bg-amber-100 text-amber-900 ring-1 ring-amber-400'
-                        : 'bg-gray-50 hover:bg-gray-100 text-gray-700'
-                    }`}
-                  >
-                    <span className="material-symbols-outlined text-icon-md">{SHAPE_ICONS[kind]}</span>
-                    <span className="leading-tight text-center">{SHAPE_LABELS[kind]}</span>
-                  </button>
-                ))}
+      {open &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            ref={popoverRef}
+            style={{
+              position: 'fixed',
+              left: popoverStyle.left,
+              top: popoverStyle.top,
+              width: 320,
+              zIndex: 10000,
+            }}
+            className="bg-white rounded-xl shadow-xl border border-gray-200 p-3 space-y-2"
+          >
+            {SHAPE_CATEGORIES.map((cat) => (
+              <div key={cat.label}>
+                <div className="text-caption font-semibold text-gray-500 uppercase tracking-wider mb-1">
+                  {cat.label}
+                </div>
+                <div className="grid grid-cols-4 gap-1.5">
+                  {cat.kinds.map((kind) => (
+                    <button
+                      key={kind}
+                      onClick={() => {
+                        onShapeKindChange(kind);
+                        onModeChange('shape');
+                      }}
+                      className={`rounded-lg py-1.5 px-1 text-caption font-medium flex flex-col items-center gap-0.5 transition-colors ${
+                        shapeKind === kind
+                          ? 'bg-amber-100 text-amber-900 ring-1 ring-amber-400'
+                          : 'bg-gray-50 hover:bg-gray-100 text-gray-700'
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-icon-md">
+                        {SHAPE_ICONS[kind]}
+                      </span>
+                      <span className="leading-tight text-center">{SHAPE_LABELS[kind]}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+            <div className="pt-2 border-t border-gray-100 text-caption text-gray-500 leading-relaxed space-y-0.5">
+              <div>드래그하여 그리기 · 색상·굵기는 펜 설정과 공유</div>
+              <div>
+                <kbd className="px-1 bg-gray-100 rounded border text-[9px]">Shift</kbd> 정비율·15°
+                직선 · <kbd className="px-1 bg-gray-100 rounded border text-[9px]">Alt</kbd> 중심
+                기준
               </div>
             </div>
-          ))}
-          <div className="pt-2 border-t border-gray-100 text-caption text-gray-500 leading-relaxed space-y-0.5">
-            <div>드래그하여 그리기 · 색상·굵기는 펜 설정과 공유</div>
-            <div><kbd className="px-1 bg-gray-100 rounded border text-[9px]">Shift</kbd> 정비율·15° 직선 · <kbd className="px-1 bg-gray-100 rounded border text-[9px]">Alt</kbd> 중심 기준</div>
-          </div>
-        </div>,
-        document.body,
-      )}
+          </div>,
+          document.body,
+        )}
     </>
   );
 }

@@ -540,7 +540,7 @@ export function TimetablePage() {
                 className="flex items-center gap-2 rounded-xl bg-sp-accent/10 border border-sp-accent/30 px-4 py-2.5 text-sm font-bold text-sp-accent hover:bg-sp-accent/20 transition-all active:scale-95"
               >
                 <span className="material-symbols-outlined text-icon-lg">download</span>
-                <span>나이스에서 불러오기</span>
+                <span className="hidden xl:inline">나이스에서 불러오기</span>
               </button>
             )}
 
@@ -552,12 +552,12 @@ export function TimetablePage() {
                   className="flex items-center gap-2 rounded-xl bg-sp-surface border border-sp-border px-4 py-2.5 text-sm font-bold text-sp-muted hover:text-sp-text hover:bg-sp-card transition-all active:scale-95"
                 >
                   <span className="material-symbols-outlined text-icon-lg">download</span>
-                  <span>양식 다운로드</span>
+                  <span className="hidden xl:inline">양식 다운로드</span>
                 </button>
                 <div className="flex flex-col items-start gap-1">
                   <label className="flex items-center gap-2 rounded-xl bg-sp-accent/10 border border-sp-accent/30 px-4 py-2.5 text-sm font-bold text-sp-accent hover:bg-sp-accent/20 transition-all active:scale-95 cursor-pointer">
                     <span className="material-symbols-outlined text-icon-lg">file_open</span>
-                    <span>엑셀 불러오기</span>
+                    <span className="hidden xl:inline">엑셀 불러오기</span>
                     <input
                       type="file"
                       accept=".xlsx"
@@ -617,7 +617,7 @@ export function TimetablePage() {
               aria-label="변동 시간표 관리"
             >
               <span className="material-symbols-outlined text-icon-lg">swap_horiz</span>
-              <span>변동 시간표</span>
+              <span className="hidden xl:inline">변동 시간표</span>
               {futureOverrideCount > 0 && (
                 <span
                   className="ml-1 min-w-[18px] h-[18px] px-1.5 inline-flex items-center justify-center text-caption font-bold rounded-full bg-sp-accent text-white"
@@ -633,7 +633,7 @@ export function TimetablePage() {
               className="flex items-center gap-2 rounded-xl bg-sp-surface border border-sp-border px-4 py-2.5 text-sm font-bold text-sp-text hover:bg-sp-card transition-all active:scale-95"
             >
               <span className="material-symbols-outlined text-icon-lg">edit</span>
-              <span>직접 편집</span>
+              <span className="hidden xl:inline">직접 편집</span>
             </button>
             {/* 내보내기 */}
             <div className="relative" ref={exportMenuRef}>
@@ -642,7 +642,7 @@ export function TimetablePage() {
                 className="flex items-center gap-2 rounded-xl bg-sp-surface border border-sp-border px-4 py-2.5 text-sm font-bold text-sp-text hover:bg-sp-card transition-all active:scale-95"
               >
                 <span className="material-symbols-outlined text-icon-lg">download</span>
-                <span>내보내기</span>
+                <span className="hidden xl:inline">내보내기</span>
               </button>
               {showExportMenu && (
                 <div className="absolute right-0 top-full mt-2 w-48 bg-sp-card border border-sp-border rounded-xl shadow-2xl shadow-black/30 z-50 overflow-hidden">

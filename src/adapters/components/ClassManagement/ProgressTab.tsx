@@ -3,6 +3,7 @@ import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { CalendarPicker } from '@adapters/components/common/CalendarPicker';
+import { ScrollRow } from '@adapters/components/common/ScrollRow';
 import type { ProgressEntry, ProgressStatus } from '@domain/entities/CurriculumProgress';
 import type { TeachingClass } from '@domain/entities/TeachingClass';
 import { resolvePreset, resolveClassroomPreset } from '@domain/valueObjects/SubjectColor';
@@ -52,13 +53,8 @@ interface ProgressTabProps {
 }
 
 export function ProgressTab({ classId }: ProgressTabProps) {
-  const {
-    classes,
-    progressEntries,
-    addProgressEntry,
-    updateProgressEntry,
-    deleteProgressEntry,
-  } = useTeachingClassStore();
+  const { classes, progressEntries, addProgressEntry, updateProgressEntry, deleteProgressEntry } =
+    useTeachingClassStore();
 
   const { classSchedule, getEffectiveTeacherSchedule } = useScheduleStore();
   const { settings } = useSettingsStore();
@@ -71,7 +67,13 @@ export function ProgressTab({ classId }: ProgressTabProps) {
       return resolveClassroomPreset(cls.name, settings.classroomColors).tw;
     }
     return resolvePreset(cls.subject, settings.subjectColors).tw;
-  }, [classes, classId, settings.subjectColors, settings.classroomColors, settings.timetableColorBy]);
+  }, [
+    classes,
+    classId,
+    settings.subjectColors,
+    settings.classroomColors,
+    settings.timetableColorBy,
+  ]);
 
   const [showForm, setShowForm] = useState(false);
   const [formDate, setFormDate] = useState(todayString);
@@ -132,23 +134,26 @@ export function ProgressTab({ classId }: ProgressTabProps) {
   /* ── 폼 핸들러 ── */
 
   // 해당 학급(과목)의 시간표 교시 추출 — 도메인 헬퍼(@domain/rules/progressMatching)에 위임
-  const getMatchingPeriods = useCallback((dateStr: string): readonly number[] => {
-    if (!dateStr) return [];
-    const currentClass = classes.find((c: TeachingClass) => c.id === classId);
-    if (!currentClass) return [];
+  const getMatchingPeriods = useCallback(
+    (dateStr: string): readonly number[] => {
+      if (!dateStr) return [];
+      const currentClass = classes.find((c: TeachingClass) => c.id === classId);
+      if (!currentClass) return [];
 
-    const weekendDays = settings.enableWeekendDays;
-    const dayTeacherSchedule = getEffectiveTeacherSchedule(dateStr, weekendDays);
+      const weekendDays = settings.enableWeekendDays;
+      const dayTeacherSchedule = getEffectiveTeacherSchedule(dateStr, weekendDays);
 
-    return getMatchingPeriodsRule({
-      date: dateStr,
-      className: currentClass.name,
-      classSubject: currentClass.subject,
-      dayTeacherSchedule,
-      classSchedule,
-      weekendDays,
-    });
-  }, [classId, classes, classSchedule, getEffectiveTeacherSchedule, settings.enableWeekendDays]);
+      return getMatchingPeriodsRule({
+        date: dateStr,
+        className: currentClass.name,
+        classSubject: currentClass.subject,
+        dayTeacherSchedule,
+        classSchedule,
+        weekendDays,
+      });
+    },
+    [classId, classes, classSchedule, getEffectiveTeacherSchedule, settings.enableWeekendDays],
+  );
 
   // 수업이 있는 요일 인덱스 (JS getDay: 0=일, 1=월, ..., 6=토)
   const lessonDayIndices = useMemo(() => {
@@ -168,13 +173,16 @@ export function ProgressTab({ classId }: ProgressTabProps) {
   }, [getMatchingPeriods]);
 
   // 날짜 변경 핸들러 (교시 자동 선택 포함)
-  const handleDateChange = useCallback((newDate: string) => {
-    setFormDate(newDate);
-    const matching = getMatchingPeriods(newDate);
-    if (matching.length > 0 && matching[0] !== undefined) {
-      setFormPeriod(matching[0]);
-    }
-  }, [getMatchingPeriods]);
+  const handleDateChange = useCallback(
+    (newDate: string) => {
+      setFormDate(newDate);
+      const matching = getMatchingPeriods(newDate);
+      if (matching.length > 0 && matching[0] !== undefined) {
+        setFormPeriod(matching[0]);
+      }
+    },
+    [getMatchingPeriods],
+  );
 
   const resetForm = useCallback(() => {
     const today = todayString();
@@ -280,7 +288,8 @@ export function ProgressTab({ classId }: ProgressTabProps) {
       for (const entry of toImport) {
         await addProgressEntry(
           classId,
-          importDateOverrides.get(entry.id) ?? (importDateShiftDays !== 0 ? shiftDate(entry.date, importDateShiftDays) : entry.date),
+          importDateOverrides.get(entry.id) ??
+            (importDateShiftDays !== 0 ? shiftDate(entry.date, importDateShiftDays) : entry.date),
           entry.period,
           entry.unit,
           entry.lesson,
@@ -380,12 +389,12 @@ export function ProgressTab({ classId }: ProgressTabProps) {
             {stats.total === 0 && <div className="w-full bg-sp-border" />}
           </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <ScrollRow className="gap-2 shrink-0">
           <button
             onClick={() => setShowImportModal(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-sp-surface border border-sp-border
                        text-sp-muted rounded-lg hover:text-sp-text hover:border-sp-accent/50
-                       transition-colors text-sm font-medium"
+                       transition-colors text-sm font-medium whitespace-nowrap"
             title="다른 반의 진도 계획을 불러옵니다"
           >
             <span className="material-symbols-outlined text-lg">content_copy</span>
@@ -397,9 +406,7 @@ export function ProgressTab({ classId }: ProgressTabProps) {
                 const today = todayString();
                 const periods = getMatchingPeriods(today);
                 const existingPeriods = new Set(
-                  entries
-                    .filter((e) => e.date === today)
-                    .map((e) => e.period),
+                  entries.filter((e) => e.date === today).map((e) => e.period),
                 );
                 const unlogged = periods.filter((p) => !existingPeriods.has(p));
                 if (unlogged.length === 0) return;
@@ -411,7 +418,7 @@ export function ProgressTab({ classId }: ProgressTabProps) {
                 setShowForm(true);
               }}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-green-500/20 text-green-400
-                         rounded-lg hover:bg-green-500/30 transition-colors text-sm font-medium"
+                         rounded-lg hover:bg-green-500/30 transition-colors text-sm font-medium whitespace-nowrap"
               title="오늘 시간표에서 이 과목이 배정된 교시에 빠르게 진도를 추가합니다"
             >
               <span className="material-symbols-outlined text-lg">today</span>
@@ -424,14 +431,12 @@ export function ProgressTab({ classId }: ProgressTabProps) {
               setShowForm(!showForm);
             }}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-sp-accent/20 text-sp-accent
-                       rounded-lg hover:bg-sp-accent/30 transition-colors text-sm font-medium"
+                       rounded-lg hover:bg-sp-accent/30 transition-colors text-sm font-medium whitespace-nowrap"
           >
-            <span className="material-symbols-outlined text-lg">
-              {showForm ? 'close' : 'add'}
-            </span>
+            <span className="material-symbols-outlined text-lg">{showForm ? 'close' : 'add'}</span>
             {showForm ? '취소' : '항목 추가'}
           </button>
-        </div>
+        </ScrollRow>
       </div>
 
       {/* ── 추가 폼 ── */}
@@ -570,15 +575,17 @@ export function ProgressTab({ classId }: ProgressTabProps) {
                             className="w-full px-2.5 py-1 bg-sp-card border border-sp-border rounded-lg
                                        text-sp-text text-sm focus:outline-none focus:border-sp-accent"
                           >
-                            {Array.from({ length: settings.maxPeriods ?? 8 }, (_, i) => i + 1).map((p) => {
-                              const matching = getMatchingPeriods(editDate);
-                              const isMatch = matching.includes(p);
-                              return (
-                                <option key={p} value={p}>
-                                  {p}교시{isMatch ? ' ✦' : ''}
-                                </option>
-                              );
-                            })}
+                            {Array.from({ length: settings.maxPeriods ?? 8 }, (_, i) => i + 1).map(
+                              (p) => {
+                                const matching = getMatchingPeriods(editDate);
+                                const isMatch = matching.includes(p);
+                                return (
+                                  <option key={p} value={p}>
+                                    {p}교시{isMatch ? ' ✦' : ''}
+                                  </option>
+                                );
+                              },
+                            )}
                           </select>
                         </div>
                       </div>
@@ -715,13 +722,17 @@ export function ProgressTab({ classId }: ProgressTabProps) {
       {showImportModal && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-          onClick={(e) => { if (e.target === e.currentTarget) closeImportModal(); }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) closeImportModal();
+          }}
         >
           <div className="bg-sp-card border border-sp-border rounded-xl shadow-2xl w-full max-w-lg mx-4">
             {/* 모달 헤더 */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-sp-border">
               <div className="flex items-center gap-2 text-sp-text font-medium">
-                <span className="material-symbols-outlined text-xl text-sp-accent">content_copy</span>
+                <span className="material-symbols-outlined text-xl text-sp-accent">
+                  content_copy
+                </span>
                 다른 반에서 불러오기
               </div>
               <button
@@ -737,9 +748,13 @@ export function ProgressTab({ classId }: ProgressTabProps) {
               {importSuccessCount !== null ? (
                 /* 성공 피드백 */
                 <div className="flex flex-col items-center justify-center py-8 gap-3">
-                  <span className="material-symbols-outlined text-4xl text-green-400">check_circle</span>
+                  <span className="material-symbols-outlined text-4xl text-green-400">
+                    check_circle
+                  </span>
                   <p className="text-sp-text font-medium">불러오기 완료!</p>
-                  <p className="text-sm text-sp-muted">총 {importSuccessCount}개 항목을 불러왔습니다.</p>
+                  <p className="text-sm text-sp-muted">
+                    총 {importSuccessCount}개 항목을 불러왔습니다.
+                  </p>
                 </div>
               ) : importSourceClassId === null ? (
                 /* Step 1: 학급 선택 */
@@ -801,7 +816,9 @@ export function ProgressTab({ classId }: ProgressTabProps) {
                     </button>
                     <span className="text-sm text-sp-text font-medium">
                       {(() => {
-                        const src = otherClasses.find((c: TeachingClass) => c.id === importSourceClassId);
+                        const src = otherClasses.find(
+                          (c: TeachingClass) => c.id === importSourceClassId,
+                        );
                         return src ? `${src.subject} · ${src.name}` : '';
                       })()}
                     </span>
@@ -816,10 +833,16 @@ export function ProgressTab({ classId }: ProgressTabProps) {
                       onClick={toggleAllImportEntries}
                       className="flex items-center gap-2 text-xs text-sp-muted hover:text-sp-text transition-colors"
                     >
-                      <span className={`material-symbols-outlined text-base ${
-                        selectedImportIds.size === sourceEntries.length ? 'text-sp-accent' : ''
-                      }`}>
-                        {selectedImportIds.size === sourceEntries.length ? 'check_box' : selectedImportIds.size > 0 ? 'indeterminate_check_box' : 'check_box_outline_blank'}
+                      <span
+                        className={`material-symbols-outlined text-base ${
+                          selectedImportIds.size === sourceEntries.length ? 'text-sp-accent' : ''
+                        }`}
+                      >
+                        {selectedImportIds.size === sourceEntries.length
+                          ? 'check_box'
+                          : selectedImportIds.size > 0
+                            ? 'indeterminate_check_box'
+                            : 'check_box_outline_blank'}
                       </span>
                       전체 선택
                     </button>
@@ -841,7 +864,10 @@ export function ProgressTab({ classId }: ProgressTabProps) {
                       {(importDateOverrides.size > 0 || importDateShiftDays !== 0) && (
                         <button
                           type="button"
-                          onClick={() => { setImportDateOverrides(new Map()); setImportDateShiftDays(0); }}
+                          onClick={() => {
+                            setImportDateOverrides(new Map());
+                            setImportDateShiftDays(0);
+                          }}
                           className="px-3 py-1 bg-sp-surface border border-sp-border text-sp-muted text-xs
                                      rounded-lg hover:text-sp-text transition-colors"
                         >
@@ -860,29 +886,38 @@ export function ProgressTab({ classId }: ProgressTabProps) {
                     <div className="space-y-1 max-h-64 overflow-y-auto">
                       {sourceEntries.map((entry) => {
                         const isSelected = selectedImportIds.has(entry.id);
-                        const overriddenDate = importDateOverrides.get(entry.id) ?? (importDateShiftDays !== 0 ? shiftDate(entry.date, importDateShiftDays) : entry.date);
+                        const overriddenDate =
+                          importDateOverrides.get(entry.id) ??
+                          (importDateShiftDays !== 0
+                            ? shiftDate(entry.date, importDateShiftDays)
+                            : entry.date);
                         return (
                           <div
                             key={entry.id}
                             className={`w-full flex items-start gap-3 px-3 py-2 rounded-lg
                                        transition-colors ${
-                              isSelected
-                                ? 'bg-sp-accent/10 border border-sp-accent/30'
-                                : 'bg-sp-surface border border-sp-border'
-                            }`}
+                                         isSelected
+                                           ? 'bg-sp-accent/10 border border-sp-accent/30'
+                                           : 'bg-sp-surface border border-sp-border'
+                                       }`}
                           >
                             <button
                               type="button"
                               onClick={() => toggleImportEntry(entry.id)}
                               className="mt-0.5 shrink-0"
                             >
-                              <span className={`material-symbols-outlined text-base ${
-                                isSelected ? 'text-sp-accent' : 'text-sp-muted'
-                              }`}>
+                              <span
+                                className={`material-symbols-outlined text-base ${
+                                  isSelected ? 'text-sp-accent' : 'text-sp-muted'
+                                }`}
+                              >
                                 {isSelected ? 'check_box' : 'check_box_outline_blank'}
                               </span>
                             </button>
-                            <div className="shrink-0 flex flex-col gap-1" onClick={(e) => e.stopPropagation()}>
+                            <div
+                              className="shrink-0 flex flex-col gap-1"
+                              onClick={(e) => e.stopPropagation()}
+                            >
                               <CalendarPicker
                                 value={overriddenDate}
                                 onChange={(newDate) => {
@@ -897,7 +932,9 @@ export function ProgressTab({ classId }: ProgressTabProps) {
                                 portal
                                 accentColor={subjectAccent}
                               />
-                              <span className="text-xs text-sp-muted text-center">{entry.period}교시</span>
+                              <span className="text-xs text-sp-muted text-center">
+                                {entry.period}교시
+                              </span>
                             </div>
                             <button
                               type="button"
@@ -941,7 +978,9 @@ export function ProgressTab({ classId }: ProgressTabProps) {
                   >
                     {importLoading ? (
                       <>
-                        <span className="material-symbols-outlined text-base animate-spin">progress_activity</span>
+                        <span className="material-symbols-outlined text-base animate-spin">
+                          progress_activity
+                        </span>
                         불러오는 중...
                       </>
                     ) : (

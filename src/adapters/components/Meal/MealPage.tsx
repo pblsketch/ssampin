@@ -331,57 +331,59 @@ export function MealPage() {
               <div className="w-6 h-6 border-2 border-sp-accent border-t-transparent rounded-full animate-spin" />
             </div>
           ) : (
-            <div className="grid grid-cols-5 gap-3">
-              {/* 헤더 */}
-              {weekDates.map((date, i) => {
-                const isToday = date === today;
-                return (
-                  <div
-                    key={date}
-                    className={`text-center py-3 rounded-t-xl font-bold text-sm ${
-                      isToday ? 'bg-sp-accent/20 text-sp-accent' : 'bg-sp-surface text-sp-muted'
-                    }`}
-                  >
-                    <div>{DAY_LABELS[i]}</div>
-                    <div className="text-xs mt-0.5">{formatDateDisplay(date)}</div>
-                  </div>
-                );
-              })}
-
-              {/* 급식 내용 */}
-              {weekDates.map((date) => {
-                const mergedMeals = getMergedMealsForDate(date);
-                const hasManual = (manualMeals[date]?.length ?? 0) > 0;
-                const isToday = date === today;
-                return (
-                  <div
-                    key={`meal-${date}`}
-                    className={`rounded-b-xl p-3 min-h-[200px] flex flex-col ${
-                      isToday
-                        ? 'bg-sp-card ring-1 ring-sp-accent'
-                        : 'bg-sp-card ring-1 ring-sp-border'
-                    }`}
-                  >
-                    <div className="flex-1">
-                      <MealCell
-                        meals={mergedMeals}
-                        hasManual={hasManual && mealSource !== 'neis'}
-                      />
-                    </div>
-                    {/* 수동 입력 버튼 */}
-                    <button
-                      type="button"
-                      onClick={() => setEditingDate(date)}
-                      className="mt-2 w-full py-1 text-caption text-sp-muted hover:text-sp-accent border border-dashed border-sp-border rounded-lg transition-colors"
+            <div className="w-full overflow-x-auto">
+              <div className="grid grid-cols-5 gap-3 min-w-[640px]">
+                {/* 헤더 */}
+                {weekDates.map((date, i) => {
+                  const isToday = date === today;
+                  return (
+                    <div
+                      key={date}
+                      className={`text-center py-3 rounded-t-xl font-bold text-sm ${
+                        isToday ? 'bg-sp-accent/20 text-sp-accent' : 'bg-sp-surface text-sp-muted'
+                      }`}
                     >
-                      <span className="material-symbols-outlined text-xs align-middle mr-0.5">
-                        edit
-                      </span>
-                      수동 입력
-                    </button>
-                  </div>
-                );
-              })}
+                      <div>{DAY_LABELS[i]}</div>
+                      <div className="text-xs mt-0.5">{formatDateDisplay(date)}</div>
+                    </div>
+                  );
+                })}
+
+                {/* 급식 내용 */}
+                {weekDates.map((date) => {
+                  const mergedMeals = getMergedMealsForDate(date);
+                  const hasManual = (manualMeals[date]?.length ?? 0) > 0;
+                  const isToday = date === today;
+                  return (
+                    <div
+                      key={`meal-${date}`}
+                      className={`rounded-b-xl p-3 min-h-[200px] flex flex-col ${
+                        isToday
+                          ? 'bg-sp-card ring-1 ring-sp-accent'
+                          : 'bg-sp-card ring-1 ring-sp-border'
+                      }`}
+                    >
+                      <div className="flex-1">
+                        <MealCell
+                          meals={mergedMeals}
+                          hasManual={hasManual && mealSource !== 'neis'}
+                        />
+                      </div>
+                      {/* 수동 입력 버튼 */}
+                      <button
+                        type="button"
+                        onClick={() => setEditingDate(date)}
+                        className="mt-2 w-full py-1 text-caption text-sp-muted hover:text-sp-accent border border-dashed border-sp-border rounded-lg transition-colors"
+                      >
+                        <span className="material-symbols-outlined text-xs align-middle mr-0.5">
+                          edit
+                        </span>
+                        수동 입력
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>

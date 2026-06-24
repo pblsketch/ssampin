@@ -668,6 +668,17 @@ body {
   background-color: rgba(148, 163, 184, 0.75);
 }
 
+/* 가로 스크롤 행(툴바·탭 줄)용 — 스크롤은 되지만 스크롤바는 시각적으로 숨김.
+ * 좁은 창에서 버튼/탭이 찌그러지거나 한글이 세로로 줄바꿈되는 대신 좌우로 스크롤되도록
+ * ScrollRow 컴포넌트 및 가로 탭바에서 사용. (기존에 클래스명만 쓰고 정의가 없어 무효였던 것을 정의) */
+.scrollbar-hide {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* 구 Edge/IE */
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none; /* Chromium/Electron/WebKit */
+}
+
 /* PIN Overlay Animations */
 @keyframes pin-shake {
   0%,
