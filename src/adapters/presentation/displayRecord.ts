@@ -23,6 +23,8 @@ export interface DisplayRecord {
   readonly studentNumber?: number;
   /** 분포 차원. */
   readonly kind: 'attendance' | 'observation' | 'category';
+  /** 구분 그룹핑·필터 클릭용 안정 키(담임=카테고리 id, 수업=출결/특기). 표시 전용. */
+  readonly kindKey: string;
   /** 분포 라벨(출결 / 특기사항 / 카테고리명). */
   readonly kindLabel: string;
   /** 출결 상태(출결 기록일 때). */
@@ -67,6 +69,7 @@ export function mixedRecordToDisplay(r: MixedDisplayInput): DisplayRecord {
       studentName: r.studentName,
       studentNumber: r.studentNumber,
       kind: 'attendance',
+      kindKey: 'attendance',
       kindLabel: '출결',
       status: r.status,
       reason: r.reason,
@@ -88,6 +91,7 @@ export function mixedRecordToDisplay(r: MixedDisplayInput): DisplayRecord {
     studentName: r.studentName,
     studentNumber: r.studentNumber,
     kind: 'observation',
+    kindKey: 'observation',
     kindLabel: '특기사항',
     tags: r.tags,
     content: r.content ?? '',
@@ -120,6 +124,7 @@ export function studentRecordToDisplay(
     studentName: student?.name ?? '?',
     studentNumber: student?.studentNumber,
     kind: isAttendance ? 'attendance' : 'category',
+    kindKey: isAttendance ? 'attendance' : r.category,
     kindLabel: isAttendance ? '출결' : categoryName,
     status: attMatch?.[1] ? ATTENDANCE_LABEL_TO_STATUS[attMatch[1]] : undefined,
     reason: attMatch?.[2],

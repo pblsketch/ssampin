@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useRef } from 'react';
-import { useStudentRecordsStore } from '@adapters/stores/useStudentRecordsStore';
+import { useStudentRecordsStore, RECORD_COLOR_MAP } from '@adapters/stores/useStudentRecordsStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { ATTENDANCE_TYPES, ATTENDANCE_REASONS } from '@domain/valueObjects/RecordCategory';
@@ -28,7 +28,8 @@ import {
   initEditAttendancePeriods,
   sortRecordsInDateGroup,
 } from './recordUtils';
-import { FilterSummaryStrip } from './FilterSummaryStrip';
+import { RecordResultSummary } from '@adapters/components/common/records/RecordResultSummary';
+import { studentRecordToDisplay } from '@adapters/presentation/displayRecord';
 import { ActionDashboard } from './ActionDashboard';
 import { StudentJumpList } from './StudentJumpList';
 
@@ -205,6 +206,12 @@ function SearchMode({ students, records, categories }: ModeProps) {
     }
     return Array.from(map.entries());
   }, [filtered, sortMode, studentMap]);
+
+  // 공용 요약 띠용 표시 ViewModel(담임 누가기록 → DisplayRecord)
+  const displayRecords = useMemo(
+    () => filtered.map((r) => studentRecordToDisplay(r, { categories, studentMap })),
+    [filtered, categories, studentMap],
+  );
 
   const handleEdit = useCallback((record: StudentRecord) => {
     setEditingId(record.id);
@@ -564,12 +571,15 @@ function SearchMode({ students, records, categories }: ModeProps) {
         )}
       </div>
 
-      {/* FilterSummaryStrip */}
-      <FilterSummaryStrip
-        filtered={filtered}
-        students={students}
-        categories={categories}
-        onCategoryClick={handleSummaryCategoryClick}
+      {/* 결과 요약 띠 (공용) — 카테고리 색칩 클릭 시 해당 카테고리 필터 토글 */}
+      <RecordResultSummary
+        records={displayRecords}
+        chipClassName={(key) => {
+          const color = categories.find((c) => c.id === key)?.color ?? 'gray';
+          return (RECORD_COLOR_MAP[color] ?? RECORD_COLOR_MAP['gray']!).tagBg;
+        }}
+        onKindClick={handleSummaryCategoryClick}
+        activeKind={selectedCategory}
       />
 
       {/* 정렬 컨트롤 */}

@@ -26,6 +26,7 @@ describe('mixedRecordToDisplay (수업)', () => {
     };
     const d = mixedRecordToDisplay(input);
     expect(d.kind).toBe('attendance');
+    expect(d.kindKey).toBe('attendance');
     expect(d.kindLabel).toBe('출결');
     expect(d.status).toBe('absent');
     expect(d.studentKey).toBe('tc:c1:5');
@@ -50,6 +51,7 @@ describe('mixedRecordToDisplay (수업)', () => {
     };
     const d = mixedRecordToDisplay(input);
     expect(d.kind).toBe('observation');
+    expect(d.kindKey).toBe('observation');
     expect(d.kindLabel).toBe('특기사항');
     expect(d.tags).toEqual(['교과역량', '학습태도']);
     expect(d.content).toBe('발표를 적극적으로 함');
@@ -94,6 +96,7 @@ describe('studentRecordToDisplay (담임)', () => {
     } as unknown as StudentRecord;
     const d = studentRecordToDisplay(rec, { categories, studentMap });
     expect(d.kind).toBe('category');
+    expect(d.kindKey).toBe('counseling'); // 카테고리 id 보존(클릭 필터용)
     expect(d.kindLabel).toBe('상담'); // '상담 (관계)' → '상담'
     expect(d.studentName).toBe('김민준');
     expect(d.studentNumber).toBe(3);
@@ -113,6 +116,7 @@ describe('studentRecordToDisplay (담임)', () => {
     } as unknown as StudentRecord;
     const d = studentRecordToDisplay(rec, { categories, studentMap });
     expect(d.kind).toBe('attendance');
+    expect(d.kindKey).toBe('attendance');
     expect(d.kindLabel).toBe('출결');
     expect(d.status).toBe('absent');
     expect(d.reason).toBe('질병');

@@ -440,8 +440,17 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
         )}
       </div>
 
-      {/* 결과 요약 (구분 분포·상위 학생·날짜 범위) */}
-      <RecordResultSummary records={displayRecords} />
+      {/* 결과 요약 (구분 분포·상위 학생·날짜 범위) — 칩 클릭 시 구분 필터 토글 */}
+      <RecordResultSummary
+        records={displayRecords}
+        chipClassName={(key) =>
+          key === 'attendance' ? 'bg-amber-500/15 text-amber-400' : 'bg-blue-500/15 text-blue-400'
+        }
+        onKindClick={(key) =>
+          setCategoryFilter((prev) => (prev === key ? 'all' : (key as CategoryFilter)))
+        }
+        activeKind={categoryFilter === 'all' ? undefined : categoryFilter}
+      />
 
       {/* 타임라인 */}
       <div className="space-y-4">
