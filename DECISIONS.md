@@ -302,3 +302,51 @@
   - 행이 보드당 1개라 증가·정리 불필요
 - **한계(고지)**: "브라우저가 재생함"까지 확인 — 전자칠판 자체 볼륨/음소거는 감지 불가
 - **영향**: SC-10 메타테스트("memoShare 경로 supabase 호출은 ShortLinkClient 한정")에 MemoSharePresenceClient 허용 추가. migration 037 prod 적용 + anon upsert/select/가드 curl 검증 완료(2026-06-12)
+
+## ADR-014: 생기부 작성 근거 자료 — 신규 RecordEvidence 엔티티 (basisObservationIds 와 역할 분리)
+
+- **상태**: active
+- **일자**: 2026-06-24
+- **컨텍스트**: 교사가 여기저기 흩어진 학생 데이터(교과 관찰기록·담임 누가기록·과제·평가)를 "생기부 작성 근거"로 모아 학생별·생기부 유형별로 관리하고, MCP 연결 AI가 이를 기반으로 유형별 초안을 쓰게 하려는 요구. 기존에는 `RecordDraft.basisObservationIds`(AI가 초안에 인용한 관찰 id)만 있었고, 화면(RecordDraftView.tsx:524-590)은 이를 읽기 전용으로만 표시 — 교사가 직접 근거를 수집/유형분류/CRUD하는 수단이 없었다. 기존 엔티티(ObservationRecord/StudentRecord)는 readonly이고 "생기부 유형(area)" 분류축이 없으며, AI 쓰기 화이트리스트(OBSERVATION_FIELDS/RECORD_NOTE_FIELDS)는 동결 대상이다.
+- **결정**: **신규 `RecordEvidence` 엔티티**(src/domain/entities/RecordEvidence.ts)를 도입한다. `{ id, studentRef, areas: RecordArea[], content, date?, sourceType?, sourceId?, classId?, createdAt, updatedAt }`. 저장키 `record-evidence`(기존 `record-drafts`와 별도 파일). 한 근거가 여러 영역(areas)의 근거가 될 수 있고, `manual`(직접 입력) 또는 기존 데이터 끌어오기(`observation`/`studentRecord`/`assignment`/`evaluation`, sourceId 보존)로 생성한다. RecordDraft 수직 슬라이스(entity→IRepository→JsonRepository→Zustand store→DI)를 그대로 미러. UI는 공용 `RecordDraftView` 안 초안↔근거 자료 모드 토글 + 신규 `RecordEvidenceView`(headless)로 담임·수업반 양 컨텍스트에 동시 적용.
+- **근거**:
+  - 요구의 "등록/수정/삭제"는 신규 데이터 생성을 함의 → readonly 기존 엔티티 태깅으로는 불가.
+  - "생기부 유형(area)" 분류를 1급 필드로 보유해야 AI가 유형별로 근거를 골라 쓴다.
+  - `studentRef`를 RecordDraft와 동일 체계로 두어 초안↔근거가 즉시 매칭(담임=Student.id / 수업반=tc:{classId}:{studentKey}).
+- **basisObservationIds 와의 역할 분리**: RecordEvidence = 교사가 학생별로 모아 영역 분류한 "작성 재료 창고"(편집 가능, areas N개) / basisObservationIds = 초안 1건에 붙은 출처 꼬리표(읽기 전용 provenance). UI에서 "초안"·"근거 자료" 라벨로 명확히 구분.
+- **트레이드오프/리스크**: 근거 개념이 두 군데(초안의 인용 vs 근거 창고)로 보일 혼란 → 라벨·안내문으로 분리. 끌어오기 import는 Phase 1에서 검증된 연결(담임=StudentRecord.studentId=Student.id / 수업반=ObservationRecord.studentId=studentKey, ClassRecordInputView.tsx:661 확인)만 우선 노출, 과제·평가는 sourceType만 열어두고 UI 후속.
+- **대안**: (A)순수 신규 엔티티(끌어오기 없음) — "모아서" 약함. (B)기존 데이터 집계+area 오버레이 태깅 — readonly·화이트리스트 동결과 충돌, "등록" 부자연 → 기각. (C, 채택)신규 엔티티+선택적 출처 참조 하이브리드.
+- **AI 연동(Phase 2, 완료 2026-06-24)**: 별도 저장소 `ssampin-ai-bridge`에 읽기 전용 도구 `get_record_evidence`(record-evidence.json 읽기, area 필터, allowRecordWrite 게이트·deidentify·audit) 추가 — core `recordEvidence.ts`(parseRecordEvidence)+`io.readRecordEvidence`, mcp `getRecordEvidence`+server 등록(readOnlyHint), `write_record_draft` 안내문에 "근거 자료 우선 읽기" 반영. 쓰기 계약 SSOT(aiBridgeWriteContract.def.mjs)는 읽기 도구라 불변. esbuild 번들 `electron/ai-bridge/index.mjs` 재생성(get_record_drafts 패턴 미러). 검증: 브릿지 build OK + 테스트 552 통과(신규 core/mcp 포함, PII-0 동급생 실명 마스킹 검증) + 번들 node --check OK + ssampin regression 38/38(본체 무영향). 초안에 `basisEvidenceIds` 신설(양방향 provenance)은 더 큰 크로스레포 변경이라 후속 과제로 남김.
+- **검증**: 게이트 4/4 — tsc 0 / lint 0 / regression 38/38 / 전체 vitest 249파일·3164 passed·0 failed(10 skipped). 신규 단위·라운드트립 테스트 7/7(useRecordEvidenceStore.test.ts: load 가드 유실방지·CRUD·areas 정규화·getByArea, 엔티티 헬퍼 areEvidenceAreasValid). 1차 전체 실행 시 무관 PDF 테스트(FillFormFields)가 워커 비정상종료로 1건 플래키 실패했으나 단독 10/10·재실행 전체 그린으로 본 변경과 무관함 확인.
+
+## ADR-015: 근거 자료 4대 개선 + 성적/점수 AI 미노출(길 A)
+
+- **상태**: active
+- **일자**: 2026-06-24
+- **컨텍스트**: 근거 자료 사용성 4개 요청 — (1) 유형 분류를 수정 모드 없이 인라인 토글, (2) 관찰/누가기록을 학급 전체 일괄 끌어오기, (3) 과제물·교사 저장 파일·학생 제출물·수행평가·성적까지 import, (4) 초안 행에 근거 준비도(건수·최근일·작성가능·검토필요) 표시.
+- **핵심 충돌 결정 — 성적/점수**: `GradeAnalysis.ts` 제1원칙("학생 점수는 로컬 전용, 네트워크 전송 0") + AI 브릿지 점수 제외 정책 vs 근거(get_record_evidence)는 AI 노출. → **길 A 채택: 원점수·배점·석차·환산점·과목평균 숫자는 근거 content 에 절대 넣지 않고 질적 정보만** — 수행평가=요소별 **수준 이름**(탁월함 등)·성취 설명·요소 메모·총평 / 성적=**성취도 등급(A~E)** + 교사 서술(evidenceNote·memo). **성취도(achievementLevel)는 점수가 아니라 NEIS 생기부 기재 항목**이라 노출 가능하며(브릿지 `gradeAnalysis.ts`가 성취도를 "생기부 기재 항목"으로 유지하고 원점수·석차만 "의도적 미포함"하는 정책과 일치), 숫자가 섞인 비정상 성취도 값은 오염으로 보고 제외(`semesterGradeToEvidence` → null). 대안 길 B(원점수까지 담는 교사 전용 필드 + 브릿지 제외)는 크로스레포·고위험이라 후속 과제.
+- **구현**:
+  - `src/usecases/studentRecords/evidenceImport.ts` — 순수 변환함수(submission/attachment/rubricGrading/grade/semesterGrade → evidence). **점수 미포함이 불가침**이며 `evidenceImport.test.ts`(11건)가 배점·원점수·환산점·석차 숫자 미포함 + 성취도 등급 포함을 회귀 가드.
+  - `RecordEvidence.ts` sourceType 에 `attachment` 추가(앱; 브릿지 core 엔티티 parity 는 후속 — 미갱신 시 브릿지가 라벨만 normalize, 기능 무영향).
+  - `useRecordEvidenceStore.addMany`(학급 일괄 1회 저장).
+  - `RecordEvidenceView` 재구성: 행 area 인라인 토글(update) + '미분류' 가상 탭(영역 0개 보존) + 출처 선택 끌어오기 패널(관찰/누가/수행평가/성적/첨부/과제물) + '학급 전체' 일괄.
+  - `RecordDraftView`/RecordDraftRow: 현재 영역 근거 건수·최근일·'AI 작성 가능'·'검토 필요' 배지.
+- **한계(고지)**: Drive/Supabase 기반 과제수합(Submission) import 는 그 세션에 이미 불러온 in-memory 제출물에서만 매칭(오프라인·네트워크 의존) — 빈 경우 안내 후 과제 수합 탭 유도. 교사 저장 파일·학생 제출 파일은 ObservationAttachment(source teacher/student)로 커버.
+- **검증**: 게이트 4/4 — tsc 0 / lint 0 errors / 전체 vitest 250파일·3177 passed·0 failed / regression 38/38. 신규 evidenceImport 11/11(원점수·배점·석차 미포함 + 성취도 등급 포함 가드). (lint 경고 1건=adapters→infrastructure uuid import, 기존 형제 스토어 공통 패턴이라 유지.)
+
+## ADR-016: 근거 자료 엑셀 일괄 등록 — 유형은 업로드 후 분류
+
+- **상태**: active
+- **일자**: 2026-06-24
+- **컨텍스트**: 쌤핀에 학생 기록을 안 해둔 교사도 관찰 기록을 한 번에 올릴 수 있어야 함(학생 개별/반 전체). 잘 만든 엑셀 양식 다운로드 → 작성 → 업로드로 근거 일괄 등록.
+- **결정**: **엑셀에는 "관찰 내용"만 받고, 생기부 유형 분류는 업로드 후 앱(미분류 탭 인라인 토글, US-1)에서** 한다. 양식 = `식별키(숨김 studentRef) · 번호 · 성명 · 날짜 · 관찰 내용`, 명단 사전 채움. 한 칸 안 줄바꿈 = 줄마다 별도 근거. 업로드분은 `areas:[]`(미분류)·`sourceType:'manual'` 로 `addMany` 등록.
+- **근거**:
+  - 유형 컬럼을 엑셀에 두면(드롭다운/유형별 칸) 양식·검증이 복잡 → 이미 만든 미분류 분류 UI 재사용이 더 단순(사용자 결정).
+  - **오매칭 방지**: 숨김 `식별키`(studentRef)를 미리 채워 정확 연결, 없으면 번호→(유일)성명 폴백, 그래도 못 찾으면 임의 배정 없이 오류로만 보고.
+- **구현**:
+  - `src/infrastructure/export/EvidenceExcel.ts` — `exportEvidenceTemplateToExcel`(양식+안내 시트, 숨김 식별키 열) / `parseEvidenceFromExcel`(헤더 자동감지·줄바꿈 보존). exceljs, ExcelExporter 패턴 미러.
+  - `src/usecases/studentRecords/importEvidenceFromExcel.ts` — 순수 `mapExcelEvidenceRows`(식별키/번호/성명 매칭·줄바꿈 분리·부분 성공) + 테스트 6건.
+  - `RecordEvidenceView` — 헤더 툴바 "양식 다운로드"(electron 저장/blob) + "엑셀 업로드"(input.xlsx→파싱→매핑→addMany) + 결과·오류 행 리포트. 업로드 후 미분류 탭으로 전환.
+- **대안**: 유형별 칸/유형 드롭다운 컬럼(기각 — 양식 복잡·사용자가 "분류는 앱에서" 결정), 자유 양식(기각 — 매칭 불안정).
+- **한계(고지)**: 재업로드 시 중복 등록(경고 안내, 후속 dedup). 엑셀 관찰 내용은 교사 수동 입력이라 점수 자동 차단은 없음(양식 안내로 "점수 지양", AI 노출은 브릿지 탈식별이 방어).
+- **검증**: 게이트 4/4 — tsc 0 / lint 0 errors / 전체 vitest 251파일·3183 passed·0 failed / regression 38/38. 신규 `importEvidenceFromExcel` 6/6. (lint 경고 1건=adapters→infrastructure EvidenceExcel import, RosterManagementTab 등과 동일 패턴이라 유지.)

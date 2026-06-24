@@ -16,8 +16,10 @@ import {
   type RecordDraftUpsertInput,
 } from '@adapters/stores/useRecordDraftsStore';
 import { useObservationStore } from '@adapters/stores/useObservationStore';
+import { useRecordEvidenceStore } from '@adapters/stores/useRecordEvidenceStore';
 import type { ObservationRecord } from '@domain/entities/Observation';
 import { RecordDraftExportModal } from '@adapters/components/Homeroom/Records/RecordDraftExportModal';
+import { RecordEvidenceView } from '@adapters/components/RecordDraft/RecordEvidenceView';
 
 /** 작성주체(담임/교과) — 노출 영역 집합과 작성주체 결속을 결정. */
 type RecordContext = 'homeroom' | 'teaching';
@@ -101,15 +103,19 @@ export function RecordDraftView({
   const getDraft = useRecordDraftsStore((s) => s.getDraft);
   const observations = useObservationStore((s) => s.records);
   const loadObservations = useObservationStore((s) => s.load);
+  const loadEvidence = useRecordEvidenceStore((s) => s.load);
 
   const [activeArea, setActiveArea] = useState<RecordArea>(areas[0] ?? 'autonomy');
   const [filter, setFilter] = useState<DraftFilter>('all');
   const [showExport, setShowExport] = useState(false);
+  /** 서브페이지 모드 — '초안'(기존) ↔ '근거 자료'(신규). */
+  const [viewMode, setViewMode] = useState<'draft' | 'evidence'>('draft');
 
   useEffect(() => {
     void load();
     void loadObservations();
-  }, [load, loadObservations]);
+    void loadEvidence();
+  }, [load, loadObservations, loadEvidence]);
 
   // 근거 ID → 관찰기록(날짜·내용) 역참조 맵. 교사용 표시를 위해 1회 구성.
   const obsById = useMemo(() => {
@@ -219,38 +225,62 @@ export function RecordDraftView({
 
   return (
     <div className="h-full flex flex-col rounded-xl bg-sp-card ring-1 ring-sp-border overflow-hidden">
-      {/* 상단 바 — breadcrumb + 내보내기 + 컨텍스트 칩 */}
+      {/* 상단 바 — breadcrumb + 모드 토글 + (초안)복사·내보내기 + 컨텍스트 칩 */}
       <div className="flex items-center gap-3 px-4 py-3 border-b border-sp-border">
         <div className="flex items-center gap-1.5 truncate">
           {className ? <span className="text-sm text-sp-muted">{className}</span> : null}
           {className ? <span className="text-sm text-sp-muted">›</span> : null}
-          <h2 className="text-base font-bold text-sp-text">생활기록부 초안</h2>
+          <h2 className="text-base font-bold text-sp-text">
+            {viewMode === 'draft' ? '생활기록부 초안' : '근거 자료'}
+          </h2>
+        </div>
+        {/* 초안 ↔ 근거 자료 서브페이지 토글 */}
+        <div className="inline-flex overflow-hidden rounded-full text-xs font-medium ring-1 ring-sp-border">
+          <button
+            type="button"
+            onClick={() => setViewMode('draft')}
+            className={`px-3 py-1 transition-colors ${viewMode === 'draft' ? 'bg-sp-accent text-white' : 'text-sp-muted hover:text-sp-text'}`}
+          >
+            초안
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode('evidence')}
+            className={`px-3 py-1 transition-colors ${viewMode === 'evidence' ? 'bg-sp-accent text-white' : 'text-sp-muted hover:text-sp-text'}`}
+          >
+            근거 자료
+          </button>
         </div>
         <div className="flex-1" />
-        {copyMsg ? (
-          <span
-            role="status"
-            aria-live="polite"
-            className={`text-xs font-medium ${copyMsg.ok ? 'text-emerald-500' : 'text-sp-muted'}`}
-          >
-            {copyMsg.text}
-          </span>
-        ) : null}
-        <button
-          type="button"
-          onClick={() => void copyAllVisible()}
-          title="현재 영역의 작성된 초안을 한 번에 복사 (번호·이름·내용)"
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-sp-muted ring-1 ring-sp-border hover:text-sp-text hover:bg-sp-surface transition-all"
-        >
-          <span className="material-symbols-outlined text-base">content_copy</span>영역 전체 복사
-        </button>
-        <button
-          type="button"
-          onClick={() => setShowExport(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-sp-muted ring-1 ring-sp-border hover:text-sp-text hover:bg-sp-surface transition-all"
-        >
-          <span className="material-symbols-outlined text-base">download</span>내보내기
-        </button>
+        {viewMode === 'draft' && (
+          <>
+            {copyMsg ? (
+              <span
+                role="status"
+                aria-live="polite"
+                className={`text-xs font-medium ${copyMsg.ok ? 'text-emerald-500' : 'text-sp-muted'}`}
+              >
+                {copyMsg.text}
+              </span>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => void copyAllVisible()}
+              title="현재 영역의 작성된 초안을 한 번에 복사 (번호·이름·내용)"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-sp-muted ring-1 ring-sp-border hover:text-sp-text hover:bg-sp-surface transition-all"
+            >
+              <span className="material-symbols-outlined text-base">content_copy</span>영역 전체
+              복사
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowExport(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-sp-muted ring-1 ring-sp-border hover:text-sp-text hover:bg-sp-surface transition-all"
+            >
+              <span className="material-symbols-outlined text-base">download</span>내보내기
+            </button>
+          </>
+        )}
         <span
           className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ring-1 ${ctxChip.cls}`}
         >
@@ -259,131 +289,149 @@ export function RecordDraftView({
         </span>
       </div>
 
-      {/* 유형(영역) 탭 */}
-      <div
-        ref={tablistRef}
-        className="flex gap-1 px-3 border-b border-sp-border overflow-x-auto"
-        role="tablist"
-        aria-label="생활기록부 영역"
-      >
-        {areas.map((area, idx) => {
-          const cnt = students.filter(
-            (s) =>
-              (getDraft(area, s.studentRef, areaSubject(area, classSubject))?.content ?? '').trim()
-                .length > 0,
-          ).length;
-          const on = area === activeArea;
-          return (
-            <button
-              key={area}
-              role="tab"
-              aria-selected={on}
-              tabIndex={on ? 0 : -1}
-              data-rd-tab={area}
-              onClick={() => setActiveArea(area)}
-              onKeyDown={(e) => onTabKeyDown(e, idx)}
-              className={`relative -mb-px flex items-center gap-2 whitespace-nowrap border-b-2 px-4 py-3 text-sm transition-colors ${
-                on
-                  ? 'border-sp-accent font-bold text-sp-text'
-                  : 'border-transparent font-medium text-sp-muted hover:text-sp-text'
-              }`}
-            >
-              {RECORD_AREA_LABELS[area]}
-              <span className="text-[0.65rem] font-semibold text-sp-muted">
-                {Math.round(resolveAreaLimit(area, level) / 3)}자
-              </span>
-              <span
-                className={`rounded-full px-1.5 py-0.5 text-[0.65rem] font-semibold ${on ? 'bg-sp-accent/15 text-sp-accent' : 'bg-sp-surface text-sp-muted'}`}
-              >
-                {cnt}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* 영역 정보 바 */}
-      <div className="flex flex-wrap items-center gap-3 px-4 py-2 bg-sp-surface/50 border-b border-sp-border text-xs text-sp-muted">
-        <span>
-          <span className="material-symbols-outlined text-sm align-middle mr-1">description</span>
-          <b className="text-sp-text">{RECORD_AREA_LABELS[activeArea]}</b>
-          {subject ? <span className="text-sp-muted"> · {subject}</span> : null} · 한도{' '}
-          <b className="text-amber-500">
-            {Math.round(limit / 3)}자 / {limit.toLocaleString()}B
-          </b>
-          {!isAreaLimitVerified(activeArea, level) && (
-            <span className="ml-1 text-amber-500/80">(원문 확인 필요)</span>
-          )}
-        </span>
-        <span className="inline-flex items-center gap-2">
-          작성 <b className="text-sp-text">{writtenCount}</b>/{students.length}명
-          <span className="h-1.5 w-24 overflow-hidden rounded-full bg-sp-border">
-            <span
-              className="block h-full rounded-full bg-sp-accent"
-              style={{
-                width: `${students.length ? Math.round((writtenCount / students.length) * 100) : 0}%`,
-              }}
-            />
-          </span>
-        </span>
-        <div className="ml-auto inline-flex overflow-hidden rounded-full ring-1 ring-sp-border text-[0.7rem] font-medium">
-          {FILTERS.map((f) => (
-            <button
-              key={f.id}
-              type="button"
-              onClick={() => setFilter(f.id)}
-              className={`px-3 py-1 transition-colors ${filter === f.id ? 'bg-sp-accent text-white' : 'text-sp-muted hover:text-sp-text'}`}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* 입력창 안내 — 목록 전체에 1회만 노출(행마다 반복 제거) */}
-      <p className="flex flex-wrap items-center gap-x-2 gap-y-1 px-4 py-1.5 text-[0.7rem] text-sp-muted border-b border-sp-border">
-        <span className="inline-flex items-center gap-1">
-          <span className="material-symbols-outlined text-sm">open_in_full</span>
-          입력창 우하단을 끌어 크기를 조절할 수 있습니다.
-        </span>
-        <span className="inline-flex items-center gap-1">
-          <span className="material-symbols-outlined text-sm">keyboard_return</span>
-          <kbd className="rounded bg-sp-surface px-1 font-semibold text-sp-text">Ctrl+Enter</kbd>로
-          다음 학생 칸으로 이동합니다.
-        </span>
-      </p>
-
-      {/* 학생 세로 스크롤 리스트 */}
-      <div ref={listRef} className="flex-1 min-h-0 overflow-y-auto">
-        {visibleStudents.length === 0 ? (
-          <p className="py-10 text-center text-sm text-sp-muted">표시할 학생이 없습니다.</p>
-        ) : (
-          visibleStudents.map((s, i) => (
-            <RecordDraftRow
-              key={`${s.studentRef}:${activeArea}:${subject ?? ''}`}
-              student={s}
-              area={activeArea}
-              level={level}
-              subject={subject}
-              classId={classId}
-              draft={draftFor(s.studentRef)}
-              obsById={obsById}
-              index={i}
-              onJumpNext={() => focusRowTextarea(i + 1)}
-            />
-          ))
-        )}
-      </div>
-
-      {showExport && (
-        <RecordDraftExportModal
-          drafts={records}
-          students={students}
-          areas={areas}
+      {viewMode === 'evidence' ? (
+        <RecordEvidenceView
+          context={context}
           level={level}
+          students={students}
+          {...(classId !== undefined ? { classId } : {})}
           {...(className !== undefined ? { className } : {})}
-          onClose={() => setShowExport(false)}
+          headless
         />
+      ) : (
+        <>
+          {/* 유형(영역) 탭 */}
+          <div
+            ref={tablistRef}
+            className="flex gap-1 px-3 border-b border-sp-border overflow-x-auto"
+            role="tablist"
+            aria-label="생활기록부 영역"
+          >
+            {areas.map((area, idx) => {
+              const cnt = students.filter(
+                (s) =>
+                  (
+                    getDraft(area, s.studentRef, areaSubject(area, classSubject))?.content ?? ''
+                  ).trim().length > 0,
+              ).length;
+              const on = area === activeArea;
+              return (
+                <button
+                  key={area}
+                  role="tab"
+                  aria-selected={on}
+                  tabIndex={on ? 0 : -1}
+                  data-rd-tab={area}
+                  onClick={() => setActiveArea(area)}
+                  onKeyDown={(e) => onTabKeyDown(e, idx)}
+                  className={`relative -mb-px flex items-center gap-2 whitespace-nowrap border-b-2 px-4 py-3 text-sm transition-colors ${
+                    on
+                      ? 'border-sp-accent font-bold text-sp-text'
+                      : 'border-transparent font-medium text-sp-muted hover:text-sp-text'
+                  }`}
+                >
+                  {RECORD_AREA_LABELS[area]}
+                  <span className="text-[0.65rem] font-semibold text-sp-muted">
+                    {Math.round(resolveAreaLimit(area, level) / 3)}자
+                  </span>
+                  <span
+                    className={`rounded-full px-1.5 py-0.5 text-[0.65rem] font-semibold ${on ? 'bg-sp-accent/15 text-sp-accent' : 'bg-sp-surface text-sp-muted'}`}
+                  >
+                    {cnt}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* 영역 정보 바 */}
+          <div className="flex flex-wrap items-center gap-3 px-4 py-2 bg-sp-surface/50 border-b border-sp-border text-xs text-sp-muted">
+            <span>
+              <span className="material-symbols-outlined text-sm align-middle mr-1">
+                description
+              </span>
+              <b className="text-sp-text">{RECORD_AREA_LABELS[activeArea]}</b>
+              {subject ? <span className="text-sp-muted"> · {subject}</span> : null} · 한도{' '}
+              <b className="text-amber-500">
+                {Math.round(limit / 3)}자 / {limit.toLocaleString()}B
+              </b>
+              {!isAreaLimitVerified(activeArea, level) && (
+                <span className="ml-1 text-amber-500/80">(원문 확인 필요)</span>
+              )}
+            </span>
+            <span className="inline-flex items-center gap-2">
+              작성 <b className="text-sp-text">{writtenCount}</b>/{students.length}명
+              <span className="h-1.5 w-24 overflow-hidden rounded-full bg-sp-border">
+                <span
+                  className="block h-full rounded-full bg-sp-accent"
+                  style={{
+                    width: `${students.length ? Math.round((writtenCount / students.length) * 100) : 0}%`,
+                  }}
+                />
+              </span>
+            </span>
+            <div className="ml-auto inline-flex overflow-hidden rounded-full ring-1 ring-sp-border text-[0.7rem] font-medium">
+              {FILTERS.map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => setFilter(f.id)}
+                  className={`px-3 py-1 transition-colors ${filter === f.id ? 'bg-sp-accent text-white' : 'text-sp-muted hover:text-sp-text'}`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 입력창 안내 — 목록 전체에 1회만 노출(행마다 반복 제거) */}
+          <p className="flex flex-wrap items-center gap-x-2 gap-y-1 px-4 py-1.5 text-[0.7rem] text-sp-muted border-b border-sp-border">
+            <span className="inline-flex items-center gap-1">
+              <span className="material-symbols-outlined text-sm">open_in_full</span>
+              입력창 우하단을 끌어 크기를 조절할 수 있습니다.
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span className="material-symbols-outlined text-sm">keyboard_return</span>
+              <kbd className="rounded bg-sp-surface px-1 font-semibold text-sp-text">
+                Ctrl+Enter
+              </kbd>
+              로 다음 학생 칸으로 이동합니다.
+            </span>
+          </p>
+
+          {/* 학생 세로 스크롤 리스트 */}
+          <div ref={listRef} className="flex-1 min-h-0 overflow-y-auto">
+            {visibleStudents.length === 0 ? (
+              <p className="py-10 text-center text-sm text-sp-muted">표시할 학생이 없습니다.</p>
+            ) : (
+              visibleStudents.map((s, i) => (
+                <RecordDraftRow
+                  key={`${s.studentRef}:${activeArea}:${subject ?? ''}`}
+                  student={s}
+                  area={activeArea}
+                  level={level}
+                  subject={subject}
+                  classId={classId}
+                  draft={draftFor(s.studentRef)}
+                  obsById={obsById}
+                  index={i}
+                  onJumpNext={() => focusRowTextarea(i + 1)}
+                />
+              ))
+            )}
+          </div>
+
+          {showExport && (
+            <RecordDraftExportModal
+              drafts={records}
+              students={students}
+              areas={areas}
+              level={level}
+              {...(className !== undefined ? { className } : {})}
+              onClose={() => setShowExport(false)}
+            />
+          )}
+        </>
       )}
     </div>
   );
@@ -489,6 +537,24 @@ function RecordDraftRow({
   const flags = draft?.groundingFlags ?? [];
   const hasRisk = flags.some((f) => f === 'unverified_high_risk_term' || f === 'pii_leak');
 
+  // 근거 준비도(US-4) — 현재 영역의 근거 건수·최근 날짜·작성 준비/검토 신호.
+  const evidenceRecords = useRecordEvidenceStore((s) => s.records);
+  const evidenceForArea = useMemo(
+    () =>
+      evidenceRecords.filter((e) => e.studentRef === student.studentRef && e.areas.includes(area)),
+    [evidenceRecords, student.studentRef, area],
+  );
+  const evidenceCount = evidenceForArea.length;
+  const recentEvidenceDate = useMemo(() => {
+    let best = '';
+    for (const e of evidenceForArea) {
+      const d = e.date ?? '';
+      if (d > best) best = d;
+    }
+    return best;
+  }, [evidenceForArea]);
+  const needsReview = !!draft && (draft.status === 'reviewing' || flags.length > 0);
+
   const copyNeis = async (): Promise<void> => {
     try {
       await navigator.clipboard.writeText(text);
@@ -519,6 +585,20 @@ function RecordDraftRow({
         ) : (
           <span className="w-fit rounded-full bg-sp-surface px-2 py-0.5 text-[0.65rem] font-semibold text-sp-muted">
             초안 없음
+          </span>
+        )}
+        {/* 근거 준비도(US-4): 근거 건수·최근 날짜 + 작성 준비/검토 신호 */}
+        <span className="inline-flex items-center gap-0.5 text-[0.6rem] text-sp-muted">
+          <span className="material-symbols-outlined text-xs">inventory_2</span>
+          근거{' '}
+          <b className={evidenceCount > 0 ? 'text-sp-accent' : 'text-sp-muted'}>
+            {evidenceCount}건
+          </b>
+          {recentEvidenceDate ? ` · 최근 ${formatObsDate(recentEvidenceDate)}` : ''}
+        </span>
+        {needsReview && (
+          <span className="w-fit rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[0.55rem] font-semibold text-amber-600">
+            검토 필요
           </span>
         )}
         {draft && draft.basisObservationIds.length > 0 && (

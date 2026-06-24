@@ -1141,6 +1141,63 @@ function parseRecordDrafts(raw) {
   return { records };
 }
 
+// ../ssampin-ai-bridge/packages/core/dist/entities/recordEvidence.js
+var EVIDENCE_SOURCE_TYPES = /* @__PURE__ */ new Set([
+  'manual',
+  'observation',
+  'studentRecord',
+  'assignment',
+  'evaluation',
+]);
+function isEvidenceSourceType(v) {
+  return typeof v === 'string' && EVIDENCE_SOURCE_TYPES.has(v);
+}
+function asString18(v) {
+  return typeof v === 'string' ? v : void 0;
+}
+function asNumber11(v) {
+  return typeof v === 'number' && Number.isFinite(v) ? v : void 0;
+}
+function setIf13(target, key, value) {
+  if (value !== void 0) target[key] = value;
+}
+function normalizeRecord5(o) {
+  if (typeof o['id'] !== 'string' || typeof o['studentRef'] !== 'string') {
+    return null;
+  }
+  const rawAreas = Array.isArray(o['areas']) ? o['areas'].filter(isRecordArea) : [];
+  const areas = [...new Set(rawAreas)];
+  const content = asString18(o['content']) ?? '';
+  const now = asNumber11(o['createdAt']);
+  const rec = {
+    id: o['id'],
+    studentRef: o['studentRef'],
+    areas,
+    content,
+    createdAt: now ?? 0,
+    updatedAt: asNumber11(o['updatedAt']) ?? now ?? 0,
+  };
+  setIf13(rec, 'date', asString18(o['date']));
+  if (isEvidenceSourceType(o['sourceType'])) rec['sourceType'] = o['sourceType'];
+  setIf13(rec, 'sourceId', asString18(o['sourceId']));
+  setIf13(rec, 'classId', asString18(o['classId']));
+  return rec;
+}
+function parseRecordEvidence(raw) {
+  const rawRecords = Array.isArray(raw)
+    ? raw
+    : raw && typeof raw === 'object' && Array.isArray(raw['records'])
+      ? raw['records']
+      : [];
+  const records = [];
+  for (const item of rawRecords) {
+    if (!item || typeof item !== 'object') continue;
+    const rec = normalizeRecord5(item);
+    if (rec) records.push(rec);
+  }
+  return { records };
+}
+
 // ../ssampin-ai-bridge/packages/core/dist/io.js
 function readRawJson(filename, dataDir = resolveDataDir()) {
   const filePath = resolveDataFile(dataDir, filename);
@@ -1229,6 +1286,9 @@ function readBookmarks(dataDir = resolveDataDir()) {
 }
 function readRecordDrafts(dataDir = resolveDataDir()) {
   return parseRecordDrafts(readRawJson('record-drafts', dataDir));
+}
+function readRecordEvidence(dataDir = resolveDataDir()) {
+  return parseRecordEvidence(readRawJson('record-evidence', dataDir));
 }
 
 // ../ssampin-ai-bridge/packages/core/dist/identity.js
@@ -2311,7 +2371,7 @@ function assertWriteEnabled(env = process.env, dataDir) {
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
-function setIf13(target, key, value) {
+function setIf14(target, key, value) {
   if (value !== void 0) target[key] = value;
 }
 function validate(input) {
@@ -2353,7 +2413,7 @@ function buildRecord(input) {
     createdAt: now,
     updatedAt: now,
   };
-  setIf13(rec, 'classId', input.classId);
+  setIf14(rec, 'classId', input.classId);
   return rec;
 }
 function idemPath(dataDir) {
@@ -2468,7 +2528,7 @@ async function appendObservation(dataDir, input) {
     }
     const record = buildRecord(input);
     const nextData = { records: [...data.records, record] };
-    setIf13(nextData, 'customTags', data.customTags);
+    setIf14(nextData, 'customTags', data.customTags);
     const nowRaw = fs6.existsSync(file) ? fs6.readFileSync(file, 'utf-8') : '';
     if (nowRaw !== baseRaw) {
       throw new WriteConflictError(
@@ -2777,8 +2837,8 @@ async function setRecordDraft(dataDir, input) {
       createdAt,
       updatedAt,
     };
-    setIf13(record, 'classId', input.classId);
-    setIf13(record, 'subject', input.subject);
+    setIf14(record, 'classId', input.classId);
+    setIf14(record, 'subject', input.subject);
     if (dedupFlags.length > 0) record['groundingFlags'] = dedupFlags;
     else delete record['groundingFlags'];
     if (idx >= 0) records[idx] = record;
@@ -2802,7 +2862,7 @@ function recordId(prefix, clientKey) {
   }
   return `${prefix}_${Date.now().toString(36)}_${crypto4.randomBytes(5).toString('hex')}`;
 }
-function setIf14(t, k, v) {
+function setIf15(t, k, v) {
   if (v !== void 0) t[k] = v;
 }
 function hasId(v, id) {
@@ -2880,9 +2940,9 @@ function appendTodoDirect(dataDir, input, clientKey) {
       pendingRemoteOp: 'create',
       priority: input.priority ?? 'none',
     };
-    setIf14(todo, 'dueDate', input.dueDate);
-    setIf14(todo, 'category', input.category);
-    setIf14(todo, 'time', input.time);
+    setIf15(todo, 'dueDate', input.dueDate);
+    setIf15(todo, 'category', input.category);
+    setIf15(todo, 'time', input.time);
     return { next: { ...root, todos: [...list, todo] }, ref: id };
   });
 }
@@ -2898,8 +2958,8 @@ function appendEventDirect(dataDir, input, clientKey) {
       category: input.category ?? 'etc',
       source: 'ssampin',
     };
-    setIf14(ev, 'time', input.time);
-    setIf14(ev, 'location', input.location);
+    setIf15(ev, 'time', input.time);
+    setIf15(ev, 'location', input.location);
     return { next: { ...root, events: [...list, ev] }, ref: id };
   });
 }
@@ -3106,7 +3166,7 @@ function safeAchievement(level) {
   if (t.length === 0 || t.length > 4 || /\d/.test(t)) return void 0;
   return t;
 }
-function setIf15(target, key, value) {
+function setIf16(target, key, value) {
   if (value !== void 0 && value !== '') target[key] = value;
 }
 function getRubricFeedback(dataDir, classId, studentKey2, maskText) {
@@ -3128,9 +3188,9 @@ function getRubricFeedback(dataDir, classId, studentKey2, maskText) {
             criterion: c.name,
             achievedLevel: level?.name ?? null,
           };
-          if (level?.description) setIf15(fb, 'levelDescription', scrub(level.description));
+          if (level?.description) setIf16(fb, 'levelDescription', scrub(level.description));
           const note = g.criterionNotes[c.id];
-          if (note) setIf15(fb, 'note', scrub(note));
+          if (note) setIf16(fb, 'note', scrub(note));
           return fb;
         });
       const view = {
@@ -3139,7 +3199,7 @@ function getRubricFeedback(dataDir, classId, studentKey2, maskText) {
         criteria,
         date: g.gradedAt,
       };
-      if (g.overallFeedback) setIf15(view, 'overallFeedback', scrub(g.overallFeedback));
+      if (g.overallFeedback) setIf16(view, 'overallFeedback', scrub(g.overallFeedback));
       return view;
     });
 }
@@ -3171,7 +3231,7 @@ function getGradeSummary(dataDir, classId, studentKey2, maskText) {
       participation: '\uBBF8\uC785\uB825',
       confirmed: false,
     };
-    if (p.method) setIf15(summary, 'method', scrub(p.method));
+    if (p.method) setIf16(summary, 'method', scrub(p.method));
     if (p.kind === 'written-exam') {
       const w = ga.writtenResults.find((x) => x.assessmentId === p.id && x.studentKey === gKey);
       if (w) {
@@ -3185,7 +3245,7 @@ function getGradeSummary(dataDir, classId, studentKey2, maskText) {
       if (pr) {
         summary['participation'] = pr.scorePresent ? '\uC751\uC2DC' : '\uBBF8\uC785\uB825';
         summary['confirmed'] = pr.confirmed;
-        if (pr.evidenceNote) setIf15(summary, 'evidenceNote', scrub(pr.evidenceNote));
+        if (pr.evidenceNote) setIf16(summary, 'evidenceNote', scrub(pr.evidenceNote));
       }
     }
     return summary;
@@ -4700,6 +4760,34 @@ function getRecordDrafts(ctx, args) {
     });
   ctx.audit.append({ tool: 'get_record_drafts', redactionStats: { items: drafts.length } });
   return { count: drafts.length, studentToken: args.studentToken, drafts, notice: DRAFT_NOTICE };
+}
+var EVIDENCE_NOTICE =
+  '\uAD50\uC0AC\uAC00 \uBAA8\uC740 \uC0DD\uAE30\uBD80 \uC791\uC131 \uADFC\uAC70 \uC790\uB8CC\uC785\uB2C8\uB2E4. \uB3D9\uAE09\uC0DD \uC9C1\uC811 \uC2DD\uBCC4\uC790(\uC2E4\uBA85/\uC5F0\uB77D\uCC98/\uC0DD\uC77C/\uD559\uBC88)\uB294 \uB9C8\uC2A4\uD0B9\uB418\uB098 \uB9E5\uB77D \uC7AC\uC2DD\uBCC4\uC774 \uAC00\uB2A5\uD569\uB2C8\uB2E4. \uC774 \uADFC\uAC70\uC5D0 \uAE30\uBC18\uD574 \uC601\uC5ED\uBCC4 \uCD08\uC548\uC744 \uC791\uC131\uD558\uB418(write_record_draft), \uADFC\uAC70\uC5D0 \uC5C6\uB294 \uC0AC\uC2E4\uC744 \uC9C0\uC5B4\uB0B4\uC9C0 \uB9D0\uACE0, \uCD5C\uC885 \uAE30\uC7AC \uC804 \uAD50\uC0AC\uAC00 \uADDC\uC815\xB7\uC0AC\uC2E4\uC744 \uBC18\uB4DC\uC2DC \uAC80\uD1A0\uD569\uB2C8\uB2E4(requiresTeacherReview).';
+function getRecordEvidence(ctx, args) {
+  assertRecordWriteAllowed(ctx);
+  const areaFilter = isRecordArea(args.area) ? args.area : void 0;
+  const { resolved: studentRef, identity } = resolveStudentTarget(ctx, args.studentToken);
+  const roster = rosterForIdentity(ctx.dataDir, identity, ctx.store);
+  const evidence = readRecordEvidence(ctx.dataDir)
+    .records.filter((e) => e.studentRef === studentRef)
+    .filter((e) => areaFilter === void 0 || e.areas.includes(areaFilter))
+    .map((e) => {
+      const view = {
+        areas: e.areas,
+        content: deidentify(e.content, roster).text,
+        sourceType: e.sourceType ?? 'manual',
+        ...(e.date !== void 0 ? { date: e.date } : {}),
+      };
+      return view;
+    });
+  ctx.audit.append({ tool: 'get_record_evidence', redactionStats: { items: evidence.length } });
+  return {
+    count: evidence.length,
+    studentToken: args.studentToken,
+    ...(areaFilter !== void 0 ? { area: areaFilter } : {}),
+    evidence,
+    notice: EVIDENCE_NOTICE,
+  };
 }
 
 // ../ssampin-ai-bridge/packages/mcp/dist/memoTools.js
@@ -6365,7 +6453,7 @@ function createSsampinMcpServer(opts = {}) {
     {
       title: '\uC0DD\uAE30\uBD80 \uCD08\uC548 \uC800\uC7A5(\uC601\uC5ED\uBCC4)',
       description:
-        'AI \uAC00 \uC791\uC131\uD55C NEIS \uC601\uC5ED\uBCC4 \uC0DD\uAE30\uBD80 \uCD08\uC548\uC744 \uC324\uD540\uC5D0 \uC800\uC7A5\uD569\uB2C8\uB2E4(\uC0DD\uC131\uC774 \uC544\uB2C8\uB77C \uC800\uC7A5 \u2014 \uBAA8\uB4E0 \uCD08\uC548\uC740 \uAD50\uC0AC \uCD5C\uC885 \uAC80\uD1A0 \uD544\uC694 \uC0C1\uD0DC\uB85C \uC800\uC7A5\uB418\uBA70 \uC790\uB3D9 \uD655\uC815\uB418\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4). \uC4F0\uAE30\uB294 \uC324\uD540 \uC124\uC815 "AI \uC5F0\uACB0"\uC758 "\uC0DD\uAE30\uBD80 \uCD08\uC548 \uC4F0\uAE30 \uD5C8\uC6A9"(\uBCC4\uB3C4 \uACE0\uC704\uD5D8 \uD1A0\uAE00)\uC744 \uCF1C\uC57C \uD65C\uC131\uD654\uB429\uB2C8\uB2E4. studentToken \uC740 list_students \uC758 \uD1A0\uD070, area \uC640 level(\uD559\uAD50\uAE09)\uC740 \uC791\uC131\uC8FC\uCCB4\xB7\uBC14\uC774\uD2B8 \uD55C\uB3C4 \uACB0\uC18D\uC5D0 \uC4F0\uC785\uB2C8\uB2E4(\uB2F4\uC784 \uC601\uC5ED=\uB2F4\uC784 \uD559\uC0DD \uD1A0\uD070, \uACFC\uBAA9/\uB3D9\uC544\uB9AC=\uC218\uC5C5\uBC18 \uD559\uC0DD \uD1A0\uD070). \uC601\uC5ED\uBCC4 \uBC14\uC774\uD2B8 \uD55C\uB3C4(\uC9C4\uB85C 2,100B/\uADF8 \uC678 1,500B, \uD55C\uAE00 3B) \uCD08\uACFC \uC2DC \uAC70\uBD80\uB429\uB2C8\uB2E4. \uADFC\uAC70 \uAD00\uCC30\uC740 basisObservationTokens(get_observations \uC758 observationId)\uB85C \uC778\uC6A9\uD558\uC138\uC694. \uC751\uB2F5\uC758 flags \uB294 \uC2B9\uC778 \uC2E0\uD638\uAC00 \uC544\uB2D9\uB2C8\uB2E4.',
+        'AI \uAC00 \uC791\uC131\uD55C NEIS \uC601\uC5ED\uBCC4 \uC0DD\uAE30\uBD80 \uCD08\uC548\uC744 \uC324\uD540\uC5D0 \uC800\uC7A5\uD569\uB2C8\uB2E4(\uC0DD\uC131\uC774 \uC544\uB2C8\uB77C \uC800\uC7A5 \u2014 \uBAA8\uB4E0 \uCD08\uC548\uC740 \uAD50\uC0AC \uCD5C\uC885 \uAC80\uD1A0 \uD544\uC694 \uC0C1\uD0DC\uB85C \uC800\uC7A5\uB418\uBA70 \uC790\uB3D9 \uD655\uC815\uB418\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4). \uC4F0\uAE30\uB294 \uC324\uD540 \uC124\uC815 "AI \uC5F0\uACB0"\uC758 "\uC0DD\uAE30\uBD80 \uCD08\uC548 \uC4F0\uAE30 \uD5C8\uC6A9"(\uBCC4\uB3C4 \uACE0\uC704\uD5D8 \uD1A0\uAE00)\uC744 \uCF1C\uC57C \uD65C\uC131\uD654\uB429\uB2C8\uB2E4. studentToken \uC740 list_students \uC758 \uD1A0\uD070, area \uC640 level(\uD559\uAD50\uAE09)\uC740 \uC791\uC131\uC8FC\uCCB4\xB7\uBC14\uC774\uD2B8 \uD55C\uB3C4 \uACB0\uC18D\uC5D0 \uC4F0\uC785\uB2C8\uB2E4(\uB2F4\uC784 \uC601\uC5ED=\uB2F4\uC784 \uD559\uC0DD \uD1A0\uD070, \uACFC\uBAA9/\uB3D9\uC544\uB9AC=\uC218\uC5C5\uBC18 \uD559\uC0DD \uD1A0\uD070). \uC601\uC5ED\uBCC4 \uBC14\uC774\uD2B8 \uD55C\uB3C4(\uC9C4\uB85C 2,100B/\uADF8 \uC678 1,500B, \uD55C\uAE00 3B) \uCD08\uACFC \uC2DC \uAC70\uBD80\uB429\uB2C8\uB2E4. \uC791\uC131 \uC804 get_record_evidence \uB85C \uD574\uB2F9 \uD559\uC0DD\xB7\uC601\uC5ED\uC758 \uADFC\uAC70 \uC790\uB8CC\uB97C \uBA3C\uC800 \uC77D\uACE0 \uADF8 \uC0AC\uC2E4\uC5D0 \uAE30\uBC18\uD574 \uC791\uC131\uD558\uC138\uC694(\uADFC\uAC70\uC5D0 \uC5C6\uB294 \uB0B4\uC6A9 \uC9C0\uC5B4\uB0B4\uAE30 \uAE08\uC9C0). \uADFC\uAC70 \uAD00\uCC30\uC740 basisObservationTokens(get_observations \uC758 observationId)\uB85C \uC778\uC6A9\uD558\uC138\uC694. \uC751\uB2F5\uC758 flags \uB294 \uC2B9\uC778 \uC2E0\uD638\uAC00 \uC544\uB2D9\uB2C8\uB2E4.',
       inputSchema: {
         studentToken: z
           .string()
@@ -6445,6 +6533,38 @@ function createSsampinMcpServer(opts = {}) {
       annotations: { readOnlyHint: true },
     },
     async (args) => runTool('get_record_drafts', () => getRecordDrafts(ctx, args)),
+  );
+  server.registerTool(
+    'get_record_evidence',
+    {
+      title:
+        '\uC0DD\uAE30\uBD80 \uC791\uC131 \uADFC\uAC70 \uC790\uB8CC \uC870\uD68C(\uD559\uC0DD\uBCC4)',
+      description:
+        '\uD2B9\uC815 \uD559\uC0DD\uC5D0 \uB300\uD574 \uAD50\uC0AC\uAC00 \uBAA8\uC544 \uB454 "\uC0DD\uAE30\uBD80 \uC791\uC131 \uADFC\uAC70 \uC790\uB8CC"\uB97C \uC601\uC5ED\uBCC4\uB85C \uC870\uD68C\uD569\uB2C8\uB2E4. write_record_draft \uB85C \uC601\uC5ED\uBCC4 \uCD08\uC548\uC744 \uC4F0\uAE30 \uC804\uC5D0 \uC774 \uB3C4\uAD6C\uB85C \uADFC\uAC70\uB97C \uBA3C\uC800 \uC77D\uACE0, \uADFC\uAC70\uC5D0 \uC788\uB294 \uC0AC\uC2E4\uB9CC\uC73C\uB85C \uC791\uC131\uD558\uC138\uC694(\uC5C6\uB294 \uB0B4\uC6A9 \uC9C0\uC5B4\uB0B4\uAE30 \uAE08\uC9C0). area \uB97C \uC8FC\uBA74 \uD574\uB2F9 \uC601\uC5ED \uADFC\uAC70\uB9CC \uBC18\uD658\uD569\uB2C8\uB2E4. studentToken \uC740 list_students \uC758 \uD1A0\uD070. "\uC0DD\uAE30\uBD80 \uCD08\uC548 \uC4F0\uAE30 \uD5C8\uC6A9" \uD1A0\uAE00\uC774 \uCF1C\uC838 \uC788\uC5B4\uC57C \uC870\uD68C\uB429\uB2C8\uB2E4. \uB3D9\uAE09\uC0DD \uC9C1\uC811 \uC2DD\uBCC4\uC790\uB294 \uB9C8\uC2A4\uD0B9\uB418\uC9C0\uB9CC \uB9E5\uB77D \uC7AC\uC2DD\uBCC4\uC774 \uAC00\uB2A5\uD569\uB2C8\uB2E4. \uC77D\uAE30 \uC804\uC6A9.',
+      inputSchema: {
+        studentToken: z
+          .string()
+          .describe(
+            'list_students \uAC00 \uBC18\uD658\uD55C \uD559\uC0DD \uD1A0\uD070(\uB2F4\uC784=\uD559\uBC88 \uD1A0\uD070 / \uACFC\uBAA9\xB7\uB3D9\uC544\uB9AC=\uC218\uC5C5\uBC18 \uD1A0\uD070)',
+          ),
+        area: z
+          .enum([
+            'autonomy',
+            'career',
+            'behavior',
+            'subject',
+            'individualSubject',
+            'club',
+            'subjectDev',
+          ])
+          .optional()
+          .describe(
+            '\uC601\uC5ED \uD544\uD130(\uBBF8\uC9C0\uC815 \uC2DC \uC804\uCCB4): autonomy=\uC790\uC728 / career=\uC9C4\uB85C / behavior=\uD589\uD2B9 / subject=\uACFC\uBAA9\uC138\uD2B9 / individualSubject=\uAC1C\uC778\uC138\uD2B9 / club=\uB3D9\uC544\uB9AC / subjectDev=\uAD50\uACFC\uD559\uC2B5\uBC1C\uB2EC',
+          ),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    async (args) => runTool('get_record_evidence', () => getRecordEvidence(ctx, args)),
   );
   server.registerTool(
     'complete_todo',

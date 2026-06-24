@@ -46,6 +46,7 @@ import type { IToolResultRepository } from '@domain/repositories/IToolResultRepo
 import type { IObservationRepository } from '@domain/repositories/IObservationRepository';
 import type { IObservationAttachmentRepository } from '@domain/repositories/IObservationAttachmentRepository';
 import type { IRecordDraftsRepository } from '@domain/repositories/IRecordDraftsRepository';
+import type { IRecordEvidenceRepository } from '@domain/repositories/IRecordEvidenceRepository';
 import type { IFormTemplateRepository } from '@domain/repositories/IFormTemplateRepository';
 import type { INotebookRepository } from '@domain/repositories/INotebookRepository';
 import type { IWallBoardRepository } from '@domain/repositories/IWallBoardRepository';
@@ -105,6 +106,7 @@ import { JsonToolResultRepository } from '@adapters/repositories/JsonToolResultR
 import { JsonObservationRepository } from '@adapters/repositories/JsonObservationRepository';
 import { JsonObservationAttachmentRepository } from '@adapters/repositories/JsonObservationAttachmentRepository';
 import { JsonRecordDraftsRepository } from '@adapters/repositories/JsonRecordDraftsRepository';
+import { JsonRecordEvidenceRepository } from '@adapters/repositories/JsonRecordEvidenceRepository';
 import { JsonFormTemplateRepository } from '@adapters/repositories/JsonFormTemplateRepository';
 import { JsonNotebookRepository } from '@adapters/repositories/JsonNotebookRepository';
 import { JsonWallBoardRepository } from '@adapters/repositories/JsonWallBoardRepository';
@@ -225,6 +227,10 @@ export const observationAttachmentRepository: IObservationAttachmentRepository =
   new JsonObservationAttachmentRepository(storage);
 
 export const recordDraftsRepository: IRecordDraftsRepository = new JsonRecordDraftsRepository(
+  storage,
+);
+
+export const recordEvidenceRepository: IRecordEvidenceRepository = new JsonRecordEvidenceRepository(
   storage,
 );
 
