@@ -15,7 +15,12 @@ import { AttendanceStatusBadge } from '@adapters/components/common/records/Atten
 import { DateGroupHeader } from '@adapters/components/common/records/DateGroupHeader';
 import { RecordEmptyState } from '@adapters/components/common/records/RecordEmptyState';
 import { RecordResultSummary } from '@adapters/components/common/records/RecordResultSummary';
+import {
+  RecordStudentJumpList,
+  type JumpListItem,
+} from '@adapters/components/common/records/RecordStudentJumpList';
 import { mixedRecordToDisplay } from '@adapters/presentation/displayRecord';
+import { groupRecordsByStudent } from '@adapters/presentation/recordIdentityAdapter';
 /* eslint-disable no-restricted-imports */
 import { exportMixedRecordsToExcel } from '@infrastructure/export/ExcelExporter';
 /* eslint-enable no-restricted-imports */
@@ -241,6 +246,47 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
 
   const displayRecords = useMemo(() => filtered.map((r) => mixedRecordToDisplay(r)), [filtered]);
 
+  // 좌측 학생 점프 리스트 — 학생 단위 그룹핑(컨텍스트=teaching, 반=classId로 안전 키).
+  // 카운트는 studentFilter 무관(전체 학생 네비게이션용)하도록 mixedRecords 기준.
+  const allDisplayRecords = useMemo(
+    () => mixedRecords.map((r) => mixedRecordToDisplay(r)),
+    [mixedRecords],
+  );
+  const countByStudentKey = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const g of groupRecordsByStudent(allDisplayRecords, 'teaching', classId)) {
+      m.set(g.key.rawKey, g.items.length);
+    }
+    return m;
+  }, [allDisplayRecords, classId]);
+  const jumpItems = useMemo<JumpListItem[]>(
+    () =>
+      students.map((s) => {
+        const k = studentKey(s);
+        return { key: k, label: s.name, number: s.number, count: countByStudentKey.get(k) ?? 0 };
+      }),
+    [students, countByStudentKey],
+  );
+
+  // 선택 학생 통계 — 건수만(출석률 등 비율 지표는 두 컨텍스트 정의 일치 보장 전까지 미노출).
+  const selectedStudentStats = useMemo(() => {
+    if (!studentFilter) return null;
+    let absent = 0;
+    let late = 0;
+    let earlyLeave = 0;
+    let classAbsence = 0;
+    let observation = 0;
+    for (const r of displayRecords) {
+      if (r.kind === 'observation') observation++;
+      else if (r.status === 'absent') absent++;
+      else if (r.status === 'late') late++;
+      else if (r.status === 'earlyLeave') earlyLeave++;
+      else if (r.status === 'classAbsence') classAbsence++;
+    }
+    return { absent, late, earlyLeave, classAbsence, observation };
+  }, [displayRecords, studentFilter]);
+  const selectedStudentName = studentFilter ? (studentNameMap.get(studentFilter)?.name ?? '') : '';
+
   const hasActiveFilters =
     studentFilter !== '' ||
     categoryFilter !== 'all' ||
@@ -318,7 +364,7 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
   }, [filtered, periodFilter, showToast]);
 
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col gap-3 h-full min-h-0">
       {/* 필터 바 */}
       <div className="flex flex-wrap items-center gap-2">
         <select
@@ -452,69 +498,109 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
         activeKind={categoryFilter === 'all' ? undefined : categoryFilter}
       />
 
-      {/* 타임라인 */}
-      <div className="space-y-4">
-        {grouped.length === 0 ? (
-          <RecordEmptyState hasActiveFilters={hasActiveFilters} onReset={handleResetFilters} />
-        ) : (
-          grouped.map((group) => (
-            <div key={group.date}>
-              <DateGroupHeader date={group.date} count={group.records.length} />
-              <div className="space-y-1.5">
-                {group.records.map((r) => (
-                  <div
-                    key={`${r.type}-${r.date}-${r.studentKey}-${r.type === 'attendance' ? r.period : r.id}`}
-                    className="bg-sp-card border border-sp-border rounded-xl px-3 py-2.5"
+      {/* 본문: 좌측 학생 점프 리스트 + 우측 타임라인 */}
+      <div className="flex-1 flex gap-3 min-h-0">
+        <RecordStudentJumpList
+          items={jumpItems}
+          selectedKey={studentFilter}
+          onSelect={setStudentFilter}
+        />
+
+        <div className="flex-1 min-w-0 overflow-y-auto">
+          {/* 선택 학생 통계 헤더(건수만 — 비율 지표 미노출) */}
+          {selectedStudentStats && (
+            <div className="mb-3 flex items-center gap-2 flex-wrap bg-sp-card border border-sp-border rounded-xl px-3 py-2.5">
+              <span className="text-sm font-bold text-sp-text">{selectedStudentName}</span>
+              <span className="text-xs text-sp-muted">기록 {displayRecords.length}건</span>
+              <div className="flex items-center gap-1.5 ml-auto flex-wrap">
+                {(
+                  [
+                    ['결석', selectedStudentStats.absent],
+                    ['지각', selectedStudentStats.late],
+                    ['조퇴', selectedStudentStats.earlyLeave],
+                    ['결과', selectedStudentStats.classAbsence],
+                    ['특기', selectedStudentStats.observation],
+                  ] as const
+                ).map(([label, n]) => (
+                  <span
+                    key={label}
+                    className="px-2 py-0.5 rounded-full text-xs bg-sp-surface text-sp-muted"
                   >
-                    <div className="flex items-center gap-2 mb-1">
-                      <span
-                        className={`px-1.5 py-0.5 rounded text-xs font-bold ${
-                          r.type === 'attendance'
-                            ? 'bg-amber-500/15 text-amber-400'
-                            : 'bg-blue-500/15 text-blue-400'
-                        }`}
-                      >
-                        {r.type === 'attendance' ? '출결' : '특기'}
-                      </span>
-                      <span className="text-xs font-medium text-sp-text">
-                        {r.studentName} <span className="text-sp-muted">{r.studentNumber}번</span>
-                      </span>
-                      {r.type === 'attendance' && r.status && (
-                        <>
-                          <AttendanceStatusBadge status={r.status} />
-                          {r.period && (
-                            <span className="text-xs text-sp-muted">{r.period}교시</span>
-                          )}
-                          {r.reason && <span className="text-xs text-sp-muted">({r.reason})</span>}
-                        </>
-                      )}
-                      {r.type === 'observation' && r.tags && (
-                        <div className="flex gap-1">
-                          {r.tags.map((tag) => (
-                            <span
-                              key={tag}
-                              className="px-1.5 py-0.5 rounded-full text-xs font-medium bg-sp-accent/10 text-sp-accent"
-                            >
-                              {tag}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                    {r.type === 'attendance' && r.memo && (
-                      <p className="text-xs text-sp-muted pl-1">{r.memo}</p>
-                    )}
-                    {r.type === 'observation' && r.content && (
-                      <div className="pl-1">
-                        <ExpandableRecordContent content={r.content} />
-                      </div>
-                    )}
-                  </div>
+                    {label} <span className="font-bold text-sp-text">{n}</span>
+                  </span>
                 ))}
               </div>
             </div>
-          ))
-        )}
+          )}
+
+          {/* 타임라인 */}
+          <div className="space-y-4">
+            {grouped.length === 0 ? (
+              <RecordEmptyState hasActiveFilters={hasActiveFilters} onReset={handleResetFilters} />
+            ) : (
+              grouped.map((group) => (
+                <div key={group.date}>
+                  <DateGroupHeader date={group.date} count={group.records.length} />
+                  <div className="space-y-1.5">
+                    {group.records.map((r) => (
+                      <div
+                        key={`${r.type}-${r.date}-${r.studentKey}-${r.type === 'attendance' ? r.period : r.id}`}
+                        className="bg-sp-card border border-sp-border rounded-xl px-3 py-2.5"
+                      >
+                        <div className="flex items-center gap-2 mb-1">
+                          <span
+                            className={`px-1.5 py-0.5 rounded text-xs font-bold ${
+                              r.type === 'attendance'
+                                ? 'bg-amber-500/15 text-amber-400'
+                                : 'bg-blue-500/15 text-blue-400'
+                            }`}
+                          >
+                            {r.type === 'attendance' ? '출결' : '특기'}
+                          </span>
+                          <span className="text-xs font-medium text-sp-text">
+                            {r.studentName}{' '}
+                            <span className="text-sp-muted">{r.studentNumber}번</span>
+                          </span>
+                          {r.type === 'attendance' && r.status && (
+                            <>
+                              <AttendanceStatusBadge status={r.status} />
+                              {r.period && (
+                                <span className="text-xs text-sp-muted">{r.period}교시</span>
+                              )}
+                              {r.reason && (
+                                <span className="text-xs text-sp-muted">({r.reason})</span>
+                              )}
+                            </>
+                          )}
+                          {r.type === 'observation' && r.tags && (
+                            <div className="flex gap-1">
+                              {r.tags.map((tag) => (
+                                <span
+                                  key={tag}
+                                  className="px-1.5 py-0.5 rounded-full text-xs font-medium bg-sp-accent/10 text-sp-accent"
+                                >
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        {r.type === 'attendance' && r.memo && (
+                          <p className="text-xs text-sp-muted pl-1">{r.memo}</p>
+                        )}
+                        {r.type === 'observation' && r.content && (
+                          <div className="pl-1">
+                            <ExpandableRecordContent content={r.content} />
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
