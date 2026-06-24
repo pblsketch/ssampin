@@ -23,6 +23,7 @@ import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { NeisSchedulePanel } from './NeisSchedulePanel';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { PageHeader } from '@adapters/components/common/PageHeader';
+import { ScrollRow } from '@adapters/components/common/ScrollRow';
 
 type ScheduleView = 'month' | 'semester' | 'year';
 type SourceFilter = 'all' | 'ssampin' | 'google' | 'neis';
@@ -82,7 +83,14 @@ export function Schedule() {
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
 
   // 구글 캘린더 연결 상태
-  const { isConnected: googleConnected, syncState, syncNow: googleSyncNow, startAuth, isLoading: googleLoading, error: googleError } = useCalendarSyncStore();
+  const {
+    isConnected: googleConnected,
+    syncState,
+    syncNow: googleSyncNow,
+    startAuth,
+    isLoading: googleLoading,
+    error: googleError,
+  } = useCalendarSyncStore();
   // 학교급 (custom이면 NEIS 숨김)
   const schoolLevel = useSettingsStore((s) => s.settings.schoolLevel);
   // NEIS 학사일정 상태
@@ -314,108 +322,118 @@ export function Schedule() {
             ))}
           </div>
         }
-        rightActions={<>
-          {schoolLevel !== 'custom' && (
-            <button
-              type="button"
-              onClick={() => setShowNeisPanel(true)}
-              className={`flex items-center gap-1.5 border px-3 xl:px-4 py-2 xl:py-2.5 rounded-xl text-xs xl:text-sm font-semibold transition-all ${
-                neisEnabled
-                  ? 'border-purple-500/30 text-purple-400 hover:bg-purple-500/10'
-                  : 'border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-surface'
-              }`}
-              title="NEIS 학사일정 설정"
-            >
-              {neisSyncStatus === 'syncing' ? (
-                <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-purple-400/30 border-t-purple-400" />
-              ) : (
-                <span className="material-symbols-outlined text-icon">school</span>
-              )}
-              <span className="hidden sm:inline">NEIS</span>
-              {neisEnabled && neisSyncedCount > 0 && (
-                <span className="text-purple-300 text-caption bg-purple-500/15 px-1.5 py-0.5 rounded">
-                  {neisSyncedCount}
+        rightActions={
+          <>
+            {schoolLevel !== 'custom' && (
+              <button
+                type="button"
+                onClick={() => setShowNeisPanel(true)}
+                className={`flex items-center gap-1.5 border px-3 xl:px-4 py-2 xl:py-2.5 rounded-xl text-xs xl:text-sm font-semibold transition-all ${
+                  neisEnabled
+                    ? 'border-purple-500/30 text-purple-400 hover:bg-purple-500/10'
+                    : 'border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-surface'
+                }`}
+                title="NEIS 학사일정 설정"
+              >
+                {neisSyncStatus === 'syncing' ? (
+                  <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-purple-400/30 border-t-purple-400" />
+                ) : (
+                  <span className="material-symbols-outlined text-icon">school</span>
+                )}
+                <span className="hidden sm:inline">NEIS</span>
+                {neisEnabled && neisSyncedCount > 0 && (
+                  <span className="text-purple-300 text-caption bg-purple-500/15 px-1.5 py-0.5 rounded">
+                    {neisSyncedCount}
+                  </span>
+                )}
+              </button>
+            )}
+            {/* 구글 캘린더 버튼 */}
+            {googleConnected ? (
+              <button
+                type="button"
+                onClick={() => void googleSyncNow()}
+                disabled={syncState.status === 'syncing'}
+                className="flex items-center gap-1.5 border border-blue-500/30 text-blue-400 hover:bg-blue-500/10 px-3 xl:px-4 py-2 xl:py-2.5 rounded-xl text-xs xl:text-sm font-semibold transition-all disabled:opacity-50"
+                title="구글 캘린더 동기화"
+              >
+                <span
+                  className={`material-symbols-outlined text-icon-md ${syncState.status === 'syncing' ? 'animate-spin' : ''}`}
+                >
+                  sync
                 </span>
-              )}
-            </button>
-          )}
-          {/* 구글 캘린더 버튼 */}
-          {googleConnected ? (
+                <span className="hidden sm:inline">
+                  {syncState.status === 'syncing' ? '동기화 중...' : '구글 동기화'}
+                </span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => void startAuth()}
+                disabled={googleLoading}
+                className="flex items-center gap-1.5 border border-blue-500/30 text-blue-400 hover:bg-blue-500/10 px-3 xl:px-4 py-2 xl:py-2.5 rounded-xl text-xs xl:text-sm font-semibold transition-all disabled:opacity-50"
+                title="구글 캘린더 연결"
+              >
+                {googleLoading ? (
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-blue-400/30 border-t-blue-400" />
+                ) : (
+                  <span className="material-symbols-outlined text-icon-md">add_link</span>
+                )}
+                <span className="hidden sm:inline">
+                  {googleLoading ? '연결 중...' : '구글 캘린더 연결'}
+                </span>
+              </button>
+            )}
             <button
               type="button"
-              onClick={() => void googleSyncNow()}
-              disabled={syncState.status === 'syncing'}
-              className="flex items-center gap-1.5 border border-blue-500/30 text-blue-400 hover:bg-blue-500/10 px-3 xl:px-4 py-2 xl:py-2.5 rounded-xl text-xs xl:text-sm font-semibold transition-all disabled:opacity-50"
-              title="구글 캘린더 동기화"
+              onClick={() => void downloadTemplate()}
+              className="flex items-center gap-1.5 border border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-surface px-3 xl:px-4 py-2 xl:py-2.5 rounded-xl text-xs xl:text-sm font-semibold transition-all"
+              title="양식 다운로드"
             >
-              <span className={`material-symbols-outlined text-icon-md ${syncState.status === 'syncing' ? 'animate-spin' : ''}`}>
-                sync
-              </span>
-              <span className="hidden sm:inline">{syncState.status === 'syncing' ? '동기화 중...' : '구글 동기화'}</span>
+              <span className="material-symbols-outlined text-icon-md">description</span>
+              <span className="hidden lg:inline">양식 다운로드</span>
             </button>
-          ) : (
             <button
               type="button"
-              onClick={() => void startAuth()}
-              disabled={googleLoading}
-              className="flex items-center gap-1.5 border border-blue-500/30 text-blue-400 hover:bg-blue-500/10 px-3 xl:px-4 py-2 xl:py-2.5 rounded-xl text-xs xl:text-sm font-semibold transition-all disabled:opacity-50"
-              title="구글 캘린더 연결"
+              onClick={handleImportClick}
+              className="flex items-center gap-1.5 border border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-surface px-3 xl:px-4 py-2 xl:py-2.5 rounded-xl text-xs xl:text-sm font-semibold transition-all"
+              title="가져오기"
             >
-              {googleLoading ? (
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-blue-400/30 border-t-blue-400" />
-              ) : (
-                <span className="material-symbols-outlined text-icon-md">add_link</span>
-              )}
-              <span className="hidden sm:inline">{googleLoading ? '연결 중...' : '구글 캘린더 연결'}</span>
+              <span className="material-symbols-outlined text-icon-md">download</span>
+              <span className="hidden lg:inline">가져오기</span>
             </button>
-          )}
-          <button
-            type="button"
-            onClick={() => void downloadTemplate()}
-            className="flex items-center gap-1.5 border border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-surface px-3 xl:px-4 py-2 xl:py-2.5 rounded-xl text-xs xl:text-sm font-semibold transition-all"
-            title="양식 다운로드"
-          >
-            <span className="material-symbols-outlined text-icon-md">description</span>
-            <span className="hidden lg:inline">양식 다운로드</span>
-          </button>
-          <button
-            type="button"
-            onClick={handleImportClick}
-            className="flex items-center gap-1.5 border border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-surface px-3 xl:px-4 py-2 xl:py-2.5 rounded-xl text-xs xl:text-sm font-semibold transition-all"
-            title="가져오기"
-          >
-            <span className="material-symbols-outlined text-icon-md">download</span>
-            <span className="hidden lg:inline">가져오기</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowExportModal(true)}
-            className="flex items-center gap-1.5 border border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-surface px-3 xl:px-4 py-2 xl:py-2.5 rounded-xl text-xs xl:text-sm font-semibold transition-all"
-            title="내보내기"
-          >
-            <span className="material-symbols-outlined text-icon-md">upload</span>
-            <span className="hidden lg:inline">내보내기</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setEditingEvent(null);
-              setShowEventModal(true);
-            }}
-            className="flex items-center gap-1.5 bg-sp-accent hover:bg-blue-600 text-white px-4 xl:px-5 py-2 xl:py-2.5 rounded-xl transition-all shadow-lg shadow-sp-accent/20"
-            title="일정 추가"
-          >
-            <span className="material-symbols-outlined text-icon-lg">add</span>
-            <span className="text-xs xl:text-sm font-bold">일정 추가</span>
-          </button>
-        </>}
+            <button
+              type="button"
+              onClick={() => setShowExportModal(true)}
+              className="flex items-center gap-1.5 border border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-surface px-3 xl:px-4 py-2 xl:py-2.5 rounded-xl text-xs xl:text-sm font-semibold transition-all"
+              title="내보내기"
+            >
+              <span className="material-symbols-outlined text-icon-md">upload</span>
+              <span className="hidden lg:inline">내보내기</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setEditingEvent(null);
+                setShowEventModal(true);
+              }}
+              className="flex items-center gap-1.5 bg-sp-accent hover:bg-blue-600 text-white px-4 xl:px-5 py-2 xl:py-2.5 rounded-xl transition-all shadow-lg shadow-sp-accent/20"
+              title="일정 추가"
+            >
+              <span className="material-symbols-outlined text-icon-lg">add</span>
+              <span className="text-xs xl:text-sm font-bold">일정 추가</span>
+            </button>
+          </>
+        }
       />
 
       {/* 구글 캘린더 오류 인라인 안내 */}
       {googleConnected && googleError && dismissedGoogleError !== googleError && (
         <div className="shrink-0 flex items-center gap-2 px-8 py-2 text-xs text-amber-400/70 bg-amber-400/5 border-b border-amber-400/10">
           <span className="material-symbols-outlined text-sm">warning</span>
-          <span className="flex-1">구글 캘린더 동기화 오류 — 사용하지 않으시면 무시하셔도 괜찮아요</span>
+          <span className="flex-1">
+            구글 캘린더 동기화 오류 — 사용하지 않으시면 무시하셔도 괜찮아요
+          </span>
           <button
             type="button"
             onClick={() => setDismissedGoogleError(googleError)}
@@ -427,22 +445,22 @@ export function Schedule() {
       )}
 
       {/* 콘텐츠 */}
-      <div className="flex-1 overflow-y-auto p-8">
-        <div className="max-w-7xl mx-auto flex flex-col gap-6 h-full">
-
+      <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+        <div className="max-w-7xl mx-auto flex flex-col gap-4 sm:gap-5 lg:gap-6 lg:h-full">
           {/* 월간 뷰 */}
           {view === 'month' && (
             <>
               {/* 카테고리 탭 */}
-              <div className="flex items-center justify-between overflow-x-auto py-1.5">
-                <div className="flex gap-3">
+              <div className="flex items-center gap-2 py-1.5 min-w-0">
+                <ScrollRow className="gap-3 flex-1 min-w-0">
                   <button
                     type="button"
                     onClick={() => setSelectedCategory(null)}
-                    className={`px-5 py-2 rounded-full text-sm font-bold shadow-sm ring-1 transition-colors ${selectedCategory === null
-                      ? 'bg-sp-accent text-white ring-sp-accent/30'
-                      : 'bg-sp-card hover:bg-sp-surface text-sp-muted ring-sp-border/50'
-                      }`}
+                    className={`px-3 py-1.5 sm:px-5 sm:py-2 rounded-full text-sm font-bold shadow-sm ring-1 transition-colors ${
+                      selectedCategory === null
+                        ? 'bg-sp-accent text-white ring-sp-accent/30'
+                        : 'bg-sp-card hover:bg-sp-surface text-sp-muted ring-sp-border/50'
+                    }`}
                   >
                     전체
                   </button>
@@ -455,84 +473,92 @@ export function Schedule() {
                       <button
                         key={cat.id}
                         type="button"
-                        onClick={() =>
-                          setSelectedCategory(isActive ? null : cat.id)
-                        }
-                        className={`px-5 py-2 rounded-full text-sm font-medium transition-colors ring-1 flex items-center gap-2 ${isActive
-                          ? 'bg-sp-accent text-white ring-sp-accent/30 font-bold'
-                          : 'bg-sp-card hover:bg-sp-surface text-sp-muted ring-sp-border/50'
-                          }`}
+                        onClick={() => setSelectedCategory(isActive ? null : cat.id)}
+                        className={`px-3 py-1.5 sm:px-5 sm:py-2 rounded-full text-sm font-medium transition-colors ring-1 flex items-center gap-2 ${
+                          isActive
+                            ? 'bg-sp-accent text-white ring-sp-accent/30 font-bold'
+                            : 'bg-sp-card hover:bg-sp-surface text-sp-muted ring-sp-border/50'
+                        }`}
                       >
                         <span className={`w-2 h-2 rounded-full ${colors.dot}`} />
                         {cat.name}
                       </button>
                     );
                   })}
+                </ScrollRow>
+
+                {/* 우측 고정: 소스 필터 + 카테고리 관리 (좁은 창에서도 항상 접근 가능) */}
+                <div className="flex items-center gap-1 shrink-0">
+                  {/* 소스 필터 (구글 또는 NEIS 연결 시) */}
+                  {(googleConnected || neisEnabled) && (
+                    <div className="flex items-center gap-1 border-l border-sp-border pl-3">
+                      <button
+                        type="button"
+                        onClick={() => setSourceFilter('all')}
+                        className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                          sourceFilter === 'all'
+                            ? 'bg-sp-accent text-white'
+                            : 'text-sp-muted hover:text-sp-text hover:bg-sp-surface'
+                        }`}
+                      >
+                        전체
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSourceFilter('ssampin')}
+                        className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                          sourceFilter === 'ssampin'
+                            ? 'bg-sp-accent text-white'
+                            : 'text-sp-muted hover:text-sp-text hover:bg-sp-surface'
+                        }`}
+                      >
+                        쌤핀
+                      </button>
+                      {googleConnected && (
+                        <button
+                          type="button"
+                          onClick={() => setSourceFilter('google')}
+                          className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                            sourceFilter === 'google'
+                              ? 'bg-sp-accent text-white'
+                              : 'text-sp-muted hover:text-sp-text hover:bg-sp-surface'
+                          }`}
+                        >
+                          <span className="flex items-center gap-1">
+                            <GoogleBadge /> 구글
+                          </span>
+                        </button>
+                      )}
+                      {neisEnabled && (
+                        <button
+                          type="button"
+                          onClick={() => setSourceFilter('neis')}
+                          className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                            sourceFilter === 'neis'
+                              ? 'bg-purple-500 text-white'
+                              : 'text-sp-muted hover:text-sp-text hover:bg-sp-surface'
+                          }`}
+                        >
+                          <span className="flex items-center gap-1">
+                            <span className="text-tiny text-purple-300 bg-purple-500/15 px-1 py-0.5 rounded font-medium">
+                              N
+                            </span>
+                            NEIS{neisSyncStatus === 'syncing' && ' ⟳'}
+                          </span>
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => setShowCategoryModal(true)}
+                    className="text-sp-muted text-sm font-medium hover:text-sp-accent transition-colors flex items-center gap-1 shrink-0 ml-1"
+                  >
+                    <span className="material-symbols-outlined text-icon-md">settings</span>
+                    <span className="hidden md:inline">카테고리 관리</span>
+                  </button>
                 </div>
-
-                {/* 소스 필터 (구글 또는 NEIS 연결 시) */}
-                {(googleConnected || neisEnabled) && (
-                  <div className="flex items-center gap-1 ml-4 border-l border-sp-border pl-4">
-                    <button
-                      type="button"
-                      onClick={() => setSourceFilter('all')}
-                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${sourceFilter === 'all'
-                        ? 'bg-sp-accent text-white'
-                        : 'text-sp-muted hover:text-sp-text hover:bg-sp-surface'
-                        }`}
-                    >
-                      전체
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSourceFilter('ssampin')}
-                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${sourceFilter === 'ssampin'
-                        ? 'bg-sp-accent text-white'
-                        : 'text-sp-muted hover:text-sp-text hover:bg-sp-surface'
-                        }`}
-                    >
-                      쌤핀
-                    </button>
-                    {googleConnected && (
-                      <button
-                        type="button"
-                        onClick={() => setSourceFilter('google')}
-                        className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${sourceFilter === 'google'
-                          ? 'bg-sp-accent text-white'
-                          : 'text-sp-muted hover:text-sp-text hover:bg-sp-surface'
-                          }`}
-                      >
-                        <span className="flex items-center gap-1">
-                          <GoogleBadge /> 구글
-                        </span>
-                      </button>
-                    )}
-                    {neisEnabled && (
-                      <button
-                        type="button"
-                        onClick={() => setSourceFilter('neis')}
-                        className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${sourceFilter === 'neis'
-                          ? 'bg-purple-500 text-white'
-                          : 'text-sp-muted hover:text-sp-text hover:bg-sp-surface'
-                          }`}
-                      >
-                        <span className="flex items-center gap-1">
-                          <span className="text-tiny text-purple-300 bg-purple-500/15 px-1 py-0.5 rounded font-medium">N</span>
-                          NEIS{neisSyncStatus === 'syncing' && ' ⟳'}
-                        </span>
-                      </button>
-                    )}
-                  </div>
-                )}
-
-                <button
-                  type="button"
-                  onClick={() => setShowCategoryModal(true)}
-                  className="text-sp-muted text-sm font-medium hover:text-sp-accent transition-colors flex items-center gap-1 shrink-0"
-                >
-                  <span className="material-symbols-outlined text-icon-md">settings</span>
-                  카테고리 관리
-                </button>
               </div>
 
               {/* 일괄 관리 도구바 */}
@@ -554,9 +580,7 @@ export function Schedule() {
 
                 {isSelectMode && selectedIds.size > 0 && (
                   <>
-                    <span className="text-xs text-sp-muted">
-                      {selectedIds.size}개 선택됨
-                    </span>
+                    <span className="text-xs text-sp-muted">{selectedIds.size}개 선택됨</span>
                     <button
                       type="button"
                       onClick={handleBulkDelete}
@@ -580,14 +604,20 @@ export function Schedule() {
                     <div className="absolute right-0 top-full mt-1 w-48 bg-sp-card border border-sp-border rounded-lg shadow-xl z-20 py-1">
                       <button
                         type="button"
-                        onClick={() => { setShowBulkMenu(false); setShowCategoryDeleteModal(true); }}
+                        onClick={() => {
+                          setShowBulkMenu(false);
+                          setShowCategoryDeleteModal(true);
+                        }}
                         className="w-full text-left px-4 py-2 text-xs text-sp-text hover:bg-sp-bg"
                       >
                         카테고리별 삭제
                       </button>
                       <button
                         type="button"
-                        onClick={() => { setShowBulkMenu(false); setShowDateRangeDeleteModal(true); }}
+                        onClick={() => {
+                          setShowBulkMenu(false);
+                          setShowDateRangeDeleteModal(true);
+                        }}
                         className="w-full text-left px-4 py-2 text-xs text-sp-text hover:bg-sp-bg"
                       >
                         기간별 삭제
@@ -598,8 +628,8 @@ export function Schedule() {
               </div>
 
               {/* 분할 레이아웃: 캘린더(60%) + 이벤트리스트(40%) */}
-              <div className="flex flex-col lg:flex-row gap-6 flex-1 min-h-0">
-                <div className="lg:w-[60%] min-h-0 flex flex-col">
+              <div className="flex flex-col lg:flex-row gap-4 lg:gap-6 lg:flex-1 lg:min-h-0">
+                <div className="lg:w-[60%] min-h-[480px] lg:min-h-0 flex flex-col">
                   <CalendarView
                     year={year}
                     month={month}
@@ -612,7 +642,7 @@ export function Schedule() {
                   />
                 </div>
 
-                <div className="lg:w-[40%] min-h-0 overflow-hidden">
+                <div className="lg:w-[40%] min-h-[320px] lg:min-h-0 lg:overflow-hidden">
                   <EventList
                     events={filteredEvents}
                     categories={categories}
@@ -639,9 +669,7 @@ export function Schedule() {
               events={events}
               categories={categories}
               onNavigateToMonth={handleNavigateToMonth}
-              onToggleSemester={() =>
-                setSemester((s) => (s === 'first' ? 'second' : 'first'))
-              }
+              onToggleSemester={() => setSemester((s) => (s === 'first' ? 'second' : 'first'))}
             />
           )}
 
@@ -660,11 +688,7 @@ export function Schedule() {
       </div>
 
       {/* 모달들 */}
-      {showCategoryModal && (
-        <CategoryManagementModal
-          onClose={() => setShowCategoryModal(false)}
-        />
-      )}
+      {showCategoryModal && <CategoryManagementModal onClose={() => setShowCategoryModal(false)} />}
 
       {showExportModal && (
         <ExportModal
@@ -717,10 +741,7 @@ export function Schedule() {
       )}
 
       {/* NEIS 학사일정 패널 */}
-      <NeisSchedulePanel
-        open={showNeisPanel}
-        onClose={() => setShowNeisPanel(false)}
-      />
+      <NeisSchedulePanel open={showNeisPanel} onClose={() => setShowNeisPanel(false)} />
 
       {/* 카테고리별 삭제 모달 */}
       {showCategoryDeleteModal && (

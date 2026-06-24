@@ -1,8 +1,6 @@
 import { useMemo } from 'react';
 import type { SchoolEvent, CategoryItem } from '@domain/entities/SchoolEvent';
-import {
-  getMultiDayBarsForWeek,
-} from '@domain/rules/eventRules';
+import { getMultiDayBarsForWeek } from '@domain/rules/eventRules';
 import type { CalendarBar, WeekBarsResult } from '@domain/rules/eventRules';
 import { getColorsForCategory } from '@adapters/presenters/categoryPresenter';
 import { getHolidayMapForMonth } from '@domain/rules/holidayRules';
@@ -116,14 +114,15 @@ function getCalendarDays(year: number, month: number): CalendarDay[] {
 }
 
 function isSameDate(a: Date, b: Date): boolean {
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
 }
 
 /** 주 단위로 바 계산 */
-function computeWeekBars(
-  weekDays: CalendarDay[],
-  events: readonly SchoolEvent[],
-): WeekBarsResult {
+function computeWeekBars(weekDays: CalendarDay[], events: readonly SchoolEvent[]): WeekBarsResult {
   if (weekDays.length < 7) return { bars: [], overflowCounts: Array(7).fill(0) as number[] };
   const weekStart = weekDays[0]!.date;
   const weekEnd = weekDays[6]!.date;
@@ -174,7 +173,10 @@ function SingleEventChip({
     <button
       type="button"
       className={`w-full text-left text-caption leading-none px-1 py-0.5 rounded-md text-white truncate cursor-pointer transition-all duration-sp-quick ease-sp-out hover:brightness-110 ${barClass}`}
-      onClick={(e) => { e.stopPropagation(); onClick(); }}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
       title={title}
     >
       {title}
@@ -205,10 +207,7 @@ export function CalendarView({
   onPrevMonth,
   onNextMonth,
 }: CalendarViewProps) {
-  const days = useMemo(
-    () => getCalendarDays(year, month),
-    [year, month],
-  );
+  const days = useMemo(() => getCalendarDays(year, month), [year, month]);
 
   // 주 단위로 분할
   const weeks = useMemo(() => {
@@ -238,9 +237,9 @@ export function CalendarView({
   const monthLabel = `${year}년 ${month + 1}월`;
 
   return (
-    <div className="flex flex-col bg-sp-card rounded-3xl p-6 border border-sp-border shadow-sp-md h-full min-h-0 flex-1 overflow-hidden">
+    <div className="flex flex-col bg-sp-card rounded-3xl p-4 sm:p-5 lg:p-6 border border-sp-border shadow-sp-md lg:h-full lg:min-h-0 lg:flex-1 overflow-hidden">
       {/* 월 네비게이션 */}
-      <div className="flex items-center justify-between mb-4 px-2">
+      <div className="flex items-center justify-between mb-3 lg:mb-4 px-1 sm:px-2">
         <button
           type="button"
           onClick={onPrevMonth}
@@ -248,7 +247,7 @@ export function CalendarView({
         >
           <span className="material-symbols-outlined">chevron_left</span>
         </button>
-        <h3 className="text-xl font-sp-bold text-sp-text">{monthLabel}</h3>
+        <h3 className="text-lg sm:text-xl font-sp-bold text-sp-text">{monthLabel}</h3>
         <button
           type="button"
           onClick={onNextMonth}
@@ -259,7 +258,7 @@ export function CalendarView({
       </div>
 
       {/* 요일 헤더 */}
-      <div className="grid grid-cols-7 mb-2">
+      <div className="grid grid-cols-7 mb-1 sm:mb-2">
         {DAY_HEADERS.map((day, i) => (
           <div
             key={day}
@@ -274,11 +273,14 @@ export function CalendarView({
 
       {/* 주 단위 렌더링 */}
       <div
-        className="flex-1 min-h-0 grid gap-y-1 overflow-y-auto"
-        style={{ gridTemplateRows: `repeat(${weeks.length}, minmax(auto, 1fr))` }}
+        className="lg:flex-1 lg:min-h-0 grid gap-y-1 lg:overflow-y-auto"
+        style={{ gridTemplateRows: `repeat(${weeks.length}, minmax(64px, 1fr))` }}
       >
         {weeks.map((weekDays, weekIdx) => {
-          const { bars, overflowCounts } = weekBars[weekIdx] ?? { bars: [], overflowCounts: Array(7).fill(0) as number[] };
+          const { bars, overflowCounts } = weekBars[weekIdx] ?? {
+            bars: [],
+            overflowCounts: Array(7).fill(0) as number[],
+          };
           const maxRow = bars.length > 0 ? Math.max(...bars.map((b) => b.row)) + 1 : 0;
 
           // 이번 주에서 다일 바가 차지하는 날 목록 (칩 표시 억제)
@@ -291,31 +293,31 @@ export function CalendarView({
           }
 
           return (
-            <div key={weekIdx} className="flex flex-col min-h-0 overflow-visible">
+            <div key={weekIdx} className="flex flex-col overflow-visible">
               {/* 날짜 셀 */}
-              <div
-                className="grid grid-cols-7 gap-x-1 flex-shrink-0"
-                style={{ minHeight: '2rem' }}
-              >
+              <div className="grid grid-cols-7 gap-x-1 flex-shrink-0" style={{ minHeight: '2rem' }}>
                 {weekDays.map((d, dayIdx) => {
                   const isSelected = selectedDate !== null && isSameDate(d.date, selectedDate);
 
                   // 단일 이벤트 칩 (이번 달, 다일 바 없는 날만)
-                  const singleEvts = (d.isCurrentMonth && !multiDayDateKeys.has(d.dateKey))
-                    ? (singleEventMap.get(d.dateKey) ?? [])
-                    : [];
+                  const singleEvts =
+                    d.isCurrentMonth && !multiDayDateKeys.has(d.dateKey)
+                      ? (singleEventMap.get(d.dateKey) ?? [])
+                      : [];
                   const chipsToShow = singleEvts.slice(0, 2);
                   const chipOverflow = singleEvts.length - chipsToShow.length;
 
                   // ── cell 상태 클래스 ──
-                  let cellClass = 'group relative flex flex-col py-1 px-0.5 rounded-xl cursor-pointer transition-all duration-sp-base ease-sp-out h-full overflow-hidden ';
+                  let cellClass =
+                    'group relative flex flex-col py-1 px-0.5 rounded-xl cursor-pointer transition-all duration-sp-base ease-sp-out h-full overflow-hidden ';
 
                   // today는 숫자의 원형 파란 배지 + cell 하단 accent bar로 강조
                   // (ring-offset은 overflow-hidden 부모에 잘리므로 사용 안 함)
                   if (isSelected) {
                     cellClass += 'bg-sp-accent/15 border border-sp-accent/40 ';
                   } else {
-                    cellClass += 'border border-transparent hover:bg-sp-text/5 hover:border-sp-border/40 ';
+                    cellClass +=
+                      'border border-transparent hover:bg-sp-text/5 hover:border-sp-border/40 ';
                   }
 
                   // ── 날짜 숫자 색상 ──
