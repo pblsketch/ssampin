@@ -30,6 +30,8 @@ interface SignatureStatusRow {
   signedAt?: string;
   /** 서명 이미지 공개 URL (서명 완료자만). 시트/Excel 서명 셀 주입 대상. */
   signaturePublicUrl?: string;
+  /** 서명 이미지만 삭제된 시각. 행 자체는 서명 완료로 유지된다. */
+  signatureImageDeletedAt?: string;
 }
 
 serve(async (req: Request) => {
@@ -77,7 +79,9 @@ serve(async (req: Request) => {
     // ── 세션 조회 (adminKey 포함) ──
     const { data: session, error: sessionError } = await supabase
       .from('sigv2_sessions')
-      .select('id, admin_key, roster_snapshot, status')
+      .select(
+        'id, admin_key, roster_snapshot, status, closed_at, signature_retention_days, signature_cleanup_after, signature_images_deleted_at',
+      )
       .eq('id', sessionId)
       .single();
 
@@ -93,7 +97,7 @@ serve(async (req: Request) => {
     // ── sigv2_entries 조회 (signature_public_url 포함 — 교사 시트/Excel 서명 셀 주입용) ──
     const { data: entries, error: entriesError } = await supabase
       .from('sigv2_entries')
-      .select('member_ref, signed_at, signature_public_url')
+      .select('member_ref, signed_at, signature_public_url, signature_image_deleted_at')
       .eq('session_id', sessionId);
 
     if (entriesError) {
@@ -105,11 +109,15 @@ serve(async (req: Request) => {
     }
 
     // ── 제출 맵 구성 (서명 시각 + 공개 URL) ──
-    const signedMap = new Map<string, { signedAt: string; signaturePublicUrl: string }>();
+    const signedMap = new Map<
+      string,
+      { signedAt: string; signaturePublicUrl: string; signatureImageDeletedAt?: string }
+    >();
     for (const entry of entries ?? []) {
       signedMap.set(entry.member_ref, {
         signedAt: entry.signed_at,
         signaturePublicUrl: entry.signature_public_url ?? '',
+        signatureImageDeletedAt: entry.signature_image_deleted_at ?? undefined,
       });
     }
 
@@ -130,6 +138,7 @@ serve(async (req: Request) => {
         signedAt: submission?.signedAt ?? undefined,
         // 서명 완료자만 공개 URL 노출 (빈 문자열이면 undefined로 정규화).
         signaturePublicUrl: submission?.signaturePublicUrl || undefined,
+        signatureImageDeletedAt: submission?.signatureImageDeletedAt,
       };
     });
 
@@ -138,6 +147,10 @@ serve(async (req: Request) => {
     return jsonResponse({
       sessionId,
       status: session.status,
+      closedAt: session.closed_at ?? undefined,
+      signatureRetentionDays: session.signature_retention_days ?? undefined,
+      signatureCleanupAfter: session.signature_cleanup_after ?? undefined,
+      signatureImagesDeletedAt: session.signature_images_deleted_at ?? undefined,
       totalCount: rawMembers.length,
       signedCount,
       members: statusRows,

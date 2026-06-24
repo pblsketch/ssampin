@@ -47,4 +47,6 @@ export interface SignatureStatusRow {
    * 미서명자는 undefined.
    */
   readonly signaturePublicUrl?: string;
+  /** 서명 이미지만 삭제된 시각. 서명 완료 기록은 유지된다. */
+  readonly signatureImageDeletedAt?: string;
 }

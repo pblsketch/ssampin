@@ -22,7 +22,10 @@ import type {
   ISignaturePort,
   CreateSignatureSessionInput,
   CreateSignatureSessionResult,
+  CloseSignatureSessionResult,
+  DeleteSignatureImagesResult,
   PublishSignatureSessionResult,
+  SignatureStatusResult,
   SubmitSignatureInput,
   SubmitSignatureResult,
 } from '@domain/ports/ISignaturePort';
@@ -97,15 +100,37 @@ interface SigStatusRow {
   signedAt?: string;
   /** 서명 완료자만 — 시트/Excel 서명 셀(=IMAGE / addImage) 주입 대상 */
   signaturePublicUrl?: string;
+  /** 서명 이미지만 삭제된 시각. 서명 완료 기록은 유지된다. */
+  signatureImageDeletedAt?: string;
 }
 
 /** sig-status 전체 응답 (members 배열 래핑 + 집계 메타) */
 interface SigStatusResponse {
   sessionId: string;
-  status: string;
+  status: 'draft' | 'active' | 'closed';
   totalCount: number;
   signedCount: number;
   members: SigStatusRow[];
+  closedAt?: string;
+  signatureRetentionDays?: number;
+  signatureCleanupAfter?: string;
+  signatureImagesDeletedAt?: string;
+}
+
+interface SigCloseSessionResponse {
+  ok: boolean;
+  status: 'draft' | 'active' | 'closed';
+  closedAt?: string;
+  signatureRetentionDays: number;
+  signatureCleanupAfter?: string;
+  signatureImagesDeletedAt?: string;
+}
+
+interface SigDeleteSignaturesResponse {
+  ok: boolean;
+  status: 'draft' | 'active' | 'closed';
+  removedStorageObjects: number;
+  signatureImagesDeletedAt: string;
 }
 
 /**
@@ -266,11 +291,69 @@ export class SignatureSupabaseClient implements ISignaturePort {
    * 교사 현황 보드 조회 — sig-status 호출 (관리 키 검증).
    */
   async getStatus(sessionId: string, adminKey: string): Promise<readonly SignatureStatusRow[]> {
+    const res = await this.getStatusDetails(sessionId, adminKey);
+    return res.members;
+  }
+
+  /**
+   * 교사용 상세 현황 조회 — 세션 상태·보관 일정 포함.
+   */
+  async getStatusDetails(sessionId: string, adminKey: string): Promise<SignatureStatusResult> {
     const res = await this.invoke<SigStatusResponse>('sig-status', {
       sessionId,
       adminKey,
     });
-    return (res.members ?? []).map(mapStatusRow);
+    return {
+      sessionId: res.sessionId,
+      status: res.status,
+      totalCount: res.totalCount,
+      signedCount: res.signedCount,
+      members: (res.members ?? []).map(mapStatusRow),
+      closedAt: res.closedAt,
+      signatureRetentionDays: res.signatureRetentionDays,
+      signatureCleanupAfter: res.signatureCleanupAfter,
+      signatureImagesDeletedAt: res.signatureImagesDeletedAt,
+    };
+  }
+
+  /**
+   * 세션 마감 — 학생 추가 제출 차단 + 이미지 보관기간 시작.
+   */
+  async closeSession(
+    sessionId: string,
+    adminKey: string,
+    retentionDays: number,
+  ): Promise<CloseSignatureSessionResult> {
+    const res = await this.invoke<SigCloseSessionResponse>('sig-close-session', {
+      sessionId,
+      adminKey,
+      retentionDays,
+    });
+    return {
+      status: res.status,
+      closedAt: res.closedAt,
+      signatureRetentionDays: res.signatureRetentionDays,
+      signatureCleanupAfter: res.signatureCleanupAfter,
+      signatureImagesDeletedAt: res.signatureImagesDeletedAt,
+    };
+  }
+
+  /**
+   * 마감된 세션의 서명 이미지만 삭제 — 현황 행은 유지.
+   */
+  async deleteSignatureImages(
+    sessionId: string,
+    adminKey: string,
+  ): Promise<DeleteSignatureImagesResult> {
+    const res = await this.invoke<SigDeleteSignaturesResponse>('sig-delete-signatures', {
+      sessionId,
+      adminKey,
+    });
+    return {
+      status: res.status,
+      removedStorageObjects: res.removedStorageObjects,
+      signatureImagesDeletedAt: res.signatureImagesDeletedAt,
+    };
   }
 
   /**
@@ -291,15 +374,15 @@ export class SignatureSupabaseClient implements ISignaturePort {
   startStatusPolling(
     sessionId: string,
     adminKey: string,
-    onUpdate: (rows: readonly SignatureStatusRow[]) => void,
+    onUpdate: (rows: readonly SignatureStatusRow[], details?: SignatureStatusResult) => void,
     intervalMs = 10_000,
   ): () => void {
     let timerId: ReturnType<typeof setInterval> | null = null;
 
     const poll = async () => {
       try {
-        const rows = await this.getStatus(sessionId, adminKey);
-        onUpdate(rows);
+        const details = await this.getStatusDetails(sessionId, adminKey);
+        onUpdate(details.members, details);
       } catch {
         // 폴링 에러는 무시 (다음 폴링에서 재시도)
       }
@@ -350,6 +433,7 @@ function mapStatusRow(row: SigStatusRow): SignatureStatusRow {
     signed: row.signed,
     signedAt: row.signedAt,
     signaturePublicUrl: row.signaturePublicUrl || undefined,
+    signatureImageDeletedAt: row.signatureImageDeletedAt,
   };
 }
 

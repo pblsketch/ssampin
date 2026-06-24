@@ -34,6 +34,11 @@ const MAX_SIGNER_NAME_LEN = 100;
 const MAX_MEMBER_REF_LEN = 200;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+interface SupabaseDbErrorLike {
+  readonly code?: string;
+  readonly message?: string;
+}
+
 // ─── PNG 검증 헬퍼 ──────────────────────────────────────────────────────────
 
 /** base64 → Uint8Array 변환. 실패 시 null 반환. */
@@ -55,6 +60,13 @@ function isPngMagic(bytes: Uint8Array): boolean {
   if (bytes.length < 8) return false;
   const magic = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
   return magic.every((v, i) => bytes[i] === v);
+}
+
+function isClosedSessionImageWriteError(error: SupabaseDbErrorLike | null): boolean {
+  return (
+    error?.code === '23514' &&
+    (error.message ?? '').includes('sigv2 entries with signature images require active session')
+  );
 }
 
 // ─── 핸들러 ─────────────────────────────────────────────────────────────────
@@ -280,6 +292,9 @@ serve(async (req: Request) => {
         if (updateError || !updated) {
           // 덮어쓰기 실패: 방금 업로드한 새 객체를 정리하고 오류 반환.
           await supabase.storage.from('sigv2-signatures').remove([objectKey]);
+          if (isClosedSessionImageWriteError(updateError)) {
+            return errorResponse('이미 마감된 세션입니다', 403);
+          }
           return internalErrorResponse(
             'sig-submit',
             updateError,
@@ -301,6 +316,9 @@ serve(async (req: Request) => {
       }
       // 그 외 오류: 업로드된 이미지 정리 (best-effort)
       await supabase.storage.from('sigv2-signatures').remove([objectKey]);
+      if (isClosedSessionImageWriteError(entryError)) {
+        return errorResponse('이미 마감된 세션입니다', 403);
+      }
       return internalErrorResponse('sig-submit', entryError, '서명 저장 중 오류가 발생했습니다');
     }
 

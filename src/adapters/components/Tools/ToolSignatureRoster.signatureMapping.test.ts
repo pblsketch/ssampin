@@ -60,6 +60,23 @@ const STATUS_ROWS: SignatureStatusRow[] = [
   },
 ];
 
+const DELETED_SIGNATURE_STATUS_ROWS: SignatureStatusRow[] = [
+  {
+    memberRef: 'm-1',
+    name: '홍길동',
+    affiliation: '3-2',
+    signed: true,
+    signedAt: '2026-06-05T01:00:00.000Z',
+    signatureImageDeletedAt: '2026-07-05T01:00:00.000Z',
+  },
+  {
+    memberRef: 'm-2',
+    name: '김철수',
+    affiliation: '3-2',
+    signed: false,
+  },
+];
+
 describe('buildSheetRows — 동적 열 매핑', () => {
   it('서명 완료자의 signature 셀에 status.signaturePublicUrl을 주입한다', () => {
     const [signedRow] = buildSheetRows(MEMBERS, COLUMNS, STATUS_ROWS);
@@ -70,6 +87,12 @@ describe('buildSheetRows — 동적 열 매핑', () => {
   it('미서명자의 signature 셀은 빈칸이다(=IMAGE 미생성)', () => {
     const [, unsignedRow] = buildSheetRows(MEMBERS, COLUMNS, STATUS_ROWS);
     expect(unsignedRow?.signature).toBe('');
+  });
+
+  it('서명 완료 기록은 유지하되 이미지가 삭제된 행은 signature 셀을 비운다', () => {
+    const [deletedImageRow] = buildSheetRows(MEMBERS, COLUMNS, DELETED_SIGNATURE_STATUS_ROWS);
+    expect(deletedImageRow?.signature).toBe('');
+    expect(deletedImageRow?.signedAt).toBe('2026-06-05 10:00');
   });
 
   it('builtin 열(연번·이름·소속·서명일시)을 명단/현황에서 채운다', () => {
@@ -101,6 +124,12 @@ describe('buildExcelRows — 서명 PNG 임베드 매핑', () => {
     const [, unsignedRow] = buildExcelRows(MEMBERS, COLUMNS, STATUS_ROWS);
     expect(unsignedRow?.signatureUrl).toBeUndefined();
     expect(unsignedRow?.cells.signature).toBe('');
+  });
+
+  it('이미 삭제된 서명 이미지는 Excel 임베드 URL로 넘기지 않는다', () => {
+    const [deletedImageRow] = buildExcelRows(MEMBERS, COLUMNS, DELETED_SIGNATURE_STATUS_ROWS);
+    expect(deletedImageRow?.signatureUrl).toBeUndefined();
+    expect(deletedImageRow?.cells.signedAt).toBe('2026-06-05 10:00');
   });
 
   it('builtin·커스텀 셀 텍스트를 시트 행과 동일 규약으로 채운다', () => {

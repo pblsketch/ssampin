@@ -8,6 +8,7 @@
  * 의존성 역전을 위해 좁은 포트(ISignatureStatusPoller)로 주입받는다.
  */
 import type { SignatureStatusRow } from '@domain/entities/SignatureEntry';
+import type { SignatureStatusResult } from '@domain/ports/ISignaturePort';
 
 /**
  * 현황 폴링 포트 (ISignaturePort와 분리된 좁은 능력).
@@ -17,7 +18,7 @@ export interface ISignatureStatusPoller {
   startStatusPolling(
     sessionId: string,
     adminKey: string,
-    onUpdate: (rows: readonly SignatureStatusRow[]) => void,
+    onUpdate: (rows: readonly SignatureStatusRow[], details?: SignatureStatusResult) => void,
     intervalMs?: number,
   ): () => void;
 }
@@ -26,7 +27,7 @@ export interface MonitorSignatureParams {
   readonly sessionId: string;
   readonly adminKey: string;
   /** 현황 갱신 콜백 */
-  readonly onUpdate: (rows: readonly SignatureStatusRow[]) => void;
+  readonly onUpdate: (rows: readonly SignatureStatusRow[], details?: SignatureStatusResult) => void;
   /** 폴링 간격 (기본 10초) */
   readonly intervalMs?: number;
 }

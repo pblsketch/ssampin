@@ -11,6 +11,19 @@ import { SIGNATURE_LEGAL_DISCLAIMER } from '../../../../signature/signatureLegal
 
 type StatusFilter = 'all' | 'signed' | 'unsigned';
 type StatusSort = 'order' | 'name' | 'affiliation' | 'signed';
+export type SignatureRetentionPreset = '30' | '60' | '90' | 'custom';
+
+interface RetentionControlProps {
+  readonly session: ActiveSignatureSession;
+  readonly retentionPreset: SignatureRetentionPreset;
+  readonly customRetentionDays: string;
+  readonly closingSession: boolean;
+  readonly deletingSignatureImages: boolean;
+  readonly onRetentionPresetChange: (preset: SignatureRetentionPreset) => void;
+  readonly onCustomRetentionDaysChange: (value: string) => void;
+  readonly onCloseSession: () => void;
+  readonly onDeleteSignatureImages: () => void;
+}
 
 // ──────────────────────────────────────────────────────────
 // 공유·현황 (4단계)
@@ -24,6 +37,14 @@ interface SharePanelProps {
   readonly statusRows: readonly SignatureStatusRow[];
   readonly onCopyLink: () => void;
   readonly onGoExport: () => void;
+  readonly retentionPreset: SignatureRetentionPreset;
+  readonly customRetentionDays: string;
+  readonly closingSession: boolean;
+  readonly deletingSignatureImages: boolean;
+  readonly onRetentionPresetChange: (preset: SignatureRetentionPreset) => void;
+  readonly onCustomRetentionDaysChange: (value: string) => void;
+  readonly onCloseSession: () => void;
+  readonly onDeleteSignatureImages: () => void;
   readonly onDeleteSession: () => void;
 }
 
@@ -35,10 +56,19 @@ export function SharePanel({
   statusRows,
   onCopyLink,
   onGoExport,
+  retentionPreset,
+  customRetentionDays,
+  closingSession,
+  deletingSignatureImages,
+  onRetentionPresetChange,
+  onCustomRetentionDaysChange,
+  onCloseSession,
+  onDeleteSignatureImages,
   onDeleteSession,
 }: SharePanelProps) {
   const totalCount = session.members.length;
   const signedCount = statusRows.filter((row) => row.signed).length;
+  const sessionClosed = session.status === 'closed';
 
   return (
     <section className="rounded-2xl border border-sp-border bg-sp-card p-5">
@@ -53,6 +83,7 @@ export function SharePanel({
             <InfoRow label="대상" value={`${totalCount}명`} />
             <InfoRow label="참여 코드" value={session.shortLinkCode} />
             <InfoRow label="완료" value={`${signedCount} / ${totalCount}명`} />
+            <InfoRow label="상태" value={sessionClosed ? '마감됨' : '진행 중'} />
           </dl>
           <div className="mt-5 flex flex-wrap gap-2">
             <button
@@ -91,6 +122,18 @@ export function SharePanel({
           </div>
         </div>
       </div>
+
+      <SessionRetentionControl
+        session={session}
+        retentionPreset={retentionPreset}
+        customRetentionDays={customRetentionDays}
+        closingSession={closingSession}
+        deletingSignatureImages={deletingSignatureImages}
+        onRetentionPresetChange={onRetentionPresetChange}
+        onCustomRetentionDaysChange={onCustomRetentionDaysChange}
+        onCloseSession={onCloseSession}
+        onDeleteSignatureImages={onDeleteSignatureImages}
+      />
 
       <StatusBoard rows={statusRows} totalCount={totalCount} signedCount={signedCount} />
     </section>
@@ -201,6 +244,7 @@ function StatusBoard({
               <p className="mt-1 text-xs text-sp-muted">
                 {row.affiliation ?? '소속 미지정'}
                 {row.signed && row.signedAt ? ` · ${formatSignedAt(row.signedAt)}` : ''}
+                {row.signatureImageDeletedAt ? ' · 이미지 삭제됨' : ''}
               </p>
             </div>
           ))
@@ -223,6 +267,14 @@ interface ExportPanelProps {
   readonly onExport: () => void;
   readonly onExportExcel: () => void;
   readonly onOpenSheet: () => void;
+  readonly retentionPreset: SignatureRetentionPreset;
+  readonly customRetentionDays: string;
+  readonly closingSession: boolean;
+  readonly deletingSignatureImages: boolean;
+  readonly onRetentionPresetChange: (preset: SignatureRetentionPreset) => void;
+  readonly onCustomRetentionDaysChange: (value: string) => void;
+  readonly onCloseSession: () => void;
+  readonly onDeleteSignatureImages: () => void;
   readonly onBackupReset: () => void;
   readonly onDeleteSession: () => void;
 }
@@ -236,6 +288,14 @@ export function ExportPanel({
   onExport,
   onExportExcel,
   onOpenSheet,
+  retentionPreset,
+  customRetentionDays,
+  closingSession,
+  deletingSignatureImages,
+  onRetentionPresetChange,
+  onCustomRetentionDaysChange,
+  onCloseSession,
+  onDeleteSignatureImages,
   onBackupReset,
   onDeleteSession,
 }: ExportPanelProps) {
@@ -297,6 +357,18 @@ export function ExportPanel({
         </div>
       </div>
 
+      <SessionRetentionControl
+        session={session}
+        retentionPreset={retentionPreset}
+        customRetentionDays={customRetentionDays}
+        closingSession={closingSession}
+        deletingSignatureImages={deletingSignatureImages}
+        onRetentionPresetChange={onRetentionPresetChange}
+        onCustomRetentionDaysChange={onCustomRetentionDaysChange}
+        onCloseSession={onCloseSession}
+        onDeleteSignatureImages={onDeleteSignatureImages}
+      />
+
       <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-sp-border pt-4">
         <button
           type="button"
@@ -339,6 +411,127 @@ function InfoRow({ label, value }: { readonly label: string; readonly value: str
   );
 }
 
+function SessionRetentionControl({
+  session,
+  retentionPreset,
+  customRetentionDays,
+  closingSession,
+  deletingSignatureImages,
+  onRetentionPresetChange,
+  onCustomRetentionDaysChange,
+  onCloseSession,
+  onDeleteSignatureImages,
+}: RetentionControlProps) {
+  const sessionClosed = session.status === 'closed';
+  const imagesDeleted = Boolean(session.signatureImagesDeletedAt);
+
+  return (
+    <div className="mt-5 rounded-2xl border border-sp-border bg-sp-surface p-5">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p className="text-sm font-semibold text-sp-accent">서명 이미지 보관</p>
+          <h4 className="mt-1 text-lg font-bold text-sp-text">
+            {imagesDeleted
+              ? '서명 이미지가 삭제되었습니다'
+              : sessionClosed
+                ? '마감된 세션입니다'
+                : '마감 후 자동삭제 기간을 정해 주세요'}
+          </h4>
+          <p className="mt-2 max-w-2xl text-xs leading-5 text-sp-muted">
+            세션을 마감하면 학생은 더 이상 서명할 수 없습니다. 선생님은 보관기간 동안 현황 확인과
+            내보내기를 계속 할 수 있습니다.
+          </p>
+        </div>
+        <span className="rounded-full border border-sp-border bg-sp-card px-3 py-1 text-xs font-bold text-sp-muted">
+          {sessionClosed ? '마감됨' : '진행 중'}
+        </span>
+      </div>
+
+      {!sessionClosed && (
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          {(['30', '60', '90'] as const).map((preset) => (
+            <button
+              key={preset}
+              type="button"
+              onClick={() => onRetentionPresetChange(preset)}
+              className={`rounded-xl border px-4 py-2 text-sm font-bold transition ${
+                retentionPreset === preset
+                  ? 'border-sp-accent bg-sp-accent/10 text-sp-text'
+                  : 'border-sp-border bg-sp-card text-sp-muted hover:text-sp-text'
+              }`}
+            >
+              {preset}일
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => onRetentionPresetChange('custom')}
+            className={`rounded-xl border px-4 py-2 text-sm font-bold transition ${
+              retentionPreset === 'custom'
+                ? 'border-sp-accent bg-sp-accent/10 text-sp-text'
+                : 'border-sp-border bg-sp-card text-sp-muted hover:text-sp-text'
+            }`}
+          >
+            직접 설정
+          </button>
+          {retentionPreset === 'custom' && (
+            <label className="flex items-center gap-2 text-sm text-sp-text">
+              <input
+                type="number"
+                min={1}
+                max={365}
+                value={customRetentionDays}
+                onChange={(event) => onCustomRetentionDaysChange(event.target.value)}
+                className="w-24 rounded-xl border border-sp-border bg-sp-card px-3 py-2 text-sm text-sp-text focus:border-sp-accent focus:outline-none"
+              />
+              일
+            </label>
+          )}
+          <button
+            type="button"
+            onClick={onCloseSession}
+            disabled={closingSession}
+            className="rounded-xl bg-sp-accent px-4 py-2.5 text-sm font-bold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {closingSession ? '마감하는 중...' : '세션 마감'}
+          </button>
+        </div>
+      )}
+
+      {sessionClosed && (
+        <div className="mt-4 grid gap-3 text-sm md:grid-cols-3">
+          <InfoRow label="마감 시각" value={formatDateTime(session.closedAt)} />
+          <InfoRow
+            label="자동삭제 예정"
+            value={imagesDeleted ? '이미 삭제됨' : formatDateTime(session.signatureCleanupAfter)}
+          />
+          <InfoRow
+            label="이미지 삭제"
+            value={imagesDeleted ? formatDateTime(session.signatureImagesDeletedAt) : '보관 중'}
+          />
+        </div>
+      )}
+
+      {sessionClosed && !imagesDeleted && (
+        <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-sp-border pt-4">
+          <p className="max-w-2xl text-xs leading-5 text-sp-muted">
+            서명 이미지를 지금 삭제하면 구글시트의 서명 칸이 더 이상 보이지 않을 수 있습니다. 서명
+            완료 여부와 명단 기록은 유지되지만, 삭제한 이미지는 복구할 수 없습니다.
+          </p>
+          <button
+            type="button"
+            onClick={onDeleteSignatureImages}
+            disabled={deletingSignatureImages}
+            className="rounded-xl border border-red-500/40 px-4 py-2.5 text-sm font-bold text-red-300 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {deletingSignatureImages ? '삭제하는 중...' : '서명 이미지만 삭제'}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function filterAndSortStatus(
   rows: readonly SignatureStatusRow[],
   filter: StatusFilter,
@@ -367,6 +560,19 @@ function formatSignedAt(signedAt?: string): string {
   const date = new Date(signedAt);
   if (Number.isNaN(date.getTime())) return signedAt;
   return new Intl.DateTimeFormat('ko-KR', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
+}
+
+function formatDateTime(value?: string): string {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat('ko-KR', {
+    year: 'numeric',
     month: '2-digit',
     day: '2-digit',
     hour: '2-digit',

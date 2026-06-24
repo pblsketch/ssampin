@@ -56,7 +56,11 @@ import {
 } from './SignatureRoster/signatureRosterLogic';
 import { RosterImportMapping } from './SignatureRoster/RosterImportMapping';
 import { RosterTable } from './SignatureRoster/RosterTable';
-import { ExportPanel, SharePanel } from './SignatureRoster/SessionPanels';
+import {
+  ExportPanel,
+  SharePanel,
+  type SignatureRetentionPreset,
+} from './SignatureRoster/SessionPanels';
 
 // 순수 로직 재export — 기존 단위 테스트(ToolSignatureRoster.signatureMapping.test.ts) 호환.
 export {
@@ -142,6 +146,18 @@ export function ToolSignatureRoster({ onBack, isFullscreen }: ToolSignatureRoste
   const [copied, setCopied] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportingExcel, setExportingExcel] = useState(false);
+  const [closingSession, setClosingSession] = useState(false);
+  const [deletingSignatureImages, setDeletingSignatureImages] = useState(false);
+  const [retentionPreset, setRetentionPreset] = useState<SignatureRetentionPreset>(() => {
+    const days = initialSession?.signatureRetentionDays ?? 30;
+    if (days === 30) return '30';
+    if (days === 60) return '60';
+    if (days === 90) return '90';
+    return 'custom';
+  });
+  const [customRetentionDays, setCustomRetentionDays] = useState(() =>
+    String(initialSession?.signatureRetentionDays ?? 30),
+  );
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -188,6 +204,8 @@ export function ToolSignatureRoster({ onBack, isFullscreen }: ToolSignatureRoste
 
   const activeClassStudents = useMemo(() => students.filter(isStudentActive), [students]);
   const signedCount = statusRows.filter((row) => row.signed).length;
+  const activeSessionId = activeSession?.sessionId;
+  const activeSessionAdminKey = activeSession?.adminKey;
 
   useEffect(() => {
     loadRosters();
@@ -216,18 +234,29 @@ export function ToolSignatureRoster({ onBack, isFullscreen }: ToolSignatureRoste
 
   // 현황 폴링 (10초) — 세션 활성 시 시작, 정리 시 정지
   useEffect(() => {
-    if (!activeSession) return;
+    if (!activeSessionId || !activeSessionAdminKey) return;
     const stop = submitMonitorSignature.start({
-      sessionId: activeSession.sessionId,
-      adminKey: activeSession.adminKey,
-      onUpdate: (rows) => setStatusRows(rows),
+      sessionId: activeSessionId,
+      adminKey: activeSessionAdminKey,
+      onUpdate: (rows, details) => {
+        setStatusRows(rows);
+        if (details) {
+          updateActiveSession({
+            status: details.status,
+            closedAt: details.closedAt,
+            signatureRetentionDays: details.signatureRetentionDays,
+            signatureCleanupAfter: details.signatureCleanupAfter,
+            signatureImagesDeletedAt: details.signatureImagesDeletedAt,
+          });
+        }
+      },
     });
     stopPollingRef.current = stop;
     return () => {
       stop();
       stopPollingRef.current = null;
     };
-  }, [activeSession, setStatusRows]);
+  }, [activeSessionId, activeSessionAdminKey, setStatusRows, updateActiveSession]);
 
   // ── 명단 불러오기 ──
 
@@ -435,6 +464,8 @@ export function ToolSignatureRoster({ onBack, isFullscreen }: ToolSignatureRoste
         headerText: trimmedHeader || undefined,
         columns: orderedColumns,
         members,
+        status: 'active',
+        signatureRetentionDays: resolveRetentionDays(retentionPreset, customRetentionDays) ?? 30,
       });
       setStatusRows([]);
       setSessionView('share');
@@ -453,6 +484,8 @@ export function ToolSignatureRoster({ onBack, isFullscreen }: ToolSignatureRoste
     orderedColumns,
     setActiveSession,
     setStatusRows,
+    retentionPreset,
+    customRetentionDays,
   ]);
 
   const handleCopyLink = useCallback(async () => {
@@ -485,7 +518,7 @@ export function ToolSignatureRoster({ onBack, isFullscreen }: ToolSignatureRoste
         rows,
       });
       updateActiveSession({ sheetUrl: result.url });
-      setNotice('구글시트 등록부를 생성했습니다.');
+      setNotice('구글시트 등록부를 생성했습니다. 서명을 더 받지 않는다면 세션을 마감해 주세요.');
     } catch (err) {
       setError(
         err instanceof Error
@@ -512,7 +545,7 @@ export function ToolSignatureRoster({ onBack, isFullscreen }: ToolSignatureRoste
       });
       const fileName = `${activeSession.title.trim() || '서명 등록부'}.xlsx`;
       await downloadExcel(buffer, fileName);
-      setNotice('Excel 등록부를 내보냈습니다.');
+      setNotice('Excel 등록부를 내보냈습니다. 서명을 더 받지 않는다면 세션을 마감해 주세요.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Excel 등록부를 생성하지 못했습니다.');
     } finally {
@@ -537,6 +570,82 @@ export function ToolSignatureRoster({ onBack, isFullscreen }: ToolSignatureRoste
     setSetupStep('info');
     setNotice('현재 세션을 닫고 처음 화면으로 돌아왔습니다. 명단은 그대로 남아 있어요.');
   }, [resetSession]);
+
+  const handleCloseSession = useCallback(async () => {
+    if (!activeSession) return;
+    const retentionDays = resolveRetentionDays(retentionPreset, customRetentionDays);
+    if (retentionDays === null) {
+      setError('보관기간은 1일부터 365일 사이의 정수로 입력해 주세요.');
+      return;
+    }
+    const ok = window.confirm(
+      `세션을 마감할까요?\n\n학생은 더 이상 서명할 수 없습니다. 서명 이미지는 마감 후 ${retentionDays}일 동안 보관한 뒤 자동 삭제됩니다.`,
+    );
+    if (!ok) return;
+
+    setError(null);
+    setClosingSession(true);
+    try {
+      const result = await signaturePort.closeSession(
+        activeSession.sessionId,
+        activeSession.adminKey,
+        retentionDays,
+      );
+      updateActiveSession({
+        status: result.status,
+        closedAt: result.closedAt,
+        signatureRetentionDays: result.signatureRetentionDays,
+        signatureCleanupAfter: result.signatureCleanupAfter,
+        signatureImagesDeletedAt: result.signatureImagesDeletedAt,
+      });
+      setNotice(
+        '세션을 마감했습니다. 보관기간 동안 현황 확인과 내보내기는 계속 사용할 수 있습니다.',
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '세션 마감에 실패했습니다.');
+    } finally {
+      setClosingSession(false);
+    }
+  }, [activeSession, customRetentionDays, retentionPreset, updateActiveSession]);
+
+  const handleDeleteSignatureImages = useCallback(async () => {
+    if (!activeSession) return;
+    const ok = window.confirm(
+      '서명 이미지 삭제\n\n서명 이미지를 지금 삭제하면 구글시트의 서명 칸이 더 이상 보이지 않을 수 있습니다. 서명 완료 여부와 명단 기록은 유지되지만, 삭제한 이미지는 복구할 수 없습니다.',
+    );
+    if (!ok) return;
+
+    setError(null);
+    setDeletingSignatureImages(true);
+    try {
+      const result = await signaturePort.deleteSignatureImages(
+        activeSession.sessionId,
+        activeSession.adminKey,
+      );
+      updateActiveSession({
+        status: result.status,
+        signatureImagesDeletedAt: result.signatureImagesDeletedAt,
+      });
+      setStatusRows(
+        statusRows.map((row) =>
+          row.signed
+            ? {
+                ...row,
+                signaturePublicUrl: undefined,
+                signatureImageDeletedAt: result.signatureImagesDeletedAt,
+              }
+            : row,
+        ),
+      );
+      setNotice(
+        `서명 이미지 ${result.removedStorageObjects}개를 삭제했습니다. 서명 완료 기록은 유지됩니다.`,
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '서명 이미지 삭제에 실패했습니다.');
+    } finally {
+      setDeletingSignatureImages(false);
+    }
+  }, [activeSession, setStatusRows, statusRows, updateActiveSession]);
 
   const handleDeleteSession = useCallback(async () => {
     if (!activeSession) return;
@@ -986,6 +1095,14 @@ export function ToolSignatureRoster({ onBack, isFullscreen }: ToolSignatureRoste
             statusRows={statusRows}
             onCopyLink={() => void handleCopyLink()}
             onGoExport={() => setSessionView('export')}
+            retentionPreset={retentionPreset}
+            customRetentionDays={customRetentionDays}
+            closingSession={closingSession}
+            deletingSignatureImages={deletingSignatureImages}
+            onRetentionPresetChange={setRetentionPreset}
+            onCustomRetentionDaysChange={setCustomRetentionDays}
+            onCloseSession={() => void handleCloseSession()}
+            onDeleteSignatureImages={() => void handleDeleteSignatureImages()}
             onDeleteSession={() => void handleDeleteSession()}
           />
         )}
@@ -1001,6 +1118,14 @@ export function ToolSignatureRoster({ onBack, isFullscreen }: ToolSignatureRoste
             onExport={() => void handleExportSheet()}
             onExportExcel={() => void handleExportExcel()}
             onOpenSheet={openSheet}
+            retentionPreset={retentionPreset}
+            customRetentionDays={customRetentionDays}
+            closingSession={closingSession}
+            deletingSignatureImages={deletingSignatureImages}
+            onRetentionPresetChange={setRetentionPreset}
+            onCustomRetentionDaysChange={setCustomRetentionDays}
+            onCloseSession={() => void handleCloseSession()}
+            onDeleteSignatureImages={() => void handleDeleteSignatureImages()}
             onBackupReset={handleBackupAndReset}
             onDeleteSession={() => void handleDeleteSession()}
           />
@@ -1069,6 +1194,15 @@ async function downloadCsv(csvText: string, fileName: string): Promise<void> {
 
 function labelForStep(step: WizardStep): string {
   return WIZARD_STEPS.find((s) => s.id === step)?.label ?? '기본 정보';
+}
+
+function resolveRetentionDays(
+  preset: SignatureRetentionPreset,
+  customRetentionDays: string,
+): number | null {
+  const raw = preset === 'custom' ? Number(customRetentionDays) : Number(preset);
+  if (!Number.isInteger(raw) || raw < 1 || raw > 365) return null;
+  return raw;
 }
 
 function StepIndicator({

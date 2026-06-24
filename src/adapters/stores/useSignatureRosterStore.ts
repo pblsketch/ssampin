@@ -14,6 +14,7 @@
 import { create } from 'zustand';
 import type { ColumnDef, RosterMember } from '@domain/entities/SignatureRoster';
 import type { SignatureStatusRow } from '@domain/entities/SignatureEntry';
+import type { SignatureSessionStatus } from '@domain/entities/SignatureSession';
 
 const ROSTER_STORAGE_KEY = 'ssampin_sigv2_rosters';
 const SESSION_STORAGE_KEY = 'ssampin_sigv2_active_session';
@@ -52,6 +53,16 @@ export interface ActiveSignatureSession {
   readonly members: readonly RosterMember[];
   /** 생성된 구글시트 URL (생성 후 기록 — 재진입 시 "시트 열기" 유지) */
   readonly sheetUrl?: string;
+  /** 서버 기준 세션 상태 */
+  readonly status: SignatureSessionStatus;
+  /** 세션 마감 후 서명 이미지 보관 일수 */
+  readonly signatureRetentionDays?: number;
+  /** 세션 마감 시각 */
+  readonly closedAt?: string;
+  /** 자동삭제 예정 시각 */
+  readonly signatureCleanupAfter?: string;
+  /** 서명 이미지 삭제 완료 시각 */
+  readonly signatureImagesDeletedAt?: string;
 }
 
 interface SignatureRosterStoreState {
@@ -122,7 +133,10 @@ function readSessionFromStorage(): ActiveSignatureSession | null {
     ) {
       return null;
     }
-    return parsed;
+    return {
+      ...parsed,
+      status: parsed.status ?? 'active',
+    };
   } catch {
     return null;
   }

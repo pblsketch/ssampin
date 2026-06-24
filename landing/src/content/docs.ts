@@ -617,7 +617,7 @@ export const docsArticles: readonly DocArticle[] = [
     title: '쌤도구',
     description: '수업 중 바로 쓰는 27가지 교실 도구를 정리하고 실행합니다.',
     category: 'features',
-    lastUpdated: '2026-06-23',
+    lastUpdated: '2026-06-24',
     image: { src: '/docs/screenshots/tools-grid.png', alt: '쌤핀 쌤도구 목록 화면' },
     sections: [
       {
@@ -633,8 +633,22 @@ export const docsArticles: readonly DocArticle[] = [
           '주사위, 객관식 설문, 점수판, 신호등, 주관식 설문, 복합 유형 설문',
           '교실약속정하기, 과제수합, 동전던지기, 모둠 편성기',
           '가치수직선 토론, 신호등 토론, 칠판, 협업 보드',
-          '숲소리, PBL스케치, 서식, 마크다운 변환기, 배점 계산기',
+          '숲소리, PBL스케치, 서명받기, 서식, 마크다운 변환기, 배점 계산기',
         ],
+      },
+      {
+        id: 'signature-retention',
+        title: '서명받기 보관과 삭제',
+        body: [
+          '서명받기는 구글시트 등록부에서 서명 이미지를 불러올 수 있도록 서명 이미지를 공개 링크로 보관합니다.',
+          '서명을 더 받지 않을 때 세션을 마감하면 30일, 60일, 90일 또는 직접 설정한 기간 뒤 서명 이미지만 자동 삭제됩니다. 마감 전에는 서명 이미지만 삭제할 수 없습니다.',
+          '마감된 세션에서는 서명 이미지만 즉시 삭제할 수 있습니다. 이때 명단, 서명 완료 여부, 서명 시각 기록은 유지됩니다.',
+        ],
+        callout: {
+          title: '삭제 전 확인',
+          body: '서명 이미지를 삭제하면 기존 구글시트의 서명 칸이 더 이상 보이지 않을 수 있고, 삭제한 이미지는 복구할 수 없습니다.',
+          tone: 'warning',
+        },
       },
       {
         id: 'organize',

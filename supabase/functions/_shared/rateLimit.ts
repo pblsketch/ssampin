@@ -9,9 +9,28 @@
  * `endpoint` 값으로 구분해 그대로 재사용한다.
  */
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+interface RateLimitErrorLike {
+  readonly message: string;
+}
 
-type SupabaseClient = ReturnType<typeof createClient>;
+interface RateLimitSelectBuilder {
+  eq(column: string, value: string): RateLimitSelectBuilder;
+  gte(
+    column: string,
+    value: string,
+  ): Promise<{ count: number | null; error: RateLimitErrorLike | null }>;
+}
+
+interface RateLimitTable {
+  select(columns: string, options: { count: 'exact'; head: true }): RateLimitSelectBuilder;
+  insert(
+    rows: readonly { readonly identifier: string; readonly endpoint: string }[],
+  ): Promise<{ error: RateLimitErrorLike | null }>;
+}
+
+interface RateLimitSupabaseClient {
+  from(table: string): RateLimitTable;
+}
 
 export interface RateLimitWindow {
   /** 식별자 (IP / sessionId 등) */
@@ -32,16 +51,17 @@ export interface RateLimitWindow {
  * `endpoint` 는 `ssampin_rate_limits.endpoint` 컬럼 값 — 함수별로 고유하게.
  */
 export async function checkRateLimit(
-  supabase: SupabaseClient,
+  supabase: unknown,
   endpoint: string,
   rules: RateLimitWindow[],
 ): Promise<boolean> {
   try {
+    const db = supabase as RateLimitSupabaseClient;
     const now = Date.now();
 
     for (const rule of rules) {
       const since = new Date(now - rule.windowMs).toISOString();
-      const { count, error } = await supabase
+      const { count, error } = await db
         .from('ssampin_rate_limits')
         .select('*', { count: 'exact', head: true })
         .eq('identifier', rule.identifier)
@@ -59,7 +79,7 @@ export async function checkRateLimit(
     // 모든 규칙 통과 → 요청 기록
     const rows = rules.map((r) => ({ identifier: r.identifier, endpoint }));
     if (rows.length > 0) {
-      const { error: insertError } = await supabase.from('ssampin_rate_limits').insert(rows);
+      const { error: insertError } = await db.from('ssampin_rate_limits').insert(rows);
       if (insertError) {
         console.error(`rate-limit record failed (${endpoint}):`, insertError.message);
       }

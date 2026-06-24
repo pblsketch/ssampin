@@ -6,7 +6,11 @@
  */
 
 import type { ColumnDef, RosterMember } from '../entities/SignatureRoster';
-import type { SignatureSessionPublic, TrustMode } from '../entities/SignatureSession';
+import type {
+  SignatureSessionPublic,
+  SignatureSessionStatus,
+  TrustMode,
+} from '../entities/SignatureSession';
 import type { SignatureStatusRow } from '../entities/SignatureEntry';
 
 /** createSession 입력 */
@@ -71,6 +75,35 @@ export interface SubmitSignatureResult {
   readonly signedAt: string;
 }
 
+/** 교사용 상세 현황 응답 */
+export interface SignatureStatusResult {
+  readonly sessionId: string;
+  readonly status: SignatureSessionStatus;
+  readonly totalCount: number;
+  readonly signedCount: number;
+  readonly members: readonly SignatureStatusRow[];
+  readonly closedAt?: string;
+  readonly signatureRetentionDays?: number;
+  readonly signatureCleanupAfter?: string;
+  readonly signatureImagesDeletedAt?: string;
+}
+
+/** 세션 마감 결과 */
+export interface CloseSignatureSessionResult {
+  readonly status: SignatureSessionStatus;
+  readonly closedAt?: string;
+  readonly signatureRetentionDays: number;
+  readonly signatureCleanupAfter?: string;
+  readonly signatureImagesDeletedAt?: string;
+}
+
+/** 서명 이미지만 삭제한 결과 */
+export interface DeleteSignatureImagesResult {
+  readonly status: SignatureSessionStatus;
+  readonly removedStorageObjects: number;
+  readonly signatureImagesDeletedAt: string;
+}
+
 /** 서명받기 포트 */
 export interface ISignaturePort {
   /** 세션 생성 (draft 상태) */
@@ -87,6 +120,19 @@ export interface ISignaturePort {
 
   /** 교사 현황 보드 조회 (관리 키 검증) */
   getStatus(sessionId: string, adminKey: string): Promise<readonly SignatureStatusRow[]>;
+
+  /** 교사용 상세 현황 조회 (세션 상태·보관 일정 포함) */
+  getStatusDetails(sessionId: string, adminKey: string): Promise<SignatureStatusResult>;
+
+  /** 세션 마감 (학생 추가 제출 차단 + 이미지 보관기간 시작) */
+  closeSession(
+    sessionId: string,
+    adminKey: string,
+    retentionDays: number,
+  ): Promise<CloseSignatureSessionResult>;
+
+  /** 마감된 세션의 서명 이미지만 삭제 (현황 행은 유지) */
+  deleteSignatureImages(sessionId: string, adminKey: string): Promise<DeleteSignatureImagesResult>;
 
   /** 세션 삭제 (관리 키 검증) */
   deleteSession(sessionId: string, adminKey: string): Promise<void>;
