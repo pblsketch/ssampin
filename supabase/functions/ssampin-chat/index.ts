@@ -120,6 +120,9 @@ const SYSTEM_PROMPT = `당신은 '쌤핀(SsamPin)' 교사용 데스크톱 앱의
 에스컬레이션 시 다음 JSON 형식으로만 응답:
 {"escalation": true, "type": "bug|feature|other", "summary": "한줄 요약"}
 
+## 모호한 질문 되묻기 (중요)
+질문이 한 줄이고 어느 기능을 말하는지 분명하지 않으면(예: "작동이 안돼요", "안 깔려요", "안 돼요", "오류나요"만 있는 경우), 임의의 기능(학교 Wi-Fi·실시간 활동·특정 도구 등)을 단정해 답하지 마세요. 어떤 화면·기능에서 무엇이 안 되는지 1개의 질문으로 먼저 되물은 뒤 안내합니다. 단, 설치·업데이트·보안 차단처럼 맥락이 분명한 경우는 기존 트러블슈팅 안내를 그대로 제공합니다. 또한 [관련 문서]가 특정 기능을 명확히 가리키면 그 문서를 우선해 답하고, 문서와 동떨어진 기능을 임의로 끌어와 답하지 마세요. (우선순위: 먼저 되묻고, 되물었는데도 어느 기능인지 특정되지 않으면 그때 아래 '에스컬레이션 판단'의 버그 처리로 넘어갑니다.)
+
 ## 문제 해결 안내 원칙
 1. 설치/업데이트 문제 질문 시 구체적인 단계별 해결법을 안내합니다.
 2. 백신 차단 문제(V3, 알약 등): "실시간 감시를 잠시 끄고 설치 → 설치 후 다시 켜기" 순서로 안내합니다.
@@ -191,6 +194,29 @@ function classifyQuery(query: string): string | null {
     ['sync', /동기화|Google Drive|백업|복원|구글 드라이브|PKCE/i],
     ['widget', /위젯/],
     ['mobile', /모바일|PWA|m\.ssampin/i],
+    // ── 기능별 분류 (troubleshooting 보다 먼저 — "○○ 안돼/오류" 가 설치문제로 오분류되지 않게) ──
+    // 카테고리 문자열은 KB(scripts/ingest-chatbot-qa.mjs)의 metadata.category 값과 정확히 일치해야 함.
+    // 첫 매칭 승: 위의 기존 카테고리(settings/sync 등)가 키워드 겹침 시 우선한다(예: 'AI 연결 설정'→settings).
+    // 가산보강 구조라 오분류돼도 전체검색이 정답 문서를 붙잡으므로 비치명적이다.
+    ['homeroom', /생활기록부|생기부|근거 ?자료|누가기록|관찰기록|특기사항|세특|행동특성/i],
+    [
+      'ai-bridge',
+      /AI ?브릿지|브릿지|MCP|외부 ?AI|클로드|claude|제미나이|gemini|코덱스|codex|안티그래비티|AI ?연결/i,
+    ],
+    ['attendance', /출결|출석|결석|지각|조퇴|무단/],
+    ['consultation', /상담|학부모 ?상담|상담 ?예약/],
+    ['realtime-wall', /담벼락|실시간 ?벽|모둠 ?의견/],
+    ['survey', /설문|투표|워드클라우드|복합 ?설문|발제|퀴즈/],
+    ['collab-board', /협업 ?보드|협업보드|화이트보드|모둠 ?보드/],
+    ['assignment', /과제|수합|제출물/],
+    ['signature', /서명받기|서명 ?받기|등록부/],
+    ['roster', /명단|명렬|반 ?학생/],
+    ['note', /쌤핀 ?노트|블록 ?에디터/],
+    ['bookmark', /북마크|즐겨찾기/],
+    ['meal', /급식|식단|중식|석식/],
+    ['native-desktop', /바탕화면 ?아이콘|바탕화면 ?모드|아이콘 ?아래/],
+    ['markdown-convert', /마크다운|markdown|hwpx/i],
+    ['tools', /쌤도구|룰렛|뽑기|사다리|타이머|이름 ?뽑기|랜덤 ?뽑기/],
     ['troubleshooting', /설치|업데이트|오류|안 돼|안돼|차단|백신|SmartScreen|V3|알약|크래시|멈춰/i],
   ];
 
@@ -259,40 +285,77 @@ async function generateQueryEmbedding(query: string, apiKey: string): Promise<nu
   return data.embedding.values;
 }
 
-/** Hybrid 검색 (벡터 + 전문 검색 + RRF) with 카테고리 필터 */
+/**
+ * Hybrid 검색 (벡터 + 전문 검색 + RRF).
+ *
+ * ⚠️ 과거에는 category 가 추정되면 'hybrid_search_ssampin_docs_filtered' 로 그 카테고리
+ * 문서만 '하드필터' 검색했다. 이 구조는 분류기(classifyQuery)가 질문을 잘못 분류하면(예:
+ * "생기부 초안 안돼" → '안돼' 때문에 troubleshooting 으로 오분류) 정답 문서가 검색 후보에서
+ * 통째로 빠져 엉뚱한 답(학교 Wi-Fi·실시간 활동 등)이 나오는 치명적 함정이었다.
+ *
+ * 그래서 이제는 '하드필터'가 아니라 '가산 보강'으로 바꾼다:
+ *   ① 항상 카테고리 무관 전체 검색을 수행해 정답 문서가 절대 누락되지 않게 한다(recall 보장).
+ *   ② category 가 추정되면 해당 카테고리 문서를 추가로 끌어와 앞쪽에 보강한다(precision↑).
+ * 분류가 틀려도 ①이 정답을 붙잡고, 맞으면 ②가 정확도를 올린다. 최종 선별은 LLM 리랭킹이 한다.
+ */
 async function searchDocuments(
   supabase: ReturnType<typeof createClient>,
   queryEmbedding: number[],
   queryText: string,
   category: string | null,
 ): Promise<MatchedDocument[]> {
-  // 카테고리가 있으면 필터 검색, 없으면 일반 hybrid 검색
-  const rpcName = category ? 'hybrid_search_ssampin_docs_filtered' : 'hybrid_search_ssampin_docs';
+  const embeddingJson = JSON.stringify(queryEmbedding);
 
-  const params: Record<string, unknown> = {
+  // ① 항상 전체(카테고리 무관) hybrid 검색 — 오분류로 정답이 빠지는 일을 원천 차단
+  const { data: baseData, error: baseError } = await supabase.rpc('hybrid_search_ssampin_docs', {
     query_text: queryText,
-    query_embedding: JSON.stringify(queryEmbedding),
+    query_embedding: embeddingJson,
     match_count: 10,
-  };
+  });
 
-  if (category) {
-    params.filter_category = category;
-  }
-
-  const { data, error } = await supabase.rpc(rpcName, params);
-
-  if (error) {
-    console.error('Hybrid 검색 에러:', error);
+  if (baseError) {
+    console.error('Hybrid 검색 에러:', baseError);
     // Fallback: 기존 벡터 검색
     const { data: fallbackData } = await supabase.rpc('match_ssampin_docs', {
-      query_embedding: JSON.stringify(queryEmbedding),
+      query_embedding: embeddingJson,
       match_count: 10,
       match_threshold: 0.35,
     });
     return (fallbackData ?? []) as MatchedDocument[];
   }
 
-  return (data ?? []) as MatchedDocument[];
+  const baseDocs = (baseData ?? []) as MatchedDocument[];
+
+  // 카테고리 추정이 없으면 전체 검색 결과를 그대로 사용
+  if (!category) return baseDocs;
+
+  // ② 카테고리 문서를 추가로 끌어와 앞쪽에 보강(가산). 실패해도 전체 검색 결과는 유지
+  const { data: catData } = await supabase.rpc('hybrid_search_ssampin_docs_filtered', {
+    query_text: queryText,
+    query_embedding: embeddingJson,
+    match_count: 6,
+    filter_category: category,
+  });
+
+  const catDocs = (catData ?? []) as MatchedDocument[];
+  if (catDocs.length === 0) return baseDocs;
+
+  // 카테고리 문서를 앞에, 전체 검색 문서를 뒤에 두고 id 기준 중복 제거 (최대 12개)
+  const seen = new Set<number>();
+  const merged: MatchedDocument[] = [];
+  for (const doc of [...catDocs, ...baseDocs]) {
+    // id 가 비어 있으면(RPC 반환에 id 누락 등) 중복 제거를 건너뛰고 그대로 유지한다.
+    // (Set 이 undefined 를 하나로 뭉개 결과가 조용히 붕괴하는 것을 방지)
+    if (doc.id == null) {
+      merged.push(doc);
+      continue;
+    }
+    if (!seen.has(doc.id)) {
+      seen.add(doc.id);
+      merged.push(doc);
+    }
+  }
+  return merged.slice(0, 12);
 }
 
 /** LLM 리랭킹: 검색된 문서의 관련성을 LLM으로 재평가 */
