@@ -26,6 +26,7 @@ import {
 } from 'kordoc';
 import JSZip from 'jszip';
 import { buildStoreZip, dedupeFilenames, sanitizeFilename } from '../lib/zipStore';
+import { friendlyParseFailure, hasNoExtractableText } from './markdownConvertErrors';
 
 const MAX_BYTES = 50 * 1024 * 1024; // 50MB
 const SUPPORTED_EXTENSIONS = ['hwp', 'hwpx', 'hwpml', 'pdf', 'xls', 'xlsx', 'docx'];
@@ -120,28 +121,6 @@ function toTextQuality(
 }
 
 /**
- * 에러 코드 → 친화 한국어 메시지. 민감 코드는 원시 메시지(파일 경로 echo 위험)를 노출하지 않고
- * 자체 문구를 쓴다. 미매핑 코드는 fallback(원시 메시지) 유지.
- */
-const FRIENDLY_ERROR: Partial<Record<string, string>> = {
-  ENCRYPTED:
-    '암호가 걸렸거나 배포용으로 잠긴 문서예요. Windows에서 한글(한컴오피스)이 설치돼 있으면 ‘문서 선택하기’로 다시 시도해 보세요.',
-  DRM_PROTECTED:
-    '배포용으로 잠긴 문서예요. Windows에서 한글(한컴오피스)이 설치돼 있으면 ‘문서 선택하기’로 다시 시도해 보세요.',
-  IMAGE_BASED_PDF:
-    '사진(스캔)으로 된 PDF라 글자를 읽지 못했어요. 글자가 들어 있는 파일을 사용해 주세요.',
-  UNSUPPORTED_FORMAT: '지원하지 않는 파일 형식이에요. (한글·PDF·엑셀·워드)',
-  CORRUPTED: '파일이 손상된 것 같아요. 다른 파일로 다시 시도해 주세요.',
-  ZIP_BOMB: '파일이 비정상적으로 커서 안전을 위해 변환을 멈췄어요.',
-  DECOMPRESSION_BOMB: '파일이 비정상적으로 커서 안전을 위해 변환을 멈췄어요.',
-  MISSING_DEPENDENCY: '이 파일을 읽는 데 필요한 구성요소를 찾지 못했어요.',
-};
-
-function friendlyError(code: string | undefined, fallback: string): string {
-  return (code ? FRIENDLY_ERROR[code] : undefined) ?? fallback;
-}
-
-/**
  * kordoc markdownToHwpx 출력의 한글 줄나눔을 어절 단위로 교체.
  * kordoc 기본값 breakNonLatinWord="BREAK_WORD"(글자 단위)는 '감격스/럽습니다'처럼 낱말 중간에서
  * 끊겨 가독성이 나쁘다 → "KEEP_WORD"(어절 단위)로 바꾼다(header.xml 의 문단 스타일 정의).
@@ -202,12 +181,19 @@ export async function parseArrayBuffer(
     // kordoc 이 디스크를 다시 읽지 않는다(filePath 는 COM 재시도에만 사용).
     const parsed: ParseResult = await parse(arrayBuffer, filePath ? { filePath } : undefined);
     if (!parsed.success) {
-      return {
-        status: 'error',
-        code: parsed.code ?? 'PARSE_ERROR',
-        message: friendlyError(parsed.code, parsed.error),
-      };
+      const code = parsed.code ?? 'PARSE_ERROR';
+      // 진단용: PII 없는 코드만 기록(원본 경로·내용은 로그에 남기지 않는 원칙 유지).
+      console.warn(`[markdownConvert] 변환 실패 code=${code}`);
+      // 원시 kordoc 문구 노출 금지 → 코드/파일종류별 친화 문구. 엑셀 구조 문제면 '다시 저장' 해결책 안내.
+      return { status: 'error', code, message: friendlyParseFailure(code, fileName) };
     }
+    // 파싱은 됐지만 추출된 글자가 사실상 없으면(빈 문서/이미지·표만 있는 문서) 빈 결과를 그대로 주지
+    // 않고 품질 신호로 설명한다. kordoc 자체 품질 신호가 있으면 그것을 우선한다.
+    const textQuality: MarkdownTextQuality | undefined =
+      toTextQuality(parsed) ??
+      (!(parsed.isImageBased ?? false) && hasNoExtractableText(parsed.markdown)
+        ? { needsReview: true, reason: 'low_text' }
+        : undefined);
     return {
       status: 'ok',
       fileName,
@@ -217,7 +203,7 @@ export async function parseArrayBuffer(
       warnings: (parsed.warnings ?? []).map((w) => w.message),
       metadata: toDocMetadata(parsed.metadata),
       outline: toOutline(parsed.outline),
-      textQuality: toTextQuality(parsed),
+      textQuality,
     };
   } catch (e) {
     return {
