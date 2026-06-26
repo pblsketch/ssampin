@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { derivePinInfo, decidePeek, buildSummary, hasPinAlert } from './pinPresence';
+import { derivePinInfo, decidePeek, buildSummary } from './pinPresence';
 import type { Todo } from '@domain/entities/Todo';
 import type { SchoolEvent } from '@domain/entities/SchoolEvent';
 import type { TeacherScheduleData } from '@domain/entities/Timetable';
@@ -109,19 +109,12 @@ describe('decidePeek — 우선순위', () => {
   });
 });
 
-describe('buildSummary / hasPinAlert', () => {
+describe('buildSummary', () => {
   it('현재 수업을 제목으로, 다음 수업을 보조 줄로 보여준다', () => {
     const now = new Date(2026, 5, 23, 9, 10, 0); // 1교시 진행 중
     const info = derivePinInfo({ now, periodTimes, teacherSchedule, todos: [], events: [] });
     const summary = buildSummary(info);
     expect(summary.title).toBe('1교시 수학 · 2-3');
     expect(summary.lines.some((l) => l.startsWith('다음: 3교시 과학'))).toBe(true);
-  });
-
-  it('지난 마감 할 일이 있으면 알림 링을 켠다', () => {
-    const now = new Date(2026, 5, 23, 14, 0, 0);
-    const todos: Todo[] = [todo({ text: '성적 입력', dueDate: '2026-06-20' })];
-    const info = derivePinInfo({ now, periodTimes, teacherSchedule, todos, events: [] });
-    expect(hasPinAlert(info)).toBe(true);
   });
 });

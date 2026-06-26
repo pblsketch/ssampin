@@ -36,11 +36,10 @@ const ROW: Record<PinState, number> = { idle: 0, jump: 1, wave: 2, celebrate: 3 
 const FPS: Record<PinState, number> = { idle: 4, jump: 8, wave: 6, celebrate: 8 };
 
 interface PinDiscProps {
-  hasAlert: boolean;
   state: PinState;
 }
 
-export function PinDisc({ hasAlert, state }: PinDiscProps) {
+export function PinDisc({ state }: PinDiscProps) {
   const [frame, setFrame] = useState(0);
 
   // 동작이 바뀌면 첫 프레임부터 다시 재생
@@ -66,14 +65,6 @@ export function PinDisc({ hasAlert, state }: PinDiscProps) {
       style={{ background: 'transparent', backgroundColor: 'transparent' }}
       aria-hidden="true"
     >
-      {/* 알림 펄스 ring — 평소엔 표시 안 됨. 캐릭터 본체와 분리. */}
-      {hasAlert && (
-        <div
-          className="absolute inset-0 rounded-full ring-2 ring-[#f59e0b] animate-pulse"
-          style={{ background: 'transparent', backgroundColor: 'transparent' }}
-        />
-      )}
-
       {/*
         스프라이트는 CSS background 가 아니라 <img> 콘텐츠로 그린다.
         아이콘 모드 전역 CSS `body.ssampin-icon-popup * { background: transparent !important }`

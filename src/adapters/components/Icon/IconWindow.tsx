@@ -21,7 +21,7 @@ import { IconContextMenu } from './IconContextMenu';
 import { CoachMark } from './CoachMark';
 import { PinDisc } from './PinDisc';
 import { PinBubble } from './PinBubble';
-import { derivePinInfo, decidePeek, buildSummary, hasPinAlert, type PinState } from './pinPresence';
+import { derivePinInfo, decidePeek, buildSummary, type PinState } from './pinPresence';
 
 const DOUBLE_CLICK_THRESHOLD_MS = 250;
 const HOVER_TOOLTIP_DELAY_MS = 100;
@@ -220,9 +220,8 @@ export function IconWindow() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [peekKey]);
 
-  // 호버 요약 + 주황 알림 링 + 현재 펫 동작 결정
+  // 호버 요약 + 현재 펫 동작 결정
   const summary = buildSummary(pinInfo);
-  const hasAlert = hasPinAlert(pinInfo);
   let pinState: PinState = 'idle';
   if (hovered) pinState = 'wave';
   else if (celebrating) pinState = 'celebrate';
@@ -466,7 +465,7 @@ export function IconWindow() {
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >
-        <PinDisc hasAlert={hasAlert} state={pinState} />
+        <PinDisc state={pinState} />
       </div>
       {hovered ? (
         <PinBubble title={summary.title} lines={summary.lines} />

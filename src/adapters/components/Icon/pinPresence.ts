@@ -6,7 +6,6 @@
  *   - derivePinInfo: 지금 시각 기준 다음 수업(과목+교실) / 마감 할 일 / 다가오는 일정 계산
  *   - decidePeek:    능동 말풍선으로 "먼저 알릴" 가장 급한 1건 + 어떤 동작으로 표현할지
  *   - buildSummary:  마우스 호버 시 보여줄 전체 요약
- *   - hasPinAlert:   주황 알림 링을 켤지 여부(임박한 것만)
  *
  * 모든 시간 비교는 주입된 now 기준 — 테스트에서 고정 시각으로 검증 가능.
  */
@@ -234,19 +233,4 @@ export function buildSummary(info: PinInfo): { title: string; lines: string[] } 
   }
   if (lines.length === 0 && !info.current) lines.push('오늘 일정 없음');
   return { title, lines };
-}
-
-/** 주황 알림 링을 켤지 — 임박한 것(5분 내 수업/일정)이나 지난 마감만 */
-export function hasPinAlert(info: PinInfo): boolean {
-  if (info.next && info.next.minutesUntil > 0 && info.next.minutesUntil <= 5) return true;
-  if (info.dueTodos.overdueCount > 0) return true;
-  if (
-    info.nextEvent &&
-    info.nextEvent.today &&
-    info.nextEvent.minutesUntil != null &&
-    info.nextEvent.minutesUntil <= 5
-  ) {
-    return true;
-  }
-  return false;
 }
