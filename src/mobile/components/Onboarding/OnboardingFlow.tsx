@@ -311,6 +311,13 @@ export function OnboardingFlow({ onComplete, onLogin }: Props) {
           'PC에서 입력한 데이터를 모바일에서 보려면\nGoogle 계정으로 로그인하세요.\n나중에 설정에서도 연결할 수 있어요.'
         }
       </p>
+      <div className="mt-5 rounded-xl bg-sp-accent/10 px-4 py-3 text-left">
+        <p className="text-xs leading-relaxed text-sp-text">
+          💡 <span className="font-semibold">PC를 먼저 설정하세요.</span> 교무실 PC에서 데이터를
+          입력하고 동기화를 켠 뒤 휴대폰에서 같은 Google 계정으로 로그인하면, PC 데이터를 그대로
+          받아와요.
+        </p>
+      </div>
     </div>,
     <div className="space-y-3">
       <button

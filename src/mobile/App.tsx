@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, Suspense } from 'react';
-import { useGoogleAuth } from './hooks/useGoogleAuth';
+import { useGoogleAuthContext } from './contexts/GoogleAuthContext';
 import { useSyncTrigger } from './hooks/useSyncTrigger';
 import { useMobileDriveSyncStore } from './stores/useMobileDriveSyncStore';
 import { useMobileAttendanceStore } from './stores/useMobileAttendanceStore';
@@ -132,7 +132,7 @@ export function App() {
   const [showOnboarding, setShowOnboarding] = useState(() => {
     return !localStorage.getItem('onboarding-completed');
   });
-  const auth = useGoogleAuth();
+  const auth = useGoogleAuthContext();
   const setTokenGetter = useMobileDriveSyncStore((s) => s.setTokenGetter);
 
   // 테마 적용 함수

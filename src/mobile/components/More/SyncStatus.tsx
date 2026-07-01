@@ -1,5 +1,6 @@
 import { useMobileDriveSyncStore } from '@mobile/stores/useMobileDriveSyncStore';
 import { useMobileSettingsStore } from '@mobile/stores/useMobileSettingsStore';
+import { useGoogleAuthContext } from '@mobile/contexts/GoogleAuthContext';
 import { SyncResultSummary } from '@adapters/components/common/SyncResultSummary';
 
 const AUTO_SYNC_OPTIONS = [
@@ -11,7 +12,19 @@ const AUTO_SYNC_OPTIONS = [
 ] as const;
 
 export function SyncStatus() {
-  const { state, progress, error, conflict, lastSyncedAt, syncToCloud, syncFromCloud, resolveConflict, isAuthenticated, lastSyncResult } = useMobileDriveSyncStore();
+  const {
+    state,
+    progress,
+    error,
+    conflict,
+    lastSyncedAt,
+    syncToCloud,
+    syncFromCloud,
+    resolveConflict,
+    isAuthenticated,
+    lastSyncResult,
+  } = useMobileDriveSyncStore();
+  const { isAuthenticated: accountConnected, email, startLogin, logout } = useGoogleAuthContext();
   const currentInterval = useMobileSettingsStore((s) => s.settings.sync?.autoSyncInterval ?? 0);
   const setAutoSyncInterval = useMobileSettingsStore((s) => s.setAutoSyncInterval);
 
@@ -26,7 +39,7 @@ export function SyncStatus() {
           <span className="material-symbols-outlined text-sp-accent">cloud_sync</span>
           <span className="text-sp-text font-bold">Google Drive 동기화</span>
         </div>
-        {isAuthenticated && (
+        {accountConnected && (
           <div className="flex items-center gap-1.5">
             <div className="w-2 h-2 rounded-full bg-green-400" />
             <span className="text-green-400 text-xs">연결됨</span>
@@ -34,13 +47,55 @@ export function SyncStatus() {
         )}
       </div>
 
-      {!isAuthenticated && !error && (
-        <p className="text-sp-muted text-sm">로그인이 필요합니다. Google 계정으로 로그인해 주세요.</p>
+      {/* 계정 영역: 로그인 / 로그아웃 / 계정 변경 */}
+      {accountConnected ? (
+        <div className="flex items-center justify-between gap-2 rounded-xl border border-sp-border px-3 py-2">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="material-symbols-outlined text-sp-muted text-icon-sm shrink-0">
+              account_circle
+            </span>
+            <span className="text-sp-text text-xs truncate">{email ?? '연결됨'}</span>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              onClick={() => {
+                void logout().then(() => startLogin(true));
+              }}
+              className="flex items-center gap-1 text-xs text-sp-muted hover:text-sp-accent transition-colors"
+              title="다른 계정으로 변경"
+            >
+              <span className="material-symbols-outlined text-icon-sm">swap_horiz</span>
+              계정 변경
+            </button>
+            <button
+              onClick={() => void logout()}
+              className="flex items-center gap-1 text-xs text-sp-muted hover:text-red-400 transition-colors"
+            >
+              <span className="material-symbols-outlined text-icon-sm">logout</span>
+              로그아웃
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <p className="text-sp-muted text-sm">
+            PC에서 입력한 데이터를 보려면 Google 계정으로 로그인하세요.
+          </p>
+          <p className="text-sp-muted text-xs leading-relaxed">
+            💡 PC에서 먼저 데이터를 입력·동기화한 뒤 휴대폰에서 같은 계정으로 로그인하면 PC 데이터를
+            그대로 받아와요.
+          </p>
+          <button
+            onClick={() => void startLogin()}
+            className="w-full flex items-center justify-center gap-1.5 py-2.5 text-sm rounded-xl bg-sp-accent text-sp-accent-fg font-medium active:scale-[0.98] transition-all"
+          >
+            <span className="material-symbols-outlined text-icon-sm">login</span>
+            Google 계정으로 로그인
+          </button>
+        </div>
       )}
 
-      {!isAuthenticated && error && (
-        <p className="text-red-400 text-sm">{error}</p>
-      )}
+      {!accountConnected && error && <p className="text-red-400 text-sm">{error}</p>}
 
       {isAuthenticated && state === 'syncing' && (
         <div>
@@ -103,9 +158,7 @@ export function SyncStatus() {
         </div>
       )}
 
-      {isAuthenticated && lastSyncResult && (
-        <SyncResultSummary result={lastSyncResult} compact />
-      )}
+      {isAuthenticated && lastSyncResult && <SyncResultSummary result={lastSyncResult} compact />}
 
       {isAuthenticated && (
         <div className="mt-3">

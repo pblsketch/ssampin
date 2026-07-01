@@ -1,6 +1,7 @@
 import React, { Suspense } from 'react';
 import ReactDOM from 'react-dom/client';
 import { App } from './App';
+import { GoogleAuthProvider } from './contexts/GoogleAuthContext';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { isSignatureRoute } from '../signature/signatureRoute';
 import '../index.css';
@@ -45,7 +46,9 @@ if (isSignatureRoute()) {
   root.render(
     <React.StrictMode>
       <ErrorBoundary>
-        <App />
+        <GoogleAuthProvider>
+          <App />
+        </GoogleAuthProvider>
       </ErrorBoundary>
     </React.StrictMode>,
   );
