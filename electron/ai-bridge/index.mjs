@@ -3991,7 +3991,7 @@ function getMeals(ctx, args = {}) {
   return { count: meals.length, meals };
 }
 var CONTENT_GATE_NOTICE =
-  '\uC81C\uBAA9\xB7\uC124\uBA85\xB7\uC7A5\uC18C \uB4F1 \uC790\uC720\uC11C\uC220\uC740 SSAMPIN_BRIDGE_ALLOW_CONTENT=1 \uB9C8\uC2A4\uD130 \uC2A4\uC704\uCE58\uAC00 \uCF1C\uC9C4 \uACBD\uC6B0\uC5D0\uB9CC \uB178\uCD9C\uB429\uB2C8\uB2E4(\uD604\uC7AC \uBBF8\uB178\uCD9C). \uB0A0\uC9DC\xB7\uAD50\uC2DC \uB4F1 \uBE44\uC2DD\uBCC4 \uBA54\uD0C0\uB9CC \uBC18\uD658\uD588\uC2B5\uB2C8\uB2E4.';
+  '\uC81C\uBAA9\xB7\uC124\uBA85\xB7\uC7A5\uC18C \uB4F1 \uC790\uC720\uC11C\uC220\uC740 \uC324\uD540 \uC124\uC815 "AI \uC5F0\uACB0"\uC758 \uC77D\uAE30 \uD5C8\uC6A9 \uD1A0\uAE00(\uCF1C\uB294 \uC989\uC2DC \uC801\uC6A9) \uB610\uB294 SSAMPIN_BRIDGE_ALLOW_CONTENT=1 \uB9C8\uC2A4\uD130 \uC2A4\uC704\uCE58\uAC00 \uCF1C\uC9C4 \uACBD\uC6B0\uC5D0\uB9CC \uB178\uCD9C\uB429\uB2C8\uB2E4(\uD604\uC7AC \uBBF8\uB178\uCD9C). \uB0A0\uC9DC\xB7\uAD50\uC2DC \uB4F1 \uBE44\uC2DD\uBCC4 \uBA54\uD0C0\uB9CC \uBC18\uD658\uD588\uC2B5\uB2C8\uB2E4.';
 var CONTENT_SHOWN_NOTICE =
   '\uC790\uC720\uC11C\uC220\uC774 \uD3EC\uD568\uB418\uC5B4 \uC788\uC2B5\uB2C8\uB2E4. \uD559\uC0DD \uC2E4\uBA85\xB7\uC5F0\uB77D\uCC98\xB7\uC0DD\uC77C\uC740 \uB9C8\uC2A4\uD0B9\uB418\uC9C0\uB9CC \uB9E5\uB77D\uC73C\uB85C \uC7AC\uC2DD\uBCC4\uB420 \uC218 \uC788\uC73C\uBBC0\uB85C \uAD50\uC0AC \uAC80\uD1A0\uAC00 \uD544\uC694\uD569\uB2C8\uB2E4.';
 function sumDeid(stats) {
@@ -5716,6 +5716,7 @@ async function runTool(label, produce) {
       .write(`[ssampin-mcp] tool '${label}' \uC2E4\uD328: ${err instanceof Error ? err.name : 'Error'}
 `);
     const known =
+      err instanceof ContentExposureDisabledError ||
       err instanceof WriteConflictError ||
       err instanceof WriteDisabledError ||
       err instanceof WriteValidationError;
