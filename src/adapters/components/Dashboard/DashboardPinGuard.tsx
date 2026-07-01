@@ -48,13 +48,9 @@ export function DashboardPinGuard({ feature, children }: DashboardPinGuardProps)
 
   return (
     <>
-      {/* 잠금 카드 */}
-      <Card
-        interactive
-        className="p-4 group"
-        onClick={() => setShowPinOverlay(true)}
-      >
-        <div className="flex items-center justify-center flex-col gap-3 py-8">
+      {/* 잠금 카드 — 위젯 셀/모달 본문 높이를 채우고 중앙 정렬 */}
+      <Card interactive className="h-full p-4 group" onClick={() => setShowPinOverlay(true)}>
+        <div className="flex h-full min-h-[96px] items-center justify-center flex-col gap-3 py-8">
           <div className="w-12 h-12 rounded-full bg-sp-border/20 flex items-center justify-center group-hover:bg-sp-accent/10 transition-colors">
             <span className="material-symbols-outlined text-sp-border group-hover:text-sp-accent text-2xl transition-colors">
               lock
