@@ -3685,7 +3685,7 @@ async function createTodo(ctx, args) {
   const { ref, via } = await createVia(ctx, 'todos', data, idempotencyKey, () =>
     appendTodoDirect(ctx.dataDir, data, idempotencyKey),
   );
-  ctx.audit.append({ tool: 'create_todo', redactionStats: { items: 1 } });
+  ctx.audit.append({ tool: 'ssampin_create_todo', redactionStats: { items: 1 } });
   return { ok: true, ref, via };
 }
 async function createEvent(ctx, args) {
@@ -3712,7 +3712,7 @@ async function createEvent(ctx, args) {
   const { ref, via } = await createVia(ctx, 'events', data, idempotencyKey, () =>
     appendEventDirect(ctx.dataDir, data, idempotencyKey),
   );
-  ctx.audit.append({ tool: 'create_event', redactionStats: { items: 1 } });
+  ctx.audit.append({ tool: 'ssampin_create_event', redactionStats: { items: 1 } });
   return { ok: true, ref, via };
 }
 async function mutateTodo(ctx, op, todoToken, extra, provided, tool) {
@@ -3725,10 +3725,17 @@ async function mutateTodo(ctx, op, todoToken, extra, provided, tool) {
   return { ok: true, ref, via: 'app' };
 }
 function completeTodo(ctx, args) {
-  return mutateTodo(ctx, 'complete', args.todoToken, {}, args.idempotencyKey, 'complete_todo');
+  return mutateTodo(
+    ctx,
+    'complete',
+    args.todoToken,
+    {},
+    args.idempotencyKey,
+    'ssampin_complete_todo',
+  );
 }
 function deleteTodo(ctx, args) {
-  return mutateTodo(ctx, 'delete', args.todoToken, {}, args.idempotencyKey, 'delete_todo');
+  return mutateTodo(ctx, 'delete', args.todoToken, {}, args.idempotencyKey, 'ssampin_delete_todo');
 }
 async function updateTodo(ctx, args) {
   const changes = {};
@@ -3778,7 +3785,14 @@ async function updateTodo(ctx, args) {
     throw new WriteValidationError(
       '\uBCC0\uACBD\uD560 \uD544\uB4DC\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.',
     );
-  return mutateTodo(ctx, 'update', args.todoToken, changes, args.idempotencyKey, 'update_todo');
+  return mutateTodo(
+    ctx,
+    'update',
+    args.todoToken,
+    changes,
+    args.idempotencyKey,
+    'ssampin_update_todo',
+  );
 }
 function resolveEventId(ctx, eventToken) {
   const resolved = ctx.store.resolveToken(eventToken);
@@ -3826,7 +3840,7 @@ async function updateEvent(ctx, args) {
   const data = { id, ...changes };
   const idempotencyKey = deriveIdemKey('events', 'update', data, args.idempotencyKey);
   const { ref } = await delegate(ctx, 'update', 'events', idempotencyKey, data);
-  ctx.audit.append({ tool: 'update_event', redactionStats: { items: 1 } });
+  ctx.audit.append({ tool: 'ssampin_update_event', redactionStats: { items: 1 } });
   return { ok: true, ref, via: 'app' };
 }
 async function deleteEvent(ctx, args) {
@@ -3835,7 +3849,7 @@ async function deleteEvent(ctx, args) {
   const data = { id };
   const idempotencyKey = deriveIdemKey('events', 'delete', data, args.idempotencyKey);
   const { ref } = await delegate(ctx, 'delete', 'events', idempotencyKey, data);
-  ctx.audit.append({ tool: 'delete_event', redactionStats: { items: 1 } });
+  ctx.audit.append({ tool: 'ssampin_delete_event', redactionStats: { items: 1 } });
   return { ok: true, ref, via: 'app' };
 }
 
@@ -4832,7 +4846,7 @@ async function createMemo(ctx, args) {
   const { ref, via } = await createVia(ctx, 'memos', data, idempotencyKey, () =>
     appendMemoDirect(ctx.dataDir, data, idempotencyKey),
   );
-  ctx.audit.append({ tool: 'create_memo', redactionStats: { items: 1 } });
+  ctx.audit.append({ tool: 'ssampin_create_memo', redactionStats: { items: 1 } });
   return { ok: true, ref, via };
 }
 async function updateMemo(ctx, args) {
@@ -4860,7 +4874,7 @@ async function updateMemo(ctx, args) {
   const data = { id, ...changes };
   const idempotencyKey = deriveIdemKey('memos', 'update', data, args.idempotencyKey);
   const { ref } = await delegate(ctx, 'update', 'memos', idempotencyKey, data);
-  ctx.audit.append({ tool: 'update_memo', redactionStats: { items: 1 } });
+  ctx.audit.append({ tool: 'ssampin_update_memo', redactionStats: { items: 1 } });
   return { ok: true, ref, via: 'app' };
 }
 async function deleteMemo(ctx, args) {
@@ -4869,7 +4883,7 @@ async function deleteMemo(ctx, args) {
   const data = { id };
   const idempotencyKey = deriveIdemKey('memos', 'delete', data, args.idempotencyKey);
   const { ref } = await delegate(ctx, 'delete', 'memos', idempotencyKey, data);
-  ctx.audit.append({ tool: 'delete_memo', redactionStats: { items: 1 } });
+  ctx.audit.append({ tool: 'ssampin_delete_memo', redactionStats: { items: 1 } });
   return { ok: true, ref, via: 'app' };
 }
 
@@ -4895,7 +4909,7 @@ function resolveGroupId(ctx, groupToken) {
   const id = parseBookmarkGroupIdentity(resolved);
   if (!id)
     throw new WriteValidationError(
-      '\uADF8\uB8F9 \uD1A0\uD070\uC774 \uC544\uB2D9\uB2C8\uB2E4(create_bookmark \uB294 groupToken \uC774 \uD544\uC694). get_bookmarks \uC758 groupToken \uC744 \uC4F0\uC138\uC694.',
+      '\uADF8\uB8F9 \uD1A0\uD070\uC774 \uC544\uB2D9\uB2C8\uB2E4(ssampin_create_bookmark \uB294 groupToken \uC774 \uD544\uC694). get_bookmarks \uC758 groupToken \uC744 \uC4F0\uC138\uC694.',
     );
   return id;
 }
@@ -4933,7 +4947,7 @@ async function createBookmark(ctx, args) {
   const { ref, via } = await createVia(ctx, 'bookmarks', data, idempotencyKey, () =>
     appendBookmarkDirect(ctx.dataDir, { name, url, groupId }, idempotencyKey),
   );
-  ctx.audit.append({ tool: 'create_bookmark', redactionStats: { items: 1 } });
+  ctx.audit.append({ tool: 'ssampin_create_bookmark', redactionStats: { items: 1 } });
   return { ok: true, ref, via };
 }
 async function createBookmarkGroup(ctx, args) {
@@ -4959,7 +4973,7 @@ async function createBookmarkGroup(ctx, args) {
       idempotencyKey,
     ),
   );
-  ctx.audit.append({ tool: 'create_bookmark_group', redactionStats: { items: 1 } });
+  ctx.audit.append({ tool: 'ssampin_create_bookmark_group', redactionStats: { items: 1 } });
   return { ok: true, ref, via };
 }
 async function updateBookmark(ctx, args) {
@@ -4991,7 +5005,7 @@ async function updateBookmark(ctx, args) {
   const data = { id, ...changes };
   const idempotencyKey = deriveIdemKey('bookmarks', 'update', data, args.idempotencyKey);
   const { ref } = await delegate(ctx, 'update', 'bookmarks', idempotencyKey, data);
-  ctx.audit.append({ tool: 'update_bookmark', redactionStats: { items: 1 } });
+  ctx.audit.append({ tool: 'ssampin_update_bookmark', redactionStats: { items: 1 } });
   return { ok: true, ref, via: 'app' };
 }
 async function deleteBookmark(ctx, args) {
@@ -5000,7 +5014,7 @@ async function deleteBookmark(ctx, args) {
   const data = { id };
   const idempotencyKey = deriveIdemKey('bookmarks', 'delete', data, args.idempotencyKey);
   const { ref } = await delegate(ctx, 'delete', 'bookmarks', idempotencyKey, data);
-  ctx.audit.append({ tool: 'delete_bookmark', redactionStats: { items: 1 } });
+  ctx.audit.append({ tool: 'ssampin_delete_bookmark', redactionStats: { items: 1 } });
   return { ok: true, ref, via: 'app' };
 }
 
@@ -5057,7 +5071,7 @@ async function createNotebook(ctx, args) {
   const data = { kind: 'notebook', title };
   const idempotencyKey = deriveIdemKey('notes', 'create', data, args.idempotencyKey);
   const { ref } = await delegate(ctx, 'create', 'notes', idempotencyKey, data);
-  ctx.audit.append({ tool: 'create_notebook', redactionStats: { items: 1 } });
+  ctx.audit.append({ tool: 'ssampin_create_notebook', redactionStats: { items: 1 } });
   return { ok: true, ref, via: 'app' };
 }
 async function createNoteSection(ctx, args) {
@@ -5072,7 +5086,7 @@ async function createNoteSection(ctx, args) {
   const data = { kind: 'section', notebookId, title };
   const idempotencyKey = deriveIdemKey('notes', 'create', data, args.idempotencyKey);
   const { ref } = await delegate(ctx, 'create', 'notes', idempotencyKey, data);
-  ctx.audit.append({ tool: 'create_note_section', redactionStats: { items: 1 } });
+  ctx.audit.append({ tool: 'ssampin_create_note_section', redactionStats: { items: 1 } });
   return { ok: true, ref, via: 'app' };
 }
 async function createNotePage(ctx, args) {
@@ -5095,7 +5109,7 @@ async function createNotePage(ctx, args) {
   }
   const idempotencyKey = deriveIdemKey('notes', 'create', data, args.idempotencyKey);
   const { ref } = await delegate(ctx, 'create', 'notes', idempotencyKey, data);
-  ctx.audit.append({ tool: 'create_note_page', redactionStats: { items: 1 } });
+  ctx.audit.append({ tool: 'ssampin_create_note_page', redactionStats: { items: 1 } });
   return { ok: true, ref, via: 'app' };
 }
 async function updateNotePage(ctx, args) {
@@ -5129,7 +5143,7 @@ async function updateNotePage(ctx, args) {
   const data = { id, ...changes };
   const idempotencyKey = deriveIdemKey('notes', 'update', data, args.idempotencyKey);
   const { ref } = await delegate(ctx, 'update', 'notes', idempotencyKey, data);
-  ctx.audit.append({ tool: 'update_note_page', redactionStats: { items: 1 } });
+  ctx.audit.append({ tool: 'ssampin_update_note_page', redactionStats: { items: 1 } });
   return { ok: true, ref, via: 'app' };
 }
 async function deleteNotePage(ctx, args) {
@@ -5138,7 +5152,7 @@ async function deleteNotePage(ctx, args) {
   const data = { id };
   const idempotencyKey = deriveIdemKey('notes', 'delete', data, args.idempotencyKey);
   const { ref } = await delegate(ctx, 'delete', 'notes', idempotencyKey, data);
-  ctx.audit.append({ tool: 'delete_note_page', redactionStats: { items: 1 } });
+  ctx.audit.append({ tool: 'ssampin_delete_note_page', redactionStats: { items: 1 } });
   return { ok: true, ref, via: 'app' };
 }
 
@@ -6215,7 +6229,7 @@ function createSsampinMcpServer(opts = {}) {
     {
       title: '\uC324\uD540 \uD560\uC77C \uCD94\uAC00',
       description:
-        '\uC324\uD540(ssampin)\uC5D0 \uD560\uC77C\uC744 \uCD94\uAC00\uD569\uB2C8\uB2E4(\uC324\uD540 \uC804\uC6A9 \u2014 \uB2E4\uB978 \uCE98\uB9B0\uB354/\uD560\uC77C \uC11C\uBE44\uC2A4 \uC544\uB2D8). \uC324\uD540\uC774 \uC2E4\uD589 \uC911\uC77C \uB54C\uB9CC \uC548\uC804\uD558\uAC8C \uC801\uC6A9\uB418\uBA70(\uC2E4\uD589 \uC911\uC774 \uC544\uB2C8\uBA74 \uAC70\uBD80), \uC4F0\uAE30\uB294 \uC324\uD540 \uC124\uC815\uC758 "AI \uC5F0\uACB0"\uC5D0\uC11C \uCF1C\uC57C \uD65C\uC131\uD654\uB429\uB2C8\uB2E4(\uB610\uB294 SSAMPIN_BRIDGE_ALLOW_WRITE=1). \uAC19\uC740 idempotencyKey \uC7AC\uC694\uCCAD\uC740 \uC911\uBCF5 \uC0DD\uC131\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.',
+        '\uC324\uD540(ssampin)\uC5D0 \uD560\uC77C\uC744 \uCD94\uAC00\uD569\uB2C8\uB2E4(\uC324\uD540 \uC804\uC6A9 \u2014 \uB2E4\uB978 \uCE98\uB9B0\uB354/\uD560\uC77C \uC11C\uBE44\uC2A4 \uC544\uB2D8). \uC324\uD540\uC774 \uC2E4\uD589 \uC911\uC774\uBA74 \uC571\uC5D0 \uC704\uC784\uD558\uACE0, \uB2EB\uD798\uC774 \uD655\uC815\uB41C \uB54C\uB9CC \uD30C\uC77C\uC5D0 \uC9C1\uC811 \uAE30\uB85D\uD558\uBA70, \uC0C1\uD0DC\uAC00 \uBD88\uD655\uC2E4\uD558\uBA74 \uAC70\uBD80\uD569\uB2C8\uB2E4. \uC4F0\uAE30\uB294 \uC324\uD540 \uC124\uC815\uC758 "AI \uC5F0\uACB0"\uC5D0\uC11C \uCF1C\uC57C \uD65C\uC131\uD654\uB429\uB2C8\uB2E4(\uB610\uB294 SSAMPIN_BRIDGE_ALLOW_WRITE=1). \uAC19\uC740 idempotencyKey \uC7AC\uC694\uCCAD\uC740 \uC911\uBCF5 \uC0DD\uC131\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.',
       inputSchema: {
         text: z.string().min(1).max(500).describe('\uD560\uC77C \uB0B4\uC6A9'),
         dueDate: z
@@ -6250,7 +6264,7 @@ function createSsampinMcpServer(opts = {}) {
     {
       title: '\uC324\uD540 \uC77C\uC815 \uCD94\uAC00',
       description:
-        '\uC324\uD540(ssampin)\uC5D0 \uC77C\uC815\uC744 \uCD94\uAC00\uD569\uB2C8\uB2E4(\uC324\uD540 \uC804\uC6A9 \u2014 Google Calendar \uB4F1 \uB2E4\uB978 \uCE98\uB9B0\uB354 \uC544\uB2D8). \uC324\uD540\uC774 \uC2E4\uD589 \uC911\uC77C \uB54C\uB9CC \uC548\uC804\uD558\uAC8C \uC801\uC6A9\uB429\uB2C8\uB2E4(\uC2E4\uD589 \uC911\uC774 \uC544\uB2C8\uBA74 \uAC70\uBD80). \uC4F0\uAE30 \uD65C\uC131\uD654 \uD544\uC694. \uAC19\uC740 idempotencyKey \uC7AC\uC694\uCCAD\uC740 \uC911\uBCF5 \uC0DD\uC131\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.',
+        '\uC324\uD540(ssampin)\uC5D0 \uC77C\uC815\uC744 \uCD94\uAC00\uD569\uB2C8\uB2E4(\uC324\uD540 \uC804\uC6A9 \u2014 Google Calendar \uB4F1 \uB2E4\uB978 \uCE98\uB9B0\uB354 \uC544\uB2D8). \uC324\uD540\uC774 \uC2E4\uD589 \uC911\uC774\uBA74 \uC571\uC5D0 \uC704\uC784\uD558\uACE0, \uB2EB\uD798\uC774 \uD655\uC815\uB41C \uB54C\uB9CC \uD30C\uC77C\uC5D0 \uC9C1\uC811 \uAE30\uB85D\uD558\uBA70, \uC0C1\uD0DC\uAC00 \uBD88\uD655\uC2E4\uD558\uBA74 \uAC70\uBD80\uD569\uB2C8\uB2E4. \uC4F0\uAE30 \uD65C\uC131\uD654 \uD544\uC694. \uAC19\uC740 idempotencyKey \uC7AC\uC694\uCCAD\uC740 \uC911\uBCF5 \uC0DD\uC131\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.',
       inputSchema: {
         title: z.string().min(1).max(200).describe('\uC77C\uC815 \uC81C\uBAA9'),
         date: z
@@ -6568,7 +6582,7 @@ function createSsampinMcpServer(opts = {}) {
     async (args) => runTool('get_record_evidence', () => getRecordEvidence(ctx, args)),
   );
   server.registerTool(
-    'complete_todo',
+    'ssampin_complete_todo',
     {
       title: '\uD560\uC77C \uC644\uB8CC \uCC98\uB9AC',
       description:
@@ -6581,10 +6595,10 @@ function createSsampinMcpServer(opts = {}) {
       },
       annotations: { readOnlyHint: false },
     },
-    async (args) => runTool('complete_todo', () => completeTodo(ctx, args)),
+    async (args) => runTool('ssampin_complete_todo', () => completeTodo(ctx, args)),
   );
   server.registerTool(
-    'update_todo',
+    'ssampin_update_todo',
     {
       title: '\uD560\uC77C \uC218\uC815',
       description:
@@ -6609,10 +6623,10 @@ function createSsampinMcpServer(opts = {}) {
       },
       annotations: { readOnlyHint: false },
     },
-    async (args) => runTool('update_todo', () => updateTodo(ctx, args)),
+    async (args) => runTool('ssampin_update_todo', () => updateTodo(ctx, args)),
   );
   server.registerTool(
-    'delete_todo',
+    'ssampin_delete_todo',
     {
       title: '\uD560\uC77C \uC0AD\uC81C',
       description:
@@ -6625,10 +6639,10 @@ function createSsampinMcpServer(opts = {}) {
       },
       annotations: { readOnlyHint: false },
     },
-    async (args) => runTool('delete_todo', () => deleteTodo(ctx, args)),
+    async (args) => runTool('ssampin_delete_todo', () => deleteTodo(ctx, args)),
   );
   server.registerTool(
-    'update_event',
+    'ssampin_update_event',
     {
       title: '\uC77C\uC815 \uC218\uC815',
       description:
@@ -6649,10 +6663,10 @@ function createSsampinMcpServer(opts = {}) {
       },
       annotations: { readOnlyHint: false },
     },
-    async (args) => runTool('update_event', () => updateEvent(ctx, args)),
+    async (args) => runTool('ssampin_update_event', () => updateEvent(ctx, args)),
   );
   server.registerTool(
-    'delete_event',
+    'ssampin_delete_event',
     {
       title: '\uC77C\uC815 \uC0AD\uC81C',
       description:
@@ -6665,10 +6679,10 @@ function createSsampinMcpServer(opts = {}) {
       },
       annotations: { readOnlyHint: false },
     },
-    async (args) => runTool('delete_event', () => deleteEvent(ctx, args)),
+    async (args) => runTool('ssampin_delete_event', () => deleteEvent(ctx, args)),
   );
   server.registerTool(
-    'create_memo',
+    'ssampin_create_memo',
     {
       title: '\uD3EC\uC2A4\uD2B8\uC787 \uBA54\uBAA8 \uCD94\uAC00',
       description:
@@ -6690,10 +6704,10 @@ function createSsampinMcpServer(opts = {}) {
       },
       annotations: { readOnlyHint: false },
     },
-    async (args) => runTool('create_memo', () => createMemo(ctx, args)),
+    async (args) => runTool('ssampin_create_memo', () => createMemo(ctx, args)),
   );
   server.registerTool(
-    'update_memo',
+    'ssampin_update_memo',
     {
       title: '\uD3EC\uC2A4\uD2B8\uC787 \uBA54\uBAA8 \uC218\uC815',
       description:
@@ -6712,10 +6726,10 @@ function createSsampinMcpServer(opts = {}) {
       },
       annotations: { readOnlyHint: false },
     },
-    async (args) => runTool('update_memo', () => updateMemo(ctx, args)),
+    async (args) => runTool('ssampin_update_memo', () => updateMemo(ctx, args)),
   );
   server.registerTool(
-    'delete_memo',
+    'ssampin_delete_memo',
     {
       title: '\uD3EC\uC2A4\uD2B8\uC787 \uBA54\uBAA8 \uC0AD\uC81C',
       description:
@@ -6728,10 +6742,10 @@ function createSsampinMcpServer(opts = {}) {
       },
       annotations: { readOnlyHint: false },
     },
-    async (args) => runTool('delete_memo', () => deleteMemo(ctx, args)),
+    async (args) => runTool('ssampin_delete_memo', () => deleteMemo(ctx, args)),
   );
   server.registerTool(
-    'create_bookmark_group',
+    'ssampin_create_bookmark_group',
     {
       title: '\uBD81\uB9C8\uD06C \uADF8\uB8F9 \uCD94\uAC00',
       description:
@@ -6750,14 +6764,14 @@ function createSsampinMcpServer(opts = {}) {
       },
       annotations: { readOnlyHint: false },
     },
-    async (args) => runTool('create_bookmark_group', () => createBookmarkGroup(ctx, args)),
+    async (args) => runTool('ssampin_create_bookmark_group', () => createBookmarkGroup(ctx, args)),
   );
   server.registerTool(
-    'create_bookmark',
+    'ssampin_create_bookmark',
     {
       title: '\uBD81\uB9C8\uD06C(\uB9C1\uD06C) \uCD94\uAC00',
       description:
-        '\uC324\uD540(ssampin)\uC5D0 \uBD81\uB9C8\uD06C(\uB9C1\uD06C)\uB97C \uCD94\uAC00\uD569\uB2C8\uB2E4. groupToken \uC740 get_bookmarks(\uBCF8\uBB38 \uC77D\uAE30 \uD1A0\uAE00 ON)\uAC00 \uBC1C\uAE09\uD55C \uB300\uC0C1 \uADF8\uB8F9 \uD1A0\uD070\uC774\uBA70, \uADF8\uB8F9\uC774 \uC5C6\uC73C\uBA74 create_bookmark_group \uC73C\uB85C \uBA3C\uC800 \uB9CC\uB4DC\uC138\uC694. url \uC740 http/https \uB9CC \uD5C8\uC6A9\uD569\uB2C8\uB2E4. \uC4F0\uAE30 \uD65C\uC131\uD654 \uD544\uC694. \uC324\uD540 \uC2E4\uD589 \uC911\uC774\uBA74 \uC989\uC2DC \uBC18\uC601, \uB2EB\uD600 \uC788\uC73C\uBA74 \uD30C\uC77C\uC5D0 \uC9C1\uC811 \uC800\uC7A5.',
+        '\uC324\uD540(ssampin)\uC5D0 \uBD81\uB9C8\uD06C(\uB9C1\uD06C)\uB97C \uCD94\uAC00\uD569\uB2C8\uB2E4. groupToken \uC740 get_bookmarks(\uBCF8\uBB38 \uC77D\uAE30 \uD1A0\uAE00 ON)\uAC00 \uBC1C\uAE09\uD55C \uB300\uC0C1 \uADF8\uB8F9 \uD1A0\uD070\uC774\uBA70, \uADF8\uB8F9\uC774 \uC5C6\uC73C\uBA74 ssampin_create_bookmark_group \uC73C\uB85C \uBA3C\uC800 \uB9CC\uB4DC\uC138\uC694. url \uC740 http/https \uB9CC \uD5C8\uC6A9\uD569\uB2C8\uB2E4. \uC4F0\uAE30 \uD65C\uC131\uD654 \uD544\uC694. \uC324\uD540 \uC2E4\uD589 \uC911\uC774\uBA74 \uC989\uC2DC \uBC18\uC601, \uB2EB\uD600 \uC788\uC73C\uBA74 \uD30C\uC77C\uC5D0 \uC9C1\uC811 \uC800\uC7A5.',
       inputSchema: {
         groupToken: z
           .string()
@@ -6773,10 +6787,10 @@ function createSsampinMcpServer(opts = {}) {
       },
       annotations: { readOnlyHint: false },
     },
-    async (args) => runTool('create_bookmark', () => createBookmark(ctx, args)),
+    async (args) => runTool('ssampin_create_bookmark', () => createBookmark(ctx, args)),
   );
   server.registerTool(
-    'update_bookmark',
+    'ssampin_update_bookmark',
     {
       title: '\uBD81\uB9C8\uD06C \uC218\uC815',
       description:
@@ -6791,10 +6805,10 @@ function createSsampinMcpServer(opts = {}) {
       },
       annotations: { readOnlyHint: false },
     },
-    async (args) => runTool('update_bookmark', () => updateBookmark(ctx, args)),
+    async (args) => runTool('ssampin_update_bookmark', () => updateBookmark(ctx, args)),
   );
   server.registerTool(
-    'delete_bookmark',
+    'ssampin_delete_bookmark',
     {
       title: '\uBD81\uB9C8\uD06C \uC0AD\uC81C',
       description:
@@ -6807,10 +6821,10 @@ function createSsampinMcpServer(opts = {}) {
       },
       annotations: { readOnlyHint: false },
     },
-    async (args) => runTool('delete_bookmark', () => deleteBookmark(ctx, args)),
+    async (args) => runTool('ssampin_delete_bookmark', () => deleteBookmark(ctx, args)),
   );
   server.registerTool(
-    'create_notebook',
+    'ssampin_create_notebook',
     {
       title: '\uB178\uD2B8\uBD81 \uCD94\uAC00',
       description:
@@ -6824,10 +6838,10 @@ function createSsampinMcpServer(opts = {}) {
       },
       annotations: { readOnlyHint: false },
     },
-    async (args) => runTool('create_notebook', () => createNotebook(ctx, args)),
+    async (args) => runTool('ssampin_create_notebook', () => createNotebook(ctx, args)),
   );
   server.registerTool(
-    'create_note_section',
+    'ssampin_create_note_section',
     {
       title: '\uB178\uD2B8 \uC139\uC158 \uCD94\uAC00',
       description:
@@ -6841,10 +6855,10 @@ function createSsampinMcpServer(opts = {}) {
       },
       annotations: { readOnlyHint: false },
     },
-    async (args) => runTool('create_note_section', () => createNoteSection(ctx, args)),
+    async (args) => runTool('ssampin_create_note_section', () => createNoteSection(ctx, args)),
   );
   server.registerTool(
-    'create_note_page',
+    'ssampin_create_note_page',
     {
       title: '\uB178\uD2B8 \uD398\uC774\uC9C0 \uCD94\uAC00',
       description:
@@ -6863,10 +6877,10 @@ function createSsampinMcpServer(opts = {}) {
       },
       annotations: { readOnlyHint: false },
     },
-    async (args) => runTool('create_note_page', () => createNotePage(ctx, args)),
+    async (args) => runTool('ssampin_create_note_page', () => createNotePage(ctx, args)),
   );
   server.registerTool(
-    'update_note_page',
+    'ssampin_update_note_page',
     {
       title: '\uB178\uD2B8 \uD398\uC774\uC9C0 \uC218\uC815',
       description:
@@ -6889,10 +6903,10 @@ function createSsampinMcpServer(opts = {}) {
       },
       annotations: { readOnlyHint: false },
     },
-    async (args) => runTool('update_note_page', () => updateNotePage(ctx, args)),
+    async (args) => runTool('ssampin_update_note_page', () => updateNotePage(ctx, args)),
   );
   server.registerTool(
-    'delete_note_page',
+    'ssampin_delete_note_page',
     {
       title: '\uB178\uD2B8 \uD398\uC774\uC9C0 \uC0AD\uC81C',
       description:
@@ -6905,7 +6919,7 @@ function createSsampinMcpServer(opts = {}) {
       },
       annotations: { readOnlyHint: false },
     },
-    async (args) => runTool('delete_note_page', () => deleteNotePage(ctx, args)),
+    async (args) => runTool('ssampin_delete_note_page', () => deleteNotePage(ctx, args)),
   );
   return server;
 }
