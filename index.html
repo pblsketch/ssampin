@@ -45,9 +45,11 @@
         background: #0a0e17;
       }
       #splash .icon {
-        font-size: 48px;
-        opacity: 0.6;
-        animation: pulse 1.5s ease-in-out infinite;
+        width: 88px;
+        height: 88px;
+        /* 픽셀아트 마스코트가 축소 렌더링에서 흐려지지 않도록 보간 끔 */
+        image-rendering: pixelated;
+        animation: pulse 1.8s ease-in-out infinite;
       }
       #splash .text {
         color: #94a3b8;
@@ -56,8 +58,8 @@
         opacity: 0.5;
       }
       @keyframes pulse {
-        0%, 100% { opacity: 0.4; transform: scale(1); }
-        50% { opacity: 0.7; transform: scale(1.05); }
+        0%, 100% { opacity: 0.85; transform: translateY(0) scale(1); }
+        50% { opacity: 1; transform: translateY(-4px) scale(1.04); }
       }
     </style>
   </head>
@@ -65,7 +67,7 @@
     <div id="root">
       <!-- 스플래시: React 마운트 전까지 표시, 마운트 후 React가 대체 -->
       <div id="splash">
-        <span class="icon">📌</span>
+        <img class="icon" src="./floating-pin.png" alt="쌤핀이" width="88" height="88" />
         <span class="text">쌤핀</span>
       </div>
     </div>
