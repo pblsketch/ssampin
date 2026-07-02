@@ -151,12 +151,18 @@ export class ComciganApiClient implements IComciganPort {
     }
 
     const separatorRaw = json['분리'];
+    // 교시별 시각(일과시간)은 학교가 입력하지 않았으면 미제공 — 있을 때만 통과시킨다.
+    const dayTimesRaw = json['일과시간'];
+    const dayTimes = Array.isArray(dayTimesRaw)
+      ? dayTimesRaw.filter((t): t is string => typeof t === 'string')
+      : undefined;
     return {
       schoolName: typeof json['학교명'] === 'string' ? json['학교명'] : '',
       teachers: teachers.map((t) => (typeof t === 'string' ? t : '')),
       subjects: subjects.map((s) => (typeof s === 'string' ? s : '')),
       separator: typeof separatorRaw === 'number' && separatorRaw > 0 ? separatorRaw : 100,
       baseGrid: baseGrid as ComciganGrid,
+      ...(dayTimes && dayTimes.length > 0 ? { dayTimes } : {}),
     };
   }
 }

@@ -21,6 +21,8 @@ import {
 } from '@domain/entities/NeisTimetable';
 import type { NeisClassInfo } from '@domain/entities/NeisTimetable';
 import { neisPort, enrichSchoolOnSelect } from '@adapters/di/container';
+import { ComciganPeriodTimesModal } from './ComciganPeriodTimesModal';
+import { periodTimesToSettingsPatch } from '@domain/rules/comciganRules';
 import { NAV_ITEMS } from '@adapters/components/Layout/Sidebar';
 import type { PageId } from '@adapters/components/Layout/Sidebar';
 import { ROLE_MENU_MAP, MENU_DESCRIPTIONS, type TeacherRoleId } from './menuRecommendations';
@@ -64,6 +66,9 @@ export function Onboarding() {
 
   // NEIS 학사일정 자동 동기화 온보딩 옵트인
   const [neisScheduleEnabled, setNeisScheduleEnabled] = useState(true);
+
+  // 컴시간에서 교시 시각 가져오기 모달 (교시 시간 설정 단계)
+  const [showComciganTimes, setShowComciganTimes] = useState(false);
 
   // NEIS 학교가 선택된 상태인지
   const hasNeisSchool = Boolean(draft.neis?.schoolCode && draft.neis?.atptCode);
@@ -722,6 +727,18 @@ export function Onboarding() {
                 ))}
               </div>
 
+              {/* 컴시간에서 교시 시각 가져오기 (컴시간 쓰는 학교용 — 점심시간까지 자동) */}
+              <button
+                type="button"
+                onClick={() => setShowComciganTimes(true)}
+                className="mb-6 flex items-center gap-2 px-4 py-2 rounded-lg bg-sp-surface border border-sp-border text-sm font-medium text-sp-text hover:bg-sp-card transition-colors"
+              >
+                <span className="material-symbols-outlined text-icon-md text-sp-accent">
+                  download
+                </span>
+                컴시간에서 교시 시각 가져오기
+              </button>
+
               {draft.schoolLevel === 'custom' && (
                 <div className="flex gap-4 w-full max-w-lg mb-4">
                   <div className="flex-1 space-y-1">
@@ -998,6 +1015,20 @@ export function Onboarding() {
             </button>
           </div>
         )}
+
+        <ComciganPeriodTimesModal
+          isOpen={showComciganTimes}
+          onClose={() => setShowComciganTimes(false)}
+          schoolLevel={draft.schoolLevel ?? 'middle'}
+          defaultQuery={draft.schoolName}
+          onImport={(parsed) => {
+            setDraft((prev) => ({
+              ...prev,
+              ...periodTimesToSettingsPatch(parsed),
+              maxPeriods: parsed.periodTimes.length,
+            }));
+          }}
+        />
       </div>
     </div>
   );

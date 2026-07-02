@@ -31,6 +31,12 @@ export interface ComciganRawSchoolData {
   readonly separator: number;
   /** 기본 편성표 격자 (자료481 계열 — 일일 변경 미반영 원본) */
   readonly baseGrid: ComciganGrid;
+  /**
+   * 교시별 시각 문자열 (자료.일과시간 — 예: '5(13:40)' = 5교시 13:40 시작).
+   * 학교가 컴시간에 입력하지 않았으면 미제공(undefined). 시작 시각만 담기며,
+   * 끝 시각·점심 위치는 parseComciganPeriodTimes에서 추정한다.
+   */
+  readonly dayTimes?: readonly string[];
 }
 
 /** 해석 완료된 수업 1칸 */

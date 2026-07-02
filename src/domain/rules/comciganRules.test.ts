@@ -4,6 +4,10 @@ import {
   decodeTimetable,
   summarizeTeachers,
   buildTeacherSchedule,
+  buildClassSchedule,
+  listComciganClasses,
+  parseComciganPeriodTimes,
+  periodTimesToSettingsPatch,
   COMCIGAN_DUMMY_SUBJECTS,
 } from './comciganRules';
 import type { ComciganRawSchoolData } from '../entities/ComciganTimetable';
@@ -166,5 +170,127 @@ describe('buildTeacherSchedule — 교사 시간표 구성', () => {
     expect(maxPeriod).toBe(0);
     expect(totalHours).toBe(0);
     expect(schedule['월']).toHaveLength(0);
+  });
+});
+
+describe('listComciganClasses — 등장 학년-반 목록', () => {
+  it('격자에 실제 있는 학년-반만 학년·반 오름차순으로 반환한다', () => {
+    const lessons = decodeTimetable(makeFixture());
+    expect(listComciganClasses(lessons)).toEqual([
+      { grade: 1, classNum: 1 },
+      { grade: 1, classNum: 2 },
+    ]);
+  });
+
+  it('수업이 없으면 빈 배열', () => {
+    expect(listComciganClasses([])).toEqual([]);
+  });
+});
+
+describe('buildClassSchedule — 학급 시간표 구성 (교사명 포함)', () => {
+  it("'월'~'금' 키·빈칸 {subject:'',teacher:''} 규약으로 담당 교사까지 채운다", () => {
+    const lessons = decodeTimetable(makeFixture());
+    const { schedule, maxPeriod } = buildClassSchedule(lessons, 1, 1);
+
+    expect(maxPeriod).toBe(3); // 1-1 월요일이 3교시로 가장 김
+    expect(schedule['월']).toEqual([
+      { subject: '언매', teacher: '백순*' },
+      { subject: '수학', teacher: 'A교사*' },
+      { subject: '자율', teacher: '자*' },
+    ]);
+    // 화요일은 2교시까지만 수업 → 3교시는 빈칸으로 패딩
+    expect(schedule['화']).toEqual([
+      { subject: '국어', teacher: 'B교사*' },
+      { subject: '언매', teacher: '백순*' },
+      { subject: '', teacher: '' },
+    ]);
+    // 수업 없는 요일도 같은 길이의 빈칸 배열
+    expect(schedule['수']).toEqual([
+      { subject: '', teacher: '' },
+      { subject: '', teacher: '' },
+      { subject: '', teacher: '' },
+    ]);
+  });
+
+  it('다른 반(1-2)은 자기 수업만 담는다', () => {
+    const lessons = decodeTimetable(makeFixture());
+    const { schedule, maxPeriod } = buildClassSchedule(lessons, 1, 2);
+    expect(maxPeriod).toBe(1);
+    expect(schedule['월']).toEqual([{ subject: '언매', teacher: '백순*' }]);
+    expect(schedule['화']).toEqual([{ subject: '', teacher: '' }]);
+  });
+
+  it('존재하지 않는 반은 maxPeriod 0의 빈 시간표', () => {
+    const lessons = decodeTimetable(makeFixture());
+    const { schedule, maxPeriod } = buildClassSchedule(lessons, 9, 9);
+    expect(maxPeriod).toBe(0);
+    expect(schedule['월']).toHaveLength(0);
+  });
+});
+
+describe('parseComciganPeriodTimes — 일과시간 → 교시 시각', () => {
+  it('실측 일과시간을 교시 시각으로 변환하고 점심(4교시 후)을 추정한다', () => {
+    // 실측: 4교시 11:40 → 5교시 13:40 (점심 갭). 시작 간격 60분 − 쉬는시간 10분 = 수업 50분
+    const dayTimes = [
+      '1(08:40)',
+      '2(09:40)',
+      '3(10:40)',
+      '4(11:40)',
+      '5(13:40)',
+      '6(14:40)',
+      '7(15:40)',
+      '8(16:40)',
+    ];
+    const result = parseComciganPeriodTimes(dayTimes, 'high');
+    expect(result).not.toBeNull();
+    expect(result!.periodTimes).toHaveLength(8);
+    expect(result!.periodTimes[0]).toEqual({ period: 1, start: '08:40', end: '09:30' });
+    // 4교시 끝(=점심 시작)이 12:25가 아니라 12:30 이어야 한다 (버그 회귀 방지)
+    expect(result!.periodTimes[3]).toEqual({ period: 4, start: '11:40', end: '12:30' });
+    expect(result!.periodTimes[4]).toEqual({ period: 5, start: '13:40', end: '14:30' });
+    expect(result!.lunchAfterPeriod).toBe(4);
+  });
+
+  it('학교급 설정이 실제와 달라도 시작 간격에서 수업 길이를 역산한다', () => {
+    // 학교급을 'middle'로 넘겨도 데이터 간격 60분 → 수업 50분으로 자동 교정
+    const result = parseComciganPeriodTimes(['2(09:40)', '1(08:40)'], 'middle');
+    expect(result!.periodTimes.map((p) => p.period)).toEqual([1, 2]);
+    expect(result!.periodTimes[0]).toEqual({ period: 1, start: '08:40', end: '09:30' });
+  });
+
+  it('역산할 연속 교시가 없으면 학교급 기본 수업시간으로 폴백한다', () => {
+    // 단일 교시 → 간격 계산 불가 → 중학교 기본 45분
+    const result = parseComciganPeriodTimes(['3(10:00)'], 'middle');
+    expect(result!.periodTimes[0]).toEqual({ period: 3, start: '10:00', end: '10:45' });
+  });
+
+  it('미제공·빈 배열·불량 입력은 null 을 반환한다 (throw 없음)', () => {
+    expect(parseComciganPeriodTimes(undefined, 'high')).toBeNull();
+    expect(parseComciganPeriodTimes(null, 'high')).toBeNull();
+    expect(parseComciganPeriodTimes([], 'high')).toBeNull();
+    expect(parseComciganPeriodTimes(['정보 없음', 'x'], 'high')).toBeNull();
+  });
+});
+
+describe('periodTimesToSettingsPatch — 교시 시각 → 설정 payload', () => {
+  it('점심 위치를 알면 점심 시작·끝(직전 교시 끝 ~ 다음 교시 시작)까지 채운다', () => {
+    const parsed = parseComciganPeriodTimes(
+      ['1(08:40)', '2(09:40)', '3(10:40)', '4(11:40)', '5(13:40)'],
+      'high',
+    )!;
+    const patch = periodTimesToSettingsPatch(parsed);
+    expect(patch.lunchAfterPeriod).toBe(4);
+    expect(patch.lunchStart).toBe('12:30'); // 4교시 끝
+    expect(patch.lunchEnd).toBe('13:40'); // 5교시 시작(컴시간 정확값)
+    expect(patch.periodTimes).toBe(parsed.periodTimes);
+  });
+
+  it('점심을 못 찾으면 periodTimes만 담고 점심 필드는 비운다', () => {
+    const parsed = parseComciganPeriodTimes(['1(08:40)', '2(09:40)'], 'high')!;
+    const patch = periodTimesToSettingsPatch(parsed);
+    expect(patch.lunchAfterPeriod).toBeUndefined();
+    expect(patch.lunchStart).toBeUndefined();
+    expect(patch.lunchEnd).toBeUndefined();
+    expect(patch.periodTimes).toHaveLength(2);
   });
 });

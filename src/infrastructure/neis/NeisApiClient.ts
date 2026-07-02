@@ -62,36 +62,42 @@ export class NeisApiClient implements INeisPort {
 
     const url = `${this.baseUrl}/schoolInfo?${params.toString()}`;
 
+    // 네트워크·타임아웃 실패는 예외로 전파해 무한 로딩을 막는다(다른 조회 메서드와 동일하게
+    // fetchWithTimeout 사용). 검색어에 해당하는 학교가 없는 '정상 빈 결과'는 [] 로 반환한다.
+    let json: NeisApiResponse;
     try {
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-      const json = (await res.json()) as NeisApiResponse;
-      const data = json['schoolInfo'];
-      if (!data || data.length < 2) return [];
-
-      const head = data[0]?.head;
-      if (!head) return [];
-      const result = head[1]?.RESULT;
-      if (result?.CODE !== 'INFO-000') return [];
-
-      const rows = data[1]?.row;
-      if (!rows) return [];
-
-      return rows.map((row) => ({
-        schoolName: row['SCHUL_NM'] ?? '',
-        schoolCode: row['SD_SCHUL_CODE'] ?? '',
-        atptCode: row['ATPT_OFCDC_SC_CODE'] ?? '',
-        address: row['ORG_RDNMA'] ?? row['ORG_RDNDA'] ?? '',
-        schoolType: row['SCHUL_KND_SC_NM'] ?? '',
-        // 같은 응답에 포함된 우편번호·전화·팩스 (추가 호출 없음). 빈값은 undefined 로.
-        postalCode: (row['ORG_RDNZC'] ?? '').trim() || undefined,
-        tel: (row['ORG_TELNO'] ?? '').trim() || undefined,
-        fax: (row['ORG_FAXNO'] ?? '').trim() || undefined,
-      }));
-    } catch {
-      return [];
+      const res = await this.fetchWithTimeout(url);
+      json = (await res.json()) as NeisApiResponse;
+    } catch (e) {
+      if (e instanceof NeisApiError) throw e;
+      throw new NeisApiError(
+        'NETWORK_ERROR',
+        '학교 검색 연결이 지연되고 있어요. 잠시 후 다시 시도하거나 직접 입력을 이용해주세요.',
+      );
     }
+
+    const data = json['schoolInfo'];
+    if (!data || data.length < 2) return [];
+
+    const head = data[0]?.head;
+    if (!head) return [];
+    const result = head[1]?.RESULT;
+    if (result?.CODE !== 'INFO-000') return [];
+
+    const rows = data[1]?.row;
+    if (!rows) return [];
+
+    return rows.map((row) => ({
+      schoolName: row['SCHUL_NM'] ?? '',
+      schoolCode: row['SD_SCHUL_CODE'] ?? '',
+      atptCode: row['ATPT_OFCDC_SC_CODE'] ?? '',
+      address: row['ORG_RDNMA'] ?? row['ORG_RDNDA'] ?? '',
+      schoolType: row['SCHUL_KND_SC_NM'] ?? '',
+      // 같은 응답에 포함된 우편번호·전화·팩스 (추가 호출 없음). 빈값은 undefined 로.
+      postalCode: (row['ORG_RDNZC'] ?? '').trim() || undefined,
+      tel: (row['ORG_TELNO'] ?? '').trim() || undefined,
+      fax: (row['ORG_FAXNO'] ?? '').trim() || undefined,
+    }));
   }
 
   async getMeals(

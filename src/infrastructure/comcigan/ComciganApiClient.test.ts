@@ -45,6 +45,7 @@ const TIMETABLE_JSON = JSON.stringify({
   자료446: ['', '박지*', '백순*'],
   자료492: ['', '국어', '언매'],
   자료481: [[], [[], [[], [2, 2002, 1001]]]],
+  일과시간: ['1(08:40)', '2(09:40)'],
 });
 
 function toBuf(bytes: Uint8Array): ArrayBuffer {
@@ -108,8 +109,28 @@ describe('ComciganApiClient — 라우트 추출·검색·시간표 수신', () 
     expect(data.teachers).toEqual(['', '박지*', '백순*']);
     expect(data.subjects).toEqual(['', '국어', '언매']);
     expect(Array.isArray(data.baseGrid)).toBe(true);
+    // 일과시간(교시별 시각)도 함께 통과된다
+    expect(data.dayTimes).toEqual(['1(08:40)', '2(09:40)']);
     const ttPath = transport.requestedPaths.find((p) => p.startsWith('/36179_T?'));
     expect(ttPath).toBe(`/36179_T?${btoa('73629_77367_0_1')}`);
+  });
+
+  it('일과시간이 없는 학교는 dayTimes 를 미제공(undefined)으로 둔다', async () => {
+    const transport = fixtureTransport({
+      timetableBody: JSON.stringify({
+        학교명: 'X',
+        분리: 1000,
+        자료446: ['', '박지*'],
+        자료492: ['', '국어'],
+        자료481: [[], [[], [[], [2, 1001]]]],
+      }),
+    });
+    const client = new ComciganApiClient(transport);
+    const data = await client.getSchoolData(77367);
+    expect(data.dayTimes).toBeUndefined();
+    // 교사·과목 등 기존 필드는 그대로 (무회귀)
+    expect(data.teachers).toEqual(['', '박지*']);
+    expect(data.subjects).toEqual(['', '국어']);
   });
 
   it('라우트 코드는 캐시되어 /st 를 한 번만 요청한다', async () => {

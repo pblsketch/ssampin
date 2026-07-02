@@ -7,6 +7,8 @@ import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { toLocalDateString } from '@shared/utils/localDate';
 import { getDayOfWeek, getCurrentPeriod } from '@domain/rules/periodRules';
 import { getActiveDays } from '@domain/valueObjects/DayOfWeek';
+import { periodTimesToSettingsPatch } from '@domain/rules/comciganRules';
+import type { ParsedComciganPeriodTimes } from '@domain/rules/comciganRules';
 import type { DayOfWeekFull } from '@domain/valueObjects/DayOfWeek';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import type { TeacherPeriod, ClassPeriod, TimetableOverride } from '@domain/entities/Timetable';
@@ -32,6 +34,7 @@ import { TimetableOverridesPanel } from './TimetableOverridesPanel';
 import { InlineColorPalette } from './InlineColorPalette';
 import { NeisImportModal } from './NeisImportModal';
 import { ComciganImportModal } from './ComciganImportModal';
+import { ComciganClassImportModal } from './ComciganClassImportModal';
 import { TeacherExcelPreviewModal } from './TeacherExcelPreviewModal';
 /* eslint-disable no-restricted-imports */
 import {
@@ -344,6 +347,9 @@ export function TimetablePage() {
   // ── 컴시간 교사 시간표 불러오기 모달 ──
   const [showComciganImport, setShowComciganImport] = useState(false);
 
+  // ── 컴시간 학급 시간표 불러오기 모달 ──
+  const [showComciganClassImport, setShowComciganClassImport] = useState(false);
+
   const hasExistingData = useMemo(() => {
     return activeDays.some((day) =>
       (classSchedule[day] ?? []).some((cp) => cp.subject.trim() !== ''),
@@ -393,9 +399,17 @@ export function TimetablePage() {
   const updateTeacherSchedule = useScheduleStore((s) => s.updateTeacherSchedule);
   const [showExcelPreview, setShowExcelPreview] = useState(false);
   const [previewSchedule, setPreviewSchedule] = useState<TeacherScheduleData | null>(null);
+  // 컴시간 교사 불러오기에서 '교시 시각 함께 가져오기' 선택 시 확정 단계에 적용할 payload
+  const [previewPeriodTimes, setPreviewPeriodTimes] = useState<ParsedComciganPeriodTimes | null>(
+    null,
+  );
 
   const handleExcelConfirm = useCallback(async () => {
     if (!previewSchedule) return;
+    // 교시 시각을 먼저 적용해 아래 maxPeriods·색상 설정 갱신과 저장이 겹치지 않게 직렬화한다.
+    if (previewPeriodTimes) {
+      await updateSettings(periodTimesToSettingsPatch(previewPeriodTimes));
+    }
     await updateTeacherSchedule(previewSchedule);
 
     const maxFromData = Math.max(...Object.values(previewSchedule).map((arr) => arr.length), 0);
@@ -431,8 +445,10 @@ export function TimetablePage() {
     showToast('교사 시간표가 업데이트되었습니다!', 'success');
     setShowExcelPreview(false);
     setPreviewSchedule(null);
+    setPreviewPeriodTimes(null);
   }, [
     previewSchedule,
+    previewPeriodTimes,
     updateTeacherSchedule,
     settings.maxPeriods,
     settings.enableWeekendDays,
@@ -480,6 +496,17 @@ export function TimetablePage() {
               >
                 <span className="material-symbols-outlined text-icon-lg">download</span>
                 <span className="hidden xl:inline">나이스에서 불러오기</span>
+              </button>
+            )}
+
+            {/* 학급 시간표: 컴시간에서 불러오기 (컴시간 쓰는 학교용 보조 경로 — 담당 교사까지 채움) */}
+            {tab === 'class' && (
+              <button
+                onClick={() => setShowComciganClassImport(true)}
+                className="flex items-center gap-2 rounded-xl bg-sp-surface border border-sp-border px-4 py-2.5 text-sm font-bold text-sp-text hover:bg-sp-card transition-all active:scale-95"
+              >
+                <span className="material-symbols-outlined text-icon-lg">download</span>
+                <span className="hidden xl:inline">컴시간에서 불러오기</span>
               </button>
             )}
 
@@ -848,11 +875,23 @@ export function TimetablePage() {
       <ComciganImportModal
         isOpen={showComciganImport}
         onClose={() => setShowComciganImport(false)}
-        onImport={(schedule) => {
+        onImport={(schedule, periodTimes) => {
           setShowComciganImport(false);
           setPreviewSchedule(schedule);
+          setPreviewPeriodTimes(periodTimes);
           setShowExcelPreview(true);
         }}
+      />
+
+      {/* 컴시간 학급 시간표 불러오기 — 나이스와 동일 적용 경로 재사용 */}
+      <ComciganClassImportModal
+        isOpen={showComciganClassImport}
+        onClose={() => setShowComciganClassImport(false)}
+        onImport={(data, maxPeriods) => {
+          setShowComciganClassImport(false);
+          void handleNeisImport(data, maxPeriods);
+        }}
+        hasExistingData={hasExistingData}
       />
 
       {/* 교사 시간표 불러오기 미리보기 모달 */}
@@ -865,6 +904,7 @@ export function TimetablePage() {
           onCancel={() => {
             setShowExcelPreview(false);
             setPreviewSchedule(null);
+            setPreviewPeriodTimes(null);
           }}
         />
       )}
