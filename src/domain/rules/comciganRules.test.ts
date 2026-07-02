@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   decodeLessonCode,
   decodeTimetable,
+  detectDecodeAnomaly,
   summarizeTeachers,
   buildTeacherSchedule,
   buildClassSchedule,
@@ -292,5 +293,93 @@ describe('periodTimesToSettingsPatch — 교시 시각 → 설정 payload', () =
     expect(patch.lunchStart).toBeUndefined();
     expect(patch.lunchEnd).toBeUndefined();
     expect(patch.periodTimes).toHaveLength(2);
+  });
+});
+
+/** 같은 마스킹 이름 '김민*'을 서로 다른 인덱스(1·2)로 가진 학교 */
+function makeCollisionFixture(): ComciganRawSchoolData {
+  const teachers = ['', '김민*', '김민*', '이철*'];
+  const subjects = ['', '국어', '수학', '영어'];
+  return {
+    schoolName: '동명이인고',
+    teachers,
+    subjects,
+    separator: 1000,
+    baseGrid: [
+      [],
+      [
+        [],
+        [
+          [],
+          [2, code(1, 1), code(2, 2)], // 월: 국어(김민* idx1), 수학(김민* idx2)
+          [1, code(3, 3)], // 화: 영어(이철* idx3)
+        ],
+      ],
+    ],
+  };
+}
+
+/** 한 반의 월~금 8교시를 전부 한 교사(idx1)로 몰아 40시간(>30) 만드는 병합 시뮬 */
+function makeOverloadFixture(): ComciganRawSchoolData {
+  const day = [8, ...Array.from({ length: 8 }, () => code(1, 1))];
+  const classArr = [[], day, day, day, day, day]; // [요일0(미사용), 월, 화, 수, 목, 금]
+  return {
+    schoolName: '과부하고',
+    teachers: ['', '과로*', 'B교사*'],
+    subjects: ['', '국어'],
+    separator: 1000,
+    baseGrid: [[], [[], classArr]],
+  };
+}
+
+describe('summarizeTeachers — 마스킹 동명이인 구분(maskedNameCollision)', () => {
+  it('같은 마스킹 이름이 2명 이상이면 각각 true, 항목은 분리 유지', () => {
+    const summaries = summarizeTeachers(decodeTimetable(makeCollisionFixture()));
+    const kims = summaries.filter((s) => s.name === '김민*');
+    expect(kims).toHaveLength(2); // 인덱스 별개 → 병합되지 않음
+    expect(kims.every((s) => s.maskedNameCollision)).toBe(true);
+    // 서로 다른 과목을 각자 유지(데이터 병합 아님)
+    expect(new Set(kims.flatMap((s) => s.subjects))).toEqual(new Set(['국어', '수학']));
+  });
+
+  it('유일한 이름은 maskedNameCollision=false', () => {
+    const summaries = summarizeTeachers(decodeTimetable(makeCollisionFixture()));
+    const lee = summaries.find((s) => s.name === '이철*');
+    expect(lee?.maskedNameCollision).toBe(false);
+  });
+
+  it('정상 학교(makeFixture)는 동명이인이 없어 전부 false', () => {
+    const summaries = summarizeTeachers(decodeTimetable(makeFixture()));
+    expect(summaries.every((s) => !s.maskedNameCollision)).toBe(true);
+  });
+});
+
+describe('detectDecodeAnomaly — 해석 이상 감지(비차단 경고 신호)', () => {
+  it('정상 학교 픽스처는 suspicious=false (오탐 0)', () => {
+    const fixture = makeFixture();
+    const report = detectDecodeAnomaly(fixture, decodeTimetable(fixture));
+    expect(report.suspicious).toBe(false);
+    expect(report.reasons).toEqual([]);
+  });
+
+  it('한 인덱스로 수업이 대량 병합되면(비정상 시수) suspicious=true', () => {
+    const fixture = makeOverloadFixture();
+    const lessons = decodeTimetable(fixture);
+    const report = detectDecodeAnomaly(fixture, lessons);
+    expect(report.suspicious).toBe(true);
+    expect(report.reasons.length).toBeGreaterThan(0);
+    // 병합이 요약에도 그대로 드러난다(한 명에게 40시간) — 감춰지지 않음
+    expect(summarizeTeachers(lessons).find((t) => t.name === '과로*')?.weeklyHours).toBe(40);
+  });
+
+  it('교사·과목 인덱스가 목록을 크게 벗어나면(구조 변경) suspicious=true', () => {
+    const fixture = makeFixture();
+    const broken: ComciganRawSchoolData = {
+      ...fixture,
+      // 모든 셀이 teachers/subjects 범위 밖 → decodeTimetable은 버리지만 비율로 감지
+      baseGrid: [[], [[], [[], [3, code(99, 99), code(98, 98), code(97, 97)]]]],
+    };
+    const report = detectDecodeAnomaly(broken, decodeTimetable(broken));
+    expect(report.suspicious).toBe(true);
   });
 });

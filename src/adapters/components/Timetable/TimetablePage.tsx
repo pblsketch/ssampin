@@ -27,7 +27,9 @@ import {
   autoAssignClassroomColors,
 } from '@domain/rules/subjectColorRules';
 import { getCurrentISOWeek } from '@usecases/timetable/AutoSyncNeisTimetable';
+import { checkComciganTimetableChange } from '@adapters/hooks/useComciganAutoSync';
 import type { ClassScheduleData, TeacherScheduleData } from '@domain/entities/Timetable';
+import type { ComciganTeacherFingerprint } from '@domain/entities/Settings';
 import { TimetableEditor } from './TimetableEditor';
 import { TempChangeModal } from './TempChangeModal';
 import { TimetableOverridesPanel } from './TimetableOverridesPanel';
@@ -403,6 +405,36 @@ export function TimetablePage() {
   const [previewPeriodTimes, setPreviewPeriodTimes] = useState<ParsedComciganPeriodTimes | null>(
     null,
   );
+  // 컴시간 자동연동: 확정 시 저장할 교사 지문(자동 변경감지용). 미리보기가 컴시간 경로일 때만 셋.
+  const [previewFingerprint, setPreviewFingerprint] = useState<ComciganTeacherFingerprint | null>(
+    null,
+  );
+
+  // ── 컴시간 변경 감지: 대기 중 검토 + 수동 확인 ──
+  const pendingComciganReview = useScheduleStore((s) => s.pendingComciganReview);
+  const setPendingComciganReview = useScheduleStore((s) => s.setPendingComciganReview);
+  const [checkingComcigan, setCheckingComcigan] = useState(false);
+  const comciganAutoSyncOn = settings.comcigan?.autoSync?.enabled === true;
+
+  // 감지된 변경을 미리보기(비파괴)로 연다 — 지문은 이미 저장돼 있어 재저장 안 함
+  const handleReviewComcigan = useCallback(() => {
+    if (!pendingComciganReview) return;
+    setPreviewSchedule(pendingComciganReview.schedule);
+    setPreviewPeriodTimes(null);
+    setPreviewFingerprint(null);
+    setShowExcelPreview(true);
+  }, [pendingComciganReview]);
+
+  // 수동 '컴시간 변동 확인' — 지금 다시 확인(스로틀 무시)
+  const handleComciganCheck = useCallback(async () => {
+    if (checkingComcigan) return;
+    setCheckingComcigan(true);
+    try {
+      await checkComciganTimetableChange({ manual: true });
+    } finally {
+      setCheckingComcigan(false);
+    }
+  }, [checkingComcigan]);
 
   const handleExcelConfirm = useCallback(async () => {
     if (!previewSchedule) return;
@@ -442,19 +474,39 @@ export function TimetablePage() {
       await updateSettings({ subjectColors: updated });
     }
 
+    // 컴시간 경로(수동 불러오기)면 자동 변경감지 활성화 + 교사 지문 저장.
+    // 검토하기(pendingReview) 경로는 지문이 이미 있어 previewFingerprint=null → 재저장 안 함.
+    if (previewFingerprint) {
+      await updateSettings({
+        comcigan: {
+          autoSync: {
+            enabled: true,
+            autoApply: settings.comcigan?.autoSync?.autoApply ?? false,
+            lastSyncDate: toLocalDateString(),
+          },
+          fingerprint: previewFingerprint,
+        },
+      });
+    }
+
     showToast('교사 시간표가 업데이트되었습니다!', 'success');
     setShowExcelPreview(false);
     setPreviewSchedule(null);
     setPreviewPeriodTimes(null);
+    setPreviewFingerprint(null);
+    setPendingComciganReview(null);
   }, [
     previewSchedule,
     previewPeriodTimes,
+    previewFingerprint,
     updateTeacherSchedule,
     settings.maxPeriods,
     settings.enableWeekendDays,
     settings.subjectColors,
+    settings.comcigan?.autoSync?.autoApply,
     updateSettings,
     showToast,
+    setPendingComciganReview,
   ]);
 
   const { className, teacherName } = settings;
@@ -518,6 +570,25 @@ export function TimetablePage() {
               >
                 <span className="material-symbols-outlined text-icon-lg">download</span>
                 <span className="hidden xl:inline">컴시간에서 불러오기</span>
+              </button>
+            )}
+
+            {/* 교사 시간표: 컴시간 변동 확인 (이미 불러온 사용자만 — 지금 재확인) */}
+            {tab === 'teacher' && comciganAutoSyncOn && (
+              <button
+                onClick={() => void handleComciganCheck()}
+                disabled={checkingComcigan}
+                title="컴시간에서 시간표가 바뀌었는지 지금 확인해요"
+                className="flex items-center gap-2 rounded-xl bg-sp-surface border border-sp-border px-4 py-2.5 text-sm font-bold text-sp-text hover:bg-sp-card transition-all active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                <span
+                  className={`material-symbols-outlined text-icon-lg ${checkingComcigan ? 'animate-spin' : ''}`}
+                >
+                  {checkingComcigan ? 'progress_activity' : 'sync'}
+                </span>
+                <span className="hidden xl:inline">
+                  {checkingComcigan ? '확인 중...' : '컴시간 변동 확인'}
+                </span>
               </button>
             )}
 
@@ -625,6 +696,39 @@ export function TimetablePage() {
       {/* 시간표 그리드 */}
       <div className="flex-1 overflow-auto p-8">
         <div className="mx-auto max-w-7xl flex flex-col gap-6">
+          {/* 컴시간 변경 감지 배너 (비파괴 — 검토 후 적용). 밝은 카드 + amber 좌측 스트라이프
+              (다크모드 amber-on-amber 가독성 가드 준수) */}
+          {tab === 'teacher' && pendingComciganReview && (
+            <div className="flex flex-col gap-3 rounded-xl border border-sp-border border-l-4 border-l-amber-400 bg-sp-card px-4 py-3 sm:flex-row sm:items-center">
+              <div className="flex min-w-0 flex-1 items-start gap-2">
+                <span className="material-symbols-outlined shrink-0 text-xl text-amber-400">
+                  sync_problem
+                </span>
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-sp-text">컴시간에서 시간표가 바뀌었어요</p>
+                  <p className="mt-0.5 text-xs text-sp-muted">
+                    {pendingComciganReview.changeCount}칸이 달라졌어요. 검토 후 적용할 수 있어요 —
+                    자동으로 덮어쓰지 않아요.
+                  </p>
+                </div>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <button
+                  onClick={handleReviewComcigan}
+                  className="flex items-center gap-1.5 rounded-lg bg-sp-accent px-3.5 py-2 text-sm font-bold text-white transition-opacity hover:opacity-90"
+                >
+                  <span className="material-symbols-outlined text-icon-sm">visibility</span>
+                  검토하기
+                </button>
+                <button
+                  onClick={() => setPendingComciganReview(null)}
+                  className="rounded-lg border border-sp-border px-3 py-2 text-sm font-semibold text-sp-muted transition-colors hover:bg-sp-surface hover:text-sp-text"
+                >
+                  나중에
+                </button>
+              </div>
+            </div>
+          )}
           <div className="rounded-2xl border border-sp-border bg-sp-card overflow-hidden shadow-2xl shadow-black/20">
             <div className="w-full overflow-x-auto">
               <table className="w-full min-w-[800px] border-collapse">
@@ -875,10 +979,11 @@ export function TimetablePage() {
       <ComciganImportModal
         isOpen={showComciganImport}
         onClose={() => setShowComciganImport(false)}
-        onImport={(schedule, periodTimes) => {
+        onImport={(schedule, periodTimes, fingerprint) => {
           setShowComciganImport(false);
           setPreviewSchedule(schedule);
           setPreviewPeriodTimes(periodTimes);
+          setPreviewFingerprint(fingerprint);
           setShowExcelPreview(true);
         }}
       />
@@ -905,6 +1010,8 @@ export function TimetablePage() {
             setShowExcelPreview(false);
             setPreviewSchedule(null);
             setPreviewPeriodTimes(null);
+            setPreviewFingerprint(null);
+            // 검토 취소 시 pendingComciganReview는 유지 — 배너에서 다시 열 수 있게 둔다
           }}
         />
       )}

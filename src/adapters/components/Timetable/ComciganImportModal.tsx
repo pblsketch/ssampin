@@ -14,20 +14,27 @@ import {
 import {
   buildTeacherSchedule,
   decodeTimetable,
+  detectDecodeAnomaly,
   parseComciganPeriodTimes,
   summarizeTeachers,
 } from '@domain/rules/comciganRules';
-import type { ParsedComciganPeriodTimes } from '@domain/rules/comciganRules';
+import type { DecodeAnomalyReport, ParsedComciganPeriodTimes } from '@domain/rules/comciganRules';
 import type { TeacherScheduleData } from '@domain/entities/Timetable';
+import type { ComciganTeacherFingerprint } from '@domain/entities/Settings';
 
 interface ComciganImportModalProps {
   isOpen: boolean;
   onClose: () => void;
   /**
-   * 교사 선택 완료 — 구성된 시간표 + (옵트인 시) 교시 시각을 전달.
+   * 교사 선택 완료 — 구성된 시간표 + (옵트인 시) 교시 시각 + 재매칭용 교사 지문을 전달.
    * 실제 적용 여부는 부모의 미리보기에서 확정한다. periodTimes 는 미선택 시 null.
+   * fingerprint 는 부모가 확정 시 컴시간 자동연동(변경 감지)용으로 저장한다.
    */
-  onImport: (schedule: TeacherScheduleData, periodTimes: ParsedComciganPeriodTimes | null) => void;
+  onImport: (
+    schedule: TeacherScheduleData,
+    periodTimes: ParsedComciganPeriodTimes | null,
+    fingerprint: ComciganTeacherFingerprint,
+  ) => void;
 }
 
 type WizardStep = 'school' | 'teacher' | 'loading' | 'error';
@@ -52,6 +59,8 @@ export function ComciganImportModal({ isOpen, onClose, onImport }: ComciganImpor
   /* ── 상태 ── */
   const [step, setStep] = useState<WizardStep>('school');
   const [errorMsg, setErrorMsg] = useState('');
+  /** 해석 신뢰도 경고 (컴시간 코드 해석이 이 학교에서 어긋났을 가능성) */
+  const [anomaly, setAnomaly] = useState<DecodeAnomalyReport | null>(null);
 
   /* ── 열릴 때 리셋 + 나이스 학교명 프리필 ── */
   useEffect(() => {
@@ -65,6 +74,7 @@ export function ComciganImportModal({ isOpen, onClose, onImport }: ComciganImpor
     setDayTimes(undefined);
     setImportPeriodTimes(false);
     setErrorMsg('');
+    setAnomaly(null);
     const prefill = settings.neis.schoolName.split(' (')[0] ?? '';
     setSchoolQuery(prefill);
   }, [isOpen, settings.neis.schoolName]);
@@ -113,6 +123,7 @@ export function ComciganImportModal({ isOpen, onClose, onImport }: ComciganImpor
       }
       setLessons(decoded);
       setDayTimes(data.dayTimes);
+      setAnomaly(detectDecodeAnomaly(data, decoded));
       setStep('teacher');
     } catch (e) {
       setErrorMsg(
@@ -137,13 +148,42 @@ export function ComciganImportModal({ isOpen, onClose, onImport }: ComciganImpor
     [dayTimes, settings.schoolLevel],
   );
 
+  /* ── 동명이인 구분용 담당 학년 힌트 (교사 인덱스 → 'N학년·M학년') ── */
+  const teacherGradeHint = useMemo(() => {
+    const byIndex = new Map<number, Set<number>>();
+    for (const l of lessons) {
+      let grades = byIndex.get(l.teacherIndex);
+      if (!grades) {
+        grades = new Set();
+        byIndex.set(l.teacherIndex, grades);
+      }
+      grades.add(l.grade);
+    }
+    const hint = new Map<number, string>();
+    for (const [idx, grades] of byIndex) {
+      hint.set(
+        idx,
+        [...grades]
+          .sort((a, b) => a - b)
+          .map((g) => `${g}학년`)
+          .join('·'),
+      );
+    }
+    return hint;
+  }, [lessons]);
+
   /* ── 교사 선택 → 시간표 구성 → 부모 미리보기로 전달 ── */
   const handleSelectTeacher = useCallback(
     (teacher: ComciganTeacherSummary) => {
+      if (!selectedSchool) return;
       const { schedule } = buildTeacherSchedule(lessons, teacher.index);
-      onImport(schedule, importPeriodTimes ? parsedPeriodTimes : null);
+      onImport(schedule, importPeriodTimes ? parsedPeriodTimes : null, {
+        schoolCode: selectedSchool.code,
+        maskedName: teacher.name,
+        subjects: teacher.subjects,
+      });
     },
-    [lessons, onImport, importPeriodTimes, parsedPeriodTimes],
+    [lessons, onImport, importPeriodTimes, parsedPeriodTimes, selectedSchool],
   );
 
   const stepLabels = ['학교 선택', '교사 선택'];
@@ -270,6 +310,26 @@ export function ComciganImportModal({ isOpen, onClose, onImport }: ComciganImpor
                 목록이에요. 개인정보 보호를 위해 이름 끝 글자는 *로 표시돼요 — 본인을 선택해주세요.
               </div>
 
+              {/* 해석 신뢰도 경고 — 비차단(계속 진행 가능). 밝은 표면 + amber 좌측 스트라이프
+                  (다크모드 amber-on-amber 가독성 가드 준수) */}
+              {anomaly?.suspicious && (
+                <div className="p-3 rounded-xl border border-sp-border border-l-4 border-l-amber-400 bg-sp-surface text-xs space-y-1">
+                  <p className="font-semibold text-sp-text flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-sm text-amber-400">
+                      warning
+                    </span>
+                    이 학교 시간표 해석이 정확하지 않을 수 있어요
+                  </p>
+                  <p className="text-sp-muted leading-relaxed">
+                    {anomaly.reasons[0]}. 결과가 이상하면{' '}
+                    <span className="font-semibold text-sp-text">
+                      [양식 다운로드 → 엑셀 불러오기]
+                    </span>{' '}
+                    또는 직접 입력을 권장해요. 그래도 계속 진행할 수 있어요.
+                  </p>
+                </div>
+              )}
+
               {/* 일과시간(교시 시각) 옵트인 — 컴시간에 시각 정보가 있을 때만 노출 */}
               {parsedPeriodTimes && (
                 <PeriodTimesImportOption
@@ -305,9 +365,22 @@ export function ComciganImportModal({ isOpen, onClose, onImport }: ComciganImpor
                       className="w-full flex items-center justify-between text-left p-3 rounded-xl hover:bg-sp-surface border border-transparent hover:border-sp-border transition-colors"
                     >
                       <div className="min-w-0">
-                        <p className="text-sm font-bold text-sp-text">{teacher.name}</p>
+                        <p className="text-sm font-bold text-sp-text flex items-center gap-1.5">
+                          {teacher.name}
+                          {teacher.maskedNameCollision && (
+                            <span className="shrink-0 text-micro font-semibold text-amber-300 bg-amber-500/15 border border-amber-400/30 rounded px-1.5 py-0.5">
+                              동명이인
+                            </span>
+                          )}
+                        </p>
                         <p className="text-xs text-sp-muted mt-0.5 truncate">
                           {teacher.subjects.join(' · ')}
+                          {teacher.maskedNameCollision && teacherGradeHint.get(teacher.index) && (
+                            <span className="text-amber-300/80">
+                              {' · '}
+                              {teacherGradeHint.get(teacher.index)} 담당
+                            </span>
+                          )}
                         </p>
                       </div>
                       <span className="shrink-0 text-xs font-semibold text-sp-accent bg-sp-accent/10 rounded-lg px-2 py-1 ml-3">

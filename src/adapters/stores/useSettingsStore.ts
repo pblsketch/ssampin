@@ -124,6 +124,8 @@ const DEFAULT_SETTINGS: Settings = {
       lastSyncDate: '',
       lastSyncWeek: '',
       syncTarget: 'class',
+      // 신규 사용자 기본 = 알림(비파괴). 기존 자동사용자는 load 마이그레이션으로 true 유지.
+      autoApply: false,
     },
   },
   pin: {
@@ -333,11 +335,15 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
                 autoSync?: Partial<NonNullable<Settings['neis']['autoSync']>>;
               }
             ).autoSync;
-            return {
-              ...DEFAULT_SETTINGS.neis,
-              ...savedNeis,
-              autoSync: { ...DEFAULT_SETTINGS.neis.autoSync!, ...(savedAutoSync ?? {}) },
-            };
+            const mergedAutoSync = { ...DEFAULT_SETTINGS.neis.autoSync!, ...(savedAutoSync ?? {}) };
+            // M4 마이그레이션: 기존 자동동기화 사용자(enabled)인데 autoApply 미저장이면
+            // true 부여 — 현행 무음 적용 동작을 그대로 유지(신규 알림 기본 정책의 하위호환).
+            const migratedAutoSync =
+              mergedAutoSync.enabled &&
+              (savedAutoSync as { autoApply?: boolean } | undefined)?.autoApply === undefined
+                ? { ...mergedAutoSync, autoApply: true }
+                : mergedAutoSync;
+            return { ...DEFAULT_SETTINGS.neis, ...savedNeis, autoSync: migratedAutoSync };
           })(),
           pin: (() => {
             const savedPin = (saved as unknown as { pin?: Partial<Settings['pin']> }).pin ?? {};
@@ -470,6 +476,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       // 중첩 객체는 명시적 딥 머지 (부분 업데이트 시 기존 값 보존)
       weather: patch.weather ? { ...current.weather, ...patch.weather } : current.weather,
       neis: patch.neis ? { ...current.neis, ...patch.neis } : current.neis,
+      // comcigan 부분 업데이트 시 autoSync/fingerprint 중 안 넘긴 쪽 보존(얕은 병합)
+      comcigan: patch.comcigan ? { ...current.comcigan, ...patch.comcigan } : current.comcigan,
       widget: patch.widget ? { ...current.widget, ...patch.widget } : current.widget,
       system: patch.system ? { ...current.system, ...patch.system } : current.system,
       todoSettings: patch.todoSettings

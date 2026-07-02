@@ -60,6 +60,12 @@ export interface ComciganTeacherSummary {
   readonly subjects: readonly string[];
   /** 자율/창체 같은 편성용 더미 항목 여부 (실제 교사 아님) */
   readonly isDummy: boolean;
+  /**
+   * 같은 마스킹 이름(예: '김민*')을 가진 선택 가능한 교사가 2명 이상일 때 true.
+   * 컴시간이 이름 끝 글자를 마스킹해 넘기므로, 서로 다른 교사가 목록에 동일하게 보인다.
+   * 데이터 병합은 아니며(인덱스 별개), 선택 UI에서 과목·시수로 구분하도록 표시할 때 쓴다.
+   */
+  readonly maskedNameCollision: boolean;
 }
 
 /** 컴시간 연동 에러 유형 (미등록 학교는 에러가 아니라 검색 0건 UI로 안내) */

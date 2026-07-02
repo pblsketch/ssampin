@@ -102,6 +102,7 @@ import { PinGuard } from '@adapters/components/common/PinGuard';
 import { useAutoSync } from '@adapters/hooks/useAutoSync';
 import { useTasksAutoSync } from '@adapters/hooks/useTasksAutoSync';
 import { useNeisAutoSync } from '@adapters/hooks/useNeisAutoSync';
+import { useComciganAutoSync } from '@adapters/hooks/useComciganAutoSync';
 import { useDriveSyncStore } from '@adapters/stores/useDriveSyncStore';
 import { DriveSyncConflictModal } from '@adapters/components/common/DriveSyncConflictModal';
 import { FirstSyncConfirmModal } from '@adapters/components/common/FirstSyncConfirmModal';
@@ -1077,6 +1078,9 @@ function MainApp() {
 
   // NEIS 시간표 자동 동기화 (앱 시작 시)
   useNeisAutoSync();
+
+  // 컴시간 교사 시간표 변경 자동 확인 (앱 시작 시 · 비파괴 알림)
+  useComciganAutoSync();
 
   // NEIS 학사일정 자동 동기화 (앱 시작 시) + 학기 초 안내
   const showToast = useToastStore((s) => s.show);

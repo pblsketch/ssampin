@@ -1,5 +1,10 @@
 import { create } from 'zustand';
-import type { ClassScheduleData, TeacherScheduleData, ClassPeriod, TimetableOverride } from '@domain/entities/Timetable';
+import type {
+  ClassScheduleData,
+  TeacherScheduleData,
+  ClassPeriod,
+  TimetableOverride,
+} from '@domain/entities/Timetable';
 import {
   createEmptyClassSchedule,
   createEmptyTeacherSchedule,
@@ -24,6 +29,16 @@ interface ScheduleSnapshot {
   teacherSchedule: TeacherScheduleData;
 }
 
+/**
+ * 컴시간 변경 감지 후 사용자 검토를 대기 중인 새 교사 시간표(비파괴 — 확인 전엔 미적용).
+ * 앱 시작 훅(useComciganAutoSync)이 채우고 시간표 화면이 배너로 노출한다. 영속·동기화 안 함.
+ */
+export interface PendingComciganReview {
+  readonly schedule: TeacherScheduleData;
+  /** 바뀐 칸 수(배너 표시용) */
+  readonly changeCount: number;
+}
+
 interface ScheduleState {
   classSchedule: ClassScheduleData;
   teacherSchedule: TeacherScheduleData;
@@ -35,6 +50,10 @@ interface ScheduleState {
   /** 임시 시간표 변경 */
   overrides: readonly TimetableOverride[];
 
+  /** 컴시간 변경 감지 후 검토 대기 중인 교사 시간표(없으면 null) */
+  pendingComciganReview: PendingComciganReview | null;
+  setPendingComciganReview: (review: PendingComciganReview | null) => void;
+
   load: () => Promise<void>;
   forceReload: () => Promise<void>;
   updateClassSchedule: (data: ClassScheduleData) => Promise<void>;
@@ -45,7 +64,9 @@ interface ScheduleState {
   canUndo: () => boolean;
   canRedo: () => boolean;
 
-  addOverride: (override: Omit<TimetableOverride, 'id' | 'createdAt' | 'updatedAt'>) => Promise<{ replacedId: string | null }>;
+  addOverride: (
+    override: Omit<TimetableOverride, 'id' | 'createdAt' | 'updatedAt'>,
+  ) => Promise<{ replacedId: string | null }>;
   /** 수업 교체: 두 개의 변동을 같은 pairId로 묶어 원자적으로 저장 */
   addSwapPair: (
     slotA: Omit<TimetableOverride, 'id' | 'createdAt' | 'updatedAt' | 'kind' | 'pairId'>,
@@ -57,9 +78,15 @@ interface ScheduleState {
   ) => Promise<void>;
   deleteOverride: (id: string) => Promise<void>;
   /** 특정 날짜의 오버라이드가 적용된 교사 시간표 반환 */
-  getEffectiveTeacherSchedule: (date: string, weekendDays?: readonly WeekendDay[]) => readonly (import('@domain/entities/Timetable').TeacherPeriod | null)[];
+  getEffectiveTeacherSchedule: (
+    date: string,
+    weekendDays?: readonly WeekendDay[],
+  ) => readonly (import('@domain/entities/Timetable').TeacherPeriod | null)[];
   /** 특정 날짜의 오버라이드가 적용된 학급 시간표 반환 */
-  getEffectiveClassSchedule: (date: string, weekendDays?: readonly WeekendDay[]) => readonly ClassPeriod[];
+  getEffectiveClassSchedule: (
+    date: string,
+    weekendDays?: readonly WeekendDay[],
+  ) => readonly ClassPeriod[];
   /** 특정 날짜의 오버라이드 목록 반환 */
   getOverridesForDate: (date: string) => readonly TimetableOverride[];
   /** 날짜 범위의 오버라이드 목록 반환 (inclusive) */
@@ -81,6 +108,9 @@ export const useScheduleStore = create<ScheduleState>((set, get) => {
     past: [],
     future: [],
     overrides: [],
+    pendingComciganReview: null,
+
+    setPendingComciganReview: (review) => set({ pendingComciganReview: review }),
 
     load: async () => {
       if (get().loaded) return;
@@ -213,13 +243,19 @@ export const useScheduleStore = create<ScheduleState>((set, get) => {
       const idFactory = () => `ovr-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       const r1 = upsertOverride(
         current,
-        { ...slotA, kind: 'swap', pairId } as Omit<TimetableOverride, 'id' | 'createdAt' | 'updatedAt'>,
+        { ...slotA, kind: 'swap', pairId } as Omit<
+          TimetableOverride,
+          'id' | 'createdAt' | 'updatedAt'
+        >,
         now,
         idFactory,
       );
       const r2 = upsertOverride(
         r1.overrides,
-        { ...slotB, kind: 'swap', pairId } as Omit<TimetableOverride, 'id' | 'createdAt' | 'updatedAt'>,
+        { ...slotB, kind: 'swap', pairId } as Omit<
+          TimetableOverride,
+          'id' | 'createdAt' | 'updatedAt'
+        >,
         now,
         idFactory,
       );
@@ -234,9 +270,17 @@ export const useScheduleStore = create<ScheduleState>((set, get) => {
       if (idx < 0) return;
       const prev = current[idx]!;
       // 핵심 키(id/date/period/createdAt)는 patch로 바꿀 수 없다 — 경계 방어
-      const { id: _dropId, date: _dropDate, period: _dropPeriod, createdAt: _dropCreated, ...safePatch } =
-        patch as Record<string, unknown>;
-      void _dropId; void _dropDate; void _dropPeriod; void _dropCreated;
+      const {
+        id: _dropId,
+        date: _dropDate,
+        period: _dropPeriod,
+        createdAt: _dropCreated,
+        ...safePatch
+      } = patch as Record<string, unknown>;
+      void _dropId;
+      void _dropDate;
+      void _dropPeriod;
+      void _dropCreated;
       const updated: TimetableOverride = {
         ...prev,
         ...(safePatch as Partial<TimetableOverride>),

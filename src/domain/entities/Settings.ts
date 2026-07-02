@@ -248,6 +248,34 @@ export interface NeisAutoSyncSettings {
   readonly lastSyncDate: string;
   readonly lastSyncWeek: string;
   readonly syncTarget: 'class' | 'both';
+  /**
+   * true면 변경 감지 시 확인 없이 무음 적용, false/미설정이면 알림만(비파괴).
+   * optional — 기존 자동동기화 사용자는 load 시 true로 마이그레이션(현행 무음 동작 유지).
+   */
+  readonly autoApply?: boolean;
+}
+
+/** 컴시간 자동연동 설정 (M3). 전부 optional — 기존 사용자 마이그레이션 불필요. */
+export interface ComciganAutoSyncSettings {
+  readonly enabled: boolean;
+  /** true면 변경 감지 시 무음 적용. 기본 false — 비공식 소스라 항상 알림+확인. */
+  readonly autoApply: boolean;
+  readonly lastSyncDate: string; // 'YYYY-MM-DD'
+}
+
+/**
+ * 컴시간 교사 재매칭용 저장 지문. raw teacherIndex(fetch마다 재부여 위험)를 저장하지 않고
+ * 마스킹 이름 + 과목으로 재매칭한다. schoolCode는 재fetch 대상 학교.
+ */
+export interface ComciganTeacherFingerprint {
+  readonly schoolCode: number;
+  readonly maskedName: string;
+  readonly subjects: readonly string[];
+}
+
+export interface ComciganSettings {
+  readonly autoSync?: ComciganAutoSyncSettings;
+  readonly fingerprint?: ComciganTeacherFingerprint;
 }
 
 export interface NeisSettings {
@@ -369,6 +397,8 @@ export interface Settings {
   readonly fontSize: 'small' | 'medium' | 'large' | 'xlarge';
   readonly fontFamily?: FontFamily;
   readonly neis: NeisSettings;
+  /** 컴시간알리미 교사 시간표 자동연동 (M3). optional — 미import 사용자는 없음. */
+  readonly comcigan?: ComciganSettings;
   /** 학교알리미 학교 연결 (평가계획 불러오기 학교 재검색 생략용, school-enrich ②-B) */
   readonly schoolInfo?: SchoolInfoLink;
   readonly pin: PinSettings;

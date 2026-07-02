@@ -7,11 +7,9 @@ import {
   getCurrentSemester,
 } from '@domain/entities/NeisTimetable';
 import { toLocalDateString } from '@shared/utils/localDate';
-import {
-  transformToClassSchedule,
-  getMaxPeriod,
-} from '@domain/rules/neisTransformRules';
+import { transformToClassSchedule, getMaxPeriod } from '@domain/rules/neisTransformRules';
 import { extractSubjectsFromSchedule } from '@domain/rules/subjectColorRules';
+import { diffClassSchedule } from '@domain/rules/timetableDiff';
 import type { ClassScheduleData } from '@domain/entities/Timetable';
 import type { SubjectColorMap } from '@domain/valueObjects/SubjectColor';
 
@@ -22,6 +20,11 @@ export interface AutoSyncResult {
   readonly newSubjects?: readonly string[];
   readonly error?: string;
   readonly skipped?: boolean;
+  /**
+   * 현재 저장본과 달라졌는지. currentClassSchedule 미제공 시(구버전 호출) true로 간주 —
+   * 비교 근거가 없으면 안전하게 '변경 있음'으로 취급해 하위호환(무음 사용자 동작 유지).
+   */
+  readonly changed?: boolean;
 }
 
 /**
@@ -51,6 +54,7 @@ export async function autoSyncNeisTimetable(
   autoSync: NeisAutoSyncSettings,
   schoolLevel: 'elementary' | 'middle' | 'high' | 'custom',
   existingSubjectColors: SubjectColorMap,
+  currentClassSchedule?: ClassScheduleData,
 ): Promise<AutoSyncResult> {
   // 비활성화 또는 설정 불완전
   if (!autoSync.enabled || !autoSync.grade || !autoSync.className) {
@@ -92,12 +96,17 @@ export async function autoSyncNeisTimetable(
     const maxPeriods = getMaxPeriod(rows);
     const data = transformToClassSchedule(rows, maxPeriods);
 
+    // 현재 저장본과 비교(비파괴 정책용). 미제공 시 변경으로 간주(하위호환).
+    const changed = currentClassSchedule
+      ? diffClassSchedule(currentClassSchedule, data).changed
+      : true;
+
     // 새 과목 감지
     const allSubjects = extractSubjectsFromSchedule(data);
     const mergedColors = { ...existingSubjectColors };
     const newSubjects = allSubjects.filter((s) => !(s in mergedColors));
 
-    return { success: true, data, maxPeriods, newSubjects };
+    return { success: true, data, maxPeriods, newSubjects, changed };
   } catch {
     return { success: false, error: 'SYNC_FAILED' };
   }
