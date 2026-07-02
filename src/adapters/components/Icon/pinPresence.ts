@@ -40,6 +40,19 @@ export interface PinEventInfo {
   /** 오늘 일정이고 시작 시각을 알면 시작까지 남은 분, 아니면 null */
   readonly minutesUntil: number | null;
   readonly today: boolean;
+  /** 일정 날짜 "YYYY-MM-DD" — 말풍선에 날짜·요일 표기용 (v2.2.7) */
+  readonly date: string;
+}
+
+const WEEKDAY_LABEL = ['일', '월', '화', '수', '목', '금', '토'] as const;
+
+/** "YYYY-MM-DD" → "M월 D일 (요일)" (못 읽으면 원문 그대로) */
+function formatMonthDayWeekday(dateStr: string): string {
+  const m = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return dateStr;
+  const [, y, mo, d] = m;
+  const day = new Date(Number(y), Number(mo) - 1, Number(d)).getDay();
+  return `${Number(mo)}월 ${Number(d)}일 (${WEEKDAY_LABEL[day]})`;
 }
 
 export interface PinLunchInfo {
@@ -211,9 +224,10 @@ export function derivePinInfo(params: DerivePinInfoParams): PinInfo {
         title: e.title,
         today: true,
         minutesUntil: start != null ? Math.max(0, start - nowMinutes) : null,
+        date: e.date,
       };
     } else {
-      nextEvent = { title: e.title, today: false, minutesUntil: null };
+      nextEvent = { title: e.title, today: false, minutesUntil: null, date: e.date };
     }
     break;
   }
@@ -295,6 +309,8 @@ export interface PinTodayClass {
   readonly number: number;
   readonly subject: string;
   readonly classroom: string;
+  /** 교시 시작 시각 "HH:mm" (모르면 null) — 팝오버 시간 안내용 (v2.2.7) */
+  readonly start: string | null;
   readonly isCurrent: boolean;
   readonly isNext: boolean;
 }
@@ -316,10 +332,14 @@ export function listTodayClasses(
   for (let p = 1; p <= periodTimes.length; p++) {
     const slot = slots[p - 1];
     if (!slot || !slot.subject) continue;
+    // 시작 시각 — "HH:mm - HH:mm" 형태도 앞쪽만 추려 통일
+    const rawStart = periodTimes[p - 1]?.start;
+    const startMatch = rawStart?.match(/\d{1,2}:\d{2}/);
     out.push({
       number: p,
       subject: slot.subject,
       classroom: slot.classroom ?? '',
+      start: startMatch ? startMatch[0] : null,
       isCurrent: info.current?.number === p,
       isNext: info.next?.number === p,
     });
@@ -383,11 +403,12 @@ export function buildSummary(info: PinInfo): { title: string; lines: string[] } 
     lines.push(`급식: ${info.lunch.menu}`);
   }
   if (info.nextEvent) {
+    // 오늘이면 남은 시간, 아니면 날짜·요일을 함께 안내 (v2.2.7 사용자 요청)
     const when = info.nextEvent.today
       ? info.nextEvent.minutesUntil != null
-        ? ` (${info.nextEvent.minutesUntil}분 후)`
+        ? ` (오늘, ${info.nextEvent.minutesUntil}분 후)`
         : ' (오늘)'
-      : '';
+      : ` (${formatMonthDayWeekday(info.nextEvent.date)})`;
     lines.push(`일정: ${info.nextEvent.title}${when}`);
   }
   if (lines.length === 0 && !info.current) lines.push('오늘 일정 없음');

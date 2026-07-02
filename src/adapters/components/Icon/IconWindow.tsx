@@ -292,6 +292,12 @@ export function IconWindow() {
     (hovered || popoverOpen || menuOpen || showCoachMark || celebrating || peek !== null);
 
   useEffect(() => {
+    // 조율(reconcile): 원하는 상태와 실제 창 상태가 어긋나 있으면 요청한다.
+    // main 이 스스로 축소하는 경우(드래그 시작·화면 이탈 리셋)에도 layout push 로
+    // 이 효과가 다시 실행되므로 어긋난 상태가 즉시 복구된다 — wantExpanded 만
+    // 의존하면 "값은 그대로인데 실제 창만 축소된" 경우 재요청이 나가지 않는다
+    // (실기기 확인 2026-07-02: 클릭 후 팝오버가 화면에 안 나오던 원인).
+    if (wantExpanded === layout.expanded) return undefined;
     const api = window.electronAPI;
     if (api?.iconSetExpanded) {
       let cancelled = false;
@@ -305,7 +311,7 @@ export function IconWindow() {
     // 브라우저 dev 폴백 — 창 개념이 없으므로 즉시 반영 (실화면 검증용)
     setLayout({ expanded: wantExpanded, anchor: { up: true, right: true } });
     return undefined;
-  }, [wantExpanded]);
+  }, [wantExpanded, layout.expanded]);
 
   // main 주도 레이아웃 변경(드래그 축소·화면 이탈 리셋 등) 구독
   useEffect(() => {
@@ -324,9 +330,9 @@ export function IconWindow() {
   // 인터랙티브 요소(핀·팝오버·메뉴) hover 참조 카운트로 마우스 통과 토글.
   // 확장 창의 빈 영역은 ignore=true(아래 창으로 통과), 요소 위에서만 false.
   const interactiveCountRef = useRef(0);
-  const sendMouseIgnore = (ignore: boolean) => {
+  const sendMouseIgnore = useCallback((ignore: boolean) => {
     void window.electronAPI?.iconSetMouseIgnore?.(ignore);
-  };
+  }, []);
   const interactiveEnter = () => {
     interactiveCountRef.current += 1;
     sendMouseIgnore(false);
@@ -336,8 +342,16 @@ export function IconWindow() {
     if (interactiveCountRef.current === 0) sendMouseIgnore(true);
   };
   useEffect(() => {
-    if (!layout.expanded) interactiveCountRef.current = 0;
-  }, [layout.expanded]);
+    if (!layout.expanded) {
+      interactiveCountRef.current = 0;
+      return;
+    }
+    // 확장 직후 main 은 빈 영역 클릭 통과(ignore=true)로 시작한다. 이때 포인터가
+    // 이미 핀 위에 있으면(호버로 확장된 경우) 핀의 클릭·드래그까지 바탕화면으로
+    // 통과돼 버리므로, 현재 hover 참조 카운트 기준으로 즉시 재동기화한다.
+    // (실기기 확인 2026-07-02: 말풍선 표시 중 클릭 무반응·드래그 불가의 원인)
+    sendMouseIgnore(interactiveCountRef.current === 0);
+  }, [layout.expanded, sendMouseIgnore]);
 
   // 창 포커스 이탈(바깥 클릭 등) 시 팝오버/메뉴 닫기
   useEffect(() => {
@@ -361,7 +375,8 @@ export function IconWindow() {
     { now, periodTimes: settings.periodTimes, teacherSchedule },
     pinInfo,
   );
-  const topTodos = listTopDueTodos(todos, now, 3);
+  // 마감 할 일 — 최대 12개까지, 목록이 길면 팝오버 안에서 스크롤 (사용자 요청: 3개 제한 해제)
+  const topTodos = listTopDueTodos(todos, now, 12);
 
   // 모드 전환(분석 이벤트 포함) — 더블클릭/메뉴/팝오버 푸터 공용
   const expandTo = useCallback(
@@ -466,8 +481,9 @@ export function IconWindow() {
       isDragging: false,
       pointerId: e.pointerId,
     };
-    // main process drag 폴링 시작 (main 이 확장 창을 방어적으로 축소한다)
-    void window.electronAPI?.iconStartDrag();
+    // main process drag 폴링은 실제 드래그 판정(5px 이동) 시점에 시작한다 —
+    // pointerDown 에서 시작하면 클릭만 해도 main 이 확장 창을 방어적으로 축소해
+    // 팝오버가 열리자마자 사라진다 (실기기 확인 2026-07-02). handlePointerMove 참조.
 
     // 글로벌 fallback — pointerup 이 어떤 경로로든 React 핸들러에 도달하지 못하는
     // edge case(window blur, alt-tab 등) 안전망. 정상 flow 에선 React handlePointerUp
@@ -502,6 +518,9 @@ export function IconWindow() {
     const totalMoved = Math.hypot(e.screenX - state.startScreenX, e.screenY - state.startScreenY);
     if (!state.isDragging && totalMoved > CLICK_MAX_MOVE_PX) {
       state.isDragging = true;
+      // 이 시점에 main 폴링 시작 — 클릭에는 창 축소/폴링이 개입하지 않는다.
+      // main 이 확장 창을 축소한 뒤(핀 위치 불변) compact 상태로 따라온다.
+      void window.electronAPI?.iconStartDrag();
       setDragging(true); // 오버레이 숨김 + 창 확장 요청 억제
       setPopoverOpen(false);
       setMenuOpen(false);

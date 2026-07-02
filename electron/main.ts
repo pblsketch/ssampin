@@ -1365,9 +1365,13 @@ function buildIconWindow(): void {
 
   if (process.env['VITE_DEV_SERVER_URL']) {
     void iconWindow.loadURL(`${process.env['VITE_DEV_SERVER_URL']}?mode=icon`);
-    iconWindow.webContents.once('did-finish-load', () => {
-      iconWindow?.webContents.openDevTools({ mode: 'detach' });
-    });
+    // DevTools 자동 열림은 opt-in(SSAMPIN_ICON_DEVTOOLS=1) — DevTools 가 붙어 있으면
+    // 창 확장/축소 때마다 Chromium 이 "W×H" 크기 배지를 화면에 띄워 실사용 확인을 방해.
+    if (process.env['SSAMPIN_ICON_DEVTOOLS']) {
+      iconWindow.webContents.once('did-finish-load', () => {
+        iconWindow?.webContents.openDevTools({ mode: 'detach' });
+      });
+    }
   } else {
     void iconWindow.loadFile(path.join(__dirname, '../dist/index.html'), {
       query: { mode: 'icon' },

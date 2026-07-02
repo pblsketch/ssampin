@@ -8,7 +8,7 @@
  * 디자인: sp-* 토큰만 사용(하드코딩 HEX 금지), rounded-xl, 그림자 절제(shadow-lg).
  * 투명 Electron 창 위에 뜨므로 카드 밖은 완전 투명이어야 한다.
  */
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { PinTodayClass, PinDueTodoItem } from './pinPresence';
 import { PIN_NAME } from './pinName';
 
@@ -41,6 +41,7 @@ export function PinPopover({
 }: PinPopoverProps) {
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
   const dateLabel = `${now.getMonth() + 1}월 ${now.getDate()}일 (${DAY_LABEL[now.getDay()]})`;
 
   const submit = async () => {
@@ -52,6 +53,9 @@ export function PinPopover({
       setDraft('');
     } finally {
       setBusy(false);
+      // 연속 입력 — 추가 직후 포커스를 되돌려 바로 다음 할 일을 칠 수 있게 (사용자 요청).
+      // input 을 disabled 로 잠그면 그 순간 포커스를 잃으므로 busy 는 내부 가드로만 쓴다.
+      inputRef.current?.focus();
     }
   };
 
@@ -61,10 +65,10 @@ export function PinPopover({
       aria-label={`${PIN_NAME} 오늘 요약`}
       className="w-[300px] bg-sp-card border border-sp-border rounded-xl shadow-lg overflow-hidden animate-pin-bubble-pop"
     >
-      {/* 헤더 — 핀 이름 + 날짜 + 현재 상태 */}
+      {/* 헤더 — 제목 + 날짜 + 현재 상태 */}
       <div className="px-4 pt-3 pb-2.5 border-b border-sp-border">
         <div className="flex items-baseline justify-between gap-2">
-          <span className="text-sm font-semibold text-sp-text">{PIN_NAME}</span>
+          <span className="text-sm font-semibold text-sp-text">{PIN_NAME}가 정리한 오늘 하루</span>
           <span className="text-xs text-sp-muted">{dateLabel}</span>
         </div>
         <div className="mt-0.5 text-xs text-sp-accent truncate">{statusTitle}</div>
@@ -78,7 +82,7 @@ export function PinPopover({
         {classes.length === 0 ? (
           <div className="px-2 pb-0.5 text-xs text-sp-muted">오늘은 수업이 없어요</div>
         ) : (
-          <ul className="max-h-[168px] overflow-y-auto">
+          <ul className="max-h-[140px] overflow-y-auto">
             {classes.map((c) => (
               <li
                 key={c.number}
@@ -93,6 +97,11 @@ export function PinPopover({
                 >
                   {c.number}
                 </span>
+                {c.start && (
+                  <span className="w-10 text-[10px] text-sp-muted tabular-nums flex-shrink-0">
+                    {c.start}
+                  </span>
+                )}
                 <span className="flex-1 truncate text-sp-text">{c.subject}</span>
                 {c.classroom && <span className="text-sp-muted flex-shrink-0">{c.classroom}</span>}
                 {c.isCurrent && (
@@ -116,7 +125,7 @@ export function PinPopover({
         {todos.length === 0 ? (
           <div className="px-2 text-xs text-sp-muted">오늘 마감 할 일이 없어요 ✨</div>
         ) : (
-          <ul>
+          <ul className="max-h-[140px] overflow-y-auto">
             {todos.map((t) => (
               <li key={t.id}>
                 <button
@@ -146,11 +155,11 @@ export function PinPopover({
           className="px-2 pt-1.5"
         >
           <input
+            ref={inputRef}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             placeholder="할 일 빠른 추가 · Enter (오늘 마감)"
             aria-label="할 일 빠른 추가"
-            disabled={busy}
             className="w-full bg-sp-bg border border-sp-border rounded-lg px-2.5 py-1.5 text-xs text-sp-text placeholder:text-sp-muted focus:outline-none focus:border-sp-accent"
           />
         </form>

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { derivePinInfo, decidePeek, buildSummary } from './pinPresence';
+import { derivePinInfo, decidePeek, buildSummary, listTodayClasses } from './pinPresence';
 import type { Todo } from '@domain/entities/Todo';
 import type { SchoolEvent } from '@domain/entities/SchoolEvent';
 import type { TeacherScheduleData } from '@domain/entities/Timetable';
@@ -133,6 +133,22 @@ describe('buildSummary', () => {
     expect(summary.lines.some((l) => l.startsWith('급식: 김치찌개'))).toBe(true);
   });
 
+  it('오늘이 아닌 일정은 날짜와 요일을 함께 안내한다', () => {
+    const now = new Date(2026, 5, 23, 14, 0, 0); // 화요일
+    const events: SchoolEvent[] = [event({ title: '수학여행', date: '2026-06-27' })]; // 토요일
+    const info = derivePinInfo({ now, periodTimes, teacherSchedule, todos: [], events });
+    expect(buildSummary(info).lines).toContain('일정: 수학여행 (6월 27일 (토))');
+  });
+
+  it('오늘 일정은 "오늘"과 남은 분을 함께 안내한다', () => {
+    const now = new Date(2026, 5, 23, 13, 0, 0);
+    const events: SchoolEvent[] = [
+      event({ title: '학부모 상담', date: '2026-06-23', time: '13:20' }),
+    ];
+    const info = derivePinInfo({ now, periodTimes, teacherSchedule, todos: [], events });
+    expect(buildSummary(info).lines).toContain('일정: 학부모 상담 (오늘, 20분 후)');
+  });
+
   it('점심 시작 1시간이 지난 급식 줄은 숨긴다', () => {
     const now = new Date(2026, 5, 23, 14, 0, 0); // 점심(11:50) 130분 후
     const info = derivePinInfo({
@@ -145,6 +161,38 @@ describe('buildSummary', () => {
       lunchAfterPeriod: 3,
     });
     expect(buildSummary(info).lines.some((l) => l.startsWith('급식:'))).toBe(false);
+  });
+});
+
+describe('listTodayClasses — 팝오버 오늘 수업 목록 (v2.2.7)', () => {
+  it('빈 교시를 제외하고 시작 시각·현재/다음 표시와 함께 나열한다', () => {
+    const now = new Date(2026, 5, 23, 9, 10, 0); // 1교시 진행 중
+    const info = derivePinInfo({ now, periodTimes, teacherSchedule, todos: [], events: [] });
+    const classes = listTodayClasses({ now, periodTimes, teacherSchedule }, info);
+    expect(classes).toEqual([
+      {
+        number: 1,
+        subject: '수학',
+        classroom: '2-3',
+        start: '09:00',
+        isCurrent: true,
+        isNext: false,
+      },
+      {
+        number: 3,
+        subject: '과학',
+        classroom: '과학실',
+        start: '11:00',
+        isCurrent: false,
+        isNext: true,
+      },
+    ]);
+  });
+
+  it('주말이면 빈 목록', () => {
+    const sat = new Date(2026, 5, 27, 9, 0, 0);
+    const info = derivePinInfo({ now: sat, periodTimes, teacherSchedule, todos: [], events: [] });
+    expect(listTodayClasses({ now: sat, periodTimes, teacherSchedule }, info)).toEqual([]);
   });
 });
 

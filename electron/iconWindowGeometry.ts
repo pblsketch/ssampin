@@ -29,9 +29,9 @@ export interface IconAnchor {
   right: boolean;
 }
 
-/** 확장 창 크기 — 팝오버(약 300×380) + 핀(64) + 여백이 들어가는 크기 */
+/** 확장 창 크기 — 팝오버(약 300×460, 수업·할일 목록 스크롤 포함) + 핀(64) + 여백 */
 export const ICON_EXPANDED_W = 340;
-export const ICON_EXPANDED_H = 480;
+export const ICON_EXPANDED_H = 560;
 
 /**
  * 핀(compact) 사각형을 기준으로 확장 창 사각형과 열림 방향을 계산.
