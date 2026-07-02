@@ -117,4 +117,143 @@ describe('buildSummary', () => {
     expect(summary.title).toBe('1교시 수학 · 2-3');
     expect(summary.lines.some((l) => l.startsWith('다음: 3교시 과학'))).toBe(true);
   });
+
+  it('급식 메뉴가 있으면 급식 줄을 추가한다 (점심 전)', () => {
+    const now = new Date(2026, 5, 23, 10, 20, 0);
+    const info = derivePinInfo({
+      now,
+      periodTimes,
+      teacherSchedule,
+      todos: [],
+      events: [],
+      lunchMenu: '김치찌개, 제육볶음',
+      lunchAfterPeriod: 3, // 3교시(11:50) 직후 점심
+    });
+    const summary = buildSummary(info);
+    expect(summary.lines.some((l) => l.startsWith('급식: 김치찌개'))).toBe(true);
+  });
+
+  it('점심 시작 1시간이 지난 급식 줄은 숨긴다', () => {
+    const now = new Date(2026, 5, 23, 14, 0, 0); // 점심(11:50) 130분 후
+    const info = derivePinInfo({
+      now,
+      periodTimes,
+      teacherSchedule,
+      todos: [],
+      events: [],
+      lunchMenu: '김치찌개',
+      lunchAfterPeriod: 3,
+    });
+    expect(buildSummary(info).lines.some((l) => l.startsWith('급식:'))).toBe(false);
+  });
+});
+
+describe('derivePinInfo — 아침 브리핑 재료 (v2.2.7)', () => {
+  it('오늘 수업 수와 첫 수업을 계산한다 (빈 교시 제외)', () => {
+    const now = new Date(2026, 5, 23, 8, 20, 0);
+    const info = derivePinInfo({ now, periodTimes, teacherSchedule, todos: [], events: [] });
+    expect(info.todayClassCount).toBe(2); // 수학 + 과학 (2교시는 빈 교시)
+    expect(info.firstClass?.number).toBe(1);
+    expect(info.firstClass?.subject).toBe('수학');
+  });
+
+  it('주말이면 수업 수 0, 첫 수업 없음', () => {
+    const sat = new Date(2026, 5, 27, 9, 0, 0);
+    const info = derivePinInfo({ now: sat, periodTimes, teacherSchedule, todos: [], events: [] });
+    expect(info.todayClassCount).toBe(0);
+    expect(info.firstClass).toBeNull();
+  });
+});
+
+describe('decidePeek — 아침 브리핑 (v2.2.7)', () => {
+  it('첫 수업 30분 전이면 오늘 수업 개수와 함께 브리핑한다', () => {
+    const now = new Date(2026, 5, 23, 8, 35, 0); // 1교시(09:00) 25분 전
+    const info = derivePinInfo({ now, periodTimes, teacherSchedule, todos: [], events: [] });
+    expect(decidePeek(info)).toEqual({
+      state: 'wave',
+      text: '오늘 수업 2개 · 첫 수업 1교시 수학 · 2-3 (25분 후)',
+    });
+  });
+
+  it('5분 이내로 임박하면 아침 브리핑 대신 "곧 시작" 알림이 이긴다', () => {
+    const now = new Date(2026, 5, 23, 8, 56, 0); // 4분 전
+    const info = derivePinInfo({ now, periodTimes, teacherSchedule, todos: [], events: [] });
+    expect(decidePeek(info)?.text).toBe('곧 1교시 수학 · 2-3');
+  });
+
+  it('첫 수업이 아닌 수업 앞에서는 아침 브리핑을 하지 않는다', () => {
+    const now = new Date(2026, 5, 23, 10, 40, 0); // 3교시(11:00) 20분 전, 2교시 빈 교시 중
+    const info = derivePinInfo({ now, periodTimes, teacherSchedule, todos: [], events: [] });
+    expect(decidePeek(info)).toBeNull(); // 3교시는 첫 수업이 아님 — 브리핑 없음
+  });
+
+  it('마감 할 일이 있어도 아침 브리핑 창에서는 브리핑이 우선한다', () => {
+    const now = new Date(2026, 5, 23, 8, 35, 0);
+    const todos: Todo[] = [todo({ text: '성적 입력', dueDate: '2026-06-20' })];
+    const info = derivePinInfo({ now, periodTimes, teacherSchedule, todos, events: [] });
+    expect(decidePeek(info)?.text.startsWith('오늘 수업 2개')).toBe(true);
+  });
+});
+
+describe('decidePeek — 급식 브리핑 (v2.2.7)', () => {
+  it('점심 60분 전부터 급식 메뉴를 알린다 (할 일보다 우선)', () => {
+    const now = new Date(2026, 5, 23, 11, 10, 0); // 3교시 진행 중, 점심(11:50) 40분 전
+    const todos: Todo[] = [todo({ text: '성적 입력', dueDate: '2026-06-20' })];
+    const info = derivePinInfo({
+      now,
+      periodTimes,
+      teacherSchedule,
+      todos,
+      events: [],
+      lunchMenu: '김치찌개, 제육볶음, 사과',
+      lunchAfterPeriod: 3,
+    });
+    expect(decidePeek(info)).toEqual({
+      state: 'jump',
+      text: '오늘 급식 · 김치찌개, 제육볶음, 사과',
+    });
+  });
+
+  it('점심이 이미 시작했으면 급식 알림은 없다', () => {
+    const now = new Date(2026, 5, 23, 12, 10, 0); // 점심(11:50) 시작 후
+    const info = derivePinInfo({
+      now,
+      periodTimes,
+      teacherSchedule,
+      todos: [],
+      events: [],
+      lunchMenu: '김치찌개',
+      lunchAfterPeriod: 3,
+    });
+    expect(decidePeek(info)).toBeNull();
+  });
+
+  it('점심 시각을 모르면(lunchAfterPeriod·폴백 없음) 급식 알림은 없지만 요약에는 남는다', () => {
+    const now = new Date(2026, 5, 23, 11, 10, 0);
+    const info = derivePinInfo({
+      now,
+      periodTimes,
+      teacherSchedule,
+      todos: [],
+      events: [],
+      lunchMenu: '김치찌개',
+    });
+    expect(decidePeek(info)).toBeNull();
+    expect(buildSummary(info).lines.some((l) => l.startsWith('급식:'))).toBe(true);
+  });
+
+  it('레거시 lunchStart "HH:mm" 폴백으로도 시각을 계산한다', () => {
+    const now = new Date(2026, 5, 23, 11, 40, 0);
+    const info = derivePinInfo({
+      now,
+      periodTimes,
+      teacherSchedule,
+      todos: [],
+      events: [],
+      lunchMenu: '비빔밥',
+      lunchStartFallback: '12:10',
+    });
+    expect(info.lunch?.minutesUntil).toBe(30);
+    expect(decidePeek(info)?.text).toBe('오늘 급식 · 비빔밥');
+  });
 });

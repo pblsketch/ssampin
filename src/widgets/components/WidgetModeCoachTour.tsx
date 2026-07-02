@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Modal } from '@adapters/components/common/Modal';
 import { isWindows } from '@adapters/hooks/shortcut/keyNormalize';
 import { useRegisterModal } from '@adapters/hooks/useRegisterModal';
+import { PIN_NAME } from '@adapters/components/Icon/pinName';
 import type { WidgetDesktopMode } from '@domain/entities/Settings';
 
 /**
@@ -68,6 +69,15 @@ const SLIDES: readonly SlideDef[] = [
     body: '쌤핀이 바탕화면 위에 깔리고, 아이콘은 그 위에서 그대로 클릭·드래그 가능해요. Windows 전용. 새 모드라면 한 번 써보세요!',
     tryMode: 'native-desktop',
     tryLabel: '바탕화면 모드로',
+  },
+  {
+    key: 'icon',
+    icon: 'push_pin',
+    tone: 'blue',
+    preview: 'mode-preview/icon.svg',
+    title: '아이콘 모드',
+    subtitle: `핀 캐릭터 ${PIN_NAME}로 접기`,
+    body: `위젯을 화면 위에 떠 있는 작은 핀으로 접어둘 수 있어요. ${PIN_NAME}가 수업 시작 전·급식·마감 할 일을 말풍선으로 먼저 알려주고, 클릭하면 오늘 요약이 그 자리에서 열려요. 위젯 우클릭 → "아이콘으로 접기"로 시작!`,
   },
 ];
 

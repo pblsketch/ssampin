@@ -18,6 +18,7 @@ import fs from 'fs';
 import crypto from 'crypto';
 import { autoUpdater } from 'electron-updater';
 import { installNavigationGuard } from './security-guards';
+import { computeExpandedBounds, pinFromExpanded, type IconAnchor } from './iconWindowGeometry';
 import { attachCsp, installCspViolationLogger } from './security/csp';
 import { registerOAuthHandlers } from './ipc/oauth';
 import { registerPKCEFallbackHandlers } from './ipc/oauthPKCEFallback';
@@ -1111,6 +1112,14 @@ let lastUserMode: 'main' | 'widget' = 'main';
  * 방지하기 위한 가드 (executeWindowTransition에서 갱신).
  */
 let currentWindowMode: 'main' | 'widget' | 'icon' = 'main';
+/**
+ * 아이콘 창 확장 상태 (v2.2.7 창 구조 재설계).
+ * 평소 compact(64×64, 핀만). 말풍선·팝오버·메뉴가 필요할 때만 확장한다 —
+ * 기존에는 창이 항상 64×64라 이 UI들이 전부 창 밖에 그려져 보이지 않았다
+ * (2026-07-02 실화면 진단). anchor = 확장 시 핀이 붙는 모서리(UI가 열리는 방향).
+ */
+let iconExpanded = false;
+let iconAnchor: IconAnchor = { up: true, right: true };
 
 function getDefaultIconBounds(): IconBounds {
   const display = screen.getPrimaryDisplay();
@@ -1156,6 +1165,54 @@ function scheduleIconBoundsSave(bounds: IconBounds): void {
   }, 500);
 }
 
+/** 현재 "핀"의 화면 사각형 — 확장 상태면 창 bounds 에서 역산 (위치 저장·화면 이탈 검사용) */
+function currentPinBounds(): IconBounds {
+  if (!iconWindow || iconWindow.isDestroyed()) return getDefaultIconBounds();
+  const b = iconWindow.getBounds();
+  if (!iconExpanded) return { x: b.x, y: b.y, width: ICON_SIZE, height: ICON_SIZE };
+  return pinFromExpanded(b, iconAnchor, ICON_SIZE);
+}
+
+/** 렌더러에 현재 레이아웃(확장 여부 + 열림 방향) 통지 */
+function sendIconLayout(): void {
+  if (!iconWindow || iconWindow.isDestroyed()) return;
+  iconWindow.webContents.send('icon:layout', { expanded: iconExpanded, anchor: iconAnchor });
+}
+
+/**
+ * 아이콘 창 확장 — 핀의 화면 위치는 불변, 말풍선/팝오버 공간만 확보.
+ * 확장 영역의 빈 부분은 클릭이 아래 창으로 통과(setIgnoreMouseEvents+forward).
+ * 렌더러가 인터랙티브 요소 위에서만 icon:set-mouse-ignore 로 되돌린다.
+ */
+function expandIconWindow(): { expanded: boolean; anchor: IconAnchor } {
+  if (!iconWindow || iconWindow.isDestroyed()) return { expanded: false, anchor: iconAnchor };
+  if (iconExpanded) return { expanded: true, anchor: iconAnchor };
+  const pin = currentPinBounds();
+  const display = screen.getDisplayMatching(pin);
+  const { bounds, anchor } = computeExpandedBounds(pin, display.workArea);
+  iconAnchor = anchor;
+  iconExpanded = true;
+  iconWindow.setBounds(bounds);
+  iconWindow.setIgnoreMouseEvents(true, { forward: true });
+  sendIconLayout();
+  return { expanded: true, anchor };
+}
+
+/** 아이콘 창 축소(compact 64×64) — 핀 화면 위치 불변, 전체 인터랙티브 복귀 */
+function collapseIconWindow(): { expanded: boolean; anchor: IconAnchor } {
+  if (!iconWindow || iconWindow.isDestroyed()) return { expanded: false, anchor: iconAnchor };
+  if (!iconExpanded) {
+    iconWindow.setIgnoreMouseEvents(false);
+    return { expanded: false, anchor: iconAnchor };
+  }
+  const pin = currentPinBounds();
+  iconExpanded = false;
+  iconWindow.setBounds(pin);
+  iconWindow.setIgnoreMouseEvents(false);
+  sendIconLayout();
+  return { expanded: false, anchor: iconAnchor };
+}
+
 // ─── 아이콘 드래그 — main process polling (가장 견고) ───────────────────
 // Renderer pointer capture 의존 X. screen.getCursorScreenPoint()로 OS 레벨
 // 마우스 위치를 직접 받아 setBounds. mouse가 윈도우 밖으로 나가도 정상 작동.
@@ -1181,6 +1238,7 @@ function startIconDrag(): void {
     return;
   }
   stopIconDrag(); // 기존 드래그 정리
+  collapseIconWindow(); // 드래그는 항상 compact 상태에서 — 확장 중이었어도 핀 위치는 유지된 채 축소
   const mouse = screen.getCursorScreenPoint();
   const bounds = iconWindow.getBounds();
   iconDragState = {
@@ -1227,10 +1285,9 @@ function stopIconDrag(): void {
     iconDragSafetyTimer = null;
   }
   iconDragState = null;
-  // 위치 영속화
+  // 위치 영속화 — 항상 "핀" 사각형 기준 (확장 상태여도 안전)
   if (iconWindow && !iconWindow.isDestroyed()) {
-    const b = iconWindow.getBounds();
-    saveIconBounds({ x: b.x, y: b.y, width: ICON_SIZE, height: ICON_SIZE });
+    saveIconBounds(currentPinBounds());
   }
   if (hadInterval || hadSafety || hadState) {
     diagLog('icon', `stopIconDrag (interval=${hadInterval} safety=${hadSafety} state=${hadState})`);
@@ -1239,7 +1296,8 @@ function stopIconDrag(): void {
 
 function ensureIconOnScreen(): void {
   if (!iconWindow || iconWindow.isDestroyed()) return;
-  const bounds = iconWindow.getBounds();
+  // 확장 상태여도 "핀"이 화면 안에 있는지를 검사 (창 전체가 아니라)
+  const bounds = currentPinBounds();
   const displays = screen.getAllDisplays();
   const visible = displays.some((d) => {
     const a = d.workArea;
@@ -1252,18 +1310,23 @@ function ensureIconOnScreen(): void {
   });
   if (!visible) {
     const fallback = getDefaultIconBounds();
+    iconExpanded = false;
+    iconWindow.setIgnoreMouseEvents(false);
     iconWindow.setBounds(fallback);
     saveIconBounds(fallback);
+    sendIconLayout();
   }
 }
 
 function buildIconWindow(): void {
   const bounds = readIconBoundsOrDefault();
+  iconExpanded = false; // 새 창은 항상 compact 로 시작
   diagLog('icon', `buildIconWindow start bounds=${JSON.stringify(bounds)}`);
 
   iconWindow = new BrowserWindow({
-    width: bounds.width,
-    height: bounds.height,
+    // 저장 파일의 width/height 는 무시하고 항상 핀 크기로 — 손상된 값 방어
+    width: ICON_SIZE,
+    height: ICON_SIZE,
     x: bounds.x,
     y: bounds.y,
     frame: false,
@@ -1298,6 +1361,7 @@ function buildIconWindow(): void {
   // PoC #1 검증된 옵션 — PPT/F11/YouTube 풀스크린 위에 표시 보장
   iconWindow.setAlwaysOnTop(true, 'screen-saver');
   iconWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  iconWindow.setIgnoreMouseEvents(false); // compact 기본 — 창 전체가 핀(인터랙티브)
 
   if (process.env['VITE_DEV_SERVER_URL']) {
     void iconWindow.loadURL(`${process.env['VITE_DEV_SERVER_URL']}?mode=icon`);
@@ -1459,11 +1523,14 @@ function executeWindowTransition(target: WindowMode): Promise<void> {
         );
         if (needsBuild) buildIconWindow();
         if (iconWindow && !iconWindow.isDestroyed()) {
+          collapseIconWindow(); // 항상 compact(핀만) 상태로 표시 시작
           const wasVisible = iconWindow.isVisible();
           diagLog('icon', `case icon: pre-fadeIn isVisible=${wasVisible}`);
           if (!wasVisible) iconWindow.setOpacity(0);
           await fadeInIconWindow(220);
           ensureIconOnScreen();
+          // 렌더러에 진입 통지 — UI 상태 초기화 + 진입 분석 이벤트
+          iconWindow.webContents.send('icon:shown');
           diagLog(
             'icon',
             `case icon: post-fadeIn bounds=${JSON.stringify(iconWindow.getBounds())} isVisible=${iconWindow.isVisible()}`,
@@ -1491,6 +1558,7 @@ function executeWindowTransition(target: WindowMode): Promise<void> {
         if (iconWindow && !iconWindow.isDestroyed() && iconWindow.isVisible()) {
           await fadeOutIconWindow(180);
           iconWindow.hide();
+          collapseIconWindow(); // 다음 표시가 compact 로 시작하도록
         }
 
         // 2) 위젯 보장 + show. 새로 생성하는 경우 ready-to-show 콜백으로
@@ -1529,6 +1597,7 @@ function executeWindowTransition(target: WindowMode): Promise<void> {
         if (iconWindow && !iconWindow.isDestroyed() && iconWindow.isVisible()) {
           await fadeOutIconWindow(180);
           iconWindow.hide();
+          collapseIconWindow(); // 다음 표시가 compact 로 시작하도록
         }
 
         // 3) 위젯 숨김
@@ -2818,14 +2887,44 @@ function registerIpcHandlers(): void {
   ipcMain.handle('icon:hide', async (): Promise<void> => {
     if (!iconWindow || iconWindow.isDestroyed()) return;
     await fadeOutIconWindow(180);
-    if (iconWindow && !iconWindow.isDestroyed()) iconWindow.hide();
+    if (iconWindow && !iconWindow.isDestroyed()) {
+      iconWindow.hide();
+      collapseIconWindow(); // 다음 표시가 compact 로 시작하도록
+    }
   });
 
   ipcMain.handle('icon:set-bounds', (_event, bounds: { x: number; y: number }): void => {
     if (!iconWindow || iconWindow.isDestroyed()) return;
     if (typeof bounds?.x !== 'number' || typeof bounds?.y !== 'number') return;
+    collapseIconWindow(); // 좌표는 "핀" 기준 — 확장 상태였다면 축소 후 적용
     iconWindow.setBounds({ x: bounds.x, y: bounds.y, width: ICON_SIZE, height: ICON_SIZE });
     scheduleIconBoundsSave({ x: bounds.x, y: bounds.y, width: ICON_SIZE, height: ICON_SIZE });
+  });
+
+  /**
+   * 아이콘 창 확장/축소 (v2.2.7) — 렌더러가 말풍선·팝오버·메뉴를 열 때 확장 요청.
+   * 반환값의 anchor 로 렌더러가 오버레이를 어느 방향으로 열지 결정한다.
+   */
+  ipcMain.handle(
+    'icon:set-expanded',
+    (_event, expanded: boolean): { expanded: boolean; anchor: IconAnchor } => {
+      if (typeof expanded !== 'boolean') return { expanded: iconExpanded, anchor: iconAnchor };
+      return expanded ? expandIconWindow() : collapseIconWindow();
+    },
+  );
+
+  /**
+   * 확장 상태에서 마우스 통과 토글 — 인터랙티브 요소(핀·팝오버·메뉴) 위에서는
+   * false, 빈 영역에서는 true(아래 창으로 클릭 통과). compact 에선 항상 false.
+   */
+  ipcMain.handle('icon:set-mouse-ignore', (_event, ignore: boolean): void => {
+    if (!iconWindow || iconWindow.isDestroyed()) return;
+    if (typeof ignore !== 'boolean') return;
+    if (!iconExpanded) {
+      iconWindow.setIgnoreMouseEvents(false);
+      return;
+    }
+    iconWindow.setIgnoreMouseEvents(ignore, { forward: true });
   });
 
   /**
@@ -2854,6 +2953,7 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('icon:reset-position', (): void => {
     if (!iconWindow || iconWindow.isDestroyed()) return;
+    collapseIconWindow();
     const fallback = getDefaultIconBounds();
     iconWindow.setBounds(fallback);
     saveIconBounds(fallback);

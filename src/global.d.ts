@@ -254,6 +254,16 @@ interface ElectronAPI {
   iconResetPosition: () => Promise<void>;
   iconExpand: (target: { to: 'main' | 'widget' | 'restore' }) => Promise<void>;
   iconDiag: (payload: { event: string; data?: unknown }) => Promise<void>;
+  /** 아이콘 창 확장/축소 (v2.2.7) — 말풍선·팝오버·메뉴 공간 확보 */
+  iconSetExpanded: (
+    expanded: boolean,
+  ) => Promise<{ expanded: boolean; anchor: { up: boolean; right: boolean } }>;
+  /** 확장 상태에서 빈 영역 클릭을 아래 창으로 통과시킬지 토글 */
+  iconSetMouseIgnore: (ignore: boolean) => Promise<void>;
+  onIconLayout: (
+    callback: (layout: { expanded: boolean; anchor: { up: boolean; right: boolean } }) => void,
+  ) => () => void;
+  onIconShown: (callback: () => void) => () => void;
   /** 저장 대화상자. 경로 대신 1회용 handle + 표시용 fileName 반환. */
   showSaveDialog: (options: {
     title: string;

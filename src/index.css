@@ -167,12 +167,16 @@ body {
     background-color: transparent !important;
   }
 
-  /* 아이콘 모드 (v2.0.3~) — transparent BrowserWindow에 PNG 캐릭터만 표시.
-     light 테마에서 body bg-sp-bg(#ffffff)가 적용되면 흰 박스로 보이므로 강제 투명. */
+  /* 아이콘 모드 (v2.0.3~) — transparent BrowserWindow에 캐릭터만 표시.
+     light 테마에서 body bg-sp-bg(#ffffff)가 적용되면 흰 박스로 보이므로 강제 투명.
+     v2.2.7: 기존 `body.ssampin-icon-popup *`(전 자손) 규칙이 말풍선(PinBubble)·
+     컨텍스트 메뉴·팝오버의 카드 배경(bg-sp-card)까지 지워 "그림자+테두리만 남은
+     유령 상자"를 만들었다. 구조 요소(html/body/#root)만 투명 강제하고 내부 UI는
+     자기 배경을 유지한다. (IconWindow가 inline style로 같은 3요소를 한 번 더
+     강제 — 2중 안전망 유지) */
   body.ssampin-icon-popup,
   html:has(body.ssampin-icon-popup),
-  body.ssampin-icon-popup #root,
-  body.ssampin-icon-popup * {
+  body.ssampin-icon-popup #root {
     background: transparent !important;
     background-color: transparent !important;
   }

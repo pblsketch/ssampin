@@ -48,7 +48,12 @@ export type AnalyticsEventName =
   | 'widget_mode_fallback_shown'
   | 'widget_mode_coach_tour_shown'
   | 'widget_mode_coach_tour_completed'
-  | 'widget_mode_coach_tour_skipped';
+  | 'widget_mode_coach_tour_skipped'
+  | 'icon_mode_enter'
+  | 'icon_mode_expand'
+  | 'icon_popover_open'
+  | 'icon_popover_quick_add'
+  | 'icon_popover_todo_toggle';
 
 /** tool_use 이벤트의 tool 프로퍼티에 사용 가능한 도구명 */
 export type ToolName =
@@ -140,4 +145,17 @@ export interface AnalyticsEventProperties {
     trySelected: 'normal' | 'topmost' | 'native-desktop' | 'none';
   };
   widget_mode_coach_tour_skipped: { slideIndex: number };
+  /** 아이콘 모드 진입 — 창 전환 완료 시 (v2.2.7) */
+  icon_mode_enter: Record<string, never>;
+  /** 아이콘 모드에서 다른 창으로 확장 — via는 진입 경로 */
+  icon_mode_expand: {
+    to: 'main' | 'widget' | 'restore';
+    via: 'double-click' | 'context-menu' | 'popover';
+  };
+  /** 핀 클릭으로 오늘 요약 팝오버 열림 */
+  icon_popover_open: Record<string, never>;
+  /** 팝오버에서 할 일 빠른 추가 */
+  icon_popover_quick_add: Record<string, never>;
+  /** 팝오버에서 할 일 완료 토글 */
+  icon_popover_todo_toggle: Record<string, never>;
 }

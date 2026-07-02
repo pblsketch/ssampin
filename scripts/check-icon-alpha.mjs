@@ -29,6 +29,9 @@ import crypto from 'node:crypto';
 const DEFAULT_TARGETS = [
   'public/floating-pin.png',
   'public/플로팅 아이콘2.png',
+  // v2.2.3~ 아이콘 모드가 실제 사용하는 스프라이트 시트 (PinDisc.tsx) —
+  // 2026-07-02 진단에서 검사 목록 누락 발견, 추가.
+  'public/sprite-pin.png',
 ];
 
 const targets = process.argv.length > 2 ? process.argv.slice(2) : DEFAULT_TARGETS;
@@ -45,10 +48,7 @@ async function inspect(rel) {
   const sha = crypto.createHash('sha256').update(buf).digest('hex').slice(0, 16);
   const sizeBytes = buf.length;
 
-  const { data, info } = await sharp(abs)
-    .ensureAlpha()
-    .raw()
-    .toBuffer({ resolveWithObject: true });
+  const { data, info } = await sharp(abs).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
 
   const { width, height, channels } = info;
   if (channels !== 4) {
@@ -60,13 +60,16 @@ async function inspect(rel) {
   let semiTransparent = 0;
 
   // 배경 잔상 후보: 회색/흰색 + 낮은 alpha
-  let lowAlphaGrayBg = 0;        // 가장 의심되는 그룹
+  let lowAlphaGrayBg = 0; // 가장 의심되는 그룹
   let lowAlphaNonTransparent = 0;
   let graySemi = 0;
   let grayLow = 0;
 
   // alpha > 5 bbox
-  let minX = width, minY = height, maxX = -1, maxY = -1;
+  let minX = width,
+    minY = height,
+    maxX = -1,
+    maxY = -1;
 
   // 외곽 2px non-zero alpha
   let edgeNonZero = 0;
@@ -92,7 +95,7 @@ async function inspect(rel) {
 
       const maxC = Math.max(r, g, b);
       const minC = Math.min(r, g, b);
-      const grayish = (maxC - minC) < 12;
+      const grayish = maxC - minC < 12;
       const bright = maxC > 120;
 
       // 의심 픽셀: 회색 계열 + 밝음 + low-alpha (배경 잔상 추정)
@@ -132,7 +135,7 @@ async function inspect(rel) {
     fullyOpaquePct: ((fullyOpaque / totalPixels) * 100).toFixed(2),
     semiTransparentPct: ((semiTransparent / totalPixels) * 100).toFixed(2),
     edgeNonZero,
-    lowAlphaGrayBg,        // 가장 의심
+    lowAlphaGrayBg, // 가장 의심
     lowAlphaNonTransparent,
     graySemi,
     grayLow,
@@ -162,12 +165,20 @@ async function inspect(rel) {
     console.log(`  파일 크기            : ${r.sizeBytes.toLocaleString()} bytes`);
     console.log(`  SHA-256 (16)        : ${r.sha}`);
     console.log(`  총 픽셀              : ${r.totalPixels.toLocaleString()}`);
-    console.log(`  완전 투명 (a=0)     : ${r.fullyTransparent.toLocaleString()} (${r.fullyTransparentPct}%)`);
+    console.log(
+      `  완전 투명 (a=0)     : ${r.fullyTransparent.toLocaleString()} (${r.fullyTransparentPct}%)`,
+    );
     console.log(`  완전 불투명 (a=255) : ${r.fullyOpaque.toLocaleString()} (${r.fullyOpaquePct}%)`);
-    console.log(`  반투명              : ${r.semiTransparent.toLocaleString()} (${r.semiTransparentPct}%)`);
+    console.log(
+      `  반투명              : ${r.semiTransparent.toLocaleString()} (${r.semiTransparentPct}%)`,
+    );
     console.log(`  외곽 2px non-zero α : ${r.edgeNonZero}  ${r.edgeNonZero === 0 ? '✅' : '⚠️'}`);
-    console.log(`  배경 잔상 후보 (low-α gray+bright, α≤80) : ${r.lowAlphaGrayBg.toLocaleString()}  ${r.lowAlphaGrayBg === 0 ? '✅' : '⚠️'}`);
-    console.log(`  low-α non-transparent (0<α<30)            : ${r.lowAlphaNonTransparent.toLocaleString()}`);
+    console.log(
+      `  배경 잔상 후보 (low-α gray+bright, α≤80) : ${r.lowAlphaGrayBg.toLocaleString()}  ${r.lowAlphaGrayBg === 0 ? '✅' : '⚠️'}`,
+    );
+    console.log(
+      `  low-α non-transparent (0<α<30)            : ${r.lowAlphaNonTransparent.toLocaleString()}`,
+    );
     console.log(`  graySemi (gray, 0<α<200)                  : ${r.graySemi.toLocaleString()}`);
     console.log(`  grayLow  (gray, 0<α<60)                   : ${r.grayLow.toLocaleString()}`);
     if (r.bbox) {
@@ -176,11 +187,16 @@ async function inspect(rel) {
   }
   console.log('═'.repeat(80));
 
-  if (results.length === 2 && results[0].exists && results[1].exists) {
-    const same = results[0].sha === results[1].sha;
+  // 레거시 정지 이미지 2종은 같은 내용이어야 한다 (스프라이트 시트는 비교 대상 아님)
+  const legacyA = results.find((r) => r.rel === 'public/floating-pin.png');
+  const legacyB = results.find((r) => r.rel === 'public/플로팅 아이콘2.png');
+  if (legacyA?.exists && legacyB?.exists) {
+    const same = legacyA.sha === legacyB.sha;
     console.log(`🔁  두 자산 동일 여부 : ${same ? '동일 ✅' : '다름 ⚠️'}`);
     if (!same) {
-      console.log('   → public/floating-pin.png 와 public/플로팅 아이콘2.png 를 같은 내용으로 동기화하세요.');
+      console.log(
+        '   → public/floating-pin.png 와 public/플로팅 아이콘2.png 를 같은 내용으로 동기화하세요.',
+      );
     }
   }
 })();

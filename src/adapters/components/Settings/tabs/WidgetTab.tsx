@@ -5,6 +5,7 @@ import { Toggle } from '../shared/Toggle';
 import { isWindows } from '@adapters/hooks/shortcut/keyNormalize';
 import { useFirstRunModeCoachTour } from '@adapters/hooks/useFirstRunModeCoachTour';
 import { useToastStore } from '@adapters/components/common/Toast';
+import { PIN_NAME } from '@adapters/components/Icon/pinName';
 
 interface Props {
   draft: Settings;
@@ -159,6 +160,45 @@ export function WidgetTab({ draft, patch }: Props) {
               </p>
             </div>
           )}
+          {/* 아이콘 모드 승격 카드 (v2.2.7) — 기존에는 '창 닫기 동작' 옵션 안에만 숨어
+              있어 사용자가 "화면 모드"로 인지할 수 없었다. 표시 모드 섹션에서 함께 소개. */}
+          <div
+            className="mt-3 px-3 py-2.5 rounded-lg bg-sp-surface/50 border border-sp-border"
+            data-testid="settings-icon-mode-card"
+          >
+            <div className="flex items-start gap-3">
+              <span
+                className="material-symbols-outlined text-sp-accent mt-0.5"
+                style={{ fontSize: 20 }}
+              >
+                push_pin
+              </span>
+              <div className="flex-1">
+                <span className="text-xs font-medium text-sp-text">
+                  아이콘 모드 — 핀 캐릭터 {PIN_NAME}
+                  <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 text-[10px] font-semibold">
+                    NEW
+                  </span>
+                </span>
+                <p className="text-caption text-sp-muted mt-0.5 leading-relaxed">
+                  화면 위에 떠 있는 작은 핀 캐릭터가 수업 시작 전·급식·할 일 마감을 말풍선으로 먼저
+                  알려줍니다. 핀을 클릭하면 오늘 요약(수업·할 일·빠른 추가)이 그 자리에서 열려요.
+                  아래 &lsquo;창 닫기 동작&rsquo;을 &lsquo;아이콘 모드로 접기&rsquo;로 두면 X 버튼
+                  한 번으로 접힙니다.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void window.electronAPI?.iconShow();
+                  }}
+                  className="mt-1.5 px-2.5 py-1 rounded-lg bg-sp-accent text-white text-xs font-medium hover:opacity-90 transition-opacity"
+                  data-testid="settings-icon-mode-try"
+                >
+                  지금 아이콘 모드로 접기
+                </button>
+              </div>
+            </div>
+          </div>
           {/* 모드 가이드 다시 보기 — settings.widget.modeTour.shown=false reset → 다음 위젯 모드 진입에서 표시 */}
           <button
             type="button"

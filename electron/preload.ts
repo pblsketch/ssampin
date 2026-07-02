@@ -231,6 +231,33 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('icon:expand', target),
   iconDiag: (payload: { event: string; data?: unknown }): Promise<void> =>
     ipcRenderer.invoke('icon:diag', payload),
+  // 아이콘 창 확장/축소 (v2.2.7) — 말풍선·팝오버·메뉴 공간 확보. 반환 anchor 로 열림 방향 결정.
+  iconSetExpanded: (
+    expanded: boolean,
+  ): Promise<{ expanded: boolean; anchor: { up: boolean; right: boolean } }> =>
+    ipcRenderer.invoke('icon:set-expanded', expanded),
+  // 확장 상태에서 빈 영역 클릭을 아래 창으로 통과시킬지 토글
+  iconSetMouseIgnore: (ignore: boolean): Promise<void> =>
+    ipcRenderer.invoke('icon:set-mouse-ignore', ignore),
+  onIconLayout: (
+    callback: (layout: { expanded: boolean; anchor: { up: boolean; right: boolean } }) => void,
+  ): (() => void) => {
+    const handler = (
+      _event: unknown,
+      layout: { expanded: boolean; anchor: { up: boolean; right: boolean } },
+    ) => callback(layout);
+    ipcRenderer.on('icon:layout', handler);
+    return () => {
+      ipcRenderer.removeListener('icon:layout', handler);
+    };
+  },
+  onIconShown: (callback: () => void): (() => void) => {
+    const handler = () => callback();
+    ipcRenderer.on('icon:shown', handler);
+    return () => {
+      ipcRenderer.removeListener('icon:shown', handler);
+    };
+  },
   // 저장 대화상자 — 경로 문자열 대신 1회용 핸들 + 표시용 파일명 반환 (메인이 경로를 보유).
   showSaveDialog: (options: {
     title: string;

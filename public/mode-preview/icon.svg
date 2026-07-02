@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 80" fill="none" aria-hidden="true">
+  <!-- 바탕화면 + 아이콘 -->
+  <rect x="0" y="0" width="120" height="80" rx="6" fill="currentColor" opacity="0.06"/>
+  <rect x="6" y="6" width="10" height="10" rx="2" fill="currentColor" opacity="0.35"/>
+  <rect x="6" y="20" width="10" height="10" rx="2" fill="currentColor" opacity="0.35"/>
+  <rect x="6" y="34" width="10" height="10" rx="2" fill="currentColor" opacity="0.35"/>
+  <!-- 다른 작업 창 (넓게 사용 중) -->
+  <rect x="22" y="10" width="86" height="52" rx="4" fill="#ffffff" fill-opacity="0.92" stroke="currentColor" stroke-opacity="0.55" stroke-width="1"/>
+  <line x1="22" y1="18" x2="108" y2="18" stroke="currentColor" stroke-opacity="0.55" stroke-width="1"/>
+  <circle cx="27" cy="14" r="1.5" fill="currentColor" opacity="0.6"/>
+  <line x1="28" y1="26" x2="100" y2="26" stroke="currentColor" stroke-opacity="0.3" stroke-width="1"/>
+  <line x1="28" y1="32" x2="92" y2="32" stroke="currentColor" stroke-opacity="0.3" stroke-width="1"/>
+  <line x1="28" y1="38" x2="96" y2="38" stroke="currentColor" stroke-opacity="0.3" stroke-width="1"/>
+  <!-- 말풍선 (핀이의 알림) -->
+  <rect x="62" y="48" width="34" height="12" rx="4" fill="currentColor" opacity="0.28"/>
+  <line x1="66" y1="54" x2="90" y2="54" stroke="#ffffff" stroke-opacity="0.85" stroke-width="1.5"/>
+  <path d="M96 58 L101 63 L96 60 Z" fill="currentColor" opacity="0.28"/>
+  <!-- 핀 캐릭터 (우하단 고정) -->
+  <circle cx="104" cy="66" r="7" fill="currentColor" opacity="0.85"/>
+  <circle cx="101.5" cy="64.5" r="1.2" fill="#ffffff" fill-opacity="0.95"/>
+  <circle cx="106.5" cy="64.5" r="1.2" fill="#ffffff" fill-opacity="0.95"/>
+  <path d="M101.5 68.5 Q104 70 106.5 68.5" stroke="#ffffff" stroke-opacity="0.95" stroke-width="1" stroke-linecap="round"/>
+</svg>
