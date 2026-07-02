@@ -1,0 +1,72 @@
+name: Build Windows
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build Windows Installer
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: TypeScript type check
+        run: npm run typecheck
+
+      - name: Build Windows installer
+        run: npm run build && npx electron-builder --win --publish never
+        shell: bash
+        env:
+          VITE_DEV_SERVER_URL: ''
+          # macOS 빌드와 동일 — Vite build 가드가 client_id/secret 빈값 시 throw.
+          # OAuth 정상 동작을 위해 secrets 주입을 명시.
+          VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
+          VITE_GOOGLE_CLIENT_SECRET: ${{ secrets.VITE_GOOGLE_CLIENT_SECRET }}
+
+      - name: Verify build output
+        shell: bash
+        run: |
+          ls -lh release/
+          if ! ls release/*.exe 1>/dev/null 2>&1; then
+            echo "::error::No .exe files found in release/"
+            exit 1
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ssampin-windows-${{ github.sha }}
+          path: |
+            release/*.exe
+            release/*.blockmap
+            release/latest.yml
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Build summary
+        if: success()
+        shell: bash
+        run: |
+          echo "## Windows Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **Trigger:** ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Files" >> $GITHUB_STEP_SUMMARY
+          for f in release/*.exe; do
+            echo "- \`$(basename $f)\` ($(du -h "$f" | cut -f1))" >> $GITHUB_STEP_SUMMARY
+          done
