@@ -281,11 +281,13 @@ export function Seating(props?: { embedded?: boolean }) {
   const [showShuffle, setShowShuffle] = useState(false);
   const [showGroupShuffle, setShowGroupShuffle] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [showConstraintModal, setShowConstraintModal] = useState(false);
   const [showHistoryPanel, setShowHistoryPanel] = useState(false);
   const [showNameLearning, setShowNameLearning] = useState(false);
   const [showPresetDialog, setShowPresetDialog] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);
+  const moreMenuRef = useRef<HTMLDivElement>(null);
 
   const loaded = seatingLoaded && studentsLoaded;
 
@@ -400,6 +402,25 @@ export function Seating(props?: { embedded?: boolean }) {
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, [showExportMenu]);
+
+  // 더보기 드롭다운 외부 클릭 · Esc 닫기
+  useEffect(() => {
+    if (!showMoreMenu) return;
+    const handleClick = (e: MouseEvent) => {
+      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)) {
+        setShowMoreMenu(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShowMoreMenu(false);
+    };
+    document.addEventListener('mousedown', handleClick);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClick);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [showMoreMenu]);
 
   const showToast = useToastStore((s) => s.show);
   const getStudent = useStudentStore((s) => s.getStudent);
@@ -619,74 +640,6 @@ export function Seating(props?: { embedded?: boolean }) {
               </span>
               <span>교사 시점</span>
             </button>
-            {/* 배치 기록 (Phase 1) — 교사·학생 시점 모두 노출 (저장된 기록은 모두 동일하게 사용 가능) */}
-            <button
-              onClick={() => setShowHistoryPanel(true)}
-              className="shrink-0 whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface text-sm font-medium text-sp-text transition-colors shadow-sm"
-              title="자리배치 기록 보기"
-            >
-              <span className="material-symbols-outlined text-lg">history</span>
-              <span>배치 기록</span>
-            </button>
-            {/* 이름 학습 (Phase 3a) — 교사·학생 시점 모두 노출. 학생이 0명일 때만 비활성 */}
-            {totalStudents > 0 && (
-              <button
-                onClick={() => setShowNameLearning(true)}
-                className="shrink-0 whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface text-sm font-medium text-sp-text transition-colors shadow-sm"
-                title="학생 이름 외우기 모드"
-              >
-                <span className="material-symbols-outlined text-lg">quiz</span>
-                <span>이름 학습</span>
-              </button>
-            )}
-            {/* Phase 3b: 프리셋 배치 메뉴 (교사 시점에서만, 학생 화면에는 절대 노출 X) */}
-            {isTeacherView && (
-              <div className="shrink-0 relative">
-                {hasPreset ? (
-                  <div className="flex items-center gap-1 px-3 py-2 rounded-lg border border-sp-warning/40 bg-sp-warning/10 text-sm font-medium text-sp-warning shadow-sm">
-                    <span className="material-symbols-outlined text-lg" aria-hidden="true">
-                      target
-                    </span>
-                    <span title="다음 셔플 시 미리 설정한 배치가 적용됩니다">프리셋 대기</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        void clearPresetAction();
-                        useToastStore.getState().show('프리셋이 제거되었습니다', 'info');
-                      }}
-                      aria-label="프리셋 제거"
-                      className="ml-1 p-0.5 rounded hover:bg-sp-warning/20"
-                    >
-                      <span className="material-symbols-outlined text-sm">close</span>
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => {
-                      if (totalStudents === 0) return;
-                      if (
-                        window.confirm(
-                          '현재 배치를 프리셋으로 저장할까요?\n' +
-                            '다음에 "랜덤 셔플" 버튼을 누르면 셔플 애니메이션 후 이 배치가 그대로 적용됩니다.\n' +
-                            '(1회 사용 후 자동 해제)',
-                        )
-                      ) {
-                        void setPresetFromCurrent();
-                        useToastStore
-                          .getState()
-                          .show('현재 배치를 프리셋으로 저장했습니다', 'info');
-                      }
-                    }}
-                    disabled={totalStudents === 0}
-                    className="whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium text-sp-text transition-colors shadow-sm"
-                    title="다음 셔플에 적용할 배치를 미리 저장"
-                  >
-                    <span className="material-symbols-outlined text-lg">target</span>
-                    <span>프리셋 저장</span>
-                  </button>
-                )}
-              </div>
-            )}
             <button
               onClick={() => setEditing(!isEditing)}
               className={`shrink-0 whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-colors shadow-sm ${
@@ -729,6 +682,101 @@ export function Seating(props?: { embedded?: boolean }) {
               </>
             )}
           </ScrollRow>
+          {/* 더보기 메뉴 — ScrollRow(오버플로우 클립) 밖에 두어야 드롭다운이 잘리지 않는다.
+              내보내기 버튼 왼쪽에 배치. */}
+          <div className="relative shrink-0" ref={moreMenuRef}>
+            <button
+              onClick={() => setShowMoreMenu((v) => !v)}
+              aria-label="더보기 메뉴"
+              aria-expanded={showMoreMenu}
+              title="더보기"
+              className="whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface text-sm font-medium text-sp-text transition-colors shadow-sm"
+            >
+              <span className="material-symbols-outlined text-lg">more_vert</span>
+              <span>더보기</span>
+            </button>
+            {showMoreMenu && (
+              <div className="absolute right-0 top-full mt-2 w-64 bg-sp-card border border-sp-border rounded-xl shadow-2xl shadow-black/30 z-50 overflow-hidden">
+                {/* 배치 기록 (Phase 1) — 교사·학생 시점 모두 노출 (저장된 기록은 모두 동일하게 사용 가능) */}
+                <button
+                  onClick={() => {
+                    setShowMoreMenu(false);
+                    setShowHistoryPanel(true);
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-sm text-sp-text hover:bg-sp-accent/10 transition-colors"
+                  title="자리배치 기록 보기"
+                >
+                  <span className="material-symbols-outlined text-sp-muted text-lg">history</span>
+                  <span>배치 기록</span>
+                </button>
+                {/* 이름 학습 (Phase 3a) — 교사 시점 전용 도구. 학생이 0명이면 항목 숨김 */}
+                {isTeacherView && totalStudents > 0 && (
+                  <button
+                    onClick={() => {
+                      setShowMoreMenu(false);
+                      setShowNameLearning(true);
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-sm text-sp-text hover:bg-sp-accent/10 transition-colors border-t border-sp-border"
+                    title="학생 이름 외우기 모드"
+                  >
+                    <span className="material-symbols-outlined text-sp-muted text-lg">quiz</span>
+                    <span>이름 학습</span>
+                  </button>
+                )}
+                {/* Phase 3b: 프리셋 배치 — 교사 시점 전용 도구 (학생 화면에는 절대 노출 X) */}
+                {isTeacherView &&
+                  (hasPreset ? (
+                    <div className="w-full flex items-center gap-2 px-4 py-3 text-sm font-medium text-sp-warning bg-sp-warning/10 border-t border-sp-border">
+                      <span className="material-symbols-outlined text-lg" aria-hidden="true">
+                        target
+                      </span>
+                      <span className="flex-1" title="다음 셔플 시 미리 설정한 배치가 적용됩니다">
+                        프리셋 대기 중
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowMoreMenu(false);
+                          void clearPresetAction();
+                          useToastStore.getState().show('프리셋이 제거되었습니다', 'info');
+                        }}
+                        aria-label="프리셋 해제"
+                        className="p-0.5 rounded hover:bg-sp-warning/20"
+                      >
+                        <span className="material-symbols-outlined text-sm">close</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        if (totalStudents === 0) return;
+                        if (
+                          window.confirm(
+                            '현재 배치를 프리셋으로 저장할까요?\n' +
+                              '다음에 "랜덤 셔플" 버튼을 누르면 셔플 애니메이션 후 이 배치가 그대로 적용됩니다.\n' +
+                              '(1회 사용 후 자동 해제)',
+                          )
+                        ) {
+                          setShowMoreMenu(false);
+                          void setPresetFromCurrent();
+                          useToastStore
+                            .getState()
+                            .show('현재 배치를 프리셋으로 저장했습니다', 'info');
+                        }
+                      }}
+                      disabled={totalStudents === 0}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-sm text-sp-text hover:bg-sp-accent/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors border-t border-sp-border"
+                      title="다음 셔플에 적용할 배치를 미리 저장"
+                    >
+                      <span className="material-symbols-outlined text-sp-muted text-lg">
+                        target
+                      </span>
+                      <span>프리셋 저장</span>
+                    </button>
+                  ))}
+              </div>
+            )}
+          </div>
           <div className="relative shrink-0" ref={exportMenuRef}>
             <button
               onClick={() => setShowExportMenu((v) => !v)}
