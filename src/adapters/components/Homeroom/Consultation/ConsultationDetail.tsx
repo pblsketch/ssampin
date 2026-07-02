@@ -9,6 +9,7 @@ import { ExportModal } from '@adapters/components/Homeroom/shared/ExportModal';
 import { consultationSupabaseClient } from '@adapters/di/container';
 import { decrypt } from '@domain/rules/cryptoUtils';
 import { isStudentActive } from '@domain/rules/studentActivity';
+import { getConsultationLinkStatus } from '@domain/rules/consultationRules';
 import {
   buildConsultationEventTitle,
   buildConsultationEventDescription,
@@ -172,7 +173,9 @@ function ConsultationShareModal({ schedule, onClose, onCopyLink }: ConsultationS
 /* ──────────────── 컴포넌트 ──────────────── */
 
 export function ConsultationDetail({ schedule, onBack, onWriteRecord }: ConsultationDetailProps) {
-  const { archiveSchedule, deleteSchedule } = useConsultationStore();
+  const { archiveSchedule, deleteSchedule, closeSchedule, reopenSchedule } = useConsultationStore();
+  const linkStatus = getConsultationLinkStatus(schedule);
+  const isClosed = linkStatus === 'closed' || linkStatus === 'expired';
   const { students } = useStudentStore();
   const showToast = useToastStore((s) => s.show);
   const { track } = useAnalytics();
@@ -399,6 +402,24 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
     onBack();
   }, [archiveSchedule, schedule.id, showToast, onBack]);
 
+  const handleClose = useCallback(async () => {
+    const result = await closeSchedule(schedule.id);
+    if (result.ok) {
+      showToast('예약을 마감했습니다. 학부모는 더 이상 예약할 수 없습니다.', 'success');
+    } else {
+      showToast(result.reason, 'error');
+    }
+  }, [closeSchedule, schedule.id, showToast]);
+
+  const handleReopen = useCallback(async () => {
+    const result = await reopenSchedule(schedule.id);
+    if (result.ok) {
+      showToast('예약을 다시 받습니다.', 'success');
+    } else {
+      showToast(result.reason, 'error');
+    }
+  }, [reopenSchedule, schedule.id, showToast]);
+
   const handleDelete = useCallback(async () => {
     await deleteSchedule(schedule.id);
     showToast('삭제되었습니다', 'success');
@@ -478,6 +499,17 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
             <span className="material-symbols-outlined text-xl">arrow_back</span>
           </button>
           <h3 className="text-sm font-bold text-sp-text truncate">{schedule.title}</h3>
+          {linkStatus !== 'open' && (
+            <span
+              className={`shrink-0 text-tiny font-medium px-1.5 py-0.5 rounded-full ${
+                linkStatus === 'expired'
+                  ? 'bg-amber-400/10 text-amber-400'
+                  : 'bg-sp-surface text-sp-muted border border-sp-border'
+              }`}
+            >
+              {linkStatus === 'closed' ? '마감' : linkStatus === 'expired' ? '만료' : '보관'}
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0">
@@ -506,7 +538,31 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
             {showMenu && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setShowMenu(false)} />
-                <div className="absolute right-0 top-full mt-1 z-50 bg-sp-card border border-sp-border rounded-lg shadow-xl py-1 min-w-[120px]">
+                <div className="absolute right-0 top-full mt-1 z-50 bg-sp-card border border-sp-border rounded-lg shadow-xl py-1 min-w-[140px]">
+                  {linkStatus === 'open' && (
+                    <button
+                      onClick={() => {
+                        setShowMenu(false);
+                        void handleClose();
+                      }}
+                      className="w-full text-left px-3 py-2 text-xs text-sp-text hover:bg-sp-surface transition-colors flex items-center gap-2"
+                    >
+                      <span className="material-symbols-outlined text-sm">event_busy</span>
+                      예약 마감
+                    </button>
+                  )}
+                  {isClosed && (
+                    <button
+                      onClick={() => {
+                        setShowMenu(false);
+                        void handleReopen();
+                      }}
+                      className="w-full text-left px-3 py-2 text-xs text-sp-text hover:bg-sp-surface transition-colors flex items-center gap-2"
+                    >
+                      <span className="material-symbols-outlined text-sm">lock_open</span>
+                      예약 다시 열기
+                    </button>
+                  )}
                   <button
                     onClick={() => {
                       setShowMenu(false);

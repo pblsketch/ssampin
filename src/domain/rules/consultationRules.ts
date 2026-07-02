@@ -289,3 +289,71 @@ export function makePeriodResolver(
   }
   return (period) => map.get(period) ?? null;
 }
+
+/**
+ * 상담 일정의 기본 자동 만료 시각을 계산한다.
+ *
+ * 정책: 마지막 상담일 **다음날 00:00 (KST, UTC+9)** 의 ISO 문자열.
+ * 이 시각이 지나면 예약 링크가 자동으로 마감된다(= 마지막 상담일까지는 예약 가능).
+ * 상담 날짜가 없으면 undefined (자동 만료 없음).
+ */
+export function computeDefaultConsultationExpiry(
+  dates: readonly ConsultationDate[],
+): string | undefined {
+  if (dates.length === 0) return undefined;
+  const lastDate = [...dates].sort((a, b) => b.date.localeCompare(a.date))[0]!.date;
+  const [y, m, d] = lastDate.split('-').map(Number);
+  if (!y || !m || !d) return undefined;
+  // Date.UTC(y, m-1, d) = 해당일 00:00 UTC.
+  // 마지막 상담일 다음날 00:00 KST = 해당일 00:00 UTC + 15h
+  //   (KST 자정은 UTC보다 9h 이르고, "다음날"이라 +24h → 합 +15h)
+  const kstNextMidnightMs = Date.UTC(y, m - 1, d) + 15 * 60 * 60 * 1000;
+  return new Date(kstNextMidnightMs).toISOString();
+}
+
+/** 예약 링크 상태. open=예약 진행 중, closed=수동 마감, expired=자동 만료, archived=보관. */
+export type ConsultationLinkStatus = 'open' | 'closed' | 'expired' | 'archived';
+
+/**
+ * 상담 일정의 예약 링크 상태를 판정한다(교사 UI 뱃지·학부모 마감 판정 공용).
+ * 우선순위: 보관 > 수동 마감 > 자동 만료 > 진행 중.
+ * @param now 비교 기준 시각(ms). 테스트에서 주입 가능. 기본값은 현재 시각.
+ */
+export function getConsultationLinkStatus(
+  s: { readonly isArchived: boolean; readonly closedAt?: string; readonly expiresAt?: string },
+  now: number = Date.now(),
+): ConsultationLinkStatus {
+  if (s.isArchived) return 'archived';
+  if (s.closedAt) return 'closed';
+  if (s.expiresAt && new Date(s.expiresAt).getTime() < now) return 'expired';
+  return 'open';
+}
+
+/** open 이 아닌 모든 상태(보관·마감·만료)에서 true. 학부모 예약이 불가한 상태. */
+export function isConsultationLinkClosed(
+  s: { readonly isArchived: boolean; readonly closedAt?: string; readonly expiresAt?: string },
+  now: number = Date.now(),
+): boolean {
+  return getConsultationLinkStatus(s, now) !== 'open';
+}
+
+/**
+ * expiresAt ISO → date input 용 "YYYY-MM-DD" (KST 기준).
+ * 예: "2026-06-04T00:00:00+09:00"(=…T15:00Z) → "2026-06-04".
+ */
+export function expiryIsoToKstDateString(iso: string): string {
+  const kstMs = new Date(iso).getTime() + 9 * 60 * 60 * 1000;
+  return new Date(kstMs).toISOString().slice(0, 10);
+}
+
+/**
+ * date input "YYYY-MM-DD" → expiresAt ISO (해당일 00:00 KST).
+ * `expiryIsoToKstDateString` 의 역함수. 이 시각이 지나면 예약이 마감된다.
+ */
+export function kstDateStringToExpiryIso(dateStr: string): string {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  if (!y || !m || !d) return '';
+  // 'YYYY-MM-DD' 00:00 KST = 해당일 00:00 UTC - 9h
+  const utcMs = Date.UTC(y, m - 1, d) - 9 * 60 * 60 * 1000;
+  return new Date(utcMs).toISOString();
+}

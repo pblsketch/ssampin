@@ -18,6 +18,10 @@ const { clientFakes, repoFakes } = vi.hoisted(() => ({
     rescheduleBooking: vi.fn(),
     cancelBooking: vi.fn(),
     bulkUpdateSlotStatus: vi.fn(),
+    setClosed: vi.fn(),
+    setArchived: vi.fn(),
+    setExpiresAt: vi.fn(),
+    createSchedule: vi.fn(),
   },
   repoFakes: {
     load: vi.fn(),
@@ -134,6 +138,10 @@ beforeEach(() => {
     message: '예약 시간이 변경되었습니다.',
   });
   clientFakes.cancelBooking.mockResolvedValue(undefined);
+  clientFakes.setClosed.mockResolvedValue(undefined);
+  clientFakes.setArchived.mockResolvedValue(undefined);
+  clientFakes.setExpiresAt.mockResolvedValue(undefined);
+  clientFakes.createSchedule.mockResolvedValue(undefined);
   repoFakes.load.mockResolvedValue(null);
   repoFakes.save.mockResolvedValue(undefined);
 });
@@ -361,5 +369,128 @@ describe('registerScheduleSyncListener', () => {
     const unsub = useConsultationStore.getState().registerScheduleSyncListener();
     expect(typeof unsub).toBe('function');
     unsub();
+  });
+});
+
+// ── 링크 만료: archiveSchedule 서버 반영 (버그 수정) ──────────────────
+
+describe('archiveSchedule', () => {
+  it('로컬 isArchived=true + 서버 setArchived(id, true) 반영', async () => {
+    await useConsultationStore.getState().archiveSchedule('sch-1');
+
+    const s = useConsultationStore.getState().schedules.find((x) => x.id === 'sch-1');
+    expect(s?.isArchived).toBe(true);
+    expect(clientFakes.setArchived).toHaveBeenCalledWith('sch-1', true);
+  });
+
+  it('서버 반영 실패해도 로컬 보관은 유지되고 throw 하지 않음', async () => {
+    clientFakes.setArchived.mockRejectedValueOnce(new Error('network'));
+
+    await expect(useConsultationStore.getState().archiveSchedule('sch-1')).resolves.toBeUndefined();
+
+    const s = useConsultationStore.getState().schedules.find((x) => x.id === 'sch-1');
+    expect(s?.isArchived).toBe(true);
+  });
+});
+
+// ── 링크 만료: 수동 마감 / 재개 ──────────────────────────────────────
+
+describe('closeSchedule / reopenSchedule', () => {
+  it('closeSchedule → setClosed(id, true) + 로컬 closedAt 설정 + ok', async () => {
+    const result = await useConsultationStore.getState().closeSchedule('sch-1');
+
+    expect(result.ok).toBe(true);
+    expect(clientFakes.setClosed).toHaveBeenCalledWith('sch-1', true);
+    const s = useConsultationStore.getState().schedules.find((x) => x.id === 'sch-1');
+    expect(s?.closedAt).toBeTruthy();
+  });
+
+  it('closeSchedule 실패 → ok:false + 한국어 사유', async () => {
+    clientFakes.setClosed.mockRejectedValueOnce(new Error('network'));
+
+    const result = await useConsultationStore.getState().closeSchedule('sch-1');
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toMatch(/마감/);
+  });
+
+  it('reopenSchedule → setClosed(id, false) + 로컬 closedAt 제거', async () => {
+    useConsultationStore.setState({
+      schedules: [{ ...SCHEDULE, closedAt: '2026-06-01T00:00:00.000Z' }],
+      loaded: true,
+    });
+
+    const result = await useConsultationStore.getState().reopenSchedule('sch-1');
+
+    expect(result.ok).toBe(true);
+    expect(clientFakes.setClosed).toHaveBeenCalledWith('sch-1', false);
+    const s = useConsultationStore.getState().schedules.find((x) => x.id === 'sch-1');
+    expect(s?.closedAt).toBeUndefined();
+  });
+});
+
+// ── 링크 만료: 자동 만료일 변경/해제 ────────────────────────────────
+
+describe('setScheduleExpiry', () => {
+  it('ISO 설정 → setExpiresAt 호출 + 로컬 expiresAt 반영', async () => {
+    const iso = '2026-07-01T15:00:00.000Z';
+    const result = await useConsultationStore.getState().setScheduleExpiry('sch-1', iso);
+
+    expect(result.ok).toBe(true);
+    expect(clientFakes.setExpiresAt).toHaveBeenCalledWith('sch-1', iso);
+    const s = useConsultationStore.getState().schedules.find((x) => x.id === 'sch-1');
+    expect(s?.expiresAt).toBe(iso);
+  });
+
+  it('null → 자동 만료 해제 (로컬 expiresAt 제거)', async () => {
+    useConsultationStore.setState({
+      schedules: [{ ...SCHEDULE, expiresAt: '2026-07-01T15:00:00.000Z' }],
+      loaded: true,
+    });
+
+    const result = await useConsultationStore.getState().setScheduleExpiry('sch-1', null);
+
+    expect(result.ok).toBe(true);
+    expect(clientFakes.setExpiresAt).toHaveBeenCalledWith('sch-1', null);
+    const s = useConsultationStore.getState().schedules.find((x) => x.id === 'sch-1');
+    expect(s?.expiresAt).toBeUndefined();
+  });
+});
+
+// ── 링크 만료: createSchedule 기본 만료일 (마지막 상담일 다음날 00:00 KST) ──
+
+describe('createSchedule 기본 만료일', () => {
+  it('여러 날짜 중 가장 마지막 상담일 다음날 00:00(KST)을 expiresAt 으로 설정', async () => {
+    const schedule = await useConsultationStore.getState().createSchedule({
+      title: '상담',
+      type: 'parent',
+      methods: ['face'],
+      slotMinutes: 20,
+      dates: [
+        { date: '2026-06-01', startTime: '14:00', endTime: '15:00' },
+        { date: '2026-06-03', startTime: '14:00', endTime: '15:00' },
+      ],
+      targetClassName: '3-2',
+      targetStudents: [{ number: 1 }],
+      message: '',
+    });
+
+    // 마지막 상담일 2026-06-03 → 다음날 00:00 KST = 2026-06-03T15:00:00.000Z
+    expect(schedule.expiresAt).toBe('2026-06-03T15:00:00.000Z');
+  });
+
+  it('상담 날짜가 없으면 expiresAt 은 undefined', async () => {
+    const schedule = await useConsultationStore.getState().createSchedule({
+      title: '상담',
+      type: 'parent',
+      methods: ['face'],
+      slotMinutes: 20,
+      dates: [],
+      targetClassName: '3-2',
+      targetStudents: [{ number: 1 }],
+      message: '',
+    });
+
+    expect(schedule.expiresAt).toBeUndefined();
   });
 });

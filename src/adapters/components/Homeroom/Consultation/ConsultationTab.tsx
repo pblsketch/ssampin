@@ -4,6 +4,10 @@ import { useConsultationStore } from '@adapters/stores/useConsultationStore';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { isStudentActive } from '@domain/rules/studentActivity';
+import {
+  getConsultationLinkStatus,
+  type ConsultationLinkStatus,
+} from '@domain/rules/consultationRules';
 import { RosterEmptyState } from '@adapters/components/common/RosterEmptyState';
 import type { ConsultationSchedule } from '@domain/entities/Consultation';
 import type { RecordPrefill } from '../HomeroomPage';
@@ -29,6 +33,16 @@ function getMethodLabel(m: string): string {
 function getTypeLabel(t: string): string {
   return t === 'parent' ? '학부모' : '학생';
 }
+
+/** 예약 링크 상태별 뱃지(진행중은 뱃지 없음). */
+const LINK_STATUS_BADGE: Record<
+  Exclude<ConsultationLinkStatus, 'open'>,
+  { label: string; className: string }
+> = {
+  closed: { label: '마감', className: 'bg-sp-surface text-sp-muted border border-sp-border' },
+  expired: { label: '만료', className: 'bg-amber-400/10 text-amber-400' },
+  archived: { label: '보관', className: 'bg-sp-surface text-sp-muted border border-sp-border' },
+};
 
 function formatDateRange(
   dates: readonly { date: string; startTime: string; endTime: string }[],
@@ -153,6 +167,7 @@ function ConsultationCard({ schedule, onSelect, onShare, onEdit }: ConsultationC
   const typeLabel = getTypeLabel(schedule.type);
   const methodLabels = schedule.methods.map(getMethodLabel).join(', ');
   const dateRange = formatDateRange(schedule.dates);
+  const linkStatus = getConsultationLinkStatus(schedule);
 
   const totalSlots = useMemo(() => {
     let count = 0;
@@ -186,7 +201,16 @@ function ConsultationCard({ schedule, onSelect, onShare, onEdit }: ConsultationC
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-2">
-            <h4 className="text-sm font-bold text-sp-text truncate">{schedule.title}</h4>
+            <div className="flex items-center gap-1.5 min-w-0">
+              <h4 className="text-sm font-bold text-sp-text truncate">{schedule.title}</h4>
+              {linkStatus !== 'open' && (
+                <span
+                  className={`shrink-0 text-tiny font-medium px-1.5 py-0.5 rounded-full ${LINK_STATUS_BADGE[linkStatus].className}`}
+                >
+                  {LINK_STATUS_BADGE[linkStatus].label}
+                </span>
+              )}
+            </div>
             <span className="text-xs text-sp-muted whitespace-nowrap">{totalSlots}슬롯</span>
           </div>
           <div className="flex items-center gap-2 mt-1 text-xs text-sp-muted flex-wrap">

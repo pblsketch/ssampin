@@ -8,6 +8,7 @@ import type {
 import {
   analyzeScheduleUpdateImpact,
   buildBusyPeriods,
+  computeDefaultConsultationExpiry,
   isSlotBlockedByTimetable,
   makePeriodResolver,
 } from '@domain/rules/consultationRules';
@@ -55,6 +56,13 @@ interface ConsultationState {
   ) => Promise<ConsultationSchedule>;
   deleteSchedule: (id: string) => Promise<void>;
   archiveSchedule: (id: string) => Promise<void>;
+
+  /** 수동 예약 마감 — 학부모 예약만 중단한다(명단·내보내기는 계속 사용). */
+  closeSchedule: (id: string) => Promise<CancelBookingResult>;
+  /** 마감 해제 — 다시 예약을 받는다. */
+  reopenSchedule: (id: string) => Promise<CancelBookingResult>;
+  /** 자동 만료 시각 변경(ISO) 또는 해제(null). */
+  setScheduleExpiry: (id: string, iso: string | null) => Promise<CancelBookingResult>;
 
   /**
    * 일정 부분 갱신 (2-step commit).
@@ -130,19 +138,27 @@ export const useConsultationStore = create<ConsultationState>((set, get) => ({
     const shareUrl = `${SHARE_BASE_URL}/${id}#key=${encodeURIComponent(adminKey)}`;
     const createdAt = new Date().toISOString();
 
-    // 상담 날짜 중 가장 마지막 날짜 + 30일을 만료일로 설정
+    // 숏링크 만료: 마지막 상담일 + 30일 (예약 마감 후에도 학부모가 "마감" 안내
+    // 화면을 볼 수 있도록 숏링크 자체는 여유 있게 유지)
     const lastDate =
       scheduleParams.dates.length > 0
         ? [...scheduleParams.dates].sort((a, b) => b.date.localeCompare(a.date))[0]!.date
         : createdAt.slice(0, 10);
-    const expiresAt = new Date(
+    const shortLinkExpiresAt = new Date(
       new Date(lastDate).getTime() + 30 * 24 * 60 * 60 * 1000,
     ).toISOString();
+
+    // 예약 자동 만료: 마지막 상담일 다음날 00:00(KST). 이 시각이 지나면 예약 링크가 마감된다.
+    const expiresAt = computeDefaultConsultationExpiry(scheduleParams.dates);
 
     // 숏링크 생성 (실패해도 무시)
     let shortUrl: string | undefined;
     try {
-      const result = await shortLinkClient.createShortLink(shareUrl, customLinkCode, expiresAt);
+      const result = await shortLinkClient.createShortLink(
+        shareUrl,
+        customLinkCode,
+        shortLinkExpiresAt,
+      );
       if (result !== shareUrl) shortUrl = result;
     } catch {
       // 숏링크 생성 실패는 무시
@@ -156,6 +172,7 @@ export const useConsultationStore = create<ConsultationState>((set, get) => ({
       shortUrl,
       createdAt,
       isArchived: false,
+      ...(expiresAt ? { expiresAt } : {}),
     };
 
     const { schedules } = get();
@@ -183,6 +200,73 @@ export const useConsultationStore = create<ConsultationState>((set, get) => ({
     };
     await consultationRepository.save(next);
     set({ schedules: next.schedules });
+    // 서버에도 보관(is_archived)을 반영한다. 이 호출이 빠져 있어서 "보관"해도
+    // 학부모 예약 링크가 닫히지 않던 버그를 여기서 함께 고친다.
+    try {
+      await consultationSupabaseClient.setArchived(id, true);
+    } catch {
+      // 서버 반영 실패는 무시(로컬은 이미 반영). 온라인 복구 후 재보관/편집으로 정정 가능.
+    }
+  },
+
+  closeSchedule: async (id) => {
+    try {
+      await consultationSupabaseClient.setClosed(id, true);
+    } catch (e) {
+      return { ok: false, reason: `예약 마감에 실패했습니다: ${String(e)}` };
+    }
+    const closedAt = new Date().toISOString();
+    const nextSchedules = get().schedules.map((s) => (s.id === id ? { ...s, closedAt } : s));
+    set({ schedules: nextSchedules });
+    try {
+      await consultationRepository.save({ schedules: nextSchedules });
+    } catch {
+      // 로컬 미러 저장 실패는 무시 (Supabase 가 단일 진실 원천)
+    }
+    return { ok: true };
+  },
+
+  reopenSchedule: async (id) => {
+    try {
+      await consultationSupabaseClient.setClosed(id, false);
+    } catch (e) {
+      return { ok: false, reason: `예약 다시 열기에 실패했습니다: ${String(e)}` };
+    }
+    const nextSchedules: ConsultationSchedule[] = get().schedules.map((s) => {
+      if (s.id !== id) return s;
+      const { closedAt: _closedAt, ...rest } = s;
+      return rest;
+    });
+    set({ schedules: nextSchedules });
+    try {
+      await consultationRepository.save({ schedules: nextSchedules });
+    } catch {
+      // 무시
+    }
+    return { ok: true };
+  },
+
+  setScheduleExpiry: async (id, iso) => {
+    try {
+      await consultationSupabaseClient.setExpiresAt(id, iso);
+    } catch (e) {
+      return { ok: false, reason: `만료일 변경에 실패했습니다: ${String(e)}` };
+    }
+    const nextSchedules: ConsultationSchedule[] = get().schedules.map((s) => {
+      if (s.id !== id) return s;
+      if (iso === null) {
+        const { expiresAt: _expiresAt, ...rest } = s;
+        return rest;
+      }
+      return { ...s, expiresAt: iso };
+    });
+    set({ schedules: nextSchedules });
+    try {
+      await consultationRepository.save({ schedules: nextSchedules });
+    } catch {
+      // 무시
+    }
+    return { ok: true };
   },
 
   updateSchedule: async (id, patch, options = {}) => {

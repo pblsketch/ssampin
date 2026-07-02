@@ -19,6 +19,8 @@ interface ScheduleRow {
   message: string | null;
   admin_key: string;
   is_archived: boolean;
+  closed_at: string | null;
+  expires_at: string | null;
   created_at: string;
 }
 
@@ -56,6 +58,8 @@ export interface SchedulePublic {
   message?: string;
   adminKey: string;
   isArchived: boolean;
+  closedAt?: string;
+  expiresAt?: string;
   createdAt: string;
 }
 
@@ -133,6 +137,8 @@ export class ConsultationSupabaseClient {
     targetStudents: ReadonlyArray<{ number: number }>;
     message?: string;
     adminKey: string;
+    /** 자동 만료 시각 (ISO). undefined = 자동 만료 없음 */
+    expiresAt?: string;
     blockedSlots?: ReadonlyArray<{ date: string; startTime: string }>;
   }): Promise<void> {
     this.ensureConfigured();
@@ -154,6 +160,7 @@ export class ConsultationSupabaseClient {
         message: params.message ?? null,
         admin_key: params.adminKey,
         is_archived: false,
+        expires_at: params.expiresAt ?? null,
       }),
     });
 
@@ -212,7 +219,7 @@ export class ConsultationSupabaseClient {
   async getSchedule(id: string): Promise<SchedulePublic | null> {
     this.ensureConfigured();
     const res = await fetch(
-      `${this.baseUrl}/rest/v1/consultation_schedules?id=eq.${id}&select=id,title,type,methods,slot_minutes,dates,target_class_name,target_students,message,admin_key,is_archived,created_at`,
+      `${this.baseUrl}/rest/v1/consultation_schedules?id=eq.${id}&select=id,title,type,methods,slot_minutes,dates,target_class_name,target_students,message,admin_key,is_archived,closed_at,expires_at,created_at`,
       { headers: this.headers() },
     );
 
@@ -233,6 +240,8 @@ export class ConsultationSupabaseClient {
       message: row.message ?? undefined,
       adminKey: row.admin_key,
       isArchived: row.is_archived,
+      closedAt: row.closed_at ?? undefined,
+      expiresAt: row.expires_at ?? undefined,
       createdAt: row.created_at,
     };
   }
@@ -414,6 +423,57 @@ export class ConsultationSupabaseClient {
     if (!res.ok) {
       const err = await res.text();
       throw new Error(`Failed to update consultation schedule: ${err}`);
+    }
+  }
+
+  /**
+   * 예약 마감/재개 — closed_at PATCH.
+   * closed=true 면 현재 시각으로 마감, false 면 NULL 로 재개한다.
+   * 마감되면 학부모 예약 페이지가 마감 화면을 표시하고 서버 RPC 도 새 예약을 거부한다.
+   */
+  async setClosed(id: string, closed: boolean): Promise<void> {
+    this.ensureConfigured();
+    const res = await fetch(`${this.baseUrl}/rest/v1/consultation_schedules?id=eq.${id}`, {
+      method: 'PATCH',
+      headers: { ...this.headers(), Prefer: 'return=minimal' },
+      body: JSON.stringify({ closed_at: closed ? new Date().toISOString() : null }),
+    });
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`Failed to update consultation closed state: ${err}`);
+    }
+  }
+
+  /**
+   * 보관/보관 해제 — is_archived PATCH.
+   * (기존 archiveSchedule 이 로컬만 갱신하던 버그를 이 메서드로 서버까지 반영한다.)
+   */
+  async setArchived(id: string, archived: boolean): Promise<void> {
+    this.ensureConfigured();
+    const res = await fetch(`${this.baseUrl}/rest/v1/consultation_schedules?id=eq.${id}`, {
+      method: 'PATCH',
+      headers: { ...this.headers(), Prefer: 'return=minimal' },
+      body: JSON.stringify({ is_archived: archived }),
+    });
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`Failed to update consultation archived state: ${err}`);
+    }
+  }
+
+  /**
+   * 자동 만료 시각 변경 — expires_at PATCH. null 이면 자동 만료 해제.
+   */
+  async setExpiresAt(id: string, iso: string | null): Promise<void> {
+    this.ensureConfigured();
+    const res = await fetch(`${this.baseUrl}/rest/v1/consultation_schedules?id=eq.${id}`, {
+      method: 'PATCH',
+      headers: { ...this.headers(), Prefer: 'return=minimal' },
+      body: JSON.stringify({ expires_at: iso }),
+    });
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`Failed to update consultation expiry: ${err}`);
     }
   }
 

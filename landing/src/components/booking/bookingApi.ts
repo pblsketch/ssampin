@@ -22,6 +22,10 @@ export interface SchedulePublic {
   targetStudents: ReadonlyArray<{ number: number }>;
   message?: string;
   isArchived: boolean;
+  /** 담임이 수동으로 마감한 시각 (ISO). 있으면 마감. */
+  closedAt?: string;
+  /** 자동 만료 시각 (ISO). 이 시각이 지나면 마감. */
+  expiresAt?: string;
 }
 
 export interface SlotPublic {
@@ -73,6 +77,8 @@ interface ScheduleRow {
   target_students: unknown;
   message: string | null;
   is_archived: boolean;
+  closed_at: string | null;
+  expires_at: string | null;
 }
 
 interface SlotRow {
@@ -89,7 +95,7 @@ interface SlotRow {
 export async function getSchedulePublic(scheduleId: string): Promise<SchedulePublic | null> {
   try {
     const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/consultation_schedules?id=eq.${scheduleId}&select=id,title,type,methods,slot_minutes,dates,target_class_name,target_students,message,is_archived`,
+      `${SUPABASE_URL}/rest/v1/consultation_schedules?id=eq.${scheduleId}&select=id,title,type,methods,slot_minutes,dates,target_class_name,target_students,message,is_archived,closed_at,expires_at`,
       { headers: headers() },
     );
 
@@ -109,10 +115,27 @@ export async function getSchedulePublic(scheduleId: string): Promise<SchedulePub
       targetStudents: row.target_students as SchedulePublic['targetStudents'],
       message: row.message ?? undefined,
       isArchived: row.is_archived,
+      closedAt: row.closed_at ?? undefined,
+      expiresAt: row.expires_at ?? undefined,
     };
   } catch {
     return null;
   }
+}
+
+/**
+ * 예약 링크가 마감 상태인지 판정한다(앱 서버 RPC 와 동일 규칙).
+ * - 보관(isArchived) 또는 수동 마감(closedAt) 또는 자동 만료(expiresAt < now) 중 하나라도 참이면 마감.
+ */
+export function isScheduleClosed(s: {
+  isArchived: boolean;
+  closedAt?: string;
+  expiresAt?: string;
+}): boolean {
+  if (s.isArchived) return true;
+  if (s.closedAt) return true;
+  if (s.expiresAt && new Date(s.expiresAt).getTime() < Date.now()) return true;
+  return false;
 }
 
 export async function getSlots(scheduleId: string): Promise<SlotPublic[]> {

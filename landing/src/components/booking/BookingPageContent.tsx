@@ -10,6 +10,7 @@ import {
   encrypt,
   saveBookingToken,
   readBookingToken,
+  isScheduleClosed,
 } from './bookingApi';
 
 interface BookingPageContentProps {
@@ -83,7 +84,7 @@ export function BookingPageContent({ scheduleId }: BookingPageContentProps) {
         setView('notFound');
         return;
       }
-      if (data.isArchived) {
+      if (isScheduleClosed(data)) {
         setSchedule(data);
         setView('closed');
         return;

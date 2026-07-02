@@ -2,8 +2,12 @@ import { describe, expect, it } from 'vitest';
 import {
   analyzeScheduleUpdateImpact,
   buildBusyPeriods,
+  computeDefaultConsultationExpiry,
   expandEventDates,
+  expiryIsoToKstDateString,
+  getConsultationLinkStatus,
   isSlotBlockedByTimetable,
+  kstDateStringToExpiryIso,
   makePeriodResolver,
   resolveEventTimeRange,
 } from './consultationRules';
@@ -415,5 +419,76 @@ describe('buildBusyPeriods', () => {
       resolvePeriodTime: r,
     });
     expect(result).toEqual([]);
+  });
+});
+
+// ── 링크 만료: 기본 만료일 계산 ──────────────────────────────────────
+
+describe('computeDefaultConsultationExpiry', () => {
+  it('가장 마지막 상담일 다음날 00:00(KST)을 반환', () => {
+    const iso = computeDefaultConsultationExpiry([
+      { date: '2026-06-01', startTime: '14:00', endTime: '15:00' },
+      { date: '2026-06-03', startTime: '14:00', endTime: '15:00' },
+    ]);
+    // 2026-06-03 다음날 00:00 KST = 2026-06-03T15:00:00.000Z
+    expect(iso).toBe('2026-06-03T15:00:00.000Z');
+  });
+
+  it('날짜가 없으면 undefined', () => {
+    expect(computeDefaultConsultationExpiry([])).toBeUndefined();
+  });
+});
+
+// ── 링크 만료: 상태 판정 ──────────────────────────────────────────────
+
+describe('getConsultationLinkStatus', () => {
+  const NOW = Date.parse('2026-06-15T00:00:00.000Z');
+
+  it('아무 상태도 없으면 open', () => {
+    expect(getConsultationLinkStatus({ isArchived: false }, NOW)).toBe('open');
+  });
+
+  it('isArchived 면 archived (최우선)', () => {
+    expect(
+      getConsultationLinkStatus({ isArchived: true, closedAt: '2026-06-10T00:00:00.000Z' }, NOW),
+    ).toBe('archived');
+  });
+
+  it('closedAt 이 있으면 closed', () => {
+    expect(
+      getConsultationLinkStatus({ isArchived: false, closedAt: '2026-06-10T00:00:00.000Z' }, NOW),
+    ).toBe('closed');
+  });
+
+  it('expiresAt 이 now 이전이면 expired', () => {
+    expect(
+      getConsultationLinkStatus({ isArchived: false, expiresAt: '2026-06-14T00:00:00.000Z' }, NOW),
+    ).toBe('expired');
+  });
+
+  it('expiresAt 이 미래면 open', () => {
+    expect(
+      getConsultationLinkStatus({ isArchived: false, expiresAt: '2026-06-20T00:00:00.000Z' }, NOW),
+    ).toBe('open');
+  });
+});
+
+// ── 링크 만료: 만료일 ISO ↔ KST 날짜 변환 ────────────────────────────
+
+describe('expiryIsoToKstDateString / kstDateStringToExpiryIso', () => {
+  it('ISO → KST 날짜 문자열', () => {
+    // 2026-06-04 00:00 KST = 2026-06-03T15:00:00Z
+    expect(expiryIsoToKstDateString('2026-06-03T15:00:00.000Z')).toBe('2026-06-04');
+  });
+
+  it('KST 날짜 문자열 → ISO (해당일 00:00 KST)', () => {
+    expect(kstDateStringToExpiryIso('2026-06-04')).toBe('2026-06-03T15:00:00.000Z');
+  });
+
+  it('왕복 변환이 일치한다', () => {
+    const iso = '2026-06-03T15:00:00.000Z';
+    expect(kstDateStringToExpiryIso(expiryIsoToKstDateString(iso))).toBe(iso);
+    const date = '2026-07-01';
+    expect(expiryIsoToKstDateString(kstDateStringToExpiryIso(date))).toBe(date);
   });
 });

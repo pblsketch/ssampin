@@ -19,6 +19,10 @@ export interface ConsultationSchedule {
   readonly shortUrl?: string;
   readonly adminKey: string;
   readonly isArchived: boolean;
+  /** 담임이 수동으로 예약을 마감한 시각 (ISO). undefined = 마감 안 됨(예약 진행 중) */
+  readonly closedAt?: string;
+  /** 자동 만료 시각 (ISO). 이 시각이 지나면 예약 링크가 마감된다. undefined = 자동 만료 없음 */
+  readonly expiresAt?: string;
   readonly createdAt: string;
 }
 

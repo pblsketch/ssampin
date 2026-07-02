@@ -18,6 +18,10 @@ import { useCallback, useMemo, useState } from 'react';
 import { Modal } from '@adapters/components/common/Modal';
 import { useConsultationStore } from '@adapters/stores/useConsultationStore';
 import { useToastStore } from '@adapters/components/common/Toast';
+import {
+  expiryIsoToKstDateString,
+  kstDateStringToExpiryIso,
+} from '@domain/rules/consultationRules';
 import type {
   ConsultationDate,
   ConsultationMethod,
@@ -85,6 +89,11 @@ export function ConsultationEditModal({
   const [slotMinutes, setSlotMinutes] = useState<number>(schedule.slotMinutes);
   const [message, setMessage] = useState<string>(schedule.message ?? '');
   const [entries, setEntries] = useState<DateEntry[]>(toEntries(schedule.dates));
+  const initialExpiryDate = useMemo(
+    () => (schedule.expiresAt ? expiryIsoToKstDateString(schedule.expiresAt) : ''),
+    [schedule.expiresAt],
+  );
+  const [expiryDate, setExpiryDate] = useState<string>(initialExpiryDate);
   const [pendingImpact, setPendingImpact] = useState<ScheduleUpdateImpact | null>(null);
   const [pendingPatch, setPendingPatch] = useState<ScheduleUpdatePatch | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -124,7 +133,8 @@ export function ConsultationEditModal({
     return patch;
   }, [title, type, methods, slotMinutes, message, entries, schedule]);
 
-  const hasChanges = Object.keys(computedPatch).length > 0;
+  const expiryChanged = expiryDate !== initialExpiryDate;
+  const hasChanges = Object.keys(computedPatch).length > 0 || expiryChanged;
 
   const toggleMethod = useCallback((m: ConsultationMethod) => {
     setMethods((prev) => (prev.includes(m) ? prev.filter((x) => x !== m) : [...prev, m]));
@@ -198,7 +208,7 @@ export function ConsultationEditModal({
     [schedule.id, onSuccess, showToast],
   );
 
-  const handleSave = useCallback(() => {
+  const handleSave = useCallback(async () => {
     const err = validate();
     if (err) {
       showToast(err, 'info');
@@ -208,8 +218,35 @@ export function ConsultationEditModal({
       showToast('변경된 내용이 없습니다', 'info');
       return;
     }
-    void runUpdate(computedPatch);
-  }, [validate, hasChanges, computedPatch, runUpdate, showToast]);
+
+    // 만료일 변경분을 먼저 반영 (updateSchedule 과 독립적인 별도 액션)
+    if (expiryChanged) {
+      const iso = expiryDate ? kstDateStringToExpiryIso(expiryDate) : null;
+      const r = await useConsultationStore.getState().setScheduleExpiry(schedule.id, iso);
+      if (!r.ok) {
+        showToast(r.reason, 'error');
+        return;
+      }
+    }
+
+    // 나머지 필드 변경이 있으면 updateSchedule(2-step commit), 없으면 바로 완료 처리
+    if (Object.keys(computedPatch).length > 0) {
+      void runUpdate(computedPatch);
+    } else {
+      showToast('일정이 수정되었습니다', 'success');
+      onSuccess();
+    }
+  }, [
+    validate,
+    hasChanges,
+    expiryChanged,
+    expiryDate,
+    schedule.id,
+    computedPatch,
+    runUpdate,
+    showToast,
+    onSuccess,
+  ]);
 
   const handleProceedWithImpact = useCallback(() => {
     if (!pendingPatch) return;
@@ -337,6 +374,35 @@ export function ConsultationEditModal({
           />
         </div>
 
+        {/* 예약 자동 마감일 */}
+        <div>
+          <label className="block text-xs font-medium text-sp-muted mb-1">
+            예약 자동 마감일 (선택)
+          </label>
+          <div className="flex items-center gap-2">
+            <input
+              type="date"
+              value={expiryDate}
+              onChange={(e) => setExpiryDate(e.target.value)}
+              className="px-3 py-2 rounded-lg bg-sp-surface border border-sp-border text-sm text-sp-text focus:border-sp-accent outline-none"
+            />
+            {expiryDate && (
+              <button
+                type="button"
+                onClick={() => setExpiryDate('')}
+                className="text-xs text-sp-muted hover:text-sp-text transition-colors"
+              >
+                자동 마감 해제
+              </button>
+            )}
+          </div>
+          <p className="text-detail text-sp-muted mt-1 leading-relaxed">
+            {expiryDate
+              ? '이 날짜 0시부터 학부모 예약이 자동으로 마감됩니다.'
+              : '자동 마감이 설정되지 않았습니다. 날짜를 선택하면 그날부터 예약이 자동 마감됩니다.'}
+          </p>
+        </div>
+
         {/* 날짜·시간대 */}
         <div>
           <div className="flex items-center justify-between mb-2">
@@ -425,7 +491,7 @@ export function ConsultationEditModal({
           </button>
           <button
             type="button"
-            onClick={handleSave}
+            onClick={() => void handleSave()}
             disabled={submitting || !hasChanges || pendingImpact !== null}
             className="px-3 py-2 rounded-lg bg-sp-accent hover:bg-sp-accent/90 text-white text-sm font-medium disabled:opacity-50"
           >
