@@ -380,6 +380,10 @@ export function Widget() {
     void window.electronAPI?.navigateToPage(page);
   }, []);
 
+  // Ctrl+5(우측 사이드)는 화면 가로 1/4 폭이라, 넓은 모드용 "가운데 시계 + 우측 버튼 6개"를
+  // 한 줄에 두면 폭이 부족해 눌린다. 좁은 모드에선 헤더를 2행(시계 / 버튼)으로 분리한다.
+  const isNarrow = layoutMode === 'sidebar-right';
+
   return (
     <>
       <div
@@ -420,13 +424,30 @@ export function Widget() {
           }
           onDoubleClick={handleHeaderDoubleClick}
         >
-          <div className="grid grid-cols-[1fr_auto_1fr] items-baseline gap-2 mb-1">
-            {/* 좌측 placeholder — buttonGroup 폭과 균형, aria-hidden */}
-            <div aria-hidden="true" />
+          <div
+            className={
+              isNarrow
+                ? 'flex flex-col gap-2 mb-1'
+                : 'grid grid-cols-[1fr_auto_1fr] items-baseline gap-2 mb-1'
+            }
+          >
+            {/* 좌측 placeholder — 넓은 모드에서만 buttonGroup 폭과 균형(시계 중앙정렬용) */}
+            {!isNarrow && <div aria-hidden="true" />}
 
-            {/* 중앙: 날짜 + 시간 */}
-            <div className="flex items-baseline justify-center gap-3 min-w-0">
-              <span className="text-sp-muted text-lg font-medium whitespace-nowrap">
+            {/* 중앙: 날짜 + 시간 (좁은 모드는 세로 스택, 넓은 모드는 가로 baseline) */}
+            <div
+              className={
+                isNarrow
+                  ? 'flex flex-col items-center gap-0.5'
+                  : 'flex items-baseline justify-center gap-3 min-w-0'
+              }
+            >
+              <span
+                className={[
+                  'text-sp-muted font-medium whitespace-nowrap',
+                  isNarrow ? 'text-sm' : 'text-lg',
+                ].join(' ')}
+              >
                 {clock.date} ({clock.dayOfWeek})
               </span>
               <span className="text-4xl font-bold tracking-tight text-sp-text leading-none whitespace-nowrap">
@@ -434,10 +455,15 @@ export function Widget() {
               </span>
             </div>
 
-            {/* 헤더 우측 버튼 그룹 — absolute 제거, grid item으로 자기 column 차지 */}
+            {/* 헤더 버튼 그룹 — 좁은 모드는 아래 행에서 중앙정렬, 넓은 모드는 grid 우측 정렬.
+                buttonGroupRef 하나로 계속 감싸므로 IPC 드래그 영역 로직은 변경 불필요. */}
             <div
               ref={buttonGroupRef}
-              className="flex items-center gap-1 justify-end"
+              className={
+                isNarrow
+                  ? 'flex items-center justify-center gap-2'
+                  : 'flex items-center gap-1 justify-end'
+              }
               style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
             >
               {/* widget-mode-discovery — 모드 인디케이터 칩 (헤더에서 가장 먼저 노출) */}
@@ -475,6 +501,10 @@ export function Widget() {
                   refresh
                 </span>
               </button>
+
+              {/* 좁은 모드 전용 클러스터 구분선 — "상태·액션 / 패널" 두 묶음으로 스캔성↑.
+                  검증된 sp-border/50 조합 재사용(신규 투명도 수식 함정 회피). */}
+              {isNarrow && <span className="w-px h-4 bg-sp-border/50 mx-0.5" aria-hidden="true" />}
 
               {/* 위젯 관리 버튼 */}
               <button
