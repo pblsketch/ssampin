@@ -375,8 +375,8 @@ export function IconWindow() {
     { now, periodTimes: settings.periodTimes, teacherSchedule },
     pinInfo,
   );
-  // 마감 할 일 — 최대 12개까지, 목록이 길면 팝오버 안에서 스크롤 (사용자 요청: 3개 제한 해제)
-  const topTodos = listTopDueTodos(todos, now, 12);
+  // 마감 할 일 — 사실상 전부(상한 50은 DOM 폭주 방지용), 팝오버가 스크롤로 처리 (사용자 요청: 3개 제한 해제)
+  const topTodos = listTopDueTodos(todos, now, 50);
 
   // 모드 전환(분석 이벤트 포함) — 더블클릭/메뉴/팝오버 푸터 공용
   const expandTo = useCallback(

@@ -63,10 +63,12 @@ export function PinPopover({
     <div
       role="dialog"
       aria-label={`${PIN_NAME} 오늘 요약`}
-      className="w-[300px] bg-sp-card border border-sp-border rounded-xl shadow-lg overflow-hidden animate-pin-bubble-pop"
+      /* max-h 는 아이콘 창(뷰포트) 높이 기준 — 내용이 길어도 창 밖으로 넘쳐 헤더가
+         잘리지 않게 스스로 창 안에 맞춘다(위로 열릴 때도 안전). 창 크기와 무관. */
+      className="flex flex-col w-[300px] max-h-[calc(100vh-84px)] bg-sp-card border border-sp-border rounded-xl shadow-lg overflow-hidden animate-pin-bubble-pop"
     >
-      {/* 헤더 — 제목 + 날짜 + 현재 상태 */}
-      <div className="px-4 pt-3 pb-2.5 border-b border-sp-border">
+      {/* 헤더 — 제목 + 날짜 + 현재 상태 (고정) */}
+      <div className="flex-shrink-0 px-4 pt-3 pb-2.5 border-b border-sp-border">
         <div className="flex items-baseline justify-between gap-2">
           <span className="text-sm font-semibold text-sp-text">{PIN_NAME}가 정리한 오늘 하루</span>
           <span className="text-xs text-sp-muted">{dateLabel}</span>
@@ -74,85 +76,95 @@ export function PinPopover({
         <div className="mt-0.5 text-xs text-sp-accent truncate">{statusTitle}</div>
       </div>
 
-      {/* 오늘 수업 */}
-      <div className="px-2 py-2 border-b border-sp-border">
-        <div className="px-2 pb-1 text-[11px] font-medium text-sp-muted">
-          오늘 수업{classes.length > 0 ? ` ${classes.length}개` : ''}
-        </div>
-        {classes.length === 0 ? (
-          <div className="px-2 pb-0.5 text-xs text-sp-muted">오늘은 수업이 없어요</div>
-        ) : (
-          <ul className="max-h-[140px] overflow-y-auto">
-            {classes.map((c) => (
-              <li
-                key={c.number}
-                className={`flex items-center gap-2 rounded-lg px-2 py-1 text-xs ${
-                  c.isCurrent ? 'bg-sp-bg border-l-2 border-sp-accent' : ''
-                }`}
-              >
-                <span
-                  className={`w-4 text-center font-semibold ${
-                    c.isCurrent || c.isNext ? 'text-sp-accent' : 'text-sp-muted'
+      {/* 스크롤 영역 — 오늘 수업 + 마감 할 일 목록. 내용이 많으면 여기만 스크롤 */}
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        {/* 오늘 수업 */}
+        <div className="px-2 py-2 border-b border-sp-border">
+          <div className="px-2 pb-1 text-[11px] font-medium text-sp-muted">
+            오늘 수업{classes.length > 0 ? ` ${classes.length}개` : ''}
+          </div>
+          {classes.length === 0 ? (
+            <div className="px-2 pb-0.5 text-xs text-sp-muted">오늘은 수업이 없어요</div>
+          ) : (
+            <ul>
+              {classes.map((c) => (
+                <li
+                  key={c.number}
+                  className={`flex items-center gap-2 rounded-lg px-2 py-1 text-xs ${
+                    c.isCurrent ? 'bg-sp-bg border-l-2 border-sp-accent' : ''
                   }`}
                 >
-                  {c.number}
-                </span>
-                {c.start && (
-                  <span className="w-10 text-[10px] text-sp-muted tabular-nums flex-shrink-0">
-                    {c.start}
+                  <span
+                    className={`w-4 text-center font-semibold ${
+                      c.isCurrent || c.isNext ? 'text-sp-accent' : 'text-sp-muted'
+                    }`}
+                  >
+                    {c.number}
                   </span>
-                )}
-                <span className="flex-1 truncate text-sp-text">{c.subject}</span>
-                {c.classroom && <span className="text-sp-muted flex-shrink-0">{c.classroom}</span>}
-                {c.isCurrent && (
-                  <span className="text-[10px] text-sp-accent font-medium flex-shrink-0">지금</span>
-                )}
-                {!c.isCurrent && c.isNext && (
-                  <span className="text-[10px] text-sp-muted flex-shrink-0">다음</span>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-        {lunchMenu && (
-          <div className="px-2 pt-1 text-[11px] text-sp-muted truncate">급식 · {lunchMenu}</div>
-        )}
+                  {c.start && (
+                    <span className="w-10 text-[10px] text-sp-muted tabular-nums flex-shrink-0">
+                      {c.start}
+                    </span>
+                  )}
+                  <span className="flex-1 truncate text-sp-text">{c.subject}</span>
+                  {c.classroom && (
+                    <span className="text-sp-muted flex-shrink-0">{c.classroom}</span>
+                  )}
+                  {c.isCurrent && (
+                    <span className="text-[10px] text-sp-accent font-medium flex-shrink-0">
+                      지금
+                    </span>
+                  )}
+                  {!c.isCurrent && c.isNext && (
+                    <span className="text-[10px] text-sp-muted flex-shrink-0">다음</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          {lunchMenu && (
+            <div className="px-2 pt-1 text-[11px] text-sp-muted truncate">급식 · {lunchMenu}</div>
+          )}
+        </div>
+
+        {/* 마감 할 일 목록 (스크롤 영역 안 — 개수 제한 없이 전부, 길면 함께 스크롤) */}
+        <div className="px-2 py-2">
+          <div className="px-2 pb-1 text-[11px] font-medium text-sp-muted">마감 할 일</div>
+          {todos.length === 0 ? (
+            <div className="px-2 text-xs text-sp-muted">오늘 마감 할 일이 없어요 ✨</div>
+          ) : (
+            <ul>
+              {todos.map((t) => (
+                <li key={t.id}>
+                  <button
+                    type="button"
+                    onClick={() => onToggleTodo(t.id)}
+                    className="w-full flex items-center gap-2 rounded-lg px-2 py-1 text-left text-xs hover:bg-sp-bg transition-colors"
+                    title="완료로 표시"
+                  >
+                    <span
+                      className="w-3.5 h-3.5 rounded-full border border-sp-muted flex-shrink-0"
+                      aria-hidden="true"
+                    />
+                    <span className="flex-1 truncate text-sp-text">{t.text}</span>
+                    {t.overdue && (
+                      <span className="text-[10px] text-sp-error flex-shrink-0">지남</span>
+                    )}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
 
-      {/* 마감 할 일 + 빠른 추가 */}
-      <div className="px-2 py-2 border-b border-sp-border">
-        <div className="px-2 pb-1 text-[11px] font-medium text-sp-muted">마감 할 일</div>
-        {todos.length === 0 ? (
-          <div className="px-2 text-xs text-sp-muted">오늘 마감 할 일이 없어요 ✨</div>
-        ) : (
-          <ul className="max-h-[140px] overflow-y-auto">
-            {todos.map((t) => (
-              <li key={t.id}>
-                <button
-                  type="button"
-                  onClick={() => onToggleTodo(t.id)}
-                  className="w-full flex items-center gap-2 rounded-lg px-2 py-1 text-left text-xs hover:bg-sp-bg transition-colors"
-                  title="완료로 표시"
-                >
-                  <span
-                    className="w-3.5 h-3.5 rounded-full border border-sp-muted flex-shrink-0"
-                    aria-hidden="true"
-                  />
-                  <span className="flex-1 truncate text-sp-text">{t.text}</span>
-                  {t.overdue && (
-                    <span className="text-[10px] text-sp-error flex-shrink-0">지남</span>
-                  )}
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
+      {/* 빠른 추가 입력 — 고정(스크롤과 무관하게 항상 보임) */}
+      <div className="flex-shrink-0 px-4 py-2 border-t border-sp-border">
         <form
           onSubmit={(e) => {
             e.preventDefault();
             void submit();
           }}
-          className="px-2 pt-1.5"
         >
           <input
             ref={inputRef}
@@ -165,8 +177,8 @@ export function PinPopover({
         </form>
       </div>
 
-      {/* 푸터 — 창 열기 */}
-      <div className="flex gap-1.5 px-3 py-2.5">
+      {/* 푸터 — 창 열기 (고정) */}
+      <div className="flex-shrink-0 flex gap-1.5 px-3 py-2.5 border-t border-sp-border">
         <button
           type="button"
           onClick={onOpenWidget}
