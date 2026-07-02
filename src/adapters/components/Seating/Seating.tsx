@@ -484,242 +484,251 @@ export function Seating(props?: { embedded?: boolean }) {
         />
       )}
       <div className={embedded ? '' : 'p-8 flex flex-col flex-1 min-h-0'}>
-        <ScrollRow className="justify-end gap-2 mb-4">
-          {/* 레이아웃 모드 스위치 */}
-          <div className="flex items-center gap-0.5 bg-sp-surface rounded-lg p-0.5 shrink-0">
+        {/* 내보내기 버튼은 ScrollRow(가로 스크롤·오버플로우 클립) 밖에 두어야
+            아래로 펼쳐지는 드롭다운 메뉴가 잘리지 않고 보인다. */}
+        <div className="flex items-center gap-2 mb-4">
+          <ScrollRow className="justify-end gap-2 flex-1 min-w-0">
+            {/* 레이아웃 모드 스위치 */}
+            <div className="flex items-center gap-0.5 bg-sp-surface rounded-lg p-0.5 shrink-0">
+              <button
+                onClick={() => void changeLayout('grid')}
+                className={`whitespace-nowrap px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                  layout === 'grid' ? 'bg-sp-accent text-white' : 'text-sp-muted hover:text-sp-text'
+                }`}
+              >
+                <span className="material-symbols-outlined text-sm mr-1 align-middle">
+                  grid_view
+                </span>
+                격자
+              </button>
+              <button
+                onClick={() => void changeLayout('group')}
+                className={`whitespace-nowrap px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                  layout === 'group'
+                    ? 'bg-sp-accent text-white'
+                    : 'text-sp-muted hover:text-sp-text'
+                }`}
+              >
+                <span className="material-symbols-outlined text-sm mr-1 align-middle">
+                  workspaces
+                </span>
+                모둠
+              </button>
+              <button
+                onClick={() => void changeLayout('freestyle')}
+                className={`whitespace-nowrap px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                  layout === 'freestyle'
+                    ? 'bg-sp-accent text-white'
+                    : 'text-sp-muted hover:text-sp-text'
+                }`}
+                title="자유 배치 — 일제식·모둠·ㄷ자형 프리셋 + 드래그 이동"
+              >
+                <span className="material-symbols-outlined text-sm mr-1 align-middle">widgets</span>
+                자유
+              </button>
+            </div>
+            {/* 격자↔모둠 연동 토글 — 자유 모드에서는 의미 없으므로 숨김 */}
+            {layout !== 'freestyle' && (
+              <button
+                onClick={() => void toggleGroupGridSync()}
+                className={`shrink-0 whitespace-nowrap flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
+                  groupGridSync
+                    ? 'border-sp-accent/40 bg-sp-accent/10 text-sp-accent'
+                    : 'border-sp-border bg-sp-card text-sp-muted hover:text-sp-text'
+                }`}
+                title={
+                  groupGridSync
+                    ? '격자↔모둠 연동: 전환 시 학생 자동 재분배'
+                    : '격자↔모둠 비연동: 각각 독립 유지'
+                }
+              >
+                <span className="material-symbols-outlined text-sm">
+                  {groupGridSync ? 'link' : 'link_off'}
+                </span>
+                {groupGridSync ? '연동' : '비연동'}
+              </button>
+            )}
+            <div className="w-px h-8 bg-sp-border shrink-0" />
             <button
-              onClick={() => void changeLayout('grid')}
-              className={`whitespace-nowrap px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                layout === 'grid' ? 'bg-sp-accent text-white' : 'text-sp-muted hover:text-sp-text'
-              }`}
-            >
-              <span className="material-symbols-outlined text-sm mr-1 align-middle">grid_view</span>
-              격자
-            </button>
-            <button
-              onClick={() => void changeLayout('group')}
-              className={`whitespace-nowrap px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                layout === 'group' ? 'bg-sp-accent text-white' : 'text-sp-muted hover:text-sp-text'
-              }`}
-            >
-              <span className="material-symbols-outlined text-sm mr-1 align-middle">
-                workspaces
-              </span>
-              모둠
-            </button>
-            <button
-              onClick={() => void changeLayout('freestyle')}
-              className={`whitespace-nowrap px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                layout === 'freestyle'
-                  ? 'bg-sp-accent text-white'
-                  : 'text-sp-muted hover:text-sp-text'
-              }`}
-              title="자유 배치 — 일제식·모둠·ㄷ자형 프리셋 + 드래그 이동"
-            >
-              <span className="material-symbols-outlined text-sm mr-1 align-middle">widgets</span>
-              자유
-            </button>
-          </div>
-          {/* 격자↔모둠 연동 토글 — 자유 모드에서는 의미 없으므로 숨김 */}
-          {layout !== 'freestyle' && (
-            <button
-              onClick={() => void toggleGroupGridSync()}
-              className={`shrink-0 whitespace-nowrap flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
-                groupGridSync
-                  ? 'border-sp-accent/40 bg-sp-accent/10 text-sp-accent'
-                  : 'border-sp-border bg-sp-card text-sp-muted hover:text-sp-text'
-              }`}
-              title={
-                groupGridSync
-                  ? '격자↔모둠 연동: 전환 시 학생 자동 재분배'
-                  : '격자↔모둠 비연동: 각각 독립 유지'
-              }
-            >
-              <span className="material-symbols-outlined text-sm">
-                {groupGridSync ? 'link' : 'link_off'}
-              </span>
-              {groupGridSync ? '연동' : '비연동'}
-            </button>
-          )}
-          <div className="w-px h-8 bg-sp-border shrink-0" />
-          <button
-            onClick={handleRandomize}
-            className="shrink-0 whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface text-sm font-medium text-sp-text transition-colors shadow-sm"
-          >
-            <span className="material-symbols-outlined text-lg">shuffle</span>
-            <span>자리 바꾸기</span>
-          </button>
-          <button
-            onClick={() => setShowConstraintModal(true)}
-            className="shrink-0 whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface text-sm font-medium text-sp-text transition-colors shadow-sm"
-          >
-            <span className="material-symbols-outlined text-lg">tune</span>
-            <span>배치 조건</span>
-          </button>
-          {layout === 'freestyle' && (
-            <button
-              onClick={() => setShowPresetDialog(true)}
+              onClick={handleRandomize}
               className="shrink-0 whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface text-sm font-medium text-sp-text transition-colors shadow-sm"
-              title="자유 배치 프리셋 선택 (일제식 · 모둠형 · ㄷ자형)"
+            >
+              <span className="material-symbols-outlined text-lg">shuffle</span>
+              <span>자리 바꾸기</span>
+            </button>
+            <button
+              onClick={() => setShowConstraintModal(true)}
+              className="shrink-0 whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface text-sm font-medium text-sp-text transition-colors shadow-sm"
             >
               <span className="material-symbols-outlined text-lg">tune</span>
-              <span>프리셋</span>
+              <span>배치 조건</span>
             </button>
-          )}
-          {layout === 'grid' && (
-            <>
+            {layout === 'freestyle' && (
               <button
-                onClick={() => void togglePairMode()}
-                className={`shrink-0 whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-colors shadow-sm ${
-                  seating.pairMode
-                    ? 'border-sp-highlight bg-sp-highlight/20 text-sp-highlight'
-                    : 'border-sp-border bg-sp-card hover:bg-sp-surface text-sp-text'
-                }`}
-                title="짝꿍 모드: 2명씩 짝 그룹으로 표시"
+                onClick={() => setShowPresetDialog(true)}
+                className="shrink-0 whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface text-sm font-medium text-sp-text transition-colors shadow-sm"
+                title="자유 배치 프리셋 선택 (일제식 · 모둠형 · ㄷ자형)"
               >
-                <span className="material-symbols-outlined text-lg">group</span>
-                <span>짝꿍</span>
+                <span className="material-symbols-outlined text-lg">tune</span>
+                <span>프리셋</span>
               </button>
-              {seating.pairMode && (
+            )}
+            {layout === 'grid' && (
+              <>
                 <button
-                  onClick={() => void toggleOddColumnMode()}
-                  className={`shrink-0 whitespace-nowrap flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors shadow-sm ${
-                    (seating.oddColumnMode ?? 'single') === 'triple'
+                  onClick={() => void togglePairMode()}
+                  className={`shrink-0 whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-colors shadow-sm ${
+                    seating.pairMode
                       ? 'border-sp-highlight bg-sp-highlight/20 text-sp-highlight'
                       : 'border-sp-border bg-sp-card hover:bg-sp-surface text-sp-text'
                   }`}
-                  title="홀수 열 처리: 3명 함께 앉기 / 1명 따로 앉기"
+                  title="짝꿍 모드: 2명씩 짝 그룹으로 표시"
                 >
-                  <span className="material-symbols-outlined text-lg">group_add</span>
-                  <span>
-                    {(seating.oddColumnMode ?? 'single') === 'triple' ? '3인 짝' : '1인 따로'}
-                  </span>
+                  <span className="material-symbols-outlined text-lg">group</span>
+                  <span>짝꿍</span>
                 </button>
-              )}
-            </>
-          )}
-          <button
-            onClick={() => setIsTeacherView((v) => !v)}
-            className={`shrink-0 whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-colors shadow-sm ${
-              isTeacherView
-                ? 'border-sp-accent bg-sp-accent/20 text-sp-accent'
-                : 'border-sp-border bg-sp-card hover:bg-sp-surface text-sp-text'
-            }`}
-            title={isTeacherView ? '학생 시점으로 보기' : '교사 시점으로 보기'}
-          >
-            <span className="material-symbols-outlined text-lg">
-              {isTeacherView ? 'visibility' : 'swap_vert'}
-            </span>
-            <span>교사 시점</span>
-          </button>
-          {/* 배치 기록 (Phase 1) — 교사·학생 시점 모두 노출 (저장된 기록은 모두 동일하게 사용 가능) */}
-          <button
-            onClick={() => setShowHistoryPanel(true)}
-            className="shrink-0 whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface text-sm font-medium text-sp-text transition-colors shadow-sm"
-            title="자리배치 기록 보기"
-          >
-            <span className="material-symbols-outlined text-lg">history</span>
-            <span>배치 기록</span>
-          </button>
-          {/* 이름 학습 (Phase 3a) — 교사·학생 시점 모두 노출. 학생이 0명일 때만 비활성 */}
-          {totalStudents > 0 && (
-            <button
-              onClick={() => setShowNameLearning(true)}
-              className="shrink-0 whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface text-sm font-medium text-sp-text transition-colors shadow-sm"
-              title="학생 이름 외우기 모드"
-            >
-              <span className="material-symbols-outlined text-lg">quiz</span>
-              <span>이름 학습</span>
-            </button>
-          )}
-          {/* Phase 3b: 프리셋 배치 메뉴 (교사 시점에서만, 학생 화면에는 절대 노출 X) */}
-          {isTeacherView && (
-            <div className="shrink-0 relative">
-              {hasPreset ? (
-                <div className="flex items-center gap-1 px-3 py-2 rounded-lg border border-sp-warning/40 bg-sp-warning/10 text-sm font-medium text-sp-warning shadow-sm">
-                  <span className="material-symbols-outlined text-lg" aria-hidden="true">
-                    target
-                  </span>
-                  <span title="다음 셔플 시 미리 설정한 배치가 적용됩니다">프리셋 대기</span>
+                {seating.pairMode && (
                   <button
-                    type="button"
-                    onClick={() => {
-                      void clearPresetAction();
-                      useToastStore.getState().show('프리셋이 제거되었습니다', 'info');
-                    }}
-                    aria-label="프리셋 제거"
-                    className="ml-1 p-0.5 rounded hover:bg-sp-warning/20"
+                    onClick={() => void toggleOddColumnMode()}
+                    className={`shrink-0 whitespace-nowrap flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors shadow-sm ${
+                      (seating.oddColumnMode ?? 'single') === 'triple'
+                        ? 'border-sp-highlight bg-sp-highlight/20 text-sp-highlight'
+                        : 'border-sp-border bg-sp-card hover:bg-sp-surface text-sp-text'
+                    }`}
+                    title="홀수 열 처리: 3명 함께 앉기 / 1명 따로 앉기"
                   >
-                    <span className="material-symbols-outlined text-sm">close</span>
+                    <span className="material-symbols-outlined text-lg">group_add</span>
+                    <span>
+                      {(seating.oddColumnMode ?? 'single') === 'triple' ? '3인 짝' : '1인 따로'}
+                    </span>
                   </button>
-                </div>
-              ) : (
+                )}
+              </>
+            )}
+            <button
+              onClick={() => setIsTeacherView((v) => !v)}
+              className={`shrink-0 whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-colors shadow-sm ${
+                isTeacherView
+                  ? 'border-sp-accent bg-sp-accent/20 text-sp-accent'
+                  : 'border-sp-border bg-sp-card hover:bg-sp-surface text-sp-text'
+              }`}
+              title={isTeacherView ? '학생 시점으로 보기' : '교사 시점으로 보기'}
+            >
+              <span className="material-symbols-outlined text-lg">
+                {isTeacherView ? 'visibility' : 'swap_vert'}
+              </span>
+              <span>교사 시점</span>
+            </button>
+            {/* 배치 기록 (Phase 1) — 교사·학생 시점 모두 노출 (저장된 기록은 모두 동일하게 사용 가능) */}
+            <button
+              onClick={() => setShowHistoryPanel(true)}
+              className="shrink-0 whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface text-sm font-medium text-sp-text transition-colors shadow-sm"
+              title="자리배치 기록 보기"
+            >
+              <span className="material-symbols-outlined text-lg">history</span>
+              <span>배치 기록</span>
+            </button>
+            {/* 이름 학습 (Phase 3a) — 교사·학생 시점 모두 노출. 학생이 0명일 때만 비활성 */}
+            {totalStudents > 0 && (
+              <button
+                onClick={() => setShowNameLearning(true)}
+                className="shrink-0 whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface text-sm font-medium text-sp-text transition-colors shadow-sm"
+                title="학생 이름 외우기 모드"
+              >
+                <span className="material-symbols-outlined text-lg">quiz</span>
+                <span>이름 학습</span>
+              </button>
+            )}
+            {/* Phase 3b: 프리셋 배치 메뉴 (교사 시점에서만, 학생 화면에는 절대 노출 X) */}
+            {isTeacherView && (
+              <div className="shrink-0 relative">
+                {hasPreset ? (
+                  <div className="flex items-center gap-1 px-3 py-2 rounded-lg border border-sp-warning/40 bg-sp-warning/10 text-sm font-medium text-sp-warning shadow-sm">
+                    <span className="material-symbols-outlined text-lg" aria-hidden="true">
+                      target
+                    </span>
+                    <span title="다음 셔플 시 미리 설정한 배치가 적용됩니다">프리셋 대기</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void clearPresetAction();
+                        useToastStore.getState().show('프리셋이 제거되었습니다', 'info');
+                      }}
+                      aria-label="프리셋 제거"
+                      className="ml-1 p-0.5 rounded hover:bg-sp-warning/20"
+                    >
+                      <span className="material-symbols-outlined text-sm">close</span>
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => {
+                      if (totalStudents === 0) return;
+                      if (
+                        window.confirm(
+                          '현재 배치를 프리셋으로 저장할까요?\n' +
+                            '다음에 "랜덤 셔플" 버튼을 누르면 셔플 애니메이션 후 이 배치가 그대로 적용됩니다.\n' +
+                            '(1회 사용 후 자동 해제)',
+                        )
+                      ) {
+                        void setPresetFromCurrent();
+                        useToastStore
+                          .getState()
+                          .show('현재 배치를 프리셋으로 저장했습니다', 'info');
+                      }
+                    }}
+                    disabled={totalStudents === 0}
+                    className="whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium text-sp-text transition-colors shadow-sm"
+                    title="다음 셔플에 적용할 배치를 미리 저장"
+                  >
+                    <span className="material-symbols-outlined text-lg">target</span>
+                    <span>프리셋 저장</span>
+                  </button>
+                )}
+              </div>
+            )}
+            <button
+              onClick={() => setEditing(!isEditing)}
+              className={`shrink-0 whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-colors shadow-sm ${
+                isEditing
+                  ? 'border-sp-accent bg-sp-accent/20 text-sp-accent'
+                  : 'border-sp-border bg-sp-card hover:bg-sp-surface text-sp-text'
+              }`}
+            >
+              <span className="material-symbols-outlined text-lg">edit</span>
+              <span>{isEditing ? '편집 완료' : '편집'}</span>
+            </button>
+            {isEditing && (
+              <>
+                <div className="w-px h-8 bg-sp-border shrink-0" />
                 <button
-                  onClick={() => {
-                    if (totalStudents === 0) return;
-                    if (
-                      window.confirm(
-                        '현재 배치를 프리셋으로 저장할까요?\n' +
-                          '다음에 "랜덤 셔플" 버튼을 누르면 셔플 애니메이션 후 이 배치가 그대로 적용됩니다.\n' +
-                          '(1회 사용 후 자동 해제)',
-                      )
-                    ) {
-                      void setPresetFromCurrent();
-                      useToastStore.getState().show('현재 배치를 프리셋으로 저장했습니다', 'info');
-                    }
-                  }}
-                  disabled={totalStudents === 0}
-                  className="whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium text-sp-text transition-colors shadow-sm"
-                  title="다음 셔플에 적용할 배치를 미리 저장"
+                  onClick={() => void undo()}
+                  title="실행 취소 (Ctrl+Z)"
+                  disabled={!canUndo()}
+                  className="shrink-0 whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium text-sp-text transition-colors shadow-sm"
                 >
-                  <span className="material-symbols-outlined text-lg">target</span>
-                  <span>프리셋 저장</span>
+                  <span className="material-symbols-outlined text-lg">undo</span>
+                  <span>실행 취소</span>
                 </button>
-              )}
-            </div>
-          )}
-          <button
-            onClick={() => setEditing(!isEditing)}
-            className={`shrink-0 whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-colors shadow-sm ${
-              isEditing
-                ? 'border-sp-accent bg-sp-accent/20 text-sp-accent'
-                : 'border-sp-border bg-sp-card hover:bg-sp-surface text-sp-text'
-            }`}
-          >
-            <span className="material-symbols-outlined text-lg">edit</span>
-            <span>{isEditing ? '편집 완료' : '편집'}</span>
-          </button>
-          {isEditing && (
-            <>
-              <div className="w-px h-8 bg-sp-border shrink-0" />
-              <button
-                onClick={() => void undo()}
-                title="실행 취소 (Ctrl+Z)"
-                disabled={!canUndo()}
-                className="shrink-0 whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium text-sp-text transition-colors shadow-sm"
-              >
-                <span className="material-symbols-outlined text-lg">undo</span>
-                <span>실행 취소</span>
-              </button>
-              <button
-                onClick={() => void redo()}
-                title="다시 실행 (Ctrl+Shift+Z)"
-                disabled={!canRedo()}
-                className="shrink-0 whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium text-sp-text transition-colors shadow-sm"
-              >
-                <span className="material-symbols-outlined text-lg">redo</span>
-                <span>다시 실행</span>
-              </button>
-              <button
-                onClick={() => setShowClearConfirm(true)}
-                className="shrink-0 whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-lg border border-red-500/30 bg-sp-card hover:bg-red-500/10 text-sm font-medium text-red-400 transition-colors shadow-sm"
-              >
-                <span className="material-symbols-outlined text-lg">delete_sweep</span>
-                <span>모두 삭제</span>
-              </button>
-            </>
-          )}
-
+                <button
+                  onClick={() => void redo()}
+                  title="다시 실행 (Ctrl+Shift+Z)"
+                  disabled={!canRedo()}
+                  className="shrink-0 whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium text-sp-text transition-colors shadow-sm"
+                >
+                  <span className="material-symbols-outlined text-lg">redo</span>
+                  <span>다시 실행</span>
+                </button>
+                <button
+                  onClick={() => setShowClearConfirm(true)}
+                  className="shrink-0 whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-lg border border-red-500/30 bg-sp-card hover:bg-red-500/10 text-sm font-medium text-red-400 transition-colors shadow-sm"
+                >
+                  <span className="material-symbols-outlined text-lg">delete_sweep</span>
+                  <span>모두 삭제</span>
+                </button>
+              </>
+            )}
+          </ScrollRow>
           <div className="relative shrink-0" ref={exportMenuRef}>
             <button
               onClick={() => setShowExportMenu((v) => !v)}
@@ -760,7 +769,7 @@ export function Seating(props?: { embedded?: boolean }) {
               </div>
             )}
           </div>
-        </ScrollRow>
+        </div>
 
         {/* 컨텐츠 영역 */}
         <div className="flex-1 overflow-y-auto flex flex-col items-center">
