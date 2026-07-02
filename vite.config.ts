@@ -76,6 +76,12 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           rewrite: (p) => p.replace(/^\/weather-api/, ''),
         },
+        // 컴시간알리미 — CORS 미지원이라 브라우저 dev 는 프록시 경유 (Electron 은 IPC)
+        '/comcigan-api': {
+          target: 'http://comci.net:4082',
+          changeOrigin: true,
+          rewrite: (p) => p.replace(/^\/comcigan-api/, ''),
+        },
       },
     },
   };

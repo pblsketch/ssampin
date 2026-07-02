@@ -5,13 +5,13 @@
  * exceljs로 첫 시트를 2차원 셀 배열로 변환한 뒤, 레이아웃 인식·파싱은 도메인 규칙
  * (neisTranscriptImportRules)에 위임한다. 학생 점수는 로컬에서만 처리(네트워크 전송 없음).
  */
-import ExcelJS from 'exceljs';
 import type { StudentTranscript } from '@domain/entities/ImportedTranscript';
 import {
   detectTranscriptLayout,
   parseTranscriptRows,
   type TranscriptLayout,
 } from '@domain/rules/neisTranscriptImportRules';
+import { loadSheetGrid } from './sheetGrid';
 
 export interface TranscriptExcelParseResult {
   readonly students: readonly StudentTranscript[];
@@ -20,19 +20,6 @@ export interface TranscriptExcelParseResult {
   readonly rawRows: readonly (readonly unknown[])[];
   /** 감지/지정된 학기 표기 */
   readonly term: string;
-}
-
-/** exceljs 셀 값(서식·수식·리치텍스트)을 원시값으로 정규화. */
-function cellValue(value: unknown): unknown {
-  if (value !== null && typeof value === 'object') {
-    const obj = value as Record<string, unknown>;
-    if ('result' in obj) return obj.result;
-    if ('text' in obj) return obj.text;
-    if (Array.isArray(obj.richText)) {
-      return obj.richText.map((part) => String((part as { text?: unknown }).text ?? '')).join('');
-    }
-  }
-  return value;
 }
 
 /** 상위 행에서 "2026학년도 1학기" 류 학기 표기를 추출. 실패 시 null. */
@@ -57,24 +44,16 @@ export async function parseTranscriptExcel(
   buffer: ArrayBuffer,
   options: { term?: string } = {},
 ): Promise<TranscriptExcelParseResult> {
-  const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(buffer);
-  const ws = workbook.worksheets[0];
-  if (ws === undefined) {
+  // .xlsx 우선, 실패 시 'HTML 표를 .xls로 저장'한 나이스 파일 폴백(sheetGrid가 처리).
+  const { rows, sheetName } = await loadSheetGrid(buffer);
+  if (rows.length === 0) {
     return { students: [], layout: null, rawRows: [], term: options.term ?? '' };
   }
-
-  const rows: unknown[][] = [];
-  ws.eachRow({ includeEmpty: true }, (row) => {
-    const values = Array.isArray(row.values) ? row.values : [];
-    // exceljs의 row.values는 1-based(인덱스 0은 비어 있음) → 0-based로 정규화
-    rows.push(values.slice(1).map((v) => cellValue(v)));
-  });
 
   const term = options.term ?? detectTerm(rows) ?? '';
   const layout = detectTranscriptLayout(rows);
   const students = layout
-    ? parseTranscriptRows(rows, layout, { term, fallbackSubject: ws.name })
+    ? parseTranscriptRows(rows, layout, { term, fallbackSubject: sheetName })
     : [];
 
   return { students, layout, rawRows: rows.slice(0, 15), term };

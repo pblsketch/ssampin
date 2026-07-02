@@ -731,6 +731,14 @@ interface ElectronAPI {
     >;
   };
 
+  // === 컴시간알리미 (comcigan) — 교사 시간표 불러오기 ===
+  // comci.net 은 CORS 미지원이라 메인이 바이트만 대신 fetch (파싱은 renderer).
+  comcigan?: {
+    fetchRaw: (
+      path: string,
+    ) => Promise<{ status: 'ok'; body: ArrayBuffer } | { status: 'error'; message: string }>;
+  };
+
   // === 협업 보드 (collab-board) — Design §4.1 ===
   collabBoard?: {
     list: () => Promise<CollabBoardMeta[]>;

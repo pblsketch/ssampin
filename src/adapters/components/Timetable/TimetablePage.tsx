@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { FormatHint } from '../common/FormatHint';
 import { PageHeader } from '@adapters/components/common/PageHeader';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
@@ -32,13 +31,12 @@ import { TempChangeModal } from './TempChangeModal';
 import { TimetableOverridesPanel } from './TimetableOverridesPanel';
 import { InlineColorPalette } from './InlineColorPalette';
 import { NeisImportModal } from './NeisImportModal';
+import { ComciganImportModal } from './ComciganImportModal';
 import { TeacherExcelPreviewModal } from './TeacherExcelPreviewModal';
 /* eslint-disable no-restricted-imports */
 import {
   exportClassScheduleToExcel,
   exportTeacherScheduleToExcel,
-  exportTeacherTimetableTemplate,
-  parseTeacherTimetableFromExcel,
 } from '@infrastructure/export/ExcelExporter';
 import {
   exportClassScheduleToHwpx,
@@ -343,6 +341,9 @@ export function TimetablePage() {
   // ── 나이스 불러오기 모달 ──
   const [showNeisImport, setShowNeisImport] = useState(false);
 
+  // ── 컴시간 교사 시간표 불러오기 모달 ──
+  const [showComciganImport, setShowComciganImport] = useState(false);
+
   const hasExistingData = useMemo(() => {
     return activeDays.some((day) =>
       (classSchedule[day] ?? []).some((cp) => cp.subject.trim() !== ''),
@@ -388,72 +389,10 @@ export function TimetablePage() {
     [settings.neis, updateSettings, showToast],
   );
 
-  /* ── 교사 시간표 엑셀 불러오기 (메인 페이지) ── */
+  /* ── 교사 시간표 불러오기 미리보기 (컴시간 경로 — 메인 페이지) ── */
   const updateTeacherSchedule = useScheduleStore((s) => s.updateTeacherSchedule);
   const [showExcelPreview, setShowExcelPreview] = useState(false);
   const [previewSchedule, setPreviewSchedule] = useState<TeacherScheduleData | null>(null);
-
-  const handleDownloadTemplate = useCallback(async () => {
-    try {
-      const days = activeDays as readonly string[];
-      const normalized = await exportTeacherTimetableTemplate(
-        settings.maxPeriods,
-        days,
-        teacherSchedule,
-      );
-
-      if (window.electronAPI) {
-        const saved = await window.electronAPI.showSaveDialog({
-          title: '양식 다운로드',
-          defaultPath: '교사_시간표_양식.xlsx',
-          filters: [{ name: 'Excel 파일', extensions: ['xlsx'] }],
-        });
-        if (saved) {
-          await window.electronAPI.writeFile(saved.handle, normalized);
-          showToast('양식이 저장되었습니다', 'success', {
-            label: '파일 열기',
-            onClick: () => window.electronAPI?.openFile(saved.handle),
-          });
-        }
-      } else {
-        const blob = new Blob([normalized], { type: 'application/octet-stream' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = '교사_시간표_양식.xlsx';
-        a.click();
-        URL.revokeObjectURL(url);
-        showToast('양식이 다운로드되었습니다', 'success');
-      }
-    } catch {
-      showToast('양식 다운로드 중 오류가 발생했습니다', 'error');
-    }
-  }, [settings.maxPeriods, activeDays, teacherSchedule, showToast]);
-
-  const handleExcelUpload = useCallback(
-    async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      try {
-        const buffer = await file.arrayBuffer();
-        const parsed = await parseTeacherTimetableFromExcel(buffer);
-        const hasData =
-          Object.keys(parsed).length > 0 &&
-          Object.values(parsed).some((periods) => periods.some((p) => p !== null));
-        if (!hasData) {
-          showToast('시간표 데이터를 찾을 수 없습니다. 양식을 확인해주세요.', 'error');
-          return;
-        }
-        setPreviewSchedule(parsed);
-        setShowExcelPreview(true);
-      } catch (err) {
-        console.error('[TimetablePage] 엑셀 파싱 실패:', err);
-        showToast('엑셀 파일을 읽을 수 없습니다. 양식을 확인해주세요.', 'error');
-      }
-      e.target.value = '';
-    },
-    [showToast],
-  );
 
   const handleExcelConfirm = useCallback(async () => {
     if (!previewSchedule) return;
@@ -544,30 +483,15 @@ export function TimetablePage() {
               </button>
             )}
 
-            {/* 교사 시간표: 양식 다운로드 + 엑셀 불러오기 */}
+            {/* 교사 시간표: 컴시간에서 불러오기 (양식/엑셀 세트는 직접 편집 안에 있음) */}
             {tab === 'teacher' && (
-              <>
-                <button
-                  onClick={() => void handleDownloadTemplate()}
-                  className="flex items-center gap-2 rounded-xl bg-sp-surface border border-sp-border px-4 py-2.5 text-sm font-bold text-sp-muted hover:text-sp-text hover:bg-sp-card transition-all active:scale-95"
-                >
-                  <span className="material-symbols-outlined text-icon-lg">download</span>
-                  <span className="hidden xl:inline">양식 다운로드</span>
-                </button>
-                <div className="flex flex-col items-start gap-1">
-                  <label className="flex items-center gap-2 rounded-xl bg-sp-accent/10 border border-sp-accent/30 px-4 py-2.5 text-sm font-bold text-sp-accent hover:bg-sp-accent/20 transition-all active:scale-95 cursor-pointer">
-                    <span className="material-symbols-outlined text-icon-lg">file_open</span>
-                    <span className="hidden xl:inline">엑셀 불러오기</span>
-                    <input
-                      type="file"
-                      accept=".xlsx"
-                      className="hidden"
-                      onChange={(e) => void handleExcelUpload(e)}
-                    />
-                  </label>
-                  <FormatHint formats=".xlsx" />
-                </div>
-              </>
+              <button
+                onClick={() => setShowComciganImport(true)}
+                className="flex items-center gap-2 rounded-xl bg-sp-accent/10 border border-sp-accent/30 px-4 py-2.5 text-sm font-bold text-sp-accent hover:bg-sp-accent/20 transition-all active:scale-95"
+              >
+                <span className="material-symbols-outlined text-icon-lg">download</span>
+                <span className="hidden xl:inline">컴시간에서 불러오기</span>
+              </button>
             )}
 
             {/* 색상 모드 토글 (교사 시간표에서만 표시) */}
@@ -920,7 +844,18 @@ export function TimetablePage() {
         onEnableAutoSync={(grade, cls) => void handleEnableAutoSync(grade, cls)}
       />
 
-      {/* 교사 시간표 엑셀 미리보기 모달 */}
+      {/* 컴시간 교사 시간표 불러오기 — 교사 선택 후 아래 미리보기 모달로 합류 */}
+      <ComciganImportModal
+        isOpen={showComciganImport}
+        onClose={() => setShowComciganImport(false)}
+        onImport={(schedule) => {
+          setShowComciganImport(false);
+          setPreviewSchedule(schedule);
+          setShowExcelPreview(true);
+        }}
+      />
+
+      {/* 교사 시간표 불러오기 미리보기 모달 */}
       {showExcelPreview && previewSchedule && (
         <TeacherExcelPreviewModal
           schedule={previewSchedule}

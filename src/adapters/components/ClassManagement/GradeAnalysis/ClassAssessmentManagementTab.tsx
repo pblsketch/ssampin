@@ -396,7 +396,10 @@ export function ClassAssessmentManagementTab({
       const result = await parseGradeExcel(buffer);
       if (result.columns === null) {
         if (result.rawRows.length === 0) {
-          showToast('엑셀을 읽지 못했어요. .xlsx 파일인지 확인해주세요.', 'error');
+          showToast(
+            '엑셀을 읽지 못했어요. 나이스 파일이면 엑셀에서 연 뒤 .xlsx로 다시 저장해 가져와주세요.',
+            'error',
+          );
           return;
         }
         // 자동 인식 실패 → 수동 컬럼 매핑 모달

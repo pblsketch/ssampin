@@ -74,7 +74,7 @@ export function HomeroomGradeOverviewTab() {
     } catch {
       setImportMsg({
         kind: 'error',
-        text: '파일을 읽지 못했어요. 손상되지 않은 .xlsx 파일인지 확인해 주세요.',
+        text: '파일을 읽지 못했어요. 나이스에서 받은 파일이면 엑셀에서 연 뒤 [다른 이름으로 저장] → ‘Excel 통합 문서(.xlsx)’로 바꿔 다시 가져와 주세요.',
       });
     } finally {
       setImporting(false);

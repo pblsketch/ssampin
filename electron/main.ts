@@ -36,6 +36,7 @@ import { registerRealtimeWallPdfHandlers } from './ipc/realtimeWallPdf';
 import { registerMarkdownConvertHandlers } from './ipc/markdownConvert';
 import { registerSchoolinfoEvaluationHandlers } from './ipc/schoolinfoEvaluation';
 import { registerSchoolinfoDisclosureHandlers } from './ipc/schoolinfoDisclosure';
+import { registerComciganHandlers } from './ipc/comcigan';
 import { registerBoardHandlers, endActiveBoardSessionSync } from './ipc/board';
 import { registerMultiSurveyShareHandlers } from './ipc/multiSurveyShare';
 import { registerAiBridgeHandlers } from './ipc/aiBridge';
@@ -4641,6 +4642,7 @@ if (!gotTheLock) {
     registerMarkdownConvertHandlers(mainWindow);
     registerSchoolinfoEvaluationHandlers();
     registerSchoolinfoDisclosureHandlers();
+    registerComciganHandlers();
     registerBoardHandlers(mainWindow!);
     registerRealtimeWallBoardHandlers();
     registerAiBridgeHandlers();
