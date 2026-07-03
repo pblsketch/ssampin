@@ -4,6 +4,7 @@ import { useMobileHomeLayoutStore, type HomeCardId } from '@mobile/stores/useMob
 import { Toggle } from '@mobile/components/common/Toggle';
 import { PeriodTimesEditor } from '@mobile/components/Settings/PeriodTimesEditor';
 import { SyncStatus } from '@mobile/components/More/SyncStatus';
+import { MOBILE_APP_VERSION } from '@mobile/version';
 
 interface Props {
   onBack: () => void;
@@ -248,7 +249,7 @@ export function SettingsPage({ onBack }: Props) {
               <span className="material-symbols-outlined text-sp-muted text-icon-lg">info</span>
               <div className="flex-1">
                 <p className="text-sp-muted text-xs mb-0.5">버전</p>
-                <p className="text-sp-text text-sm font-medium">쌤핀 모바일 v2.2.7</p>
+                <p className="text-sp-text text-sm font-medium">쌤핀 모바일 {MOBILE_APP_VERSION}</p>
               </div>
             </div>
             <div className="py-3">

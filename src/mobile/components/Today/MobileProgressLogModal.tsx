@@ -3,6 +3,7 @@ import { useMobileProgressStore } from '@mobile/stores/useMobileProgressStore';
 import { useMobileTeachingClassStore } from '@mobile/stores/useMobileTeachingClassStore';
 import { useMobileSettingsStore } from '@mobile/stores/useMobileSettingsStore';
 import { useBottomSheet } from '@mobile/hooks/useBottomSheet';
+import { todayISO } from '@mobile/utils/date';
 import { isSubjectMatch } from '@domain/rules/matchingRules';
 import type { TeachingClass } from '@domain/entities/TeachingClass';
 import type { ProgressEntry, ProgressStatus } from '@domain/entities/CurriculumProgress';
@@ -35,11 +36,6 @@ interface Props {
    * 편집 모드 진입 시 prefill할 항목 (mode='edit'일 때 필수).
    */
   entryToEdit?: ProgressEntry;
-}
-
-function todayString(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 /**
@@ -95,7 +91,7 @@ export function MobileProgressLogModal({
   const [lesson, setLesson] = useState('');
   const [note, setNote] = useState('');
   const [period, setPeriod] = useState(defaultPeriod);
-  const [formDate, setFormDate] = useState<string>(todayString);
+  const [formDate, setFormDate] = useState<string>(todayISO);
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
 
@@ -127,7 +123,7 @@ export function MobileProgressLogModal({
     setLesson('');
     setNote('');
     setPeriod(defaultPeriod);
-    setFormDate(todayString());
+    setFormDate(todayISO());
     setSavedAt(null);
 
     // 학급 선택: defaultClassId 우선, 그다음 후보 첫 번째
@@ -183,8 +179,8 @@ export function MobileProgressLogModal({
         await updateEntry(updated);
       } else {
         // 미래 날짜로 추가하면 'planned'(예정), 그 외엔 'completed'(완료) 기본값
-        const targetDate = formDate || todayString();
-        const inferredStatus: ProgressStatus = targetDate > todayString() ? 'planned' : 'completed';
+        const targetDate = formDate || todayISO();
+        const inferredStatus: ProgressStatus = targetDate > todayISO() ? 'planned' : 'completed';
         await addEntry(
           selectedClassId,
           targetDate,

@@ -57,6 +57,25 @@ import { SegmentedControl } from './components/common/SegmentedControl';
 import { QuickAddFab, type QuickAddAction } from './components/QuickAddFab';
 import { useMobileUiTriggerStore } from './stores/useMobileUiTriggerStore';
 
+type MobileToolProps = { onBack: () => void; isFullscreen: boolean };
+
+/** 더보기 > 쌤도구 lazy 컴포넌트 레지스트리 — moreSub 키로 조회해 단일 지점에서 렌더한다.
+ *  9개 도구가 모두 동일 시그니처(onBack·isFullscreen)라 Suspense 래퍼 하나로 균일하게 렌더한다. */
+const MORE_LAZY_TOOLS: Record<
+  string,
+  React.LazyExoticComponent<React.ComponentType<MobileToolProps>>
+> = {
+  'tool-traffic-light': ToolTrafficLight,
+  'tool-dice': ToolDice,
+  'tool-coin': ToolCoin,
+  'tool-scoreboard': ToolScoreboard,
+  'tool-timer': ToolTimer,
+  'tool-work-symbols': ToolWorkSymbols,
+  'tool-random': ToolRandom,
+  'tool-roulette': ToolRoulette,
+  'tool-qrcode': ToolQRCode,
+};
+
 /** 쌤도구 동적 로딩 시 표시할 폴백 스피너 */
 function ToolLoadingFallback() {
   return (
@@ -326,6 +345,31 @@ export function App() {
           },
         ];
 
+  // 더보기 탭 콘텐츠 — moreSub 키에 따라 하위 페이지/도구를 렌더하는 단일 지점.
+  // 9개 쌤도구는 MORE_LAZY_TOOLS 레지스트리에서 조회해 Suspense 래퍼 하나로 균일 렌더한다.
+  const renderMoreSub = (): React.ReactNode => {
+    if (moreSub === 'settings') return <SettingsPage onBack={() => setMoreSub(null)} />;
+    if (moreSub === 'memo') return <MemoPage onBack={() => setMoreSub(null)} />;
+    if (moreSub === 'tools')
+      return (
+        <ToolsOverviewPage
+          onNavigate={(sub) => setMoreSub(sub as NonNullable<typeof moreSub>)}
+          onBack={() => setMoreSub(null)}
+        />
+      );
+    if (moreSub === 'tool-assignment')
+      return <ToolAssignmentPage onBack={() => setMoreSub('tools')} />;
+    if (moreSub === 'tool-survey') return <ToolSurveyPage onBack={() => setMoreSub('tools')} />;
+    const LazyTool = moreSub ? MORE_LAZY_TOOLS[moreSub] : undefined;
+    if (LazyTool)
+      return (
+        <Suspense fallback={<ToolLoadingFallback />}>
+          <LazyTool onBack={() => setMoreSub('tools')} isFullscreen={false} />
+        </Suspense>
+      );
+    return <MorePage onNavigate={(sub) => setMoreSub(sub as NonNullable<typeof moreSub>)} />;
+  };
+
   return (
     <div className="flex flex-col h-dvh mobile-bg">
       {/* 인앱 브라우저 경고 배너 */}
@@ -401,59 +445,7 @@ export function App() {
             </div>
           </div>
         )}
-        {activeTab === 'more' &&
-          (moreSub === 'settings' ? (
-            <SettingsPage onBack={() => setMoreSub(null)} />
-          ) : moreSub === 'memo' ? (
-            <MemoPage onBack={() => setMoreSub(null)} />
-          ) : moreSub === 'tools' ? (
-            <ToolsOverviewPage
-              onNavigate={(sub) => setMoreSub(sub as NonNullable<typeof moreSub>)}
-              onBack={() => setMoreSub(null)}
-            />
-          ) : moreSub === 'tool-assignment' ? (
-            <ToolAssignmentPage onBack={() => setMoreSub('tools')} />
-          ) : moreSub === 'tool-survey' ? (
-            <ToolSurveyPage onBack={() => setMoreSub('tools')} />
-          ) : moreSub === 'tool-traffic-light' ? (
-            <Suspense fallback={<ToolLoadingFallback />}>
-              <ToolTrafficLight onBack={() => setMoreSub('tools')} isFullscreen={false} />
-            </Suspense>
-          ) : moreSub === 'tool-dice' ? (
-            <Suspense fallback={<ToolLoadingFallback />}>
-              <ToolDice onBack={() => setMoreSub('tools')} isFullscreen={false} />
-            </Suspense>
-          ) : moreSub === 'tool-coin' ? (
-            <Suspense fallback={<ToolLoadingFallback />}>
-              <ToolCoin onBack={() => setMoreSub('tools')} isFullscreen={false} />
-            </Suspense>
-          ) : moreSub === 'tool-scoreboard' ? (
-            <Suspense fallback={<ToolLoadingFallback />}>
-              <ToolScoreboard onBack={() => setMoreSub('tools')} isFullscreen={false} />
-            </Suspense>
-          ) : moreSub === 'tool-timer' ? (
-            <Suspense fallback={<ToolLoadingFallback />}>
-              <ToolTimer onBack={() => setMoreSub('tools')} isFullscreen={false} />
-            </Suspense>
-          ) : moreSub === 'tool-work-symbols' ? (
-            <Suspense fallback={<ToolLoadingFallback />}>
-              <ToolWorkSymbols onBack={() => setMoreSub('tools')} isFullscreen={false} />
-            </Suspense>
-          ) : moreSub === 'tool-random' ? (
-            <Suspense fallback={<ToolLoadingFallback />}>
-              <ToolRandom onBack={() => setMoreSub('tools')} isFullscreen={false} />
-            </Suspense>
-          ) : moreSub === 'tool-roulette' ? (
-            <Suspense fallback={<ToolLoadingFallback />}>
-              <ToolRoulette onBack={() => setMoreSub('tools')} isFullscreen={false} />
-            </Suspense>
-          ) : moreSub === 'tool-qrcode' ? (
-            <Suspense fallback={<ToolLoadingFallback />}>
-              <ToolQRCode onBack={() => setMoreSub('tools')} isFullscreen={false} />
-            </Suspense>
-          ) : (
-            <MorePage onNavigate={(sub) => setMoreSub(sub as NonNullable<typeof moreSub>)} />
-          ))}
+        {activeTab === 'more' && renderMoreSub()}
       </main>
 
       {/* 설치 가이드 (PWA 미설치 시) */}

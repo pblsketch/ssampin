@@ -45,6 +45,12 @@ const ALLOWED_FILES: ReadonlySet<string> = new Set([
   'src/adapters/components/Homeroom/Records/InputMode.tsx',
   'src/adapters/components/ClassManagement/ClassRosterTab.tsx',
   'src/mobile/pages/StudentsPage.tsx',
+  // 2026-07-03 모바일 리팩토링 — StudentsPage 내부 뷰들을 파일로 순수 추출하면서
+  // 동일한 UI 표시 목적의 `.isVacant` 접근이 코드 무변경으로 함께 이사 (사유 3 승계)
+  'src/mobile/pages/students/HomeroomListView.tsx',
+  'src/mobile/pages/students/SeatingView.tsx',
+  'src/mobile/pages/students/TeachingListView.tsx',
+  'src/mobile/pages/students/TeachingSeatingView.tsx',
 
   // 4. 데이터 패스스루 (`isVacant: src.isVacant`) + 결번 라벨 표시
   'src/adapters/components/ClassManagement/ClassSurveyTab.tsx',

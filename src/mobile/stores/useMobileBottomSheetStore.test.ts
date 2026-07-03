@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { useBottomSheetStore } from './useBottomSheetStore';
+import { useBottomSheetStore } from './useMobileBottomSheetStore';
 
 describe('useBottomSheetStore', () => {
   beforeEach(() => {

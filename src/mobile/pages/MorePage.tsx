@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { SyncStatus } from '@mobile/components/More/SyncStatus';
 import { MobileShareModal } from '@mobile/components/Share/MobileShareModal';
+import { MOBILE_APP_VERSION } from '@mobile/version';
 
 interface Props {
   onNavigate: (page: string) => void;
@@ -104,7 +105,7 @@ export function MorePage({ onNavigate }: Props) {
 
         {/* 버전 */}
         <div className="flex items-center justify-center pt-2">
-          <p className="text-sp-muted text-xs">쌤핀 모바일 v2.2.7</p>
+          <p className="text-sp-muted text-xs">쌤핀 모바일 {MOBILE_APP_VERSION}</p>
         </div>
       </div>
 

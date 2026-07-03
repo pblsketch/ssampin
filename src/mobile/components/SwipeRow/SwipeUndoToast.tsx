@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useSwipeUndoStore } from './useSwipeUndoStore';
+import { useSwipeUndoStore } from '@mobile/stores/useMobileSwipeUndoStore';
 
 /**
  * 스와이프 빠른 기록 직후 화면 하단(탭바 위)에 5초간 떠 있는 "되돌리기" pill.

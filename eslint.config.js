@@ -68,6 +68,9 @@ export default tseslint.config(
       'src/adapters/components/common/CalendarPicker.tsx',
       'src/adapters/hooks/useFontApplier.ts',
       'src/mobile/pages/StudentsPage.tsx',
+      // 2026-07-03 모바일 리팩토링: StudentsPage 내부 AttendanceSubTab 을 파일로 분리하면서
+      // 기존 warn 위반(useMemo 'records' dep)이 코드 무변경으로 함께 이사함 — 래칫 지위 승계.
+      'src/mobile/pages/students/AttendanceSubTab.tsx',
       'src/student/StudentInlineComposer.tsx',
       'src/student/StudentSubmitForm.tsx',
       'src/widgets/items/Bookmarks.tsx',

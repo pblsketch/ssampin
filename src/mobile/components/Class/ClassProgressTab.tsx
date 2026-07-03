@@ -4,7 +4,11 @@ import { useMobileTeachingClassStore } from '@mobile/stores/useMobileTeachingCla
 import { useMobileScheduleStore } from '@mobile/stores/useMobileScheduleStore';
 import { useMobileSettingsStore } from '@mobile/stores/useMobileSettingsStore';
 import { MobileProgressLogModal } from '@mobile/components/Today/MobileProgressLogModal';
-import { useBottomSheet } from '@mobile/hooks/useBottomSheet';
+import { ActionSheet } from '@mobile/components/common/ActionSheet';
+import { ConfirmDialog } from '@mobile/components/common/ConfirmDialog';
+import { Spinner } from '@mobile/components/common/Spinner';
+import { EmptyState } from '@mobile/components/common/EmptyState';
+import { formatDateLabel } from '@mobile/utils/date';
 import { ClassProgressEntryItem } from './ClassProgressEntryItem';
 import { getMatchingPeriods, type DayTeacherSlot } from '@domain/rules/progressMatching';
 import { getDayOfWeek } from '@domain/rules/periodRules';
@@ -16,13 +20,6 @@ const STATUS_CYCLE: Record<ProgressStatus, ProgressStatus> = {
   completed: 'skipped',
   skipped: 'planned',
 };
-
-const DAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
-
-function formatDateLabel(dateStr: string): string {
-  const d = new Date(dateStr + 'T00:00:00');
-  return `${d.getMonth() + 1}월 ${d.getDate()}일 (${DAY_LABELS[d.getDay()]})`;
-}
 
 interface ClassProgressTabProps {
   classId: string;
@@ -143,13 +140,7 @@ export function ClassProgressTab({ classId, className }: ClassProgressTabProps) 
   };
 
   if (!loaded) {
-    return (
-      <div className="flex items-center justify-center h-32">
-        <span className="material-symbols-outlined text-sp-muted text-3xl animate-spin">
-          progress_activity
-        </span>
-      </div>
-    );
+    return <Spinner />;
   }
 
   return (
@@ -197,16 +188,12 @@ export function ClassProgressTab({ classId, className }: ClassProgressTabProps) 
       {/* 항목 그룹 리스트 */}
       <div className="flex-1 overflow-y-auto px-4 py-3">
         {classEntries.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-48 gap-3">
-            <span className="material-symbols-outlined text-sp-muted text-4xl">trending_up</span>
-            <p className="text-sp-muted text-sm">아직 진도 기록이 없습니다.</p>
-            <button
-              onClick={() => setModalState({ type: 'add' })}
-              className="px-4 py-2 rounded-xl bg-sp-accent text-sp-accent-fg text-sm font-medium active:scale-95 transition-transform"
-            >
-              첫 진도 기록
-            </button>
-          </div>
+          <EmptyState
+            icon="trending_up"
+            text="아직 진도 기록이 없습니다."
+            actionLabel="첫 진도 기록"
+            onAction={() => setModalState({ type: 'add' })}
+          />
         ) : (
           <div className="space-y-4">
             {grouped.map(({ date, items }) => {
@@ -273,106 +260,17 @@ export function ClassProgressTab({ classId, className }: ClassProgressTabProps) 
 
       {/* 삭제 확인 다이얼로그 */}
       {modalState.type === 'confirmDelete' && (
-        <ConfirmDeleteDialog
-          entry={modalState.entry}
+        <ConfirmDialog
+          title="진도 항목 삭제"
+          message={
+            <>
+              {modalState.entry.unit} ({modalState.entry.period}교시)을(를) 삭제하시겠어요?
+            </>
+          }
           onConfirm={() => void handleConfirmDelete(modalState.entry)}
           onCancel={() => setModalState({ type: 'closed' })}
         />
       )}
-    </div>
-  );
-}
-
-/* ──────────────────────── 보조 컴포넌트 ──────────────────────── */
-
-interface ActionSheetProps {
-  onEdit: () => void;
-  onDelete: () => void;
-  onClose: () => void;
-}
-
-function ActionSheet({ onEdit, onDelete, onClose }: ActionSheetProps) {
-  useBottomSheet();
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-sm"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-md bg-sp-card border-t border-sp-border rounded-t-2xl pb-[env(safe-area-inset-bottom)]"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="px-2 pt-2 flex justify-center">
-          <div className="w-12 h-1 bg-sp-border rounded-full" aria-hidden />
-        </div>
-        <button
-          onClick={onEdit}
-          className="w-full flex items-center gap-3 px-5 py-4 text-left text-sp-text active:bg-sp-surface"
-          style={{ minHeight: 52 }}
-        >
-          <span className="material-symbols-outlined text-sp-accent">edit</span>
-          <span className="text-sm font-medium">편집</span>
-        </button>
-        <button
-          onClick={onDelete}
-          className="w-full flex items-center gap-3 px-5 py-4 text-left text-red-400 active:bg-sp-surface"
-          style={{ minHeight: 52 }}
-        >
-          <span className="material-symbols-outlined">delete</span>
-          <span className="text-sm font-medium">삭제</span>
-        </button>
-        <div className="border-t border-sp-border">
-          <button
-            onClick={onClose}
-            className="w-full px-5 py-4 text-sp-muted text-sm font-medium"
-            style={{ minHeight: 52 }}
-          >
-            취소
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-interface ConfirmDeleteDialogProps {
-  entry: ProgressEntry;
-  onConfirm: () => void;
-  onCancel: () => void;
-}
-
-function ConfirmDeleteDialog({ entry, onConfirm, onCancel }: ConfirmDeleteDialogProps) {
-  useBottomSheet();
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-6"
-      onClick={onCancel}
-    >
-      <div
-        className="w-full max-w-sm bg-sp-card border border-sp-border rounded-2xl p-5"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h3 className="text-sp-text font-bold text-base mb-2">진도 항목 삭제</h3>
-        <p className="text-sp-muted text-sm mb-5">
-          {entry.unit} ({entry.period}교시)을(를) 삭제하시겠어요?
-        </p>
-        <div className="flex justify-end gap-2">
-          <button
-            onClick={onCancel}
-            className="px-4 py-2 text-sm text-sp-muted hover:text-sp-text rounded-lg"
-            style={{ minHeight: 44 }}
-          >
-            취소
-          </button>
-          <button
-            onClick={onConfirm}
-            className="px-4 py-2 text-sm text-white bg-sp-error hover:opacity-90 rounded-lg font-medium"
-            style={{ minHeight: 44 }}
-          >
-            삭제
-          </button>
-        </div>
-      </div>
     </div>
   );
 }

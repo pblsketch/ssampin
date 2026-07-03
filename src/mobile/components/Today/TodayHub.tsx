@@ -14,8 +14,7 @@ import { useMobileHomeLayoutStore } from '@mobile/stores/useMobileHomeLayoutStor
 import { isStudentActive } from '@domain/rules/studentActivity';
 import { CollapsibleCard } from '@mobile/components/common/CollapsibleCard';
 import { CurrentClassCard } from './CurrentClassCard';
-import { HomeroomAttendanceCard } from './HomeroomAttendanceCard';
-import { ClassAttendanceCard } from './ClassAttendanceCard';
+import { AttendanceSummaryCard } from './AttendanceSummaryCard';
 import { MealCard } from './MealCard';
 import { WeatherCard } from './WeatherCard';
 import { SyncStatusBanner } from './SyncStatusBanner';
@@ -141,8 +140,8 @@ export function TodayHub({ onNavigateAttendance }: Props) {
               iconClass="text-amber-500"
               className="h-full"
             >
-              <HomeroomAttendanceCard
-                todayRecord={homeroomRecord}
+              <AttendanceSummaryCard
+                record={homeroomRecord}
                 totalStudents={totalStudents}
                 onCheckAttendance={() =>
                   onNavigateAttendance({
@@ -166,8 +165,8 @@ export function TodayHub({ onNavigateAttendance }: Props) {
               iconClass="text-sp-accent"
               className="h-full"
             >
-              <ClassAttendanceCard
-                attendanceRecord={getTodayRecord(currentClass.classroom, periodInfo.currentPeriod)}
+              <AttendanceSummaryCard
+                record={getTodayRecord(currentClass.classroom, periodInfo.currentPeriod)}
                 onCheckAttendance={() =>
                   onNavigateAttendance({
                     classId: currentClass.classroom,

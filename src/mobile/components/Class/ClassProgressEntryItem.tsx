@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useLongPress } from '@mobile/hooks/useLongPress';
 import type { ProgressEntry, ProgressStatus } from '@domain/entities/CurriculumProgress';
 
 const STATUS_BADGE_TW: Record<ProgressStatus, string> = {
@@ -36,39 +36,22 @@ export function ClassProgressEntryItem({
   onLongPress,
   onActionMenu,
 }: ClassProgressEntryItemProps) {
-  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const longPressFiredRef = useRef(false);
-
-  const startLongPress = () => {
-    longPressFiredRef.current = false;
-    longPressTimer.current = setTimeout(() => {
-      longPressFiredRef.current = true;
-      // 햅틱 피드백 (지원 기기)
-      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-        navigator.vibrate(10);
-      }
-      onLongPress();
-    }, 500);
-  };
-
-  const cancelLongPress = () => {
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
-    }
-  };
+  // 500ms + 햅틱 피드백(지원 기기) — 기존 인라인 롱프레스 로직을 useLongPress 로 흡수.
+  const { start: startLongPress, cancel: cancelLongPress } = useLongPress(onLongPress, {
+    haptic: true,
+  });
 
   const borderClass =
     entry.status === 'completed'
       ? 'border-green-500/30 bg-green-500/5'
       : entry.status === 'skipped'
-      ? 'border-amber-500/30 bg-amber-500/5'
-      : 'border-sp-border bg-sp-card';
+        ? 'border-amber-500/30 bg-amber-500/5'
+        : 'border-sp-border bg-sp-card';
 
   return (
     <div
       className={`rounded-xl p-3 border ${borderClass} select-none`}
-      onTouchStart={startLongPress}
+      onTouchStart={() => startLongPress(undefined)}
       onTouchEnd={cancelLongPress}
       onTouchMove={cancelLongPress}
       onTouchCancel={cancelLongPress}

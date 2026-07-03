@@ -1,6 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useMobileMemoStore } from '@mobile/stores/useMobileMemoStore';
 import { useBottomSheet } from '@mobile/hooks/useBottomSheet';
+import { useLongPress } from '@mobile/hooks/useLongPress';
+import { Spinner } from '@mobile/components/common/Spinner';
+import { EmptyState } from '@mobile/components/common/EmptyState';
 import { generateUUID } from '@infrastructure/utils/uuid';
 import type { Memo } from '@domain/entities/Memo';
 import type { MemoColor } from '@domain/valueObjects/MemoColor';
@@ -214,7 +217,6 @@ export function MemoPage({ onBack = undefined }: Props) {
   const { memos, loaded, load, addMemo, updateMemo, deleteMemo } = useMobileMemoStore();
   const [showAdd, setShowAdd] = useState(false);
   const [editingMemo, setEditingMemo] = useState<Memo | null>(null);
-  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     void load();
@@ -246,18 +248,10 @@ export function MemoPage({ onBack = undefined }: Props) {
     void deleteMemo(id);
   };
 
-  const startLongPress = (memo: Memo) => {
-    longPressTimer.current = setTimeout(() => {
-      setEditingMemo(memo);
-    }, 500);
-  };
-
-  const cancelLongPress = () => {
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
-    }
-  };
+  // 500ms 롱프레스 → 편집 열기 (햅틱 없음, 기존 동작 유지).
+  const { start: startLongPress, cancel: cancelLongPress } = useLongPress<Memo>((memo) => {
+    setEditingMemo(memo);
+  });
 
   return (
     <div className="flex flex-col h-full">
@@ -280,22 +274,14 @@ export function MemoPage({ onBack = undefined }: Props) {
       {/* 메모 목록 */}
       <div className="flex-1 overflow-y-auto p-4">
         {!loaded ? (
-          <div className="flex items-center justify-center h-32">
-            <span className="material-symbols-outlined text-sp-muted text-3xl animate-spin">
-              progress_activity
-            </span>
-          </div>
+          <Spinner />
         ) : memos.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-48 gap-3">
-            <span className="material-symbols-outlined text-sp-muted text-4xl">sticky_note_2</span>
-            <p className="text-sp-muted text-sm">메모가 없습니다.</p>
-            <button
-              onClick={() => setShowAdd(true)}
-              className="px-4 py-2 rounded-xl bg-sp-accent text-sp-accent-fg text-sm font-medium active:scale-95 transition-transform"
-            >
-              첫 메모 작성
-            </button>
-          </div>
+          <EmptyState
+            icon="sticky_note_2"
+            text="메모가 없습니다."
+            actionLabel="첫 메모 작성"
+            onAction={() => setShowAdd(true)}
+          />
         ) : (
           <ul className="space-y-3">
             {[...memos]

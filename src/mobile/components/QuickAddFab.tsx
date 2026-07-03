@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useIsAnyBottomSheetOpen } from '@mobile/stores/useBottomSheetStore';
+import { useIsAnyBottomSheetOpen } from '@mobile/stores/useMobileBottomSheetStore';
 
 export interface QuickAddAction {
   key: string;

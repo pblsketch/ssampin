@@ -1,16 +1,9 @@
 import { useRef, useState, useEffect, useCallback } from 'react';
-import { useSwipeRowStore } from './useSwipeRowStore';
+import { haptic } from '@mobile/utils/haptic';
+import { useSwipeRowStore } from '@mobile/stores/useMobileSwipeRowStore';
 
 const THRESHOLD = 56; // px — 이 이상 끌면 액션 노출 고정
 const SCROLL_GUARD = 8; // 수직 이동이 이만큼 넘으면 스크롤로 간주해 스와이프 취소
-
-function haptic() {
-  try {
-    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate(10);
-  } catch {
-    /* ignore — iOS Safari 미지원 */
-  }
-}
 
 interface SwipeRowProps {
   rowId: string;

@@ -4,13 +4,9 @@ import type { ProgressEntry, ProgressStatus } from '@domain/entities/CurriculumP
 import { ManageCurriculumProgress } from '@usecases/classManagement/ManageCurriculumProgress';
 import { teachingClassRepository } from '@mobile/di/container';
 import { useMobileDriveSyncStore } from '@mobile/stores/useMobileDriveSyncStore';
+import { todayISO } from '@mobile/utils/date';
 
 const manageProgress = new ManageCurriculumProgress(teachingClassRepository);
-
-function todayString(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
 
 interface MobileProgressState {
   entries: readonly ProgressEntry[];
@@ -61,15 +57,15 @@ export const useMobileProgressStore = create<MobileProgressState>((set, get) => 
   },
 
   getEntriesByClass: (classId) => {
-    return get().entries
-      .filter((e) => e.classId === classId)
+    return get()
+      .entries.filter((e) => e.classId === classId)
       .sort((a, b) => b.date.localeCompare(a.date) || a.period - b.period);
   },
 
   getTodayEntries: (classId) => {
-    const today = todayString();
-    return get().entries
-      .filter((e) => e.classId === classId && e.date === today)
+    const today = todayISO();
+    return get()
+      .entries.filter((e) => e.classId === classId && e.date === today)
       .sort((a, b) => a.period - b.period);
   },
 

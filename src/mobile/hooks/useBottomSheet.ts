@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useBottomSheetStore } from '@mobile/stores/useBottomSheetStore';
+import { useBottomSheetStore } from '@mobile/stores/useMobileBottomSheetStore';
 
 /**
  * 바텀시트가 열린 동안 전역 카운터를 +1 한다.

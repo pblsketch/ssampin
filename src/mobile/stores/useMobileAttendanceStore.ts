@@ -3,6 +3,7 @@ import type { AttendanceRecord } from '@domain/entities/Attendance';
 import { ManageAttendance } from '@usecases/classManagement/ManageAttendance';
 import { teachingClassRepository } from '@mobile/di/container';
 import { useMobileDriveSyncStore } from '@mobile/stores/useMobileDriveSyncStore';
+import { todayISO } from '@mobile/utils/date';
 
 const manageAttendance = new ManageAttendance(teachingClassRepository);
 
@@ -13,14 +14,6 @@ interface MobileAttendanceState {
   reload: () => Promise<void>;
   getTodayRecord: (classId: string, period?: number) => AttendanceRecord | null;
   saveRecord: (record: AttendanceRecord) => Promise<void>;
-}
-
-function todayString(): string {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
 }
 
 export const useMobileAttendanceStore = create<MobileAttendanceState>((set, get) => ({
@@ -43,10 +36,15 @@ export const useMobileAttendanceStore = create<MobileAttendanceState>((set, get)
   },
 
   getTodayRecord: (classId, period) => {
-    const today = todayString();
-    return get().records.find(
-      (r) => r.date === today && r.classId === classId && (period === undefined || r.period === period),
-    ) ?? null;
+    const today = todayISO();
+    return (
+      get().records.find(
+        (r) =>
+          r.date === today &&
+          r.classId === classId &&
+          (period === undefined || r.period === period),
+      ) ?? null
+    );
   },
 
   saveRecord: async (record) => {
