@@ -18,6 +18,7 @@ import { ToolsOverviewPage } from './pages/ToolsOverviewPage';
 import { ToolAssignmentPage } from './pages/ToolAssignmentPage';
 import { ToolSurveyPage } from './pages/ToolSurveyPage';
 import { ToolGroupingPage } from './pages/ToolGroupingPage';
+import { ToolRubricPage } from './pages/ToolRubricPage';
 // 쌤도구 PC 컴포넌트 — 동적 import (코드 스플리팅)
 const ToolTrafficLight = React.lazy(() =>
   import('@adapters/components/Tools/ToolTrafficLight').then((m) => ({
@@ -374,6 +375,7 @@ export function App() {
       return <ToolAssignmentPage onBack={() => setMoreSub('tools')} />;
     if (moreSub === 'tool-survey') return <ToolSurveyPage onBack={() => setMoreSub('tools')} />;
     if (moreSub === 'tool-grouping') return <ToolGroupingPage onBack={() => setMoreSub('tools')} />;
+    if (moreSub === 'tool-rubric') return <ToolRubricPage onBack={() => setMoreSub('tools')} />;
     const LazyTool = moreSub ? MORE_LAZY_TOOLS[moreSub] : undefined;
     if (LazyTool)
       return (

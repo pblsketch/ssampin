@@ -21,6 +21,7 @@ import type { IGoogleAuthPort } from '@domain/ports/IGoogleAuthPort';
 import type { IDriveSyncPort } from '@domain/ports/IDriveSyncPort';
 import type { IDriveSyncRepository } from '@domain/repositories/IDriveSyncRepository';
 import type { IObservationRepository } from '@domain/repositories/IObservationRepository';
+import type { IRubricRepository } from '@domain/repositories/IRubricRepository';
 
 import { IndexedDBStorageAdapter } from '@infrastructure/storage/IndexedDBStorageAdapter';
 import { NeisApiClient } from '@infrastructure/neis/NeisApiClient';
@@ -42,6 +43,7 @@ import { JsonBookmarkRepository } from '@adapters/repositories/JsonBookmarkRepos
 import { JsonDDayRepository } from '@adapters/repositories/JsonDDayRepository';
 import { JsonDriveSyncRepository } from '@adapters/repositories/JsonDriveSyncRepository';
 import { JsonObservationRepository } from '@adapters/repositories/JsonObservationRepository';
+import { JsonRubricRepository } from '@adapters/repositories/JsonRubricRepository';
 import { AssignmentSupabaseClient } from '@infrastructure/supabase/AssignmentSupabaseClient';
 import { SurveySupabaseClient } from '@infrastructure/supabase/SurveySupabaseClient';
 
@@ -69,6 +71,7 @@ export const bookmarkRepository: IBookmarkRepository = new JsonBookmarkRepositor
 export const ddayRepository: IDDayRepository = new JsonDDayRepository(storage);
 export const driveSyncRepository: IDriveSyncRepository = new JsonDriveSyncRepository(storage);
 export const observationRepository: IObservationRepository = new JsonObservationRepository(storage);
+export const rubricRepository: IRubricRepository = new JsonRubricRepository(storage);
 
 // === Supabase Clients (과제/설문 실시간 조회용) ===
 export const assignmentSupabaseClient = new AssignmentSupabaseClient();

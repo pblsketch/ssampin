@@ -25,6 +25,7 @@ const SHEETS_TO_REGISTER: ReadonlyArray<readonly [filePath: string, sheetLabel: 
   ['src/mobile/pages/todo/AddTodoModal.tsx', 'AddTodoModal'],
   ['src/mobile/pages/MemoPage.tsx', 'AddModal / EditModal'],
   ['src/mobile/pages/AttendanceCheckPage.tsx', 'periodMenu'],
+  ['src/mobile/pages/ToolRubricPage.tsx', 'GradingSheet (수행평가 채점)'],
 ];
 
 describe('bottom-sheet coverage (meta)', () => {

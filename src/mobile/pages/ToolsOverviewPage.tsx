@@ -8,6 +8,8 @@ const CLASSROOM_TOOLS = [
   { id: 'tool-random', emoji: '🎲', name: '랜덤뽑기', desc: '누가 발표할까?' },
   { id: 'tool-roulette', emoji: '🎯', name: '룰렛', desc: '돌려돌려 돌림판' },
   { id: 'tool-qrcode', emoji: '🔗', name: 'QR코드', desc: 'URL을 QR로 변환' },
+  { id: 'tool-grouping', emoji: '👥', name: '모둠 편성기', desc: '조건별 모둠 구성' },
+  { id: 'tool-score-allocator', emoji: '🧮', name: '배점 계산기', desc: '지필 문항 배점 설계' },
 ];
 
 interface Props {
@@ -28,7 +30,9 @@ export function ToolsOverviewPage({ onNavigate, onBack }: Props) {
       <div className="flex-1 overflow-auto p-4 space-y-5">
         {/* 교실 도구 섹션 */}
         <div>
-          <p className="text-xs font-semibold text-sp-muted uppercase tracking-wider mb-3">🏫 교실 도구</p>
+          <p className="text-xs font-semibold text-sp-muted uppercase tracking-wider mb-3">
+            🏫 교실 도구
+          </p>
           <div className="grid grid-cols-2 gap-3">
             {CLASSROOM_TOOLS.map((tool) => (
               <button
@@ -46,7 +50,9 @@ export function ToolsOverviewPage({ onNavigate, onBack }: Props) {
 
         {/* 관리 도구 섹션 */}
         <div>
-          <p className="text-xs font-semibold text-sp-muted uppercase tracking-wider mb-3">📋 관리 도구</p>
+          <p className="text-xs font-semibold text-sp-muted uppercase tracking-wider mb-3">
+            📋 관리 도구
+          </p>
           <div className="space-y-3">
             {/* 과제 수합 */}
             <button
@@ -61,7 +67,9 @@ export function ToolsOverviewPage({ onNavigate, onBack }: Props) {
                   <p className="text-sm font-bold text-sp-text">과제 수합</p>
                   <p className="text-xs text-sp-muted mt-0.5">학생 과제 제출 현황 확인</p>
                 </div>
-                <span className="material-symbols-outlined text-sp-muted text-lg shrink-0">chevron_right</span>
+                <span className="material-symbols-outlined text-sp-muted text-lg shrink-0">
+                  chevron_right
+                </span>
               </div>
             </button>
 
@@ -78,7 +86,28 @@ export function ToolsOverviewPage({ onNavigate, onBack }: Props) {
                   <p className="text-sm font-bold text-sp-text">설문/체크리스트</p>
                   <p className="text-xs text-sp-muted mt-0.5">설문 응답 현황 확인</p>
                 </div>
-                <span className="material-symbols-outlined text-sp-muted text-lg shrink-0">chevron_right</span>
+                <span className="material-symbols-outlined text-sp-muted text-lg shrink-0">
+                  chevron_right
+                </span>
+              </div>
+            </button>
+
+            {/* 수행평가 채점 */}
+            <button
+              onClick={() => onNavigate('tool-rubric')}
+              className="w-full rounded-xl glass-card p-4 text-left active:scale-[0.98] transition-transform"
+            >
+              <div className="flex items-center gap-3">
+                <div className="flex items-center justify-center w-11 h-11 rounded-xl bg-emerald-500/15 shrink-0">
+                  <span className="material-symbols-outlined text-emerald-400">grading</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold text-sp-text">수행평가 채점</p>
+                  <p className="text-xs text-sp-muted mt-0.5">평가지 점수 입력</p>
+                </div>
+                <span className="material-symbols-outlined text-sp-muted text-lg shrink-0">
+                  chevron_right
+                </span>
               </div>
             </button>
           </div>
