@@ -6,6 +6,7 @@ import { useMobileUiTriggerStore } from '@mobile/stores/useMobileUiTriggerStore'
 import { filterActive, filterArchived } from '@domain/rules/todoRules';
 import { AddTodoModal } from './todo/AddTodoModal';
 import { TodoItem } from './todo/TodoItem';
+import { EmptyState } from '@mobile/components/common/EmptyState';
 import type { Todo } from '@domain/entities/Todo';
 
 type TodoView = 'active' | 'archive';
@@ -108,9 +109,12 @@ export function TodoPage() {
           </div>
         ) : view === 'active' ? (
           sorted.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full gap-2 px-6 text-center">
-              <p className="text-sp-muted text-sm">할 일이 없습니다.</p>
-              <p className="text-sp-muted opacity-60 text-xs">[+] 버튼으로 추가하세요.</p>
+            <div className="flex h-full items-center justify-center">
+              <EmptyState
+                mascot
+                text="아직 할 일이 없어요"
+                hint="오른쪽 아래 + 버튼으로 첫 할 일을 추가해 보세요."
+              />
             </div>
           ) : (
             <ul>
@@ -126,12 +130,12 @@ export function TodoPage() {
             </ul>
           )
         ) : archivedSorted.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full gap-2 px-6 text-center">
-            <span className="material-symbols-outlined text-sp-muted text-3xl">inventory_2</span>
-            <p className="text-sp-muted text-sm">보관된 할 일이 없습니다.</p>
-            <p className="text-sp-muted opacity-60 text-xs">
-              완료한 할 일을 [완료 N개 보관]으로 정리하세요.
-            </p>
+          <div className="flex h-full items-center justify-center">
+            <EmptyState
+              icon="inventory_2"
+              text="보관된 할 일이 없어요"
+              hint="완료한 할 일을 ‘완료 N개 보관’으로 정리하세요."
+            />
           </div>
         ) : (
           <ul>
@@ -162,7 +166,7 @@ export function TodoPage() {
                 {/* 영구 삭제 */}
                 <button
                   onClick={() => handleDelete(todo.id)}
-                  className="shrink-0 flex items-center justify-center text-sp-muted hover:text-red-400 transition-colors"
+                  className="shrink-0 flex items-center justify-center text-sp-muted hover:text-sp-error transition-colors"
                   style={{ minWidth: 44, minHeight: 44 }}
                   aria-label="영구 삭제"
                 >

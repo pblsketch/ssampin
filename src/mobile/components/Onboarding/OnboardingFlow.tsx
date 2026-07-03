@@ -9,7 +9,9 @@ interface Props {
 }
 
 interface SlideData {
-  icon: string;
+  /** true 면 쌤핀이 마스코트, 아니면 icon(Material Symbol) 표시. */
+  mascot?: boolean;
+  icon?: string;
   title: string;
   description: string;
   features?: string[];
@@ -17,18 +19,18 @@ interface SlideData {
 
 const slides: SlideData[] = [
   {
-    icon: '👋',
+    mascot: true,
     title: '쌤핀 모바일에\n오신 걸 환영해요',
     description: '교무실 PC의 데이터를\n교실에서도 확인하세요',
   },
   {
-    icon: '📋',
+    icon: 'checklist',
     title: '시간표·출결·메모를\n한눈에',
     description: '오늘 필요한 정보를 빠르게 확인하고\n출결 체크도 바로 할 수 있어요',
     features: ['오늘 시간표', '담임/수업 출결 체크', '메모·할 일', '급식·날씨'],
   },
   {
-    icon: '🔄',
+    icon: 'cloud_sync',
     title: 'Google Drive로\n자동 동기화',
     description: 'PC에서 입력한 데이터가\n모바일에 자동으로 반영돼요',
     features: ['Google 계정 로그인', 'PC ↔ 모바일 동기화', '오프라인에서도 사용 가능'],
@@ -134,7 +136,18 @@ export function OnboardingFlow({ onComplete, onLogin }: Props) {
     if (!slide) return null;
     return wrap(
       <div className="flex flex-col items-center justify-center min-h-full text-center pb-4">
-        <div className="text-6xl mb-6">{slide.icon}</div>
+        {slide.mascot ? (
+          <img
+            src="/floating-pin.png"
+            alt=""
+            aria-hidden
+            className="mb-6 h-28 w-28 select-none sp-float"
+          />
+        ) : (
+          <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-3xl bg-black/5 dark:bg-white/10">
+            <span className="material-symbols-outlined text-5xl text-sp-accent">{slide.icon}</span>
+          </div>
+        )}
         <h1 className="text-2xl font-bold text-sp-text whitespace-pre-line leading-tight">
           {slide.title}
         </h1>
@@ -143,7 +156,9 @@ export function OnboardingFlow({ onComplete, onLogin }: Props) {
           <div className="mt-6 space-y-2">
             {slide.features.map((f) => (
               <div key={f} className="flex items-center gap-2 text-sm text-sp-text">
-                <span className="text-blue-500">✓</span>
+                <span className="material-symbols-outlined text-icon-md text-sp-accent">
+                  check_circle
+                </span>
                 <span>{f}</span>
               </div>
             ))}
@@ -164,7 +179,9 @@ export function OnboardingFlow({ onComplete, onLogin }: Props) {
     return wrap(
       <div className="max-w-md mx-auto">
         <div className="text-center mb-6">
-          <div className="text-5xl mb-3">🏫</div>
+          <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-2xl bg-black/5 dark:bg-white/10">
+            <span className="material-symbols-outlined text-4xl text-sp-accent">school</span>
+          </div>
           <h1 className="text-xl font-bold text-sp-text">학교 정보</h1>
           <p className="text-sp-muted mt-1 text-sm">
             나중에 설정에서 바꿀 수 있어요. 비워두고 넘어가도 됩니다.
@@ -252,7 +269,9 @@ export function OnboardingFlow({ onComplete, onLogin }: Props) {
     return wrap(
       <div className="max-w-md mx-auto">
         <div className="text-center mb-6">
-          <div className="text-5xl mb-3">⏰</div>
+          <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-2xl bg-black/5 dark:bg-white/10">
+            <span className="material-symbols-outlined text-4xl text-sp-accent">schedule</span>
+          </div>
           <h1 className="text-xl font-bold text-sp-text">교시 시간</h1>
           <p className="text-sp-muted mt-1 text-sm">
             수업 시작·끝 시각. 기본값을 쓰거나 직접 설정하세요. 설정에서 언제든 바꿀 수 있어요.
@@ -302,7 +321,12 @@ export function OnboardingFlow({ onComplete, onLogin }: Props) {
   // ── 로그인 (5) ──
   return wrap(
     <div className="flex flex-col items-center justify-center min-h-full text-center pb-4">
-      <div className="text-6xl mb-6">🔄</div>
+      <img
+        src="/floating-pin.png"
+        alt=""
+        aria-hidden
+        className="mb-6 h-28 w-28 select-none sp-float"
+      />
       <h1 className="text-2xl font-bold text-sp-text whitespace-pre-line leading-tight">
         {'Google 계정으로\n동기화할까요?'}
       </h1>
@@ -311,11 +335,16 @@ export function OnboardingFlow({ onComplete, onLogin }: Props) {
           'PC에서 입력한 데이터를 모바일에서 보려면\nGoogle 계정으로 로그인하세요.\n나중에 설정에서도 연결할 수 있어요.'
         }
       </p>
-      <div className="mt-5 rounded-xl bg-sp-accent/10 px-4 py-3 text-left">
-        <p className="text-xs leading-relaxed text-sp-text">
-          💡 <span className="font-semibold">PC를 먼저 설정하세요.</span> 교무실 PC에서 데이터를
-          입력하고 동기화를 켠 뒤 휴대폰에서 같은 Google 계정으로 로그인하면, PC 데이터를 그대로
-          받아와요.
+      <div className="mt-5 rounded-xl bg-black/5 px-4 py-3 text-left dark:bg-white/10">
+        <p className="flex items-start gap-1.5 text-xs leading-relaxed text-sp-text">
+          <span className="material-symbols-outlined text-icon-sm shrink-0 text-sp-highlight">
+            lightbulb
+          </span>
+          <span>
+            <span className="font-semibold">PC를 먼저 설정하세요.</span> 교무실 PC에서 데이터를
+            입력하고 동기화를 켠 뒤 휴대폰에서 같은 Google 계정으로 로그인하면, PC 데이터를 그대로
+            받아와요.
+          </span>
         </p>
       </div>
     </div>,

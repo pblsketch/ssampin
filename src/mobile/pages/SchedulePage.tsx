@@ -5,6 +5,7 @@ import { useMobileSettingsStore } from '@mobile/stores/useMobileSettingsStore';
 import { useMobileUiTriggerStore } from '@mobile/stores/useMobileUiTriggerStore';
 import { useBottomSheet } from '@mobile/hooks/useBottomSheet';
 import { Toggle } from '@mobile/components/common/Toggle';
+import { EmptyState } from '@mobile/components/common/EmptyState';
 import type { SchoolEvent, CategoryItem } from '@domain/entities/SchoolEvent';
 import {
   format,
@@ -303,9 +304,11 @@ export function SchedulePage() {
         </div>
 
         {displayedEvents.length === 0 ? (
-          <div className="flex items-center justify-center py-12">
-            <p className="text-sp-muted text-sm">일정이 없습니다.</p>
-          </div>
+          <EmptyState
+            icon="event_available"
+            text="표시할 일정이 없어요"
+            hint="+ 버튼으로 일정을 추가할 수 있어요."
+          />
         ) : (
           <ul className="divide-y divide-sp-border">
             {displayedEvents.map((ev) => {

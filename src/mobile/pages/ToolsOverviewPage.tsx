@@ -1,16 +1,38 @@
 const CLASSROOM_TOOLS = [
-  { id: 'tool-traffic-light', emoji: '🚦', name: '신호등', desc: '활동 시작과 멈춤' },
-  { id: 'tool-dice', emoji: '🎲', name: '주사위', desc: '운에 맡겨볼까?' },
-  { id: 'tool-coin', emoji: '🪙', name: '동전', desc: '앞? 뒤?' },
-  { id: 'tool-scoreboard', emoji: '📊', name: '점수판', desc: '팀별 점수 관리' },
-  { id: 'tool-timer', emoji: '⏱️', name: '타이머', desc: '시간 제한 활동에 딱!' },
-  { id: 'tool-work-symbols', emoji: '🤫', name: '활동 기호', desc: '수업 모드를 한눈에' },
-  { id: 'tool-random', emoji: '🎲', name: '랜덤뽑기', desc: '누가 발표할까?' },
-  { id: 'tool-roulette', emoji: '🎯', name: '룰렛', desc: '돌려돌려 돌림판' },
-  { id: 'tool-qrcode', emoji: '🔗', name: 'QR코드', desc: 'URL을 QR로 변환' },
-  { id: 'tool-grouping', emoji: '👥', name: '모둠 편성기', desc: '조건별 모둠 구성' },
-  { id: 'tool-score-allocator', emoji: '🧮', name: '배점 계산기', desc: '지필 문항 배점 설계' },
+  { id: 'tool-traffic-light', icon: 'traffic', name: '신호등', desc: '활동 시작과 멈춤' },
+  { id: 'tool-dice', icon: 'casino', name: '주사위', desc: '운에 맡겨볼까?' },
+  { id: 'tool-coin', icon: 'paid', name: '동전', desc: '앞? 뒤?' },
+  { id: 'tool-scoreboard', icon: 'scoreboard', name: '점수판', desc: '팀별 점수 관리' },
+  { id: 'tool-timer', icon: 'timer', name: '타이머', desc: '시간 제한 활동에 딱!' },
+  { id: 'tool-work-symbols', icon: 'front_hand', name: '활동 기호', desc: '수업 모드를 한눈에' },
+  { id: 'tool-random', icon: 'shuffle', name: '랜덤뽑기', desc: '누가 발표할까?' },
+  { id: 'tool-roulette', icon: 'donut_large', name: '룰렛', desc: '돌려돌려 돌림판' },
+  { id: 'tool-qrcode', icon: 'qr_code_2', name: 'QR코드', desc: 'URL을 QR로 변환' },
+  { id: 'tool-grouping', icon: 'groups', name: '모둠 편성기', desc: '조건별 모둠 구성' },
+  {
+    id: 'tool-score-allocator',
+    icon: 'calculate',
+    name: '배점 계산기',
+    desc: '지필 문항 배점 설계',
+  },
 ];
+
+// 관리 도구 — 도구별 Material Symbol. 칩 배경/아이콘 색은 교실 도구와 동일한 중립 토큰 계열로 통일.
+const MANAGEMENT_TOOLS = [
+  {
+    id: 'tool-assignment',
+    icon: 'assignment',
+    name: '과제 수합',
+    desc: '학생 과제 제출 현황 확인',
+  },
+  { id: 'tool-survey', icon: 'poll', name: '설문/체크리스트', desc: '설문 응답 현황 확인' },
+  { id: 'tool-rubric', icon: 'grading', name: '수행평가 채점', desc: '평가지 점수 입력' },
+];
+
+// 아이콘 칩 — 앱 전역(설치 배너·온보딩 메달리온)과 동일한 중립 틴트.
+// sp 토큰 알파 수식(bg-sp-accent/NN)은 클래스가 생성되지 않아 무효이므로 black/white 알파를 쓴다.
+const CHIP_CLASS =
+  'flex items-center justify-center rounded-xl bg-black/5 text-sp-accent dark:bg-white/10';
 
 interface Props {
   onNavigate: (sub: string) => void;
@@ -21,7 +43,11 @@ export function ToolsOverviewPage({ onNavigate, onBack }: Props) {
   return (
     <div className="flex flex-col h-full">
       <header className="flex items-center gap-3 px-4 py-3 border-b border-sp-border/30">
-        <button onClick={onBack} className="text-sp-muted active:scale-95 transition-transform">
+        <button
+          onClick={onBack}
+          aria-label="뒤로"
+          className="flex h-11 w-11 shrink-0 items-center justify-center -ml-2 text-sp-muted active:scale-95 transition-transform"
+        >
           <span className="material-symbols-outlined">arrow_back</span>
         </button>
         <h2 className="text-base font-bold text-sp-text">쌤도구</h2>
@@ -31,7 +57,7 @@ export function ToolsOverviewPage({ onNavigate, onBack }: Props) {
         {/* 교실 도구 섹션 */}
         <div>
           <p className="text-xs font-semibold text-sp-muted uppercase tracking-wider mb-3">
-            🏫 교실 도구
+            교실 도구
           </p>
           <div className="grid grid-cols-2 gap-3">
             {CLASSROOM_TOOLS.map((tool) => (
@@ -40,7 +66,9 @@ export function ToolsOverviewPage({ onNavigate, onBack }: Props) {
                 onClick={() => onNavigate(tool.id)}
                 className="rounded-xl glass-card p-4 text-left active:scale-[0.97] transition-transform"
               >
-                <div className="text-2xl mb-2">{tool.emoji}</div>
+                <div className={`${CHIP_CLASS} mb-2 h-11 w-11`}>
+                  <span className="material-symbols-outlined text-icon-xl">{tool.icon}</span>
+                </div>
                 <p className="text-sm font-bold text-sp-text">{tool.name}</p>
                 <p className="text-xs text-sp-muted mt-0.5 leading-snug">{tool.desc}</p>
               </button>
@@ -51,65 +79,29 @@ export function ToolsOverviewPage({ onNavigate, onBack }: Props) {
         {/* 관리 도구 섹션 */}
         <div>
           <p className="text-xs font-semibold text-sp-muted uppercase tracking-wider mb-3">
-            📋 관리 도구
+            관리 도구
           </p>
           <div className="space-y-3">
-            {/* 과제 수합 */}
-            <button
-              onClick={() => onNavigate('tool-assignment')}
-              className="w-full rounded-xl glass-card p-4 text-left active:scale-[0.98] transition-transform"
-            >
-              <div className="flex items-center gap-3">
-                <div className="flex items-center justify-center w-11 h-11 rounded-xl bg-blue-500/15 shrink-0">
-                  <span className="material-symbols-outlined text-blue-400">assignment</span>
+            {MANAGEMENT_TOOLS.map((tool) => (
+              <button
+                key={tool.id}
+                onClick={() => onNavigate(tool.id)}
+                className="w-full rounded-xl glass-card p-4 text-left active:scale-[0.98] transition-transform"
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`${CHIP_CLASS} h-11 w-11 shrink-0`}>
+                    <span className="material-symbols-outlined">{tool.icon}</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-sp-text">{tool.name}</p>
+                    <p className="text-xs text-sp-muted mt-0.5">{tool.desc}</p>
+                  </div>
+                  <span className="material-symbols-outlined text-sp-muted text-lg shrink-0">
+                    chevron_right
+                  </span>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold text-sp-text">과제 수합</p>
-                  <p className="text-xs text-sp-muted mt-0.5">학생 과제 제출 현황 확인</p>
-                </div>
-                <span className="material-symbols-outlined text-sp-muted text-lg shrink-0">
-                  chevron_right
-                </span>
-              </div>
-            </button>
-
-            {/* 설문/체크리스트 */}
-            <button
-              onClick={() => onNavigate('tool-survey')}
-              className="w-full rounded-xl glass-card p-4 text-left active:scale-[0.98] transition-transform"
-            >
-              <div className="flex items-center gap-3">
-                <div className="flex items-center justify-center w-11 h-11 rounded-xl bg-purple-500/15 shrink-0">
-                  <span className="material-symbols-outlined text-purple-400">poll</span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold text-sp-text">설문/체크리스트</p>
-                  <p className="text-xs text-sp-muted mt-0.5">설문 응답 현황 확인</p>
-                </div>
-                <span className="material-symbols-outlined text-sp-muted text-lg shrink-0">
-                  chevron_right
-                </span>
-              </div>
-            </button>
-
-            {/* 수행평가 채점 */}
-            <button
-              onClick={() => onNavigate('tool-rubric')}
-              className="w-full rounded-xl glass-card p-4 text-left active:scale-[0.98] transition-transform"
-            >
-              <div className="flex items-center gap-3">
-                <div className="flex items-center justify-center w-11 h-11 rounded-xl bg-emerald-500/15 shrink-0">
-                  <span className="material-symbols-outlined text-emerald-400">grading</span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold text-sp-text">수행평가 채점</p>
-                  <p className="text-xs text-sp-muted mt-0.5">평가지 점수 입력</p>
-                </div>
-                <span className="material-symbols-outlined text-sp-muted text-lg shrink-0">
-                  chevron_right
-                </span>
-              </div>
-            </button>
+              </button>
+            ))}
           </div>
         </div>
       </div>

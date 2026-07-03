@@ -3,6 +3,7 @@ import type { SeatingData } from '@domain/entities/Seating';
 import type { AttendanceStatus } from '@domain/entities/Attendance';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useMobileSettingsStore } from '@mobile/stores/useMobileSettingsStore';
+import { EmptyState } from '@mobile/components/common/EmptyState';
 
 // ============================================================
 // 담임반 좌석 뷰
@@ -57,8 +58,12 @@ export function SeatingView({
 
   if (!seatingData) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <p className="text-sp-muted text-sm">좌석 배치 정보가 없습니다.</p>
+      <div className="flex h-full items-center justify-center">
+        <EmptyState
+          mascot
+          text="아직 좌석 배치가 없어요"
+          hint="PC 앱에서 자리 배치를 만들면 여기에 표시돼요."
+        />
       </div>
     );
   }

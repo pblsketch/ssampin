@@ -81,9 +81,14 @@ export function SyncStatus() {
           <p className="text-sp-muted text-sm">
             PC에서 입력한 데이터를 보려면 Google 계정으로 로그인하세요.
           </p>
-          <p className="text-sp-muted text-xs leading-relaxed">
-            💡 PC에서 먼저 데이터를 입력·동기화한 뒤 휴대폰에서 같은 계정으로 로그인하면 PC 데이터를
-            그대로 받아와요.
+          <p className="flex items-start gap-1.5 text-sp-muted text-xs leading-relaxed">
+            <span className="material-symbols-outlined text-icon-sm shrink-0 text-sp-highlight">
+              lightbulb
+            </span>
+            <span>
+              PC에서 먼저 데이터를 입력·동기화한 뒤 휴대폰에서 같은 계정으로 로그인하면 PC 데이터를
+              그대로 받아와요.
+            </span>
           </p>
           <button
             onClick={() => void startLogin()}

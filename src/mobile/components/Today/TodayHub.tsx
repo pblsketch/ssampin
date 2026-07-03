@@ -113,7 +113,7 @@ export function TodayHub({ onNavigateAttendance }: Props) {
       {/* 날짜 헤더 */}
       <div className="px-4 flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-bold text-sp-text">{dateStr}</h2>
+          <h2 className="text-2xl font-bold tracking-tight text-sp-text">{dateStr}</h2>
           {settings.schoolName && (
             <p className="text-xs text-sp-muted mt-0.5">
               {settings.schoolName} &middot; {settings.teacherName}

@@ -65,8 +65,11 @@ export function TodoItem({ todo, onToggle, onDelete, onToggleSubTask }: TodoItem
           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
             {/* 우선순위 배지 (none 제외) */}
             {priority !== 'none' && (
-              <span className={`text-xs ${priorityCfg.color}`}>
-                {priorityCfg.emoji} {priorityCfg.label}
+              <span className={`inline-flex items-center gap-0.5 text-xs ${priorityCfg.color}`}>
+                {priorityCfg.icon && (
+                  <span className="material-symbols-outlined text-icon-sm">{priorityCfg.icon}</span>
+                )}
+                {priorityCfg.label}
               </span>
             )}
             {/* D-Day 배지 */}
@@ -99,7 +102,7 @@ export function TodoItem({ todo, onToggle, onDelete, onToggleSubTask }: TodoItem
         {/* 삭제 버튼 */}
         <button
           onClick={() => onDelete(todo.id)}
-          className="shrink-0 flex items-center justify-center text-sp-muted hover:text-red-400 transition-colors"
+          className="shrink-0 flex items-center justify-center text-sp-muted hover:text-sp-error transition-colors"
           style={{ minWidth: 44, minHeight: 44 }}
           aria-label="삭제"
         >

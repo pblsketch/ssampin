@@ -1,15 +1,13 @@
 import { todayISO } from '@mobile/utils/date';
 import type { TodoPriority } from '@domain/entities/Todo';
 
-export const PRIORITY_CONFIG: Record<
-  TodoPriority,
-  { label: string; emoji: string; color: string }
-> = {
-  high: { label: '긴급', emoji: '🔴', color: 'text-red-400' },
-  medium: { label: '보통', emoji: '🟡', color: 'text-yellow-400' },
-  low: { label: '낮음', emoji: '🟢', color: 'text-green-400' },
-  none: { label: '없음', emoji: '', color: 'text-sp-muted' },
-};
+export const PRIORITY_CONFIG: Record<TodoPriority, { label: string; icon: string; color: string }> =
+  {
+    high: { label: '긴급', icon: 'flag', color: 'text-sp-error' },
+    medium: { label: '보통', icon: 'flag', color: 'text-sp-warning' },
+    low: { label: '낮음', icon: 'flag', color: 'text-sp-success' },
+    none: { label: '없음', icon: '', color: 'text-sp-muted' },
+  };
 
 export function calcDDay(dueDate: string): { label: string; colorClass: string } {
   const today = todayISO();
@@ -18,7 +16,7 @@ export function calcDDay(dueDate: string): { label: string; colorClass: string }
   const diffDays = Math.round((dueMs - todayMs) / (1000 * 60 * 60 * 24));
 
   if (diffDays < 0) {
-    return { label: `D+${Math.abs(diffDays)}`, colorClass: 'text-red-400' };
+    return { label: `D+${Math.abs(diffDays)}`, colorClass: 'text-sp-error' };
   } else if (diffDays === 0) {
     return { label: 'D-Day', colorClass: 'text-sp-accent' };
   } else {

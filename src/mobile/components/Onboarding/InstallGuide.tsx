@@ -15,8 +15,10 @@ function detectPlatform(): Platform {
 }
 
 function isStandalone(): boolean {
-  return window.matchMedia('(display-mode: standalone)').matches
-    || (navigator as unknown as { standalone?: boolean }).standalone === true;
+  return (
+    window.matchMedia('(display-mode: standalone)').matches ||
+    (navigator as unknown as { standalone?: boolean }).standalone === true
+  );
 }
 
 const DISMISS_KEY = 'install-guide-dismissed';
@@ -76,11 +78,15 @@ export function InstallGuide() {
   if (!show) return null;
 
   return (
-    <div className="fixed bottom-20 left-4 right-4 z-50 glass-card p-4 animate-slide-up">
+    <div className="fixed bottom-[calc(var(--tab-bar-height)+5.5rem)] left-4 right-4 z-50 glass-card p-4 animate-slide-up">
       <div className="flex items-start gap-3">
-        <span className="text-2xl shrink-0">📲</span>
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-black/5 text-sp-accent dark:bg-white/10">
+          <span className="material-symbols-outlined text-icon-lg">add_to_home_screen</span>
+        </span>
         <div className="flex-1 min-w-0">
-          <p className="text-sp-text font-bold text-sm">홈 화면에 추가하면 앱처럼 사용할 수 있어요</p>
+          <p className="text-sp-text font-bold text-sm">
+            홈 화면에 추가하면 앱처럼 사용할 수 있어요
+          </p>
           {canInstall ? (
             <button
               onClick={handleInstall}
@@ -90,22 +96,23 @@ export function InstallGuide() {
             </button>
           ) : platform === 'ios' ? (
             <p className="text-sp-muted text-xs mt-1">
-              Safari 하단의 <strong className="text-sp-text">공유 버튼</strong>(□↑)을 누르고 → <strong className="text-sp-text">&quot;홈 화면에 추가&quot;</strong>를 탭하세요
+              Safari 하단의 <strong className="text-sp-text">공유 버튼</strong>(□↑)을 누르고 →{' '}
+              <strong className="text-sp-text">&quot;홈 화면에 추가&quot;</strong>를 탭하세요
             </p>
           ) : platform === 'android' ? (
             <p className="text-sp-muted text-xs mt-1">
-              Chrome 상단의 <strong className="text-sp-text">⋮ 메뉴</strong>를 누르고 → <strong className="text-sp-text">&quot;홈 화면에 추가&quot;</strong> 또는 <strong className="text-sp-text">&quot;앱 설치&quot;</strong>를 탭하세요
+              Chrome 상단의 <strong className="text-sp-text">⋮ 메뉴</strong>를 누르고 →{' '}
+              <strong className="text-sp-text">&quot;홈 화면에 추가&quot;</strong> 또는{' '}
+              <strong className="text-sp-text">&quot;앱 설치&quot;</strong>를 탭하세요
             </p>
           ) : (
             <p className="text-sp-muted text-xs mt-1">
-              브라우저 메뉴에서 <strong className="text-sp-text">&quot;홈 화면에 추가&quot;</strong>를 찾아 탭하세요
+              브라우저 메뉴에서 <strong className="text-sp-text">&quot;홈 화면에 추가&quot;</strong>
+              를 찾아 탭하세요
             </p>
           )}
         </div>
-        <button
-          onClick={dismiss}
-          className="text-sp-muted hover:text-sp-text text-xs p-1 shrink-0"
-        >
+        <button onClick={dismiss} className="text-sp-muted hover:text-sp-text text-xs p-1 shrink-0">
           <span className="material-symbols-outlined text-icon">close</span>
         </button>
       </div>

@@ -499,7 +499,7 @@ export function App() {
                 <span className={`material-symbols-outlined text-2xl ${active ? 'font-bold' : ''}`}>
                   {tab.icon}
                 </span>
-                <span className="text-tiny font-medium leading-tight">{tab.label}</span>
+                <span className="text-detail font-medium leading-tight">{tab.label}</span>
               </span>
             </button>
           );

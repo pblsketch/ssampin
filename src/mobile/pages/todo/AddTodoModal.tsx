@@ -74,8 +74,12 @@ export function AddTodoModal({ onAdd, onCancel }: AddTodoModalProps) {
                     : 'border-sp-border text-sp-muted hover:border-sp-text/30'
                 }`}
               >
-                {opt.value !== 'none' && (
-                  <span className="mr-1">{PRIORITY_CONFIG[opt.value].emoji}</span>
+                {opt.value !== 'none' && PRIORITY_CONFIG[opt.value].icon && (
+                  <span
+                    className={`material-symbols-outlined text-icon-sm mr-1 align-middle ${PRIORITY_CONFIG[opt.value].color}`}
+                  >
+                    {PRIORITY_CONFIG[opt.value].icon}
+                  </span>
                 )}
                 {opt.label}
               </button>
