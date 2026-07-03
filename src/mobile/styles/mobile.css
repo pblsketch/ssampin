@@ -95,6 +95,25 @@ input[type='datetime-local'] {
   background: rgba(59, 130, 246, 0.12);
 }
 
+/* 쌤핀이 로딩 마스코트 — 부드럽게 떠 있는 모션 */
+@keyframes sp-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+.sp-float {
+  animation: sp-float 1.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sp-float {
+    animation: none;
+  }
+}
+
 /* ── Glass 탭바 ── */
 .glass-tabbar {
   border-top: 1px solid rgba(0, 0, 0, 0.06);

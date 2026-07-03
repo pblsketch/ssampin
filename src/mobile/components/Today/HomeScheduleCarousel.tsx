@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback, type ReactNode } from 'react';
+import { useRef, useState, useCallback, useEffect, type ReactNode } from 'react';
 import type { CurrentPeriodInfo } from '@mobile/hooks/useCurrentPeriod';
 import type { ClassScheduleData, TeacherScheduleData } from '@domain/entities/Timetable';
 import { CurrentClassCard } from './CurrentClassCard';
@@ -24,7 +24,12 @@ function hasClassContent(classSchedule: ClassScheduleData | null): boolean {
  */
 export function HomeScheduleCarousel({ periodInfo, teacherSchedule, classSchedule }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const slideRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [active, setActive] = useState(0);
+  // 컨테이너 높이를 "현재 보이는 슬라이드" 높이에 맞춘다.
+  // (flex 행은 기본적으로 가장 큰 슬라이드 높이로 고정돼, 짧은 카드일 때 아래에 빈 공간이
+  //  크게 남고 다음 카드와의 간격이 벌어져 보인다. 활성 슬라이드 높이로 동기화해 해소.)
+  const [height, setHeight] = useState<number | undefined>(undefined);
 
   const slides: { key: string; node: ReactNode }[] = [
     {
@@ -74,6 +79,18 @@ export function HomeScheduleCarousel({ periodInfo, teacherSchedule, classSchedul
     el.scrollTo({ left: idx * el.clientWidth, behavior: 'smooth' });
   }, []);
 
+  // 활성 슬라이드 높이를 추적(콘텐츠 변화·접힘 등도 ResizeObserver로 반영).
+  useEffect(() => {
+    const el = slideRefs.current[active];
+    if (!el) return;
+    const update = () => setHeight(el.offsetHeight);
+    update();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [active, slides.length]);
+
   // 슬라이드가 하나뿐이면 캐러셀 UI 불필요
   if (slides.length <= 1) {
     return <div className="px-4">{slides[0]?.node}</div>;
@@ -84,14 +101,20 @@ export function HomeScheduleCarousel({ periodInfo, teacherSchedule, classSchedul
       <div
         ref={scrollRef}
         onScroll={onScroll}
-        className="flex items-start gap-3 overflow-x-auto snap-x snap-mandatory scrollbar-hide px-4"
-        style={{ scrollPaddingLeft: '1rem', scrollPaddingRight: '1rem' }}
+        className="flex items-start gap-3 overflow-x-auto overflow-y-hidden snap-x snap-mandatory scrollbar-hide px-4 transition-[height] duration-300 ease-out"
+        style={{ scrollPaddingLeft: '1rem', scrollPaddingRight: '1rem', height }}
         role="group"
         aria-roledescription="carousel"
         aria-label="오늘 현황과 주간 시간표"
       >
-        {slides.map((s) => (
-          <div key={s.key} className="w-full shrink-0 snap-center">
+        {slides.map((s, i) => (
+          <div
+            key={s.key}
+            ref={(el) => {
+              slideRefs.current[i] = el;
+            }}
+            className="w-full shrink-0 snap-center snap-always self-start"
+          >
             {s.node}
           </div>
         ))}

@@ -453,8 +453,8 @@ export function AttendanceCheckPage({
         </div>
       )}
 
-      {/* 실시간 카운터 */}
-      <div className="glass-card flex items-center justify-around mx-4 mt-3 px-4 py-3 rounded-xl shrink-0">
+      {/* 실시간 카운터 — 6칸 고정 grid (항상 한 줄) */}
+      <div className="glass-card grid grid-cols-6 items-center gap-1 mx-4 mt-3 px-3 py-3 rounded-xl shrink-0">
         <div className="text-center">
           <p className="text-green-500 font-bold text-lg">{presentCount}</p>
           <p className="text-sp-muted text-xs">출석</p>
@@ -506,8 +506,9 @@ export function AttendanceCheckPage({
                     )}
                   </div>
 
-                  {/* 상태 버튼 — 아이콘 위 / 라벨 아래, 5열 균등 (좁은 화면에서도 라벨 노출) */}
-                  <div className="flex gap-1 mt-2">
+                  {/* 상태 버튼 — 아이콘 위 / 라벨 아래, 5열 고정 grid (아이콘 폰트 로딩·글자 배율과
+                      무관하게 항상 한 줄. flex+flex-1은 콘텐츠 min-width로 줄바꿈될 수 있어 grid로 고정) */}
+                  <div className="grid grid-cols-5 gap-1 mt-2">
                     {(
                       Object.entries(STATUS_CONFIG) as [
                         AttendanceStatus,
@@ -521,7 +522,7 @@ export function AttendanceCheckPage({
                           onClick={() => setStatus(sKey, status)}
                           aria-pressed={isActive}
                           aria-label={config.label}
-                          className={`flex flex-col items-center justify-center flex-1 min-h-[52px] py-1.5 rounded-lg border text-sm font-medium transition-colors ${
+                          className={`flex flex-col items-center justify-center min-w-0 overflow-hidden min-h-[52px] py-1.5 rounded-lg border text-sm font-medium transition-colors ${
                             isActive
                               ? config.activeColor
                               : 'border-sp-border text-sp-muted hover:border-sp-text/30'

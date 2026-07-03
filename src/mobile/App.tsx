@@ -17,6 +17,7 @@ import { SettingsPage } from './pages/SettingsPage';
 import { ToolsOverviewPage } from './pages/ToolsOverviewPage';
 import { ToolAssignmentPage } from './pages/ToolAssignmentPage';
 import { ToolSurveyPage } from './pages/ToolSurveyPage';
+import { ToolGroupingPage } from './pages/ToolGroupingPage';
 // 쌤도구 PC 컴포넌트 — 동적 import (코드 스플리팅)
 const ToolTrafficLight = React.lazy(() =>
   import('@adapters/components/Tools/ToolTrafficLight').then((m) => ({
@@ -49,6 +50,11 @@ const ToolRoulette = React.lazy(() =>
 const ToolQRCode = React.lazy(() =>
   import('@adapters/components/Tools/ToolQRCode').then((m) => ({ default: m.ToolQRCode })),
 );
+const ToolScoreAllocator = React.lazy(() =>
+  import('@adapters/components/Tools/ToolScoreAllocator').then((m) => ({
+    default: m.ToolScoreAllocator,
+  })),
+);
 import { OnboardingFlow } from './components/Onboarding/OnboardingFlow';
 import { InstallGuide } from './components/Onboarding/InstallGuide';
 import { NavMigrationCoachmark } from './components/Onboarding/NavMigrationCoachmark';
@@ -74,6 +80,7 @@ const MORE_LAZY_TOOLS: Record<
   'tool-random': ToolRandom,
   'tool-roulette': ToolRoulette,
   'tool-qrcode': ToolQRCode,
+  'tool-score-allocator': ToolScoreAllocator,
 };
 
 /** 쌤도구 동적 로딩 시 표시할 폴백 스피너 */
@@ -146,6 +153,9 @@ export function App() {
     | 'tool-random'
     | 'tool-roulette'
     | 'tool-qrcode'
+    | 'tool-score-allocator'
+    | 'tool-grouping'
+    | 'tool-rubric'
     | null
   >(null);
   const [showOnboarding, setShowOnboarding] = useState(() => {
@@ -281,10 +291,13 @@ export function App() {
     return (
       <div className="flex items-center justify-center h-dvh mobile-bg">
         <div className="text-center">
-          <span className="material-symbols-outlined text-sp-accent text-4xl animate-spin">
-            progress_activity
-          </span>
-          <p className="text-sp-muted mt-3 text-sm">
+          <img
+            src="/floating-pin.png"
+            alt="쌤핀이"
+            className="w-20 h-20 mx-auto sp-float select-none"
+            draggable={false}
+          />
+          <p className="text-sp-muted mt-4 text-sm">
             {isProcessingCallback ? '동기화 연결 중...' : '로딩 중...'}
           </p>
         </div>
@@ -360,6 +373,7 @@ export function App() {
     if (moreSub === 'tool-assignment')
       return <ToolAssignmentPage onBack={() => setMoreSub('tools')} />;
     if (moreSub === 'tool-survey') return <ToolSurveyPage onBack={() => setMoreSub('tools')} />;
+    if (moreSub === 'tool-grouping') return <ToolGroupingPage onBack={() => setMoreSub('tools')} />;
     const LazyTool = moreSub ? MORE_LAZY_TOOLS[moreSub] : undefined;
     if (LazyTool)
       return (

@@ -54,7 +54,7 @@ export function WeeklyTimetableCard({
   const cells = toCells(variant, teacherSchedule, classSchedule);
   const days = DOW_ORDER.filter((d) => (cells[d]?.length ?? 0) > 0);
 
-  const title = variant === 'teacher' ? '주간 시간표 · 나' : '주간 시간표 · 우리 반';
+  const title = variant === 'teacher' ? '주간 시간표 · 교사' : '주간 시간표 · 우리 반';
   const icon = variant === 'teacher' ? 'person' : 'groups';
   const iconClass = variant === 'teacher' ? 'text-sp-accent' : 'text-amber-500';
 
