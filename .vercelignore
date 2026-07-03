@@ -1,3 +1,8 @@
+# 주의: /src 와 /public 은 제외하지 말 것.
+# 저장소 루트는 ssampin-mobile(모바일 PWA) 프로젝트의 빌드 컨텍스트이며
+# vite.mobile 빌드가 src/mobile/main.tsx 와 public/ 자산을 필요로 한다.
+# (제외하면 "Failed to resolve /src/mobile/main.tsx" 로 모바일 배포가 전부 실패한다.)
+# 랜딩(ssampin) 프로젝트는 landing/ 를 루트로 쓰므로 루트 src/public 를 올려도 무해하다.
 /.git
 /node_modules
 /release
@@ -9,12 +14,10 @@
 /dist
 /spikes
 /dist-mobile
-/src
 /test
 /dist-electron
 /dist-student
 /dist-slides-student
-/public
 /supabase
 /design examples
 /references
