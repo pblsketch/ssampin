@@ -205,9 +205,12 @@ export function SchedulePage() {
       : `${format(currentMonth, 'M월', { locale: ko })} 일정`;
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    // 페이지 전체(달력 + 다가오는 일정)가 하나로 상하 스크롤된다.
+    // 이전에는 달력이 고정되고 아래 목록만 따로 스크롤됐으나, 모바일에서 정보 확인이
+    // 불편해 전체 스크롤로 통합했다 (사용자 요청, 2026-07-03).
+    <div className="h-full overflow-y-auto">
       {/* Mini Calendar */}
-      <div className="glass-card mx-3 mt-3 rounded-xl shrink-0">
+      <div className="glass-card mx-3 mt-3 rounded-xl">
         {/* Month Header */}
         <div className="flex items-center justify-between px-4 py-3">
           <button
@@ -293,8 +296,8 @@ export function SchedulePage() {
         </div>
       </div>
 
-      {/* Events List */}
-      <div className="flex-1 overflow-y-auto">
+      {/* Events List — 전체 스크롤 컨테이너 안의 일반 블록 (하단 FAB 여백 확보) */}
+      <div className="pb-24">
         <div className="px-4 pt-4 pb-2">
           <h3 className="text-sp-text font-semibold text-sm">{listHeader}</h3>
         </div>

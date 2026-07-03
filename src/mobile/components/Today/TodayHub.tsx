@@ -13,7 +13,7 @@ import { useMobileStudentStore } from '@mobile/stores/useMobileStudentStore';
 import { useMobileHomeLayoutStore } from '@mobile/stores/useMobileHomeLayoutStore';
 import { isStudentActive } from '@domain/rules/studentActivity';
 import { CollapsibleCard } from '@mobile/components/common/CollapsibleCard';
-import { CurrentClassCard } from './CurrentClassCard';
+import { HomeScheduleCarousel } from './HomeScheduleCarousel';
 import { AttendanceSummaryCard } from './AttendanceSummaryCard';
 import { MealCard } from './MealCard';
 import { WeatherCard } from './WeatherCard';
@@ -34,6 +34,7 @@ export function TodayHub({ onNavigateAttendance }: Props) {
   const loadSettings = useMobileSettingsStore((s) => s.load);
 
   const teacherSchedule = useMobileScheduleStore((s) => s.teacherSchedule);
+  const classSchedule = useMobileScheduleStore((s) => s.classSchedule);
   const loadSchedule = useMobileScheduleStore((s) => s.load);
 
   const loadAttendance = useMobileAttendanceStore((s) => s.load);
@@ -121,15 +122,17 @@ export function TodayHub({ onNavigateAttendance }: Props) {
         </div>
       </div>
 
+      {/* 오늘 현황 + 주간 시간표 캐러셀 — 좌우 스와이프로 오늘/주간 교사/주간 학급 시간표 전환 */}
+      {!isHidden('currentClass') && (
+        <HomeScheduleCarousel
+          periodInfo={periodInfo}
+          teacherSchedule={teacherSchedule}
+          classSchedule={classSchedule}
+        />
+      )}
+
       {/* Bento Grid */}
       <div className="px-4 grid grid-cols-2 gap-3">
-        {/* 현재 교시 — 풀 너비 */}
-        {!isHidden('currentClass') && (
-          <div className="col-span-2">
-            <CurrentClassCard periodInfo={periodInfo} teacherSchedule={teacherSchedule} />
-          </div>
-        )}
-
         {/* 담임 출결 + 수업 출결 — 반 너비 */}
         {showHomeroomCard && (
           <div className="col-span-1">

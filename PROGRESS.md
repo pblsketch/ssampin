@@ -2,6 +2,14 @@
 
 마지막 업데이트: 2026-07-03 KST
 
+## ✅ 모바일 홈/일정 UX 3종 (2026-07-03, main 미커밋)
+
+사용자 요청 3건. **① 앱 아이콘 → 쌤핀이 마스코트**: PWA 홈화면/즐겨찾기 아이콘(`public/icons/icon-192·512·apple-touch-icon.png`)을 단순 압정에서 얼굴 있는 쌤핀이(`public/floating-pin.png`)로 교체 — 크림 배경(#FAF7F0, 사용자 선택) 위 중앙 합성, 마스킹 안전영역 고려(192/512는 0.70, apple-touch 0.80). sharp로 생성(trim→contain→composite). **② 홈 상단 카드 좌우 스와이프 캐러셀**: `HomeScheduleCarousel`(무라이브러리 CSS scroll-snap + 점 인디케이터) — 슬라이드 [오늘 현황(기존 CurrentClassCard) → 주간 교사 시간표 → 주간 학급 시간표(우리 반, 내용 있을 때만)]. `WeeklyTimetableCard`(요일×교시 table, 오늘 열 헤더 강조 + 현재 교시 셀 채움). 캐러셀은 벤토 그리드 밖 풀너비로 배치. 학급 시간표 위해 `useMobileScheduleStore`가 `getClassSchedule()`도 로드하도록 확장. (마침 같은 날 [모바일 기능 격차 분석] 1차 추천 "주간 시간표 보기"와 일치.) **③ 일정 페이지 전체 스크롤**: `SchedulePage` 루트를 `flex flex-col overflow-hidden`(내부 목록만 스크롤) → `h-full overflow-y-auto` 단일 스크롤(달력+다가오는 일정이 하나로 상하 스크롤). **함정 대응**: sp-_ 토큰은 Tailwind 투명도 수식(`bg-sp-accent/20`) 무효 → `black/white` 알파·`opacity-_`만 사용. **frontend-design(designer) 협업 리뷰 반영**: 오늘 열 셀별 `ring-1 ring-sp-accent`제거(3중 강조 완화), 과목명`truncate`, `text-[11px]/[9px]`→`text-detail/text-tiny`토큰화, 점 인디케이터 탭영역`py-2` 확대. **미반영(리스크·후보)**: 캐러셀 슬라이드 높이 JS 동기화(높이 다른 슬라이드 가로 스와이프 중 잘림 위험 → auto 유지), gap 스냅 좌표 오차(슬라이드 4개+ 시 재검토). **게이트 4/4**: tsc 0 / lint 0(변경파일) / vitest 269파일 3363 passed / regression 38/38 + 정적 렌더 스크린샷으로 그리드 밀도 확인(390px). **남음**: 실기기 확인(스와이프 감·아이콘 홈추가·전체 스크롤), 커밋(사용자 요청 시).
+
+## ✅ 모바일 기능 격차 분석 (2026-07-03, 분석만 — 구현 없음)
+
+데스크톱 vs 모바일 기능 전수 비교 → 추가 우선순위 제안. 산출물 3건: `docs/03-analysis/mobile-feature-gap/`(격차 분석 본문 + 데스크톱/모바일 전수 목록 2건). 핵심 발견: 동기화 30개 도메인이 이미 모바일 IndexedDB에 전부 내려오므로 격차 대부분은 "화면 부재" 문제. **1차 추천(읽기 전용 3종): 주간 시간표 보기 · 상담 예약 조회 · 즐겨찾기(북마크 — DI 리포지토리는 이미 등록됨)**. 2차: 과제 제출 체크(쓰기, 소형) → 루브릭 채점 입력(쓰기, 별도 PDCA). 3차: 모둠 편성기·자리 뽑기·배점 계산기 도구 이식(MORE_LAZY_TOOLS 패턴). 부적합 확정: 실시간 협업 개설(Electron 터널 서버)·명단/시간표 편집(PC=원본 설계)·파일시스템 의존 도구. 다음: 사용자 우선순위 결정 → 항목별 계획(.plan.md) 작성.
+
 ## ✅ 모바일 리팩토링 (2026-07-03, main `5fa0c3e6` 커밋·푸시)
 
 `src/mobile/` 전면 정리 — **동작 완전 보존(순수 리팩토링만), 코드 변경 0건 원칙 준수**. ① 중복 통합: utils/date·haptic, common/ActionSheet·ConfirmDialog·Spinner·EmptyState, AttendanceSummaryCard(출결 카드 2종 통합), hooks/useLongPress, version.ts(표시 버전 단일화). ② 구조: 스토어 3개 `stores/useMobileXxx` 규칙으로 이동·개명, StudentsPage 1,815→484줄(pages/students/ 9파일), TodoPage 398→102, ToolSurveyPage 455→153, App.tsx 도구 라우팅 레지스트리화. ③ 화이트리스트 승계 2건(eslint 래칫 + isVacant 메타 테스트 — ADR-018). 게이트: tsc 0 / lint 0 err / vitest 3,363 passed / regression 38/38. 보고서 `docs/04-report/features/mobile-refactor.report.md`, 보류·최적화 메모 포함. 남음: 커밋(사용자 요청 시), 실기기 확인.
