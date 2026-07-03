@@ -2,7 +2,7 @@
 
 마지막 업데이트: 2026-07-03 KST
 
-## ✅ 모바일 리팩토링 (2026-07-03, main 미커밋)
+## ✅ 모바일 리팩토링 (2026-07-03, main `5fa0c3e6` 커밋·푸시)
 
 `src/mobile/` 전면 정리 — **동작 완전 보존(순수 리팩토링만), 코드 변경 0건 원칙 준수**. ① 중복 통합: utils/date·haptic, common/ActionSheet·ConfirmDialog·Spinner·EmptyState, AttendanceSummaryCard(출결 카드 2종 통합), hooks/useLongPress, version.ts(표시 버전 단일화). ② 구조: 스토어 3개 `stores/useMobileXxx` 규칙으로 이동·개명, StudentsPage 1,815→484줄(pages/students/ 9파일), TodoPage 398→102, ToolSurveyPage 455→153, App.tsx 도구 라우팅 레지스트리화. ③ 화이트리스트 승계 2건(eslint 래칫 + isVacant 메타 테스트 — ADR-018). 게이트: tsc 0 / lint 0 err / vitest 3,363 passed / regression 38/38. 보고서 `docs/04-report/features/mobile-refactor.report.md`, 보류·최적화 메모 포함. 남음: 커밋(사용자 요청 시), 실기기 확인.
 
