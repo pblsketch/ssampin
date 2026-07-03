@@ -44,6 +44,11 @@ jobs:
           # OAuth 정상 동작을 위해 secrets 주입을 명시.
           VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
           VITE_GOOGLE_CLIENT_SECRET: ${{ secrets.VITE_GOOGLE_CLIENT_SECRET }}
+          # Supabase 값이 없으면 SupabaseAnalyticsAdapter 가 비활성화돼 버전/다운로드
+          # 집계가 전송되지 않는다(로컬 빌드는 .env 로 주입됐으나 GHA 는 .env 가 없음).
+          # anon 키는 클라이언트에 실려 배포되는 공개키(RLS 로 보호)라 secrets 로 주입해도 안전.
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
       - name: Verify build output
         shell: bash
