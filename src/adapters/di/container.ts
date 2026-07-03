@@ -82,6 +82,8 @@ import { JsonEventsRepository } from '@adapters/repositories/JsonEventsRepositor
 import { JsonMemoRepository } from '@adapters/repositories/JsonMemoRepository';
 import { JsonTodoRepository } from '@adapters/repositories/JsonTodoRepository';
 import { JsonSettingsRepository } from '@adapters/repositories/JsonSettingsRepository';
+import type { IMiniAppRepository } from '@domain/repositories/IMiniAppRepository';
+import { MiniAppFileRepository } from '@infrastructure/storage/MiniAppFileRepository';
 import { JsonStudentRecordsRepository } from '@adapters/repositories/JsonStudentRecordsRepository';
 import { JsonMessageRepository } from '@adapters/repositories/JsonMessageRepository';
 import { JsonStudentRepository } from '@adapters/repositories/JsonStudentRepository';
@@ -179,6 +181,9 @@ export const memoRepository: IMemoRepository = new JsonMemoRepository(storage);
 export const todoRepository: ITodoRepository = new JsonTodoRepository(storage);
 
 export const settingsRepository: ISettingsRepository = new JsonSettingsRepository(storage);
+
+/** 미니앱("내가 만든 앱") HTML·아이콘 파일 영속 (Electron IPC 위임). 메타는 settings에 저장. */
+export const miniAppRepository: IMiniAppRepository = new MiniAppFileRepository();
 
 export const studentRecordsRepository: IStudentRecordsRepository = new JsonStudentRecordsRepository(
   storage,

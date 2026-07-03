@@ -1,9 +1,12 @@
 import { useCallback, useMemo, useState } from 'react';
 import type { PageId } from '@adapters/components/Layout/Sidebar';
+import type { MiniApp } from '@domain/entities/MiniApp';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { PageHeader } from '@adapters/components/common/PageHeader';
 import { Modal } from '@adapters/components/common/Modal';
 import { IconButton } from '@adapters/components/common/IconButton';
+import { MiniAppsSection } from '@adapters/components/Tools/MiniApps/MiniAppsSection';
+import { MiniAppRunner } from '@adapters/components/Tools/MiniApps/MiniAppRunner';
 
 interface ToolsGridProps {
   onNavigate: (page: PageId) => void;
@@ -176,6 +179,8 @@ export function ToolsGrid({ onNavigate }: ToolsGridProps) {
 
   const [view, setView] = useState<ViewMode>('mine');
   const [organizing, setOrganizing] = useState(false);
+  // 실행 중인 미니앱("내가 만든 앱"). PageId 유니온에 넣지 않아 사이드바를 오염시키지 않는다.
+  const [openApp, setOpenApp] = useState<MiniApp | null>(null);
 
   // 개발 모드(npm run dev / npm run electron:dev)에서는 hidden: true 도구도 노출해 내부 QA 가능.
   // 프로덕션 빌드에서는 hidden: true 도구는 '전체 보기'에서도 제외.
@@ -188,6 +193,10 @@ export function ToolsGrid({ onNavigate }: ToolsGridProps) {
     const hidden = new Set(hiddenTools ?? []);
     return sorted.filter((t) => !hidden.has(t.id));
   }, [view, toolsOrder, hiddenTools, isDev]);
+
+  if (openApp) {
+    return <MiniAppRunner app={openApp} onBack={() => setOpenApp(null)} isFullscreen={false} />;
+  }
 
   return (
     <div className="flex flex-col h-full -m-8">
@@ -234,48 +243,59 @@ export function ToolsGrid({ onNavigate }: ToolsGridProps) {
         }
       />
       <div className="flex-1 min-h-0 overflow-y-auto p-8">
-        <p className="text-sp-muted text-sm mb-6">
-          {view === 'all'
-            ? '전체 보기 — 모든 도구를 기본 순서대로 보여줍니다'
-            : '내 화면 — 정리한 순서·표시 설정으로 보여줍니다'}
-        </p>
-
-        {/* Tool Cards Grid */}
-        {visibleTools.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-sp-border p-10 text-center">
-            <p className="text-sp-muted">
-              표시할 도구가 없습니다. 정리하기에서 도구를 다시 표시하거나 전체 보기로 전환하세요.
+        {/* 좌우 2단: 왼쪽 = 쌤도구 그리드(남는 폭), 오른쪽 = 내가 만든 앱(고정 폭 세로 열).
+            분기 기준을 lg(1024) 대신 xl(1280)로 둔 이유 — 이 앱의 최소 창 폭이 정확히 1024px(lg)이고,
+            도구 그리드도 lg에서 4열로 바뀌므로 lg에서 합치면 두 변화가 겹쳐 가장 좁을 때 그리드가
+            과하게 눌린다. xl(기본 창 폭 1280)부터 나란히 두면 그 구간을 피할 수 있다. */}
+        <div className="flex flex-col xl:flex-row gap-8 xl:items-start">
+          <div className="flex-1 min-w-0">
+            <p className="text-sp-muted text-sm mb-6">
+              {view === 'all'
+                ? '전체 보기 — 모든 도구를 기본 순서대로 보여줍니다'
+                : '내 화면 — 정리한 순서·표시 설정으로 보여줍니다'}
             </p>
+
+            {/* Tool Cards Grid */}
+            {visibleTools.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-sp-border p-10 text-center">
+                <p className="text-sp-muted">
+                  표시할 도구가 없습니다. 정리하기에서 도구를 다시 표시하거나 전체 보기로
+                  전환하세요.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {visibleTools.map((tool) => (
+                  <button
+                    key={tool.id}
+                    onClick={() =>
+                      tool.externalUrl ? openExternal(tool.externalUrl) : onNavigate(tool.id)
+                    }
+                    className="bg-sp-card rounded-2xl p-6 text-left border border-transparent hover:border-blue-500/30 hover:scale-[1.02] transition-all group"
+                  >
+                    <div className="text-4xl mb-3">{tool.emoji}</div>
+                    <h3 className="text-lg font-bold text-sp-text group-hover:text-sp-accent transition-colors flex items-center gap-1.5 flex-wrap">
+                      {tool.name}
+                      {tool.badge && (
+                        <span className="text-caption font-extrabold tracking-wider px-2 py-[3px] rounded-md bg-gradient-to-br from-amber-400 to-amber-500 text-amber-950 shadow-sm ring-1 ring-amber-500/50">
+                          {tool.badge}
+                        </span>
+                      )}
+                      {tool.externalUrl && (
+                        <span className="material-symbols-outlined text-icon-sm text-sp-muted">
+                          open_in_new
+                        </span>
+                      )}
+                    </h3>
+                    <p className="text-sm text-sp-muted mt-1">{tool.description}</p>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
-        ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {visibleTools.map((tool) => (
-              <button
-                key={tool.id}
-                onClick={() =>
-                  tool.externalUrl ? openExternal(tool.externalUrl) : onNavigate(tool.id)
-                }
-                className="bg-sp-card rounded-2xl p-6 text-left border border-transparent hover:border-blue-500/30 hover:scale-[1.02] transition-all group"
-              >
-                <div className="text-4xl mb-3">{tool.emoji}</div>
-                <h3 className="text-lg font-bold text-sp-text group-hover:text-sp-accent transition-colors flex items-center gap-1.5 flex-wrap">
-                  {tool.name}
-                  {tool.badge && (
-                    <span className="text-caption font-extrabold tracking-wider px-2 py-[3px] rounded-md bg-gradient-to-br from-amber-400 to-amber-500 text-amber-950 shadow-sm ring-1 ring-amber-500/50">
-                      {tool.badge}
-                    </span>
-                  )}
-                  {tool.externalUrl && (
-                    <span className="material-symbols-outlined text-icon-sm text-sp-muted">
-                      open_in_new
-                    </span>
-                  )}
-                </h3>
-                <p className="text-sm text-sp-muted mt-1">{tool.description}</p>
-              </button>
-            ))}
-          </div>
-        )}
+
+          <MiniAppsSection onOpen={setOpenApp} />
+        </div>
       </div>
 
       {organizing && (

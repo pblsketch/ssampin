@@ -63,6 +63,7 @@ export const docsNavGroups: readonly DocNavGroup[] = [
       'features/todo',
       'features/meals',
       'features/tools',
+      'features/my-apps',
       'features/bookmarks-export',
       'features/settings',
       'features/security-pin',
@@ -701,6 +702,61 @@ export const docsArticles: readonly DocArticle[] = [
       },
     ],
     related: ['features/markdown-converter', 'features/class-management'],
+  },
+  {
+    slug: 'features/my-apps',
+    title: '내가 만든 앱',
+    description: 'AI로 만든 나만의 HTML 웹앱을 쌤핀에 등록해 격리된 환경에서 실행합니다.',
+    category: 'features',
+    lastUpdated: '2026-07-03',
+    sections: [
+      {
+        id: 'what',
+        title: '내가 만든 앱이란',
+        body: [
+          '쌤도구 맨 아래 "내가 만든 앱"에서, 선생님이 직접 만든 HTML 웹앱을 등록해 쌤핀 안에서 바로 실행할 수 있습니다.',
+          '타이머, 활동판, 간단한 게임처럼 원하는 도구를 직접 만들어 아이콘과 이름을 붙여 보관하고, 필요할 때 클릭 한 번으로 실행합니다.',
+        ],
+      },
+      {
+        id: 'make-with-ai',
+        title: 'AI로 앱 만들기',
+        steps: [
+          'Gemini, ChatGPT 같은 AI 챗봇에 "학생용 ○○ 활동 웹앱을 HTML 파일 하나로 만들어줘"라고 요청합니다. 필요하면 폰트·차트 같은 공개 자료(https)나 공개 API도 쓸 수 있습니다.',
+          '만들어진 코드를 index.html 파일 하나로 저장합니다.',
+          '쌤핀 > 쌤도구 > 내가 만든 앱 > 앱 추가에서 그 HTML 파일을 올리고, 이름과 아이콘을 정합니다.',
+        ],
+        callout: {
+          title: '예시 프롬프트',
+          body: '예를 들어 "우리 반 발표 순서 뽑기 웹앱을 만들어줘. 컴퓨터를 잘 몰라도 바로 쓰게 HTML 파일 하나로, 스마트폰과 교실 큰 화면에서 잘 보이게, 글씨는 크고 색은 산뜻하게, 학생 이름 같은 개인정보는 저장하거나 밖으로 보내지 않게"처럼 편하게 요청하면 됩니다.',
+          tone: 'info',
+        },
+      },
+      {
+        id: 'safety',
+        title: '안전하게 실행됩니다',
+        body: [
+          '등록한 앱은 쌤핀 본체와 분리된 격리 공간에서 실행됩니다. 앱은 선생님 PC의 파일이나 쌤핀에 저장된 학생 정보에 접근할 수 없습니다.',
+          '앱마다 저장 공간이 분리되어, 한 앱이 다른 앱의 데이터를 볼 수 없습니다.',
+        ],
+        callout: {
+          title: '앱마다 디자인이 다를 수 있어요',
+          body: '내가 만든 앱은 선생님이 직접 만든 것이라 쌤핀 기본 화면과 모양이 다를 수 있습니다. 쌤핀은 이를 안전하게 격리해 실행만 합니다.',
+          tone: 'info',
+        },
+      },
+      {
+        id: 'manage',
+        title: '추가·삭제·개수',
+        bullets: [
+          'HTML 파일은 최대 20MB, 앱은 최대 50개까지 등록할 수 있습니다.',
+          '아이콘은 이모지(기본) 또는 이미지 파일로 지정할 수 있습니다.',
+          '앱을 삭제하면 등록한 파일도 함께 지워집니다.',
+          '내가 만든 앱을 쓰지 않는 선생님은 "내가 만든 앱" 영역을 숨길 수 있습니다.',
+        ],
+      },
+    ],
+    related: ['features/tools'],
   },
   {
     slug: 'features/bookmarks-export',

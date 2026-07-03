@@ -4,6 +4,7 @@ import type { NeisScheduleSettings } from './NeisSchedule';
 import type { PresetThemeId, ThemeColors } from './DashboardTheme';
 import type { SubjectColorMap } from '../valueObjects/SubjectColor';
 import type { TodoSettings } from './TodoSettings';
+import type { MiniApp } from './MiniApp';
 
 export interface DashboardThemeSettings {
   readonly presetId: PresetThemeId | 'custom';
@@ -440,6 +441,15 @@ export interface Settings {
   readonly toolsOrder?: readonly string[];
   /** 쌤도구 페이지에서 숨길 도구 ID 목록. 빈 배열/미설정 = 모두 표시 */
   readonly hiddenTools?: readonly string[];
+  /**
+   * 미니앱("내가 만든 앱") 메타데이터 목록.
+   * HTML 본문·이미지 아이콘은 로컬 userData/miniapps/<id>/ 에 저장(동기화 제외),
+   * 메타만 여기 실려 'settings' 동기화 도메인에 편승한다(다른 기기엔 목록/이모지만 전달).
+   * 미설정/빈 배열 = 등록된 미니앱 없음.
+   */
+  readonly miniApps?: readonly MiniApp[];
+  /** 쌤도구 "내가 만든 앱" 섹션을 숨겼는지 여부 (기본 false = 표시) */
+  readonly hiddenMiniAppSection?: boolean;
   /** 즐겨찾기 위젯에서 숨길 북마크 그룹 ID 목록 */
   readonly bookmarkWidgetHiddenGroups?: readonly string[];
   /** 즐겨찾기 위젯에서 숨길 개별 북마크 ID 목록 */

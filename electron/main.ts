@@ -17,7 +17,17 @@ import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
 import { autoUpdater } from 'electron-updater';
-import { installNavigationGuard } from './security-guards';
+import {
+  installNavigationGuard,
+  installMiniAppWebviewGuard,
+  installMiniAppContentNavGuard,
+} from './security-guards';
+import {
+  registerMiniAppScheme,
+  registerMiniAppProtocol,
+  MINIAPP_PARTITION,
+} from './miniapp-protocol';
+import { registerMiniAppHandlers } from './ipc/miniapp';
 import { computeExpandedBounds, pinFromExpanded, type IconAnchor } from './iconWindowGeometry';
 import { attachCsp, installCspViolationLogger } from './security/csp';
 import { registerOAuthHandlers } from './ipc/oauth';
@@ -60,6 +70,10 @@ import {
 import { safeFetchText } from './security/safeFetch';
 
 declare const __dirname: string;
+
+// 미니앱 커스텀 스킴(miniapp://) 등록 — 반드시 app 'ready' 이전(모듈 로드 시점)에 1회.
+// registerSchemesAsPrivileged는 ready 이후 호출하면 무시되므로 여기 최상단에서 실행한다.
+registerMiniAppScheme();
 
 let mainWindow: BrowserWindow | null = null;
 let widgetWindow: BrowserWindow | null = null;
@@ -1683,6 +1697,20 @@ function createWindow(): void {
 
   // file:// drop navigate 차단 (defense in depth) — security-guards.ts §3.2 참조
   installNavigationGuard(mainWindow);
+
+  // 미니앱 <webview> attach 강제 가드 — preload strip·Node 차단(전체) + miniapp partition sandbox·
+  // 스킴 화이트리스트(미니앱만). 기존 외부 쌤도구(persist:tools)는 차단하지 않음. security-guards.ts §3
+  installMiniAppWebviewGuard(mainWindow.webContents);
+
+  // 미니앱 webview attach 이후 — 외부 이동/새창 차단(방어심도, 계획 §3). attach된 webContents의
+  // 세션이 미니앱 partition일 때만 적용(기존 persist:tools 외부 https 도구는 제외).
+  mainWindow.webContents.on('did-attach-webview', (_event, attachedContents) => {
+    if (attachedContents.session === session.fromPartition(MINIAPP_PARTITION)) {
+      installMiniAppContentNavGuard(attachedContents, (url) => {
+        void shell.openExternal(url);
+      });
+    }
+  });
 
   mainWindow.once('ready-to-show', () => {
     mainWindow?.show();
@@ -4728,6 +4756,9 @@ if (!gotTheLock) {
     checkInstallation();
     registerIpcHandlers();
     registerSecureStorageHandlers();
+    // 미니앱: persist:miniapps 세션에 miniapp:// 프로토콜 핸들러 등록(defaultSession 아님) + 파일 IPC.
+    registerMiniAppProtocol(app.getPath('userData'));
+    registerMiniAppHandlers();
     createWindow();
     registerOAuthHandlers(mainWindow!);
     registerPKCEFallbackHandlers();

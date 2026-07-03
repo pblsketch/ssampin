@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>우리 반 뽑기 · 미니앱 테스트</title>
+<style>
+  :root {
+    --bg: #0f1420;
+    --card: #1a2130;
+    --card2: #212a3d;
+    --line: #2c3652;
+    --text: #eaf0ff;
+    --muted: #93a0be;
+    --accent: #6ea8fe;
+    --accent2: #a78bfa;
+    --ok: #4ade80;
+    --warn: #fbbf24;
+    --danger: #f87171;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: "Pretendard", system-ui, -apple-system, "Segoe UI", "Malgun Gothic", sans-serif;
+    background: radial-gradient(1200px 600px at 50% -10%, #1b2440 0%, transparent 60%), var(--bg);
+    color: var(--text);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100%;
+    padding: 24px 16px 40px;
+    gap: 20px;
+  }
+  .wrap { width: 100%; max-width: 720px; display: flex; flex-direction: column; gap: 18px; }
+  header { text-align: center; }
+  header h1 { font-size: clamp(22px, 5vw, 30px); letter-spacing: -0.02em; }
+  header p { color: var(--muted); margin-top: 6px; font-size: 14px; }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    padding: 20px;
+  }
+
+  /* 뽑기 결과 */
+  .stage {
+    background: linear-gradient(160deg, var(--card2), var(--card));
+    text-align: center;
+    padding: 34px 20px;
+  }
+  .result {
+    font-size: clamp(34px, 11vw, 68px);
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    min-height: 1.2em;
+    transition: transform .12s ease;
+  }
+  .result.pop { transform: scale(1.12); }
+  .result.idle { color: var(--muted); -webkit-text-fill-color: var(--muted); font-weight: 600; font-size: clamp(18px,5vw,26px); }
+  .count { color: var(--muted); font-size: 13px; margin-top: 10px; }
+
+  .row { display: flex; gap: 10px; flex-wrap: wrap; }
+  button {
+    font: inherit; cursor: pointer; border: none; border-radius: 12px;
+    padding: 12px 18px; font-weight: 700; color: #0b1020;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    transition: filter .15s ease, transform .05s ease;
+  }
+  button:hover { filter: brightness(1.08); }
+  button:active { transform: scale(.97); }
+  button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+  button.ghost:hover { color: var(--text); }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  .pickbtn { flex: 1; min-width: 160px; font-size: 18px; padding: 16px; }
+
+  /* 명단 */
+  .names { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+  .chip {
+    background: var(--card2); border: 1px solid var(--line); border-radius: 999px;
+    padding: 6px 12px 6px 14px; font-size: 14px; display: flex; align-items: center; gap: 8px;
+  }
+  .chip button { background: none; color: var(--muted); padding: 0; font-size: 16px; line-height: 1; }
+  .chip button:hover { color: var(--danger); }
+  .addrow { display: flex; gap: 8px; margin-top: 14px; }
+  input[type=text] {
+    flex: 1; font: inherit; background: var(--bg); border: 1px solid var(--line);
+    border-radius: 12px; padding: 11px 14px; color: var(--text);
+  }
+  input[type=text]:focus { outline: 2px solid var(--accent); border-color: transparent; }
+  h2 { font-size: 15px; color: var(--muted); font-weight: 700; margin-bottom: 2px; }
+
+  /* 격리 점검 */
+  details.diag { padding: 0; overflow: hidden; }
+  details.diag > summary {
+    list-style: none; cursor: pointer; padding: 16px 20px; display: flex;
+    align-items: center; justify-content: space-between; font-weight: 700;
+  }
+  details.diag > summary::-webkit-details-marker { display: none; }
+  .diag-body { padding: 0 20px 20px; display: flex; flex-direction: column; gap: 10px; }
+  .diag-item { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    background: var(--card2); border: 1px solid var(--line); border-radius: 12px; padding: 11px 14px; font-size: 14px; }
+  .diag-item .k { color: var(--muted); }
+  .diag-item .v { font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+  .v.ok { color: var(--ok); }
+  .v.warn { color: var(--warn); }
+  .v.danger { color: var(--danger); }
+  .net-out { color: var(--muted); font-size: 13px; word-break: break-word; }
+  footer { color: var(--muted); font-size: 12px; text-align: center; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>🎯 우리 반 뽑기</h1>
+      <p>미니앱 테스트용 · 이름을 넣고 공정하게 뽑아요</p>
+    </header>
+
+    <section class="card stage">
+      <div id="result" class="result idle">뽑기 버튼을 눌러보세요</div>
+      <div id="count" class="count"></div>
+    </section>
+
+    <div class="row">
+      <button id="pick" class="pickbtn">🎲 뽑기</button>
+      <button id="reset" class="ghost">되돌리기</button>
+    </div>
+
+    <section class="card">
+      <h2>명단</h2>
+      <div id="names" class="names"></div>
+      <div class="addrow">
+        <input id="newname" type="text" placeholder="이름 추가 후 Enter" maxlength="20" />
+        <button id="add">추가</button>
+      </div>
+      <p style="color:var(--muted);font-size:12px;margin-top:10px">
+        명단은 이 앱에만 저장돼요(localStorage). 다른 앱·쌤핀 본체와 분리됩니다.
+      </p>
+    </section>
+
+    <details class="card diag">
+      <summary>🔒 쌤핀 격리 점검 <span style="color:var(--muted);font-weight:500;font-size:13px">(펼쳐서 확인)</span></summary>
+      <div class="diag-body">
+        <div class="diag-item"><span class="k">실행 주소(origin)</span><span id="d-origin" class="v">—</span></div>
+        <div class="diag-item"><span class="k">쌤핀 내부(electronAPI) 접근</span><span id="d-api" class="v">—</span></div>
+        <div class="diag-item"><span class="k">시스템(require/process) 접근</span><span id="d-node" class="v">—</span></div>
+        <div class="diag-item"><span class="k">앱 전용 저장소(localStorage)</span><span id="d-ls" class="v">—</span></div>
+        <div class="diag-item"><span class="k">인터넷 연결 상태</span><span id="d-online" class="v">—</span></div>
+        <div class="diag-item" style="flex-direction:column;align-items:stretch;gap:10px">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span class="k">인터넷 요청 테스트(https)</span>
+            <button id="nettest" class="ghost" style="padding:6px 12px;font-size:13px">테스트</button>
+          </div>
+          <div id="d-net" class="net-out">버튼을 눌러 외부 https 요청을 확인해요.</div>
+        </div>
+      </div>
+    </details>
+
+    <footer>쌤핀 미니앱 테스트 샘플 · 학생 개인정보를 수집·전송하지 않습니다</footer>
+  </div>
+
+<script>
+(function () {
+  "use strict";
+  var KEY = "miniapp-test-roster-v1";
+  var DEFAULTS = ["김하늘", "이서준", "박지우", "최민서", "정예린", "강도윤"];
+  var names = load();
+  var pool = [];
+
+  var $ = function (id) { return document.getElementById(id); };
+  var resultEl = $("result"), countEl = $("count"), namesEl = $("names");
+
+  function load() {
+    try {
+      var raw = localStorage.getItem(KEY);
+      if (raw) { var arr = JSON.parse(raw); if (Array.isArray(arr) && arr.length) return arr; }
+    } catch (e) {}
+    return DEFAULTS.slice();
+  }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(names)); } catch (e) {} }
+
+  function renderNames() {
+    namesEl.innerHTML = "";
+    names.forEach(function (n, i) {
+      var chip = document.createElement("span");
+      chip.className = "chip";
+      var label = document.createElement("span");
+      label.textContent = n;
+      var del = document.createElement("button");
+      del.textContent = "×";
+      del.setAttribute("aria-label", n + " 삭제");
+      del.onclick = function () { names.splice(i, 1); save(); renderNames(); updateCount(); };
+      chip.appendChild(label); chip.appendChild(del);
+      namesEl.appendChild(chip);
+    });
+    $("pick").disabled = names.length === 0;
+  }
+  function updateCount() {
+    if (!pool.length) countEl.textContent = names.length ? "남은 인원 " + names.length + "명" : "명단을 추가해 주세요";
+    else countEl.textContent = "남은 인원 " + pool.length + "명 / 전체 " + names.length + "명";
+  }
+
+  function pick() {
+    if (!names.length) return;
+    if (!pool.length) pool = names.slice();
+    var idx = Math.floor(Math.random() * pool.length);
+    var chosen = pool.splice(idx, 1)[0];
+    // 살짝 굴리는 연출
+    var ticks = 12, t = 0;
+    var spin = setInterval(function () {
+      resultEl.classList.remove("idle");
+      resultEl.textContent = names[Math.floor(Math.random() * names.length)];
+      if (++t >= ticks) {
+        clearInterval(spin);
+        resultEl.textContent = chosen;
+        resultEl.classList.add("pop");
+        setTimeout(function () { resultEl.classList.remove("pop"); }, 130);
+        updateCount();
+      }
+    }, 45);
+  }
+
+  $("pick").onclick = pick;
+  $("reset").onclick = function () {
+    pool = []; resultEl.classList.add("idle"); resultEl.textContent = "뽑기 버튼을 눌러보세요"; updateCount();
+  };
+  $("add").onclick = addName;
+  $("newname").addEventListener("keydown", function (e) { if (e.key === "Enter") addName(); });
+  function addName() {
+    var v = $("newname").value.trim();
+    if (!v) return;
+    names.push(v); save(); $("newname").value = ""; renderNames(); pool = []; updateCount();
+  }
+
+  // ── 격리 점검 ──
+  function setV(id, text, cls) {
+    var el = $(id); el.textContent = text; el.className = "v" + (cls ? " " + cls : "");
+  }
+  try {
+    setV("d-origin", location.origin || location.protocol, location.protocol === "miniapp:" ? "ok" : "warn");
+  } catch (e) { setV("d-origin", "확인 불가", "warn"); }
+
+  var hasApi = typeof window.electronAPI !== "undefined";
+  setV("d-api", hasApi ? "노출됨 ⚠ (위험)" : "차단됨 ✓ (안전)", hasApi ? "danger" : "ok");
+
+  var hasNode = (typeof window.require !== "undefined") || (typeof window.process !== "undefined");
+  setV("d-node", hasNode ? "노출됨 ⚠ (위험)" : "차단됨 ✓ (안전)", hasNode ? "danger" : "ok");
+
+  try {
+    localStorage.setItem("__t", "1"); localStorage.removeItem("__t");
+    setV("d-ls", "사용 가능 ✓", "ok");
+  } catch (e) { setV("d-ls", "차단됨", "warn"); }
+
+  function online() { setV("d-online", navigator.onLine ? "온라인 ✓" : "오프라인", navigator.onLine ? "ok" : "warn"); }
+  online(); window.addEventListener("online", online); window.addEventListener("offline", online);
+
+  $("nettest").onclick = function () {
+    var out = $("d-net");
+    out.textContent = "요청 중…";
+    fetch("https://api.github.com/zen", { cache: "no-store" })
+      .then(function (r) { return r.text(); })
+      .then(function (txt) { out.innerHTML = '외부 https 요청 성공 ✓ — 응답: "' + txt.replace(/[<>&]/g, "") + '"'; })
+      .catch(function (err) { out.textContent = "요청 실패: " + (err && err.message ? err.message : err) + " (오프라인이거나 차단됨)"; });
+  };
+
+  renderNames(); updateCount();
+})();
+</script>
+</body>
+</html>

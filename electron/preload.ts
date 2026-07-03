@@ -1185,6 +1185,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
     > => ipcRenderer.invoke('markdown-convert:save-hwpx-zip', { files, zipName }),
   },
 
+  // === 내가 만든 앱(미니앱) 파일 저장 (miniapp) ===
+  // 앱 HTML·아이콘을 <userData>/miniapps/<id>/ 로컬 파일로 저장/삭제/조회. 쌤핀 renderer 전용
+  // (미니앱 webview는 preload가 없어 이 채널에 도달 불가 — 설계상 격리).
+  miniApp: {
+    save: (id: string, html: Uint8Array): Promise<void> =>
+      ipcRenderer.invoke('miniapp:save', id, html),
+    saveIcon: (id: string, bytes: Uint8Array, ext: string): Promise<string> =>
+      ipcRenderer.invoke('miniapp:saveIcon', id, bytes, ext),
+    remove: (id: string): Promise<void> => ipcRenderer.invoke('miniapp:remove', id),
+    list: (): Promise<string[]> => ipcRenderer.invoke('miniapp:list'),
+  },
+
   // === 학교 평가 운영계획 불러오기 (schoolinfo-evaluation) ===
   // 학교알리미 평가계획 hwp 자동 다운로드 + kordoc 파싱(메인, 로컬). 결과 markdown 만 반환.
   schoolinfoEvaluation: {

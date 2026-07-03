@@ -705,6 +705,19 @@ interface ElectronAPI {
     ) => Promise<MarkdownSaveZipResult>;
   };
 
+  // === 내가 만든 앱(미니앱) 파일 저장 (miniapp) ===
+  // 앱 HTML·아이콘을 <userData>/miniapps/<id>/ 로컬 파일로 저장/삭제/조회(데스크톱 전용).
+  miniApp?: {
+    /** 앱 HTML 저장 → index.html. */
+    save: (id: string, html: Uint8Array) => Promise<void>;
+    /** 이미지 아이콘 저장 → icon.<ext>. 저장된 파일명 반환. */
+    saveIcon: (id: string, bytes: Uint8Array, ext: string) => Promise<string>;
+    /** 앱 폴더 전체 삭제. */
+    remove: (id: string) => Promise<void>;
+    /** 디스크에 존재하는 앱 폴더 id 목록. */
+    list: () => Promise<string[]>;
+  };
+
   // === 학교 평가 운영계획 불러오기 (schoolinfo-evaluation) ===
   // 학교알리미 평가계획 hwp 자동 다운로드 + kordoc 파싱(메인, 로컬). 결과 markdown 만 반환.
   schoolinfoEvaluation?: {
