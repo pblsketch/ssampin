@@ -19,6 +19,7 @@ import { ToolAssignmentPage } from './pages/ToolAssignmentPage';
 import { ToolSurveyPage } from './pages/ToolSurveyPage';
 import { ToolGroupingPage } from './pages/ToolGroupingPage';
 import { ToolRubricPage } from './pages/ToolRubricPage';
+import { BookmarkPage } from './pages/BookmarkPage';
 // 쌤도구 PC 컴포넌트 — 동적 import (코드 스플리팅)
 const ToolTrafficLight = React.lazy(() =>
   import('@adapters/components/Tools/ToolTrafficLight').then((m) => ({
@@ -142,6 +143,7 @@ export function App() {
   const [moreSub, setMoreSub] = useState<
     | 'settings'
     | 'memo'
+    | 'bookmarks'
     | 'tools'
     | 'tool-assignment'
     | 'tool-survey'
@@ -364,6 +366,7 @@ export function App() {
   const renderMoreSub = (): React.ReactNode => {
     if (moreSub === 'settings') return <SettingsPage onBack={() => setMoreSub(null)} />;
     if (moreSub === 'memo') return <MemoPage onBack={() => setMoreSub(null)} />;
+    if (moreSub === 'bookmarks') return <BookmarkPage onBack={() => setMoreSub(null)} />;
     if (moreSub === 'tools')
       return (
         <ToolsOverviewPage

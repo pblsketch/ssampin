@@ -71,6 +71,14 @@ export function MorePage({ onNavigate }: Props) {
               onClick={() => onNavigate('memo')}
             />
             <MenuItem
+              icon="bookmark"
+              iconBg="bg-sp-success/12"
+              iconText="text-sp-success"
+              label="즐겨찾기"
+              description="PC에서 등록한 링크 열기"
+              onClick={() => onNavigate('bookmarks')}
+            />
+            <MenuItem
               icon="build"
               iconBg="bg-sp-info/12"
               iconText="text-sp-info"
