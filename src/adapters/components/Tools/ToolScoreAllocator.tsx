@@ -491,8 +491,8 @@ export function ToolScoreAllocator({ onBack, isFullscreen }: ToolScoreAllocatorP
                     [자동 채우기] 누르면 적용)
                   </p>
 
-                  {/* 난이도별 직접 입력 (상·중·하) */}
-                  <div className="grid grid-cols-3 gap-2">
+                  {/* 난이도별 직접 입력 (상·중·하) — 모바일은 세로 스택(고정 3열은 좁은 폭에서 붕괴) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                     {DISPLAY_ORDER.map((i) => {
                       const row = block.rows[i];
                       if (!row) return null;

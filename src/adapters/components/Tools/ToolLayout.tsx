@@ -46,7 +46,32 @@ function useCanEnterDual(): boolean {
   return canEnter;
 }
 
-export function ToolLayout({ title, emoji, onBack, isFullscreen, children, shortcuts, disableZoom }: ToolLayoutProps) {
+/** 좁은 폭(모바일) 여부 — 데스크톱 전용 헤더 컨트롤(배율·단축키·전체화면)을 숨긴다. */
+const NARROW_MAX_WIDTH = 640;
+function useIsNarrow(): boolean {
+  const [narrow, setNarrow] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth < NARROW_MAX_WIDTH;
+  });
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const update = () => setNarrow(window.innerWidth < NARROW_MAX_WIDTH);
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
+  return narrow;
+}
+
+export function ToolLayout({
+  title,
+  emoji,
+  onBack,
+  isFullscreen,
+  children,
+  shortcuts,
+  disableZoom,
+}: ToolLayoutProps) {
   const [zoom, setZoom] = useState(100);
   const [showHelp, setShowHelp] = useState(false);
   const shortcutsRef = useRef<KeyboardShortcut[]>([]);
@@ -55,6 +80,7 @@ export function ToolLayout({ title, emoji, onBack, isFullscreen, children, short
   const dualCtx = useContext(DualToolContext);
   const singleSvc = useContext(ToolServicesContext);
   const canEnterDual = useCanEnterDual();
+  const isNarrow = useIsNarrow();
   const showDualEntry = singleSvc !== null && dualCtx === null;
 
   const soundEnabled = useSoundStore((s) => s.settings.enabled);
@@ -89,46 +115,49 @@ export function ToolLayout({ title, emoji, onBack, isFullscreen, children, short
   // Keyboard shortcut handler
   // 듀얼 모드: useToolKeydown 이 활성 슬롯이 아닐 때 자동으로 스킵.
   // 단일 모드: DualToolContext 부재 → 항상 실행 (기존 동작과 동일).
-  useToolKeydown((e) => {
-    // ESC: 듀얼 모드면 슬롯 닫기, 아니면 onBack
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      if (dualCtx) dualCtx.onSlotClose();
-      else onBack();
-      return;
-    }
-
-    // F11: 듀얼 모드면 슬롯 최대화 토글, 아니면 창 전체화면
-    if (e.key === 'F11') {
-      e.preventDefault();
-      if (dualCtx) dualCtx.onSlotMaximizeToggle();
-      else toggleFullscreen();
-      return;
-    }
-
-    // Skip remaining shortcuts when focused on form elements
-    const tag = (document.activeElement as HTMLElement)?.tagName;
-    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-
-    // M key for mute toggle
-    if (e.key === 'm' || e.key === 'M') {
-      e.preventDefault();
-      toggleSound();
-      return;
-    }
-
-    for (const sc of shortcutsRef.current) {
-      const keyMatch = e.key === sc.key;
-      const needShift = sc.modifiers?.shift ?? false;
-      const needCtrl = sc.modifiers?.ctrl ?? false;
-
-      if (keyMatch && needShift === e.shiftKey && needCtrl === (e.ctrlKey || e.metaKey)) {
+  useToolKeydown(
+    (e) => {
+      // ESC: 듀얼 모드면 슬롯 닫기, 아니면 onBack
+      if (e.key === 'Escape') {
         e.preventDefault();
-        sc.handler();
+        if (dualCtx) dualCtx.onSlotClose();
+        else onBack();
         return;
       }
-    }
-  }, [onBack, toggleFullscreen, toggleSound, dualCtx]);
+
+      // F11: 듀얼 모드면 슬롯 최대화 토글, 아니면 창 전체화면
+      if (e.key === 'F11') {
+        e.preventDefault();
+        if (dualCtx) dualCtx.onSlotMaximizeToggle();
+        else toggleFullscreen();
+        return;
+      }
+
+      // Skip remaining shortcuts when focused on form elements
+      const tag = (document.activeElement as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+      // M key for mute toggle
+      if (e.key === 'm' || e.key === 'M') {
+        e.preventDefault();
+        toggleSound();
+        return;
+      }
+
+      for (const sc of shortcutsRef.current) {
+        const keyMatch = e.key === sc.key;
+        const needShift = sc.modifiers?.shift ?? false;
+        const needCtrl = sc.modifiers?.ctrl ?? false;
+
+        if (keyMatch && needShift === e.shiftKey && needCtrl === (e.ctrlKey || e.metaKey)) {
+          e.preventDefault();
+          sc.handler();
+          return;
+        }
+      }
+    },
+    [onBack, toggleFullscreen, toggleSound, dualCtx],
+  );
 
   const allShortcuts = [
     { key: 'Esc', label: dualCtx ? '슬롯 닫기' : '뒤로가기' },
@@ -144,27 +173,29 @@ export function ToolLayout({ title, emoji, onBack, isFullscreen, children, short
     <div className="h-full flex flex-col">
       {/* Header */}
       <div className={`flex items-center justify-between ${isFullscreen ? 'mb-2' : 'mb-6'}`}>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 min-w-0 flex-1">
           {!isFullscreen && (
             <>
               <button
                 onClick={onBack}
-                className="flex items-center gap-1.5 text-sp-muted hover:text-sp-text transition-colors text-sm"
+                className="flex items-center gap-1.5 text-sp-muted hover:text-sp-text transition-colors text-sm shrink-0"
               >
                 <span className="material-symbols-outlined text-icon-md">arrow_back</span>
-                <span>쌤도구</span>
+                <span className="whitespace-nowrap">쌤도구</span>
               </button>
-              <div className="w-px h-5 bg-sp-border" />
+              <div className="w-px h-5 bg-sp-border shrink-0" />
             </>
           )}
-          <h1 className={`font-bold text-sp-text flex items-center gap-2 ${isFullscreen ? 'text-lg' : 'text-xl'}`}>
-            <span>{emoji}</span>
-            <span>{title}</span>
+          <h1
+            className={`font-bold text-sp-text flex items-center gap-2 min-w-0 ${isFullscreen ? 'text-lg' : 'text-xl'}`}
+          >
+            <span className="shrink-0">{emoji}</span>
+            <span className="truncate">{title}</span>
           </h1>
         </div>
-        <div className="flex items-center gap-2">
-          {/* Zoom controls */}
-          {!disableZoom && (
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Zoom controls — 데스크톱 전용(모바일은 네이티브 핀치 줌 사용) */}
+          {!disableZoom && !isNarrow && (
             <div className="flex items-center gap-0.5 bg-sp-text/5 rounded-lg px-1 py-0.5">
               <button
                 onClick={zoomOut}
@@ -207,37 +238,39 @@ export function ToolLayout({ title, emoji, onBack, isFullscreen, children, short
             </span>
           </button>
 
-          {/* Keyboard shortcuts help */}
-          <div className="relative">
-            <button
-              onClick={() => setShowHelp((v) => !v)}
-              className="p-2 rounded-lg text-sp-muted hover:text-sp-text hover:bg-sp-text/5 transition-all"
-              title="단축키 안내"
-            >
-              <span className="material-symbols-outlined text-icon-lg">keyboard</span>
-            </button>
-            {showHelp && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setShowHelp(false)} />
-                <div className="absolute right-0 top-full mt-2 w-52 bg-sp-card border border-sp-border rounded-xl shadow-2xl z-50 p-3">
-                  <h3 className="text-xs font-bold text-sp-text mb-2 flex items-center gap-1.5">
-                    <span className="material-symbols-outlined text-icon-sm">keyboard</span>
-                    단축키
-                  </h3>
-                  <div className="space-y-1">
-                    {allShortcuts.map((s, i) => (
-                      <div key={i} className="flex items-center justify-between text-xs">
-                        <kbd className="px-1.5 py-0.5 rounded bg-sp-text/10 text-sp-text font-mono text-caption">
-                          {s.key}
-                        </kbd>
-                        <span className="text-sp-muted">{s.label}</span>
-                      </div>
-                    ))}
+          {/* Keyboard shortcuts help — 데스크톱 전용(모바일은 물리 키보드 없음) */}
+          {!isNarrow && (
+            <div className="relative">
+              <button
+                onClick={() => setShowHelp((v) => !v)}
+                className="p-2 rounded-lg text-sp-muted hover:text-sp-text hover:bg-sp-text/5 transition-all"
+                title="단축키 안내"
+              >
+                <span className="material-symbols-outlined text-icon-lg">keyboard</span>
+              </button>
+              {showHelp && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowHelp(false)} />
+                  <div className="absolute right-0 top-full mt-2 w-52 bg-sp-card border border-sp-border rounded-xl shadow-2xl z-50 p-3">
+                    <h3 className="text-xs font-bold text-sp-text mb-2 flex items-center gap-1.5">
+                      <span className="material-symbols-outlined text-icon-sm">keyboard</span>
+                      단축키
+                    </h3>
+                    <div className="space-y-1">
+                      {allShortcuts.map((s, i) => (
+                        <div key={i} className="flex items-center justify-between text-xs">
+                          <kbd className="px-1.5 py-0.5 rounded bg-sp-text/10 text-sp-text font-mono text-caption">
+                            {s.key}
+                          </kbd>
+                          <span className="text-sp-muted">{s.label}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              </>
-            )}
-          </div>
+                </>
+              )}
+            </div>
+          )}
 
           {/* Dual mode entry button (single mode only) */}
           {showDualEntry && (
@@ -281,24 +314,22 @@ export function ToolLayout({ title, emoji, onBack, isFullscreen, children, short
             </>
           )}
 
-          {/* Fullscreen / Slot maximize button */}
-          <button
-            type="button"
-            onClick={dualCtx ? dualCtx.onSlotMaximizeToggle : toggleFullscreen}
-            className="p-2 rounded-lg text-sp-muted hover:text-sp-text hover:bg-sp-text/5 transition-all"
-            title={
-              dualCtx
-                ? '슬롯 최대화'
-                : (isFullscreen ? '전체화면 나가기' : '전체화면')
-            }
-            aria-label={dualCtx ? '슬롯 최대화 토글' : (isFullscreen ? '전체화면 나가기' : '전체화면')}
-          >
-            <span className="material-symbols-outlined">
-              {dualCtx
-                ? 'open_in_full'
-                : (isFullscreen ? 'fullscreen_exit' : 'fullscreen')}
-            </span>
-          </button>
+          {/* Fullscreen / Slot maximize button — 좁은 폭(모바일)에선 숨김, 듀얼 슬롯 최대화는 유지 */}
+          {(!isNarrow || dualCtx) && (
+            <button
+              type="button"
+              onClick={dualCtx ? dualCtx.onSlotMaximizeToggle : toggleFullscreen}
+              className="p-2 rounded-lg text-sp-muted hover:text-sp-text hover:bg-sp-text/5 transition-all"
+              title={dualCtx ? '슬롯 최대화' : isFullscreen ? '전체화면 나가기' : '전체화면'}
+              aria-label={
+                dualCtx ? '슬롯 최대화 토글' : isFullscreen ? '전체화면 나가기' : '전체화면'
+              }
+            >
+              <span className="material-symbols-outlined">
+                {dualCtx ? 'open_in_full' : isFullscreen ? 'fullscreen_exit' : 'fullscreen'}
+              </span>
+            </button>
+          )}
 
           {/* Slot close button (dual mode only) */}
           {dualCtx && (
@@ -318,9 +349,7 @@ export function ToolLayout({ title, emoji, onBack, isFullscreen, children, short
       {/* Content */}
       <div className="flex-1 min-h-0 overflow-auto">
         {disableZoom ? (
-          <div className="flex flex-col min-h-full h-full">
-            {children}
-          </div>
+          <div className="flex flex-col min-h-full h-full">{children}</div>
         ) : (
           <div
             style={{

@@ -71,7 +71,9 @@ function SetupView({
   onStart,
 }: SetupViewProps) {
   return (
-    <div className={`w-full max-w-2xl mx-auto flex flex-col ${isFullscreen ? 'h-full min-h-0 gap-3' : 'gap-6'}`}>
+    <div
+      className={`w-full max-w-2xl mx-auto flex flex-col ${isFullscreen ? 'h-full min-h-0 gap-3' : 'gap-6'}`}
+    >
       {/* Team count stepper */}
       <div className="flex items-center justify-center gap-4 shrink-0">
         <span className="text-sp-muted text-sm font-medium">팀 수</span>
@@ -97,16 +99,16 @@ function SetupView({
       </div>
 
       {/* Team rows */}
-      <div className={`flex flex-col gap-2 pr-1 ${isFullscreen ? 'flex-1 min-h-0 overflow-y-auto' : 'max-h-[420px] overflow-y-auto'}`}>
+      <div
+        className={`flex flex-col gap-2 pr-1 ${isFullscreen ? 'flex-1 min-h-0 overflow-y-auto' : 'max-h-[420px] overflow-y-auto'}`}
+      >
         {teams.map((team, idx) => (
           <div
             key={team.id}
-            className={`flex items-center gap-3 bg-sp-card border border-sp-border rounded-xl px-4 ${isFullscreen ? 'py-2' : 'py-3'}`}
+            className={`flex flex-wrap items-center gap-3 bg-sp-card border border-sp-border rounded-xl px-4 ${isFullscreen ? 'py-2' : 'py-3'}`}
           >
             {/* Index label */}
-            <span className="text-sp-muted text-sm font-medium w-5 shrink-0">
-              {idx + 1}
-            </span>
+            <span className="text-sp-muted text-sm font-medium w-5 shrink-0">{idx + 1}</span>
 
             {/* Color palette */}
             <div className="flex gap-1.5 shrink-0">
@@ -118,9 +120,7 @@ function SetupView({
                   style={{
                     backgroundColor: color,
                     boxShadow:
-                      team.color === color
-                        ? `0 0 0 2px #131a2b, 0 0 0 4px ${color}`
-                        : 'none',
+                      team.color === color ? `0 0 0 2px #131a2b, 0 0 0 4px ${color}` : 'none',
                     transform: team.color === color ? 'scale(1.15)' : 'scale(1)',
                   }}
                   title={color}
@@ -134,7 +134,7 @@ function SetupView({
               value={team.name}
               onChange={(e) => onTeamNameChange(team.id, e.target.value)}
               maxLength={20}
-              className="flex-1 min-w-0 bg-sp-bg border border-sp-border rounded-lg px-3 py-1.5 text-sm text-sp-text placeholder-sp-muted focus:border-sp-accent focus:outline-none transition-colors"
+              className="w-full min-w-0 sm:w-auto sm:flex-1 bg-sp-bg border border-sp-border rounded-lg px-3 py-1.5 text-sm text-sp-text placeholder-sp-muted focus:border-sp-accent focus:outline-none transition-colors"
               placeholder={`${idx + 1}팀`}
             />
           </div>
@@ -172,11 +172,8 @@ function BarGraph({ teams, ranking, isFullscreen }: BarGraphProps) {
       } bg-sp-card border border-sp-border`}
     >
       {teams.map((team) => {
-        const widthPercent = allZero
-          ? 100 / teams.length
-          : (team.score / totalScore) * 100;
-        const isLeader =
-          !allZero && ranking.get(team.id) === bestRank;
+        const widthPercent = allZero ? 100 / teams.length : (team.score / totalScore) * 100;
+        const isLeader = !allZero && ranking.get(team.id) === bestRank;
         const showLabel = widthPercent > (isFullscreen ? 8 : 12);
 
         return (
@@ -217,13 +214,7 @@ interface TeamCardProps {
   onScoreChange: (teamId: string, delta: number) => void;
 }
 
-function TeamCard({
-  team,
-  rank,
-  isAnimating,
-  isFullscreen,
-  onScoreChange,
-}: TeamCardProps) {
+function TeamCard({ team, rank, isAnimating, isFullscreen, onScoreChange }: TeamCardProps) {
   const scoreButtons: { label: string; delta: number; type: 'minus' | 'plus' }[] = [
     { label: '-5', delta: -5, type: 'minus' },
     { label: '-1', delta: -1, type: 'minus' },
@@ -241,15 +232,10 @@ function TeamCard({
     >
       {/* Header: name + rank */}
       <div className="flex items-center justify-between mb-2">
-        <span
-          className="font-bold truncate"
-          style={{ color: team.color }}
-        >
+        <span className="font-bold truncate" style={{ color: team.color }}>
           {team.name}
         </span>
-        <span className="text-sm shrink-0">
-          {getRankEmoji(rank)}
-        </span>
+        <span className="text-sm shrink-0">{getRankEmoji(rank)}</span>
       </div>
 
       {/* Score */}
@@ -264,21 +250,15 @@ function TeamCard({
         </span>
       </div>
 
-      {/* Buttons */}
-      <div className="flex items-center justify-center gap-1.5 mt-2">
+      {/* Buttons — 모바일은 카드 폭 초과 시 줄바꿈 */}
+      <div className="flex flex-wrap items-center justify-center gap-1.5 mt-2">
         {scoreButtons.map((btn) => (
           <button
             key={btn.label}
             onClick={() => onScoreChange(team.id, btn.delta)}
             className={`rounded-lg font-medium transition-all active:scale-95 ${
-              isFullscreen
-                ? 'px-4 py-2 text-sm'
-                : 'px-3 py-1.5 text-xs'
-            } ${
-              btn.type === 'minus'
-                ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30'
-                : ''
-            }`}
+              isFullscreen ? 'px-4 py-2 text-sm' : 'px-3 py-1.5 text-xs'
+            } ${btn.type === 'minus' ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30' : ''}`}
             style={
               btn.type === 'plus'
                 ? {
@@ -289,14 +269,18 @@ function TeamCard({
             }
             onMouseEnter={(e) => {
               if (btn.type === 'plus') {
-                (e.currentTarget as HTMLButtonElement).style.backgroundColor =
-                  hexToRgba(team.color, 0.3);
+                (e.currentTarget as HTMLButtonElement).style.backgroundColor = hexToRgba(
+                  team.color,
+                  0.3,
+                );
               }
             }}
             onMouseLeave={(e) => {
               if (btn.type === 'plus') {
-                (e.currentTarget as HTMLButtonElement).style.backgroundColor =
-                  hexToRgba(team.color, 0.2);
+                (e.currentTarget as HTMLButtonElement).style.backgroundColor = hexToRgba(
+                  team.color,
+                  0.2,
+                );
               }
             }}
           >
@@ -398,15 +382,11 @@ export function ToolScoreboard({ onBack, isFullscreen }: ToolScoreboardProps) {
   }, []);
 
   const handleTeamNameChange = useCallback((id: string, name: string) => {
-    setTeams((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, name } : t))
-    );
+    setTeams((prev) => prev.map((t) => (t.id === id ? { ...t, name } : t)));
   }, []);
 
   const handleTeamColorChange = useCallback((id: string, color: string) => {
-    setTeams((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, color } : t))
-    );
+    setTeams((prev) => prev.map((t) => (t.id === id ? { ...t, color } : t)));
   }, []);
 
   const handleStart = useCallback(() => {
@@ -419,7 +399,7 @@ export function ToolScoreboard({ onBack, isFullscreen }: ToolScoreboardProps) {
         if (t.id !== teamId) return t;
         const newScore = Math.max(0, t.score + delta);
         return { ...t, score: newScore };
-      })
+      }),
     );
 
     // Trigger scale animation
@@ -476,7 +456,13 @@ export function ToolScoreboard({ onBack, isFullscreen }: ToolScoreboardProps) {
   }, [viewMode, teams, handleScoreChange]);
 
   return (
-    <ToolLayout title="점수판" emoji="📊" onBack={onBack} isFullscreen={isFullscreen} shortcuts={scoreShortcuts}>
+    <ToolLayout
+      title="점수판"
+      emoji="📊"
+      onBack={onBack}
+      isFullscreen={isFullscreen}
+      shortcuts={scoreShortcuts}
+    >
       {viewMode === 'setup' ? (
         <SetupView
           teams={teams}

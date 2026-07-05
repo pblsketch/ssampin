@@ -122,17 +122,28 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
           if (!tc) return [];
           return tc.students
             .filter(isStudentActive)
-            .map((s) => s.name?.trim() ? s.name : `${s.number}번`)
+            .map((s) => (s.name?.trim() ? s.name : `${s.number}번`))
             .filter((name) => !rosterExcludedNames.has(name));
         }
         // Regular class roster
         const roster = rosters.find((r) => r.id === selectedRosterId);
         if (!roster) return [];
-        return roster.studentNames
-          .filter((name) => name.trim().length > 0 && !rosterExcludedNames.has(name));
+        return roster.studentNames.filter(
+          (name) => name.trim().length > 0 && !rosterExcludedNames.has(name),
+        );
       }
     }
-  }, [dataSource, students, excludedIds, rangeConfig, customText, rosters, selectedRosterId, rosterExcludedNames, teachingClasses]);
+  }, [
+    dataSource,
+    students,
+    excludedIds,
+    rangeConfig,
+    customText,
+    rosters,
+    selectedRosterId,
+    rosterExcludedNames,
+    teachingClasses,
+  ]);
 
   // Reset state when mode or data source changes
   useEffect(() => {
@@ -144,55 +155,58 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
   }, [mode, dataSource]);
 
   // --- Slot machine animation for single pick ---
-  const runSlotAnimation = useCallback((pool: string[], onComplete: (picked: string) => void) => {
-    if (pool.length === 0) return;
+  const runSlotAnimation = useCallback(
+    (pool: string[], onComplete: (picked: string) => void) => {
+      if (pool.length === 0) return;
 
-    setIsAnimating(true);
-    setShowResult(false);
-    playProgress();
-    speedRef.current = 50;
-    stepCountRef.current = 0;
+      setIsAnimating(true);
+      setShowResult(false);
+      playProgress();
+      speedRef.current = 50;
+      stepCountRef.current = 0;
 
-    // P1-1: 시각적 다양성 강화 — 30 → 40 step
-    const totalSteps = 40;
+      // P1-1: 시각적 다양성 강화 — 30 → 40 step
+      const totalSteps = 40;
 
-    const tick = () => {
-      stepCountRef.current += 1;
-      const idx = Math.floor(Math.random() * pool.length);
-      setSlotDisplay(pool[idx] ?? '');
+      const tick = () => {
+        stepCountRef.current += 1;
+        const idx = Math.floor(Math.random() * pool.length);
+        setSlotDisplay(pool[idx] ?? '');
 
-      if (stepCountRef.current >= totalSteps) {
-        // Final pick — anti-repeat 모드면 직전 결과들을 회피
+        if (stepCountRef.current >= totalSteps) {
+          // Final pick — anti-repeat 모드면 직전 결과들을 회피
+          if (animationRef.current) {
+            clearInterval(animationRef.current);
+            animationRef.current = null;
+          }
+          const picked = pickWithMemory(pool, { history: pickedItems });
+          if (picked !== undefined) {
+            setSlotDisplay(picked);
+            onComplete(picked);
+          }
+          setIsAnimating(false);
+          playResult();
+          return;
+        }
+
+        // Gradually slow down
+        if (stepCountRef.current > totalSteps * 0.6) {
+          speedRef.current = Math.min(300, speedRef.current + 25);
+        } else if (stepCountRef.current > totalSteps * 0.3) {
+          speedRef.current = Math.min(300, speedRef.current + 10);
+        }
+
+        // Restart with new speed
         if (animationRef.current) {
           clearInterval(animationRef.current);
-          animationRef.current = null;
         }
-        const picked = pickWithMemory(pool, { history: pickedItems });
-        if (picked !== undefined) {
-          setSlotDisplay(picked);
-          onComplete(picked);
-        }
-        setIsAnimating(false);
-        playResult();
-        return;
-      }
+        animationRef.current = setInterval(tick, speedRef.current);
+      };
 
-      // Gradually slow down
-      if (stepCountRef.current > totalSteps * 0.6) {
-        speedRef.current = Math.min(300, speedRef.current + 25);
-      } else if (stepCountRef.current > totalSteps * 0.3) {
-        speedRef.current = Math.min(300, speedRef.current + 10);
-      }
-
-      // Restart with new speed
-      if (animationRef.current) {
-        clearInterval(animationRef.current);
-      }
       animationRef.current = setInterval(tick, speedRef.current);
-    };
-
-    animationRef.current = setInterval(tick, speedRef.current);
-  }, [playProgress, playResult, pickedItems]);
+    },
+    [playProgress, playResult, pickedItems],
+  );
 
   // --- Handle pick ---
   const handlePick = useCallback(() => {
@@ -322,7 +336,17 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
         break;
       }
     }
-  }, [isAnimating, mode, excludePicked, getPool, pickedItems, multipleCount, runSlotAnimation, playProgress, playResult]);
+  }, [
+    isAnimating,
+    mode,
+    excludePicked,
+    getPool,
+    pickedItems,
+    multipleCount,
+    runSlotAnimation,
+    playProgress,
+    playResult,
+  ]);
 
   // --- Reset ---
   const handleReset = useCallback(() => {
@@ -382,8 +406,12 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
   const subTextSize = isFullscreen ? 'text-2xl' : 'text-lg';
 
   // Custom items for PresetSelector
-  const customItems = useMemo(() =>
-    customText.split('\n').map((l) => l.trim()).filter((l) => l.length > 0),
+  const customItems = useMemo(
+    () =>
+      customText
+        .split('\n')
+        .map((l) => l.trim())
+        .filter((l) => l.length > 0),
     [customText],
   );
 
@@ -397,22 +425,31 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
     setRevealedCount(0);
   }, []);
 
-  const randomShortcuts = useMemo<KeyboardShortcut[]>(() => [
-    { key: ' ', label: '뽑기', description: '랜덤 뽑기 실행', handler: handlePick },
-    { key: 'Enter', label: '뽑기', description: '랜덤 뽑기 실행', handler: handlePick },
-    { key: 'r', label: '초기화', description: '전체 초기화', handler: handleReset },
-  ], [handlePick, handleReset]);
+  const randomShortcuts = useMemo<KeyboardShortcut[]>(
+    () => [
+      { key: ' ', label: '뽑기', description: '랜덤 뽑기 실행', handler: handlePick },
+      { key: 'Enter', label: '뽑기', description: '랜덤 뽑기 실행', handler: handlePick },
+      { key: 'r', label: '초기화', description: '전체 초기화', handler: handleReset },
+    ],
+    [handlePick, handleReset],
+  );
 
   return (
-    <ToolLayout title="랜덤 뽑기" emoji="🎲" onBack={onBack} isFullscreen={isFullscreen} shortcuts={randomShortcuts}>
+    <ToolLayout
+      title="랜덤 뽑기"
+      emoji="🎲"
+      onBack={onBack}
+      isFullscreen={isFullscreen}
+      shortcuts={randomShortcuts}
+    >
       <div className="w-full max-w-4xl mx-auto flex flex-col gap-6">
         {/* Mode Tabs */}
-        <div className="flex gap-2 justify-center">
-          {([
+        <div className="flex flex-wrap gap-2 justify-center">
+          {[
             { key: 'single' as const, label: '🎯 1명 뽑기' },
             { key: 'multiple' as const, label: '👥 N명 뽑기' },
             { key: 'order' as const, label: '📋 순서 정하기' },
-          ]).map((tab) => (
+          ].map((tab) => (
             <button
               key={tab.key}
               onClick={() => setMode(tab.key)}
@@ -430,12 +467,12 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
         {/* Data Source Selection */}
         <div className="bg-sp-card rounded-xl border border-sp-border p-4">
           <div className="flex gap-2 mb-4 justify-center flex-wrap">
-            {([
+            {[
               { key: 'students' as const, label: '👩\u200D🎓 우리 반' },
               { key: 'classRoster' as const, label: '📋 다른 반' },
               { key: 'range' as const, label: '🔢 번호 범위' },
               { key: 'custom' as const, label: '✏️ 직접 입력' },
-            ]).map((src) => (
+            ].map((src) => (
               <button
                 key={src.key}
                 onClick={() => setDataSource(src.key)}
@@ -459,33 +496,32 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
                 </div>
               ) : (
                 <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto pr-1">
-                  {students
-                    .filter(isStudentActive)
-                    .map((student) => {
-                      const isExcluded = excludedIds.has(student.id);
-                      const studentName = student.name || `${student.studentNumber ?? 0}번`;
-                      const isPicked = pickedItems.includes(studentName);
-                      return (
-                        <button
-                          key={student.id}
-                          onClick={() => toggleStudentExclusion(student.id)}
-                          className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
-                            isExcluded
-                              ? 'bg-sp-surface text-sp-muted/50 line-through border border-sp-border/50'
-                              : isPicked
-                                ? 'bg-sp-surface text-sp-muted line-through border border-sp-border'
-                                : 'bg-sp-accent/10 text-sp-accent border border-sp-accent/30 hover:bg-sp-accent/20'
-                          }`}
-                        >
-                          {studentName}
-                        </button>
-                      );
-                    })}
+                  {students.filter(isStudentActive).map((student) => {
+                    const isExcluded = excludedIds.has(student.id);
+                    const studentName = student.name || `${student.studentNumber ?? 0}번`;
+                    const isPicked = pickedItems.includes(studentName);
+                    return (
+                      <button
+                        key={student.id}
+                        onClick={() => toggleStudentExclusion(student.id)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                          isExcluded
+                            ? 'bg-sp-surface text-sp-muted/50 line-through border border-sp-border/50'
+                            : isPicked
+                              ? 'bg-sp-surface text-sp-muted line-through border border-sp-border'
+                              : 'bg-sp-accent/10 text-sp-accent border border-sp-accent/30 hover:bg-sp-accent/20'
+                        }`}
+                      >
+                        {studentName}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
               {students.length > 0 && (
                 <div className="mt-2 text-xs text-sp-muted text-center">
-                  클릭하여 제외/포함 ({students.filter(isStudentActive).length - excludedIds.size}명 참여)
+                  클릭하여 제외/포함 ({students.filter(isStudentActive).length - excludedIds.size}명
+                  참여)
                 </div>
               )}
             </div>
@@ -510,7 +546,12 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
                   min={1}
                   max={999}
                   value={rangeConfig.start}
-                  onChange={(e) => setRangeConfig((prev) => ({ ...prev, start: Math.max(1, parseInt(e.target.value) || 1) }))}
+                  onChange={(e) =>
+                    setRangeConfig((prev) => ({
+                      ...prev,
+                      start: Math.max(1, parseInt(e.target.value) || 1),
+                    }))
+                  }
                   className="w-20 px-3 py-1.5 rounded-lg bg-sp-surface border border-sp-border text-sp-text text-sm text-center focus:outline-none focus:border-sp-accent"
                 />
               </div>
@@ -522,7 +563,12 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
                   min={1}
                   max={999}
                   value={rangeConfig.end}
-                  onChange={(e) => setRangeConfig((prev) => ({ ...prev, end: Math.max(1, parseInt(e.target.value) || 1) }))}
+                  onChange={(e) =>
+                    setRangeConfig((prev) => ({
+                      ...prev,
+                      end: Math.max(1, parseInt(e.target.value) || 1),
+                    }))
+                  }
                   className="w-20 px-3 py-1.5 rounded-lg bg-sp-surface border border-sp-border text-sp-text text-sm text-center focus:outline-none focus:border-sp-accent"
                 />
               </div>
@@ -535,7 +581,11 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
           {dataSource === 'custom' && (
             <div>
               <div className="mb-3">
-                <PresetSelector type="random" currentItems={customItems} onLoad={handleLoadPreset} />
+                <PresetSelector
+                  type="random"
+                  currentItems={customItems}
+                  onLoad={handleLoadPreset}
+                />
               </div>
               <textarea
                 value={customText}
@@ -566,7 +616,9 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
                 min={1}
                 max={poolTotal}
                 value={multipleCount}
-                onChange={(e) => setMultipleCount(Math.max(1, Math.min(poolTotal, parseInt(e.target.value) || 1)))}
+                onChange={(e) =>
+                  setMultipleCount(Math.max(1, Math.min(poolTotal, parseInt(e.target.value) || 1)))
+                }
                 className="w-14 px-2 py-1 rounded-lg bg-sp-surface border border-sp-border text-sp-text text-sm text-center focus:outline-none focus:border-sp-accent"
               />
               <button
@@ -613,9 +665,7 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
               >
                 {result[0]}
               </div>
-              <p className={`${subTextSize} text-amber-400 font-medium mt-3`}>
-                당첨!
-              </p>
+              <p className={`${subTextSize} text-amber-400 font-medium mt-3`}>당첨!</p>
             </div>
           )}
 
@@ -629,7 +679,9 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
                   style={{ animationDelay: `${idx * 100}ms` }}
                 >
                   <span className="text-amber-400 text-xs font-bold mb-1">#{idx + 1}</span>
-                  <span className={`${isFullscreen ? 'text-4xl' : 'text-2xl'} font-bold text-sp-text`}>
+                  <span
+                    className={`${isFullscreen ? 'text-4xl' : 'text-2xl'} font-bold text-sp-text`}
+                  >
                     {item}
                   </span>
                 </div>
@@ -650,20 +702,24 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
                         : 'opacity-0 translate-x-4'
                     }`}
                   >
-                    <span className={`text-sm font-bold min-w-[2rem] text-center rounded-md px-1.5 py-0.5 ${
-                      idx === 0
-                        ? 'bg-amber-500/20 text-amber-400'
-                        : idx === 1
-                          ? 'bg-gray-400/20 text-gray-300'
-                          : idx === 2
-                            ? 'bg-orange-500/20 text-orange-400'
-                            : 'bg-sp-card text-sp-muted'
-                    }`}>
+                    <span
+                      className={`text-sm font-bold min-w-[2rem] text-center rounded-md px-1.5 py-0.5 ${
+                        idx === 0
+                          ? 'bg-amber-500/20 text-amber-400'
+                          : idx === 1
+                            ? 'bg-gray-400/20 text-gray-300'
+                            : idx === 2
+                              ? 'bg-orange-500/20 text-orange-400'
+                              : 'bg-sp-card text-sp-muted'
+                      }`}
+                    >
                       {idx + 1}
                     </span>
-                    <span className={`font-medium ${
-                      idx === 0 ? 'text-amber-400 text-lg' : 'text-sp-text'
-                    }`}>
+                    <span
+                      className={`font-medium ${
+                        idx === 0 ? 'text-amber-400 text-lg' : 'text-sp-text'
+                      }`}
+                    >
                       {item}
                     </span>
                     {idx === 0 && <span className="text-amber-400 ml-auto">👑</span>}
@@ -685,11 +741,7 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
                 : 'bg-sp-card text-sp-muted border border-sp-border cursor-not-allowed'
             }`}
           >
-            {isAnimating
-              ? '🎰 뽑는 중...'
-              : mode === 'order'
-                ? '🔀 순서 섞기!'
-                : '🎲 뽑기!'}
+            {isAnimating ? '🎰 뽑는 중...' : mode === 'order' ? '🔀 순서 섞기!' : '🎲 뽑기!'}
           </button>
           <button
             onClick={handleReset}

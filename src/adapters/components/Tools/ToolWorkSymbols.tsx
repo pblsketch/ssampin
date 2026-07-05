@@ -18,36 +18,126 @@ const EMOJI_CATEGORIES: { label: string; emojis: string[] }[] = [
   {
     label: '수업 활동',
     emojis: [
-      '🤫', '🙋', '💬', '👥', '📝', '✋', '🤚', '👋', '🖐️', '🙌',
-      '👏', '🤝', '🗣️', '💭', '📢', '📣', '🔔', '🔕', '🤔', '💡',
+      '🤫',
+      '🙋',
+      '💬',
+      '👥',
+      '📝',
+      '✋',
+      '🤚',
+      '👋',
+      '🖐️',
+      '🙌',
+      '👏',
+      '🤝',
+      '🗣️',
+      '💭',
+      '📢',
+      '📣',
+      '🔔',
+      '🔕',
+      '🤔',
+      '💡',
     ],
   },
   {
     label: '학습',
     emojis: [
-      '📖', '📚', '✏️', '🖊️', '📐', '📏', '🔬', '🔭', '🧪', '🧮',
-      '💻', '🎓', '📓', '📋', '🗒️', '📎', '✂️', '🖍️', '🎨', '🧠',
+      '📖',
+      '📚',
+      '✏️',
+      '🖊️',
+      '📐',
+      '📏',
+      '🔬',
+      '🔭',
+      '🧪',
+      '🧮',
+      '💻',
+      '🎓',
+      '📓',
+      '📋',
+      '🗒️',
+      '📎',
+      '✂️',
+      '🖍️',
+      '🎨',
+      '🧠',
     ],
   },
   {
     label: '상태 / 신호',
     emojis: [
-      '🟢', '🟡', '🔴', '⭕', '❌', '✅', '⚠️', '🚦', '⏸️', '▶️',
-      '⏹️', '🔇', '🔊', '👀', '👁️', '⏰', '⏳', '🎯', '⭐', '🏆',
+      '🟢',
+      '🟡',
+      '🔴',
+      '⭕',
+      '❌',
+      '✅',
+      '⚠️',
+      '🚦',
+      '⏸️',
+      '▶️',
+      '⏹️',
+      '🔇',
+      '🔊',
+      '👀',
+      '👁️',
+      '⏰',
+      '⏳',
+      '🎯',
+      '⭐',
+      '🏆',
     ],
   },
   {
     label: '감정 / 표현',
     emojis: [
-      '😊', '😀', '🤩', '😮', '🤯', '😴', '🥳', '💪', '🙏', '❤️',
-      '🔥', '✨', '🌟', '👍', '👎', '🎉', '🎊', '💯', '🏃', '🧘',
+      '😊',
+      '😀',
+      '🤩',
+      '😮',
+      '🤯',
+      '😴',
+      '🥳',
+      '💪',
+      '🙏',
+      '❤️',
+      '🔥',
+      '✨',
+      '🌟',
+      '👍',
+      '👎',
+      '🎉',
+      '🎊',
+      '💯',
+      '🏃',
+      '🧘',
     ],
   },
   {
     label: '사물',
     emojis: [
-      '📱', '🖥️', '⌨️', '🎧', '🎤', '📷', '🗂️', '📌', '🧩', '🎲',
-      '🪄', '🔑', '🧲', '💎', '🛠️', '🔧', '📦', '🗃️', '🏷️', '🔖',
+      '📱',
+      '🖥️',
+      '⌨️',
+      '🎧',
+      '🎤',
+      '📷',
+      '🗂️',
+      '📌',
+      '🧩',
+      '🎲',
+      '🪄',
+      '🔑',
+      '🧲',
+      '💎',
+      '🛠️',
+      '🔧',
+      '📦',
+      '🗃️',
+      '🏷️',
+      '🔖',
     ],
   },
 ];
@@ -75,17 +165,18 @@ function EmojiPicker({ value, onSelect }: EmojiPickerProps) {
     return () => document.removeEventListener('mousedown', handleClick);
   }, [open]);
 
-  const handleSelect = useCallback((emoji: string) => {
-    onSelect(emoji);
-    setOpen(false);
-    setSearch('');
-  }, [onSelect]);
+  const handleSelect = useCallback(
+    (emoji: string) => {
+      onSelect(emoji);
+      setOpen(false);
+      setSearch('');
+    },
+    [onSelect],
+  );
 
   // Flatten for search
   const allEmojis = EMOJI_CATEGORIES.flatMap((c) => c.emojis);
-  const filtered = search
-    ? [...new Set(allEmojis)].filter((e) => e.includes(search))
-    : null;
+  const filtered = search ? [...new Set(allEmojis)].filter((e) => e.includes(search)) : null;
 
   return (
     <div ref={containerRef} className="relative">
@@ -283,7 +374,10 @@ function SettingsModal({ symbols, onSave, onClose }: SettingsModalProps) {
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+      onClick={onClose}
+    >
       <div
         className="bg-sp-surface border border-sp-border rounded-2xl w-full max-w-lg max-h-[85vh] flex flex-col shadow-2xl"
         onClick={(e) => e.stopPropagation()}
@@ -348,7 +442,9 @@ function SettingsModal({ symbols, onSave, onClose }: SettingsModalProps) {
                     className="w-full px-3 py-1.5 text-sm bg-sp-surface border border-sp-border rounded-lg text-sp-text focus:outline-none focus:border-sp-accent"
                   >
                     {BG_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -425,39 +521,48 @@ export function ToolWorkSymbols({ onBack, isFullscreen }: ToolWorkSymbolsProps) 
   const [showBottomBar, setShowBottomBar] = useState(true);
   const hideTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const currentSymbol = symbols[selectedIndex] ?? symbols[0] ?? {
-    id: 'fallback', emoji: '🤫', name: '조용히',
-    description: '소리 내지 않고 혼자 활동합니다',
-    bgGradient: 'from-blue-950/30 to-transparent',
-  };
+  const currentSymbol = symbols[selectedIndex] ??
+    symbols[0] ?? {
+      id: 'fallback',
+      emoji: '🤫',
+      name: '조용히',
+      description: '소리 내지 않고 혼자 활동합니다',
+      bgGradient: 'from-blue-950/30 to-transparent',
+    };
 
   // Select with animation
-  const selectSymbol = useCallback((index: number) => {
-    if (index === selectedIndex || animPhase !== 'idle') return;
-    pendingIndex.current = index;
-    setAnimPhase('out');
-    playSwitchSound();
+  const selectSymbol = useCallback(
+    (index: number) => {
+      if (index === selectedIndex || animPhase !== 'idle') return;
+      pendingIndex.current = index;
+      setAnimPhase('out');
+      playSwitchSound();
 
-    setTimeout(() => {
-      setSelectedIndex(index);
-      setAnimPhase('in');
       setTimeout(() => {
-        setAnimPhase('idle');
-        pendingIndex.current = null;
-      }, 300);
-    }, 200);
-  }, [selectedIndex, animPhase, playSwitchSound]);
+        setSelectedIndex(index);
+        setAnimPhase('in');
+        setTimeout(() => {
+          setAnimPhase('idle');
+          pendingIndex.current = null;
+        }, 300);
+      }, 200);
+    },
+    [selectedIndex, animPhase, playSwitchSound],
+  );
 
   // Keyboard shortcuts (1~N)
-  useToolKeydown((e) => {
-    const tag = (e.target as HTMLElement).tagName;
-    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+  useToolKeydown(
+    (e) => {
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
 
-    const num = parseInt(e.key, 10);
-    if (num >= 1 && num <= symbols.length) {
-      selectSymbol(num - 1);
-    }
-  }, [symbols.length, selectSymbol]);
+      const num = parseInt(e.key, 10);
+      if (num >= 1 && num <= symbols.length) {
+        selectSymbol(num - 1);
+      }
+    },
+    [symbols.length, selectSymbol],
+  );
 
   // Fullscreen: auto-hide bottom bar
   useEffect(() => {
@@ -485,15 +590,18 @@ export function ToolWorkSymbols({ onBack, isFullscreen }: ToolWorkSymbolsProps) 
   }, [isFullscreen]);
 
   // Save customized symbols
-  const handleSaveSymbols = useCallback(async (newSymbols: WorkSymbolItem[]) => {
-    await updateSettings({
-      workSymbols: { symbols: newSymbols },
-    });
-    // Ensure selected index stays valid
-    if (selectedIndex >= newSymbols.length) {
-      setSelectedIndex(0);
-    }
-  }, [updateSettings, selectedIndex]);
+  const handleSaveSymbols = useCallback(
+    async (newSymbols: WorkSymbolItem[]) => {
+      await updateSettings({
+        workSymbols: { symbols: newSymbols },
+      });
+      // Ensure selected index stays valid
+      if (selectedIndex >= newSymbols.length) {
+        setSelectedIndex(0);
+      }
+    },
+    [updateSettings, selectedIndex],
+  );
 
   // Animation classes for the icon
   const iconAnimClass = (() => {
@@ -546,12 +654,16 @@ export function ToolWorkSymbols({ onBack, isFullscreen }: ToolWorkSymbolsProps) 
           </div>
 
           {/* Name */}
-          <div className={`mt-4 font-bold text-sp-text transition-all duration-300 ${nameSize} ${animPhase !== 'idle' ? 'opacity-0' : 'opacity-100'}`}>
+          <div
+            className={`mt-4 font-bold text-sp-text transition-all duration-300 ${nameSize} ${animPhase !== 'idle' ? 'opacity-0' : 'opacity-100'}`}
+          >
             {currentSymbol.name}
           </div>
 
           {/* Description */}
-          <div className={`mt-2 text-sp-muted transition-all duration-300 ${descSize} ${animPhase !== 'idle' ? 'opacity-0' : 'opacity-100'}`}>
+          <div
+            className={`mt-2 text-sp-muted transition-all duration-300 ${descSize} ${animPhase !== 'idle' ? 'opacity-0' : 'opacity-100'}`}
+          >
             {currentSymbol.description}
           </div>
         </div>
@@ -566,7 +678,7 @@ export function ToolWorkSymbols({ onBack, isFullscreen }: ToolWorkSymbolsProps) 
               : 'mt-6 pb-2'
           }`}
         >
-          <div className="flex items-center justify-center gap-3">
+          <div className="flex flex-wrap items-center justify-center gap-3">
             {symbols.map((symbol, index) => (
               <button
                 key={symbol.id}
@@ -598,7 +710,9 @@ export function ToolWorkSymbols({ onBack, isFullscreen }: ToolWorkSymbolsProps) 
           </div>
 
           {/* Keyboard hint */}
-          <div className={`text-center mt-3 text-xs text-sp-muted ${isFullscreen && !showBottomBar ? 'hidden' : ''}`}>
+          <div
+            className={`text-center mt-3 text-xs text-sp-muted ${isFullscreen && !showBottomBar ? 'hidden' : ''}`}
+          >
             단축키:{' '}
             {symbols.map((_, i) => (
               <span key={i}>

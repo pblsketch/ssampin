@@ -2,7 +2,11 @@ import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { ToolLayout } from './ToolLayout';
 import type { KeyboardShortcut } from './types';
 import { formatTime, formatTimeMs, shouldTriggerPreWarning } from '@domain/rules/timerRules';
-import type { AlarmSoundId, PreWarningSoundId, PreWarningSettings } from '@domain/entities/Settings';
+import type {
+  AlarmSoundId,
+  PreWarningSoundId,
+  PreWarningSettings,
+} from '@domain/entities/Settings';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { useToastStore } from '@adapters/components/common/Toast';
@@ -97,7 +101,9 @@ function playBeep(volume: number, boost: number): void {
     playOne(0.8);
 
     setTimeout(() => ctx.close(), 1500);
-  } catch { /* Audio not supported */ }
+  } catch {
+    /* Audio not supported */
+  }
 }
 
 /** 학교 종 — 댕동 2음 반복 (C5 523Hz, E5 659Hz sine) */
@@ -124,7 +130,9 @@ function playSchoolBell(volume: number, boost: number): void {
     });
 
     setTimeout(() => ctx.close(), 3000);
-  } catch { /* Audio not supported */ }
+  } catch {
+    /* Audio not supported */
+  }
 }
 
 /** 알람 시계 — 빠른 교차 비프 (1000Hz / 800Hz) */
@@ -146,7 +154,9 @@ function playAlarmClock(volume: number, boost: number): void {
     }
 
     setTimeout(() => ctx.close(), 3000);
-  } catch { /* Audio not supported */ }
+  } catch {
+    /* Audio not supported */
+  }
 }
 
 /** 부드러운 차임 — 도미솔도 어센딩 스케일 (sine) */
@@ -173,7 +183,9 @@ function playGentleChime(volume: number, boost: number): void {
     });
 
     setTimeout(() => ctx.close(), 3000);
-  } catch { /* Audio not supported */ }
+  } catch {
+    /* Audio not supported */
+  }
 }
 
 /** 버저 — 220Hz 톱니파 지속음 */
@@ -198,7 +210,9 @@ function playBuzzer(volume: number, boost: number): void {
     osc.stop(ctx.currentTime + 1.5);
 
     setTimeout(() => ctx.close(), 2500);
-  } catch { /* Audio not supported */ }
+  } catch {
+    /* Audio not supported */
+  }
 }
 
 // ─── 예고 알림음 ─────────────────────────────────────────────
@@ -224,7 +238,9 @@ function playSoftBell(volume: number, boost: number): void {
     osc.stop(ctx.currentTime + 1.5);
 
     setTimeout(() => ctx.close(), 2000);
-  } catch { /* Audio not supported */ }
+  } catch {
+    /* Audio not supported */
+  }
 }
 
 /** 째깍째깍 — 교차 톤 4회 */
@@ -250,15 +266,23 @@ function playTickTock(volume: number, boost: number): void {
     }
 
     setTimeout(() => ctx.close(), 2500);
-  } catch { /* Audio not supported */ }
+  } catch {
+    /* Audio not supported */
+  }
 }
 
 /** 예고 알림음 재생 디스패처 */
 function playPreWarningSound(soundId: PreWarningSoundId, volume: number, boost: number): void {
   switch (soundId) {
-    case 'gentle-chime': playGentleChime(volume * 0.6, boost); break;
-    case 'soft-bell': playSoftBell(volume, boost); break;
-    case 'tick-tock': playTickTock(volume, boost); break;
+    case 'gentle-chime':
+      playGentleChime(volume * 0.6, boost);
+      break;
+    case 'soft-bell':
+      playSoftBell(volume, boost);
+      break;
+    case 'tick-tock':
+      playTickTock(volume, boost);
+      break;
   }
 }
 
@@ -295,7 +319,9 @@ function playCustomAudio(dataUrl: string, volume: number, boost: number): void {
       audio.volume = volume;
       audio.play();
     }
-  } catch { /* Audio not supported */ }
+  } catch {
+    /* Audio not supported */
+  }
 }
 
 /** 사운드 ID로 알람 재생 */
@@ -306,11 +332,21 @@ function playAlarmSound(
   customDataUrl: string | null,
 ): void {
   switch (soundId) {
-    case 'beep': playBeep(volume, boost); break;
-    case 'school-bell': playSchoolBell(volume, boost); break;
-    case 'alarm-clock': playAlarmClock(volume, boost); break;
-    case 'gentle-chime': playGentleChime(volume, boost); break;
-    case 'buzzer': playBuzzer(volume, boost); break;
+    case 'beep':
+      playBeep(volume, boost);
+      break;
+    case 'school-bell':
+      playSchoolBell(volume, boost);
+      break;
+    case 'alarm-clock':
+      playAlarmClock(volume, boost);
+      break;
+    case 'gentle-chime':
+      playGentleChime(volume, boost);
+      break;
+    case 'buzzer':
+      playBuzzer(volume, boost);
+      break;
     case 'custom':
       if (customDataUrl) playCustomAudio(customDataUrl, volume, boost);
       else playBeep(volume, boost);
@@ -357,7 +393,13 @@ async function deleteCustomAudio(): Promise<void> {
 
 // ─── 원형 프로그레스 링 ──────────────────────────────────────
 
-function CircleProgress({ ratio, preWarningActive }: { ratio: number; preWarningActive?: boolean }) {
+function CircleProgress({
+  ratio,
+  preWarningActive,
+}: {
+  ratio: number;
+  preWarningActive?: boolean;
+}) {
   const radius = 140;
   const stroke = 6;
   const circumference = 2 * Math.PI * radius;
@@ -365,14 +407,14 @@ function CircleProgress({ ratio, preWarningActive }: { ratio: number; preWarning
 
   const color = preWarningActive
     ? '#f59e0b'
-    : ratio > 0.5 ? '#3b82f6' : ratio > 0.2 ? '#f59e0b' : '#ef4444';
+    : ratio > 0.5
+      ? '#3b82f6'
+      : ratio > 0.2
+        ? '#f59e0b'
+        : '#ef4444';
 
   return (
-    <svg
-      className="absolute inset-0 -rotate-90"
-      viewBox="0 0 300 300"
-      fill="none"
-    >
+    <svg className="absolute inset-0 -rotate-90" viewBox="0 0 300 300" fill="none">
       <circle
         cx="150"
         cy="150"
@@ -551,9 +593,7 @@ function AlarmSoundSelector({
           <span className="material-symbols-outlined text-[22px]">
             {customDataUrl ? 'audio_file' : 'upload_file'}
           </span>
-          <span className="text-xs font-medium">
-            {customDataUrl ? '내 파일' : '직접 등록'}
-          </span>
+          <span className="text-xs font-medium">{customDataUrl ? '내 파일' : '직접 등록'}</span>
           <span className="text-caption opacity-60 truncate max-w-full px-1">
             {customAudioName || '파일 선택'}
           </span>
@@ -731,7 +771,10 @@ function TimerMode() {
             if (preWarningBannerTimeoutRef.current) {
               clearTimeout(preWarningBannerTimeoutRef.current);
             }
-            preWarningBannerTimeoutRef.current = setTimeout(() => setShowPreWarningBanner(false), 5000);
+            preWarningBannerTimeoutRef.current = setTimeout(
+              () => setShowPreWarningBanner(false),
+              5000,
+            );
           }
 
           // ─── 종료 ───
@@ -766,28 +809,34 @@ function TimerMode() {
     setShowPreWarningBanner(false);
   }, [totalSeconds, clearTimer]);
 
-  const selectPreset = useCallback((seconds: number) => {
-    clearTimer();
-    setState('idle');
-    setTotalSeconds(seconds);
-    setRemaining(seconds);
-    setSelectedPreset(seconds);
-    setFlashCount(0);
-    preWarningTriggeredRef.current = false;
-    setShowPreWarningBanner(false);
-  }, [clearTimer]);
+  const selectPreset = useCallback(
+    (seconds: number) => {
+      clearTimer();
+      setState('idle');
+      setTotalSeconds(seconds);
+      setRemaining(seconds);
+      setSelectedPreset(seconds);
+      setFlashCount(0);
+      preWarningTriggeredRef.current = false;
+      setShowPreWarningBanner(false);
+    },
+    [clearTimer],
+  );
 
-  const handleCustomTime = useCallback((seconds: number) => {
-    setShowCustom(false);
-    clearTimer();
-    setState('idle');
-    setTotalSeconds(seconds);
-    setRemaining(seconds);
-    setSelectedPreset(-1);
-    setFlashCount(0);
-    preWarningTriggeredRef.current = false;
-    setShowPreWarningBanner(false);
-  }, [clearTimer]);
+  const handleCustomTime = useCallback(
+    (seconds: number) => {
+      setShowCustom(false);
+      clearTimer();
+      setState('idle');
+      setTotalSeconds(seconds);
+      setRemaining(seconds);
+      setSelectedPreset(-1);
+      setFlashCount(0);
+      preWarningTriggeredRef.current = false;
+      setShowPreWarningBanner(false);
+    },
+    [clearTimer],
+  );
 
   const dismiss = useCallback(() => {
     reset();
@@ -810,29 +859,41 @@ function TimerMode() {
     });
   }, []);
 
-  const handleSelectSound = useCallback(async (id: AlarmSoundId) => {
-    await updateSettings({
-      alarmSound: { ...settings.alarmSound, selectedSound: id },
-    });
-  }, [updateSettings, settings.alarmSound]);
+  const handleSelectSound = useCallback(
+    async (id: AlarmSoundId) => {
+      await updateSettings({
+        alarmSound: { ...settings.alarmSound, selectedSound: id },
+      });
+    },
+    [updateSettings, settings.alarmSound],
+  );
 
-  const handleVolumeChange = useCallback(async (v: number) => {
-    await updateSettings({
-      alarmSound: { ...settings.alarmSound, volume: v },
-    });
-  }, [updateSettings, settings.alarmSound]);
+  const handleVolumeChange = useCallback(
+    async (v: number) => {
+      await updateSettings({
+        alarmSound: { ...settings.alarmSound, volume: v },
+      });
+    },
+    [updateSettings, settings.alarmSound],
+  );
 
-  const handleBoostChange = useCallback(async (b: number) => {
-    await updateSettings({
-      alarmSound: { ...settings.alarmSound, boost: b },
-    });
-  }, [updateSettings, settings.alarmSound]);
+  const handleBoostChange = useCallback(
+    async (b: number) => {
+      await updateSettings({
+        alarmSound: { ...settings.alarmSound, boost: b },
+      });
+    },
+    [updateSettings, settings.alarmSound],
+  );
 
-  const handlePreWarningChange = useCallback(async (pw: PreWarningSettings) => {
-    await updateSettings({
-      alarmSound: { ...settings.alarmSound, preWarning: pw },
-    });
-  }, [updateSettings, settings.alarmSound]);
+  const handlePreWarningChange = useCallback(
+    async (pw: PreWarningSettings) => {
+      await updateSettings({
+        alarmSound: { ...settings.alarmSound, preWarning: pw },
+      });
+    },
+    [updateSettings, settings.alarmSound],
+  );
 
   const handleImportCustom = useCallback(async () => {
     const api = window.electronAPI;
@@ -856,31 +917,34 @@ function TimerMode() {
     }
   }, [updateSettings, settings.alarmSound]);
 
-  const handleFileInputChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const MAX_AUDIO_SIZE = 5 * 1024 * 1024;
-    if (file.size > MAX_AUDIO_SIZE) {
-      showToast('파일 크기가 너무 큽니다. 5MB 이하의 파일을 사용해주세요.', 'error');
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = async () => {
-      const dataUrl = reader.result as string;
-      setCustomDataUrl(dataUrl);
-      await saveCustomAudio(file.name, dataUrl);
-      await updateSettings({
-        alarmSound: {
-          ...settings.alarmSound,
-          selectedSound: 'custom',
-          customAudioName: file.name,
-        },
-      });
-    };
-    reader.readAsDataURL(file);
-    // reset input
-    e.target.value = '';
-  }, [updateSettings, settings.alarmSound, showToast]);
+  const handleFileInputChange = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      const MAX_AUDIO_SIZE = 5 * 1024 * 1024;
+      if (file.size > MAX_AUDIO_SIZE) {
+        showToast('파일 크기가 너무 큽니다. 5MB 이하의 파일을 사용해주세요.', 'error');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const dataUrl = reader.result as string;
+        setCustomDataUrl(dataUrl);
+        await saveCustomAudio(file.name, dataUrl);
+        await updateSettings({
+          alarmSound: {
+            ...settings.alarmSound,
+            selectedSound: 'custom',
+            customAudioName: file.name,
+          },
+        });
+      };
+      reader.readAsDataURL(file);
+      // reset input
+      e.target.value = '';
+    },
+    [updateSettings, settings.alarmSound, showToast],
+  );
 
   const handleDeleteCustom = useCallback(async () => {
     setCustomDataUrl(null);
@@ -912,29 +976,32 @@ function TimerMode() {
   }, [flashCount]);
 
   // Keyboard shortcuts
-  useToolKeydown((e) => {
-    const tag = (document.activeElement as HTMLElement)?.tagName;
-    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+  useToolKeydown(
+    (e) => {
+      const tag = (document.activeElement as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
 
-    if (e.key === ' ') {
-      e.preventDefault();
-      if (state === 'finished') return;
-      if (state === 'running') pause();
-      else start();
-    } else if (e.key === 'r' || e.key === 'R') {
-      e.preventDefault();
-      reset();
-    } else if (e.key === 'Enter' && state === 'finished') {
-      e.preventDefault();
-      dismiss();
-    } else if (e.key === 'ArrowUp' && (state === 'running' || state === 'paused')) {
-      e.preventDefault();
-      adjustTime(30);
-    } else if (e.key === 'ArrowDown' && (state === 'running' || state === 'paused')) {
-      e.preventDefault();
-      adjustTime(-30);
-    }
-  }, [state, start, pause, reset, dismiss, adjustTime]);
+      if (e.key === ' ') {
+        e.preventDefault();
+        if (state === 'finished') return;
+        if (state === 'running') pause();
+        else start();
+      } else if (e.key === 'r' || e.key === 'R') {
+        e.preventDefault();
+        reset();
+      } else if (e.key === 'Enter' && state === 'finished') {
+        e.preventDefault();
+        dismiss();
+      } else if (e.key === 'ArrowUp' && (state === 'running' || state === 'paused')) {
+        e.preventDefault();
+        adjustTime(30);
+      } else if (e.key === 'ArrowDown' && (state === 'running' || state === 'paused')) {
+        e.preventDefault();
+        adjustTime(-30);
+      }
+    },
+    [state, start, pause, reset, dismiss, adjustTime],
+  );
 
   const ratio = totalSeconds > 0 ? remaining / totalSeconds : 0;
   const isFlashing = flashCount > 0 && flashCount % 2 === 0;
@@ -998,8 +1065,8 @@ function TimerMode() {
         </button>
       </div>
 
-      {/* 시간 조정 + 프로그레스 링 영역 */}
-      <div className="flex items-center gap-4">
+      {/* 시간 조정 + 프로그레스 링 영역 — 모바일은 링 축소·간격 축소로 폭 안에 수용 */}
+      <div className="flex items-center justify-center gap-2 sm:gap-4">
         {/* 왼쪽: 감소(-) 버튼 그룹 */}
         <div className="flex flex-col gap-2">
           {ADJUST_AMOUNTS.map((adj) => (
@@ -1014,14 +1081,16 @@ function TimerMode() {
                 transition-all text-xs font-medium"
               title={`${adj.label} 빼기`}
             >
-              <span className="material-symbols-outlined text-icon-sm group-hover:text-red-400">remove</span>
+              <span className="material-symbols-outlined text-icon-sm group-hover:text-red-400">
+                remove
+              </span>
               {adj.label}
             </button>
           ))}
         </div>
 
         {/* 중앙: 프로그레스 링 + 시간 */}
-        <div className="relative w-[300px] h-[300px] flex items-center justify-center">
+        <div className="relative w-[200px] h-[200px] sm:w-[300px] sm:h-[300px] flex items-center justify-center">
           {/* 예고 알림 배너 */}
           {showPreWarningBanner && state === 'running' && (
             <div className="absolute -top-2 left-0 right-0 z-30 flex justify-center animate-in fade-in slide-in-from-top-2 duration-300">
@@ -1030,13 +1099,17 @@ function TimerMode() {
                   notifications_active
                 </span>
                 <span className="text-sm font-bold text-white">
-                  {remaining >= 60 ? `${Math.ceil(remaining / 60)}분` : `${remaining}초`} 남았어요! 마무리 준비~
+                  {remaining >= 60 ? `${Math.ceil(remaining / 60)}분` : `${remaining}초`} 남았어요!
+                  마무리 준비~
                 </span>
               </div>
             </div>
           )}
-          <CircleProgress ratio={ratio} preWarningActive={showPreWarningBanner && state === 'running'} />
-          <span className="text-7xl md:text-8xl font-mono font-bold text-sp-text z-10 select-none">
+          <CircleProgress
+            ratio={ratio}
+            preWarningActive={showPreWarningBanner && state === 'running'}
+          />
+          <span className="text-5xl sm:text-7xl md:text-8xl font-mono font-bold text-sp-text z-10 select-none">
             {formatTime(remaining)}
           </span>
         </div>
@@ -1055,7 +1128,9 @@ function TimerMode() {
                 transition-all text-xs font-medium"
               title={`${adj.label} 추가`}
             >
-              <span className="material-symbols-outlined text-icon-sm group-hover:text-emerald-400">add</span>
+              <span className="material-symbols-outlined text-icon-sm group-hover:text-emerald-400">
+                add
+              </span>
               {adj.label}
             </button>
           ))}
@@ -1098,7 +1173,10 @@ function TimerMode() {
         <div className="flex items-center gap-2">
           {/* 알람음 버튼 */}
           <button
-            onClick={() => { setShowSoundPanel((v) => !v); setShowPreWarningPanel(false); }}
+            onClick={() => {
+              setShowSoundPanel((v) => !v);
+              setShowPreWarningPanel(false);
+            }}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-all ${
               showSoundPanel
                 ? 'bg-sp-accent/15 text-sp-accent border border-sp-accent/30'
@@ -1109,9 +1187,10 @@ function TimerMode() {
               {volume === 0 ? 'volume_off' : 'volume_up'}
             </span>
             <span>
-              알람음: {selectedSound === 'custom' && customAudioName
+              알람음:{' '}
+              {selectedSound === 'custom' && customAudioName
                 ? customAudioName
-                : ALARM_PRESETS.find((p) => p.id === selectedSound)?.label ?? '기본 알림'}
+                : (ALARM_PRESETS.find((p) => p.id === selectedSound)?.label ?? '기본 알림')}
             </span>
             <span className="material-symbols-outlined text-icon">
               {showSoundPanel ? 'expand_less' : 'expand_more'}
@@ -1120,7 +1199,10 @@ function TimerMode() {
 
           {/* 예고 알림 버튼 */}
           <button
-            onClick={() => { setShowPreWarningPanel((v) => !v); setShowSoundPanel(false); }}
+            onClick={() => {
+              setShowPreWarningPanel((v) => !v);
+              setShowSoundPanel(false);
+            }}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-all ${
               showPreWarningPanel
                 ? 'bg-amber-500 text-white border border-amber-500'
@@ -1130,7 +1212,12 @@ function TimerMode() {
             }`}
           >
             <span className="material-symbols-outlined text-icon-md">notifications_active</span>
-            <span>예고 알림{preWarning.enabled ? `: ${preWarning.secondsBefore < 60 ? `${preWarning.secondsBefore}초` : `${preWarning.secondsBefore / 60}분`} 전` : ' (꺼짐)'}</span>
+            <span>
+              예고 알림
+              {preWarning.enabled
+                ? `: ${preWarning.secondsBefore < 60 ? `${preWarning.secondsBefore}초` : `${preWarning.secondsBefore / 60}분`} 전`
+                : ' (꺼짐)'}
+            </span>
             <span className="material-symbols-outlined text-icon">
               {showPreWarningPanel ? 'expand_less' : 'expand_more'}
             </span>
@@ -1167,7 +1254,9 @@ function TimerMode() {
               <span className="text-sm font-medium text-sp-text">종료 전 예고 알림</span>
             </div>
             <button
-              onClick={() => handlePreWarningChange({ ...preWarning, enabled: !preWarning.enabled })}
+              onClick={() =>
+                handlePreWarningChange({ ...preWarning, enabled: !preWarning.enabled })
+              }
               className={`relative w-10 h-5 rounded-full transition-colors ${
                 preWarning.enabled ? 'bg-amber-500' : 'bg-sp-border'
               }`}
@@ -1239,10 +1328,7 @@ function TimerMode() {
       )}
 
       {showCustom && (
-        <CustomTimeModal
-          onConfirm={handleCustomTime}
-          onClose={() => setShowCustom(false)}
-        />
+        <CustomTimeModal onConfirm={handleCustomTime} onClose={() => setShowCustom(false)} />
       )}
     </div>
   );
@@ -1292,10 +1378,7 @@ function StopwatchMode() {
     const firstLap = laps[0];
     const prevTotal = firstLap !== undefined ? firstLap.elapsed : 0;
     const diff = current - prevTotal;
-    setLaps((prev) => [
-      { index: prev.length + 1, elapsed: current, diff },
-      ...prev,
-    ]);
+    setLaps((prev) => [{ index: prev.length + 1, elapsed: current, diff }, ...prev]);
   }, [elapsed, laps]);
 
   useEffect(() => {
@@ -1303,27 +1386,30 @@ function StopwatchMode() {
   }, [clearSW]);
 
   // Keyboard shortcuts
-  useToolKeydown((e) => {
-    const tag = (document.activeElement as HTMLElement)?.tagName;
-    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+  useToolKeydown(
+    (e) => {
+      const tag = (document.activeElement as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
 
-    if (e.key === ' ') {
-      e.preventDefault();
-      if (state === 'running') pause();
-      else start();
-    } else if (e.key === 'r' || e.key === 'R') {
-      e.preventDefault();
-      reset();
-    } else if ((e.key === 'l' || e.key === 'L') && state === 'running') {
-      e.preventDefault();
-      lap();
-    }
-  }, [state, start, pause, reset, lap]);
+      if (e.key === ' ') {
+        e.preventDefault();
+        if (state === 'running') pause();
+        else start();
+      } else if (e.key === 'r' || e.key === 'R') {
+        e.preventDefault();
+        reset();
+      } else if ((e.key === 'l' || e.key === 'L') && state === 'running') {
+        e.preventDefault();
+        lap();
+      }
+    },
+    [state, start, pause, reset, lap],
+  );
 
   return (
     <div className="flex flex-col items-center gap-6 w-full max-w-lg mx-auto">
       {/* 경과 시간 */}
-      <div className="text-8xl font-mono font-bold text-sp-text select-none tabular-nums">
+      <div className="text-6xl sm:text-8xl font-mono font-bold text-sp-text select-none tabular-nums">
         {formatTimeMs(elapsed)}
       </div>
 
@@ -1379,10 +1465,7 @@ function StopwatchMode() {
             </thead>
             <tbody>
               {laps.map((l) => (
-                <tr
-                  key={l.index}
-                  className="border-b border-sp-border/50 last:border-0"
-                >
+                <tr key={l.index} className="border-b border-sp-border/50 last:border-0">
                   <td className="py-2 px-4 text-sp-muted">#{l.index}</td>
                   <td className="py-2 px-4 text-right font-mono text-sp-text">
                     {formatTimeMs(l.elapsed)}
@@ -1428,7 +1511,13 @@ export function ToolTimer({ onBack, isFullscreen }: ToolTimerProps) {
   }, [tab]);
 
   return (
-    <ToolLayout title="타이머" emoji="⏱️" onBack={onBack} isFullscreen={isFullscreen} shortcuts={displayShortcuts}>
+    <ToolLayout
+      title="타이머"
+      emoji="⏱️"
+      onBack={onBack}
+      isFullscreen={isFullscreen}
+      shortcuts={displayShortcuts}
+    >
       <div className="flex flex-col items-center w-full max-w-xl mx-auto gap-8">
         {/* 탭 */}
         <div className="flex bg-sp-card rounded-xl p-1 border border-sp-border">

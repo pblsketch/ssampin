@@ -69,9 +69,12 @@ function FullscreenQR({
   value: string;
   onClose: () => void;
 }) {
-  useToolKeydown((e) => {
-    if (e.key === 'Escape') onClose();
-  }, [onClose]);
+  useToolKeydown(
+    (e) => {
+      if (e.key === 'Escape') onClose();
+    },
+    [onClose],
+  );
 
   return (
     <div
@@ -87,9 +90,7 @@ function FullscreenQR({
       </button>
 
       {/* 안내 텍스트 */}
-      <p className="text-xl text-gray-800 font-medium mb-6">
-        스마트폰 카메라로 스캔하세요 📱
-      </p>
+      <p className="text-xl text-gray-800 font-medium mb-6">스마트폰 카메라로 스캔하세요 📱</p>
 
       {/* QR코드 */}
       <img
@@ -100,9 +101,7 @@ function FullscreenQR({
       />
 
       {/* URL 표시 */}
-      <p className="mt-6 text-lg text-blue-600 underline max-w-[80vw] truncate">
-        {value}
-      </p>
+      <p className="mt-6 text-lg text-blue-600 underline max-w-[80vw] truncate">{value}</p>
     </div>
   );
 }
@@ -134,36 +133,33 @@ export function ToolQRCode({ onBack, isFullscreen }: ToolQRCodeProps) {
   const urlValid = tab === 'url' ? isValidUrl(urlInput) : true;
 
   // QR코드 생성 (디바운스)
-  const generateQR = useCallback(
-    (value: string, size: QRSize, level: ErrorLevel) => {
-      if (!value.trim()) {
-        setQrDataUrl(null);
-        return;
-      }
+  const generateQR = useCallback((value: string, size: QRSize, level: ErrorLevel) => {
+    if (!value.trim()) {
+      setQrDataUrl(null);
+      return;
+    }
 
-      const canvas = canvasRef.current;
-      if (!canvas) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
 
-      QRCode.toCanvas(
-        canvas,
-        value,
-        {
-          width: size,
-          margin: 2,
-          errorCorrectionLevel: level,
-          color: { dark: '#000000', light: '#ffffff' },
-        },
-        (err) => {
-          if (err) {
-            setQrDataUrl(null);
-            return;
-          }
-          setQrDataUrl(canvas.toDataURL('image/png'));
-        },
-      );
-    },
-    [],
-  );
+    QRCode.toCanvas(
+      canvas,
+      value,
+      {
+        width: size,
+        margin: 2,
+        errorCorrectionLevel: level,
+        color: { dark: '#000000', light: '#ffffff' },
+      },
+      (err) => {
+        if (err) {
+          setQrDataUrl(null);
+          return;
+        }
+        setQrDataUrl(canvas.toDataURL('image/png'));
+      },
+    );
+  }, []);
 
   // 디바운스된 QR 생성
   useEffect(() => {
@@ -177,22 +173,19 @@ export function ToolQRCode({ onBack, isFullscreen }: ToolQRCodeProps) {
   }, [currentValue, qrSize, errorLevel, generateQR]);
 
   // 히스토리에 추가
-  const addToHistory = useCallback(
-    (value: string, mode: TabMode) => {
-      const trimmed = value.trim();
-      if (!trimmed) return;
-      setHistory((prev) => {
-        const filtered = prev.filter((h) => h.value !== trimmed);
-        const next = [
-          { value: trimmed, mode, createdAt: Date.now() },
-          ...filtered,
-        ].slice(0, MAX_HISTORY);
-        saveHistory(next);
-        return next;
-      });
-    },
-    [],
-  );
+  const addToHistory = useCallback((value: string, mode: TabMode) => {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    setHistory((prev) => {
+      const filtered = prev.filter((h) => h.value !== trimmed);
+      const next = [{ value: trimmed, mode, createdAt: Date.now() }, ...filtered].slice(
+        0,
+        MAX_HISTORY,
+      );
+      saveHistory(next);
+      return next;
+    });
+  }, []);
 
   // 클립보드에 이미지 복사
   const handleCopy = useCallback(async () => {
@@ -200,14 +193,10 @@ export function ToolQRCode({ onBack, isFullscreen }: ToolQRCodeProps) {
     if (!canvas) return;
 
     try {
-      const blob = await new Promise<Blob | null>((resolve) =>
-        canvas.toBlob(resolve, 'image/png'),
-      );
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
       if (!blob) return;
 
-      await navigator.clipboard.write([
-        new ClipboardItem({ 'image/png': blob }),
-      ]);
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
       addToHistory(currentValue, tab);
       setCopyFeedback(true);
       setTimeout(() => setCopyFeedback(false), 1500);
@@ -359,12 +348,8 @@ export function ToolQRCode({ onBack, isFullscreen }: ToolQRCodeProps) {
               </>
             ) : (
               <div className="flex flex-col items-center gap-3 py-8 text-sp-muted">
-                <span className="material-symbols-outlined text-5xl opacity-30">
-                  qr_code_2
-                </span>
-                <p className="text-sm">
-                  URL 또는 텍스트를 입력하면 QR코드가 생성됩니다
-                </p>
+                <span className="material-symbols-outlined text-5xl opacity-30">qr_code_2</span>
+                <p className="text-sm">URL 또는 텍스트를 입력하면 QR코드가 생성됩니다</p>
                 {/* 숨겨진 캔버스 (생성용) */}
                 <canvas ref={canvasRef} className="hidden" />
               </div>
@@ -433,7 +418,7 @@ export function ToolQRCode({ onBack, isFullscreen }: ToolQRCodeProps) {
 
         {/* ─── 버튼 영역 ─── */}
         {hasInput && qrDataUrl && (
-          <div className="flex gap-3 w-full justify-center">
+          <div className="flex flex-wrap gap-3 w-full justify-center">
             <button
               onClick={handleCopy}
               className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/50 transition-all text-sm font-medium"
@@ -484,9 +469,7 @@ export function ToolQRCode({ onBack, isFullscreen }: ToolQRCodeProps) {
                     {item.mode === 'url' ? '🔗' : '✏️'}
                   </span>
                   {/* 값 미리보기 */}
-                  <span className="text-sm text-sp-text truncate flex-1">
-                    {item.value}
-                  </span>
+                  <span className="text-sm text-sp-text truncate flex-1">{item.value}</span>
                   {/* 시각 */}
                   <span className="text-xs text-sp-muted shrink-0">
                     {formatTime(item.createdAt)}
