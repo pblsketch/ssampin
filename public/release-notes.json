@@ -1,6 +1,28 @@
 {
   "versions": [
     {
+      "version": "2.2.9",
+      "appVersion": "v2.2.9",
+      "domainVersion": "v2.0.0",
+      "date": "2026-07-06",
+      "highlights": [
+        "🔧 구글 계정 연동 로그인 오류 수정 — '액세스 차단됨: 승인 오류(invalid_client)'로 구글 캘린더 연동이 안 되던 문제를 고쳤어요",
+        "🔧 AI 브릿지 연결 오류 수정 — 쌤도구의 'AI로 연결하기'에서 Claude·Codex·Antigravity 어디로 연결해도 실패하던 문제를 고쳤어요"
+      ],
+      "changes": [
+        {
+          "type": "fix",
+          "title": "구글 계정 연동 로그인 실패(invalid_client) 수정",
+          "description": "구글 계정으로 로그인할 때 '액세스 차단됨: 승인 오류 — The OAuth client was not found(invalid_client)'가 뜨면서 구글 캘린더 연동이 되지 않던 문제를 고쳤어요. 앱을 새로 설치하거나 업데이트하면 정상적으로 구글 계정 연동을 진행할 수 있어요."
+        },
+        {
+          "type": "fix",
+          "title": "AI 브릿지(Claude·Codex·Antigravity 연결) 실패 수정",
+          "description": "설치된 쌤핀에서 'Claude 연결' 등 AI 브릿지 버튼을 눌러도 상대 프로그램이 'Could not attach to MCP server ssampin' 처럼 연결에 실패하던 문제를 고쳤어요. 앱 안에 동봉된 연결 프로그램이 필요한 부품을 다 챙기지 못한 채 배포된 게 원인이었고, 이번 업데이트부터는 Claude 데스크톱·Codex·Antigravity 모두 정상적으로 연결돼요."
+        }
+      ]
+    },
+    {
       "version": "2.2.8",
       "appVersion": "v2.2.8",
       "domainVersion": "v2.0.0",
