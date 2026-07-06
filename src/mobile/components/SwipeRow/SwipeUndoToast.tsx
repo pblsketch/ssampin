@@ -33,14 +33,24 @@ export function SwipeUndoToast() {
     >
       <div className="glass-card pointer-events-auto relative flex items-center gap-3 overflow-hidden rounded-full py-2 pl-4 pr-2 shadow-lg">
         <span className="whitespace-nowrap text-sm font-medium text-sp-text">{message}</span>
-        <button
-          type="button"
-          onClick={() => void handleUndo()}
-          disabled={busy}
-          className="shrink-0 rounded-full bg-sp-accent px-3 py-1 text-xs font-bold text-sp-accent-fg disabled:opacity-50"
-        >
-          되돌리기
-        </button>
+        {onUndo ? (
+          <button
+            type="button"
+            onClick={() => void handleUndo()}
+            disabled={busy}
+            className="shrink-0 rounded-full bg-sp-accent px-3 py-1 text-xs font-bold text-sp-accent-fg disabled:opacity-50"
+          >
+            되돌리기
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={dismiss}
+            className="shrink-0 rounded-full bg-sp-surface px-3 py-1 text-xs font-bold text-sp-muted"
+          >
+            확인
+          </button>
+        )}
         {/* 남은 시간 진행바 — key 로 token 마다 애니메이션 재시작 */}
         <span
           key={token}

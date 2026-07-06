@@ -2,9 +2,20 @@ import { useState, useMemo, useCallback, useRef } from 'react';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import type { TeachingClassStudent } from '@domain/entities/TeachingClass';
 import { studentKey } from '@domain/entities/TeachingClass';
-import { generateTeachingClassRosterTemplate, parseTeachingClassRosterFromExcel } from '@infrastructure/export';
+import {
+  detectStudentNumberIssues,
+  assignSequentialNumbers,
+} from '@domain/rules/studentNumberRules';
+import {
+  generateTeachingClassRosterTemplate,
+  parseTeachingClassRosterFromExcel,
+} from '@infrastructure/export';
 import { useToastStore } from '@adapters/components/common/Toast';
-import { STUDENT_STATUS_LABELS, STUDENT_STATUS_COLORS, isInactiveStatus } from '@domain/entities/Student';
+import {
+  STUDENT_STATUS_LABELS,
+  STUDENT_STATUS_COLORS,
+  isInactiveStatus,
+} from '@domain/entities/Student';
 import type { StudentStatus } from '@domain/entities/Student';
 import { FormatHint } from '../common/FormatHint';
 import { UnifiedExportModal } from './UnifiedExportModal';
@@ -40,7 +51,7 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
   }, [students, isEditing, editStudents]);
 
   const sortedStudents = useMemo(() => {
-    const list = isEditing ? editStudents : cls?.students ?? [];
+    const list = isEditing ? editStudents : (cls?.students ?? []);
     return [...list].sort((a, b) => {
       switch (sortBy) {
         case 'grade':
@@ -85,7 +96,16 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
       });
     }
     setIsEditing(false);
-  }, [cls, editStudents, updateClass, syncGroupStudents]);
+    // 번호 누락/중복 경고: 기존 명렬표는 출결·좌석이 번호에 묶여 있어 자동 재번호가
+    // 위험하므로, 자동 정리 대신 경고만 하고 사용자가 직접 번호를 고치도록 안내한다.
+    const issues = detectStudentNumberIssues(editStudents);
+    if (issues.hasCollisionRisk) {
+      showToast(
+        '번호가 비었거나 중복된 학생이 있어요. 출결이 학생끼리 섞일 수 있으니 번호를 정리해주세요.',
+        'info',
+      );
+    }
+  }, [cls, editStudents, updateClass, syncGroupStudents, showToast]);
 
   const updateStudentName = useCallback((index: number, name: string) => {
     setEditStudents((prev) => {
@@ -169,17 +189,20 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
   }, []);
 
   /* ── 반별 인원 입력 ── */
-  const [bulkEntries, setBulkEntries] = useState<Array<{ grade: string; classNum: string; count: string }>>([
-    { grade: '', classNum: '', count: '' },
-  ]);
+  const [bulkEntries, setBulkEntries] = useState<
+    Array<{ grade: string; classNum: string; count: string }>
+  >([{ grade: '', classNum: '', count: '' }]);
 
-  const updateBulkEntry = useCallback((index: number, field: 'grade' | 'classNum' | 'count', value: string) => {
-    setBulkEntries((prev) => {
-      const next = [...prev];
-      next[index] = { ...next[index]!, [field]: value };
-      return next;
-    });
-  }, []);
+  const updateBulkEntry = useCallback(
+    (index: number, field: 'grade' | 'classNum' | 'count', value: string) => {
+      setBulkEntries((prev) => {
+        const next = [...prev];
+        next[index] = { ...next[index]!, [field]: value };
+        return next;
+      });
+    },
+    [],
+  );
 
   const addBulkEntry = useCallback(() => {
     setBulkEntries((prev) => {
@@ -189,12 +212,16 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
   }, []);
 
   const removeBulkEntry = useCallback((index: number) => {
-    setBulkEntries((prev) => prev.length > 1 ? prev.filter((_, i) => i !== index) : prev);
+    setBulkEntries((prev) => (prev.length > 1 ? prev.filter((_, i) => i !== index) : prev));
   }, []);
 
   const applyBulkEntries = useCallback(() => {
     const sorted = [...bulkEntries]
-      .map((e) => ({ grade: parseInt(e.grade, 10), classNum: parseInt(e.classNum, 10), count: parseInt(e.count, 10) }))
+      .map((e) => ({
+        grade: parseInt(e.grade, 10),
+        classNum: parseInt(e.classNum, 10),
+        count: parseInt(e.count, 10),
+      }))
       .filter((e) => !isNaN(e.grade) && !isNaN(e.classNum) && !isNaN(e.count) && e.count > 0)
       .sort((a, b) => a.grade - b.grade || a.classNum - b.classNum);
     const newStudents: TeachingClassStudent[] = [];
@@ -204,9 +231,16 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
       }
     }
     if (newStudents.length > 0) {
-      setEditStudents(newStudents);
+      // 신규 일괄 등록 — 같은 학년-반을 두 번 추가하면 번호가 중복될 수 있으므로
+      // 저장 전 미리보기 단계에서 고유 순번으로 정리한다(아직 출결/좌석 없음 → 안전).
+      const issues = detectStudentNumberIssues(newStudents);
+      const cleaned = issues.hasCollisionRisk ? assignSequentialNumbers(newStudents) : newStudents;
+      setEditStudents(cleaned);
+      if (issues.hasCollisionRisk) {
+        showToast('번호가 겹쳐서 학년·반별로 1번부터 자동 정리했습니다.', 'info');
+      }
     }
-  }, [bulkEntries]);
+  }, [bulkEntries, showToast]);
 
   const bulkValid = bulkEntries.some((e) => {
     const g = parseInt(e.grade, 10);
@@ -221,7 +255,10 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
   }, 0);
 
   const handlePasteImport = useCallback(() => {
-    const lines = pasteText.trim().split('\n').filter((line) => line.trim());
+    const lines = pasteText
+      .trim()
+      .split('\n')
+      .filter((line) => line.trim());
     if (lines.length === 0) return;
 
     const parsed: TeachingClassStudent[] = lines.map((line, idx) => {
@@ -246,11 +283,21 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
       return { number: idx + 1, name: line.trim() };
     });
 
-    setEditStudents(parsed);
+    // 신규 붙여넣기 — 번호가 비었거나 중복이면 저장 전 미리보기에서 고유 순번으로 정리.
+    // (아직 출결/좌석이 없는 신규 데이터라 재번호가 안전하다.)
+    const issues = detectStudentNumberIssues(parsed);
+    const cleaned = issues.hasCollisionRisk ? assignSequentialNumbers(parsed) : parsed;
+    setEditStudents(cleaned);
     setShowPasteModal(false);
     setPasteText('');
     if (!isEditing) setIsEditing(true);
-  }, [pasteText, isEditing]);
+    if (issues.hasCollisionRisk) {
+      showToast(
+        '번호가 비었거나 중복되어 1번부터 자동 정리했습니다. 저장 전 확인해주세요.',
+        'info',
+      );
+    }
+  }, [pasteText, isEditing, showToast]);
 
   /* ── 엑셀 양식 다운로드 ── */
   const handleDownloadTemplate = useCallback(async () => {
@@ -289,35 +336,50 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
   }, [showToast]);
 
   /* ── 엑셀 파일 선택 ── */
-  const handleExcelFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const handleExcelFileChange = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
 
-    if (file.name.endsWith('.xls') && !file.name.endsWith('.xlsx')) {
-      showToast('구형 엑셀(.xls) 파일은 지원되지 않습니다. Excel에서 .xlsx로 다시 저장해주세요.', 'error');
-      e.target.value = '';
-      return;
-    }
-
-    try {
-      const buffer = await file.arrayBuffer();
-      const parsed = await parseTeachingClassRosterFromExcel(buffer);
-      if (parsed.length === 0) {
-        showToast('엑셀에서 학생 데이터를 찾을 수 없습니다. 1열=번호, 2열=이름 순서인지 확인해주세요.', 'error');
+      if (file.name.endsWith('.xls') && !file.name.endsWith('.xlsx')) {
+        showToast(
+          '구형 엑셀(.xls) 파일은 지원되지 않습니다. Excel에서 .xlsx로 다시 저장해주세요.',
+          'error',
+        );
         e.target.value = '';
         return;
       }
-      setExcelPreview(parsed);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : '';
-      if (msg.includes('End of data reached') || msg.includes('Unexpected')) {
-        showToast('파일 형식을 읽을 수 없습니다. .xlsx 파일인지 확인해주세요.', 'error');
-      } else {
-        showToast('엑셀 파일을 읽는 중 오류가 발생했습니다', 'error');
+
+      try {
+        const buffer = await file.arrayBuffer();
+        const parsed = await parseTeachingClassRosterFromExcel(buffer);
+        if (parsed.length === 0) {
+          showToast(
+            '엑셀에서 학생 데이터를 찾을 수 없습니다. 1열=번호, 2열=이름 순서인지 확인해주세요.',
+            'error',
+          );
+          e.target.value = '';
+          return;
+        }
+        // 신규 엑셀 명단 — 번호 누락/중복이면 고유 순번으로 정리 후 미리보기.
+        const issues = detectStudentNumberIssues(parsed);
+        const cleaned = issues.hasCollisionRisk ? assignSequentialNumbers(parsed) : parsed;
+        setExcelPreview(cleaned);
+        if (issues.hasCollisionRisk) {
+          showToast('엑셀의 번호가 비었거나 중복되어 1번부터 자동 정리했습니다.', 'info');
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : '';
+        if (msg.includes('End of data reached') || msg.includes('Unexpected')) {
+          showToast('파일 형식을 읽을 수 없습니다. .xlsx 파일인지 확인해주세요.', 'error');
+        } else {
+          showToast('엑셀 파일을 읽는 중 오류가 발생했습니다', 'error');
+        }
       }
-    }
-    e.target.value = '';
-  }, [showToast]);
+      e.target.value = '';
+    },
+    [showToast],
+  );
 
   /* ── 엑셀 가져오기 적용 ── */
   const applyExcelImport = useCallback(async () => {
@@ -334,7 +396,10 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
   /* ── 붙여넣기 미리보기 ── */
   const parsedPreview = useMemo(() => {
     if (!pasteText.trim()) return [];
-    const lines = pasteText.trim().split('\n').filter((line) => line.trim());
+    const lines = pasteText
+      .trim()
+      .split('\n')
+      .filter((line) => line.trim());
     return lines.map((line, idx) => {
       const parts = line.split('\t');
       if (parts.length >= 4) {
@@ -358,7 +423,6 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
     });
   }, [pasteText]);
 
-
   /* ──────────────────────── 렌더링 ──────────────────────── */
 
   if (!cls) {
@@ -375,8 +439,12 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
   const showGradeCol = isEditing || hasGradeInfo;
 
   const gridCols = showGradeCol
-    ? (isEditing ? 'grid-cols-[7rem_3.5rem_1fr_1fr_5rem_2.5rem]' : 'grid-cols-[4rem_2.5rem_1fr]')
-    : (isEditing ? 'grid-cols-[3rem_1fr_1fr_5rem_2.5rem]' : 'grid-cols-[2.5rem_1fr]');
+    ? isEditing
+      ? 'grid-cols-[7rem_3.5rem_1fr_1fr_5rem_2.5rem]'
+      : 'grid-cols-[4rem_2.5rem_1fr]'
+    : isEditing
+      ? 'grid-cols-[3rem_1fr_1fr_5rem_2.5rem]'
+      : 'grid-cols-[2.5rem_1fr]';
 
   const groupSiblingCount = cls.groupId
     ? classes.filter((c) => c.groupId === cls.groupId).length
@@ -397,11 +465,13 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
             이 학급은 <span className="text-sp-text font-medium">{cls.name}</span> 그룹에 속합니다.{' '}
             {isIndependent ? (
               <>
-                <span className="text-amber-400 font-medium">이 과목은 다른 명단</span>을 사용합니다 (그룹 동기화 미적용).
+                <span className="text-amber-400 font-medium">이 과목은 다른 명단</span>을 사용합니다
+                (그룹 동기화 미적용).
               </>
             ) : (
               <>
-                변경사항은 <span className="text-sp-accent font-medium">{groupSiblingCount}</span>개 과목에 공유됩니다.
+                변경사항은 <span className="text-sp-accent font-medium">{groupSiblingCount}</span>개
+                과목에 공유됩니다.
               </>
             )}
           </div>
@@ -564,8 +634,7 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
                   onClick={addBulkEntry}
                   className="flex items-center gap-0.5 px-2 py-1 text-xs text-sp-accent hover:bg-sp-accent/10 rounded-lg transition-colors"
                 >
-                  <span className="material-symbols-outlined text-sm">add</span>
-                  반 추가
+                  <span className="material-symbols-outlined text-sm">add</span>반 추가
                 </button>
               )}
             </div>
@@ -580,9 +649,7 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
               <span className="material-symbols-outlined text-sm">done_all</span>
               명단 생성
             </button>
-            {bulkTotal > 0 && (
-              <span className="text-xs text-sp-muted">총 {bulkTotal}명</span>
-            )}
+            {bulkTotal > 0 && <span className="text-xs text-sp-muted">총 {bulkTotal}명</span>}
           </div>
         </div>
       )}
@@ -599,7 +666,9 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
               className={`flex items-center gap-0.5 hover:text-sp-text transition-colors text-left ${sortBy === 'grade' ? 'text-sp-accent' : ''}`}
             >
               소속
-              {sortBy === 'grade' && <span className="material-symbols-outlined text-xs">arrow_downward</span>}
+              {sortBy === 'grade' && (
+                <span className="material-symbols-outlined text-xs">arrow_downward</span>
+              )}
             </button>
           )}
           <button
@@ -607,7 +676,9 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
             className={`flex items-center gap-0.5 hover:text-sp-text transition-colors text-left ${sortBy === 'number' ? 'text-sp-accent' : ''}`}
           >
             번호
-            {sortBy === 'number' && <span className="material-symbols-outlined text-xs">arrow_downward</span>}
+            {sortBy === 'number' && (
+              <span className="material-symbols-outlined text-xs">arrow_downward</span>
+            )}
           </button>
           {!isEditing ? (
             <button
@@ -615,7 +686,9 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
               className={`flex items-center gap-0.5 hover:text-sp-text transition-colors text-left ${sortBy === 'name' ? 'text-sp-accent' : ''}`}
             >
               이름
-              {sortBy === 'name' && <span className="material-symbols-outlined text-xs">arrow_downward</span>}
+              {sortBy === 'name' && (
+                <span className="material-symbols-outlined text-xs">arrow_downward</span>
+              )}
             </button>
           ) : (
             <>
@@ -624,7 +697,9 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
                 className={`flex items-center gap-0.5 hover:text-sp-text transition-colors text-left ${sortBy === 'name' ? 'text-sp-accent' : ''}`}
               >
                 이름
-                {sortBy === 'name' && <span className="material-symbols-outlined text-xs">arrow_downward</span>}
+                {sortBy === 'name' && (
+                  <span className="material-symbols-outlined text-xs">arrow_downward</span>
+                )}
               </button>
               <span />
               <span className="text-center">상태</span>
@@ -637,23 +712,34 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
         <div className="divide-y divide-sp-border/50">
           {displayStudents.map((student) => {
             const originalIdx = isEditing
-              ? editStudents.findIndex((s) => s.number === student.number && s.grade === student.grade && s.classNum === student.classNum)
+              ? editStudents.findIndex(
+                  (s) =>
+                    s.number === student.number &&
+                    s.grade === student.grade &&
+                    s.classNum === student.classNum,
+                )
               : -1;
 
             const sKey = studentKey(student);
 
             return (
-              <div key={sKey}
+              <div
+                key={sKey}
                 className={`grid items-center px-4 py-2 hover:bg-sp-text/[0.02] transition-colors ${gridCols}`}
               >
                 {/* 소속 (학년-반) */}
-                {showGradeCol && (
-                  isEditing ? (
+                {showGradeCol &&
+                  (isEditing ? (
                     <div className="flex gap-1 pr-1">
                       <input
                         type="number"
                         value={student.grade ?? ''}
-                        onChange={(e) => updateStudentGrade(originalIdx, e.target.value ? parseInt(e.target.value, 10) : undefined)}
+                        onChange={(e) =>
+                          updateStudentGrade(
+                            originalIdx,
+                            e.target.value ? parseInt(e.target.value, 10) : undefined,
+                          )
+                        }
                         className="w-11 bg-sp-bg border border-sp-border rounded px-1.5 py-1 text-xs text-sp-text text-center focus:outline-none focus:border-sp-accent"
                         placeholder="학년"
                         min={1}
@@ -663,7 +749,12 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
                       <input
                         type="number"
                         value={student.classNum ?? ''}
-                        onChange={(e) => updateStudentClassNum(originalIdx, e.target.value ? parseInt(e.target.value, 10) : undefined)}
+                        onChange={(e) =>
+                          updateStudentClassNum(
+                            originalIdx,
+                            e.target.value ? parseInt(e.target.value, 10) : undefined,
+                          )
+                        }
                         className="w-11 bg-sp-bg border border-sp-border rounded px-1.5 py-1 text-xs text-sp-text text-center focus:outline-none focus:border-sp-accent"
                         placeholder="반"
                         min={1}
@@ -672,10 +763,11 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
                     </div>
                   ) : (
                     <span className="text-xs text-sp-muted">
-                      {student.grade != null && student.classNum != null ? `${student.grade}-${student.classNum}` : ''}
+                      {student.grade != null && student.classNum != null
+                        ? `${student.grade}-${student.classNum}`
+                        : ''}
                     </span>
-                  )
-                )}
+                  ))}
 
                 {/* 번호 */}
                 {isEditing ? (
@@ -690,7 +782,11 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
                     min={1}
                   />
                 ) : (
-                  <span className={`text-sm ${(student.isVacant || isInactiveStatus(student.status)) ? 'text-sp-muted/40' : 'text-sp-muted'}`}>{student.number}</span>
+                  <span
+                    className={`text-sm ${student.isVacant || isInactiveStatus(student.status) ? 'text-sp-muted/40' : 'text-sp-muted'}`}
+                  >
+                    {student.number}
+                  </span>
                 )}
 
                 {/* 이름 (보기 모드) / 이름 + 상태 (편집 모드) */}
@@ -715,18 +811,23 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
                     <div className="flex justify-center">
                       <select
                         value={student.status ?? 'active'}
-                        onChange={(e) => updateStudentStatus(originalIdx, e.target.value as StudentStatus)}
+                        onChange={(e) =>
+                          updateStudentStatus(originalIdx, e.target.value as StudentStatus)
+                        }
                         className={`px-2 py-1 rounded-lg text-xs font-medium border transition-colors focus:outline-none focus:border-sp-accent cursor-pointer
-                          ${isInactiveStatus(student.status)
-                            ? `${STUDENT_STATUS_COLORS[student.status ?? 'active']} border-transparent`
-                            : 'bg-sp-bg border-sp-border text-sp-muted hover:border-sp-accent/50'
+                          ${
+                            isInactiveStatus(student.status)
+                              ? `${STUDENT_STATUS_COLORS[student.status ?? 'active']} border-transparent`
+                              : 'bg-sp-bg border-sp-border text-sp-muted hover:border-sp-accent/50'
                           }`}
                       >
-                        {(Object.entries(STUDENT_STATUS_LABELS) as [StudentStatus, string][]).map(([value, label]) => (
-                          <option key={value} value={value} className="bg-sp-card text-sp-text">
-                            {label}
-                          </option>
-                        ))}
+                        {(Object.entries(STUDENT_STATUS_LABELS) as [StudentStatus, string][]).map(
+                          ([value, label]) => (
+                            <option key={value} value={value} className="bg-sp-card text-sp-text">
+                              {label}
+                            </option>
+                          ),
+                        )}
                       </select>
                     </div>
                     <div className="flex justify-center">
@@ -738,20 +839,20 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
                       </button>
                     </div>
                   </>
-                ) : (
-                  /* 보기 모드: 이름 */
-                  student.isVacant && !isInactiveStatus(student.status) ? (
-                    <span className="text-sm text-sp-muted/40 italic">결번</span>
-                  ) : isInactiveStatus(student.status) ? (
-                    <span className="flex items-center gap-1.5 whitespace-nowrap">
-                      <span className="text-sm text-sp-muted/50 line-through">{student.name}</span>
-                      <span className={`text-caption font-medium px-1.5 py-0.5 rounded ${STUDENT_STATUS_COLORS[student.status!]}`}>
-                        {STUDENT_STATUS_LABELS[student.status!]}
-                      </span>
+                ) : /* 보기 모드: 이름 */
+                student.isVacant && !isInactiveStatus(student.status) ? (
+                  <span className="text-sm text-sp-muted/40 italic">결번</span>
+                ) : isInactiveStatus(student.status) ? (
+                  <span className="flex items-center gap-1.5 whitespace-nowrap">
+                    <span className="text-sm text-sp-muted/50 line-through">{student.name}</span>
+                    <span
+                      className={`text-caption font-medium px-1.5 py-0.5 rounded ${STUDENT_STATUS_COLORS[student.status!]}`}
+                    >
+                      {STUDENT_STATUS_LABELS[student.status!]}
                     </span>
-                  ) : (
-                    <span className="text-sm text-sp-text whitespace-nowrap">{student.name}</span>
-                  )
+                  </span>
+                ) : (
+                  <span className="text-sm text-sp-text whitespace-nowrap">{student.name}</span>
                 )}
               </div>
             );
@@ -794,10 +895,7 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
 
       {/* ── 통합 내보내기 모달 ── */}
       {showExportModal && cls && (
-        <UnifiedExportModal
-          classId={classId}
-          onClose={() => setShowExportModal(false)}
-        />
+        <UnifiedExportModal classId={classId} onClose={() => setShowExportModal(false)} />
       )}
 
       {/* ── 붙여넣기 모달 ── */}
@@ -806,8 +904,10 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
           <div className="bg-sp-card border border-sp-border rounded-xl shadow-2xl w-full max-w-lg mx-4 p-6">
             <h3 className="text-base font-bold text-sp-text mb-2">붙여넣기로 입력</h3>
             <p className="text-xs text-sp-muted mb-4">
-              엑셀이나 한글에서 복사한 명렬표를 붙여넣으세요.<br />
-              &quot;학년{'\t'}반{'\t'}번호{'\t'}이름&quot; · &quot;번호{'\t'}이름&quot; · &quot;이름&quot; 형식을 지원합니다.
+              엑셀이나 한글에서 복사한 명렬표를 붙여넣으세요.
+              <br />
+              &quot;학년{'\t'}반{'\t'}번호{'\t'}이름&quot; · &quot;번호{'\t'}이름&quot; ·
+              &quot;이름&quot; 형식을 지원합니다.
             </p>
             <textarea
               value={pasteText}
@@ -822,8 +922,12 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
                   <table className="w-full text-sm">
                     <thead className="bg-sp-bg/50 sticky top-0">
                       <tr className="text-xs text-sp-muted">
-                        {parsedPreview.some((s) => s.grade != null) && <th className="px-3 py-1.5 text-left font-medium">학년</th>}
-                        {parsedPreview.some((s) => s.classNum != null) && <th className="px-3 py-1.5 text-left font-medium">반</th>}
+                        {parsedPreview.some((s) => s.grade != null) && (
+                          <th className="px-3 py-1.5 text-left font-medium">학년</th>
+                        )}
+                        {parsedPreview.some((s) => s.classNum != null) && (
+                          <th className="px-3 py-1.5 text-left font-medium">반</th>
+                        )}
                         <th className="px-3 py-1.5 text-left font-medium">번호</th>
                         <th className="px-3 py-1.5 text-left font-medium">이름</th>
                       </tr>
@@ -831,8 +935,12 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
                     <tbody className="divide-y divide-sp-border/50">
                       {parsedPreview.map((s, i) => (
                         <tr key={i} className="text-sp-text">
-                          {parsedPreview.some((ps) => ps.grade != null) && <td className="px-3 py-1.5">{s.grade ?? '-'}</td>}
-                          {parsedPreview.some((ps) => ps.classNum != null) && <td className="px-3 py-1.5">{s.classNum ?? '-'}</td>}
+                          {parsedPreview.some((ps) => ps.grade != null) && (
+                            <td className="px-3 py-1.5">{s.grade ?? '-'}</td>
+                          )}
+                          {parsedPreview.some((ps) => ps.classNum != null) && (
+                            <td className="px-3 py-1.5">{s.classNum ?? '-'}</td>
+                          )}
                           <td className="px-3 py-1.5">{s.number}</td>
                           <td className="px-3 py-1.5">{s.name}</td>
                         </tr>
@@ -883,8 +991,12 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
               <table className="w-full">
                 <thead className="sticky top-0 bg-sp-card">
                   <tr className="text-sp-muted border-b border-sp-border">
-                    {excelPreview.some((s) => s.grade != null) && <th className="py-1.5 text-left">학년</th>}
-                    {excelPreview.some((s) => s.classNum != null) && <th className="py-1.5 text-left">반</th>}
+                    {excelPreview.some((s) => s.grade != null) && (
+                      <th className="py-1.5 text-left">학년</th>
+                    )}
+                    {excelPreview.some((s) => s.classNum != null) && (
+                      <th className="py-1.5 text-left">반</th>
+                    )}
                     <th className="py-1.5 text-left w-16">번호</th>
                     <th className="py-1.5 text-left">이름</th>
                   </tr>
@@ -924,7 +1036,6 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
           </div>
         </div>
       )}
-
     </div>
   );
 }

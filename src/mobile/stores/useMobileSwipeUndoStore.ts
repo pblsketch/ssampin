@@ -7,7 +7,8 @@ interface SwipeUndoState {
   onUndo: (() => void | Promise<void>) | null;
   /** show 호출마다 +1 — 만료 타이머가 자기 토큰일 때만 닫도록 해 경쟁을 막는다. */
   token: number;
-  show: (message: string, onUndo: () => void | Promise<void>) => void;
+  /** onUndo 생략 시 되돌리기 버튼 없는 안내 전용 토스트로 표시된다. */
+  show: (message: string, onUndo?: () => void | Promise<void>) => void;
   dismiss: () => void;
 }
 
@@ -19,7 +20,7 @@ export const useSwipeUndoStore = create<SwipeUndoState>((set, get) => ({
   token: 0,
   show: (message, onUndo) => {
     const token = get().token + 1;
-    set({ message, onUndo, token });
+    set({ message, onUndo: onUndo ?? null, token });
     setTimeout(() => {
       if (get().token === token) set({ message: null, onUndo: null });
     }, AUTO_DISMISS_MS);

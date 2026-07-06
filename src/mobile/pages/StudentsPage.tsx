@@ -199,6 +199,13 @@ export function StudentsPage() {
 
   const handleQuickRecord = useCallback(
     async (student: HomeroomStudent, status: 'late' | 'absent') => {
+      // 번호 없는 학생은 출결이 번호로 저장돼 서로 뭉개지므로 기록을 막고 안내한다.
+      if (student.studentNumber == null || student.studentNumber <= 0) {
+        useSwipeUndoStore
+          .getState()
+          .show('번호가 없어 출결을 기록할 수 없어요. 명렬표에서 번호를 지정해주세요.');
+        return;
+      }
       await writeHomeroomStatus(student, status);
       const label = status === 'late' ? '지각' : '결석';
       useSwipeUndoStore
@@ -246,6 +253,13 @@ export function StudentsPage() {
 
   const handleClassQuickRecord = useCallback(
     async (tc: TeachingClass, student: TeachingClassStudent, status: 'late' | 'absent') => {
+      // 번호 없는 학생은 출결이 번호로 저장돼 서로 뭉개지므로 기록을 막고 안내한다.
+      if (student.number == null || student.number <= 0) {
+        useSwipeUndoStore
+          .getState()
+          .show('번호가 없어 출결을 기록할 수 없어요. 명렬표에서 번호를 지정해주세요.');
+        return;
+      }
       await writeClassStatus(tc, student, status);
       const label = status === 'late' ? '지각' : '결석';
       useSwipeUndoStore

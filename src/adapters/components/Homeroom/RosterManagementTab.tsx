@@ -28,6 +28,7 @@ import type {
 } from '@domain/rules/rosterImportRules';
 import { planImport } from '@domain/rules/rosterImportPlan';
 import type { ImportAction, PlanResult } from '@domain/rules/rosterImportPlan';
+import { detectStudentNumberIssues } from '@domain/rules/studentNumberRules';
 import { applyImportPlan } from '@usecases/roster/applyImportPlan';
 import { generateUUID } from '@infrastructure/utils/uuid';
 
@@ -145,9 +146,14 @@ export function RosterManagementTab() {
       const newStudents = applyImportPlan(students, plan, resolutions, generateUUID);
       prevStudentsRef.current = students;
       await updateStudents(newStudents);
+      // 번호 누락/중복 경고: 담임 명단은 학생 id·출결(번호 브리지)이 얽혀 있어
+      // 자동 재번호가 위험하므로 경고만 한다. 요약 토스트에 접어 실행취소 액션을 보존.
+      const numberIssues = detectStudentNumberIssues(
+        newStudents.map((s) => ({ number: s.studentNumber })),
+      );
       const summary = `${importedReady.length}명 처리 (보존 ${plan.matched.length} · 신규 ${plan.newOnly.length}${
         plan.conflicts.length > 0 ? ` · 결정 ${plan.conflicts.length}` : ''
-      })`;
+      })${numberIssues.hasCollisionRisk ? ' · ⚠️ 번호 확인 필요' : ''}`;
       showToast(summary, 'success', {
         label: '실행 취소',
         onClick: () => void updateStudents([...prevStudentsRef.current]),
