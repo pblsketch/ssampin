@@ -4,6 +4,7 @@ import { ATTENDANCE_REASONS } from '@domain/entities/Attendance';
 import { useMobileAttendanceStore } from '@mobile/stores/useMobileAttendanceStore';
 import { useMobileStudentRecordsStore } from '@mobile/stores/useMobileStudentRecordsStore';
 import { STATUS_CONFIG, type SheetStudentInfo } from './shared';
+import { AttendanceHistorySummary } from './AttendanceHistorySummary';
 
 // ============================================================
 // 출결 서브탭 (기존 출결 UI 추출)
@@ -205,6 +206,14 @@ export function AttendanceSubTab({
             {saving ? '저장 중...' : '저장'}
           </button>
         </div>
+      )}
+
+      {info.type === 'homeroom' && (
+        <AttendanceHistorySummary
+          studentId={info.studentId}
+          studentNumber={info.number}
+          studentName={info.name}
+        />
       )}
     </div>
   );

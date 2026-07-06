@@ -21,6 +21,8 @@ const SHEETS_TO_REGISTER: ReadonlyArray<readonly [filePath: string, sheetLabel: 
   ['src/mobile/components/Today/MobileProgressLogModal.tsx', 'MobileProgressLogModal'],
   ['src/mobile/components/common/ConfirmDialog.tsx', 'ConfirmDialog (공용 삭제 확인)'],
   ['src/mobile/pages/students/StudentQuickActionSheet.tsx', 'StudentQuickActionSheet'],
+  ['src/mobile/pages/students/StudentRecordsFullSheet.tsx', 'StudentRecordsFullSheet'],
+  ['src/mobile/pages/students/StudentAttendanceHistorySheet.tsx', 'StudentAttendanceHistorySheet'],
   ['src/mobile/pages/SchedulePage.tsx', 'AddEventModal'],
   ['src/mobile/pages/todo/AddTodoModal.tsx', 'AddTodoModal'],
   ['src/mobile/pages/MemoPage.tsx', 'AddModal / EditModal'],

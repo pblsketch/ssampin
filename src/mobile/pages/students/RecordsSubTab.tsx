@@ -4,12 +4,19 @@ import type { StudentRecord } from '@domain/entities/StudentRecord';
 import { useMobileStudentRecordsStore } from '@mobile/stores/useMobileStudentRecordsStore';
 import { todayISO } from '@mobile/utils/date';
 import { CATEGORY_COLORS } from './shared';
+import { StudentRecordsFullSheet } from './StudentRecordsFullSheet';
 
 // ============================================================
 // 기록 서브탭 (Phase A 신규)
 // ============================================================
 
-export function RecordsSubTab({ studentId }: { studentId: string; studentName: string }) {
+export function RecordsSubTab({
+  studentId,
+  studentName,
+}: {
+  studentId: string;
+  studentName: string;
+}) {
   const loadRecords = useMobileStudentRecordsStore((s) => s.load);
   const getRecords = useMobileStudentRecordsStore((s) => s.getRecordsByStudentId);
   const addRecord = useMobileStudentRecordsStore((s) => s.addRecord);
@@ -17,6 +24,7 @@ export function RecordsSubTab({ studentId }: { studentId: string; studentName: s
 
   const [showForm, setShowForm] = useState(false);
   const [showMobileRecords, setShowMobileRecords] = useState(false);
+  const [showFullSheet, setShowFullSheet] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
   const [selectedSubcategory, setSelectedSubcategory] = useState<string>('');
   const [content, setContent] = useState('');
@@ -30,6 +38,7 @@ export function RecordsSubTab({ studentId }: { studentId: string; studentName: s
   const mobileCategories = categories.filter((c) => c.id !== 'attendance');
   const selectedCategory = mobileCategories.find((c) => c.id === selectedCategoryId);
   const recentRecords = getRecords(studentId, 3);
+  const allRecords = getRecords(studentId, Number.POSITIVE_INFINITY);
 
   const handleSubmit = async () => {
     if (!selectedCategoryId || !content.trim()) return;
@@ -119,6 +128,15 @@ export function RecordsSubTab({ studentId }: { studentId: string; studentName: s
           ))}
       </div>
 
+      {/* 전체 기록 보기 진입 링크 */}
+      <button
+        onClick={() => setShowFullSheet(true)}
+        className="w-full flex items-center justify-between px-1 py-3 min-h-[44px] text-sp-accent text-sm font-medium"
+      >
+        <span>전체 기록 보기 ({allRecords.length}건)</span>
+        <span className="material-symbols-outlined text-lg">chevron_right</span>
+      </button>
+
       {/* 기록 추가 폼 */}
       {showForm && (
         <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-4 space-y-3">
@@ -185,6 +203,14 @@ export function RecordsSubTab({ studentId }: { studentId: string; studentName: s
             {saving ? '저장 중...' : '기록 저장'}
           </button>
         </div>
+      )}
+
+      {showFullSheet && (
+        <StudentRecordsFullSheet
+          studentId={studentId}
+          studentName={studentName}
+          onClose={() => setShowFullSheet(false)}
+        />
       )}
     </div>
   );
