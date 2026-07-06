@@ -10,6 +10,7 @@ import type { DriveSyncManifest } from '@domain/entities/DriveSyncState';
 import type { DriveFolderInfo } from '@domain/ports/IGoogleDrivePort';
 import type { IDriveSyncPort, DriveSyncFileListItem } from '@domain/ports/IDriveSyncPort';
 import { GOOGLE_AUTH_BLOCKED_MESSAGE } from '@domain/rules/calendarSyncRules';
+import { MAX_DRIVE_RETRIES, isRetryableDriveStatus, computeDriveRetryDelayMs } from './driveRetry';
 
 const DRIVE_API_URL = 'https://www.googleapis.com/drive/v3';
 const DRIVE_UPLOAD_URL = 'https://www.googleapis.com/upload/drive/v3';
@@ -37,10 +38,31 @@ interface FileResponse {
 export class DriveSyncAdapter implements IDriveSyncPort {
   constructor(private readonly getAccessToken: () => Promise<string>) {}
 
+  /**
+   * 일시 오류(429/5xx) 자동 재시도 fetch.
+   * Retry-After 헤더를 존중하고, 없으면 지수 백오프. 그 외 상태는 즉시 반환해
+   * 기존 401/403 처리 흐름을 그대로 태운다.
+   */
+  private async fetchWithRetry(url: string, init: RequestInit): Promise<Response> {
+    let attempt = 0;
+    for (;;) {
+      const res = await fetch(url, init);
+      if (res.ok || !isRetryableDriveStatus(res.status) || attempt >= MAX_DRIVE_RETRIES) {
+        return res;
+      }
+      const delay = computeDriveRetryDelayMs(attempt, res.headers.get('Retry-After'));
+      console.warn(
+        `[DriveSyncAdapter] ${res.status} 일시 오류 → ${delay}ms 후 재시도 (${attempt + 1}/${MAX_DRIVE_RETRIES})`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      attempt++;
+    }
+  }
+
   /** JSON 응답용 API 요청 헬퍼 */
   private async request<T>(path: string, options?: RequestInit, isRetry = false): Promise<T> {
     const accessToken = await this.getAccessToken();
-    const res = await fetch(`${DRIVE_API_URL}${path}`, {
+    const res = await this.fetchWithRetry(`${DRIVE_API_URL}${path}`, {
       ...options,
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -54,8 +76,13 @@ export class DriveSyncAdapter implements IDriveSyncPort {
         return this.request<T>(path, options, true);
       }
       const err = await res.text();
-      if (res.status === 403 && (err.includes('ACCESS_TOKEN_SCOPE_INSUFFICIENT') || err.includes('insufficientPermissions'))) {
-        throw new Error('SCOPE_INSUFFICIENT: Google Drive 접근 권한이 부족합니다. 다시 로그인해주세요.');
+      if (
+        res.status === 403 &&
+        (err.includes('ACCESS_TOKEN_SCOPE_INSUFFICIENT') || err.includes('insufficientPermissions'))
+      ) {
+        throw new Error(
+          'SCOPE_INSUFFICIENT: Google Drive 접근 권한이 부족합니다. 다시 로그인해주세요.',
+        );
       }
       // 재시도 후에도 401: 학교 Workspace 정책 차단 가능성 안내
       if (res.status === 401) {
@@ -70,7 +97,7 @@ export class DriveSyncAdapter implements IDriveSyncPort {
   /** 텍스트 콘텐츠 다운로드 (alt=media) */
   private async downloadText(fileId: string, isRetry = false): Promise<string> {
     const accessToken = await this.getAccessToken();
-    const res = await fetch(`${DRIVE_API_URL}/files/${fileId}?alt=media`, {
+    const res = await this.fetchWithRetry(`${DRIVE_API_URL}/files/${fileId}?alt=media`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     if (!res.ok) {
@@ -78,8 +105,13 @@ export class DriveSyncAdapter implements IDriveSyncPort {
         return this.downloadText(fileId, true);
       }
       const err = await res.text();
-      if (res.status === 403 && (err.includes('ACCESS_TOKEN_SCOPE_INSUFFICIENT') || err.includes('insufficientPermissions'))) {
-        throw new Error('SCOPE_INSUFFICIENT: Google Drive 접근 권한이 부족합니다. 다시 로그인해주세요.');
+      if (
+        res.status === 403 &&
+        (err.includes('ACCESS_TOKEN_SCOPE_INSUFFICIENT') || err.includes('insufficientPermissions'))
+      ) {
+        throw new Error(
+          'SCOPE_INSUFFICIENT: Google Drive 접근 권한이 부족합니다. 다시 로그인해주세요.',
+        );
       }
       if (res.status === 401) {
         throw new Error(GOOGLE_AUTH_BLOCKED_MESSAGE);
@@ -115,7 +147,7 @@ export class DriveSyncAdapter implements IDriveSyncPort {
         ? `${DRIVE_UPLOAD_URL}/files?uploadType=multipart&fields=id,name,modifiedTime`
         : `${DRIVE_UPLOAD_URL}/files/${fileId}?uploadType=multipart&fields=id,name,modifiedTime`;
 
-    const res = await fetch(url, {
+    const res = await this.fetchWithRetry(url, {
       method,
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -129,8 +161,13 @@ export class DriveSyncAdapter implements IDriveSyncPort {
         return this.uploadText(metadata, content, method, fileId, true);
       }
       const err = await res.text();
-      if (res.status === 403 && (err.includes('ACCESS_TOKEN_SCOPE_INSUFFICIENT') || err.includes('insufficientPermissions'))) {
-        throw new Error('SCOPE_INSUFFICIENT: Google Drive 접근 권한이 부족합니다. 다시 로그인해주세요.');
+      if (
+        res.status === 403 &&
+        (err.includes('ACCESS_TOKEN_SCOPE_INSUFFICIENT') || err.includes('insufficientPermissions'))
+      ) {
+        throw new Error(
+          'SCOPE_INSUFFICIENT: Google Drive 접근 권한이 부족합니다. 다시 로그인해주세요.',
+        );
       }
       if (res.status === 401) {
         throw new Error(GOOGLE_AUTH_BLOCKED_MESSAGE);
@@ -197,10 +234,7 @@ export class DriveSyncAdapter implements IDriveSyncPort {
         modifiedTime: result.modifiedTime ?? new Date().toISOString(),
       };
     }
-    const result = await this.uploadText(
-      { name: filename, parents: [folderId] },
-      content,
-    );
+    const result = await this.uploadText({ name: filename, parents: [folderId] }, content);
     return {
       fileId: result.id,
       modifiedTime: result.modifiedTime ?? new Date().toISOString(),
@@ -242,10 +276,7 @@ export class DriveSyncAdapter implements IDriveSyncPort {
     }
 
     // 새로 생성
-    const result = await this.uploadText(
-      { name: MANIFEST_FILENAME, parents: [folderId] },
-      content,
-    );
+    const result = await this.uploadText({ name: MANIFEST_FILENAME, parents: [folderId] }, content);
     return result.id;
   }
 

@@ -373,7 +373,7 @@ export function Sidebar({ currentPage, onNavigate, onFeedback }: SidebarProps) {
       {/* 하단: 설정 + 프로필 + 버전 */}
       <div className={`${sidebarCollapsed ? 'p-2' : 'p-4'} border-t border-sp-border`}>
         {!sidebarCollapsed && <SyncStatusBar />}
-        {!sidebarCollapsed && <DriveSyncIndicator />}
+        <DriveSyncIndicator collapsed={sidebarCollapsed} />
         <button
           onClick={() => {
             track('feature_discovery', { feature: 'settings', source: 'menu' });

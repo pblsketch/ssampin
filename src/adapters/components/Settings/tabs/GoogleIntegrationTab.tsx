@@ -1,6 +1,13 @@
 import { useRef } from 'react';
 import { useGoogleAccountStore } from '@adapters/stores/useGoogleAccountStore';
-import { AccountSection, BackupCard, CalendarCard, TasksCard, LockedCard } from '../google';
+import {
+  AccountSection,
+  BackupCard,
+  CalendarCard,
+  TasksCard,
+  LockedCard,
+  MobileConnectCard,
+} from '../google';
 
 export function GoogleIntegrationTab() {
   const accountRef = useRef<HTMLDivElement>(null);
@@ -20,21 +27,30 @@ export function GoogleIntegrationTab() {
       {/* 학교 계정 안내 (항상 표시 — 연결 전이면 예방, 연결 후이면 트러블슈팅 단서) */}
       <div className="rounded-xl bg-amber-100 border-2 border-amber-400 p-4">
         <div className="flex items-start gap-3">
-          <span className="material-symbols-outlined text-amber-700 text-icon-lg shrink-0 mt-0.5">school</span>
+          <span className="material-symbols-outlined text-amber-700 text-icon-lg shrink-0 mt-0.5">
+            school
+          </span>
           <div className="flex-1 text-sm leading-relaxed">
             <p className="font-bold text-amber-900 mb-1">학교 Google 계정은 차단될 수 있어요</p>
             <p className="text-amber-900 mb-2">
-              학교에서 발급한 계정(@*.go.kr, @*.sen.go.kr 등)은 관리자 정책으로 외부 앱 접근이 차단되는 경우가 많아요.
-              연결은 되지만 캘린더·드라이브 호출이 모두 <span className="font-mono text-xs font-bold">401 (UNAUTHENTICATED)</span> 오류로 실패합니다.
+              학교에서 발급한 계정(@*.go.kr, @*.sen.go.kr 등)은 관리자 정책으로 외부 앱 접근이
+              차단되는 경우가 많아요. 연결은 되지만 캘린더·드라이브 호출이 모두{' '}
+              <span className="font-mono text-xs font-bold">401 (UNAUTHENTICATED)</span> 오류로
+              실패합니다.
             </p>
             <p className="text-amber-900">
-              <span className="font-bold">개인 Gmail 계정으로 연결하시는 걸 권장</span>해요. 이미 학교 계정으로 연결한 상태에서 동기화 오류가 뜬다면, 아래에서 연결을 해제하고 개인 Gmail로 다시 연결해주세요.
+              <span className="font-bold">개인 Gmail 계정으로 연결하시는 걸 권장</span>해요. 이미
+              학교 계정으로 연결한 상태에서 동기화 오류가 뜬다면, 아래에서 연결을 해제하고 개인
+              Gmail로 다시 연결해주세요.
             </p>
           </div>
         </div>
       </div>
 
       <AccountSection ref={accountRef} />
+
+      {/* 모바일 연결 — Google 연결 여부와 무관하게 항상 노출되는 상설 카드 */}
+      <MobileConnectCard />
 
       {isConnected ? (
         <div className="space-y-4">

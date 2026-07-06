@@ -88,7 +88,8 @@ export const ENTITY_FIELD_CONTRACT = {
     interfaces: {
       AttendanceRecord: {
         mirrored: ['classId', 'groupId', 'date', 'period', 'students'],
-        notMirrored: [],
+        // updatedAt: 기기 간 병합용 동기화 메타데이터 — 저장 시 ManageAttendance가 자동 스탬프하므로 미러 불필요
+        notMirrored: ['updatedAt'],
       },
       StudentAttendance: {
         mirrored: ['number', 'status', 'reason', 'memo', 'grade', 'classNum'],

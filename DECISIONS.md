@@ -372,3 +372,16 @@
 - **결정**: ① 모바일 Zustand 스토어는 전부 `src/mobile/stores/useMobileXxxStore.ts`(컴포넌트 폴더 내 store 금지, 데스크톱 스토어와 import 구분용 Mobile 접두어), 훅은 `hooks/useXxx`, 순수 유틸은 `utils/`, 표시 버전은 `version.ts` 단일 소스. ② 대형 페이지는 `pages/<페이지명 소문자>/` 폴더로 서브컴포넌트 순수 추출(예: `pages/students/`). ③ 리팩토링으로 코드가 파일 간 무변경 이사할 때, 화이트리스트 기반 게이트(eslint exhaustive-deps 래칫, `.isVacant` 메타 테스트)는 새 파일이 원 파일의 등재 지위를 승계한다 — 코드를 고쳐 게이트를 통과시키는 것은 동작 보존 원칙 위반 소지가 있어 금지.
 - **근거**: 모바일 리팩토링(2026-07-03)에서 네이밍 이원화·store 위치 이탈·1,815줄 단일 파일이 탐색 비용의 주범으로 분석됨(docs/03-analysis/mobile-refactor/). 화이트리스트 승계는 "이사한 기존 부채가 error로 승격되며 순수 이동을 막는" 문제의 표준 해법.
 - **트레이드오프**: 래칫 목록이 파일 이동을 따라 자라날 수 있음 — 부채 자체의 해소는 별도 작업으로 추적.
+
+## ADR-019: 출결 동기화 기록 단위 병합 + 업로드 유예 자동 재동기화
+
+- **상태**: active
+- **일자**: 2026-07-06
+- **배경**: Drive 동기화는 파일 단위 last-write-wins라, 폰(교실)과 PC(교무실)가 같은 `attendance.json`을 비슷한 시각에 고치면 한쪽 편집이 통째로 유실됐다. 또 SyncToCloud는 리모트가 더 최신이면 업로드를 조용히 스킵해, 모바일처럼 업로드만 하는 흐름에서는 내 변경분이 Drive에 오르지 못한 채 다음 다운로드에 덮여 소멸할 수 있었다(고아화).
+- **결정**:
+  1. **AttendanceRecord.updatedAt(optional)** — 저장 시 ManageAttendance가 "내용이 달라진 레코드에만" 스탬프하고, 내용이 같으면 기존 스탬프를 승계(`stampChangedRecords`). 키 규칙은 `attendanceRecordKey`(classId|groupId|date|period)로 domain/entities/Attendance.ts에 단일 정의.
+  2. **mergeAttendance** — SyncFromCloud의 3개 분기(충돌·manifest 미등록·최초 다운로드)에서 attendance는 student-records처럼 레코드 단위 병합. 한쪽에만 있는 레코드는 무조건 보존, 같은 키는 updatedAt 최신 우선, 양쪽 부재 시 preferRemote 폴백. AI 브릿지 계약에서는 updatedAt=notMirrored(동기화 메타데이터).
+  3. **deferred + pull-merge-push** — SyncToCloudResult에 `deferred`(리모트 변경으로 유예된 파일)를 추가하고, 모바일·데스크톱 스토어가 deferred 발생 시 syncFrom(병합)→syncTo를 1회 재시도(모듈 가드로 무한루프 차단).
+  4. **PC 기본값 상향** — autoSyncOnSave true, autoSyncIntervalMin 5분(useSettingsStore·BackupCard·ImportSettingsFromCloud 3곳 일치). Drive 어댑터에 429/5xx 지수 백오프(최대 3회, Retry-After 존중, infrastructure/google/driveRetry.ts).
+- **트레이드오프(고지)**: 툼스톤이 없어 한쪽에서 삭제한 출결 레코드가 상대쪽 동기화로 부활할 수 있음 — student-records 병합과 동일한 기존 트레이드오프로, 통째 유실보다 낫다고 판단. 삭제 전파가 필요해지면 툼스톤 배열 도입을 후속 과제로.
+- **검증**: tsc 0 / lint 0 errors / vitest 3415 passed(신규 20건: mergeAttendance 12·deferred 3·driveRetry 5) / regression 38/38 / landing docs:check·build 통과 / architect APPROVED.

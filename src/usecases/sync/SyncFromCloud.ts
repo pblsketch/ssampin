@@ -7,6 +7,8 @@ import type {
   DriveSyncFileInfo,
 } from '@domain/entities/DriveSyncState';
 import type { StudentRecordsData, StudentRecord } from '@domain/entities/StudentRecord';
+import type { AttendanceData, AttendanceRecord } from '@domain/entities/Attendance';
+import { attendanceRecordKey } from '@domain/entities/Attendance';
 import {
   SYNC_FILES,
   type SyncProgress,
@@ -54,6 +56,40 @@ export function mergeStudentRecords(
     records: [...map.values()],
     ...(categories ? { categories } : {}),
   };
+}
+
+/**
+ * attendance를 (classId|groupId|date|period) 레코드 단위로 병합.
+ * - 한쪽에만 있는 레코드는 무조건 보존 (다른 반/날짜/교시를 서로 지우지 않음)
+ * - 같은 키는 updatedAt(ISO 문자열 사전순 비교)이 최신인 쪽 채택
+ * - 양쪽 모두 updatedAt이 없거나 동률이면 preferRemote로 판정
+ *   (과거 데이터 호환: updatedAt 부재 = 가장 오래된 것으로 취급)
+ * 주의: 툼스톤이 없어 한쪽에서 삭제한 레코드가 상대쪽에서 되살아날 수 있다.
+ *       student-records 병합과 동일한 기존 트레이드오프로, 통째 덮어쓰기 유실보다 낫다.
+ */
+export function mergeAttendance(
+  local: AttendanceData | null,
+  remote: AttendanceData,
+  preferRemote: boolean,
+): AttendanceData {
+  const map = new Map<string, AttendanceRecord>();
+  for (const r of local?.records ?? []) {
+    map.set(attendanceRecordKey(r), r);
+  }
+  for (const r of remote.records ?? []) {
+    const key = attendanceRecordKey(r);
+    const existing = map.get(key);
+    if (!existing) {
+      map.set(key, r);
+      continue;
+    }
+    const localStamp = existing.updatedAt ?? '';
+    const remoteStamp = r.updatedAt ?? '';
+    if (remoteStamp > localStamp || (remoteStamp === localStamp && preferRemote)) {
+      map.set(key, r);
+    }
+  }
+  return { records: [...map.values()] };
 }
 
 export interface SyncFromCloudResult {
@@ -162,6 +198,25 @@ export class SyncFromCloud {
           continue;
         }
 
+        // attendance도 항상 record-level merge — 폰·PC가 서로 다른 반/날짜를
+        // 같은 파일에 쓰는 도메인이라 통째 덮어쓰기가 곧 출결 유실이다.
+        if (filename === 'attendance') {
+          const driveFile = remoteFiles.find((f) => f.name === `${filename}.json`);
+          if (driveFile) {
+            const content = await this.drivePort.downloadSyncFile(driveFile.id);
+            const remoteData = JSON.parse(content) as AttendanceData;
+            const localData = await this.storage.read<AttendanceData>(filename);
+            const merged = mergeAttendance(localData, remoteData, remoteIsNewer);
+            await this.storage.write(filename, merged);
+            updatedFiles[filename] = remoteInfo;
+            downloaded.push(filename);
+            console.log(
+              `[SyncFromCloud]   ${filename}: ✅ MERGE (local=${localData?.records?.length ?? 0}건 + remote=${remoteData?.records?.length ?? 0}건 → ${merged.records.length}건)`,
+            );
+          }
+          continue;
+        }
+
         if (this.conflictPolicy === 'latest') {
           if (remoteIsNewer) {
             // 리모트가 최신 → 다운로드
@@ -196,11 +251,11 @@ export class SyncFromCloud {
       // 매니페스트엔 없지만 로컬 storage에는 실제로 파일이 있을 수 있음.
       // (예: 본 도메인이 신규로 SYNC_FILES에 편입된 직후의 기존 사용자)
       // 이 경우 무조건 다운로드하면 사용자가 작성한 로컬 데이터가 silent하게 덮어쓰기됨.
-      // student-records는 record-level merge가 자체 구현되어 있으므로 그대로 두고,
+      // student-records/attendance는 record-level merge가 자체 구현되어 있으므로 그대로 두고,
       // 그 외 도메인은 로컬 파일이 실제로 존재하면 충돌 다이얼로그로 회수한다.
       const driveFile = remoteFiles.find((f) => f.name === `${filename}.json`);
       if (driveFile) {
-        if (filename !== 'student-records') {
+        if (filename !== 'student-records' && filename !== 'attendance') {
           const localData = await this.storage.read<unknown>(filename);
           if (localData !== null) {
             // 실제 로컬 파일 존재 → manifest 미등록 상태에서의 silent 덮어쓰기 방지
@@ -246,6 +301,15 @@ export class SyncFromCloud {
           const remoteData = JSON.parse(content) as StudentRecordsData;
           const localData = await this.storage.read<StudentRecordsData>(filename);
           const merged = mergeStudentRecords(localData, remoteData);
+          await this.storage.write(filename, merged);
+          console.log(
+            `[SyncFromCloud]   ${filename}: ✅ MERGE (first download, local=${localData?.records?.length ?? 0}건 + remote=${remoteData?.records?.length ?? 0}건 → ${merged.records.length}건)`,
+          );
+        } else if (filename === 'attendance') {
+          const remoteData = JSON.parse(content) as AttendanceData;
+          const localData = await this.storage.read<AttendanceData>(filename);
+          // 로컬 manifest 정보가 없어 최신 판정 불가 → 기존 동작(리모트 우선)과 일치하게 preferRemote
+          const merged = mergeAttendance(localData, remoteData, true);
           await this.storage.write(filename, merged);
           console.log(
             `[SyncFromCloud]   ${filename}: ✅ MERGE (first download, local=${localData?.records?.length ?? 0}건 + remote=${remoteData?.records?.length ?? 0}건 → ${merged.records.length}건)`,

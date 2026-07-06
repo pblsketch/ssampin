@@ -4,3 +4,4 @@ export { CalendarCard } from './CalendarCard';
 export { TasksCard } from './TasksCard';
 export { LockedCard } from './LockedCard';
 export { DisconnectConfirmModal } from './DisconnectConfirmModal';
+export { MobileConnectCard } from './MobileConnectCard';

@@ -32,7 +32,7 @@ const slides: SlideData[] = [
   {
     icon: 'cloud_sync',
     title: 'Google Drive로\n자동 동기화',
-    description: 'PC에서 입력한 데이터가\n모바일에 자동으로 반영돼요',
+    description: 'PC 데이터가 Google Drive를 거쳐\n자동으로 동기화돼요 (몇 분 이내 반영)',
     features: ['Google 계정 로그인', 'PC ↔ 모바일 동기화', '오프라인에서도 사용 가능'],
   },
 ];

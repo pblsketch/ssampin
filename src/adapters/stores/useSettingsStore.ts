@@ -197,8 +197,11 @@ const DEFAULT_SETTINGS: Settings = {
   sync: {
     enabled: false,
     autoSyncOnStart: true,
-    autoSyncOnSave: false,
-    autoSyncIntervalMin: 0,
+    // 기본 ON: 모바일에서 입력한 변경분이 PC에 자동으로 내려오고,
+    // PC 변경분도 저장 시 올라가야 "자동 반영" 안내와 실제 동작이 일치한다.
+    // (기존 사용자가 명시적으로 저장한 설정값은 그대로 존중됨)
+    autoSyncOnSave: true,
+    autoSyncIntervalMin: 5,
     conflictPolicy: 'latest' as const,
     lastSyncedAt: null,
     deviceId: '', // 런타임에 generateUUID()로 초기화

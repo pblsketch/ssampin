@@ -75,8 +75,8 @@ export default function MobileApp() {
                     </span>
                   </div>
                   <p className="mt-2 text-xs leading-relaxed text-sp-muted">
-                    PC에서 작성한 시간표·출결·메모를 Google Drive를 통해 모바일에서 바로 확인할 수
-                    있어요. 별도 서버 없이 안전하게 동기화됩니다.
+                    PC에서 작성한 시간표·출결·메모가 Google Drive를 거쳐 몇 분 안에 모바일로
+                    동기화돼요. 별도 서버 없이 안전하게 보관됩니다.
                   </p>
                 </div>
               </div>

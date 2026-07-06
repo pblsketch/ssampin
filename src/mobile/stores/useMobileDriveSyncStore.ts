@@ -5,6 +5,15 @@ import { SyncToCloud } from '@usecases/sync/SyncToCloud';
 import { SyncFromCloud } from '@usecases/sync/SyncFromCloud';
 import { getDriveSyncAdapter, driveSyncRepository, storage } from '@mobile/di/container';
 import type { SyncResult } from '@adapters/stores/useDriveSyncStore';
+import { isGoogleAuthBlockedError } from '@domain/rules/calendarSyncRules';
+
+/**
+ * 학교 Google Workspace 계정 차단 안내 (모바일 문구).
+ * 데스크톱(GOOGLE_AUTH_BLOCKED_MESSAGE)은 "설정 → Google 통합"을 안내하지만
+ * 모바일은 그 화면이 없으므로 "다시 로그인" 동작에 맞춘 문구를 별도로 둔다.
+ */
+const MOBILE_AUTH_BLOCKED_MESSAGE =
+  '학교 계정(@*.go.kr 등)은 외부 앱 차단 정책일 수 있어요. 개인 Gmail로 다시 로그인해주세요.';
 
 /** 모바일 전용 고유 device ID (synced settings와 독립적으로 관리) */
 function getMobileDeviceId(): string {
@@ -95,6 +104,9 @@ async function reloadAllStores(): Promise<void> {
 
 type SyncState = 'idle' | 'syncing' | 'error' | 'conflict';
 
+/** 오류 종류 — SyncStatusBanner가 '다시 시도' 대신 '다시 로그인'을 보여줄지 판단하는 데 사용. */
+type SyncErrorKind = 'auth' | 'blocked' | 'generic' | null;
+
 interface ConflictInfo {
   filename: string;
   localTime: string;
@@ -105,6 +117,7 @@ interface MobileDriveSyncState {
   state: SyncState;
   progress: number;
   error: string | null;
+  errorKind: SyncErrorKind;
   conflict: ConflictInfo | null;
   lastSyncedAt: string | null;
   isAuthenticated: boolean;
@@ -123,6 +136,8 @@ interface MobileDriveSyncState {
 let tokenGetter: (() => Promise<string>) | null = null;
 let adapter: IDriveSyncPort | null = null;
 let saveDebounce: ReturnType<typeof setTimeout> | null = null;
+/** 업로드 유예(deferred) 재시도 1회 가드 — pull-merge-push 무한루프 방지 */
+let deferredRetrying = false;
 
 function getAdapter(): IDriveSyncPort {
   if (!adapter && tokenGetter) {
@@ -132,10 +147,39 @@ function getAdapter(): IDriveSyncPort {
   return adapter;
 }
 
+/** 동기화 실패 분류 → 스토어 상태 반영 (syncToCloud/syncFromCloud 공용) */
+function applySyncError(e: unknown, set: (partial: Partial<MobileDriveSyncState>) => void): void {
+  const msg = e instanceof Error ? e.message : '동기화 실패';
+  if (isGoogleAuthBlockedError(msg)) {
+    tokenGetter = null;
+    adapter = null;
+    set({
+      state: 'error',
+      isAuthenticated: false,
+      errorKind: 'blocked',
+      error: MOBILE_AUTH_BLOCKED_MESSAGE,
+    });
+  } else if (msg.includes('INVALID_GRANT') || msg.includes('SCOPE_INSUFFICIENT')) {
+    tokenGetter = null;
+    adapter = null;
+    set({
+      state: 'error',
+      isAuthenticated: false,
+      errorKind: 'auth',
+      error: msg.includes('SCOPE_INSUFFICIENT')
+        ? 'Google Drive 접근 권한이 변경되었습니다. 다시 로그인해주세요.'
+        : 'Google 인증이 만료되었습니다. 다시 로그인해주세요.',
+    });
+  } else {
+    set({ state: 'error', errorKind: 'generic', error: msg });
+  }
+}
+
 export const useMobileDriveSyncStore = create<MobileDriveSyncState>((set, get) => ({
   state: 'idle',
   progress: 0,
   error: null,
+  errorKind: null,
   conflict: null,
   lastSyncedAt: null,
   isAuthenticated: false,
@@ -149,11 +193,15 @@ export const useMobileDriveSyncStore = create<MobileDriveSyncState>((set, get) =
 
   syncToCloud: async () => {
     if (!tokenGetter) {
-      set({ state: 'error', error: '로그인이 필요합니다. Google 계정으로 로그인해 주세요.' });
+      set({
+        state: 'error',
+        errorKind: 'auth',
+        error: '로그인이 필요합니다. Google 계정으로 로그인해 주세요.',
+      });
       return;
     }
     if (get().state === 'syncing') return;
-    set({ state: 'syncing', progress: 0, error: null });
+    set({ state: 'syncing', progress: 0, error: null, errorKind: null });
     try {
       // Load settings to get real deviceId
       const { useMobileSettingsStore } = await import('@mobile/stores/useMobileSettingsStore');
@@ -175,6 +223,7 @@ export const useMobileDriveSyncStore = create<MobileDriveSyncState>((set, get) =
       set({
         state: 'idle',
         progress: 100,
+        errorKind: null,
         lastSyncedAt: now,
         lastSyncResult: {
           direction: 'upload',
@@ -183,31 +232,33 @@ export const useMobileDriveSyncStore = create<MobileDriveSyncState>((set, get) =
           skipped: result.skipped,
         },
       });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : '동기화 실패';
-      if (msg.includes('INVALID_GRANT') || msg.includes('SCOPE_INSUFFICIENT')) {
-        tokenGetter = null;
-        adapter = null;
-        set({
-          state: 'error',
-          isAuthenticated: false,
-          error: msg.includes('SCOPE_INSUFFICIENT')
-            ? 'Google Drive 접근 권한이 변경되었습니다. 다시 로그인해주세요.'
-            : 'Google 인증이 만료되었습니다. 다시 로그인해주세요.',
-        });
-      } else {
-        set({ state: 'error', error: msg });
+      // 리모트 변경으로 업로드가 유예된 파일이 있으면: 다운로드(병합) 후 1회만 재업로드.
+      // 이게 없으면 폰에서 입력한 변경분이 Drive에 오르지 못한 채 다음 다운로드에 덮여 사라질 수 있다.
+      if (result.deferred.length > 0 && !deferredRetrying) {
+        deferredRetrying = true;
+        try {
+          await get().syncFromCloud();
+          await get().syncToCloud();
+        } finally {
+          deferredRetrying = false;
+        }
       }
+    } catch (e) {
+      applySyncError(e, set);
     }
   },
 
   syncFromCloud: async () => {
     if (!tokenGetter) {
-      set({ state: 'error', error: '로그인이 필요합니다. Google 계정으로 로그인해 주세요.' });
+      set({
+        state: 'error',
+        errorKind: 'auth',
+        error: '로그인이 필요합니다. Google 계정으로 로그인해 주세요.',
+      });
       return;
     }
     if (get().state === 'syncing') return;
-    set({ state: 'syncing', progress: 0, error: null });
+    set({ state: 'syncing', progress: 0, error: null, errorKind: null });
     try {
       const { useMobileSettingsStore } = await import('@mobile/stores/useMobileSettingsStore');
       const settingsState = useMobileSettingsStore.getState();
@@ -229,6 +280,7 @@ export const useMobileDriveSyncStore = create<MobileDriveSyncState>((set, get) =
       set({
         state: 'idle',
         progress: 100,
+        errorKind: null,
         lastSyncedAt: now,
         lastSyncResult: {
           direction: 'download',
@@ -240,20 +292,7 @@ export const useMobileDriveSyncStore = create<MobileDriveSyncState>((set, get) =
       });
       await reloadAllStores();
     } catch (e) {
-      const msg = e instanceof Error ? e.message : '동기화 실패';
-      if (msg.includes('INVALID_GRANT') || msg.includes('SCOPE_INSUFFICIENT')) {
-        tokenGetter = null;
-        adapter = null;
-        set({
-          state: 'error',
-          isAuthenticated: false,
-          error: msg.includes('SCOPE_INSUFFICIENT')
-            ? 'Google Drive 접근 권한이 변경되었습니다. 다시 로그인해주세요.'
-            : 'Google 인증이 만료되었습니다. 다시 로그인해주세요.',
-        });
-      } else {
-        set({ state: 'error', error: msg });
-      }
+      applySyncError(e, set);
     }
   },
 

@@ -1,13 +1,16 @@
 import { useState, useEffect } from 'react';
 import { useMobileDriveSyncStore } from '@mobile/stores/useMobileDriveSyncStore';
+import { useGoogleAuthContext } from '@mobile/contexts/GoogleAuthContext';
 
 export function SyncStatusBanner() {
   const state = useMobileDriveSyncStore((s) => s.state);
   const progress = useMobileDriveSyncStore((s) => s.progress);
   const error = useMobileDriveSyncStore((s) => s.error);
+  const errorKind = useMobileDriveSyncStore((s) => s.errorKind);
   const lastSyncedAt = useMobileDriveSyncStore((s) => s.lastSyncedAt);
   const isAuthenticated = useMobileDriveSyncStore((s) => s.isAuthenticated);
   const syncFromCloud = useMobileDriveSyncStore((s) => s.syncFromCloud);
+  const { startLogin } = useGoogleAuthContext();
 
   const [dismissed, setDismissed] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
@@ -32,7 +35,8 @@ export function SyncStatusBanner() {
   }, [state, error]);
 
   if (dismissed) return null;
-  if (!isAuthenticated) return null;
+  // 인증 만료/차단 오류는 isAuthenticated 를 false 로 바꾸므로, 오류 배너까지 숨기지 않도록 예외 처리.
+  if (!isAuthenticated && state !== 'error') return null;
 
   // 동기화 중
   if (state === 'syncing') {
@@ -67,6 +71,9 @@ export function SyncStatusBanner() {
 
   // 오류
   if (state === 'error' && error) {
+    // 인증 만료(auth) / 학교 계정 차단(blocked) 은 재시도로 해결되지 않으므로 재로그인 유도.
+    const needsRelogin = errorKind === 'auth' || errorKind === 'blocked';
+
     return (
       <div className="mx-4 mb-3 rounded-xl bg-sp-error/10 border border-sp-error/30 px-4 py-3">
         <div className="flex items-start justify-between gap-2">
@@ -85,15 +92,28 @@ export function SyncStatusBanner() {
           </button>
         </div>
         <div className="mt-2 flex justify-end">
-          <button
-            onClick={() => {
-              setDismissed(false);
-              void syncFromCloud();
-            }}
-            className="text-xs text-sp-error hover:opacity-80 font-medium transition-opacity"
-          >
-            다시 시도
-          </button>
+          {needsRelogin ? (
+            <button
+              onClick={() => {
+                setDismissed(false);
+                void startLogin(true);
+              }}
+              className="flex items-center gap-1 text-xs text-sp-error hover:opacity-80 font-medium transition-opacity"
+            >
+              <span className="material-symbols-outlined text-icon-sm">login</span>
+              다시 로그인
+            </button>
+          ) : (
+            <button
+              onClick={() => {
+                setDismissed(false);
+                void syncFromCloud();
+              }}
+              className="text-xs text-sp-error hover:opacity-80 font-medium transition-opacity"
+            >
+              다시 시도
+            </button>
+          )}
         </div>
       </div>
     );

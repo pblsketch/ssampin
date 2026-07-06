@@ -37,6 +37,13 @@ export type GetBinaryDynamicSyncFiles = () => Promise<string[]>;
 export interface SyncToCloudResult {
   readonly uploaded: string[];
   readonly skipped: string[];
+  /**
+   * 리모트가 내 마지막 동기화 이후 변경되어 업로드를 미룬 파일들.
+   * (skipped에도 포함됨 — 요약 UI 집계 호환)
+   * 호출자는 syncFromCloud(병합) 후 syncToCloud를 1회 재시도해
+   * 로컬 변경분이 고아가 되지 않게 해야 한다.
+   */
+  readonly deferred: string[];
 }
 
 export interface SyncProgress {
@@ -65,6 +72,7 @@ export class SyncToCloud {
     const localManifest = await this.syncRepo.getLocalManifest();
     const uploaded: string[] = [];
     const skipped: string[] = [];
+    const deferred: string[] = [];
     const total = SYNC_FILES.length;
 
     // 리모트 매니페스트를 먼저 읽어 다른 기기가 올린 파일 엔트리를 보존
@@ -104,13 +112,14 @@ export class SyncToCloud {
         return;
       }
 
-      // 리모트가 우리 마지막 동기화 이후 변경되었으면 업로드 스킵 (다른 기기가 올린 최신 데이터 보호)
+      // 리모트가 우리 마지막 동기화 이후 변경되었으면 업로드 유예 (다른 기기가 올린 최신 데이터 보호)
       const remoteChecksum = remoteManifest?.files[filename]?.checksum;
       if (remoteChecksum && manifestChecksum && remoteChecksum !== manifestChecksum) {
         console.log(
-          `[SyncToCloud]   ${filename}: SKIP (remote changed: local-manifest=${manifestChecksum.slice(0, 8)} remote=${remoteChecksum.slice(0, 8)}, 다음 syncFromCloud에서 다운로드)`,
+          `[SyncToCloud]   ${filename}: DEFER (remote changed: local-manifest=${manifestChecksum.slice(0, 8)} remote=${remoteChecksum.slice(0, 8)}, syncFromCloud 병합 후 재업로드 필요)`,
         );
         skipped.push(filename);
+        deferred.push(filename);
         return;
       }
 
@@ -165,9 +174,10 @@ export class SyncToCloud {
       const remoteChecksum = remoteManifest?.files[relPath]?.checksum;
       if (remoteChecksum && manifestChecksum && remoteChecksum !== manifestChecksum) {
         console.log(
-          `[SyncToCloud]   ${relPath}: SKIP (remote changed, 다음 syncFromCloud에서 다운로드)`,
+          `[SyncToCloud]   ${relPath}: DEFER (remote changed, syncFromCloud 병합 후 재업로드 필요)`,
         );
         skipped.push(relPath);
+        deferred.push(relPath);
         continue;
       }
 
@@ -198,8 +208,8 @@ export class SyncToCloud {
     await this.syncRepo.saveLocalManifest(newManifest);
 
     console.log(
-      `[SyncToCloud] ✅ 완료 | uploaded=${uploaded.length} skipped=${skipped.length} | uploaded=[${uploaded.join(', ')}]`,
+      `[SyncToCloud] ✅ 완료 | uploaded=${uploaded.length} skipped=${skipped.length} deferred=${deferred.length} | uploaded=[${uploaded.join(', ')}]`,
     );
-    return { uploaded, skipped };
+    return { uploaded, skipped, deferred };
   }
 }

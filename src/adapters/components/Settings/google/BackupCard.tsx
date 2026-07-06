@@ -11,8 +11,9 @@ const INTERVAL_OPTIONS = [0, 5, 10, 15, 30] as const;
 const DEFAULT_SYNC: SyncSettings = {
   enabled: false,
   autoSyncOnStart: true,
-  autoSyncOnSave: false,
-  autoSyncIntervalMin: 0,
+  // useSettingsStore 기본값과 반드시 일치시킬 것 (모바일 변경분 자동 반영 기본 ON)
+  autoSyncOnSave: true,
+  autoSyncIntervalMin: 5,
   conflictPolicy: 'latest',
   lastSyncedAt: null,
   deviceId: '',
@@ -139,9 +140,7 @@ export const BackupCard = forwardRef<HTMLDivElement>(function BackupCard(_props,
             warning_amber
           </span>
           <div className="flex-1 min-w-0">
-            <p className="text-sm text-sp-text">
-              최초 동기화 방향을 아직 결정하지 않았어요.
-            </p>
+            <p className="text-sm text-sp-text">최초 동기화 방향을 아직 결정하지 않았어요.</p>
           </div>
           <button
             type="button"
@@ -269,7 +268,8 @@ export const BackupCard = forwardRef<HTMLDivElement>(function BackupCard(_props,
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-sp-text">다른 컴퓨터 설정 가져오기</p>
               <p className="text-xs text-sp-muted mt-0.5 leading-relaxed">
-                같은 Google 계정의 Drive 백업에서 설정값만 이 기기에 적용합니다.<br />
+                같은 Google 계정의 Drive 백업에서 설정값만 이 기기에 적용합니다.
+                <br />
                 시간표·학생·메모 등 다른 데이터는 건드리지 않아요.
               </p>
             </div>
@@ -384,7 +384,8 @@ export const BackupCard = forwardRef<HTMLDivElement>(function BackupCard(_props,
         <div className="p-6">
           <h3 className="text-lg font-bold text-sp-text mb-2">클라우드 데이터 삭제</h3>
           <p className="text-sm text-sp-muted mb-6">
-            Google Drive의 '쌤핀 동기화' 폴더의 모든 데이터가 삭제됩니다. 이 작업은 되돌릴 수 없습니다.
+            Google Drive의 '쌤핀 동기화' 폴더의 모든 데이터가 삭제됩니다. 이 작업은 되돌릴 수
+            없습니다.
           </p>
           <div className="flex gap-3 justify-end">
             <button

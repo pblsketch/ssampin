@@ -2,13 +2,18 @@ import type { IStoragePort } from '@domain/ports/IStoragePort';
 import type { IDriveSyncPort } from '@domain/ports/IDriveSyncPort';
 import type { IDriveSyncRepository } from '@domain/repositories/IDriveSyncRepository';
 import type { DriveSyncManifest, DriveSyncFileInfo } from '@domain/entities/DriveSyncState';
-import type { Settings, SyncSettings, WidgetStyleSettings, CustomFontSettings } from '@domain/entities/Settings';
+import type {
+  Settings,
+  SyncSettings,
+  WidgetStyleSettings,
+  CustomFontSettings,
+} from '@domain/entities/Settings';
 
 export type ImportSettingsFromCloudErrorCode =
-  | 'NO_BACKUP'          // Drive에 쌤핀 폴더/매니페스트/settings 엔트리 없음
+  | 'NO_BACKUP' // Drive에 쌤핀 폴더/매니페스트/settings 엔트리 없음
   | 'SCOPE_INSUFFICIENT' // OAuth 권한 부족
-  | 'PARSE_ERROR'        // settings.json 파싱 실패
-  | 'NETWORK_ERROR'      // 기타 네트워크/Drive 오류
+  | 'PARSE_ERROR' // settings.json 파싱 실패
+  | 'NETWORK_ERROR' // 기타 네트워크/Drive 오류
   | 'UNKNOWN';
 
 export class ImportSettingsFromCloudError extends Error {
@@ -24,9 +29,9 @@ export class ImportSettingsFromCloudError extends Error {
 
 export interface ImportSettingsFromCloudResult {
   readonly applied: true;
-  readonly appliedAt: string;         // ISO
+  readonly appliedAt: string; // ISO
   readonly remoteDeviceName?: string; // 매니페스트의 업로더 디바이스
-  readonly remoteUpdatedAt?: string;  // 매니페스트의 settings 엔트리 lastModified
+  readonly remoteUpdatedAt?: string; // 매니페스트의 settings 엔트리 lastModified
 }
 
 /**
@@ -97,11 +102,7 @@ export class ImportSettingsFromCloud {
       }
       remoteSettings = parsed as Settings;
     } catch (err) {
-      throw new ImportSettingsFromCloudError(
-        'PARSE_ERROR',
-        '설정 파일을 해석할 수 없습니다.',
-        err,
-      );
+      throw new ImportSettingsFromCloudError('PARSE_ERROR', '설정 파일을 해석할 수 없습니다.', err);
     }
 
     // 5. 현재 로컬 settings 조회
@@ -204,8 +205,8 @@ export class ImportSettingsFromCloud {
     return {
       enabled: l?.enabled ?? r?.enabled ?? false,
       autoSyncOnStart: r?.autoSyncOnStart ?? l?.autoSyncOnStart ?? true,
-      autoSyncOnSave: r?.autoSyncOnSave ?? l?.autoSyncOnSave ?? false,
-      autoSyncIntervalMin: r?.autoSyncIntervalMin ?? l?.autoSyncIntervalMin ?? 0,
+      autoSyncOnSave: r?.autoSyncOnSave ?? l?.autoSyncOnSave ?? true,
+      autoSyncIntervalMin: r?.autoSyncIntervalMin ?? l?.autoSyncIntervalMin ?? 5,
       conflictPolicy: r?.conflictPolicy ?? l?.conflictPolicy ?? 'latest',
       deviceId: l?.deviceId ?? r?.deviceId ?? '',
       lastSyncedAt: l?.lastSyncedAt ?? null,

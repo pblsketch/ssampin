@@ -81,8 +81,12 @@ export function MobileAnnouncementBanner() {
             </div>
 
             <div className="bg-blue-500/10 rounded-xl p-4 mb-6">
-              <p className="text-blue-400 text-sm font-medium mb-1">🔄 Google Drive로 자동 동기화</p>
-              <p className="text-sp-muted text-xs">PC에서 입력한 데이터가 모바일에 자동 반영돼요</p>
+              <p className="text-blue-400 text-sm font-medium mb-1">
+                🔄 Google Drive로 자동 동기화
+              </p>
+              <p className="text-sp-muted text-xs">
+                PC 데이터가 Google Drive를 거쳐 자동 동기화돼요 (몇 분 이내 반영)
+              </p>
             </div>
 
             <div className="border border-sp-border rounded-xl p-4 mb-6">
@@ -90,7 +94,11 @@ export function MobileAnnouncementBanner() {
               <ol className="space-y-2 text-sm text-sp-muted">
                 <li className="flex items-start gap-2">
                   <span className="text-blue-400 font-bold shrink-0">1.</span>
-                  <span>핸드폰으로 <strong className="text-sp-text">{MOBILE_URL.replace('https://', '')}</strong> 접속</span>
+                  <span>
+                    핸드폰으로{' '}
+                    <strong className="text-sp-text">{MOBILE_URL.replace('https://', '')}</strong>{' '}
+                    접속
+                  </span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-blue-400 font-bold shrink-0">2.</span>

@@ -55,6 +55,8 @@ interface DriveSyncState {
 }
 
 let _saveSyncTimer: ReturnType<typeof setTimeout> | null = null;
+/** 업로드 유예(deferred) 재시도 1회 가드 — pull-merge-push 무한루프 방지 */
+let _deferredRetrying = false;
 
 export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
   status: 'idle',
@@ -125,6 +127,18 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
       setTimeout(() => {
         if (get().status === 'success') set({ status: 'idle' });
       }, 3000);
+
+      // 리모트 변경으로 업로드가 유예된 파일이 있으면: 다운로드(병합) 후 1회만 재업로드.
+      // 이 기기의 변경분이 Drive에 오르지 못한 채 다음 다운로드에 덮이는 것을 막는다.
+      if (result.deferred.length > 0 && !_deferredRetrying) {
+        _deferredRetrying = true;
+        try {
+          await get().syncFromCloud();
+          await get().syncToCloud();
+        } finally {
+          _deferredRetrying = false;
+        }
+      }
     } catch (err) {
       console.error('[DriveSync] syncToCloud error:', err);
       const msg = err instanceof Error ? err.message : '동기화 중 오류가 발생했습니다.';
