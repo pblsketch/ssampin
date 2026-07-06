@@ -89,8 +89,9 @@ export function SettingsLayout({
           <SettingsSidebar activeTab={activeTab} onTabChange={onTabChange} />
         </div>
 
-        {/* Mobile: 상단 탭바 + Content */}
-        <div className="flex-1 flex flex-col min-h-0">
+        {/* Mobile: 상단 탭바 + Content — min-w-0: 탭바 고유 폭이 컨테이너를 밀어내
+            좁은 창에서 본문이 화면 밖으로 벗어나는 것 방지 */}
+        <div className="flex-1 flex flex-col min-h-0 min-w-0">
           <div className="md:hidden shrink-0 bg-sp-bg border-b border-sp-border">
             <SettingsTabBar activeTab={activeTab} onTabChange={onTabChange} />
           </div>

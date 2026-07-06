@@ -561,9 +561,8 @@ export function PeriodTab({ draft, patch }: Props) {
           <div>
             <p className="text-sm text-sp-text font-medium">NEIS 학급 시간표 자동 동기화</p>
             <p className="text-xs text-sp-muted mt-0.5">
-              학급 시간표(담임용) 동기화 설정은{' '}
-              <strong className="text-sp-accent">일정·연동</strong> 탭의 외부 연동 섹션으로
-              이동했습니다.
+              학급 시간표(담임용) 동기화 설정은 <strong className="text-sp-accent">일정</strong>{' '}
+              탭의 외부 연동 섹션으로 이동했습니다.
             </p>
           </div>
         </div>
