@@ -22,6 +22,7 @@ import { TeachingSeatingView } from '@mobile/pages/students/TeachingSeatingView'
 import { HomeroomListView } from '@mobile/pages/students/HomeroomListView';
 import { TeachingListView } from '@mobile/pages/students/TeachingListView';
 import { StudentQuickActionSheet } from '@mobile/pages/students/StudentQuickActionSheet';
+import { HomeroomRecordsOverviewPage } from '@mobile/pages/HomeroomRecordsOverviewPage';
 import type { HomeroomStudent, SheetStudentInfo } from '@mobile/pages/students/shared';
 
 type ViewMode = 'seating' | 'list';
@@ -36,6 +37,8 @@ export function StudentsPage() {
   const [selectedClass, setSelectedClass] = useState<ClassSelection>('homeroom');
   const [seatingData, setSeatingData] = useState<SeatingData | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  // 반 전체 기록 모아보기(Feature B) — 담임반 선택 시 헤더 아이콘으로 진입하는 풀스크린 전환
+  const [showRecordsOverview, setShowRecordsOverview] = useState(false);
 
   // 바텀시트 상태
   const [sheetStudent, setSheetStudent] = useState<SheetStudentInfo | null>(null);
@@ -291,6 +294,11 @@ export function StudentsPage() {
     [addStudentRecord, deleteStudentRecord, selectedDateStr],
   );
 
+  // 반 전체 기록 모아보기 — 담임반 헤더 아이콘 진입, 하단 탭바는 유지된 채 이 슬롯만 전체화면 전환
+  if (showRecordsOverview) {
+    return <HomeroomRecordsOverviewPage onClose={() => setShowRecordsOverview(false)} />;
+  }
+
   return (
     <div className="flex flex-col h-full">
       {/* 헤더 */}
@@ -303,57 +311,71 @@ export function StudentsPage() {
               : (selectedTeachingClass?.name ?? '수업반')}
           </h2>
 
-          {/* 담임반일 때만 뷰 토글 표시 */}
-          {selectedClass === 'homeroom' && (
-            <div className="flex items-center gap-1 bg-black/5 dark:bg-white/5 rounded-lg p-1">
+          <div className="flex items-center gap-2">
+            {/* 반 전체 기록 보기 (담임반 선택 시만) */}
+            {selectedClass === 'homeroom' && (
               <button
-                onClick={() => setViewMode('seating')}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                  viewMode === 'seating'
-                    ? 'bg-sp-accent text-sp-accent-fg'
-                    : 'text-sp-muted hover:text-sp-text'
-                }`}
+                onClick={() => setShowRecordsOverview(true)}
+                className="flex items-center justify-center rounded-lg text-sp-muted hover:text-sp-text active:bg-black/5 dark:active:bg-white/10"
+                style={{ minWidth: 44, minHeight: 44 }}
+                aria-label="반 전체 기록 보기"
               >
-                좌석
+                <span className="material-symbols-outlined text-xl">history_edu</span>
               </button>
-              <button
-                onClick={() => setViewMode('list')}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                  viewMode === 'list'
-                    ? 'bg-sp-accent text-sp-accent-fg'
-                    : 'text-sp-muted hover:text-sp-text'
-                }`}
-              >
-                명단
-              </button>
-            </div>
-          )}
+            )}
 
-          {/* 수업반일 때 뷰 토글 (명단/좌석, 좌석이 있을 때) */}
-          {selectedClass !== 'homeroom' && selectedTeachingClass?.seating && (
-            <div className="flex items-center gap-1 bg-black/5 dark:bg-white/5 rounded-lg p-1">
-              <button
-                onClick={() => setViewMode('list')}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                  viewMode === 'list'
-                    ? 'bg-sp-accent text-sp-accent-fg'
-                    : 'text-sp-muted hover:text-sp-text'
-                }`}
-              >
-                명단
-              </button>
-              <button
-                onClick={() => setViewMode('seating')}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                  viewMode === 'seating'
-                    ? 'bg-sp-accent text-sp-accent-fg'
-                    : 'text-sp-muted hover:text-sp-text'
-                }`}
-              >
-                좌석
-              </button>
-            </div>
-          )}
+            {/* 담임반일 때만 뷰 토글 표시 */}
+            {selectedClass === 'homeroom' && (
+              <div className="flex items-center gap-1 bg-black/5 dark:bg-white/5 rounded-lg p-1">
+                <button
+                  onClick={() => setViewMode('seating')}
+                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                    viewMode === 'seating'
+                      ? 'bg-sp-accent text-sp-accent-fg'
+                      : 'text-sp-muted hover:text-sp-text'
+                  }`}
+                >
+                  좌석
+                </button>
+                <button
+                  onClick={() => setViewMode('list')}
+                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                    viewMode === 'list'
+                      ? 'bg-sp-accent text-sp-accent-fg'
+                      : 'text-sp-muted hover:text-sp-text'
+                  }`}
+                >
+                  명단
+                </button>
+              </div>
+            )}
+
+            {/* 수업반일 때 뷰 토글 (명단/좌석, 좌석이 있을 때) */}
+            {selectedClass !== 'homeroom' && selectedTeachingClass?.seating && (
+              <div className="flex items-center gap-1 bg-black/5 dark:bg-white/5 rounded-lg p-1">
+                <button
+                  onClick={() => setViewMode('list')}
+                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                    viewMode === 'list'
+                      ? 'bg-sp-accent text-sp-accent-fg'
+                      : 'text-sp-muted hover:text-sp-text'
+                  }`}
+                >
+                  명단
+                </button>
+                <button
+                  onClick={() => setViewMode('seating')}
+                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                    viewMode === 'seating'
+                      ? 'bg-sp-accent text-sp-accent-fg'
+                      : 'text-sp-muted hover:text-sp-text'
+                  }`}
+                >
+                  좌석
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* 학급 선택 탭 (담임반 + 수업반들)

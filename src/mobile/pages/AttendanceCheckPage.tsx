@@ -34,6 +34,13 @@ interface Props {
    * default: false — 기존 호출처(App.tsx 담임출결, AttendanceListPage)는 회귀 0.
    */
   embedded?: boolean;
+  /**
+   * false면 비embedded 헤더가 safe-area-inset-top 여백을 스스로 적용하지 않는다
+   * (고정 높이 3.5rem만 사용). `HomeroomAttendanceView`처럼 이 페이지 위에 이미 노치
+   * 안전영역을 흡수하는 세그먼트 바가 있을 때 이중 여백을 막기 위해 쓴다.
+   * default: true — 기존 호출처(화면 최상단에 바로 렌더되는 경우)는 회귀 0.
+   */
+  headerTopInset?: boolean;
 }
 
 const STATUS_CONFIG: Record<
@@ -83,6 +90,7 @@ export function AttendanceCheckPage({
   onBack,
   currentPeriod,
   embedded = false,
+  headerTopInset = true,
 }: Props) {
   const saveRecord = useMobileAttendanceStore((s) => s.saveRecord);
   const getTodayRecord = useMobileAttendanceStore((s) => s.getTodayRecord);
@@ -357,8 +365,8 @@ export function AttendanceCheckPage({
         <header
           className="glass-header flex items-center gap-3 px-4 shrink-0"
           style={{
-            minHeight: 'var(--header-height)',
-            paddingTop: 'env(safe-area-inset-top)',
+            minHeight: headerTopInset ? 'var(--header-height)' : '3.5rem',
+            paddingTop: headerTopInset ? 'env(safe-area-inset-top)' : 0,
           }}
         >
           <button onClick={onBack} className="touch-target flex items-center justify-center">

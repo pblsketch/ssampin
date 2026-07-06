@@ -5,6 +5,7 @@ import { ActionSheet } from '@mobile/components/common/ActionSheet';
 import { ConfirmDialog } from '@mobile/components/common/ConfirmDialog';
 import { Spinner } from '@mobile/components/common/Spinner';
 import { EmptyState } from '@mobile/components/common/EmptyState';
+import { SegmentedControl } from '@mobile/components/common/SegmentedControl';
 import { ObservationRecordCard } from '@mobile/components/Class/ObservationRecordCard';
 import { ObservationSheet } from '@mobile/components/Class/ObservationSheet';
 import { formatDateLabel } from '@mobile/utils/date';
@@ -25,6 +26,9 @@ type ModalState =
   | { type: 'actionSheet'; record: ObservationRecord }
   | { type: 'confirmDelete'; record: ObservationRecord };
 
+/** 학생별(기존) / 전체(신규, §6.2.2) 보기 전환. */
+type ObservationViewMode = 'student' | 'all';
+
 /**
  * 학급 상세 화면의 특기사항 서브탭.
  * 학생 선택(가로 스크롤 칩) → 해당 학생 기록 목록 → 작성/편집 BottomSheet → 액션시트 → 삭제 확인.
@@ -43,6 +47,7 @@ export function ClassObservationTab({ classId, className }: ClassObservationTabP
 
   const [selectedStudentKey, setSelectedStudentKey] = useState<string | null>(null);
   const [modalState, setModalState] = useState<ModalState>({ type: 'closed' });
+  const [viewMode, setViewMode] = useState<ObservationViewMode>('student');
 
   useEffect(() => {
     void load();
@@ -85,130 +90,281 @@ export function ClassObservationTab({ classId, className }: ClassObservationTabP
 
   return (
     <div className="flex flex-col h-full">
-      {/* 학생 선택 — 가로 스크롤 칩 */}
-      <div className="px-4 py-3 border-b border-sp-border shrink-0">
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide">
-          {activeStudents.length === 0 ? (
-            <span className="text-sp-muted text-sm">등록된 학생이 없습니다.</span>
-          ) : (
-            activeStudents.map((s) => {
-              const key = studentKey(s);
-              const isSelected = key === selectedStudentKey;
+      {/* 보기 전환 — 학생별(기존) / 전체(§6.2.2 신규) */}
+      <div className="px-4 py-2 border-b border-sp-border shrink-0">
+        <SegmentedControl
+          options={[
+            { key: 'student', label: '학생별' },
+            { key: 'all', label: '전체' },
+          ]}
+          value={viewMode}
+          onChange={setViewMode}
+          ariaLabel="특기사항 보기 전환"
+        />
+      </div>
+
+      {viewMode === 'student' ? (
+        <>
+          {/* 학생 선택 — 가로 스크롤 칩 */}
+          <div className="px-4 py-3 border-b border-sp-border shrink-0">
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide">
+              {activeStudents.length === 0 ? (
+                <span className="text-sp-muted text-sm">등록된 학생이 없습니다.</span>
+              ) : (
+                activeStudents.map((s) => {
+                  const key = studentKey(s);
+                  const isSelected = key === selectedStudentKey;
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => setSelectedStudentKey(key)}
+                      className={`shrink-0 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                        isSelected
+                          ? 'bg-sp-accent text-sp-accent-fg'
+                          : 'bg-sp-surface text-sp-muted border border-sp-border'
+                      }`}
+                      style={{ minHeight: 36 }}
+                    >
+                      {s.number}번 {s.name}
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          {/* 기록 목록 + 추가 버튼 */}
+          <div className="flex items-center justify-between px-4 py-2 shrink-0">
+            <span className="text-sp-muted text-xs">
+              {selectedStudentKey ? `${studentRecords.length}건의 기록` : '학생을 선택해 주세요'}
+            </span>
+            {selectedStudentKey && (
+              <button
+                onClick={() => setModalState({ type: 'add' })}
+                className="flex items-center justify-center w-10 h-10 rounded-full bg-sp-accent/15 text-sp-accent shrink-0 active:scale-95 transition-transform"
+                style={{ minWidth: 44, minHeight: 44 }}
+                aria-label={`${className} 특기사항 기록 추가`}
+              >
+                <span className="material-symbols-outlined">add</span>
+              </button>
+            )}
+          </div>
+
+          {/* 기록 카드 목록 */}
+          <div className="flex-1 overflow-y-auto px-4 pb-4">
+            {!selectedStudentKey ? null : studentRecords.length === 0 ? (
+              <EmptyState
+                icon="sticky_note_2"
+                text="아직 특기사항 기록이 없습니다."
+                actionLabel="첫 기록 추가"
+                onAction={() => setModalState({ type: 'add' })}
+              />
+            ) : (
+              <ul className="space-y-3 pt-1">
+                {studentRecords.map((record) => (
+                  <li key={record.id}>
+                    <ObservationRecordCard
+                      record={record}
+                      onAction={() => setModalState({ type: 'actionSheet', record })}
+                    />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          {/* 작성 BottomSheet */}
+          {modalState.type === 'add' && selectedStudentKey && (
+            <ObservationSheet
+              mode="add"
+              tags={tags}
+              onSave={async (date, content, selectedTagList) => {
+                await addRecord({
+                  studentId: selectedStudentKey,
+                  classId,
+                  date,
+                  content,
+                  tags: selectedTagList,
+                });
+                setModalState({ type: 'closed' });
+              }}
+              onClose={() => setModalState({ type: 'closed' })}
+            />
+          )}
+
+          {/* 편집 BottomSheet */}
+          {modalState.type === 'edit' && (
+            <ObservationSheet
+              mode="edit"
+              initialRecord={modalState.record}
+              tags={tags}
+              onSave={async (date, content, selectedTagList) => {
+                await updateRecord({
+                  ...modalState.record,
+                  date,
+                  content,
+                  tags: selectedTagList,
+                });
+                setModalState({ type: 'closed' });
+              }}
+              onClose={() => setModalState({ type: 'closed' })}
+            />
+          )}
+
+          {/* 액션시트 */}
+          {modalState.type === 'actionSheet' && (
+            <ActionSheet
+              onEdit={() => setModalState({ type: 'edit', record: modalState.record })}
+              onDelete={() => setModalState({ type: 'confirmDelete', record: modalState.record })}
+              onClose={() => setModalState({ type: 'closed' })}
+            />
+          )}
+
+          {/* 삭제 확인 다이얼로그 */}
+          {modalState.type === 'confirmDelete' && (
+            <ConfirmDialog
+              title="기록 삭제"
+              message={<>{formatDateLabel(modalState.record.date)}의 기록을 삭제하시겠어요?</>}
+              onConfirm={() => void handleConfirmDelete(modalState.record)}
+              onCancel={() => setModalState({ type: 'closed' })}
+            />
+          )}
+        </>
+      ) : (
+        <ClassWideObservationList
+          records={records}
+          classId={classId}
+          activeStudents={activeStudents}
+          onSelectStudent={(key) => {
+            setSelectedStudentKey(key);
+            setViewMode('student');
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// 전체 모드 — 학급 전체 관찰 기록을 월별로 나열 (읽기 전용, §6.2.2)
+// ============================================================
+
+interface ClassWideObservationListProps {
+  records: readonly ObservationRecord[];
+  classId: string;
+  activeStudents: readonly TeachingClassStudent[];
+  onSelectStudent: (key: string) => void;
+}
+
+interface ObservationMonthGroup {
+  key: string;
+  label: string;
+  records: ObservationRecord[];
+}
+
+function groupObservationsByMonth(records: readonly ObservationRecord[]): ObservationMonthGroup[] {
+  const map = new Map<string, ObservationRecord[]>();
+  for (const r of records) {
+    const key = r.date.slice(0, 7);
+    const arr = map.get(key);
+    if (arr) arr.push(r);
+    else map.set(key, [r]);
+  }
+  return Array.from(map.entries()).map(([key, recs]) => {
+    const [y, m] = key.split('-');
+    return { key, label: `${y}년 ${Number(m)}월`, records: recs };
+  });
+}
+
+function formatObservationMonthDay(date: string): string {
+  return `${Number(date.slice(5, 7))}/${Number(date.slice(8, 10))}`;
+}
+
+function ClassWideObservationList({
+  records,
+  classId,
+  activeStudents,
+  onSelectStudent,
+}: ClassWideObservationListProps) {
+  const studentMap = useMemo(() => {
+    const map = new Map<string, TeachingClassStudent>();
+    for (const s of activeStudents) map.set(studentKey(s), s);
+    return map;
+  }, [activeStudents]);
+
+  const classRecords = useMemo(
+    () =>
+      records
+        .filter((r) => r.classId === classId)
+        .slice()
+        .sort((a, b) => b.date.localeCompare(a.date)),
+    [records, classId],
+  );
+
+  const monthGroups = useMemo(() => groupObservationsByMonth(classRecords), [classRecords]);
+
+  if (classRecords.length === 0) {
+    return (
+      <div className="flex-1 overflow-y-auto px-4 pb-4">
+        <EmptyState icon="sticky_note_2" text="아직 특기사항 기록이 없습니다." />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex-1 overflow-y-auto px-4 pb-4 pt-3 space-y-5">
+      {monthGroups.map((group) => (
+        <div key={group.key}>
+          <p className="text-sp-muted text-xs font-semibold mb-2 px-1 sticky top-0 bg-sp-card py-1 -mx-1">
+            {group.label}
+          </p>
+          <div className="space-y-2">
+            {group.records.map((rec) => {
+              const student = studentMap.get(rec.studentId);
               return (
                 <button
-                  key={key}
-                  onClick={() => setSelectedStudentKey(key)}
-                  className={`shrink-0 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                    isSelected
-                      ? 'bg-sp-accent text-sp-accent-fg'
-                      : 'bg-sp-surface text-sp-muted border border-sp-border'
-                  }`}
-                  style={{ minHeight: 36 }}
+                  key={rec.id}
+                  type="button"
+                  onClick={() => onSelectStudent(rec.studentId)}
+                  aria-label={
+                    student
+                      ? `${student.number}번 ${student.name} 학생별 보기로 전환`
+                      : '학생별 보기로 전환'
+                  }
+                  className="w-full bg-white/5 backdrop-blur-sm border border-white/10 flex rounded-xl overflow-hidden text-left"
                 >
-                  {s.number}번 {s.name}
+                  <div className="w-1 shrink-0 bg-sp-accent" />
+                  <div className="flex-1 p-3 min-h-[44px]">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      <span className="text-xs font-medium text-sp-accent">
+                        {student ? `${student.number}번 ${student.name}` : '알 수 없음'}
+                      </span>
+                      <span className="text-xs text-sp-muted tabular-nums">
+                        {formatObservationMonthDay(rec.date)}
+                      </span>
+                    </div>
+                    <p className="text-sp-text text-sm whitespace-pre-wrap break-words">
+                      {rec.content}
+                    </p>
+                    {rec.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {rec.tags.map((tag) => (
+                          <span
+                            key={tag}
+                            className="px-2 py-0.5 rounded-full bg-sp-surface border border-sp-border text-sp-muted text-xs"
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </button>
               );
-            })
-          )}
+            })}
+          </div>
         </div>
-      </div>
-
-      {/* 기록 목록 + 추가 버튼 */}
-      <div className="flex items-center justify-between px-4 py-2 shrink-0">
-        <span className="text-sp-muted text-xs">
-          {selectedStudentKey ? `${studentRecords.length}건의 기록` : '학생을 선택해 주세요'}
-        </span>
-        {selectedStudentKey && (
-          <button
-            onClick={() => setModalState({ type: 'add' })}
-            className="flex items-center justify-center w-10 h-10 rounded-full bg-sp-accent/15 text-sp-accent shrink-0 active:scale-95 transition-transform"
-            style={{ minWidth: 44, minHeight: 44 }}
-            aria-label={`${className} 특기사항 기록 추가`}
-          >
-            <span className="material-symbols-outlined">add</span>
-          </button>
-        )}
-      </div>
-
-      {/* 기록 카드 목록 */}
-      <div className="flex-1 overflow-y-auto px-4 pb-4">
-        {!selectedStudentKey ? null : studentRecords.length === 0 ? (
-          <EmptyState
-            icon="sticky_note_2"
-            text="아직 특기사항 기록이 없습니다."
-            actionLabel="첫 기록 추가"
-            onAction={() => setModalState({ type: 'add' })}
-          />
-        ) : (
-          <ul className="space-y-3 pt-1">
-            {studentRecords.map((record) => (
-              <li key={record.id}>
-                <ObservationRecordCard
-                  record={record}
-                  onAction={() => setModalState({ type: 'actionSheet', record })}
-                />
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      {/* 작성 BottomSheet */}
-      {modalState.type === 'add' && selectedStudentKey && (
-        <ObservationSheet
-          mode="add"
-          tags={tags}
-          onSave={async (date, content, selectedTagList) => {
-            await addRecord({
-              studentId: selectedStudentKey,
-              classId,
-              date,
-              content,
-              tags: selectedTagList,
-            });
-            setModalState({ type: 'closed' });
-          }}
-          onClose={() => setModalState({ type: 'closed' })}
-        />
-      )}
-
-      {/* 편집 BottomSheet */}
-      {modalState.type === 'edit' && (
-        <ObservationSheet
-          mode="edit"
-          initialRecord={modalState.record}
-          tags={tags}
-          onSave={async (date, content, selectedTagList) => {
-            await updateRecord({
-              ...modalState.record,
-              date,
-              content,
-              tags: selectedTagList,
-            });
-            setModalState({ type: 'closed' });
-          }}
-          onClose={() => setModalState({ type: 'closed' })}
-        />
-      )}
-
-      {/* 액션시트 */}
-      {modalState.type === 'actionSheet' && (
-        <ActionSheet
-          onEdit={() => setModalState({ type: 'edit', record: modalState.record })}
-          onDelete={() => setModalState({ type: 'confirmDelete', record: modalState.record })}
-          onClose={() => setModalState({ type: 'closed' })}
-        />
-      )}
-
-      {/* 삭제 확인 다이얼로그 */}
-      {modalState.type === 'confirmDelete' && (
-        <ConfirmDialog
-          title="기록 삭제"
-          message={<>{formatDateLabel(modalState.record.date)}의 기록을 삭제하시겠어요?</>}
-          onConfirm={() => void handleConfirmDelete(modalState.record)}
-          onCancel={() => setModalState({ type: 'closed' })}
-        />
-      )}
+      ))}
     </div>
   );
 }

@@ -7,6 +7,7 @@ import { useMobileStudentStore } from './stores/useMobileStudentStore';
 import { useMobileStudentRecordsStore } from './stores/useMobileStudentRecordsStore';
 import { TodayHub } from './components/Today/TodayHub';
 import { AttendanceCheckPage } from './pages/AttendanceCheckPage';
+import { HomeroomAttendanceView } from './pages/HomeroomAttendanceView';
 import { ClassListPage } from './pages/ClassListPage';
 import { SchedulePage } from './pages/SchedulePage';
 import { StudentsPage } from './pages/StudentsPage';
@@ -310,6 +311,15 @@ export function App() {
 
   // 출결 체크 페이지 (전체 화면, 탭바 숨김)
   if (attendanceNav) {
+    if (attendanceNav.type === 'homeroom') {
+      return (
+        <HomeroomAttendanceView
+          classId={attendanceNav.classId}
+          className={attendanceNav.className}
+          onBack={() => setAttendanceNav(null)}
+        />
+      );
+    }
     return (
       <AttendanceCheckPage
         classId={attendanceNav.classId}

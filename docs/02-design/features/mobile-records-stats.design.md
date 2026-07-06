@@ -427,3 +427,198 @@ SegmentedControl.tsx:26-53), `ariaLabel="출결 화면 전환"`. 기간 칩 `rol
 | `src/mobile/__tests__/bottomSheetCoverage.meta.test.ts` | `SHEETS_TO_REGISTER`에 2건 추가: `['src/mobile/pages/students/StudentRecordsFullSheet.tsx','StudentRecordsFullSheet']`, `['src/mobile/pages/students/StudentAttendanceHistorySheet.tsx','StudentAttendanceHistorySheet']`. S3는 신규 시트가 없어 builder-class는 이 파일을 건드리지 않는다. |
 
 두 빌더 모두 domain/, App.tsx, 스토어 파일은 읽기 전용 import만 하고 수정하지 않는다.
+
+---
+
+## 6. 후속 R — 학급 단위 조회 2종
+
+team: mobile-records-stats(후속) · 대상: builder-attendance, builder-records. §4 공통 시각
+언어 그대로 재사용, 신규 색·칩·표 규격 없음. **신규 오버레이 시트 0건**(풀스크린/세그먼트
+전환만) — `bottomSheetCoverage.meta.test.ts`는 두 빌더 모두 건드리지 않는다.
+
+### 핵심 배치 결정
+
+| #   | 결정                                                                                | 근거                                                                                                                                                                                                                                                                             |
+| --- | ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | 담임 출결 "체크" 모드는 `AttendanceCheckPage`를 **embedded 없이(prop 무변경)** 렌더 | S3는 `embedded`로 감싸 자체 헤더(여러 날·완료)를 죽였지만 교과는 TodayHub→전체화면 대체 경로가 남아 있어 무방했다. 담임은 진입로가 이 화면 하나뿐이라 embedded면 "여러 날 일괄 적용"(FR-09)·완료 버튼이 영구 소실(회귀). 체크 모드는 무변경, 헤더는 통계 모드에만 별도로 그린다. |
+| 2   | 담임 학급 전체 기록은 오버레이 시트가 아니라 **풀스크린 페이지**                    | 카테고리 필터+주의 학생+월별 타임라인은 전교생 대상이라 S1보다 밀도가 높아 85vh 시트는 이중 스크롤이 된다. `ClassListPage`의 "탭 내부 로컬 state 전체화면" 선례(43-51행)를 따름 — 하단 탭바는 계속 보임(App.tsx 레벨 전환 아님).                                                 |
+| 3   | 교과 "전체" 관찰은 새 화면이 아니라 `ClassObservationTab` **세그먼트 전환**         | 이미 있는 학생별 목록의 표현 모드만 바꾼다 — 신규 최상위 진입로 불필요, 담임 쪽과 대칭.                                                                                                                                                                                          |
+
+### 6.1 Feature A — 담임 '우리 반' 출결 통계
+
+**진입 경로**: 홈 → "담임 출결하기" 카드(`TodayHub`) → `attendanceNav`(`type:'homeroom'`) → App.tsx가 신규 `HomeroomAttendanceView` 렌더 → 상단 `[출결 체크|출결 통계]` 세그먼트(기본 "체크" — 기존과 동일 첫 화면). "통계" 선택 시 `HomeroomAttendanceStatsView` 렌더.
+
+**390px 와이어프레임** — 체크 모드는 세그먼트 바만 얹고 아래는 기존 `AttendanceCheckPage` 그대로(← 담임 출결/여러 날/완료/카운터/명단, prop 무변경이라 생략). 통계 모드:
+
+```
+┌ HomeroomAttendanceStatsView (신규) ─────────────┐
+│ [ 출결 체크 | 출결 통계 ]                        │
+│ ← 담임 출결 통계 · 1학년 2반                      │
+│ [전체][이번 학기][이번 달][이번 주]               │
+│ 이번 학기 우리 반 전체 (연인원)                   │
+│ 결석 5 · 지각 3 · 조퇴 1 · 결과 0                 │
+│ 학생별 출결                     옆으로 스크롤→   │
+│ ┌──────────┬────┬────┬────┬────┬────┐           │
+│ │번호·이름  │출석│결석│지각│조퇴│결과│ <스크롤>   │
+│ │ 1 김민준 │ 18 │  1 │  0 │  0 │  0 │           │
+│ └──────────┴────┴────┴────┴────┴────┘           │
+└─────────────────────────────────────────────────────┘
+```
+
+**컴포넌트 트리**
+
+```
+App.tsx: attendanceNav.type==='homeroom' → <HomeroomAttendanceView classId className onBack />
+         (type==='class' 분기는 기존 AttendanceCheckPage 그대로 — 무변경)
+HomeroomAttendanceView (신규, pages/) — SegmentedControl(체크/통계), mode 기본 'check'
+ ├─ mode==='check' → <AttendanceCheckPage classId className period={0} type="homeroom" onBack /> (prop 무변경)
+ └─ mode==='stats' → <HomeroomAttendanceStatsView classId className onBack /> (onBack 그대로 relay)
+HomeroomAttendanceStatsView (신규, pages/) — 자체 헤더(← + "담임 출결 통계" + className, AttendanceCheckPage 비embedded 헤더 스타일 복제) + <AttendanceStatsTable .../>
+ClassAttendanceStatsView (기존, 리팩터) → <AttendanceStatsTable .../> 소비, 렌더 byte-identical
+AttendanceStatsTable (신규 공용, components/common/) — 기간 칩+요약 카드+sticky 표(순수 프레젠테이션)
+```
+
+**AttendanceStatsTable 추출 prop 인터페이스**
+
+```ts
+export type AttendancePeriodFilter = 'all' | 'semester' | 'month' | 'week';
+export interface AttendanceStatsRow {
+  readonly key: string; // studentKey(교과) | student.id(담임)
+  readonly number: number; // 표시 번호(담임은 studentNumber ?? 0)
+  readonly name: string;
+  readonly counts: Readonly<Record<AttendanceStatus, number>>;
+}
+export interface AttendanceStatsSummary {
+  readonly absent: number;
+  readonly late: number;
+  readonly earlyLeave: number;
+  readonly classAbsence: number;
+}
+export interface AttendanceStatsTableProps {
+  readonly filter: AttendancePeriodFilter;
+  readonly onFilterChange: (filter: AttendancePeriodFilter) => void;
+  readonly summary: AttendanceStatsSummary;
+  readonly rows: readonly AttendanceStatsRow[];
+  readonly scopeLabel: string; // "학급 전체"|"우리 반 전체" — 문구=`${기간라벨} ${scopeLabel} (연인원)`
+  readonly tableAriaLabel: string; // 예: "2학년 3반 학생별 출결 통계"
+}
+// 함께 export: PERIOD_FILTERS, getFilterRange(filter), ATT_STATUSES — ClassAttendanceStatsView.tsx:16-58을 그대로 이동(값 변경 없음).
+```
+
+**상태/인터랙션**: `HomeroomAttendanceView`는 `mode:'check'|'stats'` 기본 `'check'`(회귀 0), 두 모드 모두 뒤로가기는 항상 홈으로. `HomeroomAttendanceStatsView`는 `filter` 기본 `'all'`, "직접 설정" 칩 없음(§3 근거 동일). 표 셀 비상호작용.
+
+**데이터 소스 · 집계 로직**
+
+- 학생: `useMobileStudentStore((s)=>s.students)` → `filterActive` → `.sort((a,b)=>(a.studentNumber??0)-(b.studentNumber??0))`. grade/classNum이 없어 `studentKey` 대신 **`student.id`를 row key**로 사용(번호 미배정 학생 충돌 방지).
+- 출결 레코드: `useMobileAttendanceStore((s)=>s.records)` → `filter(r => r.classId===classId && dateRange)`(period 필터 없음 — 담임은 항상 period 0). `classId`는 prop 그대로 전달(=TodayHub의 `settings.className`) — 재계산 없이 체크 모드가 저장한 키와 항상 일치.
+- 집계: `Map<student.id, Record<AttendanceStatus, number>>`(전원 0) → `record.students` 순회, `students.find(s => s.studentNumber === sa.number)` 매칭(AttendanceCheckPage.tsx:220-221 bridge 로직과 동일) → `entry[sa.status]++`. 기간 범위는 이동된 `getFilterRange` 재사용.
+- `rows`: `students.map(s => ({ key: s.id, number: s.studentNumber ?? 0, name: s.name, counts: stats.get(s.id)! }))`.
+
+**정확한 Tailwind 클래스**: 세그먼트 바 `px-4 py-2 border-b border-sp-border shrink-0`(ClassAttendanceTab과 동일). 통계 헤더 `glass-header flex items-center gap-3 px-4 shrink-0`, style `{minHeight:'var(--header-height)', paddingTop:'env(safe-area-inset-top)'}`(AttendanceCheckPage 비embedded 헤더 스타일 의도적 복제). 기간 칩/요약/표는 `AttendanceStatsTable` 내부 — §3(S3) 클래스와 완전히 동일.
+
+**빈 상태/로딩 · 다크 모드 · 접근성**: `!studentsLoaded` → S3와 동일 스켈레톤, 활성 학생 0명 → `EmptyState icon="group_off" text="등록된 학생이 없습니다."`, 기간 내 레코드 없음은 표 전원 0 정상 렌더. 다크는 §4.4/§4.5와 완전히 동일(신규 색 없음). 세그먼트는 `SegmentedControl` 재사용(`role=tablist/tab` 자동), 통계 헤더 뒤로가기 버튼에 `aria-label="뒤로가기"` 명시.
+
+### 6.2 Feature B — 학급 전체 기록 모아보기
+
+#### 6.2.1 담임 — `HomeroomRecordsOverviewPage`
+
+**진입 경로**: `StudentsPage` 헤더(담임 선택 시), 좌석/명단 토글 **왼쪽**에 신규 아이콘 버튼 `history_edu`("반 전체 기록 보기") → `showRecordsOverview` state → 풀스크린 전환(ClassListPage의 "탭 내부 로컬 state 전체화면" 패턴과 동일, 하단 탭바는 계속 보임).
+
+**390px 와이어프레임**
+
+```
+┌ HomeroomRecordsOverviewPage (신규 풀스크린) ────┐
+│ ← 반 전체 기록 · 32건                            │
+│ 출결 12 · 상담 5 · 생활 9 · 기타 6      (비대화형)│
+│ ⚠ 결석·지각 잦음: 김민준(결석3), 이서연(지각5) 탭→필터│
+│ [전체32][출결12][상담5][생활9][기타6]  카테고리 칩│
+│ (필터 중) 학생: 김민준 ✕                          │
+│ 2026년 7월                                        │
+│ ┃ 12번 김민준 · 7/6  [결석] 결석 (질병)            │
+│ ┃ 3번  이서연 · 7/2  [상담] 교우관계 상담 진행…     │
+│ ...                             (스크롤 계속)     │
+└──────────────────────────────────────────────────────┘
+```
+
+**컴포넌트 트리**
+
+```
+StudentsPage (수정) → 헤더 아이콘(homeroom일 때만) → showRecordsOverview
+ └─ {showRecordsOverview && <HomeroomRecordsOverviewPage onClose={() => setShowRecordsOverview(false)} />}
+HomeroomRecordsOverviewPage (신규, pages/) — 자체 스토어 구독(prop은 onClose만)
+ ├─ 헤더(← + "반 전체 기록" + 건수)
+ ├─ 요약 digest(비대화형: getCategorySummary) + 주의 학생 줄(getWarningStudents, 이름 탭 가능)
+ ├─ CategoryFilterChips(S1 패턴) + {studentFilter && 활성 필터 칩(✕ 해제)}
+ └─ MonthGroupedTimeline → RecordRow[](학생 배지+날짜+분류+내용, 파일 내 로컬 서브컴포넌트)
+```
+
+**상태/인터랙션**: `selectedCategory:'all'|string` 기본 `'all'`(S1과 동일), `studentFilter:string|null`(student.id) 기본 `null` — 타임라인 행의 학생 배지 또는 주의 학생 줄 이름 탭 시 설정, ✕/재탭 시 해제, 카테고리와 AND 결합. **"학생별 섹션 그룹핑" 대신 "탭-투-필터" 선택**: 30명 안팎 학급에서 학생별 헤더를 전부 펼치면 스크롤이 2배 이상 길어지고 기록 적은 학생은 빈 섹션만 남는다. 플랫 타임라인+배지 탭이 "전체 조망"과 "한 명만 보기"를 스크롤 1개로 해결하며 S1/S3의 기존 탭-필터 문법을 재사용한다.
+
+**데이터 소스 · 집계 로직**
+
+- 학생: `useMobileStudentStore((s)=>s.students)` → `filterActive` → 번호순(§6.1과 동일). `activeIds = new Set(...)`.
+- 레코드: `useMobileStudentRecordsStore((s)=>s.records)` → `filter(r => activeIds.has(r.studentId))`(StudentRecord엔 classId가 없어 studentId 매칭만으로 담임 범위가 이미 확정).
+- 요약 digest: `getCategorySummary(homeroomRecords)`(studentRecordRules.ts:167). 주의 학생: `getWarningStudents(homeroomRecords, activeStudents)`(studentRecordRules.ts:191, 기본 임계값 그대로) → 0건이면 줄 미렌더.
+- 카테고리 필터 칩(건수 포함): `categories`(store) 순회 + 카테고리별 `filter().length`(S1과 동일 로직). 타임라인: 두 필터 적용 → `sortByDateDesc`(studentRecordRules.ts:138) → `date.slice(0,7)` 월 그룹핑(S1의 `groupRecordsByMonth`와 동일 로직 재구현 — 파일 소유자가 달라 공유 모듈로 뽑지 않음, 5줄 복제는 허용 범위). 표시 라벨: 출결은 `subcategory`, 그 외 `tags?.join(' · ')`.
+
+**정확한 Tailwind 클래스**: 헤더 아이콘 버튼 `flex items-center justify-center rounded-lg text-sp-muted hover:text-sp-text active:bg-black/5 dark:active:bg-white/10`, style `{minWidth:44,minHeight:44}`, `aria-label="반 전체 기록 보기"`. 요약 digest 줄 `text-sp-muted text-xs flex flex-wrap gap-x-3`. 주의 학생 줄 `text-amber-600 dark:text-amber-400 text-xs flex items-center gap-1 flex-wrap`, 이름 버튼 `underline underline-offset-2 min-h-[32px] px-0.5`(RecordsSubTab 세부카테고리 칩과 동일 32px 예외). 카테고리/필터 칩은 §4.1 그대로. 타임라인 카드는 §4.3 그대로(`CATEGORY_COLORS` 좌측 바). 학생 배지 `text-xs font-medium text-sp-accent`(행 전체가 버튼 — StudentRecordsFullSheet RecordRow와 동일 패턴).
+
+**빈 상태/로딩 · 다크 모드 · 접근성**: `!studentsLoaded||!recordsLoaded` → S3 스켈레톤. 활성 학생 0명 → `EmptyState icon="group_off"`. 레코드 0건 → `EmptyState mascot text="아직 기록이 없습니다." hint="학생 상세에서 기록을 추가해보세요."`(S1과 동일 문구). 필터 결과 0건 → `EmptyState icon="filter_alt_off" text="해당 조건의 기록이 없습니다."` 다크는 `active:bg-black/5 dark:active:bg-white/10`, `text-amber-600 dark:text-amber-400` 외 sp-\* 자동 대응. 헤더 아이콘 `aria-label` 필수, 카테고리 칩 `role="tablist"/"tab"`, 필터 해제 버튼 `aria-label="학생 필터 해제"`, 타임라인 행 `aria-label="{number}번 {name} 학생으로 필터"`.
+
+#### 6.2.2 교과 — `ClassObservationTab` 전체 세그먼트
+
+**진입 경로**: `ClassDetailPage` → 특기사항 탭(`ClassObservationTab`) → 탭 최상단 신규 `[학생별|전체]` 세그먼트("학생별" 기본, 기존과 100% 동일). "전체" 선택 시 학급 전체 관찰 기록을 월별로 나열.
+
+**390px 와이어프레임** — 학생별 모드는 세그먼트 바만 얹고 나머지는 기존 그대로(생략). 전체 모드:
+
+```
+┌ 전체 모드 ──────────────────────────────────────┐
+│ [ 학생별 | 전체 ]                                │
+│ 2026년 7월                                       │
+│ ┃ 12번 김민준 · 7/5  수업 중 적극 발표 [학습태도] │
+│ ┃ 3번  이서연 · 7/3  과제 제출 잦게 늦음 [특이사항]│
+│ ...                              (스크롤 계속)   │
+└─────────────────────────────────────────────────────┘
+```
+
+**컴포넌트 트리**
+
+```
+ClassObservationTab (수정)
+ ├─ SegmentedControl(학생별/전체) — viewMode 기본 'student'
+ ├─ viewMode==='student' → 기존 JSX 전체(무변경, 조건부 렌더만)
+ └─ viewMode==='all' → ClassWideObservationList(파일 내 로컬 서브컴포넌트)
+      └─ 행 탭 → setSelectedStudentKey(key) + setViewMode('student')
+```
+
+**상태/인터랙션**: `viewMode:'student'|'all'` 기본 `'student'` — 학생별 모드 JSX/로직/모달은 조건 한 겹으로만 감싸 회귀 0. '전체'는 읽기 전용(`more_vert` 수정/삭제 없음) — 행 탭 시 해당 학생의 학생별 화면으로 점프해 기존 편집 흐름을 이용, 신규 편집 UI 없음. '전체'에서는 "+ 추가" 버튼도 숨김(어느 학생 것인지 맥락 없음).
+
+**데이터 소스 · 집계 로직**: `records.filter(r => r.classId === classId)`(학생 필터 없이 학급 전체) → `.sort((a,b)=>b.date.localeCompare(a.date))`(기존 studentRecords useMemo와 동일 비교식). 월 그룹핑은 6.2.1과 동일 로직 재구현(파일 간 공유 없음 — 겹침 0 유지). 학생 표시명은 이미 계산된 `activeStudents`로 `Map<studentKey, TeachingClassStudent>` 구성 후 `record.studentId` 조회.
+
+**정확한 Tailwind 클래스**: 세그먼트 바는 기존 "학생 선택" 칩 위에 `px-4 py-2 border-b border-sp-border shrink-0` 래퍼 추가(ClassAttendanceTab과 동일 패턴). 전체 모드 카드는 §4.3 그대로(좌측 바는 카테고리 축이 없어 단색 `bg-sp-accent`). 태그 칩은 기존 `ObservationRecordCard`의 `px-2 py-0.5 rounded-full bg-sp-surface border border-sp-border text-sp-muted text-xs` 그대로 재사용(시각 일치 목적).
+
+**빈 상태/로딩 · 다크 모드 · 접근성**: 기존 최상단 `!loaded` 가드가 두 모드 모두 커버 — 추가 분기 불필요. 활성 학생 0명 → `EmptyState icon="group_off"`. 학급 전체 기록 0건 → `EmptyState icon="sticky_note_2" text="아직 특기사항 기록이 없습니다."`(액션 버튼 생략 — 읽기 전용). 다크 신규 색 없음. 세그먼트 재사용, 전체 모드 행 버튼 `aria-label="{number}번 {name} 학생별 보기로 전환"`, 태그 칩은 정보 표시용이라 `aria-hidden` 아님.
+
+### 6.3 파일 계획 (겹침 0)
+
+#### builder-attendance 소유
+
+| 파일                                                       | 종류 | 내용                                                                                              |
+| ---------------------------------------------------------- | ---- | ------------------------------------------------------------------------------------------------- |
+| `src/mobile/components/common/AttendanceStatsTable.tsx`    | 신규 | 공용 프레젠테이션(기간 칩+요약+sticky 표) + `PERIOD_FILTERS`/`getFilterRange`/`ATT_STATUSES` 이동 |
+| `src/mobile/components/Class/ClassAttendanceStatsView.tsx` | 수정 | `AttendanceStatsTable` 소비로 리팩터, 렌더 결과 byte-identical                                    |
+| `src/mobile/pages/HomeroomAttendanceView.tsx`              | 신규 | 체크/통계 세그먼트 래퍼                                                                           |
+| `src/mobile/pages/HomeroomAttendanceStatsView.tsx`         | 신규 | 담임 출결 통계 집계 + 자체 헤더 + `AttendanceStatsTable`                                          |
+| `src/mobile/App.tsx`                                       | 수정 | import 1줄 + `attendanceNav.type==='homeroom'` 렌더 분기만 교체. `type==='class'` 분기는 무변경   |
+
+#### builder-records 소유
+
+| 파일                                                  | 종류 | 내용                                                                                      |
+| ----------------------------------------------------- | ---- | ----------------------------------------------------------------------------------------- |
+| `src/mobile/pages/StudentsPage.tsx`                   | 수정 | 헤더 아이콘 버튼 1개(담임 선택 시만) + `showRecordsOverview` state + 조건부 전체화면 렌더 |
+| `src/mobile/pages/HomeroomRecordsOverviewPage.tsx`    | 신규 | 요약+카테고리 필터+학생 필터+월별 타임라인                                                |
+| `src/mobile/components/Class/ClassObservationTab.tsx` | 수정 | `[학생별\|전체]` 세그먼트 추가, 학생별 모드는 조건부 래핑만(무변경)                       |
+
+두 목록 사이 겹치는 파일 없음. `App.tsx`는 builder-attendance만 수정(§6.1의 render-swap 1건).
+`bottomSheetCoverage.meta.test.ts`는 이번 스코프에 신규 시트가 없어 어느 빌더도 건드리지
+않는다.
