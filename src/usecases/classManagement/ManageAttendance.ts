@@ -1,9 +1,10 @@
 import type {
   AttendanceRecord,
   AttendanceData,
+  AttendanceTombstone,
   StudentAttendance,
 } from '@domain/entities/Attendance';
-import { attendanceRecordKey } from '@domain/entities/Attendance';
+import { attendanceRecordKey, ATTENDANCE_TOMBSTONE_TTL_MS } from '@domain/entities/Attendance';
 import type { ITeachingClassRepository } from '@domain/repositories/ITeachingClassRepository';
 
 /** students 내용 비교용 정규화(순서 무관) — 순서만 바뀐 저장으로 updatedAt이 갱신되는 것을 줄인다 */
@@ -34,9 +35,9 @@ function studentsFingerprint(students: readonly StudentAttendance[]): string {
 export function stampChangedRecords(
   existing: readonly AttendanceRecord[],
   next: readonly AttendanceRecord[],
+  now: string = new Date().toISOString(),
 ): readonly AttendanceRecord[] {
   const prevByKey = new Map(existing.map((r) => [attendanceRecordKey(r), r]));
-  const now = new Date().toISOString();
   return next.map((r) => {
     const prev = prevByKey.get(attendanceRecordKey(r));
     if (prev && studentsFingerprint(prev.students) === studentsFingerprint(r.students)) {
@@ -45,6 +46,39 @@ export function stampChangedRecords(
     }
     return { ...r, updatedAt: now };
   });
+}
+
+/**
+ * 저장 데이터 조립: 변경 레코드 스탬프 + 삭제 전파 툼스톤 관리.
+ * - 이번 저장에서 사라진 키 → 툼스톤 추가(삭제 시각 기록)
+ * - 다시 등장한 키 → 툼스톤 제거(재작성이 삭제를 이김)
+ * - TTL(90일) 지난 툼스톤 → 정리(GC)
+ * 모든 출결 저장 경로(add/saveRecord/saveDayBatch/saveAll)가 이 함수를 거친다.
+ */
+export function buildAttendanceSaveData(
+  existing: AttendanceData | null,
+  nextRecords: readonly AttendanceRecord[],
+  now: string = new Date().toISOString(),
+): AttendanceData {
+  const existingRecords = existing?.records ?? [];
+  const records = stampChangedRecords(existingRecords, nextRecords, now);
+  const nextKeys = new Set(records.map(attendanceRecordKey));
+  const cutoff = new Date(new Date(now).getTime() - ATTENDANCE_TOMBSTONE_TTL_MS).toISOString();
+
+  // 기존 툼스톤 승계 — 재등장(부활) 키와 TTL 경과분은 제거
+  const carried = (existing?.deleted ?? []).filter(
+    (t) => !nextKeys.has(t.key) && t.deletedAt > cutoff,
+  );
+  const carriedKeys = new Set(carried.map((t) => t.key));
+
+  // 이번 저장에서 사라진 키 → 새 툼스톤
+  const newTombstones: AttendanceTombstone[] = existingRecords
+    .map(attendanceRecordKey)
+    .filter((k) => !nextKeys.has(k) && !carriedKeys.has(k))
+    .map((key) => ({ key, deletedAt: now }));
+
+  const deleted = [...carried, ...newTombstones];
+  return deleted.length > 0 ? { records, deleted } : { records };
 }
 
 export class ManageAttendance {
@@ -66,10 +100,7 @@ export class ManageAttendance {
     const data = await this.repository.getAttendance();
     const records = data?.records ?? [];
 
-    const updatedRecords = stampChangedRecords(records, [...records, record]);
-    const updatedData: AttendanceData = { records: updatedRecords };
-
-    await this.repository.saveAttendance(updatedData);
+    await this.repository.saveAttendance(buildAttendanceSaveData(data, [...records, record]));
   }
 
   async saveRecord(record: AttendanceRecord): Promise<void> {
@@ -88,8 +119,7 @@ export class ManageAttendance {
         )
       : [...records, record];
 
-    const updatedData: AttendanceData = { records: stampChangedRecords(records, replaced) };
-    await this.repository.saveAttendance(updatedData);
+    await this.repository.saveAttendance(buildAttendanceSaveData(data, replaced));
   }
 
   /**
@@ -141,7 +171,6 @@ export class ManageAttendance {
       return;
     }
 
-    const updatedData: AttendanceData = { records: stampChangedRecords(existingRecords, records) };
-    await this.repository.saveAttendance(updatedData);
+    await this.repository.saveAttendance(buildAttendanceSaveData(existing, records));
   }
 }

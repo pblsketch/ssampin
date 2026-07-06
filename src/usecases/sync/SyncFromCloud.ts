@@ -60,12 +60,13 @@ export function mergeStudentRecords(
 
 /**
  * attendance를 (classId|groupId|date|period) 레코드 단위로 병합.
- * - 한쪽에만 있는 레코드는 무조건 보존 (다른 반/날짜/교시를 서로 지우지 않음)
+ * - 한쪽에만 있는 레코드는 보존 (다른 반/날짜/교시를 서로 지우지 않음)
  * - 같은 키는 updatedAt(ISO 문자열 사전순 비교)이 최신인 쪽 채택
  * - 양쪽 모두 updatedAt이 없거나 동률이면 preferRemote로 판정
  *   (과거 데이터 호환: updatedAt 부재 = 가장 오래된 것으로 취급)
- * 주의: 툼스톤이 없어 한쪽에서 삭제한 레코드가 상대쪽에서 되살아날 수 있다.
- *       student-records 병합과 동일한 기존 트레이드오프로, 통째 덮어쓰기 유실보다 낫다.
+ * - 삭제 전파: 양쪽 툼스톤(deleted)을 키별 최신 deletedAt으로 합치고,
+ *   레코드가 툼스톤보다 나중에 수정된 경우에만 살아남는다(재작성이 삭제를 이김).
+ *   동률이거나 레코드에 스탬프가 없으면 삭제가 이긴다.
  */
 export function mergeAttendance(
   local: AttendanceData | null,
@@ -89,7 +90,30 @@ export function mergeAttendance(
       map.set(key, r);
     }
   }
-  return { records: [...map.values()] };
+
+  // 툼스톤 병합: 키별 최신 deletedAt 유지
+  const tombstones = new Map<string, string>();
+  for (const t of [...(local?.deleted ?? []), ...(remote.deleted ?? [])]) {
+    const prev = tombstones.get(t.key);
+    if (!prev || t.deletedAt > prev) tombstones.set(t.key, t.deletedAt);
+  }
+
+  // 레코드 vs 툼스톤: 레코드의 updatedAt이 삭제 시각보다 나중이면 부활(툼스톤 제거),
+  // 아니면 레코드 제거(삭제 유지)
+  for (const [key, deletedAt] of tombstones) {
+    const rec = map.get(key);
+    if (!rec) continue;
+    if ((rec.updatedAt ?? '') > deletedAt) {
+      tombstones.delete(key);
+    } else {
+      map.delete(key);
+    }
+  }
+
+  const deleted = [...tombstones].map(([key, deletedAt]) => ({ key, deletedAt }));
+  return deleted.length > 0
+    ? { records: [...map.values()], deleted }
+    : { records: [...map.values()] };
 }
 
 export interface SyncFromCloudResult {

@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { mergeAttendance } from '../SyncFromCloud';
-import { stampChangedRecords } from '@usecases/classManagement/ManageAttendance';
+import {
+  stampChangedRecords,
+  buildAttendanceSaveData,
+} from '@usecases/classManagement/ManageAttendance';
 import type { AttendanceData, AttendanceRecord } from '@domain/entities/Attendance';
 
 function rec(
@@ -193,5 +196,136 @@ describe('stampChangedRecords — 저장 시 변경 레코드만 updatedAt 스�
     ];
     const stamped = stampChangedRecords(existing, next);
     expect(stamped[0]!.updatedAt).toBe('2026-07-01T00:00:00Z');
+  });
+});
+
+describe('buildAttendanceSaveData — 저장 시 툼스톤 생성·승계·GC', () => {
+  const NOW = '2026-07-06T12:00:00.000Z';
+
+  it('이번 저장에서 사라진 레코드는 툼스톤으로 남는다', () => {
+    const existing: AttendanceData = {
+      records: [
+        rec({ classId: 'A반', date: '2026-07-06', period: 1 }),
+        rec({ classId: 'A반', date: '2026-07-06', period: 2 }),
+      ],
+    };
+    // 2교시를 지운 저장
+    const result = buildAttendanceSaveData(
+      existing,
+      [rec({ classId: 'A반', date: '2026-07-06', period: 1 })],
+      NOW,
+    );
+    expect(result.deleted).toEqual([{ key: 'A반||2026-07-06|2', deletedAt: NOW }]);
+  });
+
+  it('삭제됐던 키가 다시 저장되면 툼스톤이 제거된다 (재작성이 삭제를 이김)', () => {
+    const existing: AttendanceData = {
+      records: [],
+      deleted: [{ key: 'A반||2026-07-06|1', deletedAt: '2026-07-05T00:00:00.000Z' }],
+    };
+    const result = buildAttendanceSaveData(
+      existing,
+      [rec({ classId: 'A반', date: '2026-07-06', period: 1 })],
+      NOW,
+    );
+    expect(result.deleted).toBeUndefined();
+  });
+
+  it('TTL(90일)이 지난 툼스톤은 정리된다', () => {
+    const existing: AttendanceData = {
+      records: [],
+      deleted: [
+        { key: 'A반||2026-01-01|1', deletedAt: '2026-01-02T00:00:00.000Z' }, // 90일 초과
+        { key: 'A반||2026-07-01|1', deletedAt: '2026-07-01T00:00:00.000Z' }, // 최근
+      ],
+    };
+    const result = buildAttendanceSaveData(existing, [], NOW);
+    expect(result.deleted).toEqual([
+      { key: 'A반||2026-07-01|1', deletedAt: '2026-07-01T00:00:00.000Z' },
+    ]);
+  });
+
+  it('삭제가 없으면 deleted 필드 자체가 없다 (기존 파일 형태 보존)', () => {
+    const existing: AttendanceData = {
+      records: [rec({ classId: 'A반', date: '2026-07-06' })],
+    };
+    const result = buildAttendanceSaveData(
+      existing,
+      [rec({ classId: 'A반', date: '2026-07-06' })],
+      NOW,
+    );
+    expect(result.deleted).toBeUndefined();
+  });
+});
+
+describe('mergeAttendance — 삭제 전파(툼스톤)', () => {
+  it('한쪽에서 삭제한 레코드는 상대쪽 옛 사본으로 부활하지 않는다', () => {
+    // 로컬: 삭제됨(툼스톤), 리모트: 삭제 전의 옛 레코드가 아직 있음
+    const local: AttendanceData = {
+      records: [],
+      deleted: [{ key: 'A반||2026-07-06|1', deletedAt: '2026-07-06T10:00:00.000Z' }],
+    };
+    const remote: AttendanceData = {
+      records: [
+        rec({
+          classId: 'A반',
+          date: '2026-07-06',
+          period: 1,
+          updatedAt: '2026-07-06T09:00:00.000Z',
+        }),
+      ],
+    };
+    const merged = mergeAttendance(local, remote, true);
+    expect(merged.records).toHaveLength(0);
+    expect(merged.deleted).toEqual([
+      { key: 'A반||2026-07-06|1', deletedAt: '2026-07-06T10:00:00.000Z' },
+    ]);
+  });
+
+  it('삭제 이후에 다시 작성된 레코드(updatedAt > deletedAt)는 살아남고 툼스톤은 제거된다', () => {
+    const local: AttendanceData = {
+      records: [],
+      deleted: [{ key: 'A반||2026-07-06|1', deletedAt: '2026-07-06T10:00:00.000Z' }],
+    };
+    const remote: AttendanceData = {
+      records: [
+        rec({
+          classId: 'A반',
+          date: '2026-07-06',
+          period: 1,
+          updatedAt: '2026-07-06T11:00:00.000Z',
+        }),
+      ],
+    };
+    const merged = mergeAttendance(local, remote, true);
+    expect(merged.records).toHaveLength(1);
+    expect(merged.deleted).toBeUndefined();
+  });
+
+  it('양쪽 툼스톤은 키별 최신 deletedAt으로 합쳐진다', () => {
+    const local: AttendanceData = {
+      records: [],
+      deleted: [{ key: 'A반||2026-07-06|1', deletedAt: '2026-07-06T08:00:00.000Z' }],
+    };
+    const remote: AttendanceData = {
+      records: [],
+      deleted: [{ key: 'A반||2026-07-06|1', deletedAt: '2026-07-06T09:00:00.000Z' }],
+    };
+    const merged = mergeAttendance(local, remote, false);
+    expect(merged.deleted).toEqual([
+      { key: 'A반||2026-07-06|1', deletedAt: '2026-07-06T09:00:00.000Z' },
+    ]);
+  });
+
+  it('updatedAt이 없는 과거 레코드는 툼스톤이 있으면 삭제가 이긴다', () => {
+    const local: AttendanceData = {
+      records: [],
+      deleted: [{ key: 'A반||2026-07-06|1', deletedAt: '2026-07-06T10:00:00.000Z' }],
+    };
+    const remote: AttendanceData = {
+      records: [rec({ classId: 'A반', date: '2026-07-06', period: 1 })], // updatedAt 없음
+    };
+    const merged = mergeAttendance(local, remote, true);
+    expect(merged.records).toHaveLength(0);
   });
 });

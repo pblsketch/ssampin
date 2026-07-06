@@ -385,3 +385,11 @@
   4. **PC 기본값 상향** — autoSyncOnSave true, autoSyncIntervalMin 5분(useSettingsStore·BackupCard·ImportSettingsFromCloud 3곳 일치). Drive 어댑터에 429/5xx 지수 백오프(최대 3회, Retry-After 존중, infrastructure/google/driveRetry.ts).
 - **트레이드오프(고지)**: 툼스톤이 없어 한쪽에서 삭제한 출결 레코드가 상대쪽 동기화로 부활할 수 있음 — student-records 병합과 동일한 기존 트레이드오프로, 통째 유실보다 낫다고 판단. 삭제 전파가 필요해지면 툼스톤 배열 도입을 후속 과제로.
 - **검증**: tsc 0 / lint 0 errors / vitest 3415 passed(신규 20건: mergeAttendance 12·deferred 3·driveRetry 5) / regression 38/38 / landing docs:check·build 통과 / architect APPROVED.
+
+### ADR-019 후속 (2026-07-06 당일): 출결 삭제 전파(툼스톤) 추가
+
+- 고지했던 트레이드오프("삭제 레코드가 상대쪽에서 부활 가능")를 같은 날 해소.
+- `AttendanceTombstone { key, deletedAt }` + `AttendanceData.deleted?`(optional — 과거 파일 호환).
+- 저장 측: `buildAttendanceSaveData`가 모든 저장 경로에서 사라진 키에 툼스톤을 남기고, 재등장 키의 툼스톤은 제거, TTL 90일 경과분은 GC.
+- 병합 측: `mergeAttendance`가 양쪽 툼스톤을 키별 최신 deletedAt으로 합친 뒤, 레코드 updatedAt이 deletedAt보다 나중일 때만 부활(동률·스탬프 부재는 삭제 승).
+- 테스트 8건 추가(생성·승계·GC·부활차단·재작성승리·툼스톤병합·legacy).

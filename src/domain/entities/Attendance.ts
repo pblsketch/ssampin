@@ -42,8 +42,25 @@ export interface AttendanceRecord {
   readonly updatedAt?: string;
 }
 
+/**
+ * 삭제 전파용 툼스톤.
+ * 레코드를 지울 때 "언제 지웠는지"를 남겨, 기기 간 병합에서
+ * 상대 기기에 남아 있던 옛 사본이 부활하지 않게 한다.
+ */
+export interface AttendanceTombstone {
+  /** attendanceRecordKey 결과 */
+  readonly key: string;
+  /** 삭제 시각(ISO) */
+  readonly deletedAt: string;
+}
+
+/** 툼스톤 보존 기간 — 지난 툼스톤은 저장/병합 시 정리(GC)된다 */
+export const ATTENDANCE_TOMBSTONE_TTL_MS = 90 * 24 * 60 * 60 * 1000;
+
 export interface AttendanceData {
   readonly records: readonly AttendanceRecord[];
+  /** 삭제 전파용 툼스톤 목록 (과거 데이터에는 없음) */
+  readonly deleted?: readonly AttendanceTombstone[];
 }
 
 /**
