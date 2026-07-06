@@ -174,7 +174,16 @@ export function StudentsPage() {
     async (student: HomeroomStudent, status: AttendanceStatus) => {
       const classId = settings.className || 'homeroom';
       const num = student.studentNumber ?? 0;
-      const existing = getRecordForDate(classId, 0, selectedDateStr);
+      // 데이터 유실 방지: 로드 미완료 시 빈 스냅샷으로 others 를 만들면 나머지 학생이 지워진다.
+      // 로드를 보장하고 최신 스냅샷에서 기존 기록을 직접 읽는다.
+      const attStore = useMobileAttendanceStore.getState();
+      if (!attStore.loaded) await attStore.load();
+      const existing =
+        useMobileAttendanceStore
+          .getState()
+          .records.find(
+            (r) => r.date === selectedDateStr && r.classId === classId && r.period === 0,
+          ) ?? null;
       const others = (existing?.students ?? []).filter((sa) => sa.number !== num);
       await saveAttendanceRecord({
         classId,
@@ -185,7 +194,7 @@ export function StudentsPage() {
       const { bridgeAttendanceRecord } = useMobileStudentRecordsStore.getState();
       await bridgeAttendanceRecord({ studentId: student.id, date: selectedDateStr, status });
     },
-    [settings.className, selectedDateStr, getRecordForDate, saveAttendanceRecord],
+    [settings.className, selectedDateStr, saveAttendanceRecord],
   );
 
   const handleQuickRecord = useCallback(
@@ -203,7 +212,15 @@ export function StudentsPage() {
   const writeClassStatus = useCallback(
     async (tc: TeachingClass, student: TeachingClassStudent, status: AttendanceStatus) => {
       const sKey = studentKey(student);
-      const existing = getRecordForDate(tc.id, 0, selectedDateStr);
+      // 데이터 유실 방지: 로드를 보장하고 최신 스냅샷에서 기존 기록을 직접 읽는다.
+      const attStore = useMobileAttendanceStore.getState();
+      if (!attStore.loaded) await attStore.load();
+      const existing =
+        useMobileAttendanceStore
+          .getState()
+          .records.find(
+            (r) => r.date === selectedDateStr && r.classId === tc.id && r.period === 0,
+          ) ?? null;
       const others = (existing?.students ?? []).filter((sa) => {
         const saKey =
           sa.grade != null && sa.classNum != null
@@ -224,7 +241,7 @@ export function StudentsPage() {
         students: [...others, entry],
       });
     },
-    [getRecordForDate, selectedDateStr, saveAttendanceRecord],
+    [selectedDateStr, saveAttendanceRecord],
   );
 
   const handleClassQuickRecord = useCallback(

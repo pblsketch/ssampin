@@ -450,6 +450,11 @@ function InputMode({
         const status = STATUS_FROM_TYPE[attendanceType] ?? 'absent';
         const memoText = memo.trim() || undefined;
 
+        // 데이터 유실 방지: 병합 시드(그날 기존 출결)를 읽기 전에 스토어 로드를 보장한다.
+        // 미로딩 상태의 빈 스냅샷으로 시드하면 saveDayAttendance 의 하루치 통째 교체가
+        // 방금 입력하지 않은 다른 학생의 기존 기록을 지운다.
+        const tcState = useTeachingClassStore.getState();
+        if (!tcState.loaded) await tcState.load();
         const existing = getDayAttendance(className, date);
         const recordsByPeriod = new Map<number, StudentAttendance[]>();
         for (const r of existing) {

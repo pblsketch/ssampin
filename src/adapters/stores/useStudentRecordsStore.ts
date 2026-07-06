@@ -467,7 +467,12 @@ export const useStudentRecordsStore = create<StudentRecordsState>((set, get) => 
       // 2) 원본 출결부(useTeachingClassStore) 동기화 — classId/studentNumber 있을 때만
       if (classId && studentNumber != null) {
         try {
-          const teaching = useTeachingClassStore.getState();
+          // 데이터 유실 방지: 병합 시드를 읽기 전에 원본 출결부 스토어 로드를 보장한다.
+          let teaching = useTeachingClassStore.getState();
+          if (!teaching.loaded) {
+            await teaching.load();
+            teaching = useTeachingClassStore.getState();
+          }
           const existing = teaching.getDayAttendance(classId, date);
 
           // 기존 recordsByPeriod 맵 구성 (다른 학생 엔트리 보존)

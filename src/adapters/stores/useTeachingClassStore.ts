@@ -631,6 +631,9 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
     },
 
     saveAttendanceRecord: async (record) => {
+      // 데이터 유실 방지: 로드가 끝나지 않은 상태(attendanceRecords 빈 스냅샷)에서
+      // 저장하면 기존 기록을 덮어써 유실될 수 있으므로 먼저 로드를 보장한다.
+      if (!get().loaded) await get().load();
       if (get().loadFailed) {
         console.warn('[TeachingClassStore] 데이터 로드 실패 상태에서 저장 차단');
         return;
@@ -697,6 +700,9 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
     },
 
     saveDayAttendance: async (classId, date, recordsByPeriod) => {
+      // 데이터 유실 방지: 로드가 끝나지 않은 상태에서 하루치 통째 교체를 수행하면
+      // 아직 못 읽은 기존 기록이 사라진다. 먼저 로드를 보장한다.
+      if (!get().loaded) await get().load();
       if (get().loadFailed) {
         console.warn('[TeachingClassStore] 데이터 로드 실패 상태에서 저장 차단');
         return;
