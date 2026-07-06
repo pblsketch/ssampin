@@ -23,6 +23,7 @@ const SHEETS_TO_REGISTER: ReadonlyArray<readonly [filePath: string, sheetLabel: 
   ['src/mobile/pages/students/StudentQuickActionSheet.tsx', 'StudentQuickActionSheet'],
   ['src/mobile/pages/students/StudentRecordsFullSheet.tsx', 'StudentRecordsFullSheet'],
   ['src/mobile/pages/students/StudentAttendanceHistorySheet.tsx', 'StudentAttendanceHistorySheet'],
+  ['src/mobile/components/common/DateRangePickerSheet.tsx', 'DateRangePickerSheet'],
   ['src/mobile/pages/SchedulePage.tsx', 'AddEventModal'],
   ['src/mobile/pages/todo/AddTodoModal.tsx', 'AddTodoModal'],
   ['src/mobile/pages/MemoPage.tsx', 'AddModal / EditModal'],

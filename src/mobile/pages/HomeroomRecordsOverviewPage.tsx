@@ -12,6 +12,7 @@ import { useMobileStudentStore } from '@mobile/stores/useMobileStudentStore';
 import { useMobileStudentRecordsStore } from '@mobile/stores/useMobileStudentRecordsStore';
 import { EmptyState } from '@mobile/components/common/EmptyState';
 import { CATEGORY_COLORS } from '@mobile/pages/students/shared';
+import { DateRangePickerSheet } from '@mobile/components/common/DateRangePickerSheet';
 
 // ============================================================
 // 담임 — 반 전체 기록 모아보기 (Feature B §6.2.1, 풀스크린)
@@ -59,6 +60,8 @@ export function HomeroomRecordsOverviewPage({ onClose }: HomeroomRecordsOverview
 
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [studentFilter, setStudentFilter] = useState<string | null>(null);
+  const [dateRange, setDateRange] = useState<{ start: string; end: string } | null>(null);
+  const [rangeSheetOpen, setRangeSheetOpen] = useState(false);
 
   useEffect(() => {
     void loadStudents();
@@ -82,22 +85,29 @@ export function HomeroomRecordsOverviewPage({ onClose }: HomeroomRecordsOverview
     [records, activeIds],
   );
 
-  const categorySummary = useMemo(() => getCategorySummary(homeroomRecords), [homeroomRecords]);
+  // §7.4 — 기간이 설정되면 1차 필터로 적용해 이 페이지 전체(digest·주의 학생·카테고리 카운트·
+  // 타임라인)가 그 기간 기준으로 계산되게 한다(없으면 전체 기간 그대로).
+  const periodRecords = useMemo(() => {
+    if (!dateRange) return homeroomRecords;
+    return homeroomRecords.filter((r) => r.date >= dateRange.start && r.date <= dateRange.end);
+  }, [homeroomRecords, dateRange]);
+
+  const categorySummary = useMemo(() => getCategorySummary(periodRecords), [periodRecords]);
   const warningStudents = useMemo(
-    () => getWarningStudents(homeroomRecords, activeStudents),
-    [homeroomRecords, activeStudents],
+    () => getWarningStudents(periodRecords, activeStudents),
+    [periodRecords, activeStudents],
   );
 
   const categoryCounts = useMemo(() => {
     const counts = new Map<string, number>();
-    for (const r of homeroomRecords) {
+    for (const r of periodRecords) {
       counts.set(r.category, (counts.get(r.category) ?? 0) + 1);
     }
     return counts;
-  }, [homeroomRecords]);
+  }, [periodRecords]);
 
   const filteredRecords = useMemo(() => {
-    let result = homeroomRecords;
+    let result = periodRecords;
     if (selectedCategory !== 'all') {
       result = result.filter((r) => r.category === selectedCategory);
     }
@@ -105,7 +115,7 @@ export function HomeroomRecordsOverviewPage({ onClose }: HomeroomRecordsOverview
       result = result.filter((r) => r.studentId === studentFilter);
     }
     return sortByDateDesc(result);
-  }, [homeroomRecords, selectedCategory, studentFilter]);
+  }, [periodRecords, selectedCategory, studentFilter]);
 
   const monthGroups = useMemo(() => groupRecordsByMonth(filteredRecords), [filteredRecords]);
 
@@ -170,6 +180,39 @@ export function HomeroomRecordsOverviewPage({ onClose }: HomeroomRecordsOverview
               </p>
             )}
 
+            {/* 기간 필터 — 트리거(미설정) 또는 활성 칩(설정됨), design §7.4 */}
+            <div className="px-4 pt-2">
+              {dateRange ? (
+                <button
+                  type="button"
+                  onClick={() => setDateRange(null)}
+                  aria-label="기간 필터 해제"
+                  className="inline-flex items-center gap-1.5 shrink-0 min-h-[44px] px-3 py-2 rounded-lg text-xs font-medium bg-sp-accent text-sp-accent-fg"
+                >
+                  {formatMonthDay(dateRange.start)}~{formatMonthDay(dateRange.end)}
+                  <span className="material-symbols-outlined text-sm">close</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setRangeSheetOpen(true)}
+                  className="inline-flex items-center gap-1.5 shrink-0 min-h-[44px] px-3 py-2 rounded-lg text-xs font-medium border border-sp-border text-sp-muted"
+                >
+                  <span className="material-symbols-outlined text-sm">date_range</span>
+                  기간
+                </button>
+              )}
+            </div>
+
+            {rangeSheetOpen && (
+              <DateRangePickerSheet
+                initialStart={dateRange?.start}
+                initialEnd={dateRange?.end}
+                onApply={(start, end) => setDateRange({ start, end })}
+                onClose={() => setRangeSheetOpen(false)}
+              />
+            )}
+
             {/* 카테고리 필터 칩 — S1과 동일 규격 */}
             <div
               className="flex gap-1.5 px-4 py-3 overflow-x-auto no-scrollbar"
@@ -187,7 +230,7 @@ export function HomeroomRecordsOverviewPage({ onClose }: HomeroomRecordsOverview
                     : 'border-sp-border text-sp-muted'
                 }`}
               >
-                전체 {homeroomRecords.length}
+                전체 {periodRecords.length}
               </button>
               {categories.map((cat) => (
                 <button

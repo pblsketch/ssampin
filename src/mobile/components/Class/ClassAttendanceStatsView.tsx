@@ -37,6 +37,7 @@ interface ClassAttendanceStatsViewProps {
  */
 export function ClassAttendanceStatsView({ classId, className }: ClassAttendanceStatsViewProps) {
   const [filter, setFilter] = useState<AttendancePeriodFilter>('all');
+  const [customRange, setCustomRange] = useState<{ start: string; end: string } | null>(null);
 
   const classes = useMobileTeachingClassStore((s) => s.classes);
   const loadClasses = useMobileTeachingClassStore((s) => s.load);
@@ -55,7 +56,11 @@ export function ClassAttendanceStatsView({ classId, className }: ClassAttendance
     return filterActive(cls.students).sort((a, b) => a.number - b.number);
   }, [cls]);
 
-  const dateRange = useMemo(() => getFilterRange(filter), [filter]);
+  const dateRange = useMemo(
+    () =>
+      filter === 'custom' ? (customRange ?? { start: null, end: null }) : getFilterRange(filter),
+    [filter, customRange],
+  );
 
   /* 학생별 출결 통계 — PC ClassRecordStatsView.tsx:89-108과 동일 알고리즘(period 무시, 연인원 합산) */
   const stats = useMemo(() => {
@@ -125,6 +130,8 @@ export function ClassAttendanceStatsView({ classId, className }: ClassAttendance
         rows={rows}
         scopeLabel="학급 전체"
         tableAriaLabel={`${className} 학생별 출결 통계`}
+        customRange={customRange}
+        onCustomRangeChange={setCustomRange}
       />
     </div>
   );

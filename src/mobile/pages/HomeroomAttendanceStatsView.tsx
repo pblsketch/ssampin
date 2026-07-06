@@ -44,6 +44,7 @@ export function HomeroomAttendanceStatsView({
   onBack,
 }: HomeroomAttendanceStatsViewProps) {
   const [filter, setFilter] = useState<AttendancePeriodFilter>('all');
+  const [customRange, setCustomRange] = useState<{ start: string; end: string } | null>(null);
 
   const students = useMobileStudentStore((s) => s.students);
   const studentsLoaded = useMobileStudentStore((s) => s.loaded);
@@ -61,7 +62,11 @@ export function HomeroomAttendanceStatsView({
     [students],
   );
 
-  const dateRange = useMemo(() => getFilterRange(filter), [filter]);
+  const dateRange = useMemo(
+    () =>
+      filter === 'custom' ? (customRange ?? { start: null, end: null }) : getFilterRange(filter),
+    [filter, customRange],
+  );
 
   /* 학생별 출결 통계 — record.students[].number → Student.studentNumber 매핑
      (AttendanceCheckPage.tsx:220-221 bridge 로직과 동일). period 필터 없음(담임은 항상 period 0). */
@@ -147,6 +152,8 @@ export function HomeroomAttendanceStatsView({
             rows={rows}
             scopeLabel="우리 반 전체"
             tableAriaLabel={`${className} 학생별 출결 통계`}
+            customRange={customRange}
+            onCustomRangeChange={setCustomRange}
           />
         </div>
       )}

@@ -622,3 +622,61 @@ ClassObservationTab (수정)
 두 목록 사이 겹치는 파일 없음. `App.tsx`는 builder-attendance만 수정(§6.1의 render-swap 1건).
 `bottomSheetCoverage.meta.test.ts`는 이번 스코프에 신규 시트가 없어 어느 빌더도 건드리지
 않는다.
+
+## 7. 후속 R2 — 달력 '직접 설정' 기간 필터 (출결 통계 + 반 전체 기록)
+
+사용자 요청: 프리셋(전체/이번 학기/이번 달/이번 주) 외에 **달력으로 시작~종료 날짜를 직접
+지정**. §3에서 358px 폭 문제로 미뤘던 '직접 설정'을, 두 번 클릭 range 픽커를 **바텀시트**로
+띄워 해결한다. 적용 범위 = 출결 통계(담임+교과) + 반 전체 기록(담임). 단일 빌더 구현(공용
+시트를 공유하므로 파일 분할 시 충돌).
+
+### 7.1 재사용 — MultiDatePicker range 모드
+
+`@adapters/components/common/MultiDatePicker`는 이미 모바일(AttendanceCheckPage '여러 날')이
+import하는 공용 컴포넌트다(레이어 규칙 위반 아님 — 공용 UI). `mode="range"` +
+`rangeStart`/`rangeEnd`/`onRangeChange` + `mobileSheet` + `inline` 지원. **함정: range 모드
+`maxCount`(기본 30)가 기간 길이를 30일로 제한**(MultiDatePicker.tsx:121-124 `total > maxCount`
+→ over-cap). 학기(≈180일)를 고를 수 있게 **`maxCount={366}`** 전달.
+
+### 7.2 신규 공용 `DateRangePickerSheet`
+
+- 파일 `src/mobile/components/common/DateRangePickerSheet.tsx`(신규 오버레이 시트 → `useBottomSheet()` +
+  `bottomSheetCoverage.meta.test.ts` 등록 필수).
+- 컨테이너 §4.5 규격(`fixed inset-0 z-[70] flex items-end`, `bg-black/50`,
+  `glass-card rounded-t-2xl pb-safe`), 핸들바, 헤더("기간 선택" + 닫기 + "적용"), 본문 =
+  `<MultiDatePicker mode="range" rangeStart rangeEnd onRangeChange maxCount={366} mobileSheet inline />`.
+- Props: `{ initialStart?: string; initialEnd?: string; onApply:(start,end)=>void; onClose:()=>void }`.
+  로컬 state로 진행 중 range 보관, "적용"은 start·end 둘 다 있을 때만 활성 → `onApply` 후 `onClose`.
+  "초기화"(선택) 버튼으로 range 비우기. 날짜 표기 `M/D`(utils/date `formatDateLabel` 또는 로컬).
+
+### 7.3 출결 통계 — '직접 설정' 칩
+
+- `AttendancePeriodFilter`에 `'custom'` 추가(`AttendanceStatsTable.tsx`).
+- `AttendanceStatsTable`는 5번째 칩 `직접 설정` 렌더: `customRange`가 있으면 라벨 =
+  `${M/D(start)}~${M/D(end)}`, 없으면 "직접 설정". 탭 시 로컬 `sheetOpen` state로
+  `DateRangePickerSheet` 오픈 → `onApply(start,end)` → `onCustomRangeChange({start,end})` +
+  `onFilterChange('custom')`. 나머지 4칩은 기존대로.
+- `AttendanceStatsTableProps`에 추가: `customRange?: {start:string; end:string} | null`,
+  `onCustomRangeChange?: (range:{start:string; end:string})=>void`.
+- 소비자(`ClassAttendanceStatsView`/`HomeroomAttendanceStatsView`): `customRange` state 추가,
+  `dateRange = filter==='custom' ? (customRange ?? {start:null,end:null}) : getFilterRange(filter)`.
+  요약 라벨(`${기간라벨} ${scopeLabel}`)의 기간라벨은 custom이면 "직접 설정" 또는 범위 문자열.
+  `getFilterRange`에 `'custom'` 케이스 추가(`{start:null,end:null}` 반환 — 실호출 안 되지만 타입 총족).
+
+### 7.4 반 전체 기록 — 기간 필터
+
+- `HomeroomRecordsOverviewPage`에 `dateRange:{start,end}|null` state 추가. 카테고리 칩 줄 옆(또는
+  위) "기간" 버튼(아이콘 `date_range`, §4.1 칩 규격) → `DateRangePickerSheet` 오픈. 설정되면 활성
+  칩(`${M/D}~${M/D}` + ✕ 해제, 학생 필터 칩과 동일 패턴).
+- **적용 일관성**: dateRange가 있으면 이를 **1차 필터**로 working set을 만든 뒤 digest·주의 학생·
+  카테고리 카운트·타임라인 전부 그 기간 기준으로 계산(없으면 전체 기간). 날짜 비교는
+  `r.date >= start && r.date <= end`.
+
+### 7.5 접근성/다크/함정
+
+- 시트 `role="dialog" aria-modal aria-label="기간 선택"`, "직접 설정"/"기간" 칩 `min-h-[44px]`,
+  활성 범위 칩 해제 `aria-label="기간 필터 해제"`. sp-\* 알파수식 금지(신규 코드 0). 신규 시트는
+  MultiDatePicker가 내부 렌더하므로 그 자체 색은 이미 검증됨 — 시트 래퍼만 §4.5 준수.
+- 파일 계획(단일 빌더): 신규 `DateRangePickerSheet.tsx` / 수정 `AttendanceStatsTable.tsx`·
+  `ClassAttendanceStatsView.tsx`·`HomeroomAttendanceStatsView.tsx`·`HomeroomRecordsOverviewPage.tsx`·
+  `bottomSheetCoverage.meta.test.ts`(등록 1건).

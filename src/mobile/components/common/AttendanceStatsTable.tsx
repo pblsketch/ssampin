@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import type { AttendanceStatus } from '@domain/entities/Attendance';
+import { DateRangePickerSheet } from './DateRangePickerSheet';
 
-export type AttendancePeriodFilter = 'all' | 'semester' | 'month' | 'week';
+export type AttendancePeriodFilter = 'all' | 'semester' | 'month' | 'week' | 'custom';
 
 export interface AttendanceStatsRow {
   readonly key: string; // studentKey(교과) | student.id(담임)
@@ -25,6 +27,14 @@ export interface AttendanceStatsTableProps {
   readonly scopeLabel: string;
   /** 예: "2학년 3반 학생별 출결 통계" */
   readonly tableAriaLabel: string;
+  /** '직접 설정'으로 선택된 범위 — design §7.3 */
+  readonly customRange?: { start: string; end: string } | null;
+  readonly onCustomRangeChange?: (range: { start: string; end: string }) => void;
+}
+
+/** `YYYY-MM-DD` → `M/D` (선행 0 제거). §7.2/§7.3 범위 칩 라벨 표기용 로컬 헬퍼. */
+function formatMonthDay(date: string): string {
+  return `${Number(date.slice(5, 7))}/${Number(date.slice(8, 10))}`;
 }
 
 /**
@@ -40,7 +50,8 @@ export function getFilterRange(filter: AttendancePeriodFilter): {
   start: string | null;
   end: string | null;
 } {
-  if (filter === 'all') return { start: null, end: null };
+  // 'custom'은 소비자가 customRange를 직접 계산해 사용 — 여기선 타입 총족용 빈 값만 반환(design §7.3).
+  if (filter === 'all' || filter === 'custom') return { start: null, end: null };
   const now = new Date();
   if (filter === 'week') {
     const day = now.getDay();
@@ -96,8 +107,18 @@ export function AttendanceStatsTable({
   rows,
   scopeLabel,
   tableAriaLabel,
+  customRange,
+  onCustomRangeChange,
 }: AttendanceStatsTableProps) {
-  const periodLabel = PERIOD_FILTERS.find((f) => f.id === filter)?.label ?? '전체';
+  const [sheetOpen, setSheetOpen] = useState(false);
+
+  const customLabel = customRange
+    ? `${formatMonthDay(customRange.start)}~${formatMonthDay(customRange.end)}`
+    : '직접 설정';
+  const periodLabel =
+    filter === 'custom'
+      ? customLabel
+      : (PERIOD_FILTERS.find((f) => f.id === filter)?.label ?? '전체');
 
   return (
     <>
@@ -126,7 +147,33 @@ export function AttendanceStatsTable({
             </button>
           );
         })}
+        {/* 5번째 칩 — 직접 설정(달력 범위), design §7.3 */}
+        <button
+          type="button"
+          role="tab"
+          aria-selected={filter === 'custom'}
+          onClick={() => setSheetOpen(true)}
+          className={`shrink-0 min-h-[44px] px-3 py-2 rounded-lg text-xs font-medium border ${
+            filter === 'custom'
+              ? 'bg-sp-accent text-sp-accent-fg border-transparent'
+              : 'border-sp-border text-sp-muted'
+          }`}
+        >
+          {customLabel}
+        </button>
       </div>
+
+      {sheetOpen && (
+        <DateRangePickerSheet
+          initialStart={customRange?.start}
+          initialEnd={customRange?.end}
+          onApply={(start, end) => {
+            onCustomRangeChange?.({ start, end });
+            onFilterChange('custom');
+          }}
+          onClose={() => setSheetOpen(false)}
+        />
+      )}
 
       {/* 요약(연인원) */}
       <div className="mx-4 mb-3 rounded-xl border border-sp-border bg-sp-card p-3">
