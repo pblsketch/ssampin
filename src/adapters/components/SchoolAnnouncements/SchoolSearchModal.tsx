@@ -48,6 +48,7 @@ export function SchoolSearchModal({ onSelect, onClose }: SchoolSearchModalProps)
       address: hit.address,
       kindName: hit.kind,
       schoolName: hit.name,
+      shlIdfCd: hit.shlIdfCd,
     });
     if (!identity) {
       setError(`${hit.name}의 지역·학교급을 해석하지 못했어요. 다른 학교를 골라보세요.`);

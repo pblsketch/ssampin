@@ -29,8 +29,15 @@ export function useSchoolIdentity(): SchoolDisclosureIdentity | null {
         address: settings.neis?.address ?? '',
         schoolLevel: settings.schoolLevel,
         schoolName: settings.neis?.schoolName ?? settings.schoolName ?? '',
+        shlIdfCd: settings.schoolInfo?.shlIdfCd,
       }),
-    [settings.neis?.address, settings.neis?.schoolName, settings.schoolLevel, settings.schoolName],
+    [
+      settings.neis?.address,
+      settings.neis?.schoolName,
+      settings.schoolLevel,
+      settings.schoolName,
+      settings.schoolInfo?.shlIdfCd,
+    ],
   );
 }
 

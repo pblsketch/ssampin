@@ -59,6 +59,25 @@ describe('identifySchoolForDisclosure', () => {
       }),
     ).toBeNull();
   });
+
+  it('설정의 shlIdfCd(고유번호)를 식별자에 실어준다', () => {
+    const r = identifySchoolForDisclosure({
+      address: '서울특별시 강남구 선릉로 9',
+      schoolLevel: 'middle',
+      schoolName: '개포중학교',
+      shlIdfCd: 'ABC123',
+    });
+    expect(r!.shlIdfCd).toBe('ABC123');
+  });
+
+  it('shlIdfCd 미지정 시 undefined', () => {
+    const r = identifySchoolForDisclosure({
+      address: '서울특별시 강남구 선릉로 9',
+      schoolLevel: 'middle',
+      schoolName: '개포중학교',
+    });
+    expect(r!.shlIdfCd).toBeUndefined();
+  });
 });
 
 describe('identifyFromAddressKind (다른 학교 검색)', () => {

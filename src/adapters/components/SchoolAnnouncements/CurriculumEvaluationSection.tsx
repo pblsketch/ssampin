@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { importEvaluationPlan } from '@adapters/di/container';
+import { extractCurriculumTables } from '@domain/services/curriculumTableExtract';
 import { CurriculumMatrixView } from './CurriculumMatrixView';
+import { useSelectedSchool } from './SchoolDisclosureContext';
 
 /**
  * 교육과정 탭 — 우리 학교가 학교알리미에 올린 "교육과정 편제표"(학교교육과정 편성·운영 및 평가 항목,
@@ -13,10 +14,11 @@ const CURRENT_YEAR = new Date().getFullYear();
 const YEAR_OPTIONS = [CURRENT_YEAR, CURRENT_YEAR - 1, CURRENT_YEAR - 2];
 
 export function CurriculumEvaluationSection() {
-  const savedSchoolInfo = useSettingsStore((s) => s.settings.schoolInfo);
+  // 현재 조회 대상 학교(기본=우리 학교, '다른 학교 검색' 시 그 학교)를 따라간다.
+  const selected = useSelectedSchool();
   const isDesktop = typeof window !== 'undefined' && !!window.electronAPI;
-  const shlIdfCd = savedSchoolInfo?.shlIdfCd ?? '';
-  const schoolName = savedSchoolInfo?.matchedName ?? '';
+  const shlIdfCd = selected?.shlIdfCd ?? '';
+  const schoolName = selected?.schoolName ?? '';
 
   const [year, setYear] = useState(CURRENT_YEAR);
   const [filename, setFilename] = useState('');
@@ -49,10 +51,16 @@ export function CurriculumEvaluationSection() {
         );
         if (cancelled) return;
         setFilename(res.filename);
+        // 학교마다 문서 양식이 달라(편제표 단독 vs 운영계획 전체 문서) 편제표 표만 골라낸다.
+        const extracted = extractCurriculumTables(res.markdown);
         if (res.needsOcr) {
           setError('이미지로 된 문서라 편제표를 표로 자동 정리하지 못했어요.');
+        } else if (!extracted.found) {
+          setError('이 문서에서는 편제표 표만 따로 찾지 못해 문서 전체를 보여드려요.');
+        } else if (/\.pdf$/i.test(res.filename)) {
+          setError('PDF로 올라온 문서라 표 모양이 원본과 조금 다르게 보일 수 있어요.');
         }
-        setMarkdown(res.markdown);
+        setMarkdown(extracted.markdown);
       } catch (e) {
         if (!cancelled) {
           setError(e instanceof Error ? e.message : '교육과정 편제표를 불러오지 못했어요.');
@@ -108,7 +116,9 @@ export function CurriculumEvaluationSection() {
       <section className="space-y-2">
         {heading}
         <div className="rounded-xl border border-sp-border bg-sp-card p-4 text-xs text-sp-muted">
-          교육과정 편제표를 보려면 설정에서 우리 학교를 등록해 주세요.
+          {selected
+            ? '이 학교는 편제표 문서를 불러올 식별 정보가 없어요. 다른 학교를 검색해 보세요.'
+            : '교육과정 편제표를 보려면 설정에서 우리 학교를 등록해 주세요.'}
         </div>
       </section>
     );
@@ -118,8 +128,8 @@ export function CurriculumEvaluationSection() {
     <section className="space-y-3">
       {heading}
       <p className="text-xs text-sp-muted leading-relaxed">
-        우리 학교가 올린 교육과정 편제표(학년/학기별 이수단위)를 그대로 보여드려요. (출처:
-        학교알리미 공시 문서)
+        이 학교가 학교알리미에 올린 교육과정 편제표(학년/학기별 이수단위)를 그대로 보여드려요.
+        (출처: 학교알리미 공시 문서)
       </p>
 
       {error !== null && (

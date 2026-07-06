@@ -21,6 +21,11 @@ export interface SchoolDisclosureIdentity {
   readonly sggList: readonly { name: string; code: string }[];
   readonly schulKndCode: string;
   readonly schoolName: string;
+  /**
+   * 학교알리미 학교 고유번호(SHL_IDF_CD) — 편제표/평가계획 문서 다운로드용.
+   * 지역 코드만으로 만든 식별자(주소 기반)엔 없을 수 있어 optional.
+   */
+  readonly shlIdfCd?: string;
 }
 
 /** 주소 앞부분 → 시도코드 + 시군구 코드 목록 (식별 공유 코어). 2-depth 자치구 우선. */
@@ -46,6 +51,7 @@ function buildIdentity(
   address: string,
   schulKndCode: string,
   schoolName: string,
+  shlIdfCd?: string,
 ): SchoolDisclosureIdentity | null {
   if (!schoolName.trim()) return null;
   const region = resolveAddressToRegion(address);
@@ -55,6 +61,7 @@ function buildIdentity(
     sggList: region.sggList,
     schulKndCode,
     schoolName: schoolName.trim(),
+    shlIdfCd: shlIdfCd?.trim() || undefined,
   };
 }
 
@@ -63,10 +70,12 @@ export function identifySchoolForDisclosure(params: {
   address: string;
   schoolLevel: SchoolLevel;
   schoolName: string;
+  /** 설정에 저장된 학교알리미 고유번호(있으면 편제표 다운로드에 사용). */
+  shlIdfCd?: string;
 }): SchoolDisclosureIdentity | null {
   const kindName = LEVEL_TO_KIND[params.schoolLevel];
   if (!kindName) return null;
-  return buildIdentity(params.address, SCHOOL_KIND[kindName], params.schoolName);
+  return buildIdentity(params.address, SCHOOL_KIND[kindName], params.schoolName, params.shlIdfCd);
 }
 
 /**
@@ -77,10 +86,12 @@ export function identifyFromAddressKind(params: {
   address: string;
   kindName: string;
   schoolName: string;
+  /** 검색 결과의 학교알리미 고유번호(편제표 다운로드에 사용). */
+  shlIdfCd?: string;
 }): SchoolDisclosureIdentity | null {
   const schulKndCode = (SCHOOL_KIND as Record<string, string>)[params.kindName];
   if (!schulKndCode) return null;
-  return buildIdentity(params.address, schulKndCode, params.schoolName);
+  return buildIdentity(params.address, schulKndCode, params.schoolName, params.shlIdfCd);
 }
 
 /** 학교명 정규화 — 괄호 안 지역/부가정보 제거 + 공백 제거 */
