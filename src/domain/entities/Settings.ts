@@ -279,6 +279,34 @@ export interface ComciganSettings {
   readonly fingerprint?: ComciganTeacherFingerprint;
 }
 
+/**
+ * 압핀 자동연동 설정. 전부 optional — 기존 사용자 마이그레이션 불필요.
+ * 압핀은 학교(webdir)·교사번호·학년/반이 안정적이라 컴시간처럼 지문 재매칭이 필요 없다.
+ */
+export interface AppinAutoSyncSettings {
+  readonly enabled: boolean;
+  /** 재fetch 대상 학교 식별자 */
+  readonly webdir: string;
+  readonly schoolName: string;
+  readonly city: string;
+  /** getupdir 날짜 앵커(현재 주차 추정 폴백용) */
+  readonly date?: string;
+  /** 자동연동 대상 */
+  readonly target: 'teacher' | 'class';
+  /** target='teacher' — 교사 번호(1-베이스) */
+  readonly teacherNo?: number;
+  /** target='class' — 학년/반 */
+  readonly grade?: number;
+  readonly classNum?: number;
+  /** true면 변경 감지 시 무음 적용. 기본 false — 비공식 소스라 항상 알림+확인. */
+  readonly autoApply: boolean;
+  readonly lastSyncDate: string; // 'YYYY-MM-DD'
+}
+
+export interface AppinSettings {
+  readonly autoSync?: AppinAutoSyncSettings;
+}
+
 export interface NeisSettings {
   readonly schoolCode: string; // SD_SCHUL_CODE
   readonly atptCode: string; // ATPT_OFCDC_SC_CODE
@@ -400,6 +428,8 @@ export interface Settings {
   readonly neis: NeisSettings;
   /** 컴시간알리미 교사 시간표 자동연동 (M3). optional — 미import 사용자는 없음. */
   readonly comcigan?: ComciganSettings;
+  /** 압핀 시간표 자동연동. optional — 압핀 미import 사용자는 없음. */
+  readonly appin?: AppinSettings;
   /** 학교알리미 학교 연결 (평가계획 불러오기 학교 재검색 생략용, school-enrich ②-B) */
   readonly schoolInfo?: SchoolInfoLink;
   readonly pin: PinSettings;

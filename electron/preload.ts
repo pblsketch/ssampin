@@ -1260,6 +1260,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('comcigan:fetch', { path }),
   },
 
+  // === 압핀 (appin, sgpap.com) — 학급/교사 시간표 불러오기 ===
+  // sgpap.com 은 CORS 미지원이라 main 의 safeFetch 가 바이트만 대신 수신 (파싱은 renderer).
+  appin: {
+    fetch: (args: {
+      path: string;
+      method?: 'GET' | 'POST';
+      body?: string;
+    }): Promise<{ status: 'ok'; body: ArrayBuffer } | { status: 'error'; message: string }> =>
+      ipcRenderer.invoke('appin:fetch', args),
+  },
+
   // === 협업 보드 (collab-board) ===
   // Design §4.1 14개 채널을 서브객체로 그루핑 (기존 flat 패턴과의 절충 — 채널 많음)
   collabBoard: {

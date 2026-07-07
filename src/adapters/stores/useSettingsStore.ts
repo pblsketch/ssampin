@@ -482,6 +482,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       neis: patch.neis ? { ...current.neis, ...patch.neis } : current.neis,
       // comcigan 부분 업데이트 시 autoSync/fingerprint 중 안 넘긴 쪽 보존(얕은 병합)
       comcigan: patch.comcigan ? { ...current.comcigan, ...patch.comcigan } : current.comcigan,
+      // appin 부분 업데이트 시 autoSync 보존(얕은 병합) — 컴시간과 대칭
+      appin: patch.appin ? { ...current.appin, ...patch.appin } : current.appin,
       widget: patch.widget ? { ...current.widget, ...patch.widget } : current.widget,
       system: patch.system ? { ...current.system, ...patch.system } : current.system,
       todoSettings: patch.todoSettings

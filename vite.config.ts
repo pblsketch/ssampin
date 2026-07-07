@@ -82,6 +82,12 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           rewrite: (p) => p.replace(/^\/comcigan-api/, ''),
         },
+        // 압핀(sgpap.com) — CORS 미지원이라 브라우저 dev 는 프록시 경유 (Electron 은 IPC)
+        '/appin-api': {
+          target: 'http://www.sgpap.com',
+          changeOrigin: true,
+          rewrite: (p) => p.replace(/^\/appin-api/, ''),
+        },
       },
     },
   };

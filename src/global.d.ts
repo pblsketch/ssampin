@@ -762,6 +762,17 @@ interface ElectronAPI {
     ) => Promise<{ status: 'ok'; body: ArrayBuffer } | { status: 'error'; message: string }>;
   };
 
+  // === 압핀 (appin, sgpap.com) — 학급/교사 시간표 불러오기 ===
+  // sgpap.com 은 CORS 미지원이라 메인이 바이트만 대신 fetch (파싱은 renderer).
+  // 정적 파일(GET)·학교조회/원소표(POST form) 두 경로 지원.
+  appin?: {
+    fetch: (args: {
+      path: string;
+      method?: 'GET' | 'POST';
+      body?: string;
+    }) => Promise<{ status: 'ok'; body: ArrayBuffer } | { status: 'error'; message: string }>;
+  };
+
   // === 협업 보드 (collab-board) — Design §4.1 ===
   collabBoard?: {
     list: () => Promise<CollabBoardMeta[]>;

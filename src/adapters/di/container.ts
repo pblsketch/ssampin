@@ -5,6 +5,7 @@
 import type { IStoragePort } from '@domain/ports/IStoragePort';
 import type { INeisPort } from '@domain/ports/INeisPort';
 import type { IComciganPort } from '@domain/ports/IComciganPort';
+import type { IAppinPort } from '@domain/ports/IAppinPort';
 import type { IScheduleRepository } from '@domain/repositories/IScheduleRepository';
 import type { ISeatingRepository } from '@domain/repositories/ISeatingRepository';
 import type { ISeatingSnapshotRepository } from '@domain/repositories/ISeatingSnapshotRepository';
@@ -61,6 +62,7 @@ import { ElectronStorageAdapter } from '@infrastructure/storage/ElectronStorageA
 import { LocalStorageAdapter } from '@infrastructure/storage/LocalStorageAdapter';
 import { NeisApiClient } from '@infrastructure/neis/NeisApiClient';
 import { ComciganApiClient } from '@infrastructure/comcigan/ComciganApiClient';
+import { AppinApiClient } from '@infrastructure/appin/AppinApiClient';
 import { GoogleOAuthClient } from '@infrastructure/google/GoogleOAuthClient';
 import { GoogleCalendarApiClient } from '@infrastructure/google/GoogleCalendarApiClient';
 import { SupabaseAnalyticsAdapter } from '@infrastructure/analytics/SupabaseAnalyticsAdapter';
@@ -265,6 +267,10 @@ export const neisPort: INeisPort = new NeisApiClient();
 // === 컴시간알리미 (comcigan) — 교사 시간표 불러오기 ===
 // 통신은 electron main('comcigan:fetch' IPC, safeFetch 경유)에 위임, 브라우저 dev 는 vite 프록시.
 export const comciganPort: IComciganPort = new ComciganApiClient();
+
+// === 압핀 (appin, sgpap.com) — 학급/교사 시간표 불러오기 ===
+// 통신은 electron main('appin:fetch' IPC, safeFetch 경유)에 위임, 브라우저 dev 는 vite 프록시.
+export const appinPort: IAppinPort = new AppinApiClient();
 
 // === Google Calendar 관련 ===
 

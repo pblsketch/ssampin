@@ -39,6 +39,7 @@ import {
 } from '@domain/rules/subjectColorRules';
 import { getCurrentISOWeek } from '@usecases/timetable/AutoSyncNeisTimetable';
 import { checkComciganTimetableChange } from '@adapters/hooks/useComciganAutoSync';
+import { checkAppinTimetableChange } from '@adapters/hooks/useAppinAutoSync';
 import type { ClassScheduleData, TeacherScheduleData } from '@domain/entities/Timetable';
 import type { ComciganTeacherFingerprint } from '@domain/entities/Settings';
 import { TimetableEditor } from './TimetableEditor';
@@ -48,6 +49,9 @@ import { InlineColorPalette } from './InlineColorPalette';
 import { NeisImportModal } from './NeisImportModal';
 import { ComciganImportModal } from './ComciganImportModal';
 import { ComciganClassImportModal } from './ComciganClassImportModal';
+import { AppinClassImportModal } from './AppinClassImportModal';
+import { AppinTeacherImportModal } from './AppinTeacherImportModal';
+import { ImportSourceMenu, type ImportSource } from './ImportSourceMenu';
 import { TeacherExcelPreviewModal } from './TeacherExcelPreviewModal';
 /* eslint-disable no-restricted-imports */
 import {
@@ -223,7 +227,6 @@ export function TimetablePage() {
       map.set(cls.id, summarizeClassProgress(progressEntries.filter((e) => e.classId === cls.id)));
     }
     return map;
-     
   }, [showProgress, classes, progressEntries]);
 
   // 진도 빠른 입력/편집 상태 머신 — B안(수업 관리 캘린더)과 공유
@@ -430,6 +433,56 @@ export function TimetablePage() {
   // ── 컴시간 학급 시간표 불러오기 모달 ──
   const [showComciganClassImport, setShowComciganClassImport] = useState(false);
 
+  // ── 압핀 학급 시간표 불러오기 모달 ──
+  const [showAppinClassImport, setShowAppinClassImport] = useState(false);
+
+  // ── 압핀 교사 시간표 불러오기 모달 ──
+  const [showAppinTeacherImport, setShowAppinTeacherImport] = useState(false);
+
+  // ── 불러오기 소스(현재 탭 기준) — 단일 '불러오기' 드롭다운에 넘김 ──
+  const importSources = useMemo<readonly ImportSource[]>(() => {
+    if (tab === 'class') {
+      const list: ImportSource[] = [];
+      if (settings.schoolLevel !== 'custom') {
+        list.push({
+          key: 'neis',
+          label: '나이스에서 불러오기',
+          hint: '우리 반 시간표를 나이스에서',
+          onSelect: () => setShowNeisImport(true),
+        });
+      }
+      list.push({
+        key: 'comcigan',
+        label: '컴시간에서 불러오기',
+        hint: '컴시간 쓰는 학교 — 담당 교사까지 채워요',
+        onSelect: () => setShowComciganClassImport(true),
+      });
+      list.push({
+        key: 'appin',
+        label: '압핀에서 불러오기',
+        hint: '압핀 쓰는 학교',
+        onSelect: () => setShowAppinClassImport(true),
+      });
+      return list;
+    }
+    // 교사 시간표 탭
+    const list: ImportSource[] = [
+      {
+        key: 'comcigan',
+        label: '컴시간에서 불러오기',
+        hint: '이름으로 검색해서 불러와요',
+        onSelect: () => setShowComciganImport(true),
+      },
+      {
+        key: 'appin',
+        label: '압핀에서 불러오기',
+        hint: '교사 번호로 불러와요',
+        onSelect: () => setShowAppinTeacherImport(true),
+      },
+    ];
+    return list;
+  }, [tab, settings.schoolLevel]);
+
   const hasExistingData = useMemo(() => {
     return activeDays.some((day) =>
       (classSchedule[day] ?? []).some((cp) => cp.subject.trim() !== ''),
@@ -513,6 +566,46 @@ export function TimetablePage() {
       setCheckingComcigan(false);
     }
   }, [checkingComcigan]);
+
+  // ── 압핀 자동연동 (변동 확인 + 검토) ──
+  const pendingAppinReview = useScheduleStore((s) => s.pendingAppinReview);
+  const setPendingAppinReview = useScheduleStore((s) => s.setPendingAppinReview);
+  const [checkingAppin, setCheckingAppin] = useState(false);
+  const appinAutoSyncOn = settings.appin?.autoSync?.enabled === true;
+  const appinTarget = settings.appin?.autoSync?.target;
+
+  // 감지된 압핀 변경 적용 — 교사는 미리보기로, 학급은 바로 적용(비파괴 검토 소비)
+  const handleReviewAppin = useCallback(() => {
+    if (!pendingAppinReview) return;
+    if (pendingAppinReview.target === 'teacher') {
+      setPreviewSchedule(pendingAppinReview.schedule as TeacherScheduleData);
+      setPreviewPeriodTimes(null);
+      setPreviewFingerprint(null);
+      setShowExcelPreview(true);
+    } else {
+      // 학급 재적용도 import 경로(handleNeisImport)로 통일 — 새 주차 교시 수가 늘면
+      // maxPeriods 를 함께 올려 초과 교시가 표에서 잘리지 않게 한다.
+      const classSched = pendingAppinReview.schedule as ClassScheduleData;
+      const maxFromData = Math.max(
+        0,
+        ...Object.values(classSched).map((periods) => periods.length),
+      );
+      void handleNeisImport(classSched, maxFromData > 0 ? maxFromData : settings.maxPeriods);
+      showToast('압핀에서 바뀐 학급 시간표를 적용했어요.', 'success');
+    }
+    setPendingAppinReview(null);
+  }, [pendingAppinReview, handleNeisImport, settings.maxPeriods, setPendingAppinReview, showToast]);
+
+  // 수동 '압핀 변동 확인'
+  const handleAppinCheck = useCallback(async () => {
+    if (checkingAppin) return;
+    setCheckingAppin(true);
+    try {
+      await checkAppinTimetableChange({ manual: true });
+    } finally {
+      setCheckingAppin(false);
+    }
+  }, [checkingAppin]);
 
   const handleExcelConfirm = useCallback(async () => {
     if (!previewSchedule) return;
@@ -618,38 +711,8 @@ export function TimetablePage() {
         }
         rightActions={
           <>
-            {/* 나이스에서 불러오기 (학급 시간표, 비-custom 학교급) */}
-            {tab === 'class' && settings.schoolLevel !== 'custom' && (
-              <button
-                onClick={() => setShowNeisImport(true)}
-                className="flex items-center gap-2 rounded-xl bg-sp-accent/10 border border-sp-accent/30 px-4 py-2.5 text-sm font-bold text-sp-accent hover:bg-sp-accent/20 transition-all active:scale-95"
-              >
-                <span className="material-symbols-outlined text-icon-lg">download</span>
-                <span className="hidden xl:inline">나이스에서 불러오기</span>
-              </button>
-            )}
-
-            {/* 학급 시간표: 컴시간에서 불러오기 (컴시간 쓰는 학교용 보조 경로 — 담당 교사까지 채움) */}
-            {tab === 'class' && (
-              <button
-                onClick={() => setShowComciganClassImport(true)}
-                className="flex items-center gap-2 rounded-xl bg-sp-surface border border-sp-border px-4 py-2.5 text-sm font-bold text-sp-text hover:bg-sp-card transition-all active:scale-95"
-              >
-                <span className="material-symbols-outlined text-icon-lg">download</span>
-                <span className="hidden xl:inline">컴시간에서 불러오기</span>
-              </button>
-            )}
-
-            {/* 교사 시간표: 컴시간에서 불러오기 (양식/엑셀 세트는 직접 편집 안에 있음) */}
-            {tab === 'teacher' && (
-              <button
-                onClick={() => setShowComciganImport(true)}
-                className="flex items-center gap-2 rounded-xl bg-sp-accent/10 border border-sp-accent/30 px-4 py-2.5 text-sm font-bold text-sp-accent hover:bg-sp-accent/20 transition-all active:scale-95"
-              >
-                <span className="material-symbols-outlined text-icon-lg">download</span>
-                <span className="hidden xl:inline">컴시간에서 불러오기</span>
-              </button>
-            )}
+            {/* 시간표 불러오기 — 나이스/컴시간/압핀 통합 드롭다운 (탭별 소스는 importSources) */}
+            <ImportSourceMenu sources={importSources} />
 
             {/* 교사 시간표: 컴시간 변동 확인 (이미 불러온 사용자만 — 지금 재확인) */}
             {tab === 'teacher' && comciganAutoSyncOn && (
@@ -666,6 +729,25 @@ export function TimetablePage() {
                 </span>
                 <span className="hidden xl:inline">
                   {checkingComcigan ? '확인 중...' : '컴시간 변동 확인'}
+                </span>
+              </button>
+            )}
+
+            {/* 압핀 변동 확인 (압핀 자동연동 켜진 경우 — 대상 탭에서) */}
+            {appinAutoSyncOn && tab === (appinTarget === 'class' ? 'class' : 'teacher') && (
+              <button
+                onClick={() => void handleAppinCheck()}
+                disabled={checkingAppin}
+                title="압핀에서 시간표가 바뀌었는지 지금 확인해요"
+                className="flex items-center gap-2 rounded-xl bg-sp-surface border border-sp-border px-4 py-2.5 text-sm font-bold text-sp-text hover:bg-sp-card transition-all active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                <span
+                  className={`material-symbols-outlined text-icon-lg ${checkingAppin ? 'animate-spin' : ''}`}
+                >
+                  {checkingAppin ? 'progress_activity' : 'sync'}
+                </span>
+                <span className="hidden xl:inline">
+                  {checkingAppin ? '확인 중...' : '압핀 변동 확인'}
                 </span>
               </button>
             )}
@@ -823,6 +905,40 @@ export function TimetablePage() {
               </div>
             </div>
           )}
+
+          {/* 압핀 변경 감지 배너 (비파괴 — 검토 후 적용). 대상 탭에서만 노출 */}
+          {pendingAppinReview &&
+            tab === (pendingAppinReview.target === 'class' ? 'class' : 'teacher') && (
+              <div className="flex flex-col gap-3 rounded-xl border border-sp-border border-l-4 border-l-amber-400 bg-sp-card px-4 py-3 sm:flex-row sm:items-center">
+                <div className="flex min-w-0 flex-1 items-start gap-2">
+                  <span className="material-symbols-outlined shrink-0 text-xl text-amber-400">
+                    sync_problem
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-sp-text">압핀에서 시간표가 바뀌었어요</p>
+                    <p className="mt-0.5 text-xs text-sp-muted">
+                      {pendingAppinReview.changeCount}칸이 달라졌어요. 검토 후 적용할 수 있어요 —
+                      자동으로 덮어쓰지 않아요.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <button
+                    onClick={handleReviewAppin}
+                    className="flex items-center gap-1.5 rounded-lg bg-sp-accent px-3.5 py-2 text-sm font-bold text-white transition-opacity hover:opacity-90"
+                  >
+                    <span className="material-symbols-outlined text-icon-sm">visibility</span>
+                    {pendingAppinReview.target === 'teacher' ? '검토하기' : '적용하기'}
+                  </button>
+                  <button
+                    onClick={() => setPendingAppinReview(null)}
+                    className="rounded-lg border border-sp-border px-3 py-2 text-sm font-semibold text-sp-muted transition-colors hover:bg-sp-surface hover:text-sp-text"
+                  >
+                    나중에
+                  </button>
+                </div>
+              </div>
+            )}
           <div className="rounded-2xl border border-sp-border bg-sp-card overflow-hidden shadow-2xl shadow-black/20">
             <div className="w-full overflow-x-auto">
               <table className="w-full min-w-[800px] border-collapse">
@@ -1083,12 +1199,36 @@ export function TimetablePage() {
         }}
       />
 
+      {/* 압핀 교사 시간표 불러오기 — 미리보기(TeacherExcelPreviewModal)로 합류. 교시시각·지문 없음 */}
+      <AppinTeacherImportModal
+        isOpen={showAppinTeacherImport}
+        onClose={() => setShowAppinTeacherImport(false)}
+        onImport={(schedule) => {
+          setShowAppinTeacherImport(false);
+          setPreviewSchedule(schedule);
+          setPreviewPeriodTimes(null);
+          setPreviewFingerprint(null);
+          setShowExcelPreview(true);
+        }}
+      />
+
       {/* 컴시간 학급 시간표 불러오기 — 나이스와 동일 적용 경로 재사용 */}
       <ComciganClassImportModal
         isOpen={showComciganClassImport}
         onClose={() => setShowComciganClassImport(false)}
         onImport={(data, maxPeriods) => {
           setShowComciganClassImport(false);
+          void handleNeisImport(data, maxPeriods);
+        }}
+        hasExistingData={hasExistingData}
+      />
+
+      {/* 압핀 학급 시간표 불러오기 — 나이스와 동일 적용 경로 재사용 */}
+      <AppinClassImportModal
+        isOpen={showAppinClassImport}
+        onClose={() => setShowAppinClassImport(false)}
+        onImport={(data, maxPeriods) => {
+          setShowAppinClassImport(false);
           void handleNeisImport(data, maxPeriods);
         }}
         hasExistingData={hasExistingData}

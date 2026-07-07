@@ -39,6 +39,16 @@ export interface PendingComciganReview {
   readonly changeCount: number;
 }
 
+/**
+ * 압핀 변경 감지 후 사용자 검토를 대기 중인 새 시간표(비파괴 — 확인 전엔 미적용).
+ * 교사/학급 둘 다 대상이 될 수 있어 target으로 구분한다. 영속·동기화 안 함.
+ */
+export interface PendingAppinReview {
+  readonly schedule: TeacherScheduleData | ClassScheduleData;
+  readonly changeCount: number;
+  readonly target: 'teacher' | 'class';
+}
+
 interface ScheduleState {
   classSchedule: ClassScheduleData;
   teacherSchedule: TeacherScheduleData;
@@ -53,6 +63,10 @@ interface ScheduleState {
   /** 컴시간 변경 감지 후 검토 대기 중인 교사 시간표(없으면 null) */
   pendingComciganReview: PendingComciganReview | null;
   setPendingComciganReview: (review: PendingComciganReview | null) => void;
+
+  /** 압핀 변경 감지 후 검토 대기 중인 시간표(교사/학급, 없으면 null) */
+  pendingAppinReview: PendingAppinReview | null;
+  setPendingAppinReview: (review: PendingAppinReview | null) => void;
 
   load: () => Promise<void>;
   forceReload: () => Promise<void>;
@@ -109,8 +123,11 @@ export const useScheduleStore = create<ScheduleState>((set, get) => {
     future: [],
     overrides: [],
     pendingComciganReview: null,
+    pendingAppinReview: null,
 
     setPendingComciganReview: (review) => set({ pendingComciganReview: review }),
+
+    setPendingAppinReview: (review) => set({ pendingAppinReview: review }),
 
     load: async () => {
       if (get().loaded) return;

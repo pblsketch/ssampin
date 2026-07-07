@@ -41,34 +41,33 @@ export function PageHeader({
   sticky = false,
   className = '',
 }: PageHeaderProps) {
-  const stickyCls = sticky
-    ? 'sticky top-0 bg-sp-bg/95 backdrop-blur-sm z-10'
-    : 'bg-sp-bg';
+  const stickyCls = sticky ? 'sticky top-0 bg-sp-bg/95 backdrop-blur-sm z-10' : 'bg-sp-bg';
 
   return (
     <header
       className={`shrink-0 px-8 py-3 flex flex-wrap items-center gap-3 border-b border-sp-border ${stickyCls} ${className}`.trim()}
     >
-      <div className="flex items-center gap-4 mr-auto">
+      <div className="flex items-center gap-4">
         <h1 className="text-lg xl:text-xl font-bold text-sp-text flex items-center gap-2 leading-none">
-          {icon && (iconIsMaterial ? (
-            <span
-              className="material-symbols-outlined text-[22px] xl:text-[24px] text-sp-muted"
-              aria-hidden="true"
-            >
-              {icon}
-            </span>
-          ) : (
-            <span className="text-xl xl:text-2xl leading-none" aria-hidden="true">
-              {icon}
-            </span>
-          ))}
+          {icon &&
+            (iconIsMaterial ? (
+              <span
+                className="material-symbols-outlined text-[22px] xl:text-[24px] text-sp-muted"
+                aria-hidden="true"
+              >
+                {icon}
+              </span>
+            ) : (
+              <span className="text-xl xl:text-2xl leading-none" aria-hidden="true">
+                {icon}
+              </span>
+            ))}
           {title}
         </h1>
         {leftAddon}
       </div>
       {rightActions && (
-        <div className="flex items-center gap-1.5 xl:gap-2 flex-wrap">
+        <div className="flex grow items-center justify-end gap-1.5 xl:gap-2 flex-wrap">
           {rightActions}
         </div>
       )}

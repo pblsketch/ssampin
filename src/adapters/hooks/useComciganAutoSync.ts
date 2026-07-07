@@ -101,19 +101,22 @@ export async function checkComciganTimetableChange(opts: { manual: boolean }): P
  */
 export function useComciganAutoSync(): void {
   const settings = useSettingsStore((s) => s.settings);
-  const hasRun = useRef(false);
+  const scheduled = useRef(false);
 
   useEffect(() => {
-    if (hasRun.current) return;
+    if (scheduled.current) return;
+    // settings 는 앱 시작 시 디스크에서 비동기로 채워지므로 [settings] 로 재실행을 받아
+    // autoSync 가 로드된 시점을 포착한다.
     const autoSync = settings.comcigan?.autoSync;
     if (!autoSync?.enabled || !settings.comcigan?.fingerprint) return;
     if (autoSync.lastSyncDate === toLocalDateString()) return; // 오늘 이미 확인
-    hasRun.current = true;
+    scheduled.current = true;
 
-    // 다른 앱 시작 동기화(드라이브/나이스)와 겹치지 않도록 살짝 지연
-    const timer = setTimeout(() => {
+    // 살짝 지연시켜 다른 앱 시작 동기화(드라이브/나이스)와 겹치지 않게 한다. cleanup 으로
+    // 취소하지 않는데, 3초 내 settings 갱신 시 effect 재실행 → clearTimeout 으로 타이머가
+    // 영구 취소되는 레이스를 막기 위함이다. App 최상위 훅이라 실제 unmount 는 앱 종료뿐이다.
+    setTimeout(() => {
       void checkComciganTimetableChange({ manual: false });
     }, 2500);
-    return () => clearTimeout(timer);
   }, [settings]);
 }
