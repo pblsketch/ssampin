@@ -81,11 +81,17 @@ export function MemoEditor({
 
   const { updateFontSize, attachImage, detachImage } = useMemoStore();
 
-  // 외부에서 memo prop 변경(색상 변경 후 갱신 등)될 때 editContent 동기화
+  // 외부에서 memo prop 변경(색상 변경 후 갱신 등)될 때 editContent 동기화.
+  // 단, 같은 메모를 편집 중일 때는 외부 갱신(동기화 리로드 등)으로 입력을 리셋하지 않는다
+  // — 편집 종료 시 isEditing=false가 되면서 최신 저장값과 다시 동기화된다.
+  const prevMemoIdRef = useRef(memo.id);
   useEffect(() => {
+    const idChanged = prevMemoIdRef.current !== memo.id;
+    prevMemoIdRef.current = memo.id;
+    if (!idChanged && isEditing) return;
     setEditContent(memo.content);
     savedContentRef.current = memo.content;
-  }, [memo.id, memo.content]);
+  }, [memo.id, memo.content, isEditing]);
 
   const saveContent = useCallback(async () => {
     if (editContent !== savedContentRef.current && onUpdate) {

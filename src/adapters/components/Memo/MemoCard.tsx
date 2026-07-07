@@ -90,8 +90,11 @@ export function MemoCard({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    // 편집 중에는 외부 갱신(동기화 리로드·다른 창 변경)으로 입력을 리셋하지 않는다.
+    // 편집 종료(blur/ESC) 시 editing=false가 되면서 최신 저장값과 다시 동기화된다.
+    if (editing) return;
     setContent(memo.content);
-  }, [memo.content]);
+  }, [memo.content, editing]);
 
   useEffect(() => {
     setResizeSize({

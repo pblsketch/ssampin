@@ -16,7 +16,8 @@ export async function reloadStores(downloadedFiles: string[]): Promise<void> {
       // 않으므로 prefix 매칭으로 useNoteStore reload만 호출한다.
       if (file.startsWith('note-body--')) {
         const { useNoteStore } = await import('@adapters/stores/useNoteStore');
-        useNoteStore.setState({ loaded: false });
+        // loaded:false로 떨어뜨리지 않고 force 리로드 — 노트 편집기가 스피너로
+        // 언마운트돼 작성 중인 본문/입력이 소실되는 것을 막는다.
         await useNoteStore.getState().load(true);
         continue;
       }

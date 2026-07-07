@@ -127,8 +127,9 @@ export const SYNC_REGISTRY: SyncDomain[] = [
     fileName: 'memos',
     reload: async () => {
       const { useMemoStore } = await import('@adapters/stores/useMemoStore');
-      useMemoStore.setState({ loaded: false });
-      await useMemoStore.getState().load();
+      // loaded:false로 떨어뜨리지 않고 force 리로드 — 편집 중인 메모 카드가
+      // 페이지 스피너로 언마운트돼 입력이 소실되는 것을 막는다.
+      await useMemoStore.getState().load(true);
     },
   },
   // 9. todos
@@ -243,7 +244,8 @@ export const SYNC_REGISTRY: SyncDomain[] = [
     fileName: 'note-notebooks',
     reload: async () => {
       const { useNoteStore } = await import('@adapters/stores/useNoteStore');
-      useNoteStore.setState({ loaded: false });
+      // loaded:false로 떨어뜨리지 않고 force 리로드 — 노트 편집기가 스피너로
+      // 언마운트돼 작성 중인 본문/입력이 소실되는 것을 막는다.
       await useNoteStore.getState().load(true);
     },
   },
@@ -253,7 +255,8 @@ export const SYNC_REGISTRY: SyncDomain[] = [
     subscribeExcluded: true,
     reload: async () => {
       const { useNoteStore } = await import('@adapters/stores/useNoteStore');
-      useNoteStore.setState({ loaded: false });
+      // loaded:false로 떨어뜨리지 않고 force 리로드 — 노트 편집기가 스피너로
+      // 언마운트돼 작성 중인 본문/입력이 소실되는 것을 막는다.
       await useNoteStore.getState().load(true);
     },
   },
@@ -263,7 +266,8 @@ export const SYNC_REGISTRY: SyncDomain[] = [
     subscribeExcluded: true,
     reload: async () => {
       const { useNoteStore } = await import('@adapters/stores/useNoteStore');
-      useNoteStore.setState({ loaded: false });
+      // loaded:false로 떨어뜨리지 않고 force 리로드 — 노트 편집기가 스피너로
+      // 언마운트돼 작성 중인 본문/입력이 소실되는 것을 막는다.
       await useNoteStore.getState().load(true);
     },
   },
@@ -278,7 +282,8 @@ export const SYNC_REGISTRY: SyncDomain[] = [
     enumerateDynamic: async () => [],
     reload: async () => {
       const { useNoteStore } = await import('@adapters/stores/useNoteStore');
-      useNoteStore.setState({ loaded: false });
+      // loaded:false로 떨어뜨리지 않고 force 리로드 — 노트 편집기가 스피너로
+      // 언마운트돼 작성 중인 본문/입력이 소실되는 것을 막는다.
       await useNoteStore.getState().load(true);
     },
   },

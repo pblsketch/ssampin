@@ -14,7 +14,7 @@ import { generateUUID } from '@infrastructure/utils/uuid';
 interface MemoState {
   memos: readonly Memo[];
   loaded: boolean;
-  load: () => Promise<void>;
+  load: (force?: boolean) => Promise<void>;
   addMemo: (content: string, color: MemoColor) => Promise<void>;
   updateMemo: (id: string, content: string) => Promise<void>;
   updatePosition: (id: string, x: number, y: number) => Promise<void>;
@@ -26,7 +26,11 @@ interface MemoState {
   bringToFront: (id: string) => void;
   arrangeInGrid: (canvasWidth: number) => Promise<void>;
   updateFontSize: (id: string, fontSize: MemoFontSize) => Promise<void>;
-  attachImage: (id: string, blob: Blob, fileName: string) => Promise<{ ok: true } | { ok: false; reason: 'size' | 'mime' | 'decode' }>;
+  attachImage: (
+    id: string,
+    blob: Blob,
+    fileName: string,
+  ) => Promise<{ ok: true } | { ok: false; reason: 'size' | 'mime' | 'decode' }>;
   detachImage: (id: string) => Promise<void>;
 }
 
@@ -41,8 +45,11 @@ export const useMemoStore = create<MemoState>((set, get) => {
     memos: [],
     loaded: false,
 
-    load: async () => {
-      if (get().loaded) return;
+    load: async (force = false) => {
+      // force=true: 백그라운드 동기화 리로드용. loaded 플래그를 false로 떨어뜨리지 않고
+      // (= 페이지 스피너로 언마운트되지 않고) 메모 목록만 조용히 교체한다.
+      // 편집 중이던 메모 카드가 언마운트돼 입력이 소실되는 것을 막는다.
+      if (get().loaded && !force) return;
       try {
         const memos = await manageMemos.getAll();
         const migrated = memos.map((m) => ({
@@ -87,9 +94,7 @@ export const useMemoStore = create<MemoState>((set, get) => {
     updateMemo: async (id, content) => {
       const updatedAt = new Date().toISOString();
       set((state) => ({
-        memos: state.memos.map((memo) =>
-          memo.id === id ? { ...memo, content, updatedAt } : memo,
-        ),
+        memos: state.memos.map((memo) => (memo.id === id ? { ...memo, content, updatedAt } : memo)),
       }));
       const existing = get().memos.find((memo) => memo.id === id);
       if (existing !== undefined) {
@@ -100,9 +105,7 @@ export const useMemoStore = create<MemoState>((set, get) => {
     updatePosition: async (id, x, y) => {
       const updatedAt = new Date().toISOString();
       set((state) => ({
-        memos: state.memos.map((memo) =>
-          memo.id === id ? { ...memo, x, y, updatedAt } : memo,
-        ),
+        memos: state.memos.map((memo) => (memo.id === id ? { ...memo, x, y, updatedAt } : memo)),
       }));
       const existing = get().memos.find((memo) => memo.id === id);
       if (existing !== undefined) {
@@ -113,9 +116,7 @@ export const useMemoStore = create<MemoState>((set, get) => {
     updateColor: async (id, color) => {
       const updatedAt = new Date().toISOString();
       set((state) => ({
-        memos: state.memos.map((memo) =>
-          memo.id === id ? { ...memo, color, updatedAt } : memo,
-        ),
+        memos: state.memos.map((memo) => (memo.id === id ? { ...memo, color, updatedAt } : memo)),
       }));
       const existing = get().memos.find((memo) => memo.id === id);
       if (existing !== undefined) {
@@ -191,7 +192,9 @@ export const useMemoStore = create<MemoState>((set, get) => {
       const START_Y = 40;
 
       // 평균 카드 너비 기반으로 열 수 계산
-      const avgWidth = state.memos.reduce((sum, m) => sum + (m.width ?? MEMO_SIZE.DEFAULT_WIDTH), 0) / state.memos.length;
+      const avgWidth =
+        state.memos.reduce((sum, m) => sum + (m.width ?? MEMO_SIZE.DEFAULT_WIDTH), 0) /
+        state.memos.length;
       const cols = Math.max(1, Math.floor((canvasWidth - START_X) / (avgWidth + GAP)));
 
       // 행별로 메모 분배
@@ -211,7 +214,7 @@ export const useMemoStore = create<MemoState>((set, get) => {
         let newY = START_Y;
         for (let r = 0; r < rowIdx; r++) {
           const rowMemos = rows[r] ?? [];
-          const maxHeight = Math.max(...rowMemos.map(m => m.height ?? MEMO_SIZE.DEFAULT_HEIGHT));
+          const maxHeight = Math.max(...rowMemos.map((m) => m.height ?? MEMO_SIZE.DEFAULT_HEIGHT));
           newY += maxHeight + GAP;
         }
 
@@ -263,9 +266,7 @@ export const useMemoStore = create<MemoState>((set, get) => {
       };
       const updatedAt = new Date().toISOString();
       set((state) => ({
-        memos: state.memos.map((memo) =>
-          memo.id === id ? { ...memo, image, updatedAt } : memo,
-        ),
+        memos: state.memos.map((memo) => (memo.id === id ? { ...memo, image, updatedAt } : memo)),
       }));
       await manageMemos.attachImage(id, image);
       return { ok: true };
