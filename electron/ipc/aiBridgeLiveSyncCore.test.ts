@@ -255,6 +255,11 @@ describe('isDomainWriteAllowed (도메인별 게이트 fail-closed)', () => {
     expect(isDomainWriteAllowed('notes', caps({ allowWrite: true }))).toBe(true);
     expect(isDomainWriteAllowed('notes', caps({}))).toBe(false);
   });
+  it('수업 진도(progress)는 allowWrite 만 본다 — allowRecordWrite ON 이어도 거부', () => {
+    expect(isDomainWriteAllowed('progress', caps({ allowRecordWrite: true }))).toBe(false);
+    expect(isDomainWriteAllowed('progress', caps({ allowWrite: true }))).toBe(true);
+    expect(isDomainWriteAllowed('progress', caps({}))).toBe(false);
+  });
 });
 
 describe('authorizeWriteRequest', () => {
@@ -344,6 +349,94 @@ describe('validateApplyWrite', () => {
         op: 'create',
         idempotencyKey: 'k',
         data: { title: '체육대회' },
+      }).ok,
+    ).toBe(false);
+  });
+  it('정상 progress create — classId/date/period/unit 필수', () => {
+    expect(
+      validateApplyWrite({
+        domain: 'progress',
+        op: 'create',
+        idempotencyKey: 'k',
+        data: {
+          classId: 'cls-1',
+          date: '2026-07-07',
+          period: 3,
+          unit: '5단원',
+          lesson: '일차함수',
+          status: 'completed',
+          note: '메모',
+        },
+      }).ok,
+    ).toBe(true);
+    // unit 누락 → 거부
+    expect(
+      validateApplyWrite({
+        domain: 'progress',
+        op: 'create',
+        idempotencyKey: 'k',
+        data: { classId: 'cls-1', date: '2026-07-07', period: 3 },
+      }).ok,
+    ).toBe(false);
+    // period 문자열 → 거부
+    expect(
+      validateApplyWrite({
+        domain: 'progress',
+        op: 'create',
+        idempotencyKey: 'k',
+        data: { classId: 'cls-1', date: '2026-07-07', period: '3', unit: 'x' },
+      }).ok,
+    ).toBe(false);
+  });
+  it('progress — status enum·허용 밖 필드·update 의 classId 변경 거부', () => {
+    expect(
+      validateApplyWrite({
+        domain: 'progress',
+        op: 'create',
+        idempotencyKey: 'k',
+        data: { classId: 'c', date: '2026-07-07', period: 1, unit: 'x', status: 'done' },
+      }).ok,
+    ).toBe(false);
+    expect(
+      validateApplyWrite({
+        domain: 'progress',
+        op: 'create',
+        idempotencyKey: 'k',
+        data: { classId: 'c', date: '2026-07-07', period: 1, unit: 'x', evil: 1 },
+      }).ok,
+    ).toBe(false);
+    // update 는 classId 를 받지 않는다(소속 반 변경 불가).
+    expect(
+      validateApplyWrite({
+        domain: 'progress',
+        op: 'update',
+        idempotencyKey: 'k',
+        data: { id: 'p1', classId: 'other' },
+      }).ok,
+    ).toBe(false);
+    expect(
+      validateApplyWrite({
+        domain: 'progress',
+        op: 'update',
+        idempotencyKey: 'k',
+        data: { id: 'p1', status: 'skipped' },
+      }).ok,
+    ).toBe(true);
+    expect(
+      validateApplyWrite({
+        domain: 'progress',
+        op: 'delete',
+        idempotencyKey: 'k',
+        data: { id: 'p1' },
+      }).ok,
+    ).toBe(true);
+    // complete 는 서버 검증 단계에서도 거부(렌더러 거부와 대칭).
+    expect(
+      validateApplyWrite({
+        domain: 'progress',
+        op: 'complete',
+        idempotencyKey: 'k',
+        data: { id: 'p1' },
       }).ok,
     ).toBe(false);
   });

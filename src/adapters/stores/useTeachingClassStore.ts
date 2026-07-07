@@ -8,7 +8,7 @@ import { studentKey } from '@domain/entities/TeachingClass';
 import type { StudentStatus } from '@domain/entities/Student';
 import { isStudentActive, normalizeStudentStatus } from '@domain/rules/studentActivity';
 import type { OddColumnMode } from '@domain/rules/seatingLayoutRules';
-import type { ProgressEntry } from '@domain/entities/CurriculumProgress';
+import type { ProgressEntry, ProgressStatus } from '@domain/entities/CurriculumProgress';
 import type {
   AttendanceRecord,
   AttendanceStatus,
@@ -73,6 +73,7 @@ interface TeachingClassState {
     unit: string,
     lesson: string,
     note?: string,
+    status?: ProgressStatus,
   ) => Promise<void>;
   updateProgressEntry: (entry: ProgressEntry) => Promise<void>;
   deleteProgressEntry: (id: string) => Promise<void>;
@@ -384,7 +385,15 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
       await teachingClassRepository.saveClasses({ classes: reordered });
     },
 
-    addProgressEntry: async (classId, date, period, unit, lesson, note = '') => {
+    addProgressEntry: async (
+      classId,
+      date,
+      period,
+      unit,
+      lesson,
+      note = '',
+      status = 'planned',
+    ) => {
       const entry: ProgressEntry = {
         id: generateUUID(),
         classId,
@@ -392,7 +401,7 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
         period,
         unit,
         lesson,
-        status: 'planned',
+        status,
         note,
       };
       await manageProgress.add(entry);

@@ -16,6 +16,7 @@ export const WRITE_DOMAINS = [
   "homeroomAttendance",
   "observations",
   "recordNote",
+  "progress",
 ] as const;
 export type WriteDomain = (typeof WRITE_DOMAINS)[number];
 
@@ -44,6 +45,24 @@ export const RECORD_NOTE_FIELDS = [
   "date",
 ] as const;
 export const RECORD_NOTE_CONTENT_MAX = 2000;
+
+export const PROGRESS_FIELDS = [
+  "classId",
+  "date",
+  "period",
+  "unit",
+  "lesson",
+  "status",
+  "note",
+] as const;
+export const PROGRESS_UNIT_MAX = 200;
+export const PROGRESS_LESSON_MAX = 500;
+export const PROGRESS_NOTE_MAX = 500;
+export const PROGRESS_STATUSES = [
+  "planned",
+  "completed",
+  "skipped",
+] as const;
 
 export const ATTENDANCE_STATUSES = [
   "present",

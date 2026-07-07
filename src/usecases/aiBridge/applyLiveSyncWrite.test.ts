@@ -73,6 +73,13 @@ beforeEach(() => {
         { id: 'custom-uuid-1234', subcategories: ['우리반행사', '봉사'] },
       ],
     },
+    progress: {
+      add: rec('progress.add') as LiveSyncWriteDeps['progress']['add'],
+      update: rec('progress.update') as LiveSyncWriteDeps['progress']['update'],
+      delete: rec('progress.delete') as LiveSyncWriteDeps['progress']['delete'],
+      exists: vi.fn((id: string) => id === 'prog-1'),
+      classExists: vi.fn((classId: string) => classId === 'cls-1'),
+    },
   };
 });
 
@@ -994,5 +1001,141 @@ describe('applyLiveSyncWrite — recordNote(담임 노트)', () => {
       deps,
     );
     expect(res.ok).toBe(false);
+  });
+});
+
+describe('applyLiveSyncWrite — progress(수업 진도)', () => {
+  it('create → progress.add(input), ok+ref(멱등키)', async () => {
+    const r = await applyLiveSyncWrite(
+      {
+        domain: 'progress',
+        op: 'create',
+        idempotencyKey: 'k1',
+        data: {
+          classId: 'cls-1',
+          date: '2026-07-07',
+          period: 3,
+          unit: '5단원 함수',
+          lesson: '일차함수 그래프',
+          status: 'completed',
+          note: '진도 빠름',
+        },
+      },
+      deps,
+    );
+    expect(r).toEqual({ ok: true, ref: 'k1' });
+    expect(calls[0]).toEqual({
+      fn: 'progress.add',
+      args: [
+        {
+          classId: 'cls-1',
+          date: '2026-07-07',
+          period: 3,
+          unit: '5단원 함수',
+          lesson: '일차함수 그래프',
+          status: 'completed',
+          note: '진도 빠름',
+        },
+      ],
+    });
+  });
+
+  it('create — lesson/status/note 생략 가능(선택 필드 미포함 전달)', async () => {
+    const r = await applyLiveSyncWrite(
+      {
+        domain: 'progress',
+        op: 'create',
+        idempotencyKey: 'k',
+        data: { classId: 'cls-1', date: '2026-07-07', period: 1, unit: '1단원' },
+      },
+      deps,
+    );
+    expect(r.ok).toBe(true);
+    expect(calls[0]).toEqual({
+      fn: 'progress.add',
+      args: [{ classId: 'cls-1', date: '2026-07-07', period: 1, unit: '1단원' }],
+    });
+  });
+
+  it('create — 필수 필드(classId/date/period/unit) 누락 → 400, 액션 미호출', async () => {
+    const r = await applyLiveSyncWrite(
+      {
+        domain: 'progress',
+        op: 'create',
+        idempotencyKey: 'k',
+        data: { classId: 'cls-1', date: '2026-07-07' },
+      },
+      deps,
+    );
+    expect(r).toMatchObject({ ok: false, status: 400 });
+    expect(calls).toHaveLength(0);
+  });
+
+  it('create — 미존재 수업반 → 404, 액션 미호출', async () => {
+    const r = await applyLiveSyncWrite(
+      {
+        domain: 'progress',
+        op: 'create',
+        idempotencyKey: 'k',
+        data: { classId: 'no-such', date: '2026-07-07', period: 1, unit: '1단원' },
+      },
+      deps,
+    );
+    expect(r).toMatchObject({ ok: false, status: 404 });
+    expect(calls).toHaveLength(0);
+  });
+
+  it('update → progress.update(id, 변경분만), 없는 id → 404', async () => {
+    const r = await applyLiveSyncWrite(
+      {
+        domain: 'progress',
+        op: 'update',
+        idempotencyKey: 'k',
+        data: { id: 'prog-1', status: 'completed', note: '보강 완료' },
+      },
+      deps,
+    );
+    expect(r.ok).toBe(true);
+    expect(calls[0]).toEqual({
+      fn: 'progress.update',
+      args: ['prog-1', { status: 'completed', note: '보강 완료' }],
+    });
+    const notFound = await applyLiveSyncWrite(
+      { domain: 'progress', op: 'update', idempotencyKey: 'k2', data: { id: 'nope', unit: 'x' } },
+      deps,
+    );
+    expect(notFound).toMatchObject({ ok: false, status: 404 });
+  });
+
+  it('update — 변경 필드 없음 → 400', async () => {
+    const r = await applyLiveSyncWrite(
+      { domain: 'progress', op: 'update', idempotencyKey: 'k', data: { id: 'prog-1' } },
+      deps,
+    );
+    expect(r).toMatchObject({ ok: false, status: 400 });
+    expect(calls).toHaveLength(0);
+  });
+
+  it('delete → progress.delete(id), 없는 id → 404', async () => {
+    const r = await applyLiveSyncWrite(
+      { domain: 'progress', op: 'delete', idempotencyKey: 'k', data: { id: 'prog-1' } },
+      deps,
+    );
+    expect(r.ok).toBe(true);
+    expect(calls[0]).toEqual({ fn: 'progress.delete', args: ['prog-1'] });
+    const notFound = await applyLiveSyncWrite(
+      { domain: 'progress', op: 'delete', idempotencyKey: 'k2', data: { id: 'nope' } },
+      deps,
+    );
+    expect(notFound).toMatchObject({ ok: false, status: 404 });
+  });
+
+  it('complete 연산 거부', async () => {
+    const r = await applyLiveSyncWrite(
+      { domain: 'progress', op: 'complete', idempotencyKey: 'k', data: { id: 'prog-1' } },
+      deps,
+    );
+    expect(r).toMatchObject({ ok: false, status: 400 });
+    expect(calls).toHaveLength(0);
   });
 });

@@ -50,6 +50,12 @@ export const OBSERVATION_CONTENT_MAX = ${c.OBSERVATION_CONTENT_MAX};
 export const RECORD_NOTE_FIELDS = ${arrLiteral(c.RECORD_NOTE_FIELDS)} as const;
 export const RECORD_NOTE_CONTENT_MAX = ${c.RECORD_NOTE_CONTENT_MAX};
 
+export const PROGRESS_FIELDS = ${arrLiteral(c.PROGRESS_FIELDS)} as const;
+export const PROGRESS_UNIT_MAX = ${c.PROGRESS_UNIT_MAX};
+export const PROGRESS_LESSON_MAX = ${c.PROGRESS_LESSON_MAX};
+export const PROGRESS_NOTE_MAX = ${c.PROGRESS_NOTE_MAX};
+export const PROGRESS_STATUSES = ${arrLiteral(c.PROGRESS_STATUSES)} as const;
+
 export const ATTENDANCE_STATUSES = ${arrLiteral(c.ATTENDANCE_STATUSES)} as const;
 export const ATTENDANCE_REASONS = ${arrLiteral(c.ATTENDANCE_REASONS)} as const;
 

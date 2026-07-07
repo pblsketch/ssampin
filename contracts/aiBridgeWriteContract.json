@@ -9,7 +9,8 @@
     "attendance",
     "homeroomAttendance",
     "observations",
-    "recordNote"
+    "recordNote",
+    "progress"
   ],
   "WRITE_OPS": [
     "create",
@@ -33,6 +34,23 @@
     "date"
   ],
   "RECORD_NOTE_CONTENT_MAX": 2000,
+  "PROGRESS_FIELDS": [
+    "classId",
+    "date",
+    "period",
+    "unit",
+    "lesson",
+    "status",
+    "note"
+  ],
+  "PROGRESS_UNIT_MAX": 200,
+  "PROGRESS_LESSON_MAX": 500,
+  "PROGRESS_NOTE_MAX": 500,
+  "PROGRESS_STATUSES": [
+    "planned",
+    "completed",
+    "skipped"
+  ],
   "ATTENDANCE_STATUSES": [
     "present",
     "absent",

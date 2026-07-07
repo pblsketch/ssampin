@@ -22689,6 +22689,10 @@ function parseStudents(raw) {
   }
   return out;
 }
+function isStudentActive(s) {
+  if (s.status !== void 0) return s.status === 'active';
+  return !s.isVacant;
+}
 
 // ../ssampin-ai-bridge/packages/core/dist/entities/seating.js
 function toSeatCell(v) {
@@ -22862,12 +22866,56 @@ function parseTeachingClasses(raw) {
   return { classes };
 }
 
+// ../ssampin-ai-bridge/packages/core/dist/entities/curriculumProgress.js
+var PROGRESS_STATUSES = ['planned', 'completed', 'skipped'];
+function isProgressStatus(v) {
+  return typeof v === 'string' && PROGRESS_STATUSES.includes(v);
+}
+function asString5(v) {
+  return typeof v === 'string' ? v : void 0;
+}
+function normalizeEntry(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const o = raw;
+  const classId = asString5(o['classId']);
+  const date3 = asString5(o['date']);
+  const period = o['period'];
+  if (classId === void 0 || classId.length === 0) return null;
+  if (date3 === void 0 || date3.length === 0) return null;
+  if (typeof period !== 'number' || !Number.isFinite(period)) return null;
+  const rec = {
+    classId,
+    date: date3,
+    period,
+    // 미상 status 는 앱 기본값(planned)으로 관대 정규화(항목을 버리지 않음).
+    status: isProgressStatus(o['status']) ? o['status'] : 'planned',
+    unit: asString5(o['unit']) ?? '',
+    lesson: asString5(o['lesson']) ?? '',
+    note: asString5(o['note']) ?? '',
+  };
+  const id = asString5(o['id']);
+  if (id !== void 0) rec['id'] = id;
+  return rec;
+}
+function parseCurriculumProgress(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return [];
+  const list = raw['entries'];
+  if (!Array.isArray(list)) return [];
+  const out = [];
+  for (const item of list) {
+    const entry = normalizeEntry(item);
+    if (entry) out.push(entry);
+  }
+  out.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.period - b.period));
+  return out;
+}
+
 // ../ssampin-ai-bridge/packages/core/dist/entities/attendance.js
 var ATTENDANCE_STATUSES = ['present', 'absent', 'late', 'earlyLeave', 'classAbsence'];
 var ATTENDANCE_REASONS = ['\uC9C8\uBCD1', '\uC778\uC815', '\uBBF8\uC778\uC815', '\uAE30\uD0C0'];
 var STATUS_SET = new Set(ATTENDANCE_STATUSES);
 var REASON_SET = new Set(ATTENDANCE_REASONS);
-function asString5(v) {
+function asString6(v) {
   return typeof v === 'string' ? v : void 0;
 }
 function asNumber4(v) {
@@ -22884,19 +22932,19 @@ function isAttendanceReason(v) {
 }
 function normalizeStudent3(o) {
   const number3 = asNumber4(o['number']);
-  const status = asString5(o['status']);
+  const status = asString6(o['status']);
   if (number3 === void 0 || status === void 0 || !isAttendanceStatus(status)) return null;
   const student = { number: number3, status };
-  const reason = asString5(o['reason']);
+  const reason = asString6(o['reason']);
   if (reason !== void 0 && isAttendanceReason(reason)) student['reason'] = reason;
-  setIf4(student, 'memo', asString5(o['memo']));
+  setIf4(student, 'memo', asString6(o['memo']));
   setIf4(student, 'grade', asNumber4(o['grade']));
   setIf4(student, 'classNum', asNumber4(o['classNum']));
   return student;
 }
 function normalizeRecord2(o) {
-  const classId = asString5(o['classId']);
-  const date3 = asString5(o['date']);
+  const classId = asString6(o['classId']);
+  const date3 = asString6(o['date']);
   const period = asNumber4(o['period']);
   if (classId === void 0 || date3 === void 0 || period === void 0) return null;
   const rawStudents = Array.isArray(o['students']) ? o['students'] : [];
@@ -22907,7 +22955,7 @@ function normalizeRecord2(o) {
     if (student) students.push(student);
   }
   const record2 = { classId, date: date3, period, students };
-  setIf4(record2, 'groupId', asString5(o['groupId']));
+  setIf4(record2, 'groupId', asString6(o['groupId']));
   return record2;
 }
 function parseAttendance(raw) {
@@ -22925,7 +22973,7 @@ function parseAttendance(raw) {
 }
 
 // ../ssampin-ai-bridge/packages/core/dist/entities/studentRecord.js
-function asString6(v) {
+function asString7(v) {
   return typeof v === 'string' ? v : void 0;
 }
 function asNumber5(v) {
@@ -22941,20 +22989,20 @@ function normalizePeriod(raw) {
   if (!raw || typeof raw !== 'object') return null;
   const o = raw;
   const period = asNumber5(o['period']);
-  const status = asString6(o['status']);
+  const status = asString7(o['status']);
   if (period === void 0 || status === void 0) return null;
   if (!isAttendanceStatus(status) || status === 'present') return null;
   const e = { period, status };
-  const reason = asString6(o['reason']);
+  const reason = asString7(o['reason']);
   if (reason !== void 0 && isAttendanceReason(reason)) e['reason'] = reason;
-  setIf5(e, 'memo', asString6(o['memo']));
+  setIf5(e, 'memo', asString7(o['memo']));
   return e;
 }
 function normalizeRecord3(o) {
-  const id = asString6(o['id']);
-  const studentId = asString6(o['studentId']);
-  const category = asString6(o['category']);
-  const date3 = asString6(o['date']);
+  const id = asString7(o['id']);
+  const studentId = asString7(o['studentId']);
+  const category = asString7(o['category']);
+  const date3 = asString7(o['date']);
   if (id === void 0 || studentId === void 0 || category === void 0 || date3 === void 0) {
     return null;
   }
@@ -22962,8 +23010,8 @@ function normalizeRecord3(o) {
     id,
     studentId,
     category,
-    subcategory: asString6(o['subcategory']) ?? '',
-    content: asString6(o['content']) ?? '',
+    subcategory: asString7(o['subcategory']) ?? '',
+    content: asString7(o['content']) ?? '',
     date: date3,
   };
   if (Array.isArray(o['attendancePeriods'])) {
@@ -22998,7 +23046,7 @@ function parseStudentRecords(raw) {
 }
 
 // ../ssampin-ai-bridge/packages/core/dist/entities/rubric.js
-function asString7(v) {
+function asString8(v) {
   return typeof v === 'string' ? v : void 0;
 }
 function asNumber6(v) {
@@ -23018,7 +23066,7 @@ function asStringRecord(v) {
 function normalizeLevel(o) {
   if (typeof o['id'] !== 'string' || typeof o['name'] !== 'string') return null;
   const lv = { id: o['id'], name: o['name'] };
-  setIf6(lv, 'description', asString7(o['description']));
+  setIf6(lv, 'description', asString8(o['description']));
   return lv;
 }
 function normalizeCriterion(o) {
@@ -23052,7 +23100,7 @@ function normalizeRubric(o) {
     }
   }
   const r = { id: o['id'], classId: o['classId'], title: o['title'], criteria };
-  setIf6(r, 'description', asString7(o['description']));
+  setIf6(r, 'description', asString8(o['description']));
   return r;
 }
 function normalizeGrading(o) {
@@ -23073,9 +23121,9 @@ function normalizeGrading(o) {
     status,
     marks: asStringRecord(o['marks']),
     criterionNotes: asStringRecord(o['criterionNotes']),
-    gradedAt: asString7(o['gradedAt']) ?? '',
+    gradedAt: asString8(o['gradedAt']) ?? '',
   };
-  setIf6(g, 'overallFeedback', asString7(o['overallFeedback']));
+  setIf6(g, 'overallFeedback', asString8(o['overallFeedback']));
   return g;
 }
 function parseRubrics(raw) {
@@ -23109,7 +23157,7 @@ function gradeStudentKey(ref) {
   }
   return [ref.number, name].join('-');
 }
-function asString8(v) {
+function asString9(v) {
   return typeof v === 'string' ? v : void 0;
 }
 function setIf7(target, key, value) {
@@ -23130,13 +23178,13 @@ function normalizePlan(o) {
   const p = {
     id: o['id'],
     teachingClassId: o['teachingClassId'],
-    semester: asString8(o['semester']) ?? '',
-    subject: asString8(o['subject']) ?? '',
+    semester: asString9(o['semester']) ?? '',
+    subject: asString9(o['subject']) ?? '',
     title: o['title'],
     kind,
-    areaName: asString8(o['areaName']) ?? '',
+    areaName: asString9(o['areaName']) ?? '',
   };
-  setIf7(p, 'method', asString8(o['method']));
+  setIf7(p, 'method', asString9(o['method']));
   return p;
 }
 function normalizeWritten(o) {
@@ -23155,7 +23203,7 @@ function normalizeWritten(o) {
     confirmed: o['confirmed'] === true,
   };
   setIf7(w, 'absenceCode', asAbsence(o['absenceCode']));
-  setIf7(w, 'memo', asString8(o['memo']));
+  setIf7(w, 'memo', asString9(o['memo']));
   return w;
 }
 function normalizePerformance(o) {
@@ -23173,9 +23221,9 @@ function normalizePerformance(o) {
     scorePresent: typeof o['score'] === 'number' && Number.isFinite(o['score']),
     confirmed: o['confirmed'] === true,
   };
-  setIf7(p, 'rubricGradingId', asString8(o['rubricGradingId']));
-  setIf7(p, 'evidenceNote', asString8(o['evidenceNote']));
-  setIf7(p, 'memo', asString8(o['memo']));
+  setIf7(p, 'rubricGradingId', asString9(o['rubricGradingId']));
+  setIf7(p, 'evidenceNote', asString9(o['evidenceNote']));
+  setIf7(p, 'memo', asString9(o['memo']));
   return p;
 }
 function normalizeSemester(o) {
@@ -23189,11 +23237,11 @@ function normalizeSemester(o) {
   const s = {
     id: o['id'],
     teachingClassId: o['teachingClassId'],
-    semester: asString8(o['semester']) ?? '',
+    semester: asString9(o['semester']) ?? '',
     studentKey: o['studentKey'],
     confirmed: o['confirmed'] === true,
   };
-  setIf7(s, 'achievementLevel', asString8(o['achievementLevel']));
+  setIf7(s, 'achievementLevel', asString9(o['achievementLevel']));
   return s;
 }
 function collect(raw, key, fn) {
@@ -23219,7 +23267,7 @@ function parseGradeAnalysis(raw) {
 }
 
 // ../ssampin-ai-bridge/packages/core/dist/entities/meal.js
-function asString9(v) {
+function asString10(v) {
   return typeof v === 'string' ? v : void 0;
 }
 function parseDishes(raw) {
@@ -23228,7 +23276,7 @@ function parseDishes(raw) {
   for (const d of raw) {
     if (!d || typeof d !== 'object') continue;
     const o = d;
-    const name = asString9(o['name']);
+    const name = asString10(o['name']);
     if (name === void 0 || name.length === 0) continue;
     const allergensRaw = o['allergens'];
     const allergens = Array.isArray(allergensRaw)
@@ -23241,10 +23289,10 @@ function parseDishes(raw) {
 function normalizeMeal(date3, raw) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const o = raw;
-  const ownDate = asString9(o['date']);
-  const mealType = asString9(o['mealType']) ?? '';
+  const ownDate = asString10(o['date']);
+  const mealType = asString10(o['mealType']) ?? '';
   const dishes = parseDishes(o['dishes']);
-  const calorie = asString9(o['calorie']);
+  const calorie = asString10(o['calorie']);
   const entry = {
     date: ownDate && ownDate.length > 0 ? ownDate : date3,
     mealType,
@@ -23270,7 +23318,7 @@ function parseManualMeals(raw) {
 }
 
 // ../ssampin-ai-bridge/packages/core/dist/entities/schoolEvent.js
-function asString10(v) {
+function asString11(v) {
   return typeof v === 'string' ? v : void 0;
 }
 function asBool4(v) {
@@ -23283,22 +23331,22 @@ function normalizeEvent(raw) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const o = raw;
   if (o['isHidden'] === true) return null;
-  const date3 = asString10(o['date']);
-  const title = asString10(o['title']);
+  const date3 = asString11(o['date']);
+  const title = asString11(o['title']);
   if (date3 === void 0 || date3.length === 0) return null;
   const rec = { date: date3, title: title ?? '' };
-  setIf8(rec, 'id', asString10(o['id']));
-  setIf8(rec, 'endDate', asString10(o['endDate']));
-  setIf8(rec, 'category', asString10(o['category']));
-  setIf8(rec, 'time', asString10(o['time']));
-  setIf8(rec, 'startTime', asString10(o['startTime']));
-  setIf8(rec, 'endTime', asString10(o['endTime']));
-  setIf8(rec, 'period', asString10(o['period']));
-  setIf8(rec, 'periodEnd', asString10(o['periodEnd']));
-  setIf8(rec, 'recurrence', asString10(o['recurrence']));
+  setIf8(rec, 'id', asString11(o['id']));
+  setIf8(rec, 'endDate', asString11(o['endDate']));
+  setIf8(rec, 'category', asString11(o['category']));
+  setIf8(rec, 'time', asString11(o['time']));
+  setIf8(rec, 'startTime', asString11(o['startTime']));
+  setIf8(rec, 'endTime', asString11(o['endTime']));
+  setIf8(rec, 'period', asString11(o['period']));
+  setIf8(rec, 'periodEnd', asString11(o['periodEnd']));
+  setIf8(rec, 'recurrence', asString11(o['recurrence']));
   setIf8(rec, 'isDDay', asBool4(o['isDDay']));
-  setIf8(rec, 'description', asString10(o['description']));
-  setIf8(rec, 'location', asString10(o['location']));
+  setIf8(rec, 'description', asString11(o['description']));
+  setIf8(rec, 'location', asString11(o['location']));
   return rec;
 }
 function parseSchoolEvents(raw) {
@@ -23315,7 +23363,7 @@ function parseSchoolEvents(raw) {
 }
 
 // ../ssampin-ai-bridge/packages/core/dist/entities/dday.js
-function asString11(v) {
+function asString12(v) {
   return typeof v === 'string' ? v : void 0;
 }
 function asBool5(v) {
@@ -23327,11 +23375,11 @@ function setIf9(target, key, value) {
 function normalizeDday(raw) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const o = raw;
-  const date3 = asString11(o['targetDate']);
+  const date3 = asString12(o['targetDate']);
   if (date3 === void 0 || date3.length === 0) return null;
-  const rec = { date: date3, title: asString11(o['title']) ?? '' };
-  setIf9(rec, 'emoji', asString11(o['emoji']));
-  setIf9(rec, 'color', asString11(o['color']));
+  const rec = { date: date3, title: asString12(o['title']) ?? '' };
+  setIf9(rec, 'emoji', asString12(o['emoji']));
+  setIf9(rec, 'color', asString12(o['color']));
   setIf9(rec, 'pinned', asBool5(o['pinned']));
   return rec;
 }
@@ -23349,7 +23397,7 @@ function parseDdays(raw) {
 }
 
 // ../ssampin-ai-bridge/packages/core/dist/entities/todo.js
-function asString12(v) {
+function asString13(v) {
   return typeof v === 'string' ? v : void 0;
 }
 function asBool6(v) {
@@ -23360,24 +23408,24 @@ function setIf10(target, key, value) {
 }
 function recurrenceType(v) {
   if (!v || typeof v !== 'object' || Array.isArray(v)) return void 0;
-  return asString12(v['type']);
+  return asString13(v['type']);
 }
 function normalizeTodo(raw) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const o = raw;
-  const text = asString12(o['text']);
+  const text = asString13(o['text']);
   if (text === void 0) return null;
   const rec = { text, completed: asBool6(o['completed']) };
-  setIf10(rec, 'id', asString12(o['id']));
-  setIf10(rec, 'dueDate', asString12(o['dueDate']));
-  setIf10(rec, 'startDate', asString12(o['startDate']));
-  setIf10(rec, 'time', asString12(o['time']));
-  setIf10(rec, 'priority', asString12(o['priority']));
-  setIf10(rec, 'category', asString12(o['category']));
-  setIf10(rec, 'status', asString12(o['status']));
+  setIf10(rec, 'id', asString13(o['id']));
+  setIf10(rec, 'dueDate', asString13(o['dueDate']));
+  setIf10(rec, 'startDate', asString13(o['startDate']));
+  setIf10(rec, 'time', asString13(o['time']));
+  setIf10(rec, 'priority', asString13(o['priority']));
+  setIf10(rec, 'category', asString13(o['category']));
+  setIf10(rec, 'status', asString13(o['status']));
   setIf10(rec, 'recurrence', recurrenceType(o['recurrence']));
-  setIf10(rec, 'archivedAt', asString12(o['archivedAt']));
-  setIf10(rec, 'notes', asString12(o['notes']));
+  setIf10(rec, 'archivedAt', asString13(o['archivedAt']));
+  setIf10(rec, 'notes', asString13(o['notes']));
   const subTasks = o['subTasks'];
   if (Array.isArray(subTasks)) {
     rec['subTaskCount'] = subTasks.length;
@@ -23409,7 +23457,7 @@ function effectiveTodoStatus(t) {
 }
 
 // ../ssampin-ai-bridge/packages/core/dist/entities/schedule.js
-function asString13(v) {
+function asString14(v) {
   return typeof v === 'string' ? v : void 0;
 }
 function asNumber7(v) {
@@ -23435,20 +23483,20 @@ function flattenDayMap(raw, build) {
 }
 function parseClassSchedule(raw) {
   return flattenDayMap(raw, (day, i, slot) => {
-    const subject = asString13(slot['subject']) ?? '';
+    const subject = asString14(slot['subject']) ?? '';
     if (subject.length === 0) return null;
     const rec = { day, period: i + 1, subject };
-    const teacher = asString13(slot['teacher']);
+    const teacher = asString14(slot['teacher']);
     if (teacher !== void 0 && teacher.length > 0) rec['teacher'] = teacher;
     return rec;
   });
 }
 function parseTeacherSchedule(raw) {
   return flattenDayMap(raw, (day, i, slot) => {
-    const subject = asString13(slot['subject']) ?? '';
+    const subject = asString14(slot['subject']) ?? '';
     if (subject.length === 0) return null;
     const rec = { day, period: i + 1, subject };
-    const classroom = asString13(slot['classroom']);
+    const classroom = asString14(slot['classroom']);
     if (classroom !== void 0 && classroom.length > 0) rec['classroom'] = classroom;
     return rec;
   });
@@ -23461,16 +23509,16 @@ function parseTimetableOverrides(raw) {
   for (const item of list) {
     if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
     const o = item;
-    const date3 = asString13(o['date']);
+    const date3 = asString14(o['date']);
     const period = asNumber7(o['period']);
     if (date3 === void 0 || period === void 0) continue;
     const rec = { date: date3, period };
-    setIf11(rec, 'subject', asString13(o['subject']));
-    setIf11(rec, 'classroom', asString13(o['classroom']));
-    setIf11(rec, 'kind', asString13(o['kind']));
-    setIf11(rec, 'scope', asString13(o['scope']));
-    setIf11(rec, 'substituteTeacher', asString13(o['substituteTeacher']));
-    setIf11(rec, 'reason', asString13(o['reason']));
+    setIf11(rec, 'subject', asString14(o['subject']));
+    setIf11(rec, 'classroom', asString14(o['classroom']));
+    setIf11(rec, 'kind', asString14(o['kind']));
+    setIf11(rec, 'scope', asString14(o['scope']));
+    setIf11(rec, 'substituteTeacher', asString14(o['substituteTeacher']));
+    setIf11(rec, 'reason', asString14(o['reason']));
     out.push(rec);
   }
   out.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.period - b.period));
@@ -23478,7 +23526,7 @@ function parseTimetableOverrides(raw) {
 }
 
 // ../ssampin-ai-bridge/packages/core/dist/entities/note.js
-function asString14(v) {
+function asString15(v) {
   return typeof v === 'string' ? v : void 0;
 }
 function asNumber8(v) {
@@ -23492,11 +23540,11 @@ function parseNotebooks(raw) {
   for (const item of asArray(raw)) {
     if (!item || typeof item !== 'object') continue;
     const o = item;
-    const id = asString14(o['id']);
+    const id = asString15(o['id']);
     if (id === void 0) continue;
     out.push({
       id,
-      title: asString14(o['title']) ?? '',
+      title: asString15(o['title']) ?? '',
       archived: o['archived'] === true,
       order: asNumber8(o['order']),
     });
@@ -23508,10 +23556,10 @@ function parseNoteSections(raw) {
   for (const item of asArray(raw)) {
     if (!item || typeof item !== 'object') continue;
     const o = item;
-    const id = asString14(o['id']);
-    const notebookId = asString14(o['notebookId']);
+    const id = asString15(o['id']);
+    const notebookId = asString15(o['notebookId']);
     if (id === void 0 || notebookId === void 0) continue;
-    out.push({ id, notebookId, title: asString14(o['title']) ?? '', order: asNumber8(o['order']) });
+    out.push({ id, notebookId, title: asString15(o['title']) ?? '', order: asNumber8(o['order']) });
   }
   return out;
 }
@@ -23520,18 +23568,18 @@ function parseNotePages(raw) {
   for (const item of asArray(raw)) {
     if (!item || typeof item !== 'object') continue;
     const o = item;
-    const id = asString14(o['id']);
-    const sectionId = asString14(o['sectionId']);
+    const id = asString15(o['id']);
+    const sectionId = asString15(o['sectionId']);
     if (id === void 0 || sectionId === void 0) continue;
     const tags = asArray(o['tags']).filter((t) => typeof t === 'string');
     const rec = {
       id,
       sectionId,
-      title: asString14(o['title']) ?? '',
+      title: asString15(o['title']) ?? '',
       tags,
       pinned: o['pinned'] === true,
     };
-    const updatedAt = asString14(o['updatedAt']);
+    const updatedAt = asString15(o['updatedAt']);
     if (updatedAt !== void 0) rec['updatedAt'] = updatedAt;
     out.push(rec);
   }
@@ -23539,7 +23587,7 @@ function parseNotePages(raw) {
 }
 
 // ../ssampin-ai-bridge/packages/core/dist/entities/memo.js
-function asString15(v) {
+function asString16(v) {
   return typeof v === 'string' ? v : void 0;
 }
 function parseMemos(raw) {
@@ -23550,11 +23598,11 @@ function parseMemos(raw) {
   for (const item of list) {
     if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
     const o = item;
-    const id = asString15(o['id']);
-    const text = asString15(o['content']);
+    const id = asString16(o['id']);
+    const text = asString16(o['content']);
     if (id === void 0 || text === void 0) continue;
     const rec = { id, text, archived: o['archived'] === true };
-    const color = asString15(o['color']);
+    const color = asString16(o['color']);
     if (color !== void 0) rec['color'] = color;
     out.push(rec);
   }
@@ -23562,7 +23610,7 @@ function parseMemos(raw) {
 }
 
 // ../ssampin-ai-bridge/packages/core/dist/entities/bookmark.js
-function asString16(v) {
+function asString17(v) {
   return typeof v === 'string' ? v : void 0;
 }
 function asNumber9(v) {
@@ -23575,11 +23623,11 @@ function parseBookmarks(raw) {
   for (const g of Array.isArray(o['groups']) ? o['groups'] : []) {
     if (!g || typeof g !== 'object') continue;
     const go = g;
-    const id = asString16(go['id']);
+    const id = asString17(go['id']);
     if (id === void 0) continue;
     groups.push({
       id,
-      name: asString16(go['name']) ?? '',
+      name: asString17(go['name']) ?? '',
       archived: go['archived'] === true,
       order: asNumber9(go['order']),
     });
@@ -23588,11 +23636,11 @@ function parseBookmarks(raw) {
   for (const b of Array.isArray(o['bookmarks']) ? o['bookmarks'] : []) {
     if (!b || typeof b !== 'object') continue;
     const bo = b;
-    const id = asString16(bo['id']);
-    const url = asString16(bo['url']);
-    const groupId = asString16(bo['groupId']);
+    const id = asString17(bo['id']);
+    const url = asString17(bo['url']);
+    const groupId = asString17(bo['groupId']);
     if (id === void 0 || url === void 0 || url.length === 0 || groupId === void 0) continue;
-    bookmarks.push({ id, groupId, name: asString16(bo['name']) ?? '', url });
+    bookmarks.push({ id, groupId, name: asString17(bo['name']) ?? '', url });
   }
   return { groups, bookmarks };
 }
@@ -23620,7 +23668,7 @@ function neisByteLength(s) {
   }
   return bytes;
 }
-function asString17(v) {
+function asString18(v) {
   return typeof v === 'string' ? v : void 0;
 }
 function asNumber10(v) {
@@ -23640,7 +23688,7 @@ function normalizeRecord4(o) {
   ) {
     return null;
   }
-  const content = asString17(o['content']) ?? '';
+  const content = asString18(o['content']) ?? '';
   const basis = Array.isArray(o['basisObservationIds'])
     ? o['basisObservationIds'].filter((x) => typeof x === 'string')
     : [];
@@ -23657,8 +23705,8 @@ function normalizeRecord4(o) {
     createdAt: now ?? 0,
     updatedAt: asNumber10(o['updatedAt']) ?? now ?? 0,
   };
-  setIf12(rec, 'classId', asString17(o['classId']));
-  setIf12(rec, 'subject', asString17(o['subject']));
+  setIf12(rec, 'classId', asString18(o['classId']));
+  setIf12(rec, 'subject', asString18(o['subject']));
   if (Array.isArray(o['groundingFlags'])) {
     rec['groundingFlags'] = o['groundingFlags'].filter((x) => typeof x === 'string');
   }
@@ -23690,7 +23738,7 @@ var EVIDENCE_SOURCE_TYPES = /* @__PURE__ */ new Set([
 function isEvidenceSourceType(v) {
   return typeof v === 'string' && EVIDENCE_SOURCE_TYPES.has(v);
 }
-function asString18(v) {
+function asString19(v) {
   return typeof v === 'string' ? v : void 0;
 }
 function asNumber11(v) {
@@ -23705,7 +23753,7 @@ function normalizeRecord5(o) {
   }
   const rawAreas = Array.isArray(o['areas']) ? o['areas'].filter(isRecordArea) : [];
   const areas = [...new Set(rawAreas)];
-  const content = asString18(o['content']) ?? '';
+  const content = asString19(o['content']) ?? '';
   const now = asNumber11(o['createdAt']);
   const rec = {
     id: o['id'],
@@ -23715,10 +23763,10 @@ function normalizeRecord5(o) {
     createdAt: now ?? 0,
     updatedAt: asNumber11(o['updatedAt']) ?? now ?? 0,
   };
-  setIf13(rec, 'date', asString18(o['date']));
+  setIf13(rec, 'date', asString19(o['date']));
   if (isEvidenceSourceType(o['sourceType'])) rec['sourceType'] = o['sourceType'];
-  setIf13(rec, 'sourceId', asString18(o['sourceId']));
-  setIf13(rec, 'classId', asString18(o['classId']));
+  setIf13(rec, 'sourceId', asString19(o['sourceId']));
+  setIf13(rec, 'classId', asString19(o['classId']));
   return rec;
 }
 function parseRecordEvidence(raw) {
@@ -23773,6 +23821,9 @@ function readObservationAttachments(dataDir = resolveDataDir()) {
 }
 function readTeachingClasses(dataDir = resolveDataDir()) {
   return parseTeachingClasses(readRawJson('teaching-classes', dataDir));
+}
+function readCurriculumProgress(dataDir = resolveDataDir()) {
+  return parseCurriculumProgress(readRawJson('curriculum-progress', dataDir));
 }
 function readAttendance(dataDir = resolveDataDir()) {
   return parseAttendance(readRawJson('attendance', dataDir));
@@ -23843,6 +23894,7 @@ var BOOKMARK_GROUP_PREFIX = 'bmg:';
 var NOTEBOOK_PREFIX = 'nb:';
 var NOTE_SECTION_PREFIX = 'nsec:';
 var NOTE_PAGE_PREFIX = 'npg:';
+var PROGRESS_PREFIX = 'prog:';
 function makeTeachingStudentIdentity(classId, studentKey2) {
   return `${TEACHING_PREFIX}${classId}:${studentKey2}`;
 }
@@ -23925,6 +23977,14 @@ function parseNotePageIdentity(resolved) {
     ? resolved.slice(NOTE_PAGE_PREFIX.length) || null
     : null;
 }
+function makeProgressIdentity(entryId) {
+  return `${PROGRESS_PREFIX}${entryId}`;
+}
+function parseProgressIdentity(resolved) {
+  return resolved.startsWith(PROGRESS_PREFIX)
+    ? resolved.slice(PROGRESS_PREFIX.length) || null
+    : null;
+}
 function parseIdentity(resolved) {
   if (resolved.startsWith(TEACHING_PREFIX)) {
     const rest = resolved.slice(TEACHING_PREFIX.length);
@@ -23946,7 +24006,7 @@ function parseIdentity(resolved) {
 import crypto from 'node:crypto';
 import fs3 from 'node:fs';
 import path2 from 'node:path';
-var TOKEN_RE = /^(?:stu|tcs|cls|obs|rub|todo|evt|rd|memo|bm|bmg|nb|nsec|npg)_[0-9a-f]{12}$/;
+var TOKEN_RE = /^(?:stu|tcs|cls|obs|rub|todo|evt|rd|memo|bm|bmg|nb|nsec|npg|prg)_[0-9a-f]{12}$/;
 function defaultRandomToken(prefix) {
   return `${prefix}_` + crypto.randomBytes(6).toString('hex');
 }
@@ -25559,6 +25619,25 @@ function deleteAttendanceDirect(dataDir, input, clientKey) {
     };
   });
 }
+function appendProgressDirect(dataDir, input, clientKey) {
+  return mutateDataFile(dataDir, 'curriculum-progress', clientKey, (parsed) => {
+    const { root, list } = readListRoot(parsed, 'entries');
+    const id = recordId('prog', clientKey);
+    if (list.some((p) => hasId(p, id))) return { next: { ...root, entries: list }, ref: id };
+    const entry = {
+      id,
+      classId: input.classId,
+      date: input.date,
+      period: input.period,
+      unit: input.unit,
+      // 쌤핀 ProgressEntry 는 lesson/status/note 가 항상 존재하는 필드 — 앱 기본값과 동일하게 채운다.
+      lesson: input.lesson ?? '',
+      status: input.status ?? 'planned',
+      note: input.note ?? '',
+    };
+    return { next: { ...root, entries: [...list, entry] }, ref: id };
+  });
+}
 var MEMO_DEFAULT_WIDTH = 280;
 var MEMO_DEFAULT_HEIGHT = 220;
 var MEMO_DEFAULT_COLOR = 'yellow';
@@ -26390,6 +26469,139 @@ async function deleteEvent(ctx, args) {
   ctx.audit.append({ tool: 'ssampin_delete_event', redactionStats: { items: 1 } });
   return { ok: true, ref, via: 'app' };
 }
+var PROGRESS_STATUSES2 = /* @__PURE__ */ new Set(['planned', 'completed', 'skipped']);
+var PROGRESS_UNIT_MAX = 200;
+var PROGRESS_LESSON_MAX = 500;
+var PROGRESS_NOTE_MAX = 500;
+function resolveProgressClassId(ctx, classToken) {
+  const resolved = ctx.store.resolveToken(classToken);
+  if (!resolved) {
+    throw new WriteValidationError(
+      '\uC54C \uC218 \uC5C6\uB294 \uC218\uC5C5\uBC18 \uD1A0\uD070\uC785\uB2C8\uB2E4. list_classes \uC758 classToken \uC744 \uC4F0\uC138\uC694.',
+    );
+  }
+  const identity = parseIdentity(resolved);
+  if (identity.kind !== 'class') {
+    throw new WriteValidationError(
+      '\uC218\uC5C5\uBC18 \uD1A0\uD070\uC774 \uC544\uB2D9\uB2C8\uB2E4. list_classes \uC758 classToken \uC744 \uC4F0\uC138\uC694.',
+    );
+  }
+  return identity.classId;
+}
+function resolveProgressId(ctx, progressToken) {
+  const resolved = ctx.store.resolveToken(progressToken);
+  if (!resolved) {
+    throw new WriteValidationError(
+      '\uC54C \uC218 \uC5C6\uB294 \uC9C4\uB3C4 \uD1A0\uD070\uC785\uB2C8\uB2E4. get_progress \uC758 progressToken \uC744 \uC4F0\uC138\uC694.',
+    );
+  }
+  const id = parseProgressIdentity(resolved);
+  if (!id)
+    throw new WriteValidationError(
+      '\uC9C4\uB3C4 \uD1A0\uD070\uC774 \uC544\uB2D9\uB2C8\uB2E4. get_progress \uC758 progressToken \uC744 \uC4F0\uC138\uC694.',
+    );
+  return id;
+}
+function checkPeriod(period) {
+  if (typeof period !== 'number' || !Number.isInteger(period) || period < 0 || period > 20) {
+    throw new WriteValidationError(
+      'period \uB294 0 \uC774\uC0C1 20 \uC774\uD558\uC758 \uC815\uC218\uC5EC\uC57C \uD569\uB2C8\uB2E4.',
+    );
+  }
+  return period;
+}
+function putProgressContentFields(data, args) {
+  const unit = asStr2(args.unit);
+  if (unit !== void 0) {
+    if (unit.length > PROGRESS_UNIT_MAX)
+      throw new WriteValidationError(
+        `unit \uC740 \uCD5C\uB300 ${PROGRESS_UNIT_MAX}\uC790\uC785\uB2C8\uB2E4(\uD604\uC7AC ${unit.length}).`,
+      );
+    data['unit'] = unit;
+  }
+  const lesson = asStr2(args.lesson);
+  if (lesson !== void 0) {
+    if (lesson.length > PROGRESS_LESSON_MAX)
+      throw new WriteValidationError(
+        `lesson \uC740 \uCD5C\uB300 ${PROGRESS_LESSON_MAX}\uC790\uC785\uB2C8\uB2E4(\uD604\uC7AC ${lesson.length}).`,
+      );
+    data['lesson'] = lesson;
+  }
+  const status = asStr2(args.status);
+  if (status !== void 0) {
+    if (!PROGRESS_STATUSES2.has(status))
+      throw new WriteValidationError(
+        'status \uB294 planned|completed|skipped \uC5EC\uC57C \uD569\uB2C8\uB2E4.',
+      );
+    data['status'] = status;
+  }
+  const note = asStr2(args.note);
+  if (note !== void 0) {
+    if (note.length > PROGRESS_NOTE_MAX)
+      throw new WriteValidationError(
+        `note \uB294 \uCD5C\uB300 ${PROGRESS_NOTE_MAX}\uC790\uC785\uB2C8\uB2E4(\uD604\uC7AC ${note.length}).`,
+      );
+    data['note'] = note;
+  }
+}
+async function createProgress(ctx, args) {
+  assertWriteAllowed(ctx);
+  const classId = resolveProgressClassId(ctx, args.classToken);
+  const date3 = asStr2(args.date);
+  if (!date3 || !DATE_RE2.test(date3))
+    throw new WriteValidationError(
+      'date \uB294 YYYY-MM-DD \uD615\uC2DD\uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4.',
+    );
+  const period = checkPeriod(args.period);
+  const data = { classId, date: date3, period };
+  putProgressContentFields(data, args);
+  if (data['unit'] === void 0)
+    throw new WriteValidationError('unit(\uB2E8\uC6D0)\uC774 \uD544\uC694\uD569\uB2C8\uB2E4.');
+  if (!readTeachingClasses(ctx.dataDir).classes.some((c) => c.id === classId)) {
+    throw new WriteValidationError(
+      '\uC218\uC5C5\uBC18\uC744 \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4(\uC0AD\uC81C\uB418\uC5C8\uC744 \uC218 \uC788\uC74C). list_classes \uB85C \uB2E4\uC2DC \uD655\uC778\uD558\uC138\uC694.',
+    );
+  }
+  const idempotencyKey = deriveIdemKey('progress', 'create', data, args.idempotencyKey);
+  const { ref, via } = await createVia(ctx, 'progress', data, idempotencyKey, () =>
+    appendProgressDirect(ctx.dataDir, data, idempotencyKey),
+  );
+  ctx.audit.append({ tool: 'ssampin_create_progress', redactionStats: { items: 1 } });
+  return { ok: true, ref, via };
+}
+async function updateProgress(ctx, args) {
+  assertWriteAllowed(ctx);
+  const changes = {};
+  const date3 = asStr2(args.date);
+  if (date3 !== void 0) {
+    if (!DATE_RE2.test(date3))
+      throw new WriteValidationError(
+        'date \uB294 YYYY-MM-DD \uD615\uC2DD\uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4.',
+      );
+    changes['date'] = date3;
+  }
+  if (args.period !== void 0) changes['period'] = checkPeriod(args.period);
+  putProgressContentFields(changes, args);
+  if (Object.keys(changes).length === 0)
+    throw new WriteValidationError(
+      '\uBCC0\uACBD\uD560 \uD544\uB4DC\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.',
+    );
+  const id = resolveProgressId(ctx, args.progressToken);
+  const data = { id, ...changes };
+  const idempotencyKey = deriveIdemKey('progress', 'update', data, args.idempotencyKey);
+  const { ref } = await delegate(ctx, 'update', 'progress', idempotencyKey, data);
+  ctx.audit.append({ tool: 'ssampin_update_progress', redactionStats: { items: 1 } });
+  return { ok: true, ref, via: 'app' };
+}
+async function deleteProgress(ctx, args) {
+  assertWriteAllowed(ctx);
+  const id = resolveProgressId(ctx, args.progressToken);
+  const data = { id };
+  const idempotencyKey = deriveIdemKey('progress', 'delete', data, args.idempotencyKey);
+  const { ref } = await delegate(ctx, 'delete', 'progress', idempotencyKey, data);
+  ctx.audit.append({ tool: 'ssampin_delete_progress', redactionStats: { items: 1 } });
+  return { ok: true, ref, via: 'app' };
+}
 
 // ../ssampin-ai-bridge/packages/mcp/dist/tools.js
 function looksLikeToken(seg) {
@@ -26435,9 +26647,9 @@ var UnknownTokenError = class extends Error {
   name = 'UnknownTokenError';
 };
 function resolveStudentTarget(ctx, token) {
-  if (/^(?:cls|obs|rub)_/.test(token)) {
+  if (/^(?:cls|obs|rub|prg)_/.test(token)) {
     throw new UnknownTokenError(
-      '\uD559\uC0DD \uD1A0\uD070\uC774 \uC544\uB2D9\uB2C8\uB2E4(\uC218\uC5C5\uBC18/\uAD00\uCC30/\uD3C9\uAC00\uD45C \uD1A0\uD070). list_students \uC758 \uD559\uC0DD token \uC744 \uC4F0\uC138\uC694.',
+      '\uD559\uC0DD \uD1A0\uD070\uC774 \uC544\uB2D9\uB2C8\uB2E4(\uC218\uC5C5\uBC18/\uAD00\uCC30/\uD3C9\uAC00\uD45C/\uC9C4\uB3C4 \uD1A0\uD070). list_students \uC758 \uD559\uC0DD token \uC744 \uC4F0\uC138\uC694.',
     );
   }
   const resolved = ctx.store.resolveToken(token);
@@ -26501,14 +26713,21 @@ function listStudents(ctx, args = {}) {
       token: ctx.store.getToken(makeTeachingStudentIdentity(cls.id, studentKey(s)), {
         prefix: 'tcs',
       }),
+      active: true,
     }));
     ctx.audit.append({ tool: 'list_students', redactionStats: { students: roster2.length } });
     return { count: roster2.length, students: roster2 };
   }
   const students = readStudents(ctx.dataDir);
   const roster = students.map((s) => {
-    const token = ctx.store.getToken(s.id);
-    return s.studentNumber === void 0 ? { token } : { studentNumber: s.studentNumber, token };
+    const active = isStudentActive(s);
+    const entry = {
+      token: ctx.store.getToken(s.id),
+      active,
+    };
+    if (s.studentNumber !== void 0) entry.studentNumber = s.studentNumber;
+    if (!active && s.status !== void 0) entry.status = s.status;
+    return entry;
   });
   ctx.audit.append({ tool: 'list_students', redactionStats: { students: students.length } });
   return { count: roster.length, students: roster };
@@ -26637,6 +26856,60 @@ function getEvents(ctx, args = {}) {
     contentIncluded: contentOn,
     notice: contentOn ? CONTENT_SHOWN_NOTICE : CONTENT_GATE_NOTICE,
     events,
+  };
+}
+function getProgress(ctx, args = {}) {
+  const filterClassId = args.classToken !== void 0 ? resolveClass(ctx, args.classToken).id : void 0;
+  const from = isYmdDash(args.from) ? args.from : void 0;
+  const to = isYmdDash(args.to) ? args.to : void 0;
+  const all = readCurriculumProgress(ctx.dataDir);
+  const classMeta = new Map(readTeachingClasses(ctx.dataDir).classes.map((c) => [c.id, c]));
+  const filtered = all.filter((e) => {
+    if (filterClassId !== void 0 && e.classId !== filterClassId) return false;
+    if (from !== void 0 && e.date < from) return false;
+    if (to !== void 0 && e.date > to) return false;
+    return true;
+  });
+  const contentOn = isContentExposureEnabled(process.env, ctx.dataDir);
+  const roster = contentOn ? buildFullRoster(ctx) : [];
+  let masked = 0;
+  const entries = filtered.map((e) => {
+    const v = {
+      classToken: ctx.store.getToken(makeClassIdentity(e.classId), { prefix: 'cls' }),
+      date: e.date,
+      period: e.period,
+      status: e.status,
+    };
+    const cls = classMeta.get(e.classId);
+    if (cls !== void 0) {
+      v['subject'] = cls.subject;
+      v['className'] = cls.name;
+    }
+    if (e.id !== void 0) {
+      v['progressToken'] = ctx.store.getToken(makeProgressIdentity(e.id), { prefix: 'prg' });
+    }
+    if (contentOn) {
+      const u = deidentify(e.unit, roster);
+      masked += sumDeid(u.stats);
+      v['unit'] = u.text;
+      const l = deidentify(e.lesson, roster);
+      masked += sumDeid(l.stats);
+      v['lesson'] = l.text;
+      const n = deidentify(e.note, roster);
+      masked += sumDeid(n.stats);
+      v['note'] = n.text;
+    }
+    return v;
+  });
+  ctx.audit.append({
+    tool: 'get_progress',
+    redactionStats: { items: entries.length, names: masked },
+  });
+  return {
+    count: entries.length,
+    contentIncluded: contentOn,
+    notice: contentOn ? CONTENT_SHOWN_NOTICE : CONTENT_GATE_NOTICE,
+    entries,
   };
 }
 function getDdays(ctx) {
@@ -28299,7 +28572,7 @@ function createSsampinMcpServer(opts = {}) {
     {
       title: '\uD559\uC0DD \uBA85\uB2E8(\uBC88\uD638+\uAC00\uBA85)',
       description:
-        '\uD559\uC0DD \uBA85\uB2E8\uC744 "\uBC88\uD638 + \uBD88\uD22C\uBA85 \uD1A0\uD070"\uC73C\uB85C \uBC18\uD658\uD569\uB2C8\uB2E4. classToken \uBBF8\uC9C0\uC815 \uC2DC \uB2F4\uC784 \uD559\uAE09(\uD559\uBC88), classToken \uC9C0\uC815 \uC2DC \uD574\uB2F9 \uC218\uC5C5\uBC18(\uBC18 \uB0B4 \uBC88\uD638)\uC744 \uBC18\uD658\uD569\uB2C8\uB2E4. \uAD50\uC0AC\uAC00 \uD1A0\uD070\uC744 \uC678\uC6B8 \uC218 \uC5C6\uC73C\uBBC0\uB85C \uBA85\uB2E8\uC5D0\uB9CC \uBC88\uD638\uB97C \uB178\uCD9C\uD558\uBA70, \uC2E4\uBA85\xB7\uC5F0\uB77D\uCC98\xB7\uC0DD\uB144\uC6D4\uC77C\xB7\uBA54\uBAA8\uB294 \uD3EC\uD568\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4. \uBC88\uD638\uB85C \uD559\uC0DD\uC744 \uCC3E\uC544 \uAC19\uC740 \uD589\uC758 token \uC73C\uB85C add_observation/get_observations \uD558\uC138\uC694. \uC77D\uAE30 \uC804\uC6A9.',
+        '\uD559\uC0DD \uBA85\uB2E8\uC744 "\uBC88\uD638 + \uBD88\uD22C\uBA85 \uD1A0\uD070"\uC73C\uB85C \uBC18\uD658\uD569\uB2C8\uB2E4. classToken \uBBF8\uC9C0\uC815 \uC2DC \uB2F4\uC784 \uD559\uAE09(\uD559\uBC88), classToken \uC9C0\uC815 \uC2DC \uD574\uB2F9 \uC218\uC5C5\uBC18(\uBC18 \uB0B4 \uBC88\uD638)\uC744 \uBC18\uD658\uD569\uB2C8\uB2E4. \uAD50\uC0AC\uAC00 \uD1A0\uD070\uC744 \uC678\uC6B8 \uC218 \uC5C6\uC73C\uBBC0\uB85C \uBA85\uB2E8\uC5D0\uB9CC \uBC88\uD638\uB97C \uB178\uCD9C\uD558\uBA70, \uC2E4\uBA85\xB7\uC5F0\uB77D\uCC98\xB7\uC0DD\uB144\uC6D4\uC77C\xB7\uBA54\uBAA8\uB294 \uD3EC\uD568\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4. \uAC01 \uD559\uC0DD\uC758 active(\uC7AC\uD559 \uC5EC\uBD80)\uB3C4 \uD568\uAED8 \uBC18\uD658\uD569\uB2C8\uB2E4 \u2014 active=false \uB294 \uC790\uD1F4\xB7\uC804\uCD9C \uB4F1 \uBE44\uD65C\uC131(\uACB0\uBC88) \uD559\uC0DD\uC73C\uB85C, \uBA85\uB82C\uD45C\uC5D0\uC11C \uD68C\uC0C9 \uCC98\uB9AC\uB418\uBA70 status \uC5D0 \uC0AC\uC720\uAC00 \uB2F4\uAE41\uB2C8\uB2E4(\uB2F4\uC784 \uBA85\uB2E8\uC740 \uBE44\uD65C\uC131 \uD559\uC0DD\uB3C4 \uD45C\uC2DC\uB9CC \uD558\uACE0 \uAC70\uB974\uC9C0 \uC54A\uC74C). \uBC88\uD638\uB85C \uD559\uC0DD\uC744 \uCC3E\uC544 \uAC19\uC740 \uD589\uC758 token \uC73C\uB85C add_observation/get_observations \uD558\uC138\uC694. \uC77D\uAE30 \uC804\uC6A9.',
       inputSchema: {
         classToken: external_exports
           .string()
@@ -28445,6 +28718,34 @@ function createSsampinMcpServer(opts = {}) {
       annotations: { readOnlyHint: true },
     },
     async (args) => runTool('get_events', () => getEvents(ctx, args)),
+  );
+  server.registerTool(
+    'get_progress',
+    {
+      title: '\uC218\uC5C5 \uC9C4\uB3C4 \uAE30\uB85D',
+      description:
+        '\uC218\uC5C5 \uC9C4\uB3C4 \uAE30\uB85D(\uC9C4\uB3C4 \uCE98\uB9B0\uB354\uC758 \uB370\uC774\uD130)\uC744 \uBC18\uD1A0\uD070\xB7\uB0A0\uC9DC\xB7\uAD50\uC2DC\xB7\uC0C1\uD0DC(planned|completed|skipped) \uB4F1 \uBE44\uC2DD\uBCC4 \uBA54\uD0C0\uB85C \uBC18\uD658\uD569\uB2C8\uB2E4. \uB2E8\uC6D0(unit)\xB7\uCC28\uC2DC(lesson)\xB7\uBA54\uBAA8(note) \uB4F1 \uC790\uC720\uC11C\uC220\uC740 \uC324\uD540 \uC124\uC815 AI \uC5F0\uACB0\uC5D0\uC11C \uC77D\uAE30\uB97C \uCF1C\uAC70\uB098(\uC989\uC2DC \uC801\uC6A9) SSAMPIN_BRIDGE_ALLOW_CONTENT=1 \uB9C8\uC2A4\uD130 \uC2A4\uC704\uCE58\uAC00 \uCF1C\uC9C4 \uACBD\uC6B0\uC5D0\uB9CC \uD559\uC0DD \uC2E4\uBA85 \uD0C8\uC2DD\uBCC4 \uD6C4 \uD3EC\uD568\uB429\uB2C8\uB2E4. classToken(list_classes)\uC73C\uB85C \uBC18 \uD544\uD130, from/to \uB294 YYYY-MM-DD. \uC77D\uAE30 \uC804\uC6A9.',
+      inputSchema: {
+        classToken: external_exports
+          .string()
+          .optional()
+          .describe(
+            'list_classes \uAC00 \uBC18\uD658\uD55C \uC218\uC5C5\uBC18 \uD1A0\uD070(\uBBF8\uC9C0\uC815 \uC2DC \uC804\uCCB4 \uBC18)',
+          ),
+        from: external_exports
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/)
+          .optional()
+          .describe('\uC2DC\uC791\uC77C YYYY-MM-DD(\uD3EC\uD568)'),
+        to: external_exports
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/)
+          .optional()
+          .describe('\uC885\uB8CC\uC77C YYYY-MM-DD(\uD3EC\uD568)'),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    async (args) => runTool('get_progress', () => getProgress(ctx, args)),
   );
   server.registerTool(
     'get_ddays',
@@ -28843,6 +29144,41 @@ function createSsampinMcpServer(opts = {}) {
       annotations: { readOnlyHint: false },
     },
     async (args) => runTool('ssampin_create_event', () => createEvent(ctx, args)),
+  );
+  server.registerTool(
+    'ssampin_create_progress',
+    {
+      title: '\uC218\uC5C5 \uC9C4\uB3C4 \uAE30\uB85D \uCD94\uAC00',
+      description:
+        '\uC324\uD540(ssampin) \uC218\uC5C5 \uAD00\uB9AC\uC5D0 \uC9C4\uB3C4 \uAE30\uB85D\uC744 \uCD94\uAC00\uD569\uB2C8\uB2E4(\uC2DC\uAC04\uD45C \uC9C4\uB3C4 \uC624\uBC84\uB808\uC774\xB7\uC9C4\uB3C4 \uCE98\uB9B0\uB354\uC5D0 \uD45C\uC2DC). classToken \uC740 list_classes \uAC00 \uBC18\uD658\uD55C \uC218\uC5C5\uBC18 \uD1A0\uD070\uB9CC \uC0AC\uC6A9\uD569\uB2C8\uB2E4. \uC324\uD540\uC774 \uC2E4\uD589 \uC911\uC774\uBA74 \uC571\uC5D0 \uC704\uC784\uD558\uACE0, \uB2EB\uD798\uC774 \uD655\uC815\uB41C \uB54C\uB9CC \uD30C\uC77C\uC5D0 \uC9C1\uC811 \uAE30\uB85D\uD558\uBA70, \uC0C1\uD0DC\uAC00 \uBD88\uD655\uC2E4\uD558\uBA74 \uAC70\uBD80\uD569\uB2C8\uB2E4. \uC4F0\uAE30\uB294 \uC324\uD540 \uC124\uC815\uC758 "AI \uC5F0\uACB0"\uC5D0\uC11C \uCF1C\uC57C \uD65C\uC131\uD654\uB429\uB2C8\uB2E4. \uAC19\uC740 idempotencyKey \uC7AC\uC694\uCCAD\uC740 \uC911\uBCF5 \uC0DD\uC131\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.',
+      inputSchema: {
+        classToken: external_exports
+          .string()
+          .describe('list_classes \uAC00 \uBC18\uD658\uD55C \uC218\uC5C5\uBC18 \uD1A0\uD070'),
+        date: external_exports
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/)
+          .describe('\uC218\uC5C5 \uB0A0\uC9DC YYYY-MM-DD'),
+        period: external_exports.number().int().min(0).max(20).describe('\uAD50\uC2DC'),
+        unit: external_exports.string().min(1).max(200).describe('\uB2E8\uC6D0\uBA85'),
+        lesson: external_exports
+          .string()
+          .max(500)
+          .optional()
+          .describe('\uCC28\uC2DC\xB7\uC218\uC5C5 \uB0B4\uC6A9'),
+        status: external_exports
+          .enum(['planned', 'completed', 'skipped'])
+          .optional()
+          .describe('\uC0C1\uD0DC(\uAE30\uBCF8 planned=\uC608\uC815)'),
+        note: external_exports.string().max(500).optional().describe('\uBA54\uBAA8'),
+        idempotencyKey: external_exports
+          .string()
+          .optional()
+          .describe('\uC7AC\uC2DC\uB3C4 \uC911\uBCF5 \uBC29\uC9C0 \uD0A4'),
+      },
+      annotations: { readOnlyHint: false },
+    },
+    async (args) => runTool('ssampin_create_progress', () => createProgress(ctx, args)),
   );
   server.registerTool(
     'set_attendance_record',
@@ -29256,6 +29592,47 @@ function createSsampinMcpServer(opts = {}) {
       annotations: { readOnlyHint: false },
     },
     async (args) => runTool('ssampin_delete_event', () => deleteEvent(ctx, args)),
+  );
+  server.registerTool(
+    'ssampin_update_progress',
+    {
+      title: '\uC218\uC5C5 \uC9C4\uB3C4 \uAE30\uB85D \uC218\uC815',
+      description:
+        'get_progress \uC758 progressToken \uC73C\uB85C \uC9C0\uC815\uD55C \uC9C4\uB3C4 \uAE30\uB85D\uC758 \uB0A0\uC9DC\xB7\uAD50\uC2DC\xB7\uB2E8\uC6D0\xB7\uCC28\uC2DC\xB7\uC0C1\uD0DC\xB7\uBA54\uBAA8\uB97C \uC218\uC815\uD569\uB2C8\uB2E4(\uC9C0\uC815\uD55C \uD544\uB4DC\uB9CC, \uC18C\uC18D \uBC18 \uBCC0\uACBD \uBD88\uAC00). \uC324\uD540 \uC2E4\uD589 \uC911\uC5D0\uB9CC \uC801\uC6A9, \uC4F0\uAE30 \uD65C\uC131\uD654 \uD544\uC694.',
+      inputSchema: {
+        progressToken: external_exports
+          .string()
+          .describe('get_progress \uAC00 \uBC18\uD658\uD55C \uC9C4\uB3C4 \uD1A0\uD070'),
+        date: external_exports
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/)
+          .optional(),
+        period: external_exports.number().int().min(0).max(20).optional(),
+        unit: external_exports.string().min(1).max(200).optional(),
+        lesson: external_exports.string().max(500).optional(),
+        status: external_exports.enum(['planned', 'completed', 'skipped']).optional(),
+        note: external_exports.string().max(500).optional(),
+        idempotencyKey: external_exports.string().optional(),
+      },
+      annotations: { readOnlyHint: false },
+    },
+    async (args) => runTool('ssampin_update_progress', () => updateProgress(ctx, args)),
+  );
+  server.registerTool(
+    'ssampin_delete_progress',
+    {
+      title: '\uC218\uC5C5 \uC9C4\uB3C4 \uAE30\uB85D \uC0AD\uC81C',
+      description:
+        'get_progress \uC758 progressToken \uC73C\uB85C \uC9C0\uC815\uD55C \uC9C4\uB3C4 \uAE30\uB85D\uC744 \uC0AD\uC81C\uD569\uB2C8\uB2E4. \uC324\uD540 \uC2E4\uD589 \uC911\uC5D0\uB9CC \uC801\uC6A9(\uBBF8\uC2E4\uD589 \uC2DC \uAC70\uBD80), \uC4F0\uAE30 \uD65C\uC131\uD654 \uD544\uC694.',
+      inputSchema: {
+        progressToken: external_exports
+          .string()
+          .describe('get_progress \uAC00 \uBC18\uD658\uD55C \uC9C4\uB3C4 \uD1A0\uD070'),
+        idempotencyKey: external_exports.string().optional(),
+      },
+      annotations: { readOnlyHint: false },
+    },
+    async (args) => runTool('ssampin_delete_progress', () => deleteProgress(ctx, args)),
   );
   server.registerTool(
     'ssampin_create_memo',

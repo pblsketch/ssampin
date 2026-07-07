@@ -63,6 +63,27 @@ export interface LiveSyncWriteResult {
   readonly error?: string;
 }
 
+/** 수업 진도(progress) create 입력(store 액션 주입용). 브릿지 progress payload 와 1:1. */
+export interface LiveSyncProgressInput {
+  readonly classId: string;
+  readonly date: string;
+  readonly period: number;
+  readonly unit: string;
+  readonly lesson?: string;
+  readonly status?: string;
+  readonly note?: string;
+}
+
+/** 수업 진도 update 변경분 — 소속 반(classId)은 변경 불가. */
+export interface LiveSyncProgressChanges {
+  readonly date?: string;
+  readonly period?: number;
+  readonly unit?: string;
+  readonly lesson?: string;
+  readonly status?: string;
+  readonly note?: string;
+}
+
 /** store 액션 주입 — 실제 호출자는 useTodoStore/useEventsStore 의 getState() 액션을 넘긴다. */
 export interface LiveSyncWriteDeps {
   readonly todos: {
@@ -155,6 +176,16 @@ export interface LiveSyncWriteDeps {
       readonly content: string;
       readonly tags?: readonly string[];
     }) => Promise<void>;
+  };
+  readonly progress: {
+    /** 수업 진도 추가 — 호출자는 useTeachingClassStore.addProgressEntry 를 넘긴다. */
+    readonly add: (input: LiveSyncProgressInput) => Promise<void>;
+    /** 수업 진도 수정(변경 필드만) — 호출자가 기존 항목과 병합해 updateProgressEntry 로 반영. */
+    readonly update: (id: string, changes: LiveSyncProgressChanges) => Promise<void>;
+    readonly delete: (id: string) => Promise<void>;
+    readonly exists: (id: string) => boolean;
+    /** create 대상 수업반 존재 확인(미상 classId 로의 고아 진도 생성 차단). */
+    readonly classExists: (classId: string) => boolean;
   };
   readonly recordNote: {
     /** 담임 학생 기록(student-records) append — 호출자는 useStudentRecordsStore.addRecord 를 넘긴다. */
@@ -654,6 +685,54 @@ async function applyRecordNote(
   return ok(req.idempotencyKey);
 }
 
+/** 수업 진도(progress) — create/update/delete. 대상 반·항목의 존재는 렌더러 store 로 재검증한다. */
+async function applyProgress(
+  req: LiveSyncWriteRequest,
+  deps: LiveSyncWriteDeps,
+): Promise<LiveSyncWriteResult> {
+  const d = req.data;
+  if (req.op === 'create') {
+    const classId = asStr(d['classId']);
+    const date = asStr(d['date']);
+    const unit = asStr(d['unit']);
+    const period = d['period'];
+    if (!classId || !date || !unit || typeof period !== 'number') {
+      return bad('진도 생성에는 classId·date·period·unit 이 필요합니다.');
+    }
+    if (!deps.progress.classExists(classId)) return bad('수업반을 찾을 수 없습니다.', 404);
+    const lesson = asStr(d['lesson']);
+    const status = asStr(d['status']);
+    const note = typeof d['note'] === 'string' ? d['note'] : undefined;
+    const input: LiveSyncProgressInput = {
+      classId,
+      date,
+      period,
+      unit,
+      ...(lesson !== undefined ? { lesson } : {}),
+      ...(status !== undefined ? { status } : {}),
+      ...(note !== undefined ? { note } : {}),
+    };
+    await deps.progress.add(input);
+    return ok(req.idempotencyKey);
+  }
+  if (req.op === 'complete') return bad('진도 기록은 complete 연산을 지원하지 않습니다.');
+  const id = asStr(d['id']);
+  if (!id) return bad('대상 id 가 필요합니다.');
+  if (!deps.progress.exists(id)) return bad('진도 기록을 찾을 수 없습니다.', 404);
+  if (req.op === 'delete') {
+    await deps.progress.delete(id);
+    return ok(req.idempotencyKey);
+  }
+  // update — 안전 필드만 통과(classId 변경 불가 — 검증 단계에서 이미 거부됨).
+  const changes: Record<string, unknown> = {};
+  for (const k of ['date', 'period', 'unit', 'lesson', 'status', 'note'] as const) {
+    if (d[k] !== undefined) changes[k] = d[k];
+  }
+  if (Object.keys(changes).length === 0) return bad('변경할 필드가 없습니다.');
+  await deps.progress.update(id, changes as LiveSyncProgressChanges);
+  return ok(req.idempotencyKey);
+}
+
 /** 도메인별 핸들러 시그니처(모두 동일 — req+deps → 결과). */
 type LiveSyncHandler = (
   req: LiveSyncWriteRequest,
@@ -675,6 +754,7 @@ const LIVE_SYNC_DISPATCH = {
   homeroomAttendance: applyHomeroomAttendance,
   observations: applyObservations,
   recordNote: applyRecordNote,
+  progress: applyProgress,
 } satisfies Record<WriteDomain, LiveSyncHandler>;
 
 /** 디스패치가 실제로 다루는 도메인 키 — 계약 정렬 메타테스트가 WRITE_DOMAINS 와 일치 검증. */

@@ -23,6 +23,11 @@ import {
   OBSERVATION_CONTENT_MAX as CONTRACT_OBSERVATION_CONTENT_MAX,
   RECORD_NOTE_FIELDS as CONTRACT_RECORD_NOTE_FIELDS,
   RECORD_NOTE_CONTENT_MAX as CONTRACT_RECORD_NOTE_CONTENT_MAX,
+  PROGRESS_FIELDS as CONTRACT_PROGRESS_FIELDS,
+  PROGRESS_UNIT_MAX as CONTRACT_PROGRESS_UNIT_MAX,
+  PROGRESS_LESSON_MAX as CONTRACT_PROGRESS_LESSON_MAX,
+  PROGRESS_NOTE_MAX as CONTRACT_PROGRESS_NOTE_MAX,
+  PROGRESS_STATUSES as CONTRACT_PROGRESS_STATUSES,
   ATTENDANCE_STATUSES as CONTRACT_ATTENDANCE_STATUSES,
   ATTENDANCE_REASONS as CONTRACT_ATTENDANCE_REASONS,
   type WriteDomain,
@@ -598,6 +603,50 @@ function checkBookmarkFields(d: Record<string, unknown>): string | null {
   return null;
 }
 
+const PROGRESS_UNIT_MAX = CONTRACT_PROGRESS_UNIT_MAX;
+const PROGRESS_LESSON_MAX = CONTRACT_PROGRESS_LESSON_MAX;
+const PROGRESS_NOTE_MAX = CONTRACT_PROGRESS_NOTE_MAX;
+const PROGRESS_STATUSES: ReadonlySet<string> = new Set(CONTRACT_PROGRESS_STATUSES);
+
+/** 수업 진도(progress) data 필드값 검증(create·update 공통). 위반 시 사유 문자열, 정상이면 null. (브리지 progress 쓰기 도구와 동일 강도.) */
+function checkProgressFields(d: Record<string, unknown>): string | null {
+  if (d['classId'] !== undefined && typeof d['classId'] !== 'string') {
+    return 'classId 는 문자열이어야 합니다.';
+  }
+  if (d['date'] !== undefined && (typeof d['date'] !== 'string' || !DATE_RE.test(d['date']))) {
+    return 'date 는 YYYY-MM-DD 형식이어야 합니다.';
+  }
+  if (
+    d['period'] !== undefined &&
+    (typeof d['period'] !== 'number' ||
+      !Number.isInteger(d['period']) ||
+      d['period'] < 0 ||
+      d['period'] > 20)
+  ) {
+    return 'period 는 0 이상 20 이하의 정수여야 합니다.';
+  }
+  if (d['unit'] !== undefined) {
+    if (typeof d['unit'] !== 'string') return 'unit 은 문자열이어야 합니다.';
+    if (d['unit'].length > PROGRESS_UNIT_MAX) return `unit 은 최대 ${PROGRESS_UNIT_MAX}자입니다.`;
+  }
+  if (d['lesson'] !== undefined) {
+    if (typeof d['lesson'] !== 'string') return 'lesson 은 문자열이어야 합니다.';
+    if (d['lesson'].length > PROGRESS_LESSON_MAX)
+      return `lesson 은 최대 ${PROGRESS_LESSON_MAX}자입니다.`;
+  }
+  if (
+    d['status'] !== undefined &&
+    (typeof d['status'] !== 'string' || !PROGRESS_STATUSES.has(d['status']))
+  ) {
+    return 'status 는 planned|completed|skipped 여야 합니다.';
+  }
+  if (d['note'] !== undefined) {
+    if (typeof d['note'] !== 'string') return 'note 는 문자열이어야 합니다.';
+    if (d['note'].length > PROGRESS_NOTE_MAX) return `note 는 최대 ${PROGRESS_NOTE_MAX}자입니다.`;
+  }
+  return null;
+}
+
 const NOTE_TITLE_MAX = 200;
 const NOTE_BODY_MAX = 100_000;
 const NOTE_KINDS: ReadonlySet<string> = new Set(['notebook', 'section', 'page']);
@@ -657,6 +706,13 @@ const NOTE_FIELDS: Readonly<Record<WriteOp, ReadonlySet<string>>> = {
   create: new Set(['kind', 'title', 'notebookId', 'sectionId', 'body']),
   update: new Set(['id', 'title', 'body', 'pinned']), // 페이지 수정만(노트북·섹션 수정은 본체 UI)
   complete: new Set(['id']), // notes 는 complete 미지원 — 적용 단계에서 거부
+  delete: new Set(['id']),
+};
+const PROGRESS_WRITE_FIELDS: Readonly<Record<WriteOp, ReadonlySet<string>>> = {
+  create: new Set(CONTRACT_PROGRESS_FIELDS),
+  // update 는 소속 반(classId) 변경 불가 — 대상 id + 내용 필드만.
+  update: new Set(['id', 'date', 'period', 'unit', 'lesson', 'status', 'note']),
+  complete: new Set(['id']), // progress 는 complete 미지원 — 적용 단계에서 거부
   delete: new Set(['id']),
 };
 
@@ -765,8 +821,7 @@ export function validateApplyWrite(raw: unknown): ValidateResult {
   if (typeof domain !== 'string' || !DOMAINS.has(domain)) {
     return {
       ok: false,
-      reason:
-        'domain 은 todos|events|recordDrafts|memos|bookmarks|notes|attendance|homeroomAttendance 여야 합니다.',
+      reason: `domain 은 ${WRITE_DOMAINS.join('|')} 여야 합니다.`,
     };
   }
   if (typeof op !== 'string' || !OPS.has(op)) {
@@ -791,7 +846,8 @@ export function validateApplyWrite(raw: unknown): ValidateResult {
     domain === 'events' ||
     domain === 'memos' ||
     domain === 'bookmarks' ||
-    domain === 'notes'
+    domain === 'notes' ||
+    domain === 'progress'
   ) {
     const fieldMap =
       domain === 'todos'
@@ -802,7 +858,9 @@ export function validateApplyWrite(raw: unknown): ValidateResult {
             ? MEMO_FIELDS
             : domain === 'bookmarks'
               ? BOOKMARK_FIELDS
-              : NOTE_FIELDS;
+              : domain === 'notes'
+                ? NOTE_FIELDS
+                : PROGRESS_WRITE_FIELDS;
     const fieldErr = checkAllowedFields(fieldMap[op as WriteOp], d);
     if (fieldErr) return { ok: false, reason: fieldErr };
     const valErr =
@@ -814,7 +872,9 @@ export function validateApplyWrite(raw: unknown): ValidateResult {
             ? checkMemoFields(d)
             : domain === 'bookmarks'
               ? checkBookmarkFields(d)
-              : checkNoteFields(d);
+              : domain === 'notes'
+                ? checkNoteFields(d)
+                : checkProgressFields(d);
     if (valErr) return { ok: false, reason: valErr };
   }
   // 생기부 초안은 create(upsert)만 지원 — 수정·삭제는 본체 UI 에서 한다(법정기록 보수화).
@@ -852,6 +912,10 @@ export function validateApplyWrite(raw: unknown): ValidateResult {
     }
     const err = checkRecordNotePayload(d);
     if (err) return { ok: false, reason: err };
+  }
+  // 수업 진도(progress) — complete 미지원을 서버 단계에서도 거부(렌더러 거부와 대칭인 심층방어).
+  if (domain === 'progress' && op === 'complete') {
+    return { ok: false, reason: '진도 기록은 complete 연산을 지원하지 않습니다.' };
   }
   if (op === 'create') {
     if (domain === 'todos' && (typeof d['text'] !== 'string' || d['text'].trim().length === 0)) {
@@ -918,6 +982,20 @@ export function validateApplyWrite(raw: unknown): ValidateResult {
       }
       if (typeof d['content'] !== 'string' || d['content'].trim().length === 0) {
         return { ok: false, reason: '생기부 초안 저장에는 content 가 필요합니다.' };
+      }
+    }
+    if (domain === 'progress') {
+      if (typeof d['classId'] !== 'string' || d['classId'].trim().length === 0) {
+        return { ok: false, reason: '진도 기록 생성에는 classId 가 필요합니다.' };
+      }
+      if (typeof d['date'] !== 'string' || !DATE_RE.test(d['date'])) {
+        return { ok: false, reason: '진도 기록 생성에는 date(YYYY-MM-DD)가 필요합니다.' };
+      }
+      if (typeof d['period'] !== 'number' || !Number.isInteger(d['period'])) {
+        return { ok: false, reason: '진도 기록 생성에는 period(교시)가 필요합니다.' };
+      }
+      if (typeof d['unit'] !== 'string' || d['unit'].trim().length === 0) {
+        return { ok: false, reason: '진도 기록 생성에는 unit(단원)이 필요합니다.' };
       }
     }
   }

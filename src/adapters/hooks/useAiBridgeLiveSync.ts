@@ -16,6 +16,7 @@ import {
 } from '@usecases/aiBridge/applyLiveSyncWrite';
 import type { Todo, TodoPriority } from '@domain/entities/Todo';
 import type { SchoolEvent } from '@domain/entities/SchoolEvent';
+import type { ProgressStatus } from '@domain/entities/CurriculumProgress';
 import type { StudentAttendance } from '@domain/entities/Attendance';
 import type { NotePageBody } from '@domain/entities/NotePage';
 import { MEMO_COLORS, type MemoColor } from '@domain/valueObjects/MemoColor';
@@ -55,6 +56,11 @@ function coerceMemoColor(v: string | undefined): MemoColor {
 const RECORD_STATUSES: readonly string[] = ['draft', 'reviewing', 'confirmed'];
 function coerceRecordStatus(v: string | undefined): RecordDraftStatus | undefined {
   return v !== undefined && RECORD_STATUSES.includes(v) ? (v as RecordDraftStatus) : undefined;
+}
+
+const PROGRESS_STATUSES: readonly string[] = ['planned', 'completed', 'skipped'];
+function coerceProgressStatus(v: string | undefined): ProgressStatus | undefined {
+  return v !== undefined && PROGRESS_STATUSES.includes(v) ? (v as ProgressStatus) : undefined;
 }
 
 // ── 멱등 가드(#2) — 호스트가 timeout(504) 후 멱등키를 기록하지 못해도, AI 가 같은 키로 재시도할 때
@@ -131,6 +137,8 @@ export function useAiBridgeLiveSync(): void {
     // 관찰기록·담임 기록 store 선로딩 — 라이브싱크 쓰기 대상이며, recordNote 의 라이브 카테고리 검증에도 쓰인다.
     void useObservationStore.getState().load();
     void useStudentRecordsStore.getState().load();
+    // 수업반·진도 store 선로딩 — progress 쓰기의 exists/classExists 검사가 빈 상태로 404 나지 않게(load 는 멱등).
+    void useTeachingClassStore.getState().load();
     return api.aiBridge.onApplyWrite((raw) => {
       const req = raw as LiveSyncWriteRequest;
       const todo = useTodoStore.getState();
@@ -341,6 +349,36 @@ export function useAiBridgeLiveSync(): void {
               .then(() => undefined),
           // 라이브 카테고리(렌더러 store 의 단일 진실) — applyRecordNote 가 categoryId/subcategory 재검증에 쓴다.
           categories: () => useStudentRecordsStore.getState().categories,
+        },
+        progress: {
+          // 수업 진도 추가 — store 액션이 UUID 발급·메모리 반영·파일 저장을 일원화한다.
+          add: (input) =>
+            tc.addProgressEntry(
+              input.classId,
+              input.date,
+              input.period,
+              input.unit,
+              input.lesson ?? '',
+              input.note ?? '',
+              coerceProgressStatus(input.status),
+            ),
+          update: async (id, changes) => {
+            const found = tc.progressEntries.find((e) => e.id === id);
+            if (!found) return;
+            const status = coerceProgressStatus(changes.status);
+            await tc.updateProgressEntry({
+              ...found,
+              ...(changes.date !== undefined ? { date: changes.date } : {}),
+              ...(changes.period !== undefined ? { period: changes.period } : {}),
+              ...(changes.unit !== undefined ? { unit: changes.unit } : {}),
+              ...(changes.lesson !== undefined ? { lesson: changes.lesson } : {}),
+              ...(status !== undefined ? { status } : {}),
+              ...(changes.note !== undefined ? { note: changes.note } : {}),
+            });
+          },
+          delete: (id) => tc.deleteProgressEntry(id),
+          exists: (id) => tc.progressEntries.some((e) => e.id === id),
+          classExists: (classId) => tc.classes.some((c) => c.id === classId),
         },
       });
     });

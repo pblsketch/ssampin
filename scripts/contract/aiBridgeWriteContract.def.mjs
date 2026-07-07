@@ -20,7 +20,7 @@
  *   (생성물을 직접 수정하면 `npm run check:contract-sync` 가 실패한다.)
  */
 
-/** 허용 쓰기 도메인 10종(외부 AI 가 R/W 할 수 있는 표면). */
+/** 허용 쓰기 도메인 11종(외부 AI 가 R/W 할 수 있는 표면). */
 export const WRITE_DOMAINS = [
   'todos',
   'events',
@@ -32,6 +32,7 @@ export const WRITE_DOMAINS = [
   'homeroomAttendance',
   'observations',
   'recordNote',
+  'progress',
 ];
 
 /** 허용 쓰기 연산. (도메인별 미지원 연산은 적용 단계에서 별도 거부.) */
@@ -44,6 +45,13 @@ export const OBSERVATION_CONTENT_MAX = 500;
 /** 담임 노트(recordNote) create payload 허용 필드 + 내용 상한. */
 export const RECORD_NOTE_FIELDS = ['studentId', 'content', 'categoryId', 'subcategory', 'date'];
 export const RECORD_NOTE_CONTENT_MAX = 2000;
+
+/** 수업 진도(progress, curriculum-progress.json) payload 허용 필드 + 상한/enum. */
+export const PROGRESS_FIELDS = ['classId', 'date', 'period', 'unit', 'lesson', 'status', 'note'];
+export const PROGRESS_UNIT_MAX = 200;
+export const PROGRESS_LESSON_MAX = 500;
+export const PROGRESS_NOTE_MAX = 500;
+export const PROGRESS_STATUSES = ['planned', 'completed', 'skipped'];
 
 /** 출결 status enum — 서버(loopback)가 클라를 신뢰하지 않고 재검증하는 값. */
 export const ATTENDANCE_STATUSES = ['present', 'absent', 'late', 'earlyLeave', 'classAbsence'];
@@ -72,6 +80,11 @@ export const AI_BRIDGE_WRITE_CONTRACT = {
   OBSERVATION_CONTENT_MAX,
   RECORD_NOTE_FIELDS,
   RECORD_NOTE_CONTENT_MAX,
+  PROGRESS_FIELDS,
+  PROGRESS_UNIT_MAX,
+  PROGRESS_LESSON_MAX,
+  PROGRESS_NOTE_MAX,
+  PROGRESS_STATUSES,
   ATTENDANCE_STATUSES,
   ATTENDANCE_REASONS,
   IDENTITY_KEY_CONTRACT,

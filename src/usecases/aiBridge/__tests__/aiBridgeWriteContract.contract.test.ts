@@ -18,6 +18,11 @@ import {
   OBSERVATION_CONTENT_MAX,
   RECORD_NOTE_FIELDS,
   RECORD_NOTE_CONTENT_MAX,
+  PROGRESS_FIELDS,
+  PROGRESS_UNIT_MAX,
+  PROGRESS_LESSON_MAX,
+  PROGRESS_NOTE_MAX,
+  PROGRESS_STATUSES,
   ATTENDANCE_STATUSES,
   ATTENDANCE_REASONS,
   IDENTITY_KEY_CONTRACT,
@@ -32,7 +37,7 @@ import {
 // 단일 정의(def) 자체를 직접 import 해 생성물과의 동기화를 런타임으로도 확인한다.
 import { AI_BRIDGE_WRITE_CONTRACT } from '../../../../scripts/contract/aiBridgeWriteContract.def.mjs';
 
-/** def 가 선언한 10개 쓰기 도메인 — 이 목록을 바꾸려면 테스트도 의도적으로 바꿔야 한다(change-detector). */
+/** def 가 선언한 11개 쓰기 도메인 — 이 목록을 바꾸려면 테스트도 의도적으로 바꿔야 한다(change-detector). */
 const EXPECTED_DOMAINS = [
   'todos',
   'events',
@@ -44,12 +49,13 @@ const EXPECTED_DOMAINS = [
   'homeroomAttendance',
   'observations',
   'recordNote',
+  'progress',
 ];
 
 const sorted = (xs: readonly string[]): string[] => [...xs].sort();
 
 describe('AI 브릿지 쓰기 계약 — def ↔ 생성물 ↔ 디스패치 정합', () => {
-  it('생성물 WRITE_DOMAINS 가 기대 도메인 10종과 정확히 일치(누락·잉여 0)', () => {
+  it('생성물 WRITE_DOMAINS 가 기대 도메인 11종과 정확히 일치(누락·잉여 0)', () => {
     expect(sorted(WRITE_DOMAINS)).toEqual(sorted(EXPECTED_DOMAINS));
   });
 
@@ -61,6 +67,11 @@ describe('AI 브릿지 쓰기 계약 — def ↔ 생성물 ↔ 디스패치 정�
     expect(def['OBSERVATION_CONTENT_MAX']).toBe(OBSERVATION_CONTENT_MAX);
     expect(def['RECORD_NOTE_FIELDS']).toEqual([...RECORD_NOTE_FIELDS]);
     expect(def['RECORD_NOTE_CONTENT_MAX']).toBe(RECORD_NOTE_CONTENT_MAX);
+    expect(def['PROGRESS_FIELDS']).toEqual([...PROGRESS_FIELDS]);
+    expect(def['PROGRESS_UNIT_MAX']).toBe(PROGRESS_UNIT_MAX);
+    expect(def['PROGRESS_LESSON_MAX']).toBe(PROGRESS_LESSON_MAX);
+    expect(def['PROGRESS_NOTE_MAX']).toBe(PROGRESS_NOTE_MAX);
+    expect(def['PROGRESS_STATUSES']).toEqual([...PROGRESS_STATUSES]);
     expect(def['ATTENDANCE_STATUSES']).toEqual([...ATTENDANCE_STATUSES]);
     expect(def['ATTENDANCE_REASONS']).toEqual([...ATTENDANCE_REASONS]);
     expect(def['IDENTITY_KEY_CONTRACT']).toEqual({ ...IDENTITY_KEY_CONTRACT });
@@ -88,6 +99,20 @@ describe('AI 브릿지 쓰기 계약 — def ↔ 생성물 ↔ 디스패치 정�
     expect(RECORD_NOTE_CONTENT_MAX).toBe(2000);
     // recordNote 의 'subcategory' 는 "보이지 않는 MCP 계약 슬롯" — 화이트리스트에 반드시 남아야 한다(Q2 정합).
     expect([...RECORD_NOTE_FIELDS]).toContain('subcategory');
+    // 수업 진도(progress) — 필드·상한·status enum 고정(CurriculumProgress 엔티티와 1:1).
+    expect([...PROGRESS_FIELDS]).toEqual([
+      'classId',
+      'date',
+      'period',
+      'unit',
+      'lesson',
+      'status',
+      'note',
+    ]);
+    expect(PROGRESS_UNIT_MAX).toBe(200);
+    expect(PROGRESS_LESSON_MAX).toBe(500);
+    expect(PROGRESS_NOTE_MAX).toBe(500);
+    expect([...PROGRESS_STATUSES]).toEqual(['planned', 'completed', 'skipped']);
   });
 
   it('출결 status/reason enum 이 계약값으로 고정 + RecordCategory 와 동일(드리프트 차단)', () => {
