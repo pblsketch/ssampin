@@ -1703,6 +1703,9 @@ function TeacherCell({
   onColorChange,
   overlay,
 }: TeacherCellProps) {
+  // 진도 보기 모드 여부 — 호출부가 진도 보기일 때만 overlay(null 포함)를 넘기므로 undefined 비교로 판별.
+  // 이 모드에선 셀을 키우고(h-20) 본문을 위 정렬해, 하단 진도 띠가 학반 줄을 덮지 않게 한다.
+  const progressMode = overlay !== undefined;
   const isOverridden = override != null;
 
   // 오버라이드된 경우 override 데이터로 표시
@@ -1721,9 +1724,9 @@ function TeacherCell({
         onContextMenu={onContextMenu}
       >
         <div
-          className={`h-14 w-full flex items-center justify-center text-sp-muted text-xs relative ${
-            isOverridden ? 'border border-dashed border-amber-400/30 rounded-lg' : ''
-          }`}
+          className={`w-full flex justify-center text-sp-muted text-xs relative ${
+            progressMode ? 'h-20 items-start pt-2' : 'h-14 items-center'
+          } ${isOverridden ? 'border border-dashed border-amber-400/30 rounded-lg' : ''}`}
         >
           {isOverridden ? '자습' : '공강'}
           {isOverridden && (
@@ -1772,9 +1775,9 @@ function TeacherCell({
       >
         <div className="absolute inset-0 bg-amber-500/10 pointer-events-none animate-pulse" />
         <div
-          className={`h-14 w-full rounded-lg ${style.bg} border-2 border-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.3)] flex items-center justify-center relative z-20 cursor-pointer ${
-            isOverridden ? 'border-dashed' : ''
-          }`}
+          className={`w-full rounded-lg ${style.bg} border-2 border-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.3)] flex justify-center relative z-20 cursor-pointer ${
+            progressMode ? 'h-20 items-start pt-2' : 'h-14 items-center'
+          } ${isOverridden ? 'border-dashed' : ''}`}
           onClick={onOpenColorPalette}
         >
           {cellContent}
@@ -1807,9 +1810,11 @@ function TeacherCell({
       onContextMenu={onContextMenu}
     >
       <div
-        className={`h-14 w-full rounded-lg ${style.bg} border ${
+        className={`w-full rounded-lg ${style.bg} border ${
           isOverridden ? 'border-dashed border-amber-400/30' : style.border
-        } flex items-center justify-center relative cursor-pointer`}
+        } flex justify-center relative cursor-pointer ${
+          progressMode ? 'h-20 items-start pt-2' : 'h-14 items-center'
+        }`}
         onClick={onOpenColorPalette}
       >
         {cellContent}
