@@ -4,11 +4,19 @@
  */
 import { DAYS_OF_WEEK, getActiveDays } from '../valueObjects/DayOfWeek';
 import type { DayOfWeekFull, WeekendDay } from '../valueObjects/DayOfWeek';
-import type { ClassScheduleData, TeacherScheduleData, ClassPeriod, TeacherPeriod } from '../entities/Timetable';
+import type {
+  ClassScheduleData,
+  TeacherScheduleData,
+  ClassPeriod,
+  TeacherPeriod,
+} from '../entities/Timetable';
 import type { NeisTimetableRow } from '../entities/NeisTimetable';
 
 /** YYYYMMDD → 요일 (weekendDays에 포함된 주말 요일만 반환) */
-function dateToDayOfWeek(yyyymmdd: string, weekendDays?: readonly WeekendDay[]): DayOfWeekFull | null {
+export function dateToDayOfWeek(
+  yyyymmdd: string,
+  weekendDays?: readonly WeekendDay[],
+): DayOfWeekFull | null {
   const y = parseInt(yyyymmdd.substring(0, 4), 10);
   const m = parseInt(yyyymmdd.substring(4, 6), 10) - 1;
   const d = parseInt(yyyymmdd.substring(6, 8), 10);
@@ -173,9 +181,12 @@ function createEmpty(maxPeriods: number, weekendDays?: readonly WeekendDay[]): C
   return data as ClassScheduleData;
 }
 
-function createEmptyTeacher(maxPeriods: number, weekendDays?: readonly WeekendDay[]): TeacherScheduleData {
+function createEmptyTeacher(
+  maxPeriods: number,
+  weekendDays?: readonly WeekendDay[],
+): TeacherScheduleData {
   const activeDays = getActiveDays(weekendDays);
-  const data: Record<string, (null)[]> = {};
+  const data: Record<string, null[]> = {};
   for (const day of activeDays) {
     data[day] = Array.from({ length: maxPeriods }, () => null);
   }

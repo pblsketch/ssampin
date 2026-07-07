@@ -51,6 +51,7 @@ import { ComciganImportModal } from './ComciganImportModal';
 import { ComciganClassImportModal } from './ComciganClassImportModal';
 import { AppinClassImportModal } from './AppinClassImportModal';
 import { AppinTeacherImportModal } from './AppinTeacherImportModal';
+import { NeisTeacherImportModal } from './NeisTeacherImportModal';
 import { ImportSourceMenu, type ImportSource } from './ImportSourceMenu';
 import { TeacherExcelPreviewModal } from './TeacherExcelPreviewModal';
 /* eslint-disable no-restricted-imports */
@@ -439,6 +440,9 @@ export function TimetablePage() {
   // ── 압핀 교사 시간표 불러오기 모달 ──
   const [showAppinTeacherImport, setShowAppinTeacherImport] = useState(false);
 
+  // ── 나이스 교사 시간표(학급 재조합) 불러오기 모달 ──
+  const [showNeisTeacherImport, setShowNeisTeacherImport] = useState(false);
+
   // ── 불러오기 소스(현재 탭 기준) — 단일 '불러오기' 드롭다운에 넘김 ──
   const importSources = useMemo<readonly ImportSource[]>(() => {
     if (tab === 'class') {
@@ -480,6 +484,16 @@ export function TimetablePage() {
         onSelect: () => setShowAppinTeacherImport(true),
       },
     ];
+    // 나이스는 교사 시간표 API가 없어 수업반 과목으로 학급 시간표를 재조합한다(베타).
+    // 학교급(초/중/고)이 정해져야 올바른 엔드포인트를 쓸 수 있어 '직접 설정'에선 제외.
+    if (settings.schoolLevel !== 'custom') {
+      list.push({
+        key: 'neis',
+        label: '나이스에서 불러오기',
+        hint: '수업반으로 재조합 (베타)',
+        onSelect: () => setShowNeisTeacherImport(true),
+      });
+    }
     return list;
   }, [tab, settings.schoolLevel]);
 
@@ -1205,6 +1219,19 @@ export function TimetablePage() {
         onClose={() => setShowAppinTeacherImport(false)}
         onImport={(schedule) => {
           setShowAppinTeacherImport(false);
+          setPreviewSchedule(schedule);
+          setPreviewPeriodTimes(null);
+          setPreviewFingerprint(null);
+          setShowExcelPreview(true);
+        }}
+      />
+
+      {/* 나이스 교사 시간표(학급 재조합) 불러오기 — 미리보기로 합류. 교시시각·지문 없음 */}
+      <NeisTeacherImportModal
+        isOpen={showNeisTeacherImport}
+        onClose={() => setShowNeisTeacherImport(false)}
+        onImport={(schedule) => {
+          setShowNeisTeacherImport(false);
           setPreviewSchedule(schedule);
           setPreviewPeriodTimes(null);
           setPreviewFingerprint(null);
