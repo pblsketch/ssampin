@@ -650,6 +650,7 @@ export function Schedule() {
                     allEvents={allVisibleEvents}
                     allHolidays={yearHolidays}
                     year={year}
+                    month={month}
                     onEdit={handleEditEvent}
                     onDelete={handleDeleteEvent}
                     isSelectMode={isSelectMode}
