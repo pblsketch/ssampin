@@ -47,8 +47,8 @@
       #splash .icon {
         width: 88px;
         height: 88px;
-        /* 픽셀아트 마스코트가 축소 렌더링에서 흐려지지 않도록 보간 끔 */
-        image-rendering: pixelated;
+        /* 512px 마스코트를 88px로 축소 — 부드럽게 보간(기본)해야 계단(픽셀 튐) 방지.
+           pixelated는 축소 시 픽셀을 버려 각진 테두리가 생기므로 쓰지 않는다. */
         animation: pulse 1.8s ease-in-out infinite;
       }
       #splash .text {
