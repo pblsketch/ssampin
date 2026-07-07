@@ -5,7 +5,7 @@
 // 불가능한 지표(도구순위·내보내기·버전·인기주제·대화깊이·신뢰도·피드백)는 기간 파라미터
 // RPC 함수(fetchRpc, migration 038)로 조회해 DateRangePicker 선택을 반영한다.
 
-import { fetchRpc, fetchTable } from './supabase';
+import { fetchRpc, fetchTable, signStorageUrls } from './supabase';
 import type {
   ChatConfidenceRow,
   ChatDailyRow,
@@ -29,6 +29,24 @@ import type {
 export interface DateRange {
   dateFrom: string | null;
   dateTo: string | null;
+}
+
+const ESCALATION_SCREENSHOTS_BUCKET = 'escalation-screenshots';
+
+// 에스컬레이션 첨부 스크린샷(private 버킷) → 임시 서명 URL 일괄 발급 후 각 행에 부착.
+// 개별 escalation 마다 서명 요청을 하지 않도록 전체 경로를 모아 한 번에 처리한다.
+async function attachEscalationImageUrls(
+  escalations: ChatEscalationRow[],
+): Promise<ChatEscalationRow[]> {
+  const allPaths = escalations.flatMap((e) => e.image_paths ?? []);
+  if (allPaths.length === 0) return escalations;
+
+  const urlMap = await signStorageUrls(ESCALATION_SCREENSHOTS_BUCKET, allPaths);
+  return escalations.map((e) =>
+    e.image_paths && e.image_paths.length > 0
+      ? { ...e, image_urls: e.image_paths.map((p) => urlMap[p]).filter((u): u is string => !!u) }
+      : e,
+  );
 }
 
 // 최근 이벤트 로그 조회 (app_analytics)
@@ -164,6 +182,8 @@ export async function loadDashboardData({ dateFrom, dateTo }: DateRange): Promis
     fetchTable<ChatFeedbackEscalationRow>('chatbot_feedback_escalations'),
   ]);
 
+  const chatEscalationsWithImages = await attachEscalationImageUrls(chatEscalations);
+
   return {
     weekly,
     daily,
@@ -178,7 +198,7 @@ export async function loadDashboardData({ dateFrom, dateTo }: DateRange): Promis
     chatDaily,
     chatTopics,
     chatDepth,
-    chatEscalations,
+    chatEscalations: chatEscalationsWithImages,
     chatConfidence,
     chatConversations,
     chatFeedbackStats,

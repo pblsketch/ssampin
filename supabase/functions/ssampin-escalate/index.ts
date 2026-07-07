@@ -17,6 +17,11 @@ import { checkRateLimit, clientIpFrom } from '../_shared/rateLimit.ts';
 
 // ── 타입 정의 ──────────────────────────────────────────────
 
+interface EscalateImage {
+  mimeType: string;
+  data: string; // base64 (no data: URL prefix)
+}
+
 interface EscalateRequest {
   sessionId: string;
   type: 'bug' | 'feature' | 'other';
@@ -24,6 +29,7 @@ interface EscalateRequest {
   email?: string;
   appVersion?: string;
   appSettings?: string;
+  images?: EscalateImage[];
 }
 
 interface EscalateResponse {
@@ -137,6 +143,78 @@ async function sendEscalationEmail(params: {
   }
 }
 
+// 클라이언트(imageUtils.ts/HelpEscalationForm.tsx)와 동일한 제한 — 서버측 방어.
+const MAX_IMAGES = 3;
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5MB
+const ALLOWED_IMAGE_MIME_TO_EXT: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/gif': 'gif',
+  'image/webp': 'webp',
+};
+
+interface StorageUploadClient {
+  storage: {
+    from(bucket: string): {
+      upload(
+        path: string,
+        body: Uint8Array,
+        options: { contentType: string; upsert: boolean },
+      ): Promise<{ error: { message: string } | null }>;
+    };
+  };
+}
+
+/**
+ * 첨부 스크린샷을 escalation-screenshots 버킷에 업로드하고 저장된 경로들을 반환한다.
+ * 개별 이미지가 실패(형식/용량 초과, 업로드 오류)해도 나머지는 계속 시도 — 첨부 문제로
+ * 텍스트 신고 자체가 유실되지 않도록 한다.
+ * (supabase 는 createClient() 의 제네릭 추론이 호출부마다 달라 unknown 으로 받아 좁은
+ *  구조적 타입으로 캐스트한다 — _shared/rateLimit.ts 의 기존 패턴과 동일.)
+ */
+async function uploadEscalationImages(
+  supabaseClient: unknown,
+  sessionId: string,
+  images: EscalateImage[],
+): Promise<string[]> {
+  const supabase = supabaseClient as StorageUploadClient;
+  const paths: string[] = [];
+
+  for (const img of images.slice(0, MAX_IMAGES)) {
+    const ext = ALLOWED_IMAGE_MIME_TO_EXT[img.mimeType];
+    if (!ext) {
+      console.warn('[ssampin-escalate] 지원하지 않는 이미지 형식 건너뜀:', img.mimeType);
+      continue;
+    }
+
+    let bytes: Uint8Array;
+    try {
+      bytes = Uint8Array.from(atob(img.data), (c) => c.charCodeAt(0));
+    } catch {
+      console.warn('[ssampin-escalate] 이미지 base64 디코딩 실패, 건너뜀');
+      continue;
+    }
+
+    if (bytes.byteLength === 0 || bytes.byteLength > MAX_IMAGE_BYTES) {
+      console.warn('[ssampin-escalate] 이미지 용량 초과/비어있음, 건너뜀:', bytes.byteLength);
+      continue;
+    }
+
+    const path = `${sessionId}/${crypto.randomUUID()}.${ext}`;
+    const { error } = await supabase.storage
+      .from('escalation-screenshots')
+      .upload(path, bytes, { contentType: img.mimeType, upsert: false });
+
+    if (error) {
+      console.error('[ssampin-escalate] 이미지 업로드 실패:', error);
+      continue;
+    }
+    paths.push(path);
+  }
+
+  return paths;
+}
+
 /** HTML 이스케이프 (XSS 방지) */
 function escapeHtml(text: string): string {
   return text
@@ -197,6 +275,12 @@ serve(async (req: Request): Promise<Response> => {
 
     const conversationContext = ((recentConversations ?? []) as ConversationRow[]).reverse();
 
+    // 첨부 스크린샷 업로드 (있는 경우만) — 실패해도 텍스트 신고는 계속 진행
+    const imagePaths =
+      body.images && body.images.length > 0
+        ? await uploadEscalationImages(supabase, body.sessionId, body.images)
+        : [];
+
     // 에스컬레이션 저장
     const { error: insertError } = await supabase.from('ssampin_escalations').insert({
       session_id: body.sessionId,
@@ -206,6 +290,7 @@ serve(async (req: Request): Promise<Response> => {
       user_message: body.message,
       conversation_context: conversationContext,
       email_sent: false,
+      image_paths: imagePaths.length > 0 ? imagePaths : null,
     });
 
     if (insertError) {

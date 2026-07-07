@@ -229,6 +229,19 @@ export function ChatbotAnalyticsSection({
                     )}
                   </summary>
                   <div className="border-t border-gray-700/40 px-3 pb-3 pt-2 space-y-1.5">
+                    {e.image_urls && e.image_urls.length > 0 && (
+                      <div className="flex flex-wrap gap-2 pb-1">
+                        {e.image_urls.map((url, i) => (
+                          <a key={url} href={url} target="_blank" rel="noopener noreferrer">
+                            <img
+                              src={url}
+                              alt={`첨부 스크린샷 ${i + 1}`}
+                              className="h-16 w-16 rounded object-cover border border-gray-700 hover:border-gray-500"
+                            />
+                          </a>
+                        ))}
+                      </div>
+                    )}
                     {context.length === 0 ? (
                       <p className="text-xs text-gray-500">저장된 대화 맥락이 없습니다</p>
                     ) : (

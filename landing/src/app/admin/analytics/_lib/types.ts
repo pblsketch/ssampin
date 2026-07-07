@@ -94,6 +94,10 @@ export interface ChatEscalationRow {
   session_id: string;
   /** 신고 시점 대화 맥락 (ssampin-escalate 가 적재, 최근 메시지 순서대로) */
   conversation_context: EscalationMessage[] | null;
+  /** 첨부 스크린샷의 escalation-screenshots 버킷 내 경로 (ssampin-escalate 가 적재) */
+  image_paths: string[] | null;
+  /** image_paths 로 서버에서 발급한 임시 서명 URL (data.ts 가 채움, private 버킷이라 뷰 자체엔 없음) */
+  image_urls?: string[];
 }
 
 export interface ChatConfidenceRow {

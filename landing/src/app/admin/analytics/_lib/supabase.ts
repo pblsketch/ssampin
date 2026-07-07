@@ -93,3 +93,54 @@ export async function fetchRpc<T>(
   }
   return res.json();
 }
+
+interface SignedUrlItem {
+  path?: string;
+  signedURL?: string;
+  signedUrl?: string;
+  error?: string | null;
+}
+
+/**
+ * private Storage 버킷의 파일들에 대해 임시 서명 URL을 일괄 발급한다.
+ * 관리자 화면(브라우저)에 직접 노출해도 되도록 시간 제한을 둔다 — 버킷 자체는
+ * service_role만 접근 가능해 서명 URL 없이는 열람 불가.
+ * 환경 변수 누락/요청 실패 시 빈 객체를 반환해 화면은 안전하게 "이미지 없음"으로 동작한다.
+ */
+export async function signStorageUrls(
+  bucket: string,
+  paths: string[],
+  expiresIn = 3600,
+): Promise<Record<string, string>> {
+  if (paths.length === 0) return {};
+
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return {};
+
+  const res = await fetch(`${url}/storage/v1/object/sign/${bucket}`, {
+    method: 'POST',
+    headers: {
+      apikey: key,
+      Authorization: `Bearer ${key}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ expiresIn, paths }),
+    cache: 'no-store',
+  });
+
+  if (!res.ok) {
+    console.error(`[Analytics] Storage sign "${bucket}" failed: ${res.status}`);
+    return {};
+  }
+
+  const items = (await res.json()) as SignedUrlItem[];
+  const map: Record<string, string> = {};
+  for (const item of items) {
+    const signed = item.signedURL ?? item.signedUrl;
+    if (item.path && signed) {
+      map[item.path] = `${url}/storage/v1${signed}`;
+    }
+  }
+  return map;
+}
