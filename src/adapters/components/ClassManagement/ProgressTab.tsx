@@ -4,6 +4,7 @@ import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { CalendarPicker } from '@adapters/components/common/CalendarPicker';
 import { ScrollRow } from '@adapters/components/common/ScrollRow';
+import { ProgressEntryFields } from './ProgressEntryFields';
 import type { ProgressEntry, ProgressStatus } from '@domain/entities/CurriculumProgress';
 import type { TeachingClass } from '@domain/entities/TeachingClass';
 import { resolvePreset, resolveClassroomPreset } from '@domain/valueObjects/SubjectColor';
@@ -442,72 +443,26 @@ export function ProgressTab({ classId }: ProgressTabProps) {
       {/* ── 추가 폼 ── */}
       {showForm && (
         <div className="bg-sp-surface border border-sp-border rounded-xl p-4 space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs text-sp-muted mb-1">날짜</label>
-              <CalendarPicker
-                value={formDate}
-                onChange={handleDateChange}
-                lessonDays={lessonDayIndices}
-                accentColor={subjectAccent}
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-sp-muted mb-1">교시</label>
-              <select
-                value={formPeriod}
-                onChange={(e) => setFormPeriod(Number(e.target.value))}
-                className="w-full px-3 py-1.5 bg-sp-card border border-sp-border rounded-lg
-                           text-sp-text text-sm focus:outline-none focus:border-sp-accent"
-              >
-                {Array.from({ length: settings.maxPeriods ?? 8 }, (_, i) => i + 1).map((p) => {
-                  const matching = getMatchingPeriods(formDate);
-                  const isMatch = matching.includes(p);
-                  return (
-                    <option key={p} value={p}>
-                      {p}교시{isMatch ? ' ✦' : ''}
-                    </option>
-                  );
-                })}
-              </select>
-            </div>
-          </div>
-          <div>
-            <label className="block text-xs text-sp-muted mb-1">단원</label>
-            <input
-              type="text"
-              value={formUnit}
-              onChange={(e) => setFormUnit(e.target.value)}
-              placeholder="예: 1단원 - 문학의 이해"
-              className="w-full px-3 py-1.5 bg-sp-card border border-sp-border rounded-lg
-                         text-sp-text text-sm focus:outline-none focus:border-sp-accent
-                         placeholder:text-sp-muted/50"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-sp-muted mb-1">차시/주제</label>
-            <input
-              type="text"
-              value={formLesson}
-              onChange={(e) => setFormLesson(e.target.value)}
-              placeholder="예: 1차시 - 소설의 구성요소"
-              className="w-full px-3 py-1.5 bg-sp-card border border-sp-border rounded-lg
-                         text-sp-text text-sm focus:outline-none focus:border-sp-accent
-                         placeholder:text-sp-muted/50"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-sp-muted mb-1">비고 (선택)</label>
-            <input
-              type="text"
-              value={formNote}
-              onChange={(e) => setFormNote(e.target.value)}
-              placeholder="예: 모둠 활동 포함"
-              className="w-full px-3 py-1.5 bg-sp-card border border-sp-border rounded-lg
-                         text-sp-text text-sm focus:outline-none focus:border-sp-accent
-                         placeholder:text-sp-muted/50"
-            />
-          </div>
+          <ProgressEntryFields
+            values={{
+              date: formDate,
+              period: formPeriod,
+              unit: formUnit,
+              lesson: formLesson,
+              note: formNote,
+            }}
+            onChange={(patch) => {
+              if (patch.period !== undefined) setFormPeriod(patch.period);
+              if (patch.unit !== undefined) setFormUnit(patch.unit);
+              if (patch.lesson !== undefined) setFormLesson(patch.lesson);
+              if (patch.note !== undefined) setFormNote(patch.note);
+            }}
+            onDateChange={handleDateChange}
+            matchingPeriods={getMatchingPeriods(formDate)}
+            lessonDays={lessonDayIndices}
+            accentColor={subjectAccent}
+            maxPeriods={settings.maxPeriods ?? 8}
+          />
           <div className="flex justify-end gap-2 pt-1">
             <button
               onClick={() => setShowForm(false)}

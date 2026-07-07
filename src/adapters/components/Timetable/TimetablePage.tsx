@@ -1,7 +1,18 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import type { ReactNode } from 'react';
 import { PageHeader } from '@adapters/components/common/PageHeader';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
+import {
+  buildWeeklyProgressGrid,
+  summarizeClassProgress,
+  cellKey,
+  type ClassProgressSummary,
+} from '@domain/rules/progressCalendarRules';
+import { ProgressCellOverlay } from '@adapters/components/Progress/ProgressCellOverlay';
+import { ProgressQuickEntryModal } from '@adapters/components/Progress/ProgressQuickEntryModal';
+import { useProgressQuickEntry } from '@adapters/components/Progress/useProgressQuickEntry';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { toLocalDateString } from '@shared/utils/localDate';
@@ -65,10 +76,13 @@ export function TimetablePage() {
     getEffectiveTeacherSchedule,
   } = useScheduleStore();
   const { settings, load: loadSettings } = useSettingsStore();
+  const { classes, progressEntries, load: loadClasses } = useTeachingClassStore();
   useAnalytics();
   const [tab, setTabState] = useState<TabType>(
     settings.timetableDefaultView ?? (settings.schoolLevel === 'elementary' ? 'class' : 'teacher'),
   );
+  /** 진도 보기 오버레이 (교사 탭 전용) */
+  const [showProgress, setShowProgress] = useState(false);
   const tabInitializedRef = useRef(false);
   const [isEditing, setIsEditing] = useState(false);
   const [now, setNow] = useState(new Date());
@@ -76,7 +90,8 @@ export function TimetablePage() {
   useEffect(() => {
     void loadSchedule();
     void loadSettings();
-  }, [loadSchedule, loadSettings]);
+    void loadClasses();
+  }, [loadSchedule, loadSettings, loadClasses]);
 
   // Settings 비동기 로드 완료 후 초기 탭을 한 번만 동기화
   useEffect(() => {
@@ -181,6 +196,69 @@ export function TimetablePage() {
     return map;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weekDates, teacherSchedule, overrides, weekendDays]);
+
+  /* ── 진도 보기 오버레이 (교사 탭 전용) ── */
+  const periodNumbers = useMemo(
+    () => settings.periodTimes.slice(0, settings.maxPeriods).map((pt) => pt.period),
+    [settings.periodTimes, settings.maxPeriods],
+  );
+
+  // 유효(변동 머지) 교사 시간표를 도메인 셀렉터에 주입 — base 시간표를 넘기면 자습 셀 오표시(Critic 캐비엇)
+  const progressGrid = useMemo(() => {
+    if (!showProgress) return null;
+    const dayTeacherSchedules = weekDates.map((date) => effectiveTeacherByDate.get(date) ?? []);
+    return buildWeeklyProgressGrid({
+      weekDates,
+      periods: periodNumbers,
+      dayTeacherSchedules,
+      progressEntries,
+      classes,
+    });
+  }, [showProgress, weekDates, effectiveTeacherByDate, periodNumbers, progressEntries, classes]);
+
+  const progressClassSummaries = useMemo(() => {
+    if (!showProgress) return null;
+    const map = new Map<string, ClassProgressSummary>();
+    for (const cls of classes) {
+      map.set(cls.id, summarizeClassProgress(progressEntries.filter((e) => e.classId === cls.id)));
+    }
+    return map;
+     
+  }, [showProgress, classes, progressEntries]);
+
+  // 진도 빠른 입력/편집 상태 머신 — B안(수업 관리 캘린더)과 공유
+  const {
+    modal: progressModal,
+    openAdd: openProgressAdd,
+    openEntry: openProgressEntry,
+    submit: handleProgressSubmit,
+    remove: handleProgressDelete,
+    close: closeProgressModal,
+    accentFor: progressAccentFor,
+  } = useProgressQuickEntry({
+    colorBy,
+    subjectColors: settings.subjectColors,
+    classroomColors: settings.classroomColors,
+  });
+
+  // 셀별 진도 오버레이 렌더프롭 — 셀은 진도 데이터를 모르고, 이 클로저만 grid를 조회한다
+  const renderCellOverlay = useCallback(
+    (dayIdx: number, period: number): ReactNode => {
+      if (!showProgress || tab !== 'teacher' || !progressGrid) return null;
+      const cell = progressGrid.get(cellKey(dayIdx, period));
+      if (!cell || !cell.matchedClass) return null;
+      return (
+        <ProgressCellOverlay
+          cell={cell}
+          classSummary={progressClassSummaries?.get(cell.matchedClass.id)}
+          asOverlay
+          onAddClick={() => openProgressAdd(cell)}
+          onEntryClick={() => openProgressEntry(cell)}
+        />
+      );
+    },
+    [showProgress, tab, progressGrid, progressClassSummaries, openProgressAdd, openProgressEntry],
+  );
 
   // 임시 변경 모달 상태
   const [tempChangeTarget, setTempChangeTarget] = useState<{
@@ -592,6 +670,22 @@ export function TimetablePage() {
               </button>
             )}
 
+            {/* 진도 보기 토글 (교사 시간표에서만 — 격자 위 진도 오버레이) */}
+            {tab === 'teacher' && (
+              <button
+                onClick={() => setShowProgress((v) => !v)}
+                title="시간표 위에 각 반의 진도를 표시해요"
+                className={`flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-bold transition-all active:scale-95 ${
+                  showProgress
+                    ? 'bg-sp-accent border-sp-accent text-white shadow-md'
+                    : 'bg-sp-surface border-sp-border text-sp-text hover:bg-sp-card'
+                }`}
+              >
+                <span className="material-symbols-outlined text-icon-lg">trending_up</span>
+                <span className="hidden xl:inline">진도 보기</span>
+              </button>
+            )}
+
             {/* 색상 모드 토글 (교사 시간표에서만 표시) */}
             {tab === 'teacher' && (
               <div className="flex items-center gap-1 bg-sp-surface rounded-xl p-1 border border-sp-border">
@@ -773,6 +867,7 @@ export function TimetablePage() {
                         onOpenPalette={setOpenPalette}
                         onClosePalette={closePalette}
                         onViewColorChange={handleViewColorChange}
+                        renderCellOverlay={showProgress ? renderCellOverlay : undefined}
                       />
                     );
                   })}
@@ -1015,6 +1110,22 @@ export function TimetablePage() {
           }}
         />
       )}
+
+      {/* 진도 빠른 입력/편집 모달 (진도 보기 오버레이 셀 클릭) */}
+      {progressModal && progressModal.cell.matchedClass && (
+        <ProgressQuickEntryModal
+          mode={progressModal.mode}
+          className={`${progressModal.cell.matchedClass.name} · ${progressModal.cell.matchedClass.subject}`}
+          initialValues={progressModal.values}
+          initialStatus={progressModal.status}
+          matchingPeriods={[progressModal.cell.period]}
+          accentColor={progressAccentFor(progressModal.cell)}
+          maxPeriods={settings.maxPeriods}
+          onSubmit={handleProgressSubmit}
+          onDelete={progressModal.mode === 'edit' ? handleProgressDelete : undefined}
+          onClose={closeProgressModal}
+        />
+      )}
     </div>
   );
 }
@@ -1097,6 +1208,8 @@ interface PeriodRowProps {
   onOpenPalette: (palette: { dayIdx: number; period: number }) => void;
   onClosePalette: () => void;
   onViewColorChange: (key: string, colorId: SubjectColorId) => void;
+  /** 진도 보기 오버레이 렌더프롭 — 셀은 진도 데이터를 모르고 이 노드만 렌더한다 (교사 탭 전용) */
+  renderCellOverlay?: (dayIdx: number, period: number) => ReactNode;
 }
 
 function PeriodRow({
@@ -1120,6 +1233,7 @@ function PeriodRow({
   onOpenPalette,
   onClosePalette,
   onViewColorChange,
+  renderCellOverlay,
 }: PeriodRowProps) {
   return (
     <>
@@ -1218,6 +1332,7 @@ function PeriodRow({
               classroomColors={classroomColors}
               colorBy={colorBy}
               override={override}
+              overlay={renderCellOverlay?.(dayIdx, periodTime.period)}
               onContextMenu={(e) => {
                 e.preventDefault();
                 if (override) {
@@ -1401,6 +1516,8 @@ interface TeacherCellProps {
   onOpenColorPalette: () => void;
   onCloseColorPalette: () => void;
   onColorChange: (key: string, colorId: SubjectColorId) => void;
+  /** 진도 보기 오버레이 노드 (셀은 내용 무지 — 절대배치 슬롯으로 렌더만) */
+  overlay?: ReactNode;
 }
 
 function TeacherCell({
@@ -1417,6 +1534,7 @@ function TeacherCell({
   onOpenColorPalette,
   onCloseColorPalette,
   onColorChange,
+  overlay,
 }: TeacherCellProps) {
   const isOverridden = override != null;
 
@@ -1449,6 +1567,7 @@ function TeacherCell({
               <span className="material-symbols-outlined text-xs">push_pin</span>
             </span>
           )}
+          {overlay}
         </div>
       </td>
     );
@@ -1499,6 +1618,7 @@ function TeacherCell({
           ) : (
             <span className="block w-2 h-2 rounded-full bg-amber-400 animate-ping absolute -top-1 -right-1" />
           )}
+          {overlay}
         </div>
         {isColorPaletteOpen && (
           <InlineColorPalette
@@ -1534,6 +1654,7 @@ function TeacherCell({
             <span className="material-symbols-outlined text-xs">push_pin</span>
           </span>
         )}
+        {overlay}
       </div>
       {isColorPaletteOpen && (
         <InlineColorPalette
