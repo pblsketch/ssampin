@@ -10,7 +10,7 @@ interface StickerState {
   loaded: boolean;
   loadingError: string | null;
 
-  load: () => Promise<void>;
+  load: (force?: boolean) => Promise<void>;
 
   addSticker: (input: {
     /** 사전 발급된 id (atomic 흐름에서 PNG 파일과 metadata id를 일치시키기 위해 사용) */
@@ -76,8 +76,9 @@ export const useStickerStore = create<StickerState>((set, get) => {
     loaded: false,
     loadingError: null,
 
-    load: async () => {
-      if (get().loaded) return;
+    load: async (force = false) => {
+      // force=true: 동기화 리로드용 — loaded를 유지한 채 데이터만 조용히 갱신
+      if (get().loaded && !force) return;
       try {
         const data = await manageStickers.load();
         set({ data, loaded: true, loadingError: null });

@@ -178,7 +178,7 @@ interface SeatingState {
   past: SeatingData[];
   future: SeatingData[];
 
-  load: () => Promise<void>;
+  load: (force?: boolean) => Promise<void>;
   swapSeats: (r1: number, c1: number, r2: number, c2: number) => Promise<void>;
   randomize: () => Promise<ShuffleResult | null>;
   updateStudent: (row: number, col: number, studentId: string | null) => Promise<void>;
@@ -347,8 +347,9 @@ export const useSeatingStore = create<SeatingState>((set, get) => {
     presetArrangement: null,
     presetLoaded: false,
 
-    load: async () => {
-      if (get().loaded) return;
+    load: async (force = false) => {
+      // force=true: 동기화 리로드용 — loaded를 유지한 채 데이터만 조용히 갱신
+      if (get().loaded && !force) return;
       try {
         // 학생 스토어가 먼저 로드되어야 함
         const studentState = useStudentStore.getState();

@@ -16,7 +16,7 @@ interface StudentState {
   students: readonly Student[];
   loaded: boolean;
 
-  load: () => Promise<void>;
+  load: (force?: boolean) => Promise<void>;
   updateStudents: (students: readonly Student[]) => Promise<void>;
   updateStudentName: (id: string, name: string) => Promise<void>;
   updateStudentField: (
@@ -76,8 +76,9 @@ export const useStudentStore = create<StudentState>((set, get) => ({
   students: [],
   loaded: false,
 
-  load: async () => {
-    if (get().loaded) return;
+  load: async (force = false) => {
+    // force=true: 동기화 리로드용 — loaded를 유지한 채 데이터만 조용히 갱신
+    if (get().loaded && !force) return;
     try {
       const data = await studentRepository.getStudents();
       if (!data) {

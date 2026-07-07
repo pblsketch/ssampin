@@ -5,7 +5,7 @@ import { ddayRepository } from '@adapters/di/container';
 interface DDayState {
   items: readonly DDayItem[];
   loaded: boolean;
-  load: () => Promise<void>;
+  load: (force?: boolean) => Promise<void>;
   add: (item: DDayItem) => Promise<void>;
   update: (id: string, patch: Partial<Omit<DDayItem, 'id' | 'createdAt'>>) => Promise<void>;
   remove: (id: string) => Promise<void>;
@@ -16,8 +16,9 @@ export const useDDayStore = create<DDayState>((set, get) => ({
   items: [],
   loaded: false,
 
-  load: async () => {
-    if (get().loaded) return;
+  load: async (force = false) => {
+    // force=true: 동기화 리로드용 — loaded를 유지한 채 데이터만 조용히 갱신
+    if (get().loaded && !force) return;
     const data = await ddayRepository.load();
     set({ items: data?.items ? [...data.items] : [], loaded: true });
   },

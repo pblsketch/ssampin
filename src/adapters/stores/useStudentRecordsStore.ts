@@ -102,7 +102,7 @@ interface StudentRecordsState {
   viewMode: ViewMode;
   periodFilter: PeriodFilter;
 
-  load: () => Promise<void>;
+  load: (force?: boolean) => Promise<void>;
   addRecord: (
     studentId: string,
     category: string,
@@ -176,8 +176,9 @@ export const useStudentRecordsStore = create<StudentRecordsState>((set, get) => 
     viewMode: 'input',
     periodFilter: 'month',
 
-    load: async () => {
-      if (get().loaded) return;
+    load: async (force = false) => {
+      // force=true: 동기화 리로드용 — loaded를 유지한 채 데이터만 조용히 갱신
+      if (get().loaded && !force) return;
       try {
         // Q2: 로드 시 멱등 정규화(비출결 subcategory→tags). 변경 있으면 1회 백업 후 영속,
         //   변경 없으면 순수 read no-op. 동기화 후 reload 에서도 재실행되어 자가 치유한다.

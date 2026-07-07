@@ -12,7 +12,7 @@ interface ObservationState {
   customCategories: readonly string[];
   loaded: boolean;
 
-  load: () => Promise<void>;
+  load: (force?: boolean) => Promise<void>;
   addRecord: (params: {
     studentId: string;
     classId: string;
@@ -44,8 +44,9 @@ export const useObservationStore = create<ObservationState>((set, get) => {
     customCategories: [],
     loaded: false,
 
-    load: async () => {
-      if (get().loaded) return;
+    load: async (force = false) => {
+      // force=true: 동기화 리로드용 — loaded를 유지한 채 데이터만 조용히 갱신
+      if (get().loaded && !force) return;
       try {
         const data = await manage.getAll();
         set({

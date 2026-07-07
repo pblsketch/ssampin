@@ -24,7 +24,7 @@ interface ObservationAttachmentState {
   attachments: readonly ObservationAttachment[];
   loaded: boolean;
 
-  load: () => Promise<void>;
+  load: (force?: boolean) => Promise<void>;
   /**
    * 파일을 첨부한다. 검증 실패(형식·크기·개수)는 Error 를 throw 하므로 호출 측에서 catch 해 안내한다.
    * 원본을 그대로 저장한다(리사이즈 없음 — 생기부 근거로 원본 보존, 크기 한도가 안전판).
@@ -40,8 +40,9 @@ export const useObservationAttachmentStore = create<ObservationAttachmentState>(
   attachments: [],
   loaded: false,
 
-  load: async () => {
-    if (get().loaded) return;
+  load: async (force = false) => {
+    // force=true: 동기화 리로드용 — loaded를 유지한 채 데이터만 조용히 갱신
+    if (get().loaded && !force) return;
     try {
       const attachments = await observationAttachmentRepository.list();
       set({ attachments, loaded: true });

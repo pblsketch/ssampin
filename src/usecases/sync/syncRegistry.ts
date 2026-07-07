@@ -35,6 +35,11 @@ export interface SyncDomain {
    * subscribeExcluded인 도메인(settings 등)도 다운로드 후 reload가 필요하므로 분리.
    *
    * 반드시 dynamic import lazy로 구현 (usecases → adapters 직접 의존 금지).
+   *
+   * ⚠️ setState({ loaded: false })를 켜지 말 것 — 페이지의 `!loaded` 로딩 가드가
+   * 화면(편집 중인 입력 포함)을 통째로 언마운트해 작성 내용이 소실된다.
+   * store.load(true) / reload() / refresh() 등으로 loaded를 유지한 채 조용히 갱신한다.
+   * (예외: useScheduleStore — 타 세션 작업 중 파일이라 force 미지원, 후속 전환 대상)
    */
   reload: () => Promise<void>;
 
@@ -62,8 +67,7 @@ export const SYNC_REGISTRY: SyncDomain[] = [
     subscribeExcluded: true,
     reload: async () => {
       const { useSettingsStore } = await import('@adapters/stores/useSettingsStore');
-      useSettingsStore.setState({ loaded: false });
-      await useSettingsStore.getState().load();
+      await useSettingsStore.getState().load(true);
     },
   },
   // 2. class-schedule ─ useScheduleStore (대표 키)
@@ -100,8 +104,7 @@ export const SYNC_REGISTRY: SyncDomain[] = [
     fileName: 'students',
     reload: async () => {
       const { useStudentStore } = await import('@adapters/stores/useStudentStore');
-      useStudentStore.setState({ loaded: false });
-      await useStudentStore.getState().load();
+      await useStudentStore.getState().load(true);
     },
   },
   // 6. seating
@@ -109,8 +112,7 @@ export const SYNC_REGISTRY: SyncDomain[] = [
     fileName: 'seating',
     reload: async () => {
       const { useSeatingStore } = await import('@adapters/stores/useSeatingStore');
-      useSeatingStore.setState({ loaded: false });
-      await useSeatingStore.getState().load();
+      await useSeatingStore.getState().load(true);
     },
   },
   // 7. events
@@ -118,8 +120,8 @@ export const SYNC_REGISTRY: SyncDomain[] = [
     fileName: 'events',
     reload: async () => {
       const { useEventsStore } = await import('@adapters/stores/useEventsStore');
-      useEventsStore.setState({ loaded: false });
-      await useEventsStore.getState().load();
+      // reload()는 loaded를 유지한 채 데이터만 교체하는 기존 전용 함수
+      await useEventsStore.getState().reload();
     },
   },
   // 8. memos
@@ -137,8 +139,8 @@ export const SYNC_REGISTRY: SyncDomain[] = [
     fileName: 'todos',
     reload: async () => {
       const { useTodoStore } = await import('@adapters/stores/useTodoStore');
-      useTodoStore.setState({ loaded: false });
-      await useTodoStore.getState().load();
+      // refresh()는 loaded를 유지한 채 데이터만 교체하는 기존 전용 함수
+      await useTodoStore.getState().refresh();
     },
   },
   // 10. student-records
@@ -146,8 +148,7 @@ export const SYNC_REGISTRY: SyncDomain[] = [
     fileName: 'student-records',
     reload: async () => {
       const { useStudentRecordsStore } = await import('@adapters/stores/useStudentRecordsStore');
-      useStudentRecordsStore.setState({ loaded: false });
-      await useStudentRecordsStore.getState().load();
+      await useStudentRecordsStore.getState().load(true);
     },
   },
   // 11. bookmarks ─ loaded 플래그 없는 패턴 (loadAll 직접 호출)
@@ -163,7 +164,7 @@ export const SYNC_REGISTRY: SyncDomain[] = [
     fileName: 'surveys',
     reload: async () => {
       const { useSurveyStore } = await import('@adapters/stores/useSurveyStore');
-      useSurveyStore.setState({ loaded: false });
+      // useSurveyStore.load()는 loaded 가드가 없어 항상 재조회한다
       await useSurveyStore.getState().load();
     },
   },
@@ -180,8 +181,7 @@ export const SYNC_REGISTRY: SyncDomain[] = [
     fileName: 'seat-constraints',
     reload: async () => {
       const { useSeatConstraintsStore } = await import('@adapters/stores/useSeatConstraintsStore');
-      useSeatConstraintsStore.setState({ loaded: false });
-      await useSeatConstraintsStore.getState().load();
+      await useSeatConstraintsStore.getState().load(true);
     },
   },
   // 15. teaching-classes ─ useTeachingClassStore (대표 키)
@@ -189,8 +189,7 @@ export const SYNC_REGISTRY: SyncDomain[] = [
     fileName: 'teaching-classes',
     reload: async () => {
       const { useTeachingClassStore } = await import('@adapters/stores/useTeachingClassStore');
-      useTeachingClassStore.setState({ loaded: false });
-      await useTeachingClassStore.getState().load();
+      await useTeachingClassStore.getState().load(true);
     },
   },
   // 16. curriculum-progress ─ useTeachingClassStore 중복 subscribe 방지
@@ -199,8 +198,7 @@ export const SYNC_REGISTRY: SyncDomain[] = [
     subscribeExcluded: true,
     reload: async () => {
       const { useTeachingClassStore } = await import('@adapters/stores/useTeachingClassStore');
-      useTeachingClassStore.setState({ loaded: false });
-      await useTeachingClassStore.getState().load();
+      await useTeachingClassStore.getState().load(true);
     },
   },
   // 17. attendance ─ useTeachingClassStore 중복 subscribe 방지
@@ -209,8 +207,7 @@ export const SYNC_REGISTRY: SyncDomain[] = [
     subscribeExcluded: true,
     reload: async () => {
       const { useTeachingClassStore } = await import('@adapters/stores/useTeachingClassStore');
-      useTeachingClassStore.setState({ loaded: false });
-      await useTeachingClassStore.getState().load();
+      await useTeachingClassStore.getState().load(true);
     },
   },
   // 18. dday
@@ -218,8 +215,7 @@ export const SYNC_REGISTRY: SyncDomain[] = [
     fileName: 'dday',
     reload: async () => {
       const { useDDayStore } = await import('@adapters/stores/useDDayStore');
-      useDDayStore.setState({ loaded: false });
-      await useDDayStore.getState().load();
+      await useDDayStore.getState().load(true);
     },
   },
   // 19. consultations
@@ -227,7 +223,7 @@ export const SYNC_REGISTRY: SyncDomain[] = [
     fileName: 'consultations',
     reload: async () => {
       const { useConsultationStore } = await import('@adapters/stores/useConsultationStore');
-      useConsultationStore.setState({ loaded: false });
+      // useConsultationStore.load()는 loaded 가드가 없어 항상 재조회한다
       await useConsultationStore.getState().load();
     },
   },
@@ -292,8 +288,7 @@ export const SYNC_REGISTRY: SyncDomain[] = [
     fileName: 'stickers',
     reload: async () => {
       const { useStickerStore } = await import('@adapters/stores/useStickerStore');
-      useStickerStore.setState({ loaded: false });
-      await useStickerStore.getState().load();
+      await useStickerStore.getState().load(true);
     },
   },
   // 26. rubrics ─ 수행평가 채점 (루브릭 + 채점 기록)
@@ -301,7 +296,7 @@ export const SYNC_REGISTRY: SyncDomain[] = [
     fileName: 'rubrics',
     reload: async () => {
       const { useRubricStore } = await import('@adapters/stores/useRubricStore');
-      useRubricStore.setState({ loaded: false });
+      // useRubricStore.load()는 loaded 가드가 없어 항상 재조회한다
       await useRubricStore.getState().load();
     },
   },
@@ -310,8 +305,7 @@ export const SYNC_REGISTRY: SyncDomain[] = [
     fileName: 'observations',
     reload: async () => {
       const { useObservationStore } = await import('@adapters/stores/useObservationStore');
-      useObservationStore.setState({ loaded: false });
-      await useObservationStore.getState().load();
+      await useObservationStore.getState().load(true);
     },
   },
   // 28. record-drafts ─ AI 브릿지 생기부 초안 (영역별 write-back 수신)
@@ -319,8 +313,7 @@ export const SYNC_REGISTRY: SyncDomain[] = [
     fileName: 'record-drafts',
     reload: async () => {
       const { useRecordDraftsStore } = await import('@adapters/stores/useRecordDraftsStore');
-      useRecordDraftsStore.setState({ loaded: false });
-      await useRecordDraftsStore.getState().load();
+      await useRecordDraftsStore.getState().load(true);
     },
   },
   // 29. observation-attachments ─ 관찰 첨부 메타(JSON). useObservationAttachmentStore 대표 키.
@@ -329,8 +322,7 @@ export const SYNC_REGISTRY: SyncDomain[] = [
     reload: async () => {
       const { useObservationAttachmentStore } =
         await import('@adapters/stores/useObservationAttachmentStore');
-      useObservationAttachmentStore.setState({ loaded: false });
-      await useObservationAttachmentStore.getState().load();
+      await useObservationAttachmentStore.getState().load(true);
     },
   },
   // 30. obs-attachment-binary ─ 관찰 첨부 바이너리 (동적, 첨부마다 1파일).

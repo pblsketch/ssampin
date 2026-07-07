@@ -237,7 +237,7 @@ interface SettingsState {
   settings: Settings;
   loaded: boolean;
   isFirstRun: boolean;
-  load: () => Promise<void>;
+  load: (force?: boolean) => Promise<void>;
   update: (patch: Partial<Settings>) => Promise<void>;
   completeOnboarding: (settings: Partial<Settings>) => Promise<void>;
   setShortcut: (commandId: string, combo: string, enabled?: boolean) => Promise<void>;
@@ -250,8 +250,9 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   loaded: false,
   isFirstRun: false,
 
-  load: async () => {
-    if (get().loaded) return;
+  load: async (force = false) => {
+    // force=true: 동기화 리로드용 — loaded를 유지한 채 데이터만 조용히 갱신
+    if (get().loaded && !force) return;
     try {
       const saved = await settingsRepository.getSettings();
       if (saved) {

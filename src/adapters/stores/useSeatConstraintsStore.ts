@@ -13,7 +13,7 @@ import { ManageSeatConstraints } from '@usecases/seating/ManageSeatConstraints';
 interface SeatConstraintsState {
   constraints: SeatConstraints;
   loaded: boolean;
-  load: () => Promise<void>;
+  load: (force?: boolean) => Promise<void>;
   save: (data: SeatConstraints) => Promise<void>;
   addZone: (zone: ZoneConstraint) => Promise<void>;
   removeZone: (studentId: string) => Promise<void>;
@@ -46,8 +46,9 @@ export const useSeatConstraintsStore = create<SeatConstraintsState>((set, get) =
     constraints: EMPTY_SEAT_CONSTRAINTS,
     loaded: false,
 
-    load: async () => {
-      if (get().loaded) return;
+    load: async (force = false) => {
+      // force=true: 동기화 리로드용 — loaded를 유지한 채 데이터만 조용히 갱신
+      if (get().loaded && !force) return;
       try {
         const data = await uc.getConstraints();
         set({ constraints: data, loaded: true });

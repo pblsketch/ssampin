@@ -27,7 +27,7 @@ interface RecordDraftsState {
   records: readonly RecordDraft[];
   loaded: boolean;
 
-  load: () => Promise<void>;
+  load: (force?: boolean) => Promise<void>;
   /** (area+studentRef+subject) 키로 upsert. 반환 = 저장된 draft id. */
   upsert: (input: RecordDraftUpsertInput) => Promise<string>;
   setStatus: (id: string, status: RecordDraftStatus) => Promise<void>;
@@ -58,8 +58,9 @@ export const useRecordDraftsStore = create<RecordDraftsState>((set, get) => {
     records: [],
     loaded: false,
 
-    load: async () => {
-      if (get().loaded) return;
+    load: async (force = false) => {
+      // force=true: 동기화 리로드용 — loaded를 유지한 채 데이터만 조용히 갱신
+      if (get().loaded && !force) return;
       try {
         const data = await recordDraftsRepository.getRecordDrafts();
         set({ records: data?.records ?? [], loaded: true });
