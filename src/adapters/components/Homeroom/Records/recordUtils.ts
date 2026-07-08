@@ -7,6 +7,7 @@ import type {
   AttendancePeriodEntry,
 } from '@domain/entities/StudentRecord';
 import { formatPeriodLabel } from '@domain/entities/Attendance';
+import { reassignConflictingNumbers } from '@domain/rules/studentNumberRules';
 import {
   enumerateRange,
   formatDateKR as formatDateKRBase,
@@ -82,6 +83,23 @@ export function initEditAttendancePeriods(record: {
       ...(reason ? { reason } : {}),
     },
   ];
+}
+
+/* ──────────────────────── 출석번호 정리 ──────────────────────── */
+
+/**
+ * 담임 명단의 출석번호 충돌(빈 번호·중복)을 정리한다.
+ *
+ * 출결은 학생을 "번호"로 식별하므로 번호가 비었거나 겹치면 한 명의 출결이 같은 번호
+ * 학생 전원에게 번진다("한 명 → 전원" 오염). 이 함수는 유효·고유한 번호는 그대로 두고
+ * 문제 있는 학생에게만 미사용 번호를 새로 부여해 충돌을 없앤다.
+ *
+ * ⚠️ 반드시 **비활성 학생을 포함한 전체 명단**에 적용해 updateStudents 로 저장해야 한다
+ *   (활성 학생만 넘기면 저장 시 비활성 학생이 명단에서 사라진다).
+ */
+export function renumberHomeroomStudents(students: readonly Student[]): Student[] {
+  const fixed = reassignConflictingNumbers(students.map((s) => ({ number: s.studentNumber })));
+  return students.map((s, i) => ({ ...s, studentNumber: fixed[i]!.number }));
 }
 
 /* ──────────────────────── 날짜 유틸 ──────────────────────── */
@@ -197,7 +215,9 @@ export function getRecordChipLabel(
 ): string {
   if (record.category === 'attendance') return record.subcategory;
   if (record.tags && record.tags.length > 0) return record.tags.join(' · ');
-  return categories.find((c) => c.id === record.category)?.name.split(' (')[0] ?? record.subcategory;
+  return (
+    categories.find((c) => c.id === record.category)?.name.split(' (')[0] ?? record.subcategory
+  );
 }
 
 export function getCategoryDotColor(

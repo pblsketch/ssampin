@@ -1,7 +1,9 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useStudentRecordsStore } from '@adapters/stores/useStudentRecordsStore';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
+import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+import { detectStudentNumberIssues } from '@domain/rules/studentNumberRules';
 import { useToastStore } from '@adapters/components/common/Toast';
 import {
   ATTENDANCE_TYPES,
@@ -31,6 +33,7 @@ import {
   getRecordTagClass,
   getRecordChipLabel,
   initEditAttendancePeriods,
+  renumberHomeroomStudents,
 } from './recordUtils';
 import { MultiDatePicker } from '@adapters/components/common/MultiDatePicker';
 import { Notice } from '@adapters/components/common/Notice';
@@ -97,6 +100,40 @@ function InputMode({
   );
   const periodCount = maxPeriods ?? 7;
   const showToast = useToastStore((s) => s.show);
+
+  // ── 출석번호 무결성 (한 명 → 전원 오염 방어) ──
+  // 출결은 학생을 "번호"로 식별하므로, 번호가 비었거나 겹치면 한 명 저장이 같은 번호
+  // 학생 전원에게 번진다. 화면에 표시되는 활성 학생 기준으로 충돌을 감지한다.
+  const numberIssues = useMemo(
+    () => detectStudentNumberIssues(students.map((s) => ({ number: s.studentNumber }))),
+    [students],
+  );
+  // 번호 정리는 비활성 학생을 포함한 전체 명단에 적용해야 저장 시 명단이 잘리지 않는다.
+  const allStudents = useStudentStore((s) => s.students);
+  const updateStudents = useStudentStore((s) => s.updateStudents);
+  const renumberPlan = useMemo(() => {
+    const fixed = renumberHomeroomStudents(allStudents);
+    let changed = 0;
+    for (let i = 0; i < allStudents.length; i += 1) {
+      if (allStudents[i]!.studentNumber !== fixed[i]!.studentNumber) changed += 1;
+    }
+    return { fixed, changed };
+  }, [allStudents]);
+  const [renumbering, setRenumbering] = useState(false);
+  const [showRenumberConfirm, setShowRenumberConfirm] = useState(false);
+
+  const handleRenumber = useCallback(async () => {
+    setRenumbering(true);
+    try {
+      await updateStudents(renumberPlan.fixed);
+      showToast('출석번호를 정리했어요. 이제 출결이 학생별로 따로 저장됩니다.', 'success');
+      setShowRenumberConfirm(false);
+    } catch {
+      showToast('번호 정리에 실패했어요. 다시 시도해주세요.', 'error');
+    } finally {
+      setRenumbering(false);
+    }
+  }, [updateStudents, renumberPlan, showToast]);
 
   // ── 저장 상태 머신 (S3 저장 시맨틱 통일) ──
   const {
@@ -439,6 +476,12 @@ function InputMode({
           showToast('설정에서 담임반을 먼저 입력해주세요', 'info');
           return { recordIds: [], affected: 0 };
         }
+        // 번호 충돌 시 출결 저장 차단 — 같은 번호 학생끼리 기록이 섞이는 것을 원천 차단.
+        // (비출결 기록은 studentId 로 저장돼 안전하므로 막지 않는다.)
+        if (numberIssues.hasCollisionRisk) {
+          showToast('출석번호가 겹치거나 비어 있어요. 번호를 먼저 정리해주세요.', 'info');
+          return { recordIds: [], affected: 0 };
+        }
         const periods =
           selectedPeriods.size > 0
             ? Array.from(selectedPeriods)
@@ -578,6 +621,7 @@ function InputMode({
       documentSubmitted,
       addRecord,
       showToast,
+      numberIssues,
     ],
   );
 
@@ -764,7 +808,11 @@ function InputMode({
 
   const studentMap = useMemo(() => new Map(students.map((s) => [s.id, s])), [students]);
 
-  const canSave = selectedStudents.size > 0 && selectedSub !== null && !rangeError;
+  // 출결 입력 중 번호 충돌이 있으면 저장 차단 (비출결 기록은 studentId 기반이라 안전 → 허용).
+  const isAttendanceIntent = attendanceType !== null || selectedSub?.categoryId === 'attendance';
+  const attendanceBlocked = numberIssues.hasCollisionRisk && isAttendanceIntent;
+  const canSave =
+    selectedStudents.size > 0 && selectedSub !== null && !rangeError && !attendanceBlocked;
   // 첨부는 대상 record 가 1건으로 명확할 때만(학생 1명·단일 날짜). 출결도 'att-{studentId}-{date}'
   // StudentRecord 로 미러링되므로 진단서·결석계 첨부가 가능하다.
   const canAttachHere =
@@ -779,6 +827,24 @@ function InputMode({
 
   return (
     <div className="flex flex-col flex-1 min-h-0 gap-3">
+      {/* 출석번호 충돌 경고 — 같은 번호/빈 번호 학생끼리 출결이 섞이는 것을 막는다 */}
+      {numberIssues.hasCollisionRisk && (
+        <Notice variant="warning" title="출석번호가 겹치거나 비어 있어요">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <span className="text-sp-muted">
+              번호가 같거나 비어 있는 학생끼리 출결이 섞여 저장될 수 있어요. 출결을 저장하려면 먼저
+              번호를 정리해주세요. (상담·생활 기록은 영향 없어요.)
+            </span>
+            <button
+              onClick={() => setShowRenumberConfirm(true)}
+              className="shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold bg-sp-accent text-white hover:bg-sp-accent/90 transition-colors"
+            >
+              <span className="material-symbols-outlined text-sm">format_list_numbered</span>
+              번호 정리하기
+            </button>
+          </div>
+        </Notice>
+      )}
       <div ref={containerRef} className="flex-1 flex min-h-0">
         {/* ── 좌측: 학생 선택 ── */}
         <div
@@ -1351,6 +1417,16 @@ function InputMode({
 
           {/* 저장 버튼 + 상태칩 (sticky) */}
           <div className="sticky bottom-0 bg-gradient-to-t from-sp-card to-transparent pt-6 pb-1 px-5 -mt-16 rounded-b-xl space-y-1.5">
+            {/* 번호 충돌로 출결 저장이 막힌 경우 안내 */}
+            {attendanceBlocked && (
+              <button
+                onClick={() => setShowRenumberConfirm(true)}
+                className="w-full flex items-center justify-center gap-1 text-xs font-medium py-1 rounded-lg text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 transition-colors"
+              >
+                <span className="material-symbols-outlined text-sm">warning</span>
+                출석번호를 정리해야 출결을 저장할 수 있어요
+              </button>
+            )}
             {/* 저장 상태칩 — idle 이면 비노출 */}
             {saveStatus !== 'idle' && (
               <div
@@ -1492,6 +1568,65 @@ function InputMode({
             </div>
           )}
         </div>
+
+        {/* ── 출석번호 정리 확인 모달 ── */}
+        {showRenumberConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+            <div className="bg-sp-card border border-sp-border rounded-2xl p-6 w-96 shadow-2xl">
+              <h3 className="text-base font-bold text-sp-text flex items-center gap-2 mb-3">
+                <span className="material-symbols-outlined text-sp-accent">
+                  format_list_numbered
+                </span>
+                출석번호 정리
+              </h3>
+              <div className="space-y-2 mb-4 text-sm">
+                <p className="text-sp-text">
+                  번호가 비었거나 겹친 학생에게{' '}
+                  <span className="text-sp-accent font-bold">사용하지 않는 번호</span>를 새로
+                  부여해요. 이미 번호가 올바른 학생은 그대로 둡니다.
+                </p>
+                <p className="text-sp-muted">
+                  번호가 바뀌는 학생:{' '}
+                  <span className="text-sp-text font-medium">{renumberPlan.changed}명</span>
+                </p>
+                <p className="text-xs text-sp-muted">
+                  예전에 이 반 출결을 입력한 적이 있다면, 번호가 바뀐 학생의 지난 기록은 한 번
+                  확인해주세요.
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowRenumberConfirm(false)}
+                  disabled={renumbering}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-sp-surface text-sp-muted
+                           hover:text-sp-text hover:bg-sp-surface/80 transition-all disabled:opacity-50"
+                >
+                  취소
+                </button>
+                <button
+                  onClick={() => void handleRenumber()}
+                  disabled={renumbering || renumberPlan.changed === 0}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-bold bg-sp-accent text-white
+                           hover:bg-sp-accent/90 transition-all disabled:opacity-50 flex items-center justify-center gap-1.5"
+                >
+                  {renumbering ? (
+                    <>
+                      <span className="material-symbols-outlined text-sm animate-spin">
+                        progress_activity
+                      </span>
+                      정리 중...
+                    </>
+                  ) : (
+                    <>
+                      <span className="material-symbols-outlined text-sm">check</span>
+                      번호 정리하기
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* 리사이즈 핸들 (중↔우) */}
         <div
