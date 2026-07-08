@@ -43,6 +43,30 @@ export function getCurrentPeriod(periodTimes: readonly PeriodTime[], now: Date):
   return null;
 }
 
+/**
+ * '방금 끝난 교시'를 반환한다 — now 직전에 종료된 교시 중 가장 최근 것.
+ * '수업 직후' 관찰 알림 트리거([D1])용.
+ *
+ * - 수업 중(교시 진행 중)에는 null (아직 끝나지 않음).
+ * - graceMinutes(기본 10분) 이내에 끝난 교시만 유효 — 오래 전에 끝난 교시를 잡아
+ *   엉뚱한 시점에 알리는 오탐을 막는다.
+ */
+export function getJustFinishedPeriod(
+  periodTimes: readonly PeriodTime[],
+  now: Date,
+  graceMinutes = 10,
+): number | null {
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  let best: { period: number; end: number } | null = null;
+  for (const pt of periodTimes) {
+    const end = parseMinutes(pt.end);
+    if (end <= nowMinutes && nowMinutes - end <= graceMinutes) {
+      if (!best || end > best.end) best = { period: pt.period, end };
+    }
+  }
+  return best ? best.period : null;
+}
+
 /* ─── 학교급별 프리셋 ─── */
 
 /** 학교급별 기본 수업 시간(분) */
