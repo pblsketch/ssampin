@@ -1,15 +1,24 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { useStudentRecordsStore } from '@adapters/stores/useStudentRecordsStore';
+import { useObservationStore } from '@adapters/stores/useObservationStore';
+import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
+import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import {
   useRecordReminderStore,
   isReminderPaused,
   isReminderSnoozed,
 } from '@adapters/stores/useRecordReminderStore';
 import { DEFAULT_REMINDER_SETTINGS } from '@domain/entities/RecordReminder';
-import type { LastRecordDateProvider, ReminderStudent } from '@domain/entities/RecordReminder';
+import type {
+  LastRecordDateProvider,
+  ReminderStudent,
+  ReminderTarget,
+} from '@domain/entities/RecordReminder';
 import { DEFAULT_HOMEROOM_RECORD_TAGS } from '@domain/entities/StudentRecord';
+import { DEFAULT_OBSERVATION_TAGS } from '@domain/entities/Observation';
+import { studentKey } from '@domain/entities/TeachingClass';
 import { isStudentActive } from '@domain/rules/studentActivity';
 import {
   pickDueStudents,
@@ -18,122 +27,198 @@ import {
   studentDedupKey,
   resolvePromptText,
 } from '@domain/rules/recordReminderRules';
+import { detectJustFinishedClass } from '@domain/rules/reminderClassMatch';
 
 /**
- * 학생 관찰 기록 알림 — 인앱 오케스트레이션 훅(P2).
+ * 학생 관찰 기록 알림 — 인앱 오케스트레이션 훅(P2·P4).
  *
- * 설정(Settings.recordReminder)+담임 명단+기록+런타임 상태를 모아
- *  - `dueNow`   : 지금 물어볼 학생(팝업/팝오버용, 실명 — 교사가 직접 연 화면)
- *  - `missingCount` : 공백 임계를 넘긴 학생 수(은은형 배지, 이름 없음)
- * 를 계산하고, 저장/스누즈/건너뛰기 액션을 제공한다.
+ * 담임반(StudentRecord)과 수업반(ObservationRecord)을 모두 다룬다.
+ *  - 담임반: 공백(마지막 기록일)이 임계를 넘긴 학생을 상시 감지.
+ *  - 수업반(D1): '방금 끝난 수업'(시간표 연동)의 학생 중 관찰 공백이 큰 학생만 감지.
+ * 각 대상은 서로 다른 저장처·태그를 쓰므로, `ReminderPromptItem.target`으로 라우팅한다.
  *
- * 발화 로직(도메인 순수함수)은 recordReminderRules에 있고, 여기서는 스토어를 잇는다(adapters).
- * OS 토스트 발화(P3)·수업반(P4)은 별도. 실명 노출 정책(nameExposure)은 은은형 배지·OS 토스트에만
- * 적용하며, 교사가 직접 연 인앱 프롬프트에는 실명을 그대로 보여준다.
+ * 발화 로직(도메인 순수함수)은 recordReminderRules/reminderClassMatch에 있고, 여기서는 스토어를 잇는다.
+ * 인앱 프롬프트는 실명 그대로(교사가 직접 연 화면). 은은형 배지·OS 토스트에만 nameExposure 적용.
  */
 export interface ReminderPromptItem {
+  /** 고유 식별(dismiss/skip/rotation). 담임=studentId, 수업반=`subject:${classId}:${studentKey}`. */
+  readonly key: string;
+  /** 저장용 학생 id. 담임=Student.id, 수업반=studentKey(학년-반-번호). */
   readonly studentId: string;
   readonly studentName: string;
   readonly promptText: string;
+  readonly target: ReminderTarget;
+  /** 수업반일 때 TeachingClass.id. 담임이면 null. */
+  readonly classId: string | null;
+  /** 이 학생에 대한 태그 후보(담임=생활 태그, 수업반=교과 태그). */
+  readonly tagOptions: readonly string[];
+}
+
+export interface ReminderSavePayload {
+  tags: string[];
+  content: string;
 }
 
 export interface UseReminderSchedulerResult {
   readonly dueNow: readonly ReminderPromptItem[];
   readonly missingCount: number;
-  readonly tagOptions: readonly string[];
-  saveObservation: (
-    studentId: string,
-    payload: { tags: string[]; content: string },
-  ) => Promise<void>;
+  saveObservation: (item: ReminderPromptItem, payload: ReminderSavePayload) => Promise<void>;
   snooze: () => void;
-  skipStudent: (studentId: string) => void;
-  nothingToday: (studentId: string) => void;
+  skipStudent: (item: ReminderPromptItem) => void;
+  nothingToday: (item: ReminderPromptItem) => void;
 }
 
 export function useReminderScheduler(): UseReminderSchedulerResult {
   const rr = useSettingsStore((s) => s.settings.recordReminder) ?? DEFAULT_REMINDER_SETTINGS;
+  const periodTimes = useSettingsStore((s) => s.settings.periodTimes);
   const students = useStudentStore((s) => s.students);
   const records = useStudentRecordsStore((s) => s.records);
+  const observationRecords = useObservationStore((s) => s.records);
+  const classes = useTeachingClassStore((s) => s.classes);
+  const teacherSchedule = useScheduleStore((s) => s.teacherSchedule);
   const cursor = useRecordReminderStore((s) => s.rotationCursor);
   const snoozeUntil = useRecordReminderStore((s) => s.snoozeUntil);
   const pausedUntil = useRecordReminderStore((s) => s.pausedUntil);
   const skippedKeys = useRecordReminderStore((s) => s.skippedKeys);
 
+  const subjectEnabled = rr.enabled && rr.targets.includes('subject');
+
+  // 수업반 대상이면 관련 스토어를 로드하고, '수업 직후' 창을 놓치지 않게 주기적으로 재평가한다.
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    if (!subjectEnabled) return;
+    void useObservationStore.getState().load();
+    void useTeachingClassStore.getState().load();
+    void useScheduleStore.getState().load();
+    const id = setInterval(() => setTick((t) => t + 1), 60_000);
+    return () => clearInterval(id);
+  }, [subjectEnabled]);
+
   const { dueNow, missingCount } = useMemo(() => {
+    void tick; // 시간 경과(수업 직후 창)에 따른 재평가를 위해 deps에 포함 — 값 자체는 미사용.
     const empty = { dueNow: [] as ReminderPromptItem[], missingCount: 0 };
-    if (!rr.enabled || !rr.targets.includes('homeroom')) return empty;
+    if (!rr.enabled) return empty;
 
     const now = new Date();
     const today = formatDateStr(now);
-    // 마지막 기록일 맵을 records 스냅샷에서 1회 계산(O(records)).
-    const lastDateById = new Map<string, string>();
-    for (const rec of records) {
-      const prev = lastDateById.get(rec.studentId);
-      if (prev === undefined || rec.date > prev) lastDateById.set(rec.studentId, rec.date);
+    const paused = isReminderPaused(pausedUntil, now.getTime());
+    const snoozed = isReminderSnoozed(snoozeUntil, now.getTime());
+    const skipSet = new Set(skippedKeys);
+    const active = !paused && !snoozed;
+
+    let missing = 0;
+    let homeroomItems: ReminderPromptItem[] = [];
+    let subjectItems: ReminderPromptItem[] = [];
+
+    // ── 담임반 (StudentRecord, 상시 공백감지) ──
+    if (rr.targets.includes('homeroom')) {
+      const lastById = new Map<string, string>();
+      for (const rec of records) {
+        const prev = lastById.get(rec.studentId);
+        if (prev === undefined || rec.date > prev) lastById.set(rec.studentId, rec.date);
+      }
+      const provider: LastRecordDateProvider = (id) => lastById.get(id) ?? null;
+      const roster: ReminderStudent[] = students
+        .filter(isStudentActive)
+        .map((s) => ({ id: s.id, name: s.name }));
+      missing += roster.filter(
+        (s) => daysSinceLastRecord(provider, s.id, now) >= rr.staleDays,
+      ).length;
+
+      if (active) {
+        const candidates = roster.filter((s) => !skipSet.has(studentDedupKey(s.id, today)));
+        const due = pickDueStudents(candidates, provider, rr, cursor, now);
+        homeroomItems = due.map((r, i) => ({
+          key: r.student.id,
+          studentId: r.student.id,
+          studentName: r.student.name,
+          promptText: resolvePromptText(cursor + i, r.student.name),
+          target: 'homeroom' as const,
+          classId: null,
+          tagOptions: DEFAULT_HOMEROOM_RECORD_TAGS,
+        }));
+      }
     }
-    const provider: LastRecordDateProvider = (id) => lastDateById.get(id) ?? null;
-    const reminderStudents: ReminderStudent[] = students
-      .filter(isStudentActive)
-      .map((s) => ({ id: s.id, name: s.name }));
 
-    const missing = reminderStudents.filter(
-      (s) => daysSinceLastRecord(provider, s.id, now) >= rr.staleDays,
-    ).length;
-
-    // 스누즈/일시정지 중에는 팝업 대상을 비우되, 배지 카운트(은은형)는 유지한다.
-    if (
-      isReminderPaused(pausedUntil, now.getTime()) ||
-      isReminderSnoozed(snoozeUntil, now.getTime())
-    ) {
-      return { dueNow: [] as ReminderPromptItem[], missingCount: missing };
+    // ── 수업반 (ObservationRecord, D1: 방금 끝난 수업만) ──
+    if (rr.targets.includes('subject') && active) {
+      const finished = detectJustFinishedClass(teacherSchedule, classes, periodTimes ?? [], now);
+      if (finished) {
+        // 관찰 마지막 기록일 맵 (해당 수업반).
+        const obsLast = new Map<string, string>();
+        for (const rec of observationRecords) {
+          if (rec.classId !== finished.id) continue;
+          const prev = obsLast.get(rec.studentId);
+          if (prev === undefined || rec.date > prev) obsLast.set(rec.studentId, rec.date);
+        }
+        const obsProvider: LastRecordDateProvider = (sKey) => obsLast.get(sKey) ?? null;
+        const roster: ReminderStudent[] = finished.students
+          .filter(isStudentActive)
+          .map((s) => ({ id: studentKey(s), name: s.name }));
+        const keyOf = (sid: string) => `subject:${finished.id}:${sid}`;
+        const candidates = roster.filter((s) => !skipSet.has(studentDedupKey(keyOf(s.id), today)));
+        const due = pickDueStudents(candidates, obsProvider, rr, cursor, now);
+        subjectItems = due.map((r) => ({
+          key: keyOf(r.student.id),
+          studentId: r.student.id,
+          studentName: r.student.name,
+          promptText: `방금 '${finished.name}' 수업에서 ${r.student.name} 학생, 눈에 띈 점이 있었나요?`,
+          target: 'subject' as const,
+          classId: finished.id,
+          tagOptions: DEFAULT_OBSERVATION_TAGS,
+        }));
+      }
     }
 
-    const skippedSet = new Set(skippedKeys);
-    const candidates = reminderStudents.filter(
-      (s) => !skippedSet.has(studentDedupKey(s.id, today)),
-    );
-    const due = pickDueStudents(candidates, provider, rr, cursor, now);
-    const items: ReminderPromptItem[] = due.map((r, i) => ({
-      studentId: r.student.id,
-      studentName: r.student.name,
-      promptText: resolvePromptText(cursor + i, r.student.name),
-    }));
-    return { dueNow: items, missingCount: missing };
-  }, [rr, students, records, cursor, snoozeUntil, pausedUntil, skippedKeys]);
+    // 수업 직후(subject)를 먼저, 그다음 담임반.
+    return { dueNow: [...subjectItems, ...homeroomItems], missingCount: missing };
+  }, [
+    rr,
+    periodTimes,
+    students,
+    records,
+    observationRecords,
+    classes,
+    teacherSchedule,
+    cursor,
+    snoozeUntil,
+    pausedUntil,
+    skippedKeys,
+    tick,
+  ]);
 
-  const saveObservation = async (
-    studentId: string,
-    payload: { tags: string[]; content: string },
-  ) => {
+  const saveObservation = async (item: ReminderPromptItem, payload: ReminderSavePayload) => {
     const today = formatDateStr(new Date());
-    await useStudentRecordsStore.getState().addRecordWithTags({
-      studentId,
-      category: 'life',
-      content: payload.content,
-      date: today,
-      tags: payload.tags,
-    });
+    if (item.target === 'subject' && item.classId) {
+      await useObservationStore.getState().addRecord({
+        studentId: item.studentId,
+        classId: item.classId,
+        date: today,
+        content: payload.content,
+        tags: payload.tags,
+      });
+    } else {
+      await useStudentRecordsStore.getState().addRecordWithTags({
+        studentId: item.studentId,
+        category: 'life',
+        content: payload.content,
+        date: today,
+        tags: payload.tags,
+      });
+    }
     useRecordReminderStore.getState().advanceCursor();
   };
 
   const snooze = () => useRecordReminderStore.getState().snooze();
 
-  const skipStudent = (studentId: string) => {
+  const skipStudent = (item: ReminderPromptItem) => {
     const today = formatDateStr(new Date());
-    useRecordReminderStore.getState().skipStudent(studentId, today);
+    useRecordReminderStore.getState().skipStudent(item.key, today);
     useRecordReminderStore.getState().advanceCursor();
   };
 
   // "오늘은 특이사항 없음" — 무리하게 기록을 만들지 않고 오늘 순회에서만 제외한다.
-  const nothingToday = (studentId: string) => skipStudent(studentId);
+  const nothingToday = (item: ReminderPromptItem) => skipStudent(item);
 
-  return {
-    dueNow,
-    missingCount,
-    tagOptions: DEFAULT_HOMEROOM_RECORD_TAGS,
-    saveObservation,
-    snooze,
-    skipStudent,
-    nothingToday,
-  };
+  return { dueNow, missingCount, saveObservation, snooze, skipStudent, nothingToday };
 }

@@ -37,9 +37,8 @@ const TARGET_OPTIONS: { key: ReminderTarget; label: string; desc: string; disabl
   { key: 'homeroom', label: '담임반', desc: '담임을 맡은 학급 학생을 알림 대상에 포함합니다' },
   {
     key: 'subject',
-    label: '수업반 (곧 지원)',
-    desc: '수업반 관찰 알림은 준비 중이에요. 곧 업데이트로 켤 수 있어요.',
-    disabled: true,
+    label: '수업반',
+    desc: '수업 직후, 그 반에서 관찰 기록이 뜸한 학생을 알려드립니다',
   },
 ];
 
