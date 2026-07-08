@@ -20,6 +20,7 @@ export type SettingsTabId =
   | 'todo'
   | 'tools'
   | 'shortcuts'
+  | 'record-reminder'
   | 'system'
   | 'backup'
   | 'ai-bridge'

@@ -20,6 +20,7 @@ import { AiBridgeTab } from './tabs/AiBridgeTab';
 import { TodoTab } from './tabs/TodoTab';
 import { ToolsTab } from './tabs/ToolsTab';
 import { ShortcutsTab } from './tabs/ShortcutsTab';
+import { RecordReminderSection } from './RecordReminderSection';
 import { PageHeader } from '@adapters/components/common/PageHeader';
 import { Modal } from '@adapters/components/common/Modal';
 interface Props {
@@ -179,6 +180,8 @@ function TabContent({
       return <ToolsTab />;
     case 'shortcuts':
       return <ShortcutsTab />;
+    case 'record-reminder':
+      return <RecordReminderSection draft={draft} patch={patch} />;
     case 'system':
       return <SystemTab draft={draft} patch={patch} setDraft={setDraft} />;
     case 'backup':

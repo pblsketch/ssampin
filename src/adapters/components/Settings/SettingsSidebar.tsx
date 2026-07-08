@@ -54,6 +54,12 @@ const TAB_GROUPS: TabGroup[] = [
       { id: 'todo', icon: 'checklist', label: '할 일', color: 'bg-green-500/10 text-green-400' },
       { id: 'seat', icon: 'chair', label: '좌석', color: 'bg-orange-500/10 text-orange-400' },
       { id: 'weather', icon: 'cloud', label: '날씨', color: 'bg-sky-500/10 text-sky-500' },
+      {
+        id: 'record-reminder',
+        icon: 'notifications_active',
+        label: '기록 알림',
+        color: 'bg-amber-500/10 text-amber-400',
+      },
       { id: 'tools', icon: 'build', label: '도구', color: 'bg-purple-500/10 text-purple-400' },
       {
         id: 'shortcuts',
