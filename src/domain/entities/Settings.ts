@@ -5,6 +5,7 @@ import type { PresetThemeId, ThemeColors } from './DashboardTheme';
 import type { SubjectColorMap } from '../valueObjects/SubjectColor';
 import type { TodoSettings } from './TodoSettings';
 import type { MiniApp } from './MiniApp';
+import type { ReminderSettings } from './RecordReminder';
 
 export interface DashboardThemeSettings {
   readonly presetId: PresetThemeId | 'custom';
@@ -461,6 +462,8 @@ export interface Settings {
   readonly sync?: SyncSettings;
   /** 행사 알림 팝업 활성화 여부 (기본: true) */
   readonly eventAlertEnabled?: boolean;
+  /** 학생 관찰 기록 알림 설정. 미설정 시 DEFAULT_REMINDER_SETTINGS(전체 OFF). */
+  readonly recordReminder?: ReminderSettings;
   /** AI 도우미 챗봇 표시 여부 (기본: true) */
   readonly showChatbot?: boolean;
   /** 온보딩에서 선택한 교사 역할 (복수) */

@@ -25,6 +25,7 @@ export type ModalPriority =
   | 'NORMAL_UPDATE'
   | 'WIDGET_EXPAND'
   | 'EVENT_ALERT'
+  | 'RECORD_REMINDER'
   | 'WIDGET_MODE_COACH'
   | 'SHARE_PROMPT';
 
@@ -40,6 +41,7 @@ export type ModalPriority =
  * NORMAL_UPDATE: 일반 업데이트 안내
  * WIDGET_EXPAND: 위젯 확장 모달 — 업데이트 안내와 행사 알림 사이 (4.5)
  * EVENT_ALERT: 오늘 행사 알림
+ * RECORD_REMINDER: 학생 관찰 기록 알림 — 행사 알림 다음, 코치 투어 전 (5.2)
  * WIDGET_MODE_COACH: 위젯 모드 첫 진입 코치 투어 — 교육 성격, 알림보다 후순위 (v2.1.x, 5.5)
  * SHARE_PROMPT: 충성 사용자 공유 권유 — 마케팅 성격, 가장 후순위
  */
@@ -52,6 +54,7 @@ export const PRIORITY_ORDER: Record<ModalPriority, number> = {
   NORMAL_UPDATE: 4,
   WIDGET_EXPAND: 4.5,
   EVENT_ALERT: 5,
+  RECORD_REMINDER: 5.2,
   WIDGET_MODE_COACH: 5.5,
   SHARE_PROMPT: 6,
 };

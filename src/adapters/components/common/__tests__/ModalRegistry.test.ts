@@ -92,7 +92,7 @@ describe('ModalRegistry 정합성 메타테스트', () => {
   });
 
   describe('priority enum 정합성 (useModalCoordinatorStore와 메타테스트 일치)', () => {
-    it('useModalCoordinatorStore의 ModalPriority 7종이 메타테스트의 priority 목록과 일치', () => {
+    it('useModalCoordinatorStore의 ModalPriority 8종이 메타테스트의 priority 목록과 일치', () => {
       const storeSource = readSource('src/adapters/stores/useModalCoordinatorStore.ts');
       const expectedPriorities = [
         'SECURITY_UPDATE',
@@ -101,6 +101,7 @@ describe('ModalRegistry 정합성 메타테스트', () => {
         'OAUTH_FLOW',
         'NORMAL_UPDATE',
         'EVENT_ALERT',
+        'RECORD_REMINDER',
         'SHARE_PROMPT',
       ];
       for (const p of expectedPriorities) {

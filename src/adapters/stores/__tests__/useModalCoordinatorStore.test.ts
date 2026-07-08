@@ -204,7 +204,7 @@ describe('useModalCoordinatorStore', () => {
   });
 
   describe('priority enum 정합성 (회귀 가드)', () => {
-    it('PRIORITY_ORDER에 10종 priority 모두 정의되어 있다 (widget-mode-discovery v2.1.x 포함)', () => {
+    it('PRIORITY_ORDER에 11종 priority 모두 정의되어 있다 (record-reminder 포함)', () => {
       const all: ModalPriority[] = [
         'SECURITY_UPDATE',
         'FIRST_SYNC',
@@ -214,6 +214,7 @@ describe('useModalCoordinatorStore', () => {
         'NORMAL_UPDATE',
         'WIDGET_EXPAND',
         'EVENT_ALERT',
+        'RECORD_REMINDER',
         'WIDGET_MODE_COACH',
         'SHARE_PROMPT',
       ];
@@ -222,10 +223,10 @@ describe('useModalCoordinatorStore', () => {
       }
     });
 
-    it('PRIORITY_ORDER 값은 단조 증가 (sparse 허용: 2.5, 4.5, 5.5)', () => {
+    it('PRIORITY_ORDER 값은 단조 증가 (sparse 허용: 2.5, 4.5, 5.2, 5.5)', () => {
       const values = Object.values(PRIORITY_ORDER).sort((a, b) => a - b);
-      // 0,1,2,2.5,3,4,4.5,5,5.5,6 — widget-mode-discovery로 2.5와 5.5 추가.
-      expect(values).toEqual([0, 1, 2, 2.5, 3, 4, 4.5, 5, 5.5, 6]);
+      // 0,1,2,2.5,3,4,4.5,5,5.2,5.5,6 — record-reminder로 5.2 추가.
+      expect(values).toEqual([0, 1, 2, 2.5, 3, 4, 4.5, 5, 5.2, 5.5, 6]);
     });
 
     it('WIDGET_MODE_FALLBACK(2.5)는 DRIVE_CONFLICT(2)와 OAUTH_FLOW(3) 사이 — widget-mode-discovery', () => {

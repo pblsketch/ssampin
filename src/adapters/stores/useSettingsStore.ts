@@ -9,6 +9,7 @@ import type {
   ShortcutSettings,
 } from '@domain/entities/Settings';
 import { DEFAULT_TODO_SETTINGS } from '@domain/entities/TodoSettings';
+import { DEFAULT_REMINDER_SETTINGS } from '@domain/entities/RecordReminder';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import { settingsRepository } from '@adapters/di/container';
 import { detectLunchFromPeriods, getDefaultLunchTime } from '@domain/rules/periodRules';
@@ -185,6 +186,7 @@ const DEFAULT_SETTINGS: Settings = {
   seatingNameSize: 'sm',
   sidebarCollapsed: false,
   eventAlertEnabled: true,
+  recordReminder: DEFAULT_REMINDER_SETTINGS,
   showChatbot: true,
   analytics: {
     enabled: true,
@@ -489,6 +491,9 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       todoSettings: patch.todoSettings
         ? { ...(current.todoSettings ?? DEFAULT_TODO_SETTINGS), ...patch.todoSettings }
         : current.todoSettings,
+      recordReminder: patch.recordReminder
+        ? { ...(current.recordReminder ?? DEFAULT_REMINDER_SETTINGS), ...patch.recordReminder }
+        : current.recordReminder,
       // pin은 보안 관련 중첩 객체이므로 부분 업데이트 시 기존 pinHash 등 필드 보존 필요
       pin: patch.pin
         ? {
