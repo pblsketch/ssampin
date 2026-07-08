@@ -28,6 +28,7 @@ import {
   MINIAPP_PARTITION,
 } from './miniapp-protocol';
 import { registerMiniAppHandlers } from './ipc/miniapp';
+import { registerReminderIpc } from './ipc/reminder';
 import { computeExpandedBounds, pinFromExpanded, type IconAnchor } from './iconWindowGeometry';
 import { attachCsp, installCspViolationLogger } from './security/csp';
 import { registerOAuthHandlers } from './ipc/oauth';
@@ -1839,6 +1840,22 @@ function createTray(): void {
   } catch {
     // ignore tray error if icon not found
   }
+}
+
+/**
+ * 관찰 기록 알림 토스트 클릭 라우팅 (P3, 계획서 M2).
+ * main은 opaque reminderId만 렌더러에 되돌리고(학생/프롬프트 해석은 렌더러 몫), 앱 창을 앞으로 가져온다.
+ * memorySaver로 메인 렌더러가 destroy된 경우 createWindow()로 복원한다(tray double-click과 동형).
+ */
+function focusForReminder(reminderId: string): void {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  } else {
+    createWindow();
+  }
+  broadcastToAllWindows('reminder:click', reminderId);
 }
 
 function applySystemSettings(): void {
@@ -4802,6 +4819,11 @@ if (!gotTheLock) {
     // Sticker picker prewarm (5.5초 — quickAdd와 약간 stagger)
     setTimeout(() => prewarmStickerPickerWindow(), 5500);
     createTray();
+    // 학생 관찰 기록 알림 — OS 토스트 발화 IPC(P3, S1). 렌더러가 push한 스케줄을 상시 타이머로 발화.
+    registerReminderIpc({
+      onReminderClick: (reminderId) => focusForReminder(reminderId),
+      onReminderFired: (dedupKey) => broadcastToAllWindows('reminder:fired', dedupKey),
+    });
     setupAutoUpdater();
 
     // Auto-check for updates 5 seconds after app start (only in production)

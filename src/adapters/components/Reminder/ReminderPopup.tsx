@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Modal } from '@adapters/components/common/Modal';
 import { useRegisterModal } from '@adapters/hooks/useRegisterModal';
 import { useReminderScheduler } from '@adapters/hooks/useReminderScheduler';
+import { useReminderOsPush } from '@adapters/hooks/useReminderOsPush';
 import { ReminderPrompt } from './ReminderPrompt';
 
 // ReminderPrompt 카드가 자체 크롬(bg-sp-card·border·rounded-xl·shadow)을 갖고 있으므로,
@@ -18,6 +19,9 @@ const CHROMELESS =
  * (OS 토스트 발화는 P3, 위젯/아이콘 은은형 표면은 별도.)
  */
 export function ReminderPopup() {
+  // OS 토스트 스케줄 push(P3)를 이 마운트 지점에서 함께 구동한다(MainApp 생존 동안).
+  useReminderOsPush();
+
   const { dueNow, tagOptions, saveObservation, snooze, skipStudent, nothingToday } =
     useReminderScheduler();
   const [dismissed, setDismissed] = useState(false);

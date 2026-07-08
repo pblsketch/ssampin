@@ -1060,6 +1060,39 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.removeListener('system:resume', handler);
     };
   },
+
+  // === 학생 관찰 기록 알림 — OS 토스트 발화 (reminder, P3) ===
+  // 렌더러가 forward 스케줄을 계산해 push → main 상시 타이머가 예정 시각에 발화(S1).
+  scheduleReminders: (
+    items: Array<{
+      reminderId: string;
+      fireAt: number;
+      title: string;
+      body: string;
+      studentDedupKey: string;
+    }>,
+  ): void => {
+    ipcRenderer.send('reminder:schedule', items);
+  },
+  clearReminderSchedule: (): void => {
+    ipcRenderer.send('reminder:clear');
+  },
+  // 토스트 클릭 시 opaque reminderId 수신 (학생/프롬프트 해석은 렌더러 몫 — 레이어·프라이버시).
+  onReminderClick: (callback: (reminderId: string) => void): (() => void) => {
+    const handler = (_event: unknown, reminderId: string) => callback(reminderId);
+    ipcRenderer.on('reminder:click', handler);
+    return () => {
+      ipcRenderer.removeListener('reminder:click', handler);
+    };
+  },
+  // 토스트 발화 직후 dedup 키 수신 → 렌더러 발화 장부에 기록(중복 방지).
+  onReminderFired: (callback: (studentDedupKey: string) => void): (() => void) => {
+    const handler = (_event: unknown, studentDedupKey: string) => callback(studentDedupKey);
+    ipcRenderer.on('reminder:fired', handler);
+    return () => {
+      ipcRenderer.removeListener('reminder:fired', handler);
+    };
+  },
   // 메모리 진단 (설정 화면 표시용)
   getMemoryMetrics: (): Promise<{
     totalBytes: number;

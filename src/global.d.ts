@@ -666,6 +666,19 @@ interface ElectronAPI {
   onDataChanged: (callback: (filename: string) => void) => () => void;
   // 절전/잠금 복귀 알림
   onSystemResume?: (callback: () => void) => () => void;
+  // 학생 관찰 기록 알림 — OS 토스트 발화 (P3)
+  scheduleReminders?: (
+    items: Array<{
+      reminderId: string;
+      fireAt: number;
+      title: string;
+      body: string;
+      studentDedupKey: string;
+    }>,
+  ) => void;
+  clearReminderSchedule?: () => void;
+  onReminderClick?: (callback: (reminderId: string) => void) => () => void;
+  onReminderFired?: (callback: (studentDedupKey: string) => void) => () => void;
   // 메모리 진단
   getMemoryMetrics?: () => Promise<{
     totalBytes: number;
