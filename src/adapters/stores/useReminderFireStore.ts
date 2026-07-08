@@ -12,6 +12,9 @@ import { pruneFiredKeys } from '@domain/rules/recordReminderRules';
 
 const KEEP_DAYS = 30;
 
+/** 저장 직렬화 체인 — 동시 발화 시 out-of-order write로 항목이 유실되지 않게 순차 저장. */
+let saveChain: Promise<void> = Promise.resolve();
+
 interface ReminderFireState {
   firedKeys: readonly string[];
   loaded: boolean;
@@ -41,6 +44,8 @@ export const useReminderFireStore = create<ReminderFireState>((set, get) => ({
     if (get().firedKeys.includes(key)) return;
     const next = pruneFiredKeys([...get().firedKeys, key], new Date(), KEEP_DAYS);
     set({ firedKeys: next });
-    await reminderFireRepository.save({ firedKeys: next });
+    // 직렬화 + 저장 시점의 최신 state 사용 — 여러 토스트가 한 tick에 발화해도 항목이 유실되지 않는다.
+    saveChain = saveChain.then(() => reminderFireRepository.save({ firedKeys: get().firedKeys }));
+    await saveChain;
   },
 }));

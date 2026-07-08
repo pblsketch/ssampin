@@ -2,7 +2,11 @@ import { useCallback, useEffect } from 'react';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { useStudentRecordsStore } from '@adapters/stores/useStudentRecordsStore';
-import { useRecordReminderStore } from '@adapters/stores/useRecordReminderStore';
+import {
+  useRecordReminderStore,
+  isReminderPaused,
+  isReminderSnoozed,
+} from '@adapters/stores/useRecordReminderStore';
 import { useReminderFireStore } from '@adapters/stores/useReminderFireStore';
 import { DEFAULT_REMINDER_SETTINGS } from '@domain/entities/RecordReminder';
 import type { LastRecordDateProvider, ReminderStudent } from '@domain/entities/RecordReminder';
@@ -21,11 +25,13 @@ import { buildForwardSchedule } from '@domain/rules/recordReminderRules';
  *
  * 브라우저 모드(electronAPI 없음)에서는 조용히 no-op.
  */
-export function useReminderOsPush(): void {
+export function useReminderOsPush(onToastClicked?: (reminderId: string) => void): void {
   const rr = useSettingsStore((s) => s.settings.recordReminder) ?? DEFAULT_REMINDER_SETTINGS;
   const students = useStudentStore((s) => s.students);
   const records = useStudentRecordsStore((s) => s.records);
   const cursor = useRecordReminderStore((s) => s.rotationCursor);
+  const snoozeUntil = useRecordReminderStore((s) => s.snoozeUntil);
+  const pausedUntil = useRecordReminderStore((s) => s.pausedUntil);
   const firedKeys = useReminderFireStore((s) => s.firedKeys);
   const fireLoaded = useReminderFireStore((s) => s.loaded);
 
@@ -43,11 +49,24 @@ export function useReminderOsPush(): void {
     });
   }, []);
 
+  // 토스트 클릭 시 opaque reminderId 수신 → 호출부(팝업)에 전달(팝업 재노출 등, 레이어 M2).
+  useEffect(() => {
+    const api = window.electronAPI;
+    if (!api?.onReminderClick || !onToastClicked) return;
+    return api.onReminderClick((reminderId) => onToastClicked(reminderId));
+  }, [onToastClicked]);
+
   const push = useCallback(() => {
     const api = window.electronAPI;
     if (!api?.scheduleReminders || !api.clearReminderSchedule) return;
-    // 능동형(OS 토스트)이 꺼져 있거나 기능 자체가 꺼져 있으면 스케줄을 비운다.
-    if (!rr.enabled || !rr.osToastEnabled || !rr.targets.includes('homeroom')) {
+    // 능동형 OFF·기능 OFF·스누즈·일시정지 중이면 스케줄을 비운다(인앱 팝업과 동일하게 억제).
+    if (
+      !rr.enabled ||
+      !rr.osToastEnabled ||
+      !rr.targets.includes('homeroom') ||
+      isReminderPaused(pausedUntil, Date.now()) ||
+      isReminderSnoozed(snoozeUntil, Date.now())
+    ) {
       api.clearReminderSchedule();
       return;
     }
@@ -80,7 +99,7 @@ export function useReminderOsPush(): void {
         studentDedupKey: it.studentDedupKey,
       })),
     );
-  }, [rr, students, records, cursor, firedKeys]);
+  }, [rr, students, records, cursor, firedKeys, pausedUntil, snoozeUntil]);
 
   // 데이터/설정 변화 시 재계산·재-push (발화 장부 로드 후).
   useEffect(() => {

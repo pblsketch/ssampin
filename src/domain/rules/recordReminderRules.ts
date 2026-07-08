@@ -294,9 +294,14 @@ export function buildForwardSchedule(
   // fireAt 오름차순 정렬
   candidates.sort((a, b) => a.fireAt - b.fireAt);
 
-  // 날짜별 dailyFireCap + perNudge 상한 적용
+  // 날짜별 dailyFireCap 상한 적용 (perNudge는 인앱 팝업 배치 크기이지 OS 토스트 상한이 아님).
+  // 이미 발화한 키(firedKeys)를 그 날짜 카운트에 먼저 반영해, 오늘 이미 cap만큼 쐈다면 추가 예약을 막는다.
+  const cap = Math.max(1, config.dailyFireCap);
   const perDayCount = new Map<string, number>();
-  const cap = Math.max(1, Math.min(config.dailyFireCap, config.perNudge));
+  for (const key of firedKeys) {
+    const date = key.slice(key.lastIndexOf(':') + 1);
+    perDayCount.set(date, (perDayCount.get(date) ?? 0) + 1);
+  }
   const result: ReminderScheduleItem[] = [];
   for (const c of candidates) {
     const dayKey = formatDateStr(c.fireDate);

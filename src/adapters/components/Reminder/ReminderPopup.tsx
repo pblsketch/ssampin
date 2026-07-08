@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Modal } from '@adapters/components/common/Modal';
 import { useRegisterModal } from '@adapters/hooks/useRegisterModal';
 import { useReminderScheduler } from '@adapters/hooks/useReminderScheduler';
@@ -15,24 +15,28 @@ const CHROMELESS =
  *
  * 지금 물어볼 학생(dueNow)이 있으면 ReminderPrompt를 모달로 띄운다. 저장/건너뛰기 시
  * dueNow가 반응형으로 줄어 자동으로 다음 학생으로 넘어가고, 비면 스스로 사라진다.
+ * X로 닫으면 그 학생만 이번 세션 동안 접어두되, 다른 학생 due가 생기면 다시 뜬다(학생별 dismiss).
  * ModalCoordinator 큐(RECORD_REMINDER=5.2)로 다른 모달과 겹치지 않는다.
- * (OS 토스트 발화는 P3, 위젯/아이콘 은은형 표면은 별도.)
  */
 export function ReminderPopup() {
+  // X로 접어둔 학생 id(이 학생이 top인 동안만 숨김). 다른 학생이 top이 되면 다시 노출.
+  const [dismissedId, setDismissedId] = useState<string | null>(null);
+
+  // OS 토스트 클릭 시 접어둔 상태를 해제해 팝업을 다시 노출(레이어 M2 — reminderId 해석은 렌더러).
+  const handleToastClicked = useCallback(() => setDismissedId(null), []);
   // OS 토스트 스케줄 push(P3)를 이 마운트 지점에서 함께 구동한다(MainApp 생존 동안).
-  useReminderOsPush();
+  useReminderOsPush(handleToastClicked);
 
   const { dueNow, tagOptions, saveObservation, snooze, skipStudent, nothingToday } =
     useReminderScheduler();
-  const [dismissed, setDismissed] = useState(false);
 
-  const hasDue = dueNow.length > 0 && !dismissed;
+  const current = dueNow[0];
+  const hasDue = !!current && current.studentId !== dismissedId;
   const isHead = useRegisterModal('RECORD_REMINDER', hasDue);
 
-  if (!hasDue || !isHead) return null;
-  const current = dueNow[0]!;
+  if (!hasDue || !isHead || !current) return null;
 
-  const close = () => setDismissed(true);
+  const close = () => setDismissedId(current.studentId);
 
   return (
     <Modal
@@ -53,10 +57,7 @@ export function ReminderPopup() {
           void saveObservation(current.studentId, payload);
         }}
         onNothingToday={() => nothingToday(current.studentId)}
-        onSnooze={() => {
-          snooze();
-          close();
-        }}
+        onSnooze={() => snooze()}
         onSkipStudent={() => skipStudent(current.studentId)}
         onClose={close}
       />

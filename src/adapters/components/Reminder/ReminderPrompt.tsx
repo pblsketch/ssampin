@@ -50,6 +50,7 @@ export function ReminderPrompt({
   // 선택된 태그 Set + 메모 문자열만 내부 상태로 보유(가드레일 — 그 외 로직은 컨테이너 소관).
   const [selectedTags, setSelectedTags] = useState<ReadonlySet<string>>(() => new Set());
   const [content, setContent] = useState('');
+  const [submitting, setSubmitting] = useState(false);
   const headingId = useId();
 
   const displayName = studentName.trim() || '학생';
@@ -65,7 +66,10 @@ export function ReminderPrompt({
   };
 
   const handleSave = () => {
-    if (!canSave) return;
+    if (!canSave || submitting) return;
+    // 저장 중 더블클릭/Ctrl+Enter 반복으로 같은 기록이 중복 생성되지 않게 1회로 잠근다.
+    // (저장 후 부모가 다음 학생으로 넘어가며 key로 리마운트해 상태가 초기화된다.)
+    setSubmitting(true);
     // 표시 순서(tagOptions 순서)를 유지해 반환 — 클릭 순서가 아니라 칩 배치 순서로 저장.
     onSave({
       tags: tagOptions.filter((tag) => selectedTags.has(tag)),
@@ -203,7 +207,7 @@ export function ReminderPrompt({
         <button
           type="button"
           onClick={handleSave}
-          disabled={!canSave}
+          disabled={!canSave || submitting}
           className="w-full py-2.5 rounded-lg bg-sp-accent text-sp-accent-fg text-sm font-semibold shadow-sm hover:brightness-110 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
         >
           저장

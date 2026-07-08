@@ -33,9 +33,14 @@ const NAME_EXPOSURE_OPTIONS: { key: NameExposure; label: string }[] = [
   { key: 'none', label: '표시 안 함' },
 ];
 
-const TARGET_OPTIONS: { key: ReminderTarget; label: string; desc: string }[] = [
+const TARGET_OPTIONS: { key: ReminderTarget; label: string; desc: string; disabled?: boolean }[] = [
   { key: 'homeroom', label: '담임반', desc: '담임을 맡은 학급 학생을 알림 대상에 포함합니다' },
-  { key: 'subject', label: '수업반', desc: '수업에 들어가는 학급 학생을 알림 대상에 포함합니다' },
+  {
+    key: 'subject',
+    label: '수업반 (곧 지원)',
+    desc: '수업반 관찰 알림은 준비 중이에요. 곧 업데이트로 켤 수 있어요.',
+    disabled: true,
+  },
 ];
 
 /**
@@ -298,12 +303,16 @@ export function RecordReminderSection({ draft, patch }: Props) {
         {/* 알림 대상 */}
         <SettingsSection icon="groups" iconColor="bg-blue-500/10 text-blue-400" title="알림 대상">
           <div className="space-y-2">
-            {TARGET_OPTIONS.map(({ key, label, desc }) => {
-              const checked = rr.targets.includes(key);
+            {TARGET_OPTIONS.map(({ key, label, desc, disabled }) => {
+              const checked = !disabled && rr.targets.includes(key);
               return (
                 <label
                   key={key}
-                  className="flex items-center justify-between gap-3 cursor-pointer p-3 rounded-lg bg-sp-surface/60 hover:bg-sp-surface transition-colors"
+                  className={`flex items-center justify-between gap-3 p-3 rounded-lg bg-sp-surface/60 transition-colors ${
+                    disabled
+                      ? 'cursor-not-allowed opacity-60'
+                      : 'cursor-pointer hover:bg-sp-surface'
+                  }`}
                 >
                   <div className="flex flex-col">
                     <span className="text-sm font-medium text-sp-text">{label}</span>
@@ -312,8 +321,9 @@ export function RecordReminderSection({ draft, patch }: Props) {
                   <input
                     type="checkbox"
                     checked={checked}
-                    onChange={() => toggleTarget(key)}
-                    className="w-4 h-4 rounded border-sp-border accent-sp-accent"
+                    disabled={disabled}
+                    onChange={() => !disabled && toggleTarget(key)}
+                    className="w-4 h-4 rounded border-sp-border accent-sp-accent disabled:opacity-50"
                   />
                 </label>
               );

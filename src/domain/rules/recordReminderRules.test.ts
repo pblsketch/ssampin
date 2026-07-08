@@ -256,6 +256,27 @@ describe('buildForwardSchedule', () => {
     expect(items.length).toBeLessThanOrEqual(2);
   });
 
+  it('[cap] 오늘 이미 발화한 키가 dailyFireCap에 반영된다', () => {
+    const many: ReminderStudent[] = [
+      { id: 'a', name: '김' },
+      { id: 'b', name: '이' },
+      { id: 'c', name: '박' },
+    ];
+    const provider = providerOf({ a: '2026-06-01', b: '2026-06-01', c: '2026-06-01' });
+    const today = formatDateStr(now);
+    // dailyFireCap=2, 이미 1건(x:today) 발화 → 오늘 추가는 1건만.
+    const items = buildForwardSchedule(
+      many,
+      provider,
+      cfg({ weekdays: [], perNudge: 3, dailyFireCap: 2, horizonDays: 0 }),
+      new Set([`x:${today}`]),
+      0,
+      now,
+      idFactory,
+    );
+    expect(items.length).toBeLessThanOrEqual(1);
+  });
+
   it('알림 시각이 방해금지 구간이면 그 날은 예약하지 않는다', () => {
     const provider = providerOf({ a: '2026-06-01' });
     const items = buildForwardSchedule(
