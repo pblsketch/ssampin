@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
+import { useStudentRecordsStore } from '@adapters/stores/useStudentRecordsStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { useBirthdaySync } from '@adapters/hooks/useBirthdaySync';
@@ -87,6 +88,56 @@ export function RosterManagementTab() {
   } | null>(null);
   const settings = useSettingsStore((s) => s.settings);
   const showToast = useToastStore((s) => s.show);
+
+  // ── 편집 모드 그리드 템플릿 (편집 시 학번 입력칸 확대 + 삭제 열 추가) ──
+  const rosterGrid = isEditing
+    ? '36px 48px minmax(60px,1fr) 120px 64px 120px 64px 120px 96px 56px 40px'
+    : '36px 36px minmax(60px,1fr) 120px 64px 120px 64px 120px 96px 56px';
+
+  // ── 겹친 학번 감지 (편집 시 빨간 테두리로 경고) ──
+  const duplicateNumbers = useMemo(() => {
+    const counts = new Map<number, number>();
+    for (const s of students) {
+      if (s.studentNumber != null && s.studentNumber > 0) {
+        counts.set(s.studentNumber, (counts.get(s.studentNumber) ?? 0) + 1);
+      }
+    }
+    const dups = new Set<number>();
+    for (const [n, c] of counts) if (c > 1) dups.add(n);
+    return dups;
+  }, [students]);
+
+  // ── 학생 삭제 (완전 삭제 + 기록 있으면 확인창 + 실행 취소) ──
+  const [pendingDelete, setPendingDelete] = useState<{
+    student: Student;
+    recordCount: number;
+  } | null>(null);
+
+  const doDeleteStudent = useCallback(
+    async (student: Student) => {
+      const snapshot = students;
+      await updateStudents(students.filter((s) => s.id !== student.id));
+      showToast(`${student.name || '학생'}을(를) 명단에서 삭제했습니다`, 'success', {
+        label: '실행 취소',
+        onClick: () => void updateStudents([...snapshot]),
+      });
+    },
+    [students, updateStudents, showToast],
+  );
+
+  const handleDeleteStudent = useCallback(
+    async (student: Student) => {
+      // 기록 존재 여부는 records 로드 후 판단(미로딩 시 0으로 오판해 경고 없이 삭제되는 것 방지)
+      await useStudentRecordsStore.getState().load();
+      const recordCount = useStudentRecordsStore.getState().hasStudentReferences([student.id]);
+      if (recordCount > 0) {
+        setPendingDelete({ student, recordCount });
+      } else {
+        void doDeleteStudent(student);
+      }
+    },
+    [doDeleteStudent],
+  );
 
   useEffect(() => {
     void loadStudents();
@@ -540,7 +591,10 @@ export function RosterManagementTab() {
         <div className="flex-1 overflow-y-auto">
           <div className="w-full max-w-6xl mx-auto overflow-x-auto">
             {/* 테이블 헤더 */}
-            <div className="grid grid-cols-[36px_36px_minmax(60px,1fr)_120px_64px_120px_64px_120px_96px_56px] gap-1.5 px-3 py-3 border-b border-sp-border text-xs font-bold text-sp-muted uppercase tracking-wider min-w-[850px]">
+            <div
+              className="grid gap-1.5 px-3 py-3 border-b border-sp-border text-xs font-bold text-sp-muted uppercase tracking-wider min-w-[850px]"
+              style={{ gridTemplateColumns: rosterGrid }}
+            >
               <span>번호</span>
               <span>학번</span>
               <span>이름</span>
@@ -551,6 +605,7 @@ export function RosterManagementTab() {
               <span>보호자2 연락처</span>
               <span>생년월일</span>
               <span className="text-center">상태</span>
+              {isEditing && <span className="text-center">삭제</span>}
             </div>
 
             {/* 학생 목록 */}
@@ -561,19 +616,57 @@ export function RosterManagementTab() {
                 return (
                   <div
                     key={student.id}
-                    className={`grid grid-cols-[36px_36px_minmax(60px,1fr)_120px_64px_120px_64px_120px_96px_56px] gap-1.5 px-3 py-2.5 items-center transition-colors ${isVacant ? 'opacity-50 bg-red-500/5' : ''} ${isEditing ? 'hover:bg-sp-accent/5' : 'hover:bg-sp-card'}`}
+                    className={`grid gap-1.5 px-3 py-2.5 items-center transition-colors ${isVacant ? 'opacity-50 bg-red-500/5' : ''} ${isEditing ? 'hover:bg-sp-accent/5' : 'hover:bg-sp-card'}`}
+                    style={{ gridTemplateColumns: rosterGrid }}
                   >
                     {/* 번호 */}
                     <span className="text-sm text-sp-muted font-mono">{idx + 1}</span>
 
-                    {/* 학번 */}
-                    <span
-                      className={`text-sm font-mono font-bold ${isVacant ? 'text-red-400/60' : 'text-sp-accent'}`}
-                    >
-                      {student.studentNumber !== undefined
-                        ? String(student.studentNumber).padStart(2, '0')
-                        : '--'}
-                    </span>
+                    {/* 학번 (편집 모드에서 수정 가능 — 겹치거나 비면 빨간 경고) */}
+                    {isEditing && !isVacant ? (
+                      (() => {
+                        const badNumber =
+                          student.studentNumber == null ||
+                          student.studentNumber <= 0 ||
+                          duplicateNumbers.has(student.studentNumber);
+                        return (
+                          <input
+                            type="number"
+                            min={1}
+                            defaultValue={student.studentNumber ?? ''}
+                            title={
+                              student.studentNumber == null || student.studentNumber <= 0
+                                ? '번호가 비어 있어요'
+                                : duplicateNumbers.has(student.studentNumber)
+                                  ? '번호가 다른 학생과 겹쳐요'
+                                  : undefined
+                            }
+                            onBlur={(e) => {
+                              const v = parseInt(e.target.value, 10);
+                              if (!isNaN(v) && v > 0 && v !== student.studentNumber) {
+                                void updateStudentField(student.id, 'studentNumber', v);
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') e.currentTarget.blur();
+                            }}
+                            className={`w-full rounded bg-sp-bg border px-1 py-1.5 text-sm font-mono font-bold text-center focus:outline-none focus:border-sp-accent ${
+                              badNumber
+                                ? 'border-red-500/60 text-red-400'
+                                : 'border-sp-border text-sp-accent'
+                            }`}
+                          />
+                        );
+                      })()
+                    ) : (
+                      <span
+                        className={`text-sm font-mono font-bold ${isVacant ? 'text-red-400/60' : 'text-sp-accent'}`}
+                      >
+                        {student.studentNumber !== undefined
+                          ? String(student.studentNumber).padStart(2, '0')
+                          : '--'}
+                      </span>
+                    )}
 
                     {/* 이름 */}
                     {isVacant ? (
@@ -810,6 +903,19 @@ export function RosterManagementTab() {
                         </span>
                       ) : null}
                     </div>
+
+                    {/* 삭제 (편집 모드) */}
+                    {isEditing && (
+                      <div className="flex justify-center">
+                        <button
+                          onClick={() => void handleDeleteStudent(student)}
+                          className="w-6 h-6 flex items-center justify-center rounded text-sp-muted hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                          title="이 학생을 명단에서 삭제"
+                        >
+                          <span className="material-symbols-outlined text-icon-sm">delete</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -1338,6 +1444,47 @@ export function RosterManagementTab() {
           studentsToDelete={pendingReducePlan.activeRemoved}
           inactiveAutoRemoved={pendingReducePlan.inactiveRemoved}
         />
+      )}
+
+      {/* 학생 삭제 확인 모달 (기록 있는 학생) */}
+      {pendingDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-sp-card border border-sp-border rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl">
+            <h3 className="text-lg font-bold text-sp-text mb-3 flex items-center gap-2">
+              <span className="material-symbols-outlined text-red-400">delete</span>
+              학생 삭제
+            </h3>
+            <p className="text-sm text-sp-text mb-1">
+              <span className="font-bold">{pendingDelete.student.name || '이름 없음'}</span> 학생을
+              명단에서 삭제할까요?
+            </p>
+            <p className="text-xs text-sp-muted mb-4 leading-relaxed">
+              이 학생에게 저장된 기록이{' '}
+              <span className="text-red-400 font-medium">{pendingDelete.recordCount}건</span>{' '}
+              있습니다. 삭제하면 명단에서 사라지고 이 기록들은 조회 화면에 더 이상 보이지 않습니다.
+              <br />
+              <span className="text-sp-muted/70">(삭제 후 '실행 취소'로 되돌릴 수 있어요.)</span>
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setPendingDelete(null)}
+                className="px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface text-sm text-sp-text transition-colors"
+              >
+                취소
+              </button>
+              <button
+                onClick={() => {
+                  const target = pendingDelete.student;
+                  setPendingDelete(null);
+                  void doDeleteStudent(target);
+                }}
+                className="px-4 py-2 rounded-lg bg-red-500 hover:bg-red-600 text-white text-sm font-medium transition-colors"
+              >
+                삭제
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
