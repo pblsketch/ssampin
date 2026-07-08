@@ -182,6 +182,18 @@ export function studentDedupKey(studentId: string, dateStr: string): string {
   return `${studentId}:${dateStr}`;
 }
 
+/**
+ * 발화 장부에서 오래된 키(keepDays 이전 날짜)를 제거한다(무한 증가 방지).
+ * 키는 `studentId:YYYY-MM-DD` 형식이며 마지막 ':' 뒤가 날짜다.
+ */
+export function pruneFiredKeys(keys: readonly string[], now: Date, keepDays: number): string[] {
+  const cutoff = formatDateStr(addDays(now, -Math.max(0, keepDays)));
+  return keys.filter((k) => {
+    const date = k.slice(k.lastIndexOf(':') + 1);
+    return date >= cutoff;
+  });
+}
+
 /** 알림 본문 생성 — 이름 노출 여부에 따라 무명 문구 또는 프롬프트. */
 function buildBody(
   student: ReminderStudent,

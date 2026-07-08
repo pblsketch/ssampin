@@ -10,6 +10,7 @@ import {
   studentDedupKey,
   buildForwardSchedule,
   formatDateStr,
+  pruneFiredKeys,
 } from './recordReminderRules';
 import { DEFAULT_REMINDER_SETTINGS } from '../entities/RecordReminder';
 import type { ReminderSettings, ReminderStudent } from '../entities/RecordReminder';
@@ -147,6 +148,20 @@ describe('resolvePromptText & maskName', () => {
 
   it('studentDedupKey 형식', () => {
     expect(studentDedupKey('a', '2026-07-08')).toBe('a:2026-07-08');
+  });
+});
+
+describe('pruneFiredKeys', () => {
+  const now = new Date(2026, 6, 8); // 2026-07-08
+
+  it('keepDays 이전 날짜 키는 제거, 이내는 유지', () => {
+    const keys = ['a:2026-07-08', 'b:2026-07-01', 'c:2026-06-01'];
+    // keepDays=7 → cutoff 2026-07-01. c(06-01)만 제거.
+    expect(pruneFiredKeys(keys, now, 7)).toEqual(['a:2026-07-08', 'b:2026-07-01']);
+  });
+
+  it('빈 배열은 빈 배열', () => {
+    expect(pruneFiredKeys([], now, 30)).toEqual([]);
   });
 });
 

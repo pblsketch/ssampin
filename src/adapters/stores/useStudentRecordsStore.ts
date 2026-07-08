@@ -5,7 +5,10 @@ import type {
   AttendancePeriodEntry,
 } from '@domain/entities/StudentRecord';
 import type { RecordCategoryItem } from '@domain/valueObjects/RecordCategory';
-import { DEFAULT_RECORD_CATEGORIES } from '@domain/valueObjects/RecordCategory';
+import {
+  DEFAULT_RECORD_CATEGORIES,
+  synthesizeSubcategory,
+} from '@domain/valueObjects/RecordCategory';
 import { studentRecordsRepository } from '@adapters/di/container';
 import { ManageStudentRecords } from '@usecases/studentRecords/ManageStudentRecords';
 import { updateAttendancePeriods } from '@usecases/studentRecords/UpdateAttendancePeriods';
@@ -115,6 +118,13 @@ interface StudentRecordsState {
     reportedToNeis?: boolean,
     documentSubmitted?: boolean,
   ) => Promise<string>;
+  /**
+   * 태그를 포함한 단일 write 저장 (관찰 기록 알림 등에서 사용).
+   * 기존 addRecord(10-인자)의 시그니처·호출부를 건드리지 않기 위해 별도 액션으로 둔다.
+   */
+  addRecordWithTags: (params: AddRecordWithTagsParams) => Promise<string>;
+  /** 해당 학생의 가장 최근 기록일('YYYY-MM-DD'). 기록 없으면 null. (공백 감지용) */
+  getLastRecordDate: (studentId: string) => string | null;
   updateRecord: (record: StudentRecord) => Promise<void>;
   deleteRecord: (id: string) => Promise<void>;
   toggleFollowUpDone: (recordId: string) => Promise<void>;
@@ -148,6 +158,17 @@ interface StudentRecordsState {
    * @returns 참조 건수 (0 = 참조 없음 → 정리 가능)
    */
   hasStudentReferences: (studentIds: readonly string[]) => number;
+}
+
+export interface AddRecordWithTagsParams {
+  studentId: string;
+  category: string;
+  content: string;
+  date: string;
+  tags?: readonly string[];
+  /** 미지정 시 카테고리별 중립 sentinel로 합성(비출결 전용). */
+  subcategory?: string;
+  method?: CounselingMethod;
 }
 
 export interface UpdateAttendanceRecordParams {
@@ -225,6 +246,29 @@ export const useStudentRecordsStore = create<StudentRecordsState>((set, get) => 
       await manageRecords.add(newRecord);
       set((state) => ({ records: [...state.records, newRecord] }));
       return newRecord.id;
+    },
+
+    addRecordWithTags: async (params) => {
+      const newRecord: StudentRecord = {
+        id: generateUUID(),
+        studentId: params.studentId,
+        category: params.category,
+        subcategory: params.subcategory ?? synthesizeSubcategory(params.category),
+        content: params.content,
+        date: params.date,
+        createdAt: new Date().toISOString(),
+        ...(params.tags && params.tags.length > 0 ? { tags: [...params.tags] } : {}),
+        ...(params.method ? { method: params.method } : {}),
+      };
+      await manageRecords.add(newRecord);
+      set((state) => ({ records: [...state.records, newRecord] }));
+      return newRecord.id;
+    },
+
+    getLastRecordDate: (studentId) => {
+      const rs = get().records.filter((r) => r.studentId === studentId);
+      if (rs.length === 0) return null;
+      return rs.reduce((latest, r) => (r.date > latest ? r.date : latest), rs[0]!.date);
     },
 
     updateRecord: async (updated) => {

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState, Suspense } from 'react';
 import { Sidebar, type PageId } from '@adapters/components/Layout/Sidebar';
 import { EventPopup } from '@adapters/components/Dashboard/EventPopup';
+import { ReminderPopup } from '@adapters/components/Reminder/ReminderPopup';
 import { Dashboard } from '@adapters/components/Dashboard/Dashboard';
 import { Seating } from '@adapters/components/Seating/Seating';
 import { TimetablePage } from '@adapters/components/Timetable/TimetablePage';
@@ -1162,6 +1163,7 @@ function MainApp() {
         <ModalCoordinator />
         <UpdateNotification />
         <EventPopup />
+        <ReminderPopup />
         <ToastContainer />
         <Onboarding />
         {driveConflicts.length > 0 && (

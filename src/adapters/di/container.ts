@@ -49,6 +49,7 @@ import type { IObservationRepository } from '@domain/repositories/IObservationRe
 import type { IObservationAttachmentRepository } from '@domain/repositories/IObservationAttachmentRepository';
 import type { IRecordDraftsRepository } from '@domain/repositories/IRecordDraftsRepository';
 import type { IRecordEvidenceRepository } from '@domain/repositories/IRecordEvidenceRepository';
+import type { IReminderFireRepository } from '@domain/repositories/IReminderFireRepository';
 import type { IFormTemplateRepository } from '@domain/repositories/IFormTemplateRepository';
 import type { INotebookRepository } from '@domain/repositories/INotebookRepository';
 import type { IWallBoardRepository } from '@domain/repositories/IWallBoardRepository';
@@ -113,6 +114,7 @@ import { JsonObservationRepository } from '@adapters/repositories/JsonObservatio
 import { JsonObservationAttachmentRepository } from '@adapters/repositories/JsonObservationAttachmentRepository';
 import { JsonRecordDraftsRepository } from '@adapters/repositories/JsonRecordDraftsRepository';
 import { JsonRecordEvidenceRepository } from '@adapters/repositories/JsonRecordEvidenceRepository';
+import { JsonReminderFireRepository } from '@adapters/repositories/JsonReminderFireRepository';
 import { JsonFormTemplateRepository } from '@adapters/repositories/JsonFormTemplateRepository';
 import { JsonNotebookRepository } from '@adapters/repositories/JsonNotebookRepository';
 import { JsonWallBoardRepository } from '@adapters/repositories/JsonWallBoardRepository';
@@ -240,6 +242,11 @@ export const recordDraftsRepository: IRecordDraftsRepository = new JsonRecordDra
 );
 
 export const recordEvidenceRepository: IRecordEvidenceRepository = new JsonRecordEvidenceRepository(
+  storage,
+);
+
+// === 학생 관찰 기록 알림 발화 장부 (로컬 전용, syncRegistry 제외 — 크로스기기 중복은 유계 허용) ===
+export const reminderFireRepository: IReminderFireRepository = new JsonReminderFireRepository(
   storage,
 );
 

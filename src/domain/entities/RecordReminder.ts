@@ -66,6 +66,14 @@ export interface ReminderStudent {
 }
 
 /**
+ * 피로 상한/중복 발화 방지용 발화 장부(동기화 도메인 `reminder-fires`).
+ * 각 키는 `studentId:YYYY-MM-DD` — 같은 학생·같은 날은 어느 기기에서든 1회로 수렴(best-effort).
+ */
+export interface ReminderFireData {
+  readonly firedKeys: readonly string[];
+}
+
+/**
  * 학생 id → 마지막 기록일('YYYY-MM-DD') 조회 함수. null 이면 기록 전무.
  * 담임(`useStudentRecordsStore`)·수업반(`useObservationStore`) 저장처가 다르므로,
  * 순수 규칙은 이 provider 를 주입받아 저장처를 알지 못한 채 동작한다.
