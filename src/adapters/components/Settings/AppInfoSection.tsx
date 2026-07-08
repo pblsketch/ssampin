@@ -97,6 +97,7 @@ type UpdateCheckStatus =
   | 'not-available'
   | 'downloading'
   | 'downloaded'
+  | 'manual'
   | 'error';
 
 type ChangeType = 'new' | 'fix' | 'improve' | 'change';
@@ -104,6 +105,8 @@ type ChangeType = 'new' | 'fix' | 'improve' | 'change';
 interface UpdateInfo {
   version: string;
   releaseNotes?: string;
+  /** macOS(베타 지원): 인앱 자동 설치 불가 — 브라우저 다운로드 후 수동 설치 안내로 전환 */
+  manualOnly?: boolean;
 }
 
 interface ChangeItem {
@@ -268,10 +271,16 @@ export function AppInfoSection() {
   }, []);
 
   const handleDownload = useCallback(() => {
+    if (updateInfo?.manualOnly) {
+      // macOS: 본체가 칩에 맞는 DMG를 브라우저로 열어준다 — 진행바 대신 수동 설치 안내
+      window.electronAPI?.downloadUpdate();
+      setStatus('manual');
+      return;
+    }
     setStatus('downloading');
     setProgress(0);
     window.electronAPI?.downloadUpdate();
-  }, []);
+  }, [updateInfo?.manualOnly]);
 
   const handleInstall = useCallback(() => {
     window.electronAPI?.installUpdate();
@@ -551,7 +560,7 @@ export function AppInfoSection() {
                   className="px-4 py-2 rounded-lg bg-sp-accent text-white text-sm font-medium hover:bg-sp-accent/90 transition-colors flex items-center gap-2"
                 >
                   <span className="material-symbols-outlined text-icon-md">download</span>
-                  다운로드
+                  {updateInfo.manualOnly ? '새 버전 다운로드' : '다운로드'}
                 </button>
                 <button
                   type="button"
@@ -621,6 +630,20 @@ export function AppInfoSection() {
                   )}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* manual — macOS 베타 지원: 브라우저 다운로드 후 수동 설치 */}
+          {status === 'manual' && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-sp-highlight text-sm">
+                <span className="material-symbols-outlined text-icon-md">download</span>
+                브라우저에서 새 버전 다운로드가 시작됐어요
+              </div>
+              <p className="text-xs text-sp-muted leading-relaxed">
+                macOS 버전은 베타 지원이라 자동 설치가 되지 않아요. 받은 DMG 파일을 열어 쌤핀을 응용
+                프로그램 폴더로 드래그해 덮어쓰면 업데이트돼요. 데이터는 그대로 유지됩니다.
+              </p>
             </div>
           )}
 

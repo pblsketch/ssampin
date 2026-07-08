@@ -2357,6 +2357,9 @@ function setupAutoUpdater(): void {
     broadcastToAllWindows('update:available', {
       version: info.version,
       releaseNotes: info.releaseNotes ?? undefined,
+      // macOS는 Apple 서명 인증서가 없어 인앱 자동 설치가 불가(베타 지원) —
+      // 렌더러는 이 플래그를 보고 다운로드 진행바 대신 수동 설치 안내를 띄운다.
+      manualOnly: process.platform === 'darwin',
     });
   });
 
@@ -3675,10 +3678,15 @@ function registerIpcHandlers(): void {
   });
 
   // update:download — 업데이트 다운로드
-  // macOS: 코드서명 없이는 인앱 업데이트가 차단되므로 릴리즈 페이지로 안내
+  // macOS: 코드서명 없이는 인앱 업데이트가 차단되므로 칩에 맞는 DMG를 브라우저로 직접 받게 한다.
+  // (릴리즈 페이지로 보내면 arm64/x64 중 잘못 고르는 사고가 잦음 — 실행 중인 앱이 칩을 알고 있다)
   ipcMain.handle('update:download', (): void => {
     if (process.platform === 'darwin') {
-      shell.openExternal('https://github.com/pblsketch/ssampin/releases/latest');
+      const macArch =
+        process.arch === 'arm64' || app.runningUnderARM64Translation ? 'arm64' : 'x64';
+      shell.openExternal(
+        `https://github.com/pblsketch/ssampin/releases/latest/download/ssampin-${macArch}.dmg`,
+      );
       return;
     }
     autoUpdater.downloadUpdate().catch((err: Error) => {

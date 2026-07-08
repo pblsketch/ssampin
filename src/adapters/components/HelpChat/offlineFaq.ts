@@ -87,7 +87,8 @@ export const OFFLINE_FAQ: readonly FaqItem[] = [
   },
   {
     question: '업데이트는 어떻게 하나요?',
-    answer: '앱이 자동으로 새 버전을 알려줘요. 알림이 오면 "업데이트" 버튼만 누르면 돼요.',
+    answer:
+      'Windows는 앱이 자동으로 새 버전을 알려주고, 알림에서 "업데이트" 버튼만 누르면 돼요. macOS(베타 지원)는 자동 설치가 되지 않아, 알림에서 "새 버전 다운로드"를 누르면 받아지는 DMG를 열어 쌤핀을 응용 프로그램 폴더에 덮어쓰면 돼요. 데이터는 유지됩니다.',
     keywords: ['업데이트', '버전', '최신'],
     category: 'settings',
   },
@@ -360,8 +361,8 @@ export const OFFLINE_FAQ: readonly FaqItem[] = [
   },
   {
     question: '자동 업데이트가 안 돼요',
-    answer: `인터넷 연결을 확인해보세요. 방화벽이 차단할 수도 있어요. 수동으로 업데이트하려면 ${SITE_DISPLAY}에서 최신 설치 파일을 다운로드해서 실행하세요. 기존 데이터는 유지돼요.`,
-    keywords: ['업데이트', '실패', '안 됨', '안됨', '자동', '안 돼', '안돼'],
+    answer: `Windows: 인터넷 연결을 확인해보세요. 방화벽이 차단할 수도 있어요. 수동으로 업데이트하려면 ${SITE_DISPLAY}에서 최신 설치 파일을 다운로드해서 실행하세요.\n\nmacOS(베타 지원): 자동 설치가 원래 지원되지 않아요. 새 버전 알림에서 "새 버전 다운로드"를 누르면 DMG가 받아지고, 열어서 응용 프로그램 폴더에 덮어쓰면 업데이트돼요.\n\n두 경우 모두 기존 데이터는 유지돼요.`,
+    keywords: ['업데이트', '실패', '안 됨', '안됨', '자동', '안 돼', '안돼', '맥', 'mac'],
     category: 'troubleshoot',
   },
   {
@@ -817,22 +818,54 @@ export const OFFLINE_FAQ: readonly FaqItem[] = [
   {
     question: 'macOS(맥)에서 사용할 수 있나요?',
     answer:
-      '네, macOS도 지원해요! ssampin.com에서 macOS용 DMG 파일을 다운로드하세요. Apple Silicon(M1~M4)과 Intel Mac 모두 지원합니다.',
-    keywords: ['mac', 'macOS', '맥', '맥북', 'Mac', 'MacBook', '맥os', 'DMG', 'dmg'],
+      'macOS는 현재 베타로 지원해요. ssampin.com에서 macOS용 DMG 파일을 다운로드하세요. 🍎 메뉴 → "이 Mac에 관하여"의 칩 항목을 확인해서 Apple M1~M4면 Apple Silicon용, Intel Core면 Intel용을 받아야 해요. Apple 인증서가 없어 첫 실행 시 보안 경고가 뜨지만 앱은 안전합니다.',
+    keywords: ['mac', 'macOS', '맥', '맥북', 'Mac', 'MacBook', '맥os', 'DMG', 'dmg', '베타'],
     category: 'general',
   },
   {
     question: 'macOS에서 "개발자를 확인할 수 없음" 경고가 떠요',
     answer:
-      '개인 개발 앱이라 Apple 인증서가 아직 없어서 경고가 표시돼요. 시스템 설정 → 개인정보 보호 및 보안에서 "확인 없이 열기"를 클릭하세요. 또는 앱을 Control+클릭 → "열기"를 선택하세요.',
+      'Apple 인증서가 아직 없어서 표시되는 경고예요(베타 지원). ① 경고 창에서 "완료"를 클릭하세요("휴지통으로 이동"은 누르지 마세요). ② 시스템 설정 → 개인정보 보호 및 보안으로 이동해 아래로 스크롤하세요. ③ 쌤핀 옆의 "그래도 열기"를 클릭하고 Mac 암호를 입력하면 이후엔 경고 없이 실행돼요. 참고: Control+클릭 → "열기" 방법은 최신 macOS(15 이상)에서 더 이상 동작하지 않아요.',
     keywords: ['개발자', '확인', '열기', 'Gatekeeper', '게이트키퍼', '차단', '맥', 'mac', '보안'],
     category: 'troubleshoot',
   },
   {
-    question: 'macOS에서 DMG 파일이 열리지 않아요',
+    question:
+      'macOS에서 "이 버전의 macOS에서 작동하는지 확인하려면 개발자에게 문의하십시오" 오류가 떠요',
     answer:
-      '터미널을 열고 xattr -cr ~/Downloads/ssampin-arm64.dmg 명령을 실행한 후 다시 DMG를 더블클릭하세요. 다운로드 시 붙는 보안 속성을 제거하면 정상적으로 마운트됩니다.',
-    keywords: ['DMG', 'dmg', '마운트', '추출', '디스크', '열리지', '설치', '맥', 'mac', '손상'],
+      '내 Mac의 칩에 맞지 않는 파일을 받은 경우예요. 🍎 메뉴 → "이 Mac에 관하여"에서 칩을 확인하세요. Apple M1~M4면 Apple Silicon용(ssampin-arm64.dmg), Intel Core면 Intel용(ssampin-x64.dmg)을 ssampin.com에서 다시 받아 설치하면 해결됩니다.',
+    keywords: [
+      '작동',
+      '개발자에게 문의',
+      '다시 설치',
+      '칩',
+      'Apple Silicon',
+      'Intel',
+      'arm64',
+      'x64',
+      '맥',
+      'mac',
+      '실행 안',
+    ],
+    category: 'troubleshoot',
+  },
+  {
+    question: 'macOS에서 DMG 파일이 열리지 않거나 "손상" 경고가 반복돼요',
+    answer:
+      '다운로드 시 붙는 보안 속성 때문이에요. 터미널을 열고 xattr -cr /Applications/쌤핀.app 명령을 실행한 후 다시 실행해보세요. DMG 파일 자체가 안 열리면 xattr -cr ~/Downloads/ssampin-arm64.dmg (Intel은 ssampin-x64.dmg)를 실행하세요.',
+    keywords: [
+      'DMG',
+      'dmg',
+      '마운트',
+      '추출',
+      '디스크',
+      '열리지',
+      '설치',
+      '맥',
+      'mac',
+      '손상',
+      'xattr',
+    ],
     category: 'troubleshoot',
   },
   {

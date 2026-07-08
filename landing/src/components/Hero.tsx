@@ -23,7 +23,7 @@ export default function Hero() {
               <div className="mb-7 inline-flex items-center gap-2 rounded-full border border-sp-border bg-sp-surface px-3.5 py-1.5">
                 <span className="text-xs text-sp-accent">●</span>
                 <span className="text-xs font-medium tracking-wide text-sp-muted">
-                  Windows · macOS 교사용 대시보드
+                  Windows · macOS(베타) 교사용 대시보드
                 </span>
               </div>
 

@@ -1,6 +1,10 @@
 # Progress
 
-마지막 업데이트: 2026-07-07 KST
+마지막 업데이트: 2026-07-08 KST
+
+## ✅ macOS 베타 지원 표기 + 실행·업데이트 안내 전면 교정 (2026-07-08, ADR-020)
+
+macOS Tahoe 사용자 실행 실패·이탈 사례 조사(근거: v2.2.11 GHA 빌드 로그 — 서명 skip·ad-hoc 폴백·공증 skip 확인) 후 사용자 결정: **Apple 개발자 프로그램 미가입 확정 → macOS "베타 지원" 솔직 표기**. **① 랜딩**: Hero 배지 macOS(베타), DownloadButton 캡션 베타 표기+칩 확인 안내(🍎 이 Mac에 관하여)+FAQ 재작성(macOS 15+ [그래도 열기] 절차, 칩 불일치 오류 케이스), InstallGuide mac 트러블슈팅 A(보안 경고)/B(칩 불일치 "이 버전의 macOS에서 작동하는지…")/C(xattr) 3케이스+Control+클릭 폐기 명시, FAQ.tsx Mac·업데이트 답변 교체. **② /docs**: install-macos(베타 공지+칩 고르기+새 절차), macos-security(칩 불일치·xattr·수동 업데이트 섹션, lastUpdated 2026-07-08). **③ 챗봇 KB**(ingest-chatbot-qa.mjs): Tahoe 항목에 베타·게이트키퍼 절차 추가, v1.10.5 "자동 업데이트 곧 정상화" 거짓 약속 제거→수동 설치 안내로 교체, 신규 2건(칩 불일치 오류 전용 Q&A·macOS 15+ 그래도 열기 절차) — **다음 릴리즈 재임베딩 때 반영됨**. 오프라인 FAQ 4항목 갱신+1신규. **④ 앱**: mac에서 업데이트 모달이 "다운로드 중 0%"에 영구히 갇히던 버그 수정 — main.ts `update:available`에 `manualOnly`+`update:download`가 칩(process.arch+runningUnderARM64Translation) 맞는 DMG 직접 브라우저 다운로드, UpdateNotification·AppInfoSection에 `manual` 상태(수동 설치 3단계 안내). universal 빌드는 실기기 검증 불가로 보류(ADR-020). **게이트**: tsc 0 / lint 0에러(경고 132 기존) / vitest 3492 passed·1 flaky(FillFormFields 단독 10/10) / regression 38/38 / landing docs:check(문서 41)+build 통과. 남음: 실기기(Mac) 확인 불가 상태 지속 — 다음 mac 사용자 문의 시 새 안내로 검증, 다음 릴리즈에 앱 변경분 포함+KB 재임베딩.
 
 ## 🚀 v2.2.11 릴리즈 진행 (2026-07-07)
 

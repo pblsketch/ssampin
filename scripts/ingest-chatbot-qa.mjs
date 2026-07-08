@@ -382,8 +382,24 @@ const QA_DOCUMENTS = [
 
   // ── macOS Tahoe 지원 (v2.0.3) ─────────────────────────────────────────────
   {
-    content: `Q: 맥 Tahoe(macOS 26.x)에서 쌤핀이 잘 안 돌아갔어요.\nA: v2.0.3에서 Electron 런타임을 32 → 40.9.3 LTS로 메이저 업그레이드해 macOS Tahoe(26.x)를 정식 지원합니다. 한글 입력 깨짐·창 transparency·Always on Top 동작이 모두 정식 지원되며, Windows 11 24H2 호환성도 함께 강화됐어요. arm64(M1/M2/M3)와 x64(Intel) DMG가 모두 제공됩니다.`,
-    metadata: { source: 'system-qa', category: 'platform', title: 'Q: macOS Tahoe 26 지원' },
+    content: `Q: 맥 Tahoe(macOS 26.x)에서 쌤핀이 잘 안 돌아갔어요.\nA: v2.0.3에서 Electron 런타임을 32 → 40.9.3 LTS로 메이저 업그레이드해 macOS Tahoe(26.x)에서 동작합니다. 다만 macOS는 현재 **베타 지원**이에요 — Apple 개발자 인증서가 없어 다음 두 가지를 꼭 확인해야 해요.\n\n1) **칩에 맞는 DMG 받기**: 🍎 메뉴 > "이 Mac에 관하여"의 칩 항목 확인. Apple M1~M4 = arm64 DMG, Intel Core = x64 DMG. 잘못 받으면 "이 버전의 macOS에서 작동하는지 확인하려면 개발자에게 문의하십시오" 오류가 나요.\n2) **첫 실행 보안 경고 해제**: 더블클릭 → 경고 창에서 [완료] 클릭(휴지통 이동 금지) → 시스템 설정 > 개인정보 보호 및 보안 → 아래로 스크롤 → 쌤핀 옆 [그래도 열기] → Mac 암호 입력. ⚠️ Control+클릭 → 열기 방법은 macOS 15(Sequoia) 이상에서 더 이상 동작하지 않아요.\n\n또한 macOS에서는 자동 업데이트가 지원되지 않아, 새 버전 알림에서 [새 버전 다운로드]로 받은 DMG를 응용 프로그램 폴더에 덮어써서 업데이트합니다(데이터 유지).`,
+    metadata: { source: 'system-qa', category: 'platform', title: 'Q: macOS Tahoe 26 지원 (베타)' },
+  },
+  {
+    content: `Q: 맥에서 쌤핀 실행 시 "이 버전의 macOS에서 작동하는지 확인하려면 개발자에게 문의하십시오. 응용 프로그램을 다시 설치해야 할 수 있습니다"라는 오류가 떠요.\nA: 내 Mac의 칩에 맞지 않는 설치 파일을 받은 경우예요(재설치나 macOS 업데이트로는 해결되지 않아요).\n\n**해결 방법**\n1. 🍎 메뉴 > "이 Mac에 관하여" 클릭 → "칩" 항목 확인\n2. **Apple M1/M2/M3/M4**로 표시되면 → Apple Silicon용 **ssampin-arm64.dmg**\n3. **Intel Core i5/i7/i9**로 표시되면 → Intel용 **ssampin-x64.dmg**\n4. ssampin.com에서 맞는 파일을 다시 받아 설치 (기존 앱은 덮어쓰기, 데이터 유지)\n\n설치 후 첫 실행 시 "개발자를 확인할 수 없음" 경고가 뜨면: 경고 창에서 [완료] → 시스템 설정 > 개인정보 보호 및 보안 > [그래도 열기] → Mac 암호 입력. macOS는 현재 베타 지원이라 이 경고가 표시되지만 앱은 안전합니다.`,
+    metadata: {
+      source: 'system-qa',
+      category: 'install',
+      title: 'Q: macOS "이 버전의 macOS에서 작동하는지 확인" 오류 (칩 불일치)',
+    },
+  },
+  {
+    content: `Q: 맥에서 쌤핀이 "손상되었기 때문에 열 수 없습니다" 또는 "개발자를 확인할 수 없음"이라며 실행이 안 돼요.\nA: macOS는 현재 **베타 지원**이라 Apple 인증서가 없어 표시되는 경고예요. 앱 자체는 안전합니다.\n\n**여는 방법 (macOS 15 Sequoia·26 Tahoe 기준)**\n1. 쌤핀을 더블클릭 → 경고 창에서 [완료] 클릭 ("휴지통으로 이동"은 누르지 마세요!)\n2. 시스템 설정 > 개인정보 보호 및 보안 → 아래로 스크롤\n3. "쌤핀이(가) 차단되었습니다" 옆 [그래도 열기] 클릭 → Mac 암호 입력\n4. 한 번 허용하면 이후엔 경고 없이 실행돼요\n\n⚠️ 예전에 안내되던 **Control+클릭 → 열기 방법은 macOS 15 이상에서 더 이상 동작하지 않습니다.**\n\n그래도 "손상" 경고가 반복되면 터미널에서: xattr -cr /Applications/쌤핀.app 실행 후 다시 열어보세요.`,
+    metadata: {
+      source: 'system-qa',
+      category: 'install',
+      title: 'Q: macOS 보안 경고 해제 — 그래도 열기 (macOS 15+/Tahoe)',
+    },
   },
 
   // ── 아이콘 모드 (v2.0.2~) ────────────────────────────────────────────────
@@ -1163,7 +1179,7 @@ const QA_DOCUMENTS = [
 
   // ── v1.10.5 안내: macOS 자동 업데이트 깨짐 + 수동 재설치 ──────────────────
   {
-    content: `Q: Mac에서 쌤핀이 자동 업데이트가 안 돼요. 한참 됐는데 계속 이전 버전이에요.\nA: 죄송해요, v1.10.4 macOS 빌드에서 자동 업데이트 경로가 잘못 설정되는 문제가 있었어요. v1.10.5에서 원인을 찾아 수정했지만, v1.10.4가 설치된 Mac은 잘못된 경로를 계속 바라보기 때문에 **한 번만 수동으로 v1.10.5를 재설치**하셔야 해요.\n\n**수동 재설치 방법**\n1. ssampin.com 접속\n2. Mac 다운로드 버튼(Apple Silicon 또는 Intel) 클릭해 v1.10.5 DMG 받기\n3. DMG 열어 쌤핀을 응용 프로그램 폴더에 드래그 (기존 아이콘 덮어쓰기)\n4. 데이터는 Google Drive 동기화·localStorage에 그대로 남아있으니 재설치해도 안전합니다\n\nv1.10.5 → v1.10.6부터는 자동 업데이트가 정상 작동할 예정이에요.`,
+    content: `Q: Mac에서 쌤핀이 자동 업데이트가 안 돼요. 한참 됐는데 계속 이전 버전이에요.\nA: macOS는 현재 **베타 지원**이라 앱 안 자동 설치가 제공되지 않아요(Apple 서명 인증서가 있어야 자동 업데이트가 가능한데, 쌤핀은 아직 없습니다). 새 버전은 수동으로 설치해 주세요.\n\n**수동 업데이트 방법**\n1. 앱의 새 버전 알림에서 [새 버전 다운로드] 클릭 → 내 칩에 맞는 DMG가 브라우저로 받아져요. (또는 ssampin.com에서 직접 다운로드 — Apple Silicon은 arm64, Intel은 x64)\n2. DMG 열어 쌤핀을 응용 프로그램 폴더에 드래그 (기존 아이콘 덮어쓰기)\n3. 쌤핀 다시 실행 — 데이터는 로컬·Google Drive 동기화에 그대로 남아있어 안전합니다\n\n오래된 버전(v2.0.3 미만)을 쓰고 계시면 최신 macOS에서 실행 자체가 안 될 수 있으니 꼭 최신 버전으로 재설치해 주세요.`,
     metadata: {
       source: 'system-qa',
       category: 'sync',
@@ -1171,7 +1187,7 @@ const QA_DOCUMENTS = [
     },
   },
   {
-    content: `Q: Mac 어느 칩을 쓰는지 어떻게 확인해요? Apple Silicon과 Intel 중 어떤 DMG를 받아야 하나요?\nA: 왼쪽 위 🍎 메뉴 > "이 Mac에 관하여"를 클릭하세요. "칩" 항목에 **Apple M1/M2/M3/M4** 같은 표기가 있으면 **Apple Silicon용 DMG(ssampin-arm64.dmg)**, **Intel Core i5/i7/i9** 같은 표기가 있으면 **Intel용 DMG(ssampin-x64.dmg)**를 받으시면 돼요.\n\n2020년 이후 출시된 Mac은 대부분 Apple Silicon이에요. 잘 모르겠으면 arm64를 먼저 시도해 보고, 실행이 안 되면 x64로 받아보세요.`,
+    content: `Q: Mac 어느 칩을 쓰는지 어떻게 확인해요? Apple Silicon과 Intel 중 어떤 DMG를 받아야 하나요?\nA: 왼쪽 위 🍎 메뉴 > "이 Mac에 관하여"를 클릭하세요. "칩" 항목에 **Apple M1/M2/M3/M4** 같은 표기가 있으면 **Apple Silicon용 DMG(ssampin-arm64.dmg)**, **Intel Core i5/i7/i9** 같은 표기가 있으면 **Intel용 DMG(ssampin-x64.dmg)**를 받으시면 돼요.\n\n칩에 맞지 않는 파일을 받으면 "이 버전의 macOS에서 작동하는지 확인하려면 개발자에게 문의하십시오" 오류가 나면서 실행되지 않아요. 이 오류가 보이면 반대쪽 DMG를 다시 받아 설치하면 해결됩니다(데이터 유지).`,
     metadata: { source: 'system-qa', category: 'sync', title: 'Q: Mac arm64 vs x64 DMG 선택' },
   },
   {
@@ -2107,7 +2123,7 @@ const FEATURE_DOCUMENTS = [
     },
   },
   {
-    content: `🍎 macOS Tahoe(26.x) 정식 지원 (v2.0.3): Electron 런타임 32 → 40.9.3 LTS 메이저 업그레이드. macOS Tahoe(26.x) 한글 입력 깨짐·창 transparency·Always on Top 정식 지원. Windows 11 24H2 호환성 강화 동반. arm64(Apple Silicon)·x64(Intel) DMG 모두 제공.`,
+    content: `🍎 macOS Tahoe(26.x) 지원 — 베타 (v2.0.3): Electron 런타임 32 → 40.9.3 LTS 메이저 업그레이드. macOS Tahoe(26.x) 한글 입력 깨짐·창 transparency·Always on Top 지원. Windows 11 24H2 호환성 강화 동반. arm64(Apple Silicon)·x64(Intel) DMG 모두 제공. 단 macOS는 베타 지원: Apple 인증서가 없어 첫 실행 시 시스템 설정 > 개인정보 보호 및 보안 > [그래도 열기] 허용이 필요하고, 자동 업데이트 대신 수동 DMG 설치를 사용.`,
     metadata: {
       source: 'feature-summary',
       category: 'platform',

@@ -26,7 +26,8 @@ const macSteps = [
   {
     number: '01',
     title: '다운로드',
-    description: '.dmg 파일을 받으세요. Apple Silicon(M1~M4)과 Intel 버전이 있어요.',
+    description:
+      '.dmg 파일을 받으세요. 🍎 메뉴 → "이 Mac에 관하여"의 칩 항목을 보고 Apple Silicon(M1~M4)과 Intel 중 맞는 버전을 고르세요.',
   },
   {
     number: '02',
@@ -351,22 +352,25 @@ export default function InstallGuide() {
               <p
                 className={`text-lg font-semibold text-amber-900 ${os === 'mac' ? '' : 'opacity-70'}`}
               >
-                🍎 &quot;개발자를 확인할 수 없음&quot; 경고가 뜨나요?
+                🍎 macOS에서 설치·실행이 안 되나요? (베타 지원)
               </p>
               <p className={`mt-1.5 text-sm text-amber-800/80 ${os === 'mac' ? '' : 'opacity-70'}`}>
-                개인 개발 앱이라 아직 Apple 인증서가 없어서 표시되는 경고예요.
+                macOS 버전은 현재 베타로 제공돼요. Apple 인증서가 없어 보안 경고가 표시되지만, 앱
+                자체는 안전합니다.
               </p>
               <div className="mt-4 rounded-lg border border-amber-300/70 bg-white/70 p-4">
-                <ol className="space-y-2">
+                <p className="text-xs font-semibold text-amber-900">
+                  A. &quot;개발자를 확인할 수 없음&quot; · &quot;손상되었기 때문에 열 수
+                  없습니다&quot; 경고가 뜰 때
+                </p>
+                <ol className="mt-2 space-y-2">
                   <li className="flex items-start gap-2.5 text-xs text-amber-800/85">
                     <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-200 text-[0.65rem] font-bold text-amber-900">
                       1
                     </span>
                     <span className="pt-0.5">
-                      <strong className="text-amber-900">
-                        시스템 설정 → 개인정보 보호 및 보안
-                      </strong>
-                      으로 이동하세요
+                      경고 창에서 <strong className="text-amber-900">&quot;완료&quot;</strong>를
+                      클릭하세요 (&quot;휴지통으로 이동&quot;은 누르지 마세요)
                     </span>
                   </li>
                   <li className="flex items-start gap-2.5 text-xs text-amber-800/85">
@@ -374,9 +378,10 @@ export default function InstallGuide() {
                       2
                     </span>
                     <span className="pt-0.5">
-                      &quot;쌤핀이(가) 차단되었습니다&quot; 옆의{' '}
-                      <strong className="text-amber-900">&quot;확인 없이 열기&quot;</strong>를
-                      클릭하세요
+                      <strong className="text-amber-900">
+                        시스템 설정 → 개인정보 보호 및 보안
+                      </strong>
+                      으로 이동해 아래로 스크롤하세요
                     </span>
                   </li>
                   <li className="flex items-start gap-2.5 text-xs text-amber-800/85">
@@ -384,15 +389,45 @@ export default function InstallGuide() {
                       3
                     </span>
                     <span className="pt-0.5">
-                      또는: 앱을{' '}
-                      <strong className="text-amber-900">Control+클릭 → &quot;열기&quot;</strong>를
-                      선택하세요
+                      쌤핀 항목 옆의{' '}
+                      <strong className="text-amber-900">&quot;그래도 열기&quot;</strong>를 클릭하고
+                      Mac 암호를 입력하세요
                     </span>
                   </li>
                 </ol>
+                <p className="mt-2 text-[0.7rem] text-amber-800/60">
+                  💡 예전에 안내되던 Control+클릭 → &quot;열기&quot; 방법은 최신 macOS(15 이상)에서
+                  더 이상 동작하지 않아요.
+                </p>
+              </div>
+              <div className="mt-2 rounded-lg border border-amber-300/70 bg-white/70 p-4">
+                <p className="text-xs font-semibold text-amber-900">
+                  B. &quot;이 버전의 macOS에서 작동하는지 확인하려면 개발자에게 문의하십시오&quot;가
+                  뜰 때
+                </p>
+                <p className="mt-1.5 text-xs leading-relaxed text-amber-800/85">
+                  내 Mac의 칩에 맞지 않는 파일을 받은 경우예요. 🍎 메뉴 → &quot;이 Mac에
+                  관하여&quot;에서 칩을 확인하세요.{' '}
+                  <strong className="text-amber-900">Apple M1~M4</strong>면 Apple Silicon용,{' '}
+                  <strong className="text-amber-900">Intel Core</strong>면 Intel용 DMG를 다시
+                  받아주세요.
+                </p>
+              </div>
+              <div className="mt-2 rounded-lg border border-amber-300/70 bg-white/70 p-4">
+                <p className="text-xs font-semibold text-amber-900">
+                  C. 위 방법으로도 &quot;손상&quot; 경고가 반복될 때
+                </p>
+                <p className="mt-1.5 text-xs leading-relaxed text-amber-800/85">
+                  Launchpad에서 <strong className="text-amber-900">터미널</strong>을 열고 아래
+                  명령을 붙여넣은 뒤 Enter를 누르고 다시 실행해 보세요.
+                </p>
+                <p className="mt-1.5 rounded bg-amber-50 px-2 py-1.5 font-mono text-[0.7rem] text-amber-900">
+                  xattr -cr /Applications/쌤핀.app
+                </p>
               </div>
               <p className="mt-4 text-xs text-amber-800/60">
-                Apple 코드 서명 인증서를 준비 중이며, 곧 경고 없이 설치하실 수 있게 됩니다.
+                macOS 버전은 베타로 제공되고 있어요. 문제가 계속되면 사이트 오른쪽 아래 채팅으로
+                알려주세요.
               </p>
             </div>
           </FadeIn>

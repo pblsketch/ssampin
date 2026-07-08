@@ -132,7 +132,7 @@ export default function DownloadButton({
       {/* Primary OS 부가 정보 */}
       {primaryOs === 'mac' ? (
         <p className={`text-sm ${isPrimary ? 'text-sp-muted' : 'text-blue-100/70'}`}>
-          무료 · Apple Silicon (M1/M2/M3/M4) · {FILE_SIZE_MAC}
+          무료 · Apple Silicon (M1/M2/M3/M4) · {FILE_SIZE_MAC} · 베타 지원
         </p>
       ) : (
         <p className={`text-sm ${isPrimary ? 'text-sp-muted' : 'text-blue-100/70'}`}>
@@ -142,7 +142,9 @@ export default function DownloadButton({
 
       {/* macOS Intel 링크 (macOS일 때만) */}
       {primaryOs === 'mac' && (
-        <p className={`text-xs ${isPrimary ? 'text-sp-muted/60' : 'text-blue-100/50'}`}>
+        <p
+          className={`text-center text-xs leading-relaxed ${isPrimary ? 'text-sp-muted/60' : 'text-blue-100/50'}`}
+        >
           Intel Mac을 사용하시나요?{' '}
           <a
             href={DOWNLOAD_URL_MAC_X64}
@@ -154,6 +156,7 @@ export default function DownloadButton({
           >
             Intel 버전 받기 →
           </a>
+          <br />내 칩 확인: 화면 왼쪽 위 🍎 메뉴 → &quot;이 Mac에 관하여&quot;의 칩 항목
         </p>
       )}
 
@@ -195,7 +198,7 @@ export default function DownloadButton({
           <details className="group mt-3 w-full max-w-md rounded-xl border border-amber-300/70 bg-amber-50 text-left">
             <summary className="flex min-h-[44px] cursor-pointer items-center gap-2 px-4 py-3 text-[0.85rem] font-medium text-amber-900 select-none">
               <span>⚠️</span>
-              <span className="flex-1">&quot;개발자를 확인할 수 없음&quot; 경고가 뜨나요?</span>
+              <span className="flex-1">앱이 열리지 않나요? (macOS 베타 지원)</span>
               <span className="shrink-0 text-amber-700/60 transition-transform duration-200 group-open:rotate-45">
                 +
               </span>
@@ -204,20 +207,21 @@ export default function DownloadButton({
               <p>
                 걱정 마세요! 쌤핀은 안전한 프로그램입니다.
                 <br />
-                개인 개발 앱이라 아직 Apple 인증서가 없어서 경고가 표시돼요.
+                macOS 버전은 현재 <strong className="text-amber-900">베타 지원</strong>이라 Apple
+                인증서가 없어 보안 경고가 표시돼요.
               </p>
               <div className="mt-3 rounded-lg border border-amber-200 bg-white/70 p-3">
-                <p className="text-xs font-semibold text-amber-900">해결 방법</p>
+                <p className="text-xs font-semibold text-amber-900">
+                  &quot;개발자를 확인할 수 없음&quot; · &quot;손상되었기 때문에&quot; 경고가 뜰 때
+                </p>
                 <ol className="mt-1.5 space-y-1 text-xs text-amber-800/85">
                   <li className="flex items-start gap-2">
                     <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-200 text-[0.6rem] font-bold text-amber-900">
                       1
                     </span>
                     <span>
-                      <strong className="text-amber-900">
-                        시스템 설정 → 개인정보 보호 및 보안
-                      </strong>
-                      으로 이동
+                      경고 창에서 <strong className="text-amber-900">&quot;완료&quot;</strong> 클릭
+                      (&quot;휴지통으로 이동&quot;은 누르지 마세요)
                     </span>
                   </li>
                   <li className="flex items-start gap-2">
@@ -225,11 +229,34 @@ export default function DownloadButton({
                       2
                     </span>
                     <span>
-                      &quot;쌤핀이(가) 차단되었습니다&quot; 옆의{' '}
-                      <strong className="text-amber-900">&quot;확인 없이 열기&quot;</strong> 클릭
+                      <strong className="text-amber-900">
+                        시스템 설정 → 개인정보 보호 및 보안
+                      </strong>
+                      으로 이동해 아래로 스크롤
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-200 text-[0.6rem] font-bold text-amber-900">
+                      3
+                    </span>
+                    <span>
+                      쌤핀 항목 옆의{' '}
+                      <strong className="text-amber-900">&quot;그래도 열기&quot;</strong> 클릭 → Mac
+                      암호 입력
                     </span>
                   </li>
                 </ol>
+              </div>
+              <div className="mt-2 rounded-lg border border-amber-200 bg-white/70 p-3">
+                <p className="text-xs font-semibold text-amber-900">
+                  &quot;이 버전의 macOS에서 작동하는지 확인하려면 개발자에게 문의하십시오&quot;가 뜰
+                  때
+                </p>
+                <p className="mt-1.5 text-xs text-amber-800/85">
+                  내 Mac의 칩에 맞지 않는 파일을 받은 경우예요. 🍎 메뉴 → &quot;이 Mac에
+                  관하여&quot;에서 칩을 확인하고, 위에서 맞는 버전(Apple Silicon/Intel)을 다시
+                  받아주세요.
+                </p>
               </div>
             </div>
           </details>

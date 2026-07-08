@@ -189,33 +189,44 @@ export const docsArticles: readonly DocArticle[] = [
   },
   {
     slug: 'start/install-macos',
-    title: 'macOS에 설치하기',
-    description: 'Apple Silicon과 Intel Mac에서 DMG 파일을 설치하고 Gatekeeper 경고를 해결합니다.',
+    title: 'macOS에 설치하기 (베타 지원)',
+    description:
+      'Apple Silicon과 Intel Mac에서 내 칩에 맞는 DMG 파일을 고르고 보안 경고를 해결합니다.',
     category: 'start',
-    lastUpdated: '2026-06-23',
+    lastUpdated: '2026-07-08',
     sections: [
+      {
+        id: 'beta-notice',
+        title: 'macOS는 베타 지원입니다',
+        body: [
+          'macOS 버전은 현재 베타로 제공됩니다. Apple 개발자 인증서가 없어 첫 실행 시 보안 경고가 표시되지만, 앱 자체는 안전합니다. 자동 업데이트도 지원되지 않아 새 버전은 직접 내려받아 설치합니다.',
+        ],
+      },
       {
         id: 'choose-file',
         title: '내 Mac에 맞는 파일 고르기',
         bullets: [
-          'M1, M2, M3, M4 Mac: Apple Silicon용 DMG 파일을 받습니다.',
-          'Intel Mac: Intel 버전 받기 링크를 사용합니다.',
+          '먼저 화면 왼쪽 위 사과(🍎) 메뉴에서 이 Mac에 관하여를 열어 칩 항목을 확인합니다.',
+          '칩이 Apple M1, M2, M3, M4로 표시되면: Apple Silicon용 DMG 파일을 받습니다.',
+          '칩(또는 프로세서)이 Intel Core로 표시되면: Intel 버전 받기 링크를 사용합니다.',
+          '칩에 맞지 않는 파일을 받으면 "이 버전의 macOS에서 작동하는지 확인하려면 개발자에게 문의하십시오"라는 오류가 나며 실행되지 않습니다.',
         ],
       },
       {
         id: 'gatekeeper',
         title: '개발자를 확인할 수 없음 경고',
         steps: [
-          '쌤핀 아이콘을 Control 키를 누른 채 클릭합니다.',
-          '메뉴에서 열기를 선택합니다.',
-          '다시 경고가 나오면 열기를 한 번 더 선택합니다.',
+          '쌤핀을 더블클릭해 실행을 시도합니다.',
+          '경고 창에서 완료를 클릭합니다. 휴지통으로 이동은 누르지 않습니다.',
+          '시스템 설정을 열고 개인정보 보호 및 보안으로 이동해 아래로 스크롤합니다.',
+          '쌤핀 항목 옆의 그래도 열기를 클릭하고 Mac 암호를 입력합니다.',
         ],
       },
       {
         id: 'privacy',
-        title: '시스템 설정에서 허용하기',
+        title: '한 번만 허용하면 됩니다',
         body: [
-          'Control+클릭으로도 열리지 않으면 시스템 설정의 개인정보 보호 및 보안에서 쌤핀 실행을 허용합니다.',
+          '그래도 열기로 한 번 실행하면 이후에는 경고 없이 실행됩니다. 예전에 안내되던 Control+클릭 → 열기 방법은 최신 macOS(15 이상)에서는 더 이상 동작하지 않습니다.',
         ],
       },
     ],
@@ -1254,25 +1265,48 @@ export const docsArticles: readonly DocArticle[] = [
   },
   {
     slug: 'troubleshooting/macos-security',
-    title: 'macOS 보안 경고 해결',
-    description: 'macOS에서 개발자를 확인할 수 없음, DMG가 열리지 않음 문제를 해결합니다.',
+    title: 'macOS 실행 문제 해결 (베타 지원)',
+    description:
+      'macOS에서 개발자를 확인할 수 없음, 이 버전의 macOS 오류, 자동 업데이트 안 됨 문제를 해결합니다.',
     category: 'troubleshooting',
-    lastUpdated: '2026-06-23',
+    lastUpdated: '2026-07-08',
     sections: [
       {
+        id: 'beta',
+        title: 'macOS는 베타 지원입니다',
+        body: [
+          'macOS 버전은 현재 베타로 제공됩니다. Apple 개발자 인증서가 없어 첫 실행 시 보안 경고가 표시되지만, 앱 자체는 안전합니다.',
+        ],
+      },
+      {
         id: 'open',
-        title: '개발자를 확인할 수 없음',
+        title: '개발자를 확인할 수 없음 · 손상되었기 때문에 열 수 없음',
         steps: [
-          '쌤핀 앱을 Control+클릭합니다.',
-          '열기를 선택합니다.',
-          '확인 창에서 다시 열기를 선택합니다.',
+          '쌤핀을 더블클릭해 실행을 시도한 뒤, 경고 창에서 완료를 클릭합니다. 휴지통으로 이동은 누르지 않습니다.',
+          '시스템 설정 → 개인정보 보호 및 보안으로 이동해 아래로 스크롤합니다.',
+          '쌤핀 항목 옆의 그래도 열기를 클릭하고 Mac 암호를 입력합니다.',
+          '한 번 허용하면 이후에는 경고 없이 실행됩니다. Control+클릭 → 열기 방법은 최신 macOS(15 이상)에서는 동작하지 않습니다.',
+        ],
+      },
+      {
+        id: 'wrong-chip',
+        title: '이 버전의 macOS에서 작동하는지 확인하려면 개발자에게 문의하십시오',
+        body: [
+          '내 Mac의 칩에 맞지 않는 파일을 받은 경우에 나타나는 오류입니다. 사과(🍎) 메뉴 → 이 Mac에 관하여에서 칩을 확인하세요. Apple M1~M4면 Apple Silicon용 DMG, Intel Core면 Intel용 DMG를 다시 받아 설치하면 해결됩니다.',
         ],
       },
       {
         id: 'dmg',
-        title: 'DMG가 열리지 않을 때',
+        title: '손상 경고가 반복되거나 DMG가 열리지 않을 때',
         body: [
-          '다운로드 보안 속성 때문에 열리지 않을 수 있습니다. 터미널에서 `xattr -cr ~/Downloads/ssampin-arm64.dmg` 명령을 실행한 뒤 다시 열어 보세요.',
+          '다운로드 보안 속성 때문일 수 있습니다. 터미널을 열고 `xattr -cr /Applications/쌤핀.app` 명령을 실행한 뒤 다시 실행해 보세요. DMG 파일 자체가 열리지 않으면 `xattr -cr ~/Downloads/ssampin-arm64.dmg`(Intel은 ssampin-x64.dmg)를 실행합니다.',
+        ],
+      },
+      {
+        id: 'update',
+        title: '자동 업데이트가 되지 않아요',
+        body: [
+          'macOS 베타 지원에서는 앱 안 자동 설치가 제공되지 않습니다. 새 버전 알림에서 새 버전 다운로드를 누르면 내 칩에 맞는 DMG가 브라우저로 받아집니다. 받은 DMG를 열어 쌤핀을 응용 프로그램 폴더로 드래그해 덮어쓰면 업데이트 완료이며, 데이터는 그대로 유지됩니다.',
         ],
       },
     ],

@@ -309,7 +309,7 @@ interface ElectronAPI {
   downloadUpdate: () => Promise<void>;
   installUpdate: () => Promise<void>;
   onUpdateAvailable: (
-    callback: (info: { version: string; releaseNotes?: string }) => void,
+    callback: (info: { version: string; releaseNotes?: string; manualOnly?: boolean }) => void,
   ) => () => void;
   onUpdateDownloadProgress: (callback: (progress: { percent: number }) => void) => () => void;
   onUpdateDownloaded: (callback: (info: { version: string }) => void) => () => void;

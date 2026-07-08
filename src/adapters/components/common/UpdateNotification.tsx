@@ -15,9 +15,11 @@ const FEEDBACK_FORM_URL = 'https://forms.gle/o1X4zLYocUpFKCzy7';
 interface UpdateInfo {
   version: string;
   releaseNotes?: string;
+  /** macOS(베타 지원): 인앱 자동 설치 불가 — 브라우저 다운로드 후 수동 설치 안내로 전환 */
+  manualOnly?: boolean;
 }
 
-type UpdateStatus = 'idle' | 'available' | 'downloading' | 'downloaded' | 'error';
+type UpdateStatus = 'idle' | 'available' | 'downloading' | 'downloaded' | 'manual' | 'error';
 
 type ChangeType = 'new' | 'fix' | 'improve' | 'change';
 
@@ -216,11 +218,17 @@ export function UpdateNotification() {
   }, [info?.version]);
 
   const handleDownload = useCallback(() => {
+    if (info?.manualOnly) {
+      // macOS: 본체가 칩에 맞는 DMG를 브라우저로 열어준다 — 진행바 대신 수동 설치 안내
+      window.electronAPI?.downloadUpdate();
+      setStatus('manual');
+      return;
+    }
     setUserInitiatedDownload(true);
     setStatus('downloading');
     setProgress(0);
     window.electronAPI?.downloadUpdate();
-  }, []);
+  }, [info?.manualOnly]);
 
   const handleInstall = useCallback(() => {
     track('update_installed', {
@@ -475,9 +483,9 @@ export function UpdateNotification() {
                 className="px-4 py-1.5 text-sm bg-sp-accent text-white rounded-lg hover:bg-blue-600 transition-colors font-medium flex items-center gap-1.5"
               >
                 <span className="material-symbols-outlined text-base" aria-hidden="true">
-                  rocket_launch
+                  {info.manualOnly ? 'download' : 'rocket_launch'}
                 </span>
-                지금 업데이트
+                {info.manualOnly ? '새 버전 다운로드' : '지금 업데이트'}
               </button>
             </div>
           </div>
@@ -546,6 +554,46 @@ export function UpdateNotification() {
                 restart_alt
               </span>
               쌤핀 재시작
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── macOS 수동 설치 안내 (베타 지원) ── */}
+      {status === 'manual' && (
+        <div className="flex flex-col gap-4 px-6 py-5">
+          <div className="flex items-start gap-2.5">
+            <span className="material-symbols-outlined text-sp-accent text-2xl" aria-hidden="true">
+              download
+            </span>
+            <div>
+              <p className="text-sp-text text-sm font-bold">브라우저에서 다운로드가 시작됐어요</p>
+              <p className="text-sp-muted text-xs mt-0.5 leading-relaxed">
+                macOS 버전은 베타 지원이라 앱 안에서 자동 설치가 되지 않아요. 받은 파일로 직접
+                설치해 주세요.
+              </p>
+            </div>
+          </div>
+          <ol className="space-y-1.5 text-sm text-sp-text/85 list-none">
+            <li className="flex items-start gap-2">
+              <span className="text-sp-accent shrink-0">1.</span>
+              <span>다운로드한 DMG 파일을 엽니다.</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="text-sp-accent shrink-0">2.</span>
+              <span>쌤핀 아이콘을 응용 프로그램 폴더로 드래그해 덮어씁니다.</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="text-sp-accent shrink-0">3.</span>
+              <span>쌤핀을 다시 실행하면 완료 — 데이터는 그대로 유지돼요.</span>
+            </li>
+          </ol>
+          <div className="flex justify-end">
+            <button
+              onClick={handleDismiss}
+              className="px-4 py-2 text-sm bg-sp-accent text-white rounded-lg hover:bg-blue-600 transition-colors font-medium"
+            >
+              확인
             </button>
           </div>
         </div>
