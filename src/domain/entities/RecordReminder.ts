@@ -133,7 +133,8 @@ export const DEFAULT_REMINDER_SETTINGS: ReminderSettings = {
  * 선생님이 프리셋을 고르면 이 값들이 현재 설정에 얹힌다.
  * - light(가볍게): 주1(수) · 임계 21일
  * - normal(보통): 주3(월·수·금) · 임계 14일
- * - thorough(꼼꼼히): 매일 · 임계 10일 · 한 번에 2명
+ * - thorough(꼼꼼히): 평일 매일(월~금) · 임계 10일 · 한 번에 2명
+ *   (학교는 주말에 없으므로 '매일'은 평일 기준. 요일을 모두 비우면 주말 포함 매일.)
  */
 export const REMINDER_PRESETS: Record<
   Exclude<ReminderPreset, 'custom'>,
@@ -141,5 +142,5 @@ export const REMINDER_PRESETS: Record<
 > = {
   light: { weekdays: [3], perNudge: 1, dailyFireCap: 1, staleDays: 21 },
   normal: { weekdays: [1, 3, 5], perNudge: 1, dailyFireCap: 2, staleDays: 14 },
-  thorough: { weekdays: [], perNudge: 2, dailyFireCap: 3, staleDays: 10 },
+  thorough: { weekdays: [1, 2, 3, 4, 5], perNudge: 2, dailyFireCap: 3, staleDays: 10 },
 };

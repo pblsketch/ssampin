@@ -24,7 +24,7 @@ const PRESET_OPTIONS: {
 }[] = [
   { key: 'light', label: '가볍게', desc: '주 1회 · 21일 공백' },
   { key: 'normal', label: '보통', desc: '주 3회 · 14일 공백' },
-  { key: 'thorough', label: '꼼꼼히', desc: '매일 · 10일 공백 · 2명씩' },
+  { key: 'thorough', label: '꼼꼼히', desc: '평일 매일 · 10일 공백 · 2명씩' },
 ];
 
 const NAME_EXPOSURE_OPTIONS: { key: NameExposure; label: string }[] = [

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useEventsStore } from '@adapters/stores/useEventsStore';
@@ -56,8 +56,16 @@ export function SettingsPage({ initialTab }: SettingsPageProps = {}) {
     load();
     loadEvents();
   }, [load, loadEvents]);
+  // 초안(draft)은 최초 로드 완료 시 한 번만 스토어와 맞춘다.
+  // 이후 백그라운드 설정 변경(구글 드라이브 동기화 재로드 등)이 저장 안 한 편집을
+  // 덮어써 되돌려버리던 문제를 막는다(예: '기록 알림' 토글이 저장 전에 꺼지던 버그).
+  // 다른 창/기기의 변경은 설정 화면을 다시 열면 반영된다.
+  const draftInitializedRef = useRef(false);
   useEffect(() => {
-    if (loaded) setDraft(settings);
+    if (loaded && !draftInitializedRef.current) {
+      draftInitializedRef.current = true;
+      setDraft(settings);
+    }
   }, [loaded, settings]);
 
   const patch = useCallback((p: Partial<Settings>) => {
