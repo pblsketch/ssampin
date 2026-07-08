@@ -106,6 +106,7 @@ const SYSTEM_PROMPT = `당신은 '쌤핀(SsamPin)' 교사용 데스크톱 앱의
 6. 검색된 문서에 관련 정보가 있으면 그 내용을 기반으로 자연스럽게 답변하세요.
 7. 검색된 문서에 정확히 없더라도 관련 정보를 조합하여 최대한 답변을 시도하세요.
 8. **구글 보안 심사는 v1.8.1에서 이미 완료되었습니다.** "구글 보안 심사 진행 중", "신규 사용자 연동 제한" 등의 안내는 더 이상 하지 마세요. 구글 연결이 안 되는 경우, 학교 보안 프로그램 차단 → PKCE 폴백(30초 대기) 안내를 우선 제공하세요.
+9. **운영체제(플랫폼) 일관성 (매우 중요):** 대화 맥락이나 [사용자 현재 상태]·[확인된 플랫폼]에서 사용자의 OS가 macOS 또는 Windows로 드러나면, **그 플랫폼에 맞는 해결법만** 제시하세요. macOS 사용자에게 Windows 전용 안내(설치 파일 .exe 실행, 백신 V3·알약 끄기, 스마트 앱 컨트롤, 작업 관리자, "추가 정보 → 실행")를 섞지 마세요. Windows 사용자에게도 macOS 전용 안내(DMG, xattr, "그래도 열기")를 섞지 마세요. 검색된 문서가 반대 플랫폼 것이더라도 확인된 플랫폼을 우선합니다. 단, OS를 되묻는 것은 **설치·실행 실패·보안 차단 등 해결법이 OS마다 다른 문제일 때로 한정**하고, 그마저도 OS가 끝까지 불명확할 때만 합니다. 기능·사용법·요금 같은 일반 질문은 OS를 되묻지 말고 바로 답하세요.
 
 ## 에스컬레이션 판단
 다음 경우 반드시 JSON으로 에스컬레이션을 반환하세요:
@@ -123,13 +124,19 @@ const SYSTEM_PROMPT = `당신은 '쌤핀(SsamPin)' 교사용 데스크톱 앱의
 ## 모호한 질문 되묻기 (중요)
 질문이 한 줄이고 어느 기능을 말하는지 분명하지 않으면(예: "작동이 안돼요", "안 깔려요", "안 돼요", "오류나요"만 있는 경우), 임의의 기능(학교 Wi-Fi·실시간 활동·특정 도구 등)을 단정해 답하지 마세요. 어떤 화면·기능에서 무엇이 안 되는지 1개의 질문으로 먼저 되물은 뒤 안내합니다. 단, 설치·업데이트·보안 차단처럼 맥락이 분명한 경우는 기존 트러블슈팅 안내를 그대로 제공합니다. 또한 [관련 문서]가 특정 기능을 명확히 가리키면 그 문서를 우선해 답하고, 문서와 동떨어진 기능을 임의로 끌어와 답하지 마세요. (우선순위: 먼저 되묻고, 되물었는데도 어느 기능인지 특정되지 않으면 그때 아래 '에스컬레이션 판단'의 버그 처리로 넘어갑니다.)
 
-## 문제 해결 안내 원칙
+## 문제 해결 안내 원칙 (플랫폼별 — 위 규칙 9에 따라 확인된 OS의 항목만 사용)
+### Windows
 1. 설치/업데이트 문제 질문 시 구체적인 단계별 해결법을 안내합니다.
 2. 백신 차단 문제(V3, 알약 등): "실시간 감시를 잠시 끄고 설치 → 설치 후 다시 켜기" 순서로 안내합니다.
 3. Windows 보안 경고: "Microsoft Windows의 PC 보호" 화면이면 "추가 정보 → 실행", "스마트 앱 컨트롤이 차단했습니다" 화면이면 설정 → 개인정보 및 보안 → Windows 보안 → 앱 및 브라우저 컨트롤 → 스마트 앱 컨트롤 → "끔"을 안내합니다.
-4. 업데이트 실패 시: ssampin.com에서 최신 설치 파일을 수동 다운로드하라고 안내합니다.
-5. 데이터 관련 질문: 데이터 저장 위치는 %APPDATA%/ssampin/data/ 이고, 앱을 삭제해도 데이터는 보존된다고 안내합니다.
-6. 기본 트러블슈팅 순서: 앱 재시작 → 최신 버전 확인 → 재설치를 먼저 안내한 후, 그래도 안 되면 에스컬레이션합니다.
+4. 업데이트 실패 시: ssampin.com에서 최신 설치 파일(ssampin-Setup.exe)을 수동 다운로드하라고 안내합니다.
+5. 데이터 관련 질문: Windows 데이터 저장 위치는 %APPDATA%/ssampin/data/ 이고, 앱을 삭제해도 데이터는 보존된다고 안내합니다.
+### macOS (베타 지원 — Apple 인증서 없음)
+6. "개발자를 확인할 수 없음"·"손상되었기 때문에 열 수 없습니다" 경고: ① 경고 창에서 "완료"(휴지통으로 이동 금지) → ② 시스템 설정 → 개인정보 보호 및 보안 → 아래로 스크롤 → ③ 쌤핀 옆 "그래도 열기" → 암호 입력. **"Control+클릭 → 열기" 방식은 macOS 15(Sequoia) 이상에서 동작하지 않으므로 안내하지 마세요.**
+7. "이 버전의 macOS에서 작동하는지 확인하려면 개발자에게 문의하십시오" 오류: 칩(Apple Silicon/Intel) 불일치입니다. 🍎 메뉴 → "이 Mac에 관하여"에서 칩 확인 후 맞는 DMG(Apple M칩=arm64, Intel=x64)를 ssampin.com에서 다시 받아 설치하도록 안내합니다.
+8. macOS는 자동 업데이트가 없습니다(베타). 새 버전은 DMG를 받아 응용 프로그램 폴더에 덮어써 수동 설치하며, 데이터는 유지됩니다. 손상 경고 반복 시 터미널에서 "xattr -cr /Applications/쌤핀.app" 명령을 안내하세요.
+### 공통
+9. 기본 트러블슈팅 순서: 앱 재시작 → 최신 버전 확인 → 재설치를 먼저 안내한 후, 그래도 안 되면 에스컬레이션합니다.
 
 ## 모바일 앱 관련 안내
 - 모바일 앱 주소: m.ssampin.com
@@ -171,12 +178,35 @@ function validateRequest(body: ChatRequest): string | null {
   return null;
 }
 
-/** 대화 맥락 인식 쿼리 재구성 */
+/**
+ * 텍스트에서 사용자 운영체제(플랫폼)를 추정. 강한 고유 신호만 사용해 오탐을 줄인다.
+ * (예: navigator.platform 의 "MacIntel"/"Win32", macOS 버전명 tahoe/sequoia, .exe, xattr 등)
+ */
+function detectPlatform(text: string): 'macOS' | 'Windows' | null {
+  if (!text) return null;
+  const mac =
+    /macos|macintel|macintosh|맥북|맥\b|\bmac\b|tahoe|sequoia|sonoma|ventura|monterey|\bdmg\b|apple silicon|\bm[1-4]\b|xattr|gatekeeper|개발자를 확인|응용 ?프로그램|런치패드|launchpad|그래도 열기/i;
+  const win =
+    /windows|윈도우|win ?1[01]|win32|\.exe|smartscreen|스마트 ?앱 ?컨트롤|바탕화면|작업 ?관리자|제어판|\bv3\b|알약|추가 ?정보/i;
+  const isMac = mac.test(text);
+  const isWin = win.test(text);
+  if (isMac && !isWin) return 'macOS';
+  if (isWin && !isMac) return 'Windows';
+  return null; // 둘 다/둘 다 아님 → 불명확
+}
+
+/** 대화 맥락 인식 쿼리 재구성 — 애매하거나 짧은 후속 질문에 직전 사용자 질문을 이어붙여 검색 맥락을 회복 */
 function reformulateQuery(message: string, history: ChatHistoryItem[]): string {
+  const trimmed = message.trim();
   const ambiguousPatterns =
     /^(그거|이거|그건|거기|어떻게|왜|뭐가|그럼|그래서|그러면|저거|이건|그게|뭔가요|그건요).{0,15}$/;
-  if (ambiguousPatterns.test(message.trim()) && history.length >= 2) {
-    const lastUserMsg = [...history].reverse().find((h) => h.role === 'user');
+  // 짧은 후속("그래도 안 돼", "알려준대로 해도 실행이 안되" 등)은 자체 주제 앵커가 약해
+  // 임베딩·HyDE 검색이 엉뚱한(기본 편향된) 문서를 잡는다. 직전 사용자 질문을 이어붙여 맥락 회복.
+  const shortFollowUp = trimmed.length <= 30;
+  if ((ambiguousPatterns.test(trimmed) || shortFollowUp) && history.length >= 2) {
+    const lastUserMsg = [...history]
+      .reverse()
+      .find((h) => h.role === 'user' && h.content.trim() !== trimmed);
     if (lastUserMsg) return `${lastUserMsg.content} ${message}`;
   }
   return message;
@@ -428,6 +458,7 @@ async function generateAnswer(
   apiKey: string,
   topSimilarity: number,
   appContext?: string,
+  platformHint?: 'macOS' | 'Windows' | null,
 ): Promise<string> {
   // 컨텍스트가 부족한 경우 힌트 추가
   const contextNote =
@@ -435,7 +466,12 @@ async function generateAnswer(
       ? '\n\n[참고: 관련 문서가 충분하지 않을 수 있습니다. 확신이 없으면 에스컬레이션하세요.]'
       : '';
 
-  const systemPrompt = SYSTEM_PROMPT + contextNote;
+  // 대화에서 플랫폼이 확인되면 시스템 지시에 못 박아, 검색 문서가 반대 OS 것이어도 흔들리지 않게 한다.
+  const platformNote = platformHint
+    ? `\n\n[확인된 플랫폼: ${platformHint}] 반드시 ${platformHint} 전용 해결법만 안내하고, 반대 OS 안내는 절대 섞지 마세요.`
+    : '';
+
+  const systemPrompt = SYSTEM_PROMPT + contextNote + platformNote;
 
   // 히스토리를 Gemini 형식으로 변환
   const geminiHistory: GeminiContent[] = history.map((h) => ({
@@ -457,7 +493,9 @@ async function generateAnswer(
       },
     ],
     generationConfig: {
-      temperature: 1.0,
+      // 지원 봇의 최종 답변은 검색 문서·대화 맥락에 충실해야 하므로 낮은 온도를 쓴다.
+      // (과거 1.0 은 같은 질문에 Mac/Windows 답을 오가는 비결정성의 직접 원인이었다.)
+      temperature: 0.3,
       maxOutputTokens: 2048,
       thinkingConfig: {
         thinkingLevel: 'low',
@@ -584,7 +622,18 @@ serve(async (req: Request): Promise<Response> => {
     // 3. 쿼리 전처리: 대화 맥락 인식 재구성
     const apiKey = Deno.env.get('GOOGLE_API_KEY')!;
     const history = body.history?.slice(-6) ?? [];
-    const reformulatedQuery = reformulateQuery(body.message, history);
+    let reformulatedQuery = reformulateQuery(body.message, history);
+
+    // 3-1. 플랫폼(OS) 확정: 이번 메시지 → 대화 히스토리 → 앱 컨텍스트 순으로 탐지.
+    // 짧은 후속 질문("실행이 안돼")은 자체 플랫폼 신호가 없어 검색이 다수(Windows) 문서로
+    // 쏠린다. 대화에서 이미 드러난 OS를 검색 쿼리에 못 박아 recall 을 그 플랫폼으로 끌어온다.
+    const msgPlatform = detectPlatform(body.message);
+    const historyText = history.map((h) => h.content).join(' ');
+    const platformHint =
+      msgPlatform ?? detectPlatform(historyText) ?? detectPlatform(body.appContext ?? '');
+    if (platformHint && !msgPlatform) {
+      reformulatedQuery = `${reformulatedQuery} (${platformHint} 환경)`;
+    }
 
     // 4. 쿼리 카테고리 분류
     const queryCategory = classifyQuery(reformulatedQuery);
@@ -622,6 +671,7 @@ serve(async (req: Request): Promise<Response> => {
       apiKey,
       matchedDocs.length > 0 ? 0.7 : 0,
       body.appContext,
+      platformHint,
     );
 
     // 6. 에스컬레이션 판단

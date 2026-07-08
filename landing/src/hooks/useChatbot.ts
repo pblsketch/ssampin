@@ -24,6 +24,15 @@ function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
+/** 방문자 OS 추정 (navigator 기반) — 챗봇 서버가 첫 메시지부터 OS에 맞는 답을 주도록 전달 */
+function detectVisitorOS(): string | undefined {
+  if (typeof navigator === 'undefined') return undefined;
+  const ua = navigator.userAgent;
+  if (/Macintosh|Mac OS X/i.test(ua)) return 'macOS';
+  if (/Windows/i.test(ua)) return 'Windows';
+  return undefined;
+}
+
 function getSessionId(): string {
   if (typeof window === 'undefined') return generateId();
 
@@ -202,6 +211,7 @@ export function useChatbot() {
             history,
             source: 'landing',
             isTest: typeof window !== 'undefined' && window.location.hostname === 'localhost',
+            ...(detectVisitorOS() ? { appContext: detectVisitorOS() } : {}),
             ...(apiImages && apiImages.length > 0 ? { images: apiImages } : {}),
           }),
         });

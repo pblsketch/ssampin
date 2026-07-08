@@ -308,7 +308,9 @@ export function useHelpChat() {
             source: 'app',
             appVersion: typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : undefined,
             isTest: !!import.meta.env.DEV,
-            appContext: getAppContext().currentPage,
+            // 페이지명 + 플랫폼(navigator.platform: "MacIntel"/"Win32")을 함께 보내 서버가
+            // 첫 메시지부터 OS에 맞는 해결법을 주도록 한다(플랫폼 불일치 오답 방지).
+            appContext: `${getAppContext().currentPage} · ${navigator.platform}`,
             ...(apiImages && apiImages.length > 0 ? { images: apiImages } : {}),
           }),
         });
