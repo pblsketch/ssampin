@@ -3,6 +3,7 @@ import { Modal } from '@adapters/components/common/Modal';
 import { useRegisterModal } from '@adapters/hooks/useRegisterModal';
 import { useReminderScheduler } from '@adapters/hooks/useReminderScheduler';
 import { useReminderOsPush } from '@adapters/hooks/useReminderOsPush';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { ReminderPrompt } from './ReminderPrompt';
 
 // ReminderPrompt 카드가 자체 크롬(bg-sp-card·border·rounded-xl·shadow)을 갖고 있으므로,
@@ -24,6 +25,12 @@ export function ReminderPopup() {
   // 이번 세션(배치) 진행 상태.
   const [handled, setHandled] = useState(0);
   const [sessionTarget, setSessionTarget] = useState(0);
+  // OS 토스트 클릭으로 강제로 연 세션(은은형이 꺼져 있어도 이때는 팝업을 연다).
+  const [forcedOpen, setForcedOpen] = useState(false);
+
+  // 은은형(subtleEnabled)이 켜져 있으면 due가 있을 때 팝업이 자동으로 뜬다.
+  // 꺼져 있으면 자동으로 뜨지 않고, OS 토스트를 클릭했을 때만(forcedOpen) 열린다.
+  const subtleEnabled = useSettingsStore((s) => s.settings.recordReminder?.subtleEnabled ?? true);
 
   const resetSession = useCallback(() => {
     setHandled(0);
@@ -31,7 +38,10 @@ export function ReminderPopup() {
     setDismissedKey(null);
   }, []);
 
-  const handleToastClicked = useCallback(() => resetSession(), [resetSession]);
+  const handleToastClicked = useCallback(() => {
+    resetSession();
+    setForcedOpen(true);
+  }, [resetSession]);
   // OS 토스트 스케줄 push(P3)를 이 마운트 지점에서 함께 구동한다(MainApp 생존 동안).
   useReminderOsPush(handleToastClicked);
 
@@ -39,7 +49,8 @@ export function ReminderPopup() {
 
   const current = dueNow[0];
   const sessionComplete = sessionTarget > 0 && handled >= sessionTarget;
-  const hasDue = !!current && current.key !== dismissedKey && !sessionComplete;
+  const hasDue =
+    !!current && current.key !== dismissedKey && !sessionComplete && (subtleEnabled || forcedOpen);
   const isHead = useRegisterModal('RECORD_REMINDER', hasDue);
 
   // 배치가 새로 열릴 때 목표 인원 확정(= 지금 대상 수, 최대 perNudge).
@@ -54,6 +65,7 @@ export function ReminderPopup() {
     if (sessionComplete) {
       snooze();
       resetSession();
+      setForcedOpen(false);
     }
   }, [sessionComplete, snooze, resetSession]);
 

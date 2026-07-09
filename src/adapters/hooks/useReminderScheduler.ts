@@ -76,6 +76,7 @@ export function useReminderScheduler(): UseReminderSchedulerResult {
   const observationRecords = useObservationStore((s) => s.records);
   const classes = useTeachingClassStore((s) => s.classes);
   const teacherSchedule = useScheduleStore((s) => s.teacherSchedule);
+  const scheduleOverrides = useScheduleStore((s) => s.overrides);
   const cursor = useRecordReminderStore((s) => s.rotationCursor);
   const snoozeUntil = useRecordReminderStore((s) => s.snoozeUntil);
   const pausedUntil = useRecordReminderStore((s) => s.pausedUntil);
@@ -95,7 +96,10 @@ export function useReminderScheduler(): UseReminderSchedulerResult {
   }, [subjectEnabled]);
 
   const { dueNow, missingCount } = useMemo(() => {
-    void tick; // 시간 경과(수업 직후 창)에 따른 재평가를 위해 deps에 포함 — 값 자체는 미사용.
+    // deps 재평가 트리거(값은 getState로 읽음): 시간 경과·시간표·변동시간표 변화.
+    void tick;
+    void teacherSchedule;
+    void scheduleOverrides;
     const empty = { dueNow: [] as ReminderPromptItem[], missingCount: 0 };
     if (!rr.enabled) return empty;
 
@@ -142,7 +146,9 @@ export function useReminderScheduler(): UseReminderSchedulerResult {
 
     // ── 수업반 (ObservationRecord, D1: 방금 끝난 수업만) ──
     if (rr.targets.includes('subject') && active) {
-      const finished = detectJustFinishedClass(teacherSchedule, classes, periodTimes ?? [], now);
+      // 변동 시간표(교체·보강)까지 반영된 그 날의 교사 시간표로 '방금 끝난 수업'을 찾는다.
+      const daySlots = useScheduleStore.getState().getEffectiveTeacherSchedule(today);
+      const finished = detectJustFinishedClass(daySlots, classes, periodTimes ?? [], now);
       if (finished) {
         // 관찰 마지막 기록일 맵 (해당 수업반).
         const obsLast = new Map<string, string>();
@@ -180,6 +186,7 @@ export function useReminderScheduler(): UseReminderSchedulerResult {
     observationRecords,
     classes,
     teacherSchedule,
+    scheduleOverrides,
     cursor,
     snoozeUntil,
     pausedUntil,

@@ -1,9 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { detectJustFinishedClass } from './reminderClassMatch';
 import type { TeachingClass } from '../entities/TeachingClass';
-import type { TeacherScheduleData } from '../entities/Timetable';
+import type { TeacherPeriod } from '../entities/Timetable';
 import type { PeriodTime } from '../valueObjects/PeriodTime';
-import type { WeekendDay } from '../valueObjects/DayOfWeek';
 
 const periods: PeriodTime[] = [
   { period: 1, start: '09:00', end: '09:50' },
@@ -24,43 +23,39 @@ function tc(name: string, subject: string): TeachingClass {
 
 const classes: TeachingClass[] = [tc('3-2', '국어'), tc('3-5', '국어')];
 
-// 요일 독립 테스트: weekendDays로 토/일도 매핑되게 해 now의 요일과 무관하게 검증.
-const WEEKEND: readonly WeekendDay[] = ['토', '일'];
-const DAY_KEYS = ['일', '월', '화', '수', '목', '금', '토'] as const;
-const dayKeyOf = (d: Date): string => DAY_KEYS[d.getDay()]!;
+// daySlots: 그 날의 교시별 배열(0-based). 2교시에 국어 3-2.
+const daySlots: readonly (TeacherPeriod | null)[] = [
+  null,
+  { subject: '국어', classroom: '3-2' },
+  null,
+];
 
 describe('detectJustFinishedClass', () => {
   const now = new Date(2026, 6, 7, 10, 55); // 2교시(10:00~10:50) 방금 끝남
-  const dayKey = dayKeyOf(now);
 
   it('방금 끝난 교시의 수업반을 매핑해 반환', () => {
-    const schedule: TeacherScheduleData = {
-      [dayKey]: [null, { subject: '국어', classroom: '3-2' }, null],
-    };
-    expect(detectJustFinishedClass(schedule, classes, periods, now, WEEKEND)?.name).toBe('3-2');
+    expect(detectJustFinishedClass(daySlots, classes, periods, now)?.name).toBe('3-2');
   });
 
   it('수업 중에는 null (방금 끝난 교시 없음)', () => {
     const during = new Date(2026, 6, 7, 10, 30); // 2교시 진행 중
-    const schedule: TeacherScheduleData = {
-      [dayKeyOf(during)]: [null, { subject: '국어', classroom: '3-2' }, null],
-    };
-    expect(detectJustFinishedClass(schedule, classes, periods, during, WEEKEND)).toBeNull();
+    expect(detectJustFinishedClass(daySlots, classes, periods, during)).toBeNull();
   });
 
   it('그 교시가 공강(null 슬롯)이면 null', () => {
-    const schedule: TeacherScheduleData = { [dayKey]: [null, null, null] };
-    expect(detectJustFinishedClass(schedule, classes, periods, now, WEEKEND)).toBeNull();
+    expect(detectJustFinishedClass([null, null, null], classes, periods, now)).toBeNull();
   });
 
   it('교실이 어떤 수업반과도 매핑 안 되면 null (오알림 방지)', () => {
-    const schedule: TeacherScheduleData = {
-      [dayKey]: [null, { subject: '체육', classroom: '운동장' }, null],
-    };
-    expect(detectJustFinishedClass(schedule, classes, periods, now, WEEKEND)).toBeNull();
+    const other: readonly (TeacherPeriod | null)[] = [
+      null,
+      { subject: '체육', classroom: '운동장' },
+      null,
+    ];
+    expect(detectJustFinishedClass(other, classes, periods, now)).toBeNull();
   });
 
-  it('그 요일에 시간표가 없으면 null', () => {
-    expect(detectJustFinishedClass({}, classes, periods, now, WEEKEND)).toBeNull();
+  it('빈 배열(그 날 시간표 없음)이면 null', () => {
+    expect(detectJustFinishedClass([], classes, periods, now)).toBeNull();
   });
 });
