@@ -5,6 +5,7 @@ import { useDashboardConfig } from '@widgets/useDashboardConfig';
 import { DashboardHeader } from '@widgets/components/DashboardHeader';
 import { WidgetGrid } from '@widgets/components/WidgetGrid';
 import { WidgetSettingsPanel } from '@widgets/components/WidgetSettingsPanel';
+import { ReminderDashboardBadge } from '@adapters/components/Reminder/ReminderDashboardBadge';
 
 interface DashboardProps {
   onNavigate?: (page: string) => void;
@@ -41,6 +42,9 @@ export function Dashboard({ onNavigate }: DashboardProps) {
         onOpenWidgetPanel={handleOpenWidgetPanel}
         onOpenStylePanel={handleOpenStylePanel}
       />
+
+      {/* 학생 관찰 기록 알림 — 은은형 배지(설정 on + 미기록 있을 때만 렌더) */}
+      <ReminderDashboardBadge />
 
       {/* 본문: 그리드 + 사이드 패널 */}
       <div className="flex-1 flex min-h-0">
