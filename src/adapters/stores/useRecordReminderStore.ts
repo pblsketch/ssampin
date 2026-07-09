@@ -23,11 +23,17 @@ export interface RecordReminderRuntimeState {
   lastComputeAt: number | null;
   /** 오늘 '이 학생 건너뛰기'한 dedup 키(`studentId:YYYY-MM-DD`) 목록 — 순회에서 제외. */
   skippedKeys: string[];
+  /** 학생별 '나중에' 만료 시각. key(항목 key) → Unix ms. 만료 전까지 그 학생만 제외. */
+  studentSnoozes: Record<string, number>;
 }
 
 export interface RecordReminderActions {
   /** 스누즈 — 기본 1시간 뒤로 미룸. */
   snooze: (hours?: number) => void;
+  /** 스누즈 — 만료 시각(Unix ms)을 직접 지정(1시간/오후/내일 선택용). */
+  snoozeUntilMs: (untilMs: number) => void;
+  /** 특정 학생만 만료 시각까지 미룸(만료된 다른 학생 키는 정리). */
+  snoozeStudentUntil: (key: string, untilMs: number) => void;
   /** 전체 일시정지 만료 시각 직접 지정(null=해제). */
   pauseUntil: (untilMs: number | null) => void;
   /** 오늘 하루(다음 자정까지) 일시정지. */
@@ -54,6 +60,7 @@ const INITIAL: RecordReminderRuntimeState = {
   pausedUntil: null,
   lastComputeAt: null,
   skippedKeys: [],
+  studentSnoozes: {},
 };
 
 /** 주어진 시각의 다음 로컬 자정(Unix ms). */
@@ -68,6 +75,20 @@ export const useRecordReminderStore = create<RecordReminderStore>()(
       ...INITIAL,
 
       snooze: (hours = 1) => set({ snoozeUntil: Date.now() + hours * 3_600_000 }),
+
+      snoozeUntilMs: (untilMs) => set({ snoozeUntil: untilMs }),
+
+      snoozeStudentUntil: (key, untilMs) =>
+        set((s) => {
+          const now = Date.now();
+          const next: Record<string, number> = {};
+          // 만료 안 된 기존 학생 스누즈만 보존(무한 누적 방지).
+          for (const [k, v] of Object.entries(s.studentSnoozes)) {
+            if (v > now) next[k] = v;
+          }
+          next[key] = untilMs;
+          return { studentSnoozes: next };
+        }),
 
       pauseUntil: (untilMs) => set({ pausedUntil: untilMs }),
 
@@ -99,6 +120,7 @@ export const useRecordReminderStore = create<RecordReminderStore>()(
         pausedUntil: s.pausedUntil,
         lastComputeAt: s.lastComputeAt,
         skippedKeys: s.skippedKeys,
+        studentSnoozes: s.studentSnoozes,
       }),
     },
   ),
@@ -112,4 +134,14 @@ export function isReminderPaused(pausedUntil: number | null, now: number): boole
 /** 스누즈 중인가. (now 주입으로 테스트 결정론) */
 export function isReminderSnoozed(snoozeUntil: number | null, now: number): boolean {
   return snoozeUntil !== null && now < snoozeUntil;
+}
+
+/** 특정 학생이 '나중에'로 미뤄져 있는가. (now 주입으로 테스트 결정론) */
+export function isStudentSnoozed(
+  studentSnoozes: Record<string, number>,
+  key: string,
+  now: number,
+): boolean {
+  const until = studentSnoozes[key];
+  return until !== undefined && now < until;
 }

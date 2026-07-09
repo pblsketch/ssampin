@@ -1,4 +1,5 @@
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
+import type { SnoozeWhen } from '@domain/rules/reminderSnoozeTimes';
 
 /**
  * 학생 관찰 기록 알림 — 기록 입력 카드.
@@ -26,8 +27,11 @@ export interface ReminderPromptProps {
   readonly onSave: (payload: { tags: string[]; content: string }) => void;
   /** "오늘은 특이사항 없음" — 그냥 넘김(무리한 기록 방지) */
   readonly onNothingToday: () => void;
-  /** "나중에"(스누즈) */
-  readonly onSnooze: () => void;
+  /**
+   * "나중에"(스누즈) — 트리거를 누르면 미루기 메뉴가 열리고, 항목 선택 시 호출된다.
+   * scope='all'은 전체(오늘 순회)를 미루고, scope='student'는 이 학생만 미루고 나머지는 계속 알린다.
+   */
+  readonly onSnooze: (scope: 'all' | 'student', when: SnoozeWhen) => void;
   /** "이 학생 건너뛰기" */
   readonly onSkipStudent: () => void;
   /** X 닫기(옵셔널) */
@@ -35,6 +39,13 @@ export interface ReminderPromptProps {
 }
 
 const CONTENT_MAX_LENGTH = 200;
+
+/** 미루기 메뉴에 노출할 시간 옵션(전체 미루기·이 학생만 미루기 두 섹션 공용). */
+const SNOOZE_OPTIONS: ReadonlyArray<{ readonly value: SnoozeWhen; readonly label: string }> = [
+  { value: 'hour1', label: '1시간 뒤' },
+  { value: 'afternoon', label: '오후에' },
+  { value: 'tomorrow', label: '내일' },
+];
 
 export function ReminderPrompt({
   studentName,
@@ -51,10 +62,34 @@ export function ReminderPrompt({
   const [selectedTags, setSelectedTags] = useState<ReadonlySet<string>>(() => new Set());
   const [content, setContent] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [snoozeMenuOpen, setSnoozeMenuOpen] = useState(false);
+  const snoozeContainerRef = useRef<HTMLDivElement>(null);
   const headingId = useId();
 
   const displayName = studentName.trim() || '학생';
   const canSave = selectedTags.size > 0 || content.trim().length > 0;
+
+  // 미루기 메뉴 — 바깥 클릭/ESC로 닫는다(메뉴가 열려 있을 때만 리스너 등록).
+  useEffect(() => {
+    if (!snoozeMenuOpen) return;
+    const handlePointerDown = (e: MouseEvent) => {
+      if (!snoozeContainerRef.current?.contains(e.target as Node)) {
+        setSnoozeMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        setSnoozeMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown, { capture: true });
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown, { capture: true });
+    };
+  }, [snoozeMenuOpen]);
 
   const toggleTag = (tag: string) => {
     setSelectedTags((prev) => {
@@ -85,10 +120,12 @@ export function ReminderPrompt({
   };
 
   return (
+    // overflow-hidden 없음 — 하단 "나중에" 버튼의 미루기 팝오버가 카드 경계에 잘리지 않아야 한다.
+    // (내부 콘텐츠가 모두 좌우 여백을 두고 있어 rounded-xl 시각 효과에는 영향 없음.)
     <div
       role="group"
       aria-labelledby={headingId}
-      className="w-[min(480px,calc(100vw-32px))] flex flex-col bg-sp-card border border-sp-border rounded-xl shadow-sp-lg ring-1 ring-white/5 overflow-hidden"
+      className="w-[min(480px,calc(100vw-32px))] flex flex-col bg-sp-card border border-sp-border rounded-xl shadow-sp-lg ring-1 ring-white/5"
     >
       {/* 헤더 */}
       <div className="flex items-start justify-between gap-3 p-5 pb-3 shrink-0">
@@ -183,16 +220,73 @@ export function ReminderPrompt({
       {/* 하단 버튼 — 나중에/건너뛰기(보조) + 저장(강조) */}
       <div className="px-5 pb-5 pt-1 flex flex-col gap-2 shrink-0">
         <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={onSnooze}
-            className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-sp-border px-3 py-2 text-sm font-semibold text-sp-muted hover:bg-sp-surface hover:text-sp-text transition-colors"
-          >
-            <span className="material-symbols-outlined text-icon-md" aria-hidden="true">
-              snooze
-            </span>
-            나중에
-          </button>
+          <div className="relative flex-1" ref={snoozeContainerRef}>
+            <button
+              type="button"
+              onClick={() => setSnoozeMenuOpen((v) => !v)}
+              aria-haspopup="menu"
+              aria-expanded={snoozeMenuOpen}
+              className="w-full flex items-center justify-center gap-1.5 rounded-lg border border-sp-border px-3 py-2 text-sm font-semibold text-sp-muted hover:bg-sp-surface hover:text-sp-text transition-colors"
+            >
+              <span className="material-symbols-outlined text-icon-md" aria-hidden="true">
+                snooze
+              </span>
+              나중에
+            </button>
+
+            {snoozeMenuOpen && (
+              <div
+                role="menu"
+                aria-label="미루기 옵션"
+                className="absolute bottom-full left-0 mb-2 z-sp-dropdown w-64 rounded-lg border border-sp-border bg-sp-card shadow-sp-lg overflow-hidden animate-slide-up motion-reduce:animate-none"
+              >
+                <div className="px-3 pt-2.5 pb-1">
+                  <p className="text-caption font-sp-semibold text-sp-muted">전체 미루기</p>
+                </div>
+                <div className="px-2 pb-2 flex flex-col">
+                  {SNOOZE_OPTIONS.map((opt) => (
+                    <button
+                      key={`all-${opt.value}`}
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        onSnooze('all', opt.value);
+                        setSnoozeMenuOpen(false);
+                      }}
+                      className="text-left px-2 py-1.5 rounded-md text-sm text-sp-text hover:bg-sp-surface transition-colors"
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="h-px bg-sp-border mx-3" />
+
+                <div className="px-3 pt-2 pb-1">
+                  <p className="text-caption font-sp-semibold text-sp-muted">이 학생만</p>
+                  <p className="text-detail text-sp-muted">
+                    {displayName} 학생만 미루고, 나머지는 계속 알려요
+                  </p>
+                </div>
+                <div className="px-2 pb-2 flex flex-col">
+                  {SNOOZE_OPTIONS.map((opt) => (
+                    <button
+                      key={`student-${opt.value}`}
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        onSnooze('student', opt.value);
+                        setSnoozeMenuOpen(false);
+                      }}
+                      className="text-left px-2 py-1.5 rounded-md text-sm text-sp-text hover:bg-sp-surface transition-colors"
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
           <button
             type="button"
             onClick={onSkipStudent}

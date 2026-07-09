@@ -1,18 +1,17 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Modal } from '@adapters/components/common/Modal';
 import { useRegisterModal } from '@adapters/hooks/useRegisterModal';
 import { useReminderScheduler } from '@adapters/hooks/useReminderScheduler';
 import { useReminderOsPush } from '@adapters/hooks/useReminderOsPush';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { ReminderPrompt } from './ReminderPrompt';
 
-// ReminderPrompt 카드가 자체 크롬(bg-sp-card·border·rounded-xl·shadow)을 갖고 있으므로,
-// Modal 패널은 배경/테두리를 벗겨 오버레이·포커스트랩·ESC·스크롤락만 담당하게 한다.
-const CHROMELESS =
-  '!bg-transparent !border-0 !shadow-none !ring-0 !rounded-none !w-auto !max-h-none !overflow-visible';
-
 /**
  * 학생 관찰 기록 알림 — 메인 모드 앱-내 팝업(P2·P4).
+ *
+ * **비-모달**: 화면을 가리는 오버레이·포커스트랩·ESC 전역 닫기·스크롤 락이 없다. 선생님이
+ * 팝업이 떠 있는 동안에도 뒤에서 계속 다른 작업을 할 수 있도록 우측 하단에 떠 있는 카드로만
+ * 노출한다(ReminderPrompt 카드 자체가 배경·테두리·그림자를 모두 갖는 완결된 형태라 이 컨테이너는
+ * 위치·z-index·등장 애니메이션만 담당).
  *
  * 한 번 뜰 때 '한 번에 물어볼 학생 수(perNudge)'만큼의 배치를 처리하고, 다 채우면 스누즈해
  * 반 전체로 연쇄되지 않게 한다. 담임반/수업반 학생이 섞여 있어도 각 항목의 target에 따라
@@ -45,7 +44,8 @@ export function ReminderPopup() {
   // OS 토스트 스케줄 push(P3)를 이 마운트 지점에서 함께 구동한다(MainApp 생존 동안).
   useReminderOsPush(handleToastClicked);
 
-  const { dueNow, saveObservation, snooze, skipStudent, nothingToday } = useReminderScheduler();
+  const { dueNow, saveObservation, snooze, snoozeAll, snoozeStudent, skipStudent, nothingToday } =
+    useReminderScheduler();
 
   const current = dueNow[0];
   const sessionComplete = sessionTarget > 0 && handled >= sessionTarget;
@@ -75,13 +75,10 @@ export function ReminderPopup() {
   const close = () => setDismissedKey(current.key);
 
   return (
-    <Modal
-      isOpen
-      onClose={close}
-      title="관찰 기록 알림"
-      srOnlyTitle
-      size="sm"
-      panelClassName={CHROMELESS}
+    <div
+      role="dialog"
+      aria-label="관찰 기록 알림"
+      className="fixed bottom-4 right-4 z-sp-toast animate-slide-up motion-reduce:animate-none"
     >
       <ReminderPrompt
         key={current.key}
@@ -97,13 +94,22 @@ export function ReminderPopup() {
           nothingToday(current);
           advance();
         }}
-        onSnooze={() => snooze()}
+        onSnooze={(scope, when) => {
+          if (scope === 'all') {
+            snoozeAll(when);
+            resetSession();
+            setForcedOpen(false);
+          } else {
+            snoozeStudent(current, when);
+            advance();
+          }
+        }}
         onSkipStudent={() => {
           skipStudent(current);
           advance();
         }}
         onClose={close}
       />
-    </Modal>
+    </div>
   );
 }

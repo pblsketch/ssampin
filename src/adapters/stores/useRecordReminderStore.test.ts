@@ -3,6 +3,7 @@ import {
   useRecordReminderStore,
   isReminderPaused,
   isReminderSnoozed,
+  isStudentSnoozed,
 } from './useRecordReminderStore';
 
 describe('isReminderPaused / isReminderSnoozed (순수 gate)', () => {
@@ -21,6 +22,22 @@ describe('isReminderPaused / isReminderSnoozed (순수 gate)', () => {
   it('과거 만료면 false (이미 해제)', () => {
     expect(isReminderPaused(now - 1000, now)).toBe(false);
     expect(isReminderSnoozed(now - 1000, now)).toBe(false);
+  });
+});
+
+describe('isStudentSnoozed (순수 gate)', () => {
+  const now = 1_000_000;
+
+  it('키가 없으면 false', () => {
+    expect(isStudentSnoozed({}, 'a', now)).toBe(false);
+  });
+
+  it('미래 만료면 true(그 학생만 미뤄짐)', () => {
+    expect(isStudentSnoozed({ a: now + 1000 }, 'a', now)).toBe(true);
+  });
+
+  it('과거 만료면 false(그 학생 다시 대상)', () => {
+    expect(isStudentSnoozed({ a: now - 1000 }, 'a', now)).toBe(false);
   });
 });
 
@@ -56,5 +73,19 @@ describe('useRecordReminderStore actions', () => {
     const until = useRecordReminderStore.getState().snoozeUntil;
     expect(until).not.toBeNull();
     expect(until!).toBeGreaterThan(before);
+  });
+
+  it('snoozeUntilMs 는 만료 시각을 그대로 설정한다', () => {
+    useRecordReminderStore.getState().snoozeUntilMs(1_700_000_000_000);
+    expect(useRecordReminderStore.getState().snoozeUntil).toBe(1_700_000_000_000);
+  });
+
+  it('snoozeStudentUntil 은 학생 키를 미루고 만료된 키는 정리한다', () => {
+    const future = Date.now() + 3_600_000;
+    useRecordReminderStore.getState().snoozeStudentUntil('a', Date.now() - 1000); // 이미 만료
+    useRecordReminderStore.getState().snoozeStudentUntil('b', future); // b 추가 → a 정리됨
+    const snoozes = useRecordReminderStore.getState().studentSnoozes;
+    expect(snoozes.b).toBe(future);
+    expect(snoozes.a).toBeUndefined();
   });
 });

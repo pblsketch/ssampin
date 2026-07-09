@@ -9,7 +9,10 @@ import {
   useRecordReminderStore,
   isReminderPaused,
   isReminderSnoozed,
+  isStudentSnoozed,
 } from '@adapters/stores/useRecordReminderStore';
+import { computeSnoozeUntil } from '@domain/rules/reminderSnoozeTimes';
+import type { SnoozeWhen } from '@domain/rules/reminderSnoozeTimes';
 import { DEFAULT_REMINDER_SETTINGS } from '@domain/entities/RecordReminder';
 import type {
   LastRecordDateProvider,
@@ -63,7 +66,12 @@ export interface UseReminderSchedulerResult {
   readonly dueNow: readonly ReminderPromptItem[];
   readonly missingCount: number;
   saveObservation: (item: ReminderPromptItem, payload: ReminderSavePayload) => Promise<void>;
+  /** 전체를 1시간 뒤로 미룸(세션 배치 완료 등 기존 동작). */
   snooze: () => void;
+  /** 전체를 선택 시각(1시간/오후/내일)으로 미룸. */
+  snoozeAll: (when: SnoozeWhen) => void;
+  /** 이 학생만 선택 시각으로 미룸(나머지는 계속 알림). */
+  snoozeStudent: (item: ReminderPromptItem, when: SnoozeWhen) => void;
   skipStudent: (item: ReminderPromptItem) => void;
   nothingToday: (item: ReminderPromptItem) => void;
 }
@@ -81,6 +89,7 @@ export function useReminderScheduler(): UseReminderSchedulerResult {
   const snoozeUntil = useRecordReminderStore((s) => s.snoozeUntil);
   const pausedUntil = useRecordReminderStore((s) => s.pausedUntil);
   const skippedKeys = useRecordReminderStore((s) => s.skippedKeys);
+  const studentSnoozes = useRecordReminderStore((s) => s.studentSnoozes);
 
   const subjectEnabled = rr.enabled && rr.targets.includes('subject');
 
@@ -104,9 +113,10 @@ export function useReminderScheduler(): UseReminderSchedulerResult {
     if (!rr.enabled) return empty;
 
     const now = new Date();
+    const nowMs = now.getTime();
     const today = formatDateStr(now);
-    const paused = isReminderPaused(pausedUntil, now.getTime());
-    const snoozed = isReminderSnoozed(snoozeUntil, now.getTime());
+    const paused = isReminderPaused(pausedUntil, nowMs);
+    const snoozed = isReminderSnoozed(snoozeUntil, nowMs);
     const skipSet = new Set(skippedKeys);
     const active = !paused && !snoozed;
 
@@ -130,7 +140,11 @@ export function useReminderScheduler(): UseReminderSchedulerResult {
       ).length;
 
       if (active) {
-        const candidates = roster.filter((s) => !skipSet.has(studentDedupKey(s.id, today)));
+        const candidates = roster.filter(
+          (s) =>
+            !skipSet.has(studentDedupKey(s.id, today)) &&
+            !isStudentSnoozed(studentSnoozes, s.id, nowMs),
+        );
         const due = pickDueStudents(candidates, provider, rr, cursor, now);
         homeroomItems = due.map((r, i) => ({
           key: r.student.id,
@@ -162,7 +176,11 @@ export function useReminderScheduler(): UseReminderSchedulerResult {
           .filter(isStudentActive)
           .map((s) => ({ id: studentKey(s), name: s.name }));
         const keyOf = (sid: string) => `subject:${finished.id}:${sid}`;
-        const candidates = roster.filter((s) => !skipSet.has(studentDedupKey(keyOf(s.id), today)));
+        const candidates = roster.filter(
+          (s) =>
+            !skipSet.has(studentDedupKey(keyOf(s.id), today)) &&
+            !isStudentSnoozed(studentSnoozes, keyOf(s.id), nowMs),
+        );
         const due = pickDueStudents(candidates, obsProvider, rr, cursor, now);
         subjectItems = due.map((r) => ({
           key: keyOf(r.student.id),
@@ -191,6 +209,7 @@ export function useReminderScheduler(): UseReminderSchedulerResult {
     snoozeUntil,
     pausedUntil,
     skippedKeys,
+    studentSnoozes,
     tick,
   ]);
 
@@ -218,6 +237,16 @@ export function useReminderScheduler(): UseReminderSchedulerResult {
 
   const snooze = () => useRecordReminderStore.getState().snooze();
 
+  const snoozeAll = (when: SnoozeWhen) =>
+    useRecordReminderStore.getState().snoozeUntilMs(computeSnoozeUntil(new Date(), when));
+
+  const snoozeStudent = (item: ReminderPromptItem, when: SnoozeWhen) => {
+    useRecordReminderStore
+      .getState()
+      .snoozeStudentUntil(item.key, computeSnoozeUntil(new Date(), when));
+    useRecordReminderStore.getState().advanceCursor();
+  };
+
   const skipStudent = (item: ReminderPromptItem) => {
     const today = formatDateStr(new Date());
     useRecordReminderStore.getState().skipStudent(item.key, today);
@@ -227,5 +256,14 @@ export function useReminderScheduler(): UseReminderSchedulerResult {
   // "오늘은 특이사항 없음" — 무리하게 기록을 만들지 않고 오늘 순회에서만 제외한다.
   const nothingToday = (item: ReminderPromptItem) => skipStudent(item);
 
-  return { dueNow, missingCount, saveObservation, snooze, skipStudent, nothingToday };
+  return {
+    dueNow,
+    missingCount,
+    saveObservation,
+    snooze,
+    snoozeAll,
+    snoozeStudent,
+    skipStudent,
+    nothingToday,
+  };
 }
