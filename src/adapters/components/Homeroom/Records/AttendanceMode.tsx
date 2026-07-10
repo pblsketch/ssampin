@@ -5,6 +5,7 @@ import { PERIOD_MORNING, PERIOD_CLOSING } from '@domain/entities/Attendance';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { useStudentRecordsStore } from '@adapters/stores/useStudentRecordsStore';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
+import { useSeatingStore } from '@adapters/stores/useSeatingStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { useMultiDateAttendanceIntentStore } from '@adapters/stores/useMultiDateAttendanceIntentStore';
@@ -63,6 +64,36 @@ export function AttendanceMode({ students, selectedDate, onDateChange }: Attenda
         .map((s) => ({ number: s.studentNumber!, name: s.name })),
     [students],
   );
+
+  // ── 좌석 뷰 데이터 (§3.10-4) — 데이터만 읽어 그리드에 주입(그리드는 스토어 미import). ──
+  // 읽기 전용: seating 상태만 구독하고 편집 액션은 참조하지 않는다. load()는 데이터 확보용.
+  const seating = useSeatingStore((s) => s.seating);
+  const seatingLoaded = useSeatingStore((s) => s.loaded);
+  const loadSeating = useSeatingStore((s) => s.load);
+  useEffect(() => {
+    if (!seatingLoaded) void loadSeating();
+  }, [seatingLoaded, loadSeating]);
+
+  const seatingProp = useMemo(() => {
+    if (!seatingLoaded) return undefined;
+    const seats = seating.seats;
+    const hasSeats = seats.some((row) => row.some((id) => id != null));
+    if (!hasSeats) return undefined; // 좌석 배치가 없으면 토글 숨김
+    // id↔번호 매핑 계층 — 좌석은 studentId, 출결은 번호(studentKey). 활성·유번호 학생만.
+    const studentMap = new Map<string, { number: number; name: string }>();
+    for (const s of students) {
+      if (isStudentActive(s) && s.studentNumber != null && s.studentNumber > 0) {
+        studentMap.set(s.id, { number: s.studentNumber, name: s.name });
+      }
+    }
+    return {
+      layout: seating.layout ?? 'grid',
+      rows: seating.rows,
+      cols: seating.cols,
+      seats,
+      studentMap,
+    } as const;
+  }, [seatingLoaded, seating, students]);
   const loadGridDayRecords = useCallback(
     (date: string) => (className ? getDayAttendance(className, date) : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -194,6 +225,7 @@ export function AttendanceMode({ students, selectedDate, onDateChange }: Attenda
             loadDayRecords={loadGridDayRecords}
             onSaveDay={saveGridDay}
             periods={gridPeriods}
+            seating={seatingProp}
           />
         </div>
       )}

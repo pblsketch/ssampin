@@ -5,11 +5,17 @@ import type {
   AttendanceReason,
   StudentAttendance,
 } from '@domain/entities/Attendance';
-import { PERIOD_MORNING, PERIOD_CLOSING, ATTENDANCE_REASONS } from '@domain/entities/Attendance';
+import {
+  PERIOD_MORNING,
+  PERIOD_CLOSING,
+  ATTENDANCE_REASONS,
+  formatPeriodLabel,
+} from '@domain/entities/Attendance';
 import { computeAutoPeriods, summarizeTotal } from '@domain/rules/attendanceRules';
 import { parseAttendanceQuickText } from '@domain/rules/attendanceQuickText';
 import { studentKey } from '@domain/entities/TeachingClass';
 import { AttendanceGridView } from '@adapters/components/attendance/shared/AttendanceGridView';
+import { SeatAttendanceView } from './SeatAttendanceView';
 import {
   STATUS_CONFIG,
   STAT_COLORS,
@@ -53,6 +59,19 @@ export interface HomeroomAttendanceGridProps {
   ) => Promise<void>;
   /** 교시 목록 — settings(maxPeriods) 단일 출처에서 호스트가 구성 */
   periods: readonly number[];
+  /**
+   * 좌석 뷰 데이터(선택) — 호스트(AttendanceMode)가 useSeatingStore에서 읽어 주입한다.
+   * 그리드 셸은 스토어를 직접 import 하지 않으므로(메타 가드), 데이터·매핑을 prop으로만 받는다(§3.10-4).
+   * 미전달이면 [명렬|좌석] 토글을 숨긴다.
+   */
+  seating?: {
+    layout: 'grid' | 'group' | 'freestyle';
+    rows: number;
+    cols: number;
+    seats: readonly (readonly (string | null)[])[];
+    /** studentId → {번호, 이름} (활성·유번호 학생) */
+    studentMap: ReadonlyMap<string, { number: number; name: string }>;
+  };
 }
 
 /** 팔레트 종류 = 예외 상태 4종 + 지우개 */
@@ -80,6 +99,8 @@ const TYPE_HINT: Record<Exclude<AttendanceStatus, 'present'>, string> = {
 const AUTOSAVE_DEBOUNCE_MS = 800;
 const MAX_UNDO = 50;
 
+const ATT_VIEW_KEY = 'ssampin:homeroom-attendance-view';
+
 export function HomeroomAttendanceGrid({
   students,
   classId,
@@ -87,6 +108,7 @@ export function HomeroomAttendanceGrid({
   loadDayRecords,
   onSaveDay,
   periods,
+  seating,
 }: HomeroomAttendanceGridProps) {
   const [matrix, setMatrix] = useState<MatrixState>({});
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -96,6 +118,24 @@ export function HomeroomAttendanceGrid({
   const [paletteType, setPaletteType] = useState<PaletteType>('absent');
   const [paletteReason, setPaletteReason] = useState<AttendanceReason>('질병');
   const [paletteMemo, setPaletteMemo] = useState('');
+
+  /* 보기(명렬|좌석) — 기기별 localStorage 영속. 좌석엔 교시 축이 없어 기준 교시 선택기 사용. */
+  const [attView, setAttView] = useState<'list' | 'seat'>(() => {
+    try {
+      return localStorage.getItem(ATT_VIEW_KEY) === 'seat' ? 'seat' : 'list';
+    } catch {
+      return 'list';
+    }
+  });
+  const [seatReferencePeriod, setSeatReferencePeriod] = useState<number>(1);
+  const setAttViewPersist = useCallback((v: 'list' | 'seat') => {
+    setAttView(v);
+    try {
+      localStorage.setItem(ATT_VIEW_KEY, v);
+    } catch {
+      /* noop */
+    }
+  }, []);
 
   /* undo/redo 표시 상태 (스택은 ref) */
   const [canUndo, setCanUndo] = useState(false);
@@ -375,6 +415,16 @@ export function HomeroomAttendanceGrid({
     e.preventDefault();
   }, []);
 
+  /* 좌석 클릭 = 팔레트 적용. 좌석엔 교시 축이 없으므로 기준 교시(선택기)를 앵커로 쓴다.
+     지우개는 그 학생 하루 전체를 지운다(그리드의 이름 클릭과 동일). */
+  const handleSeatClick = useCallback(
+    (sKey: string) => {
+      if (paletteType === 'eraser') handleNameClick(sKey);
+      else handleCellClick(sKey, seatReferencePeriod);
+    },
+    [paletteType, seatReferencePeriod, handleNameClick, handleCellClick],
+  );
+
   /* ── undo / redo ── */
   const undo = useCallback(() => {
     const entry = undoStackRef.current.pop();
@@ -515,6 +565,8 @@ export function HomeroomAttendanceGrid({
   }
 
   const isEraser = paletteType === 'eraser';
+  // 좌석 뷰 유효 여부 — localStorage에 'seat'가 남아도 좌석 데이터가 없으면 명렬로 폴백.
+  const seatMode = attView === 'seat' && !!seating;
   const selectionLabel = isEraser
     ? '지우개'
     : `${STATUS_CONFIG[paletteType].label} · ${paletteReason}`;
@@ -601,10 +653,39 @@ export function HomeroomAttendanceGrid({
           </div>
         )}
 
+        {/* 좌석 뷰 전용 기준 교시 선택기 — 좌석엔 교시 축이 없어 지각/조퇴/결과의 앵커를 여기서 고른다. */}
+        {seatMode && !isEraser && paletteType !== 'absent' && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-sp-muted w-8 shrink-0">기준</span>
+            <span className="text-xs text-sp-muted">
+              {paletteType === 'late'
+                ? '등교 교시'
+                : paletteType === 'earlyLeave'
+                  ? '하교 교시'
+                  : '해당 교시'}
+            </span>
+            <select
+              value={seatReferencePeriod}
+              onChange={(e) => setSeatReferencePeriod(Number(e.target.value))}
+              className="bg-sp-card border border-sp-border rounded-lg px-2 py-1 text-xs text-sp-text focus:outline-none focus:border-sp-accent"
+            >
+              {periods.map((p) => (
+                <option key={p} value={p}>
+                  {formatPeriodLabel(p)}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
         <p className="text-caption text-sp-muted leading-relaxed">
           {isEraser
-            ? '칸을 클릭하면 그 칸만, 이름을 클릭하면 그 학생 하루 전체를 출석으로 되돌려요.'
-            : TYPE_HINT[paletteType]}
+            ? seatMode
+              ? '좌석을 클릭하면 그 학생 하루 전체를 출석으로 되돌려요.'
+              : '칸을 클릭하면 그 칸만, 이름을 클릭하면 그 학생 하루 전체를 출석으로 되돌려요.'
+            : seatMode
+              ? '좌석을 클릭하면 팔레트가 적용돼요.'
+              : TYPE_HINT[paletteType]}
         </p>
       </div>
 
@@ -663,6 +744,37 @@ export function HomeroomAttendanceGrid({
                   : '자동 저장'}
         </span>
 
+        {/* 보기 토글 (명렬|좌석) — 좌석 데이터가 있을 때만 노출 */}
+        {seating && (
+          <div className="flex items-center bg-sp-card border border-sp-border rounded-lg p-0.5">
+            <button
+              type="button"
+              onClick={() => setAttViewPersist('list')}
+              className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors ${
+                attView === 'list'
+                  ? 'bg-sp-accent/20 text-sp-accent'
+                  : 'text-sp-muted hover:text-sp-text'
+              }`}
+              title="명렬 보기"
+            >
+              <span className="material-symbols-outlined text-sm">format_list_numbered</span>
+              명렬
+            </button>
+            <button
+              type="button"
+              onClick={() => setAttViewPersist('seat')}
+              className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors ${
+                attView === 'seat'
+                  ? 'bg-sp-accent/20 text-sp-accent'
+                  : 'text-sp-muted hover:text-sp-text'
+              }`}
+              title="좌석 보기"
+            >
+              <span className="material-symbols-outlined text-sm">grid_view</span>
+              좌석
+            </button>
+          </div>
+        )}
         <button
           onClick={() => setShowTextPanel(true)}
           className="flex items-center gap-1 px-2.5 py-1 text-xs text-sp-muted hover:text-sp-text bg-sp-card border border-sp-border rounded-lg transition-colors hover:border-sp-accent/50"
@@ -699,19 +811,38 @@ export function HomeroomAttendanceGrid({
         </button>
       </div>
 
-      {/* 공용 headless 그리드 뷰 */}
-      <AttendanceGridView
-        students={students}
-        matrix={matrix}
-        periods={periods}
-        onCellClick={handleCellClick}
-        onCellContextMenu={handleCellContextMenu}
-        onStudentNameClick={isEraser ? handleNameClick : undefined}
-        nameClickTitle="지우개: 클릭하면 이 학생의 하루 출결을 전부 지워요"
-        blankPresent
-        reasonColumn
-        onMemoEdit={handleMemoEdit}
-      />
+      {/* 본문 — 명렬(표) 또는 좌석 뷰 */}
+      {seatMode && seating ? (
+        seating.layout === 'grid' ? (
+          <SeatAttendanceView
+            rows={seating.rows}
+            cols={seating.cols}
+            seats={seating.seats}
+            studentMap={seating.studentMap}
+            matrix={matrix}
+            periods={periods}
+            onSeatClick={handleSeatClick}
+          />
+        ) : (
+          <div className="rounded-xl border border-sp-border bg-sp-surface/40 px-4 py-10 text-center text-sm text-sp-muted leading-relaxed">
+            좌석 보기는 격자(grid) 배치에서만 지원돼요. 모둠·자유 배치는 준비 중입니다 — 명렬 보기로
+            입력해주세요.
+          </div>
+        )
+      ) : (
+        <AttendanceGridView
+          students={students}
+          matrix={matrix}
+          periods={periods}
+          onCellClick={handleCellClick}
+          onCellContextMenu={handleCellContextMenu}
+          onStudentNameClick={isEraser ? handleNameClick : undefined}
+          nameClickTitle="지우개: 클릭하면 이 학생의 하루 출결을 전부 지워요"
+          blankPresent
+          reasonColumn
+          onMemoEdit={handleMemoEdit}
+        />
+      )}
 
       {/* ── 텍스트 빠른 입력 패널 ── */}
       {showTextPanel && (

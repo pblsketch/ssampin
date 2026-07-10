@@ -70,6 +70,16 @@ describe('담임 출결 단일 기록자 불변식 (P4.2 → P7.1/P7.3 리타깃
     expect(grid).not.toMatch(/from '@adapters\/stores\//);
   });
 
+  it('좌석 뷰는 스토어·좌석 편집 액션을 import/참조하지 않는다 (읽기 전용 격리, §3.10-4)', () => {
+    // 자리 배치 도구의 편집 액션(useSeatingStore)을 참조하면 좌석 편집 부작용이 유출된다.
+    // 데이터(seats 그리드·매핑)는 prop으로만 받고, 편집 함수 import는 0이어야 한다.
+    const seat = read('SeatAttendanceView.tsx');
+    expect(seat).not.toMatch(/from '@adapters\/stores\//);
+    expect(seat).not.toMatch(
+      /updateStudent|swapSeats|moveFreestyleDesk|changeLayout|updateGroups|randomize|clearAllSeats|resizeGrid/,
+    );
+  });
+
   it('그리드 교시 목록과 교시 수는 같은 settings(maxPeriods) 출처를 쓴다 (AttendanceMode)', () => {
     // periodCount = maxPeriods ?? 7 이 단일 출처이고, gridPeriods 가 이를 소비해야 한다.
     expect(attendanceMode).toMatch(/const periodCount = maxPeriods \?\? 7/);
