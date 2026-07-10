@@ -29,6 +29,14 @@ import type { HomeroomStudent, SheetStudentInfo } from '@mobile/pages/students/s
 type ViewMode = 'seating' | 'list';
 type ClassSelection = 'homeroom' | string; // 'homeroom' 또는 teachingClass.id
 
+/** 명단 스와이프 빠른 출결로 기록 가능한 상태와 토스트 라벨 */
+type QuickStatus = 'late' | 'absent' | 'earlyLeave';
+const QUICK_LABEL: Record<QuickStatus, string> = {
+  late: '지각',
+  absent: '결석',
+  earlyLeave: '조퇴',
+};
+
 // ============================================================
 // 메인 페이지
 // ============================================================
@@ -219,7 +227,7 @@ export function StudentsPage() {
   );
 
   const handleQuickRecord = useCallback(
-    async (student: HomeroomStudent, status: 'late' | 'absent') => {
+    async (student: HomeroomStudent, status: QuickStatus) => {
       // 번호 없는 학생은 출결이 번호로 저장돼 서로 뭉개지므로 기록을 막고 안내한다.
       if (student.studentNumber == null || student.studentNumber <= 0) {
         useSwipeUndoStore
@@ -228,10 +236,11 @@ export function StudentsPage() {
         return;
       }
       await writeHomeroomStatus(student, status);
-      const label = status === 'late' ? '지각' : '결석';
       useSwipeUndoStore
         .getState()
-        .show(`${student.name} · ${label}`, () => writeHomeroomStatus(student, 'present'));
+        .show(`${student.name} · ${QUICK_LABEL[status]}`, () =>
+          writeHomeroomStatus(student, 'present'),
+        );
     },
     [writeHomeroomStatus],
   );
@@ -273,7 +282,7 @@ export function StudentsPage() {
   );
 
   const handleClassQuickRecord = useCallback(
-    async (tc: TeachingClass, student: TeachingClassStudent, status: 'late' | 'absent') => {
+    async (tc: TeachingClass, student: TeachingClassStudent, status: QuickStatus) => {
       // 번호 없는 학생은 출결이 번호로 저장돼 서로 뭉개지므로 기록을 막고 안내한다.
       if (student.number == null || student.number <= 0) {
         useSwipeUndoStore
@@ -282,10 +291,11 @@ export function StudentsPage() {
         return;
       }
       await writeClassStatus(tc, student, status);
-      const label = status === 'late' ? '지각' : '결석';
       useSwipeUndoStore
         .getState()
-        .show(`${student.name} · ${label}`, () => writeClassStatus(tc, student, 'present'));
+        .show(`${student.name} · ${QUICK_LABEL[status]}`, () =>
+          writeClassStatus(tc, student, 'present'),
+        );
     },
     [writeClassStatus],
   );

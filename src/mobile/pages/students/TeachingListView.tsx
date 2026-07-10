@@ -12,7 +12,10 @@ interface TeachingListViewProps {
   teachingClass: TeachingClass;
   onStudentTap: (student: TeachingClassStudent) => void;
   onPraise: (student: TeachingClassStudent) => void;
-  onQuickRecord: (student: TeachingClassStudent, status: 'late' | 'absent') => void | Promise<void>;
+  onQuickRecord: (
+    student: TeachingClassStudent,
+    status: 'late' | 'absent' | 'earlyLeave',
+  ) => void | Promise<void>;
   dateStr: string;
   getRecordForDate: (
     classId: string,
@@ -135,7 +138,7 @@ export function TeachingListView({
               <SwipeRow
                 rowId={sKey}
                 leftRevealWidth={96}
-                rightRevealWidth={148}
+                rightRevealWidth={222}
                 leftActions={
                   <button
                     type="button"
@@ -155,6 +158,14 @@ export function TeachingListView({
                     >
                       <span className="material-symbols-outlined text-lg">schedule</span>
                       지각
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void onQuickRecord(student, 'earlyLeave')}
+                      className="flex flex-1 flex-col items-center justify-center gap-0.5 bg-orange-500 text-xs font-bold text-white"
+                    >
+                      <span className="material-symbols-outlined text-lg">directions_walk</span>
+                      조퇴
                     </button>
                     <button
                       type="button"

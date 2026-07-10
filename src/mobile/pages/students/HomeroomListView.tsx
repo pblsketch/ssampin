@@ -11,7 +11,10 @@ interface HomeroomListViewProps {
   students: readonly HomeroomStudent[];
   onStudentTap: (studentId: string) => void;
   onPraise: (student: HomeroomStudent) => void;
-  onQuickRecord: (student: HomeroomStudent, status: 'late' | 'absent') => void | Promise<void>;
+  onQuickRecord: (
+    student: HomeroomStudent,
+    status: 'late' | 'absent' | 'earlyLeave',
+  ) => void | Promise<void>;
   dateStr: string;
   getRecordForDate: (
     classId: string,
@@ -115,7 +118,7 @@ export function HomeroomListView({
               <SwipeRow
                 rowId={student.id}
                 leftRevealWidth={96}
-                rightRevealWidth={148}
+                rightRevealWidth={222}
                 leftActions={
                   <button
                     type="button"
@@ -135,6 +138,14 @@ export function HomeroomListView({
                     >
                       <span className="material-symbols-outlined text-lg">schedule</span>
                       지각
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void onQuickRecord(student, 'earlyLeave')}
+                      className="flex flex-1 flex-col items-center justify-center gap-0.5 bg-orange-500 text-xs font-bold text-white"
+                    >
+                      <span className="material-symbols-outlined text-lg">directions_walk</span>
+                      조퇴
                     </button>
                     <button
                       type="button"
