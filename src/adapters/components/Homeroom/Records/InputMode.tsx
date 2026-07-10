@@ -15,6 +15,8 @@ import type {
   AttendanceStatus,
   AttendanceReason,
 } from '@domain/entities/Attendance';
+import { PERIOD_MORNING, PERIOD_CLOSING } from '@domain/entities/Attendance';
+import { HomeroomAttendanceGrid } from './HomeroomAttendanceGrid';
 import type { CounselingMethod, AttendancePeriodEntry } from '@domain/entities/StudentRecord';
 import { DEFAULT_HOMEROOM_RECORD_TAGS } from '@domain/entities/StudentRecord';
 import type { RecordPrefill } from '../HomeroomPage';
@@ -62,6 +64,7 @@ export interface InputModeProps extends ModeProps {
 type RightTab = 'today' | 'history';
 
 const LAST_PERIODS_KEY = 'ssampin:homeroom-last-periods';
+const GRID_OPEN_KEY = 'ssampin:homeroom-attendance-grid-open';
 
 const STATUS_FROM_TYPE: Record<string, AttendanceStatus> = {
   결석: 'absent',
@@ -100,6 +103,65 @@ function InputMode({
   );
   const periodCount = maxPeriods ?? 7;
   const showToast = useToastStore((s) => s.show);
+
+  // ── 오늘 출결 그리드 (단일 날짜 출결의 단일 기록자) ──
+  // 교시 목록은 settings(maxPeriods) 단일 출처 — computeAutoPeriods 의 periodCount 와 동일 기준.
+  const attendanceRecordsAll = useTeachingClassStore((s) => s.attendanceRecords);
+  const gridPeriods = useMemo(
+    () => [PERIOD_MORNING, ...Array.from({ length: periodCount }, (_, i) => i + 1), PERIOD_CLOSING],
+    [periodCount],
+  );
+  const gridStudents = useMemo(
+    () =>
+      students
+        .filter((s) => !s.isVacant && s.studentNumber != null && s.studentNumber > 0)
+        .map((s) => ({ number: s.studentNumber!, name: s.name })),
+    [students],
+  );
+  // 외부 저장(다중날짜 카드 경로 등) 시 그리드가 저장본으로 재시드되도록 스토어 스냅샷에 의존 —
+  // 두 기록 경로가 같은 날짜에 겹칠 때 "스토어가 이긴다"(그리드 스냅샷이 다른 기록을 지우지 않게).
+  const loadGridDayRecords = useCallback(
+    (date: string) => (className ? getDayAttendance(className, date) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [className, getDayAttendance, attendanceRecordsAll],
+  );
+  const saveGridDay = useCallback(
+    async (date: string, byPeriod: ReadonlyMap<number, readonly StudentAttendance[]>) => {
+      if (!className) {
+        showToast('설정에서 담임반을 먼저 입력해주세요', 'info');
+        return;
+      }
+      // 데이터 유실 방지: 하루치 통째 교체 전 스토어 로드 보장 (카드 경로와 동일 가드)
+      const tcState = useTeachingClassStore.getState();
+      if (!tcState.loaded) await tcState.load();
+      const recordsByPeriod = new Map<number, StudentAttendance[]>();
+      for (const [p, arr] of byPeriod) recordsByPeriod.set(p, [...arr]);
+      await saveDayAttendance(className, date, recordsByPeriod);
+      // 미러: bridge 가 students(id+번호)로 number→studentId 재매핑을 수행해
+      // att-{studentId}-{date} StudentRecord 를 조립한다.
+      await bridgeHomeroomDayAttendance({ className, date, recordsByPeriod, students });
+      showToast('출결을 저장했어요', 'success');
+    },
+    [className, saveDayAttendance, bridgeHomeroomDayAttendance, students, showToast],
+  );
+  const [gridOpen, setGridOpen] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(GRID_OPEN_KEY) !== '0';
+    } catch {
+      return true;
+    }
+  });
+  const toggleGridOpen = useCallback(() => {
+    setGridOpen((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(GRID_OPEN_KEY, next ? '1' : '0');
+      } catch {
+        /* noop */
+      }
+      return next;
+    });
+  }, []);
 
   // ── 출석번호 무결성 (한 명 → 전원 오염 방어) ──
   // 출결은 학생을 "번호"로 식별하므로, 번호가 비었거나 겹치면 한 명 저장이 같은 번호
@@ -709,26 +771,28 @@ function InputMode({
 
       const key = e.key.toLowerCase();
 
-      // 출결 유형 토글
-      if (key === 'a') {
-        handleAttendanceTypeClick('결석');
-        e.preventDefault();
-        return;
-      }
-      if (key === 'l') {
-        handleAttendanceTypeClick('지각');
-        e.preventDefault();
-        return;
-      }
-      if (key === 'e') {
-        handleAttendanceTypeClick('조퇴');
-        e.preventDefault();
-        return;
-      }
-      if (key === 'x') {
-        handleAttendanceTypeClick('결과');
-        e.preventDefault();
-        return;
+      // 출결 유형 토글 — 카드 출결은 여러 날 모드 전용(단일 날짜는 그리드가 단일 기록자)
+      if (dateRangeMode) {
+        if (key === 'a') {
+          handleAttendanceTypeClick('결석');
+          e.preventDefault();
+          return;
+        }
+        if (key === 'l') {
+          handleAttendanceTypeClick('지각');
+          e.preventDefault();
+          return;
+        }
+        if (key === 'e') {
+          handleAttendanceTypeClick('조퇴');
+          e.preventDefault();
+          return;
+        }
+        if (key === 'x') {
+          handleAttendanceTypeClick('결과');
+          e.preventDefault();
+          return;
+        }
       }
 
       // 출결 유형 선택된 상태에서만 교시/사유 단축키
@@ -800,7 +864,18 @@ function InputMode({
     handleAttendanceReasonClick,
     handleSaveClick,
     periodCount,
+    dateRangeMode,
   ]);
+
+  // 단일 날짜 모드로 돌아오면 숨겨진 카드 출결 선택 상태를 정리한다
+  // (숨긴 채 남으면 canSave 가 보이지 않는 선택으로 활성화되는 혼란 방지)
+  useEffect(() => {
+    if (!dateRangeMode && (attendanceType !== null || selectedSub?.categoryId === 'attendance')) {
+      setAttendanceType(null);
+      setSelectedSub(null);
+      setSelectedPeriods(new Set());
+    }
+  }, [dateRangeMode, attendanceType, selectedSub]);
 
   const dateRecords = useMemo(() => {
     return records.filter((r) => r.date === selectedDate);
@@ -845,6 +920,60 @@ function InputMode({
           </div>
         </Notice>
       )}
+      {/* ── 오늘 출결 그리드 — 단일 날짜 출결의 단일 기록자 (여러 날 출결은 아래 카드 경로) ── */}
+      {className && gridStudents.length > 0 && (
+        <div className="mb-3 rounded-xl bg-sp-card p-4 shrink-0">
+          <button
+            type="button"
+            onClick={toggleGridOpen}
+            className="w-full flex items-center justify-between text-left"
+            aria-expanded={gridOpen}
+          >
+            <h3 className="text-sm font-bold text-sp-text flex items-center gap-2">
+              <span className="material-symbols-outlined text-base">fact_check</span>
+              오늘 출결
+              <span className="text-sp-muted font-normal text-xs">
+                {formatDateKR(selectedDate)} · 칸 클릭: 출석→결석→지각→조퇴→결과 · 우클릭: 사유
+              </span>
+            </h3>
+            <span className="material-symbols-outlined text-sp-muted">
+              {gridOpen ? 'expand_less' : 'expand_more'}
+            </span>
+          </button>
+          {gridOpen &&
+            (numberIssues.hasCollisionRisk ? (
+              /* 렌더 게이트: 번호 충돌 시 그리드에서 학생 행이 병합돼 편집 자체가 오염되므로
+                 그리드 대신 정리 안내를 렌더한다 (저장 차단만으로는 부족). */
+              <div className="mt-3 flex items-center gap-3 rounded-lg bg-sp-surface border border-sp-border px-4 py-3">
+                <span className="material-symbols-outlined text-sp-accent">warning</span>
+                <p className="flex-1 text-xs text-sp-muted leading-relaxed">
+                  출석번호가 겹치거나 비어 있어 출결 표를 열 수 없어요. 번호가 겹치면 서로 다른
+                  학생의 출결이 한 줄로 합쳐져 잘못 저장됩니다.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setShowRenumberConfirm(true)}
+                  className="shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold bg-sp-accent text-white hover:bg-sp-accent/90 transition-colors"
+                >
+                  <span className="material-symbols-outlined text-sm">format_list_numbered</span>
+                  번호 정리하기
+                </button>
+              </div>
+            ) : (
+              <div className="mt-3">
+                <HomeroomAttendanceGrid
+                  students={gridStudents}
+                  classId={className}
+                  date={selectedDate}
+                  loadDayRecords={loadGridDayRecords}
+                  onSaveDay={saveGridDay}
+                  periods={gridPeriods}
+                />
+              </div>
+            ))}
+        </div>
+      )}
+
       <div ref={containerRef} className="flex-1 flex min-h-0">
         {/* ── 좌측: 학생 선택 ── */}
         <div
@@ -1031,70 +1160,81 @@ function InputMode({
 
             {/* 카테고리 목록 */}
             <div className="space-y-3">
-              {/* 출결 — 유형·사유·교시(구조 그대로 유지) */}
-              {categories
-                .filter((cat) => cat.id === 'attendance')
-                .map((cat) => (
-                  <div key={cat.id}>
-                    <p
-                      className={`text-xs font-semibold mb-1.5 ${getCategoryLabelColor(cat.color)}`}
-                    >
-                      {cat.name}
-                    </p>
-                    <div className="space-y-2">
-                      <div className="flex flex-wrap gap-1.5">
-                        {ATTENDANCE_TYPES.map((type) => {
-                          const isTypeSelected = attendanceType === type;
-                          return (
-                            <button
-                              key={type}
-                              onClick={() => handleAttendanceTypeClick(type)}
-                              className={getSubcategoryChipClass(cat.color, isTypeSelected)}
-                            >
-                              {isTypeSelected && <span className="mr-1">✓</span>}
-                              {type}
-                            </button>
-                          );
-                        })}
-                      </div>
-                      {attendanceType && (
-                        <PeriodChipGroup
-                          periodCount={periodCount}
-                          selected={selectedPeriods}
-                          onChange={setSelectedPeriods}
-                          accent={ACCENT_FROM_TYPE[attendanceType] ?? 'red'}
-                        />
-                      )}
-                      {attendanceType && (
-                        <div className="ml-2 pl-3 border-l-2 border-red-500/30">
-                          <p className="text-detail text-sp-muted mb-1">사유</p>
-                          <div className="flex flex-wrap gap-1.5">
-                            {ATTENDANCE_REASONS.map((reason) => {
-                              const combined = `${attendanceType} (${reason})`;
-                              const isReasonSelected =
-                                selectedSub?.categoryId === 'attendance' &&
-                                selectedSub.subcategory === combined;
-                              return (
-                                <button
-                                  key={reason}
-                                  onClick={() => handleAttendanceReasonClick(reason)}
-                                  className={getSubcategoryChipClass(cat.color, isReasonSelected)}
-                                >
-                                  {isReasonSelected && <span className="mr-1">✓</span>}
-                                  {reason}
-                                </button>
-                              );
-                            })}
-                          </div>
-                          <p className="mt-2 text-caption text-sp-muted leading-relaxed">
-                            단축키: A 결석 · L 지각 · E 조퇴 · X 결과 · 1~7 교시 · 0 전체 · Q 질병 ·
-                            ↵ 저장
-                          </p>
+              {/* 출결 — 단일 날짜는 위 '오늘 출결' 그리드가 단일 기록자.
+                  카드 경로는 여러 날(기간/여러 날) 출결에서만 연다 (이중 기록자 방지). */}
+              {!dateRangeMode && (
+                <p className="text-xs text-sp-muted bg-sp-surface rounded-lg px-3 py-2 leading-relaxed">
+                  오늘 출결은 위 <span className="font-semibold text-sp-text">‘오늘 출결’ 표</span>
+                  에서 입력해요. 여러 날 출결(입원·체험학습 등)은 아래 날짜 모드를{' '}
+                  <span className="font-semibold text-sp-text">기간</span> 또는{' '}
+                  <span className="font-semibold text-sp-text">여러 날</span>로 바꾸면 입력할 수
+                  있어요.
+                </p>
+              )}
+              {dateRangeMode &&
+                categories
+                  .filter((cat) => cat.id === 'attendance')
+                  .map((cat) => (
+                    <div key={cat.id}>
+                      <p
+                        className={`text-xs font-semibold mb-1.5 ${getCategoryLabelColor(cat.color)}`}
+                      >
+                        {cat.name}
+                      </p>
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap gap-1.5">
+                          {ATTENDANCE_TYPES.map((type) => {
+                            const isTypeSelected = attendanceType === type;
+                            return (
+                              <button
+                                key={type}
+                                onClick={() => handleAttendanceTypeClick(type)}
+                                className={getSubcategoryChipClass(cat.color, isTypeSelected)}
+                              >
+                                {isTypeSelected && <span className="mr-1">✓</span>}
+                                {type}
+                              </button>
+                            );
+                          })}
                         </div>
-                      )}
+                        {attendanceType && (
+                          <PeriodChipGroup
+                            periodCount={periodCount}
+                            selected={selectedPeriods}
+                            onChange={setSelectedPeriods}
+                            accent={ACCENT_FROM_TYPE[attendanceType] ?? 'red'}
+                          />
+                        )}
+                        {attendanceType && (
+                          <div className="ml-2 pl-3 border-l-2 border-red-500/30">
+                            <p className="text-detail text-sp-muted mb-1">사유</p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {ATTENDANCE_REASONS.map((reason) => {
+                                const combined = `${attendanceType} (${reason})`;
+                                const isReasonSelected =
+                                  selectedSub?.categoryId === 'attendance' &&
+                                  selectedSub.subcategory === combined;
+                                return (
+                                  <button
+                                    key={reason}
+                                    onClick={() => handleAttendanceReasonClick(reason)}
+                                    className={getSubcategoryChipClass(cat.color, isReasonSelected)}
+                                  >
+                                    {isReasonSelected && <span className="mr-1">✓</span>}
+                                    {reason}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            <p className="mt-2 text-caption text-sp-muted leading-relaxed">
+                              단축키: A 결석 · L 지각 · E 조퇴 · X 결과 · 1~7 교시 · 0 전체 · Q 질병
+                              · ↵ 저장
+                            </p>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
 
               {/* 비출결 분류 — 단일 선택(Q2: 서브카테고리 칩 → 분류 선택, 세부는 아래 태그로) */}
               <div>
