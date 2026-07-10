@@ -29,6 +29,12 @@ export interface AttendanceGridViewProps {
    * 셸이 상태 선택 → computeAutoPeriods 행 채움 팝오버를 띄우는 용도 (담임 셸에서 사용).
    */
   onStudentNameClick?: (sKey: string, anchorRect: DOMRect) => void;
+  /** 다중 선택 모드(선택): true 면 행 앞에 체크박스 열을 렌더한다 (일괄 적용용) */
+  selectable?: boolean;
+  /** 선택된 studentKey 집합 (selectable 일 때) */
+  selectedKeys?: ReadonlySet<string>;
+  /** 체크박스 토글 콜백 (selectable 일 때) */
+  onToggleSelect?: (sKey: string) => void;
 }
 
 export function AttendanceGridView({
@@ -39,6 +45,9 @@ export function AttendanceGridView({
   onCellClick,
   onCellContextMenu,
   onStudentNameClick,
+  selectable = false,
+  selectedKeys,
+  onToggleSelect,
 }: AttendanceGridViewProps) {
   const hasGradeInfo = useMemo(
     () => students.some((s) => s.grade != null || s.classNum != null),
@@ -73,6 +82,9 @@ export function AttendanceGridView({
       <table className="w-full border-collapse text-sm">
         <thead>
           <tr className="bg-sp-surface border-b border-sp-border">
+            {selectable && (
+              <th className="sticky left-0 z-10 bg-sp-surface px-2 py-2 text-center min-w-[2rem]" />
+            )}
             {hasGradeInfo && (
               <th className="sticky left-0 z-10 bg-sp-surface px-3 py-2 text-sm text-sp-muted font-medium text-left whitespace-nowrap min-w-[4rem]">
                 소속
@@ -116,6 +128,17 @@ export function AttendanceGridView({
 
             return (
               <tr key={sKey} className="hover:bg-sp-card/30 transition-colors">
+                {selectable && (
+                  <td className="sticky left-0 bg-sp-bg px-2 py-2 text-center">
+                    <input
+                      type="checkbox"
+                      checked={selectedKeys?.has(sKey) ?? false}
+                      onChange={() => onToggleSelect?.(sKey)}
+                      aria-label={`${student.name} 선택`}
+                      className="w-4 h-4 accent-sp-accent cursor-pointer"
+                    />
+                  </td>
+                )}
                 {hasGradeInfo && (
                   <td className="sticky left-0 bg-sp-bg px-3 py-2 text-sm text-sp-muted whitespace-nowrap">
                     {student.grade != null && student.classNum != null
@@ -195,6 +218,7 @@ export function AttendanceGridView({
 
           {/* ── 교시별 요약 행 ── */}
           <tr className="bg-sp-surface border-t border-sp-border">
+            {selectable && <td className="px-2 py-2" />}
             {hasGradeInfo && <td className="px-3 py-2" />}
             <td className="px-2 py-2" />
             <td className="px-3 py-2 text-sm text-sp-muted font-medium">교시 합계</td>

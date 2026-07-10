@@ -8,6 +8,7 @@ import type {
 import { formatPeriodLabel, PERIOD_MORNING, PERIOD_CLOSING } from '@domain/entities/Attendance';
 import { cycleStatus, summarizeTotal, computeAutoPeriods } from '@domain/rules/attendanceRules';
 import { studentKey } from '@domain/entities/TeachingClass';
+import { ATTENDANCE_REASONS } from '@domain/valueObjects/RecordCategory';
 import { AttendanceDetailEditor } from '@adapters/components/attendance/shared/AttendanceDetailEditor';
 import { AttendanceGridView } from '@adapters/components/attendance/shared/AttendanceGridView';
 import {
@@ -96,6 +97,14 @@ export function HomeroomAttendanceGrid({
   const [autoFill, setAutoFill] = useState<AutoFillState | null>(null);
   const autoFillRef = useRef<HTMLDivElement>(null);
 
+  /* ── 다중 선택(일괄 적용) 모드 — 셀 순환과 배타 ── */
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+  const [bulkStatus, setBulkStatus] = useState<Exclude<AttendanceStatus, 'present'>>('absent');
+  const [bulkReferencePeriod, setBulkReferencePeriod] = useState<number>(1);
+  const [bulkReason, setBulkReason] = useState<AttendanceReason | undefined>(undefined);
+  const [bulkMemo, setBulkMemo] = useState('');
+
   /** 정규 교시 수 (조회/종례 제외) — computeAutoPeriods 의 periodCount */
   const regularPeriodCount = useMemo(
     () => periods.filter((p) => p !== PERIOD_MORNING && p !== PERIOD_CLOSING).length,
@@ -138,9 +147,11 @@ export function HomeroomAttendanceGrid({
     };
   }, []);
 
-  /* 셀 클릭 = 상태 순환 (정상 출석은 엔트리 제거 = 예외 기반 입력) */
+  /* 셀 클릭 = 상태 순환 (정상 출석은 엔트리 제거 = 예외 기반 입력).
+     선택 모드에선 순환을 잠가 두 인터랙션이 섞이지 않게 한다(배타). */
   const handleCellClick = useCallback(
     (sKey: string, period: number) => {
+      if (selectionMode) return;
       const student = students.find((s) => studentKey(s) === sKey);
       if (!student) return;
       setMatrix((prev) => {
@@ -158,14 +169,18 @@ export function HomeroomAttendanceGrid({
       setDirty(true);
       setSaveStatus('idle');
     },
-    [students],
+    [students, selectionMode],
   );
 
-  const handleCellContextMenu = useCallback((e: React.MouseEvent, sKey: string, period: number) => {
-    e.preventDefault();
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    setPopover({ studentKey: sKey, period, anchorRect: rect });
-  }, []);
+  const handleCellContextMenu = useCallback(
+    (e: React.MouseEvent, sKey: string, period: number) => {
+      e.preventDefault();
+      if (selectionMode) return;
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      setPopover({ studentKey: sKey, period, anchorRect: rect });
+    },
+    [selectionMode],
+  );
 
   const handleDetailChange = useCallback(
     (sKey: string, period: number, next: { reason?: AttendanceReason; memo?: string }) => {
@@ -184,11 +199,80 @@ export function HomeroomAttendanceGrid({
     [],
   );
 
-  /* 이름 클릭 → 자동채움 팝오버 열기 */
-  const openAutoFill = useCallback((sKey: string, anchorRect: DOMRect) => {
-    setPopover(null);
-    setAutoFill({ studentKey: sKey, anchorRect, pendingStatus: null });
+  /* 이름 클릭 → 자동채움 팝오버 열기 (선택 모드에선 잠금) */
+  const openAutoFill = useCallback(
+    (sKey: string, anchorRect: DOMRect) => {
+      if (selectionMode) return;
+      setPopover(null);
+      setAutoFill({ studentKey: sKey, anchorRect, pendingStatus: null });
+    },
+    [selectionMode],
+  );
+
+  /* ── 다중 선택 / 일괄 적용 ── */
+  const toggleSelectionMode = useCallback(() => {
+    setSelectionMode((prev) => {
+      if (!prev) {
+        setPopover(null);
+        setAutoFill(null);
+      } else {
+        setSelectedKeys(new Set());
+      }
+      return !prev;
+    });
   }, []);
+
+  const toggleSelect = useCallback((sKey: string) => {
+    setSelectedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(sKey)) next.delete(sKey);
+      else next.add(sKey);
+      return next;
+    });
+  }, []);
+
+  const selectAll = useCallback(() => {
+    setSelectedKeys((prev) =>
+      prev.size === students.length ? new Set() : new Set(students.map((s) => studentKey(s))),
+    );
+  }, [students]);
+
+  /* 선택 학생 전원에게 동일 상태(+기준 교시)·사유·메모를 한 번에 적용 —
+     체험학습 단체·단체 조퇴 등. computeAutoPeriods 로 교시를 채우고,
+     결과는 초기값(적용 후 셀 단위 수정·저장 전 초기화 가능). */
+  const applyBulk = useCallback(() => {
+    if (selectedKeys.size === 0) return;
+    const fill = computeAutoPeriods(bulkStatus, bulkReferencePeriod, regularPeriodCount);
+    const memoText = bulkMemo.trim() || undefined;
+    setMatrix((prev) => {
+      const next = { ...prev };
+      for (const sKey of selectedKeys) {
+        const student = students.find((s) => studentKey(s) === sKey);
+        if (!student) continue;
+        const row: Record<number, LocalStudentAttendance | undefined> = {};
+        for (const p of periods) {
+          row[p] = fill.has(p)
+            ? { number: student.number, status: bulkStatus, reason: bulkReason, memo: memoText }
+            : undefined;
+        }
+        next[sKey] = row;
+      }
+      return next;
+    });
+    setDirty(true);
+    setSaveStatus('idle');
+    setSelectionMode(false);
+    setSelectedKeys(new Set());
+  }, [
+    selectedKeys,
+    bulkStatus,
+    bulkReferencePeriod,
+    bulkReason,
+    bulkMemo,
+    regularPeriodCount,
+    students,
+    periods,
+  ]);
 
   /* 상태(+기준 교시) 확정 → computeAutoPeriods 로 행 채움.
      결과는 초기값일 뿐 — 이후 셀 단위 클릭으로 자유롭게 override 가능. */
@@ -294,6 +378,18 @@ export function HomeroomAttendanceGrid({
         ))}
         <div className="flex-1" />
         <button
+          onClick={toggleSelectionMode}
+          className={`flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg border transition-colors ${
+            selectionMode
+              ? 'bg-sp-accent/15 text-sp-accent border-sp-accent/50'
+              : 'text-sp-muted hover:text-sp-text bg-sp-card border-sp-border hover:border-sp-accent/50'
+          }`}
+          title="여러 학생을 골라 같은 출결을 한 번에 적용 (체험학습 단체 등)"
+        >
+          <span className="material-symbols-outlined text-sm">checklist</span>
+          {selectionMode ? '선택 모드 끄기' : '일괄 적용'}
+        </button>
+        <button
           onClick={handleReset}
           className="flex items-center gap-1 px-2.5 py-1 text-xs text-sp-muted hover:text-sp-text
                      bg-sp-card border border-sp-border rounded-lg transition-colors hover:border-sp-accent/50"
@@ -331,7 +427,94 @@ export function HomeroomAttendanceGrid({
         </button>
       </div>
 
-      {/* 공용 headless 그리드 뷰 (이름 클릭 = 자동채움) */}
+      {/* 일괄 적용 바 (선택 모드) — 상태 + 기준 교시 + 사유 + 메모를 선택 학생 전원에게 */}
+      {selectionMode && (
+        <div className="flex flex-col gap-2.5 bg-sp-surface border border-sp-accent/40 rounded-xl px-4 py-3">
+          <div className="flex items-center gap-3 flex-wrap">
+            <span className="text-xs font-medium text-sp-text">선택 {selectedKeys.size}명</span>
+            <button
+              type="button"
+              onClick={selectAll}
+              className="text-xs text-sp-accent hover:text-sp-accent/80 transition-colors"
+            >
+              {selectedKeys.size === students.length ? '전체 해제' : '전체 선택'}
+            </button>
+            <span className="text-sp-border">|</span>
+            {AUTO_FILL_STATUSES.map((status) => (
+              <button
+                key={status}
+                type="button"
+                onClick={() => setBulkStatus(status)}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
+                  bulkStatus === status
+                    ? 'bg-sp-accent/15 text-sp-accent border-sp-accent/50'
+                    : 'text-sp-muted bg-sp-card border-sp-border hover:text-sp-text'
+                }`}
+              >
+                <span className={`material-symbols-outlined text-sm ${STAT_COLORS[status]}`}>
+                  {STATUS_CONFIG[status].icon}
+                </span>
+                {STATUS_CONFIG[status].label}
+              </button>
+            ))}
+            {bulkStatus !== 'absent' && (
+              <label className="flex items-center gap-1.5 text-xs text-sp-muted">
+                {bulkStatus === 'late'
+                  ? '등교 교시'
+                  : bulkStatus === 'earlyLeave'
+                    ? '하교 교시'
+                    : '해당 교시'}
+                <select
+                  value={bulkReferencePeriod}
+                  onChange={(e) => setBulkReferencePeriod(Number(e.target.value))}
+                  className="bg-sp-card border border-sp-border rounded-lg px-2 py-1 text-xs text-sp-text focus:outline-none focus:border-sp-accent"
+                >
+                  {periods.map((p) => (
+                    <option key={p} value={p}>
+                      {formatPeriodLabel(p)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs text-sp-muted">사유</span>
+            {ATTENDANCE_REASONS.map((reason) => (
+              <button
+                key={reason}
+                type="button"
+                onClick={() => setBulkReason((prev) => (prev === reason ? undefined : reason))}
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
+                  bulkReason === reason
+                    ? 'bg-sp-accent/15 text-sp-accent border-sp-accent/50'
+                    : 'text-sp-muted bg-sp-card border-sp-border hover:text-sp-text'
+                }`}
+              >
+                {reason}
+              </button>
+            ))}
+            <input
+              type="text"
+              value={bulkMemo}
+              onChange={(e) => setBulkMemo(e.target.value)}
+              placeholder="메모 (선택)"
+              className="flex-1 min-w-[8rem] bg-sp-card border border-sp-border rounded-lg px-2.5 py-1 text-xs text-sp-text placeholder:text-sp-muted/60 focus:outline-none focus:border-sp-accent"
+            />
+            <button
+              type="button"
+              onClick={applyBulk}
+              disabled={selectedKeys.size === 0}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold bg-sp-accent text-white hover:bg-sp-accent/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <span className="material-symbols-outlined text-sm">done_all</span>
+              {selectedKeys.size}명에게 적용
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 공용 headless 그리드 뷰 (이름 클릭 = 자동채움, 선택 모드 = 체크박스) */}
       <AttendanceGridView
         students={students}
         matrix={matrix}
@@ -339,6 +522,9 @@ export function HomeroomAttendanceGrid({
         onCellClick={handleCellClick}
         onCellContextMenu={handleCellContextMenu}
         onStudentNameClick={openAutoFill}
+        selectable={selectionMode}
+        selectedKeys={selectedKeys}
+        onToggleSelect={toggleSelect}
       />
 
       {/* 자동채움 팝오버 — 상태 선택 → (지각·조퇴·결과) 기준 교시 선택 */}

@@ -372,6 +372,28 @@ function InputMode({
           ? '선택된 날짜가 없습니다'
           : null;
 
+  // 출결 기간(범위) 입력은 비수업일(주말)을 자동 제외한다 — 나이스 기간출결 관행 (P5).
+  // 여러 날(multi) 모드는 사용자가 날짜를 직접 골랐으므로 그대로 존중한다.
+  const weekendSkipped = useMemo(() => {
+    if (dateMode !== 'range' || selectedSub?.categoryId !== 'attendance') return [] as string[];
+    return rangeDates.filter((d) => {
+      const day = new Date(`${d}T00:00:00`).getDay();
+      return day === 0 || day === 6;
+    });
+  }, [dateMode, selectedSub, rangeDates]);
+
+  /** 일괄 저장이 실제로 도는 날짜 목록 (출결 범위 모드에선 주말 제외) */
+  const effectiveRangeDates = useMemo(
+    () =>
+      weekendSkipped.length > 0
+        ? rangeDates.filter((d) => {
+            const day = new Date(`${d}T00:00:00`).getDay();
+            return day !== 0 && day !== 6;
+          })
+        : rangeDates,
+    [rangeDates, weekendSkipped],
+  );
+
   // 3컬럼 리사이즈 (퍼센트 기반)
   const [leftPct, setLeftPct] = useState(38);
   const [rightPct, setRightPct] = useState(24);
@@ -720,19 +742,25 @@ function InputMode({
   // 여러 날 일괄 저장 (확인 모달에서 호출)
   // 일괄([적용])은 자동저장 대상 아님 — 명시 [적용]=확정=저장으로 유지
   const handleBatchSave = useCallback(async () => {
-    if (rangeDates.length === 0 || rangeError) return;
+    if (effectiveRangeDates.length === 0 || rangeError) {
+      if (weekendSkipped.length > 0 && effectiveRangeDates.length === 0) {
+        showToast('선택한 기간이 모두 주말이라 저장할 날이 없어요', 'info');
+        setShowBatchConfirm(false);
+      }
+      return;
+    }
     await wrapSave(async () => {
       setBatchSaving(true);
-      setBatchProgress({ current: 0, total: rangeDates.length });
+      setBatchProgress({ current: 0, total: effectiveRangeDates.length });
       setSkippedDates([]);
       let totalCreated = 0;
       const newSkipped: string[] = [];
-      for (let i = 0; i < rangeDates.length; i++) {
-        const date = rangeDates[i]!;
+      for (let i = 0; i < effectiveRangeDates.length; i++) {
+        const date = effectiveRangeDates[i]!;
         const { affected } = await saveForDate(date);
         if (affected === 0) newSkipped.push(date);
         else totalCreated += affected;
-        setBatchProgress({ current: i + 1, total: rangeDates.length });
+        setBatchProgress({ current: i + 1, total: effectiveRangeDates.length });
       }
       setBatchSaving(false);
       setBatchProgress(null);
@@ -740,14 +768,25 @@ function InputMode({
       setShowBatchConfirm(false);
       resetForm();
 
-      const registeredDays = rangeDates.length - newSkipped.length;
+      const registeredDays = effectiveRangeDates.length - newSkipped.length;
+      const parts: string[] = [];
+      if (newSkipped.length > 0) parts.push(`중복 ${newSkipped.length}일 제외`);
+      if (weekendSkipped.length > 0) parts.push(`주말 ${weekendSkipped.length}일 자동 제외`);
       const msg =
-        newSkipped.length > 0
-          ? `${rangeDates.length}일 중 ${registeredDays}일 등록 완료 (중복 ${newSkipped.length}일 제외)`
-          : `${rangeDates.length}일 출결이 등록되었습니다`;
+        parts.length > 0
+          ? `${effectiveRangeDates.length}일 중 ${registeredDays}일 등록 완료 (${parts.join(', ')})`
+          : `${effectiveRangeDates.length}일 출결이 등록되었습니다`;
       showToast(msg, totalCreated > 0 ? 'success' : 'info');
     });
-  }, [rangeDates, rangeError, saveForDate, resetForm, showToast, wrapSave]);
+  }, [
+    effectiveRangeDates,
+    weekendSkipped,
+    rangeError,
+    saveForDate,
+    resetForm,
+    showToast,
+    wrapSave,
+  ]);
 
   // 저장 버튼 클릭 핸들러: 다중/범위 모드면 확인 모달, 아니면 바로 저장
   const handleSaveClick = useCallback(() => {
@@ -1646,12 +1685,17 @@ function InputMode({
                     선택 학생{' '}
                     <span className="text-sp-text font-medium">{selectedStudents.size}명</span>
                     {' × '}
-                    {rangeDates.length}일 = 총{' '}
+                    {effectiveRangeDates.length}일 = 총{' '}
                     <span className="text-sp-text font-bold">
-                      {selectedStudents.size * rangeDates.length}건
+                      {selectedStudents.size * effectiveRangeDates.length}건
                     </span>{' '}
                     등록
                   </p>
+                  {weekendSkipped.length > 0 && (
+                    <p className="text-xs text-sp-muted">
+                      주말 {weekendSkipped.length}일은 비수업일이라 자동 제외됩니다.
+                    </p>
+                  )}
                   <p className="text-xs text-sp-muted">이미 등록된 날짜는 자동으로 건너뜁니다.</p>
                 </div>
 
