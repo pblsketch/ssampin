@@ -4,6 +4,7 @@ import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { RecordCategoryManagementModal } from '@adapters/components/StudentRecords/RecordCategoryManagementModal';
 import { DateNavigator } from '@adapters/components/StudentRecords/DateNavigator';
 import { RosterEmptyState } from '@adapters/components/common/RosterEmptyState';
+import { AttendanceMode } from './AttendanceMode';
 import { InputMode } from './InputMode';
 import { ProgressMode } from './ProgressMode';
 import { SearchMode } from './SearchMode';
@@ -11,10 +12,11 @@ import { RecordsExportModal } from './RecordsExportModal';
 import { todayString } from './recordUtils';
 import type { RecordPrefill } from '../HomeroomPage';
 
-type ViewMode = 'input' | 'progress' | 'search';
+type ViewMode = 'attendance' | 'input' | 'progress' | 'search';
 
 const MODE_TABS: { id: ViewMode; icon: string; label: string }[] = [
-  { id: 'input', icon: '✏️', label: '입력' },
+  { id: 'attendance', icon: '✅', label: '출결' },
+  { id: 'input', icon: '✏️', label: '누가기록' },
   { id: 'progress', icon: '📊', label: '통계' },
   { id: 'search', icon: '🔍', label: '조회' },
 ];
@@ -124,6 +126,14 @@ export function RecordsTab({ prefill, onPrefillConsumed, onRecordDirtyChange }: 
           </button>
         </div>
       </div>
+
+      {viewMode === 'attendance' && (
+        <AttendanceMode
+          students={activeStudentsList}
+          selectedDate={selectedDate}
+          onDateChange={setSelectedDate}
+        />
+      )}
 
       {viewMode === 'input' && (
         <DateNavigator selectedDate={selectedDate} onDateChange={setSelectedDate} />

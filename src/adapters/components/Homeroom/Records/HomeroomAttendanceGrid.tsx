@@ -525,6 +525,7 @@ export function HomeroomAttendanceGrid({
         selectable={selectionMode}
         selectedKeys={selectedKeys}
         onToggleSelect={toggleSelect}
+        blankPresent
       />
 
       {/* 자동채움 팝오버 — 상태 선택 → (지각·조퇴·결과) 기준 교시 선택 */}

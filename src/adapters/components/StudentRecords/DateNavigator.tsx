@@ -3,6 +3,11 @@ import { useCallback, useRef } from 'react';
 interface DateNavigatorProps {
   selectedDate: string;
   onDateChange: (date: string) => void;
+  /**
+   * true 이면 선택 날짜가 오늘보다 과거일 때 "(과거)" 배지를 표시한다.
+   * 다른 사용처(기존 누가기록 등)에 영향을 주지 않도록 기본값은 false.
+   */
+  pastBadge?: boolean;
 }
 
 const DAY_NAMES = ['일', '월', '화', '수', '목', '금', '토'];
@@ -27,9 +32,15 @@ function addDays(dateStr: string, days: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-export function DateNavigator({ selectedDate, onDateChange }: DateNavigatorProps) {
+export function DateNavigator({
+  selectedDate,
+  onDateChange,
+  pastBadge = false,
+}: DateNavigatorProps) {
   const dateInputRef = useRef<HTMLInputElement>(null);
-  const isToday = selectedDate === todayString();
+  const today = todayString();
+  const isToday = selectedDate === today;
+  const isPast = selectedDate < today;
 
   const handlePrev = useCallback(() => {
     onDateChange(addDays(selectedDate, -1));
@@ -60,9 +71,7 @@ export function DateNavigator({ selectedDate, onDateChange }: DateNavigatorProps
       <button
         onClick={handleDateClick}
         className={`relative px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-          isToday
-            ? 'bg-sp-surface text-sp-text'
-            : 'bg-sp-accent/10 text-sp-accent'
+          isToday ? 'bg-sp-surface text-sp-text' : 'bg-sp-accent/10 text-sp-accent'
         } hover:bg-sp-surface/80`}
       >
         {formatDateFull(selectedDate)}
@@ -93,6 +102,12 @@ export function DateNavigator({ selectedDate, onDateChange }: DateNavigatorProps
         >
           오늘
         </button>
+      )}
+
+      {pastBadge && isPast && (
+        <span className="px-2 py-1 rounded-md text-xs font-semibold bg-amber-500/15 text-amber-500">
+          과거
+        </span>
       )}
     </div>
   );

@@ -1,4 +1,4 @@
-﻿import { useMemo } from 'react';
+import { useMemo } from 'react';
 import type { AttendanceStatus, StudentAttendance } from '@domain/entities/Attendance';
 import { formatPeriodLabel } from '@domain/entities/Attendance';
 import { summarizeByStudent, summarizeByPeriod } from '@domain/rules/attendanceRules';
@@ -15,7 +15,21 @@ import {
  * 학생×교시 출결 매트릭스 — headless 프레젠테이션 뷰.
  * 날짜·저장·dirty·일괄 액션 같은 셸 상태는 갖지 않는다(각 기능 셸이 소유).
  * 셀 클릭(상태 순환)·우클릭(사유 팝오버)은 콜백으로 위임한다.
+ *
+ * 표 골격은 table-fixed + colgroup 으로 교시 열 폭을 균등 고정한다(조회/종례가
+ * 잔여 폭을 흡수해 정규 교시만 좁아지던 문제 해소, attendance-grid-v2 P7.1).
+ * 이 골격 변경은 공유 뷰 전체(담임·수업관리)에 적용된다(§3.10-8).
+ * 담임 전용 옵션(blankPresent 등)은 opt-in prop(기본 off)로 격리한다.
  */
+
+/** 식별(왼쪽 고정) 열 폭 상수 (px) */
+const W_CHECK = 40;
+const W_GRADE = 64;
+const W_NUM = 48;
+const W_NAME = 128;
+const W_PERIOD = 48;
+const W_SUMMARY = 96;
+
 export interface AttendanceGridViewProps {
   students: readonly MatrixStudent[];
   matrix: MatrixState;
@@ -35,6 +49,11 @@ export interface AttendanceGridViewProps {
   selectedKeys?: ReadonlySet<string>;
   /** 체크박스 토글 콜백 (selectable 일 때) */
   onToggleSelect?: (sKey: string) => void;
+  /**
+   * opt-in(기본 off): true 면 출석(present) 칸을 아이콘 없이 빈칸으로 렌더한다.
+   * 담임 그리드는 예외만 표시(나이스식 '/' 모델), 수업관리는 미전달로 기존 아이콘 유지(§3.10-8).
+   */
+  blankPresent?: boolean;
 }
 
 export function AttendanceGridView({
@@ -48,6 +67,7 @@ export function AttendanceGridView({
   selectable = false,
   selectedKeys,
   onToggleSelect,
+  blankPresent = false,
 }: AttendanceGridViewProps) {
   const hasGradeInfo = useMemo(
     () => students.some((s) => s.grade != null || s.classNum != null),
@@ -58,6 +78,15 @@ export function AttendanceGridView({
     () => matchingPeriods ?? new Set<number>(),
     [matchingPeriods],
   );
+
+  /* 왼쪽 고정 식별 열들의 누적 left 오프셋 (sticky 열 겹침 방지) */
+  const stickyLeft = useMemo(() => {
+    const checkLeft = 0;
+    const gradeLeft = selectable ? W_CHECK : 0;
+    const numLeft = gradeLeft + (hasGradeInfo ? W_GRADE : 0);
+    const nameLeft = numLeft + W_NUM;
+    return { checkLeft, gradeLeft, numLeft, nameLeft };
+  }, [selectable, hasGradeInfo]);
 
   /* 도메인 집계용 Map 변환 */
   const matrixMap = useMemo(() => {
@@ -78,22 +107,47 @@ export function AttendanceGridView({
   const byPeriodStats = useMemo(() => summarizeByPeriod(matrixMap), [matrixMap]);
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-sp-border">
-      <table className="w-full border-collapse text-sm">
+    <div className="overflow-auto rounded-xl border border-sp-border max-h-full">
+      <table
+        className="border-collapse text-sm table-fixed"
+        style={{ width: 'max-content', minWidth: '100%' }}
+      >
+        <colgroup>
+          {selectable && <col style={{ width: W_CHECK }} />}
+          {hasGradeInfo && <col style={{ width: W_GRADE }} />}
+          <col style={{ width: W_NUM }} />
+          <col style={{ width: W_NAME }} />
+          {periods.map((p) => (
+            <col key={p} style={{ width: W_PERIOD }} />
+          ))}
+          <col style={{ width: W_SUMMARY }} />
+        </colgroup>
         <thead>
           <tr className="bg-sp-surface border-b border-sp-border">
             {selectable && (
-              <th className="sticky left-0 z-10 bg-sp-surface px-2 py-2 text-center min-w-[2rem]" />
+              <th
+                className="sticky top-0 z-30 bg-sp-surface px-2 py-2 text-center"
+                style={{ left: stickyLeft.checkLeft }}
+              />
             )}
             {hasGradeInfo && (
-              <th className="sticky left-0 z-10 bg-sp-surface px-3 py-2 text-sm text-sp-muted font-medium text-left whitespace-nowrap min-w-[4rem]">
+              <th
+                className="sticky top-0 z-30 bg-sp-surface px-3 py-2 text-sm text-sp-muted font-medium text-left whitespace-nowrap"
+                style={{ left: stickyLeft.gradeLeft }}
+              >
                 소속
               </th>
             )}
-            <th className="sticky left-0 z-10 bg-sp-surface px-2 py-2 text-sm text-sp-muted font-medium text-center whitespace-nowrap min-w-[2.5rem]">
+            <th
+              className="sticky top-0 z-30 bg-sp-surface px-2 py-2 text-sm text-sp-muted font-medium text-center whitespace-nowrap"
+              style={{ left: stickyLeft.numLeft }}
+            >
               번호
             </th>
-            <th className="sticky left-0 z-10 bg-sp-surface px-3 py-2 text-sm text-sp-muted font-medium text-left whitespace-nowrap min-w-[5rem]">
+            <th
+              className="sticky top-0 z-30 bg-sp-surface px-3 py-2 text-sm text-sp-muted font-medium text-left whitespace-nowrap"
+              style={{ left: stickyLeft.nameLeft }}
+            >
               이름
             </th>
             {periods.map((p) => {
@@ -101,21 +155,19 @@ export function AttendanceGridView({
               return (
                 <th
                   key={p}
-                  className={`px-1 py-2 text-sm font-medium text-center ${
-                    special ? 'min-w-[3rem]' : 'w-11'
-                  } whitespace-nowrap ${
+                  className={`sticky top-0 z-20 px-1 py-2 text-sm font-medium text-center whitespace-nowrap ${
                     effectiveMatchingPeriods.has(p)
                       ? 'bg-sp-accent/20 text-sp-accent'
                       : special
                         ? 'text-sp-muted/80 bg-sp-bg/40'
-                        : 'text-sp-muted'
+                        : 'text-sp-muted bg-sp-surface'
                   }`}
                 >
                   {formatPeriodLabel(p)}
                 </th>
               );
             })}
-            <th className="px-3 py-2 text-sm text-sp-muted font-medium text-center whitespace-nowrap min-w-[5rem]">
+            <th className="sticky top-0 z-20 bg-sp-surface px-3 py-2 text-sm text-sp-muted font-medium text-center whitespace-nowrap">
               요약
             </th>
           </tr>
@@ -129,7 +181,10 @@ export function AttendanceGridView({
             return (
               <tr key={sKey} className="hover:bg-sp-card/30 transition-colors">
                 {selectable && (
-                  <td className="sticky left-0 bg-sp-bg px-2 py-2 text-center">
+                  <td
+                    className="sticky z-10 bg-sp-bg px-2 py-2 text-center"
+                    style={{ left: stickyLeft.checkLeft }}
+                  >
                     <input
                       type="checkbox"
                       checked={selectedKeys?.has(sKey) ?? false}
@@ -140,16 +195,25 @@ export function AttendanceGridView({
                   </td>
                 )}
                 {hasGradeInfo && (
-                  <td className="sticky left-0 bg-sp-bg px-3 py-2 text-sm text-sp-muted whitespace-nowrap">
+                  <td
+                    className="sticky z-10 bg-sp-bg px-3 py-2 text-sm text-sp-muted whitespace-nowrap"
+                    style={{ left: stickyLeft.gradeLeft }}
+                  >
                     {student.grade != null && student.classNum != null
                       ? `${student.grade}-${student.classNum}`
                       : ''}
                   </td>
                 )}
-                <td className="sticky left-0 bg-sp-bg px-2 py-2 text-sm text-sp-muted text-center whitespace-nowrap font-medium">
+                <td
+                  className="sticky z-10 bg-sp-bg px-2 py-2 text-sm text-sp-muted text-center whitespace-nowrap font-medium"
+                  style={{ left: stickyLeft.numLeft }}
+                >
                   {student.number}
                 </td>
-                <td className="sticky left-0 bg-sp-bg px-3 py-2 text-base text-sp-text whitespace-nowrap">
+                <td
+                  className="sticky z-10 bg-sp-bg px-3 py-2 text-base text-sp-text whitespace-nowrap"
+                  style={{ left: stickyLeft.nameLeft }}
+                >
                   {onStudentNameClick ? (
                     <button
                       type="button"
@@ -160,7 +224,7 @@ export function AttendanceGridView({
                         )
                       }
                       title="클릭하면 이 학생의 교시를 자동으로 채워요 (결석·지각·조퇴·결과)"
-                      className="text-base text-sp-text hover:text-sp-accent underline-offset-2 hover:underline transition-colors"
+                      className="text-base text-sp-text hover:text-sp-accent underline-offset-2 hover:underline transition-colors truncate max-w-full"
                     >
                       {student.name}
                     </button>
@@ -173,6 +237,7 @@ export function AttendanceGridView({
                   const status: AttendanceStatus = att?.status ?? 'present';
                   const config = STATUS_CONFIG[status];
                   const periodLabel = formatPeriodLabel(p);
+                  const isPresent = status === 'present';
                   const titleParts = [
                     periodLabel,
                     config.label,
@@ -189,11 +254,17 @@ export function AttendanceGridView({
                         title={titleParts.join(' · ')}
                         aria-label={`${student.name} ${periodLabel} ${config.label}${att?.reason ? ` (${att.reason})` : ''}`}
                         className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all
-                                   cursor-pointer ${config.cell}`}
+                                   cursor-pointer ${
+                                     blankPresent && isPresent
+                                       ? 'text-transparent hover:bg-sp-surface'
+                                       : config.cell
+                                   }`}
                       >
-                        <span className="material-symbols-outlined text-lg leading-none">
-                          {config.icon}
-                        </span>
+                        {blankPresent && isPresent ? null : (
+                          <span className="material-symbols-outlined text-lg leading-none">
+                            {config.icon}
+                          </span>
+                        )}
                       </button>
                     </td>
                   );
@@ -218,10 +289,28 @@ export function AttendanceGridView({
 
           {/* ── 교시별 요약 행 ── */}
           <tr className="bg-sp-surface border-t border-sp-border">
-            {selectable && <td className="px-2 py-2" />}
-            {hasGradeInfo && <td className="px-3 py-2" />}
-            <td className="px-2 py-2" />
-            <td className="px-3 py-2 text-sm text-sp-muted font-medium">교시 합계</td>
+            {selectable && (
+              <td
+                className="sticky z-10 bg-sp-surface px-2 py-2"
+                style={{ left: stickyLeft.checkLeft }}
+              />
+            )}
+            {hasGradeInfo && (
+              <td
+                className="sticky z-10 bg-sp-surface px-3 py-2"
+                style={{ left: stickyLeft.gradeLeft }}
+              />
+            )}
+            <td
+              className="sticky z-10 bg-sp-surface px-2 py-2"
+              style={{ left: stickyLeft.numLeft }}
+            />
+            <td
+              className="sticky z-10 bg-sp-surface px-3 py-2 text-sm text-sp-muted font-medium whitespace-nowrap"
+              style={{ left: stickyLeft.nameLeft }}
+            >
+              교시 합계
+            </td>
             {periods.map((p) => {
               const ps = byPeriodStats.get(p);
               const nonPresent = ps

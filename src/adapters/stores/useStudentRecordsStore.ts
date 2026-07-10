@@ -95,7 +95,7 @@ export interface BridgeHomeroomDayParams {
   students: readonly Student[];
 }
 
-type ViewMode = 'input' | 'progress' | 'search';
+type ViewMode = 'attendance' | 'input' | 'progress' | 'search';
 type PeriodFilter = 'week' | 'month' | 'all' | 'custom' | 'semester';
 
 interface StudentRecordsState {
@@ -194,7 +194,8 @@ export const useStudentRecordsStore = create<StudentRecordsState>((set, get) => 
     records: [],
     categories: [...DEFAULT_RECORD_CATEGORIES],
     loaded: false,
-    viewMode: 'input',
+    // 기록 탭 첫 진입 화면 = 출결 (attendance-grid-v2 P7.1). 릴리즈 노트 고지 대상.
+    viewMode: 'attendance',
     periodFilter: 'month',
 
     load: async (force = false) => {
