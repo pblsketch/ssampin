@@ -7,6 +7,7 @@ import type { TeachingClassStudent, TeachingClass } from '@domain/entities/Teach
 import type { AttendanceStatus } from '@domain/entities/Attendance';
 import { studentKey } from '@domain/entities/TeachingClass';
 import { useMobileSettingsStore } from '@mobile/stores/useMobileSettingsStore';
+import { useMobileViewPrefsStore } from '@mobile/stores/useMobileViewPrefsStore';
 import { useMobileStudentStore } from '@mobile/stores/useMobileStudentStore';
 import { useMobileTeachingClassStore } from '@mobile/stores/useMobileTeachingClassStore';
 import { useMobileAttendanceStore } from '@mobile/stores/useMobileAttendanceStore';
@@ -33,8 +34,12 @@ type ClassSelection = 'homeroom' | string; // 'homeroom' 또는 teachingClass.id
 // ============================================================
 
 export function StudentsPage() {
-  const [viewMode, setViewMode] = useState<ViewMode>('seating');
+  // 좌석/명단 보기: 반별 저장 선호를 초기값으로 (기기별 localStorage 영속)
+  const [viewMode, setViewMode] = useState<ViewMode>(
+    () => useMobileViewPrefsStore.getState().getStudentsViewMode('homeroom') ?? 'seating',
+  );
   const [selectedClass, setSelectedClass] = useState<ClassSelection>('homeroom');
+  const setStudentsViewMode = useMobileViewPrefsStore((s) => s.setStudentsViewMode);
   const [seatingData, setSeatingData] = useState<SeatingData | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   // 반 전체 기록 모아보기(Feature B) — 담임반 선택 시 헤더 아이콘으로 진입하는 풀스크린 전환
@@ -96,13 +101,26 @@ export function StudentsPage() {
     });
   }, [loadSettings, loadStudents, loadTeachingClasses, loadAttendance, loadRecords, loadProgress]);
 
-  // 담임반이 선택되었는데 수업반 뷰로 전환되면 좌석 뷰 기본값 유지
-  // 수업반 선택 시 명단 뷰로 자동 전환 (좌석은 별도 지원)
+  // 반 전환 시 해당 반의 저장된 보기 선호를 복원한다 (없으면 담임=좌석, 수업반=명단).
+  // 수업반은 좌석 데이터가 없으면 저장 선호가 'seating'이어도 명단으로 폴백.
   useEffect(() => {
-    if (selectedClass !== 'homeroom') {
-      setViewMode('list');
+    const saved = useMobileViewPrefsStore.getState().getStudentsViewMode(selectedClass);
+    if (selectedClass === 'homeroom') {
+      setViewMode(saved ?? 'seating');
+    } else {
+      const hasSeating = teachingClasses.find((c) => c.id === selectedClass)?.seating != null;
+      setViewMode(saved === 'seating' && hasSeating ? 'seating' : 'list');
     }
-  }, [selectedClass]);
+  }, [selectedClass, teachingClasses]);
+
+  // 보기 토글: 화면 상태 변경 + 반별 선호 영속 저장
+  const changeViewMode = useCallback(
+    (mode: ViewMode) => {
+      setViewMode(mode);
+      setStudentsViewMode(selectedClass, mode);
+    },
+    [selectedClass, setStudentsViewMode],
+  );
 
   // 학생 ID → 학생 정보 맵 (담임반용)
   const studentMap = React.useMemo(() => {
@@ -328,7 +346,7 @@ export function StudentsPage() {
             {selectedClass === 'homeroom' && (
               <div className="flex items-center gap-1 bg-black/5 dark:bg-white/5 rounded-lg p-1">
                 <button
-                  onClick={() => setViewMode('seating')}
+                  onClick={() => changeViewMode('seating')}
                   className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                     viewMode === 'seating'
                       ? 'bg-sp-accent text-sp-accent-fg'
@@ -338,7 +356,7 @@ export function StudentsPage() {
                   좌석
                 </button>
                 <button
-                  onClick={() => setViewMode('list')}
+                  onClick={() => changeViewMode('list')}
                   className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                     viewMode === 'list'
                       ? 'bg-sp-accent text-sp-accent-fg'
@@ -354,7 +372,7 @@ export function StudentsPage() {
             {selectedClass !== 'homeroom' && selectedTeachingClass?.seating && (
               <div className="flex items-center gap-1 bg-black/5 dark:bg-white/5 rounded-lg p-1">
                 <button
-                  onClick={() => setViewMode('list')}
+                  onClick={() => changeViewMode('list')}
                   className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                     viewMode === 'list'
                       ? 'bg-sp-accent text-sp-accent-fg'
@@ -364,7 +382,7 @@ export function StudentsPage() {
                   명단
                 </button>
                 <button
-                  onClick={() => setViewMode('seating')}
+                  onClick={() => changeViewMode('seating')}
                   className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                     viewMode === 'seating'
                       ? 'bg-sp-accent text-sp-accent-fg'
