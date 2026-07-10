@@ -1,5 +1,13 @@
-import type { AttendanceRecord, AttendanceStatus, StudentAttendance } from '@domain/entities/Attendance';
-import { ATTENDANCE_STATUS_ORDER, PERIOD_MORNING, PERIOD_CLOSING } from '@domain/entities/Attendance';
+import type {
+  AttendanceRecord,
+  AttendanceStatus,
+  StudentAttendance,
+} from '@domain/entities/Attendance';
+import {
+  ATTENDANCE_STATUS_ORDER,
+  PERIOD_MORNING,
+  PERIOD_CLOSING,
+} from '@domain/entities/Attendance';
 import type { AttendancePeriodEntry } from '@domain/entities/StudentRecord';
 import { studentKey } from '@domain/entities/TeachingClass';
 
@@ -32,9 +40,7 @@ export function buildAttendanceMatrix(
   periods: readonly number[],
 ): Map<string, Map<number, StudentAttendance | undefined>> {
   // (classId, date) 필터링
-  const dayRecords = records.filter(
-    (r) => r.classId === classId && r.date === date,
-  );
+  const dayRecords = records.filter((r) => r.classId === classId && r.date === date);
 
   // period → students 조회 맵 구성
   const periodMap = new Map<number, readonly StudentAttendance[]>();
@@ -233,4 +239,79 @@ export function validateAttendancePeriods(
     seen.add(e.period);
   }
   return null;
+}
+
+/**
+ * 출결 유형 선택 시 교시 자동 채움 초기값을 계산한다.
+ *
+ * - absent(결석)       → 조회~종례 전체 {조회, 1..N, 종례}
+ * - late(지각)         → 조회~등교 교시 {조회, 1..referencePeriod} — 전 구간을 '지각' 상태로 기록
+ * - earlyLeave(조퇴)   → 하교 교시~종례 {referencePeriod..N, 종례}
+ * - classAbsence(결과) → 해당 교시만 {referencePeriod}
+ * - present            → 빈 Set (자동 채움 대상 아님)
+ *
+ * 계약: 비-present 상태는 절대 빈 Set을 반환하지 않는다.
+ * 빈 Set은 present/무예외 전용이다 — 교시 저장 경로 중 빈 선택을 '전 교시'로
+ * 해석하는 곳이 있어(담임 기록 카드), 비-present에 빈 Set이 흘러가면 한 교시
+ * 예외가 전 교시로 잘못 저장되는 데이터 오염이 된다.
+ *
+ * 반환값은 초기값일 뿐이며 사용자는 교시 단위로 자유롭게 override할 수 있다.
+ * 지각의 등교 전 교시를 '결과'로 바꾸는 자동화는 제공하지 않는다 —
+ * 같은 날 지각·조퇴·결과는 한 가지로만 처리하는 것이 학교생활기록부 기재
+ * 원칙이라(2026 기재요령 별표 8 §3 바) 이중 집계를 만들지 않는다.
+ *
+ * @param status             선택한 출결 유형
+ * @param referencePeriod    기준 교시 (지각=등교 교시, 조퇴=하교 교시, 결과=해당 교시.
+ *                           조회/종례 상수도 허용)
+ * @param regularPeriodCount 정규 교시 수 (1..N)
+ */
+export function computeAutoPeriods(
+  status: AttendanceStatus,
+  referencePeriod: number,
+  regularPeriodCount: number,
+): Set<number> {
+  const result = new Set<number>();
+
+  switch (status) {
+    case 'present':
+      return result;
+
+    case 'absent': {
+      result.add(PERIOD_MORNING);
+      for (let p = 1; p <= regularPeriodCount; p++) result.add(p);
+      result.add(PERIOD_CLOSING);
+      return result;
+    }
+
+    case 'late': {
+      result.add(PERIOD_MORNING);
+      if (referencePeriod === PERIOD_CLOSING) {
+        // 종례에야 등교 — 하루 전체가 지각 구간
+        for (let p = 1; p <= regularPeriodCount; p++) result.add(p);
+        result.add(PERIOD_CLOSING);
+      } else {
+        for (let p = 1; p <= Math.min(referencePeriod, regularPeriodCount); p++) {
+          result.add(p);
+        }
+      }
+      return result;
+    }
+
+    case 'earlyLeave': {
+      if (referencePeriod === PERIOD_MORNING) {
+        result.add(PERIOD_MORNING);
+      }
+      if (referencePeriod !== PERIOD_CLOSING) {
+        const start = referencePeriod === PERIOD_MORNING ? 1 : referencePeriod;
+        for (let p = start; p <= regularPeriodCount; p++) result.add(p);
+      }
+      result.add(PERIOD_CLOSING);
+      return result;
+    }
+
+    case 'classAbsence': {
+      result.add(referencePeriod);
+      return result;
+    }
+  }
 }

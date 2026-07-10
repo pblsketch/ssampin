@@ -7,6 +7,7 @@ import {
   summarizeTotal,
   pickRepresentativeAttendance,
   validateAttendancePeriods,
+  computeAutoPeriods,
 } from './attendanceRules';
 import type {
   AttendanceRecord,
@@ -276,5 +277,78 @@ describe('validateAttendancePeriods', () => {
       code: 'OUT_OF_RANGE',
       period: 99,
     });
+  });
+});
+
+describe('computeAutoPeriods — 교시 자동 채움 초기값', () => {
+  const N = 7; // 정규 교시 수
+
+  it('결석 → 조회~종례 전체', () => {
+    expect(computeAutoPeriods('absent', 3, N)).toEqual(
+      new Set([PERIOD_MORNING, 1, 2, 3, 4, 5, 6, 7, PERIOD_CLOSING]),
+    );
+  });
+
+  it('결석은 기준 교시와 무관하게 항상 전체', () => {
+    expect(computeAutoPeriods('absent', 1, N)).toEqual(computeAutoPeriods('absent', 7, N));
+  });
+
+  it('지각 3교시 → 조회~3교시 (건의 원문 그대로, 지각 상태로 기록)', () => {
+    expect(computeAutoPeriods('late', 3, N)).toEqual(new Set([PERIOD_MORNING, 1, 2, 3]));
+  });
+
+  it('지각 조회(0) → 조회만', () => {
+    expect(computeAutoPeriods('late', PERIOD_MORNING, N)).toEqual(new Set([PERIOD_MORNING]));
+  });
+
+  it('지각 종례(9) → 하루 전체가 지각 구간', () => {
+    expect(computeAutoPeriods('late', PERIOD_CLOSING, N)).toEqual(
+      new Set([PERIOD_MORNING, 1, 2, 3, 4, 5, 6, 7, PERIOD_CLOSING]),
+    );
+  });
+
+  it('조퇴 3교시 → 3교시~종례', () => {
+    expect(computeAutoPeriods('earlyLeave', 3, N)).toEqual(
+      new Set([3, 4, 5, 6, 7, PERIOD_CLOSING]),
+    );
+  });
+
+  it('조퇴 조회(0) → 조회~종례 전체', () => {
+    expect(computeAutoPeriods('earlyLeave', PERIOD_MORNING, N)).toEqual(
+      new Set([PERIOD_MORNING, 1, 2, 3, 4, 5, 6, 7, PERIOD_CLOSING]),
+    );
+  });
+
+  it('조퇴 종례(9) → 종례만', () => {
+    expect(computeAutoPeriods('earlyLeave', PERIOD_CLOSING, N)).toEqual(new Set([PERIOD_CLOSING]));
+  });
+
+  it('결과 3교시 → 해당 교시만 (빈 Set 아님)', () => {
+    expect(computeAutoPeriods('classAbsence', 3, N)).toEqual(new Set([3]));
+  });
+
+  it('present → 빈 Set (자동 채움 대상 아님)', () => {
+    expect(computeAutoPeriods('present', 3, N)).toEqual(new Set());
+  });
+
+  it('계약: 비-present 상태는 어떤 입력에서도 절대 빈 Set을 반환하지 않는다', () => {
+    const nonPresent = ['absent', 'late', 'earlyLeave', 'classAbsence'] as const;
+    const refs = [PERIOD_MORNING, 1, 3, 7, PERIOD_CLOSING];
+    for (const status of nonPresent) {
+      for (const ref of refs) {
+        expect(computeAutoPeriods(status, ref, N).size).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('정규 교시 수를 따른다 (regularPeriodCount=4)', () => {
+    expect(computeAutoPeriods('absent', 1, 4)).toEqual(
+      new Set([PERIOD_MORNING, 1, 2, 3, 4, PERIOD_CLOSING]),
+    );
+    expect(computeAutoPeriods('earlyLeave', 2, 4)).toEqual(new Set([2, 3, 4, PERIOD_CLOSING]));
+  });
+
+  it('지각 기준 교시가 정규 교시 수를 넘으면 정규 범위로 잘라낸다', () => {
+    expect(computeAutoPeriods('late', 6, 4)).toEqual(new Set([PERIOD_MORNING, 1, 2, 3, 4]));
   });
 });
