@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import type {
   AttendanceRecord,
   AttendanceStatus,
@@ -7,33 +7,35 @@ import type {
 } from '@domain/entities/Attendance';
 import { PERIOD_MORNING, PERIOD_CLOSING, ATTENDANCE_REASONS } from '@domain/entities/Attendance';
 import { computeAutoPeriods, summarizeTotal } from '@domain/rules/attendanceRules';
+import { parseAttendanceQuickText } from '@domain/rules/attendanceQuickText';
 import { studentKey } from '@domain/entities/TeachingClass';
 import { AttendanceGridView } from '@adapters/components/attendance/shared/AttendanceGridView';
 import {
   STATUS_CONFIG,
   STAT_COLORS,
   buildInitialMatrix,
+  buildByPeriodFromMatrix,
+  canonicalDaySignature,
+  recordsToByPeriod,
   type LocalStudentAttendance,
   type MatrixState,
   type MatrixStudent,
 } from '@adapters/components/attendance/shared/attendanceGridShared';
 
 /**
- * 담임 오늘 출결 그리드 — 담임 소유 얇은 셸 (attendance-grid-v2 팔레트 모델).
+ * 담임 오늘 출결 그리드 — 담임 소유 얇은 셸 (attendance-grid-v2 팔레트 + 자동 저장).
  *
- * 인터랙션: 팔레트에서 종류(결석/지각/조퇴/결과/지우개)+사유(질병/미인정/기타/인정)+비고를
- * 사전 설정 → 학생 행의 교시 칸을 클릭하면 그 교시를 기준으로 computeAutoPeriods 로 행 전체를
- * 재작성한다(§3.10-5 전-행 재작성: 찍힌 교시 외 clear, 전 교시 동일 사유·비고). 지우개는 칸=그
- * 칸만, 이름=하루 전체 지움. 저장 구조·미러·통계는 불변(교시별 fan-out 유지).
+ * 인터랙션: 팔레트(종류·사유·비고) 사전 설정 → 교시 칸 클릭 = 기준 교시로 행 전체
+ * 재작성(§3.10-5). 지우개(칸/이름), 텍스트 빠른 입력, undo/redo(Ctrl+Z), 오늘 비우기.
  *
- * 공유하는 것: headless 그리드 뷰(AttendanceGridView) + 도메인 규칙(attendanceRules).
- * 담임 셸이 소유하는 것: 매트릭스 편집 상태, 팔레트, 저장 위임(onSaveDay).
- * 날짜와 교시 목록(periods)은 호스트(AttendanceMode)가 단일 출처로 내려준다.
+ * 자동 저장(§3.10-1): 편집 시 800ms 디바운스로 조용히 저장한다. 성공 토스트 없이
+ * "저장됨 ✓" 상태칩만. **dirty-gate가 주 메커니즘**(편집 중이면 외부 스냅샷 변경으로
+ * 재시드하지 않음 = 포커스된 그리드가 이긴다) + **자기 저장 서명이 보조**(비-dirty 시
+ * 자기 저장의 store 반영을 canonical 서명으로 식별해 불필요한 재구성 방지).
+ * 플러시 3종: 날짜 이동 · 언마운트 · window blur/beforeunload.
+ *
  * 스토어 직접 import 금지(저장·데이터는 호스트 위임) — 단일 기록자 메타 가드.
- *
- * 주의: 이 컴포넌트를 장착하는 호스트는 반드시 렌더 게이트를 앞단에 둬야 한다 —
- * 담임 학생은 studentKey === String(number)라 번호가 겹치면 그리드에서 한 행으로
- * 병합 렌더되므로, 번호 충돌 시 그리드 대신 정리 안내를 렌더할 것.
+ * 렌더 게이트(번호 충돌)는 호스트(AttendanceMode)가 앞단에서 처리한다.
  */
 export interface HomeroomAttendanceGridProps {
   /** 담임 학생 목록 (번호순 정렬, number 기반 식별) */
@@ -44,10 +46,7 @@ export interface HomeroomAttendanceGridProps {
   date: string;
   /** (date) → 해당 날짜의 AttendanceRecord 배열 */
   loadDayRecords: (date: string) => readonly AttendanceRecord[];
-  /**
-   * 하루치 저장 위임 — 호스트가 saveDayAttendance 호출과
-   * number→studentId 재매핑을 통한 StudentRecord 미러 조립까지 책임진다.
-   */
+  /** 하루치 저장 위임 — 호스트가 saveDayAttendance + 미러 조립까지 책임진다. */
   onSaveDay: (
     date: string,
     byPeriod: ReadonlyMap<number, readonly StudentAttendance[]>,
@@ -58,6 +57,11 @@ export interface HomeroomAttendanceGridProps {
 
 /** 팔레트 종류 = 예외 상태 4종 + 지우개 */
 type PaletteType = Exclude<AttendanceStatus, 'present'> | 'eraser';
+/** undo/redo 단위 = 행 스냅샷(studentKey → 이전 row 전체) */
+type RowVal = Record<number, LocalStudentAttendance | undefined> | undefined;
+interface UndoEntry {
+  rows: { sKey: string; row: RowVal }[];
+}
 
 const TYPE_ITEMS: readonly Exclude<AttendanceStatus, 'present'>[] = [
   'absent',
@@ -66,13 +70,15 @@ const TYPE_ITEMS: readonly Exclude<AttendanceStatus, 'present'>[] = [
   'classAbsence',
 ];
 
-/** 종류별 칸 클릭 안내(기준 교시 의미) */
 const TYPE_HINT: Record<Exclude<AttendanceStatus, 'present'>, string> = {
   absent: '아무 칸이나 클릭 → 전 교시 결석',
   late: '등교한 교시 칸 클릭 → 조회~그 교시 지각',
   earlyLeave: '하교한 교시 칸 클릭 → 그 교시~종례 조퇴',
   classAbsence: '해당 교시 칸 클릭 → 그 교시만 결과',
 };
+
+const AUTOSAVE_DEBOUNCE_MS = 800;
+const MAX_UNDO = 50;
 
 export function HomeroomAttendanceGrid({
   students,
@@ -83,36 +89,210 @@ export function HomeroomAttendanceGrid({
   periods,
 }: HomeroomAttendanceGridProps) {
   const [matrix, setMatrix] = useState<MatrixState>({});
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [dirty, setDirty] = useState(false);
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
 
-  /* ── 팔레트 상태 (종류 + 사유 + 비고) ── */
+  /* 팔레트 상태 */
   const [paletteType, setPaletteType] = useState<PaletteType>('absent');
   const [paletteReason, setPaletteReason] = useState<AttendanceReason>('질병');
   const [paletteMemo, setPaletteMemo] = useState('');
+
+  /* undo/redo 표시 상태 (스택은 ref) */
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
+
+  /* 텍스트 빠른 입력 / 오늘 비우기 모달 */
+  const [showTextPanel, setShowTextPanel] = useState(false);
+  const [textInput, setTextInput] = useState('');
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+
+  /* ── refs (자동 저장 상태 소유 — 스토어 직접 import 금지) ── */
+  const matrixRef = useRef<MatrixState>(matrix);
+  const dirtyRef = useRef(false);
+  const dateRef = useRef(date);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingSigRef = useRef<Set<string>>(new Set());
+  const undoStackRef = useRef<UndoEntry[]>([]);
+  const redoStackRef = useRef<UndoEntry[]>([]);
+  const externalFirstRun = useRef(true);
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    // StrictMode 이중 호출 대비: 마운트마다 true로 되돌린다(cleanup만 두면 false로 고착).
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  /* 최신 props를 클로저 밖에서 읽기 위한 ref (외부 재시드 effect용) */
+  const latestRef = useRef({ classId, date, students, periods, loadDayRecords });
+  latestRef.current = { classId, date, students, periods, loadDayRecords };
+
+  useEffect(() => {
+    matrixRef.current = matrix;
+  }, [matrix]);
 
   /** 정규 교시 수 (조회/종례 제외) — computeAutoPeriods 의 periodCount */
   const regularPeriodCount = useMemo(
     () => periods.filter((p) => p !== PERIOD_MORNING && p !== PERIOD_CLOSING).length,
     [periods],
   );
+  // 원시 배열 periods를 dep로 쓰기 위한 안정 키(값 비교). 복합식(periods.join)을 dep 배열에
+  // 직접 두면 여러 줄로 나뉠 때 lint 억제 주석이 첫 줄만 덮으므로, 이 변수를 dep에 둔다.
+  const periodsKey = periods.join(',');
 
-  /* 날짜/학생 변경 시 저장본에서 재시드 */
-  useEffect(() => {
-    const records = loadDayRecords(date);
-    setMatrix(buildInitialMatrix(records, classId, date, students, periods));
-    setDirty(false);
-    setSaveStatus('idle');
-    // periods는 원시 배열이므로 직렬화로 의존성 비교
+  const setDirtyBoth = useCallback((v: boolean) => {
+    dirtyRef.current = v;
+    setDirty(v);
+  }, []);
+
+  const refreshUndoState = useCallback(() => {
+    setCanUndo(undoStackRef.current.length > 0);
+    setCanRedo(redoStackRef.current.length > 0);
+  }, []);
+
+  const clearUndo = useCallback(() => {
+    undoStackRef.current = [];
+    redoStackRef.current = [];
+    setCanUndo(false);
+    setCanRedo(false);
+  }, []);
+
+  /* 편집 전 행 스냅샷 push (undo). 새 편집이면 redo 초기화. */
+  const pushUndo = useCallback(
+    (keys: readonly string[]) => {
+      const cur = matrixRef.current;
+      undoStackRef.current.push({ rows: keys.map((sKey) => ({ sKey, row: cur[sKey] })) });
+      if (undoStackRef.current.length > MAX_UNDO) undoStackRef.current.shift();
+      redoStackRef.current = [];
+      refreshUndoState();
+    },
+    [refreshUndoState],
+  );
+
+  /* ── 자동 저장 ──
+   * silent=true: 플러시(날짜 이동·언마운트) — setState 없이 저장만(언마운트 경고 방지). */
+  const flushSave = useCallback(
+    async (silent = false) => {
+      if (saveTimerRef.current != null) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+      if (!dirtyRef.current) return;
+      const snapMatrix = matrixRef.current;
+      const snapDate = dateRef.current;
+      const byPeriod = buildByPeriodFromMatrix(snapMatrix, students, periods);
+      const sig = canonicalDaySignature(byPeriod);
+      pendingSigRef.current.add(sig);
+      dirtyRef.current = false;
+      if (!silent) {
+        setDirty(false);
+        setSaveStatus('saving');
+      }
+      try {
+        await onSaveDay(snapDate, byPeriod);
+        // 저장 중 다시 편집됐으면 조용히 대기(다음 디바운스가 처리)
+        if (!silent && mountedRef.current) setSaveStatus(dirtyRef.current ? 'idle' : 'saved');
+      } catch {
+        pendingSigRef.current.delete(sig);
+        dirtyRef.current = true;
+        if (!silent && mountedRef.current) {
+          setDirty(true);
+          setSaveStatus('error');
+        }
+      }
+    },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [classId, date, loadDayRecords, students, periods.join(',')]);
+    [onSaveDay, students, periodsKey],
+  );
 
-  /* 팔레트 적용 = 칸 클릭. 지우개면 그 칸만 clear, 아니면 기준 교시로 전-행 재작성. */
+  const scheduleSave = useCallback(() => {
+    if (saveTimerRef.current != null) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      void flushSave();
+    }, AUTOSAVE_DEBOUNCE_MS);
+  }, [flushSave]);
+
+  /* 편집 커밋 공통 후처리 */
+  const commitEdit = useCallback(() => {
+    setDirtyBoth(true);
+    setSaveStatus('idle');
+    scheduleSave();
+  }, [setDirtyBoth, scheduleSave]);
+
+  /* 저장본에서 재시드(공통) — 매트릭스 교체 + undo/상태 초기화 */
+  const reseedFrom = useCallback(
+    (
+      records: readonly AttendanceRecord[],
+      cid: string,
+      d: string,
+      sts: readonly MatrixStudent[],
+      ps: readonly number[],
+      resetDirty: boolean,
+    ) => {
+      setMatrix(buildInitialMatrix(records, cid, d, sts, ps));
+      if (resetDirty) setDirtyBoth(false);
+      setSaveStatus('idle');
+      clearUndo();
+    },
+    [setDirtyBoth, clearUndo],
+  );
+
+  /* 구조적 재시드(날짜/학생/학급/교시 변경) + 플러시(날짜 이동·언마운트) */
+  useEffect(() => {
+    dateRef.current = date;
+    const records = loadDayRecords(date);
+    reseedFrom(records, classId, date, students, periods, true);
+    return () => {
+      // 떠나는 날짜(또는 언마운트) → 대기 중 저장 플러시 (플러시 3종 ①②). silent=재시드/언마운트 경고 방지
+      void flushSave(true);
+    };
+    // loadDayRecords는 store 스냅샷 변화로 매 저장마다 identity가 바뀌므로 dep에서 제외
+    // (외부 변경 재시드는 아래 dirty-gate effect가 담당). date/students/classId/periods만 구조 트리거.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [classId, date, students, periodsKey]);
+
+  /* 외부 변경 재시드 — dirty-gate(주) + 자기 저장 서명(보조) */
+  useEffect(() => {
+    if (externalFirstRun.current) {
+      externalFirstRun.current = false;
+      return; // 최초 마운트는 구조 effect가 이미 시드
+    }
+    if (dirtyRef.current) return; // dirty-gate: 편집 중이면 포커스된 그리드가 이긴다
+    const {
+      classId: cid,
+      date: d,
+      students: sts,
+      periods: ps,
+      loadDayRecords: load,
+    } = latestRef.current;
+    const records = load(d);
+    const sig = canonicalDaySignature(recordsToByPeriod(records));
+    if (pendingSigRef.current.has(sig)) {
+      pendingSigRef.current.delete(sig);
+      return; // 자기 저장의 store 반영 — 재구성 불필요
+    }
+    reseedFrom(records, cid, d, sts, ps, false); // 진짜 외부 변경 → 재시드
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadDayRecords]);
+
+  /* 플러시 3종 ③ — window blur / beforeunload */
+  useEffect(() => {
+    const onBlur = () => void flushSave();
+    window.addEventListener('blur', onBlur);
+    window.addEventListener('beforeunload', onBlur);
+    return () => {
+      window.removeEventListener('blur', onBlur);
+      window.removeEventListener('beforeunload', onBlur);
+    };
+  }, [flushSave]);
+
+  /* ── 팔레트 적용 = 칸 클릭 ── */
   const handleCellClick = useCallback(
     (sKey: string, period: number) => {
       const student = students.find((s) => studentKey(s) === sKey);
       if (!student) return;
-
+      pushUndo([sKey]);
       if (paletteType === 'eraser') {
         setMatrix((prev) => {
           const row = { ...(prev[sKey] ?? {}) };
@@ -134,33 +314,42 @@ export function HomeroomAttendanceGrid({
           return { ...prev, [sKey]: row };
         });
       }
-      setDirty(true);
-      setSaveStatus('idle');
+      commitEdit();
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [students, paletteType, paletteReason, paletteMemo, regularPeriodCount, periods.join(',')],
+    [
+      students,
+      paletteType,
+      paletteReason,
+      paletteMemo,
+      regularPeriodCount,
+      periodsKey,
+      pushUndo,
+      commitEdit,
+    ],
   );
 
-  /* 이름 클릭 = (지우개 모드에서만) 그 학생 하루 전체 지움 */
+  /* 이름 클릭 = (지우개 모드) 그 학생 하루 전체 지움 */
   const handleNameClick = useCallback(
     (sKey: string) => {
       if (paletteType !== 'eraser') return;
+      pushUndo([sKey]);
       setMatrix((prev) => {
         const row: Record<number, LocalStudentAttendance | undefined> = {};
         for (const p of periods) row[p] = undefined;
         return { ...prev, [sKey]: row };
       });
-      setDirty(true);
-      setSaveStatus('idle');
+      commitEdit();
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [paletteType, periods.join(',')],
+    [paletteType, periodsKey, pushUndo, commitEdit],
   );
 
   /* 사유(비고) 인라인 편집 = 찍힌 교시 전체로 memo fan-out (§3.10-5) */
   const handleMemoEdit = useCallback(
     (sKey: string, memo: string) => {
       const memoText = memo.trim() || undefined;
+      pushUndo([sKey]);
       setMatrix((prev) => {
         const row = prev[sKey];
         if (!row) return prev;
@@ -176,53 +365,134 @@ export function HomeroomAttendanceGrid({
         if (!changed) return prev;
         return { ...prev, [sKey]: next };
       });
-      setDirty(true);
-      setSaveStatus('idle');
+      commitEdit();
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [periods.join(',')],
+    [periodsKey, pushUndo, commitEdit],
   );
 
-  /* 우클릭은 팔레트 모델에서 미사용 (컨텍스트 메뉴 무시) */
   const handleCellContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
   }, []);
 
-  const handleReset = useCallback(() => {
-    const records = loadDayRecords(date);
-    setMatrix(buildInitialMatrix(records, classId, date, students, periods));
-    setDirty(false);
-    setSaveStatus('idle');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [classId, date, loadDayRecords, students, periods.join(',')]);
-
-  const handleSave = useCallback(async () => {
-    setSaveStatus('saving');
-    const byPeriod = new Map<number, StudentAttendance[]>();
-    for (const p of periods) {
-      const periodStudents: StudentAttendance[] = [];
-      for (const [sKey, row] of Object.entries(matrix)) {
-        const att = row?.[p];
-        if (att) {
-          const student = students.find((s) => studentKey(s) === sKey);
-          periodStudents.push({
-            number: att.number || (student?.number ?? 0),
-            status: att.status,
-            ...(att.reason ? { reason: att.reason } : {}),
-            ...(att.memo ? { memo: att.memo } : {}),
-          });
-        }
+  /* ── undo / redo ── */
+  const undo = useCallback(() => {
+    const entry = undoStackRef.current.pop();
+    if (!entry) return;
+    const cur = matrixRef.current;
+    redoStackRef.current.push({ rows: entry.rows.map(({ sKey }) => ({ sKey, row: cur[sKey] })) });
+    setMatrix((prev) => {
+      const next = { ...prev };
+      for (const { sKey, row } of entry.rows) {
+        if (row === undefined) delete next[sKey];
+        else next[sKey] = row;
       }
-      byPeriod.set(p, periodStudents);
-    }
-    await onSaveDay(date, byPeriod);
-    setSaveStatus('saved');
-    setDirty(false);
-    setTimeout(() => setSaveStatus('idle'), 2000);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [date, matrix, students, onSaveDay, periods.join(',')]);
+      return next;
+    });
+    commitEdit();
+    refreshUndoState();
+  }, [commitEdit, refreshUndoState]);
 
-  /* 상단 요약 (전체 카운트) */
+  const redo = useCallback(() => {
+    const entry = redoStackRef.current.pop();
+    if (!entry) return;
+    const cur = matrixRef.current;
+    undoStackRef.current.push({ rows: entry.rows.map(({ sKey }) => ({ sKey, row: cur[sKey] })) });
+    setMatrix((prev) => {
+      const next = { ...prev };
+      for (const { sKey, row } of entry.rows) {
+        if (row === undefined) delete next[sKey];
+        else next[sKey] = row;
+      }
+      return next;
+    });
+    commitEdit();
+    refreshUndoState();
+  }, [commitEdit, refreshUndoState]);
+
+  /* Ctrl+Z / Ctrl+Shift+Z */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = document.activeElement as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        if (e.shiftKey) redo();
+        else undo();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [undo, redo]);
+
+  /* 오늘 기록 비우기 (확인 후 전 행 clear + 저장) */
+  const clearToday = useCallback(() => {
+    const keys = students.map((s) => studentKey(s));
+    pushUndo(keys);
+    setMatrix((prev) => {
+      const next = { ...prev };
+      for (const sKey of keys) {
+        const row: Record<number, LocalStudentAttendance | undefined> = {};
+        for (const p of periods) row[p] = undefined;
+        next[sKey] = row;
+      }
+      return next;
+    });
+    commitEdit();
+    setShowClearConfirm(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [students, periodsKey, pushUndo, commitEdit]);
+
+  /* ── 텍스트 빠른 입력 ── */
+  const parsedLines = useMemo(() => {
+    if (!showTextPanel || textInput.trim() === '') return [];
+    return parseAttendanceQuickText(
+      textInput,
+      students.map((s) => ({ number: s.number, name: s.name })),
+      regularPeriodCount,
+    );
+  }, [showTextPanel, textInput, students, regularPeriodCount]);
+
+  const okLineCount = useMemo(() => parsedLines.filter((l) => l.ok).length, [parsedLines]);
+
+  const applyText = useCallback(() => {
+    const applies = parsedLines
+      .filter((l) => l.ok && l.result)
+      .map((l) => {
+        const student = students.find((s) => s.number === l.result!.studentNumber);
+        return student ? { student, res: l.result! } : null;
+      })
+      .filter(
+        (
+          a,
+        ): a is {
+          student: MatrixStudent;
+          res: NonNullable<(typeof parsedLines)[number]['result']>;
+        } => a !== null,
+      );
+    if (applies.length === 0) return;
+    pushUndo(applies.map((a) => studentKey(a.student)));
+    setMatrix((prev) => {
+      const next = { ...prev };
+      for (const { student, res } of applies) {
+        const fill = new Set(res.periods);
+        const row: Record<number, LocalStudentAttendance | undefined> = {};
+        for (const p of periods) {
+          row[p] = fill.has(p)
+            ? { number: student.number, status: res.status, reason: res.reason, memo: res.memo }
+            : undefined;
+        }
+        next[studentKey(student)] = row;
+      }
+      return next;
+    });
+    commitEdit();
+    setShowTextPanel(false);
+    setTextInput('');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [parsedLines, students, periodsKey, pushUndo, commitEdit]);
+
+  /* 상단 요약(전체 카운트) */
   const matrixMap = useMemo(() => {
     const m = new Map<string, Map<number, StudentAttendance | undefined>>();
     for (const [sKey, row] of Object.entries(matrix)) {
@@ -232,7 +502,7 @@ export function HomeroomAttendanceGrid({
     }
     return m;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [matrix, periods.join(',')]);
+  }, [matrix, periodsKey]);
   const totalStats = useMemo(() => summarizeTotal(matrixMap), [matrixMap]);
 
   if (students.length === 0) {
@@ -291,7 +561,6 @@ export function HomeroomAttendanceGrid({
 
           <div className="flex-1" />
 
-          {/* 현재 선택 크게 강조 */}
           <span
             className={`px-3 py-1 rounded-lg text-sm font-bold ${
               isEraser ? 'bg-sp-card text-sp-text' : 'bg-sp-accent/15 text-sp-accent'
@@ -301,7 +570,6 @@ export function HomeroomAttendanceGrid({
           </span>
         </div>
 
-        {/* 사유 + 비고 (지우개일 땐 숨김) */}
         {!isEraser && (
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-xs text-sp-muted w-8 shrink-0">사유</span>
@@ -340,8 +608,8 @@ export function HomeroomAttendanceGrid({
         </p>
       </div>
 
-      {/* ── 요약 + 저장 바 ── */}
-      <div className="flex items-center gap-4 bg-sp-surface border border-sp-border rounded-xl px-4 py-2.5 flex-wrap">
+      {/* ── 도구 + 저장 상태 바 ── */}
+      <div className="flex items-center gap-3 bg-sp-surface border border-sp-border rounded-xl px-4 py-2.5 flex-wrap">
         <span className="text-xs text-sp-muted">전체 {students.length}명</span>
         <span className="text-sp-border">|</span>
         {(['absent', 'late', 'earlyLeave', 'classAbsence'] as AttendanceStatus[]).map((status) => (
@@ -355,46 +623,83 @@ export function HomeroomAttendanceGrid({
             </span>
           </div>
         ))}
+
         <div className="flex-1" />
-        <button
-          onClick={handleReset}
-          className="flex items-center gap-1 px-2.5 py-1 text-xs text-sp-muted hover:text-sp-text
-                     bg-sp-card border border-sp-border rounded-lg transition-colors hover:border-sp-accent/50"
-          title="저장된 데이터로 되돌리기"
+
+        {/* 저장 상태칩 (조용) */}
+        <span
+          aria-live="polite"
+          className={`flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-lg ${
+            saveStatus === 'saving'
+              ? 'text-sp-muted bg-sp-card'
+              : saveStatus === 'error'
+                ? 'text-red-400 bg-red-500/10'
+                : dirty
+                  ? 'text-sp-muted bg-sp-card'
+                  : saveStatus === 'saved'
+                    ? 'text-green-400 bg-green-500/10'
+                    : 'text-sp-muted/60'
+          }`}
         >
-          <span className="material-symbols-outlined text-sm">restart_alt</span>
-          변경 초기화
+          <span className="material-symbols-outlined text-sm">
+            {saveStatus === 'saving'
+              ? 'progress_activity'
+              : saveStatus === 'error'
+                ? 'error'
+                : dirty
+                  ? 'edit'
+                  : saveStatus === 'saved'
+                    ? 'check_circle'
+                    : 'cloud_done'}
+          </span>
+          {saveStatus === 'saving'
+            ? '저장 중...'
+            : saveStatus === 'error'
+              ? '저장 실패 — 다시 편집하면 재시도'
+              : dirty
+                ? '저장 대기'
+                : saveStatus === 'saved'
+                  ? '저장됨 ✓'
+                  : '자동 저장'}
+        </span>
+
+        <button
+          onClick={() => setShowTextPanel(true)}
+          className="flex items-center gap-1 px-2.5 py-1 text-xs text-sp-muted hover:text-sp-text bg-sp-card border border-sp-border rounded-lg transition-colors hover:border-sp-accent/50"
+          title="여러 줄로 한 번에 입력"
+        >
+          <span className="material-symbols-outlined text-sm">edit_note</span>
+          텍스트로 입력
         </button>
         <button
-          onClick={() => void handleSave()}
-          disabled={saveStatus === 'saving'}
-          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium
-                     transition-all duration-200 ${
-                       saveStatus === 'saved'
-                         ? 'bg-green-500/20 text-green-400'
-                         : 'bg-sp-accent text-white hover:bg-sp-accent/80'
-                     } ${
-                       dirty && saveStatus === 'idle'
-                         ? 'animate-pulse ring-2 ring-sp-accent/50'
-                         : ''
-                     } disabled:opacity-50 disabled:cursor-not-allowed`}
+          onClick={undo}
+          disabled={!canUndo}
+          aria-label="되돌리기"
+          className="flex items-center gap-1 px-2 py-1 text-xs text-sp-muted hover:text-sp-text bg-sp-card border border-sp-border rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          title="되돌리기 (Ctrl+Z)"
         >
-          <span className="material-symbols-outlined text-lg">
-            {saveStatus === 'saved'
-              ? 'check'
-              : saveStatus === 'saving'
-                ? 'hourglass_empty'
-                : 'save'}
-          </span>
-          {saveStatus === 'saved'
-            ? '저장됨!'
-            : saveStatus === 'saving'
-              ? '저장 중...'
-              : '출결 저장'}
+          <span className="material-symbols-outlined text-sm">undo</span>
+        </button>
+        <button
+          onClick={redo}
+          disabled={!canRedo}
+          aria-label="다시 실행"
+          className="flex items-center gap-1 px-2 py-1 text-xs text-sp-muted hover:text-sp-text bg-sp-card border border-sp-border rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          title="다시 실행 (Ctrl+Shift+Z)"
+        >
+          <span className="material-symbols-outlined text-sm">redo</span>
+        </button>
+        <button
+          onClick={() => setShowClearConfirm(true)}
+          className="flex items-center gap-1 px-2.5 py-1 text-xs text-sp-muted hover:text-red-400 bg-sp-card border border-sp-border rounded-lg transition-colors hover:border-red-500/40"
+          title="오늘 출결을 전부 지웁니다"
+        >
+          <span className="material-symbols-outlined text-sm">delete_sweep</span>
+          오늘 기록 비우기
         </button>
       </div>
 
-      {/* 공용 headless 그리드 뷰 (팔레트 클릭 적용 · 구분/사유 열 · 출석 빈칸) */}
+      {/* 공용 headless 그리드 뷰 */}
       <AttendanceGridView
         students={students}
         matrix={matrix}
@@ -407,6 +712,112 @@ export function HomeroomAttendanceGrid({
         reasonColumn
         onMemoEdit={handleMemoEdit}
       />
+
+      {/* ── 텍스트 빠른 입력 패널 ── */}
+      {showTextPanel && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-sp-card border border-sp-border rounded-2xl p-5 w-[640px] max-w-[92vw] max-h-[85vh] flex flex-col shadow-2xl">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-bold text-sp-text flex items-center gap-2">
+                <span className="material-symbols-outlined text-base">edit_note</span>
+                텍스트로 빠르게 입력
+              </h3>
+              <button
+                onClick={() => setShowTextPanel(false)}
+                className="text-sp-muted hover:text-sp-text transition-colors"
+              >
+                <span className="material-symbols-outlined text-lg">close</span>
+              </button>
+            </div>
+            <div className="text-xs text-sp-muted bg-sp-surface rounded-lg px-3 py-2 mb-2 leading-relaxed">
+              한 줄에 한 명씩:{' '}
+              <span className="text-sp-text font-medium">학생 [교시] [사유] 종류 [비고]</span>
+              <br />
+              예: <span className="text-sp-text">김정민 2교시 질병 지각 감기</span> ·{' '}
+              <span className="text-sp-text">이서연 조회 미인정 지각</span> ·{' '}
+              <span className="text-sp-text">4 3교시 미인정 결과</span>
+              <br />
+              결석은 교시를 생략하면 전 교시로 처리돼요. 사유를 생략하면 ‘기타’.
+            </div>
+            <textarea
+              value={textInput}
+              onChange={(e) => setTextInput(e.target.value)}
+              placeholder={
+                '김정민 2교시 질병 지각 감기\n이서연 조회 미인정 지각\n4 3교시 미인정 결과'
+              }
+              autoFocus
+              className="w-full h-32 bg-sp-surface border border-sp-border rounded-lg p-3 text-sm text-sp-text placeholder:text-sp-muted/50 resize-none focus:outline-none focus:ring-1 focus:ring-sp-accent"
+            />
+            {/* 미리보기 */}
+            {parsedLines.length > 0 && (
+              <div className="mt-2 flex-1 overflow-y-auto border border-sp-border rounded-lg p-2 space-y-1 min-h-0">
+                {parsedLines.map((line) => (
+                  <div
+                    key={line.lineNo}
+                    className={`flex items-start gap-1.5 text-xs ${
+                      line.ok ? 'text-sp-text' : 'text-red-400'
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-sm leading-none mt-0.5">
+                      {line.ok ? 'check' : 'close'}
+                    </span>
+                    <span>
+                      {line.ok
+                        ? line.result!.preview
+                        : `${line.lineNo}행: ${line.error} (${line.raw})`}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="flex justify-end gap-2 mt-3">
+              <button
+                onClick={() => setShowTextPanel(false)}
+                className="px-4 py-2 rounded-lg text-sm font-medium bg-sp-surface text-sp-muted hover:text-sp-text transition-colors"
+              >
+                취소
+              </button>
+              <button
+                onClick={applyText}
+                disabled={okLineCount === 0}
+                className="px-4 py-2 rounded-lg text-sm font-bold bg-sp-accent text-white hover:bg-sp-accent/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {okLineCount > 0 ? `${okLineCount}명 적용` : '적용'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 오늘 기록 비우기 확인 ── */}
+      {showClearConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-sp-card border border-sp-border rounded-2xl p-6 w-80 shadow-2xl">
+            <h3 className="text-base font-bold text-sp-text flex items-center gap-2 mb-3">
+              <span className="material-symbols-outlined text-red-400">delete_sweep</span>
+              오늘 기록 비우기
+            </h3>
+            <p className="text-sm text-sp-muted mb-4 leading-relaxed">
+              이 날짜의 출결을 모두 지우고 전원 출석으로 되돌려요. 되돌리기(Ctrl+Z)로 복구할 수
+              있어요.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowClearConfirm(false)}
+                className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-sp-surface text-sp-muted hover:text-sp-text transition-colors"
+              >
+                취소
+              </button>
+              <button
+                onClick={clearToday}
+                className="flex-1 py-2.5 rounded-xl text-sm font-bold bg-red-500/90 text-white hover:bg-red-500 transition-colors"
+              >
+                모두 비우기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

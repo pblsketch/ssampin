@@ -97,3 +97,68 @@ export function buildInitialMatrix(
   }
   return obj;
 }
+
+/**
+ * 매트릭스 → 교시별 저장 페이로드(byPeriod) 투영.
+ * 예외(비-present) 엔트리만 담고, 출석(빈칸=undefined)은 저장하지 않는다.
+ * 자동 저장·수동 저장이 같은 투영을 쓰도록 단일 정의한다(§3.10-1).
+ */
+export function buildByPeriodFromMatrix(
+  matrix: MatrixState,
+  students: readonly { number: number; name: string }[],
+  periods: readonly number[],
+): Map<number, StudentAttendance[]> {
+  const byPeriod = new Map<number, StudentAttendance[]>();
+  for (const p of periods) {
+    const arr: StudentAttendance[] = [];
+    for (const [sKey, row] of Object.entries(matrix)) {
+      const att = row?.[p];
+      if (att) {
+        const student = students.find((s) => studentKey(s) === sKey);
+        arr.push({
+          number: att.number || (student?.number ?? 0),
+          status: att.status,
+          ...(att.reason ? { reason: att.reason } : {}),
+          ...(att.memo ? { memo: att.memo } : {}),
+        });
+      }
+    }
+    byPeriod.set(p, arr);
+  }
+  return byPeriod;
+}
+
+/**
+ * 하루치 출결의 canonical 내용 다이제스트 — 자기 저장 서명(§3.10-1).
+ *
+ * 빈 교시 제외 · 교시 정렬 · 학생 정렬 · reason/memo 정규화를 저장측·재시드측에
+ * **동일 적용**한다. `saveDayAttendance`가 빈 교시를 삭제하므로 보낸 byPeriod와 읽은
+ * records의 형태가 달라도 이 투영을 거치면 같은 문자열이 된다. 카운트류 요약이 아니라
+ * 내용 다이제스트여야 서로 다른 편집을 구분한다.
+ */
+export function canonicalDaySignature(
+  byPeriod: ReadonlyMap<number, readonly StudentAttendance[]>,
+): string {
+  const rows: string[] = [];
+  const sortedPeriods = [...byPeriod.keys()].sort((a, b) => a - b);
+  for (const p of sortedPeriods) {
+    const entries = byPeriod.get(p) ?? [];
+    if (entries.length === 0) continue;
+    const parts = entries
+      .map((s) => `${s.number}:${s.status}:${s.reason ?? ''}:${s.memo ?? ''}`)
+      .sort();
+    rows.push(`${p}|${parts.join(',')}`);
+  }
+  return rows.join(';');
+}
+
+/** AttendanceRecord[] → 교시별 Map (재시드측 canonical 서명 계산용). */
+export function recordsToByPeriod(
+  records: readonly AttendanceRecord[],
+): Map<number, StudentAttendance[]> {
+  const m = new Map<number, StudentAttendance[]>();
+  for (const r of records) {
+    m.set(r.period, [...r.students]);
+  }
+  return m;
+}

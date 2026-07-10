@@ -73,7 +73,7 @@ export function AttendanceMode({ students, selectedDate, onDateChange }: Attenda
       // 미러: bridge 가 students(id+번호)로 number→studentId 재매핑을 수행해
       // att-{studentId}-{date} StudentRecord 를 조립한다.
       await bridgeHomeroomDayAttendance({ className, date, recordsByPeriod, students });
-      showToast('출결을 저장했어요', 'success');
+      // 자동 저장 성공 토스트 금지(§3.10-1) — 조용한 "저장됨 ✓" 상태칩으로 대체. 오류만 그리드가 표시.
     },
     [className, saveDayAttendance, bridgeHomeroomDayAttendance, students, showToast],
   );
