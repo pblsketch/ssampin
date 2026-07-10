@@ -933,7 +933,8 @@ function InputMode({
               <span className="material-symbols-outlined text-base">fact_check</span>
               오늘 출결
               <span className="text-sp-muted font-normal text-xs">
-                {formatDateKR(selectedDate)} · 칸 클릭: 출석→결석→지각→조퇴→결과 · 우클릭: 사유
+                {formatDateKR(selectedDate)} · 이름 클릭: 교시 자동 채움 · 칸 클릭: 상태 순환 ·
+                우클릭: 사유
               </span>
             </h3>
             <span className="material-symbols-outlined text-sp-muted">

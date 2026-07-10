@@ -24,6 +24,11 @@ export interface AttendanceGridViewProps {
   matchingPeriods?: ReadonlySet<number>;
   onCellClick: (sKey: string, period: number) => void;
   onCellContextMenu: (e: React.MouseEvent, sKey: string, period: number) => void;
+  /**
+   * 자동채움 훅(선택): 지정 시 학생 이름이 버튼이 되고, 클릭하면 앵커 좌표와 함께 호출된다.
+   * 셸이 상태 선택 → computeAutoPeriods 행 채움 팝오버를 띄우는 용도 (담임 셸에서 사용).
+   */
+  onStudentNameClick?: (sKey: string, anchorRect: DOMRect) => void;
 }
 
 export function AttendanceGridView({
@@ -33,6 +38,7 @@ export function AttendanceGridView({
   matchingPeriods,
   onCellClick,
   onCellContextMenu,
+  onStudentNameClick,
 }: AttendanceGridViewProps) {
   const hasGradeInfo = useMemo(
     () => students.some((s) => s.grade != null || s.classNum != null),
@@ -121,7 +127,23 @@ export function AttendanceGridView({
                   {student.number}
                 </td>
                 <td className="sticky left-0 bg-sp-bg px-3 py-2 text-sm text-sp-text whitespace-nowrap">
-                  {student.name}
+                  {onStudentNameClick ? (
+                    <button
+                      type="button"
+                      onClick={(e) =>
+                        onStudentNameClick(
+                          sKey,
+                          (e.currentTarget as HTMLElement).getBoundingClientRect(),
+                        )
+                      }
+                      title="클릭하면 이 학생의 교시를 자동으로 채워요 (결석·지각·조퇴·결과)"
+                      className="text-sm text-sp-text hover:text-sp-accent underline-offset-2 hover:underline transition-colors"
+                    >
+                      {student.name}
+                    </button>
+                  ) : (
+                    student.name
+                  )}
                 </td>
                 {periods.map((p) => {
                   const att = row[p];
