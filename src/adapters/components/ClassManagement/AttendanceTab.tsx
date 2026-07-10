@@ -17,7 +17,7 @@ import { exportAttendanceToExcel } from '@infrastructure/export';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { getCurrentPeriod, getDayOfWeek } from '@domain/rules/periodRules';
 import { AttendanceMatrixView } from './AttendanceMatrixView';
-import { AttendanceDetailEditor } from './shared/AttendanceDetailEditor';
+import { AttendanceDetailEditor } from '@adapters/components/attendance/shared/AttendanceDetailEditor';
 import { MultiDatePicker } from '@adapters/components/common/MultiDatePicker';
 
 /* ──────────────────────── 유틸 ──────────────────────── */

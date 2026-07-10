@@ -24,9 +24,7 @@ export function AttendanceDetailEditor({
 }: AttendanceDetailEditorProps) {
   if (status === 'present') {
     return (
-      <p
-        className={`text-sp-muted/70 ${compact ? 'text-caption pt-0.5' : 'text-xs pt-1'}`}
-      >
+      <p className={`text-sp-muted/70 ${compact ? 'text-caption pt-0.5' : 'text-xs pt-1'}`}>
         결석·지각·조퇴·결과로 변경하면 사유와 메모를 입력할 수 있어요.
       </p>
     );
@@ -44,7 +42,9 @@ export function AttendanceDetailEditor({
     <div className={`flex flex-col gap-1.5 ${compact ? 'pt-1' : 'pt-2'}`}>
       {/* 사유 chip */}
       <div className="flex items-center gap-1 flex-wrap">
-        <span className={`text-sp-muted font-medium shrink-0 ${compact ? 'text-caption' : 'text-xs'}`}>
+        <span
+          className={`text-sp-muted font-medium shrink-0 ${compact ? 'text-caption' : 'text-xs'}`}
+        >
           사유
         </span>
         {ATTENDANCE_REASONS.map((r) => (
