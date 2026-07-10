@@ -1052,13 +1052,13 @@ function InputMode({
                   <button
                     key={student.id}
                     onClick={() => toggleStudent(student.id)}
-                    className={`px-1.5 py-2.5 rounded-lg text-xs font-medium transition-all text-center ${
+                    className={`px-1.5 py-2.5 rounded-lg text-sm font-medium transition-all text-center ${
                       isSelected
                         ? 'bg-sp-accent text-white ring-1 ring-sp-accent'
                         : 'bg-sp-surface text-sp-text hover:bg-sp-surface/80'
                     }`}
                   >
-                    <div className="text-caption opacity-60 tabular-nums">{num}</div>
+                    <div className="text-xs opacity-60 tabular-nums">{num}</div>
                     <div className="truncate">{student.name}</div>
                   </button>
                 );

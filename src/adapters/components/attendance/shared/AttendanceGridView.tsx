@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+﻿import { useMemo } from 'react';
 import type { AttendanceStatus, StudentAttendance } from '@domain/entities/Attendance';
 import { formatPeriodLabel } from '@domain/entities/Attendance';
 import { summarizeByStudent, summarizeByPeriod } from '@domain/rules/attendanceRules';
@@ -74,14 +74,14 @@ export function AttendanceGridView({
         <thead>
           <tr className="bg-sp-surface border-b border-sp-border">
             {hasGradeInfo && (
-              <th className="sticky left-0 z-10 bg-sp-surface px-3 py-2 text-xs text-sp-muted font-medium text-left whitespace-nowrap min-w-[4rem]">
+              <th className="sticky left-0 z-10 bg-sp-surface px-3 py-2 text-sm text-sp-muted font-medium text-left whitespace-nowrap min-w-[4rem]">
                 소속
               </th>
             )}
-            <th className="sticky left-0 z-10 bg-sp-surface px-2 py-2 text-xs text-sp-muted font-medium text-center whitespace-nowrap min-w-[2.5rem]">
+            <th className="sticky left-0 z-10 bg-sp-surface px-2 py-2 text-sm text-sp-muted font-medium text-center whitespace-nowrap min-w-[2.5rem]">
               번호
             </th>
-            <th className="sticky left-0 z-10 bg-sp-surface px-3 py-2 text-xs text-sp-muted font-medium text-left whitespace-nowrap min-w-[5rem]">
+            <th className="sticky left-0 z-10 bg-sp-surface px-3 py-2 text-sm text-sp-muted font-medium text-left whitespace-nowrap min-w-[5rem]">
               이름
             </th>
             {periods.map((p) => {
@@ -89,8 +89,8 @@ export function AttendanceGridView({
               return (
                 <th
                   key={p}
-                  className={`px-1 py-2 text-xs font-medium text-center ${
-                    special ? 'min-w-[3rem]' : 'w-10'
+                  className={`px-1 py-2 text-sm font-medium text-center ${
+                    special ? 'min-w-[3rem]' : 'w-11'
                   } whitespace-nowrap ${
                     effectiveMatchingPeriods.has(p)
                       ? 'bg-sp-accent/20 text-sp-accent'
@@ -103,7 +103,7 @@ export function AttendanceGridView({
                 </th>
               );
             })}
-            <th className="px-3 py-2 text-xs text-sp-muted font-medium text-center whitespace-nowrap min-w-[5rem]">
+            <th className="px-3 py-2 text-sm text-sp-muted font-medium text-center whitespace-nowrap min-w-[5rem]">
               요약
             </th>
           </tr>
@@ -117,16 +117,16 @@ export function AttendanceGridView({
             return (
               <tr key={sKey} className="hover:bg-sp-card/30 transition-colors">
                 {hasGradeInfo && (
-                  <td className="sticky left-0 bg-sp-bg px-3 py-2 text-xs text-sp-muted whitespace-nowrap">
+                  <td className="sticky left-0 bg-sp-bg px-3 py-2 text-sm text-sp-muted whitespace-nowrap">
                     {student.grade != null && student.classNum != null
                       ? `${student.grade}-${student.classNum}`
                       : ''}
                   </td>
                 )}
-                <td className="sticky left-0 bg-sp-bg px-2 py-2 text-xs text-sp-muted text-center whitespace-nowrap font-medium">
+                <td className="sticky left-0 bg-sp-bg px-2 py-2 text-sm text-sp-muted text-center whitespace-nowrap font-medium">
                   {student.number}
                 </td>
-                <td className="sticky left-0 bg-sp-bg px-3 py-2 text-sm text-sp-text whitespace-nowrap">
+                <td className="sticky left-0 bg-sp-bg px-3 py-2 text-base text-sp-text whitespace-nowrap">
                   {onStudentNameClick ? (
                     <button
                       type="button"
@@ -137,7 +137,7 @@ export function AttendanceGridView({
                         )
                       }
                       title="클릭하면 이 학생의 교시를 자동으로 채워요 (결석·지각·조퇴·결과)"
-                      className="text-sm text-sp-text hover:text-sp-accent underline-offset-2 hover:underline transition-colors"
+                      className="text-base text-sp-text hover:text-sp-accent underline-offset-2 hover:underline transition-colors"
                     >
                       {student.name}
                     </button>
@@ -165,10 +165,10 @@ export function AttendanceGridView({
                         onContextMenu={(e) => onCellContextMenu(e, sKey, p)}
                         title={titleParts.join(' · ')}
                         aria-label={`${student.name} ${periodLabel} ${config.label}${att?.reason ? ` (${att.reason})` : ''}`}
-                        className={`w-9 h-9 rounded-lg flex items-center justify-center transition-all
+                        className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all
                                    cursor-pointer ${config.cell}`}
                       >
-                        <span className="material-symbols-outlined text-base leading-none">
+                        <span className="material-symbols-outlined text-lg leading-none">
                           {config.icon}
                         </span>
                       </button>
@@ -182,7 +182,7 @@ export function AttendanceGridView({
                       (['absent', 'late', 'earlyLeave', 'classAbsence'] as AttendanceStatus[])
                         .filter((s) => (studentStats[s] ?? 0) > 0)
                         .map((s) => (
-                          <span key={s} className={`text-caption font-medium ${STAT_COLORS[s]}`}>
+                          <span key={s} className={`text-xs font-medium ${STAT_COLORS[s]}`}>
                             {STATUS_CONFIG[s].label}
                             {studentStats[s]}
                           </span>
@@ -197,7 +197,7 @@ export function AttendanceGridView({
           <tr className="bg-sp-surface border-t border-sp-border">
             {hasGradeInfo && <td className="px-3 py-2" />}
             <td className="px-2 py-2" />
-            <td className="px-3 py-2 text-xs text-sp-muted font-medium">교시 합계</td>
+            <td className="px-3 py-2 text-sm text-sp-muted font-medium">교시 합계</td>
             {periods.map((p) => {
               const ps = byPeriodStats.get(p);
               const nonPresent = ps
@@ -209,10 +209,10 @@ export function AttendanceGridView({
                 <td key={p} className="px-0.5 py-2 text-center">
                   <div className="flex flex-col items-center gap-0.5">
                     {nonPresent.length === 0 ? (
-                      <span className="text-caption text-sp-muted/40">-</span>
+                      <span className="text-xs text-sp-muted/40">-</span>
                     ) : (
                       nonPresent.map((s) => (
-                        <span key={s} className={`text-caption font-medium ${STAT_COLORS[s]}`}>
+                        <span key={s} className={`text-xs font-medium ${STAT_COLORS[s]}`}>
                           {STATUS_CONFIG[s].label}
                           {ps![s]}
                         </span>
