@@ -1,5 +1,6 @@
 import { parseDescription, parseInlineMarks } from '@usecases/releaseNotes/parseDescription';
 import type { InlineNode } from '@usecases/releaseNotes/parseDescription';
+import { handleExternalLinkClick } from '@adapters/utils/openExternalUrl';
 
 interface DescriptionRendererProps {
   description: string | null | undefined;
@@ -75,6 +76,7 @@ function InlineNodes({ nodes, boldClassName }: InlineNodesProps) {
               href={inline.href}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={(e) => handleExternalLinkClick(e, inline.href)}
               className="text-sp-accent underline underline-offset-2 hover:opacity-80 break-all"
             >
               {inline.value}

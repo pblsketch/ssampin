@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { DescriptionRenderer, InlineMarkup } from '@adapters/components/common/DescriptionRenderer';
+import { handleExternalLinkClick } from '@adapters/utils/openExternalUrl';
 
 function DeveloperModal({ onClose }: { onClose: () => void }) {
   const [imgError, setImgError] = useState(false);
@@ -79,6 +80,7 @@ function DeveloperModal({ onClose }: { onClose: () => void }) {
               href={project.url}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={(e) => handleExternalLinkClick(e, project.url)}
               className="px-2.5 py-1 rounded-lg bg-sp-surface text-xs text-sp-muted ring-1 ring-sp-border transition-colors hover:ring-sp-accent/50 hover:text-sp-accent cursor-pointer"
             >
               {project.name}
@@ -449,6 +451,7 @@ export function AppInfoSection() {
                                       href={c.notionUrl}
                                       target="_blank"
                                       rel="noopener noreferrer"
+                                      onClick={(e) => handleExternalLinkClick(e, c.notionUrl)}
                                       className="inline-flex items-center gap-1 mt-1 text-detail text-sp-accent hover:underline"
                                     >
                                       자세히 보기

@@ -8,6 +8,7 @@ import {
   shouldShowUpdateModal,
 } from '@adapters/stores/useUpdatePreferencesStore';
 import { useRegisterModal } from '@adapters/hooks/useRegisterModal';
+import { handleExternalLinkClick } from '@adapters/utils/openExternalUrl';
 
 const GUIDE_URL = 'https://www.ssampin.com/docs';
 const FEEDBACK_FORM_URL = 'https://forms.gle/o1X4zLYocUpFKCzy7';
@@ -407,12 +408,13 @@ export function UpdateNotification() {
                               href={c.notionUrl}
                               target="_blank"
                               rel="noopener noreferrer"
-                              onClick={() =>
+                              onClick={(e) => {
+                                handleExternalLinkClick(e, c.notionUrl);
                                 track('release_notes_notion_link_clicked', {
                                   version: note.version,
                                   title: c.title,
-                                })
-                              }
+                                });
+                              }}
                               className="inline-flex items-center gap-1 mt-1.5 text-detail text-sp-accent hover:underline"
                             >
                               자세히 보기
@@ -452,6 +454,7 @@ export function UpdateNotification() {
                 href={GUIDE_URL}
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={(e) => handleExternalLinkClick(e, GUIDE_URL)}
                 className="flex items-center gap-1 text-xs text-sp-muted hover:text-sp-text transition-colors"
               >
                 사용 가이드
@@ -463,6 +466,7 @@ export function UpdateNotification() {
                 href={FEEDBACK_FORM_URL}
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={(e) => handleExternalLinkClick(e, FEEDBACK_FORM_URL)}
                 className="flex items-center gap-1 text-xs text-sp-muted hover:text-sp-text transition-colors"
               >
                 피드백

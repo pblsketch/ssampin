@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, type MouseEvent } from 'react';
 import type { HelpChatMessage as MessageType } from './types';
 import { ChatFeedback } from './ChatFeedback';
+import { openExternalUrl, handleExternalLinkClick } from '@adapters/utils/openExternalUrl';
 
 const OFFICIAL_GUIDE_URL = 'https://www.ssampin.com/docs';
 const OFFICIAL_GUIDE_TEXT = `더 자세한 설명은 공식 사용자 가이드에서 확인할 수 있어요: ${OFFICIAL_GUIDE_URL}`;
@@ -29,6 +30,19 @@ function splitOfficialGuideFooter(content: string): { body: string; hasGuideFoot
 
 function linkOfficialGuideUrl(html: string): string {
   return html.split(OFFICIAL_GUIDE_URL).join(OFFICIAL_GUIDE_LINK);
+}
+
+/**
+ * dangerouslySetInnerHTML로 삽입된 링크(OFFICIAL_GUIDE_LINK 등)는 React onClick을
+ * 붙일 수 없으므로, 컨테이너에서 이벤트 위임으로 가로채 OS 브라우저로 연다.
+ * (Electron 보안 가드가 <a target="_blank">를 막는 문제 회피)
+ */
+function handleRenderedHtmlClick(e: MouseEvent<HTMLDivElement>): void {
+  const anchor = (e.target as HTMLElement).closest('a');
+  if (anchor?.href) {
+    e.preventDefault();
+    openExternalUrl(anchor.href);
+  }
 }
 
 function renderSimpleMarkdown(text: string): string {
@@ -102,6 +116,7 @@ export function HelpChatMessage({
           {guideContent.body && (
             <div
               className="whitespace-pre-wrap break-words [&_strong]:font-semibold"
+              onClick={handleRenderedHtmlClick}
               dangerouslySetInnerHTML={{ __html: renderSimpleMarkdown(guideContent.body) }}
             />
           )}
@@ -158,6 +173,7 @@ export function HelpChatMessage({
                 href={OFFICIAL_GUIDE_URL}
                 target="_blank"
                 rel="noreferrer"
+                onClick={(e) => handleExternalLinkClick(e, OFFICIAL_GUIDE_URL)}
                 className="font-semibold text-sp-accent underline underline-offset-2"
               >
                 공식 사용자 가이드
