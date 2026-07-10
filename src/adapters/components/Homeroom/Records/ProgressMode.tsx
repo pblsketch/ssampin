@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, type ComponentProps } from 'react';
+import { useState, useMemo, useCallback, Fragment, type ComponentProps } from 'react';
 import type { StudentRecord } from '@domain/entities/StudentRecord';
 import type { Student } from '@domain/entities/Student';
 import {
@@ -9,7 +9,14 @@ import {
   getWarningStudents,
 } from '@domain/rules/studentRecordRules';
 import { useStudentRecordsStore } from '@adapters/stores/useStudentRecordsStore';
+import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { isStudentActive } from '@domain/rules/studentActivity';
+import {
+  summarizeNeisAttendance,
+  type NeisAttendanceCounts,
+  type NeisReasonAxis,
+} from '@domain/rules/attendanceRules';
 import { SummaryCard, StatBadge } from './RecordStatCards';
 import {
   type ModeProps,
@@ -24,6 +31,283 @@ import { studentRecordToDisplay, type DisplayRecord } from '@adapters/presentati
 import { RecordDetailModal } from '@adapters/components/common/records/RecordDetailModal';
 
 type StatBadgeColor = ComponentProps<typeof StatBadge>['color'];
+
+/* ── 생활기록부 기준 출결 집계 (P6 — 기재요령 별표 8 §3 정합) ── */
+
+const NEIS_STATUS_COLUMNS = [
+  { key: 'absent', label: '결석' },
+  { key: 'late', label: '지각' },
+  { key: 'earlyLeave', label: '조퇴' },
+  { key: 'classAbsence', label: '결과' },
+] as const;
+
+const NEIS_REASON_AXES: readonly NeisReasonAxis[] = ['질병', '미인정', '기타'];
+
+const NEIS_FOOTNOTE =
+  '같은 날 지각·조퇴·결과가 겹치면 학교생활기록부 기재요령에 따라 한 가지로만 집계합니다(학교장 판단 사항 — 쌤핀 기본: 결석>조퇴>지각>결과). 출석인정(인정) 사유는 횟수에 포함하지 않습니다. 결석은 교시 수와 무관하게 1일 1회입니다.';
+
+function NeisAttendanceSection({
+  students,
+  dateFrom,
+  dateTo,
+  periodLabel,
+}: {
+  students: readonly Student[];
+  dateFrom?: string;
+  dateTo?: string;
+  periodLabel: string;
+}) {
+  const className = useSettingsStore((s) => s.settings.className);
+  const attendanceRecords = useTeachingClassStore((s) => s.attendanceRecords);
+  const [open, setOpen] = useState(true);
+  const [showBreakdown, setShowBreakdown] = useState(false);
+
+  const rows = useMemo(
+    () =>
+      students
+        .filter((s) => isStudentActive(s) && s.studentNumber != null && s.studentNumber > 0)
+        .sort((a, b) => (a.studentNumber ?? 0) - (b.studentNumber ?? 0)),
+    [students],
+  );
+
+  const stats = useMemo(() => {
+    if (!className) return new Map<string, NeisAttendanceCounts>();
+    return summarizeNeisAttendance(
+      attendanceRecords,
+      className,
+      rows.map((s) => ({ number: s.studentNumber ?? 0 })),
+      dateFrom,
+      dateTo,
+    );
+  }, [className, attendanceRecords, rows, dateFrom, dateTo]);
+
+  const totals = useMemo(() => {
+    const t = { absent: 0, late: 0, earlyLeave: 0, classAbsence: 0 };
+    for (const c of stats.values()) {
+      t.absent += c.absent;
+      t.late += c.late;
+      t.earlyLeave += c.earlyLeave;
+      t.classAbsence += c.classAbsence;
+    }
+    return t;
+  }, [stats]);
+
+  /* 인쇄 — 현재 보기(요약/사유 상세) 그대로 A4 가로 인쇄 (2종 옵션) */
+  const handlePrint = useCallback(() => {
+    const title = `${className || '우리 반'} 출결 집계 (${periodLabel})`;
+    const headCols = showBreakdown
+      ? NEIS_STATUS_COLUMNS.map((c) => `<th colspan="4">${c.label}</th>`).join('')
+      : NEIS_STATUS_COLUMNS.map((c) => `<th>${c.label}</th>`).join('');
+    const subHead = showBreakdown
+      ? `<tr><th></th><th></th>${NEIS_STATUS_COLUMNS.map(
+          () => `<th>계</th>${NEIS_REASON_AXES.map((r) => `<th>${r}</th>`).join('')}`,
+        ).join('')}</tr>`
+      : '';
+    const bodyRows = rows
+      .map((s) => {
+        const c = stats.get(String(s.studentNumber ?? 0));
+        const cells = NEIS_STATUS_COLUMNS.map((col) => {
+          const total = c?.[col.key] ?? 0;
+          if (!showBreakdown) return `<td>${total || ''}</td>`;
+          const reasons = NEIS_REASON_AXES.map(
+            (r) => `<td>${c?.byReason[r][col.key] || ''}</td>`,
+          ).join('');
+          return `<td>${total || ''}</td>${reasons}`;
+        }).join('');
+        return `<tr><td>${s.studentNumber}</td><td class="name">${s.name}</td>${cells}</tr>`;
+      })
+      .join('');
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title><style>
+      @page { size: A4 landscape; margin: 12mm; }
+      body { font-family: 'Malgun Gothic', sans-serif; color: #111; }
+      h1 { font-size: 16px; margin: 0 0 4px; }
+      .meta { font-size: 11px; color: #555; margin-bottom: 10px; }
+      table { border-collapse: collapse; width: 100%; font-size: 11px; }
+      th, td { border: 1px solid #999; padding: 3px 6px; text-align: center; }
+      td.name { text-align: left; }
+      tfoot td { font-weight: bold; background: #f2f2f2; }
+      .footnote { font-size: 9px; color: #666; margin-top: 8px; line-height: 1.5; }
+    </style></head><body>
+      <h1>${title}</h1>
+      <div class="meta">${showBreakdown ? '사유 상세' : '요약'} · 인쇄일 ${new Date().toLocaleDateString('ko-KR')}</div>
+      <table><thead><tr><th rowspan="${showBreakdown ? 2 : 1}">번호</th><th rowspan="${showBreakdown ? 2 : 1}">이름</th>${headCols}</tr>${subHead}</thead>
+      <tbody>${bodyRows}</tbody>
+      <tfoot><tr><td colspan="2">합계</td>${NEIS_STATUS_COLUMNS.map((col) => {
+        if (!showBreakdown) return `<td>${totals[col.key] || ''}</td>`;
+        const reasonTotals = NEIS_REASON_AXES.map((r) => {
+          let sum = 0;
+          for (const c of stats.values()) sum += c.byReason[r][col.key];
+          return `<td>${sum || ''}</td>`;
+        }).join('');
+        return `<td>${totals[col.key] || ''}</td>${reasonTotals}`;
+      }).join('')}</tr></tfoot></table>
+      <p class="footnote">${NEIS_FOOTNOTE}</p>
+    </body></html>`;
+    const w = window.open('', '_blank', 'width=1000,height=700');
+    if (!w) return;
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    w.print();
+  }, [className, periodLabel, showBreakdown, rows, stats, totals]);
+
+  if (rows.length === 0) return null;
+
+  return (
+    <div className="rounded-xl bg-sp-card p-4">
+      <div className="flex items-center gap-2 flex-wrap">
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="flex items-center gap-2 text-left"
+          aria-expanded={open}
+        >
+          <span className="material-symbols-outlined text-base text-sp-accent">table_chart</span>
+          <span className="text-sm font-bold text-sp-text">출결 집계 (생활기록부 기준)</span>
+          <span className="text-xs text-sp-muted">{periodLabel}</span>
+          <span className="material-symbols-outlined text-sp-muted text-base">
+            {open ? 'expand_less' : 'expand_more'}
+          </span>
+        </button>
+        <div className="flex-1" />
+        <button
+          type="button"
+          onClick={() => setShowBreakdown((v) => !v)}
+          className={`flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg border transition-colors ${
+            showBreakdown
+              ? 'bg-sp-accent/15 text-sp-accent border-sp-accent/50'
+              : 'text-sp-muted hover:text-sp-text bg-sp-surface border-sp-border'
+          }`}
+        >
+          <span className="material-symbols-outlined text-sm">unfold_more_double</span>
+          사유 상세
+        </button>
+        <button
+          type="button"
+          onClick={handlePrint}
+          className="flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg border border-sp-border bg-sp-surface text-sp-muted hover:text-sp-text transition-colors"
+          title="현재 보기(요약/사유 상세)를 A4 가로로 인쇄"
+        >
+          <span className="material-symbols-outlined text-sm">print</span>
+          인쇄
+        </button>
+      </div>
+
+      {open && (
+        <>
+          <div className="mt-3 overflow-x-auto rounded-lg border border-sp-border">
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="bg-sp-surface text-sp-muted">
+                  <th rowSpan={showBreakdown ? 2 : 1} className="px-2 py-2 text-sm font-medium">
+                    번호
+                  </th>
+                  <th
+                    rowSpan={showBreakdown ? 2 : 1}
+                    className="px-3 py-2 text-sm font-medium text-left"
+                  >
+                    이름
+                  </th>
+                  {NEIS_STATUS_COLUMNS.map((col) => (
+                    <th
+                      key={col.key}
+                      colSpan={showBreakdown ? 4 : 1}
+                      className="px-2 py-2 text-sm font-medium border-l border-sp-border"
+                    >
+                      {col.label}
+                    </th>
+                  ))}
+                </tr>
+                {showBreakdown && (
+                  <tr className="bg-sp-surface text-sp-muted">
+                    {NEIS_STATUS_COLUMNS.map((col) => (
+                      <Fragment key={col.key}>
+                        <th className="px-2 py-1 text-xs font-medium border-l border-sp-border">
+                          계
+                        </th>
+                        {NEIS_REASON_AXES.map((r) => (
+                          <th key={r} className="px-2 py-1 text-xs font-normal">
+                            {r}
+                          </th>
+                        ))}
+                      </Fragment>
+                    ))}
+                  </tr>
+                )}
+              </thead>
+              <tbody className="divide-y divide-sp-border/50">
+                {rows.map((s) => {
+                  const c = stats.get(String(s.studentNumber ?? 0));
+                  return (
+                    <tr key={s.id} className="hover:bg-sp-surface/50 transition-colors">
+                      <td className="px-2 py-1.5 text-center text-sm text-sp-muted tabular-nums">
+                        {s.studentNumber}
+                      </td>
+                      <td className="px-3 py-1.5 text-sm text-sp-text whitespace-nowrap">
+                        {s.name}
+                      </td>
+                      {NEIS_STATUS_COLUMNS.map((col) => {
+                        const total = c?.[col.key] ?? 0;
+                        return (
+                          <Fragment key={col.key}>
+                            <td
+                              className={`px-2 py-1.5 text-center text-sm border-l border-sp-border/60 ${
+                                total > 0 ? 'text-sp-text font-medium' : 'text-sp-muted/40'
+                              }`}
+                            >
+                              {total > 0 ? total : '·'}
+                            </td>
+                            {showBreakdown &&
+                              NEIS_REASON_AXES.map((r) => {
+                                const v = c?.byReason[r][col.key] ?? 0;
+                                return (
+                                  <td
+                                    key={r}
+                                    className={`px-2 py-1.5 text-center text-xs ${
+                                      v > 0 ? 'text-sp-text' : 'text-sp-muted/30'
+                                    }`}
+                                  >
+                                    {v > 0 ? v : '·'}
+                                  </td>
+                                );
+                              })}
+                          </Fragment>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
+                <tr className="bg-sp-surface border-t border-sp-border">
+                  <td colSpan={2} className="px-3 py-1.5 text-sm text-sp-muted font-medium">
+                    합계
+                  </td>
+                  {NEIS_STATUS_COLUMNS.map((col) => (
+                    <Fragment key={col.key}>
+                      <td className="px-2 py-1.5 text-center text-sm font-bold text-sp-text border-l border-sp-border/60">
+                        {totals[col.key] || '·'}
+                      </td>
+                      {showBreakdown &&
+                        NEIS_REASON_AXES.map((r) => {
+                          let sum = 0;
+                          for (const c of stats.values()) sum += c.byReason[r][col.key];
+                          return (
+                            <td key={r} className="px-2 py-1.5 text-center text-xs text-sp-muted">
+                              {sum || '·'}
+                            </td>
+                          );
+                        })}
+                    </Fragment>
+                  ))}
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-2 text-caption text-sp-muted leading-relaxed">{NEIS_FOOTNOTE}</p>
+        </>
+      )}
+    </div>
+  );
+}
 
 /** 통계 수치 — 값>0이면 클릭 가능(상세 모달 열기), 아니면 단순 배지. */
 function ClickableStat({
@@ -115,6 +399,22 @@ function ProgressMode({ students, records, categories }: ModeProps) {
     }
     return records as StudentRecord[];
   }, [records, statsPeriod, customStart, customEnd]);
+
+  // 생활기록부 기준 출결 집계용 기간 문자열 (YYYY-MM-DD) — 기존 기간 필터와 동일 기준
+  const neisRange = useMemo((): { from?: string; to?: string; label: string } => {
+    if (statsPeriod === 'week') {
+      const { start, end } = getWeekRange();
+      return { from: toDateInputString(start), to: toDateInputString(end), label: '이번 주' };
+    }
+    if (statsPeriod === 'month') {
+      const { start, end } = getMonthRange();
+      return { from: toDateInputString(start), to: toDateInputString(end), label: '이번 달' };
+    }
+    if (statsPeriod === 'custom') {
+      return { from: customStart, to: customEnd, label: `${customStart} ~ ${customEnd}` };
+    }
+    return { label: '전체 기간' };
+  }, [statsPeriod, customStart, customEnd]);
 
   // Summary cards
   const summary = useMemo(() => getCategorySummary(filteredRecords), [filteredRecords]);
@@ -632,6 +932,14 @@ function ProgressMode({ students, records, categories }: ModeProps) {
           </div>
         )}
       </div>
+
+      {/* 생활기록부 기준 출결 집계 — 일 단위 대표 접기 + 인정 제외 + 사유 드릴다운 + 인쇄 (P6) */}
+      <NeisAttendanceSection
+        students={students}
+        dateFrom={neisRange.from}
+        dateTo={neisRange.to}
+        periodLabel={neisRange.label}
+      />
 
       {/* Stats table */}
       <div className="flex-1 overflow-auto rounded-xl bg-sp-card">

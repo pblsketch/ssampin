@@ -315,3 +315,102 @@ export function computeAutoPeriods(
     }
   }
 }
+
+/** 생기부(나이스)식 공식 사유 축 — 학교생활기록부 기재요령 별표 8 §3 마 */
+export type NeisReasonAxis = '질병' | '미인정' | '기타';
+
+export interface NeisStatusCounts {
+  absent: number;
+  late: number;
+  earlyLeave: number;
+  classAbsence: number;
+}
+
+export interface NeisAttendanceCounts extends NeisStatusCounts {
+  /** 사유별 세부 (질병/미인정/기타 × 상태) — 드릴다운용 */
+  byReason: Record<NeisReasonAxis, NeisStatusCounts>;
+}
+
+function emptyNeisStatusCounts(): NeisStatusCounts {
+  return { absent: 0, late: 0, earlyLeave: 0, classAbsence: 0 };
+}
+
+export function emptyNeisAttendanceCounts(): NeisAttendanceCounts {
+  return {
+    ...emptyNeisStatusCounts(),
+    byReason: {
+      질병: emptyNeisStatusCounts(),
+      미인정: emptyNeisStatusCounts(),
+      기타: emptyNeisStatusCounts(),
+    },
+  };
+}
+
+/**
+ * 생기부(나이스)식 출결 집계 — 학교생활기록부 기재요령 별표 8 §3 정합.
+ *
+ * - 규칙 바: 같은 날 지각·조퇴·결과 중복은 한 가지로만 → 일 단위 대표 접기
+ *   (`pickRepresentativeAttendance`, 심각도 absent>earlyLeave>late>classAbsence —
+ *   '학교장 판단' 사항에 대한 쌤핀 기본값)
+ * - 규칙 사: 같은 날 결과가 여러 교시라도 1회 → 접기로 자동 충족
+ * - 규칙 라: 출석인정('인정') 사유의 지각·조퇴·결과는 횟수 미포함 →
+ *   **접기 전에** reason==='인정' 엔트리를 제거한다(사전 필터 → 접기 합성 순서).
+ *   같은 날 지각(질병)+지각(인정)이 섞여 있으면 질병 지각 1회로 집계된다.
+ * - 규칙 마: 사유 축은 질병·미인정·기타 3분류. 사유 미기재는 '기타'로 분류.
+ *
+ * @returns Map<studentKey, NeisAttendanceCounts> (모든 대상 학생 키 포함, 없으면 0)
+ */
+export function summarizeNeisAttendance(
+  records: readonly AttendanceRecord[],
+  classId: string,
+  students: readonly { number: number; grade?: number; classNum?: number }[],
+  dateFrom?: string,
+  dateTo?: string,
+): Map<string, NeisAttendanceCounts> {
+  const result = new Map<string, NeisAttendanceCounts>();
+  for (const student of students) {
+    result.set(studentKey(student), emptyNeisAttendanceCounts());
+  }
+
+  // 날짜별 레코드 그룹
+  const byDate = new Map<string, AttendanceRecord[]>();
+  for (const r of records) {
+    if (r.classId !== classId) continue;
+    if (dateFrom != null && r.date < dateFrom) continue;
+    if (dateTo != null && r.date > dateTo) continue;
+    const arr = byDate.get(r.date);
+    if (arr) arr.push(r);
+    else byDate.set(r.date, [r]);
+  }
+
+  for (const dayRecords of byDate.values()) {
+    for (const student of students) {
+      const key = studentKey(student);
+      const periodMap = new Map<number, StudentAttendance | undefined>();
+      for (const rec of dayRecords) {
+        const hit = rec.students.find(
+          (sa) =>
+            sa.number === student.number &&
+            (student.grade == null || sa.grade === student.grade) &&
+            (student.classNum == null || sa.classNum === student.classNum),
+        );
+        // 규칙 라: '인정' 사유는 접기 전에 제거 (사전 필터 → 대표 접기)
+        if (hit && hit.reason !== '인정') {
+          periodMap.set(rec.period, hit);
+        }
+      }
+      if (periodMap.size === 0) continue;
+
+      const rep = pickRepresentativeAttendance(periodMap);
+      if (rep == null || rep.status === 'present') continue;
+
+      const counts = result.get(key)!;
+      counts[rep.status] += 1;
+      const axis: NeisReasonAxis =
+        rep.reason === '질병' || rep.reason === '미인정' ? rep.reason : '기타';
+      counts.byReason[axis][rep.status] += 1;
+    }
+  }
+
+  return result;
+}

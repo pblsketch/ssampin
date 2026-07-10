@@ -8,6 +8,7 @@ import {
   pickRepresentativeAttendance,
   validateAttendancePeriods,
   computeAutoPeriods,
+  summarizeNeisAttendance,
 } from './attendanceRules';
 import type {
   AttendanceRecord,
@@ -350,5 +351,90 @@ describe('computeAutoPeriods — 교시 자동 채움 초기값', () => {
 
   it('지각 기준 교시가 정규 교시 수를 넘으면 정규 범위로 잘라낸다', () => {
     expect(computeAutoPeriods('late', 6, 4)).toEqual(new Set([PERIOD_MORNING, 1, 2, 3, 4]));
+  });
+});
+
+describe('summarizeNeisAttendance — 생기부식 일 단위 집계 (별표 8 §3)', () => {
+  const students = [{ number: 1 }, { number: 2 }];
+  const key1 = '1';
+
+  it('전일 결석(여러 교시)은 1일로 집계한다 (연인원 아님)', () => {
+    const recs = [1, 2, 3, 4, 5, 6, 7].map((p) =>
+      record('c1', '2026-03-02', p, [att(1, 'absent', { reason: '질병' })]),
+    );
+    const m = summarizeNeisAttendance(recs, 'c1', students);
+    expect(m.get(key1)!.absent).toBe(1);
+    expect(m.get(key1)!.byReason['질병'].absent).toBe(1);
+  });
+
+  it('같은 날 지각+조퇴+결과 중복은 대표 1건만 집계한다 (규칙 바)', () => {
+    const recs = [
+      record('c1', '2026-03-02', 1, [att(1, 'late')]),
+      record('c1', '2026-03-02', 3, [att(1, 'classAbsence')]),
+      record('c1', '2026-03-02', 6, [att(1, 'earlyLeave')]),
+    ];
+    const m = summarizeNeisAttendance(recs, 'c1', students);
+    const c = m.get(key1)!;
+    // 심각도 우선순위: earlyLeave > late > classAbsence
+    expect(c.earlyLeave).toBe(1);
+    expect(c.late).toBe(0);
+    expect(c.classAbsence).toBe(0);
+  });
+
+  it('같은 날 결과가 여러 교시라도 결과 1회로 처리한다 (규칙 사)', () => {
+    const recs = [2, 4, 6].map((p) =>
+      record('c1', '2026-03-02', p, [att(1, 'classAbsence', { reason: '기타' })]),
+    );
+    const m = summarizeNeisAttendance(recs, 'c1', students);
+    expect(m.get(key1)!.classAbsence).toBe(1);
+  });
+
+  it("'인정' 사유는 횟수에 포함하지 않는다 (규칙 라)", () => {
+    const recs = [
+      record('c1', '2026-03-02', 1, [att(1, 'absent', { reason: '인정' })]),
+      record('c1', '2026-03-03', 1, [att(1, 'late', { reason: '인정' })]),
+    ];
+    const m = summarizeNeisAttendance(recs, 'c1', students);
+    const c = m.get(key1)!;
+    expect(c.absent).toBe(0);
+    expect(c.late).toBe(0);
+  });
+
+  it("합성 순서: 같은 날 지각(질병)+지각(인정) 혼재 → '인정' 사전 필터 후 접기 = 질병 지각 1회", () => {
+    const recs = [
+      record('c1', '2026-03-02', PERIOD_MORNING, [att(1, 'late', { reason: '질병' })]),
+      record('c1', '2026-03-02', 1, [att(1, 'late', { reason: '질병' })]),
+      record('c1', '2026-03-02', 3, [att(1, 'late', { reason: '인정' })]),
+    ];
+    const m = summarizeNeisAttendance(recs, 'c1', students);
+    const c = m.get(key1)!;
+    expect(c.late).toBe(1);
+    expect(c.byReason['질병'].late).toBe(1);
+    expect(c.byReason['기타'].late).toBe(0);
+  });
+
+  it('사유 미기재는 기타로 분류한다 (규칙 마)', () => {
+    const recs = [record('c1', '2026-03-02', 1, [att(1, 'absent')])];
+    const m = summarizeNeisAttendance(recs, 'c1', students);
+    expect(m.get(key1)!.byReason['기타'].absent).toBe(1);
+  });
+
+  it('기간 필터(dateFrom/dateTo)를 적용하고, 기록 없는 학생은 0으로 포함한다', () => {
+    const recs = [
+      record('c1', '2026-03-01', 1, [att(1, 'absent')]),
+      record('c1', '2026-03-05', 1, [att(1, 'absent')]),
+      record('c1', '2026-03-10', 1, [att(1, 'absent')]),
+    ];
+    const m = summarizeNeisAttendance(recs, 'c1', students, '2026-03-02', '2026-03-09');
+    expect(m.get(key1)!.absent).toBe(1);
+    expect(m.get('2')).toEqual(
+      expect.objectContaining({ absent: 0, late: 0, earlyLeave: 0, classAbsence: 0 }),
+    );
+  });
+
+  it('다른 학급(classId) 레코드는 무시한다', () => {
+    const recs = [record('OTHER', '2026-03-02', 1, [att(1, 'absent')])];
+    const m = summarizeNeisAttendance(recs, 'c1', students);
+    expect(m.get(key1)!.absent).toBe(0);
   });
 });
