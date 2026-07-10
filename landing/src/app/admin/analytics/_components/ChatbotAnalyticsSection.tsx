@@ -229,6 +229,17 @@ export function ChatbotAnalyticsSection({
                     )}
                   </summary>
                   <div className="border-t border-gray-700/40 px-3 pb-3 pt-2 space-y-1.5">
+                    {/* 신고 본문 전문 — summary/preview 는 200자로 잘리므로 전체 내용은 여기서 확인 */}
+                    {e.user_message && (
+                      <div className="rounded bg-gray-900/50 border border-gray-700/60 p-2.5">
+                        <div className="text-[10px] font-bold text-gray-400 mb-1">
+                          신고 내용 전문
+                        </div>
+                        <p className="max-h-72 overflow-y-auto whitespace-pre-wrap break-words text-xs leading-relaxed text-gray-200">
+                          {e.user_message}
+                        </p>
+                      </div>
+                    )}
                     {e.image_urls && e.image_urls.length > 0 && (
                       <div className="flex flex-wrap gap-2 pb-1">
                         {e.image_urls.map((url, i) => (
@@ -241,6 +252,9 @@ export function ChatbotAnalyticsSection({
                           </a>
                         ))}
                       </div>
+                    )}
+                    {e.user_message && context.length > 0 && (
+                      <div className="pt-1 text-[10px] font-bold text-gray-400">대화 맥락</div>
                     )}
                     {context.length === 0 ? (
                       <p className="text-xs text-gray-500">저장된 대화 맥락이 없습니다</p>

@@ -90,6 +90,8 @@ export interface ChatEscalationRow {
   type: string;
   summary: string;
   user_message_preview: string;
+  /** 신고 본문 전문 (migration 043 뷰가 노출, 접힌 미리보기와 달리 잘리지 않음) */
+  user_message?: string;
   created_at_kst: string;
   session_id: string;
   /** 신고 시점 대화 맥락 (ssampin-escalate 가 적재, 최근 메시지 순서대로) */
