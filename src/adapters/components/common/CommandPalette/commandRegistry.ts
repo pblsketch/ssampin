@@ -3,6 +3,7 @@ import type { PageId } from '@adapters/components/Layout/Sidebar';
 import { useQuickAddStore } from '@adapters/stores/useQuickAddStore';
 import { useSettingsStore, DEFAULT_SHORTCUTS } from '@adapters/stores/useSettingsStore';
 import { useMultiDateAttendanceIntentStore } from '@adapters/stores/useMultiDateAttendanceIntentStore';
+import { useStudentRecordsStore } from '@adapters/stores/useStudentRecordsStore';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { comboToDisplay, isMacOS } from '@adapters/hooks/shortcut/keyNormalize';
 import { toChosungString, isChosungQuery } from '@domain/services/hangulSearch';
@@ -149,8 +150,12 @@ export function buildDefaultCommands({ onNavigate }: BuildDefaultCommandsParams)
         '인플루엔자',
       ],
       run: () => {
+        // attendance-grid-v2 P7.3: 여러 날 출결은 출결 탭 패널로 이관.
+        // 기록 탭 → 출결 뷰 전환 후 AttendanceMode가 intent를 소비해 여러 날 패널을 연다.
         useMultiDateAttendanceIntentStore.getState().setIntent('multi');
+        useStudentRecordsStore.getState().setViewMode('attendance');
         onNavigate('homeroom');
+        requestHomeroomTab('records');
       },
     },
   ];

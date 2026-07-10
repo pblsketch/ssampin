@@ -1,18 +1,28 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import type { Student } from '@domain/entities/Student';
-import type { StudentAttendance } from '@domain/entities/Attendance';
+import type { AttendanceStatus, StudentAttendance } from '@domain/entities/Attendance';
 import { PERIOD_MORNING, PERIOD_CLOSING } from '@domain/entities/Attendance';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { useStudentRecordsStore } from '@adapters/stores/useStudentRecordsStore';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useToastStore } from '@adapters/components/common/Toast';
+import { useMultiDateAttendanceIntentStore } from '@adapters/stores/useMultiDateAttendanceIntentStore';
 import { detectStudentNumberIssues } from '@domain/rules/studentNumberRules';
 import { isStudentActive } from '@domain/rules/studentActivity';
 import { DateNavigator } from '@adapters/components/StudentRecords/DateNavigator';
 import { Notice } from '@adapters/components/common/Notice';
 import { HomeroomAttendanceGrid } from './HomeroomAttendanceGrid';
+import { MultiDayAttendancePanel } from './MultiDayAttendancePanel';
 import { renumberHomeroomStudents } from './recordUtils';
+
+/** 명령 팔레트 intent의 한글 종류 → AttendanceStatus */
+const TYPE_FROM_KR: Record<string, Exclude<AttendanceStatus, 'present'>> = {
+  결석: 'absent',
+  지각: 'late',
+  조퇴: 'earlyLeave',
+  결과: 'classAbsence',
+};
 
 /**
  * 출결 탭 전용 화면 — 담임 단일 날짜 출결의 유일한 기록자.
@@ -110,9 +120,41 @@ export function AttendanceMode({ students, selectedDate, onDateChange }: Attenda
     }
   }, [updateStudents, renumberPlan, showToast]);
 
+  // ── 여러 날 출결 패널 (§3.6 이관 — 출결 탭이 유일한 출결 입력구) ──
+  const [showMultiDay, setShowMultiDay] = useState(false);
+  const [multiInitialType, setMultiInitialType] =
+    useState<Exclude<AttendanceStatus, 'present'>>('absent');
+
+  // 명령 팔레트 "여러 날 출결" intent 소비 (구 InputMode → AttendanceMode 이동, §3.10-7)
+  const intentPending = useMultiDateAttendanceIntentStore((s) => s.pending);
+  const intentPreferredType = useMultiDateAttendanceIntentStore((s) => s.preferredAttendanceType);
+  const consumeIntent = useMultiDateAttendanceIntentStore((s) => s.consume);
+  useEffect(() => {
+    if (!intentPending) return;
+    setMultiInitialType(TYPE_FROM_KR[intentPreferredType] ?? 'absent');
+    setShowMultiDay(true);
+    consumeIntent();
+  }, [intentPending, intentPreferredType, consumeIntent]);
+
   return (
     <div className="flex flex-col flex-1 min-h-0 gap-3">
-      <DateNavigator selectedDate={selectedDate} onDateChange={onDateChange} pastBadge />
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <DateNavigator selectedDate={selectedDate} onDateChange={onDateChange} pastBadge />
+        {className && gridStudents.length > 0 && (
+          <button
+            type="button"
+            onClick={() => {
+              setMultiInitialType('absent');
+              setShowMultiDay(true);
+            }}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium text-sp-muted hover:text-sp-text bg-sp-card border border-sp-border transition-colors hover:border-sp-accent/50"
+            title="입원·체험학습 등 여러 날 출결을 한 번에 입력"
+          >
+            <span className="material-symbols-outlined text-sm">date_range</span>
+            여러 날 입력
+          </button>
+        )}
+      </div>
 
       {!className ? (
         <Notice variant="info" title="담임반을 먼저 설정해주세요">
@@ -211,6 +253,19 @@ export function AttendanceMode({ students, selectedDate, onDateChange }: Attenda
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── 여러 날 출결 입력 패널 ── */}
+      {showMultiDay && className && (
+        <MultiDayAttendancePanel
+          students={students}
+          className={className}
+          regularPeriodCount={periodCount}
+          periods={gridPeriods}
+          defaultDate={selectedDate}
+          initialType={multiInitialType}
+          onClose={() => setShowMultiDay(false)}
+        />
       )}
     </div>
   );
