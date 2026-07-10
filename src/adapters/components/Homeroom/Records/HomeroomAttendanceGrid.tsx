@@ -128,6 +128,8 @@ export function HomeroomAttendanceGrid({
     }
   });
   const [seatReferencePeriod, setSeatReferencePeriod] = useState<number>(1);
+  /* 요약 칩 클릭 시 해당 상태 학생 행/좌석 하이라이트 (§3.5) */
+  const [highlightStatus, setHighlightStatus] = useState<AttendanceStatus | null>(null);
   const setAttViewPersist = useCallback((v: 'list' | 'seat') => {
     setAttView(v);
     try {
@@ -693,17 +695,31 @@ export function HomeroomAttendanceGrid({
       <div className="flex items-center gap-3 bg-sp-surface border border-sp-border rounded-xl px-4 py-2.5 flex-wrap">
         <span className="text-xs text-sp-muted">전체 {students.length}명</span>
         <span className="text-sp-border">|</span>
-        {(['absent', 'late', 'earlyLeave', 'classAbsence'] as AttendanceStatus[]).map((status) => (
-          <div key={status} className="flex items-center gap-1">
-            <span className={`material-symbols-outlined text-sm ${STAT_COLORS[status]}`}>
-              {STATUS_CONFIG[status].icon}
-            </span>
-            <span className="text-xs text-sp-muted">{STATUS_CONFIG[status].label}</span>
-            <span className={`text-sm font-medium ${STAT_COLORS[status]}`}>
-              {totalStats[status]}
-            </span>
-          </div>
-        ))}
+        {(['absent', 'late', 'earlyLeave', 'classAbsence'] as AttendanceStatus[]).map((status) => {
+          const active = highlightStatus === status;
+          return (
+            <button
+              key={status}
+              type="button"
+              onClick={() => setHighlightStatus((prev) => (prev === status ? null : status))}
+              aria-pressed={active}
+              title={`${STATUS_CONFIG[status].label} 학생 강조`}
+              className={`flex items-center gap-1 px-1.5 py-0.5 rounded-lg border transition-colors ${
+                active
+                  ? 'border-sp-accent/50 bg-sp-accent/10'
+                  : 'border-transparent hover:bg-sp-card'
+              } ${totalStats[status] === 0 ? 'opacity-50' : ''}`}
+            >
+              <span className={`material-symbols-outlined text-sm ${STAT_COLORS[status]}`}>
+                {STATUS_CONFIG[status].icon}
+              </span>
+              <span className="text-xs text-sp-muted">{STATUS_CONFIG[status].label}</span>
+              <span className={`text-sm font-medium ${STAT_COLORS[status]}`}>
+                {totalStats[status]}
+              </span>
+            </button>
+          );
+        })}
 
         <div className="flex-1" />
 
@@ -822,6 +838,7 @@ export function HomeroomAttendanceGrid({
             matrix={matrix}
             periods={periods}
             onSeatClick={handleSeatClick}
+            highlightStatus={highlightStatus}
           />
         ) : (
           <div className="rounded-xl border border-sp-border bg-sp-surface/40 px-4 py-10 text-center text-sm text-sp-muted leading-relaxed">
@@ -841,6 +858,7 @@ export function HomeroomAttendanceGrid({
           blankPresent
           reasonColumn
           onMemoEdit={handleMemoEdit}
+          highlightStatus={highlightStatus}
         />
       )}
 

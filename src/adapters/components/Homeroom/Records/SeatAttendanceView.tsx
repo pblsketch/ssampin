@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import type { StudentAttendance } from '@domain/entities/Attendance';
+import type { AttendanceStatus, StudentAttendance } from '@domain/entities/Attendance';
 import { pickRepresentativeAttendance } from '@domain/rules/attendanceRules';
 import {
   STATUS_CONFIG,
@@ -30,6 +30,8 @@ export interface SeatAttendanceViewProps {
   periods: readonly number[];
   /** 좌석 클릭 = 그 학생(studentKey)에 팔레트 적용 */
   onSeatClick: (studentKey: string) => void;
+  /** 지정 상태를 가진 좌석을 강조 (요약 칩 클릭 연동, §3.5) */
+  highlightStatus?: AttendanceStatus | null;
 }
 
 export function SeatAttendanceView({
@@ -40,6 +42,7 @@ export function SeatAttendanceView({
   matrix,
   periods,
   onSeatClick,
+  highlightStatus = null,
 }: SeatAttendanceViewProps) {
   // studentKey(=번호 문자열) → 대표 출결
   const repByKey = useMemo(() => {
@@ -80,6 +83,7 @@ export function SeatAttendanceView({
             const rep = repByKey.get(sKey);
             const hasException = rep != null && rep.status !== 'present';
             const cfg = hasException ? STATUS_CONFIG[rep!.status] : null;
+            const highlighted = highlightStatus != null && rep?.status === highlightStatus;
 
             return (
               <button
@@ -95,7 +99,7 @@ export function SeatAttendanceView({
                   hasException
                     ? cfg!.cell
                     : 'bg-sp-card border-sp-border hover:border-sp-accent/60 text-sp-text'
-                }`}
+                } ${highlighted ? 'ring-2 ring-sp-accent ring-offset-1 ring-offset-sp-bg' : ''}`}
               >
                 <span className="text-caption tabular-nums opacity-70 leading-none">
                   {student.number}

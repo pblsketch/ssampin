@@ -69,6 +69,8 @@ export interface AttendanceGridViewProps {
   reasonColumn?: boolean;
   /** 사유(비고) 인라인 편집 콜백 — reasonColumn 일 때. 행 대표 memo를 찍힌 교시 전체로 fan-out. */
   onMemoEdit?: (sKey: string, memo: string) => void;
+  /** opt-in(기본 null): 지정 상태를 가진 학생 행을 하이라이트한다(요약 칩 클릭 연동, §3.5). */
+  highlightStatus?: AttendanceStatus | null;
 }
 
 /** 사유(비고) 인라인 편집 셀 — 로컬 상태로 타이핑, blur/Enter 시 커밋. */
@@ -99,6 +101,7 @@ function MemoCell({
       onKeyDown={(e) => {
         if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
       }}
+      title={local || undefined}
       placeholder="사유 입력"
       className="w-full bg-transparent border-b border-transparent hover:border-sp-border focus:border-sp-accent
                  text-xs text-sp-text placeholder:text-sp-muted/40 focus:outline-none px-1 py-0.5 transition-colors"
@@ -121,6 +124,7 @@ export function AttendanceGridView({
   blankPresent = false,
   reasonColumn = false,
   onMemoEdit,
+  highlightStatus = null,
 }: AttendanceGridViewProps) {
   const hasGradeInfo = useMemo(
     () => students.some((s) => s.grade != null || s.classNum != null),
@@ -263,12 +267,21 @@ export function AttendanceGridView({
             const studentStats = byStudentStats.get(sKey);
             const rep = repByStudent.get(sKey);
             const hasException = rep != null && rep.status !== 'present';
+            const highlighted =
+              highlightStatus != null && (studentStats?.[highlightStatus] ?? 0) > 0;
+            // sticky 식별 셀은 자체 배경(bg-sp-bg)이라 행 배경이 가려진다 → 하이라이트 시 함께 tint.
+            const stickyBg = highlighted ? 'bg-sp-accent/10' : 'bg-sp-bg';
 
             return (
-              <tr key={sKey} className="hover:bg-sp-card/30 transition-colors">
+              <tr
+                key={sKey}
+                className={`transition-colors ${
+                  highlighted ? 'bg-sp-accent/10' : 'hover:bg-sp-card/30'
+                }`}
+              >
                 {selectable && (
                   <td
-                    className="sticky z-10 bg-sp-bg px-2 py-2 text-center"
+                    className={`sticky z-10 ${stickyBg} px-2 py-2 text-center`}
                     style={{ left: stickyLeft.checkLeft }}
                   >
                     <input
@@ -282,7 +295,7 @@ export function AttendanceGridView({
                 )}
                 {hasGradeInfo && (
                   <td
-                    className="sticky z-10 bg-sp-bg px-3 py-2 text-sm text-sp-muted whitespace-nowrap"
+                    className={`sticky z-10 ${stickyBg} px-3 py-2 text-sm text-sp-muted whitespace-nowrap`}
                     style={{ left: stickyLeft.gradeLeft }}
                   >
                     {student.grade != null && student.classNum != null
@@ -291,13 +304,13 @@ export function AttendanceGridView({
                   </td>
                 )}
                 <td
-                  className="sticky z-10 bg-sp-bg px-2 py-2 text-sm text-sp-muted text-center whitespace-nowrap font-medium"
+                  className={`sticky z-10 ${stickyBg} px-2 py-2 text-sm text-sp-muted text-center whitespace-nowrap font-medium`}
                   style={{ left: stickyLeft.numLeft }}
                 >
                   {student.number}
                 </td>
                 <td
-                  className="sticky z-10 bg-sp-bg px-3 py-2 text-base text-sp-text whitespace-nowrap"
+                  className={`sticky z-10 ${stickyBg} px-3 py-2 text-base text-sp-text whitespace-nowrap`}
                   style={{ left: stickyLeft.nameLeft }}
                 >
                   {onStudentNameClick ? (
