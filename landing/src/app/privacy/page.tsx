@@ -17,7 +17,7 @@ const koContent = {
   lang: 'ko',
   title: '개인정보처리방침',
   subtitle: '쌤핀 (SsamPin)',
-  lastUpdated: '최종 수정일: 2026년 6월 24일',
+  lastUpdated: '최종 수정일: 2026년 7월 10일',
   switchLang: 'View in English',
   switchHref: '?lang=en',
   sections: [
@@ -379,6 +379,97 @@ const koContent = {
         </>
       ),
     },
+    {
+      number: '12',
+      title: '만 14세 미만 아동의 개인정보 보호',
+      content: (
+        <>
+          <p>
+            쌤핀의 이용자는 <strong>교사 등 교육 종사자</strong>로 한정되며, 쌤핀 개발자는 만 14세
+            미만 아동으로부터 직접 개인정보를 수집하지 않습니다. 학생에 관한 정보는 교사가 직무
+            목적으로 입력·처리하는 것이며, 그 적법한 처리 책임은 이용약관 제3조에 따라 교사(및 소속
+            학교·기관)에게 있습니다.
+          </p>
+          <ul>
+            <li>
+              학생 정보는 <strong>기본적으로 교사의 PC에만 로컬 저장</strong>되며, 쌤핀 개발자
+              서버로 전송·수집되지 않습니다.
+            </li>
+            <li>
+              상담 예약·설문·체크리스트 등 온라인 협업 기능에서는 학생을{' '}
+              <strong>실명이 아닌 학생 번호</strong>로만 식별하며, 연락처·메모 등은 사용자 단말에서
+              암호화한 뒤 전송합니다(제11조).
+            </li>
+            <li>
+              과제 수합·전자 서명 기능은 기능 특성상 학생 이름이 포함될 수 있으므로, 교사가 꼭
+              필요한 범위에서만 사용하고 목적을 달성한 뒤에는 삭제하는 것을 원칙으로 합니다.
+            </li>
+            <li>
+              외부 AI로 데이터를 보내는 경우(제10조)에는 실명·연락처·생년월일 등 신원 정보를 불투명
+              토큰으로 가명처리합니다.
+            </li>
+          </ul>
+          <p>근거: 개인정보 보호법 제22조의2(만 14세 미만 아동의 개인정보 처리).</p>
+        </>
+      ),
+    },
+    {
+      number: '13',
+      title: '개인정보의 국외 이전',
+      content: (
+        <>
+          <p>
+            쌤핀의 일부 협업 기능과 Google 연동은 국외에 서버를 둔 사업자에게 개인정보 처리를
+            위탁하며, 이 과정에서 개인정보가 국외로 이전될 수 있습니다. 교사가 해당 기능을 사용하지
+            않으면 어떤 정보도 국외로 이전되지 않습니다.
+          </p>
+          <ul>
+            <li>
+              <strong>Supabase Inc.</strong> (미국) — 협업 기능(상담 예약·과제 수합·전자 서명·설문
+              등) 데이터의 클라우드 저장·처리 (제11조)
+            </li>
+            <li>
+              <strong>Vercel Inc.</strong> (미국) — 협업 기능이 사용하는 웹페이지 호스팅
+            </li>
+            <li>
+              <strong>Google LLC</strong> (미국) — 사용자가 Google 연동을 활성화한 경우 캘린더·Drive
+              백업·Tasks 데이터 처리 (제1조·제6조)
+            </li>
+          </ul>
+          <p>
+            이전되는 항목·목적·보유 및 이용 기간은 제1조·제2조·제4조·제11조에 따르며, 전송 구간은
+            HTTPS(TLS)로 암호화됩니다. 근거: 개인정보 보호법 제28조의8(개인정보의 국외 이전).
+          </p>
+        </>
+      ),
+    },
+    {
+      number: '14',
+      title: '개인정보 보호책임자',
+      content: (
+        <>
+          <p>
+            쌤핀은 개인정보 처리에 관한 업무를 총괄하고 정보주체의 문의·불만을 처리하기 위해 아래와
+            같이 개인정보 보호책임자를 지정합니다.
+          </p>
+          <ul>
+            <li>
+              <strong>개인정보 보호책임자:</strong> 박준일 (쌤핀 개발·운영자)
+            </li>
+            <li>
+              <strong>연락처:</strong> <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
+            </li>
+          </ul>
+          <p>정보주체는 개인정보 침해에 관한 상담·신고를 아래 기관에 하실 수 있습니다.</p>
+          <ul>
+            <li>개인정보침해신고센터 — privacy.kisa.or.kr / 국번 없이 118</li>
+            <li>개인정보 분쟁조정위원회 — kopico.go.kr / 1833-6972</li>
+            <li>대검찰청 사이버수사과 — spo.go.kr / 국번 없이 1301</li>
+            <li>경찰청 사이버수사국 — cyberbureau.police.go.kr / 국번 없이 182</li>
+          </ul>
+        </>
+      ),
+    },
   ],
 };
 
@@ -386,7 +477,7 @@ const enContent = {
   lang: 'en',
   title: 'Privacy Policy',
   subtitle: 'SsamPin',
-  lastUpdated: 'Last updated: June 24, 2026',
+  lastUpdated: 'Last updated: July 10, 2026',
   switchLang: '한국어로 보기',
   switchHref: '?lang=ko',
   sections: [
@@ -772,6 +863,113 @@ const enContent = {
             feature or when its retention period (e.g., real-time link expiry) passes. Data in
             transit is encrypted via HTTPS (TLS).
           </p>
+        </>
+      ),
+    },
+    {
+      number: '12',
+      title: 'Protection of Children Under 14',
+      content: (
+        <>
+          <p>
+            SsamPin&apos;s users are limited to{' '}
+            <strong>teachers and other education professionals</strong>, and the SsamPin developer
+            does not collect personal information directly from children under the age of 14.
+            Information about students is entered and processed by teachers for work purposes;
+            responsibility for its lawful processing rests with the teacher (and their
+            school/institution) under Section 3 of the Terms.
+          </p>
+          <ul>
+            <li>
+              Student information is{' '}
+              <strong>stored locally on the teacher&apos;s PC by default</strong> and is not
+              transmitted to or collected by any SsamPin developer server.
+            </li>
+            <li>
+              In online collaboration features (consultation booking, surveys, checklists), students
+              are identified <strong>only by student number, not by real name</strong>, and contact
+              details or memos are encrypted on the user&apos;s device before transmission (Section
+              11).
+            </li>
+            <li>
+              Assignment collection and e-signature features may, by their nature, include a
+              student&apos;s name; teachers are expected to use them only to the extent necessary
+              and to delete the data once the purpose is fulfilled.
+            </li>
+            <li>
+              When data is sent to an external AI (Section 10), identifying information such as
+              names, contact details, and dates of birth is pseudonymized with opaque tokens.
+            </li>
+          </ul>
+          <p>
+            Basis: Article 22-2 of the Personal Information Protection Act (processing of personal
+            information of children under 14).
+          </p>
+        </>
+      ),
+    },
+    {
+      number: '13',
+      title: 'Overseas Transfer of Personal Information',
+      content: (
+        <>
+          <p>
+            Some of SsamPin&apos;s collaboration features and Google integrations consign personal
+            information processing to companies whose servers are located overseas, and personal
+            information may be transferred abroad in the process. If a teacher does not use these
+            features, no information is transferred overseas.
+          </p>
+          <ul>
+            <li>
+              <strong>Supabase Inc.</strong> (USA) — cloud storage and processing of collaboration
+              feature data (consultation booking, assignment collection, e-signature, surveys, etc.;
+              Section 11)
+            </li>
+            <li>
+              <strong>Vercel Inc.</strong> (USA) — hosting of the web pages used by collaboration
+              features
+            </li>
+            <li>
+              <strong>Google LLC</strong> (USA) — processing of Calendar, Drive backup, and Tasks
+              data when you enable Google integration (Sections 1 and 6)
+            </li>
+          </ul>
+          <p>
+            The items, purposes, and retention/use periods of the transferred data follow Sections
+            1, 2, 4, and 11, and data in transit is encrypted via HTTPS (TLS). Basis: Article 28-8
+            of the Personal Information Protection Act (overseas transfer of personal information).
+          </p>
+        </>
+      ),
+    },
+    {
+      number: '14',
+      title: 'Personal Information Protection Officer',
+      content: (
+        <>
+          <p>
+            SsamPin designates the following Personal Information Protection Officer to oversee
+            personal information processing and to handle inquiries and complaints from data
+            subjects.
+          </p>
+          <ul>
+            <li>
+              <strong>Protection Officer:</strong> Junil Park (SsamPin developer/operator)
+            </li>
+            <li>
+              <strong>Contact:</strong> <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
+            </li>
+          </ul>
+          <p>
+            Data subjects may direct inquiries or reports about privacy infringement to the
+            following Korean authorities:
+          </p>
+          <ul>
+            <li>Privacy Infringement Report Center — privacy.kisa.or.kr / 118</li>
+            <li>Personal Information Dispute Mediation Committee — kopico.go.kr / 1833-6972</li>
+            <li>Supreme Prosecutors&apos; Office Cybercrime Division — spo.go.kr / 1301</li>
+            <li>National Police Agency Cyber Bureau — cyberbureau.police.go.kr / 182</li>
+          </ul>
         </>
       ),
     },
