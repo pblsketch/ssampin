@@ -98,6 +98,10 @@ async function advance(ms: number) {
   await act(async () => {
     await vi.advanceTimersByTimeAsync(ms);
   });
+  // 비동기 저장(onSaveDay await→setState)이 병렬 부하에서도 완전히 정착하도록 마이크로태스크 한 번 더 플러시.
+  await act(async () => {
+    await Promise.resolve();
+  });
 }
 
 describe('HomeroomAttendanceGrid 자동 저장 런타임 회귀 (§3.10-2)', () => {

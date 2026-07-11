@@ -1,6 +1,12 @@
 # Progress
 
-마지막 업데이트: 2026-07-10 KST
+마지막 업데이트: 2026-07-11 KST
+
+## ✅ 출결 그리드 v2 — 팔레트 입력 모델 재설계, ralplan 승인→ralph 구현 완료 (2026-07-11, main `8d5d1b70`~`49679d3a` 6커밋, ADR-022, **미푸시**)
+
+v1(ADR-021) 실기기 피드백 8건 + 나이스 출결 매뉴얼 분석으로 담임 출결 입력을 팔레트 모델로 재설계. 계획서 `docs/01-plan/features/attendance-grid-v2.plan.md`(§3.10 실행 안전 계약) 승인본을 P7.1~P7.6 순차 구현. **P7.1**(`8d5d1b70`): 기록 탭 서브탭 [출결|누가기록|통계|조회] 기본=출결, 오늘 출결 그리드를 InputMode→전용 `AttendanceMode`로 분리, 공용 `AttendanceGridView` table-fixed+colgroup(교시 열 균등)+헤더/식별 열 sticky+출석 빈칸 opt-in, DateNavigator 과거 배지, 메타 가드 리타깃. **P7.2a**(`8cabb86d`): 팔레트(종류5×사유4+비고), 칸 클릭=computeAutoPeriods 기준 교시 전-행 재작성(§3.10-5), 지우개, 공용 뷰 opt-in 구분/사유 열, 순환·팝오버·선택모드·일괄바 제거. **P7.2b**(`879c98fb`, 최대 위험): 자동 저장(dirty-gate 주+자기저장 canonical 서명 보조, 800ms 디바운스, 플러시 3종=날짜/언마운트/blur, 조용한 저장됨✓·성공토스트 제거), undo/redo(행 스냅샷 50·Ctrl+Z·오늘 비우기), `parseAttendanceQuickText` 순수함수+미리보기. **fake timer 런타임 회귀 7종(§3.10-2 4종 포함)+파서 계약 14종.** StrictMode `mountedRef` 미복원으로 저장칩 고착 버그를 실렌더로 발견·수정(타입/테스트로는 안 잡힘). **P7.3**(`ca7182ea`): 여러 날 출결을 `MultiDayAttendancePanel`(팔레트+기간/여러날+주말제외+학생다중선택)로 출결 탭 이관, 명령 팔레트 라우팅 변경, InputMode 출결 완전 제거(2024→1357줄, 날짜모드는 비출결용 존치), 메타 가드 강화(출결 입력 경로 부재+AttendanceMode 유일). **P7.4**(`8f0aaf22`): 좌석 배치 뷰(grid 우선) — 신규 읽기 전용 `SeatAttendanceView`(편집 스토어/액션 import 0), id↔번호 매핑(AttendanceMode가 useSeatingStore 읽기+명렬로 주입, 그리드 셸 스토어 미import 유지), 팔레트 기준 교시 선택기, [명렬|좌석] 토글 localStorage 영속. **P7.5**(`49679d3a`): 요약 칩 클릭→행/좌석 하이라이트(opt-in highlightStatus), 사유 툴팁. **P7.6**: 실렌더 검증 게이트(Playwright) — 열 정렬·팔레트·텍스트·여러날·좌석·누가기록 정화·다크 모드 확인. **§3.10-8 수업관리 무회귀**: 공유 뷰 소비처 AttendanceTab이 Phase5 UX 정리로 desktop UI에서 언마운트됨(ClassRecordTab가 대체) → 공유 AttendanceGridView의 유일 라이브 소비처는 담임 그리드(검증 완료), 수업관리 AttendanceMatrixCore는 컴파일·정적 테스트 통과하나 라이브 회귀 표면 없음.
+
+**게이트**: 매 단계 tsc 0 / lint 0에러(경고 132 기존) / vitest 3604 / regression 38. 신규 테스트: 파서 14 + 자동저장 회귀 7 + 메타가드 7(리타깃·좌석 격리). **남음**: v1(9커밋)+v2(6커밋) **전체 미푸시** — 사용자 푸시 확인 필요 · 실기기(팔레트·텍스트·좌석·다크) · 다음 릴리즈 노트 고지 3종(카드 여러날 출결→출결 탭 이동·기록 탭 첫 화면 출결로 변경·레거시 이질 상태 행 첫 편집 시 평탄화) · /docs 사용자 가이드 출결 섹션 · 모바일 행 모델 이관·모둠/자유 좌석 렌더(후속). 자동저장 테스트는 병렬 부하에서 간헐 flaky(단독 7/7 통과, 마이크로태스크 추가 플러시로 완화).
 
 ## ✅ 출결 개선 6종 — 사용자 건의 반영, ralplan 합의→ralph 구현 완료 (2026-07-10, main `529faffb`~`4df843e9` 9커밋, ADR-021)
 
