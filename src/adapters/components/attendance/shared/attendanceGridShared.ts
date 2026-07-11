@@ -139,17 +139,20 @@ export function buildByPeriodFromMatrix(
 export function canonicalDaySignature(
   byPeriod: ReadonlyMap<number, readonly StudentAttendance[]>,
 ): string {
-  const rows: string[] = [];
+  const rows: [number, string[]][] = [];
   const sortedPeriods = [...byPeriod.keys()].sort((a, b) => a - b);
   for (const p of sortedPeriods) {
     const entries = byPeriod.get(p) ?? [];
     if (entries.length === 0) continue;
+    // number/status/reason 는 구분자(:)를 포함할 수 없고 memo 는 항상 tail 이라 엔트리 내부는
+    // 모호하지 않다. 다만 자유 입력 memo 가 교시/엔트리 경계 구분자(, ; |)를 포함하면 서로 다른
+    // 상태가 같은 문자열이 될 수 있으므로, 문자열 join 대신 JSON 구조로 직렬화해 경계를 보존한다.
     const parts = entries
       .map((s) => `${s.number}:${s.status}:${s.reason ?? ''}:${s.memo ?? ''}`)
       .sort();
-    rows.push(`${p}|${parts.join(',')}`);
+    rows.push([p, parts]);
   }
-  return rows.join(';');
+  return JSON.stringify(rows);
 }
 
 /** AttendanceRecord[] → 교시별 Map (재시드측 canonical 서명 계산용). */

@@ -145,18 +145,23 @@ export function MultiDayAttendancePanel({
       const memoText = memo.trim() || undefined;
       const picked = rosterStudents.filter((s) => selectedIds.has(s.id));
 
+      const pickedNumbers = new Set(picked.map((s) => s.studentNumber!));
       for (const date of effectiveDates) {
         const existing = getDayAttendance(className, date);
         const byPeriod = new Map<number, StudentAttendance[]>();
         for (const r of existing) byPeriod.set(r.period, [...r.students]);
+        // §3.10-5 전-행 재작성: 선택 학생의 기존 교시 기록을 먼저 전부 지운다(다른 학생 기록은 보존).
+        // 이렇게 해야 기존에 전일 결석이던 학생을 2교시 지각으로 바꿀 때 3교시~종례에 결석이 남지 않는다.
+        for (const [p, arr] of byPeriod) {
+          const cleaned = arr.filter((sa) => !pickedNumbers.has(sa.number));
+          if (cleaned.length !== arr.length) byPeriod.set(p, cleaned);
+        }
+        // 그다음 fill 교시에만 선택 학생 엔트리를 넣는다(그리드의 팔레트 적용과 동일 계약).
         for (const student of picked) {
           const number = student.studentNumber!;
           for (const p of fill) {
             const arr = byPeriod.get(p) ?? [];
-            const entry: StudentAttendance = { number, status: type, reason, memo: memoText };
-            const idx = arr.findIndex((sa) => sa.number === number);
-            if (idx >= 0) arr[idx] = entry;
-            else arr.push(entry);
+            arr.push({ number, status: type, reason, memo: memoText });
             byPeriod.set(p, arr);
           }
         }

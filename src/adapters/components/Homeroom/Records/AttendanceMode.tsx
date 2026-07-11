@@ -108,6 +108,11 @@ export function AttendanceMode({ students, selectedDate, onDateChange }: Attenda
       // 데이터 유실 방지: 하루치 통째 교체 전 스토어 로드 보장 (카드 경로와 동일 가드)
       const tcState = useTeachingClassStore.getState();
       if (!tcState.loaded) await tcState.load();
+      // 로드 실패 시 saveDayAttendance 가 조용히 no-op 하므로(저장 안 됨), 미러·성공표시 전에 차단하고
+      // 오류를 던져 그리드가 "저장 실패"를 표시하게 한다(저장 안 됐는데 저장됨✓ 표시 방지).
+      if (useTeachingClassStore.getState().loadFailed) {
+        throw new Error('출결 데이터를 불러오지 못해 저장할 수 없어요. 잠시 후 다시 시도해주세요.');
+      }
       const recordsByPeriod = new Map<number, StudentAttendance[]>();
       for (const [p, arr] of byPeriod) recordsByPeriod.set(p, [...arr]);
       await saveDayAttendance(className, date, recordsByPeriod);
@@ -162,10 +167,14 @@ export function AttendanceMode({ students, selectedDate, onDateChange }: Attenda
   const consumeIntent = useMultiDateAttendanceIntentStore((s) => s.consume);
   useEffect(() => {
     if (!intentPending) return;
+    consumeIntent();
+    if (numberIssues.hasCollisionRisk) {
+      showToast('출석번호가 겹치거나 비어 있어요. 먼저 번호를 정리해주세요.', 'info');
+      return;
+    }
     setMultiInitialType(TYPE_FROM_KR[intentPreferredType] ?? 'absent');
     setShowMultiDay(true);
-    consumeIntent();
-  }, [intentPending, intentPreferredType, consumeIntent]);
+  }, [intentPending, intentPreferredType, consumeIntent, numberIssues.hasCollisionRisk, showToast]);
 
   return (
     <div className="flex flex-col flex-1 min-h-0 gap-3">
@@ -174,12 +183,17 @@ export function AttendanceMode({ students, selectedDate, onDateChange }: Attenda
         {className && gridStudents.length > 0 && (
           <button
             type="button"
+            disabled={numberIssues.hasCollisionRisk}
             onClick={() => {
               setMultiInitialType('absent');
               setShowMultiDay(true);
             }}
-            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium text-sp-muted hover:text-sp-text bg-sp-card border border-sp-border transition-colors hover:border-sp-accent/50"
-            title="입원·체험학습 등 여러 날 출결을 한 번에 입력"
+            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium text-sp-muted hover:text-sp-text bg-sp-card border border-sp-border transition-colors hover:border-sp-accent/50 disabled:opacity-40 disabled:cursor-not-allowed"
+            title={
+              numberIssues.hasCollisionRisk
+                ? '출석번호가 겹치거나 비어 있어요. 먼저 번호를 정리해주세요.'
+                : '입원·체험학습 등 여러 날 출결을 한 번에 입력'
+            }
           >
             <span className="material-symbols-outlined text-sm">date_range</span>
             여러 날 입력

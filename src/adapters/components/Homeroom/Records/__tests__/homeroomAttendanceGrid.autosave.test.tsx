@@ -252,4 +252,28 @@ describe('HomeroomAttendanceGrid 자동 저장 런타임 회귀 (§3.10-2)', () 
     expect(screen.getByRole('button', { name: /홍길동 조회 결석/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '김영희 조회 출석' })).toBeInTheDocument();
   });
+
+  it('⑤ 저장 시 화면 밖(비활성·전학) 학생의 기존 기록을 보존 (통째 교체 데이터 유실 방지)', async () => {
+    const onSave = vi.fn();
+    const ctl: { current: Controller | null } = { current: null };
+    // 번호 9 = 명렬(1·2·3)에 없는 전학 학생의 기존 결석 기록
+    const initial = PERIODS.map((p) =>
+      rec(DATE0, p, [{ number: 9, status: 'absent' as AttendanceStatus, reason: '질병' }]),
+    );
+    render(<TestHost ctl={ctl} onSave={onSave} initialRecords={initial} />);
+
+    // 활성 학생(홍길동=1)만 편집·저장
+    clickCell('홍길동', '조회');
+    await advance(800);
+    expect(onSave).toHaveBeenCalled();
+
+    // 저장 payload 에 화면 밖 번호 9가 보존되고, 편집한 번호 1도 함께 있어야 한다
+    const [, byPeriod] = onSave.mock.calls.at(-1) as [
+      string,
+      ReadonlyMap<number, readonly StudentAttendance[]>,
+    ];
+    const p0 = byPeriod.get(0) ?? [];
+    expect(p0.some((s) => s.number === 9 && s.status === 'absent')).toBe(true);
+    expect(p0.some((s) => s.number === 1 && s.status === 'absent')).toBe(true);
+  });
 });

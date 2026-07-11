@@ -1249,6 +1249,12 @@ function InputMode({
                               </button>
                               <button
                                 onClick={() => {
+                                  // 출결 미러 기록을 여기서 지우면 원본 출결은 남아 화면 간 불일치가 난다.
+                                  // 출결 삭제는 출결 탭(그리드 지우개/오늘 비우기)으로 일원화한다.
+                                  if (record.category === 'attendance') {
+                                    showToast('출결 기록은 출결 탭에서 지워주세요', 'info');
+                                    return;
+                                  }
                                   if (window.confirm('이 기록을 삭제하시겠습니까?'))
                                     void deleteRecord(record.id);
                                 }}

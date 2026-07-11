@@ -224,6 +224,23 @@ export function HomeroomAttendanceGrid({
       const snapMatrix = matrixRef.current;
       const snapDate = dateRef.current;
       const byPeriod = buildByPeriodFromMatrix(snapMatrix, students, periods);
+      // 데이터 유실 방지: saveDayAttendance 는 하루치를 통째 교체하는데 매트릭스는 활성 명렬만 담는다.
+      // 화면에 없는 학생(비활성·전학·결번 번호)의 그날 기록을 기존 저장본에서 그대로 얹어 보존한다.
+      // (자동 저장이라 매 편집마다 조용히 삭제되던 회귀 방지.) 서명도 이 병합본으로 계산해
+      // 재시드측(전체 레코드 기준)과 대칭을 유지한다.
+      const activeNumbers = new Set(students.map((s) => s.number));
+      for (const rec of latestRef.current.loadDayRecords(snapDate)) {
+        let arr = byPeriod.get(rec.period);
+        if (!arr) {
+          arr = [];
+          byPeriod.set(rec.period, arr);
+        }
+        for (const sa of rec.students) {
+          if (!activeNumbers.has(sa.number) && !arr.some((x) => x.number === sa.number)) {
+            arr.push({ ...sa });
+          }
+        }
+      }
       const sig = canonicalDaySignature(byPeriod);
       pendingSigRef.current.add(sig);
       dirtyRef.current = false;
