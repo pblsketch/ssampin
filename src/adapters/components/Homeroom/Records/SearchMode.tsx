@@ -177,6 +177,17 @@ function SearchMode({ students, records, categories }: ModeProps) {
     return { ...stats, counseling, total: studentRecs.length };
   }, [records, selectedStudentId]);
 
+  // 좌측 학생 사이드바 — 찾아보기/검토 두 모드가 동일하게 공유
+  const studentSidebar = (
+    <div className="w-full lg:w-[180px] lg:shrink-0">
+      <RecordStudentJumpList
+        items={jumpItems}
+        selectedKey={selectedStudentId}
+        onSelect={setSelectedStudentId}
+      />
+    </div>
+  );
+
   return (
     <div className="flex-1 flex flex-col gap-4 min-h-0">
       {/* 찾아보기/검토 모드 세그먼트 — 검토 지표는 찾아보기 화면에서 걷어내고 배지 하나로(안 B) */}
@@ -223,13 +234,7 @@ function SearchMode({ students, records, categories }: ModeProps) {
       {activeView === 'review' ? (
         /* ── 검토 모드: 좌측 학생 사이드바(공유) + 통합 처리 큐 ── */
         <div className="flex-1 flex flex-col lg:flex-row gap-3 min-h-0 animate-sp-fade-in">
-          <div className="w-full lg:w-[180px] lg:shrink-0">
-            <RecordStudentJumpList
-              items={jumpItems}
-              selectedKey={selectedStudentId}
-              onSelect={setSelectedStudentId}
-            />
-          </div>
+          {studentSidebar}
           <ReviewMode
             queue={queue}
             categories={categories}
@@ -409,13 +414,7 @@ function SearchMode({ students, records, categories }: ModeProps) {
           {/* 3-column body */}
           <div className="flex-1 flex flex-col lg:flex-row gap-3 min-h-0 animate-sp-fade-in">
             {/* Left: 학생 점프 리스트 (공용 부품 — 수업 조회와 동일) */}
-            <div className="w-full lg:w-[180px] lg:shrink-0">
-              <RecordStudentJumpList
-                items={jumpItems}
-                selectedKey={selectedStudentId}
-                onSelect={setSelectedStudentId}
-              />
-            </div>
+            {studentSidebar}
 
             {/* Center: Record list */}
             <div className="flex-1 min-w-0 min-h-0">

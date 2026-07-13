@@ -63,9 +63,9 @@ export function useReviewQueue(records: readonly StudentRecord[]): ReviewQueueRe
   return useMemo(() => {
     const today = todayStr();
     const items: ReviewQueueItem[] = [];
-    let neis = 0;
-    let document = 0;
-    let followUp = 0;
+    let neisCount = 0;
+    let documentCount = 0;
+    let followUpCount = 0;
     let totalAttendance = 0;
     let followUpTotal = 0;
     let followUpDone = 0;
@@ -84,9 +84,9 @@ export function useReviewQueue(records: readonly StudentRecord[]): ReviewQueueRe
 
       if (!neisPending && !documentPending && !followUpPending) continue;
 
-      if (neisPending) neis++;
-      if (documentPending) document++;
-      if (followUpPending) followUp++;
+      if (neisPending) neisCount++;
+      if (documentPending) documentCount++;
+      if (followUpPending) followUpCount++;
 
       let followUpStatus: ReviewQueueItem['followUpStatus'];
       let followUpDays: number | undefined;
@@ -130,11 +130,16 @@ export function useReviewQueue(records: readonly StudentRecord[]): ReviewQueueRe
 
     return {
       items,
-      counts: { neis, document, followUp, total: items.length },
+      counts: {
+        neis: neisCount,
+        document: documentCount,
+        followUp: followUpCount,
+        total: items.length,
+      },
       progress: {
         totalAttendance,
-        neisReported: totalAttendance - neis,
-        docSubmitted: totalAttendance - document,
+        neisReported: totalAttendance - neisCount,
+        docSubmitted: totalAttendance - documentCount,
         followUpTotal,
         followUpDone,
       },
