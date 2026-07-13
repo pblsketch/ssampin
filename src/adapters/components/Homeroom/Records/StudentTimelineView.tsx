@@ -16,6 +16,8 @@ import {
 } from './recordUtils';
 import { RecordEmptyState } from '@adapters/components/common/records/RecordEmptyState';
 import { RecordCompletionBadge } from '@adapters/components/common/records/RecordCompletionBadge';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+import { requiresDocument } from '@domain/rules/attendanceDocumentPolicy';
 
 interface StudentTimelineViewProps {
   student: Student;
@@ -52,6 +54,8 @@ function StudentTimelineView({
   onToggleDocumentSubmitted,
   edit,
 }: StudentTimelineViewProps) {
+  // M4: 서류 배지 노출 게이트 — 증빙서류 요구 정책
+  const documentPolicy = useSettingsStore((s) => s.settings.attendanceDocumentPolicy);
   const {
     editingId,
     editContent,
@@ -177,11 +181,14 @@ function StudentTimelineView({
                                   completed={!!record.reportedToNeis}
                                   onToggle={() => void onToggleNeisReport(record.id)}
                                 />
-                                <RecordCompletionBadge
-                                  kind="document"
-                                  completed={!!record.documentSubmitted}
-                                  onToggle={() => void onToggleDocumentSubmitted(record.id)}
-                                />
+                                {/* M4: 서류 배지는 증빙서류 요구 대상에만 표시 (정책 게이트) */}
+                                {requiresDocument(record, documentPolicy) && (
+                                  <RecordCompletionBadge
+                                    kind="document"
+                                    completed={!!record.documentSubmitted}
+                                    onToggle={() => void onToggleDocumentSubmitted(record.id)}
+                                  />
+                                )}
                               </>
                             )}
                             <span className="text-detail text-sp-muted ml-auto">

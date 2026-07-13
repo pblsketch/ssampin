@@ -418,6 +418,11 @@ export interface Settings {
    * 기본 제공 키워드 없음(사용자 등록만) — 규정 판단을 내장하지 않는다.
    */
   readonly attendanceReasonKeywords?: readonly string[];
+  /**
+   * 증빙서류 요구 정책(M4) — 어떤 출결(사유 축×상태)이 서류 수합 대상인지 학교 방침.
+   * 미설정 시 기본 정책(출석인정만 요구, DEFAULT_ATTENDANCE_DOCUMENT_POLICY) 적용.
+   */
+  readonly attendanceDocumentPolicy?: import('@domain/rules/attendanceDocumentPolicy').AttendanceDocumentPolicy;
   readonly subject: string;
   readonly schoolLevel: SchoolLevel;
   /** 직접 설정 시 수업 시간(분). schoolLevel이 'custom'일 때 사용 */

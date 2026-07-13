@@ -192,7 +192,7 @@ export function ReviewMode({
         <ProgressStat
           label="서류 제출"
           done={progress.docSubmitted}
-          total={progress.totalAttendance}
+          total={progress.docRequired}
           barClass="bg-orange-500"
           action={
             counts.document > 0 ? { label: '전체 제출 완료', onClick: handleAllDoc } : undefined

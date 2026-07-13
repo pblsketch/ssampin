@@ -1,5 +1,9 @@
 import { useMemo } from 'react';
 import type { StudentRecord } from '@domain/entities/StudentRecord';
+import {
+  requiresDocument,
+  type AttendanceDocumentPolicy,
+} from '@domain/rules/attendanceDocumentPolicy';
 
 /** 검토 대상 종류 — 나이스 반영 / 서류 제출 / 후속조치. */
 export type ReviewKind = 'neis' | 'document' | 'followUp';
@@ -32,6 +36,9 @@ export interface ReviewQueueResult {
   readonly progress: {
     readonly totalAttendance: number;
     readonly neisReported: number;
+    /** 서류 요구 대상 건수(M4 — 정책 게이트 후 분모). */
+    readonly docRequired: number;
+    /** 서류 요구 대상 중 제출 완료 건수(M4 — "N중 M"의 M). */
     readonly docSubmitted: number;
     readonly followUpTotal: number;
     readonly followUpDone: number;
@@ -54,12 +61,16 @@ function daysFromToday(dateStr: string): number {
  *
  * 나이스 미반영·서류 미제출·미완료 후속조치를 하나의 처리 목록으로 통합한다.
  * 이전에는 경고 배너·진행 현황 패널·필터 토글이 각자 records.filter로 따로 세던 것을
- * 이 훅 하나가 대체한다(조회 화면 안에서 소스 단일화). 계산 조건은 기존과 동일:
+ * 이 훅 하나가 대체한다(조회 화면 안에서 소스 단일화). 계산 조건:
  * - 나이스: category==='attendance' && !reportedToNeis
- * - 서류: category==='attendance' && !documentSubmitted
+ * - 서류(M4 정책 게이트): category==='attendance' && requiresDocument(r, policy) && !documentSubmitted
+ *   — 서류가 필요 없는 출결(예: 기본 정책의 질병 결석)은 미제출로 세지 않는다.
  * - 후속조치: followUp && !followUpDone (기한 지남/7일 내/기한 없음 구분)
  */
-export function useReviewQueue(records: readonly StudentRecord[]): ReviewQueueResult {
+export function useReviewQueue(
+  records: readonly StudentRecord[],
+  documentPolicy?: AttendanceDocumentPolicy,
+): ReviewQueueResult {
   return useMemo(() => {
     const today = todayStr();
     const items: ReviewQueueItem[] = [];
@@ -67,6 +78,8 @@ export function useReviewQueue(records: readonly StudentRecord[]): ReviewQueueRe
     let documentCount = 0;
     let followUpCount = 0;
     let totalAttendance = 0;
+    let docRequired = 0;
+    let docSubmittedCount = 0;
     let followUpTotal = 0;
     let followUpDone = 0;
 
@@ -78,8 +91,14 @@ export function useReviewQueue(records: readonly StudentRecord[]): ReviewQueueRe
         if (r.followUpDone) followUpDone++;
       }
 
+      const docNeeded = isAttendance && requiresDocument(r, documentPolicy);
+      if (docNeeded) {
+        docRequired++;
+        if (r.documentSubmitted) docSubmittedCount++;
+      }
+
       const neisPending = isAttendance && !r.reportedToNeis;
-      const documentPending = isAttendance && !r.documentSubmitted;
+      const documentPending = docNeeded && !r.documentSubmitted;
       const followUpPending = !!r.followUp && !r.followUpDone;
 
       if (!neisPending && !documentPending && !followUpPending) continue;
@@ -139,10 +158,11 @@ export function useReviewQueue(records: readonly StudentRecord[]): ReviewQueueRe
       progress: {
         totalAttendance,
         neisReported: totalAttendance - neisCount,
-        docSubmitted: totalAttendance - documentCount,
+        docRequired,
+        docSubmitted: docSubmittedCount,
         followUpTotal,
         followUpDone,
       },
     };
-  }, [records]);
+  }, [records, documentPolicy]);
 }

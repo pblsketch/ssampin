@@ -11,6 +11,7 @@ import {
   formatDateRangeKR,
   sortRecordsInDateGroup,
   getRecordChipLabel,
+  docCompletionCellView,
 } from './recordUtils';
 import { enumerateRange } from '@adapters/components/common/calendarUtils';
 import { DEFAULT_RECORD_CATEGORIES } from '@domain/valueObjects/RecordCategory';
@@ -151,5 +152,25 @@ describe('sortRecordsInDateGroup', () => {
       'absent-5',
       'late',
     ]);
+  });
+});
+
+describe('docCompletionCellView (M4+N1 — 서류 열 분모·색·빈 가드 세트)', () => {
+  it('요구 서류 전부 제출한 학생은 주황이 아닌 완료 톤(녹색)', () => {
+    // 전체 출결 10건이어도 요구 3건 전부 제출이면 완료 — 분모가 attendanceTotal이면 생기던 오표시 방지
+    const v = docCompletionCellView(3, 3);
+    expect(v.text).toBe('3/3');
+    expect(v.toneClass).toContain('text-green-400');
+    expect(v.toneClass).not.toContain('orange');
+  });
+
+  it("요구 0건인 학생은 '0/0'이 아니라 '-'", () => {
+    expect(docCompletionCellView(0, 0).text).toBe('-');
+  });
+
+  it('요구 대비 미제출이 남아 있으면 미완료 톤(주황)', () => {
+    const v = docCompletionCellView(1, 3);
+    expect(v.text).toBe('1/3');
+    expect(v.toneClass).toContain('text-orange-400');
   });
 });

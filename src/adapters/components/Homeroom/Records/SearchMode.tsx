@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useStudentRecordsStore, RECORD_COLOR_MAP } from '@adapters/stores/useStudentRecordsStore';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useToastStore } from '@adapters/components/common/Toast';
 import type { StudentRecord } from '@domain/entities/StudentRecord';
 import { filterByStudent, getAttendanceStats } from '@domain/rules/studentRecordRules';
@@ -38,7 +39,9 @@ function SearchMode({ students, records, categories }: ModeProps) {
 
   // 찾아보기/검토 모드 (리디자인 4단계, 안 B) — 기본은 찾아보기, 검토 대기 건수는 배지로
   const [activeView, setActiveView] = useState<'browse' | 'review'>('browse');
-  const queue = useReviewQueue(records);
+  // M4: 서류 미제출은 증빙서류 요구 정책(설정) 게이트를 거친다 — 과다 카운트 교정
+  const documentPolicy = useSettingsStore((s) => s.settings.attendanceDocumentPolicy);
+  const queue = useReviewQueue(records, documentPolicy);
 
   // 필터 상태·파생값(리디자인 3단계 — SearchMode 본체는 레이아웃 배치만 담당)
   const filters = useRecordFilters(records, categories);

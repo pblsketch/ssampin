@@ -1,5 +1,7 @@
 import { useState, useMemo, useCallback, useRef } from 'react';
 import { useStudentRecordsStore } from '@adapters/stores/useStudentRecordsStore';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+import { requiresDocument } from '@domain/rules/attendanceDocumentPolicy';
 import { ATTENDANCE_TYPES, ATTENDANCE_REASONS } from '@domain/valueObjects/RecordCategory';
 import type { StudentRecord } from '@domain/entities/StudentRecord';
 import type { RecordCategoryItem } from '@domain/valueObjects/RecordCategory';
@@ -27,6 +29,8 @@ export function useRecordFilters(
 ) {
   const periodFilter = useStudentRecordsStore((s) => s.periodFilter);
   const setPeriodFilter = useStudentRecordsStore((s) => s.setPeriodFilter);
+  // M4: '서류 미제출' 토글은 증빙서류 요구 정책 게이트를 거친다
+  const documentPolicy = useSettingsStore((s) => s.settings.attendanceDocumentPolicy);
 
   const [selectedStudentId, setSelectedStudentId] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
@@ -132,7 +136,13 @@ export function useRecordFilters(
       result = result.filter((r) => r.category === 'attendance' && !r.reportedToNeis);
     }
     if (docUnsubmittedOnly) {
-      result = result.filter((r) => r.category === 'attendance' && !r.documentSubmitted);
+      // M4: 증빙서류 요구 정책 게이트 — 서류가 필요 없는 출결은 '미제출'로 세지 않는다.
+      result = result.filter(
+        (r) =>
+          r.category === 'attendance' &&
+          requiresDocument(r, documentPolicy) &&
+          !r.documentSubmitted,
+      );
     }
     if (periodFilter === 'week') {
       const { start, end } = getWeekRange();
@@ -164,6 +174,7 @@ export function useRecordFilters(
     followUpOnly,
     unreportedOnly,
     docUnsubmittedOnly,
+    documentPolicy,
     periodFilter,
     customStartDate,
     customEndDate,

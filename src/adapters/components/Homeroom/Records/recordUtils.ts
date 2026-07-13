@@ -427,3 +427,17 @@ export const COUNSELING_METHODS: { value: CounselingMethod; label: string }[] = 
   { value: 'text', label: '문자' },
   { value: 'other', label: '기타' },
 ];
+
+/**
+ * 통계 서류 열 셀 뷰 (M4+N1) — 분모=서류 요구 대상.
+ * 요구 0건은 '-'(빈 가드), 요구 전부 제출은 완료 톤(색상 술어도 같은 분모).
+ */
+export function docCompletionCellView(
+  docSubmitted: number,
+  docRequired: number,
+): { text: string; toneClass: string } {
+  return {
+    text: docRequired > 0 ? `${docSubmitted}/${docRequired}` : '-',
+    toneClass: docSubmitted < docRequired ? 'text-orange-400 font-medium' : 'text-green-400',
+  };
+}

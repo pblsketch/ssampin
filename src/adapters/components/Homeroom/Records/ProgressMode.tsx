@@ -18,6 +18,7 @@ import {
   type NeisReasonAxis,
   type NeisReasonAxisWithExcused,
 } from '@domain/rules/attendanceRules';
+import { requiresDocument } from '@domain/rules/attendanceDocumentPolicy';
 import { formatPeriodLabel, type AttendanceStatus } from '@domain/entities/Attendance';
 import { SummaryCard, StatBadge } from './RecordStatCards';
 import {
@@ -27,6 +28,7 @@ import {
   METHOD_OPTIONS,
   getAttendanceTypeFromSubcategory,
   formatDateKR,
+  docCompletionCellView,
 } from './recordUtils';
 import { studentRecordToDisplay, type DisplayRecord } from '@adapters/presentation/displayRecord';
 import { RecordDetailModal } from '@adapters/components/common/records/RecordDetailModal';
@@ -735,6 +737,8 @@ function toDateInputString(d: Date): string {
 function ProgressMode({ students, records, categories }: ModeProps) {
   const [statsPeriod, setStatsPeriod] = useState<StatsPeriod>('all');
   const [statsTab, setStatsTab] = useState<StatsTab>('attendance');
+  // M4: 서류 완료율은 증빙서류 요구 정책 게이트를 거친다 (분모=요구 대상)
+  const documentPolicy = useSettingsStore((s) => s.settings.attendanceDocumentPolicy);
   const [sortKey, setSortKey] = useState<SortKey>('number');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
   const monthRange = useMemo(() => getMonthRange(), []);
@@ -873,9 +877,13 @@ function ProgressMode({ students, records, categories }: ModeProps) {
       const neisReported = studentRecs.filter(
         (r) => r.category === 'attendance' && r.reportedToNeis,
       ).length;
-      const docSubmitted = studentRecs.filter(
-        (r) => r.category === 'attendance' && r.documentSubmitted,
-      ).length;
+      // M4: 서류 완료율의 분모는 '서류 요구 대상'(정책 게이트) — "요구 N건 중 제출 M건".
+      // 나이스 열 분모(attendanceTotal)는 불변 — 나이스 반영은 전 출결 대상.
+      const docRequiredRecs = studentRecs.filter(
+        (r) => r.category === 'attendance' && requiresDocument(r, documentPolicy),
+      );
+      const docRequired = docRequiredRecs.length;
+      const docSubmitted = docRequiredRecs.filter((r) => r.documentSubmitted).length;
 
       // Feature 3: Counseling method breakdown
       const methodCounts: Record<string, number> = {};
@@ -900,6 +908,7 @@ function ProgressMode({ students, records, categories }: ModeProps) {
         idx,
         attendanceTotal,
         neisReported,
+        docRequired,
         docSubmitted,
         methodCounts,
         subCounts,
@@ -946,7 +955,7 @@ function ProgressMode({ students, records, categories }: ModeProps) {
       return sortDir === 'desc' ? -cmp : cmp;
     });
     return sorted;
-  }, [students, filteredRecords, sortKey, sortDir]);
+  }, [students, filteredRecords, sortKey, sortDir, documentPolicy]);
 
   // 셀 클릭 상세 모달
   const studentMap = useMemo(() => new Map(students.map((s) => [s.id, s])), [students]);
@@ -1257,6 +1266,7 @@ function ProgressMode({ students, records, categories }: ModeProps) {
                 idx,
                 attendanceTotal,
                 neisReported,
+                docRequired,
                 docSubmitted,
                 methodCounts,
                 subCounts,
@@ -1354,12 +1364,17 @@ function ProgressMode({ students, records, categories }: ModeProps) {
                       >
                         {attendanceTotal > 0 ? `${neisReported}/${attendanceTotal}` : '-'}
                       </td>
-                      {/* Document submitted/total */}
-                      <td
-                        className={`text-center p-3 border-b border-l text-xs ${docSubmitted < attendanceTotal ? 'text-orange-400 font-medium' : 'text-green-400'}`}
-                      >
-                        {attendanceTotal > 0 ? `${docSubmitted}/${attendanceTotal}` : '-'}
-                      </td>
+                      {/* Document submitted/required — M4+N1: 분모·색상 술어·빈 가드를 '요구 대상'으로 세트 교체 */}
+                      {(() => {
+                        const docCell = docCompletionCellView(docSubmitted, docRequired);
+                        return (
+                          <td
+                            className={`text-center p-3 border-b border-l text-xs ${docCell.toneClass}`}
+                          >
+                            {docCell.text}
+                          </td>
+                        );
+                      })()}
                     </>
                   )}
                   {statsTab === 'counseling' && (

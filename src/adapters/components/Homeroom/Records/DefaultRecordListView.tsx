@@ -15,6 +15,8 @@ import {
 import { DateGroupHeader } from '@adapters/components/common/records/DateGroupHeader';
 import { RecordEmptyState } from '@adapters/components/common/records/RecordEmptyState';
 import { RecordCompletionBadge } from '@adapters/components/common/records/RecordCompletionBadge';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+import { requiresDocument } from '@domain/rules/attendanceDocumentPolicy';
 
 interface DefaultRecordListViewProps {
   grouped: [string, StudentRecord[]][];
@@ -44,6 +46,8 @@ function DefaultRecordListView({
   onToggleDocumentSubmitted,
   edit,
 }: DefaultRecordListViewProps) {
+  // M4: 서류 배지 노출 게이트 — 증빙서류 요구 정책
+  const documentPolicy = useSettingsStore((s) => s.settings.attendanceDocumentPolicy);
   const {
     editingId,
     editContent,
@@ -144,11 +148,14 @@ function DefaultRecordListView({
                             completed={!!record.reportedToNeis}
                             onToggle={() => void onToggleNeisReport(record.id)}
                           />
-                          <RecordCompletionBadge
-                            kind="document"
-                            completed={!!record.documentSubmitted}
-                            onToggle={() => void onToggleDocumentSubmitted(record.id)}
-                          />
+                          {/* M4: 서류 배지는 증빙서류 요구 대상에만 표시 (정책 게이트) */}
+                          {requiresDocument(record, documentPolicy) && (
+                            <RecordCompletionBadge
+                              kind="document"
+                              completed={!!record.documentSubmitted}
+                              onToggle={() => void onToggleDocumentSubmitted(record.id)}
+                            />
+                          )}
                         </>
                       )}
                       <span className="text-sm text-sp-text font-medium min-w-[60px] flex items-center gap-1.5">

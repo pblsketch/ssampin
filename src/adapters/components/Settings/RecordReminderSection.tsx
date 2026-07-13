@@ -1,5 +1,14 @@
 import { useState } from 'react';
 import type { Settings } from '@domain/entities/Settings';
+import {
+  DEFAULT_ATTENDANCE_DOCUMENT_POLICY,
+  DOC_REASON_AXES,
+  ALL_DOC_STATUSES,
+  DOC_STATUS_LABELS,
+  type AttendanceDocumentPolicy,
+  type DocReasonAxis,
+  type DocStatusKey,
+} from '@domain/rules/attendanceDocumentPolicy';
 import type {
   NameExposure,
   ReminderPreset,
@@ -449,6 +458,19 @@ export function RecordReminderSection({ draft, patch }: Props) {
           />
         </SettingsSection>
 
+        {/* 증빙서류 요구 정책 (M4) — 어떤 출결이 서류 수합 대상인지 학교 방침 */}
+        <SettingsSection
+          icon="description"
+          iconColor="bg-orange-500/10 text-orange-500"
+          title="증빙서류 요구 설정"
+          description="체크한 출결만 '서류 미제출'로 집계돼요. 기본은 출석인정(체험학습 등)만 서류를 요구하고, 질병·미인정·기타는 학교 방침에 따라 켜세요."
+        >
+          <AttendanceDocumentPolicyEditor
+            policy={draft.attendanceDocumentPolicy ?? DEFAULT_ATTENDANCE_DOCUMENT_POLICY}
+            onChange={(next) => patch({ attendanceDocumentPolicy: next })}
+          />
+        </SettingsSection>
+
         {/* 제외/관심 학생 (추후 지원) */}
         <SettingsSection
           icon="person_search"
@@ -547,6 +569,72 @@ function AttendanceKeywordEditor({
           구체적으로 등록할수록 정확해요.
         </p>
       )}
+    </div>
+  );
+}
+
+/** 증빙서류 요구 정책 편집기 (M4) — 사유 축 × 출결 구분 체크 매트릭스. */
+function AttendanceDocumentPolicyEditor({
+  policy,
+  onChange,
+}: {
+  policy: AttendanceDocumentPolicy;
+  onChange: (next: AttendanceDocumentPolicy) => void;
+}) {
+  const AXIS_LABELS: Record<DocReasonAxis, string> = {
+    인정: '출석인정',
+    질병: '질병',
+    미인정: '미인정',
+    기타: '기타',
+  };
+
+  const isOn = (axis: DocReasonAxis, status: DocStatusKey) =>
+    policy.requiredBy[axis]?.includes(status) ?? false;
+
+  const toggle = (axis: DocReasonAxis, status: DocStatusKey) => {
+    const cur = policy.requiredBy[axis] ?? [];
+    const next = cur.includes(status) ? cur.filter((s) => s !== status) : [...cur, status];
+    onChange({ requiredBy: { ...policy.requiredBy, [axis]: next } });
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="overflow-x-auto rounded-lg border border-sp-border">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-sp-surface text-sp-muted">
+              <th className="px-3 py-2 text-left text-xs font-medium">사유</th>
+              {ALL_DOC_STATUSES.map((s) => (
+                <th key={s} className="px-2 py-2 text-center text-xs font-medium">
+                  {DOC_STATUS_LABELS[s]}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-sp-border/50">
+            {DOC_REASON_AXES.map((axis) => (
+              <tr key={axis}>
+                <td className="px-3 py-1.5 text-xs text-sp-text">{AXIS_LABELS[axis]}</td>
+                {ALL_DOC_STATUSES.map((status) => (
+                  <td key={status} className="px-2 py-1.5 text-center">
+                    <input
+                      type="checkbox"
+                      checked={isOn(axis, status)}
+                      onChange={() => toggle(axis, status)}
+                      aria-label={`${AXIS_LABELS[axis]} ${DOC_STATUS_LABELS[status]} 서류 요구`}
+                      className="w-4 h-4 accent-sp-accent cursor-pointer"
+                    />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-xs text-sp-muted">
+        예: 질병 결석에 진단서를 걷는 학교라면 '질병' 행의 '결석'을 체크하세요. 바꾸는 즉시 서류
+        미제출 집계(조회·통계·검토)가 다시 계산돼요.
+      </p>
     </div>
   );
 }

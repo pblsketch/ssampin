@@ -2,13 +2,17 @@ import { useMemo, useState } from 'react';
 import type { Student } from '@domain/entities/Student';
 import type { StudentRecord } from '@domain/entities/StudentRecord';
 import { useStudentRecordsStore } from '@adapters/stores/useStudentRecordsStore';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+import { requiresDocument } from '@domain/rules/attendanceDocumentPolicy';
 import { formatDateKR, getRecordChipLabel } from './recordUtils';
 
 /**
  * 출결 현황 요약 배너 — 나이스 미반영·서류 미제출 출결 기록을 한눈에 보고 일괄 처리한다.
  *
- * 출결 탭(AttendanceMode)과 통계 탭(ProgressMode)이 공유하는 단일 컴포넌트. 카운트 산식은
- * category==='attendance' && !reportedToNeis / !documentSubmitted (통계·출결 탭 동일).
+ * 출결 탭(AttendanceMode)과 통계 탭(ProgressMode)이 공유하는 단일 컴포넌트. 카운트 산식:
+ * 나이스 = category==='attendance' && !reportedToNeis (불변).
+ * 서류(M4) = requiresDocument(r, 정책) && !documentSubmitted — 증빙서류 요구 정책 게이트로
+ * 과다 카운트(서류가 필요 없는 출결까지 미제출 집계)를 교정한다.
  *
  * 가독성(피드백 2026-07): 배너 본문은 테마 대응 `text-sp-text`로 두고 색은 아이콘·건수·완료
  * 버튼에만 쓴다(노란 바탕+노란 글씨 저대비 회피 — Notice 컴포넌트와 같은 원칙).
@@ -41,9 +45,16 @@ export function AttendanceStatusBanners({ students }: { students: readonly Stude
     () => records.filter((r) => r.category === 'attendance' && !r.reportedToNeis),
     [records],
   );
+  const documentPolicy = useSettingsStore((s) => s.settings.attendanceDocumentPolicy);
   const unsubmitted = useMemo(
-    () => records.filter((r) => r.category === 'attendance' && !r.documentSubmitted),
-    [records],
+    () =>
+      records.filter(
+        (r) =>
+          r.category === 'attendance' &&
+          requiresDocument(r, documentPolicy) &&
+          !r.documentSubmitted,
+      ),
+    [records, documentPolicy],
   );
   const neisDetail = useMemo(
     () => groupRecordsByStudent(unreported, students),
