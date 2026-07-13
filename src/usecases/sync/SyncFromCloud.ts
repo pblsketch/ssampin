@@ -119,8 +119,9 @@ export function mergeCategories(
  * - 한쪽에만 있는 기록은 무조건 보존 — 구/빈 파일이 "최신" 판정을 받아도 통째 유실이 없다.
  *   (파일 단위 latest 교체가 학생별 수업 메모 전체를 지운 2026-07-13 유실 신고의 원인 ②)
  * - 같은 id 는 updatedAt(ms 숫자) 최신 우선, 동률이면 preferRemote 로 판정
- * - 삭제 전파(툼스톤) 없음: 한쪽에서 지운 기록이 상대쪽 동기화로 되살아날 수 있음 —
- *   student-records 병합과 동일한 기존 트레이드오프
+ * - 삭제 전파: 양쪽 툼스톤(deleted)을 id별 최신 deletedAt으로 합치고,
+ *   기록이 툼스톤보다 나중에 수정된 경우에만 살아남는다(재작성이 삭제를 이김).
+ *   동률이면 삭제가 이긴다 — mergeAttendance 와 동일 정책.
  * - customTags/customCategories 는 순서 보존 합집합 (빈 배열이 커스텀을 덮지 않게)
  */
 export function mergeObservations(
@@ -145,12 +146,33 @@ export function mergeObservations(
     }
   }
 
+  // 툼스톤 병합: id별 최신 deletedAt 유지
+  const tombstones = new Map<string, number>();
+  for (const t of [...(local?.deleted ?? []), ...(remote.deleted ?? [])]) {
+    const prev = tombstones.get(t.id);
+    if (!prev || t.deletedAt > prev) tombstones.set(t.id, t.deletedAt);
+  }
+
+  // 기록 vs 툼스톤: 기록의 updatedAt이 삭제 시각보다 나중이면 부활(툼스톤 제거),
+  // 아니면 기록 제거(삭제 유지)
+  for (const [id, deletedAt] of tombstones) {
+    const rec = map.get(id);
+    if (!rec) continue;
+    if ((rec.updatedAt ?? 0) > deletedAt) {
+      tombstones.delete(id);
+    } else {
+      map.delete(id);
+    }
+  }
+  const deleted = [...tombstones].map(([id, deletedAt]) => ({ id, deletedAt }));
+
   const customTags = mergeStringUnion(local?.customTags, remote.customTags);
   const customCategories = mergeStringUnion(local?.customCategories, remote.customCategories);
   return {
     records: [...map.values()],
     ...(customTags ? { customTags } : {}),
     ...(customCategories ? { customCategories } : {}),
+    ...(deleted.length > 0 ? { deleted } : {}),
   };
 }
 

@@ -13,11 +13,28 @@ export interface ObservationRecord {
   readonly category?: string;
 }
 
+/**
+ * 삭제 전파용 툼스톤.
+ * 기록을 지울 때 "언제 지웠는지"를 남겨, 기기 간 병합에서
+ * 상대 기기에 남아 있던 옛 사본이 부활하지 않게 한다.
+ */
+export interface ObservationTombstone {
+  /** ObservationRecord.id */
+  readonly id: string;
+  /** 삭제 시각(ms) — ObservationRecord.updatedAt 과 동일 축 */
+  readonly deletedAt: number;
+}
+
+/** 툼스톤 보존 기간 — 지난 툼스톤은 저장 시 정리(GC)된다 */
+export const OBSERVATION_TOMBSTONE_TTL_MS = 90 * 24 * 60 * 60 * 1000;
+
 export interface ObservationData {
   readonly records: readonly ObservationRecord[];
   readonly customTags?: readonly string[];
   /** 통합 입력 분류(S4) 사용자 추가 목록 — DEFAULT_OBSERVATION_CATEGORIES 외 직접 추가분. */
   readonly customCategories?: readonly string[];
+  /** 삭제 전파용 툼스톤 목록 (과거 데이터에는 없음) */
+  readonly deleted?: readonly ObservationTombstone[];
 }
 
 export const DEFAULT_OBSERVATION_TAGS = ['교과역량', '학습태도', '진로흥미', '특이사항'] as const;

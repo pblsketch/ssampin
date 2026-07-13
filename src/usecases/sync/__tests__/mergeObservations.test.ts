@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { mergeObservations } from '../SyncFromCloud';
+import { buildObservationSaveData } from '@usecases/classManagement/ManageObservations';
+import { OBSERVATION_TOMBSTONE_TTL_MS } from '@domain/entities/Observation';
 import type { ObservationData, ObservationRecord } from '@domain/entities/Observation';
 
 function obs(
@@ -100,5 +102,94 @@ describe('mergeObservations — 수업 기록 레코드 단위 병합', () => {
     const merged = mergeObservations(null, remote, true);
     expect(merged.records).toHaveLength(1);
     expect(merged.customTags).toEqual(['발표력']);
+  });
+});
+
+describe('mergeObservations — 삭제 전파(툼스톤)', () => {
+  it('한쪽에서 지운 기록은 상대 기기 병합에서 부활하지 않는다 (삭제 전파)', () => {
+    // 리모트가 id 'a'를 3000 시점에 삭제, 로컬엔 옛 사본(updatedAt 2000)이 남아 있음
+    const local: ObservationData = { records: [obs({ id: 'a', updatedAt: 2_000 })] };
+    const remote: ObservationData = { records: [], deleted: [{ id: 'a', deletedAt: 3_000 }] };
+    const merged = mergeObservations(local, remote, true);
+    expect(merged.records).toHaveLength(0);
+    expect(merged.deleted).toEqual([{ id: 'a', deletedAt: 3_000 }]);
+  });
+
+  it('삭제 이후에 다시 수정된 기록은 살아남는다 (재작성이 삭제를 이김)', () => {
+    const local: ObservationData = { records: [obs({ id: 'a', updatedAt: 4_000 })] };
+    const remote: ObservationData = { records: [], deleted: [{ id: 'a', deletedAt: 3_000 }] };
+    const merged = mergeObservations(local, remote, true);
+    expect(merged.records.map((r) => r.id)).toEqual(['a']);
+    expect(merged.deleted).toBeUndefined();
+  });
+
+  it('updatedAt과 deletedAt이 동률이면 삭제가 이긴다', () => {
+    const local: ObservationData = { records: [obs({ id: 'a', updatedAt: 3_000 })] };
+    const remote: ObservationData = { records: [], deleted: [{ id: 'a', deletedAt: 3_000 }] };
+    const merged = mergeObservations(local, remote, true);
+    expect(merged.records).toHaveLength(0);
+  });
+
+  it('양쪽 툼스톤은 id별 최신 deletedAt으로 합쳐진다', () => {
+    const local: ObservationData = { records: [], deleted: [{ id: 'a', deletedAt: 1_000 }] };
+    const remote: ObservationData = { records: [], deleted: [{ id: 'a', deletedAt: 5_000 }] };
+    const merged = mergeObservations(local, remote, true);
+    expect(merged.deleted).toEqual([{ id: 'a', deletedAt: 5_000 }]);
+  });
+
+  it('legacy 파일(툼스톤 없음)끼리 병합하면 deleted 필드가 생성되지 않는다', () => {
+    const merged = mergeObservations({ records: [obs({ id: 'a' })] }, { records: [] }, true);
+    expect('deleted' in merged).toBe(false);
+  });
+});
+
+describe('buildObservationSaveData — 저장 시 툼스톤 관리', () => {
+  const NOW = 10_000;
+
+  it('이번 저장에서 사라진 id에 툼스톤을 남긴다', () => {
+    const existing: ObservationData = { records: [obs({ id: 'a' }), obs({ id: 'b' })] };
+    const next: ObservationData = { records: [obs({ id: 'a' })] };
+    const saved = buildObservationSaveData(existing, next, NOW);
+    expect(saved.records.map((r) => r.id)).toEqual(['a']);
+    expect(saved.deleted).toEqual([{ id: 'b', deletedAt: NOW }]);
+  });
+
+  it('다시 등장한 id의 툼스톤은 제거된다 (재작성이 삭제를 이김)', () => {
+    const existing: ObservationData = {
+      records: [],
+      deleted: [{ id: 'a', deletedAt: 5_000 }],
+    };
+    const next: ObservationData = { records: [obs({ id: 'a' })] };
+    const saved = buildObservationSaveData(existing, next, NOW);
+    expect(saved.records.map((r) => r.id)).toEqual(['a']);
+    expect('deleted' in saved).toBe(false);
+  });
+
+  it('기존 툼스톤은 승계되고 TTL(90일) 경과분은 정리된다', () => {
+    const now = OBSERVATION_TOMBSTONE_TTL_MS + 1_000_000;
+    const fresh = { id: 'fresh', deletedAt: now - 1_000 };
+    const expired = { id: 'expired', deletedAt: 999_999 }; // cutoff(=1,000,000) 이전
+    const existing: ObservationData = { records: [], deleted: [fresh, expired] };
+    const next: ObservationData = { records: [] };
+    const saved = buildObservationSaveData(existing, next, now);
+    expect(saved.deleted).toEqual([fresh]);
+  });
+
+  it('호출자가 스프레드로 실어온 낡은 next.deleted는 무시된다 (existing 기준 재계산)', () => {
+    const existing: ObservationData = { records: [obs({ id: 'a' })] };
+    const next: ObservationData = {
+      records: [obs({ id: 'a' })],
+      deleted: [{ id: 'ghost', deletedAt: 1 }],
+    };
+    const saved = buildObservationSaveData(existing, next, NOW);
+    expect('deleted' in saved).toBe(false);
+  });
+
+  it('삭제가 없으면 legacy 형태 그대로 deleted 필드를 만들지 않는다', () => {
+    const existing: ObservationData = { records: [obs({ id: 'a' })], customTags: ['발표력'] };
+    const next: ObservationData = { ...existing, records: [obs({ id: 'a' }), obs({ id: 'b' })] };
+    const saved = buildObservationSaveData(existing, next, NOW);
+    expect('deleted' in saved).toBe(false);
+    expect(saved.customTags).toEqual(['발표력']);
   });
 });
