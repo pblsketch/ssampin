@@ -135,6 +135,8 @@ interface StudentRecordsState {
   toggleDocumentItem: (recordId: string, kind: string) => Promise<void>;
   bulkMarkDocumentSubmitted: (recordIds: readonly string[]) => Promise<void>;
   bulkMarkNeisReported: (recordIds: readonly string[]) => Promise<void>;
+  /** 검토 모드 일괄 완료 — followUp이 있고 미완료인 대상만 완료 처리(원자 저장). */
+  bulkMarkFollowUpDone: (recordIds: readonly string[]) => Promise<void>;
   setViewMode: (mode: ViewMode) => void;
   setPeriodFilter: (filter: PeriodFilter) => void;
 
@@ -362,7 +364,8 @@ export const useStudentRecordsStore = create<StudentRecordsState>((set, get) => 
           ? { documents: r.documents.map((d) => ({ ...d, submitted: true })) }
           : {}),
       }));
-      await Promise.all(updatedRecords.map((r) => manageRecords.update(r)));
+      // 기록별 update() 병렬 실행은 같은 스냅샷을 서로 덮어써 마지막 쓰기만 남는다(codex QA) — 원자 일괄 저장.
+      await manageRecords.updateMany(updatedRecords);
       const updatedById = new Map(updatedRecords.map((r) => [r.id, r]));
       set((state) => ({
         records: state.records.map((r) => updatedById.get(r.id) ?? r),
@@ -375,12 +378,23 @@ export const useStudentRecordsStore = create<StudentRecordsState>((set, get) => 
         (r) => idSet.has(r.id) && r.category === 'attendance' && !r.reportedToNeis,
       );
       const updatedRecords = targets.map((r) => ({ ...r, reportedToNeis: true }));
-      await Promise.all(updatedRecords.map((r) => manageRecords.update(r)));
+      await manageRecords.updateMany(updatedRecords);
       const updatedIds = new Set(updatedRecords.map((r) => r.id));
       set((state) => ({
         records: state.records.map((r) =>
           updatedIds.has(r.id) ? { ...r, reportedToNeis: true } : r,
         ),
+      }));
+    },
+
+    bulkMarkFollowUpDone: async (recordIds) => {
+      const idSet = new Set(recordIds);
+      const targets = get().records.filter((r) => idSet.has(r.id) && r.followUp && !r.followUpDone);
+      const updatedRecords = targets.map((r) => ({ ...r, followUpDone: true }));
+      await manageRecords.updateMany(updatedRecords);
+      const updatedById = new Map(updatedRecords.map((r) => [r.id, r]));
+      set((state) => ({
+        records: state.records.map((r) => updatedById.get(r.id) ?? r),
       }));
     },
 

@@ -26,6 +26,7 @@ import { useRecordInlineEdit } from './useRecordInlineEdit';
 import { useRecordFilters } from './useRecordFilters';
 import { RecordFilterPopover } from './RecordFilterPopover';
 import { useReviewQueue } from './useReviewQueue';
+import { useTodayStr } from './useTodayStr';
 import { ReviewMode } from './ReviewMode';
 
 function SearchMode({ students, records, categories }: ModeProps) {
@@ -67,13 +68,11 @@ function SearchMode({ students, records, categories }: ModeProps) {
   const { edit, handleEdit } = useRecordInlineEdit(studentMap);
 
   // 좌측 학생 점프 리스트 아이템 — 학생별 건수·경고 점(나이스 미반영/기한 초과 후속조치)
+  // 자정을 넘기면 자동 갱신 — 경고 점(기한 초과) 판정이 어제 기준으로 남지 않게
+  const today = useTodayStr();
   const jumpItems = useMemo<JumpListItem[]>(() => {
     const counts = new Map<string, number>();
     const warnings = new Map<string, { unreported: number; overdueFollowUp: number }>();
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
     for (const r of records) {
       counts.set(r.studentId, (counts.get(r.studentId) ?? 0) + 1);
@@ -82,7 +81,7 @@ function SearchMode({ students, records, categories }: ModeProps) {
       if (r.category === 'attendance' && !r.reportedToNeis) {
         w.unreported++;
       }
-      if (r.followUp && !r.followUpDone && r.followUpDate && r.followUpDate < todayStr) {
+      if (r.followUp && !r.followUpDone && r.followUpDate && r.followUpDate < today) {
         w.overdueFollowUp++;
       }
       warnings.set(r.studentId, w);
@@ -110,7 +109,7 @@ function SearchMode({ students, records, categories }: ModeProps) {
       });
     });
     return items;
-  }, [students, records]);
+  }, [students, records, today]);
 
   // 날짜별 그룹핑 + 정렬
   const grouped = useMemo(() => {

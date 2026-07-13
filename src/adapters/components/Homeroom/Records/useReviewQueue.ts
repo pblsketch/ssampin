@@ -4,6 +4,7 @@ import {
   requiresDocument,
   type AttendanceDocumentPolicy,
 } from '@domain/rules/attendanceDocumentPolicy';
+import { useTodayStr } from './useTodayStr';
 
 /** 검토 대상 종류 — 나이스 반영 / 서류 제출 / 후속조치. */
 export type ReviewKind = 'neis' | 'document' | 'followUp';
@@ -45,13 +46,8 @@ export interface ReviewQueueResult {
   };
 }
 
-function todayStr(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-function daysFromToday(dateStr: string): number {
-  const today = new Date(todayStr() + 'T00:00:00');
+function daysBetween(todayYmd: string, dateStr: string): number {
+  const today = new Date(todayYmd + 'T00:00:00');
   const target = new Date(dateStr + 'T00:00:00');
   return Math.round((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 }
@@ -71,8 +67,9 @@ export function useReviewQueue(
   records: readonly StudentRecord[],
   documentPolicy?: AttendanceDocumentPolicy,
 ): ReviewQueueResult {
+  // 자정을 넘기면 자동 갱신 — 기한 계산이 어제 기준으로 남지 않게 메모 의존성에 포함
+  const today = useTodayStr();
   return useMemo(() => {
-    const today = todayStr();
     const items: ReviewQueueItem[] = [];
     let neisCount = 0;
     let documentCount = 0;
@@ -113,10 +110,10 @@ export function useReviewQueue(
         if (r.followUpDate) {
           if (r.followUpDate < today) {
             followUpStatus = 'overdue';
-            followUpDays = -daysFromToday(r.followUpDate);
-          } else if (daysFromToday(r.followUpDate) <= 7) {
+            followUpDays = -daysBetween(today, r.followUpDate);
+          } else if (daysBetween(today, r.followUpDate) <= 7) {
             followUpStatus = 'upcoming';
-            followUpDays = daysFromToday(r.followUpDate);
+            followUpDays = daysBetween(today, r.followUpDate);
           } else {
             followUpStatus = 'noDue';
           }
@@ -164,5 +161,5 @@ export function useReviewQueue(
         followUpDone,
       },
     };
-  }, [records, documentPolicy]);
+  }, [records, documentPolicy, today]);
 }

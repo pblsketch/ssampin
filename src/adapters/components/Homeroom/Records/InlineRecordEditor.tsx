@@ -79,6 +79,11 @@ export function InlineRecordEditor({
     [editCategory, categories],
   );
   const isAttendance = editCategory === 'attendance';
+  /**
+   * 출결 기록의 저장 경로(updateAttendanceRecord)는 카테고리 전환·후속조치를 지원하지 않는다
+   * — 입력을 받아놓고 조용히 버리던 문제(codex QA)를 막기 위해 해당 입력 자체를 숨긴다.
+   */
+  const isAttendanceRecord = record.category === 'attendance';
   const periodEditMode =
     isAttendance &&
     attendancePeriods !== undefined &&
@@ -125,33 +130,37 @@ export function InlineRecordEditor({
           : 'bg-sp-surface/80 border border-sp-accent/30 rounded-xl p-3 space-y-2.5 animate-fade-in'
       }
     >
-      {/* 카테고리 */}
-      <div>
-        <p className={`text-sp-muted mb-1 ${compact ? 'text-caption' : 'text-detail'}`}>카테고리</p>
-        <div className="flex flex-wrap gap-1.5">
-          {categories.map((c) => {
-            const isSelected = c.id === editCategory;
-            const colorSet = RECORD_COLOR_MAP[c.color] ?? GRAY_COLOR;
-            return (
-              <button
-                key={c.id}
-                onClick={() => {
-                  setEditCategory(c.id);
-                  // Q2: 비출결은 subcategory 를 sentinel 로 자동 유지(세부는 태그로). 출결은 유형 선택까지 빈값.
-                  setEditSubcategory(c.id === 'attendance' ? '' : synthesizeSubcategory(c.id));
-                  setLocalAttType('');
-                  setLocalAttReason('');
-                }}
-                className={`${chipSize} rounded-lg font-medium transition-all cursor-pointer select-none ${
-                  isSelected ? colorSet.activeBg : colorSet.inactiveBg
-                }`}
-              >
-                {c.name.split(' (')[0]}
-              </button>
-            );
-          })}
+      {/* 카테고리 — 출결 기록은 전환 저장이 지원되지 않아 숨김 */}
+      {!isAttendanceRecord && (
+        <div>
+          <p className={`text-sp-muted mb-1 ${compact ? 'text-caption' : 'text-detail'}`}>
+            카테고리
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {categories.map((c) => {
+              const isSelected = c.id === editCategory;
+              const colorSet = RECORD_COLOR_MAP[c.color] ?? GRAY_COLOR;
+              return (
+                <button
+                  key={c.id}
+                  onClick={() => {
+                    setEditCategory(c.id);
+                    // Q2: 비출결은 subcategory 를 sentinel 로 자동 유지(세부는 태그로). 출결은 유형 선택까지 빈값.
+                    setEditSubcategory(c.id === 'attendance' ? '' : synthesizeSubcategory(c.id));
+                    setLocalAttType('');
+                    setLocalAttReason('');
+                  }}
+                  className={`${chipSize} rounded-lg font-medium transition-all cursor-pointer select-none ${
+                    isSelected ? colorSet.activeBg : colorSet.inactiveBg
+                  }`}
+                >
+                  {c.name.split(' (')[0]}
+                </button>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* 세부 항목 / 태그 */}
       {cat && (
@@ -322,8 +331,8 @@ export function InlineRecordEditor({
         </label>
       )}
 
-      {/* 후속 조치 */}
-      {setEditFollowUp && (
+      {/* 후속 조치 — 출결 기록의 저장 경로는 후속조치를 지원하지 않아 숨김 */}
+      {setEditFollowUp && !isAttendanceRecord && (
         <div>
           <p className={`text-sp-muted mb-1 ${compact ? 'text-caption' : 'text-detail'}`}>
             후속 조치

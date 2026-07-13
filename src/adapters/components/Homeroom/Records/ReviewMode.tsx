@@ -41,8 +41,8 @@ function kindPending(item: ReviewQueueResult['items'][number], kind: ReviewKind)
 /**
  * 검토 모드 (리디자인 4단계, 안 B) — 나이스 미반영·서류 미제출·미완료 후속조치를
  * 하나의 처리 큐로 보여주고, 건별·선택 일괄·전체 일괄 처리를 한 화면에서 끝낸다.
- * 저장은 전부 기존 스토어 액션(bulkMarkNeisReported/bulkMarkDocumentSubmitted/
- * toggleNeisReport/toggleDocumentItem/toggleFollowUpDone) 재사용 — 신규 저장 경로 없음.
+ * 저장은 전부 스토어 액션(bulkMark 3종/toggleNeisReport/toggleDocumentItem/
+ * toggleFollowUpDone) 경유 — 일괄은 원자 저장(updateMany), 성공 알림은 저장 완료 후에만.
  */
 export function ReviewMode({
   queue,
@@ -54,6 +54,7 @@ export function ReviewMode({
 }: ReviewModeProps) {
   const bulkMarkNeisReported = useStudentRecordsStore((s) => s.bulkMarkNeisReported);
   const bulkMarkDocumentSubmitted = useStudentRecordsStore((s) => s.bulkMarkDocumentSubmitted);
+  const bulkMarkFollowUpDone = useStudentRecordsStore((s) => s.bulkMarkFollowUpDone);
   const toggleNeisReport = useStudentRecordsStore((s) => s.toggleNeisReport);
   const toggleDocumentItem = useStudentRecordsStore((s) => s.toggleDocumentItem);
   const toggleFollowUpDone = useStudentRecordsStore((s) => s.toggleFollowUpDone);
@@ -61,6 +62,8 @@ export function ReviewMode({
 
   const [kindFilter, setKindFilter] = useState<ReviewKind | 'all'>('all');
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
+  /** 일괄 처리 진행 중 — 연속 클릭으로 같은 대상을 겹쳐 저장하지 않도록 버튼을 잠근다. */
+  const [busy, setBusy] = useState(false);
 
   const visibleItems = useMemo(
     () =>
@@ -102,72 +105,121 @@ export function ReviewMode({
 
   const clearSelection = () => setSelectedIds(new Set());
 
+  /**
+   * 일괄 처리 공통 러너 — 저장이 실제로 끝난 뒤에만 성공 알림·선택 해제를 하고,
+   * 실패하면 실패 알림을 띄운다(codex QA: 저장 전 성공 표시·무실패 처리 지적).
+   */
+  const runBulk = async (fn: () => Promise<void>, successMsg: string) => {
+    setBusy(true);
+    try {
+      await fn();
+      showToast(successMsg, 'success');
+      clearSelection();
+    } catch (err) {
+      console.error('[ReviewMode] 일괄 처리 실패', err);
+      showToast('일괄 처리에 실패했습니다. 잠시 후 다시 시도해주세요.', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   /* ── 일괄 처리 (선택 항목) ── */
   const selNeisIds = visibleSelected.filter((i) => i.neisPending).map((i) => i.record.id);
   const selDocIds = visibleSelected.filter((i) => i.documentPending).map((i) => i.record.id);
   const selFollowIds = visibleSelected.filter((i) => i.followUpPending).map((i) => i.record.id);
 
   const handleBulkNeis = () => {
-    if (selNeisIds.length === 0) return;
+    if (busy || selNeisIds.length === 0) return;
     if (
       window.confirm(
         `선택한 출결 기록 ${selNeisIds.length}건을 나이스 반영 완료로 처리하시겠습니까?`,
       )
     ) {
-      void bulkMarkNeisReported(selNeisIds);
-      showToast(`나이스 반영 완료 ${selNeisIds.length}건 처리했습니다`, 'success');
-      clearSelection();
+      void runBulk(
+        () => bulkMarkNeisReported(selNeisIds),
+        `나이스 반영 완료 ${selNeisIds.length}건 처리했습니다`,
+      );
     }
   };
   const handleBulkDoc = () => {
-    if (selDocIds.length === 0) return;
+    if (busy || selDocIds.length === 0) return;
     if (
       window.confirm(`선택한 출결 기록 ${selDocIds.length}건을 서류 제출 완료로 처리하시겠습니까?`)
     ) {
-      void bulkMarkDocumentSubmitted(selDocIds);
-      showToast(`서류 제출 완료 ${selDocIds.length}건 처리했습니다`, 'success');
-      clearSelection();
+      void runBulk(
+        () => bulkMarkDocumentSubmitted(selDocIds),
+        `서류 제출 완료 ${selDocIds.length}건 처리했습니다`,
+      );
     }
   };
   const handleBulkFollowUp = () => {
-    if (selFollowIds.length === 0) return;
+    if (busy || selFollowIds.length === 0) return;
     if (window.confirm(`선택한 후속조치 ${selFollowIds.length}건을 완료로 처리하시겠습니까?`)) {
-      void (async () => {
-        for (const id of selFollowIds) {
-          await toggleFollowUpDone(id);
-        }
-        showToast(`후속조치 완료 ${selFollowIds.length}건 처리했습니다`, 'success');
-      })();
-      clearSelection();
+      void runBulk(
+        () => bulkMarkFollowUpDone(selFollowIds),
+        `후속조치 완료 ${selFollowIds.length}건 처리했습니다`,
+      );
     }
   };
 
-  /* ── 전체 처리 (반 전체 대기 항목 — 기존 배너의 일괄 버튼 승계) ── */
+  /* ── 전체 처리 (반 전체 대기 항목 — 기존 배너의 일괄 버튼 승계 + 후속조치 추가) ── */
   const allNeisIds = queue.items.filter((i) => i.neisPending).map((i) => i.record.id);
   const allDocIds = queue.items.filter((i) => i.documentPending).map((i) => i.record.id);
+  const allFollowIds = queue.items.filter((i) => i.followUpPending).map((i) => i.record.id);
   const handleAllNeis = () => {
+    if (busy) return;
     if (
       window.confirm(
         `나이스 미반영 출결 기록 ${allNeisIds.length}건을 모두 반영 완료로 처리하시겠습니까?`,
       )
     ) {
-      void bulkMarkNeisReported(allNeisIds);
+      void runBulk(
+        () => bulkMarkNeisReported(allNeisIds),
+        `나이스 반영 완료 ${allNeisIds.length}건 처리했습니다`,
+      );
     }
   };
   const handleAllDoc = () => {
+    if (busy) return;
     if (
       window.confirm(
         `서류 미제출 출결 기록 ${allDocIds.length}건을 모두 제출 완료로 처리하시겠습니까?`,
       )
     ) {
-      void bulkMarkDocumentSubmitted(allDocIds);
+      void runBulk(
+        () => bulkMarkDocumentSubmitted(allDocIds),
+        `서류 제출 완료 ${allDocIds.length}건 처리했습니다`,
+      );
+    }
+  };
+  const handleAllFollowUp = () => {
+    if (busy) return;
+    if (
+      window.confirm(`미완료 후속조치 ${allFollowIds.length}건을 모두 완료로 처리하시겠습니까?`)
+    ) {
+      void runBulk(
+        () => bulkMarkFollowUpDone(allFollowIds),
+        `후속조치 완료 ${allFollowIds.length}건 처리했습니다`,
+      );
     }
   };
 
   const { progress, counts } = queue;
 
-  /* ── 모두 완료 빈 상태 ── */
+  /* ── 빈 상태 — "기록 자체가 없음"과 "전부 처리됨"을 구분(codex QA) ── */
   if (counts.total === 0) {
+    const hasAnyReviewable = progress.totalAttendance > 0 || progress.followUpTotal > 0;
+    if (!hasAnyReviewable) {
+      return (
+        <div className="flex-1 flex flex-col items-center justify-center gap-3 rounded-xl bg-sp-card p-8">
+          <span className="material-symbols-outlined text-4xl text-sp-muted">inbox</span>
+          <p className="text-sm font-bold text-sp-text">아직 검토할 기록이 없습니다</p>
+          <p className="text-xs text-sp-muted">
+            출결 기록이나 후속조치가 생기면 여기에서 한 번에 처리할 수 있어요.
+          </p>
+        </div>
+      );
+    }
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-3 rounded-xl bg-sp-card p-8">
         <span className="material-symbols-outlined text-4xl text-green-400">check_circle</span>
@@ -188,7 +240,11 @@ export function ReviewMode({
           done={progress.neisReported}
           total={progress.totalAttendance}
           barClass="bg-green-500"
-          action={counts.neis > 0 ? { label: '전체 반영 완료', onClick: handleAllNeis } : undefined}
+          action={
+            counts.neis > 0
+              ? { label: '전체 반영 완료', onClick: handleAllNeis, disabled: busy }
+              : undefined
+          }
         />
         <ProgressStat
           label="서류 제출"
@@ -196,7 +252,9 @@ export function ReviewMode({
           total={progress.docRequired}
           barClass="bg-orange-500"
           action={
-            counts.document > 0 ? { label: '전체 제출 완료', onClick: handleAllDoc } : undefined
+            counts.document > 0
+              ? { label: '전체 제출 완료', onClick: handleAllDoc, disabled: busy }
+              : undefined
           }
         />
         <ProgressStat
@@ -204,6 +262,11 @@ export function ReviewMode({
           done={progress.followUpDone}
           total={progress.followUpTotal}
           barClass="bg-blue-500"
+          action={
+            counts.followUp > 0
+              ? { label: '전체 완료 처리', onClick: handleAllFollowUp, disabled: busy }
+              : undefined
+          }
         />
       </div>
 
@@ -255,7 +318,7 @@ export function ReviewMode({
             <button
               type="button"
               onClick={handleBulkNeis}
-              disabled={selNeisIds.length === 0}
+              disabled={busy || selNeisIds.length === 0}
               className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-green-500/10 text-green-400 border border-green-500/30 hover:bg-green-500/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               나이스 반영 {selNeisIds.length > 0 ? selNeisIds.length : ''}
@@ -263,7 +326,7 @@ export function ReviewMode({
             <button
               type="button"
               onClick={handleBulkDoc}
-              disabled={selDocIds.length === 0}
+              disabled={busy || selDocIds.length === 0}
               className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-green-500/10 text-green-400 border border-green-500/30 hover:bg-green-500/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               서류 제출 {selDocIds.length > 0 ? selDocIds.length : ''}
@@ -271,7 +334,7 @@ export function ReviewMode({
             <button
               type="button"
               onClick={handleBulkFollowUp}
-              disabled={selFollowIds.length === 0}
+              disabled={busy || selFollowIds.length === 0}
               className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-blue-500/10 text-blue-400 border border-blue-500/30 hover:bg-blue-500/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               후속조치 완료 {selFollowIds.length > 0 ? selFollowIds.length : ''}
@@ -477,7 +540,7 @@ function ProgressStat({
   done: number;
   total: number;
   barClass: string;
-  action?: { label: string; onClick: () => void };
+  action?: { label: string; onClick: () => void; disabled?: boolean };
 }) {
   const pct = total > 0 ? Math.round((done / total) * 100) : 100;
   return (
@@ -495,7 +558,8 @@ function ProgressStat({
         <button
           type="button"
           onClick={action.onClick}
-          className="flex items-center gap-1 px-2 py-1 rounded-lg bg-green-500/10 border border-green-500/30 text-green-400 text-caption hover:bg-green-500/20 transition-colors"
+          disabled={action.disabled}
+          className="flex items-center gap-1 px-2 py-1 rounded-lg bg-green-500/10 border border-green-500/30 text-green-400 text-caption hover:bg-green-500/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <span className="material-symbols-outlined text-icon-xs">done_all</span>
           {action.label}
