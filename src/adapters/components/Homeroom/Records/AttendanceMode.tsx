@@ -177,7 +177,7 @@ export function AttendanceMode({ students, selectedDate, onDateChange }: Attenda
   }, [intentPending, intentPreferredType, consumeIntent, numberIssues.hasCollisionRisk, showToast]);
 
   return (
-    <div className="flex flex-col flex-1 min-h-0 gap-3">
+    <div className="flex flex-col flex-1 min-h-0 gap-2">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <DateNavigator selectedDate={selectedDate} onDateChange={onDateChange} pastBadge />
         {className && gridStudents.length > 0 && (
@@ -231,7 +231,9 @@ export function AttendanceMode({ students, selectedDate, onDateChange }: Attenda
           </button>
         </div>
       ) : (
-        <div className="flex-1 min-h-0 overflow-auto">
+        /* 현황 요약 배너는 '조회' 탭으로 이동(피드백 2026-07) — 출결 표 영역을 넓게 확보.
+           overflow-auto를 두지 않아 팔레트·도구 바가 고정되고 표만 내부 스크롤된다. */
+        <div className="flex-1 min-h-0 flex flex-col">
           <HomeroomAttendanceGrid
             students={gridStudents}
             classId={className}

@@ -318,6 +318,11 @@ export function computeAutoPeriods(
 
 /** 생기부(나이스)식 공식 사유 축 — 학교생활기록부 기재요령 별표 8 §3 마 */
 export type NeisReasonAxis = '질병' | '미인정' | '기타';
+/**
+ * 표시용 확장 축 — '인정'(출석인정)은 공식 계(별표 8 규칙 라)에서 제외되지만,
+ * 교사 참고용으로 별도 집계해 '인정 표시' 토글로만 노출한다.
+ */
+export type NeisReasonAxisWithExcused = NeisReasonAxis | '인정';
 
 export interface NeisStatusCounts {
   absent: number;
@@ -327,8 +332,11 @@ export interface NeisStatusCounts {
 }
 
 export interface NeisAttendanceCounts extends NeisStatusCounts {
-  /** 사유별 세부 (질병/미인정/기타 × 상태) — 드릴다운용 */
-  byReason: Record<NeisReasonAxis, NeisStatusCounts>;
+  /**
+   * 사유별 세부 × 상태. 질병/미인정/기타 = 공식 축(계 = 이 셋의 합).
+   * '인정' = 참고용 별도 집계(공식 계에는 미포함, 별도 접기).
+   */
+  byReason: Record<NeisReasonAxisWithExcused, NeisStatusCounts>;
 }
 
 function emptyNeisStatusCounts(): NeisStatusCounts {
@@ -342,6 +350,7 @@ export function emptyNeisAttendanceCounts(): NeisAttendanceCounts {
       질병: emptyNeisStatusCounts(),
       미인정: emptyNeisStatusCounts(),
       기타: emptyNeisStatusCounts(),
+      인정: emptyNeisStatusCounts(),
     },
   };
 }
@@ -386,7 +395,10 @@ export function summarizeNeisAttendance(
   for (const dayRecords of byDate.values()) {
     for (const student of students) {
       const key = studentKey(student);
-      const periodMap = new Map<number, StudentAttendance | undefined>();
+      const counts = result.get(key)!;
+      // 공식 집계용(인정 제외)과 인정 참고용을 분리해 하루치를 수집한다.
+      const officialMap = new Map<number, StudentAttendance | undefined>();
+      const excusedMap = new Map<number, StudentAttendance | undefined>();
       for (const rec of dayRecords) {
         const hit = rec.students.find(
           (sa) =>
@@ -394,21 +406,30 @@ export function summarizeNeisAttendance(
             (student.grade == null || sa.grade === student.grade) &&
             (student.classNum == null || sa.classNum === student.classNum),
         );
-        // 규칙 라: '인정' 사유는 접기 전에 제거 (사전 필터 → 대표 접기)
-        if (hit && hit.reason !== '인정') {
-          periodMap.set(rec.period, hit);
+        if (!hit) continue;
+        // 규칙 라: '인정'은 공식 접기에서 제외하고, 참고용으로만 별도 접기한다.
+        if (hit.reason === '인정') excusedMap.set(rec.period, hit);
+        else officialMap.set(rec.period, hit);
+      }
+
+      // 공식 집계 (계 = 질병+미인정+기타). 인정은 여기 포함되지 않는다.
+      if (officialMap.size > 0) {
+        const rep = pickRepresentativeAttendance(officialMap);
+        if (rep != null && rep.status !== 'present') {
+          counts[rep.status] += 1;
+          const axis: NeisReasonAxis =
+            rep.reason === '질병' || rep.reason === '미인정' ? rep.reason : '기타';
+          counts.byReason[axis][rep.status] += 1;
         }
       }
-      if (periodMap.size === 0) continue;
 
-      const rep = pickRepresentativeAttendance(periodMap);
-      if (rep == null || rep.status === 'present') continue;
-
-      const counts = result.get(key)!;
-      counts[rep.status] += 1;
-      const axis: NeisReasonAxis =
-        rep.reason === '질병' || rep.reason === '미인정' ? rep.reason : '기타';
-      counts.byReason[axis][rep.status] += 1;
+      // 인정(참고) — 공식 계 미포함. 그날 인정 사유의 대표를 잡아 표시용으로만 집계한다.
+      if (excusedMap.size > 0) {
+        const exRep = pickRepresentativeAttendance(excusedMap);
+        if (exRep != null && exRep.status !== 'present') {
+          counts.byReason['인정'][exRep.status] += 1;
+        }
+      }
     }
   }
 

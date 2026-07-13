@@ -32,6 +32,7 @@ import { RecordResultSummary } from '@adapters/components/common/records/RecordR
 import { studentRecordToDisplay } from '@adapters/presentation/displayRecord';
 import { ActionDashboard } from './ActionDashboard';
 import { StudentJumpList } from './StudentJumpList';
+import { AttendanceStatusBanners } from './AttendanceStatusBanners';
 
 function SearchMode({ students, records, categories }: ModeProps) {
   const {
@@ -361,6 +362,8 @@ function SearchMode({ students, records, categories }: ModeProps) {
 
   return (
     <div className="flex-1 flex flex-col gap-4 min-h-0">
+      {/* 출결 현황 요약 — 나이스 미반영·서류 미제출 (출결 탭에서 이동, 피드백 2026-07). 없으면 자동 숨김. */}
+      <AttendanceStatusBanners students={students} />
       {/* 수정 안내 배너 (첫 방문 시) */}
       {!dismissedSearchGuide && (
         <div

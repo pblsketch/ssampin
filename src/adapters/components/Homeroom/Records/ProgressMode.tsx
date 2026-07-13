@@ -8,7 +8,6 @@ import {
   getCategorySummary,
   getWarningStudents,
 } from '@domain/rules/studentRecordRules';
-import { useStudentRecordsStore } from '@adapters/stores/useStudentRecordsStore';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { isStudentActive } from '@domain/rules/studentActivity';
@@ -16,6 +15,7 @@ import {
   summarizeNeisAttendance,
   type NeisAttendanceCounts,
   type NeisReasonAxis,
+  type NeisReasonAxisWithExcused,
 } from '@domain/rules/attendanceRules';
 import { SummaryCard, StatBadge } from './RecordStatCards';
 import {
@@ -23,12 +23,20 @@ import {
   getWeekRange,
   getMonthRange,
   METHOD_OPTIONS,
-  formatDateKR,
   getAttendanceTypeFromSubcategory,
-  getRecordChipLabel,
 } from './recordUtils';
 import { studentRecordToDisplay, type DisplayRecord } from '@adapters/presentation/displayRecord';
 import { RecordDetailModal } from '@adapters/components/common/records/RecordDetailModal';
+import { printHtmlDocument } from '@adapters/utils/printHtmlDocument';
+import { AttendanceStatusBanners } from './AttendanceStatusBanners';
+import { useToastStore } from '@adapters/components/common/Toast';
+/* eslint-disable no-restricted-imports */
+import {
+  exportNeisAttendanceToExcel,
+  exportNeisAttendanceToHwpx,
+  type NeisAttendanceExportInput,
+} from '@infrastructure/export';
+/* eslint-enable no-restricted-imports */
 
 type StatBadgeColor = ComponentProps<typeof StatBadge>['color'];
 
@@ -46,21 +54,34 @@ const NEIS_REASON_AXES: readonly NeisReasonAxis[] = ['질병', '미인정', '기
 const NEIS_FOOTNOTE =
   '같은 날 지각·조퇴·결과가 겹치면 학교생활기록부 기재요령에 따라 한 가지로만 집계합니다(학교장 판단 사항 — 쌤핀 기본: 결석>조퇴>지각>결과). 출석인정(인정) 사유는 횟수에 포함하지 않습니다. 결석은 교시 수와 무관하게 1일 1회입니다.';
 
-function NeisAttendanceSection({
+export function NeisAttendanceSection({
   students,
   dateFrom,
   dateTo,
   periodLabel,
+  defaultOpen = true,
 }: {
   students: readonly Student[];
   dateFrom?: string;
   dateTo?: string;
   periodLabel: string;
+  /** 처음에 표를 펼친 채로 렌더할지 (통계 탭=true, 출결 탭=false로 접어 노출). */
+  defaultOpen?: boolean;
 }) {
   const className = useSettingsStore((s) => s.settings.className);
   const attendanceRecords = useTeachingClassStore((s) => s.attendanceRecords);
-  const [open, setOpen] = useState(true);
-  const [showBreakdown, setShowBreakdown] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
+  // 사유 상세(질병/미인정/기타 분해)를 기본으로 펼쳐 보여준다(사용자 피드백 2026-07).
+  const [showBreakdown, setShowBreakdown] = useState(true);
+  // 인정(출석인정) 참고 표시 — 기본 숨김. 켜면 사유 상세에 '인정' 칸이 붙는다(피드백 2026-07).
+  const [showExcused, setShowExcused] = useState(false);
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const showToast = useToastStore((s) => s.show);
+  // 사유 상세에서 렌더할 사유 축 — 인정 표시 시 '인정'을 마지막 칸으로 덧붙인다.
+  const reasonAxes: readonly NeisReasonAxisWithExcused[] = showExcused
+    ? [...NEIS_REASON_AXES, '인정']
+    : NEIS_REASON_AXES;
+  const reasonColSpan = showBreakdown ? 1 + reasonAxes.length : 1;
 
   const rows = useMemo(
     () =>
@@ -95,12 +116,18 @@ function NeisAttendanceSection({
   /* 인쇄 — 현재 보기(요약/사유 상세) 그대로 A4 가로 인쇄 (2종 옵션) */
   const handlePrint = useCallback(() => {
     const title = `${className || '우리 반'} 출결 집계 (${periodLabel})`;
+    // 인정 표시 시 사유 축에 '인정'을 덧붙인다(공식 계 미포함, 참고 표시).
+    const axes: readonly NeisReasonAxisWithExcused[] = showExcused
+      ? [...NEIS_REASON_AXES, '인정']
+      : NEIS_REASON_AXES;
     const headCols = showBreakdown
-      ? NEIS_STATUS_COLUMNS.map((c) => `<th colspan="4">${c.label}</th>`).join('')
+      ? NEIS_STATUS_COLUMNS.map((c) => `<th colspan="${1 + axes.length}">${c.label}</th>`).join('')
       : NEIS_STATUS_COLUMNS.map((c) => `<th>${c.label}</th>`).join('');
+    // 번호·이름은 위 행에서 rowspan=2로 이미 두 행을 차지하므로, 이 하위 헤더에 빈 칸을
+    // 추가하면 계/질병/미인정/기타가 두 칸씩 밀린다(피드백 2026-07). 빈 칸을 넣지 않는다.
     const subHead = showBreakdown
-      ? `<tr><th></th><th></th>${NEIS_STATUS_COLUMNS.map(
-          () => `<th>계</th>${NEIS_REASON_AXES.map((r) => `<th>${r}</th>`).join('')}`,
+      ? `<tr>${NEIS_STATUS_COLUMNS.map(
+          () => `<th>계</th>${axes.map((r) => `<th>${r}</th>`).join('')}`,
         ).join('')}</tr>`
       : '';
     const bodyRows = rows
@@ -109,9 +136,7 @@ function NeisAttendanceSection({
         const cells = NEIS_STATUS_COLUMNS.map((col) => {
           const total = c?.[col.key] ?? 0;
           if (!showBreakdown) return `<td>${total || ''}</td>`;
-          const reasons = NEIS_REASON_AXES.map(
-            (r) => `<td>${c?.byReason[r][col.key] || ''}</td>`,
-          ).join('');
+          const reasons = axes.map((r) => `<td>${c?.byReason[r][col.key] || ''}</td>`).join('');
           return `<td>${total || ''}</td>${reasons}`;
         }).join('');
         return `<tr><td>${s.studentNumber}</td><td class="name">${s.name}</td>${cells}</tr>`;
@@ -134,22 +159,97 @@ function NeisAttendanceSection({
       <tbody>${bodyRows}</tbody>
       <tfoot><tr><td colspan="2">합계</td>${NEIS_STATUS_COLUMNS.map((col) => {
         if (!showBreakdown) return `<td>${totals[col.key] || ''}</td>`;
-        const reasonTotals = NEIS_REASON_AXES.map((r) => {
-          let sum = 0;
-          for (const c of stats.values()) sum += c.byReason[r][col.key];
-          return `<td>${sum || ''}</td>`;
-        }).join('');
+        const reasonTotals = axes
+          .map((r) => {
+            let sum = 0;
+            for (const c of stats.values()) sum += c.byReason[r][col.key];
+            return `<td>${sum || ''}</td>`;
+          })
+          .join('');
         return `<td>${totals[col.key] || ''}</td>${reasonTotals}`;
       }).join('')}</tr></tfoot></table>
       <p class="footnote">${NEIS_FOOTNOTE}</p>
     </body></html>`;
-    const w = window.open('', '_blank', 'width=1000,height=700');
-    if (!w) return;
-    w.document.write(html);
-    w.document.close();
-    w.focus();
-    w.print();
-  }, [className, periodLabel, showBreakdown, rows, stats, totals]);
+    // window.open은 Electron 보안 가드에 막히므로(about:blank deny) 숨김 iframe로 인쇄한다.
+    printHtmlDocument(html);
+  }, [className, periodLabel, showBreakdown, showExcused, rows, stats, totals]);
+
+  /* 내보내기(Excel/HWPX) 입력 구성 — PDF는 handlePrint 재사용 */
+  const buildExportInput = useCallback(
+    (): NeisAttendanceExportInput => ({
+      title: `${className || '우리 반'} 출결 집계 (${periodLabel})`,
+      footnote: NEIS_FOOTNOTE,
+      showBreakdown,
+      statusColumns: NEIS_STATUS_COLUMNS,
+      reasonAxes: showExcused ? [...NEIS_REASON_AXES, '인정'] : NEIS_REASON_AXES,
+      rows: rows.map((s) => ({ studentNumber: s.studentNumber ?? 0, name: s.name })),
+      stats,
+    }),
+    [className, periodLabel, showBreakdown, showExcused, rows, stats],
+  );
+
+  /* 생성된 파일 저장 — Electron 저장 대화상자 / 브라우저 다운로드 폴백 (기존 익스포터 패턴) */
+  const saveExport = useCallback(
+    async (data: ArrayBuffer, filename: string, mime: string, kindLabel: string) => {
+      const ext = filename.split('.').pop() ?? 'dat';
+      if (window.electronAPI) {
+        const saved = await window.electronAPI.showSaveDialog({
+          title: '출결 집계 내보내기',
+          defaultPath: filename,
+          filters: [{ name: `${kindLabel} 파일`, extensions: [ext] }],
+        });
+        if (!saved) return;
+        await window.electronAPI.writeFile(saved.handle, data);
+        showToast('파일이 저장되었습니다', 'success', {
+          label: '파일 열기',
+          onClick: () => window.electronAPI?.openFile(saved.handle),
+        });
+      } else {
+        const blob = new Blob([data], { type: mime });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast('파일이 다운로드되었습니다', 'success');
+      }
+    },
+    [showToast],
+  );
+
+  const handleExport = useCallback(
+    async (format: 'pdf' | 'hwpx' | 'excel') => {
+      setExportMenuOpen(false);
+      if (format === 'pdf') {
+        handlePrint();
+        return;
+      }
+      try {
+        const input = buildExportInput();
+        const base = `${(className || '우리반').replace(/\s+/g, '')}_출결집계`;
+        if (format === 'excel') {
+          const buf = await exportNeisAttendanceToExcel(input);
+          await saveExport(
+            buf,
+            `${base}.xlsx`,
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Excel',
+          );
+        } else {
+          const bytes = await exportNeisAttendanceToHwpx(input);
+          const ab = bytes.buffer.slice(
+            bytes.byteOffset,
+            bytes.byteOffset + bytes.byteLength,
+          ) as ArrayBuffer;
+          await saveExport(ab, `${base}.hwpx`, 'application/octet-stream', '한글');
+        }
+      } catch {
+        showToast('내보내기 중 오류가 발생했어요. 잠시 후 다시 시도해주세요.', 'error');
+      }
+    },
+    [handlePrint, buildExportInput, saveExport, className, showToast],
+  );
 
   if (rows.length === 0) return null;
 
@@ -182,15 +282,69 @@ function NeisAttendanceSection({
           <span className="material-symbols-outlined text-sm">unfold_more_double</span>
           사유 상세
         </button>
-        <button
-          type="button"
-          onClick={handlePrint}
-          className="flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg border border-sp-border bg-sp-surface text-sp-muted hover:text-sp-text transition-colors"
-          title="현재 보기(요약/사유 상세)를 A4 가로로 인쇄"
-        >
-          <span className="material-symbols-outlined text-sm">print</span>
-          인쇄
-        </button>
+        {showBreakdown && (
+          <button
+            type="button"
+            onClick={() => setShowExcused((v) => !v)}
+            className={`flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg border transition-colors ${
+              showExcused
+                ? 'bg-sp-accent/15 text-sp-accent border-sp-accent/50'
+                : 'text-sp-muted hover:text-sp-text bg-sp-surface border-sp-border'
+            }`}
+            title="출석인정(인정) 사유를 참고용으로 표시 (공식 집계 '계'에는 미포함)"
+          >
+            <span className="material-symbols-outlined text-sm">event_available</span>
+            인정 표시
+          </button>
+        )}
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setExportMenuOpen((v) => !v)}
+            aria-haspopup="menu"
+            aria-expanded={exportMenuOpen}
+            className="flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg border border-sp-border bg-sp-surface text-sp-muted hover:text-sp-text transition-colors"
+            title="현재 보기(요약/사유 상세)를 PDF·한글·Excel로 저장"
+          >
+            <span className="material-symbols-outlined text-sm">download</span>
+            내보내기
+            <span className="material-symbols-outlined text-sm">arrow_drop_down</span>
+          </button>
+          {exportMenuOpen && (
+            <>
+              <div
+                className="fixed inset-0 z-40"
+                onClick={() => setExportMenuOpen(false)}
+                aria-hidden
+              />
+              <div
+                role="menu"
+                className="absolute right-0 mt-1 z-50 w-44 rounded-lg border border-sp-border bg-sp-card shadow-xl py-1"
+              >
+                {(
+                  [
+                    { fmt: 'pdf', icon: 'picture_as_pdf', label: 'PDF (인쇄·저장)' },
+                    { fmt: 'hwpx', icon: 'description', label: '한글 (HWPX)' },
+                    { fmt: 'excel', icon: 'table_view', label: 'Excel (XLSX)' },
+                  ] as const
+                ).map((opt) => (
+                  <button
+                    key={opt.fmt}
+                    type="button"
+                    role="menuitem"
+                    onClick={() => void handleExport(opt.fmt)}
+                    className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-sp-text hover:bg-sp-surface transition-colors text-left"
+                  >
+                    <span className="material-symbols-outlined text-sm text-sp-muted">
+                      {opt.icon}
+                    </span>
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       {open && (
@@ -204,14 +358,14 @@ function NeisAttendanceSection({
                   </th>
                   <th
                     rowSpan={showBreakdown ? 2 : 1}
-                    className="px-3 py-2 text-sm font-medium text-left"
+                    className="px-3 py-2 text-sm font-medium text-center"
                   >
                     이름
                   </th>
                   {NEIS_STATUS_COLUMNS.map((col) => (
                     <th
                       key={col.key}
-                      colSpan={showBreakdown ? 4 : 1}
+                      colSpan={reasonColSpan}
                       className="px-2 py-2 text-sm font-medium border-l border-sp-border"
                     >
                       {col.label}
@@ -225,8 +379,13 @@ function NeisAttendanceSection({
                         <th className="px-2 py-1 text-xs font-medium border-l border-sp-border">
                           계
                         </th>
-                        {NEIS_REASON_AXES.map((r) => (
-                          <th key={r} className="px-2 py-1 text-xs font-normal">
+                        {reasonAxes.map((r) => (
+                          <th
+                            key={r}
+                            className={`px-2 py-1 text-xs font-normal ${
+                              r === '인정' ? 'text-sp-muted/70 italic' : ''
+                            }`}
+                          >
                             {r}
                           </th>
                         ))}
@@ -243,7 +402,7 @@ function NeisAttendanceSection({
                       <td className="px-2 py-1.5 text-center text-sm text-sp-muted tabular-nums">
                         {s.studentNumber}
                       </td>
-                      <td className="px-3 py-1.5 text-sm text-sp-text whitespace-nowrap">
+                      <td className="px-3 py-1.5 text-sm text-sp-text whitespace-nowrap text-center">
                         {s.name}
                       </td>
                       {NEIS_STATUS_COLUMNS.map((col) => {
@@ -258,14 +417,15 @@ function NeisAttendanceSection({
                               {total > 0 ? total : '·'}
                             </td>
                             {showBreakdown &&
-                              NEIS_REASON_AXES.map((r) => {
+                              reasonAxes.map((r) => {
                                 const v = c?.byReason[r][col.key] ?? 0;
+                                const excused = r === '인정';
                                 return (
                                   <td
                                     key={r}
                                     className={`px-2 py-1.5 text-center text-xs ${
-                                      v > 0 ? 'text-sp-text' : 'text-sp-muted/30'
-                                    }`}
+                                      excused ? 'italic ' : ''
+                                    }${v > 0 ? (excused ? 'text-sp-muted' : 'text-sp-text') : 'text-sp-muted/30'}`}
                                   >
                                     {v > 0 ? v : '·'}
                                   </td>
@@ -287,11 +447,16 @@ function NeisAttendanceSection({
                         {totals[col.key] || '·'}
                       </td>
                       {showBreakdown &&
-                        NEIS_REASON_AXES.map((r) => {
+                        reasonAxes.map((r) => {
                           let sum = 0;
                           for (const c of stats.values()) sum += c.byReason[r][col.key];
                           return (
-                            <td key={r} className="px-2 py-1.5 text-center text-xs text-sp-muted">
+                            <td
+                              key={r}
+                              className={`px-2 py-1.5 text-center text-xs text-sp-muted ${
+                                r === '인정' ? 'italic' : ''
+                              }`}
+                            >
                               {sum || '·'}
                             </td>
                           );
@@ -355,7 +520,6 @@ function toDateInputString(d: Date): string {
 }
 
 function ProgressMode({ students, records, categories }: ModeProps) {
-  const { bulkMarkDocumentSubmitted } = useStudentRecordsStore();
   const [statsPeriod, setStatsPeriod] = useState<StatsPeriod>('all');
   const [statsTab, setStatsTab] = useState<StatsTab>('attendance');
   const [sortKey, setSortKey] = useState<SortKey>('number');
@@ -363,9 +527,6 @@ function ProgressMode({ students, records, categories }: ModeProps) {
   const monthRange = useMemo(() => getMonthRange(), []);
   const [customStart, setCustomStart] = useState<string>(toDateInputString(monthRange.start));
   const [customEnd, setCustomEnd] = useState<string>(toDateInputString(monthRange.end));
-
-  // Feature 2: NEIS drill-down toggle
-  const [showNeisDetail, setShowNeisDetail] = useState(false);
 
   // Feature 4: Follow-up tracker toggle
   const [showFollowUpTracker, setShowFollowUpTracker] = useState(true);
@@ -437,50 +598,6 @@ function ProgressMode({ students, records, categories }: ModeProps) {
     const activeStudentCount = students.filter(isStudentActive).length;
     return activeStudentCount > 0 ? filteredRecords.length / activeStudentCount : 0;
   }, [students, filteredRecords]);
-
-  // Feature 2: NEIS unreported detail data
-  const unreportedCount = useMemo(() => {
-    return records.filter((r) => r.category === 'attendance' && !r.reportedToNeis).length;
-  }, [records]);
-
-  const neisDetail = useMemo(() => {
-    const unreported = records.filter((r) => r.category === 'attendance' && !r.reportedToNeis);
-    const byStudent = new Map<string, StudentRecord[]>();
-    for (const r of unreported) {
-      const arr = byStudent.get(r.studentId) ?? [];
-      arr.push(r as StudentRecord);
-      byStudent.set(r.studentId, arr);
-    }
-    return Array.from(byStudent.entries())
-      .map(([studentId, recs]) => ({
-        student: students.find((s) => s.id === studentId),
-        records: recs,
-      }))
-      .filter((d) => d.student);
-  }, [records, students]);
-
-  // Document-not-submitted detail data
-  const [showDocDetail, setShowDocDetail] = useState(false);
-
-  const docUnsubmittedCount = useMemo(() => {
-    return records.filter((r) => r.category === 'attendance' && !r.documentSubmitted).length;
-  }, [records]);
-
-  const docDetail = useMemo(() => {
-    const unsubmitted = records.filter((r) => r.category === 'attendance' && !r.documentSubmitted);
-    const byStudent = new Map<string, StudentRecord[]>();
-    for (const r of unsubmitted) {
-      const arr = byStudent.get(r.studentId) ?? [];
-      arr.push(r as StudentRecord);
-      byStudent.set(r.studentId, arr);
-    }
-    return Array.from(byStudent.entries())
-      .map(([studentId, recs]) => ({
-        student: students.find((s) => s.id === studentId),
-        records: recs,
-      }))
-      .filter((d) => d.student);
-  }, [records, students]);
 
   // Feature 3: Life subcategories from categories prop (string[])
   const lifeSubcategories = useMemo(() => {
@@ -696,103 +813,8 @@ function ProgressMode({ students, records, categories }: ModeProps) {
         />
       </div>
 
-      {/* Feature 2: NEIS warning - clickable drill-down */}
-      {unreportedCount > 0 && (
-        <div className="space-y-2">
-          <button
-            type="button"
-            onClick={() => setShowNeisDetail(!showNeisDetail)}
-            aria-expanded={showNeisDetail}
-            className="w-full flex items-center gap-1.5 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs text-left"
-          >
-            <span className="material-symbols-outlined text-icon-sm">warning</span>
-            나이스 미반영 출결 기록 {unreportedCount}건
-            <span
-              className={`material-symbols-outlined text-sm ml-auto transition-transform ${showNeisDetail ? 'rotate-180' : ''}`}
-            >
-              expand_more
-            </span>
-          </button>
-          {showNeisDetail && (
-            <div className="rounded-lg bg-sp-card p-3 space-y-2 border border-sp-border">
-              {neisDetail.map(({ student, records: recs }) => (
-                <div key={student!.id} className="flex items-center gap-3 text-xs">
-                  <span className="font-medium text-sp-text min-w-[60px]">{student!.name}</span>
-                  <div className="flex flex-wrap gap-1">
-                    {recs.map((r) => (
-                      <span
-                        key={r.id}
-                        className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400"
-                      >
-                        {formatDateKR(r.date)} {getRecordChipLabel(r, categories)}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Document not-submitted warning - clickable drill-down */}
-      {docUnsubmittedCount > 0 && (
-        <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setShowDocDetail(!showDocDetail)}
-              aria-expanded={showDocDetail}
-              className="flex-1 flex items-center gap-1.5 px-3 py-2 rounded-lg bg-orange-500/10 border border-orange-500/30 text-orange-400 text-xs text-left"
-            >
-              <span className="material-symbols-outlined text-icon-sm">description</span>
-              서류 미제출 출결 기록 {docUnsubmittedCount}건
-              <span
-                className={`material-symbols-outlined text-sm ml-auto transition-transform ${showDocDetail ? 'rotate-180' : ''}`}
-              >
-                expand_more
-              </span>
-            </button>
-            <button
-              onClick={() => {
-                if (
-                  window.confirm(
-                    `서류 미제출 출결 기록 ${docUnsubmittedCount}건을 모두 제출 완료로 처리하시겠습니까?`,
-                  )
-                )
-                  void bulkMarkDocumentSubmitted(
-                    records
-                      .filter((r) => r.category === 'attendance' && !r.documentSubmitted)
-                      .map((r) => r.id),
-                  );
-              }}
-              className="flex items-center gap-1 px-3 py-2 rounded-lg bg-green-500/10 border border-green-500/30 text-green-400 text-xs hover:bg-green-500/20 transition-colors whitespace-nowrap"
-            >
-              <span className="material-symbols-outlined text-icon-sm">done_all</span>
-              전체 제출 완료
-            </button>
-          </div>
-          {showDocDetail && (
-            <div className="rounded-lg bg-sp-card p-3 space-y-2 border border-sp-border">
-              {docDetail.map(({ student, records: recs }) => (
-                <div key={student!.id} className="flex items-center gap-3 text-xs">
-                  <span className="font-medium text-sp-text min-w-[60px]">{student!.name}</span>
-                  <div className="flex flex-wrap gap-1">
-                    {recs.map((r) => (
-                      <span
-                        key={r.id}
-                        className="px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-400"
-                      >
-                        {formatDateKR(r.date)} {getRecordChipLabel(r, categories)}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+      {/* 나이스 미반영·서류 미제출 배너 (출결 탭과 공유 — 가독성·나이스 일괄 반영 버튼 포함) */}
+      <AttendanceStatusBanners students={students} />
 
       {/* Feature 4: Follow-up tracker panel */}
       {(followUpData.overdue.length > 0 || followUpData.upcoming.length > 0) && (
@@ -933,13 +955,16 @@ function ProgressMode({ students, records, categories }: ModeProps) {
         )}
       </div>
 
-      {/* 생활기록부 기준 출결 집계 — 일 단위 대표 접기 + 인정 제외 + 사유 드릴다운 + 인쇄 (P6) */}
-      <NeisAttendanceSection
-        students={students}
-        dateFrom={neisRange.from}
-        dateTo={neisRange.to}
-        periodLabel={neisRange.label}
-      />
+      {/* 생활기록부 기준 출결 집계 — 일 단위 대표 접기 + 인정 제외 + 사유 드릴다운 + 인쇄 (P6).
+          출결 탭에서만 노출 — 상담/생활/전체 탭에선 아래 통계 표만 바뀌어야 탭이 눌리는 게 보인다(피드백 2026-07). */}
+      {statsTab === 'attendance' && (
+        <NeisAttendanceSection
+          students={students}
+          dateFrom={neisRange.from}
+          dateTo={neisRange.to}
+          periodLabel={neisRange.label}
+        />
+      )}
 
       {/* Stats table */}
       <div className="flex-1 overflow-auto rounded-xl bg-sp-card">
@@ -947,7 +972,7 @@ function ProgressMode({ students, records, categories }: ModeProps) {
           <thead>
             <tr className="text-sp-muted">
               <SortHeader label="번호" sortId="number" className="text-left" />
-              <SortHeader label="이름" sortId="name" className="text-left" />
+              <SortHeader label="이름" sortId="name" className="text-center" />
               {statsTab === 'attendance' && (
                 <>
                   <SortHeader label="결석" sortId="absent" className="text-center border-l" />
@@ -1025,7 +1050,9 @@ function ProgressMode({ students, records, categories }: ModeProps) {
               }) => (
                 <tr key={student.id} className="hover:bg-sp-surface/30 transition-colors">
                   <td className="p-3 text-sp-muted border-b">{idx + 1}</td>
-                  <td className="p-3 text-sp-text font-medium border-b">{student.name}</td>
+                  <td className="p-3 text-sp-text font-medium border-b text-center">
+                    {student.name}
+                  </td>
                   {statsTab === 'attendance' && (
                     <>
                       <td className="text-center p-3 border-b border-l">

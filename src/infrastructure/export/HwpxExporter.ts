@@ -9,7 +9,10 @@ import type { GroupResult } from '@domain/rules/groupingRules';
 import type { RubricFeedbackDoc } from '@domain/rules/rubricRules';
 import type { RecordDraft, RecordArea, SchoolLevel } from '@domain/entities/RecordDraft';
 import { RECORD_AREA_LABELS, resolveAreaLimit } from '@domain/entities/RecordDraft';
-import type { RecordDraftStudentRef } from '@infrastructure/export/ExcelExporter';
+import type {
+  RecordDraftStudentRef,
+  NeisAttendanceExportInput,
+} from '@infrastructure/export/ExcelExporter';
 import {
   getAttendanceStats,
   sortByDateDesc,
@@ -1589,4 +1592,137 @@ export async function exportRecordDraftsToHwpx(
   }
 
   return doc.save();
+}
+
+/* ──────────────────────────────────────────────────────────── */
+/* 생활기록부 기준 출결 집계표 → HWPX (attendance-grid-v2 P3)     */
+/* ──────────────────────────────────────────────────────────── */
+
+/**
+ * 생활기록부 기준 출결 집계표를 HWPX(한글)로 내보낸다. 열이 많아 A4 가로로 구성한다.
+ * showBreakdown 이면 상태별 [계·질병·미인정·기타(·인정)]를 2행 헤더(병합)로 만든다.
+ * 셀 병합은 스타일 적용 이후 마지막에 수행한다(병합으로 사라진 셀에 스타일 접근 방지).
+ */
+export async function exportNeisAttendanceToHwpx(
+  input: NeisAttendanceExportInput,
+): Promise<Uint8Array> {
+  const { showBreakdown, statusColumns, reasonAxes, rows, stats } = input;
+  const doc = await createDoc();
+
+  // A4 가로
+  const margin = { top: 2834, bottom: 2834, left: 2834, right: 2834, header: 2834, footer: 1417 };
+  const section = doc.section(0);
+  section.properties.setPageSize({ width: 84188, height: 59528, orientation: 'WIDELY' });
+  section.properties.setPageMargins(margin);
+  const secPrParagraph = await buildSecPrParagraph({
+    landscape: 'WIDELY',
+    width: 84188,
+    height: 59528,
+    margin,
+  });
+
+  const titleCharId = doc.ensureRunStyle({ bold: true, fontSize: 15 });
+  const centerParaId = doc.ensureParaStyle({ alignment: 'CENTER' });
+  const headerCharId = doc.ensureRunStyle({ bold: true, fontSize: 9 });
+  const bodyCharId = doc.ensureRunStyle({ fontSize: 9 });
+  const footCharId = doc.ensureRunStyle({ fontSize: 8 });
+
+  while (doc.paragraphs.length > 0) {
+    doc.removeParagraph(0, 0);
+  }
+
+  doc.addParagraph(input.title, { charPrIdRef: titleCharId, paraPrIdRef: centerParaId });
+  doc.addParagraph();
+
+  const perStatus = showBreakdown ? 1 + reasonAxes.length : 1; // 계 + 사유들
+  const totalCols = 2 + statusColumns.length * perStatus;
+  const headerRowCount = showBreakdown ? 2 : 1;
+  const totalRows = headerRowCount + rows.length + 1; // 헤더 + 학생 + 합계
+  const totalRowIdx = headerRowCount + rows.length;
+
+  const tablePara = doc.addParagraph();
+  const table = tablePara.addTable(totalRows, totalCols);
+
+  // ── 헤더 텍스트 (병합 전, master 셀에만 기입) ──
+  table.setCellText(0, 0, '번호');
+  table.setCellText(0, 1, '이름');
+  if (showBreakdown) {
+    let c = 2;
+    for (const col of statusColumns) {
+      table.setCellText(0, c, col.label);
+      table.setCellText(1, c, '계');
+      for (let i = 0; i < reasonAxes.length; i++) {
+        table.setCellText(1, c + 1 + i, reasonAxes[i]!);
+      }
+      c += perStatus;
+    }
+  } else {
+    let c = 2;
+    for (const col of statusColumns) {
+      table.setCellText(0, c, col.label);
+      c += 1;
+    }
+  }
+
+  // ── 본문 + 합계 누적 ──
+  const totals: number[] = new Array(statusColumns.length * perStatus).fill(0);
+  for (let ri = 0; ri < rows.length; ri++) {
+    const stu = rows[ri]!;
+    const r = headerRowCount + ri;
+    const cnt = stats.get(String(stu.studentNumber));
+    table.setCellText(r, 0, String(stu.studentNumber));
+    table.setCellText(r, 1, stu.name);
+    let c = 2;
+    let ti = 0;
+    for (const col of statusColumns) {
+      const total = cnt?.[col.key] ?? 0;
+      totals[ti] = (totals[ti] ?? 0) + total;
+      ti += 1;
+      table.setCellText(r, c, total ? String(total) : '');
+      c += 1;
+      if (showBreakdown) {
+        for (const rz of reasonAxes) {
+          const v = cnt?.byReason[rz][col.key] ?? 0;
+          totals[ti] = (totals[ti] ?? 0) + v;
+          ti += 1;
+          table.setCellText(r, c, v ? String(v) : '');
+          c += 1;
+        }
+      }
+    }
+  }
+
+  // 합계 행
+  table.setCellText(totalRowIdx, 0, '합계');
+  for (let i = 0; i < totals.length; i++) {
+    table.setCellText(totalRowIdx, 2 + i, totals[i] ? String(totals[i]!) : '');
+  }
+
+  // ── 스타일 (병합 전: 모든 셀 존재) ──
+  applyStyleToAllCells(table, totalRows, totalCols, {
+    charPrId: bodyCharId,
+    paraPrId: centerParaId,
+  });
+  for (let hr = 0; hr < headerRowCount; hr++) {
+    for (let c = 0; c < totalCols; c++) {
+      applyCellStyle(table, hr, c, { charPrId: headerCharId, paraPrId: centerParaId });
+    }
+  }
+
+  // ── 병합 (마지막) ──
+  if (showBreakdown) {
+    table.mergeCells(0, 0, 1, 0); // 번호 세로 병합
+    table.mergeCells(0, 1, 1, 1); // 이름 세로 병합
+    let c = 2;
+    for (let s = 0; s < statusColumns.length; s++) {
+      table.mergeCells(0, c, 0, c + perStatus - 1); // 상태 라벨 가로 병합
+      c += perStatus;
+    }
+  }
+  table.mergeCells(totalRowIdx, 0, totalRowIdx, 1); // 합계 라벨 병합
+
+  doc.addParagraph();
+  doc.addParagraph(input.footnote, { charPrIdRef: footCharId });
+
+  return await saveWithSectionProps(doc, secPrParagraph);
 }

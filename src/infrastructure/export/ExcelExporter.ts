@@ -17,6 +17,11 @@ import {
   sortByDateDesc,
   recordExportLabel,
 } from '@domain/rules/studentRecordRules';
+import type {
+  NeisAttendanceCounts,
+  NeisReasonAxisWithExcused,
+  NeisStatusCounts,
+} from '@domain/rules/attendanceRules';
 import { buildPairGroups, adjustPairGroupsForRow } from '@domain/rules/seatingLayoutRules';
 import { isStudentActive } from '@domain/rules/studentActivity';
 import type { SubjectColorMap } from '@domain/valueObjects/SubjectColor';
@@ -2700,6 +2705,126 @@ export async function exportGradeSummaryToExcel(
     const row = ws.addRow([d.grade, d.count, pct]);
     row.eachCell((cell) => applyCellStyle(cell));
   }
+
+  return (await workbook.xlsx.writeBuffer()) as ArrayBuffer;
+}
+
+/* ──────────────────────────────────────────────────────────── */
+/* 생활기록부 기준 출결 집계표 내보내기 (attendance-grid-v2 P3)   */
+/* ──────────────────────────────────────────────────────────── */
+
+/** 출결 집계 내보내기 공통 입력 — Excel/HWPX 익스포터가 공유한다. */
+export interface NeisAttendanceExportInput {
+  /** 문서 제목 (예: "3학년 4반 출결 집계 (전체 기간)") */
+  title: string;
+  /** 하단 각주(기재요령 안내) */
+  footnote: string;
+  /** 사유 상세(질병/미인정/기타[/인정]) 분해 여부 */
+  showBreakdown: boolean;
+  /** 상태 열 정의 (결석/지각/조퇴/결과) */
+  statusColumns: readonly { key: keyof NeisStatusCounts; label: string }[];
+  /** 사유 축 (질병/미인정/기타[, 인정]) — showBreakdown 일 때만 사용 */
+  reasonAxes: readonly NeisReasonAxisWithExcused[];
+  /** 표시 대상 학생 (번호순) */
+  rows: readonly { studentNumber: number; name: string }[];
+  /** studentKey(=번호 문자열) → 집계 */
+  stats: ReadonlyMap<string, NeisAttendanceCounts>;
+}
+
+/**
+ * 생활기록부 기준 출결 집계표를 Excel로 내보낸다.
+ * showBreakdown 이면 상태별로 [계·질병·미인정·기타(·인정)] 소열을 2행 헤더(병합)로 구성한다.
+ */
+export async function exportNeisAttendanceToExcel(
+  input: NeisAttendanceExportInput,
+): Promise<ArrayBuffer> {
+  const { showBreakdown, statusColumns, reasonAxes, rows, stats } = input;
+  const workbook = new ExcelJS.Workbook();
+  const ws = workbook.addWorksheet('출결 집계');
+
+  const perStatus = showBreakdown ? 1 + reasonAxes.length : 1; // 계 + 사유들
+  const totalCols = 2 + statusColumns.length * perStatus;
+  const styleRow = (rowNum: number, styler: (c: ExcelJS.Cell) => void): void => {
+    for (let c = 1; c <= totalCols; c++) styler(ws.getCell(rowNum, c));
+  };
+
+  // 제목 행 (병합)
+  const titleRow = ws.addRow([input.title]);
+  ws.mergeCells(titleRow.number, 1, titleRow.number, totalCols);
+  titleRow.getCell(1).font = { bold: true, size: 14 };
+  titleRow.getCell(1).alignment = { horizontal: 'left', vertical: 'middle' };
+
+  // 헤더 상단 행 (번호/이름 + 상태 라벨)
+  const topValues: (string | number)[] = ['번호', '이름'];
+  for (const col of statusColumns) {
+    topValues.push(col.label);
+    for (let i = 1; i < perStatus; i++) topValues.push('');
+  }
+  const topRow = ws.addRow(topValues);
+
+  if (showBreakdown) {
+    const subValues: (string | number)[] = ['', ''];
+    for (let s = 0; s < statusColumns.length; s++) {
+      subValues.push('계');
+      for (const r of reasonAxes) subValues.push(r);
+    }
+    const subRow = ws.addRow(subValues);
+    // 번호/이름 세로 병합 + 상태 라벨 가로 병합
+    ws.mergeCells(topRow.number, 1, subRow.number, 1);
+    ws.mergeCells(topRow.number, 2, subRow.number, 2);
+    let c = 3;
+    for (let s = 0; s < statusColumns.length; s++) {
+      ws.mergeCells(topRow.number, c, topRow.number, c + perStatus - 1);
+      c += perStatus;
+    }
+    styleRow(subRow.number, applyHeaderStyle);
+  }
+  styleRow(topRow.number, applyHeaderStyle);
+
+  // 본문 + 합계 누적
+  const totals: number[] = new Array(statusColumns.length * perStatus).fill(0);
+  for (const stu of rows) {
+    const c = stats.get(String(stu.studentNumber));
+    const values: (string | number)[] = [String(stu.studentNumber).padStart(2, '0'), stu.name];
+    let ti = 0;
+    for (const col of statusColumns) {
+      const total = c?.[col.key] ?? 0;
+      totals[ti] = (totals[ti] ?? 0) + total;
+      values.push(total || '');
+      ti += 1;
+      if (showBreakdown) {
+        for (const r of reasonAxes) {
+          const v = c?.byReason[r][col.key] ?? 0;
+          totals[ti] = (totals[ti] ?? 0) + v;
+          values.push(v || '');
+          ti += 1;
+        }
+      }
+    }
+    const row = ws.addRow(values);
+    styleRow(row.number, (cell) => applyCellStyle(cell));
+  }
+
+  // 합계 행 (번호+이름 병합)
+  const totalValues: (string | number)[] = ['합계', ''];
+  for (const t of totals) totalValues.push(t || '');
+  const totalRow = ws.addRow(totalValues);
+  styleRow(totalRow.number, (cell) => applyCellStyle(cell, 'FFF3F4F6'));
+  ws.mergeCells(totalRow.number, 1, totalRow.number, 2);
+  const totalLabelCell = ws.getCell(totalRow.number, 1);
+  totalLabelCell.value = '합계';
+  totalLabelCell.font = { bold: true };
+
+  // 각주 행 (병합)
+  const footRow = ws.addRow([input.footnote]);
+  ws.mergeCells(footRow.number, 1, footRow.number, totalCols);
+  footRow.getCell(1).font = { size: 9, color: { argb: 'FF666666' } };
+  footRow.getCell(1).alignment = { wrapText: true, vertical: 'top' };
+
+  // 열 너비
+  ws.getColumn(1).width = 6;
+  ws.getColumn(2).width = 12;
+  for (let i = 3; i <= totalCols; i++) ws.getColumn(i).width = 7;
 
   return (await workbook.xlsx.writeBuffer()) as ArrayBuffer;
 }

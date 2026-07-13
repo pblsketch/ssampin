@@ -28,8 +28,8 @@ export interface SeatAttendanceViewProps {
   matrix: MatrixState;
   /** 교시 목록 (대표 출결 계산용) */
   periods: readonly number[];
-  /** 좌석 클릭 = 그 학생(studentKey)에 팔레트 적용 */
-  onSeatClick: (studentKey: string) => void;
+  /** 좌석 클릭 = 그 학생(studentKey) 교시별 팝오버 열기 (앵커 좌표 전달) */
+  onSeatClick: (studentKey: string, anchorRect: DOMRect) => void;
   /** 지정 상태를 가진 좌석을 강조 (요약 칩 클릭 연동, §3.5) */
   highlightStatus?: AttendanceStatus | null;
 }
@@ -89,7 +89,9 @@ export function SeatAttendanceView({
               <button
                 key={key}
                 type="button"
-                onClick={() => onSeatClick(sKey)}
+                onClick={(e) =>
+                  onSeatClick(sKey, (e.currentTarget as HTMLElement).getBoundingClientRect())
+                }
                 title={
                   hasException
                     ? `${student.name} · ${cfg!.label}${rep!.reason ? `(${rep!.reason})` : ''}`

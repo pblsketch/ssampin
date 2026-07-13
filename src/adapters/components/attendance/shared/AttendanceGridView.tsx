@@ -102,7 +102,7 @@ function MemoCell({
         if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
       }}
       title={local || undefined}
-      placeholder="사유 입력"
+      placeholder="비고 입력"
       className="w-full bg-transparent border-b border-transparent hover:border-sp-border focus:border-sp-accent
                  text-xs text-sp-text placeholder:text-sp-muted/40 focus:outline-none px-1 py-0.5 transition-colors"
     />
@@ -179,7 +179,7 @@ export function AttendanceGridView({
   return (
     <div className="overflow-auto rounded-xl border border-sp-border max-h-full">
       <table
-        className="border-collapse text-sm table-fixed"
+        className="border-collapse text-sm table-fixed [&_th]:border-sp-border/50 [&_td]:border-sp-border/50 [&_th+th]:border-l [&_td+td]:border-l"
         style={{ width: 'max-content', minWidth: '100%' }}
       >
         <colgroup>
@@ -222,7 +222,7 @@ export function AttendanceGridView({
               번호
             </th>
             <th
-              className="sticky top-0 z-30 bg-sp-surface px-3 py-2 text-sm text-sp-muted font-medium text-left whitespace-nowrap"
+              className="sticky top-0 z-30 bg-sp-surface px-3 py-2 text-sm text-sp-muted font-medium text-center whitespace-nowrap"
               style={{ left: stickyLeft.nameLeft }}
             >
               이름
@@ -234,9 +234,9 @@ export function AttendanceGridView({
                   key={p}
                   className={`sticky top-0 z-20 px-1 py-2 text-sm font-medium text-center whitespace-nowrap ${
                     effectiveMatchingPeriods.has(p)
-                      ? 'bg-sp-accent/20 text-sp-accent'
+                      ? 'bg-sp-accent text-white'
                       : special
-                        ? 'text-sp-muted/80 bg-sp-bg/40'
+                        ? 'text-sp-muted/80 bg-sp-bg'
                         : 'text-sp-muted bg-sp-surface'
                   }`}
                 >
@@ -250,7 +250,7 @@ export function AttendanceGridView({
                   구분
                 </th>
                 <th className="sticky top-0 z-20 bg-sp-surface px-3 py-2 text-sm text-sp-muted font-medium text-left whitespace-nowrap">
-                  사유
+                  비고
                 </th>
               </>
             ) : (
@@ -310,7 +310,7 @@ export function AttendanceGridView({
                   {student.number}
                 </td>
                 <td
-                  className={`sticky z-10 ${stickyBg} px-3 py-2 text-base text-sp-text whitespace-nowrap`}
+                  className={`sticky z-10 ${stickyBg} px-3 py-2 text-base text-sp-text whitespace-nowrap text-center`}
                   style={{ left: stickyLeft.nameLeft }}
                 >
                   {onStudentNameClick ? (
@@ -352,7 +352,7 @@ export function AttendanceGridView({
                         onContextMenu={(e) => onCellContextMenu(e, sKey, p)}
                         title={titleParts.join(' · ')}
                         aria-label={`${student.name} ${periodLabel} ${config.label}${att?.reason ? ` (${att.reason})` : ''}`}
-                        className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all
+                        className={`w-10 h-10 mx-auto rounded-lg flex items-center justify-center transition-all
                                    cursor-pointer ${
                                      blankPresent && isPresent
                                        ? 'text-transparent hover:bg-sp-surface'
@@ -381,7 +381,7 @@ export function AttendanceGridView({
                         <span className="text-sp-muted/30 text-xs">-</span>
                       )}
                     </td>
-                    {/* 사유 — 자유 텍스트(비고) 인라인 편집 */}
+                    {/* 비고 — 자유 텍스트 인라인 편집 (통계의 '사유'=질병/인정/미인정/기타와 구분) */}
                     <td className="px-2 py-1">
                       <MemoCell
                         value={rep?.memo ?? ''}
@@ -428,7 +428,7 @@ export function AttendanceGridView({
               style={{ left: stickyLeft.numLeft }}
             />
             <td
-              className="sticky z-10 bg-sp-surface px-3 py-2 text-sm text-sp-muted font-medium whitespace-nowrap"
+              className="sticky z-10 bg-sp-surface px-3 py-2 text-sm text-sp-muted font-medium whitespace-nowrap text-center"
               style={{ left: stickyLeft.nameLeft }}
             >
               교시 합계

@@ -14,8 +14,13 @@ export {
   parseTeachingClassRosterFromExcel,
   exportGroupingToExcel,
   exportObservationsToExcel,
+  exportNeisAttendanceToExcel,
 } from './ExcelExporter';
-export type { ParsedExcelEvent, ObservationExportRecord } from './ExcelExporter';
+export type {
+  ParsedExcelEvent,
+  ObservationExportRecord,
+  NeisAttendanceExportInput,
+} from './ExcelExporter';
 
 export { createPdfExporter, exportToPdf } from './PdfExporter';
 export { exportSeatingToPdf } from './pdf/SeatingPdf';
@@ -40,9 +45,7 @@ export {
   exportSeatingToHwpx,
   exportStudentRecordsToHwpx,
   exportGroupingToHwpx,
+  exportNeisAttendanceToHwpx,
 } from './HwpxExporter';
 
-export {
-  exportRealtimeWallToExcel,
-  exportRealtimeWallToPdf,
-} from './RealtimeWallExporter';
+export { exportRealtimeWallToExcel, exportRealtimeWallToPdf } from './RealtimeWallExporter';

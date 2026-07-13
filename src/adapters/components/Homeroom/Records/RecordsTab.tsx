@@ -86,7 +86,7 @@ export function RecordsTab({ prefill, onPrefillConsumed, onRecordDirtyChange }: 
   return (
     <div className="h-full flex flex-col">
       {/* 서브탭 + 카테고리 관리 */}
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-2 flex items-center justify-between">
         <div
           className="flex gap-1 bg-sp-surface rounded-lg p-1"
           role="tablist"

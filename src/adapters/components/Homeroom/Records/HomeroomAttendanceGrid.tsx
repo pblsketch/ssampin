@@ -5,17 +5,13 @@ import type {
   AttendanceReason,
   StudentAttendance,
 } from '@domain/entities/Attendance';
-import {
-  PERIOD_MORNING,
-  PERIOD_CLOSING,
-  ATTENDANCE_REASONS,
-  formatPeriodLabel,
-} from '@domain/entities/Attendance';
+import { PERIOD_MORNING, PERIOD_CLOSING, ATTENDANCE_REASONS } from '@domain/entities/Attendance';
 import { computeAutoPeriods, summarizeTotal } from '@domain/rules/attendanceRules';
 import { parseAttendanceQuickText } from '@domain/rules/attendanceQuickText';
 import { studentKey } from '@domain/entities/TeachingClass';
 import { AttendanceGridView } from '@adapters/components/attendance/shared/AttendanceGridView';
 import { SeatAttendanceView } from './SeatAttendanceView';
+import { SeatPeriodPopover } from './SeatPeriodPopover';
 import {
   STATUS_CONFIG,
   STAT_COLORS,
@@ -127,7 +123,8 @@ export function HomeroomAttendanceGrid({
       return 'list';
     }
   });
-  const [seatReferencePeriod, setSeatReferencePeriod] = useState<number>(1);
+  /* 좌석 클릭 → 그 학생 교시별 팝오버 (명렬 보기처럼 교시를 하나씩 지정) */
+  const [seatPopover, setSeatPopover] = useState<{ sKey: string; rect: DOMRect } | null>(null);
   /* 요약 칩 클릭 시 해당 상태 학생 행/좌석 하이라이트 (§3.5) */
   const [highlightStatus, setHighlightStatus] = useState<AttendanceStatus | null>(null);
   const setAttViewPersist = useCallback((v: 'list' | 'seat') => {
@@ -346,6 +343,11 @@ export function HomeroomAttendanceGrid({
     };
   }, [flushSave]);
 
+  /* 좌석 팝오버는 날짜·보기(명렬/좌석) 변경 시 닫는다 (컨텍스트 바뀌면 잘못된 학생에 적용 방지). */
+  useEffect(() => {
+    setSeatPopover(null);
+  }, [date, attView]);
+
   /* ── 팔레트 적용 = 칸 클릭 ── */
   const handleCellClick = useCallback(
     (sKey: string, period: number) => {
@@ -388,10 +390,9 @@ export function HomeroomAttendanceGrid({
     ],
   );
 
-  /* 이름 클릭 = (지우개 모드) 그 학생 하루 전체 지움 */
-  const handleNameClick = useCallback(
+  /* 그 학생 하루 전체를 출석으로 되돌림 (이름 클릭·좌석 팝오버 '하루 전체 지우기' 공용) */
+  const clearStudentDay = useCallback(
     (sKey: string) => {
-      if (paletteType !== 'eraser') return;
       pushUndo([sKey]);
       setMatrix((prev) => {
         const row: Record<number, LocalStudentAttendance | undefined> = {};
@@ -401,7 +402,16 @@ export function HomeroomAttendanceGrid({
       commitEdit();
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [paletteType, periodsKey, pushUndo, commitEdit],
+    [periodsKey, pushUndo, commitEdit],
+  );
+
+  /* 이름 클릭 = (지우개 모드) 그 학생 하루 전체 지움 */
+  const handleNameClick = useCallback(
+    (sKey: string) => {
+      if (paletteType !== 'eraser') return;
+      clearStudentDay(sKey);
+    },
+    [paletteType, clearStudentDay],
   );
 
   /* 사유(비고) 인라인 편집 = 찍힌 교시 전체로 memo fan-out (§3.10-5) */
@@ -434,15 +444,11 @@ export function HomeroomAttendanceGrid({
     e.preventDefault();
   }, []);
 
-  /* 좌석 클릭 = 팔레트 적용. 좌석엔 교시 축이 없으므로 기준 교시(선택기)를 앵커로 쓴다.
-     지우개는 그 학생 하루 전체를 지운다(그리드의 이름 클릭과 동일). */
-  const handleSeatClick = useCallback(
-    (sKey: string) => {
-      if (paletteType === 'eraser') handleNameClick(sKey);
-      else handleCellClick(sKey, seatReferencePeriod);
-    },
-    [paletteType, seatReferencePeriod, handleNameClick, handleCellClick],
-  );
+  /* 좌석 클릭 = 그 학생 교시별 팝오버 열기. 좌석엔 교시 축이 없으므로 팝오버에서
+     명렬 보기처럼 교시를 하나씩 지정한다(§3.10-4 후속, 피드백 2026-07). */
+  const handleSeatClick = useCallback((sKey: string, rect: DOMRect) => {
+    setSeatPopover({ sKey, rect });
+  }, []);
 
   /* ── undo / redo ── */
   const undo = useCallback(() => {
@@ -591,9 +597,9 @@ export function HomeroomAttendanceGrid({
     : `${STATUS_CONFIG[paletteType].label} · ${paletteReason}`;
 
   return (
-    <div className="flex flex-col gap-3">
-      {/* ── 팔레트 바 ── */}
-      <div className="flex flex-col gap-2.5 bg-sp-surface border border-sp-border rounded-xl px-4 py-3">
+    <div className="flex flex-col gap-2 flex-1 min-h-0">
+      {/* ── 팔레트 바 (스크롤해도 고정) ── */}
+      <div className="shrink-0 flex flex-col gap-2 bg-sp-surface border border-sp-border rounded-xl px-3 py-2">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs text-sp-muted w-8 shrink-0">종류</span>
           {TYPE_ITEMS.map((type) => {
@@ -672,44 +678,19 @@ export function HomeroomAttendanceGrid({
           </div>
         )}
 
-        {/* 좌석 뷰 전용 기준 교시 선택기 — 좌석엔 교시 축이 없어 지각/조퇴/결과의 앵커를 여기서 고른다. */}
-        {seatMode && !isEraser && paletteType !== 'absent' && (
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-sp-muted w-8 shrink-0">기준</span>
-            <span className="text-xs text-sp-muted">
-              {paletteType === 'late'
-                ? '등교 교시'
-                : paletteType === 'earlyLeave'
-                  ? '하교 교시'
-                  : '해당 교시'}
-            </span>
-            <select
-              value={seatReferencePeriod}
-              onChange={(e) => setSeatReferencePeriod(Number(e.target.value))}
-              className="bg-sp-card border border-sp-border rounded-lg px-2 py-1 text-xs text-sp-text focus:outline-none focus:border-sp-accent"
-            >
-              {periods.map((p) => (
-                <option key={p} value={p}>
-                  {formatPeriodLabel(p)}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-
         <p className="text-caption text-sp-muted leading-relaxed">
           {isEraser
             ? seatMode
-              ? '좌석을 클릭하면 그 학생 하루 전체를 출석으로 되돌려요.'
+              ? '좌석을 클릭하면 그 학생의 교시별 창이 열려요. 창에서 하루 전체 지우기도 할 수 있어요.'
               : '칸을 클릭하면 그 칸만, 이름을 클릭하면 그 학생 하루 전체를 출석으로 되돌려요.'
             : seatMode
-              ? '좌석을 클릭하면 팔레트가 적용돼요.'
+              ? '좌석을 클릭하면 그 학생의 교시별 창이 열려요. 창에서 교시를 클릭해 지정하세요.'
               : TYPE_HINT[paletteType]}
         </p>
       </div>
 
-      {/* ── 도구 + 저장 상태 바 ── */}
-      <div className="flex items-center gap-3 bg-sp-surface border border-sp-border rounded-xl px-4 py-2.5 flex-wrap">
+      {/* ── 도구 + 저장 상태 바 (스크롤해도 고정) ── */}
+      <div className="shrink-0 flex items-center gap-3 bg-sp-surface border border-sp-border rounded-xl px-3 py-1.5 flex-wrap">
         <span className="text-xs text-sp-muted">전체 {students.length}명</span>
         <span className="text-sp-border">|</span>
         {(['absent', 'late', 'earlyLeave', 'classAbsence'] as AttendanceStatus[]).map((status) => {
@@ -844,40 +825,42 @@ export function HomeroomAttendanceGrid({
         </button>
       </div>
 
-      {/* 본문 — 명렬(표) 또는 좌석 뷰 */}
-      {seatMode && seating ? (
-        seating.layout === 'grid' ? (
-          <SeatAttendanceView
-            rows={seating.rows}
-            cols={seating.cols}
-            seats={seating.seats}
-            studentMap={seating.studentMap}
+      {/* 본문 — flex-1로 남은 영역을 채우고 이 영역만 스크롤(위 팔레트·도구 바는 고정). */}
+      <div className="flex-1 min-h-0 overflow-auto">
+        {seatMode && seating ? (
+          seating.layout === 'grid' ? (
+            <SeatAttendanceView
+              rows={seating.rows}
+              cols={seating.cols}
+              seats={seating.seats}
+              studentMap={seating.studentMap}
+              matrix={matrix}
+              periods={periods}
+              onSeatClick={handleSeatClick}
+              highlightStatus={highlightStatus}
+            />
+          ) : (
+            <div className="rounded-xl border border-sp-border bg-sp-surface/40 px-4 py-10 text-center text-sm text-sp-muted leading-relaxed">
+              좌석 보기는 격자(grid) 배치에서만 지원돼요. 모둠·자유 배치는 준비 중입니다 — 명렬
+              보기로 입력해주세요.
+            </div>
+          )
+        ) : (
+          <AttendanceGridView
+            students={students}
             matrix={matrix}
             periods={periods}
-            onSeatClick={handleSeatClick}
+            onCellClick={handleCellClick}
+            onCellContextMenu={handleCellContextMenu}
+            onStudentNameClick={isEraser ? handleNameClick : undefined}
+            nameClickTitle="지우개: 클릭하면 이 학생의 하루 출결을 전부 지워요"
+            blankPresent
+            reasonColumn
+            onMemoEdit={handleMemoEdit}
             highlightStatus={highlightStatus}
           />
-        ) : (
-          <div className="rounded-xl border border-sp-border bg-sp-surface/40 px-4 py-10 text-center text-sm text-sp-muted leading-relaxed">
-            좌석 보기는 격자(grid) 배치에서만 지원돼요. 모둠·자유 배치는 준비 중입니다 — 명렬 보기로
-            입력해주세요.
-          </div>
-        )
-      ) : (
-        <AttendanceGridView
-          students={students}
-          matrix={matrix}
-          periods={periods}
-          onCellClick={handleCellClick}
-          onCellContextMenu={handleCellContextMenu}
-          onStudentNameClick={isEraser ? handleNameClick : undefined}
-          nameClickTitle="지우개: 클릭하면 이 학생의 하루 출결을 전부 지워요"
-          blankPresent
-          reasonColumn
-          onMemoEdit={handleMemoEdit}
-          highlightStatus={highlightStatus}
-        />
-      )}
+        )}
+      </div>
 
       {/* ── 텍스트 빠른 입력 패널 ── */}
       {showTextPanel && (
@@ -984,6 +967,31 @@ export function HomeroomAttendanceGrid({
           </div>
         </div>
       )}
+
+      {/* ── 좌석 교시별 팝오버 (좌석 보기에서 좌석 클릭 시) ── */}
+      {seatMode &&
+        seatPopover &&
+        (() => {
+          const student = students.find((s) => studentKey(s) === seatPopover.sKey);
+          if (!student) return null;
+          return (
+            <SeatPeriodPopover
+              student={{ number: student.number, name: student.name }}
+              row={matrix[seatPopover.sKey] ?? {}}
+              periods={periods}
+              isEraser={isEraser}
+              paletteLabel={selectionLabel}
+              anchorRect={seatPopover.rect}
+              onCellClick={(p) => handleCellClick(seatPopover.sKey, p)}
+              onMemoEdit={(m) => handleMemoEdit(seatPopover.sKey, m)}
+              onClearStudent={() => {
+                clearStudentDay(seatPopover.sKey);
+                setSeatPopover(null);
+              }}
+              onClose={() => setSeatPopover(null)}
+            />
+          );
+        })()}
     </div>
   );
 }

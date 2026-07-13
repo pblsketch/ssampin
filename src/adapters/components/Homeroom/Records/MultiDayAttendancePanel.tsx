@@ -12,7 +12,6 @@ import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { useStudentRecordsStore } from '@adapters/stores/useStudentRecordsStore';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { MultiDatePicker } from '@adapters/components/common/MultiDatePicker';
-import { Notice } from '@adapters/components/common/Notice';
 import {
   STATUS_CONFIG,
   STAT_COLORS,
@@ -393,8 +392,9 @@ export function MultiDayAttendancePanel({
             </div>
           </div>
 
-          {/* 미리보기 */}
-          <Notice variant="info" title="적용 미리보기">
+          {/* 미리보기 — 좌측 파란 띠 없는 담백한 카드 (피드백 2026-07) */}
+          <div className="rounded-lg bg-sp-surface border border-sp-border px-3 py-2 text-xs">
+            <div className="font-bold text-sp-text mb-0.5">적용 미리보기</div>
             <span className="text-sp-muted">
               선택 학생 <span className="text-sp-text font-medium">{selectedIds.size}명</span> ×{' '}
               <span className="text-sp-text font-medium">{effectiveDates.length}일</span> = 총{' '}
@@ -410,7 +410,7 @@ export function MultiDayAttendancePanel({
                 </>
               )}
             </span>
-          </Notice>
+          </div>
         </div>
 
         <div className="flex justify-end gap-2 px-5 py-3 border-t border-sp-border">

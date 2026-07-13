@@ -131,6 +131,7 @@ interface StudentRecordsState {
   toggleNeisReport: (recordId: string) => Promise<void>;
   toggleDocumentSubmitted: (recordId: string) => Promise<void>;
   bulkMarkDocumentSubmitted: (recordIds: readonly string[]) => Promise<void>;
+  bulkMarkNeisReported: (recordIds: readonly string[]) => Promise<void>;
   setViewMode: (mode: ViewMode) => void;
   setPeriodFilter: (filter: PeriodFilter) => void;
 
@@ -329,6 +330,21 @@ export const useStudentRecordsStore = create<StudentRecordsState>((set, get) => 
       set((state) => ({
         records: state.records.map((r) =>
           updatedIds.has(r.id) ? { ...r, documentSubmitted: true } : r,
+        ),
+      }));
+    },
+
+    bulkMarkNeisReported: async (recordIds) => {
+      const idSet = new Set(recordIds);
+      const targets = get().records.filter(
+        (r) => idSet.has(r.id) && r.category === 'attendance' && !r.reportedToNeis,
+      );
+      const updatedRecords = targets.map((r) => ({ ...r, reportedToNeis: true }));
+      await Promise.all(updatedRecords.map((r) => manageRecords.update(r)));
+      const updatedIds = new Set(updatedRecords.map((r) => r.id));
+      set((state) => ({
+        records: state.records.map((r) =>
+          updatedIds.has(r.id) ? { ...r, reportedToNeis: true } : r,
         ),
       }));
     },

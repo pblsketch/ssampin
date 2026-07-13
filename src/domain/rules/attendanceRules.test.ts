@@ -413,6 +413,34 @@ describe('summarizeNeisAttendance — 생기부식 일 단위 집계 (별표 8 �
     expect(c.byReason['기타'].late).toBe(0);
   });
 
+  it("'인정' 사유는 공식 계에서 빠지되 byReason['인정']에 참고용으로 집계된다 (P2)", () => {
+    const recs = [
+      record('c1', '2026-03-02', 1, [att(1, 'absent', { reason: '인정' })]),
+      record('c1', '2026-03-03', 1, [att(1, 'late', { reason: '인정' })]),
+    ];
+    const m = summarizeNeisAttendance(recs, 'c1', students);
+    const c = m.get(key1)!;
+    // 공식 계는 인정 미포함
+    expect(c.absent).toBe(0);
+    expect(c.late).toBe(0);
+    // 참고용 인정 집계는 별도 접기로 집계됨
+    expect(c.byReason['인정'].absent).toBe(1);
+    expect(c.byReason['인정'].late).toBe(1);
+  });
+
+  it('같은 날 지각(질병)+조퇴(인정) → 공식 지각(질병) 1, 인정 조퇴 1로 분리 집계 (P2)', () => {
+    const recs = [
+      record('c1', '2026-03-02', 1, [att(1, 'late', { reason: '질병' })]),
+      record('c1', '2026-03-02', 6, [att(1, 'earlyLeave', { reason: '인정' })]),
+    ];
+    const m = summarizeNeisAttendance(recs, 'c1', students);
+    const c = m.get(key1)!;
+    expect(c.late).toBe(1);
+    expect(c.byReason['질병'].late).toBe(1);
+    expect(c.earlyLeave).toBe(0); // 조퇴는 인정이라 공식 계 제외
+    expect(c.byReason['인정'].earlyLeave).toBe(1);
+  });
+
   it('사유 미기재는 기타로 분류한다 (규칙 마)', () => {
     const recs = [record('c1', '2026-03-02', 1, [att(1, 'absent')])];
     const m = summarizeNeisAttendance(recs, 'c1', students);
