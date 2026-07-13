@@ -52,7 +52,7 @@ export function RecordStudentJumpList({
           onClick={() => onSelect('')}
           className={`w-full flex items-center gap-2 px-3 py-2 text-xs transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-sp-accent ${
             !selectedKey
-              ? 'bg-sp-accent/10 text-sp-accent font-bold'
+              ? 'bg-sp-surface text-sp-accent font-bold'
               : 'text-sp-muted hover:bg-sp-surface hover:text-sp-text'
           }`}
         >
@@ -68,7 +68,7 @@ export function RecordStudentJumpList({
               onClick={() => onSelect(item.key)}
               className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-sp-accent ${
                 isSelected
-                  ? 'bg-sp-accent/10 text-sp-accent font-bold'
+                  ? 'bg-sp-surface text-sp-accent font-bold'
                   : item.count > 0
                     ? 'text-sp-text hover:bg-sp-surface'
                     : 'text-sp-muted/50 hover:bg-sp-surface hover:text-sp-muted'

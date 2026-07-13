@@ -41,7 +41,6 @@ const ALLOWED_FILES: ReadonlySet<string> = new Set([
   // 3. UI 표시 (line-through · opacity · 결번 배지) — `isVacant` 단독으로 시각적 분기
   'src/adapters/components/Homeroom/RosterManagementTab.tsx',
   'src/adapters/components/Homeroom/shared/StudentGrid.tsx',
-  'src/adapters/components/Homeroom/Records/StudentJumpList.tsx',
   'src/adapters/components/Homeroom/Records/InputMode.tsx',
   'src/adapters/components/ClassManagement/ClassRosterTab.tsx',
   'src/mobile/pages/StudentsPage.tsx',

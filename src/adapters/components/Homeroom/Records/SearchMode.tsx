@@ -1,9 +1,8 @@
 import { useState, useMemo, useCallback, useRef } from 'react';
 import { useStudentRecordsStore, RECORD_COLOR_MAP } from '@adapters/stores/useStudentRecordsStore';
-import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { ATTENDANCE_TYPES, ATTENDANCE_REASONS } from '@domain/valueObjects/RecordCategory';
-import type { StudentRecord, AttendancePeriodEntry } from '@domain/entities/StudentRecord';
+import type { StudentRecord } from '@domain/entities/StudentRecord';
 import {
   filterByStudent,
   filterByCategory,
@@ -13,6 +12,7 @@ import {
   getAttendanceStats,
   sortByDateDesc,
 } from '@domain/rules/studentRecordRules';
+import { isStudentActive } from '@domain/rules/studentActivity';
 /* eslint-disable no-restricted-imports */
 import { exportStudentRecordsToExcel } from '@infrastructure/export/ExcelExporter';
 /* eslint-enable no-restricted-imports */
@@ -25,28 +25,27 @@ import {
   RECORD_SORT_OPTIONS,
   getWeekRange,
   getMonthRange,
-  initEditAttendancePeriods,
   sortRecordsInDateGroup,
 } from './recordUtils';
 import { RecordResultSummary } from '@adapters/components/common/records/RecordResultSummary';
+import {
+  RecordStudentJumpList,
+  type JumpListItem,
+} from '@adapters/components/common/records/RecordStudentJumpList';
 import { studentRecordToDisplay } from '@adapters/presentation/displayRecord';
 import { ActionDashboard } from './ActionDashboard';
-import { StudentJumpList } from './StudentJumpList';
 import { AttendanceStatusBanners } from './AttendanceStatusBanners';
+import { useRecordInlineEdit } from './useRecordInlineEdit';
 
 function SearchMode({ students, records, categories }: ModeProps) {
   const {
     periodFilter,
     setPeriodFilter,
     deleteRecord,
-    updateRecord,
-    updateAttendanceRecord,
     toggleFollowUpDone,
     toggleNeisReport,
     toggleDocumentSubmitted,
   } = useStudentRecordsStore();
-  const className = useSettingsStore((s) => s.settings.className);
-  const regularPeriodCount = useSettingsStore((s) => s.settings.maxPeriods) ?? 7;
   const showToast = useToastStore((s) => s.show);
   const [dismissedSearchGuide, setDismissedSearchGuide] = useState(
     () => localStorage.getItem('ssampin:record-search-guide-dismissed') === 'true',
@@ -60,15 +59,6 @@ function SearchMode({ students, records, categories }: ModeProps) {
   const [followUpOnly, setFollowUpOnly] = useState(false);
   const [unreportedOnly, setUnreportedOnly] = useState(false);
   const [docUnsubmittedOnly, setDocUnsubmittedOnly] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editContent, setEditContent] = useState('');
-  const [editCategory, setEditCategory] = useState('');
-  const [editSubcategory, setEditSubcategory] = useState('');
-  const [editReportedToNeis, setEditReportedToNeis] = useState(false);
-  const [editDocumentSubmitted, setEditDocumentSubmitted] = useState(false);
-  const [editFollowUp, setEditFollowUp] = useState('');
-  const [editFollowUpDate, setEditFollowUpDate] = useState('');
-  const [editAttendancePeriods, setEditAttendancePeriods] = useState<AttendancePeriodEntry[]>([]);
   const [sortMode, setSortMode] = useState<RecordSortMode>('occurredAt');
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
@@ -82,6 +72,55 @@ function SearchMode({ students, records, categories }: ModeProps) {
   }, []);
 
   const studentMap = useMemo(() => new Map(students.map((s) => [s.id, s])), [students]);
+
+  // 인라인 편집 상태 묶음 — 뷰에는 edit 객체 하나로 전달(useRecordInlineEdit 훅)
+  const { edit, handleEdit } = useRecordInlineEdit(studentMap);
+
+  // 좌측 학생 점프 리스트 아이템 — 학생별 건수·경고 점(나이스 미반영/기한 초과 후속조치)
+  const jumpItems = useMemo<JumpListItem[]>(() => {
+    const counts = new Map<string, number>();
+    const warnings = new Map<string, { unreported: number; overdueFollowUp: number }>();
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+    for (const r of records) {
+      counts.set(r.studentId, (counts.get(r.studentId) ?? 0) + 1);
+
+      const w = warnings.get(r.studentId) ?? { unreported: 0, overdueFollowUp: 0 };
+      if (r.category === 'attendance' && !r.reportedToNeis) {
+        w.unreported++;
+      }
+      if (r.followUp && !r.followUpDone && r.followUpDate && r.followUpDate < todayStr) {
+        w.overdueFollowUp++;
+      }
+      warnings.set(r.studentId, w);
+    }
+
+    const items: JumpListItem[] = [];
+    students.forEach((student, idx) => {
+      if (!isStudentActive(student)) return;
+      const w = warnings.get(student.id);
+      const hasWarning = !!w && (w.unreported > 0 || w.overdueFollowUp > 0);
+      items.push({
+        key: student.id,
+        label: student.name,
+        number: idx + 1,
+        count: counts.get(student.id) ?? 0,
+        hasWarning,
+        warningTitle: hasWarning
+          ? [
+              w.unreported > 0 ? `나이스 미반영 ${w.unreported}건` : '',
+              w.overdueFollowUp > 0 ? `기한 초과 ${w.overdueFollowUp}건` : '',
+            ]
+              .filter(Boolean)
+              .join(', ')
+          : undefined,
+      });
+    });
+    return items;
+  }, [students, records]);
 
   // 선택된 카테고리의 서브카테고리 목록
   const subcategoryOptions = useMemo(() => {
@@ -214,105 +253,6 @@ function SearchMode({ students, records, categories }: ModeProps) {
     [filtered, categories, studentMap],
   );
 
-  const handleEdit = useCallback((record: StudentRecord) => {
-    setEditingId(record.id);
-    setEditContent(record.content);
-    setEditCategory(record.category);
-    setEditSubcategory(record.subcategory);
-    setEditReportedToNeis(record.reportedToNeis ?? false);
-    setEditDocumentSubmitted(record.documentSubmitted ?? false);
-    setEditFollowUp(record.followUp ?? '');
-    setEditFollowUpDate(record.followUpDate ?? '');
-    if (record.category === 'attendance') {
-      setEditAttendancePeriods(initEditAttendancePeriods(record));
-    } else {
-      setEditAttendancePeriods([]);
-    }
-  }, []);
-
-  const handleEditSave = useCallback(
-    async (record: StudentRecord) => {
-      if (record.category === 'attendance') {
-        const student = studentMap.get(record.studentId);
-        // Snapshot for undo
-        const snapshot = {
-          nextPeriods: [...(record.attendancePeriods ?? [])],
-          content: record.content,
-          reportedToNeis: record.reportedToNeis ?? false,
-          documentSubmitted: record.documentSubmitted ?? false,
-        };
-        try {
-          await updateAttendanceRecord({
-            record,
-            nextPeriods: editAttendancePeriods,
-            content: editContent,
-            reportedToNeis: editReportedToNeis,
-            documentSubmitted: editDocumentSubmitted,
-            classId: className,
-            date: record.date,
-            studentNumber: student?.studentNumber,
-            regularPeriodCount,
-          });
-          showToast('출결 기록을 저장했습니다', 'success', {
-            label: '되돌리기',
-            onClick: () => {
-              void updateAttendanceRecord({
-                record,
-                nextPeriods: snapshot.nextPeriods,
-                content: snapshot.content,
-                reportedToNeis: snapshot.reportedToNeis,
-                documentSubmitted: snapshot.documentSubmitted,
-                classId: className,
-                date: record.date,
-                studentNumber: student?.studentNumber,
-                regularPeriodCount,
-              });
-            },
-          });
-        } catch (err) {
-          console.error('[handleEditSave] 출결 기록 저장 실패', err);
-          showToast('저장에 실패했습니다', 'error');
-          return;
-        }
-      } else {
-        await updateRecord({
-          ...record,
-          content: editContent,
-          category: editCategory,
-          subcategory: editSubcategory,
-          followUp: editFollowUp.trim() || undefined,
-          followUpDate: editFollowUpDate || undefined,
-        });
-        showToast('기록을 저장했습니다', 'success');
-      }
-      setEditingId(null);
-      setEditContent('');
-      setEditCategory('');
-      setEditSubcategory('');
-      setEditReportedToNeis(false);
-      setEditDocumentSubmitted(false);
-      setEditFollowUp('');
-      setEditFollowUpDate('');
-      setEditAttendancePeriods([]);
-    },
-    [
-      editContent,
-      editCategory,
-      editSubcategory,
-      editReportedToNeis,
-      editDocumentSubmitted,
-      editFollowUp,
-      editFollowUpDate,
-      editAttendancePeriods,
-      className,
-      regularPeriodCount,
-      studentMap,
-      updateRecord,
-      updateAttendanceRecord,
-      showToast,
-    ],
-  );
-
   const handleExportFiltered = useCallback(async () => {
     const targetStudents = selectedStudentId
       ? students.filter((s) => s.id === selectedStudentId)
@@ -413,7 +353,7 @@ function SearchMode({ students, records, categories }: ModeProps) {
           />
         </div>
 
-        {/* 학생 선택 — lg 이상에서는 좌측 StudentJumpList와 중복이라 lg 미만(사이드바가 세로로 밀릴 때)에서만 노출 */}
+        {/* 학생 선택 — lg 이상에서는 좌측 학생 점프 리스트와 중복이라 lg 미만(사이드바가 세로로 밀릴 때)에서만 노출 */}
         <div className="lg:hidden">
           <select
             value={selectedStudentId}
@@ -613,12 +553,11 @@ function SearchMode({ students, records, categories }: ModeProps) {
 
       {/* 3-column body */}
       <div className="flex-1 flex flex-col lg:flex-row gap-3 min-h-0">
-        {/* Left: StudentJumpList */}
+        {/* Left: 학생 점프 리스트 (공용 부품 — 수업 조회와 동일) */}
         <div className="w-full lg:w-[180px] lg:shrink-0">
-          <StudentJumpList
-            students={students}
-            records={records}
-            selectedStudentId={selectedStudentId}
+          <RecordStudentJumpList
+            items={jumpItems}
+            selectedKey={selectedStudentId}
             onSelect={setSelectedStudentId}
           />
         </div>
@@ -638,33 +577,7 @@ function SearchMode({ students, records, categories }: ModeProps) {
               onToggleFollowUp={toggleFollowUpDone}
               onToggleNeisReport={toggleNeisReport}
               onToggleDocumentSubmitted={toggleDocumentSubmitted}
-              editingId={editingId}
-              editContent={editContent}
-              setEditContent={setEditContent}
-              editCategory={editCategory}
-              setEditCategory={setEditCategory}
-              editSubcategory={editSubcategory}
-              setEditSubcategory={setEditSubcategory}
-              editReportedToNeis={editReportedToNeis}
-              setEditReportedToNeis={setEditReportedToNeis}
-              editDocumentSubmitted={editDocumentSubmitted}
-              setEditDocumentSubmitted={setEditDocumentSubmitted}
-              editFollowUp={editFollowUp}
-              setEditFollowUp={setEditFollowUp}
-              editFollowUpDate={editFollowUpDate}
-              setEditFollowUpDate={setEditFollowUpDate}
-              editAttendancePeriods={editAttendancePeriods}
-              setEditAttendancePeriods={setEditAttendancePeriods}
-              regularPeriodCount={regularPeriodCount}
-              onEditSave={handleEditSave}
-              onEditCancel={() => {
-                setEditingId(null);
-                setEditReportedToNeis(false);
-                setEditDocumentSubmitted(false);
-                setEditFollowUp('');
-                setEditFollowUpDate('');
-                setEditAttendancePeriods([]);
-              }}
+              edit={edit}
             />
           ) : (
             <DefaultRecordListView
@@ -678,33 +591,7 @@ function SearchMode({ students, records, categories }: ModeProps) {
               onToggleFollowUp={toggleFollowUpDone}
               onToggleNeisReport={toggleNeisReport}
               onToggleDocumentSubmitted={toggleDocumentSubmitted}
-              editingId={editingId}
-              editContent={editContent}
-              setEditContent={setEditContent}
-              editCategory={editCategory}
-              setEditCategory={setEditCategory}
-              editSubcategory={editSubcategory}
-              setEditSubcategory={setEditSubcategory}
-              editReportedToNeis={editReportedToNeis}
-              setEditReportedToNeis={setEditReportedToNeis}
-              editDocumentSubmitted={editDocumentSubmitted}
-              setEditDocumentSubmitted={setEditDocumentSubmitted}
-              editFollowUp={editFollowUp}
-              setEditFollowUp={setEditFollowUp}
-              editFollowUpDate={editFollowUpDate}
-              setEditFollowUpDate={setEditFollowUpDate}
-              editAttendancePeriods={editAttendancePeriods}
-              setEditAttendancePeriods={setEditAttendancePeriods}
-              regularPeriodCount={regularPeriodCount}
-              onEditSave={handleEditSave}
-              onEditCancel={() => {
-                setEditingId(null);
-                setEditReportedToNeis(false);
-                setEditDocumentSubmitted(false);
-                setEditFollowUp('');
-                setEditFollowUpDate('');
-                setEditAttendancePeriods([]);
-              }}
+              edit={edit}
             />
           )}
         </div>

@@ -14,8 +14,9 @@ import {
 } from './recordUtils';
 import { DateGroupHeader } from '@adapters/components/common/records/DateGroupHeader';
 import { RecordEmptyState } from '@adapters/components/common/records/RecordEmptyState';
+import { RecordCompletionBadge } from '@adapters/components/common/records/RecordCompletionBadge';
 
-interface DefaultRecordListViewProps extends RecordEditProps {
+interface DefaultRecordListViewProps {
   grouped: [string, StudentRecord[]][];
   categories: readonly RecordCategoryItem[];
   studentMap: Map<string, Student>;
@@ -26,6 +27,8 @@ interface DefaultRecordListViewProps extends RecordEditProps {
   onToggleFollowUp: (id: string) => Promise<void>;
   onToggleNeisReport: (id: string) => Promise<void>;
   onToggleDocumentSubmitted: (id: string) => Promise<void>;
+  /** 인라인 편집 상태 묶음 (useRecordInlineEdit 반환값) */
+  edit: RecordEditProps;
 }
 
 function DefaultRecordListView({
@@ -39,27 +42,30 @@ function DefaultRecordListView({
   onToggleFollowUp,
   onToggleNeisReport,
   onToggleDocumentSubmitted,
-  editingId,
-  editContent,
-  setEditContent,
-  editCategory,
-  setEditCategory,
-  editSubcategory,
-  setEditSubcategory,
-  editReportedToNeis,
-  setEditReportedToNeis,
-  editDocumentSubmitted,
-  setEditDocumentSubmitted,
-  editFollowUp,
-  setEditFollowUp,
-  editFollowUpDate,
-  setEditFollowUpDate,
-  editAttendancePeriods,
-  setEditAttendancePeriods,
-  regularPeriodCount,
-  onEditSave,
-  onEditCancel,
+  edit,
 }: DefaultRecordListViewProps) {
+  const {
+    editingId,
+    editContent,
+    setEditContent,
+    editCategory,
+    setEditCategory,
+    editSubcategory,
+    setEditSubcategory,
+    editReportedToNeis,
+    setEditReportedToNeis,
+    editDocumentSubmitted,
+    setEditDocumentSubmitted,
+    editFollowUp,
+    setEditFollowUp,
+    editFollowUpDate,
+    setEditFollowUpDate,
+    editAttendancePeriods,
+    setEditAttendancePeriods,
+    regularPeriodCount,
+    onEditSave,
+    onEditCancel,
+  } = edit;
   return (
     <div className="flex-1 overflow-y-auto space-y-4">
       {grouped.length === 0 ? (
@@ -127,48 +133,16 @@ function DefaultRecordListView({
                       )}
                       {record.category === 'attendance' && (
                         <>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              void onToggleNeisReport(record.id);
-                            }}
-                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium transition-colors cursor-pointer flex-shrink-0 ${
-                              record.reportedToNeis
-                                ? 'bg-green-500/15 text-green-400 hover:bg-green-500/25'
-                                : 'bg-red-500/10 text-red-400/70 hover:bg-red-500/20'
-                            }`}
-                            title={
-                              record.reportedToNeis
-                                ? '나이스 반영 완료 (클릭하여 취소)'
-                                : '나이스 미반영 (클릭하여 반영 처리)'
-                            }
-                          >
-                            <span className="material-symbols-outlined text-icon-xs">
-                              {record.reportedToNeis ? 'check_circle' : 'pending'}
-                            </span>
-                            {record.reportedToNeis ? '나이스' : '미반영'}
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              void onToggleDocumentSubmitted(record.id);
-                            }}
-                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium transition-colors cursor-pointer flex-shrink-0 ${
-                              record.documentSubmitted
-                                ? 'bg-green-500/15 text-green-400 hover:bg-green-500/25'
-                                : 'bg-orange-500/10 text-orange-400/70 hover:bg-orange-500/20'
-                            }`}
-                            title={
-                              record.documentSubmitted
-                                ? '서류 제출 완료 (클릭하여 취소)'
-                                : '서류 미제출 (클릭하여 제출 처리)'
-                            }
-                          >
-                            <span className="material-symbols-outlined text-icon-xs">
-                              {record.documentSubmitted ? 'description' : 'draft'}
-                            </span>
-                            {record.documentSubmitted ? '서류' : '미제출'}
-                          </button>
+                          <RecordCompletionBadge
+                            kind="neis"
+                            completed={!!record.reportedToNeis}
+                            onToggle={() => void onToggleNeisReport(record.id)}
+                          />
+                          <RecordCompletionBadge
+                            kind="document"
+                            completed={!!record.documentSubmitted}
+                            onToggle={() => void onToggleDocumentSubmitted(record.id)}
+                          />
                         </>
                       )}
                       <span className="text-sm text-sp-text font-medium min-w-[60px] flex items-center gap-1.5">
