@@ -17,6 +17,7 @@ import {
   type NeisReasonAxis,
   type NeisReasonAxisWithExcused,
 } from '@domain/rules/attendanceRules';
+import { formatPeriodLabel, type AttendanceStatus } from '@domain/entities/Attendance';
 import { SummaryCard, StatBadge } from './RecordStatCards';
 import {
   type ModeProps,
@@ -24,6 +25,7 @@ import {
   getMonthRange,
   METHOD_OPTIONS,
   getAttendanceTypeFromSubcategory,
+  formatDateKR,
 } from './recordUtils';
 import { studentRecordToDisplay, type DisplayRecord } from '@adapters/presentation/displayRecord';
 import { RecordDetailModal } from '@adapters/components/common/records/RecordDetailModal';
@@ -51,6 +53,23 @@ const NEIS_STATUS_COLUMNS = [
 
 const NEIS_REASON_AXES: readonly NeisReasonAxis[] = ['질병', '미인정', '기타'];
 
+const ATT_STATUS_LABEL: Record<Exclude<AttendanceStatus, 'present'>, string> = {
+  absent: '결석',
+  late: '지각',
+  earlyLeave: '조퇴',
+  classAbsence: '결과',
+};
+
+/** 출결 집계 학생 상세 — 날짜별 1건으로 묶어(교시 범위) 언제·구분·사유·비고를 보여준다. */
+interface AttendanceDetailEntry {
+  date: string;
+  periodStart: number;
+  periodEnd: number;
+  status: Exclude<AttendanceStatus, 'present'>;
+  reason?: string;
+  memo?: string;
+}
+
 const NEIS_FOOTNOTE =
   '같은 날 지각·조퇴·결과가 겹치면 학교생활기록부 기재요령에 따라 한 가지로만 집계합니다(학교장 판단 사항 — 쌤핀 기본: 결석>조퇴>지각>결과). 출석인정(인정) 사유는 횟수에 포함하지 않습니다. 결석은 교시 수와 무관하게 1일 1회입니다.';
 
@@ -59,24 +78,26 @@ export function NeisAttendanceSection({
   dateFrom,
   dateTo,
   periodLabel,
-  defaultOpen = true,
 }: {
   students: readonly Student[];
   dateFrom?: string;
   dateTo?: string;
   periodLabel: string;
-  /** 처음에 표를 펼친 채로 렌더할지 (통계 탭=true, 출결 탭=false로 접어 노출). */
-  defaultOpen?: boolean;
 }) {
   const className = useSettingsStore((s) => s.settings.className);
   const attendanceRecords = useTeachingClassStore((s) => s.attendanceRecords);
-  const [open, setOpen] = useState(defaultOpen);
   // 사유 상세(질병/미인정/기타 분해)를 기본으로 펼쳐 보여준다(사용자 피드백 2026-07).
   const [showBreakdown, setShowBreakdown] = useState(true);
   // 인정(출석인정) 참고 표시 — 기본 숨김. 켜면 사유 상세에 '인정' 칸이 붙는다(피드백 2026-07).
   const [showExcused, setShowExcused] = useState(false);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const showToast = useToastStore((s) => s.show);
+  // 학생 클릭 상세 (언제·교시·구분·사유·비고)
+  const [detail, setDetail] = useState<{
+    name: string;
+    studentNumber: number;
+    entries: AttendanceDetailEntry[];
+  } | null>(null);
   // 사유 상세에서 렌더할 사유 축 — 인정 표시 시 '인정'을 마지막 칸으로 덧붙인다.
   const reasonAxes: readonly NeisReasonAxisWithExcused[] = showExcused
     ? [...NEIS_REASON_AXES, '인정']
@@ -251,24 +272,52 @@ export function NeisAttendanceSection({
     [handlePrint, buildExportInput, saveExport, className, showToast],
   );
 
+  /* 학생 행 클릭 → 그 학생의 이상 출결 상세.
+     날짜+구분+사유 단위로 묶어 교시 범위(조회~종례 등)로 보여준다(교시별 나열 대신 날짜별 1건). */
+  const openStudentDetail = useCallback(
+    (studentNumber: number, name: string) => {
+      const groups = new Map<string, AttendanceDetailEntry>();
+      for (const r of attendanceRecords) {
+        if (r.classId !== className) continue;
+        if (dateFrom != null && r.date < dateFrom) continue;
+        if (dateTo != null && r.date > dateTo) continue;
+        const hit = r.students.find((sa) => sa.number === studentNumber);
+        if (!hit || hit.status === 'present') continue;
+        const key = `${r.date}|${hit.status}|${hit.reason ?? ''}`;
+        const g = groups.get(key);
+        if (!g) {
+          groups.set(key, {
+            date: r.date,
+            periodStart: r.period,
+            periodEnd: r.period,
+            status: hit.status,
+            ...(hit.reason ? { reason: hit.reason } : {}),
+            ...(hit.memo ? { memo: hit.memo } : {}),
+          });
+        } else {
+          if (r.period < g.periodStart) g.periodStart = r.period;
+          if (r.period > g.periodEnd) g.periodEnd = r.period;
+          if (!g.memo && hit.memo) g.memo = hit.memo;
+        }
+      }
+      const entries = [...groups.values()].sort((a, b) =>
+        a.date < b.date ? -1 : a.date > b.date ? 1 : a.periodStart - b.periodStart,
+      );
+      setDetail({ studentNumber, name, entries });
+    },
+    [attendanceRecords, className, dateFrom, dateTo],
+  );
+
   if (rows.length === 0) return null;
 
   return (
     <div className="rounded-xl bg-sp-card p-4">
       <div className="flex items-center gap-2 flex-wrap">
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          className="flex items-center gap-2 text-left"
-          aria-expanded={open}
-        >
+        <div className="flex items-center gap-2">
           <span className="material-symbols-outlined text-base text-sp-accent">table_chart</span>
           <span className="text-sm font-bold text-sp-text">출결 집계 (생활기록부 기준)</span>
           <span className="text-xs text-sp-muted">{periodLabel}</span>
-          <span className="material-symbols-outlined text-sp-muted text-base">
-            {open ? 'expand_less' : 'expand_more'}
-          </span>
-        </button>
+        </div>
         <div className="flex-1" />
         <button
           type="button"
@@ -347,128 +396,200 @@ export function NeisAttendanceSection({
         </div>
       </div>
 
-      {open && (
-        <>
-          <div className="mt-3 overflow-x-auto rounded-lg border border-sp-border">
-            <table className="w-full border-collapse text-sm">
-              <thead>
-                <tr className="bg-sp-surface text-sp-muted">
-                  <th rowSpan={showBreakdown ? 2 : 1} className="px-2 py-2 text-sm font-medium">
-                    번호
-                  </th>
-                  <th
-                    rowSpan={showBreakdown ? 2 : 1}
-                    className="px-3 py-2 text-sm font-medium text-center"
-                  >
-                    이름
-                  </th>
-                  {NEIS_STATUS_COLUMNS.map((col) => (
-                    <th
-                      key={col.key}
-                      colSpan={reasonColSpan}
-                      className="px-2 py-2 text-sm font-medium border-l border-sp-border"
-                    >
-                      {col.label}
-                    </th>
-                  ))}
-                </tr>
-                {showBreakdown && (
-                  <tr className="bg-sp-surface text-sp-muted">
-                    {NEIS_STATUS_COLUMNS.map((col) => (
-                      <Fragment key={col.key}>
-                        <th className="px-2 py-1 text-xs font-medium border-l border-sp-border">
-                          계
-                        </th>
-                        {reasonAxes.map((r) => (
-                          <th
-                            key={r}
-                            className={`px-2 py-1 text-xs font-normal ${
-                              r === '인정' ? 'text-sp-muted/70 italic' : ''
-                            }`}
-                          >
-                            {r}
-                          </th>
-                        ))}
-                      </Fragment>
+      <div className="mt-3 overflow-x-auto rounded-lg border border-sp-border">
+        <table className="w-full border-collapse text-sm">
+          <thead>
+            <tr className="bg-sp-surface text-sp-muted">
+              <th rowSpan={showBreakdown ? 2 : 1} className="px-2 py-2 text-sm font-medium">
+                번호
+              </th>
+              <th
+                rowSpan={showBreakdown ? 2 : 1}
+                className="px-3 py-2 text-sm font-medium text-center"
+              >
+                이름
+              </th>
+              {NEIS_STATUS_COLUMNS.map((col) => (
+                <th
+                  key={col.key}
+                  colSpan={reasonColSpan}
+                  className="px-2 py-2 text-sm font-medium border-l border-sp-border"
+                >
+                  {col.label}
+                </th>
+              ))}
+            </tr>
+            {showBreakdown && (
+              <tr className="bg-sp-surface text-sp-muted">
+                {NEIS_STATUS_COLUMNS.map((col) => (
+                  <Fragment key={col.key}>
+                    <th className="px-2 py-1 text-xs font-medium border-l border-sp-border">계</th>
+                    {reasonAxes.map((r) => (
+                      <th
+                        key={r}
+                        className={`px-2 py-1 text-xs font-normal ${
+                          r === '인정' ? 'text-sp-muted/70 italic' : ''
+                        }`}
+                      >
+                        {r}
+                      </th>
                     ))}
-                  </tr>
-                )}
-              </thead>
-              <tbody className="divide-y divide-sp-border/50">
-                {rows.map((s) => {
-                  const c = stats.get(String(s.studentNumber ?? 0));
-                  return (
-                    <tr key={s.id} className="hover:bg-sp-surface/50 transition-colors">
-                      <td className="px-2 py-1.5 text-center text-sm text-sp-muted tabular-nums">
-                        {s.studentNumber}
-                      </td>
-                      <td className="px-3 py-1.5 text-sm text-sp-text whitespace-nowrap text-center">
-                        {s.name}
-                      </td>
-                      {NEIS_STATUS_COLUMNS.map((col) => {
-                        const total = c?.[col.key] ?? 0;
-                        return (
-                          <Fragment key={col.key}>
-                            <td
-                              className={`px-2 py-1.5 text-center text-sm border-l border-sp-border/60 ${
-                                total > 0 ? 'text-sp-text font-medium' : 'text-sp-muted/40'
-                              }`}
-                            >
-                              {total > 0 ? total : '·'}
-                            </td>
-                            {showBreakdown &&
-                              reasonAxes.map((r) => {
-                                const v = c?.byReason[r][col.key] ?? 0;
-                                const excused = r === '인정';
-                                return (
-                                  <td
-                                    key={r}
-                                    className={`px-2 py-1.5 text-center text-xs ${
-                                      excused ? 'italic ' : ''
-                                    }${v > 0 ? (excused ? 'text-sp-muted' : 'text-sp-text') : 'text-sp-muted/30'}`}
-                                  >
-                                    {v > 0 ? v : '·'}
-                                  </td>
-                                );
-                              })}
-                          </Fragment>
-                        );
-                      })}
-                    </tr>
-                  );
-                })}
-                <tr className="bg-sp-surface border-t border-sp-border">
-                  <td colSpan={2} className="px-3 py-1.5 text-sm text-sp-muted font-medium">
-                    합계
+                  </Fragment>
+                ))}
+              </tr>
+            )}
+          </thead>
+          <tbody className="divide-y divide-sp-border/50">
+            {rows.map((s) => {
+              const c = stats.get(String(s.studentNumber ?? 0));
+              return (
+                <tr
+                  key={s.id}
+                  onClick={() => openStudentDetail(s.studentNumber ?? 0, s.name)}
+                  title={`${s.name} 출결 상세 보기`}
+                  className="cursor-pointer hover:bg-sp-surface/50 transition-colors"
+                >
+                  <td className="px-2 py-1.5 text-center text-sm text-sp-muted tabular-nums">
+                    {s.studentNumber}
                   </td>
-                  {NEIS_STATUS_COLUMNS.map((col) => (
-                    <Fragment key={col.key}>
-                      <td className="px-2 py-1.5 text-center text-sm font-bold text-sp-text border-l border-sp-border/60">
-                        {totals[col.key] || '·'}
-                      </td>
-                      {showBreakdown &&
-                        reasonAxes.map((r) => {
-                          let sum = 0;
-                          for (const c of stats.values()) sum += c.byReason[r][col.key];
-                          return (
-                            <td
-                              key={r}
-                              className={`px-2 py-1.5 text-center text-xs text-sp-muted ${
-                                r === '인정' ? 'italic' : ''
-                              }`}
-                            >
-                              {sum || '·'}
-                            </td>
-                          );
-                        })}
-                    </Fragment>
-                  ))}
+                  <td className="px-3 py-1.5 text-sm text-sp-text whitespace-nowrap text-center">
+                    {s.name}
+                  </td>
+                  {NEIS_STATUS_COLUMNS.map((col) => {
+                    const total = c?.[col.key] ?? 0;
+                    return (
+                      <Fragment key={col.key}>
+                        <td
+                          className={`px-2 py-1.5 text-center text-sm border-l border-sp-border/60 ${
+                            total > 0 ? 'text-sp-text font-medium' : 'text-sp-muted/40'
+                          }`}
+                        >
+                          {total > 0 ? total : '·'}
+                        </td>
+                        {showBreakdown &&
+                          reasonAxes.map((r) => {
+                            const v = c?.byReason[r][col.key] ?? 0;
+                            const excused = r === '인정';
+                            return (
+                              <td
+                                key={r}
+                                className={`px-2 py-1.5 text-center text-xs ${
+                                  excused ? 'italic ' : ''
+                                }${v > 0 ? (excused ? 'text-sp-muted' : 'text-sp-text') : 'text-sp-muted/30'}`}
+                              >
+                                {v > 0 ? v : '·'}
+                              </td>
+                            );
+                          })}
+                      </Fragment>
+                    );
+                  })}
                 </tr>
-              </tbody>
-            </table>
+              );
+            })}
+            <tr className="bg-sp-surface border-t border-sp-border">
+              <td colSpan={2} className="px-3 py-1.5 text-sm text-sp-muted font-medium">
+                합계
+              </td>
+              {NEIS_STATUS_COLUMNS.map((col) => (
+                <Fragment key={col.key}>
+                  <td className="px-2 py-1.5 text-center text-sm font-bold text-sp-text border-l border-sp-border/60">
+                    {totals[col.key] || '·'}
+                  </td>
+                  {showBreakdown &&
+                    reasonAxes.map((r) => {
+                      let sum = 0;
+                      for (const c of stats.values()) sum += c.byReason[r][col.key];
+                      return (
+                        <td
+                          key={r}
+                          className={`px-2 py-1.5 text-center text-xs text-sp-muted ${
+                            r === '인정' ? 'italic' : ''
+                          }`}
+                        >
+                          {sum || '·'}
+                        </td>
+                      );
+                    })}
+                </Fragment>
+              ))}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p className="mt-2 text-caption text-sp-muted leading-relaxed">{NEIS_FOOTNOTE}</p>
+
+      {/* 학생 클릭 상세 — 언제·몇 교시·구분·사유·비고 (피드백 2026-07) */}
+      {detail && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setDetail(null)}
+        >
+          <div
+            role="dialog"
+            aria-label={`${detail.name} 출결 상세`}
+            className="bg-sp-card border border-sp-border rounded-2xl w-[560px] max-w-full max-h-[80vh] flex flex-col shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-3 border-b border-sp-border">
+              <h3 className="text-sm font-bold text-sp-text">
+                {detail.studentNumber}번 {detail.name} · 출결 상세
+                <span className="ml-2 text-xs font-normal text-sp-muted">
+                  {detail.entries.length}건
+                </span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setDetail(null)}
+                aria-label="닫기"
+                className="text-sp-muted hover:text-sp-text transition-colors"
+              >
+                <span className="material-symbols-outlined text-lg">close</span>
+              </button>
+            </div>
+            <div className="overflow-auto p-4">
+              {detail.entries.length === 0 ? (
+                <p className="text-sm text-sp-muted text-center py-6">이상 출결 기록이 없어요.</p>
+              ) : (
+                <table className="w-full border-collapse text-sm">
+                  <thead>
+                    <tr className="bg-sp-surface text-sp-muted">
+                      <th className="px-2 py-2 text-sm font-medium">날짜</th>
+                      <th className="px-2 py-2 text-sm font-medium">교시</th>
+                      <th className="px-2 py-2 text-sm font-medium">구분</th>
+                      <th className="px-2 py-2 text-sm font-medium">사유</th>
+                      <th className="px-3 py-2 text-sm font-medium text-left">비고</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-sp-border/50">
+                    {detail.entries.map((e, i) => (
+                      <tr
+                        key={`${e.date}-${e.status}-${e.periodStart}-${i}`}
+                        className="hover:bg-sp-surface/40"
+                      >
+                        <td className="px-2 py-1.5 text-center text-sm text-sp-text whitespace-nowrap">
+                          {formatDateKR(e.date)}
+                        </td>
+                        <td className="px-2 py-1.5 text-center text-sm text-sp-muted whitespace-nowrap">
+                          {e.periodStart === e.periodEnd
+                            ? formatPeriodLabel(e.periodStart)
+                            : `${formatPeriodLabel(e.periodStart)}~${formatPeriodLabel(e.periodEnd)}`}
+                        </td>
+                        <td className="px-2 py-1.5 text-center text-sm text-sp-text">
+                          {ATT_STATUS_LABEL[e.status]}
+                        </td>
+                        <td className="px-2 py-1.5 text-center text-sm text-sp-muted">
+                          {e.reason ?? '-'}
+                        </td>
+                        <td className="px-3 py-1.5 text-sm text-sp-text">{e.memo ?? '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
           </div>
-          <p className="mt-2 text-caption text-sp-muted leading-relaxed">{NEIS_FOOTNOTE}</p>
-        </>
+        </div>
       )}
     </div>
   );

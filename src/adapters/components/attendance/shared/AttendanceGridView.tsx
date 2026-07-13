@@ -295,7 +295,7 @@ export function AttendanceGridView({
                 )}
                 {hasGradeInfo && (
                   <td
-                    className={`sticky z-10 ${stickyBg} px-3 py-2 text-sm text-sp-muted whitespace-nowrap`}
+                    className={`sticky z-10 ${stickyBg} px-3 py-1 text-sm text-sp-muted whitespace-nowrap`}
                     style={{ left: stickyLeft.gradeLeft }}
                   >
                     {student.grade != null && student.classNum != null
@@ -304,13 +304,13 @@ export function AttendanceGridView({
                   </td>
                 )}
                 <td
-                  className={`sticky z-10 ${stickyBg} px-2 py-2 text-sm text-sp-muted text-center whitespace-nowrap font-medium`}
+                  className={`sticky z-10 ${stickyBg} px-2 py-1 text-sm text-sp-muted text-center whitespace-nowrap font-medium`}
                   style={{ left: stickyLeft.numLeft }}
                 >
                   {student.number}
                 </td>
                 <td
-                  className={`sticky z-10 ${stickyBg} px-3 py-2 text-base text-sp-text whitespace-nowrap text-center`}
+                  className={`sticky z-10 ${stickyBg} px-3 py-1 text-base text-sp-text whitespace-nowrap text-center`}
                   style={{ left: stickyLeft.nameLeft }}
                 >
                   {onStudentNameClick ? (
@@ -345,14 +345,14 @@ export function AttendanceGridView({
                   ].filter(Boolean);
 
                   return (
-                    <td key={p} className="px-0.5 py-1 text-center">
+                    <td key={p} className="px-0.5 py-0.5 text-center">
                       <button
                         type="button"
                         onClick={() => onCellClick(sKey, p)}
                         onContextMenu={(e) => onCellContextMenu(e, sKey, p)}
                         title={titleParts.join(' · ')}
                         aria-label={`${student.name} ${periodLabel} ${config.label}${att?.reason ? ` (${att.reason})` : ''}`}
-                        className={`w-10 h-10 mx-auto rounded-lg flex items-center justify-center transition-all
+                        className={`w-7 h-7 mx-auto rounded-lg flex items-center justify-center transition-all
                                    cursor-pointer ${
                                      blankPresent && isPresent
                                        ? 'text-transparent hover:bg-sp-surface'
@@ -360,7 +360,7 @@ export function AttendanceGridView({
                                    }`}
                       >
                         {blankPresent && isPresent ? null : (
-                          <span className="material-symbols-outlined text-lg leading-none">
+                          <span className="material-symbols-outlined text-sm leading-none">
                             {config.icon}
                           </span>
                         )}

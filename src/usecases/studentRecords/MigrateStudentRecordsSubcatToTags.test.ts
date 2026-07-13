@@ -18,7 +18,10 @@ function rec(p: Partial<StudentRecord>): StudentRecord {
     content: p.content ?? '',
     date: p.date ?? '2026-06-24',
     createdAt: p.createdAt ?? '2026-06-24T00:00:00.000Z',
+    ...(p.updatedAt ? { updatedAt: p.updatedAt } : {}),
     ...(p.tags ? { tags: p.tags } : {}),
+    ...(p.reportedToNeis !== undefined ? { reportedToNeis: p.reportedToNeis } : {}),
+    ...(p.documentSubmitted !== undefined ? { documentSubmitted: p.documentSubmitted } : {}),
     ...(p.attendancePeriods ? { attendancePeriods: p.attendancePeriods } : {}),
   };
 }
@@ -179,5 +182,60 @@ describe('mergeStudentRecords — Drive 병합 동률 가드(좀비 방지)', ()
     };
     const merged = mergeStudentRecords(local, remote);
     expect(merged.records[0]!.content).toBe('new');
+  });
+
+  it('updatedAt 최신 로컬이 이긴다 — 나이스/서류 플래그 편집이 동기화로 되살아나지 않음', () => {
+    // createdAt·tags 동률이지만 로컬이 더 나중에 수정(reportedToNeis=true) → 로컬 보존
+    const local: StudentRecordsData = {
+      records: [
+        rec({
+          id: 'a',
+          reportedToNeis: true,
+          createdAt: SAME,
+          updatedAt: '2026-06-24T09:00:00.000Z',
+        }),
+      ],
+    };
+    const remote: StudentRecordsData = {
+      records: [
+        rec({
+          id: 'a',
+          reportedToNeis: false,
+          createdAt: SAME,
+          updatedAt: '2026-06-24T00:00:00.000Z',
+        }),
+      ],
+    };
+    const merged = mergeStudentRecords(local, remote);
+    expect(merged.records[0]!.reportedToNeis).toBe(true);
+  });
+
+  it('한쪽만 updatedAt(로컬 편집) → updatedAt 있는 쪽 우선 (구 리모트가 덮지 못함)', () => {
+    const local: StudentRecordsData = {
+      records: [
+        rec({ id: 'a', documentSubmitted: true, tags: ['x'], createdAt: SAME, updatedAt: SAME }),
+      ],
+    };
+    const remote: StudentRecordsData = {
+      // updatedAt 없음(구 데이터) + tags 동수 → 예전 로직이면 리모트가 이겼음
+      records: [rec({ id: 'a', documentSubmitted: false, tags: ['x'], createdAt: SAME })],
+    };
+    const merged = mergeStudentRecords(local, remote);
+    expect(merged.records[0]!.documentSubmitted).toBe(true);
+  });
+
+  it('리모트 updatedAt 최신 → 리모트 우선 (정상 원격 편집 반영)', () => {
+    const local: StudentRecordsData = {
+      records: [
+        rec({ id: 'a', content: 'local', createdAt: SAME, updatedAt: '2026-06-24T01:00:00.000Z' }),
+      ],
+    };
+    const remote: StudentRecordsData = {
+      records: [
+        rec({ id: 'a', content: 'remote', createdAt: SAME, updatedAt: '2026-06-24T05:00:00.000Z' }),
+      ],
+    };
+    const merged = mergeStudentRecords(local, remote);
+    expect(merged.records[0]!.content).toBe('remote');
   });
 });

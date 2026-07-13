@@ -75,7 +75,15 @@ export const ENTITY_FIELD_CONTRACT = {
           'documentSubmitted',
           'tags',
         ],
-        notMirrored: ['createdAt', 'method', 'followUp', 'followUpDate', 'followUpDone'],
+        // updatedAt: 기기 간 병합용 동기화 메타데이터 — ManageStudentRecords가 자동 스탬프하므로 미러 불필요
+        notMirrored: [
+          'createdAt',
+          'updatedAt',
+          'method',
+          'followUp',
+          'followUpDate',
+          'followUpDone',
+        ],
       },
       AttendancePeriodEntry: {
         mirrored: ['period', 'status', 'reason', 'memo'],

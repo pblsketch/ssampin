@@ -429,7 +429,12 @@ export const useStudentRecordsStore = create<StudentRecordsState>((set, get) => 
             : r.tags.map((t) => (t === oldTag ? newTag : t));
         // 중복 제거(치환 시 newTag 가 이미 있던 경우) + 빈 배열이면 undefined
         const deduped = replaced.filter((t, i, a) => a.indexOf(t) === i);
-        return { ...r, tags: deduped.length > 0 ? deduped : undefined };
+        // 태그 편집도 수정 시각을 갱신해 동기화 병합이 최신본으로 인식하게 한다.
+        return {
+          ...r,
+          tags: deduped.length > 0 ? deduped : undefined,
+          updatedAt: new Date().toISOString(),
+        };
       });
       if (affected === 0) return 0;
       // 단일 영속(envelope 보존) — categories 등 기존 봉투 유지.
@@ -490,6 +495,9 @@ export const useStudentRecordsStore = create<StudentRecordsState>((set, get) => 
           content: rep.memo ?? '',
           date,
           createdAt: existing?.createdAt ?? new Date().toISOString(),
+          // 출결을 다시 입력해도 나이스 반영·서류 제출 표시가 초기화되지 않게 승계한다.
+          ...(existing?.reportedToNeis ? { reportedToNeis: existing.reportedToNeis } : {}),
+          ...(existing?.documentSubmitted ? { documentSubmitted: existing.documentSubmitted } : {}),
           attendancePeriods,
         };
 

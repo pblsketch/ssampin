@@ -35,10 +35,24 @@ export function mergeStudentRecords(
   for (const r of localRecords) {
     map.set(r.id, r);
   }
-  // 리모트 레코드로 업데이트 (같은 ID면 createdAt이 더 최신인 것 사용)
+  // 리모트 레코드로 업데이트.
+  //  1순위: updatedAt(최근 수정) — 나이스 반영/서류 제출 같은 플래그 편집이 동기화로
+  //         되살아나는 것을 막는다. 한쪽만 updatedAt 이 있으면 있는 쪽을 최신으로 본다.
+  //  2순위(updatedAt 동률 또는 둘 다 없음): 기존 createdAt·tags 로직(Q2 좀비 부활 방지).
   for (const r of remoteRecords) {
     const existing = map.get(r.id);
-    if (!existing || r.createdAt > existing.createdAt) {
+    if (!existing) {
+      map.set(r.id, r);
+      continue;
+    }
+    const rU = r.updatedAt ?? '';
+    const eU = existing.updatedAt ?? '';
+    if (rU !== eU) {
+      if (rU > eU) map.set(r.id, r); // 리모트가 더 최근 수정 → 채택 (아니면 로컬 유지)
+      continue;
+    }
+    // updatedAt 동률(또는 둘 다 없는 구 데이터) → createdAt·tags 폴백
+    if (r.createdAt > existing.createdAt) {
       map.set(r.id, r);
     } else if (
       r.createdAt === existing.createdAt &&

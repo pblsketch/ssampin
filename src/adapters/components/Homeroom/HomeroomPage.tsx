@@ -113,7 +113,7 @@ export function HomeroomPage() {
         rightActions={<HomeroomTabBar activeTab={activeTab} onChange={handleTabChange} />}
       />
       {showBanner && <SampleRosterWarningBanner />}
-      <div className="flex-1 min-h-0 p-8 overflow-y-auto">
+      <div className="flex-1 min-h-0 px-8 py-4 overflow-y-auto">
         {activeTab === 'roster' && <RosterManagementTab />}
         {activeTab === 'records' && (
           <RecordsTab

@@ -1640,8 +1640,22 @@ export async function exportNeisAttendanceToHwpx(
   const totalRows = headerRowCount + rows.length + 1; // 헤더 + 학생 + 합계
   const totalRowIdx = headerRowCount + rows.length;
 
+  // 표 전체 폭을 본문 폭(가로 A4 − 좌우 여백)에 맞추고 열 너비를 명시한다.
+  // 미지정 시 hwpxcore 기본 폭이 페이지를 벗어난다(피드백 2026-07).
+  const contentWidth = 84188 - margin.left - margin.right;
+  const numColW = 4600;
+  const nameColW = 9000;
+  const leafCount = statusColumns.length * perStatus;
+  const leafColW = Math.max(
+    2200,
+    Math.floor((contentWidth - numColW - nameColW) / Math.max(1, leafCount)),
+  );
+
   const tablePara = doc.addParagraph();
-  const table = tablePara.addTable(totalRows, totalCols);
+  const table = tablePara.addTable(totalRows, totalCols, { width: contentWidth });
+  table.setColumnWidth(0, numColW);
+  table.setColumnWidth(1, nameColW);
+  for (let c = 2; c < totalCols; c++) table.setColumnWidth(c, leafColW);
 
   // ── 헤더 텍스트 (병합 전, master 셀에만 기입) ──
   table.setCellText(0, 0, '번호');
@@ -1720,6 +1734,10 @@ export async function exportNeisAttendanceToHwpx(
     }
   }
   table.mergeCells(totalRowIdx, 0, totalRowIdx, 1); // 합계 라벨 병합
+
+  // 표를 '글자처럼 취급' 해제 + 행 높이 축소 → 쪽을 넘어가도 다음 쪽에 이어서 렌더되고
+  // 헤더가 반복되며, 세로로 짧아져 1~2쪽에 담긴다(피드백 2026-07, rubric 흐름표와 동일 처리).
+  configureRubricFlowTable(table.element, 1400, true);
 
   doc.addParagraph();
   doc.addParagraph(input.footnote, { charPrIdRef: footCharId });

@@ -599,7 +599,7 @@ export function HomeroomAttendanceGrid({
   return (
     <div className="flex flex-col gap-2 flex-1 min-h-0">
       {/* ── 팔레트 바 (스크롤해도 고정) ── */}
-      <div className="shrink-0 flex flex-col gap-2 bg-sp-surface border border-sp-border rounded-xl px-3 py-2">
+      <div className="shrink-0 flex flex-col gap-1.5 bg-sp-surface border border-sp-border rounded-xl px-3 py-1.5">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs text-sp-muted w-8 shrink-0">종류</span>
           {TYPE_ITEMS.map((type) => {

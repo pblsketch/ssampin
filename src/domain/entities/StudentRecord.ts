@@ -23,6 +23,11 @@ export interface StudentRecord {
   readonly content: string;
   readonly date: string;
   readonly createdAt: string;
+  /**
+   * 마지막 수정 시각(ISO). 동기화 병합이 "가장 최근 수정"을 판별하는 근거.
+   * 없으면(구 데이터) 병합은 createdAt·tags 로 폴백한다. 쓰기 경로에서 매번 갱신한다.
+   */
+  readonly updatedAt?: string;
   readonly method?: CounselingMethod;
   readonly followUp?: string;
   readonly followUpDate?: string;
