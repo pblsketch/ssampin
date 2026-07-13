@@ -71,13 +71,29 @@ export function updateAttendancePeriods(
     subcategory = rep.reason ? `${typeLabel} (${rep.reason})` : typeLabel;
   }
 
+  // M6 불변식: documentSubmitted를 명시적으로 '변경'할 때만 documents 전 종류를 같은 상태로
+  // 동기화한다. 값이 그대로면(내용만 편집 등) 부분 체크리스트를 건드리지 않는다.
+  const boolFlipped =
+    input.documentSubmitted !== undefined &&
+    input.documentSubmitted !== (input.record.documentSubmitted ?? false);
+
   const next: StudentRecord = {
     ...input.record,
     subcategory,
     content: input.content,
     attendancePeriods: sorted,
     ...(input.reportedToNeis !== undefined ? { reportedToNeis: input.reportedToNeis } : {}),
-    ...(input.documentSubmitted !== undefined ? { documentSubmitted: input.documentSubmitted } : {}),
+    ...(input.documentSubmitted !== undefined
+      ? { documentSubmitted: input.documentSubmitted }
+      : {}),
+    ...(boolFlipped && input.record.documents && input.record.documents.length > 0
+      ? {
+          documents: input.record.documents.map((d) => ({
+            ...d,
+            submitted: input.documentSubmitted!,
+          })),
+        }
+      : {}),
   };
 
   return { record: next };

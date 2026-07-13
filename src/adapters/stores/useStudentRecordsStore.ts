@@ -533,6 +533,10 @@ export const useStudentRecordsStore = create<StudentRecordsState>((set, get) => 
           // 출결을 다시 입력해도 나이스 반영·서류 제출 표시가 초기화되지 않게 승계한다.
           ...(existing?.reportedToNeis ? { reportedToNeis: existing.reportedToNeis } : {}),
           ...(existing?.documentSubmitted ? { documentSubmitted: existing.documentSubmitted } : {}),
+          // M6: 종류별 체크 상세(documents)도 승계 — 그리드 재저장이 체크리스트를 지우지 않게.
+          ...(existing?.documents && existing.documents.length > 0
+            ? { documents: existing.documents }
+            : {}),
           attendancePeriods,
         };
 
