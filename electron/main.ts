@@ -4713,7 +4713,24 @@ function createStartupBackups(): void {
     'memos',
     'todos',
     'events',
+    // 2026-07-13 동기화 유실 신고 후속: 학생 기록(커스텀 카테고리 포함)·수업 기록도
+    // 시작 시 백업 대상에 포함 — 저장마다 덮이는 .backup.json 1세대 외 복구 지점 확보
+    'student-records',
+    'observations',
   ];
+
+  // 날짜별 시작 스냅샷 — {filename}.backup.json 1세대 슬롯은 저장·재시작마다 덮여서
+  // 사고(파일 통째 교체) 후 앱을 다시 켜면 마지막 정상본까지 지워진다.
+  // 지난 날짜 스냅샷은 그대로 남으므로 복구 지점이 보존된다. 14일 경과분은 정리.
+  const snapshotDir = path.join(dataDir, 'backups', 'startup');
+  const today = new Date().toISOString().slice(0, 10);
+  let snapshotReady = false;
+  try {
+    fs.mkdirSync(snapshotDir, { recursive: true });
+    snapshotReady = true;
+  } catch {
+    // 스냅샷 폴더 생성 실패 시 1세대 백업만 진행
+  }
 
   for (const filename of criticalFiles) {
     const filePath = path.join(dataDir, `${filename}.json`);
@@ -4724,10 +4741,25 @@ function createStartupBackups(): void {
         if (raw.length > 10) {
           JSON.parse(raw); // 유효한 JSON인지 확인
           fs.writeFileSync(backupPath, raw, 'utf-8');
+          if (snapshotReady) {
+            fs.writeFileSync(path.join(snapshotDir, `${filename}.${today}.json`), raw, 'utf-8');
+          }
         }
       }
     } catch {
       // 개별 파일 실패는 무시
+    }
+  }
+
+  if (snapshotReady) {
+    try {
+      const cutoff = Date.now() - 14 * 24 * 60 * 60 * 1000;
+      for (const entry of fs.readdirSync(snapshotDir)) {
+        const entryPath = path.join(snapshotDir, entry);
+        if (fs.statSync(entryPath).mtimeMs < cutoff) fs.unlinkSync(entryPath);
+      }
+    } catch {
+      // 오래된 스냅샷 정리 실패는 무시
     }
   }
 }

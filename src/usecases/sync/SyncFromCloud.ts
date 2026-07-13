@@ -8,6 +8,8 @@ import type {
 } from '@domain/entities/DriveSyncState';
 import type { StudentRecordsData, StudentRecord } from '@domain/entities/StudentRecord';
 import type { AttendanceData, AttendanceRecord } from '@domain/entities/Attendance';
+import type { ObservationData, ObservationRecord } from '@domain/entities/Observation';
+import type { RecordCategoryItem } from '@domain/valueObjects/RecordCategory';
 import { attendanceRecordKey } from '@domain/entities/Attendance';
 import {
   SYNC_FILES,
@@ -64,12 +66,106 @@ export function mergeStudentRecords(
     }
   }
 
-  // 카테고리: 리모트 우선, 없으면 로컬
-  const categories = remote.categories ?? local?.categories;
+  // 카테고리: 항목(id) 합집합 병합.
+  // 과거 "리모트 우선 통째 교체"(remote.categories ?? local)는 기본값·빈 배열만 든
+  // 리모트가 로컬 커스텀 카테고리를 전부 소거했다(2026-07-13 데이터 유실 신고의 원인 ①).
+  const categories = mergeCategories(local?.categories, remote.categories);
   return {
     records: [...map.values()],
     ...(categories ? { categories } : {}),
   };
+}
+
+/**
+ * 카테고리 목록을 항목(id) 단위 합집합으로 병합.
+ * - 한쪽에만 있는 카테고리는 무조건 보존 (커스텀 카테고리 소거 방지)
+ * - 같은 id 는 리모트 내용(name/color) 채택 — 이름·색 변경 전파는 기존 리모트 우선 방향 유지.
+ *   단 subcategories 는 합집합(리모트 순서 우선): 항목에 타임스탬프가 없어 최신 판정이 불가하다.
+ * - 트레이드오프: 한쪽에서 삭제한 카테고리/서브카테고리가 병합으로 되살아날 수 있음 —
+ *   student-records 레코드 병합과 동일한 기존 정책(통째 유실보다 낫다).
+ */
+export function mergeCategories(
+  local: readonly RecordCategoryItem[] | undefined,
+  remote: readonly RecordCategoryItem[] | undefined,
+): readonly RecordCategoryItem[] | undefined {
+  if (!local || local.length === 0) return remote;
+  if (!remote || remote.length === 0) return local;
+
+  const localById = new Map(local.map((c) => [c.id, c]));
+  const merged: RecordCategoryItem[] = [];
+  const seen = new Set<string>();
+
+  for (const r of remote) {
+    seen.add(r.id);
+    const l = localById.get(r.id);
+    if (!l) {
+      merged.push(r);
+      continue;
+    }
+    const subcategories = [...r.subcategories];
+    for (const s of l.subcategories) {
+      if (!subcategories.includes(s)) subcategories.push(s);
+    }
+    merged.push({ ...r, subcategories });
+  }
+  for (const l of local) {
+    if (!seen.has(l.id)) merged.push(l);
+  }
+  return merged;
+}
+
+/**
+ * observations(수업 기록)를 record ID 단위로 병합.
+ * - 한쪽에만 있는 기록은 무조건 보존 — 구/빈 파일이 "최신" 판정을 받아도 통째 유실이 없다.
+ *   (파일 단위 latest 교체가 학생별 수업 메모 전체를 지운 2026-07-13 유실 신고의 원인 ②)
+ * - 같은 id 는 updatedAt(ms 숫자) 최신 우선, 동률이면 preferRemote 로 판정
+ * - 삭제 전파(툼스톤) 없음: 한쪽에서 지운 기록이 상대쪽 동기화로 되살아날 수 있음 —
+ *   student-records 병합과 동일한 기존 트레이드오프
+ * - customTags/customCategories 는 순서 보존 합집합 (빈 배열이 커스텀을 덮지 않게)
+ */
+export function mergeObservations(
+  local: ObservationData | null,
+  remote: ObservationData,
+  preferRemote: boolean,
+): ObservationData {
+  const map = new Map<string, ObservationRecord>();
+  for (const r of local?.records ?? []) {
+    map.set(r.id, r);
+  }
+  for (const r of remote.records ?? []) {
+    const existing = map.get(r.id);
+    if (!existing) {
+      map.set(r.id, r);
+      continue;
+    }
+    const remoteStamp = r.updatedAt ?? 0;
+    const localStamp = existing.updatedAt ?? 0;
+    if (remoteStamp > localStamp || (remoteStamp === localStamp && preferRemote)) {
+      map.set(r.id, r);
+    }
+  }
+
+  const customTags = mergeStringUnion(local?.customTags, remote.customTags);
+  const customCategories = mergeStringUnion(local?.customCategories, remote.customCategories);
+  return {
+    records: [...map.values()],
+    ...(customTags ? { customTags } : {}),
+    ...(customCategories ? { customCategories } : {}),
+  };
+}
+
+/** 문자열 배열 합집합(로컬 순서 우선, 중복 제거). 양쪽 모두 없으면 undefined. */
+function mergeStringUnion(
+  local: readonly string[] | undefined,
+  remote: readonly string[] | undefined,
+): readonly string[] | undefined {
+  if (!local || local.length === 0) return remote;
+  if (!remote || remote.length === 0) return local;
+  const union = [...local];
+  for (const s of remote) {
+    if (!union.includes(s)) union.push(s);
+  }
+  return union;
 }
 
 /**
@@ -255,6 +351,25 @@ export class SyncFromCloud {
           continue;
         }
 
+        // observations(수업 기록)도 항상 record-level merge — 파일 단위 latest 교체가
+        // 구/빈 파일 승리 시 학생별 수업 메모 전체를 지웠다(2026-07-13 유실 신고).
+        if (filename === 'observations') {
+          const driveFile = remoteFiles.find((f) => f.name === `${filename}.json`);
+          if (driveFile) {
+            const content = await this.drivePort.downloadSyncFile(driveFile.id);
+            const remoteData = JSON.parse(content) as ObservationData;
+            const localData = await this.storage.read<ObservationData>(filename);
+            const merged = mergeObservations(localData, remoteData, remoteIsNewer);
+            await this.storage.write(filename, merged);
+            updatedFiles[filename] = remoteInfo;
+            downloaded.push(filename);
+            console.log(
+              `[SyncFromCloud]   ${filename}: ✅ MERGE (local=${localData?.records?.length ?? 0}건 + remote=${remoteData?.records?.length ?? 0}건 → ${merged.records.length}건)`,
+            );
+          }
+          continue;
+        }
+
         if (this.conflictPolicy === 'latest') {
           if (remoteIsNewer) {
             // 리모트가 최신 → 다운로드
@@ -289,11 +404,15 @@ export class SyncFromCloud {
       // 매니페스트엔 없지만 로컬 storage에는 실제로 파일이 있을 수 있음.
       // (예: 본 도메인이 신규로 SYNC_FILES에 편입된 직후의 기존 사용자)
       // 이 경우 무조건 다운로드하면 사용자가 작성한 로컬 데이터가 silent하게 덮어쓰기됨.
-      // student-records/attendance는 record-level merge가 자체 구현되어 있으므로 그대로 두고,
+      // student-records/attendance/observations는 record-level merge가 자체 구현되어 있으므로 그대로 두고,
       // 그 외 도메인은 로컬 파일이 실제로 존재하면 충돌 다이얼로그로 회수한다.
       const driveFile = remoteFiles.find((f) => f.name === `${filename}.json`);
       if (driveFile) {
-        if (filename !== 'student-records' && filename !== 'attendance') {
+        if (
+          filename !== 'student-records' &&
+          filename !== 'attendance' &&
+          filename !== 'observations'
+        ) {
           const localData = await this.storage.read<unknown>(filename);
           if (localData !== null) {
             // 실제 로컬 파일 존재 → manifest 미등록 상태에서의 silent 덮어쓰기 방지
@@ -348,6 +467,15 @@ export class SyncFromCloud {
           const localData = await this.storage.read<AttendanceData>(filename);
           // 로컬 manifest 정보가 없어 최신 판정 불가 → 기존 동작(리모트 우선)과 일치하게 preferRemote
           const merged = mergeAttendance(localData, remoteData, true);
+          await this.storage.write(filename, merged);
+          console.log(
+            `[SyncFromCloud]   ${filename}: ✅ MERGE (first download, local=${localData?.records?.length ?? 0}건 + remote=${remoteData?.records?.length ?? 0}건 → ${merged.records.length}건)`,
+          );
+        } else if (filename === 'observations') {
+          const remoteData = JSON.parse(content) as ObservationData;
+          const localData = await this.storage.read<ObservationData>(filename);
+          // 로컬 manifest 정보가 없어 최신 판정 불가 → attendance와 동일하게 preferRemote
+          const merged = mergeObservations(localData, remoteData, true);
           await this.storage.write(filename, merged);
           console.log(
             `[SyncFromCloud]   ${filename}: ✅ MERGE (first download, local=${localData?.records?.length ?? 0}건 + remote=${remoteData?.records?.length ?? 0}건 → ${merged.records.length}건)`,
