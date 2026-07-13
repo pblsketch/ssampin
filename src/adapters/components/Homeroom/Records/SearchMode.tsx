@@ -1,17 +1,8 @@
-import { useState, useMemo, useCallback, useRef } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useStudentRecordsStore, RECORD_COLOR_MAP } from '@adapters/stores/useStudentRecordsStore';
 import { useToastStore } from '@adapters/components/common/Toast';
-import { ATTENDANCE_TYPES, ATTENDANCE_REASONS } from '@domain/valueObjects/RecordCategory';
 import type { StudentRecord } from '@domain/entities/StudentRecord';
-import {
-  filterByStudent,
-  filterByCategory,
-  filterBySubcategory,
-  filterByDateRange,
-  filterByKeyword,
-  getAttendanceStats,
-  sortByDateDesc,
-} from '@domain/rules/studentRecordRules';
+import { filterByStudent, getAttendanceStats } from '@domain/rules/studentRecordRules';
 import { isStudentActive } from '@domain/rules/studentActivity';
 /* eslint-disable no-restricted-imports */
 import { exportStudentRecordsToExcel } from '@infrastructure/export/ExcelExporter';
@@ -21,10 +12,7 @@ import { DefaultRecordListView } from './DefaultRecordListView';
 import {
   type ModeProps,
   type RecordSortMode,
-  COUNSELING_METHODS,
   RECORD_SORT_OPTIONS,
-  getWeekRange,
-  getMonthRange,
   sortRecordsInDateGroup,
 } from './recordUtils';
 import { RecordResultSummary } from '@adapters/components/common/records/RecordResultSummary';
@@ -36,40 +24,35 @@ import { studentRecordToDisplay } from '@adapters/presentation/displayRecord';
 import { ActionDashboard } from './ActionDashboard';
 import { AttendanceStatusBanners } from './AttendanceStatusBanners';
 import { useRecordInlineEdit } from './useRecordInlineEdit';
+import { useRecordFilters } from './useRecordFilters';
+import { RecordFilterPopover } from './RecordFilterPopover';
 
 function SearchMode({ students, records, categories }: ModeProps) {
-  const {
-    periodFilter,
-    setPeriodFilter,
-    deleteRecord,
-    toggleFollowUpDone,
-    toggleNeisReport,
-    toggleDocumentSubmitted,
-  } = useStudentRecordsStore();
+  const { deleteRecord, toggleFollowUpDone, toggleNeisReport, toggleDocumentSubmitted } =
+    useStudentRecordsStore();
   const showToast = useToastStore((s) => s.show);
   const [dismissedSearchGuide, setDismissedSearchGuide] = useState(
     () => localStorage.getItem('ssampin:record-search-guide-dismissed') === 'true',
   );
-  const [selectedStudentId, setSelectedStudentId] = useState<string>('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('');
-  const [selectedSubcategory, setSelectedSubcategory] = useState<string>('');
-  const [selectedMethod, setSelectedMethod] = useState<string>('');
-  const [keyword, setKeyword] = useState('');
-  const [debouncedKeyword, setDebouncedKeyword] = useState('');
-  const [followUpOnly, setFollowUpOnly] = useState(false);
-  const [unreportedOnly, setUnreportedOnly] = useState(false);
-  const [docUnsubmittedOnly, setDocUnsubmittedOnly] = useState(false);
   const [sortMode, setSortMode] = useState<RecordSortMode>('occurredAt');
-  const [customStartDate, setCustomStartDate] = useState('');
-  const [customEndDate, setCustomEndDate] = useState('');
 
-  // debounce keyword
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const handleKeywordChange = useCallback((val: string) => {
-    setKeyword(val);
-    if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => setDebouncedKeyword(val), 300);
-  }, []);
+  // 필터 상태·파생값(리디자인 3단계 — SearchMode 본체는 레이아웃 배치만 담당)
+  const filters = useRecordFilters(records, categories);
+  const {
+    periodFilter,
+    setPeriodFilter,
+    keyword,
+    handleKeywordChange,
+    selectedStudentId,
+    setSelectedStudentId,
+    customStartDate,
+    setCustomStartDate,
+    customEndDate,
+    setCustomEndDate,
+    filtered,
+    hasFilters,
+    resetFilters,
+  } = filters;
 
   const studentMap = useMemo(() => new Map(students.map((s) => [s.id, s])), [students]);
 
@@ -121,117 +104,6 @@ function SearchMode({ students, records, categories }: ModeProps) {
     });
     return items;
   }, [students, records]);
-
-  // 선택된 카테고리의 서브카테고리 목록
-  const subcategoryOptions = useMemo(() => {
-    if (!selectedCategory) return [];
-    const cat = categories.find((c) => c.id === selectedCategory);
-    if (!cat) return [];
-    if (cat.id === 'attendance') {
-      const subs: string[] = [];
-      for (const t of ATTENDANCE_TYPES) {
-        for (const r of ATTENDANCE_REASONS) {
-          subs.push(`${t} (${r})`);
-        }
-      }
-      return subs;
-    }
-    return [...cat.subcategories];
-  }, [selectedCategory, categories]);
-
-  // 필터 적용 여부
-  const hasFilters =
-    selectedStudentId ||
-    selectedCategory ||
-    selectedSubcategory ||
-    selectedMethod ||
-    debouncedKeyword ||
-    followUpOnly ||
-    unreportedOnly ||
-    docUnsubmittedOnly ||
-    periodFilter !== 'all';
-
-  const resetFilters = useCallback(() => {
-    setSelectedStudentId('');
-    setSelectedCategory('');
-    setSelectedSubcategory('');
-    setSelectedMethod('');
-    setKeyword('');
-    setDebouncedKeyword('');
-    setFollowUpOnly(false);
-    setUnreportedOnly(false);
-    setDocUnsubmittedOnly(false);
-    setPeriodFilter('all');
-    setCustomStartDate('');
-    setCustomEndDate('');
-  }, [setPeriodFilter]);
-
-  const handleSummaryCategoryClick = useCallback((categoryId: string) => {
-    setSelectedCategory((prev) => (prev === categoryId ? '' : categoryId));
-    setSelectedSubcategory('');
-  }, []);
-
-  const filtered = useMemo(() => {
-    let result = [...records];
-
-    if (selectedStudentId) {
-      result = filterByStudent(result, selectedStudentId) as StudentRecord[];
-    }
-    if (selectedCategory) {
-      result = filterByCategory(result, selectedCategory) as StudentRecord[];
-    }
-    if (selectedSubcategory) {
-      result = filterBySubcategory(result, selectedSubcategory) as StudentRecord[];
-    }
-    if (selectedMethod) {
-      result = result.filter((r) => r.method === selectedMethod);
-    }
-    if (debouncedKeyword) {
-      result = filterByKeyword(result, debouncedKeyword) as StudentRecord[];
-    }
-    if (followUpOnly) {
-      result = result.filter((r) => r.followUp && !r.followUpDone);
-    }
-    if (unreportedOnly) {
-      result = result.filter((r) => r.category === 'attendance' && !r.reportedToNeis);
-    }
-    if (docUnsubmittedOnly) {
-      result = result.filter((r) => r.category === 'attendance' && !r.documentSubmitted);
-    }
-    if (periodFilter === 'week') {
-      const { start, end } = getWeekRange();
-      result = filterByDateRange(result, start, end) as StudentRecord[];
-    } else if (periodFilter === 'month') {
-      const { start, end } = getMonthRange();
-      result = filterByDateRange(result, start, end) as StudentRecord[];
-    } else if (periodFilter === 'semester') {
-      const now = new Date();
-      const month = now.getMonth() + 1;
-      const semStart = month >= 3 && month < 9 ? 3 : 9;
-      const year = semStart === 9 && month < 3 ? now.getFullYear() - 1 : now.getFullYear();
-      const start = new Date(`${year}-${String(semStart).padStart(2, '0')}-01T00:00:00`);
-      result = filterByDateRange(result, start, new Date()) as StudentRecord[];
-    } else if (periodFilter === 'custom' && customStartDate) {
-      const start = new Date(customStartDate + 'T00:00:00');
-      const end = customEndDate ? new Date(customEndDate + 'T23:59:59') : new Date();
-      result = filterByDateRange(result, start, end) as StudentRecord[];
-    }
-
-    return sortByDateDesc(result);
-  }, [
-    records,
-    selectedStudentId,
-    selectedCategory,
-    selectedSubcategory,
-    selectedMethod,
-    debouncedKeyword,
-    followUpOnly,
-    unreportedOnly,
-    docUnsubmittedOnly,
-    periodFilter,
-    customStartDate,
-    customEndDate,
-  ]);
 
   // 날짜별 그룹핑 + 정렬
   const grouped = useMemo(() => {
@@ -369,88 +241,8 @@ function SearchMode({ students, records, categories }: ModeProps) {
           </select>
         </div>
 
-        {/* 카테고리 필터 */}
-        <select
-          value={selectedCategory}
-          onChange={(e) => {
-            setSelectedCategory(e.target.value);
-            setSelectedSubcategory('');
-          }}
-          className="bg-sp-surface border border-sp-border rounded-lg px-3 py-2 text-sm text-sp-text focus:outline-none focus:ring-1 focus:ring-sp-accent"
-        >
-          <option value="">전체 카테고리</option>
-          {categories.map((cat) => (
-            <option key={cat.id} value={cat.id}>
-              {cat.name}
-            </option>
-          ))}
-        </select>
-
-        {/* 2-4: 서브카테고리 필터 */}
-        {subcategoryOptions.length > 0 && (
-          <select
-            value={selectedSubcategory}
-            onChange={(e) => setSelectedSubcategory(e.target.value)}
-            className="bg-sp-surface border border-sp-border rounded-lg px-3 py-2 text-sm text-sp-text focus:outline-none focus:ring-1 focus:ring-sp-accent"
-          >
-            <option value="">전체 하위</option>
-            {subcategoryOptions.map((sub) => (
-              <option key={sub} value={sub}>
-                {sub}
-              </option>
-            ))}
-          </select>
-        )}
-
-        {/* 2-4: 상담 방법 필터 */}
-        <select
-          value={selectedMethod}
-          onChange={(e) => setSelectedMethod(e.target.value)}
-          className="bg-sp-surface border border-sp-border rounded-lg px-3 py-2 text-sm text-sp-text focus:outline-none focus:ring-1 focus:ring-sp-accent"
-        >
-          <option value="">전체 방법</option>
-          {COUNSELING_METHODS.map((m) => (
-            <option key={m.value} value={m.value}>
-              {m.label}
-            </option>
-          ))}
-        </select>
-
-        {/* 2-3: 미완료 후속조치 필터 */}
-        <button
-          onClick={() => setFollowUpOnly(!followUpOnly)}
-          className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${
-            followUpOnly
-              ? 'bg-sp-accent text-white'
-              : 'bg-sp-surface text-sp-muted hover:text-sp-text border border-sp-border'
-          }`}
-        >
-          {'\uD83D\uDCCC'} 후속조치 미완료
-        </button>
-
-        {/* 나이스 미반영 필터 */}
-        <button
-          onClick={() => setUnreportedOnly(!unreportedOnly)}
-          className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${
-            unreportedOnly
-              ? 'bg-red-500 text-white'
-              : 'bg-sp-surface text-sp-muted hover:text-sp-text border border-sp-border'
-          }`}
-        >
-          나이스 미반영
-        </button>
-
-        {/* 서류 미제출 필터 */}
-        <button
-          onClick={() => setDocUnsubmittedOnly(!docUnsubmittedOnly)}
-          className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${
-            docUnsubmittedOnly
-              ? 'bg-orange-500 text-white'
-              : 'bg-sp-surface text-sp-muted hover:text-sp-text border border-sp-border'
-          }`}
-        >
-          서류 미제출
-        </button>
+        {/* 필터 더보기 — 카테고리·하위 분류·상담 방법·상태 토글 (리디자인 3단계) */}
+        <RecordFilterPopover categories={categories} filters={filters} />
 
         {/* 기간 필터 */}
         <div className="flex items-center gap-1 bg-sp-surface rounded-lg p-1 ml-auto">
@@ -525,8 +317,8 @@ function SearchMode({ students, records, categories }: ModeProps) {
           const color = categories.find((c) => c.id === key)?.color ?? 'gray';
           return (RECORD_COLOR_MAP[color] ?? RECORD_COLOR_MAP['gray']!).tagBg;
         }}
-        onKindClick={handleSummaryCategoryClick}
-        activeKind={selectedCategory}
+        onKindClick={filters.toggleCategory}
+        activeKind={filters.selectedCategory}
       />
 
       {/* 정렬 컨트롤 */}
@@ -601,9 +393,9 @@ function SearchMode({ students, records, categories }: ModeProps) {
           <ActionDashboard
             records={records}
             students={students}
-            onFilterUnreported={() => setUnreportedOnly(true)}
-            onFilterDocUnsubmitted={() => setDocUnsubmittedOnly(true)}
-            onFilterFollowUp={() => setFollowUpOnly(true)}
+            onFilterUnreported={() => filters.setUnreportedOnly(true)}
+            onFilterDocUnsubmitted={() => filters.setDocUnsubmittedOnly(true)}
+            onFilterFollowUp={() => filters.setFollowUpOnly(true)}
             scopeStudent={
               selectedStudent ? { id: selectedStudent.id, name: selectedStudent.name } : undefined
             }
