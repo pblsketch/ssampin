@@ -25115,7 +25115,8 @@ async function appendObservation(dataDir, input) {
       );
     }
     const baseRaw = fs6.existsSync(file) ? fs6.readFileSync(file, 'utf-8') : '';
-    const data = parseObservations(baseRaw.length > 0 ? JSON.parse(baseRaw) : { records: [] });
+    const rawJson = baseRaw.length > 0 ? JSON.parse(baseRaw) : null;
+    const data = parseObservations(rawJson ?? { records: [] });
     if (input.clientKey) {
       const idem = loadIdem(dataDir);
       const existingId = idem[input.clientKey];
@@ -25124,9 +25125,21 @@ async function appendObservation(dataDir, input) {
         if (found) return found;
       }
     }
+    if (rawJson !== null && (typeof rawJson !== 'object' || Array.isArray(rawJson))) {
+      throw new WriteValidationError(
+        'observations.json \uD615\uC2DD\uC774 \uC608\uC0C1\uACFC \uB2E4\uB985\uB2C8\uB2E4 \u2014 \uB370\uC774\uD130 \uBCF4\uD638\uB97C \uC704\uD574 \uC9C1\uC811\uC4F0\uAE30\uB97C \uC911\uB2E8\uD569\uB2C8\uB2E4.',
+      );
+    }
+    const root = rawJson === null ? {} : { ...rawJson };
+    const rawRecords = root['records'];
+    if (rawRecords !== void 0 && !Array.isArray(rawRecords)) {
+      throw new WriteValidationError(
+        'observations.json \uC758 records \uAC00 \uBC30\uC5F4\uC774 \uC544\uB2D9\uB2C8\uB2E4 \u2014 \uC9C1\uC811\uC4F0\uAE30\uB97C \uC911\uB2E8\uD569\uB2C8\uB2E4(\uB370\uC774\uD130 \uBCF4\uD638).',
+      );
+    }
+    const list = Array.isArray(rawRecords) ? rawRecords : [];
     const record2 = buildRecord(input);
-    const nextData = { records: [...data.records, record2] };
-    setIf14(nextData, 'customTags', data.customTags);
+    const nextData = { ...root, records: [...list, record2] };
     const nowRaw = fs6.existsSync(file) ? fs6.readFileSync(file, 'utf-8') : '';
     if (nowRaw !== baseRaw) {
       throw new WriteConflictError(
