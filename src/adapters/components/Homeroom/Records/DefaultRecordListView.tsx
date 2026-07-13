@@ -125,10 +125,16 @@ function DefaultRecordListView({
                       {record.followUp && (
                         <button
                           onClick={() => void onToggleFollowUp(record.id)}
-                          className="text-xs"
+                          className="rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-sp-accent"
                           title={`${record.followUp}${record.followUpDate ? ` (${formatDateKR(record.followUpDate)})` : ''}`}
                         >
-                          {record.followUpDone ? '\u2705' : '\uD83D\uDCCC'}
+                          <span
+                            className={`material-symbols-outlined text-sm ${
+                              record.followUpDone ? 'text-green-400' : 'text-sp-muted'
+                            }`}
+                          >
+                            {record.followUpDone ? 'task_alt' : 'push_pin'}
+                          </span>
                         </button>
                       )}
                       {record.category === 'attendance' && (

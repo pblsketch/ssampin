@@ -116,7 +116,9 @@ function StudentTimelineView({
                 {/* 날짜 구분 */}
                 <div className="flex items-center gap-3 mb-3 -ml-6">
                   <div className="w-[22px] h-[22px] rounded-full bg-sp-surface border-2 border-sp-border flex items-center justify-center z-10">
-                    <span className="text-micro text-sp-muted">{'\uD83D\uDCC5'}</span>
+                    <span className="material-symbols-outlined text-icon-xs text-sp-muted">
+                      calendar_today
+                    </span>
                   </div>
                   <span className="text-xs font-semibold text-sp-muted">{formatDateKR(date)}</span>
                 </div>
@@ -158,8 +160,14 @@ function StudentTimelineView({
                               </span>
                             )}
                             {record.followUp && (
-                              <span className="text-xs" title={record.followUp}>
-                                {record.followUpDone ? '\u2705' : '\uD83D\uDCCC'}
+                              <span title={record.followUp}>
+                                <span
+                                  className={`material-symbols-outlined text-sm ${
+                                    record.followUpDone ? 'text-green-400' : 'text-sp-muted'
+                                  }`}
+                                >
+                                  {record.followUpDone ? 'task_alt' : 'push_pin'}
+                                </span>
                               </span>
                             )}
                             {record.category === 'attendance' && (
@@ -218,8 +226,11 @@ function StudentTimelineView({
                               )}
                               {record.followUp && (
                                 <div className="mt-1 flex items-center gap-2 text-xs">
-                                  <span className="text-sp-muted">
-                                    {'\uD83D\uDCCC'} {record.followUp}
+                                  <span className="text-sp-muted inline-flex items-center gap-1">
+                                    <span className="material-symbols-outlined text-icon-sm">
+                                      push_pin
+                                    </span>
+                                    {record.followUp}
                                   </span>
                                   {record.followUpDate && (
                                     <span className="text-sp-muted">

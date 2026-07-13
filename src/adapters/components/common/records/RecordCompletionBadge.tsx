@@ -42,7 +42,7 @@ export function RecordCompletionBadge({ kind, completed, onToggle }: RecordCompl
         e.stopPropagation();
         onToggle();
       }}
-      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium transition-colors cursor-pointer flex-shrink-0 ${
+      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium transition-colors cursor-pointer flex-shrink-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sp-accent ${
         completed ? v.completedClass : v.pendingClass
       }`}
       title={completed ? v.completedTitle : v.pendingTitle}

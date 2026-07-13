@@ -374,7 +374,7 @@ export function ReviewMode({
                       <button
                         type="button"
                         onClick={() => void toggleNeisReport(record.id)}
-                        className="px-2 py-1 rounded text-caption font-medium bg-red-500/10 text-red-400 hover:bg-green-500/15 hover:text-green-400 transition-colors"
+                        className="px-2 py-1 rounded text-caption font-medium bg-red-500/10 text-red-400 hover:bg-green-500/15 hover:text-green-400 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-sp-accent"
                         title="나이스 반영 완료로 처리"
                       >
                         나이스 처리
@@ -384,7 +384,7 @@ export function ReviewMode({
                       <button
                         type="button"
                         onClick={() => void toggleDocumentSubmitted(record.id)}
-                        className="px-2 py-1 rounded text-caption font-medium bg-orange-500/10 text-orange-400 hover:bg-green-500/15 hover:text-green-400 transition-colors"
+                        className="px-2 py-1 rounded text-caption font-medium bg-orange-500/10 text-orange-400 hover:bg-green-500/15 hover:text-green-400 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-sp-accent"
                         title="서류 제출 완료로 처리"
                       >
                         서류 처리
@@ -394,7 +394,7 @@ export function ReviewMode({
                       <button
                         type="button"
                         onClick={() => void toggleFollowUpDone(record.id)}
-                        className="px-2 py-1 rounded text-caption font-medium bg-blue-500/10 text-blue-400 hover:bg-green-500/15 hover:text-green-400 transition-colors"
+                        className="px-2 py-1 rounded text-caption font-medium bg-blue-500/10 text-blue-400 hover:bg-green-500/15 hover:text-green-400 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-sp-accent"
                         title="후속조치 완료로 처리"
                       >
                         완료 처리
@@ -403,7 +403,7 @@ export function ReviewMode({
                     <button
                       type="button"
                       onClick={() => onEdit(record)}
-                      className="p-1 rounded text-sp-muted/50 hover:text-sp-accent hover:bg-sp-surface transition-colors"
+                      className="p-1 rounded text-sp-muted/50 hover:text-sp-accent hover:bg-sp-surface transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-sp-accent"
                       title="수정"
                     >
                       <span className="material-symbols-outlined text-sm">edit</span>

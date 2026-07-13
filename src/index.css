@@ -995,3 +995,18 @@ body {
 .ssampin-note-editor .bn-editor::-webkit-scrollbar-thumb:hover {
   background: var(--sp-muted);
 }
+
+/* 조회 탭 리디자인(2026-07) — 팝오버·모드 전환 등장 페이드. sp-duration 토큰 준수(과한 모션 지양). */
+@keyframes sp-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-sp-fade-in {
+  animation: sp-fade-in var(--sp-duration-base, 160ms) var(--sp-ease-out, ease-out);
+}
