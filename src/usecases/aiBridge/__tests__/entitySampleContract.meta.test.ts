@@ -47,6 +47,10 @@ function sampleObjectsFor(interfaceName: string): Record<string, unknown>[] {
       return (
         s['studentRecord'] as { records: { attendancePeriods?: Record<string, unknown>[] }[] }
       ).records.flatMap((r) => r.attendancePeriods ?? []);
+    case 'AttendanceDocumentItem':
+      return (
+        s['studentRecord'] as { records: { documents?: Record<string, unknown>[] }[] }
+      ).records.flatMap((r) => r.documents ?? []);
     case 'AttendanceRecord':
       return (s['attendance'] as { records: Record<string, unknown>[] }).records;
     case 'StudentAttendance':

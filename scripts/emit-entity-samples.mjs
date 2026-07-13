@@ -73,6 +73,7 @@ export const ENTITY_FIELD_CONTRACT = {
           'attendancePeriods',
           'reportedToNeis',
           'documentSubmitted',
+          'documents',
           'tags',
         ],
         // updatedAt: 기기 간 병합용 동기화 메타데이터 — ManageStudentRecords가 자동 스탬프하므로 미러 불필요
@@ -87,6 +88,10 @@ export const ENTITY_FIELD_CONTRACT = {
       },
       AttendancePeriodEntry: {
         mirrored: ['period', 'status', 'reason', 'memo'],
+        notMirrored: [],
+      },
+      AttendanceDocumentItem: {
+        mirrored: ['kind', 'submitted'],
         notMirrored: [],
       },
     },
@@ -213,6 +218,11 @@ export const SAMPLES = {
         ],
         reportedToNeis: true,
         documentSubmitted: true,
+        documents: [
+          { kind: '신청서', submitted: true },
+          { kind: '보고서', submitted: true },
+          { kind: '증빙자료', submitted: true },
+        ],
       },
     ],
   },

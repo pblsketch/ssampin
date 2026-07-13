@@ -4,6 +4,10 @@ import {
   DEFAULT_ATTENDANCE_DOCUMENT_POLICY,
   ALL_DOC_STATUSES,
   type AttendanceDocumentPolicy,
+  deriveDocumentSubmitted,
+  toggleDocumentKind,
+  documentChecklist,
+  DEFAULT_DOCUMENT_KINDS,
 } from './attendanceDocumentPolicy';
 import type { AttendancePeriodEntry } from '@domain/entities/StudentRecord';
 
@@ -105,5 +109,74 @@ describe('과다 카운트 교정 회귀 — 소비처 산식 (교정 전/후 �
     expect(required).toHaveLength(2); // b, d
     const submitted = required.filter((r) => r.documentSubmitted);
     expect(submitted).toHaveLength(1); // d
+  });
+});
+
+describe('서류 종류 체크리스트 (M6, D-2) — 파생·토글·하위호환', () => {
+  it('deriveDocumentSubmitted — 전 종류 제출=true, 하나라도 미제출=false, 미존재=fallback', () => {
+    expect(
+      deriveDocumentSubmitted([
+        { kind: '신청서', submitted: true },
+        { kind: '보고서', submitted: true },
+      ]),
+    ).toBe(true);
+    expect(
+      deriveDocumentSubmitted([
+        { kind: '신청서', submitted: true },
+        { kind: '보고서', submitted: false },
+      ]),
+    ).toBe(false);
+    expect(deriveDocumentSubmitted(undefined, true)).toBe(true);
+    expect(deriveDocumentSubmitted(undefined, false)).toBe(false);
+    expect(deriveDocumentSubmitted(undefined)).toBe(false);
+    expect(deriveDocumentSubmitted([], true)).toBe(true); // 빈 배열=미존재 취급
+  });
+
+  it('toggleDocumentKind — 구 데이터(documents 없음, 미제출)에서 첫 체크는 기본 3종으로 초기화', () => {
+    const next = toggleDocumentKind({ documentSubmitted: false, kind: '신청서' });
+    expect(next.documents.map((d) => d.kind)).toEqual([...DEFAULT_DOCUMENT_KINDS]);
+    expect(next.documents.find((d) => d.kind === '신청서')!.submitted).toBe(true);
+    expect(next.documentSubmitted).toBe(false); // 아직 보고서·증빙자료 미제출
+  });
+
+  it('toggleDocumentKind — 하위호환: 기존 documentSubmitted=true 기록은 전 종류 제출 상태에서 출발', () => {
+    // 완료 기록에서 한 종류를 해제하면 파생 documentSubmitted가 false로 내려간다
+    const next = toggleDocumentKind({ documentSubmitted: true, kind: '보고서' });
+    expect(next.documents.find((d) => d.kind === '보고서')!.submitted).toBe(false);
+    expect(next.documents.find((d) => d.kind === '신청서')!.submitted).toBe(true);
+    expect(next.documentSubmitted).toBe(false);
+  });
+
+  it('toggleDocumentKind — 마지막 종류를 체크하면 documentSubmitted가 파생 완료된다 (불변식)', () => {
+    let state: {
+      documents?: readonly { kind: string; submitted: boolean }[];
+      documentSubmitted?: boolean;
+    } = { documentSubmitted: false };
+    for (const kind of DEFAULT_DOCUMENT_KINDS) {
+      state = { ...toggleDocumentKind({ ...state, kind }) };
+    }
+    expect(state.documentSubmitted).toBe(true);
+    expect(state.documents!.every((d) => d.submitted)).toBe(true);
+  });
+
+  it('toggleDocumentKind — 알 수 없는 종류는 submitted=true로 추가한다 (사용자 정의 허용)', () => {
+    const next = toggleDocumentKind({
+      documents: [{ kind: '신청서', submitted: true }],
+      documentSubmitted: true,
+      kind: '진단서',
+    });
+    expect(next.documents.map((d) => d.kind)).toEqual(['신청서', '진단서']);
+    expect(next.documentSubmitted).toBe(true);
+  });
+
+  it('documentChecklist — documents 없으면 기본 3종을 기존 boolean 승계 상태로 보여준다', () => {
+    expect(documentChecklist({ documentSubmitted: false }).map((d) => d.submitted)).toEqual([
+      false,
+      false,
+      false,
+    ]);
+    expect(documentChecklist({ documentSubmitted: true }).every((d) => d.submitted)).toBe(true);
+    const own = [{ kind: '진단서', submitted: false }];
+    expect(documentChecklist({ documents: own, documentSubmitted: false })).toBe(own);
   });
 });

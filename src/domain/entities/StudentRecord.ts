@@ -15,6 +15,16 @@ export interface AttendancePeriodEntry {
   readonly memo?: string;
 }
 
+/**
+ * 증빙서류 종류별 체크 항목 (M6, D-2) — 예: 신청서/보고서/증빙자료.
+ * documents가 존재하는 기록의 documentSubmitted는 "전 종류 제출 완료"의 파생값이며,
+ * 쓰기 경로가 항상 함께 갱신한다(attendanceDocumentPolicy.toggleDocumentKind 불변식).
+ */
+export interface AttendanceDocumentItem {
+  readonly kind: string;
+  readonly submitted: boolean;
+}
+
 export interface StudentRecord {
   readonly id: string;
   readonly studentId: string;
@@ -34,6 +44,11 @@ export interface StudentRecord {
   readonly followUpDone?: boolean;
   readonly reportedToNeis?: boolean;
   readonly documentSubmitted?: boolean;
+  /**
+   * 증빙서류 종류별 체크(M6) — 미존재(구 데이터)면 documentSubmitted 단독 사용.
+   * 존재하면 documentSubmitted === documents.every(d => d.submitted) 불변식 유지.
+   */
+  readonly documents?: readonly AttendanceDocumentItem[];
   /** 출결 카테고리 전용: 어떤 교시에 어떤 상태가 있었는지 보존 (period 오름차순) */
   readonly attendancePeriods?: readonly AttendancePeriodEntry[];
   /** 통합 입력 폼(S4)에서 부여하는 태그 목록. 기존 레코드는 undefined — additive optional. */

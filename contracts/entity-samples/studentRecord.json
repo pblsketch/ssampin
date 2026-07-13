@@ -29,7 +29,21 @@
         }
       ],
       "reportedToNeis": true,
-      "documentSubmitted": true
+      "documentSubmitted": true,
+      "documents": [
+        {
+          "kind": "신청서",
+          "submitted": true
+        },
+        {
+          "kind": "보고서",
+          "submitted": true
+        },
+        {
+          "kind": "증빙자료",
+          "submitted": true
+        }
+      ]
     }
   ]
 }

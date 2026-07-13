@@ -4,6 +4,7 @@ import type { StudentRecord } from '@domain/entities/StudentRecord';
 import type { RecordCategoryItem } from '@domain/valueObjects/RecordCategory';
 import { useStudentRecordsStore } from '@adapters/stores/useStudentRecordsStore';
 import { useToastStore } from '@adapters/components/common/Toast';
+import { documentChecklist } from '@domain/rules/attendanceDocumentPolicy';
 import { InlineRecordEditor } from './InlineRecordEditor';
 import {
   type RecordEditProps,
@@ -41,7 +42,7 @@ function kindPending(item: ReviewQueueResult['items'][number], kind: ReviewKind)
  * 검토 모드 (리디자인 4단계, 안 B) — 나이스 미반영·서류 미제출·미완료 후속조치를
  * 하나의 처리 큐로 보여주고, 건별·선택 일괄·전체 일괄 처리를 한 화면에서 끝낸다.
  * 저장은 전부 기존 스토어 액션(bulkMarkNeisReported/bulkMarkDocumentSubmitted/
- * toggleNeisReport/toggleDocumentSubmitted/toggleFollowUpDone) 재사용 — 신규 저장 경로 없음.
+ * toggleNeisReport/toggleDocumentItem/toggleFollowUpDone) 재사용 — 신규 저장 경로 없음.
  */
 export function ReviewMode({
   queue,
@@ -54,7 +55,7 @@ export function ReviewMode({
   const bulkMarkNeisReported = useStudentRecordsStore((s) => s.bulkMarkNeisReported);
   const bulkMarkDocumentSubmitted = useStudentRecordsStore((s) => s.bulkMarkDocumentSubmitted);
   const toggleNeisReport = useStudentRecordsStore((s) => s.toggleNeisReport);
-  const toggleDocumentSubmitted = useStudentRecordsStore((s) => s.toggleDocumentSubmitted);
+  const toggleDocumentItem = useStudentRecordsStore((s) => s.toggleDocumentItem);
   const toggleFollowUpDone = useStudentRecordsStore((s) => s.toggleFollowUpDone);
   const showToast = useToastStore((s) => s.show);
 
@@ -381,14 +382,29 @@ export function ReviewMode({
                       </button>
                     )}
                     {item.documentPending && (
-                      <button
-                        type="button"
-                        onClick={() => void toggleDocumentSubmitted(record.id)}
-                        className="px-2 py-1 rounded text-caption font-medium bg-orange-500/10 text-orange-400 hover:bg-green-500/15 hover:text-green-400 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-sp-accent"
-                        title="서류 제출 완료로 처리"
-                      >
-                        서류 처리
-                      </button>
+                      /* M6: 서류 종류별 체크 — 전 종류 제출되면 documentSubmitted 파생 완료로 큐에서 빠진다 */
+                      <span className="flex items-center gap-0.5">
+                        {documentChecklist(record).map((doc) => (
+                          <button
+                            key={doc.kind}
+                            type="button"
+                            onClick={() => void toggleDocumentItem(record.id, doc.kind)}
+                            aria-pressed={doc.submitted}
+                            className={`px-1.5 py-1 rounded text-caption font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-sp-accent ${
+                              doc.submitted
+                                ? 'bg-green-500/15 text-green-400 hover:bg-green-500/25'
+                                : 'bg-orange-500/10 text-orange-400 hover:bg-orange-500/20'
+                            }`}
+                            title={
+                              doc.submitted
+                                ? `${doc.kind} 제출됨 (클릭하여 취소)`
+                                : `${doc.kind} 미제출 (클릭하여 제출 체크)`
+                            }
+                          >
+                            {doc.kind}
+                          </button>
+                        ))}
+                      </span>
                     )}
                     {item.followUpPending && (
                       <button

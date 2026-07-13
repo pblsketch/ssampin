@@ -34,12 +34,24 @@
             "attendancePeriods",
             "reportedToNeis",
             "documentSubmitted",
+            "documents",
             "tags"
           ],
-          "notMirrored": ["createdAt", "method", "followUp", "followUpDate", "followUpDone"]
+          "notMirrored": [
+            "createdAt",
+            "updatedAt",
+            "method",
+            "followUp",
+            "followUpDate",
+            "followUpDone"
+          ]
         },
         "AttendancePeriodEntry": {
           "mirrored": ["period", "status", "reason", "memo"],
+          "notMirrored": []
+        },
+        "AttendanceDocumentItem": {
+          "mirrored": ["kind", "submitted"],
           "notMirrored": []
         }
       }
@@ -49,7 +61,7 @@
       "interfaces": {
         "AttendanceRecord": {
           "mirrored": ["classId", "groupId", "date", "period", "students"],
-          "notMirrored": []
+          "notMirrored": ["updatedAt"]
         },
         "StudentAttendance": {
           "mirrored": ["number", "status", "reason", "memo", "grade", "classNum"],

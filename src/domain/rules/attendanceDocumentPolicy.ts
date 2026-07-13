@@ -14,7 +14,7 @@
  * 결측(레거시): subcategory("결석 (질병)" 형식)에서 상태·사유를 추론하고,
  * 추론 불가면 **보수적 false**(과다 카운트 재유입 방지).
  */
-import type { StudentRecord } from '@domain/entities/StudentRecord';
+import type { StudentRecord, AttendanceDocumentItem } from '@domain/entities/StudentRecord';
 
 export type DocReasonAxis = '질병' | '미인정' | '기타' | '인정';
 export type DocStatusKey = 'absent' | 'late' | 'earlyLeave' | 'classAbsence';
@@ -92,4 +92,63 @@ export function requiresDocument(
   const status = statusFromSubcategory(record.subcategory ?? '');
   if (status == null) return false;
   return isRequired(policy, axisOf(record.subcategory), status);
+}
+
+/* ── M6 (D-2): 서류 종류별 체크리스트 ── */
+
+/** 기본 서류 종류 — 사용자가 종류를 따로 정의하기 전의 표준 3종. */
+export const DEFAULT_DOCUMENT_KINDS: readonly string[] = ['신청서', '보고서', '증빙자료'];
+
+/**
+ * documents → documentSubmitted 파생 (하위호환 규칙의 단일 정의).
+ * documents가 있으면 "전 종류 제출"이 곧 제출 완료다. 없으면(구 데이터) 기존 boolean 단독.
+ */
+export function deriveDocumentSubmitted(
+  documents: readonly AttendanceDocumentItem[] | undefined,
+  fallback?: boolean,
+): boolean {
+  if (documents == null || documents.length === 0) return fallback ?? false;
+  return documents.every((d) => d.submitted);
+}
+
+/**
+ * 종류 하나를 토글한 다음 상태를 계산한다 (순수 함수 — 스토어 액션이 그대로 적용).
+ *
+ * - documents 미존재(구 데이터): 기본 3종으로 초기화하되, 기존 documentSubmitted가
+ *   true였다면 전 종류 제출 상태에서 출발한다(하위호환 — 완료 기록이 미완료로 튀지 않게).
+ * - 알 수 없는 kind는 submitted=true로 추가한다(사용자 정의 종류 허용).
+ * - 반환된 documentSubmitted는 항상 파생 불변식(전 종류 제출)을 만족한다.
+ */
+export function toggleDocumentKind(args: {
+  documents?: readonly AttendanceDocumentItem[];
+  documentSubmitted?: boolean;
+  kind: string;
+  defaultKinds?: readonly string[];
+}): { documents: readonly AttendanceDocumentItem[]; documentSubmitted: boolean } {
+  const { documents, documentSubmitted, kind, defaultKinds = DEFAULT_DOCUMENT_KINDS } = args;
+  const base: AttendanceDocumentItem[] =
+    documents != null && documents.length > 0
+      ? [...documents]
+      : defaultKinds.map((k) => ({ kind: k, submitted: documentSubmitted === true }));
+
+  const idx = base.findIndex((d) => d.kind === kind);
+  if (idx >= 0) {
+    const cur = base[idx]!;
+    base[idx] = { kind: cur.kind, submitted: !cur.submitted };
+  } else {
+    base.push({ kind, submitted: true });
+  }
+
+  return { documents: base, documentSubmitted: deriveDocumentSubmitted(base) };
+}
+
+/**
+ * 표시용 체크리스트 — documents 미존재 기록도 기본 3종을 (기존 boolean 승계 상태로) 보여준다.
+ */
+export function documentChecklist(
+  record: Pick<StudentRecord, 'documents' | 'documentSubmitted'>,
+  defaultKinds: readonly string[] = DEFAULT_DOCUMENT_KINDS,
+): readonly AttendanceDocumentItem[] {
+  if (record.documents != null && record.documents.length > 0) return record.documents;
+  return defaultKinds.map((k) => ({ kind: k, submitted: record.documentSubmitted === true }));
 }

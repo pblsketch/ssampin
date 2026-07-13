@@ -16,6 +16,7 @@ import { migrateStudentRecordsOnLoad } from '@usecases/studentRecords/MigrateStu
 import { generateUUID } from '@infrastructure/utils/uuid';
 import type { StudentAttendance, AttendanceStatus } from '@domain/entities/Attendance';
 import { pickRepresentativeAttendance } from '@domain/rules/attendanceRules';
+import { toggleDocumentKind } from '@domain/rules/attendanceDocumentPolicy';
 import type { Student } from '@domain/entities/Student';
 import { useTeachingClassStore } from './useTeachingClassStore';
 import { useObservationAttachmentStore } from './useObservationAttachmentStore';
@@ -130,6 +131,8 @@ interface StudentRecordsState {
   toggleFollowUpDone: (recordId: string) => Promise<void>;
   toggleNeisReport: (recordId: string) => Promise<void>;
   toggleDocumentSubmitted: (recordId: string) => Promise<void>;
+  /** M6: 서류 종류 하나 토글 — documentSubmitted는 '전 종류 제출' 파생 불변식으로 함께 갱신. */
+  toggleDocumentItem: (recordId: string, kind: string) => Promise<void>;
   bulkMarkDocumentSubmitted: (recordIds: readonly string[]) => Promise<void>;
   bulkMarkNeisReported: (recordIds: readonly string[]) => Promise<void>;
   setViewMode: (mode: ViewMode) => void;
@@ -312,8 +315,35 @@ export const useStudentRecordsStore = create<StudentRecordsState>((set, get) => 
     toggleDocumentSubmitted: async (recordId) => {
       const record = get().records.find((r) => r.id === recordId);
       if (!record || record.category !== 'attendance') return;
-      const updated = { ...record, documentSubmitted: !record.documentSubmitted };
+      const nextSubmitted = !record.documentSubmitted;
+      // M6 불변식: documents가 있으면 boolean 토글이 전 종류를 같은 상태로 동기화
+      const updated = {
+        ...record,
+        documentSubmitted: nextSubmitted,
+        ...(record.documents && record.documents.length > 0
+          ? { documents: record.documents.map((d) => ({ ...d, submitted: nextSubmitted })) }
+          : {}),
+      };
       await manageRecords.update(updated);
+      set((state) => ({
+        records: state.records.map((r) => (r.id === recordId ? updated : r)),
+      }));
+    },
+
+    toggleDocumentItem: async (recordId, kind) => {
+      const record = get().records.find((r) => r.id === recordId);
+      if (!record || record.category !== 'attendance') return;
+      const next = toggleDocumentKind({
+        documents: record.documents,
+        documentSubmitted: record.documentSubmitted,
+        kind,
+      });
+      const updated = {
+        ...record,
+        documents: next.documents,
+        documentSubmitted: next.documentSubmitted,
+      };
+      await manageRecords.update(updated); // updatedAt 자동 스탬프 → 레코드 단위 병합 편승
       set((state) => ({
         records: state.records.map((r) => (r.id === recordId ? updated : r)),
       }));
@@ -324,13 +354,18 @@ export const useStudentRecordsStore = create<StudentRecordsState>((set, get) => 
       const targets = get().records.filter(
         (r) => idSet.has(r.id) && r.category === 'attendance' && !r.documentSubmitted,
       );
-      const updatedRecords = targets.map((r) => ({ ...r, documentSubmitted: true }));
+      // M6 불변식: 일괄 완료도 documents 전 종류를 제출 상태로 동기화
+      const updatedRecords = targets.map((r) => ({
+        ...r,
+        documentSubmitted: true,
+        ...(r.documents && r.documents.length > 0
+          ? { documents: r.documents.map((d) => ({ ...d, submitted: true })) }
+          : {}),
+      }));
       await Promise.all(updatedRecords.map((r) => manageRecords.update(r)));
-      const updatedIds = new Set(updatedRecords.map((r) => r.id));
+      const updatedById = new Map(updatedRecords.map((r) => [r.id, r]));
       set((state) => ({
-        records: state.records.map((r) =>
-          updatedIds.has(r.id) ? { ...r, documentSubmitted: true } : r,
-        ),
+        records: state.records.map((r) => updatedById.get(r.id) ?? r),
       }));
     },
 
