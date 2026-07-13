@@ -283,6 +283,7 @@ function SearchMode({ students, records, categories }: ModeProps) {
           followUp: editFollowUp.trim() || undefined,
           followUpDate: editFollowUpDate || undefined,
         });
+        showToast('기록을 저장했습니다', 'success');
       }
       setEditingId(null);
       setEditContent('');
@@ -362,8 +363,9 @@ function SearchMode({ students, records, categories }: ModeProps) {
 
   return (
     <div className="flex-1 flex flex-col gap-4 min-h-0">
-      {/* 출결 현황 요약 — 나이스 미반영·서류 미제출 (출결 탭에서 이동, 피드백 2026-07). 없으면 자동 숨김. */}
-      <AttendanceStatusBanners students={students} />
+      {/* 출결 현황 요약 — 나이스 미반영·서류 미제출 (출결 탭에서 이동, 피드백 2026-07). 없으면 자동 숨김.
+          조회 탭은 접힌 한 줄 스트립으로(리디자인 1단계), 통계 탭(ProgressMode)은 기존 세로 배너 그대로. */}
+      <AttendanceStatusBanners students={students} variant="strip" />
       {/* 수정 안내 배너 (첫 방문 시) */}
       {!dismissedSearchGuide && (
         <div
@@ -411,19 +413,21 @@ function SearchMode({ students, records, categories }: ModeProps) {
           />
         </div>
 
-        {/* 학생 선택 */}
-        <select
-          value={selectedStudentId}
-          onChange={(e) => setSelectedStudentId(e.target.value)}
-          className="bg-sp-surface border border-sp-border rounded-lg px-3 py-2 text-sm text-sp-text focus:outline-none focus:ring-1 focus:ring-sp-accent"
-        >
-          <option value="">전체 학생</option>
-          {students.map((s, idx) => (
-            <option key={s.id} value={s.id}>
-              {idx + 1} {s.name}
-            </option>
-          ))}
-        </select>
+        {/* 학생 선택 — lg 이상에서는 좌측 StudentJumpList와 중복이라 lg 미만(사이드바가 세로로 밀릴 때)에서만 노출 */}
+        <div className="lg:hidden">
+          <select
+            value={selectedStudentId}
+            onChange={(e) => setSelectedStudentId(e.target.value)}
+            className="bg-sp-surface border border-sp-border rounded-lg px-3 py-2 text-sm text-sp-text focus:outline-none focus:ring-1 focus:ring-sp-accent"
+          >
+            <option value="">전체 학생</option>
+            {students.map((s, idx) => (
+              <option key={s.id} value={s.id}>
+                {idx + 1} {s.name}
+              </option>
+            ))}
+          </select>
+        </div>
 
         {/* 카테고리 필터 */}
         <select
@@ -705,18 +709,19 @@ function SearchMode({ students, records, categories }: ModeProps) {
           )}
         </div>
 
-        {/* Right: ActionDashboard (only when no student selected) */}
-        {!selectedStudentId && (
-          <div className="w-full lg:w-[280px] lg:shrink-0">
-            <ActionDashboard
-              records={records}
-              students={students}
-              onFilterUnreported={() => setUnreportedOnly(true)}
-              onFilterDocUnsubmitted={() => setDocUnsubmittedOnly(true)}
-              onFilterFollowUp={() => setFollowUpOnly(true)}
-            />
-          </div>
-        )}
+        {/* Right: ActionDashboard — 학생 선택 시에도 유지, 대신 해당 학생 기준으로 집계(리디자인 1단계, §1.4 해소) */}
+        <div className="w-full lg:w-[280px] lg:shrink-0">
+          <ActionDashboard
+            records={records}
+            students={students}
+            onFilterUnreported={() => setUnreportedOnly(true)}
+            onFilterDocUnsubmitted={() => setDocUnsubmittedOnly(true)}
+            onFilterFollowUp={() => setFollowUpOnly(true)}
+            scopeStudent={
+              selectedStudent ? { id: selectedStudent.id, name: selectedStudent.name } : undefined
+            }
+          />
+        </div>
       </div>
     </div>
   );

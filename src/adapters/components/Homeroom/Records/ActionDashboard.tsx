@@ -9,6 +9,8 @@ interface ActionDashboardProps {
   onFilterUnreported: () => void;
   onFilterDocUnsubmitted: () => void;
   onFilterFollowUp: () => void;
+  /** 학생 선택 시 집계 대상을 그 학생 기록으로 좁힌다. 없으면 기존과 동일하게 전체 집계. */
+  scopeStudent?: { id: string; name: string };
 }
 
 function todayStr(): string {
@@ -22,49 +24,68 @@ function daysFromToday(dateStr: string): number {
   return Math.round((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 }
 
-export function ActionDashboard({ records, students, onFilterUnreported, onFilterDocUnsubmitted, onFilterFollowUp }: ActionDashboardProps) {
-  const studentMap = useMemo(
-    () => new Map(students.map((s) => [s.id, s])),
-    [students],
-  );
+export function ActionDashboard({
+  records,
+  students,
+  onFilterUnreported,
+  onFilterDocUnsubmitted,
+  onFilterFollowUp,
+  scopeStudent,
+}: ActionDashboardProps) {
+  const studentMap = useMemo(() => new Map(students.map((s) => [s.id, s])), [students]);
 
   const today = todayStr();
 
+  // 학생 선택 시 집계 대상을 그 학생 기록으로 좁힌다(패널 자체를 언마운트하지 않고 데이터만 스코프)
+  const scopeStudentId = scopeStudent?.id;
+  const scopedRecords = useMemo(
+    () => (scopeStudentId ? records.filter((r) => r.studentId === scopeStudentId) : records),
+    [records, scopeStudentId],
+  );
+
   // NEIS unreported attendance records
   const neisUnreported = useMemo(() => {
-    const unreported = records.filter((r) => r.category === 'attendance' && !r.reportedToNeis);
+    const unreported = scopedRecords.filter(
+      (r) => r.category === 'attendance' && !r.reportedToNeis,
+    );
     const byDate = new Map<string, number>();
     for (const r of unreported) {
       byDate.set(r.date, (byDate.get(r.date) ?? 0) + 1);
     }
     return {
       total: unreported.length,
-      byDate: Array.from(byDate.entries()).sort((a, b) => b[0].localeCompare(a[0])).slice(0, 5),
+      byDate: Array.from(byDate.entries())
+        .sort((a, b) => b[0].localeCompare(a[0]))
+        .slice(0, 5),
     };
-  }, [records]);
+  }, [scopedRecords]);
 
   // Document unsubmitted attendance records
   const docUnsubmitted = useMemo(() => {
-    const unsubmitted = records.filter((r) => r.category === 'attendance' && !r.documentSubmitted);
+    const unsubmitted = scopedRecords.filter(
+      (r) => r.category === 'attendance' && !r.documentSubmitted,
+    );
     const byDate = new Map<string, number>();
     for (const r of unsubmitted) {
       byDate.set(r.date, (byDate.get(r.date) ?? 0) + 1);
     }
     return {
       total: unsubmitted.length,
-      byDate: Array.from(byDate.entries()).sort((a, b) => b[0].localeCompare(a[0])).slice(0, 5),
+      byDate: Array.from(byDate.entries())
+        .sort((a, b) => b[0].localeCompare(a[0]))
+        .slice(0, 5),
     };
-  }, [records]);
+  }, [scopedRecords]);
 
   // Total attendance for progress
   const totalAttendance = useMemo(
-    () => records.filter((r) => r.category === 'attendance').length,
-    [records],
+    () => scopedRecords.filter((r) => r.category === 'attendance').length,
+    [scopedRecords],
   );
 
   // Follow-up items
   const followUps = useMemo(() => {
-    const pending = records.filter((r) => r.followUp && !r.followUpDone);
+    const pending = scopedRecords.filter((r) => r.followUp && !r.followUpDone);
     const overdue: Array<{ record: StudentRecord; daysOver: number }> = [];
     const upcoming: Array<{ record: StudentRecord; daysUntil: number }> = [];
     const noDue: StudentRecord[] = [];
@@ -84,17 +105,25 @@ export function ActionDashboard({ records, students, onFilterUnreported, onFilte
     overdue.sort((a, b) => b.daysOver - a.daysOver);
     upcoming.sort((a, b) => a.daysUntil - b.daysUntil);
 
-    const totalFollowUp = records.filter((r) => r.followUp).length;
-    const doneFollowUp = records.filter((r) => r.followUp && r.followUpDone).length;
+    const totalFollowUp = scopedRecords.filter((r) => r.followUp).length;
+    const doneFollowUp = scopedRecords.filter((r) => r.followUp && r.followUpDone).length;
 
-    return { overdue, upcoming, noDue, total: totalFollowUp, done: doneFollowUp, pendingCount: pending.length };
-  }, [records, today]);
+    return {
+      overdue,
+      upcoming,
+      noDue,
+      total: totalFollowUp,
+      done: doneFollowUp,
+      pendingCount: pending.length,
+    };
+  }, [scopedRecords, today]);
 
   const neisReported = totalAttendance - neisUnreported.total;
   const docSubmitted = totalAttendance - docUnsubmitted.total;
 
   return (
     <div className="w-[280px] shrink-0 flex flex-col gap-3 overflow-y-auto">
+      {scopeStudent && <p className="text-xs text-sp-muted px-1">{scopeStudent.name} 기준</p>}
       {/* 완료 진행률 */}
       <div className="rounded-xl bg-sp-card p-4">
         <h4 className="text-xs font-bold text-sp-text mb-3 flex items-center gap-1.5">
@@ -107,7 +136,9 @@ export function ActionDashboard({ records, students, onFilterUnreported, onFilte
               <div>
                 <div className="flex items-center justify-between text-xs mb-1">
                   <span className="text-sp-muted">나이스 반영</span>
-                  <span className="text-sp-text font-medium">{neisReported}/{totalAttendance}</span>
+                  <span className="text-sp-text font-medium">
+                    {neisReported}/{totalAttendance}
+                  </span>
                 </div>
                 <div className="h-1.5 bg-sp-surface rounded-full overflow-hidden">
                   <div
@@ -119,7 +150,9 @@ export function ActionDashboard({ records, students, onFilterUnreported, onFilte
               <div>
                 <div className="flex items-center justify-between text-xs mb-1">
                   <span className="text-sp-muted">서류 제출</span>
-                  <span className="text-sp-text font-medium">{docSubmitted}/{totalAttendance}</span>
+                  <span className="text-sp-text font-medium">
+                    {docSubmitted}/{totalAttendance}
+                  </span>
                 </div>
                 <div className="h-1.5 bg-sp-surface rounded-full overflow-hidden">
                   <div
@@ -134,12 +167,16 @@ export function ActionDashboard({ records, students, onFilterUnreported, onFilte
             <div>
               <div className="flex items-center justify-between text-xs mb-1">
                 <span className="text-sp-muted">후속조치 완료</span>
-                <span className="text-sp-text font-medium">{followUps.done}/{followUps.total}</span>
+                <span className="text-sp-text font-medium">
+                  {followUps.done}/{followUps.total}
+                </span>
               </div>
               <div className="h-1.5 bg-sp-surface rounded-full overflow-hidden">
                 <div
                   className="h-full bg-blue-400 rounded-full transition-all"
-                  style={{ width: `${followUps.total > 0 ? (followUps.done / followUps.total) * 100 : 0}%` }}
+                  style={{
+                    width: `${followUps.total > 0 ? (followUps.done / followUps.total) * 100 : 0}%`,
+                  }}
                 />
               </div>
             </div>
@@ -213,9 +250,14 @@ export function ActionDashboard({ records, students, onFilterUnreported, onFilte
           </button>
           <div className="space-y-1.5">
             {followUps.overdue.slice(0, 5).map(({ record, daysOver }) => (
-              <div key={record.id} className="text-xs py-1 border-b border-sp-border/50 last:border-0">
+              <div
+                key={record.id}
+                className="text-xs py-1 border-b border-sp-border/50 last:border-0"
+              >
                 <div className="flex items-center justify-between">
-                  <span className="text-sp-text font-medium">{studentMap.get(record.studentId)?.name ?? '?'}</span>
+                  <span className="text-sp-text font-medium">
+                    {studentMap.get(record.studentId)?.name ?? '?'}
+                  </span>
                   <span className="text-red-400">{daysOver}일 지남</span>
                 </div>
                 <p className="text-sp-muted truncate mt-0.5">{record.followUp}</p>
@@ -235,10 +277,17 @@ export function ActionDashboard({ records, students, onFilterUnreported, onFilte
           </h4>
           <div className="space-y-1.5">
             {followUps.upcoming.slice(0, 5).map(({ record, daysUntil }) => (
-              <div key={record.id} className="text-xs py-1 border-b border-sp-border/50 last:border-0">
+              <div
+                key={record.id}
+                className="text-xs py-1 border-b border-sp-border/50 last:border-0"
+              >
                 <div className="flex items-center justify-between">
-                  <span className="text-sp-text font-medium">{studentMap.get(record.studentId)?.name ?? '?'}</span>
-                  <span className="text-blue-400">{daysUntil === 0 ? '오늘' : `${daysUntil}일 후`}</span>
+                  <span className="text-sp-text font-medium">
+                    {studentMap.get(record.studentId)?.name ?? '?'}
+                  </span>
+                  <span className="text-blue-400">
+                    {daysUntil === 0 ? '오늘' : `${daysUntil}일 후`}
+                  </span>
                 </div>
                 <p className="text-sp-muted truncate mt-0.5">{record.followUp}</p>
               </div>
@@ -248,13 +297,20 @@ export function ActionDashboard({ records, students, onFilterUnreported, onFilte
       )}
 
       {/* 모든 항목 완료 */}
-      {neisUnreported.total === 0 && docUnsubmitted.total === 0 && followUps.overdue.length === 0 && followUps.upcoming.length === 0 && followUps.pendingCount === 0 && totalAttendance > 0 && (
-        <div className="rounded-xl bg-sp-card p-4 flex flex-col items-center justify-center py-8 text-center">
-          <span className="material-symbols-outlined text-2xl text-green-400 mb-2">check_circle</span>
-          <p className="text-sm text-sp-text font-medium">모든 업무 완료!</p>
-          <p className="text-xs text-sp-muted mt-1">미처리 항목이 없습니다</p>
-        </div>
-      )}
+      {neisUnreported.total === 0 &&
+        docUnsubmitted.total === 0 &&
+        followUps.overdue.length === 0 &&
+        followUps.upcoming.length === 0 &&
+        followUps.pendingCount === 0 &&
+        totalAttendance > 0 && (
+          <div className="rounded-xl bg-sp-card p-4 flex flex-col items-center justify-center py-8 text-center">
+            <span className="material-symbols-outlined text-2xl text-green-400 mb-2">
+              check_circle
+            </span>
+            <p className="text-sm text-sp-text font-medium">모든 업무 완료!</p>
+            <p className="text-xs text-sp-muted mt-1">미처리 항목이 없습니다</p>
+          </div>
+        )}
     </div>
   );
 }
