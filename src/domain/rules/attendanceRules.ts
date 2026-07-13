@@ -435,3 +435,35 @@ export function summarizeNeisAttendance(
 
   return result;
 }
+
+/**
+ * 사유 축 필터 합계 — 포함으로 선택된 축의 byReason 카운트만 상태별로 합산한다.
+ * 개근 파악·상담 참고용 파생 뷰 전용이며 공식 계(별표 8 규칙 라)는 건드리지 않는다.
+ */
+export function countWithReasonFilter(
+  counts: NeisAttendanceCounts,
+  includedAxes: readonly NeisReasonAxisWithExcused[],
+): NeisStatusCounts {
+  const out = emptyNeisStatusCounts();
+  for (const axis of includedAxes) {
+    const c = counts.byReason[axis];
+    out.absent += c.absent;
+    out.late += c.late;
+    out.earlyLeave += c.earlyLeave;
+    out.classAbsence += c.classAbsence;
+  }
+  return out;
+}
+
+/**
+ * 개근 후보 판정 — 포함 축 기준 결석·지각·조퇴·결과가 전부 0이면 true.
+ * '인정'은 규칙 라(횟수 미포함)에 따라 기본 제외 축이다.
+ * 개근의 최종 확정은 나이스 기준으로 확인해야 한다(참고용 판정).
+ */
+export function isPerfectAttendance(
+  counts: NeisAttendanceCounts,
+  includedAxes: readonly NeisReasonAxisWithExcused[],
+): boolean {
+  const f = countWithReasonFilter(counts, includedAxes);
+  return f.absent === 0 && f.late === 0 && f.earlyLeave === 0 && f.classAbsence === 0;
+}

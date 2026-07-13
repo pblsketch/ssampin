@@ -13,6 +13,7 @@ import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { isStudentActive } from '@domain/rules/studentActivity';
 import {
   summarizeNeisAttendance,
+  isPerfectAttendance,
   type NeisAttendanceCounts,
   type NeisReasonAxis,
   type NeisReasonAxisWithExcused,
@@ -98,6 +99,10 @@ export function NeisAttendanceSection({
     studentNumber: number;
     entries: AttendanceDetailEntry[];
   } | null>(null);
+  // 개근 파악 — 포함 축 토글 (기본: 공식 3축. '인정'은 규칙 라에 따라 기본 제외)
+  const [perfectOpen, setPerfectOpen] = useState(false);
+  const [perfectAxes, setPerfectAxes] =
+    useState<readonly NeisReasonAxisWithExcused[]>(NEIS_REASON_AXES);
   // 사유 상세에서 렌더할 사유 축 — 인정 표시 시 '인정'을 마지막 칸으로 덧붙인다.
   const reasonAxes: readonly NeisReasonAxisWithExcused[] = showExcused
     ? [...NEIS_REASON_AXES, '인정']
@@ -133,6 +138,22 @@ export function NeisAttendanceSection({
     }
     return t;
   }, [stats]);
+
+  // 개근 후보 — 포함 축 기준 결석·지각·조퇴·결과 전부 0인 학생 (참고용)
+  const perfectCandidates = useMemo(
+    () =>
+      rows.filter((s) => {
+        const c = stats.get(String(s.studentNumber ?? 0));
+        return c == null || isPerfectAttendance(c, perfectAxes);
+      }),
+    [rows, stats, perfectAxes],
+  );
+
+  const togglePerfectAxis = useCallback((axis: NeisReasonAxisWithExcused) => {
+    setPerfectAxes((prev) =>
+      prev.includes(axis) ? prev.filter((a) => a !== axis) : [...prev, axis],
+    );
+  }, []);
 
   /* 인쇄 — 현재 보기(요약/사유 상세) 그대로 A4 가로 인쇄 (2종 옵션) */
   const handlePrint = useCallback(() => {
@@ -517,6 +538,77 @@ export function NeisAttendanceSection({
           </tbody>
         </table>
       </div>
+      {/* 개근 파악 (참고) — 포함 축을 골라 누적 0인 학생을 본다 (M1, 연간 누적 필터) */}
+      <div className="mt-3 rounded-lg border border-sp-border bg-sp-surface p-3">
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setPerfectOpen((v) => !v)}
+            aria-expanded={perfectOpen}
+            className="flex items-center gap-1.5 text-sm font-medium text-sp-text"
+          >
+            <span className="material-symbols-outlined text-base text-sp-accent">
+              workspace_premium
+            </span>
+            개근 파악 (참고)
+            <span className="text-xs text-sp-muted">
+              {periodLabel} · 후보 {perfectCandidates.length}명
+            </span>
+            <span
+              className={`material-symbols-outlined text-sm text-sp-muted transition-transform ${
+                perfectOpen ? 'rotate-180' : ''
+              }`}
+            >
+              expand_more
+            </span>
+          </button>
+          <div className="flex-1" />
+          {([...NEIS_REASON_AXES, '인정'] as readonly NeisReasonAxisWithExcused[]).map((axis) => {
+            const on = perfectAxes.includes(axis);
+            return (
+              <button
+                key={axis}
+                type="button"
+                onClick={() => togglePerfectAxis(axis)}
+                aria-pressed={on}
+                title={
+                  on
+                    ? `${axis} 사유를 집계에 포함 중 (클릭하면 제외)`
+                    : `${axis} 사유를 집계에서 제외 중 (클릭하면 포함)`
+                }
+                className={`flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg border transition-colors ${
+                  on
+                    ? 'bg-sp-accent/15 text-sp-accent border-sp-accent/50'
+                    : 'text-sp-muted hover:text-sp-text bg-sp-surface border-sp-border'
+                }`}
+              >
+                {axis} {on ? '(포함)' : '(제외)'}
+              </button>
+            );
+          })}
+        </div>
+        {perfectOpen &&
+          (perfectCandidates.length > 0 ? (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {perfectCandidates.map((s) => (
+                <span
+                  key={s.id}
+                  className="px-2 py-0.5 rounded-full bg-sp-card border border-sp-border text-xs text-sp-text"
+                >
+                  {s.studentNumber} {s.name}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-2 text-xs text-sp-muted">현재 조건에서 개근 후보가 없습니다.</p>
+          ))}
+        <p className="mt-2 text-caption text-sp-muted leading-relaxed">
+          포함으로 켠 사유만 집계해 결석·지각·조퇴·결과가 모두 0인 학생을 보여줍니다.
+          출석인정(인정)은 기재요령에 따라 기본 제외입니다. 개근의 최종 확인은 나이스 기준으로
+          해주세요.
+        </p>
+      </div>
+
       <p className="mt-2 text-caption text-sp-muted leading-relaxed">{NEIS_FOOTNOTE}</p>
 
       {/* 학생 클릭 상세 — 언제·몇 교시·구분·사유·비고 (피드백 2026-07) */}

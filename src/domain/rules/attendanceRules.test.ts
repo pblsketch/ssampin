@@ -9,6 +9,8 @@ import {
   validateAttendancePeriods,
   computeAutoPeriods,
   summarizeNeisAttendance,
+  countWithReasonFilter,
+  isPerfectAttendance,
 } from './attendanceRules';
 import type {
   AttendanceRecord,
@@ -464,5 +466,48 @@ describe('summarizeNeisAttendance — 생기부식 일 단위 집계 (별표 8 �
     const recs = [record('OTHER', '2026-03-02', 1, [att(1, 'absent')])];
     const m = summarizeNeisAttendance(recs, 'c1', students);
     expect(m.get(key1)!.absent).toBe(0);
+  });
+});
+
+describe('countWithReasonFilter / isPerfectAttendance (개근 파악, M1)', () => {
+  const students = [{ number: 1 }, { number: 2 }, { number: 3 }];
+  // 1번: 인정 지각만 · 2번: 질병 결석 1회 · 3번: 기록 없음
+  const records = [
+    record('c1', '2026-03-02', 1, [
+      att(1, 'late', { reason: '인정' }),
+      att(2, 'absent', { reason: '질병' }),
+    ]),
+  ];
+  const stats = summarizeNeisAttendance(records, 'c1', students);
+  const OFFICIAL = ['질병', '미인정', '기타'] as const;
+
+  it('기본 축(질병·미인정·기타, 인정 제외)에서 인정 기록만 있는 학생은 개근 후보다', () => {
+    const c1 = stats.get('1')!;
+    expect(isPerfectAttendance(c1, OFFICIAL)).toBe(true);
+    // '인정'을 포함 축으로 켜면 후보에서 탈락한다
+    expect(isPerfectAttendance(c1, [...OFFICIAL, '인정'])).toBe(false);
+  });
+
+  it('질병 축 토글 시 합계와 개근 후보가 재계산된다', () => {
+    const c2 = stats.get('2')!;
+    expect(countWithReasonFilter(c2, OFFICIAL).absent).toBe(1);
+    expect(isPerfectAttendance(c2, OFFICIAL)).toBe(false);
+    // 질병 축을 제외하면 결석 합계가 0이 되고 개근 후보가 된다
+    expect(countWithReasonFilter(c2, ['미인정', '기타']).absent).toBe(0);
+    expect(isPerfectAttendance(c2, ['미인정', '기타'])).toBe(true);
+  });
+
+  it('기록이 전혀 없는 학생은 모든 축 조합에서 개근 후보다', () => {
+    const c3 = stats.get('3')!;
+    expect(isPerfectAttendance(c3, [...OFFICIAL, '인정'])).toBe(true);
+  });
+
+  it('countWithReasonFilter는 포함 축의 상태별 카운트만 합산한다 (공식 계 불변)', () => {
+    const c2 = stats.get('2')!;
+    const filtered = countWithReasonFilter(c2, ['질병']);
+    expect(filtered).toEqual({ absent: 1, late: 0, earlyLeave: 0, classAbsence: 0 });
+    // 원본 counts는 변형되지 않는다
+    expect(c2.absent).toBe(1);
+    expect(c2.byReason['질병'].absent).toBe(1);
   });
 });
