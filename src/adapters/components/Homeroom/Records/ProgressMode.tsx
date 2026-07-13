@@ -141,15 +141,21 @@ export function NeisAttendanceSection({
     return t;
   }, [stats]);
 
-  // 개근 후보 — 포함 축 기준 결석·지각·조퇴·결과 전부 0인 학생 (참고용)
-  const perfectCandidates = useMemo(
-    () =>
-      rows.filter((s) => {
-        const c = stats.get(String(s.studentNumber ?? 0));
-        return c == null || isPerfectAttendance(c, perfectAxes);
-      }),
-    [rows, stats, perfectAxes],
+  // 출석번호 중복 시 같은 키로 이중 집계·통계 공유가 일어난다(codex QA) — 후보 판정을 멈추고 안내.
+  const hasDuplicateNumbers = useMemo(
+    () => new Set(rows.map((s) => s.studentNumber)).size !== rows.length,
+    [rows],
   );
+
+  // 개근 후보 — 포함 축 기준 결석·지각·조퇴·결과 전부 0인 학생 (참고용).
+  // 학급명 미설정이면 집계 자체가 비어 전원이 후보로 보이는 오류가 있어(codex QA) 빈 목록으로 멈춘다.
+  const perfectCandidates = useMemo(() => {
+    if (!className || hasDuplicateNumbers) return [];
+    return rows.filter((s) => {
+      const c = stats.get(String(s.studentNumber ?? 0));
+      return c != null && isPerfectAttendance(c, perfectAxes);
+    });
+  }, [className, hasDuplicateNumbers, rows, stats, perfectAxes]);
 
   const togglePerfectAxis = useCallback((axis: NeisReasonAxisWithExcused) => {
     setPerfectAxes((prev) =>
@@ -419,6 +425,17 @@ export function NeisAttendanceSection({
         </div>
       </div>
 
+      {/* 출석번호 중복 경고 — 같은 번호는 한 키로 접혀 결석 등이 이중 집계된다(codex QA) */}
+      {hasDuplicateNumbers && (
+        <div className="mt-3 flex items-center gap-2 rounded-lg bg-sp-surface border border-sp-border px-3 py-2">
+          <span className="material-symbols-outlined text-base text-amber-500">warning</span>
+          <p className="text-xs text-sp-muted leading-relaxed">
+            출석번호가 겹치는 학생이 있어 아래 집계가 부정확할 수 있어요(같은 번호는 한 명으로
+            합산됩니다). 출결 탭이나 명렬에서 번호를 먼저 정리해주세요.
+          </p>
+        </div>
+      )}
+
       <div className="mt-3 overflow-x-auto rounded-lg border border-sp-border">
         <table className="w-full border-collapse text-sm">
           <thead>
@@ -602,7 +619,13 @@ export function NeisAttendanceSection({
               ))}
             </div>
           ) : (
-            <p className="mt-2 text-xs text-sp-muted">현재 조건에서 개근 후보가 없습니다.</p>
+            <p className="mt-2 text-xs text-sp-muted">
+              {!className
+                ? '설정에서 담임 학급을 입력하면 개근 후보를 판정할 수 있어요.'
+                : hasDuplicateNumbers
+                  ? '출석번호가 겹치는 학생이 있어 개근 판정을 멈췄어요. 명렬에서 번호를 정리해주세요.'
+                  : '현재 조건에서 개근 후보가 없습니다.'}
+            </p>
           ))}
         <p className="mt-2 text-caption text-sp-muted leading-relaxed">
           포함으로 켠 사유만 집계해 결석·지각·조퇴·결과가 모두 0인 학생을 보여줍니다.

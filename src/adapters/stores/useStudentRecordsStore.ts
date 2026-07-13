@@ -16,7 +16,10 @@ import { migrateStudentRecordsOnLoad } from '@usecases/studentRecords/MigrateStu
 import { generateUUID } from '@infrastructure/utils/uuid';
 import type { StudentAttendance, AttendanceStatus } from '@domain/entities/Attendance';
 import { pickRepresentativeAttendance } from '@domain/rules/attendanceRules';
-import { toggleDocumentKind } from '@domain/rules/attendanceDocumentPolicy';
+import {
+  toggleDocumentKind,
+  deriveDocumentSubmitted,
+} from '@domain/rules/attendanceDocumentPolicy';
 import type { Student } from '@domain/entities/Student';
 import { useTeachingClassStore } from './useTeachingClassStore';
 import { useObservationAttachmentStore } from './useObservationAttachmentStore';
@@ -195,6 +198,8 @@ export interface UpdateAttendanceRecordParams {
 
 export const useStudentRecordsStore = create<StudentRecordsState>((set, get) => {
   const manageRecords = new ManageStudentRecords(studentRecordsRepository);
+  // 서류 종류 토글 직렬화 체인 — 계산까지 순서 보장(파일 쓰기 직렬화만으로는 낡은 계산을 못 막는다).
+  let documentToggleChain: Promise<unknown> = Promise.resolve();
 
   return {
     records: [],
@@ -333,22 +338,30 @@ export const useStudentRecordsStore = create<StudentRecordsState>((set, get) => 
     },
 
     toggleDocumentItem: async (recordId, kind) => {
-      const record = get().records.find((r) => r.id === recordId);
-      if (!record || record.category !== 'attendance') return;
-      const next = toggleDocumentKind({
-        documents: record.documents,
-        documentSubmitted: record.documentSubmitted,
-        kind,
-      });
-      const updated = {
-        ...record,
-        documents: next.documents,
-        documentSubmitted: next.documentSubmitted,
+      // 직렬화 체인(codex QA HIGH): 서로 다른 서류 칩을 빠르게 누르면 두 호출이 같은
+      // 낡은 레코드에서 계산해 앞선 체크를 덮었다. 계산→상태 반영→저장을 통째로
+      // 순서대로 실행해, 다음 클릭이 항상 직전 결과 위에서 계산하게 한다.
+      const task = async () => {
+        const record = get().records.find((r) => r.id === recordId);
+        if (!record || record.category !== 'attendance') return;
+        const next = toggleDocumentKind({
+          documents: record.documents,
+          documentSubmitted: record.documentSubmitted,
+          kind,
+        });
+        const updated = {
+          ...record,
+          documents: next.documents,
+          documentSubmitted: next.documentSubmitted,
+        };
+        set((state) => ({
+          records: state.records.map((r) => (r.id === recordId ? updated : r)),
+        }));
+        await manageRecords.update(updated); // updatedAt 자동 스탬프 → 레코드 단위 병합 편승
       };
-      await manageRecords.update(updated); // updatedAt 자동 스탬프 → 레코드 단위 병합 편승
-      set((state) => ({
-        records: state.records.map((r) => (r.id === recordId ? updated : r)),
-      }));
+      const run = documentToggleChain.then(task, task);
+      documentToggleChain = run.catch(() => undefined);
+      await run;
     },
 
     bulkMarkDocumentSubmitted: async (recordIds) => {
@@ -546,11 +559,16 @@ export const useStudentRecordsStore = create<StudentRecordsState>((set, get) => 
           createdAt: existing?.createdAt ?? new Date().toISOString(),
           // 출결을 다시 입력해도 나이스 반영·서류 제출 표시가 초기화되지 않게 승계한다.
           ...(existing?.reportedToNeis ? { reportedToNeis: existing.reportedToNeis } : {}),
-          ...(existing?.documentSubmitted ? { documentSubmitted: existing.documentSubmitted } : {}),
-          // M6: 종류별 체크 상세(documents)도 승계 — 그리드 재저장이 체크리스트를 지우지 않게.
+          // M6: 종류별 체크(documents) 승계 시 documentSubmitted는 파생으로 재계산 —
+          // 명시적 false가 truthy 승계에서 탈락해 불변식(전 종류 제출=완료)이 깨지지 않게(codex QA).
           ...(existing?.documents && existing.documents.length > 0
-            ? { documents: existing.documents }
-            : {}),
+            ? {
+                documents: existing.documents,
+                documentSubmitted: deriveDocumentSubmitted(existing.documents),
+              }
+            : existing?.documentSubmitted
+              ? { documentSubmitted: existing.documentSubmitted }
+              : {}),
           attendancePeriods,
         };
 
