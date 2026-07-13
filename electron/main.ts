@@ -4721,9 +4721,15 @@ function createStartupBackups(): void {
 
   // 날짜별 시작 스냅샷 — {filename}.backup.json 1세대 슬롯은 저장·재시작마다 덮여서
   // 사고(파일 통째 교체) 후 앱을 다시 켜면 마지막 정상본까지 지워진다.
-  // 지난 날짜 스냅샷은 그대로 남으므로 복구 지점이 보존된다. 14일 경과분은 정리.
+  // 하루 한 번 첫 실행 때만 기록(first-write-wins): 오전 정상 백업 후 데이터가 오염된 채
+  // 같은 날 재시작해도 그날의 정상 스냅샷이 보존된다. 날짜는 로컬(KST) 기준. 14일 경과분은 정리.
   const snapshotDir = path.join(dataDir, 'backups', 'startup');
-  const today = new Date().toISOString().slice(0, 10);
+  const nowDate = new Date();
+  const today = [
+    nowDate.getFullYear(),
+    String(nowDate.getMonth() + 1).padStart(2, '0'),
+    String(nowDate.getDate()).padStart(2, '0'),
+  ].join('-');
   let snapshotReady = false;
   try {
     fs.mkdirSync(snapshotDir, { recursive: true });
@@ -4742,7 +4748,10 @@ function createStartupBackups(): void {
           JSON.parse(raw); // 유효한 JSON인지 확인
           fs.writeFileSync(backupPath, raw, 'utf-8');
           if (snapshotReady) {
-            fs.writeFileSync(path.join(snapshotDir, `${filename}.${today}.json`), raw, 'utf-8');
+            const snapshotPath = path.join(snapshotDir, `${filename}.${today}.json`);
+            if (!fs.existsSync(snapshotPath)) {
+              fs.writeFileSync(snapshotPath, raw, 'utf-8');
+            }
           }
         }
       }
