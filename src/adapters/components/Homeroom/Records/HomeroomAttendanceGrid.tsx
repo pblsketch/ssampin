@@ -68,6 +68,12 @@ export interface HomeroomAttendanceGridProps {
     /** studentId → {번호, 이름} (활성·유번호 학생) */
     studentMap: ReadonlyMap<string, { number: number; name: string }>;
   };
+  /**
+   * 예외 편집 알림(M2, 선택) — 팔레트 칸 클릭·텍스트 빠른 입력·사유 인라인 편집
+   * 3곳에서만 (studentNumber, 사유·비고 텍스트)를 호스트에 알린다. undo/redo/지우기에서는
+   * 호출하지 않는다(오경보 차단). 경고 판정·표시는 호스트 소관 — 저장 흐름과 무관한 비차단 훅.
+   */
+  onExceptionEdited?: (studentNumber: number, text: string) => void;
 }
 
 /** 팔레트 종류 = 예외 상태 4종 + 지우개 */
@@ -105,6 +111,7 @@ export function HomeroomAttendanceGrid({
   onSaveDay,
   periods,
   seating,
+  onExceptionEdited,
 }: HomeroomAttendanceGridProps) {
   const [matrix, setMatrix] = useState<MatrixState>({});
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -374,6 +381,8 @@ export function HomeroomAttendanceGrid({
           }
           return { ...prev, [sKey]: row };
         });
+        // M2: 예외 편집 알림 — 지우개·undo/redo 경로에서는 호출하지 않는다.
+        onExceptionEdited?.(student.number, [paletteReason, memoText].filter(Boolean).join(' '));
       }
       commitEdit();
     },
@@ -387,6 +396,7 @@ export function HomeroomAttendanceGrid({
       periodsKey,
       pushUndo,
       commitEdit,
+      onExceptionEdited,
     ],
   );
 
@@ -434,10 +444,21 @@ export function HomeroomAttendanceGrid({
         if (!changed) return prev;
         return { ...prev, [sKey]: next };
       });
+      // M2: 예외 편집 알림 — 예외(비-present) 교시가 있는 행의 비고 입력만 알린다.
+      if (memoText) {
+        const student = students.find((s) => studentKey(s) === sKey);
+        const row = matrixRef.current[sKey];
+        const hasException =
+          row != null && Object.values(row).some((a) => a && a.status !== 'present');
+        if (student && hasException) {
+          const reason = Object.values(row).find((a) => a && a.status !== 'present')?.reason;
+          onExceptionEdited?.(student.number, [reason, memoText].filter(Boolean).join(' '));
+        }
+      }
       commitEdit();
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [periodsKey, pushUndo, commitEdit],
+    [periodsKey, pushUndo, commitEdit, students, onExceptionEdited],
   );
 
   const handleCellContextMenu = useCallback((e: React.MouseEvent) => {
@@ -561,11 +582,15 @@ export function HomeroomAttendanceGrid({
       }
       return next;
     });
+    // M2: 예외 편집 알림 — 적용된 학생별 1회씩 (undo/redo와 무관한 편집 원본 지점).
+    for (const { student, res } of applies) {
+      onExceptionEdited?.(student.number, [res.reason, res.memo].filter(Boolean).join(' '));
+    }
     commitEdit();
     setShowTextPanel(false);
     setTextInput('');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [parsedLines, students, periodsKey, pushUndo, commitEdit]);
+  }, [parsedLines, students, periodsKey, pushUndo, commitEdit, onExceptionEdited]);
 
   /* 상단 요약(전체 카운트) */
   const matrixMap = useMemo(() => {

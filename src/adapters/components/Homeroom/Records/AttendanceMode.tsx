@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import type { Student } from '@domain/entities/Student';
 import type { AttendanceStatus, StudentAttendance } from '@domain/entities/Attendance';
 import { PERIOD_MORNING, PERIOD_CLOSING } from '@domain/entities/Attendance';
@@ -10,6 +10,7 @@ import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { useMultiDateAttendanceIntentStore } from '@adapters/stores/useMultiDateAttendanceIntentStore';
 import { detectStudentNumberIssues } from '@domain/rules/studentNumberRules';
+import { findRepeatedKeyword, type KeywordScanEntry } from '@domain/rules/attendanceKeywordRules';
 import { isStudentActive } from '@domain/rules/studentActivity';
 import { DateNavigator } from '@adapters/components/StudentRecords/DateNavigator';
 import { Notice } from '@adapters/components/common/Notice';
@@ -125,6 +126,50 @@ export function AttendanceMode({ students, selectedDate, onDateChange }: Attenda
   );
 
   // ── 출석번호 무결성 (한 명 → 전원 오염 방어) ──
+  // ── 사유 키워드 반복 경고 (M2) — 비차단 안내, 저장 흐름과 독립 ──
+  const reasonKeywords = useSettingsStore((s) => s.settings.attendanceReasonKeywords);
+  // (studentNumber, keyword) 디듑 — 다중 칸 편집 폭주 방지. 날짜·반 전환 시 초기화.
+  const keywordWarnedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    keywordWarnedRef.current.clear();
+  }, [selectedDate, className]);
+  const handleExceptionEdited = useCallback(
+    (studentNumber: number, text: string) => {
+      const keywords = reasonKeywords ?? [];
+      if (keywords.length === 0 || !className || !text.trim()) return;
+      const month = selectedDate.slice(0, 7);
+      // 월-스캔: 그날 그리드 밖의 해당 월 전체 기록에서 이 학생의 사유·비고 수집
+      const entries: KeywordScanEntry[] = [];
+      for (const r of attendanceRecordsAll) {
+        if (r.classId !== className) continue;
+        if (!r.date.startsWith(month)) continue;
+        for (const sa of r.students) {
+          if (sa.number !== studentNumber || sa.status === 'present') continue;
+          const t = [sa.reason, sa.memo].filter(Boolean).join(' ');
+          if (t) entries.push({ date: r.date, studentNumber: sa.number, text: t });
+        }
+      }
+      const hit = findRepeatedKeyword({
+        entries,
+        keywords,
+        studentNumber,
+        date: selectedDate,
+        text,
+      });
+      if (!hit) return;
+      const dedupeKey = `${studentNumber}|${hit.keyword}`;
+      if (keywordWarnedRef.current.has(dedupeKey)) return;
+      keywordWarnedRef.current.add(dedupeKey);
+      const student = students.find((s) => s.studentNumber === studentNumber);
+      const [, mm, dd] = hit.priorDate.split('-');
+      showToast(
+        `${student?.name ?? `${studentNumber}번`} — 이번 달에 '${hit.keyword}' 기록이 이미 있어요 (${Number(mm)}/${Number(dd)}). 저장은 그대로 진행됩니다.`,
+        'info',
+      );
+    },
+    [reasonKeywords, className, selectedDate, attendanceRecordsAll, students, showToast],
+  );
+
   const numberIssues = useMemo(
     () => detectStudentNumberIssues(students.map((s) => ({ number: s.studentNumber }))),
     [students],
@@ -242,6 +287,7 @@ export function AttendanceMode({ students, selectedDate, onDateChange }: Attenda
             onSaveDay={saveGridDay}
             periods={gridPeriods}
             seating={seatingProp}
+            onExceptionEdited={handleExceptionEdited}
           />
         </div>
       )}

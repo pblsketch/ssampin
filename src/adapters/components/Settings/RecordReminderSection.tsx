@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { Settings } from '@domain/entities/Settings';
 import type {
   NameExposure,
@@ -435,6 +436,19 @@ export function RecordReminderSection({ draft, patch }: Props) {
           )}
         </SettingsSection>
 
+        {/* 출결 사유 반복 경고 (M2) — 같은 달 동일 키워드 재입력 시 비차단 안내 */}
+        <SettingsSection
+          icon="notification_important"
+          iconColor="bg-amber-500/10 text-amber-500"
+          title="출결 사유 반복 경고"
+          description="등록한 단어가 출결 사유·비고에 들어가면, 같은 달에 같은 단어 기록이 이미 있을 때 저장 시 알려드려요. 저장을 막지는 않아요."
+        >
+          <AttendanceKeywordEditor
+            keywords={draft.attendanceReasonKeywords ?? []}
+            onChange={(next) => patch({ attendanceReasonKeywords: next })}
+          />
+        </SettingsSection>
+
         {/* 제외/관심 학생 (추후 지원) */}
         <SettingsSection
           icon="person_search"
@@ -458,6 +472,81 @@ export function RecordReminderSection({ draft, patch }: Props) {
           </div>
         </SettingsSection>
       </div>
+    </div>
+  );
+}
+
+/** 출결 사유 반복 경고 키워드 편집기 (M2) — 기본 키워드 없음, 사용자 등록만. */
+function AttendanceKeywordEditor({
+  keywords,
+  onChange,
+}: {
+  keywords: readonly string[];
+  onChange: (next: readonly string[]) => void;
+}) {
+  const [input, setInput] = useState('');
+
+  const addKeyword = () => {
+    const kw = input.trim();
+    if (!kw) return;
+    if (keywords.includes(kw)) {
+      setInput('');
+      return;
+    }
+    onChange([...keywords, kw]);
+    setInput('');
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              addKeyword();
+            }
+          }}
+          placeholder="예: 생리통, 병원"
+          className="flex-1 px-3 py-2 rounded-lg bg-sp-surface border border-sp-border text-sm text-sp-text placeholder:text-sp-muted/60 focus:outline-none focus:border-sp-accent"
+        />
+        <button
+          type="button"
+          onClick={addKeyword}
+          disabled={input.trim() === ''}
+          className="shrink-0 px-3 py-2 rounded-lg bg-sp-accent text-white text-sm font-medium hover:bg-sp-accent/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          추가
+        </button>
+      </div>
+      {keywords.length > 0 ? (
+        <div className="flex flex-wrap gap-1.5">
+          {keywords.map((kw) => (
+            <span
+              key={kw}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-sp-surface border border-sp-border text-xs text-sp-text"
+            >
+              {kw}
+              <button
+                type="button"
+                onClick={() => onChange(keywords.filter((k) => k !== kw))}
+                aria-label={`${kw} 키워드 삭제`}
+                className="text-sp-muted hover:text-sp-text transition-colors"
+              >
+                <span className="material-symbols-outlined text-sm leading-none">close</span>
+              </button>
+            </span>
+          ))}
+        </div>
+      ) : (
+        <p className="text-xs text-sp-muted">
+          등록된 단어가 없어요. 단어는 부분 일치로 찾으므로(예: '원' → '병원'·'학원' 모두 해당)
+          구체적으로 등록할수록 정확해요.
+        </p>
+      )}
     </div>
   );
 }

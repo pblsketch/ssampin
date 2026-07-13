@@ -413,6 +413,11 @@ export interface Settings {
   readonly teacherName: string;
   /** 담임 누가기록 통합 입력(S4) 사용자 추가 태그 — DEFAULT_HOMEROOM_RECORD_TAGS 외 직접 추가분. */
   readonly homeroomRecordTags?: readonly string[];
+  /**
+   * 출결 사유 반복 경고 키워드(M2) — 같은 달 동일 키워드 재입력 시 비차단 경고.
+   * 기본 제공 키워드 없음(사용자 등록만) — 규정 판단을 내장하지 않는다.
+   */
+  readonly attendanceReasonKeywords?: readonly string[];
   readonly subject: string;
   readonly schoolLevel: SchoolLevel;
   /** 직접 설정 시 수업 시간(분). schoolLevel이 'custom'일 때 사용 */
