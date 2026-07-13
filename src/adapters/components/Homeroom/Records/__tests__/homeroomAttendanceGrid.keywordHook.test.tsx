@@ -88,9 +88,10 @@ describe('HomeroomAttendanceGrid onExceptionEdited 훅 지점 (M2)', () => {
     clickCell('김영희', '2교시');
     expect(spy).toHaveBeenCalledTimes(1);
 
-    // 지우개 모드 이름 클릭 = clearStudentDay — 무발화
+    // 지우개 모드 이름 클릭 = clearStudentDay — 무발화 (요소 부재 시 조용히 통과하지 않게 단언)
     const nameEl = screen.getAllByTitle(/지우개: 클릭하면/)[0];
-    if (nameEl) fireEvent.click(nameEl);
+    expect(nameEl).toBeDefined();
+    fireEvent.click(nameEl!);
     expect(spy).toHaveBeenCalledTimes(1);
   });
 
