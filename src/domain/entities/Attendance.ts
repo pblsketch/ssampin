@@ -72,6 +72,38 @@ export function attendanceRecordKey(r: AttendanceRecord): string {
   return `${r.classId}|${r.groupId ?? ''}|${r.date}|${r.period}`;
 }
 
+/**
+ * 학급 관점의 (날짜, 교시) 출결 레코드 조회 — 그룹 학급(같은 교실의 여러 과목)은
+ * 그룹 키를 우선한다(물리 classId 무관).
+ *
+ * 그룹 레코드를 classId로만 찾으면 다른 과목 명의로 저장된 공유 레코드를 놓치고,
+ * 그 상태로 부분 페이로드를 저장하면 기존 학생 출결이 통째로 교체·유실된다
+ * (2026-07 QA2 B2). 저장 전 existing 탐색은 반드시 이 함수를 쓸 것.
+ */
+export function findAttendanceRecordForClass(
+  records: readonly AttendanceRecord[],
+  cls: { readonly id: string; readonly groupId?: string },
+  date: string,
+  period?: number,
+): AttendanceRecord | null {
+  const candidates = records.filter(
+    (r) => r.date === date && (period === undefined || r.period === period),
+  );
+  if (cls.groupId) {
+    return (
+      candidates.find((r) => r.groupId === cls.groupId) ??
+      candidates.find((r) => r.classId === cls.id && !r.groupId) ??
+      candidates.find((r) => r.classId === cls.id) ??
+      null
+    );
+  }
+  return (
+    candidates.find((r) => r.classId === cls.id && !r.groupId) ??
+    candidates.find((r) => r.classId === cls.id) ??
+    null
+  );
+}
+
 /** 조회(아침 조회) — 1교시 전 담임 점검 시간대 */
 export const PERIOD_MORNING = 0;
 /** 종례(하교 종례) — 8교시 후 담임 점검 시간대 */

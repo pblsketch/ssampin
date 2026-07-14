@@ -25,15 +25,13 @@ function getBinDB(): Promise<IDBPDatabase> {
 
 export class LocalStorageAdapter implements IStoragePort {
   async read<T>(filename: string): Promise<T | null> {
-    try {
-      const raw = localStorage.getItem(PREFIX + filename);
-      if (raw === null) {
-        return null;
-      }
-      return JSON.parse(raw) as T;
-    } catch {
+    // null은 "키 없음"만 의미한다 — 접근/파싱 오류를 null로 삼키면 저장 경로가
+    // 빈 파일로 오인해 기존 데이터를 편집분만으로 덮어쓴다(QA2 H3). 오류는 전파한다.
+    const raw = localStorage.getItem(PREFIX + filename);
+    if (raw === null) {
       return null;
     }
+    return JSON.parse(raw) as T;
   }
 
   async write<T>(filename: string, data: T): Promise<void> {

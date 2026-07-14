@@ -337,3 +337,159 @@ describe('ManageAttendance 락 배선 (A2a)', () => {
     expect(rec?.students.find((s) => s.number === 3)?.status).toBe('present'); // 무관 학생 보존
   });
 });
+
+/**
+ * 2026-07 QA2(gpt-5.6-sol 데이터 보존 검증) 회귀 잠금 — 기존 사용자 데이터가
+ * 학급 삭제·교차 반 저장·읽기 실패로 사라지는 세 경로를 막는다.
+ */
+describe('QA2 데이터 보존 회귀 잠금', () => {
+  beforeEach(() => {
+    resetFileWriteLocksForTest();
+  });
+
+  const groupRecordOwnedByA: AttendanceRecord = {
+    classId: 'class-A',
+    groupId: 'group-G',
+    date: '2026-07-14',
+    period: 1,
+    students: [
+      { number: 1, status: 'absent' },
+      { number: 2, status: 'late' },
+    ],
+  };
+
+  it('deleteByClass: 그룹에 다른 학급이 남아 있으면 공유 그룹 출결을 보존한다 (QA2 B1)', async () => {
+    const repo = new FakeAttendanceRepo();
+    repo.classes = [
+      { id: 'class-A', groupId: 'group-G' },
+      { id: 'class-B', groupId: 'group-G' },
+    ];
+    repo.data = {
+      records: [
+        groupRecordOwnedByA, // class-B가 계속 쓰는 공유 레코드 (물리 classId만 A)
+        {
+          classId: 'class-A',
+          date: '2026-07-14',
+          period: 2,
+          students: [{ number: 1, status: 'late' }],
+        },
+      ],
+    };
+    const manage = new ManageAttendance(repo as unknown as ITeachingClassRepository);
+
+    await manage.deleteByClass('class-A', 'group-G');
+
+    // 공유 그룹 레코드는 보존, A 단독(비그룹) 레코드만 삭제된다.
+    expect(repo.data?.records).toHaveLength(1);
+    expect(repo.data?.records[0]?.groupId).toBe('group-G');
+    // 공유 레코드에 삭제 툼스톤이 생기면 다른 기기의 사본까지 지워진다.
+    const tombKeys = (repo.data?.deleted ?? []).map((t) => t.key);
+    expect(tombKeys.some((k) => k.includes('group-G'))).toBe(false);
+  });
+
+  it('deleteByClass: 그룹의 마지막 학급을 삭제하면 그룹 출결도 함께 정리한다', async () => {
+    const repo = new FakeAttendanceRepo();
+    repo.classes = [{ id: 'class-A', groupId: 'group-G' }]; // 남은 학급 없음
+    repo.data = { records: [groupRecordOwnedByA] };
+    const manage = new ManageAttendance(repo as unknown as ITeachingClassRepository);
+
+    await manage.deleteByClass('class-A', 'group-G');
+
+    expect(repo.data?.records).toHaveLength(0);
+  });
+
+  it('deleteByClass: 학급 목록을 읽지 못하면(null) 그룹 출결을 보존한다 (fail-closed)', async () => {
+    const repo = new FakeAttendanceRepo();
+    repo.classes = null; // 판정 불가
+    repo.data = { records: [groupRecordOwnedByA] };
+    const manage = new ManageAttendance(repo as unknown as ITeachingClassRepository);
+
+    await manage.deleteByClass('class-A', 'group-G');
+
+    expect(repo.data?.records).toHaveLength(1);
+  });
+
+  it('upsertRecord: 다른 학급 명의의 공유 그룹 레코드를 교체할 때 classId를 승계해 툼스톤을 만들지 않는다 (QA2 B2)', async () => {
+    const repo = new FakeAttendanceRepo();
+    repo.classes = [
+      { id: 'class-A', groupId: 'group-G' },
+      { id: 'class-B', groupId: 'group-G' },
+    ];
+    repo.data = { records: [groupRecordOwnedByA] };
+    const manage = new ManageAttendance(repo as unknown as ITeachingClassRepository);
+
+    // 같은 그룹의 다른 과목 반(class-B)에서 전체 명단으로 저장 (groupId 미주입 = 모바일 모양)
+    await manage.upsertRecord({
+      classId: 'class-B',
+      date: '2026-07-14',
+      period: 1,
+      students: [
+        { number: 1, status: 'absent' },
+        { number: 2, status: 'present' },
+      ],
+    });
+
+    // 레코드는 하나로 유지되고 물리 classId(키)가 보존된다 — 키가 바뀌면
+    // 옛 키의 삭제 툼스톤이 다른 기기의 사본을 지운다.
+    expect(repo.data?.records).toHaveLength(1);
+    expect(repo.data?.records[0]?.classId).toBe('class-A');
+    expect(repo.data?.records[0]?.students.find((s) => s.number === 2)?.status).toBe('present');
+    expect(repo.data?.deleted ?? []).toHaveLength(0);
+  });
+
+  it('upsertRecord: 같은 키의 레거시 비그룹 레코드가 있으면 그룹 키를 주입하지 않고 그 자리에서 교체한다(이중화 방지)', async () => {
+    const repo = new FakeAttendanceRepo();
+    repo.classes = [{ id: 'class-A', groupId: 'group-G' }];
+    repo.data = {
+      records: [
+        {
+          classId: 'class-A',
+          date: '2026-07-14',
+          period: 1,
+          students: [{ number: 1, status: 'late' }], // 레거시 비그룹
+        },
+      ],
+    };
+    const manage = new ManageAttendance(repo as unknown as ITeachingClassRepository);
+
+    await manage.upsertRecord({
+      classId: 'class-A',
+      date: '2026-07-14',
+      period: 1,
+      students: [{ number: 1, status: 'absent' }],
+    });
+
+    // 그룹 키를 주입해 새 레코드를 추가하면 레거시와 이중화된다 — 제자리 교체여야 한다.
+    expect(repo.data?.records).toHaveLength(1);
+    expect(repo.data?.records[0]?.groupId).toBeUndefined();
+    expect(repo.data?.records[0]?.students[0]?.status).toBe('absent');
+  });
+
+  it('저장 intent는 읽기 실패 시 아무것도 쓰지 않는다 (QA2 H3 fail-closed)', async () => {
+    const repo = new FakeAttendanceRepo();
+    repo.data = { records: [groupRecordOwnedByA] };
+    let saveCalls = 0;
+    repo.getAttendance = async () => {
+      throw new Error('일시적 읽기 실패');
+    };
+    const origSave = repo.saveAttendance.bind(repo);
+    repo.saveAttendance = async (data) => {
+      saveCalls += 1;
+      return origSave(data);
+    };
+    const manage = new ManageAttendance(repo as unknown as ITeachingClassRepository);
+
+    await expect(
+      manage.upsertRecord({
+        classId: 'class-A',
+        date: '2026-07-14',
+        period: 1,
+        students: [{ number: 1, status: 'present' }],
+      }),
+    ).rejects.toThrow('일시적 읽기 실패');
+
+    // 읽기를 못 했으면 쓰기 0회 — "빈 파일"로 오인한 부분 덮어쓰기가 없어야 한다.
+    expect(saveCalls).toBe(0);
+    expect(repo.data?.records).toHaveLength(1);
+  });
+});

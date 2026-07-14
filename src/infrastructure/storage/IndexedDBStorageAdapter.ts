@@ -35,13 +35,11 @@ function getDB(): Promise<IDBPDatabase> {
 
 export class IndexedDBStorageAdapter implements IStoragePort {
   async read<T>(filename: string): Promise<T | null> {
-    try {
-      const db = await getDB();
-      const value = await db.get(DATA_STORE, filename);
-      return (value as T) ?? null;
-    } catch {
-      return null;
-    }
+    // null은 "키 없음"만 의미한다 — DB 오류를 null로 삼키면 저장 경로가 빈 파일로
+    // 오인해 기존 데이터를 편집분만으로 덮어쓴다(QA2 H3). 오류는 전파한다.
+    const db = await getDB();
+    const value = await db.get(DATA_STORE, filename);
+    return (value as T) ?? null;
   }
 
   async write<T>(filename: string, data: T): Promise<void> {

@@ -5,6 +5,7 @@ import { ko } from 'date-fns/locale';
 import type { SeatingData } from '@domain/entities/Seating';
 import type { TeachingClassStudent, TeachingClass } from '@domain/entities/TeachingClass';
 import type { AttendanceStatus } from '@domain/entities/Attendance';
+import { findAttendanceRecordForClass } from '@domain/entities/Attendance';
 import { studentKey } from '@domain/entities/TeachingClass';
 import { useMobileSettingsStore } from '@mobile/stores/useMobileSettingsStore';
 import { useMobileViewPrefsStore } from '@mobile/stores/useMobileViewPrefsStore';
@@ -89,12 +90,12 @@ export function StudentsPage() {
 
   const getRecordForDate = useCallback(
     (classId: string, period: number, dateStr: string) => {
-      return (
-        records.find((r) => r.date === dateStr && r.classId === classId && r.period === period) ??
-        null
-      );
+      // 그룹 학급(같은 교실의 여러 과목)은 다른 과목 명의로 저장된 공유 레코드를
+      // 그룹 키로 찾아야 한다 — classId 단독 조회는 부분 저장 시 학생 유실(QA2 B2).
+      const cls = teachingClasses.find((c) => c.id === classId);
+      return findAttendanceRecordForClass(records, cls ?? { id: classId }, dateStr, period);
     },
-    [records],
+    [records, teachingClasses],
   );
 
   useEffect(() => {
@@ -207,12 +208,16 @@ export function StudentsPage() {
       // 로드를 보장하고 최신 스냅샷에서 기존 기록을 직접 읽는다.
       const attStore = useMobileAttendanceStore.getState();
       if (!attStore.loaded) await attStore.load();
-      const existing =
-        useMobileAttendanceStore
-          .getState()
-          .records.find(
-            (r) => r.date === selectedDateStr && r.classId === classId && r.period === 0,
-          ) ?? null;
+      // 담임 반이 그룹 소속(초등)이면 그룹 키의 공유 레코드를 찾아야 한다(QA2 B2).
+      const homeroomCls = useMobileTeachingClassStore
+        .getState()
+        .classes.find((c) => c.id === classId);
+      const existing = findAttendanceRecordForClass(
+        useMobileAttendanceStore.getState().records,
+        homeroomCls ?? { id: classId },
+        selectedDateStr,
+        0,
+      );
       const others = (existing?.students ?? []).filter((sa) => sa.number !== num);
       await saveAttendanceRecord({
         classId,
@@ -252,12 +257,14 @@ export function StudentsPage() {
       // 데이터 유실 방지: 로드를 보장하고 최신 스냅샷에서 기존 기록을 직접 읽는다.
       const attStore = useMobileAttendanceStore.getState();
       if (!attStore.loaded) await attStore.load();
-      const existing =
-        useMobileAttendanceStore
-          .getState()
-          .records.find(
-            (r) => r.date === selectedDateStr && r.classId === tc.id && r.period === 0,
-          ) ?? null;
+      // 같은 그룹의 다른 과목 반 명의로 저장된 공유 레코드를 놓치면 아래 저장이
+      // 그 레코드를 학생 한 명짜리로 교체해 기존 출결이 유실된다(QA2 B2).
+      const existing = findAttendanceRecordForClass(
+        useMobileAttendanceStore.getState().records,
+        tc,
+        selectedDateStr,
+        0,
+      );
       const others = (existing?.students ?? []).filter((sa) => {
         const saKey =
           sa.grade != null && sa.classNum != null

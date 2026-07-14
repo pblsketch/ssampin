@@ -165,8 +165,9 @@ export function AttendanceCheckPage({
     const studentList = teachingClass?.students.filter(isStudentActive) ?? [];
     setStudents(studentList);
 
-    // 기존 기록이 있으면 로드
-    const existing = getTodayRecord(classId, selectedPeriod);
+    // 기존 기록이 있으면 로드 — 그룹 학급은 다른 과목 명의의 공유 레코드도 찾아야
+    // 빈 기본값(전원 출석)이 실제 기록을 덮지 않는다(QA2 B2).
+    const existing = getTodayRecord(classId, selectedPeriod, teachingClass?.groupId);
     if (existing) {
       const statusMap = new Map<string, AttendanceStatus>();
       const reasonMap = new Map<string, AttendanceReason>();

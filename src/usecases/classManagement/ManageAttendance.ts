@@ -131,19 +131,29 @@ export class ManageAttendance {
   /** 단건 upsert(그룹 키 지원) — 같은 키 레코드는 교체, 없으면 추가. */
   async upsertRecord(record: AttendanceRecord): Promise<readonly AttendanceRecord[]> {
     return withFileLock(SYNC_FILE_KEYS.attendance, async () => {
+      const data = await this.repository.getAttendance();
+      const records = data?.records ?? [];
+
       // groupId 미주입 호출(모바일 등)은 fresh 학급 목록에서 폴백 주입 — 그룹 학급의
       // 출결이 비그룹 키로 저장되면 같은 (학급,날짜,교시)에 상충 레코드가 이중화된다(스윕 S4).
+      // 단, 같은 키의 레거시 비그룹 레코드가 이미 있으면 주입하지 않고 그 자리에서
+      // 교체한다 — 주입하면 레거시는 남긴 채 그룹 레코드를 새로 만들어 오히려
+      // 이중화가 생긴다(QA2 B2).
       let finalRecord = record;
-      if (!record.groupId) {
+      if (!record.groupId && !records.some((r) => ManageAttendance.matchesKey(r, record))) {
         const classesData = await this.repository.getClasses();
         const cls = classesData?.classes.find((c) => c.id === record.classId);
         if (cls?.groupId) finalRecord = { ...record, groupId: cls.groupId };
       }
 
-      const data = await this.repository.getAttendance();
-      const records = data?.records ?? [];
-      const exists = records.some((r) => ManageAttendance.matchesKey(r, finalRecord));
-      const replaced: readonly AttendanceRecord[] = exists
+      // 그룹 키 매치는 물리 classId가 달라도(같은 교실의 다른 과목 명의) 성립한다 —
+      // 교체 시 기존 레코드의 classId를 승계해 키 변경으로 인한 삭제 툼스톤 오생성과
+      // 다른 기기로의 삭제 전파를 막는다(QA2 B2).
+      const match = records.find((r) => ManageAttendance.matchesKey(r, finalRecord));
+      if (match && match.classId !== finalRecord.classId) {
+        finalRecord = { ...finalRecord, classId: match.classId };
+      }
+      const replaced: readonly AttendanceRecord[] = match
         ? records.map((r) => (ManageAttendance.matchesKey(r, finalRecord) ? finalRecord : r))
         : [...records, finalRecord];
       const saveData = buildAttendanceSaveData(data, replaced);
@@ -281,30 +291,37 @@ export class ManageAttendance {
   }
 
   /**
-   * 학급 삭제에 따른 출결 정리 — 해당 classId 레코드(+그룹의 마지막 학급이면 그룹 레코드)를 제거.
-   * "그룹 마지막 학급" 판정은 락 안에서 fresh 학급 목록으로 수행한다 — 호출자의
-   * in-memory 스냅샷 판정은 동기화로 방금 추가된 그룹 학급을 못 보고 그룹 출결을 오삭제한다.
+   * 학급 삭제에 따른 출결 정리 — 해당 classId의 비그룹 레코드를 제거하고, 그룹 출결은
+   * 그룹을 공유하는 다른 학급이 하나도 없을 때만 함께 제거한다.
+   *
+   * 그룹 출결은 물리 classId와 무관하게 그룹 전체(같은 교실의 여러 과목)가 공유하므로,
+   * 남은 학급이 있는데 classId 기준으로 지우면 남은 과목이 쓰던 출결까지 삭제되고
+   * 툼스톤으로 전 기기에 전파된다(QA2 B1). "남은 학급" 판정은 락 안 fresh 학급
+   * 목록으로 수행하고, 목록을 읽지 못하면(null) 그룹 출결 전체를 보존한다(fail-closed) —
+   * 오판의 비용이 비대칭이다(잔재 leftover < 복구 불가 삭제, 코드리뷰 스윕 S1).
    */
   async deleteByClass(classId: string, groupId?: string): Promise<readonly AttendanceRecord[]> {
     return withFileLock(SYNC_FILE_KEYS.attendance, async () => {
-      let purgeGroupId: string | undefined;
-      if (groupId) {
-        const classesData = await this.repository.getClasses();
-        // 판정 불가(null = 읽기 실패/파일 부재)면 그룹 purge 보류(fail-closed) —
-        // 오판이 그룹 출결 전체 삭제 + 툼스톤 전파로 이어진다(코드리뷰 스윕 S1).
-        if (classesData) {
-          const remaining = classesData.classes.filter(
-            (c) => c.id !== classId && c.groupId === groupId,
-          );
-          if (remaining.length === 0) purgeGroupId = groupId;
-        }
-      }
+      const classesData = await this.repository.getClasses();
+      const survivingGroups = classesData
+        ? new Set(
+            classesData.classes
+              .filter((c) => c.id !== classId && c.groupId)
+              .map((c) => c.groupId as string),
+          )
+        : null;
 
       const data = await this.repository.getAttendance();
       const all = data?.records ?? [];
-      const kept = all.filter(
-        (r) => r.classId !== classId && (!purgeGroupId || r.groupId !== purgeGroupId),
-      );
+      const kept = all.filter((r) => {
+        if (r.groupId) {
+          if (survivingGroups === null) return true; // 판정 불가 — 보존(fail-closed)
+          if (survivingGroups.has(r.groupId)) return true; // 남은 학급이 공유 — 보존
+          // 그룹에 남은 학급 없음: 삭제 학급 소유거나 지정 그룹이면 함께 정리
+          return r.classId !== classId && r.groupId !== groupId;
+        }
+        return r.classId !== classId;
+      });
       const saveData = buildAttendanceSaveData(data, kept);
       await this.repository.saveAttendance(saveData);
       return saveData.records;

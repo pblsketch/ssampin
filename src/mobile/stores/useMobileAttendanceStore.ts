@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { AttendanceRecord } from '@domain/entities/Attendance';
+import { findAttendanceRecordForClass } from '@domain/entities/Attendance';
 import { ManageAttendance } from '@usecases/classManagement/ManageAttendance';
 import { teachingClassRepository } from '@mobile/di/container';
 import { useMobileDriveSyncStore } from '@mobile/stores/useMobileDriveSyncStore';
@@ -12,7 +13,8 @@ interface MobileAttendanceState {
   loaded: boolean;
   load: () => Promise<void>;
   reload: () => Promise<void>;
-  getTodayRecord: (classId: string, period?: number) => AttendanceRecord | null;
+  /** 오늘 출결 조회 — 그룹 학급은 groupId를 함께 넘겨야 다른 과목 명의의 공유 레코드를 찾는다. */
+  getTodayRecord: (classId: string, period?: number, groupId?: string) => AttendanceRecord | null;
   saveRecord: (record: AttendanceRecord) => Promise<void>;
 }
 
@@ -35,15 +37,13 @@ export const useMobileAttendanceStore = create<MobileAttendanceState>((set, get)
     await get().load();
   },
 
-  getTodayRecord: (classId, period) => {
+  getTodayRecord: (classId, period, groupId) => {
     const today = todayISO();
-    return (
-      get().records.find(
-        (r) =>
-          r.date === today &&
-          r.classId === classId &&
-          (period === undefined || r.period === period),
-      ) ?? null
+    return findAttendanceRecordForClass(
+      get().records,
+      { id: classId, ...(groupId ? { groupId } : {}) },
+      today,
+      period,
     );
   },
 

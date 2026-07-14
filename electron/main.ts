@@ -2450,6 +2450,18 @@ function registerIpcHandlers(): void {
       }
     }
 
+    // 파일이 존재하는데 여기까지 왔다면 원본·백업 모두 복구 실패다 — null("파일 없음")로
+    // 위장하지 않고 오류를 던진다. null을 받은 렌더러 저장 경로는 빈 파일로 오인해
+    // 기존 데이터를 편집분만으로 덮어쓴다(QA2 H3). null은 파일 부재만 의미한다.
+    let stillExists = true;
+    try {
+      stillExists = fs.existsSync(filePath);
+    } catch {
+      stillExists = true;
+    }
+    if (stillExists) {
+      throw new Error(`[data:read] ${filename} 파일 손상 — 원본·백업 복구 실패`);
+    }
     return null;
   });
 
