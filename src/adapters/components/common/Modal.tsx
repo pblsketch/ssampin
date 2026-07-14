@@ -78,6 +78,9 @@ export function Modal({
         ...focusOptions,
         escapeDeactivates: false,
         clickOutsideDeactivates: false,
+        // body로 포털된 팝업(색상 선택 등)은 트랩 밖 요소라, 이 옵션이 없으면
+        // focus-trap이 해당 클릭을 차단해 팝업이 동작하지 않는다.
+        allowOutsideClick: true,
         returnFocusOnDeactivate: true,
       }}
     >
@@ -99,7 +102,9 @@ export function Modal({
             SIZE_CLASS[size],
             'max-h-[calc(100vh-48px)]',
             panelClassName,
-          ].filter(Boolean).join(' ')}
+          ]
+            .filter(Boolean)
+            .join(' ')}
         >
           <h2
             id={titleId}
