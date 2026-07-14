@@ -107,30 +107,23 @@ export const useObservationStore = create<ObservationState>((set, get) => {
       }
     },
 
+    // 커스텀 태그·분류는 변경 의도만 넘긴다 — 합집합/제거는 락 안 fresh 목록에서
+    // 수행되고(P6), 화면 상태는 저장 결과(반환값)로 갱신한다. in-memory 목록을
+    // 통째로 실어 보내면 동기화가 방금 병합한 항목을 낡은 스냅샷이 덮는다(2026-07 QA).
+
     addCustomTag: async (tag) => {
-      const trimmed = tag.trim();
-      if (!trimmed) return;
-      const current = get().customTags;
-      if (current.includes(trimmed)) return;
-      const updated = [...current, trimmed];
-      set({ customTags: updated });
-      await manage.saveCustomTags(updated);
+      const saved = await manage.addCustomTag(tag);
+      set({ customTags: [...saved] });
     },
 
     removeCustomTag: async (tag) => {
-      const updated = get().customTags.filter((t) => t !== tag);
-      set({ customTags: updated });
-      await manage.saveCustomTags(updated);
+      const saved = await manage.removeCustomTag(tag);
+      set({ customTags: [...saved] });
     },
 
     addCustomCategory: async (category) => {
-      const trimmed = category.trim();
-      if (!trimmed) return;
-      const current = get().customCategories;
-      if (current.includes(trimmed)) return;
-      const updated = [...current, trimmed];
-      set({ customCategories: updated });
-      await manage.saveCustomCategories(updated);
+      const saved = await manage.addCustomCategory(category);
+      set({ customCategories: [...saved] });
     },
 
     getByStudent: (studentId, classId) => {

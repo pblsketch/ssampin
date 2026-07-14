@@ -94,6 +94,49 @@ describe('동기화 병합 쓰기 × 유스케이스 저장 직렬화 (A2a)', ()
   });
 });
 
+describe('ManageObservations 커스텀 태그·분류 intent (A2c)', () => {
+  beforeEach(() => {
+    resetFileWriteLocksForTest();
+  });
+
+  it('addCustomTag 두 건이 겹쳐도 둘 다 살아남는다 (whole-array 저장이었다면 마지막만 남음)', async () => {
+    const repo = new FakeObsRepo();
+    const manage = new ManageObservations(repo);
+
+    await Promise.all([manage.addCustomTag('태그A'), manage.addCustomTag('태그B')]);
+
+    expect([...(repo.data?.customTags ?? [])].sort()).toEqual(['태그A', '태그B']);
+  });
+
+  it('sync 병합(customTags 합집합)과 addCustomTag가 겹쳐도 둘 다 살아남는다', async () => {
+    const repo = new FakeObsRepo();
+    const manage = new ManageObservations(repo);
+
+    const remoteData: ObservationData = { records: [], customTags: ['원격태그'] };
+    const syncMergeWrite = withFileLock(SYNC_FILE_KEYS.observations, async () => {
+      const local = await repo.getObservations();
+      const merged = mergeObservations(local, remoteData, true);
+      await repo.saveObservations(merged);
+    });
+    const userAdd = manage.addCustomTag('로컬태그');
+
+    await Promise.all([syncMergeWrite, userAdd]);
+
+    expect([...(repo.data?.customTags ?? [])].sort()).toEqual(['로컬태그', '원격태그']);
+  });
+
+  it('removeCustomTag는 락 안 fresh 목록에서 제거한다 (반환값 = 저장된 목록)', async () => {
+    const repo = new FakeObsRepo();
+    repo.data = { records: [], customTags: ['유지', '삭제대상'] };
+    const manage = new ManageObservations(repo);
+
+    const saved = await manage.removeCustomTag('삭제대상');
+
+    expect(saved).toEqual(['유지']);
+    expect(repo.data?.customTags).toEqual(['유지']);
+  });
+});
+
 /** ManageAttendance용 최소 가짜 저장소 — 출결 읽기/쓰기만 구현. */
 class FakeAttendanceRepo {
   data: AttendanceData | null = null;

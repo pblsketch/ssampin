@@ -13,8 +13,9 @@ import { SYNC_FILE_KEYS } from '@usecases/sync/syncRegistry';
  * - 이번 저장에서 사라진 id → 툼스톤 추가(삭제 시각 기록)
  * - 다시 등장한 id → 툼스톤 제거(재작성이 삭제를 이김)
  * - TTL(90일) 지난 툼스톤 → 정리(GC)
- * 모든 수업 기록 저장 경로(add/update/delete/deleteByClassId/saveCustomTags/saveCustomCategories)가
- * 이 함수를 거친다. 봉투는 명시 재조립 — 호출자가 스프레드로 실어온 낡은 deleted 가 새지 않게 한다.
+ * 모든 수업 기록 저장 경로(add/update/delete/deleteByClassId/addCustomTag/removeCustomTag/
+ * addCustomCategory)가 이 함수를 거친다. 봉투는 명시 재조립 — 호출자가 스프레드로 실어온
+ * 낡은 deleted 가 새지 않게 한다.
  *
  * 불변식: 모든 관찰 기록 write 경로는 저장 전에 updatedAt(ms)을 세팅해야 한다
  * (현재 useObservationStore·useMobileObservationStore 가 add/update 시 Date.now() 스탬프).
@@ -95,19 +96,48 @@ export class ManageObservations {
     });
   }
 
-  async saveCustomTags(tags: readonly string[]): Promise<void> {
+  /*
+   * 커스텀 태그·분류는 변경 의도(intent)만 받는다 — 합집합/제거 계산은 락 안 fresh
+   * 목록에서 수행된다(P6). 과거의 whole-array saveCustomTags/saveCustomCategories는
+   * 스토어가 락 밖 in-memory 목록을 실어 보내 동기화 병합본을 덮었기에 제거됐다(K1) —
+   * 재도입 금지. 반환값 = 저장된 최신 목록(호출자가 화면 상태 갱신에 사용).
+   */
+
+  async addCustomTag(tag: string): Promise<readonly string[]> {
+    const trimmed = tag.trim();
     return withFileLock(SYNC_FILE_KEYS.observations, async () => {
       const data = await this.getAll();
-      const updated: ObservationData = { ...data, customTags: tags };
+      const current = data.customTags ?? [];
+      if (!trimmed || current.includes(trimmed)) return current;
+      const next = [...current, trimmed];
+      const updated: ObservationData = { ...data, customTags: next };
       await this.repository.saveObservations(buildObservationSaveData(data, updated));
+      return next;
     });
   }
 
-  async saveCustomCategories(categories: readonly string[]): Promise<void> {
+  async removeCustomTag(tag: string): Promise<readonly string[]> {
     return withFileLock(SYNC_FILE_KEYS.observations, async () => {
       const data = await this.getAll();
-      const updated: ObservationData = { ...data, customCategories: categories };
+      const current = data.customTags ?? [];
+      if (!current.includes(tag)) return current;
+      const next = current.filter((t) => t !== tag);
+      const updated: ObservationData = { ...data, customTags: next };
       await this.repository.saveObservations(buildObservationSaveData(data, updated));
+      return next;
+    });
+  }
+
+  async addCustomCategory(category: string): Promise<readonly string[]> {
+    const trimmed = category.trim();
+    return withFileLock(SYNC_FILE_KEYS.observations, async () => {
+      const data = await this.getAll();
+      const current = data.customCategories ?? [];
+      if (!trimmed || current.includes(trimmed)) return current;
+      const next = [...current, trimmed];
+      const updated: ObservationData = { ...data, customCategories: next };
+      await this.repository.saveObservations(buildObservationSaveData(data, updated));
+      return next;
     });
   }
 
