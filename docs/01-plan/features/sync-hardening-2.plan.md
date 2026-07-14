@@ -299,6 +299,35 @@ npm run regression-check    # 통과(수치는 실행 시 확인 — 헤더 주�
 
 ---
 
+## 12.5 QA2 — 구현 완료 후 데이터 보존 검증 (2026-07-14, Codex gpt-5.6-sol NO-GO → 수정 완료)
+
+구현·xhigh 리뷰 완료본에 "기존 사용자 데이터가 사라질 수 있는가" 단일 관점의 외부 QA(6개
+시나리오, 인라인 tsx 실행 재현)를 돌린 결과 **NO-GO(BLOCKER 2·HIGH 2·MED 1)** → 3건 즉시
+수정, 2건 잔여 등재(R6/R7). 아티팩트 `.omc/artifacts/ask/codex-*sync-hardenin-2026-07-14T05-06-*.md`.
+
+- **[B1 수정] deleteByClass 공유 그룹 출결 오삭제** — 그룹(같은 교실의 여러 과목)에 다른
+  학급이 남아도 물리 `classId` 기준 필터가 공유 레코드를 삭제+툼스톤 전파. →
+  fresh 학급 목록으로 "살아남는 그룹" 집합을 만들어 그룹 레코드는 그룹 생존 여부로만
+  판정(fail-closed: 목록 읽기 실패 시 전체 보존). 이 결함은 베이스에도 있었으나 본 트랙이
+  `deleteByClass`로 재구현하며 승계한 것 — QA 조건(기존 데이터 보존) 위반이라 함께 해소.
+- **[B2 수정] 모바일 교차 반 저장이 그룹 레코드를 부분 페이로드로 교체(신규 회귀)** —
+  모바일 4곳이 기존 기록을 `classId`로만 조회해, 다른 과목 명의의 공유 그룹 레코드를 못
+  보고 학생 1명짜리로 통째 교체(+구 키 툼스톤). 스윕 S4의 groupId 폴백 주입이 연 회귀. →
+  ① 도메인 헬퍼 `findAttendanceRecordForClass`(그룹 키 우선 조회) 신설, 모바일 조회 4곳
+  (StudentsPage×2·getRecordForDate·getTodayRecord+AttendanceCheckPage) 전환 ② usecase
+  `upsertRecord`가 교체 시 기존 레코드의 `classId`를 승계(키 불변=툼스톤 0) ③ S4 주입은
+  같은 키의 레거시 비그룹 레코드가 없을 때만(주입이 만들던 이중화 차단).
+- **[H3 수정] 읽기 오류를 "파일 없음"으로 위장 → 부분 덮어쓰기** — 어댑터 3종(Electron/
+  LocalStorage/IndexedDB)이 read 오류를 `null`로 삼켜, 락 안 fresh-read 저장 경로가 빈
+  파일로 오인해 기존 데이터를 편집분만으로 덮어쓸 수 있었다(intent 전환이 노출면을 키운
+  본 트랙 소유 결함). → **null=부재만, 오류=예외 전파**로 계약 변경(어댑터 3종 +
+  electron main `data:read`의 원본·백업 복구 실패 시 throw). 쓰기 게이트는 락 안 fresh-read
+  이므로 읽기 실패 시 쓰기 0회(fail-closed) — 스토어 `loadFailed`/`ensureWritable` 기제가
+  이제 실제로 발동한다. ※ electron main 변경 = dev 검증 시 build-electron+재시작 필요.
+- **QA가 실행으로 확인한 보존 경로(요지):** 구 스키마 현행 필드 왕복 무손실 · 첫 동기화
+  합집합 보존 · mapless/혼합 버전 병합 = v2.2.13 record-LWW와 동일(P4 바닥) · 단일 컨텍스트
+  락 직렬화·실패 격리 정상.
+
 ## 13. 범위 밖 + 잔여 + Open Questions
 
 ### 범위 밖
@@ -313,6 +342,8 @@ npm run regression-check    # 통과(수치는 실행 시 확인 — 헤더 주�
 - **R2:** documents 그룹 내 kind 단위 동시 분기 손실(B-2a).
 - **R3:** 시계 오차 승자 뒤집힘(수용).
 - **R4 (cross-file 비원자):** deleteClass의 attendance+progress, updateAttendanceRecord의 student-records+teaching-classes — 파일별 락은 교차파일 원자성 미보장(기존 위험, 본 트랙 미악화).
+- **R6 (QA2 H4 — 멀티탭/멀티컨텍스트 무직렬화):** `withFileLock`은 단일 JS 컨텍스트 전제(모듈 스코프 Map). 브라우저 localStorage·모바일 PWA IndexedDB를 두 탭에서 동시 수정하면 마지막 쓰기만 남는다 — v2.2.13에도 락 자체가 없었으므로 **본 트랙 미악화**(기존 위험). 데스크톱은 A3 실측으로 보조 창이 3도메인을 쓰지 않음 확인. 후속: Web Locks API 또는 저장소 버전 CAS.
+- **R7 (QA2 M5 — 미래 필드 roundtrip 보존 계약 부재):** 저장 경로가 알려진 봉투 필드만 재조립하므로, 미래 버전이 추가한 필드는 구버전(다운그레이드·혼합 버전) 저장 시 드롭된다. 현행 v2.2.13 필드는 전수 보존 확인 — 즉시 영향 없음. 후속: fresh 봉투 스프레드 후 소유 필드만 교체하는 계약.
 - **R5 (F1 — rev.5 신규 1급, 문서 가드): teaching-classes/curriculum-progress 등 non-merge 도메인은 본 트랙에서 락 미적용(의도적).** `useTeachingClassStore`의 명렬·좌석 15+ 액션(`saveClasses`:385 등)과 curriculum-progress(#16)는 in-memory whole-array 저장이지만, SyncFromCloud가 병합 아닌 **latest-wins whole-file**로 다운로드하는 도메인이라 이번 트랙은 record-merge 3도메인만 커버하고 **이들은 오늘과 동일한 무직렬화로 남긴다**(merge-clobber보다 손실 밀도 낮음·본 트랙 미악화·P4 바닥). 미래 회귀 오인 방지 문서 가드 — **락 확대는 후속 PDCA**(같은 `useTeachingClassStore`가 attendance만 반쪽 전환된 비일관 포함).
 
 ### C1이 정답으로 만든 케이스(잔여 아님)
