@@ -7,6 +7,11 @@
  * - 본 테스트는 CI postbuild + `npm run check:bundle-isolation` 의 sibling.
  *   (CI 게이트 진실성은 `scripts/check-bundle-isolation.mjs` 가 책임. 본 vitest leg 는 로컬-dev convenience.)
  *
+ * CI 예외 (loud skip): ci.yml 의 verify 잡은 빌드 없이 vitest 만 실행하므로 dist/ 가
+ * 존재할 수 없다 — CI 환경 + 산출물 부재 조합에서만 사유를 출력하고 skip 한다.
+ * 번들 격리의 정본 게이트는 Build 워크플로의 postbuild `check-bundle-isolation.mjs` 가 계속 책임진다.
+ * 로컬(비-CI)에서는 기존대로 부재 시 throw — silent skip 금지 원칙은 로컬 leg 에서 유지된다.
+ *
  * Two-way assertion (vacuous gate prevention):
  *   (a) 학생 SPA 번들에 'exceljs' 0회 등장 (negative)
  *   (b) 교사 SPA 번들에 'exceljs' 1회 이상 등장 (positive — dynamic import 가 끊긴 경우 즉시 감지)
@@ -28,6 +33,17 @@ const BASELINE_PATH = path.resolve('tests/fixtures/student-bundle-baseline.json'
 
 const NEEDLE = /exceljs/i;
 
+// ci.yml verify 잡(빌드 없는 vitest)에서만 skip 허용 — 로컬 부재는 여전히 throw.
+const IS_CI = process.env.CI === 'true' || process.env.CI === '1';
+const SKIP_TEACHER_ON_CI = IS_CI && !fs.existsSync(TEACHER_DIST);
+const SKIP_STUDENT_ON_CI = IS_CI && !fs.existsSync(STUDENT_DIST);
+if (SKIP_TEACHER_ON_CI || SKIP_STUDENT_ON_CI) {
+  console.warn(
+    '[bundle-isolation vitest leg] CI 에 빌드 산출물이 없어 skip — ' +
+      '정본 게이트는 Build 워크플로 postbuild 의 scripts/check-bundle-isolation.mjs 가 수행한다.',
+  );
+}
+
 function readJsFiles(dir: string): string[] {
   return fs.readdirSync(dir).filter((f) => f.endsWith('.js'));
 }
@@ -42,79 +58,88 @@ function anyJsContains(dir: string, needle: RegExp): boolean {
 }
 
 describe('XlsxExporter — bundle isolation (Plan §4 H2 / OC-5)', () => {
-  it('학생 SPA 번들(dist-student/assets) 에 exceljs 0회 등장 [negative]', () => {
-    if (!fs.existsSync(STUDENT_DIST)) {
-      throw new Error(
-        `bundle isolation gate requires student build first — 디렉토리 부재: ${STUDENT_DIST}. ` +
-          `먼저 \`npm run build:student\` 또는 \`npm run build\` 를 실행하라. ` +
-          `silent skip 은 금지(Plan §4 H2 / Delta v3.1 OC-5).`,
-      );
-    }
-    const files = readJsFiles(STUDENT_DIST);
-    expect(files.length).toBeGreaterThan(0);
-    for (const f of files) {
-      const content = fs.readFileSync(path.join(STUDENT_DIST, f), 'utf-8');
+  it.skipIf(SKIP_STUDENT_ON_CI)(
+    '학생 SPA 번들(dist-student/assets) 에 exceljs 0회 등장 [negative]',
+    () => {
+      if (!fs.existsSync(STUDENT_DIST)) {
+        throw new Error(
+          `bundle isolation gate requires student build first — 디렉토리 부재: ${STUDENT_DIST}. ` +
+            `먼저 \`npm run build:student\` 또는 \`npm run build\` 를 실행하라. ` +
+            `silent skip 은 금지(Plan §4 H2 / Delta v3.1 OC-5).`,
+        );
+      }
+      const files = readJsFiles(STUDENT_DIST);
+      expect(files.length).toBeGreaterThan(0);
+      for (const f of files) {
+        const content = fs.readFileSync(path.join(STUDENT_DIST, f), 'utf-8');
+        expect(
+          content,
+          `학생 SPA 번들 ${f} 에 'exceljs' 등장 — dynamic import 격리 깨짐`,
+        ).not.toMatch(NEEDLE);
+      }
+    },
+  );
+
+  it.skipIf(SKIP_TEACHER_ON_CI)(
+    '교사 SPA 번들(dist/assets) 에 exceljs 1회 이상 등장 [positive — vacuous gate prevention]',
+    () => {
+      if (!fs.existsSync(TEACHER_DIST)) {
+        throw new Error(
+          `bundle isolation gate requires teacher build first — 디렉토리 부재: ${TEACHER_DIST}. ` +
+            `먼저 \`npm run build\` 를 실행하라 (vite build 가 dist/ 산출). ` +
+            `silent skip 은 금지(Plan §4 H2 / Delta v3.1 OC-5).`,
+        );
+      }
+      const present = anyJsContains(TEACHER_DIST, NEEDLE);
       expect(
-        content,
-        `학생 SPA 번들 ${f} 에 'exceljs' 등장 — dynamic import 격리 깨짐`,
-      ).not.toMatch(NEEDLE);
-    }
-  });
+        present,
+        `교사 SPA 번들에 'exceljs' 부재 — XlsxExporter dynamic import 가 의도치 않게 끊겨 있을 수 있음. ` +
+          `(vacuous-gate prevention: 학생 SPA 격리 검증이 무의미해지지 않도록 positive 한도를 보장한다.)`,
+      ).toBe(true);
+    },
+  );
 
-  it('교사 SPA 번들(dist/assets) 에 exceljs 1회 이상 등장 [positive — vacuous gate prevention]', () => {
-    if (!fs.existsSync(TEACHER_DIST)) {
-      throw new Error(
-        `bundle isolation gate requires teacher build first — 디렉토리 부재: ${TEACHER_DIST}. ` +
-          `먼저 \`npm run build\` 를 실행하라 (vite build 가 dist/ 산출). ` +
-          `silent skip 은 금지(Plan §4 H2 / Delta v3.1 OC-5).`,
-      );
-    }
-    const present = anyJsContains(TEACHER_DIST, NEEDLE);
-    expect(
-      present,
-      `교사 SPA 번들에 'exceljs' 부재 — XlsxExporter dynamic import 가 의도치 않게 끊겨 있을 수 있음. ` +
-        `(vacuous-gate prevention: 학생 SPA 격리 검증이 무의미해지지 않도록 positive 한도를 보장한다.)`,
-    ).toBe(true);
-  });
+  it.skipIf(SKIP_STUDENT_ON_CI)(
+    '학생 SPA bundle gzip 크기가 baseline + growthBudget 이하 [bundle-02 regression]',
+    () => {
+      if (!fs.existsSync(STUDENT_DIST)) {
+        throw new Error(
+          `bundle-02 baseline gate requires student build first — 디렉토리 부재: ${STUDENT_DIST}.`,
+        );
+      }
+      if (!fs.existsSync(BASELINE_PATH)) {
+        throw new Error(
+          `baseline JSON 부재: ${BASELINE_PATH}. ` +
+            `Plan §4 H5 / Step 5.5 의 fixture 가 누락됐다 — 첫 빌드 후 capture 필요.`,
+        );
+      }
 
-  it('학생 SPA bundle gzip 크기가 baseline + growthBudget 이하 [bundle-02 regression]', () => {
-    if (!fs.existsSync(STUDENT_DIST)) {
-      throw new Error(
-        `bundle-02 baseline gate requires student build first — 디렉토리 부재: ${STUDENT_DIST}.`,
-      );
-    }
-    if (!fs.existsSync(BASELINE_PATH)) {
-      throw new Error(
-        `baseline JSON 부재: ${BASELINE_PATH}. ` +
-          `Plan §4 H5 / Step 5.5 의 fixture 가 누락됐다 — 첫 빌드 후 capture 필요.`,
-      );
-    }
+      const baseline = JSON.parse(fs.readFileSync(BASELINE_PATH, 'utf-8')) as {
+        files: Array<{ name?: string; gzipBytes: number }>;
+        growthBudget: { absoluteBytes: number };
+      };
 
-    const baseline = JSON.parse(fs.readFileSync(BASELINE_PATH, 'utf-8')) as {
-      files: Array<{ name?: string; gzipBytes: number }>;
-      growthBudget: { absoluteBytes: number };
-    };
+      const studentJs = readJsFiles(STUDENT_DIST).find((f) => f.startsWith('student-'));
+      if (!studentJs) {
+        throw new Error(
+          `학생 SPA 메인 청크(student-*.js) 를 ${STUDENT_DIST} 에서 찾지 못함 — vite 출력 패턴 변경 의심.`,
+        );
+      }
 
-    const studentJs = readJsFiles(STUDENT_DIST).find((f) => f.startsWith('student-'));
-    if (!studentJs) {
-      throw new Error(
-        `학생 SPA 메인 청크(student-*.js) 를 ${STUDENT_DIST} 에서 찾지 못함 — vite 출력 패턴 변경 의심.`,
-      );
-    }
+      const baselineFile = baseline.files[0];
+      if (!baselineFile) {
+        throw new Error(
+          `baseline JSON 의 files[] 가 비어 있음 (${BASELINE_PATH}) — fixture malformed.`,
+        );
+      }
 
-    const baselineFile = baseline.files[0];
-    if (!baselineFile) {
-      throw new Error(
-        `baseline JSON 의 files[] 가 비어 있음 (${BASELINE_PATH}) — fixture malformed.`,
-      );
-    }
-
-    const gz = zlib.gzipSync(fs.readFileSync(path.join(STUDENT_DIST, studentJs))).length;
-    const baselineGzip = baselineFile.gzipBytes;
-    const budget = baseline.growthBudget.absoluteBytes;
-    expect(
-      gz,
-      `학생 SPA gzip ${gz}B 가 baseline ${baselineGzip}B + budget ${budget}B 한도 초과`,
-    ).toBeLessThanOrEqual(baselineGzip + budget);
-  });
+      const gz = zlib.gzipSync(fs.readFileSync(path.join(STUDENT_DIST, studentJs))).length;
+      const baselineGzip = baselineFile.gzipBytes;
+      const budget = baseline.growthBudget.absoluteBytes;
+      expect(
+        gz,
+        `학생 SPA gzip ${gz}B 가 baseline ${baselineGzip}B + budget ${budget}B 한도 초과`,
+      ).toBeLessThanOrEqual(baselineGzip + budget);
+    },
+  );
 });

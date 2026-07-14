@@ -2,6 +2,10 @@
 
 마지막 업데이트: 2026-07-14 KST
 
+## ✅ CI 46일 연속 실패 원인 규명 + 수정 (2026-07-14)
+
+**증상**: GitHub Actions CI 워크플로가 2026-05-29(`7045480c`)부터 46일간 전 커밋 실패(마지막 성공 05-28). 알림은 "최근 6회"였으나 실제 스트릭은 훨씬 김. **원인**: `XlsxExporter.bundle.test.ts`(번들 격리 게이트 vitest leg)가 빌드 산출물 부재 시 throw 하도록 설계됐는데(silent skip 금지), ci.yml verify 잡은 빌드 없이 vitest만 실행 → `dist/assets`·`dist-student/assets`가 CI에 존재한 적 없음 → 매 런 동일 3건 실패. 로컬은 과거 빌드 잔존물로 항상 통과라 46일간 미발견. 번들 격리 자체는 무결(정본 게이트 `check-bundle-isolation.mjs`는 Build 워크플로 postbuild에서 계속 통과). **수정**: CI 환경(+산출물 부재)에서만 `it.skipIf`로 사유 출력 후 skip, 로컬 부재는 기존대로 throw 유지. 3시나리오 실검증(로컬+dist=3통과 / CI+무dist=3스킵 exit0 / 로컬+무dist=3실패). **게이트**: tsc 0·lint 0(경고 132 기존)·vitest 전체 3750/3760 통과(10 skip, 기본 병렬은 부하 시간초과 flaky → `--maxWorkers=4`로 클린 통과, 실패분 단독 재실행 전건 통과)·regression 38/38. **함정: 전체 vitest 기본 병렬은 머신 부하 시 PDF·grid 테스트 5s 타임아웃 flaky — maxWorkers 축소나 단독 재실행으로 판별.** 남음: push 후 CI 초록 확인.
+
 ## ✅ 일정 카테고리 색 수정 버그 3종 세트 — 수정·검증·**push 완료** (2026-07-14, main `e19a5717`+`2555f47c`+`8f395871`)
 
 **① 모달 색 수정 불가(신고)**: 일정 > 카테고리 관리에서 색상 팝업의 색을 클릭해도 반응 없음 — 실렌더 100% 재현. 원인 = 공용 `Modal`의 FocusTrap이 `allowOutsideClick` 미설정(기본 false)이라 body로 포털된 색상 팝업 클릭을 트랩 밖 클릭으로 차단(capture 단계 preventDefault+stopImmediatePropagation → React onClick 미도달). 수정 = focusTrapOptions `allowOutsideClick: true` 1줄(`e19a5717`). 백드롭/ESC 닫기 회귀 없음. **함정: 모달 안 body 포털 드롭다운은 이 옵션이 전제 — 제거 금지.**
