@@ -43,7 +43,8 @@
             "method",
             "followUp",
             "followUpDate",
-            "followUpDone"
+            "followUpDone",
+            "fieldUpdatedAt"
           ]
         },
         "AttendancePeriodEntry": {

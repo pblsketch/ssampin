@@ -76,7 +76,9 @@ export const ENTITY_FIELD_CONTRACT = {
           'documents',
           'tags',
         ],
-        // updatedAt: 기기 간 병합용 동기화 메타데이터 — ManageStudentRecords가 자동 스탬프하므로 미러 불필요
+        // updatedAt/fieldUpdatedAt: 기기 간 병합용 동기화 메타데이터 — ManageStudentRecords가
+        // 자동 스탬프하므로 미러 불필요(외부 AI 미노출). fieldUpdatedAt은 최상위 type 별칭이라
+        // 인터페이스 계약(sampleObjectsFor) 추가 불필요 — StudentRecord 필드 분류만 한다.
         notMirrored: [
           'createdAt',
           'updatedAt',
@@ -84,6 +86,7 @@ export const ENTITY_FIELD_CONTRACT = {
           'followUp',
           'followUpDate',
           'followUpDone',
+          'fieldUpdatedAt',
         ],
       },
       AttendancePeriodEntry: {
