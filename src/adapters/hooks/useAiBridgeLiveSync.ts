@@ -17,7 +17,6 @@ import {
 import type { Todo, TodoPriority } from '@domain/entities/Todo';
 import type { SchoolEvent } from '@domain/entities/SchoolEvent';
 import type { ProgressStatus } from '@domain/entities/CurriculumProgress';
-import type { StudentAttendance } from '@domain/entities/Attendance';
 import type { NotePageBody } from '@domain/entities/NotePage';
 import { MEMO_COLORS, type MemoColor } from '@domain/valueObjects/MemoColor';
 import { ManageNotes } from '@usecases/note/ManageNotes';
@@ -296,23 +295,16 @@ export function useAiBridgeLiveSync(): void {
             const students = useStudentStore
               .getState()
               .students.filter((s) => s.studentNumber != null && target.has(s.studentNumber));
-            // (1) 출결부(attendance.json) 미러 — 본체 InputMode 와 동일하게 saveDayAttendance 도 호출.
-            //     단 saveDayAttendance 는 그 날 출결을 통째 교체하므로, 기존 출결을 읽어 대상 학생만
-            //     교체하고 나머지 학생은 보존한다(부분 등록이 다른 학생 출결을 지우지 않게).
-            const existing = tc.getDayAttendance(className, input.date);
-            const mergedMap = new Map<number, StudentAttendance[]>();
-            for (const r of existing) {
-              mergedMap.set(
-                r.period,
-                r.students.filter((sa) => !target.has(sa.number)),
-              );
-            }
-            for (const [period, sas] of input.recordsByPeriod) {
-              const arr = mergedMap.get(period) ?? [];
-              for (const sa of sas) arr.push(sa);
-              mergedMap.set(period, arr);
-            }
-            await tc.saveDayAttendance(className, input.date, mergedMap);
+            // (1) 출결부(attendance.json) 미러 — 대상 학생만 부분 갱신(나머지 학생 보존).
+            //     기존에는 in-memory getDayAttendance로 병합한 하루치를 통째 교체했는데,
+            //     그 스냅샷이 낡으면 동시 편집된 다른 학생 출결을 덮는다(2026-07 QA F3).
+            //     보존·병합은 usecase가 락 안 fresh 스냅샷에서 수행한다(P6).
+            await tc.upsertStudentAttendanceEntries({
+              classId: className,
+              date: input.date,
+              studentNumbers: target,
+              recordsByPeriod: input.recordsByPeriod,
+            });
             // (2) 기록부(student-records) 미러 — subcategory 자동계산 + att-{id}-{date}.
             await sr.bridgeHomeroomDayAttendance({
               className,

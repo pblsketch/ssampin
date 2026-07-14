@@ -8,7 +8,11 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import type { ObservationData, ObservationRecord } from '@domain/entities/Observation';
 import type { IObservationRepository } from '@domain/repositories/IObservationRepository';
-import type { AttendanceData, AttendanceRecord } from '@domain/entities/Attendance';
+import type {
+  AttendanceData,
+  AttendanceRecord,
+  AttendanceStatus,
+} from '@domain/entities/Attendance';
 import type { ITeachingClassRepository } from '@domain/repositories/ITeachingClassRepository';
 import { withFileLock, resetFileWriteLocksForTest } from '@usecases/shared/fileWriteLock';
 import { SYNC_FILE_KEYS } from '@usecases/sync/syncRegistry';
@@ -108,17 +112,40 @@ describe('ManageAttendance 락 배선 (A2a)', () => {
     resetFileWriteLocksForTest();
   });
 
-  it('saveDayBatch는 락 안에서 saveAllUnsafe를 쓰므로 교착 없이 완료된다 (비재진입 규율)', async () => {
+  it('replaceDayForClass는 하루 통째 교체 의도를 락 안 fresh 스냅샷에 적용한다', async () => {
     const repo = new FakeAttendanceRepo();
+    // 다른 날짜/다른 반 레코드는 보존되어야 한다.
+    repo.data = {
+      records: [
+        {
+          classId: 'class-9',
+          date: '2026-07-14',
+          period: 1,
+          students: [{ number: 9, status: 'present' }],
+        },
+        {
+          classId: 'class-1',
+          date: '2026-07-13',
+          period: 1,
+          students: [{ number: 1, status: 'late' }],
+        },
+      ],
+    };
     const manage = new ManageAttendance(repo as unknown as ITeachingClassRepository);
 
     const students = [{ number: 1, status: 'absent' as const }];
-    await expect(
-      manage.saveDayBatch('class-1', '2026-07-14', new Map([[1, students]])),
-    ).resolves.toBeUndefined();
+    const saved = await manage.replaceDayForClass({
+      classId: 'class-1',
+      date: '2026-07-14',
+      recordsByPeriod: new Map([[1, students]]),
+    });
 
-    expect(repo.data?.records).toHaveLength(1);
-    expect(repo.data?.records[0]?.classId).toBe('class-1');
+    expect(saved).toHaveLength(3);
+    expect(repo.data?.records).toHaveLength(3);
+    const dayRec = repo.data?.records.find(
+      (r) => r.classId === 'class-1' && r.date === '2026-07-14',
+    );
+    expect(dayRec?.students[0]?.status).toBe('absent');
   });
 
   it('attendance: add 두 건이 겹쳐도 직렬화되어 둘 다 저장된다', async () => {
@@ -135,5 +162,40 @@ describe('ManageAttendance 락 배선 (A2a)', () => {
     await Promise.all([manage.add(rec(1)), manage.add(rec(2))]);
 
     expect(repo.data?.records).toHaveLength(2);
+  });
+
+  it('intra-period 다학생: 같은 교시의 두 학생 부분 갱신이 겹쳐도 둘 다 살아남는다 (QA F3 역검증)', async () => {
+    const repo = new FakeAttendanceRepo();
+    repo.data = {
+      records: [
+        {
+          classId: 'class-1',
+          date: '2026-07-14',
+          period: 1,
+          students: [
+            { number: 1, status: 'present' },
+            { number: 2, status: 'present' },
+            { number: 3, status: 'present' },
+          ],
+        },
+      ],
+    };
+    const manage = new ManageAttendance(repo as unknown as ITeachingClassRepository);
+
+    const editStudent = (num: number, status: AttendanceStatus): Promise<unknown> =>
+      manage.upsertStudentEntries({
+        classId: 'class-1',
+        date: '2026-07-14',
+        studentNumbers: new Set([num]),
+        recordsByPeriod: new Map([[1, [{ number: num, status }]]]),
+      });
+
+    // 하루 통째 교체(stale 페이로드)였다면 나중 저장이 앞 학생의 편집을 덮는다.
+    await Promise.all([editStudent(1, 'absent'), editStudent(2, 'late')]);
+
+    const rec = repo.data?.records.find((r) => r.period === 1);
+    expect(rec?.students.find((s) => s.number === 1)?.status).toBe('absent');
+    expect(rec?.students.find((s) => s.number === 2)?.status).toBe('late');
+    expect(rec?.students.find((s) => s.number === 3)?.status).toBe('present'); // 무관 학생 보존
   });
 });

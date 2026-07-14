@@ -55,7 +55,7 @@ export function stampChangedRecords(
  * - 이번 저장에서 사라진 키 → 툼스톤 추가(삭제 시각 기록)
  * - 다시 등장한 키 → 툼스톤 제거(재작성이 삭제를 이김)
  * - TTL(90일) 지난 툼스톤 → 정리(GC)
- * 모든 출결 저장 경로(add/saveRecord/saveDayBatch/saveAll)가 이 함수를 거친다.
+ * 모든 출결 저장 경로(add/saveRecord/upsertRecord/replaceDayForClass/upsertStudentEntries/deleteByClass)가 이 함수를 거친다.
  */
 export function buildAttendanceSaveData(
   existing: AttendanceData | null,
@@ -137,55 +137,157 @@ export class ManageAttendance {
     return records.filter((r) => r.classId === classId && r.date === date);
   }
 
-  /**
-   * 특정 학급의 하루치 모든 교시 출결을 일괄 저장한다 (매트릭스 저장용).
-   * 1. 전체 레코드 로드
-   * 2. (classId, date) 일치하는 기존 레코드 제거
-   * 3. recordsByPeriod의 각 항목에서 students가 비어있지 않은 period만 새 레코드 생성
-   * 4. saveAll() 1회 호출 (파일 I/O 최소화)
+  /*
+   * ── 변경 의도(intent) 메서드 ──────────────────────────────────────────
+   * 스토어는 아래 intent만 호출한다 — "무엇을 바꾸겠다"만 넘기고, 실제 변형은
+   * 락 안의 fresh 스냅샷에서 수행된다(P6). 과거의 whole-array saveAll류는
+   * 스토어가 락 밖 in-memory 배열을 실어 보내 동기화 병합본을 통째로 덮었기에
+   * (2026-07 QA BLOCKER 재현) 공개 API에서 제거됐다 — 재도입 금지.
+   * 반환값 = 저장된 전체 레코드(스탬프 반영) — 호출자는 이것으로 화면 상태를 갱신한다.
    */
-  async saveDayBatch(
-    classId: string,
-    date: string,
-    recordsByPeriod: ReadonlyMap<number, readonly StudentAttendance[]>,
-  ): Promise<void> {
-    // 읽기(getAll)부터 쓰기까지 한 임계구역 — 내부는 saveAllUnsafe(같은 락 중첩 = 교착).
+
+  /** 레코드 키 일치 — 그룹이면 (groupId,date,period), 단일이면 (classId,date,period,비그룹). */
+  private static matchesKey(r: AttendanceRecord, target: AttendanceRecord): boolean {
+    if (target.groupId) {
+      return r.groupId === target.groupId && r.date === target.date && r.period === target.period;
+    }
+    return (
+      r.classId === target.classId &&
+      r.date === target.date &&
+      r.period === target.period &&
+      !r.groupId
+    );
+  }
+
+  /** 단건 upsert(그룹 키 지원) — 같은 키 레코드는 교체, 없으면 추가. */
+  async upsertRecord(record: AttendanceRecord): Promise<readonly AttendanceRecord[]> {
     return withFileLock(SYNC_FILE_KEYS.attendance, async () => {
-      const all = await this.getAll();
-
-      // 기존 (classId, date) 레코드 제거
-      const filtered = all.filter((r) => !(r.classId === classId && r.date === date));
-
-      // recordsByPeriod에서 students가 비어있지 않은 period만 신규 레코드 생성
-      const newRecords: AttendanceRecord[] = [];
-      for (const [period, students] of recordsByPeriod) {
-        if (students.length > 0) {
-          newRecords.push({ classId, date, period, students });
-        }
-      }
-
-      const merged: readonly AttendanceRecord[] = [...filtered, ...newRecords];
-      await this.saveAllUnsafe(merged, true);
+      const data = await this.repository.getAttendance();
+      const records = data?.records ?? [];
+      const exists = records.some((r) => ManageAttendance.matchesKey(r, record));
+      const replaced: readonly AttendanceRecord[] = exists
+        ? records.map((r) => (ManageAttendance.matchesKey(r, record) ? record : r))
+        : [...records, record];
+      const saveData = buildAttendanceSaveData(data, replaced);
+      await this.repository.saveAttendance(saveData);
+      return saveData.records;
     });
   }
 
-  async saveAll(records: readonly AttendanceRecord[], force = false): Promise<void> {
-    return withFileLock(SYNC_FILE_KEYS.attendance, () => this.saveAllUnsafe(records, force));
+  /**
+   * 하루 통째 교체(그리드 전용 — 담임 그리드는 그 학급 하루의 단일 기록자, ADR-021/022).
+   * 그룹이면 (groupId, date) 매치 + 해당 classId의 단일 레코드, 단일이면 (classId, date, 비그룹)을
+   * 제거하고 recordsByPeriod로 재구성한다. 빈 맵 = 그 날 비우기(의도적 삭제 허용).
+   */
+  async replaceDayForClass(params: {
+    classId: string;
+    groupId?: string;
+    date: string;
+    recordsByPeriod: ReadonlyMap<number, readonly StudentAttendance[]>;
+  }): Promise<readonly AttendanceRecord[]> {
+    const { classId, groupId, date, recordsByPeriod } = params;
+    return withFileLock(SYNC_FILE_KEYS.attendance, async () => {
+      const data = await this.repository.getAttendance();
+      const all = data?.records ?? [];
+
+      const filtered = all.filter((r) => {
+        if (r.date !== date) return true;
+        if (groupId) {
+          if (r.groupId === groupId) return false;
+          if (r.classId === classId && !r.groupId) return false;
+          return true;
+        }
+        return !(r.classId === classId && !r.groupId);
+      });
+
+      const newRecords: AttendanceRecord[] = [];
+      for (const [period, students] of recordsByPeriod) {
+        if (students.length > 0) {
+          newRecords.push({
+            classId,
+            ...(groupId ? { groupId } : {}),
+            date,
+            period,
+            students,
+          });
+        }
+      }
+
+      const saveData = buildAttendanceSaveData(data, [...filtered, ...newRecords]);
+      await this.repository.saveAttendance(saveData);
+      return saveData.records;
+    });
   }
 
-  /** 락 내부 전용 — 공개 saveAll을 락 안에서 중첩 호출하면 체인이 자기 자신을 기다려 교착한다. */
-  private async saveAllUnsafe(records: readonly AttendanceRecord[], force: boolean): Promise<void> {
-    const existing = await this.repository.getAttendance();
-    const existingRecords = existing?.records ?? [];
+  /**
+   * 대상 학생들의 하루 출결만 부분 갱신 — 대상 학생 엔트리를 그 날 전 교시에서 제거한 뒤
+   * recordsByPeriod의 엔트리를 삽입한다. 나머지 학생은 락 안 fresh 상태 그대로 보존된다.
+   *
+   * 하루 통째 교체(replaceDayForClass)를 재사용하면 호출 시점의 낡은 하루 페이로드가
+   * 동시 편집된 다른 학생의 fresh 출결을 덮는다(2026-07 QA F3) — 단일/부분 학생 편집은
+   * 반드시 이 메서드를 쓸 것(기록 탭 인라인 편집·AI 브릿지 부분 등록).
+   */
+  async upsertStudentEntries(params: {
+    classId: string;
+    groupId?: string;
+    date: string;
+    studentNumbers: ReadonlySet<number>;
+    recordsByPeriod: ReadonlyMap<number, readonly StudentAttendance[]>;
+  }): Promise<readonly AttendanceRecord[]> {
+    const { classId, groupId, date, studentNumbers, recordsByPeriod } = params;
+    return withFileLock(SYNC_FILE_KEYS.attendance, async () => {
+      const data = await this.repository.getAttendance();
+      const all = data?.records ?? [];
 
-    // 방어: 기존 데이터가 있는데 빈 배열로 덮어쓰려 하면 차단 (force로 의도적 삭제 허용)
-    if (!force && existingRecords.length > 0 && records.length === 0) {
-      console.warn(
-        `[ManageAttendance] 기존 출결 ${existingRecords.length}건을 빈 배열로 덮어쓰기 시도 차단됨`,
+      const isDayRecord = (r: AttendanceRecord): boolean => {
+        if (r.date !== date) return false;
+        if (groupId) return r.groupId === groupId || (r.classId === classId && !r.groupId);
+        return r.classId === classId && !r.groupId;
+      };
+
+      const untouched = all.filter((r) => !isDayRecord(r));
+      const dayByPeriod = new Map(all.filter(isDayRecord).map((r) => [r.period, r]));
+
+      const periods = new Set<number>([...dayByPeriod.keys(), ...recordsByPeriod.keys()]);
+      const nextDay: AttendanceRecord[] = [];
+      for (const period of periods) {
+        const existing = dayByPeriod.get(period);
+        // 대상 학생 제거 → 새 엔트리 삽입(방어적으로 대상 학생 것만 받아들인다)
+        const kept = (existing?.students ?? []).filter((sa) => !studentNumbers.has(sa.number));
+        const added = (recordsByPeriod.get(period) ?? []).filter((sa) =>
+          studentNumbers.has(sa.number),
+        );
+        const students = [...kept, ...added];
+        if (students.length === 0) continue; // 교시가 비면 레코드 삭제
+        nextDay.push(
+          existing
+            ? { ...existing, students }
+            : { classId, ...(groupId ? { groupId } : {}), date, period, students },
+        );
+      }
+
+      const saveData = buildAttendanceSaveData(data, [...untouched, ...nextDay]);
+      await this.repository.saveAttendance(saveData);
+      return saveData.records;
+    });
+  }
+
+  /**
+   * 학급 삭제에 따른 출결 정리 — 해당 classId 레코드(+그룹의 마지막 학급이면 그룹 레코드)를 제거.
+   */
+  async deleteByClass(
+    classId: string,
+    purgeGroupId?: string,
+  ): Promise<readonly AttendanceRecord[]> {
+    return withFileLock(SYNC_FILE_KEYS.attendance, async () => {
+      const data = await this.repository.getAttendance();
+      const all = data?.records ?? [];
+      const kept = all.filter(
+        (r) => r.classId !== classId && (!purgeGroupId || r.groupId !== purgeGroupId),
       );
-      return;
-    }
-
-    await this.repository.saveAttendance(buildAttendanceSaveData(existing, records));
+      const saveData = buildAttendanceSaveData(data, kept);
+      await this.repository.saveAttendance(saveData);
+      return saveData.records;
+    });
   }
 }

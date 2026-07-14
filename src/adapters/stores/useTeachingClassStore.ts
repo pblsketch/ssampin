@@ -89,6 +89,13 @@ interface TeachingClassState {
     date: string,
     recordsByPeriod: ReadonlyMap<number, readonly StudentAttendance[]>,
   ) => Promise<void>;
+  /** 대상 학생들의 하루 출결만 부분 갱신 — 다른 학생은 락 안 fresh 상태 그대로 보존(QA F3). */
+  upsertStudentAttendanceEntries: (params: {
+    classId: string;
+    date: string;
+    studentNumbers: ReadonlySet<number>;
+    recordsByPeriod: ReadonlyMap<number, readonly StudentAttendance[]>;
+  }) => Promise<void>;
   // 좌석배치 액션
   initClassSeating: (classId: string, mode: 'sequential' | 'random') => Promise<void>;
   randomizeClassSeating: (classId: string) => Promise<void>;
@@ -344,24 +351,24 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
       const groupId = target?.groupId;
 
       await manageClasses.delete(id);
-      // 해당 학급의 진도 기록과 출석 기록도 함께 삭제
+      // 해당 학급의 진도 기록과 출석 기록도 함께 삭제.
+      // 진도(curriculum-progress)는 의도적으로 스냅샷 저장 유지 — 본 트랙(sync-hardening-2)의
+      // 락·intent 전환 범위는 record-merge 도메인(attendance 등)이다(R5 잔여, 후속 PDCA).
       const progressToKeep = get().progressEntries.filter((e) => e.classId !== id);
-      let attendanceToKeep = get().attendanceRecords.filter((r) => r.classId !== id);
 
       // 그룹 내 마지막 클래스 삭제 시: 그룹 attendance records도 정리
-      if (groupId) {
-        const remaining = get().classes.filter((c) => c.id !== id && c.groupId === groupId);
-        if (remaining.length === 0) {
-          attendanceToKeep = attendanceToKeep.filter((r) => r.groupId !== groupId);
-        }
-      }
+      const remaining = groupId
+        ? get().classes.filter((c) => c.id !== id && c.groupId === groupId)
+        : [];
+      const purgeGroupId = groupId && remaining.length === 0 ? groupId : undefined;
 
       await manageProgress.saveAll(progressToKeep, true);
-      await manageAttendance.saveAll(attendanceToKeep, true);
+      // 출결은 변경 의도만 넘긴다 — 삭제 대상 계산은 락 안 fresh 스냅샷에서(P6).
+      const savedAttendance = await manageAttendance.deleteByClass(id, purgeGroupId);
       set((state) => ({
         classes: state.classes.filter((c) => c.id !== id),
         progressEntries: progressToKeep,
-        attendanceRecords: attendanceToKeep,
+        attendanceRecords: [...savedAttendance],
         selectedClassId: state.selectedClassId === id ? null : state.selectedClassId,
       }));
     },
@@ -654,48 +661,11 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
         ? { ...record, groupId: cls.groupId }
         : record;
 
-      // 그룹 레코드인 경우: (groupId, date, period) 키로 upsert
-      // 단일 레코드인 경우: (classId, date, period) 키로 upsert
-      const records = get().attendanceRecords;
-      const isGroup = !!finalRecord.groupId;
-
-      const existing = isGroup
-        ? records.find(
-            (r) =>
-              r.groupId === finalRecord.groupId &&
-              r.date === finalRecord.date &&
-              r.period === finalRecord.period,
-          )
-        : records.find(
-            (r) =>
-              r.classId === finalRecord.classId &&
-              r.date === finalRecord.date &&
-              r.period === finalRecord.period &&
-              !r.groupId,
-          );
-
-      if (existing !== undefined) {
-        const updated = records.map((r) => {
-          if (isGroup) {
-            return r.groupId === finalRecord.groupId &&
-              r.date === finalRecord.date &&
-              r.period === finalRecord.period
-              ? finalRecord
-              : r;
-          }
-          return r.classId === finalRecord.classId &&
-            r.date === finalRecord.date &&
-            r.period === finalRecord.period &&
-            !r.groupId
-            ? finalRecord
-            : r;
-        });
-        await manageAttendance.saveAll(updated);
-        set({ attendanceRecords: updated });
-      } else {
-        await manageAttendance.add(finalRecord);
-        set((state) => ({ attendanceRecords: [...state.attendanceRecords, finalRecord] }));
-      }
+      // 변경 의도(단건 upsert)만 넘긴다 — 그룹/단일 키 매칭과 배열 교체는 락 안
+      // fresh 스냅샷에서 수행된다(P6). in-memory 배열을 실어 보내면 동기화가 방금
+      // 병합한 다른 기록을 낡은 스냅샷이 통째로 덮는다(2026-07 QA BLOCKER).
+      const saved = await manageAttendance.upsertRecord(finalRecord);
+      set({ attendanceRecords: [...saved] });
     },
 
     getDayAttendance: (classId, date) => {
@@ -720,38 +690,33 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
       const cls = get().classes.find((c) => c.id === classId);
       const groupId = cls?.groupId;
 
-      // 기존 manageAttendance.saveDayBatch는 classId 기반이므로 직접 처리
-      const all = await manageAttendance.getAll();
-
-      // 제거 대상: 그룹이면 (groupId, date) 매치 + 해당 classId의 (classId, date) 단일 레코드
-      //          단일이면 (classId, date, !groupId) 매치
-      const filtered = all.filter((r) => {
-        if (r.date !== date) return true;
-        if (groupId) {
-          if (r.groupId === groupId) return false;
-          if (r.classId === classId && !r.groupId) return false;
-          return true;
-        }
-        return !(r.classId === classId && !r.groupId);
+      // 하루 통째 교체 의도만 넘긴다 — 제거 대상 계산·재구성은 락 안 fresh 스냅샷에서(P6).
+      // (그리드는 그 학급 하루의 단일 기록자라 recordsByPeriod 페이로드 자체가 사용자 의도다)
+      const saved = await manageAttendance.replaceDayForClass({
+        classId,
+        ...(groupId ? { groupId } : {}),
+        date,
+        recordsByPeriod,
       });
+      set({ attendanceRecords: [...saved] });
+    },
 
-      const newRecords: AttendanceRecord[] = [];
-      for (const [period, students] of recordsByPeriod) {
-        if (students.length > 0) {
-          const rec: AttendanceRecord = {
-            classId,
-            ...(groupId ? { groupId } : {}),
-            date,
-            period,
-            students,
-          };
-          newRecords.push(rec);
-        }
+    upsertStudentAttendanceEntries: async ({ classId, date, studentNumbers, recordsByPeriod }) => {
+      // 데이터 유실 방지: 로드 보장(다른 저장 액션과 동일 가드).
+      if (!get().loaded) await get().load();
+      if (get().loadFailed) {
+        console.warn('[TeachingClassStore] 데이터 로드 실패 상태에서 저장 차단');
+        return;
       }
-
-      const merged: readonly AttendanceRecord[] = [...filtered, ...newRecords];
-      await manageAttendance.saveAll(merged, true);
-      set({ attendanceRecords: [...merged] });
+      const cls = get().classes.find((c) => c.id === classId);
+      const saved = await manageAttendance.upsertStudentEntries({
+        classId,
+        ...(cls?.groupId ? { groupId: cls.groupId } : {}),
+        date,
+        studentNumbers,
+        recordsByPeriod,
+      });
+      set({ attendanceRecords: [...saved] });
     },
 
     /**

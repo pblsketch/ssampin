@@ -591,45 +591,34 @@ export const useStudentRecordsStore = create<StudentRecordsState>((set, get) => 
       // 2) 원본 출결부(useTeachingClassStore) 동기화 — classId/studentNumber 있을 때만
       if (classId && studentNumber != null) {
         try {
-          // 데이터 유실 방지: 병합 시드를 읽기 전에 원본 출결부 스토어 로드를 보장한다.
+          // 데이터 유실 방지: 원본 출결부 스토어 로드를 보장한다.
           let teaching = useTeachingClassStore.getState();
           if (!teaching.loaded) {
             await teaching.load();
             teaching = useTeachingClassStore.getState();
           }
-          const existing = teaching.getDayAttendance(classId, date);
 
-          // 기존 recordsByPeriod 맵 구성 (다른 학생 엔트리 보존)
-          const nextMap = new Map<number, StudentAttendance[]>();
-          for (const r of existing) {
-            nextMap.set(r.period, [...r.students]);
-          }
-
-          // 전체 후보 교시 (조회/정규/종례) — 이 범위 내에서 해당 학생 엔트리 재계산
-          const candidatePeriods = new Set<number>(nextMap.keys());
-          candidatePeriods.add(0); // 조회
-          candidatePeriods.add(9); // 종례
-          for (let p = 1; p <= regularPeriodCount; p += 1) candidatePeriods.add(p);
-
-          for (const p of candidatePeriods) {
-            const periodEntry = updatedRecord.attendancePeriods?.find((e) => e.period === p);
-            const others = (nextMap.get(p) ?? []).filter((sa) => sa.number !== studentNumber);
-            if (periodEntry) {
-              others.push({
+          // 이 학생의 교시별 엔트리(=사용자 의도)만 부분 갱신으로 넘긴다.
+          // 하루 통째 교체(saveDayAttendance)를 재사용하면 호출 시점의 낡은 하루
+          // 페이로드가 동시 편집된 다른 학생 출결을 덮는다(2026-07 QA F3) —
+          // 다른 학생 보존·병합은 락 안 fresh 스냅샷에서 수행된다.
+          const entriesByPeriod = new Map<number, StudentAttendance[]>();
+          for (const e of updatedRecord.attendancePeriods ?? []) {
+            entriesByPeriod.set(e.period, [
+              {
                 number: studentNumber,
-                status: periodEntry.status,
-                ...(periodEntry.reason ? { reason: periodEntry.reason } : {}),
-                ...(periodEntry.memo ? { memo: periodEntry.memo } : {}),
-              });
-            }
-            if (others.length > 0) {
-              nextMap.set(p, others);
-            } else {
-              nextMap.delete(p);
-            }
+                status: e.status,
+                ...(e.reason ? { reason: e.reason } : {}),
+                ...(e.memo ? { memo: e.memo } : {}),
+              },
+            ]);
           }
-
-          await teaching.saveDayAttendance(classId, date, nextMap);
+          await teaching.upsertStudentAttendanceEntries({
+            classId,
+            date,
+            studentNumbers: new Set([studentNumber]),
+            recordsByPeriod: entriesByPeriod,
+          });
         } catch (err) {
           console.warn('[updateAttendanceRecord] 원본 출결부 동기화 실패', err);
           // 원본 실패해도 기록 레이어는 계속 진행 (부분 실패 허용)
