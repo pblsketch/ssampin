@@ -353,3 +353,20 @@ export const SYNC_FILES: readonly string[] = SYNC_REGISTRY.filter((d) => !d.isDy
 );
 
 export type SyncFileName = (typeof SYNC_FILES)[number];
+
+/**
+ * 파일 쓰기 락(withFileLock) 키 정본 — 쓰기 직렬화 대상(record-merge 3도메인)의 이름 있는 키.
+ *
+ * 역할 분리(sync-hardening-2 계획 §10 A1): 동기화 도메인의 원천은 SYNC_REGISTRY이고
+ * SYNC_FILES는 그 파생이다. SYNC_FILE_KEYS는 그중 "파일 쓰기 락"에 쓰는 부분집합의
+ * named 정본일 뿐, 동기화 도메인 목록을 대체하지 않는다.
+ *
+ * 락 키는 반드시 이 상수로만 접근한다(리터럴 금지) — 오타 하나가 별개 락 도메인을
+ * 만들어 직렬화가 조용히 깨진다. 값은 각 도메인의 SYNC_REGISTRY.fileName이자
+ * 리포지토리 storage 키와 동일해야 하며, 정합은 fileWriteLock.test.ts가 잠근다.
+ */
+export const SYNC_FILE_KEYS = {
+  studentRecords: 'student-records',
+  attendance: 'attendance',
+  observations: 'observations',
+} as const;
