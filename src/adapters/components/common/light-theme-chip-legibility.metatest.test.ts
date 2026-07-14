@@ -23,11 +23,16 @@ import path from 'path';
 
 const repoRoot = path.resolve(__dirname, '..', '..', '..', '..');
 
-// Phase 2B 스코프 — Plan 명시 4 색상 + Plan 작성 시점 사용자 신고 색상.
-// 추가 색상(sky/blue/fuchsia/lime 등)은 후속 PDCA 에서 정규식 확장 + override 동반.
+// 스코프 전면 확장(2026-07-14): Tailwind 유채색 17종 전부 × 100~400 단계.
+// 계기 — text-yellow-200/80 alpha 변형이 정확 매치 override 를 빠져나가 라이트 모드
+// NEIS 안내문이 노랑 배경 위 노랑 글씨가 된 사용자 신고. 같은 구멍(override 부재
+// 또는 정확 매치라 alpha 변형 누락)이 다른 색·400 단계에도 있어 전 색상으로 확장했다.
+// 중성색(slate/gray/zinc/neutral/stone)은 제외 — 상시 어두운 배경(칠판·오버레이 등)
+// 위 텍스트로 흔히 쓰여 일괄 강제 시 오히려 콘트라스트가 깨진다. 필요 시 별도 PDCA.
 // alpha 변형(/80, /90 등)도 잡음 — Tailwind 가 text-amber-300/80 을 별도 클래스로 컴파일하므로
 // override selector 가 `[class*="text-amber-300"]` 부분 매치 패턴으로 alpha 변형까지 함께 잡는다.
-const COLOR_RE = /\btext-(amber|red|orange|purple)-(100|200|300)(?:\/\d+)?\b/g;
+const COLOR_RE =
+  /\btext-(red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(100|200|300|400)(?:\/\d+)?\b/g;
 
 function walk(dir: string, out: string[]): void {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -49,9 +54,11 @@ function walk(dir: string, out: string[]): void {
 
 /**
  * index.css 의 라이트 테마 override 셀렉터를 파싱해 (color, shade) 화이트리스트 집합 반환.
- * 두 패턴 모두 지원:
- *   - `.theme-light .text-amber-300 { ... }` (정확 매치)
- *   - `.theme-light [class*="text-amber-300"] { ... }` (alpha 변형까지 잡는 부분 매치 — 권장)
+ * 지원 패턴:
+ *   - `.theme-light .text-amber-300 { ... }` (정확 매치 — alpha 변형 누락, 레거시)
+ *   - `.theme-light [class*="text-amber-300"] { ... }` (부분 매치 — hover: 변형까지 오염, 레거시)
+ *   - `.theme-light [class^="text-amber-300"], .theme-light [class*=" text-amber-300"]`
+ *     (앞경계 고정 쌍 — alpha 변형은 잡고 hover: 등 상태 변형은 제외. 권장, index.css 주석 참조)
  */
 function loadOverrideAllowSet(): Set<string> {
   const cssPath = path.join(repoRoot, 'src', 'index.css');
@@ -60,7 +67,9 @@ function loadOverrideAllowSet(): Set<string> {
   const exact = /\.theme-light\s+\.text-(\w+)-(\d+)/g;
   // prettier 가 single/double 어느 쪽이든 정규화할 수 있으므로 양 따옴표 모두 매치.
   const partial = /\.theme-light\s+\[class\*=["']text-(\w+)-(\d+)["']\]/g;
-  for (const re of [exact, partial]) {
+  const anchoredStart = /\.theme-light\s+\[class\^=["']text-(\w+)-(\d+)["']\]/g;
+  const anchoredToken = /\.theme-light\s+\[class\*=["'] text-(\w+)-(\d+)["']\]/g;
+  for (const re of [exact, partial, anchoredStart, anchoredToken]) {
     let m: RegExpExecArray | null;
     while ((m = re.exec(css)) !== null) {
       allow.add(`${m[1]}-${m[2]}`);
