@@ -95,6 +95,15 @@
 
 ### 5.1 항목별 병합 규칙 (mergeStudentRecords — 값 + 결과 fieldUpdatedAt 맵)
 
+> **구현 노트(2026-07-14 구현 세션 — 최종 xhigh 코드리뷰 반영):** 아래 (b)백스톱은 구현에서
+> **"양쪽 맵 보유 시에만 항목 오버레이, 한쪽이라도 맵 부재면 record-LWW 폴백"으로 교체**됐다.
+> 스윕 검증(S2)에서 mapless 패자의 무관 편집 updatedAt이 LWW 승자의 진짜 항목 스탬프를
+> 이겨 낡은 체크를 부활시키는 **P4 위반**이 발견됐기 때문(LWW 폴백은 P5 보호를 record-LWW와
+> 동일하게 달성). 보완으로 쓰기 측(applyRecordChange)이 **맵 최초 신설 시 미변경 그룹을
+> 직전 updatedAt으로 백필**해, 신버전에서 한 번이라도 편집된 레코드는 즉시 정확한 항목
+> 병합 대상이 된다(업그레이드 경계 P4 보호 포함). 하한 클램프는 createdAt 복제 불일치
+> 데이터에서 시각 위조라 제거. no-op 재저장은 updatedAt을 올리지 않는다(백스톱 오염 차단).
+
 1. 추적 항목 f ∈ {reportedToNeis, documentGroup(=documents+documentSubmitted), followUpDone(+followUp/followUpDate **한 그룹**)}.
 2. **유효 시각(effective) 3분기(C1, QA 유효 확인):**
    - **(a) 양측 맵 보유** → 각 측 e(f) = `fieldUpdatedAt[f]`(키 있으면 그 값). record.updatedAt 미개입.
