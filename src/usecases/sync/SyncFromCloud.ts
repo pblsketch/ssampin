@@ -11,6 +11,7 @@ import type { AttendanceData, AttendanceRecord } from '@domain/entities/Attendan
 import type { ObservationData, ObservationRecord } from '@domain/entities/Observation';
 import type { RecordCategoryItem } from '@domain/valueObjects/RecordCategory';
 import { attendanceRecordKey } from '@domain/entities/Attendance';
+import { deriveDocumentSubmitted } from '@domain/rules/attendanceDocumentPolicy';
 import {
   SYNC_FILES,
   type SyncProgress,
@@ -26,7 +27,97 @@ function recordTagCount(r: StudentRecord): number {
   return r.tags?.length ?? 0;
 }
 
-/** student-records를 record ID 기준으로 병합 (최신 createdAt 우선) */
+/* ── 항목(추적 그룹) 단위 병합 (sync-hardening-2 B트랙 — 계획 §5.1) ─────────────
+ * 두 기기가 같은 기록의 서로 다른 체크 항목을 고쳤을 때(예: PC=서류, 노트북=나이스)
+ * record-LWW가 기록을 통째로 골라 한쪽 체크를 지우던 HIGH 버그의 해소.
+ * record-LWW 승자를 BASE로 두고, 추적 그룹만 항목별 유효시각으로 오버레이한다.
+ * 비추적 필드(content/subcategory/tags/attendancePeriods 등)는 record-LWW 유지(P4).
+ */
+
+const TRACKED_GROUPS = ['reportedToNeis', 'documentGroup', 'followUpDone'] as const;
+type TrackedGroup = (typeof TRACKED_GROUPS)[number];
+
+/**
+ * 항목별 유효 시각 3분기(C1):
+ * (a) 맵 보유·키 있음 → 그 값(record.updatedAt 미개입 — 무관 편집이 항목 병합을 못 무너뜨림)
+ * (c) 맵 보유·키 없음 → createdAt(한 번도 안 건드린 항목)
+ * (b) 맵 자체 부재(구버전 드롭) → record.updatedAt 백스톱(없으면 createdAt)
+ */
+function effectiveStamp(r: StudentRecord, group: TrackedGroup): string {
+  if (r.fieldUpdatedAt) return r.fieldUpdatedAt[group] ?? r.createdAt;
+  return r.updatedAt ?? r.createdAt;
+}
+
+/** 그룹 값 채택 — after가 undefined인 필드는 제거(명시 삭제)로 취급한다. */
+function adoptGroup(
+  target: StudentRecord,
+  source: StudentRecord,
+  group: TrackedGroup,
+): StudentRecord {
+  if (group === 'reportedToNeis') {
+    const { reportedToNeis: _dropped, ...rest } = target;
+    return {
+      ...rest,
+      ...(source.reportedToNeis !== undefined ? { reportedToNeis: source.reportedToNeis } : {}),
+    };
+  }
+  if (group === 'documentGroup') {
+    const { documents: _d, documentSubmitted: _s, ...rest } = target;
+    const adopted: StudentRecord = {
+      ...rest,
+      ...(source.documents !== undefined ? { documents: source.documents } : {}),
+      ...(source.documentSubmitted !== undefined
+        ? { documentSubmitted: source.documentSubmitted }
+        : {}),
+    };
+    // H4 불변식 — documents 채택 후 파생값 재계산은 정본 경유(빈 배열=미존재 fallback).
+    const derived = deriveDocumentSubmitted(adopted.documents, adopted.documentSubmitted);
+    return { ...adopted, documentSubmitted: derived };
+  }
+  const { followUpDone: _fd, followUp: _f, followUpDate: _fdt, ...rest } = target;
+  return {
+    ...rest,
+    ...(source.followUpDone !== undefined ? { followUpDone: source.followUpDone } : {}),
+    ...(source.followUp !== undefined ? { followUp: source.followUp } : {}),
+    ...(source.followUpDate !== undefined ? { followUpDate: source.followUpDate } : {}),
+  };
+}
+
+/** ISO 시각 clamp — 불변식 createdAt ≤ fieldUpdatedAt[f] ≤ record.updatedAt(있으면). */
+function clampStamp(stamp: string, base: StudentRecord): string {
+  let s = stamp;
+  if (s < base.createdAt) s = base.createdAt;
+  if (base.updatedAt && s > base.updatedAt) s = base.updatedAt;
+  return s;
+}
+
+/**
+ * record-LWW 승자(base)에 패자(other)의 추적 그룹을 항목별 유효시각으로 오버레이한다.
+ * 결과 fieldUpdatedAt 합성(H3): base 맵 승계 + 채택된 그룹은 "패자 쪽 키 있으면 그 값,
+ * 없으면 유효시각"을 materialize — 안 남기면 다음 병합에서 (c)createdAt로 퇴화해
+ * 방금 채택한 값이 더 낡은 상대에게 뒤집힌다(2단계 병합 수렴의 핵심).
+ * 아무 그룹도 채택되지 않으면 base를 그대로 반환(무변경 — 구 데이터 대량 재업로드 방지).
+ */
+function mergeTrackedGroups(base: StudentRecord, other: StudentRecord): StudentRecord {
+  let result = base;
+  const map: { -readonly [K in TrackedGroup]?: string } = { ...(base.fieldUpdatedAt ?? {}) };
+  let adopted = false;
+
+  for (const group of TRACKED_GROUPS) {
+    const baseStamp = effectiveStamp(base, group);
+    const otherStamp = effectiveStamp(other, group);
+    // 동률 = base(record-LWW/preferRemote 정책 승계) 유지
+    if (otherStamp <= baseStamp) continue;
+    result = adoptGroup(result, other, group);
+    map[group] = clampStamp(other.fieldUpdatedAt?.[group] ?? otherStamp, base);
+    adopted = true;
+  }
+
+  if (!adopted) return base;
+  return Object.keys(map).length > 0 ? { ...result, fieldUpdatedAt: map } : result;
+}
+
+/** student-records를 record ID 기준으로 병합 (record-LWW BASE + 추적 그룹 오버레이) */
 export function mergeStudentRecords(
   local: StudentRecordsData | null,
   remote: StudentRecordsData,
@@ -39,7 +130,7 @@ export function mergeStudentRecords(
   for (const r of localRecords) {
     map.set(r.id, r);
   }
-  // 리모트 레코드로 업데이트.
+  // 리모트 레코드로 업데이트 — record-LWW로 BASE 승자를 정한 뒤 추적 그룹만 오버레이.
   //  1순위: updatedAt(최근 수정) — 나이스 반영/서류 제출 같은 플래그 편집이 동기화로
   //         되살아나는 것을 막는다. 한쪽만 updatedAt 이 있으면 있는 쪽을 최신으로 본다.
   //  2순위(updatedAt 동률 또는 둘 다 없음): 기존 createdAt·tags 로직(Q2 좀비 부활 방지).
@@ -51,21 +142,21 @@ export function mergeStudentRecords(
     }
     const rU = r.updatedAt ?? '';
     const eU = existing.updatedAt ?? '';
+    let base = existing; // record-LWW 승자(비추적 필드의 기준)
     if (rU !== eU) {
-      if (rU > eU) map.set(r.id, r); // 리모트가 더 최근 수정 → 채택 (아니면 로컬 유지)
-      continue;
-    }
-    // updatedAt 동률(또는 둘 다 없는 구 데이터) → createdAt·tags 폴백
-    if (r.createdAt > existing.createdAt) {
-      map.set(r.id, r);
+      if (rU > eU) base = r;
+    } else if (r.createdAt > existing.createdAt) {
+      base = r;
     } else if (
       r.createdAt === existing.createdAt &&
       recordTagCount(r) >= recordTagCount(existing)
     ) {
       // Q2: createdAt 동률(정규화는 createdAt 불변)일 때 tags 가 더(또는 같이) 많은 쪽 우선.
       //   미변환(tags 적은) 레코드가 변환본을 덮어 "좀비 부활"하는 것을 막는다(remote 우선 기본은 보존).
-      map.set(r.id, r);
+      base = r;
     }
+    const other = base === r ? existing : r;
+    map.set(r.id, mergeTrackedGroups(base, other));
   }
 
   // 카테고리: 항목(id) 합집합 병합.

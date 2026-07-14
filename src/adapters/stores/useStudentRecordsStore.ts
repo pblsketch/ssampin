@@ -284,10 +284,11 @@ export const useStudentRecordsStore = create<StudentRecordsState>((set, get) => 
     },
 
     updateRecord: async (updated) => {
-      await manageRecords.update(updated);
-      set((state) => ({
-        records: state.records.map((r) => (r.id === updated.id ? updated : r)),
-      }));
+      // 변경 의도(before=화면 원본, after=편집본)만 넘긴다 — 안 건드린 필드는 fresh 보존(P6).
+      const before = get().records.find((r) => r.id === updated.id);
+      if (!before) return;
+      const saved = await manageRecords.update({ before, after: updated });
+      set({ records: [...saved] });
     },
 
     deleteRecord: async (id) => {
@@ -303,20 +304,16 @@ export const useStudentRecordsStore = create<StudentRecordsState>((set, get) => 
       const record = get().records.find((r) => r.id === recordId);
       if (!record || !record.followUp) return;
       const updated = { ...record, followUpDone: !record.followUpDone };
-      await manageRecords.update(updated);
-      set((state) => ({
-        records: state.records.map((r) => (r.id === recordId ? updated : r)),
-      }));
+      const saved = await manageRecords.update({ before: record, after: updated });
+      set({ records: [...saved] });
     },
 
     toggleNeisReport: async (recordId) => {
       const record = get().records.find((r) => r.id === recordId);
       if (!record || record.category !== 'attendance') return;
       const updated = { ...record, reportedToNeis: !record.reportedToNeis };
-      await manageRecords.update(updated);
-      set((state) => ({
-        records: state.records.map((r) => (r.id === recordId ? updated : r)),
-      }));
+      const saved = await manageRecords.update({ before: record, after: updated });
+      set({ records: [...saved] });
     },
 
     toggleDocumentSubmitted: async (recordId) => {
@@ -331,10 +328,8 @@ export const useStudentRecordsStore = create<StudentRecordsState>((set, get) => 
           ? { documents: record.documents.map((d) => ({ ...d, submitted: nextSubmitted })) }
           : {}),
       };
-      await manageRecords.update(updated);
-      set((state) => ({
-        records: state.records.map((r) => (r.id === recordId ? updated : r)),
-      }));
+      const saved = await manageRecords.update({ before: record, after: updated });
+      set({ records: [...saved] });
     },
 
     toggleDocumentItem: async (recordId, kind) => {
@@ -354,10 +349,9 @@ export const useStudentRecordsStore = create<StudentRecordsState>((set, get) => 
           documents: next.documents,
           documentSubmitted: next.documentSubmitted,
         };
-        set((state) => ({
-          records: state.records.map((r) => (r.id === recordId ? updated : r)),
-        }));
-        await manageRecords.update(updated); // updatedAt 자동 스탬프 → 레코드 단위 병합 편승
+        // 변경 의도(before→after)로 저장 — 체인 덕에 다음 클릭은 저장 반영된 상태에서 계산된다.
+        const saved = await manageRecords.update({ before: record, after: updated });
+        set({ records: [...saved] });
       };
       const run = documentToggleChain.then(task, task);
       documentToggleChain = run.catch(() => undefined);
@@ -369,20 +363,22 @@ export const useStudentRecordsStore = create<StudentRecordsState>((set, get) => 
       const targets = get().records.filter(
         (r) => idSet.has(r.id) && r.category === 'attendance' && !r.documentSubmitted,
       );
+      if (targets.length === 0) return;
       // M6 불변식: 일괄 완료도 documents 전 종류를 제출 상태로 동기화
-      const updatedRecords = targets.map((r) => ({
-        ...r,
-        documentSubmitted: true,
-        ...(r.documents && r.documents.length > 0
-          ? { documents: r.documents.map((d) => ({ ...d, submitted: true })) }
-          : {}),
-      }));
       // 기록별 update() 병렬 실행은 같은 스냅샷을 서로 덮어써 마지막 쓰기만 남는다(codex QA) — 원자 일괄 저장.
-      await manageRecords.updateMany(updatedRecords);
-      const updatedById = new Map(updatedRecords.map((r) => [r.id, r]));
-      set((state) => ({
-        records: state.records.map((r) => updatedById.get(r.id) ?? r),
-      }));
+      const saved = await manageRecords.updateMany(
+        targets.map((r) => ({
+          before: r,
+          after: {
+            ...r,
+            documentSubmitted: true,
+            ...(r.documents && r.documents.length > 0
+              ? { documents: r.documents.map((d) => ({ ...d, submitted: true })) }
+              : {}),
+          },
+        })),
+      );
+      set({ records: [...saved] });
     },
 
     bulkMarkNeisReported: async (recordIds) => {
@@ -390,25 +386,21 @@ export const useStudentRecordsStore = create<StudentRecordsState>((set, get) => 
       const targets = get().records.filter(
         (r) => idSet.has(r.id) && r.category === 'attendance' && !r.reportedToNeis,
       );
-      const updatedRecords = targets.map((r) => ({ ...r, reportedToNeis: true }));
-      await manageRecords.updateMany(updatedRecords);
-      const updatedIds = new Set(updatedRecords.map((r) => r.id));
-      set((state) => ({
-        records: state.records.map((r) =>
-          updatedIds.has(r.id) ? { ...r, reportedToNeis: true } : r,
-        ),
-      }));
+      if (targets.length === 0) return;
+      const saved = await manageRecords.updateMany(
+        targets.map((r) => ({ before: r, after: { ...r, reportedToNeis: true } })),
+      );
+      set({ records: [...saved] });
     },
 
     bulkMarkFollowUpDone: async (recordIds) => {
       const idSet = new Set(recordIds);
       const targets = get().records.filter((r) => idSet.has(r.id) && r.followUp && !r.followUpDone);
-      const updatedRecords = targets.map((r) => ({ ...r, followUpDone: true }));
-      await manageRecords.updateMany(updatedRecords);
-      const updatedById = new Map(updatedRecords.map((r) => [r.id, r]));
-      set((state) => ({
-        records: state.records.map((r) => updatedById.get(r.id) ?? r),
-      }));
+      if (targets.length === 0) return;
+      const saved = await manageRecords.updateMany(
+        targets.map((r) => ({ before: r, after: { ...r, followUpDone: true } })),
+      );
+      set({ records: [...saved] });
     },
 
     setViewMode: (mode) => set({ viewMode: mode }),
@@ -556,8 +548,10 @@ export const useStudentRecordsStore = create<StudentRecordsState>((set, get) => 
         };
 
         if (existing) {
-          await manageRecords.update(record);
-          set((s) => ({ records: s.records.map((r) => (r.id === bridgeId ? record : r)) }));
+          // before=existing, after=재구성본 — 추적 플래그는 existing에서 승계돼 before==after라
+          // patch에서 빠지고(스탬프 없음), sync가 갱신한 fresh 값이 보존된다(B2 설계 강점).
+          const saved = await manageRecords.update({ before: existing, after: record });
+          set({ records: [...saved] });
         } else {
           await manageRecords.add(record);
           set((s) => ({ records: [...s.records, record] }));
@@ -625,11 +619,9 @@ export const useStudentRecordsStore = create<StudentRecordsState>((set, get) => 
         }
       }
 
-      // 3) 기록 레이어 업데이트
-      await manageRecords.update(updatedRecord);
-      set((s) => ({
-        records: s.records.map((r) => (r.id === updatedRecord.id ? updatedRecord : r)),
-      }));
+      // 3) 기록 레이어 업데이트 — before=입력 원본, after=usecase 재계산본(사용자 의도)
+      const saved = await manageRecords.update({ before: record, after: updatedRecord });
+      set({ records: [...saved] });
     },
 
     /**

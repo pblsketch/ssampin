@@ -66,8 +66,8 @@ describe('ManageStudentRecords 쓰기 경합 방지', () => {
     const manage = new ManageStudentRecords(repo);
 
     await manage.updateMany([
-      makeRecord('a', { reportedToNeis: true }),
-      makeRecord('b', { reportedToNeis: true }),
+      { before: makeRecord('a'), after: makeRecord('a', { reportedToNeis: true }) },
+      { before: makeRecord('b'), after: makeRecord('b', { reportedToNeis: true }) },
     ]);
 
     expect(repo.saveCount).toBe(1);
@@ -86,8 +86,8 @@ describe('ManageStudentRecords 쓰기 경합 방지', () => {
 
     // 직렬화가 없다면 두 호출 모두 같은 스냅샷을 읽어 a의 변경이 b의 쓰기에 덮인다
     await Promise.all([
-      manage.update(makeRecord('a', { reportedToNeis: true })),
-      manage.update(makeRecord('b', { reportedToNeis: true })),
+      manage.update({ before: makeRecord('a'), after: makeRecord('a', { reportedToNeis: true }) }),
+      manage.update({ before: makeRecord('b'), after: makeRecord('b', { reportedToNeis: true }) }),
     ]);
 
     const saved = repo.data!.records;
@@ -102,13 +102,14 @@ describe('ManageStudentRecords 쓰기 경합 방지', () => {
     // 토글 1: 나이스 반영 / 토글 2: 서류 제출 — 직렬화되면 둘 다 남는다.
     // (스토어 토글은 호출 시점 최신 상태를 읽어 만들므로, 여기서는 usecase 직렬화만 고정한다:
     //  두 번째 변이가 첫 변이 이후의 파일 스냅샷 위에서 수행되는지)
-    const first = manage.update(makeRecord('a', { reportedToNeis: true }));
-    const second = first.then(() =>
-      manage.update({
-        ...(repo.data!.records.find((r) => r.id === 'a') as StudentRecord),
-        documentSubmitted: true,
-      }),
-    );
+    const first = manage.update({
+      before: makeRecord('a', { documentSubmitted: false }),
+      after: makeRecord('a', { documentSubmitted: false, reportedToNeis: true }),
+    });
+    const second = first.then(() => {
+      const current = repo.data!.records.find((r) => r.id === 'a') as StudentRecord;
+      return manage.update({ before: current, after: { ...current, documentSubmitted: true } });
+    });
     await second;
 
     const saved = repo.data!.records.find((r) => r.id === 'a');
@@ -121,11 +122,14 @@ describe('ManageStudentRecords 쓰기 경합 방지', () => {
     const manage = new ManageStudentRecords(repo);
 
     repo.failNextSave = true;
-    await expect(manage.update(makeRecord('a', { reportedToNeis: true }))).rejects.toThrow(
-      'save failed (test)',
-    );
+    await expect(
+      manage.update({ before: makeRecord('a'), after: makeRecord('a', { reportedToNeis: true }) }),
+    ).rejects.toThrow('save failed (test)');
 
-    await manage.update(makeRecord('b', { reportedToNeis: true }));
+    await manage.update({
+      before: makeRecord('b'),
+      after: makeRecord('b', { reportedToNeis: true }),
+    });
     expect(repo.data!.records.find((r) => r.id === 'b')?.reportedToNeis).toBe(true);
     // 실패한 첫 건은 저장되지 않은 상태 그대로
     expect(repo.data!.records.find((r) => r.id === 'a')?.reportedToNeis).toBe(false);

@@ -1,9 +1,95 @@
-import type { StudentRecord, StudentRecordsData } from '@domain/entities/StudentRecord';
+import type {
+  StudentRecord,
+  StudentRecordsData,
+  FieldUpdatedAt,
+} from '@domain/entities/StudentRecord';
 import type { RecordCategoryItem } from '@domain/valueObjects/RecordCategory';
 import { DEFAULT_RECORD_CATEGORIES } from '@domain/valueObjects/RecordCategory';
 import type { IStudentRecordsRepository } from '@domain/repositories/IStudentRecordsRepository';
+import { deriveDocumentSubmitted } from '@domain/rules/attendanceDocumentPolicy';
 import { withFileLock } from '@usecases/shared/fileWriteLock';
 import { SYNC_FILE_KEYS } from '@usecases/sync/syncRegistry';
+
+/**
+ * update/updateMany에 넘기는 변경 의도 — before/after 모두 "호출 시점 화면 기준".
+ *
+ * 화면-화면 diff라 디스크 상태와 무관하게 "사용자가 실제로 바꾼 필드"만 추출된다 —
+ * 동기화 직후 화면이 낡아도, 안 건드린 필드는 before==after라 patch에서 빠져
+ * 디스크(fresh) 값이 보존된다(2026-07 QA B2: 디스크-input diff는 낡은 화면값을
+ * 사용자 변경으로 오인해 체크 부활을 강화했다 — 그 설계의 대체).
+ */
+export interface StudentRecordChange {
+  readonly before: StudentRecord;
+  readonly after: StudentRecord;
+}
+
+/** 시스템 관리 필드 — 사용자 의도(patch)에서 항상 제외(usecase가 관리). */
+const SYSTEM_FIELDS: ReadonlySet<string> = new Set([
+  'id',
+  'createdAt',
+  'updatedAt',
+  'fieldUpdatedAt',
+]);
+
+function fieldEquals(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (a === undefined || b === undefined) return false;
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+type MutableStudentRecord = { -readonly [K in keyof StudentRecord]?: StudentRecord[K] };
+
+function setField<K extends keyof StudentRecord>(
+  target: MutableStudentRecord,
+  key: K,
+  value: StudentRecord[K] | undefined,
+): void {
+  if (value === undefined) delete target[key];
+  else target[key] = value;
+}
+
+/**
+ * 변경 의도를 락 안의 fresh 레코드에 적용한다(F2 — 절대 SET, CAS 아님).
+ * - 바뀐 필드(before≠after)만 after 값으로 SET(after가 undefined면 필드 제거).
+ * - 안 바뀐 필드는 patch에서 빠져 fresh 값 보존(낡은 화면 통째 덮어쓰기 차단).
+ * - 추적 그룹(reportedToNeis / documents+documentSubmitted / followUp 3필드)이 바뀌면
+ *   해당 그룹만 fieldUpdatedAt에 now 스탬프 — 기존 맵은 지우지 않고 승계한다.
+ * - documentGroup 변경 시 documentSubmitted는 정본 deriveDocumentSubmitted로 재계산(H4).
+ */
+export function applyRecordChange(
+  fresh: StudentRecord,
+  change: StudentRecordChange,
+  now: string,
+): StudentRecord {
+  const { before, after } = change;
+  const keys = new Set([...Object.keys(before), ...Object.keys(after)]) as Set<keyof StudentRecord>;
+  const result: MutableStudentRecord = { ...fresh };
+  const changed = new Set<keyof StudentRecord>();
+
+  for (const key of keys) {
+    if (SYSTEM_FIELDS.has(key)) continue;
+    if (fieldEquals(before[key], after[key])) continue;
+    changed.add(key);
+    setField(result, key, after[key]);
+  }
+
+  const map: { -readonly [K in keyof FieldUpdatedAt]?: string } = {
+    ...(fresh.fieldUpdatedAt ?? {}),
+  };
+  if (changed.has('reportedToNeis')) map.reportedToNeis = now;
+  if (changed.has('documents') || changed.has('documentSubmitted')) {
+    map.documentGroup = now;
+    // H4 불변식 — 빈 배열은 "미존재"로 취급해 fallback 보존(원시 every 금지).
+    result.documentSubmitted = deriveDocumentSubmitted(result.documents, result.documentSubmitted);
+  }
+  if (changed.has('followUpDone') || changed.has('followUp') || changed.has('followUpDate')) {
+    map.followUpDone = now;
+  }
+
+  result.updatedAt = now;
+  if (Object.keys(map).length > 0) result.fieldUpdatedAt = map;
+  return result as StudentRecord;
+}
 
 export class ManageStudentRecords {
   /**
@@ -53,40 +139,48 @@ export class ManageStudentRecords {
     });
   }
 
-  update(updated: StudentRecord): Promise<void> {
-    return this.runExclusive(async () => {
-      const data = await this.studentRecordsRepository.getRecords();
-      const current = data?.records ?? [];
-      // 수정 시 updatedAt 갱신 — 동기화가 "가장 최근 수정본"을 채택해 플래그 편집이 되살아나지 않게 한다.
-      const stamped: StudentRecord = { ...updated, updatedAt: new Date().toISOString() };
-      const records = current.map((r) => (r.id === updated.id ? stamped : r));
-      await this.studentRecordsRepository.saveRecords({
-        records,
-        categories: data?.categories,
-      });
-    });
-  }
-
   /**
-   * 여러 기록을 한 번의 읽기→교체→쓰기로 원자 갱신 (일괄 처리 전용).
-   *
-   * 기록별 update()를 병렬로 돌리면 전부 같은 스냅샷에서 출발해 마지막 쓰기만 파일에
-   * 남는다 — 일괄 나이스/서류/후속조치 처리는 반드시 이 메서드를 쓸 것.
+   * 변경 의도(before→after)를 락 안의 fresh 레코드에 적용해 저장한다.
+   * 반환 = 저장된 전체 레코드(authoritative) — 호출자는 이것으로 화면 상태를 갱신한다(P6).
    */
-  updateMany(updatedList: readonly StudentRecord[]): Promise<void> {
-    if (updatedList.length === 0) return Promise.resolve();
+  update(change: StudentRecordChange): Promise<readonly StudentRecord[]> {
     return this.runExclusive(async () => {
       const data = await this.studentRecordsRepository.getRecords();
       const current = data?.records ?? [];
       const now = new Date().toISOString();
-      const stampedById = new Map(
-        updatedList.map((u) => [u.id, { ...u, updatedAt: now } as StudentRecord]),
+      const records = current.map((r) =>
+        r.id === change.after.id ? applyRecordChange(r, change, now) : r,
       );
-      const records = current.map((r) => stampedById.get(r.id) ?? r);
       await this.studentRecordsRepository.saveRecords({
         records,
         categories: data?.categories,
       });
+      return records;
+    });
+  }
+
+  /**
+   * 여러 변경 의도를 한 번의 읽기→적용→쓰기로 원자 갱신 (일괄 처리 전용).
+   *
+   * 기록별 update()를 병렬로 돌리면 전부 같은 스냅샷에서 출발해 마지막 쓰기만 파일에
+   * 남는다 — 일괄 나이스/서류/후속조치 처리는 반드시 이 메서드를 쓸 것.
+   */
+  updateMany(changes: readonly StudentRecordChange[]): Promise<readonly StudentRecord[]> {
+    if (changes.length === 0) return Promise.resolve([]);
+    return this.runExclusive(async () => {
+      const data = await this.studentRecordsRepository.getRecords();
+      const current = data?.records ?? [];
+      const now = new Date().toISOString();
+      const changeById = new Map(changes.map((c) => [c.after.id, c]));
+      const records = current.map((r) => {
+        const change = changeById.get(r.id);
+        return change ? applyRecordChange(r, change, now) : r;
+      });
+      await this.studentRecordsRepository.saveRecords({
+        records,
+        categories: data?.categories,
+      });
+      return records;
     });
   }
 

@@ -106,12 +106,21 @@ export const useMobileStudentRecordsStore = create<MobileStudentRecordsState>((s
       subcategory,
       content: memo ?? '',
       date,
-      createdAt: new Date().toISOString(),
+      createdAt: existing?.createdAt ?? new Date().toISOString(),
+      // 재구성 저장이 나이스 반영·서류 체크를 지우지 않게 승계 — before==after로 patch에서
+      // 빠져 fresh 값이 보존된다(데스크톱 bridgeHomeroomDayAttendance와 동일 계약).
+      ...(existing?.reportedToNeis !== undefined
+        ? { reportedToNeis: existing.reportedToNeis }
+        : {}),
+      ...(existing?.documents !== undefined ? { documents: existing.documents } : {}),
+      ...(existing?.documentSubmitted !== undefined
+        ? { documentSubmitted: existing.documentSubmitted }
+        : {}),
     };
 
     if (existing) {
-      await manageRecords.update(record);
-      set((s) => ({ records: s.records.map((r) => (r.id === bridgeId ? record : r)) }));
+      const saved = await manageRecords.update({ before: existing, after: record });
+      set({ records: [...saved] });
     } else {
       await manageRecords.add(record);
       set((s) => ({ records: [...s.records, record] }));
