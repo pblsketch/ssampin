@@ -79,8 +79,10 @@ describe('mergeStudentRecords — C1 항목 단위 병합', () => {
     expect(result.content).toBe('수정된 내용'); // 비추적 필드는 record-LWW(BASE=A) 유지
   });
 
-  it('③ (b)분기: 한쪽 맵 부재(구버전 드롭)면 record.updatedAt 백스톱으로 판정한다', () => {
-    // 구버전(맵 없음)이 T6에 편집 — 신버전 스탬프 T3보다 최신이면 구버전 승리(P5)
+  it('③ 한쪽 맵 부재(구버전 드롭)면 항목 오버레이 없이 record-LWW로 폴백한다', () => {
+    // mapless 쪽의 updatedAt을 항목 백스톱으로 쓰면 무관 편집이 LWW 승자의 진짜
+    // 항목 스탬프를 이겨 P4가 깨진다(리뷰 스윕 S2) — 맵 부재 페어는 LWW 폴백.
+    // 구버전(맵 없음)이 T6에 편집 → record-LWW 승자로서 통째 승리(P5 보호는 동일).
     const oldDevice = rec({ reportedToNeis: true, updatedAt: T(6) }); // 맵 자체 부재
     const newDevice = rec({
       reportedToNeis: false,
@@ -89,7 +91,24 @@ describe('mergeStudentRecords — C1 항목 단위 병합', () => {
     });
 
     const result = mergedRecord(newDevice, oldDevice);
-    expect(result.reportedToNeis).toBe(true); // 구버전 편집(T6)이 최신 → 승리
+    expect(result.reportedToNeis).toBe(true); // 구버전 편집(T6)이 LWW 승자 → 통째 승리
+    expect(result.fieldUpdatedAt).toBeUndefined(); // 항목 오버레이 없음(base 그대로)
+  });
+
+  it('③-b 맵 보유 LWW 승자는 mapless 패자의 무관 편집에 항목을 뺏기지 않는다 (스윕 S2 역검증)', () => {
+    // 신버전 N: T3 나이스 체크(map) 후 T9 내용 편집(updatedAt=T9, LWW 승자).
+    const withMap = rec({
+      reportedToNeis: true,
+      content: '최신 내용',
+      updatedAt: T(9),
+      fieldUpdatedAt: { reportedToNeis: T(3) },
+    });
+    // mapless L: 낡은 미체크 상태로 T6에 무관 편집만 함(LWW 패자).
+    const mapless = rec({ reportedToNeis: false, updatedAt: T(6) });
+
+    // (b)백스톱이 있었다면 L의 T6 > N의 항목 스탬프 T3로 체크가 풀렸다(P4 위반).
+    const result = mergedRecord(withMap, mapless);
+    expect(result.reportedToNeis).toBe(true); // record-LWW 폴백 — 승자 통째 유지
   });
 
   it('⑤ P2: 체크 해제가 더 최근이면 해제가 유지된다 (9ce4c1cf 회귀 금지)', () => {
@@ -210,7 +229,7 @@ describe('mergeStudentRecords — 잔여 명시(R1/R1-c, 손실 아님)', () => 
     expect(result.reportedToNeis).toBe(false);
   });
 
-  it('R1-c: 구버전(map-drop)이 무관 편집만 해도 updatedAt 백스톱으로 체크가 부활할 수 있다 (record-LWW 동일 결과 — P4 바닥)', () => {
+  it('R1-c: 구버전(map-drop)의 무관 편집이 LWW 승자가 되면 체크가 부활할 수 있다 (record-LWW와 정확히 동일 — P4 바닥)', () => {
     // 구버전: 낡은 체크(true)를 가진 채 내용만 T7에 편집(맵 드롭)
     const oldDevice = rec({ reportedToNeis: true, content: '무관 편집', updatedAt: T(7) });
     // 신버전: T5에 체크 해제
@@ -221,7 +240,7 @@ describe('mergeStudentRecords — 잔여 명시(R1/R1-c, 손실 아님)', () => 
     });
 
     const result = mergedRecord(newDevice, oldDevice);
-    // (b)백스톱: 구버전 유효시각=T7 > T5 → 체크 부활. record-LWW였어도 같은 결과(P4 유지).
+    // 맵 부재 페어 = record-LWW 폴백: 구버전(T7)이 통째 승자 → 체크 부활(오늘 동작과 동일).
     expect(result.reportedToNeis).toBe(true);
   });
 });
@@ -289,7 +308,7 @@ describe('applyRecordChange — before→after 의도 적용(B2)', () => {
     expect(result.updatedAt).toBe(T(7));
   });
 
-  it('바뀐 추적 필드는 after 값으로 절대 SET(F2 — CAS 아님)되고 해당 그룹만 스탬프된다', () => {
+  it('바뀐 추적 필드는 after 값으로 절대 SET(F2 — CAS 아님)되고 해당 그룹만 now 스탬프된다', () => {
     const before = rec({ reportedToNeis: false });
     const after = { ...before, reportedToNeis: true };
     const fresh = rec({ reportedToNeis: true }); // 디스크가 이미 true여도(불일치) 의도대로 SET
@@ -297,7 +316,9 @@ describe('applyRecordChange — before→after 의도 적용(B2)', () => {
     const result = applyRecordChange(fresh, { before, after }, T(7));
     expect(result.reportedToNeis).toBe(true);
     expect(result.fieldUpdatedAt?.reportedToNeis).toBe(T(7)); // 사용자 의도 시각 기록
-    expect(result.fieldUpdatedAt?.documentGroup).toBeUndefined(); // 무관 그룹 미스탬프
+    // 무관 그룹은 now가 아니라 백필값(맵 최초 신설 — 직전 updatedAt 없으면 createdAt).
+    expect(result.fieldUpdatedAt?.documentGroup).toBe(T(1));
+    expect(result.fieldUpdatedAt?.followUpDone).toBe(T(1));
   });
 
   it('documents 변경 시 documentSubmitted는 deriveDocumentSubmitted로 재계산된다 (H4 — 빈 배열 함정)', () => {
@@ -319,5 +340,53 @@ describe('applyRecordChange — before→after 의도 적용(B2)', () => {
     const result = applyRecordChange(rec(), { before, after }, T(7));
     expect(result.followUpDate).toBe('2026-07-20');
     expect(result.fieldUpdatedAt?.followUpDone).toBe(T(7));
+  });
+
+  it('완전 no-op(before==after)이면 fresh를 그대로 반환한다 — updatedAt 인플레이션 차단', () => {
+    // 그리드 자동저장이 무변경 미러를 재기록해도 updatedAt이 오르면 record-LWW·
+    // (b)백스톱 판정을 오염시켜 상대 기기의 진짜 편집을 이긴다(코드리뷰 E#2).
+    const before = rec({ content: '동일' });
+    const after = { ...before };
+    const fresh = rec({ content: '동일', updatedAt: T(3) });
+
+    const result = applyRecordChange(fresh, { before, after }, T(9));
+    expect(result).toBe(fresh); // 참조까지 동일 — 쓰기 자체가 무의미함을 표현
+    expect(result.updatedAt).toBe(T(3));
+  });
+
+  it('맵 최초 신설 시 미변경 그룹을 직전 updatedAt으로 백필한다 — 업그레이드 경계 P4 보호', () => {
+    // 구버전 시절 나이스 체크(updatedAt=T5, 맵 없음) 후 신버전에서 서류만 체크하면,
+    // 백필 없이는 reportedToNeis 유효시각이 createdAt(T1)으로 강등돼 record-LWW라면
+    // 보호됐을 구 편집이 상대의 더 낡은 값에 진다(코드리뷰 A#3).
+    const fresh = rec({ reportedToNeis: true, updatedAt: T(5) }); // 맵 없음(구버전 편집분)
+    const before = { ...fresh };
+    const after = { ...fresh, documentSubmitted: true };
+
+    const result = applyRecordChange(fresh, { before, after }, T(7));
+    expect(result.fieldUpdatedAt?.documentGroup).toBe(T(7)); // 변경 그룹 = now
+    expect(result.fieldUpdatedAt?.reportedToNeis).toBe(T(5)); // 미변경 그룹 = 직전 updatedAt 백필
+    expect(result.fieldUpdatedAt?.followUpDone).toBe(T(5));
+  });
+
+  it('무관 편집만 해도 맵이 백필 신설되어 (b)백스톱이 상대의 항목 편집을 못 이긴다', () => {
+    // 기기 A: 추적 필드 무편집 레코드에 내용만 T9 수정 → 맵 백필(직전 updatedAt=T2).
+    const freshA = rec({ updatedAt: T(2) });
+    const editedA = applyRecordChange(
+      freshA,
+      { before: { ...freshA }, after: { ...freshA, content: '내용 수정' } },
+      T(9),
+    );
+    expect(editedA.fieldUpdatedAt?.reportedToNeis).toBe(T(2)); // 백필 — updatedAt(T9) 아님
+
+    // 기기 B: T5에 나이스 체크. 병합 시 A(T9)가 record-LWW BASE지만
+    // reportedToNeis는 A 백필(T2) < B(T5) → B의 체크가 생존한다.
+    const deviceB = rec({
+      reportedToNeis: true,
+      updatedAt: T(5),
+      fieldUpdatedAt: { reportedToNeis: T(5) },
+    });
+    const merged = mergedRecord(editedA, deviceB);
+    expect(merged.reportedToNeis).toBe(true);
+    expect(merged.content).toBe('내용 수정'); // 비추적 필드는 BASE(A) 유지
   });
 });

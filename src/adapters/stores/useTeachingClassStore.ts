@@ -137,6 +137,16 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
   const manageProgress = new ManageCurriculumProgress(teachingClassRepository);
   const manageAttendance = new ManageAttendance(teachingClassRepository);
 
+  // 저장 계열 공통 가드 — 로드 보장 + 로드 실패 시 쓰기 차단(빈 스냅샷 기반 유실 방지).
+  const ensureWritable = async (): Promise<boolean> => {
+    if (!get().loaded) await get().load();
+    if (get().loadFailed) {
+      console.warn('[TeachingClassStore] 데이터 로드 실패 상태에서 저장 차단');
+      return false;
+    }
+    return true;
+  };
+
   /** 좌석을 그룹 내 모든 클래스에 전파하여 저장. 대상 클래스가 단일이면 단일 업데이트. */
   const applySeatingToGroup = async (
     classId: string,
@@ -356,15 +366,11 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
       // 락·intent 전환 범위는 record-merge 도메인(attendance 등)이다(R5 잔여, 후속 PDCA).
       const progressToKeep = get().progressEntries.filter((e) => e.classId !== id);
 
-      // 그룹 내 마지막 클래스 삭제 시: 그룹 attendance records도 정리
-      const remaining = groupId
-        ? get().classes.filter((c) => c.id !== id && c.groupId === groupId)
-        : [];
-      const purgeGroupId = groupId && remaining.length === 0 ? groupId : undefined;
-
       await manageProgress.saveAll(progressToKeep, true);
-      // 출결은 변경 의도만 넘긴다 — 삭제 대상 계산은 락 안 fresh 스냅샷에서(P6).
-      const savedAttendance = await manageAttendance.deleteByClass(id, purgeGroupId);
+      // 출결은 변경 의도만 넘긴다 — 삭제 대상 계산과 "그룹 마지막 학급" 판정 모두
+      // usecase가 락 안 fresh 데이터로 수행한다(in-memory 스냅샷 판정은 동기화로
+      // 방금 추가된 그룹 학급을 못 보고 그룹 출결을 오삭제할 수 있다).
+      const savedAttendance = await manageAttendance.deleteByClass(id, groupId);
       set((state) => ({
         classes: state.classes.filter((c) => c.id !== id),
         progressEntries: progressToKeep,
@@ -648,13 +654,7 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
     },
 
     saveAttendanceRecord: async (record) => {
-      // 데이터 유실 방지: 로드가 끝나지 않은 상태(attendanceRecords 빈 스냅샷)에서
-      // 저장하면 기존 기록을 덮어써 유실될 수 있으므로 먼저 로드를 보장한다.
-      if (!get().loaded) await get().load();
-      if (get().loadFailed) {
-        console.warn('[TeachingClassStore] 데이터 로드 실패 상태에서 저장 차단');
-        return;
-      }
+      if (!(await ensureWritable())) return;
       // cls의 groupId 주입
       const cls = get().classes.find((c) => c.id === record.classId);
       const finalRecord: AttendanceRecord = cls?.groupId
@@ -680,13 +680,7 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
     },
 
     saveDayAttendance: async (classId, date, recordsByPeriod) => {
-      // 데이터 유실 방지: 로드가 끝나지 않은 상태에서 하루치 통째 교체를 수행하면
-      // 아직 못 읽은 기존 기록이 사라진다. 먼저 로드를 보장한다.
-      if (!get().loaded) await get().load();
-      if (get().loadFailed) {
-        console.warn('[TeachingClassStore] 데이터 로드 실패 상태에서 저장 차단');
-        return;
-      }
+      if (!(await ensureWritable())) return;
       const cls = get().classes.find((c) => c.id === classId);
       const groupId = cls?.groupId;
 
@@ -702,12 +696,7 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
     },
 
     upsertStudentAttendanceEntries: async ({ classId, date, studentNumbers, recordsByPeriod }) => {
-      // 데이터 유실 방지: 로드 보장(다른 저장 액션과 동일 가드).
-      if (!get().loaded) await get().load();
-      if (get().loadFailed) {
-        console.warn('[TeachingClassStore] 데이터 로드 실패 상태에서 저장 차단');
-        return;
-      }
+      if (!(await ensureWritable())) return;
       const cls = get().classes.find((c) => c.id === classId);
       const saved = await manageAttendance.upsertStudentEntries({
         classId,

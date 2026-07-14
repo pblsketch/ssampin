@@ -3,6 +3,7 @@ import type {
   StudentRecordsData,
   FieldUpdatedAt,
 } from '@domain/entities/StudentRecord';
+import { TRACKED_GROUP_FIELDS, TRACKED_GROUPS } from '@domain/entities/StudentRecord';
 import type { RecordCategoryItem } from '@domain/valueObjects/RecordCategory';
 import { DEFAULT_RECORD_CATEGORIES } from '@domain/valueObjects/RecordCategory';
 import type { IStudentRecordsRepository } from '@domain/repositories/IStudentRecordsRepository';
@@ -31,10 +32,26 @@ const SYSTEM_FIELDS: ReadonlySet<string> = new Set([
   'fieldUpdatedAt',
 ]);
 
+/** 키 정렬 직렬화 — 외부 작성 경로(AI 브릿지 등)의 객체 키 순서 차이가 위양성 diff가 되지 않게. */
+function stableStringify(value: unknown): string {
+  return JSON.stringify(value, (_key, v: unknown) => {
+    if (v && typeof v === 'object' && !Array.isArray(v)) {
+      const obj = v as Record<string, unknown>;
+      return Object.keys(obj)
+        .sort()
+        .reduce<Record<string, unknown>>((acc, k) => {
+          acc[k] = obj[k];
+          return acc;
+        }, {});
+    }
+    return v;
+  });
+}
+
 function fieldEquals(a: unknown, b: unknown): boolean {
   if (a === b) return true;
   if (a === undefined || b === undefined) return false;
-  return JSON.stringify(a) === JSON.stringify(b);
+  return stableStringify(a) === stableStringify(b);
 }
 
 type MutableStudentRecord = { -readonly [K in keyof StudentRecord]?: StudentRecord[K] };
@@ -52,8 +69,14 @@ function setField<K extends keyof StudentRecord>(
  * 변경 의도를 락 안의 fresh 레코드에 적용한다(F2 — 절대 SET, CAS 아님).
  * - 바뀐 필드(before≠after)만 after 값으로 SET(after가 undefined면 필드 제거).
  * - 안 바뀐 필드는 patch에서 빠져 fresh 값 보존(낡은 화면 통째 덮어쓰기 차단).
- * - 추적 그룹(reportedToNeis / documents+documentSubmitted / followUp 3필드)이 바뀌면
- *   해당 그룹만 fieldUpdatedAt에 now 스탬프 — 기존 맵은 지우지 않고 승계한다.
+ * - **완전 no-op(바뀐 필드 0)이면 fresh를 그대로 반환** — updatedAt도 안 올린다.
+ *   무변경 재저장(그리드 자동저장의 미러 재기록 등)이 record-LWW·(b)백스톱 판정을
+ *   오염시켜 상대 기기의 진짜 편집을 이기는 채널을 차단한다.
+ * - 추적 그룹(TRACKED_GROUP_FIELDS 정본)이 바뀌면 해당 그룹만 fieldUpdatedAt에 now 스탬프.
+ *   **맵 최초 신설 시 미변경 그룹 키를 "이번 편집 직전 updatedAt"으로 백필**한다 —
+ *   스키마 도입 전(구버전 시절) 편집이 (c)createdAt으로 강등돼 record-LWW 바닥(P4)이
+ *   깨지는 업그레이드 경계와, 무관 편집만 한 레코드의 (b)백스톱이 상대의 항목 편집을
+ *   이기는 경로를 함께 봉합한다(백필값 ≤ updatedAt이라 P4 유지).
  * - documentGroup 변경 시 documentSubmitted는 정본 deriveDocumentSubmitted로 재계산(H4).
  */
 export function applyRecordChange(
@@ -73,17 +96,25 @@ export function applyRecordChange(
     setField(result, key, after[key]);
   }
 
+  if (changed.size === 0) return fresh;
+
+  const creatingMap = fresh.fieldUpdatedAt === undefined;
   const map: { -readonly [K in keyof FieldUpdatedAt]?: string } = {
     ...(fresh.fieldUpdatedAt ?? {}),
   };
-  if (changed.has('reportedToNeis')) map.reportedToNeis = now;
+  const backfill = fresh.updatedAt ?? fresh.createdAt;
+
+  for (const group of TRACKED_GROUPS) {
+    const groupChanged = TRACKED_GROUP_FIELDS[group].some((field) => changed.has(field));
+    if (groupChanged) {
+      map[group] = now;
+    } else if (creatingMap) {
+      map[group] = backfill;
+    }
+  }
   if (changed.has('documents') || changed.has('documentSubmitted')) {
-    map.documentGroup = now;
     // H4 불변식 — 빈 배열은 "미존재"로 취급해 fallback 보존(원시 every 금지).
     result.documentSubmitted = deriveDocumentSubmitted(result.documents, result.documentSubmitted);
-  }
-  if (changed.has('followUpDone') || changed.has('followUp') || changed.has('followUpDate')) {
-    map.followUpDone = now;
   }
 
   result.updatedAt = now;
@@ -92,19 +123,15 @@ export function applyRecordChange(
 }
 
 export class ManageStudentRecords {
-  /**
-   * lockKey — 파일 쓰기 락 도메인 키. 기본값 = SYNC_FILE_KEYS.studentRecords 정본.
-   * per-instance 체인이 아니라 전역 파일 락(withFileLock)이어야 SyncFromCloud 병합
-   * 쓰기·cascade·마이그레이션과 같은 락 도메인에 들어온다 — 인스턴스별 체인은
-   * sync vs 사용자 저장 경합(2026-07 QA 재현)을 못 막는다.
-   */
-  constructor(
-    private readonly studentRecordsRepository: IStudentRecordsRepository,
-    private readonly lockKey: string = SYNC_FILE_KEYS.studentRecords,
-  ) {}
+  constructor(private readonly studentRecordsRepository: IStudentRecordsRepository) {}
 
   /**
    * 쓰기 직렬화 — 모든 변이가 "읽기→가공→쓰기"를 통째로 파일 락 안에서 수행한다.
+   *
+   * 락 키는 SYNC_FILE_KEYS 정본을 직접 사용한다(주입 없음) — 전역 파일 락이어야
+   * SyncFromCloud 병합 쓰기·cascade·마이그레이션과 같은 락 도메인에 들어오고,
+   * 임의 문자열 주입 지점을 남기면 오타 키가 별개 락 도메인을 만들어 직렬화가
+   * 조용히 깨진다(fileWriteLock 규율).
    *
    * 이 usecase의 변이는 전부 파일 전체를 읽어 일부를 바꾸고 전체를 다시 쓰는 구조라,
    * 병렬 실행되면 서로의 스냅샷을 덮어써 마지막 쓰기만 남는다(2026-07 codex QA critical —
@@ -113,7 +140,7 @@ export class ManageStudentRecords {
    * 이전 작업의 실패는 체인에서 격리되어 다음 작업을 막지 않는다(호출자에게는 그대로 전파).
    */
   private runExclusive<T>(fn: () => Promise<T>): Promise<T> {
-    return withFileLock(this.lockKey, fn);
+    return withFileLock(SYNC_FILE_KEYS.studentRecords, fn);
   }
 
   /* ─── 기록 CRUD ────────────────────────────────────── */
@@ -272,12 +299,15 @@ export class ManageStudentRecords {
             : r.tags.map((t) => (t === oldTag ? newTag : t));
         // 중복 제거(치환 시 newTag 가 이미 있던 경우) + 빈 배열이면 undefined
         const deduped = replaced.filter((t, i, a) => a.indexOf(t) === i);
-        // 태그 편집도 수정 시각을 갱신해 동기화 병합이 최신본으로 인식하게 한다.
-        return {
-          ...r,
-          tags: deduped.length > 0 ? deduped : undefined,
-          updatedAt: now,
+        // 스탬프 규율 단일화: 직접 updatedAt만 찍지 않고 applyRecordChange를 경유 —
+        // mapless 레코드는 맵 백필까지 함께 이뤄져, 태그 개명의 updatedAt 상승이
+        // 상대 기기의 항목 편집을 이기는 창이 열리지 않는다(코드리뷰 스윕 S3).
+        const { tags: _oldTags, ...withoutTags } = r;
+        const after: StudentRecord = {
+          ...withoutTags,
+          ...(deduped.length > 0 ? { tags: deduped } : {}),
         };
+        return applyRecordChange(r, { before: r, after }, now);
       });
       if (affected === 0) return { records: current, affected: 0 };
       // 단일 영속(envelope 보존) — categories 등 기존 봉투 유지.

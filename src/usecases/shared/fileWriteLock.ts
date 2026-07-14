@@ -14,6 +14,10 @@
  *   기다려 교착한다(ManageStudentRecords.saveCategoriesUnsafe 전례). 락은 정확히
  *   한 계층에서만 획득하고, 내부 로직은 -Unsafe 변형으로 분리한다.
  * - 이전 작업의 실패는 체인에서 격리되어 다음 작업을 막지 않는다(호출자에게는 그대로 전파).
+ * - **단일 JS 컨텍스트 전제**: chains는 렌더러 모듈 스코프라 별도 BrowserWindow·main
+ *   프로세스와는 직렬화되지 않는다. 현재 다른 쓰기 주체 없음(위젯/피커=3도메인 미기록,
+ *   브릿지=앱 실행 중 loopback 강제, main=읽기 전용 백업). 다른 컨텍스트에 3도메인
+ *   쓰기 경로를 추가하려면 main 단 CAS(계획 R5 후속)를 먼저 도입할 것.
  */
 
 const chains = new Map<string, Promise<unknown>>();

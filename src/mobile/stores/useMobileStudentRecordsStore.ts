@@ -99,7 +99,13 @@ export const useMobileStudentRecordsStore = create<MobileStudentRecordsState>((s
 
     const typeLabel = ATTENDANCE_STATUS_LABEL[status];
     const subcategory = reason ? `${typeLabel} (${reason})` : typeLabel;
+    // existing 기반 부분 갱신 — 승계 목록을 손으로 고르면 followUp/tags 같은 필드가
+    // after에서 빠져 before→after diff가 "삭제 의도"로 오인한다(데스크톱 브릿지와 동일 계약).
+    // 교시 상세(attendancePeriods)는 모바일이 하루 단위 상태로 재기록하므로 의도적으로
+    // 제외한다(낡은 교시 상세가 새 하루 상태와 불일치하게 남지 않게).
+    const { attendancePeriods: _stale, ...existingBase } = existing ?? ({} as StudentRecord);
     const record: StudentRecord = {
+      ...existingBase,
       id: bridgeId,
       studentId,
       category: 'attendance',
@@ -107,15 +113,6 @@ export const useMobileStudentRecordsStore = create<MobileStudentRecordsState>((s
       content: memo ?? '',
       date,
       createdAt: existing?.createdAt ?? new Date().toISOString(),
-      // 재구성 저장이 나이스 반영·서류 체크를 지우지 않게 승계 — before==after로 patch에서
-      // 빠져 fresh 값이 보존된다(데스크톱 bridgeHomeroomDayAttendance와 동일 계약).
-      ...(existing?.reportedToNeis !== undefined
-        ? { reportedToNeis: existing.reportedToNeis }
-        : {}),
-      ...(existing?.documents !== undefined ? { documents: existing.documents } : {}),
-      ...(existing?.documentSubmitted !== undefined
-        ? { documentSubmitted: existing.documentSubmitted }
-        : {}),
     };
 
     if (existing) {

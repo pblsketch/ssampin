@@ -137,9 +137,10 @@ describe('ManageObservations 커스텀 태그·분류 intent (A2c)', () => {
   });
 });
 
-/** ManageAttendance용 최소 가짜 저장소 — 출결 읽기/쓰기만 구현. */
+/** ManageAttendance용 최소 가짜 저장소 — 출결 읽기/쓰기 + 학급 목록(그룹 판정용). */
 class FakeAttendanceRepo {
   data: AttendanceData | null = null;
+  classes: { id: string; groupId?: string }[] | null = null;
   async getAttendance(): Promise<AttendanceData | null> {
     await sleep(3);
     return this.data ? (JSON.parse(JSON.stringify(this.data)) as AttendanceData) : null;
@@ -147,6 +148,9 @@ class FakeAttendanceRepo {
   async saveAttendance(data: AttendanceData): Promise<void> {
     await sleep(2);
     this.data = data;
+  }
+  async getClasses(): Promise<{ classes: { id: string; groupId?: string }[] } | null> {
+    return this.classes ? { classes: this.classes } : null;
   }
 }
 
@@ -191,7 +195,7 @@ describe('ManageAttendance 락 배선 (A2a)', () => {
     expect(dayRec?.students[0]?.status).toBe('absent');
   });
 
-  it('attendance: add 두 건이 겹쳐도 직렬화되어 둘 다 저장된다', async () => {
+  it('attendance: upsertRecord 두 건이 겹쳐도 직렬화되어 둘 다 저장된다', async () => {
     const repo = new FakeAttendanceRepo();
     const manage = new ManageAttendance(repo as unknown as ITeachingClassRepository);
 
@@ -202,9 +206,100 @@ describe('ManageAttendance 락 배선 (A2a)', () => {
       students: [{ number: 1, status: 'late' }],
     });
 
-    await Promise.all([manage.add(rec(1)), manage.add(rec(2))]);
+    await Promise.all([manage.upsertRecord(rec(1)), manage.upsertRecord(rec(2))]);
 
     expect(repo.data?.records).toHaveLength(2);
+  });
+
+  it('upsertRecord는 그룹 키를 존중한다 — 같은 classId의 그룹 레코드를 비그룹 저장이 덮지 않는다', async () => {
+    const repo = new FakeAttendanceRepo();
+    repo.data = {
+      records: [
+        {
+          classId: 'class-1',
+          groupId: 'group-G',
+          date: '2026-07-14',
+          period: 1,
+          students: [{ number: 9, status: 'absent' }],
+        },
+      ],
+    };
+    const manage = new ManageAttendance(repo as unknown as ITeachingClassRepository);
+
+    await manage.upsertRecord({
+      classId: 'class-1',
+      date: '2026-07-14',
+      period: 1,
+      students: [{ number: 1, status: 'late' }],
+    });
+
+    // 그룹 레코드는 보존되고 비그룹 레코드가 별도로 추가된다(키 체계 분리).
+    expect(repo.data?.records).toHaveLength(2);
+    expect(repo.data?.records.some((r) => r.groupId === 'group-G')).toBe(true);
+  });
+
+  it('upsertRecord는 groupId 미주입 호출에 fresh 학급 목록의 그룹 키를 폴백 주입한다 (스윕 S4)', async () => {
+    const repo = new FakeAttendanceRepo();
+    repo.classes = [{ id: 'class-1', groupId: 'group-G' }]; // class-1은 그룹 소속
+    repo.data = {
+      records: [
+        {
+          classId: 'class-1',
+          groupId: 'group-G',
+          date: '2026-07-14',
+          period: 1,
+          students: [{ number: 9, status: 'absent' }],
+        },
+      ],
+    };
+    const manage = new ManageAttendance(repo as unknown as ITeachingClassRepository);
+
+    // 모바일처럼 groupId 없이 저장 — 주입 없으면 비그룹 레코드가 이중화된다.
+    await manage.upsertRecord({
+      classId: 'class-1',
+      date: '2026-07-14',
+      period: 1,
+      students: [{ number: 1, status: 'late' }],
+    });
+
+    expect(repo.data?.records).toHaveLength(1); // 그룹 레코드가 교체됨(이중화 없음)
+    expect(repo.data?.records[0]?.groupId).toBe('group-G');
+    expect(repo.data?.records[0]?.students[0]?.number).toBe(1);
+  });
+
+  it('upsertStudentEntries: 같은 교시에 그룹+레거시 비그룹 레코드가 공존해도 비대상 학생이 유실되지 않는다', async () => {
+    const repo = new FakeAttendanceRepo();
+    repo.data = {
+      records: [
+        {
+          classId: 'class-1',
+          date: '2026-07-14',
+          period: 1,
+          students: [{ number: 1, status: 'absent' }], // 레거시 비그룹
+        },
+        {
+          classId: 'class-1',
+          groupId: 'group-G',
+          date: '2026-07-14',
+          period: 1,
+          students: [{ number: 2, status: 'late' }], // 그룹 레코드
+        },
+      ],
+    };
+    const manage = new ManageAttendance(repo as unknown as ITeachingClassRepository);
+
+    // 그룹 문맥에서 학생 3만 부분 갱신 — Map 단일 키로 접으면 한 레코드가 통째 드롭됐다.
+    await manage.upsertStudentEntries({
+      classId: 'class-1',
+      groupId: 'group-G',
+      date: '2026-07-14',
+      studentNumbers: new Set([3]),
+      recordsByPeriod: new Map([[1, [{ number: 3, status: 'earlyLeave' }]]]),
+    });
+
+    const period1 = repo.data?.records.filter((r) => r.period === 1) ?? [];
+    const numbers = period1.flatMap((r) => r.students.map((s) => s.number)).sort();
+    expect(numbers).toEqual([1, 2, 3]); // 두 레코드의 기존 학생 전원 보존 + 대상 학생 추가
   });
 
   it('intra-period 다학생: 같은 교시의 두 학생 부분 갱신이 겹쳐도 둘 다 살아남는다 (QA F3 역검증)', async () => {

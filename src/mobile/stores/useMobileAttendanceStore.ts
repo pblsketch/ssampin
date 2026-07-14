@@ -48,18 +48,11 @@ export const useMobileAttendanceStore = create<MobileAttendanceState>((set, get)
   },
 
   saveRecord: async (record) => {
-    await manageAttendance.saveRecord(record);
-    // 로컬 상태도 업데이트
-    const records = [...get().records];
-    const idx = records.findIndex(
-      (r) => r.classId === record.classId && r.date === record.date && r.period === record.period,
-    );
-    if (idx >= 0) {
-      records[idx] = record;
-    } else {
-      records.push(record);
-    }
-    set({ records });
+    // 그룹 키 인지 upsert 경유 — 구 saveRecord는 (classId,date,period)만 매치해
+    // 같은 classId의 그룹 레코드를 그룹 키 없는 레코드로 통째 교체(그룹 출결 소실
+    // +툼스톤 전파)했다. 화면 상태는 저장 결과(반환값)로 갱신한다(P6).
+    const saved = await manageAttendance.upsertRecord(record);
+    set({ records: [...saved] });
     useMobileDriveSyncStore.getState().triggerSaveSync();
   },
 }));

@@ -98,37 +98,6 @@ export class ManageAttendance {
     );
   }
 
-  async add(record: AttendanceRecord): Promise<void> {
-    // 읽기→조립→쓰기 전체를 파일 락 안에서 — 쓰기만 감싸면 낡은 스냅샷 위라 무의미.
-    return withFileLock(SYNC_FILE_KEYS.attendance, async () => {
-      const data = await this.repository.getAttendance();
-      const records = data?.records ?? [];
-
-      await this.repository.saveAttendance(buildAttendanceSaveData(data, [...records, record]));
-    });
-  }
-
-  async saveRecord(record: AttendanceRecord): Promise<void> {
-    return withFileLock(SYNC_FILE_KEYS.attendance, async () => {
-      const data = await this.repository.getAttendance();
-      const records = data?.records ?? [];
-
-      const exists = records.some(
-        (r) => r.classId === record.classId && r.date === record.date && r.period === record.period,
-      );
-
-      const replaced: readonly AttendanceRecord[] = exists
-        ? records.map((r) =>
-            r.classId === record.classId && r.date === record.date && r.period === record.period
-              ? record
-              : r,
-          )
-        : [...records, record];
-
-      await this.repository.saveAttendance(buildAttendanceSaveData(data, replaced));
-    });
-  }
-
   /**
    * 특정 학급의 하루치 모든 교시 레코드를 반환한다.
    */
@@ -162,12 +131,21 @@ export class ManageAttendance {
   /** 단건 upsert(그룹 키 지원) — 같은 키 레코드는 교체, 없으면 추가. */
   async upsertRecord(record: AttendanceRecord): Promise<readonly AttendanceRecord[]> {
     return withFileLock(SYNC_FILE_KEYS.attendance, async () => {
+      // groupId 미주입 호출(모바일 등)은 fresh 학급 목록에서 폴백 주입 — 그룹 학급의
+      // 출결이 비그룹 키로 저장되면 같은 (학급,날짜,교시)에 상충 레코드가 이중화된다(스윕 S4).
+      let finalRecord = record;
+      if (!record.groupId) {
+        const classesData = await this.repository.getClasses();
+        const cls = classesData?.classes.find((c) => c.id === record.classId);
+        if (cls?.groupId) finalRecord = { ...record, groupId: cls.groupId };
+      }
+
       const data = await this.repository.getAttendance();
       const records = data?.records ?? [];
-      const exists = records.some((r) => ManageAttendance.matchesKey(r, record));
+      const exists = records.some((r) => ManageAttendance.matchesKey(r, finalRecord));
       const replaced: readonly AttendanceRecord[] = exists
-        ? records.map((r) => (ManageAttendance.matchesKey(r, record) ? record : r))
-        : [...records, record];
+        ? records.map((r) => (ManageAttendance.matchesKey(r, finalRecord) ? finalRecord : r))
+        : [...records, finalRecord];
       const saveData = buildAttendanceSaveData(data, replaced);
       await this.repository.saveAttendance(saveData);
       return saveData.records;
@@ -213,6 +191,15 @@ export class ManageAttendance {
         }
       }
 
+      // 관측성: 기존 기록이 있던 날을 통째로 비우면 툼스톤으로 삭제가 전 기기에
+      // 전파된다 — 상태 리셋 버그로 빈 페이로드가 들어온 경우 진단 단서를 남긴다.
+      const removedCount = all.length - filtered.length;
+      if (newRecords.length === 0 && removedCount > 0) {
+        console.warn(
+          `[ManageAttendance] ${classId} ${date} 하루 출결 ${removedCount}건 전체 비우기 — 툼스톤으로 삭제 전파`,
+        );
+      }
+
       const saveData = buildAttendanceSaveData(data, [...filtered, ...newRecords]);
       await this.repository.saveAttendance(saveData);
       return saveData.records;
@@ -246,22 +233,43 @@ export class ManageAttendance {
       };
 
       const untouched = all.filter((r) => !isDayRecord(r));
-      const dayByPeriod = new Map(all.filter(isDayRecord).map((r) => [r.period, r]));
+      // 같은 교시에 그룹 레코드와 레거시 비그룹 레코드가 공존할 수 있다(그룹 도입 전
+      // 데이터·타 경로 저장 잔재). 교시당 단일 레코드 Map으로 접으면 한쪽이 조용히
+      // 버려져 그 레코드의 비대상 학생 출결이 통째 유실+툼스톤 전파된다 — 반드시
+      // 매치된 전 레코드의 students를 병합해 보존한다(중복 번호는 앞 레코드 우선).
+      const dayRecordsByPeriod = new Map<number, AttendanceRecord[]>();
+      for (const r of all) {
+        if (!isDayRecord(r)) continue;
+        const list = dayRecordsByPeriod.get(r.period) ?? [];
+        list.push(r);
+        dayRecordsByPeriod.set(r.period, list);
+      }
 
-      const periods = new Set<number>([...dayByPeriod.keys(), ...recordsByPeriod.keys()]);
+      const periods = new Set<number>([...dayRecordsByPeriod.keys(), ...recordsByPeriod.keys()]);
       const nextDay: AttendanceRecord[] = [];
       for (const period of periods) {
-        const existing = dayByPeriod.get(period);
+        const matches = dayRecordsByPeriod.get(period) ?? [];
         // 대상 학생 제거 → 새 엔트리 삽입(방어적으로 대상 학생 것만 받아들인다)
-        const kept = (existing?.students ?? []).filter((sa) => !studentNumbers.has(sa.number));
+        const seen = new Set<number>();
+        const kept: StudentAttendance[] = [];
+        for (const rec of matches) {
+          for (const sa of rec.students) {
+            if (studentNumbers.has(sa.number) || seen.has(sa.number)) continue;
+            seen.add(sa.number);
+            kept.push(sa);
+          }
+        }
         const added = (recordsByPeriod.get(period) ?? []).filter((sa) =>
           studentNumbers.has(sa.number),
         );
         const students = [...kept, ...added];
         if (students.length === 0) continue; // 교시가 비면 레코드 삭제
+        // 병합 결과는 단일 레코드 — 그룹 키 레코드가 있으면 그것을 기반으로(키 보존).
+        const baseRecord =
+          matches.find((r) => (groupId ? r.groupId === groupId : !r.groupId)) ?? matches[0];
         nextDay.push(
-          existing
-            ? { ...existing, students }
+          baseRecord
+            ? { ...baseRecord, students }
             : { classId, ...(groupId ? { groupId } : {}), date, period, students },
         );
       }
@@ -274,12 +282,24 @@ export class ManageAttendance {
 
   /**
    * 학급 삭제에 따른 출결 정리 — 해당 classId 레코드(+그룹의 마지막 학급이면 그룹 레코드)를 제거.
+   * "그룹 마지막 학급" 판정은 락 안에서 fresh 학급 목록으로 수행한다 — 호출자의
+   * in-memory 스냅샷 판정은 동기화로 방금 추가된 그룹 학급을 못 보고 그룹 출결을 오삭제한다.
    */
-  async deleteByClass(
-    classId: string,
-    purgeGroupId?: string,
-  ): Promise<readonly AttendanceRecord[]> {
+  async deleteByClass(classId: string, groupId?: string): Promise<readonly AttendanceRecord[]> {
     return withFileLock(SYNC_FILE_KEYS.attendance, async () => {
+      let purgeGroupId: string | undefined;
+      if (groupId) {
+        const classesData = await this.repository.getClasses();
+        // 판정 불가(null = 읽기 실패/파일 부재)면 그룹 purge 보류(fail-closed) —
+        // 오판이 그룹 출결 전체 삭제 + 툼스톤 전파로 이어진다(코드리뷰 스윕 S1).
+        if (classesData) {
+          const remaining = classesData.classes.filter(
+            (c) => c.id !== classId && c.groupId === groupId,
+          );
+          if (remaining.length === 0) purgeGroupId = groupId;
+        }
+      }
+
       const data = await this.repository.getAttendance();
       const all = data?.records ?? [];
       const kept = all.filter(

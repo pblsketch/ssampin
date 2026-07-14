@@ -50,7 +50,7 @@ const { studentRecordsRepoFake, teachingClassRepoFake } = vi.hoisted(() => {
   };
 
   // TeachingClass repo: ITeachingClassRepository 인메모리 구현
-  // saveDayAttendance → manageAttendance.saveAll → saveAttendance 경로를 커버해야 함
+  // saveDayAttendance → manageAttendance.replaceDayForClass → saveAttendance 경로를 커버해야 함
   const attendanceRecords: AttendanceRecord[] = [];
   const teachingClassRepoFakeRef = {
     async loadClasses() {
@@ -267,11 +267,13 @@ describe('IT-1: 담임 출결 자동저장 → 원본↔미러 정합 (S3 저장
     const mirror = useStudentRecordsStore.getState().records.find((r) => r.id === bridgeId);
     expect(mirror).toBeDefined();
 
-    // saveDayAttendance를 실패하게 강제 — useTeachingClassStore 스토어 메서드를 spy
-    const originalSave = useTeachingClassStore.getState().saveDayAttendance;
+    // 원본 출결 동기화를 실패하게 강제 — updateAttendanceRecord의 현재 경로는
+    // upsertStudentAttendanceEntries(부분 갱신 intent)다. 구 mock 대상(saveDayAttendance)을
+    // 남겨두면 실패가 유도되지 않아 부분실패 계약을 검증하지 못하는 공허한 테스트가 된다.
+    const originalSave = useTeachingClassStore.getState().upsertStudentAttendanceEntries;
     useTeachingClassStore.setState((s) => ({
       ...s,
-      saveDayAttendance: vi.fn().mockRejectedValueOnce(new Error('디스크 쓰기 실패')),
+      upsertStudentAttendanceEntries: vi.fn().mockRejectedValueOnce(new Error('디스크 쓰기 실패')),
     }));
 
     // updateAttendanceRecord는 원본 실패에도 미러 레이어는 계속 진행
@@ -294,6 +296,6 @@ describe('IT-1: 담임 출결 자동저장 → 원본↔미러 정합 (S3 저장
     expect(updatedMirror?.content).toBe('부분실패 테스트');
 
     // 복원
-    useTeachingClassStore.setState((s) => ({ ...s, saveDayAttendance: originalSave }));
+    useTeachingClassStore.setState((s) => ({ ...s, upsertStudentAttendanceEntries: originalSave }));
   });
 });

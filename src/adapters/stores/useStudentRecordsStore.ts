@@ -16,10 +16,7 @@ import { migrateStudentRecordsOnLoad } from '@usecases/studentRecords/MigrateStu
 import { generateUUID } from '@infrastructure/utils/uuid';
 import type { StudentAttendance, AttendanceStatus } from '@domain/entities/Attendance';
 import { pickRepresentativeAttendance } from '@domain/rules/attendanceRules';
-import {
-  toggleDocumentKind,
-  deriveDocumentSubmitted,
-} from '@domain/rules/attendanceDocumentPolicy';
+import { toggleDocumentKind } from '@domain/rules/attendanceDocumentPolicy';
 import type { Student } from '@domain/entities/Student';
 import { useTeachingClassStore } from './useTeachingClassStore';
 import { useObservationAttachmentStore } from './useObservationAttachmentStore';
@@ -524,7 +521,14 @@ export const useStudentRecordsStore = create<StudentRecordsState>((set, get) => 
           });
         }
 
+        // 재구성이 아니라 existing 기반 부분 갱신 — 승계 목록을 손으로 고르면
+        // 명시적 false·빈 배열(truthy 탈락)·followUp/tags(목록 누락) 같은 필드가
+        // after에서 빠져 before→after diff가 "삭제 의도"로 오인하고 위조 스탬프까지
+        // 찍는다(코드리뷰 7앵글 수렴 — B트랙이 막으려던 체크 소실의 재유입 경로).
+        // existing 전체를 깔고 이 경로가 실제로 소유한 필드만 덮는다 — 안 덮인 필드는
+        // before==after로 patch에서 빠져 fresh(디스크) 값이 보존된다(P6).
         const record: StudentRecord = {
+          ...(existing ?? ({} as StudentRecord)),
           id: bridgeId,
           studentId: student.id,
           category: 'attendance',
@@ -532,18 +536,6 @@ export const useStudentRecordsStore = create<StudentRecordsState>((set, get) => 
           content: rep.memo ?? '',
           date,
           createdAt: existing?.createdAt ?? new Date().toISOString(),
-          // 출결을 다시 입력해도 나이스 반영·서류 제출 표시가 초기화되지 않게 승계한다.
-          ...(existing?.reportedToNeis ? { reportedToNeis: existing.reportedToNeis } : {}),
-          // M6: 종류별 체크(documents) 승계 시 documentSubmitted는 파생으로 재계산 —
-          // 명시적 false가 truthy 승계에서 탈락해 불변식(전 종류 제출=완료)이 깨지지 않게(codex QA).
-          ...(existing?.documents && existing.documents.length > 0
-            ? {
-                documents: existing.documents,
-                documentSubmitted: deriveDocumentSubmitted(existing.documents),
-              }
-            : existing?.documentSubmitted
-              ? { documentSubmitted: existing.documentSubmitted }
-              : {}),
           attendancePeriods,
         };
 

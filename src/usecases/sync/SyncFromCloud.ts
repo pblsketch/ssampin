@@ -6,7 +6,12 @@ import type {
   DriveSyncConflict,
   DriveSyncFileInfo,
 } from '@domain/entities/DriveSyncState';
-import type { StudentRecordsData, StudentRecord } from '@domain/entities/StudentRecord';
+import type {
+  StudentRecordsData,
+  StudentRecord,
+  TrackedGroup,
+} from '@domain/entities/StudentRecord';
+import { TRACKED_GROUP_FIELDS, TRACKED_GROUPS } from '@domain/entities/StudentRecord';
 import type { AttendanceData, AttendanceRecord } from '@domain/entities/Attendance';
 import type { ObservationData, ObservationRecord } from '@domain/entities/Observation';
 import type { RecordCategoryItem } from '@domain/valueObjects/RecordCategory';
@@ -18,7 +23,6 @@ import {
   type GetDynamicSyncFiles,
   type GetBinaryDynamicSyncFiles,
 } from './SyncToCloud';
-import { SYNC_FILE_KEYS } from './syncRegistry';
 import { withFileLock } from '@usecases/shared/fileWriteLock';
 import { base64ToUint8 } from './binaryBase64';
 
@@ -34,61 +38,43 @@ function recordTagCount(r: StudentRecord): number {
  * 비추적 필드(content/subcategory/tags/attendancePeriods 등)는 record-LWW 유지(P4).
  */
 
-const TRACKED_GROUPS = ['reportedToNeis', 'documentGroup', 'followUpDone'] as const;
-type TrackedGroup = (typeof TRACKED_GROUPS)[number];
-
 /**
- * 항목별 유효 시각 3분기(C1):
- * (a) 맵 보유·키 있음 → 그 값(record.updatedAt 미개입 — 무관 편집이 항목 병합을 못 무너뜨림)
- * (c) 맵 보유·키 없음 → createdAt(한 번도 안 건드린 항목)
- * (b) 맵 자체 부재(구버전 드롭) → record.updatedAt 백스톱(없으면 createdAt)
+ * 항목별 유효 시각(C1) — **양쪽 모두 맵을 보유할 때만 호출된다**:
+ * (a) 키 있음 → 그 값(record.updatedAt 미개입 — 무관 편집이 항목 병합을 못 무너뜨림)
+ * (c) 키 없음 → createdAt(쓰기 측이 맵 신설 시 미변경 그룹을 직전 updatedAt으로
+ *     백필하므로, 키 부재는 "신버전 편집 이력 없음"을 뜻한다)
+ *
+ * 한쪽이라도 맵이 없으면(구버전 드롭·신버전 미편집) 항목 오버레이를 하지 않고
+ * record-LWW로 폴백한다 — mapless 쪽의 updatedAt을 항목 백스톱으로 쓰면 무관
+ * 편집이 LWW 승자의 진짜 항목 스탬프를 이겨 낡은 체크를 부활시킨다(record-LWW보다
+ * 나쁜 결과 = P4 위반, 코드리뷰 스윕 S2). LWW 폴백은 구버전 최신 편집 보호(P5)를
+ * record-LWW와 정확히 동일하게 달성한다.
  */
 function effectiveStamp(r: StudentRecord, group: TrackedGroup): string {
-  if (r.fieldUpdatedAt) return r.fieldUpdatedAt[group] ?? r.createdAt;
-  return r.updatedAt ?? r.createdAt;
+  return r.fieldUpdatedAt?.[group] ?? r.createdAt;
 }
 
-/** 그룹 값 채택 — after가 undefined인 필드는 제거(명시 삭제)로 취급한다. */
+/**
+ * 그룹 값 채택 — TRACKED_GROUP_FIELDS 정본에서 멤버 필드를 파생해 함께 이동시킨다.
+ * source에 없는(undefined) 필드는 제거(명시 삭제)로 취급.
+ * documentGroup은 채택 후 파생값을 정본 deriveDocumentSubmitted로 재계산(H4 —
+ * 빈 배열=미존재 fallback, 원시 every 금지).
+ */
 function adoptGroup(
   target: StudentRecord,
   source: StudentRecord,
   group: TrackedGroup,
 ): StudentRecord {
-  if (group === 'reportedToNeis') {
-    const { reportedToNeis: _dropped, ...rest } = target;
-    return {
-      ...rest,
-      ...(source.reportedToNeis !== undefined ? { reportedToNeis: source.reportedToNeis } : {}),
-    };
+  const result: { -readonly [K in keyof StudentRecord]?: StudentRecord[K] } = { ...target };
+  for (const field of TRACKED_GROUP_FIELDS[group]) {
+    const value = source[field];
+    if (value === undefined) delete result[field];
+    else (result as Record<string, unknown>)[field] = value;
   }
   if (group === 'documentGroup') {
-    const { documents: _d, documentSubmitted: _s, ...rest } = target;
-    const adopted: StudentRecord = {
-      ...rest,
-      ...(source.documents !== undefined ? { documents: source.documents } : {}),
-      ...(source.documentSubmitted !== undefined
-        ? { documentSubmitted: source.documentSubmitted }
-        : {}),
-    };
-    // H4 불변식 — documents 채택 후 파생값 재계산은 정본 경유(빈 배열=미존재 fallback).
-    const derived = deriveDocumentSubmitted(adopted.documents, adopted.documentSubmitted);
-    return { ...adopted, documentSubmitted: derived };
+    result.documentSubmitted = deriveDocumentSubmitted(result.documents, result.documentSubmitted);
   }
-  const { followUpDone: _fd, followUp: _f, followUpDate: _fdt, ...rest } = target;
-  return {
-    ...rest,
-    ...(source.followUpDone !== undefined ? { followUpDone: source.followUpDone } : {}),
-    ...(source.followUp !== undefined ? { followUp: source.followUp } : {}),
-    ...(source.followUpDate !== undefined ? { followUpDate: source.followUpDate } : {}),
-  };
-}
-
-/** ISO 시각 clamp — 불변식 createdAt ≤ fieldUpdatedAt[f] ≤ record.updatedAt(있으면). */
-function clampStamp(stamp: string, base: StudentRecord): string {
-  let s = stamp;
-  if (s < base.createdAt) s = base.createdAt;
-  if (base.updatedAt && s > base.updatedAt) s = base.updatedAt;
-  return s;
+  return result as StudentRecord;
 }
 
 /**
@@ -96,11 +82,16 @@ function clampStamp(stamp: string, base: StudentRecord): string {
  * 결과 fieldUpdatedAt 합성(H3): base 맵 승계 + 채택된 그룹은 "패자 쪽 키 있으면 그 값,
  * 없으면 유효시각"을 materialize — 안 남기면 다음 병합에서 (c)createdAt로 퇴화해
  * 방금 채택한 값이 더 낡은 상대에게 뒤집힌다(2단계 병합 수렴의 핵심).
+ * 스탬프는 원 값 그대로 남긴다 — base.createdAt으로 끌어올리는 클램프는 createdAt
+ * 복제본이 어긋난 구 데이터에서 시각을 미래로 위조해 이후 병합을 뒤집는다.
  * 아무 그룹도 채택되지 않으면 base를 그대로 반환(무변경 — 구 데이터 대량 재업로드 방지).
  */
 function mergeTrackedGroups(base: StudentRecord, other: StudentRecord): StudentRecord {
+  // 양쪽 맵 필수 — 한쪽이라도 없으면 record-LWW 폴백(base 그대로). effectiveStamp 주석 참조.
+  if (!base.fieldUpdatedAt || !other.fieldUpdatedAt) return base;
+
   let result = base;
-  const map: { -readonly [K in TrackedGroup]?: string } = { ...(base.fieldUpdatedAt ?? {}) };
+  const map: { -readonly [K in TrackedGroup]?: string } = { ...base.fieldUpdatedAt };
   let adopted = false;
 
   for (const group of TRACKED_GROUPS) {
@@ -109,12 +100,38 @@ function mergeTrackedGroups(base: StudentRecord, other: StudentRecord): StudentR
     // 동률 = base(record-LWW/preferRemote 정책 승계) 유지
     if (otherStamp <= baseStamp) continue;
     result = adoptGroup(result, other, group);
-    map[group] = clampStamp(other.fieldUpdatedAt?.[group] ?? otherStamp, base);
+    map[group] = other.fieldUpdatedAt?.[group] ?? otherStamp;
     adopted = true;
   }
 
   if (!adopted) return base;
   return Object.keys(map).length > 0 ? { ...result, fieldUpdatedAt: map } : result;
+}
+
+/**
+ * 병합 도메인 공용 임계구역: 락 안에서 로컬 읽기→병합→쓰기(+카운트 로그).
+ * 락은 반드시 읽기부터 감싼다(쓰기만 감싸면 낡은 스냅샷 위라 무의미 — 계획 §4).
+ * 사용자 저장(유스케이스)과 겹치면 병합본이 사용자 변경을 삼키거나 그 반대가 되는
+ * 2026-07 QA 재현 경합의 방어가 이 헬퍼 하나에 있다 — 새 병합 도메인은 반드시 이걸 쓸 것.
+ */
+async function mergeAndWriteLocked<T extends { readonly records: readonly unknown[] }>(
+  storage: IStoragePort,
+  // 파일명 = 락 키(SYNC_FILE_KEYS 값과 동일 — fileWriteLock.test가 정합을 잠근다).
+  // 별도 lockKey 파라미터를 두면 불일치 주입 시 병합 쓰기가 유스케이스 쓰기와 다른
+  // 락 도메인으로 빠져 직렬화가 조용히 깨진다(코드리뷰 스윕 S6) — 하나로 겸용한다.
+  filename: string,
+  remoteData: T,
+  merge: (local: T | null) => T,
+  logSuffix = '',
+): Promise<void> {
+  await withFileLock(filename, async () => {
+    const localData = await storage.read<T>(filename);
+    const merged = merge(localData);
+    await storage.write(filename, merged);
+    console.log(
+      `[SyncFromCloud]   ${filename}: ✅ MERGE${logSuffix} (local=${localData?.records?.length ?? 0}건 + remote=${remoteData?.records?.length ?? 0}건 → ${merged.records.length}건)`,
+    );
+  });
 }
 
 /** student-records를 record ID 기준으로 병합 (record-LWW BASE + 추적 그룹 오버레이) */
@@ -435,16 +452,9 @@ export class SyncFromCloud {
           if (driveFile) {
             const content = await this.drivePort.downloadSyncFile(driveFile.id);
             const remoteData = JSON.parse(content) as StudentRecordsData;
-            // 읽기→병합→쓰기를 파일 락 안에서 — 사용자 저장(유스케이스)과 겹치면
-            // 병합본이 사용자 변경을 삼키거나 그 반대가 된다(2026-07 QA 재현 경합).
-            await withFileLock(SYNC_FILE_KEYS.studentRecords, async () => {
-              const localData = await this.storage.read<StudentRecordsData>(filename);
-              const merged = mergeStudentRecords(localData, remoteData);
-              await this.storage.write(filename, merged);
-              console.log(
-                `[SyncFromCloud]   ${filename}: ✅ MERGE (local=${localData?.records?.length ?? 0}건 + remote=${remoteData?.records?.length ?? 0}건 → ${merged.records.length}건)`,
-              );
-            });
+            await mergeAndWriteLocked(this.storage, filename, remoteData, (local) =>
+              mergeStudentRecords(local, remoteData),
+            );
             updatedFiles[filename] = remoteInfo;
             downloaded.push(filename);
           }
@@ -458,14 +468,9 @@ export class SyncFromCloud {
           if (driveFile) {
             const content = await this.drivePort.downloadSyncFile(driveFile.id);
             const remoteData = JSON.parse(content) as AttendanceData;
-            await withFileLock(SYNC_FILE_KEYS.attendance, async () => {
-              const localData = await this.storage.read<AttendanceData>(filename);
-              const merged = mergeAttendance(localData, remoteData, remoteIsNewer);
-              await this.storage.write(filename, merged);
-              console.log(
-                `[SyncFromCloud]   ${filename}: ✅ MERGE (local=${localData?.records?.length ?? 0}건 + remote=${remoteData?.records?.length ?? 0}건 → ${merged.records.length}건)`,
-              );
-            });
+            await mergeAndWriteLocked(this.storage, filename, remoteData, (local) =>
+              mergeAttendance(local, remoteData, remoteIsNewer),
+            );
             updatedFiles[filename] = remoteInfo;
             downloaded.push(filename);
           }
@@ -479,14 +484,9 @@ export class SyncFromCloud {
           if (driveFile) {
             const content = await this.drivePort.downloadSyncFile(driveFile.id);
             const remoteData = JSON.parse(content) as ObservationData;
-            await withFileLock(SYNC_FILE_KEYS.observations, async () => {
-              const localData = await this.storage.read<ObservationData>(filename);
-              const merged = mergeObservations(localData, remoteData, remoteIsNewer);
-              await this.storage.write(filename, merged);
-              console.log(
-                `[SyncFromCloud]   ${filename}: ✅ MERGE (local=${localData?.records?.length ?? 0}건 + remote=${remoteData?.records?.length ?? 0}건 → ${merged.records.length}건)`,
-              );
-            });
+            await mergeAndWriteLocked(this.storage, filename, remoteData, (local) =>
+              mergeObservations(local, remoteData, remoteIsNewer),
+            );
             updatedFiles[filename] = remoteInfo;
             downloaded.push(filename);
           }
@@ -579,36 +579,33 @@ export class SyncFromCloud {
         const content = await this.drivePort.downloadSyncFile(driveFile.id);
         if (filename === 'student-records') {
           const remoteData = JSON.parse(content) as StudentRecordsData;
-          await withFileLock(SYNC_FILE_KEYS.studentRecords, async () => {
-            const localData = await this.storage.read<StudentRecordsData>(filename);
-            const merged = mergeStudentRecords(localData, remoteData);
-            await this.storage.write(filename, merged);
-            console.log(
-              `[SyncFromCloud]   ${filename}: ✅ MERGE (first download, local=${localData?.records?.length ?? 0}건 + remote=${remoteData?.records?.length ?? 0}건 → ${merged.records.length}건)`,
-            );
-          });
+          await mergeAndWriteLocked(
+            this.storage,
+            filename,
+            remoteData,
+            (local) => mergeStudentRecords(local, remoteData),
+            ' (first download)',
+          );
         } else if (filename === 'attendance') {
           const remoteData = JSON.parse(content) as AttendanceData;
-          await withFileLock(SYNC_FILE_KEYS.attendance, async () => {
-            const localData = await this.storage.read<AttendanceData>(filename);
-            // 로컬 manifest 정보가 없어 최신 판정 불가 → 기존 동작(리모트 우선)과 일치하게 preferRemote
-            const merged = mergeAttendance(localData, remoteData, true);
-            await this.storage.write(filename, merged);
-            console.log(
-              `[SyncFromCloud]   ${filename}: ✅ MERGE (first download, local=${localData?.records?.length ?? 0}건 + remote=${remoteData?.records?.length ?? 0}건 → ${merged.records.length}건)`,
-            );
-          });
+          // 로컬 manifest 정보가 없어 최신 판정 불가 → 기존 동작(리모트 우선)과 일치하게 preferRemote
+          await mergeAndWriteLocked(
+            this.storage,
+            filename,
+            remoteData,
+            (local) => mergeAttendance(local, remoteData, true),
+            ' (first download)',
+          );
         } else if (filename === 'observations') {
           const remoteData = JSON.parse(content) as ObservationData;
-          await withFileLock(SYNC_FILE_KEYS.observations, async () => {
-            const localData = await this.storage.read<ObservationData>(filename);
-            // 로컬 manifest 정보가 없어 최신 판정 불가 → attendance와 동일하게 preferRemote
-            const merged = mergeObservations(localData, remoteData, true);
-            await this.storage.write(filename, merged);
-            console.log(
-              `[SyncFromCloud]   ${filename}: ✅ MERGE (first download, local=${localData?.records?.length ?? 0}건 + remote=${remoteData?.records?.length ?? 0}건 → ${merged.records.length}건)`,
-            );
-          });
+          // 로컬 manifest 정보가 없어 최신 판정 불가 → attendance와 동일하게 preferRemote
+          await mergeAndWriteLocked(
+            this.storage,
+            filename,
+            remoteData,
+            (local) => mergeObservations(local, remoteData, true),
+            ' (first download)',
+          );
         } else {
           const parsed = JSON.parse(content) as unknown;
           await this.storage.write(filename, parsed);

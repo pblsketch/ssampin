@@ -44,6 +44,21 @@ export type FieldUpdatedAt = {
   readonly followUpDone?: string;
 };
 
+/**
+ * 추적 그룹 → 멤버 필드 정본. 스탬프(쓰기: 멤버 중 하나라도 바뀌면 그룹 스탬프)와
+ * 채택(병합: 멤버 전부 함께 이동)이 모두 이 레지스트리에서 파생된다 —
+ * 새 추적 그룹은 여기(+FieldUpdatedAt 키)만 추가하면 양쪽이 자동 정합된다.
+ * 한쪽에만 추가하면 "스탬프는 찍히는데 병합이 채택 안 함"(또는 반대) 소실 버그가 재발한다.
+ */
+export const TRACKED_GROUP_FIELDS = {
+  reportedToNeis: ['reportedToNeis'],
+  documentGroup: ['documents', 'documentSubmitted'],
+  followUpDone: ['followUpDone', 'followUp', 'followUpDate'],
+} as const satisfies Record<keyof FieldUpdatedAt, readonly (keyof StudentRecord)[]>;
+
+export type TrackedGroup = keyof typeof TRACKED_GROUP_FIELDS;
+export const TRACKED_GROUPS = Object.keys(TRACKED_GROUP_FIELDS) as readonly TrackedGroup[];
+
 export interface StudentRecord {
   readonly id: string;
   readonly studentId: string;
