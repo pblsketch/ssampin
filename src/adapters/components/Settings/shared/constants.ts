@@ -5,56 +5,7 @@ import type { SchoolLevel } from '@domain/entities/Settings';
 export { KOREAN_CITIES } from '@domain/services/koreanGeo';
 export type { KoreanRegionGeo } from '@domain/services/koreanGeo';
 
-export const COLOR_MAP: Record<string, { bg: string; shadow: string; ring: string }> = {
-  blue: {
-    bg: 'bg-blue-500',
-    shadow: 'shadow-[0_0_8px_rgba(59,130,246,0.5)]',
-    ring: 'ring-blue-500',
-  },
-  green: {
-    bg: 'bg-green-500',
-    shadow: 'shadow-[0_0_8px_rgba(34,197,94,0.5)]',
-    ring: 'ring-green-500',
-  },
-  yellow: {
-    bg: 'bg-amber-500',
-    shadow: 'shadow-[0_0_8px_rgba(245,158,11,0.5)]',
-    ring: 'ring-amber-500',
-  },
-  purple: {
-    bg: 'bg-purple-500',
-    shadow: 'shadow-[0_0_8px_rgba(168,85,247,0.5)]',
-    ring: 'ring-purple-500',
-  },
-  red: { bg: 'bg-red-500', shadow: 'shadow-[0_0_8px_rgba(239,68,68,0.5)]', ring: 'ring-red-500' },
-  pink: {
-    bg: 'bg-pink-500',
-    shadow: 'shadow-[0_0_8px_rgba(236,72,153,0.5)]',
-    ring: 'ring-pink-500',
-  },
-  indigo: {
-    bg: 'bg-indigo-500',
-    shadow: 'shadow-[0_0_8px_rgba(99,102,241,0.5)]',
-    ring: 'ring-indigo-500',
-  },
-  teal: {
-    bg: 'bg-teal-500',
-    shadow: 'shadow-[0_0_8px_rgba(20,184,166,0.5)]',
-    ring: 'ring-teal-500',
-  },
-  gray: {
-    bg: 'bg-slate-400',
-    shadow: 'shadow-[0_0_8px_rgba(148,163,184,0.5)]',
-    ring: 'ring-slate-400',
-  },
-};
-
-export function colorDot(color: string, size = 'w-3 h-3') {
-  const fallback = COLOR_MAP['gray']!;
-  const c = COLOR_MAP[color] ?? fallback;
-  return `${size} rounded-full ${c.bg} ${c.shadow}`;
-}
-
+// 카테고리 색상 표·점 헬퍼는 공용 CategoryColorPicker(CATEGORY_COLOR_INFO)로 이동했다.
 export const DEFAULT_CAT_IDS = new Set(['school', 'class', 'department', 'treeSchool', 'etc']);
 
 export const SCHOOL_LEVEL_OPTIONS: { value: SchoolLevel; label: string; desc: string }[] = [

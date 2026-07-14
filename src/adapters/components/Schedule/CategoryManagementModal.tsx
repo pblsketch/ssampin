@@ -1,78 +1,15 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { createPortal } from 'react-dom';
 import { useEventsStore } from '@adapters/stores/useEventsStore';
-import { CATEGORY_COLOR_PRESETS } from '@domain/entities/SchoolEvent';
 import type { CategoryItem } from '@domain/entities/SchoolEvent';
 import { Modal } from '@adapters/components/common/Modal';
 import { IconButton } from '@adapters/components/common/IconButton';
+import {
+  CategoryColorPicker,
+  CATEGORY_COLOR_INFO,
+  CATEGORY_COLOR_KEYS,
+} from '@adapters/components/common/CategoryColorPicker';
 
 const DEFAULT_CAT_IDS = new Set(['school', 'class', 'department', 'treeSchool', 'etc']);
-
-const SETTINGS_COLOR_MAP: Record<
-  string,
-  { bg: string; shadow: string; ring: string; label: string }
-> = {
-  blue: {
-    bg: 'bg-blue-500',
-    shadow: 'shadow-[0_0_8px_rgba(59,130,246,0.5)]',
-    ring: 'ring-blue-500',
-    label: '파랑',
-  },
-  green: {
-    bg: 'bg-green-500',
-    shadow: 'shadow-[0_0_8px_rgba(34,197,94,0.5)]',
-    ring: 'ring-green-500',
-    label: '초록',
-  },
-  yellow: {
-    bg: 'bg-amber-500',
-    shadow: 'shadow-[0_0_8px_rgba(245,158,11,0.5)]',
-    ring: 'ring-amber-500',
-    label: '노랑',
-  },
-  purple: {
-    bg: 'bg-purple-500',
-    shadow: 'shadow-[0_0_8px_rgba(168,85,247,0.5)]',
-    ring: 'ring-purple-500',
-    label: '보라',
-  },
-  red: {
-    bg: 'bg-red-500',
-    shadow: 'shadow-[0_0_8px_rgba(239,68,68,0.5)]',
-    ring: 'ring-red-500',
-    label: '빨강',
-  },
-  pink: {
-    bg: 'bg-pink-500',
-    shadow: 'shadow-[0_0_8px_rgba(236,72,153,0.5)]',
-    ring: 'ring-pink-500',
-    label: '분홍',
-  },
-  indigo: {
-    bg: 'bg-indigo-500',
-    shadow: 'shadow-[0_0_8px_rgba(99,102,241,0.5)]',
-    ring: 'ring-indigo-500',
-    label: '남색',
-  },
-  teal: {
-    bg: 'bg-teal-500',
-    shadow: 'shadow-[0_0_8px_rgba(20,184,166,0.5)]',
-    ring: 'ring-teal-500',
-    label: '청록',
-  },
-  gray: {
-    bg: 'bg-slate-400',
-    shadow: 'shadow-[0_0_8px_rgba(148,163,184,0.5)]',
-    ring: 'ring-slate-400',
-    label: '회색',
-  },
-};
-
-function colorDot(color: string, size = 'w-3 h-3') {
-  const fallback = SETTINGS_COLOR_MAP['gray']!;
-  const c = SETTINGS_COLOR_MAP[color] ?? fallback;
-  return `${size} rounded-full ${c.bg} ${c.shadow}`;
-}
 
 /* ── 인라인 이름 편집 ────────────────────────────── */
 function InlineNameEditor({ value, onSave }: { value: string; onSave: (name: string) => void }) {
@@ -120,88 +57,6 @@ function InlineNameEditor({ value, onSave }: { value: string; onSave: (name: str
       }}
       className="text-sm font-medium text-sp-text bg-sp-bg/60 border border-sp-accent/50 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-sp-accent w-full min-w-0"
     />
-  );
-}
-
-/* ── 색상 선택 드롭다운 (Portal로 렌더링하여 잘림 방지) ── */
-function ColorPicker({ value, onChange }: { value: string; onChange: (color: string) => void }) {
-  const [open, setOpen] = useState(false);
-  const btnRef = useRef<HTMLButtonElement>(null);
-  const popupRef = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState({ top: 0, left: 0 });
-
-  useEffect(() => {
-    if (!open) return;
-    function handleClick(e: MouseEvent) {
-      if (
-        btnRef.current?.contains(e.target as Node) ||
-        popupRef.current?.contains(e.target as Node)
-      )
-        return;
-      setOpen(false);
-    }
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, [open]);
-
-  function handleToggle() {
-    if (!open && btnRef.current) {
-      const rect = btnRef.current.getBoundingClientRect();
-      // 팝업을 버튼 아래 왼쪽 정렬로 배치
-      setPos({ top: rect.bottom + 4, left: rect.left });
-    }
-    setOpen(!open);
-  }
-
-  return (
-    <>
-      <button
-        ref={btnRef}
-        type="button"
-        onClick={handleToggle}
-        className="flex items-center gap-1.5 px-2 py-1 rounded-lg hover:bg-sp-surface transition-colors shrink-0"
-        title="색상 변경"
-      >
-        <div className={colorDot(value, 'w-4 h-4')} />
-        <span className="material-symbols-outlined text-icon-sm text-sp-muted">expand_more</span>
-      </button>
-
-      {open &&
-        createPortal(
-          <div
-            ref={popupRef}
-            className="fixed z-sp-tooltip bg-sp-card border border-sp-border rounded-xl shadow-2xl p-3"
-            style={{ top: pos.top, left: pos.left, minWidth: 200 }}
-          >
-            <div className="grid grid-cols-3 gap-2">
-              {[...CATEGORY_COLOR_PRESETS, 'gray' as const].map((c) => {
-                const info = SETTINGS_COLOR_MAP[c];
-                if (!info) return null;
-                const isSelected = c === value;
-                return (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => {
-                      onChange(c);
-                      setOpen(false);
-                    }}
-                    className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs transition-colors ${
-                      isSelected
-                        ? 'bg-sp-accent/10 ring-1 ring-sp-accent/40 text-sp-text font-semibold'
-                        : 'hover:bg-sp-surface text-sp-muted'
-                    }`}
-                  >
-                    <div className={`w-3 h-3 rounded-full ${info.bg}`} />
-                    {info.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>,
-          document.body,
-        )}
-    </>
   );
 }
 
@@ -324,7 +179,7 @@ function CategoryRow({
         </span>
 
         {/* 색상 선택 */}
-        <ColorPicker value={category.color} onChange={(color) => onUpdate({ color })} />
+        <CategoryColorPicker value={category.color} onChange={(color) => onUpdate({ color })} />
 
         {/* 이름 편집 */}
         <div className="flex-1 min-w-0 ml-3">
@@ -478,12 +333,12 @@ export function CategoryManagementModal({ onClose }: { onClose: () => void }) {
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-3 flex-1 min-w-0 px-5 py-3 rounded-lg bg-sp-surface border border-sp-accent/30">
                   <div className="flex gap-1.5 flex-wrap w-[40%]">
-                    {[...CATEGORY_COLOR_PRESETS, 'gray' as const].map((c) => (
+                    {CATEGORY_COLOR_KEYS.map((c) => (
                       <button
                         key={c}
                         type="button"
                         onClick={() => setNewCatColor(c)}
-                        className={`w-5 h-5 rounded-full ${SETTINGS_COLOR_MAP[c]?.bg ?? 'bg-slate-400'} ${
+                        className={`w-5 h-5 rounded-full ${CATEGORY_COLOR_INFO[c]?.bg ?? 'bg-slate-400'} ${
                           newCatColor === c
                             ? 'ring-2 ring-sp-text ring-offset-2 ring-offset-sp-card'
                             : ''

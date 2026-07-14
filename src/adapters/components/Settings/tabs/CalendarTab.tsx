@@ -1,11 +1,15 @@
 import { useState } from 'react';
 import type { Settings } from '@domain/entities/Settings';
 import type { CategoryItem } from '@domain/entities/SchoolEvent';
-import { CATEGORY_COLOR_PRESETS } from '@domain/entities/SchoolEvent';
 import { useEventsStore } from '@adapters/stores/useEventsStore';
+import {
+  CategoryColorPicker,
+  CATEGORY_COLOR_INFO,
+  CATEGORY_COLOR_KEYS,
+} from '@adapters/components/common/CategoryColorPicker';
 import { SettingsSection } from '../shared/SettingsSection';
 import { Toggle } from '../shared/Toggle';
-import { COLOR_MAP, colorDot, DEFAULT_CAT_IDS } from '../shared/constants';
+import { DEFAULT_CAT_IDS } from '../shared/constants';
 import { NeisScheduleSection } from '../NeisScheduleSection';
 import { NeisTimetableAutoSyncSection } from '../NeisTimetableAutoSyncSection';
 
@@ -15,7 +19,7 @@ interface Props {
 }
 
 export function CalendarTab({ draft, patch }: Props) {
-  const { categories, addCategory, deleteCategory } = useEventsStore();
+  const { categories, addCategory, deleteCategory, updateCategory } = useEventsStore();
   const [showCatForm, setShowCatForm] = useState(false);
   const [newCatName, setNewCatName] = useState('');
   const [newCatColor, setNewCatColor] = useState<string>('blue');
@@ -131,19 +135,20 @@ export function CalendarTab({ draft, patch }: Props) {
               key={cat.id}
               category={cat}
               isDefault={DEFAULT_CAT_IDS.has(cat.id)}
+              onColorChange={(color) => void updateCategory(cat.id, { color })}
               onDelete={() => deleteCategory(cat.id)}
             />
           ))}
 
           {showCatForm && (
             <div className="flex items-center gap-3 p-3 rounded-lg bg-sp-surface border border-sp-border">
-              <div className="flex gap-1.5">
-                {CATEGORY_COLOR_PRESETS.map((c) => (
+              <div className="flex gap-1.5 flex-wrap">
+                {CATEGORY_COLOR_KEYS.map((c) => (
                   <button
                     key={c}
                     type="button"
                     onClick={() => setNewCatColor(c)}
-                    className={`w-5 h-5 rounded-full ${COLOR_MAP[c]?.bg ?? 'bg-slate-400'} ${
+                    className={`w-5 h-5 rounded-full ${CATEGORY_COLOR_INFO[c]?.bg ?? 'bg-slate-400'} ${
                       newCatColor === c ? 'ring-2 ring-white ring-offset-2 ring-offset-sp-card' : ''
                     }`}
                   />
@@ -216,16 +221,18 @@ export function CalendarTab({ draft, patch }: Props) {
 function CategoryRow({
   category,
   isDefault,
+  onColorChange,
   onDelete,
 }: {
   category: CategoryItem;
   isDefault: boolean;
+  onColorChange: (color: string) => void;
   onDelete: () => void;
 }) {
   return (
     <div className="flex items-center justify-between p-3 rounded-lg bg-sp-surface/80 hover:bg-sp-surface transition-colors group border border-transparent hover:border-sp-border">
-      <div className="flex items-center gap-3">
-        <div className={colorDot(category.color)} />
+      <div className="flex items-center gap-2">
+        <CategoryColorPicker value={category.color} onChange={onColorChange} />
         <span className="text-sm font-medium text-sp-text">{category.name}</span>
         {isDefault && (
           <span className="text-caption text-sp-muted bg-sp-border/30 px-1.5 py-0.5 rounded">
