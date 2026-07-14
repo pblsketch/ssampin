@@ -5,6 +5,8 @@ import type {
 } from '@domain/entities/Observation';
 import { OBSERVATION_TOMBSTONE_TTL_MS } from '@domain/entities/Observation';
 import type { IObservationRepository } from '@domain/repositories/IObservationRepository';
+import { withFileLock } from '@usecases/shared/fileWriteLock';
+import { SYNC_FILE_KEYS } from '@usecases/sync/syncRegistry';
 
 /**
  * 저장 데이터 조립: 삭제 전파 툼스톤 관리 (attendance buildAttendanceSaveData 패턴).
@@ -56,51 +58,67 @@ export class ManageObservations {
     return data ?? { records: [], customTags: [] };
   }
 
+  // 모든 변이는 "읽기(getAll)→조립→쓰기"를 파일 락 안에서 수행한다 — 쓰기만 감싸면
+  // 낡은 스냅샷 위라 무의미(2026-07 QA: sync 병합 쓰기 vs 사용자 저장 경합).
+  // 락 안에서 다른 공개 변이 메서드를 중첩 호출하면 교착한다.
+
   async add(record: ObservationRecord): Promise<void> {
-    const data = await this.getAll();
-    const updated: ObservationData = {
-      ...data,
-      records: [...data.records, record],
-    };
-    await this.repository.saveObservations(buildObservationSaveData(data, updated));
+    return withFileLock(SYNC_FILE_KEYS.observations, async () => {
+      const data = await this.getAll();
+      const updated: ObservationData = {
+        ...data,
+        records: [...data.records, record],
+      };
+      await this.repository.saveObservations(buildObservationSaveData(data, updated));
+    });
   }
 
   async update(record: ObservationRecord): Promise<void> {
-    const data = await this.getAll();
-    const updated: ObservationData = {
-      ...data,
-      records: data.records.map((r) => (r.id === record.id ? record : r)),
-    };
-    await this.repository.saveObservations(buildObservationSaveData(data, updated));
+    return withFileLock(SYNC_FILE_KEYS.observations, async () => {
+      const data = await this.getAll();
+      const updated: ObservationData = {
+        ...data,
+        records: data.records.map((r) => (r.id === record.id ? record : r)),
+      };
+      await this.repository.saveObservations(buildObservationSaveData(data, updated));
+    });
   }
 
   async delete(id: string): Promise<void> {
-    const data = await this.getAll();
-    const updated: ObservationData = {
-      ...data,
-      records: data.records.filter((r) => r.id !== id),
-    };
-    await this.repository.saveObservations(buildObservationSaveData(data, updated));
+    return withFileLock(SYNC_FILE_KEYS.observations, async () => {
+      const data = await this.getAll();
+      const updated: ObservationData = {
+        ...data,
+        records: data.records.filter((r) => r.id !== id),
+      };
+      await this.repository.saveObservations(buildObservationSaveData(data, updated));
+    });
   }
 
   async saveCustomTags(tags: readonly string[]): Promise<void> {
-    const data = await this.getAll();
-    const updated: ObservationData = { ...data, customTags: tags };
-    await this.repository.saveObservations(buildObservationSaveData(data, updated));
+    return withFileLock(SYNC_FILE_KEYS.observations, async () => {
+      const data = await this.getAll();
+      const updated: ObservationData = { ...data, customTags: tags };
+      await this.repository.saveObservations(buildObservationSaveData(data, updated));
+    });
   }
 
   async saveCustomCategories(categories: readonly string[]): Promise<void> {
-    const data = await this.getAll();
-    const updated: ObservationData = { ...data, customCategories: categories };
-    await this.repository.saveObservations(buildObservationSaveData(data, updated));
+    return withFileLock(SYNC_FILE_KEYS.observations, async () => {
+      const data = await this.getAll();
+      const updated: ObservationData = { ...data, customCategories: categories };
+      await this.repository.saveObservations(buildObservationSaveData(data, updated));
+    });
   }
 
   async deleteByClassId(classId: string): Promise<void> {
-    const data = await this.getAll();
-    const updated: ObservationData = {
-      ...data,
-      records: data.records.filter((r) => r.classId !== classId),
-    };
-    await this.repository.saveObservations(buildObservationSaveData(data, updated));
+    return withFileLock(SYNC_FILE_KEYS.observations, async () => {
+      const data = await this.getAll();
+      const updated: ObservationData = {
+        ...data,
+        records: data.records.filter((r) => r.classId !== classId),
+      };
+      await this.repository.saveObservations(buildObservationSaveData(data, updated));
+    });
   }
 }

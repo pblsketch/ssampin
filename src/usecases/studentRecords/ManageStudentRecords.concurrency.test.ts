@@ -6,9 +6,10 @@
  * (재현: 2건 일괄 처리 후 재시작 시 첫 건의 완료 플래그가 되살아남).
  * 아래 테스트는 ① updateMany 원자 일괄 저장 ② update 직렬화 ③ 실패 격리를 고정한다.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import type { StudentRecord, StudentRecordsData } from '@domain/entities/StudentRecord';
 import type { IStudentRecordsRepository } from '@domain/repositories/IStudentRecordsRepository';
+import { resetFileWriteLocksForTest } from '@usecases/shared/fileWriteLock';
 import { ManageStudentRecords } from './ManageStudentRecords';
 
 function sleep(ms: number): Promise<void> {
@@ -54,6 +55,12 @@ class FakeRepo implements IStudentRecordsRepository {
 }
 
 describe('ManageStudentRecords 쓰기 경합 방지', () => {
+  // 직렬화가 per-instance 체인 → 전역 파일 락(withFileLock)으로 바뀌어, 테스트 간
+  // 'student-records' 체인 공유를 끊는다(테스트 격리 — 계약 자체는 동일).
+  beforeEach(() => {
+    resetFileWriteLocksForTest();
+  });
+
   it('updateMany는 여러 기록의 변경을 한 번의 쓰기로 전부 저장한다 (일괄 유실 방지)', async () => {
     const repo = new FakeRepo([makeRecord('a'), makeRecord('b'), makeRecord('c')]);
     const manage = new ManageStudentRecords(repo);

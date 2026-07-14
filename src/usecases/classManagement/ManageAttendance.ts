@@ -6,6 +6,8 @@ import type {
 } from '@domain/entities/Attendance';
 import { attendanceRecordKey, ATTENDANCE_TOMBSTONE_TTL_MS } from '@domain/entities/Attendance';
 import type { ITeachingClassRepository } from '@domain/repositories/ITeachingClassRepository';
+import { withFileLock } from '@usecases/shared/fileWriteLock';
+import { SYNC_FILE_KEYS } from '@usecases/sync/syncRegistry';
 
 /** students 내용 비교용 정규화(순서 무관) — 순서만 바뀐 저장으로 updatedAt이 갱신되는 것을 줄인다 */
 function studentsFingerprint(students: readonly StudentAttendance[]): string {
@@ -97,29 +99,34 @@ export class ManageAttendance {
   }
 
   async add(record: AttendanceRecord): Promise<void> {
-    const data = await this.repository.getAttendance();
-    const records = data?.records ?? [];
+    // 읽기→조립→쓰기 전체를 파일 락 안에서 — 쓰기만 감싸면 낡은 스냅샷 위라 무의미.
+    return withFileLock(SYNC_FILE_KEYS.attendance, async () => {
+      const data = await this.repository.getAttendance();
+      const records = data?.records ?? [];
 
-    await this.repository.saveAttendance(buildAttendanceSaveData(data, [...records, record]));
+      await this.repository.saveAttendance(buildAttendanceSaveData(data, [...records, record]));
+    });
   }
 
   async saveRecord(record: AttendanceRecord): Promise<void> {
-    const data = await this.repository.getAttendance();
-    const records = data?.records ?? [];
+    return withFileLock(SYNC_FILE_KEYS.attendance, async () => {
+      const data = await this.repository.getAttendance();
+      const records = data?.records ?? [];
 
-    const exists = records.some(
-      (r) => r.classId === record.classId && r.date === record.date && r.period === record.period,
-    );
+      const exists = records.some(
+        (r) => r.classId === record.classId && r.date === record.date && r.period === record.period,
+      );
 
-    const replaced: readonly AttendanceRecord[] = exists
-      ? records.map((r) =>
-          r.classId === record.classId && r.date === record.date && r.period === record.period
-            ? record
-            : r,
-        )
-      : [...records, record];
+      const replaced: readonly AttendanceRecord[] = exists
+        ? records.map((r) =>
+            r.classId === record.classId && r.date === record.date && r.period === record.period
+              ? record
+              : r,
+          )
+        : [...records, record];
 
-    await this.repository.saveAttendance(buildAttendanceSaveData(data, replaced));
+      await this.repository.saveAttendance(buildAttendanceSaveData(data, replaced));
+    });
   }
 
   /**
@@ -142,24 +149,32 @@ export class ManageAttendance {
     date: string,
     recordsByPeriod: ReadonlyMap<number, readonly StudentAttendance[]>,
   ): Promise<void> {
-    const all = await this.getAll();
+    // 읽기(getAll)부터 쓰기까지 한 임계구역 — 내부는 saveAllUnsafe(같은 락 중첩 = 교착).
+    return withFileLock(SYNC_FILE_KEYS.attendance, async () => {
+      const all = await this.getAll();
 
-    // 기존 (classId, date) 레코드 제거
-    const filtered = all.filter((r) => !(r.classId === classId && r.date === date));
+      // 기존 (classId, date) 레코드 제거
+      const filtered = all.filter((r) => !(r.classId === classId && r.date === date));
 
-    // recordsByPeriod에서 students가 비어있지 않은 period만 신규 레코드 생성
-    const newRecords: AttendanceRecord[] = [];
-    for (const [period, students] of recordsByPeriod) {
-      if (students.length > 0) {
-        newRecords.push({ classId, date, period, students });
+      // recordsByPeriod에서 students가 비어있지 않은 period만 신규 레코드 생성
+      const newRecords: AttendanceRecord[] = [];
+      for (const [period, students] of recordsByPeriod) {
+        if (students.length > 0) {
+          newRecords.push({ classId, date, period, students });
+        }
       }
-    }
 
-    const merged: readonly AttendanceRecord[] = [...filtered, ...newRecords];
-    await this.saveAll(merged, true);
+      const merged: readonly AttendanceRecord[] = [...filtered, ...newRecords];
+      await this.saveAllUnsafe(merged, true);
+    });
   }
 
   async saveAll(records: readonly AttendanceRecord[], force = false): Promise<void> {
+    return withFileLock(SYNC_FILE_KEYS.attendance, () => this.saveAllUnsafe(records, force));
+  }
+
+  /** 락 내부 전용 — 공개 saveAll을 락 안에서 중첩 호출하면 체인이 자기 자신을 기다려 교착한다. */
+  private async saveAllUnsafe(records: readonly AttendanceRecord[], force: boolean): Promise<void> {
     const existing = await this.repository.getAttendance();
     const existingRecords = existing?.records ?? [];
 

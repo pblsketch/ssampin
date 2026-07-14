@@ -14,6 +14,8 @@ import type { StudentRecordsData, StudentRecord } from '@domain/entities/Student
 import type { RecordCategoryItem } from '@domain/valueObjects/RecordCategory';
 import type { IStudentRecordsRepository } from '@domain/repositories/IStudentRecordsRepository';
 import { normalizeStudentRecordsSubcatToTags } from '@domain/rules/studentRecordRules';
+import { withFileLock } from '@usecases/shared/fileWriteLock';
+import { SYNC_FILE_KEYS } from '@usecases/sync/syncRegistry';
 
 export interface MigrationOutcome {
   /** 정규화된 레코드(메모리에 반영할 값 — 영속 성패와 무관하게 항상 정규화본). */
@@ -33,6 +35,13 @@ export interface MigrationOutcome {
 export async function migrateStudentRecordsOnLoad(
   repo: IStudentRecordsRepository,
 ): Promise<MigrationOutcome> {
+  // 읽기→정규화→쓰기 전체를 student-records 파일 락 안에서 — 동기화 병합 쓰기와 겹치면
+  // 낡은 스냅샷 기반 저장이 병합본을 통째로 덮는다(2026-07 QA N1). 본문은 이미 fresh-read
+  // 구조라 전체 감싸기로 충분하다(락 안에서 같은 파일 락 재획득 없음).
+  return withFileLock(SYNC_FILE_KEYS.studentRecords, () => migrateUnsafe(repo));
+}
+
+async function migrateUnsafe(repo: IStudentRecordsRepository): Promise<MigrationOutcome> {
   const data = await repo.getRecords();
   const rawRecords = data?.records ?? [];
   const categories = data?.categories;

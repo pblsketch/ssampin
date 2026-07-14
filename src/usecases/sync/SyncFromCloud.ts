@@ -17,6 +17,8 @@ import {
   type GetDynamicSyncFiles,
   type GetBinaryDynamicSyncFiles,
 } from './SyncToCloud';
+import { SYNC_FILE_KEYS } from './syncRegistry';
+import { withFileLock } from '@usecases/shared/fileWriteLock';
 import { base64ToUint8 } from './binaryBase64';
 
 /** Q2: 마이그레이션 여부 판별 보조 — tags 가 많을수록 정규화된 쪽으로 본다. */
@@ -342,14 +344,18 @@ export class SyncFromCloud {
           if (driveFile) {
             const content = await this.drivePort.downloadSyncFile(driveFile.id);
             const remoteData = JSON.parse(content) as StudentRecordsData;
-            const localData = await this.storage.read<StudentRecordsData>(filename);
-            const merged = mergeStudentRecords(localData, remoteData);
-            await this.storage.write(filename, merged);
+            // 읽기→병합→쓰기를 파일 락 안에서 — 사용자 저장(유스케이스)과 겹치면
+            // 병합본이 사용자 변경을 삼키거나 그 반대가 된다(2026-07 QA 재현 경합).
+            await withFileLock(SYNC_FILE_KEYS.studentRecords, async () => {
+              const localData = await this.storage.read<StudentRecordsData>(filename);
+              const merged = mergeStudentRecords(localData, remoteData);
+              await this.storage.write(filename, merged);
+              console.log(
+                `[SyncFromCloud]   ${filename}: ✅ MERGE (local=${localData?.records?.length ?? 0}건 + remote=${remoteData?.records?.length ?? 0}건 → ${merged.records.length}건)`,
+              );
+            });
             updatedFiles[filename] = remoteInfo;
             downloaded.push(filename);
-            console.log(
-              `[SyncFromCloud]   ${filename}: ✅ MERGE (local=${localData?.records?.length ?? 0}건 + remote=${remoteData?.records?.length ?? 0}건 → ${merged.records.length}건)`,
-            );
           }
           continue;
         }
@@ -361,14 +367,16 @@ export class SyncFromCloud {
           if (driveFile) {
             const content = await this.drivePort.downloadSyncFile(driveFile.id);
             const remoteData = JSON.parse(content) as AttendanceData;
-            const localData = await this.storage.read<AttendanceData>(filename);
-            const merged = mergeAttendance(localData, remoteData, remoteIsNewer);
-            await this.storage.write(filename, merged);
+            await withFileLock(SYNC_FILE_KEYS.attendance, async () => {
+              const localData = await this.storage.read<AttendanceData>(filename);
+              const merged = mergeAttendance(localData, remoteData, remoteIsNewer);
+              await this.storage.write(filename, merged);
+              console.log(
+                `[SyncFromCloud]   ${filename}: ✅ MERGE (local=${localData?.records?.length ?? 0}건 + remote=${remoteData?.records?.length ?? 0}건 → ${merged.records.length}건)`,
+              );
+            });
             updatedFiles[filename] = remoteInfo;
             downloaded.push(filename);
-            console.log(
-              `[SyncFromCloud]   ${filename}: ✅ MERGE (local=${localData?.records?.length ?? 0}건 + remote=${remoteData?.records?.length ?? 0}건 → ${merged.records.length}건)`,
-            );
           }
           continue;
         }
@@ -380,14 +388,16 @@ export class SyncFromCloud {
           if (driveFile) {
             const content = await this.drivePort.downloadSyncFile(driveFile.id);
             const remoteData = JSON.parse(content) as ObservationData;
-            const localData = await this.storage.read<ObservationData>(filename);
-            const merged = mergeObservations(localData, remoteData, remoteIsNewer);
-            await this.storage.write(filename, merged);
+            await withFileLock(SYNC_FILE_KEYS.observations, async () => {
+              const localData = await this.storage.read<ObservationData>(filename);
+              const merged = mergeObservations(localData, remoteData, remoteIsNewer);
+              await this.storage.write(filename, merged);
+              console.log(
+                `[SyncFromCloud]   ${filename}: ✅ MERGE (local=${localData?.records?.length ?? 0}건 + remote=${remoteData?.records?.length ?? 0}건 → ${merged.records.length}건)`,
+              );
+            });
             updatedFiles[filename] = remoteInfo;
             downloaded.push(filename);
-            console.log(
-              `[SyncFromCloud]   ${filename}: ✅ MERGE (local=${localData?.records?.length ?? 0}건 + remote=${remoteData?.records?.length ?? 0}건 → ${merged.records.length}건)`,
-            );
           }
           continue;
         }
@@ -478,30 +488,36 @@ export class SyncFromCloud {
         const content = await this.drivePort.downloadSyncFile(driveFile.id);
         if (filename === 'student-records') {
           const remoteData = JSON.parse(content) as StudentRecordsData;
-          const localData = await this.storage.read<StudentRecordsData>(filename);
-          const merged = mergeStudentRecords(localData, remoteData);
-          await this.storage.write(filename, merged);
-          console.log(
-            `[SyncFromCloud]   ${filename}: ✅ MERGE (first download, local=${localData?.records?.length ?? 0}건 + remote=${remoteData?.records?.length ?? 0}건 → ${merged.records.length}건)`,
-          );
+          await withFileLock(SYNC_FILE_KEYS.studentRecords, async () => {
+            const localData = await this.storage.read<StudentRecordsData>(filename);
+            const merged = mergeStudentRecords(localData, remoteData);
+            await this.storage.write(filename, merged);
+            console.log(
+              `[SyncFromCloud]   ${filename}: ✅ MERGE (first download, local=${localData?.records?.length ?? 0}건 + remote=${remoteData?.records?.length ?? 0}건 → ${merged.records.length}건)`,
+            );
+          });
         } else if (filename === 'attendance') {
           const remoteData = JSON.parse(content) as AttendanceData;
-          const localData = await this.storage.read<AttendanceData>(filename);
-          // 로컬 manifest 정보가 없어 최신 판정 불가 → 기존 동작(리모트 우선)과 일치하게 preferRemote
-          const merged = mergeAttendance(localData, remoteData, true);
-          await this.storage.write(filename, merged);
-          console.log(
-            `[SyncFromCloud]   ${filename}: ✅ MERGE (first download, local=${localData?.records?.length ?? 0}건 + remote=${remoteData?.records?.length ?? 0}건 → ${merged.records.length}건)`,
-          );
+          await withFileLock(SYNC_FILE_KEYS.attendance, async () => {
+            const localData = await this.storage.read<AttendanceData>(filename);
+            // 로컬 manifest 정보가 없어 최신 판정 불가 → 기존 동작(리모트 우선)과 일치하게 preferRemote
+            const merged = mergeAttendance(localData, remoteData, true);
+            await this.storage.write(filename, merged);
+            console.log(
+              `[SyncFromCloud]   ${filename}: ✅ MERGE (first download, local=${localData?.records?.length ?? 0}건 + remote=${remoteData?.records?.length ?? 0}건 → ${merged.records.length}건)`,
+            );
+          });
         } else if (filename === 'observations') {
           const remoteData = JSON.parse(content) as ObservationData;
-          const localData = await this.storage.read<ObservationData>(filename);
-          // 로컬 manifest 정보가 없어 최신 판정 불가 → attendance와 동일하게 preferRemote
-          const merged = mergeObservations(localData, remoteData, true);
-          await this.storage.write(filename, merged);
-          console.log(
-            `[SyncFromCloud]   ${filename}: ✅ MERGE (first download, local=${localData?.records?.length ?? 0}건 + remote=${remoteData?.records?.length ?? 0}건 → ${merged.records.length}건)`,
-          );
+          await withFileLock(SYNC_FILE_KEYS.observations, async () => {
+            const localData = await this.storage.read<ObservationData>(filename);
+            // 로컬 manifest 정보가 없어 최신 판정 불가 → attendance와 동일하게 preferRemote
+            const merged = mergeObservations(localData, remoteData, true);
+            await this.storage.write(filename, merged);
+            console.log(
+              `[SyncFromCloud]   ${filename}: ✅ MERGE (first download, local=${localData?.records?.length ?? 0}건 + remote=${remoteData?.records?.length ?? 0}건 → ${merged.records.length}건)`,
+            );
+          });
         } else {
           const parsed = JSON.parse(content) as unknown;
           await this.storage.write(filename, parsed);

@@ -481,28 +481,11 @@ export const useStudentRecordsStore = create<StudentRecordsState>((set, get) => 
     },
 
     cascadeTagChange: async (oldTag, newTag) => {
-      let affected = 0;
-      const next = get().records.map((r) => {
-        if (!r.tags || !r.tags.includes(oldTag)) return r;
-        affected += 1;
-        const replaced =
-          newTag === null
-            ? r.tags.filter((t) => t !== oldTag)
-            : r.tags.map((t) => (t === oldTag ? newTag : t));
-        // 중복 제거(치환 시 newTag 가 이미 있던 경우) + 빈 배열이면 undefined
-        const deduped = replaced.filter((t, i, a) => a.indexOf(t) === i);
-        // 태그 편집도 수정 시각을 갱신해 동기화 병합이 최신본으로 인식하게 한다.
-        return {
-          ...r,
-          tags: deduped.length > 0 ? deduped : undefined,
-          updatedAt: new Date().toISOString(),
-        };
-      });
-      if (affected === 0) return 0;
-      // 단일 영속(envelope 보존) — categories 등 기존 봉투 유지.
-      const data = await studentRecordsRepository.getRecords();
-      await studentRecordsRepository.saveRecords({ ...(data ?? { records: [] }), records: next });
-      set({ records: next });
+      // 변경 의도만 usecase에 넘기고, 태그 변형은 락 안의 fresh 스냅샷에서 재계산된다(P6).
+      // in-memory get().records로 계산해 저장하면 동기화가 방금 병합한 레코드를 낡은
+      // 스냅샷이 통째로 덮는다(2026-07 QA) — 화면 상태는 반환값(저장 결과)으로만 갱신.
+      const { records, affected } = await manageRecords.cascadeTagChange(oldTag, newTag);
+      if (affected > 0) set({ records: [...records] });
       return affected;
     },
 
