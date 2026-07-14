@@ -26,8 +26,10 @@ describe('AttendanceCheckPage 여러 날 Bottom Sheet', () => {
     expect(source).toContain('multiDateSet');
   });
 
-  it('useBottomSheet 통합 — periodMenuOpen OR multiDateSheetOpen', () => {
-    expect(source).toContain('useBottomSheet(periodMenuOpen || multiDateSheetOpen)');
+  it('useBottomSheet 통합 — periodMenuOpen OR multiDateSheetOpen OR textSheetOpen', () => {
+    expect(source).toContain(
+      'useBottomSheet(periodMenuOpen || multiDateSheetOpen || textSheetOpen)',
+    );
   });
 
   it('헤더 "여러 날" 트리거 버튼', () => {

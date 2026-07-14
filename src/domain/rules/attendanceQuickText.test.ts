@@ -156,3 +156,41 @@ describe('parseAttendanceQuickText — 여러 줄 / 빈 줄', () => {
     expect(rows[1]!.ok).toBe(false); // 교시 누락
   });
 });
+
+describe('parseAttendanceQuickText — requirePeriod:false (교시 개념 없는 화면용)', () => {
+  const parseNoPeriod = (text: string) =>
+    parseAttendanceQuickText(text, ROSTER, P, { requirePeriod: false })[0]!;
+
+  it('지각 교시 생략 허용: "이서연 지각 질병" → ok, 기준 교시=조회', () => {
+    const r = parseNoPeriod('이서연 지각 질병');
+    expect(r.ok).toBe(true);
+    expect(r.result).toMatchObject({
+      studentNumber: 2,
+      status: 'late',
+      reason: '질병',
+      referencePeriod: 0, // 조회
+    });
+  });
+
+  it('조퇴·결과도 교시 생략 허용: "김철수 조퇴" / "4 결과"', () => {
+    expect(parseNoPeriod('김철수 조퇴').ok).toBe(true);
+    expect(parseNoPeriod('4 결과').ok).toBe(true);
+  });
+
+  it('교시를 적으면 그대로 해석(무시 아님): "김정민 2교시 지각"', () => {
+    const r = parseNoPeriod('김정민 2교시 지각');
+    expect(r.ok).toBe(true);
+    expect(r.result).toMatchObject({ status: 'late', referencePeriod: 2, periods: [0, 1, 2] });
+  });
+
+  it('옵션 미지정(기본)은 기존과 동일하게 교시 필수: "이서연 지각" → 오류', () => {
+    const r = one('이서연 지각');
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain('교시');
+  });
+
+  it('종류·명단 검증은 옵션과 무관하게 유지', () => {
+    expect(parseNoPeriod('김정민 질병').error).toContain('종류');
+    expect(parseNoPeriod('홍길동 결석').error).toContain('홍길동');
+  });
+});

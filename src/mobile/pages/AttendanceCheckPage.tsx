@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import type {
   AttendanceStatus,
   AttendanceReason,
@@ -6,6 +6,8 @@ import type {
   AttendanceRecord,
 } from '@domain/entities/Attendance';
 import { ATTENDANCE_REASONS } from '@domain/entities/Attendance';
+import { parseAttendanceQuickText } from '@domain/rules/attendanceQuickText';
+import type { QuickTextParsedResult } from '@domain/rules/attendanceQuickText';
 import type { TeachingClassStudent } from '@domain/entities/TeachingClass';
 import { studentKey } from '@domain/entities/TeachingClass';
 import { useMobileAttendanceStore } from '@mobile/stores/useMobileAttendanceStore';
@@ -112,9 +114,14 @@ export function AttendanceCheckPage({
     current: number;
     total: number;
   } | null>(null);
-  const [multiSaveToast, setMultiSaveToast] = useState<string | null>(null);
+  // 여러 날 저장·텍스트 적용 공용 결과 토스트
+  const [actionToast, setActionToast] = useState<string | null>(null);
 
-  useBottomSheet(periodMenuOpen || multiDateSheetOpen);
+  // 텍스트 빠른 입력 Bottom Sheet (담임 출결 전용 — 데스크톱 출결 그리드의 텍스트 입력 이식)
+  const [textSheetOpen, setTextSheetOpen] = useState(false);
+  const [textInput, setTextInput] = useState('');
+
+  useBottomSheet(periodMenuOpen || multiDateSheetOpen || textSheetOpen);
   const periodCount = settings.periodTimes.length > 0 ? settings.periodTimes.length : 7;
 
   const [studentStatuses, setStudentStatuses] = useState<Map<string, AttendanceStatus>>(new Map());
@@ -296,7 +303,7 @@ export function AttendanceCheckPage({
     const dates = Array.from(multiDateSet).sort();
     if (dates.length === 0) return;
     if (dates.length > 30) {
-      setMultiSaveToast('최대 30일까지 일괄 저장 가능합니다');
+      setActionToast('최대 30일까지 한 번에 저장할 수 있어요');
       return;
     }
     setMultiSaveProgress({ current: 0, total: dates.length });
@@ -327,14 +334,67 @@ export function AttendanceCheckPage({
     }
     setMultiSaveProgress(null);
     setMultiDateSheetOpen(false);
-    setMultiSaveToast(
+    setActionToast(
       successCount === dates.length
-        ? `${dates.length}일에 동일 출결이 저장되었습니다`
-        : `${dates.length}일 중 ${successCount}일 저장됨`,
+        ? `${dates.length}일에 동일 출결을 저장했어요`
+        : `${dates.length}일 중 ${successCount}일만 저장됐어요`,
     );
     // 토스트 자동 해제
-    setTimeout(() => setMultiSaveToast(null), 3000);
+    setTimeout(() => setActionToast(null), 3000);
   }, [classId, selectedPeriod, saveRecord, multiDateSet]);
+
+  /* ── 텍스트 빠른 입력 (담임 출결 전용) ──
+     파서는 데스크톱 출결 그리드와 공유. 모바일 담임 출결은 하루 단위 상태 1개만
+     저장하므로 교시 생략을 허용(requirePeriod:false)하고, 파싱 결과의 교시 정보
+     (periods/referencePeriod)는 쓰지 않는다 — status/reason/memo만 반영. */
+  const parsedLines = useMemo(() => {
+    if (!textSheetOpen || textInput.trim() === '') return [];
+    return parseAttendanceQuickText(
+      textInput,
+      students.map((s) => ({ number: s.number, name: s.name })),
+      periodCount,
+      { requirePeriod: false },
+    );
+  }, [textSheetOpen, textInput, students, periodCount]);
+
+  const okLineCount = useMemo(() => parsedLines.filter((l) => l.ok).length, [parsedLines]);
+
+  // 모바일 미리보기 — 교시 없이 "이름 — 종류(사유) · 비고"로 재조립
+  // (파서의 preview는 교시 범위를 포함해 모바일에선 오해를 줌)
+  const previewLabel = (res: QuickTextParsedResult) =>
+    `${res.studentName} — ${STATUS_CONFIG[res.status].label}(${res.reason})${
+      res.memo ? ` · ${res.memo}` : ''
+    }`;
+
+  const applyText = () => {
+    const applies = parsedLines.filter((l) => l.ok && l.result);
+    if (applies.length === 0) return;
+    const nextStatuses = new Map(studentStatuses);
+    const nextReasons = new Map(studentReasons);
+    const nextMemos = new Map(studentMemos);
+    let appliedCount = 0;
+    for (const line of applies) {
+      const res = line.result!;
+      const student = students.find((s) => s.number === res.studentNumber);
+      if (!student) continue;
+      const sKey = studentKey(student);
+      nextStatuses.set(sKey, res.status);
+      nextReasons.set(sKey, res.reason);
+      // 한 줄이 그 학생의 새 예외 상태 전체를 서술한다 — 비고 생략 시 기존 메모도 비움(데스크톱 행 재작성과 동일 의미)
+      if (res.memo) nextMemos.set(sKey, res.memo);
+      else nextMemos.delete(sKey);
+      appliedCount += 1;
+    }
+    if (appliedCount === 0) return;
+    setStudentStatuses(nextStatuses);
+    setStudentReasons(nextReasons);
+    setStudentMemos(nextMemos);
+    scheduleSave();
+    setTextSheetOpen(false);
+    setTextInput('');
+    setActionToast(`${appliedCount}명의 출결을 적용했어요`);
+    setTimeout(() => setActionToast(null), 3000);
+  };
 
   // 교시 변경 — 변경 전 현재 교시의 미저장분을 즉시 flush 후 전환
   const handleSelectPeriod = async (p: number) => {
@@ -378,6 +438,16 @@ export function AttendanceCheckPage({
             </h2>
             <p className="text-sp-muted text-xs">{className}</p>
           </div>
+          {type === 'homeroom' && (
+            <button
+              onClick={() => setTextSheetOpen(true)}
+              className="px-2.5 py-1.5 text-xs font-medium text-sp-accent rounded-lg hover:bg-sp-accent/10 touch-target active:scale-[0.98] transition-all flex items-center gap-1"
+              aria-label="텍스트로 출결 입력"
+            >
+              <span className="material-symbols-outlined text-base">edit_note</span>
+              텍스트
+            </button>
+          )}
           <button
             onClick={() => setMultiDateSheetOpen(true)}
             className="px-2.5 py-1.5 text-xs font-medium text-sp-accent rounded-lg hover:bg-sp-accent/10 touch-target active:scale-[0.98] transition-all flex items-center gap-1"
@@ -639,21 +709,101 @@ export function AttendanceCheckPage({
                 maxCount={30}
                 mobileSheet
                 inline
-                onToast={(msg) => setMultiSaveToast(msg)}
+                onToast={(msg) => setActionToast(msg)}
               />
             </div>
           </div>
         </div>
       )}
 
-      {/* 여러 날 저장 결과 토스트 */}
-      {multiSaveToast && (
+      {/* 텍스트 빠른 입력 Bottom Sheet (담임 출결 전용) */}
+      {textSheetOpen && (
+        <div
+          className="fixed inset-0 z-[80] flex flex-col justify-end bg-black/50"
+          onClick={() => setTextSheetOpen(false)}
+        >
+          <div
+            className="bg-sp-bg rounded-t-2xl max-h-[90vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label="텍스트로 출결 입력"
+            style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+          >
+            <div className="flex items-center justify-between gap-2 p-3 border-b border-sp-border sticky top-0 bg-sp-bg rounded-t-2xl">
+              <div className="min-w-0">
+                <h3 className="text-sm font-bold text-sp-text flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-base">edit_note</span>
+                  텍스트로 출결 입력
+                </h3>
+                <p className="text-xs text-sp-muted">한 줄에 한 명씩 · 미리보기 확인 후 적용</p>
+              </div>
+              <button
+                onClick={applyText}
+                disabled={okLineCount === 0}
+                className="px-3 py-1.5 bg-sp-accent text-sp-accent-fg text-xs font-medium rounded-lg disabled:opacity-50 touch-target shrink-0"
+              >
+                {okLineCount > 0 ? `${okLineCount}명 적용` : '적용'}
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-3 space-y-2">
+              <div className="text-xs text-sp-muted glass-card rounded-lg px-3 py-2 leading-relaxed">
+                <span className="text-sp-text font-medium">학생 [사유] 종류 [비고]</span> — 종류는
+                결석·지각·조퇴·결과
+                <br />
+                예: <span className="text-sp-text">김정민 질병 지각 감기</span> ·{' '}
+                <span className="text-sp-text">4 미인정 결과</span> ·{' '}
+                <span className="text-sp-text">이서연 결석</span>
+                <br />
+                사유(질병·인정·미인정·기타)를 생략하면 &lsquo;기타&rsquo;로 적혀요.
+              </div>
+              <textarea
+                value={textInput}
+                onChange={(e) => setTextInput(e.target.value)}
+                placeholder={'김정민 질병 지각 감기\n4 미인정 결과\n이서연 결석'}
+                rows={4}
+                className="w-full px-3 py-2 glass-input text-sm resize-none"
+              />
+              {/* 스크린리더용 파싱 요약 — 미리보기 행 전체를 읽어주면 수다스러워 카운트만 알린다 */}
+              <p className="sr-only" role="status">
+                {parsedLines.length > 0
+                  ? `적용 가능 ${okLineCount}명, 오류 ${parsedLines.length - okLineCount}건`
+                  : ''}
+              </p>
+              {parsedLines.length > 0 && (
+                <div className="border border-sp-border rounded-lg p-2 space-y-1">
+                  {parsedLines.map((line) => (
+                    <div
+                      key={line.lineNo}
+                      className={`flex items-start gap-1.5 text-xs ${
+                        line.ok ? 'text-sp-text' : 'text-red-400'
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-sm leading-none mt-0.5">
+                        {line.ok ? 'check' : 'close'}
+                      </span>
+                      <span className="min-w-0">
+                        {line.ok
+                          ? previewLabel(line.result!)
+                          : `${line.lineNo}행: ${line.error} (${line.raw})`}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 작업 결과 토스트 (여러 날 저장 · 텍스트 적용 공용) */}
+      {actionToast && (
         <div
           role="status"
           aria-live="polite"
           className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[90] px-4 py-2 bg-sp-card border border-sp-border rounded-lg shadow-xl text-sm text-sp-text"
         >
-          {multiSaveToast}
+          {actionToast}
         </div>
       )}
     </div>

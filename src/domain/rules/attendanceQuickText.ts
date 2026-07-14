@@ -9,6 +9,7 @@ import { computeAutoPeriods } from '@domain/rules/attendanceRules';
  * - 학생 = 이름 또는 번호(맨 앞 고정). 동명이인이면 번호로 입력.
  * - 종류 = 결석/지각/조퇴/결과 (필수, 첫 매칭 1개).
  * - 교시 = 조회/종례/N교시/순수 N. 결석은 생략 허용(전 교시), 나머지는 필수.
+ *   (교시 개념이 없는 화면 — 모바일 담임 출결 — 은 requirePeriod:false로 전 종류 생략 허용)
  * - 사유 = 질병/미인정/기타/인정 (생략 시 기타).
  * - 남은 토큰 전부 = 비고 (종류·사유 예약어의 2번째 출현도 비고).
  *
@@ -56,6 +57,15 @@ export interface QuickTextParsedLine {
   result?: QuickTextParsedResult;
 }
 
+export interface QuickTextParseOptions {
+  /**
+   * false면 지각·조퇴·결과도 교시 생략을 허용한다(기준 교시=조회).
+   * 하루 단위 상태만 저장하는 화면(모바일 담임 출결)처럼 교시 개념이 없는 호출자용.
+   * 기본 true — 데스크톱 그리드 동작 불변.
+   */
+  requirePeriod?: boolean;
+}
+
 /** 교시 토큰 해석 — 조회/종례/N교시/순수 N. 실패 시 null. */
 function parsePeriodToken(tok: string, periodCount: number): number | null {
   if (tok === '조회') return PERIOD_MORNING;
@@ -90,6 +100,7 @@ function parseLine(
   lineNo: number,
   roster: readonly { number: number; name: string }[],
   periodCount: number,
+  requirePeriod: boolean,
 ): QuickTextParsedLine | null {
   const trimmed = raw.trim();
   if (trimmed === '') return null; // 빈 줄 무시
@@ -164,8 +175,8 @@ function parseLine(
   const memoTokens = rest.filter((_, i) => i !== statusIdx && i !== periodIdx && i !== reasonIdx);
   const memo = memoTokens.length > 0 ? memoTokens.join(' ') : undefined;
 
-  // 6) 교시 필수 검증(결석만 생략 허용)
-  if (status !== 'absent' && period === undefined) {
+  // 6) 교시 필수 검증(결석만 생략 허용 — requirePeriod:false면 전 종류 생략 허용)
+  if (status !== 'absent' && period === undefined && requirePeriod) {
     return {
       raw: trimmed,
       lineNo,
@@ -174,7 +185,7 @@ function parseLine(
     };
   }
 
-  const referencePeriod = status === 'absent' ? PERIOD_MORNING : period!;
+  const referencePeriod = status === 'absent' ? PERIOD_MORNING : (period ?? PERIOD_MORNING);
   const periods = [...computeAutoPeriods(status, referencePeriod, periodCount)].sort(
     (a, b) => a - b,
   );
@@ -204,16 +215,19 @@ function parseLine(
  * @param text        여러 줄 입력
  * @param roster      명렬(번호·이름) — 동명이인 판정용
  * @param periodCount 정규 교시 수(1..N)
+ * @param options     파싱 옵션 — 생략 시 데스크톱 그리드 동작(교시 필수)
  */
 export function parseAttendanceQuickText(
   text: string,
   roster: readonly { number: number; name: string }[],
   periodCount: number,
+  options?: QuickTextParseOptions,
 ): QuickTextParsedLine[] {
+  const requirePeriod = options?.requirePeriod ?? true;
   const out: QuickTextParsedLine[] = [];
   const lines = text.split(/\r?\n/);
   for (let i = 0; i < lines.length; i += 1) {
-    const parsed = parseLine(lines[i]!, i + 1, roster, periodCount);
+    const parsed = parseLine(lines[i]!, i + 1, roster, periodCount, requirePeriod);
     if (parsed) out.push(parsed);
   }
   return out;
