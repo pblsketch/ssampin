@@ -1,7 +1,7 @@
 import type { IStoragePort } from '@domain/ports/IStoragePort';
 import type { IDriveSyncPort } from '@domain/ports/IDriveSyncPort';
 import type { IDriveSyncRepository } from '@domain/repositories/IDriveSyncRepository';
-import type { DriveSyncManifest, DriveSyncFileInfo } from '@domain/entities/DriveSyncState';
+import type { DriveSyncFileInfo } from '@domain/entities/DriveSyncState';
 import { uint8ToBase64 } from './binaryBase64';
 
 /** SHA-256 체크섬 계산 (Web Crypto API) */
@@ -79,8 +79,16 @@ export class SyncToCloud {
     const remoteManifest = await this.drivePort.getSyncManifest(folder.id);
     console.log(`[SyncToCloud] 리모트 매니페스트 deviceId=${remoteManifest?.deviceId ?? 'NONE'}`);
     console.log(`[SyncToCloud] 로컬 매니페스트 deviceId=${localManifest?.deviceId ?? 'NONE'}`);
-    const updatedFiles: Record<string, DriveSyncFileInfo> = {
+    // 리모트/로컬 매니페스트는 서로 다른 사실을 기록하므로 절대 합치지 않는다.
+    //  - 리모트: Drive에 실제 있는 파일들 = 리모트 기존 항목 + 이번에 업로드한 항목
+    //  - 로컬: 이 기기가 실제 주고받은 파일들 = 로컬 기존 항목 + 이번에 업로드한 항목
+    // 과거 {...remote, ...local} 단일 병합은 ① 받은 적 없는 리모트 항목을 로컬 장부에
+    // 승계시켜 이후 다운로드가 checksum 동일 판정으로 영구 스킵되고(2026-07-21 신고),
+    // ② 낡은 로컬 항목이 리모트의 더 새 항목을 덮어 다른 기기의 변경 감지를 깨뜨렸다.
+    const nextRemoteFiles: Record<string, DriveSyncFileInfo> = {
       ...(remoteManifest?.files ?? {}),
+    };
+    const nextLocalFiles: Record<string, DriveSyncFileInfo> = {
       ...(localManifest?.files ?? {}),
     };
 
@@ -127,11 +135,14 @@ export class SyncToCloud {
         `[SyncToCloud]   ${filename}: UPLOAD (checksum ${manifestChecksum?.slice(0, 8) ?? 'NONE'} → ${checksum.slice(0, 8)})`,
       );
       const result = await this.drivePort.uploadSyncFile(folder.id, `${filename}.json`, content);
-      updatedFiles[filename] = {
+      const entry: DriveSyncFileInfo = {
         lastModified: result.modifiedTime,
         checksum,
         size: new TextEncoder().encode(content).length,
+        uploadedBy: this.deviceId,
       };
+      nextRemoteFiles[filename] = entry;
+      nextLocalFiles[filename] = entry;
       uploaded.push(filename);
     };
 
@@ -187,25 +198,37 @@ export class SyncToCloud {
       // Drive 파일명: slashes를 '__'로 치환해 단일 파일명으로 평탄화
       const driveFilename = `${relPath.replace(/\//g, '__')}.json`;
       const result = await this.drivePort.uploadSyncFile(folder.id, driveFilename, content);
-      updatedFiles[relPath] = {
+      const entry: DriveSyncFileInfo = {
         lastModified: result.modifiedTime,
         checksum,
         size: new TextEncoder().encode(content).length,
+        uploadedBy: this.deviceId,
       };
+      nextRemoteFiles[relPath] = entry;
+      nextLocalFiles[relPath] = entry;
       uploaded.push(relPath);
     }
 
-    // 매니페스트 업데이트
-    const newManifest: DriveSyncManifest = {
-      version: 1,
-      lastSyncedAt: new Date().toISOString(),
-      deviceId: this.deviceId,
-      deviceName: this.deviceName,
-      files: updatedFiles,
-    };
-
-    await this.drivePort.updateSyncManifest(folder.id, newManifest);
-    await this.syncRepo.saveLocalManifest(newManifest);
+    // 매니페스트 업데이트 — 실제 업로드가 있었을 때만.
+    // no-op 실행("변경 없음")이 매니페스트를 다시 쓰면 리모트 deviceId가 업로드하지 않은
+    // 기기로 찍히고(다운로드의 "내가 올린 데이터" 스킵 오판) lastSyncedAt만 위조된다.
+    if (uploaded.length > 0) {
+      const now = new Date().toISOString();
+      await this.drivePort.updateSyncManifest(folder.id, {
+        version: 1,
+        lastSyncedAt: now,
+        deviceId: this.deviceId,
+        deviceName: this.deviceName,
+        files: nextRemoteFiles,
+      });
+      await this.syncRepo.saveLocalManifest({
+        version: 1,
+        lastSyncedAt: now,
+        deviceId: this.deviceId,
+        deviceName: this.deviceName,
+        files: nextLocalFiles,
+      });
+    }
 
     console.log(
       `[SyncToCloud] ✅ 완료 | uploaded=${uploaded.length} skipped=${skipped.length} deferred=${deferred.length} | uploaded=[${uploaded.join(', ')}]`,

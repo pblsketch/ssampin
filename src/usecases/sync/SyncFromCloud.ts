@@ -423,10 +423,19 @@ export class SyncFromCloud {
         continue;
       }
 
-      // 체크섬 동일 → 스킵
+      // 체크섬 동일 → 원칙적으로 스킵. 단, 로컬에 실제 파일이 없으면 장부만 "받았음"인
+      // 오염 상태(과거 no-op 업로드가 받은 적 없는 리모트 항목을 로컬 장부에 승계)이므로
+      // 스킵하지 않고 아래 첫-다운로드 경로로 진행해 자가 치유한다.
+      // 로컬 파일이 없으니 다운로드로 잃을 데이터도 없다(데이터 보존 안전).
       if (localInfo && localInfo.checksum === remoteInfo.checksum) {
-        skipped.push(filename);
-        continue;
+        const localData = await this.storage.read<unknown>(filename);
+        if (localData !== null) {
+          skipped.push(filename);
+          continue;
+        }
+        console.log(
+          `[SyncFromCloud]   ${filename}: 🩹 장부엔 "받았음"인데 로컬 파일 없음 → 다운로드로 치유`,
+        );
       }
 
       // 양쪽 다 변경됨 → 충돌
@@ -438,9 +447,12 @@ export class SyncFromCloud {
           `[SyncFromCloud]   ${filename}: 충돌 감지 | local=${localInfo.checksum.slice(0, 8)}@${localInfo.lastModified} | remote=${remoteInfo.checksum.slice(0, 8)}@${remoteInfo.lastModified} | ${remoteIsNewer ? 'remote가 최신' : 'local이 최신'}`,
         );
 
-        // 동일 기기가 마지막으로 수정했으면 충돌 아님 (로컬이 최신이면 스킵)
-        if (remoteManifest.deviceId === this.deviceId) {
-          console.log(`[SyncFromCloud]   ${filename}: ⚠️ SKIP (동일 deviceId — 내가 올린 데이터)`);
+        // 내가 올린 파일이면 충돌 아님 (로컬이 최신이면 스킵).
+        // 판정은 파일별 uploadedBy 우선 — 매니페스트 최상위 deviceId는 "마지막으로
+        // 매니페스트를 쓴 기기"라 다른 파일을 올린 기기로 찍혀 있을 수 있다.
+        // uploadedBy 부재(구버전 항목)면 기존 deviceId 폴백 — 스킵은 데이터 무변경이라 안전 방향.
+        if ((remoteInfo.uploadedBy ?? remoteManifest.deviceId) === this.deviceId) {
+          console.log(`[SyncFromCloud]   ${filename}: ⚠️ SKIP (내가 올린 데이터)`);
           skipped.push(filename);
           continue;
         }
@@ -637,15 +649,22 @@ export class SyncFromCloud {
           continue;
         }
 
-        // 체크섬 동일 → 스킵
+        // 체크섬 동일 → 스킵. 단 로컬 파일 부재 시 장부 오염 치유(정적 루프와 동일).
         if (localInfo && localInfo.checksum === remoteInfo.checksum) {
-          skipped.push(filename);
-          continue;
+          const localData = await this.storage.read<unknown>(filename);
+          if (localData !== null) {
+            skipped.push(filename);
+            continue;
+          }
+          console.log(
+            `[SyncFromCloud]   ${filename}: 🩹 장부엔 "받았음"인데 로컬 파일 없음 → 다운로드로 치유 (동적)`,
+          );
         }
 
         // 양쪽 다 변경됨 → 충돌 처리
         if (localInfo && localInfo.checksum !== remoteInfo.checksum) {
-          if (remoteManifest.deviceId === this.deviceId) {
+          // 파일별 uploadedBy 우선, 부재 시 매니페스트 deviceId 폴백 (정적 루프와 동일)
+          if ((remoteInfo.uploadedBy ?? remoteManifest.deviceId) === this.deviceId) {
             skipped.push(filename);
             continue;
           }
@@ -743,13 +762,23 @@ export class SyncFromCloud {
           continue;
         }
 
+        // 체크섬 동일 → 스킵. 단 로컬 바이너리 부재 시 장부 오염 치유(정적 루프와 동일).
+        let healDownload = false;
         if (localInfo && localInfo.checksum === remoteInfo.checksum) {
-          skipped.push(relPath);
-          continue;
+          const existing = await this.storage.readBinary(relPath);
+          if (existing !== null) {
+            skipped.push(relPath);
+            continue;
+          }
+          healDownload = true;
+          console.log(
+            `[SyncFromCloud]   ${relPath}: 🩹 장부엔 "받았음"인데 로컬 바이너리 없음 → 다운로드로 치유`,
+          );
         }
 
-        // 동일 기기가 마지막으로 수정했으면 스킵
-        if (remoteManifest.deviceId === this.deviceId) {
+        // 내가 올린 파일이면 스킵 — 파일별 uploadedBy 우선, 부재 시 매니페스트 deviceId 폴백.
+        // 치유 다운로드는 예외: 내가 올렸던 파일이라도 로컬에 없으면 받아와야 한다.
+        if (!healDownload && (remoteInfo.uploadedBy ?? remoteManifest.deviceId) === this.deviceId) {
           skipped.push(relPath);
           continue;
         }
