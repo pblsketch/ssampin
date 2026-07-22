@@ -27,6 +27,7 @@ import { useMealStore } from '@adapters/stores/useMealStore';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { IconContextMenu } from './IconContextMenu';
 import { CoachMark } from './CoachMark';
+import { useCoachMark } from './useCoachMark';
 import { PinDisc } from './PinDisc';
 import { PinBubble } from './PinBubble';
 import { PinPopover } from './PinPopover';
@@ -59,7 +60,7 @@ function localToday(): string {
 }
 
 export function IconWindow() {
-  const { settings, load: loadSettings, update: updateSettings } = useSettingsStore();
+  const { settings, load: loadSettings } = useSettingsStore();
   const { teacherSchedule, load: loadSchedule } = useScheduleStore();
   const { events, load: loadEvents } = useEventsStore();
   const { todos, load: loadTodos, addTodo, toggleTodo } = useTodoStore();
@@ -72,7 +73,8 @@ export function IconWindow() {
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [now, setNow] = useState(new Date());
-  const [showCoachMark, setShowCoachMark] = useState(false);
+  // 첫 활성화 안내 말풍선 — 설정 로드 완료 후에만 판정한다 (#147 B-2 고착 수정)
+  const { visible: showCoachMark, dismiss: dismissCoachMark } = useCoachMark();
   // 창 확장 상태 — main 프로세스가 확정한 값(확장 여부 + UI가 열리는 방향)
   const [layout, setLayout] = useState<IconLayout>({
     expanded: false,
@@ -212,26 +214,6 @@ export function IconWindow() {
     const t = setInterval(() => setNow(new Date()), 30_000);
     return () => clearInterval(t);
   }, []);
-
-  // 첫 활성화 코치마크 — settings.widget.icon.showCoachMark 기준
-  useEffect(() => {
-    if (!settings.widget.icon) return;
-    if (!settings.widget.icon.showCoachMark) return;
-    setShowCoachMark(true);
-    const timer = window.setTimeout(() => {
-      setShowCoachMark(false);
-      // 다음 진입부터는 안 띄우도록 갱신
-      void updateSettings({
-        widget: {
-          ...settings.widget,
-          icon: { ...settings.widget.icon!, showCoachMark: false },
-        },
-      });
-    }, 5000);
-    return () => clearTimeout(timer);
-    // settings.widget.icon은 한 번만 평가하면 됨 (코치마크는 1회성)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings.widget.icon?.showCoachMark]);
 
   // 오늘 급식(중식) 요약 — 수동+NEIS 병합 결과에서 반찬 3개까지
   const mergedTodayMeals = getMergedTodayMeals();
@@ -669,7 +651,12 @@ export function IconWindow() {
   } else if (peek) {
     overlay = <PinBubble title={peek.text} />;
   } else if (showCoachMark) {
-    overlay = <CoachMark />;
+    // 닫기(×)가 클릭을 받으려면 확장 창의 마우스 통과를 꺼야 한다 (팝오버와 동일 패턴)
+    overlay = (
+      <div onMouseEnter={interactiveEnter} onMouseLeave={interactiveLeave}>
+        <CoachMark onClose={dismissCoachMark} />
+      </div>
+    );
   }
 
   return (
