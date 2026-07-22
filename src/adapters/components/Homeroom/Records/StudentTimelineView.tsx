@@ -266,8 +266,9 @@ function StudentTimelineView({
                                 </button>
                                 <button
                                   onClick={() => {
+                                    // 실패 시 스토어가 오류 토스트 — 여기서는 미처리 rejection만 막는다
                                     if (window.confirm('이 기록을 삭제하시겠습니까?'))
-                                      void onDelete(record.id);
+                                      void onDelete(record.id).catch(() => {});
                                   }}
                                   className="p-0.5 rounded text-sp-muted/50 hover:text-red-400 hover:bg-red-500/10 transition-colors"
                                   title="삭제"

@@ -1256,7 +1256,7 @@ function InputMode({
                                     return;
                                   }
                                   if (window.confirm('이 기록을 삭제하시겠습니까?'))
-                                    void deleteRecord(record.id);
+                                    void deleteRecord(record.id).catch(() => {});
                                 }}
                                 className="text-sp-muted hover:text-red-400 transition-colors"
                                 title="삭제"

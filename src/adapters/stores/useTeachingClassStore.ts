@@ -89,13 +89,19 @@ interface TeachingClassState {
     date: string,
     recordsByPeriod: ReadonlyMap<number, readonly StudentAttendance[]>,
   ) => Promise<void>;
-  /** 대상 학생들의 하루 출결만 부분 갱신 — 다른 학생은 락 안 fresh 상태 그대로 보존(QA F3). */
+  /**
+   * 대상 학생들의 하루 출결만 부분 갱신 — 다른 학생은 락 안 fresh 상태 그대로 보존(QA F3).
+   *
+   * 반환 = 저장된 전체 출결 레코드. 로드 실패 등으로 **저장이 차단되면 `null`**.
+   * 호출자가 "정말 반영됐는지" 확인해야 하는 경로(예: 삭제 fail-closed)는 반드시
+   * null을 실패로 취급할 것 — 예외 없이 조용히 no-op 하던 경로였다.
+   */
   upsertStudentAttendanceEntries: (params: {
     classId: string;
     date: string;
     studentNumbers: ReadonlySet<number>;
     recordsByPeriod: ReadonlyMap<number, readonly StudentAttendance[]>;
-  }) => Promise<void>;
+  }) => Promise<readonly AttendanceRecord[] | null>;
   // 좌석배치 액션
   initClassSeating: (classId: string, mode: 'sequential' | 'random') => Promise<void>;
   randomizeClassSeating: (classId: string) => Promise<void>;
@@ -696,7 +702,7 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
     },
 
     upsertStudentAttendanceEntries: async ({ classId, date, studentNumbers, recordsByPeriod }) => {
-      if (!(await ensureWritable())) return;
+      if (!(await ensureWritable())) return null;
       const cls = get().classes.find((c) => c.id === classId);
       const saved = await manageAttendance.upsertStudentEntries({
         classId,
@@ -706,6 +712,7 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
         recordsByPeriod,
       });
       set({ attendanceRecords: [...saved] });
+      return saved;
     },
 
     /**

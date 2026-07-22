@@ -288,7 +288,14 @@ export function StudentRecordsEditor() {
 
     const bridgeId = `att-${form.studentId}-${form.date}`;
     if (existing && existing.id !== bridgeId) {
-      await deleteRecord(existing.id);
+      // 학생·날짜를 옮긴 경우의 옛 사본 정리. deleteRecord가 원본 출결부도 함께 비우지만,
+      // 옛 학생/날짜는 위 writeAttendanceDay에서 이미 정리돼 실질 no-op이다.
+      // 실패해도 출결부 저장 자체는 위에서 끝났으므로 여기서 흐름을 끊지 않는다(스토어가 토스트).
+      try {
+        await deleteRecord(existing.id);
+      } catch (err) {
+        console.error('[saveAttendanceRecord] 옛 사본 삭제 실패', err);
+      }
     }
     showToast('출결 기록을 저장했습니다', 'success');
     return true;
@@ -323,7 +330,30 @@ export function StudentRecordsEditor() {
   };
 
   const handleDelete = async (record: StudentRecord) => {
-    await deleteRecord(record.id);
+    try {
+      await deleteRecord(record.id);
+    } catch {
+      // 원본 출결부 정리 실패 → 삭제가 취소됐다(두 장부 모두 그대로). 스토어가 오류 토스트를
+      // 이미 띄웠으므로 여기서는 성공 토스트를 내지 않는다.
+      return;
+    }
+
+    // 출결 브리지 기록은 원본 출결부에서도 함께 지워진다(ADR-027). 되돌리기로 사본만
+    // 되살리면 두 장부가 다시 어긋나므로(그 사본은 원본 없는 유령이 된다) 되돌리기를
+    // 제공하지 않고, 전파 범위를 문장으로 알린다. 복구는 출결 탭에서 다시 입력한다.
+    if (record.category === 'attendance' && record.id.startsWith('att-')) {
+      useToastStore
+        .getState()
+        .show(
+          '출결 기록을 삭제했어요 · 담임 출결과 다른 기기에서도 지워집니다',
+          'success',
+          undefined,
+          5000,
+        );
+      if (editingId === record.id) resetForm();
+      return;
+    }
+
     // 5초 되돌리기 Undo toast (명세: 5000ms 명시)
     useToastStore.getState().show(
       '기록 삭제됨',

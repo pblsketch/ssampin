@@ -85,6 +85,12 @@ export const useMobileStudentRecordsStore = create<MobileStudentRecordsState>((s
   },
 
   bridgeAttendanceRecord: async ({ studentId, date, status, reason, memo }) => {
+    // 사본 목록 로드 보장 — 미로드 상태면 records가 []라 existing을 못 찾아
+    //  ① present 되돌리기가 삭제를 조용히 건너뛰고(PC에 사본이 그대로 남는다)
+    //  ② 비-present는 같은 id를 중복 추가한다(ManageStudentRecords.add는 무조건 append).
+    // 앱을 켜고 동기화 완료 전에 바로 출결로 들어가면 재현된다. 호출처가 4곳으로 흩어져 있어
+    // 호출처 누락에 강하도록 스토어 안에서 보장한다(StudentsPage의 출결 스토어 방어와 같은 패턴).
+    if (!get().loaded) await get().load();
     const bridgeId = `att-${studentId}-${date}`;
     const existing = get().records.find((r) => r.id === bridgeId);
 

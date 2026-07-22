@@ -208,8 +208,10 @@ function DefaultRecordListView({
                           </button>
                           <button
                             onClick={() => {
+                              // 출결 기록은 원본 출결부 정리에 실패하면 삭제가 취소되고 거부된다
+                              // (스토어가 오류 토스트를 띄운다) — 여기서는 미처리 rejection만 막는다
                               if (window.confirm('이 기록을 삭제하시겠습니까?'))
-                                void onDelete(record.id);
+                                void onDelete(record.id).catch(() => {});
                             }}
                             className="p-1 rounded text-sp-muted/50 hover:text-red-400 hover:bg-red-500/10 transition-colors"
                             title="삭제"

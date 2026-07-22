@@ -9,7 +9,7 @@ import {
   DEFAULT_RECORD_CATEGORIES,
   synthesizeSubcategory,
 } from '@domain/valueObjects/RecordCategory';
-import { studentRecordsRepository } from '@adapters/di/container';
+import { studentRecordsRepository, studentRepository } from '@adapters/di/container';
 import { ManageStudentRecords } from '@usecases/studentRecords/ManageStudentRecords';
 import { updateAttendancePeriods } from '@usecases/studentRecords/UpdateAttendancePeriods';
 import { migrateStudentRecordsOnLoad } from '@usecases/studentRecords/MigrateStudentRecordsSubcatToTags';
@@ -19,7 +19,9 @@ import { pickRepresentativeAttendance } from '@domain/rules/attendanceRules';
 import { toggleDocumentKind } from '@domain/rules/attendanceDocumentPolicy';
 import type { Student } from '@domain/entities/Student';
 import { useTeachingClassStore } from './useTeachingClassStore';
+import { useSettingsStore } from './useSettingsStore';
 import { useObservationAttachmentStore } from './useObservationAttachmentStore';
+import { useToastStore } from '@adapters/components/common/Toast';
 
 /** 카테고리 색상 → Tailwind 클래스 매핑 */
 export const RECORD_COLOR_MAP: Record<
@@ -193,6 +195,74 @@ export interface UpdateAttendanceRecordParams {
   regularPeriodCount: number;
 }
 
+/**
+ * 담임 출결 브리지 기록인가 — `bridgeHomeroomDayAttendance`가 만든 `att-<studentId>-<date>`.
+ *
+ * 이 형태의 기록만 원본 출결부(attendance)에 같은 사실이 이중 기록돼 있다. 같은 attendance
+ * 카테고리라도 사용자가 직접 추가한 기록(UUID id)은 원본에 대응 엔트리가 없으므로 건드리지
+ * 않는다(삭제 영향 범위를 브리지 기록으로 한정).
+ */
+function isAttendanceBridgeRecord(record: StudentRecord): boolean {
+  return record.category === 'attendance' && record.id.startsWith('att-');
+}
+
+/**
+ * 출결 브리지 기록 삭제 시 원본 출결부에서 그 학생의 그날 엔트리를 제거한다(ADR-027).
+ *
+ * 기록 **수정**은 이미 양방향(`updateAttendanceRecord`)인데 **삭제**만 사본에 머물러
+ * "지웠는데 담임 출결에 여전히 살아 있다"가 됐다(피드백 #147 B-4). 게다가 출결 그리드가
+ * 그 날짜를 다시 저장하면 브리지가 사본을 재생성해 되살아났다.
+ *
+ * - 부분 갱신 API(`upsertStudentAttendanceEntries`) + **빈 recordsByPeriod** 를 쓴다.
+ *   대상 학생 엔트리만 그날 전 교시에서 빠지고 다른 학생은 락 안 fresh 상태로 보존된다.
+ *   하루 통째 교체(replaceDayForClass)는 동시 편집된 다른 학생 출결을 덮는다(QA F3) — 금지.
+ * - 학급/번호를 특정할 수 없으면(담임반 미설정·명렬표에서 학생 제외) 원본에서 어떤 엔트리인지
+ *   알 수 없으므로 정리를 건너뛴다. 여기서 삭제를 막으면 사용자가 기록을 영영 못 지운다.
+ * - 원본 저장이 실패하거나 차단되면 **throw** 한다 — 호출자가 사본을 남겨(fail-closed)
+ *   두 장부가 어긋난 채로 갈라지지 않게 한다.
+ *
+ * `useStudentStore`를 import하지 않는 이유: `useStudentStore → collectExternalRefs →
+ * useStudentRecordsStore` 경로가 이미 있어 순환 의존이 된다. 명렬표는 저장소에서 직접 읽는다.
+ */
+async function clearAttendanceLedgerEntry(record: StudentRecord): Promise<void> {
+  // 설정 로드 보장 — 로드 전이면 className이 빈 문자열이라 정리를 조용히 건너뛴다.
+  let settings = useSettingsStore.getState();
+  if (!settings.loaded) {
+    await settings.load();
+    settings = useSettingsStore.getState();
+  }
+  const classId = settings.settings.className;
+  if (!classId) {
+    console.warn('[deleteRecord] 담임반 미설정 — 원본 출결부 정리를 건너뜁니다');
+    return;
+  }
+
+  const students = await studentRepository.getStudents();
+  const studentNumber = students?.find((s) => s.id === record.studentId)?.studentNumber;
+  if (studentNumber == null) {
+    console.warn(
+      '[deleteRecord] 명렬표에서 학생을 찾지 못해 원본 출결부 정리를 건너뜁니다',
+      record.studentId,
+    );
+    return;
+  }
+
+  let teaching = useTeachingClassStore.getState();
+  if (!teaching.loaded) {
+    await teaching.load();
+    teaching = useTeachingClassStore.getState();
+  }
+  const saved = await teaching.upsertStudentAttendanceEntries({
+    classId,
+    date: record.date,
+    studentNumbers: new Set([studentNumber]),
+    recordsByPeriod: new Map(), // 비움 → 그 학생 엔트리만 제거
+  });
+  if (saved === null) {
+    throw new Error('원본 출결부를 저장할 수 없어 출결 기록 삭제를 중단했습니다');
+  }
+}
+
 export const useStudentRecordsStore = create<StudentRecordsState>((set, get) => {
   const manageRecords = new ManageStudentRecords(studentRecordsRepository);
   // 서류 종류 토글 직렬화 체인 — 계산까지 순서 보장(파일 쓰기 직렬화만으로는 낡은 계산을 못 막는다).
@@ -289,6 +359,29 @@ export const useStudentRecordsStore = create<StudentRecordsState>((set, get) => 
     },
 
     deleteRecord: async (id) => {
+      // 대상 조회 전 로드 보장 — 미로드 상태의 빈 records에서 못 찾으면 출결 브리지 여부를
+      // 판정하지 못해 원본 출결부 정리를 조용히 건너뛴다(모바일에서 실제로 난 사고 형태).
+      let target = get().records.find((r) => r.id === id);
+      if (!target && !get().loaded) {
+        await get().load();
+        target = get().records.find((r) => r.id === id);
+      }
+
+      // 출결 브리지 기록은 원본 출결부에도 같은 사실이 기록돼 있다. 원본을 **먼저** 지운다 —
+      // 실패하면 여기서 throw되어 사본이 남고(fail-closed) 두 장부가 어긋나지 않는다.
+      // (반대 순서로 사본을 먼저 지우면, 원본이 남아 다음 그리드 저장 때 사본이 부활한다)
+      if (target && isAttendanceBridgeRecord(target)) {
+        try {
+          await clearAttendanceLedgerEntry(target);
+        } catch (err) {
+          console.error('[deleteRecord] 원본 출결부 정리 실패 — 기록을 지우지 않았습니다', err);
+          useToastStore
+            .getState()
+            .show('출결부를 정리하지 못해 삭제를 취소했어요. 잠시 후 다시 시도해주세요', 'error');
+          throw err;
+        }
+      }
+
       await manageRecords.delete(id);
       set((state) => ({
         records: state.records.filter((r) => r.id !== id),
