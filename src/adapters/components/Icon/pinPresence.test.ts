@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { derivePinInfo, decidePeek, buildSummary, listTodayClasses } from './pinPresence';
+import {
+  derivePinInfo,
+  decidePeek,
+  buildSummary,
+  listTodayClasses,
+  formatMinutesUntil,
+} from './pinPresence';
 import type { Todo } from '@domain/entities/Todo';
 import type { SchoolEvent } from '@domain/entities/SchoolEvent';
 import type { TeacherScheduleData } from '@domain/entities/Timetable';
@@ -303,5 +309,34 @@ describe('decidePeek — 급식 브리핑 (v2.2.7)', () => {
     });
     expect(info.lunch?.minutesUntil).toBe(30);
     expect(decidePeek(info)?.text).toBe('오늘 급식 · 비빔밥');
+  });
+});
+
+describe('formatMinutesUntil — 시간 단위 표기 (2026-07-23 사용자 피드백)', () => {
+  it('60분 미만은 분 단위 그대로', () => {
+    expect(formatMinutesUntil(0)).toBe('0분 후');
+    expect(formatMinutesUntil(45)).toBe('45분 후');
+    expect(formatMinutesUntil(59)).toBe('59분 후');
+  });
+
+  it('정각 시간은 "H시간 후"', () => {
+    expect(formatMinutesUntil(60)).toBe('1시간 후');
+    expect(formatMinutesUntil(120)).toBe('2시간 후');
+  });
+
+  it('60분 이상은 "H시간 M분 후" — 345분 그대로 노출 금지', () => {
+    expect(formatMinutesUntil(61)).toBe('1시간 1분 후');
+    expect(formatMinutesUntil(345)).toBe('5시간 45분 후');
+  });
+
+  it('buildSummary 다음 수업·일정 줄에도 시간 단위 표기가 적용된다', () => {
+    const now = new Date(2026, 5, 23, 7, 30, 0); // 1교시(09:00) 90분 전
+    const events: SchoolEvent[] = [
+      event({ title: '아산병원', date: '2026-06-23', time: '13:15' }), // 345분 후
+    ];
+    const info = derivePinInfo({ now, periodTimes, teacherSchedule, todos: [], events });
+    const summary = buildSummary(info);
+    expect(summary.lines).toContain('다음: 1교시 수학 · 2-3 (1시간 30분 후)');
+    expect(summary.lines).toContain('일정: 아산병원 (오늘, 5시간 45분 후)');
   });
 });

@@ -1209,7 +1209,19 @@ function expandIconWindow(): { expanded: boolean; anchor: IconAnchor } {
   iconAnchor = anchor;
   iconExpanded = true;
   iconWindow.setBounds(bounds);
-  iconWindow.setIgnoreMouseEvents(true, { forward: true });
+  // 마우스 통과 초기값 — 예전엔 무조건 true(통과)로 두고 렌더러 mouseenter IPC
+  // 왕복이 성공해야만 핀이 클릭을 받았다. 그런데 확장은 대부분 "커서가 이미 핀
+  // 위에 있을 때"(호버·드래그 직후) 일어나므로, 왕복이 늦거나 mouseenter가 재발화
+  // 하지 않으면 pointerdown이 바탕화면으로 새며 "아이콘이 안 움직여요"가 된다
+  // (#147 B-1 잔재, 2026-07-23 드래그 재신고). 커서가 핀 위면 즉시 인터랙티브.
+  const cursor = screen.getCursorScreenPoint();
+  const overPin =
+    cursor.x >= pin.x &&
+    cursor.x < pin.x + pin.width &&
+    cursor.y >= pin.y &&
+    cursor.y < pin.y + pin.height;
+  diagLog('icon', `expandIconWindow overPin=${overPin} cursor=(${cursor.x},${cursor.y})`);
+  iconWindow.setIgnoreMouseEvents(!overPin, { forward: true });
   sendIconLayout();
   return { expanded: true, anchor };
 }

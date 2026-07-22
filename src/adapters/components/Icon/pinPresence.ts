@@ -117,6 +117,17 @@ function truncate(s: string, n: number): string {
   return s.length > n ? `${s.slice(0, n - 1)}…` : s;
 }
 
+/**
+ * 남은 분 → 사람이 읽는 "후" 표기 (v2.2.14 사용자 피드백).
+ * 60분 미만 "M분 후" · 정각 "H시간 후" · 그 외 "H시간 M분 후" — "345분 후" 방지.
+ */
+export function formatMinutesUntil(minutes: number): string {
+  if (minutes < 60) return `${minutes}분 후`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m === 0 ? `${h}시간 후` : `${h}시간 ${m}분 후`;
+}
+
 /** 지금 시각 기준 펫이 알 수 있는 정보(수업/할 일/일정/급식)를 한 번에 계산 */
 export function derivePinInfo(params: DerivePinInfoParams): PinInfo {
   const { now, periodTimes, teacherSchedule, todos, events, lunchMenu } = params;
@@ -277,7 +288,7 @@ export function decidePeek(info: PinInfo): { state: PinState; text: string } | n
     const room = info.next.classroom ? ` · ${info.next.classroom}` : '';
     return {
       state: 'wave',
-      text: `오늘 수업 ${info.todayClassCount}개 · 첫 수업 ${info.next.number}교시 ${info.next.subject}${room} (${info.next.minutesUntil}분 후)`,
+      text: `오늘 수업 ${info.todayClassCount}개 · 첫 수업 ${info.next.number}교시 ${info.next.subject}${room} (${formatMinutesUntil(info.next.minutesUntil)})`,
     };
   }
   // 급식 브리핑 — 점심 시작 60분 전부터 시작 전까지
@@ -391,7 +402,8 @@ export function buildSummary(info: PinInfo): { title: string; lines: string[] } 
 
   if (info.next) {
     const room = info.next.classroom ? ` · ${info.next.classroom}` : '';
-    const when = info.next.minutesUntil > 0 ? ` (${info.next.minutesUntil}분 후)` : '';
+    const when =
+      info.next.minutesUntil > 0 ? ` (${formatMinutesUntil(info.next.minutesUntil)})` : '';
     lines.push(`다음: ${info.next.number}교시 ${info.next.subject}${room}${when}`);
   }
   if (info.dueTodos.count > 0) {
@@ -406,7 +418,7 @@ export function buildSummary(info: PinInfo): { title: string; lines: string[] } 
     // 오늘이면 남은 시간, 아니면 날짜·요일을 함께 안내 (v2.2.7 사용자 요청)
     const when = info.nextEvent.today
       ? info.nextEvent.minutesUntil != null
-        ? ` (오늘, ${info.nextEvent.minutesUntil}분 후)`
+        ? ` (오늘, ${formatMinutesUntil(info.nextEvent.minutesUntil)})`
         : ' (오늘)'
       : ` (${formatMonthDayWeekday(info.nextEvent.date)})`;
     lines.push(`일정: ${info.nextEvent.title}${when}`);

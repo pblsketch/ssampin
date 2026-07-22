@@ -42,6 +42,8 @@ import {
 
 const DOUBLE_CLICK_THRESHOLD_MS = 250;
 const HOVER_TOOLTIP_DELAY_MS = 100;
+// 확장 전 핀 숨김의 안전망 — 응답이 늦어도 이 시간이 지나면 핀을 다시 보인다
+const PRE_RESIZE_HIDE_FAILSAFE_MS = 250;
 
 // 능동 말풍선 노출 시간 / 축하 동작 지속 시간
 const PEEK_VISIBLE_MS = 6000;
@@ -90,6 +92,8 @@ export function IconWindow() {
   const prevDueCountRef = useRef<number | null>(null);
 
   const hoverTimerRef = useRef<number | null>(null);
+  // 핀 요소 — 확장 직후 마우스 통과 재동기화에서 실제 :hover 판정에 사용
+  const pinRef = useRef<HTMLDivElement | null>(null);
   const lastClickAtRef = useRef<number>(0);
   const singleClickTimerRef = useRef<number | null>(null);
   // 드래그 판정 상태. 실제 윈도우 이동은 main process가 screen.getCursorScreenPoint()를
@@ -273,6 +277,16 @@ export function IconWindow() {
     !dragging &&
     (hovered || popoverOpen || menuOpen || showCoachMark || celebrating || peek !== null);
 
+  // 확장 전 핀 숨김(pre-hide) — 투명 창은 setBounds 로 커지는 순간 OS 가 "직전
+  // 프레임"을 새 창 자리에 한두 프레임 그대로 비춰, 핀 잔상이 엉뚱한 위치에서
+  // 깜빡인다(2026-07-23 사용자 신고. main 의 setOpacity 는 transparent 창에서
+  // 무효라 창 차원 은폐 불가 — 실기기 확인). 확장 직전에 핀 스프라이트만 CSS 로
+  // 숨겨 "빈 프레임"을 만들어 두면, 비치는 낡은 프레임에 아무것도 없다.
+  // hit-test 를 유지해야 하므로 visibility 가 아닌 opacity 를 쓴다(숨긴 동안에도
+  // 클릭·드래그는 정상 동작). 축소는 낡은 프레임의 해당 영역이 빈 곳이라 잔상이
+  // 없으므로 즉시 요청한다.
+  const [preResizeHide, setPreResizeHide] = useState(false);
+
   useEffect(() => {
     // 조율(reconcile): 원하는 상태와 실제 창 상태가 어긋나 있으면 요청한다.
     // main 이 스스로 축소하는 경우(드래그 시작·화면 이탈 리셋)에도 layout push 로
@@ -281,18 +295,40 @@ export function IconWindow() {
     // (실기기 확인 2026-07-02: 클릭 후 팝오버가 화면에 안 나오던 원인).
     if (wantExpanded === layout.expanded) return undefined;
     const api = window.electronAPI;
-    if (api?.iconSetExpanded) {
-      let cancelled = false;
+    if (!api?.iconSetExpanded) {
+      // 브라우저 dev 폴백 — 창 개념이 없으므로 즉시 반영 (실화면 검증용)
+      setLayout({ expanded: wantExpanded, anchor: { up: true, right: true } });
+      return undefined;
+    }
+    let cancelled = false;
+    const request = () => {
       void api.iconSetExpanded(wantExpanded).then((l) => {
         if (!cancelled && l) setLayout(l);
       });
+    };
+    if (!wantExpanded) {
+      request();
       return () => {
         cancelled = true;
       };
     }
-    // 브라우저 dev 폴백 — 창 개념이 없으므로 즉시 반영 (실화면 검증용)
-    setLayout({ expanded: wantExpanded, anchor: { up: true, right: true } });
-    return undefined;
+    // 확장: 핀을 숨긴 빈 프레임이 실제로 그려진 뒤(rAF 2회) 리사이즈를 요청한다.
+    setPreResizeHide(true);
+    let raf2 = 0;
+    const raf1 = window.requestAnimationFrame(() => {
+      raf2 = window.requestAnimationFrame(() => {
+        if (!cancelled) request();
+      });
+    });
+    const failsafe = window.setTimeout(() => setPreResizeHide(false), PRE_RESIZE_HIDE_FAILSAFE_MS);
+    return () => {
+      // 정상 완료(layout.expanded 갱신)든 드래그 개입이든, dep 변경 시점에 핀 복원
+      cancelled = true;
+      window.cancelAnimationFrame(raf1);
+      if (raf2) window.cancelAnimationFrame(raf2);
+      window.clearTimeout(failsafe);
+      setPreResizeHide(false);
+    };
   }, [wantExpanded, layout.expanded]);
 
   // main 주도 레이아웃 변경(드래그 축소·화면 이탈 리셋 등) 구독
@@ -328,11 +364,15 @@ export function IconWindow() {
       interactiveCountRef.current = 0;
       return;
     }
-    // 확장 직후 main 은 빈 영역 클릭 통과(ignore=true)로 시작한다. 이때 포인터가
-    // 이미 핀 위에 있으면(호버로 확장된 경우) 핀의 클릭·드래그까지 바탕화면으로
-    // 통과돼 버리므로, 현재 hover 참조 카운트 기준으로 즉시 재동기화한다.
+    // 확장 직후 재동기화 — 참조 카운트가 아니라 실제 DOM :hover 를 기준으로 한다.
+    // 카운트는 축소 시 0으로 리셋되는데, 커서가 핀 위에 머문 채 재확장되면(드래그
+    // 직후가 대표) mouseenter 가 다시 발화하지 않아 카운트 0 = 마우스 통과로 굳고,
+    // 핀 클릭·드래그가 바탕화면으로 새는 고착이 된다(#147 B-1 잔재, 2026-07-23
+    // "처음 몇 번만 이동 성공" 재신고의 원인).
     // (실기기 확인 2026-07-02: 말풍선 표시 중 클릭 무반응·드래그 불가의 원인)
-    sendMouseIgnore(interactiveCountRef.current === 0);
+    const pinHovered = !!pinRef.current?.matches(':hover');
+    if (pinHovered && interactiveCountRef.current === 0) interactiveCountRef.current = 1;
+    sendMouseIgnore(!pinHovered && interactiveCountRef.current === 0);
   }, [layout.expanded, sendMouseIgnore]);
 
   // 창 포커스 이탈(바깥 클릭 등) 시 팝오버/메뉴 닫기
@@ -673,10 +713,16 @@ export function IconWindow() {
         BrowserWindow compact 64×64 (Issue #30171 회피), 캐릭터는 56×56 중앙 표시.
       */}
       <div
+        ref={pinRef}
         className={`absolute w-16 h-16 cursor-pointer flex items-center justify-center ${
           up ? 'bottom-0' : 'top-0'
         } ${right ? 'right-0' : 'left-0'}`}
-        style={{ background: 'transparent', touchAction: 'none' }}
+        style={{
+          background: 'transparent',
+          touchAction: 'none',
+          // 확장 리사이즈 직전 잔상 예방용 숨김 — opacity 라 hit-test 는 유지된다
+          opacity: preResizeHide ? 0 : 1,
+        }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
