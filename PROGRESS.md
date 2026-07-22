@@ -1,6 +1,24 @@
 # Progress
 
-마지막 업데이트: 2026-07-21 KST
+마지막 업데이트: 2026-07-22 KST
+
+## ✅ 피드백 #147 B-3 — 모바일 담임 출결 학생 명단 미표시 + 빈 명단 덮어쓰기 차단 (2026-07-22, ADR-026)
+
+**신고**: "첫화면 우리반 출결 체크를 누르면 학생 있어도 명단 안 뜸"(smile837@naver.com). **원인(핸드오프 확정 그대로)**: `AttendanceCheckPage`가 담임인데도 학생을 **수업 학급 명부**(`getClass(classId)`)에서 찾는데, 홈이 넘기는 `classId`는 `settings.className`("3-5" 문자열)이고 `TeachingClass.id`는 UUID라 영원히 매치 실패 → 빈 배열 → "학생 명단이 없습니다." 같은 화면의 출결 통계 탭·PC 담임 출결·모바일 학생 탭은 전부 담임 명렬표를 쓴다(이 화면 하나만 어긋남). **함께 막은 미신고 유실 경로(§3)**: 명단이 빈 채로 "완료"를 누르면 그날 담임 출결이 `students: []`로 교체되고 `updatedAt`이 갱신돼 **동기화 LWW로 PC의 그날 출결까지 사라진다**(여러 날은 최대 30일 동시). **수정**: ① `type === 'homeroom'`만 원천을 담임 명렬표로 전환(`type === 'class'`는 코드 무변경) ② 매핑은 `number: studentNumber` + **grade/classNum 미부여**(`studentKey`가 `String(number)`여야 기존 기록이 붙는다) + `isStudentActive` 필터 + 번호 없는 학생 제외·안내 ③ **`doSave()`/`handleMultiDateSave()` 빈 명단 가드**(완료·자동저장·언마운트 flush·교시 전환 전부 이 경로) + 완료/여러 날/텍스트 버튼 비활성 ④ 명렬표·출결 **로드 완료 전 판정 금지**(로드 전 빈 배열·null 기록을 사용자 의도로 오인하지 않도록, 로딩 스켈레톤) ⑤ 빈 화면 문구를 원인별로 분리(명렬표 비었음 / 번호 있는 학생 없음 / 수업 명단 없음) ⑥ 카운터를 현재 명단 기준으로 계산("출석 3 · 전체 0" 오해 제거). **명시적 비변경**: `getTodayRecord(classId, selectedPeriod, teachingClass?.groupId)` 인자(그룹 공유 레코드 계약, ADR-023 QA2 B2)·`classId` UUID 정규화 금지(저장된 레코드 전량 고아화)·신규 저장 경로 0. **게이트**: tsc 0 / lint 0에러(경고 132 기존) / 전체 vitest 3786 passed·10 skipped(308파일, `--maxWorkers=4`) / regression 38/38 / landing docs:check 통과. **신규 테스트 11**(`AttendanceCheckPage.homeroomRoster.test.tsx`) + **돌연변이 검증**(수정 전 소스로 되돌리면 11개 중 8개 실패, 수업 경로 3개만 통과 = 결함 포착과 회귀 0 동시 증명). **실화면**(모바일 dev + IndexedDB 시드): 명단 4명 표시·저장 바이트 확인·재진입 유지·통계 탭 수 일치·**명렬표 비운 뒤 완료해도 그날 레코드 updatedAt까지 무변경**·텍스트/여러 날/수업 출결 회귀 없음. **함정: 이 파일의 기존 테스트 2개(multiDate·quickText)는 소스 원문을 grep하는 계약 테스트 — `'await saveRecord(record)'`, `setStudentStatuses(nextStatuses)` 등 고정 문자열과 "applyText 본문에 `saveRecord(` 없음" 부정 계약을 깨지 않도록 가드는 해당 줄 앞에 추가했다.** **남음**: 릴리즈 고지(v2.2.14)·**신고자 회신 — "명단이 빈 채로 완료를 눌러 저장된 날이 있는지" 확인 안내 필요(Drive 웹 '버전 관리' 리비전으로 30일 내 복구 가능)**·실기기(iOS/Android) 확인·트랙 C(출결 이중 장부 삭제 — 같은 파일 뒷부분이라 이 커밋 이후 진행).
+
+## ✅ 피드백 #147 B-2/B-1 — 아이콘 모드 코치마크 고착 + 드래그 실패 수정 완료 (2026-07-22, ADR-025, main `857566d7`)
+
+**신고**: B-2 "'쌤핀이예요! 클릭, 오늘 요약~' 멘트가 계속 살아 있어 화면을 자꾸 가립니다" / B-1 "쌤핀 닫았을 때 생기는 아이콘이 때때로 움직이지 않습니다"(smile837@naver.com). 핸드오프 `docs/01-plan/features/icon-mode-coachmark-stuck.handoff.md`가 **두 신고의 원인을 하나로 확정**(원인 재조사 없이 §4 수정부터 착수).
+
+**원인**: `IconWindow` 코치마크 effect가 마운트 직후 스토어 초기값(`DEFAULT_SETTINGS...showCoachMark=true`)을 보고 말풍선을 켜고 5초 타이머 무장 → `loadSettings()` 완료로 저장값 `false`가 들어오며 dep이 뒤집히면 cleanup이 **타이머만** 정리하고 표시 상태는 `true`로 고착(끄는 코드 없음) → `wantExpanded` 상시 true → 창 340×480 확장 유지 → 확장 창은 마우스 통과가 기본이라 핀 위 IPC 왕복이 늦거나 유실되면 pointerdown 미도달 = "때때로 안 움직임"(B-1). 대상 = **코치마크를 한 번이라도 본 기존 사용자 전원**(신규는 저장값도 true라 dep 불변으로 정상 — 헤비 유저가 신고한 이유).
+
+**수정**(4파일, 전부 `src/adapters/components/Icon/` — `electron/`·스토어 diff 0): ① 수명주기를 `useCoachMark` 훅으로 분리하고 **`loaded` 게이트** 적용(로드 완료 후 딱 한 번 판정) ② cleanup에서 타이머와 표시 상태를 **항상 함께** 내림(고착 방어) ③ **[데이터 보호]** 저장 페이로드를 `useSettingsStore.getState()`로 **발사 시점에** 읽음 — 기존 코드는 effect 생성 시점 `settings.widget`을 통째 스프레드해서, ①만 고치면 로드 전 기본값이 5초 뒤 저장되어 **사용자 위젯 설정(크기·투명도·데스크톱 모드·표시 섹션)이 기본값으로 덮어써지는 유실 경로**가 살아났을 것(update가 widget을 얕은 병합하므로 stale 스프레드가 전 필드를 민다) ④ 수동 닫기(×) 추가 — 본체는 `pointer-events-none` 유지, 버튼만 `pointer-events-auto` + 팝오버와 동일한 `interactiveEnter/Leave` 래퍼로 클릭 도달.
+
+**검증**: 게이트 4종 — tsc 0 / lint 0에러(경고 132 기존, Icon 폴더 무경고) / 전체 vitest **3773 passed**·10 skipped(307파일; 실패 2건 JsonInteractiveLessonRepository는 부하 flaky, 단독 18/18 통과) / regression 38/38. **신규 테스트 5**(`useCoachMark.test.tsx`, 수정 전에 먼저 작성). **돌연변이 검증**으로 테스트가 공허하지 않음을 실증 — `loaded` 게이트+cleanup 복원을 빼면 테스트 1·2 실패(고착 재현), 저장 시점 읽기를 무장 시점 캡처로 바꾸면 테스트 4 실패. **실화면**: (a) 브라우저 `?mode=icon` 실렌더 — 기존 사용자 미표시(진입 직후·7초 후 모두)·신규 사용자 표시→5초 소멸→저장 시 width 999·opacity 0.42·desktopMode native-desktop **보존**·× 클릭 즉시 소멸+저장 (b) **Electron 실기동**(`npm run build:electron` → `electron:dev:fresh` 격리 프로필) — 기존 사용자 상태에서 아이콘 모드 진입 시 창이 **66×66 compact 유지**(확장 340×480 없음, 20초 관찰), PrintWindow 캡처로 핀만 표시 확인, settings.json width 999/opacity 0.42 무변경.
+
+**함정**: PowerShell `Set-Content -Encoding utf8`은 **BOM**을 붙여 앱의 `JSON.parse`가 실패 → 시드한 설정이 통째 무시되고 기본값으로 재작성됨(`[System.IO.File]::WriteAllText`+`UTF8Encoding($false)` 사용). dev Electron은 Vite 최초 컴파일 때문에 창 표시까지 **5~6분** 걸림. `MainWindowTitle`로 프로세스를 찾으면 **설치판 실앱**이 잡힘(격리 dev 인스턴스는 electron.exe) — 창 핸들을 직접 지정할 것.
+
+**남음**: 실기기 확인(핀 드래그 10회·단일/더블/우클릭 — 사람 손 필요, §5-3 잔여 3항목)·커밋·릴리즈 고지(v2.2.14 "아이콘 모드 안내 말풍선 고착 + 드래그 실패 수정")·신고자 회신. 형제 트랙 2개(모바일 담임 출결 명단·출결 이중 장부 삭제)는 미착수.
 
 ## ✅ 모바일 동기화 안 됨 신고(문혜인) — 원인 규명 + 수정 완료 (2026-07-21, ADR-024, 미커밋)
 

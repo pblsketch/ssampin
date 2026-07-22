@@ -16,6 +16,7 @@ import { useMobileStudentStore } from '@mobile/stores/useMobileStudentStore';
 import { useMobileStudentRecordsStore } from '@mobile/stores/useMobileStudentRecordsStore';
 import { useMobileSettingsStore } from '@mobile/stores/useMobileSettingsStore';
 import { useBottomSheet } from '@mobile/hooks/useBottomSheet';
+import { EmptyState } from '@mobile/components/common/EmptyState';
 import { isStudentActive } from '@domain/rules/studentActivity';
 import { MultiDatePicker } from '@adapters/components/common/MultiDatePicker';
 
@@ -97,9 +98,13 @@ export function AttendanceCheckPage({
   const saveRecord = useMobileAttendanceStore((s) => s.saveRecord);
   const getTodayRecord = useMobileAttendanceStore((s) => s.getTodayRecord);
   const loadAttendance = useMobileAttendanceStore((s) => s.load);
+  const attendanceLoaded = useMobileAttendanceStore((s) => s.loaded);
   const loadClasses = useMobileTeachingClassStore((s) => s.load);
   const getClass = useMobileTeachingClassStore((s) => s.getClass);
   const classesLoaded = useMobileTeachingClassStore((s) => s.loaded);
+  const homeroomStudents = useMobileStudentStore((s) => s.students);
+  const homeroomStudentsLoaded = useMobileStudentStore((s) => s.loaded);
+  const loadStudents = useMobileStudentStore((s) => s.load);
   const settings = useMobileSettingsStore((s) => s.settings);
   const loadSettings = useMobileSettingsStore((s) => s.load);
 
@@ -154,15 +159,56 @@ export function AttendanceCheckPage({
   useEffect(() => {
     void loadAttendance();
     void loadClasses();
+    void loadStudents();
     void loadSettings();
-  }, [loadAttendance, loadClasses, loadSettings]);
+  }, [loadAttendance, loadClasses, loadStudents, loadSettings]);
+
+  /**
+   * 담임 출결의 학생 원천 — 담임 명렬표(`useMobileStudentStore`).
+   *
+   * 담임 화면이 넘겨받는 `classId`는 `settings.className`("3-5" 같은 사람이 읽는 문자열)이고
+   * `TeachingClass.id`는 UUID라 `getClass(classId)`가 항상 undefined → 명단이 비어 보였다.
+   * PC 담임 출결(AttendanceMode)·모바일 담임 학생 탭·출결 통계 탭과 동일하게 명렬표를 쓴다.
+   *
+   * 매핑 규칙(기존 저장 데이터 호환):
+   *  - `number`는 반드시 `studentNumber` — 저장된 담임 출결 `students[].number`와 브리지
+   *    역매핑(`allStudents.find(st => st.studentNumber === sa.number)`)이 이 값을 쓴다.
+   *  - `grade`/`classNum`은 넣지 않는다 — 담임은 단일 반이라 `studentKey()`가 `String(number)`를
+   *    반환해야 기존 기록 로딩 키와 일치한다(넣으면 "3-5-1"이 되어 저장된 출결이 화면에 안 붙는다).
+   *  - 번호 없는 학생은 제외 — 출결은 번호로 식별돼 번호 없는 학생끼리 서로 뭉개진다
+   *    (StudentsPage 빠른 출결과 동일 정책). 제외된 인원은 화면에 안내한다.
+   */
+  const homeroomRoster = useMemo(() => {
+    if (type !== 'homeroom') {
+      return { students: [] as readonly TeachingClassStudent[], excludedNoNumber: 0 };
+    }
+    const active = homeroomStudents.filter(isStudentActive);
+    const numbered = active.filter((s) => s.studentNumber != null && s.studentNumber > 0);
+    const mapped: TeachingClassStudent[] = numbered
+      .map((s) => ({
+        number: s.studentNumber!,
+        name: s.name,
+        ...(s.status !== undefined ? { status: s.status } : {}),
+      }))
+      .sort((a, b) => a.number - b.number);
+    return { students: mapped, excludedNoNumber: active.length - numbered.length };
+  }, [type, homeroomStudents]);
+
+  // 원천 로드 완료 여부 — 담임은 명렬표, 수업은 수업 학급 명부.
+  // 출결 로드까지 기다린다: 로드 전 `getTodayRecord`는 null이라 "전원 출석" 기본값이 시드되고,
+  // 그 상태로 저장되면 그날 기존 출결을 덮어쓴다.
+  const rosterLoaded = type === 'homeroom' ? homeroomStudentsLoaded : classesLoaded;
+  const isLoading = !rosterLoaded || !attendanceLoaded;
 
   // 학생 목록 + 기존 기록 초기화
   useEffect(() => {
-    if (!classesLoaded) return;
+    if (isLoading) return;
 
     const teachingClass = getClass(classId);
-    const studentList = teachingClass?.students.filter(isStudentActive) ?? [];
+    const studentList =
+      type === 'homeroom'
+        ? homeroomRoster.students
+        : (teachingClass?.students.filter(isStudentActive) ?? []);
     setStudents(studentList);
 
     // 기존 기록이 있으면 로드 — 그룹 학급은 다른 과목 명의의 공유 레코드도 찾아야
@@ -198,12 +244,17 @@ export function AttendanceCheckPage({
       setStudentReasons(new Map());
       setStudentMemos(new Map());
     }
-  }, [classesLoaded, classId, selectedPeriod, getClass, getTodayRecord]);
+  }, [isLoading, type, homeroomRoster, classId, selectedPeriod, getClass, getTodayRecord]);
 
   // 저장 함수 — 상태는 ref에서 읽어 항상 최신 값을 보장
   // (의존성 배열에서 state를 제외하여 debounce 중 재생성을 방지 → clearTimeout race 제거)
   const doSave = useCallback(async () => {
     const currentStudents = studentsRef.current;
+    // 데이터 유실 차단: 명단이 비어 있으면 저장하지 않는다.
+    // 빈 명단으로 저장하면 upsert가 그날 기존 레코드를 students:[] 로 교체하고 updatedAt이
+    // 갱신돼, 동기화 LWW로 PC의 그날 담임 출결까지 지워진다.
+    // (완료 버튼 · 2초 디바운스 자동저장 · 언마운트 flush · 교시 전환 flush 전부 이 경로를 탄다)
+    if (currentStudents.length === 0) return;
     const currentStatuses = statusesRef.current;
     const currentReasons = reasonsRef.current;
     const currentMemos = memosRef.current;
@@ -301,6 +352,12 @@ export function AttendanceCheckPage({
 
   // 여러 날 일괄 저장 (Phase 3 FR-09)
   const handleMultiDateSave = useCallback(async () => {
+    // 데이터 유실 차단(doSave와 동일 사유) — 여러 날은 최대 30일을 한 번에 비울 수 있어 더 위험하다.
+    if (studentsRef.current.length === 0) {
+      setActionToast('학생 명단이 없어 저장하지 않았어요');
+      setTimeout(() => setActionToast(null), 3000);
+      return;
+    }
     const dates = Array.from(multiDateSet).sort();
     if (dates.length === 0) return;
     if (dates.length > 30) {
@@ -409,8 +466,27 @@ export function AttendanceCheckPage({
     setSelectedPeriod(p);
   };
 
-  // 카운터
-  const values = Array.from(studentStatuses.values());
+  // 명단이 없으면 저장 동선을 아예 막는다 (빈 명단 저장 = 그날 출결 삭제)
+  const hasNoStudents = !isLoading && students.length === 0;
+
+  // 빈 화면 안내 — 원인별로 다음 행동이 달라 문구를 구분한다
+  const emptyStateText =
+    type !== 'homeroom'
+      ? '학생 명단이 없습니다.'
+      : homeroomRoster.excludedNoNumber > 0
+        ? '번호가 있는 학생이 없어요'
+        : '담임 명렬표에 학생이 없어요';
+  const emptyStateHint =
+    type !== 'homeroom'
+      ? '수업 학급 명단을 먼저 등록해주세요.'
+      : homeroomRoster.excludedNoNumber > 0
+        ? '출결은 번호로 저장돼요. 명렬표에서 번호를 지정해주세요.'
+        : "아래 '학생' 탭 → 담임에서 학생을 추가하면 여기에 나타나요.";
+
+  // 카운터 — 화면에 있는 학생 기준.
+  // (상태맵에는 기록에만 남아 있고 지금 명단엔 없는 학생도 들어올 수 있다. 명단이 비었는데
+  //  "출석 3 · 전체 0"처럼 보이면 저장된 것으로 오해할 수 있어 명단을 기준으로 센다)
+  const values = students.map((s) => studentStatuses.get(studentKey(s)) ?? 'present');
   const presentCount = values.filter((s) => s === 'present').length;
   const lateCount = values.filter((s) => s === 'late').length;
   const absentCount = values.filter((s) => s === 'absent').length;
@@ -442,7 +518,8 @@ export function AttendanceCheckPage({
           {type === 'homeroom' && (
             <button
               onClick={() => setTextSheetOpen(true)}
-              className="px-2.5 py-1.5 text-xs font-medium text-sp-accent rounded-lg hover:bg-sp-accent/10 touch-target active:scale-[0.98] transition-all flex items-center gap-1"
+              disabled={hasNoStudents}
+              className="px-2.5 py-1.5 text-xs font-medium text-sp-accent rounded-lg hover:bg-sp-accent/10 disabled:opacity-40 touch-target active:scale-[0.98] transition-all flex items-center gap-1"
               aria-label="텍스트로 출결 입력"
             >
               <span className="material-symbols-outlined text-base">edit_note</span>
@@ -451,15 +528,18 @@ export function AttendanceCheckPage({
           )}
           <button
             onClick={() => setMultiDateSheetOpen(true)}
-            className="px-2.5 py-1.5 text-xs font-medium text-sp-accent rounded-lg hover:bg-sp-accent/10 touch-target active:scale-[0.98] transition-all flex items-center gap-1"
+            disabled={hasNoStudents}
+            className="px-2.5 py-1.5 text-xs font-medium text-sp-accent rounded-lg hover:bg-sp-accent/10 disabled:opacity-40 touch-target active:scale-[0.98] transition-all flex items-center gap-1"
             aria-label="여러 날에 동일 출결 적용"
           >
             <span className="material-symbols-outlined text-base">date_range</span>
             여러 날
           </button>
+          {/* 명단이 비면 저장 자체를 막는다 — 빈 명단 저장은 그날 기존 출결을 지운다 */}
           <button
             onClick={() => void handleComplete()}
-            disabled={saving}
+            disabled={saving || hasNoStudents}
+            title={hasNoStudents ? '학생 명단이 없어 저장할 수 없어요' : undefined}
             className="px-4 py-2 bg-sp-accent text-sp-accent-fg text-sm font-medium rounded-xl disabled:opacity-50 touch-target active:scale-[0.98] transition-all"
           >
             {saving ? '저장 중...' : '완료'}
@@ -560,12 +640,24 @@ export function AttendanceCheckPage({
         </div>
       </div>
 
+      {/* 번호 없는 학생 안내 — 출결은 번호로 식별돼 번호 없는 학생은 목록에서 제외된다 */}
+      {!isLoading && homeroomRoster.excludedNoNumber > 0 && (
+        <p className="px-4 pt-2 text-xs text-sp-muted shrink-0">
+          번호가 없는 학생 {homeroomRoster.excludedNoNumber}명은 출결에 표시되지 않아요. 명렬표에서
+          번호를 지정해주세요.
+        </p>
+      )}
+
       {/* 학생 리스트 */}
       <div className="flex-1 overflow-y-auto">
-        {students.length === 0 ? (
-          <div className="flex items-center justify-center h-full">
-            <p className="text-sp-muted text-sm">학생 명단이 없습니다.</p>
+        {isLoading ? (
+          <div className="p-4 space-y-2" aria-hidden="true">
+            {[0, 1, 2, 3, 4].map((row) => (
+              <div key={row} className="h-20 rounded-xl bg-sp-surface border border-sp-border" />
+            ))}
           </div>
+        ) : students.length === 0 ? (
+          <EmptyState icon="group_off" text={emptyStateText} hint={emptyStateHint} />
         ) : (
           <ul className="divide-y divide-sp-border">
             {students.map((student) => {
@@ -692,7 +784,7 @@ export function AttendanceCheckPage({
               </div>
               <button
                 onClick={() => void handleMultiDateSave()}
-                disabled={multiDateSet.size === 0 || multiSaveProgress !== null}
+                disabled={multiDateSet.size === 0 || multiSaveProgress !== null || hasNoStudents}
                 className="px-3 py-1.5 bg-sp-accent text-sp-accent-fg text-xs font-medium rounded-lg disabled:opacity-50 touch-target"
               >
                 {multiSaveProgress

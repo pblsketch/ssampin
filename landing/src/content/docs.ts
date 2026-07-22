@@ -920,7 +920,7 @@ export const docsArticles: readonly DocArticle[] = [
     title: '쌤핀 모바일',
     description: 'm.ssampin.com에서 PC 데이터를 휴대폰으로 확인하고 일부 기록을 작성합니다.',
     category: 'features',
-    lastUpdated: '2026-07-06',
+    lastUpdated: '2026-07-22',
     sections: [
       {
         id: 'install',
@@ -937,7 +937,7 @@ export const docsArticles: readonly DocArticle[] = [
         title: '모바일에서 할 수 있는 것',
         bullets: [
           '시간표(주간 포함), 일정, 메모, 할 일, 즐겨찾기 확인',
-          '담임·수업 출결 기록 (스와이프 빠른 출결 포함)',
+          '담임·수업 출결 기록 (스와이프 빠른 출결 포함). 홈의 "우리 반 → 체크하기" 명단은 담임 명렬표를 그대로 따르며, 번호가 없는 학생은 출결이 번호로 저장되는 특성상 목록에 나오지 않습니다(명렬표에서 번호를 지정하면 나타납니다).',
           '학생 연락처 조회와 전화 걸기, 관찰 기록·수업 기록 작성',
           '수행평가 채점, 진도 관리, 설문·과제 현황 확인',
           '그동안 쌓인 학생 기록 모아보기(유형·월별)와 담임·학급 출결 통계 조회',
