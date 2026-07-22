@@ -1,9 +1,14 @@
 import type {
   StudentRecord,
   StudentRecordsData,
+  StudentRecordTombstone,
   FieldUpdatedAt,
 } from '@domain/entities/StudentRecord';
-import { TRACKED_GROUP_FIELDS, TRACKED_GROUPS } from '@domain/entities/StudentRecord';
+import {
+  TRACKED_GROUP_FIELDS,
+  TRACKED_GROUPS,
+  STUDENT_RECORD_TOMBSTONE_TTL_MS,
+} from '@domain/entities/StudentRecord';
 import type { RecordCategoryItem } from '@domain/valueObjects/RecordCategory';
 import { DEFAULT_RECORD_CATEGORIES } from '@domain/valueObjects/RecordCategory';
 import type { IStudentRecordsRepository } from '@domain/repositories/IStudentRecordsRepository';
@@ -122,6 +127,52 @@ export function applyRecordChange(
   return result as StudentRecord;
 }
 
+/**
+ * 저장 데이터 조립: 삭제 전파 툼스톤 관리 (buildObservationSaveData 패턴).
+ * - 이번 저장에서 사라진 id → 툼스톤 추가(삭제 시각 기록)
+ * - 다시 등장한 id → 툼스톤 제거(재작성이 삭제를 이김)
+ * - TTL(90일) 지난 툼스톤 → 정리(GC)
+ * 모든 학생 기록 저장 경로(add/update/updateMany/delete/카테고리 저장/cascadeTagChange)가
+ * 이 함수를 거친다. 봉투는 명시 재조립 — 호출자가 스프레드로 실어온 낡은 deleted 가
+ * 새지 않게 하고, 한 경로라도 우회하면 그 저장이 기존 툼스톤을 통째로 떨어뜨린다.
+ *
+ * 시각 축 주의: 이 도메인의 툼스톤은 ISO **문자열**이다(StudentRecord.updatedAt 과 동일 축).
+ * TTL·부활 비교 모두 ISO 문자열 사전순 비교로 수행한다(toISOString은 고정 폭 UTC 포맷이라
+ * 사전순 = 시간순).
+ *
+ * 불변식: 모든 학생 기록 write 경로는 저장 전에 updatedAt(ISO)을 세팅해야 한다
+ * (add는 createdAt 백필, update 계열은 applyRecordChange가 스탬프). updatedAt 없는
+ * 레코드는 부활 비교에서 ''(최고참)으로 취급돼 어떤 툼스톤에도 진다 — 새 write 경로에서
+ * 이 스탬프를 빠뜨리면 그 기록은 삭제 후 재작성해도 영원히 부활하지 못한다.
+ */
+export function buildStudentRecordsSaveData(
+  existing: StudentRecordsData | null,
+  next: StudentRecordsData,
+  now: string = new Date().toISOString(),
+): StudentRecordsData {
+  const existingRecords = existing?.records ?? [];
+  const nextIds = new Set(next.records.map((r) => r.id));
+  const cutoff = new Date(Date.parse(now) - STUDENT_RECORD_TOMBSTONE_TTL_MS).toISOString();
+
+  // 기존 툼스톤 승계 — 재등장(부활) id 와 TTL 경과분은 제거
+  const carried = (existing?.deleted ?? []).filter(
+    (t) => !nextIds.has(t.id) && t.deletedAt > cutoff,
+  );
+  const carriedIds = new Set(carried.map((t) => t.id));
+
+  // 이번 저장에서 사라진 id → 새 툼스톤
+  const newTombstones: StudentRecordTombstone[] = existingRecords
+    .filter((r) => !nextIds.has(r.id) && !carriedIds.has(r.id))
+    .map((r) => ({ id: r.id, deletedAt: now }));
+
+  const deleted = [...carried, ...newTombstones];
+  const envelope: StudentRecordsData = {
+    records: next.records,
+    ...(next.categories ? { categories: next.categories } : {}),
+  };
+  return deleted.length > 0 ? { ...envelope, deleted } : envelope;
+}
+
 export class ManageStudentRecords {
   constructor(private readonly studentRecordsRepository: IStudentRecordsRepository) {}
 
@@ -159,10 +210,12 @@ export class ManageStudentRecords {
         ...record,
         updatedAt: record.updatedAt ?? record.createdAt,
       };
-      await this.studentRecordsRepository.saveRecords({
-        records: [...current, stamped],
-        categories: data?.categories,
-      });
+      await this.studentRecordsRepository.saveRecords(
+        buildStudentRecordsSaveData(data, {
+          records: [...current, stamped],
+          categories: data?.categories,
+        }),
+      );
     });
   }
 
@@ -178,10 +231,9 @@ export class ManageStudentRecords {
       const records = current.map((r) =>
         r.id === change.after.id ? applyRecordChange(r, change, now) : r,
       );
-      await this.studentRecordsRepository.saveRecords({
-        records,
-        categories: data?.categories,
-      });
+      await this.studentRecordsRepository.saveRecords(
+        buildStudentRecordsSaveData(data, { records, categories: data?.categories }),
+      );
       return records;
     });
   }
@@ -203,10 +255,9 @@ export class ManageStudentRecords {
         const change = changeById.get(r.id);
         return change ? applyRecordChange(r, change, now) : r;
       });
-      await this.studentRecordsRepository.saveRecords({
-        records,
-        categories: data?.categories,
-      });
+      await this.studentRecordsRepository.saveRecords(
+        buildStudentRecordsSaveData(data, { records, categories: data?.categories }),
+      );
       return records;
     });
   }
@@ -216,10 +267,10 @@ export class ManageStudentRecords {
       const data = await this.studentRecordsRepository.getRecords();
       const current = data?.records ?? [];
       const records = current.filter((r) => r.id !== id);
-      await this.studentRecordsRepository.saveRecords({
-        records,
-        categories: data?.categories,
-      });
+      // 사라진 id 는 buildStudentRecordsSaveData 가 툼스톤으로 기록 — 기기 간 삭제 전파(ADR-028).
+      await this.studentRecordsRepository.saveRecords(
+        buildStudentRecordsSaveData(data, { records, categories: data?.categories }),
+      );
     });
   }
 
@@ -241,7 +292,7 @@ export class ManageStudentRecords {
       records: data?.records ?? [],
       categories,
     };
-    await this.studentRecordsRepository.saveRecords(updatedData);
+    await this.studentRecordsRepository.saveRecords(buildStudentRecordsSaveData(data, updatedData));
   }
 
   private async getCategoriesUnsafe(): Promise<readonly RecordCategoryItem[]> {
@@ -310,8 +361,10 @@ export class ManageStudentRecords {
         return applyRecordChange(r, { before: r, after }, now);
       });
       if (affected === 0) return { records: current, affected: 0 };
-      // 단일 영속(envelope 보존) — categories 등 기존 봉투 유지.
-      await this.studentRecordsRepository.saveRecords({ ...(data ?? { records: [] }), records });
+      // 단일 영속(envelope 보존) — categories·툼스톤 등 기존 봉투는 조립 함수가 승계.
+      await this.studentRecordsRepository.saveRecords(
+        buildStudentRecordsSaveData(data, { records, categories: data?.categories }),
+      );
       return { records, affected };
     });
   }

@@ -1,6 +1,10 @@
 # Progress
 
-마지막 업데이트: 2026-07-22 KST
+마지막 업데이트: 2026-07-23 KST
+
+## ✅ 학생 기록 삭제 툼스톤 — 기기 간 삭제 전파 (2026-07-23, ADR-028, 미커밋)
+
+**배경**: v2.2.14 릴리즈 전 QA 잔여 HIGH 1건 — "학생 기록을 지웠는데 다른 기기에서 다시 생겨요." student-records만 삭제 표식(툼스톤)이 없어(출결·관찰기록은 이미 있음) A기기에서 지운 기록이 B기기 사본과의 병합에서 부활. 핸드오프 `docs/01-plan/features/student-records-delete-tombstone.handoff.md` 그대로 구현. **수정 3파일+테스트 2파일**: ①`StudentRecord.ts` — `StudentRecordTombstone`(**deletedAt은 ISO 문자열** — 관찰기록의 ms 숫자를 복사하면 updatedAt(string)과의 부활 비교가 조용히 항상 오판, §4-① 최대 함정)+TTL 90일 상수+`StudentRecordsData.deleted?`(optional=과거 파일 호환) ②`ManageStudentRecords.ts` — `buildStudentRecordsSaveData` 조립 함수(사라진 id→툼스톤, 재등장→걷힘, TTL GC) 신설 + **저장 6경로 전부 경유**(add/update/updateMany/delete/카테고리/cascadeTagChange — 한 경로라도 우회하면 그 저장이 툼스톤을 통째 소실) ③`SyncFromCloud.ts` `mergeStudentRecords` — 툼스톤 id별 최신 합집합 병합+부활 규칙(`(updatedAt ?? '') > deletedAt`만 생존, 동률·스탬프 부재=삭제 승=의도된 기본값·테스트 고정)+`deleted` 비었으면 미직렬화. **스토어 무변경**(데스크톱·모바일 삭제 전부 usecase `delete()` 하나로 수렴 실측)·**entity-samples 무변경**(notMirrored — 메타테스트는 등재 인터페이스만 검사, ObservationTombstone 미등재 선례 확인). `MigrateStudentRecordsSubcatToTags`는 봉투 스프레드 저장이라 deleted 자동 보존(미수정). **게이트 전통과**: tsc 0 / lint 0에러(경고 132 기존) / 전체 vitest **3828 passed**·10 skipped(314파일, `--maxWorkers=4`) / regression 38/38 / prettier 통과. **신규 테스트 17**(병합 9+저장 조립 8 — §5 필수 시나리오 6종 전부 포함: 삭제 전파·정당한 부활·스탬프 없는 옛 기록=삭제 승·TTL GC·하위 호환·툼스톤 병합). **남음**: 커밋(push는 사용자 요청 시)·릴리즈 노트에 "지운 기록이 다시 생기던 문제"로 고지(/docs는 사용자 행동 무변경이라 갱신 불필요)·실기기 2대 왕복 확인.
 
 ## ✅ 피드백 #147 B-4 — 출결 이중 장부: 삭제가 한쪽에만 기록되던 문제 수정 (2026-07-22, ADR-027, 미커밋)
 

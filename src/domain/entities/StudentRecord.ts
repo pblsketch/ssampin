@@ -97,9 +97,32 @@ export interface StudentRecord {
   readonly tags?: readonly string[];
 }
 
+/**
+ * 삭제 전파용 툼스톤.
+ * 기록을 지울 때 "언제 지웠는지"를 남겨, 기기 간 병합에서
+ * 상대 기기에 남아 있던 옛 사본이 부활하지 않게 한다.
+ * 계약 분류: notMirrored 계열(동기화 메타 — 외부 AI 미노출, updatedAt 선례).
+ * entity-samples 픽스처에 넣지 말 것.
+ */
+export interface StudentRecordTombstone {
+  /** StudentRecord.id */
+  readonly id: string;
+  /**
+   * 삭제 시각(ISO 문자열) — StudentRecord.updatedAt 과 동일 축.
+   * 관찰기록 툼스톤(deletedAt: number/ms)과 달리 여기는 문자열이다 —
+   * 숫자로 정의하면 updatedAt(string)과의 부활 비교가 조용히 항상 오판한다.
+   */
+  readonly deletedAt: string;
+}
+
+/** 툼스톤 보존 기간(90일, 관찰기록과 동일) — 지난 툼스톤은 저장 시 정리(GC)된다 */
+export const STUDENT_RECORD_TOMBSTONE_TTL_MS = 90 * 24 * 60 * 60 * 1000;
+
 export interface StudentRecordsData {
   readonly records: readonly StudentRecord[];
   readonly categories?: readonly RecordCategoryItem[];
+  /** 삭제 전파용 툼스톤 목록 (과거 데이터에는 없음 — optional 유지) */
+  readonly deleted?: readonly StudentRecordTombstone[];
 }
 
 export interface AttendanceStats {

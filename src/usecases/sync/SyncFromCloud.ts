@@ -134,7 +134,13 @@ async function mergeAndWriteLocked<T extends { readonly records: readonly unknow
   });
 }
 
-/** student-records를 record ID 기준으로 병합 (record-LWW BASE + 추적 그룹 오버레이) */
+/**
+ * student-records를 record ID 기준으로 병합 (record-LWW BASE + 추적 그룹 오버레이).
+ * 삭제 전파: 양쪽 툼스톤(deleted)을 id별 최신 deletedAt으로 합치고,
+ * 기록이 툼스톤보다 나중에 수정된 경우에만 살아남는다(재작성이 삭제를 이김).
+ * 동률이면 삭제가 이긴다 — mergeObservations 와 동일 정책.
+ * 시각 축: 이 도메인은 ISO 문자열(observations 의 ms 숫자와 다름) — 문자열 사전순 비교.
+ */
 export function mergeStudentRecords(
   local: StudentRecordsData | null,
   remote: StudentRecordsData,
@@ -176,6 +182,27 @@ export function mergeStudentRecords(
     map.set(r.id, mergeTrackedGroups(base, other));
   }
 
+  // 툼스톤 병합: id별 최신 deletedAt(ISO 문자열) 유지
+  const tombstones = new Map<string, string>();
+  for (const t of [...(local?.deleted ?? []), ...(remote.deleted ?? [])]) {
+    const prev = tombstones.get(t.id);
+    if (!prev || t.deletedAt > prev) tombstones.set(t.id, t.deletedAt);
+  }
+
+  // 기록 vs 툼스톤: 기록의 updatedAt(ISO)이 삭제 시각보다 나중이면 부활(툼스톤 제거),
+  // 아니면 기록 제거(삭제 유지). updatedAt 없는 구 기록은 ''(최고참)으로 취급돼
+  // 항상 삭제가 이긴다 — 지운 걸 되살리는 것보다 안전한 의도된 기본값.
+  for (const [id, deletedAt] of tombstones) {
+    const rec = map.get(id);
+    if (!rec) continue;
+    if ((rec.updatedAt ?? '') > deletedAt) {
+      tombstones.delete(id);
+    } else {
+      map.delete(id);
+    }
+  }
+  const deleted = [...tombstones].map(([id, deletedAt]) => ({ id, deletedAt }));
+
   // 카테고리: 항목(id) 합집합 병합.
   // 과거 "리모트 우선 통째 교체"(remote.categories ?? local)는 기본값·빈 배열만 든
   // 리모트가 로컬 커스텀 카테고리를 전부 소거했다(2026-07-13 데이터 유실 신고의 원인 ①).
@@ -183,6 +210,7 @@ export function mergeStudentRecords(
   return {
     records: [...map.values()],
     ...(categories ? { categories } : {}),
+    ...(deleted.length > 0 ? { deleted } : {}),
   };
 }
 
