@@ -325,6 +325,22 @@ const absenceChecks = [
     patterns: [/async function sha256Hex\b/],
     fileFilter: (path) => !path.includes(`${sep}_shared${sep}`),
   },
+  // ────────────────────────────────────────────────────────────────────────
+  // REGRESSION #51 — @nut-tree-fork/nut-js 재도입 금지 (ADR-038, 2026-08-07).
+  // 스티커 자동 붙여넣기는 koffi(FFI) → user32.dll SendInput 으로 대체됐다
+  // (electron/platform/win32SendKeys.ts). nut-js 포크는 낡은 jimp(0.22)에 고정되어
+  // jimp → @jimp/core → file-type 취약점 알림 7건을 영구히 달고 다녔고, 상류 패치가 없다.
+  // "Ctrl+V 한 번" 을 위해 이미지 라이브러리 전체를 배포하지 않는다.
+  // ────────────────────────────────────────────────────────────────────────
+  {
+    name: 'REGRESSION #51: @nut-tree-fork/nut-js 가 재도입되지 않았다 (koffi SendInput 사용)',
+    roots: ['electron', 'src', 'scripts'],
+    extensions: ['.ts', '.tsx', '.mjs', '.js'],
+    patterns: [/@nut-tree(-fork)?\//],
+    // 이 스크립트 자신의 설명 주석과 대체 모듈의 배경 주석은 예외 (패턴을 문자열로 언급함)
+    fileFilter: (path) =>
+      !/regression-grep-check\.mjs$/.test(path) && !/win32SendKeys\.ts$/.test(path),
+  },
   {
     name: 'REGRESSION #48: active product source must not send users to the old Notion guide',
     roots: ['src', 'landing/src', 'public', 'scripts'],

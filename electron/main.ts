@@ -75,6 +75,7 @@ import {
 } from './archiveManager';
 import { isCorruptShortDataFile } from './dataFileRules';
 import { createDesktopWidgetManager, type DesktopWidgetManager } from './desktopWidgetManager';
+import { sendCtrlV } from './platform/win32SendKeys';
 import type { DesktopModeFallbackEvent } from './desktopWidgetTypes';
 import { initNativeDesktopDiag, diagLog, diagLogVerbose, diagWarn } from './nativeDesktopDiag';
 import {
@@ -4153,10 +4154,14 @@ function registerIpcHandlers(): void {
   }
 
   /**
-   * Windows 자동 붙여넣기 — @nut-tree-fork/nut-js로 Ctrl+V 시뮬레이션.
-   * 원본 `@nut-tree/nut-js`는 2024년 npm에서 제거되어 현재 유지보수되는
-   * 포크(`@nut-tree-fork/nut-js`)를 사용한다. require/dispatch 실패 시
-   * autoPasted=false로 graceful fallback (클립보드는 이미 채워져 있어
+   * Windows 자동 붙여넣기 — koffi(FFI)로 user32.dll SendInput을 호출해 Ctrl+V를 보낸다.
+   *
+   * v2.2.14~ (ADR-038): 이전에는 nut-js 포크 패키지를 썼으나, 그 포크가 낡은 jimp에
+   * 고정되어 있어 상류 패치가 나오지 않는 취약점 알림이 계속 붙었다. 실제로 쓰는 기능은
+   * "Ctrl+V 한 번" 뿐이라 이미 쓰고 있는 koffi로 대체했다(electron/platform/win32SendKeys.ts).
+   * 재도입은 REGRESSION #51이 막는다.
+   *
+   * dispatch 실패 시 autoPasted=false로 graceful fallback (클립보드는 이미 채워져 있어
    * 사용자가 수동 Ctrl+V로 붙여넣을 수 있다).
    */
   async function pasteOnWindows(
@@ -4169,7 +4174,7 @@ function registerIpcHandlers(): void {
     let pasteReason: string | undefined;
     try {
       // 포커스 전환 대기 — 80ms → 150ms로 늘려 OS가 이전 앱(카톡/스레드)에
-      // 포커스를 자연스럽게 되돌릴 시간을 충분히 확보. 짧으면 nut-js Ctrl+V가
+      // 포커스를 자연스럽게 되돌릴 시간을 충분히 확보. 짧으면 SendInput Ctrl+V가
       // 아직 hide 처리중인 피커 윈도우 위에 떨어져 스크린샷 캡처처럼 보일 수 있다.
       await new Promise<void>((resolve) => setTimeout(resolve, 150));
 
@@ -4187,35 +4192,21 @@ function registerIpcHandlers(): void {
         return { ok: false, autoPasted: false, reason: 'clipboard-cleared-before-paste' };
       }
 
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const nut = require('@nut-tree-fork/nut-js') as {
-        keyboard: {
-          pressKey: (...keys: number[]) => Promise<void>;
-          releaseKey: (...keys: number[]) => Promise<void>;
-        };
-        Key: Record<string, number>;
-      };
-      const modKey = nut.Key['LeftControl'];
-      const vKey = nut.Key['V'];
-      if (modKey === undefined || vKey === undefined) {
-        throw new Error('nut-js Key 매핑 없음');
-      }
-      stickerLog('[sticker:paste] dispatching Ctrl+V via nut-js');
-      await nut.keyboard.pressKey(modKey, vKey);
-      await nut.keyboard.releaseKey(vKey, modKey);
+      stickerLog('[sticker:paste] dispatching Ctrl+V via SendInput(koffi)');
+      sendCtrlV();
       autoPasted = true;
-      stickerLog('[sticker:paste] nut-js dispatch complete, autoPasted=true');
+      stickerLog('[sticker:paste] SendInput dispatch complete, autoPasted=true');
     } catch (err) {
       autoPasted = false;
       pasteReason = err instanceof Error ? err.message : String(err);
       // 진단을 위해 stack까지 포함한 error 로그 — 사용자 환경에서 native binding 로드
-      // 실패(libnut 미언팩 등) 원인을 추적하기 쉽도록 한다.
+      // 실패(koffi 미언팩 등)나 UIPI 차단 원인을 추적하기 쉽도록 한다.
       stickerLog(
-        '[sticker:paste] nut-js require/dispatch failed:',
+        '[sticker:paste] SendInput dispatch failed:',
         err instanceof Error ? err.message : String(err),
       );
       console.error(
-        '[sticker:paste] nut-js require/dispatch failed:',
+        '[sticker:paste] SendInput dispatch failed:',
         err instanceof Error ? (err.stack ?? err.message) : err,
       );
     }
@@ -4380,7 +4371,7 @@ function registerIpcHandlers(): void {
 
   // sticker:paste — 클립보드에 PNG 복사 + 피커 hide + (가능 시) 자동 Ctrl+V (PRD §3.2)
   // 플랫폼별 분기:
-  //  - win32: pasteOnWindows (@nut-tree-fork/nut-js 사용 — 실패 시 graceful fallback)
+  //  - win32: pasteOnWindows (koffi → user32 SendInput — 실패 시 graceful fallback)
   //  - darwin: pasteOnMacOS (AppleScript via osascript, 접근성 권한 필요)
   //  - 그 외(linux 등): 클립보드만 채우고 autoPasted=false 반환
   //
@@ -4403,7 +4394,7 @@ function registerIpcHandlers(): void {
       // v2.0.x 핫픽스: 사용자 settings의 restorePreviousClipboard 옵션은 일시적으로
       // 강제 비활성화한다. 클립보드 복원 모드가 picker capture로 클립보드를
       // 덮어씌우는 회귀 이슈(수동 paste 시 picker 화면이 붙여넣어지는 버그)를
-      // 차단하기 위함. nut-js 자동 붙여넣기 안정화 + prev 클립보드 오염 원인
+      // 차단하기 위함. 자동 붙여넣기 안정화 + prev 클립보드 오염 원인
       // 규명 후 다시 활성화 검토.
       // 원래 라인: const restoreMode = args.restorePreviousClipboard === true;
       const restoreMode = false;
@@ -4468,7 +4459,7 @@ function registerIpcHandlers(): void {
       // 4) 피커 숨기기 — 이전 앱이 포커스를 되찾도록.
       //    ★ 순서가 중요: alwaysOnTop을 먼저 해제해야 OS가 자연스럽게 이전 앱
       //    (카톡/스레드)에게 포커스를 돌려준다. alwaysOnTop이 살아있는 채로
-      //    hide만 하면 일부 환경에서 포커스 복원 타이밍이 어긋나 nut-js Ctrl+V가
+      //    hide만 하면 일부 환경에서 포커스 복원 타이밍이 어긋나 SendInput Ctrl+V가
       //    엉뚱한 윈도우에 떨어져 "피커 스크린샷이 붙여넣어진 것처럼" 보이는
       //    증상이 발생할 수 있다.
       if (stickerPickerWindow && !stickerPickerWindow.isDestroyed()) {

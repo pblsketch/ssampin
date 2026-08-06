@@ -49,27 +49,17 @@ files:
       - '!node_modules/express/**'
       - '!node_modules/express-rate-limit/**'
 # 네이티브 모듈은 asar 내부에서 require할 수 없으므로 언팩 필요.
-# @nut-tree-fork/nut-js (스티커 자동 붙여넣기용) → libnut-{win32,darwin,linux} 의
-# .node 바이너리가 OS dlopen으로 로드되어야 한다. 미언팩 시 win32에서
-# `Cannot find module ...libnut.node` 런타임 오류 → 자동 Ctrl+V 실패.
 #
-# v2.0.x 핫픽스: `**/node_modules/@nut-tree-fork/**` 단일 글롭만으로는 일부
-# 환경에서 .node 바이너리가 asar 외부로 추출되지 않는 회귀가 관찰되어
-# (사용자 진단 로그 → libnut.node 경로 모두 app.asar 내부에서 탐색),
-# (a) nut-js 하위 패키지를 명시 + (b) bindings/file-uri-to-path 의존성도 함께
-# 언팩 + (c) 보험으로 모든 `.node` 파일을 강제 언팩한다.
+# v2.2.14~ (ADR-038): 스티커 자동 붙여넣기(Ctrl+V)의 @nut-tree-fork/nut-js 의존을 제거하고
+# koffi(FFI)로 user32.dll SendInput을 직접 부르도록 바꿨다(electron/platform/win32SendKeys.ts).
+# 그에 따라 libnut / bindings / file-uri-to-path 언팩 항목도 함께 삭제했다 —
+# nut-js 를 되살리지 않는 한 재도입 금지(취약점 알림 7건의 발생원이었다).
 asarUnpack:
-  - '**/node_modules/@nut-tree-fork/**'
-  - '**/node_modules/@nut-tree-fork/libnut-win32/**'
-  - '**/node_modules/@nut-tree-fork/libnut-darwin/**'
-  - '**/node_modules/@nut-tree-fork/libnut-linux/**'
-  - '**/node_modules/libnut*/**'
-  - '**/node_modules/bindings/**'
-  - '**/node_modules/file-uri-to-path/**'
-  # koffi: 바탕화면 아이콘 아래 모드(native-desktop) FFI. Win32 전용이지만 packaging은
-  # 모든 OS 빌드에 포함되며, win32 패키지에서만 require된다. .node 바이너리는 asar
-  # 외부에서 dlopen 가능해야 함 (Phase 4-1~).
+  # koffi: 바탕화면 아이콘 아래 모드(native-desktop) FFI + 스티커 Ctrl+V 송신.
+  # Win32 전용이지만 packaging은 모든 OS 빌드에 포함되며, win32 패키지에서만 require된다.
+  # .node 바이너리는 asar 외부에서 dlopen 가능해야 함 (Phase 4-1~).
   - '**/node_modules/koffi/**'
+  # 보험 — 어떤 경로에 있든 네이티브 바이너리는 asar 밖으로.
   - '**/*.node'
 win:
   target:
