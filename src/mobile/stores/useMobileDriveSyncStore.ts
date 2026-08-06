@@ -6,6 +6,7 @@ import { SyncFromCloud } from '@usecases/sync/SyncFromCloud';
 import { getDriveSyncAdapter, driveSyncRepository, storage } from '@mobile/di/container';
 import type { SyncResult } from '@adapters/stores/useDriveSyncStore';
 import { isGoogleAuthBlockedError } from '@domain/rules/calendarSyncRules';
+import { awaitPendingWrites } from '@mobile/stores/pendingWrites';
 
 /**
  * 학교 Google Workspace 계정 차단 안내 (모바일 문구).
@@ -330,6 +331,10 @@ export const useMobileDriveSyncStore = create<MobileDriveSyncState>((set, get) =
       saveDebounce = null;
     }
     if (!tokenGetter || get().state === 'syncing') return;
+    // 화면의 미저장 편집이 로컬에 먼저 내려앉기를 기다린다. 이걸 건너뛰면 백그라운드 전환 시
+    // 편집 직전 상태가 클라우드 정본이 되어 PC 까지 덮는다(같은 이벤트에 두 리스너가 붙어 있고
+    // 실행 순서는 등록 순서에 달려 있다).
+    await awaitPendingWrites();
     await get().syncToCloud();
   },
 }));

@@ -19,6 +19,7 @@ import { useBottomSheet } from '@mobile/hooks/useBottomSheet';
 import { EmptyState } from '@mobile/components/common/EmptyState';
 import { isStudentActive } from '@domain/rules/studentActivity';
 import { MultiDatePicker } from '@adapters/components/common/MultiDatePicker';
+import { beginPendingWrite } from '@mobile/stores/pendingWrites';
 
 interface Props {
   classId: string;
@@ -304,26 +305,59 @@ export function AttendanceCheckPage({
     doSaveRef.current = doSave;
   }, [doSave]);
 
+  // 미저장 편집 배리어 — 백그라운드 전환 업로드(flushSync)가 이 편집을 기다리게 한다.
+  // 열어두지 않으면 편집 직전 상태가 클라우드 정본이 되어 PC 의 그날 출결까지 덮는다.
+  const releasePendingRef = useRef<(() => void) | null>(null);
+  const openPending = useCallback(() => {
+    if (!releasePendingRef.current) releasePendingRef.current = beginPendingWrite();
+  }, []);
+  const closePending = useCallback(() => {
+    releasePendingRef.current?.();
+    releasePendingRef.current = null;
+  }, []);
+
+  // 예약된 디바운스를 즉시 저장으로 승격 (백그라운드 전환·언마운트·교시 전환 공용).
+  const flushNow = useCallback(async () => {
+    if (!debounceRef.current) {
+      closePending();
+      return;
+    }
+    clearTimeout(debounceRef.current);
+    debounceRef.current = null;
+    try {
+      await doSaveRef.current();
+    } finally {
+      closePending();
+    }
+  }, [closePending]);
+
   // 언마운트 시 미저장 디바운스 분을 flush (embedded 모드는 "완료" 버튼이 없어 자동저장만 의존)
-  useEffect(
-    () => () => {
-      if (debounceRef.current) {
-        clearTimeout(debounceRef.current);
-        debounceRef.current = null;
-        void doSaveRef.current();
-      }
-    },
-    [],
-  );
+  useEffect(() => () => void flushNow(), [flushNow]);
+
+  // 백그라운드 전환 시 즉시 flush — iOS PWA 는 백그라운드에서 타이머를 죽이므로
+  // 디바운스가 나중에 발사된다는 보장이 없다. 여기서 저장해야 편집이 살아남는다.
+  useEffect(() => {
+    const onVisibility = (): void => {
+      if (document.visibilityState === 'hidden') void flushNow();
+    };
+    const onPageHide = (): void => void flushNow();
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pagehide', onPageHide);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pagehide', onPageHide);
+    };
+  }, [flushNow]);
 
   // 2초 디바운스 자동 저장 예약
   const scheduleSave = useCallback(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
+    openPending();
     debounceRef.current = setTimeout(() => {
       debounceRef.current = null;
-      void doSave();
+      void doSave().finally(closePending);
     }, 2000);
-  }, [doSave]);
+  }, [doSave, openPending, closePending]);
 
   // 상태 변경 핸들러
   const setStatus = useCallback(
@@ -345,7 +379,11 @@ export function AttendanceCheckPage({
       clearTimeout(debounceRef.current);
       debounceRef.current = null;
     }
-    await doSave();
+    try {
+      await doSave();
+    } finally {
+      closePending();
+    }
     setSaving(false);
     onBack();
   };
@@ -462,7 +500,11 @@ export function AttendanceCheckPage({
       clearTimeout(debounceRef.current);
       debounceRef.current = null;
     }
-    await doSave();
+    try {
+      await doSave();
+    } finally {
+      closePending();
+    }
     setSelectedPeriod(p);
   };
 
