@@ -78,7 +78,8 @@ beforeEach(() => {
       update: rec('progress.update') as LiveSyncWriteDeps['progress']['update'],
       delete: rec('progress.delete') as LiveSyncWriteDeps['progress']['delete'],
       exists: vi.fn((id: string) => id === 'prog-1'),
-      classExists: vi.fn((classId: string) => classId === 'cls-1'),
+      classExists: vi.fn((classId: string) => classId === 'cls-1' || classId === 'cls-archived'),
+      isClassArchived: vi.fn((classId: string) => classId === 'cls-archived'),
     },
   };
 });
@@ -1068,6 +1069,23 @@ describe('applyLiveSyncWrite — progress(수업 진도)', () => {
       deps,
     );
     expect(r).toMatchObject({ ok: false, status: 400 });
+    expect(calls).toHaveLength(0);
+  });
+
+  it('create — 보관된 수업반 → 사용자 언어 오류로 거부, 액션 미호출 (plan S1.4-F)', async () => {
+    const r = await applyLiveSyncWrite(
+      {
+        domain: 'progress',
+        op: 'create',
+        idempotencyKey: 'k',
+        data: { classId: 'cls-archived', date: '2026-07-07', period: 1, unit: '1단원' },
+      },
+      deps,
+    );
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.error).toContain('보관된 수업반이라 새로 기록할 수 없어요');
+    }
     expect(calls).toHaveLength(0);
   });
 

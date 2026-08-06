@@ -1,6 +1,7 @@
 import { useMemo, useEffect } from 'react';
 import type { StudentInfo } from '@domain/entities/Assignment';
 import { isStudentActive } from '@domain/rules/studentActivity';
+import { filterActiveClasses } from '@domain/rules/teachingClassArchive';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
@@ -49,8 +50,8 @@ export function useStudentLists(): StudentListOption[] {
       }
     }
 
-    // 2. 수업반 (수업 관리에서 등록한 반)
-    for (const tc of teachingClasses) {
+    // 2. 수업반 (수업 관리에서 등록한 반) — 보관된 반은 새 과제·설문 대상이 아니다
+    for (const tc of filterActiveClasses(teachingClasses)) {
       const activeStudentsInClass = tc.students.filter(isStudentActive);
       if (activeStudentsInClass.length > 0) {
         lists.push({

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { ToolLayout } from './ToolLayout';
+import { filterActiveClasses } from '@domain/rules/teachingClassArchive';
 import { useSeatingStore } from '@adapters/stores/useSeatingStore';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { useToolSound } from '@adapters/hooks/useToolSound';
@@ -624,13 +625,14 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
               </div>
               {seatDataSource === 'teachingClass' && (
                 <div>
-                  {teachingClasses.length === 0 ? (
+                  {filterActiveClasses(teachingClasses).length === 0 ? (
                     <div className="text-center py-3 text-sp-muted text-sm">
                       수업관리에서 먼저 반을 등록하세요
                     </div>
                   ) : (
                     <div className="flex flex-wrap gap-2">
-                      {teachingClasses.map((tc) => {
+                      {/* 보관된 반 제외 — 해석(selectedTc find)은 전체 유지 */}
+                      {filterActiveClasses(teachingClasses).map((tc) => {
                         const activeCount = tc.students.filter(isStudentActive).length;
                         return (
                           <button

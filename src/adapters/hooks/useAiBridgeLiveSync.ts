@@ -19,6 +19,7 @@ import type { SchoolEvent } from '@domain/entities/SchoolEvent';
 import type { ProgressStatus } from '@domain/entities/CurriculumProgress';
 import type { NotePageBody } from '@domain/entities/NotePage';
 import { MEMO_COLORS, type MemoColor } from '@domain/valueObjects/MemoColor';
+import { isTeachingClassArchived } from '@domain/rules/teachingClassArchive';
 import { ManageNotes } from '@usecases/note/ManageNotes';
 import { createEmptyNotePageBody, fromEditorDocument } from '@adapters/presenters/notePresenter';
 import { noteRepository } from '@adapters/di/container';
@@ -382,6 +383,10 @@ export function useAiBridgeLiveSync(): void {
           delete: (id) => tc.deleteProgressEntry(id),
           exists: (id) => tc.progressEntries.some((e) => e.id === id),
           classExists: (classId) => tc.classes.some((c) => c.id === classId),
+          isClassArchived: (classId) => {
+            const cls = tc.classes.find((c) => c.id === classId);
+            return cls ? isTeachingClassArchived(cls) : false;
+          },
         },
       });
     });

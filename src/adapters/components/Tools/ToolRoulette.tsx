@@ -5,6 +5,7 @@ import { PresetSelector } from './PresetSelector';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { isStudentActive } from '@domain/rules/studentActivity';
+import { filterActiveClasses } from '@domain/rules/teachingClassArchive';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { useToolSound } from '@adapters/hooks/useToolSound';
 import { secureRandom, pickIndexWithMemory } from '@domain/rules/randomRules';
@@ -15,10 +16,26 @@ interface ToolRouletteProps {
 }
 
 const WHEEL_COLORS = [
-  '#ef4444', '#3b82f6', '#22c55e', '#f59e0b', '#8b5cf6',
-  '#ec4899', '#14b8a6', '#f97316', '#6366f1', '#10b981',
-  '#e11d48', '#0ea5e9', '#84cc16', '#d946ef', '#06b6d4',
-  '#facc15', '#a855f7', '#fb923c', '#2dd4bf', '#f43f5e',
+  '#ef4444',
+  '#3b82f6',
+  '#22c55e',
+  '#f59e0b',
+  '#8b5cf6',
+  '#ec4899',
+  '#14b8a6',
+  '#f97316',
+  '#6366f1',
+  '#10b981',
+  '#e11d48',
+  '#0ea5e9',
+  '#84cc16',
+  '#d946ef',
+  '#06b6d4',
+  '#facc15',
+  '#a855f7',
+  '#fb923c',
+  '#2dd4bf',
+  '#f43f5e',
 ];
 
 function buildArcPath(
@@ -53,6 +70,8 @@ export function ToolRoulette({ onBack, isFullscreen }: ToolRouletteProps) {
   const [inputMode, setInputMode] = useState<'students' | 'teachingClass' | 'custom'>('custom');
   const [showTcDropdown, setShowTcDropdown] = useState(false);
   const tcClasses = useTeachingClassStore((s) => s.classes);
+  // 선택지 열거는 활성 반만 (보관된 반은 새 뽑기 대상 아님). 해석(find)은 전체 유지.
+  const selectableTcClasses = useMemo(() => filterActiveClasses(tcClasses), [tcClasses]);
   const tcLoaded = useTeachingClassStore((s) => s.loaded);
   const loadTc = useTeachingClassStore((s) => s.load);
   const tcDropdownRef = useRef<HTMLDivElement>(null);
@@ -110,13 +129,13 @@ export function ToolRoulette({ onBack, isFullscreen }: ToolRouletteProps) {
   }, []);
 
   const handleTcButtonClick = useCallback(() => {
-    if (tcClasses.length === 0) return;
-    if (tcClasses.length === 1) {
+    if (selectableTcClasses.length === 0) return;
+    if (selectableTcClasses.length === 1) {
       // Only one class, load it directly
-      const cls = tcClasses[0]!;
+      const cls = selectableTcClasses[0]!;
       const names = cls.students
         .filter(isStudentActive)
-        .map((s) => s.name?.trim() ? s.name : `${s.number}번`)
+        .map((s) => (s.name?.trim() ? s.name : `${s.number}번`))
         .filter((n) => n.trim() !== '');
       if (names.length >= 2) {
         setItems(names.slice(0, 20));
@@ -128,24 +147,27 @@ export function ToolRoulette({ onBack, isFullscreen }: ToolRouletteProps) {
     } else {
       setShowTcDropdown((v) => !v);
     }
-  }, [tcClasses]);
+  }, [selectableTcClasses]);
 
-  const loadTeachingClass = useCallback((classId: string) => {
-    const cls = tcClasses.find((c) => c.id === classId);
-    if (!cls) return;
-    const names = cls.students
-      .filter(isStudentActive)
-      .map((s) => s.name?.trim() ? s.name : `${s.number}번`)
-      .filter((n) => n.trim() !== '');
-    if (names.length >= 2) {
-      setItems(names.slice(0, 20));
-      setInputMode('teachingClass');
-      setWinner(null);
-      setWinnerIndex(null);
-      setHistory([]);
-    }
-    setShowTcDropdown(false);
-  }, [tcClasses]);
+  const loadTeachingClass = useCallback(
+    (classId: string) => {
+      const cls = tcClasses.find((c) => c.id === classId);
+      if (!cls) return;
+      const names = cls.students
+        .filter(isStudentActive)
+        .map((s) => (s.name?.trim() ? s.name : `${s.number}번`))
+        .filter((n) => n.trim() !== '');
+      if (names.length >= 2) {
+        setItems(names.slice(0, 20));
+        setInputMode('teachingClass');
+        setWinner(null);
+        setWinnerIndex(null);
+        setHistory([]);
+      }
+      setShowTcDropdown(false);
+    },
+    [tcClasses],
+  );
 
   const switchToCustom = useCallback(() => {
     setInputMode('custom');
@@ -159,15 +181,21 @@ export function ToolRoulette({ onBack, isFullscreen }: ToolRouletteProps) {
     setNewItemText('');
   }, [newItemText, items.length]);
 
-  const removeItem = useCallback((index: number) => {
-    setItems((prev) => prev.filter((_, i) => i !== index));
-    if (editingIndex === index) setEditingIndex(null);
-  }, [editingIndex]);
+  const removeItem = useCallback(
+    (index: number) => {
+      setItems((prev) => prev.filter((_, i) => i !== index));
+      if (editingIndex === index) setEditingIndex(null);
+    },
+    [editingIndex],
+  );
 
-  const startEdit = useCallback((index: number) => {
-    setEditingIndex(index);
-    setEditText(items[index] ?? '');
-  }, [items]);
+  const startEdit = useCallback(
+    (index: number) => {
+      setEditingIndex(index);
+      setEditText(items[index] ?? '');
+    },
+    [items],
+  );
 
   const saveEdit = useCallback(() => {
     if (editingIndex === null) return;
@@ -201,16 +229,16 @@ export function ToolRoulette({ onBack, isFullscreen }: ToolRouletteProps) {
     // 회전 θ 적용 후 포인터(top, -90도) 아래에 섹션 i의 중앙이 오려면:
     //   θ ≡ -(i + 0.5) * sectionAngle  (mod 360)
     const sectionAngle = 360 / items.length;
-    const baseFinal = ((-(targetIdx + 0.5) * sectionAngle) % 360 + 360) % 360;
+    const baseFinal = (((-(targetIdx + 0.5) * sectionAngle) % 360) + 360) % 360;
     // 섹션 내부에서 약간 흔들림 (인접 섹션 경계는 안 침범)
     const jitterMax = sectionAngle * 0.3; // 섹션 폭의 ±30%
     const jitter = (secureRandom() - 0.5) * 2 * jitterMax;
-    const finalAngle = ((baseFinal + jitter) % 360 + 360) % 360;
+    const finalAngle = (((baseFinal + jitter) % 360) + 360) % 360;
 
     // ── 3. 7~11 바퀴 + delta 로 newRotation 계산 ──
     const fullSpins = (7 + Math.floor(secureRandom() * 5)) * 360;
     const currentNormalized = ((rotation % 360) + 360) % 360;
-    const delta = ((finalAngle - currentNormalized) % 360 + 360) % 360;
+    const delta = (((finalAngle - currentNormalized) % 360) + 360) % 360;
     const newRotation = rotation + fullSpins + delta;
 
     setRotation(newRotation);
@@ -249,10 +277,13 @@ export function ToolRoulette({ onBack, isFullscreen }: ToolRouletteProps) {
     setHistory([]);
   }, []);
 
-  const rouletteShortcuts = useMemo<KeyboardShortcut[]>(() => [
-    { key: ' ', label: '돌리기', description: '룰렛 돌리기', handler: spin },
-    { key: 'Enter', label: '돌리기', description: '룰렛 돌리기', handler: spin },
-  ], [spin]);
+  const rouletteShortcuts = useMemo<KeyboardShortcut[]>(
+    () => [
+      { key: ' ', label: '돌리기', description: '룰렛 돌리기', handler: spin },
+      { key: 'Enter', label: '돌리기', description: '룰렛 돌리기', handler: spin },
+    ],
+    [spin],
+  );
 
   const radius = isFullscreen ? 220 : 160;
   const cx = radius + 10;
@@ -261,11 +292,16 @@ export function ToolRoulette({ onBack, isFullscreen }: ToolRouletteProps) {
   const sectionAngle = items.length > 0 ? 360 / items.length : 360;
 
   return (
-    <ToolLayout title="룰렛" emoji="🎯" onBack={onBack} isFullscreen={isFullscreen} shortcuts={rouletteShortcuts}>
+    <ToolLayout
+      title="룰렛"
+      emoji="🎯"
+      onBack={onBack}
+      isFullscreen={isFullscreen}
+      shortcuts={rouletteShortcuts}
+    >
       <div className="w-full h-full flex flex-col items-center gap-4 overflow-auto py-2">
         {/* Main area: input + wheel */}
         <div className="flex flex-col lg:flex-row items-start lg:items-center gap-6 w-full max-w-5xl px-4">
-
           {/* Data Input Panel */}
           <div className="w-full lg:w-72 flex-shrink-0 bg-sp-card border border-sp-border rounded-xl p-4 flex flex-col gap-3">
             {/* Preset selector */}
@@ -288,20 +324,24 @@ export function ToolRoulette({ onBack, isFullscreen }: ToolRouletteProps) {
               <div className="relative flex-1" ref={tcDropdownRef}>
                 <button
                   onClick={handleTcButtonClick}
-                  disabled={tcClasses.length === 0}
+                  disabled={selectableTcClasses.length === 0}
                   className={`w-full flex items-center justify-center gap-1 px-2 py-2 rounded-lg border text-xs font-medium transition-all ${
                     inputMode === 'teachingClass'
                       ? 'bg-sp-accent/20 border-sp-accent text-sp-accent'
                       : 'bg-sp-surface border-sp-border text-sp-text hover:border-sp-accent hover:text-sp-accent'
                   } disabled:opacity-40 disabled:cursor-not-allowed`}
-                  title={tcClasses.length === 0 ? '수업관리에서 먼저 반을 등록하세요' : '수업반 학생 불러오기'}
+                  title={
+                    selectableTcClasses.length === 0
+                      ? '수업관리에서 먼저 반을 등록하세요'
+                      : '수업반 학생 불러오기'
+                  }
                 >
                   <span>📚</span>
                   <span>수업반</span>
                 </button>
                 {showTcDropdown && (
                   <div className="absolute top-full left-0 right-0 mt-1 bg-sp-card border border-sp-border rounded-xl shadow-2xl z-50 py-1 max-h-48 overflow-y-auto">
-                    {tcClasses.map((tc) => {
+                    {selectableTcClasses.map((tc) => {
                       const activeCount = tc.students.filter(isStudentActive).length;
                       return (
                         <button
@@ -358,9 +398,7 @@ export function ToolRoulette({ onBack, isFullscreen }: ToolRouletteProps) {
 
             {/* Item count info */}
             <div className="flex items-center justify-between">
-              <span className="text-xs text-sp-muted">
-                {items.length} / 20개
-              </span>
+              <span className="text-xs text-sp-muted">{items.length} / 20개</span>
               {items.length < 2 && (
                 <span className="text-xs text-red-400">최소 2개 항목이 필요합니다</span>
               )}
@@ -405,7 +443,13 @@ export function ToolRoulette({ onBack, isFullscreen }: ToolRouletteProps) {
                     className="text-sp-muted hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 flex-shrink-0"
                     title="삭제"
                   >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <svg
+                      className="w-4 h-4"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                    >
                       <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                     </svg>
                   </button>
@@ -423,22 +467,14 @@ export function ToolRoulette({ onBack, isFullscreen }: ToolRouletteProps) {
                 className="absolute z-10 flex flex-col items-center"
                 style={{ top: -4, left: '50%', transform: 'translateX(-50%)' }}
               >
-                <svg
-                  width="28"
-                  height="36"
-                  viewBox="0 0 28 36"
-                  className="drop-shadow-lg"
-                >
+                <svg width="28" height="36" viewBox="0 0 28 36" className="drop-shadow-lg">
                   <polygon
                     points="14,36 0,4 28,4"
                     fill="#f8fafc"
                     stroke="#1e293b"
                     strokeWidth="2"
                   />
-                  <polygon
-                    points="14,30 4,8 24,8"
-                    fill="#f59e0b"
-                  />
+                  <polygon points="14,30 4,8 24,8" fill="#f59e0b" />
                 </svg>
               </div>
 
@@ -451,7 +487,14 @@ export function ToolRoulette({ onBack, isFullscreen }: ToolRouletteProps) {
               >
                 {/* Outer ring shadow */}
                 <circle cx={cx} cy={cy} r={radius + 6} fill="#0a0e17" opacity={0.6} />
-                <circle cx={cx} cy={cy} r={radius + 4} fill="none" stroke="#2a3548" strokeWidth="2" />
+                <circle
+                  cx={cx}
+                  cy={cy}
+                  r={radius + 4}
+                  fill="none"
+                  stroke="#2a3548"
+                  strokeWidth="2"
+                />
 
                 {/* Spinning group */}
                 <g

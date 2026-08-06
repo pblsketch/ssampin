@@ -6,6 +6,7 @@ import { useBottomSheet } from '@mobile/hooks/useBottomSheet';
 import { todayISO } from '@mobile/utils/date';
 import { isSubjectMatch } from '@domain/rules/matchingRules';
 import type { TeachingClass } from '@domain/entities/TeachingClass';
+import { filterActiveClasses } from '@domain/rules/teachingClassArchive';
 import type { ProgressEntry, ProgressStatus } from '@domain/entities/CurriculumProgress';
 
 interface Props {
@@ -65,15 +66,17 @@ export function MobileProgressLogModal({
   useBottomSheet(isOpen);
 
   // 시간표(과목+교실)에 매칭되는 후보 학급들 (mode='add' && defaultClassId 미지정 시에만 의미 있음)
+  // 새 진도를 기록할 반 선택이므로 보관된 반은 후보에서 제외한다 (plan S1.4-B — S1.2b의 모바일 판박이).
   const candidates = useMemo(() => {
+    const activeClasses = filterActiveClasses(classes);
     if (defaultClassId) {
-      const cls = classes.find((c) => c.id === defaultClassId);
+      const cls = activeClasses.find((c) => c.id === defaultClassId);
       return cls ? [cls] : [];
     }
-    if (!subject && !classroom) return classes;
+    if (!subject && !classroom) return activeClasses;
     const exact: TeachingClass[] = [];
     const partial: TeachingClass[] = [];
-    for (const cls of classes) {
+    for (const cls of activeClasses) {
       const subjMatch = subject ? isSubjectMatch(subject, cls.subject) : true;
       const roomMatch =
         !classroom ||

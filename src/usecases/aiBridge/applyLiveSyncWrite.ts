@@ -186,6 +186,8 @@ export interface LiveSyncWriteDeps {
     readonly exists: (id: string) => boolean;
     /** create 대상 수업반 존재 확인(미상 classId 로의 고아 진도 생성 차단). */
     readonly classExists: (classId: string) => boolean;
+    /** 보관된 수업반인가 — 새 진도 쓰기(create)만 거부한다. 조회·수정은 무변경(plan S1.4-F). */
+    readonly isClassArchived: (classId: string) => boolean;
   };
   readonly recordNote: {
     /** 담임 학생 기록(student-records) append — 호출자는 useStudentRecordsStore.addRecord 를 넘긴다. */
@@ -700,6 +702,10 @@ async function applyProgress(
       return bad('진도 생성에는 classId·date·period·unit 이 필요합니다.');
     }
     if (!deps.progress.classExists(classId)) return bad('수업반을 찾을 수 없습니다.', 404);
+    if (deps.progress.isClassArchived(classId)) {
+      // 조용한 오기록 방지 — 보관된 반에 AI가 새 진도를 쓰지 못하게 명시적으로 거부한다.
+      return bad('보관된 수업반이라 새로 기록할 수 없어요. 보관을 해제한 뒤 다시 시도해 주세요.');
+    }
     const lesson = asStr(d['lesson']);
     const status = asStr(d['status']);
     const note = typeof d['note'] === 'string' ? d['note'] : undefined;

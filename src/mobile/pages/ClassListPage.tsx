@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { filterActiveClasses } from '@domain/rules/teachingClassArchive';
 import { useMobileTeachingClassStore } from '@mobile/stores/useMobileTeachingClassStore';
 import { ClassDetailPage } from './ClassDetailPage';
 
@@ -24,6 +25,9 @@ export function ClassListPage({ onBack }: ClassListPageProps = {}) {
   const loaded = useMobileTeachingClassStore((s) => s.loaded);
   const load = useMobileTeachingClassStore((s) => s.load);
   const [selected, setSelected] = useState<SelectedClass | null>(null);
+  // 보관된 반은 목록에서 숨김 — 필터는 뷰 단에서만(스토어 셀렉터 금지, plan S1.4-D).
+  // 기존 상세 진입(classId 전달)은 무변경이라 보관된 반 상세는 계속 열린다.
+  const visibleClasses = filterActiveClasses(classes);
 
   useEffect(() => {
     void load();
@@ -70,14 +74,14 @@ export function ClassListPage({ onBack }: ClassListPageProps = {}) {
         </div>
       </header>
       <div className="flex-1 overflow-auto p-4 space-y-2">
-        {classes.length === 0 ? (
+        {visibleClasses.length === 0 ? (
           <div className="text-center py-12">
             <span className="material-symbols-outlined text-sp-muted text-4xl mb-2">school</span>
             <p className="text-sp-muted text-sm">등록된 수업반이 없습니다</p>
             <p className="text-sp-muted text-xs mt-1">PC 앱에서 수업반을 추가한 후 동기화하세요</p>
           </div>
         ) : (
-          classes.map((cls) => (
+          visibleClasses.map((cls) => (
             <button
               key={cls.id}
               onClick={() => setSelected({ classId: cls.id, className: cls.name })}

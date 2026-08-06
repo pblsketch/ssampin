@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useClassRosterStore } from '@adapters/stores/useClassRosterStore';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { isStudentActive } from '@domain/rules/studentActivity';
+import { filterActiveClasses } from '@domain/rules/teachingClassArchive';
 
 interface ClassRosterSelectorProps {
   selectedRosterId: string | null;
@@ -24,6 +25,8 @@ export function ClassRosterSelector({
 }: ClassRosterSelectorProps) {
   const { rosters, loaded, load, addRoster, updateRoster, deleteRoster } = useClassRosterStore();
   const teachingClasses = useTeachingClassStore((s) => s.classes);
+  // 선택지 열거는 활성 반만 — 저장된 "tc:<id>" 선택의 해석(find)은 전체 목록 유지(보관 후에도 빈 명렬 금지)
+  const selectableClasses = filterActiveClasses(teachingClasses);
   const tcLoaded = useTeachingClassStore((s) => s.loaded);
   const loadTc = useTeachingClassStore((s) => s.load);
 
@@ -65,9 +68,9 @@ export function ClassRosterSelector({
   const isTeachingClassSelected = selectedRosterId?.startsWith(TC_PREFIX) ?? false;
   const selectedRoster = isTeachingClassSelected
     ? null
-    : rosters.find((r) => r.id === selectedRosterId) ?? null;
+    : (rosters.find((r) => r.id === selectedRosterId) ?? null);
   const selectedTeachingClass = isTeachingClassSelected
-    ? teachingClasses.find((c) => c.id === selectedRosterId!.slice(TC_PREFIX.length)) ?? null
+    ? (teachingClasses.find((c) => c.id === selectedRosterId!.slice(TC_PREFIX.length)) ?? null)
     : null;
 
   // Convert teaching class students to name array
@@ -75,7 +78,7 @@ export function ClassRosterSelector({
     if (!selectedTeachingClass) return [];
     return selectedTeachingClass.students
       .filter(isStudentActive)
-      .map((s) => s.name?.trim() ? s.name : `${s.number}번`);
+      .map((s) => (s.name?.trim() ? s.name : `${s.number}번`));
   }, [selectedTeachingClass]);
 
   // Unified display label and names for selected item
@@ -90,10 +93,13 @@ export function ClassRosterSelector({
       ? selectedRoster.studentNames
       : [];
 
-  const handleSelect = useCallback((id: string) => {
-    onSelectRoster(id);
-    setIsDropdownOpen(false);
-  }, [onSelectRoster]);
+  const handleSelect = useCallback(
+    (id: string) => {
+      onSelectRoster(id);
+      setIsDropdownOpen(false);
+    },
+    [onSelectRoster],
+  );
 
   const handleStartCreate = useCallback(() => {
     setEditorName('');
@@ -124,7 +130,15 @@ export function ClassRosterSelector({
       await updateRoster(selectedRosterId, name, studentNames);
     }
     setEditorMode('idle');
-  }, [editorMode, editorName, editorText, addRoster, updateRoster, selectedRosterId, onSelectRoster]);
+  }, [
+    editorMode,
+    editorName,
+    editorText,
+    addRoster,
+    updateRoster,
+    selectedRosterId,
+    onSelectRoster,
+  ]);
 
   const handleDelete = useCallback(async () => {
     if (!selectedRosterId) return;
@@ -137,9 +151,7 @@ export function ClassRosterSelector({
     setEditorMode('idle');
   }, []);
 
-  const editorStudentCount = editorText
-    .split('\n')
-    .filter((l) => l.trim().length > 0).length;
+  const editorStudentCount = editorText.split('\n').filter((l) => l.trim().length > 0).length;
 
   // --- Editor Modal ---
   if (editorMode !== 'idle') {
@@ -166,9 +178,7 @@ export function ClassRosterSelector({
               placeholder={'학생 이름을 한 줄에 하나씩 입력\n\n엑셀에서 복사-붙여넣기도 가능합니다'}
               className="w-full h-32 px-3 py-2 rounded-lg bg-sp-surface border border-sp-border text-sp-text text-sm placeholder-sp-muted/50 resize-none focus:outline-none focus:border-sp-accent"
             />
-            <div className="mt-1 text-xs text-sp-muted">
-              {editorStudentCount}명
-            </div>
+            <div className="mt-1 text-xs text-sp-muted">{editorStudentCount}명</div>
           </div>
           <div className="flex gap-2 justify-end">
             <button
@@ -195,11 +205,14 @@ export function ClassRosterSelector({
     <div>
       {/* Phase 5 — 도구 전용 명렬 안내 배너 (담임반·수업반과 별개임을 명시) */}
       <div className="flex items-start gap-2 px-3 py-2 mb-3 rounded-lg border border-sp-accent/30 bg-sp-accent/10 text-xs text-sp-muted">
-        <span className="material-symbols-outlined text-sp-accent text-icon-sm shrink-0 mt-0.5">info</span>
+        <span className="material-symbols-outlined text-sp-accent text-icon-sm shrink-0 mt-0.5">
+          info
+        </span>
         <p className="leading-relaxed">
           여기서 만든 학급 명렬은 <span className="text-sp-text font-medium">도구 전용</span>입니다.
-          담임반·수업반 명렬과는 별도로 저장됩니다.
-          담임반 명렬을 그대로 쓰려면 <span className="text-sp-text">설정 → 학교/학급</span>에서 수업반으로 복사하거나, 위 드롭다운에서 수업반을 선택하세요.
+          담임반·수업반 명렬과는 별도로 저장됩니다. 담임반 명렬을 그대로 쓰려면{' '}
+          <span className="text-sp-text">설정 → 학교/학급</span>에서 수업반으로 복사하거나, 위
+          드롭다운에서 수업반을 선택하세요.
         </p>
       </div>
 
@@ -212,9 +225,7 @@ export function ClassRosterSelector({
             className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-sp-surface border border-sp-border text-sm hover:border-sp-accent transition-all"
           >
             <span className={selectedLabel ? 'text-sp-text' : 'text-sp-muted'}>
-              {selectedLabel
-                ? `${selectedLabel} (${selectedNames.length}명)`
-                : '반을 선택하세요'}
+              {selectedLabel ? `${selectedLabel} (${selectedNames.length}명)` : '반을 선택하세요'}
             </span>
             <span className="material-symbols-outlined text-icon text-sp-muted">
               {isDropdownOpen ? 'expand_less' : 'expand_more'}
@@ -223,21 +234,21 @@ export function ClassRosterSelector({
 
           {isDropdownOpen && (
             <div className="absolute top-full left-0 right-0 mt-1 bg-sp-card border border-sp-border rounded-xl shadow-2xl z-50 py-1 max-h-56 overflow-y-auto">
-              {teachingClasses.length === 0 && rosters.length === 0 ? (
+              {selectableClasses.length === 0 && rosters.length === 0 ? (
                 <div className="px-3 py-3 text-xs text-sp-muted text-center">
                   등록된 반이 없습니다
                 </div>
               ) : (
                 <>
                   {/* 수업반 섹션 */}
-                  {teachingClasses.length > 0 && (
+                  {selectableClasses.length > 0 && (
                     <>
                       {rosters.length > 0 && (
                         <div className="px-3 pt-2 pb-1 text-caption font-bold text-sp-muted/70 uppercase tracking-wider">
                           📚 수업반
                         </div>
                       )}
-                      {teachingClasses.map((tc) => {
+                      {selectableClasses.map((tc) => {
                         const activeCount = tc.students.filter(isStudentActive).length;
                         const tcRosterId = `${TC_PREFIX}${tc.id}`;
                         return (
@@ -262,14 +273,14 @@ export function ClassRosterSelector({
                   )}
 
                   {/* 구분선 */}
-                  {teachingClasses.length > 0 && rosters.length > 0 && (
+                  {selectableClasses.length > 0 && rosters.length > 0 && (
                     <div className="mx-2 my-1 border-t border-sp-border/50" />
                   )}
 
                   {/* 사용자 명단 섹션 */}
                   {rosters.length > 0 && (
                     <>
-                      {teachingClasses.length > 0 && (
+                      {selectableClasses.length > 0 && (
                         <div className="px-3 pt-2 pb-1 text-caption font-bold text-sp-muted/70 uppercase tracking-wider">
                           📝 사용자 명단
                         </div>
@@ -354,7 +365,7 @@ export function ClassRosterSelector({
             클릭하여 제외/포함 ({selectedNames.length - excludedNames.size}명 참여)
           </div>
         </div>
-      ) : (selectedRoster || selectedTeachingClass) ? (
+      ) : selectedRoster || selectedTeachingClass ? (
         <div className="text-center py-4 text-sp-muted text-sm">
           {selectedTeachingClass
             ? '수업관리에서 먼저 학생을 등록하세요.'
@@ -362,7 +373,7 @@ export function ClassRosterSelector({
         </div>
       ) : (
         <div className="text-center py-4 text-sp-muted text-sm">
-          {teachingClasses.length === 0 && rosters.length === 0
+          {selectableClasses.length === 0 && rosters.length === 0
             ? '수업관리에서 반을 등록하거나, [명단 추가] 버튼으로 시작하세요.'
             : '위 드롭다운에서 반을 선택하세요.'}
         </div>

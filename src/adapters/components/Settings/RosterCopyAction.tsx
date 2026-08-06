@@ -15,6 +15,7 @@ import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { useToastStore } from '@adapters/components/common/Toast';
 import type { TeachingClassStudent } from '@domain/entities/TeachingClass';
 import { isStudentActive } from '@domain/rules/studentActivity';
+import { filterActiveClasses } from '@domain/rules/teachingClassArchive';
 
 export function RosterCopyAction() {
   const students = useStudentStore((s) => s.students);
@@ -35,10 +36,7 @@ export function RosterCopyAction() {
     if (!tcLoaded) void loadTc();
   }, [studentsLoaded, loadStudents, tcLoaded, loadTc]);
 
-  const activeHomeroomStudents = useMemo(
-    () => students.filter(isStudentActive),
-    [students],
-  );
+  const activeHomeroomStudents = useMemo(() => students.filter(isStudentActive), [students]);
 
   const targetClass = useMemo(
     () => teachingClasses.find((c) => c.id === targetId) ?? null,
@@ -88,12 +86,11 @@ export function RosterCopyAction() {
   return (
     <div className="rounded-xl border border-sp-border bg-sp-card p-4 flex flex-col gap-3">
       <div>
-        <h4 className="text-sm font-bold text-sp-text mb-1">
-          담임반 → 수업반 명렬 복사
-        </h4>
+        <h4 className="text-sm font-bold text-sp-text mb-1">담임반 → 수업반 명렬 복사</h4>
         <p className="text-xs text-sp-muted leading-relaxed">
-          담임반 활성 학생 <span className="text-sp-text font-semibold">{activeHomeroomStudents.length}명</span>을 선택한 수업반에 복사합니다.
-          기존 수업반 명단은 교체됩니다 (학생기록·좌석은 그대로 유지).
+          담임반 활성 학생{' '}
+          <span className="text-sp-text font-semibold">{activeHomeroomStudents.length}명</span>을
+          선택한 수업반에 복사합니다. 기존 수업반 명단은 교체됩니다 (학생기록·좌석은 그대로 유지).
         </p>
       </div>
 
@@ -107,7 +104,8 @@ export function RosterCopyAction() {
           className="flex-1 bg-sp-surface border border-sp-border rounded-lg px-3 py-2 text-sm text-sp-text focus:outline-none focus:border-sp-accent transition-colors"
         >
           <option value="">대상 수업반 선택…</option>
-          {teachingClasses.map((c) => {
+          {/* 보관된 반은 복사 대상에서 제외 — 보관된 반에 새 데이터를 쓰면 안 된다 */}
+          {filterActiveClasses(teachingClasses).map((c) => {
             const activeCount = c.students.filter(isStudentActive).length;
             return (
               <option key={c.id} value={c.id}>
@@ -130,9 +128,10 @@ export function RosterCopyAction() {
       {targetClass && confirming && (
         <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 flex flex-col gap-2">
           <p className="text-xs text-amber-300 leading-relaxed">
-            <span className="font-semibold">{targetClass.name}({targetClass.subject})</span>의 기존 명단{' '}
-            {targetClass.students.length}명이 담임반 명단으로 교체됩니다.
-            진행할까요?
+            <span className="font-semibold">
+              {targetClass.name}({targetClass.subject})
+            </span>
+            의 기존 명단 {targetClass.students.length}명이 담임반 명단으로 교체됩니다. 진행할까요?
           </p>
           <div className="flex gap-2">
             <button
