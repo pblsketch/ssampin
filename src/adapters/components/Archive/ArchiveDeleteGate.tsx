@@ -1,9 +1,14 @@
 /**
- * ArchiveDeleteGate — 보관함 영구 삭제 2단계 게이트 (P3 S3.3).
+ * ArchiveDeleteGate — 보관함 삭제 2단계 게이트 (P3 S3.3).
  *
  * 보관함에서만 삭제할 수 있고, 확인 문구를 정확히 타이핑해야 버튼이 열린다.
  * 라이브 삭제 경로(deleteClass 등)를 절대 재사용하지 않는다 — archive:delete(디렉토리만).
- * 삭제 전 백업 내보내기를 먼저 제안하고, 되돌릴 수 없음을 명시한다.
+ * 삭제 전 백업 내보내기를 먼저 제안한다.
+ *
+ * F4(H2) 문구 정직화: 이 삭제는 **이 PC의 보관함**만 지운다. Drive 동기화 사용 중이면
+ * 클라우드·다른 기기의 사본이 다음 동기화 때 되돌아올 수 있다(qa4-⑤ — Drive 개별 삭제
+ * 원시 부재). "영구 삭제·되돌릴 수 없음"은 거짓 약속이라 쓰지 않는다.
+ * 클라우드까지 지우는 완전 삭제(툼스톤/Drive 삭제)는 후속 트랙 — plan §13.5.
  */
 
 import { useState } from 'react';
@@ -76,8 +81,10 @@ export function ArchiveDeleteGate({
         <h3 className="text-lg font-bold text-sp-text">{termLabel} 보관함을 삭제할까요?</h3>
         <p className="mt-2 text-sm leading-relaxed text-sp-muted">
           이 학기의 보관함(명렬·출결·기록·진도·첨부)이{' '}
-          <span className="font-semibold text-red-400">영구히 삭제</span>
-          돼요. 되돌릴 수 없어요. 지금 쓰고 있는 데이터(라이브)는 바뀌지 않아요.
+          <span className="font-semibold text-red-400">이 PC의 보관함에서 삭제</span>
+          돼요. Google Drive 동기화를 사용 중이면 클라우드·다른 기기에 남은 사본이 다음 동기화 때
+          다시 내려올 수 있어요. 클라우드까지 지우는 완전 삭제는 준비 중이에요. 지금 쓰고 있는
+          데이터(라이브)는 바뀌지 않아요.
         </p>
 
         <div className="mt-3 rounded-lg border border-sp-border bg-sp-surface px-3 py-2.5">
@@ -122,7 +129,7 @@ export function ArchiveDeleteGate({
             disabled={!confirmed || deleting}
             className="rounded-lg bg-red-500/90 px-4 py-2 text-sm font-semibold text-sp-accent-fg transition-all hover:brightness-110 disabled:opacity-40"
           >
-            {deleting ? '삭제하는 중…' : '영구 삭제'}
+            {deleting ? '삭제하는 중…' : '이 PC에서 삭제'}
           </button>
         </div>
       </div>

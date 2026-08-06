@@ -116,6 +116,27 @@ export const YEAR_TRANSITION_FILES: readonly YearTransitionFileSpec[] = [
 /** 진행 상태 파일(data/year-transition-state.json) — 중단 감지·이어하기·원복의 근거. */
 export const YEAR_TRANSITION_STATE_KEY = 'year-transition-state';
 
+/**
+ * F1(B1) — 전환이 remove로 비운 파일의 **로컬 전용 마커**(data/year-transition-removed.json).
+ * ⚠️ SYNC_REGISTRY(SYNC_FILES)에 절대 등재하지 않는다 — 이 마커가 동기화되면 다른 기기의
+ * 정상 파일까지 치유가 막힌다(마커는 "이 기기가 의도적으로 비웠다"는 로컬 사실이다).
+ *
+ * 용도: SyncFromCloud의 "장부엔 받았음+로컬 파일 부재 → 치유 다운로드"(ADR-024)가
+ * 전환-remove 파일(students/seating/seating-snapshots)에 대해 자기 기기의 옛 리모트
+ * 사본을 부활시키는 것(qa3-D)을 막는다. 리모트 modifiedTime이 removedAt보다 새로우면
+ * 다른 기기가 전환 이후 올린 정당한 새 데이터로 보고 다운로드를 허용+해당 키 해제.
+ */
+export const YEAR_TRANSITION_REMOVED_KEY = 'year-transition-removed';
+
+export interface YearTransitionRemovedMarker {
+  readonly version: 1;
+  /** 어느 학기 전환이 비웠는지. */
+  readonly term: string;
+  /** 비운 시각(ISO) — 리모트 modifiedTime과 비교해 "전환 이후 새 데이터" 예외를 판정. */
+  readonly removedAt: string;
+  readonly keys: readonly string[];
+}
+
 export interface YearTransitionState {
   readonly version: 1;
   /** 보관(마감)하는 학기 라벨 — 아카이브 디렉토리 이름. */
@@ -244,6 +265,34 @@ async function listAttachmentArchiveKeys(storage: IStoragePort): Promise<string[
 /** 저장 후 재독 대조용 직렬화(결정적) — 봉투 비교는 JSON 문자열 동치로 판정한다. */
 function stableEquals(a: unknown, b: unknown): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
+}
+
+/**
+ * remove 리셋 키를 마커에 기록(read-modify-write). 실패는 무해로 삼키지 않고 전파한다 —
+ * 마커 없이 remove만 되면 치유 다운로드 부활(qa3-D)이 열리므로 리셋 검증과 같은 급이다.
+ */
+async function recordRemovedKey(
+  storage: IStoragePort,
+  term: string,
+  now: string,
+  key: string,
+): Promise<void> {
+  let existing: YearTransitionRemovedMarker | null = null;
+  try {
+    const raw = await storage.read<YearTransitionRemovedMarker>(YEAR_TRANSITION_REMOVED_KEY);
+    if (raw && raw.version === 1 && Array.isArray(raw.keys)) existing = raw;
+  } catch {
+    existing = null; // 손상 마커는 새로 쓴다
+  }
+  const prior = existing !== null && existing.term === term ? existing : null;
+  const marker: YearTransitionRemovedMarker = {
+    version: 1,
+    term,
+    // 같은 학기 재개면 최초 removedAt 유지 — 시각을 미루면 그 사이 리모트의 새 데이터까지 막는다.
+    removedAt: prior !== null ? prior.removedAt : now,
+    keys: prior !== null ? Array.from(new Set([...prior.keys, key])) : [key],
+  };
+  await storage.write(YEAR_TRANSITION_REMOVED_KEY, marker);
 }
 
 async function readState(storage: IStoragePort): Promise<YearTransitionState | null> {
@@ -382,6 +431,7 @@ export async function executeYearTransition(
     // ④+⑤ 라이브 리셋 + 파일별 재독 검증 — 실패 시 즉시 중단(상태 파일은 남겨 재개/원복 유도).
     log(`4/5 라이브 리셋 (${YEAR_TRANSITION_FILES.length}개 파일)`);
     const resetDone: string[] = [];
+    const resetStartedAt = new Date().toISOString();
     await storage.write(YEAR_TRANSITION_STATE_KEY, { ...baseState, phase: 'resetting' });
     for (const spec of YEAR_TRANSITION_FILES) {
       const failure = await withFileLock(spec.key, async (): Promise<string | null> => {
@@ -389,6 +439,9 @@ export async function executeYearTransition(
           await storage.remove(spec.key);
           const after = await storage.read<unknown>(spec.key);
           if (after !== null) return `삭제 후에도 파일이 남아 있어요: ${spec.key}`;
+          // F1(B1): remove 성공과 같은 급으로 마커 기록 — 마커 없이 remove만 되면
+          // SyncFromCloud 치유 다운로드가 자기 리모트 옛 사본을 부활시킨다(qa3-D).
+          await recordRemovedKey(storage, closingTerm, resetStartedAt, spec.key);
           return null;
         }
         const envelope =
@@ -498,6 +551,8 @@ export async function revertYearTransition(
       await deps.setCurrentTerm(closingTerm);
     }
     await storage.remove(YEAR_TRANSITION_STATE_KEY);
+    // F1(B1): 원복으로 파일이 되살아났으니 remove 마커도 정리 — 이후 치유 다운로드는 정상 동작.
+    await storage.remove(YEAR_TRANSITION_REMOVED_KEY);
     await deps.reloadStores(YEAR_TRANSITION_FILES.map((f) => f.key));
     log(`✅ 원복 완료 (${restoredKeys.length}개 항목, 보관 사본은 유지)`);
     return { ok: true, restoredKeys };

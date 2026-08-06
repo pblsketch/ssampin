@@ -548,6 +548,13 @@ async function applyAttendance(
   if (typeof classId !== 'string' || typeof date !== 'string' || typeof period !== 'number') {
     return bad('출결 payload 가 올바르지 않습니다.');
   }
+  // F5(M2) — 보관된 수업반 쓰기 가드: 진도 create와 동일 정책·동일 문구(S1.4-F 계열).
+  // upsert(create)든 비우기(delete)든 보관된 반의 출결을 변경하므로 둘 다 거부한다
+  // (보관 무결성 — 조회는 무변경). 판정 함수는 progress 네임스페이스에 이미 주입돼
+  // 있는 isClassArchived를 재사용한다(같은 수업반 스토어 판정 — deps 확장 불필요).
+  if (deps.progress.isClassArchived(classId)) {
+    return bad('보관된 수업반이라 새로 기록할 수 없어요. 보관을 해제한 뒤 다시 시도해 주세요.');
+  }
   const groupId = typeof d['groupId'] === 'string' ? d['groupId'] : undefined;
   const students =
     req.op === 'create' && Array.isArray(d['students'])

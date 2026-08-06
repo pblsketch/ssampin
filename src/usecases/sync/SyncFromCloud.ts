@@ -17,7 +17,11 @@ import type { ObservationData, ObservationRecord } from '@domain/entities/Observ
 import type { RecordCategoryItem } from '@domain/valueObjects/RecordCategory';
 import { attendanceRecordKey } from '@domain/entities/Attendance';
 import { deriveDocumentSubmitted } from '@domain/rules/attendanceDocumentPolicy';
-import { schoolYearOf } from '@domain/rules/academicCalendar';
+import { parseTerm, schoolYearOf } from '@domain/rules/academicCalendar';
+import {
+  YEAR_TRANSITION_REMOVED_KEY,
+  type YearTransitionRemovedMarker,
+} from '@usecases/schoolYear/ExecuteYearTransition';
 import { ARCHIVE_MANIFEST_FILENAME, parseArchiveSyncKey } from '@domain/rules/archiveRules';
 import {
   SYNC_FILES,
@@ -151,6 +155,40 @@ function filterOldYearRemoteRecords<T extends { readonly term?: string }>(
     );
   }
   return kept;
+}
+
+/**
+ * F3(H1) — settings 통파일 교체 시 currentTerm은 "더 최신 학기 승" 보존 규칙.
+ *
+ * settings는 병합 없는 통파일 LWW라, 아직 전환하지 않은 기기가 올린 settings가
+ * 내려오면 currentTerm이 벗겨져 옛 학년도 스킵 필터(S2.2b)가 영구 비활성된다(qa3-C).
+ * 규칙(parseTerm 튜플 비교):
+ *  - 로컬 currentTerm이 수신보다 최신(또는 수신에 부재·파싱 불가) → 로컬 값을 재부착해 저장.
+ *    체크섬이 리모트와 달라지므로 다음 업로드가 교정본을 밀어올린다(1회 쓰기 — 루프 없음).
+ *  - 수신이 더 최신이거나 동일 → 수신 그대로(정상 LWW).
+ *  - 양쪽 부재·수신이 객체가 아님 → 무동작(수신 그대로).
+ */
+export function preserveNewerCurrentTerm(
+  incoming: unknown,
+  localCurrentTerm: string | undefined,
+): unknown {
+  if (localCurrentTerm === undefined) return incoming;
+  const localParsed = parseTerm(localCurrentTerm);
+  if (localParsed === null) return incoming;
+  if (incoming === null || typeof incoming !== 'object' || Array.isArray(incoming)) {
+    return incoming; // settings 형태가 아니면 건드리지 않는다(방어)
+  }
+  const obj = incoming as Record<string, unknown>;
+  const incomingTerm = typeof obj['currentTerm'] === 'string' ? obj['currentTerm'] : undefined;
+  const incomingParsed = incomingTerm === undefined ? null : parseTerm(incomingTerm);
+  const localOrder = localParsed.year * 10 + localParsed.semester;
+  const incomingOrder =
+    incomingParsed === null ? -1 : incomingParsed.year * 10 + incomingParsed.semester;
+  if (incomingOrder >= localOrder) return incoming; // 수신이 더 최신·동일 → 수신 채택
+  console.log(
+    `[SyncFromCloud]   settings: currentTerm 보존 (수신=${incomingTerm ?? '없음'} < 로컬=${localCurrentTerm})`,
+  );
+  return { ...obj, currentTerm: localCurrentTerm };
 }
 
 /**
@@ -485,6 +523,25 @@ export class SyncFromCloud {
     private readonly importArchiveTerm?: ImportArchiveTermFiles,
   ) {}
 
+  /**
+   * 통파일 교체 쓰기(비병합 도메인) — settings는 currentTerm "더 최신 학기 승" 보존(F3) 경유.
+   * 로컬 읽기 실패(손상 등)는 보존 불가로 보고 수신 그대로 쓴다(fail-open).
+   */
+  private async writeReplacedFile(filename: string, parsed: unknown): Promise<void> {
+    let data = parsed;
+    if (filename === 'settings') {
+      let localCurrentTerm: string | undefined;
+      try {
+        localCurrentTerm = (await this.storage.read<{ currentTerm?: string }>('settings'))
+          ?.currentTerm;
+      } catch {
+        localCurrentTerm = undefined;
+      }
+      data = preserveNewerCurrentTerm(parsed, localCurrentTerm);
+    }
+    await this.storage.write(filename, data);
+  }
+
   async execute(onProgress?: (progress: SyncProgress) => void): Promise<SyncFromCloudResult> {
     console.log(
       `[SyncFromCloud] ▶ 시작 | myDeviceId=${this.deviceId} | policy=${this.conflictPolicy}`,
@@ -498,6 +555,42 @@ export class SyncFromCloud {
         currentTerm = undefined; // 읽기 실패 = 필터 비활성(fail-open — 자기 격리 금지)
       }
     }
+
+    // F1(B1) — 학년도 전환이 remove로 비운 파일 마커(로컬 전용, SYNC_FILES 미등재).
+    // 치유 다운로드가 이 파일들에 대해 자기 리모트 옛 사본을 부활시키는 것을 막는다(qa3-D).
+    // lazy 1회 로드 — 읽기 실패=마커 없음(fail-open: 치유는 원래 데이터 보호 장치다).
+    let removedMarkerCache: YearTransitionRemovedMarker | null | undefined;
+    const loadRemovedMarker = async (): Promise<YearTransitionRemovedMarker | null> => {
+      if (removedMarkerCache !== undefined) return removedMarkerCache;
+      try {
+        const raw = await this.storage.read<YearTransitionRemovedMarker>(
+          YEAR_TRANSITION_REMOVED_KEY,
+        );
+        removedMarkerCache =
+          raw && raw.version === 1 && typeof raw.removedAt === 'string' && Array.isArray(raw.keys)
+            ? raw
+            : null;
+      } catch {
+        removedMarkerCache = null;
+      }
+      return removedMarkerCache;
+    };
+    /** 해당 키의 마커를 해제(리모트가 전환 이후 새 데이터를 올린 정당한 케이스). */
+    const releaseRemovedKey = async (filename: string): Promise<void> => {
+      const marker = await loadRemovedMarker();
+      if (marker === null) return;
+      const nextKeys = marker.keys.filter((k) => k !== filename);
+      removedMarkerCache = nextKeys.length > 0 ? { ...marker, keys: nextKeys } : null;
+      try {
+        if (removedMarkerCache !== null) {
+          await this.storage.write(YEAR_TRANSITION_REMOVED_KEY, removedMarkerCache);
+        } else {
+          await this.storage.remove(YEAR_TRANSITION_REMOVED_KEY);
+        }
+      } catch {
+        /* 해제 실패는 비치명 — 다음 동기화에서 같은 판정으로 재시도된다 */
+      }
+    };
     const folder = await this.drivePort.getOrCreateSyncFolder();
     const remoteManifest = await this.drivePort.getSyncManifest(folder.id);
     if (!remoteManifest) {
@@ -547,6 +640,24 @@ export class SyncFromCloud {
         if (localData !== null) {
           skipped.push(filename);
           continue;
+        }
+        // F1(B1): 학년도 전환이 의도적으로 비운 파일이면 "치유"가 곧 자기 리모트 옛 사본의
+        // 부활이다(qa3-D). 단 리모트 modifiedTime이 removedAt보다 새로우면 다른 기기가
+        // 전환 이후 실제 새 데이터를 올린 것 — 정당한 다운로드로 보고 해당 키 마커를 해제한다.
+        const removedMarker = await loadRemovedMarker();
+        if (removedMarker !== null && removedMarker.keys.includes(filename)) {
+          const remoteIsNewerThanRemoval =
+            new Date(remoteInfo.lastModified).getTime() >
+            new Date(removedMarker.removedAt).getTime();
+          if (!remoteIsNewerThanRemoval) {
+            skipped.push(filename);
+            console.log(`[SyncFromCloud]   ${filename}: 치유 스킵(학년도 전환으로 비운 파일)`);
+            continue;
+          }
+          await releaseRemovedKey(filename);
+          console.log(
+            `[SyncFromCloud]   ${filename}: 치유 허용(전환 이후 새 리모트 데이터 — 마커 해제)`,
+          );
         }
         console.log(
           `[SyncFromCloud]   ${filename}: 🩹 장부엔 "받았음"인데 로컬 파일 없음 → 다운로드로 치유`,
@@ -627,7 +738,7 @@ export class SyncFromCloud {
             if (driveFile) {
               const content = await this.drivePort.downloadSyncFile(driveFile.id);
               const parsed = JSON.parse(content) as unknown;
-              await this.storage.write(filename, parsed);
+              await this.writeReplacedFile(filename, parsed);
               updatedFiles[filename] = remoteInfo;
               downloaded.push(filename);
               console.log(`[SyncFromCloud]   ${filename}: ✅ DOWNLOAD (remote가 최신)`);
@@ -679,7 +790,7 @@ export class SyncFromCloud {
               });
               const content = await this.drivePort.downloadSyncFile(driveFile.id);
               const parsed = JSON.parse(content) as unknown;
-              await this.storage.write(filename, parsed);
+              await this.writeReplacedFile(filename, parsed);
               updatedFiles[filename] = remoteInfo;
               downloaded.push(filename);
               console.log(
@@ -735,7 +846,7 @@ export class SyncFromCloud {
           );
         } else {
           const parsed = JSON.parse(content) as unknown;
-          await this.storage.write(filename, parsed);
+          await this.writeReplacedFile(filename, parsed);
         }
         updatedFiles[filename] = remoteInfo;
         downloaded.push(filename);

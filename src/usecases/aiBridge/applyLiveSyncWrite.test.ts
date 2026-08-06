@@ -749,6 +749,33 @@ describe('applyLiveSyncWrite — #5 update 필드 정렬(브리지 스키마)', 
 });
 
 describe('applyLiveSyncWrite — attendance(교과반)', () => {
+  it('F5(M2): 보관된 수업반 출결 쓰기는 create·delete 모두 사용자 언어로 거부한다', async () => {
+    for (const op of ['create', 'delete'] as const) {
+      const r = await applyLiveSyncWrite(
+        {
+          domain: 'attendance',
+          op,
+          idempotencyKey: `guard-${op}`,
+          data: {
+            classId: 'cls-archived',
+            date: '2026-06-02',
+            period: 3,
+            ...(op === 'create' ? { students: [{ number: 5, status: 'late' }] } : {}),
+          },
+        },
+        deps,
+      );
+      expect(r.ok).toBe(false);
+      if (!r.ok) {
+        expect(r.error).toBe(
+          '보관된 수업반이라 새로 기록할 수 없어요. 보관을 해제한 뒤 다시 시도해 주세요.',
+        );
+      }
+    }
+    // 저장은 한 번도 호출되지 않는다(조용한 오기록 차단)
+    expect(calls.filter((c) => c.fn === 'attendance.save')).toHaveLength(0);
+  });
+
   it('create → attendance.save(classId,date,period,students), ok+ref', async () => {
     const r = await applyLiveSyncWrite(
       {

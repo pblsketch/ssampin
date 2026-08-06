@@ -25,6 +25,7 @@ import {
   type YearTransitionState,
 } from '@usecases/schoolYear/ExecuteYearTransition';
 import { academicTerm, formatTermKo } from '@domain/rules/academicCalendar';
+import { WIZARD_SEMESTER_BLOCK_MESSAGE, canRunYearEndWizard } from './wizardProgress';
 import { SchoolYearWizardModal } from './SchoolYearWizardModal';
 import { invalidateArchivedTermNoticeCache } from './ArchivedTermNotice';
 import { ArchiveViewer } from '@adapters/components/Archive/ArchiveViewer';
@@ -155,17 +156,25 @@ export function SchoolYearArchiveTab() {
               {settings.currentTerm === undefined && ' (오늘 날짜 기준)'}
             </p>
             {gateway ? (
-              <button
-                type="button"
-                onClick={() => openWizard(false)}
-                disabled={pending !== null}
-                className="mt-4 flex items-center gap-1.5 rounded-lg bg-sp-accent px-4 py-2.5 text-sm font-semibold text-sp-accent-fg transition-all hover:brightness-110 active:scale-95 disabled:opacity-40"
-              >
-                <span aria-hidden className="material-symbols-outlined text-icon-md">
-                  auto_awesome
-                </span>
-                학년도 마무리 시작하기
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => openWizard(false)}
+                  disabled={pending !== null || !canRunYearEndWizard(closingTerm)}
+                  className="mt-4 flex items-center gap-1.5 rounded-lg bg-sp-accent px-4 py-2.5 text-sm font-semibold text-sp-accent-fg transition-all hover:brightness-110 active:scale-95 disabled:opacity-40"
+                >
+                  <span aria-hidden className="material-symbols-outlined text-icon-md">
+                    auto_awesome
+                  </span>
+                  학년도 마무리 시작하기
+                </button>
+                {/* F2(B2): 마법사는 학년도 전환 전용 — 1학기 마감은 차단(부활 필터가 학년도 기준) */}
+                {!canRunYearEndWizard(closingTerm) && (
+                  <p className="mt-2 rounded-lg border border-sp-border bg-sp-surface px-3 py-2.5 text-xs leading-relaxed text-sp-muted">
+                    {WIZARD_SEMESTER_BLOCK_MESSAGE}
+                  </p>
+                )}
+              </>
             ) : (
               <p className="mt-4 rounded-lg border border-sp-border bg-sp-surface px-3 py-2.5 text-xs text-sp-muted">
                 이 기능은 데스크톱 앱에서만 사용할 수 있어요. 브라우저 모드에서는 보관함을 만들 수
@@ -190,6 +199,11 @@ export function SchoolYearArchiveTab() {
               <p className="mt-1 text-xs leading-relaxed text-sp-muted">
                 지난번 전환이 끝까지 진행되지 못했어요. 이어서 마무리하거나, 전환 전 상태로 되돌릴
                 수 있어요. 어느 쪽이든 보관 사본과 안전 백업이 함께 있어요.
+              </p>
+              {/* F6(M1): 이어하기 = 전 파일 재정리 — 중단 이후 입력분 소거를 사전 고지 */}
+              <p className="mt-1 text-xs leading-relaxed text-amber-400/90">
+                중단된 뒤에 새로 입력한 내용이 있다면 이어하기 때 함께 정리돼요. 필요하면 안전
+                백업에서 복구할 수 있어요.
               </p>
               <div className="mt-3 flex gap-2">
                 <button

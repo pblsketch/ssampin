@@ -361,7 +361,20 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
         const driveFile = remoteFiles.find((f) => f.name === `${conflict.filename}.json`);
         if (driveFile) {
           const content = await drivePort.downloadSyncFile(driveFile.id);
-          const parsed = JSON.parse(content) as unknown;
+          let parsed = JSON.parse(content) as unknown;
+          if (conflict.filename === 'settings') {
+            // F3(H1): settings 통파일 교체는 충돌 해소 경로에서도 currentTerm "더 최신 학기 승" —
+            // 미전환 기기의 settings 채택이 옛 학년도 스킵 필터를 영구 비활성시키지 않게(qa3-C).
+            const { preserveNewerCurrentTerm } = await import('@usecases/sync/SyncFromCloud');
+            let localCurrentTerm: string | undefined;
+            try {
+              localCurrentTerm = (await storage.read<{ currentTerm?: string }>('settings'))
+                ?.currentTerm;
+            } catch {
+              localCurrentTerm = undefined;
+            }
+            parsed = preserveNewerCurrentTerm(parsed, localCurrentTerm);
+          }
           await storage.write(conflict.filename, parsed);
         }
       } else {

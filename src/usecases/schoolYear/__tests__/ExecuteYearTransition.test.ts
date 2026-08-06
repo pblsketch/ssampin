@@ -8,7 +8,9 @@ import { resolve } from 'node:path';
 import type { IStoragePort } from '../../../domain/ports/IStoragePort';
 import {
   YEAR_TRANSITION_FILES,
+  YEAR_TRANSITION_REMOVED_KEY,
   YEAR_TRANSITION_STATE_KEY,
+  type YearTransitionRemovedMarker,
   createIpcYearTransitionGateway,
   deriveNextTerm,
   detectPendingTransition,
@@ -276,6 +278,32 @@ describe('executeYearTransition — 성공 경로', () => {
     expect(getTerm()).toBe('2026-2'); // settings.currentTerm 갱신
     expect(await storage.read(YEAR_TRANSITION_STATE_KEY)).toBeNull(); // 상태 파일 정리
     expect(reloadStores).toHaveBeenCalledWith(YEAR_TRANSITION_FILES.map((f) => f.key)); // 조용한 리로드
+  });
+});
+
+describe('F1(B1) — 전환-remove 마커 기록/정리', () => {
+  test('성공 전환 후 remove 키 3개가 마커에 기록된다 (치유 다운로드 게이트 근거)', async () => {
+    const { deps } = makeDeps(storage, gateway);
+    const result = await executeYearTransition(deps, { closingTerm: '2026-2' });
+    expect(result.ok).toBe(true);
+
+    const marker = await storage.read<YearTransitionRemovedMarker>(YEAR_TRANSITION_REMOVED_KEY);
+    expect(marker).not.toBeNull();
+    expect(marker?.version).toBe(1);
+    expect(marker?.term).toBe('2026-2');
+    expect(typeof marker?.removedAt).toBe('string');
+    expect([...(marker?.keys ?? [])].sort()).toEqual(['seating', 'seating-snapshots', 'students']);
+  });
+
+  test('revert 후 마커가 정리된다 — 이후 치유 다운로드는 정상 동작(ADR-024 복원)', async () => {
+    const { deps } = makeDeps(storage, gateway);
+    const done = await executeYearTransition(deps, { closingTerm: '2026-2' });
+    expect(done.ok).toBe(true);
+    expect(await storage.read(YEAR_TRANSITION_REMOVED_KEY)).not.toBeNull();
+
+    const revert = await revertYearTransition(deps, '2026-2');
+    expect(revert.ok).toBe(true);
+    expect(await storage.read(YEAR_TRANSITION_REMOVED_KEY)).toBeNull();
   });
 });
 
