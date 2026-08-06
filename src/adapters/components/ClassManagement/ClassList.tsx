@@ -8,6 +8,7 @@ import type { SubjectColorMap } from '@domain/valueObjects/SubjectColor';
 import { filterActiveClasses, filterArchivedClasses } from '@domain/rules/teachingClassArchive';
 import { ArchivedClassesSection } from './ArchivedClassesSection';
 import { ArchiveConfirmDialog } from './ArchiveConfirmDialog';
+import { ArchivedTermNotice } from '@adapters/components/SchoolYearWizard/ArchivedTermNotice';
 import {
   DndContext,
   closestCenter,
@@ -512,7 +513,11 @@ export function ClassList({ onAddClass, onBeforeSelect }: ClassListProps) {
         )}
 
         {classes.length === 0 && (
-          <p className="text-sp-muted text-xs text-center py-8">등록된 학급이 없습니다</p>
+          <div className="py-8 space-y-4">
+            <p className="text-sp-muted text-xs text-center">등록된 학급이 없습니다</p>
+            {/* S2.5 — 학년도 전환 직후엔 "없음"만 단독으로 두지 않는다(보관 사실 안내) */}
+            <ArchivedTermNotice />
+          </div>
         )}
 
         {/* 모든 반이 보관된 경우 — 죽은 화면 금지: 보관 섹션으로 안내한다 */}

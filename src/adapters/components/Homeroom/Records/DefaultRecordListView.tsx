@@ -14,6 +14,7 @@ import {
 } from './recordUtils';
 import { DateGroupHeader } from '@adapters/components/common/records/DateGroupHeader';
 import { RecordEmptyState } from '@adapters/components/common/records/RecordEmptyState';
+import { ArchivedTermNotice } from '@adapters/components/SchoolYearWizard/ArchivedTermNotice';
 import { RecordCompletionBadge } from '@adapters/components/common/records/RecordCompletionBadge';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { requiresDocument } from '@domain/rules/attendanceDocumentPolicy';
@@ -73,11 +74,15 @@ function DefaultRecordListView({
   return (
     <div className="flex-1 overflow-y-auto space-y-4">
       {grouped.length === 0 ? (
-        <RecordEmptyState
-          message={hasActiveFilters ? '조건에 맞는 기록이 없습니다' : '기록이 없습니다'}
-          hasActiveFilters={hasActiveFilters}
-          onReset={onResetFilters}
-        />
+        <div>
+          <RecordEmptyState
+            message={hasActiveFilters ? '조건에 맞는 기록이 없습니다' : '기록이 없습니다'}
+            hasActiveFilters={hasActiveFilters}
+            onReset={onResetFilters}
+          />
+          {/* S2.5 — 학년도 전환 직후엔 "없음"만 단독으로 두지 않는다(필터 없이 비었을 때만) */}
+          {!hasActiveFilters && <ArchivedTermNotice />}
+        </div>
       ) : (
         grouped.map(([date, dateRecords]) => (
           <div key={date}>

@@ -90,6 +90,14 @@ const TAB_GROUPS: TabGroup[] = [
         label: '백업/복원',
         color: 'bg-emerald-500/10 text-emerald-400',
       },
+      // S2.3 학년도 마무리(보관함) — 기존 18개 탭 id·라벨 불변, 추가만(스냅샷 테스트로 고정).
+      // P3 보관함 뷰어도 이 탭에 얹는다.
+      {
+        id: 'archive',
+        icon: 'inventory_2',
+        label: '학년도 마무리',
+        color: 'bg-amber-500/10 text-amber-400',
+      },
     ],
   },
   {

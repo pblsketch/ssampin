@@ -893,10 +893,24 @@ function MainApp() {
   // AI 브릿지 live-sync 쓰기 수신(메인 창) — 외부 AI 의 일정·할일 쓰기를 store 액션으로 적용
   useAiBridgeLiveSync();
 
-  // 위젯 내 도구 클릭 → 해당 도구 페이지로 네비게이션
+  // 위젯 내 도구 클릭 / 앱 내 안내 배너 → 해당 페이지로 네비게이션.
+  // 'settings#archive' 같은 fragment 형식도 지원한다(onNavigateToPage와 동일 규칙 —
+  // S2.5 빈 상태의 "학년도 마무리 설정 열기"가 사용).
   useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent<string>).detail;
+      const hashIdx = detail.indexOf('#');
+      if (hashIdx >= 0) {
+        const base = detail.slice(0, hashIdx);
+        const fragment = detail.slice(hashIdx + 1);
+        if (base === 'settings' && fragment.length > 0) {
+          setSettingsInitialTab(
+            fragment as import('@adapters/components/Settings/SettingsPage').SettingsTabId,
+          );
+          setCurrentPage('settings');
+          return;
+        }
+      }
       setCurrentPage(detail as PageId);
     };
     window.addEventListener('ssampin:navigate', handler);

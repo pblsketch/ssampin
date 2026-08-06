@@ -23,6 +23,7 @@ export type SettingsTabId =
   | 'record-reminder'
   | 'system'
   | 'backup'
+  | 'archive'
   | 'ai-bridge'
   | 'about';
 

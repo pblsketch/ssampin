@@ -12,6 +12,7 @@ import { exportRosterToExcel, parseRosterFromExcel } from '@infrastructure/expor
 /* eslint-enable no-restricted-imports */
 import { FormatHint } from '../common/FormatHint';
 import { RosterEmptyState } from '@adapters/components/common/RosterEmptyState';
+import { ArchivedTermNotice } from '@adapters/components/SchoolYearWizard/ArchivedTermNotice';
 import { ConflictResolveModal } from './RosterImport/ConflictResolveModal';
 import { StudentCountReduceConfirmModal } from './RosterImport/StudentCountReduceConfirmModal';
 import {
@@ -564,7 +565,9 @@ export function RosterManagementTab() {
           - Secondary([직접 입력 시작]): 빈 학생 1명을 추가하고 편집 모드 진입
             → length가 1이 되면서 아래 명렬표(else 분기)로 즉시 전환된다. */}
       {students.length === 0 ? (
-        <div className="flex-1 flex items-center justify-center py-16">
+        <div className="flex-1 flex flex-col items-center justify-center gap-5 py-16">
+          {/* S2.5 — 학년도 전환 직후엔 빈 명렬만 단독으로 두지 않는다(보관 사실 안내) */}
+          <ArchivedTermNotice />
           <RosterEmptyState
             context="roster_management"
             onNavigate={() => {
