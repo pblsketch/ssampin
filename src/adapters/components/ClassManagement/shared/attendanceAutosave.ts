@@ -1,6 +1,7 @@
 import type { AttendanceRecord } from '@domain/entities/Attendance';
 
-export type AttendanceSaveFn = (record: AttendanceRecord) => Promise<void>;
+/** 저장 함수. `false` 를 돌려주면 쓰기가 차단돼 아무것도 저장되지 않았다는 뜻이다(ADR-027). */
+export type AttendanceSaveFn = (record: AttendanceRecord) => Promise<boolean | void>;
 
 let lastAttendanceMutationAt = 0;
 let pendingLocalSaveCount = 0;
@@ -39,7 +40,10 @@ export function createAttendanceSaveSequencer(saveAttendanceRecord: AttendanceSa
   const runSave = async (record: AttendanceRecord): Promise<void> => {
     pendingLocalSaveCount += 1;
     try {
-      await saveAttendanceRecord(record);
+      // 명시적 false = 쓰기 차단(조용한 no-op). 성공으로 처리하면 아무것도 저장되지 않았는데
+      // 그리드에 "저장됨 ✓" 이 뜬다. 예외로 올려 저장 실패 표시를 타게 한다(ADR-027).
+      const saved = await saveAttendanceRecord(record);
+      if (saved === false) throw new Error('출결 저장이 차단되어 기록하지 못했습니다.');
       clearAttendanceSaveError();
     } catch (error) {
       lastAttendanceSaveErrorAt = Date.now();

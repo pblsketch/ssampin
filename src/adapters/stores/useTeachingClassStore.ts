@@ -82,7 +82,8 @@ interface TeachingClassState {
     date: string,
     period: number,
   ) => AttendanceRecord | undefined;
-  saveAttendanceRecord: (record: AttendanceRecord) => Promise<void>;
+  /** 저장 성공 시 true, 쓰기 차단(읽기 오류 등)으로 아무것도 하지 않았으면 false. */
+  saveAttendanceRecord: (record: AttendanceRecord) => Promise<boolean>;
   getDayAttendance: (classId: string, date: string) => readonly AttendanceRecord[];
   saveDayAttendance: (
     classId: string,
@@ -660,7 +661,9 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
     },
 
     saveAttendanceRecord: async (record) => {
-      if (!(await ensureWritable())) return;
+      // 쓰기가 차단되면 false — 호출자가 "저장됨"으로 오해하지 않도록 표면화한다(ADR-027).
+      // 기존 호출자는 반환값을 무시해도 그대로 동작한다(void → boolean 확대).
+      if (!(await ensureWritable())) return false;
       // cls의 groupId 주입
       const cls = get().classes.find((c) => c.id === record.classId);
       const finalRecord: AttendanceRecord = cls?.groupId
@@ -672,6 +675,7 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
       // 병합한 다른 기록을 낡은 스냅샷이 통째로 덮는다(2026-07 QA BLOCKER).
       const saved = await manageAttendance.upsertRecord(finalRecord);
       set({ attendanceRecords: [...saved] });
+      return true;
     },
 
     getDayAttendance: (classId, date) => {

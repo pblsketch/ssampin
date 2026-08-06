@@ -283,7 +283,12 @@ export function useAiBridgeLiveSync(): void {
         },
         attendance: {
           // 교과반 출결 (classId, date, period) 단건 upsert — store 가 groupId 미러링 처리.
-          save: (input) => tc.saveAttendanceRecord(input),
+          // 쓰기가 차단되면 던진다 — applyLiveSyncWrite 가 500 으로 응답하고 멱등 예약을
+          // 해제해 재시도가 열린다. 삼키면 "저장 완료"로 굳어 재시도까지 막힌다(ADR-027).
+          save: async (input) => {
+            const saved = await tc.saveAttendanceRecord(input);
+            if (!saved) throw new Error('출결 저장이 차단되어 기록하지 못했습니다.');
+          },
         },
         homeroomAttendance: {
           // 정규 교시 수(settings.maxPeriods, 기본 7) — usecase 가 allDay 펼침에 사용.
@@ -299,12 +304,18 @@ export function useAiBridgeLiveSync(): void {
             //     기존에는 in-memory getDayAttendance로 병합한 하루치를 통째 교체했는데,
             //     그 스냅샷이 낡으면 동시 편집된 다른 학생 출결을 덮는다(2026-07 QA F3).
             //     보존·병합은 usecase가 락 안 fresh 스냅샷에서 수행한다(P6).
-            await tc.upsertStudentAttendanceEntries({
+            // 쓰기 차단이면 null — 여기서 던져야 아래 (2) 기록부 미러가 실행되지 않는다.
+            // 삼키면 원본 출결부 없이 사본만 생기고(이중 장부 역방향 어긋남) 멱등키까지
+            // 완료 처리돼 재시도가 봉쇄된다(ADR-027).
+            const savedEntries = await tc.upsertStudentAttendanceEntries({
               classId: className,
               date: input.date,
               studentNumbers: target,
               recordsByPeriod: input.recordsByPeriod,
             });
+            if (savedEntries === null) {
+              throw new Error('출결부 저장이 차단되어 담임 출결을 기록하지 못했습니다.');
+            }
             // (2) 기록부(student-records) 미러 — subcategory 자동계산 + att-{id}-{date}.
             await sr.bridgeHomeroomDayAttendance({
               className,
