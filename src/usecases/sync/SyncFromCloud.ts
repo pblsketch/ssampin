@@ -17,6 +17,7 @@ import type { ObservationData, ObservationRecord } from '@domain/entities/Observ
 import type { RecordCategoryItem } from '@domain/valueObjects/RecordCategory';
 import { attendanceRecordKey } from '@domain/entities/Attendance';
 import { deriveDocumentSubmitted } from '@domain/rules/attendanceDocumentPolicy';
+import { schoolYearOf } from '@domain/rules/academicCalendar';
 import {
   SYNC_FILES,
   type SyncProgress,
@@ -109,6 +110,49 @@ function mergeTrackedGroups(base: StudentRecord, other: StudentRecord): StudentR
 }
 
 /**
+ * S2.2b — 옛 "학년도" 리모트 레코드 스킵 (계획 §4 S2.2 AC-2 계열, ADR-034 epoch 가드).
+ *
+ * 판정은 학기(term)가 아니라 **학년도(schoolYearOf)** 비교다 — 담임 축은 학년도를 관통하므로
+ * 같은 학년도의 1·2학기는 정상 병합된다(2026-1 레코드는 currentTerm=2026-2에서도 병합).
+ *
+ * fail-open 규칙(자기 격리 금지 — 계획 §4 S2.2 미정의 케이스 ③):
+ *  - record.term 부재(구버전 레코드) → 현행 병합
+ *  - currentTerm 부재·파싱 불가(전환 미사용·구버전 설정) → 필터 전체 비활성
+ *
+ * 로컬 레코드는 판정하지 않는다 — 잔존 옛 레코드 보존(레코드 스탬프 설계의 핵심:
+ * 반쯤 전환 상태는 오류가 아니다). 툼스톤 로직과 완전 분리(0줄 수정) — 스킵된 레코드는
+ * map에 들어가지 않으므로 툼스톤 판정 대상도 아니다(옛 레코드의 삭제 전파는 그대로 동작).
+ */
+function filterOldYearRemoteRecords<T extends { readonly term?: string }>(
+  filename: string,
+  records: readonly T[],
+  currentTerm: string | undefined,
+): readonly T[] {
+  if (currentTerm === undefined) return records;
+  const currentYear = schoolYearOf(currentTerm);
+  if (currentYear === null) return records;
+
+  const kept: T[] = [];
+  const skippedTerms = new Set<string>();
+  let skipped = 0;
+  for (const r of records) {
+    const year = r.term === undefined ? null : schoolYearOf(r.term);
+    if (year !== null && year < currentYear) {
+      skipped++;
+      if (r.term !== undefined) skippedTerms.add(r.term);
+      continue;
+    }
+    kept.push(r);
+  }
+  if (skipped > 0) {
+    console.log(
+      `[SyncFromCloud] ${filename}: ${skipped}건 skip (옛 학년도 term=${[...skippedTerms].sort().join(',')} < current=${currentTerm})`,
+    );
+  }
+  return kept;
+}
+
+/**
  * 병합 도메인 공용 임계구역: 락 안에서 로컬 읽기→병합→쓰기(+카운트 로그).
  * 락은 반드시 읽기부터 감싼다(쓰기만 감싸면 낡은 스냅샷 위라 무의미 — 계획 §4).
  * 사용자 저장(유스케이스)과 겹치면 병합본이 사용자 변경을 삼키거나 그 반대가 되는
@@ -140,13 +184,19 @@ async function mergeAndWriteLocked<T extends { readonly records: readonly unknow
  * 기록이 툼스톤보다 나중에 수정된 경우에만 살아남는다(재작성이 삭제를 이김).
  * 동률이면 삭제가 이긴다 — mergeObservations 와 동일 정책.
  * 시각 축: 이 도메인은 ISO 문자열(observations 의 ms 숫자와 다름) — 문자열 사전순 비교.
+ * currentTerm(S2.2b): 있으면 옛 학년도 리모트 레코드를 스킵한다(filterOldYearRemoteRecords).
  */
 export function mergeStudentRecords(
   local: StudentRecordsData | null,
   remote: StudentRecordsData,
+  currentTerm?: string,
 ): StudentRecordsData {
   const localRecords = local?.records ?? [];
-  const remoteRecords = remote.records ?? [];
+  const remoteRecords = filterOldYearRemoteRecords(
+    'student-records',
+    remote.records ?? [],
+    currentTerm,
+  );
   const map = new Map<string, StudentRecord>();
 
   // 로컬 레코드 먼저 추가
@@ -261,17 +311,19 @@ export function mergeCategories(
  *   기록이 툼스톤보다 나중에 수정된 경우에만 살아남는다(재작성이 삭제를 이김).
  *   동률이면 삭제가 이긴다 — mergeAttendance 와 동일 정책.
  * - customTags/customCategories 는 순서 보존 합집합 (빈 배열이 커스텀을 덮지 않게)
+ * - currentTerm(S2.2b): 있으면 옛 학년도 리모트 레코드를 스킵한다(filterOldYearRemoteRecords)
  */
 export function mergeObservations(
   local: ObservationData | null,
   remote: ObservationData,
   preferRemote: boolean,
+  currentTerm?: string,
 ): ObservationData {
   const map = new Map<string, ObservationRecord>();
   for (const r of local?.records ?? []) {
     map.set(r.id, r);
   }
-  for (const r of remote.records ?? []) {
+  for (const r of filterOldYearRemoteRecords('observations', remote.records ?? [], currentTerm)) {
     const existing = map.get(r.id);
     if (!existing) {
       map.set(r.id, r);
@@ -337,17 +389,19 @@ function mergeStringUnion(
  * - 삭제 전파: 양쪽 툼스톤(deleted)을 키별 최신 deletedAt으로 합치고,
  *   레코드가 툼스톤보다 나중에 수정된 경우에만 살아남는다(재작성이 삭제를 이김).
  *   동률이거나 레코드에 스탬프가 없으면 삭제가 이긴다.
+ * - currentTerm(S2.2b): 있으면 옛 학년도 리모트 레코드를 스킵한다(filterOldYearRemoteRecords)
  */
 export function mergeAttendance(
   local: AttendanceData | null,
   remote: AttendanceData,
   preferRemote: boolean,
+  currentTerm?: string,
 ): AttendanceData {
   const map = new Map<string, AttendanceRecord>();
   for (const r of local?.records ?? []) {
     map.set(attendanceRecordKey(r), r);
   }
-  for (const r of remote.records ?? []) {
+  for (const r of filterOldYearRemoteRecords('attendance', remote.records ?? [], currentTerm)) {
     const key = attendanceRecordKey(r);
     const existing = map.get(key);
     if (!existing) {
@@ -405,12 +459,26 @@ export class SyncFromCloud {
     private readonly conflictPolicy: 'latest' | 'ask' = 'ask',
     private readonly getDynamicSyncFiles?: GetDynamicSyncFiles,
     private readonly getBinaryDynamicSyncFiles?: GetBinaryDynamicSyncFiles,
+    /**
+     * S2.2b — settings.currentTerm 지연 조회(전역 import 금지, 호출부 주입).
+     * 미주입·부재·읽기 실패 = 옛 학년도 스킵 필터 비활성(현행 병합 그대로, fail-open).
+     */
+    private readonly getCurrentTerm?: () => Promise<string | undefined>,
   ) {}
 
   async execute(onProgress?: (progress: SyncProgress) => void): Promise<SyncFromCloudResult> {
     console.log(
       `[SyncFromCloud] ▶ 시작 | myDeviceId=${this.deviceId} | policy=${this.conflictPolicy}`,
     );
+    // S2.2b — 옛 학년도 스킵 기준. 실행 시점에 1회 읽어 다운로드·병합 전체에 같은 값 적용.
+    let currentTerm: string | undefined;
+    if (this.getCurrentTerm) {
+      try {
+        currentTerm = await this.getCurrentTerm();
+      } catch {
+        currentTerm = undefined; // 읽기 실패 = 필터 비활성(fail-open — 자기 격리 금지)
+      }
+    }
     const folder = await this.drivePort.getOrCreateSyncFolder();
     const remoteManifest = await this.drivePort.getSyncManifest(folder.id);
     if (!remoteManifest) {
@@ -493,7 +561,7 @@ export class SyncFromCloud {
             const content = await this.drivePort.downloadSyncFile(driveFile.id);
             const remoteData = JSON.parse(content) as StudentRecordsData;
             await mergeAndWriteLocked(this.storage, filename, remoteData, (local) =>
-              mergeStudentRecords(local, remoteData),
+              mergeStudentRecords(local, remoteData, currentTerm),
             );
             updatedFiles[filename] = remoteInfo;
             downloaded.push(filename);
@@ -509,7 +577,7 @@ export class SyncFromCloud {
             const content = await this.drivePort.downloadSyncFile(driveFile.id);
             const remoteData = JSON.parse(content) as AttendanceData;
             await mergeAndWriteLocked(this.storage, filename, remoteData, (local) =>
-              mergeAttendance(local, remoteData, remoteIsNewer),
+              mergeAttendance(local, remoteData, remoteIsNewer, currentTerm),
             );
             updatedFiles[filename] = remoteInfo;
             downloaded.push(filename);
@@ -525,7 +593,7 @@ export class SyncFromCloud {
             const content = await this.drivePort.downloadSyncFile(driveFile.id);
             const remoteData = JSON.parse(content) as ObservationData;
             await mergeAndWriteLocked(this.storage, filename, remoteData, (local) =>
-              mergeObservations(local, remoteData, remoteIsNewer),
+              mergeObservations(local, remoteData, remoteIsNewer, currentTerm),
             );
             updatedFiles[filename] = remoteInfo;
             downloaded.push(filename);
@@ -623,7 +691,7 @@ export class SyncFromCloud {
             this.storage,
             filename,
             remoteData,
-            (local) => mergeStudentRecords(local, remoteData),
+            (local) => mergeStudentRecords(local, remoteData, currentTerm),
             ' (first download)',
           );
         } else if (filename === 'attendance') {
@@ -633,7 +701,7 @@ export class SyncFromCloud {
             this.storage,
             filename,
             remoteData,
-            (local) => mergeAttendance(local, remoteData, true),
+            (local) => mergeAttendance(local, remoteData, true, currentTerm),
             ' (first download)',
           );
         } else if (filename === 'observations') {
@@ -643,7 +711,7 @@ export class SyncFromCloud {
             this.storage,
             filename,
             remoteData,
-            (local) => mergeObservations(local, remoteData, true),
+            (local) => mergeObservations(local, remoteData, true, currentTerm),
             ' (first download)',
           );
         } else {
