@@ -641,6 +641,129 @@ export function deleteArchive(
   }
 }
 
+export interface ArchiveImportSuccess {
+  readonly ok: true;
+  readonly term: string;
+  /** true = 이미 로컬에 같은 학기가 있어 아무것도 쓰지 않았다(아카이브 불변 — 덮어쓰기 금지). */
+  readonly skipped: boolean;
+  readonly entryCount: number;
+}
+
+/**
+ * (S4.1) 아카이브 Drive 동기화의 다운로드 배치 — 리모트에서 받아온 학기 1개 분량의
+ * 파일 묶음(`{relPath: {format, content}}`)을 `archives/{term}/`으로 원자적으로 들여온다.
+ *
+ * 계약(계획 §4 S4.1 — 아카이브는 불변):
+ *  - **이미 같은 학기가 있으면 아무것도 쓰지 않는다**(skipped:true — 절대 덮어쓰기 금지).
+ *  - manifest.json이 반드시 포함되어야 하고, term이 일치해야 하며, 매니페스트의 **모든
+ *    항목이 실제로 존재 + SHA-256 일치**할 때에만 배치한다(부분·손상 다운로드 거부).
+ *  - 매니페스트에 없는 낯선 파일이 섞여 있으면 거부한다(다른 기기의 동명 아카이브 혼입 방지).
+ *  - archive:create와 같은 스테이징 + rename — 실패 시 최종 위치에 부분 결과물 0.
+ */
+export function importArchive(
+  userDataPath: string,
+  term: string,
+  filesRaw: unknown,
+): ArchiveImportSuccess | ArchiveFailure {
+  let stagingDir: string | null = null;
+  try {
+    if (!isValidArchiveTerm(term)) {
+      return fail(`허용되지 않은 학기 이름이에요: ${term}`);
+    }
+    const archivesRoot = getArchivesRoot(userDataPath);
+    const termDir = resolveUnder(archivesRoot, term);
+    if (termDir === null) {
+      return fail(`보관함 경계를 벗어난 학기 이름이에요: ${term}`);
+    }
+    if (fs.existsSync(termDir)) {
+      return { ok: true, term, skipped: true, entryCount: 0 };
+    }
+
+    // 1) 형태 검증 — term·상대 경로·포맷 전부 화이트리스트(validateArchivesSection 재사용).
+    const validated = validateArchivesSection({ [term]: filesRaw });
+    if (!validated.ok) {
+      return fail(validated.error);
+    }
+    const files = validated.archives[term] ?? {};
+
+    // 2) 바이트 복원 + 매니페스트 검증.
+    const bytesByPath = new Map<string, Buffer>();
+    for (const [relPath, entry] of Object.entries(files)) {
+      bytesByPath.set(
+        relPath,
+        entry.format === 'base64'
+          ? Buffer.from(entry.content, 'base64')
+          : Buffer.from(entry.content, 'utf-8'),
+      );
+    }
+    const manifestBytes = bytesByPath.get(ARCHIVE_MANIFEST_FILENAME);
+    if (!manifestBytes) {
+      return fail(`매니페스트가 없어 보관함을 들여올 수 없어요: ${term}`);
+    }
+    let manifestParsed: unknown;
+    try {
+      manifestParsed = JSON.parse(manifestBytes.toString('utf-8'));
+    } catch {
+      return fail(`매니페스트를 해석할 수 없어요: ${term}`);
+    }
+    const manifestValidated = validateArchiveManifest(manifestParsed);
+    if (!manifestValidated.ok) {
+      return fail(manifestValidated.error);
+    }
+    const manifest = manifestValidated.manifest;
+    if (manifest.term !== term) {
+      return fail(`매니페스트의 학기(${manifest.term})가 대상 학기(${term})와 달라요.`);
+    }
+
+    // 3) 완결성 — 매니페스트의 모든 항목이 존재하고 체크섬이 일치해야 한다.
+    for (const entry of manifest.entries) {
+      const bytes = bytesByPath.get(entry.path);
+      if (!bytes) {
+        return fail(`받은 파일이 불완전해요(누락): ${term}/${entry.path}`);
+      }
+      if (sha256Hex(bytes) !== entry.sha256) {
+        return fail(`받은 파일이 손상됐어요(체크섬 불일치): ${term}/${entry.path}`);
+      }
+    }
+    // 낯선 파일 거부 — 매니페스트 + manifest.json 외의 경로가 섞여 있으면 배치하지 않는다.
+    const allowedPaths = new Set<string>([
+      ARCHIVE_MANIFEST_FILENAME,
+      ...manifest.entries.map((e) => e.path),
+    ]);
+    for (const relPath of bytesByPath.keys()) {
+      if (!allowedPaths.has(relPath)) {
+        return fail(`매니페스트에 없는 파일이 섞여 있어요: ${term}/${relPath}`);
+      }
+    }
+
+    // 4) 스테이징 쓰기 → rename (archive:create와 동일한 원자적 완성).
+    stagingDir = path.join(archivesRoot, `.staging-import-${Date.now()}-${process.pid}`);
+    fs.mkdirSync(stagingDir, { recursive: true });
+    for (const [relPath, bytes] of bytesByPath) {
+      const destPath = resolveUnder(stagingDir, relPath);
+      if (destPath === null) {
+        return fail(`보관함 경계를 벗어난 파일 경로예요: ${term}/${relPath}`);
+      }
+      fs.mkdirSync(path.dirname(destPath), { recursive: true });
+      fs.writeFileSync(destPath, bytes);
+      const written = fs.readFileSync(destPath);
+      if (sha256Hex(written) !== sha256Hex(bytes)) {
+        return fail(`쓰기 검증에 실패했어요(체크섬 불일치): ${term}/${relPath}`);
+      }
+    }
+    fs.renameSync(stagingDir, termDir);
+    stagingDir = null;
+
+    return { ok: true, term, skipped: false, entryCount: manifest.entries.length };
+  } catch (err) {
+    return fail(`보관함 들여오기에 실패했어요: ${errorMessage(err)}`);
+  } finally {
+    if (stagingDir !== null && fs.existsSync(stagingDir)) {
+      removeDirQuiet(stagingDir);
+    }
+  }
+}
+
 /**
  * (S2.1b) 수동 백업 export용 — 디스크의 모든 아카이브를 `archives` 섹션으로 수집한다.
  * 파일은 파싱하지 않고 원문(utf8)/base64로 담아 바이트 보존 — 복원 후 체크섬이 그대로 맞는다.

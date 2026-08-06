@@ -18,6 +18,7 @@ import {
   summarizeArchivedAttendance,
 } from './archiveViewerData';
 import { readArchiveBinaryAsDataUrl, useArchiveFile } from './useArchiveFile';
+import { ArchiveRosterCarryover } from './ArchiveRosterCarryover';
 
 type DomainTab = 'students' | 'records' | 'observations' | 'attendance' | 'progress';
 
@@ -62,24 +63,35 @@ function StudentsView({ term, query }: { term: string; query: string }) {
   if (loading) return <LoadingRow />;
   if (error) return <ErrorRow message={error} />;
   const visible = students.filter((s) => matchesSearch(s.name, query));
-  if (visible.length === 0) return <EmptyRow message="보관된 명렬이 없어요" />;
+  if (visible.length === 0)
+    return (
+      <>
+        {/* 학생 승계(S4.3) — 담임 명렬이 비어 있을 때만 나타나는 opt-in 버튼 */}
+        <ArchiveRosterCarryover term={term} data={data} />
+        <EmptyRow message="보관된 명렬이 없어요" />
+      </>
+    );
   return (
-    <ul className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
-      {visible.map((s) => (
-        <li
-          key={s.id}
-          className="flex items-center gap-2 rounded-lg border border-sp-border bg-sp-card px-3 py-2"
-        >
-          <span className="w-8 shrink-0 text-right text-xs text-sp-muted">{s.number ?? '—'}</span>
-          <span className="truncate text-sm text-sp-text">{s.name}</span>
-          {s.status !== 'active' && (
-            <span className="ml-auto shrink-0 rounded bg-sp-surface px-1.5 py-0.5 text-caption text-sp-muted">
-              {s.status === 'withdrawn' ? '전출' : s.status === 'transferred' ? '전출' : s.status}
-            </span>
-          )}
-        </li>
-      ))}
-    </ul>
+    <>
+      {/* 학생 승계(S4.3) — 담임 명렬이 비어 있을 때만 나타나는 opt-in 버튼 */}
+      <ArchiveRosterCarryover term={term} data={data} />
+      <ul className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+        {visible.map((s) => (
+          <li
+            key={s.id}
+            className="flex items-center gap-2 rounded-lg border border-sp-border bg-sp-card px-3 py-2"
+          >
+            <span className="w-8 shrink-0 text-right text-xs text-sp-muted">{s.number ?? '—'}</span>
+            <span className="truncate text-sm text-sp-text">{s.name}</span>
+            {s.status !== 'active' && (
+              <span className="ml-auto shrink-0 rounded bg-sp-surface px-1.5 py-0.5 text-caption text-sp-muted">
+                {s.status === 'withdrawn' ? '전출' : s.status === 'transferred' ? '전출' : s.status}
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </>
   );
 }
 

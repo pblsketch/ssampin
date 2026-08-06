@@ -317,3 +317,35 @@ export function validateArchivesSection(
   }
   return { ok: true, archives: result };
 }
+
+/* ─── (S4.1) 아카이브 Drive 동기화 키 ─────────────────────────────────────────
+ * Drive 매니페스트에서 아카이브 파일을 식별하는 네임스페이스 키:
+ *   `archives/{term}/{relPath}`  (예: 'archives/2026-1/students.json',
+ *                                     'archives/2026-1/obs-attachments/x.png')
+ * ⚠️ 아래 두 함수는 electron 미러 대상이 아니다 — 렌더러(어댑터)·유즈케이스만 사용한다.
+ * ───────────────────────────────────────────────────────────────────────────── */
+
+/** Drive 동기화 매니페스트의 아카이브 키 접두어. */
+export const ARCHIVE_SYNC_KEY_PREFIX = 'archives/';
+
+/** 아카이브 동기화 키 생성 — term·relPath가 화이트리스트를 통과할 때만. 아니면 null. */
+export function buildArchiveSyncKey(term: string, relPath: string): string | null {
+  if (!isValidArchiveTerm(term)) return null;
+  if (!isValidArchiveRelPath(relPath)) return null;
+  return `${ARCHIVE_SYNC_KEY_PREFIX}${term}/${relPath}`;
+}
+
+/** 아카이브 동기화 키 해석 — 접두어·term·relPath 전부 검증. 형식이 아니면 null. */
+export function parseArchiveSyncKey(
+  key: string,
+): { readonly term: string; readonly relPath: string } | null {
+  if (typeof key !== 'string' || !key.startsWith(ARCHIVE_SYNC_KEY_PREFIX)) return null;
+  const rest = key.slice(ARCHIVE_SYNC_KEY_PREFIX.length);
+  const slash = rest.indexOf('/');
+  if (slash <= 0) return null;
+  const term = rest.slice(0, slash);
+  const relPath = rest.slice(slash + 1);
+  if (!isValidArchiveTerm(term)) return null;
+  if (!isValidArchiveRelPath(relPath)) return null;
+  return { term, relPath };
+}

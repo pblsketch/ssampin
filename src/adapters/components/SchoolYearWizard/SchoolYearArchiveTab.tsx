@@ -362,7 +362,14 @@ export function SchoolYearArchiveTab() {
           closingTerm={wizardResume && pending !== null ? pending.closingTerm : closingTerm}
           gateway={gateway}
           resumePending={wizardResume}
-          onCompleted={() => void refresh()}
+          onCompleted={() => {
+            void refresh();
+            // (S4.1) 방금 만든 아카이브를 곧 업로드하도록 디바운스 동기화를 예약한다.
+            // 동기화 비활성·첫 동기화 대기 상태면 내부 가드가 조용히 스킵한다(오류 아님).
+            void import('@adapters/stores/useDriveSyncStore').then(({ useDriveSyncStore }) =>
+              useDriveSyncStore.getState().triggerSaveSync(),
+            );
+          }}
         />
       )}
     </div>

@@ -93,6 +93,9 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
         await import('@adapters/di/container');
       const getDynamicSyncFiles = () => noteRepository.listPageBodyKeys();
       const getBinaryDynamicSyncFiles = () => observationAttachmentRepository.listBinaryKeys();
+      // (S4.1) 아카이브 훅 — 데스크톱(archive IPC 존재)에서만 주입. 미주입=기존 동작 그대로.
+      const archiveSync = await import('@adapters/repositories/archiveSyncGateway');
+      const archiveEnabled = archiveSync.hasArchiveSync();
 
       const useCase = new SyncToCloud(
         storage,
@@ -102,6 +105,8 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
         settings.teacherName || '내 기기',
         getDynamicSyncFiles,
         getBinaryDynamicSyncFiles,
+        archiveEnabled ? archiveSync.listArchiveSyncFiles : undefined,
+        archiveEnabled ? archiveSync.readArchiveSyncFileBytes : undefined,
       );
 
       const result = await useCase.execute((p) => set({ progress: p }));
@@ -193,6 +198,9 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
         await import('@adapters/di/container');
       const getDynamicSyncFiles = () => noteRepository.listPageBodyKeys();
       const getBinaryDynamicSyncFiles = () => observationAttachmentRepository.listBinaryKeys();
+      // (S4.1) 아카이브 훅 — 데스크톱(archive IPC 존재)에서만 주입. 미주입=기존 동작 그대로.
+      const archiveSync = await import('@adapters/repositories/archiveSyncGateway');
+      const archiveEnabled = archiveSync.hasArchiveSync();
 
       const useCase = new SyncFromCloud(
         storage,
@@ -206,6 +214,8 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
         // S2.2b — 옛 학년도 스킵 기준(settings.currentTerm). 실행 시점 fresh 조회.
         // 지연 재시도(pull-merge-push)도 이 액션을 재호출하므로 업/다운 병합이 같은 기준을 쓴다.
         async () => useSettingsStore.getState().settings.currentTerm,
+        archiveEnabled ? archiveSync.listLocalArchiveTerms : undefined,
+        archiveEnabled ? archiveSync.importArchiveTermFiles : undefined,
       );
 
       const result = await useCase.execute((p) => set({ progress: p }));

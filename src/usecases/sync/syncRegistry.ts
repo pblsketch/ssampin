@@ -340,6 +340,24 @@ export const SYNC_REGISTRY: SyncDomain[] = [
       // 다운로드된 바이너리 파일은 IStoragePort.writeBinary로 직접 기록되며 store를 거치지 않는다.
     },
   },
+  // 31. archives ─ 학년도 보관함 파일군 (S4.1, 동적: 'archives/{term}/{relPath}').
+  // 아카이브는 전환 실행 시에만 생기는 불변 파일군이라 대응하는 스토어가 없다 —
+  // subscribeExcluded(자동 업로드 구독 대상 아님) + isDynamic(정적 SYNC_FILES 제외).
+  // 실제 열거·업로드·배치는 SyncToCloud/SyncFromCloud의 아카이브 훅
+  // (useDriveSyncStore가 archiveSyncGateway로 주입 — 데스크톱 전용)이 담당하고,
+  // 본 registry의 enumerateDynamic은 메타테스트(f) 정합성용 placeholder이다.
+  {
+    fileName: 'archives',
+    subscribeExcluded: true,
+    isDynamic: true,
+    enumerateDynamic: async () => [],
+    reload: async () => {
+      // 스토어 없음 — 보관함 뷰어의 파일 캐시만 무효화(다음 열람이 새 학기를 읽는다).
+      const { invalidateArchiveFileCache } =
+        await import('@adapters/components/Archive/useArchiveFile');
+      invalidateArchiveFileCache();
+    },
+  },
 ];
 
 /**

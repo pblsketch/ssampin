@@ -297,6 +297,32 @@ export function Step3Profile({ profile, onChange }: Props) {
           </div>
         </div>
       </div>
+
+      {/* 구조 승계 opt-in (S4.3) — 기본 OFF. 실행 성공 후에만 동작한다. */}
+      <div className="space-y-2">
+        <p className="text-xs font-semibold uppercase tracking-wider text-sp-muted">
+          지난 학기에서 가져오기
+        </p>
+        <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-sp-border bg-sp-surface px-4 py-3">
+          <input
+            type="checkbox"
+            checked={profile.carryClassStructure === true}
+            onChange={(e) => patch({ carryClassStructure: e.target.checked })}
+            className="mt-0.5 h-4 w-4"
+          />
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold text-sp-text">
+              지난 학기 수업반 틀 가져오기
+            </span>
+            <span className="mt-0.5 block text-xs leading-relaxed text-sp-muted">
+              전환이 끝나면 보관함의 수업반에서{' '}
+              <strong className="text-sp-text">반 이름·과목·그룹 구조만</strong> 새 수업반으로
+              만들어요. 학생 명렬·좌석·출결·기록은 가져오지 않아요 — 새 명단은 수업 관리에서 새로
+              등록해요.
+            </span>
+          </span>
+        </label>
+      </div>
     </div>
   );
 }

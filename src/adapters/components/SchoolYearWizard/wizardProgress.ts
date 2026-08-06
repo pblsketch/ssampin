@@ -25,6 +25,12 @@ export interface WizardProfileDraft {
   readonly customPeriodDuration?: number;
   readonly maxPeriods: number;
   readonly periodTimes: readonly PeriodTime[];
+  /**
+   * 구조 승계(S4.3) opt-in — 전환 성공 후 아카이브의 수업반 틀(이름·과목·그룹 구조만,
+   * 학생·좌석 제외)을 새 수업반으로 만들지. 기본 OFF(undefined=false).
+   * Settings에는 반영되지 않는다(profileToSettingsPatch 미포함 — 마법사 초안 전용).
+   */
+  readonly carryClassStructure?: boolean;
 }
 
 export interface WizardProgress {

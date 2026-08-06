@@ -1065,6 +1065,17 @@ interface ArchiveElectronAPI {
   ) => Promise<
     { ok: true; encoding: 'utf8' | 'base64'; content: string } | { ok: false; error: string }
   >;
+  /**
+   * (S4.1) Drive 동기화 다운로드 배치 — 학기 1개 분량 파일 묶음을 스테이징·매니페스트
+   * 체크섬 검증 후 원자적으로 들여온다. 이미 있는 학기는 무변경 스킵(skipped:true —
+   * 아카이브 불변, 절대 덮어쓰기 금지).
+   */
+  import: (
+    term: string,
+    files: Record<string, { format: 'utf8' | 'base64'; content: string }>,
+  ) => Promise<
+    { ok: true; term: string; skipped: boolean; entryCount: number } | { ok: false; error: string }
+  >;
   /** 학기 보관함 삭제 — archives/{term} 디렉토리만. 라이브 데이터 무변경. */
   delete: (term: string) => Promise<{ ok: true; existed: boolean } | { ok: false; error: string }>;
 }

@@ -34,6 +34,38 @@ export type GetDynamicSyncFiles = () => Promise<string[]>;
  */
 export type GetBinaryDynamicSyncFiles = () => Promise<string[]>;
 
+/**
+ * (S4.1) 로컬 아카이브 파일 키(`archives/{term}/{relPath}`) 열거 훅.
+ * 데스크톱만 주입한다(archiveSyncGateway — archive:list/read IPC 경유).
+ * 미주입 = 아카이브 동기화 전체 비활성(모바일·브라우저 모드 — 기존 동작 무변경).
+ */
+export type GetArchiveSyncFiles = () => Promise<string[]>;
+
+/**
+ * (S4.1) 아카이브 파일 1개의 바이트 읽기 훅 — archive:read(체크섬 검증 포함) 경유.
+ * 부재·검증 실패 시 null(해당 파일만 스킵 — 다음 동기화에서 재시도).
+ */
+export type ReadArchiveSyncFile = (key: string) => Promise<Uint8Array | null>;
+
+/**
+ * (S4.1) 아카이브 키 업로드 순서 — 학기별로 묶고, 각 학기의 manifest.json을 그 학기의
+ * 맨 뒤로 보낸다. "리모트에 manifest.json이 있다 = 그 학기 업로드가 완결됐다"는
+ * 다운로드 측 판정의 성립 조건이다(부분 업로드 학기를 새 기기가 들여오지 않게).
+ */
+export function sortArchiveSyncKeysManifestLast(keys: readonly string[]): string[] {
+  const termOf = (k: string): string => k.split('/')[1] ?? '';
+  const isManifest = (k: string): boolean => k.endsWith('/manifest.json');
+  return [...keys].sort((a, b) => {
+    const at = termOf(a);
+    const bt = termOf(b);
+    if (at !== bt) return at.localeCompare(bt);
+    const am = isManifest(a) ? 1 : 0;
+    const bm = isManifest(b) ? 1 : 0;
+    if (am !== bm) return am - bm;
+    return a.localeCompare(b);
+  });
+}
+
 export interface SyncToCloudResult {
   readonly uploaded: string[];
   readonly skipped: string[];
@@ -64,6 +96,9 @@ export class SyncToCloud {
     private readonly deviceName: string,
     private readonly getDynamicSyncFiles?: GetDynamicSyncFiles,
     private readonly getBinaryDynamicSyncFiles?: GetBinaryDynamicSyncFiles,
+    /** (S4.1) 아카이브 훅 2종 — 둘 다 주입될 때만 아카이브 업로드가 켜진다(데스크톱 전용). */
+    private readonly getArchiveSyncFiles?: GetArchiveSyncFiles,
+    private readonly readArchiveSyncFile?: ReadArchiveSyncFile,
   ) {}
 
   async execute(onProgress?: (progress: SyncProgress) => void): Promise<SyncToCloudResult> {
@@ -97,7 +132,16 @@ export class SyncToCloud {
     const binaryFilesPreview = this.getBinaryDynamicSyncFiles
       ? await this.getBinaryDynamicSyncFiles()
       : [];
-    const grandTotal = total + dynamicFiles.length + binaryFilesPreview.length;
+    // (S4.1) 아카이브 키 사전 조회 — 열거 실패는 라이브 동기화를 막지 않는다(빈 목록 취급).
+    let archiveKeys: string[] = [];
+    if (this.getArchiveSyncFiles && this.readArchiveSyncFile) {
+      try {
+        archiveKeys = sortArchiveSyncKeysManifestLast(await this.getArchiveSyncFiles());
+      } catch (err) {
+        console.warn('[SyncToCloud] 아카이브 열거 실패 — 라이브 동기화는 계속:', err);
+      }
+    }
+    const grandTotal = total + dynamicFiles.length + binaryFilesPreview.length + archiveKeys.length;
 
     // 정적/동적 파일 모두 동일 로직으로 처리하기 위한 헬퍼
     const uploadOne = async (filename: string, current: number): Promise<void> => {
@@ -207,6 +251,51 @@ export class SyncToCloud {
       nextRemoteFiles[relPath] = entry;
       nextLocalFiles[relPath] = entry;
       uploaded.push(relPath);
+    }
+
+    // (S4.1) 아카이브 파일 업로드 — 불변 계약:
+    //  - 리모트 매니페스트에 키가 이미 있으면 **무조건 스킵**(존재=완결, 절대 덮어쓰기 금지.
+    //    체크섬 비교·DEFER 없음 — 아카이브는 수정되지 않으므로 재업로드 자체가 없다).
+    //  - 파일 단위 try/catch: 한 파일 실패가 라이브 동기화·다른 아카이브 파일을 막지 않고,
+    //    실패분은 매니페스트에 기록되지 않아 **다음 동기화에서 이어서** 올라간다.
+    //  - manifest.json은 학기별 맨 뒤(sortArchiveSyncKeysManifestLast) — 완결 표식.
+    const readArchiveSyncFile = this.readArchiveSyncFile;
+    for (const key of archiveKeys) {
+      if (!readArchiveSyncFile) break; // archiveKeys가 비어 있어 도달 불가 — 타입 좁히기용
+      index++;
+      onProgress?.({ current: index, total: grandTotal, filename: key });
+
+      if (remoteManifest?.files[key]) {
+        skipped.push(key);
+        continue; // 존재=완결 — 아카이브는 절대 덮어쓰지 않는다
+      }
+
+      try {
+        const bytes = await readArchiveSyncFile(key);
+        if (bytes === null) {
+          skipped.push(key);
+          console.log(`[SyncToCloud]   ${key}: SKIP (아카이브 파일 읽기 실패·부재)`);
+          continue;
+        }
+        const wrapper = { __binaryBase64: uint8ToBase64(bytes), __relPath: key };
+        const content = JSON.stringify(wrapper);
+        const checksum = await computeChecksum(content);
+        console.log(`[SyncToCloud]   ${key}: UPLOAD archive (${bytes.byteLength}B)`);
+        const driveFilename = `${key.replace(/\//g, '__')}.json`;
+        const result = await this.drivePort.uploadSyncFile(folder.id, driveFilename, content);
+        const entry: DriveSyncFileInfo = {
+          lastModified: result.modifiedTime,
+          checksum,
+          size: new TextEncoder().encode(content).length,
+          uploadedBy: this.deviceId,
+        };
+        nextRemoteFiles[key] = entry;
+        nextLocalFiles[key] = entry;
+        uploaded.push(key);
+      } catch (err) {
+        skipped.push(key);
+        console.warn(`[SyncToCloud]   ${key}: 아카이브 업로드 실패(다음 동기화에서 재시도):`, err);
+      }
     }
 
     // 매니페스트 업데이트 — 실제 업로드가 있었을 때만.

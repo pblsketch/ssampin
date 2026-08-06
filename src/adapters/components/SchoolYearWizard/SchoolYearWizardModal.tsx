@@ -49,6 +49,7 @@ import {
   type WizardStep,
 } from './wizardProgress';
 import { invalidateArchivedTermNoticeCache } from './ArchivedTermNotice';
+import { carryOverClassStructure, type ClassCarryoverResult } from './classCarryover';
 
 /** 실행 5단계 라벨 — 유즈케이스 로그(1/5~5/5)와 같은 순서. */
 const RUN_STEP_LABELS: readonly string[] = [
@@ -128,6 +129,8 @@ export function SchoolYearWizardModal({
   const [doneResult, setDoneResult] = useState<Extract<YearTransitionResult, { ok: true }> | null>(
     null,
   );
+  /** 구조 승계(S4.3) 결과 — opt-in을 켰을 때만 채워진다. */
+  const [carryover, setCarryover] = useState<ClassCarryoverResult | null>(null);
   const [devicesConfirmed, setDevicesConfirmed] = useState(false);
   const initializedRef = useRef(false);
 
@@ -142,6 +145,7 @@ export function SchoolYearWizardModal({
     setPhase('form');
     setFailure(null);
     setDoneResult(null);
+    setCarryover(null);
     setRunStep(0);
     setDevicesConfirmed(false);
     const saved = loadWizardProgress(window.localStorage, closingTerm);
@@ -262,6 +266,12 @@ export function SchoolYearWizardModal({
     if (result.ok) {
       // 새 학년도 프로필은 전환이 성공한 뒤에만 실제 설정으로 반영한다.
       await useSettingsStore.getState().update(profileToSettingsPatch(profile));
+      // 구조 승계(S4.3, opt-in) — 전환 성공 후에만, 아카이브를 읽어(무변경)
+      // 기존 addClass/addClassGroup 경로로만 새 수업반 틀을 만든다.
+      // 실패해도 전환은 완료 상태 그대로다(사유만 완료 화면에 표시).
+      if (profile.carryClassStructure === true) {
+        setCarryover(await carryOverClassStructure(gateway, result.closingTerm));
+      }
       clearWizardProgress(window.localStorage);
       invalidateArchivedTermNoticeCache();
       setDoneResult(result);
@@ -274,7 +284,7 @@ export function SchoolYearWizardModal({
         ...(result.safetyBackupPath ? { safetyBackupPath: result.safetyBackupPath } : {}),
       });
     }
-  }, [closingTerm, profile, buildDeps, onCompleted]);
+  }, [closingTerm, profile, buildDeps, gateway, onCompleted]);
 
   const executeLabel = useMemo(
     () => buildExecuteLabel(closingTerm, nextTerm),
@@ -463,6 +473,22 @@ export function SchoolYearWizardModal({
                   수 있어요.
                 </p>
               </div>
+              {carryover !== null &&
+                (carryover.ok ? (
+                  <p className="mx-auto flex max-w-md items-center justify-center gap-1.5 rounded-lg border border-sp-border bg-sp-surface px-3 py-2 text-xs text-sp-text">
+                    <span aria-hidden className="material-symbols-outlined text-icon-sm">
+                      content_copy
+                    </span>
+                    {carryover.createdCount > 0
+                      ? `지난 학기 수업반 틀 ${carryover.createdCount}개를 새 수업반으로 만들었어요 (학생 명렬은 비어 있어요)`
+                      : '지난 학기에 가져올 수업반 틀이 없었어요'}
+                  </p>
+                ) : (
+                  <p className="mx-auto max-w-md rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs leading-relaxed text-sp-muted">
+                    수업반 틀 가져오기는 완료하지 못했어요 — {carryover.error} 수업반은 수업
+                    관리에서 직접 만들 수 있어요.
+                  </p>
+                ))}
               <p className="break-all text-xs text-sp-muted">
                 안전 백업 위치: <span className="text-sp-text">{doneResult.safetyBackupPath}</span>
               </p>

@@ -22,6 +22,15 @@ export async function reloadStores(downloadedFiles: string[]): Promise<void> {
         continue;
       }
 
+      // (S4.1) 아카이브 동적 키(archives/{term}/...) — 스토어가 없다. 보관함 뷰어의
+      // 파일 캐시만 비워 다음 열람이 새 학기를 읽게 한다(목록은 탭 진입 시 IPC 재조회).
+      if (file.startsWith('archives/')) {
+        const { invalidateArchiveFileCache } =
+          await import('@adapters/components/Archive/useArchiveFile');
+        invalidateArchiveFileCache();
+        continue;
+      }
+
       // registry 기반 dispatch.
       const domain = SYNC_REGISTRY.find((d) => d.fileName === file);
       if (domain) {

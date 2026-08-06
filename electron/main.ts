@@ -66,7 +66,13 @@ import {
   importBackup,
   createSafetyBackup,
 } from './backupManager';
-import { createArchive, listArchives, readArchiveFile, deleteArchive } from './archiveManager';
+import {
+  createArchive,
+  listArchives,
+  readArchiveFile,
+  deleteArchive,
+  importArchive,
+} from './archiveManager';
 import { createDesktopWidgetManager, type DesktopWidgetManager } from './desktopWidgetManager';
 import type { DesktopModeFallbackEvent } from './desktopWidgetTypes';
 import { initNativeDesktopDiag, diagLog, diagLogVerbose, diagWarn } from './nativeDesktopDiag';
@@ -3424,6 +3430,19 @@ function registerIpcHandlers(): void {
       return {
         ok: false as const,
         error: `보관된 파일을 읽지 못했어요: ${err instanceof Error ? err.message : String(err)}`,
+      };
+    }
+  });
+
+  // S4.1 — Drive 동기화 다운로드 배치. 기존 학기는 무변경 스킵(아카이브 불변),
+  // 매니페스트 체크섬 전건 일치 시에만 스테이징+rename으로 원자적 배치.
+  ipcMain.handle('archive:import', (_event, term: string, files: unknown) => {
+    try {
+      return importArchive(app.getPath('userData'), term, files);
+    } catch (err) {
+      return {
+        ok: false as const,
+        error: `보관함 들여오기에 실패했어요: ${err instanceof Error ? err.message : String(err)}`,
       };
     }
   });

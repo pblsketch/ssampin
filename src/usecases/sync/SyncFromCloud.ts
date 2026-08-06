@@ -18,6 +18,7 @@ import type { RecordCategoryItem } from '@domain/valueObjects/RecordCategory';
 import { attendanceRecordKey } from '@domain/entities/Attendance';
 import { deriveDocumentSubmitted } from '@domain/rules/attendanceDocumentPolicy';
 import { schoolYearOf } from '@domain/rules/academicCalendar';
+import { ARCHIVE_MANIFEST_FILENAME, parseArchiveSyncKey } from '@domain/rules/archiveRules';
 import {
   SYNC_FILES,
   type SyncProgress,
@@ -447,6 +448,21 @@ export interface SyncFromCloudResult {
 }
 
 /**
+ * (S4.1) 로컬에 이미 있는 아카이브 학기 목록 훅(archive:list 경유).
+ * 목록에 있는 학기는 다운로드를 통째로 건너뛴다(존재=완결 — 아카이브 불변).
+ */
+export type ListLocalArchiveTerms = () => Promise<string[]>;
+
+/**
+ * (S4.1) 학기 1개 분량의 아카이브 파일 묶음을 로컬에 배치하는 훅(archive:import IPC 경유 —
+ * 스테이징 + 매니페스트 체크섬 전건 검증 + rename). 이미 있는 학기는 main이 무변경 스킵한다.
+ */
+export type ImportArchiveTermFiles = (
+  term: string,
+  files: Record<string, { format: 'utf8' | 'base64'; content: string }>,
+) => Promise<{ ok: boolean; error?: string }>;
+
+/**
  * Google Drive에서 로컬로 데이터를 다운로드하는 UseCase
  */
 export class SyncFromCloud {
@@ -464,6 +480,9 @@ export class SyncFromCloud {
      * 미주입·부재·읽기 실패 = 옛 학년도 스킵 필터 비활성(현행 병합 그대로, fail-open).
      */
     private readonly getCurrentTerm?: () => Promise<string | undefined>,
+    /** (S4.1) 아카이브 훅 2종 — 둘 다 주입될 때만 아카이브 다운로드가 켜진다(데스크톱 전용). */
+    private readonly listLocalArchiveTerms?: ListLocalArchiveTerms,
+    private readonly importArchiveTerm?: ImportArchiveTermFiles,
   ) {}
 
   async execute(onProgress?: (progress: SyncProgress) => void): Promise<SyncFromCloudResult> {
@@ -912,6 +931,96 @@ export class SyncFromCloud {
         updatedFiles[relPath] = remoteInfo;
         downloaded.push(relPath);
         console.log(`[SyncFromCloud]   ${relPath}: ✅ DOWNLOAD binary`);
+      }
+    }
+
+    // (S4.1) 아카이브 다운로드 — 리모트 매니페스트의 archives/{term}/... 키를 학기 단위로
+    // 묶어, **로컬에 없는 학기만** 전부 내려받아 archive:import(스테이징 + 매니페스트 체크섬
+    // 전건 검증 + rename)로 원자적으로 배치한다.
+    //  - 로컬에 이미 있는 학기 = 통째 스킵(존재=완결 — 아카이브 불변, 절대 덮어쓰기 금지).
+    //  - 리모트에 manifest.json이 아직 없는 학기 = 업로드 미완결 — 다음 동기화까지 대기.
+    //  - 학기 단위 try/catch: 아카이브 실패가 라이브 동기화 결과를 오염시키지 않는다.
+    if (this.listLocalArchiveTerms && this.importArchiveTerm) {
+      const importArchiveTerm = this.importArchiveTerm;
+      try {
+        // 리모트 아카이브 키를 학기별로 그룹핑(형식 불량 키는 무시)
+        const remoteByTerm = new Map<
+          string,
+          { key: string; relPath: string; info: DriveSyncFileInfo }[]
+        >();
+        for (const [key, info] of Object.entries(remoteManifest.files)) {
+          const parsed = parseArchiveSyncKey(key);
+          if (!parsed) continue;
+          const bucket = remoteByTerm.get(parsed.term) ?? [];
+          bucket.push({ key, relPath: parsed.relPath, info });
+          remoteByTerm.set(parsed.term, bucket);
+        }
+
+        if (remoteByTerm.size > 0) {
+          const localTerms = new Set(await this.listLocalArchiveTerms());
+          for (const [term, entries] of remoteByTerm) {
+            if (localTerms.has(term)) {
+              skipped.push(...entries.map((e) => e.key));
+              continue; // 존재=완결 — 이미 있는 학기는 절대 덮어쓰지 않는다
+            }
+            if (!entries.some((e) => e.relPath === ARCHIVE_MANIFEST_FILENAME)) {
+              console.log(
+                `[SyncFromCloud]   archives/${term}: SKIP (manifest.json 미도착 — 업로드 완결 대기)`,
+              );
+              skipped.push(...entries.map((e) => e.key));
+              continue;
+            }
+            try {
+              const files: Record<string, { format: 'base64'; content: string }> = {};
+              let missing: string | null = null;
+              for (const e of entries) {
+                const driveFilename = `${e.key.replace(/\//g, '__')}.json`;
+                const driveFile = remoteFiles.find((f) => f.name === driveFilename);
+                if (!driveFile) {
+                  missing = e.key;
+                  break;
+                }
+                const content = await this.drivePort.downloadSyncFile(driveFile.id);
+                const wrapper = JSON.parse(content) as { __binaryBase64?: string };
+                if (typeof wrapper.__binaryBase64 !== 'string') {
+                  missing = e.key;
+                  break;
+                }
+                files[e.relPath] = { format: 'base64', content: wrapper.__binaryBase64 };
+              }
+              if (missing !== null) {
+                console.warn(
+                  `[SyncFromCloud]   archives/${term}: SKIP (파일 누락·형식 불량: ${missing} — 다음 동기화에서 재시도)`,
+                );
+                skipped.push(...entries.map((e) => e.key));
+                continue;
+              }
+              const imported = await importArchiveTerm(term, files);
+              if (imported.ok) {
+                for (const e of entries) {
+                  updatedFiles[e.key] = e.info;
+                  downloaded.push(e.key);
+                }
+                console.log(
+                  `[SyncFromCloud]   archives/${term}: ✅ IMPORT (${entries.length}개 파일)`,
+                );
+              } else {
+                skipped.push(...entries.map((e) => e.key));
+                console.warn(
+                  `[SyncFromCloud]   archives/${term}: 배치 실패(다음 동기화에서 재시도): ${imported.error ?? '알 수 없음'}`,
+                );
+              }
+            } catch (err) {
+              skipped.push(...entries.map((e) => e.key));
+              console.warn(
+                `[SyncFromCloud]   archives/${term}: 다운로드 실패(다음 동기화에서 재시도):`,
+                err,
+              );
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('[SyncFromCloud] 아카이브 동기화 실패 — 라이브 동기화는 계속:', err);
       }
     }
 
