@@ -5,6 +5,7 @@ import type {
 } from '@domain/entities/Observation';
 import { OBSERVATION_TOMBSTONE_TTL_MS } from '@domain/entities/Observation';
 import type { IObservationRepository } from '@domain/repositories/IObservationRepository';
+import { withDerivedTerm } from '@domain/rules/academicCalendar';
 import { withFileLock } from '@usecases/shared/fileWriteLock';
 import { SYNC_FILE_KEYS } from '@usecases/sync/syncRegistry';
 
@@ -44,7 +45,8 @@ export function buildObservationSaveData(
 
   const deleted = [...carried, ...newTombstones];
   const envelope: ObservationData = {
-    records: next.records,
+    // term 스탬프(S2.2·ADR-034): date(수업일)에서 파생 — 저장 통과 시 자연 부착(마이그레이션 없음).
+    records: next.records.map(withDerivedTerm),
     ...(next.customTags ? { customTags: next.customTags } : {}),
     ...(next.customCategories ? { customCategories: next.customCategories } : {}),
   };

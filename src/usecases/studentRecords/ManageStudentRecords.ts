@@ -13,6 +13,7 @@ import type { RecordCategoryItem } from '@domain/valueObjects/RecordCategory';
 import { DEFAULT_RECORD_CATEGORIES } from '@domain/valueObjects/RecordCategory';
 import type { IStudentRecordsRepository } from '@domain/repositories/IStudentRecordsRepository';
 import { deriveDocumentSubmitted } from '@domain/rules/attendanceDocumentPolicy';
+import { withDerivedTerm } from '@domain/rules/academicCalendar';
 import { withFileLock } from '@usecases/shared/fileWriteLock';
 import { SYNC_FILE_KEYS } from '@usecases/sync/syncRegistry';
 
@@ -167,7 +168,8 @@ export function buildStudentRecordsSaveData(
 
   const deleted = [...carried, ...newTombstones];
   const envelope: StudentRecordsData = {
-    records: next.records,
+    // term 스탬프(S2.2·ADR-034): date(사건 발생일)에서 파생 — 저장 통과 시 자연 부착(마이그레이션 없음).
+    records: next.records.map(withDerivedTerm),
     ...(next.categories ? { categories: next.categories } : {}),
   };
   return deleted.length > 0 ? { ...envelope, deleted } : envelope;

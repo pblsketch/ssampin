@@ -6,6 +6,7 @@ import type {
 } from '@domain/entities/Attendance';
 import { attendanceRecordKey, ATTENDANCE_TOMBSTONE_TTL_MS } from '@domain/entities/Attendance';
 import type { ITeachingClassRepository } from '@domain/repositories/ITeachingClassRepository';
+import { withDerivedTerm } from '@domain/rules/academicCalendar';
 import { withFileLock } from '@usecases/shared/fileWriteLock';
 import { SYNC_FILE_KEYS } from '@usecases/sync/syncRegistry';
 
@@ -63,7 +64,9 @@ export function buildAttendanceSaveData(
   now: string = new Date().toISOString(),
 ): AttendanceData {
   const existingRecords = existing?.records ?? [];
-  const records = stampChangedRecords(existingRecords, nextRecords, now);
+  // term 스탬프(S2.2·ADR-034): date(사건 발생일)에서 파생 — 저장 통과 시 자연 부착(마이그레이션 없음).
+  // stampChangedRecords 뒤에 적용해도 안전 — 변경 지문(fingerprint)은 students만 본다.
+  const records = stampChangedRecords(existingRecords, nextRecords, now).map(withDerivedTerm);
   const nextKeys = new Set(records.map(attendanceRecordKey));
   const cutoff = new Date(new Date(now).getTime() - ATTENDANCE_TOMBSTONE_TTL_MS).toISOString();
 

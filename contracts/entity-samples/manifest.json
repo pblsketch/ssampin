@@ -16,7 +16,7 @@
             "createdAt",
             "updatedAt"
           ],
-          "notMirrored": ["category"]
+          "notMirrored": ["category", "term"]
         }
       }
     },
@@ -44,7 +44,8 @@
             "followUp",
             "followUpDate",
             "followUpDone",
-            "fieldUpdatedAt"
+            "fieldUpdatedAt",
+            "term"
           ]
         },
         "AttendancePeriodEntry": {
@@ -62,7 +63,7 @@
       "interfaces": {
         "AttendanceRecord": {
           "mirrored": ["classId", "groupId", "date", "period", "students"],
-          "notMirrored": ["updatedAt"]
+          "notMirrored": ["updatedAt", "term"]
         },
         "StudentAttendance": {
           "mirrored": ["number", "status", "reason", "memo", "grade", "classNum"],

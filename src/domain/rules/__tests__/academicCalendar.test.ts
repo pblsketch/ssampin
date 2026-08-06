@@ -92,13 +92,18 @@ describe('표시 문자열', () => {
 });
 
 describe('모듈 표면 계약 — 시즌 판정 함수를 두지 않는다 (ADR-037)', () => {
-  it('export 목록이 라벨 계산·표시 5종뿐이다', () => {
+  it('export 목록이 라벨 계산·표시 5종 + term 스탬프 파생 2종(S2.2)뿐이다', () => {
+    // academicTermForDate/withDerivedTerm은 레코드 date(사건 발생일) → 학기 파생(ADR-034 epoch
+    // 스탬프)이다 — 날짜 "구간" 판정(시즌 배너류)이 아니므로 ADR-037 금지 대상이 아니다.
+    // 시즌 판정류(isXxxSeason)가 추가되면 이 목록 갱신 전에 ADR-037부터 재검토할 것.
     expect(Object.keys(academicCalendar).sort()).toEqual([
       'academicTerm',
+      'academicTermForDate',
       'formatSchoolYearKo',
       'formatTermKo',
       'parseTerm',
       'schoolYearOf',
+      'withDerivedTerm',
     ]);
   });
 });

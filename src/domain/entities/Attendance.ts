@@ -40,6 +40,12 @@ export interface AttendanceRecord {
    * 과거 데이터에는 없을 수 있다(부재 시 병합에서 가장 오래된 것으로 취급).
    */
   readonly updatedAt?: string;
+  /**
+   * 학기 epoch 스탬프(S2.2·ADR-034) — `date`(사건 발생일)에서 파생한 '2026-1' 형식.
+   * buildAttendanceSaveData가 저장 시 자동 부착한다(withDerivedTerm — createdAt/updatedAt 금지).
+   * 구 데이터에는 없다(부재 = 현행 병합 폴백, 추측 부착 금지). 계약 분류: notMirrored(동기화 메타).
+   */
+  readonly term?: string;
 }
 
 /**

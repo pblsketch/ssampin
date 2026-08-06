@@ -11,6 +11,12 @@ export interface ObservationRecord {
   readonly updatedAt: number;
   /** 통합 입력 폼(S4)에서 부여하는 분류. 기존 레코드는 undefined — additive optional. tags 배열과 별도 보존. */
   readonly category?: string;
+  /**
+   * 학기 epoch 스탬프(S2.2·ADR-034) — `date`(수업일)에서 파생한 '2026-1' 형식.
+   * buildObservationSaveData가 저장 시 자동 부착한다(withDerivedTerm — createdAt/updatedAt(ms) 금지).
+   * 구 데이터에는 없다(부재 = 현행 병합 폴백, 추측 부착 금지). 계약 분류: notMirrored(동기화 메타).
+   */
+  readonly term?: string;
 }
 
 /**

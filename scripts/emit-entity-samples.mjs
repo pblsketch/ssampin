@@ -55,7 +55,9 @@ export const ENTITY_FIELD_CONTRACT = {
           'createdAt',
           'updatedAt',
         ],
-        notMirrored: ['category'],
+        // term: 학기 epoch 스탬프(S2.2·ADR-034) — 동기화 메타(date 파생, 저장 시 자동 부착).
+        // 외부 AI 미노출 — updatedAt 선례.
+        notMirrored: ['category', 'term'],
       },
     },
   },
@@ -79,6 +81,7 @@ export const ENTITY_FIELD_CONTRACT = {
         // updatedAt/fieldUpdatedAt: 기기 간 병합용 동기화 메타데이터 — ManageStudentRecords가
         // 자동 스탬프하므로 미러 불필요(외부 AI 미노출). fieldUpdatedAt은 최상위 type 별칭이라
         // 인터페이스 계약(sampleObjectsFor) 추가 불필요 — StudentRecord 필드 분류만 한다.
+        // term: 학기 epoch 스탬프(S2.2·ADR-034) — 동기화 메타(date 파생, 저장 시 자동 부착).
         notMirrored: [
           'createdAt',
           'updatedAt',
@@ -87,6 +90,7 @@ export const ENTITY_FIELD_CONTRACT = {
           'followUpDate',
           'followUpDone',
           'fieldUpdatedAt',
+          'term',
         ],
       },
       AttendancePeriodEntry: {
@@ -105,7 +109,8 @@ export const ENTITY_FIELD_CONTRACT = {
       AttendanceRecord: {
         mirrored: ['classId', 'groupId', 'date', 'period', 'students'],
         // updatedAt: 기기 간 병합용 동기화 메타데이터 — 저장 시 ManageAttendance가 자동 스탬프하므로 미러 불필요
-        notMirrored: ['updatedAt'],
+        // term: 학기 epoch 스탬프(S2.2·ADR-034) — 동기화 메타(date 파생, 저장 시 자동 부착)
+        notMirrored: ['updatedAt', 'term'],
       },
       StudentAttendance: {
         mirrored: ['number', 'status', 'reason', 'memo', 'grade', 'classNum'],
