@@ -59,7 +59,14 @@ import {
   saveDirtyWallBoardsSync,
 } from './ipc/realtimeWallBoard';
 import { buildStoreZip, dedupeFilenames, sanitizeFilename, type ZipEntry } from './lib/zipStore';
-import { getDataLocationInfo, openDataLocation, exportBackup, importBackup } from './backupManager';
+import {
+  getDataLocationInfo,
+  openDataLocation,
+  exportBackup,
+  importBackup,
+  createSafetyBackup,
+} from './backupManager';
+import { createArchive, listArchives, readArchiveFile, deleteArchive } from './archiveManager';
 import { createDesktopWidgetManager, type DesktopWidgetManager } from './desktopWidgetManager';
 import type { DesktopModeFallbackEvent } from './desktopWidgetTypes';
 import { initNativeDesktopDiag, diagLog, diagLogVerbose, diagWarn } from './nativeDesktopDiag';
@@ -3377,6 +3384,72 @@ function registerIpcHandlers(): void {
       // data:changed 도 함께 받으면 무해(상위 레이어가 알아서 dedupe).
       broadcastToAllWindows('data:changed', filename);
     });
+  });
+
+  // ─── 학년도 보관함(아카이브) IPC — S2.1 ─────────────────────────────────
+  // ⚠️ data:write 재사용 금지(실패를 조용히 삼킨다 — 함정 ⑪). 아카이브 채널은 전부
+  // 명시적 {ok:true,...} | {ok:false, error} 반환이며 throw하지 않는다. 경로 검증
+  // (이름 화이트리스트 + path.relative 재확인 — 함정 ⑫)은 archiveManager가 수행.
+  // 아카이브는 라이브 스토어 파일이 아니므로 data:changed 브로드캐스트 대상이 아니다.
+
+  ipcMain.handle(
+    'archive:create',
+    (_event, term: string, fileKeys: string[], opts?: { label?: string }) => {
+      try {
+        return createArchive(app.getPath('userData'), app.getVersion(), term, fileKeys, opts);
+      } catch (err) {
+        return {
+          ok: false as const,
+          error: `보관함 생성에 실패했어요: ${err instanceof Error ? err.message : String(err)}`,
+        };
+      }
+    },
+  );
+
+  ipcMain.handle('archive:list', () => {
+    try {
+      return listArchives(app.getPath('userData'));
+    } catch (err) {
+      return {
+        ok: false as const,
+        error: `보관함 목록을 읽지 못했어요: ${err instanceof Error ? err.message : String(err)}`,
+      };
+    }
+  });
+
+  ipcMain.handle('archive:read', (_event, term: string, fileKey: string) => {
+    try {
+      return readArchiveFile(app.getPath('userData'), term, fileKey);
+    } catch (err) {
+      return {
+        ok: false as const,
+        error: `보관된 파일을 읽지 못했어요: ${err instanceof Error ? err.message : String(err)}`,
+      };
+    }
+  });
+
+  ipcMain.handle('archive:delete', (_event, term: string) => {
+    try {
+      return deleteArchive(app.getPath('userData'), term);
+    } catch (err) {
+      return {
+        ok: false as const,
+        error: `보관함 삭제에 실패했어요: ${err instanceof Error ? err.message : String(err)}`,
+      };
+    }
+  });
+
+  // backup:createSafety — 안전 백업 즉시 생성 (S2.4 전환 실행 1단계·함정 ⑧ 대비).
+  // createSafetyBackup은 실패 시 throw하므로 여기서 {ok:false}로 변환해 은닉을 막는다.
+  ipcMain.handle('backup:createSafety', () => {
+    try {
+      return { ok: true as const, path: createSafetyBackup(app.getVersion()) };
+    } catch (err) {
+      return {
+        ok: false as const,
+        error: `안전 백업 생성에 실패했어요: ${err instanceof Error ? err.message : String(err)}`,
+      };
+    }
   });
 
   // audio:importAlarm — 알람음 파일 가져오기

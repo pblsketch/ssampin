@@ -841,6 +841,11 @@ interface ElectronAPI {
   // 외부 서버 전송 없음 — main 프로세스 fs/dialog/shell만 사용.
   backup?: BackupElectronAPI;
 
+  // === 학년도 보관함(아카이브) (S2.1) ===
+  // {userData}/data/archives/{term}/ 스냅샷 + manifest.json(체크섬).
+  // 전 채널 명시적 {ok} 반환 — 실패를 조용히 삼키지 않는다.
+  archive?: ArchiveElectronAPI;
+
   // === Interactive Slides (Pear Deck 스타일, v2.2.x+) ===
   // Plan §3 + Design §5 매핑.
   interactiveSlides?: InteractiveSlidesElectronAPI;
@@ -976,16 +981,26 @@ interface BackupElectronAPI {
   }>;
   /** OS 파일 탐색기에서 데이터 디렉토리 열기. */
   openDataLocation: () => Promise<{ ok: boolean; reason?: string }>;
-  /** 백업 파일 저장 (Save dialog 경유). canceled=true는 사용자 취소. */
+  /**
+   * 백업 파일 저장 (Save dialog 경유). canceled=true는 사용자 취소.
+   * (S2.1b) 아카이브가 있으면 archives 섹션으로 함께 담기며, 학기 수·바이트 합이
+   * archiveTermCount / archiveTotalBytes로 반환된다(예상 크기 안내용). 수집 실패 시
+   * 아카이브 없이 백업하고 archiveError로 사유를 표면화한다.
+   */
   exportBackup: () => Promise<{
     canceled: boolean;
     filePath?: string;
     entryCount?: number;
+    archiveTermCount?: number;
+    archiveTotalBytes?: number;
+    archiveError?: string;
   }>;
   /**
    * 백업 파일 가져오기. main이 자동으로 safety backup을 먼저 만든 뒤 적용한다.
    * canceled=true는 사용자 취소(error 없음).
    * error가 있으면 한국어 메시지를 그대로 토스트/모달에 표시.
+   * (S2.1b) 백업에 archives 섹션이 있으면 라이브 데이터 적용 전에 복원한다.
+   * 이미 로컬에 있는 학기는 덮어쓰지 않고 skippedArchiveTerms로 보고한다.
    */
   importBackup: () => Promise<{
     canceled: boolean;
@@ -994,7 +1009,64 @@ interface BackupElectronAPI {
     safetyBackupPath?: string;
     metadata?: BackupFileMetadataView;
     error?: BackupImportErrorPayload;
+    restoredArchiveTerms?: readonly string[];
+    skippedArchiveTerms?: readonly string[];
   }>;
+  /**
+   * 안전 백업 즉시 생성 (S2.4 전환 실행 1단계 — data:write의 .backup.json 1세대 덮임 대비).
+   * 실패는 {ok:false, error}로 표면화 — throw하지 않는다.
+   */
+  createSafetyBackup: () => Promise<{ ok: true; path: string } | { ok: false; error: string }>;
+}
+
+/** 보관함 목록의 학기 1건 요약 (archive.list). manifestOk=false면 error에 사유. */
+interface ArchiveSummaryView {
+  readonly term: string;
+  readonly label: string;
+  readonly archivedAt: string;
+  readonly appVersion: string;
+  readonly entryCount: number;
+  readonly totalBytes: number;
+  readonly manifestOk: boolean;
+  readonly error?: string;
+}
+
+/**
+ * 학년도 보관함(아카이브) IPC — S2.1.
+ * 모든 채널이 명시적 {ok:true,...} | {ok:false, error} 를 반환한다.
+ * error는 한국어 메시지 — UI에 그대로 표시 가능. ok !== true면 즉시 중단할 것
+ * (특히 전환 실행에서 create 실패 시 라이브 리셋으로 진입 금지).
+ */
+interface ArchiveElectronAPI {
+  /**
+   * 아카이브 생성 — fileKeys의 파일들을 data/archives/{term}/으로 스냅샷 복사.
+   * fileKey: 데이터 키('students' → data/students.json) 또는 바이너리 상대경로
+   * ('obs-attachments/{name}' — 관찰 첨부는 userData 직하, data/ 밖).
+   */
+  create: (
+    term: string,
+    fileKeys: string[],
+    opts?: { label?: string },
+  ) => Promise<
+    | { ok: true; term: string; label: string; entryCount: number; totalBytes: number }
+    | { ok: false; error: string }
+  >;
+  /** 보관함 목록 — 학기별 매니페스트 요약(최신 학기 먼저). */
+  list: () => Promise<
+    { ok: true; archives: readonly ArchiveSummaryView[] } | { ok: false; error: string }
+  >;
+  /**
+   * 보관된 파일 읽기 — 매니페스트의 SHA-256과 대조해 일치할 때만 반환.
+   * fileKey는 학기 디렉토리 기준 상대 경로('students.json' | 'obs-attachments/x.png' | 'manifest.json').
+   */
+  read: (
+    term: string,
+    fileKey: string,
+  ) => Promise<
+    { ok: true; encoding: 'utf8' | 'base64'; content: string } | { ok: false; error: string }
+  >;
+  /** 학기 보관함 삭제 — archives/{term} 디렉토리만. 라이브 데이터 무변경. */
+  delete: (term: string) => Promise<{ ok: true; existed: boolean } | { ok: false; error: string }>;
 }
 
 /** 내 템플릿 메타 (PDCA-4 / G006) — UserTemplateMeta 직렬화 형태 */

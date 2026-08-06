@@ -13,20 +13,25 @@
  * 도메인 동기화: 본 파일의 구조 검증/필터 로직은
  * `src/domain/rules/backupRules.ts`의 selectBackupCandidates / validateBackupFile과 동일한
  * 규칙을 따라야 한다. (electron rootDir=electron 한계로 직접 import 불가, 의도적 미러링.)
+ *
+ * 아카이브(S2.1b): 백업 파일 최상위에 선택적 `archives` 섹션을 담는다 —
+ * `{ metadata, data, archives?: { [term]: { [relPath]: {format, content} } } }`.
+ * 스키마 버전은 1 유지(추가 키 방식) — validateBackupShape / 도메인 validateBackupFile은
+ * metadata·data만 읽고 최상위 추가 키를 거부하지 않으므로(실측: 두 함수 모두 obj['metadata'],
+ * obj['data']만 접근) 구버전 앱도 신버전 백업을 그대로 복원한다(archives는 조용히 무시).
+ * 수집·복원·검증은 `archiveManager.ts`(collect/restore/validateArchivesSection)가 담당한다.
  */
 
 import { app, BrowserWindow, dialog, shell } from 'electron';
 import path from 'path';
 import fs from 'fs';
+import { collectArchivesSection, restoreArchivesSection } from './archiveManager';
 
 const BACKUP_SCHEMA_VERSION = 1;
 const BACKUP_FILE_EXT = '.ssampin-backup.json';
 const SAFETY_BACKUP_DIRNAME = 'backups';
 /** 환경 의존 파일은 백업/복원 양방향에서 모두 제외 */
-const EXCLUDED_FILENAMES: ReadonlySet<string> = new Set([
-  'widget-bounds',
-  'icon-bounds',
-]);
+const EXCLUDED_FILENAMES: ReadonlySet<string> = new Set(['widget-bounds', 'icon-bounds']);
 /** 화이트리스트 패턴 — 경로 인젝션 방어 */
 const VALID_FILENAME_RE = /^[A-Za-z0-9_.-]+$/;
 
@@ -51,6 +56,12 @@ export interface BackupExportResult {
   readonly canceled: boolean;
   readonly filePath?: string;
   readonly entryCount?: number;
+  /** (S2.1b) 백업에 함께 담긴 아카이브 학기 수. 아카이브가 없으면 0. */
+  readonly archiveTermCount?: number;
+  /** (S2.1b) 담긴 아카이브 원본 바이트 합 — 사용자에게 예상 크기 안내용. */
+  readonly archiveTotalBytes?: number;
+  /** (S2.1b) 아카이브 수집 실패 사유 — 실패 시 아카이브 없이 백업하고 사유를 표면화한다. */
+  readonly archiveError?: string;
 }
 
 export interface BackupImportError {
@@ -71,6 +82,10 @@ export interface BackupImportResult {
   readonly safetyBackupPath?: string;
   readonly metadata?: BackupMetadataPayload;
   readonly error?: BackupImportError;
+  /** (S2.1b) 백업에서 새로 복원된 아카이브 학기 목록. */
+  readonly restoredArchiveTerms?: readonly string[];
+  /** (S2.1b) 이미 로컬에 있어 건너뛴 아카이브 학기 목록(아카이브는 덮어쓰지 않는다). */
+  readonly skippedArchiveTerms?: readonly string[];
 }
 
 /** dataDir이 없으면 생성하지 않고 path만 반환 (백업 시점 외엔 부수효과 회피) */
@@ -113,7 +128,7 @@ function buildDefaultBackupFilename(now: Date): string {
     .toISOString()
     .replace(/\.\d+Z$/, '')
     .replace(/Z$/, '')
-    .replace(/[:\-]/g, '')
+    .replace(/[:-]/g, '')
     .replace('T', '-');
   return `ssampin-backup-${compact}${BACKUP_FILE_EXT}`;
 }
@@ -169,7 +184,18 @@ export async function exportBackup(
     platform: process.platform,
     entryCount: Object.keys(data).length,
   };
-  const backupFile = { metadata, data };
+
+  // (S2.1b) 아카이브 수집 — 로컬 전용(ADR-036)인 아카이브의 유일한 기기 간 이동 수단이
+  // 수동 백업이므로(함정 ⑯), 있으면 반드시 담는다. 수집 실패는 숨기지 않고 결과에 표면화.
+  const collected = collectArchivesSection(app.getPath('userData'));
+  const archiveTermCount = collected.ok ? collected.termCount : 0;
+  const archiveTotalBytes = collected.ok ? collected.totalBytes : 0;
+  const archiveError = collected.ok ? undefined : collected.error;
+
+  const backupFile =
+    collected.ok && collected.termCount > 0
+      ? { metadata, data, archives: collected.archives }
+      : { metadata, data };
   const serialized = JSON.stringify(backupFile, null, 2);
 
   // 저장 다이얼로그
@@ -198,13 +224,21 @@ export async function exportBackup(
     canceled: false,
     filePath: result.filePath,
     entryCount: metadata.entryCount,
+    archiveTermCount,
+    archiveTotalBytes,
+    ...(archiveError !== undefined ? { archiveError } : {}),
   };
 }
 
 /** =================  Import (with safety backup)  ================= */
 
-/** 도메인 검증과 동일 규칙. 호출 측은 ok=false면 error를 그대로 사용자에게 표시. */
-function validateBackupShape(
+/**
+ * 도메인 검증과 동일 규칙. 호출 측은 ok=false면 error를 그대로 사용자에게 표시.
+ * ⚠️ metadata·data만 검사하며 최상위 추가 키(`archives` 등)는 거부하지 않는다 —
+ * S2.1b가 이 성질에 기대므로 여기에 "알 수 없는 최상위 키 거부"를 추가하지 말 것.
+ * (export는 단위 테스트용 — backupManager.archives.test.ts가 하위 호환을 고정한다.)
+ */
+export function validateBackupShape(
   raw: unknown,
 ):
   | { ok: true; data: Record<string, unknown>; metadata: BackupMetadataPayload }
@@ -220,11 +254,7 @@ function validateBackupShape(
   }
   const obj = raw as Record<string, unknown>;
   const metaUnknown = obj['metadata'];
-  if (
-    metaUnknown === null ||
-    typeof metaUnknown !== 'object' ||
-    Array.isArray(metaUnknown)
-  ) {
+  if (metaUnknown === null || typeof metaUnknown !== 'object' || Array.isArray(metaUnknown)) {
     return {
       ok: false,
       error: {
@@ -265,11 +295,7 @@ function validateBackupShape(
     };
   }
   const dataUnknown = obj['data'];
-  if (
-    dataUnknown === null ||
-    typeof dataUnknown !== 'object' ||
-    Array.isArray(dataUnknown)
-  ) {
+  if (dataUnknown === null || typeof dataUnknown !== 'object' || Array.isArray(dataUnknown)) {
     return {
       ok: false,
       error: {
@@ -316,8 +342,12 @@ function validateBackupShape(
   };
 }
 
-/** 현재 dataDir의 모든 후보 파일을 모아 safety backup을 작성하고 절대 경로 반환. */
-function createSafetyBackup(appVersion: string): string {
+/**
+ * 현재 dataDir의 모든 후보 파일을 모아 safety backup을 작성하고 절대 경로 반환.
+ * (S2.1에서 export 승격 — 함정 ⑰. `backup:createSafety` IPC와 S2.4 전환 실행 1단계가 사용.)
+ * 실패 시 throw — IPC 핸들러가 잡아 `{ok:false, error}`로 변환한다.
+ */
+export function createSafetyBackup(appVersion: string): string {
   const dataDir = getDataDir();
   ensureDir(dataDir);
   const safetyDir = path.join(dataDir, SAFETY_BACKUP_DIRNAME);
@@ -349,7 +379,7 @@ function createSafetyBackup(appVersion: string): string {
     .toISOString()
     .replace(/\.\d+Z$/, '')
     .replace(/Z$/, '')
-    .replace(/[:\-]/g, '')
+    .replace(/[:-]/g, '')
     .replace('T', '-');
   const safetyPath = path.join(safetyDir, `safety-${stamp}${BACKUP_FILE_EXT}`);
   fs.writeFileSync(safetyPath, serialized, 'utf-8');
@@ -364,7 +394,11 @@ function atomicWriteData(dataDir: string, base: string, json: string): void {
   // 검증
   const verify = fs.readFileSync(tempPath, 'utf-8');
   if (verify.length !== json.length) {
-    try { fs.unlinkSync(tempPath); } catch { /* ignore */ }
+    try {
+      fs.unlinkSync(tempPath);
+    } catch {
+      /* ignore */
+    }
     throw new Error(`복원 검증 실패: ${base}`);
   }
   fs.renameSync(tempPath, filePath);
@@ -383,9 +417,7 @@ export async function importBackup(
   const dialogOptions: Electron.OpenDialogOptions = {
     title: '쌤핀 백업 파일 가져오기',
     properties: ['openFile'],
-    filters: [
-      { name: '쌤핀 백업 파일', extensions: ['ssampin-backup.json', 'json'] },
-    ],
+    filters: [{ name: '쌤핀 백업 파일', extensions: ['ssampin-backup.json', 'json'] }],
   };
   const open = parent
     ? await dialog.showOpenDialog(parent, dialogOptions)
@@ -404,9 +436,7 @@ export async function importBackup(
       canceled: false,
       error: {
         code: 'file-read-failed',
-        message: `파일을 읽을 수 없어요. (${
-          err instanceof Error ? err.message : String(err)
-        })`,
+        message: `파일을 읽을 수 없어요. (${err instanceof Error ? err.message : String(err)})`,
       },
     };
   }
@@ -449,7 +479,30 @@ export async function importBackup(
     };
   }
 
-  // 6. 적용 — 환경 의존 파일은 skip (사용자 화면이 망가지지 않게)
+  // 6. (S2.1b) 아카이브 복원 — 라이브 데이터를 건드리기 전에 먼저 수행한다.
+  //    실패 시 라이브 파일이 1바이트도 변하기 전에 중단(fail-closed). 이미 있는 학기는
+  //    덮어쓰지 않고 건너뛰므로 로컬 아카이브가 파괴될 일이 없다. 구버전 백업(archives 없음)은
+  //    이 단계를 통째로 건너뛴다(하위 호환).
+  const archivesRaw = (parsed as Record<string, unknown>)['archives'];
+  let restoredArchiveTerms: readonly string[] = [];
+  let skippedArchiveTerms: readonly string[] = [];
+  if (archivesRaw !== undefined) {
+    const archiveResult = restoreArchivesSection(app.getPath('userData'), archivesRaw);
+    if (!archiveResult.ok) {
+      return {
+        canceled: false,
+        safetyBackupPath,
+        error: {
+          code: 'write-failed',
+          message: `보관함(아카이브) 복원에 실패했어요: ${archiveResult.error}`,
+        },
+      };
+    }
+    restoredArchiveTerms = archiveResult.restoredTerms;
+    skippedArchiveTerms = archiveResult.skippedTerms;
+  }
+
+  // 7. 적용 — 환경 의존 파일은 skip (사용자 화면이 망가지지 않게)
   const dataDir = getDataDir();
   ensureDir(dataDir);
   const restored: string[] = [];
@@ -474,7 +527,8 @@ export async function importBackup(
     }
   }
 
-  // 7. 렌더러에 변경 통지 (각 base마다)
+  // 8. 렌더러에 변경 통지 (각 base마다)
+  //    아카이브는 라이브 스토어가 읽는 파일이 아니므로 data:changed 통지 대상이 아니다.
   for (const base of restored) {
     try {
       broadcastDataChanged(base);
@@ -489,5 +543,7 @@ export async function importBackup(
     restoredFilenames: restored,
     safetyBackupPath,
     metadata: validated.metadata,
+    restoredArchiveTerms,
+    skippedArchiveTerms,
   };
 }

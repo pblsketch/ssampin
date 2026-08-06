@@ -1413,13 +1413,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
     /** OS 파일 탐색기로 데이터 디렉토리 열기 */
     openDataLocation: (): Promise<{ ok: boolean; reason?: string }> =>
       ipcRenderer.invoke('backup:openDataLocation'),
-    /** 백업 파일 저장 (Save dialog → JSON 직렬화 → 디스크 저장) */
+    /** 백업 파일 저장 (Save dialog → JSON 직렬화 → 디스크 저장). 아카이브도 함께 담는다(S2.1b). */
     exportBackup: (): Promise<{
       canceled: boolean;
       filePath?: string;
       entryCount?: number;
+      archiveTermCount?: number;
+      archiveTotalBytes?: number;
+      archiveError?: string;
     }> => ipcRenderer.invoke('backup:export'),
-    /** 백업 파일 가져오기 (Open dialog → 검증 → safety backup → atomic write) */
+    /** 백업 파일 가져오기 (Open dialog → 검증 → safety backup → 아카이브 복원 → atomic write) */
     importBackup: (): Promise<{
       canceled: boolean;
       restoredCount?: number;
@@ -1442,7 +1445,59 @@ contextBridge.exposeInMainWorld('electronAPI', {
           | 'write-failed';
         message: string;
       };
+      restoredArchiveTerms?: readonly string[];
+      skippedArchiveTerms?: readonly string[];
     }> => ipcRenderer.invoke('backup:import'),
+    /** 안전 백업 즉시 생성 (S2.4 전환 실행 1단계). 실패는 {ok:false}로 표면화 — throw 없음. */
+    createSafetyBackup: (): Promise<{ ok: true; path: string } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('backup:createSafety'),
+  },
+
+  // === 학년도 보관함(아카이브) — S2.1 ===
+  // {userData}/data/archives/{term}/ 스냅샷 + manifest.json(체크섬). 전 채널이 명시적
+  // {ok:true,...}|{ok:false,error} 반환 — 실패를 조용히 삼키지 않는다(data:write와 다름).
+  archive: {
+    /**
+     * 아카이브 생성. fileKeys: 데이터 키('students' → data/students.json) 또는
+     * 바이너리 상대경로('obs-attachments/{name}' — 관찰 첨부는 data/ 밖).
+     */
+    create: (
+      term: string,
+      fileKeys: string[],
+      opts?: { label?: string },
+    ): Promise<
+      | { ok: true; term: string; label: string; entryCount: number; totalBytes: number }
+      | { ok: false; error: string }
+    > => ipcRenderer.invoke('archive:create', term, fileKeys, opts),
+    /** 보관함 목록 — 학기별 매니페스트 요약(손상 시 manifestOk:false + 사유). */
+    list: (): Promise<
+      | {
+          ok: true;
+          archives: readonly {
+            term: string;
+            label: string;
+            archivedAt: string;
+            appVersion: string;
+            entryCount: number;
+            totalBytes: number;
+            manifestOk: boolean;
+            error?: string;
+          }[];
+        }
+      | { ok: false; error: string }
+    > => ipcRenderer.invoke('archive:list'),
+    /** 보관된 파일 읽기 — 매니페스트 체크섬 일치 시에만 내용 반환. */
+    read: (
+      term: string,
+      fileKey: string,
+    ): Promise<
+      { ok: true; encoding: 'utf8' | 'base64'; content: string } | { ok: false; error: string }
+    > => ipcRenderer.invoke('archive:read', term, fileKey),
+    /** 학기 보관함 삭제 — archives/{term} 디렉토리만 지운다(라이브 데이터 무변경). */
+    delete: (
+      term: string,
+    ): Promise<{ ok: true; existed: boolean } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('archive:delete', term),
   },
 
   // === 내 이모티콘 (Sticker picker — PRD §4.1) ===
