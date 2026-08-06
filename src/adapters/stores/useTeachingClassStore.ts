@@ -7,6 +7,13 @@ import type {
 import { studentKey } from '@domain/entities/TeachingClass';
 import type { StudentStatus } from '@domain/entities/Student';
 import { isStudentActive, normalizeStudentStatus } from '@domain/rules/studentActivity';
+import {
+  archiveTeachingClass,
+  filterActiveClasses,
+  isTeachingClassArchived,
+  shouldPropagateToSibling,
+  unarchiveTeachingClass,
+} from '@domain/rules/teachingClassArchive';
 import type { OddColumnMode } from '@domain/rules/seatingLayoutRules';
 import type { ProgressEntry, ProgressStatus } from '@domain/entities/CurriculumProgress';
 import type {
@@ -26,6 +33,16 @@ import { generateUUID } from '@infrastructure/utils/uuid';
  */
 function migrateStudentStatus(student: TeachingClassStudent): TeachingClassStudent {
   return normalizeStudentStatus(student);
+}
+
+/** order → createdAt 순 정렬 (load와 재정렬·복원이 같은 규칙을 쓴다). */
+function sortClasses(list: readonly TeachingClass[]): TeachingClass[] {
+  return [...list].sort((a, b) => {
+    const orderA = a.order ?? Infinity;
+    const orderB = b.order ?? Infinity;
+    if (orderA !== orderB) return orderA - orderB;
+    return a.createdAt.localeCompare(b.createdAt);
+  });
 }
 
 /** targetId가 가리키는 클래스를 포함하여 같은 groupId를 가진 모든 클래스 id 목록. groupId 없으면 단일. */
@@ -66,6 +83,12 @@ interface TeachingClassState {
   updateClass: (cls: TeachingClass) => Promise<void>;
   deleteClass: (id: string) => Promise<void>;
   reorderClasses: (orderedIds: string[]) => Promise<void>;
+  /** 수업반 보관 — 개별 보관이 기본(형제 전파 없음). 데이터는 그대로, 플래그만 전이. */
+  archiveClass: (id: string) => Promise<void>;
+  /** 체크박스 일괄 보관 — 저장 1회·상태 갱신 1회(업로드 트리거 1회). */
+  archiveClasses: (ids: readonly string[]) => Promise<void>;
+  /** 보관 해제 — 활성 목록 맨 아래(order = max+1)로 복원. 보관 이력은 남긴다. */
+  unarchiveClass: (id: string) => Promise<void>;
   addProgressEntry: (
     classId: string,
     date: string,
@@ -167,6 +190,8 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
     const updatedList: TeachingClass[] = [];
     const nextClasses = classes.map((c) => {
       if (!ids.includes(c.id)) return c;
+      // 형제 반은 전파 술어 통과 시에만 갱신 (보관·independent 형제 보호). 대상 반 자신은 항상 갱신.
+      if (c.id !== classId && !shouldPropagateToSibling(c)) return c;
       const updated: TeachingClass = { ...c, seating: seatingOrUndef, updatedAt: now };
       updatedList.push(updated);
       return updated;
@@ -216,12 +241,7 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
         }
 
         // order 기준 정렬 (order 없으면 생성순)
-        const sorted = [...migrated].sort((a, b) => {
-          const orderA = a.order ?? Infinity;
-          const orderB = b.order ?? Infinity;
-          if (orderA !== orderB) return orderA - orderB;
-          return a.createdAt.localeCompare(b.createdAt);
-        });
+        const sorted = sortClasses(migrated);
         set({
           classes: sorted,
           progressEntries,
@@ -281,8 +301,8 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
       const updatedList: TeachingClass[] = [];
       const nextClasses = classes.map((c) => {
         if (c.groupId !== groupId) return c;
-        // Phase 6 — independent 모드 클래스는 그룹 동기화 제외 (자체 명단 유지)
-        if (c.studentSyncMode === 'independent') return c;
+        // 전파 술어 — independent(자체 명단 유지)·보관된 형제(과거 명렬 보호)는 그룹 동기화 제외
+        if (!shouldPropagateToSibling(c)) return c;
         // 비활성 학생 좌석 제거 (각 클래스 seating 고려)
         const activeKeys = new Set(
           students.filter((s) => !s.status || s.status === 'active').map((s) => studentKey(s)),
@@ -310,6 +330,8 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
       const updatedList: TeachingClass[] = [];
       const nextClasses = classes.map((c) => {
         if (c.groupId !== groupId) return c;
+        // 전파 술어 — 보관·independent 형제의 좌석을 활성 반 편집이 바꾸지 않게 한다
+        if (!shouldPropagateToSibling(c)) return c;
         const updated: TeachingClass = { ...c, seating, updatedAt: now };
         updatedList.push(updated);
         return updated;
@@ -387,22 +409,52 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
     },
 
     reorderClasses: async (orderedIds) => {
-      const classes = get().classes;
-      const reordered: TeachingClass[] = orderedIds
-        .map((id, index) => {
-          const cls = classes.find((c) => c.id === id);
-          if (!cls) return null;
-          const updated: TeachingClass = {
-            ...cls,
-            order: index,
-            updatedAt: new Date().toISOString(),
-          };
-          return updated;
-        })
-        .filter((c): c is TeachingClass => c !== null);
+      if (!(await ensureWritable())) return;
+      // 유즈케이스 경유(레이어 준수) + 저장 파일 기준 fresh 갱신.
+      // orderedIds에 없는 반(보관된 반 등)은 원본 유지 — 과거의 통째 재구성은
+      // 미매칭 항목을 조용히 파일에서 유실시켰다(school-year-archive plan 함정 ⑩).
+      const updated = await manageClasses.reorder(orderedIds);
+      set({ classes: sortClasses(updated) });
+    },
 
-      set({ classes: reordered });
-      await teachingClassRepository.saveClasses({ classes: reordered });
+    archiveClass: async (id) => {
+      await get().archiveClasses([id]);
+    },
+
+    archiveClasses: async (ids) => {
+      if (!(await ensureWritable())) return;
+      const now = new Date();
+      const stamp = now.toISOString();
+      const idSet = new Set(ids);
+      const updatedList: TeachingClass[] = [];
+      const nextClasses = get().classes.map((c) => {
+        if (!idSet.has(c.id) || isTeachingClassArchived(c)) return c;
+        const updated: TeachingClass = { ...archiveTeachingClass(c, now), updatedAt: stamp };
+        updatedList.push(updated);
+        return updated;
+      });
+      if (updatedList.length === 0) return;
+      // 상태 갱신 1회 → 동기화 구독(App.tsx STORE_SUBSCRIBE_MAP)이 디바운스 업로드를
+      // 1회 트리거한다(ADR-033 요구사항 — 동기화 비활성이면 구독 자체가 없어 자연 스킵).
+      set({ classes: nextClasses });
+      await manageClasses.updateMany(updatedList); // 저장 1회 (N회 쓰기 금지 — 함정 ⑧)
+    },
+
+    unarchiveClass: async (id) => {
+      if (!(await ensureWritable())) return;
+      const classes = get().classes;
+      const target = classes.find((c) => c.id === id);
+      if (!target || !isTeachingClassArchived(target)) return;
+      const maxActiveOrder = filterActiveClasses(classes).reduce(
+        (max, c) => Math.max(max, c.order ?? -1),
+        -1,
+      );
+      const updated: TeachingClass = {
+        ...unarchiveTeachingClass(target, maxActiveOrder),
+        updatedAt: new Date().toISOString(),
+      };
+      set({ classes: sortClasses(classes.map((c) => (c.id === id ? updated : c))) });
+      await manageClasses.update(updated);
     },
 
     addProgressEntry: async (
@@ -618,6 +670,9 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
         const updatedList: TeachingClass[] = [];
         const nextClasses = classes.map((c) => {
           if (c.groupId !== cls.groupId) return c;
+          // 전파 술어 — 형제 정책 통일: independent(기존 syncGroupStudents만 지키던 규칙)·보관 형제 제외.
+          // 대상 반 자신은 항상 갱신.
+          if (c.id !== classId && !shouldPropagateToSibling(c)) return c;
           let seating = c.seating;
           if (isInactive && seating) {
             const newSeats = seating.seats.map((row) =>
