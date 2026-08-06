@@ -1,0 +1,104 @@
+import { describe, it, expect } from 'vitest';
+import * as academicCalendar from '../academicCalendar';
+import {
+  academicTerm,
+  parseTerm,
+  schoolYearOf,
+  formatSchoolYearKo,
+  formatTermKo,
+} from '../academicCalendar';
+
+describe('academicTerm — 12개월 전부', () => {
+  // [월, 기대 라벨] — 2026년 기준. 1~2월은 직전 학년도(2025) 2학기.
+  const CASES: Array<[number, string]> = [
+    [1, '2025-2'],
+    [2, '2025-2'],
+    [3, '2026-1'],
+    [4, '2026-1'],
+    [5, '2026-1'],
+    [6, '2026-1'],
+    [7, '2026-1'],
+    [8, '2026-1'],
+    [9, '2026-2'],
+    [10, '2026-2'],
+    [11, '2026-2'],
+    [12, '2026-2'],
+  ];
+
+  it.each(CASES)('2026년 %i월 → %s', (month, expected) => {
+    expect(academicTerm(new Date(2026, month - 1, 15))).toBe(expected);
+  });
+});
+
+describe('academicTerm — 연말연시·학년도 경계', () => {
+  it('12/31은 그 해 2학기', () => {
+    expect(academicTerm(new Date(2026, 11, 31))).toBe('2026-2');
+  });
+
+  it('1/1은 직전 학년도 2학기', () => {
+    expect(academicTerm(new Date(2027, 0, 1))).toBe('2026-2');
+  });
+
+  it('2/28은 직전 학년도 2학기', () => {
+    expect(academicTerm(new Date(2027, 1, 28))).toBe('2026-2');
+  });
+
+  it('윤년 2/29도 직전 학년도 2학기', () => {
+    expect(academicTerm(new Date(2028, 1, 29))).toBe('2027-2');
+  });
+
+  it('3/1부터 새 학년도 1학기', () => {
+    expect(academicTerm(new Date(2027, 2, 1))).toBe('2027-1');
+  });
+
+  it('8/31은 1학기, 9/1부터 2학기', () => {
+    expect(academicTerm(new Date(2026, 7, 31))).toBe('2026-1');
+    expect(academicTerm(new Date(2026, 8, 1))).toBe('2026-2');
+  });
+});
+
+describe('parseTerm / schoolYearOf', () => {
+  it('정상 라벨을 분해한다', () => {
+    expect(parseTerm('2026-1')).toEqual({ year: 2026, semester: 1 });
+    expect(parseTerm('2026-2')).toEqual({ year: 2026, semester: 2 });
+  });
+
+  it('형식이 아니면 null', () => {
+    for (const bad of ['2026', '2026-3', '2026-0', '26-1', 'abcd-1', '', '2026-1-1']) {
+      expect(parseTerm(bad)).toBeNull();
+    }
+  });
+
+  it('schoolYearOf는 학년도 숫자를 돌려준다', () => {
+    expect(schoolYearOf('2026-2')).toBe(2026);
+    expect(schoolYearOf('2025-1')).toBe(2025);
+    expect(schoolYearOf('nope')).toBeNull();
+  });
+});
+
+describe('표시 문자열', () => {
+  it('formatSchoolYearKo', () => {
+    expect(formatSchoolYearKo(2026)).toBe('2026학년도');
+  });
+
+  it('formatTermKo', () => {
+    expect(formatTermKo('2026-1')).toBe('2026학년도 1학기');
+    expect(formatTermKo('2025-2')).toBe('2025학년도 2학기');
+  });
+
+  it('형식이 아니면 원문 그대로', () => {
+    expect(formatTermKo('학기 미상')).toBe('학기 미상');
+  });
+});
+
+describe('모듈 표면 계약 — 시즌 판정 함수를 두지 않는다 (ADR-037)', () => {
+  it('export 목록이 라벨 계산·표시 5종뿐이다', () => {
+    expect(Object.keys(academicCalendar).sort()).toEqual([
+      'academicTerm',
+      'formatSchoolYearKo',
+      'formatTermKo',
+      'parseTerm',
+      'schoolYearOf',
+    ]);
+  });
+});

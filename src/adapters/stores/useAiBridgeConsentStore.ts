@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import { academicTerm } from '@domain/rules/academicCalendar';
 
 /**
  * AI 브릿지 고위험 게이트 고지 확인 기록 (v-ai-bridge+).
@@ -37,16 +38,10 @@ export interface AiBridgeConsentActions {
 export type AiBridgeConsentStore = AiBridgeConsentState & AiBridgeConsentActions;
 
 /**
- * 한국 학사 학기 키(예: '2026-1').
- * 3~8월=1학기, 9~12월=2학기, 1~2월=직전 학년도의 2학기(겨울방학은 학사상 직전 2학기에 속함).
+ * 한국 학사 학기 키(예: '2026-1') — 정본은 domain/rules/academicCalendar.
+ * 기존 호출처 호환을 위해 re-export 유지(ackKey 값 불변).
  */
-export function academicTerm(date: Date = new Date()): string {
-  const y = date.getFullYear();
-  const m = date.getMonth() + 1; // 1~12
-  if (m >= 3 && m <= 8) return `${y}-1`;
-  if (m >= 9) return `${y}-2`;
-  return `${y - 1}-2`;
-}
+export { academicTerm } from '@domain/rules/academicCalendar';
 
 /** 확인 기록 맵의 합성 키. */
 export function ackKey(gate: HighRiskGate, term: string, version: number): string {
