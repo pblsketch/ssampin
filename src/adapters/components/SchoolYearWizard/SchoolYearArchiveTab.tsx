@@ -27,6 +27,9 @@ import {
 import { academicTerm, formatTermKo } from '@domain/rules/academicCalendar';
 import { SchoolYearWizardModal } from './SchoolYearWizardModal';
 import { invalidateArchivedTermNoticeCache } from './ArchivedTermNotice';
+import { ArchiveViewer } from '@adapters/components/Archive/ArchiveViewer';
+import { ArchiveDeleteGate } from '@adapters/components/Archive/ArchiveDeleteGate';
+import { invalidateArchiveFileCache } from '@adapters/components/Archive/useArchiveFile';
 
 interface ArchiveSummary {
   readonly term: string;
@@ -65,6 +68,8 @@ export function SchoolYearArchiveTab() {
   const [wizardResume, setWizardResume] = useState(false);
   const [revertTarget, setRevertTarget] = useState<string | null>(null);
   const [reverting, setReverting] = useState(false);
+  const [viewTerm, setViewTerm] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setPending(await detectPendingTransition(storage));
@@ -213,7 +218,8 @@ export function SchoolYearArchiveTab() {
           <h4 className="text-sm font-bold text-sp-text">보관함</h4>
           <p className="mt-0.5 text-xs text-sp-muted">
             보관함은 이 PC에만 저장돼요. 백업 파일(설정 &gt; 백업/복원)로 내보내면 보관함까지 함께
-            담겨 다른 PC로 옮길 수 있어요. 자세히 열람하는 화면은 다음 업데이트에서 제공돼요.
+            담겨 다른 PC로 옮길 수 있어요. 학기를 눌러 명렬·기록·출결·진도를 그대로 열람할 수
+            있어요(읽기 전용).
           </p>
         </div>
 
@@ -230,42 +236,82 @@ export function SchoolYearArchiveTab() {
         ) : (
           <ul className="space-y-2">
             {archives.map((a) => (
-              <li
-                key={a.term}
-                className="flex items-center gap-3 rounded-xl border border-sp-border bg-sp-card px-4 py-3"
-              >
-                <span aria-hidden className="material-symbols-outlined text-sp-accent">
-                  folder_zip
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="flex items-center gap-2 text-sm font-semibold text-sp-text">
-                    {formatTermKo(a.term)}
-                    {!a.manifestOk && (
-                      <span className="rounded bg-red-500/10 px-1.5 py-0.5 text-caption font-medium text-red-400">
-                        검증 필요
-                      </span>
-                    )}
-                  </p>
-                  <p className="mt-0.5 text-xs text-sp-muted">
-                    {formatDateTimeKo(a.archivedAt)} 보관 · {a.entryCount}개 항목 ·{' '}
-                    {formatBytes(a.totalBytes)} · v{a.appVersion}
-                  </p>
-                </div>
-                {gateway && (
+              <li key={a.term} className="space-y-2">
+                <div className="flex items-center gap-3 rounded-xl border border-sp-border bg-sp-card px-4 py-3">
+                  <span aria-hidden className="material-symbols-outlined text-sp-accent">
+                    folder_zip
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="flex items-center gap-2 text-sm font-semibold text-sp-text">
+                      {formatTermKo(a.term)}
+                      {!a.manifestOk && (
+                        <span className="rounded bg-red-500/10 px-1.5 py-0.5 text-caption font-medium text-red-400">
+                          검증 필요
+                        </span>
+                      )}
+                    </p>
+                    <p className="mt-0.5 text-xs text-sp-muted">
+                      {formatDateTimeKo(a.archivedAt)} 보관 · {a.entryCount}개 항목 ·{' '}
+                      {formatBytes(a.totalBytes)} · v{a.appVersion}
+                    </p>
+                  </div>
                   <button
                     type="button"
-                    onClick={() => setRevertTarget(a.term)}
-                    disabled={reverting || pending !== null}
-                    className="shrink-0 rounded-lg border border-sp-border px-3 py-1.5 text-xs font-medium text-sp-muted transition-colors hover:text-sp-text disabled:opacity-40"
+                    onClick={() => setViewTerm((cur) => (cur === a.term ? null : a.term))}
+                    className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
+                      viewTerm === a.term
+                        ? 'bg-sp-accent text-sp-accent-fg'
+                        : 'border border-sp-border text-sp-muted hover:text-sp-text'
+                    }`}
                   >
-                    전환 취소(이 시점으로 복원)
+                    {viewTerm === a.term ? '열람 닫기' : '열람'}
                   </button>
-                )}
+                  {gateway && (
+                    <button
+                      type="button"
+                      onClick={() => setRevertTarget(a.term)}
+                      disabled={reverting || pending !== null}
+                      className="shrink-0 rounded-lg border border-sp-border px-3 py-1.5 text-xs font-medium text-sp-muted transition-colors hover:text-sp-text disabled:opacity-40"
+                    >
+                      전환 취소(이 시점으로 복원)
+                    </button>
+                  )}
+                  {/* 삭제는 되돌릴 수 없는 유일한 조작 — 다른 버튼과 거리·색을 분리(2단계 게이트로 진입) */}
+                  <button
+                    type="button"
+                    onClick={() => setDeleteTarget(a.term)}
+                    disabled={reverting || pending !== null}
+                    aria-label={`${formatTermKo(a.term)} 보관함 삭제`}
+                    className="ml-2 shrink-0 rounded-lg border-l border-sp-border p-1.5 text-sp-muted/60 transition-colors hover:text-red-400 disabled:opacity-40"
+                  >
+                    <span aria-hidden className="material-symbols-outlined text-icon-sm">
+                      delete
+                    </span>
+                  </button>
+                </div>
+                {viewTerm === a.term && <ArchiveViewer term={a.term} />}
               </li>
             ))}
           </ul>
         )}
       </section>
+
+      {/* 보관함 영구 삭제 — 2단계 게이트 (S3.3) */}
+      <ArchiveDeleteGate
+        term={deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onDeleted={(term) => {
+          setDeleteTarget(null);
+          if (viewTerm === term) setViewTerm(null);
+          invalidateArchiveFileCache();
+          invalidateArchivedTermNoticeCache();
+          showToast(`${formatTermKo(term)} 보관함을 삭제했어요`);
+          void refresh();
+        }}
+        onOpenBackup={() =>
+          window.dispatchEvent(new CustomEvent('ssampin:navigate', { detail: 'settings#backup' }))
+        }
+      />
 
       {/* 전환 취소 확인 */}
       <Modal
