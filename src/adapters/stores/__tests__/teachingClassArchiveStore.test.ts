@@ -184,6 +184,52 @@ describe('reorderClasses — 보관된 반 보존 (함정 ⑩ 회귀 가드)', (
   });
 });
 
+describe('보관 → 업로드 트리거 (S1.2 AC-8 · ADR-033 성립 조건)', () => {
+  // App.tsx STORE_SUBSCRIBE_MAP이 이 스토어 구독으로 디바운스 업로드를 트리거한다.
+  // 여기서는 그 계약의 스토어 측 절반을 잠근다: 보관/해제/일괄이 상태 갱신을 정확히 1회
+  // 일으키고(=업로드 트리거 1회), 쓰기 차단 시에는 0회(=트리거 없음 — 조용한 스킵).
+  it('일괄 보관은 구독 알림 1회 — 반 수만큼 트리거하지 않는다', async () => {
+    await seedAndLoad([
+      makeClass({ id: 'a', order: 0 }),
+      makeClass({ id: 'b', order: 1 }),
+      makeClass({ id: 'c', order: 2 }),
+    ]);
+    let notifications = 0;
+    const unsubscribe = useTeachingClassStore.subscribe(() => {
+      notifications += 1;
+    });
+    await useTeachingClassStore.getState().archiveClasses(['a', 'b']);
+    unsubscribe();
+    expect(notifications).toBe(1);
+  });
+
+  it('보관 해제도 알림 1회', async () => {
+    await seedAndLoad([
+      makeClass({ id: 'a', order: 0 }),
+      makeClass({ id: 'z', order: 1, archived: true, archivedAt: 'T', archivedTerm: '2026-1' }),
+    ]);
+    let notifications = 0;
+    const unsubscribe = useTeachingClassStore.subscribe(() => {
+      notifications += 1;
+    });
+    await useTeachingClassStore.getState().unarchiveClass('z');
+    unsubscribe();
+    expect(notifications).toBe(1);
+  });
+
+  it('쓰기 차단(loadFailed)이면 알림 0회 — 업로드 트리거 없음(조용한 스킵)', async () => {
+    await seedAndLoad([makeClass({ id: 'a' })]);
+    useTeachingClassStore.setState({ loadFailed: true });
+    let notifications = 0;
+    const unsubscribe = useTeachingClassStore.subscribe(() => {
+      notifications += 1;
+    });
+    await useTeachingClassStore.getState().archiveClasses(['a']);
+    unsubscribe();
+    expect(notifications).toBe(0);
+  });
+});
+
 describe('그룹 격리 — 활성 형제 편집이 보관된 형제를 변조하지 않는다 (함정 ㉒)', () => {
   const seedGroup = () => [
     makeClass({
