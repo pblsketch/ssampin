@@ -534,3 +534,17 @@
 - **명시적 비변경**: 출결·관찰기록 툼스톤(이미 정상 — 리팩터링 금지) · `MigrateStudentRecordsSubcatToTags`(봉투 통째 스프레드 저장이라 `deleted` 자동 보존 — 조립 함수 미경유 유지) · `reorderClasses` 통째 저장(별도 과제) · 동기화 잔여 하드닝 R6·R7(별도 PDCA).
 - **불변식(승계)**: 모든 학생 기록 write 경로는 저장 전 `updatedAt`(ISO)을 세팅해야 한다(2026-07-13 유실 재발 방지책). 안 찍으면 결정 3에 의해 그 기록은 삭제 후 재작성해도 영원히 부활하지 못한다 — 조립 함수 주석에 명문화.
 - **검증**: tsc 0 / lint 0에러(경고 132 기존) / 전체 vitest **3828 passed**·10 skipped(314파일, `--maxWorkers=4`) / regression 38/38 / prettier 통과. 신규 테스트 17 — 병합 9(`mergeStudentRecords.tombstone.test.ts`: 삭제 전파 양방향·정당한 부활·스탬프 부재/동률=삭제 승·하위 호환 무키·신규 기기 null 로컬·툼스톤 합집합 최신 채택·병합 승자 기준 부활) + 저장 조립 8(`ManageStudentRecords.tombstone.test.ts`: 삭제→툼스톤·재등장→걷힘·TTL 경계 GC·무관 저장 승계+categories 보존·무키 유지·첫 저장·delete() 통합·delete 후 update 승계).
+
+## ADR-029 ~ ADR-037: 학년도·학기 전환 + 보관함 (일괄 등재)
+
+- **상태**: active · **일자**: 2026-08-06
+- **정본**: `docs/01-plan/features/school-year-archive.plan.md` §7 (ralplan 3자 합의: Planner v3 · Architect r2 · Critic r2 APPROVE + 오너 결정 v4). 각 ADR의 Drivers/Alternatives/Consequences 전문은 계획서에 있다 — 여기는 결정 요지만 등재한다.
+- **ADR-029**: 시간 축 최소 단위는 **학기**, 라벨 `'YYYY-S'`(예 '2026-1'), 계산 정본 `src/domain/rules/academicCalendar.ts`. 경계: 3~8월=1학기, 9~12월=2학기, **1~2월=직전 학년도 2학기**.
+- **ADR-030**: 아카이브는 엔티티 필드가 아니라 **파일 스냅샷**(`data/archives/{term}/` + 매니페스트 SHA-256). 전 엔티티 `schoolYear` 필드 추가는 기각(300+ 호출처 — 이 숫자는 이 대안에만 적용).
+- **ADR-031**: 보관함 뷰어 MVP는 5도메인(명렬·누가기록·관찰+첨부·출결 통계·진도). 나머지는 **저장은 하되 뷰어는 후속** — 뷰어에 없는 도메인도 "보관되어 있어요"를 명시한다.
+- **ADR-032**: 마법사 v1은 **전부 보관 고정**(파기 옵션 없음). 영구 삭제는 보관함에서만, 확인 문구 타이핑 2단계 게이트 + 백업 내보내기 선제안.
+- **ADR-033**: teaching-classes 레코드 병합 도입은 **NO 종결**(승자 판정은 Drive modifiedTime 출처 + 업로드 DEFER가 이미 방어 — "낡은 기기가 열기만 해도 승자"는 불성립). 성립 조건: **보관/복원 직후 업로드 트리거**(S1.2 요구사항, 자동 동기화는 사용자 설정·비활성 가능).
+- **ADR-034**: epoch는 파일 루트가 아니라 **레코드 단위 term 스탬프**(봉투 재조립 9지점이 루트 키를 벗김 — fail-open 금지). term은 **`date`(사건 발생일) 파생 고정**(createdAt 금지 — 학기 경계 오판), 파생 불가=미부착(추측 금지). 선결 검증 4건 전부 실측 PASS 후 구현. 옛 **학년도** 리모트 레코드만 병합 스킵(같은 학년도 타 학기는 병합 — 담임 축 연속), fail-open 3중(term/currentTerm 부재=현행 병합).
+- **ADR-035**: `TeachingClass.archived/archivedAt/archivedTerm`은 **notMirrored**(AI 브릿지 미노출). 브릿지의 보관 반 새 진도 쓰기는 `applyLiveSyncWrite`의 가드가 사용자 언어 오류로 거부.
+- **ADR-036**: 아카이브 Drive 동기화는 P4 — 구현 완료(2026-08-06). **불변 3중 계약**: 리모트 존재=업로드 스킵 · 로컬 존재=다운로드 스킵 · `archive:import` 기존 학기 바이트 무변경. S2.1b(수동 백업 archives 섹션)와 짝 결정. **알려진 제약**: 삭제한 보관함이 Drive 사본에서 재다운로드될 수 있음(후속 결정: /docs 고지 / 포트 확장 / 툼스톤).
+- **ADR-037**: 시즌 배너는 만들지 않는다(오너 결정 — 학교마다 개학일이 달라 단일 구간 정의 불가). 발견성은 kebab "보관" + 보관 섹션 + 릴리즈 노트 + /docs 4경로. `academicCalendar`에 시즌 구간 판정 함수 금지(모듈 표면 계약 테스트로 고정).
