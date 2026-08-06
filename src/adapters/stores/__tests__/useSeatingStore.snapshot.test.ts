@@ -323,4 +323,37 @@ describe('useSeatingStore — snapshots', () => {
       expect(list[0]?.label).toMatch(/셔플 #1$/);
     });
   });
+
+  describe('F8b(RM-a) — 학년도 전환의 빈 유효 표현 load 안전성', () => {
+    it('격자 승계형(rows/cols 유지 + seats 전부 null, 학생 0명) load가 안전하다', async () => {
+      // ExecuteYearTransition의 seating preserve-fields 리셋 결과와 동일한 형태
+      seatingFake.seating = {
+        rows: 2,
+        cols: 3,
+        seats: [
+          [null, null, null],
+          [null, null, null],
+        ],
+      };
+      studentsRef.students = []; // 전환 직후 students도 빈 값
+
+      await useSeatingStore.getState().load(true);
+
+      const seating = useSeatingStore.getState().seating;
+      expect(seating.rows).toBe(2);
+      expect(seating.cols).toBe(3);
+      expect(seating.seats.flat().every((cell) => cell === null)).toBe(true);
+    });
+
+    it('최소 유효형({rows:0,cols:0,seats:[]} — current 부재 케이스) load가 안전하다', async () => {
+      seatingFake.seating = { rows: 0, cols: 0, seats: [] };
+      studentsRef.students = [];
+
+      await useSeatingStore.getState().load(true);
+
+      const seating = useSeatingStore.getState().seating;
+      expect(seating.seats).toEqual([]);
+      expect(useSeatingStore.getState().loaded).toBe(true);
+    });
+  });
 });

@@ -18,6 +18,10 @@ async function computeChecksum(content: string): Promise<string> {
 import { SYNC_FILES } from './syncRegistry';
 export { SYNC_FILES };
 export type { SyncFileName } from './syncRegistry';
+import {
+  YEAR_TRANSITION_REMOVED_KEY,
+  type YearTransitionRemovedMarker,
+} from '../schoolYear/ExecuteYearTransition';
 
 /**
  * 런타임에 결정되는 동적 파일 키 목록을 반환하는 훅 타입.
@@ -110,6 +114,20 @@ export class SyncToCloud {
     const deferred: string[] = [];
     const total = SYNC_FILES.length;
 
+    // F8a(RT2) — 전환 마커 활성 키 로드: 이 키들은 DEFER하지 않는다(아래 uploadOne 참조).
+    // 읽기 실패·형식 불일치 = 마커 없음(fail-open — DEFER는 원래 보호 장치다).
+    let transitionGuardedKeys: ReadonlySet<string> = new Set();
+    try {
+      const marker = await this.storage.read<YearTransitionRemovedMarker>(
+        YEAR_TRANSITION_REMOVED_KEY,
+      );
+      if (marker && marker.version === 1 && Array.isArray(marker.keys)) {
+        transitionGuardedKeys = new Set(marker.keys);
+      }
+    } catch {
+      transitionGuardedKeys = new Set();
+    }
+
     // 리모트 매니페스트를 먼저 읽어 다른 기기가 올린 파일 엔트리를 보존
     const remoteManifest = await this.drivePort.getSyncManifest(folder.id);
     console.log(`[SyncToCloud] 리모트 매니페스트 deviceId=${remoteManifest?.deviceId ?? 'NONE'}`);
@@ -167,12 +185,22 @@ export class SyncToCloud {
       // 리모트가 우리 마지막 동기화 이후 변경되었으면 업로드 유예 (다른 기기가 올린 최신 데이터 보호)
       const remoteChecksum = remoteManifest?.files[filename]?.checksum;
       if (remoteChecksum && manifestChecksum && remoteChecksum !== manifestChecksum) {
-        console.log(
-          `[SyncToCloud]   ${filename}: DEFER (remote changed: local-manifest=${manifestChecksum.slice(0, 8)} remote=${remoteChecksum.slice(0, 8)}, syncFromCloud 병합 후 재업로드 필요)`,
-        );
-        skipped.push(filename);
-        deferred.push(filename);
-        return;
+        // F8a(RT2) — 전환 마커 활성 키는 유예하지 않는다: 마커가 다운로드를 봉쇄하는 동안
+        // pull-merge-push가 장부를 갱신하지 못해 DEFER가 영구 교착이 된다(재정화 불가 실측).
+        // 이 키의 리모트 값은 전환 전 옛 데이터(또는 미전환 기기의 되오염)라 보호 대상이
+        // 아니다 — 강제 업로드로 리모트를 정화해야 마커 해제 조건(정화 확인)이 성립한다.
+        if (transitionGuardedKeys.has(filename)) {
+          console.log(
+            `[SyncToCloud]   ${filename}: 전환 마커 활성 — DEFER 없이 정화 업로드 진행(remote=${remoteChecksum.slice(0, 8)})`,
+          );
+        } else {
+          console.log(
+            `[SyncToCloud]   ${filename}: DEFER (remote changed: local-manifest=${manifestChecksum.slice(0, 8)} remote=${remoteChecksum.slice(0, 8)}, syncFromCloud 병합 후 재업로드 필요)`,
+          );
+          skipped.push(filename);
+          deferred.push(filename);
+          return;
+        }
       }
 
       console.log(

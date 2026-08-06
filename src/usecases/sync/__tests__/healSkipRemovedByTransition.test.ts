@@ -11,6 +11,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { SyncFromCloud } from '../SyncFromCloud';
+import { SyncToCloud } from '../SyncToCloud';
 import {
   YEAR_TRANSITION_REMOVED_KEY,
   type YearTransitionRemovedMarker,
@@ -155,9 +156,9 @@ describe('F7c — 전환 마커의 전 다운로드 분기 게이트', () => {
     expect(files['students']).toEqual([]);
   });
 
-  it('해제(a): 로컬에 실질 내용이 생기면 마커를 해제하고 정상 동기화를 재개한다', async () => {
+  it('해제(a): 로컬 실질 내용 + 리모트 정화 확인(체크섬 일치) → 마커 해제·정상 동기화 재개', async () => {
     const { useCase, files } = scenario({
-      localChecksum: 'local-new-v3',
+      localChecksum: 'remote-v1', // F8a: 리모트 == 내가 마지막으로 올린 것(정화 상태)
       storageInit: {
         students: [{ id: 'stu-new', name: '학생새명렬' }], // 사용자가 새로 입력
         [YEAR_TRANSITION_REMOVED_KEY]: marker(['students', 'seating']),
@@ -166,14 +167,14 @@ describe('F7c — 전환 마커의 전 다운로드 분기 게이트', () => {
 
     await useCase.execute();
 
-    // students만 해제 — seating(remove 유지 키)은 남는다
+    // students만 해제 — seating은 남는다
     const after = files[YEAR_TRANSITION_REMOVED_KEY] as YearTransitionRemovedMarker;
     expect(after.keys).toEqual(['seating']);
   });
 
   it('해제 시 마지막 키였다면 마커 파일 자체를 지운다', async () => {
     const { useCase, files } = scenario({
-      localChecksum: 'local-new-v3',
+      localChecksum: 'remote-v1', // 정화 상태
       storageInit: {
         students: [{ id: 'stu-new', name: '학생새명렬' }],
         [YEAR_TRANSITION_REMOVED_KEY]: marker(['students']),
@@ -183,6 +184,28 @@ describe('F7c — 전환 마커의 전 다운로드 분기 게이트', () => {
     await useCase.execute();
 
     expect(files[YEAR_TRANSITION_REMOVED_KEY]).toBeUndefined();
+  });
+
+  it('F8a(RT2) 체인 재현: 리모트 되오염 상태에선 로컬 실질 내용이 있어도 해제하지 않는다', async () => {
+    // B(미전환 기기)가 리모트를 옛 명렬로 되오염(remote-v1 ≠ 내 장부 my-upload-v2) →
+    // A 사용자가 새 명렬 입력. 구 해제 조건(로컬 실질 내용만)이었다면 해제 직후 충돌 분기가
+    // A의 새 명렬을 옛 명렬로 덮었다(QA 3차 재현). 강화 후: 마커 유지+스킵+새 명렬 보존.
+    const newRoster = [{ id: 'stu-new', name: '학생새명렬' }];
+    const { useCase, files } = scenario({
+      localChecksum: 'my-upload-v2', // 리모트(remote-v1)와 불일치 = 되오염
+      storageInit: {
+        students: newRoster,
+        [YEAR_TRANSITION_REMOVED_KEY]: marker(['students']),
+      },
+    });
+
+    const result = await useCase.execute();
+
+    expect(result.downloaded).not.toContain('students');
+    expect(files['students']).toEqual(newRoster); // 새 명렬이 옛 명렬로 덮이지 않는다
+    expect((files[YEAR_TRANSITION_REMOVED_KEY] as YearTransitionRemovedMarker).keys).toContain(
+      'students',
+    ); // 마커 유지 — 재정화는 업로드가 담당
   });
 
   it('revert 후(마커 없음)에는 기존 치유 다운로드가 정상 동작한다 (ADR-024 보존)', async () => {
@@ -227,6 +250,38 @@ describe('F7c — 전환 마커의 전 다운로드 분기 게이트', () => {
 
     expect(result.downloaded).toContain('students');
     expect(files['students']).toEqual(OLD_ROSTER);
+  });
+
+  it('F8a(RT2): 전환 마커 활성 키는 리모트가 변했어도 DEFER 없이 정화 업로드된다', async () => {
+    // 마커가 다운로드를 봉쇄하는 동안 DEFER는 pull-merge-push 장부 갱신이 불가능해
+    // 영구 교착이 된다 — 마커 키는 강제 업로드로 리모트를 정화해야 해제 조건이 성립한다.
+    const localLedger = manifest(
+      {
+        students: { checksum: 'my-upload-v2', lastModified: REMOVED_AT, size: 10 },
+        todos: { checksum: 'todos-old', lastModified: REMOVED_AT, size: 10 },
+      },
+      'my-pc',
+    );
+    const remoteLedger = manifest(
+      {
+        students: { checksum: 'poisoned-v9', lastModified: SKEWED_FUTURE, size: 100 }, // 되오염
+        todos: { checksum: 'todos-new', lastModified: SKEWED_FUTURE, size: 100 }, // 타 기기 최신
+      },
+      'other-pc',
+    );
+    const { storage } = makeStorage({
+      students: [{ id: 'stu-new', name: '학생새명렬' }],
+      todos: { items: ['할 일'] },
+      [YEAR_TRANSITION_REMOVED_KEY]: marker(['students']),
+    });
+    const { port } = makeDrive(remoteLedger);
+    const useCase = new SyncToCloud(storage, port, makeSyncRepo(localLedger), 'my-pc', '내 PC');
+
+    const result = await useCase.execute();
+
+    expect(result.uploaded).toContain('students'); // 마커 키 = DEFER 예외(정화 업로드)
+    expect(result.uploaded).not.toContain('todos'); // 비마커 키 = 기존 DEFER 유지
+    expect(result.deferred).toContain('todos');
   });
 
   it('F7b 효과: 리모트가 빈 값으로 정화된 뒤 새 PC(마커 없음)는 빈 값을 받는다 — 옛 명렬 아님', async () => {

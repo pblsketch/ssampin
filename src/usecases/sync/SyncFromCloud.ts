@@ -656,7 +656,7 @@ export class SyncFromCloud {
       // F7c(B1 구조 수정) — 전환 마커 게이트: 마커 활성 동안 이 키의 **모든** 다운로드 분기
       // (치유·충돌·첫 다운로드)를 스킵한다. 시각 비교(removedAt vs modifiedTime)는 시계
       // 스큐로 반증(RH2)되어 제거 — 판정은 "마커 활성 여부"뿐이다. 해제 조건은
-      // (a) 로컬에 실질 내용이 생김(사용자 입력 — 빈 값이면 유지) (b) revert(마커 파일 삭제).
+      // (a) 로컬 실질 내용 **AND** 리모트 정화 확인(F8a) (b) revert(마커 파일 삭제).
       // 남는 창(전환~첫 업로드)은 F7b의 빈 값 업로드가 리모트를 정화해 닫는다.
       {
         const removedMarker = await loadRemovedMarker();
@@ -667,15 +667,26 @@ export class SyncFromCloud {
           } catch {
             localData = null; // 읽기 실패 = 실질 내용 미확인 — 보수적으로 스킵 유지
           }
-          if (hasSubstantiveContent(localData)) {
+          // F8a(RT2): "로컬 실질 내용"만으로 해제하면, 미전환 기기가 리모트를 되오염시킨
+          // 상태에서 해제 직후 충돌 분기가 이 기기의 새 명렬을 옛 명렬로 덮는 체인이
+          // 성립한다(QA 3차 재현). 해제는 **리모트가 정화 상태**(리모트 체크섬 == 내 로컬
+          // 장부 체크섬 = 내가 마지막으로 올린 것)일 때만. 되오염이면 마커 유지+스킵 —
+          // 재정화는 업로드 경로가 담당(SyncToCloud가 마커 키를 DEFER하지 않는다).
+          const remotePurified =
+            localInfo !== undefined && localInfo.checksum === remoteInfo.checksum;
+          if (hasSubstantiveContent(localData) && remotePurified) {
             await releaseRemovedKey(filename);
             console.log(
-              `[SyncFromCloud]   ${filename}: 전환 마커 해제(로컬에 새 내용) — 정상 동기화 재개`,
+              `[SyncFromCloud]   ${filename}: 전환 마커 해제(로컬 새 내용+리모트 정화 확인) — 정상 동기화 재개`,
             );
           } else {
             skipped.push(filename);
             console.log(
-              `[SyncFromCloud]   ${filename}: 다운로드 스킵(학년도 전환으로 비운 파일 — 마커 활성)`,
+              `[SyncFromCloud]   ${filename}: 다운로드 스킵(학년도 전환으로 비운 파일 — 마커 활성${
+                hasSubstantiveContent(localData) && !remotePurified
+                  ? ', 리모트 미정화 — 업로드가 정화 예정'
+                  : ''
+              })`,
             );
             continue;
           }

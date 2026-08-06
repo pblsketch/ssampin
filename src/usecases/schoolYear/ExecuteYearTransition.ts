@@ -23,6 +23,7 @@
 
 import type { IStoragePort } from '@domain/ports/IStoragePort';
 import type { ObservationData } from '@domain/entities/Observation';
+import type { SeatingData } from '@domain/entities/Seating';
 import type { StudentRecordsData } from '@domain/entities/StudentRecord';
 import { parseTerm } from '@domain/rules/academicCalendar';
 import { withFileLock } from '@usecases/shared/fileWriteLock';
@@ -62,8 +63,39 @@ export const YEAR_TRANSITION_FILES: readonly YearTransitionFileSpec[] = [
   // ── 담임 축 ──
   // F7b: `[]` 쓰기(F7a로 유효) — 첫 업로드가 리모트 옛 명렬을 정화한다(remove는 정화 불가였다).
   { key: 'students', guardDownloads: true, reset: { kind: 'empty-envelope', envelope: [] } },
-  // seating은 빈 유효 표현 미검증(0×0은 렌더 가정 밖) — remove 유지, F7c 마커가 유일 방어.
-  { key: 'seating', guardDownloads: true, reset: { kind: 'remove' } },
+  {
+    key: 'seating',
+    guardDownloads: true,
+    reset: {
+      kind: 'preserve-fields',
+      // F8b(RM-a): 빈 유효 표현 확정 — 기존 격자 크기·레이아웃 환경(pairMode/oddColumnMode/
+      // layout/groupGridSync/freestylePreset)은 승계하고 학생 배치 데이터(seats 내용·groups·
+      // freestyleDesks)만 비운다. 유효 파일이라 업로드가 리모트를 정화한다(students와 동일 —
+      // 구 remove 방식은 정화 불가였다). current 부재(좌석 미사용)면 최소 유효형
+      // {rows:0,cols:0,seats:[]} — 스토어 sanitize는 배열 순회뿐이라 0×0 무해(실측),
+      // 렌더는 사용자가 쓰던 격자 크기가 승계되는 경우가 기본이다.
+      build: (current) => {
+        const data = current as SeatingData | null;
+        if (!data || typeof data.rows !== 'number' || typeof data.cols !== 'number') {
+          return { rows: 0, cols: 0, seats: [] };
+        }
+        const rows = Math.max(0, Math.floor(data.rows));
+        const cols = Math.max(0, Math.floor(data.cols));
+        return {
+          rows,
+          cols,
+          seats: Array.from({ length: rows }, () =>
+            Array.from({ length: cols }, () => null as string | null),
+          ),
+          ...(data.pairMode !== undefined ? { pairMode: data.pairMode } : {}),
+          ...(data.oddColumnMode !== undefined ? { oddColumnMode: data.oddColumnMode } : {}),
+          ...(data.layout !== undefined ? { layout: data.layout } : {}),
+          ...(data.groupGridSync !== undefined ? { groupGridSync: data.groupGridSync } : {}),
+          ...(data.freestylePreset !== undefined ? { freestylePreset: data.freestylePreset } : {}),
+        };
+      },
+    },
+  },
   {
     key: 'seat-constraints',
     reset: {
@@ -87,12 +119,10 @@ export const YEAR_TRANSITION_FILES: readonly YearTransitionFileSpec[] = [
   },
   { key: 'record-drafts', reset: { kind: 'empty-envelope', envelope: { records: [] } } },
   { key: 'record-evidence', reset: { kind: 'empty-envelope', envelope: { records: [] } } },
-  // F7b: `[]` 쓰기(F7a로 유효) — 업로드 정화. (SYNC_REGISTRY 등재 파일 — 다운로드 게이트도 필요)
-  {
-    key: 'seating-snapshots',
-    guardDownloads: true,
-    reset: { kind: 'empty-envelope', envelope: [] },
-  },
+  // F7b: `[]` 쓰기(F7a로 유효). RL-a 정정: seating-snapshots는 **SYNC_REGISTRY 미등재**
+  // (동기화 표면 자체가 없음 — 업로드·다운로드 모두 안 됨) → 다운로드 게이트(guardDownloads)
+  // 불요. 빈 값 쓰기는 로컬 정합용이다. (구 주석 "SYNC_REGISTRY 등재 파일"은 오기였다.)
+  { key: 'seating-snapshots', reset: { kind: 'empty-envelope', envelope: [] } },
   { key: 'surveys', reset: { kind: 'empty-envelope', envelope: { surveys: [], localData: [] } } },
   { key: 'assignments', reset: { kind: 'empty-envelope', envelope: { assignments: [] } } },
   // ── 교과 축 ──
@@ -357,12 +387,22 @@ export async function executeYearTransition(
 ): Promise<YearTransitionResult> {
   const { storage, gateway } = deps;
   const closingTerm = options.closingTerm;
-  const nextTerm = options.nextTerm ?? deriveNextTerm(closingTerm);
+  const derivedNextTerm = deriveNextTerm(closingTerm);
+  const nextTerm = options.nextTerm ?? derivedNextTerm;
   if (!nextTerm) {
     return {
       ok: false,
       step: 'safety-backup',
       error: `학기 형식이 올바르지 않아요: ${closingTerm}`,
+    };
+  }
+  // RL-b: nextTerm은 deriveNextTerm 파생 결과만 허용 — 임의 값이 들어오면 currentTerm·
+  // 마커·옛 학년도 병합 필터가 전부 오염된다(호출 경로가 늘어도 이 가드가 정본을 지킨다).
+  if (options.nextTerm !== undefined && options.nextTerm !== derivedNextTerm) {
+    return {
+      ok: false,
+      step: 'safety-backup',
+      error: `다음 학기 값이 올바르지 않아요: ${options.nextTerm} (기대: ${derivedNextTerm ?? '파생 불가'})`,
     };
   }
 

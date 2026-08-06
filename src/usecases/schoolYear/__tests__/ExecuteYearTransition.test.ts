@@ -247,7 +247,15 @@ describe('executeYearTransition — 성공 경로', () => {
 
     // 리셋 결과 — 봉투 정의표 그대로 (F7b: 배열 루트는 [] 쓰기 — 첫 업로드가 리모트 정화)
     expect(await storage.read('students')).toEqual([]);
-    expect(await storage.read('seating')).toBeNull(); // remove 유지(빈 유효 표현 미검증)
+    // F8b(RM-a): seating은 격자 크기 승계 + seats 전부 null(학생 배치만 비움 — 업로드 정화 성립)
+    expect(await storage.read('seating')).toEqual({
+      rows: 2,
+      cols: 3,
+      seats: [
+        [null, null, null],
+        [null, null, null],
+      ],
+    });
     expect(await storage.read('seating-snapshots')).toEqual([]);
     expect(await storage.read('teaching-classes')).toEqual({ classes: [] });
     expect(await storage.read('attendance')).toEqual({ records: [] }); // 툼스톤 미승계
@@ -286,8 +294,8 @@ describe('executeYearTransition — 성공 경로', () => {
   });
 });
 
-describe('F1(B1) — 전환-remove 마커 기록/정리', () => {
-  test('성공 전환 후 remove 키 3개가 마커에 기록된다 (치유 다운로드 게이트 근거)', async () => {
+describe('F1(B1) — 전환 마커 기록/정리', () => {
+  test('성공 전환 후 guardDownloads 키(students·seating)가 마커에 기록된다 — snapshots는 미등재(RL-a)', async () => {
     const { deps } = makeDeps(storage, gateway);
     const result = await executeYearTransition(deps, { closingTerm: '2026-2' });
     expect(result.ok).toBe(true);
@@ -297,7 +305,8 @@ describe('F1(B1) — 전환-remove 마커 기록/정리', () => {
     expect(marker?.version).toBe(1);
     expect(marker?.term).toBe('2026-2');
     expect(typeof marker?.removedAt).toBe('string');
-    expect([...(marker?.keys ?? [])].sort()).toEqual(['seating', 'seating-snapshots', 'students']);
+    // RL-a: seating-snapshots는 SYNC_REGISTRY 미등재(동기화 표면 없음) — 마커 대상 아님
+    expect([...(marker?.keys ?? [])].sort()).toEqual(['seating', 'students']);
   });
 
   test('revert 후 마커가 정리된다 — 이후 치유 다운로드는 정상 동작(ADR-024 복원)', async () => {
@@ -324,6 +333,25 @@ describe('AC: 실패 시 fail-closed', () => {
     expect(storage.snapshot().files).toEqual(before.files); // 1바이트 무변경
     expect(getTerm()).toBe('2026-2');
     expect(await detectPendingTransition(storage)).toBeNull();
+  });
+
+  test('RL-b: nextTerm은 deriveNextTerm 파생 결과만 허용 — 임의 값은 시작 전 거부', async () => {
+    const before = storage.snapshot();
+    const { deps } = makeDeps(storage, gateway);
+
+    const result = await executeYearTransition(deps, {
+      closingTerm: '2026-2',
+      nextTerm: '2030-1', // 임의 값 — 기대는 deriveNextTerm('2026-2') = '2027-1'
+    });
+    expect(result).toMatchObject({ ok: false, step: 'safety-backup' });
+    if (result.ok) return;
+    expect(result.error).toContain('2030-1');
+    expect(gateway.safetyCalls).toBe(0);
+    expect(storage.snapshot().files).toEqual(before.files);
+
+    // 파생 결과와 일치하는 명시 값은 허용된다
+    const ok = await executeYearTransition(deps, { closingTerm: '2026-2', nextTerm: '2027-1' });
+    expect(ok.ok, JSON.stringify(ok)).toBe(true);
   });
 
   test('F7g(RM2): 1학기 마감은 유즈케이스 진입부에서 차단된다(안전 백업조차 안 만든다)', async () => {

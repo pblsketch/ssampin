@@ -378,10 +378,12 @@ export function SchoolYearArchiveTab() {
           resumePending={wizardResume}
           onCompleted={() => {
             void refresh();
-            // (S4.1) 방금 만든 아카이브를 곧 업로드하도록 디바운스 동기화를 예약한다.
-            // 동기화 비활성·첫 동기화 대기 상태면 내부 가드가 조용히 스킵한다(오류 아님).
+            // F8d(RM-c): 전환 직후 정화 업로드는 디바운스 예약이 아니라 **즉시 1회 직접 실행** —
+            // "전환~첫 업로드" 창(리모트 옛 데이터 잔존)을 최소화한다. 동기화 비활성·첫 동기화
+            // 대기 상태면 syncToCloud 내부 가드(sync.enabled·firstSyncRequired)가 조용히
+            // 스킵한다(오류 아님 — 비활성 시 정화 불가는 §13.5 RM-c 등재, 마법사 체크박스가 고지).
             void import('@adapters/stores/useDriveSyncStore').then(({ useDriveSyncStore }) =>
-              useDriveSyncStore.getState().triggerSaveSync(),
+              useDriveSyncStore.getState().syncToCloud(),
             );
           }}
         />

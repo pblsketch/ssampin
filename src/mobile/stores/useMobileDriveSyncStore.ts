@@ -6,7 +6,29 @@ import { SyncFromCloud } from '@usecases/sync/SyncFromCloud';
 import { getDriveSyncAdapter, driveSyncRepository, storage } from '@mobile/di/container';
 import type { SyncResult } from '@adapters/stores/useDriveSyncStore';
 import { isGoogleAuthBlockedError } from '@domain/rules/calendarSyncRules';
+import { parseTerm } from '@domain/rules/academicCalendar';
 import { awaitPendingWrites } from '@mobile/stores/pendingWrites';
+
+/**
+ * F8c(RT1) — 다른 기기의 학년도 마무리 감지: 동기화 다운로드로 settings.currentTerm이
+ * "새로 생기거나 전진"했는가(단일 신호 — 과도한 감지 로직 금지 지침).
+ * before 부재+after 존재 = 다른 기기의 첫 전환도 전진으로 본다.
+ */
+export function isYearTransitionAdvance(
+  before: string | undefined,
+  after: string | undefined,
+): boolean {
+  if (after === undefined) return false;
+  const a = parseTerm(after);
+  if (a === null) return false;
+  if (before === undefined) return true;
+  const b = parseTerm(before);
+  if (b === null) return true;
+  return a.year * 10 + a.semester > b.year * 10 + b.semester;
+}
+
+/** F8c — 학년도 전환 안내 1회 노출 dedup(localStorage: 마지막으로 안내한 학기). */
+const YEAR_TRANSITION_NOTICE_SEEN_KEY = 'ssampin-mobile-year-transition-notice-v1';
 
 /**
  * 학교 Google Workspace 계정 차단 안내 (모바일 문구).
@@ -123,8 +145,14 @@ interface MobileDriveSyncState {
   lastSyncedAt: string | null;
   isAuthenticated: boolean;
   lastSyncResult: SyncResult | null;
+  /**
+   * F8c(RT1) — 다른 기기에서 학년도 마무리가 실행됐음을 감지한 1회 안내(새 학기 라벨).
+   * null이면 안내 없음. 닫으면 dismissYearTransitionNotice가 dedup 기록 후 소거.
+   */
+  yearTransitionNoticeTerm: string | null;
 
   setTokenGetter: (getter: () => Promise<string>) => void;
+  dismissYearTransitionNotice: () => void;
   syncToCloud: () => Promise<void>;
   syncFromCloud: () => Promise<void>;
   resolveConflict: (choice: 'local' | 'remote') => Promise<void>;
@@ -185,11 +213,24 @@ export const useMobileDriveSyncStore = create<MobileDriveSyncState>((set, get) =
   lastSyncedAt: null,
   isAuthenticated: false,
   lastSyncResult: null,
+  yearTransitionNoticeTerm: null,
 
   setTokenGetter: (getter) => {
     tokenGetter = getter;
     adapter = null;
     set({ isAuthenticated: true });
+  },
+
+  dismissYearTransitionNotice: () => {
+    const term = get().yearTransitionNoticeTerm;
+    if (term !== null) {
+      try {
+        localStorage.setItem(YEAR_TRANSITION_NOTICE_SEEN_KEY, term);
+      } catch {
+        /* localStorage 불가 시 이 세션만 소거(다음 세션 재노출 — 무해) */
+      }
+    }
+    set({ yearTransitionNoticeTerm: null });
   },
 
   syncToCloud: async () => {
@@ -266,6 +307,13 @@ export const useMobileDriveSyncStore = create<MobileDriveSyncState>((set, get) =
       if (!settingsState.loaded) await settingsState.load();
       const deviceId = getMobileDeviceId();
       const deviceName = settingsState.settings.teacherName || 'Mobile PWA';
+      // F8c(RT1) — 전환 감지 기준점: 다운로드 전 settings.currentTerm(읽기 실패=감지 스킵).
+      let termBeforeSync: string | undefined;
+      try {
+        termBeforeSync = (await storage.read<{ currentTerm?: string }>('settings'))?.currentTerm;
+      } catch {
+        termBeforeSync = undefined;
+      }
       const syncFrom = new SyncFromCloud(
         storage,
         getAdapter(),
@@ -283,6 +331,20 @@ export const useMobileDriveSyncStore = create<MobileDriveSyncState>((set, get) =
       const result = await syncFrom.execute(({ current, total }) => {
         set({ progress: Math.round((current / total) * 100) });
       });
+      // F8c(RT1) — 다운로드로 currentTerm이 전진했으면 1회 안내(localStorage dedup).
+      try {
+        const termAfterSync = (await storage.read<{ currentTerm?: string }>('settings'))
+          ?.currentTerm;
+        if (
+          isYearTransitionAdvance(termBeforeSync, termAfterSync) &&
+          termAfterSync !== undefined &&
+          localStorage.getItem(YEAR_TRANSITION_NOTICE_SEEN_KEY) !== termAfterSync
+        ) {
+          set({ yearTransitionNoticeTerm: termAfterSync });
+        }
+      } catch {
+        /* 감지 실패는 안내 생략일 뿐 — 동기화 자체에 영향 없음 */
+      }
       const now = new Date().toISOString();
       set({
         state: 'idle',
