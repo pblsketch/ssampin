@@ -1,5 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
+import { useToastStore } from '@adapters/components/common/Toast';
+import { isTeachingClassArchived } from '@domain/rules/teachingClassArchive';
+import { formatTermKo } from '@domain/rules/academicCalendar';
 import {
   getLastAttendanceSaveErrorAt,
   hasPendingAttendanceSave,
@@ -48,6 +51,9 @@ const TABS: readonly TabConfig[] = [
 export function ClassManagementPage() {
   const load = useTeachingClassStore((s) => s.load);
   const selectedClassId = useTeachingClassStore((s) => s.selectedClassId);
+  const classes = useTeachingClassStore((s) => s.classes);
+  const unarchiveClass = useTeachingClassStore((s) => s.unarchiveClass);
+  const showToast = useToastStore((s) => s.show);
   const [activeTab, setActiveTab] = useState<TabId>('roster');
   const [showAddModal, setShowAddModal] = useState(false);
   const [isClassPanelCollapsed, setIsClassPanelCollapsed] = useState(false);
@@ -60,6 +66,75 @@ export function ClassManagementPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  /* ── 보관된 반 읽기 전용 방어 (school-year-archive plan §4 S1.3 — 3중 방어의 1·3겹) ── */
+  const selectedClass = useMemo(
+    () => classes.find((c) => c.id === selectedClassId),
+    [classes, selectedClassId],
+  );
+  const isArchivedSelected = selectedClass !== undefined && isTeachingClassArchived(selectedClass);
+
+  /**
+   * 탭 콘텐츠 캡처 가드 — 보관된 반에서는 입력 컨트롤 조작을 원천 차단한다.
+   * 조회는 그대로: 렌더·스크롤·보기 전환(role="tablist")·data-archive-allow 영역은 통과.
+   * 저장 버튼 비활성만으로는 부족하다(자동저장·드래그 등 버튼 밖 입력 경로가 있다).
+   */
+  const blockInputIfArchived = useCallback(
+    (e: React.SyntheticEvent) => {
+      if (!isArchivedSelected) return;
+      const target = e.target;
+      if (!(target instanceof HTMLElement)) return;
+      if (target === e.currentTarget) return; // 스크롤바 등 컨테이너 자체 조작은 통과
+      if (target.closest('[role="tablist"], [data-archive-allow]')) return; // 보기 전환 = 조회
+      e.preventDefault();
+      e.stopPropagation();
+    },
+    [isArchivedSelected],
+  );
+
+  const blockKeyIfArchived = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (!isArchivedSelected) return;
+      const target = e.target;
+      if (!(target instanceof HTMLElement)) return;
+      if (target.closest('[role="tablist"], [data-archive-allow]')) return;
+      // 탐색·복사 키는 조회이므로 통과, 값 변경·활성화 키만 막는다
+      if (e.ctrlKey || e.metaKey) return;
+      const NAV_KEYS = new Set([
+        'Tab',
+        'Escape',
+        'Shift',
+        'Control',
+        'Alt',
+        'Meta',
+        'ArrowUp',
+        'ArrowDown',
+        'ArrowLeft',
+        'ArrowRight',
+        'Home',
+        'End',
+        'PageUp',
+        'PageDown',
+      ]);
+      if (NAV_KEYS.has(e.key)) return;
+      const isEditable = target.matches('input, textarea, select, [contenteditable="true"]');
+      const isActivation =
+        (e.key === 'Enter' || e.key === ' ') && target.matches('button, [role="button"], a');
+      if (isEditable || isActivation) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    },
+    [isArchivedSelected],
+  );
+
+  const handleUnarchiveSelected = useCallback(async () => {
+    if (!selectedClass) return;
+    await unarchiveClass(selectedClass.id);
+    showToast(
+      `'${selectedClass.name}(${selectedClass.subject})' 보관을 해제했어요 — 다시 기록할 수 있어요`,
+    );
+  }, [selectedClass, unarchiveClass, showToast]);
 
   const hasUnsafeLocalAttendanceSave = useCallback(() => {
     return hasPendingAttendanceSave() || getLastAttendanceSaveErrorAt() > 0;
@@ -163,6 +238,32 @@ export function ClassManagementPage() {
           <div className="flex-1 flex flex-col min-w-0">
             {selectedClassId ? (
               <>
+                {/* 보관됨 배지 — 읽기 전용 안내 + 즉시 해제 경로 */}
+                {isArchivedSelected && selectedClass && (
+                  <div className="mb-3 flex items-center gap-3 rounded-xl border border-sp-border bg-sp-surface px-4 py-2.5">
+                    <span className="material-symbols-outlined text-sp-muted">inventory_2</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-sp-semibold text-sp-text">
+                        보관됨
+                        {selectedClass.archivedTerm
+                          ? ` · ${formatTermKo(selectedClass.archivedTerm)}`
+                          : ''}
+                      </p>
+                      <p className="text-xs text-sp-muted">
+                        조회 전용이에요 — 출결·진도·기록은 그대로 볼 수 있고, 다시 기록하려면 보관을
+                        해제하세요.
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => void handleUnarchiveSelected()}
+                      className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-sp-semibold text-sp-accent bg-sp-card border border-sp-border hover:border-sp-accent transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-sm">unarchive</span>
+                      보관 해제
+                    </button>
+                  </div>
+                )}
+
                 {/* 탭 버튼 — 좁은 창에서 찌그러지지 않고 가로 스크롤 (반응형 패턴 A) */}
                 <ScrollRow className="gap-2 mb-4" role="tablist" aria-label="수업 관리 탭">
                   {TABS.map((tab) => (
@@ -183,8 +284,16 @@ export function ClassManagementPage() {
                   ))}
                 </ScrollRow>
 
-                {/* 탭 콘텐츠 */}
-                <div className="flex-1 overflow-y-auto">
+                {/* 탭 콘텐츠 — 보관된 반이면 캡처 가드로 입력을 차단한다(조회·스크롤·보기 전환은 통과) */}
+                <div
+                  className="flex-1 overflow-y-auto"
+                  data-archived-readonly={isArchivedSelected || undefined}
+                  onClickCapture={blockInputIfArchived}
+                  onPointerDownCapture={blockInputIfArchived}
+                  onMouseDownCapture={blockInputIfArchived}
+                  onDragStartCapture={blockInputIfArchived}
+                  onKeyDownCapture={blockKeyIfArchived}
+                >
                   {activeTab === 'roster' && <ClassRosterTab classId={selectedClassId} />}
                   {activeTab === 'record' && (
                     <ClassRecordTab

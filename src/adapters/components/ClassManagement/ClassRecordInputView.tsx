@@ -22,7 +22,9 @@ import { resolvePreset, resolveClassroomPreset } from '@domain/valueObjects/Subj
 import { ObservationForm } from './ObservationForm';
 import { ObservationCard } from './ObservationCard';
 import { ClassRecordStudentGrid } from './ClassRecordStudentGrid';
-import { createAttendanceSaveSequencer, markAttendanceMutation } from './shared/attendanceAutosave';
+import { markAttendanceMutation } from './shared/attendanceAutosave';
+import { createArchiveAwareAttendanceSequencer } from './shared/archiveAwareAutosave';
+import { isTeachingClassArchived } from '@domain/rules/teachingClassArchive';
 
 /* ── 유틸 ── */
 
@@ -97,9 +99,13 @@ export function ClassRecordInputView({
 
   const observationRecords = useObservationStore((s) => s.records);
   const loadObservations = useObservationStore((s) => s.load);
+  const cls = useMemo(() => classes.find((c) => c.id === classId), [classes, classId]);
+  // 보관된 반(또는 로드 전)은 출결 자동저장 시퀀서를 만들지 않는다 —
+  // 읽기 전용 3중 방어의 2겹(school-year-archive plan §4 S1.3 AC-4). 조회는 그대로.
+  const attendanceSaveBlocked = cls === undefined || isTeachingClassArchived(cls);
   const { enqueueSave } = useMemo(
-    () => createAttendanceSaveSequencer(saveAttendanceRecord),
-    [saveAttendanceRecord],
+    () => createArchiveAwareAttendanceSequencer(attendanceSaveBlocked, saveAttendanceRecord),
+    [attendanceSaveBlocked, saveAttendanceRecord],
   );
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -113,7 +119,6 @@ export function ClassRecordInputView({
     setStudentViewMode(initialStudentViewMode);
   }, [initialStudentViewMode]);
 
-  const cls = useMemo(() => classes.find((c) => c.id === classId), [classes, classId]);
   const students = useMemo(() => {
     if (!cls) return [];
     return [...cls.students].filter(isStudentActive).sort((a, b) => a.number - b.number);
