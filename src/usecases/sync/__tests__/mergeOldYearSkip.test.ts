@@ -220,6 +220,141 @@ describe('mergeStudentRecords — 옛 학년도 스킵', () => {
   });
 });
 
+describe('F9a — lastClosedTerm(마감 학기) 기준 스킵 · B2 재발 방지', () => {
+  test('B2 재현 방지(attendance): 2026-1 마감 후 미전환 기기의 2026-1은 스킵, 2026-2는 병합', () => {
+    const merged = mergeAttendance(
+      { records: [] },
+      {
+        records: [
+          att({ date: '2026-05-01', term: '2026-1' }), // 마감분 → 스킵
+          att({ date: '2026-09-01', period: 2, term: '2026-2' }), // 미마감 → 병합(담임 축 연속)
+        ],
+      },
+      true,
+      '2026-2', // currentTerm — 같은 학년도라 구 필터로는 무가드였다
+      '2026-1', // lastClosedTerm — F9a 정본 기준
+    );
+    expect(merged.records).toHaveLength(1);
+    expect(merged.records[0]?.term).toBe('2026-2');
+  });
+
+  test('B2 재현 방지(observations·student-records): 같은 규칙이 3도메인 전부에 적용된다', () => {
+    const obsMerged = mergeObservations(
+      { records: [] },
+      {
+        records: [
+          obs({ id: 'closed', term: '2026-1' }),
+          obs({ id: 'open', term: '2026-2' }),
+          obs({ id: 'legacy' }), // term 부재 → 병합(fail-open)
+        ],
+      },
+      true,
+      '2026-2',
+      '2026-1',
+    );
+    expect(obsMerged.records.map((r) => r.id).sort()).toEqual(['legacy', 'open']);
+
+    const recMerged = mergeStudentRecords(
+      { records: [] },
+      {
+        records: [
+          rec({ id: 'closed', term: '2026-1' }),
+          rec({ id: 'open', term: '2026-2' }),
+          rec({ id: 'legacy' }),
+        ],
+      },
+      '2026-2',
+      '2026-1',
+    );
+    expect(recMerged.records.map((r) => r.id).sort()).toEqual(['legacy', 'open']);
+  });
+
+  test('경계: 마감 학기와 동일한 term은 스킵(<=), 그 다음 학기는 병합', () => {
+    const skipSame = mergeAttendance(
+      { records: [] },
+      { records: [att({ term: '2026-1' })] },
+      true,
+      '2026-2',
+      '2026-1',
+    );
+    expect(skipSame.records).toHaveLength(0);
+
+    const keepNext = mergeAttendance(
+      { records: [] },
+      { records: [att({ term: '2026-2' })] },
+      true,
+      '2026-2',
+      '2026-1',
+    );
+    expect(keepNext.records).toHaveLength(1);
+  });
+
+  test('학년도 전환도 동일 규칙으로 커버된다(2026-2 마감 → 2026-1·2026-2 모두 스킵)', () => {
+    const merged = mergeAttendance(
+      { records: [] },
+      {
+        records: [
+          att({ date: '2026-05-01', term: '2026-1' }),
+          att({ date: '2026-10-01', period: 2, term: '2026-2' }),
+          att({ date: '2027-03-05', period: 3, term: '2027-1' }), // 새 학년도 → 병합
+        ],
+      },
+      true,
+      '2027-1',
+      '2026-2',
+    );
+    expect(merged.records).toHaveLength(1);
+    expect(merged.records[0]?.term).toBe('2027-1');
+  });
+
+  test('lastClosedTerm 부재 → 기존 학년도 비교 폴백(구버전 전환 이력 하위 호환)', () => {
+    const remote = {
+      records: [
+        att({ date: '2026-05-01', term: '2026-1' }),
+        att({ date: '2026-10-01', period: 2, term: '2026-2' }),
+      ],
+    };
+    // 폴백: currentTerm=2027-1이면 2026학년도 전부 스킵(구 동작 그대로)
+    expect(mergeAttendance({ records: [] }, remote, true, '2027-1').records).toHaveLength(0);
+    // 폴백: 같은 학년도(2026-2)면 스킵 없음 — 이것이 B2였고, lastClosedTerm이 있어야 막힌다
+    expect(mergeAttendance({ records: [] }, remote, true, '2026-2').records).toHaveLength(2);
+  });
+
+  test('lastClosedTerm 파싱 불가 → 폴백, 둘 다 없으면 필터 전체 비활성', () => {
+    const remote = { records: [att({ term: '2026-1' })] };
+    expect(
+      mergeAttendance({ records: [] }, remote, true, '2027-1', '이상한값').records,
+    ).toHaveLength(0); // 폴백(학년도 비교)
+    expect(mergeAttendance({ records: [] }, remote, true, undefined, undefined).records).toEqual(
+      mergeAttendance({ records: [] }, remote, true).records,
+    ); // 현행 병합 그대로
+  });
+
+  test('로컬 잔존 레코드는 마감 학기여도 건드리지 않는다(반쯤 전환은 오류 아님)', () => {
+    const localClosed = att({ term: '2026-1' });
+    const merged = mergeAttendance(
+      { records: [localClosed] },
+      { records: [] },
+      true,
+      '2026-2',
+      '2026-1',
+    );
+    expect(merged.records).toContain(localClosed);
+  });
+
+  test('툼스톤 판정은 마감 기준과 완전 분리(스킵 레코드는 툼스톤 대상 아님)', () => {
+    const local = {
+      records: [],
+      deleted: [{ key: 'tc-1||2026-06-01|1', deletedAt: '2026-07-01T00:00:00.000Z' }],
+    };
+    const remote = { records: [att({ term: '2026-1' })] };
+    const withFilter = mergeAttendance(local, remote, true, '2026-2', '2026-1');
+    const withoutFilter = mergeAttendance(local, remote, true);
+    expect(withFilter.records).toHaveLength(0);
+    expect(withFilter.deleted).toEqual(withoutFilter.deleted);
+  });
+});
+
 describe('통합 시나리오 — 전환 완료 후 옛 학년도 파일과 병합', () => {
   test('라이브 리셋(빈 파일) + currentTerm=2027-1 상태에서 2026학년도 리모트와 병합 → 유입 0건', () => {
     const currentTerm = '2027-1'; // ExecuteYearTransition 완료 상태(settings.currentTerm)
@@ -271,7 +406,7 @@ describe('통합 시나리오 — 전환 완료 후 옛 학년도 파일과 병�
     );
     expect(logSpy).toHaveBeenCalledWith(
       expect.stringContaining(
-        '[SyncFromCloud] attendance: 2건 skip (옛 학년도 term=2025-2,2026-1 < current=2027-1)',
+        '[SyncFromCloud] attendance: 2건 skip (옛 학년도 < 2027-1, term=2025-2,2026-1)',
       ),
     );
   });

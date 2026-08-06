@@ -25,7 +25,8 @@ import {
   type YearTransitionState,
 } from '@usecases/schoolYear/ExecuteYearTransition';
 import { academicTerm, formatTermKo } from '@domain/rules/academicCalendar';
-import { WIZARD_SEMESTER_BLOCK_MESSAGE, canRunYearEndWizard } from './wizardProgress';
+import { formatArchiveRoundKo } from '@domain/rules/archiveRules';
+import { isMidYearClosing } from './wizardProgress';
 import { SchoolYearWizardModal } from './SchoolYearWizardModal';
 import { invalidateArchivedTermNoticeCache } from './ArchivedTermNotice';
 import { ArchiveViewer } from '@adapters/components/Archive/ArchiveViewer';
@@ -33,7 +34,11 @@ import { ArchiveDeleteGate } from '@adapters/components/Archive/ArchiveDeleteGat
 import { invalidateArchiveFileCache } from '@adapters/components/Archive/useArchiveFile';
 
 interface ArchiveSummary {
+  /** 논리 학기('2026-1') — 표시용. */
   readonly term: string;
+  /** F10a — 디렉토리 이름(회차 포함). 열람·삭제·복원 IPC의 키. */
+  readonly archiveId: string;
+  readonly round: number;
   readonly label: string;
   readonly archivedAt: string;
   readonly appVersion: string;
@@ -71,6 +76,16 @@ export function SchoolYearArchiveTab() {
   const [reverting, setReverting] = useState(false);
   const [viewTerm, setViewTerm] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  /** F10b — 복원 대상의 표시 라벨(학기 + 회차). */
+  const revertTargetLabel = (() => {
+    if (revertTarget === null) return '';
+    const a = archives.find((x) => x.archiveId === revertTarget);
+    return a === undefined
+      ? formatTermKo(revertTarget)
+      : `${formatTermKo(a.term)}${formatArchiveRoundKo(a.round)}`;
+  })();
+  /** F10b — 복원이 덮어쓸 라이브 내용이 있는지(명렬·수업반 기준 — 읽기 전용 판정). */
+  const [liveHasContent, setLiveHasContent] = useState(false);
 
   const refresh = useCallback(async () => {
     setPending(await detectPendingTransition(storage));
@@ -91,6 +106,31 @@ export function SchoolYearArchiveTab() {
     void refresh();
   }, [refresh]);
 
+  // F10b — 복원 확인 모달을 열 때만 라이브 내용 유무를 조회한다(쓰기 없음).
+  useEffect(() => {
+    if (revertTarget === null) {
+      setLiveHasContent(false);
+      return;
+    }
+    let alive = true;
+    void (async () => {
+      try {
+        const [students, classes] = await Promise.all([
+          storage.read<unknown[]>('students'),
+          storage.read<{ classes?: unknown[] }>('teaching-classes'),
+        ]);
+        const has =
+          (Array.isArray(students) && students.length > 0) || (classes?.classes?.length ?? 0) > 0;
+        if (alive) setLiveHasContent(has);
+      } catch {
+        if (alive) setLiveHasContent(false); // 조회 실패 = 경고 생략(오탐보다 낫다)
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [revertTarget]);
+
   const openWizard = (resume: boolean) => {
     setWizardResume(resume);
     setWizardOpen(true);
@@ -102,8 +142,10 @@ export function SchoolYearArchiveTab() {
       storage,
       gateway,
       getCurrentTerm: async () => useSettingsStore.getState().settings.currentTerm,
-      setCurrentTerm: async (term) => {
-        await useSettingsStore.getState().update({ currentTerm: term });
+      getLastClosedTerm: async () => useSettingsStore.getState().settings.lastClosedTerm,
+      // F9a: 두 값은 반드시 같은 저장에서 함께 갱신한다(갈리면 스킵 필터 기준이 어긋난다).
+      setCurrentTerm: async (term, lastClosedTerm) => {
+        await useSettingsStore.getState().update({ currentTerm: term, lastClosedTerm });
       },
       // useDriveSync.reloadStores는 mutable string[]을 받는다 — readonly 계약에 맞춰 복사.
       reloadStores: (filenames) => reloadStores([...filenames]),
@@ -120,7 +162,7 @@ export function SchoolYearArchiveTab() {
         if (result.ok) {
           invalidateArchivedTermNoticeCache();
           showToast(
-            `${formatTermKo(term)} 보관 시점으로 되돌렸어요 (${result.restoredKeys.length}개 항목, 보관 사본은 유지)`,
+            `보관 시점으로 되돌렸어요 (${result.restoredKeys.length}개 항목, 보관 사본은 유지) — 다시 마무리하면 새 회차로 보관돼요`,
           );
         } else {
           showToast(result.error, 'error');
@@ -160,7 +202,7 @@ export function SchoolYearArchiveTab() {
                 <button
                   type="button"
                   onClick={() => openWizard(false)}
-                  disabled={pending !== null || !canRunYearEndWizard(closingTerm)}
+                  disabled={pending !== null}
                   className="mt-4 flex items-center gap-1.5 rounded-lg bg-sp-accent px-4 py-2.5 text-sm font-semibold text-sp-accent-fg transition-all hover:brightness-110 active:scale-95 disabled:opacity-40"
                 >
                   <span aria-hidden className="material-symbols-outlined text-icon-md">
@@ -168,10 +210,11 @@ export function SchoolYearArchiveTab() {
                   </span>
                   학년도 마무리 시작하기
                 </button>
-                {/* F2(B2): 마법사는 학년도 전환 전용 — 1학기 마감은 차단(부활 필터가 학년도 기준) */}
-                {!canRunYearEndWizard(closingTerm) && (
+                {/* F9c: 상시 실행 가능. 학년도 중간이면 마법사 실행 직전에 한 번 더 확인한다. */}
+                {isMidYearClosing(closingTerm) && (
                   <p className="mt-2 rounded-lg border border-sp-border bg-sp-surface px-3 py-2.5 text-xs leading-relaxed text-sp-muted">
-                    {WIZARD_SEMESTER_BLOCK_MESSAGE}
+                    지금은 학년도 중간이에요. 실행 전에 한 번 더 확인해 드려요. 1학기 수업반만
+                    정리하려면 수업 관리의 &lsquo;수업반 보관&rsquo;이 더 알맞아요.
                   </p>
                 )}
               </>
@@ -250,7 +293,7 @@ export function SchoolYearArchiveTab() {
         ) : (
           <ul className="space-y-2">
             {archives.map((a) => (
-              <li key={a.term} className="space-y-2">
+              <li key={a.archiveId} className="space-y-2">
                 <div className="flex items-center gap-3 rounded-xl border border-sp-border bg-sp-card px-4 py-3">
                   <span aria-hidden className="material-symbols-outlined text-sp-accent">
                     folder_zip
@@ -258,6 +301,7 @@ export function SchoolYearArchiveTab() {
                   <div className="min-w-0 flex-1">
                     <p className="flex items-center gap-2 text-sm font-semibold text-sp-text">
                       {formatTermKo(a.term)}
+                      {formatArchiveRoundKo(a.round)}
                       {!a.manifestOk && (
                         <span className="rounded bg-red-500/10 px-1.5 py-0.5 text-caption font-medium text-red-400">
                           검증 필요
@@ -271,19 +315,19 @@ export function SchoolYearArchiveTab() {
                   </div>
                   <button
                     type="button"
-                    onClick={() => setViewTerm((cur) => (cur === a.term ? null : a.term))}
+                    onClick={() => setViewTerm((cur) => (cur === a.archiveId ? null : a.archiveId))}
                     className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
-                      viewTerm === a.term
+                      viewTerm === a.archiveId
                         ? 'bg-sp-accent text-sp-accent-fg'
                         : 'border border-sp-border text-sp-muted hover:text-sp-text'
                     }`}
                   >
-                    {viewTerm === a.term ? '열람 닫기' : '열람'}
+                    {viewTerm === a.archiveId ? '열람 닫기' : '열람'}
                   </button>
                   {gateway && (
                     <button
                       type="button"
-                      onClick={() => setRevertTarget(a.term)}
+                      onClick={() => setRevertTarget(a.archiveId)}
                       disabled={reverting || pending !== null}
                       className="shrink-0 rounded-lg border border-sp-border px-3 py-1.5 text-xs font-medium text-sp-muted transition-colors hover:text-sp-text disabled:opacity-40"
                     >
@@ -293,9 +337,9 @@ export function SchoolYearArchiveTab() {
                   {/* 삭제는 되돌릴 수 없는 유일한 조작 — 다른 버튼과 거리·색을 분리(2단계 게이트로 진입) */}
                   <button
                     type="button"
-                    onClick={() => setDeleteTarget(a.term)}
+                    onClick={() => setDeleteTarget(a.archiveId)}
                     disabled={reverting || pending !== null}
-                    aria-label={`${formatTermKo(a.term)} 보관함 삭제`}
+                    aria-label={`${formatTermKo(a.term)}${formatArchiveRoundKo(a.round)} 보관함 삭제`}
                     className="ml-2 shrink-0 rounded-lg border-l border-sp-border p-1.5 text-sp-muted/60 transition-colors hover:text-red-400 disabled:opacity-40"
                   >
                     <span aria-hidden className="material-symbols-outlined text-icon-sm">
@@ -303,7 +347,8 @@ export function SchoolYearArchiveTab() {
                     </span>
                   </button>
                 </div>
-                {viewTerm === a.term && <ArchiveViewer term={a.term} />}
+                {/* ArchiveViewer의 term prop은 IPC 키 — 회차 디렉토리 이름을 그대로 넘긴다. */}
+                {viewTerm === a.archiveId && <ArchiveViewer term={a.archiveId} />}
               </li>
             ))}
           </ul>
@@ -313,6 +358,16 @@ export function SchoolYearArchiveTab() {
       {/* 보관함 영구 삭제 — 2단계 게이트 (S3.3) */}
       <ArchiveDeleteGate
         term={deleteTarget}
+        displayLabel={
+          deleteTarget === null
+            ? undefined
+            : (() => {
+                const a = archives.find((x) => x.archiveId === deleteTarget);
+                return a === undefined
+                  ? undefined
+                  : `${formatTermKo(a.term)}${formatArchiveRoundKo(a.round)}`;
+              })()
+        }
         onClose={() => setDeleteTarget(null)}
         onDeleted={(term) => {
           setDeleteTarget(null);
@@ -338,12 +393,23 @@ export function SchoolYearArchiveTab() {
       >
         <div className="p-6" data-modal-fallback tabIndex={-1}>
           <h3 className="text-lg font-bold text-sp-text">
-            {revertTarget !== null ? formatTermKo(revertTarget) : ''} 시점으로 되돌릴까요?
+            {revertTargetLabel} 시점으로 되돌릴까요?
           </h3>
           <p className="mt-2 text-sm leading-relaxed text-sp-muted">
-            보관 사본의 내용이 현재 화면(라이브 데이터)으로 복원돼요. 전환 이후에 새로 입력한 내용이
-            있다면 이 복원으로 덮어써져요. 보관 사본 자체는 그대로 유지돼요.
+            보관 사본의 내용이 현재 화면(라이브 데이터)으로 복원돼요. 보관 사본 자체는 그대로
+            유지돼요.
           </p>
+          {/* F10b — 복원 후 재마무리가 막다른 길이 아님을 알린다(F10a 회차 보관). */}
+          <p className="mt-1.5 text-xs leading-relaxed text-sp-muted">
+            복원 후 다시 마무리하면 새 회차로 보관돼요.
+          </p>
+          {/* F10b — 라이브에 새 입력이 있으면 덮어쓰기 경고 + 먼저 보관 안내 */}
+          {liveHasContent && (
+            <p className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2.5 text-xs leading-relaxed text-amber-400/90">
+              지금 입력한 내용은 이 복원으로 덮어써져요. 필요하면 먼저 지금 상태를 보관하세요 —
+              &lsquo;학년도 마무리 시작하기&rsquo;로 새 회차를 만든 뒤 복원하면 양쪽 다 남아요.
+            </p>
+          )}
           <div className="mt-5 flex justify-end gap-2">
             <button
               type="button"

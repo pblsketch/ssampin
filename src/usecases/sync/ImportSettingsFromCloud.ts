@@ -158,8 +158,8 @@ export class ImportSettingsFromCloud {
    *  - sync.enabled           ("가져오기"를 눌렀다는 건 이미 이 기기에서 Drive 연동 ON 상태)
    *  - widgetStyle.backgroundImage (로컬 file:// 경로 — 다른 PC엔 없으므로 로컬 값 보존, 로컬이 없으면 null)
    *  - customFont             (기기별 설치 폰트 또는 로컬 base64 데이터 — 로컬 값 유지)
-   *  - currentTerm            (F7e/RH1 — "더 최신 학기 승"(preserveNewerCurrentTerm). 미전환 기기의
-   *                            settings 가져오기가 옛 학년도 스킵 필터를 영구 비활성시키지 않게(qa3-C 계열))
+   *  - currentTerm·lastClosedTerm (F7e/RH1 + F9a — "더 최신 학기 승"(preserveNewerCurrentTerm).
+   *                            미전환 기기의 settings 가져오기가 스킵 필터를 영구 비활성시키지 않게(qa3-C 계열))
    *
    * 리모트 적용:
    *  - sync.autoSyncOnStart / autoSyncOnSave / autoSyncIntervalMin / conflictPolicy
@@ -197,7 +197,11 @@ export class ImportSettingsFromCloud {
 
     // F7e(RH1) — currentTerm은 "더 최신 학기 승": 미전환 기기가 올린 settings 가져오기가
     // 로컬의 더 최신 currentTerm을 벗기면 옛 학년도 스킵 필터(S2.2b)가 영구 비활성된다.
-    return preserveNewerCurrentTerm(result, safeLocal.currentTerm) as Settings;
+    return preserveNewerCurrentTerm(
+      result,
+      safeLocal.currentTerm,
+      safeLocal.lastClosedTerm,
+    ) as Settings;
   }
 
   private mergeSync(

@@ -1021,7 +1021,12 @@ interface BackupElectronAPI {
 
 /** 보관함 목록의 학기 1건 요약 (archive.list). manifestOk=false면 error에 사유. */
 interface ArchiveSummaryView {
+  /** 논리 학기('2026-1') — 표시·그룹핑용. */
   readonly term: string;
+  /** F10a — 디렉토리 이름(회차 포함, 예 '2026-1-2'). **열람·삭제·복원의 키.** */
+  readonly archiveId: string;
+  /** 재보관 회차(1부터). 2 이상이면 "N번째 보관"으로 표시한다. */
+  readonly round: number;
   readonly label: string;
   readonly archivedAt: string;
   readonly appVersion: string;
@@ -1048,7 +1053,16 @@ interface ArchiveElectronAPI {
     fileKeys: string[],
     opts?: { label?: string },
   ) => Promise<
-    | { ok: true; term: string; label: string; entryCount: number; totalBytes: number }
+    | {
+        ok: true;
+        term: string;
+        /** F10a — 실제 디렉토리 이름(회차 포함). 이후 열람·삭제·복원 키로 쓴다. */
+        archiveId: string;
+        round: number;
+        label: string;
+        entryCount: number;
+        totalBytes: number;
+      }
     | { ok: false; error: string }
   >;
   /** 보관함 목록 — 학기별 매니페스트 요약(최신 학기 먼저). */

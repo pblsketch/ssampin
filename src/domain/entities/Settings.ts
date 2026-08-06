@@ -419,6 +419,14 @@ export interface Settings {
    * 학년도는 schoolYearOf(currentTerm)로 파생한다.
    */
   readonly currentTerm?: string;
+  /**
+   * 마지막으로 **마감한**(학년도 마무리를 실행한) 학기 라벨('2026-1' 형식) — F9a.
+   * 동기화 병합의 스킵 기준 정본: 리모트 레코드의 term이 이 값 이하면 병합하지 않는다
+   * (사용자가 명시적으로 마감한 학기는 라이브에 없어야 한다 — 같은 학년도 학기 전환 부활 차단).
+   * 미설정(전환 미사용·구버전 이력)이면 학년도 비교로 폴백한다.
+   * currentTerm과 **항상 같은 저장에서 함께 갱신**되어야 한다(갈리면 가드가 어긋난다).
+   */
+  readonly lastClosedTerm?: string;
   /** 담임 누가기록 통합 입력(S4) 사용자 추가 태그 — DEFAULT_HOMEROOM_RECORD_TAGS 외 직접 추가분. */
   readonly homeroomRecordTags?: readonly string[];
   /**

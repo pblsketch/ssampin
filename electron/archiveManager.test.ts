@@ -149,11 +149,60 @@ describe('createArchive', () => {
     expectLiveUnchanged(before);
   });
 
-  test('같은 학기 재생성은 거부한다(아카이브 불변)', () => {
-    expect(createArchive(userData, APP_VERSION, '2026-1', ['students']).ok).toBe(true);
+  test('F10a: 같은 학기 재보관은 새 회차 디렉토리를 만든다(불변 유지·막다른 길 해소)', () => {
+    const first = createArchive(userData, APP_VERSION, '2026-1', ['students']);
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    expect(first.archiveId).toBe('2026-1');
+    expect(first.round).toBe(1);
+
+    // 라이브를 다시 채우고(복원 후 재마무리 시나리오) 2회차 보관
+    fs.writeFileSync(
+      path.join(userData, 'data', 'students.json'),
+      JSON.stringify([{ id: 's2' }], null, 2),
+      'utf-8',
+    );
     const second = createArchive(userData, APP_VERSION, '2026-1', ['students']);
-    expect(second.ok).toBe(false);
-    if (!second.ok) expect(second.error).toContain('이미');
+    expect(second.ok, JSON.stringify(second)).toBe(true);
+    if (!second.ok) return;
+    expect(second.archiveId).toBe('2026-1-2');
+    expect(second.round).toBe(2);
+
+    const third = createArchive(userData, APP_VERSION, '2026-1', ['students']);
+    expect(third.ok && third.archiveId).toBe('2026-1-3');
+
+    // 디렉토리 3개가 독립 존재하고, 1회차 사본은 덮이지 않았다(불변 계약)
+    const root = path.join(userData, 'data', 'archives');
+    expect(fs.readdirSync(root).sort()).toEqual(['2026-1', '2026-1-2', '2026-1-3']);
+    expect(fs.readFileSync(path.join(root, '2026-1', 'students.json'), 'utf-8')).toBe(
+      STUDENTS_JSON,
+    );
+
+    // 목록: 학기 내림차순 → 회차 내림차순(최신 보관이 위) + term/round 분리
+    const listed = listArchives(userData);
+    expect(listed.ok).toBe(true);
+    if (!listed.ok) return;
+    expect(listed.archives.map((a) => a.archiveId)).toEqual(['2026-1-3', '2026-1-2', '2026-1']);
+    expect(listed.archives.every((a) => a.term === '2026-1')).toBe(true);
+    expect(listed.archives.map((a) => a.round)).toEqual([3, 2, 1]);
+
+    // 각 회차가 독립적으로 열람/삭제된다
+    const read2 = readArchiveFile(userData, '2026-1-2', 'students.json');
+    expect(read2.ok && JSON.parse(read2.content)).toEqual([{ id: 's2' }]);
+    expect(deleteArchive(userData, '2026-1-2')).toEqual({ ok: true, existed: true });
+    expect(fs.existsSync(path.join(root, '2026-1'))).toBe(true);
+    expect(fs.existsSync(path.join(root, '2026-1-3'))).toBe(true);
+  });
+
+  test('F10a: 회차 매니페스트가 term(논리 학기)과 archiveId(디렉토리)를 분리 보관한다', () => {
+    expect(createArchive(userData, APP_VERSION, '2026-1', ['students']).ok).toBe(true);
+    expect(createArchive(userData, APP_VERSION, '2026-1', ['students']).ok).toBe(true);
+    const read = readArchiveFile(userData, '2026-1-2', ARCHIVE_MANIFEST_FILENAME);
+    expect(read.ok).toBe(true);
+    if (!read.ok) return;
+    const manifest = JSON.parse(read.content) as { term: string; archiveId?: string };
+    expect(manifest.term).toBe('2026-1');
+    expect(manifest.archiveId).toBe('2026-1-2');
   });
 });
 

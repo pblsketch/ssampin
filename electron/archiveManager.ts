@@ -50,6 +50,43 @@ export function isValidArchiveTerm(term: string): boolean {
   return isValidArchiveName(term);
 }
 
+/**
+ * F10a — 같은 학기 재보관 회차(도메인 정본 미러). 아카이브 불변을 유지한 채
+ * `2026-1` → `2026-1-2` → `2026-1-3` … 새 디렉토리를 만든다.
+ */
+const ARCHIVE_ID_RE = /^(\d{4}-[12])(?:-(\d+))?$/;
+
+export function buildArchiveId(term: string, round: number): string {
+  return round <= 1 ? term : `${term}-${round}`;
+}
+
+export function parseArchiveId(archiveId: string): { term: string; round: number } {
+  const match = ARCHIVE_ID_RE.exec(archiveId);
+  if (!match) return { term: archiveId, round: 1 };
+  const round = match[2] === undefined ? 1 : Number(match[2]);
+  return { term: match[1] as string, round: Number.isFinite(round) && round > 0 ? round : 1 };
+}
+
+export function formatArchiveRoundKo(round: number): string {
+  return round > 1 ? ` (${round}번째 보관)` : '';
+}
+
+export function compareArchiveIdsDesc(a: string, b: string): number {
+  const pa = parseArchiveId(a);
+  const pb = parseArchiveId(b);
+  if (pa.term !== pb.term) return pa.term < pb.term ? 1 : -1;
+  return pb.round - pa.round;
+}
+
+export function nextArchiveRound(term: string, existingIds: readonly string[]): number {
+  let max = 0;
+  for (const id of existingIds) {
+    const parsed = parseArchiveId(id);
+    if (parsed.term === term && parsed.round > max) max = parsed.round;
+  }
+  return max + 1;
+}
+
 export type ArchiveCreateKey =
   | { readonly kind: 'data'; readonly base: string; readonly relPath: string }
   | {
@@ -123,6 +160,8 @@ export interface ArchiveManifestEntry {
 export interface ArchiveManifest {
   readonly schemaVersion: number;
   readonly term: string;
+  /** F10a — 디렉토리 이름(회차 포함). 구 매니페스트에는 없다(부재 = term과 동일). */
+  readonly archiveId?: string;
   readonly label: string;
   readonly archivedAt: string;
   readonly appVersion: string;
@@ -132,6 +171,7 @@ export interface ArchiveManifest {
 
 export interface BuildArchiveManifestInput {
   readonly term: string;
+  readonly archiveId?: string;
   readonly label: string;
   readonly archivedAt: string;
   readonly appVersion: string;
@@ -142,6 +182,7 @@ export function buildArchiveManifest(input: BuildArchiveManifestInput): ArchiveM
   return {
     schemaVersion: ARCHIVE_SCHEMA_VERSION,
     term: input.term,
+    ...(input.archiveId !== undefined ? { archiveId: input.archiveId } : {}),
     label: input.label,
     archivedAt: input.archivedAt,
     appVersion: input.appVersion,
@@ -297,14 +338,24 @@ export interface ArchiveFailure {
 
 export interface ArchiveCreateSuccess {
   readonly ok: true;
+  /** 논리 학기('2026-1'). */
   readonly term: string;
+  /** F10a — 실제 디렉토리 이름(회차 포함, 예 '2026-1-2'). 열람·삭제·복원의 키. */
+  readonly archiveId: string;
+  /** 재보관 회차(1부터). */
+  readonly round: number;
   readonly label: string;
   readonly entryCount: number;
   readonly totalBytes: number;
 }
 
 export interface ArchiveSummary {
+  /** 논리 학기('2026-1') — 표시·그룹핑용. */
   readonly term: string;
+  /** F10a — 디렉토리 이름(회차 포함). **열람·삭제·복원은 이 값을 키로 쓴다.** */
+  readonly archiveId: string;
+  /** 재보관 회차(1부터). 표시는 formatArchiveRoundKo. */
+  readonly round: number;
   readonly label: string;
   readonly archivedAt: string;
   readonly appVersion: string;
@@ -398,12 +449,25 @@ export function createArchive(
       return fail(`허용되지 않은 학기 이름이에요: ${term}`);
     }
     const archivesRoot = getArchivesRoot(userDataPath);
-    const termDir = resolveUnder(archivesRoot, term);
+    // F10a — 같은 학기를 다시 마무리하면 **새 회차 디렉토리**를 만든다(덮어쓰기 금지 유지).
+    // 되돌리기 후 재마무리가 "이미 있어요"로 막히던 막다른 길(qa1-⑥)을 여는 유일한 변경점이다.
+    const existingIds = fs.existsSync(archivesRoot)
+      ? fs
+          .readdirSync(archivesRoot, { withFileTypes: true })
+          .filter((d) => d.isDirectory() && isValidArchiveTerm(d.name))
+          .map((d) => d.name)
+      : [];
+    const round = nextArchiveRound(term, existingIds);
+    const archiveId = buildArchiveId(term, round);
+    if (!isValidArchiveTerm(archiveId)) {
+      return fail(`허용되지 않은 보관 회차 이름이에요: ${archiveId}`);
+    }
+    const termDir = resolveUnder(archivesRoot, archiveId);
     if (termDir === null) {
-      return fail(`보관함 경계를 벗어난 학기 이름이에요: ${term}`);
+      return fail(`보관함 경계를 벗어난 학기 이름이에요: ${archiveId}`);
     }
     if (fs.existsSync(termDir)) {
-      return fail(`이미 같은 학기의 보관함이 있어요: ${term}`);
+      return fail(`이미 같은 이름의 보관함이 있어요: ${archiveId}`);
     }
 
     // 1) 키 전수 검증 — 하나라도 불량이면 아무것도 쓰지 않는다.
@@ -462,6 +526,7 @@ export function createArchive(
     // 3) 매니페스트 작성 → 원자적 완성(rename)
     const manifest = buildArchiveManifest({
       term,
+      archiveId,
       label: opts?.label ?? defaultArchiveLabel(term),
       archivedAt: new Date().toISOString(),
       appVersion,
@@ -480,6 +545,8 @@ export function createArchive(
     return {
       ok: true,
       term,
+      archiveId,
+      round,
       label: manifest.label,
       entryCount: entries.length,
       totalBytes: manifest.totalBytes,
@@ -505,8 +572,10 @@ export function listArchives(userDataPath: string): ArchiveListSuccess | Archive
     for (const dirent of dirents) {
       if (!dirent.isDirectory()) continue;
       if (!isValidArchiveTerm(dirent.name)) continue; // '.staging-*' 등은 목록에서 제외
-      const term = dirent.name;
-      const manifestPath = path.join(archivesRoot, term, ARCHIVE_MANIFEST_FILENAME);
+      // F10a — 디렉토리 이름이 archiveId(회차 포함), 논리 학기는 여기서 파생한다.
+      const archiveId = dirent.name;
+      const parsed = parseArchiveId(archiveId);
+      const manifestPath = path.join(archivesRoot, archiveId, ARCHIVE_MANIFEST_FILENAME);
       let summary: ArchiveSummary;
       try {
         const raw = fs.readFileSync(manifestPath, 'utf-8');
@@ -514,7 +583,10 @@ export function listArchives(userDataPath: string): ArchiveListSuccess | Archive
         if (validated.ok) {
           const m = validated.manifest;
           summary = {
-            term,
+            // 매니페스트의 term이 정본(디렉토리 파생은 폴백) — 레거시 이름도 그대로 보인다.
+            term: m.term,
+            archiveId,
+            round: parsed.round,
             label: m.label,
             archivedAt: m.archivedAt,
             appVersion: m.appVersion,
@@ -524,8 +596,10 @@ export function listArchives(userDataPath: string): ArchiveListSuccess | Archive
           };
         } else {
           summary = {
-            term,
-            label: term,
+            term: parsed.term,
+            archiveId,
+            round: parsed.round,
+            label: archiveId,
             archivedAt: '',
             appVersion: '',
             entryCount: 0,
@@ -536,8 +610,10 @@ export function listArchives(userDataPath: string): ArchiveListSuccess | Archive
         }
       } catch (err) {
         summary = {
-          term,
-          label: term,
+          term: parsed.term,
+          archiveId,
+          round: parsed.round,
+          label: archiveId,
           archivedAt: '',
           appVersion: '',
           entryCount: 0,
@@ -548,7 +624,8 @@ export function listArchives(userDataPath: string): ArchiveListSuccess | Archive
       }
       archives.push(summary);
     }
-    archives.sort((a, b) => (a.term < b.term ? 1 : a.term > b.term ? -1 : 0)); // 최신 학기 먼저
+    // 학기 내림차순 → 회차 내림차순(최신 보관이 위)
+    archives.sort((a, b) => compareArchiveIdsDesc(a.archiveId, b.archiveId));
     return { ok: true, archives };
   } catch (err) {
     return fail(`보관함 목록을 읽지 못했어요: ${errorMessage(err)}`);

@@ -8,8 +8,8 @@ import type { WizardProgress } from '../wizardProgress';
 import {
   WIZARD_PROGRESS_STORAGE_KEY,
   buildExecuteLabel,
-  canRunYearEndWizard,
   clearWizardProgress,
+  isMidYearClosing,
   loadWizardProgress,
   saveWizardProgress,
 } from '../wizardProgress';
@@ -101,28 +101,33 @@ describe('wizardProgress — 이어하기(AC-1)', () => {
 });
 
 describe('buildExecuteLabel — 실행 버튼 라벨(formatSchoolYearKo 동적)', () => {
-  test('학년도 전환은 학년도 단위로 말한다 (F2: 마법사는 학년도 전환 전용)', () => {
+  test('학년도 전환은 학년도 단위로 말한다', () => {
     expect(buildExecuteLabel('2026-2', '2027-1')).toBe('2026학년도를 보관하고 2027학년도 시작하기');
     expect(buildExecuteLabel('2030-2', '2031-1')).toBe('2030학년도를 보관하고 2031학년도 시작하기');
   });
 
+  test('F9c: 같은 학년도 학기 전환 라벨이 복원됐다', () => {
+    expect(buildExecuteLabel('2026-1', '2026-2')).toBe(
+      '2026학년도 1학기를 보관하고 2학기 시작하기',
+    );
+  });
+
   test('형식이 아니면 일반 라벨로 폴백한다', () => {
-    expect(buildExecuteLabel('없는형식', '2027-1')).toBe('보관하고 새 학년도 시작하기');
+    expect(buildExecuteLabel('없는형식', '2027-1')).toBe('보관하고 새 학기 시작하기');
   });
 });
 
-describe('canRunYearEndWizard — F2(B2): 학년도 전환 전용 게이트', () => {
-  test('2학기(학년도 말) 마감만 허용한다', () => {
-    expect(canRunYearEndWizard('2026-2')).toBe(true);
-    expect(canRunYearEndWizard('2030-2')).toBe(true);
+describe('isMidYearClosing — F9c: 학년도 중간(1학기) 마감 판정', () => {
+  test('1학기 마감이면 true (확인 팝업 대상)', () => {
+    expect(isMidYearClosing('2026-1')).toBe(true);
   });
 
-  test('1학기 마감(같은 학년도 학기 전환)은 차단한다 — 부활 필터가 학년도 기준(qa3-A)', () => {
-    expect(canRunYearEndWizard('2026-1')).toBe(false);
+  test('2학기(학년도 말) 마감이면 false — 팝업 없이 바로 실행', () => {
+    expect(isMidYearClosing('2026-2')).toBe(false);
   });
 
-  test('형식이 아니면 차단한다', () => {
-    expect(canRunYearEndWizard('없는형식')).toBe(false);
-    expect(canRunYearEndWizard('')).toBe(false);
+  test('형식이 아니면 false(중간 마감으로 단정하지 않는다)', () => {
+    expect(isMidYearClosing('없는형식')).toBe(false);
+    expect(isMidYearClosing('')).toBe(false);
   });
 });

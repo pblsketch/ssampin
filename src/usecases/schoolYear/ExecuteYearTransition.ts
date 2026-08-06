@@ -26,6 +26,7 @@ import type { ObservationData } from '@domain/entities/Observation';
 import type { SeatingData } from '@domain/entities/Seating';
 import type { StudentRecordsData } from '@domain/entities/StudentRecord';
 import { parseTerm } from '@domain/rules/academicCalendar';
+import { parseArchiveId } from '@domain/rules/archiveRules';
 import { withFileLock } from '@usecases/shared/fileWriteLock';
 
 /* ─── 전환 대상 파일 정의(계획 §4 S2.4 "아카이브 대상") ─────────────────── */
@@ -192,6 +193,10 @@ export interface YearTransitionState {
   readonly nextTerm: string;
   /** 전환 전 settings.currentTerm(원복 시 되돌릴 값 — 미설정이었으면 null). */
   readonly previousTerm: string | null;
+  /** 전환 전 settings.lastClosedTerm(F9a — 원복 시 currentTerm과 **반드시 함께** 되돌린다). */
+  readonly previousLastClosedTerm?: string | null;
+  /** F10a — 이번 전환이 만든 보관함 디렉토리(회차 포함). 재개 시 검증 대상 식별에 쓴다. */
+  readonly archiveId?: string;
   readonly startedAt: string;
   readonly safetyBackupPath: string;
   readonly phase: 'archiving' | 'resetting';
@@ -202,7 +207,16 @@ export interface YearTransitionState {
 /* ─── IPC 게이트웨이(주입 경계) ────────────────────────────── */
 
 type ArchiveCreateResult =
-  | { ok: true; term: string; label: string; entryCount: number; totalBytes: number }
+  | {
+      ok: true;
+      term: string;
+      /** F10a — 실제 디렉토리 이름(회차 포함). 검증·복원은 이 값을 키로 쓴다. */
+      archiveId?: string;
+      round?: number;
+      label: string;
+      entryCount: number;
+      totalBytes: number;
+    }
   | { ok: false; error: string };
 type ArchiveReadResult =
   | { ok: true; encoding: 'utf8' | 'base64'; content: string }
@@ -224,8 +238,17 @@ export interface YearTransitionDeps {
   readonly gateway: YearTransitionGateway;
   /** settings.currentTerm 읽기(전환 전 값 보존용). */
   readonly getCurrentTerm: () => Promise<string | undefined>;
-  /** settings.currentTerm 갱신(완료 시 nextTerm, 원복 시 previousTerm). */
-  readonly setCurrentTerm: (term: string | undefined) => Promise<void>;
+  /** settings.lastClosedTerm 읽기(F9a — 원복 대비 전환 전 값 보존용). 미주입 시 undefined 취급. */
+  readonly getLastClosedTerm?: () => Promise<string | undefined>;
+  /**
+   * settings.currentTerm·lastClosedTerm 갱신 — **반드시 한 번의 저장에서 함께**(F9a).
+   * 두 값이 갈리면 스킵 필터 기준과 표시 학기가 어긋난다.
+   * 완료 시 (nextTerm, closingTerm), 원복 시 (previousTerm, previousLastClosedTerm).
+   */
+  readonly setCurrentTerm: (
+    term: string | undefined,
+    lastClosedTerm: string | undefined,
+  ) => Promise<void>;
   /**
    * 조용한 스토어 리로드 — 기존 reloadStores(@adapters/hooks/useDriveSync) 재사용.
    * ⚠️ 구현은 절대 `setState({loaded:false})`를 쓰면 안 된다(함정 ⑦).
@@ -379,6 +402,12 @@ export interface ExecuteYearTransitionOptions {
   readonly nextTerm?: string;
   /** 아카이브 라벨(생략 시 archiveManager 기본 라벨). */
   readonly label?: string;
+  /**
+   * F9c — 학년도 중간(1학기) 마감 허용 플래그. UI가 확인 팝업을 띄우고 사용자가
+   * "그래도 마무리하기"를 고른 뒤에만 true로 넘긴다(무단 호출 경로의 중간 마감을 막는 이중화).
+   * pending 재개는 이 플래그 없이도 허용된다(중단분을 마무리할 길을 막지 않는다).
+   */
+  readonly allowMidYearClosing?: boolean;
 }
 
 export async function executeYearTransition(
@@ -421,17 +450,17 @@ export async function executeYearTransition(
   const resumeState = pending; // null이 아니면 같은 학기의 중단분(위에서 배제)
   const resume = resumeState !== null;
 
-  // F7g(RM2) — 유즈케이스 이중화: 학년도 마무리는 2학기(학년도 말) 마감만 실행한다.
-  // UI 가드(canRunYearEndWizard)와 별개로 어떤 호출 경로로도 1학기 마감 전환이 실행되지
-  // 않게 한다(같은 학년도 학기 전환은 옛 학년도 부활 필터가 원리적으로 못 막는다 — qa3-A).
-  // 단 같은 학기의 pending 재개는 예외 — 기존 중단분의 이어하기를 막으면 반쯤 전환 상태에 갇힌다.
-  if (parseTerm(closingTerm)?.semester !== 2 && !resume) {
+  // F9c(오너 결정) — 상시 실행 허용. 단 학년도 중간(1학기) 마감은 **명시 플래그**를 요구한다:
+  // UI가 확인 팝업을 띄운 뒤에만 allowMidYearClosing을 넘기므로, 팝업을 거치지 않은 호출
+  // 경로(스크립트·미래의 자동화)가 조용히 중간 마감을 실행하지 못한다.
+  // 부활 방지 자체는 F9a(lastClosedTerm 기준 스킵 필터)가 담당한다 — 구 F7g의 하드 차단은 철회.
+  // 같은 학기의 pending 재개는 예외 — 중단분의 이어하기를 막으면 반쯤 전환 상태에 갇힌다.
+  if (parseTerm(closingTerm)?.semester === 1 && !resume && options.allowMidYearClosing !== true) {
     return {
       ok: false,
       step: 'safety-backup',
       error:
-        '학년도 마무리는 2학기(학년도 말)에만 실행할 수 있어요. ' +
-        "학기 정리는 수업 관리의 '수업반 보관'을 사용해 주세요.",
+        '학년도 중간(1학기) 마무리는 확인이 필요해요. 마법사에서 안내를 읽고 다시 실행해 주세요.',
     };
   }
 
@@ -446,11 +475,17 @@ export async function executeYearTransition(
 
   const previousTerm =
     resumeState !== null ? resumeState.previousTerm : ((await deps.getCurrentTerm()) ?? null);
+  // F9a: 원복 시 currentTerm과 함께 되돌리기 위해 전환 전 lastClosedTerm도 보존한다.
+  const previousLastClosedTerm =
+    resumeState !== null
+      ? (resumeState.previousLastClosedTerm ?? null)
+      : ((await deps.getLastClosedTerm?.()) ?? null);
   const baseState: YearTransitionState = {
     version: 1,
     closingTerm,
     nextTerm,
     previousTerm,
+    previousLastClosedTerm,
     startedAt: resumeState !== null ? resumeState.startedAt : new Date().toISOString(),
     safetyBackupPath,
     phase: 'archiving',
@@ -470,8 +505,14 @@ export async function executeYearTransition(
       fileKeys,
       options.label ? { label: options.label } : undefined,
     );
+    // F10a — 검증·복원 대상은 실제로 만들어진 디렉토리(회차 포함). 구현이 archiveId를
+    // 주지 않으면(구 게이트웨이) 학기 라벨과 동일한 1회차로 본다.
+    let archiveId = resumeState?.archiveId ?? closingTerm;
     if (created.ok) {
       archivedEntryCount = created.entryCount;
+      archiveId = created.archiveId ?? closingTerm;
+      // 재개 시 같은 디렉토리를 검증·복원할 수 있도록 상태 파일에 남긴다(회차본 대응).
+      await storage.write(YEAR_TRANSITION_STATE_KEY, { ...baseState, archiveId });
     } else if (!resume) {
       log(`❌ 아카이브 생성 실패 — 라이브 무변경 중단: ${created.error}`);
       await storage.remove(YEAR_TRANSITION_STATE_KEY);
@@ -484,7 +525,7 @@ export async function executeYearTransition(
 
     // ③ 매니페스트 체크섬 재검증 — archive:read가 항목별 SHA-256 대조(불일치=ok:false).
     log('3/5 아카이브 체크섬 재검증');
-    const manifestRead = await gateway.archiveRead(closingTerm, 'manifest.json');
+    const manifestRead = await gateway.archiveRead(archiveId, 'manifest.json');
     if (!manifestRead.ok) {
       return {
         ok: false,
@@ -497,7 +538,7 @@ export async function executeYearTransition(
       entries: readonly { path: string }[];
     };
     for (const entry of manifest.entries) {
-      const read = await gateway.archiveRead(closingTerm, entry.path);
+      const read = await gateway.archiveRead(archiveId, entry.path);
       if (!read.ok) {
         log(`❌ 체크섬 재검증 실패: ${entry.path}`);
         return {
@@ -560,8 +601,11 @@ export async function executeYearTransition(
     }
 
     // ⑥ 마무리 — currentTerm 갱신 + 상태 파일 정리 + 조용한 리로드(loaded:false 금지).
-    log(`5/5 마무리 — currentTerm=${nextTerm}, 스토어 조용한 리로드`);
-    await deps.setCurrentTerm(nextTerm);
+    log(
+      `5/5 마무리 — currentTerm=${nextTerm}, lastClosedTerm=${closingTerm}, 스토어 조용한 리로드`,
+    );
+    // F9a: 마감 학기를 같은 저장에 함께 기록 — 이 값이 병합 스킵 필터의 기준이 된다.
+    await deps.setCurrentTerm(nextTerm, closingTerm);
     await storage.remove(YEAR_TRANSITION_STATE_KEY);
     await deps.reloadStores(YEAR_TRANSITION_FILES.map((f) => f.key));
     log(`✅ 전환 완료: ${closingTerm} 보관 → ${nextTerm} 시작`);
@@ -592,6 +636,7 @@ export async function executeYearTransition(
  */
 export async function revertYearTransition(
   deps: YearTransitionDeps,
+  /** F10a — 보관함 디렉토리 이름(회차 포함, 예 '2026-1-2'). 학기 라벨이면 1회차. */
   closingTerm: string,
 ): Promise<RevertResult> {
   const { storage, gateway } = deps;
@@ -636,10 +681,19 @@ export async function revertYearTransition(
     // currentTerm 원복 — 중단분(상태 파일)이 남아 있으면 전환 전 값으로, 완료된 전환의
     // 원복(상태 파일 없음)이면 되돌린 데이터의 학기(closingTerm)로 맞춘다.
     const pending = await readState(storage);
-    if (pending && pending.closingTerm === closingTerm) {
-      await deps.setCurrentTerm(pending.previousTerm ?? undefined);
+    // F10a — 중단분 매칭은 archiveId 우선(회차본), 없으면 학기 라벨.
+    if (pending && (pending.archiveId ?? pending.closingTerm) === closingTerm) {
+      // 중단분 원복 — 전환 전 두 값을 함께 되돌린다(F9a: 갈리면 가드가 어긋난다).
+      await deps.setCurrentTerm(
+        pending.previousTerm ?? undefined,
+        pending.previousLastClosedTerm ?? undefined,
+      );
     } else {
-      await deps.setCurrentTerm(closingTerm);
+      // 완료된 전환의 원복(상태 파일 없음) — 되돌린 데이터의 학기로 표시 축을 맞추고,
+      // lastClosedTerm은 **해제**한다(F9a): 방금 라이브로 되살린 학기를 "마감됨"으로 두면
+      // 그 학기의 리모트 레코드가 계속 스킵돼 복원 결과가 기기 간에 어긋난다.
+      // 회차 디렉토리를 되돌린 경우 표시 학기는 논리 학기다('2026-1-2' → '2026-1').
+      await deps.setCurrentTerm(parseArchiveId(closingTerm).term, undefined);
     }
     await storage.remove(YEAR_TRANSITION_STATE_KEY);
     // F1(B1): 원복으로 파일이 되살아났으니 remove 마커도 정리 — 이후 치유 다운로드는 정상 동작.

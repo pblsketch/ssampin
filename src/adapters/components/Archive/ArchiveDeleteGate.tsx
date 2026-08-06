@@ -17,8 +17,10 @@ import { formatTermKo } from '@domain/rules/academicCalendar';
 import { deleteConfirmPhrase, isDeleteConfirmed } from './archiveViewerData';
 
 interface ArchiveDeleteGateProps {
-  /** 삭제 대상 학기 라벨('2026-1'). null이면 닫힘. */
+  /** 삭제 대상 보관함 id(회차 포함, 예 '2026-1-2'). null이면 닫힘. IPC 키로 그대로 쓴다. */
   term: string | null;
+  /** F10a — 사람에게 보이는 이름(예 '2026학년도 1학기 (2번째 보관)'). 생략 시 term에서 파생. */
+  displayLabel?: string;
   onClose: () => void;
   /** 삭제 성공 후 목록 갱신용. */
   onDeleted: (term: string) => void;
@@ -28,6 +30,7 @@ interface ArchiveDeleteGateProps {
 
 export function ArchiveDeleteGate({
   term,
+  displayLabel,
   onClose,
   onDeleted,
   onOpenBackup,
@@ -36,7 +39,7 @@ export function ArchiveDeleteGate({
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const termLabel = term !== null ? formatTermKo(term) : '';
+  const termLabel = displayLabel ?? (term !== null ? formatTermKo(term) : '');
   const phrase = deleteConfirmPhrase(termLabel);
   const confirmed = isDeleteConfirmed(input, termLabel);
 

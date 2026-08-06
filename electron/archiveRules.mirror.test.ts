@@ -98,6 +98,29 @@ describe('archiveRules ↔ archiveManager 미러 동치', () => {
     }
   });
 
+  test('F10a 회차 함수 동치 (buildArchiveId·parseArchiveId·formatArchiveRoundKo·compare·nextRound)', () => {
+    const ids = ['2026-1', '2026-1-2', '2026-1-10', '2026-2', '2027-1-3', 'legacy', '2026-1-0'];
+    for (const id of ids) {
+      expect(mirror.parseArchiveId(id), id).toEqual(domain.parseArchiveId(id));
+    }
+    for (const term of ['2026-1', '2026-2', 'legacy']) {
+      for (const round of [1, 2, 7]) {
+        expect(mirror.buildArchiveId(term, round)).toBe(domain.buildArchiveId(term, round));
+      }
+      expect(mirror.nextArchiveRound(term, ids)).toBe(domain.nextArchiveRound(term, ids));
+    }
+    for (const round of [1, 2, 5]) {
+      expect(mirror.formatArchiveRoundKo(round)).toBe(domain.formatArchiveRoundKo(round));
+    }
+    for (const a of ids) {
+      for (const b of ids) {
+        expect(Math.sign(mirror.compareArchiveIdsDesc(a, b)), `${a} vs ${b}`).toBe(
+          Math.sign(domain.compareArchiveIdsDesc(a, b)),
+        );
+      }
+    }
+  });
+
   test('countArchiveRecords 동치', () => {
     for (const parsed of PARSED_CORPUS) {
       expect(mirror.countArchiveRecords(parsed), JSON.stringify(parsed) ?? 'undefined').toBe(

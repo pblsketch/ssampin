@@ -211,9 +211,12 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
         sync.conflictPolicy,
         getDynamicSyncFiles,
         getBinaryDynamicSyncFiles,
-        // S2.2b — 옛 학년도 스킵 기준(settings.currentTerm). 실행 시점 fresh 조회.
+        // S2.2b·F9a — 스킵 기준(lastClosedTerm 정본 + currentTerm 폴백). 실행 시점 fresh 조회.
         // 지연 재시도(pull-merge-push)도 이 액션을 재호출하므로 업/다운 병합이 같은 기준을 쓴다.
-        async () => useSettingsStore.getState().settings.currentTerm,
+        async () => {
+          const s = useSettingsStore.getState().settings;
+          return { currentTerm: s.currentTerm, lastClosedTerm: s.lastClosedTerm };
+        },
         archiveEnabled ? archiveSync.listLocalArchiveTerms : undefined,
         archiveEnabled ? archiveSync.importArchiveTermFiles : undefined,
       );
@@ -366,14 +369,15 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
             // F3(H1): settings 통파일 교체는 충돌 해소 경로에서도 currentTerm "더 최신 학기 승" —
             // 미전환 기기의 settings 채택이 옛 학년도 스킵 필터를 영구 비활성시키지 않게(qa3-C).
             const { preserveNewerCurrentTerm } = await import('@usecases/sync/SyncFromCloud');
-            let localCurrentTerm: string | undefined;
+            let local: { currentTerm?: string; lastClosedTerm?: string } | null = null;
             try {
-              localCurrentTerm = (await storage.read<{ currentTerm?: string }>('settings'))
-                ?.currentTerm;
+              local = await storage.read<{ currentTerm?: string; lastClosedTerm?: string }>(
+                'settings',
+              );
             } catch {
-              localCurrentTerm = undefined;
+              local = null;
             }
-            parsed = preserveNewerCurrentTerm(parsed, localCurrentTerm);
+            parsed = preserveNewerCurrentTerm(parsed, local?.currentTerm, local?.lastClosedTerm);
           }
           await storage.write(conflict.filename, parsed);
         }

@@ -67,6 +67,11 @@ function StudentsView({ term, query }: { term: string; query: string }) {
     return (
       <>
         {/* 학생 승계(S4.3) — 담임 명렬이 비어 있을 때만 나타나는 opt-in 버튼 */}
+        {/* F10c — 전체 되돌리기 없이 명렬만 복원하는 경로가 있음을 알린다(기존 기능의 발견성). */}
+        <p className="text-xs leading-relaxed text-sp-muted">
+          전체를 되돌리지 않고 <span className="text-sp-text">명렬만</span> 지금 학년도로 가져올
+          수도 있어요(담임 명렬이 비어 있을 때).
+        </p>
         <ArchiveRosterCarryover term={term} data={data} />
         <EmptyRow message="보관된 명렬이 없어요" />
       </>

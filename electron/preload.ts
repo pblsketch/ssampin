@@ -1466,7 +1466,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
       fileKeys: string[],
       opts?: { label?: string },
     ): Promise<
-      | { ok: true; term: string; label: string; entryCount: number; totalBytes: number }
+      | {
+          ok: true;
+          term: string;
+          archiveId: string;
+          round: number;
+          label: string;
+          entryCount: number;
+          totalBytes: number;
+        }
       | { ok: false; error: string }
     > => ipcRenderer.invoke('archive:create', term, fileKeys, opts),
     /** 보관함 목록 — 학기별 매니페스트 요약(손상 시 manifestOk:false + 사유). */

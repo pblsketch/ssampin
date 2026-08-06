@@ -114,35 +114,56 @@ function mergeTrackedGroups(base: StudentRecord, other: StudentRecord): StudentR
   return Object.keys(map).length > 0 ? { ...result, fieldUpdatedAt: map } : result;
 }
 
-/**
- * S2.2b — 옛 "학년도" 리모트 레코드 스킵 (계획 §4 S2.2 AC-2 계열, ADR-034 epoch 가드).
- *
- * 판정은 학기(term)가 아니라 **학년도(schoolYearOf)** 비교다 — 담임 축은 학년도를 관통하므로
- * 같은 학년도의 1·2학기는 정상 병합된다(2026-1 레코드는 currentTerm=2026-2에서도 병합).
- *
- * fail-open 규칙(자기 격리 금지 — 계획 §4 S2.2 미정의 케이스 ③):
- *  - record.term 부재(구버전 레코드) → 현행 병합
- *  - currentTerm 부재·파싱 불가(전환 미사용·구버전 설정) → 필터 전체 비활성
- *
+/*
+ * ── 리모트 레코드 스킵 필터 (S2.2b → F9a로 기준 교체) ─────────────────────
  * 로컬 레코드는 판정하지 않는다 — 잔존 옛 레코드 보존(레코드 스탬프 설계의 핵심:
  * 반쯤 전환 상태는 오류가 아니다). 툼스톤 로직과 완전 분리(0줄 수정) — 스킵된 레코드는
  * map에 들어가지 않으므로 툼스톤 판정 대상도 아니다(옛 레코드의 삭제 전파는 그대로 동작).
  */
-function filterOldYearRemoteRecords<T extends { readonly term?: string }>(
+
+/** 학기 라벨의 시간 순서값('2026-1' → 20261). 형식이 아니면 null. */
+function termOrder(term: string | undefined): number | null {
+  if (term === undefined) return null;
+  const parsed = parseTerm(term);
+  return parsed === null ? null : parsed.year * 10 + parsed.semester;
+}
+
+/**
+ * F9a — **마감한 학기(lastClosedTerm) 기준** 리모트 레코드 스킵.
+ *
+ * 원칙은 여전히 "담임 축은 학년도를 관통한다"이지만, 사용자가 그 학기를 **명시적으로 마감**
+ * (학년도 마무리 실행)했다면 그 학기 이하의 기록은 라이브에 없어야 한다 — 마감으로 비운
+ * 라이브에 미전환 기기의 사본이 되돌아오면 그게 곧 부활이다(QA-A B2: 같은 학년도 학기
+ * 전환에서 학년도 비교 필터가 무가드였던 결함).
+ *  - `lastClosedTerm` 있음 → `record.term <= lastClosedTerm`이면 스킵.
+ *    **마감하지 않은 학기는 그대로 병합**한다(담임 축 연속 — 2026-1 마감 시 2026-2는 병합).
+ *  - `lastClosedTerm` 없음(구버전 전환 이력·전환 미사용) → 기존 학년도 비교로 폴백.
+ *  - record.term 부재·파싱 불가 → 병합(추측 금지·fail-open, S2.2b 규칙 유지).
+ */
+function filterClosedTermRemoteRecords<T extends { readonly term?: string }>(
   filename: string,
   records: readonly T[],
   currentTerm: string | undefined,
+  lastClosedTerm: string | undefined,
 ): readonly T[] {
-  if (currentTerm === undefined) return records;
-  const currentYear = schoolYearOf(currentTerm);
-  if (currentYear === null) return records;
+  const closedOrder = termOrder(lastClosedTerm);
+  const currentYear = currentTerm === undefined ? null : schoolYearOf(currentTerm);
+  // 두 기준 모두 없으면 필터 비활성(현행 병합 그대로).
+  if (closedOrder === null && currentYear === null) return records;
 
   const kept: T[] = [];
   const skippedTerms = new Set<string>();
   let skipped = 0;
   for (const r of records) {
-    const year = r.term === undefined ? null : schoolYearOf(r.term);
-    if (year !== null && year < currentYear) {
+    const shouldSkip =
+      closedOrder !== null
+        ? // 마감 학기 기준(정본): 마감분 이하만 스킵
+          (termOrder(r.term) ?? Number.POSITIVE_INFINITY) <= closedOrder
+        : // 폴백: 옛 학년도만 스킵(lastClosedTerm 없는 구버전 전환 이력)
+          r.term !== undefined &&
+          schoolYearOf(r.term) !== null &&
+          (schoolYearOf(r.term) as number) < (currentYear as number);
+    if (shouldSkip) {
       skipped++;
       if (r.term !== undefined) skippedTerms.add(r.term);
       continue;
@@ -150,8 +171,10 @@ function filterOldYearRemoteRecords<T extends { readonly term?: string }>(
     kept.push(r);
   }
   if (skipped > 0) {
+    const basis =
+      closedOrder !== null ? `마감 학기 <= ${lastClosedTerm}` : `옛 학년도 < ${currentTerm}`;
     console.log(
-      `[SyncFromCloud] ${filename}: ${skipped}건 skip (옛 학년도 term=${[...skippedTerms].sort().join(',')} < current=${currentTerm})`,
+      `[SyncFromCloud] ${filename}: ${skipped}건 skip (${basis}, term=${[...skippedTerms].sort().join(',')})`,
     );
   }
   return kept;
@@ -189,24 +212,36 @@ function hasSubstantiveContent(data: unknown): boolean {
 export function preserveNewerCurrentTerm(
   incoming: unknown,
   localCurrentTerm: string | undefined,
+  localLastClosedTerm?: string,
 ): unknown {
-  if (localCurrentTerm === undefined) return incoming;
-  const localParsed = parseTerm(localCurrentTerm);
-  if (localParsed === null) return incoming;
   if (incoming === null || typeof incoming !== 'object' || Array.isArray(incoming)) {
     return incoming; // settings 형태가 아니면 건드리지 않는다(방어)
   }
-  const obj = incoming as Record<string, unknown>;
-  const incomingTerm = typeof obj['currentTerm'] === 'string' ? obj['currentTerm'] : undefined;
-  const incomingParsed = incomingTerm === undefined ? null : parseTerm(incomingTerm);
-  const localOrder = localParsed.year * 10 + localParsed.semester;
-  const incomingOrder =
-    incomingParsed === null ? -1 : incomingParsed.year * 10 + incomingParsed.semester;
-  if (incomingOrder >= localOrder) return incoming; // 수신이 더 최신·동일 → 수신 채택
-  console.log(
-    `[SyncFromCloud]   settings: currentTerm 보존 (수신=${incomingTerm ?? '없음'} < 로컬=${localCurrentTerm})`,
-  );
-  return { ...obj, currentTerm: localCurrentTerm };
+  let result = incoming as Record<string, unknown>;
+  let changed = false;
+  // F9a: currentTerm(표시 축)과 lastClosedTerm(스킵 필터 기준) 둘 다 같은 규칙으로 보존한다.
+  // lastClosedTerm이 벗겨지면 학기 전환의 부활 가드(B2)가 통째로 무력해진다.
+  const fields: readonly [key: string, localValue: string | undefined][] = [
+    ['currentTerm', localCurrentTerm],
+    ['lastClosedTerm', localLastClosedTerm],
+  ];
+  for (const [key, localValue] of fields) {
+    if (localValue === undefined) continue;
+    const localParsed = parseTerm(localValue);
+    if (localParsed === null) continue;
+    const incomingValue = typeof result[key] === 'string' ? (result[key] as string) : undefined;
+    const incomingParsed = incomingValue === undefined ? null : parseTerm(incomingValue);
+    const localOrder = localParsed.year * 10 + localParsed.semester;
+    const incomingOrder =
+      incomingParsed === null ? -1 : incomingParsed.year * 10 + incomingParsed.semester;
+    if (incomingOrder >= localOrder) continue; // 수신이 더 최신·동일 → 수신 채택
+    console.log(
+      `[SyncFromCloud]   settings: ${key} 보존 (수신=${incomingValue ?? '없음'} < 로컬=${localValue})`,
+    );
+    result = { ...result, [key]: localValue };
+    changed = true;
+  }
+  return changed ? result : incoming;
 }
 
 /**
@@ -247,12 +282,14 @@ export function mergeStudentRecords(
   local: StudentRecordsData | null,
   remote: StudentRecordsData,
   currentTerm?: string,
+  lastClosedTerm?: string,
 ): StudentRecordsData {
   const localRecords = local?.records ?? [];
-  const remoteRecords = filterOldYearRemoteRecords(
+  const remoteRecords = filterClosedTermRemoteRecords(
     'student-records',
     remote.records ?? [],
     currentTerm,
+    lastClosedTerm,
   );
   const map = new Map<string, StudentRecord>();
 
@@ -375,12 +412,18 @@ export function mergeObservations(
   remote: ObservationData,
   preferRemote: boolean,
   currentTerm?: string,
+  lastClosedTerm?: string,
 ): ObservationData {
   const map = new Map<string, ObservationRecord>();
   for (const r of local?.records ?? []) {
     map.set(r.id, r);
   }
-  for (const r of filterOldYearRemoteRecords('observations', remote.records ?? [], currentTerm)) {
+  for (const r of filterClosedTermRemoteRecords(
+    'observations',
+    remote.records ?? [],
+    currentTerm,
+    lastClosedTerm,
+  )) {
     const existing = map.get(r.id);
     if (!existing) {
       map.set(r.id, r);
@@ -453,12 +496,18 @@ export function mergeAttendance(
   remote: AttendanceData,
   preferRemote: boolean,
   currentTerm?: string,
+  lastClosedTerm?: string,
 ): AttendanceData {
   const map = new Map<string, AttendanceRecord>();
   for (const r of local?.records ?? []) {
     map.set(attendanceRecordKey(r), r);
   }
-  for (const r of filterOldYearRemoteRecords('attendance', remote.records ?? [], currentTerm)) {
+  for (const r of filterClosedTermRemoteRecords(
+    'attendance',
+    remote.records ?? [],
+    currentTerm,
+    lastClosedTerm,
+  )) {
     const key = attendanceRecordKey(r);
     const existing = map.get(key);
     if (!existing) {
@@ -532,10 +581,14 @@ export class SyncFromCloud {
     private readonly getDynamicSyncFiles?: GetDynamicSyncFiles,
     private readonly getBinaryDynamicSyncFiles?: GetBinaryDynamicSyncFiles,
     /**
-     * S2.2b — settings.currentTerm 지연 조회(전역 import 금지, 호출부 주입).
-     * 미주입·부재·읽기 실패 = 옛 학년도 스킵 필터 비활성(현행 병합 그대로, fail-open).
+     * S2.2b·F9a — 스킵 필터 기준 지연 조회(전역 import 금지, 호출부 주입).
+     * `lastClosedTerm`(마감 학기)이 정본, `currentTerm`은 구버전 이력용 폴백 기준.
+     * 미주입·부재·읽기 실패 = 필터 비활성(현행 병합 그대로, fail-open).
      */
-    private readonly getCurrentTerm?: () => Promise<string | undefined>,
+    private readonly getTermGuard?: () => Promise<{
+      currentTerm?: string;
+      lastClosedTerm?: string;
+    }>,
     /** (S4.1) 아카이브 훅 2종 — 둘 다 주입될 때만 아카이브 다운로드가 켜진다(데스크톱 전용). */
     private readonly listLocalArchiveTerms?: ListLocalArchiveTerms,
     private readonly importArchiveTerm?: ImportArchiveTermFiles,
@@ -548,14 +601,15 @@ export class SyncFromCloud {
   private async writeReplacedFile(filename: string, parsed: unknown): Promise<void> {
     let data = parsed;
     if (filename === 'settings') {
-      let localCurrentTerm: string | undefined;
+      let local: { currentTerm?: string; lastClosedTerm?: string } | null = null;
       try {
-        localCurrentTerm = (await this.storage.read<{ currentTerm?: string }>('settings'))
-          ?.currentTerm;
+        local = await this.storage.read<{ currentTerm?: string; lastClosedTerm?: string }>(
+          'settings',
+        );
       } catch {
-        localCurrentTerm = undefined;
+        local = null;
       }
-      data = preserveNewerCurrentTerm(parsed, localCurrentTerm);
+      data = preserveNewerCurrentTerm(parsed, local?.currentTerm, local?.lastClosedTerm);
     }
     await this.storage.write(filename, data);
   }
@@ -564,13 +618,18 @@ export class SyncFromCloud {
     console.log(
       `[SyncFromCloud] ▶ 시작 | myDeviceId=${this.deviceId} | policy=${this.conflictPolicy}`,
     );
-    // S2.2b — 옛 학년도 스킵 기준. 실행 시점에 1회 읽어 다운로드·병합 전체에 같은 값 적용.
+    // S2.2b·F9a — 스킵 기준. 실행 시점에 1회 읽어 다운로드·병합 전체에 같은 값 적용.
     let currentTerm: string | undefined;
-    if (this.getCurrentTerm) {
+    let lastClosedTerm: string | undefined;
+    if (this.getTermGuard) {
       try {
-        currentTerm = await this.getCurrentTerm();
+        const guard = await this.getTermGuard();
+        currentTerm = guard.currentTerm;
+        lastClosedTerm = guard.lastClosedTerm;
       } catch {
-        currentTerm = undefined; // 읽기 실패 = 필터 비활성(fail-open — 자기 격리 금지)
+        // 읽기 실패 = 필터 비활성(fail-open — 자기 격리 금지)
+        currentTerm = undefined;
+        lastClosedTerm = undefined;
       }
     }
 
@@ -731,7 +790,7 @@ export class SyncFromCloud {
             const content = await this.drivePort.downloadSyncFile(driveFile.id);
             const remoteData = JSON.parse(content) as StudentRecordsData;
             await mergeAndWriteLocked(this.storage, filename, remoteData, (local) =>
-              mergeStudentRecords(local, remoteData, currentTerm),
+              mergeStudentRecords(local, remoteData, currentTerm, lastClosedTerm),
             );
             updatedFiles[filename] = remoteInfo;
             downloaded.push(filename);
@@ -747,7 +806,7 @@ export class SyncFromCloud {
             const content = await this.drivePort.downloadSyncFile(driveFile.id);
             const remoteData = JSON.parse(content) as AttendanceData;
             await mergeAndWriteLocked(this.storage, filename, remoteData, (local) =>
-              mergeAttendance(local, remoteData, remoteIsNewer, currentTerm),
+              mergeAttendance(local, remoteData, remoteIsNewer, currentTerm, lastClosedTerm),
             );
             updatedFiles[filename] = remoteInfo;
             downloaded.push(filename);
@@ -763,7 +822,7 @@ export class SyncFromCloud {
             const content = await this.drivePort.downloadSyncFile(driveFile.id);
             const remoteData = JSON.parse(content) as ObservationData;
             await mergeAndWriteLocked(this.storage, filename, remoteData, (local) =>
-              mergeObservations(local, remoteData, remoteIsNewer, currentTerm),
+              mergeObservations(local, remoteData, remoteIsNewer, currentTerm, lastClosedTerm),
             );
             updatedFiles[filename] = remoteInfo;
             downloaded.push(filename);
@@ -861,7 +920,7 @@ export class SyncFromCloud {
             this.storage,
             filename,
             remoteData,
-            (local) => mergeStudentRecords(local, remoteData, currentTerm),
+            (local) => mergeStudentRecords(local, remoteData, currentTerm, lastClosedTerm),
             ' (first download)',
           );
         } else if (filename === 'attendance') {
@@ -871,7 +930,7 @@ export class SyncFromCloud {
             this.storage,
             filename,
             remoteData,
-            (local) => mergeAttendance(local, remoteData, true, currentTerm),
+            (local) => mergeAttendance(local, remoteData, true, currentTerm, lastClosedTerm),
             ' (first download)',
           );
         } else if (filename === 'observations') {
@@ -881,7 +940,7 @@ export class SyncFromCloud {
             this.storage,
             filename,
             remoteData,
-            (local) => mergeObservations(local, remoteData, true, currentTerm),
+            (local) => mergeObservations(local, remoteData, true, currentTerm, lastClosedTerm),
             ' (first download)',
           );
         } else {

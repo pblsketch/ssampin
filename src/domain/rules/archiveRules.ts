@@ -46,9 +46,50 @@ export function isValidArchiveName(name: string): boolean {
   return VALID_ARCHIVE_NAME_RE.test(name);
 }
 
-/** 학기 디렉토리 이름(예: '2026-1') 검증 — 세그먼트 규칙과 동일. */
+/** 학기 디렉토리 이름(예: '2026-1', 회차본 '2026-1-2') 검증 — 세그먼트 규칙과 동일. */
 export function isValidArchiveTerm(term: string): boolean {
   return isValidArchiveName(term);
+}
+
+/**
+ * F10a — 같은 학기 **재보관 회차**. 아카이브 불변(덮어쓰기 금지)은 Drive 동기화 안전의
+ * 핵심이라 유지하고, 같은 학기를 다시 마무리하면 **새 디렉토리**를 만든다:
+ * `2026-1` → `2026-1-2` → `2026-1-3` … (되돌리기 후 재마무리가 막다른 길이 되지 않게).
+ *
+ * archiveId = 디렉토리 이름(회차 포함), term = 논리 학기('2026-1').
+ */
+const ARCHIVE_ID_RE = /^(\d{4}-[12])(?:-(\d+))?$/;
+
+/** 회차 번호로 디렉토리 이름 생성. round<=1이면 학기 라벨 그대로. */
+export function buildArchiveId(term: string, round: number): string {
+  return round <= 1 ? term : `${term}-${round}`;
+}
+
+/**
+ * 디렉토리 이름을 논리 학기·회차로 분해. 표준 학기 라벨('YYYY-S')이 아닌 레거시 이름은
+ * 그 자체를 term으로 보고 회차 1로 취급한다(추측 금지).
+ */
+export function parseArchiveId(archiveId: string): { term: string; round: number } {
+  const match = ARCHIVE_ID_RE.exec(archiveId);
+  if (!match) return { term: archiveId, round: 1 };
+  const round = match[2] === undefined ? 1 : Number(match[2]);
+  return { term: match[1] as string, round: Number.isFinite(round) && round > 0 ? round : 1 };
+}
+
+/** 회차 표시 접미사 — 1회차는 표기하지 않는다(예: ' (2번째 보관)'). */
+export function formatArchiveRoundKo(round: number): string {
+  return round > 1 ? ` (${round}번째 보관)` : '';
+}
+
+/**
+ * 보관함 정렬 비교자 — 학기 내림차순 → 회차 내림차순(최신 보관이 위).
+ * 표준 라벨이 아닌 레거시 id는 문자열 역순으로 뒤에 붙는다.
+ */
+export function compareArchiveIdsDesc(a: string, b: string): number {
+  const pa = parseArchiveId(a);
+  const pb = parseArchiveId(b);
+  if (pa.term !== pb.term) return pa.term < pb.term ? 1 : -1;
+  return pb.round - pa.round;
 }
 
 /** archive:create 입력 키 분류 결과. relPath는 학기 디렉토리 기준 저장 상대 경로. */
@@ -144,7 +185,13 @@ export interface ArchiveManifestEntry {
 /** 아카이브 매니페스트 — 라벨·시각·앱 버전·파일별 건수·체크섬(계획 S2.1). */
 export interface ArchiveManifest {
   readonly schemaVersion: number;
+  /** 논리 학기 라벨('2026-1'). 회차와 무관하게 이 학기의 기록임을 뜻한다. */
   readonly term: string;
+  /**
+   * F10a — 디렉토리 이름(= 회차 포함, 예 '2026-1-2'). 구 매니페스트에는 없다(부재 = term과 동일).
+   * 목록·열람·삭제·복원은 모두 이 값을 키로 쓰고, 표시만 term+회차로 조합한다.
+   */
+  readonly archiveId?: string;
   readonly label: string;
   /** ISO 8601 보관 시각. */
   readonly archivedAt: string;
@@ -155,10 +202,22 @@ export interface ArchiveManifest {
 
 export interface BuildArchiveManifestInput {
   readonly term: string;
+  /** F10a — 디렉토리 이름(회차 포함). 생략 시 term과 동일(1회차). */
+  readonly archiveId?: string;
   readonly label: string;
   readonly archivedAt: string;
   readonly appVersion: string;
   readonly entries: readonly ArchiveManifestEntry[];
+}
+
+/** 기존 디렉토리 목록에서 이 학기의 다음 회차 번호를 고른다(빈 회차를 메우지 않고 max+1). */
+export function nextArchiveRound(term: string, existingIds: readonly string[]): number {
+  let max = 0;
+  for (const id of existingIds) {
+    const parsed = parseArchiveId(id);
+    if (parsed.term === term && parsed.round > max) max = parsed.round;
+  }
+  return max + 1;
 }
 
 /** 매니페스트 생성 — totalBytes는 entries에서 파생한다. */
@@ -166,6 +225,7 @@ export function buildArchiveManifest(input: BuildArchiveManifestInput): ArchiveM
   return {
     schemaVersion: ARCHIVE_SCHEMA_VERSION,
     term: input.term,
+    ...(input.archiveId !== undefined ? { archiveId: input.archiveId } : {}),
     label: input.label,
     archivedAt: input.archivedAt,
     appVersion: input.appVersion,

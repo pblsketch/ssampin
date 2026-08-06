@@ -43,6 +43,7 @@ import { Step4Confirm } from './Step4Confirm';
 import {
   buildExecuteLabel,
   clearWizardProgress,
+  isMidYearClosing,
   loadWizardProgress,
   saveWizardProgress,
   type WizardProfileDraft,
@@ -132,6 +133,8 @@ export function SchoolYearWizardModal({
   /** 구조 승계(S4.3) 결과 — opt-in을 켰을 때만 채워진다. */
   const [carryover, setCarryover] = useState<ClassCarryoverResult | null>(null);
   const [devicesConfirmed, setDevicesConfirmed] = useState(false);
+  /** F9c — 학년도 중간(1학기) 마감 확인 팝업. 실행 흐름 앞단에서 1회. */
+  const [midYearConfirmOpen, setMidYearConfirmOpen] = useState(false);
   const initializedRef = useRef(false);
 
   // 열릴 때 1회: 저장된 진행 복원(이어하기 진입이면 ④ 고정) — AC-1.
@@ -233,9 +236,11 @@ export function SchoolYearWizardModal({
       storage: trackedStorage,
       gateway: trackedGateway,
       getCurrentTerm: async () => useSettingsStore.getState().settings.currentTerm,
-      setCurrentTerm: async (term) => {
+      getLastClosedTerm: async () => useSettingsStore.getState().settings.lastClosedTerm,
+      // F9a: currentTerm·lastClosedTerm은 한 번의 저장에서 함께 갱신(가드 기준 정합).
+      setCurrentTerm: async (term, lastClosedTerm) => {
         bumpRunStep(5);
-        await useSettingsStore.getState().update({ currentTerm: term });
+        await useSettingsStore.getState().update({ currentTerm: term, lastClosedTerm });
       },
       // useDriveSync.reloadStores는 mutable string[]을 받는다 — readonly 계약에 맞춰 복사.
       reloadStores: (filenames) => reloadStores([...filenames]),
@@ -243,6 +248,7 @@ export function SchoolYearWizardModal({
   }, [gateway, bumpRunStep]);
 
   const runTransition = useCallback(async () => {
+    setMidYearConfirmOpen(false);
     setPhase('running');
     setFailure(null);
     setRunStep(0);
@@ -261,6 +267,8 @@ export function SchoolYearWizardModal({
     const result = await executeYearTransition(buildDeps(), {
       closingTerm,
       label: `${formatTermKo(closingTerm)} 마무리`,
+      // F9c: 중간 마감은 확인 팝업을 거친 뒤에만 실행된다(유즈케이스 가드와 이중화).
+      ...(isMidYearClosing(closingTerm) ? { allowMidYearClosing: true } : {}),
     });
 
     if (result.ok) {
@@ -304,250 +312,326 @@ export function SchoolYearWizardModal({
   };
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={handleClose}
-      title="학년도 마무리 마법사"
-      srOnlyTitle
-      size="lg"
-      closeOnBackdrop={false}
-      closeOnEsc={phase !== 'running'}
-    >
-      <div className="flex max-h-[min(720px,calc(100vh-96px))] flex-col">
-        {/* 헤더 + 단계 표시 */}
-        <div className="border-b border-sp-border px-6 pb-4 pt-5">
-          <div className="flex items-center justify-between">
-            <h2 className="text-base font-bold text-sp-text">학년도 마무리</h2>
-            <button
-              type="button"
-              onClick={handleClose}
-              disabled={phase === 'running'}
-              aria-label="닫기"
-              className="rounded-lg p-1 text-sp-muted transition-colors hover:bg-sp-surface hover:text-sp-text disabled:opacity-40"
-            >
-              <span aria-hidden className="material-symbols-outlined text-icon-md">
-                close
-              </span>
-            </button>
-          </div>
-          {phase === 'form' && (
-            <ol className="mt-3 flex items-center gap-1.5">
-              {([1, 2, 3, 4] as const).map((s) => (
-                <li key={s} className="flex flex-1 items-center gap-1.5">
-                  <span
-                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-caption font-bold ${
-                      s === step
-                        ? 'bg-sp-accent text-sp-accent-fg'
-                        : s < step
-                          ? 'bg-sp-surface text-sp-accent'
-                          : 'bg-sp-surface text-sp-muted'
-                    }`}
-                  >
-                    {s < step ? (
-                      <span aria-hidden className="material-symbols-outlined text-sm">
-                        check
-                      </span>
-                    ) : (
-                      s
-                    )}
-                  </span>
-                  <span
-                    className={`truncate text-caption ${s === step ? 'font-bold text-sp-text' : 'text-sp-muted'}`}
-                  >
-                    {stepTitles[s]}
-                  </span>
-                  {s < 4 && <span className="h-px flex-1 bg-sp-border" />}
-                </li>
-              ))}
-            </ol>
-          )}
-        </div>
-
-        {/* 본문 */}
-        <div className="flex-1 overflow-y-auto px-6 py-5" data-modal-fallback tabIndex={-1}>
-          {phase === 'form' && step === 1 && <Step1Intro closingTerm={closingTerm} />}
-          {phase === 'form' && step === 2 && <Step2Scope counts={counts} />}
-          {phase === 'form' && step === 3 && (
-            <Step3Profile profile={profile} onChange={setProfile} />
-          )}
-          {phase === 'form' && step === 4 && (
-            <Step4Confirm
-              closingTerm={closingTerm}
-              nextTerm={nextTerm}
-              profile={profile}
-              counts={counts}
-              syncEnabled={syncEnabled}
-              devicesConfirmed={devicesConfirmed}
-              onDevicesConfirmedChange={setDevicesConfirmed}
-              resuming={resumePending}
-            />
-          )}
-
-          {phase === 'running' && (
-            <div className="space-y-4 py-4">
-              <h3 className="text-lg font-bold text-sp-text">전환을 진행하고 있어요…</h3>
-              <ol className="space-y-2">
-                {RUN_STEP_LABELS.map((label, i) => {
-                  const n = i + 1;
-                  const state = runStep > n ? 'done' : runStep === n ? 'active' : 'waiting';
-                  return (
-                    <li key={label} className="flex items-center gap-3">
-                      {state === 'done' ? (
-                        <span
-                          aria-hidden
-                          className="material-symbols-outlined text-icon-md text-emerald-400"
-                        >
-                          check_circle
-                        </span>
-                      ) : state === 'active' ? (
-                        <span
-                          aria-hidden
-                          className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-sp-accent border-t-transparent"
-                        />
-                      ) : (
-                        <span
-                          aria-hidden
-                          className="material-symbols-outlined text-icon-md text-sp-muted"
-                        >
-                          circle
-                        </span>
-                      )}
-                      <span
-                        className={`text-sm ${state === 'waiting' ? 'text-sp-muted' : 'text-sp-text'}`}
-                      >
-                        {n}/5 {label}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ol>
-              <p className="text-xs text-sp-muted">
-                창을 닫지 말고 잠시만 기다려 주세요. 문제가 생기면 어떤 단계에서 멈췄는지와 함께
-                안내해 드려요.
-              </p>
-            </div>
-          )}
-
-          {phase === 'failed' && failure && (
-            <div className="space-y-4 py-4">
-              <div className="flex items-start gap-3">
-                <span aria-hidden className="material-symbols-outlined text-3xl text-red-400">
-                  error
+    <>
+      <Modal
+        isOpen={isOpen}
+        onClose={handleClose}
+        title="학년도 마무리 마법사"
+        srOnlyTitle
+        size="lg"
+        closeOnBackdrop={false}
+        closeOnEsc={phase !== 'running'}
+      >
+        <div className="flex max-h-[min(720px,calc(100vh-96px))] flex-col">
+          {/* 헤더 + 단계 표시 */}
+          <div className="border-b border-sp-border px-6 pb-4 pt-5">
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-bold text-sp-text">학년도 마무리</h2>
+              <button
+                type="button"
+                onClick={handleClose}
+                disabled={phase === 'running'}
+                aria-label="닫기"
+                className="rounded-lg p-1 text-sp-muted transition-colors hover:bg-sp-surface hover:text-sp-text disabled:opacity-40"
+              >
+                <span aria-hidden className="material-symbols-outlined text-icon-md">
+                  close
                 </span>
-                <div>
-                  <h3 className="text-lg font-bold text-sp-text">전환을 진행하지 못했어요</h3>
-                  <p className="mt-1 text-sm leading-relaxed text-sp-muted">{failure.error}</p>
+              </button>
+            </div>
+            {phase === 'form' && (
+              <ol className="mt-3 flex items-center gap-1.5">
+                {([1, 2, 3, 4] as const).map((s) => (
+                  <li key={s} className="flex flex-1 items-center gap-1.5">
+                    <span
+                      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-caption font-bold ${
+                        s === step
+                          ? 'bg-sp-accent text-sp-accent-fg'
+                          : s < step
+                            ? 'bg-sp-surface text-sp-accent'
+                            : 'bg-sp-surface text-sp-muted'
+                      }`}
+                    >
+                      {s < step ? (
+                        <span aria-hidden className="material-symbols-outlined text-sm">
+                          check
+                        </span>
+                      ) : (
+                        s
+                      )}
+                    </span>
+                    <span
+                      className={`truncate text-caption ${s === step ? 'font-bold text-sp-text' : 'text-sp-muted'}`}
+                    >
+                      {stepTitles[s]}
+                    </span>
+                    {s < 4 && <span className="h-px flex-1 bg-sp-border" />}
+                  </li>
+                ))}
+              </ol>
+            )}
+          </div>
+
+          {/* 본문 */}
+          <div className="flex-1 overflow-y-auto px-6 py-5" data-modal-fallback tabIndex={-1}>
+            {phase === 'form' && step === 1 && <Step1Intro closingTerm={closingTerm} />}
+            {phase === 'form' && step === 2 && <Step2Scope counts={counts} />}
+            {phase === 'form' && step === 3 && (
+              <Step3Profile profile={profile} onChange={setProfile} />
+            )}
+            {phase === 'form' && step === 4 && (
+              <Step4Confirm
+                closingTerm={closingTerm}
+                nextTerm={nextTerm}
+                profile={profile}
+                counts={counts}
+                syncEnabled={syncEnabled}
+                devicesConfirmed={devicesConfirmed}
+                onDevicesConfirmedChange={setDevicesConfirmed}
+                resuming={resumePending}
+              />
+            )}
+
+            {phase === 'running' && (
+              <div className="space-y-4 py-4">
+                <h3 className="text-lg font-bold text-sp-text">전환을 진행하고 있어요…</h3>
+                <ol className="space-y-2">
+                  {RUN_STEP_LABELS.map((label, i) => {
+                    const n = i + 1;
+                    const state = runStep > n ? 'done' : runStep === n ? 'active' : 'waiting';
+                    return (
+                      <li key={label} className="flex items-center gap-3">
+                        {state === 'done' ? (
+                          <span
+                            aria-hidden
+                            className="material-symbols-outlined text-icon-md text-emerald-400"
+                          >
+                            check_circle
+                          </span>
+                        ) : state === 'active' ? (
+                          <span
+                            aria-hidden
+                            className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-sp-accent border-t-transparent"
+                          />
+                        ) : (
+                          <span
+                            aria-hidden
+                            className="material-symbols-outlined text-icon-md text-sp-muted"
+                          >
+                            circle
+                          </span>
+                        )}
+                        <span
+                          className={`text-sm ${state === 'waiting' ? 'text-sp-muted' : 'text-sp-text'}`}
+                        >
+                          {n}/5 {label}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ol>
+                <p className="text-xs text-sp-muted">
+                  창을 닫지 말고 잠시만 기다려 주세요. 문제가 생기면 어떤 단계에서 멈췄는지와 함께
+                  안내해 드려요.
+                </p>
+              </div>
+            )}
+
+            {phase === 'failed' && failure && (
+              <div className="space-y-4 py-4">
+                <div className="flex items-start gap-3">
+                  <span aria-hidden className="material-symbols-outlined text-3xl text-red-400">
+                    error
+                  </span>
+                  <div>
+                    <h3 className="text-lg font-bold text-sp-text">전환을 진행하지 못했어요</h3>
+                    <p className="mt-1 text-sm leading-relaxed text-sp-muted">{failure.error}</p>
+                  </div>
+                </div>
+                <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4">
+                  <p className="text-sm font-bold text-sp-text">데이터는 그대로 있어요</p>
+                  <p className="mt-1 text-xs leading-relaxed text-sp-muted">
+                    전환은 보관 사본이 완성된 뒤에만 라이브 데이터를 정리하도록 설계돼 있어요.
+                    실패한 지점까지의 기록은 모두 그대로 남아 있어요.
+                  </p>
+                  {failure.safetyBackupPath && (
+                    <p className="mt-2 break-all text-xs text-sp-muted">
+                      안전 백업 위치:{' '}
+                      <span className="text-sp-text">{failure.safetyBackupPath}</span>
+                    </p>
+                  )}
                 </div>
               </div>
-              <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4">
-                <p className="text-sm font-bold text-sp-text">데이터는 그대로 있어요</p>
-                <p className="mt-1 text-xs leading-relaxed text-sp-muted">
-                  전환은 보관 사본이 완성된 뒤에만 라이브 데이터를 정리하도록 설계돼 있어요. 실패한
-                  지점까지의 기록은 모두 그대로 남아 있어요.
-                </p>
-                {failure.safetyBackupPath && (
-                  <p className="mt-2 break-all text-xs text-sp-muted">
-                    안전 백업 위치: <span className="text-sp-text">{failure.safetyBackupPath}</span>
-                  </p>
-                )}
-              </div>
-            </div>
-          )}
+            )}
 
-          {phase === 'done' && doneResult && (
-            <div className="space-y-4 py-6 text-center">
-              <span
-                aria-hidden
-                className="material-symbols-outlined mx-auto text-5xl text-emerald-400"
-              >
-                task_alt
-              </span>
-              <div>
-                <h3 className="text-xl font-bold text-sp-text">
-                  {formatTermKo(doneResult.closingTerm)}를 보관했어요
-                </h3>
-                <p className="mt-2 text-sm leading-relaxed text-sp-muted">
-                  {formatTermKo(doneResult.nextTerm)}를 깨끗한 상태로 시작해요. 보관된 기록{' '}
-                  {doneResult.archivedEntryCount}개 항목은 이 설정 탭의 보관함에서 확인할 수 있고,
-                  마음이 바뀌면 <strong className="text-sp-text">전환 취소</strong>로 언제든 되돌릴
-                  수 있어요.
+            {phase === 'done' && doneResult && (
+              <div className="space-y-4 py-6 text-center">
+                <span
+                  aria-hidden
+                  className="material-symbols-outlined mx-auto text-5xl text-emerald-400"
+                >
+                  task_alt
+                </span>
+                <div>
+                  <h3 className="text-xl font-bold text-sp-text">
+                    {formatTermKo(doneResult.closingTerm)}를 보관했어요
+                  </h3>
+                  <p className="mt-2 text-sm leading-relaxed text-sp-muted">
+                    {formatTermKo(doneResult.nextTerm)}를 깨끗한 상태로 시작해요. 보관된 기록{' '}
+                    {doneResult.archivedEntryCount}개 항목은 이 설정 탭의 보관함에서 확인할 수 있고,
+                    마음이 바뀌면 <strong className="text-sp-text">전환 취소</strong>로 언제든
+                    되돌릴 수 있어요.
+                  </p>
+                </div>
+                {carryover !== null &&
+                  (carryover.ok ? (
+                    <p className="mx-auto flex max-w-md items-center justify-center gap-1.5 rounded-lg border border-sp-border bg-sp-surface px-3 py-2 text-xs text-sp-text">
+                      <span aria-hidden className="material-symbols-outlined text-icon-sm">
+                        content_copy
+                      </span>
+                      {carryover.createdCount > 0
+                        ? `지난 학기 수업반 틀 ${carryover.createdCount}개를 새 수업반으로 만들었어요 (학생 명렬은 비어 있어요)`
+                        : '지난 학기에 가져올 수업반 틀이 없었어요'}
+                    </p>
+                  ) : (
+                    <p className="mx-auto max-w-md rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs leading-relaxed text-sp-muted">
+                      수업반 틀 가져오기는 완료하지 못했어요 — {carryover.error} 수업반은 수업
+                      관리에서 직접 만들 수 있어요.
+                    </p>
+                  ))}
+                <p className="break-all text-xs text-sp-muted">
+                  안전 백업 위치:{' '}
+                  <span className="text-sp-text">{doneResult.safetyBackupPath}</span>
                 </p>
               </div>
-              {carryover !== null &&
-                (carryover.ok ? (
-                  <p className="mx-auto flex max-w-md items-center justify-center gap-1.5 rounded-lg border border-sp-border bg-sp-surface px-3 py-2 text-xs text-sp-text">
-                    <span aria-hidden className="material-symbols-outlined text-icon-sm">
-                      content_copy
+            )}
+          </div>
+
+          {/* 푸터 */}
+          <div className="flex items-center justify-between gap-3 border-t border-sp-border px-6 py-4">
+            {phase === 'form' ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => (step > 1 ? setStep((step - 1) as WizardStep) : handleClose())}
+                  className="rounded-lg border border-sp-border px-4 py-2 text-sm text-sp-muted transition-colors hover:text-sp-text"
+                >
+                  {step > 1 ? '이전' : '닫기'}
+                </button>
+                {step < 4 ? (
+                  <button
+                    type="button"
+                    onClick={() => setStep((step + 1) as WizardStep)}
+                    className="flex items-center gap-1.5 rounded-lg bg-sp-accent px-5 py-2 text-sm font-semibold text-sp-accent-fg transition-all hover:brightness-110 active:scale-95"
+                  >
+                    다음
+                    <span aria-hidden className="material-symbols-outlined text-icon-md">
+                      arrow_forward
                     </span>
-                    {carryover.createdCount > 0
-                      ? `지난 학기 수업반 틀 ${carryover.createdCount}개를 새 수업반으로 만들었어요 (학생 명렬은 비어 있어요)`
-                      : '지난 학기에 가져올 수업반 틀이 없었어요'}
-                  </p>
+                  </button>
                 ) : (
-                  <p className="mx-auto max-w-md rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs leading-relaxed text-sp-muted">
-                    수업반 틀 가져오기는 완료하지 못했어요 — {carryover.error} 수업반은 수업
-                    관리에서 직접 만들 수 있어요.
-                  </p>
-                ))}
-              <p className="break-all text-xs text-sp-muted">
-                안전 백업 위치: <span className="text-sp-text">{doneResult.safetyBackupPath}</span>
-              </p>
-            </div>
-          )}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      // F9c: 학년도 중간 마감이면 실행 전에 한 번 더 확인 팝업을 띄운다.
+                      isMidYearClosing(closingTerm)
+                        ? setMidYearConfirmOpen(true)
+                        : void runTransition()
+                    }
+                    disabled={!canExecute}
+                    className="flex items-center gap-1.5 rounded-lg bg-sp-accent px-5 py-2 text-sm font-semibold text-sp-accent-fg transition-all hover:brightness-110 active:scale-95 disabled:opacity-40"
+                  >
+                    <span aria-hidden className="material-symbols-outlined text-icon-md">
+                      inventory_2
+                    </span>
+                    {executeLabel}
+                  </button>
+                )}
+              </>
+            ) : phase === 'running' ? (
+              <p className="w-full text-center text-xs text-sp-muted">전환 중…</p>
+            ) : (
+              <>
+                <span />
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="rounded-lg bg-sp-accent px-5 py-2 text-sm font-semibold text-sp-accent-fg transition-all hover:brightness-110 active:scale-95"
+                >
+                  닫기
+                </button>
+              </>
+            )}
+          </div>
         </div>
+      </Modal>
 
-        {/* 푸터 */}
-        <div className="flex items-center justify-between gap-3 border-t border-sp-border px-6 py-4">
-          {phase === 'form' ? (
-            <>
-              <button
-                type="button"
-                onClick={() => (step > 1 ? setStep((step - 1) as WizardStep) : handleClose())}
-                className="rounded-lg border border-sp-border px-4 py-2 text-sm text-sp-muted transition-colors hover:text-sp-text"
-              >
-                {step > 1 ? '이전' : '닫기'}
-              </button>
-              {step < 4 ? (
-                <button
-                  type="button"
-                  onClick={() => setStep((step + 1) as WizardStep)}
-                  className="flex items-center gap-1.5 rounded-lg bg-sp-accent px-5 py-2 text-sm font-semibold text-sp-accent-fg transition-all hover:brightness-110 active:scale-95"
-                >
-                  다음
-                  <span aria-hidden className="material-symbols-outlined text-icon-md">
-                    arrow_forward
-                  </span>
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => void runTransition()}
-                  disabled={!canExecute}
-                  className="flex items-center gap-1.5 rounded-lg bg-sp-accent px-5 py-2 text-sm font-semibold text-sp-accent-fg transition-all hover:brightness-110 active:scale-95 disabled:opacity-40"
-                >
-                  <span aria-hidden className="material-symbols-outlined text-icon-md">
-                    inventory_2
-                  </span>
-                  {executeLabel}
-                </button>
-              )}
-            </>
-          ) : phase === 'running' ? (
-            <p className="w-full text-center text-xs text-sp-muted">전환 중…</p>
-          ) : (
-            <>
-              <span />
-              <button
-                type="button"
-                onClick={onClose}
-                className="rounded-lg bg-sp-accent px-5 py-2 text-sm font-semibold text-sp-accent-fg transition-all hover:brightness-110 active:scale-95"
-              >
-                닫기
-              </button>
-            </>
-          )}
+      {/* F9c — 학년도 중간 마감 확인(오너 지시: "언제나 가능하되 한 번 더 물어보기").
+          마법사 Modal 바깥의 형제로 둔다 — 중첩하면 포커스 트랩이 서로 물린다. */}
+      <Modal
+        isOpen={midYearConfirmOpen}
+        onClose={() => setMidYearConfirmOpen(false)}
+        title="학년도 중간 마무리 확인"
+        srOnlyTitle
+        size="sm"
+        closeOnBackdrop={false}
+      >
+        <div className="p-6" data-modal-fallback tabIndex={-1}>
+          <h3 className="text-lg font-bold text-sp-text">학년도 중간에 마무리할까요?</h3>
+          <div className="mt-3 space-y-2.5 text-sm leading-relaxed text-sp-muted">
+            <p>
+              지금은 <span className="font-semibold text-sp-text">{formatTermKo(closingTerm)}</span>
+              예요. 학년도 마무리는 보통 학년도가 끝나는 2월에 하지만, 지금 실행할 수도 있어요.
+            </p>
+            <p className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2.5 text-xs">
+              <span className="font-semibold text-sp-text">주의</span>: 출결과 학생 기록은 보통{' '}
+              <span className="font-semibold text-sp-text">학년도 단위로 집계</span>돼요. 지금
+              보관하면 이번 학년도 통계가 1학기와 2학기로 나뉘어 보여요(보관함에서는 그대로 볼 수
+              있어요).
+            </p>
+            <p className="text-xs">
+              1학기 수업반만 정리하려면{' '}
+              <span className="font-semibold text-sp-text">
+                수업 관리의 &lsquo;수업반 보관&rsquo;
+              </span>
+              이 더 알맞아요.
+            </p>
+            <p className="text-xs">
+              보관한 기록은 언제든 다시 볼 수 있고, 전환은 되돌릴 수 있어요.
+            </p>
+          </div>
+          <div className="mt-5 flex flex-wrap items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                // 팝업·마법사를 닫고 수업 관리로 실제 이동한다(App.tsx의 ssampin:navigate 핸들러).
+                setMidYearConfirmOpen(false);
+                onClose();
+                window.dispatchEvent(
+                  new CustomEvent('ssampin:navigate', { detail: 'class-management' }),
+                );
+              }}
+              className="rounded-lg bg-sp-accent px-4 py-2 text-sm font-semibold text-sp-accent-fg transition-all hover:brightness-110"
+            >
+              수업반 보관으로 가기
+            </button>
+            <button
+              type="button"
+              onClick={() => setMidYearConfirmOpen(false)}
+              className="rounded-lg border border-sp-border px-4 py-2 text-sm text-sp-muted transition-colors hover:text-sp-text"
+            >
+              취소
+            </button>
+            <button
+              type="button"
+              onClick={() => void runTransition()}
+              className="rounded-lg px-4 py-2 text-sm text-sp-muted underline decoration-sp-border underline-offset-4 transition-colors hover:text-sp-text"
+            >
+              그래도 마무리하기
+            </button>
+          </div>
         </div>
-      </div>
-    </Modal>
+      </Modal>
+    </>
   );
 }

@@ -249,7 +249,7 @@ describe('SyncFromCloud — 아카이브 다운로드·배치', () => {
       'latest',
       undefined,
       undefined,
-      async () => undefined,
+      async () => ({}),
       async () => [], // 로컬 아카이브 없음
       importArchiveTerm,
     );
@@ -284,7 +284,7 @@ describe('SyncFromCloud — 아카이브 다운로드·배치', () => {
       'latest',
       undefined,
       undefined,
-      async () => undefined,
+      async () => ({}),
       async () => ['2026-1'], // 이미 있음 — 존재=완결
       importArchiveTerm,
     );
@@ -308,7 +308,7 @@ describe('SyncFromCloud — 아카이브 다운로드·배치', () => {
       'latest',
       undefined,
       undefined,
-      async () => undefined,
+      async () => ({}),
       async () => [],
       importArchiveTerm,
     );
@@ -330,7 +330,7 @@ describe('SyncFromCloud — 아카이브 다운로드·배치', () => {
       'latest',
       undefined,
       undefined,
-      async () => undefined,
+      async () => ({}),
       async () => [],
       importArchiveTerm,
     );

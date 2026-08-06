@@ -44,18 +44,23 @@ export async function listArchiveSyncFiles(): Promise<string[]> {
   for (const summary of listed.archives) {
     if (!summary.manifestOk) continue;
     try {
-      const read = await api.read(summary.term, ARCHIVE_MANIFEST_FILENAME);
+      // F10a — 동기화 키는 **archiveId**(회차 디렉토리) 기준. 회차마다 별개 키라
+      // "리모트에 있으면 업로드 스킵·로컬에 있으면 다운로드 스킵" 불변 계약이 그대로 성립한다.
+      const read = await api.read(summary.archiveId, ARCHIVE_MANIFEST_FILENAME);
       if (!read.ok) continue;
       const validated = validateArchiveManifest(JSON.parse(read.content));
       if (!validated.ok) continue;
-      const manifestKey = buildArchiveSyncKey(summary.term, ARCHIVE_MANIFEST_FILENAME);
+      const manifestKey = buildArchiveSyncKey(summary.archiveId, ARCHIVE_MANIFEST_FILENAME);
       if (manifestKey !== null) keys.push(manifestKey);
       for (const entry of validated.manifest.entries) {
-        const key = buildArchiveSyncKey(summary.term, entry.path);
+        const key = buildArchiveSyncKey(summary.archiveId, entry.path);
         if (key !== null) keys.push(key);
       }
     } catch (err) {
-      console.warn(`[archiveSyncGateway] ${summary.term} 열거 실패(해당 학기만 건너뜀):`, err);
+      console.warn(
+        `[archiveSyncGateway] ${summary.archiveId} 열거 실패(해당 보관함만 건너뜀):`,
+        err,
+      );
     }
   }
   return keys;
@@ -88,7 +93,8 @@ export async function listLocalArchiveTerms(): Promise<string[]> {
   if (!api) return [];
   const listed = await api.list();
   if (!listed.ok) return [];
-  return listed.archives.map((a) => a.term);
+  // 로컬 보유 판정도 archiveId 기준(회차본을 서로 다른 아카이브로 취급).
+  return listed.archives.map((a) => a.archiveId);
 }
 
 /** 다운로드 배치 훅 — archive:import IPC(스테이징·검증·rename)에 위임. */

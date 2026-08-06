@@ -323,10 +323,14 @@ export const useMobileDriveSyncStore = create<MobileDriveSyncState>((set, get) =
         'latest',
         undefined,
         undefined,
-        // S2.2b — 옛 학년도 스킵 기준. 모바일은 자체 전환이 없으므로 동기화된 settings 파일의
-        // currentTerm(데스크톱 전환이 기록)을 raw로 읽는다(MobileSettings 투영에 미포함 필드).
-        async () =>
-          (await storage.read<{ currentTerm?: string }>('settings'))?.currentTerm ?? undefined,
+        // S2.2b·F9a — 스킵 기준. 모바일은 자체 전환이 없으므로 동기화된 settings 파일의
+        // currentTerm·lastClosedTerm(데스크톱 전환이 기록)을 raw로 읽는다(MobileSettings 투영 밖).
+        async () => {
+          const s = await storage.read<{ currentTerm?: string; lastClosedTerm?: string }>(
+            'settings',
+          );
+          return { currentTerm: s?.currentTerm, lastClosedTerm: s?.lastClosedTerm };
+        },
       );
       const result = await syncFrom.execute(({ current, total }) => {
         set({ progress: Math.round((current / total) * 100) });

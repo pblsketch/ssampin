@@ -88,9 +88,10 @@ class FakeGateway implements YearTransitionGateway {
   async archiveCreate(term: string, fileKeys: string[]) {
     this.createCalls.push(fileKeys);
     if (this.createFail) return { ok: false as const, error: '보관함 생성에 실패했어요(모의)' };
-    if (this.archives.has(term)) {
-      return { ok: false as const, error: `이미 같은 학기의 보관함이 있어요: ${term}` };
-    }
+    // F10a — 같은 학기 재보관은 새 회차 디렉토리(실제 archiveManager와 동일 규칙).
+    let round = 1;
+    while (this.archives.has(round === 1 ? term : `${term}-${round}`)) round++;
+    const archiveId = round === 1 ? term : `${term}-${round}`;
     const files = new Map<string, FakeArchiveEntry>();
     const entries: { path: string; kind: 'data' | 'binary' }[] = [];
     for (const key of fileKeys) {
@@ -108,12 +109,14 @@ class FakeGateway implements YearTransitionGateway {
     }
     files.set('manifest.json', {
       kind: 'data',
-      content: JSON.stringify({ schemaVersion: 1, term, entries }),
+      content: JSON.stringify({ schemaVersion: 1, term, archiveId, entries }),
     });
-    this.archives.set(term, files);
+    this.archives.set(archiveId, files);
     return {
       ok: true as const,
       term,
+      archiveId,
+      round,
       label: term,
       entryCount: entries.length,
       totalBytes: 0,
@@ -199,17 +202,26 @@ function seedLiveData(storage: FakeStorage): void {
 function makeDeps(storage: FakeStorage, gateway: FakeGateway) {
   // F7g: 마법사는 2학기(학년도 말) 마감 전용 — 테스트 기본 학기도 2학기로 맞춘다.
   let currentTerm: string | undefined = '2026-2';
+  let lastClosedTerm: string | undefined;
   const reloadStores = vi.fn(async (_filenames: readonly string[]) => {});
   const deps: YearTransitionDeps = {
     storage,
     gateway,
     getCurrentTerm: async () => currentTerm,
-    setCurrentTerm: async (term) => {
+    getLastClosedTerm: async () => lastClosedTerm,
+    // F9a: 두 값은 한 번의 저장에서 함께 갱신된다(테스트 하네스도 동일 계약).
+    setCurrentTerm: async (term, closed) => {
       currentTerm = term;
+      lastClosedTerm = closed;
     },
     reloadStores,
   };
-  return { deps, reloadStores, getTerm: () => currentTerm };
+  return {
+    deps,
+    reloadStores,
+    getTerm: () => currentTerm,
+    getLastClosed: () => lastClosedTerm,
+  };
 }
 
 let storage: FakeStorage;
@@ -294,6 +306,100 @@ describe('executeYearTransition — 성공 경로', () => {
   });
 });
 
+describe('F9b·F9c — 학기 전환(1학기 마감) 완주 · 통파일 리셋·마커·정화 동일 동작', () => {
+  test('allowMidYearClosing 플래그가 있으면 학기 전환이 완주하고 lastClosedTerm이 기록된다', async () => {
+    const { deps, getTerm, getLastClosed } = makeDeps(storage, gateway);
+
+    const result = await executeYearTransition(deps, {
+      closingTerm: '2026-1',
+      allowMidYearClosing: true,
+    });
+    expect(result.ok, JSON.stringify(result)).toBe(true);
+    if (!result.ok) return;
+    expect(result.nextTerm).toBe('2026-2'); // 같은 학년도 2학기
+    expect(getTerm()).toBe('2026-2');
+    expect(getLastClosed()).toBe('2026-1'); // B2 방어의 기준값
+
+    // F9b: 통파일 리셋·마커·정화 경로가 학년도 전환과 동일하게 동작한다(학년도 전제 코드 없음)
+    expect(await storage.read('students')).toEqual([]); // 빈 값 쓰기 = 업로드 정화 가능
+    expect(await storage.read('teaching-classes')).toEqual({ classes: [] });
+    const marker = await storage.read<YearTransitionRemovedMarker>(YEAR_TRANSITION_REMOVED_KEY);
+    expect(marker?.term).toBe('2026-1');
+    expect([...(marker?.keys ?? [])].sort()).toEqual(['seating', 'students']);
+    expect(gateway.archives.has('2026-1')).toBe(true); // 아카이브도 학기 라벨로 생성
+  });
+});
+
+describe('F10a·F10b — 마무리 ↔ 복원 순환(같은 학기 재보관)', () => {
+  test('전환 → 복원 → 재전환이 막히지 않고 새 회차로 보관된다 (qa1-⑥ 해소)', async () => {
+    const { deps, getTerm, getLastClosed } = makeDeps(storage, gateway);
+
+    const first = await executeYearTransition(deps, { closingTerm: '2026-2' });
+    expect(first.ok, JSON.stringify(first)).toBe(true);
+    if (!first.ok) return;
+
+    // 복원(전환 취소) — 라이브가 보관 시점으로 돌아오고 lastClosedTerm 해제
+    const revert = await revertYearTransition(deps, '2026-2');
+    expect(revert.ok, JSON.stringify(revert)).toBe(true);
+    expect(getTerm()).toBe('2026-2');
+    expect(getLastClosed()).toBeUndefined();
+
+    // 재전환 — "이미 있어요"로 막히지 않고 2회차 디렉토리 생성
+    const second = await executeYearTransition(deps, { closingTerm: '2026-2' });
+    expect(second.ok, JSON.stringify(second)).toBe(true);
+    expect(gateway.createCalls).toHaveLength(2);
+    expect([...gateway.archives.keys()].sort()).toEqual(['2026-2', '2026-2-2']);
+    expect(getTerm()).toBe('2027-1');
+    expect(getLastClosed()).toBe('2026-2');
+
+    // 1회차 사본은 그대로 남아 있다(불변 계약) — 각각 독립 복원 가능
+    const revertRound2 = await revertYearTransition(deps, '2026-2-2');
+    expect(revertRound2.ok, JSON.stringify(revertRound2)).toBe(true);
+    expect(gateway.archives.has('2026-2')).toBe(true);
+    expect(getTerm()).toBe('2026-2'); // 회차본이어도 표시 학기는 논리 학기
+  });
+});
+
+describe('F9a — lastClosedTerm 기록/원복 (스킵 필터 기준의 정본)', () => {
+  test('전환 완료 시 currentTerm·lastClosedTerm이 같은 저장에서 함께 갱신된다', async () => {
+    const { deps, getTerm, getLastClosed } = makeDeps(storage, gateway);
+
+    const result = await executeYearTransition(deps, { closingTerm: '2026-2' });
+    expect(result.ok, JSON.stringify(result)).toBe(true);
+    expect(getTerm()).toBe('2027-1');
+    expect(getLastClosed()).toBe('2026-2'); // 마감한 학기
+  });
+
+  test('완료된 전환의 원복은 lastClosedTerm을 해제한다(되살린 학기가 계속 스킵되면 안 된다)', async () => {
+    const { deps, getTerm, getLastClosed } = makeDeps(storage, gateway);
+    expect((await executeYearTransition(deps, { closingTerm: '2026-2' })).ok).toBe(true);
+    expect(getLastClosed()).toBe('2026-2');
+
+    const revert = await revertYearTransition(deps, '2026-2');
+    expect(revert.ok, JSON.stringify(revert)).toBe(true);
+    expect(getTerm()).toBe('2026-2');
+    expect(getLastClosed()).toBeUndefined();
+  });
+
+  test('중단분(pending) 원복은 전환 전 두 값을 함께 되돌린다', async () => {
+    const { deps, getTerm, getLastClosed } = makeDeps(storage, gateway);
+    // 1차 전환 완료 → lastClosedTerm='2026-2'
+    expect((await executeYearTransition(deps, { closingTerm: '2026-2' })).ok).toBe(true);
+    // 새 학년도에 데이터를 입력한 뒤 2차 전환이 리셋 도중 중단(조용한 쓰기 실패 주입).
+    // (리셋값과 다른 내용이 있어야 재독 검증이 실패로 잡힌다 — 빈 값 그대로면 통과해버린다.)
+    storage.files.set('students', JSON.stringify([{ id: 'stu-new' }], null, 2));
+    storage.swallowWriteKeys.add('students');
+    const second = await executeYearTransition(deps, { closingTerm: '2027-2' });
+    expect(second.ok).toBe(false);
+
+    storage.swallowWriteKeys.clear();
+    const revert = await revertYearTransition(deps, '2027-2');
+    expect(revert.ok, JSON.stringify(revert)).toBe(true);
+    expect(getTerm()).toBe('2027-1'); // 2차 전환 전 값
+    expect(getLastClosed()).toBe('2026-2'); // 1차 전환의 마감 학기로 원복
+  });
+});
+
 describe('F1(B1) — 전환 마커 기록/정리', () => {
   test('성공 전환 후 guardDownloads 키(students·seating)가 마커에 기록된다 — snapshots는 미등재(RL-a)', async () => {
     const { deps } = makeDeps(storage, gateway);
@@ -354,14 +460,14 @@ describe('AC: 실패 시 fail-closed', () => {
     expect(ok.ok, JSON.stringify(ok)).toBe(true);
   });
 
-  test('F7g(RM2): 1학기 마감은 유즈케이스 진입부에서 차단된다(안전 백업조차 안 만든다)', async () => {
+  test('F9c: 1학기 마감은 확인 플래그 없이는 거부된다(안전 백업조차 안 만든다)', async () => {
     const before = storage.snapshot();
     const { deps, getTerm } = makeDeps(storage, gateway);
 
     const result = await executeYearTransition(deps, { closingTerm: '2026-1' });
     expect(result).toMatchObject({ ok: false, step: 'safety-backup' });
     if (result.ok) return;
-    expect(result.error).toContain('2학기');
+    expect(result.error).toContain('확인이 필요해요');
     expect(gateway.safetyCalls).toBe(0);
     expect(gateway.createCalls).toHaveLength(0);
     expect(storage.snapshot().files).toEqual(before.files);

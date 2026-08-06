@@ -51,6 +51,26 @@ describe('preserveNewerCurrentTerm — 단위 규칙', () => {
     expect(preserveNewerCurrentTerm(null, '2027-1')).toBeNull();
     expect(preserveNewerCurrentTerm([1], '2027-1')).toEqual([1]);
   });
+
+  it('F9a: lastClosedTerm도 같은 규칙으로 보존한다(스킵 필터 기준이 벗겨지면 B2 재발)', () => {
+    // 수신에 lastClosedTerm 부재 → 로컬 값 재부착
+    expect(preserveNewerCurrentTerm({ currentTerm: '2026-2' }, '2026-2', '2026-1')).toEqual({
+      currentTerm: '2026-2',
+      lastClosedTerm: '2026-1',
+    });
+    // 수신이 더 최신 마감이면 수신 채택
+    const newer = { currentTerm: '2027-1', lastClosedTerm: '2026-2' };
+    expect(preserveNewerCurrentTerm(newer, '2026-2', '2026-1')).toBe(newer);
+    // 두 필드 동시 보존
+    expect(preserveNewerCurrentTerm({}, '2027-1', '2026-2')).toEqual({
+      currentTerm: '2027-1',
+      lastClosedTerm: '2026-2',
+    });
+    // 로컬 lastClosedTerm 부재 → 그 필드는 무동작
+    expect(preserveNewerCurrentTerm({ currentTerm: '2027-1' }, '2027-1', undefined)).toEqual({
+      currentTerm: '2027-1',
+    });
+  });
 });
 
 /* ─── SyncFromCloud 통합 — settings 충돌 latest 교체 경로 ─── */
