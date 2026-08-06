@@ -5,6 +5,7 @@ import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import type { DayOfWeekFull } from '@domain/valueObjects/DayOfWeek';
 import type { ProgressEntry } from '@domain/entities/CurriculumProgress';
 import { findMatchingClass } from '@domain/rules/matchingRules';
+import { filterActiveClasses } from '@domain/rules/teachingClassArchive';
 import { getDayOfWeek } from '@domain/rules/periodRules';
 import { toLocalDateString } from '@shared/utils/localDate';
 
@@ -14,7 +15,12 @@ import { toLocalDateString } from '@shared/utils/localDate';
  */
 export function TodayProgress() {
   const { classes, progressEntries, load: loadClasses } = useTeachingClassStore();
-  const { teacherSchedule, overrides, getEffectiveTeacherSchedule, load: loadSchedule } = useScheduleStore();
+  const {
+    teacherSchedule,
+    overrides,
+    getEffectiveTeacherSchedule,
+    load: loadSchedule,
+  } = useScheduleStore();
   const { settings } = useSettingsStore();
   const weekendDays = settings.enableWeekendDays;
 
@@ -54,7 +60,10 @@ export function TodayProgress() {
     };
   }, [loadClasses, loadSchedule]);
 
-  const today = useMemo((): DayOfWeekFull | null => getDayOfWeek(now, weekendDays), [now, weekendDays]);
+  const today = useMemo(
+    (): DayOfWeekFull | null => getDayOfWeek(now, weekendDays),
+    [now, weekendDays],
+  );
 
   const isWeekend = today === null;
 
@@ -66,43 +75,45 @@ export function TodayProgress() {
       .map((period, index) => {
         if (period === null) return null;
         const periodNumber = index + 1;
-        const matchedClass = findMatchingClass(classes, period.classroom, period.subject);
-        const progress: ProgressEntry | null = matchedClass !== null
-          ? (progressEntries.find(
-              (e) =>
-                e.classId === matchedClass.id &&
-                e.date === todayStr &&
-                e.period === periodNumber,
-            ) ?? null)
-          : null;
-
-        const prevProgress: ProgressEntry | null = matchedClass !== null
-          ? (progressEntries
-              .filter(
+        // 보관된 반 제외 — 위젯에서 기록한 진도가 같은 이름의 보관된 옛 반에 저장되면 안 된다
+        const matchedClass = findMatchingClass(
+          filterActiveClasses(classes),
+          period.classroom,
+          period.subject,
+        );
+        const progress: ProgressEntry | null =
+          matchedClass !== null
+            ? (progressEntries.find(
                 (e) =>
-                  e.classId === matchedClass.id &&
-                  e.date < todayStr &&
-                  e.status === 'completed',
-              )
-              .sort((a, b) => {
-                if (b.date !== a.date) return b.date.localeCompare(a.date);
-                return b.period - a.period;
-              })[0] ?? null)
-          : null;
+                  e.classId === matchedClass.id && e.date === todayStr && e.period === periodNumber,
+              ) ?? null)
+            : null;
 
-        const nextProgress: ProgressEntry | null = matchedClass !== null
-          ? (progressEntries
-              .filter(
-                (e) =>
-                  e.classId === matchedClass.id &&
-                  e.date > todayStr &&
-                  e.status === 'planned',
-              )
-              .sort((a, b) => {
-                if (a.date !== b.date) return a.date.localeCompare(b.date);
-                return a.period - b.period;
-              })[0] ?? null)
-          : null;
+        const prevProgress: ProgressEntry | null =
+          matchedClass !== null
+            ? (progressEntries
+                .filter(
+                  (e) =>
+                    e.classId === matchedClass.id && e.date < todayStr && e.status === 'completed',
+                )
+                .sort((a, b) => {
+                  if (b.date !== a.date) return b.date.localeCompare(a.date);
+                  return b.period - a.period;
+                })[0] ?? null)
+            : null;
+
+        const nextProgress: ProgressEntry | null =
+          matchedClass !== null
+            ? (progressEntries
+                .filter(
+                  (e) =>
+                    e.classId === matchedClass.id && e.date > todayStr && e.status === 'planned',
+                )
+                .sort((a, b) => {
+                  if (a.date !== b.date) return a.date.localeCompare(b.date);
+                  return a.period - b.period;
+                })[0] ?? null)
+            : null;
 
         return {
           period: periodNumber,
@@ -115,7 +126,16 @@ export function TodayProgress() {
         };
       })
       .filter((item): item is NonNullable<typeof item> => item !== null);
-  }, [today, now, teacherSchedule, overrides, classes, progressEntries, getEffectiveTeacherSchedule, weekendDays]);
+  }, [
+    today,
+    now,
+    teacherSchedule,
+    overrides,
+    classes,
+    progressEntries,
+    getEffectiveTeacherSchedule,
+    weekendDays,
+  ]);
 
   const completedCount = useMemo(
     () => todayLessons.filter((l) => l.progress?.status === 'completed').length,
@@ -138,9 +158,7 @@ export function TodayProgress() {
   if (isWeekend) {
     return (
       <div ref={containerRef} className="rounded-xl bg-sp-card p-4 h-full flex flex-col">
-        <div className="py-6 text-center text-sm text-sp-muted">
-          🎉 오늘은 주말입니다
-        </div>
+        <div className="py-6 text-center text-sm text-sp-muted">🎉 오늘은 주말입니다</div>
       </div>
     );
   }
@@ -148,9 +166,7 @@ export function TodayProgress() {
   if (todayLessons.length === 0) {
     return (
       <div ref={containerRef} className="rounded-xl bg-sp-card p-4 h-full flex flex-col">
-        <div className="py-6 text-center text-sm text-sp-muted">
-          오늘은 수업이 없습니다
-        </div>
+        <div className="py-6 text-center text-sm text-sp-muted">오늘은 수업이 없습니다</div>
       </div>
     );
   }
@@ -159,17 +175,26 @@ export function TodayProgress() {
     <div ref={containerRef} className="rounded-xl bg-sp-card p-4 h-full flex flex-col">
       {/* 헤더 */}
       <div className="flex items-center justify-between mb-3 shrink-0">
-        <h3 className="text-sm font-bold text-sp-text flex items-center gap-1.5"><span>📚</span>오늘 수업 진도</h3>
+        <h3 className="text-sm font-bold text-sp-text flex items-center gap-1.5">
+          <span>📚</span>오늘 수업 진도
+        </h3>
         {todayLessons.length > 0 && (
-          <span className="text-xs text-sp-muted">{completedCount}/{todayLessons.length} 완료</span>
+          <span className="text-xs text-sp-muted">
+            {completedCount}/{todayLessons.length} 완료
+          </span>
         )}
       </div>
 
       <div className="flex flex-col gap-2 flex-1 overflow-auto">
         {todayLessons.map((lesson) => {
-          const statusBadge = lesson.matchedClass === null
-            ? <span className="flex-shrink-0 text-caption text-sp-muted/40 italic">학급 미매칭</span>
-            : getStatusBadge(lesson.progress?.status ?? null);
+          const statusBadge =
+            lesson.matchedClass === null ? (
+              <span className="flex-shrink-0 text-caption text-sp-muted/40 italic">
+                학급 미매칭
+              </span>
+            ) : (
+              getStatusBadge(lesson.progress?.status ?? null)
+            );
           const hasPrev = lesson.prevProgress !== null;
           const hasNext = lesson.nextProgress !== null;
           const hasToday = lesson.progress !== null;
@@ -246,9 +271,7 @@ export function TodayProgress() {
                   수업 관리에서 학급을 등록해주세요
                 </p>
               ) : (
-                <p className="ml-9 text-xs text-sp-muted/50 italic mt-1">
-                  📝 진도 미등록
-                </p>
+                <p className="ml-9 text-xs text-sp-muted/50 italic mt-1">📝 진도 미등록</p>
               )}
             </div>
           );
@@ -258,7 +281,9 @@ export function TodayProgress() {
       {/* 하단 진행 바 */}
       <div className="mt-3 pt-3 border-t border-sp-border/30">
         <div className="flex items-center justify-between text-xs text-sp-muted">
-          <span>완료 {completedCount} / 전체 {todayLessons.length}</span>
+          <span>
+            완료 {completedCount} / 전체 {todayLessons.length}
+          </span>
           <div className="w-16 h-1.5 rounded-full bg-sp-surface overflow-hidden">
             <div
               className="h-full rounded-full bg-emerald-400 transition-all"

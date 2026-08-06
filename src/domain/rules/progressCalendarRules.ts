@@ -2,6 +2,7 @@ import type { ProgressEntry, ProgressStatus } from '@domain/entities/CurriculumP
 import type { TeacherPeriod } from '@domain/entities/Timetable';
 import type { TeachingClass } from '@domain/entities/TeachingClass';
 import { findMatchingClass } from './matchingRules';
+import { filterActiveClasses } from './teachingClassArchive';
 
 /**
  * 진도 캘린더 — 주간 진도 격자 계산 (순수 도메인 로직)
@@ -64,12 +65,16 @@ export function buildWeeklyProgressGrid(
 ): Map<string, WeeklyProgressCell> {
   const grid = new Map<string, WeeklyProgressCell>();
 
+  // 같은 이름·과목의 (보관된 1학기 반, 새 2학기 반) 쌍에서 정렬 순서와 무관하게
+  // 항상 활성 반에 결합한다 — 보관된 반은 새 진도의 기록 대상이 아니다.
+  const activeClasses = filterActiveClasses(input.classes);
+
   input.weekDates.forEach((date, dayIndex) => {
     const daySchedule = input.dayTeacherSchedules[dayIndex] ?? [];
     input.periods.forEach((period) => {
       const slot = daySchedule[period - 1] ?? null;
       const matchedClass = slot
-        ? findMatchingClass(input.classes, slot.classroom, slot.subject)
+        ? findMatchingClass(activeClasses, slot.classroom, slot.subject)
         : null;
       const entries = matchedClass
         ? input.progressEntries.filter(

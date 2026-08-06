@@ -17,6 +17,7 @@ import { isStudentActive } from '@domain/rules/studentActivity';
 import { buildForwardSchedule, daysSinceLastRecord } from '@domain/rules/recordReminderRules';
 import { parseMinutes } from '@domain/rules/periodRules';
 import { findMatchingClass } from '@domain/rules/matchingRules';
+import { filterActiveClasses } from '@domain/rules/teachingClassArchive';
 import { studentKey } from '@domain/entities/TeachingClass';
 
 interface OsScheduleItem {
@@ -148,7 +149,8 @@ export function useReminderOsPush(onToastClicked?: (reminderId: string) => void)
       for (let i = 0; i < daySlots.length; i++) {
         const slot = daySlots[i];
         if (!slot || !slot.classroom) continue;
-        const cls = findMatchingClass(classes, slot.classroom, slot.subject);
+        // 보관된 반은 기록 알림 대상이 아니다 — 활성 반만 매칭
+        const cls = findMatchingClass(filterActiveClasses(classes), slot.classroom, slot.subject);
         if (!cls) continue;
         const pt = pts.find((p) => p.period === i + 1);
         if (!pt) continue;

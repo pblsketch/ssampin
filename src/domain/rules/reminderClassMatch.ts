@@ -3,6 +3,7 @@ import type { TeachingClass } from '../entities/TeachingClass';
 import type { PeriodTime } from '../valueObjects/PeriodTime';
 import { getJustFinishedPeriod } from './periodRules';
 import { findMatchingClass } from './matchingRules';
+import { filterActiveClasses } from './teachingClassArchive';
 
 /**
  * '방금 끝난 수업'의 수업반(TeachingClass)을 반환한다 — 수업 직후 관찰 알림(D1).
@@ -29,5 +30,6 @@ export function detectJustFinishedClass(
   const slot = daySlots[period - 1]; // period 1-based, 배열 0-based
   if (!slot || !slot.classroom) return null; // 그 교시에 수업 없음(공강)
 
-  return findMatchingClass(classes, slot.classroom, slot.subject);
+  // 보관된 반은 새 알림·기록 대상이 아니다 — 활성 반만 후보로 매칭(폴백 없음).
+  return findMatchingClass(filterActiveClasses(classes), slot.classroom, slot.subject);
 }
