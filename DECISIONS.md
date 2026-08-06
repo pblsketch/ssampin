@@ -548,3 +548,13 @@
 - **ADR-035**: `TeachingClass.archived/archivedAt/archivedTerm`은 **notMirrored**(AI 브릿지 미노출). 브릿지의 보관 반 새 진도 쓰기는 `applyLiveSyncWrite`의 가드가 사용자 언어 오류로 거부.
 - **ADR-036**: 아카이브 Drive 동기화는 P4 — 구현 완료(2026-08-06). **불변 3중 계약**: 리모트 존재=업로드 스킵 · 로컬 존재=다운로드 스킵 · `archive:import` 기존 학기 바이트 무변경. S2.1b(수동 백업 archives 섹션)와 짝 결정. **알려진 제약**: 삭제한 보관함이 Drive 사본에서 재다운로드될 수 있음(후속 결정: /docs 고지 / 포트 확장 / 툼스톤).
 - **ADR-037**: 시즌 배너는 만들지 않는다(오너 결정 — 학교마다 개학일이 달라 단일 구간 정의 불가). 발견성은 kebab "보관" + 보관 섹션 + 릴리즈 노트 + /docs 4경로. `academicCalendar`에 시즌 구간 판정 함수 금지(모듈 표면 계약 테스트로 고정).
+
+## ADR-038: 의존성 취약점은 "배포되는 코드" 기준으로 다루고, override는 정확 버전으로 핀하지 않는다
+
+- **상태**: active · **일자**: 2026-08-07
+- **배경**: Dependabot 알림 39건이 쌓여 방치 상태였다. 추적해 보니 세 갈래였다 — ①우리가 만든 override 핀이 낡아 **취약 버전을 붙잡고** 있었다 ②앱이 실행조차 하지 않는 코드(kordoc의 MCP 서버 계열·OCR 계열·sharp)가 설치파일에 담겨 알림을 만들었다 ③운영 스크립트 전용 패키지(`@google/genai`)가 `dependencies`에 있어 배포본까지 따라갔다.
+- **결정 1 — 정확 핀 금지**: `overrides`는 반드시 캐럿(`^`) 범위로 적는다. `"shell-quote": "1.8.4"` 처럼 정확 버전으로 고정하면 그 버전에 새 권고가 붙는 순간 override 자체가 취약점을 고정하고, npm/Dependabot이 스스로 올리지 못한다. 실제로 shell-quote 1.8.4 · brace-expansion 1.1.17/2.1.3 핀이 정확히 이 상태였다(고치자마자 4건 소멸).
+- **결정 2 — 위험의 기준은 배포본**: 판단은 `npm audit`(개발 도구 포함) 총계가 아니라 `npm audit --omit=dev` + electron-builder `files` 제외 목록을 통과한 **실제 설치파일 트리** 기준으로 한다. 배포되지 않는 코드의 취약점은 선생님 PC에 도달하지 않는다.
+- **결정 3 — 미사용 서브트리는 설치파일에서 제외하고 테스트로 고정**: kordoc은 `kordoc-mcp` 별도 실행파일에서만 `@modelcontextprotocol/sdk`(→express·hono)를 쓰고, 앱이 import하는 `dist/index.cjs`는 xmldom·jszip·markdown-it만 필요하다. sharp(+@img 20MB)는 앱 런타임 미사용(이미지 처리는 Electron `nativeImage`). 이 제외 목록은 `builderFiles.meta.test.ts`의 `REQUIRED_NODE_MODULES_EXCLUSIONS`가 지킨다 — **되돌리려면 런타임 require 여부를 grep으로 먼저 증명**해야 한다.
+- **결정 4 — 앱이 안 쓰는 패키지는 devDependencies**: `dependencies`는 electron-builder가 그대로 설치파일에 담는다. 스크립트·빌드 전용은 예외 없이 `devDependencies`.
+- **알려진 잔여(의도적)**: ①`esbuild` 0.28 업그레이드 **금지** — vite 6 빌드가 깨진다(기존 결정 유지). low·개발 서버 전용이라 수용. ②`@nut-tree-fork/nut-js` → jimp 0.22 → file-type 계열은 **상류 패치가 존재하지 않는다**(포크가 옛 jimp에 고정). 스티커 자동 붙여넣기 Ctrl+V 한 곳에만 쓰이므로, 제거하고 이미 있는 koffi(FFI)로 대체하는 안이 후속 과제. ③`electron`은 40.10.6까지 올렸고 남은 권고는 42+ 메이저를 요구한다 — Chromium 메이저 + 네이티브 모듈(koffi·libnut) ABI 재검증이 필요하므로 별도 작업 단위로 분리.

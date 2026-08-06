@@ -25,11 +25,29 @@ files:
       # Plan D8 + G002 A.7 결정 (builderFiles.meta.test가 이 라인 부재 시 fail).
       - '!prototype/**'
       # 마크다운 변환기(kordoc) 수식 OCR용 optional 의존성은 미사용 — 설치파일에서 제외해 용량을 줄인다.
-      # parse()는 이들이 없어도 정상 동작한다(경고만 남김). sharp 는 쌤핀이 직접 쓰므로 제외하지 않는다.
+      # parse()는 이들이 없어도 정상 동작한다(경고만 남김).
       - '!node_modules/onnxruntime-node/**'
       - '!node_modules/onnxruntime-common/**'
       - '!node_modules/@huggingface/**'
       - '!node_modules/@hyzyla/**'
+      # adm-zip: onnxruntime-node 전용 전이 의존성. 위에서 onnxruntime 을 뺐으므로 도달 불가 코드.
+      - '!node_modules/adm-zip/**'
+      # sharp(+@img 네이티브 바이너리 20MB): 앱 런타임 미사용. 이미지 처리는 Electron nativeImage 로 한다
+      # (electron/main.ts §이미지 변환 "sharp 미사용", StickerImageProcessor "sharp 없음").
+      # 남은 사용처는 빌드용 아이콘 스크립트(scripts/*-icon-alpha.mjs)와 kordoc 의 optional 경로뿐이다.
+      # 과거 주석은 "쌤핀이 직접 쓴다"고 했으나 실제 import 는 없다 — 되돌리기 전 grep 으로 재확인할 것.
+      - '!node_modules/sharp/**'
+      - '!node_modules/@img/**'
+      # kordoc의 MCP 서버 계열도 미사용 — kordoc은 `kordoc-mcp` 라는 별도 실행파일(dist/mcp.js)에서만
+      # @modelcontextprotocol/sdk 를 쓴다. 쌤핀이 import 하는 dist/index.cjs 는 xmldom·jszip·markdown-it
+      # 만 필요하다(검증: dist/index.cjs 의 외부 require 목록에 sdk 없음).
+      # 이 서브트리는 express/hono 웹서버까지 끌고 오며 취약점 알림의 최대 발생원이므로 설치파일에서 제외한다.
+      # 되돌릴 때는 kordoc dist/index.cjs 가 정말 sdk 를 require 하는지부터 확인할 것.
+      - '!node_modules/@modelcontextprotocol/**'
+      - '!node_modules/@hono/**'
+      - '!node_modules/hono/**'
+      - '!node_modules/express/**'
+      - '!node_modules/express-rate-limit/**'
 # 네이티브 모듈은 asar 내부에서 require할 수 없으므로 언팩 필요.
 # @nut-tree-fork/nut-js (스티커 자동 붙여넣기용) → libnut-{win32,darwin,linux} 의
 # .node 바이너리가 OS dlopen으로 로드되어야 한다. 미언팩 시 win32에서

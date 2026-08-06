@@ -55,7 +55,6 @@
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
-    "@google/genai": "^1.0.0",
     "@nut-tree-fork/nut-js": "^4.2.6",
     "@pdf-lib/fontkit": "^1.1.1",
     "@pdfme/common": "^6.0.6",
@@ -89,16 +88,30 @@
     "zod": "^3.25.76",
     "zustand": "^5.0.3"
   },
+  "//overrides": [
+    "전이 의존성(우리가 직접 고를 수 없는 하위 패키지)의 취약 버전을 강제로 끌어올리는 곳.",
+    "규칙 1 — 정확한 버전(1.8.4)으로 핀하지 말 것. 새 권고가 나오면 그 핀이 '취약 버전 고정'이 되어",
+    "  Dependabot/npm audit가 스스로 올리지 못한다. 실제로 2026-08 시점 shell-quote 1.8.4 핀과",
+    "  brace-expansion 1.1.17/2.1.3 핀이 정확히 이 이유로 취약 상태를 붙잡고 있었다.",
+    "규칙 2 — 반드시 캐럿(^) 범위로 적어 패치 릴리즈를 자동으로 받게 한다.",
+    "규칙 3 — 상위 패키지가 스스로 고친 뒤에는 이 항목을 지운다(npm audit에 남지 않으면 불필요)."
+  ],
+  "//devDependencies": [
+    "앱 실행에 필요 없는 패키지는 반드시 여기에 둔다. dependencies 에 있으면 electron-builder 가",
+    "설치파일에 그대로 담아 선생님 PC까지 배포되고, 그 패키지의 취약점 알림도 계속 따라온다.",
+    "@google/genai — 챗봇 문서 임베딩 스크립트(scripts/embed-docs.ts) 전용. 앱 코드는 import 하지 않는다."
+  ],
   "overrides": {
-    "brace-expansion@<1.1.17": "1.1.17",
-    "brace-expansion@>=2.0.0 <2.1.3": "2.1.3",
-    "brace-expansion@>=4.0.0 <5.0.8": "5.0.9",
-    "shell-quote": "1.8.4",
+    "brace-expansion@<1.1.18": "^1.1.18",
+    "brace-expansion@>=2.0.0 <2.1.4": "^2.1.4",
+    "brace-expansion@>=4.0.0 <5.0.8": "^5.0.9",
+    "shell-quote": "^1.10.0",
     "uuid": "^11.1.1"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@fontsource/noto-sans-kr": "^5.2.9",
+    "@google/genai": "^1.0.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
