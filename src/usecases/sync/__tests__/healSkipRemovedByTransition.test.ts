@@ -1,11 +1,13 @@
 /**
- * F1(B1) 회귀 테스트 — 학년도 전환이 remove로 비운 파일의 "치유 다운로드" 부활 차단 (qa3-D 재현).
+ * F7c 회귀 테스트 — 전환 마커의 전 다운로드 분기 게이트 (QA-A B1 계열 공격 표면 영구화).
  *
- * 재현 조건(QA-A): 전환 기기가 과거 업로드한 students가 리모트·로컬 장부 양쪽에 남아
- * 체크섬 동일 + 전환-remove로 로컬 파일 부재 → ADR-024 치유 경로가 자기 기기의 옛 리모트
- * 사본을 그대로 복원했다. 마커(year-transition-removed, 로컬 전용)가 이 경로를 게이트한다.
- * 예외: 리모트 modifiedTime > removedAt(다른 기기가 전환 이후 실제 새 데이터를 올림)이면
- * 정당한 다운로드로 보고 허용 + 해당 키 마커 해제.
+ * QA-A 재공격이 반증한 것들을 표면 기준으로 고정한다:
+ *  - qa3-D: 치유 분기(장부 체크섬 동일+로컬 부재)가 자기 리모트 옛 사본을 부활시켰다.
+ *  - RB1 우회①: conflict 분기(체크섬 상이)가 마커를 우회했다.
+ *  - RB1 우회②: 장부 없는 첫 다운로드 분기가 마커를 우회했다.
+ *  - RH2: removedAt vs modifiedTime 시각 비교는 시계 스큐로 뚫렸다 → **시각 비교 자체를 제거**,
+ *    판정은 "마커 활성 여부"뿐. 해제는 (a) 로컬 실질 내용 (b) revert(마커 삭제)만.
+ *  - F7b 효과: 첫 업로드가 빈 값을 리모트에 올려 정화 → 새 PC는 빈 값을 받는다(옛 명렬 아님).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { SyncFromCloud } from '../SyncFromCloud';
@@ -19,8 +21,9 @@ import type { IDriveSyncRepository } from '@domain/repositories/IDriveSyncReposi
 import type { DriveSyncManifest } from '@domain/entities/DriveSyncState';
 
 const REMOVED_AT = '2026-08-06T00:00:00Z';
-const BEFORE_REMOVAL = '2026-08-01T00:00:00Z';
-const AFTER_REMOVAL = '2026-08-07T00:00:00Z';
+/** RH2 — 시계 스큐 모사: 리모트 modifiedTime이 removedAt보다 "미래"여도 게이트는 뚫리면 안 된다. */
+const SKEWED_FUTURE = '2026-08-07T00:00:00Z';
+const OLD_ROSTER = [{ id: 'stu-old', name: '학생옛명렬' }];
 
 function manifest(files: DriveSyncManifest['files'], deviceId: string): DriveSyncManifest {
   return { version: 1, lastSyncedAt: REMOVED_AT, deviceId, deviceName: deviceId, files };
@@ -53,7 +56,7 @@ function makeDrive(
 ) {
   const port = {
     getOrCreateSyncFolder: vi.fn(async () => ({ id: 'folder-1', name: '쌤핀 동기화' })),
-    uploadSyncFile: vi.fn(async () => ({ fileId: 'f', modifiedTime: AFTER_REMOVAL })),
+    uploadSyncFile: vi.fn(async () => ({ fileId: 'f', modifiedTime: SKEWED_FUTURE })),
     downloadSyncFile: vi.fn(async (fileId: string) => fileContents[fileId] ?? '{}'),
     getSyncManifest: vi.fn(async () => initialManifest),
     updateSyncManifest: vi.fn(async () => 'manifest-1'),
@@ -75,17 +78,28 @@ function makeSyncRepo(initial: DriveSyncManifest | null): IDriveSyncRepository {
   };
 }
 
-/** qa3-D 공통 셋업: 장부 양쪽에 students 체크섬 동일 + 로컬 파일 부재. */
-function healScenario(remoteModified: string, storageInit: Record<string, unknown>) {
-  const entry = { checksum: 'old-v1', lastModified: remoteModified, size: 100 };
-  const remote = manifest({ students: entry }, 'my-pc');
-  const local = manifest({ students: entry }, 'my-pc');
+interface ScenarioOptions {
+  /** 로컬 장부의 students 체크섬(undefined = 장부 자체 없음 — 우회②). */
+  readonly localChecksum?: string;
+  readonly storageInit?: Record<string, unknown>;
+}
+
+/** students 공격 표면 공통 셋업 — 리모트에 옛 명렬, 리모트 modifiedTime은 시계 스큐(미래). */
+function scenario({ localChecksum, storageInit = {} }: ScenarioOptions) {
+  const remote = manifest(
+    { students: { checksum: 'remote-v1', lastModified: SKEWED_FUTURE, size: 100 } },
+    'other-pc',
+  );
+  const local =
+    localChecksum === undefined
+      ? null
+      : manifest(
+          { students: { checksum: localChecksum, lastModified: REMOVED_AT, size: 100 } },
+          'my-pc',
+        );
   const { storage, files } = makeStorage(storageInit);
-  const { port } = makeDrive(remote, {
-    students: JSON.stringify([{ id: 'stu-old', name: '학생옛명렬' }]),
-  });
-  const repo = makeSyncRepo(local);
-  const useCase = new SyncFromCloud(storage, port, repo, 'my-pc', '내 PC', 'latest');
+  const { port } = makeDrive(remote, { students: JSON.stringify(OLD_ROSTER) });
+  const useCase = new SyncFromCloud(storage, port, makeSyncRepo(local), 'my-pc', '내 PC', 'latest');
   return { useCase, files };
 }
 
@@ -93,40 +107,77 @@ beforeEach(() => {
   vi.spyOn(console, 'log').mockImplementation(() => {});
 });
 
-describe('F1(B1) — 전환-remove 파일의 치유 다운로드 게이트', () => {
-  it('qa3-D 재현: 마커가 있으면 치유 다운로드가 일어나지 않는다(옛 사본 부활 차단)', async () => {
-    const { useCase, files } = healScenario(BEFORE_REMOVAL, {
-      [YEAR_TRANSITION_REMOVED_KEY]: marker(['students', 'seating', 'seating-snapshots']),
+describe('F7c — 전환 마커의 전 다운로드 분기 게이트', () => {
+  it('qa3-D(치유 분기): 장부 체크섬 동일+로컬 부재+마커 → 다운로드 0 (시계 스큐 무의미 — RH2)', async () => {
+    const { useCase, files } = scenario({
+      localChecksum: 'remote-v1', // 체크섬 동일 → 치유 분기
+      storageInit: { [YEAR_TRANSITION_REMOVED_KEY]: marker(['students', 'seating']) },
     });
 
     const result = await useCase.execute();
 
     expect(result.downloaded).not.toContain('students');
     expect(result.skipped).toContain('students');
-    expect(files['students']).toBeUndefined(); // 옛 명렬 부활 0
-    // 마커는 그대로 유지(다음 동기화에서도 계속 게이트)
+    expect(files['students']).toBeUndefined();
+    // 리모트 modifiedTime(미래·스큐)과 무관하게 마커는 유지된다 — 시각 비교가 없다
     expect((files[YEAR_TRANSITION_REMOVED_KEY] as YearTransitionRemovedMarker).keys).toContain(
       'students',
     );
   });
 
-  it('예외: 리모트 modifiedTime > removedAt이면 정당한 새 데이터로 다운로드 + 해당 키 마커 해제', async () => {
-    const { useCase, files } = healScenario(AFTER_REMOVAL, {
-      [YEAR_TRANSITION_REMOVED_KEY]: marker(['students', 'seating']),
+  it('RB1 우회①(conflict 분기): 체크섬 상이+마커+로컬 빈 값 → 다운로드 0', async () => {
+    const { useCase, files } = scenario({
+      localChecksum: 'local-empty-v2', // 체크섬 상이 → conflict 분기(latest)
+      storageInit: {
+        students: [], // F7b 리셋 직후의 빈 값
+        [YEAR_TRANSITION_REMOVED_KEY]: marker(['students']),
+      },
     });
 
     const result = await useCase.execute();
 
-    expect(result.downloaded).toContain('students');
-    expect(files['students']).toEqual([{ id: 'stu-old', name: '학생옛명렬' }]);
-    // students만 해제 — seating은 남는다
+    expect(result.downloaded).not.toContain('students');
+    expect(files['students']).toEqual([]); // 옛 명렬로 덮이지 않는다
+  });
+
+  it('RB1 우회②(장부 없는 첫 다운로드): localManifest 없음+마커 → 다운로드 0', async () => {
+    const { useCase, files } = scenario({
+      localChecksum: undefined, // 장부 자체 없음 → 첫 다운로드 분기
+      storageInit: {
+        students: [],
+        [YEAR_TRANSITION_REMOVED_KEY]: marker(['students']),
+      },
+    });
+
+    const result = await useCase.execute();
+
+    expect(result.downloaded).not.toContain('students');
+    expect(files['students']).toEqual([]);
+  });
+
+  it('해제(a): 로컬에 실질 내용이 생기면 마커를 해제하고 정상 동기화를 재개한다', async () => {
+    const { useCase, files } = scenario({
+      localChecksum: 'local-new-v3',
+      storageInit: {
+        students: [{ id: 'stu-new', name: '학생새명렬' }], // 사용자가 새로 입력
+        [YEAR_TRANSITION_REMOVED_KEY]: marker(['students', 'seating']),
+      },
+    });
+
+    await useCase.execute();
+
+    // students만 해제 — seating(remove 유지 키)은 남는다
     const after = files[YEAR_TRANSITION_REMOVED_KEY] as YearTransitionRemovedMarker;
     expect(after.keys).toEqual(['seating']);
   });
 
-  it('마커에 마지막 키만 남았을 때 해제되면 마커 파일 자체를 지운다', async () => {
-    const { useCase, files } = healScenario(AFTER_REMOVAL, {
-      [YEAR_TRANSITION_REMOVED_KEY]: marker(['students']),
+  it('해제 시 마지막 키였다면 마커 파일 자체를 지운다', async () => {
+    const { useCase, files } = scenario({
+      localChecksum: 'local-new-v3',
+      storageInit: {
+        students: [{ id: 'stu-new', name: '학생새명렬' }],
+        [YEAR_TRANSITION_REMOVED_KEY]: marker(['students']),
+      },
     });
 
     await useCase.execute();
@@ -135,16 +186,16 @@ describe('F1(B1) — 전환-remove 파일의 치유 다운로드 게이트', () 
   });
 
   it('revert 후(마커 없음)에는 기존 치유 다운로드가 정상 동작한다 (ADR-024 보존)', async () => {
-    const { useCase, files } = healScenario(BEFORE_REMOVAL, {}); // 마커 없음
+    const { useCase, files } = scenario({ localChecksum: 'remote-v1', storageInit: {} });
 
     const result = await useCase.execute();
 
     expect(result.downloaded).toContain('students');
-    expect(files['students']).toEqual([{ id: 'stu-old', name: '학생옛명렬' }]);
+    expect(files['students']).toEqual(OLD_ROSTER);
   });
 
-  it('마커에 없는 파일은 마커가 있어도 정상 치유된다(게이트는 remove 키에만)', async () => {
-    const entry = { checksum: 'todos-v1', lastModified: BEFORE_REMOVAL, size: 50 };
+  it('마커에 없는 파일은 마커가 있어도 정상 치유된다(게이트는 guardDownloads 키에만)', async () => {
+    const entry = { checksum: 'todos-v1', lastModified: REMOVED_AT, size: 50 };
     const remote = manifest({ todos: entry }, 'my-pc');
     const local = manifest({ todos: entry }, 'my-pc');
     const { storage, files } = makeStorage({
@@ -166,14 +217,38 @@ describe('F1(B1) — 전환-remove 파일의 치유 다운로드 게이트', () 
     expect(files['todos']).toEqual({ items: ['할 일'] });
   });
 
-  it('마커 손상(형식 불일치)은 마커 없음으로 취급한다(fail-open — 치유는 원래 보호 장치)', async () => {
-    const { useCase, files } = healScenario(BEFORE_REMOVAL, {
-      [YEAR_TRANSITION_REMOVED_KEY]: { broken: true },
+  it('마커 손상(형식 불일치)은 마커 없음으로 취급한다(fail-open — 다운로드는 보호 장치)', async () => {
+    const { useCase, files } = scenario({
+      localChecksum: 'remote-v1',
+      storageInit: { [YEAR_TRANSITION_REMOVED_KEY]: { broken: true } },
     });
 
     const result = await useCase.execute();
 
     expect(result.downloaded).toContain('students');
-    expect(files['students']).toEqual([{ id: 'stu-old', name: '학생옛명렬' }]);
+    expect(files['students']).toEqual(OLD_ROSTER);
+  });
+
+  it('F7b 효과: 리모트가 빈 값으로 정화된 뒤 새 PC(마커 없음)는 빈 값을 받는다 — 옛 명렬 아님', async () => {
+    // 전환 기기의 첫 업로드가 students=[]를 올린 상태. 새 PC: 장부·로컬 파일·마커 전부 없음.
+    const remote = manifest(
+      { students: { checksum: 'empty-v2', lastModified: SKEWED_FUTURE, size: 2 } },
+      'transitioned-pc',
+    );
+    const { storage, files } = makeStorage();
+    const { port } = makeDrive(remote, { students: '[]' });
+    const useCase = new SyncFromCloud(
+      storage,
+      port,
+      makeSyncRepo(null),
+      'new-pc',
+      '새 PC',
+      'latest',
+    );
+
+    const result = await useCase.execute();
+
+    expect(result.downloaded).toContain('students');
+    expect(files['students']).toEqual([]); // 정화된 빈 값 — 옛 학년도 명렬이 아니다
   });
 });

@@ -633,7 +633,15 @@ async function applyObservations(
     tags?: readonly string[];
   } = { studentId, content };
   const classId = asStr(d['classId']);
-  if (classId !== undefined) input.classId = classId;
+  if (classId !== undefined) {
+    // F7f(RM1) — 출결·진도 가드와 동일 근거: 미상 classId 고아 관찰 차단(404) +
+    // 보관된 수업반 새 기록 거부(조회·기존 기록은 무변경 — S1.4-F 계열).
+    if (!deps.progress.classExists(classId)) return bad('수업반을 찾을 수 없습니다.', 404);
+    if (deps.progress.isClassArchived(classId)) {
+      return bad('보관된 수업반이라 새로 기록할 수 없어요. 보관을 해제한 뒤 다시 시도해 주세요.');
+    }
+    input.classId = classId;
+  }
   const date = asStr(d['date']);
   if (date !== undefined) input.date = date;
   if (Array.isArray(d['tags'])) {

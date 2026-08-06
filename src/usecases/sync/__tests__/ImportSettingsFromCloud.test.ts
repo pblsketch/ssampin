@@ -5,10 +5,7 @@ import type { IDriveSyncRepository } from '@domain/repositories/IDriveSyncReposi
 import type { DriveFolderInfo } from '@domain/ports/IGoogleDrivePort';
 import type { DriveSyncManifest, DriveSyncFileInfo } from '@domain/entities/DriveSyncState';
 import type { Settings, SyncSettings, WidgetStyleSettings } from '@domain/entities/Settings';
-import {
-  ImportSettingsFromCloud,
-  ImportSettingsFromCloudError,
-} from '../ImportSettingsFromCloud';
+import { ImportSettingsFromCloud, ImportSettingsFromCloudError } from '../ImportSettingsFromCloud';
 
 // ============================================================
 // 테스트용 최소 Settings 팩토리
@@ -392,6 +389,39 @@ describe('ImportSettingsFromCloud', () => {
     });
   });
 
+  describe('F7e(RH1) — currentTerm은 "더 최신 학기 승" 보존', () => {
+    it('리모트에 currentTerm이 없으면(미전환 기기) 로컬 최신 값이 생존한다', async () => {
+      const ctx = makeContext({
+        localSettings: mkSettings({ currentTerm: '2027-1' }),
+        remoteSettings: mkSettings({ schoolName: '원격 중학교' }), // currentTerm 벗겨진 settings
+      });
+      await ctx.usecase.execute();
+      const saved = (await ctx.storage.read<Settings>('settings')) as Settings;
+      expect(saved.schoolName).toBe('원격 중학교'); // 나머지는 리모트 적용
+      expect(saved.currentTerm).toBe('2027-1'); // 필터 기준은 벗겨지지 않는다(qa3-C 계열)
+    });
+
+    it('리모트가 구학기면 로컬을 보존하고, 더 최신 학기면 리모트를 채택한다', async () => {
+      const older = makeContext({
+        localSettings: mkSettings({ currentTerm: '2027-1' }),
+        remoteSettings: mkSettings({ currentTerm: '2026-2' }),
+      });
+      await older.usecase.execute();
+      expect(((await older.storage.read<Settings>('settings')) as Settings).currentTerm).toBe(
+        '2027-1',
+      );
+
+      const newer = makeContext({
+        localSettings: mkSettings({ currentTerm: '2027-1' }),
+        remoteSettings: mkSettings({ currentTerm: '2027-2' }),
+      });
+      await newer.usecase.execute();
+      expect(((await newer.storage.read<Settings>('settings')) as Settings).currentTerm).toBe(
+        '2027-2',
+      );
+    });
+  });
+
   describe('widgetStyle.backgroundImage 처리', () => {
     it('로컬에 backgroundImage가 있으면 로컬 값을 유지한다', async () => {
       const localWidgetStyle: WidgetStyleSettings = {
@@ -459,9 +489,7 @@ describe('ImportSettingsFromCloud', () => {
   describe('NO_BACKUP', () => {
     it('매니페스트가 null이면 NO_BACKUP', async () => {
       const ctx = makeContext({ manifest: null });
-      await expect(ctx.usecase.execute()).rejects.toBeInstanceOf(
-        ImportSettingsFromCloudError,
-      );
+      await expect(ctx.usecase.execute()).rejects.toBeInstanceOf(ImportSettingsFromCloudError);
       try {
         await ctx.usecase.execute();
       } catch (e) {

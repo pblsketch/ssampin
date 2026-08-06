@@ -73,6 +73,7 @@ import {
   deleteArchive,
   importArchive,
 } from './archiveManager';
+import { isCorruptShortDataFile } from './dataFileRules';
 import { createDesktopWidgetManager, type DesktopWidgetManager } from './desktopWidgetManager';
 import type { DesktopModeFallbackEvent } from './desktopWidgetTypes';
 import { initNativeDesktopDiag, diagLog, diagLogVerbose, diagWarn } from './nativeDesktopDiag';
@@ -2453,7 +2454,9 @@ function registerIpcHandlers(): void {
     try {
       if (fs.existsSync(filePath)) {
         const raw = fs.readFileSync(filePath, 'utf-8');
-        if (raw.length < 5) {
+        // F7a: 5바이트 미만이라도 유효한 빈 구조값(`[]`·`{}`)은 정상 — 손상 오탐이
+        // .backup.json에서 옛 데이터를 부활시키던 것을 제거(학년도 전환 빈 값 리셋의 전제).
+        if (isCorruptShortDataFile(raw)) {
           throw new Error('파일이 비어있음');
         }
         JSON.parse(raw); // JSON 유효성 검증

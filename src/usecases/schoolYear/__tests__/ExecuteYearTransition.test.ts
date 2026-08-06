@@ -197,7 +197,8 @@ function seedLiveData(storage: FakeStorage): void {
 }
 
 function makeDeps(storage: FakeStorage, gateway: FakeGateway) {
-  let currentTerm: string | undefined = '2026-1';
+  // F7g: 마법사는 2학기(학년도 말) 마감 전용 — 테스트 기본 학기도 2학기로 맞춘다.
+  let currentTerm: string | undefined = '2026-2';
   const reloadStores = vi.fn(async (_filenames: readonly string[]) => {});
   const deps: YearTransitionDeps = {
     storage,
@@ -228,15 +229,15 @@ describe('executeYearTransition — 성공 경로', () => {
     const before = storage.snapshot();
     const { deps, reloadStores, getTerm } = makeDeps(storage, gateway);
 
-    const result = await executeYearTransition(deps, { closingTerm: '2026-1' });
+    const result = await executeYearTransition(deps, { closingTerm: '2026-2' });
     expect(result.ok, JSON.stringify(result)).toBe(true);
     if (!result.ok) return;
-    expect(result.nextTerm).toBe('2026-2');
+    expect(result.nextTerm).toBe('2027-1');
     expect(result.safetyBackupPath).toContain('safety');
     expect(result.resetKeys).toHaveLength(YEAR_TRANSITION_FILES.length);
 
     // 아카이브 사본 == 전환 전 라이브 원문(해시 일치의 유닛 등가 — 바이트 문자열 동치)
-    const archive = gateway.archives.get('2026-1')!;
+    const archive = gateway.archives.get('2026-2')!;
     for (const [key, raw] of before.files) {
       expect(archive.get(`${key}.json`)?.content, key).toBe(raw);
     }
@@ -244,10 +245,10 @@ describe('executeYearTransition — 성공 경로', () => {
       Buffer.from(PNG).toString('base64'),
     );
 
-    // 리셋 결과 — 봉투 정의표 그대로
-    expect(await storage.read('students')).toBeNull(); // remove(배열 루트 ㉓)
-    expect(await storage.read('seating')).toBeNull(); // remove
-    expect(await storage.read('seating-snapshots')).toBeNull(); // remove
+    // 리셋 결과 — 봉투 정의표 그대로 (F7b: 배열 루트는 [] 쓰기 — 첫 업로드가 리모트 정화)
+    expect(await storage.read('students')).toEqual([]);
+    expect(await storage.read('seating')).toBeNull(); // remove 유지(빈 유효 표현 미검증)
+    expect(await storage.read('seating-snapshots')).toEqual([]);
     expect(await storage.read('teaching-classes')).toEqual({ classes: [] });
     expect(await storage.read('attendance')).toEqual({ records: [] }); // 툼스톤 미승계
     expect(await storage.read('student-records')).toEqual({
@@ -265,17 +266,21 @@ describe('executeYearTransition — 성공 경로', () => {
       performanceResults: [],
       semesterResults: [],
     });
-    // 모든 리셋 파일이 5바이트 이상(함정 ㉓) 또는 부재(remove)
+    // 모든 리셋 파일이 유효 JSON 구조값(F7a — 짧은 빈 배열도 정상) 또는 부재(remove)
     for (const spec of YEAR_TRANSITION_FILES) {
       const raw = storage.files.get(spec.key);
-      if (spec.reset.kind === 'remove') expect(raw, spec.key).toBeUndefined();
-      else expect(raw!.length, spec.key).toBeGreaterThanOrEqual(5);
+      if (spec.reset.kind === 'remove') {
+        expect(raw, spec.key).toBeUndefined();
+      } else {
+        const parsed: unknown = JSON.parse(raw!); // 파스 실패면 throw = 테스트 실패
+        expect(parsed !== null && typeof parsed === 'object', spec.key).toBe(true);
+      }
     }
 
     // 바이너리 원본은 삭제하지 않는다(비가역 삭제 배제 — 사본만 생성)
     expect(storage.binaries.has('obs-attachments/att-1.png')).toBe(true);
 
-    expect(getTerm()).toBe('2026-2'); // settings.currentTerm 갱신
+    expect(getTerm()).toBe('2027-1'); // settings.currentTerm 갱신
     expect(await storage.read(YEAR_TRANSITION_STATE_KEY)).toBeNull(); // 상태 파일 정리
     expect(reloadStores).toHaveBeenCalledWith(YEAR_TRANSITION_FILES.map((f) => f.key)); // 조용한 리로드
   });
@@ -313,12 +318,26 @@ describe('AC: 실패 시 fail-closed', () => {
     const before = storage.snapshot();
     const { deps, getTerm } = makeDeps(storage, gateway);
 
-    const result = await executeYearTransition(deps, { closingTerm: '2026-1' });
+    const result = await executeYearTransition(deps, { closingTerm: '2026-2' });
     expect(result).toMatchObject({ ok: false, step: 'safety-backup' });
     expect(gateway.createCalls).toHaveLength(0); // 시작 자체를 안 함
     expect(storage.snapshot().files).toEqual(before.files); // 1바이트 무변경
-    expect(getTerm()).toBe('2026-1');
+    expect(getTerm()).toBe('2026-2');
     expect(await detectPendingTransition(storage)).toBeNull();
+  });
+
+  test('F7g(RM2): 1학기 마감은 유즈케이스 진입부에서 차단된다(안전 백업조차 안 만든다)', async () => {
+    const before = storage.snapshot();
+    const { deps, getTerm } = makeDeps(storage, gateway);
+
+    const result = await executeYearTransition(deps, { closingTerm: '2026-1' });
+    expect(result).toMatchObject({ ok: false, step: 'safety-backup' });
+    if (result.ok) return;
+    expect(result.error).toContain('2학기');
+    expect(gateway.safetyCalls).toBe(0);
+    expect(gateway.createCalls).toHaveLength(0);
+    expect(storage.snapshot().files).toEqual(before.files);
+    expect(getTerm()).toBe('2026-2');
   });
 
   test('② archive:create 실패 → 라이브 1바이트 무변경 + safety 경로 보고', async () => {
@@ -326,13 +345,13 @@ describe('AC: 실패 시 fail-closed', () => {
     const before = storage.snapshot();
     const { deps, getTerm } = makeDeps(storage, gateway);
 
-    const result = await executeYearTransition(deps, { closingTerm: '2026-1' });
+    const result = await executeYearTransition(deps, { closingTerm: '2026-2' });
     expect(result).toMatchObject({ ok: false, step: 'archive' });
     if (result.ok) return;
     expect(result.safetyBackupPath).toContain('safety'); // 사용자 안내용 경로 동봉
     expect(storage.snapshot().files).toEqual(before.files); // 라이브+상태 전부 전환 전과 동일
     expect(storage.snapshot().binaries).toEqual(before.binaries);
-    expect(getTerm()).toBe('2026-1');
+    expect(getTerm()).toBe('2026-2');
   });
 
   test('③ 체크섬 재검증 실패 → 리셋 미진입(라이브 무변경)', async () => {
@@ -340,7 +359,7 @@ describe('AC: 실패 시 fail-closed', () => {
     const before = new Map(storage.files);
     const { deps } = makeDeps(storage, gateway);
 
-    const result = await executeYearTransition(deps, { closingTerm: '2026-1' });
+    const result = await executeYearTransition(deps, { closingTerm: '2026-2' });
     expect(result).toMatchObject({ ok: false, step: 'verify-archive' });
     for (const spec of YEAR_TRANSITION_FILES) {
       expect(storage.files.get(spec.key), spec.key).toBe(before.get(spec.key)); // 리셋 미진입
@@ -351,14 +370,25 @@ describe('AC: 실패 시 fail-closed', () => {
     storage.swallowWriteKeys.add('attendance'); // 함정 ⑪ 모사
     const { deps } = makeDeps(storage, gateway);
 
-    const result = await executeYearTransition(deps, { closingTerm: '2026-1' });
+    const result = await executeYearTransition(deps, { closingTerm: '2026-2' });
     expect(result).toMatchObject({ ok: false, step: 'verify-reset' });
     if (result.ok) return;
     expect(result.error).toContain('attendance');
     expect(result.safetyBackupPath).toContain('safety');
     // 중단 지점 상태가 남아 재개/원복 안내 근거가 된다
     const state = await detectPendingTransition(storage);
-    expect(state).toMatchObject({ closingTerm: '2026-1', phase: 'resetting' });
+    expect(state).toMatchObject({ closingTerm: '2026-2', phase: 'resetting' });
+  });
+
+  test('F7d(RB2): 마커 기록의 조용한 쓰기 실패 주입 → 전환 중단(마커 없는 비우기 금지)', async () => {
+    storage.swallowWriteKeys.add(YEAR_TRANSITION_REMOVED_KEY); // data:write 실패 은닉 모사
+    const { deps } = makeDeps(storage, gateway);
+
+    const result = await executeYearTransition(deps, { closingTerm: '2026-2' });
+    expect(result).toMatchObject({ ok: false, step: 'verify-reset' });
+    if (result.ok) return;
+    expect(result.error).toContain('마커');
+    expect(result.safetyBackupPath).toContain('safety');
   });
 });
 
@@ -367,20 +397,41 @@ describe('중단 지점 재개 시나리오', () => {
     const before = storage.snapshot();
     storage.swallowWriteKeys.add('attendance');
     const { deps, getTerm } = makeDeps(storage, gateway);
-    const first = await executeYearTransition(deps, { closingTerm: '2026-1' });
+    const first = await executeYearTransition(deps, { closingTerm: '2026-2' });
     expect(first.ok).toBe(false);
 
     // 장애 해소 후 재실행 — archive:create는 "이미 존재"를 반환하지만 재개 모드가 흡수한다
     storage.swallowWriteKeys.clear();
-    const second = await executeYearTransition(deps, { closingTerm: '2026-1' });
+    const second = await executeYearTransition(deps, { closingTerm: '2026-2' });
     expect(second.ok, JSON.stringify(second)).toBe(true);
-    expect(getTerm()).toBe('2026-2');
+    expect(getTerm()).toBe('2027-1');
     expect(await storage.read(YEAR_TRANSITION_STATE_KEY)).toBeNull();
     expect(await storage.read('attendance')).toEqual({ records: [] });
     // 아카이브 사본은 첫 시도의 전환 전 원문 그대로(재개가 사본을 덮지 않는다)
-    expect(gateway.archives.get('2026-1')!.get('attendance.json')?.content).toBe(
+    expect(gateway.archives.get('2026-2')!.get('attendance.json')?.content).toBe(
       before.files.get('attendance'),
     );
+  });
+
+  test('F7g 예외: 1학기 중단분(pending)의 재개는 학기 가드를 통과한다', async () => {
+    // 과거(가드 도입 전) 1학기 전환이 중단된 상태를 심는다 — 이어하기를 막으면 반쯤 전환에 갇힌다.
+    const state: YearTransitionState = {
+      version: 1,
+      closingTerm: '2026-1',
+      nextTerm: '2026-2',
+      previousTerm: '2026-1',
+      startedAt: '2026-08-01T00:00:00.000Z',
+      safetyBackupPath: 'C:/fake/old-safety.json',
+      phase: 'resetting',
+      resetDone: [],
+    };
+    await storage.write(YEAR_TRANSITION_STATE_KEY, state);
+    const { deps, getTerm } = makeDeps(storage, gateway);
+
+    const result = await executeYearTransition(deps, { closingTerm: '2026-1' });
+    expect(result.ok, JSON.stringify(result)).toBe(true); // 재개는 차단하지 않는다
+    expect(getTerm()).toBe('2026-2');
+    expect(await storage.read(YEAR_TRANSITION_STATE_KEY)).toBeNull();
   });
 
   test('다른 학기의 중단분이 남아 있으면 새 전환을 거부한다', async () => {
@@ -407,10 +458,10 @@ describe('AC: 전환 취소(원복) 후 전환 전과 동일', () => {
   test('성공한 전환을 원복 → 17키 데이터·바이너리·currentTerm이 전환 전과 동일 + 사본 유지', async () => {
     const before = storage.snapshot();
     const { deps, getTerm } = makeDeps(storage, gateway);
-    const done = await executeYearTransition(deps, { closingTerm: '2026-1' });
+    const done = await executeYearTransition(deps, { closingTerm: '2026-2' });
     expect(done.ok).toBe(true);
 
-    const revert = await revertYearTransition(deps, '2026-1');
+    const revert = await revertYearTransition(deps, '2026-2');
     expect(revert.ok, JSON.stringify(revert)).toBe(true);
 
     for (const [key, raw] of before.files) {
@@ -419,16 +470,16 @@ describe('AC: 전환 취소(원복) 후 전환 전과 동일', () => {
     expect(Buffer.from(storage.binaries.get('obs-attachments/att-1.png')!).toString('base64')).toBe(
       before.binaries.get('obs-attachments/att-1.png'),
     );
-    expect(getTerm()).toBe('2026-1'); // 되돌린 데이터의 학기로 복귀
-    expect(gateway.archives.has('2026-1')).toBe(true); // 보관 사본은 유지
+    expect(getTerm()).toBe('2026-2'); // 되돌린 데이터의 학기로 복귀
+    expect(gateway.archives.has('2026-2')).toBe(true); // 보관 사본은 유지
     expect(await storage.read(YEAR_TRANSITION_STATE_KEY)).toBeNull();
   });
 
   test('사본 손상(체크섬 불일치) 시 원복이 진행되지 않는다', async () => {
     const { deps } = makeDeps(storage, gateway);
-    await executeYearTransition(deps, { closingTerm: '2026-1' });
+    await executeYearTransition(deps, { closingTerm: '2026-2' });
     gateway.readFailPaths.add('students.json');
-    const revert = await revertYearTransition(deps, '2026-1');
+    const revert = await revertYearTransition(deps, '2026-2');
     expect(revert.ok).toBe(false);
   });
 });

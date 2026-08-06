@@ -904,7 +904,8 @@ describe('applyLiveSyncWrite — observations(관찰기록)', () => {
         domain: 'observations',
         op: 'create',
         idempotencyKey: 'o1',
-        data: { studentId: 's1', classId: 'c1', content: '발표 잘함', tags: ['수업태도'] },
+        // F7f: classId는 존재하는 수업반이어야 한다(cls-1 = mock classExists 통과)
+        data: { studentId: 's1', classId: 'cls-1', content: '발표 잘함', tags: ['수업태도'] },
       },
       deps,
     );
@@ -912,10 +913,40 @@ describe('applyLiveSyncWrite — observations(관찰기록)', () => {
     expect(calls[0]?.fn).toBe('observations.add');
     expect(calls[0]?.args[0]).toMatchObject({
       studentId: 's1',
-      classId: 'c1',
+      classId: 'cls-1',
       content: '발표 잘함',
       tags: ['수업태도'],
     });
+  });
+
+  it('F7f(RM1): 미상 classId는 404, 보관된 수업반은 사용자 언어로 거부한다', async () => {
+    const unknown = await applyLiveSyncWrite(
+      {
+        domain: 'observations',
+        op: 'create',
+        idempotencyKey: 'o-unknown',
+        data: { studentId: 's1', classId: 'no-such-class', content: '내용' },
+      },
+      deps,
+    );
+    expect(unknown).toMatchObject({ ok: false, status: 404 });
+
+    const archived = await applyLiveSyncWrite(
+      {
+        domain: 'observations',
+        op: 'create',
+        idempotencyKey: 'o-archived',
+        data: { studentId: 's1', classId: 'cls-archived', content: '내용' },
+      },
+      deps,
+    );
+    expect(archived.ok).toBe(false);
+    if (!archived.ok) {
+      expect(archived.error).toBe(
+        '보관된 수업반이라 새로 기록할 수 없어요. 보관을 해제한 뒤 다시 시도해 주세요.',
+      );
+    }
+    expect(calls.filter((c) => c.fn === 'observations.add')).toHaveLength(0);
   });
 
   it('content 누락 거부', async () => {

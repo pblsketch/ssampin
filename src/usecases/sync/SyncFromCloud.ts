@@ -158,6 +158,24 @@ function filterOldYearRemoteRecords<T extends { readonly term?: string }>(
 }
 
 /**
+ * F7c — 마커 해제 판정: 파일에 "실질 내용"이 있는가(사용자가 새로 입력했는가).
+ *  - null/빈 배열/최상위 배열이 전부 빈 봉투 → 실질 내용 없음(마커 유지)
+ *  - 배열에 항목·봉투의 어느 배열에든 항목 → 실질 내용(마커 해제 → 정상 동기화 재개)
+ *  - 배열 없는 객체는 내용으로 취급(보수: 해제 방향 — 게이트 대상 3키는 전부 배열 보유 형태)
+ */
+function hasSubstantiveContent(data: unknown): boolean {
+  if (data === null || data === undefined) return false;
+  if (Array.isArray(data)) return data.length > 0;
+  if (typeof data === 'object') {
+    const values = Object.values(data as Record<string, unknown>);
+    const arrays = values.filter((v): v is unknown[] => Array.isArray(v));
+    if (arrays.length > 0) return arrays.some((a) => a.length > 0);
+    return values.length > 0;
+  }
+  return true;
+}
+
+/**
  * F3(H1) — settings 통파일 교체 시 currentTerm은 "더 최신 학기 승" 보존 규칙.
  *
  * settings는 병합 없는 통파일 LWW라, 아직 전환하지 않은 기기가 올린 settings가
@@ -556,9 +574,9 @@ export class SyncFromCloud {
       }
     }
 
-    // F1(B1) — 학년도 전환이 remove로 비운 파일 마커(로컬 전용, SYNC_FILES 미등재).
-    // 치유 다운로드가 이 파일들에 대해 자기 리모트 옛 사본을 부활시키는 것을 막는다(qa3-D).
-    // lazy 1회 로드 — 읽기 실패=마커 없음(fail-open: 치유는 원래 데이터 보호 장치다).
+    // F7c — 학년도 전환이 비운 파일 마커(로컬 전용, SYNC_FILES 미등재). 마커 활성 동안
+    // 해당 키의 모든 다운로드 분기를 스킵해 리모트 옛 사본 부활을 막는다(qa3-D·RB1).
+    // lazy 1회 로드 — 읽기 실패=마커 없음(fail-open: 다운로드는 원래 데이터 보호 장치다).
     let removedMarkerCache: YearTransitionRemovedMarker | null | undefined;
     const loadRemovedMarker = async (): Promise<YearTransitionRemovedMarker | null> => {
       if (removedMarkerCache !== undefined) return removedMarkerCache;
@@ -635,29 +653,40 @@ export class SyncFromCloud {
       // 오염 상태(과거 no-op 업로드가 받은 적 없는 리모트 항목을 로컬 장부에 승계)이므로
       // 스킵하지 않고 아래 첫-다운로드 경로로 진행해 자가 치유한다.
       // 로컬 파일이 없으니 다운로드로 잃을 데이터도 없다(데이터 보존 안전).
+      // F7c(B1 구조 수정) — 전환 마커 게이트: 마커 활성 동안 이 키의 **모든** 다운로드 분기
+      // (치유·충돌·첫 다운로드)를 스킵한다. 시각 비교(removedAt vs modifiedTime)는 시계
+      // 스큐로 반증(RH2)되어 제거 — 판정은 "마커 활성 여부"뿐이다. 해제 조건은
+      // (a) 로컬에 실질 내용이 생김(사용자 입력 — 빈 값이면 유지) (b) revert(마커 파일 삭제).
+      // 남는 창(전환~첫 업로드)은 F7b의 빈 값 업로드가 리모트를 정화해 닫는다.
+      {
+        const removedMarker = await loadRemovedMarker();
+        if (removedMarker !== null && removedMarker.keys.includes(filename)) {
+          let localData: unknown = null;
+          try {
+            localData = await this.storage.read<unknown>(filename);
+          } catch {
+            localData = null; // 읽기 실패 = 실질 내용 미확인 — 보수적으로 스킵 유지
+          }
+          if (hasSubstantiveContent(localData)) {
+            await releaseRemovedKey(filename);
+            console.log(
+              `[SyncFromCloud]   ${filename}: 전환 마커 해제(로컬에 새 내용) — 정상 동기화 재개`,
+            );
+          } else {
+            skipped.push(filename);
+            console.log(
+              `[SyncFromCloud]   ${filename}: 다운로드 스킵(학년도 전환으로 비운 파일 — 마커 활성)`,
+            );
+            continue;
+          }
+        }
+      }
+
       if (localInfo && localInfo.checksum === remoteInfo.checksum) {
         const localData = await this.storage.read<unknown>(filename);
         if (localData !== null) {
           skipped.push(filename);
           continue;
-        }
-        // F1(B1): 학년도 전환이 의도적으로 비운 파일이면 "치유"가 곧 자기 리모트 옛 사본의
-        // 부활이다(qa3-D). 단 리모트 modifiedTime이 removedAt보다 새로우면 다른 기기가
-        // 전환 이후 실제 새 데이터를 올린 것 — 정당한 다운로드로 보고 해당 키 마커를 해제한다.
-        const removedMarker = await loadRemovedMarker();
-        if (removedMarker !== null && removedMarker.keys.includes(filename)) {
-          const remoteIsNewerThanRemoval =
-            new Date(remoteInfo.lastModified).getTime() >
-            new Date(removedMarker.removedAt).getTime();
-          if (!remoteIsNewerThanRemoval) {
-            skipped.push(filename);
-            console.log(`[SyncFromCloud]   ${filename}: 치유 스킵(학년도 전환으로 비운 파일)`);
-            continue;
-          }
-          await releaseRemovedKey(filename);
-          console.log(
-            `[SyncFromCloud]   ${filename}: 치유 허용(전환 이후 새 리모트 데이터 — 마커 해제)`,
-          );
         }
         console.log(
           `[SyncFromCloud]   ${filename}: 🩹 장부엔 "받았음"인데 로컬 파일 없음 → 다운로드로 치유`,

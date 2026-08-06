@@ -31,16 +31,26 @@ import { withFileLock } from '@usecases/shared/fileWriteLock';
 
 /**
  * 리셋 방식:
- *  - 'empty-envelope': 온전한 빈 봉투 객체를 쓴다(pretty 직렬화 시 5바이트 이상 보장).
+ *  - 'empty-envelope': 온전한 빈 값을 쓴다. **F7b(QA-A RB1 구조 수정)**: 배열 루트 파일도
+ *    `[]`로 쓴다 — F7a(data:read 손상 휴리스틱 정밀화)가 "5바이트 미만=손상" 오탐을 제거해
+ *    유효한 빈 구조값이 더는 .backup.json 부활을 부르지 않는다(구 함정 ㉓의 remove 우회를 대체).
+ *    효과: 전환 직후 업로드가 빈 값을 리모트에 올려 **리모트가 정화**된다 — conflict 분기·
+ *    새 PC 첫 다운로드·사후 업로드 경쟁의 옛 데이터 부활이 첫 업로드 이후 구조적으로 소멸.
  *  - 'preserve-fields': 봉투는 비우되 사용자 어휘·설정 성격 필드는 승계한다(§6.2 원칙 —
  *    "학년도가 바뀌면 의미가 없어지는 학생 데이터만 리셋, 설정·환경은 유지").
  *  - 'remove': 파일을 삭제한다(원본+.backup.json+.tmp 전부 — data:remove 계약).
- *    배열 루트 파일은 빈 배열이 2바이트라 함정 ㉓(5바이트 미만=손상 판정→백업 부활)에
- *    걸리고, seating은 rows/cols 필수 객체라 인공 0×0이 유효 좌석이 아니다 —
- *    null(파일 없음)은 모든 스토어가 첫 실행 상태로 처리한다.
+ *    빈 유효 표현이 검증되지 않은 파일만(seating — null=첫 실행 경로만 검증됨, 0×0 인공
+ *    객체는 렌더 가정 미검증). remove 키는 업로드로 리모트를 정화할 수 없으므로
+ *    **F7c 마커 게이트가 유일한 다운로드 방어**다.
+ *
+ * guardDownloads(F7c): 전환이 비운 뒤 리모트의 옛 사본이 다운로드로 부활할 수 있는 키 —
+ * 마커(YEAR_TRANSITION_REMOVED_KEY)에 기록되어 SyncFromCloud의 전 다운로드 분기가 스킵한다.
+ * 병합 3도메인(attendance 등)은 S2.2b 옛 학년도 필터가 레코드 수준에서 이미 방어하므로 제외.
  */
 export interface YearTransitionFileSpec {
   readonly key: string;
+  /** F7c — 전환 후 이 키의 다운로드를 마커로 게이트할지(비병합 통파일 부활 표면만 true). */
+  readonly guardDownloads?: boolean;
   readonly reset:
     | { readonly kind: 'empty-envelope'; readonly envelope: unknown }
     | { readonly kind: 'preserve-fields'; readonly build: (current: unknown) => unknown }
@@ -50,8 +60,10 @@ export interface YearTransitionFileSpec {
 /** 전환(보관+리셋) 대상 17키 — 각 리포지토리가 기대하는 봉투 형태 기준(실측 근거는 계획 보고). */
 export const YEAR_TRANSITION_FILES: readonly YearTransitionFileSpec[] = [
   // ── 담임 축 ──
-  { key: 'students', reset: { kind: 'remove' } }, // Student[] 배열 루트(㉓)
-  { key: 'seating', reset: { kind: 'remove' } }, // SeatingData 단일 객체 — rows/cols 필수(0×0 불가)
+  // F7b: `[]` 쓰기(F7a로 유효) — 첫 업로드가 리모트 옛 명렬을 정화한다(remove는 정화 불가였다).
+  { key: 'students', guardDownloads: true, reset: { kind: 'empty-envelope', envelope: [] } },
+  // seating은 빈 유효 표현 미검증(0×0은 렌더 가정 밖) — remove 유지, F7c 마커가 유일 방어.
+  { key: 'seating', guardDownloads: true, reset: { kind: 'remove' } },
   {
     key: 'seat-constraints',
     reset: {
@@ -75,7 +87,12 @@ export const YEAR_TRANSITION_FILES: readonly YearTransitionFileSpec[] = [
   },
   { key: 'record-drafts', reset: { kind: 'empty-envelope', envelope: { records: [] } } },
   { key: 'record-evidence', reset: { kind: 'empty-envelope', envelope: { records: [] } } },
-  { key: 'seating-snapshots', reset: { kind: 'remove' } }, // SeatingSnapshot[] 배열 루트(㉓)
+  // F7b: `[]` 쓰기(F7a로 유효) — 업로드 정화. (SYNC_REGISTRY 등재 파일 — 다운로드 게이트도 필요)
+  {
+    key: 'seating-snapshots',
+    guardDownloads: true,
+    reset: { kind: 'empty-envelope', envelope: [] },
+  },
   { key: 'surveys', reset: { kind: 'empty-envelope', envelope: { surveys: [], localData: [] } } },
   { key: 'assignments', reset: { kind: 'empty-envelope', envelope: { assignments: [] } } },
   // ── 교과 축 ──
@@ -117,14 +134,14 @@ export const YEAR_TRANSITION_FILES: readonly YearTransitionFileSpec[] = [
 export const YEAR_TRANSITION_STATE_KEY = 'year-transition-state';
 
 /**
- * F1(B1) — 전환이 remove로 비운 파일의 **로컬 전용 마커**(data/year-transition-removed.json).
+ * F7c — 전환이 비운(guardDownloads) 파일의 **로컬 전용 마커**(data/year-transition-removed.json).
  * ⚠️ SYNC_REGISTRY(SYNC_FILES)에 절대 등재하지 않는다 — 이 마커가 동기화되면 다른 기기의
- * 정상 파일까지 치유가 막힌다(마커는 "이 기기가 의도적으로 비웠다"는 로컬 사실이다).
+ * 정상 파일까지 다운로드가 막힌다(마커는 "이 기기가 의도적으로 비웠다"는 로컬 사실이다).
  *
- * 용도: SyncFromCloud의 "장부엔 받았음+로컬 파일 부재 → 치유 다운로드"(ADR-024)가
- * 전환-remove 파일(students/seating/seating-snapshots)에 대해 자기 기기의 옛 리모트
- * 사본을 부활시키는 것(qa3-D)을 막는다. 리모트 modifiedTime이 removedAt보다 새로우면
- * 다른 기기가 전환 이후 올린 정당한 새 데이터로 보고 다운로드를 허용+해당 키 해제.
+ * 용도: SyncFromCloud의 **모든 다운로드 분기**(치유·충돌·첫 다운로드)가 마커 활성 키를
+ * 스킵해 리모트 옛 사본 부활(qa3-D·RB1 우회 3경로)을 막는다. 판정에 시각 비교는 쓰지
+ * 않는다(시계 스큐 반증 — RH2). 해제: (a) 로컬에 실질 내용이 생김(사용자 입력)
+ * (b) revert(전환 원복 시 마커 삭제). 남는 창은 F7b의 빈 값 업로드가 리모트를 정화해 닫는다.
  */
 export const YEAR_TRANSITION_REMOVED_KEY = 'year-transition-removed';
 
@@ -132,7 +149,7 @@ export interface YearTransitionRemovedMarker {
   readonly version: 1;
   /** 어느 학기 전환이 비웠는지. */
   readonly term: string;
-  /** 비운 시각(ISO) — 리모트 modifiedTime과 비교해 "전환 이후 새 데이터" 예외를 판정. */
+  /** 비운 시각(ISO) — 진단·표시용. F7c 다운로드 판정에는 쓰지 않는다(시계 스큐 — RH2). */
   readonly removedAt: string;
   readonly keys: readonly string[];
 }
@@ -268,15 +285,17 @@ function stableEquals(a: unknown, b: unknown): boolean {
 }
 
 /**
- * remove 리셋 키를 마커에 기록(read-modify-write). 실패는 무해로 삼키지 않고 전파한다 —
- * 마커 없이 remove만 되면 치유 다운로드 부활(qa3-D)이 열리므로 리셋 검증과 같은 급이다.
+ * guardDownloads 리셋 키를 마커에 기록(read-modify-write). 실패는 무해로 삼키지 않는다 —
+ * 마커 없이 비우기만 되면 다운로드 부활(qa3-D)이 열리므로 리셋 검증과 같은 급이다.
+ * F7d(RB2): data:write는 실패를 알리지 않으므로 **쓰고 다시 읽어 대조**한다.
+ * 반환: null=성공, 문자열=실패 사유(호출자는 전환을 중단한다).
  */
 async function recordRemovedKey(
   storage: IStoragePort,
   term: string,
   now: string,
   key: string,
-): Promise<void> {
+): Promise<string | null> {
   let existing: YearTransitionRemovedMarker | null = null;
   try {
     const raw = await storage.read<YearTransitionRemovedMarker>(YEAR_TRANSITION_REMOVED_KEY);
@@ -288,11 +307,20 @@ async function recordRemovedKey(
   const marker: YearTransitionRemovedMarker = {
     version: 1,
     term,
-    // 같은 학기 재개면 최초 removedAt 유지 — 시각을 미루면 그 사이 리모트의 새 데이터까지 막는다.
+    // 같은 학기 재개면 최초 removedAt 유지(진단용 시각 — F7c 판정에는 쓰지 않는다).
     removedAt: prior !== null ? prior.removedAt : now,
     keys: prior !== null ? Array.from(new Set([...prior.keys, key])) : [key],
   };
   await storage.write(YEAR_TRANSITION_REMOVED_KEY, marker);
+  try {
+    const after = await storage.read<unknown>(YEAR_TRANSITION_REMOVED_KEY);
+    if (!stableEquals(after, marker)) {
+      return `전환 마커 기록 검증 실패(기대값 불일치): ${key}`;
+    }
+  } catch (err) {
+    return `전환 마커 기록 검증 실패(재독 불가): ${key} (${errMsg(err)})`;
+  }
+  return null;
 }
 
 async function readState(storage: IStoragePort): Promise<YearTransitionState | null> {
@@ -352,6 +380,20 @@ export async function executeYearTransition(
   }
   const resumeState = pending; // null이 아니면 같은 학기의 중단분(위에서 배제)
   const resume = resumeState !== null;
+
+  // F7g(RM2) — 유즈케이스 이중화: 학년도 마무리는 2학기(학년도 말) 마감만 실행한다.
+  // UI 가드(canRunYearEndWizard)와 별개로 어떤 호출 경로로도 1학기 마감 전환이 실행되지
+  // 않게 한다(같은 학년도 학기 전환은 옛 학년도 부활 필터가 원리적으로 못 막는다 — qa3-A).
+  // 단 같은 학기의 pending 재개는 예외 — 기존 중단분의 이어하기를 막으면 반쯤 전환 상태에 갇힌다.
+  if (parseTerm(closingTerm)?.semester !== 2 && !resume) {
+    return {
+      ok: false,
+      step: 'safety-backup',
+      error:
+        '학년도 마무리는 2학기(학년도 말)에만 실행할 수 있어요. ' +
+        "학기 정리는 수업 관리의 '수업반 보관'을 사용해 주세요.",
+    };
+  }
 
   // ① safety backup — 실패 시 전환을 시작조차 하지 않는다(함정 ⑧).
   log(`1/5 안전 백업 생성 (${resume ? '재개' : '시작'}: ${closingTerm} → ${nextTerm})`);
@@ -439,20 +481,29 @@ export async function executeYearTransition(
           await storage.remove(spec.key);
           const after = await storage.read<unknown>(spec.key);
           if (after !== null) return `삭제 후에도 파일이 남아 있어요: ${spec.key}`;
-          // F1(B1): remove 성공과 같은 급으로 마커 기록 — 마커 없이 remove만 되면
-          // SyncFromCloud 치유 다운로드가 자기 리모트 옛 사본을 부활시킨다(qa3-D).
-          await recordRemovedKey(storage, closingTerm, resetStartedAt, spec.key);
-          return null;
+        } else {
+          const envelope =
+            spec.reset.kind === 'empty-envelope'
+              ? spec.reset.envelope
+              : spec.reset.build(await storage.read<unknown>(spec.key));
+          await storage.write(spec.key, envelope);
+          // data:write는 실패를 알리지 않는다(함정 ⑪) — 다시 읽어 기대값 대조(⑤).
+          const after = await storage.read<unknown>(spec.key);
+          if (!stableEquals(after, envelope)) {
+            return `리셋 검증 실패(기대값 불일치): ${spec.key}`;
+          }
         }
-        const envelope =
-          spec.reset.kind === 'empty-envelope'
-            ? spec.reset.envelope
-            : spec.reset.build(await storage.read<unknown>(spec.key));
-        await storage.write(spec.key, envelope);
-        // data:write는 실패를 알리지 않는다(함정 ⑪) — 다시 읽어 기대값 대조(⑤).
-        const after = await storage.read<unknown>(spec.key);
-        if (!stableEquals(after, envelope)) {
-          return `리셋 검증 실패(기대값 불일치): ${spec.key}`;
+        // F7c: 리셋 성공과 같은 급으로 마커 기록(리셋 방식 무관) — 마커 없이 비우기만 되면
+        // SyncFromCloud 다운로드 분기가 리모트 옛 사본을 부활시킨다(qa3-D).
+        // F7d(RB2): recordRemovedKey가 재독 검증까지 수행 — 실패 문자열이면 전환 중단.
+        if (spec.guardDownloads === true) {
+          const markerFailure = await recordRemovedKey(
+            storage,
+            closingTerm,
+            resetStartedAt,
+            spec.key,
+          );
+          if (markerFailure !== null) return markerFailure;
         }
         return null;
       });
