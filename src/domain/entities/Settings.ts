@@ -411,6 +411,13 @@ export interface Settings {
   readonly grade?: string;
   readonly className: string;
   readonly teacherName: string;
+  /**
+   * 현재 학기 라벨('2026-1' 형식) — 학년도 전환(S2.4 ExecuteYearTransition)이 완료 시 기록한다.
+   * 미설정(구버전·전환 미사용)이면 undefined — 표시 축은 academicTerm() 파생으로 폴백.
+   * ⚠️ 이름 규칙: `schoolYear` 금지(§6.1-㉕ — NEIS 학사일정 SchoolEvent.schoolYear와 충돌).
+   * 학년도는 schoolYearOf(currentTerm)로 파생한다.
+   */
+  readonly currentTerm?: string;
   /** 담임 누가기록 통합 입력(S4) 사용자 추가 태그 — DEFAULT_HOMEROOM_RECORD_TAGS 외 직접 추가분. */
   readonly homeroomRecordTags?: readonly string[];
   /**
