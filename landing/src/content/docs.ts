@@ -519,7 +519,7 @@ export const docsArticles: readonly DocArticle[] = [
     title: '수업 관리',
     description: '수업반별 명렬표, 좌석, 진도, 출석부, 과제수합, 성적 분석, 루브릭을 관리합니다.',
     category: 'features',
-    lastUpdated: '2026-06-23',
+    lastUpdated: '2026-08-06',
     image: { src: '/docs/screenshots/class-management.png', alt: '쌤핀 수업 관리 화면' },
     sections: [
       {
@@ -527,6 +527,20 @@ export const docsArticles: readonly DocArticle[] = [
         title: '수업반 만들기',
         body: [
           '과목이나 반 단위로 수업반을 만들고, 명렬표를 넣으면 수업반 전용 좌석배치, 진도, 출결, 기록을 관리할 수 있습니다.',
+        ],
+      },
+      {
+        id: 'archive',
+        title: '수업반 보관하기',
+        body: [
+          '학기가 끝나 더 쓰지 않는 수업반은 삭제하지 말고 보관하세요. 보관하면 목록과 선택 화면에서만 숨겨지고, 출결·진도·기록은 전부 그대로 남아 언제든 다시 볼 수 있습니다.',
+        ],
+        bullets: [
+          '수업반 카드의 메뉴(⋮)에서 "보관"을 누르면 목록 아래 "보관된 수업반" 칸으로 이동합니다.',
+          '여러 반을 정리할 때는 체크박스로 골라 한 번에 보관할 수 있습니다.',
+          '보관된 반을 누르면 출결·진도·기록을 그대로 볼 수 있고(읽기 전용), "보관 해제"를 누르면 활성 목록 맨 아래로 돌아옵니다.',
+          '같은 반의 다른 과목은 함께 보관되지 않습니다 — 필요한 과목만 골라 보관하세요.',
+          '보관하기 전에 폰이나 다른 컴퓨터를 먼저 동기화해 두면 안전합니다. 시간표는 자동으로 바뀌지 않으니 새 학기 시간표는 따로 갱신해 주세요.',
         ],
       },
       {
@@ -876,7 +890,7 @@ export const docsArticles: readonly DocArticle[] = [
     title: '위젯 모드',
     description: '대시보드를 작은 창, 아이콘 모드(핀 캐릭터), 바탕화면 아래 모드로 띄웁니다.',
     category: 'features',
-    lastUpdated: '2026-07-02',
+    lastUpdated: '2026-08-07',
     image: { src: '/docs/screenshots/settings-widget.png', alt: '쌤핀 위젯 설정 화면' },
     sections: [
       {
@@ -887,6 +901,16 @@ export const docsArticles: readonly DocArticle[] = [
           '항상 위에: 다른 창 위에 고정합니다.',
           '아이콘 모드: 화면 위에 떠 있는 작은 핀 캐릭터로 접습니다. 아래에서 자세히 소개합니다.',
           '바탕화면 아이콘 아래 모드: Windows에서 바탕화면 일부처럼 씁니다.',
+        ],
+      },
+      {
+        id: 'close-action',
+        title: 'X 버튼을 눌렀을 때 (창 닫기 동작)',
+        bullets: [
+          '설정 → 위젯 → "창 닫기 동작"에서 X 버튼을 눌렀을 때 무엇을 할지 고릅니다.',
+          '위젯 모드로 전환 / 아이콘 모드로 접기 / 트레이로 최소화 / 완전히 종료 / 매번 물어보기 중에서 선택합니다.',
+          '완전히 종료: 앱을 완전히 끕니다. 트레이에도 남지 않으므로 수업 알림, 자동 동기화도 함께 멈춥니다.',
+          '매번 물어보기: X를 누를 때마다 위 네 가지 중에서 고르는 창이 뜹니다. 트레이 아이콘의 "완전히 종료"로도 언제든 끌 수 있습니다.',
         ],
       },
       {
@@ -941,6 +965,7 @@ export const docsArticles: readonly DocArticle[] = [
           '학생 연락처 조회와 전화 걸기, 관찰 기록·수업 기록 작성',
           '수행평가 채점, 진도 관리, 설문·과제 현황 확인',
           '그동안 쌓인 학생 기록 모아보기(유형·월별)와 담임·학급 출결 통계 조회',
+          'PC에서 보관한 수업반은 모바일 수업 목록에서도 숨겨집니다(기록·통계는 그대로 보존).',
         ],
       },
       {
@@ -1485,7 +1510,7 @@ export const docsArticles: readonly DocArticle[] = [
     title: '자주 묻는 질문',
     description: '설치, 데이터, 오프라인, 학운위, 업데이트, 모바일 관련 질문을 모았습니다.',
     category: 'reference',
-    lastUpdated: '2026-06-23',
+    lastUpdated: '2026-08-06',
     sections: [
       {
         id: 'free',
@@ -1497,6 +1522,13 @@ export const docsArticles: readonly DocArticle[] = [
         title: '인터넷 없이도 되나요?',
         body: [
           '핵심 기능은 오프라인에서 동작합니다. 다만 날씨, 급식 자동 조회, NEIS, Google 연동, 공유 링크가 필요한 기능은 인터넷이 필요합니다.',
+        ],
+      },
+      {
+        id: 'archive-class',
+        title: '수업반을 보관하면 출결·기록도 지워지나요?',
+        body: [
+          '아니요, 그대로 남습니다. 보관은 목록에서 숨기는 것일 뿐 삭제가 아니에요. 보관된 수업반을 누르면 출결·진도·기록을 언제든 다시 볼 수 있고, "보관 해제"로 되돌릴 수도 있습니다. 학기가 바뀌어 더 쓰지 않는 반을 정리할 때 삭제 대신 보관을 사용하세요.',
         ],
       },
       {

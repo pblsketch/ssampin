@@ -13,7 +13,7 @@ export function CloseActionDialog() {
 
   if (!visible) return null;
 
-  const handleAction = (action: 'widget' | 'tray' | 'icon') => {
+  const handleAction = (action: 'widget' | 'tray' | 'icon' | 'quit') => {
     setVisible(false);
     window.electronAPI?.respondCloseAction(action);
   };
@@ -55,6 +55,19 @@ export function CloseActionDialog() {
             <div>
               <span className="text-sm font-medium text-sp-text">트레이로 최소화</span>
               <p className="text-caption text-sp-muted">시스템 트레이로 숨깁니다</p>
+            </div>
+          </button>
+
+          <button
+            onClick={() => handleAction('quit')}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg bg-sp-surface hover:bg-sp-accent/10 transition-colors text-left"
+          >
+            <span className="material-symbols-outlined text-sp-error text-xl">
+              power_settings_new
+            </span>
+            <div>
+              <span className="text-sm font-medium text-sp-text">완전히 종료</span>
+              <p className="text-caption text-sp-muted">앱을 완전히 끕니다 (알림도 멈춥니다)</p>
             </div>
           </button>
         </div>

@@ -268,6 +268,11 @@ export function WidgetTab({ draft, patch }: Props) {
               desc: '화면에 떠 있는 작은 아이콘으로 접습니다 (NEW)',
             },
             { value: 'tray' as const, label: '트레이로 최소화', desc: '시스템 트레이로 숨깁니다' },
+            {
+              value: 'quit' as const,
+              label: '완전히 종료',
+              desc: '앱을 완전히 끕니다 (알림·자동 동기화도 함께 멈춥니다)',
+            },
             { value: 'ask' as const, label: '매번 물어보기', desc: '닫을 때마다 선택합니다' },
           ].map((opt) => (
             <label

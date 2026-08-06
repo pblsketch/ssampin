@@ -17,16 +17,24 @@
  */
 import { describe, expect, test } from 'vitest';
 
+type CloseAction = 'widget' | 'tray' | 'ask' | 'icon' | 'quit';
+
 type LegacyWidgetSettings = {
   closeToWidget?: boolean;
-  closeAction?: 'widget' | 'tray' | 'ask' | 'icon';
+  closeAction?: CloseAction;
   icon?: { showCoachMark?: boolean };
 };
 
 /** useSettingsStore.ts의 closeAction 마이그레이션 로직 재현 */
-function migrateCloseAction(savedWidget: LegacyWidgetSettings | undefined): 'widget' | 'tray' | 'ask' | 'icon' {
+function migrateCloseAction(savedWidget: LegacyWidgetSettings | undefined): CloseAction {
   const explicit = savedWidget?.closeAction;
-  if (explicit === 'widget' || explicit === 'tray' || explicit === 'ask' || explicit === 'icon') {
+  if (
+    explicit === 'widget' ||
+    explicit === 'tray' ||
+    explicit === 'ask' ||
+    explicit === 'icon' ||
+    explicit === 'quit'
+  ) {
     return explicit;
   }
   const legacy = savedWidget?.closeToWidget;
@@ -35,7 +43,9 @@ function migrateCloseAction(savedWidget: LegacyWidgetSettings | undefined): 'wid
 }
 
 /** useSettingsStore.ts의 icon 옵션 마이그레이션 로직 재현 */
-function migrateIconOptions(savedWidget: LegacyWidgetSettings | undefined): { showCoachMark: boolean } {
+function migrateIconOptions(savedWidget: LegacyWidgetSettings | undefined): {
+  showCoachMark: boolean;
+} {
   const DEFAULT = { showCoachMark: true };
   return {
     ...DEFAULT,
@@ -68,6 +78,10 @@ describe('closeAction 마이그레이션 (icon-mode v2.0.2)', () => {
     expect(migrateCloseAction({ closeAction: 'ask' })).toBe('ask');
   });
 
+  test('TC-04g: 명시적 closeAction="quit" 보존 (완전 종료 옵션)', () => {
+    expect(migrateCloseAction({ closeAction: 'quit', closeToWidget: true })).toBe('quit');
+  });
+
   test('TC-04e: closeAction이 명시되어도 잘못된 값이면 closeToWidget 폴백', () => {
     // @ts-expect-error invalid value
     expect(migrateCloseAction({ closeAction: 'foobar', closeToWidget: false })).toBe('tray');
@@ -86,7 +100,9 @@ describe('icon 옵션 마이그레이션 (icon-mode v2.0.2)', () => {
   });
 
   test('TC-06a: widget.icon.showCoachMark=false 보존 (사용자가 코치마크 본 후)', () => {
-    expect(migrateIconOptions({ icon: { showCoachMark: false } })).toEqual({ showCoachMark: false });
+    expect(migrateIconOptions({ icon: { showCoachMark: false } })).toEqual({
+      showCoachMark: false,
+    });
   });
 
   test('TC-06b: widget.icon.showCoachMark=true 명시도 보존', () => {

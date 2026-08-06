@@ -661,7 +661,7 @@ interface ElectronAPI {
   onAnalyticsFlush: (callback: () => void) => () => void;
   // Close action dialog
   onCloseActionAsk: (callback: () => void) => () => void;
-  respondCloseAction: (action: 'widget' | 'tray' | 'icon') => void;
+  respondCloseAction: (action: 'widget' | 'tray' | 'icon' | 'quit') => void;
   // Cross-window data sync
   onDataChanged: (callback: (filename: string) => void) => () => void;
   // 절전/잠금 복귀 알림

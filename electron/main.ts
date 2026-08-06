@@ -151,6 +151,21 @@ function broadcastToAllWindows(channel: string, payload?: unknown, excludeSender
 type WidgetDesktopMode = 'normal' | 'topmost' | 'native-desktop';
 
 /**
+ * X 버튼(창 닫기) 동작.
+ *
+ * src/domain/entities/Settings.ts의 WidgetSettings['closeAction']와 동일하게 유지해야 한다.
+ * (electron rootDir 분리로 직접 import 불가 — WidgetDesktopMode와 같은 의도적 미러링)
+ *
+ * - 'widget': 위젯 모드로 전환 (기본)
+ * - 'icon':   아이콘 모드로 접기
+ * - 'tray':   트레이로만 숨김
+ * - 'quit':   앱 완전 종료
+ * - 'ask':    매번 다이얼로그로 물어봄
+ */
+const CLOSE_ACTIONS = ['widget', 'tray', 'ask', 'icon', 'quit'] as const;
+type CloseAction = (typeof CLOSE_ACTIONS)[number];
+
+/**
  * 임의 입력값을 안전하게 WidgetDesktopMode로 정규화.
  *
  * 기존 `value === 'topmost' ? 'topmost' : 'normal'` 패턴이 'native-desktop'을
@@ -1753,9 +1768,19 @@ function createWindow(): void {
 
   mainWindow.on('close', (e) => {
     if (!isQuitting) {
-      e.preventDefault();
       const opts = readSettingsWidgetOptions();
       diagLog('icon', `mainWindow.close fired closeAction=${opts.closeAction}`);
+
+      e.preventDefault();
+
+      if (opts.closeAction === 'quit') {
+        // 완전 종료 — 트레이 '완전히 종료' / window:closeApp과 동일 경로.
+        // window-all-closed가 quit하지 않는 앱이므로 app.quit() 명시 호출 필수.
+        // (isQuitting=true → app.quit()이 다시 부르는 close에서는 위 분기를 건너뛰고 실제로 닫힘)
+        isQuitting = true;
+        app.quit();
+        return;
+      }
 
       if (opts.closeAction === 'ask') {
         mainWindow?.webContents.send('close-action:ask');
@@ -2325,7 +2350,7 @@ function readSettingsWidgetOptions(): {
   width: number;
   height: number;
   startInWidgetMode: boolean;
-  closeAction: 'widget' | 'tray' | 'ask';
+  closeAction: CloseAction;
   desktopMode: WidgetDesktopMode;
   memorySaverMode: boolean;
 } {
@@ -2359,11 +2384,11 @@ function readSettingsWidgetOptions(): {
       const desktopMode = normalizeDesktopMode(aliasResolved, isWin32);
       // 하위 호환: closeAction 없으면 closeToWidget으로 판단
       const widgetSettings = settings.widget as
-        | { closeAction?: 'widget' | 'tray' | 'ask'; closeToWidget?: boolean }
+        | { closeAction?: string; closeToWidget?: boolean }
         | undefined;
-      const closeAction: 'widget' | 'tray' | 'ask' =
-        widgetSettings?.closeAction ??
-        (widgetSettings?.closeToWidget === false ? 'tray' : 'widget');
+      const explicitCloseAction = CLOSE_ACTIONS.find((v) => v === widgetSettings?.closeAction);
+      const closeAction: CloseAction =
+        explicitCloseAction ?? (widgetSettings?.closeToWidget === false ? 'tray' : 'widget');
       return {
         width: settings.widget?.width ?? 920,
         height: settings.widget?.height ?? 700,
@@ -2437,6 +2462,10 @@ function registerIpcHandlers(): void {
       void executeWindowTransition('widget');
     } else if (action === 'icon') {
       void executeWindowTransition('icon');
+    } else if (action === 'quit') {
+      // 완전 종료 — 트레이 '완전히 종료' / window:closeApp과 동일 경로
+      isQuitting = true;
+      app.quit();
     } else {
       // tray로 숨김은 메모리 절약 모드 영향 없음
       currentWindowMode = 'main';

@@ -1041,7 +1041,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.removeListener('close-action:ask', handler);
     };
   },
-  respondCloseAction: (action: 'widget' | 'tray' | 'icon'): void => {
+  respondCloseAction: (action: 'widget' | 'tray' | 'icon' | 'quit'): void => {
     ipcRenderer.send('close-action:respond', action);
   },
   // Cross-window data sync

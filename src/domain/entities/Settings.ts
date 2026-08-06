@@ -186,9 +186,10 @@ export interface WidgetSettings {
    * - 'widget': 위젯 모드로 전환 (기본)
    * - 'icon': 아이콘 모드(56×56 floating)로 접기 (v2.0.2~)
    * - 'tray': 트레이로만 숨김
+   * - 'quit': 앱 완전 종료
    * - 'ask': 매번 다이얼로그
    */
-  readonly closeAction?: 'widget' | 'tray' | 'ask' | 'icon';
+  readonly closeAction?: 'widget' | 'tray' | 'ask' | 'icon' | 'quit';
   readonly visibleSections: WidgetVisibleSections;
   readonly layoutMode: WidgetLayoutMode;
   readonly desktopMode: WidgetDesktopMode;
