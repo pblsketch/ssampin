@@ -290,7 +290,7 @@ export function ClassList({ onAddClass, onBeforeSelect }: ClassListProps) {
   const classroomColors = useSettingsStore((s) => s.settings.classroomColors);
   const colorBy = useSettingsStore((s) => s.settings.timetableColorBy ?? 'classroom');
 
-  // 활성/보관 분리 — 판정은 도메인 규칙만 사용 (.archived 직접 비교 금지)
+  // 활성/보관 분리 — 판정은 도메인 규칙만 사용 (archived 필드 직접 비교 금지)
   const activeClasses = useMemo(() => filterActiveClasses(classes), [classes]);
   const archivedClasses = useMemo(() => filterArchivedClasses(classes), [classes]);
 
