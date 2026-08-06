@@ -85,7 +85,7 @@
             "createdAt",
             "updatedAt"
           ],
-          "notMirrored": ["seating"]
+          "notMirrored": ["seating", "archived", "archivedAt", "archivedTerm"]
         },
         "TeachingClassStudent": {
           "mirrored": [

@@ -128,7 +128,9 @@ export const ENTITY_FIELD_CONTRACT = {
           'createdAt',
           'updatedAt',
         ],
-        notMirrored: ['seating'],
+        // archived/archivedAt/archivedTerm: 수업반 보관 플래그(ADR-035 notMirrored 확정) —
+        // 브릿지 쓰기 차단은 applyLiveSyncWrite의 classExists 가드가 담당(S1.4-F)
+        notMirrored: ['seating', 'archived', 'archivedAt', 'archivedTerm'],
       },
       TeachingClassStudent: {
         mirrored: [
