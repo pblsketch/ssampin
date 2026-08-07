@@ -326,10 +326,16 @@ export const useMobileDriveSyncStore = create<MobileDriveSyncState>((set, get) =
         // S2.2b·F9a — 스킵 기준. 모바일은 자체 전환이 없으므로 동기화된 settings 파일의
         // currentTerm·lastClosedTerm(데스크톱 전환이 기록)을 raw로 읽는다(MobileSettings 투영 밖).
         async () => {
-          const s = await storage.read<{ currentTerm?: string; lastClosedTerm?: string }>(
-            'settings',
-          );
-          return { currentTerm: s?.currentTerm, lastClosedTerm: s?.lastClosedTerm };
+          const s = await storage.read<{
+            currentTerm?: string;
+            lastClosedTerm?: string;
+            lastClosedAt?: string;
+          }>('settings');
+          return {
+            currentTerm: s?.currentTerm,
+            lastClosedTerm: s?.lastClosedTerm,
+            lastClosedAt: s?.lastClosedAt,
+          };
         },
       );
       const result = await syncFrom.execute(({ current, total }) => {

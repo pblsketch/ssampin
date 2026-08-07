@@ -203,16 +203,19 @@ function makeDeps(storage: FakeStorage, gateway: FakeGateway) {
   // F7g: 마법사는 2학기(학년도 말) 마감 전용 — 테스트 기본 학기도 2학기로 맞춘다.
   let currentTerm: string | undefined = '2026-2';
   let lastClosedTerm: string | undefined;
+  let lastClosedAt: string | undefined;
   const reloadStores = vi.fn(async (_filenames: readonly string[]) => {});
   const deps: YearTransitionDeps = {
     storage,
     gateway,
     getCurrentTerm: async () => currentTerm,
     getLastClosedTerm: async () => lastClosedTerm,
+    getLastClosedAt: async () => lastClosedAt,
     // F9a: 두 값은 한 번의 저장에서 함께 갱신된다(테스트 하네스도 동일 계약).
-    setCurrentTerm: async (term, closed) => {
+    setCurrentTerm: async (term, closed, closedAt) => {
       currentTerm = term;
       lastClosedTerm = closed;
+      lastClosedAt = closedAt;
     },
     reloadStores,
   };
@@ -221,6 +224,7 @@ function makeDeps(storage: FakeStorage, gateway: FakeGateway) {
     reloadStores,
     getTerm: () => currentTerm,
     getLastClosed: () => lastClosedTerm,
+    getLastClosedAtValue: () => lastClosedAt,
   };
 }
 
@@ -397,6 +401,49 @@ describe('F9a — lastClosedTerm 기록/원복 (스킵 필터 기준의 정본)'
     expect(revert.ok, JSON.stringify(revert)).toBe(true);
     expect(getTerm()).toBe('2027-1'); // 2차 전환 전 값
     expect(getLastClosed()).toBe('2026-2'); // 1차 전환의 마감 학기로 원복
+  });
+});
+
+describe('F11a·F11c — 마감 시각 기록 · 재개 시 회차 재사용', () => {
+  test('F11a: 전환 완료 시 lastClosedAt이 함께 기록되고, 원복 시 함께 해제된다', async () => {
+    const { deps, getLastClosed, getLastClosedAtValue } = makeDeps(storage, gateway);
+
+    expect((await executeYearTransition(deps, { closingTerm: '2026-2' })).ok).toBe(true);
+    expect(getLastClosed()).toBe('2026-2');
+    const closedAt = getLastClosedAtValue();
+    expect(typeof closedAt).toBe('string');
+    expect(Number.isFinite(Date.parse(closedAt as string))).toBe(true);
+
+    expect((await revertYearTransition(deps, '2026-2')).ok).toBe(true);
+    expect(getLastClosed()).toBeUndefined();
+    expect(getLastClosedAtValue()).toBeUndefined();
+  });
+
+  test('F11c(G3): 크래시 → 재개에서 회차가 늘지 않고 1회차 원본이 무손상이다', async () => {
+    const { deps } = makeDeps(storage, gateway);
+
+    // 1차 전환이 리셋 도중 중단(조용한 쓰기 실패 주입)
+    storage.swallowWriteKeys.add('attendance');
+    const first = await executeYearTransition(deps, { closingTerm: '2026-2' });
+    expect(first.ok).toBe(false);
+    const archiveAfterFirst = new Map(gateway.archives.get('2026-2'));
+    expect(gateway.createCalls).toHaveLength(1);
+
+    // 재개 ×2 — archiveCreate를 다시 부르지 않고 기존 회차를 재사용해야 한다
+    storage.swallowWriteKeys.clear();
+    storage.swallowWriteKeys.add('attendance');
+    const resumeFail = await executeYearTransition(deps, { closingTerm: '2026-2' });
+    expect(resumeFail.ok).toBe(false);
+    storage.swallowWriteKeys.clear();
+    const resumeOk = await executeYearTransition(deps, { closingTerm: '2026-2' });
+    expect(resumeOk.ok, JSON.stringify(resumeOk)).toBe(true);
+
+    expect(gateway.createCalls).toHaveLength(1); // 추가 생성 0
+    expect([...gateway.archives.keys()]).toEqual(['2026-2']); // 회차 증식 없음
+    // 1회차 사본은 첫 시도 시점 그대로(재개가 덮어쓰지 않는다)
+    expect(gateway.archives.get('2026-2')?.get('attendance.json')?.content).toBe(
+      archiveAfterFirst.get('attendance.json')?.content,
+    );
   });
 });
 

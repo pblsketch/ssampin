@@ -195,6 +195,8 @@ export interface YearTransitionState {
   readonly previousTerm: string | null;
   /** 전환 전 settings.lastClosedTerm(F9a — 원복 시 currentTerm과 **반드시 함께** 되돌린다). */
   readonly previousLastClosedTerm?: string | null;
+  /** F11a — 전환 전 settings.lastClosedAt(원복 시 함께 해제). */
+  readonly previousLastClosedAt?: string | null;
   /** F10a — 이번 전환이 만든 보관함 디렉토리(회차 포함). 재개 시 검증 대상 식별에 쓴다. */
   readonly archiveId?: string;
   readonly startedAt: string;
@@ -240,6 +242,8 @@ export interface YearTransitionDeps {
   readonly getCurrentTerm: () => Promise<string | undefined>;
   /** settings.lastClosedTerm 읽기(F9a — 원복 대비 전환 전 값 보존용). 미주입 시 undefined 취급. */
   readonly getLastClosedTerm?: () => Promise<string | undefined>;
+  /** F11a — 전환 전 settings.lastClosedAt 읽기(원복 대비). */
+  readonly getLastClosedAt?: () => Promise<string | undefined>;
   /**
    * settings.currentTerm·lastClosedTerm 갱신 — **반드시 한 번의 저장에서 함께**(F9a).
    * 두 값이 갈리면 스킵 필터 기준과 표시 학기가 어긋난다.
@@ -248,6 +252,8 @@ export interface YearTransitionDeps {
   readonly setCurrentTerm: (
     term: string | undefined,
     lastClosedTerm: string | undefined,
+    /** F11a — 마감 실행 시각(ISO). 해제(원복)면 undefined. lastClosedTerm과 같은 저장에 기록. */
+    lastClosedAt: string | undefined,
   ) => Promise<void>;
   /**
    * 조용한 스토어 리로드 — 기존 reloadStores(@adapters/hooks/useDriveSync) 재사용.
@@ -480,12 +486,17 @@ export async function executeYearTransition(
     resumeState !== null
       ? (resumeState.previousLastClosedTerm ?? null)
       : ((await deps.getLastClosedTerm?.()) ?? null);
+  const previousLastClosedAt =
+    resumeState !== null
+      ? (resumeState.previousLastClosedAt ?? null)
+      : ((await deps.getLastClosedAt?.()) ?? null);
   const baseState: YearTransitionState = {
     version: 1,
     closingTerm,
     nextTerm,
     previousTerm,
     previousLastClosedTerm,
+    previousLastClosedAt,
     startedAt: resumeState !== null ? resumeState.startedAt : new Date().toISOString(),
     safetyBackupPath,
     phase: 'archiving',
@@ -500,19 +511,29 @@ export async function executeYearTransition(
     const fileKeys = [...YEAR_TRANSITION_FILES.map((f) => f.key), ...attachmentKeys];
     log(`2/5 아카이브 생성 (${fileKeys.length}개 키, 첨부 ${attachmentKeys.length}개)`);
     let archivedEntryCount = 0;
-    const created = await gateway.archiveCreate(
-      closingTerm,
-      fileKeys,
-      options.label ? { label: options.label } : undefined,
-    );
+    // F11c(G3) — 재개인데 이미 만든 회차가 있으면 **다시 만들지 않는다**(재개마다 회차가
+    // 늘어나던 결함). 진위는 아래 ③ 체크섬 재검증이 가린다 — 손상이면 그 단계에서 실패한다.
+    const reuseArchiveId = resume ? resumeState?.archiveId : undefined;
+    const created =
+      reuseArchiveId !== undefined
+        ? ({ ok: false, error: `재개 — 기존 회차 재사용(${reuseArchiveId})` } as const)
+        : await gateway.archiveCreate(
+            closingTerm,
+            fileKeys,
+            options.label ? { label: options.label } : undefined,
+          );
     // F10a — 검증·복원 대상은 실제로 만들어진 디렉토리(회차 포함). 구현이 archiveId를
     // 주지 않으면(구 게이트웨이) 학기 라벨과 동일한 1회차로 본다.
+    // F11c(G3) — 상태 저장이 baseState 스프레드라 archiveId가 뒤 저장에서 소실됐다(재개마다
+    // 새 회차 생성). 이후 모든 상태 쓰기가 이 객체를 기준으로 하도록 승계한다.
     let archiveId = resumeState?.archiveId ?? closingTerm;
+    let stateWithArchive: YearTransitionState = { ...baseState, archiveId };
     if (created.ok) {
       archivedEntryCount = created.entryCount;
       archiveId = created.archiveId ?? closingTerm;
+      stateWithArchive = { ...baseState, archiveId };
       // 재개 시 같은 디렉토리를 검증·복원할 수 있도록 상태 파일에 남긴다(회차본 대응).
-      await storage.write(YEAR_TRANSITION_STATE_KEY, { ...baseState, archiveId });
+      await storage.write(YEAR_TRANSITION_STATE_KEY, stateWithArchive);
     } else if (!resume) {
       log(`❌ 아카이브 생성 실패 — 라이브 무변경 중단: ${created.error}`);
       await storage.remove(YEAR_TRANSITION_STATE_KEY);
@@ -555,7 +576,7 @@ export async function executeYearTransition(
     log(`4/5 라이브 리셋 (${YEAR_TRANSITION_FILES.length}개 파일)`);
     const resetDone: string[] = [];
     const resetStartedAt = new Date().toISOString();
-    await storage.write(YEAR_TRANSITION_STATE_KEY, { ...baseState, phase: 'resetting' });
+    await storage.write(YEAR_TRANSITION_STATE_KEY, { ...stateWithArchive, phase: 'resetting' });
     for (const spec of YEAR_TRANSITION_FILES) {
       const failure = await withFileLock(spec.key, async (): Promise<string | null> => {
         if (spec.reset.kind === 'remove') {
@@ -594,7 +615,7 @@ export async function executeYearTransition(
       }
       resetDone.push(spec.key);
       await storage.write(YEAR_TRANSITION_STATE_KEY, {
-        ...baseState,
+        ...stateWithArchive,
         phase: 'resetting',
         resetDone: [...resetDone],
       });
@@ -605,7 +626,8 @@ export async function executeYearTransition(
       `5/5 마무리 — currentTerm=${nextTerm}, lastClosedTerm=${closingTerm}, 스토어 조용한 리로드`,
     );
     // F9a: 마감 학기를 같은 저장에 함께 기록 — 이 값이 병합 스킵 필터의 기준이 된다.
-    await deps.setCurrentTerm(nextTerm, closingTerm);
+    // F11a — 마감 시각을 함께 기록한다(이 시각 이후의 새 기록은 병합 대상).
+    await deps.setCurrentTerm(nextTerm, closingTerm, new Date().toISOString());
     await storage.remove(YEAR_TRANSITION_STATE_KEY);
     await deps.reloadStores(YEAR_TRANSITION_FILES.map((f) => f.key));
     log(`✅ 전환 완료: ${closingTerm} 보관 → ${nextTerm} 시작`);
@@ -687,13 +709,14 @@ export async function revertYearTransition(
       await deps.setCurrentTerm(
         pending.previousTerm ?? undefined,
         pending.previousLastClosedTerm ?? undefined,
+        pending.previousLastClosedAt ?? undefined,
       );
     } else {
       // 완료된 전환의 원복(상태 파일 없음) — 되돌린 데이터의 학기로 표시 축을 맞추고,
       // lastClosedTerm은 **해제**한다(F9a): 방금 라이브로 되살린 학기를 "마감됨"으로 두면
       // 그 학기의 리모트 레코드가 계속 스킵돼 복원 결과가 기기 간에 어긋난다.
       // 회차 디렉토리를 되돌린 경우 표시 학기는 논리 학기다('2026-1-2' → '2026-1').
-      await deps.setCurrentTerm(parseArchiveId(closingTerm).term, undefined);
+      await deps.setCurrentTerm(parseArchiveId(closingTerm).term, undefined, undefined);
     }
     await storage.remove(YEAR_TRANSITION_STATE_KEY);
     // F1(B1): 원복으로 파일이 되살아났으니 remove 마커도 정리 — 이후 치유 다운로드는 정상 동작.

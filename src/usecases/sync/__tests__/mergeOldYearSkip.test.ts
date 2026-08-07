@@ -355,6 +355,157 @@ describe('F9a — lastClosedTerm(마감 학기) 기준 스킵 · B2 재발 방�
   });
 });
 
+describe('F11a(G1) — 중간 마감 이후 새 기록은 정상 전파된다 (재공격 대비)', () => {
+  const CLOSED_AT = '2026-05-01T00:00:00.000Z';
+  const CLOSED_MS = Date.parse(CLOSED_AT);
+
+  test('attendance: 마감 후 기록(updatedAt >) 병합 · 마감 전 기록 스킵 — 둘 다 term=2026-1', () => {
+    const merged = mergeAttendance(
+      { records: [] },
+      {
+        records: [
+          // 5월 마감 이전에 기록된 4월 수업 → 스킵
+          att({
+            date: '2026-04-10',
+            period: 1,
+            term: '2026-1',
+            updatedAt: '2026-04-10T01:00:00.000Z',
+          }),
+          // 마감 이후(6월)에 기록한 6월 수업 — term은 여전히 2026-1(=date 파생) → **병합**
+          att({
+            date: '2026-06-10',
+            period: 2,
+            term: '2026-1',
+            updatedAt: '2026-06-10T01:00:00.000Z',
+          }),
+        ],
+      },
+      true,
+      '2026-2',
+      '2026-1',
+      CLOSED_AT,
+    );
+    expect(merged.records).toHaveLength(1);
+    expect(merged.records[0]?.date).toBe('2026-06-10');
+  });
+
+  test('observations: 기록시각 축이 number(ms)여도 동일하게 판정한다(함정 ②)', () => {
+    const merged = mergeObservations(
+      { records: [] },
+      {
+        records: [
+          obs({ id: 'before', term: '2026-1', createdAt: CLOSED_MS - 86_400_000 }),
+          obs({ id: 'after', term: '2026-1', createdAt: CLOSED_MS + 86_400_000 }),
+        ],
+      },
+      true,
+      '2026-2',
+      '2026-1',
+      CLOSED_AT,
+    );
+    expect(merged.records.map((r) => r.id)).toEqual(['after']);
+  });
+
+  test('student-records: createdAt(ISO) 기준으로 마감 후 기록만 병합', () => {
+    const merged = mergeStudentRecords(
+      { records: [] },
+      {
+        records: [
+          rec({ id: 'before', term: '2026-1', createdAt: '2026-04-20T00:00:00.000Z' }),
+          rec({ id: 'after', term: '2026-1', createdAt: '2026-06-20T00:00:00.000Z' }),
+        ],
+      },
+      '2026-2',
+      '2026-1',
+      CLOSED_AT,
+    );
+    expect(merged.records.map((r) => r.id)).toEqual(['after']);
+  });
+
+  test('경계값: 마감 시각과 정확히 같으면 스킵(<=), 1ms라도 이후면 병합', () => {
+    const same = mergeObservations(
+      { records: [] },
+      { records: [obs({ id: 'same', term: '2026-1', createdAt: CLOSED_MS })] },
+      true,
+      '2026-2',
+      '2026-1',
+      CLOSED_AT,
+    );
+    expect(same.records).toHaveLength(0);
+
+    const after = mergeObservations(
+      { records: [] },
+      { records: [obs({ id: 'after', term: '2026-1', createdAt: CLOSED_MS + 1 })] },
+      true,
+      '2026-2',
+      '2026-1',
+      CLOSED_AT,
+    );
+    expect(after.records).toHaveLength(1);
+  });
+
+  test('기록시각 부재·파싱 불가는 스킵(애매하면 부활 0 우선)', () => {
+    const noTime = mergeAttendance(
+      { records: [] },
+      { records: [att({ term: '2026-1', updatedAt: undefined })] },
+      true,
+      '2026-2',
+      '2026-1',
+      CLOSED_AT,
+    );
+    expect(noTime.records).toHaveLength(0);
+
+    const badTime = mergeAttendance(
+      { records: [] },
+      { records: [att({ term: '2026-1', updatedAt: '언제인지모름' })] },
+      true,
+      '2026-2',
+      '2026-1',
+      CLOSED_AT,
+    );
+    expect(badTime.records).toHaveLength(0);
+  });
+
+  test('lastClosedAt 부재(구버전 전환 이력) → term만으로 판정하는 기존 동작', () => {
+    const merged = mergeAttendance(
+      { records: [] },
+      { records: [att({ term: '2026-1', updatedAt: '2026-06-10T01:00:00.000Z' })] },
+      true,
+      '2026-2',
+      '2026-1',
+    );
+    expect(merged.records).toHaveLength(0); // F9a 동작 그대로
+  });
+
+  test('마감하지 않은 학기(2026-2)의 기록은 시각과 무관하게 병합', () => {
+    const merged = mergeAttendance(
+      { records: [] },
+      { records: [att({ term: '2026-2', updatedAt: '2026-04-01T00:00:00.000Z' })] },
+      true,
+      '2026-2',
+      '2026-1',
+      CLOSED_AT,
+    );
+    expect(merged.records).toHaveLength(1);
+  });
+});
+
+describe('F11d(G4) — 학기 설정 불일치는 필터를 끈다(fail-open)', () => {
+  test('lastClosedTerm > currentTerm이면 스킵하지 않고 경고만 남긴다', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const merged = mergeAttendance(
+      { records: [] },
+      { records: [att({ term: '2026-1' }), att({ period: 2, term: '2026-2' })] },
+      true,
+      '2026-1', // current
+      '2026-2', // 마감 학기가 현재보다 미래 = 손상
+      '2026-05-01T00:00:00.000Z',
+    );
+    expect(merged.records).toHaveLength(2); // 정상 기록을 잘라내지 않는다
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('학기 설정 불일치'));
+  });
+});
+
 describe('통합 시나리오 — 전환 완료 후 옛 학년도 파일과 병합', () => {
   test('라이브 리셋(빈 파일) + currentTerm=2027-1 상태에서 2026학년도 리모트와 병합 → 유입 0건', () => {
     const currentTerm = '2027-1'; // ExecuteYearTransition 완료 상태(settings.currentTerm)

@@ -8,7 +8,7 @@ import type {
   WidgetStyleSettings,
   CustomFontSettings,
 } from '@domain/entities/Settings';
-import { preserveNewerCurrentTerm } from './SyncFromCloud';
+import { preserveNewerTermGuard } from './SyncFromCloud';
 
 export type ImportSettingsFromCloudErrorCode =
   | 'NO_BACKUP' // Drive에 쌤핀 폴더/매니페스트/settings 엔트리 없음
@@ -197,11 +197,12 @@ export class ImportSettingsFromCloud {
 
     // F7e(RH1) — currentTerm은 "더 최신 학기 승": 미전환 기기가 올린 settings 가져오기가
     // 로컬의 더 최신 currentTerm을 벗기면 옛 학년도 스킵 필터(S2.2b)가 영구 비활성된다.
-    return preserveNewerCurrentTerm(
-      result,
-      safeLocal.currentTerm,
-      safeLocal.lastClosedTerm,
-    ) as Settings;
+    return preserveNewerTermGuard(result, {
+      currentTerm: safeLocal.currentTerm,
+      lastClosedTerm: safeLocal.lastClosedTerm,
+      lastClosedAt: safeLocal.lastClosedAt,
+      termGuardUpdatedAt: safeLocal.termGuardUpdatedAt,
+    }) as Settings;
   }
 
   private mergeSync(

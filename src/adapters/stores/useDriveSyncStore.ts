@@ -215,7 +215,11 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
         // 지연 재시도(pull-merge-push)도 이 액션을 재호출하므로 업/다운 병합이 같은 기준을 쓴다.
         async () => {
           const s = useSettingsStore.getState().settings;
-          return { currentTerm: s.currentTerm, lastClosedTerm: s.lastClosedTerm };
+          return {
+            currentTerm: s.currentTerm,
+            lastClosedTerm: s.lastClosedTerm,
+            lastClosedAt: s.lastClosedAt,
+          };
         },
         archiveEnabled ? archiveSync.listLocalArchiveTerms : undefined,
         archiveEnabled ? archiveSync.importArchiveTermFiles : undefined,
@@ -368,16 +372,16 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
           if (conflict.filename === 'settings') {
             // F3(H1): settings 통파일 교체는 충돌 해소 경로에서도 currentTerm "더 최신 학기 승" —
             // 미전환 기기의 settings 채택이 옛 학년도 스킵 필터를 영구 비활성시키지 않게(qa3-C).
-            const { preserveNewerCurrentTerm } = await import('@usecases/sync/SyncFromCloud');
-            let local: { currentTerm?: string; lastClosedTerm?: string } | null = null;
+            const { preserveNewerTermGuard } = await import('@usecases/sync/SyncFromCloud');
+            const { storage: st } = await import('@adapters/di/container');
+            let local: import('@usecases/sync/SyncFromCloud').TermGuardSnapshot | null = null;
             try {
-              local = await storage.read<{ currentTerm?: string; lastClosedTerm?: string }>(
-                'settings',
-              );
+              local =
+                await st.read<import('@usecases/sync/SyncFromCloud').TermGuardSnapshot>('settings');
             } catch {
               local = null;
             }
-            parsed = preserveNewerCurrentTerm(parsed, local?.currentTerm, local?.lastClosedTerm);
+            parsed = preserveNewerTermGuard(parsed, local ?? {});
           }
           await storage.write(conflict.filename, parsed);
         }

@@ -7,7 +7,7 @@
  * 1회 쓰기로만 동작한다 — 체크섬이 리모트와 달라져 다음 업로드가 교정본을 밀어올린다.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { SyncFromCloud, preserveNewerCurrentTerm } from '../SyncFromCloud';
+import { SyncFromCloud, preserveNewerTermGuard } from '../SyncFromCloud';
 import type { IStoragePort } from '@domain/ports/IStoragePort';
 import type { IDriveSyncPort } from '@domain/ports/IDriveSyncPort';
 import type { IDriveSyncRepository } from '@domain/repositories/IDriveSyncRepository';
@@ -19,57 +19,124 @@ beforeEach(() => {
 
 describe('preserveNewerCurrentTerm — 단위 규칙', () => {
   it('수신에 currentTerm 부재 → 로컬 값 재부착(필터 영구 비활성 차단)', () => {
-    expect(preserveNewerCurrentTerm({ theme: 'light' }, '2027-1')).toEqual({
+    expect(preserveNewerTermGuard({ theme: 'light' }, { currentTerm: '2027-1' })).toEqual({
       theme: 'light',
       currentTerm: '2027-1',
     });
   });
 
   it('수신이 구학기 → 로컬 보존', () => {
-    expect(preserveNewerCurrentTerm({ currentTerm: '2026-2' }, '2027-1')).toEqual({
+    expect(preserveNewerTermGuard({ currentTerm: '2026-2' }, { currentTerm: '2027-1' })).toEqual({
       currentTerm: '2027-1',
     });
   });
 
   it('수신이 더 최신 → 수신 채택(정상 LWW)', () => {
     const incoming = { currentTerm: '2027-2' };
-    expect(preserveNewerCurrentTerm(incoming, '2027-1')).toBe(incoming);
+    expect(preserveNewerTermGuard(incoming, { currentTerm: '2027-1' })).toBe(incoming);
   });
 
   it('동일 학기 → 수신 그대로(무동작)', () => {
     const incoming = { currentTerm: '2027-1' };
-    expect(preserveNewerCurrentTerm(incoming, '2027-1')).toBe(incoming);
+    expect(preserveNewerTermGuard(incoming, { currentTerm: '2027-1' })).toBe(incoming);
   });
 
   it('양쪽 부재·로컬 파싱 불가 → 무동작', () => {
     const incoming = { theme: 'dark' };
-    expect(preserveNewerCurrentTerm(incoming, undefined)).toBe(incoming);
-    expect(preserveNewerCurrentTerm(incoming, '이상한값')).toBe(incoming);
+    expect(preserveNewerTermGuard(incoming, {})).toBe(incoming);
+    expect(preserveNewerTermGuard(incoming, { currentTerm: '이상한값' })).toBe(incoming);
   });
 
   it('수신이 객체가 아니면 건드리지 않는다(방어)', () => {
-    expect(preserveNewerCurrentTerm(null, '2027-1')).toBeNull();
-    expect(preserveNewerCurrentTerm([1], '2027-1')).toEqual([1]);
+    expect(preserveNewerTermGuard(null, { currentTerm: '2027-1' })).toBeNull();
+    expect(preserveNewerTermGuard([1], { currentTerm: '2027-1' })).toEqual([1]);
   });
 
   it('F9a: lastClosedTerm도 같은 규칙으로 보존한다(스킵 필터 기준이 벗겨지면 B2 재발)', () => {
     // 수신에 lastClosedTerm 부재 → 로컬 값 재부착
-    expect(preserveNewerCurrentTerm({ currentTerm: '2026-2' }, '2026-2', '2026-1')).toEqual({
+    expect(
+      preserveNewerTermGuard(
+        { currentTerm: '2026-2' },
+        { currentTerm: '2026-2', lastClosedTerm: '2026-1' },
+      ),
+    ).toEqual({
       currentTerm: '2026-2',
       lastClosedTerm: '2026-1',
     });
     // 수신이 더 최신 마감이면 수신 채택
     const newer = { currentTerm: '2027-1', lastClosedTerm: '2026-2' };
-    expect(preserveNewerCurrentTerm(newer, '2026-2', '2026-1')).toBe(newer);
+    expect(preserveNewerTermGuard(newer, { currentTerm: '2026-2', lastClosedTerm: '2026-1' })).toBe(
+      newer,
+    );
     // 두 필드 동시 보존
-    expect(preserveNewerCurrentTerm({}, '2027-1', '2026-2')).toEqual({
+    expect(preserveNewerTermGuard({}, { currentTerm: '2027-1', lastClosedTerm: '2026-2' })).toEqual(
+      {
+        currentTerm: '2027-1',
+        lastClosedTerm: '2026-2',
+      },
+    );
+    // 로컬 lastClosedTerm 부재 → 그 필드는 무동작
+    expect(preserveNewerTermGuard({ currentTerm: '2027-1' }, { currentTerm: '2027-1' })).toEqual({
+      currentTerm: '2027-1',
+    });
+  });
+});
+
+describe('F11b(G2) — "더 최신 결정 시각 승" 보존 규칙', () => {
+  it('복원(해제)도 전파된다: 로컬 결정이 더 최신이면 lastClosedTerm 해제가 채택된다', () => {
+    // A가 복원해 가드를 해제(lastClosedTerm 없음)하고 결정 시각을 갱신한 상태.
+    // 수신(B)은 아직 마감 상태 — 구 규칙("더 최신 학기 승")이면 해제가 항상 밀렸다.
+    const incoming = {
       currentTerm: '2027-1',
       lastClosedTerm: '2026-2',
-    });
-    // 로컬 lastClosedTerm 부재 → 그 필드는 무동작
-    expect(preserveNewerCurrentTerm({ currentTerm: '2027-1' }, '2027-1', undefined)).toEqual({
+      lastClosedAt: '2026-08-01T00:00:00.000Z',
+      termGuardUpdatedAt: '2026-08-01T00:00:00.000Z',
+    };
+    const result = preserveNewerTermGuard(incoming, {
+      currentTerm: '2026-2',
+      termGuardUpdatedAt: '2026-08-05T00:00:00.000Z', // 더 최신 결정(복원)
+    }) as Record<string, unknown>;
+    expect(result['currentTerm']).toBe('2026-2');
+    expect('lastClosedTerm' in result).toBe(false); // 해제가 전파된다
+    expect('lastClosedAt' in result).toBe(false);
+    expect(result['termGuardUpdatedAt']).toBe('2026-08-05T00:00:00.000Z');
+  });
+
+  it('수신이 더 최신 결정이면 통째로 채택한다(내 옛 결정이 밀린다)', () => {
+    const incoming = {
       currentTerm: '2027-1',
-    });
+      lastClosedTerm: '2026-2',
+      termGuardUpdatedAt: '2026-08-09T00:00:00.000Z',
+    };
+    expect(
+      preserveNewerTermGuard(incoming, {
+        currentTerm: '2026-2',
+        termGuardUpdatedAt: '2026-08-05T00:00:00.000Z',
+      }),
+    ).toBe(incoming);
+  });
+
+  it('로컬만 결정 시각이 있으면 로컬이 이긴다(수신은 구버전 이력)', () => {
+    const result = preserveNewerTermGuard(
+      { currentTerm: '2026-1' },
+      {
+        currentTerm: '2027-1',
+        lastClosedTerm: '2026-2',
+        lastClosedAt: '2027-02-01T00:00:00.000Z',
+        termGuardUpdatedAt: '2027-02-01T00:00:00.000Z',
+      },
+    ) as Record<string, unknown>;
+    expect(result['currentTerm']).toBe('2027-1');
+    expect(result['lastClosedTerm']).toBe('2026-2');
+    expect(result['lastClosedAt']).toBe('2027-02-01T00:00:00.000Z');
+  });
+
+  it('양쪽 결정 시각이 없으면 기존 "더 최신 학기 승" 폴백', () => {
+    const result = preserveNewerTermGuard(
+      { currentTerm: '2026-1' },
+      { currentTerm: '2027-1' },
+    ) as Record<string, unknown>;
+    expect(result['currentTerm']).toBe('2027-1');
   });
 });
 

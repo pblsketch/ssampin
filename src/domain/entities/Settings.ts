@@ -427,6 +427,18 @@ export interface Settings {
    * currentTerm과 **항상 같은 저장에서 함께 갱신**되어야 한다(갈리면 가드가 어긋난다).
    */
   readonly lastClosedTerm?: string;
+  /**
+   * F11a — 마지막 마감을 **실행한 시각**(ISO). `lastClosedTerm`과 같은 저장에서 기록한다.
+   * 병합 스킵은 "마감 학기 이하 **AND** 이 시각 이전 기록"에만 적용된다 —
+   * 마감 이후 새로 만든 기록은 term이 같아도 정상 병합된다(중간 마감 후 전파 정지 방지).
+   */
+  readonly lastClosedAt?: string;
+  /**
+   * F11b — 학기 가드(currentTerm·lastClosedTerm·lastClosedAt)를 **마지막으로 결정한 시각**(ISO).
+   * settings 통파일 교체 시 "더 최신 결정이 이긴다" 판정의 근거 — 학기 비교만 쓰면
+   * 되돌리기(해제=후퇴)가 항상 밀려 다른 기기로 전파되지 않는다.
+   */
+  readonly termGuardUpdatedAt?: string;
   /** 담임 누가기록 통합 입력(S4) 사용자 추가 태그 — DEFAULT_HOMEROOM_RECORD_TAGS 외 직접 추가분. */
   readonly homeroomRecordTags?: readonly string[];
   /**

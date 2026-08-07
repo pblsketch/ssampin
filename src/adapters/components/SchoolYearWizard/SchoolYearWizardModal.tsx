@@ -237,10 +237,17 @@ export function SchoolYearWizardModal({
       gateway: trackedGateway,
       getCurrentTerm: async () => useSettingsStore.getState().settings.currentTerm,
       getLastClosedTerm: async () => useSettingsStore.getState().settings.lastClosedTerm,
+      getLastClosedAt: async () => useSettingsStore.getState().settings.lastClosedAt,
       // F9a: currentTerm·lastClosedTerm은 한 번의 저장에서 함께 갱신(가드 기준 정합).
-      setCurrentTerm: async (term, lastClosedTerm) => {
+      // F11a·F11b: 학기 가드 4필드를 한 번의 저장에서 함께 갱신(결정 시각 포함).
+      setCurrentTerm: async (term, lastClosedTerm, lastClosedAt) => {
         bumpRunStep(5);
-        await useSettingsStore.getState().update({ currentTerm: term, lastClosedTerm });
+        await useSettingsStore.getState().update({
+          currentTerm: term,
+          lastClosedTerm,
+          lastClosedAt,
+          termGuardUpdatedAt: new Date().toISOString(),
+        });
       },
       // useDriveSync.reloadStores는 mutable string[]을 받는다 — readonly 계약에 맞춰 복사.
       reloadStores: (filenames) => reloadStores([...filenames]),
@@ -595,6 +602,11 @@ export function SchoolYearWizardModal({
                 수업 관리의 &lsquo;수업반 보관&rsquo;
               </span>
               이 더 알맞아요.
+            </p>
+            {/* F11e — "마감 후 전파 정지"(G1)는 F11a로 해소됐으므로 그 경고를 넣지 않는다.
+                대신 정상 동작을 명시해 불필요한 불안을 없앤다. */}
+            <p className="text-xs">
+              마무리 이후 새로 입력하는 기록은 다른 기기와 정상적으로 주고받아요.
             </p>
             <p className="text-xs">
               보관한 기록은 언제든 다시 볼 수 있고, 전환은 되돌릴 수 있어요.

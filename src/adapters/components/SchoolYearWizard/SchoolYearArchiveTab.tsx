@@ -143,9 +143,17 @@ export function SchoolYearArchiveTab() {
       gateway,
       getCurrentTerm: async () => useSettingsStore.getState().settings.currentTerm,
       getLastClosedTerm: async () => useSettingsStore.getState().settings.lastClosedTerm,
+      getLastClosedAt: async () => useSettingsStore.getState().settings.lastClosedAt,
       // F9a: 두 값은 반드시 같은 저장에서 함께 갱신한다(갈리면 스킵 필터 기준이 어긋난다).
-      setCurrentTerm: async (term, lastClosedTerm) => {
-        await useSettingsStore.getState().update({ currentTerm: term, lastClosedTerm });
+      // F11a·F11b: 학기 가드 4필드를 한 번의 저장에서 함께 갱신한다(결정 시각 포함 —
+      // 이 시각이 있어야 되돌리기(해제)도 다른 기기로 전파된다).
+      setCurrentTerm: async (term, lastClosedTerm, lastClosedAt) => {
+        await useSettingsStore.getState().update({
+          currentTerm: term,
+          lastClosedTerm,
+          lastClosedAt,
+          termGuardUpdatedAt: new Date().toISOString(),
+        });
       },
       // useDriveSync.reloadStores는 mutable string[]을 받는다 — readonly 계약에 맞춰 복사.
       reloadStores: (filenames) => reloadStores([...filenames]),
@@ -401,7 +409,7 @@ export function SchoolYearArchiveTab() {
           </p>
           {/* F10b — 복원 후 재마무리가 막다른 길이 아님을 알린다(F10a 회차 보관). */}
           <p className="mt-1.5 text-xs leading-relaxed text-sp-muted">
-            복원 후 다시 마무리하면 새 회차로 보관돼요.
+            복원 후 다시 마무리하면 새 회차로 보관돼요. 되돌린 결과는 다른 기기에도 곧 반영돼요.
           </p>
           {/* F10b — 라이브에 새 입력이 있으면 덮어쓰기 경고 + 먼저 보관 안내 */}
           {liveHasContent && (

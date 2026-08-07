@@ -129,40 +129,85 @@ function termOrder(term: string | undefined): number | null {
 }
 
 /**
- * F9a — **마감한 학기(lastClosedTerm) 기준** 리모트 레코드 스킵.
+ * F11a — 레코드 "기록 시각"을 밀리초로 정규화. 숫자(ms)·ISO 문자열 둘 다 받는다.
+ * ⚠️ 도메인마다 축이 다르다(함정 ②): observations는 number(ms), 나머지는 ISO 문자열.
+ * 축을 통일하지 않고 도메인별 추출자가 올바른 필드를 읽어 여기서 숫자로만 맞춘다.
+ * 파싱 불가·부재는 null(= 시각 미상 → 보수적으로 스킵 쪽).
+ */
+function toEpochMs(value: unknown): number | null {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value === 'string') {
+    const ms = Date.parse(value);
+    return Number.isFinite(ms) ? ms : null;
+  }
+  return null;
+}
+
+/** 도메인별 "언제 기록했나" 추출자 — 마감 시각과 비교할 축을 도메인이 직접 고른다. */
+type RecordTimeExtractor<T> = (record: T) => number | null;
+
+/**
+ * F9a·F11a — **마감한 학기 + 마감 시각** 기준 리모트 레코드 스킵.
  *
- * 원칙은 여전히 "담임 축은 학년도를 관통한다"이지만, 사용자가 그 학기를 **명시적으로 마감**
- * (학년도 마무리 실행)했다면 그 학기 이하의 기록은 라이브에 없어야 한다 — 마감으로 비운
- * 라이브에 미전환 기기의 사본이 되돌아오면 그게 곧 부활이다(QA-A B2: 같은 학년도 학기
- * 전환에서 학년도 비교 필터가 무가드였던 결함).
- *  - `lastClosedTerm` 있음 → `record.term <= lastClosedTerm`이면 스킵.
- *    **마감하지 않은 학기는 그대로 병합**한다(담임 축 연속 — 2026-1 마감 시 2026-2는 병합).
- *  - `lastClosedTerm` 없음(구버전 전환 이력·전환 미사용) → 기존 학년도 비교로 폴백.
- *  - record.term 부재·파싱 불가 → 병합(추측 금지·fail-open, S2.2b 규칙 유지).
+ * 원칙은 "담임 축은 학년도를 관통한다"이지만, 사용자가 그 학기를 **명시적으로 마감**했다면
+ * 마감 시점까지의 기록은 라이브에 없어야 한다(QA-A B2). 다만 term은 `date`(사건 발생일)
+ * 파생이라, 5월에 2026-1을 마감해도 6~8월에 새로 만든 기록의 term은 여전히 '2026-1'이다 —
+ * term만으로 자르면 **마감 이후의 정상 활동까지 기기 간 전파가 멈춘다**(QA G1).
+ * 그래서 마감 시각(lastClosedAt)을 함께 본다:
+ *  - `term <= lastClosedTerm` **AND** 기록시각이 없거나 `<= lastClosedAt` → 스킵(마감 전 기록)
+ *  - `term <= lastClosedTerm` **AND** 기록시각 `> lastClosedAt` → **병합**(마감 후 새 기록 — G1 해소)
+ *  - `lastClosedAt` 부재(구버전 전환 이력) → term만으로 판정(하위 호환)
+ *  - `lastClosedTerm` 부재 → 학년도 비교 폴백 / 둘 다 없으면 필터 비활성
+ *
+ * 경계 원칙: **애매하면 스킵**(부활 0 우선). 시각이 명확히 마감 이후일 때만 병합한다.
+ * F11d: `lastClosedTerm > currentTerm`(파일 손상·수기 편집)이면 필터 전체 비활성(fail-open).
  */
 function filterClosedTermRemoteRecords<T extends { readonly term?: string }>(
   filename: string,
   records: readonly T[],
   currentTerm: string | undefined,
   lastClosedTerm: string | undefined,
+  lastClosedAt: string | undefined,
+  getRecordTimeMs: RecordTimeExtractor<T>,
 ): readonly T[] {
-  const closedOrder = termOrder(lastClosedTerm);
+  let closedOrder = termOrder(lastClosedTerm);
+  const currentOrder = termOrder(currentTerm);
   const currentYear = currentTerm === undefined ? null : schoolYearOf(currentTerm);
-  // 두 기준 모두 없으면 필터 비활성(현행 병합 그대로).
+
+  // F11d — 마감 학기가 현재 학기보다 미래면 설정이 깨진 것이다. 그 상태로 필터를 돌리면
+  // 정상 기록까지 잘라내므로 판정을 포기한다(부활보다 나쁜 결과를 만들지 않는다).
+  if (closedOrder !== null && currentOrder !== null && closedOrder > currentOrder) {
+    console.warn(
+      `[SyncFromCloud] ${filename}: 학기 설정 불일치(lastClosedTerm=${lastClosedTerm} > currentTerm=${currentTerm}) — 스킵 필터 비활성`,
+    );
+    closedOrder = null;
+  }
+
+  const closedAtMs = toEpochMs(lastClosedAt);
   if (closedOrder === null && currentYear === null) return records;
 
   const kept: T[] = [];
   const skippedTerms = new Set<string>();
   let skipped = 0;
   for (const r of records) {
-    const shouldSkip =
-      closedOrder !== null
-        ? // 마감 학기 기준(정본): 마감분 이하만 스킵
-          (termOrder(r.term) ?? Number.POSITIVE_INFINITY) <= closedOrder
-        : // 폴백: 옛 학년도만 스킵(lastClosedTerm 없는 구버전 전환 이력)
-          r.term !== undefined &&
-          schoolYearOf(r.term) !== null &&
-          (schoolYearOf(r.term) as number) < (currentYear as number);
+    let shouldSkip: boolean;
+    if (closedOrder !== null) {
+      const inClosedRange = (termOrder(r.term) ?? Number.POSITIVE_INFINITY) <= closedOrder;
+      if (!inClosedRange) {
+        shouldSkip = false;
+      } else if (closedAtMs === null) {
+        shouldSkip = true; // 구버전 이력(마감 시각 없음) — term만으로 판정
+      } else {
+        const recordedMs = getRecordTimeMs(r);
+        // 시각 미상 = 마감 전으로 보수 판정(스킵). 마감 이후가 명확할 때만 병합.
+        shouldSkip = recordedMs === null || recordedMs <= closedAtMs;
+      }
+    } else {
+      shouldSkip =
+        r.term !== undefined &&
+        schoolYearOf(r.term) !== null &&
+        (schoolYearOf(r.term) as number) < (currentYear as number);
+    }
     if (shouldSkip) {
       skipped++;
       if (r.term !== undefined) skippedTerms.add(r.term);
@@ -172,7 +217,9 @@ function filterClosedTermRemoteRecords<T extends { readonly term?: string }>(
   }
   if (skipped > 0) {
     const basis =
-      closedOrder !== null ? `마감 학기 <= ${lastClosedTerm}` : `옛 학년도 < ${currentTerm}`;
+      closedOrder !== null
+        ? `마감 <= ${lastClosedTerm}${closedAtMs !== null ? `@${lastClosedAt}` : ''}`
+        : `옛 학년도 < ${currentTerm}`;
     console.log(
       `[SyncFromCloud] ${filename}: ${skipped}건 skip (${basis}, term=${[...skippedTerms].sort().join(',')})`,
     );
@@ -198,45 +245,77 @@ function hasSubstantiveContent(data: unknown): boolean {
   return true;
 }
 
+/** F11b — 학기 가드 3필드 + 결정 시각. settings 통파일 교체 시 함께 다뤄야 한다. */
+export interface TermGuardSnapshot {
+  readonly currentTerm?: string;
+  readonly lastClosedTerm?: string;
+  readonly lastClosedAt?: string;
+  /** 이 결정을 내린 시각(ISO). 있으면 학기 비교보다 우선한다. */
+  readonly termGuardUpdatedAt?: string;
+}
+
+const TERM_GUARD_FIELDS = [
+  'currentTerm',
+  'lastClosedTerm',
+  'lastClosedAt',
+  'termGuardUpdatedAt',
+] as const;
+
+/** 학기 라벨 하나의 순서값(비교 폴백용). */
+function guardTermOrder(value: unknown): number {
+  const parsed = typeof value === 'string' ? parseTerm(value) : null;
+  return parsed === null ? -1 : parsed.year * 10 + parsed.semester;
+}
+
 /**
- * F3(H1) — settings 통파일 교체 시 currentTerm은 "더 최신 학기 승" 보존 규칙.
+ * F3·F9a·F11b — settings 통파일 교체 시 **학기 가드 필드를 보존**한다.
  *
- * settings는 병합 없는 통파일 LWW라, 아직 전환하지 않은 기기가 올린 settings가
- * 내려오면 currentTerm이 벗겨져 옛 학년도 스킵 필터(S2.2b)가 영구 비활성된다(qa3-C).
- * 규칙(parseTerm 튜플 비교):
- *  - 로컬 currentTerm이 수신보다 최신(또는 수신에 부재·파싱 불가) → 로컬 값을 재부착해 저장.
- *    체크섬이 리모트와 달라지므로 다음 업로드가 교정본을 밀어올린다(1회 쓰기 — 루프 없음).
- *  - 수신이 더 최신이거나 동일 → 수신 그대로(정상 LWW).
- *  - 양쪽 부재·수신이 객체가 아님 → 무동작(수신 그대로).
+ * settings는 병합 없는 통파일 LWW라, 아직 전환하지 않은(또는 옛 결정을 가진) 기기가 올린
+ * settings가 내려오면 가드 기준이 통째로 벗겨진다(qa3-C).
+ *
+ * 판정(F11b): **더 최신 "결정 시각"(termGuardUpdatedAt)이 이긴다.**
+ * 학기 비교로만 판정하던 구 규칙은 "해제(후퇴)"가 항상 밀려서 **복원이 다른 기기로
+ * 전파되지 않았다**(QA G2). 결정 시각을 쓰면 해제도 최신 결정이라 정상 전파된다.
+ *  - 양쪽 시각 존재 → 늦은 쪽 채택(동률이면 수신 채택 — LWW 기본 방향)
+ *  - 로컬만 시각 존재 → 로컬 채택(수신은 결정 이력이 없는 구버전)
+ *  - 수신만 존재·둘 다 없음 → 수신 채택 후 **학기 비교 폴백**(구 규칙 — 하위 호환)
+ * 채택은 4필드를 **통째로** 적용한다(부분 혼합이면 term과 시각이 어긋난다).
  */
-export function preserveNewerCurrentTerm(
-  incoming: unknown,
-  localCurrentTerm: string | undefined,
-  localLastClosedTerm?: string,
-): unknown {
+export function preserveNewerTermGuard(incoming: unknown, local: TermGuardSnapshot): unknown {
   if (incoming === null || typeof incoming !== 'object' || Array.isArray(incoming)) {
     return incoming; // settings 형태가 아니면 건드리지 않는다(방어)
   }
-  let result = incoming as Record<string, unknown>;
-  let changed = false;
-  // F9a: currentTerm(표시 축)과 lastClosedTerm(스킵 필터 기준) 둘 다 같은 규칙으로 보존한다.
-  // lastClosedTerm이 벗겨지면 학기 전환의 부활 가드(B2)가 통째로 무력해진다.
-  const fields: readonly [key: string, localValue: string | undefined][] = [
-    ['currentTerm', localCurrentTerm],
-    ['lastClosedTerm', localLastClosedTerm],
-  ];
-  for (const [key, localValue] of fields) {
-    if (localValue === undefined) continue;
-    const localParsed = parseTerm(localValue);
-    if (localParsed === null) continue;
-    const incomingValue = typeof result[key] === 'string' ? (result[key] as string) : undefined;
-    const incomingParsed = incomingValue === undefined ? null : parseTerm(incomingValue);
-    const localOrder = localParsed.year * 10 + localParsed.semester;
-    const incomingOrder =
-      incomingParsed === null ? -1 : incomingParsed.year * 10 + incomingParsed.semester;
-    if (incomingOrder >= localOrder) continue; // 수신이 더 최신·동일 → 수신 채택
+  const obj = incoming as Record<string, unknown>;
+  const localAt = toEpochMs(local.termGuardUpdatedAt);
+  const incomingAt = toEpochMs(obj['termGuardUpdatedAt']);
+
+  const adoptLocal = (): unknown => {
+    const next: Record<string, unknown> = { ...obj };
+    for (const key of TERM_GUARD_FIELDS) {
+      const value = local[key];
+      if (value === undefined) delete next[key];
+      else next[key] = value;
+    }
     console.log(
-      `[SyncFromCloud]   settings: ${key} 보존 (수신=${incomingValue ?? '없음'} < 로컬=${localValue})`,
+      `[SyncFromCloud]   settings: 학기 가드 보존 (로컬 결정 ${local.termGuardUpdatedAt ?? '시각없음'} 우선, lastClosedTerm=${local.lastClosedTerm ?? '없음'})`,
+    );
+    return next;
+  };
+
+  if (localAt !== null && (incomingAt === null || localAt > incomingAt)) return adoptLocal();
+  if (localAt !== null && incomingAt !== null) return incoming; // 수신이 최신·동률 → 수신 채택
+
+  // 결정 시각이 없는 구버전 이력 — 기존 "더 최신 학기 승" 폴백.
+  let result = obj;
+  let changed = false;
+  for (const key of ['currentTerm', 'lastClosedTerm'] as const) {
+    const localValue = local[key];
+    if (localValue === undefined) continue;
+    const localOrder = guardTermOrder(localValue);
+    if (localOrder < 0) continue;
+    if (guardTermOrder(result[key]) >= localOrder) continue;
+    console.log(
+      `[SyncFromCloud]   settings: ${key} 보존 (수신=${String(result[key] ?? '없음')} < 로컬=${localValue})`,
     );
     result = { ...result, [key]: localValue };
     changed = true;
@@ -283,6 +362,7 @@ export function mergeStudentRecords(
   remote: StudentRecordsData,
   currentTerm?: string,
   lastClosedTerm?: string,
+  lastClosedAt?: string,
 ): StudentRecordsData {
   const localRecords = local?.records ?? [];
   const remoteRecords = filterClosedTermRemoteRecords(
@@ -290,6 +370,9 @@ export function mergeStudentRecords(
     remote.records ?? [],
     currentTerm,
     lastClosedTerm,
+    lastClosedAt,
+    // 기록 시각 축: createdAt(ISO). 없으면 updatedAt(ISO)로 폴백.
+    (r) => toEpochMs(r.createdAt) ?? toEpochMs(r.updatedAt),
   );
   const map = new Map<string, StudentRecord>();
 
@@ -413,6 +496,7 @@ export function mergeObservations(
   preferRemote: boolean,
   currentTerm?: string,
   lastClosedTerm?: string,
+  lastClosedAt?: string,
 ): ObservationData {
   const map = new Map<string, ObservationRecord>();
   for (const r of local?.records ?? []) {
@@ -423,6 +507,9 @@ export function mergeObservations(
     remote.records ?? [],
     currentTerm,
     lastClosedTerm,
+    lastClosedAt,
+    // 기록 시각 축: createdAt(**number ms** — 이 도메인만 숫자축, 함정 ②).
+    (r) => toEpochMs(r.createdAt),
   )) {
     const existing = map.get(r.id);
     if (!existing) {
@@ -497,6 +584,7 @@ export function mergeAttendance(
   preferRemote: boolean,
   currentTerm?: string,
   lastClosedTerm?: string,
+  lastClosedAt?: string,
 ): AttendanceData {
   const map = new Map<string, AttendanceRecord>();
   for (const r of local?.records ?? []) {
@@ -507,6 +595,9 @@ export function mergeAttendance(
     remote.records ?? [],
     currentTerm,
     lastClosedTerm,
+    lastClosedAt,
+    // 기록 시각 축: updatedAt(ISO) — 출결 레코드에는 createdAt이 없다.
+    (r) => toEpochMs(r.updatedAt),
   )) {
     const key = attendanceRecordKey(r);
     const existing = map.get(key);
@@ -588,6 +679,8 @@ export class SyncFromCloud {
     private readonly getTermGuard?: () => Promise<{
       currentTerm?: string;
       lastClosedTerm?: string;
+      /** F11a — 마감 실행 시각(ISO). 마감 이후 새로 만든 기록은 병합한다. */
+      lastClosedAt?: string;
     }>,
     /** (S4.1) 아카이브 훅 2종 — 둘 다 주입될 때만 아카이브 다운로드가 켜진다(데스크톱 전용). */
     private readonly listLocalArchiveTerms?: ListLocalArchiveTerms,
@@ -601,15 +694,13 @@ export class SyncFromCloud {
   private async writeReplacedFile(filename: string, parsed: unknown): Promise<void> {
     let data = parsed;
     if (filename === 'settings') {
-      let local: { currentTerm?: string; lastClosedTerm?: string } | null = null;
+      let local: TermGuardSnapshot | null = null;
       try {
-        local = await this.storage.read<{ currentTerm?: string; lastClosedTerm?: string }>(
-          'settings',
-        );
+        local = await this.storage.read<TermGuardSnapshot>('settings');
       } catch {
         local = null;
       }
-      data = preserveNewerCurrentTerm(parsed, local?.currentTerm, local?.lastClosedTerm);
+      data = preserveNewerTermGuard(parsed, local ?? {});
     }
     await this.storage.write(filename, data);
   }
@@ -621,15 +712,18 @@ export class SyncFromCloud {
     // S2.2b·F9a — 스킵 기준. 실행 시점에 1회 읽어 다운로드·병합 전체에 같은 값 적용.
     let currentTerm: string | undefined;
     let lastClosedTerm: string | undefined;
+    let lastClosedAt: string | undefined;
     if (this.getTermGuard) {
       try {
         const guard = await this.getTermGuard();
         currentTerm = guard.currentTerm;
         lastClosedTerm = guard.lastClosedTerm;
+        lastClosedAt = guard.lastClosedAt;
       } catch {
         // 읽기 실패 = 필터 비활성(fail-open — 자기 격리 금지)
         currentTerm = undefined;
         lastClosedTerm = undefined;
+        lastClosedAt = undefined;
       }
     }
 
@@ -790,7 +884,7 @@ export class SyncFromCloud {
             const content = await this.drivePort.downloadSyncFile(driveFile.id);
             const remoteData = JSON.parse(content) as StudentRecordsData;
             await mergeAndWriteLocked(this.storage, filename, remoteData, (local) =>
-              mergeStudentRecords(local, remoteData, currentTerm, lastClosedTerm),
+              mergeStudentRecords(local, remoteData, currentTerm, lastClosedTerm, lastClosedAt),
             );
             updatedFiles[filename] = remoteInfo;
             downloaded.push(filename);
@@ -806,7 +900,14 @@ export class SyncFromCloud {
             const content = await this.drivePort.downloadSyncFile(driveFile.id);
             const remoteData = JSON.parse(content) as AttendanceData;
             await mergeAndWriteLocked(this.storage, filename, remoteData, (local) =>
-              mergeAttendance(local, remoteData, remoteIsNewer, currentTerm, lastClosedTerm),
+              mergeAttendance(
+                local,
+                remoteData,
+                remoteIsNewer,
+                currentTerm,
+                lastClosedTerm,
+                lastClosedAt,
+              ),
             );
             updatedFiles[filename] = remoteInfo;
             downloaded.push(filename);
@@ -822,7 +923,14 @@ export class SyncFromCloud {
             const content = await this.drivePort.downloadSyncFile(driveFile.id);
             const remoteData = JSON.parse(content) as ObservationData;
             await mergeAndWriteLocked(this.storage, filename, remoteData, (local) =>
-              mergeObservations(local, remoteData, remoteIsNewer, currentTerm, lastClosedTerm),
+              mergeObservations(
+                local,
+                remoteData,
+                remoteIsNewer,
+                currentTerm,
+                lastClosedTerm,
+                lastClosedAt,
+              ),
             );
             updatedFiles[filename] = remoteInfo;
             downloaded.push(filename);
@@ -920,7 +1028,8 @@ export class SyncFromCloud {
             this.storage,
             filename,
             remoteData,
-            (local) => mergeStudentRecords(local, remoteData, currentTerm, lastClosedTerm),
+            (local) =>
+              mergeStudentRecords(local, remoteData, currentTerm, lastClosedTerm, lastClosedAt),
             ' (first download)',
           );
         } else if (filename === 'attendance') {
@@ -930,7 +1039,8 @@ export class SyncFromCloud {
             this.storage,
             filename,
             remoteData,
-            (local) => mergeAttendance(local, remoteData, true, currentTerm, lastClosedTerm),
+            (local) =>
+              mergeAttendance(local, remoteData, true, currentTerm, lastClosedTerm, lastClosedAt),
             ' (first download)',
           );
         } else if (filename === 'observations') {
@@ -940,7 +1050,8 @@ export class SyncFromCloud {
             this.storage,
             filename,
             remoteData,
-            (local) => mergeObservations(local, remoteData, true, currentTerm, lastClosedTerm),
+            (local) =>
+              mergeObservations(local, remoteData, true, currentTerm, lastClosedTerm, lastClosedAt),
             ' (first download)',
           );
         } else {
