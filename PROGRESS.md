@@ -11,9 +11,11 @@
 - **빌드·배포**: GHA Windows(`31136465198`)·macOS(`31136467464`) 둘 다 success → 릴리즈 자산 8종 업로드 → **다운로드 URL 7종 전부 302 검증**, `releases/latest` = v2.3.0.
 - 게이트: tsc 0 · regression 39/39 · landing docs:check + build 통과.
 
-**🚨 별건 장애(릴리즈와 무관, 오너 조치 필요)**: **Vercel 계정 `pblsketchs-projects` 전체가 `DEPLOYMENT_DISABLED`(HTTP 402)** — `www.ssampin.com`·`ssampin.com`·`m.ssampin.com`·`pblsketch.xyz` 전부 402. 마지막 프로덕션 배포 2026-07-23(15일 전), 마지막 배포 시도 9일 전 → **오늘 push는 배포조차 트리거되지 않음**. 영향: ①모바일 PWA 사용 불가(선생님 실사용) ②`/docs` 사용자 가이드 접근 불가(가이드 소스는 커밋·푸시 완료 상태라 계정 복구 즉시 반영) ③랜딩 다운로드 페이지·챗봇 UI 불가. **데스크톱 앱 설치·자동 업데이트는 GitHub Releases라 정상.** 조치=Vercel 대시보드 결제/사용량 확인(오너만 가능).
+**🚨→✅ 별건 장애(릴리즈와 무관, 당일 해소)**: 출시 직후 **Vercel 팀 `pblsketchs-projects` 전체가 `DEPLOYMENT_DISABLED`(HTTP 402)** — www·apex·m·pblsketch.xyz 전부 402, 마지막 프로덕션 배포가 2026-07-23에 멈춰 있었고 **v2.3.0 push는 배포를 생성조차 못 함**. **Pro 업그레이드로 차단 해제**(결제 실패 아님 — 차단 중에도 `status=active`, Hobby 한도 사유). **⚠️ 이번 최대 교훈: 차단 해제 ≠ 재배포** — 차단 기간 push는 소급 배포되지 않아, 해제 직후에도 라이브는 07-23 빌드(2.2.13)였다 → **빈 커밋 `6482bdca` push로 재트리거**해 두 프로젝트 모두 배포. (배포는 git 자동연동이 살아 있음 — 옛 메모의 "CLI 수동 배포"는 정정됨.)
 
-**남음**: Vercel 복구 후 /docs 반영 확인 · 카드뉴스·Threads 릴리즈 고지 · 사후 실기기 확인.
+**배포 후 전 지점 검증 완료**: 랜딩 표시 `2.3.0`·schema.org `softwareVersion 2.3.0` · `/docs` 신규 4문구 전부 노출(수업반 보관하기·학년도 마무리와 보관함·FAQ 2건) · 모바일 번들 `v2.3.0`+학년도 전환 배너 문구 포함 · 다운로드 버튼은 `releases/latest` 링크라 버전 무관 · 챗봇 실제 질의 응답 확인(보관=삭제 아님 정확히 답변) · 앱 업데이트 카드는 `raw.githubusercontent`에서 읽어 Vercel 무관.
+
+**남음**: 카드뉴스·Threads 릴리즈 고지 · 사후 실기기 확인.
 
 ## ✅ 학년도·학기 전환 · 보관함 — **오너 결정 반영(상시 마무리·복원 순환) + 적대 QA 6라운드 최종 GO** (2026-08-07, origin/main `f43dc29c`)
 
