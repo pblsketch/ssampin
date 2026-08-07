@@ -1,6 +1,19 @@
 # Progress
 
-마지막 업데이트: 2026-08-06 KST
+마지막 업데이트: 2026-08-07 KST
+
+## 🚀 v2.3.0 릴리즈 완료 — **단, www.ssampin.com·m.ssampin.com 전면 다운(Vercel 402)** (2026-08-07, tag `v2.3.0` Latest, main `4ab58050`)
+
+**출시 완료**: 오너 실검증 후 지시로 v2.2.14를 건너뛰고 **v2.3.0 단일 릴리즈**(v2.2.13 이후 65커밋 — 다른 세션 작업분 포함: 창 닫기 '완전히 종료' `26170d26`, nut-js 제거+Electron 43 `5fc323e7`/`04edefc5`, 설정 일정 카테고리 색 `2555f47c`, 라이트 모드 가독성 `8f395871`).
+
+- **버전 6곳**(package.json·package-lock·landing config·layout.tsx·Sidebar·mobile/version.ts) + `public/release-notes.json`(하이라이트 4·변경 11) + **/docs 가이드 재삽입 완료**(보류분 3블록 + 신규 "학년도 마무리와 보관함" 섹션·FAQ 2건, 4개 문서 `lastUpdated` 2026-08-07).
+- **챗봇 KB**: Q&A 5건 추가 → 키 로테이션·재배포·ingest **355/355 성공(실패 0)**.
+- **빌드·배포**: GHA Windows(`31136465198`)·macOS(`31136467464`) 둘 다 success → 릴리즈 자산 8종 업로드 → **다운로드 URL 7종 전부 302 검증**, `releases/latest` = v2.3.0.
+- 게이트: tsc 0 · regression 39/39 · landing docs:check + build 통과.
+
+**🚨 별건 장애(릴리즈와 무관, 오너 조치 필요)**: **Vercel 계정 `pblsketchs-projects` 전체가 `DEPLOYMENT_DISABLED`(HTTP 402)** — `www.ssampin.com`·`ssampin.com`·`m.ssampin.com`·`pblsketch.xyz` 전부 402. 마지막 프로덕션 배포 2026-07-23(15일 전), 마지막 배포 시도 9일 전 → **오늘 push는 배포조차 트리거되지 않음**. 영향: ①모바일 PWA 사용 불가(선생님 실사용) ②`/docs` 사용자 가이드 접근 불가(가이드 소스는 커밋·푸시 완료 상태라 계정 복구 즉시 반영) ③랜딩 다운로드 페이지·챗봇 UI 불가. **데스크톱 앱 설치·자동 업데이트는 GitHub Releases라 정상.** 조치=Vercel 대시보드 결제/사용량 확인(오너만 가능).
+
+**남음**: Vercel 복구 후 /docs 반영 확인 · 카드뉴스·Threads 릴리즈 고지 · 사후 실기기 확인.
 
 ## ✅ 학년도·학기 전환 · 보관함 — **오너 결정 반영(상시 마무리·복원 순환) + 적대 QA 6라운드 최종 GO** (2026-08-07, origin/main `f43dc29c`)
 
