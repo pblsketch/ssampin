@@ -35,6 +35,8 @@ interface FileResponse {
   modifiedTime?: string;
 }
 
+class DriveSyncPreconditionFailedError extends Error {}
+
 export class DriveSyncAdapter implements IDriveSyncPort {
   constructor(private readonly getAccessToken: () => Promise<string>) {}
 
@@ -127,6 +129,7 @@ export class DriveSyncAdapter implements IDriveSyncPort {
     content: string,
     method: 'POST' | 'PATCH' = 'POST',
     fileId?: string,
+    ifMatch?: string,
     isRetry = false,
   ): Promise<FileResponse> {
     const accessToken = await this.getAccessToken();
@@ -150,15 +153,17 @@ export class DriveSyncAdapter implements IDriveSyncPort {
     const res = await this.fetchWithRetry(url, {
       method,
       headers: {
-        Authorization: `Bearer ${accessToken}`,
+        Authorization: 'Bearer ' + accessToken,
         'Content-Type': `multipart/related; boundary=${boundary}`,
+        ...(ifMatch ? { 'If-Match': ifMatch } : {}),
       },
       body,
     });
 
     if (!res.ok) {
+      if (res.status === 412) throw new DriveSyncPreconditionFailedError();
       if (res.status === 401 && !isRetry) {
-        return this.uploadText(metadata, content, method, fileId, true);
+        return this.uploadText(metadata, content, method, fileId, ifMatch, true);
       }
       const err = await res.text();
       if (
@@ -191,6 +196,24 @@ export class DriveSyncAdapter implements IDriveSyncPort {
     const data = await this.request<FilesListResponse>(`/files?${params.toString()}`);
     const file = data.files?.[0];
     return file ? { id: file.id, modifiedTime: file.modifiedTime ?? '' } : null;
+  }
+
+  /** 파일의 현재 ETag와 수정 시각을 함께 읽어 조건부 PATCH에 사용한다. */
+  private async getFilePrecondition(
+    fileId: string,
+    isRetry = false,
+  ): Promise<{ etag: string; modifiedTime: string } | null> {
+    const accessToken = await this.getAccessToken();
+    const res = await this.fetchWithRetry(
+      `${DRIVE_API_URL}/files/${fileId}?fields=id,modifiedTime`,
+      { headers: { Authorization: 'Bearer ' + accessToken } },
+    );
+    if (res.status === 401 && !isRetry) return this.getFilePrecondition(fileId, true);
+    if (!res.ok) return null;
+    const etag = res.headers.get('ETag');
+    if (!etag) return null;
+    const data = (await res.json()) as FileResponse;
+    return { etag, modifiedTime: data.modifiedTime ?? '' };
   }
 
   // ── IDriveSyncPort 구현 ──
@@ -241,6 +264,30 @@ export class DriveSyncAdapter implements IDriveSyncPort {
     };
   }
 
+  async uploadSyncFileIfUnchanged(
+    folderId: string,
+    filename: string,
+    content: string,
+    expectedModifiedTime: string,
+  ): Promise<{ fileId: string; modifiedTime: string } | null> {
+    const existing = await this.findFileByName(folderId, filename);
+    if (!existing || existing.modifiedTime !== expectedModifiedTime) return null;
+
+    const precondition = await this.getFilePrecondition(existing.id);
+    if (!precondition || precondition.modifiedTime !== expectedModifiedTime) return null;
+
+    try {
+      const result = await this.uploadText({}, content, 'PATCH', existing.id, precondition.etag);
+      return {
+        fileId: result.id,
+        modifiedTime: result.modifiedTime ?? new Date().toISOString(),
+      };
+    } catch (error) {
+      if (error instanceof DriveSyncPreconditionFailedError) return null;
+      throw error;
+    }
+  }
+
   async downloadSyncFile(fileId: string): Promise<string> {
     return this.downloadText(fileId);
   }
@@ -278,6 +325,41 @@ export class DriveSyncAdapter implements IDriveSyncPort {
     // 새로 생성
     const result = await this.uploadText({ name: MANIFEST_FILENAME, parents: [folderId] }, content);
     return result.id;
+  }
+
+  async updateSyncManifestIfUnchanged(
+    folderId: string,
+    expected: DriveSyncManifest,
+    next: DriveSyncManifest,
+  ): Promise<boolean> {
+    const existing = await this.findFileByName(folderId, MANIFEST_FILENAME);
+    if (!existing) return false;
+    const precondition = await this.getFilePrecondition(existing.id);
+    if (!precondition) return false;
+
+    // ETag 획득 뒤 현재 본문을 읽는다. 그 사이 변경되면 expected 비교 또는 If-Match가 차단한다.
+    const currentContent = await this.downloadText(existing.id);
+    let current: DriveSyncManifest;
+    try {
+      current = JSON.parse(currentContent) as DriveSyncManifest;
+    } catch {
+      return false;
+    }
+    if (JSON.stringify(current) !== JSON.stringify(expected)) return false;
+
+    try {
+      await this.uploadText(
+        {},
+        JSON.stringify(next, null, 2),
+        'PATCH',
+        existing.id,
+        precondition.etag,
+      );
+      return true;
+    } catch (error) {
+      if (error instanceof DriveSyncPreconditionFailedError) return false;
+      throw error;
+    }
   }
 
   async listSyncFiles(folderId: string): Promise<DriveSyncFileListItem[]> {

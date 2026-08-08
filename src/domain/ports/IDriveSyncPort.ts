@@ -13,13 +13,34 @@ export interface IDriveSyncPort {
   /** "쌤핀 동기화" 폴더 조회 또는 생성 */
   getOrCreateSyncFolder(): Promise<DriveFolderInfo>;
   /** 동기화 파일 업로드 (기존 파일 있으면 업데이트) */
-  uploadSyncFile(folderId: string, filename: string, content: string): Promise<{ fileId: string; modifiedTime: string }>;
+  uploadSyncFile(
+    folderId: string,
+    filename: string,
+    content: string,
+  ): Promise<{ fileId: string; modifiedTime: string }>;
+  /** 기존 리모트 버전이 그대로일 때만 원자적으로 업데이트. 변경됐으면 null. */
+  uploadSyncFileIfUnchanged(
+    folderId: string,
+    filename: string,
+    content: string,
+    expectedModifiedTime: string,
+  ): Promise<{ fileId: string; modifiedTime: string } | null>;
   /** 동기화 파일 다운로드 (텍스트) */
   downloadSyncFile(fileId: string): Promise<string>;
   /** 동기화 매니페스트 조회 */
   getSyncManifest(folderId: string): Promise<DriveSyncManifest | null>;
   /** 동기화 매니페스트 업데이트 */
-  updateSyncManifest(folderId: string, manifest: DriveSyncManifest, existingFileId?: string): Promise<string>;
+  updateSyncManifest(
+    folderId: string,
+    manifest: DriveSyncManifest,
+    existingFileId?: string,
+  ): Promise<string>;
+  /** 매니페스트가 읽은 시점과 같을 때만 원자적으로 교체. 변경됐으면 false. */
+  updateSyncManifestIfUnchanged(
+    folderId: string,
+    expected: DriveSyncManifest,
+    next: DriveSyncManifest,
+  ): Promise<boolean>;
   /** 동기화 폴더 내 파일 목록 조회 */
   listSyncFiles(folderId: string): Promise<DriveSyncFileListItem[]>;
   /** 동기화 폴더 내 모든 파일 삭제 (클라우드 데이터 초기화) */
