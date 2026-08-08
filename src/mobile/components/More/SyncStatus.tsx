@@ -1,7 +1,11 @@
+import { useState } from 'react';
 import { useMobileDriveSyncStore } from '@mobile/stores/useMobileDriveSyncStore';
 import { useMobileSettingsStore } from '@mobile/stores/useMobileSettingsStore';
 import { useGoogleAuthContext } from '@mobile/contexts/GoogleAuthContext';
-import { SyncResultSummary } from '@adapters/components/common/SyncResultSummary';
+import {
+  getFileLabel,
+  SyncResultSummary,
+} from '@adapters/components/common/SyncResultSummary';
 
 const AUTO_SYNC_OPTIONS = [
   { value: 0, label: '꺼짐' },
@@ -12,6 +16,7 @@ const AUTO_SYNC_OPTIONS = [
 ] as const;
 
 export function SyncStatus() {
+  const [resolvingChoice, setResolvingChoice] = useState<'local' | 'remote' | null>(null);
   const {
     state,
     progress,
@@ -30,6 +35,16 @@ export function SyncStatus() {
 
   const handleAutoSyncChange = (value: number) => {
     void setAutoSyncInterval(value);
+  };
+
+  const handleConflictResolution = async (choice: 'local' | 'remote') => {
+    if (resolvingChoice !== null) return;
+    setResolvingChoice(choice);
+    try {
+      await resolveConflict(choice);
+    } finally {
+      setResolvingChoice(null);
+    }
   };
 
   return (
@@ -118,26 +133,64 @@ export function SyncStatus() {
         <p className="text-red-400 text-sm">{error}</p>
       )}
 
-      {isAuthenticated && conflict && (
-        <div className="space-y-2 rounded-lg border border-yellow-700/60 bg-yellow-950/30 p-3">
-          <p className="text-yellow-300 text-sm font-medium">
-            기기와 클라우드의 {conflict.filename} 내용이 달라요
-          </p>
-          <p className="text-gray-400 text-xs">
-            자동으로 덮어쓰지 않았습니다. 사용할 내용을 선택해 주세요.
-          </p>
-          <div className="flex gap-2">
+      {isAuthenticated && conflict && resolvingChoice !== null && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="rounded-xl border border-sp-border bg-sp-bg p-3"
+        >
+          <div className="flex items-start gap-2.5">
+            <span
+              className="material-symbols-outlined text-sp-accent text-icon-lg animate-spin shrink-0 mt-0.5"
+              aria-hidden
+            >
+              sync
+            </span>
+            <div className="min-w-0">
+              <p className="text-sp-text text-sm font-sp-semibold">
+                {getFileLabel(conflict.filename)}:{' '}
+                {resolvingChoice === 'remote' ? '클라우드 복구 중' : '이 기기 내용 반영 중'}
+              </p>
+              <p className="text-sp-muted text-xs leading-relaxed mt-1">
+                저장 후 안전하게 다시 확인합니다. 잠시만 기다려 주세요.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isAuthenticated && conflict && resolvingChoice === null && (
+        <div role="alert" className="space-y-3 rounded-xl border border-sp-border bg-sp-bg p-3">
+          <div className="flex items-start gap-2.5">
+            <span
+              className="material-symbols-outlined rounded-lg bg-sp-warning/12 p-1.5 text-sp-warning text-icon-lg shrink-0"
+              aria-hidden
+            >
+              cloud_alert
+            </span>
+            <div className="min-w-0">
+              <p className="text-sp-text text-sm font-sp-semibold">
+                {getFileLabel(conflict.filename)} 동기화 내용을 선택해 주세요
+              </p>
+              <p className="text-sp-muted text-xs leading-relaxed mt-1">
+                기기와 클라우드의 내용이 달라 자동으로 덮어쓰지 않았습니다.
+              </p>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
             <button
-              onClick={() => resolveConflict('local')}
+              type="button"
+              onClick={() => void handleConflictResolution('local')}
               disabled={state === 'syncing'}
-              className="flex-1 px-3 py-2 rounded-lg bg-gray-700 text-white text-xs disabled:opacity-50"
+              className="min-h-10 px-3 py-2 rounded-xl border border-sp-border bg-sp-card text-sp-text text-xs font-sp-medium disabled:opacity-50 active:scale-[0.98] transition-all"
             >
               이 기기 내용 유지
             </button>
             <button
-              onClick={() => resolveConflict('remote')}
+              type="button"
+              onClick={() => void handleConflictResolution('remote')}
               disabled={state === 'syncing'}
-              className="flex-1 px-3 py-2 rounded-lg bg-blue-600 text-white text-xs disabled:opacity-50"
+              className="min-h-10 px-3 py-2 rounded-xl bg-sp-accent text-sp-accent-fg text-xs font-sp-semibold disabled:opacity-50 active:scale-[0.98] transition-all"
             >
               클라우드에서 복구
             </button>

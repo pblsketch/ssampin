@@ -668,6 +668,79 @@ describe('모바일 충돌 선택: 클라우드 원본 복구', () => {
     );
     expect(driveState.manifest?.files['settings']?.checksum).not.toBe(entry.checksum);
   });
+
+  it('settings 교정본의 클라우드 장부 CAS가 실패하면 로컬 데이터와 장부를 바꾸지 않는다', async () => {
+    const remoteSettings = { currentTerm: '2026-2', theme: 'dark' };
+    const content = JSON.stringify(remoteSettings);
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(content));
+    const checksum = Array.from(new Uint8Array(digest))
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
+    const entry = {
+      checksum,
+      lastModified: '2026-07-30T03:54:24.657Z',
+      size: new TextEncoder().encode(content).length,
+    };
+    const remote = manifest({ settings: entry }, 'previous-mobile');
+    const local = manifest({ settings: { ...entry, checksum: 'stale-local' } }, 'current-mobile');
+    const localSettings = { currentTerm: '2027-1', theme: 'light' };
+    const { storage, files } = makeStorage({ settings: localSettings });
+    const { port } = makeDrive(remote, { settings: content });
+    vi.mocked(port.updateSyncManifestIfUnchanged).mockResolvedValue(false);
+    const { repo, state: localState } = makeSyncRepo(local);
+
+    await expect(
+      new ResolveSyncConflict(storage, port, repo).execute(
+        {
+          filename: 'settings',
+          localModified: 'content-mismatch',
+          remoteModified: entry.lastModified,
+          localDeviceName: '현재 폰',
+          remoteDeviceName: '예전 폰',
+        },
+        'remote',
+      ),
+    ).rejects.toThrow('클라우드 데이터가 다시 변경되었습니다');
+
+    expect(files['settings']).toEqual(localSettings);
+    expect(localState.manifest).toEqual(local);
+  });
+
+  it('로컬 장부 저장이 실패하면 클라우드 원본으로 로컬 데이터를 먼저 덮어쓰지 않는다', async () => {
+    const remoteEvents = { events: [{ id: 'cloud-event' }] };
+    const content = JSON.stringify(remoteEvents);
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(content));
+    const checksum = Array.from(new Uint8Array(digest))
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
+    const entry = {
+      checksum,
+      lastModified: '2026-07-30T03:54:24.657Z',
+      size: new TextEncoder().encode(content).length,
+    };
+    const remote = manifest({ events: entry }, 'previous-mobile');
+    const local = manifest({ events: { ...entry, checksum: 'stale-local' } }, 'current-mobile');
+    const localEvents = { events: [{ id: 'local-event' }] };
+    const { storage, files } = makeStorage({ events: localEvents });
+    const { port } = makeDrive(remote, { events: content });
+    const { repo, saveLocalManifest } = makeSyncRepo(local);
+    saveLocalManifest.mockRejectedValueOnce(new Error('로컬 장부 저장 실패'));
+
+    await expect(
+      new ResolveSyncConflict(storage, port, repo).execute(
+        {
+          filename: 'events',
+          localModified: 'content-mismatch',
+          remoteModified: entry.lastModified,
+          localDeviceName: '현재 폰',
+          remoteDeviceName: '예전 폰',
+        },
+        'remote',
+      ),
+    ).rejects.toThrow('로컬 장부 저장 실패');
+
+    expect(files['events']).toEqual(localEvents);
+  });
 });
 
 describe('통합: 신고 흐름 전체 (no-op 업로드 → 다운로드)', () => {

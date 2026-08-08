@@ -123,7 +123,6 @@ export class ResolveSyncConflict {
       const localSettings = await this.storage.read<TermGuardSnapshot>('settings');
       dataToWrite = preserveNewerTermGuard(parsed, localSettings ?? {});
     }
-    await this.storage.write(conflict.filename, dataToWrite);
 
     const correctedContent = JSON.stringify(dataToWrite);
     const correctedChecksum = await computeSyncChecksum(correctedContent);
@@ -152,10 +151,17 @@ export class ResolveSyncConflict {
       );
     }
 
-    await this.syncRepo.saveLocalManifest({
+    const nextLocalManifest = {
       ...manifest,
       lastSyncedAt: new Date().toISOString(),
       files: { ...manifest.files, [conflict.filename]: resolvedFileInfo },
-    });
+    };
+
+    // 로컬 원본을 덮기 전에 클라우드 교정/CAS와 로컬 장부 저장을 모두 끝낸다.
+    // 앞 단계가 실패하면 사용자가 선택하기 전의 로컬 데이터가 그대로 남는다.
+    // 장부 저장 뒤 데이터 쓰기가 실패하더라도 실제 내용 체크섬 검사가 다시 충돌로
+    // 올리므로, 조용한 데이터 손실 대신 복구 가능한 불일치 상태가 된다.
+    await this.syncRepo.saveLocalManifest(nextLocalManifest);
+    await this.storage.write(conflict.filename, dataToWrite);
   }
 }
