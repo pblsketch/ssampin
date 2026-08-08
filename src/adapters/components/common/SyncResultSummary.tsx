@@ -20,7 +20,7 @@ const SYNC_FILE_LABELS: Record<string, string> = {
   'consultations': '상담 기록',
 };
 
-function getFileLabel(filename: string): string {
+export function getFileLabel(filename: string): string {
   return SYNC_FILE_LABELS[filename] ?? filename;
 }
 
