@@ -11,7 +11,7 @@
  * uploadedBy 기록 + 다운로드 시 "장부엔 받았음인데 로컬 파일 없음" 오염 자가 치유.
  */
 import { describe, it, expect, vi } from 'vitest';
-import { SyncToCloud } from '../SyncToCloud';
+import { SyncToCloud, computeSyncChecksum } from '../SyncToCloud';
 import { SyncFromCloud } from '../SyncFromCloud';
 import { ResolveSyncConflict } from '../ResolveSyncConflict';
 import type { IStoragePort } from '@domain/ports/IStoragePort';
@@ -49,6 +49,11 @@ function makeDrive(
   fileContents: Record<string, string> = {},
 ) {
   const state = { manifest: initialManifest };
+  const fileModifiedTimes: Record<string, string> = {};
+  for (const key of Object.keys(fileContents)) {
+    fileModifiedTimes[key] = initialManifest?.files[key]?.lastModified ?? '2026-07-21T03:00:00Z';
+  }
+  let uploadSequence = 0;
   const updateSyncManifest = vi.fn(async (_folderId: string, m: DriveSyncManifest) => {
     state.manifest = m;
     return 'manifest';
@@ -67,12 +72,16 @@ function makeDrive(
       async (
         _folderId: string,
         filename: string,
-        _content: string,
+        content: string,
         expectedModifiedTime: string,
       ) => {
         const key = filename.replace(/\.json$/, '');
-        if (state.manifest?.files[key]?.lastModified !== expectedModifiedTime) return null;
-        return { fileId: 'f', modifiedTime: '2026-07-21T07:33:00Z' };
+        if (fileModifiedTimes[key] !== expectedModifiedTime) return null;
+        fileContents[key] = content;
+        uploadSequence += 1;
+        const modifiedTime = `2026-07-21T07:33:${String(uploadSequence).padStart(2, '0')}Z`;
+        fileModifiedTimes[key] = modifiedTime;
+        return { fileId: key, modifiedTime };
       },
     ),
     downloadSyncFile: vi.fn(async (fileId: string) => fileContents[fileId] ?? '{}'),
@@ -80,11 +89,21 @@ function makeDrive(
     updateSyncManifest,
     updateSyncManifestIfUnchanged,
     listSyncFiles: vi.fn(async () =>
-      Object.keys(fileContents).map((id) => ({ id, name: `${id}.json` })),
+      Object.keys(fileContents).map((id) => ({
+        id,
+        name: `${id}.json`,
+        modifiedTime: fileModifiedTimes[id],
+      })),
     ),
     deleteSyncFolder: vi.fn(async () => undefined),
   } as unknown as IDriveSyncPort;
-  return { port, state, updateSyncManifest };
+  return {
+    port,
+    state,
+    updateSyncManifest,
+    updateSyncManifestIfUnchanged,
+    fileContents,
+  };
 }
 
 function makeSyncRepo(initial: DriveSyncManifest | null) {
@@ -848,5 +867,232 @@ describe('활성 충돌 갱신의 fail-closed 동작', () => {
     );
 
     await expect(sync.execute()).rejects.toThrow('활성 충돌을 갱신하는 동안');
+  });
+});
+
+describe('병합 파일 체크섬 고정점', () => {
+  it.each([
+    {
+      filename: 'student-records',
+      localData: {
+        records: [
+          {
+            id: 'local-record',
+            studentId: 'student-1',
+            category: 'life',
+            content: '기기 기록',
+            createdAt: '2026-08-08T09:00:00Z',
+          },
+        ],
+      },
+      remoteData: {
+        records: [
+          {
+            id: 'remote-record',
+            studentId: 'student-2',
+            category: 'life',
+            content: '클라우드 기록',
+            createdAt: '2026-08-08T10:00:00Z',
+          },
+        ],
+      },
+    },
+    {
+      filename: 'attendance',
+      localData: {
+        records: [
+          {
+            classId: 'class-1',
+            date: '2026-08-08',
+            period: 1,
+            students: [{ number: 1, status: 'present' }],
+          },
+        ],
+      },
+      remoteData: {
+        records: [
+          {
+            classId: 'class-1',
+            date: '2026-08-08',
+            period: 2,
+            students: [{ number: 1, status: 'absent' }],
+          },
+        ],
+      },
+    },
+    {
+      filename: 'observations',
+      localData: {
+        records: [
+          {
+            id: 'local-observation',
+            studentId: 'student-1',
+            classId: 'class-1',
+            authorId: 'teacher-1',
+            date: '2026-08-08',
+            content: '기기 관찰',
+            tags: [],
+            visibility: 'private',
+            createdAt: 1,
+            updatedAt: 1,
+          },
+        ],
+      },
+      remoteData: {
+        records: [
+          {
+            id: 'remote-observation',
+            studentId: 'student-2',
+            classId: 'class-1',
+            authorId: 'teacher-1',
+            date: '2026-08-08',
+            content: '클라우드 관찰',
+            tags: [],
+            visibility: 'private',
+            createdAt: 2,
+            updatedAt: 2,
+          },
+        ],
+      },
+    },
+  ])('$filename 병합 결과를 양쪽 장부와 클라우드 파일에 같은 체크섬으로 수렴한다', async ({
+    filename,
+    localData,
+    remoteData,
+  }) => {
+    const remoteContent = JSON.stringify(remoteData);
+    const remoteChecksum = await computeSyncChecksum(remoteContent);
+    const remoteEntry = {
+      checksum: remoteChecksum,
+      lastModified: '2026-08-08T10:00:00Z',
+      size: new TextEncoder().encode(remoteContent).length,
+      uploadedBy: 'desktop-device',
+    };
+    const localEntry = {
+      ...remoteEntry,
+      checksum: 'local-old-checksum',
+      lastModified: '2026-08-08T09:00:00Z',
+      uploadedBy: 'mobile-device',
+    };
+    const { storage, files } = makeStorage({ [filename]: localData });
+    const { port, state: driveState, fileContents } = makeDrive(
+      manifest({ [filename]: remoteEntry }, 'desktop-device'),
+      { [filename]: remoteContent },
+    );
+    const { repo, state: localState } = makeSyncRepo(
+      manifest({ [filename]: localEntry }, 'mobile-device'),
+    );
+    const sync = new SyncFromCloud(
+      storage,
+      port,
+      repo,
+      'mobile-device',
+      '내 폰',
+      'ask',
+    );
+
+    const first = await sync.execute();
+    const actualChecksum = await computeSyncChecksum(JSON.stringify(files[filename]));
+
+    expect(first.downloaded).toContain(filename);
+    expect((files[filename] as { records: unknown[] }).records).toHaveLength(2);
+    expect(localState.manifest?.files[filename]?.checksum).toBe(actualChecksum);
+    expect(driveState.manifest?.files[filename]?.checksum).toBe(actualChecksum);
+    expect(fileContents[filename]).toBeDefined();
+    expect(await computeSyncChecksum(fileContents[filename]!)).toBe(actualChecksum);
+
+    const second = await sync.execute();
+    expect(second.conflicts).toEqual([]);
+    expect(second.skipped).toContain(filename);
+  });
+
+  it.each([
+    { mode: 'file' as const, message: '병합 중 다시 변경' },
+    { mode: 'manifest' as const, message: '안전하게 갱신' },
+  ])('$mode CAS 실패 시 로컬 병합 자료를 보존하고 실패한 장부를 기록하지 않는다', async ({
+    mode,
+    message,
+  }) => {
+    const filename = 'student-records';
+    const localData = {
+      records: [
+        {
+          id: 'local-record',
+          studentId: 'student-1',
+          category: 'life',
+          content: '기기 기록',
+          createdAt: '2026-08-08T09:00:00Z',
+        },
+      ],
+    };
+    const remoteData = {
+      records: [
+        {
+          id: 'remote-record',
+          studentId: 'student-2',
+          category: 'life',
+          content: '클라우드 기록',
+          createdAt: '2026-08-08T10:00:00Z',
+        },
+      ],
+    };
+    const remoteContent = JSON.stringify(remoteData);
+    const remoteChecksum = await computeSyncChecksum(remoteContent);
+    const remoteEntry = {
+      checksum: remoteChecksum,
+      lastModified: '2026-08-08T10:00:00Z',
+      size: new TextEncoder().encode(remoteContent).length,
+      uploadedBy: 'desktop-device',
+    };
+    const localEntry = {
+      ...remoteEntry,
+      checksum: 'local-old-checksum',
+      lastModified: '2026-08-08T09:00:00Z',
+      uploadedBy: 'mobile-device',
+    };
+    const { storage, files } = makeStorage({ [filename]: localData });
+    const {
+      port,
+      state: driveState,
+      fileContents,
+      updateSyncManifestIfUnchanged,
+    } = makeDrive(
+      manifest({ [filename]: remoteEntry }, 'desktop-device'),
+      { [filename]: remoteContent },
+    );
+    const { repo, state: localState } = makeSyncRepo(
+      manifest({ [filename]: localEntry }, 'mobile-device'),
+    );
+    if (mode === 'file') {
+      port.uploadSyncFileIfUnchanged = vi.fn(async () => null);
+    } else {
+      port.updateSyncManifestIfUnchanged = vi.fn(async () => false);
+    }
+    const sync = new SyncFromCloud(
+      storage,
+      port,
+      repo,
+      'mobile-device',
+      '내 폰',
+      'ask',
+    );
+
+    await expect(sync.execute()).rejects.toThrow(message);
+
+    expect((files[filename] as { records: unknown[] }).records).toHaveLength(2);
+    expect(localState.manifest?.files[filename]?.checksum).toBe('local-old-checksum');
+    expect(driveState.manifest?.files[filename]?.checksum).toBe(remoteChecksum);
+    if (mode === 'file') {
+      expect(fileContents[filename]).toBe(remoteContent);
+    } else {
+      expect((JSON.parse(fileContents[filename]!) as { records: unknown[] }).records).toHaveLength(2);
+      port.updateSyncManifestIfUnchanged = updateSyncManifestIfUnchanged;
+      const recovered = await sync.execute();
+      const recoveredChecksum = await computeSyncChecksum(fileContents[filename]!);
+      expect(recovered.conflicts).toEqual([]);
+      expect(localState.manifest?.files[filename]?.checksum).toBe(recoveredChecksum);
+      expect(driveState.manifest?.files[filename]?.checksum).toBe(recoveredChecksum);
+      expect(port.uploadSyncFileIfUnchanged).toHaveBeenCalledTimes(1);
+    }
   });
 });

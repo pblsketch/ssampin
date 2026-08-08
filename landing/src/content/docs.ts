@@ -1081,7 +1081,7 @@ export const docsArticles: readonly DocArticle[] = [
     title: 'Google Drive 동기화',
     description: 'PC, 새 컴퓨터, 모바일에서 같은 쌤핀 데이터를 이어서 사용합니다.',
     category: 'sync',
-    lastUpdated: '2026-07-06',
+    lastUpdated: '2026-08-09',
     sections: [
       {
         id: 'setup',
@@ -1121,7 +1121,13 @@ export const docsArticles: readonly DocArticle[] = [
         body: [
           '출결과 학생 기록은 기록 하나하나를 비교해 합치므로, 휴대폰과 PC에서 서로 다른 반이나 날짜를 고쳤다면 둘 다 안전하게 남습니다. 완전히 같은 항목을 양쪽에서 고친 경우에만 더 나중에 저장한 쪽이 남습니다.',
           '그 밖의 데이터는 더 최근에 저장한 쪽이 우선합니다. 충돌 확인 창이 뜨면, 최근에 실제로 작업한 기기가 어느 쪽인지 떠올려 그쪽을 선택하면 됩니다.',
+          '휴대폰에서 여러 항목이 한꺼번에 충돌하면 “모두 클라우드에서 복구”를 한 번 눌러 순서대로 받을 수 있습니다. 기기마다 어느 쪽을 유지할지 다르게 정해야 한다면 항목별 선택을 사용하세요.',
         ],
+        callout: {
+          tone: 'warning',
+          title: '모두 클라우드에서 복구하기 전에',
+          body: '휴대폰에서 아직 클라우드에 올리지 않은 최근 입력이 있다면 항목별 선택을 권장합니다. 일괄 복구 중 같은 항목을 다시 확인해야 하거나 안전 확인에 실패하면 자동으로 멈추고 개별 선택으로 돌아갑니다.',
+        },
       },
     ],
     related: ['sync/data-location', 'features/mobile', 'troubleshooting/google-sync'],

@@ -1,9 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { DriveSyncConflict } from '@domain/entities/DriveSyncState';
 import {
   canStartMobileConflictResolution,
   canStartMobileUpload,
   firstMobileConflict,
+  useMobileDriveSyncStore,
 } from '../useMobileDriveSyncStore';
 
 const conflict: DriveSyncConflict = {
@@ -35,5 +36,64 @@ describe('모바일 동기화 충돌 상태', () => {
     expect(canStartMobileUpload('idle', conflict)).toBe(false);
     expect(canStartMobileUpload('idle', null)).toBe(true);
     expect(canStartMobileUpload('error', null)).toBe(true);
+  });
+
+  it('일괄 복구는 남은 충돌을 순서대로 처리하고 동일 파일이 재발하면 중단한다', async () => {
+    const nextConflict = {
+      ...conflict,
+      filename: 'todos',
+      remoteModified: '2026-08-08T12:00:00Z',
+    };
+    const resolveConflict = vi
+      .fn<(choice: 'local' | 'remote') => Promise<void>>()
+      .mockImplementationOnce(async () => {
+        useMobileDriveSyncStore.setState({ state: 'conflict', conflict: nextConflict });
+      })
+      .mockImplementationOnce(async () => {
+        useMobileDriveSyncStore.setState({ state: 'conflict', conflict });
+      });
+
+    useMobileDriveSyncStore.setState({
+      state: 'conflict',
+      conflict,
+      resolveConflict,
+      lastSyncResult: {
+        direction: 'download',
+        timestamp: '2026-08-08T11:00:00Z',
+        downloaded: [],
+        skipped: [],
+        conflicts: ['events', 'todos'],
+      },
+    });
+
+    const onProgress = vi.fn();
+    await useMobileDriveSyncStore.getState().resolveAllConflictsFromCloud(onProgress);
+
+    expect(resolveConflict).toHaveBeenCalledTimes(2);
+    expect(resolveConflict).toHaveBeenNthCalledWith(1, 'remote');
+    expect(resolveConflict).toHaveBeenNthCalledWith(2, 'remote');
+    expect(onProgress).toHaveBeenNthCalledWith(1, 1);
+    expect(onProgress).toHaveBeenNthCalledWith(2, 2);
+    expect(useMobileDriveSyncStore.getState().conflict?.filename).toBe('events');
+  });
+
+  it('일괄 복구가 동시에 두 번 호출돼도 resolver는 한 번만 실행한다', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const resolveConflict = vi.fn(async () => {
+      await gate;
+      useMobileDriveSyncStore.setState({ state: 'idle', conflict: null });
+    });
+    useMobileDriveSyncStore.setState({ state: 'conflict', conflict, resolveConflict });
+
+    const first = useMobileDriveSyncStore.getState().resolveAllConflictsFromCloud();
+    const second = useMobileDriveSyncStore.getState().resolveAllConflictsFromCloud();
+    expect(resolveConflict).toHaveBeenCalledTimes(1);
+
+    release();
+    await Promise.all([first, second]);
+    expect(resolveConflict).toHaveBeenCalledTimes(1);
   });
 });

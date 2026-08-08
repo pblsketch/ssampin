@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { generateUUID } from '@infrastructure/utils/uuid';
 import type { Settings } from '@domain/entities/Settings';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import { settingsRepository } from '@mobile/di/container';
@@ -66,7 +65,7 @@ interface MobileSettingsState {
   load: () => Promise<void>;
   reload: () => Promise<void>;
   setAutoSyncInterval: (interval: number) => Promise<void>;
-  /** 모바일에서 설정 일부를 편집·저장. 로컬(IndexedDB) 반영 + Drive 동기화 트리거(인증 시). mobile- 접두사 deviceId 보존. */
+  /** 모바일에서 설정 일부를 편집·저장. 로컬(IndexedDB) 반영 + Drive 동기화 트리거(인증 시). */
   updateSettings: (patch: EditableSettings) => Promise<void>;
 }
 
@@ -80,19 +79,11 @@ export const useMobileSettingsStore = create<MobileSettingsState>((set, get) => 
       const saved = await settingsRepository.getSettings();
       if (saved) {
         const s = saved as Settings;
-        let syncDeviceId = (s as unknown as { sync?: { deviceId?: string } }).sync?.deviceId ?? '';
-        // 모바일은 항상 mobile- 접두사 deviceId를 사용 (PC settings 다운로드로 인한 오염 방지)
-        if (!syncDeviceId || !syncDeviceId.startsWith('mobile-')) {
-          syncDeviceId = `mobile-${generateUUID()}`;
-          const patched = {
-            ...s,
-            sync: {
-              ...(s as unknown as { sync?: Record<string, unknown> }).sync,
-              deviceId: syncDeviceId,
-            },
-          };
-          await settingsRepository.saveSettings(patched as Settings);
-        }
+        // 모바일 동기화 ID는 useMobileDriveSyncStore의 localStorage 전용 키가 정본이다.
+        // 클라우드에서 받은 settings.sync.deviceId를 load 중 다시 저장하면 로컬 장부의
+        // 체크섬과 실제 설정이 갈라져 다음 새로고침에서 같은 충돌이 재생성된다.
+        const syncDeviceId =
+          (s as unknown as { sync?: { deviceId?: string } }).sync?.deviceId ?? '';
         const rawMealSchool = (
           s as unknown as {
             mealSchool?: { schoolCode?: string; atptCode?: string; schoolName?: string };

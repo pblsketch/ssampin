@@ -339,14 +339,15 @@ async function mergeAndWriteLocked<T extends { readonly records: readonly unknow
   remoteData: T,
   merge: (local: T | null) => T,
   logSuffix = '',
-): Promise<void> {
-  await withFileLock(filename, async () => {
+): Promise<T> {
+  return await withFileLock(filename, async () => {
     const localData = await storage.read<T>(filename);
     const merged = merge(localData);
     await storage.write(filename, merged);
     console.log(
       `[SyncFromCloud]   ${filename}: ✅ MERGE${logSuffix} (local=${localData?.records?.length ?? 0}건 + remote=${remoteData?.records?.length ?? 0}건 → ${merged.records.length}건)`,
     );
+    return merged;
   });
 }
 
@@ -708,6 +709,85 @@ export class SyncFromCloud {
     await this.storage.write(filename, data);
   }
 
+  /**
+   * 로컬 기록을 보존해 병합한 결과는 리모트 원본과 바이트가 다를 수 있다.
+   * 그 결과에 리모트 원본 체크섬을 붙이면 다음 pull이 곧바로 content-mismatch가 된다.
+   * 병합본을 파일 CAS → 매니페스트 CAS로 수렴시킨 뒤 그 정본 정보를 로컬 장부에도 쓴다.
+   */
+  private async convergeMergedFile(
+    folderId: string,
+    filename: string,
+    mergedData: unknown,
+    expectedRemoteInfo: DriveSyncFileInfo,
+  ): Promise<DriveSyncFileInfo> {
+    const content = JSON.stringify(mergedData);
+    const checksum = await computeSyncChecksum(content);
+    if (checksum === expectedRemoteInfo.checksum) return expectedRemoteInfo;
+
+    const currentFile = (await this.drivePort.listSyncFiles(folderId)).find(
+      (file) => file.name === `${filename}.json`,
+    );
+    let nextInfo: DriveSyncFileInfo;
+    if (currentFile && currentFile.modifiedTime !== expectedRemoteInfo.lastModified) {
+      // 이전 실행에서 파일 CAS만 성공하고 매니페스트 CAS가 실패한 부분 성공 상태를 복구한다.
+      // 실제 파일이 이번 병합본과 같을 때만 재업로드 없이 장부 갱신을 재시도한다.
+      const currentContent = await this.drivePort.downloadSyncFile(currentFile.id);
+      const currentChecksum = await computeSyncChecksum(currentContent);
+      if (currentChecksum !== checksum) {
+        throw new Error(`클라우드 ${filename} 파일이 병합 중 다시 변경되었습니다.`);
+      }
+      nextInfo = {
+        lastModified: currentFile.modifiedTime,
+        checksum,
+        size: new TextEncoder().encode(currentContent).length,
+        uploadedBy: this.deviceId,
+      };
+    } else {
+      const uploaded = await this.drivePort.uploadSyncFileIfUnchanged(
+        folderId,
+        `${filename}.json`,
+        content,
+        expectedRemoteInfo.lastModified,
+      );
+      if (!uploaded) {
+        throw new Error(`클라우드 ${filename} 파일이 병합 중 다시 변경되었습니다.`);
+      }
+      nextInfo = {
+        lastModified: uploaded.modifiedTime,
+        checksum,
+        size: new TextEncoder().encode(content).length,
+        uploadedBy: this.deviceId,
+      };
+    }
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const latest = await this.drivePort.getSyncManifest(folderId);
+      if (!latest) throw new Error('클라우드 동기화 장부를 다시 확인하지 못했습니다.');
+      const latestInfo = latest.files[filename];
+      if (
+        !latestInfo ||
+        latestInfo.lastModified !== expectedRemoteInfo.lastModified ||
+        latestInfo.checksum !== expectedRemoteInfo.checksum
+      ) {
+        throw new Error(`클라우드 ${filename} 장부가 병합 중 다시 변경되었습니다.`);
+      }
+      const nextManifest: DriveSyncManifest = {
+        ...latest,
+        deviceId: this.deviceId,
+        deviceName: this.deviceName,
+        lastSyncedAt: new Date().toISOString(),
+        files: { ...latest.files, [filename]: nextInfo },
+      };
+      if (
+        await this.drivePort.updateSyncManifestIfUnchanged(folderId, latest, nextManifest)
+      ) {
+        return nextInfo;
+      }
+    }
+
+    throw new Error(`클라우드 ${filename} 장부를 안전하게 갱신하지 못했습니다.`);
+  }
+
   async execute(onProgress?: (progress: SyncProgress) => void): Promise<SyncFromCloudResult> {
     console.log(
       `[SyncFromCloud] ▶ 시작 | myDeviceId=${this.deviceId} | policy=${this.conflictPolicy}`,
@@ -932,10 +1012,19 @@ export class SyncFromCloud {
           if (driveFile) {
             const content = await this.drivePort.downloadSyncFile(driveFile.id);
             const remoteData = JSON.parse(content) as StudentRecordsData;
-            await mergeAndWriteLocked(this.storage, filename, remoteData, (local) =>
-              mergeStudentRecords(local, remoteData, currentTerm, lastClosedTerm, lastClosedAt),
+            const merged = await mergeAndWriteLocked(
+              this.storage,
+              filename,
+              remoteData,
+              (local) =>
+                mergeStudentRecords(local, remoteData, currentTerm, lastClosedTerm, lastClosedAt),
             );
-            updatedFiles[filename] = remoteInfo;
+            updatedFiles[filename] = await this.convergeMergedFile(
+              folder.id,
+              filename,
+              merged,
+              remoteInfo,
+            );
             downloaded.push(filename);
           }
           continue;
@@ -948,7 +1037,7 @@ export class SyncFromCloud {
           if (driveFile) {
             const content = await this.drivePort.downloadSyncFile(driveFile.id);
             const remoteData = JSON.parse(content) as AttendanceData;
-            await mergeAndWriteLocked(this.storage, filename, remoteData, (local) =>
+            const merged = await mergeAndWriteLocked(this.storage, filename, remoteData, (local) =>
               mergeAttendance(
                 local,
                 remoteData,
@@ -958,7 +1047,12 @@ export class SyncFromCloud {
                 lastClosedAt,
               ),
             );
-            updatedFiles[filename] = remoteInfo;
+            updatedFiles[filename] = await this.convergeMergedFile(
+              folder.id,
+              filename,
+              merged,
+              remoteInfo,
+            );
             downloaded.push(filename);
           }
           continue;
@@ -971,7 +1065,7 @@ export class SyncFromCloud {
           if (driveFile) {
             const content = await this.drivePort.downloadSyncFile(driveFile.id);
             const remoteData = JSON.parse(content) as ObservationData;
-            await mergeAndWriteLocked(this.storage, filename, remoteData, (local) =>
+            const merged = await mergeAndWriteLocked(this.storage, filename, remoteData, (local) =>
               mergeObservations(
                 local,
                 remoteData,
@@ -981,7 +1075,12 @@ export class SyncFromCloud {
                 lastClosedAt,
               ),
             );
-            updatedFiles[filename] = remoteInfo;
+            updatedFiles[filename] = await this.convergeMergedFile(
+              folder.id,
+              filename,
+              merged,
+              remoteInfo,
+            );
             downloaded.push(filename);
           }
           continue;
@@ -1048,9 +1147,10 @@ export class SyncFromCloud {
         }
 
         const content = await this.drivePort.downloadSyncFile(driveFile.id);
+        let downloadedFileInfo = remoteInfo;
         if (filename === 'student-records') {
           const remoteData = JSON.parse(content) as StudentRecordsData;
-          await mergeAndWriteLocked(
+          const merged = await mergeAndWriteLocked(
             this.storage,
             filename,
             remoteData,
@@ -1058,10 +1158,16 @@ export class SyncFromCloud {
               mergeStudentRecords(local, remoteData, currentTerm, lastClosedTerm, lastClosedAt),
             ' (first download)',
           );
+          downloadedFileInfo = await this.convergeMergedFile(
+            folder.id,
+            filename,
+            merged,
+            remoteInfo,
+          );
         } else if (filename === 'attendance') {
           const remoteData = JSON.parse(content) as AttendanceData;
           // 로컬 manifest 정보가 없어 최신 판정 불가 → 기존 동작(리모트 우선)과 일치하게 preferRemote
-          await mergeAndWriteLocked(
+          const merged = await mergeAndWriteLocked(
             this.storage,
             filename,
             remoteData,
@@ -1069,10 +1175,16 @@ export class SyncFromCloud {
               mergeAttendance(local, remoteData, true, currentTerm, lastClosedTerm, lastClosedAt),
             ' (first download)',
           );
+          downloadedFileInfo = await this.convergeMergedFile(
+            folder.id,
+            filename,
+            merged,
+            remoteInfo,
+          );
         } else if (filename === 'observations') {
           const remoteData = JSON.parse(content) as ObservationData;
           // 로컬 manifest 정보가 없어 최신 판정 불가 → attendance와 동일하게 preferRemote
-          await mergeAndWriteLocked(
+          const merged = await mergeAndWriteLocked(
             this.storage,
             filename,
             remoteData,
@@ -1080,11 +1192,17 @@ export class SyncFromCloud {
               mergeObservations(local, remoteData, true, currentTerm, lastClosedTerm, lastClosedAt),
             ' (first download)',
           );
+          downloadedFileInfo = await this.convergeMergedFile(
+            folder.id,
+            filename,
+            merged,
+            remoteInfo,
+          );
         } else {
           const parsed = JSON.parse(content) as unknown;
           await this.writeReplacedFile(filename, parsed);
         }
-        updatedFiles[filename] = remoteInfo;
+        updatedFiles[filename] = downloadedFileInfo;
         downloaded.push(filename);
         console.log(`[SyncFromCloud]   ${filename}: ✅ DOWNLOAD (로컬에 없음 → 무조건 다운로드)`);
       } else {

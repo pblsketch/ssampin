@@ -172,6 +172,7 @@ interface MobileDriveSyncState {
   syncToCloud: () => Promise<void>;
   syncFromCloud: () => Promise<void>;
   resolveConflict: (choice: 'local' | 'remote') => Promise<void>;
+  resolveAllConflictsFromCloud: (onProgress?: (current: number) => void) => Promise<void>;
   deleteCloudData: () => Promise<void>;
   triggerSaveSync: () => void;
   /** debounce 무시하고 즉시 업로드 (앱 백그라운드 전환 시 사용) */
@@ -181,6 +182,7 @@ interface MobileDriveSyncState {
 let tokenGetter: (() => Promise<string>) | null = null;
 let adapter: IDriveSyncPort | null = null;
 let saveDebounce: ReturnType<typeof setTimeout> | null = null;
+let resolveAllInFlight: Promise<void> | null = null;
 /** 업로드 유예(deferred) 재시도 1회 가드 — pull-merge-push 무한루프 방지 */
 let deferredRetrying = false;
 
@@ -422,6 +424,43 @@ export const useMobileDriveSyncStore = create<MobileDriveSyncState>((set, get) =
       }
       applySyncError(e, set);
     }
+  },
+
+  resolveAllConflictsFromCloud: (onProgress) => {
+    if (resolveAllInFlight) return resolveAllInFlight;
+
+    const run = (async () => {
+      const seenFiles = new Set<string>();
+      let currentIndex = 0;
+
+      while (true) {
+        const current = get();
+        if (current.state === 'syncing' || current.conflict === null) return;
+
+        const filename = current.conflict.filename;
+        if (seenFiles.has(filename)) {
+          set({
+            state: 'error',
+            errorKind: null,
+            error: '같은 항목을 다시 확인해야 합니다. 이 항목은 개별적으로 선택해 주세요.',
+          });
+          return;
+        }
+        seenFiles.add(filename);
+        currentIndex += 1;
+        onProgress?.(currentIndex);
+
+        await current.resolveConflict('remote');
+
+        const next = get();
+        if (next.state === 'error' || next.conflict === null) return;
+      }
+    })();
+
+    resolveAllInFlight = run;
+    return run.finally(() => {
+      if (resolveAllInFlight === run) resolveAllInFlight = null;
+    });
   },
 
   deleteCloudData: async () => {

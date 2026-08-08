@@ -16,7 +16,11 @@ const AUTO_SYNC_OPTIONS = [
 ] as const;
 
 export function SyncStatus() {
-  const [resolvingChoice, setResolvingChoice] = useState<'local' | 'remote' | null>(null);
+  const [resolvingChoice, setResolvingChoice] = useState<
+    'local' | 'remote' | 'remote-all' | null
+  >(null);
+  const [batchCurrent, setBatchCurrent] = useState(0);
+  const [batchTotal, setBatchTotal] = useState(0);
   const {
     state,
     progress,
@@ -26,6 +30,7 @@ export function SyncStatus() {
     syncToCloud,
     syncFromCloud,
     resolveConflict,
+    resolveAllConflictsFromCloud,
     isAuthenticated,
     lastSyncResult,
   } = useMobileDriveSyncStore();
@@ -44,6 +49,22 @@ export function SyncStatus() {
       await resolveConflict(choice);
     } finally {
       setResolvingChoice(null);
+    }
+  };
+
+  const conflictCount = lastSyncResult?.conflicts?.length ?? 0;
+
+  const handleResolveAllFromCloud = async () => {
+    if (resolvingChoice !== null) return;
+    setBatchCurrent(1);
+    setBatchTotal(conflictCount);
+    setResolvingChoice('remote-all');
+    try {
+      await resolveAllConflictsFromCloud(setBatchCurrent);
+    } finally {
+      setResolvingChoice(null);
+      setBatchCurrent(0);
+      setBatchTotal(0);
     }
   };
 
@@ -148,8 +169,13 @@ export function SyncStatus() {
             </span>
             <div className="min-w-0">
               <p className="text-sp-text text-sm font-sp-semibold">
-                {getFileLabel(conflict.filename)}:{' '}
-                {resolvingChoice === 'remote' ? '클라우드 복구 중' : '이 기기 내용 반영 중'}
+                {resolvingChoice === 'remote-all'
+                  ? `${batchCurrent}/${batchTotal} 항목: 클라우드 복구 중`
+                  : `${getFileLabel(conflict.filename)}: ${
+                      resolvingChoice === 'remote'
+                        ? '클라우드 복구 중'
+                        : '이 기기 내용 반영 중'
+                    }`}
               </p>
               <p className="text-sp-muted text-xs leading-relaxed mt-1">
                 저장 후 안전하게 다시 확인합니다. 잠시만 기다려 주세요.
@@ -177,6 +203,19 @@ export function SyncStatus() {
               </p>
             </div>
           </div>
+          {conflictCount > 1 && (
+            <>
+              <button
+                type="button"
+                onClick={() => void handleResolveAllFromCloud()}
+                disabled={state === 'syncing' || resolvingChoice !== null}
+                className="w-full min-h-11 px-3 py-2.5 rounded-xl bg-sp-accent text-sp-accent-fg text-sm font-sp-semibold disabled:opacity-50 active:scale-[0.98] transition-all"
+              >
+                모두 클라우드에서 복구 ({conflictCount}개)
+              </button>
+              <p className="text-center text-sp-muted text-xs">또는 현재 항목만 선택</p>
+            </>
+          )}
           <div className="grid grid-cols-2 gap-2">
             <button
               type="button"

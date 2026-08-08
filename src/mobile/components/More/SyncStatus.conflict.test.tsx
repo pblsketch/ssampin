@@ -5,6 +5,9 @@ import '@testing-library/jest-dom/vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const resolveConflictMock = vi.fn<(choice: 'local' | 'remote') => Promise<void>>();
+const resolveAllConflictsFromCloudMock = vi.fn<
+  (onProgress?: (current: number) => void) => Promise<void>
+>();
 
 const driveState = {
   state: 'conflict',
@@ -21,8 +24,16 @@ const driveState = {
   syncToCloud: vi.fn(async () => undefined),
   syncFromCloud: vi.fn(async () => undefined),
   resolveConflict: (choice: 'local' | 'remote') => resolveConflictMock(choice),
+  resolveAllConflictsFromCloud: (onProgress?: (current: number) => void) =>
+    resolveAllConflictsFromCloudMock(onProgress),
   isAuthenticated: true,
-  lastSyncResult: null,
+  lastSyncResult: {
+    direction: 'download',
+    timestamp: '2026-08-08T11:00:00.000Z',
+    downloaded: [],
+    skipped: [],
+    conflicts: ['events', 'todos', 'student-records', 'attendance'],
+  },
 };
 
 vi.mock('@mobile/stores/useMobileDriveSyncStore', () => ({
@@ -57,8 +68,11 @@ function deferred<T>() {
 }
 
 beforeEach(() => {
+  driveState.lastSyncResult.conflicts = ['events', 'todos', 'student-records', 'attendance'];
   resolveConflictMock.mockReset();
   resolveConflictMock.mockResolvedValue(undefined);
+  resolveAllConflictsFromCloudMock.mockReset();
+  resolveAllConflictsFromCloudMock.mockResolvedValue(undefined);
 });
 
 afterEach(cleanup);
@@ -76,6 +90,16 @@ describe('모바일 동기화 충돌 카드', () => {
     expect(container.innerHTML).not.toContain('yellow-950');
     expect(container.innerHTML).not.toContain('gray-700');
     expect(container.innerHTML).not.toContain('blue-600');
+    expect(screen.getByRole('button', { name: '이 기기 내용 유지' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '클라우드에서 복구' })).toBeInTheDocument();
+  });
+
+  it('충돌이 하나뿐이면 중복되는 일괄 복구 버튼을 숨긴다', () => {
+    const original = driveState.lastSyncResult.conflicts;
+    driveState.lastSyncResult.conflicts = ['events'];
+    render(<SyncStatus />);
+    expect(screen.queryByRole('button', { name: /모두 클라우드에서 복구/ })).not.toBeInTheDocument();
+    driveState.lastSyncResult.conflicts = original;
   });
 
   it('클라우드 복구를 누르면 선택 박스를 즉시 진행 안내로 바꾼다', async () => {
@@ -96,5 +120,33 @@ describe('모바일 동기화 충돌 카드', () => {
       pending.resolve(undefined);
       await pending.promise;
     });
+  });
+
+  it('여러 충돌을 한 번에 클라우드에서 복구할 수 있다', async () => {
+    const pending = deferred<void>();
+    let reportProgress: ((current: number) => void) | undefined;
+    resolveAllConflictsFromCloudMock.mockImplementationOnce(async (onProgress) => {
+      reportProgress = onProgress;
+      onProgress?.(1);
+      return pending.promise;
+    });
+    render(<SyncStatus />);
+
+    fireEvent.click(screen.getByRole('button', { name: '모두 클라우드에서 복구 (4개)' }));
+
+    expect(resolveAllConflictsFromCloudMock).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(screen.getByText('1/4 항목: 클라우드 복구 중')).toBeInTheDocument();
+    });
+    expect(screen.queryByRole('button', { name: '이 기기 내용 유지' })).not.toBeInTheDocument();
+
+    act(() => reportProgress?.(2));
+    expect(screen.getByText('2/4 항목: 클라우드 복구 중')).toBeInTheDocument();
+
+    await act(async () => {
+      pending.resolve(undefined);
+      await pending.promise;
+    });
+    expect(screen.getByRole('button', { name: '이 기기 내용 유지' })).toBeInTheDocument();
   });
 });
