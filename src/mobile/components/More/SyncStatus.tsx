@@ -118,21 +118,28 @@ export function SyncStatus() {
         <p className="text-red-400 text-sm">{error}</p>
       )}
 
-      {isAuthenticated && state === 'conflict' && conflict && (
-        <div className="space-y-2">
-          <p className="text-yellow-400 text-sm">충돌 발생: {conflict.filename}</p>
+      {isAuthenticated && conflict && (
+        <div className="space-y-2 rounded-lg border border-yellow-700/60 bg-yellow-950/30 p-3">
+          <p className="text-yellow-300 text-sm font-medium">
+            기기와 클라우드의 {conflict.filename} 내용이 달라요
+          </p>
+          <p className="text-gray-400 text-xs">
+            자동으로 덮어쓰지 않았습니다. 사용할 내용을 선택해 주세요.
+          </p>
           <div className="flex gap-2">
             <button
               onClick={() => resolveConflict('local')}
-              className="flex-1 py-2 text-sm rounded-lg bg-sp-accent/15 text-sp-accent"
+              disabled={state === 'syncing'}
+              className="flex-1 px-3 py-2 rounded-lg bg-gray-700 text-white text-xs disabled:opacity-50"
             >
-              로컬 유지
+              이 기기 내용 유지
             </button>
             <button
               onClick={() => resolveConflict('remote')}
-              className="flex-1 py-2 text-sm rounded-lg bg-sp-accent/15 text-sp-accent"
+              disabled={state === 'syncing'}
+              className="flex-1 px-3 py-2 rounded-lg bg-blue-600 text-white text-xs disabled:opacity-50"
             >
-              클라우드 유지
+              클라우드에서 복구
             </button>
           </div>
         </div>
@@ -148,14 +155,14 @@ export function SyncStatus() {
         <div className="flex gap-2">
           <button
             onClick={() => void syncToCloud()}
-            disabled={state === 'syncing'}
+            disabled={state === 'syncing' || conflict !== null}
             className="flex-1 py-2 text-sm rounded-xl border border-sp-border text-sp-text disabled:opacity-50 active:scale-[0.98] transition-all"
           >
             업로드
           </button>
           <button
             onClick={() => void syncFromCloud()}
-            disabled={state === 'syncing'}
+            disabled={state === 'syncing' || conflict !== null}
             className="flex-1 py-2 text-sm rounded-xl border border-sp-border text-sp-text disabled:opacity-50 active:scale-[0.98] transition-all"
           >
             다운로드

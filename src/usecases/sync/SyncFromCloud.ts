@@ -25,6 +25,7 @@ import {
 import { ARCHIVE_MANIFEST_FILENAME, parseArchiveSyncKey } from '@domain/rules/archiveRules';
 import {
   SYNC_FILES,
+  computeSyncChecksum,
   type SyncProgress,
   type GetDynamicSyncFiles,
   type GetBinaryDynamicSyncFiles,
@@ -685,6 +686,8 @@ export class SyncFromCloud {
     /** (S4.1) 아카이브 훅 2종 — 둘 다 주입될 때만 아카이브 다운로드가 켜진다(데스크톱 전용). */
     private readonly listLocalArchiveTerms?: ListLocalArchiveTerms,
     private readonly importArchiveTerm?: ImportArchiveTermFiles,
+    /** 활성 충돌을 갱신하는 호출에서는 장부 부재/손상을 성공(no-op)으로 처리하지 않는다. */
+    private readonly requireRemoteManifest = false,
   ) {}
 
   /**
@@ -765,6 +768,9 @@ export class SyncFromCloud {
     const folder = await this.drivePort.getOrCreateSyncFolder();
     const remoteManifest = await this.drivePort.getSyncManifest(folder.id);
     if (!remoteManifest) {
+      if (this.requireRemoteManifest) {
+        throw new Error('활성 충돌을 갱신하는 동안 클라우드 동기화 장부를 읽지 못했습니다.');
+      }
       console.log('[SyncFromCloud] ❌ 리모트 매니페스트 없음 → 전체 스킵');
       return { downloaded: [], conflicts: [], skipped: [...SYNC_FILES] };
     }
@@ -849,6 +855,49 @@ export class SyncFromCloud {
       if (localInfo && localInfo.checksum === remoteInfo.checksum) {
         const localData = await this.storage.read<unknown>(filename);
         if (localData !== null) {
+          // 장부끼리 같아도 실제 로컬 파일은 다를 수 있다. 과거 no-op 장부 오염 뒤
+          // PWA 재설치/부분 초기화로 빈 봉투만 남은 제보 상태가 그 예다. 실제 내용을
+          // 확인하지 않고 "변경 없음" 처리하면 클라우드 일정이 영구히 내려오지 않는다.
+          // 반대로 즉시 덮어쓰면 사용자의 미업로드 로컬 편집을 잃을 수 있으므로,
+          // 내용 불일치는 자동 선택하지 않고 충돌로 올려 명시적으로 회수한다.
+          const actualChecksum = await computeSyncChecksum(JSON.stringify(localData));
+          if (actualChecksum !== localInfo.checksum) {
+            // settings는 수신 시 더 최신 학기 가드를 의도적으로 보존하므로, 그 차이만 있는 경우는
+            // 오염이 아니라 아직 클라우드에 교정 업로드할 로컬 변경으로 본다.
+            if (filename === 'settings') {
+              try {
+                const driveFile = remoteFiles.find((f) => f.name === 'settings.json');
+                if (driveFile) {
+                  const remoteContent = await this.drivePort.downloadSyncFile(driveFile.id);
+                  const remoteChecksum = await computeSyncChecksum(remoteContent);
+                  if (remoteChecksum === remoteInfo.checksum) {
+                    const expected = preserveNewerTermGuard(
+                      JSON.parse(remoteContent) as unknown,
+                      localData as TermGuardSnapshot,
+                    );
+                    const expectedChecksum = await computeSyncChecksum(JSON.stringify(expected));
+                    if (expectedChecksum === actualChecksum) {
+                      skipped.push(filename);
+                      continue;
+                    }
+                  }
+                }
+              } catch {
+                // 검증 실패 시 일반 충돌로 처리해 자동 덮어쓰기를 막는다.
+              }
+            }
+            conflicts.push({
+              filename,
+              localModified: 'content-mismatch',
+              remoteModified: remoteInfo.lastModified,
+              localDeviceName: this.deviceName,
+              remoteDeviceName: remoteManifest.deviceName,
+            });
+            console.log(
+              `[SyncFromCloud]   ${filename}: 🔶 CONFLICT (장부 체크섬은 같지만 실제 로컬 내용 불일치)`,
+            );
+            continue;
+          }
           skipped.push(filename);
           continue;
         }
@@ -983,30 +1032,7 @@ export class SyncFromCloud {
         ) {
           const localData = await this.storage.read<unknown>(filename);
           if (localData !== null) {
-            // 실제 로컬 파일 존재 → manifest 미등록 상태에서의 silent 덮어쓰기 방지
-            if (this.conflictPolicy === 'latest') {
-              // 'latest' 정책: lastModified 비교가 불가능(로컬 manifest 부재)하므로
-              // 보수적으로 리모트 다운로드를 채택하되 사용자 안내용 conflict 항목으로도 기록.
-              // 실제 다운로드는 진행하지만 conflicts 배열에 추가해 toast/요약에 노출되게 함.
-              conflicts.push({
-                filename,
-                localModified: 'unknown',
-                remoteModified: remoteInfo.lastModified,
-                localDeviceName: this.deviceName,
-                remoteDeviceName: remoteManifest.deviceName,
-              });
-              const content = await this.drivePort.downloadSyncFile(driveFile.id);
-              const parsed = JSON.parse(content) as unknown;
-              await this.writeReplacedFile(filename, parsed);
-              updatedFiles[filename] = remoteInfo;
-              downloaded.push(filename);
-              console.log(
-                `[SyncFromCloud]   ${filename}: ⚠️ DOWNLOAD with CONFLICT REPORT (manifest 미등록 + 로컬 데이터 존재)`,
-              );
-              continue;
-            }
-
-            // 'ask' 정책: 충돌 다이얼로그로 위임 (다운로드 보류)
+            // 실제 로컬 파일 존재 → 정책과 관계없이 사용자가 선택하기 전에는 덮어쓰지 않는다.
             conflicts.push({
               filename,
               localModified: 'unknown',
@@ -1015,7 +1041,7 @@ export class SyncFromCloud {
               remoteDeviceName: remoteManifest.deviceName,
             });
             console.log(
-              `[SyncFromCloud]   ${filename}: 🔶 CONFLICT (manifest 미등록 + 로컬 데이터 존재, ask 정책)`,
+              `[SyncFromCloud]   ${filename}: 🔶 CONFLICT (manifest 미등록 + 로컬 데이터 존재)`,
             );
             continue;
           }
@@ -1139,23 +1165,6 @@ export class SyncFromCloud {
         if (driveFile) {
           const localData = await this.storage.read<unknown>(filename);
           if (localData !== null) {
-            if (this.conflictPolicy === 'latest') {
-              conflicts.push({
-                filename,
-                localModified: 'unknown',
-                remoteModified: remoteInfo.lastModified,
-                localDeviceName: this.deviceName,
-                remoteDeviceName: remoteManifest.deviceName,
-              });
-              const content = await this.drivePort.downloadSyncFile(driveFile.id);
-              await this.storage.write(filename, JSON.parse(content) as unknown);
-              updatedFiles[filename] = remoteInfo;
-              downloaded.push(filename);
-              console.log(
-                `[SyncFromCloud]   ${filename}: ⚠️ DOWNLOAD with CONFLICT REPORT (동적, manifest 미등록 + 로컬 존재)`,
-              );
-              continue;
-            }
             conflicts.push({
               filename,
               localModified: 'unknown',
@@ -1164,7 +1173,7 @@ export class SyncFromCloud {
               remoteDeviceName: remoteManifest.deviceName,
             });
             console.log(
-              `[SyncFromCloud]   ${filename}: 🔶 CONFLICT (동적, manifest 미등록 + 로컬 존재, ask 정책)`,
+              `[SyncFromCloud]   ${filename}: 🔶 CONFLICT (동적, manifest 미등록 + 로컬 존재)`,
             );
             continue;
           }

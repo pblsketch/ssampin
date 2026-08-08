@@ -3,11 +3,13 @@ import { generateUUID } from '@infrastructure/utils/uuid';
 import type { IDriveSyncPort } from '@domain/ports/IDriveSyncPort';
 import { SyncToCloud } from '@usecases/sync/SyncToCloud';
 import { SyncFromCloud } from '@usecases/sync/SyncFromCloud';
+import { ResolveSyncConflict, StaleSyncConflictError } from '@usecases/sync/ResolveSyncConflict';
 import { getDriveSyncAdapter, driveSyncRepository, storage } from '@mobile/di/container';
 import type { SyncResult } from '@adapters/stores/useDriveSyncStore';
 import { isGoogleAuthBlockedError } from '@domain/rules/calendarSyncRules';
 import { parseTerm } from '@domain/rules/academicCalendar';
 import { awaitPendingWrites } from '@mobile/stores/pendingWrites';
+import type { DriveSyncConflict } from '@domain/entities/DriveSyncState';
 
 /**
  * F8c(RT1) — 다른 기기의 학년도 마무리 감지: 동기화 다운로드로 settings.currentTerm이
@@ -127,21 +129,35 @@ async function reloadAllStores(): Promise<void> {
 
 type SyncState = 'idle' | 'syncing' | 'error' | 'conflict';
 
+export function firstMobileConflict(
+  conflicts: readonly DriveSyncConflict[],
+): DriveSyncConflict | null {
+  return conflicts[0] ?? null;
+}
+
+export function canStartMobileConflictResolution(
+  state: SyncState,
+  conflict: DriveSyncConflict | null,
+): conflict is DriveSyncConflict {
+  return state !== 'syncing' && conflict !== null;
+}
+
+export function canStartMobileUpload(
+  state: SyncState,
+  conflict: DriveSyncConflict | null,
+): boolean {
+  return state !== 'syncing' && conflict === null;
+}
+
 /** 오류 종류 — SyncStatusBanner가 '다시 시도' 대신 '다시 로그인'을 보여줄지 판단하는 데 사용. */
 type SyncErrorKind = 'auth' | 'blocked' | 'generic' | null;
-
-interface ConflictInfo {
-  filename: string;
-  localTime: string;
-  remoteTime: string;
-}
 
 interface MobileDriveSyncState {
   state: SyncState;
   progress: number;
   error: string | null;
   errorKind: SyncErrorKind;
-  conflict: ConflictInfo | null;
+  conflict: DriveSyncConflict | null;
   lastSyncedAt: string | null;
   isAuthenticated: boolean;
   lastSyncResult: SyncResult | null;
@@ -242,7 +258,7 @@ export const useMobileDriveSyncStore = create<MobileDriveSyncState>((set, get) =
       });
       return;
     }
-    if (get().state === 'syncing') return;
+    if (!canStartMobileUpload(get().state, get().conflict)) return;
     set({ state: 'syncing', progress: 0, error: null, errorKind: null });
     try {
       // Load settings to get real deviceId
@@ -320,7 +336,7 @@ export const useMobileDriveSyncStore = create<MobileDriveSyncState>((set, get) =
         driveSyncRepository,
         deviceId,
         deviceName,
-        'latest',
+        'ask',
         undefined,
         undefined,
         // S2.2b·F9a — 스킵 기준. 모바일은 자체 전환이 없으므로 동기화된 settings 파일의
@@ -337,6 +353,9 @@ export const useMobileDriveSyncStore = create<MobileDriveSyncState>((set, get) =
             lastClosedAt: s?.lastClosedAt,
           };
         },
+        undefined,
+        undefined,
+        get().conflict !== null,
       );
       const result = await syncFrom.execute(({ current, total }) => {
         set({ progress: Math.round((current / total) * 100) });
@@ -356,10 +375,12 @@ export const useMobileDriveSyncStore = create<MobileDriveSyncState>((set, get) =
         /* 감지 실패는 안내 생략일 뿐 — 동기화 자체에 영향 없음 */
       }
       const now = new Date().toISOString();
+      const conflict = firstMobileConflict(result.conflicts);
       set({
-        state: 'idle',
+        state: conflict ? 'conflict' : 'idle',
         progress: 100,
         errorKind: null,
+        conflict,
         lastSyncedAt: now,
         lastSyncResult: {
           direction: 'download',
@@ -376,11 +397,30 @@ export const useMobileDriveSyncStore = create<MobileDriveSyncState>((set, get) =
   },
 
   resolveConflict: async (choice) => {
-    set({ conflict: null });
-    if (choice === 'local') {
-      await get().syncToCloud();
-    } else {
+    const { state, conflict } = get();
+    if (!canStartMobileConflictResolution(state, conflict)) return;
+
+    set({ state: 'syncing', progress: 0, error: null, errorKind: null });
+    try {
+      const resolver = new ResolveSyncConflict(
+        storage,
+        getAdapter(),
+        driveSyncRepository,
+        getMobileDeviceId(),
+        conflict.localDeviceName,
+      );
+      await resolver.execute(conflict, choice);
+      // 재비교가 끝날 때까지 기존 충돌 객체를 유지한다. 그래야 장부 부재/손상을 성공으로 오인하지 않는다.
+      set({ state: 'idle' });
       await get().syncFromCloud();
+    } catch (e) {
+      if (e instanceof StaleSyncConflictError) {
+        // 기존 충돌 객체를 유지한 채 ask 정책으로 다시 비교해 최신 선택지를 갱신한다.
+        set({ state: 'idle', error: e.message, errorKind: null });
+        await get().syncFromCloud();
+        return;
+      }
+      applySyncError(e, set);
     }
   },
 

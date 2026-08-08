@@ -5,7 +5,7 @@ import type { DriveSyncFileInfo } from '@domain/entities/DriveSyncState';
 import { uint8ToBase64 } from './binaryBase64';
 
 /** SHA-256 체크섬 계산 (Web Crypto API) */
-async function computeChecksum(content: string): Promise<string> {
+export async function computeSyncChecksum(content: string): Promise<string> {
   const encoder = new TextEncoder();
   const data = encoder.encode(content);
   const hashBuffer = await crypto.subtle.digest('SHA-256', data);
@@ -173,7 +173,7 @@ export class SyncToCloud {
       }
 
       const content = JSON.stringify(data);
-      const checksum = await computeChecksum(content);
+      const checksum = await computeSyncChecksum(content);
       const manifestChecksum = localManifest?.files[filename]?.checksum;
 
       // 체크섬이 같으면 스킵
@@ -246,7 +246,7 @@ export class SyncToCloud {
       const base64 = uint8ToBase64(bytes);
       const wrapper = { __binaryBase64: base64, __relPath: relPath };
       const content = JSON.stringify(wrapper);
-      const checksum = await computeChecksum(content);
+      const checksum = await computeSyncChecksum(content);
       const manifestChecksum = localManifest?.files[relPath]?.checksum;
 
       if (manifestChecksum === checksum) {
@@ -307,7 +307,7 @@ export class SyncToCloud {
         }
         const wrapper = { __binaryBase64: uint8ToBase64(bytes), __relPath: key };
         const content = JSON.stringify(wrapper);
-        const checksum = await computeChecksum(content);
+        const checksum = await computeSyncChecksum(content);
         console.log(`[SyncToCloud]   ${key}: UPLOAD archive (${bytes.byteLength}B)`);
         const driveFilename = `${key.replace(/\//g, '__')}.json`;
         const result = await this.drivePort.uploadSyncFile(folder.id, driveFilename, content);

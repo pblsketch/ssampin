@@ -149,7 +149,11 @@ function makeFakeDrive(state: FakeDriveState): IDriveSyncPort {
       if (folderId !== state.folder.id) return null;
       return state.manifest;
     },
-    async downloadSyncFile(fileId: string) {
+    async uploadSyncFileIfUnchanged() {
+      return null;
+    },
+
+    async downloadSyncFile(fileId: string): Promise<string> {
       if (state.throwOnDownload) throw state.throwOnDownload;
       const content = state.files.get(fileId);
       if (content == null) throw new Error(`file not found: ${fileId}`);
@@ -165,7 +169,10 @@ function makeFakeDrive(state: FakeDriveState): IDriveSyncPort {
       throw new Error('not used in test');
     },
     async updateSyncManifest() {
-      throw new Error('not used in test');
+      throw new Error('not used');
+    },
+    async updateSyncManifestIfUnchanged() {
+      return false;
     },
     async deleteSyncFolder() {
       throw new Error('not used in test');
