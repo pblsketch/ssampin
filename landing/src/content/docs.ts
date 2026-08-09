@@ -1129,6 +1129,19 @@ export const docsArticles: readonly DocArticle[] = [
           body: '휴대폰에서 아직 클라우드에 올리지 않은 최근 입력이 있다면 항목별 선택을 권장합니다. 일괄 복구 중 같은 항목을 다시 확인해야 하거나 안전 확인에 실패하면 자동으로 멈추고 개별 선택으로 돌아갑니다.',
         },
       },
+      {
+        id: 'manifest-file-repair',
+        title: "PC에는 데이터가 있지만 새 기기에서 '변경 없음'으로 나올 때",
+        body: [
+          "동기화 장부에는 파일이 있다고 기록됐지만 Google Drive의 실제 JSON 파일이 사라진 예외 상태일 수 있습니다. 최신 쌤핀은 PC에서 백업할 때 실제 파일 존재와 수정 시각도 함께 확인합니다.",
+          '실제 파일이 없으면 PC 원본으로 다시 올립니다. 실제 파일과 장부의 수정 시각이 다르면 다른 기기의 변경을 덮어쓰지 않도록 자동 복구를 멈추고 오류를 안내합니다.',
+        ],
+        callout: {
+          tone: 'warning',
+          title: 'PC 데이터를 먼저 보존하세요',
+          body: "PC에서 일정과 할 일이 정상적으로 보인다면 먼저 전체 데이터를 별도로 백업하세요. 오류가 계속되면 Google Drive에서 폴더를 직접 삭제하지 말고, 설정 → Google 연동 → 클라우드 백업의 '클라우드 데이터 전체 삭제'를 사용한 뒤 같은 PC에서 즉시 다시 백업하세요.",
+        },
+      },
     ],
     related: ['sync/data-location', 'features/mobile', 'troubleshooting/google-sync'],
   },

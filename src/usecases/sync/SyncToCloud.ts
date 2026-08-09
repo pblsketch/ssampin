@@ -1,7 +1,7 @@
 import type { IStoragePort } from '@domain/ports/IStoragePort';
 import type { IDriveSyncPort } from '@domain/ports/IDriveSyncPort';
 import type { IDriveSyncRepository } from '@domain/repositories/IDriveSyncRepository';
-import type { DriveSyncFileInfo } from '@domain/entities/DriveSyncState';
+import type { DriveSyncFileInfo, DriveSyncManifest } from '@domain/entities/DriveSyncState';
 import { uint8ToBase64 } from './binaryBase64';
 
 /** SHA-256 체크섬 계산 (Web Crypto API) */
@@ -112,6 +112,7 @@ export class SyncToCloud {
     const uploaded: string[] = [];
     const skipped: string[] = [];
     const deferred: string[] = [];
+    let manifestReconciled = false;
     const total = SYNC_FILES.length;
 
     // F8a(RT2) — 전환 마커 활성 키 로드: 이 키들은 DEFER하지 않는다(아래 uploadOne 참조).
@@ -128,8 +129,45 @@ export class SyncToCloud {
       transitionGuardedKeys = new Set();
     }
 
-    // 리모트 매니페스트를 먼저 읽어 다른 기기가 올린 파일 엔트리를 보존
-    const remoteManifest = await this.drivePort.getSyncManifest(folder.id);
+    // 리모트 매니페스트를 먼저 확립한다. 최초 생성도 create-only로 수행해
+    // 다른 기기가 같은 순간 만든 장부를 PATCH로 덮어쓰지 않는다.
+    let remoteManifest = await this.drivePort.getSyncManifest(folder.id);
+    if (!remoteManifest) {
+      const initialManifest: DriveSyncManifest = {
+        version: 1,
+        lastSyncedAt: new Date().toISOString(),
+        deviceId: this.deviceId,
+        deviceName: this.deviceName,
+        files: {},
+      };
+      const created = await this.drivePort.createSyncFileIfMissing(
+        folder.id,
+        'manifest.json',
+        JSON.stringify(initialManifest, null, 2),
+      );
+      if (!created) {
+        throw new Error(
+          '클라우드 동기화 장부가 다른 기기에서 생성되었습니다. 다시 동기화해 주세요.',
+        );
+      }
+      const confirmed = await this.drivePort.getSyncManifest(folder.id);
+      if (!confirmed || JSON.stringify(confirmed) !== JSON.stringify(initialManifest)) {
+        throw new Error(
+          '클라우드 동기화 장부 생성 상태를 확인할 수 없습니다. 다시 동기화해 주세요.',
+        );
+      }
+      remoteManifest = confirmed;
+    }
+    const remoteFiles = await this.drivePort.listSyncFiles(folder.id);
+    const findUniqueRemoteFile = (logicalKey: string, driveFilename: string) => {
+      const matches = remoteFiles.filter((file) => file.name === driveFilename);
+      if (matches.length > 1) {
+        throw new Error(
+          `클라우드 ${logicalKey} 파일이 중복되어 안전하게 동기화할 수 없습니다. 클라우드 데이터를 다시 구성해 주세요.`,
+        );
+      }
+      return matches[0];
+    };
     console.log(`[SyncToCloud] 리모트 매니페스트 deviceId=${remoteManifest?.deviceId ?? 'NONE'}`);
     console.log(`[SyncToCloud] 로컬 매니페스트 deviceId=${localManifest?.deviceId ?? 'NONE'}`);
     // 리모트/로컬 매니페스트는 서로 다른 사실을 기록하므로 절대 합치지 않는다.
@@ -174,21 +212,25 @@ export class SyncToCloud {
 
       const content = JSON.stringify(data);
       const checksum = await computeSyncChecksum(content);
-      const manifestChecksum = localManifest?.files[filename]?.checksum;
+      const localInfo = localManifest?.files[filename];
+      const remoteInfo = remoteManifest.files[filename];
+      const manifestChecksum = localInfo?.checksum;
+      const remoteChecksum = remoteInfo?.checksum;
+      const driveFilename = `${filename}.json`;
+      const driveFile = findUniqueRemoteFile(filename, driveFilename);
 
-      // 체크섬이 같으면 스킵
-      if (manifestChecksum === checksum) {
+      if (remoteInfo && !localInfo && !transitionGuardedKeys.has(filename)) {
         skipped.push(filename);
+        deferred.push(filename);
+        console.log(`[SyncToCloud]   ${filename}: DEFER (로컬 동기화 기준 없음)`);
         return;
       }
 
-      // 리모트가 우리 마지막 동기화 이후 변경되었으면 업로드 유예 (다른 기기가 올린 최신 데이터 보호)
-      const remoteChecksum = remoteManifest?.files[filename]?.checksum;
+      // 리모트 변경 판정은 "로컬 내용이 바뀌었는지"보다 먼저 해야 한다. 로컬이 마지막
+      // 업로드 상태 그대로여도 다른 기기의 리모트 변경은 pull 대상으로 유예해야 한다.
       if (remoteChecksum && manifestChecksum && remoteChecksum !== manifestChecksum) {
         // F8a(RT2) — 전환 마커 활성 키는 유예하지 않는다: 마커가 다운로드를 봉쇄하는 동안
-        // pull-merge-push가 장부를 갱신하지 못해 DEFER가 영구 교착이 된다(재정화 불가 실측).
-        // 이 키의 리모트 값은 전환 전 옛 데이터(또는 미전환 기기의 되오염)라 보호 대상이
-        // 아니다 — 강제 업로드로 리모트를 정화해야 마커 해제 조건(정화 확인)이 성립한다.
+        // pull-merge-push가 장부를 갱신하지 못해 DEFER가 영구 교착이 된다.
         if (transitionGuardedKeys.has(filename)) {
           console.log(
             `[SyncToCloud]   ${filename}: 전환 마커 활성 — DEFER 없이 정화 업로드 진행(remote=${remoteChecksum.slice(0, 8)})`,
@@ -203,10 +245,119 @@ export class SyncToCloud {
         }
       }
 
+      if (!remoteInfo && driveFile) {
+        const actualContent = await this.drivePort.downloadSyncFile(driveFile.id);
+        const actualChecksum = await computeSyncChecksum(actualContent);
+        if (actualChecksum !== checksum) {
+          throw new Error(
+            `클라우드 ${filename} 파일과 동기화 장부가 일치하지 않습니다. 클라우드 데이터를 다시 구성해 주세요.`,
+          );
+        }
+        const reconciledEntry: DriveSyncFileInfo = {
+          lastModified: driveFile.modifiedTime,
+          checksum,
+          size: new TextEncoder().encode(actualContent).length,
+          ...(localInfo?.uploadedBy ? { uploadedBy: localInfo.uploadedBy } : {}),
+        };
+        nextRemoteFiles[filename] = reconciledEntry;
+        nextLocalFiles[filename] = reconciledEntry;
+        manifestReconciled = true;
+        skipped.push(filename);
+        console.warn(
+          `[SyncToCloud]   ${filename}: 장부 없는 실제 파일이 현재 로컬과 동일 — 장부만 안전하게 편입`,
+        );
+        return;
+      }
+
+      if (!driveFile && (remoteInfo || localInfo)) {
+        const knownOwner = remoteInfo?.uploadedBy ?? localInfo?.uploadedBy;
+        if (!knownOwner) {
+          throw new Error(
+            `소유 기기를 확인할 수 없는 클라우드 ${filename} 파일입니다. 원본 기기에서 클라우드 데이터를 다시 구성해 주세요.`,
+          );
+        }
+        if (knownOwner !== this.deviceId) {
+          throw new Error(
+            `다른 기기가 올린 클라우드 ${filename} 파일을 찾지 못했습니다. 원본 기기에서 클라우드 데이터를 다시 구성해 주세요.`,
+          );
+        }
+      }
+
+      // 실제 파일 revision이 장부와 다르면 내용을 먼저 검증한다. 내용이 장부 체크섬과
+      // 같을 때만 조건부 갱신 또는 revision 장부 복구를 허용한다.
+      if (
+        remoteInfo &&
+        driveFile?.modifiedTime &&
+        remoteInfo.lastModified &&
+        driveFile.modifiedTime !== remoteInfo.lastModified
+      ) {
+        const actualContent = await this.drivePort.downloadSyncFile(driveFile.id);
+        const actualChecksum = await computeSyncChecksum(actualContent);
+        if (actualChecksum !== remoteInfo.checksum) {
+          // 직전 실행에서 조건부 파일 업로드는 성공했지만 manifest CAS만 실패한 부분 성공.
+          // 실제 Drive 본문이 현재 로컬과 정확히 같으면 재업로드하지 않고 장부만 CAS 복구한다.
+          if (actualChecksum === checksum) {
+            const reconciledEntry: DriveSyncFileInfo = {
+              ...remoteInfo,
+              lastModified: driveFile.modifiedTime,
+              checksum,
+              size: new TextEncoder().encode(actualContent).length,
+              uploadedBy: localInfo?.uploadedBy ?? remoteInfo.uploadedBy,
+            };
+            nextRemoteFiles[filename] = reconciledEntry;
+            nextLocalFiles[filename] = reconciledEntry;
+            manifestReconciled = true;
+            skipped.push(filename);
+            console.warn(
+              `[SyncToCloud]   ${filename}: 파일 업로드 부분 성공 — 현재 로컬 본문과 일치해 장부만 복구`,
+            );
+            return;
+          }
+          throw new Error(
+            `클라우드 ${filename} 파일과 동기화 장부가 일치하지 않습니다. 클라우드 데이터를 다시 구성해 주세요.`,
+          );
+        }
+        if (manifestChecksum === checksum && remoteInfo.checksum === checksum) {
+          const reconciledEntry: DriveSyncFileInfo = {
+            ...remoteInfo,
+            lastModified: driveFile.modifiedTime,
+            size: new TextEncoder().encode(actualContent).length,
+          };
+          nextRemoteFiles[filename] = reconciledEntry;
+          nextLocalFiles[filename] = reconciledEntry;
+          manifestReconciled = true;
+          skipped.push(filename);
+          console.warn(
+            `[SyncToCloud]   ${filename}: 실제 파일 내용은 동일 — 부분 성공 상태의 장부 revision 복구`,
+          );
+          return;
+        }
+      }
+
+      // 로컬·원격·실제 파일이 같은 고정점이면 콘텐츠 다운로드 없이 건너뛴다.
+      if (manifestChecksum === checksum && remoteInfo && driveFile) {
+        skipped.push(filename);
+        return;
+      }
+
       console.log(
         `[SyncToCloud]   ${filename}: UPLOAD (checksum ${manifestChecksum?.slice(0, 8) ?? 'NONE'} → ${checksum.slice(0, 8)})`,
       );
-      const result = await this.drivePort.uploadSyncFile(folder.id, `${filename}.json`, content);
+      const result = driveFile
+        ? await this.drivePort.uploadSyncFileIfUnchanged(
+            folder.id,
+            driveFilename,
+            content,
+            driveFile.modifiedTime,
+          )
+        : await this.drivePort.createSyncFileIfMissing(folder.id, driveFilename, content);
+      if (!result) {
+        throw new Error(
+          driveFile
+            ? `클라우드 ${filename} 파일이 동기화 중 변경되었습니다. 다시 동기화해 주세요.`
+            : `클라우드 ${filename} 파일이 동기화 중 생성되었습니다. 다시 동기화해 주세요.`,
+        );
+      }
       const entry: DriveSyncFileInfo = {
         lastModified: result.modifiedTime,
         checksum,
@@ -247,14 +398,21 @@ export class SyncToCloud {
       const wrapper = { __binaryBase64: base64, __relPath: relPath };
       const content = JSON.stringify(wrapper);
       const checksum = await computeSyncChecksum(content);
-      const manifestChecksum = localManifest?.files[relPath]?.checksum;
+      const localInfo = localManifest?.files[relPath];
+      const remoteInfo = remoteManifest.files[relPath];
+      const manifestChecksum = localInfo?.checksum;
+      const remoteChecksum = remoteInfo?.checksum;
+      // Drive 파일명: slashes를 '__'로 치환해 단일 파일명으로 평탄화
+      const driveFilename = `${relPath.replace(/\//g, '__')}.json`;
+      const driveFile = findUniqueRemoteFile(relPath, driveFilename);
 
-      if (manifestChecksum === checksum) {
+      if (remoteInfo && !localInfo) {
         skipped.push(relPath);
+        deferred.push(relPath);
+        console.log(`[SyncToCloud]   ${relPath}: DEFER binary (로컬 동기화 기준 없음)`);
         continue;
       }
 
-      const remoteChecksum = remoteManifest?.files[relPath]?.checksum;
       if (remoteChecksum && manifestChecksum && remoteChecksum !== manifestChecksum) {
         console.log(
           `[SyncToCloud]   ${relPath}: DEFER (remote changed, syncFromCloud 병합 후 재업로드 필요)`,
@@ -264,12 +422,111 @@ export class SyncToCloud {
         continue;
       }
 
+      if (!remoteInfo && driveFile) {
+        const actualContent = await this.drivePort.downloadSyncFile(driveFile.id);
+        const actualChecksum = await computeSyncChecksum(actualContent);
+        if (actualChecksum !== checksum) {
+          throw new Error(
+            `클라우드 ${relPath} 파일과 동기화 장부가 일치하지 않습니다. 클라우드 데이터를 다시 구성해 주세요.`,
+          );
+        }
+        const reconciledEntry: DriveSyncFileInfo = {
+          lastModified: driveFile.modifiedTime,
+          checksum,
+          size: new TextEncoder().encode(actualContent).length,
+          ...(localInfo?.uploadedBy ? { uploadedBy: localInfo.uploadedBy } : {}),
+        };
+        nextRemoteFiles[relPath] = reconciledEntry;
+        nextLocalFiles[relPath] = reconciledEntry;
+        manifestReconciled = true;
+        skipped.push(relPath);
+        console.warn(
+          `[SyncToCloud]   ${relPath}: 장부 없는 실제 바이너리가 현재 로컬과 동일 — 장부만 안전하게 편입`,
+        );
+        continue;
+      }
+
+      if (!driveFile && (remoteInfo || localInfo)) {
+        const knownOwner = remoteInfo?.uploadedBy ?? localInfo?.uploadedBy;
+        if (!knownOwner) {
+          throw new Error(
+            `소유 기기를 확인할 수 없는 클라우드 ${relPath} 파일입니다. 원본 기기에서 클라우드 데이터를 다시 구성해 주세요.`,
+          );
+        }
+        if (knownOwner !== this.deviceId) {
+          throw new Error(
+            `다른 기기가 올린 클라우드 ${relPath} 파일을 찾지 못했습니다. 원본 기기에서 클라우드 데이터를 다시 구성해 주세요.`,
+          );
+        }
+      }
+
+      if (
+        remoteInfo &&
+        driveFile?.modifiedTime &&
+        remoteInfo.lastModified &&
+        driveFile.modifiedTime !== remoteInfo.lastModified
+      ) {
+        const actualContent = await this.drivePort.downloadSyncFile(driveFile.id);
+        const actualChecksum = await computeSyncChecksum(actualContent);
+        if (actualChecksum !== remoteInfo.checksum) {
+          if (actualChecksum === checksum) {
+            const reconciledEntry: DriveSyncFileInfo = {
+              ...remoteInfo,
+              lastModified: driveFile.modifiedTime,
+              checksum,
+              size: new TextEncoder().encode(actualContent).length,
+              uploadedBy: localInfo?.uploadedBy ?? remoteInfo.uploadedBy,
+            };
+            nextRemoteFiles[relPath] = reconciledEntry;
+            nextLocalFiles[relPath] = reconciledEntry;
+            manifestReconciled = true;
+            skipped.push(relPath);
+            console.warn(
+              `[SyncToCloud]   ${relPath}: 바이너리 업로드 부분 성공 — 장부만 복구`,
+            );
+            continue;
+          }
+          throw new Error(
+            `클라우드 ${relPath} 파일과 동기화 장부가 일치하지 않습니다. 클라우드 데이터를 다시 구성해 주세요.`,
+          );
+        }
+        if (manifestChecksum === checksum && remoteInfo.checksum === checksum) {
+          const reconciledEntry: DriveSyncFileInfo = {
+            ...remoteInfo,
+            lastModified: driveFile.modifiedTime,
+            size: new TextEncoder().encode(actualContent).length,
+          };
+          nextRemoteFiles[relPath] = reconciledEntry;
+          nextLocalFiles[relPath] = reconciledEntry;
+          manifestReconciled = true;
+          skipped.push(relPath);
+          continue;
+        }
+      }
+
+      if (manifestChecksum === checksum && remoteInfo && driveFile) {
+        skipped.push(relPath);
+        continue;
+      }
+
       console.log(
         `[SyncToCloud]   ${relPath}: UPLOAD binary (checksum ${manifestChecksum?.slice(0, 8) ?? 'NONE'} → ${checksum.slice(0, 8)})`,
       );
-      // Drive 파일명: slashes를 '__'로 치환해 단일 파일명으로 평탄화
-      const driveFilename = `${relPath.replace(/\//g, '__')}.json`;
-      const result = await this.drivePort.uploadSyncFile(folder.id, driveFilename, content);
+      const result = driveFile
+        ? await this.drivePort.uploadSyncFileIfUnchanged(
+            folder.id,
+            driveFilename,
+            content,
+            driveFile.modifiedTime,
+          )
+        : await this.drivePort.createSyncFileIfMissing(folder.id, driveFilename, content);
+      if (!result) {
+        throw new Error(
+          driveFile
+            ? `클라우드 ${relPath} 파일이 동기화 중 변경되었습니다. 다시 동기화해 주세요.`
+            : `클라우드 ${relPath} 파일이 동기화 중 생성되었습니다. 다시 동기화해 주세요.`,
+        );
+      }
       const entry: DriveSyncFileInfo = {
         lastModified: result.modifiedTime,
         checksum,
@@ -298,46 +555,104 @@ export class SyncToCloud {
         continue; // 존재=완결 — 아카이브는 절대 덮어쓰지 않는다
       }
 
+      let bytes: Uint8Array | null;
       try {
-        const bytes = await readArchiveSyncFile(key);
-        if (bytes === null) {
-          skipped.push(key);
-          console.log(`[SyncToCloud]   ${key}: SKIP (아카이브 파일 읽기 실패·부재)`);
-          continue;
-        }
-        const wrapper = { __binaryBase64: uint8ToBase64(bytes), __relPath: key };
-        const content = JSON.stringify(wrapper);
-        const checksum = await computeSyncChecksum(content);
-        console.log(`[SyncToCloud]   ${key}: UPLOAD archive (${bytes.byteLength}B)`);
-        const driveFilename = `${key.replace(/\//g, '__')}.json`;
-        const result = await this.drivePort.uploadSyncFile(folder.id, driveFilename, content);
-        const entry: DriveSyncFileInfo = {
-          lastModified: result.modifiedTime,
-          checksum,
-          size: new TextEncoder().encode(content).length,
-          uploadedBy: this.deviceId,
-        };
-        nextRemoteFiles[key] = entry;
-        nextLocalFiles[key] = entry;
-        uploaded.push(key);
+        bytes = await readArchiveSyncFile(key);
       } catch (err) {
         skipped.push(key);
-        console.warn(`[SyncToCloud]   ${key}: 아카이브 업로드 실패(다음 동기화에서 재시도):`, err);
+        console.warn(`[SyncToCloud]   ${key}: 아카이브 읽기 실패(다음 동기화에서 재시도):`, err);
+        continue;
       }
+      if (bytes === null) {
+        skipped.push(key);
+        console.log(`[SyncToCloud]   ${key}: SKIP (아카이브 파일 읽기 실패·부재)`);
+        continue;
+      }
+
+      const wrapper = { __binaryBase64: uint8ToBase64(bytes), __relPath: key };
+      const content = JSON.stringify(wrapper);
+      const checksum = await computeSyncChecksum(content);
+      const driveFilename = `${key.replace(/\//g, '__')}.json`;
+      const driveFile = findUniqueRemoteFile(key, driveFilename);
+
+      if (driveFile) {
+        const actualContent = await this.drivePort.downloadSyncFile(driveFile.id);
+        const actualChecksum = await computeSyncChecksum(actualContent);
+        if (actualChecksum !== checksum) {
+          throw new Error(
+            '클라우드 아카이브 파일과 동기화 장부가 일치하지 않습니다. 클라우드 데이터를 다시 구성해 주세요.',
+          );
+        }
+        const localInfo = localManifest?.files[key];
+        const reconciledEntry: DriveSyncFileInfo = {
+          lastModified: driveFile.modifiedTime ?? '',
+          checksum,
+          size: new TextEncoder().encode(actualContent).length,
+          ...(localInfo?.uploadedBy ? { uploadedBy: localInfo.uploadedBy } : {}),
+        };
+        nextRemoteFiles[key] = reconciledEntry;
+        nextLocalFiles[key] = reconciledEntry;
+        manifestReconciled = true;
+        skipped.push(key);
+        console.log(`[SyncToCloud]   ${key}: RECONCILE archive manifest`);
+        continue;
+      }
+
+      console.log(`[SyncToCloud]   ${key}: CREATE archive (${bytes.byteLength}B)`);
+      let result: Awaited<ReturnType<IDriveSyncPort['createSyncFileIfMissing']>>;
+      try {
+        result = await this.drivePort.createSyncFileIfMissing(
+          folder.id,
+          driveFilename,
+          content,
+        );
+      } catch (err) {
+        skipped.push(key);
+        console.warn(`[SyncToCloud]   ${key}: 아카이브 생성 실패(다음 동기화에서 재시도):`, err);
+        continue;
+      }
+      if (!result) {
+        throw new Error(
+          `클라우드 ${key} 파일이 동기화 중 생성되었습니다. 다시 동기화해 주세요.`,
+        );
+      }
+      const entry: DriveSyncFileInfo = {
+        lastModified: result.modifiedTime,
+        checksum,
+        size: new TextEncoder().encode(content).length,
+        uploadedBy: this.deviceId,
+      };
+      nextRemoteFiles[key] = entry;
+      nextLocalFiles[key] = entry;
+      uploaded.push(key);
     }
 
     // 매니페스트 업데이트 — 실제 업로드가 있었을 때만.
     // no-op 실행("변경 없음")이 매니페스트를 다시 쓰면 리모트 deviceId가 업로드하지 않은
     // 기기로 찍히고(다운로드의 "내가 올린 데이터" 스킵 오판) lastSyncedAt만 위조된다.
-    if (uploaded.length > 0) {
+    if (uploaded.length > 0 || manifestReconciled) {
       const now = new Date().toISOString();
-      await this.drivePort.updateSyncManifest(folder.id, {
+      const nextRemoteManifest = {
         version: 1,
         lastSyncedAt: now,
         deviceId: this.deviceId,
         deviceName: this.deviceName,
         files: nextRemoteFiles,
-      });
+      } as const;
+      if (remoteManifest) {
+        const updated = await this.drivePort.updateSyncManifestIfUnchanged(
+          folder.id,
+          remoteManifest,
+          nextRemoteManifest,
+        );
+        if (!updated) {
+          throw new Error(
+            '클라우드 동기화 장부가 다른 기기에서 변경되었습니다. 다시 동기화해 주세요.',
+          );
+        }
+      } else {
+        await this.drivePort.updateSyncManifest(folder.id, nextRemoteManifest);
+      }
       await this.syncRepo.saveLocalManifest({
         version: 1,
         lastSyncedAt: now,

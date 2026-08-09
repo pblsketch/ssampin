@@ -18,6 +18,12 @@ export interface IDriveSyncPort {
     filename: string,
     content: string,
   ): Promise<{ fileId: string; modifiedTime: string }>;
+  /** 같은 이름 파일이 없을 때만 새로 생성. 경쟁 생성이 감지되면 null. */
+  createSyncFileIfMissing(
+    folderId: string,
+    filename: string,
+    content: string,
+  ): Promise<{ fileId: string; modifiedTime: string } | null>;
   /** 기존 리모트 버전이 그대로일 때만 원자적으로 업데이트. 변경됐으면 null. */
   uploadSyncFileIfUnchanged(
     folderId: string,

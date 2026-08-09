@@ -46,8 +46,11 @@ function makeStorage(initial: Record<string, unknown> = {}) {
 /** 인메모리 Drive — 리모트 매니페스트와 파일 내용을 상태로 유지 */
 function makeDrive(
   initialManifest: DriveSyncManifest | null,
-  fileContents: Record<string, string> = {},
+  initialFileContents?: Record<string, string>,
 ) {
+  const fileContents: Record<string, string> =
+    initialFileContents ??
+    Object.fromEntries(Object.keys(initialManifest?.files ?? {}).map((key) => [key, '{}']));
   const state = { manifest: initialManifest };
   const fileModifiedTimes: Record<string, string> = {};
   for (const key of Object.keys(fileContents)) {
@@ -67,7 +70,16 @@ function makeDrive(
   );
   const port = {
     getOrCreateSyncFolder: vi.fn(async () => ({ id: 'folder-1', name: '쌤핀 동기화' })),
-    uploadSyncFile: vi.fn(async () => ({ fileId: 'f', modifiedTime: '2026-07-21T07:33:00Z' })),
+    uploadSyncFile: vi.fn(
+      async (_folderId: string, filename: string, content: string) => {
+        const key = filename.replace(/\.json$/, '');
+        uploadSequence += 1;
+        const modifiedTime = `2026-07-21T07:34:${String(uploadSequence).padStart(2, '0')}Z`;
+        fileContents[key] = content;
+        fileModifiedTimes[key] = modifiedTime;
+        return { fileId: key, modifiedTime };
+      },
+    ),
     uploadSyncFileIfUnchanged: vi.fn(
       async (
         _folderId: string,
@@ -81,6 +93,20 @@ function makeDrive(
         uploadSequence += 1;
         const modifiedTime = `2026-07-21T07:33:${String(uploadSequence).padStart(2, '0')}Z`;
         fileModifiedTimes[key] = modifiedTime;
+        return { fileId: key, modifiedTime };
+      },
+    ),
+    createSyncFileIfMissing: vi.fn(
+      async (_folderId: string, filename: string, content: string) => {
+        const key = filename.replace(/\.json$/, '');
+        if (key in fileContents) return null;
+        uploadSequence += 1;
+        const modifiedTime = `2026-07-21T07:32:${String(uploadSequence).padStart(2, '0')}Z`;
+        fileContents[key] = content;
+        fileModifiedTimes[key] = modifiedTime;
+        if (filename === 'manifest.json') {
+          state.manifest = JSON.parse(content) as DriveSyncManifest;
+        }
         return { fileId: key, modifiedTime };
       },
     ),
@@ -103,6 +129,7 @@ function makeDrive(
     updateSyncManifest,
     updateSyncManifestIfUnchanged,
     fileContents,
+    fileModifiedTimes,
   };
 }
 
@@ -119,6 +146,446 @@ function makeSyncRepo(initial: DriveSyncManifest | null) {
 }
 
 describe('SyncToCloud 매니페스트 라이프사이클', () => {
+  it('장부 체크섬은 같아도 Drive 실제 파일이 없으면 로컬 원본을 다시 업로드한다', async () => {
+    const localData = { items: [{ id: 'todo-1', text: '정상 PC 할 일' }] };
+    const content = JSON.stringify(localData);
+    const checksum = await computeSyncChecksum(content);
+    const entry = {
+      checksum,
+      lastModified: '2026-08-09T00:00:00Z',
+      size: new TextEncoder().encode(content).length,
+      uploadedBy: 'desktop-device',
+    };
+    const remote = manifest({ todos: entry }, 'desktop-device');
+    const local = manifest({ todos: entry }, 'desktop-device');
+    const { storage } = makeStorage({ todos: localData });
+    const { port, state: driveState, fileContents } = makeDrive(remote, {});
+    const { repo, state: localState } = makeSyncRepo(local);
+
+    const result = await new SyncToCloud(
+      storage,
+      port,
+      repo,
+      'desktop-device',
+      '정상 PC',
+    ).execute();
+
+    expect(result.uploaded).toContain('todos');
+    expect(fileContents.todos).toBe(content);
+    expect(driveState.manifest?.files.todos?.checksum).toBe(checksum);
+    expect(localState.manifest?.files.todos?.checksum).toBe(checksum);
+  });
+
+  it('Drive 파일 재생성 후 manifest CAS가 실패하면 로컬 장부를 성공으로 기록하지 않는다', async () => {
+    const localData = { items: [{ id: 'todo-1', text: '정상 PC 할 일' }] };
+    const content = JSON.stringify(localData);
+    const checksum = await computeSyncChecksum(content);
+    const entry = {
+      checksum,
+      lastModified: '2026-08-09T00:00:00Z',
+      size: new TextEncoder().encode(content).length,
+      uploadedBy: 'desktop-device',
+    };
+    const remote = manifest({ todos: entry }, 'desktop-device');
+    const local = manifest({ todos: entry }, 'desktop-device');
+    const { storage } = makeStorage({ todos: localData });
+    const { port, fileContents } = makeDrive(remote, {});
+    vi.mocked(port.updateSyncManifestIfUnchanged).mockResolvedValueOnce(false);
+    const { repo, state: localState, saveLocalManifest } = makeSyncRepo(local);
+
+    await expect(
+      new SyncToCloud(storage, port, repo, 'desktop-device', '정상 PC').execute(),
+    ).rejects.toThrow('클라우드 동기화 장부가 다른 기기에서 변경되었습니다');
+
+    expect(fileContents.todos).toBe(content);
+    expect(saveLocalManifest).not.toHaveBeenCalled();
+    expect(localState.manifest).toEqual(local);
+  });
+
+  it('변경 본문 업로드 후 manifest CAS가 실패해도 다음 실행에서 재업로드 없이 장부를 수렴한다', async () => {
+    const oldData = { items: [{ id: 'todo-1', text: '이전 할 일' }] };
+    const currentData = { items: [{ id: 'todo-1', text: '수정된 할 일' }] };
+    const oldContent = JSON.stringify(oldData);
+    const currentContent = JSON.stringify(currentData);
+    const oldChecksum = await computeSyncChecksum(oldContent);
+    const currentChecksum = await computeSyncChecksum(currentContent);
+    const oldEntry = {
+      checksum: oldChecksum,
+      lastModified: '2026-07-21T03:00:00Z',
+      size: new TextEncoder().encode(oldContent).length,
+      uploadedBy: 'desktop-device',
+    };
+    const remote = manifest({ todos: oldEntry }, 'desktop-device');
+    const local = manifest({ todos: oldEntry }, 'desktop-device');
+    const { storage } = makeStorage({ todos: currentData });
+    const {
+      port,
+      state: driveState,
+      fileContents,
+      updateSyncManifestIfUnchanged,
+    } = makeDrive(remote, { todos: oldContent });
+    updateSyncManifestIfUnchanged.mockResolvedValueOnce(false);
+    const { repo, state: localState, saveLocalManifest } = makeSyncRepo(local);
+    const useCase = new SyncToCloud(storage, port, repo, 'desktop-device', '정상 PC');
+
+    await expect(useCase.execute()).rejects.toThrow(
+      '클라우드 동기화 장부가 다른 기기에서 변경되었습니다',
+    );
+    expect(fileContents.todos).toBe(currentContent);
+    expect(saveLocalManifest).not.toHaveBeenCalled();
+
+    const retry = await useCase.execute();
+
+    expect(retry.skipped).toContain('todos');
+    expect(port.uploadSyncFileIfUnchanged).toHaveBeenCalledTimes(1);
+    expect(driveState.manifest?.files.todos?.checksum).toBe(currentChecksum);
+    expect(localState.manifest?.files.todos?.checksum).toBe(currentChecksum);
+  });
+
+  it('신규 파일 생성 후 manifest CAS가 실패해도 동일한 실제 본문이면 다음 실행에서 장부에 안전하게 편입한다', async () => {
+    const localData = { items: [{ id: 'todo-new', text: '최초 업로드 할 일' }] };
+    const content = JSON.stringify(localData);
+    const checksum = await computeSyncChecksum(content);
+    const remote = manifest({}, 'desktop-device');
+    const local = manifest({}, 'desktop-device');
+    const { storage } = makeStorage({ todos: localData });
+    const {
+      port,
+      state: driveState,
+      fileContents,
+      updateSyncManifestIfUnchanged,
+    } = makeDrive(remote, {});
+    updateSyncManifestIfUnchanged.mockResolvedValueOnce(false);
+    const { repo, state: localState } = makeSyncRepo(local);
+    const useCase = new SyncToCloud(storage, port, repo, 'desktop-device', '내 PC');
+
+    await expect(useCase.execute()).rejects.toThrow(
+      '클라우드 동기화 장부가 다른 기기에서 변경되었습니다',
+    );
+    expect(fileContents.todos).toBe(content);
+
+    const retry = await useCase.execute();
+
+    expect(retry.skipped).toContain('todos');
+    expect(port.createSyncFileIfMissing).toHaveBeenCalledTimes(1);
+    expect(driveState.manifest?.files.todos?.checksum).toBe(checksum);
+    expect(localState.manifest?.files.todos?.checksum).toBe(checksum);
+  });
+
+  it('신규 바이너리 생성 후 manifest CAS 실패도 동일 본문이면 다음 실행에서 장부에 편입한다', async () => {
+    const relPath = 'obs-attachments/attachment-new.png';
+    const driveKey = 'obs-attachments__attachment-new.png';
+    const bytes = new Uint8Array([1, 2, 3]);
+    const content = JSON.stringify({ __binaryBase64: 'AQID', __relPath: relPath });
+    const checksum = await computeSyncChecksum(content);
+    const { storage } = makeStorage();
+    vi.mocked(storage.readBinary).mockResolvedValue(bytes);
+    const {
+      port,
+      state: driveState,
+      fileContents,
+      updateSyncManifestIfUnchanged,
+    } = makeDrive(manifest({}, 'desktop-device'), {});
+    updateSyncManifestIfUnchanged.mockResolvedValueOnce(false);
+    const { repo, state: localState } = makeSyncRepo(manifest({}, 'desktop-device'));
+    const useCase = new SyncToCloud(
+      storage,
+      port,
+      repo,
+      'desktop-device',
+      '내 PC',
+      undefined,
+      async () => [relPath],
+    );
+
+    await expect(useCase.execute()).rejects.toThrow(
+      '클라우드 동기화 장부가 다른 기기에서 변경되었습니다',
+    );
+    expect(fileContents[driveKey]).toBe(content);
+
+    const retry = await useCase.execute();
+
+    expect(retry.skipped).toContain(relPath);
+    expect(port.createSyncFileIfMissing).toHaveBeenCalledTimes(1);
+    expect(driveState.manifest?.files[relPath]?.checksum).toBe(checksum);
+    expect(localState.manifest?.files[relPath]?.checksum).toBe(checksum);
+  });
+
+  it('새 기기는 기존 원격 바이너리 첨부를 덮어쓰지 않고 다운로드 대상으로 유예한다', async () => {
+    const relPath = 'obs-attachments/attachment-1.png';
+    const driveKey = 'obs-attachments__attachment-1.png';
+    const localBytes = new Uint8Array([1, 2, 3]);
+    const remoteContent = JSON.stringify({ __binaryBase64: 'CQkJ', __relPath: relPath });
+    const remoteEntry = {
+      checksum: await computeSyncChecksum(remoteContent),
+      lastModified: '2026-07-21T03:00:00Z',
+      size: remoteContent.length,
+      uploadedBy: 'other-device',
+    };
+    const { storage } = makeStorage();
+    vi.mocked(storage.readBinary).mockResolvedValue(localBytes);
+    const { port, fileContents } = makeDrive(
+      manifest({ [relPath]: remoteEntry }, 'other-device'),
+      { [driveKey]: remoteContent },
+    );
+    const { repo } = makeSyncRepo(manifest({}, 'current-device'));
+
+    const result = await new SyncToCloud(
+      storage,
+      port,
+      repo,
+      'current-device',
+      '새 PC',
+      undefined,
+      async () => [relPath],
+    ).execute();
+
+    expect(result.deferred).toContain(relPath);
+    expect(fileContents[driveKey]).toBe(remoteContent);
+    expect(port.uploadSyncFile).not.toHaveBeenCalled();
+    expect(port.uploadSyncFileIfUnchanged).not.toHaveBeenCalled();
+  });
+
+  it('장부에 없는 실제 바이너리 첨부는 자동 PATCH하지 않고 안전하게 중단한다', async () => {
+    const relPath = 'obs-attachments/attachment-2.png';
+    const driveKey = 'obs-attachments__attachment-2.png';
+    const remoteContent = JSON.stringify({ __binaryBase64: 'CQkJ', __relPath: relPath });
+    const { storage } = makeStorage();
+    vi.mocked(storage.readBinary).mockResolvedValue(new Uint8Array([1, 2, 3]));
+    const { port, fileContents } = makeDrive(manifest({}, 'current-device'), {
+      [driveKey]: remoteContent,
+    });
+    const { repo, saveLocalManifest } = makeSyncRepo(manifest({}, 'current-device'));
+
+    await expect(
+      new SyncToCloud(
+        storage,
+        port,
+        repo,
+        'current-device',
+        '내 PC',
+        undefined,
+        async () => [relPath],
+      ).execute(),
+    ).rejects.toThrow(`클라우드 ${relPath} 파일과 동기화 장부가 일치하지 않습니다`);
+
+    expect(fileContents[driveKey]).toBe(remoteContent);
+    expect(port.uploadSyncFile).not.toHaveBeenCalled();
+    expect(saveLocalManifest).not.toHaveBeenCalled();
+  });
+
+  it('기존 바이너리 첨부 변경은 무조건 PATCH 대신 조건부 업로드를 사용한다', async () => {
+    const relPath = 'obs-attachments/attachment-3.png';
+    const driveKey = 'obs-attachments__attachment-3.png';
+    const oldContent = JSON.stringify({ __binaryBase64: 'CQkJ', __relPath: relPath });
+    const currentContent = JSON.stringify({ __binaryBase64: 'AQID', __relPath: relPath });
+    const oldEntry = {
+      checksum: await computeSyncChecksum(oldContent),
+      lastModified: '2026-07-21T03:00:00Z',
+      size: oldContent.length,
+      uploadedBy: 'current-device',
+    };
+    const currentChecksum = await computeSyncChecksum(currentContent);
+    const { storage } = makeStorage();
+    vi.mocked(storage.readBinary).mockResolvedValue(new Uint8Array([1, 2, 3]));
+    const { port, fileContents, state: driveState } = makeDrive(
+      manifest({ [relPath]: oldEntry }, 'current-device'),
+      { [driveKey]: oldContent },
+    );
+    const { repo, state: localState } = makeSyncRepo(
+      manifest({ [relPath]: oldEntry }, 'current-device'),
+    );
+
+    const result = await new SyncToCloud(
+      storage,
+      port,
+      repo,
+      'current-device',
+      '내 PC',
+      undefined,
+      async () => [relPath],
+    ).execute();
+
+    expect(result.uploaded).toContain(relPath);
+    expect(port.uploadSyncFileIfUnchanged).toHaveBeenCalledTimes(1);
+    expect(port.uploadSyncFile).not.toHaveBeenCalled();
+    expect(fileContents[driveKey]).toBe(currentContent);
+    expect(driveState.manifest?.files[relPath]?.checksum).toBe(currentChecksum);
+    expect(localState.manifest?.files[relPath]?.checksum).toBe(currentChecksum);
+  });
+
+  it('Drive 실제 파일이 없어도 다른 기기가 올린 항목은 이 기기 원본으로 재생성하지 않는다', async () => {
+    const localData = { items: [{ id: 'todo-1', text: '이 기기 할 일' }] };
+    const content = JSON.stringify(localData);
+    const checksum = await computeSyncChecksum(content);
+    const remoteEntry = {
+      checksum,
+      lastModified: '2026-08-09T00:00:00Z',
+      size: new TextEncoder().encode(content).length,
+      uploadedBy: 'other-device',
+    };
+    const localEntry = { ...remoteEntry, uploadedBy: 'desktop-device' };
+    const { storage } = makeStorage({ todos: localData });
+    const { port, fileContents } = makeDrive(
+      manifest({ todos: remoteEntry }, 'other-device'),
+      {},
+    );
+    const { repo } = makeSyncRepo(manifest({ todos: localEntry }, 'desktop-device'));
+
+    await expect(
+      new SyncToCloud(storage, port, repo, 'desktop-device', '내 PC').execute(),
+    ).rejects.toThrow('다른 기기가 올린 클라우드 todos 파일을 찾지 못했습니다');
+    expect(fileContents.todos).toBeUndefined();
+    expect(port.uploadSyncFile).not.toHaveBeenCalled();
+  });
+
+  it('파일별 소유권이 없는 레거시 장부는 top-level deviceId가 같아도 자동 재생성하지 않는다', async () => {
+    const localData = { items: [{ id: 'todo-1', text: '레거시 할 일' }] };
+    const content = JSON.stringify(localData);
+    const checksum = await computeSyncChecksum(content);
+    const legacyEntry = {
+      checksum,
+      lastModified: '2026-08-09T00:00:00Z',
+      size: new TextEncoder().encode(content).length,
+    };
+    const { storage } = makeStorage({ todos: localData });
+    const { port } = makeDrive(manifest({ todos: legacyEntry }, 'desktop-device'), {});
+    const { repo } = makeSyncRepo(manifest({ todos: legacyEntry }, 'desktop-device'));
+
+    await expect(
+      new SyncToCloud(storage, port, repo, 'desktop-device', '내 PC').execute(),
+    ).rejects.toThrow('소유 기기를 확인할 수 없는 클라우드 todos 파일');
+    expect(port.uploadSyncFile).not.toHaveBeenCalled();
+  });
+
+  it('누락 파일 확인 직후 같은 이름 파일이 나타나면 새 파일을 덮어쓰지 않고 중단한다', async () => {
+    const localData = { items: [{ id: 'todo-1', text: '정상 PC 할 일' }] };
+    const content = JSON.stringify(localData);
+    const checksum = await computeSyncChecksum(content);
+    const entry = {
+      checksum,
+      lastModified: '2026-08-09T00:00:00Z',
+      size: new TextEncoder().encode(content).length,
+      uploadedBy: 'desktop-device',
+    };
+    const remote = manifest({ todos: entry }, 'desktop-device');
+    const local = manifest({ todos: entry }, 'desktop-device');
+    const { storage } = makeStorage({ todos: localData });
+    const { port, fileContents } = makeDrive(remote, {});
+    vi.mocked(port.createSyncFileIfMissing).mockImplementationOnce(async () => {
+      fileContents.todos = JSON.stringify({ items: [{ id: 'other', text: '다른 기기 데이터' }] });
+      return null;
+    });
+    const { repo, saveLocalManifest } = makeSyncRepo(local);
+
+    await expect(
+      new SyncToCloud(storage, port, repo, 'desktop-device', '내 PC').execute(),
+    ).rejects.toThrow('클라우드 todos 파일이 동기화 중 생성되었습니다');
+    expect(fileContents.todos).toContain('다른 기기 데이터');
+    expect(port.uploadSyncFile).not.toHaveBeenCalled();
+    expect(saveLocalManifest).not.toHaveBeenCalled();
+  });
+
+  it('최초 manifest 생성 경쟁이 발생하면 데이터 파일 업로드와 로컬 장부 저장을 시작하지 않는다', async () => {
+    const { storage } = makeStorage({ todos: { items: [{ id: 'todo-1', text: '첫 할 일' }] } });
+    const { port } = makeDrive(null, {});
+    vi.mocked(port.createSyncFileIfMissing).mockResolvedValueOnce(null);
+    const { repo, saveLocalManifest } = makeSyncRepo(null);
+
+    await expect(
+      new SyncToCloud(storage, port, repo, 'desktop-device', '내 PC').execute(),
+    ).rejects.toThrow('클라우드 동기화 장부가 다른 기기에서 생성되었습니다');
+    expect(port.uploadSyncFile).not.toHaveBeenCalled();
+    expect(saveLocalManifest).not.toHaveBeenCalled();
+  });
+
+  it('Drive 실제 파일 revision이 장부와 다르면 변경 없음으로 숨기거나 자동 덮어쓰지 않는다', async () => {
+    const localData = { items: [{ id: 'todo-1', text: '정상 PC 할 일' }] };
+    const localContent = JSON.stringify(localData);
+    const checksum = await computeSyncChecksum(localContent);
+    const entry = {
+      checksum,
+      lastModified: '2026-08-09T00:00:00Z',
+      size: new TextEncoder().encode(localContent).length,
+      uploadedBy: 'desktop-device',
+    };
+    const remote = manifest({ todos: entry }, 'desktop-device');
+    const local = manifest({ todos: entry }, 'desktop-device');
+    const unexpectedRemoteContent = JSON.stringify({ items: [{ id: 'remote-new', text: '장부 밖 변경' }] });
+    const { storage } = makeStorage({ todos: localData });
+    const { port, fileContents, fileModifiedTimes } = makeDrive(remote, {
+      todos: unexpectedRemoteContent,
+    });
+    fileModifiedTimes.todos = '2026-08-09T01:00:00Z';
+    const { repo } = makeSyncRepo(local);
+
+    await expect(
+      new SyncToCloud(storage, port, repo, 'desktop-device', '정상 PC').execute(),
+    ).rejects.toThrow('클라우드 todos 파일과 동기화 장부가 일치하지 않습니다');
+    expect(fileContents.todos).toBe(unexpectedRemoteContent);
+    expect(port.uploadSyncFile).not.toHaveBeenCalled();
+  });
+
+  it('같은 이름의 Drive 실제 파일이 둘 이상이면 첫 파일을 임의 선택하지 않고 중단한다', async () => {
+    const data = { items: [{ id: 'todo-1', text: '중복 검사' }] };
+    const content = JSON.stringify(data);
+    const checksum = await computeSyncChecksum(content);
+    const entry = {
+      checksum,
+      lastModified: '2026-08-09T00:00:00Z',
+      size: content.length,
+      uploadedBy: 'desktop-device',
+    };
+    const { storage } = makeStorage({ todos: data });
+    const { port } = makeDrive(manifest({ todos: entry }, 'desktop-device'), {
+      todos: content,
+    });
+    vi.mocked(port.listSyncFiles).mockResolvedValue([
+      { id: 'todos-a', name: 'todos.json', modifiedTime: entry.lastModified },
+      { id: 'todos-b', name: 'todos.json', modifiedTime: entry.lastModified },
+    ]);
+    const { repo, saveLocalManifest } = makeSyncRepo(
+      manifest({ todos: entry }, 'desktop-device'),
+    );
+
+    await expect(
+      new SyncToCloud(storage, port, repo, 'desktop-device', '내 PC').execute(),
+    ).rejects.toThrow('클라우드 todos 파일이 중복되어');
+    expect(port.uploadSyncFileIfUnchanged).not.toHaveBeenCalled();
+    expect(saveLocalManifest).not.toHaveBeenCalled();
+  });
+
+  it('파일 업로드만 성공한 부분 상태는 같은 내용이면 재업로드 없이 장부 revision을 복구한다', async () => {
+    const localData = { items: [{ id: 'todo-1', text: '정상 PC 할 일' }] };
+    const content = JSON.stringify(localData);
+    const checksum = await computeSyncChecksum(content);
+    const oldEntry = {
+      checksum,
+      lastModified: '2026-08-09T00:00:00Z',
+      size: new TextEncoder().encode(content).length,
+      uploadedBy: 'desktop-device',
+    };
+    const remote = manifest({ todos: oldEntry }, 'desktop-device');
+    const local = manifest({ todos: oldEntry }, 'desktop-device');
+    const { storage } = makeStorage({ todos: localData });
+    const { port, state: driveState, fileModifiedTimes } = makeDrive(remote, { todos: content });
+    fileModifiedTimes.todos = '2026-08-09T01:00:00Z';
+    const { repo, state: localState } = makeSyncRepo(local);
+
+    const result = await new SyncToCloud(
+      storage,
+      port,
+      repo,
+      'desktop-device',
+      '정상 PC',
+    ).execute();
+
+    expect(result.uploaded).not.toContain('todos');
+    expect(port.uploadSyncFile).not.toHaveBeenCalled();
+    expect(driveState.manifest?.files.todos?.lastModified).toBe('2026-08-09T01:00:00Z');
+    expect(localState.manifest?.files.todos?.lastModified).toBe('2026-08-09T01:00:00Z');
+  });
+
   it('업로드 0건(no-op)이면 리모트/로컬 매니페스트를 일절 쓰지 않는다', async () => {
     const remote = manifest(
       { todos: { checksum: 'pc-v1', lastModified: '2026-07-21T03:00:00Z', size: 100 } },
@@ -630,7 +1097,7 @@ describe('모바일 충돌 선택: 클라우드 원본 복구', () => {
     };
 
     const missingStorage = makeStorage({ events: localEvents });
-    const missingDrive = makeDrive(remote);
+    const missingDrive = makeDrive(remote, {});
     const missingRepo = makeSyncRepo(local);
     await expect(
       new ResolveSyncConflict(missingStorage.storage, missingDrive.port, missingRepo.repo).execute(

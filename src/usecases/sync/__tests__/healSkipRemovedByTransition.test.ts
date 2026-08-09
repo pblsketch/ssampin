@@ -58,9 +58,12 @@ function makeDrive(
   const port = {
     getOrCreateSyncFolder: vi.fn(async () => ({ id: 'folder-1', name: '쌤핀 동기화' })),
     uploadSyncFile: vi.fn(async () => ({ fileId: 'f', modifiedTime: SKEWED_FUTURE })),
+    uploadSyncFileIfUnchanged: vi.fn(async () => ({ fileId: 'f', modifiedTime: SKEWED_FUTURE })),
+    createSyncFileIfMissing: vi.fn(async () => ({ fileId: 'f', modifiedTime: SKEWED_FUTURE })),
     downloadSyncFile: vi.fn(async (fileId: string) => fileContents[fileId] ?? '{}'),
     getSyncManifest: vi.fn(async () => initialManifest),
     updateSyncManifest: vi.fn(async () => 'manifest-1'),
+    updateSyncManifestIfUnchanged: vi.fn(async () => true),
     listSyncFiles: vi.fn(async () =>
       Object.keys(fileContents).map((id) => ({ id, name: `${id}.json` })),
     ),
@@ -274,7 +277,9 @@ describe('F7c — 전환 마커의 전 다운로드 분기 게이트', () => {
       todos: { items: ['할 일'] },
       [YEAR_TRANSITION_REMOVED_KEY]: marker(['students']),
     });
-    const { port } = makeDrive(remoteLedger);
+    const { port } = makeDrive(remoteLedger, {
+      students: JSON.stringify([{ id: 'stu-old', name: '오염명렬' }]),
+    });
     const useCase = new SyncToCloud(storage, port, makeSyncRepo(localLedger), 'my-pc', '내 PC');
 
     const result = await useCase.execute();

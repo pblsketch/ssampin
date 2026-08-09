@@ -171,6 +171,9 @@ function makeFakeDrive(state: FakeDriveState): IDriveSyncPort {
     async updateSyncManifest() {
       throw new Error('not used');
     },
+    async createSyncFileIfMissing() {
+      return null;
+    },
     async updateSyncManifestIfUnchanged() {
       return false;
     },

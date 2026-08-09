@@ -47,32 +47,62 @@ function makeEmptyStorage(): IStoragePort {
 interface FakeDrive {
   port: IDriveSyncPort;
   uploadSyncFile: ReturnType<typeof vi.fn>;
+  createSyncFileIfMissing: ReturnType<typeof vi.fn>;
   downloadSyncFile: ReturnType<typeof vi.fn>;
+  files: { id: string; name: string; content: string; modifiedTime?: string }[];
 }
 
 function makeDrivePort(
   remote: DriveSyncManifest | null,
-  driveFiles: readonly { id: string; name: string; content: string }[] = [],
+  driveFiles: readonly { id: string; name: string; content: string; modifiedTime?: string }[] = [],
 ): FakeDrive {
-  const uploadSyncFile = vi.fn(async () => ({
-    fileId: 'file-x',
-    modifiedTime: '2026-08-02T00:00:00Z',
-  }));
+  const files = driveFiles.map((file) => ({ ...file }));
+  let sequence = 0;
+  const uploadSyncFile = vi.fn(async (_folderId: string, name: string, content: string) => {
+    const existing = files.find((file) => file.name === name);
+    const result = {
+      fileId: existing?.id ?? `file-${++sequence}`,
+      modifiedTime: '2026-08-02T00:00:00Z',
+    };
+    if (existing) {
+      existing.content = content;
+      existing.modifiedTime = result.modifiedTime;
+    } else {
+      files.push({ id: result.fileId, name, content, modifiedTime: result.modifiedTime });
+    }
+    return result;
+  });
+  const createSyncFileIfMissing = vi.fn(
+    async (_folderId: string, name: string, content: string) => {
+      if (files.some((file) => file.name === name)) return null;
+      const result = {
+        fileId: `file-${++sequence}`,
+        modifiedTime: '2026-08-02T00:00:00Z',
+      };
+      files.push({ id: result.fileId, name, content, modifiedTime: result.modifiedTime });
+      return result;
+    },
+  );
   const downloadSyncFile = vi.fn(async (id: string) => {
-    const found = driveFiles.find((f) => f.id === id);
+    const found = files.find((f) => f.id === id);
     if (!found) throw new Error(`파일 없음: ${id}`);
     return found.content;
   });
   const port = {
     getOrCreateSyncFolder: vi.fn(async () => ({ id: 'folder-1', name: '쌤핀 동기화' })),
     uploadSyncFile,
+    uploadSyncFileIfUnchanged: uploadSyncFile,
+    createSyncFileIfMissing,
     downloadSyncFile,
     getSyncManifest: vi.fn(async () => remote),
     updateSyncManifest: vi.fn(async () => 'manifest-1'),
-    listSyncFiles: vi.fn(async () => driveFiles.map((f) => ({ id: f.id, name: f.name }))),
+    updateSyncManifestIfUnchanged: vi.fn(async () => true),
+    listSyncFiles: vi.fn(async () =>
+      files.map((f) => ({ id: f.id, name: f.name, modifiedTime: f.modifiedTime })),
+    ),
     deleteSyncFolder: vi.fn(async () => undefined),
   } as unknown as IDriveSyncPort;
-  return { port, uploadSyncFile, downloadSyncFile };
+  return { port, uploadSyncFile, createSyncFileIfMissing, downloadSyncFile, files };
 }
 
 function makeSyncRepo(local: DriveSyncManifest | null): IDriveSyncRepository {
@@ -106,8 +136,10 @@ describe('SyncToCloud — 아카이브 업로드', () => {
   const readArchive = async (key: string): Promise<Uint8Array | null> =>
     ENC.encode(`content-of:${key}`);
 
-  it('리모트에 없는 아카이브 파일을 base64 래퍼로 업로드하고 매니페스트에 기록한다', async () => {
-    const { port, uploadSyncFile } = makeDrivePort(manifest({}, 'other-device'));
+  it('리모트에 없는 아카이브 파일을 create-only로 생성하고 매니페스트에 기록한다', async () => {
+    const { port, uploadSyncFile, createSyncFileIfMissing } = makeDrivePort(
+      manifest({}, 'other-device'),
+    );
     const useCase = new SyncToCloud(
       makeEmptyStorage(),
       port,
@@ -122,8 +154,9 @@ describe('SyncToCloud — 아카이브 업로드', () => {
     const result = await useCase.execute();
 
     expect(result.uploaded).toEqual(expect.arrayContaining(KEYS));
+    expect(uploadSyncFile).not.toHaveBeenCalled();
     // Drive 파일명은 '/' → '__' 평탄화 + .json
-    const names = uploadSyncFile.mock.calls.map((c) => c[1] as string);
+    const names = createSyncFileIfMissing.mock.calls.map((c) => c[1] as string);
     expect(names).toContain('archives__2026-1__students.json.json');
     expect(names).toContain('archives__2026-1__manifest.json.json');
     // manifest.json이 그 학기의 마지막에 올라간다(완결 표식)
@@ -159,13 +192,132 @@ describe('SyncToCloud — 아카이브 업로드', () => {
     expect(result.skipped).toEqual(expect.arrayContaining(KEYS));
   });
 
+  it('아카이브 생성 후 manifest CAS 실패는 동일 실제 본문이면 다음 실행에서 재업로드 없이 수렴한다', async () => {
+    const key = 'archives/2026-1/students.json';
+    const remote = manifest({}, 'other-device');
+    const { port, uploadSyncFile, createSyncFileIfMissing, files } = makeDrivePort(remote);
+    vi.mocked(port.updateSyncManifestIfUnchanged)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValue(true);
+    const repo = makeSyncRepo(null);
+    const makeUseCase = () =>
+      new SyncToCloud(
+        makeEmptyStorage(),
+        port,
+        repo,
+        'my-device',
+        '내 PC',
+        undefined,
+        undefined,
+        async () => [key],
+        readArchive,
+      );
+
+    await expect(makeUseCase().execute()).rejects.toThrow('클라우드 동기화 장부');
+    expect(files).toHaveLength(1);
+
+    const retry = await makeUseCase().execute();
+
+    expect(uploadSyncFile).not.toHaveBeenCalled();
+    expect(createSyncFileIfMissing).toHaveBeenCalledTimes(1);
+    expect(retry.skipped).toContain(key);
+    expect(repo.saveLocalManifest).toHaveBeenCalledTimes(1);
+  });
+
+  it('장부 없는 아카이브 실제 파일의 본문이 다르면 덮어쓰거나 성공으로 삼지 않는다', async () => {
+    const key = 'archives/2026-1/students.json';
+    const name = 'archives__2026-1__students.json.json';
+    const foreignContent = JSON.stringify({
+      __binaryBase64: uint8ToBase64(ENC.encode('다른 기기 아카이브')),
+      __relPath: key,
+    });
+    const { port, uploadSyncFile, createSyncFileIfMissing, files } = makeDrivePort(
+      manifest({}, 'other-device'),
+      [{ id: 'foreign', name, content: foreignContent }],
+    );
+
+    await expect(
+      new SyncToCloud(
+        makeEmptyStorage(),
+        port,
+        makeSyncRepo(null),
+        'my-device',
+        '내 PC',
+        undefined,
+        undefined,
+        async () => [key],
+        readArchive,
+      ).execute(),
+    ).rejects.toThrow('클라우드 아카이브 파일과 동기화 장부가 일치하지 않습니다');
+
+    expect(files[0]?.content).toBe(foreignContent);
+    expect(uploadSyncFile).not.toHaveBeenCalled();
+    expect(createSyncFileIfMissing).not.toHaveBeenCalled();
+  });
+
+  it('장부 없는 같은 이름 아카이브 실제 파일이 중복되면 임의 선택하지 않고 중단한다', async () => {
+    const key = 'archives/2026-1/students.json';
+    const name = 'archives__2026-1__students.json.json';
+    const content = JSON.stringify({
+      __binaryBase64: uint8ToBase64(await readArchive(key) as Uint8Array),
+      __relPath: key,
+    });
+    const { port, uploadSyncFile, createSyncFileIfMissing } = makeDrivePort(
+      manifest({}, 'other-device'),
+      [
+        { id: 'archive-a', name, content },
+        { id: 'archive-b', name, content: `${content}foreign` },
+      ],
+    );
+
+    await expect(
+      new SyncToCloud(
+        makeEmptyStorage(),
+        port,
+        makeSyncRepo(null),
+        'my-device',
+        '내 PC',
+        undefined,
+        undefined,
+        async () => [key],
+        readArchive,
+      ).execute(),
+    ).rejects.toThrow('클라우드 archives/2026-1/students.json 파일이 중복되어');
+
+    expect(uploadSyncFile).not.toHaveBeenCalled();
+    expect(createSyncFileIfMissing).not.toHaveBeenCalled();
+  });
+
+  it('아카이브 create-only 경쟁은 성공으로 숨기지 않고 중단한다', async () => {
+    const key = 'archives/2026-1/students.json';
+    const { port, createSyncFileIfMissing } = makeDrivePort(manifest({}, 'other-device'));
+    createSyncFileIfMissing.mockResolvedValue(null);
+    const repo = makeSyncRepo(null);
+
+    await expect(
+      new SyncToCloud(
+        makeEmptyStorage(),
+        port,
+        repo,
+        'my-device',
+        '내 PC',
+        undefined,
+        undefined,
+        async () => [key],
+        readArchive,
+      ).execute(),
+    ).rejects.toThrow('동기화 중 생성되었습니다');
+
+    expect(repo.saveLocalManifest).not.toHaveBeenCalled();
+  });
+
   it('부분 실패 격리 — 아카이브 한 파일 실패가 라이브 업로드·다른 파일을 막지 않는다', async () => {
     const storage = makeEmptyStorage();
     (storage.read as ReturnType<typeof vi.fn>).mockImplementation(async (filename: string) =>
       filename === 'todos' ? { items: ['할일'] } : null,
     );
-    const { port, uploadSyncFile } = makeDrivePort(manifest({}, 'other-device'));
-    uploadSyncFile.mockImplementation(async (_folderId: string, name: string) => {
+    const { port, createSyncFileIfMissing } = makeDrivePort(manifest({}, 'other-device'));
+    createSyncFileIfMissing.mockImplementation(async (_folderId: string, name: string) => {
       if (name === 'archives__2026-1__students.json.json') throw new Error('네트워크 오류');
       return { fileId: 'file-x', modifiedTime: '2026-08-02T00:00:00Z' };
     });

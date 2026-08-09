@@ -182,11 +182,11 @@ export class DriveSyncAdapter implements IDriveSyncPort {
     return res.json() as Promise<FileResponse>;
   }
 
-  /** 폴더 내에서 파일명으로 검색 */
-  private async findFileByName(
+  /** 폴더 내에서 같은 이름의 모든 파일 검색 (경쟁 생성/중복 감지용). */
+  private async findFilesByName(
     folderId: string,
     filename: string,
-  ): Promise<{ id: string; modifiedTime: string } | null> {
+  ): Promise<Array<{ id: string; modifiedTime: string }>> {
     const query = `'${folderId}' in parents and name='${filename}' and trashed=false`;
     const params = new URLSearchParams({
       q: query,
@@ -194,8 +194,19 @@ export class DriveSyncAdapter implements IDriveSyncPort {
       spaces: 'drive',
     });
     const data = await this.request<FilesListResponse>(`/files?${params.toString()}`);
-    const file = data.files?.[0];
-    return file ? { id: file.id, modifiedTime: file.modifiedTime ?? '' } : null;
+    return (data.files ?? []).map((file) => ({
+      id: file.id,
+      modifiedTime: file.modifiedTime ?? '',
+    }));
+  }
+
+  /** 폴더 내에서 파일명으로 검색 */
+  private async findFileByName(
+    folderId: string,
+    filename: string,
+  ): Promise<{ id: string; modifiedTime: string } | null> {
+    const files = await this.findFilesByName(folderId, filename);
+    return files[0] ?? null;
   }
 
   /** 파일의 현재 ETag와 수정 시각을 함께 읽어 조건부 PATCH에 사용한다. */
@@ -264,14 +275,41 @@ export class DriveSyncAdapter implements IDriveSyncPort {
     };
   }
 
+  async createSyncFileIfMissing(
+    folderId: string,
+    filename: string,
+    content: string,
+  ): Promise<{ fileId: string; modifiedTime: string } | null> {
+    if ((await this.findFilesByName(folderId, filename)).length > 0) return null;
+
+    const created = await this.uploadText(
+      { name: filename, parents: [folderId] },
+      content,
+    );
+    const matches = await this.findFilesByName(folderId, filename);
+    if (matches.length !== 1 || matches[0]?.id !== created.id) {
+      await this.request(`/files/${created.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ trashed: true }),
+      });
+      return null;
+    }
+    return {
+      fileId: created.id,
+      modifiedTime: created.modifiedTime ?? matches[0].modifiedTime,
+    };
+  }
+
   async uploadSyncFileIfUnchanged(
     folderId: string,
     filename: string,
     content: string,
     expectedModifiedTime: string,
   ): Promise<{ fileId: string; modifiedTime: string } | null> {
-    const existing = await this.findFileByName(folderId, filename);
-    if (!existing || existing.modifiedTime !== expectedModifiedTime) return null;
+    const matches = await this.findFilesByName(folderId, filename);
+    if (matches.length !== 1) return null;
+    const existing = matches[0]!;
+    if (existing.modifiedTime !== expectedModifiedTime) return null;
 
     const precondition = await this.getFilePrecondition(existing.id);
     if (!precondition || precondition.modifiedTime !== expectedModifiedTime) return null;
@@ -293,8 +331,9 @@ export class DriveSyncAdapter implements IDriveSyncPort {
   }
 
   async getSyncManifest(folderId: string): Promise<DriveSyncManifest | null> {
-    const file = await this.findFileByName(folderId, MANIFEST_FILENAME);
-    if (!file) return null;
+    const matches = await this.findFilesByName(folderId, MANIFEST_FILENAME);
+    if (matches.length !== 1) return null;
+    const file = matches[0]!;
     const content = await this.downloadText(file.id);
     try {
       return JSON.parse(content) as DriveSyncManifest;
@@ -332,8 +371,9 @@ export class DriveSyncAdapter implements IDriveSyncPort {
     expected: DriveSyncManifest,
     next: DriveSyncManifest,
   ): Promise<boolean> {
-    const existing = await this.findFileByName(folderId, MANIFEST_FILENAME);
-    if (!existing) return false;
+    const matches = await this.findFilesByName(folderId, MANIFEST_FILENAME);
+    if (matches.length !== 1) return false;
+    const existing = matches[0]!;
     const precondition = await this.getFilePrecondition(existing.id);
     if (!precondition) return false;
 
