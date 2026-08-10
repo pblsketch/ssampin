@@ -584,3 +584,19 @@
 - **표시·마이그레이션**: 읽는 곳 3군데(사이드바 `DriveSyncIndicator`·설정 `BackupCard`·`AccountSection`)는 **스토어 값 우선 + `settings.sync.lastSyncedAt` 레거시 폴백**. 앱 시작 시 `hydrateLastSyncedAt()`이 기기 저장소에서 복구하고, 없으면 레거시 값을 1회 승계해 기록한다 — 업데이트 직후에도 표시가 끊기지 않는다. `Settings.sync.lastSyncedAt`은 타입에 남기되 `@deprecated` 읽기 전용(구버전 기기가 올린 값을 파싱할 수 있어야 하므로 제거하지 않는다).
 - **하지 말 것**: settings(또는 다른 동기화 대상 파일)에 **동기화 자신이 만들어내는 값**을 쓰지 말 것. 진행률·마지막 시각·기기 상태처럼 "동기화의 부산물"은 전부 기기 전용이다. 회귀는 `driveSyncLastSyncedAtLocation.meta.test.ts`가 소스 단에서 막는다(패턴 부활 금지 + 기기 저장 호출 존재 강제 + SYNC_FILES 미등재 확인).
 - **일반 규칙**: 새 필드를 settings에 넣기 전에 "이 값이 **다른 기기에도 같아야 하는가**"를 먼저 물을 것. 아니라면 settings가 아니다.
+
+## ADR-041: Drive 조건부 갱신은 ETag 헤더에 의존하지 않는다 — 브라우저는 그 헤더를 읽을 수 없다
+
+- **상태**: active · **일자**: 2026-08-11 (v2.3.6)
+- **증상**: "클라우드 settings 파일이 동기화 중 변경되었습니다. 다시 동기화해 주세요."가 **동기화를 반복해도 사라지지 않음**(2026-08-11 신고).
+- **원인**: `getFilePrecondition`이 `res.headers.get('ETag')`를 읽어 없으면 `null`을 반환했고, 그 위에 선 `uploadSyncFileIfUnchanged`/`updateSyncManifestIfUnchanged`가 전부 실패했다. 그런데 **Google API 응답은 CORS `Access-Control-Expose-Headers`에 `etag`를 포함하지 않는다.** 직접 측정(2026-08-11):
+  ```
+  200 응답: Access-Control-Expose-Headers: content-encoding,date,server,content-length,vary
+  401 응답: www-authenticate,content-encoding,date,server,content-length,vary
+  ```
+  브라우저·Electron 렌더러(webSecurity 기본 on, CORS 우회 없음)에서 `headers.get('ETag')`는 **항상 null**이다. 즉 조건이 아니라 **상수 실패**였다.
+- **영향 범위**: `getFilePrecondition` 도입은 v2.3.1. → **v2.3.1~v2.3.3**: 충돌 화면의 "이 기기 유지"가 항상 실패(사용자가 충돌을 해결할 수 없었던 진짜 이유). → **v2.3.4~v2.3.5**: 일반 업로드 경로까지 CAS를 타면서 **클라우드에 이미 있는 어떤 파일도 갱신 불가**. 데스크톱·모바일 공통.
+- **왜 테스트가 못 잡았나**: `DriveSyncAdapterConditional.test.ts`가 모의 응답에 **ETag를 직접 넣어줬다**. 실제 Google이 주지 않는 값을 테스트가 공급해, 현실과 다른 세상을 검증하고 있었다. **교훈: 외부 API의 "응답 헤더를 읽는" 코드는 모의값을 넣는 순간 검증력이 0이 된다 — 헤더 부재 케이스를 반드시 같이 둘 것.**
+- **결정**: 판정 기준은 **응답 본문으로 읽을 수 있는 값**(`modifiedTime`)으로 한다. ETag는 읽히는 환경에서만 `If-Match`로 덤으로 얹고, **부재를 실패로 취급하지 않는다**. 헤더 부재 시 `If-Match`를 빈 값으로 보내지 않는다(412 유발).
+- **수용한 한계**: 마지막 확인과 PATCH 사이의 짧은 경합 창은 If-Match 없이 닫을 수 없다. 다만 확인은 2회(목록 + 신선한 GET) 하며, v2.3.1 이전에는 **확인 자체가 없었으므로** 그때보다 엄격하다. Drive v3에 서버측 CAS가 없는 이상 이게 상한이다.
+- **하지 말 것**: 외부 API 응답 **헤더**를 신뢰 경로의 필수 입력으로 삼지 말 것. CORS로 가려지면 조용히 100% 실패한다. 회귀는 `DriveSyncAdapterConditional.test.ts`의 "ADR-041 — ETag를 읽을 수 없어도 조건부 갱신이 동작한다" 3건이 막는다(수정 전 코드에서 2건 실패함을 실측 확인).

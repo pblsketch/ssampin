@@ -1,6 +1,20 @@
 # Progress
 
-마지막 업데이트: 2026-08-10 KST
+마지막 업데이트: 2026-08-11 KST
+
+## 🚨 v2.3.6 준비 — Drive 조건부 갱신이 **100% 실패**하던 상수 버그 수정 (2026-08-11, ADR-041, **릴리즈 대기: 오너 실기기 확인 후**)
+
+**신고**: "클라우드 settings 파일이 동기화 중 변경되었습니다. 다시 동기화해 주세요."가 **동기화를 반복해도 사라지지 않음**.
+
+**원인(직접 측정으로 확정)**: `getFilePrecondition`이 `res.headers.get('ETag')`를 못 읽으면 `null`을 반환했는데, **Google API는 CORS `Access-Control-Expose-Headers`에 `etag`를 넣지 않는다**(실측: 200·401 모두 `content-encoding,date,server,content-length,vary`). 렌더러는 webSecurity 기본 on + CORS 우회 없음 → `headers.get('ETag')`는 **항상 null** → 조건부 갱신이 **조건이 아니라 상수로 실패**. **v2.3.1~v2.3.3**엔 충돌 화면 "이 기기 유지"가 항상 실패했고(충돌이 해결되지 않던 진짜 이유), **v2.3.4~v2.3.5**엔 일반 업로드까지 CAS를 타면서 **클라우드에 이미 있는 어떤 파일도 갱신 불가**였다. 데스크톱·모바일 공통.
+
+**왜 안 잡혔나**: `DriveSyncAdapterConditional.test.ts`가 모의 응답에 **ETag를 직접 넣어줬다** — 실제 Google이 주지 않는 값을 테스트가 공급해 검증력이 0이었다.
+
+**수정**: 판정 기준을 응답 **본문**으로 읽는 `modifiedTime`으로 바꾸고, ETag는 읽히는 환경에서만 `If-Match`로 덤. 부재를 실패로 취급하지 않음(빈 If-Match 전송 금지 — 412 유발). 안전 확인(2회: 목록 + 신선한 GET)은 유지 — v2.3.1 이전엔 확인 자체가 없었으므로 그때보다 엄격하다.
+
+**게이트**: tsc 0 · lint 0 errors · vitest **352파일 4221 passed / 0 failed** · regression 39/39. 신규 회귀 3건은 **수정 전 코드에서 2건 실패함을 실측 확인**(테스트가 진짜로 이 버그를 잡는다는 증거).
+
+**남음**: 오너 실기기 확인(설치 후 동기화 1회) → 확인되면 GitHub 릴리즈 생성.
 
 ## 🚀 v2.3.5 핫픽스 **출시 완료** — 동기화 충돌 창 무한 반복 해소 (2026-08-10, tag `v2.3.5` Latest, main `c89f2e04`, ADR-039 + ADR-040)
 

@@ -209,11 +209,25 @@ export class DriveSyncAdapter implements IDriveSyncPort {
     return files[0] ?? null;
   }
 
-  /** 파일의 현재 ETag와 수정 시각을 함께 읽어 조건부 PATCH에 사용한다. */
+  /**
+   * 조건부 PATCH에 쓸 파일의 현재 상태(수정 시각 + 있으면 ETag).
+   *
+   * ⚠️ **ETag 부재를 실패로 취급하지 말 것**(ADR-041). Google API 응답의
+   * `Access-Control-Expose-Headers`에는 `etag`가 없어서(실측 2026-08-11 — 200/401 모두
+   * `content-encoding,date,server,content-length,vary`뿐) 브라우저·Electron 렌더러에서는
+   * `headers.get('ETag')`가 **항상 null**이다. 예전 코드는 여기서 null을 반환했고, 그 결과
+   * `uploadSyncFileIfUnchanged`/`updateSyncManifestIfUnchanged`가 **100% 실패**해
+   * "클라우드 … 파일이 동기화 중 변경되었습니다"가 영구 반복됐다(v2.3.1~v2.3.5 신고).
+   *
+   * 그래서 판정 기준은 **응답 본문으로 읽을 수 있는 modifiedTime**이고, ETag는 읽히는
+   * 환경(메인 프로세스 등)에서만 If-Match로 덤으로 얹는다. 남는 취약점: 마지막 확인과
+   * PATCH 사이의 짧은 경합 창은 If-Match 없이는 닫을 수 없다(v2.3.1 이전엔 확인 자체가
+   * 없었으므로 그때보다는 엄격하다).
+   */
   private async getFilePrecondition(
     fileId: string,
     isRetry = false,
-  ): Promise<{ etag: string; modifiedTime: string } | null> {
+  ): Promise<{ etag: string | null; modifiedTime: string } | null> {
     const accessToken = await this.getAccessToken();
     const res = await this.fetchWithRetry(
       `${DRIVE_API_URL}/files/${fileId}?fields=id,modifiedTime`,
@@ -221,10 +235,8 @@ export class DriveSyncAdapter implements IDriveSyncPort {
     );
     if (res.status === 401 && !isRetry) return this.getFilePrecondition(fileId, true);
     if (!res.ok) return null;
-    const etag = res.headers.get('ETag');
-    if (!etag) return null;
     const data = (await res.json()) as FileResponse;
-    return { etag, modifiedTime: data.modifiedTime ?? '' };
+    return { etag: res.headers.get('ETag'), modifiedTime: data.modifiedTime ?? '' };
   }
 
   // ── IDriveSyncPort 구현 ──
@@ -282,10 +294,7 @@ export class DriveSyncAdapter implements IDriveSyncPort {
   ): Promise<{ fileId: string; modifiedTime: string } | null> {
     if ((await this.findFilesByName(folderId, filename)).length > 0) return null;
 
-    const created = await this.uploadText(
-      { name: filename, parents: [folderId] },
-      content,
-    );
+    const created = await this.uploadText({ name: filename, parents: [folderId] }, content);
     const matches = await this.findFilesByName(folderId, filename);
     if (matches.length !== 1 || matches[0]?.id !== created.id) {
       await this.request(`/files/${created.id}`, {
@@ -315,7 +324,14 @@ export class DriveSyncAdapter implements IDriveSyncPort {
     if (!precondition || precondition.modifiedTime !== expectedModifiedTime) return null;
 
     try {
-      const result = await this.uploadText({}, content, 'PATCH', existing.id, precondition.etag);
+      // If-Match는 ETag를 실제로 읽을 수 있을 때만 얹는다(위 주석 참조).
+      const result = await this.uploadText(
+        {},
+        content,
+        'PATCH',
+        existing.id,
+        precondition.etag ?? undefined,
+      );
       return {
         fileId: result.id,
         modifiedTime: result.modifiedTime ?? new Date().toISOString(),
@@ -393,7 +409,7 @@ export class DriveSyncAdapter implements IDriveSyncPort {
         JSON.stringify(next, null, 2),
         'PATCH',
         existing.id,
-        precondition.etag,
+        precondition.etag ?? undefined,
       );
       return true;
     } catch (error) {
