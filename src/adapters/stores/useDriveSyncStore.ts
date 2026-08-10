@@ -2,6 +2,11 @@ import { create } from 'zustand';
 import type { DriveSyncStatus, DriveSyncConflict } from '@domain/entities/DriveSyncState';
 import type { SyncProgress } from '@usecases/sync/SyncToCloud';
 import type { ImportSettingsFromCloudErrorCode } from '@usecases/sync/ImportSettingsFromCloud';
+import {
+  clearDriveSyncLastSyncedAt,
+  readDriveSyncDeviceState,
+  saveDriveSyncLastSyncedAt,
+} from '@adapters/repositories/driveSyncDeviceState';
 
 export interface SyncResult {
   direction: 'upload' | 'download';
@@ -48,6 +53,8 @@ interface DriveSyncState {
   deleteCloudData: () => Promise<void>;
   resetStatus: () => void;
   triggerSaveSync: () => void;
+  /** 앱 시작 시 기기 전용 저장소에서 "마지막 동기화 시각"을 복구(레거시 settings 값 1회 승계). */
+  hydrateLastSyncedAt: () => Promise<void>;
 
   // first-sync-confirmation actions
   checkFirstSyncRequired: () => Promise<void>;
@@ -123,10 +130,10 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
         },
       });
 
-      // settings에 lastSyncedAt 업데이트
-      await useSettingsStore.getState().update({
-        sync: { ...sync, lastSyncedAt: now },
-      });
+      // 마지막 동기화 시각은 **기기 전용 저장소**에 남긴다(ADR-040).
+      // settings에 쓰면 동기화 대상 파일이 매번 바뀌어 ①매 주기 무조건 업로드
+      // ②기기 간 설정 LWW 핑퐁 ③다음 다운로드가 이를 충돌로 오해(ADR-039)로 이어진다.
+      await saveDriveSyncLastSyncedAt(now);
 
       // 3초 후 idle로 복귀
       setTimeout(() => {
@@ -257,10 +264,8 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
         }, 3000);
       }
 
-      // settings에 lastSyncedAt 업데이트
-      await useSettingsStore.getState().update({
-        sync: { ...sync, lastSyncedAt: now },
-      });
+      // 마지막 동기화 시각은 기기 전용 저장소에만 남긴다(ADR-040 — 위 syncToCloud와 동일 이유).
+      await saveDriveSyncLastSyncedAt(now);
 
       return { downloaded: result.downloaded, conflicts: result.conflicts };
     } catch (err) {
@@ -457,6 +462,7 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
         files: {},
       });
 
+      await clearDriveSyncLastSyncedAt();
       set({ status: 'idle', lastSyncedAt: null });
     } catch (err) {
       console.error('[DriveSync] deleteCloudData error:', err);
@@ -468,6 +474,23 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
   },
 
   resetStatus: () => set({ status: 'idle', error: null, progress: null }),
+
+  hydrateLastSyncedAt: async () => {
+    if (get().lastSyncedAt !== null) return; // 이미 이번 세션에서 동기화함 — 그 값이 더 최신
+    const deviceState = await readDriveSyncDeviceState();
+    if (deviceState?.lastSyncedAt) {
+      set({ lastSyncedAt: deviceState.lastSyncedAt });
+      return;
+    }
+    // 레거시 승계(1회): v2.3.4까지는 이 값이 settings.sync.lastSyncedAt에 있었다.
+    // 옮겨 적어 두면 업데이트 직후에도 "마지막 동기화" 표시가 끊기지 않는다.
+    const { useSettingsStore } = await import('./useSettingsStore');
+    const legacy = useSettingsStore.getState().settings.sync?.lastSyncedAt;
+    if (legacy) {
+      set({ lastSyncedAt: legacy });
+      await saveDriveSyncLastSyncedAt(legacy);
+    }
+  },
 
   triggerSaveSync: () => {
     // 신규 기기 첫 동기화 모달 열려있는 동안 자동 업로드 트리거 차단

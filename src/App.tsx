@@ -930,6 +930,12 @@ function MainApp() {
   // Google Tasks 자동 동기화
   useTasksAutoSync();
 
+  // Google Drive: "마지막 동기화 시각" 복구 (ADR-040 — 기기 전용 저장소).
+  // 자동 동기화가 꺼져 있어도 표시는 해야 하므로 별도 효과로 무조건 1회 실행한다.
+  useEffect(() => {
+    void useDriveSyncStore.getState().hydrateLastSyncedAt();
+  }, []);
+
   // Google Drive 자동 동기화 (앱 시작 시)
   useEffect(() => {
     const initDriveSync = async () => {

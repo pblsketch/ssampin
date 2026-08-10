@@ -37,6 +37,9 @@ export const BackupCard = forwardRef<HTMLDivElement>(function BackupCard(_props,
 
   const sync: SyncSettings = settings.sync ?? DEFAULT_SYNC;
   const checkFirstSyncRequired = useDriveSyncStore((s) => s.checkFirstSyncRequired);
+  // 마지막 동기화 시각은 기기 전용 저장소가 정본(ADR-040). settings 값은 v2.3.4 이하 레거시 폴백.
+  const driveLastSyncedAt = useDriveSyncStore((s) => s.lastSyncedAt);
+  const lastBackupAt = driveLastSyncedAt ?? sync.lastSyncedAt;
 
   const updateSync = (patch: Partial<SyncSettings>) => {
     void update({ sync: { ...sync, ...patch } });
@@ -222,10 +225,10 @@ export const BackupCard = forwardRef<HTMLDivElement>(function BackupCard(_props,
         <div className="flex items-center justify-between text-sm">
           <span className="text-sp-muted">마지막 백업</span>
           <span className="text-sp-text font-medium flex items-center gap-1">
-            {sync.lastSyncedAt ? (
+            {lastBackupAt ? (
               <>
                 <span className="material-symbols-outlined text-green-400 text-icon-sm">check</span>
-                {new Date(sync.lastSyncedAt).toLocaleString('ko-KR')}
+                {new Date(lastBackupAt).toLocaleString('ko-KR')}
               </>
             ) : (
               '기록 없음'

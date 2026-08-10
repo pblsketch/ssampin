@@ -1,6 +1,20 @@
 # Progress
 
-마지막 업데이트: 2026-08-07 KST
+마지막 업데이트: 2026-08-10 KST
+
+## 🐛 v2.3.5 핫픽스 — 동기화 충돌 창 무한 반복 해소 (2026-08-10, main, ADR-039 + ADR-040)
+
+**신고**: v2.3.0~2.3.4 업데이트 후 "동기화 충돌 — 설정" 창이 계속 뜬다. 이 기기 시각이 `Invalid Date`로 표시.
+
+**원인 (재현 테스트로 확정)**: v2.3.1 핫픽스(`81b58ab5`)가 넣은 "장부 체크섬은 같은데 실제 로컬 내용이 다르면 충돌" 판정이, 빈 봉투 유실뿐 아니라 **아직 업로드 안 된 정상적인 로컬 변경까지** 잡았다. 그런데 `useDriveSyncStore`는 동기화가 끝난 뒤 `settings.sync.lastSyncedAt`을 **장부 확정 이후에** 다시 썼다 → 매 동기화가 스스로 어긋남을 만들고 다음 다운로드가 그걸 충돌로 올리는 **자가당착 무한 반복**. 해결해도 다음 동기화에서 부활. 부팅·주기·창 포커스마다 동기화하므로 계속 떴다. `Invalid Date`는 판정이 시각 자리에 넣는 문자열 `'content-mismatch'`가 렌더된 것. 이 분기는 `conflictPolicy`도 검사하지 않아 기본값 `latest` 사용자까지 창을 봤다. **데스크톱 전용**(모바일은 settings에 시각을 덧쓰지 않음).
+
+**수정 ①(ADR-039) 판정 교정**: 겹쳐 있던 두 상태를 가름 — ⓐ미업로드 로컬 변경 → 스킵(리모트 체크섬 == 내 장부 체크섬이라 **받을 것이 없음이 증명**되고, 이어지는 업로드가 올린다) ⓑ빈 봉투 + 리모트가 더 큼 → 충돌 유지(v2.3.1 보호 그대로). 판정식 `!hasSubstantiveContent(local) && remoteInfo.size > localSize` — **크기 비교 병용이 핵심**(settings처럼 배열이 부수적인 객체의 오판 차단). settings 전용 이스케이프 해치는 도달 불가가 되어 제거(매 동기화 settings.json 1회 추가 다운로드도 소멸).
+
+**수정 ②(ADR-040) 원인 제거**: `sync.lastSyncedAt`을 동기화 대상 settings에서 빼내 **기기 전용 저장소**(`drive-sync-device-state`, SYNC_FILES 미등재)로 옮김. 이제 settings는 사용자가 실제로 설정을 바꿀 때만 올라간다 — 매 주기 업로드 낭비·기기 간 설정 LWW 핑퐁도 함께 소멸. 표시 3곳(사이드바 인디케이터·설정 백업 카드·Google 계정 카드)은 스토어 값 우선 + v2.3.4 이하 레거시 폴백, 앱 시작 시 `hydrateLastSyncedAt()`이 기기 저장소에서 복구하며 레거시 값 1회 승계. `Settings.sync.lastSyncedAt`은 `@deprecated` 읽기 전용으로만 남김.
+
+**⚠️ 작업 중 발견**: 세션 시작 브랜치 `fix/sync-events-download-heal`가 **main보다 6커밋 뒤처져 있었다**(v2.3.1~2.3.4 전부 누락, 그 브랜치의 유일 커밋 `ca290dd1`은 main의 `81b58ab5`와 동일 내용). 또 `ssampin-hotfix-v2.3.1-sync-ui` **유령 워크트리**가 main을 점유하고 있어 전환이 막혀 있었다(`git worktree prune`으로 해소). 작업을 main 위에 재적용 — main이 그 사이 추가한 `convergeMergedFile`(병합본 체크섬 수렴)·CAS 업로드(`createSyncFileIfMissing`)와 정합 확인 완료. **교훈: 작업 시작 전 `git rev-list --count HEAD..origin/main`으로 베이스 신선도를 먼저 확인할 것.**
+
+**게이트(main 기준)**: tsc 0 · lint 0 errors · vitest **352파일 4218 passed / 0 failed** · regression **39/39**. 신규 회귀 테스트 2종 — `contentMismatchPendingLocalChange.test.ts`(가짜 충돌 0·빈 봉투 충돌 유지·스킵분 실제 업로드·settings 재업로드 없음) + `driveSyncLastSyncedAtLocation.meta.test.ts`(시각이 settings로 되돌아가는 것을 소스 단에서 차단).
 
 ## 🚀 v2.3.0 릴리즈 완료 — **단, www.ssampin.com·m.ssampin.com 전면 다운(Vercel 402)** (2026-08-07, tag `v2.3.0` Latest, main `4ab58050`)
 

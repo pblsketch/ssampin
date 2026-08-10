@@ -1,6 +1,7 @@
 import { forwardRef, useState, useMemo } from 'react';
 import { useCalendarSyncStore } from '@adapters/stores/useCalendarSyncStore';
 import { useGoogleAccountStore } from '@adapters/stores/useGoogleAccountStore';
+import { useDriveSyncStore } from '@adapters/stores/useDriveSyncStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useTasksSyncStore } from '@adapters/stores/useTasksSyncStore';
 import { SITE_URL } from '@config/siteUrl';
@@ -21,18 +22,18 @@ function formatRelative(isoString: string | null | undefined): string {
 }
 
 export const AccountSection = forwardRef<HTMLDivElement>(function AccountSection(_props, ref) {
-  const { isConnected, email, isLoading, startAuth, cancelAuth, startPKCEFallback, disconnect } = useGoogleAccountStore();
+  const { isConnected, email, isLoading, startAuth, cancelAuth, startPKCEFallback, disconnect } =
+    useGoogleAccountStore();
   const { mappings } = useCalendarSyncStore();
   const { settings } = useSettingsStore();
   const { isEnabled: tasksEnabled } = useTasksSyncStore();
   const sync = settings.sync;
+  // 마지막 동기화 시각은 기기 전용 저장소가 정본(ADR-040). settings 값은 v2.3.4 이하 레거시 폴백.
+  const driveLastSyncedAt = useDriveSyncStore((s) => s.lastSyncedAt);
 
   const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
 
-  const hasEnabledMapping = useMemo(
-    () => mappings.some((m) => m.syncEnabled),
-    [mappings],
-  );
+  const hasEnabledMapping = useMemo(() => mappings.some((m) => m.syncEnabled), [mappings]);
 
   const activeServicesCount = useMemo(() => {
     return [sync?.enabled, hasEnabledMapping, tasksEnabled].filter(Boolean).length;
@@ -68,14 +69,18 @@ export const AccountSection = forwardRef<HTMLDivElement>(function AccountSection
           <div className="space-y-4">
             <div className="flex items-center gap-4 rounded-xl bg-sp-surface p-4">
               <div className="w-12 h-12 rounded-full bg-green-500/15 flex items-center justify-center shrink-0">
-                <span className="material-symbols-outlined text-green-400 text-2xl">check_circle</span>
+                <span className="material-symbols-outlined text-green-400 text-2xl">
+                  check_circle
+                </span>
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-base font-semibold text-sp-text truncate">{email ?? '연결됨'}</p>
                 <p className="text-xs text-sp-muted mt-0.5 flex items-center gap-1.5 flex-wrap">
                   <span className="text-green-400 font-medium">✅ 연결됨</span>
                   <span>·</span>
-                  <span>마지막 활동: {formatRelative(sync?.lastSyncedAt)}</span>
+                  <span>
+                    마지막 활동: {formatRelative(driveLastSyncedAt ?? sync?.lastSyncedAt)}
+                  </span>
                   <span>·</span>
                   <span>
                     {activeServicesCount > 0
@@ -126,7 +131,9 @@ export const AccountSection = forwardRef<HTMLDivElement>(function AccountSection
             {isLoading ? (
               <div className="space-y-2">
                 <div className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-sp-accent/40 text-white font-medium text-sm">
-                  <span className="material-symbols-outlined animate-spin text-icon-md">progress_activity</span>
+                  <span className="material-symbols-outlined animate-spin text-icon-md">
+                    progress_activity
+                  </span>
                   연결 중... (브라우저에서 Google 로그인을 완료해주세요)
                 </div>
                 <div className="flex gap-2">
@@ -167,24 +174,34 @@ export const AccountSection = forwardRef<HTMLDivElement>(function AccountSection
               </p>
               <ul className="space-y-2 text-sm text-sp-muted">
                 <li className="flex items-start gap-2">
-                  <span className="material-symbols-outlined text-icon text-cyan-400 mt-0.5">cloud_sync</span>
+                  <span className="material-symbols-outlined text-icon text-cyan-400 mt-0.5">
+                    cloud_sync
+                  </span>
                   <span>
                     <span className="text-sp-text font-medium">drive.appdata</span>
-                    <span className="text-xs block">쌤핀 전용 폴더 백업 (다른 Drive 파일엔 접근하지 않음)</span>
+                    <span className="text-xs block">
+                      쌤핀 전용 폴더 백업 (다른 Drive 파일엔 접근하지 않음)
+                    </span>
                   </span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="material-symbols-outlined text-icon text-pink-400 mt-0.5">event</span>
+                  <span className="material-symbols-outlined text-icon text-pink-400 mt-0.5">
+                    event
+                  </span>
                   <span>
                     <span className="text-sp-text font-medium">calendar</span>
                     <span className="text-xs block">선택한 캘린더와 쌤핀 일정 양방향 동기화</span>
                   </span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="material-symbols-outlined text-icon text-green-400 mt-0.5">checklist</span>
+                  <span className="material-symbols-outlined text-icon text-green-400 mt-0.5">
+                    checklist
+                  </span>
                   <span>
                     <span className="text-sp-text font-medium">tasks</span>
-                    <span className="text-xs block">Google Tasks 할 일 양방향 연동(켤 때 추가 동의)</span>
+                    <span className="text-xs block">
+                      Google Tasks 할 일 양방향 연동(켤 때 추가 동의)
+                    </span>
                   </span>
                 </li>
               </ul>

@@ -778,9 +778,7 @@ export class SyncFromCloud {
         lastSyncedAt: new Date().toISOString(),
         files: { ...latest.files, [filename]: nextInfo },
       };
-      if (
-        await this.drivePort.updateSyncManifestIfUnchanged(folderId, latest, nextManifest)
-      ) {
+      if (await this.drivePort.updateSyncManifestIfUnchanged(folderId, latest, nextManifest)) {
         return nextInfo;
       }
     }
@@ -938,33 +936,36 @@ export class SyncFromCloud {
           // 장부끼리 같아도 실제 로컬 파일은 다를 수 있다. 과거 no-op 장부 오염 뒤
           // PWA 재설치/부분 초기화로 빈 봉투만 남은 제보 상태가 그 예다. 실제 내용을
           // 확인하지 않고 "변경 없음" 처리하면 클라우드 일정이 영구히 내려오지 않는다.
-          // 반대로 즉시 덮어쓰면 사용자의 미업로드 로컬 편집을 잃을 수 있으므로,
-          // 내용 불일치는 자동 선택하지 않고 충돌로 올려 명시적으로 회수한다.
-          const actualChecksum = await computeSyncChecksum(JSON.stringify(localData));
+          const localContent = JSON.stringify(localData);
+          const actualChecksum = await computeSyncChecksum(localContent);
           if (actualChecksum !== localInfo.checksum) {
-            // settings는 수신 시 더 최신 학기 가드를 의도적으로 보존하므로, 그 차이만 있는 경우는
-            // 오염이 아니라 아직 클라우드에 교정 업로드할 로컬 변경으로 본다.
-            if (filename === 'settings') {
-              try {
-                const driveFile = remoteFiles.find((f) => f.name === 'settings.json');
-                if (driveFile) {
-                  const remoteContent = await this.drivePort.downloadSyncFile(driveFile.id);
-                  const remoteChecksum = await computeSyncChecksum(remoteContent);
-                  if (remoteChecksum === remoteInfo.checksum) {
-                    const expected = preserveNewerTermGuard(
-                      JSON.parse(remoteContent) as unknown,
-                      localData as TermGuardSnapshot,
-                    );
-                    const expectedChecksum = await computeSyncChecksum(JSON.stringify(expected));
-                    if (expectedChecksum === actualChecksum) {
-                      skipped.push(filename);
-                      continue;
-                    }
-                  }
-                }
-              } catch {
-                // 검증 실패 시 일반 충돌로 처리해 자동 덮어쓰기를 막는다.
-              }
+            // "장부와 다름"에는 성격이 정반대인 두 상태가 겹쳐 있다 — 반드시 갈라야 한다.
+            //
+            //  (a) 아직 안 올린 로컬 변경 = **정상 상태**. 리모트 체크섬 == 내 장부 체크섬이므로
+            //      Drive에는 내가 이미 주고받은 것 말고 새로 받을 내용이 없고, 이 변경은 곧바로
+            //      이어지는 업로드 경로가 그대로 올린다 → 스킵이 데이터 보존 관점에서 안전하다.
+            //      이걸 충돌로 올리면 **동기화가 스스로 남긴 흔적까지 매 주기 가짜 충돌**이 된다:
+            //      v2.3.4까지 동기화 완료 후 settings.sync.lastSyncedAt을 다시 쓰던 경로가
+            //      장부 확정 *이후* 파일을 건드려, 다음 다운로드가 매번 settings 충돌을 띄웠다
+            //      (2026-08-10 신고 — 해결해도 다음 동기화에서 그대로 부활하는 무한 반복).
+            //      그 재기록 자체는 ADR-040으로 제거했지만, 판정이 틀린 채로 남으면 사용자가
+            //      설정을 바꾼 직후 동기화만으로도 같은 가짜 충돌이 다시 난다.
+            //
+            //  (b) 빈 봉투 = 장부는 "받았음"인데 내용이 날아간 **유실 의심**. 리모트에 원본이
+            //      더 남아 있으므로(리모트 size가 더 큼) 자동 판단하지 않고 충돌로 올려 회수한다.
+            //      이 분기가 v2.3.1 핫픽스(모바일 Drive 복구 유실)가 지키려던 바로 그 지점이다.
+            //
+            // 판정 기준을 "로컬이 비었나"만이 아니라 "리모트가 더 크냐"까지 함께 보는 이유:
+            // settings처럼 배열이 부수적인 설정 객체는 배열이 모두 비어도 정상이라, 크기 비교
+            // 없이 hasSubstantiveContent만 쓰면 멀쩡한 설정이 다시 가짜 충돌로 잡힌다.
+            const localSize = new TextEncoder().encode(localContent).length;
+            const looksLost = !hasSubstantiveContent(localData) && remoteInfo.size > localSize;
+            if (!looksLost) {
+              skipped.push(filename);
+              console.log(
+                `[SyncFromCloud]   ${filename}: SKIP (아직 업로드 안 된 로컬 변경 — 리모트는 내 장부와 동일해 받을 것이 없음)`,
+              );
+              continue;
             }
             conflicts.push({
               filename,
@@ -974,7 +975,7 @@ export class SyncFromCloud {
               remoteDeviceName: remoteManifest.deviceName,
             });
             console.log(
-              `[SyncFromCloud]   ${filename}: 🔶 CONFLICT (장부 체크섬은 같지만 실제 로컬 내용 불일치)`,
+              `[SyncFromCloud]   ${filename}: 🔶 CONFLICT (장부엔 "받았음"인데 로컬이 빈 봉투 ${localSize}B < 리모트 ${remoteInfo.size}B)`,
             );
             continue;
           }
@@ -1012,12 +1013,8 @@ export class SyncFromCloud {
           if (driveFile) {
             const content = await this.drivePort.downloadSyncFile(driveFile.id);
             const remoteData = JSON.parse(content) as StudentRecordsData;
-            const merged = await mergeAndWriteLocked(
-              this.storage,
-              filename,
-              remoteData,
-              (local) =>
-                mergeStudentRecords(local, remoteData, currentTerm, lastClosedTerm, lastClosedAt),
+            const merged = await mergeAndWriteLocked(this.storage, filename, remoteData, (local) =>
+              mergeStudentRecords(local, remoteData, currentTerm, lastClosedTerm, lastClosedAt),
             );
             updatedFiles[filename] = await this.convergeMergedFile(
               folder.id,

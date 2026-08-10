@@ -361,6 +361,14 @@ export interface SyncSettings {
   readonly autoSyncOnSave: boolean;
   readonly autoSyncIntervalMin: number; // 0=비활성
   readonly conflictPolicy: 'latest' | 'ask';
+  /**
+   * @deprecated v2.3.5부터 **쓰지 않는다**(ADR-040). 마지막 동기화 시각은 기기 전용
+   * 저장소(`drive-sync-device-state`)가 정본이다. 이 필드는 v2.3.4 이하에서 올라온
+   * 값을 1회 승계하기 위한 읽기 전용 레거시로만 남아 있다.
+   *
+   * ⚠️ 여기에 다시 쓰지 말 것: settings는 동기화 대상 파일이라, 동기화가 끝날 때마다
+   * 이 값을 갱신하면 매 주기 업로드·기기 간 LWW 핑퐁·가짜 충돌(ADR-039)이 재발한다.
+   */
   readonly lastSyncedAt: string | null;
   readonly deviceId: string;
   /**
