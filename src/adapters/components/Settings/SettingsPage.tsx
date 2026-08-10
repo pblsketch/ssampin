@@ -82,10 +82,18 @@ export function SettingsPage({ initialTab }: SettingsPageProps = {}) {
       showToast('설정이 저장되었습니다.', 'success');
       track('settings_change', { section: activeTab, key: 'save' });
 
-      // 위젯 설정 변경 시 실행 중인 위젯에 실시간 적용
+      // 위젯 설정 변경 시 실행 중인 위젯에 실시간 적용.
+      //
+      // 'native-desktop'은 값이 그대로여도 항상 다시 보낸다(2026-08-11 사용자 신고 대응):
+      //   바탕화면 붙이기에 실패해 실제로는 일반 모드로 돌아간 상태여도 저장값은 그대로
+      //   'native-desktop'일 수 있다. 이때 "값이 같으면 안 보낸다"는 기존 조건 때문에
+      //   라디오가 이미 선택돼 있는 사용자는 저장을 눌러도 재시도가 발생하지 않아
+      //   영구히 빠져나올 수 없었다. main 쪽에 "같은 모드인데 실제로 안 붙어 있으면 재시도"
+      //   가드가 이미 있으므로, 신호만 보내면 중복 적용은 알아서 걸러진다.
       if (
         draft.widget.opacity !== settings.widget.opacity ||
-        draft.widget.desktopMode !== settings.widget.desktopMode
+        draft.widget.desktopMode !== settings.widget.desktopMode ||
+        draft.widget.desktopMode === 'native-desktop'
       ) {
         window.electronAPI?.applyWidgetSettings({
           opacity: draft.widget.opacity,

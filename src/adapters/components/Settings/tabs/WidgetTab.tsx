@@ -158,6 +158,34 @@ export function WidgetTab({ draft, patch }: Props) {
                 이벤트를 제어합니다. 일부 보안 프로그램에서 민감하게 볼 수 있으며, 문제가 있으면
                 일반 모드로 되돌릴 수 있습니다.
               </p>
+              {/*
+                고착 상태 탈출구(2026-08-11 사용자 신고 대응).
+                이 모드가 이미 선택돼 있으면 라디오를 눌러도 변경 이벤트가 발생하지 않아
+                재시도가 불가능했다. 저장을 거치지 않고 바로 다시 붙이기를 요청한다.
+              */}
+              <button
+                type="button"
+                onClick={() => {
+                  void window.electronAPI?.applyWidgetSettings({
+                    opacity: draft.widget.opacity,
+                    desktopMode: 'native-desktop',
+                  });
+                  showToast(
+                    '바탕화면에 다시 붙이는 중입니다. 실패하면 위젯 화면에 원인 안내가 표시됩니다.',
+                    'info',
+                  );
+                }}
+                className="mt-2 px-2.5 py-1 rounded-lg bg-amber-500/15 text-amber-300 text-xs font-medium hover:bg-amber-500/25 transition-colors"
+                data-testid="settings-native-desktop-reapply"
+              >
+                <span
+                  className="material-symbols-outlined align-middle mr-1"
+                  style={{ fontSize: 14 }}
+                >
+                  refresh
+                </span>
+                지금 다시 적용
+              </button>
             </div>
           )}
           {/* 아이콘 모드 승격 카드 (v2.2.7) — 기존에는 '창 닫기 동작' 옵션 안에만 숨어

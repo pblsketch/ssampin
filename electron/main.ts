@@ -185,6 +185,45 @@ function normalizeDesktopMode(value: unknown, platformIsWin32?: boolean): Widget
   return 'normal';
 }
 
+/**
+ * native-desktop 적용 실패로 fallback이 확정됐을 때 그 결과를 settings.json에 직접 반영한다.
+ *
+ * 배경(2026-08-11 사용자 신고 — "바탕화면 아이콘 아래를 눌러도 아무 변화가 없어요"):
+ *   이전에는 fallback 사실을 `desktopMode:fallback` IPC로 renderer에만 알리고,
+ *   settings.json 정정은 renderer의 useDesktopModeFallback 훅 하나에만 맡겼다.
+ *   그 신호를 놓치거나(창이 아직 구독 전/이미 닫힘) 다른 창의 설정 사본이 나중에 통째로
+ *   덮어쓰면 **저장값은 'native-desktop', 실제 적용은 'normal'** 인 불일치가 영구 고착된다.
+ *   이 상태에서는 설정 라디오가 이미 선택돼 있어 사용자가 재시도할 방법이 사라진다.
+ *
+ * 그래서 실제 적용 결과를 아는 main이 파일의 단일 진실 원천을 직접 맞춘다.
+ * IPC 브로드캐스트는 그대로 유지 — renderer store(메모리)도 함께 정정되어야 화면 표시가 맞는다.
+ *
+ * 실패는 모두 흡수한다(진단 로그만) — 설정 파일 쓰기 실패가 모드 전환 흐름을 막아선 안 된다.
+ */
+function persistDesktopModeFallback(mode: WidgetDesktopMode): void {
+  try {
+    const filePath = path.join(getDataDir(), 'settings.json');
+    if (!fs.existsSync(filePath)) return;
+    const parsed: unknown = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return;
+    const root = parsed as Record<string, unknown>;
+    const widgetRaw = root['widget'];
+    const widget: Record<string, unknown> =
+      widgetRaw !== null && typeof widgetRaw === 'object' && !Array.isArray(widgetRaw)
+        ? (widgetRaw as Record<string, unknown>)
+        : {};
+    if (widget['desktopMode'] === mode) return; // 이미 일치 — 불필요한 쓰기 생략
+    const next = { ...root, widget: { ...widget, desktopMode: mode } };
+    fs.writeFileSync(filePath, JSON.stringify(next, null, 2), 'utf-8');
+    diagLog('widget', `[fallback-persist] settings.json widget.desktopMode → ${mode}`);
+  } catch (e) {
+    diagWarn(
+      'widget',
+      `[fallback-persist] settings.json 정정 실패(무시): ${e instanceof Error ? e.message : String(e)}`,
+    );
+  }
+}
+
 let currentDesktopMode: WidgetDesktopMode = 'normal';
 
 /**
@@ -377,6 +416,8 @@ async function transitionWidgetMode(
       appliedMode = result.fallbackMode;
       fallbackEvent = { reason: result.reason, fallbackMode: result.fallbackMode };
       widgetWindow.setAlwaysOnTop(result.fallbackMode === 'topmost', 'normal');
+      // 저장값과 실제 적용 모드의 불일치 고착 차단 — IPC(renderer 정정)에만 의존하지 않는다.
+      persistDesktopModeFallback(result.fallbackMode);
     }
   } else {
     // normal | topmost

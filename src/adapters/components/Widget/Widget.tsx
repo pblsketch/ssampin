@@ -224,9 +224,19 @@ export function Widget() {
 
   // 모드 적용 헬퍼 — popover/tour/context-menu 공통 진입점
   const applyDesktopMode = useCallback(
-    (next: WidgetDesktopMode, via: 'coach-tour' | 'header-chip' | 'context-menu' | 'settings') => {
+    (
+      next: WidgetDesktopMode,
+      via: 'coach-tour' | 'header-chip' | 'context-menu' | 'settings',
+      options?: { readonly force?: boolean },
+    ) => {
       const from = settings.widget.desktopMode;
-      if (from === next) return;
+      // force=true는 "같은 모드를 다시 적용" 요청(다시 시도 버튼, 팝오버에서 현재 모드 재선택).
+      //
+      // 2026-08-11 사용자 신고 대응: 바탕화면 붙이기에 실패해 실제로는 일반 모드인데 저장값만
+      // 'native-desktop'으로 남으면, from === next 조기 반환 때문에 "다시 시도" 버튼까지
+      // 아무 일도 하지 않는 죽은 버튼이 됐다. main에 중복 적용 방지 가드가 있으므로
+      // 강제 전송해도 안전하다.
+      if (from === next && options?.force !== true) return;
       track('widget_mode_changed', { from, to: next, via });
       // 적용 성공 시 fallback 상태 클리어 (실패 시 onDesktopModeFallback이 다시 set)
       setModeFallback(null);
@@ -830,7 +840,8 @@ export function Widget() {
           anchorRect={modeChipRef.current.getBoundingClientRect()}
           currentMode={settings.widget.desktopMode}
           onSelect={(mode) => {
-            applyDesktopMode(mode, 'header-chip');
+            // 현재 모드를 다시 고르는 것도 "재적용" 의도로 본다(고착 상태 탈출구).
+            applyDesktopMode(mode, 'header-chip', { force: true });
             setShowModePopover(false);
           }}
           onShowTour={() => {
@@ -849,7 +860,8 @@ export function Widget() {
           onClose={() => setShowFallbackModal(false)}
           onRetry={() => {
             // 다시 native-desktop 적용 시도 — 실패하면 IPC가 다시 fallback 발사.
-            applyDesktopMode('native-desktop', 'header-chip');
+            // force=true: 저장값이 이미 'native-desktop'인 고착 상태에서도 반드시 재시도한다.
+            applyDesktopMode('native-desktop', 'header-chip', { force: true });
           }}
         />
       )}
