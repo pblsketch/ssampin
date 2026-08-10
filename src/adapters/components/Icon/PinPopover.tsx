@@ -14,6 +14,19 @@ import { PIN_NAME } from './pinName';
 
 const DAY_LABEL = ['일', '월', '화', '수', '목', '금', '토'] as const;
 
+/**
+ * 새 버전 안내 행에 필요한 최소 정보 (useUpdateBanner의 부분 집합).
+ * 아이콘 모드에는 업데이트 UI가 전혀 없어 위젯/메인으로 돌아가지 않는 한 업데이트를
+ * 시작할 방법이 없었다(2026-08-11 진단). 팝오버 맨 위 한 줄이 그 실행 지점이다.
+ */
+export interface PinPopoverUpdate {
+  readonly status: 'idle' | 'available' | 'downloading' | 'downloaded' | 'manual' | 'error';
+  readonly version: string;
+  readonly percent: number;
+  readonly start: () => void;
+  readonly install: () => void;
+}
+
 interface PinPopoverProps {
   readonly now: Date;
   /** 현재 상태 한 줄 (buildSummary().title — 예: "3교시 수학 · 2-3" / "쉬는 시간") */
@@ -26,6 +39,8 @@ interface PinPopoverProps {
   readonly onQuickAdd: (text: string) => Promise<void>;
   readonly onOpenWidget: () => void;
   readonly onOpenMain: () => void;
+  /** 새 버전 상태. 'idle'이거나 없으면 안내 행을 그리지 않는다. */
+  readonly update?: PinPopoverUpdate;
 }
 
 export function PinPopover({
@@ -38,6 +53,7 @@ export function PinPopover({
   onQuickAdd,
   onOpenWidget,
   onOpenMain,
+  update,
 }: PinPopoverProps) {
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
@@ -75,6 +91,55 @@ export function PinPopover({
         </div>
         <div className="mt-0.5 text-xs text-sp-accent truncate">{statusTitle}</div>
       </div>
+
+      {/* 새 버전 안내 — 아이콘 모드에서 업데이트를 시작할 수 있는 유일한 지점 */}
+      {update && update.status !== 'idle' && (
+        <div className="flex-shrink-0 px-3 py-2 border-b border-sp-border bg-sp-accent/5">
+          {update.status === 'available' && (
+            <button
+              type="button"
+              onClick={update.start}
+              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg bg-sp-accent text-white text-xs font-medium hover:brightness-110 transition-all"
+              data-testid="pin-popover-update-start"
+            >
+              <span className="material-symbols-outlined text-icon-sm">download</span>새 버전 v
+              {update.version} — 지금 업데이트
+            </button>
+          )}
+          {update.status === 'downloading' && (
+            <div className="px-2 py-1.5 text-xs text-sp-muted">
+              v{update.version} 내려받는 중… {update.percent}%
+            </div>
+          )}
+          {update.status === 'manual' && (
+            <div className="px-2 py-1.5 text-xs text-sp-muted leading-snug">
+              브라우저에서 설치 파일을 받고 있어요 — 받은 파일로 설치해 주세요.
+            </div>
+          )}
+          {update.status === 'downloaded' && (
+            <button
+              type="button"
+              onClick={update.install}
+              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-medium hover:brightness-110 transition-all"
+              data-testid="pin-popover-update-install"
+            >
+              <span className="material-symbols-outlined text-icon-sm">restart_alt</span>v
+              {update.version} 준비 완료 — 눌러서 재시작
+            </button>
+          )}
+          {update.status === 'error' && (
+            <button
+              type="button"
+              onClick={update.start}
+              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg bg-red-600/90 text-white text-xs font-medium hover:brightness-110 transition-all"
+              data-testid="pin-popover-update-retry"
+            >
+              <span className="material-symbols-outlined text-icon-sm">refresh</span>
+              업데이트 실패 — 다시 시도
+            </button>
+          )}
+        </div>
+      )}
 
       {/* 스크롤 영역 — 오늘 수업 + 마감 할 일 목록. 내용이 많으면 여기만 스크롤 */}
       <div className="flex-1 min-h-0 overflow-y-auto">

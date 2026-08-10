@@ -1133,7 +1133,7 @@ export const docsArticles: readonly DocArticle[] = [
         id: 'manifest-file-repair',
         title: "PC에는 데이터가 있지만 새 기기에서 '변경 없음'으로 나올 때",
         body: [
-          "동기화 장부에는 파일이 있다고 기록됐지만 Google Drive의 실제 JSON 파일이 사라진 예외 상태일 수 있습니다. 최신 쌤핀은 PC에서 백업할 때 실제 파일 존재와 수정 시각도 함께 확인합니다.",
+          '동기화 장부에는 파일이 있다고 기록됐지만 Google Drive의 실제 JSON 파일이 사라진 예외 상태일 수 있습니다. 최신 쌤핀은 PC에서 백업할 때 실제 파일 존재와 수정 시각도 함께 확인합니다.',
           '실제 파일이 없으면 PC 원본으로 다시 올립니다. 실제 파일과 장부의 수정 시각이 다르면 다른 기기의 변경을 덮어쓰지 않도록 자동 복구를 멈추고 오류를 안내합니다.',
         ],
         callout: {
@@ -1503,7 +1503,7 @@ export const docsArticles: readonly DocArticle[] = [
     title: '화면과 위젯 문제',
     description: '화면 배율, 위젯 위치, 글씨 크기, 바탕화면 아래 모드 문제를 해결합니다.',
     category: 'troubleshooting',
-    lastUpdated: '2026-07-16',
+    lastUpdated: '2026-08-11',
     sections: [
       {
         id: 'scale',
@@ -1536,6 +1536,15 @@ export const docsArticles: readonly DocArticle[] = [
           '흔한 원인은 보안 프로그램 차단, 다중 모니터(보조 모니터에서 켬), Wallpaper Engine 등 바탕화면 커스텀 도구와의 충돌, 윈도우 탐색기(explorer.exe) 비정상, 최신 Windows 빌드에서의 계층 변경입니다. 안내창의 "다시 시도"를 먼저 누르고, 안 되면 예외 등록 → 주 모니터에서 시도 → 작업관리자에서 explorer.exe 다시 시작 → 앱 재시작 순으로 해보세요.',
         ],
       },
+      {
+        id: 'desktop-mode-no-response',
+        title: '바탕화면 아이콘 아래를 눌러도 아무 변화가 없어요 (설정에는 켜져 있어요)',
+        body: [
+          'v2.3.6 이하에서는 이 모드를 켜는 데 한 번 실패하면 설정에만 "바탕화면 아이콘 아래"가 선택된 것으로 남고 실제로는 일반 모드로 동작했습니다. 이미 선택된 항목을 다시 눌러도 앱이 바뀐 것이 없다고 판단해, 아무 반응도 오류 안내도 없는 상태가 계속됐습니다.',
+          'v2.3.7부터는 설정 → 위젯의 "지금 다시 적용" 버튼으로 언제든 다시 시도할 수 있고, 실패하면 원인 안내창이 표시됩니다. 위젯 헤더의 모드 표시를 눌러 같은 모드를 다시 선택해도 재시도됩니다.',
+          'v2.3.6 이하를 쓰신다면 표시 모드를 "일반"으로 바꿔 저장한 뒤 다시 "바탕화면 아이콘 아래"로 바꿔 저장하면 재시도됩니다. 그래도 안 되면 %APPDATA%\\ssampin\\native-desktop-diag.log 파일을 첨부해 제보해 주세요.',
+        ],
+      },
     ],
     related: ['features/widget-mode', 'features/settings'],
   },
@@ -1544,7 +1553,7 @@ export const docsArticles: readonly DocArticle[] = [
     title: '자주 묻는 질문',
     description: '설치, 데이터, 오프라인, 학운위, 업데이트, 모바일 관련 질문을 모았습니다.',
     category: 'reference',
-    lastUpdated: '2026-08-07',
+    lastUpdated: '2026-08-11',
     sections: [
       {
         id: 'free',
@@ -1584,6 +1593,15 @@ export const docsArticles: readonly DocArticle[] = [
         title: '모바일에서도 쓸 수 있나요?',
         body: [
           'm.ssampin.com에서 사용할 수 있습니다. PC 쌤핀에서 Google Drive 동기화를 먼저 설정하고 같은 Google 계정으로 로그인해야 합니다.',
+        ],
+      },
+      {
+        id: 'update-notice',
+        title: '새 버전 안내가 안 떠요 / 업데이트는 어떻게 하나요?',
+        body: [
+          '쌤핀은 실행 5초 뒤와 4시간마다 새 버전을 확인하고, 안내가 뜨면 "지금 설치"를 눌렀을 때만 내려받습니다. 설치 파일이 크기 때문에 사용자가 누르기 전에는 자동으로 받지 않습니다.',
+          'v2.3.6 이하에서는 이 안내가 전체 화면(메인 창)에서만 표시됐습니다. 위젯이나 아이콘(핀) 모드로만 쓰시면 안내를 볼 기회가 없어 업데이트를 놓치게 됐습니다. v2.3.7부터는 위젯 모드 아래쪽 띠와 아이콘 모드의 핀 말풍선·팝오버에서도 새 버전을 안내하고 바로 설치할 수 있습니다.',
+          '안내를 놓쳤다면 설정 → 앱 정보에서 현재 버전을 확인하고, www.ssampin.com에서 최신 설치 파일을 직접 받아 덮어 설치해도 됩니다. 데이터는 그대로 유지됩니다.',
         ],
       },
       {

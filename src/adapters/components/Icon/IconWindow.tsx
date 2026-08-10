@@ -25,6 +25,7 @@ import { useTodoStore } from '@adapters/stores/useTodoStore';
 import { useMemoStore } from '@adapters/stores/useMemoStore';
 import { useMealStore } from '@adapters/stores/useMealStore';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
+import { useUpdateBanner } from '@adapters/hooks/useUpdateBanner';
 import { IconContextMenu } from './IconContextMenu';
 import { CoachMark } from './CoachMark';
 import { useCoachMark } from './useCoachMark';
@@ -69,6 +70,8 @@ export function IconWindow() {
   const { load: loadMemos } = useMemoStore();
   const { loadTodayMeals, loadManualMeals, getMergedTodayMeals } = useMealStore();
   const { track } = useAnalytics();
+  // 새 버전 안내 — 아이콘 모드 전용 진입점(말풍선 1회 + 팝오버 안 실행 버튼)
+  const update = useUpdateBanner();
 
   const [hovered, setHovered] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -87,6 +90,8 @@ export function IconWindow() {
   const [peek, setPeek] = useState<{ state: PinState; text: string } | null>(null);
   const [celebrating, setCelebrating] = useState(false);
   const lastPeekKeyRef = useRef<string | null>(null);
+  // 새 버전 말풍선은 버전당 1회만 — 4시간 주기 재확인이 같은 알림을 반복하지 않도록.
+  const lastUpdatePeekVersionRef = useRef<string | null>(null);
   const peekTimerRef = useRef<number | null>(null);
   const celebrateTimerRef = useRef<number | null>(null);
   const prevDueCountRef = useRef<number | null>(null);
@@ -269,6 +274,18 @@ export function IconWindow() {
     // peekCandidate 는 peekKey 와 1:1 대응 — key 변할 때만 실행하면 충분
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [peekKey]);
+
+  // 새 버전 알림 — 아이콘 모드에는 업데이트 UI가 전혀 없어 위젯/메인으로 돌아가지 않는 한
+  // 업데이트를 영영 못 받았다(2026-08-11 진단). 새 버전이 확인되면 말풍선으로 1회 알리고,
+  // 실제 실행 버튼은 핀 팝오버 안에 둔다(말풍선은 클릭을 받지 않는 구조라서).
+  useEffect(() => {
+    if (update.status !== 'available' || !update.version) return;
+    if (lastUpdatePeekVersionRef.current === update.version) return;
+    lastUpdatePeekVersionRef.current = update.version;
+    setPeek({ state: 'jump', text: `새 버전 v${update.version}이 나왔어요 — 저를 눌러 주세요` });
+    if (peekTimerRef.current) window.clearTimeout(peekTimerRef.current);
+    peekTimerRef.current = window.setTimeout(() => setPeek(null), PEEK_VISIBLE_MS);
+  }, [update.status, update.version]);
 
   // ─── 창 확장/축소 + 마우스 통과 (v2.2.7) ────────────────────────────────
   // UI(말풍선·팝오버·메뉴·코치마크)가 하나라도 필요하면 창 확장을 요청.
@@ -672,6 +689,7 @@ export function IconWindow() {
           onQuickAdd={handleQuickAdd}
           onOpenWidget={() => expandTo('widget', 'popover')}
           onOpenMain={() => expandTo('main', 'popover')}
+          update={update}
         />
       </div>
     );

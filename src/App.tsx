@@ -116,6 +116,7 @@ import { useFontApplier } from '@adapters/hooks/useFontApplier';
 import { useDesktopModeFallback } from '@adapters/hooks/useDesktopModeFallback';
 import { useNativeDesktopAvWarning } from '@adapters/hooks/useNativeDesktopAvWarning';
 import { useNativeDesktopDiagListener } from '@adapters/hooks/useNativeDesktopDiagListener';
+import { useUpdateBanner } from '@adapters/hooks/useUpdateBanner';
 import { useAnalytics, useAnalyticsLifecycle } from '@adapters/hooks/useAnalytics';
 import { MobileAnnouncementBanner } from '@adapters/components/MobileAnnouncementBanner';
 import { NeisSyncSuggestionBanner } from '@adapters/components/Calendar/NeisSyncSuggestionBanner';
@@ -438,39 +439,70 @@ function renderPage(
   );
 }
 
+/**
+ * 위젯 모드 업데이트 배너.
+ *
+ * v2.3.7 이전에는 '내려받기 완료' 상태에서만 떴다. 그런데 위젯에는 내려받기를 시작할
+ * 버튼이 없었고 자동 내려받기도 꺼져 있어(main: autoUpdater.autoDownload = false),
+ * 그 상태에 도달할 방법 자체가 없었다 — 위젯으로 상주하는 사용자는 업데이트를 영영
+ * 받지 못했다. 이제 '새 버전 있음'부터 노출해 여기서 바로 시작할 수 있다.
+ */
 function WidgetUpdateBanner() {
-  const [status, setStatus] = useState<'idle' | 'downloaded'>('idle');
-  const [version, setVersion] = useState('');
+  const { status, version, percent, start, install } = useUpdateBanner();
 
-  useEffect(() => {
-    const api = window.electronAPI;
-    if (!api) return;
+  if (status === 'idle') return null;
 
-    const cleanups: (() => void)[] = [];
-    cleanups.push(
-      api.onUpdateDownloaded(() => {
-        setStatus('downloaded');
-      }),
+  const base =
+    'fixed bottom-0 left-0 right-0 text-white text-xs text-center py-2 z-50 transition-colors';
+
+  if (status === 'available') {
+    return (
+      <button
+        type="button"
+        className={`${base} bg-sp-accent hover:brightness-110 cursor-pointer`}
+        onClick={start}
+      >
+        새 버전 v{version}이 나왔어요 — 눌러서 내려받기
+      </button>
     );
-    cleanups.push(
-      api.onUpdateAvailable((info) => {
-        setVersion(info.version);
-      }),
-    );
-    return () => {
-      cleanups.forEach((fn) => fn());
-    };
-  }, []);
+  }
 
-  if (status !== 'downloaded') return null;
+  if (status === 'downloading') {
+    return (
+      <div className={`${base} bg-sp-accent/80 cursor-default`}>
+        v{version} 내려받는 중… {percent}%
+      </div>
+    );
+  }
+
+  if (status === 'manual') {
+    return (
+      <div className={`${base} bg-sp-accent/80 cursor-default`}>
+        브라우저에서 v{version} 설치 파일을 내려받고 있어요 — 받은 파일로 설치해 주세요
+      </div>
+    );
+  }
+
+  if (status === 'error') {
+    return (
+      <button
+        type="button"
+        className={`${base} bg-red-600 hover:bg-red-500 cursor-pointer`}
+        onClick={start}
+      >
+        업데이트 내려받기에 실패했어요 — 눌러서 다시 시도
+      </button>
+    );
+  }
 
   return (
-    <div
-      className="fixed bottom-0 left-0 right-0 bg-green-600 text-white text-xs text-center py-2 cursor-pointer z-50 hover:bg-green-500 transition-colors"
-      onClick={() => window.electronAPI?.installUpdate()}
+    <button
+      type="button"
+      className={`${base} bg-green-600 hover:bg-green-500 cursor-pointer`}
+      onClick={install}
     >
       🎉 v{version} 업데이트 준비 완료 — 클릭하여 재시작
-    </div>
+    </button>
   );
 }
 
