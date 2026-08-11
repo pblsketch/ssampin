@@ -1,5 +1,7 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
+import { useToastStore } from '@adapters/components/common/Toast';
+import { useProgressFanout, describeFanoutResult } from './useProgressFanout';
 import { resolvePreset, resolveClassroomPreset } from '@domain/valueObjects/SubjectColor';
 import type { SubjectColorMap } from '@domain/valueObjects/SubjectColor';
 import type { WeeklyProgressCell } from '@domain/rules/progressCalendarRules';
@@ -33,7 +35,35 @@ export function useProgressQuickEntry({
 }: UseProgressQuickEntryOptions) {
   const { progressEntries, addProgressEntry, updateProgressEntry, deleteProgressEntry } =
     useTeachingClassStore();
+  const showToast = useToastStore((s) => s.show);
   const [modal, setModal] = useState<ProgressQuickEntryModalState | null>(null);
+
+  // "다른 반에도 함께 기록" — 지금 열린 셀의 반이 원본이 된다
+  const {
+    candidates: fanoutCandidates,
+    selectedIds: fanoutSelectedIds,
+    toggle: toggleFanoutClass,
+    clear: clearFanoutClasses,
+    buildPreview: buildFanoutPreview,
+    applyFanout,
+  } = useProgressFanout(modal?.cell.matchedClass?.id ?? null);
+
+  const fanout = useMemo(
+    () => ({
+      candidates: fanoutCandidates,
+      selectedIds: fanoutSelectedIds,
+      onToggle: toggleFanoutClass,
+      onClear: clearFanoutClasses,
+      buildPreview: buildFanoutPreview,
+    }),
+    [
+      fanoutCandidates,
+      fanoutSelectedIds,
+      toggleFanoutClass,
+      clearFanoutClasses,
+      buildFanoutPreview,
+    ],
+  );
 
   const openAdd = useCallback((cell: WeeklyProgressCell) => {
     if (!cell.matchedClass) return;
@@ -99,6 +129,10 @@ export function useProgressQuickEntry({
             );
           if (created) await updateProgressEntry({ ...created, status });
         }
+        // 선택한 다른 반에도 같은 진도를 기록 (날짜·교시는 그 반 시간표 기준)
+        const fanoutResult = await applyFanout(values);
+        const message = describeFanoutResult(fanoutResult);
+        if (message) showToast(message, fanoutResult.added > 0 ? 'success' : 'info');
       } else if (modal.entryId) {
         const existing = progressEntries.find((e) => e.id === modal.entryId);
         if (existing) {
@@ -114,7 +148,7 @@ export function useProgressQuickEntry({
         }
       }
     },
-    [modal, addProgressEntry, updateProgressEntry, progressEntries],
+    [modal, addProgressEntry, updateProgressEntry, progressEntries, applyFanout, showToast],
   );
 
   const remove = useCallback(async () => {
@@ -136,5 +170,5 @@ export function useProgressQuickEntry({
     [colorBy, subjectColors, classroomColors],
   );
 
-  return { modal, openAdd, openEntry, submit, remove, close, accentFor };
+  return { modal, openAdd, openEntry, submit, remove, close, accentFor, fanout };
 }

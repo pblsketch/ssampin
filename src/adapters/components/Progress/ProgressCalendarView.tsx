@@ -53,11 +53,12 @@ export function ProgressCalendarView() {
   const colorBy =
     settings.timetableColorBy ?? (settings.schoolLevel === 'elementary' ? 'subject' : 'classroom');
 
-  const { modal, openAdd, openEntry, submit, remove, close, accentFor } = useProgressQuickEntry({
-    colorBy,
-    subjectColors: settings.subjectColors,
-    classroomColors: settings.classroomColors,
-  });
+  const { modal, openAdd, openEntry, submit, remove, close, accentFor, fanout } =
+    useProgressQuickEntry({
+      colorBy,
+      subjectColors: settings.subjectColors,
+      classroomColors: settings.classroomColors,
+    });
 
   const [weekOffset, setWeekOffset] = useState(0);
 
@@ -71,7 +72,7 @@ export function ProgressCalendarView() {
   // 날짜별 유효 교사 시간표(변동 머지) — 도메인 셀렉터에 주입
   const dayTeacherSchedules = useMemo<ReadonlyArray<ReadonlyArray<TeacherPeriod | null>>>(
     () => weekDates.map((date) => getEffectiveTeacherSchedule(date, weekendDays)),
-     
+
     [weekDates, weekendDays, getEffectiveTeacherSchedule],
   );
 
@@ -132,6 +133,7 @@ export function ProgressCalendarView() {
           matchingPeriods={[modal.cell.period]}
           accentColor={accentFor(modal.cell)}
           maxPeriods={maxPeriods}
+          fanout={fanout}
           onSubmit={submit}
           onDelete={modal.mode === 'edit' ? remove : undefined}
           onClose={close}

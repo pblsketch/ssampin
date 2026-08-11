@@ -519,7 +519,7 @@ export const docsArticles: readonly DocArticle[] = [
     title: '수업 관리',
     description: '수업반별 명렬표, 좌석, 진도, 출석부, 과제수합, 성적 분석, 루브릭을 관리합니다.',
     category: 'features',
-    lastUpdated: '2026-08-07',
+    lastUpdated: '2026-08-11',
     image: { src: '/docs/screenshots/class-management.png', alt: '쌤핀 수업 관리 화면' },
     sections: [
       {
@@ -548,6 +548,8 @@ export const docsArticles: readonly DocArticle[] = [
         title: '진도와 출결',
         bullets: [
           '진도 관리는 날짜, 교시, 단원, 차시, 상태를 기록합니다.',
+          '진도를 추가할 때 "다른 반에도 함께 기록"에서 반을 고르면, 같은 내용이 그 반들에도 한 번에 들어갑니다. 날짜와 교시는 각 반의 시간표에 맞춰 자동으로 정해지고(그날 수업이 없으면 가장 가까운 다음 수업으로), 저장 전에 어디에 들어갈지 미리 보여줍니다. 이미 진도가 있는 자리는 덮어쓰지 않고 건너뜁니다.',
+          '이미 만들어 둔 진도 계획을 통째로 옮길 때는 "다른 반에서 불러오기"를 사용합니다.',
           '출석부는 학생과 교시를 연결해 수업 시간별 출결을 입력합니다.',
           'NEIS 대표값 변환과 Excel 내보내기를 지원합니다.',
         ],

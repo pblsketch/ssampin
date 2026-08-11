@@ -5,6 +5,12 @@ import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { CalendarPicker } from '@adapters/components/common/CalendarPicker';
 import { ScrollRow } from '@adapters/components/common/ScrollRow';
 import { ProgressEntryFields } from './ProgressEntryFields';
+import { ProgressFanoutPicker } from '@adapters/components/Progress/ProgressFanoutPicker';
+import {
+  useProgressFanout,
+  describeFanoutResult,
+} from '@adapters/components/Progress/useProgressFanout';
+import { useToastStore } from '@adapters/components/common/Toast';
 import type { ProgressEntry, ProgressStatus } from '@domain/entities/CurriculumProgress';
 import type { TeachingClass } from '@domain/entities/TeachingClass';
 import { resolvePreset, resolveClassroomPreset } from '@domain/valueObjects/SubjectColor';
@@ -59,6 +65,15 @@ export function ProgressTab({ classId }: ProgressTabProps) {
 
   const { classSchedule, getEffectiveTeacherSchedule } = useScheduleStore();
   const { settings } = useSettingsStore();
+  const showToast = useToastStore((s) => s.show);
+  const {
+    candidates: fanoutCandidates,
+    selectedIds: fanoutSelectedIds,
+    toggle: toggleFanoutClass,
+    clear: clearFanoutClasses,
+    buildPreview: buildFanoutPreview,
+    applyFanout,
+  } = useProgressFanout(classId);
 
   const subjectAccent = useMemo(() => {
     const cls = classes.find((c: TeachingClass) => c.id === classId);
@@ -185,6 +200,12 @@ export function ProgressTab({ classId }: ProgressTabProps) {
     [getMatchingPeriods],
   );
 
+  // 저장 전 "어느 반 · 언제 · 몇 교시에 들어가는지" 미리보기 (폼이 열려 있을 때만 계산)
+  const fanoutPreview = useMemo(
+    () => (showForm ? buildFanoutPreview(formDate, formPeriod) : []),
+    [showForm, buildFanoutPreview, formDate, formPeriod],
+  );
+
   const resetForm = useCallback(() => {
     const today = todayString();
     setFormDate(today);
@@ -205,9 +226,30 @@ export function ProgressTab({ classId }: ProgressTabProps) {
       formLesson.trim(),
       formNote.trim() || undefined,
     );
+    // 선택한 다른 반에도 같은 진도를 기록 (날짜·교시는 그 반 시간표에 맞춰 자동 배정)
+    const fanoutResult = await applyFanout({
+      date: formDate,
+      period: formPeriod,
+      unit: formUnit,
+      lesson: formLesson,
+      note: formNote,
+    });
+    const message = describeFanoutResult(fanoutResult);
+    if (message) showToast(message, fanoutResult.added > 0 ? 'success' : 'info');
     resetForm();
     setShowForm(false);
-  }, [classId, formDate, formPeriod, formUnit, formLesson, formNote, addProgressEntry, resetForm]);
+  }, [
+    classId,
+    formDate,
+    formPeriod,
+    formUnit,
+    formLesson,
+    formNote,
+    addProgressEntry,
+    resetForm,
+    applyFanout,
+    showToast,
+  ]);
 
   const handleStatusCycle = useCallback(
     async (entry: ProgressEntry) => {
@@ -462,6 +504,13 @@ export function ProgressTab({ classId }: ProgressTabProps) {
             lessonDays={lessonDayIndices}
             accentColor={subjectAccent}
             maxPeriods={settings.maxPeriods ?? 8}
+          />
+          <ProgressFanoutPicker
+            candidates={fanoutCandidates}
+            selectedIds={fanoutSelectedIds}
+            onToggle={toggleFanoutClass}
+            onClear={clearFanoutClasses}
+            preview={fanoutPreview}
           />
           <div className="flex justify-end gap-2 pt-1">
             <button

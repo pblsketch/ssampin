@@ -239,6 +239,7 @@ export function TimetablePage() {
     remove: handleProgressDelete,
     close: closeProgressModal,
     accentFor: progressAccentFor,
+    fanout: progressFanout,
   } = useProgressQuickEntry({
     colorBy,
     subjectColors: settings.subjectColors,
@@ -1288,6 +1289,7 @@ export function TimetablePage() {
           matchingPeriods={[progressModal.cell.period]}
           accentColor={progressAccentFor(progressModal.cell)}
           maxPeriods={settings.maxPeriods}
+          fanout={progressFanout}
           onSubmit={handleProgressSubmit}
           onDelete={progressModal.mode === 'edit' ? handleProgressDelete : undefined}
           onClose={closeProgressModal}

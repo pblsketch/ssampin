@@ -1,7 +1,18 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { ProgressEntryFields } from '@adapters/components/ClassManagement/ProgressEntryFields';
+import { ProgressFanoutPicker } from './ProgressFanoutPicker';
 import type { ProgressEntryFieldValues } from '@adapters/components/ClassManagement/ProgressEntryFields';
+import type { FanoutCandidate, FanoutPreviewRow } from './useProgressFanout';
 import type { ProgressStatus } from '@domain/entities/CurriculumProgress';
+
+/** "다른 반에도 함께 기록" 선택 상태 — useProgressQuickEntry가 그대로 넘겨준다 */
+export interface ProgressQuickEntryFanout {
+  readonly candidates: readonly FanoutCandidate[];
+  readonly selectedIds: ReadonlySet<string>;
+  readonly onToggle: (classId: string) => void;
+  readonly onClear: () => void;
+  readonly buildPreview: (date: string, period: number) => readonly FanoutPreviewRow[];
+}
 
 /**
  * 진도 빠른 입력/편집 모달 — A안(시간표 오버레이)·B안(캘린더)이 공유하는 chrome.
@@ -24,6 +35,8 @@ interface ProgressQuickEntryModalProps {
   lessonDays?: readonly number[];
   accentColor?: { text: string; bg: string; bgSolid: string };
   maxPeriods: number;
+  /** 추가 모드에서만 노출되는 "다른 반에도 함께 기록" 선택 */
+  fanout?: ProgressQuickEntryFanout;
   onSubmit: (values: ProgressEntryFieldValues, status: ProgressStatus) => void | Promise<void>;
   onDelete?: () => void | Promise<void>;
   onClose: () => void;
@@ -38,6 +51,7 @@ export function ProgressQuickEntryModal({
   lessonDays,
   accentColor,
   maxPeriods,
+  fanout,
   onSubmit,
   onDelete,
   onClose,
@@ -47,6 +61,12 @@ export function ProgressQuickEntryModal({
   const [saving, setSaving] = useState(false);
 
   const canSave = values.unit.trim().length > 0 && values.lesson.trim().length > 0;
+
+  // 단원/차시를 입력하는 동안 매번 다시 계산하지 않도록 날짜·교시·선택이 바뀔 때만 갱신
+  const fanoutPreview = useMemo(
+    () => (fanout ? fanout.buildPreview(values.date, values.period) : []),
+    [fanout, values.date, values.period],
+  );
 
   const handleChange = useCallback((patch: Partial<ProgressEntryFieldValues>) => {
     setValues((prev) => ({ ...prev, ...patch }));
@@ -105,6 +125,18 @@ export function ProgressQuickEntryModal({
             accentColor={accentColor}
             maxPeriods={maxPeriods}
           />
+
+          {/* 다른 반에도 함께 기록 (추가 모드 전용) */}
+          {mode === 'add' && fanout && (
+            <ProgressFanoutPicker
+              candidates={fanout.candidates}
+              selectedIds={fanout.selectedIds}
+              onToggle={fanout.onToggle}
+              onClear={fanout.onClear}
+              preview={fanoutPreview}
+              compact
+            />
+          )}
 
           {/* 상태 선택 */}
           <div>
