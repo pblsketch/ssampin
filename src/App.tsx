@@ -78,12 +78,6 @@ import { useAiBridgeLiveSync } from '@adapters/hooks/useAiBridgeLiveSync';
 import { useQuickAddStore } from '@adapters/stores/useQuickAddStore';
 import type { QuickAddKind } from '@adapters/stores/useQuickAddStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
-import {
-  resolveCurrentTerm,
-  resolveTermStartDate,
-  daysSinceTermStart,
-  toLocalIsoDate,
-} from '@domain/rules/schoolTermStart';
 import { useEventsStore } from '@adapters/stores/useEventsStore';
 import { useCalendarSyncStore } from '@adapters/stores/useCalendarSyncStore';
 import { useGoogleAccountStore } from '@adapters/stores/useGoogleAccountStore';
@@ -1163,20 +1157,11 @@ function MainApp() {
         void useNeisScheduleStore.getState().syncIfNeeded();
       }
 
-      // 학기 초(개학일로부터 15일 이내) 동기화 안내.
-      // 월을 직접 세면(3월·9월 앞 15일) 8월에 개학한 학교는 개학하고 2주가 지나서야 안내를 받는다.
-      const appSettings = useSettingsStore.getState().settings;
-      const todayIso = toLocalIsoDate(new Date());
-      const term = resolveCurrentTerm({
-        today: new Date(`${todayIso}T00:00:00`),
-        termStartDates: appSettings.termStartDates,
-        currentTerm: appSettings.currentTerm,
-      });
-      const elapsed = daysSinceTermStart(
-        todayIso,
-        resolveTermStartDate(term, appSettings.termStartDates),
-      );
-      const isSemesterStart = elapsed !== null && elapsed >= 0 && elapsed <= 15;
+      // 학기 초(3/1~3/15, 9/1~9/15) 동기화 안내
+      const now = new Date();
+      const month = now.getMonth() + 1;
+      const day = now.getDate();
+      const isSemesterStart = (month === 3 || month === 9) && day <= 15;
 
       if (isSemesterStart && neisSettings.enabled && !neisSettings.lastSyncAt) {
         showToast('새 학기가 시작되었습니다! 설정에서 NEIS 학사일정을 동기화해보세요.', 'info');
@@ -1255,6 +1240,9 @@ function MainApp() {
           />
         )}
         <FirstSyncConfirmModalContainer />
+        {/* 8월 접속 시 "2학기가 시작됐나요?" 1회 확인 — 학기가 틀린 줄 모르는 사용자는 설정에
+            들어올 이유가 없으므로 앱이 먼저 묻는다(8월에만·학기당 1회, ADR-046). */}
+        <TermStartPromptModal />
         {showFeedback && <FeedbackModal onClose={() => setShowFeedback(false)} />}
         <ShareModal />
         <SharePromptOverlay />
