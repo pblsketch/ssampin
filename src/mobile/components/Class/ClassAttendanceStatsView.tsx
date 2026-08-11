@@ -5,6 +5,7 @@ import { studentKey } from '@domain/entities/TeachingClass';
 import { filterActive } from '@domain/rules/studentActivity';
 import type { AttendanceStatus } from '@domain/entities/Attendance';
 import { EmptyState } from '@mobile/components/common/EmptyState';
+import { useMobileCurrentTermStartIso } from '@mobile/hooks/useMobileCurrentTerm';
 import {
   AttendanceStatsTable,
   getFilterRange,
@@ -56,10 +57,13 @@ export function ClassAttendanceStatsView({ classId, className }: ClassAttendance
     return filterActive(cls.students).sort((a, b) => a.number - b.number);
   }, [cls]);
 
+  const termStartIso = useMobileCurrentTermStartIso();
   const dateRange = useMemo(
     () =>
-      filter === 'custom' ? (customRange ?? { start: null, end: null }) : getFilterRange(filter),
-    [filter, customRange],
+      filter === 'custom'
+        ? (customRange ?? { start: null, end: null })
+        : getFilterRange(filter, termStartIso),
+    [filter, customRange, termStartIso],
   );
 
   /* 학생별 출결 통계 — PC ClassRecordStatsView.tsx:89-108과 동일 알고리즘(period 무시, 연인원 합산) */

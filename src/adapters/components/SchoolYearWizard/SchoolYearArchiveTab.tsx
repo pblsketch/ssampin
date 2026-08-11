@@ -24,7 +24,9 @@ import {
   type YearTransitionDeps,
   type YearTransitionState,
 } from '@usecases/schoolYear/ExecuteYearTransition';
-import { academicTerm, formatTermKo } from '@domain/rules/academicCalendar';
+import { formatTermKo } from '@domain/rules/academicCalendar';
+import { useCurrentTerm } from '@adapters/hooks/useCurrentTerm';
+import { CurrentTermSection } from './CurrentTermSection';
 import { formatArchiveRoundKo } from '@domain/rules/archiveRules';
 import { isMidYearClosing } from './wizardProgress';
 import { SchoolYearWizardModal } from './SchoolYearWizardModal';
@@ -65,8 +67,9 @@ export function SchoolYearArchiveTab() {
   const showToast = useToastStore((s) => s.show);
 
   const gateway = createIpcYearTransitionGateway();
-  // 마감 대상 학기: 전환 이력이 있으면 정본(currentTerm), 없으면 오늘 날짜로 파생.
-  const closingTerm = settings.currentTerm ?? academicTerm();
+  // 마감 대상 학기 — 전환 이력(currentTerm)·등록한 개학일·오늘 날짜를 합쳐 정한다.
+  // 8월에 2학기를 개학한 학교가 "1학기를 마감하시겠어요?"를 보는 일이 없어야 한다.
+  const closingTerm = useCurrentTerm();
 
   const [archives, setArchives] = useState<readonly ArchiveSummary[]>([]);
   const [pending, setPending] = useState<YearTransitionState | null>(null);
@@ -186,6 +189,10 @@ export function SchoolYearArchiveTab() {
 
   return (
     <div className="space-y-6">
+      {/* 현재 학기 · 개학일 — 마무리보다 앞에 둔다. 학기 표시를 바로잡는 것과 학년도를 마감하는
+          것은 전혀 다른 일인데, 예전에는 표시를 바꾸려면 마감 마법사를 도는 수밖에 없었다. */}
+      <CurrentTermSection />
+
       {/* 소개 + 마법사 진입 */}
       <section className="rounded-xl border border-sp-border bg-sp-card p-5">
         <div className="flex items-start gap-4">
@@ -203,7 +210,9 @@ export function SchoolYearArchiveTab() {
             <p className="mt-2 text-xs text-sp-muted">
               현재 학기:{' '}
               <span className="font-semibold text-sp-text">{formatTermKo(closingTerm)}</span>
-              {settings.currentTerm === undefined && ' (오늘 날짜 기준)'}
+              {settings.currentTerm === undefined &&
+                settings.termStartDates?.[closingTerm] === undefined &&
+                ' (오늘 날짜 기준 — 개학일이 다르면 설정에서 알려주세요)'}
             </p>
             {gateway ? (
               <>

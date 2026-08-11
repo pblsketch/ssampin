@@ -14,6 +14,7 @@ import {
   sortByDateDesc,
 } from '@domain/rules/studentRecordRules';
 import { getWeekRange, getMonthRange } from './recordUtils';
+import { useCurrentTermStartDateObject } from '@adapters/hooks/useCurrentTerm';
 
 /**
  * 조회 화면 필터 상태 훅.
@@ -111,6 +112,8 @@ export function useRecordFilters(
     setSelectedSubcategory('');
   }, []);
 
+  const termStartDate = useCurrentTermStartDateObject();
+
   const filtered = useMemo(() => {
     let result = [...records];
 
@@ -151,12 +154,9 @@ export function useRecordFilters(
       const { start, end } = getMonthRange();
       result = filterByDateRange(result, start, end) as StudentRecord[];
     } else if (periodFilter === 'semester') {
-      const now = new Date();
-      const month = now.getMonth() + 1;
-      const semStart = month >= 3 && month < 9 ? 3 : 9;
-      const year = semStart === 9 && month < 3 ? now.getFullYear() - 1 : now.getFullYear();
-      const start = new Date(`${year}-${String(semStart).padStart(2, '0')}-01T00:00:00`);
-      result = filterByDateRange(result, start, new Date()) as StudentRecord[];
+      // 학기 시작일은 여기서 세지 않고 앱 공통 판정에서 받는다 — 8월에 2학기를 개학한 학교가
+      // 9월까지 지난 학기 기록부터 집계되던 문제를 이 한 곳에서 고친다.
+      result = filterByDateRange(result, termStartDate, new Date()) as StudentRecord[];
     } else if (periodFilter === 'custom' && customStartDate) {
       const start = new Date(customStartDate + 'T00:00:00');
       const end = customEndDate ? new Date(customEndDate + 'T23:59:59') : new Date();
@@ -178,6 +178,7 @@ export function useRecordFilters(
     periodFilter,
     customStartDate,
     customEndDate,
+    termStartDate,
   ]);
 
   return {

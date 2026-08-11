@@ -10,8 +10,6 @@ import {
   NeisApiError,
   getNeisErrorMessage,
   settingsLevelToNeisLevel,
-  getCurrentAcademicYear,
-  getCurrentSemester,
   getCurrentWeekRange,
 } from '@domain/entities/NeisTimetable';
 import type { TeacherScheduleData } from '@domain/entities/Timetable';
@@ -122,8 +120,6 @@ export function NeisTeacherImportModal({ isOpen, onClose, onImport }: NeisTeache
         officeCode: settings.neis.atptCode,
         schoolCode: settings.neis.schoolCode,
         schoolLevel: settingsLevelToNeisLevel(settings.schoolLevel),
-        academicYear: getCurrentAcademicYear(),
-        semester: getCurrentSemester(),
         fromDate,
         toDate,
         mappings,

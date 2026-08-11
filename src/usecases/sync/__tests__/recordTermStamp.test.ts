@@ -2,7 +2,7 @@
  * recordTermStamp.test.ts — S2.2 레코드 단위 term 스탬프 경계 AC (계획 §4 S2.2 AC-8·9 + ADR-034)
  *
  *  - term 파생은 언제나 `date`(사건 발생일) — 기록 시각(now/createdAt/updatedAt)이 아니다.
- *    "date=2026-08-10 수업을 2026-09-02에 저장 → term='2026-1'" (학기 경계에서 답이 갈리는 케이스).
+ *    "date=2026-07-10 수업을 2026-09-02에 저장 → term='2026-1'" (학기 경계에서 답이 갈리는 케이스).
  *  - date 부재·파싱 불가 → term 미부착(추측 금지 = 현행 병합 폴백).
  *  - merge 3함수는 레코드를 통째 운반한다 → term이 병합을 그대로 생존(참조 동일성으로 증명).
  *  - 병합 로직·툼스톤 비교는 현행 그대로 — term은 툼스톤 판정에 어떤 영향도 주지 않는다.
@@ -21,7 +21,7 @@ import type { StudentRecord } from '../../../domain/entities/StudentRecord';
 
 const attRecord = (over: Partial<AttendanceRecord> = {}): AttendanceRecord => ({
   classId: 'tc-1',
-  date: '2026-08-10',
+  date: '2026-07-10',
   period: 1,
   students: [{ number: 1, status: 'present' }],
   ...over,
@@ -32,7 +32,7 @@ const obsRecord = (over: Partial<ObservationRecord> = {}): ObservationRecord => 
   studentId: '1-2-3',
   classId: 'tc-1',
   authorId: 't-1',
-  date: '2026-08-10',
+  date: '2026-07-10',
   content: '관찰 내용',
   tags: [],
   visibility: 'private',
@@ -47,7 +47,7 @@ const stuRecord = (over: Partial<StudentRecord> = {}): StudentRecord => ({
   category: 'life',
   subcategory: '일반',
   content: '내용',
-  date: '2026-08-10',
+  date: '2026-07-10',
   createdAt: '2026-08-10T00:00:00.000Z',
   updatedAt: '2026-08-10T00:00:00.000Z',
   ...over,
@@ -65,7 +65,9 @@ describe('academicTermForDate — date(사건 발생일) 파생 정본', () => {
       ['2026-05-10', '2026-1'],
       ['2026-06-10', '2026-1'],
       ['2026-07-10', '2026-1'],
-      ['2026-08-31', '2026-1'],
+      ['2026-07-31', '2026-1'],
+      ['2026-08-01', '2026-2'],
+      ['2026-08-31', '2026-2'],
       ['2026-09-01', '2026-2'],
       ['2026-10-10', '2026-2'],
       ['2026-11-10', '2026-2'],
@@ -77,7 +79,7 @@ describe('academicTermForDate — date(사건 발생일) 파생 정본', () => {
   });
 
   test('시간이 붙은 값은 앞의 날짜만 취한다', () => {
-    expect(academicTermForDate('2026-08-10T09:00:00.000Z')).toBe('2026-1');
+    expect(academicTermForDate('2026-07-10T09:00:00.000Z')).toBe('2026-1');
     expect(academicTermForDate('2026-09-02 14:00')).toBe('2026-2');
   });
 
@@ -120,9 +122,9 @@ describe('academicTermForDate — date(사건 발생일) 파생 정본', () => {
 /* ─── build* 3함수 경계 AC (S2.2 AC-8·9) ─────────────────── */
 
 describe('build* 저장 조립 — term은 기록 시각이 아니라 사건 발생일에서', () => {
-  test('attendance: date=2026-08-10 수업을 2026-09-02에 저장 → term=2026-1 (역케이스 포함)', () => {
+  test('attendance: date=2026-07-10 수업을 2026-09-02에 저장 → term=2026-1 (역케이스 포함)', () => {
     const now = '2026-09-02T10:00:00.000Z'; // 2학기에 저장하지만
-    const saved = buildAttendanceSaveData(null, [attRecord({ date: '2026-08-10' })], now);
+    const saved = buildAttendanceSaveData(null, [attRecord({ date: '2026-07-10' })], now);
     expect(saved.records[0]?.term).toBe('2026-1'); // 사건은 1학기 것
 
     const saved2 = buildAttendanceSaveData(null, [attRecord({ date: '2026-09-02' })], now);
@@ -140,7 +142,7 @@ describe('build* 저장 조립 — term은 기록 시각이 아니라 사건 발
 
   test('observations: 수업일 기준 파생 + 파싱 불가 시 미부착', () => {
     const nowMs = Date.parse('2026-09-02T10:00:00.000Z');
-    const data: ObservationData = { records: [obsRecord({ date: '2026-08-10' })] };
+    const data: ObservationData = { records: [obsRecord({ date: '2026-07-10' })] };
     const saved = buildObservationSaveData(null, data, nowMs);
     expect(saved.records[0]?.term).toBe('2026-1');
 
@@ -221,7 +223,7 @@ describe('merge 3함수 — term 보존(레코드 통째 운반) + 툼스톤 판
       { records: [staleWithTerm] },
       {
         records: [],
-        deleted: [{ key: 'tc-1||2026-08-10|1', deletedAt: '2026-08-11T00:00:00.000Z' }],
+        deleted: [{ key: 'tc-1||2026-07-10|1', deletedAt: '2026-08-11T00:00:00.000Z' }],
       },
       false,
     );

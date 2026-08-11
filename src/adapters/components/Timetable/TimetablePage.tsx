@@ -17,6 +17,10 @@ import { useToastStore } from '@adapters/components/common/Toast';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { toLocalDateString } from '@shared/utils/localDate';
 import { getDayOfWeek, getCurrentPeriod } from '@domain/rules/periodRules';
+import { formatTermKo } from '@domain/rules/academicCalendar';
+import { useCurrentTerm } from '@adapters/hooks/useCurrentTerm';
+import { decideTimetableTermRefresh } from '@domain/rules/timetableTermRefresh';
+import { TimetableTermRefreshBanner } from './TimetableTermRefreshBanner';
 import { getActiveDays } from '@domain/valueObjects/DayOfWeek';
 import { periodTimesToSettingsPatch } from '@domain/rules/comciganRules';
 import type { ParsedComciganPeriodTimes } from '@domain/rules/comciganRules';
@@ -517,6 +521,74 @@ export function TimetablePage({ initialIntent = null, onIntentConsumed }: Timeta
     );
   }, [classSchedule, activeDays]);
 
+  /* ── 새 학기 시간표 갱신 확인 ──────────────────────────────────────────────
+     시간표는 학기가 바뀌어도 자동으로 갱신되지 않는다(원본은 학교가 올려야 한다). 학급·교사 중
+     어느 쪽이든 내용이 있으면 갱신 여부를 묻는다. 판정은 domain 순수 규칙이 한다. */
+  const [termBannerDismissed, setTermBannerDismissed] = useState(false);
+
+  const hasAnyTimetableData = useMemo(() => {
+    const teacherFilled = activeDays.some((day) =>
+      (teacherSchedule[day] ?? []).some((tp) => tp !== null && tp.subject.trim() !== ''),
+    );
+    return hasExistingData || teacherFilled;
+  }, [hasExistingData, teacherSchedule, activeDays]);
+
+  // 개학일을 등록한 학교는 8월 개학도 여기서 2학기로 답한다 — 그래야 갱신 배너가 9월을
+  // 기다리지 않고 개학 주에 뜬다(달력만 보던 시절엔 8월 개학 학교가 지난 학기 표를 계속 봤다).
+  const currentTermLabel = useCurrentTerm();
+
+  const termRefresh = useMemo(
+    () =>
+      decideTimetableTermRefresh({
+        currentTerm: currentTermLabel,
+        ackedTerm: settings.timetableTermAck,
+        hasTimetableData: hasAnyTimetableData,
+      }),
+    [currentTermLabel, settings.timetableTermAck, hasAnyTimetableData],
+  );
+
+  // 스탬프가 없거나(구버전 이력) 물을 것이 없으면 배너 없이 조용히 채운다.
+  useEffect(() => {
+    if (termRefresh.kind !== 'silent-stamp') return;
+    void updateSettings({ timetableTermAck: termRefresh.term });
+  }, [termRefresh, updateSettings]);
+
+  const ackTimetableTerm = useCallback(() => {
+    void updateSettings({ timetableTermAck: currentTermLabel });
+  }, [updateSettings, currentTermLabel]);
+
+  /**
+   * 시간표가 실제로 바뀌면 그것으로 "이번 학기 확인"이 끝난 것으로 본다.
+   *
+   * 시간표를 쓰는 경로가 9곳(불러오기 3종·자동연동 3종·직접 편집·엑셀·검토 적용)이라 각 지점에
+   * 스탬프를 심으면 새 경로가 생길 때마다 빠진다. 스토어 값 변화 한 곳에서 관측한다.
+   *
+   * ⚠️ `loaded` 이후 **두 번째 관측부터**만 사용자의 갱신으로 센다 — 앱 시작 시 디스크에서 채워지는
+   * 첫 변화까지 갱신으로 세면 배너가 아무에게도 안 뜬다.
+   */
+  const scheduleLoaded = useScheduleStore((s) => s.loaded);
+  const seenSchedulesRef = useRef<{ cls: ClassScheduleData; tea: TeacherScheduleData } | null>(
+    null,
+  );
+
+  useEffect(() => {
+    if (!scheduleLoaded) return;
+    const prev = seenSchedulesRef.current;
+    seenSchedulesRef.current = { cls: classSchedule, tea: teacherSchedule };
+    if (prev === null) return; // 로드 직후 첫 관측 — 사용자의 갱신이 아니다
+    if (prev.cls === classSchedule && prev.tea === teacherSchedule) return;
+    if (settings.timetableTermAck === currentTermLabel) return;
+    void updateSettings({ timetableTermAck: currentTermLabel });
+    setTermBannerDismissed(true);
+  }, [
+    scheduleLoaded,
+    classSchedule,
+    teacherSchedule,
+    settings.timetableTermAck,
+    currentTermLabel,
+    updateSettings,
+  ]);
+
   const handleNeisImport = useCallback(
     async (data: ClassScheduleData, maxPeriods: number) => {
       await updateClassSchedule(data);
@@ -749,12 +821,13 @@ export function TimetablePage({ initialIntent = null, onIntentConsumed }: Timeta
   ]);
 
   const { className, teacherName } = settings;
-  const yearStr = `${now.getFullYear()}학년도`;
-  const semester = now.getMonth() < 8 ? '1학기' : '2학기';
+  // 학기 표기는 위에서 정한 현재 학기 하나만 쓴다 — 여기서 월을 다시 세면 앱 안에 학기 규칙이
+  // 두 벌 생기고, 하필 답이 갈리면 안 되는 경계(8월·9월 초 개학, 1~2월)에서만 어긋난다.
+  const termLabel = formatTermKo(currentTermLabel);
   const infoLabel =
     tab === 'class' && (className || teacherName)
-      ? `${className}  |  담임: ${teacherName}  |  ${yearStr} ${semester}`
-      : `${yearStr} ${semester}`;
+      ? `${className}  |  담임: ${teacherName}  |  ${termLabel}`
+      : termLabel;
 
   if (isEditing) {
     return (
@@ -773,9 +846,7 @@ export function TimetablePage({ initialIntent = null, onIntentConsumed }: Timeta
         iconIsMaterial
         title="시간표"
         leftAddon={
-          <span className="text-sp-muted text-sm font-sp-medium">
-            {yearStr} {semester} · 주간 시간표
-          </span>
+          <span className="text-sp-muted text-sm font-sp-medium">{termLabel} · 주간 시간표</span>
         }
         rightActions={
           <>
@@ -940,6 +1011,23 @@ export function TimetablePage({ initialIntent = null, onIntentConsumed }: Timeta
       {/* 시간표 그리드 */}
       <div className="flex-1 overflow-auto p-8">
         <div className="mx-auto max-w-7xl flex flex-col gap-6">
+          {/* 새 학기 시간표 갱신 확인 — 경고가 아니라 질문(학교마다 실제 학기 시작이 다름) */}
+          {termRefresh.kind === 'ask' && !termBannerDismissed && (
+            <TimetableTermRefreshBanner
+              fromTerm={termRefresh.fromTerm}
+              toTerm={termRefresh.toTerm}
+              onImport={() => {
+                // 현재 탭의 첫 불러오기 소스를 바로 연다(드롭다운을 한 번 더 열게 하지 않는다).
+                importSources[0]?.onSelect();
+              }}
+              onConfirmUpToDate={() => {
+                ackTimetableTerm();
+                setTermBannerDismissed(true);
+              }}
+              onDismiss={() => setTermBannerDismissed(true)}
+            />
+          )}
+
           {/* 컴시간 변경 감지 배너 (비파괴 — 검토 후 적용). 밝은 카드 + amber 좌측 스트라이프
               (다크모드 amber-on-amber 가독성 가드 준수) */}
           {tab === 'teacher' && pendingComciganReview && (

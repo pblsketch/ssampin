@@ -8,6 +8,7 @@ import { ATTENDANCE_TEXT } from '@adapters/presentation/attendanceStatusVariants
 import { DEFAULT_OBSERVATION_TAGS } from '@domain/entities/Observation';
 import { mixedRecordToDisplay, type DisplayRecord } from '@adapters/presentation/displayRecord';
 import { RecordDetailModal } from '@adapters/components/common/records/RecordDetailModal';
+import { useCurrentTermStartIso } from '@adapters/hooks/useCurrentTerm';
 
 type PeriodFilter = 'all' | 'semester' | 'month' | 'week' | 'custom';
 
@@ -21,7 +22,10 @@ function getMonthStart(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
 }
 
-function getFilterRange(filter: PeriodFilter): { start: string | null; end: string | null } {
+function getFilterRange(
+  filter: PeriodFilter,
+  termStartIso: string,
+): { start: string | null; end: string | null } {
   if (filter === 'all') return { start: null, end: null };
   const now = new Date();
   if (filter === 'week') {
@@ -42,12 +46,8 @@ function getFilterRange(filter: PeriodFilter): { start: string | null; end: stri
       end: null,
     };
   }
-  if (filter === 'semester') {
-    const month = now.getMonth() + 1;
-    const semStart = month >= 3 && month < 9 ? 3 : 9;
-    const year = semStart === 9 && month < 3 ? now.getFullYear() - 1 : now.getFullYear();
-    return { start: `${year}-${String(semStart).padStart(2, '0')}-01`, end: null };
-  }
+  // 학기 시작일은 여기서 세지 않고 앱 공통 판정에서 받는다(8월 개학 학교 대응).
+  if (filter === 'semester') return { start: termStartIso, end: null };
   return { start: null, end: null }; // custom handled separately
 }
 
@@ -80,10 +80,11 @@ export function ClassRecordStatsView({ classId }: ClassRecordStatsViewProps) {
     return [...cls.students].filter(isStudentActive).sort((a, b) => a.number - b.number);
   }, [cls]);
 
+  const termStartIso = useCurrentTermStartIso();
   const dateRange = useMemo(() => {
     if (filter === 'custom') return { start: customStart, end: customEnd };
-    return getFilterRange(filter);
-  }, [filter, customStart, customEnd]);
+    return getFilterRange(filter, termStartIso);
+  }, [filter, customStart, customEnd, termStartIso]);
 
   /* 출결 통계 */
   const attendanceStats = useMemo(() => {

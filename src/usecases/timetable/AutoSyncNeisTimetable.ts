@@ -1,11 +1,7 @@
 import type { INeisPort } from '@domain/ports/INeisPort';
 import type { NeisAutoSyncSettings } from '@domain/entities/Settings';
-import {
-  getCurrentWeekRange,
-  settingsLevelToNeisLevel,
-  getCurrentAcademicYear,
-  getCurrentSemester,
-} from '@domain/entities/NeisTimetable';
+import { getCurrentWeekRange, settingsLevelToNeisLevel } from '@domain/entities/NeisTimetable';
+import { fetchNeisTimetableWithSemesterFallback } from './FetchNeisTimetable';
 import { toLocalDateString } from '@shared/utils/localDate';
 import { transformToClassSchedule, getMaxPeriod } from '@domain/rules/neisTransformRules';
 import { extractSubjectsFromSchedule } from '@domain/rules/subjectColorRules';
@@ -76,13 +72,13 @@ export async function autoSyncNeisTimetable(
     const { fromDate, toDate } = getCurrentWeekRange();
     const neisLevel = settingsLevelToNeisLevel(schoolLevel);
 
-    const rows = await neisPort.getTimetable({
+    // 학기는 조회 주에서 파생하고, 비면 반대 학기도 확인한다 — 8월 개학 학교가 방학 취급되어
+    // 자동 동기화가 조용히 NO_DATA로 끝나던 문제 차단.
+    const { rows } = await fetchNeisTimetableWithSemesterFallback(neisPort, {
       apiKey,
       officeCode: neisSettings.atptCode,
       schoolCode: neisSettings.schoolCode,
       schoolLevel: neisLevel,
-      academicYear: getCurrentAcademicYear(),
-      semester: getCurrentSemester(),
       grade: autoSync.grade,
       className: autoSync.className,
       fromDate,

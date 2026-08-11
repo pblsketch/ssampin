@@ -7,17 +7,20 @@ import type { ObservationExportRecord } from '@infrastructure/export';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { Modal } from '@adapters/components/common/Modal';
 import { IconButton } from '@adapters/components/common/IconButton';
+import { useCurrentTermStartIso } from '@adapters/hooks/useCurrentTerm';
 
 type PeriodPreset = 'all' | 'semester' | 'month' | 'custom';
 
-function getSemesterRange(): { start: string; end: string } {
+/**
+ * 학기 시작일은 화면에서 세지 않고 앱 공통 판정(useCurrentTermStartIso)에서 받는다.
+ * 예전에는 여기서 월을 직접 봤는데 ①8월 개학 학교가 9월까지 지난 학기부터 집계됐고
+ * ②1~2월에는 시작일이 그 해 3월 1일(미래)이 되어 결과가 늘 0건이었다.
+ */
+function getSemesterRange(startIso: string): { start: string; end: string } {
   const now = new Date();
-  const y = now.getFullYear();
-  const m = now.getMonth();
-  const semesterStart = m >= 8 ? new Date(y, 8, 1) : new Date(y, 2, 1);
   const fmt = (d: Date) =>
     `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  return { start: fmt(semesterStart), end: fmt(now) };
+  return { start: startIso, end: fmt(now) };
 }
 
 function getMonthRange(): { start: string; end: string } {
@@ -47,15 +50,17 @@ export function ObservationExportModal({ classId, onClose }: ObservationExportMo
   const cls = classes.find((c) => c.id === classId);
   const className = cls?.name ?? '';
 
+  const termStartIso = useCurrentTermStartIso();
+
   const period = useMemo<{ start: string; end: string } | undefined>(() => {
     if (periodPreset === 'all') return undefined;
-    if (periodPreset === 'semester') return getSemesterRange();
+    if (periodPreset === 'semester') return getSemesterRange(termStartIso);
     if (periodPreset === 'month') return getMonthRange();
     if (periodPreset === 'custom' && customStart && customEnd) {
       return { start: customStart, end: customEnd };
     }
     return undefined;
-  }, [periodPreset, customStart, customEnd]);
+  }, [periodPreset, customStart, customEnd, termStartIso]);
 
   const classRecords = useMemo(() => {
     return allRecords.filter((r) => r.classId === classId);
@@ -148,12 +153,12 @@ export function ObservationExportModal({ classId, onClose }: ObservationExportMo
           <div>
             <label className="text-sm text-sp-muted mb-2 block">기간</label>
             <div className="flex gap-2 flex-wrap">
-              {([
+              {[
                 { id: 'all' as const, label: '전체' },
                 { id: 'semester' as const, label: '이번 학기' },
                 { id: 'month' as const, label: '이번 달' },
                 { id: 'custom' as const, label: '직접 입력' },
-              ]).map((p) => (
+              ].map((p) => (
                 <button
                   key={p.id}
                   onClick={() => setPeriodPreset(p.id)}
@@ -201,8 +206,13 @@ export function ObservationExportModal({ classId, onClose }: ObservationExportMo
           {/* 포함 내용 안내 */}
           <div className="text-detail text-sp-muted space-y-0.5">
             <p>엑셀 파일에 포함되는 내용:</p>
-            <p>· <strong className="text-sp-text">관찰기록</strong> 시트 — 날짜순 전체 기록</p>
-            <p>· <strong className="text-sp-text">학생별 요약</strong> 시트 — 기록 수, 최근일, 태그 분포</p>
+            <p>
+              · <strong className="text-sp-text">관찰기록</strong> 시트 — 날짜순 전체 기록
+            </p>
+            <p>
+              · <strong className="text-sp-text">학생별 요약</strong> 시트 — 기록 수, 최근일, 태그
+              분포
+            </p>
           </div>
         </div>
 

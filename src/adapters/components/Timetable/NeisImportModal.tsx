@@ -14,13 +14,19 @@ import {
   settingsLevelToNeisLevel,
   getGradeRange,
   getCurrentAcademicYear,
-  getCurrentSemester,
   getCurrentWeekRange,
+  getNextWeekRange,
   getLastWeekRange,
   formatDateDisplay,
+  neisTermAxisForDate,
+  toIsoDate,
 } from '@domain/entities/NeisTimetable';
 import type { ClassScheduleData } from '@domain/entities/Timetable';
 import { transformToClassSchedule, getMaxPeriod } from '@domain/rules/neisTransformRules';
+import { fetchNeisTimetableWithSemesterFallback } from '@usecases/timetable/FetchNeisTimetable';
+import { decideTermSignal, type TermSignalDecision } from '@domain/rules/termSignalFromTimetable';
+import { formatTermKo } from '@domain/rules/academicCalendar';
+import { useCurrentTerm } from '@adapters/hooks/useCurrentTerm';
 
 interface NeisImportModalProps {
   isOpen: boolean;
@@ -32,7 +38,7 @@ interface NeisImportModalProps {
 
 type WizardStep = 'school' | 'classSelect' | 'period' | 'confirm' | 'loading' | 'done' | 'error';
 
-type PeriodOption = 'thisWeek' | 'lastWeek' | 'custom';
+type PeriodOption = 'thisWeek' | 'nextWeek' | 'lastWeek' | 'custom';
 
 export function NeisImportModal({
   isOpen,
@@ -63,9 +69,8 @@ export function NeisImportModal({
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
 
-  /* ── 학년도/학기 ── */
+  /* ── 학년도(학급 목록 조회용) ── */
   const [academicYear] = useState(getCurrentAcademicYear);
-  const [semester] = useState(getCurrentSemester);
 
   /* ── 상태 ── */
   const [step, setStep] = useState<WizardStep>('school');
@@ -73,6 +78,10 @@ export function NeisImportModal({
   const [importProgress, setImportProgress] = useState('');
   const [showOverwriteConfirm, setShowOverwriteConfirm] = useState(false);
   const [autoSyncOffered, setAutoSyncOffered] = useState(false);
+  /** 학교 나이스가 "지금 2학기"라고 답한 경우의 확인 제안 — 완료 화면에서 1회. */
+  const currentTerm = useCurrentTerm();
+  const updateSettings = useSettingsStore((s) => s.update);
+  const [termSignal, setTermSignal] = useState<TermSignalDecision>({ kind: 'none' });
 
   const apiKey = NEIS_API_KEY;
   const neisLevel = settingsLevelToNeisLevel(settings.schoolLevel);
@@ -140,9 +149,16 @@ export function NeisImportModal({
   /* ── 기간 계산 ── */
   const dateRange = useMemo(() => {
     if (periodOption === 'thisWeek') return getCurrentWeekRange();
+    if (periodOption === 'nextWeek') return getNextWeekRange();
     if (periodOption === 'lastWeek') return getLastWeekRange();
     return { fromDate: customFrom.replace(/-/g, ''), toDate: customTo.replace(/-/g, '') };
   }, [periodOption, customFrom, customTo]);
+
+  /**
+   * 조회할 학기는 "오늘"이 아니라 **고른 기간**에서 파생한다 — 방학 중에 개학 주를 미리 불러오는
+   * 정상 흐름에서 오늘 기준 학기를 쓰면 엉뚱한 학기를 조회해 조용히 0건이 된다.
+   */
+  const plannedAxis = useMemo(() => neisTermAxisForDate(dateRange.fromDate), [dateRange.fromDate]);
 
   /* ── 불러오기 실행 ── */
   const executeImport = useCallback(async () => {
@@ -153,32 +169,36 @@ export function NeisImportModal({
 
     try {
       setImportProgress('시간표를 불러오는 중...');
-      const rows = await neisPort.getTimetable({
-        apiKey,
-        officeCode: selectedSchool.atptCode,
-        schoolCode: selectedSchool.schoolCode,
-        schoolLevel: neisLevel,
-        academicYear,
-        semester,
-        grade: selectedGrade,
-        className: selectedClass,
-        fromDate: dateRange.fromDate,
-        toDate: dateRange.toDate,
-      });
+      // 학기는 고른 기간에서 파생하고, 비면 반대 학기로 한 번 더 조회한다(8월 개학 학교 대응).
+      const { rows, axis, usedFallbackSemester } = await fetchNeisTimetableWithSemesterFallback(
+        neisPort,
+        {
+          apiKey,
+          officeCode: selectedSchool.atptCode,
+          schoolCode: selectedSchool.schoolCode,
+          schoolLevel: neisLevel,
+          grade: selectedGrade,
+          className: selectedClass,
+          fromDate: dateRange.fromDate,
+          toDate: dateRange.toDate,
+        },
+      );
 
       if (rows.length === 0) {
         const hint = [
-          `학년도: ${academicYear}년 ${semester}학기`,
+          `학년도: ${axis.academicYear}년 (1학기·2학기 모두 조회함)`,
           `학교 구분: ${neisLevel === 'els' ? '초등' : neisLevel === 'mis' ? '중학' : '고등'}`,
           `기간: ${formatDateDisplay(dateRange.fromDate)} ~ ${formatDateDisplay(dateRange.toDate)}`,
         ].join(' | ');
 
         setErrorMsg(
-          `시간표 데이터가 없습니다.\n\n` +
-            `가능한 원인:\n` +
-            `• 해당 기간에 등록된 시간표가 없음 (개학 전 데이터)\n` +
-            `• 학교 구분(초/중/고)이 실제 학교와 다름\n` +
-            `• 학년/반 번호가 NEIS에 등록된 것과 다름\n\n` +
+          `이 기간에 등록된 시간표가 없습니다.\n\n` +
+            `가장 흔한 원인은 학교에서 아직 나이스에 시간표를 올리지 않은 경우입니다.\n` +
+            `학기 초에는 등록이 며칠 늦어지는 일이 흔합니다.\n\n` +
+            `이렇게 해보세요:\n` +
+            `• 아직 개학 전이라면 기간을 "다음 주"나 "직접 선택"으로 개학 이후 한 주로 바꿔보세요\n` +
+            `• 학교 구분(초/중/고)과 학년·반 번호가 나이스 등록과 같은지 확인하세요\n` +
+            `• 학교 등록 전까지는 시간표 화면의 [직접 편집]으로 입력해 쓰시고, 나중에 다시 불러오세요\n\n` +
             `조회 정보: ${hint}`,
         );
         setStep('error');
@@ -188,6 +208,18 @@ export function NeisImportModal({
       const maxPeriod = getMaxPeriod(rows);
       const data = transformToClassSchedule(rows, maxPeriod);
       onImport(data, maxPeriod);
+
+      // 달력은 1학기라는데 학교 나이스가 2학기로 답했다면, 그건 학교가 개학했다는 학교 자신의
+      // 증언이다. 앱이 단정하지 않고(ADR-037) 완료 화면에서 확인만 받는다.
+      setTermSignal(
+        decideTermSignal({
+          currentTerm,
+          observedTerm: `${axis.academicYear}-${axis.semester}`,
+          usedFallbackSemester,
+          observedWeekStartIso: toIsoDate(dateRange.fromDate) ?? '',
+          termStartDates: settings.termStartDates,
+        }),
+      );
       setStep('done');
     } catch (e) {
       if (e instanceof NeisApiError) {
@@ -202,11 +234,11 @@ export function NeisImportModal({
     selectedGrade,
     selectedClass,
     neisLevel,
-    academicYear,
-    semester,
     dateRange,
     apiKey,
     onImport,
+    currentTerm,
+    settings.termStartDates,
   ]);
 
   /* ── 다음 단계 진행 ── */
@@ -448,18 +480,26 @@ export function NeisImportModal({
           {step === 'period' && (
             <div className="space-y-4">
               <div className="space-y-2">
-                {(['thisWeek', 'lastWeek', 'custom'] as PeriodOption[]).map((opt) => {
+                {(['thisWeek', 'nextWeek', 'lastWeek', 'custom'] as PeriodOption[]).map((opt) => {
                   const labels: Record<PeriodOption, string> = {
                     thisWeek: '이번 주',
+                    nextWeek: '다음 주',
                     lastWeek: '지난 주',
                     custom: '직접 선택',
+                  };
+                  // 방학 중에는 개학 주를 골라야 결과가 나온다 — '다음 주'와 '직접 선택'의 쓰임.
+                  const hints: Partial<Record<PeriodOption, string>> = {
+                    nextWeek: '개학 직전이라면 이걸 고르세요',
+                    custom: '개학 이후의 한 주를 지정할 수 있어요',
                   };
                   const range =
                     opt === 'thisWeek'
                       ? getCurrentWeekRange()
-                      : opt === 'lastWeek'
-                        ? getLastWeekRange()
-                        : null;
+                      : opt === 'nextWeek'
+                        ? getNextWeekRange()
+                        : opt === 'lastWeek'
+                          ? getLastWeekRange()
+                          : null;
 
                   return (
                     <button
@@ -487,6 +527,7 @@ export function NeisImportModal({
                             {formatDateDisplay(range.fromDate)} ~ {formatDateDisplay(range.toDate)}
                           </p>
                         )}
+                        {hints[opt] && <p className="text-xs text-sp-muted">{hints[opt]}</p>}
                       </div>
                     </button>
                   );
@@ -521,7 +562,9 @@ export function NeisImportModal({
                   {selectedGrade}학년 {selectedClass}반의 시간표를 불러옵니다.
                 </p>
                 <p className="text-xs text-sp-muted mt-1">
-                  학년도 {academicYear}년 {semester}학기
+                  {plannedAxis
+                    ? `학년도 ${plannedAxis.academicYear}년 ${plannedAxis.semester}학기 기준으로 조회하고, 비어 있으면 반대 학기도 확인합니다.`
+                    : '조회 기간을 먼저 정해주세요.'}
                 </p>
               </div>
             </div>
@@ -545,6 +588,50 @@ export function NeisImportModal({
               </div>
               <p className="text-sm font-medium text-sp-text">시간표를 성공적으로 불러왔습니다!</p>
               <p className="text-xs text-sp-muted">필요한 부분은 수동으로 수정할 수 있습니다.</p>
+
+              {/* 학기 확인 제안 — 학교 나이스가 달력과 다른 학기로 답했을 때만 뜬다.
+                  앱이 개학일을 단정하지 않고(ADR-037) 학교 데이터를 근거로 물어본다. */}
+              {termSignal.kind === 'suggest' && (
+                <div className="mt-4 w-full p-4 bg-sp-accent/5 border border-sp-accent/20 rounded-xl">
+                  <div className="flex items-start gap-3">
+                    <span className="material-symbols-outlined text-sp-accent text-xl mt-0.5">
+                      calendar_month
+                    </span>
+                    <div className="flex-1">
+                      <p className="text-sm font-bold text-sp-text">
+                        {formatTermKo(termSignal.term)}가 시작됐나요?
+                      </p>
+                      <p className="text-xs text-sp-muted mt-1">
+                        학교 나이스에 이 주 수업이 {formatTermKo(termSignal.term)}로 등록돼 있어요.
+                        쌤핀도 맞추면 시간표 갱신 안내와 &lsquo;이번 학기&rsquo; 통계가 이 학기
+                        기준으로 바뀌어요.
+                      </p>
+                      <div className="flex gap-2 mt-3">
+                        <button
+                          onClick={() => {
+                            void updateSettings({
+                              termStartDates: {
+                                ...(settings.termStartDates ?? {}),
+                                [termSignal.term]: termSignal.startIso,
+                              },
+                            });
+                            setTermSignal({ kind: 'none' });
+                          }}
+                          className="px-3 py-1.5 rounded-lg bg-sp-accent text-sp-accent-fg text-xs font-bold hover:brightness-110 transition-all"
+                        >
+                          네, 맞춰 주세요
+                        </button>
+                        <button
+                          onClick={() => setTermSignal({ kind: 'none' })}
+                          className="px-3 py-1.5 rounded-lg border border-sp-border text-xs text-sp-muted hover:text-sp-text transition-colors"
+                        >
+                          아니요
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* 자동 동기화 제안 */}
               {onEnableAutoSync &&
@@ -616,9 +703,7 @@ export function NeisImportModal({
                         ? '고등학교'
                         : '미설정'}
                 </p>
-                <p>
-                  학년도: {academicYear}년 {semester}학기
-                </p>
+                <p>학년도: {plannedAxis?.academicYear ?? academicYear}년 (1·2학기 모두 조회)</p>
               </div>
 
               <div className="flex gap-2 mt-1">
@@ -634,7 +719,8 @@ export function NeisImportModal({
                       `[NEIS 연동 오류 신고]`,
                       `학교: ${settings.neis.schoolName}`,
                       `학교구분: ${settings.schoolLevel}`,
-                      `학년도: ${academicYear}년 ${semester}학기`,
+                      `학년도: ${plannedAxis?.academicYear ?? academicYear}년 ${plannedAxis?.semester ?? '?'}학기(폴백 포함)`,
+                      `조회기간: ${dateRange.fromDate}~${dateRange.toDate}`,
                       `에러: ${errorMsg}`,
                     ].join('\n');
                     void navigator.clipboard.writeText(ctx);

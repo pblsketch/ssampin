@@ -2,7 +2,12 @@
  * 학사 달력 규칙 — 학기(term) 라벨 `'YYYY-S'`(예: '2026-1')의 단일 정본.
  *
  * 한국 학사 기준(초·중등교육법 제24조: 학년도 = 3월 1일 ~ 다음 해 2월 말일):
- * 3~8월 = 1학기, 9~12월 = 2학기, 1~2월 = 직전 학년도의 2학기(겨울방학은 학사상 직전 2학기).
+ * 3~7월 = 1학기, 8~12월 = 2학기, 1~2월 = 직전 학년도의 2학기(겨울방학은 학사상 직전 2학기).
+ *
+ * ⚠️ 8월을 2학기로 보는 이유: 우리나라 중·고등학교 대부분이 **8월 중순에 2학기를 개학**한다.
+ * 8월을 1학기로 두면 다수 학교가 9월 1일까지 지난 학기로 표시되고, 시간표 갱신 안내도 그때까지
+ * 뜨지 않았다(그게 이 경계를 옮긴 이유다). 8월 말까지 1학기인 소수 학교는 개학일을 등록하면
+ * 정확해진다 — `schoolTermStart.resolveCurrentTerm`이 등록된 개학일을 달력보다 우선한다.
  *
  * 이 파일은 라벨 계산·표시 전용이다. 시즌 배너 게이팅 같은 날짜 구간 판정 함수는
  * 의도적으로 두지 않는다(ADR-037 — 학교마다 개학일이 달라 단일 구간을 정의할 수 없음).
@@ -18,8 +23,8 @@ const TERM_RE = /^(\d{4})-([12])$/;
 export function academicTerm(date: Date = new Date()): string {
   const y = date.getFullYear();
   const m = date.getMonth() + 1; // 1~12
-  if (m >= 3 && m <= 8) return `${y}-1`;
-  if (m >= 9) return `${y}-2`;
+  if (m >= 3 && m <= 7) return `${y}-1`;
+  if (m >= 8) return `${y}-2`;
   return `${y - 1}-2`;
 }
 
@@ -66,8 +71,8 @@ export function academicTermForDate(date: string | null | undefined): string | n
   const year = Number(match[1]);
   const month = Number(match[2]);
   if (month < 1 || month > 12) return null;
-  if (month >= 3 && month <= 8) return `${year}-1`;
-  if (month >= 9) return `${year}-2`;
+  if (month >= 3 && month <= 7) return `${year}-1`;
+  if (month >= 8) return `${year}-2`;
   return `${year - 1}-2`;
 }
 

@@ -24,6 +24,8 @@ import { NeisSchedulePanel } from './NeisSchedulePanel';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { PageHeader } from '@adapters/components/common/PageHeader';
 import { ScrollRow } from '@adapters/components/common/ScrollRow';
+import { parseTerm } from '@domain/rules/academicCalendar';
+import { useCurrentTerm } from '@adapters/hooks/useCurrentTerm';
 
 type ScheduleView = 'month' | 'semester' | 'year';
 type SourceFilter = 'all' | 'ssampin' | 'google' | 'neis';
@@ -72,10 +74,12 @@ export function Schedule() {
 
   // 뷰 모드
   const [view, setView] = useState<ScheduleView>('month');
-  const [semester, setSemester] = useState<'first' | 'second'>(() => {
-    const m = new Date().getMonth();
-    return m >= 2 && m <= 7 ? 'first' : 'second';
-  });
+  // 학기 뷰 기본값은 앱 전체가 쓰는 현재 학기를 따른다 — 여기서 월을 직접 세면 8월에 개학한
+  // 학교가 일정만 1학기로 보이고 다른 화면과 답이 갈린다.
+  const currentTerm = useCurrentTerm();
+  const [semester, setSemester] = useState<'first' | 'second'>(() =>
+    parseTerm(currentTerm)?.semester === 2 ? 'second' : 'first',
+  );
 
   // 선택된 날짜, 카테고리 필터, 소스 필터
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);

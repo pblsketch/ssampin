@@ -22,6 +22,12 @@ interface MobileSettings {
   neis: { atptCode: string; schoolCode: string };
   mealSchool?: { schoolCode: string; atptCode: string; schoolName: string };
   sync: { deviceId: string; autoSyncInterval: number };
+  /**
+   * 학기별 개학일 · 마무리가 기록한 학기 — **읽기 전용 투영**(데스크톱에서만 편집한다).
+   * "이번 학기" 통계가 PC와 폰에서 다른 답을 내지 않게 하려면 여기까지 내려와야 한다.
+   */
+  termStartDates?: Readonly<Record<string, string>>;
+  currentTerm?: string;
 }
 
 const DEFAULT_MOBILE_SETTINGS: MobileSettings = {
@@ -111,6 +117,8 @@ export const useMobileSettingsStore = create<MobileSettingsState>((set, get) => 
               deviceId: syncDeviceId,
               autoSyncInterval: readAutoSyncInterval(),
             },
+            termStartDates: s.termStartDates,
+            currentTerm: s.currentTerm,
           },
           loaded: true,
         });

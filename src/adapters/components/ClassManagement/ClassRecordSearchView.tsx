@@ -25,6 +25,7 @@ import { mixedRecordToDisplay } from '@adapters/presentation/displayRecord';
 import { groupRecordsByStudent } from '@adapters/presentation/recordIdentityAdapter';
 /* eslint-disable no-restricted-imports */
 import { exportMixedRecordsToExcel } from '@infrastructure/export/ExcelExporter';
+import { useCurrentTermStartIso } from '@adapters/hooks/useCurrentTerm';
 /* eslint-enable no-restricted-imports */
 
 type CategoryFilter = 'all' | 'attendance' | 'observation';
@@ -193,6 +194,7 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
   }, [attendanceRecords, observationRecords, classId, categoryFilter, studentNameMap]);
 
   /* 기간 필터 계산 */
+  const termStartIso = useCurrentTermStartIso();
   const dateRange = useMemo(() => {
     if (periodFilter === 'all') return { start: null as string | null, end: null as string | null };
     if (periodFilter === 'custom') return { start: customStart, end: customEnd };
@@ -213,12 +215,9 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
         start: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`,
         end: null,
       };
-    // semester
-    const month = now.getMonth() + 1;
-    const semStart = month >= 3 && month < 9 ? 3 : 9;
-    const year = semStart === 9 && month < 3 ? now.getFullYear() - 1 : now.getFullYear();
-    return { start: `${year}-${String(semStart).padStart(2, '0')}-01`, end: null };
-  }, [periodFilter, customStart, customEnd]);
+    // semester — 시작일은 여기서 세지 않고 앱 공통 판정에서 받는다(8월 개학 학교 대응).
+    return { start: termStartIso, end: null };
+  }, [periodFilter, customStart, customEnd, termStartIso]);
 
   /* 필터 적용 */
   const filtered = useMemo(() => {

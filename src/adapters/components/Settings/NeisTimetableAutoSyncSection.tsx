@@ -9,15 +9,15 @@ import {
   settingsLevelToNeisLevel,
   getGradeRange,
   getCurrentAcademicYear,
-  getCurrentSemester,
   getCurrentWeekRange,
 } from '@domain/entities/NeisTimetable';
 import type { NeisClassInfo } from '@domain/entities/NeisTimetable';
+import { fetchNeisTimetableWithSemesterFallback } from '@usecases/timetable/FetchNeisTimetable';
+import { transformToClassSchedule, getMaxPeriod } from '@domain/rules/neisTransformRules';
 import {
-  transformToClassSchedule,
-  getMaxPeriod,
-} from '@domain/rules/neisTransformRules';
-import { smartAutoAssignColors, extractSubjectsFromSchedule } from '@domain/rules/subjectColorRules';
+  smartAutoAssignColors,
+  extractSubjectsFromSchedule,
+} from '@domain/rules/subjectColorRules';
 import { DEFAULT_SUBJECT_COLORS } from '@domain/valueObjects/SubjectColor';
 import { getCurrentISOWeek } from '@usecases/timetable/AutoSyncNeisTimetable';
 
@@ -69,51 +69,81 @@ export function NeisTimetableAutoSyncSection() {
       .finally(() => setClassListLoading(false));
   }, [hasSchoolInfo, autoSync?.grade, settings.neis.atptCode, settings.neis.schoolCode]);
 
-  const handleToggle = useCallback(async (enabled: boolean) => {
-    if (enabled && !hasSchoolInfo) {
-      showToast('먼저 학교를 검색해주세요.', 'error');
-      return;
-    }
+  const handleToggle = useCallback(
+    async (enabled: boolean) => {
+      if (enabled && !hasSchoolInfo) {
+        showToast('먼저 학교를 검색해주세요.', 'error');
+        return;
+      }
 
-    await updateSettings({
-      neis: {
-        ...settings.neis,
-        autoSync: {
-          ...(autoSync ?? { enabled: false, grade: '', className: '', lastSyncDate: '', lastSyncWeek: '', syncTarget: 'class' as const }),
-          enabled,
+      await updateSettings({
+        neis: {
+          ...settings.neis,
+          autoSync: {
+            ...(autoSync ?? {
+              enabled: false,
+              grade: '',
+              className: '',
+              lastSyncDate: '',
+              lastSyncWeek: '',
+              syncTarget: 'class' as const,
+            }),
+            enabled,
+          },
         },
-      },
-    });
+      });
 
-    if (enabled) {
-      showToast('시간표 자동 동기화가 켜졌습니다.', 'info');
-    }
-  }, [hasSchoolInfo, settings.neis, autoSync, updateSettings, showToast]);
+      if (enabled) {
+        showToast('시간표 자동 동기화가 켜졌습니다.', 'info');
+      }
+    },
+    [hasSchoolInfo, settings.neis, autoSync, updateSettings, showToast],
+  );
 
-  const handleGradeChange = useCallback(async (grade: string) => {
-    await updateSettings({
-      neis: {
-        ...settings.neis,
-        autoSync: {
-          ...(autoSync ?? { enabled: false, grade: '', className: '', lastSyncDate: '', lastSyncWeek: '', syncTarget: 'class' as const }),
-          grade,
-          className: '', // 학년 변경 시 반 초기화
+  const handleGradeChange = useCallback(
+    async (grade: string) => {
+      await updateSettings({
+        neis: {
+          ...settings.neis,
+          autoSync: {
+            ...(autoSync ?? {
+              enabled: false,
+              grade: '',
+              className: '',
+              lastSyncDate: '',
+              lastSyncWeek: '',
+              syncTarget: 'class' as const,
+            }),
+            grade,
+            className: '', // 학년 변경 시 반 초기화
+          },
         },
-      },
-    });
-  }, [settings.neis, autoSync, updateSettings]);
+      });
+    },
+    [settings.neis, autoSync, updateSettings],
+  );
 
-  const handleClassChange = useCallback(async (className: string) => {
-    await updateSettings({
-      neis: {
-        ...settings.neis,
-        autoSync: {
-          ...(autoSync ?? { enabled: false, grade: '', className: '', lastSyncDate: '', lastSyncWeek: '', syncTarget: 'class' as const }),
-          className,
+  const handleClassChange = useCallback(
+    async (className: string) => {
+      await updateSettings({
+        neis: {
+          ...settings.neis,
+          autoSync: {
+            ...(autoSync ?? {
+              enabled: false,
+              grade: '',
+              className: '',
+              lastSyncDate: '',
+              lastSyncWeek: '',
+              syncTarget: 'class' as const,
+            }),
+            className,
+          },
         },
-      },
-    });
-  }, [settings.neis, autoSync, updateSettings]);
+      });
+    },
+    [settings.neis, autoSync, updateSettings],
+  );
 
   const handleSyncNow = useCallback(async () => {
     if (!hasSchoolInfo || !autoSync?.grade || !autoSync?.className) {
@@ -124,13 +154,11 @@ export function NeisTimetableAutoSyncSection() {
     setSyncing(true);
     try {
       const { fromDate, toDate } = getCurrentWeekRange();
-      const rows = await neisPort.getTimetable({
+      const { rows } = await fetchNeisTimetableWithSemesterFallback(neisPort, {
         apiKey: NEIS_API_KEY,
         officeCode: settings.neis.atptCode,
         schoolCode: settings.neis.schoolCode,
         schoolLevel: neisLevel,
-        academicYear: getCurrentAcademicYear(),
-        semester: getCurrentSemester(),
         grade: autoSync.grade,
         className: autoSync.className,
         fromDate,
@@ -138,7 +166,10 @@ export function NeisTimetableAutoSyncSection() {
       });
 
       if (rows.length === 0) {
-        showToast('해당 기간의 시간표 데이터가 없습니다.', 'error');
+        showToast(
+          '이번 주에 등록된 시간표가 없어요. 방학 중이거나 학교가 아직 나이스에 올리지 않았을 수 있어요.',
+          'error',
+        );
         return;
       }
 
@@ -176,7 +207,15 @@ export function NeisTimetableAutoSyncSection() {
     } finally {
       setSyncing(false);
     }
-  }, [hasSchoolInfo, autoSync, settings, neisLevel, updateClassSchedule, updateSettings, showToast]);
+  }, [
+    hasSchoolInfo,
+    autoSync,
+    settings,
+    neisLevel,
+    updateClassSchedule,
+    updateSettings,
+    showToast,
+  ]);
 
   const formatLastSync = (date: string): string => {
     if (!date) return '동기화한 적 없음';
@@ -207,7 +246,9 @@ export function NeisTimetableAutoSyncSection() {
         {/* OFF + 학교 미설정 안내 */}
         {!autoSync?.enabled && !hasSchoolInfo && (
           <div className="flex items-start gap-2 p-3 rounded-lg bg-yellow-500/5 border border-yellow-500/20">
-            <span className="material-symbols-outlined text-yellow-500 text-icon-md mt-0.5">info</span>
+            <span className="material-symbols-outlined text-yellow-500 text-icon-md mt-0.5">
+              info
+            </span>
             <p className="text-xs text-yellow-200/80">
               먼저 위의 &quot;학교/학급 정보&quot; 섹션에서 학교를 검색해주세요.
             </p>
@@ -228,7 +269,9 @@ export function NeisTimetableAutoSyncSection() {
                 >
                   <option value="">선택</option>
                   {gradeRange.map((g) => (
-                    <option key={g} value={String(g)}>{g}학년</option>
+                    <option key={g} value={String(g)}>
+                      {g}학년
+                    </option>
                   ))}
                 </select>
               </div>
@@ -248,7 +291,9 @@ export function NeisTimetableAutoSyncSection() {
                   >
                     <option value="">선택</option>
                     {classList.map((c) => (
-                      <option key={c.CLASS_NM} value={c.CLASS_NM}>{c.CLASS_NM}반</option>
+                      <option key={c.CLASS_NM} value={c.CLASS_NM}>
+                        {c.CLASS_NM}반
+                      </option>
                     ))}
                   </select>
                 )}
@@ -260,9 +305,13 @@ export function NeisTimetableAutoSyncSection() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   {autoSync.lastSyncDate ? (
-                    <span className="material-symbols-outlined text-green-400 text-icon-md">check_circle</span>
+                    <span className="material-symbols-outlined text-green-400 text-icon-md">
+                      check_circle
+                    </span>
                   ) : (
-                    <span className="material-symbols-outlined text-sp-muted text-icon-md">sync</span>
+                    <span className="material-symbols-outlined text-sp-muted text-icon-md">
+                      sync
+                    </span>
                   )}
                   <div>
                     <p className="text-xs text-sp-muted">마지막 동기화</p>
@@ -298,7 +347,8 @@ export function NeisTimetableAutoSyncSection() {
             </div>
 
             <p className="text-xs text-sp-muted">
-              선택한 반의 월~금 학급 시간표를 NEIS에서 자동으로 가져옵니다. 새 과목이 있으면 색상이 자동으로 배정됩니다.
+              선택한 반의 월~금 학급 시간표를 NEIS에서 자동으로 가져옵니다. 새 과목이 있으면 색상이
+              자동으로 배정됩니다.
             </p>
           </>
         )}

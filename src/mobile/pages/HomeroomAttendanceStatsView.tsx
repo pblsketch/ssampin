@@ -4,6 +4,7 @@ import { useMobileAttendanceStore } from '@mobile/stores/useMobileAttendanceStor
 import { filterActive } from '@domain/rules/studentActivity';
 import type { AttendanceStatus } from '@domain/entities/Attendance';
 import { EmptyState } from '@mobile/components/common/EmptyState';
+import { useMobileCurrentTermStartIso } from '@mobile/hooks/useMobileCurrentTerm';
 import {
   AttendanceStatsTable,
   getFilterRange,
@@ -62,10 +63,13 @@ export function HomeroomAttendanceStatsView({
     [students],
   );
 
+  const termStartIso = useMobileCurrentTermStartIso();
   const dateRange = useMemo(
     () =>
-      filter === 'custom' ? (customRange ?? { start: null, end: null }) : getFilterRange(filter),
-    [filter, customRange],
+      filter === 'custom'
+        ? (customRange ?? { start: null, end: null })
+        : getFilterRange(filter, termStartIso),
+    [filter, customRange, termStartIso],
   );
 
   /* 학생별 출결 통계 — record.students[].number → Student.studentNumber 매핑

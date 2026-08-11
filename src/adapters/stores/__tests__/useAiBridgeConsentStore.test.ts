@@ -8,9 +8,9 @@ import {
 } from '../useAiBridgeConsentStore';
 
 describe('academicTerm — 한국 학사 학기 키', () => {
-  it('3~8월은 해당 연도 1학기', () => {
+  it('3~7월은 해당 연도 1학기', () => {
     expect(academicTerm(new Date('2026-03-01T00:00:00'))).toBe('2026-1');
-    expect(academicTerm(new Date('2026-08-31T00:00:00'))).toBe('2026-1');
+    expect(academicTerm(new Date('2026-07-31T00:00:00'))).toBe('2026-1');
   });
 
   it('9~12월은 해당 연도 2학기', () => {

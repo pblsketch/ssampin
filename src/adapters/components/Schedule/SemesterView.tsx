@@ -6,9 +6,11 @@ import { MiniMonth } from './MiniMonth';
 
 type Semester = 'first' | 'second';
 
+// 학사 달력 정본(academicCalendar)과 같은 경계를 쓴다 — 3~7월 1학기, 8~2월 2학기.
+// 여기서 월을 다르게 세면 일정 화면만 다른 학기를 보여준다.
 const SEMESTER_INFO: Record<Semester, { label: string; months: number[] }> = {
-  first: { label: '1학기', months: [2, 3, 4, 5, 6, 7] },   // 3~8월
-  second: { label: '2학기', months: [8, 9, 10, 11, 0, 1] }, // 9~2월
+  first: { label: '1학기', months: [2, 3, 4, 5, 6] }, // 3~7월
+  second: { label: '2학기', months: [7, 8, 9, 10, 11, 0, 1] }, // 8~2월
 };
 
 interface SemesterViewProps {
@@ -64,17 +66,22 @@ function SemesterTimeline({
           const colors = getColorsForCategory(event.category, categories);
           const [, m, d] = event.date.split('-') as [string, string, string];
           const dateLabel = `${parseInt(m, 10)}/${parseInt(d, 10)}`;
-          const endLabel = event.endDate ? (() => {
-            const [, em, ed] = event.endDate.split('-') as [string, string, string];
-            return ` ~ ${parseInt(em, 10)}/${parseInt(ed, 10)}`;
-          })() : '';
+          const endLabel = event.endDate
+            ? (() => {
+                const [, em, ed] = event.endDate.split('-') as [string, string, string];
+                return ` ~ ${parseInt(em, 10)}/${parseInt(ed, 10)}`;
+              })()
+            : '';
 
           return (
             <div key={event.id} className="flex items-start gap-2.5 py-1.5">
               <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${colors.dot}`} />
               <div className="min-w-0 flex-1">
                 <p className="text-sm text-sp-text truncate">{event.title}</p>
-                <p className="text-detail text-sp-muted">{dateLabel}{endLabel}</p>
+                <p className="text-detail text-sp-muted">
+                  {dateLabel}
+                  {endLabel}
+                </p>
               </div>
             </div>
           );

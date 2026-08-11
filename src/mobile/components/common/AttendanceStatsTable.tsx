@@ -46,7 +46,11 @@ function formatMonthDay(date: string): string {
  * 것이며 값/동작은 변경하지 않았다(ClassAttendanceStatsView와 HomeroomAttendanceStatsView가
  * 함께 재사용).
  */
-export function getFilterRange(filter: AttendancePeriodFilter): {
+export function getFilterRange(
+  filter: AttendancePeriodFilter,
+  /** 이번 학기 시작일 — useMobileCurrentTermStartIso()에서 받는다(개학일 등록 시 그 날). */
+  termStartIso: string,
+): {
   start: string | null;
   end: string | null;
 } {
@@ -71,11 +75,8 @@ export function getFilterRange(filter: AttendancePeriodFilter): {
       end: null,
     };
   }
-  // semester (3~8월 / 9~2월)
-  const month = now.getMonth() + 1;
-  const semStart = month >= 3 && month < 9 ? 3 : 9;
-  const year = semStart === 9 && month < 3 ? now.getFullYear() - 1 : now.getFullYear();
-  return { start: `${year}-${String(semStart).padStart(2, '0')}-01`, end: null };
+  // semester — 시작일은 여기서 세지 않고 앱 공통 판정에서 받는다(PC와 같은 답을 내야 한다).
+  return { start: termStartIso, end: null };
 }
 
 /** 상태색 매핑 — design §4.4 (표 텍스트 색 컬럼) 그대로. adapters/presentation/는 import 불가라 로컬 재정의. */

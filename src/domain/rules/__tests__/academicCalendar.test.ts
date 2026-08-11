@@ -10,6 +10,7 @@ import {
 
 describe('academicTerm — 12개월 전부', () => {
   // [월, 기대 라벨] — 2026년 기준. 1~2월은 직전 학년도(2025) 2학기.
+  // 8월은 2학기 — 대부분의 중·고가 8월 중순에 2학기를 개학한다(경계 근거는 academicCalendar 주석).
   const CASES: Array<[number, string]> = [
     [1, '2025-2'],
     [2, '2025-2'],
@@ -18,7 +19,7 @@ describe('academicTerm — 12개월 전부', () => {
     [5, '2026-1'],
     [6, '2026-1'],
     [7, '2026-1'],
-    [8, '2026-1'],
+    [8, '2026-2'],
     [9, '2026-2'],
     [10, '2026-2'],
     [11, '2026-2'],
@@ -51,9 +52,9 @@ describe('academicTerm — 연말연시·학년도 경계', () => {
     expect(academicTerm(new Date(2027, 2, 1))).toBe('2027-1');
   });
 
-  it('8/31은 1학기, 9/1부터 2학기', () => {
-    expect(academicTerm(new Date(2026, 7, 31))).toBe('2026-1');
-    expect(academicTerm(new Date(2026, 8, 1))).toBe('2026-2');
+  it('7/31은 1학기, 8/1부터 2학기', () => {
+    expect(academicTerm(new Date(2026, 6, 31))).toBe('2026-1');
+    expect(academicTerm(new Date(2026, 7, 1))).toBe('2026-2');
   });
 });
 

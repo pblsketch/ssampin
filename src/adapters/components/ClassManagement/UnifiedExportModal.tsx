@@ -8,18 +8,21 @@ import { useToastStore } from '@adapters/components/common/Toast';
 import { Modal } from '@adapters/components/common/Modal';
 import { IconButton } from '@adapters/components/common/IconButton';
 import { DEFAULT_OBSERVATION_TAGS } from '@domain/entities/Observation';
+import { useCurrentTermStartIso } from '@adapters/hooks/useCurrentTerm';
 
 type ExportType = 'attendance' | 'observation';
 type PeriodPreset = 'all' | 'semester' | 'month' | 'custom';
 
-function getSemesterRange(): { start: string; end: string } {
+/**
+ * 학기 시작일은 화면에서 세지 않고 앱 공통 판정(useCurrentTermStartIso)에서 받는다.
+ * 예전에는 여기서 월을 직접 봤는데 ①8월 개학 학교가 9월까지 지난 학기부터 집계됐고
+ * ②1~2월에는 시작일이 그 해 3월 1일(미래)이 되어 결과가 늘 0건이었다.
+ */
+function getSemesterRange(startIso: string): { start: string; end: string } {
   const now = new Date();
-  const y = now.getFullYear();
-  const m = now.getMonth();
-  const semesterStart = m >= 8 ? new Date(y, 8, 1) : new Date(y, 2, 1);
   const fmt = (d: Date) =>
     `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  return { start: fmt(semesterStart), end: fmt(now) };
+  return { start: startIso, end: fmt(now) };
 }
 
 function getMonthRange(): { start: string; end: string } {
@@ -38,7 +41,11 @@ interface UnifiedExportModalProps {
   onClose: () => void;
 }
 
-export function UnifiedExportModal({ classId, defaultTab = 'attendance', onClose }: UnifiedExportModalProps) {
+export function UnifiedExportModal({
+  classId,
+  defaultTab = 'attendance',
+  onClose,
+}: UnifiedExportModalProps) {
   const [exportType, setExportType] = useState<ExportType>(defaultTab);
   const [periodPreset, setPeriodPreset] = useState<PeriodPreset>('all');
   const [customStart, setCustomStart] = useState('');
@@ -55,15 +62,17 @@ export function UnifiedExportModal({ classId, defaultTab = 'attendance', onClose
   const className = cls?.name ?? '';
   const students = cls?.students ?? [];
 
+  const termStartIso = useCurrentTermStartIso();
+
   const period = useMemo<{ start: string; end: string } | undefined>(() => {
     if (periodPreset === 'all') return undefined;
-    if (periodPreset === 'semester') return getSemesterRange();
+    if (periodPreset === 'semester') return getSemesterRange(termStartIso);
     if (periodPreset === 'month') return getMonthRange();
     if (periodPreset === 'custom' && customStart && customEnd) {
       return { start: customStart, end: customEnd };
     }
     return undefined;
-  }, [periodPreset, customStart, customEnd]);
+  }, [periodPreset, customStart, customEnd, termStartIso]);
 
   // 출결 통계
   const attendanceStats = useMemo(() => {
@@ -84,65 +93,76 @@ export function UnifiedExportModal({ classId, defaultTab = 'attendance', onClose
     return { total: filtered.length, students: studentCount };
   }, [observationRecords, classId, period]);
 
-  const saveFile = useCallback(async (buffer: ArrayBuffer, fileName: string) => {
-    if (window.electronAPI) {
-      const saved = await window.electronAPI.showSaveDialog({
-        title: '기록 내보내기',
-        defaultPath: fileName,
-        filters: [{ name: 'Excel 파일', extensions: ['xlsx'] }],
-      });
-      if (saved) {
-        await window.electronAPI.writeFile(saved.handle, buffer);
-        showToast('파일이 저장되었습니다', 'success', {
-          label: '파일 열기',
-          onClick: () => window.electronAPI?.openFile(saved.handle),
+  const saveFile = useCallback(
+    async (buffer: ArrayBuffer, fileName: string) => {
+      if (window.electronAPI) {
+        const saved = await window.electronAPI.showSaveDialog({
+          title: '기록 내보내기',
+          defaultPath: fileName,
+          filters: [{ name: 'Excel 파일', extensions: ['xlsx'] }],
         });
+        if (saved) {
+          await window.electronAPI.writeFile(saved.handle, buffer);
+          showToast('파일이 저장되었습니다', 'success', {
+            label: '파일 열기',
+            onClick: () => window.electronAPI?.openFile(saved.handle),
+          });
+          onClose();
+        }
+      } else {
+        const blob = new Blob([buffer], {
+          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        });
+
+        // File System Access API (저장 다이얼로그)
+        if ('showSaveFilePicker' in window) {
+          try {
+            const handle = await (
+              window as unknown as {
+                showSaveFilePicker: (opts: unknown) => Promise<FileSystemFileHandle>;
+              }
+            ).showSaveFilePicker({
+              suggestedName: fileName,
+              types: [
+                {
+                  description: 'Excel 파일',
+                  accept: {
+                    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
+                  },
+                },
+              ],
+            });
+            const writable = await handle.createWritable();
+            await writable.write(blob);
+            await writable.close();
+            showToast('파일이 저장되었습니다', 'success');
+            onClose();
+            return;
+          } catch (err) {
+            // 사용자가 취소한 경우만 return, 그 외 에러는 fallback으로
+            if (err instanceof DOMException && err.name === 'AbortError') return;
+            // fall through to blob download
+          }
+        }
+
+        // Fallback: Blob URL 다운로드
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        }, 1000);
+        showToast('파일이 다운로드되었습니다', 'success');
         onClose();
       }
-    } else {
-      const blob = new Blob([buffer], {
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      });
-
-      // File System Access API (저장 다이얼로그)
-      if ('showSaveFilePicker' in window) {
-        try {
-          const handle = await (window as unknown as { showSaveFilePicker: (opts: unknown) => Promise<FileSystemFileHandle> }).showSaveFilePicker({
-            suggestedName: fileName,
-            types: [{
-              description: 'Excel 파일',
-              accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] },
-            }],
-          });
-          const writable = await handle.createWritable();
-          await writable.write(blob);
-          await writable.close();
-          showToast('파일이 저장되었습니다', 'success');
-          onClose();
-          return;
-        } catch (err) {
-          // 사용자가 취소한 경우만 return, 그 외 에러는 fallback으로
-          if (err instanceof DOMException && err.name === 'AbortError') return;
-          // fall through to blob download
-        }
-      }
-
-      // Fallback: Blob URL 다운로드
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.style.display = 'none';
-      a.href = url;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(() => {
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      }, 1000);
-      showToast('파일이 다운로드되었습니다', 'success');
-      onClose();
-    }
-  }, [showToast, onClose]);
+    },
+    [showToast, onClose],
+  );
 
   const handleExport = useCallback(async () => {
     setIsExporting(true);
@@ -172,7 +192,12 @@ export function UnifiedExportModal({ classId, defaultTab = 'attendance', onClose
             content: r.content,
           };
         });
-        const buffer = await exportObservationsToExcel(exportRecords, className, period, selectedTags.length === DEFAULT_OBSERVATION_TAGS.length ? undefined : selectedTags);
+        const buffer = await exportObservationsToExcel(
+          exportRecords,
+          className,
+          period,
+          selectedTags.length === DEFAULT_OBSERVATION_TAGS.length ? undefined : selectedTags,
+        );
         await saveFile(buffer, `${className}_관찰기록.xlsx`);
       }
     } catch {
@@ -180,7 +205,20 @@ export function UnifiedExportModal({ classId, defaultTab = 'attendance', onClose
     } finally {
       setIsExporting(false);
     }
-  }, [exportType, attendanceRecords, observationRecords, classId, students, className, period, attendanceStats.total, observationStats.total, showToast, saveFile, selectedTags]);
+  }, [
+    exportType,
+    attendanceRecords,
+    observationRecords,
+    classId,
+    students,
+    className,
+    period,
+    attendanceStats.total,
+    observationStats.total,
+    showToast,
+    saveFile,
+    selectedTags,
+  ]);
 
   const currentCount = exportType === 'attendance' ? attendanceStats.total : observationStats.total;
 
@@ -230,12 +268,12 @@ export function UnifiedExportModal({ classId, defaultTab = 'attendance', onClose
           <div>
             <label className="text-sm text-sp-muted mb-2 block">기간</label>
             <div className="flex gap-2 flex-wrap">
-              {([
+              {[
                 { id: 'all' as const, label: '전체' },
                 { id: 'semester' as const, label: '이번 학기' },
                 { id: 'month' as const, label: '이번 달' },
                 { id: 'custom' as const, label: '직접 입력' },
-              ]).map((p) => (
+              ].map((p) => (
                 <button
                   key={p.id}
                   onClick={() => setPeriodPreset(p.id)}
@@ -274,19 +312,26 @@ export function UnifiedExportModal({ classId, defaultTab = 'attendance', onClose
               <div className="flex items-center justify-between mb-2">
                 <label className="text-sm text-sp-muted">태그 필터</label>
                 <button
-                  onClick={() => setSelectedTags(
-                    selectedTags.length === DEFAULT_OBSERVATION_TAGS.length
-                      ? []
-                      : [...DEFAULT_OBSERVATION_TAGS]
-                  )}
+                  onClick={() =>
+                    setSelectedTags(
+                      selectedTags.length === DEFAULT_OBSERVATION_TAGS.length
+                        ? []
+                        : [...DEFAULT_OBSERVATION_TAGS],
+                    )
+                  }
                   className="text-xs text-sp-accent hover:underline"
                 >
-                  {selectedTags.length === DEFAULT_OBSERVATION_TAGS.length ? '전체 해제' : '전체 선택'}
+                  {selectedTags.length === DEFAULT_OBSERVATION_TAGS.length
+                    ? '전체 해제'
+                    : '전체 선택'}
                 </button>
               </div>
               <div className="flex flex-wrap gap-2">
                 {[...DEFAULT_OBSERVATION_TAGS].map((tag) => (
-                  <label key={tag} className="flex items-center gap-1.5 text-xs text-sp-text cursor-pointer select-none">
+                  <label
+                    key={tag}
+                    className="flex items-center gap-1.5 text-xs text-sp-text cursor-pointer select-none"
+                  >
                     <input
                       type="checkbox"
                       checked={selectedTags.includes(tag)}
@@ -332,13 +377,23 @@ export function UnifiedExportModal({ classId, defaultTab = 'attendance', onClose
             <p>엑셀 파일에 포함되는 내용:</p>
             {exportType === 'attendance' ? (
               <>
-                <p>· <strong className="text-sp-text">출결 현황</strong> 시트 — 날짜별 출결 상태</p>
-                <p>· <strong className="text-sp-text">출결 통계</strong> 시트 — 학생별 출석/결석/지각 합계</p>
+                <p>
+                  · <strong className="text-sp-text">출결 현황</strong> 시트 — 날짜별 출결 상태
+                </p>
+                <p>
+                  · <strong className="text-sp-text">출결 통계</strong> 시트 — 학생별 출석/결석/지각
+                  합계
+                </p>
               </>
             ) : (
               <>
-                <p>· <strong className="text-sp-text">관찰기록</strong> 시트 — 날짜순 전체 기록</p>
-                <p>· <strong className="text-sp-text">학생별 요약</strong> 시트 — 기록 수, 최근일, 태그 분포</p>
+                <p>
+                  · <strong className="text-sp-text">관찰기록</strong> 시트 — 날짜순 전체 기록
+                </p>
+                <p>
+                  · <strong className="text-sp-text">학생별 요약</strong> 시트 — 기록 수, 최근일,
+                  태그 분포
+                </p>
               </>
             )}
           </div>
