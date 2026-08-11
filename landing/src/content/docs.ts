@@ -328,7 +328,7 @@ export const docsArticles: readonly DocArticle[] = [
     title: '대시보드',
     description: '오늘 필요한 정보를 한 화면에서 확인하고 위젯을 정리합니다.',
     category: 'features',
-    lastUpdated: '2026-06-23',
+    lastUpdated: '2026-08-12',
     image: { src: '/docs/screenshots/dashboard.png', alt: '쌤핀 대시보드 화면' },
     sections: [
       {
@@ -347,6 +347,9 @@ export const docsArticles: readonly DocArticle[] = [
           '드래그해서 자주 보는 정보를 위쪽으로 옮깁니다.',
           '글씨 크기와 표시 옵션을 조정합니다.',
         ],
+        body: [
+          '편집 모드가 아니어도 카드에 마우스를 잠시 올리면 카드 왼쪽 위(제목 쪽)에 옮기기·숨기기 손잡이가 나타납니다. 카드 오른쪽 위는 미니 달력의 달 이동, 자주 쓰는 도구의 편집처럼 위젯이 직접 쓰는 버튼 자리라 손잡이가 그 위에 겹치지 않습니다.',
+        ],
       },
       {
         id: 'message',
@@ -364,7 +367,7 @@ export const docsArticles: readonly DocArticle[] = [
     description:
       '학급 시간표와 교사 시간표를 입력하고 NEIS, 컴시간, 엑셀, 색상, 변동 시간표를 관리합니다.',
     category: 'features',
-    lastUpdated: '2026-08-11',
+    lastUpdated: '2026-08-12',
     image: { src: '/docs/screenshots/timetable.png', alt: '쌤핀 시간표 화면' },
     sections: [
       {
@@ -391,6 +394,7 @@ export const docsArticles: readonly DocArticle[] = [
         body: [
           '학기가 바뀌어도 시간표는 저절로 바뀌지 않습니다. 쌤핀은 지금 쓰는 시간표 한 벌만 가지고 있어서, 2학기가 시작되면 새 시간표를 직접 불러오거나 입력해 주셔야 합니다.',
           '학급 시간표와 교사 시간표는 따로 관리되므로, 둘 다 쓰신다면 탭을 바꿔 가며 각각 갱신해 주세요.',
+          '학기가 바뀌면 시간표 화면 위쪽에 "새 학기가 되었어요" 안내가 뜹니다. 이 안내가 늦게 뜬다면 설정 > 연동·백업 > 학년도/학기에서 우리 학교 개학일을 알려 주세요 — 개학일을 모르면 8월 1일을 2학기 시작으로 봅니다.',
         ],
         steps: [
           '시간표 화면 위쪽에서 바꿀 탭(학급 또는 교사)을 먼저 고릅니다.',
@@ -856,9 +860,10 @@ export const docsArticles: readonly DocArticle[] = [
   {
     slug: 'features/settings',
     title: '설정',
-    description: '학교, Google 연동, 위젯, 좌석, 보안, 화면, 사이드바, 앱 정보를 관리합니다.',
+    description:
+      '학교, Google 연동, 위젯, 좌석, 보안, 학년도/학기, 화면, 사이드바, 앱 정보를 관리합니다.',
     category: 'features',
-    lastUpdated: '2026-06-23',
+    lastUpdated: '2026-08-12',
     image: { src: '/docs/screenshots/settings.png', alt: '쌤핀 설정 화면' },
     sections: [
       {
@@ -867,6 +872,7 @@ export const docsArticles: readonly DocArticle[] = [
         bullets: [
           '일반, 학교 정보, 교시 시간, 위젯, 좌석 설정, 보안',
           'Google 연동: 계정, 백업, Calendar, Tasks',
+          '학년도/학기: 현재 학기와 개학일, 학년도 마무리와 보관함',
           '날씨, 화면, 사이드바, 일정, 데이터 관리, 앱 정보',
         ],
       },
@@ -1228,15 +1234,29 @@ export const docsArticles: readonly DocArticle[] = [
   {
     slug: 'sync/data-location',
     title: '데이터 위치와 백업',
-    description: '로컬 저장 위치, 수동 백업, Drive 백업의 차이를 이해합니다.',
+    description: '로컬 저장 위치, 현재 학기 설정, 수동 백업, Drive 백업의 차이를 이해합니다.',
     category: 'sync',
-    lastUpdated: '2026-08-07',
+    lastUpdated: '2026-08-12',
     sections: [
       {
         id: 'local',
         title: '로컬 데이터',
         body: [
           'Windows에서는 사용자 AppData 아래 쌤핀 데이터 폴더에 저장됩니다. 앱을 삭제해도 데이터 폴더는 별도로 남아 있어 재설치 후 다시 사용할 수 있습니다.',
+        ],
+      },
+      {
+        id: 'current-term',
+        title: '현재 학기와 개학일',
+        body: [
+          '쌤핀은 기본적으로 3~7월을 1학기, 8~2월을 2학기로 봅니다. 우리 학교 개학일이 이와 다르면 설정 > 연동·백업 > 학년도/학기의 "현재 학기"에서 알려 주세요. 시간표 갱신 안내와 "이번 학기" 통계·내보내기가 모두 그 날짜에 맞춰집니다.',
+          '학기를 고르고 개학일을 넣으면 "지금 쌤핀은 ○학기로 알고 있어요"가 바로 보입니다. 개학일이 아직 오지 않았다면 언제부터 바뀌는지도 함께 알려드립니다.',
+        ],
+        bullets: [
+          'NEIS 학사일정을 받아 두셨다면 "개학식"을 찾아 날짜를 미리 채워 주고, 어느 일정에서 가져온 날짜인지도 보여드립니다. 맞으면 그대로 두고, 다르면 고쳐 주세요.',
+          '8월에 앱을 켜면 "2학기가 시작됐나요?"를 한 번만 확인합니다. 넘기면 그 학기에는 다시 묻지 않습니다.',
+          '개학일을 비워 두면 달력 기준(1학기 3월 1일, 2학기 8월 1일)으로 돌아갑니다.',
+          '이 설정은 표시에만 영향을 줍니다. 기록을 보관함으로 옮기는 것은 아래의 "학년도 마무리"이며, 학기를 맞추려고 마무리를 실행하실 필요는 없습니다.',
         ],
       },
       {
@@ -1589,9 +1609,9 @@ export const docsArticles: readonly DocArticle[] = [
   {
     slug: 'faq',
     title: '자주 묻는 질문',
-    description: '설치, 데이터, 오프라인, 학운위, 업데이트, 모바일 관련 질문을 모았습니다.',
+    description: '설치, 데이터, 오프라인, 학기, 학운위, 업데이트, 모바일 관련 질문을 모았습니다.',
     category: 'reference',
-    lastUpdated: '2026-08-11',
+    lastUpdated: '2026-08-12',
     sections: [
       {
         id: 'free',
@@ -1603,6 +1623,15 @@ export const docsArticles: readonly DocArticle[] = [
         title: '인터넷 없이도 되나요?',
         body: [
           '핵심 기능은 오프라인에서 동작합니다. 다만 날씨, 급식 자동 조회, NEIS, Google 연동, 공유 링크가 필요한 기능은 인터넷이 필요합니다.',
+        ],
+      },
+      {
+        id: 'wrong-term',
+        title: '2학기를 시작했는데 앱이 계속 1학기로 보여요',
+        body: [
+          '설정 > 연동·백업 > 학년도/학기의 "현재 학기"에서 우리 학교 개학일을 알려 주시면 바로 맞춰집니다. 학기를 고르고 개학일을 넣은 뒤 "이 학기로 맞추기"를 누르면 끝이고, NEIS 학사일정을 받아 두셨다면 "개학식" 날짜가 미리 채워져 있습니다.',
+          '쌤핀은 개학일을 모를 때 3~7월을 1학기, 8~2월을 2학기로 봅니다. 8월 말까지 1학기인 학교나 3월이 아닌 때 개학하는 학교는 개학일을 한 번 넣어 주시면 그 뒤로 정확해집니다.',
+          '기록을 보관함으로 옮기는 "학년도 마무리"를 실행하실 필요는 없습니다. 학기 표시와 학년도 마무리는 별개입니다.',
         ],
       },
       {
@@ -1692,26 +1721,30 @@ export const docsArticles: readonly DocArticle[] = [
     title: '업데이트 내역',
     description: '최신 버전에서 달라진 점과 주요 기능입니다.',
     category: 'reference',
-    lastUpdated: '2026-06-23',
+    lastUpdated: '2026-08-12',
     sections: [
       {
         id: 'current',
         title: '지원 기준 버전',
-        body: ['이 가이드는 쌤핀 v2.2.2에서 사용할 수 있는 기능을 기준으로 정리했습니다.'],
+        body: [
+          '이 가이드는 쌤핀 v2.3.8에서 사용할 수 있는 기능을 기준으로 정리했습니다. 버전별 상세 변경 내역은 앱의 설정 > 앱 정보에서 확인하실 수 있습니다.',
+        ],
       },
       {
         id: 'recent',
         title: '최근 반영된 주요 기능',
         bullets: [
-          '관찰 기록과 출결에 자료 첨부',
-          'AI 브릿지 출결 현황 연결',
-          'Google Drive 동기화 대상 확대',
-          'Google Tasks 양방향 동기화',
-          '성적 분석, 루브릭, 마크다운 변환기, 배점 계산기',
+          '개학일 기준 학기 판정 — 설정 > 연동·백업 > 학년도/학기에서 우리 학교 개학일 등록 (v2.3.8)',
+          '진도를 다른 반에도 함께 기록 (v2.3.8, 모바일 포함)',
+          '새로고침 한 번으로 컴시간·압핀 시간표 변동까지 확인 (v2.3.8)',
+          '학년도 마무리와 보관함, 수업반 보관 (v2.3.0)',
+          'Google Drive 동기화 안정화와 충돌 처리 개선 (v2.3.1~v2.3.6)',
+          '출결 그리드, 기록 검토 모드, 관찰 기록 알림 (v2.2.12~v2.2.13)',
+          '관찰 기록과 출결에 자료 첨부, AI 브릿지 진도·출결 연결',
         ],
       },
     ],
-    related: ['features/attachments', 'features/ai-bridge', 'features/tools'],
+    related: ['sync/data-location', 'features/attachments', 'features/timetable'],
   },
   {
     slug: 'contact',
