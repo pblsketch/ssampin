@@ -6,6 +6,7 @@ import { appinPort } from '@adapters/di/container';
 import { autoSyncAppinTimetable } from '@usecases/timetable/AutoSyncAppinTimetable';
 import { toLocalDateString } from '@shared/utils/localDate';
 import type { TeacherScheduleData, ClassScheduleData } from '@domain/entities/Timetable';
+import type { TimetableCheckResult } from './timetableCheckTypes';
 
 /** 압핀 변경 감지 시 시간표 화면으로 이동시키는 앱 내 네비게이션 이벤트 */
 function navigateToTimetable(): void {
@@ -21,20 +22,25 @@ async function markAppinSynced(today: string): Promise<void> {
 }
 
 /**
- * 압핀 변경 확인 + 결과 처리(부수효과). 앱 시작 훅과 수동 버튼이 공유한다.
+ * 압핀 변경 확인 + 결과 처리(부수효과). 앱 시작 훅과 수동 버튼, 위젯 새로고침이 공유한다.
+ * silent 를 켜면 토스트 없이 판정 결과만 돌려준다(토스트 표시기가 없는 위젯 창 전용).
  * 압핀은 학교·교사번호·학년/반이 안정적이라 결정적 재fetch → 지문 재매칭이 없다.
  * - 변경 없음 → (수동일 때만) 안내
  * - 변경 있음 + autoApply → 무음 적용, 아니면 검토 대기(비파괴) + 알림
  */
-export async function checkAppinTimetableChange(opts: { manual: boolean }): Promise<void> {
-  const { manual } = opts;
+export async function checkAppinTimetableChange(opts: {
+  manual: boolean;
+  silent?: boolean;
+}): Promise<TimetableCheckResult> {
+  const { manual, silent = false } = opts;
   const settings = useSettingsStore.getState().settings;
   const appin = settings.appin;
-  const toast = useToastStore.getState().show;
+  const show = useToastStore.getState().show;
+  const toast: typeof show = silent ? () => undefined : show;
 
   if (!appin?.autoSync?.enabled) {
     if (manual) toast('먼저 압핀에서 시간표를 한 번 불러와 주세요.', 'info');
-    return;
+    return { status: 'not-configured', changeCount: 0 };
   }
 
   const schedule = useScheduleStore.getState();
@@ -55,7 +61,10 @@ export async function checkAppinTimetableChange(opts: { manual: boolean }): Prom
         'info',
       );
     }
-    return;
+    return {
+      status: result.reason === 'fetch-failed' ? 'fetch-failed' : 'not-configured',
+      changeCount: 0,
+    };
   }
 
   const today = toLocalDateString();
@@ -63,7 +72,7 @@ export async function checkAppinTimetableChange(opts: { manual: boolean }): Prom
   if (!result.changed || !result.data) {
     if (manual) toast('시간표에 바뀐 내용이 없어요. 최신 상태예요.', 'success');
     await markAppinSynced(today);
-    return;
+    return { status: 'unchanged', changeCount: 0 };
   }
 
   const changeCount = result.diff?.changes.length ?? 0;
@@ -77,7 +86,7 @@ export async function checkAppinTimetableChange(opts: { manual: boolean }): Prom
     }
     toast(`압핀 시간표가 업데이트됐어요. (${changeCount}칸 변경)`, 'success');
     await markAppinSynced(today);
-    return;
+    return { status: 'applied', changeCount };
   }
 
   // 기본: 비파괴 — 검토 대기로 두고 알림만
@@ -91,6 +100,7 @@ export async function checkAppinTimetableChange(opts: { manual: boolean }): Prom
     onClick: navigateToTimetable,
   });
   await markAppinSynced(today);
+  return { status: 'pending', changeCount };
 }
 
 /**

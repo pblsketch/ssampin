@@ -4,7 +4,10 @@ import { EventPopup } from '@adapters/components/Dashboard/EventPopup';
 import { ReminderPopup } from '@adapters/components/Reminder/ReminderPopup';
 import { Dashboard } from '@adapters/components/Dashboard/Dashboard';
 import { Seating } from '@adapters/components/Seating/Seating';
-import { TimetablePage } from '@adapters/components/Timetable/TimetablePage';
+import {
+  TimetablePage,
+  type TimetableInitialIntent,
+} from '@adapters/components/Timetable/TimetablePage';
 import { HomeroomPage } from '@adapters/components/Homeroom/HomeroomPage';
 import { Schedule } from '@adapters/components/Schedule/Schedule';
 import { Todo } from '@adapters/components/Todo/Todo';
@@ -75,6 +78,12 @@ import { useAiBridgeLiveSync } from '@adapters/hooks/useAiBridgeLiveSync';
 import { useQuickAddStore } from '@adapters/stores/useQuickAddStore';
 import type { QuickAddKind } from '@adapters/stores/useQuickAddStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+import {
+  resolveCurrentTerm,
+  resolveTermStartDate,
+  daysSinceTermStart,
+  toLocalIsoDate,
+} from '@domain/rules/schoolTermStart';
 import { useEventsStore } from '@adapters/stores/useEventsStore';
 import { useCalendarSyncStore } from '@adapters/stores/useCalendarSyncStore';
 import { useGoogleAccountStore } from '@adapters/stores/useGoogleAccountStore';
@@ -124,6 +133,8 @@ import { ShareModal } from '@adapters/components/Share/ShareModal';
 import { SharePromptOverlay } from '@adapters/components/Share/SharePromptOverlay';
 import { recordActiveDay } from '@adapters/stores/useShareStore';
 import { ShareWindowApp } from '@adapters/components/MultiSurvey/v2/Share/ShareWindowApp';
+import { WidgetSyncBanner } from '@widgets/components/WidgetSyncBanner';
+import { parseNavigationTarget } from '@adapters/utils/navigationTarget';
 
 function isWidgetMode(): boolean {
   const params = new URLSearchParams(window.location.search);
@@ -182,6 +193,14 @@ interface RenderPageContext {
   readonly settingsInitialTab?:
     | import('@adapters/components/Settings/SettingsPage').SettingsTabId
     | null;
+  /**
+   * 시간표 페이지 진입 의도. navigateToPage('timetable#sync-review') 형식으로
+   * 위젯의 "검토하기"에서 진입할 때 사용. 감지 결과(검토 대기)는 창별 메모리라
+   * 창을 넘지 못하므로, 상태가 아니라 "무엇을 하러 왔는지"만 넘긴다.
+   */
+  readonly timetableInitialIntent?: TimetableInitialIntent | null;
+  /** 의도를 한 번 소비했음을 알려 재진입 시 반복 실행되지 않게 한다 */
+  readonly onTimetableIntentConsumed?: () => void;
 }
 
 function renderPage(
@@ -203,7 +222,10 @@ function renderPage(
   if (page === 'timetable') {
     return (
       <PinGuard feature="timetable">
-        <TimetablePage />
+        <TimetablePage
+          initialIntent={ctx.timetableInitialIntent ?? null}
+          onIntentConsumed={ctx.onTimetableIntentConsumed}
+        />
       </PinGuard>
     );
   }
@@ -452,8 +474,8 @@ function WidgetUpdateBanner() {
 
   if (status === 'idle') return null;
 
-  const base =
-    'fixed bottom-0 left-0 right-0 text-white text-xs text-center py-2 z-50 transition-colors';
+  // 위치는 WidgetApp 의 하단 알림 스택 컨테이너가 잡는다(다른 배너와 겹치지 않도록).
+  const base = 'w-full text-white text-xs text-center py-2 transition-colors';
 
   if (status === 'available') {
     return (
@@ -688,7 +710,11 @@ function WidgetApp() {
   return (
     <div className="h-screen w-screen bg-transparent">
       <Widget />
-      <WidgetUpdateBanner />
+      {/* 하단 알림 스택 — 시간표 변동 결과가 업데이트 안내 위에 쌓인다(겹침 방지) */}
+      <div className="fixed bottom-0 left-0 right-0 z-50 flex flex-col">
+        <WidgetSyncBanner />
+        <WidgetUpdateBanner />
+      </div>
     </div>
   );
 }
@@ -703,6 +729,11 @@ function MainApp() {
   const [settingsInitialTab, setSettingsInitialTab] = useState<
     import('@adapters/components/Settings/SettingsPage').SettingsTabId | null
   >(null);
+  // 시간표 페이지 진입 의도 (위젯의 "검토하기"로 'timetable#sync-review' 진입한 경우만).
+  // 위와 같은 이유로 한 번 소비되면 즉시 null 로 되돌린다.
+  const [timetableInitialIntent, setTimetableInitialIntent] =
+    useState<TimetableInitialIntent | null>(null);
+  const handleTimetableIntentConsumed = useCallback(() => setTimetableInitialIntent(null), []);
 
   // 바탕화면 아이콘 아래 모드 fallback 수신 (v2.1.0~)
   useDesktopModeFallback();
@@ -890,21 +921,12 @@ function MainApp() {
     if (!api?.onNavigateToPage) return;
 
     const unsubscribe = api.onNavigateToPage((page: string) => {
-      // 'settings#widget' 같은 fragment 형식 지원 — 설정 페이지 특정 탭 직접 진입.
-      // (DesktopOrganize 안내 배너 '설정 열기' 버튼 등에서 사용)
-      const hashIdx = page.indexOf('#');
-      if (hashIdx >= 0) {
-        const base = page.slice(0, hashIdx);
-        const fragment = page.slice(hashIdx + 1);
-        if (base === 'settings' && fragment.length > 0) {
-          setSettingsInitialTab(
-            fragment as import('@adapters/components/Settings/SettingsPage').SettingsTabId,
-          );
-          setCurrentPage('settings');
-          return;
-        }
-      }
-      setCurrentPage(page as PageId);
+      // 'settings#widget'(설정 특정 탭) / 'timetable#sync-review'(위젯의 시간표 변동 검토)
+      // 같은 fragment 형식 지원 — parseNavigationTarget 이 규칙의 단일 소스.
+      const target = parseNavigationTarget(page);
+      if (target.settingsTab) setSettingsInitialTab(target.settingsTab);
+      if (target.timetableIntent) setTimetableInitialIntent(target.timetableIntent);
+      setCurrentPage(target.page);
     });
 
     return unsubscribe;
@@ -930,20 +952,10 @@ function MainApp() {
   // S2.5 빈 상태의 "학년도 마무리 설정 열기"가 사용).
   useEffect(() => {
     const handler = (e: Event) => {
-      const detail = (e as CustomEvent<string>).detail;
-      const hashIdx = detail.indexOf('#');
-      if (hashIdx >= 0) {
-        const base = detail.slice(0, hashIdx);
-        const fragment = detail.slice(hashIdx + 1);
-        if (base === 'settings' && fragment.length > 0) {
-          setSettingsInitialTab(
-            fragment as import('@adapters/components/Settings/SettingsPage').SettingsTabId,
-          );
-          setCurrentPage('settings');
-          return;
-        }
-      }
-      setCurrentPage(detail as PageId);
+      const target = parseNavigationTarget((e as CustomEvent<string>).detail);
+      if (target.settingsTab) setSettingsInitialTab(target.settingsTab);
+      if (target.timetableIntent) setTimetableInitialIntent(target.timetableIntent);
+      setCurrentPage(target.page);
     };
     window.addEventListener('ssampin:navigate', handler);
     return () => window.removeEventListener('ssampin:navigate', handler);
@@ -1151,11 +1163,20 @@ function MainApp() {
         void useNeisScheduleStore.getState().syncIfNeeded();
       }
 
-      // 학기 초(3/1~3/15, 9/1~9/15) 동기화 안내
-      const now = new Date();
-      const month = now.getMonth() + 1;
-      const day = now.getDate();
-      const isSemesterStart = (month === 3 || month === 9) && day <= 15;
+      // 학기 초(개학일로부터 15일 이내) 동기화 안내.
+      // 월을 직접 세면(3월·9월 앞 15일) 8월에 개학한 학교는 개학하고 2주가 지나서야 안내를 받는다.
+      const appSettings = useSettingsStore.getState().settings;
+      const todayIso = toLocalIsoDate(new Date());
+      const term = resolveCurrentTerm({
+        today: new Date(`${todayIso}T00:00:00`),
+        termStartDates: appSettings.termStartDates,
+        currentTerm: appSettings.currentTerm,
+      });
+      const elapsed = daysSinceTermStart(
+        todayIso,
+        resolveTermStartDate(term, appSettings.termStartDates),
+      );
+      const isSemesterStart = elapsed !== null && elapsed >= 0 && elapsed <= 15;
 
       if (isSemesterStart && neisSettings.enabled && !neisSettings.lastSyncAt) {
         showToast('새 학기가 시작되었습니다! 설정에서 NEIS 학사일정을 동기화해보세요.', 'info');
@@ -1210,6 +1231,8 @@ function MainApp() {
             onRequestDualMode: handleRequestDualMode,
             lastSingleTool,
             settingsInitialTab,
+            timetableInitialIntent,
+            onTimetableIntentConsumed: handleTimetableIntentConsumed,
           })}
         </main>
         <ModalCoordinator />

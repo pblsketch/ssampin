@@ -19,6 +19,7 @@ import { WidgetTabBar } from '@widgets/components/WidgetTabBar';
 import type { TabFilter } from '@widgets/components/WidgetTabBar';
 import { getSpanClass } from '@widgets/utils/getSpanClass';
 import { triggerRefreshAll } from '@widgets/hooks/useWidgetRefresh';
+import { triggerTimetableCheck } from '@widgets/hooks/useTimetableChangeCheck';
 import { LayoutSelector } from '@widgets/components/LayoutSelector';
 import { WidgetContextMenu } from './WidgetContextMenu';
 import { WidgetWeatherBar } from '@widgets/components/WidgetWeatherBar';
@@ -503,9 +504,12 @@ export function Widget() {
                 onClick={(e) => {
                   e.stopPropagation();
                   triggerRefreshAll();
+                  // 사용자가 직접 누른 순간에만 컴시간·압핀 변동을 확인한다.
+                  // (자동 새로고침 경로인 useWidgetRefresh 에는 절대 넣지 말 것 — 5분 폴링이 된다)
+                  triggerTimetableCheck();
                 }}
                 onDoubleClick={(e) => e.stopPropagation()}
-                title="모든 위젯 새로고침"
+                title="모든 위젯 새로고침 (시간표 변동도 함께 확인)"
               >
                 <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
                   refresh

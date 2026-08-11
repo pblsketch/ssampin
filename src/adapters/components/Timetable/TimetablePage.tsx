@@ -67,7 +67,20 @@ import {
 
 type TabType = 'class' | 'teacher';
 
-export function TimetablePage() {
+/**
+ * 시간표 페이지 진입 의도.
+ * - 'sync-review': 위젯 새로고침에서 감지한 시간표 변동을 이어서 검토하러 왔다.
+ *   감지 결과(검토 대기 상태)는 창별 메모리라 위젯 → 메인으로 넘어오지 못하므로,
+ *   여기 도착한 뒤 이미 대기 중인 검토가 있으면 바로 열고, 없으면 한 번 더 확인한다.
+ */
+export type TimetableInitialIntent = 'sync-review';
+
+interface TimetablePageProps {
+  readonly initialIntent?: TimetableInitialIntent | null;
+  readonly onIntentConsumed?: () => void;
+}
+
+export function TimetablePage({ initialIntent = null, onIntentConsumed }: TimetablePageProps = {}) {
   const {
     classSchedule,
     teacherSchedule,
@@ -621,6 +634,46 @@ export function TimetablePage() {
       setCheckingAppin(false);
     }
   }, [checkingAppin]);
+
+  // ── 위젯 "검토하기"로 진입한 경우(initialIntent='sync-review') 이어받기 ──
+  // 위젯이 감지한 검토 대기 상태는 창별 메모리라 여기까지 오지 못한다(메모리 절약 모드면
+  // 메인 창 자체가 새로 만들어진다). 그래서 의도만 넘겨받아 여기서 마무리한다.
+  // StrictMode 재마운트로 두 번 조회하지 않도록 ref 로 1회만 실행한다.
+  const syncIntentHandledRef = useRef(false);
+  useEffect(() => {
+    if (initialIntent !== 'sync-review') return;
+    if (syncIntentHandledRef.current) return;
+    syncIntentHandledRef.current = true;
+    onIntentConsumed?.();
+
+    const openComciganPreview = (): boolean => {
+      const pending = useScheduleStore.getState().pendingComciganReview;
+      if (!pending) return false;
+      setPreviewSchedule(pending.schedule);
+      setPreviewPeriodTimes(null);
+      setPreviewFingerprint(null);
+      setShowExcelPreview(true);
+      return true;
+    };
+
+    void (async () => {
+      // 메모리 절약 모드에서는 이 창이 방금 만들어졌을 수 있다. 저장된 시간표를 먼저 읽지 않으면
+      // 빈 시간표를 기준으로 비교해 "전부 바뀌었다"는 거짓 감지가 난다.
+      await Promise.all([useSettingsStore.getState().load(), useScheduleStore.getState().load()]);
+
+      // 메인 창이 살아 있어 이미 감지해 둔 게 있으면 재조회 없이 바로 연다.
+      if (openComciganPreview()) return;
+      if (useScheduleStore.getState().pendingAppinReview) return; // 압핀 배너로 이미 보임
+
+      if (useSettingsStore.getState().settings.comcigan?.autoSync?.enabled === true) {
+        const result = await checkComciganTimetableChange({ manual: true });
+        if (result.status === 'pending' && openComciganPreview()) return;
+      }
+      if (useSettingsStore.getState().settings.appin?.autoSync?.enabled === true) {
+        await checkAppinTimetableChange({ manual: true });
+      }
+    })();
+  }, [initialIntent, onIntentConsumed]);
 
   const handleExcelConfirm = useCallback(async () => {
     if (!previewSchedule) return;

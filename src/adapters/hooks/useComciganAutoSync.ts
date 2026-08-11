@@ -5,6 +5,7 @@ import { useToastStore } from '@adapters/components/common/Toast';
 import { comciganPort } from '@adapters/di/container';
 import { autoSyncComciganTimetable } from '@usecases/timetable/AutoSyncComciganTimetable';
 import { toLocalDateString } from '@shared/utils/localDate';
+import type { TimetableCheckResult } from './timetableCheckTypes';
 
 /** 컴시간 변경 감지 시 시간표 화면으로 이동시키는 앱 내 네비게이션 이벤트 */
 function navigateToTimetable(): void {
@@ -20,20 +21,27 @@ async function markComciganSynced(today: string): Promise<void> {
 }
 
 /**
- * 컴시간 변경 확인 + 결과 처리(부수효과). 앱 시작 훅과 수동 버튼이 공유한다.
+ * 컴시간 변경 확인 + 결과 처리(부수효과). 앱 시작 훅과 수동 버튼, 위젯 새로고침이 공유한다.
  * - 매칭 실패 → "다시 선택" 안내(적용 0)
  * - 변경 없음 → (수동일 때만) 안내
  * - 변경 있음 + autoApply → 무음 적용, 아니면 검토 대기(비파괴) + 알림
+ *
+ * 판정 결과를 반환하는 이유: 위젯 창에는 토스트 표시기가 없어(App.tsx WidgetApp) 안내를
+ * 호출자가 직접 그려야 한다. silent 를 켜면 토스트를 띄우지 않고 결과만 돌려준다.
  */
-export async function checkComciganTimetableChange(opts: { manual: boolean }): Promise<void> {
-  const { manual } = opts;
+export async function checkComciganTimetableChange(opts: {
+  manual: boolean;
+  silent?: boolean;
+}): Promise<TimetableCheckResult> {
+  const { manual, silent = false } = opts;
   const settings = useSettingsStore.getState().settings;
   const comcigan = settings.comcigan;
-  const toast = useToastStore.getState().show;
+  const show = useToastStore.getState().show;
+  const toast: typeof show = silent ? () => undefined : show;
 
   if (!comcigan?.autoSync?.enabled || !comcigan.fingerprint) {
     if (manual) toast('먼저 컴시간에서 시간표를 한 번 불러와 주세요.', 'info');
-    return;
+    return { status: 'not-configured', changeCount: 0 };
   }
 
   const schedule = useScheduleStore.getState();
@@ -53,7 +61,10 @@ export async function checkComciganTimetableChange(opts: { manual: boolean }): P
         'info',
       );
     }
-    return;
+    return {
+      status: result.reason === 'fetch-failed' ? 'fetch-failed' : 'not-configured',
+      changeCount: 0,
+    };
   }
 
   const today = toLocalDateString();
@@ -67,13 +78,13 @@ export async function checkComciganTimetableChange(opts: { manual: boolean }): P
       5000,
     );
     await markComciganSynced(today);
-    return;
+    return { status: 'unmatched', changeCount: 0 };
   }
 
   if (!result.changed || !result.data) {
     if (manual) toast('시간표에 바뀐 내용이 없어요. 최신 상태예요.', 'success');
     await markComciganSynced(today);
-    return;
+    return { status: 'unchanged', changeCount: 0 };
   }
 
   const changeCount = result.diff?.changes.length ?? 0;
@@ -83,7 +94,7 @@ export async function checkComciganTimetableChange(opts: { manual: boolean }): P
     await useScheduleStore.getState().updateTeacherSchedule(result.data);
     toast(`컴시간 시간표가 업데이트됐어요. (${changeCount}칸 변경)`, 'success');
     await markComciganSynced(today);
-    return;
+    return { status: 'applied', changeCount };
   }
 
   // 기본: 비파괴 — 검토 대기로 두고 알림만
@@ -93,6 +104,7 @@ export async function checkComciganTimetableChange(opts: { manual: boolean }): P
     onClick: navigateToTimetable,
   });
   await markComciganSynced(today);
+  return { status: 'pending', changeCount };
 }
 
 /**

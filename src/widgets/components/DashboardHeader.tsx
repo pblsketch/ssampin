@@ -2,6 +2,7 @@ import { Clock } from '@adapters/components/Dashboard/Clock';
 import { WeatherBar } from '@adapters/components/Dashboard/WeatherBar';
 import { MessageBanner } from '@adapters/components/Dashboard/MessageBanner';
 import { triggerRefreshAll } from '../hooks/useWidgetRefresh';
+import { useTimetableChangeCheck } from '../hooks/useTimetableChangeCheck';
 
 interface DashboardHeaderProps {
   onOpenWidgetPanel: () => void;
@@ -12,8 +13,20 @@ interface DashboardHeaderProps {
  * 대시보드 헤더
  * - 시계/날씨/메시지 배너 (기존 그대로)
  * - 우측 상단: 새로고침 + 📋 위젯 관리 + 🎨 스타일 버튼
+ *
+ * 새로고침은 위젯 창 헤더의 같은 버튼과 동작을 맞춘다 — 카드 다시 그리기 + 시간표 변동 확인.
+ * 여기는 메인 창이라 토스트가 있으므로 silent 를 끄고 확인 함수의 안내를 그대로 쓴다
+ * (위젯 창은 토스트 표시기가 없어 배너로 대신한다).
  */
 export function DashboardHeader({ onOpenWidgetPanel, onOpenStylePanel }: DashboardHeaderProps) {
+  const { state: checkState, check: checkTimetableChange } = useTimetableChangeCheck({
+    silent: false,
+  });
+  // 확인은 네트워크를 타므로 누른 자리에서 바로 진행 표시를 준다.
+  // (결과 안내는 화면 오른쪽 아래 토스트라, 버튼 근처에 아무 변화가 없으면
+  //  클릭이 먹었는지 알 수 없다는 사용자 피드백 — 2026-08-12)
+  const checking = checkState.kind === 'checking';
+
   return (
     <header className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-6">
       <div>
@@ -26,11 +39,20 @@ export function DashboardHeader({ onOpenWidgetPanel, onOpenStylePanel }: Dashboa
 
         {/* 새로고침 버튼 */}
         <button
-          onClick={triggerRefreshAll}
-          className="shrink-0 rounded-lg p-2 text-sp-muted hover:text-sp-text hover:bg-sp-card transition-colors"
-          title="모든 위젯 새로고침"
+          onClick={() => {
+            triggerRefreshAll();
+            // 사용자가 직접 누른 순간에만 컴시간·압핀 변동을 확인한다.
+            // (자동 새로고침 경로인 useWidgetRefresh 에는 절대 넣지 말 것 — 5분 폴링이 된다)
+            checkTimetableChange();
+          }}
+          disabled={checking}
+          className="shrink-0 rounded-lg p-2 text-sp-muted hover:text-sp-text hover:bg-sp-card transition-colors disabled:opacity-60"
+          title={
+            checking ? '시간표 변동을 확인하는 중…' : '모든 위젯 새로고침 (시간표 변동도 함께 확인)'
+          }
         >
           <svg
+            className={checking ? 'animate-spin' : undefined}
             width="16"
             height="16"
             viewBox="0 0 24 24"
