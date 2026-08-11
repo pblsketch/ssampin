@@ -1,7 +1,8 @@
 import { useState, useCallback, useMemo } from 'react';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { useToastStore } from '@adapters/components/common/Toast';
-import { useProgressFanout, describeFanoutResult } from './useProgressFanout';
+import { useProgressFanout } from './useProgressFanout';
+import { describeFanoutResult } from '@domain/rules/progressFanout';
 import { resolvePreset, resolveClassroomPreset } from '@domain/valueObjects/SubjectColor';
 import type { SubjectColorMap } from '@domain/valueObjects/SubjectColor';
 import type { WeeklyProgressCell } from '@domain/rules/progressCalendarRules';

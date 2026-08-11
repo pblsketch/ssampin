@@ -2,9 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { useMobileProgressStore } from '@mobile/stores/useMobileProgressStore';
 import { useMobileTeachingClassStore } from '@mobile/stores/useMobileTeachingClassStore';
 import { useMobileSettingsStore } from '@mobile/stores/useMobileSettingsStore';
+import { useMobileScheduleStore } from '@mobile/stores/useMobileScheduleStore';
 import { useBottomSheet } from '@mobile/hooks/useBottomSheet';
+import { useMobileProgressFanout } from '@mobile/hooks/useMobileProgressFanout';
+import { ProgressFanoutSelector } from '@mobile/components/Class/ProgressFanoutSelector';
 import { todayISO } from '@mobile/utils/date';
 import { isSubjectMatch } from '@domain/rules/matchingRules';
+import { describeFanoutResult } from '@domain/rules/progressFanout';
 import type { TeachingClass } from '@domain/entities/TeachingClass';
 import { filterActiveClasses } from '@domain/rules/teachingClassArchive';
 import type { ProgressEntry, ProgressStatus } from '@domain/entities/CurriculumProgress';
@@ -62,6 +66,9 @@ export function MobileProgressLogModal({
   const updateEntry = useMobileProgressStore((s) => s.updateEntry);
   const getTodayEntries = useMobileProgressStore((s) => s.getTodayEntries);
   const settings = useMobileSettingsStore((s) => s.settings);
+  // "다른 반에도 함께 기록"이 대상 반의 교시를 찾으려면 교사 시간표가 필요하다.
+  // 이 모달은 Today 진입점에서도 열리므로 여기서 직접 보장한다(load는 멱등).
+  const loadSchedule = useMobileScheduleStore((s) => s.load);
 
   useBottomSheet(isOpen);
 
@@ -97,13 +104,26 @@ export function MobileProgressLogModal({
   const [formDate, setFormDate] = useState<string>(todayISO);
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
+  /** 저장 후 "다른 반에도 기록했습니다" 안내 (모바일엔 공용 토스트가 없어 완료 화면에 띄운다) */
+  const [fanoutMessage, setFanoutMessage] = useState<string | null>(null);
+
+  // 다른 반에도 함께 기록 — 추가 모드에서만 동작
+  const {
+    candidates: fanoutCandidates,
+    selectedIds: fanoutSelectedIds,
+    toggle: toggleFanoutClass,
+    clear: clearFanoutClasses,
+    buildPreview: buildFanoutPreview,
+    applyFanout,
+  } = useMobileProgressFanout(mode === 'add' && selectedClassId ? selectedClassId : null);
 
   useEffect(() => {
     if (isOpen) {
       void loadClasses();
       void loadProgress();
+      void loadSchedule();
     }
-  }, [isOpen, loadClasses, loadProgress]);
+  }, [isOpen, loadClasses, loadProgress, loadSchedule]);
 
   // 모달 오픈마다 폼 초기화 — mode 분기
   useEffect(() => {
@@ -118,6 +138,7 @@ export function MobileProgressLogModal({
       setPeriod(entryToEdit.period);
       setFormDate(entryToEdit.date);
       setSavedAt(null);
+      setFanoutMessage(null);
       return;
     }
 
@@ -128,6 +149,7 @@ export function MobileProgressLogModal({
     setPeriod(defaultPeriod);
     setFormDate(todayISO());
     setSavedAt(null);
+    setFanoutMessage(null);
 
     // 학급 선택: defaultClassId 우선, 그다음 후보 첫 번째
     if (defaultClassId) {
@@ -160,6 +182,12 @@ export function MobileProgressLogModal({
     return classes.find((c) => c.id === id) ?? null;
   }, [lockClass, mode, entryToEdit, defaultClassId, selectedClassId, classes]);
 
+  // 저장 시 각 반이 어디에 들어갈지 (단원/차시 타이핑마다 다시 계산하지 않도록 날짜·교시에만 반응)
+  const fanoutPreview = useMemo(
+    () => (mode === 'add' ? buildFanoutPreview(formDate || todayISO(), period) : []),
+    [mode, buildFanoutPreview, formDate, period],
+  );
+
   if (!isOpen) return null;
 
   const canSave = !!selectedClassId && unit.trim() !== '' && lesson.trim() !== '' && !saving;
@@ -169,6 +197,7 @@ export function MobileProgressLogModal({
   const handleSave = async () => {
     if (!canSave) return;
     setSaving(true);
+    let message: string | null = null;
     try {
       if (mode === 'edit' && entryToEdit) {
         const updated: ProgressEntry = {
@@ -193,9 +222,21 @@ export function MobileProgressLogModal({
           note.trim() || undefined,
           inferredStatus,
         );
+        // 선택한 다른 반에도 같은 진도를 기록 (날짜·교시는 그 반 시간표 기준으로 자동 배정)
+        message = describeFanoutResult(
+          await applyFanout({
+            date: targetDate,
+            period,
+            unit,
+            lesson,
+            note,
+          }),
+        );
       }
+      setFanoutMessage(message);
       setSavedAt(Date.now());
-      setTimeout(() => onClose(), 700);
+      // 다른 반 안내가 있으면 읽을 시간을 준다
+      setTimeout(() => onClose(), message ? 2200 : 700);
     } finally {
       setSaving(false);
     }
@@ -236,6 +277,9 @@ export function MobileProgressLogModal({
                 check_circle
               </span>
               <p className="text-sp-text font-medium">{successLabel}</p>
+              {fanoutMessage && (
+                <p className="px-4 text-center text-xs text-sp-muted">{fanoutMessage}</p>
+              )}
             </div>
           ) : (
             <>
@@ -355,6 +399,17 @@ export function MobileProgressLogModal({
                   className="w-full px-3 py-2 bg-sp-surface border border-sp-border rounded-lg text-sp-text text-sm focus:outline-none focus:border-sp-accent placeholder:text-sp-muted/50"
                 />
               </div>
+
+              {/* 다른 반에도 함께 기록 (추가 모드 한정) */}
+              {mode === 'add' && (
+                <ProgressFanoutSelector
+                  candidates={fanoutCandidates}
+                  selectedIds={fanoutSelectedIds}
+                  onToggle={toggleFanoutClass}
+                  onClear={clearFanoutClasses}
+                  preview={fanoutPreview}
+                />
+              )}
 
               {/* 오늘 이미 기록된 진도 요약 (추가 모드 한정) */}
               {mode === 'add' && todayEntries.length > 0 && (

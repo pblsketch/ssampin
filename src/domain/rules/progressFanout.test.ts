@@ -1,5 +1,23 @@
 import { describe, it, expect } from 'vitest';
-import { addDays, resolveFanoutPlacement } from './progressFanout';
+import {
+  addDays,
+  buildFanoutCandidates,
+  describeFanoutResult,
+  resolveFanoutPlacement,
+} from './progressFanout';
+import type { TeachingClass } from '@domain/entities/TeachingClass';
+
+function makeClass(id: string, name: string, subject: string, archived?: boolean): TeachingClass {
+  return {
+    id,
+    name,
+    subject,
+    students: [],
+    ...(archived === undefined ? {} : { archived }),
+    createdAt: '2026-03-02T00:00:00.000Z',
+    updatedAt: '2026-03-02T00:00:00.000Z',
+  };
+}
 
 /** 요일별 수업 교시 표로 lessonPeriodsOn 콜백을 만든다 (0=일 ... 6=토) */
 function scheduleByWeekday(table: Record<number, readonly number[]>) {
@@ -118,5 +136,53 @@ describe('resolveFanoutPlacement', () => {
       searchDays: 7,
     });
     expect(result).toEqual({ ok: true, date: TUE, period: 3, kind: 'no-timetable' });
+  });
+});
+
+describe('buildFanoutCandidates', () => {
+  const classes: readonly TeachingClass[] = [
+    makeClass('c1', '2-1', '국어'),
+    makeClass('c2', '3-5', '수학'),
+    makeClass('c3', '2-2', '국어(심화)'),
+    makeClass('c4', '2-3', '국어'),
+    makeClass('c5', '1-4', '국어', true), // 보관됨
+  ];
+
+  it('원본 반과 보관된 반을 빼고, 같은 과목을 앞에 둔다', () => {
+    const result = buildFanoutCandidates(classes, 'c1');
+    expect(result.map((r) => r.classId)).toEqual(['c3', 'c4', 'c2']);
+    expect(result.map((r) => r.sameSubject)).toEqual([true, true, false]);
+  });
+
+  it('같은 과목 안에서는 원래 학급 목록 순서를 유지한다', () => {
+    const result = buildFanoutCandidates(classes, 'c4');
+    expect(result.filter((r) => r.sameSubject).map((r) => r.name)).toEqual(['2-1', '2-2']);
+  });
+
+  it('원본 반이 없거나 지정되지 않으면 빈 배열', () => {
+    expect(buildFanoutCandidates(classes, null)).toEqual([]);
+    expect(buildFanoutCandidates(classes, '없는id')).toEqual([]);
+  });
+});
+
+describe('describeFanoutResult', () => {
+  it('알릴 내용이 없으면 null', () => {
+    expect(describeFanoutResult({ added: 0, skipped: 0, shifted: 0 })).toBeNull();
+  });
+
+  it('전부 같은 시간에 들어가면 옮겨졌다는 말을 붙이지 않는다', () => {
+    expect(describeFanoutResult({ added: 2, skipped: 0, shifted: 0 })).toBe(
+      '다른 2개 반에도 기록했습니다',
+    );
+  });
+
+  it('옮겨 배정된 반이 있으면 몇 개인지 알린다', () => {
+    expect(describeFanoutResult({ added: 3, skipped: 0, shifted: 2 })).toContain('2개 반은');
+  });
+
+  it('건너뛴 반만 있어도 안내한다', () => {
+    expect(describeFanoutResult({ added: 0, skipped: 1, shifted: 0 })).toBe(
+      '1개 반은 이미 진도가 있어 건너뛰었습니다',
+    );
   });
 });

@@ -14,6 +14,10 @@
  * Clean Architecture: 외부 의존성 0. 시간표 조회·중복 판정은 호출자가 콜백으로 주입한다.
  */
 
+import { isSubjectMatch } from './matchingRules';
+import { isTeachingClassArchived } from './teachingClassArchive';
+import type { TeachingClass } from '@domain/entities/TeachingClass';
+
 export type FanoutPlacementKind =
   /** 같은 날 같은 교시에 대상 반 수업이 있음 */
   | 'same-slot'
@@ -105,4 +109,68 @@ export function resolveFanoutPlacement(input: FanoutPlacementInput): FanoutPlace
   }
 
   return { ok: false, reason: 'duplicate' };
+}
+
+/* ─────────── 후보 반 목록 · 결과 요약 (데스크톱·모바일 공용) ─────────── */
+
+/** "함께 기록할 반" 후보 한 줄 */
+export interface FanoutCandidate {
+  readonly classId: string;
+  readonly name: string;
+  readonly subject: string;
+  /** 원본 반과 같은 과목인지 — 목록 상단 배치용 */
+  readonly sameSubject: boolean;
+}
+
+/** 저장 전 미리보기 한 줄 (후보 + 배정 결과) */
+export interface FanoutPreviewRow extends FanoutCandidate {
+  readonly placement: FanoutPlacement;
+}
+
+export interface FanoutApplyResult {
+  /** 실제로 추가된 항목 수 */
+  readonly added: number;
+  /** 이미 같은 자리에 진도가 있어 건너뛴 반 수 */
+  readonly skipped: number;
+  /** 원본과 다른 날짜/교시로 옮겨 배정된 반 수 */
+  readonly shifted: number;
+}
+
+/**
+ * 함께 기록할 수 있는 반 후보를 만든다.
+ * 원본 반과 보관된 반은 제외하고, 같은 과목을 앞에 둔다(그 안에서는 입력 순서 유지).
+ */
+export function buildFanoutCandidates(
+  classes: readonly TeachingClass[],
+  sourceClassId: string | null,
+): readonly FanoutCandidate[] {
+  if (!sourceClassId) return [];
+  const source = classes.find((c) => c.id === sourceClassId);
+  if (!source) return [];
+  const rows = classes
+    .filter((c) => c.id !== sourceClassId && !isTeachingClassArchived(c))
+    .map((c) => ({
+      classId: c.id,
+      name: c.name,
+      subject: c.subject,
+      sameSubject: isSubjectMatch(c.subject, source.subject),
+    }));
+  return [...rows.filter((r) => r.sameSubject), ...rows.filter((r) => !r.sameSubject)];
+}
+
+/** 팬아웃 결과를 사용자용 한 줄 안내로 만든다 (알릴 내용이 없으면 null) */
+export function describeFanoutResult(result: FanoutApplyResult): string | null {
+  if (result.added === 0 && result.skipped === 0) return null;
+  const parts: string[] = [];
+  if (result.added > 0) {
+    parts.push(
+      result.shifted > 0
+        ? `다른 ${result.added}개 반에도 기록했습니다 (${result.shifted}개 반은 그 반 수업 시간에 맞춰 배정)`
+        : `다른 ${result.added}개 반에도 기록했습니다`,
+    );
+  }
+  if (result.skipped > 0) {
+    parts.push(`${result.skipped}개 반은 이미 진도가 있어 건너뛰었습니다`);
+  }
+  return parts.join(' · ');
 }

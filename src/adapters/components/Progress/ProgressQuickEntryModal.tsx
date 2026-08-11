@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo } from 'react';
 import { ProgressEntryFields } from '@adapters/components/ClassManagement/ProgressEntryFields';
 import { ProgressFanoutPicker } from './ProgressFanoutPicker';
 import type { ProgressEntryFieldValues } from '@adapters/components/ClassManagement/ProgressEntryFields';
-import type { FanoutCandidate, FanoutPreviewRow } from './useProgressFanout';
+import type { FanoutCandidate, FanoutPreviewRow } from '@domain/rules/progressFanout';
 import type { ProgressStatus } from '@domain/entities/CurriculumProgress';
 
 /** "다른 반에도 함께 기록" 선택 상태 — useProgressQuickEntry가 그대로 넘겨준다 */

@@ -3,44 +3,24 @@ import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { getMatchingPeriods, type DayTeacherSlot } from '@domain/rules/progressMatching';
-import { isSubjectMatch } from '@domain/rules/matchingRules';
-import { isTeachingClassArchived } from '@domain/rules/teachingClassArchive';
-import { resolveFanoutPlacement, type FanoutPlacement } from '@domain/rules/progressFanout';
+import {
+  buildFanoutCandidates,
+  resolveFanoutPlacement,
+  type FanoutApplyResult,
+  type FanoutPlacement,
+  type FanoutPreviewRow,
+} from '@domain/rules/progressFanout';
 import type { TeachingClass } from '@domain/entities/TeachingClass';
 import type { ProgressEntryFieldValues } from '@adapters/components/ClassManagement/ProgressEntryFields';
 
 /**
- * "이 진도를 다른 반에도 함께 기록" 상태·계산·저장을 한 곳에 모은 훅.
+ * "이 진도를 다른 반에도 함께 기록" 상태·계산·저장을 한 곳에 모은 훅 (데스크톱).
  *
  * 진도 탭의 추가 폼과 진도 캘린더/시간표의 빠른 입력이 같은 동작을 공유한다.
- * 날짜·교시 배정은 도메인 규칙(resolveFanoutPlacement)에 위임하고,
- * 여기서는 시간표 조회와 중복 판정만 주입한다.
+ * 후보 목록·배정 규칙·결과 요약은 도메인(@domain/rules/progressFanout)에 있고,
+ * 여기서는 시간표 조회와 중복 판정만 주입한다. 모바일 판박이는
+ * @mobile/hooks/useMobileProgressFanout — 규칙을 고칠 땐 도메인 쪽만 고치면 된다.
  */
-
-export interface FanoutCandidate {
-  readonly classId: string;
-  readonly name: string;
-  readonly subject: string;
-  /** 원본 반과 같은 과목인지 — 목록 상단 배치·기본 후보 판단용 */
-  readonly sameSubject: boolean;
-}
-
-export interface FanoutPreviewRow {
-  readonly classId: string;
-  readonly name: string;
-  readonly subject: string;
-  readonly sameSubject: boolean;
-  readonly placement: FanoutPlacement;
-}
-
-export interface FanoutApplyResult {
-  /** 실제로 추가된 항목 수 */
-  readonly added: number;
-  /** 이미 같은 자리에 진도가 있어 건너뛴 반 수 */
-  readonly skipped: number;
-  /** 원본과 다른 날짜/교시로 옮겨 배정된 반 수 */
-  readonly shifted: number;
-}
 
 /**
  * 마지막으로 고른 "함께 기록할 반"을 원본 반별로 기억한다(세션 한정).
@@ -59,21 +39,10 @@ export function useProgressFanout(sourceClassId: string | null) {
 
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
 
-  const candidates = useMemo<readonly FanoutCandidate[]>(() => {
-    if (!sourceClassId) return [];
-    const source = classes.find((c: TeachingClass) => c.id === sourceClassId);
-    if (!source) return [];
-    const rows = classes
-      .filter((c: TeachingClass) => c.id !== sourceClassId && !isTeachingClassArchived(c))
-      .map((c: TeachingClass) => ({
-        classId: c.id,
-        name: c.name,
-        subject: c.subject,
-        sameSubject: isSubjectMatch(c.subject, source.subject),
-      }));
-    // 같은 과목을 위로 (그 안에서는 학급 목록 순서 유지)
-    return [...rows.filter((r) => r.sameSubject), ...rows.filter((r) => !r.sameSubject)];
-  }, [classes, sourceClassId]);
+  const candidates = useMemo(
+    () => buildFanoutCandidates(classes, sourceClassId),
+    [classes, sourceClassId],
+  );
 
   // 원본 반이 바뀌면 기억해 둔 선택을 되살리고, 사라진 반은 제외한다
   useEffect(() => {
@@ -218,21 +187,4 @@ export function useProgressFanout(sourceClassId: string | null) {
   );
 
   return { candidates, selectedIds, toggle, clear, buildPreview, applyFanout };
-}
-
-/** 팬아웃 결과를 사용자용 한 줄 안내로 만든다 (추가된 게 없으면 null) */
-export function describeFanoutResult(result: FanoutApplyResult): string | null {
-  if (result.added === 0 && result.skipped === 0) return null;
-  const parts: string[] = [];
-  if (result.added > 0) {
-    parts.push(
-      result.shifted > 0
-        ? `다른 ${result.added}개 반에도 기록했습니다 (${result.shifted}개 반은 그 반 수업 시간에 맞춰 배정)`
-        : `다른 ${result.added}개 반에도 기록했습니다`,
-    );
-  }
-  if (result.skipped > 0) {
-    parts.push(`${result.skipped}개 반은 이미 진도가 있어 건너뛰었습니다`);
-  }
-  return parts.join(' · ');
 }

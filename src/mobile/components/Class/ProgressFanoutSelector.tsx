@@ -1,14 +1,15 @@
 import { useState } from 'react';
+import { DAY_LABELS } from '@mobile/utils/date';
 import type { FanoutCandidate, FanoutPreviewRow } from '@domain/rules/progressFanout';
 
 /**
- * "이 진도를 다른 반에도 함께 기록" 선택 UI.
- * 진도 탭 추가 폼과 진도 캘린더 빠른 입력 모달이 공유한다.
+ * "이 진도를 다른 반에도 함께 기록" 선택 UI — 모바일판.
+ * 데스크톱 판박이는 @adapters/components/Progress/ProgressFanoutPicker.
+ * 손가락으로 누르는 화면이라 칩·헤더 모두 최소 44px 터치 영역을 지킨다.
  */
 
-const DAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
-
-function formatDate(dateStr: string): string {
+/** `YYYY-MM-DD` → `8/13(목)` — 좁은 화면용 짧은 표기 */
+function formatShortDate(dateStr: string): string {
   const d = new Date(dateStr + 'T00:00:00');
   return `${d.getMonth() + 1}/${d.getDate()}(${DAY_LABELS[d.getDay()]})`;
 }
@@ -20,24 +21,21 @@ const KIND_HINT: Record<string, string> = {
   'no-timetable': '시간표 없음 · 같은 날짜',
 };
 
-interface ProgressFanoutPickerProps {
+interface ProgressFanoutSelectorProps {
   candidates: readonly FanoutCandidate[];
   selectedIds: ReadonlySet<string>;
   onToggle: (classId: string) => void;
   onClear: () => void;
-  /** 저장 시 각 반이 어디에 들어갈지 (선택이 없으면 빈 배열) */
   preview: readonly FanoutPreviewRow[];
-  compact?: boolean;
 }
 
-export function ProgressFanoutPicker({
+export function ProgressFanoutSelector({
   candidates,
   selectedIds,
   onToggle,
   onClear,
   preview,
-  compact = false,
-}: ProgressFanoutPickerProps) {
+}: ProgressFanoutSelectorProps) {
   const [expanded, setExpanded] = useState(selectedIds.size > 0);
 
   if (candidates.length === 0) return null;
@@ -48,22 +46,24 @@ export function ProgressFanoutPicker({
     .join(', ');
 
   return (
-    <div className="rounded-lg border border-sp-border bg-sp-card">
+    <div className="border border-sp-border rounded-lg bg-sp-surface/60">
       {/* 헤더 — 접기/펼치기 */}
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
-        className={`flex w-full items-center gap-2 ${compact ? 'px-3 py-2' : 'px-3 py-2.5'} text-left`}
+        className="w-full flex items-center gap-2 px-3 py-2.5 text-left"
+        style={{ minHeight: 44 }}
+        aria-expanded={expanded}
       >
         <span className="material-symbols-outlined text-base text-sp-muted">library_add</span>
-        <span className="text-xs font-medium text-sp-text">다른 반에도 함께 기록</span>
+        <span className="text-sm text-sp-text">다른 반에도 함께</span>
         {selectedIds.size > 0 && (
-          <span className="rounded-full bg-sp-accent/15 px-2 py-0.5 text-xs text-sp-accent">
+          <span className="px-2 py-0.5 rounded-full bg-sp-accent/15 text-sp-accent text-xs shrink-0">
             {selectedIds.size}개 반
           </span>
         )}
         {!expanded && selectedIds.size > 0 && (
-          <span className="min-w-0 flex-1 truncate text-xs text-sp-muted">{selectedNames}</span>
+          <span className="flex-1 min-w-0 truncate text-xs text-sp-muted">{selectedNames}</span>
         )}
         <span className="material-symbols-outlined ml-auto text-base text-sp-muted">
           {expanded ? 'expand_less' : 'expand_more'}
@@ -71,9 +71,9 @@ export function ProgressFanoutPicker({
       </button>
 
       {expanded && (
-        <div className="space-y-2.5 border-t border-sp-border px-3 py-2.5">
+        <div className="px-3 py-2.5 border-t border-sp-border space-y-2.5">
           {/* 반 선택 칩 */}
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap gap-2">
             {candidates.map((c) => {
               const isSelected = selectedIds.has(c.classId);
               return (
@@ -81,12 +81,13 @@ export function ProgressFanoutPicker({
                   key={c.classId}
                   type="button"
                   onClick={() => onToggle(c.classId)}
-                  className={`rounded-lg border px-2.5 py-1 text-xs transition-colors ${
+                  className={`px-3 rounded-lg border text-sm transition-colors active:scale-95 ${
                     isSelected
                       ? 'border-sp-accent/50 bg-sp-accent/15 text-sp-accent'
-                      : 'border-sp-border bg-sp-surface text-sp-muted hover:text-sp-text'
+                      : 'border-sp-border bg-sp-card text-sp-muted'
                   }`}
-                  title={`${c.subject} · ${c.name}`}
+                  style={{ minHeight: 40 }}
+                  aria-pressed={isSelected}
                 >
                   {c.name}
                   {!c.sameSubject && <span className="ml-1 opacity-60">· {c.subject}</span>}
@@ -96,8 +97,8 @@ export function ProgressFanoutPicker({
           </div>
 
           {selectedIds.size === 0 ? (
-            <p className="text-xs text-sp-muted/70">
-              선택한 반에는 그 반 시간표에 맞춰 날짜와 교시가 자동으로 정해집니다.
+            <p className="text-xs text-sp-muted">
+              고른 반에는 그 반 시간표에 맞춰 날짜와 교시가 자동으로 정해집니다.
             </p>
           ) : (
             <div className="space-y-1">
@@ -106,21 +107,22 @@ export function ProgressFanoutPicker({
                 <button
                   type="button"
                   onClick={onClear}
-                  className="ml-auto text-xs text-sp-muted transition-colors hover:text-sp-text"
+                  className="ml-auto px-2 py-1 text-xs text-sp-muted"
+                  style={{ minHeight: 32 }}
                 >
                   선택 해제
                 </button>
               </div>
               {preview.map((row) => (
-                <div key={row.classId} className="flex items-center gap-2 text-xs">
+                <div key={row.classId} className="flex items-center gap-1.5 text-xs">
                   <span className="shrink-0 text-sp-text">{row.name}</span>
-                  <span className="text-sp-muted/60">→</span>
+                  <span className="text-sp-muted">→</span>
                   {row.placement.ok ? (
                     <>
-                      <span className="text-sp-text">
-                        {formatDate(row.placement.date)} {row.placement.period}교시
+                      <span className="text-sp-text shrink-0">
+                        {formatShortDate(row.placement.date)} {row.placement.period}교시
                       </span>
-                      <span className="truncate text-sp-muted/60">
+                      <span className="text-sp-muted truncate">
                         {KIND_HINT[row.placement.kind]}
                       </span>
                     </>

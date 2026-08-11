@@ -6,10 +6,8 @@ import { CalendarPicker } from '@adapters/components/common/CalendarPicker';
 import { ScrollRow } from '@adapters/components/common/ScrollRow';
 import { ProgressEntryFields } from './ProgressEntryFields';
 import { ProgressFanoutPicker } from '@adapters/components/Progress/ProgressFanoutPicker';
-import {
-  useProgressFanout,
-  describeFanoutResult,
-} from '@adapters/components/Progress/useProgressFanout';
+import { useProgressFanout } from '@adapters/components/Progress/useProgressFanout';
+import { describeFanoutResult } from '@domain/rules/progressFanout';
 import { useToastStore } from '@adapters/components/common/Toast';
 import type { ProgressEntry, ProgressStatus } from '@domain/entities/CurriculumProgress';
 import type { TeachingClass } from '@domain/entities/TeachingClass';
