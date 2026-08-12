@@ -11,8 +11,15 @@
  * - 알 수 없는 주소는 던지지 않고 홈으로 폴백한다. 링크가 낡아도 앱이 죽지 않아야 한다.
  */
 
-export type MobileTab = 'home' | 'students' | 'schedule' | 'more';
-export type StudentsSeg = 'homeroom' | 'teaching';
+/**
+ * 하단 탭.
+ *
+ * 담임(학급)과 수업이 따로인 이유: 앱 속은 원래 나뉘어 있었다. 저장소가
+ * `useMobileStudentRecordsStore`(담임) / `useMobileObservationStore`(수업반)로 별개고
+ * 화면 폴더도 `pages/students/` / `components/Class/` 로 갈라져 있는데, 겉의 탭만
+ * "학생" 하나로 묶고 그 안에서 세그먼트로 다시 갈랐었다. 겉을 속에 맞춘 것이다.
+ */
+export type MobileTab = 'home' | 'homeroom' | 'teaching' | 'schedule' | 'more';
 export type ScheduleSeg = 'schedule' | 'todo';
 export type AttendanceType = 'homeroom' | 'class';
 
@@ -21,7 +28,8 @@ export type MoreSection = 'settings' | 'memo' | 'bookmarks' | 'tools';
 
 export type MobileRoute =
   | { kind: 'home' }
-  | { kind: 'students'; seg: StudentsSeg }
+  | { kind: 'homeroom' }
+  | { kind: 'teaching' }
   | { kind: 'schedule'; seg: ScheduleSeg }
   | { kind: 'more' }
   | { kind: 'moreSection'; section: MoreSection }
@@ -59,8 +67,10 @@ export function toPath(route: MobileRoute): string {
   switch (route.kind) {
     case 'home':
       return '/';
-    case 'students':
-      return `/students/${route.seg}`;
+    case 'homeroom':
+      return '/homeroom';
+    case 'teaching':
+      return '/teaching';
     case 'schedule':
       return route.seg === 'schedule' ? '/schedule' : '/schedule/todo';
     case 'more':
@@ -90,9 +100,13 @@ export function parsePath(pathWithQuery: string): MobileRoute {
 
   const [first, second, third] = segments;
 
+  if (first === 'homeroom') return { kind: 'homeroom' };
+  if (first === 'teaching') return { kind: 'teaching' };
+
+  // 옛 주소 호환 — 담임·수업이 "학생" 탭 하나에 세그먼트로 들어 있던 시절의 링크.
+  // 아직 배포 전이지만, 테스트 중 남은 링크나 북마크가 죽지 않게 받아준다.
   if (first === 'students') {
-    if (second === 'teaching') return { kind: 'students', seg: 'teaching' };
-    return { kind: 'students', seg: 'homeroom' };
+    return second === 'teaching' ? { kind: 'teaching' } : { kind: 'homeroom' };
   }
 
   if (first === 'schedule') {
@@ -136,8 +150,10 @@ export function tabOf(route: MobileRoute): MobileTab {
     case 'home':
     case 'attendance':
       return 'home';
-    case 'students':
-      return 'students';
+    case 'homeroom':
+      return 'homeroom';
+    case 'teaching':
+      return 'teaching';
     case 'schedule':
       return 'schedule';
     case 'more':
@@ -155,7 +171,8 @@ export function parentOf(route: MobileRoute): MobileRoute | null {
   switch (route.kind) {
     case 'home':
       return null;
-    case 'students':
+    case 'homeroom':
+    case 'teaching':
     case 'schedule':
     case 'more':
     case 'attendance':

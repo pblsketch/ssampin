@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useMobileSettingsStore } from '@mobile/stores/useMobileSettingsStore';
 import { useMobileHomeLayoutStore, type HomeCardId } from '@mobile/stores/useMobileHomeLayoutStore';
+import { useMobileViewPrefsStore } from '@mobile/stores/useMobileViewPrefsStore';
 import { Toggle } from '@mobile/components/common/Toggle';
 import { PeriodTimesEditor } from '@mobile/components/Settings/PeriodTimesEditor';
 import { SyncStatus } from '@mobile/components/More/SyncStatus';
@@ -80,6 +81,9 @@ export function SettingsPage({ onBack }: Props) {
 
   const hiddenCards = useMobileHomeLayoutStore((s) => s.hiddenCards);
   const setHidden = useMobileHomeLayoutStore((s) => s.setHidden);
+
+  const showHomeroomTab = useMobileViewPrefsStore((s) => s.showHomeroomTab);
+  const setShowHomeroomTab = useMobileViewPrefsStore((s) => s.setShowHomeroomTab);
 
   return (
     <div className="flex flex-col h-full">
@@ -196,6 +200,31 @@ export function SettingsPage({ onBack }: Props) {
                   </button>
                 );
               })}
+            </div>
+          </div>
+        </section>
+
+        {/* 하단 탭 표시 */}
+        <section>
+          <h3 className="text-sp-muted text-xs font-semibold uppercase tracking-wider mb-2 px-1">
+            하단 탭 표시
+          </h3>
+          <div className="glass-card px-4">
+            <div className="flex items-center gap-3 py-3">
+              <span className="material-symbols-outlined text-sp-muted text-icon-lg shrink-0">
+                groups
+              </span>
+              <div className="flex-1 min-w-0">
+                <p className="text-sp-text text-sm">학급</p>
+                <p className="text-sp-muted text-xs mt-0.5">
+                  담임을 맡지 않으셨다면 꺼두셔도 됩니다. 다시 켜면 그대로 돌아옵니다.
+                </p>
+              </div>
+              <Toggle
+                checked={showHomeroomTab}
+                onChange={setShowHomeroomTab}
+                label="학급 탭 표시"
+              />
             </div>
           </div>
         </section>

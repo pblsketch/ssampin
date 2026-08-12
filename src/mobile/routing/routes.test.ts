@@ -12,8 +12,8 @@ import {
 /** 왕복 검증에 쓸 대표 주소들 */
 const ROUTES: readonly MobileRoute[] = [
   { kind: 'home' },
-  { kind: 'students', seg: 'homeroom' },
-  { kind: 'students', seg: 'teaching' },
+  { kind: 'homeroom' },
+  { kind: 'teaching' },
   { kind: 'schedule', seg: 'schedule' },
   { kind: 'schedule', seg: 'todo' },
   { kind: 'more' },
@@ -41,9 +41,14 @@ describe('routes — 주소 ↔ 화면 상태', () => {
     expect(parsePath('/')).toEqual({ kind: 'home' });
   });
 
-  it('학생·일정 하위가 빠지면 기본 세그먼트로 간다', () => {
-    expect(parsePath('/students')).toEqual({ kind: 'students', seg: 'homeroom' });
+  it('일정 하위가 빠지면 기본 세그먼트로 간다', () => {
     expect(parsePath('/schedule')).toEqual({ kind: 'schedule', seg: 'schedule' });
+  });
+
+  it('옛 /students 주소를 새 탭으로 받아준다 (담임·수업이 한 탭이던 시절 링크)', () => {
+    expect(parsePath('/students')).toEqual({ kind: 'homeroom' });
+    expect(parsePath('/students/homeroom')).toEqual({ kind: 'homeroom' });
+    expect(parsePath('/students/teaching')).toEqual({ kind: 'teaching' });
   });
 
   it('도구 주소에 tool- 접두사를 넣지 않는다', () => {
@@ -90,7 +95,8 @@ describe('routes — 주소 ↔ 화면 상태', () => {
     expect(
       tabOf({ kind: 'attendance', classId: 'c', className: '', period: 0, type: 'class' }),
     ).toBe('home');
-    expect(tabOf({ kind: 'students', seg: 'teaching' })).toBe('students');
+    expect(tabOf({ kind: 'homeroom' })).toBe('homeroom');
+    expect(tabOf({ kind: 'teaching' })).toBe('teaching');
     expect(tabOf({ kind: 'tool', toolId: 'dice' })).toBe('more');
   });
 

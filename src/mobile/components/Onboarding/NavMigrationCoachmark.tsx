@@ -1,10 +1,19 @@
 import { useState, useEffect } from 'react';
 
-const SEEN_KEY = 'mobile-nav-v2-coachmark';
+/**
+ * ⚠️ 키에 버전이 붙어 있는 이유 — 안내 내용이 바뀌면 키도 올려야 한다.
+ * v2 안내("담임·수업을 '학생' 탭으로 합쳤어요")를 이미 본 사용자는 플래그가 남아 있어,
+ * 키를 그대로 두면 이번 v3 안내를 영영 못 본다. 그 사용자에게는 지난 안내가 사실과
+ * 반대가 되므로 반드시 다시 알려야 한다.
+ */
+const SEEN_KEY = 'mobile-nav-v3-coachmark';
 
 /**
- * 하단 탭 6→4 재편 후 첫 실행 1회 안내. dismiss 시 localStorage 플래그.
+ * 하단 탭 재편 후 첫 실행 1회 안내. dismiss 시 localStorage 플래그.
  * (온보딩을 처음 보는 신규 사용자에게는 의미가 없으므로 onboarding-completed 가 있을 때만 표시.)
+ *
+ * v2: 6→4 재편 — 담임·수업을 '학생' 탭으로 합침
+ * v3: 4→5 재편 — '학급'과 '수업'을 각자 탭으로 분리(저장소·폴더가 원래 나뉘어 있었다)
  */
 export function NavMigrationCoachmark() {
   const [show, setShow] = useState(false);
@@ -54,14 +63,23 @@ export function NavMigrationCoachmark() {
           <li className="flex gap-2">
             <span className="text-sp-accent">·</span>
             <span>
-              <span className="text-sp-text font-medium">담임·수업</span>은{' '}
-              <span className="text-sp-text font-medium">'학생'</span> 탭 안으로 합쳤어요.
+              <span className="text-sp-text font-medium">'학급'</span>과{' '}
+              <span className="text-sp-text font-medium">'수업'</span>이 각각 탭이 됐어요. 담임 일과
+              수업 일을 섞지 않고 따로 봐요.
             </span>
           </li>
           <li className="flex gap-2">
             <span className="text-sp-accent">·</span>
             <span>
-              <span className="text-sp-text font-medium">일정·할 일</span>도{' '}
+              담임을 맡지 않으셨다면{' '}
+              <span className="text-sp-text font-medium">설정 &gt; 하단 탭 표시</span>에서 '학급'을
+              끌 수 있어요.
+            </span>
+          </li>
+          <li className="flex gap-2">
+            <span className="text-sp-accent">·</span>
+            <span>
+              <span className="text-sp-text font-medium">일정·할 일</span>은 그대로{' '}
               <span className="text-sp-text font-medium">'일정'</span> 탭에서 같이 봐요.
             </span>
           </li>

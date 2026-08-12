@@ -75,9 +75,9 @@ import {
   toolIdToLegacyKey,
   legacyKeyToToolId,
   type MobileTab,
-  type StudentsSeg,
   type ScheduleSeg,
 } from '@mobile/routing/routes';
+import { useMobileViewPrefsStore } from '@mobile/stores/useMobileViewPrefsStore';
 
 type MobileToolProps = { onBack: () => void; isFullscreen: boolean };
 
@@ -122,17 +122,26 @@ interface TabConfig {
   icon: string;
 }
 
-const tabs: TabConfig[] = [
+/**
+ * 하단 탭 5개.
+ *
+ * 담임(학급)과 수업을 따로 둔 이유는 저장소·화면 폴더가 원래 나뉘어 있었기 때문이다
+ * (routing/routes.ts 의 MobileTab 주석 참조). 겉의 탭만 "학생" 하나로 묶고 그 안에서
+ * 세그먼트로 다시 가르던 구조를 속에 맞췄다.
+ *
+ * 출결은 탭이 아니다. "출결하기"는 장소가 아니라 반 안에서 하는 동작이고,
+ * Apple HIG 는 "탭 바는 이동 전용, 탭 버튼으로 동작을 실행하지 말라"고 한다.
+ *
+ * 라벨 폭: 390px 기준 칸당 78px 인데 한국어 라벨이 2~3글자(가장 긴 '더보기' 29px)라
+ * 여유가 있다. Material 3 의 "5개일 때 라벨 주의" 경고는 이 경우 해당하지 않는다.
+ */
+const ALL_TABS: TabConfig[] = [
   { key: 'home', label: '홈', icon: 'home' },
-  { key: 'students', label: '학생', icon: 'group' },
+  { key: 'homeroom', label: '학급', icon: 'groups' },
+  { key: 'teaching', label: '수업', icon: 'school' },
   { key: 'schedule', label: '일정', icon: 'calendar_month' },
   { key: 'more', label: '더보기', icon: 'more_horiz' },
 ];
-
-const STUDENTS_SEGMENTS = [
-  { key: 'homeroom', label: '담임' },
-  { key: 'teaching', label: '수업' },
-] as const;
 
 const SCHEDULE_SEGMENTS = [
   { key: 'schedule', label: '일정' },
@@ -157,8 +166,15 @@ export function App() {
   // 기존 변수명을 그대로 유지해 아래 40여 곳의 사용처를 건드리지 않는다.
   // 값의 출처만 useState → 주소 파생으로 바뀐다.
   const activeTab = tabOf(route);
-  const studentsSeg: StudentsSeg = route.kind === 'students' ? route.seg : 'homeroom';
   const scheduleSeg: ScheduleSeg = route.kind === 'schedule' ? route.seg : 'schedule';
+
+  /**
+   * 담임을 맡지 않은 선생님은 학급 탭을 끌 수 있다(기기별 설정, 기본 켜짐).
+   * 끈 상태에서 주소로 직접 들어오면 화면은 정상 렌더한다 — 탭에서 감췄을 뿐
+   * 기능을 없앤 게 아니고, 링크가 죽으면 안 되기 때문이다.
+   */
+  const showHomeroomTab = useMobileViewPrefsStore((s) => s.showHomeroomTab);
+  const tabs = showHomeroomTab ? ALL_TABS : ALL_TABS.filter((t) => t.key !== 'homeroom');
   const moreSub: string | null =
     route.kind === 'moreSection'
       ? route.section
@@ -179,17 +195,14 @@ export function App() {
   const setActiveTab = useCallback(
     (tab: MobileTab) => {
       if (tab === 'home') navigate(HOME_ROUTE);
-      else if (tab === 'students') navigate({ kind: 'students', seg: 'homeroom' });
+      else if (tab === 'homeroom') navigate({ kind: 'homeroom' });
+      else if (tab === 'teaching') navigate({ kind: 'teaching' });
       else if (tab === 'schedule') navigate({ kind: 'schedule', seg: 'schedule' });
       else navigate({ kind: 'more' });
     },
     [navigate],
   );
 
-  const setStudentsSeg = useCallback(
-    (seg: StudentsSeg) => navigate({ kind: 'students', seg }),
-    [navigate],
-  );
   const setScheduleSeg = useCallback(
     (seg: ScheduleSeg) => navigate({ kind: 'schedule', seg }),
     [navigate],
@@ -493,21 +506,10 @@ export function App() {
           이유: 의도치 않은 탭 전환이 잦아 UX 안티패턴. 탭 전환은 하단 탭바 버튼만으로. */}
       <main className="flex-1 overflow-hidden">
         {activeTab === 'home' && <TodayHub onNavigateAttendance={openAttendance} />}
-        {activeTab === 'students' && (
-          <div className="flex flex-col h-full">
-            <div className="shrink-0 px-4 pt-2 pb-2">
-              <SegmentedControl
-                options={STUDENTS_SEGMENTS}
-                value={studentsSeg}
-                onChange={setStudentsSeg}
-                ariaLabel="담임/수업 보기"
-              />
-            </div>
-            <div className="flex-1 min-h-0 overflow-hidden">
-              {studentsSeg === 'homeroom' ? <StudentsPage /> : <ClassListPage />}
-            </div>
-          </div>
-        )}
+        {/* 담임(학급)·수업이 각자 탭이 되면서 세그먼트 한 줄이 사라졌다.
+            화면 위에서 그만큼(약 44px)이 명단에 돌아간다. */}
+        {activeTab === 'homeroom' && <StudentsPage />}
+        {activeTab === 'teaching' && <ClassListPage />}
         {activeTab === 'schedule' && (
           <div className="flex flex-col h-full">
             <div className="shrink-0 px-4 pt-2 pb-2">
