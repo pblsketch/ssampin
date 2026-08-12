@@ -1,0 +1,2555 @@
+<!doctype html>
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>쌤핀 모바일 구조 재설계 — 목업</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,400,0,0&display=block" rel="stylesheet" />
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
+
+<style>
+/* ══════════════════════════════════════════════════════════════
+   1. 쌤핀 실제 토큰 — src/mobile/styles/mobile.css 에서 그대로 가져옴
+      이 블록의 값은 임의로 바꾸지 말 것. 앱과 어긋나면 목업의 의미가 없음.
+   ══════════════════════════════════════════════════════════════ */
+.sp-scope {
+  --sp-bg: #f1f5f9;
+  --sp-surface: rgba(255, 255, 255, 0.95);
+  --sp-card: rgba(255, 255, 255, 0.7);
+  --sp-border: rgba(0, 0, 0, 0.08);
+  --sp-divider: rgba(0, 0, 0, 0.04);
+  --sp-subtle: rgba(15, 23, 42, 0.04);
+  --sp-accent: #3b82f6;
+  --sp-accent-fg: #ffffff;
+  --sp-highlight: #f59e0b;
+  --sp-text: #0f172a;
+  --sp-muted: #64748b;
+  --sp-success: #16a34a;
+  --sp-warning: #d97706;
+  --sp-error: #dc2626;
+  --sp-info: #7c3aed;
+
+  --glass-card-bg: rgba(255, 255, 255, 0.7);
+  --glass-card-border: rgba(255, 255, 255, 0.2);
+  --glass-card-shadow: 0 8px 32px rgba(0, 0, 0, 0.06);
+  --glass-chrome-bg: rgba(255, 255, 255, 0.85);
+  --glass-chrome-line: rgba(0, 0, 0, 0.06);
+
+  /* 출결 상태 5종 — AttendanceCheckPage.tsx STATUS_CONFIG 와 동일 */
+  --st-present: #22c55e;
+  --st-late: #eab308;
+  --st-absent: #ef4444;
+  --st-early: #f97316;
+  --st-classabs: #a855f7;
+}
+[data-theme='dark'] .sp-scope {
+  --sp-bg: #0f172a;
+  --sp-surface: rgba(30, 41, 59, 0.95);
+  --sp-card: rgba(30, 41, 59, 0.7);
+  --sp-border: rgba(255, 255, 255, 0.08);
+  --sp-divider: rgba(255, 255, 255, 0.05);
+  --sp-subtle: rgba(255, 255, 255, 0.04);
+  --sp-accent: #3b82f6;
+  --sp-accent-fg: #ffffff;
+  --sp-highlight: #f59e0b;
+  --sp-text: #f1f5f9;
+  --sp-muted: #94a3b8;
+  --sp-success: #4ade80;
+  --sp-warning: #fbbf24;
+  --sp-error: #f87171;
+  --sp-info: #a78bfa;
+
+  --glass-card-bg: rgba(30, 41, 59, 0.7);
+  --glass-card-border: rgba(255, 255, 255, 0.08);
+  --glass-card-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  --glass-chrome-bg: rgba(15, 23, 42, 0.85);
+  --glass-chrome-line: rgba(255, 255, 255, 0.06);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   2. 문서 바깥 틀 — 여기는 앱이 아니므로 읽기 위한 편집 디자인
+   ══════════════════════════════════════════════════════════════ */
+:root {
+  --doc-bg: #f7f5f0;
+  --doc-panel: #ffffff;
+  --doc-ink: #1c1a17;
+  --doc-ink-soft: #57534e;
+  --doc-ink-faint: #8c857c;
+  --doc-rule: #e3ded4;
+  --doc-accent: #1d4ed8;
+  --doc-bad: #b42318;
+  --doc-good: #15803d;
+  --doc-mark: #fdf6e3;
+}
+[data-theme='dark'] {
+  --doc-bg: #14161a;
+  --doc-panel: #1b1e24;
+  --doc-ink: #ece9e3;
+  --doc-ink-soft: #a8a29a;
+  --doc-ink-faint: #78716c;
+  --doc-rule: #2c3038;
+  --doc-accent: #7aa2f7;
+  --doc-bad: #f87171;
+  --doc-good: #4ade80;
+  --doc-mark: #26221a;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--doc-bg);
+  color: var(--doc-ink);
+  font-family: 'Pretendard Variable', Pretendard, 'Noto Sans KR', sans-serif;
+  font-size: 16px;
+  line-height: 1.75;
+  -webkit-font-smoothing: antialiased;
+  transition: background .3s ease, color .3s ease;
+}
+
+/* 종이 결 — 배경에 아주 옅은 질감 */
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  pointer-events: none; z-index: 0;
+  opacity: .5;
+  background-image: radial-gradient(circle at 1px 1px, rgba(120,113,108,.14) 1px, transparent 0);
+  background-size: 22px 22px;
+}
+[data-theme='dark'] body::before { opacity: .25; }
+
+.wrap { position: relative; z-index: 1; max-width: 1180px; margin: 0 auto; padding: 0 24px 140px; }
+
+/* ── 상단 바 ── */
+.topbar {
+  position: sticky; top: 0; z-index: 40;
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 14px 0;
+  background: color-mix(in srgb, var(--doc-bg) 88%, transparent);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--doc-rule);
+  margin-bottom: 56px;
+}
+.topbar__id { font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--doc-ink-faint); }
+.topbar__nav { display: flex; gap: 4px; flex-wrap: wrap; }
+.topbar__nav a {
+  font-size: 12.5px; color: var(--doc-ink-soft); text-decoration: none;
+  padding: 5px 10px; border-radius: 6px; white-space: nowrap;
+}
+.topbar__nav a:hover { background: var(--doc-mark); color: var(--doc-ink); }
+
+.tbtn {
+  display: inline-flex; align-items: center; gap: 7px;
+  border: 1px solid var(--doc-rule); background: var(--doc-panel); color: var(--doc-ink);
+  border-radius: 8px; padding: 7px 13px; cursor: pointer;
+  font-family: inherit; font-size: 13px; font-weight: 590;
+  transition: border-color .18s ease, transform .18s ease;
+}
+.tbtn:hover { border-color: var(--doc-accent); transform: translateY(-1px); }
+.tbtn .ms { font-size: 17px; }
+
+/* ── 표제 ── */
+.masthead { padding: 8px 0 64px; border-bottom: 3px double var(--doc-rule); margin-bottom: 72px; }
+.masthead__kicker {
+  font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: .2em;
+  text-transform: uppercase; color: var(--doc-accent); margin-bottom: 22px;
+}
+.masthead h1 {
+  font-family: 'Nanum Myeongjo', serif; font-weight: 800;
+  font-size: clamp(36px, 6.2vw, 66px); line-height: 1.18;
+  margin: 0 0 26px; letter-spacing: -.02em;
+}
+.masthead h1 em { font-style: normal; color: var(--doc-accent); }
+.masthead__lead { font-size: 17.5px; color: var(--doc-ink-soft); max-width: 66ch; margin: 0 0 30px; }
+.masthead__meta {
+  display: flex; flex-wrap: wrap; gap: 10px 26px;
+  font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: var(--doc-ink-faint);
+  padding-top: 22px; border-top: 1px solid var(--doc-rule);
+}
+
+/* ── 섹션 ── */
+.sec { margin-bottom: 108px; scroll-margin-top: 84px; }
+.sec__head { margin-bottom: 40px; }
+.sec__no {
+  font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: .18em;
+  color: var(--doc-accent); text-transform: uppercase; margin-bottom: 12px;
+}
+/* ⚠️ 반드시 .sec__head 로 한정할 것.
+   .sec h2 로 두면 폰 프레임 안의 앱 헤더(h2.htitle)까지 명조 38px로 덮어써서
+   앱 화면이 실제와 달라진다. 목업의 신뢰도가 깨지는 지점. */
+.sec__head h2 {
+  font-family: 'Nanum Myeongjo', serif; font-weight: 800;
+  font-size: clamp(26px, 3.6vw, 38px); line-height: 1.3; margin: 0 0 16px; letter-spacing: -.015em;
+}
+.sec__lead { font-size: 16.5px; color: var(--doc-ink-soft); max-width: 74ch; margin: 0; }
+.sec__lead + .sec__lead { margin-top: 14px; }
+
+.q {
+  margin: 26px 0 0; padding: 18px 22px;
+  border-left: 3px solid var(--doc-accent); background: var(--doc-mark);
+  border-radius: 0 8px 8px 0;
+}
+.q strong { font-weight: 680; }
+
+/* ── 폰 프레임 ── */
+.stage {
+  display: flex; flex-wrap: wrap; gap: 44px; align-items: flex-start;
+  padding: 40px 32px; background: var(--doc-panel);
+  border: 1px solid var(--doc-rule); border-radius: 16px;
+}
+.col { flex: 1 1 390px; min-width: 330px; max-width: 470px; }
+.col__tag {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: .1em;
+  text-transform: uppercase; padding: 5px 11px; border-radius: 6px; margin-bottom: 8px;
+}
+.col__tag--now { background: color-mix(in srgb, var(--doc-bad) 12%, transparent); color: var(--doc-bad); }
+.col__tag--new { background: color-mix(in srgb, var(--doc-good) 12%, transparent); color: var(--doc-good); }
+.col__tag--a  { background: color-mix(in srgb, var(--doc-accent) 12%, transparent); color: var(--doc-accent); }
+.col h3 { font-family: 'Nanum Myeongjo', serif; font-size: 21px; font-weight: 700; margin: 0 0 8px; }
+.col__note { font-size: 14.5px; color: var(--doc-ink-soft); margin: 0 0 22px; min-height: 3.4em; }
+
+.phone {
+  width: 390px; max-width: 100%;
+  border: 1px solid var(--doc-rule); border-radius: 16px; overflow: hidden;
+  box-shadow: 0 24px 50px rgba(0,0,0,.09), 0 4px 10px rgba(0,0,0,.05);
+  background: var(--sp-bg);
+}
+[data-theme='dark'] .phone { box-shadow: 0 24px 50px rgba(0,0,0,.4); }
+.phone--tall .screen { height: 620px; }
+.screen {
+  height: 500px; display: flex; flex-direction: column;
+  background: var(--sp-bg); color: var(--sp-text);
+  font-size: 15px; line-height: 1.5; overflow: hidden; position: relative;
+}
+.scroll { flex: 1; overflow-y: auto; overscroll-behavior: contain; }
+.scroll::-webkit-scrollbar { width: 0; }
+
+/* 상태바 */
+.statusbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 7px 18px 3px; font-size: 12px; font-weight: 680; color: var(--sp-text); flex-shrink: 0;
+}
+.statusbar__r { display: flex; gap: 5px; align-items: center; }
+.statusbar .ms { font-size: 15px; }
+
+/* 유리 질감 — mobile.css 의 .glass-header / .glass-tabbar / .glass-card */
+.g-chrome { background: var(--glass-chrome-bg); backdrop-filter: blur(20px); }
+.g-header { border-bottom: 1px solid var(--glass-chrome-line); }
+.g-tabbar { border-top: 1px solid var(--glass-chrome-line); }
+.g-card {
+  background: var(--glass-card-bg); border: 1px solid var(--glass-card-border);
+  box-shadow: var(--glass-card-shadow); backdrop-filter: blur(20px);
+  border-radius: 16px; /* rounded-2xl — 실제 앱은 20px raw 값(레거시), 목업은 라운드 정책 준수 */
+}
+
+/* 헤더 층 */
+.hrow {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 11px 16px; flex-shrink: 0;
+}
+.hrow--layer { position: relative; }
+.hrow--layer::after {
+  content: attr(data-layer);
+  position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+  font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 600;
+  color: #fff; background: var(--doc-bad);
+  width: 17px; height: 17px; border-radius: 9999px;
+  display: grid; place-items: center; z-index: 5;
+}
+/* 앱 헤더 제목 — 문서 쪽 제목 스타일이 절대 새어들지 않도록 폰트까지 명시 */
+.htitle {
+  font-family: 'Pretendard Variable', Pretendard, 'Noto Sans KR', sans-serif;
+  font-size: 16px; font-weight: 680; line-height: 1.4; letter-spacing: normal; margin: 0;
+}
+
+.seg {
+  display: flex; gap: 4px; padding: 3px; border-radius: 8px;
+  background: var(--sp-subtle);
+}
+.seg button {
+  border: 0; background: transparent; color: var(--sp-muted); cursor: pointer;
+  font-family: inherit; font-size: 13.5px; font-weight: 510;
+  padding: 6px 13px; border-radius: 6px; transition: all .16s ease;
+}
+.seg button[aria-selected='true'] { background: var(--sp-accent); color: var(--sp-accent-fg); }
+
+.iconbtn {
+  display: grid; place-items: center; min-width: 40px; min-height: 40px;
+  border: 0; background: transparent; color: var(--sp-muted); cursor: pointer; border-radius: 8px;
+}
+.iconbtn:hover { background: var(--sp-subtle); color: var(--sp-text); }
+
+/* 반 선택 가로 스크롤 (현재안) */
+.classtabs { display: flex; gap: 7px; padding: 9px 16px; overflow-x: auto; flex-shrink: 0; }
+.classtabs::-webkit-scrollbar { height: 0; }
+.classtabs button {
+  flex-shrink: 0; border: 1px solid var(--sp-border); background: transparent;
+  color: var(--sp-muted); font-family: inherit; font-size: 13.5px; font-weight: 510;
+  padding: 6px 14px; border-radius: 8px; cursor: pointer;
+}
+.classtabs button[aria-selected='true'] {
+  background: var(--sp-accent); color: var(--sp-accent-fg); border-color: var(--sp-accent);
+}
+
+/* 날짜 이동바 */
+.datebar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 9px 16px; flex-shrink: 0;
+}
+.datebar__mid { display: flex; align-items: center; gap: 12px; }
+.datebar__d { font-size: 14.5px; font-weight: 590; }
+.chip-today {
+  border: 1px solid var(--sp-border); background: transparent; color: var(--sp-muted);
+  font-family: inherit; font-size: 12px; padding: 4px 10px; border-radius: 8px; cursor: pointer;
+}
+
+/* 통합 헤더 (제안) */
+.hcombo { display: flex; align-items: center; gap: 8px; padding: 10px 14px; flex-shrink: 0; }
+.classpick {
+  display: flex; align-items: center; gap: 5px;
+  border: 1px solid var(--sp-border); background: var(--sp-subtle); color: var(--sp-text);
+  font-family: inherit; font-size: 15px; font-weight: 680;
+  padding: 7px 10px 7px 13px; border-radius: 8px; cursor: pointer; white-space: nowrap;
+}
+.classpick .ms { font-size: 18px; color: var(--sp-muted); }
+.datestep {
+  display: flex; align-items: center; gap: 2px; margin-left: auto;
+}
+.datestep button {
+  display: grid; place-items: center; width: 32px; height: 32px;
+  border: 0; background: transparent; color: var(--sp-muted); cursor: pointer; border-radius: 6px;
+}
+.datestep button:hover { background: var(--sp-subtle); }
+.datestep__d { font-size: 13.5px; font-weight: 590; min-width: 78px; text-align: center; }
+
+/* 명단 행 */
+.roster { list-style: none; margin: 0; padding: 0; }
+.roster li { border-bottom: 1px solid var(--sp-divider); }
+.rname { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.rnum { color: var(--sp-muted); font-size: 13.5px; flex-shrink: 0; width: 20px; }
+.rtext { font-weight: 510; }
+
+/* 현재안 출결 행 — 5버튼 전개 */
+.row-now { padding: 11px 16px; }
+.stat5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; margin-top: 9px; }
+.stat5 button {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  height: 52px; border: 1px solid var(--sp-border); background: transparent;
+  color: var(--sp-muted); font-family: inherit; font-size: 11px; border-radius: 8px; cursor: pointer;
+}
+.stat5 button .ms { font-size: 19px; }
+.stat5 button[data-on='present'] { color: var(--st-present); border-color: color-mix(in srgb, var(--st-present) 40%, transparent); background: color-mix(in srgb, var(--st-present) 10%, transparent); }
+.stat5 button[data-on='late']    { color: var(--st-late);    border-color: color-mix(in srgb, var(--st-late) 40%, transparent);    background: color-mix(in srgb, var(--st-late) 10%, transparent); }
+.stat5 button[data-on='absent']  { color: var(--st-absent);  border-color: color-mix(in srgb, var(--st-absent) 40%, transparent);  background: color-mix(in srgb, var(--st-absent) 10%, transparent); }
+
+/* 사유 칩 (결석 시 펼쳐짐) */
+.reasons { display: flex; gap: 5px; margin-top: 8px; flex-wrap: wrap; }
+.reasons button {
+  border: 1px solid var(--sp-border); background: transparent; color: var(--sp-muted);
+  font-family: inherit; font-size: 12px; padding: 5px 11px; border-radius: 8px; cursor: pointer;
+}
+.reasons button[aria-pressed='true'] { border-color: var(--sp-accent); color: var(--sp-accent); }
+.memo {
+  width: 100%; margin-top: 7px; padding: 8px 11px;
+  border: 1px solid var(--sp-border); border-radius: 8px;
+  background: transparent; color: var(--sp-text); font-family: inherit; font-size: 13px;
+}
+.memo::placeholder { color: var(--sp-muted); }
+
+/* 제안안 출결 행 — 한 줄 */
+.row-new {
+  display: flex; align-items: center; gap: 10px;
+  padding: 0 16px; height: 44px; cursor: pointer;
+}
+.row-new:hover { background: var(--sp-subtle); }
+.row-new .rname { flex: 1; }
+.pill {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 12.5px; font-weight: 590; padding: 3px 10px; border-radius: 8px; flex-shrink: 0;
+}
+.pill .ms { font-size: 14px; }
+.pill--present  { color: var(--sp-muted); background: var(--sp-subtle); }
+.pill--late     { color: var(--st-late);     background: color-mix(in srgb, var(--st-late) 14%, transparent); }
+.pill--absent   { color: var(--st-absent);   background: color-mix(in srgb, var(--st-absent) 14%, transparent); }
+.pill--early    { color: var(--st-early);    background: color-mix(in srgb, var(--st-early) 14%, transparent); }
+.pill--classabs { color: var(--st-classabs); background: color-mix(in srgb, var(--st-classabs) 14%, transparent); }
+
+/* 예외로 펼쳐진 행 */
+.row-open { padding: 10px 16px 13px; background: var(--sp-subtle); }
+.row-open__top { display: flex; align-items: center; gap: 10px; }
+
+/* 카운터 */
+.counter { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; padding: 12px; margin: 12px 16px; }
+.counter div { text-align: center; }
+.counter b { display: block; font-size: 18px; font-weight: 680; line-height: 1.2; }
+.counter span { font-size: 11px; color: var(--sp-muted); }
+.counter-slim {
+  display: flex; align-items: center; justify-content: center; gap: 14px;
+  padding: 8px 16px; font-size: 13px; flex-shrink: 0;
+  border-bottom: 1px solid var(--sp-divider);
+}
+.counter-slim b { font-weight: 680; }
+
+/* 저장 바 */
+.savebar { padding: 11px 16px; flex-shrink: 0; }
+.savebar button {
+  width: 100%; height: 46px; border: 0; border-radius: 12px; cursor: pointer;
+  background: var(--sp-accent); color: var(--sp-accent-fg);
+  font-family: inherit; font-size: 15.5px; font-weight: 680;
+}
+
+/* 탭바 */
+.tabbar { display: grid; padding: 6px 0 9px; flex-shrink: 0; }
+.tabbar--4 { grid-template-columns: repeat(4, 1fr); }
+.tabbar--5 { grid-template-columns: repeat(5, 1fr); }
+.tabbar a {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  color: var(--sp-muted); text-decoration: none; font-size: 11px; font-weight: 510; padding: 4px 0;
+}
+.tabbar a .ms { font-size: 23px; }
+.tabbar a[aria-current='page'] { color: var(--sp-accent); }
+.tabmeasure {
+  font-family: 'JetBrains Mono', monospace; font-size: 9.5px;
+  text-align: center; color: var(--sp-muted); padding-bottom: 4px;
+}
+
+/* 더보기 그리드 */
+.toolsearch {
+  display: flex; align-items: center; gap: 8px; margin: 12px 16px;
+  padding: 9px 13px; border: 1px solid var(--sp-border); border-radius: 12px;
+  background: var(--sp-card); color: var(--sp-muted); font-size: 14px;
+}
+.grouplabel {
+  font-size: 11.5px; font-weight: 680; letter-spacing: .04em;
+  color: var(--sp-muted); padding: 14px 16px 7px;
+}
+.toolgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 9px; padding: 0 16px; }
+.tool {
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  padding: 11px 3px; border-radius: 12px; background: var(--sp-card);
+  border: 1px solid var(--sp-border); cursor: pointer;
+}
+.tool .ms { font-size: 23px; color: var(--sp-accent); }
+.tool span { font-size: 11.5px; font-weight: 510; text-align: center; line-height: 1.25; }
+
+/* 메뉴 리스트 (현재 더보기) */
+.menulist { padding: 12px 16px; display: flex; flex-direction: column; gap: 9px; }
+.menuitem {
+  display: flex; align-items: center; gap: 13px; padding: 13px;
+  border-radius: 12px; background: var(--sp-card); border: 1px solid var(--sp-border); cursor: pointer;
+}
+.menuitem__ic { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 10px; background: var(--sp-subtle); flex-shrink: 0; }
+.menuitem__ic .ms { font-size: 20px; color: var(--sp-accent); }
+.menuitem__t { font-size: 14.5px; font-weight: 590; }
+.menuitem__d { font-size: 12px; color: var(--sp-muted); }
+.menuitem .ms.chev { margin-left: auto; color: var(--sp-muted); font-size: 20px; }
+
+/* 홈 시간표 카드 */
+.sectitle { font-size: 12px; font-weight: 680; color: var(--sp-muted); padding: 16px 16px 8px; letter-spacing: .03em; }
+.periodrow { display: flex; gap: 9px; padding: 0 16px 4px; overflow-x: auto; }
+.periodrow::-webkit-scrollbar { height: 0; }
+.pcard {
+  flex-shrink: 0; width: 128px; padding: 12px; border-radius: 12px;
+  background: var(--sp-card); border: 1px solid var(--sp-border); cursor: pointer;
+}
+.pcard--now { border-color: color-mix(in srgb, var(--sp-accent) 45%, transparent); background: color-mix(in srgb, var(--sp-accent) 8%, transparent); }
+.pcard__p { font-size: 11.5px; color: var(--sp-muted); font-weight: 590; }
+.pcard__s { font-size: 15px; font-weight: 680; margin-top: 2px; }
+.pcard__c { font-size: 12.5px; color: var(--sp-muted); }
+.pcard__badge {
+  display: inline-flex; align-items: center; gap: 3px; margin-top: 8px;
+  font-size: 11px; font-weight: 590; padding: 3px 8px; border-radius: 8px;
+}
+.pcard__badge--todo { color: var(--sp-error); background: color-mix(in srgb, var(--sp-error) 13%, transparent); }
+.pcard__badge--done { color: var(--sp-success); background: color-mix(in srgb, var(--sp-success) 13%, transparent); }
+.pcard__badge .ms { font-size: 13px; }
+
+/* 반 카드 (B안) */
+.classcards { display: flex; flex-direction: column; gap: 9px; padding: 12px 16px; }
+.classcard {
+  display: flex; align-items: center; gap: 12px; padding: 14px;
+  border-radius: 12px; background: var(--sp-card); border: 1px solid var(--sp-border); cursor: pointer;
+}
+.classcard__n { font-size: 15.5px; font-weight: 680; }
+.classcard__m { font-size: 12.5px; color: var(--sp-muted); }
+.classcard__tag {
+  font-size: 11px; font-weight: 590; padding: 3px 8px; border-radius: 8px;
+  color: var(--sp-accent); background: color-mix(in srgb, var(--sp-accent) 12%, transparent);
+}
+
+/* 바텀시트 */
+.sheetdim { position: absolute; inset: 0; background: rgba(0,0,0,.34); z-index: 9; }
+.sheet {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 10;
+  background: var(--sp-surface); backdrop-filter: blur(20px);
+  border-radius: 16px 16px 0 0; border-top: 1px solid var(--sp-border);
+  padding: 9px 0 16px; box-shadow: 0 -8px 32px rgba(0,0,0,.16);
+}
+.sheet__grip { width: 36px; height: 4px; border-radius: 9999px; background: var(--sp-border); margin: 0 auto 12px; }
+.sheet__t { font-size: 15px; font-weight: 680; padding: 0 18px 4px; }
+.sheet__sub { font-size: 12.5px; color: var(--sp-muted); padding: 0 18px 12px; }
+.sheet__opt {
+  display: flex; align-items: center; gap: 12px; padding: 13px 18px; cursor: pointer;
+}
+.sheet__opt:hover { background: var(--sp-subtle); }
+.sheet__opt .ms { font-size: 21px; }
+.sheet__opt span { font-size: 15px; font-weight: 510; }
+
+/* 스낵바 */
+.snack {
+  position: absolute; left: 14px; right: 14px; bottom: 14px; z-index: 12;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 12px 16px; border-radius: 12px;
+  background: #1e293b; color: #f1f5f9; font-size: 13.5px;
+  box-shadow: 0 8px 28px rgba(0,0,0,.3);
+}
+.snack button {
+  border: 0; background: transparent; color: #7dd3fc; cursor: pointer;
+  font-family: inherit; font-size: 13.5px; font-weight: 680;
+}
+
+/* ── 할 일 ── */
+.todoitem {
+  display: flex; gap: 11px; padding: 12px 16px; align-items: flex-start;
+  border-bottom: 1px solid var(--sp-divider);
+}
+.tcheck {
+  width: 22px; height: 22px; border-radius: 9999px; flex-shrink: 0; margin-top: 1px;
+  border: 2px solid var(--sp-border); display: grid; place-items: center; cursor: pointer;
+}
+.tcheck .ms { font-size: 15px; color: #fff; }
+.tcheck--done { background: var(--sp-success); border-color: var(--sp-success); }
+.tbody { flex: 1; min-width: 0; }
+.ttext { font-size: 14.5px; font-weight: 510; line-height: 1.45; }
+.ttext--done { text-decoration: line-through; color: var(--sp-muted); font-weight: 400; }
+.tmeta { display: flex; align-items: center; gap: 9px; margin-top: 5px; flex-wrap: wrap; }
+.tflag { display: inline-flex; align-items: center; gap: 3px; font-size: 11.5px; font-weight: 590; }
+.tflag .ms { font-size: 14px; }
+.tflag--high { color: var(--sp-error); }
+.tflag--mid  { color: var(--sp-warning); }
+.tflag--low  { color: var(--sp-success); }
+.tdday { font-family: 'JetBrains Mono', monospace; font-size: 11.5px; font-weight: 600; }
+.tdday--over { color: var(--sp-error); }
+.tdday--today { color: var(--sp-accent); }
+.tdday--later { color: var(--sp-muted); }
+.tcat { font-size: 11px; padding: 2px 8px; border-radius: 6px; background: var(--sp-subtle); color: var(--sp-muted); }
+.tsub { display: flex; align-items: center; gap: 7px; margin-top: 8px; font-size: 11.5px; color: var(--sp-muted); }
+.tsubbar { width: 54px; height: 4px; border-radius: 9999px; background: var(--sp-subtle); overflow: hidden; }
+.tsubbar i { display: block; height: 100%; background: var(--sp-accent); border-radius: 9999px; }
+
+.grouphead { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px 6px; }
+.grouphead b { font-size: 12px; font-weight: 680; color: var(--sp-muted); }
+.grouphead button {
+  border: 0; background: transparent; color: var(--sp-accent); cursor: pointer;
+  font-family: inherit; font-size: 12.5px; font-weight: 590;
+}
+.archivelink {
+  display: flex; align-items: center; gap: 10px; cursor: pointer;
+  padding: 13px 16px; margin: 10px 16px 18px;
+  border: 1px dashed var(--sp-border); border-radius: 12px;
+  color: var(--sp-muted); font-size: 13.5px;
+}
+.archivelink .ms { font-size: 19px; }
+.archivelink .ms.chev { margin-left: auto; }
+
+/* ── 캘린더 ── */
+.calhead { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; }
+.calhead h3 { font-size: 15.5px; font-weight: 680; margin: 0; }
+.dowrow { display: grid; grid-template-columns: repeat(7, 1fr); padding: 0 8px 4px; }
+.dowrow span { text-align: center; font-size: 11.5px; font-weight: 510; color: var(--sp-muted); }
+.dowrow span.sun { color: #f87171; }
+.dowrow span.sat { color: #60a5fa; }
+.mgrid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; padding: 0 8px 10px; }
+.mgrid button {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  border: 0; background: transparent; cursor: pointer; padding: 3px 0; font-family: inherit;
+}
+.dnum {
+  width: 29px; height: 29px; border-radius: 9999px; display: grid; place-items: center;
+  font-size: 13.5px; color: var(--sp-text);
+}
+.dnum--out { opacity: .3; }
+.dnum--sun { color: #f87171; }
+.dnum--sat { color: #60a5fa; }
+.dnum--today { background: var(--sp-accent); color: var(--sp-accent-fg); font-weight: 680; }
+.ddots { display: flex; gap: 2px; min-height: 6px; }
+.ddots i { width: 5px; height: 5px; border-radius: 9999px; display: block; }
+
+.weekstrip { display: grid; grid-template-columns: repeat(7, 1fr); padding: 5px 8px 8px; flex-shrink: 0; }
+.weekstrip button {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  border: 0; background: transparent; cursor: pointer; padding: 3px 0; font-family: inherit;
+}
+.expandmonth {
+  display: flex; align-items: center; justify-content: center; gap: 5px;
+  padding: 5px 0 8px; font-size: 12px; color: var(--sp-muted); cursor: pointer; flex-shrink: 0;
+}
+.expandmonth .ms { font-size: 16px; }
+
+.evrow { display: flex; gap: 11px; padding: 12px 16px; border-bottom: 1px solid var(--sp-divider); }
+.evbar { width: 3px; border-radius: 9999px; flex-shrink: 0; }
+.evt { font-size: 14.5px; font-weight: 590; }
+.evm { font-size: 12.5px; color: var(--sp-muted); margin-top: 2px; }
+
+/* ── 눈금자 ── */
+.ruler {
+  display: flex; align-items: center; gap: 10px; margin-top: 14px;
+  font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: var(--doc-ink-faint);
+}
+.ruler__bar { flex: 1; height: 7px; border-radius: 9999px; background: var(--doc-rule); overflow: hidden; }
+.ruler__fill { height: 100%; border-radius: 9999px; }
+.ruler__fill--bad { background: var(--doc-bad); width: 100%; }
+/* 1,350 / 3,180 — 실제 렌더 측정값 기준 */
+.ruler__fill--good { background: var(--doc-good); width: 42.5%; }
+
+/* ── 주석 ── */
+.notes { list-style: none; margin: 26px 0 0; padding: 0; display: grid; gap: 11px; }
+.notes li { display: flex; gap: 12px; font-size: 14.5px; color: var(--doc-ink-soft); line-height: 1.65; }
+.notes .ms { font-size: 18px; flex-shrink: 0; margin-top: 3px; }
+.notes .ms[data-k='bad']  { color: var(--doc-bad); }
+.notes .ms[data-k='good'] { color: var(--doc-good); }
+.notes .ms[data-k='warn'] { color: var(--doc-accent); }
+.notes b { color: var(--doc-ink); font-weight: 680; }
+
+/* ── 근거 인용 ── */
+.cite {
+  margin-top: 30px; padding: 20px 24px; border-radius: 12px;
+  background: var(--doc-mark); border: 1px solid var(--doc-rule);
+}
+.cite__k {
+  font-family: 'JetBrains Mono', monospace; font-size: 10.5px; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--doc-accent); margin-bottom: 9px;
+}
+.cite p { margin: 0 0 8px; font-size: 14.5px; color: var(--doc-ink-soft); }
+.cite p:last-child { margin-bottom: 0; }
+.cite q { font-family: 'Nanum Myeongjo', serif; font-style: italic; color: var(--doc-ink); }
+
+/* ── 결정 카드 ── */
+.decide {
+  margin-top: 34px; padding: 26px 28px; border-radius: 12px;
+  border: 2px solid var(--doc-accent); background: var(--doc-panel);
+}
+.decide__k {
+  font-family: 'JetBrains Mono', monospace; font-size: 10.5px; letter-spacing: .16em;
+  text-transform: uppercase; color: var(--doc-accent); margin-bottom: 12px;
+}
+.decide h4 { font-family: 'Nanum Myeongjo', serif; font-size: 20px; font-weight: 700; margin: 0 0 14px; }
+.decide ul { margin: 0; padding-left: 20px; }
+.decide li { font-size: 15px; color: var(--doc-ink-soft); margin-bottom: 8px; }
+.decide li b { color: var(--doc-ink); }
+
+/* ── 유의 ── */
+.caveat {
+  margin-top: 30px; padding: 20px 24px; border-radius: 12px;
+  border: 1px solid var(--doc-bad); background: color-mix(in srgb, var(--doc-bad) 6%, transparent);
+}
+.caveat__k {
+  display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 680;
+  color: var(--doc-bad); margin-bottom: 10px;
+}
+.caveat p { margin: 0; font-size: 14.5px; color: var(--doc-ink-soft); }
+.caveat p + p { margin-top: 9px; }
+
+.ms {
+  font-family: 'Material Symbols Outlined'; font-weight: normal; font-style: normal;
+  line-height: 1; letter-spacing: normal; text-transform: none; display: inline-block;
+  white-space: nowrap; direction: ltr; -webkit-font-feature-settings: 'liga'; font-feature-settings: 'liga';
+}
+
+.foot {
+  margin-top: 30px; padding-top: 30px; border-top: 3px double var(--doc-rule);
+  font-size: 14px; color: var(--doc-ink-faint);
+}
+.foot code {
+  font-family: 'JetBrains Mono', monospace; font-size: 12.5px;
+  background: var(--doc-mark); padding: 2px 7px; border-radius: 6px; color: var(--doc-ink-soft);
+}
+
+@media (max-width: 720px) {
+  .wrap { padding: 0 15px 90px; }
+  .stage { padding: 24px 15px; gap: 40px; }
+  .col { min-width: 0; }
+  .topbar__nav { display: none; }
+  .masthead { padding-bottom: 44px; margin-bottom: 52px; }
+  .sec { margin-bottom: 76px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+  html { scroll-behavior: auto; }
+}
+</style>
+</head>
+
+<body>
+<div class="wrap">
+
+  <div class="topbar">
+    <div class="topbar__id">쌤핀 · 모바일 구조 재설계</div>
+    <nav class="topbar__nav">
+      <a href="#s1">탭 구조</a>
+      <a href="#s2">헤더</a>
+      <a href="#s3">출결</a>
+      <a href="#s4">더보기</a>
+      <a href="#s4b">일정·할일</a>
+      <a href="#s4c">홈</a>
+      <a href="#s5">뒤로가기</a>
+      <a href="#s6">정리</a>
+    </nav>
+    <button class="tbtn" id="themeToggle" type="button">
+      <span class="ms" id="themeIcon">dark_mode</span><span id="themeLabel">다크</span>
+    </button>
+  </div>
+
+  <header class="masthead">
+    <div class="masthead__kicker">Mockup · 결정용 시안 · 코드 미적용</div>
+    <h1>쌤핀 모바일,<br />화면 구조를 <em>다시 짭니다</em></h1>
+    <p class="masthead__lead">
+      조사 문서에서 글로만 설명했던 대안을 실제 화면으로 만들었습니다.
+      왼쪽이 지금, 오른쪽이 제안입니다. 보시고 어느 쪽으로 갈지 정하시면 됩니다.
+      <strong>앱 코드는 한 줄도 바뀌지 않았습니다.</strong>
+    </p>
+    <div class="masthead__meta">
+      <span>2026-08-12</span>
+      <span>390 × 844</span>
+      <span>라이트 / 다크</span>
+      <span>sp-* 토큰 실값</span>
+    </div>
+  </header>
+
+  <!-- ═════════ 1. 탭 구조 ═════════ -->
+  <section class="sec" id="s1">
+    <div class="sec__head">
+      <div class="sec__no">01 — 하단 탭</div>
+      <h2>출결은 탭일까, 반 안에 있는 걸까</h2>
+      <p class="sec__lead">
+        준일님이 지적하신 부분입니다. 출결은 학급과 수업에서 하는 일이니, "출결"이라는
+        독립된 장소가 따로 있는 게 아니라는 것.
+      </p>
+      <p class="sec__lead">
+        이게 왜 중요하냐면, 애플 가이드라인이 <strong>"탭은 이동만 담당하고,
+        탭 버튼으로 동작을 실행하면 안 된다"</strong>고 못박기 때문입니다. 제가 앞서 드린
+        A안(출결 탭 승격)은 이 원칙에 걸립니다.
+      </p>
+      <div class="q">
+        <strong>두 안의 차이는 한 줄입니다.</strong> A안은 "자주 하니까 앞에 두자",
+        B안은 "반 안에서 하는 일이니 반 안에 두자".
+      </div>
+      <p class="sec__lead" style="margin-top:22px">
+        <strong>B안으로 확정하되, 담임과 수업을 각각 탭으로 분리했습니다(2026-08-12 결정).</strong>
+        원래 시안은 "학급" 한 탭 안에 담임과 수업을 세그먼트로 다시 나눴는데,
+        그럴 이유가 없다는 판단입니다. 코드를 확인해 보니 근거가 더 있었습니다.
+      </p>
+      <ul class="notes" style="margin-bottom:8px">
+        <li><span class="ms" data-k="good">check_circle</span><span>담임 기록과 수업반 기록은 <b>저장되는 곳이 아예 다릅니다</b> — 담임은 <code>StudentRecord</code>, 수업반은 <code>ObservationRecord</code>로 저장소가 따로 있습니다.</span></li>
+        <li><span class="ms" data-k="good">check_circle</span><span>화면 폴더도 <b>이미 갈라져 있습니다</b> — <code>pages/students/</code>(담임 계열)와 <code>components/Class/</code>(수업반 계열).</span></li>
+        <li><span class="ms" data-k="good">check_circle</span><span>즉 <b>속은 이미 나뉘어 있는데 겉의 탭만 하나로 묶고 세그먼트로 다시 갈라놓은</b> 상태였습니다. 탭을 나누는 게 속과 겉을 맞추는 쪽입니다.</span></li>
+        <li><span class="ms" data-k="good">check_circle</span><span>담임반 3-2에 국어 수업도 들어가는 경우, 같은 반이 두 군데 보이지만 <b>하는 일이 다릅니다</b> — 학급의 3-2는 조회·생활기록, 수업의 3-2는 교시 출결·진도.</span></li>
+      </ul>
+      <p class="sec__lead">
+        <strong>도구는 다시 더보기로 넣습니다.</strong> 대신 더보기 첫 화면에서 바로 펼쳐
+        지금 세 번 누르던 걸 두 번으로 줄입니다. 아래 04번 참고.
+      </p>
+    </div>
+
+    <div class="stage">
+      <!-- A안 -->
+      <div class="col">
+        <span class="col__tag col__tag--a">A안 · 빈도 우선</span>
+        <h3>출결을 탭으로 올린다</h3>
+        <p class="col__note">
+          홈 · 학생 · 출결 · 일정 · 더보기.
+          한 번에 닿지만, 반을 또 골라야 해서 "출결" 탭이 사실상 반 고르는 화면이 됩니다.
+        </p>
+
+        <div class="phone">
+          <div class="screen sp-scope">
+            <div class="statusbar">
+              <span>9:41</span>
+              <span class="statusbar__r"><span class="ms">signal_cellular_alt</span><span class="ms">wifi</span><span class="ms">battery_full</span></span>
+            </div>
+
+            <div class="hrow g-chrome g-header"><h2 class="htitle">출결</h2></div>
+
+            <div class="scroll">
+              <div class="sectitle">어느 반 출결을 하시겠어요?</div>
+              <div class="classcards">
+                <div class="classcard">
+                  <div style="flex:1">
+                    <div class="classcard__n">3학년 2반 <span class="classcard__tag">담임</span></div>
+                    <div class="classcard__m">조회 · 28명</div>
+                  </div>
+                  <span class="pill pill--absent"><span class="ms">error</span>미입력</span>
+                </div>
+                <div class="classcard">
+                  <div style="flex:1">
+                    <div class="classcard__n">2학년 5반</div>
+                    <div class="classcard__m">3교시 · 국어 · 26명</div>
+                  </div>
+                  <span class="pill pill--absent"><span class="ms">error</span>미입력</span>
+                </div>
+                <div class="classcard">
+                  <div style="flex:1">
+                    <div class="classcard__n">2학년 7반</div>
+                    <div class="classcard__m">5교시 · 국어 · 27명</div>
+                  </div>
+                  <span class="pill pill--present"><span class="ms">check</span>완료</span>
+                </div>
+                <div class="classcard">
+                  <div style="flex:1">
+                    <div class="classcard__n">1학년 3반</div>
+                    <div class="classcard__m">6교시 · 국어 · 29명</div>
+                  </div>
+                  <span class="pill pill--present"><span class="ms">check</span>완료</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="tabmeasure">칸당 78px</div>
+            <nav class="tabbar tabbar--5 g-chrome g-tabbar">
+              <a href="#s1"><span class="ms">home</span>홈</a>
+              <a href="#s1"><span class="ms">group</span>학생</a>
+              <a href="#s1" aria-current="page"><span class="ms">how_to_reg</span>출결</a>
+              <a href="#s1"><span class="ms">calendar_month</span>일정</a>
+              <a href="#s1"><span class="ms">more_horiz</span>더보기</a>
+            </nav>
+          </div>
+        </div>
+
+        <ul class="notes">
+          <li><span class="ms" data-k="good">check_circle</span><span>매일 하는 일이 <b>한 번에</b> 닿습니다.</span></li>
+          <li><span class="ms" data-k="bad">cancel</span><span>"출결" 탭을 눌러도 <b>반을 또 골라야</b> 합니다. 결국 반이 먼저입니다.</span></li>
+          <li><span class="ms" data-k="bad">cancel</span><span>같은 3학년 2반이 <b>학생 탭에도, 출결 탭에도</b> 나옵니다. 같은 반이 두 군데 있습니다.</span></li>
+        </ul>
+      </div>
+
+      <!-- B안 -->
+      <div class="col">
+        <span class="col__tag col__tag--new">B안 · 성격 우선 · 확정</span>
+        <h3>반을 고르면 그 안에 다 있다</h3>
+        <p class="col__note">
+          홈 · 학급 · 수업 · 일정 · 더보기.
+          반이 작업 단위가 되고, 명단 · 출결 · 기록이 그 안에 나란히 있습니다.
+        </p>
+
+        <div class="phone">
+          <div class="screen sp-scope">
+            <div class="statusbar">
+              <span>9:41</span>
+              <span class="statusbar__r"><span class="ms">signal_cellular_alt</span><span class="ms">wifi</span><span class="ms">battery_full</span></span>
+            </div>
+
+            <!-- 학급 탭 = 담임반. 보통 반이 하나라 고르는 UI가 필요 없다. -->
+            <div class="hcombo g-chrome g-header">
+              <h2 class="htitle">3학년 2반</h2>
+              <div class="datestep">
+                <button type="button"><span class="ms">chevron_left</span></button>
+                <span class="datestep__d">8월 12일 (화)</span>
+                <button type="button"><span class="ms">chevron_right</span></button>
+              </div>
+            </div>
+
+            <div class="hrow" style="padding-top:4px;padding-bottom:9px">
+              <div class="seg" style="flex:1">
+                <button type="button" style="flex:1">명단</button>
+                <button type="button" aria-selected="true" style="flex:1">출결</button>
+                <button type="button" style="flex:1">기록</button>
+              </div>
+            </div>
+
+            <div class="counter-slim">
+              <span>출석 <b style="color:var(--st-present)">25</b></span>
+              <span>지각 <b style="color:var(--st-late)">1</b></span>
+              <span>결석 <b style="color:var(--st-absent)">2</b></span>
+              <span style="color:var(--sp-muted)">전체 28</span>
+            </div>
+
+            <div class="scroll">
+              <ul class="roster">
+                <li><div class="row-new"><div class="rname"><span class="rnum">1</span><span class="rtext">강민서</span></div><span class="pill pill--present">출석</span></div></li>
+                <li><div class="row-new"><div class="rname"><span class="rnum">2</span><span class="rtext">권하윤</span></div><span class="pill pill--present">출석</span></div></li>
+                <li><div class="row-new"><div class="rname"><span class="rnum">3</span><span class="rtext">김도현</span></div><span class="pill pill--late"><span class="ms">schedule</span>지각</span></div></li>
+                <li><div class="row-new"><div class="rname"><span class="rnum">4</span><span class="rtext">김서준</span></div><span class="pill pill--present">출석</span></div></li>
+                <li><div class="row-new"><div class="rname"><span class="rnum">5</span><span class="rtext">김지우</span></div><span class="pill pill--absent"><span class="ms">cancel</span>결석</span></div></li>
+                <li><div class="row-new"><div class="rname"><span class="rnum">6</span><span class="rtext">박시윤</span></div><span class="pill pill--present">출석</span></div></li>
+                <li><div class="row-new"><div class="rname"><span class="rnum">7</span><span class="rtext">배주원</span></div><span class="pill pill--present">출석</span></div></li>
+                <li><div class="row-new"><div class="rname"><span class="rnum">8</span><span class="rtext">서예은</span></div><span class="pill pill--present">출석</span></div></li>
+              </ul>
+            </div>
+
+            <div class="savebar"><button type="button">출결 저장</button></div>
+
+            <div class="tabmeasure">칸당 78px</div>
+            <nav class="tabbar tabbar--5 g-chrome g-tabbar">
+              <a href="#s1"><span class="ms">home</span>홈</a>
+              <a href="#s1" aria-current="page"><span class="ms">groups</span>학급</a>
+              <a href="#s1"><span class="ms">school</span>수업</a>
+              <a href="#s1"><span class="ms">calendar_month</span>일정</a>
+              <a href="#s1"><span class="ms">more_horiz</span>더보기</a>
+            </nav>
+          </div>
+        </div>
+
+        <ul class="notes">
+          <li><span class="ms" data-k="good">check_circle</span><span>반이 <b>한 군데에만</b> 있습니다. 명단 보다가 출결로 바로 넘어갑니다.</span></li>
+          <li><span class="ms" data-k="good">check_circle</span><span>"탭은 장소, 세그먼트는 그 장소의 버전"이라는 <b>원칙에 맞습니다</b>.</span></li>
+          <li><span class="ms" data-k="good">check_circle</span><span>담임과 수업을 <b>탭으로 분리</b>했습니다. 저장소도 폴더도 이미 나뉘어 있어서, 겉을 속에 맞춘 것입니다.</span></li>
+          <li><span class="ms" data-k="good">check_circle</span><span><b>담임은 보통 반이 하나</b>라 학급 탭에는 반 고르기가 아예 필요 없습니다. 수업 탭에서만 고르면 됩니다.</span></li>
+          <li><span class="ms" data-k="warn">info</span><span>출결까지 <b>두 번</b>(반 선택 → 출결)입니다. 대신 홈 시간표 카드에서 바로 가는 길을 함께 둡니다. 아래 참고.</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="cite">
+      <div class="cite__k">[공식] Apple Human Interface Guidelines</div>
+      <p><q>Use a tab bar strictly for navigation. Tab bar buttons should not be used to perform actions.</q></p>
+      <p>탭 바는 이동에만 쓰고, 탭 버튼으로 동작을 실행하지 말 것 — "출결하기"는 동작에 가깝고, "3학년 2반"은 장소에 가깝습니다.</p>
+      <div class="cite__k" style="margin-top:18px">[공식] Material Design 3 · Navigation bar</div>
+      <p>탭이 5개일 때 비활성 탭의 텍스트 라벨은 <q>use text labels with caution</q> — 공간이 안 나올 수 있으니 주의하라고 되어 있습니다. 위 두 시안 모두 <b>칸당 78px</b>이고 한국어 라벨이 2~3글자라 폭은 들어갑니다. 다만 실기기 확인은 필요합니다.</p>
+    </div>
+
+    <div class="decide">
+      <div class="decide__k">결정됨 ① · 2026-08-12</div>
+      <h4>B안 + 담임/수업 탭 분리로 확정</h4>
+      <ul>
+        <li>최종 탭 — <b>홈 · 학급 · 수업 · 일정 · 더보기</b></li>
+        <li><b>출결은 탭이 아닙니다.</b> 반을 고른 뒤 그 안에서 합니다(명단 · 출결 · 기록 세그먼트).</li>
+        <li><b>도구는 더보기 안</b>에 둡니다. 대신 더보기 첫 화면에서 바로 펼쳐 세 번을 두 번으로 줄입니다.</li>
+      </ul>
+    </div>
+
+    <div class="caveat">
+      <div class="caveat__k"><span class="ms">warning</span>이 구성에서 반드시 정해야 할 것 — 담임이 아닌 선생님</div>
+      <p>
+        코드를 보니 <strong>담임을 맡지 않은 경우가 기본값</strong>입니다(<code>teacherRoles: []</code>).
+        이때 <strong>"학급" 탭이 빈 채로 남습니다.</strong>
+      </p>
+      <p>
+        그런데 애플 가이드라인은 <q>기능을 쓸 수 없다고 해서 탭을 없애거나 비활성화하지 말라</q>고 합니다.
+        탭이 사람마다 다르면 앱이 예측 불가능해지기 때문입니다.
+        <strong>그래서 탭은 그대로 두고, 안을 안내 문구로 채우는 쪽이 맞습니다</strong> —
+        "담임 학급이 아직 없어요. 설정에서 지정할 수 있어요" 같은.
+      </p>
+      <p>
+        다만 담임이 아닌 선생님에게는 <strong>평생 안 쓰는 탭이 하나 생기는 것</strong>도 사실입니다.
+        이건 정하고 넘어가야 합니다. 아래 ①-b.
+      </p>
+    </div>
+
+    <div class="decide">
+      <div class="decide__k">결정됨 ①-b · 2026-08-12</div>
+      <h4>학급 탭은 기본으로 열고, 설정에서 숨길 수 있게</h4>
+      <ul>
+        <li><b>기본값은 표시.</b> 담임을 맡지 않아도 탭은 그대로 있고, 안을 안내 문구로 채웁니다 — "담임 학급이 아직 없어요. 설정에서 지정할 수 있어요".</li>
+        <li><b>설정에서 끌 수 있음.</b> 담임을 아예 안 맡는 선생님은 직접 숨깁니다. 앱이 사람을 판단해서 지우는 게 아니라 <b>선생님이 고르는</b> 방식이라, 조건부 탭 금지 원칙과 부딪히지 않습니다.</li>
+        <li><b>따라오는 일:</b> 탭을 숨긴 선생님은 도움말의 "학급 탭에서…"를 못 찾습니다. → <code>/docs</code> 사용자 가이드에 "학급 탭이 안 보이면 설정에서 켜세요" 한 줄이 필요합니다.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ═════════ 2. 홈에서 바로 가기 ═════════ -->
+  <section class="sec" id="s1b">
+    <div class="sec__head">
+      <div class="sec__no">01-b — 보완</div>
+      <h2>B안의 "두 번 누름"은 홈에서 풀립니다</h2>
+      <p class="sec__lead">
+        B안의 유일한 약점이 출결까지 두 번 누르는 것인데, 홈 시간표 카드에
+        <strong>미입력 표시</strong>를 달면 한 번에 갑니다. 아침에 앱을 열면 오늘 안 한 게 먼저 보입니다.
+      </p>
+    </div>
+
+    <div class="stage">
+      <div class="col" style="max-width:520px">
+        <span class="col__tag col__tag--new">제안</span>
+        <h3>홈 — 오늘 안 한 것부터</h3>
+        <p class="col__note">시간표 카드에 "출결 미입력"이 뜨고, 그걸 누르면 해당 반 출결로 바로 들어갑니다.</p>
+
+        <div class="phone phone--tall">
+          <div class="screen sp-scope">
+            <div class="statusbar">
+              <span>9:41</span>
+              <span class="statusbar__r"><span class="ms">signal_cellular_alt</span><span class="ms">wifi</span><span class="ms">battery_full</span></span>
+            </div>
+
+            <div class="hrow g-chrome g-header">
+              <div>
+                <h2 class="htitle">8월 12일 화요일</h2>
+                <div style="font-size:12.5px;color:var(--sp-muted)">2학기 · 개학 4일째</div>
+              </div>
+              <button class="iconbtn" type="button"><span class="ms">sync</span></button>
+            </div>
+
+            <div class="scroll">
+              <div class="sectitle">오늘 남은 일</div>
+              <div style="padding:0 16px">
+                <div class="g-card" style="padding:14px">
+                  <div style="display:flex;align-items:center;gap:10px">
+                    <span class="ms" style="font-size:20px;color:var(--sp-error)">error</span>
+                    <div style="flex:1">
+                      <div style="font-size:14.5px;font-weight:680">출결 2건이 아직 비어 있어요</div>
+                      <div style="font-size:12.5px;color:var(--sp-muted)">3학년 2반 조회 · 2학년 5반 3교시</div>
+                    </div>
+                    <span class="ms" style="color:var(--sp-muted)">chevron_right</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="sectitle">오늘 시간표</div>
+              <div class="periodrow">
+                <div class="pcard pcard--now">
+                  <div class="pcard__p">조회</div>
+                  <div class="pcard__s">3-2</div>
+                  <div class="pcard__c">담임</div>
+                  <span class="pcard__badge pcard__badge--todo"><span class="ms">error</span>출결 미입력</span>
+                </div>
+                <div class="pcard">
+                  <div class="pcard__p">3교시</div>
+                  <div class="pcard__s">국어</div>
+                  <div class="pcard__c">2-5</div>
+                  <span class="pcard__badge pcard__badge--todo"><span class="ms">error</span>출결 미입력</span>
+                </div>
+                <div class="pcard">
+                  <div class="pcard__p">5교시</div>
+                  <div class="pcard__s">국어</div>
+                  <div class="pcard__c">2-7</div>
+                  <span class="pcard__badge pcard__badge--done"><span class="ms">check</span>완료</span>
+                </div>
+                <div class="pcard">
+                  <div class="pcard__p">6교시</div>
+                  <div class="pcard__s">국어</div>
+                  <div class="pcard__c">1-3</div>
+                  <span class="pcard__badge pcard__badge--done"><span class="ms">check</span>완료</span>
+                </div>
+              </div>
+
+              <div class="sectitle">오늘 일정</div>
+              <div style="padding:0 16px 16px">
+                <div class="g-card" style="padding:14px">
+                  <div style="display:flex;gap:10px;align-items:flex-start">
+                    <span class="ms" style="font-size:19px;color:var(--sp-highlight);margin-top:2px">event</span>
+                    <div>
+                      <div style="font-size:14.5px;font-weight:590">2학기 학부모 상담 주간 안내</div>
+                      <div style="font-size:12.5px;color:var(--sp-muted)">8월 19일 시작 · 신청 마감 8월 15일</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <nav class="tabbar tabbar--5 g-chrome g-tabbar">
+              <a href="#s1b" aria-current="page"><span class="ms">home</span>홈</a>
+              <a href="#s1b"><span class="ms">groups</span>학급</a>
+              <a href="#s1b"><span class="ms">school</span>수업</a>
+              <a href="#s1b"><span class="ms">calendar_month</span>일정</a>
+              <a href="#s1b"><span class="ms">more_horiz</span>더보기</a>
+            </nav>
+          </div>
+        </div>
+
+        <ul class="notes">
+          <li><span class="ms" data-k="good">check_circle</span><span>출결 미입력이 <b>아침에 먼저 보입니다</b>. 지금은 앱이 먼저 알려주는 지점이 없습니다.</span></li>
+          <li><span class="ms" data-k="good">check_circle</span><span>카드를 누르면 그 반 출결로 <b>바로</b> — B안에서도 한 번입니다.</span></li>
+          <li><span class="ms" data-k="warn">info</span><span>점수·연속기록 같은 건 넣지 않았습니다. <b>남은 일만 표시</b>하고 칭찬하지 않습니다.</span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═════════ 3. 헤더 ═════════ -->
+  <section class="sec" id="s2">
+    <div class="sec__head">
+      <div class="sec__no">02 — 학생/학급 탭 헤더</div>
+      <h2>첫 학생이 보이기까지 층을 몇 개 지나는가</h2>
+      <p class="sec__lead">
+        지금은 제목 줄 · 반 선택 줄 · 날짜 줄이 따로 쌓여 있습니다.
+        붉은 번호가 층 번호입니다. 세어보시면 학생 이름이 나오기 전에 세 층입니다.
+      </p>
+      <div class="q">
+        판단 기준은 하나였습니다 — <strong>"스크롤하는 내내 진짜로 계속 보여야 하나?"</strong>
+        반 이름과 날짜는 <strong>예</strong>(잘못 보면 다른 반, 다른 날에 기록이 들어갑니다).
+        좌석/명단 토글과 기록보기는 <strong>아니오</strong>(한 번 정하면 끝입니다).
+      </div>
+    </div>
+
+    <div class="stage">
+      <div class="col">
+        <span class="col__tag col__tag--now">현재</span>
+        <h3>헤더 3층</h3>
+        <p class="col__note">제목+토글, 반 선택, 날짜가 각각 한 줄씩. 화면 위쪽 <b>약 140px</b>을 항상 차지합니다.</p>
+
+        <div class="phone">
+          <div class="screen sp-scope">
+            <div class="statusbar">
+              <span>9:41</span>
+              <span class="statusbar__r"><span class="ms">signal_cellular_alt</span><span class="ms">wifi</span><span class="ms">battery_full</span></span>
+            </div>
+
+            <div class="g-chrome g-header">
+              <div class="hrow hrow--layer" data-layer="1">
+                <h2 class="htitle">3학년 2반</h2>
+                <div style="display:flex;align-items:center;gap:6px;margin-right:22px">
+                  <button class="iconbtn" type="button"><span class="ms">history_edu</span></button>
+                  <div class="seg">
+                    <button type="button" aria-selected="true">좌석</button>
+                    <button type="button">명단</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="classtabs hrow--layer" data-layer="2" style="padding-right:34px">
+                <button type="button" aria-selected="true">3-2 담임</button>
+                <button type="button">2-5</button>
+                <button type="button">2-7</button>
+                <button type="button">1-3</button>
+                <button type="button">1-6</button>
+              </div>
+
+              <div class="datebar hrow--layer" data-layer="3" style="padding-right:34px">
+                <button class="iconbtn" type="button"><span class="ms">chevron_left</span></button>
+                <div class="datebar__mid">
+                  <span class="datebar__d">8월 12일 (화)</span>
+                  <button class="chip-today" type="button">오늘로</button>
+                </div>
+                <button class="iconbtn" type="button"><span class="ms">chevron_right</span></button>
+              </div>
+            </div>
+
+            <div class="scroll">
+              <ul class="roster">
+                <li><div class="row-new"><div class="rname"><span class="rnum">1</span><span class="rtext">강민서</span></div><span class="ms" style="color:var(--sp-muted);font-size:19px">chevron_right</span></div></li>
+                <li><div class="row-new"><div class="rname"><span class="rnum">2</span><span class="rtext">권하윤</span></div><span class="ms" style="color:var(--sp-muted);font-size:19px">chevron_right</span></div></li>
+                <li><div class="row-new"><div class="rname"><span class="rnum">3</span><span class="rtext">김도현</span></div><span class="ms" style="color:var(--sp-muted);font-size:19px">chevron_right</span></div></li>
+                <li><div class="row-new"><div class="rname"><span class="rnum">4</span><span class="rtext">김서준</span></div><span class="ms" style="color:var(--sp-muted);font-size:19px">chevron_right</span></div></li>
+              </ul>
+            </div>
+
+            <nav class="tabbar tabbar--4 g-chrome g-tabbar">
+              <a href="#s2"><span class="ms">home</span>홈</a>
+              <a href="#s2" aria-current="page"><span class="ms">group</span>학생</a>
+              <a href="#s2"><span class="ms">calendar_month</span>일정</a>
+              <a href="#s2"><span class="ms">more_horiz</span>더보기</a>
+            </nav>
+          </div>
+        </div>
+
+        <ul class="notes">
+          <li><span class="ms" data-k="bad">cancel</span><span>앱 전역 헤더와 세그먼트까지 더하면 <b>다섯 층</b>입니다.</span></li>
+          <li><span class="ms" data-k="bad">cancel</span><span>반이 6개를 넘으면 가로 스크롤이라 <b>뒤쪽 반은 안 보입니다</b>.</span></li>
+        </ul>
+      </div>
+
+      <div class="col">
+        <span class="col__tag col__tag--new">제안</span>
+        <h3>헤더 1층 + 세그먼트</h3>
+        <p class="col__note">반과 날짜를 한 줄로. 반은 눌러서 고르는 방식으로 바뀝니다. <b>약 96px</b>로 줄어듭니다.</p>
+
+        <div class="phone">
+          <div class="screen sp-scope">
+            <div class="statusbar">
+              <span>9:41</span>
+              <span class="statusbar__r"><span class="ms">signal_cellular_alt</span><span class="ms">wifi</span><span class="ms">battery_full</span></span>
+            </div>
+
+            <div class="g-chrome g-header">
+              <div class="hcombo hrow--layer" data-layer="1" style="padding-right:32px">
+                <button class="classpick" type="button">2학년 5반<span class="ms">expand_more</span></button>
+                <div class="datestep">
+                  <button type="button"><span class="ms">chevron_left</span></button>
+                  <span class="datestep__d">8월 12일 (화)</span>
+                  <button type="button"><span class="ms">chevron_right</span></button>
+                </div>
+              </div>
+              <div class="hrow" style="padding-top:2px;padding-bottom:9px">
+                <div class="seg" style="flex:1">
+                  <button type="button" aria-selected="true" style="flex:1">명단</button>
+                  <button type="button" style="flex:1">출결</button>
+                  <button type="button" style="flex:1">기록</button>
+                </div>
+                <button class="iconbtn" type="button"><span class="ms">grid_view</span></button>
+              </div>
+            </div>
+
+            <div class="scroll">
+              <ul class="roster">
+                <li><div class="row-new"><div class="rname"><span class="rnum">1</span><span class="rtext">강민서</span></div><span class="ms" style="color:var(--sp-muted);font-size:19px">chevron_right</span></div></li>
+                <li><div class="row-new"><div class="rname"><span class="rnum">2</span><span class="rtext">권하윤</span></div><span class="ms" style="color:var(--sp-muted);font-size:19px">chevron_right</span></div></li>
+                <li><div class="row-new"><div class="rname"><span class="rnum">3</span><span class="rtext">김도현</span></div><span class="ms" style="color:var(--sp-muted);font-size:19px">chevron_right</span></div></li>
+                <li><div class="row-new"><div class="rname"><span class="rnum">4</span><span class="rtext">김서준</span></div><span class="ms" style="color:var(--sp-muted);font-size:19px">chevron_right</span></div></li>
+                <li><div class="row-new"><div class="rname"><span class="rnum">5</span><span class="rtext">김지우</span></div><span class="ms" style="color:var(--sp-muted);font-size:19px">chevron_right</span></div></li>
+                <li><div class="row-new"><div class="rname"><span class="rnum">6</span><span class="rtext">박시윤</span></div><span class="ms" style="color:var(--sp-muted);font-size:19px">chevron_right</span></div></li>
+                <li><div class="row-new"><div class="rname"><span class="rnum">7</span><span class="rtext">배주원</span></div><span class="ms" style="color:var(--sp-muted);font-size:19px">chevron_right</span></div></li>
+              </ul>
+            </div>
+
+            <nav class="tabbar tabbar--5 g-chrome g-tabbar">
+              <a href="#s2"><span class="ms">home</span>홈</a>
+              <a href="#s2"><span class="ms">groups</span>학급</a>
+              <a href="#s2" aria-current="page"><span class="ms">school</span>수업</a>
+              <a href="#s2"><span class="ms">calendar_month</span>일정</a>
+              <a href="#s2"><span class="ms">more_horiz</span>더보기</a>
+            </nav>
+          </div>
+        </div>
+
+        <ul class="notes">
+          <li><span class="ms" data-k="good">check_circle</span><span>같은 화면에서 학생이 <b>3명 더</b> 보입니다.</span></li>
+          <li><span class="ms" data-k="good">check_circle</span><span>반이 20개여도 <b>다 보입니다</b> — 가로 스크롤로 숨지 않습니다.</span></li>
+          <li><span class="ms" data-k="good">check_circle</span><span>좌석 보기는 오른쪽 아이콘으로 옮겼습니다. 쓸 때만 누릅니다.</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="stage" style="margin-top:26px">
+      <div class="col" style="max-width:520px">
+        <span class="col__tag col__tag--new">반 고르기</span>
+        <h3>눌렀을 때 이렇게 열립니다</h3>
+        <p class="col__note">가로 스크롤로 숨던 반이 한 번에 다 보이고, 오늘 출결을 했는지도 같이 보입니다.</p>
+
+        <div class="phone">
+          <div class="screen sp-scope">
+            <div class="statusbar">
+              <span>9:41</span>
+              <span class="statusbar__r"><span class="ms">signal_cellular_alt</span><span class="ms">wifi</span><span class="ms">battery_full</span></span>
+            </div>
+
+            <div class="g-chrome g-header">
+              <div class="hcombo">
+                <button class="classpick" type="button">2학년 5반<span class="ms">expand_less</span></button>
+                <div class="datestep">
+                  <button type="button"><span class="ms">chevron_left</span></button>
+                  <span class="datestep__d">8월 12일 (화)</span>
+                  <button type="button"><span class="ms">chevron_right</span></button>
+                </div>
+              </div>
+              <div class="hrow" style="padding-top:2px;padding-bottom:9px">
+                <div class="seg" style="flex:1">
+                  <button type="button" aria-selected="true" style="flex:1">명단</button>
+                  <button type="button" style="flex:1">출결</button>
+                  <button type="button" style="flex:1">기록</button>
+                </div>
+                <button class="iconbtn" type="button"><span class="ms">grid_view</span></button>
+              </div>
+            </div>
+
+            <div class="scroll" style="opacity:.4">
+              <ul class="roster">
+                <li><div class="row-new"><div class="rname"><span class="rnum">1</span><span class="rtext">강민서</span></div></div></li>
+                <li><div class="row-new"><div class="rname"><span class="rnum">2</span><span class="rtext">권하윤</span></div></div></li>
+                <li><div class="row-new"><div class="rname"><span class="rnum">3</span><span class="rtext">김도현</span></div></div></li>
+              </ul>
+            </div>
+
+            <div class="sheetdim"></div>
+            <div class="sheet">
+              <div class="sheet__grip"></div>
+              <div class="sheet__t">수업반 고르기</div>
+              <div class="sheet__sub">8월 12일 (화) 기준 · 담임반은 학급 탭에 있어요</div>
+              <div class="sheet__opt" style="background:var(--sp-subtle)">
+                <span class="ms" style="color:var(--sp-accent)">radio_button_checked</span>
+                <span style="flex:1">2학년 5반 <span class="classcard__tag">3교시</span></span>
+                <span class="pill pill--absent"><span class="ms">error</span>미입력</span>
+              </div>
+              <div class="sheet__opt">
+                <span class="ms" style="color:var(--sp-muted)">radio_button_unchecked</span>
+                <span style="flex:1">2학년 7반 <span class="classcard__tag">5교시</span></span>
+                <span class="pill pill--present"><span class="ms">check</span>완료</span>
+              </div>
+              <div class="sheet__opt">
+                <span class="ms" style="color:var(--sp-muted)">radio_button_unchecked</span>
+                <span style="flex:1">1학년 3반 <span class="classcard__tag">6교시</span></span>
+                <span class="pill pill--present"><span class="ms">check</span>완료</span>
+              </div>
+              <div class="sheet__opt">
+                <span class="ms" style="color:var(--sp-muted)">radio_button_unchecked</span>
+                <span style="flex:1">1학년 6반</span>
+                <span class="pill pill--present"><span class="ms">check</span>완료</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="caveat">
+      <div class="caveat__k"><span class="ms">warning</span>이건 미관이 아니라 안전 문제입니다</div>
+      <p>
+        반 선택을 드롭다운으로 바꾸면 <strong>지금 어느 반인지가 지금보다 덜 눈에 띕니다.</strong>
+        쌤핀은 반을 잘못 고르면 <strong>다른 반 출결에 기록이 들어가는</strong> 앱입니다.
+      </p>
+      <p>
+        그래서 시안에서는 반 이름을 <strong>화면에서 가장 굵은 글씨</strong>로 두고 테두리를 쳐서
+        버튼처럼 보이게 했습니다. 그래도 부족하면 출결 저장 직전에 "3학년 2반 · 8월 12일에 저장합니다"를
+        한 번 더 확인시키는 방법이 있습니다. 이건 정하고 넣어야 합니다.
+      </p>
+    </div>
+
+    <div class="decide">
+      <div class="decide__k">결정됨 ② · 2026-08-12</div>
+      <h4>반 선택은 눌러서 고르는 방식으로 — 확정</h4>
+      <ul>
+        <li>헤더가 <b>세 층에서 한 층</b>으로. 반이 몇 개든 가로 스크롤로 숨지 않습니다.</li>
+        <li>단 <b>선택된 반은 화면에서 가장 굵게</b> 두고 테두리로 눌리는 자리임을 표시합니다.</li>
+        <li><b>아직 미정:</b> 출결 저장 직전에 "3학년 2반 · 8월 12일에 저장합니다"를 한 번 더 확인시킬지. 아래 ②-b.</li>
+      </ul>
+    </div>
+
+    <div class="decide">
+      <div class="decide__k">결정됨 ②-b · 2026-08-12</div>
+      <h4>출결 저장 직전 확인 — 넣는 것으로 확정</h4>
+      <ul>
+        <li>반과 날짜를 한 번 더 보여주고 저장합니다. 화면은 <b>03번 아래</b>에 그려두었습니다.</li>
+        <li>매번 한 번 더 누르는 비용을 <b>감수하기로</b> 했습니다.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ═════════ 4. 출결 ═════════ -->
+  <section class="sec" id="s3">
+    <div class="sec__head">
+      <div class="sec__no">03 — 출결 입력</div>
+      <h2>이미 "출석이 기본"인데, 화면만 모릅니다</h2>
+      <p class="sec__lead">
+        코드를 열어보니 기록이 없는 학생은 <strong>이미 자동으로 출석 처리</strong>되고 있습니다.
+        즉 "기본은 출석, 다른 애만 표시"라는 방식이 데이터에는 벌써 들어가 있는데,
+        <strong>화면만 30명 전원에게 똑같이 버튼 5개를 펼치고</strong> 있습니다.
+      </p>
+      <p class="sec__lead">
+        그래서 이건 새로 만드는 게 아니라 <strong>이미 있는 걸 화면이 안 쓰고 있는 상태</strong>입니다.
+      </p>
+      <div class="q">
+        <strong>아래 숫자는 추정이 아니라 이 시안을 실제로 띄워서 잰 값입니다.</strong>
+        조사 문서에는 30명 기준 2,300px으로 적었는데, 재보니 행 하나가 106px이라
+        <strong>실제로는 약 3,180px</strong>이었습니다. 조사 때 행 위아래 여백을 빼먹은 값이라
+        지금 상태는 문서에 적힌 것보다 더 깁니다.
+      </div>
+    </div>
+
+    <div class="stage">
+      <div class="col">
+        <span class="col__tag col__tag--now">현재</span>
+        <h3>전원에게 버튼 5개</h3>
+        <p class="col__note">
+          출석인 27명에게도 버튼 5개가 그대로. 결석이면 사유 칩과 메모칸까지 더 펼쳐집니다.
+        </p>
+
+        <div class="phone phone--tall">
+          <div class="screen sp-scope">
+            <div class="statusbar">
+              <span>9:41</span>
+              <span class="statusbar__r"><span class="ms">signal_cellular_alt</span><span class="ms">wifi</span><span class="ms">battery_full</span></span>
+            </div>
+
+            <div class="hrow g-chrome g-header">
+              <button class="iconbtn" type="button"><span class="ms">arrow_back</span></button>
+              <h2 class="htitle" style="flex:1">3학년 2반 · 조회</h2>
+            </div>
+
+            <div class="g-card counter">
+              <div><b style="color:var(--st-present)">25</b><span>출석</span></div>
+              <div><b style="color:var(--st-late)">1</b><span>지각</span></div>
+              <div><b style="color:var(--st-absent)">2</b><span>결석</span></div>
+              <div><b style="color:var(--st-early)">0</b><span>조퇴</span></div>
+              <div><b style="color:var(--st-classabs)">0</b><span>결과</span></div>
+              <div><b>28</b><span>전체</span></div>
+            </div>
+
+            <div class="scroll">
+              <ul class="roster">
+                <li><div class="row-now">
+                  <div class="rname"><span class="rnum">1</span><span class="rtext">강민서</span></div>
+                  <div class="stat5">
+                    <button type="button" data-on="present"><span class="ms">check_circle</span>출석</button>
+                    <button type="button"><span class="ms">schedule</span>지각</button>
+                    <button type="button"><span class="ms">cancel</span>결석</button>
+                    <button type="button"><span class="ms">exit_to_app</span>조퇴</button>
+                    <button type="button"><span class="ms">event_busy</span>결과</button>
+                  </div>
+                </div></li>
+                <li><div class="row-now">
+                  <div class="rname"><span class="rnum">2</span><span class="rtext">권하윤</span></div>
+                  <div class="stat5">
+                    <button type="button" data-on="present"><span class="ms">check_circle</span>출석</button>
+                    <button type="button"><span class="ms">schedule</span>지각</button>
+                    <button type="button"><span class="ms">cancel</span>결석</button>
+                    <button type="button"><span class="ms">exit_to_app</span>조퇴</button>
+                    <button type="button"><span class="ms">event_busy</span>결과</button>
+                  </div>
+                </div></li>
+                <li><div class="row-now">
+                  <div class="rname"><span class="rnum">3</span><span class="rtext">김도현</span></div>
+                  <div class="stat5">
+                    <button type="button"><span class="ms">check_circle</span>출석</button>
+                    <button type="button" data-on="late"><span class="ms">schedule</span>지각</button>
+                    <button type="button"><span class="ms">cancel</span>결석</button>
+                    <button type="button"><span class="ms">exit_to_app</span>조퇴</button>
+                    <button type="button"><span class="ms">event_busy</span>결과</button>
+                  </div>
+                  <div class="reasons">
+                    <button type="button" aria-pressed="true">교통</button>
+                    <button type="button">질병</button>
+                    <button type="button">가정</button>
+                    <button type="button">기타</button>
+                  </div>
+                  <input class="memo" placeholder="메모 (선택)" value="버스 지연" />
+                </div></li>
+                <li><div class="row-now">
+                  <div class="rname"><span class="rnum">4</span><span class="rtext">김서준</span></div>
+                  <div class="stat5">
+                    <button type="button" data-on="present"><span class="ms">check_circle</span>출석</button>
+                    <button type="button"><span class="ms">schedule</span>지각</button>
+                    <button type="button"><span class="ms">cancel</span>결석</button>
+                    <button type="button"><span class="ms">exit_to_app</span>조퇴</button>
+                    <button type="button"><span class="ms">event_busy</span>결과</button>
+                  </div>
+                </div></li>
+              </ul>
+            </div>
+
+            <div class="savebar"><button type="button">출결 저장</button></div>
+          </div>
+        </div>
+
+        <div class="ruler">
+          <span>30명 기준</span>
+          <span class="ruler__bar"><span class="ruler__fill ruler__fill--bad"></span></span>
+          <span>약 3,180px</span>
+        </div>
+
+        <ul class="notes">
+          <li><span class="ms" data-k="bad">cancel</span><span>한 화면에 <b>3명</b>. 30명 보려면 계속 내려야 합니다.</span></li>
+          <li><span class="ms" data-k="bad">cancel</span><span>위 6칸 카운터는 스크롤해도 <b>절대 안 사라집니다</b>.</span></li>
+          <li><span class="ms" data-k="bad">cancel</span><span>버튼 150개 중 실제로 누르는 건 <b>보통 3개</b>입니다.</span></li>
+        </ul>
+      </div>
+
+      <div class="col">
+        <span class="col__tag col__tag--new">제안</span>
+        <h3>다른 애만 누른다</h3>
+        <p class="col__note">
+          전원 출석으로 시작. 다른 학생만 눌러서 바꿉니다. 아무것도 안 누르고 저장하면 전원 출석입니다.
+        </p>
+
+        <div class="phone phone--tall">
+          <div class="screen sp-scope">
+            <div class="statusbar">
+              <span>9:41</span>
+              <span class="statusbar__r"><span class="ms">signal_cellular_alt</span><span class="ms">wifi</span><span class="ms">battery_full</span></span>
+            </div>
+
+            <div class="hrow g-chrome g-header">
+              <button class="iconbtn" type="button"><span class="ms">arrow_back</span></button>
+              <h2 class="htitle" style="flex:1">3학년 2반 · 조회</h2>
+              <button class="iconbtn" type="button"><span class="ms">keyboard</span></button>
+            </div>
+
+            <div class="counter-slim">
+              <span>출석 <b style="color:var(--st-present)">25</b></span>
+              <span>지각 <b style="color:var(--st-late)">1</b></span>
+              <span>결석 <b style="color:var(--st-absent)">2</b></span>
+              <span style="color:var(--sp-muted)">전체 28</span>
+            </div>
+
+            <div class="scroll">
+              <ul class="roster">
+                <li><div class="row-new"><div class="rname"><span class="rnum">1</span><span class="rtext">강민서</span></div><span class="pill pill--present">출석</span></div></li>
+                <li><div class="row-new"><div class="rname"><span class="rnum">2</span><span class="rtext">권하윤</span></div><span class="pill pill--present">출석</span></div></li>
+
+                <li><div class="row-open">
+                  <div class="row-open__top">
+                    <div class="rname" style="flex:1"><span class="rnum">3</span><span class="rtext">김도현</span></div>
+                    <span class="pill pill--late"><span class="ms">schedule</span>지각</span>
+                  </div>
+                  <div class="stat5" style="margin-top:9px">
+                    <button type="button"><span class="ms">check_circle</span>출석</button>
+                    <button type="button" data-on="late"><span class="ms">schedule</span>지각</button>
+                    <button type="button"><span class="ms">cancel</span>결석</button>
+                    <button type="button"><span class="ms">exit_to_app</span>조퇴</button>
+                    <button type="button"><span class="ms">event_busy</span>결과</button>
+                  </div>
+                  <div class="reasons">
+                    <button type="button" aria-pressed="true">교통</button>
+                    <button type="button">질병</button>
+                    <button type="button">가정</button>
+                    <button type="button">기타</button>
+                  </div>
+                  <input class="memo" placeholder="메모 (선택)" value="버스 지연" />
+                </div></li>
+
+                <li><div class="row-new"><div class="rname"><span class="rnum">4</span><span class="rtext">김서준</span></div><span class="pill pill--present">출석</span></div></li>
+                <li><div class="row-new"><div class="rname"><span class="rnum">5</span><span class="rtext">김지우</span></div><span class="pill pill--absent"><span class="ms">cancel</span>결석 · 질병</span></div></li>
+                <li><div class="row-new"><div class="rname"><span class="rnum">6</span><span class="rtext">박시윤</span></div><span class="pill pill--present">출석</span></div></li>
+                <li><div class="row-new"><div class="rname"><span class="rnum">7</span><span class="rtext">배주원</span></div><span class="pill pill--present">출석</span></div></li>
+                <li><div class="row-new"><div class="rname"><span class="rnum">8</span><span class="rtext">서예은</span></div><span class="pill pill--present">출석</span></div></li>
+                <li><div class="row-new"><div class="rname"><span class="rnum">9</span><span class="rtext">손하람</span></div><span class="pill pill--present">출석</span></div></li>
+                <li><div class="row-new"><div class="rname"><span class="rnum">10</span><span class="rtext">신유진</span></div><span class="pill pill--present">출석</span></div></li>
+                <li><div class="row-new"><div class="rname"><span class="rnum">11</span><span class="rtext">안도윤</span></div><span class="pill pill--present">출석</span></div></li>
+                <li><div class="row-new"><div class="rname"><span class="rnum">12</span><span class="rtext">양지호</span></div><span class="pill pill--present">출석</span></div></li>
+              </ul>
+
+              <p style="font-size:12px;color:var(--sp-muted);padding:10px 16px 18px;margin:0">
+                번호가 없는 학생 1명은 출결에 표시되지 않아요. 명렬표에서 번호를 지정해주세요.
+              </p>
+            </div>
+
+            <div class="savebar"><button type="button">출결 저장 · 28명</button></div>
+          </div>
+        </div>
+
+        <div class="ruler">
+          <span>30명 기준</span>
+          <span class="ruler__bar"><span class="ruler__fill ruler__fill--good"></span></span>
+          <span>약 1,350px</span>
+        </div>
+
+        <ul class="notes">
+          <li><span class="ms" data-k="good">check_circle</span><span>한 화면에 <b>9명</b>(전원 출석일 때). 세로 길이가 <b>약 57% 줄어듭니다</b>.</span></li>
+          <li><span class="ms" data-k="good">check_circle</span><span>결석·지각인 학생은 <b>펼쳐진 채로</b> 있어 한눈에 구분됩니다.</span></li>
+          <li><span class="ms" data-k="good">check_circle</span><span>카운터는 한 줄로 줄이고 <b>스크롤과 함께</b> 움직입니다.</span></li>
+          <li><span class="ms" data-k="warn">info</span><span>번호 없는 학생 안내는 <b>그대로 유지</b>했습니다 — 이게 빠지면 왜 명단에 없는지 알 방법이 없어집니다.</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="cite">
+      <div class="cite__k">[업계] 이 방식은 출석 업무의 표준입니다</div>
+      <p>
+        Canvas Roll Call은 전원을 출석 처리한 뒤 호명하면서 결석·지각만 바꿉니다.
+        Zoho People은 아예 <q>Present by Default</q>라는 설정 이름으로 제공하고,
+        Acadly는 "이름을 탭하면 출석"까지 줄였습니다.
+      </p>
+      <p>
+        창고 검수 앱 설계 원칙도 같은 방향입니다 — <q>화면의 요소 수를 제한하면 핵심 탭 대상을
+        더 크고 더 멀리 떨어뜨릴 수 있어 누르기 쉬워진다.</q>
+      </p>
+    </div>
+
+    <div class="caveat">
+      <div class="caveat__k"><span class="ms">shield</span>바꾸더라도 이건 그대로 갑니다</div>
+      <p>
+        출결은 <strong>학번으로 학생을 식별</strong>합니다. 번호 없는 학생 차단, 그룹 학급 공유 기록 조회 경로,
+        <strong>빈 명단 저장 차단</strong>(뚫리면 그날 출결이 지워집니다) — 셋 다 새 화면에서도 유지됩니다.
+      </p>
+      <p>
+        이 저장소에는 소스를 직접 검사하는 시험이 있어서 화면을 갈아엎으면 먼저 빨간불이 납니다.
+        <strong>시험을 고쳐서 통과시키지 않습니다.</strong> 시험이 지키려던 기능을 새 구조에서도 지키는 방식으로 풉니다.
+      </p>
+    </div>
+
+    <div class="decide">
+      <div class="decide__k">결정됨 ③ · 2026-08-12</div>
+      <h4>출결은 "다른 애만 누르는" 방식으로 — 확정</h4>
+      <ul>
+        <li>한 화면에 <b>3명 → 9명</b>, 30명 전체 <b>3,180px → 1,350px</b>(실측).</li>
+        <li>아무것도 안 누르고 저장하면 <b>전원 출석</b> — 지금 동작 그대로입니다.</li>
+        <li>번호 없는 학생 안내, 빈 명단 저장 차단, 학번 식별은 <b>새 화면에도 그대로</b> 유지합니다.</li>
+      </ul>
+    </div>
+
+    <div class="sec__head" style="margin-top:64px;margin-bottom:34px">
+      <h2 style="font-family:'Nanum Myeongjo',serif;font-weight:800;font-size:clamp(22px,3vw,30px);margin:0 0 14px">
+        그리고 저장 직전에 한 번 더 묻습니다
+      </h2>
+      <p class="sec__lead">
+        반 선택이 드롭다운으로 바뀌면 <strong>지금 어느 반인지가 지금보다 덜 눈에 띕니다.</strong>
+        이 앱은 반을 잘못 고르면 다른 반 출결에 기록이 들어가고, 과거에 출결이 지워진 사고도 있었습니다.
+        그래서 <strong>마지막 관문을 하나 둡니다.</strong>
+      </p>
+    </div>
+
+    <div class="stage">
+      <div class="col" style="max-width:520px">
+        <span class="col__tag col__tag--new">확정 · 새로 생기는 화면</span>
+        <h3>저장 확인</h3>
+        <p class="col__note">
+          반과 날짜를 화면에서 가장 크게 보여주고, 무엇이 저장되는지 요약합니다.
+        </p>
+
+        <div class="phone">
+          <div class="screen sp-scope" style="height:520px">
+            <div class="statusbar">
+              <span>9:41</span>
+              <span class="statusbar__r"><span class="ms">signal_cellular_alt</span><span class="ms">wifi</span><span class="ms">battery_full</span></span>
+            </div>
+
+            <div class="hrow g-chrome g-header">
+              <button class="iconbtn" type="button"><span class="ms">arrow_back</span></button>
+              <h2 class="htitle" style="flex:1">3학년 2반 · 조회</h2>
+            </div>
+
+            <div class="scroll" style="opacity:.35">
+              <ul class="roster">
+                <li><div class="row-new"><div class="rname"><span class="rnum">1</span><span class="rtext">강민서</span></div><span class="pill pill--present">출석</span></div></li>
+                <li><div class="row-new"><div class="rname"><span class="rnum">2</span><span class="rtext">권하윤</span></div><span class="pill pill--present">출석</span></div></li>
+                <li><div class="row-new"><div class="rname"><span class="rnum">3</span><span class="rtext">김도현</span></div><span class="pill pill--late">지각</span></div></li>
+                <li><div class="row-new"><div class="rname"><span class="rnum">4</span><span class="rtext">김서준</span></div><span class="pill pill--present">출석</span></div></li>
+              </ul>
+            </div>
+
+            <div class="sheetdim"></div>
+            <div class="sheet">
+              <div class="sheet__grip"></div>
+              <div style="padding:4px 20px 0">
+                <div style="font-size:13px;color:var(--sp-muted);margin-bottom:6px">이렇게 저장할까요?</div>
+                <div style="font-size:21px;font-weight:680;line-height:1.35">3학년 2반</div>
+                <div style="font-size:15px;font-weight:590;color:var(--sp-text);margin-top:2px">
+                  8월 12일 (화) · 조회
+                </div>
+
+                <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:16px;padding-top:14px;border-top:1px solid var(--sp-border);font-size:13.5px">
+                  <span>출석 <b style="color:var(--st-present);font-weight:680">25</b></span>
+                  <span>지각 <b style="color:var(--st-late);font-weight:680">1</b></span>
+                  <span>결석 <b style="color:var(--st-absent);font-weight:680">2</b></span>
+                  <span style="color:var(--sp-muted)">전체 28명</span>
+                </div>
+
+                <div style="display:flex;gap:9px;margin-top:20px">
+                  <button type="button" style="flex:1;height:48px;border-radius:12px;border:1px solid var(--sp-border);background:transparent;color:var(--sp-text);font-family:inherit;font-size:15.5px;font-weight:590;cursor:pointer">
+                    다시 보기
+                  </button>
+                  <button type="button" style="flex:1.4;height:48px;border-radius:12px;border:0;background:var(--sp-accent);color:var(--sp-accent-fg);font-family:inherit;font-size:15.5px;font-weight:680;cursor:pointer">
+                    저장
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <ul class="notes">
+          <li><span class="ms" data-k="good">check_circle</span><span><b>반 이름이 화면에서 가장 큽니다.</b> 드롭다운으로 작아진 만큼 여기서 되찾습니다.</span></li>
+          <li><span class="ms" data-k="good">check_circle</span><span>날짜와 교시도 함께 — <b>어제 날짜에 저장하는 사고</b>도 같이 막힙니다.</span></li>
+          <li><span class="ms" data-k="good">check_circle</span><span>"취소" 대신 <b>"다시 보기"</b>. 되돌아가서 고치는 게 목적이지 없던 일로 만드는 게 아니라서요.</span></li>
+          <li><span class="ms" data-k="warn">info</span><span>매번 한 번 더 누릅니다. <b>이건 감수하는 비용</b>입니다.</span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═════════ 5. 더보기 ═════════ -->
+  <section class="sec" id="s4">
+    <div class="sec__head">
+      <div class="sec__no">04 — 쌤도구</div>
+      <h2>룰렛 한 번 쓰는 데 세 번 누릅니다</h2>
+      <p class="sec__lead">
+        지금은 더보기 → 쌤도구 → 룰렛. 게다가 14개 중에서 눈으로 찾아야 합니다.
+        검색도 없고, 자주 쓰는 것도 앞에 안 옵니다.
+      </p>
+      <p class="sec__lead">
+        도구는 <strong>더보기 안에 그대로 둡니다.</strong> 대신 "쌤도구"라는 중간 문을 없애고
+        더보기 첫 화면에서 바로 펼칩니다. <strong>세 번이 두 번</strong>이 됩니다.
+      </p>
+      <div class="q">
+        도구를 탭으로 올리는 안도 검토했지만 접었습니다. 탭 다섯 칸은
+        <strong>담임 · 수업 · 일정</strong>이라는 매일의 축에 쓰는 게 맞고,
+        도구는 그날 수업에 따라 쓰기도 안 쓰기도 하는 물건이라 성격이 다릅니다.
+      </div>
+    </div>
+
+    <div class="stage">
+      <div class="col">
+        <span class="col__tag col__tag--now">현재</span>
+        <h3>더보기 → 쌤도구 → 도구</h3>
+        <p class="col__note">메뉴 다섯 줄 중 하나가 쌤도구. 14종은 그 안쪽에 또 있습니다.</p>
+
+        <div class="phone">
+          <div class="screen sp-scope">
+            <div class="statusbar">
+              <span>9:41</span>
+              <span class="statusbar__r"><span class="ms">signal_cellular_alt</span><span class="ms">wifi</span><span class="ms">battery_full</span></span>
+            </div>
+            <div class="hrow g-chrome g-header"><h2 class="htitle">더보기</h2></div>
+
+            <div class="scroll">
+              <div class="grouplabel">메뉴</div>
+              <div class="menulist" style="padding-top:0">
+                <div class="menuitem">
+                  <span class="menuitem__ic"><span class="ms" style="color:var(--sp-warning)">sticky_note_2</span></span>
+                  <div style="flex:1"><div class="menuitem__t">메모</div><div class="menuitem__d">포스트잇 메모 관리</div></div>
+                  <span class="ms chev">chevron_right</span>
+                </div>
+                <div class="menuitem">
+                  <span class="menuitem__ic"><span class="ms" style="color:var(--sp-success)">bookmark</span></span>
+                  <div style="flex:1"><div class="menuitem__t">즐겨찾기</div><div class="menuitem__d">PC에서 등록한 링크 열기</div></div>
+                  <span class="ms chev">chevron_right</span>
+                </div>
+                <div class="menuitem" style="border-color:var(--sp-accent)">
+                  <span class="menuitem__ic"><span class="ms" style="color:var(--sp-info)">build</span></span>
+                  <div style="flex:1"><div class="menuitem__t">쌤도구</div><div class="menuitem__d">과제 수합 · 설문/체크리스트</div></div>
+                  <span class="ms chev">chevron_right</span>
+                </div>
+                <div class="menuitem">
+                  <span class="menuitem__ic"><span class="ms">settings</span></span>
+                  <div style="flex:1"><div class="menuitem__t">설정</div><div class="menuitem__d">학교, 교사, 학급 정보 확인</div></div>
+                  <span class="ms chev">chevron_right</span>
+                </div>
+                <div class="menuitem">
+                  <span class="menuitem__ic"><span class="ms" style="color:var(--sp-highlight)">mail</span></span>
+                  <div style="flex:1"><div class="menuitem__t">지인에게 추천</div><div class="menuitem__d">동료 선생님께 쌤핀을 알려주세요</div></div>
+                  <span class="ms chev">chevron_right</span>
+                </div>
+              </div>
+            </div>
+
+            <nav class="tabbar tabbar--4 g-chrome g-tabbar">
+              <a href="#s4"><span class="ms">home</span>홈</a>
+              <a href="#s4"><span class="ms">group</span>학생</a>
+              <a href="#s4"><span class="ms">calendar_month</span>일정</a>
+              <a href="#s4" aria-current="page"><span class="ms">more_horiz</span>더보기</a>
+            </nav>
+          </div>
+        </div>
+
+        <ul class="notes">
+          <li><span class="ms" data-k="bad">cancel</span><span>도구 하나 쓰려면 <b>세 번</b>.</span></li>
+          <li><span class="ms" data-k="bad">cancel</span><span>검색 없음 · 자주 쓰는 것 앞으로 안 옴.</span></li>
+        </ul>
+      </div>
+
+      <div class="col">
+        <span class="col__tag col__tag--new">제안</span>
+        <h3>더보기 첫 화면에 전부</h3>
+        <p class="col__note">"쌤도구" 중간 문을 없애고 성격별로 묶어 바로 펼칩니다. 최근 쓴 것이 맨 위, 검색 한 줄.</p>
+
+        <div class="phone">
+          <div class="screen sp-scope">
+            <div class="statusbar">
+              <span>9:41</span>
+              <span class="statusbar__r"><span class="ms">signal_cellular_alt</span><span class="ms">wifi</span><span class="ms">battery_full</span></span>
+            </div>
+            <div class="hrow g-chrome g-header"><h2 class="htitle">더보기</h2></div>
+
+            <div class="scroll">
+              <div class="toolsearch"><span class="ms" style="font-size:19px">search</span>도구 찾기</div>
+
+              <div class="grouplabel">최근 사용</div>
+              <div class="toolgrid">
+                <div class="tool"><span class="ms">timer</span><span>타이머</span></div>
+                <div class="tool"><span class="ms">traffic</span><span>신호등</span></div>
+                <div class="tool"><span class="ms">shuffle</span><span>랜덤뽑기</span></div>
+                <div class="tool"><span class="ms">groups</span><span>모둠편성</span></div>
+              </div>
+
+              <div class="grouplabel">수업 중에 바로</div>
+              <div class="toolgrid">
+                <div class="tool"><span class="ms">traffic</span><span>신호등</span></div>
+                <div class="tool"><span class="ms">timer</span><span>타이머</span></div>
+                <div class="tool"><span class="ms">shuffle</span><span>랜덤뽑기</span></div>
+                <div class="tool"><span class="ms">casino</span><span>주사위</span></div>
+                <div class="tool"><span class="ms">toll</span><span>동전</span></div>
+                <div class="tool"><span class="ms">donut_large</span><span>룰렛</span></div>
+                <div class="tool"><span class="ms">scoreboard</span><span>점수판</span></div>
+              </div>
+
+              <div class="grouplabel">준비하고 정리할 때</div>
+              <div class="toolgrid">
+                <div class="tool"><span class="ms">groups</span><span>모둠편성</span></div>
+                <div class="tool"><span class="ms">grid_view</span><span>자리배치</span></div>
+                <div class="tool"><span class="ms">tag</span><span>수업기호</span></div>
+                <div class="tool"><span class="ms">balance</span><span>점수배분</span></div>
+              </div>
+
+              <div class="grouplabel">모으고 평가할 때</div>
+              <div class="toolgrid">
+                <div class="tool"><span class="ms">assignment</span><span>과제수합</span></div>
+                <div class="tool"><span class="ms">ballot</span><span>설문</span></div>
+                <div class="tool"><span class="ms">rule</span><span>루브릭</span></div>
+                <div class="tool"><span class="ms">qr_code_2</span><span>QR</span></div>
+              </div>
+
+              <div class="grouplabel">그 밖에</div>
+              <div class="menulist" style="padding-top:0;padding-bottom:18px">
+                <div class="menuitem">
+                  <span class="menuitem__ic"><span class="ms" style="color:var(--sp-warning)">sticky_note_2</span></span>
+                  <div style="flex:1"><div class="menuitem__t">메모</div></div>
+                  <span class="ms chev">chevron_right</span>
+                </div>
+                <div class="menuitem">
+                  <span class="menuitem__ic"><span class="ms" style="color:var(--sp-success)">bookmark</span></span>
+                  <div style="flex:1"><div class="menuitem__t">즐겨찾기</div></div>
+                  <span class="ms chev">chevron_right</span>
+                </div>
+                <div class="menuitem">
+                  <span class="menuitem__ic"><span class="ms">settings</span></span>
+                  <div style="flex:1"><div class="menuitem__t">설정</div></div>
+                  <span class="ms chev">chevron_right</span>
+                </div>
+                <div class="menuitem">
+                  <span class="menuitem__ic"><span class="ms" style="color:var(--sp-accent)">cloud_sync</span></span>
+                  <div style="flex:1"><div class="menuitem__t">구글 드라이브 동기화</div><div class="menuitem__d">방금 전 동기화됨</div></div>
+                  <span class="ms chev">chevron_right</span>
+                </div>
+              </div>
+            </div>
+
+            <nav class="tabbar tabbar--5 g-chrome g-tabbar">
+              <a href="#s4"><span class="ms">home</span>홈</a>
+              <a href="#s4"><span class="ms">groups</span>학급</a>
+              <a href="#s4"><span class="ms">school</span>수업</a>
+              <a href="#s4"><span class="ms">calendar_month</span>일정</a>
+              <a href="#s4" aria-current="page"><span class="ms">more_horiz</span>더보기</a>
+            </nav>
+          </div>
+        </div>
+
+        <ul class="notes">
+          <li><span class="ms" data-k="good">check_circle</span><span>세 번이 <b>두 번</b>으로 — "쌤도구"라는 중간 문이 없어집니다.</span></li>
+          <li><span class="ms" data-k="good">check_circle</span><span>"타" 두 글자면 타이머가 걸립니다.</span></li>
+          <li><span class="ms" data-k="warn">info</span><span>"최근 사용"은 <b>순서 정렬</b>이지 점수가 아닙니다. 폰 안에만 저장되고 선생님만 봅니다.</span></li>
+          <li><span class="ms" data-k="warn">info</span><span>목록 순서는 <b>고정</b>입니다. 자주 쓴다고 자리가 바뀌면 손이 기억을 못 합니다.</span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═════════ 5b. 일정과 할 일 ═════════ -->
+  <section class="sec" id="s4b">
+    <div class="sec__head">
+      <div class="sec__no">05 — 일정과 할 일</div>
+      <h2>할 일은 그대로 두되, 층을 하나 줄입니다</h2>
+      <p class="sec__lead">
+        "할 일도 중요한데 어쩌지"라는 질문에 코드를 확인해 봤습니다.
+        결론부터 말하면 <strong>지금처럼 일정 탭 안에 나란히 두는 게 맞습니다.</strong>
+      </p>
+      <p class="sec__lead">
+        할 일에는 <strong>마감일이 없어도 됩니다</strong>(정렬 규칙에 "마감일 없는 항목은 뒤로"가 따로 있습니다).
+        그래서 할 일을 달력에 통째로 녹이면 <strong>마감 없는 할 일이 갈 데가 없어집니다.</strong>
+        일정은 날짜 축, 할 일은 급한 순 축이라 정렬 기준 자체가 다릅니다.
+      </p>
+      <div class="q">
+        <strong>그런데 진짜 문제가 따로 있었습니다.</strong>
+        할 일 화면 안에 <strong>또 전환이 있습니다</strong> — <code>할 일 / 보관함</code>.
+        그래서 탭(일정) → 세그먼트(할 일) → 또 전환(보관함)으로,
+        <strong>학생 탭에서 봤던 3층 문제가 여기도 그대로</strong> 있습니다.
+      </div>
+    </div>
+
+    <div class="stage">
+      <!-- 현재 할 일 -->
+      <div class="col">
+        <span class="col__tag col__tag--now">현재</span>
+        <h3>할 일 — 전환이 두 줄</h3>
+        <p class="col__note">
+          세그먼트(일정/할 일) 아래에 또 전환(할 일/보관함)이 있습니다. 목록 전에 두 줄을 지납니다.
+        </p>
+
+        <div class="phone phone--tall">
+          <div class="screen sp-scope">
+            <div class="statusbar">
+              <span>9:41</span>
+              <span class="statusbar__r"><span class="ms">signal_cellular_alt</span><span class="ms">wifi</span><span class="ms">battery_full</span></span>
+            </div>
+
+            <div class="g-chrome g-header">
+              <div class="hrow hrow--layer" data-layer="1" style="padding-right:32px">
+                <div class="seg" style="flex:1">
+                  <button type="button" style="flex:1">일정</button>
+                  <button type="button" aria-selected="true" style="flex:1">할 일</button>
+                </div>
+              </div>
+              <div class="hrow hrow--layer" data-layer="2" style="padding-top:2px;padding-bottom:9px;padding-right:32px">
+                <div class="seg">
+                  <button type="button" aria-selected="true">할 일</button>
+                  <button type="button">보관함 12</button>
+                </div>
+                <button class="chip-today" type="button" style="display:flex;align-items:center;gap:4px">
+                  <span class="ms" style="font-size:15px">archive</span>완료 3개 보관
+                </button>
+              </div>
+            </div>
+
+            <div class="scroll">
+              <ul style="list-style:none;margin:0;padding:0">
+                <li class="todoitem">
+                  <span class="tcheck"></span>
+                  <div class="tbody">
+                    <div class="ttext">2학기 수행평가 계획서 제출</div>
+                    <div class="tmeta">
+                      <span class="tflag tflag--high"><span class="ms">flag</span>긴급</span>
+                      <span class="tdday tdday--over">D+2</span>
+                      <span class="tcat">업무</span>
+                    </div>
+                  </div>
+                </li>
+                <li class="todoitem">
+                  <span class="tcheck"></span>
+                  <div class="tbody">
+                    <div class="ttext">체험학습 동의서 취합</div>
+                    <div class="tmeta">
+                      <span class="tflag tflag--mid"><span class="ms">flag</span>보통</span>
+                      <span class="tdday tdday--today">D-Day</span>
+                      <span class="tcat">3학년 2반</span>
+                    </div>
+                    <div class="tsub">
+                      <span class="tsubbar"><i style="width:66%"></i></span>
+                      <span>2 / 3</span>
+                    </div>
+                  </div>
+                </li>
+                <li class="todoitem">
+                  <span class="tcheck"></span>
+                  <div class="tbody">
+                    <div class="ttext">교과협의회 자료 준비</div>
+                    <div class="tmeta">
+                      <span class="tflag tflag--mid"><span class="ms">flag</span>보통</span>
+                      <span class="tdday tdday--later">D-3</span>
+                    </div>
+                  </div>
+                </li>
+                <li class="todoitem">
+                  <span class="tcheck tcheck--done"><span class="ms">check</span></span>
+                  <div class="tbody"><div class="ttext ttext--done">1학기 생활기록부 마감</div></div>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <ul class="notes">
+          <li><span class="ms" data-k="bad">cancel</span><span>같은 모양의 전환이 <b>두 줄 연속</b>이라, 어느 게 무엇을 바꾸는지 헷갈립니다.</span></li>
+          <li><span class="ms" data-k="bad">cancel</span><span>보관함은 <b>가끔 들어가는 곳</b>인데 매번 오가는 것과 같은 자리를 차지합니다.</span></li>
+          <li><span class="ms" data-k="bad">cancel</span><span>마감이 지난 할 일(D+2)이 있어도 <b>이 화면에 들어와야만</b> 압니다.</span></li>
+        </ul>
+      </div>
+
+      <!-- 제안 할 일 -->
+      <div class="col">
+        <span class="col__tag col__tag--new">제안</span>
+        <h3>할 일 — 전환 한 줄</h3>
+        <p class="col__note">
+          보관함은 <b>그대로 두고 자리만</b> 목록 맨 아래로 옮겼습니다. 급한 순으로 묶어 보여줍니다.
+        </p>
+
+        <div class="phone phone--tall">
+          <div class="screen sp-scope">
+            <div class="statusbar">
+              <span>9:41</span>
+              <span class="statusbar__r"><span class="ms">signal_cellular_alt</span><span class="ms">wifi</span><span class="ms">battery_full</span></span>
+            </div>
+
+            <div class="g-chrome g-header">
+              <div class="hrow hrow--layer" data-layer="1" style="padding-right:32px">
+                <div class="seg" style="flex:1">
+                  <button type="button" style="flex:1">일정</button>
+                  <button type="button" aria-selected="true" style="flex:1">할 일</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="scroll">
+              <div class="grouphead"><b>마감 지남</b></div>
+              <ul style="list-style:none;margin:0;padding:0">
+                <li class="todoitem">
+                  <span class="tcheck"></span>
+                  <div class="tbody">
+                    <div class="ttext">2학기 수행평가 계획서 제출</div>
+                    <div class="tmeta">
+                      <span class="tflag tflag--high"><span class="ms">flag</span>긴급</span>
+                      <span class="tdday tdday--over">D+2</span>
+                      <span class="tcat">업무</span>
+                    </div>
+                  </div>
+                </li>
+              </ul>
+
+              <div class="grouphead"><b>오늘</b></div>
+              <ul style="list-style:none;margin:0;padding:0">
+                <li class="todoitem">
+                  <span class="tcheck"></span>
+                  <div class="tbody">
+                    <div class="ttext">체험학습 동의서 취합</div>
+                    <div class="tmeta">
+                      <span class="tflag tflag--mid"><span class="ms">flag</span>보통</span>
+                      <span class="tdday tdday--today">D-Day</span>
+                      <span class="tcat">3학년 2반</span>
+                    </div>
+                    <div class="tsub">
+                      <span class="tsubbar"><i style="width:66%"></i></span>
+                      <span>2 / 3</span>
+                    </div>
+                  </div>
+                </li>
+              </ul>
+
+              <div class="grouphead"><b>이번 주</b></div>
+              <ul style="list-style:none;margin:0;padding:0">
+                <li class="todoitem">
+                  <span class="tcheck"></span>
+                  <div class="tbody">
+                    <div class="ttext">교과협의회 자료 준비</div>
+                    <div class="tmeta">
+                      <span class="tflag tflag--mid"><span class="ms">flag</span>보통</span>
+                      <span class="tdday tdday--later">D-3</span>
+                    </div>
+                  </div>
+                </li>
+              </ul>
+
+              <div class="grouphead"><b>마감 없음</b></div>
+              <ul style="list-style:none;margin:0;padding:0">
+                <li class="todoitem">
+                  <span class="tcheck"></span>
+                  <div class="tbody">
+                    <div class="ttext">3반 사물함 정리 안내</div>
+                    <div class="tmeta"><span class="tflag tflag--low"><span class="ms">flag</span>낮음</span></div>
+                  </div>
+                </li>
+              </ul>
+
+              <div class="grouphead">
+                <b>완료 3</b>
+                <button type="button">보관하기</button>
+              </div>
+              <ul style="list-style:none;margin:0;padding:0">
+                <li class="todoitem">
+                  <span class="tcheck tcheck--done"><span class="ms">check</span></span>
+                  <div class="tbody"><div class="ttext ttext--done">1학기 생활기록부 마감</div></div>
+                </li>
+              </ul>
+
+              <div class="archivelink">
+                <span class="ms">inventory_2</span>보관함 12개
+                <span class="ms chev">chevron_right</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <ul class="notes">
+          <li><span class="ms" data-k="good">check_circle</span><span>전환이 <b>한 줄</b>. 3층이 2층이 됩니다.</span></li>
+          <li><span class="ms" data-k="good">check_circle</span><span>마감 지남 · 오늘 · 이번 주로 묶었습니다. <b>도메인에 이미 있는 규칙</b>(<code>isOverdue</code> · <code>groupByDate</code>)이라 새로 만들 게 없습니다.</span></li>
+          <li><span class="ms" data-k="good">check_circle</span><span>"완료 N개 보관"은 <b>완료 묶음 옆</b>으로. 관련 있는 자리에 붙습니다.</span></li>
+          <li><span class="ms" data-k="warn">info</span><span><b>마감 없는 할 일도 자리가 있습니다.</b> 달력에 녹였으면 사라졌을 항목입니다.</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="sec__head" style="margin-top:64px;margin-bottom:34px">
+      <h2 style="font-family:'Nanum Myeongjo',serif;font-weight:800;font-size:clamp(22px,3vw,30px);margin:0 0 14px">
+        일정 쪽은 달력을 접었습니다
+      </h2>
+      <p class="sec__lead">
+        지금은 월 달력이 화면 위쪽을 통째로 먹고, 정작 일정 목록은 아래에서 조금만 보입니다.
+        교사의 일상 단위는 "이번 주"라 <strong>주를 기본으로 두고 월은 눌러서 펼치는</strong> 쪽이 맞습니다.
+      </p>
+    </div>
+
+    <div class="stage">
+      <div class="col">
+        <span class="col__tag col__tag--now">현재</span>
+        <h3>월 달력이 기본</h3>
+        <p class="col__note">6주치 달력이 항상 펼쳐져 있어 목록은 아래에 조금 남습니다.</p>
+
+        <div class="phone phone--tall">
+          <div class="screen sp-scope">
+            <div class="statusbar">
+              <span>9:41</span>
+              <span class="statusbar__r"><span class="ms">signal_cellular_alt</span><span class="ms">wifi</span><span class="ms">battery_full</span></span>
+            </div>
+
+            <div class="g-chrome g-header">
+              <div class="hrow" style="padding-bottom:9px">
+                <div class="seg" style="flex:1">
+                  <button type="button" aria-selected="true" style="flex:1">일정</button>
+                  <button type="button" style="flex:1">할 일</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="scroll">
+              <div class="g-card" style="margin:12px">
+                <div class="calhead">
+                  <button class="iconbtn" type="button"><span class="ms">chevron_left</span></button>
+                  <h3>2026년 8월</h3>
+                  <button class="iconbtn" type="button"><span class="ms">chevron_right</span></button>
+                </div>
+                <div class="dowrow">
+                  <span class="sun">일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span class="sat">토</span>
+                </div>
+                <div class="mgrid">
+                  <button><span class="dnum dnum--out dnum--sun">27</span><span class="ddots"></span></button>
+                  <button><span class="dnum dnum--out">28</span><span class="ddots"></span></button>
+                  <button><span class="dnum dnum--out">29</span><span class="ddots"></span></button>
+                  <button><span class="dnum dnum--out">30</span><span class="ddots"></span></button>
+                  <button><span class="dnum dnum--out">31</span><span class="ddots"></span></button>
+                  <button><span class="dnum">1</span><span class="ddots"></span></button>
+                  <button><span class="dnum dnum--sat">2</span><span class="ddots"></span></button>
+
+                  <button><span class="dnum dnum--sun">3</span><span class="ddots"></span></button>
+                  <button><span class="dnum">4</span><span class="ddots"><i style="background:var(--sp-accent)"></i></span></button>
+                  <button><span class="dnum">5</span><span class="ddots"></span></button>
+                  <button><span class="dnum">6</span><span class="ddots"></span></button>
+                  <button><span class="dnum">7</span><span class="ddots"><i style="background:var(--sp-warning)"></i></span></button>
+                  <button><span class="dnum">8</span><span class="ddots"></span></button>
+                  <button><span class="dnum dnum--sat">9</span><span class="ddots"></span></button>
+
+                  <button><span class="dnum dnum--sun">10</span><span class="ddots"></span></button>
+                  <button><span class="dnum">11</span><span class="ddots"><i style="background:var(--sp-accent)"></i></span></button>
+                  <button><span class="dnum dnum--today">12</span><span class="ddots"><i style="background:var(--sp-highlight)"></i><i style="background:var(--sp-accent)"></i></span></button>
+                  <button><span class="dnum">13</span><span class="ddots"></span></button>
+                  <button><span class="dnum">14</span><span class="ddots"></span></button>
+                  <button><span class="dnum">15</span><span class="ddots"><i style="background:var(--sp-error)"></i></span></button>
+                  <button><span class="dnum dnum--sat">16</span><span class="ddots"></span></button>
+
+                  <button><span class="dnum dnum--sun">17</span><span class="ddots"></span></button>
+                  <button><span class="dnum">18</span><span class="ddots"></span></button>
+                  <button><span class="dnum">19</span><span class="ddots"><i style="background:var(--sp-highlight)"></i></span></button>
+                  <button><span class="dnum">20</span><span class="ddots"></span></button>
+                  <button><span class="dnum">21</span><span class="ddots"></span></button>
+                  <button><span class="dnum">22</span><span class="ddots"></span></button>
+                  <button><span class="dnum dnum--sat">23</span><span class="ddots"></span></button>
+
+                  <button><span class="dnum dnum--sun">24</span><span class="ddots"></span></button>
+                  <button><span class="dnum">25</span><span class="ddots"></span></button>
+                  <button><span class="dnum">26</span><span class="ddots"></span></button>
+                  <button><span class="dnum">27</span><span class="ddots"></span></button>
+                  <button><span class="dnum">28</span><span class="ddots"></span></button>
+                  <button><span class="dnum">29</span><span class="ddots"></span></button>
+                  <button><span class="dnum dnum--sat">30</span><span class="ddots"></span></button>
+
+                  <button><span class="dnum dnum--sun">31</span><span class="ddots"></span></button>
+                  <button><span class="dnum dnum--out">1</span><span class="ddots"></span></button>
+                  <button><span class="dnum dnum--out">2</span><span class="ddots"></span></button>
+                  <button><span class="dnum dnum--out">3</span><span class="ddots"></span></button>
+                  <button><span class="dnum dnum--out">4</span><span class="ddots"></span></button>
+                  <button><span class="dnum dnum--out">5</span><span class="ddots"></span></button>
+                  <button><span class="dnum dnum--out dnum--sat">6</span><span class="ddots"></span></button>
+                </div>
+              </div>
+
+              <div class="sectitle">8월 12일 (화)</div>
+              <div class="evrow">
+                <span class="evbar" style="background:var(--sp-highlight)"></span>
+                <div><div class="evt">2학기 학부모 상담 주간 안내</div><div class="evm">종일</div></div>
+              </div>
+              <div class="evrow">
+                <span class="evbar" style="background:var(--sp-accent)"></span>
+                <div><div class="evt">교과협의회</div><div class="evm">15:00 – 16:00 · 3층 회의실</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <ul class="notes">
+          <li><span class="ms" data-k="bad">cancel</span><span>달력이 <b>화면의 57%</b>(620px 중 355px)를 먹고 일정은 두 줄만 보입니다. 실측값입니다.</span></li>
+          <li><span class="ms" data-k="bad">cancel</span><span>대부분의 날은 <b>비어 있는데도</b> 6주치가 항상 펼쳐져 있습니다.</span></li>
+        </ul>
+      </div>
+
+      <div class="col">
+        <span class="col__tag col__tag--new">제안</span>
+        <h3>이번 주가 기본</h3>
+        <p class="col__note">주 한 줄만 두고, 월 전체가 필요하면 눌러서 펼칩니다. 목록이 화면의 주인이 됩니다.</p>
+
+        <div class="phone phone--tall">
+          <div class="screen sp-scope">
+            <div class="statusbar">
+              <span>9:41</span>
+              <span class="statusbar__r"><span class="ms">signal_cellular_alt</span><span class="ms">wifi</span><span class="ms">battery_full</span></span>
+            </div>
+
+            <div class="g-chrome g-header">
+              <div class="hrow" style="padding-bottom:6px">
+                <div class="seg" style="flex:1">
+                  <button type="button" aria-selected="true" style="flex:1">일정</button>
+                  <button type="button" style="flex:1">할 일</button>
+                </div>
+              </div>
+              <div class="weekstrip">
+                <button><span class="dowrow" style="display:contents"></span><span class="wdow" style="font-size:11px;color:#f87171">일</span><span class="dnum dnum--sun">10</span><span class="ddots"></span></button>
+                <button><span class="wdow" style="font-size:11px;color:var(--sp-muted)">월</span><span class="dnum">11</span><span class="ddots"><i style="background:var(--sp-accent)"></i></span></button>
+                <button><span class="wdow" style="font-size:11px;color:var(--sp-muted)">화</span><span class="dnum dnum--today">12</span><span class="ddots"><i style="background:var(--sp-highlight)"></i><i style="background:var(--sp-accent)"></i></span></button>
+                <button><span class="wdow" style="font-size:11px;color:var(--sp-muted)">수</span><span class="dnum">13</span><span class="ddots"></span></button>
+                <button><span class="wdow" style="font-size:11px;color:var(--sp-muted)">목</span><span class="dnum">14</span><span class="ddots"></span></button>
+                <button><span class="wdow" style="font-size:11px;color:var(--sp-muted)">금</span><span class="dnum">15</span><span class="ddots"><i style="background:var(--sp-error)"></i></span></button>
+                <button><span class="wdow" style="font-size:11px;color:#60a5fa">토</span><span class="dnum dnum--sat">16</span><span class="ddots"></span></button>
+              </div>
+              <div class="expandmonth"><span class="ms">expand_more</span>8월 전체 보기</div>
+            </div>
+
+            <div class="scroll">
+              <div class="sectitle">8월 12일 (화) · 오늘</div>
+              <div class="evrow">
+                <span class="evbar" style="background:var(--sp-highlight)"></span>
+                <div><div class="evt">2학기 학부모 상담 주간 안내</div><div class="evm">종일</div></div>
+              </div>
+              <div class="evrow">
+                <span class="evbar" style="background:var(--sp-accent)"></span>
+                <div><div class="evt">교과협의회</div><div class="evm">15:00 – 16:00 · 3층 회의실</div></div>
+              </div>
+
+              <div class="sectitle">8월 13일 (수)</div>
+              <div class="evrow">
+                <span class="evbar" style="background:var(--sp-muted)"></span>
+                <div><div class="evt">동아리 활동</div><div class="evm">6 – 7교시</div></div>
+              </div>
+
+              <div class="sectitle">8월 15일 (금)</div>
+              <div class="evrow">
+                <span class="evbar" style="background:var(--sp-error)"></span>
+                <div><div class="evt">광복절 — 휴업일</div><div class="evm">종일</div></div>
+              </div>
+              <div class="evrow">
+                <span class="evbar" style="background:var(--sp-highlight)"></span>
+                <div><div class="evt">상담 신청 마감</div><div class="evm">종일</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <ul class="notes">
+          <li><span class="ms" data-k="good">check_circle</span><span>달력이 차지하는 자리가 <b>57% → 17%</b>. 일정은 <b>2개에서 5개</b>로 늘어 이번 주 흐름이 한눈에 들어옵니다.</span></li>
+          <li><span class="ms" data-k="good">check_circle</span><span>월 전체는 <b>"8월 전체 보기"</b>를 누르면 펼쳐집니다. 없애는 게 아니라 접는 것입니다.</span></li>
+          <li><span class="ms" data-k="warn">info</span><span>날짜 아래 점은 지금과 <b>똑같이 유지</b>했습니다 — 어느 날 뭐가 있는지 아는 수단입니다.</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="cite">
+      <div class="cite__k">[관측] Fantastical — 이번에 스크린샷으로 확인하지 못함</div>
+      <p>
+        주를 위에 한 줄로 두고 <q>필요하면 월로 펼치며 아래에 날짜별 일정이 스크롤되는</q> 구조가
+        캘린더 앱에서 잘 알려진 방식입니다. 다만 이 항목은 <strong>공식 문서가 아니라 제 지식과 2차 자료</strong>라
+        근거 등급이 낮습니다. 확정 전에 실제 화면 확인이 필요합니다.
+      </p>
+      <div class="cite__k" style="margin-top:18px">[공식] NN/g — 고정 영역</div>
+      <p>
+        <q>고정 영역은 작게 유지해 콘텐츠 대 크롬 비율을 최대로.</q>
+        월 달력을 항상 펼쳐두는 건 이 원칙과 정면으로 부딪힙니다.
+      </p>
+    </div>
+
+    <div class="caveat" style="border-color:var(--doc-accent);background:var(--doc-mark)">
+      <div class="caveat__k" style="color:var(--doc-accent)"><span class="ms">info</span>"보관함을 뺀다"는 없애는 게 아닙니다</div>
+      <p>
+        표현이 오해를 부를 수 있어 분명히 적습니다. <strong>보관함은 그대로 남습니다.</strong>
+        바뀌는 건 <strong>위치뿐</strong>입니다 — 지금은 화면 맨 위 전환 버튼이고,
+        제안은 목록 맨 아래 <strong>"보관함 12개 ›"</strong> 링크입니다.
+      </p>
+      <p>
+        기능도, 보관된 항목도, "완료 N개 보관" 동작도 전부 유지됩니다.
+        <strong>매번 오가는 자리에서 가끔 들어가는 자리로 옮기는 것</strong>입니다.
+      </p>
+    </div>
+
+    <div class="decide">
+      <div class="decide__k">결정됨 ④ · 2026-08-12</div>
+      <h4>일정 / 할 일 세그먼트 유지 · 보관함 유지</h4>
+      <ul>
+        <li><b>일정 탭 안 세그먼트 유지</b> — 마감 없는 할 일이 존재하므로 달력에 녹일 수 없습니다.</li>
+        <li><b>보관함 유지</b> — 없애지 않습니다. 목록 맨 아래 링크로 자리만 옮겨 전환 줄을 하나 줄입니다.</li>
+      </ul>
+    </div>
+
+    <div class="decide">
+      <div class="decide__k">결정됨 ④-b · 2026-08-12</div>
+      <h4>일정 달력은 주 단위 기본으로 — 확정</h4>
+      <ul>
+        <li>달력이 차지하는 자리 <b>57% → 17%</b>, 보이는 일정 <b>2개 → 5개</b>(실측).</li>
+        <li>월 전체는 <b>"8월 전체 보기"</b>로 펼칩니다. 없애는 게 아니라 접는 것입니다.</li>
+        <li>날짜 아래 점 표시는 <b>지금 그대로</b> 유지합니다.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ═════════ 5c. 홈으로 끌어올리기 ═════════ -->
+  <section class="sec" id="s4c">
+    <div class="sec__head">
+      <div class="sec__no">05-b — 발견성</div>
+      <h2>"중요한데 묻힌다"는 홈에서 풀립니다</h2>
+      <p class="sec__lead">
+        마감이 지난 할 일이 있어도 지금은 <strong>일정 탭에 들어가 할 일로 전환해야만</strong> 압니다.
+        홈의 "오늘 남은 일" 카드에 합류시키면 앱을 열자마자 보입니다.
+      </p>
+      <p class="sec__lead">
+        <strong>탭 순서를 건드리지 않고 발견성만 올리는 방법</strong>이고,
+        필요한 규칙(<code>isOverdue</code> · <code>groupByDate</code>)이 이미 도메인에 있어 새로 만들 것이 없습니다.
+      </p>
+    </div>
+
+    <div class="stage">
+      <div class="col" style="max-width:520px">
+        <span class="col__tag col__tag--new">제안</span>
+        <h3>홈 — 출결과 할 일이 함께</h3>
+        <p class="col__note">앱을 열면 오늘 안 한 것이 먼저 보입니다. 눌러서 바로 그 화면으로.</p>
+
+        <div class="phone phone--tall">
+          <div class="screen sp-scope">
+            <div class="statusbar">
+              <span>9:41</span>
+              <span class="statusbar__r"><span class="ms">signal_cellular_alt</span><span class="ms">wifi</span><span class="ms">battery_full</span></span>
+            </div>
+
+            <div class="hrow g-chrome g-header">
+              <div>
+                <h2 class="htitle">8월 12일 화요일</h2>
+                <div style="font-size:12.5px;color:var(--sp-muted)">2학기 · 개학 4일째</div>
+              </div>
+              <button class="iconbtn" type="button"><span class="ms">sync</span></button>
+            </div>
+
+            <div class="scroll">
+              <div class="sectitle">오늘 남은 일</div>
+              <div style="padding:0 16px;display:flex;flex-direction:column;gap:9px">
+                <div class="g-card" style="padding:14px">
+                  <div style="display:flex;align-items:center;gap:10px">
+                    <span class="ms" style="font-size:20px;color:var(--sp-error)">error</span>
+                    <div style="flex:1">
+                      <div style="font-size:14.5px;font-weight:680">출결 2건이 아직 비어 있어요</div>
+                      <div style="font-size:12.5px;color:var(--sp-muted)">3학년 2반 조회 · 2학년 5반 3교시</div>
+                    </div>
+                    <span class="ms" style="color:var(--sp-muted)">chevron_right</span>
+                  </div>
+                </div>
+
+                <div class="g-card" style="padding:14px">
+                  <div style="display:flex;align-items:center;gap:10px">
+                    <span class="ms" style="font-size:20px;color:var(--sp-warning)">task_alt</span>
+                    <div style="flex:1">
+                      <div style="font-size:14.5px;font-weight:680">할 일 — 마감 지남 1개 · 오늘 1개</div>
+                      <div style="font-size:12.5px;color:var(--sp-muted)">수행평가 계획서 제출 · 체험학습 동의서 취합</div>
+                    </div>
+                    <span class="ms" style="color:var(--sp-muted)">chevron_right</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="sectitle">오늘 시간표</div>
+              <div class="periodrow">
+                <div class="pcard pcard--now">
+                  <div class="pcard__p">조회</div>
+                  <div class="pcard__s">3-2</div>
+                  <div class="pcard__c">담임</div>
+                  <span class="pcard__badge pcard__badge--todo"><span class="ms">error</span>출결 미입력</span>
+                </div>
+                <div class="pcard">
+                  <div class="pcard__p">3교시</div>
+                  <div class="pcard__s">국어</div>
+                  <div class="pcard__c">2-5</div>
+                  <span class="pcard__badge pcard__badge--todo"><span class="ms">error</span>출결 미입력</span>
+                </div>
+                <div class="pcard">
+                  <div class="pcard__p">5교시</div>
+                  <div class="pcard__s">국어</div>
+                  <div class="pcard__c">2-7</div>
+                  <span class="pcard__badge pcard__badge--done"><span class="ms">check</span>완료</span>
+                </div>
+              </div>
+
+              <div class="sectitle">오늘 일정</div>
+              <div style="padding:0 16px 18px">
+                <div class="g-card" style="padding:14px">
+                  <div style="display:flex;gap:10px;align-items:flex-start">
+                    <span class="ms" style="font-size:19px;color:var(--sp-highlight);margin-top:2px">event</span>
+                    <div>
+                      <div style="font-size:14.5px;font-weight:590">교과협의회</div>
+                      <div style="font-size:12.5px;color:var(--sp-muted)">15:00 – 16:00 · 3층 회의실</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <nav class="tabbar tabbar--5 g-chrome g-tabbar">
+              <a href="#s4c" aria-current="page"><span class="ms">home</span>홈</a>
+              <a href="#s4c"><span class="ms">groups</span>학급</a>
+              <a href="#s4c"><span class="ms">school</span>수업</a>
+              <a href="#s4c"><span class="ms">calendar_month</span>일정</a>
+              <a href="#s4c"><span class="ms">more_horiz</span>더보기</a>
+            </nav>
+          </div>
+        </div>
+
+        <ul class="notes">
+          <li><span class="ms" data-k="good">check_circle</span><span>마감 지난 할 일을 <b>앱 열자마자</b> 압니다. 탭에 들어가지 않아도 됩니다.</span></li>
+          <li><span class="ms" data-k="good">check_circle</span><span>출결과 할 일이 <b>"오늘 남은 일"이라는 한 묶음</b>으로 읽힙니다.</span></li>
+          <li><span class="ms" data-k="warn">info</span><span>남은 게 없으면 이 묶음은 <b>통째로 사라집니다.</b> "다 하셨어요!" 같은 칭찬은 넣지 않습니다.</span></li>
+          <li><span class="ms" data-k="warn">info</span><span>이 카드는 <b>일정 탭을 대체하지 않습니다.</b> 오늘 것만 요약하고, 전체 목록은 일정 탭에 그대로 있습니다.</span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═════════ 6. 뒤로가기 ═════════ -->
+  <section class="sec" id="s5">
+    <div class="sec__head">
+      <div class="sec__no">06 — 뒤로가기</div>
+      <h2>이건 시안이 없습니다. 눈에 안 보이는 문제라서요</h2>
+      <p class="sec__lead">
+        지금 안드로이드에서 룰렛을 열고 뒤로가기를 누르면, 이전 화면이 아니라 <strong>앱이 닫힙니다.</strong>
+        팝업을 열고 눌러도 마찬가지입니다.
+      </p>
+      <p class="sec__lead">
+        색이나 팝업을 아무리 다듬어도 이건 안 고쳐집니다. 화면마다 <strong>주소를 붙여야만</strong> 고쳐집니다.
+        지금은 주소가 없어서 폰이 "돌아갈 데가 없다"고 판단하고 앱을 닫는 겁니다.
+      </p>
+      <div class="q">
+        <strong>이게 "마감 공사가 아니라 구조 재설계"라는 결정의 실질적인 내용입니다.</strong>
+        그리고 부수 효과가 큽니다 — 지금 앱 중심 파일에 도구 18개가 이름으로 하나하나 나열돼 있는데,
+        주소를 붙이면 이게 한 줄로 접힙니다. 도구를 늘리거나 자리를 바꿀 때 그 파일을 안 건드려도 됩니다.
+      </div>
+    </div>
+
+    <div class="stage">
+      <div class="col" style="max-width:100%">
+        <span class="col__tag col__tag--new">덤으로 따라오는 것</span>
+        <h3>되돌리기</h3>
+        <p class="col__note" style="min-height:0">
+          주소가 생기면 팝업도 뒤로가기로 닫힙니다. 그리고 삭제할 때 되돌리기를 붙일 자리도 같이 생깁니다.
+        </p>
+
+        <div class="phone" style="margin-top:22px">
+          <div class="screen sp-scope" style="height:300px">
+            <div class="hrow g-chrome g-header">
+              <button class="iconbtn" type="button"><span class="ms">arrow_back</span></button>
+              <h2 class="htitle" style="flex:1">메모</h2>
+            </div>
+            <div class="scroll">
+              <div class="menulist">
+                <div class="menuitem">
+                  <span class="menuitem__ic"><span class="ms" style="color:var(--sp-warning)">sticky_note_2</span></span>
+                  <div style="flex:1"><div class="menuitem__t">3반 체험학습 동의서</div><div class="menuitem__d">8월 10일</div></div>
+                </div>
+                <div class="menuitem">
+                  <span class="menuitem__ic"><span class="ms" style="color:var(--sp-warning)">sticky_note_2</span></span>
+                  <div style="flex:1"><div class="menuitem__t">교과협의회 준비</div><div class="menuitem__d">8월 8일</div></div>
+                </div>
+              </div>
+            </div>
+            <div class="snack">
+              <span>메모 1개를 삭제했습니다</span>
+              <button type="button">실행취소</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="cite" style="margin-top:26px">
+          <div class="cite__k">[공식] NN/g · 스와이프 동작</div>
+          <p><q>Limit contextual swipe to destructive actions.</q> — 스와이프는 삭제 계열에만 씁니다.</p>
+          <p>
+            그리고 <q>핵심 동작을 스와이프 뒤에 묻으면 사용자가 발견하지 못한다</q>는 게 근본 약점입니다.
+            그래서 <strong>출결 상태를 스와이프로 찍는 건 넣지 않았습니다.</strong>
+            스와이프는 지름길이지 유일한 길이면 안 됩니다.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═════════ 7. 정리 ═════════ -->
+  <section class="sec" id="s6">
+    <div class="sec__head">
+      <div class="sec__no">07 — 정리</div>
+      <h2>순서는 이렇게 하는 게 맞습니다</h2>
+      <p class="sec__lead">
+        눈에 보이는 것부터 하고 싶은 게 자연스럽지만, 그러면 손해입니다.
+        지금 팝업이 <strong>17개 파일에 각자 따로</strong> 만들어져 있어서, 재설계하면서
+        "이건 팝업으로 빼자"고 할 때마다 <strong>18번째, 19번째가 늘어납니다.</strong>
+      </p>
+      <p class="sec__lead">
+        토큰 대신 직접 박은 색도 지난 계획 때 149건이었는데 지금 <strong>280건</strong>입니다.
+        그냥 두면 줄지 않고 늡니다.
+      </p>
+    </div>
+
+    <div class="decide" style="border-color:var(--doc-good)">
+      <div class="decide__k" style="color:var(--doc-good)">확정된 결정 · 2026-08-12</div>
+      <h4>이만큼 정해졌습니다</h4>
+      <ul>
+        <li><b>탭</b> — 홈 · 학급 · 수업 · 일정 · 더보기. 출결은 탭이 아니라 반 안의 세그먼트.</li>
+        <li><b>학급 탭</b> — 기본은 표시, 설정에서 숨길 수 있음. 담임이 없으면 안내 문구.</li>
+        <li><b>도구</b> — 더보기 안에 유지. "쌤도구" 중간 문만 없애 3번 → 2번.</li>
+        <li><b>반 선택</b> — 눌러서 고르는 방식. 헤더 3층 → 1층.</li>
+        <li><b>출결</b> — 다른 학생만 누르는 방식. 3,180px → 1,350px.</li>
+        <li><b>출결 저장</b> — 직전에 반·날짜 확인 한 번.</li>
+        <li><b>일정 / 할 일</b> — 세그먼트 유지. 보관함은 유지하되 목록 맨 아래로 자리 이동.</li>
+        <li><b>일정 달력</b> — 주 단위 기본, 월은 펼쳐서 봄.</li>
+        <li><b>홈</b> — "오늘 남은 일"에 출결과 할 일 합류.</li>
+      </ul>
+    </div>
+
+    <div class="caveat">
+      <div class="caveat__k"><span class="ms">pending</span>아직 안 정한 것</div>
+      <p>
+        <strong>홈 카드 숨김·순서 변경</strong>(05번 홈에서 다룬 항목)은 아직 결정되지 않았습니다.
+        넣는다면 홈에 편집 손잡이를 두지 말고 <strong>설정에서만</strong> 바꾸도록 하는 게 안전합니다 —
+        데스크톱에서 위젯 손잡이가 위젯 버튼을 삼켰던 것과 같은 구조의 위험이라서요.
+      </p>
+      <p>
+        그리고 <strong>Fantastical의 주/월 접기 방식은 [관측] 등급</strong>입니다. 이번에 스크린샷으로 확인하지 못했습니다.
+        주 단위 기본은 NN/g의 고정 영역 원칙만으로도 근거가 서지만, 세부 동작은 실물 확인이 남아 있습니다.
+      </p>
+    </div>
+
+    <div class="decide">
+      <div class="decide__k">작업 순서 제안</div>
+      <h4>공용 부품과 주소를 먼저, 화면은 그 위에</h4>
+      <ul>
+        <li><b>1단계</b> — 팝업·헤더·되돌리기를 <b>공용 부품 하나씩</b>으로. 그리고 화면마다 <b>주소 붙이기</b>(뒤로가기 해결).</li>
+        <li><b>2단계</b> — 출결을 "다른 애만 누르는" 방식으로. 매일 여러 번 쓰는 화면이고, 데이터는 이미 준비돼 있습니다.</li>
+        <li><b>3단계</b> — 학급 화면 헤더를 한 층으로.</li>
+        <li><b>4단계</b> — 탭을 <b>홈 · 학급 · 수업 · 일정 · 더보기</b>로. 담임 아닌 선생님의 빈 학급 탭 처리 포함.</li>
+        <li><b>5단계</b> — 더보기 첫 화면에 도구 그리드와 검색.</li>
+        <li><b>6단계</b> — 할 일에서 보관함을 전환에서 빼고, 일정 달력을 주 기본으로.</li>
+        <li><b>7단계</b> — 홈 "오늘 남은 일"에 출결과 할 일 합류. <b>앞 단계가 끝나야 붙일 게 정해지므로 마지막</b>입니다.</li>
+      </ul>
+    </div>
+
+    <div class="caveat">
+      <div class="caveat__k"><span class="ms">warning</span>착수 전에 확인할 것</div>
+      <p>
+        주소 붙이는 작업은 앱 중심 파일 하나를 크게 건드립니다. 이 파일은 이 프로젝트에서
+        <strong>가장 많이 수정된 파일</strong>이라 다른 세션과 부딪힐 위험이 가장 큽니다.
+        시작하기 전에 다른 작업이 이 파일을 만지고 있지 않은지 확인해야 합니다.
+      </p>
+      <p>
+        그리고 데이터가 흐르는 배관(저장·동기화·규칙)은 <strong>하나도 건드리지 않습니다.</strong>
+        바꾸는 건 화면을 조립하는 층까지입니다.
+      </p>
+    </div>
+
+    <div class="foot">
+      <p style="margin:0 0 12px">
+        이 파일은 <b>결정을 위한 시안</b>이고 앱 코드가 아닙니다. 여기서 정한 것만 실제 화면으로 옮깁니다.
+      </p>
+      <p style="margin:0">
+        <code>docs/03-analysis/mobile-uiux-redesign/mockup/structure-mockup.html</code><br />
+        함께 볼 문서 — <code>reference-research.md</code>(조사) · <code>current-state.analysis.md</code>(현재 상태)
+      </p>
+    </div>
+  </section>
+
+</div>
+
+<script>
+(function () {
+  var root = document.documentElement;
+  var btn = document.getElementById('themeToggle');
+  var icon = document.getElementById('themeIcon');
+  var label = document.getElementById('themeLabel');
+
+  function apply(mode) {
+    root.setAttribute('data-theme', mode);
+    var dark = mode === 'dark';
+    icon.textContent = dark ? 'light_mode' : 'dark_mode';
+    label.textContent = dark ? '라이트' : '다크';
+    try { localStorage.setItem('ssampin-mockup-theme', mode); } catch (e) {}
+  }
+
+  var saved = null;
+  try { saved = localStorage.getItem('ssampin-mockup-theme'); } catch (e) {}
+  if (!saved) {
+    saved = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }
+  apply(saved);
+
+  btn.addEventListener('click', function () {
+    apply(root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+  });
+})();
+</script>
+</body>
+</html>
