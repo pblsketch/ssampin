@@ -131,11 +131,26 @@ async function flush(ms = 0) {
   });
 }
 
-/** 학생 행(li) 안에서 상태 버튼을 찾는다 */
+/**
+ * 학생 행(li) 안에서 상태 버튼을 찾는다.
+ *
+ * 출결 화면은 "기본은 출석, 다른 학생만 펼침" 방식이라 출석인 학생의 행은 한 줄로
+ * 접혀 있고 상태 버튼이 없다. 이름을 눌러 펼친 뒤에 찾는다.
+ * (검사하려는 내용 — 저장 페이로드·빈 명단 차단·기록 복원 — 은 그대로다.
+ *  버튼에 닿는 방법만 화면 구조에 맞춰 바뀐 것)
+ */
 function statusButton(studentName: string, label: string): HTMLElement {
   const row = screen.getByText(studentName).closest('li');
   expect(row).not.toBeNull();
-  return within(row!).getByRole('button', { name: label });
+
+  const alreadyExpanded = within(row!).queryByRole('button', { name: label });
+  if (alreadyExpanded) return alreadyExpanded;
+
+  // 접혀 있으면 행 전체가 펼치기 버튼이다.
+  fireEvent.click(within(row!).getByRole('button', { expanded: false }));
+
+  const expandedRow = screen.getByText(studentName).closest('li');
+  return within(expandedRow!).getByRole('button', { name: label });
 }
 
 beforeEach(() => {
@@ -164,8 +179,10 @@ describe('① 담임 출결 학생 원천 = 담임 명렬표', () => {
     expect(screen.getByText('김정민')).toBeInTheDocument();
     expect(screen.getByText('이서연')).toBeInTheDocument();
     expect(screen.getByText('박지훈')).toBeInTheDocument();
-    // 학생당 상태 버튼 5개(출석/지각/결석/조퇴/결과) → '출석' 버튼 수 = 학생 수
-    expect(screen.getAllByRole('button', { name: '출석' })).toHaveLength(3);
+    // 렌더된 학생 행 수 = 명렬표 학생 수. (예전엔 '출석' 버튼 개수로 셌는데, 출결 화면이
+    //  "기본은 출석, 다른 학생만 펼침"으로 바뀌어 접힌 행에는 버튼이 없다. 행을 직접 세는
+    //  편이 원래 의도 — 명단이 올바른 출처에서 N명 온다 — 에 더 가깝다)
+    expect(screen.getAllByRole('listitem')).toHaveLength(3);
     expect(screen.queryByText('담임 명렬표에 학생이 없어요')).not.toBeInTheDocument();
   });
 
@@ -312,7 +329,8 @@ describe('④ 수업 출결(type=class) 회귀 0', () => {
 
     expect(screen.getByText('최유나')).toBeInTheDocument();
     expect(screen.getByText('정하람')).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: '출석' })).toHaveLength(2);
+    // 행 개수로 센다(위 ① 테스트와 같은 이유 — 접힌 행에는 상태 버튼이 없다)
+    expect(screen.getAllByRole('listitem')).toHaveLength(2);
   });
 
   it('복합 키(grade-classNum-number)로 저장된 기존 기록이 그대로 붙는다', async () => {
