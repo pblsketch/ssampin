@@ -504,7 +504,12 @@ export function App() {
           글로벌 좌우 스와이프로 탭 전환하던 동작은 제거됨 (사용자 요청, 2026-05-14).
           이유: 의도치 않은 탭 전환이 잦아 UX 안티패턴. 탭 전환은 하단 탭바 버튼만으로. */}
       <main className="flex-1 overflow-hidden">
-        {activeTab === 'home' && <TodayHub onNavigateAttendance={openAttendance} />}
+        {activeTab === 'home' && (
+          <TodayHub
+            onNavigateAttendance={openAttendance}
+            onNavigateTodo={() => navigate({ kind: 'schedule', seg: 'todo' })}
+          />
+        )}
         {/* 담임(학급)·수업이 각자 탭이 되면서 세그먼트 한 줄이 사라졌다.
             화면 위에서 그만큼(약 44px)이 명단에 돌아간다. */}
         {activeTab === 'homeroom' && <StudentsPage />}

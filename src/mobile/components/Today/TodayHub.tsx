@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { TouchEvent } from 'react';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
@@ -19,6 +19,7 @@ import { AttendanceSummaryCard } from './AttendanceSummaryCard';
 import { MealCard } from './MealCard';
 import { WeatherCard } from './WeatherCard';
 import { SyncStatusBanner } from './SyncStatusBanner';
+import { TodayRemaining } from './TodayRemaining';
 import { SyncFreshnessIndicator } from './SyncFreshnessIndicator';
 import { haptic } from '@mobile/utils/haptic';
 
@@ -34,9 +35,11 @@ interface Props {
     period: number;
     type: 'homeroom' | 'class';
   }) => void;
+  /** "오늘 남은 일"의 할 일 줄을 눌렀을 때 — 일정 탭의 할 일로 이동 */
+  onNavigateTodo: () => void;
 }
 
-export function TodayHub({ onNavigateAttendance }: Props) {
+export function TodayHub({ onNavigateAttendance, onNavigateTodo }: Props) {
   const settings = useMobileSettingsStore((s) => s.settings);
   const settingsLoaded = useMobileSettingsStore((s) => s.loaded);
   const loadSettings = useMobileSettingsStore((s) => s.load);
@@ -150,6 +153,47 @@ export function TodayHub({ onNavigateAttendance }: Props) {
   const showClassCard =
     Boolean(periodInfo.currentPeriod && currentClass) && !isHidden('classAttendance');
 
+  /**
+   * \uC624\uB298 \uC544\uC9C1 \uCD9C\uACB0\uC744 \uB123\uC9C0 \uC54A\uC740 \uAC83\uB4E4.
+   *
+   * \uB2F4\uC784 \uC870\uD68C + \uC624\uB298 \uC2DC\uAC04\uD45C\uC5D0 \uC788\uB294 \uC218\uC5C5\uC744 \uD6D1\uC5B4 \uAE30\uB85D\uC774 \uC5C6\uB294 \uAC83\uC744 \uC13C\uB2E4.
+   * \uD310\uB2E8 \uAE30\uC900\uC740 \uD654\uBA74 \uCE74\uB4DC\uC640 \uAC19\uC740 getTodayRecord \uB77C \uC11C\uB85C \uC5B4\uAE0B\uB098\uC9C0 \uC54A\uB294\uB2E4.
+   */
+  const missingAttendance = useMemo(() => {
+    const items: {
+      label: string;
+      classId: string;
+      className: string;
+      period: number;
+      type: 'homeroom' | 'class';
+    }[] = [];
+
+    if (isHomeroom && settings.className && !homeroomRecord) {
+      items.push({
+        label: `${settings.className} \uC870\uD68C`,
+        classId: settings.className,
+        className: settings.className,
+        period: 0,
+        type: 'homeroom',
+      });
+    }
+
+    for (let i = 0; i < (daySchedule?.length ?? 0); i += 1) {
+      const slot = daySchedule?.[i];
+      if (!slot?.classroom) continue;
+      const period = i + 1;
+      if (getTodayRecord(slot.classroom, period)) continue;
+      items.push({
+        label: `${slot.classroom} ${period}\uAD50\uC2DC`,
+        classId: slot.classroom,
+        className: slot.classroom,
+        period,
+        type: 'class',
+      });
+    }
+    return items;
+  }, [isHomeroom, settings.className, homeroomRecord, daySchedule, getTodayRecord]);
+
   const today = new Date();
   const dateStr = format(today, 'M\uC6D4 d\uC77C (EEEE)', { locale: ko });
 
@@ -208,6 +252,26 @@ export function TodayHub({ onNavigateAttendance }: Props) {
         </div>
         <SyncFreshnessIndicator />
       </div>
+
+      {/* 오늘 남은 일 — 출결 미입력과 급한 할 일을 한 묶음으로.
+          앱을 열자마자 보이므로, 그 화면에 들어가야만 알 수 있던 것들이 먼저 뜬다.
+          남은 게 없으면 통째로 사라진다(칭찬·달성률 없음). */}
+      <TodayRemaining
+        attendanceMissingCount={missingAttendance.length}
+        attendanceMissingLabel={missingAttendance.map((m) => m.label).join(' · ')}
+        onOpenAttendance={() => {
+          const first = missingAttendance[0];
+          if (first) {
+            onNavigateAttendance({
+              classId: first.classId,
+              className: first.className,
+              period: first.period,
+              type: first.type,
+            });
+          }
+        }}
+        onOpenTodo={onNavigateTodo}
+      />
 
       {/* 오늘 현황 + 주간 시간표 캐러셀 — 좌우 스와이프로 오늘/주간 교사/주간 학급 시간표 전환 */}
       {!isHidden('currentClass') && (
