@@ -43,14 +43,23 @@ const SHEETS_TO_REGISTER: ReadonlyArray<readonly [filePath: string, sheetLabel: 
 
 /** 직접 훅 호출 */
 const CALLS_HOOK = /useBottomSheet\s*\(/;
-/** 공용 껍데기 렌더 — 껍데기 안에서 훅이 호출된다 */
+/**
+ * 공용 껍데기 렌더 — 껍데기 안에서 훅이 호출된다.
+ * import 까지 함께 확인한다. 렌더 표기만 보면 주석 한 줄(`// <BottomSheet> 로 옮길 것`)이나
+ * 동명의 다른 컴포넌트로도 통과해 버린다.
+ */
+const IMPORTS_SHELL = /from\s+['"]@mobile\/components\/common\/BottomSheet['"]/;
 const RENDERS_SHELL = /<BottomSheet[\s/>]/;
+
+function usesShell(source: string): boolean {
+  return IMPORTS_SHELL.test(source) && RENDERS_SHELL.test(source);
+}
 
 describe('bottom-sheet coverage (meta)', () => {
   for (const [relPath, label] of SHEETS_TO_REGISTER) {
     it(`${label} (${relPath}) 가 바텀시트 등록을 보장한다`, () => {
       const source = readFileSync(resolve(ROOT, relPath), 'utf8');
-      const registered = CALLS_HOOK.test(source) || RENDERS_SHELL.test(source);
+      const registered = CALLS_HOOK.test(source) || usesShell(source);
       expect(
         registered,
         `${label} 가 바텀시트 등록을 보장하지 않습니다. 모바일 FAB 가 시트 위로 떠 버튼을 가리는 회귀를 막으려면 ` +

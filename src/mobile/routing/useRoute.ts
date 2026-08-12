@@ -49,6 +49,24 @@ export function useRoute(): RouteApi {
     return () => window.removeEventListener('popstate', onPop);
   }, []);
 
+  /**
+   * 딥링크로 하위 화면에 바로 들어온 경우, 그 아래에 홈 항목을 하나 깔아둔다.
+   *
+   * 링크를 타고 `/more/settings` 로 바로 들어오면 히스토리에 우리 항목이 하나도
+   * 없어서, 하드웨어 뒤로가기가 곧장 앱을 벗어난다. 홈을 깔아두면 한 번은 앱 안에서
+   * 받아낸다. 홈으로 들어온 경우에는 깔지 않는다 — 홈에서 뒤로가기는 나가는 게 맞다.
+   */
+  useEffect(() => {
+    const initial = parsePath(currentPath());
+    if (initial.kind === 'home') return;
+    if (currentDepth() > 0) return; // 이미 앱 안에서 쌓인 항목이 있다
+
+    const here = currentPath();
+    window.history.replaceState({ depth: 0 } satisfies HistoryDepth, '', toPath(HOME_ROUTE));
+    window.history.pushState({ depth: 1 } satisfies HistoryDepth, '', here);
+    // 주소·화면은 그대로다. 아래에 홈 한 칸이 생겼을 뿐이다.
+  }, []);
+
   const navigate = useCallback<RouteApi['navigate']>((next, opts) => {
     const path = toPath(next);
 

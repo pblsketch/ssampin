@@ -196,33 +196,29 @@ export function App() {
   );
 
   /**
-   * 더보기 하위 이동. null 이면 더보기 첫 화면으로 "돌아가는" 것이므로 뒤로가기를 쓴다
-   * (히스토리를 앞으로 쌓지 않아야 뒤로가기 횟수가 어긋나지 않는다).
+   * 더보기 하위 화면으로 이동.
+   *
+   * ⚠️ 이름이 `setMoreSub` 이 아닌 이유. 예전 setMoreSub 는 "상태를 지운다"였고 null 을
+   * 넣으면 그냥 목록으로 돌아갔다. 지금은 이동이 히스토리를 쌓으므로 되돌아가려면
+   * 뒤로가기를 실행해야 한다 — 의미가 달라졌다. 이름을 그대로 뒀다가 남아 있던
+   * `setMoreSub(null)` 호출 하나가 탭 이동을 즉시 되돌리는 버그를 냈다(탭바가 먹통).
+   * 이름을 바꿔서 남은 호출처를 컴파일러가 드러내게 한다. 되돌아가려면 goBack() 을 쓴다.
    */
-  const setMoreSub = useCallback(
-    (sub: string | null) => {
-      if (sub === null) {
-        goBack();
-        return;
-      }
+  const openMoreSub = useCallback(
+    (sub: string) => {
       if (sub === 'settings' || sub === 'memo' || sub === 'bookmarks' || sub === 'tools') {
         navigate({ kind: 'moreSection', section: sub });
         return;
       }
       navigate({ kind: 'tool', toolId: legacyKeyToToolId(sub) });
     },
-    [navigate, goBack],
+    [navigate],
   );
 
-  const setAttendanceNav = useCallback(
-    (nav: AttendanceNav | null) => {
-      if (nav === null) {
-        goBack();
-        return;
-      }
-      navigate({ kind: 'attendance', ...nav });
-    },
-    [navigate, goBack],
+  /** 출결 전체화면 진입. 나가는 것은 goBack(). */
+  const openAttendance = useCallback(
+    (nav: AttendanceNav) => navigate({ kind: 'attendance', ...nav }),
+    [navigate],
   );
   const [showOnboarding, setShowOnboarding] = useState(() => {
     return !localStorage.getItem('onboarding-completed');
@@ -378,7 +374,7 @@ export function App() {
         <HomeroomAttendanceView
           classId={attendanceNav.classId}
           className={attendanceNav.className}
-          onBack={() => setAttendanceNav(null)}
+          onBack={goBack}
         />
       );
     }
@@ -388,7 +384,7 @@ export function App() {
         className={attendanceNav.className}
         period={attendanceNav.period}
         type={attendanceNav.type}
-        onBack={() => setAttendanceNav(null)}
+        onBack={goBack}
       />
     );
   }
@@ -434,8 +430,7 @@ export function App() {
     if (moreSub === 'settings') return <SettingsPage onBack={goBack} />;
     if (moreSub === 'memo') return <MemoPage onBack={goBack} />;
     if (moreSub === 'bookmarks') return <BookmarkPage onBack={goBack} />;
-    if (moreSub === 'tools')
-      return <ToolsOverviewPage onNavigate={(sub) => setMoreSub(sub)} onBack={goBack} />;
+    if (moreSub === 'tools') return <ToolsOverviewPage onNavigate={openMoreSub} onBack={goBack} />;
     if (moreSub === 'tool-assignment') return <ToolAssignmentPage onBack={goBack} />;
     if (moreSub === 'tool-survey') return <ToolSurveyPage onBack={goBack} />;
     if (moreSub === 'tool-grouping') return <ToolGroupingPage onBack={goBack} />;
@@ -447,7 +442,7 @@ export function App() {
           <LazyTool onBack={goBack} isFullscreen={false} />
         </Suspense>
       );
-    return <MorePage onNavigate={(sub) => setMoreSub(sub as NonNullable<typeof moreSub>)} />;
+    return <MorePage onNavigate={openMoreSub} />;
   };
 
   return (
@@ -497,7 +492,7 @@ export function App() {
           글로벌 좌우 스와이프로 탭 전환하던 동작은 제거됨 (사용자 요청, 2026-05-14).
           이유: 의도치 않은 탭 전환이 잦아 UX 안티패턴. 탭 전환은 하단 탭바 버튼만으로. */}
       <main className="flex-1 overflow-hidden">
-        {activeTab === 'home' && <TodayHub onNavigateAttendance={setAttendanceNav} />}
+        {activeTab === 'home' && <TodayHub onNavigateAttendance={openAttendance} />}
         {activeTab === 'students' && (
           <div className="flex flex-col h-full">
             <div className="shrink-0 px-4 pt-2 pb-2">
@@ -553,10 +548,11 @@ export function App() {
           return (
             <button
               key={tab.key}
-              onClick={() => {
-                setActiveTab(tab.key);
-                if (tab.key !== 'more') setMoreSub(null);
-              }}
+              // 탭 이동은 setActiveTab 하나로 끝난다. 주소 기반이 되면서 각 탭의 첫
+              // 화면으로 가는 것이 곧 하위 화면 해제이기 때문이다. 예전처럼
+              // setMoreSub(null) 을 덧붙이면 그건 이제 "뒤로가기 실행"이라 방금 한
+              // 이동을 즉시 되돌린다.
+              onClick={() => setActiveTab(tab.key)}
               aria-label={`${tab.label} 탭`}
               aria-current={active ? 'page' : undefined}
               className="flex flex-1 items-center justify-center py-1 transition-transform active:scale-95"

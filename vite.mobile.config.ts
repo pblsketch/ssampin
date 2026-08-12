@@ -102,7 +102,13 @@ export default defineConfig(({ mode, command }) => {
         },
         workbox: {
           navigateFallback: 'mobile.html',
-          navigateFallbackAllowlist: [/^\/$/],
+          /**
+           * 주소 기반 화면 전환 도입 전에는 화면이 `/` 하나뿐이라 이 목록으로 충분했다.
+           * 이제 `/more/settings` 같은 딥링크가 생겼고, 오프라인에서 그 주소를
+           * 새로고침하면 서비스워커가 폴백을 안 해줘 실패한다. 앱 경로 전반을 허용한다.
+           * API 프록시 경로는 제외 — 문서가 아니라 데이터 요청이다.
+           */
+          navigateFallbackAllowlist: [/^(?!\/(neis-api|weather-api)\/).*/],
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
           runtimeCaching: [
             {

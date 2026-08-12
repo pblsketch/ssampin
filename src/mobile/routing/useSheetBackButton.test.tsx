@@ -83,19 +83,34 @@ describe('useSheetBackButton', () => {
     backSpy.mockRestore();
   });
 
-  it('중첩 시트는 각자 항목을 쌓는다 (뒤로가기가 위쪽부터 하나씩 닫는다)', () => {
+  it('중첩 시트는 각자 항목을 쌓는다', () => {
+    render(<Sheet onClose={vi.fn()} />);
+    expect(sheetDepth()).toBe(1);
+    render(<Sheet onClose={vi.fn()} />);
+    expect(sheetDepth()).toBe(2);
+  });
+
+  /**
+   * ⚠️ 알려진 한계 — 뒤로가기 한 번에 중첩 시트가 **함께** 닫힌다.
+   *
+   * popstate 는 window 전역 브로드캐스트라 열려 있는 시트가 모두 듣는다.
+   * "위쪽 하나만 닫힌다"를 만들려면 시트마다 리스너를 다는 대신 App 최상위 리스너
+   * 하나 + 시트 스택(useMobileBottomSheetStore 확장)으로 바꿔야 한다.
+   *
+   * 지금 껍데기를 쓰는 시트가 ActionSheet 하나뿐이라 실제 사용자 영향은 없지만,
+   * 나머지 14개 시트를 껍데기로 옮기기 **전에** 반드시 해결해야 한다.
+   * 이 테스트는 한계를 문서화하고, 고쳐지면 실패해서 알려주는 역할을 한다.
+   */
+  it('[알려진 한계] 뒤로가기 한 번에 중첩 시트가 함께 닫힌다 — 시트 스택 전환 시 이 단언을 뒤집을 것', () => {
     const outer = vi.fn();
     const inner = vi.fn();
     render(<Sheet onClose={outer} />);
-    expect(sheetDepth()).toBe(1);
-
     render(<Sheet onClose={inner} />);
-    expect(sheetDepth()).toBe(2);
 
     pressBackButton();
-    // 두 시트 모두 popstate 를 듣지만, 실제 앱에서는 위쪽 시트가 언마운트되며
-    // 자기 리스너를 정리한다. 여기서는 둘 다 호출되는지가 아니라
-    // 안쪽 시트가 확실히 닫히는지를 본다.
+
     expect(inner).toHaveBeenCalled();
+    // 이상적으로는 outer 가 호출되지 않아야 한다. 현재 구조에서는 호출된다.
+    expect(outer).toHaveBeenCalled();
   });
 });
