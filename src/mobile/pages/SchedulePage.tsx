@@ -68,6 +68,8 @@ export function SchedulePage() {
   const addEvent = useMobileEventsStore((s) => s.addEvent);
 
   const [currentMonth, setCurrentMonth] = useState(() => new Date());
+  /** 월 전체 펼침. 기본은 이번 주 한 줄. */
+  const [monthExpanded, setMonthExpanded] = useState(false);
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
 
@@ -85,6 +87,20 @@ export function SchedulePage() {
     void loadEvents();
     void loadSettings();
   }, [loadEvents, loadSettings]);
+
+  /**
+   * 기준일이 속한 주(일~토) 7칸.
+   * 선택한 날이 있으면 그 주를, 없으면 오늘이 속한 주를 보여준다 —
+   * 날짜를 고르고 나서 그 주가 사라지면 맥락을 잃는다.
+   */
+  const weekAnchor = selectedDay ?? new Date();
+  const weekStart = new Date(weekAnchor);
+  weekStart.setDate(weekAnchor.getDate() - weekAnchor.getDay());
+  const weekCells: Date[] = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(weekStart);
+    d.setDate(weekStart.getDate() + i);
+    return d;
+  });
 
   // Build calendar days grid
   const monthStart = startOfMonth(currentMonth);
@@ -114,6 +130,17 @@ export function SchedulePage() {
   }
 
   const allCells = [...prevDays, ...daysInMonth, ...nextDays];
+
+  /**
+   * 기본은 이번 주 한 줄, 필요하면 월 전체로 펼친다.
+   *
+   * 월 달력은 실측 기준 화면의 57%(620px 중 355px)를 먹었다. 8월처럼 일정이 있는 날이
+   * 며칠뿐이어도 6주치가 항상 펼쳐져 있어서, 정작 일정 목록은 아래에 두 줄만 남았다.
+   * 교사의 일상 단위는 "이번 주"라 주를 기본으로 두는 편이 맞다.
+   *
+   * 없애는 게 아니라 접는 것이다. 월 전체가 필요할 때가 분명히 있다(다음 달 행사 확인 등).
+   */
+  const visibleCells = monthExpanded ? allCells : weekCells;
 
   const today = startOfDay(new Date());
 
@@ -248,8 +275,8 @@ export function SchedulePage() {
         </div>
 
         {/* Day Grid */}
-        <div className="grid grid-cols-7 px-2 pb-3 gap-y-0.5">
-          {allCells.map((day, idx) => {
+        <div className="grid grid-cols-7 px-2 gap-y-0.5">
+          {visibleCells.map((day, idx) => {
             const isCurrentMonth = isSameMonth(day, currentMonth);
             const isToday = isSameDay(day, today);
             const isSelected = selectedDay ? isSameDay(day, selectedDay) : false;
@@ -295,6 +322,22 @@ export function SchedulePage() {
             );
           })}
         </div>
+
+        {/* 월 전체 펼치기 — 없애는 게 아니라 접는 것이다.
+            기본을 주로 두면 달력이 화면의 57% 대신 한 줄만 차지하고, 그만큼 일정 목록이
+            더 보인다. 월 전체가 필요한 순간(다음 달 행사 확인 등)은 여기서 편다. */}
+        <button
+          onClick={() => setMonthExpanded((v) => !v)}
+          aria-expanded={monthExpanded}
+          className="flex items-center justify-center gap-1 w-full py-2 text-xs text-sp-muted active:bg-black/5 dark:active:bg-white/10"
+        >
+          <span className="material-symbols-outlined text-base">
+            {monthExpanded ? 'expand_less' : 'expand_more'}
+          </span>
+          {monthExpanded
+            ? '이번 주만 보기'
+            : `${format(currentMonth, 'M월', { locale: ko })} 전체 보기`}
+        </button>
       </div>
 
       {/* Events List — 전체 스크롤 컨테이너 안의 일반 블록 (하단 FAB 여백 확보) */}
