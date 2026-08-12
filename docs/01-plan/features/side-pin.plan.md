@@ -200,47 +200,51 @@ interface SidePinRuntimeState {
 
 Electron main에서 생성되는 application `SidePinController` 한 개가 runtime aggregate와 `revision`의 유일한 정본이다. controller는 주입된 `SidePinScheduler`로 180/400ms 타이머와 취소를 모두 소유하고, 순수 domain 전이 함수를 호출한 뒤 `SidePinWindowHost`에 적용 명령을 보낸다. Electron host와 renderer는 독자적인 전이 규칙이나 타이머를 갖지 않는다.
 
-renderer의 `useSidePinStore`는 controller가 보낸 state snapshot을 표시하는 mirror다. pin toggle·editor activity 같은 제품 intent만 controller command로 보낸다. DOM pointer/focus telemetry는 preload의 host-internal bridge를 통해 `SidePinWindowHost`가 sender 역할과 region을 정규화한 뒤 `SidePinHostEvent` 한 경로로만 controller에 전달한다. 각 처리 결과는 증가한 `revision`과 함께 `sidePin:state-changed`로 돌아온다. 지연 콜백은 `pendingTransition.scheduledRevision`과 현재 revision이 다르면 폐기하고, 비동기 host 완료는 `operationId + requestedRevision`이 `pendingHostOperations`의 현재 항목과 모두 일치할 때만 적용한다. `pointerRegion`, transition, host operation도 aggregate에 포함하므로 controller 바깥의 숨은 상태로 전이를 결정하지 않는다.
+renderer의 `useSidePinStore`는 controller가 보낸 state snapshot을 표시하는 mirror다. pin toggle·editor activity 같은 제품 intent만 controller command로 보낸다. DOM pointer/focus telemetry는 preload의 host-internal bridge를 통해 `SidePinWindowHost`가 sender 역할과 region을 정규화한 뒤 `SidePinHostEvent` 한 경로로만 controller에 전달한다. 각 처리 결과는 증가한 `revision`과 함께 `sidePin:state-changed`로 돌아온다. 지연 콜백은 **`pendingTransition`이 아직 살아 있고 그 예약이 맞을 때만** 실행하고, 비동기 host 완료는 `operationId + requestedRevision`이 `pendingHostOperations`의 현재 항목과 모두 일치할 때만 적용한다.
+
+> 🔧 **구현 정정 IMP-01.** v0.3은 여기를 "`scheduledRevision`과 현재 revision이 다르면 폐기"로 적었으나, 그대로 구현하면 **호버로 패널이 절대 열리지 않는다.** 손잡이 진입 시 180ms 예약과 `prepare-panel`이 동시에 나가는데, 창 준비 응답이 180ms 안에 돌아오면 그 처리로 revision이 올라가 방금 건 예약이 스스로 무효가 된다. 창 준비라는 내부 사정이 사용자 의도를 취소하는 셈이다. 취소 의미는 `pendingTransition` 대조로 충분히 지켜진다 — 사용자 의도가 바뀌는 지점(포인터 이탈·고정·편집 시작)에서 이 필드를 반드시 지우거나 교체하기 때문이다. 반례는 `src/domain/services/resolveSidePinTransition.test.ts`의 "창 준비 응답이 먼저 와도 펼침 예약이 살아남는다"가 지킨다. `pointerRegion`, transition, host operation도 aggregate에 포함하므로 controller 바깥의 숨은 상태로 전이를 결정하지 않는다.
 
 ### 상태 전이 규칙
 
-| 시작                           | 이벤트                                  | 결과                                                                                            |
-| ------------------------------ | --------------------------------------- | ----------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| 앱 시작 + enabled              | 창 준비                                 | 오른쪽 손잡이 `collapsed`, `pinnedZone=none`                                                    |
-| collapsed                      | pointerRegion=`rail-widget              | rail-memo`                                                                                      | controller가 현재 revision에 180ms reveal 예약, Option D host는 panel prepare 시작           |
-| reveal 예약                    | 180ms 경과, pointer 유지, revision 동일 | correlation 포함 `showPanel` 요청, surface=`collapsed`와 lifecycle=`preparing                   | ready`유지; matching`panelPainted(applied)`수신 때만`expanded`, reason=`hover`, 두 영역 표시 |
-| reveal 예약                    | pointer leave 또는 더 새 intent         | 예약 취소, `collapsed` 유지                                                                     |
-| panel preparing                | pointer leave·reveal 취소               | 새 revision으로 collapse/dispose 명령, lifecycle=`cooldown                                      | absent`; 이전 ready 완료는 stale 폐기                                                        |
-| hover-expanded                 | 전체 창 pointer leave                   | 400ms 접힘 타이머 시작                                                                          |
-| 접힘 타이머 중                 | pointer re-enter                        | 타이머 취소                                                                                     |
-| Option D rail leave            | 400ms 안 panel enter                    | `outside`를 거쳐도 같은 옆핀 내부 이동으로 합쳐 collapse 예약 취소                              |
-| Option D panel leave           | 400ms 안 rail enter                     | 같은 내부 이동으로 합쳐 rail 유지, panel은 필요 시 cooldown                                     |
-| expanded                       | 손잡이·영역 헤더·고정 아이콘 클릭       | 해당 영역 pinned, 창 focus, reason=`click`                                                      |
-| pinned                         | 같은 고정 지점 클릭                     | 해당 영역 unpin. pointer 밖이면 400ms 후 접힘                                                   |
-| 어떤 expanded                  | WidgetCard 본문 클릭                    | 고정 상태 불변. 옆핀 모달 억제 후 메인 대상 화면으로 이동                                       |
-| memo 목록                      | `메모 추가`                             | yellow 빈 메모 생성 후 editor activity=`editing`                                                |
-| memo 목록                      | 메모 카드 클릭                          | 해당 메모 editor activity=`editing`                                                             |
-| editor activity가 idle 아님    | pointer leave/blur                      | 접힘 금지                                                                                       |
-| editing                        | 이미지 파일 대화상자/뷰어               | `dialog-open`, 접힘 금지                                                                        |
-| dialog-open                    | 대화상자/뷰어 닫힘                      | `editing`, 접힘 금지                                                                            |
-| editing                        | Esc 1회                                 | `MemoEditor`가 이벤트를 소비하고 저장 시도. 성공하면 idle·목록 복귀, 실패하면 `save-error` 유지 |
-| saving                         | Esc/key repeat                          | 무시, 기존 저장 promise 하나만 유지                                                             |
-| focused 또는 pinned, 편집 아님 | Esc                                     | pin 해제 후 collapsed                                                                           |
-| hover-expanded                 | Esc/바깥 클릭                           | 무포커스이므로 의존하지 않음. pointer leave만 사용                                              |
-| focused, unpinned, 편집 아님   | 바깥 클릭                               | collapsed                                                                                       |
-| pinned                         | 바깥 클릭                               | 유지                                                                                            |
-| Option D collapsed             | panel hidden                            | lifecycle=`cooldown`, 현재 revision에 10초 dispose 예약                                         |
-| Option D cooldown              | 10초 경과·revision 동일                 | panel destroy, lifecycle=`absent`                                                               |
-| Option D cooldown              | rail 재진입                             | dispose 취소, 준비된 panel 재사용                                                               |
-| ensureRail fatal 실패          | operation/revision이 현재와 일치        | session에서 옆핀 비활성, hostError 기록, 기본 ON/release gate 실패                              |
-| preparePanel 실패              | operation/revision이 현재와 일치        | lifecycle=`absent`, surface=`collapsed`, rail 유지, hostError 표시                              |
-| showPanel/panelPainted 실패    | operation/revision이 현재와 일치        | expanded 확정 금지, 새 collapse 명령 후 rail로 복구                                             |
-| repositionAll 실패             | operation/revision이 현재와 일치        | 마지막 유효 layout 유지; 안전 display를 판정할 수 없으면 `hideAll` 후 오류                      |
-| 늦은 ready/paint/result        | operation 또는 requestedRevision 불일치 | state 변경 없이 폐기, host가 숨은 잔여 panel 정리                                               |
+| 시작                           | 이벤트                                      | 결과                                                                                            |
+| ------------------------------ | ------------------------------------------- | ----------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| 앱 시작 + enabled              | 창 준비                                     | 오른쪽 손잡이 `collapsed`, `pinnedZone=none`                                                    |
+| collapsed                      | pointerRegion=`rail-widget                  | rail-memo`                                                                                      | controller가 현재 revision에 180ms reveal 예약, Option D host는 panel prepare 시작           |
+| reveal 예약                    | 180ms 경과, pointer 유지, 예약 유효(IMP-01) | correlation 포함 `showPanel` 요청, surface=`collapsed`와 lifecycle=`preparing                   | ready`유지; matching`panelPainted(applied)`수신 때만`expanded`, reason=`hover`, 두 영역 표시 |
+| reveal 예약                    | pointer leave 또는 더 새 intent             | 예약 취소, `collapsed` 유지                                                                     |
+| panel preparing                | pointer leave·reveal 취소                   | 새 revision으로 collapse/dispose 명령, lifecycle=`cooldown                                      | absent`; 이전 ready 완료는 stale 폐기                                                        |
+| hover-expanded                 | 전체 창 pointer leave                       | 400ms 접힘 타이머 시작                                                                          |
+| 접힘 타이머 중                 | pointer re-enter                            | 타이머 취소                                                                                     |
+| Option D rail leave            | 400ms 안 panel enter                        | `outside`를 거쳐도 같은 옆핀 내부 이동으로 합쳐 collapse 예약 취소                              |
+| Option D panel leave           | 400ms 안 rail enter                         | 같은 내부 이동으로 합쳐 rail 유지, panel은 필요 시 cooldown                                     |
+| expanded                       | 손잡이·영역 헤더·고정 아이콘 클릭           | 해당 영역 pinned, 창 focus, reason=`click`                                                      |
+| pinned                         | 같은 고정 지점 클릭                         | 해당 영역 unpin. pointer 밖이면 400ms 후 접힘                                                   |
+| 어떤 expanded                  | WidgetCard 본문 클릭                        | 고정 상태 불변. 옆핀 모달 억제 후 메인 대상 화면으로 이동                                       |
+| memo 목록                      | `메모 추가`                                 | yellow 빈 메모 생성 후 editor activity=`editing`                                                |
+| memo 목록                      | 메모 카드 클릭                              | 해당 메모 editor activity=`editing`                                                             |
+| editor activity가 idle 아님    | pointer leave/blur                          | 접힘 금지                                                                                       |
+| editing                        | 이미지 파일 대화상자/뷰어                   | `dialog-open`, 접힘 금지                                                                        |
+| dialog-open                    | 대화상자/뷰어 닫힘                          | `editing`, 접힘 금지                                                                            |
+| editing                        | Esc 1회                                     | `MemoEditor`가 이벤트를 소비하고 저장 시도. 성공하면 idle·목록 복귀, 실패하면 `save-error` 유지 |
+| saving                         | Esc/key repeat                              | 무시, 기존 저장 promise 하나만 유지                                                             |
+| focused 또는 pinned, 편집 아님 | Esc                                         | pin 해제 후 collapsed                                                                           |
+| hover-expanded                 | Esc/바깥 클릭                               | 무포커스이므로 의존하지 않음. pointer leave만 사용                                              |
+| focused, unpinned, 편집 아님   | 바깥 클릭                                   | collapsed                                                                                       |
+| pinned                         | 바깥 클릭                                   | 유지                                                                                            |
+| Option D collapsed             | panel hidden                                | lifecycle=`cooldown`, 현재 revision에 10초 dispose 예약                                         |
+| Option D cooldown              | 10초 경과·예약 유효(IMP-01)                 | panel destroy, lifecycle=`absent`                                                               |
+| Option D cooldown              | rail 재진입                                 | dispose 취소, 준비된 panel 재사용                                                               |
+| ensureRail fatal 실패          | operation/revision이 현재와 일치            | session에서 옆핀 비활성, hostError 기록, 기본 ON/release gate 실패                              |
+| preparePanel 실패              | operation/revision이 현재와 일치            | lifecycle=`absent`, surface=`collapsed`, rail 유지, hostError 표시                              |
+| showPanel/panelPainted 실패    | operation/revision이 현재와 일치            | expanded 확정 금지, 새 collapse 명령 후 rail로 복구                                             |
+| repositionAll 실패             | operation/revision이 현재와 일치            | 마지막 유효 layout 유지; 안전 display를 판정할 수 없으면 `hideAll` 후 오류                      |
+| 늦은 ready/paint/result        | operation 또는 requestedRevision 불일치     | state 변경 없이 폐기, host가 숨은 잔여 panel 정리                                               |
 
 Esc 소유권은 DOM event 단위로 고정한다. MemoEditor가 idle이 아닐 때 첫 Esc에서 `preventDefault`, React `stopPropagation`, native `stopImmediatePropagation`을 호출한 뒤 `onRequestClose`를 한 번만 await한다. activity=`saving` 동안 key repeat와 추가 Esc는 무시한다. 전이는 `dialog-open → editing`, `editing → saving → idle|save-error`만 허용하고, 저장 성공 후 발생한 **새 keydown**만 부모 `SidePinPanel`에 도달한다. `MemoEditor.onRequestClose`는 editor의 Esc·목록·닫기 버튼이 호출하고, IPC `sidePin:request-close`는 editor activity가 idle일 때 SidePinPanel의 닫기·두 번째 Esc만 호출한다. lock/suspend는 사용자 닫기와 별개인 controller 강제 보호 event로 처리한다.
 
 `surface='expanded'`는 180ms dwell 완료가 아니라 현재 show operation의 `panelPainted(applied)`를 받은 시점에만 확정한다. 그 전에는 lifecycle=`preparing|ready`인 collapsed 상태이므로 host 실패가 canonical expanded 상태를 남기지 않는다.
+
+> 🔧 **구현 정정 IMP-02.** 위 규칙과 "operation 결과가 오면 `pendingHostOperations`에서 제거"를 같이 적용하면 패널이 영영 안 열린다. host는 보통 `showPanel`의 **요청 접수(applied)를 먼저** 답하고 그린 뒤 `panelPainted`를 따로 보내는데, 앞 응답에서 대기 항목을 지워버리면 뒤이은 `panelPainted`가 짝을 잃고 stale로 버려진다. 패널은 화면에 떠 있는데 상태만 `collapsed`로 남는다. 따라서 **kind가 `show-panel`인 대기 항목은 `panelPainted`가 올 때까지 제거하지 않는다.** 이 결함은 도메인 단위 테스트로는 드러나지 않았고(그 순서를 재현하지 않아서), 가짜 host가 실제 순서를 흉내 낸 `SidePinController.test.ts`에서 잡혔다. 지금은 양쪽 테스트에 모두 순서를 넣어 두 겹으로 막는다.
 
 메모 탐색 상태는 위젯 60%·메모 40% 고정 비율이다. 메모 편집 시 위젯 영역은 48 DIP 요약 헤더로 접히고 메모 편집기가 나머지 높이를 사용한다. 최소 너비 360 DIP는 `MemoEditor`의 최대 420px 계약과 함께 검증한다(`src/adapters/components/Memo/MemoEditor.tsx:194`).
 
@@ -809,3 +813,75 @@ v0.3이 인용한 `파일:줄번호` 근거를 모두 열어 확인했다. **틀
 - `옆핀` 명칭의 KIPRIS 상표 검색은 공개 전 별도 진행한다(§3).
 - 담임 아닌 교사처럼 표시할 위젯이 부족한 사용자의 빈 옆핀 경험은 §4 "적격 위젯이 적으면 실제 개수만 표시" 규칙에 맡기고, 실사용 데이터로 재평가한다.
 - 고정(pinned) 메모와 메모 제목 필드는 v0.4에서도 1차 제외를 유지한다.
+
+## 21. 구현 진행 상황 (2026-08-13 갱신)
+
+### 끝난 단계 — §9-1, §9-2
+
+`main`에서 순차로 구현했고 code writer는 1명이다.
+
+| 파일                                                       | 역할                                    |
+| ---------------------------------------------------------- | --------------------------------------- |
+| `src/domain/valueObjects/SidePinWidth.ts`                  | 너비 360~460 정규화, 손잡이 16 DIP 상수 |
+| `src/domain/entities/SidePinPreferences.ts`                | 동기화 설정 + 정규화 (외부 import 0)    |
+| `src/domain/entities/SidePinDeviceState.ts`                | 기기 전용 상태 + 정규화                 |
+| `src/domain/entities/SidePinRuntimeState.ts`               | §5 실행 중 상태 타입                    |
+| `src/domain/events/SidePinEvent.ts`                        | 사건·명령 닫힌 union                    |
+| `src/domain/services/resolveSidePinTransition.ts`          | **순수 전이 규칙 (핵심)**               |
+| `src/domain/repositories/ISidePinDeviceStateRepository.ts` | 기기 상태 저장 포트                     |
+| `src/usecases/sidePin/SelectSidePinMemos.ts`               | 메모 선별·라벨 파생·잠금 가림           |
+| `src/usecases/sidePin/SidePinScheduler.ts`                 | 시계·타이머 포트                        |
+| `src/usecases/sidePin/SidePinWindowHost.ts`                | 창 조작 포트 (A안·D안 공통 계약)        |
+| `src/usecases/sidePin/SidePinController.ts`                | 상태·revision 단일 소유자               |
+
+테스트 5개 파일, 옆핀 테스트 118개 통과. 이번 단계에서 기획서 결함 2건(IMP-01·IMP-02)을 찾아 위 §5에 반영했다.
+
+### 상태 모델 보강 (구현 중 추가)
+
+기획서 §5에 없던 두 가지를 추가했다. 둘 다 없으면 사용자가 스스로 회복할 수 없는 상태에 빠진다.
+
+- **`show-timeout` 예약 (3초).** "보여줘"라고 한 뒤 `panelPainted`가 끝내 오지 않으면(렌더러 사망·그리기 실패) 패널은 화면에 떠 있는데 상태는 영영 `collapsed`로 남는다. 감시 시간을 걸어 손잡이 상태로 복구한다. 3초는 성능 게이트 상한 300ms보다 훨씬 넉넉하게 잡은 값이다 — 여기 걸린다는 건 느린 게 아니라 고장이라는 뜻이다.
+- **`layout-changed` 이벤트.** §5 이벤트 목록에 없어 `repositionAll`이 도달 불가능한 상태였다. 모니터 연결·해제·배율 변경을 받는 통로를 만들었다.
+- **`SidePinPendingHostOperation.userInitiated`.** 자동 접힘과 사용자가 직접 닫은 것을 구분한다. 접히는 도중 커서가 돌아오면 다시 열어 주는 게 맞지만, **Esc·단축키로 닫을 때 커서는 대개 방금 작업하던 패널 위에 있다.** 구분이 없으면 사용자가 닫은 창이 즉시 되살아나 "Esc가 안 먹는다"가 된다.
+- **`show-timeout`은 `collapsePanel`을 `userInitiated`로 보낸다.** 여기에는 함정이 둘 있어 둘 다 피해야 한다. ① 접기 완료 처리는 "커서가 안에 있으면 다시 열기"로 이어지므로, 그냥 접으면 그리기가 계속 실패하는 상황에서 열기→3초→접기→열기가 3.18초 주기로 무한 반복된다. ② 그렇다고 `disposePanel`만 보내면, 손잡이와 패널이 한 창인 A안에서 파기는 "내용만 비우고 창은 유지"(§11 host contract)라 **창이 펼친 크기 그대로 화면에 남는다.** 손잡이 크기로 되돌리는 것은 접기뿐이다. 그래서 접되 `userInitiated`로 표시해 되열기를 막는다.
+- **`repositionAll` 실패 시 `hideAll` + `protectedReason='adapter-unhealthy'`.** 어디에 그릴지 모르는 채로 띄워 두면 화면 밖이나 엉뚱한 모니터에 걸쳐 남는다. 다만 **숨기기만 하면 손잡이가 사라진 채 다시 나타날 길이 없어져** §2 요구 4번("접힌 손잡이가 계속 보인다")이 영구히 깨진다. 보호 상태로 표시해 두면 기존 `protect-released` 채널이 `ensureRail`을 다시 발행해 복구된다.
+
+### 세 라운드 적대적 검토에서 배운 것
+
+이 상태 기계는 **수정 하나가 다음 라운드의 결함이 되는 일이 두 번 반복**됐다.
+
+| 라운드 | 고친 것                                              | 그 수정이 만든 다음 결함                                    |
+| ------ | ---------------------------------------------------- | ----------------------------------------------------------- |
+| 1 → 2  | 접히는 도중 커서가 돌아오면 다시 연다                | Esc·단축키로 닫아도 되열림 (커서는 대개 패널 위에 있으므로) |
+| 2 → 3  | 무한 반복을 피하려 `show-timeout`을 `disposePanel`로 | A안에서 창이 펼친 크기로 남아 클릭을 삼킴                   |
+
+두 번 모두 **조건을 새로 넣을 때 그 조건이 다른 경로에서 어떤 값이 되는지**를 전부 훑지 않은 것이 원인이었다. 그리고 세 라운드 모두, 코드만 읽는 검토였다면 통과했을 것이다 — 결함은 전이 함수를 실제로 실행해 상태를 찍어 봐야 드러났다. §9-3 이후 단계에서도 **재현 기반 검증**을 유지한다.
+
+### 검증 게이트가 통과시킨 결함 — 다음 단계에서 되풀이하지 말 것
+
+1차 구현이 tsc 0오류·lint 0오류·테스트 103개 통과·회귀 39/39를 모두 통과한 상태에서, 적대적 검토가 **높음 3건**을 찾았다.
+
+- 손잡이를 스치고 지나가면 패널이 혼자 열린 채 안 닫힘
+- 창 준비 실패 후 180ms 예약이 살아남아 없는 패널에 `showPanel` 요청 → `expanded`
+- 잠금 중 늦은 `panelPainted`가 상태를 `expanded`로 되살림 (§9-8 화면 배선이 들어가면 실제 메모 노출)
+
+**통과한 테스트가 왜 못 잡았는지가 핵심이다.** "취소된 요청의 늦은 응답" 테스트가 취소 방법으로 가장 관대한 경로(`enabled-changed:false` — 유일하게 대기 목록을 통째로 교체하는 분기)를 골라 통과했다. 실제 사용자 행동인 "포인터 이탈"로 바꾸자 즉시 빨간불이 됐다. 앞으로 취소·중단 테스트를 쓸 때는 **가장 관대한 경로가 아니라 사용자가 실제로 하는 행동**으로 취소시킨다.
+
+2차 검토에서는 **그 수정 자체가 만든 회귀**가 나왔다. "접히는 도중 커서가 돌아오면 다시 연다"를 사용자가 Esc로 닫은 경우까지 적용해 Esc가 무력화됐다. 조건 하나를 새로 넣을 때는 그 조건이 **실제 사용 맥락에서 어떤 값을 갖는지** 확인해야 한다 — 커서 위치는 자동 접힘에서는 유용한 신호지만 사용자가 직접 닫는 순간에는 정반대 신호다. 두 라운드 모두, 고치기 전에 테스트를 먼저 넣어 빨간불을 확인하고, 고친 뒤 조건을 되돌려 **그 테스트만 빨간불이 되는지** 실증했다.
+
+### 다음 세션이 여기서부터 시작한다 — §9-3
+
+**§9-3(WindowHost 성능 spike)은 AI가 단독으로 통과 판정할 수 없다.** 게이트 기준이 다음을 요구하기 때문이다.
+
+- Win+D 키를 실제로 20회 누르고 손잡이 복원을 눈으로 확인
+- 전체화면 앱·가상 데스크톱 왕복을 실제 기기에서 각 20회
+- 설치된 x64 release build에서 feature OFF/ON을 짝지어 각 5회, 매회 60초 표본
+
+즉 **준일님(또는 실기기에 접근할 수 있는 사람)이 실행해야 하는 단계**다. 그 전까지 `enabled` 기본값은 `false`로 두었고, 코드도 그 기본값을 강제한다.
+
+### 아직 손대지 않은 것 (의도적)
+
+- `Settings.ts`에 `sidePin` 필드 — 엔티티 새 필드는 `ENTITY_FIELD_CONTRACT` 갱신이 함께 가야 하므로 §9-5 배선 단계에서 한다.
+- `src/widgets/types.ts`의 위젯 적격성 메타 — §9-7 범위.
+- 기존 메모 저장 경로의 coordinator 이전(QA-03) — 되돌릴 수 있게 단독 작업 단위로 분리한다.
+- Electron 창·IPC·React 컴포넌트 — 전부 §9-3 이후.
