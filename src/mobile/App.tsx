@@ -68,6 +68,16 @@ import { QuickAddFab, type QuickAddAction } from './components/QuickAddFab';
 import { Snackbar } from '@mobile/components/common/Snackbar';
 import { MobileHeader } from '@mobile/components/common/MobileHeader';
 import { useMobileUiTriggerStore } from './stores/useMobileUiTriggerStore';
+import { useRoute } from '@mobile/routing/useRoute';
+import {
+  HOME_ROUTE,
+  tabOf,
+  toolIdToLegacyKey,
+  legacyKeyToToolId,
+  type MobileTab,
+  type StudentsSeg,
+  type ScheduleSeg,
+} from '@mobile/routing/routes';
 
 type MobileToolProps = { onBack: () => void; isFullscreen: boolean };
 
@@ -103,9 +113,8 @@ function ToolLoadingFallback() {
   );
 }
 
-type MobileTab = 'home' | 'students' | 'schedule' | 'more';
-type StudentsSeg = 'homeroom' | 'teaching';
-type ScheduleSeg = 'schedule' | 'todo';
+// MobileTab · StudentsSeg · ScheduleSeg 는 주소 모델(routing/routes.ts)이 단일 출처다.
+// 여기서 다시 선언하면 주소와 화면이 서로 다른 정의를 갖게 된다.
 
 interface TabConfig {
   key: MobileTab;
@@ -138,33 +147,83 @@ interface AttendanceNav {
 }
 
 export function App() {
-  const [activeTab, setActiveTab] = useState<MobileTab>('home');
-  const [studentsSeg, setStudentsSeg] = useState<StudentsSeg>('homeroom');
-  const [scheduleSeg, setScheduleSeg] = useState<ScheduleSeg>('schedule');
   const [isProcessingCallback, setIsProcessingCallback] = useState(false);
-  const [attendanceNav, setAttendanceNav] = useState<AttendanceNav | null>(null);
   const requestUiAction = useMobileUiTriggerStore((s) => s.requestAction);
-  const [moreSub, setMoreSub] = useState<
-    | 'settings'
-    | 'memo'
-    | 'bookmarks'
-    | 'tools'
-    | 'tool-assignment'
-    | 'tool-survey'
-    | 'tool-traffic-light'
-    | 'tool-dice'
-    | 'tool-coin'
-    | 'tool-scoreboard'
-    | 'tool-timer'
-    | 'tool-work-symbols'
-    | 'tool-random'
-    | 'tool-roulette'
-    | 'tool-qrcode'
-    | 'tool-score-allocator'
-    | 'tool-grouping'
-    | 'tool-rubric'
-    | null
-  >(null);
+
+  // 화면 전환은 주소 기반이다. 이전에는 useState 5개였고, 주소가 없어서 안드로이드
+  // 하드웨어 뒤로가기가 앱을 종료시켰다.
+  const { route, navigate, goBack } = useRoute();
+
+  // 기존 변수명을 그대로 유지해 아래 40여 곳의 사용처를 건드리지 않는다.
+  // 값의 출처만 useState → 주소 파생으로 바뀐다.
+  const activeTab = tabOf(route);
+  const studentsSeg: StudentsSeg = route.kind === 'students' ? route.seg : 'homeroom';
+  const scheduleSeg: ScheduleSeg = route.kind === 'schedule' ? route.seg : 'schedule';
+  const moreSub: string | null =
+    route.kind === 'moreSection'
+      ? route.section
+      : route.kind === 'tool'
+        ? toolIdToLegacyKey(route.toolId)
+        : null;
+  const attendanceNav: AttendanceNav | null =
+    route.kind === 'attendance'
+      ? {
+          classId: route.classId,
+          className: route.className,
+          period: route.period,
+          type: route.type,
+        }
+      : null;
+
+  /** 탭을 누르면 그 탭의 첫 화면으로. */
+  const setActiveTab = useCallback(
+    (tab: MobileTab) => {
+      if (tab === 'home') navigate(HOME_ROUTE);
+      else if (tab === 'students') navigate({ kind: 'students', seg: 'homeroom' });
+      else if (tab === 'schedule') navigate({ kind: 'schedule', seg: 'schedule' });
+      else navigate({ kind: 'more' });
+    },
+    [navigate],
+  );
+
+  const setStudentsSeg = useCallback(
+    (seg: StudentsSeg) => navigate({ kind: 'students', seg }),
+    [navigate],
+  );
+  const setScheduleSeg = useCallback(
+    (seg: ScheduleSeg) => navigate({ kind: 'schedule', seg }),
+    [navigate],
+  );
+
+  /**
+   * 더보기 하위 이동. null 이면 더보기 첫 화면으로 "돌아가는" 것이므로 뒤로가기를 쓴다
+   * (히스토리를 앞으로 쌓지 않아야 뒤로가기 횟수가 어긋나지 않는다).
+   */
+  const setMoreSub = useCallback(
+    (sub: string | null) => {
+      if (sub === null) {
+        goBack();
+        return;
+      }
+      if (sub === 'settings' || sub === 'memo' || sub === 'bookmarks' || sub === 'tools') {
+        navigate({ kind: 'moreSection', section: sub });
+        return;
+      }
+      navigate({ kind: 'tool', toolId: legacyKeyToToolId(sub) });
+    },
+    [navigate, goBack],
+  );
+
+  const setAttendanceNav = useCallback(
+    (nav: AttendanceNav | null) => {
+      if (nav === null) {
+        goBack();
+        return;
+      }
+      navigate({ kind: 'attendance', ...nav });
+    },
+    [navigate, goBack],
+  );
   const [showOnboarding, setShowOnboarding] = useState(() => {
     return !localStorage.getItem('onboarding-completed');
   });
@@ -343,10 +402,10 @@ export function App() {
             key: 'add-event',
             label: '일정 추가',
             icon: 'event',
+            // 이동은 반드시 한 번만. 예전처럼 setMoreSub→setActiveTab→setScheduleSeg 를
+            // 잇달아 부르면 히스토리가 세 칸 쌓여 뒤로가기를 세 번 눌러야 한다.
             onSelect: () => {
-              setMoreSub(null);
-              setActiveTab('schedule');
-              setScheduleSeg('schedule');
+              navigate({ kind: 'schedule', seg: 'schedule' });
               requestUiAction('add-event');
             },
           },
@@ -356,9 +415,7 @@ export function App() {
             icon: 'check_circle',
             tone: 'bg-green-500/15 text-green-500',
             onSelect: () => {
-              setMoreSub(null);
-              setActiveTab('schedule');
-              setScheduleSeg('todo');
+              navigate({ kind: 'schedule', seg: 'todo' });
               requestUiAction('add-todo');
             },
           },
@@ -367,36 +424,27 @@ export function App() {
             label: '메모 작성',
             icon: 'sticky_note_2',
             tone: 'bg-yellow-500/15 text-yellow-500',
-            onSelect: () => {
-              setActiveTab('more');
-              setMoreSub('memo');
-            },
+            onSelect: () => navigate({ kind: 'moreSection', section: 'memo' }),
           },
         ];
 
   // 더보기 탭 콘텐츠 — moreSub 키에 따라 하위 페이지/도구를 렌더하는 단일 지점.
   // 9개 쌤도구는 MORE_LAZY_TOOLS 레지스트리에서 조회해 Suspense 래퍼 하나로 균일 렌더한다.
   const renderMoreSub = (): React.ReactNode => {
-    if (moreSub === 'settings') return <SettingsPage onBack={() => setMoreSub(null)} />;
-    if (moreSub === 'memo') return <MemoPage onBack={() => setMoreSub(null)} />;
-    if (moreSub === 'bookmarks') return <BookmarkPage onBack={() => setMoreSub(null)} />;
+    if (moreSub === 'settings') return <SettingsPage onBack={goBack} />;
+    if (moreSub === 'memo') return <MemoPage onBack={goBack} />;
+    if (moreSub === 'bookmarks') return <BookmarkPage onBack={goBack} />;
     if (moreSub === 'tools')
-      return (
-        <ToolsOverviewPage
-          onNavigate={(sub) => setMoreSub(sub as NonNullable<typeof moreSub>)}
-          onBack={() => setMoreSub(null)}
-        />
-      );
-    if (moreSub === 'tool-assignment')
-      return <ToolAssignmentPage onBack={() => setMoreSub('tools')} />;
-    if (moreSub === 'tool-survey') return <ToolSurveyPage onBack={() => setMoreSub('tools')} />;
-    if (moreSub === 'tool-grouping') return <ToolGroupingPage onBack={() => setMoreSub('tools')} />;
-    if (moreSub === 'tool-rubric') return <ToolRubricPage onBack={() => setMoreSub('tools')} />;
+      return <ToolsOverviewPage onNavigate={(sub) => setMoreSub(sub)} onBack={goBack} />;
+    if (moreSub === 'tool-assignment') return <ToolAssignmentPage onBack={goBack} />;
+    if (moreSub === 'tool-survey') return <ToolSurveyPage onBack={goBack} />;
+    if (moreSub === 'tool-grouping') return <ToolGroupingPage onBack={goBack} />;
+    if (moreSub === 'tool-rubric') return <ToolRubricPage onBack={goBack} />;
     const LazyTool = moreSub ? MORE_LAZY_TOOLS[moreSub] : undefined;
     if (LazyTool)
       return (
         <Suspense fallback={<ToolLoadingFallback />}>
-          <LazyTool onBack={() => setMoreSub('tools')} isFullscreen={false} />
+          <LazyTool onBack={goBack} isFullscreen={false} />
         </Suspense>
       );
     return <MorePage onNavigate={(sub) => setMoreSub(sub as NonNullable<typeof moreSub>)} />;
