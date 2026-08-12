@@ -29,7 +29,7 @@
     "embed:dry": "tsx scripts/embed-docs.ts --all --dry-run",
     "embed:file": "tsx scripts/embed-docs.ts --file",
     "test:chatbot": "tsx scripts/test-chatbot.ts",
-    "test": "vitest run",
+    "test": "vitest run --maxWorkers=4",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
     "regression-check": "node scripts/regression-grep-check.mjs",

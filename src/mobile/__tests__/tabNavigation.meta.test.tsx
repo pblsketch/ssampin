@@ -78,6 +78,21 @@ describe('하단 탭바 — 탭 이동은 setActiveTab 하나로 끝난다', () 
         `탭 이동은 setActiveTab 하나로 끝나야 합니다. 이동을 두 번 하면 히스토리가 어긋나거나 화면이 튕깁니다.`,
     ).toBe(1);
   });
+
+  /**
+   * 위 단언들만으로는 `onClick={() => handleTabPress(tab.key)}` 처럼 **한 단계 감싸면**
+   * 전부 통과하고 버그가 그 안에 숨을 수 있다. 표현식 모양 자체를 고정해서, 감싸는
+   * 순간 빨간불이 나고 의식적으로 이 테스트를 갱신하게 만든다.
+   */
+  it('탭 onClick 표현식이 정확히 `() => setActiveTab(tab.key)` 이다', () => {
+    const normalized = onClick.replace(/\s+/g, ' ').trim();
+    expect(
+      normalized,
+      `탭 onClick 을 감싸거나 바꾸셨나요? 그렇다면 이 테스트가 검사하는 대상이 더 이상\n` +
+        `실제 동작을 대표하지 않으므로, 감싼 함수까지 검사하도록 이 파일을 갱신해야 합니다.\n` +
+        `실제 코드: ${normalized}`,
+    ).toBe('{() => setActiveTab(tab.key)}');
+  });
 });
 
 describe('의미가 바뀐 세터의 옛 이름이 되살아나지 않았다', () => {
