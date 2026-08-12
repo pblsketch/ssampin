@@ -5,6 +5,7 @@ import { Toggle } from '@mobile/components/common/Toggle';
 import { PeriodTimesEditor } from '@mobile/components/Settings/PeriodTimesEditor';
 import { SyncStatus } from '@mobile/components/More/SyncStatus';
 import { MOBILE_APP_VERSION } from '@mobile/version';
+import { MobileHeader } from '@mobile/components/common/MobileHeader';
 
 interface Props {
   onBack: () => void;
@@ -82,13 +83,9 @@ export function SettingsPage({ onBack }: Props) {
 
   return (
     <div className="flex flex-col h-full">
-      {/* 헤더 */}
-      <header className="glass-header flex items-center gap-3 px-4 py-3 shrink-0">
-        <button onClick={onBack} className="flex items-center justify-center w-10 h-10">
-          <span className="material-symbols-outlined text-sp-text">arrow_back</span>
-        </button>
-        <h2 className="flex-1 text-sp-text font-bold text-base">설정</h2>
-      </header>
+      {/* 헤더 — 공용 부품. 이전 구현은 뒤로가기 버튼에 최소 터치 크기(44px)와
+          aria-label 이 빠져 있었는데, 공용화하면서 함께 채워진다. */}
+      <MobileHeader variant="fullscreen" title="설정" onBack={onBack} backLabel="이전 화면으로" />
 
       {/* 본문 */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">

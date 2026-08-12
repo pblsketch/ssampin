@@ -66,6 +66,7 @@ import { InAppBrowserBanner } from './components/InAppBrowserBanner';
 import { SegmentedControl } from './components/common/SegmentedControl';
 import { QuickAddFab, type QuickAddAction } from './components/QuickAddFab';
 import { Snackbar } from '@mobile/components/common/Snackbar';
+import { MobileHeader } from '@mobile/components/common/MobileHeader';
 import { useMobileUiTriggerStore } from './stores/useMobileUiTriggerStore';
 
 type MobileToolProps = { onBack: () => void; isFullscreen: boolean };
@@ -406,40 +407,40 @@ export function App() {
       {/* 인앱 브라우저 경고 배너 */}
       <InAppBrowserBanner />
 
-      {/* Header */}
-      <header
-        className="flex items-center justify-between px-4 glass-header shrink-0"
-        style={{ height: 'var(--header-height)', paddingTop: 'env(safe-area-inset-top)' }}
-      >
-        <h1 className="text-lg font-bold text-sp-text">쌤핀</h1>
-        {auth.isAuthenticated ? (
-          <div className="flex items-center gap-2">
+      {/* Header — 공용 부품. 안전영역·높이 처리는 MobileHeader 가 책임진다. */}
+      <MobileHeader
+        variant="app"
+        title="쌤핀"
+        actions={
+          auth.isAuthenticated ? (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  auth.logout().then(() => auth.startLogin(true));
+                }}
+                className="text-xs text-sp-muted hover:text-sp-accent transition-colors"
+                title="다른 계정으로 변경"
+              >
+                <span className="material-symbols-outlined text-icon-sm">swap_horiz</span>
+              </button>
+              <button
+                onClick={auth.logout}
+                className="text-xs text-sp-muted hover:text-sp-text transition-colors flex items-center gap-1"
+              >
+                <span>{auth.email}</span>
+                <span className="material-symbols-outlined text-icon-sm">logout</span>
+              </button>
+            </div>
+          ) : (
             <button
-              onClick={() => {
-                auth.logout().then(() => auth.startLogin(true));
-              }}
-              className="text-xs text-sp-muted hover:text-sp-accent transition-colors"
-              title="다른 계정으로 변경"
+              onClick={() => void auth.startLogin()}
+              className="text-xs text-sp-accent font-medium px-3 py-1 rounded-full glass-card hover:bg-sp-accent/10 transition-colors"
             >
-              <span className="material-symbols-outlined text-icon-sm">swap_horiz</span>
+              PC 동기화
             </button>
-            <button
-              onClick={auth.logout}
-              className="text-xs text-sp-muted hover:text-sp-text transition-colors flex items-center gap-1"
-            >
-              <span>{auth.email}</span>
-              <span className="material-symbols-outlined text-icon-sm">logout</span>
-            </button>
-          </div>
-        ) : (
-          <button
-            onClick={() => void auth.startLogin()}
-            className="text-xs text-sp-accent font-medium px-3 py-1 rounded-full glass-card hover:bg-sp-accent/10 transition-colors"
-          >
-            PC 동기화
-          </button>
-        )}
-      </header>
+          )
+        }
+      />
 
       {/* F8c(RT1) — 다른 기기의 학년도 마무리 1회 안내(동기화 다운로드가 currentTerm 전진 감지 시) */}
       <YearTransitionNotice />
