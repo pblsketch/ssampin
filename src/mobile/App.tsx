@@ -65,6 +65,7 @@ import { NavMigrationCoachmark } from './components/Onboarding/NavMigrationCoach
 import { InAppBrowserBanner } from './components/InAppBrowserBanner';
 import { SegmentedControl } from './components/common/SegmentedControl';
 import { QuickAddFab, type QuickAddAction } from './components/QuickAddFab';
+import { Snackbar } from '@mobile/components/common/Snackbar';
 import { useMobileUiTriggerStore } from './stores/useMobileUiTriggerStore';
 
 type MobileToolProps = { onBack: () => void; isFullscreen: boolean };
@@ -486,6 +487,9 @@ export function App() {
 
       {/* 전역 빠른 추가 FAB */}
       <QuickAddFab actions={fabActions} />
+
+      {/* 전역 스낵바(되돌리기). 화면마다 각자 마운트하면 그 화면에서만 떠서 전역으로 둔다. */}
+      <Snackbar />
 
       {/* 하단 탭 6→4 재편 첫 실행 안내 */}
       <NavMigrationCoachmark />

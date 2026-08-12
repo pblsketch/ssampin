@@ -15,8 +15,7 @@ import { useMobileAttendanceStore } from '@mobile/stores/useMobileAttendanceStor
 import { seatingRepository } from '@mobile/di/container';
 import { useMobileStudentRecordsStore } from '@mobile/stores/useMobileStudentRecordsStore';
 import { useMobileProgressStore } from '@mobile/stores/useMobileProgressStore';
-import { SwipeUndoToast } from '@mobile/components/SwipeRow/SwipeUndoToast';
-import { useSwipeUndoStore } from '@mobile/stores/useMobileSwipeUndoStore';
+import { useSnackbarStore } from '@mobile/stores/useMobileSnackbarStore';
 import { PraiseMemoSheet } from '@mobile/components/Students/PraiseMemoSheet';
 import { SwipeHintBanner } from '@mobile/components/Students/SwipeHintBanner';
 import { SeatingView } from '@mobile/pages/students/SeatingView';
@@ -235,13 +234,13 @@ export function StudentsPage() {
     async (student: HomeroomStudent, status: QuickStatus) => {
       // 번호 없는 학생은 출결이 번호로 저장돼 서로 뭉개지므로 기록을 막고 안내한다.
       if (student.studentNumber == null || student.studentNumber <= 0) {
-        useSwipeUndoStore
+        useSnackbarStore
           .getState()
           .show('번호가 없어 출결을 기록할 수 없어요. 명렬표에서 번호를 지정해주세요.');
         return;
       }
       await writeHomeroomStatus(student, status);
-      useSwipeUndoStore
+      useSnackbarStore
         .getState()
         .show(`${student.name} · ${QUICK_LABEL[status]}`, () =>
           writeHomeroomStatus(student, 'present'),
@@ -292,13 +291,13 @@ export function StudentsPage() {
     async (tc: TeachingClass, student: TeachingClassStudent, status: QuickStatus) => {
       // 번호 없는 학생은 출결이 번호로 저장돼 서로 뭉개지므로 기록을 막고 안내한다.
       if (student.number == null || student.number <= 0) {
-        useSwipeUndoStore
+        useSnackbarStore
           .getState()
           .show('번호가 없어 출결을 기록할 수 없어요. 명렬표에서 번호를 지정해주세요.');
         return;
       }
       await writeClassStatus(tc, student, status);
-      useSwipeUndoStore
+      useSnackbarStore
         .getState()
         .show(`${student.name} · ${QUICK_LABEL[status]}`, () =>
           writeClassStatus(tc, student, 'present'),
@@ -322,9 +321,7 @@ export function StudentsPage() {
         // Q2: 칭찬을 태그로도 기록(통계 영구 이중기준 + 표시 tags 정합). subcategory='칭찬'은 호환 유지.
         tags: ['칭찬'],
       });
-      useSwipeUndoStore
-        .getState()
-        .show(`${name} · 칭찬 메모 저장됨`, () => deleteStudentRecord(id));
+      useSnackbarStore.getState().show(`${name} · 칭찬 메모 저장됨`, () => deleteStudentRecord(id));
     },
     [addStudentRecord, deleteStudentRecord, selectedDateStr],
   );
@@ -564,9 +561,6 @@ export function StudentsPage() {
           onClose={() => setPraiseTarget(null)}
         />
       )}
-
-      {/* 스와이프 빠른 기록 "되돌리기" 토스트 */}
-      <SwipeUndoToast />
     </div>
   );
 }

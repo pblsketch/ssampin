@@ -207,8 +207,8 @@ input[type='datetime-local'] {
   padding-top: env(safe-area-inset-top);
 }
 
-/* ── 스와이프 빠른 기록: "되돌리기" 토스트 잔여 시간 진행바 ── */
-@keyframes swipe-undo-progress {
+/* ── 스낵바(되돌리기) 잔여 시간 진행바 ── */
+@keyframes snackbar-progress {
   from {
     transform: scaleX(1);
   }
@@ -217,7 +217,16 @@ input[type='datetime-local'] {
   }
 }
 
-.swipe-undo-progress-bar {
+.snackbar-progress-bar {
   transform-origin: left;
-  animation: swipe-undo-progress 5s linear forwards;
+  animation: snackbar-progress 5s linear forwards;
+}
+
+/* 모션 감소를 켠 사용자에게는 줄어드는 막대를 숨긴다.
+   스낵바는 5초 뒤 어차피 사라지므로 정보가 사라지지 않는다. */
+@media (prefers-reduced-motion: reduce) {
+  .snackbar-progress-bar {
+    animation: none;
+    display: none;
+  }
 }
