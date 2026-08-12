@@ -2,6 +2,8 @@ import { useState, useCallback } from 'react';
 import { SyncStatus } from '@mobile/components/More/SyncStatus';
 import { MobileShareModal } from '@mobile/components/Share/MobileShareModal';
 import { MOBILE_APP_VERSION } from '@mobile/version';
+import { useMobileRecentToolsStore } from '@mobile/stores/useMobileRecentToolsStore';
+import { TOOL_GROUPS, findTool, searchTools, type ToolItem } from '@mobile/pages/more/toolCatalog';
 
 interface Props {
   onNavigate: (page: string) => void;
@@ -45,8 +47,43 @@ function MenuItem({
   );
 }
 
+/** 도구 한 칸 — 4열 그리드용. 라벨이 두 줄까지 자연스럽게 들어가도록 높이를 고정하지 않는다. */
+function ToolTile({ tool, onOpen }: { tool: ToolItem; onOpen: (id: string) => void }) {
+  return (
+    <button
+      onClick={() => onOpen(tool.id)}
+      className="flex flex-col items-center gap-1.5 rounded-xl glass-card px-1 py-3 active:scale-[0.97] transition-transform"
+      style={{ minHeight: 76 }}
+    >
+      <span className="material-symbols-outlined text-icon-xl text-sp-accent">{tool.icon}</span>
+      <span className="text-[11px] leading-tight text-sp-text text-center px-0.5">{tool.name}</span>
+    </button>
+  );
+}
+
 export function MorePage({ onNavigate }: Props) {
   const [showShare, setShowShare] = useState(false);
+  const [query, setQuery] = useState('');
+
+  const recentToolIds = useMobileRecentToolsStore((s) => s.recentToolIds);
+  const markToolUsed = useMobileRecentToolsStore((s) => s.markUsed);
+
+  /**
+   * 도구 열기. 최근 사용에 남기고 이동한다.
+   * 이 화면이 도구로 가는 유일한 입구이므로 여기서만 기록하면 된다.
+   */
+  const openTool = useCallback(
+    (toolId: string) => {
+      markToolUsed(toolId);
+      onNavigate(toolId);
+    },
+    [markToolUsed, onNavigate],
+  );
+
+  const searchResult = searchTools(query);
+  const recentTools = recentToolIds
+    .map((id) => findTool(id))
+    .filter((t): t is ToolItem => t !== undefined);
 
   const handleShared = useCallback(() => {
     // 분석은 MobileShareModal 내부에서 처리 가능하지만
@@ -56,6 +93,80 @@ export function MorePage({ onNavigate }: Props) {
   return (
     <div className="flex flex-col h-full">
       <div className="flex-1 overflow-y-auto p-4 space-y-5 pb-24">
+        {/* 도구 찾기 — 14개 규모에서는 "타" 두 글자면 타이머가 걸린다.
+            예전에는 더보기 → 쌤도구 → 도구로 세 번 눌러야 했고, 14개 중 눈으로 찾아야 했다. */}
+        <label
+          className="flex items-center gap-2 px-3 rounded-xl glass-card"
+          style={{ minHeight: 44 }}
+        >
+          <span className="material-symbols-outlined text-sp-muted text-icon-lg">search</span>
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="도구 찾기"
+            aria-label="도구 찾기"
+            className="flex-1 min-w-0 bg-transparent text-sm text-sp-text placeholder:text-sp-muted outline-none py-2"
+          />
+          {query !== '' && (
+            <button
+              type="button"
+              onClick={() => setQuery('')}
+              aria-label="검색어 지우기"
+              className="grid place-items-center w-8 h-8 rounded-lg text-sp-muted active:bg-black/5 dark:active:bg-white/10"
+            >
+              <span className="material-symbols-outlined text-lg">close</span>
+            </button>
+          )}
+        </label>
+
+        {searchResult !== null ? (
+          /* 검색 중 — 그룹을 접고 결과만 보여준다 */
+          <section>
+            {searchResult.length === 0 ? (
+              <p className="text-sp-muted text-sm text-center py-8">
+                &lsquo;{query}&rsquo; 와 맞는 도구가 없어요
+              </p>
+            ) : (
+              <div className="grid grid-cols-4 gap-2">
+                {searchResult.map((tool) => (
+                  <ToolTile key={tool.id} tool={tool} onOpen={openTool} />
+                ))}
+              </div>
+            )}
+          </section>
+        ) : (
+          <>
+            {/* 최근 사용 — 순서 정렬일 뿐 점수·보상이 아니다.
+                아래 그룹 목록의 순서는 고정이라 손이 위치를 기억할 수 있다. */}
+            {recentTools.length > 0 && (
+              <section>
+                <h3 className="text-sp-muted text-xs font-semibold tracking-wider mb-2 px-1">
+                  최근 사용
+                </h3>
+                <div className="grid grid-cols-4 gap-2">
+                  {recentTools.map((tool) => (
+                    <ToolTile key={tool.id} tool={tool} onOpen={openTool} />
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {TOOL_GROUPS.map((group) => (
+              <section key={group.title}>
+                <h3 className="text-sp-muted text-xs font-semibold tracking-wider mb-2 px-1">
+                  {group.title}
+                </h3>
+                <div className="grid grid-cols-4 gap-2">
+                  {group.tools.map((tool) => (
+                    <ToolTile key={tool.id} tool={tool} onOpen={openTool} />
+                  ))}
+                </div>
+              </section>
+            ))}
+          </>
+        )}
+
         {/* 메뉴 항목 */}
         <section>
           <h3 className="text-sp-muted text-xs font-semibold uppercase tracking-wider mb-2 px-1">
@@ -78,14 +189,8 @@ export function MorePage({ onNavigate }: Props) {
               description="PC에서 등록한 링크 열기"
               onClick={() => onNavigate('bookmarks')}
             />
-            <MenuItem
-              icon="build"
-              iconBg="bg-sp-info/12"
-              iconText="text-sp-info"
-              label="쌤도구"
-              description="과제 수합 · 설문/체크리스트"
-              onClick={() => onNavigate('tools')}
-            />
+            {/* '쌤도구' 항목을 없앴다. 도구 14종이 이 화면 위쪽에 바로 펼쳐져 있어
+                한 단계를 더 들어갈 이유가 없다(3번 → 2번). */}
             <MenuItem
               icon="settings"
               label="설정"

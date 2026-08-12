@@ -23,8 +23,13 @@ export type MobileTab = 'home' | 'homeroom' | 'teaching' | 'schedule' | 'more';
 export type ScheduleSeg = 'schedule' | 'todo';
 export type AttendanceType = 'homeroom' | 'class';
 
-/** 더보기 하위 중 도구가 아닌 것들. 도구는 toolId 파라미터로 따로 다룬다. */
-export type MoreSection = 'settings' | 'memo' | 'bookmarks' | 'tools';
+/**
+ * 더보기 하위 중 도구가 아닌 것들. 도구는 toolId 파라미터로 따로 다룬다.
+ *
+ * 'tools'(도구 목록)가 빠진 이유: 도구 14종이 더보기 첫 화면에 바로 펼쳐지면서
+ * 중간 문이 없어졌다. 옛 /more/tools 링크는 parsePath 가 더보기로 받아준다.
+ */
+export type MoreSection = 'settings' | 'memo' | 'bookmarks';
 
 export type MobileRoute =
   | { kind: 'home' }
@@ -44,7 +49,7 @@ export type MobileRoute =
 
 export const HOME_ROUTE: MobileRoute = { kind: 'home' };
 
-const MORE_SECTIONS: readonly MoreSection[] = ['settings', 'memo', 'bookmarks', 'tools'];
+const MORE_SECTIONS: readonly MoreSection[] = ['settings', 'memo', 'bookmarks'];
 
 function isMoreSection(v: string): v is MoreSection {
   return (MORE_SECTIONS as readonly string[]).includes(v);
@@ -116,9 +121,11 @@ export function parsePath(pathWithQuery: string): MobileRoute {
 
   if (first === 'more') {
     if (second === undefined) return { kind: 'more' };
-    // /more/tools/<toolId> 는 도구, /more/tools 는 도구 목록
-    if (second === 'tools' && third !== undefined) {
-      return { kind: 'tool', toolId: third };
+    // /more/tools/<toolId> 는 도구.
+    // /more/tools 는 도구 목록이던 시절의 주소인데, 지금은 목록이 더보기 첫 화면에
+    // 바로 있으므로 더보기로 받는다.
+    if (second === 'tools') {
+      return third !== undefined ? { kind: 'tool', toolId: third } : { kind: 'more' };
     }
     if (isMoreSection(second)) return { kind: 'moreSection', section: second };
     return { kind: 'more' };
@@ -180,6 +187,7 @@ export function parentOf(route: MobileRoute): MobileRoute | null {
     case 'moreSection':
       return { kind: 'more' };
     case 'tool':
-      return { kind: 'moreSection', section: 'tools' };
+      // 도구 목록이 더보기 첫 화면이 됐으므로 도구의 한 단계 위는 더보기다.
+      return { kind: 'more' };
   }
 }

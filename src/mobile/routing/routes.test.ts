@@ -20,7 +20,6 @@ const ROUTES: readonly MobileRoute[] = [
   { kind: 'moreSection', section: 'settings' },
   { kind: 'moreSection', section: 'memo' },
   { kind: 'moreSection', section: 'bookmarks' },
-  { kind: 'moreSection', section: 'tools' },
   { kind: 'tool', toolId: 'traffic-light' },
   { kind: 'tool', toolId: 'rubric' },
   { kind: 'attendance', classId: 'c1', className: '3학년 2반', period: 3, type: 'class' },
@@ -53,7 +52,10 @@ describe('routes — 주소 ↔ 화면 상태', () => {
 
   it('도구 주소에 tool- 접두사를 넣지 않는다', () => {
     expect(toPath({ kind: 'tool', toolId: 'dice' })).toBe('/more/tools/dice');
-    expect(parsePath('/more/tools')).toEqual({ kind: 'moreSection', section: 'tools' });
+  });
+
+  it('옛 도구 목록 주소(/more/tools)는 더보기로 받는다 — 목록이 더보기 첫 화면이 됐다', () => {
+    expect(parsePath('/more/tools')).toEqual({ kind: 'more' });
   });
 
   it('기존 moreSub 키와 toolId 를 서로 변환한다', () => {
@@ -100,11 +102,8 @@ describe('routes — 주소 ↔ 화면 상태', () => {
     expect(tabOf({ kind: 'tool', toolId: 'dice' })).toBe('more');
   });
 
-  it('부모 경로 — 도구는 도구 목록으로, 홈은 더 올라갈 데가 없다', () => {
-    expect(parentOf({ kind: 'tool', toolId: 'dice' })).toEqual({
-      kind: 'moreSection',
-      section: 'tools',
-    });
+  it('부모 경로 — 도구는 더보기로, 홈은 더 올라갈 데가 없다', () => {
+    expect(parentOf({ kind: 'tool', toolId: 'dice' })).toEqual({ kind: 'more' });
     expect(parentOf({ kind: 'moreSection', section: 'settings' })).toEqual({ kind: 'more' });
     expect(parentOf({ kind: 'more' })).toEqual({ kind: 'home' });
     expect(parentOf({ kind: 'home' })).toBeNull();

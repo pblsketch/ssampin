@@ -16,7 +16,6 @@ import { TodoPage } from './pages/TodoPage';
 import { MorePage } from './pages/MorePage';
 import { MemoPage } from './pages/MemoPage';
 import { SettingsPage } from './pages/SettingsPage';
-import { ToolsOverviewPage } from './pages/ToolsOverviewPage';
 import { ToolAssignmentPage } from './pages/ToolAssignmentPage';
 import { ToolSurveyPage } from './pages/ToolSurveyPage';
 import { ToolGroupingPage } from './pages/ToolGroupingPage';
@@ -219,7 +218,7 @@ export function App() {
    */
   const openMoreSub = useCallback(
     (sub: string) => {
-      if (sub === 'settings' || sub === 'memo' || sub === 'bookmarks' || sub === 'tools') {
+      if (sub === 'settings' || sub === 'memo' || sub === 'bookmarks') {
         navigate({ kind: 'moreSection', section: sub });
         return;
       }
@@ -443,7 +442,7 @@ export function App() {
     if (moreSub === 'settings') return <SettingsPage onBack={goBack} />;
     if (moreSub === 'memo') return <MemoPage onBack={goBack} />;
     if (moreSub === 'bookmarks') return <BookmarkPage onBack={goBack} />;
-    if (moreSub === 'tools') return <ToolsOverviewPage onNavigate={openMoreSub} onBack={goBack} />;
+    // 'tools'(도구 목록 페이지)는 없앴다 — 도구 14종이 더보기 첫 화면에 바로 있다.
     if (moreSub === 'tool-assignment') return <ToolAssignmentPage onBack={goBack} />;
     if (moreSub === 'tool-survey') return <ToolSurveyPage onBack={goBack} />;
     if (moreSub === 'tool-grouping') return <ToolGroupingPage onBack={goBack} />;
