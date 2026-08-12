@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, type ReactNode } from 'react';
 import { useBottomSheet } from '@mobile/hooks/useBottomSheet';
+import { useSheetBackButton } from '@mobile/routing/useSheetBackButton';
 
 interface BottomSheetProps {
   /** 시트를 닫는 단일 경로. 바깥 클릭·Esc·뒤로가기가 모두 이 콜백으로 수렴한다. */
@@ -35,6 +36,8 @@ export function BottomSheet({
   panelClassName = '',
 }: BottomSheetProps) {
   useBottomSheet();
+  // 안드로이드 뒤로가기가 화면을 넘기지 않고 이 시트만 닫게 한다.
+  useSheetBackButton(onClose);
 
   // onClose 가 매 렌더 새 함수로 와도 Esc 리스너를 재등록하지 않도록 최신값만 참조한다.
   const onCloseRef = useRef(onClose);
