@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
+import { StrictMode } from 'react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, act, cleanup } from '@testing-library/react';
-import { useSheetBackButton } from '@mobile/routing/useSheetBackButton';
+import { useSheetBackButton, __resetSheetStackForTest } from '@mobile/routing/useSheetBackButton';
 
 /** 시트 한 개를 나타내는 최소 컴포넌트 */
 function Sheet({ onClose }: { onClose: () => void }) {
@@ -43,6 +44,7 @@ function sheetDepth(): number {
 describe('useSheetBackButton', () => {
   beforeEach(() => {
     cleanup();
+    __resetSheetStackForTest();
     window.history.replaceState({ depth: 0 }, '', '/');
   });
 
@@ -123,6 +125,66 @@ describe('useSheetBackButton', () => {
 
     expect(inner).toHaveBeenCalledTimes(1);
     expect(outer).not.toHaveBeenCalled();
+  });
+
+  /**
+   * StrictMode(개발 모드) 재현.
+   *
+   * React 는 effect 를 **마운트 → 정리 → 재마운트** 로 두 번 돌린다. 정리가 부르는
+   * back() 은 비동기라, 재마운트가 새 항목을 쌓은 **뒤에** 도착한다. 그 popstate 를
+   * 사용자 조작으로 오해하면 시트가 열리자마자 닫힌다.
+   *
+   * 이 테스트가 그 순서를 그대로 재현한다. 고쳐지기 전에는 onClose 가 호출됐다.
+   */
+  it('[StrictMode] 정리→재마운트 뒤 늦게 도착한 자체 back 이 시트를 닫지 않는다', () => {
+    const onClose = vi.fn();
+
+    // 1) 마운트
+    const first = render(<Sheet onClose={onClose} />);
+    expect(sheetDepth()).toBe(1);
+
+    // 2) 정리 — 여기서 back() 이 예약된다(아직 도착 전)
+    act(() => {
+      first.unmount();
+    });
+
+    // 3) 재마운트 — 예약된 back 이 도착하기 전에 새 항목을 쌓는다
+    render(<Sheet onClose={onClose} />);
+
+    // 4) 이제서야 예약됐던 자체 back 이 도착한다
+    pressBackButton();
+
+    expect(
+      onClose,
+      'StrictMode 재마운트 직후 자체 back 을 사용자 조작으로 오해해 시트를 닫았습니다.',
+    ).not.toHaveBeenCalled();
+  });
+
+  /**
+   * ⚠️ 이 테스트는 **회귀를 잡는 그물이 아니다.** 가드를 꺼도 통과하는 것을 확인했다.
+   * jsdom 에서는 StrictMode 이중 호출의 타이밍이 실제 브라우저와 달라 실패가 재현되지
+   * 않는다. 위의 "정리→재마운트" 수동 재현 테스트가 실제 그물이고(가드를 끄면 빨간불),
+   * 이건 "StrictMode 로 렌더해도 터지지 않는다" 정도의 연기 감지기다.
+   *
+   * 진짜 검증은 개발 서버에서 시트를 열어보는 것이다.
+   */
+  it('[연기감지] StrictMode 로 렌더해도 시트가 스스로 닫히지 않는다 (회귀 그물 아님)', async () => {
+    const onClose = vi.fn();
+
+    render(
+      <StrictMode>
+        <Sheet onClose={onClose} />
+      </StrictMode>,
+    );
+
+    // 정리 단계에서 예약된 자체 back 이 도착할 시간을 준다.
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20));
+    });
+
+    expect(onClose, 'StrictMode 렌더만으로 시트가 닫혔습니다.').not.toHaveBeenCalled();
+    // 항목은 정확히 하나만 남아야 한다(이중 마운트가 두 개를 쌓으면 안 된다).
+    expect(sheetDepth()).toBe(1);
   });
 
   it('중첩 상태에서 뒤로가기를 두 번 하면 바깥 시트까지 닫힌다', () => {

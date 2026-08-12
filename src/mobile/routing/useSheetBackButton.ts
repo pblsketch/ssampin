@@ -1,4 +1,59 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type MutableRefObject } from 'react';
+
+/**
+ * 열려 있는 시트 스택. 맨 뒤가 가장 위에 있는 시트다.
+ *
+ * 시트마다 popstate 리스너를 달지 않고 모듈 하나만 단다. popstate 는 window 전역
+ * 브로드캐스트라, 리스너가 여러 개면 "이 뒤로가기는 누가 처리할 것인가"를 각자
+ * 판단하게 되어 중첩 시트가 한꺼번에 닫히거나 서로 어긋난다.
+ */
+interface OpenSheet {
+  onCloseRef: MutableRefObject<() => void>;
+  /** 뒤로가기로 닫혔는지. 정리 단계에서 히스토리를 되돌릴지 판단하는 데 쓴다. */
+  closedByBackButton: boolean;
+}
+
+let openSheets: OpenSheet[] = [];
+
+/**
+ * 우리가 직접 부른 `history.back()` 이 아직 도착하지 않은 개수.
+ *
+ * 시트를 X·바깥클릭으로 닫으면 쌓아둔 항목을 되돌리려고 back() 을 부르는데, 그
+ * popstate 까지 "사용자가 뒤로가기를 눌렀다"고 처리하면 시트가 하나 더 닫힌다.
+ * 우리가 만든 것은 여기서 세었다가 그냥 삼킨다.
+ *
+ * ⚠️ 이 판단은 **이벤트당 한 번**이어야 한다. 시트마다 리스너를 달면 첫 리스너가
+ * 카운터를 깎고 나머지는 삼키지 못해 어긋난다. 그래서 리스너가 하나뿐이다.
+ */
+let pendingSelfBacks = 0;
+
+let listenerInstalled = false;
+
+function handlePopState(): void {
+  if (pendingSelfBacks > 0) {
+    pendingSelfBacks -= 1;
+    return;
+  }
+  const top = openSheets[openSheets.length - 1];
+  if (!top) return;
+  top.closedByBackButton = true;
+  // 닫으라고 지시한 순간 더 이상 맨 위가 아니다. 여기서 빼지 않으면 컴포넌트가
+  // 실제로 언마운트되기 전에 뒤로가기가 한 번 더 오면 같은 시트를 또 겨냥한다.
+  openSheets = openSheets.slice(0, -1);
+  top.onCloseRef.current();
+}
+
+function ensureListener(): void {
+  if (listenerInstalled) return;
+  window.addEventListener('popstate', handlePopState);
+  listenerInstalled = true;
+}
+
+/** 테스트 전용 — 모듈 스택을 초기 상태로 되돌린다. */
+export function __resetSheetStackForTest(): void {
+  openSheets = [];
+  pendingSelfBacks = 0;
+}
 
 /**
  * 바텀시트가 열려 있는 동안 히스토리 항목을 하나 쌓아, 뒤로가기가 화면 이동 대신
@@ -11,44 +66,38 @@ import { useEffect, useRef } from 'react';
  * "지금 무엇을 하고 있는가"라서, 주소에 남기면 딥링크·새로고침 때 되살아나
  * 오히려 어색하다.
  *
- * 중첩 시트(시트 위 확인 다이얼로그)는 각자 항목을 쌓으므로 뒤로가기가 위쪽부터
- * 하나씩 닫는다.
+ * 중첩 시트는 스택의 맨 위 하나만 닫힌다.
+ *
+ * StrictMode(개발 모드)에서 effect 가 마운트→정리→재마운트로 두 번 도는데,
+ * 정리의 back() 이 **비동기**라 재마운트가 새 항목을 쌓은 뒤에 도착한다. 그 popstate 를
+ * 사용자 조작으로 오해하면 시트가 열리자마자 닫힌다. pendingSelfBacks 가 그걸 삼킨다.
  */
 export function useSheetBackButton(onClose: () => void): void {
-  // onClose 가 매 렌더 새 함수로 와도 리스너를 재등록하지 않도록 최신값만 참조한다.
+  // onClose 가 매 렌더 새 함수로 와도 스택 항목을 갈아끼우지 않도록 최신값만 참조한다.
   const onCloseRef = useRef(onClose);
   useEffect(() => {
     onCloseRef.current = onClose;
   }, [onClose]);
 
   useEffect(() => {
-    const state = (window.history.state ?? {}) as Record<string, unknown>;
-    // 이 시트가 몇 번째 층인지 기억한다. popstate 는 window 전역 브로드캐스트라
-    // 열려 있는 시트가 전부 듣는데, 이 값이 없으면 중첩 시트가 한꺼번에 닫힌다.
-    const myLevel = ((state.sheet as number | undefined) ?? 0) + 1;
-    // depth 는 그대로 물려준다. 시트가 화면 이동 깊이를 흔들면 안 된다.
-    window.history.pushState({ ...state, sheet: myLevel }, '', window.location.href);
+    ensureListener();
 
-    let closedByBackButton = false;
-    const onPop = () => {
-      const cur = (window.history.state ?? {}) as { sheet?: number };
-      // 내 층이 아직 살아 있으면 나는 닫히지 않는다. 위쪽 시트만 닫힌다.
-      if ((cur.sheet ?? 0) >= myLevel) return;
-      closedByBackButton = true;
-      onCloseRef.current();
-    };
-    window.addEventListener('popstate', onPop);
+    const entry: OpenSheet = { onCloseRef, closedByBackButton: false };
+    openSheets.push(entry);
+
+    const state = (window.history.state ?? {}) as Record<string, unknown>;
+    // depth 는 그대로 물려준다. 시트가 화면 이동 깊이를 흔들면 goBack 판단이 틀어진다.
+    window.history.pushState({ ...state, sheet: openSheets.length }, '', window.location.href);
 
     return () => {
-      window.removeEventListener('popstate', onPop);
-      // 뒤로가기가 아니라 X·바깥클릭·Esc 로 닫힌 경우, 우리가 쌓아둔 항목이 그대로
-      // 남아 있다. 그걸 비워주지 않으면 다음 뒤로가기가 "아무 일도 안 일어나는"
-      // 한 번을 삼킨다. 닫힘 경로가 무엇이든 히스토리 수지가 맞아야 한다.
-      if (!closedByBackButton) {
-        const cur = (window.history.state ?? {}) as Record<string, unknown>;
-        if (((cur.sheet as number | undefined) ?? 0) > 0) {
-          window.history.back();
-        }
+      openSheets = openSheets.filter((s) => s !== entry);
+
+      // 뒤로가기가 아니라 X·바깥클릭·Esc 로 닫힌 경우, 쌓아둔 항목이 그대로 남는다.
+      // 비워주지 않으면 다음 뒤로가기가 "아무 일도 안 일어나는" 한 번을 삼킨다.
+      // 닫힘 경로가 무엇이든 "푸시 1회 = 백 1회" 수지가 맞아야 한다.
+      if (!entry.closedByBackButton) {
+        pendingSelfBacks += 1;
+        window.history.back();
       }
     };
   }, []);
