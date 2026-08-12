@@ -23,15 +23,17 @@ export function useSheetBackButton(onClose: () => void): void {
 
   useEffect(() => {
     const state = (window.history.state ?? {}) as Record<string, unknown>;
-    // depth 를 그대로 물려준다. 시트가 화면 이동 깊이를 흔들면 안 된다.
-    window.history.pushState(
-      { ...state, sheet: ((state.sheet as number | undefined) ?? 0) + 1 },
-      '',
-      window.location.href,
-    );
+    // 이 시트가 몇 번째 층인지 기억한다. popstate 는 window 전역 브로드캐스트라
+    // 열려 있는 시트가 전부 듣는데, 이 값이 없으면 중첩 시트가 한꺼번에 닫힌다.
+    const myLevel = ((state.sheet as number | undefined) ?? 0) + 1;
+    // depth 는 그대로 물려준다. 시트가 화면 이동 깊이를 흔들면 안 된다.
+    window.history.pushState({ ...state, sheet: myLevel }, '', window.location.href);
 
     let closedByBackButton = false;
     const onPop = () => {
+      const cur = (window.history.state ?? {}) as { sheet?: number };
+      // 내 층이 아직 살아 있으면 나는 닫히지 않는다. 위쪽 시트만 닫힌다.
+      if ((cur.sheet ?? 0) >= myLevel) return;
       closedByBackButton = true;
       onCloseRef.current();
     };

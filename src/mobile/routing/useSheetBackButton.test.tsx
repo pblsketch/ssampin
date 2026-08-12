@@ -9,12 +9,23 @@ function Sheet({ onClose }: { onClose: () => void }) {
   return null;
 }
 
-/** jsdom 의 history 는 실제로 동작하므로, popstate 만 수동으로 흉내 낸다. */
+/**
+ * 하드웨어 뒤로가기를 모사한다.
+ *
+ * jsdom 의 `history.back()` 은 popstate 를 발화시키지 않아 그대로 쓸 수 없다.
+ * 그래서 **명세가 정한 순서**를 직접 재현한다 — 히스토리 상태가 먼저 복원되고,
+ * 그 다음 popstate 가 발화한다.
+ *
+ * 이 순서가 중요한 이유: 훅이 popstate 안에서 `history.state` 를 읽어 "내 층이 아직
+ * 살아 있는가"를 판단한다. 옛 버전처럼 back() 직후 popstate 를 그냥 쏘면 아직 갱신되지
+ * 않은 상태를 읽게 되어 실제 브라우저와 다르게 동작한다.
+ */
 function pressBackButton() {
+  const cur = (window.history.state ?? {}) as Record<string, unknown>;
+  const restored = { ...cur, sheet: Math.max(0, ((cur.sheet as number | undefined) ?? 0) - 1) };
   act(() => {
-    window.history.back();
-    // jsdom 은 back() 후 popstate 를 비동기로 던진다. 테스트에서는 즉시 발화시킨다.
-    window.dispatchEvent(new PopStateEvent('popstate', { state: window.history.state }));
+    window.history.replaceState(restored, '', window.location.href);
+    window.dispatchEvent(new PopStateEvent('popstate', { state: restored }));
   });
 }
 
@@ -101,16 +112,29 @@ describe('useSheetBackButton', () => {
    * 나머지 14개 시트를 껍데기로 옮기기 **전에** 반드시 해결해야 한다.
    * 이 테스트는 한계를 문서화하고, 고쳐지면 실패해서 알려주는 역할을 한다.
    */
-  it('[알려진 한계] 뒤로가기 한 번에 중첩 시트가 함께 닫힌다 — 시트 스택 전환 시 이 단언을 뒤집을 것', () => {
+  it('뒤로가기 한 번에 위쪽 시트만 닫힌다 (안쪽만 닫히고 바깥은 남는다)', () => {
+    const outer = vi.fn();
+    const inner = vi.fn();
+    render(<Sheet onClose={outer} />);
+    render(<Sheet onClose={inner} />);
+    expect(sheetDepth()).toBe(2);
+
+    pressBackButton();
+
+    expect(inner).toHaveBeenCalledTimes(1);
+    expect(outer).not.toHaveBeenCalled();
+  });
+
+  it('중첩 상태에서 뒤로가기를 두 번 하면 바깥 시트까지 닫힌다', () => {
     const outer = vi.fn();
     const inner = vi.fn();
     render(<Sheet onClose={outer} />);
     render(<Sheet onClose={inner} />);
 
     pressBackButton();
+    expect(outer).not.toHaveBeenCalled();
 
-    expect(inner).toHaveBeenCalled();
-    // 이상적으로는 outer 가 호출되지 않아야 한다. 현재 구조에서는 호출된다.
-    expect(outer).toHaveBeenCalled();
+    pressBackButton();
+    expect(outer).toHaveBeenCalledTimes(1);
   });
 });
