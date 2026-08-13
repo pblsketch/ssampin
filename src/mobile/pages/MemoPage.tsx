@@ -56,7 +56,7 @@ function AddModal({ onClose, onAdd }: AddModalProps) {
   const [content, setContent] = useState('');
   const [color, setColor] = useState<MemoColor>('yellow');
 
-  useBottomSheet();
+  useBottomSheet(true, onClose);
 
   const handleAdd = () => {
     const trimmed = content.trim();
@@ -130,7 +130,7 @@ function EditModal({ memo, onClose, onSave, onDelete }: EditModalProps) {
   const [color, setColor] = useState<MemoColor>(memo.color);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  useBottomSheet();
+  useBottomSheet(true, onClose);
 
   const handleSave = () => {
     const trimmed = content.trim();

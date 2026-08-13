@@ -35,6 +35,13 @@ export type MobileRoute =
   | { kind: 'home' }
   | { kind: 'homeroom' }
   | { kind: 'teaching' }
+  /**
+   * 수업반 상세(출결·진도 서브탭).
+   *
+   * 반 이름은 주소에 넣지 않는다 — 스토어에 이미 있고, 이름이 바뀌면 낡은 링크의
+   * 이름이 실제와 어긋난다. id 하나만 있으면 이름은 언제나 최신으로 찾을 수 있다.
+   */
+  | { kind: 'teachingClass'; classId: string }
   | { kind: 'schedule'; seg: ScheduleSeg }
   | { kind: 'more' }
   | { kind: 'moreSection'; section: MoreSection }
@@ -76,6 +83,8 @@ export function toPath(route: MobileRoute): string {
       return '/homeroom';
     case 'teaching':
       return '/teaching';
+    case 'teachingClass':
+      return `/teaching/${route.classId}`;
     case 'schedule':
       return route.seg === 'schedule' ? '/schedule' : '/schedule/todo';
     case 'more':
@@ -106,7 +115,9 @@ export function parsePath(pathWithQuery: string): MobileRoute {
   const [first, second, third] = segments;
 
   if (first === 'homeroom') return { kind: 'homeroom' };
-  if (first === 'teaching') return { kind: 'teaching' };
+  if (first === 'teaching') {
+    return second !== undefined ? { kind: 'teachingClass', classId: second } : { kind: 'teaching' };
+  }
 
   // 옛 주소 호환 — 담임·수업이 "학생" 탭 하나에 세그먼트로 들어 있던 시절의 링크.
   // 아직 배포 전이지만, 테스트 중 남은 링크나 북마크가 죽지 않게 받아준다.
@@ -160,6 +171,7 @@ export function tabOf(route: MobileRoute): MobileTab {
     case 'homeroom':
       return 'homeroom';
     case 'teaching':
+    case 'teachingClass':
       return 'teaching';
     case 'schedule':
       return 'schedule';
@@ -189,5 +201,7 @@ export function parentOf(route: MobileRoute): MobileRoute | null {
     case 'tool':
       // 도구 목록이 더보기 첫 화면이 됐으므로 도구의 한 단계 위는 더보기다.
       return { kind: 'more' };
+    case 'teachingClass':
+      return { kind: 'teaching' };
   }
 }

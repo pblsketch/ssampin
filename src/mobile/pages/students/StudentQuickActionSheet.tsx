@@ -28,7 +28,7 @@ export function StudentQuickActionSheet({
 }: StudentQuickActionSheetProps) {
   const [subTab, setSubTab] = useState<SheetSubTab>('attendance');
 
-  useBottomSheet();
+  useBottomSheet(true, onClose);
 
   // 배경 터치로 닫기
   const handleBackdropClick = (e: React.MouseEvent) => {

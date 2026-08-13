@@ -563,7 +563,9 @@ export function StudentsPage() {
                         {c.name}
                       </span>
                       {'isHomeroom' in c && c.isHomeroom && (
-                        <span className="shrink-0 text-xs text-sp-accent px-2 py-0.5 rounded-lg bg-sp-accent/12">
+                        /* sp-* 토큰에 Tailwind 투명도 수식(/12)을 붙이면 토큰이 CSS 변수라
+                           알파 합성이 안 돼 배경이 조용히 사라진다. 단색 토큰을 쓴다. */
+                        <span className="shrink-0 text-xs text-sp-accent px-2 py-0.5 rounded-lg bg-sp-subtle">
                           담임
                         </span>
                       )}

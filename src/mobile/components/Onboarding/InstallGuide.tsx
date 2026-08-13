@@ -118,8 +118,14 @@ export function InstallGuide() {
             </p>
           )}
         </div>
-        <button onClick={dismiss} className="text-sp-muted hover:text-sp-text text-xs p-1 shrink-0">
-          <span className="material-symbols-outlined text-icon">close</span>
+        <button
+          onClick={dismiss}
+          aria-label="안내 닫기"
+          className="grid place-items-center w-11 h-11 -m-2 text-sp-muted hover:text-sp-text text-xs shrink-0"
+        >
+          <span className="material-symbols-outlined text-icon" aria-hidden="true">
+            close
+          </span>
         </button>
       </div>
     </div>

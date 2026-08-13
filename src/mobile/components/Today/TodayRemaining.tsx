@@ -70,7 +70,10 @@ export function TodayRemaining({
             className="w-full glass-card rounded-xl px-4 py-3 text-left active:scale-[0.98] transition-transform"
           >
             <div className="flex items-center gap-3">
-              <span className="material-symbols-outlined text-icon-lg text-sp-error shrink-0">
+              <span
+                className="material-symbols-outlined text-icon-lg text-sp-error shrink-0"
+                aria-hidden="true"
+              >
                 error
               </span>
               <div className="flex-1 min-w-0">
@@ -81,7 +84,7 @@ export function TodayRemaining({
                   <p className="text-xs text-sp-muted mt-0.5 truncate">{attendanceMissingLabel}</p>
                 )}
               </div>
-              <span className="material-symbols-outlined text-sp-muted shrink-0">
+              <span className="material-symbols-outlined text-sp-muted shrink-0" aria-hidden="true">
                 chevron_right
               </span>
             </div>
@@ -94,14 +97,17 @@ export function TodayRemaining({
             className="w-full glass-card rounded-xl px-4 py-3 text-left active:scale-[0.98] transition-transform"
           >
             <div className="flex items-center gap-3">
-              <span className="material-symbols-outlined text-icon-lg text-sp-warning shrink-0">
+              <span
+                className="material-symbols-outlined text-icon-lg text-sp-warning shrink-0"
+                aria-hidden="true"
+              >
                 task_alt
               </span>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-bold text-sp-text">할 일 — {todoSummary}</p>
                 {todoNames && <p className="text-xs text-sp-muted mt-0.5 truncate">{todoNames}</p>}
               </div>
-              <span className="material-symbols-outlined text-sp-muted shrink-0">
+              <span className="material-symbols-outlined text-sp-muted shrink-0" aria-hidden="true">
                 chevron_right
               </span>
             </div>

@@ -14,6 +14,7 @@ const ROUTES: readonly MobileRoute[] = [
   { kind: 'home' },
   { kind: 'homeroom' },
   { kind: 'teaching' },
+  { kind: 'teachingClass', classId: 'e3b0c442-98fc-1c14-9afb-f4c8996fb924' },
   { kind: 'schedule', seg: 'schedule' },
   { kind: 'schedule', seg: 'todo' },
   { kind: 'more' },
@@ -31,6 +32,15 @@ describe('routes — 주소 ↔ 화면 상태', () => {
     for (const route of ROUTES) {
       expect(parsePath(toPath(route)), `왕복 실패: ${toPath(route)}`).toEqual(route);
     }
+  });
+
+  it('수업반 상세는 주소를 가진다 — 뒤로가기가 목록으로, 새로고침해도 상세가 남는다', () => {
+    // 로컬 state 로만 열던 시절엔 상세에 들어가도 주소가 계속 /teaching 이었다.
+    expect(toPath({ kind: 'teachingClass', classId: 'c-1' })).toBe('/teaching/c-1');
+    expect(parsePath('/teaching/c-1')).toEqual({ kind: 'teachingClass', classId: 'c-1' });
+    // 목록과 상세가 같은 탭에 속하고, 상세의 한 단계 위는 목록이다.
+    expect(tabOf({ kind: 'teachingClass', classId: 'c-1' })).toBe('teaching');
+    expect(parentOf({ kind: 'teachingClass', classId: 'c-1' })).toEqual({ kind: 'teaching' });
   });
 
   it('알 수 없는 주소는 던지지 않고 홈으로 폴백한다', () => {

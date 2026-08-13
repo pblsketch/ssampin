@@ -70,7 +70,7 @@ export function MobileProgressLogModal({
   // 이 모달은 Today 진입점에서도 열리므로 여기서 직접 보장한다(load는 멱등).
   const loadSchedule = useMobileScheduleStore((s) => s.load);
 
-  useBottomSheet(isOpen);
+  useBottomSheet(isOpen, onClose);
 
   // 시간표(과목+교실)에 매칭되는 후보 학급들 (mode='add' && defaultClassId 미지정 시에만 의미 있음)
   // 새 진도를 기록할 반 선택이므로 보관된 반은 후보에서 제외한다 (plan S1.4-B — S1.2b의 모바일 판박이).

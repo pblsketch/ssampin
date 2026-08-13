@@ -75,7 +75,7 @@ export function SchedulePage() {
   const [weekAnchorDate, setWeekAnchorDate] = useState<Date | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
 
-  useBottomSheet(showAddModal);
+  useBottomSheet(showAddModal, () => setShowAddModal(false));
 
   // Add modal form state
   const [newTitle, setNewTitle] = useState('');
@@ -270,7 +270,9 @@ export function SchedulePage() {
             // 접힌 주 보기에서는 주를 옮기므로 읽어주는 말도 그에 맞춘다.
             aria-label={monthExpanded ? '이전 달' : '이전 주'}
           >
-            <span className="material-symbols-outlined text-sp-text text-xl">chevron_left</span>
+            <span className="material-symbols-outlined text-sp-text text-xl" aria-hidden="true">
+              chevron_left
+            </span>
           </button>
           <h2 className="text-sp-text font-bold text-base">
             {format(currentMonth, 'yyyy년 M월', { locale: ko })}
@@ -280,7 +282,9 @@ export function SchedulePage() {
             className="flex items-center justify-center w-11 h-11 rounded-full hover:bg-black/5 active:bg-black/10 dark:hover:bg-white/5 dark:active:bg-white/10 transition-colors"
             aria-label={monthExpanded ? '다음 달' : '다음 주'}
           >
-            <span className="material-symbols-outlined text-sp-text text-xl">chevron_right</span>
+            <span className="material-symbols-outlined text-sp-text text-xl" aria-hidden="true">
+              chevron_right
+            </span>
           </button>
         </div>
 
@@ -355,8 +359,9 @@ export function SchedulePage() {
           onClick={() => setMonthExpanded((v) => !v)}
           aria-expanded={monthExpanded}
           className="flex items-center justify-center gap-1 w-full py-2 text-xs text-sp-muted active:bg-black/5 dark:active:bg-white/10"
+          style={{ minHeight: 44 }}
         >
-          <span className="material-symbols-outlined text-base">
+          <span className="material-symbols-outlined text-base" aria-hidden="true">
             {monthExpanded ? 'expand_less' : 'expand_more'}
           </span>
           {monthExpanded

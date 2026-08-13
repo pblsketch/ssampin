@@ -98,7 +98,7 @@ function GradingSheet({
   setOverallFeedback,
   onClose,
 }: GradingSheetProps) {
-  useBottomSheet();
+  useBottomSheet(true, onClose);
 
   const studentId = studentKey(student);
   const grading = gradingFor(rubric.id, studentId);

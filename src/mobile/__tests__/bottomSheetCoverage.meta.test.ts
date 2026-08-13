@@ -78,6 +78,39 @@ describe('bottom-sheet coverage (meta)', () => {
     ).toMatch(CALLS_HOOK);
   });
 
+  /**
+   * 안드로이드 뒤로가기 보장.
+   *
+   * 왜 따로 검사하나 — 위의 '등록' 검사는 `useBottomSheet(` 문자열만 보므로, 닫기 함수를
+   * 안 넘긴 `useBottomSheet()` 도 통과한다. 실제로 그 상태에서 뒤로가기가 새 껍데기에만
+   * 걸려 있고 기존 시트 10여 개는 빠져 있었다(시트는 그대로인데 뒤쪽 화면이 바뀜).
+   * 등록과 뒤로가기는 별개의 보장이므로 별개로 검사한다.
+   */
+  const HOOK_WITH_CLOSE = /useBottomSheet\s*\([^,()]*,/;
+
+  for (const [relPath, label] of SHEETS_TO_REGISTER) {
+    it(`${label} (${relPath}) 가 뒤로가기로 닫히는 것을 보장한다`, () => {
+      const source = readFileSync(resolve(ROOT, relPath), 'utf8');
+      const guaranteed = HOOK_WITH_CLOSE.test(source) || usesShell(source);
+      expect(
+        guaranteed,
+        `${label} 가 안드로이드 뒤로가기 보장을 하지 않습니다. 시트를 열고 뒤로가기를 누르면 ` +
+          `시트는 그대로 있고 뒤쪽 화면이 넘어갑니다. 공용 껍데기 '<BottomSheet>' 를 쓰거나, ` +
+          `useBottomSheet(열림여부, 닫기함수) 처럼 닫기 함수를 함께 넘기세요.`,
+      ).toBe(true);
+    });
+  }
+
+  it('useBottomSheet 이 useSheetBackButton 을 호출한다 (뒤로가기 보장의 근거)', () => {
+    const fullPath = resolve(ROOT, 'src/mobile/hooks/useBottomSheet.ts');
+    const source = readFileSync(fullPath, 'utf8');
+    expect(
+      source,
+      'useBottomSheet 이 useSheetBackButton 을 호출하지 않으면, 위의 모든 시트가 ' +
+        '닫기 함수를 넘겨도 뒤로가기가 동작하지 않습니다.',
+    ).toMatch(/useSheetBackButton\s*\(/);
+  });
+
   it('QuickAddFab 는 useIsAnyBottomSheetOpen 을 구독한다 (fade-out 자동화)', () => {
     const fullPath = resolve(ROOT, 'src/mobile/components/QuickAddFab.tsx');
     const source = readFileSync(fullPath, 'utf8');

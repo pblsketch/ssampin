@@ -127,7 +127,10 @@ export function AttendanceCheckPage({
   const [textSheetOpen, setTextSheetOpen] = useState(false);
   const [textInput, setTextInput] = useState('');
 
-  useBottomSheet(periodMenuOpen || multiDateSheetOpen || textSheetOpen);
+  // 시트마다 따로 등록한다 — 하나로 묶으면 뒤로가기가 "어느 시트를 닫을지" 알 수 없다.
+  useBottomSheet(periodMenuOpen, () => setPeriodMenuOpen(false));
+  useBottomSheet(multiDateSheetOpen, () => setMultiDateSheetOpen(false));
+  useBottomSheet(textSheetOpen, () => setTextSheetOpen(false));
   const periodCount = settings.periodTimes.length > 0 ? settings.periodTimes.length : 7;
 
   const [studentStatuses, setStudentStatuses] = useState<Map<string, AttendanceStatus>>(new Map());

@@ -105,7 +105,7 @@ export function StudentAttendanceHistorySheet({
   studentName,
   onClose,
 }: StudentAttendanceHistorySheetProps) {
-  useBottomSheet();
+  useBottomSheet(true, onClose);
   const load = useMobileStudentRecordsStore((s) => s.load);
   const records = useMobileStudentRecordsStore((s) => s.records);
   const [activeStat, setActiveStat] = useState<StatKey | null>(null);

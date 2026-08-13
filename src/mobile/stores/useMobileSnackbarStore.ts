@@ -15,7 +15,13 @@ interface SnackbarState {
   token: number;
   /** onUndo 생략 시 되돌리기 버튼 없는 안내 전용 스낵바로 표시된다. */
   show: (message: string, onUndo?: () => void | Promise<void>) => void;
-  dismiss: () => void;
+  /**
+   * 닫는다. `token` 을 주면 **그 토큰이 아직 최신일 때만** 닫는다.
+   *
+   * 되돌리기처럼 시간이 걸리는 작업은 끝날 때쯤 이미 다른 알림이 떠 있을 수 있다.
+   * 무조건 닫으면 남의 알림을 지운다. 시작 시점의 토큰을 들고 있다가 넘길 것.
+   */
+  dismiss: (token?: number) => void;
 }
 
 export const SNACKBAR_AUTO_DISMISS_MS = 5000;
@@ -46,7 +52,8 @@ export const useSnackbarStore = create<SnackbarState>((set, get) => ({
       if (get().token === token) set({ message: null, onUndo: null });
     }, SNACKBAR_AUTO_DISMISS_MS);
   },
-  dismiss: () => {
+  dismiss: (token) => {
+    if (token !== undefined && get().token !== token) return;
     clearDismissTimer();
     set({ message: null, onUndo: null });
   },

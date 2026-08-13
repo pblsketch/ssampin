@@ -34,13 +34,18 @@ function MenuItem({
       className="flex items-center gap-4 w-full px-4 py-4 glass-card active:scale-[0.98] transition-transform text-left min-h-[64px]"
     >
       <div className={`flex items-center justify-center w-11 h-11 rounded-xl shrink-0 ${iconBg}`}>
-        <span className={`material-symbols-outlined text-icon-xl ${iconText}`}>{icon}</span>
+        <span className={`material-symbols-outlined text-icon-xl ${iconText}`} aria-hidden="true">
+          {icon}
+        </span>
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-sp-text font-semibold text-sm">{label}</p>
         <p className="text-sp-muted text-xs mt-0.5">{description}</p>
       </div>
-      <span className="material-symbols-outlined text-sp-muted text-icon-lg shrink-0">
+      <span
+        className="material-symbols-outlined text-sp-muted text-icon-lg shrink-0"
+        aria-hidden="true"
+      >
         chevron_right
       </span>
     </button>
@@ -55,7 +60,9 @@ function ToolTile({ tool, onOpen }: { tool: ToolItem; onOpen: (id: string) => vo
       className="flex flex-col items-center gap-1.5 rounded-xl glass-card px-1 py-3 active:scale-[0.97] transition-transform"
       style={{ minHeight: 76 }}
     >
-      <span className="material-symbols-outlined text-icon-xl text-sp-accent">{tool.icon}</span>
+      <span className="material-symbols-outlined text-icon-xl text-sp-accent" aria-hidden="true">
+        {tool.icon}
+      </span>
       <span className="text-[11px] leading-tight text-sp-text text-center px-0.5">{tool.name}</span>
     </button>
   );
@@ -92,14 +99,16 @@ export function MorePage({ onNavigate }: Props) {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex-1 overflow-y-auto p-4 space-y-5 pb-24">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-24">
         {/* 도구 찾기 — 14개 규모에서는 "타" 두 글자면 타이머가 걸린다.
             예전에는 더보기 → 쌤도구 → 도구로 세 번 눌러야 했고, 14개 중 눈으로 찾아야 했다. */}
         <label
           className="flex items-center gap-2 px-3 rounded-xl glass-card"
           style={{ minHeight: 44 }}
         >
-          <span className="material-symbols-outlined text-sp-muted text-icon-lg">search</span>
+          <span className="material-symbols-outlined text-sp-muted text-icon-lg" aria-hidden="true">
+            search
+          </span>
           <input
             type="search"
             value={query}
@@ -113,9 +122,12 @@ export function MorePage({ onNavigate }: Props) {
               type="button"
               onClick={() => setQuery('')}
               aria-label="검색어 지우기"
-              className="grid place-items-center w-8 h-8 rounded-lg text-sp-muted active:bg-black/5 dark:active:bg-white/10"
+              /* 보이는 크기는 그대로 두고 누를 수 있는 넓이만 44px 로 넓힌다(음수 마진으로 상쇄). */
+              className="grid place-items-center w-11 h-11 -my-1.5 -mr-1.5 rounded-lg text-sp-muted active:bg-black/5 dark:active:bg-white/10"
             >
-              <span className="material-symbols-outlined text-lg">close</span>
+              <span className="material-symbols-outlined text-lg" aria-hidden="true">
+                close
+              </span>
             </button>
           )}
         </label>
@@ -128,7 +140,7 @@ export function MorePage({ onNavigate }: Props) {
                 &lsquo;{query}&rsquo; 와 맞는 도구가 없어요
               </p>
             ) : (
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-4 gap-3">
                 {searchResult.map((tool) => (
                   <ToolTile key={tool.id} tool={tool} onOpen={openTool} />
                 ))}
@@ -144,7 +156,7 @@ export function MorePage({ onNavigate }: Props) {
                 <h3 className="text-sp-muted text-xs font-semibold tracking-wider mb-2 px-1">
                   최근 사용
                 </h3>
-                <div className="grid grid-cols-4 gap-2">
+                <div className="grid grid-cols-4 gap-3">
                   {recentTools.map((tool) => (
                     <ToolTile key={tool.id} tool={tool} onOpen={openTool} />
                   ))}
@@ -157,7 +169,7 @@ export function MorePage({ onNavigate }: Props) {
                 <h3 className="text-sp-muted text-xs font-semibold tracking-wider mb-2 px-1">
                   {group.title}
                 </h3>
-                <div className="grid grid-cols-4 gap-2">
+                <div className="grid grid-cols-4 gap-3">
                   {group.tools.map((tool) => (
                     <ToolTile key={tool.id} tool={tool} onOpen={openTool} />
                   ))}
@@ -172,7 +184,7 @@ export function MorePage({ onNavigate }: Props) {
           <h3 className="text-sp-muted text-xs font-semibold uppercase tracking-wider mb-2 px-1">
             메뉴
           </h3>
-          <div className="space-y-2">
+          <div className="space-y-3">
             <MenuItem
               icon="sticky_note_2"
               iconBg="bg-sp-warning/12"

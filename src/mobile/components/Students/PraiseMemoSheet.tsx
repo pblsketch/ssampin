@@ -23,7 +23,7 @@ export function PraiseMemoSheet({
   const [saving, setSaving] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useBottomSheet();
+  useBottomSheet(true, onClose);
 
   useEffect(() => {
     const t = setTimeout(() => inputRef.current?.focus(), 80);

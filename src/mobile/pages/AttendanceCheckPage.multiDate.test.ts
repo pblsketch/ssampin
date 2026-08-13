@@ -26,10 +26,17 @@ describe('AttendanceCheckPage 여러 날 Bottom Sheet', () => {
     expect(source).toContain('multiDateSet');
   });
 
-  it('useBottomSheet 통합 — periodMenuOpen OR multiDateSheetOpen OR textSheetOpen', () => {
+  /**
+   * 예전에는 `useBottomSheet(periodMenuOpen || multiDateSheetOpen || textSheetOpen)` 한 줄이었다.
+   * 카운터만 볼 때는 OR 로 묶어도 됐지만, 안드로이드 뒤로가기가 붙으면서 **어느 시트를 닫을지**
+   * 알아야 해 시트마다 따로 등록한다. 지키려는 것(세 시트 모두 등록)은 같고 조건은 더 세졌다.
+   */
+  it('세 시트가 각자 등록되고 각자의 닫기 함수를 넘긴다 (뒤로가기 보장)', () => {
+    expect(source).toContain('useBottomSheet(periodMenuOpen, () => setPeriodMenuOpen(false))');
     expect(source).toContain(
-      'useBottomSheet(periodMenuOpen || multiDateSheetOpen || textSheetOpen)',
+      'useBottomSheet(multiDateSheetOpen, () => setMultiDateSheetOpen(false))',
     );
+    expect(source).toContain('useBottomSheet(textSheetOpen, () => setTextSheetOpen(false))');
   });
 
   it('헤더 "여러 날" 트리거 버튼', () => {

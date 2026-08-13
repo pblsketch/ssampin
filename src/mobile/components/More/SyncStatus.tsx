@@ -2,10 +2,7 @@ import { useState } from 'react';
 import { useMobileDriveSyncStore } from '@mobile/stores/useMobileDriveSyncStore';
 import { useMobileSettingsStore } from '@mobile/stores/useMobileSettingsStore';
 import { useGoogleAuthContext } from '@mobile/contexts/GoogleAuthContext';
-import {
-  getFileLabel,
-  SyncResultSummary,
-} from '@adapters/components/common/SyncResultSummary';
+import { getFileLabel, SyncResultSummary } from '@adapters/components/common/SyncResultSummary';
 
 const AUTO_SYNC_OPTIONS = [
   { value: 0, label: '꺼짐' },
@@ -16,9 +13,9 @@ const AUTO_SYNC_OPTIONS = [
 ] as const;
 
 export function SyncStatus() {
-  const [resolvingChoice, setResolvingChoice] = useState<
-    'local' | 'remote' | 'remote-all' | null
-  >(null);
+  const [resolvingChoice, setResolvingChoice] = useState<'local' | 'remote' | 'remote-all' | null>(
+    null,
+  );
   const [batchCurrent, setBatchCurrent] = useState(0);
   const [batchTotal, setBatchTotal] = useState(0);
   const {
@@ -97,7 +94,7 @@ export function SyncStatus() {
               onClick={() => {
                 void logout().then(() => startLogin(true));
               }}
-              className="flex items-center gap-1 text-xs text-sp-muted hover:text-sp-accent transition-colors"
+              className="flex items-center gap-1 min-h-[44px] px-1 -mx-1 text-xs text-sp-muted hover:text-sp-accent transition-colors"
               title="다른 계정으로 변경"
             >
               <span className="material-symbols-outlined text-icon-sm">swap_horiz</span>
@@ -105,7 +102,7 @@ export function SyncStatus() {
             </button>
             <button
               onClick={() => void logout()}
-              className="flex items-center gap-1 text-xs text-sp-muted hover:text-red-400 transition-colors"
+              className="flex items-center gap-1 min-h-[44px] px-1 -mx-1 text-xs text-sp-muted hover:text-red-400 transition-colors"
             >
               <span className="material-symbols-outlined text-icon-sm">logout</span>
               로그아웃
@@ -128,7 +125,7 @@ export function SyncStatus() {
           </p>
           <button
             onClick={() => void startLogin()}
-            className="w-full flex items-center justify-center gap-1.5 py-2.5 text-sm rounded-xl bg-sp-accent text-sp-accent-fg font-medium active:scale-[0.98] transition-all"
+            className="w-full flex items-center justify-center gap-1.5 min-h-[44px] py-2.5 text-sm rounded-xl bg-sp-accent text-sp-accent-fg font-medium active:scale-[0.98] transition-all"
           >
             <span className="material-symbols-outlined text-icon-sm">login</span>
             Google 계정으로 로그인
@@ -172,9 +169,7 @@ export function SyncStatus() {
                 {resolvingChoice === 'remote-all'
                   ? `${batchCurrent}/${batchTotal} 항목: 클라우드 복구 중`
                   : `${getFileLabel(conflict.filename)}: ${
-                      resolvingChoice === 'remote'
-                        ? '클라우드 복구 중'
-                        : '이 기기 내용 반영 중'
+                      resolvingChoice === 'remote' ? '클라우드 복구 중' : '이 기기 내용 반영 중'
                     }`}
               </p>
               <p className="text-sp-muted text-xs leading-relaxed mt-1">

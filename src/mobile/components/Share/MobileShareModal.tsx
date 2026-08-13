@@ -19,7 +19,7 @@ export function MobileShareModal({ isOpen, onClose, onShared }: MobileShareModal
   const [qrReady, setQrReady] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  useBottomSheet(isOpen);
+  useBottomSheet(isOpen, onClose);
 
   const kakaoAvailable = typeof window !== 'undefined' && !!window.Kakao;
 

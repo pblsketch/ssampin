@@ -473,23 +473,30 @@ export function App() {
                 onClick={() => {
                   auth.logout().then(() => auth.startLogin(true));
                 }}
-                className="text-xs text-sp-muted hover:text-sp-accent transition-colors"
+                className="grid place-items-center w-11 h-11 -m-2 text-xs text-sp-muted hover:text-sp-accent transition-colors"
+                aria-label="다른 계정으로 변경"
                 title="다른 계정으로 변경"
               >
-                <span className="material-symbols-outlined text-icon-sm">swap_horiz</span>
+                <span className="material-symbols-outlined text-icon-sm" aria-hidden="true">
+                  swap_horiz
+                </span>
               </button>
               <button
                 onClick={auth.logout}
-                className="text-xs text-sp-muted hover:text-sp-text transition-colors flex items-center gap-1"
+                aria-label="로그아웃"
+                className="min-h-[44px] px-1 -mx-1 text-xs text-sp-muted hover:text-sp-text transition-colors flex items-center gap-1"
               >
                 <span>{auth.email}</span>
-                <span className="material-symbols-outlined text-icon-sm">logout</span>
+                <span className="material-symbols-outlined text-icon-sm" aria-hidden="true">
+                  logout
+                </span>
               </button>
             </div>
           ) : (
             <button
               onClick={() => void auth.startLogin()}
-              className="text-xs text-sp-accent font-medium px-3 py-1 rounded-full glass-card hover:bg-sp-accent/10 transition-colors"
+              /* hover:bg-sp-accent/10 은 토큰이 CSS 변수라 알파 합성이 안 돼 조용히 투명했다. */
+              className="grid place-items-center min-h-[44px] text-xs text-sp-accent font-medium px-3 rounded-full glass-card hover:bg-sp-subtle transition-colors"
             >
               PC 동기화
             </button>
@@ -513,7 +520,13 @@ export function App() {
         {/* 담임(학급)·수업이 각자 탭이 되면서 세그먼트 한 줄이 사라졌다.
             화면 위에서 그만큼(약 44px)이 명단에 돌아간다. */}
         {activeTab === 'homeroom' && <StudentsPage />}
-        {activeTab === 'teaching' && <ClassListPage />}
+        {activeTab === 'teaching' && (
+          <ClassListPage
+            selectedClassId={route.kind === 'teachingClass' ? route.classId : undefined}
+            onSelectClass={(classId) => navigate({ kind: 'teachingClass', classId })}
+            onBackToList={() => navigate({ kind: 'teaching' })}
+          />
+        )}
         {activeTab === 'schedule' && (
           <div className="flex flex-col h-full">
             <div className="shrink-0 px-4 pt-2 pb-2">

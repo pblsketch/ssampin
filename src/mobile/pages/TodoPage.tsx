@@ -107,7 +107,9 @@ export function TodoPage() {
             className="grid place-items-center rounded-lg text-sp-text active:bg-black/5 dark:active:bg-white/10"
             style={{ minWidth: 44, minHeight: 44 }}
           >
-            <span className="material-symbols-outlined">arrow_back</span>
+            <span className="material-symbols-outlined" aria-hidden="true">
+              arrow_back
+            </span>
           </button>
           <h2 className="text-sp-text font-bold text-base">보관함</h2>
         </header>
@@ -161,7 +163,7 @@ export function TodoPage() {
                     <h3 className="text-xs font-semibold text-sp-muted">완료 {completed.length}</h3>
                     <button
                       onClick={handleArchive}
-                      className="text-xs font-semibold text-sp-accent px-2 py-1 rounded-lg active:bg-black/5 dark:active:bg-white/10"
+                      className="grid place-items-center min-h-[44px] text-xs font-semibold text-sp-accent px-2 rounded-lg active:bg-black/5 dark:active:bg-white/10"
                     >
                       보관하기
                     </button>
@@ -187,9 +189,13 @@ export function TodoPage() {
                   className="flex items-center gap-2 w-full mx-4 my-4 px-4 py-3 rounded-xl border border-dashed border-sp-border text-sp-muted text-sm"
                   style={{ width: 'calc(100% - 2rem)', minHeight: 48 }}
                 >
-                  <span className="material-symbols-outlined text-lg">inventory_2</span>
+                  <span className="material-symbols-outlined text-lg" aria-hidden="true">
+                    inventory_2
+                  </span>
                   보관함 {archived.length}개
-                  <span className="material-symbols-outlined text-lg ml-auto">chevron_right</span>
+                  <span className="material-symbols-outlined text-lg ml-auto" aria-hidden="true">
+                    chevron_right
+                  </span>
                 </button>
               )}
             </>
@@ -226,7 +232,9 @@ export function TodoPage() {
                   style={{ minWidth: 44, minHeight: 44 }}
                   aria-label="할 일로 되돌리기"
                 >
-                  <span className="material-symbols-outlined text-xl">unarchive</span>
+                  <span className="material-symbols-outlined text-xl" aria-hidden="true">
+                    unarchive
+                  </span>
                 </button>
                 {/* 영구 삭제 */}
                 <button
@@ -235,7 +243,9 @@ export function TodoPage() {
                   style={{ minWidth: 44, minHeight: 44 }}
                   aria-label="영구 삭제"
                 >
-                  <span className="material-symbols-outlined text-xl">delete</span>
+                  <span className="material-symbols-outlined text-xl" aria-hidden="true">
+                    delete
+                  </span>
                 </button>
               </li>
             ))}

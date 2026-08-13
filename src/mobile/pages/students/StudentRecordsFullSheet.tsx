@@ -45,7 +45,7 @@ export function StudentRecordsFullSheet({
   studentName,
   onClose,
 }: StudentRecordsFullSheetProps) {
-  useBottomSheet();
+  useBottomSheet(true, onClose);
   const load = useMobileStudentRecordsStore((s) => s.load);
   const getRecords = useMobileStudentRecordsStore((s) => s.getRecordsByStudentId);
   const categories = useMobileStudentRecordsStore((s) => s.categories);

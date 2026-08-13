@@ -74,7 +74,9 @@ export function MobileHeader({
                 style={TOUCH_TARGET}
                 className="flex items-center justify-center -ml-2 rounded-lg text-sp-text active:scale-95 transition-transform"
               >
-                <span className="material-symbols-outlined">arrow_back</span>
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  arrow_back
+                </span>
               </button>
             )}
             {typeof title === 'string' ? (

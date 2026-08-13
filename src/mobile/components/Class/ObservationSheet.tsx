@@ -19,7 +19,7 @@ export function ObservationSheet({
   onSave,
   onClose,
 }: ObservationSheetProps) {
-  useBottomSheet();
+  useBottomSheet(true, onClose);
 
   const [date, setDate] = useState(initialRecord?.date ?? todayISO());
   const [content, setContent] = useState(initialRecord?.content ?? '');

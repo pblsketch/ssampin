@@ -72,7 +72,7 @@ export function __resetSheetStackForTest(): void {
  * 정리의 back() 이 **비동기**라 재마운트가 새 항목을 쌓은 뒤에 도착한다. 그 popstate 를
  * 사용자 조작으로 오해하면 시트가 열리자마자 닫힌다. pendingSelfBacks 가 그걸 삼킨다.
  */
-export function useSheetBackButton(onClose: () => void): void {
+export function useSheetBackButton(onClose: () => void, enabled: boolean = true): void {
   // onClose 가 매 렌더 새 함수로 와도 스택 항목을 갈아끼우지 않도록 최신값만 참조한다.
   const onCloseRef = useRef(onClose);
   useEffect(() => {
@@ -80,6 +80,9 @@ export function useSheetBackButton(onClose: () => void): void {
   }, [onClose]);
 
   useEffect(() => {
+    // `열렸을 때만 렌더되는` 시트는 enabled 를 생략하면 된다. 페이지가 열림 상태를
+    // boolean 으로 들고 있는 시트는 그 값을 넘겨야 닫힌 동안 히스토리를 쌓지 않는다.
+    if (!enabled) return;
     ensureListener();
 
     const entry: OpenSheet = { onCloseRef, closedByBackButton: false };
@@ -100,5 +103,5 @@ export function useSheetBackButton(onClose: () => void): void {
         window.history.back();
       }
     };
-  }, []);
+  }, [enabled]);
 }

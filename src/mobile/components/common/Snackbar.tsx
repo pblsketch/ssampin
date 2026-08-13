@@ -12,18 +12,25 @@ export function Snackbar() {
   const onUndo = useSnackbarStore((s) => s.onUndo);
   const dismiss = useSnackbarStore((s) => s.dismiss);
   const token = useSnackbarStore((s) => s.token);
-  const [busy, setBusy] = useState(false);
+  /**
+   * "지금 되돌리는 중인" 알림의 토큰. boolean 이 아니라 토큰인 이유 —
+   * A 를 되돌리는 동안 B 가 뜨면 B 의 되돌리기는 눌릴 수 있어야 한다.
+   */
+  const [busyToken, setBusyToken] = useState<number | null>(null);
+  const busy = busyToken === token;
 
   if (!message) return null;
 
   const handleUndo = async () => {
     if (busy || !onUndo) return;
-    setBusy(true);
+    // 시작 시점의 토큰을 붙잡아 둔다. 끝났을 때 이미 다른 알림이 떠 있으면 그건 남의 것이다.
+    const startedToken = token;
+    setBusyToken(startedToken);
     try {
       await onUndo();
     } finally {
-      setBusy(false);
-      dismiss();
+      setBusyToken((t) => (t === startedToken ? null : t));
+      dismiss(startedToken);
     }
   };
 
@@ -40,15 +47,16 @@ export function Snackbar() {
             type="button"
             onClick={() => void handleUndo()}
             disabled={busy}
-            className="shrink-0 rounded-full bg-sp-accent px-3 py-1 text-xs font-bold text-sp-accent-fg disabled:opacity-50"
+            /* 보이는 알약 크기는 그대로, 누를 수 있는 높이만 44px 확보한다. */
+            className="shrink-0 grid place-items-center min-h-[44px] rounded-full bg-sp-accent px-3 text-xs font-bold text-sp-accent-fg disabled:opacity-50"
           >
             되돌리기
           </button>
         ) : (
           <button
             type="button"
-            onClick={dismiss}
-            className="shrink-0 rounded-full bg-sp-surface px-3 py-1 text-xs font-bold text-sp-muted"
+            onClick={() => dismiss()}
+            className="shrink-0 grid place-items-center min-h-[44px] rounded-full bg-sp-surface px-3 text-xs font-bold text-sp-muted"
           >
             확인
           </button>
