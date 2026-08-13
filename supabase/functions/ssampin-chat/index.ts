@@ -4,13 +4,14 @@
  * 흐름: 질문 → 임베딩 → 벡터 검색 → LLM 답변 생성 → 에스컬레이션 판단
  *
  * 모델:
- *   임베딩: gemini-embedding-001 (768차원)
- *   답변: gemini-3.1-flash-lite-preview
+ *   임베딩: gemini-embedding-001 (768차원) — DB 벡터 차원에 묶여 있어 Gemini 유지
+ *   답변: 업스테이지 Solar(기본 solar-pro3), 실패 시 Gemini 자동 폴백 → _shared/chatLlm.ts
  */
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { checkRateLimit, clientIpFrom } from '../_shared/rateLimit.ts';
+import { generateText } from '../_shared/chatLlm.ts';
 
 // ── 타입 정의 ──────────────────────────────────────────────
 
@@ -51,34 +52,7 @@ interface MatchedDocument {
   similarity: number;
 }
 
-// Gemini API 타입
-interface GeminiGenerateRequest {
-  contents: GeminiContent[];
-  systemInstruction?: { parts: GeminiPart[] };
-  generationConfig?: {
-    temperature?: number;
-    maxOutputTokens?: number;
-    responseMimeType?: string;
-    thinkingConfig?: { thinkingLevel: string };
-  };
-}
-
-interface GeminiContent {
-  role: 'user' | 'model';
-  parts: GeminiPart[];
-}
-
-interface GeminiPart {
-  text: string;
-}
-
-interface GeminiGenerateResponse {
-  candidates: Array<{
-    content: { parts: GeminiPart[] };
-    finishReason: string;
-  }>;
-}
-
+// Gemini 임베딩 API 타입 (답변 생성은 _shared/chatLlm.ts 가 담당)
 interface GeminiEmbeddingResponse {
   embedding: { values: number[] };
 }
@@ -90,7 +64,7 @@ const SYSTEM_PROMPT = `당신은 '쌤핀(SsamPin)' 교사용 데스크톱 앱의
 ## 역할
 - 쌤핀의 기능과 사용법에 대한 질문에 친절하고 정확하게 답변합니다.
 - 제공된 컨텍스트(검색된 문서)를 기반으로 답변합니다.
-- 사용자의 질문에 최대한 답변을 시도하세요. 에스컬레이션은 정말 모를 때만 사용하세요.
+- 사용자의 질문에 최대한 답변을 시도하세요. 버그·기능 요청이라면 답변을 한 뒤 개발자에게도 함께 전달합니다(아래 '개발자 전달' 참고). 답변과 전달은 둘 중 하나를 고르는 것이 아닙니다.
 - 정말 모르는 내용은 솔직히 "아직 그 부분은 정보가 없어요"라고 말합니다.
 
 ## [사용자 현재 상태]
@@ -108,21 +82,27 @@ const SYSTEM_PROMPT = `당신은 '쌤핀(SsamPin)' 교사용 데스크톱 앱의
 8. **구글 보안 심사는 v1.8.1에서 이미 완료되었습니다.** "구글 보안 심사 진행 중", "신규 사용자 연동 제한" 등의 안내는 더 이상 하지 마세요. 구글 연결이 안 되는 경우, 학교 보안 프로그램 차단 → PKCE 폴백(30초 대기) 안내를 우선 제공하세요.
 9. **운영체제(플랫폼) 일관성 (매우 중요):** 대화 맥락이나 [사용자 현재 상태]·[확인된 플랫폼]에서 사용자의 OS가 macOS 또는 Windows로 드러나면, **그 플랫폼에 맞는 해결법만** 제시하세요. macOS 사용자에게 Windows 전용 안내(설치 파일 .exe 실행, 백신 V3·알약 끄기, 스마트 앱 컨트롤, 작업 관리자, "추가 정보 → 실행")를 섞지 마세요. Windows 사용자에게도 macOS 전용 안내(DMG, xattr, "그래도 열기")를 섞지 마세요. 검색된 문서가 반대 플랫폼 것이더라도 확인된 플랫폼을 우선합니다. 단, OS를 되묻는 것은 **설치·실행 실패·보안 차단 등 해결법이 OS마다 다른 문제일 때로 한정**하고, 그마저도 OS가 끝까지 불명확할 때만 합니다. 기능·사용법·요금 같은 일반 질문은 OS를 되묻지 말고 바로 답하세요.
 
-## 에스컬레이션 판단
-다음 경우 반드시 JSON으로 에스컬레이션을 반환하세요:
-- 버그 신고 ("오류가 나요", "안 돼요", "멈춰요", "크래시" 등)
-- 기능 제안/요청 ("~했으면 좋겠어요", "~기능 추가해주세요")
+## 개발자 전달 (에스컬레이션) — 답변을 대신하는 것이 아니라 답변에 덧붙이는 것입니다
+아래에 해당하면 **도움이 되는 답변을 먼저 충분히 쓴 뒤**, 맨 마지막 줄에 JSON 한 줄을 덧붙이세요.
+- 버그 신고 ("오류가 나요", "안 돼요", "멈춰요", "크래시", "이상하게 나와요", "반대로 나와요" 등)
+- 기능 제안/요청 ("~했으면 좋겠어요", "~기능 추가해주세요") — **이미 있는 기능이어도** 어디 있는지 안내한 뒤 그대로 덧붙이세요. 찾기 어렵다는 신호이므로 개발자가 알아야 합니다.
 - 개인정보 관련 문의
-- 검색된 문서에 관련 정보가 전혀 없고 추론도 불가능한 경우
-- 답변 확신이 30% 미만인 경우
 
-⚠️ 주의: 에스컬레이션은 최후의 수단입니다. 검색된 문서를 조합하여 부분적으로라도 답변이 가능하면 먼저 답변을 제공하세요.
+정말로 답변이 불가능할 때(검색된 문서에 정보가 전혀 없고 추론도 불가능, 확신 30% 미만)만 **답변 없이 JSON만** 반환하세요.
 
-에스컬레이션 시 다음 JSON 형식으로만 응답:
+JSON 형식 — 반드시 마지막 줄에, 한 줄로, 중괄호를 겹치지 말고:
 {"escalation": true, "type": "bug|feature|other", "summary": "한줄 요약"}
 
+예시 — 질문이 "앱이 자꾸 꺼져요"일 때 당신의 응답 전체:
+앱이 갑자기 꺼지는 문제를 겪고 계시군요. 😟 아래 순서로 확인해 보세요.
+1. 쌤핀을 완전히 종료한 뒤 다시 실행해 주세요.
+2. 설정 → 앱 정보에서 최신 버전인지 확인해 주세요.
+{"escalation": true, "type": "bug", "summary": "앱이 반복적으로 강제 종료됨"}
+
+⚠️ 단순 사용법·기능 안내·요금 질문에는 이 JSON을 붙이지 마세요. 문제나 요청이 있을 때만입니다.
+
 ## 모호한 질문 되묻기 (중요)
-질문이 한 줄이고 어느 기능을 말하는지 분명하지 않으면(예: "작동이 안돼요", "안 깔려요", "안 돼요", "오류나요"만 있는 경우), 임의의 기능(학교 Wi-Fi·실시간 활동·특정 도구 등)을 단정해 답하지 마세요. 어떤 화면·기능에서 무엇이 안 되는지 1개의 질문으로 먼저 되물은 뒤 안내합니다. 단, 설치·업데이트·보안 차단처럼 맥락이 분명한 경우는 기존 트러블슈팅 안내를 그대로 제공합니다. 또한 [관련 문서]가 특정 기능을 명확히 가리키면 그 문서를 우선해 답하고, 문서와 동떨어진 기능을 임의로 끌어와 답하지 마세요. (우선순위: 먼저 되묻고, 되물었는데도 어느 기능인지 특정되지 않으면 그때 아래 '에스컬레이션 판단'의 버그 처리로 넘어갑니다.)
+질문이 한 줄이고 어느 기능을 말하는지 분명하지 않으면(예: "작동이 안돼요", "안 깔려요", "안 돼요", "오류나요"만 있는 경우), 임의의 기능(학교 Wi-Fi·실시간 활동·특정 도구 등)을 단정해 답하지 마세요. 어떤 화면·기능에서 무엇이 안 되는지 1개의 질문으로 먼저 되물은 뒤 안내합니다. 단, 설치·업데이트·보안 차단처럼 맥락이 분명한 경우는 기존 트러블슈팅 안내를 그대로 제공합니다. 또한 [관련 문서]가 특정 기능을 명확히 가리키면 그 문서를 우선해 답하고, 문서와 동떨어진 기능을 임의로 끌어와 답하지 마세요. (우선순위: 먼저 되묻고, 되물었는데도 어느 기능인지 특정되지 않으면 그때 위 '개발자 전달'의 버그로 처리합니다.)
 
 ## 문제 해결 안내 원칙 (플랫폼별 — 위 규칙 9에 따라 확인된 OS의 항목만 사용)
 ### Windows
@@ -136,7 +116,7 @@ const SYSTEM_PROMPT = `당신은 '쌤핀(SsamPin)' 교사용 데스크톱 앱의
 7. "이 버전의 macOS에서 작동하는지 확인하려면 개발자에게 문의하십시오" 오류: 칩(Apple Silicon/Intel) 불일치입니다. 🍎 메뉴 → "이 Mac에 관하여"에서 칩 확인 후 맞는 DMG(Apple M칩=arm64, Intel=x64)를 ssampin.com에서 다시 받아 설치하도록 안내합니다.
 8. macOS는 자동 업데이트가 없습니다(베타). 새 버전은 DMG를 받아 응용 프로그램 폴더에 덮어써 수동 설치하며, 데이터는 유지됩니다. 손상 경고 반복 시 터미널에서 "xattr -cr /Applications/쌤핀.app" 명령을 안내하세요.
 ### 공통
-9. 기본 트러블슈팅 순서: 앱 재시작 → 최신 버전 확인 → 재설치를 먼저 안내한 후, 그래도 안 되면 에스컬레이션합니다.
+9. 기본 트러블슈팅 순서: 앱 재시작 → 최신 버전 확인 → 재설치 순으로 안내합니다. 이렇게 해결법을 안내했더라도 위 '개발자 전달' 대상(버그·기능 요청)이면 JSON 태그를 반드시 함께 붙이세요. 안내를 했다는 이유로 전달을 생략하면 안 됩니다.
 
 ## 모바일 앱 관련 안내
 - 모바일 앱 주소: m.ssampin.com
@@ -257,37 +237,23 @@ function classifyQuery(query: string): string | null {
 }
 
 /** HyDE: 가상 답변 생성 후 임베딩으로 검색 품질 향상 */
-async function generateHypotheticalAnswer(query: string, apiKey: string): Promise<string> {
+async function generateHypotheticalAnswer(query: string): Promise<string> {
   try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [
-            {
-              role: 'user',
-              parts: [
-                {
-                  text: `쌤핀(SsamPin) 교사용 데스크톱 앱 도움말에서 다음 질문에 대한 답변을 2-3문장으로 작성하세요. 추측이어도 괜찮습니다: ${query}`,
-                },
-              ],
-            },
-          ],
-          generationConfig: {
-            temperature: 1.0,
-            maxOutputTokens: 200,
-            thinkingConfig: { thinkingLevel: 'minimal' },
-          },
-        }),
-      },
-    );
-    if (!response.ok) return query; // 실패 시 원본 쿼리 반환
-    const data = (await response.json()) as GeminiGenerateResponse;
-    return data.candidates?.[0]?.content?.parts?.[0]?.text ?? query;
+    return await generateText({
+      stage: 'hyde',
+      turns: [
+        {
+          role: 'user',
+          content: `쌤핀(SsamPin) 교사용 데스크톱 앱 도움말에서 다음 질문에 대한 답변을 2-3문장으로 작성하세요. 추측이어도 괜찮습니다: ${query}`,
+        },
+      ],
+      temperature: 1.0,
+      maxOutputTokens: 200,
+      reasoning: 'minimal',
+      timeoutMs: 15_000,
+    });
   } catch {
-    return query; // 에러 시 원본 쿼리 반환
+    return query; // 실패 시 원본 쿼리 반환 (검색은 계속 진행)
   }
 }
 
@@ -392,41 +358,25 @@ async function searchDocuments(
 async function rerankDocuments(
   query: string,
   documents: MatchedDocument[],
-  apiKey: string,
 ): Promise<MatchedDocument[]> {
   if (documents.length <= 3) return documents; // 문서가 적으면 리랭킹 불필요
 
   try {
     const docList = documents.map((d, i) => `[${i}] ${d.content.slice(0, 200)}`).join('\n');
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [
-            {
-              role: 'user',
-              parts: [
-                {
-                  text: `질문: "${query}"\n\n아래 문서들의 관련성을 평가하고, 가장 관련 있는 문서 인덱스를 관련도 순으로 쉼표 구분하여 반환하세요. 숫자만 반환:\n${docList}`,
-                },
-              ],
-            },
-          ],
-          generationConfig: {
-            temperature: 1.0,
-            maxOutputTokens: 50,
-            thinkingConfig: { thinkingLevel: 'minimal' },
-          },
-        }),
-      },
-    );
+    const text = await generateText({
+      stage: 'rerank',
+      turns: [
+        {
+          role: 'user',
+          content: `질문: "${query}"\n\n아래 문서들의 관련성을 평가하고, 가장 관련 있는 문서 인덱스를 관련도 순으로 쉼표 구분하여 반환하세요. 숫자만 반환:\n${docList}`,
+        },
+      ],
+      temperature: 1.0,
+      maxOutputTokens: 50,
+      reasoning: 'minimal',
+      timeoutMs: 15_000,
+    });
 
-    if (!response.ok) return documents.slice(0, 5);
-
-    const data = (await response.json()) as GeminiGenerateResponse;
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
     const indices =
       text
         .match(/\d+/g)
@@ -450,12 +400,11 @@ async function rerankDocuments(
   }
 }
 
-/** Gemini Flash Lite로 답변 생성 */
+/** 최종 답변 생성 (업스테이지 Solar → 실패 시 Gemini) */
 async function generateAnswer(
   question: string,
   context: string,
   history: ChatHistoryItem[],
-  apiKey: string,
   topSimilarity: number,
   appContext?: string,
   platformHint?: 'macOS' | 'Windows' | null,
@@ -473,58 +422,41 @@ async function generateAnswer(
 
   const systemPrompt = SYSTEM_PROMPT + contextNote + platformNote;
 
-  // 히스토리를 Gemini 형식으로 변환
-  const geminiHistory: GeminiContent[] = history.map((h) => ({
-    role: h.role === 'user' ? 'user' : 'model',
-    parts: [{ text: h.content }],
-  }));
-
-  const requestBody: GeminiGenerateRequest = {
-    systemInstruction: { parts: [{ text: systemPrompt }] },
-    contents: [
-      ...geminiHistory,
+  return await generateText({
+    stage: 'answer',
+    system: systemPrompt,
+    turns: [
+      ...history,
       {
         role: 'user',
-        parts: [
-          {
-            text: `${appContext ? `[사용자 현재 상태]\n현재 페이지: ${appContext}\n\n` : ''}[관련 문서]\n${context || '(관련 문서 없음)'}\n\n[질문]\n${question}`,
-          },
-        ],
+        content: `${appContext ? `[사용자 현재 상태]\n현재 페이지: ${appContext}\n\n` : ''}[관련 문서]\n${context || '(관련 문서 없음)'}\n\n[질문]\n${question}`,
       },
     ],
-    generationConfig: {
-      // 지원 봇의 최종 답변은 검색 문서·대화 맥락에 충실해야 하므로 낮은 온도를 쓴다.
-      // (과거 1.0 은 같은 질문에 Mac/Windows 답을 오가는 비결정성의 직접 원인이었다.)
-      temperature: 0.3,
-      maxOutputTokens: 2048,
-      thinkingConfig: {
-        thinkingLevel: 'low',
-      },
-    },
-  };
-
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent?key=${apiKey}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(requestBody),
-    },
-  );
-
-  if (!response.ok) {
-    throw new Error(`Gemini 답변 생성 실패: ${response.status}`);
-  }
-
-  const data = (await response.json()) as GeminiGenerateResponse;
-  return data.candidates?.[0]?.content?.parts?.[0]?.text ?? '답변을 생성하지 못했어요.';
+    // 지원 봇의 최종 답변은 검색 문서·대화 맥락에 충실해야 하므로 낮은 온도를 쓴다.
+    // (과거 1.0 은 같은 질문에 Mac/Windows 답을 오가는 비결정성의 직접 원인이었다.)
+    temperature: 0.3,
+    maxOutputTokens: 2048,
+    reasoning: 'low',
+    timeoutMs: 45_000,
+  });
 }
 
-/** 에스컬레이션 JSON 파싱 */
-function parseEscalation(
-  response: string,
-): { type: 'bug' | 'feature' | 'other'; summary: string } | null {
-  const jsonMatch = response.match(/\{[\s\S]*"escalation"\s*:\s*true[\s\S]*\}/);
+interface ParsedEscalation {
+  type: 'bug' | 'feature' | 'other';
+  summary: string;
+  /** JSON 태그를 떼어낸 나머지 = 화면에 보여줄 답변. 비어 있으면 '답변 불가' 순수 에스컬레이션이다. */
+  answer: string;
+}
+
+/**
+ * 에스컬레이션 JSON 파싱 + 본문 분리.
+ *
+ * ⚠️ 과거 패턴 `\{[\s\S]*"escalation"...[\s\S]*\}` 는 탐욕적이라, 답변 본문 뒤에 JSON 이
+ * 붙는 지금 구조에서는 본문에 중괄호가 하나라도 섞이면 **첫 `{` 부터 마지막 `}` 까지**를
+ * 통째로 삼켜 답변이 사라진다. 중괄호를 품지 않는 좁은 패턴으로 그 한 줄만 집는다.
+ */
+function parseEscalation(response: string): ParsedEscalation | null {
+  const jsonMatch = response.match(/\{[^{}]*"escalation"\s*:\s*true[^{}]*\}/);
   if (!jsonMatch) return null;
 
   try {
@@ -539,7 +471,12 @@ function parseEscalation(
       const type = validTypes.includes(parsed.type as (typeof validTypes)[number])
         ? (parsed.type as 'bug' | 'feature' | 'other')
         : 'other';
-      return { type, summary: parsed.summary };
+      // 태그 앞뒤로 남는 구분선·빈 줄까지 정리해야 화면에 "---" 만 덩그러니 남지 않는다.
+      const answer = response
+        .replace(jsonMatch[0], '')
+        .replace(/\n\s*---\s*$/, '')
+        .trim();
+      return { type, summary: parsed.summary, answer };
     }
   } catch {
     // JSON 파싱 실패 시 무시
@@ -548,15 +485,49 @@ function parseEscalation(
   return null;
 }
 
-/** 에스컬레이션 안내 메시지 */
-function getEscalationMessage(type: 'bug' | 'feature' | 'other'): string {
+/**
+ * 사용자 질문에서 '개발자가 알아야 할 신고'를 규칙으로 판정한다 — LLM 태그의 안전망.
+ *
+ * ⚠️ 왜 규칙이 필요한가: 프롬프트에 "답변 뒤에 JSON 태그를 붙여라"를 예시까지 넣어도 모델이
+ * 빠뜨린다. 실측(2026-08-14)에서 Solar 는 "앱이 갑자기 꺼져요"에 프롬프트의 **예시 문장을
+ * 그대로 따라 쓰면서 마지막 JSON 줄만 누락**했다. 버그 신고가 개발자에게 도달하는 일은 모델
+ * 기분에 맡길 수 없고, 공급자를 갈아끼울 수 있게 설계했으므로 더더욱 모델에 의존하면 안 된다.
+ *
+ * 과탐지를 피하려고 **명백한 결함 신호만** 넣는다. "안 돼요"·"실패해요"처럼 환경 문제(백신
+ * 차단·네트워크)일 가능성이 큰 표현은 일부러 제외했다 — 그런 질문까지 신고로 올리면 신고함이
+ * 노이즈로 덮여 진짜 결함이 묻힌다.
+ */
+function detectReportIntent(message: string): { type: 'bug' | 'feature'; summary: string } | null {
+  const bug =
+    /크래시|강제 ?종료|갑자기 (꺼|닫|종료)|먹통|멈춰|멈춥|튕겨|튕깁|반대로 (나와|나옵|보여|보입)|거꾸로|뒤집혀|사라졌|사라집|날아갔|지워졌|중복으로 (생겨|생깁)|버그/;
+  const feature =
+    /추가해 ?(주세요|줘|주시|달라)|만들어 ?(주세요|줘|주시|달라)|넣어 ?(주세요|줘)|생겼으면|있었으면|되었으면|됐으면|기능 ?요청|건의/;
+
+  if (bug.test(message)) return { type: 'bug', summary: message.slice(0, 200) };
+  if (feature.test(message)) return { type: 'feature', summary: message.slice(0, 200) };
+  return null;
+}
+
+/**
+ * 에스컬레이션 안내 메시지.
+ * `withAnswer` 는 위에 이미 답변이 붙어 있는 경우 — "제가 모른다"가 아니라 "답변은 드렸고
+ * 개발자에게도 함께 넘긴다"는 뜻이 되도록 문구를 갈라 쓴다.
+ */
+function getEscalationMessage(type: 'bug' | 'feature' | 'other', withAnswer = false): string {
+  const withAnswerMessages: Record<typeof type, string> = {
+    bug: '🐛 이 문제는 개발자에게도 함께 전달할게요.\n아래에 어떤 상황이었는지 조금만 더 적어주시면 훨씬 빨리 고칠 수 있어요!',
+    feature:
+      '💡 이 의견은 개발자에게도 함께 전달할게요.\n아래에 어떤 점이 필요하셨는지 적어주시면 큰 도움이 돼요!',
+    other:
+      '💬 이 문의는 개발자에게도 함께 전달할게요.\n아래에 자세히 적어주시면 확인 후 답변드릴게요!',
+  };
   const messages: Record<typeof type, string> = {
     bug: '🐛 이 문제는 개발자에게 직접 전달해 드릴게요.\n아래에서 상세 내용을 작성해 주시면 더 빠르게 해결할 수 있어요!',
     feature:
       '💡 좋은 아이디어네요! 개발자에게 전달해 드릴게요.\n아래에서 원하시는 기능을 자세히 설명해 주세요!',
     other: '💬 이 부분은 제가 아직 잘 모르는 영역이에요.\n개발자에게 직접 전달해 드릴게요!',
   };
-  return messages[type];
+  return withAnswer ? withAnswerMessages[type] : messages[type];
 }
 
 /** 대화 로그 저장 */
@@ -620,7 +591,8 @@ serve(async (req: Request): Promise<Response> => {
     }
 
     // 3. 쿼리 전처리: 대화 맥락 인식 재구성
-    const apiKey = Deno.env.get('GOOGLE_API_KEY')!;
+    // ⚠️ 이 키는 '임베딩 전용'이다. 답변 생성은 _shared/chatLlm.ts 가 업스테이지를 우선 쓴다.
+    const embeddingApiKey = Deno.env.get('GOOGLE_API_KEY')!;
     const history = body.history?.slice(-6) ?? [];
     let reformulatedQuery = reformulateQuery(body.message, history);
 
@@ -640,12 +612,12 @@ serve(async (req: Request): Promise<Response> => {
 
     // 5. HyDE: 가상 답변 생성 + 원본 쿼리 임베딩 (병렬 실행)
     const [hydeAnswer, queryEmbedding] = await Promise.all([
-      generateHypotheticalAnswer(reformulatedQuery, apiKey),
-      generateQueryEmbedding(reformulatedQuery, apiKey),
+      generateHypotheticalAnswer(reformulatedQuery),
+      generateQueryEmbedding(reformulatedQuery, embeddingApiKey),
     ]);
 
     // HyDE 답변 임베딩 생성
-    const hydeEmbedding = await generateQueryEmbedding(hydeAnswer, apiKey);
+    const hydeEmbedding = await generateQueryEmbedding(hydeAnswer, embeddingApiKey);
 
     // 원본 + HyDE 임베딩 평균으로 검색 (가중 평균: 원본 40%, HyDE 60%)
     const combinedEmbedding = queryEmbedding.map((v, i) => v * 0.4 + hydeEmbedding[i] * 0.6);
@@ -659,7 +631,7 @@ serve(async (req: Request): Promise<Response> => {
     );
 
     // 7. LLM 리랭킹
-    const matchedDocs = await rerankDocuments(reformulatedQuery, rawDocs, apiKey);
+    const matchedDocs = await rerankDocuments(reformulatedQuery, rawDocs);
 
     // 8. 컨텍스트 구성 + LLM 답변 생성
     const context = matchedDocs.map((d) => d.content).join('\n\n---\n\n');
@@ -668,14 +640,17 @@ serve(async (req: Request): Promise<Response> => {
       body.message,
       context,
       history,
-      apiKey,
       matchedDocs.length > 0 ? 0.7 : 0,
       body.appContext,
       platformHint,
     );
 
-    // 6. 에스컬레이션 판단
-    const escalation = parseEscalation(llmResponse);
+    // 6. 개발자 전달 판단 — ①모델이 붙인 JSON 태그, 없으면 ②질문 자체의 규칙 판정(안전망).
+    //    ②는 답변 본문을 그대로 유지한 채 전달만 얹는다.
+    const taggedEscalation = parseEscalation(llmResponse);
+    const ruleReport = taggedEscalation ? null : detectReportIntent(body.message);
+    const escalation: ParsedEscalation | null =
+      taggedEscalation ?? (ruleReport ? { ...ruleReport, answer: llmResponse.trim() } : null);
 
     if (escalation) {
       // 에스컬레이션 기록 저장
@@ -687,19 +662,26 @@ serve(async (req: Request): Promise<Response> => {
         conversation_context: history,
       });
 
-      // 대화 로그 저장
+      // 답변이 함께 왔으면 답변을 보여준 뒤 그 아래에 전달 안내를 붙인다.
+      // (두 클라이언트 모두 escalation 응답의 message 를 그대로 말풍선에 렌더한 뒤 신고 폼을
+      //  띄우므로, 이 조립만으로 '답변도 받고 신고도 접수'가 화면 코드 변경 없이 성립한다.)
+      const hasAnswer = escalation.answer.length > 0;
+      const notice = getEscalationMessage(escalation.type, hasAnswer);
+      const message = hasAnswer ? `${escalation.answer}\n\n---\n\n${notice}` : notice;
+
+      // 대화 로그에는 사용자가 실제로 본 답변을 남긴다(요약만 남기면 맥락이 끊긴다).
       await saveConversation(
         supabase,
         body.sessionId,
         body.message,
-        escalation.summary,
+        hasAnswer ? escalation.answer : escalation.summary,
         [],
         body.isTest ?? false,
       );
 
       return jsonResponse({
         type: 'escalation',
-        message: getEscalationMessage(escalation.type),
+        message,
         escalationType: escalation.type,
       } satisfies ChatResponseEscalation);
     }

@@ -224,8 +224,12 @@ const TEST_CASES: readonly TestCase[] = [
   },
   {
     id: 24,
+    // 2026-08-14 기대값 변경(ADR-049): 'answer' → 'escalation'.
+    // 데이터 소실은 개발자가 반드시 알아야 하는 신고다. 이제 챗봇은 복구 안내를 그대로
+    // 보여주면서(escalation 응답의 message 에 답변이 포함된다) 동시에 개발자 전달을 얹는다.
+    // 즉 사용자가 안내를 못 받게 된 것이 아니라, 안내에 더해 신고까지 접수되는 것이다.
     question: '업데이트 후에 데이터가 다 사라졌어요',
-    expectedCategory: 'answer',
+    expectedCategory: 'escalation',
     mustInclude: ['데이터'],
     mustNotInclude: [],
   },
@@ -255,7 +259,8 @@ const TEST_CASES: readonly TestCase[] = [
 // ── 테스트 실행 ───────────────────────────────────
 
 const SUPABASE_URL = process.env.SUPABASE_URL ?? '';
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? process.env.SUPABASE_ANON_KEY ?? '';
+const SUPABASE_ANON_KEY =
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? process.env.SUPABASE_ANON_KEY ?? '';
 const CHAT_URL = `${SUPABASE_URL}/functions/v1/ssampin-chat`;
 
 async function runTest(tc: TestCase): Promise<TestResult> {
@@ -267,8 +272,8 @@ async function runTest(tc: TestCase): Promise<TestResult> {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-        'apikey': SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        apikey: SUPABASE_ANON_KEY,
       },
       body: JSON.stringify({
         message: tc.question,
@@ -278,7 +283,7 @@ async function runTest(tc: TestCase): Promise<TestResult> {
       }),
     });
     const latencyMs = Date.now() - start;
-    const data = await res.json() as {
+    const data = (await res.json()) as {
       type?: string;
       message?: string;
       sources?: string[];
@@ -362,9 +367,7 @@ async function main() {
   // 요약
   const passed = results.filter((r) => r.pass).length;
   const total = results.length;
-  const avgLatency = Math.round(
-    results.reduce((sum, r) => sum + r.latencyMs, 0) / total,
-  );
+  const avgLatency = Math.round(results.reduce((sum, r) => sum + r.latencyMs, 0) / total);
 
   console.log('\n════════════════════════════════');
   console.log(`📊 결과: ${passed}/${total} 통과 (${Math.round((passed / total) * 100)}%)`);

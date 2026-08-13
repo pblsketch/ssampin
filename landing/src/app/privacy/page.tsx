@@ -444,11 +444,20 @@ const koContent = {
               <strong>Google 연동 토큰 보관</strong> — 교사 이메일과 암호화된 OAuth
               토큰(AES-256-GCM).
             </li>
+            <li>
+              <strong>AI 도우미(고객지원 챗봇)</strong> — 사용자가 <strong>직접 입력한 질문</strong>
+              과 직전 대화 내용, 현재 보고 있는 화면 이름이 답변 생성을 위해 전송됩니다. 학생 명단,
+              출결·관찰·상담 기록 등 앱에 저장된 자료는 <strong>전송되지 않습니다</strong>. 다만
+              질문에 개인정보를 직접 적으면 그 내용도 함께 전송되므로, 질문에는 학생 이름·연락처
+              등을 넣지 않는 것을 권장합니다.
+            </li>
           </ul>
           <p>
-            <strong>위탁받는 자:</strong> Supabase Inc.(클라우드 인프라).{' '}
-            <strong>위탁 목적:</strong> 위 협업 기능 제공. <strong>보관·삭제:</strong> 각 기능에서
-            자료를 삭제하거나 보관 기간(예: 실시간 링크 만료)이 지나면 삭제됩니다. 전송 구간은
+            <strong>위탁받는 자:</strong> Supabase Inc.(클라우드 인프라) · 주식회사 업스테이지(AI
+            도우미 답변 생성) · Google LLC(AI 도우미 질문 검색 처리 및 예비 답변 생성).{' '}
+            <strong>위탁 목적:</strong> 위 협업 기능과 AI 도우미 제공. <strong>보관·삭제:</strong>{' '}
+            각 기능에서 자료를 삭제하거나 보관 기간(예: 실시간 링크 만료)이 지나면 삭제됩니다. AI
+            도우미 대화는 답변 품질 개선을 위해 보관되며 요청 시 삭제합니다. 전송 구간은
             HTTPS(TLS)로 암호화됩니다.
           </p>
         </>
@@ -509,10 +518,15 @@ const koContent = {
               <strong>Vercel Inc.</strong> (미국) — 협업 기능이 사용하는 웹페이지 호스팅
             </li>
             <li>
-              <strong>Google LLC</strong> (미국) — 사용자가 Google 연동을 활성화한 경우 캘린더·Drive
-              백업·Tasks 데이터 처리 (제1조·제6조)
+              <strong>Google LLC</strong> (미국) — ①사용자가 Google 연동을 활성화한 경우
+              캘린더·Drive 백업·Tasks 데이터 처리 (제1조·제6조) ②AI 도우미에 질문을 보낼 때, 관련
+              도움말을 찾기 위한 질문 텍스트 처리 및 예비 답변 생성 (제11조)
             </li>
           </ul>
+          <p>
+            AI 도우미의 답변 생성은 국내 사업자인 <strong>주식회사 업스테이지</strong>가 맡습니다
+            (제11조).
+          </p>
           <p>
             이전되는 항목·목적·보유 및 이용 기간은 제1조·제2조·제4조·제11조에 따르며, 전송 구간은
             HTTPS(TLS)로 암호화됩니다. 근거: 개인정보 보호법 제28조의8(개인정보의 국외 이전).
@@ -1097,13 +1111,24 @@ const enContent = {
               <strong>Google integration token storage</strong> — the teacher&apos;s email and
               encrypted OAuth tokens (AES-256-GCM).
             </li>
+            <li>
+              <strong>AI assistant (support chatbot)</strong> — the{' '}
+              <strong>question you type</strong>, the immediately preceding conversation, and the
+              name of the screen you are viewing are transmitted in order to generate an answer.
+              Data stored in the app — student rosters, attendance, observation and counseling
+              records — is <strong>not transmitted</strong>. However, personal information you type
+              into the question itself is transmitted with it, so we recommend not including student
+              names or contact details in your questions.
+            </li>
           </ul>
           <p>
-            <strong>Consignee:</strong> Supabase Inc. (cloud infrastructure).{' '}
-            <strong>Purpose:</strong> providing the collaboration features above.{' '}
-            <strong>Retention/Deletion:</strong> data is deleted when you remove it within each
-            feature or when its retention period (e.g., real-time link expiry) passes. Data in
-            transit is encrypted via HTTPS (TLS).
+            <strong>Consignees:</strong> Supabase Inc. (cloud infrastructure); Upstage Inc. (AI
+            assistant answer generation); Google LLC (AI assistant question retrieval and fallback
+            answer generation). <strong>Purpose:</strong> providing the collaboration features above
+            and the AI assistant. <strong>Retention/Deletion:</strong> data is deleted when you
+            remove it within each feature or when its retention period (e.g., real-time link expiry)
+            passes. AI assistant conversations are retained to improve answer quality and are
+            deleted on request. Data in transit is encrypted via HTTPS (TLS).
           </p>
         </>
       ),
@@ -1178,10 +1203,16 @@ const enContent = {
               features
             </li>
             <li>
-              <strong>Google LLC</strong> (USA) — processing of Calendar, Drive backup, and Tasks
-              data when you enable Google integration (Sections 1 and 6)
+              <strong>Google LLC</strong> (USA) — (i) processing of Calendar, Drive backup, and
+              Tasks data when you enable Google integration (Sections 1 and 6); (ii) processing of
+              your question text to retrieve relevant help articles, and fallback answer generation,
+              when you use the AI assistant (Section 11)
             </li>
           </ul>
+          <p>
+            Answer generation for the AI assistant is handled by <strong>Upstage Inc.</strong>, a
+            company based in Korea (Section 11).
+          </p>
           <p>
             The items, purposes, and retention/use periods of the transferred data follow Sections
             1, 2, 4, and 11, and data in transit is encrypted via HTTPS (TLS). Basis: Article 28-8
