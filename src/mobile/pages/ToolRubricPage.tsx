@@ -206,7 +206,7 @@ function GradingSheet({
         </div>
 
         <div
-          className={`flex-1 overflow-auto px-5 pb-4 space-y-5 ${
+          className={`flex-1 overflow-auto px-5 pb-4 space-y-4 ${
             isAbsent ? 'opacity-40 pointer-events-none' : ''
           }`}
         >
@@ -464,7 +464,7 @@ export function ToolRubricPage({ onBack }: Props) {
               <p className="text-sp-muted text-sm mt-2">이 반에 등록된 학생이 없어요</p>
             </div>
           ) : (
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               {selectedClass.students
                 .slice()
                 .sort((a, b) => a.number - b.number)

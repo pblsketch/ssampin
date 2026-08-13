@@ -266,7 +266,7 @@ export function HomeroomRecordsOverviewPage({ onClose }: HomeroomRecordsOverview
             )}
 
             {/* 타임라인 */}
-            <div className="px-4 pb-4 space-y-5">
+            <div className="px-4 pb-4 space-y-4">
               {homeroomRecords.length === 0 ? (
                 <EmptyState
                   mascot

@@ -157,7 +157,7 @@ export function SyncStatus() {
           aria-live="polite"
           className="rounded-xl border border-sp-border bg-sp-bg p-3"
         >
-          <div className="flex items-start gap-2.5">
+          <div className="flex items-start gap-2">
             <span
               className="material-symbols-outlined text-sp-accent text-icon-lg animate-spin shrink-0 mt-0.5"
               aria-hidden
@@ -182,7 +182,7 @@ export function SyncStatus() {
 
       {isAuthenticated && conflict && resolvingChoice === null && (
         <div role="alert" className="space-y-3 rounded-xl border border-sp-border bg-sp-bg p-3">
-          <div className="flex items-start gap-2.5">
+          <div className="flex items-start gap-2">
             <span
               className="material-symbols-outlined rounded-lg bg-sp-warning/12 p-1.5 text-sp-warning text-icon-lg shrink-0"
               aria-hidden

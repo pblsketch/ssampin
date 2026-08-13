@@ -27,6 +27,22 @@ let openSheets: OpenSheet[] = [];
  */
 let pendingSelfBacks = 0;
 
+/**
+ * 정리는 됐지만 아직 되돌리지 않은 항목.
+ *
+ * 왜 필요한가 — 정리 단계의 `history.back()` 은 **비동기**다. StrictMode(개발 모드)는
+ * 마운트 → 정리 → 재마운트를 같은 커밋에서 연달아 도는데, 재마운트의 pushState 가
+ * 먼저 실행되고 back() 이 뒤늦게 도착한다. 그러면 이렇게 된다.
+ *
+ *   push {sheet:1} → back() 예약 → push {sheet:1} → (뒤늦게) popstate
+ *   결과: 시트는 열려 있는데 **현재 항목은 시트 이전 것** → 뒤로가기가 화면을 넘겨버린다
+ *
+ * 그래서 되돌리기를 마이크로태스크로 미루고, 그 사이에 새 시트가 마운트되면
+ * **되돌리지 않고 그 항목을 그대로 물려준다**(푸시도 생략). 열려 있는 시트 1개당
+ * 항목 1개라는 수지는 그대로 유지된다.
+ */
+let pendingRelease: OpenSheet | null = null;
+
 let listenerInstalled = false;
 
 function handlePopState(): void {
@@ -53,6 +69,7 @@ function ensureListener(): void {
 export function __resetSheetStackForTest(): void {
   openSheets = [];
   pendingSelfBacks = 0;
+  pendingRelease = null;
 }
 
 /**
@@ -68,9 +85,11 @@ export function __resetSheetStackForTest(): void {
  *
  * 중첩 시트는 스택의 맨 위 하나만 닫힌다.
  *
- * StrictMode(개발 모드)에서 effect 가 마운트→정리→재마운트로 두 번 도는데,
- * 정리의 back() 이 **비동기**라 재마운트가 새 항목을 쌓은 뒤에 도착한다. 그 popstate 를
- * 사용자 조작으로 오해하면 시트가 열리자마자 닫힌다. pendingSelfBacks 가 그걸 삼킨다.
+ * StrictMode(개발 모드)에서 effect 가 마운트→정리→재마운트로 두 번 도는데, 정리의
+ * back() 이 **비동기**라 재마운트가 새 항목을 쌓은 뒤에 도착한다. 방어가 두 겹이다.
+ *  - `pendingRelease`: 되돌리기를 한 박자 미뤄, 곧바로 재마운트되면 항목을 물려준다
+ *    (푸시 1회로 끝나 "시트는 열렸는데 현재 항목은 시트 이전"이 생기지 않는다)
+ *  - `pendingSelfBacks`: 그래도 나간 자체 back 의 popstate 를 사용자 조작으로 오해하지 않는다
  */
 export function useSheetBackButton(onClose: () => void, enabled: boolean = true): void {
   // onClose 가 매 렌더 새 함수로 와도 스택 항목을 갈아끼우지 않도록 최신값만 참조한다.
@@ -88,20 +107,36 @@ export function useSheetBackButton(onClose: () => void, enabled: boolean = true)
     const entry: OpenSheet = { onCloseRef, closedByBackButton: false };
     openSheets.push(entry);
 
-    const state = (window.history.state ?? {}) as Record<string, unknown>;
-    // depth 는 그대로 물려준다. 시트가 화면 이동 깊이를 흔들면 goBack 판단이 틀어진다.
-    window.history.pushState({ ...state, sheet: openSheets.length }, '', window.location.href);
+    if (pendingRelease !== null) {
+      // 방금 정리된 시트가 아직 되돌려지지 않았다 — 그 항목을 물려받는다.
+      // 새로 푸시하면 항목이 하나 더 생기고, 뒤늦게 도착할 back() 이 그걸 도로 까서
+      // "시트는 열려 있는데 현재 항목은 시트 이전" 상태가 된다.
+      pendingRelease = null;
+    } else {
+      const state = (window.history.state ?? {}) as Record<string, unknown>;
+      // depth 는 그대로 물려준다. 시트가 화면 이동 깊이를 흔들면 goBack 판단이 틀어진다.
+      window.history.pushState({ ...state, sheet: openSheets.length }, '', window.location.href);
+    }
 
     return () => {
       openSheets = openSheets.filter((s) => s !== entry);
 
+      // 뒤로가기로 닫혔으면 항목은 이미 사라졌다. 되돌릴 것이 없다.
+      if (entry.closedByBackButton) return;
+
       // 뒤로가기가 아니라 X·바깥클릭·Esc 로 닫힌 경우, 쌓아둔 항목이 그대로 남는다.
       // 비워주지 않으면 다음 뒤로가기가 "아무 일도 안 일어나는" 한 번을 삼킨다.
       // 닫힘 경로가 무엇이든 "푸시 1회 = 백 1회" 수지가 맞아야 한다.
-      if (!entry.closedByBackButton) {
+      //
+      // 다만 **한 박자 미룬다.** 곧바로 다른 시트가 마운트되면(StrictMode 재마운트,
+      // 시트 교체) 위쪽에서 이 항목을 물려받으므로 되돌리면 안 된다.
+      pendingRelease = entry;
+      queueMicrotask(() => {
+        if (pendingRelease !== entry) return; // 물려받았다 — 되돌리지 않는다
+        pendingRelease = null;
         pendingSelfBacks += 1;
         window.history.back();
-      }
+      });
     };
   }, [enabled]);
 }

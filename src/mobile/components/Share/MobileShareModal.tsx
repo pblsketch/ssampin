@@ -127,7 +127,7 @@ export function MobileShareModal({ isOpen, onClose, onShared }: MobileShareModal
           </div>
 
           {/* Actions */}
-          <div className="px-5 pb-4 space-y-2.5">
+          <div className="px-5 pb-4 space-y-2">
             {/* 네이티브 공유 (가능한 경우) */}
             {typeof navigator.share === 'function' && (
               <button

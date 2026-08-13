@@ -47,9 +47,14 @@ export function CollapsibleCard({
           onClick={() => toggle(cardId)}
           aria-expanded={!collapsed}
           aria-controls={bodyId}
-          className="flex items-center gap-2 min-w-0 flex-1 text-left min-h-[28px]"
+          /* 보이는 줄 높이는 28px 그대로 두고 누를 수 있는 높이만 44px 로.
+             음수 마진이 차이(16px)를 상쇄해 카드가 커지지 않는다. */
+          className="flex items-center gap-2 min-w-0 flex-1 text-left min-h-[44px] -my-2"
         >
-          <span className={`material-symbols-outlined shrink-0 ${iconClass ?? 'text-sp-muted'}`}>
+          <span
+            className={`material-symbols-outlined shrink-0 ${iconClass ?? 'text-sp-muted'}`}
+            aria-hidden="true"
+          >
             {icon}
           </span>
           <span className="text-sp-text font-bold shrink-0">{title}</span>
@@ -64,7 +69,8 @@ export function CollapsibleCard({
           aria-label={collapsed ? `${title} 펼치기` : `${title} 접기`}
           aria-expanded={!collapsed}
           aria-controls={bodyId}
-          className="shrink-0 flex items-center justify-center w-7 h-7"
+          /* 같은 이유 — 보이는 크기 28px, 누를 수 있는 크기 44px. */
+          className="shrink-0 flex items-center justify-center w-11 h-11 -m-2"
         >
           <span
             className={`material-symbols-outlined text-sp-muted transition-transform ${collapsed ? '' : 'rotate-180'}`}

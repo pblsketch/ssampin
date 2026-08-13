@@ -75,12 +75,18 @@ describe('useSheetBackButton', () => {
    * "닫은 뒤 sheet 값" 을 직접 재면 앞선 테스트가 쌓아둔 항목에 오염된다.
    * 그래서 결과 상태 대신 **정리 동작이 실제로 일어나는지**를 본다.
    */
-  it('X·바깥클릭으로 닫으면 쌓아둔 항목을 되돌린다 (뒤로가기 한 번을 삼키지 않도록)', () => {
+  it('X·바깥클릭으로 닫으면 쌓아둔 항목을 되돌린다 (뒤로가기 한 번을 삼키지 않도록)', async () => {
     const backSpy = vi.spyOn(window.history, 'back');
     const { unmount } = render(<Sheet onClose={() => {}} />);
 
     act(() => {
       unmount();
+    });
+
+    // 되돌리기는 한 박자 미뤄져 있다 — 그 사이 다른 시트가 마운트되면 항목을 물려주기
+    // 위해서다(StrictMode 재마운트·시트 교체). 여기서는 아무도 안 받으므로 실제로 나간다.
+    await act(async () => {
+      await Promise.resolve();
     });
 
     expect(backSpy).toHaveBeenCalledTimes(1);
@@ -136,27 +142,29 @@ describe('useSheetBackButton', () => {
    *
    * 이 테스트가 그 순서를 그대로 재현한다. 고쳐지기 전에는 onClose 가 호출됐다.
    */
-  it('[StrictMode] 정리→재마운트 뒤 늦게 도착한 자체 back 이 시트를 닫지 않는다', () => {
+  it('닫은 뒤 곧 다른 시트를 열면, 늦게 도착한 자체 back 이 그 시트를 닫지 않는다', async () => {
     const onClose = vi.fn();
 
-    // 1) 마운트
-    const first = render(<Sheet onClose={onClose} />);
+    // 1) 시트 A 를 열고 X 로 닫는다 — 되돌리기가 예약된다.
+    const first = render(<Sheet onClose={() => {}} />);
     expect(sheetDepth()).toBe(1);
-
-    // 2) 정리 — 여기서 back() 이 예약된다(아직 도착 전)
     act(() => {
       first.unmount();
     });
+    // 2) 예약이 실제로 나가게 둔다(아무도 물려받지 않았다).
+    await act(async () => {
+      await Promise.resolve();
+    });
 
-    // 3) 재마운트 — 예약된 back 이 도착하기 전에 새 항목을 쌓는다
+    // 3) 그 back 의 popstate 가 도착하기 전에 시트 B 를 연다.
     render(<Sheet onClose={onClose} />);
 
-    // 4) 이제서야 예약됐던 자체 back 이 도착한다
+    // 4) 이제서야 A 의 자체 back 이 도착한다 — 이건 사용자 조작이 아니다.
     pressBackButton();
 
     expect(
       onClose,
-      'StrictMode 재마운트 직후 자체 back 을 사용자 조작으로 오해해 시트를 닫았습니다.',
+      '앞 시트가 남긴 자체 back 을 사용자 조작으로 오해해 새 시트를 닫았습니다.',
     ).not.toHaveBeenCalled();
   });
 
@@ -185,6 +193,43 @@ describe('useSheetBackButton', () => {
     expect(onClose, 'StrictMode 렌더만으로 시트가 닫혔습니다.').not.toHaveBeenCalled();
     // 항목은 정확히 하나만 남아야 한다(이중 마운트가 두 개를 쌓으면 안 된다).
     expect(sheetDepth()).toBe(1);
+  });
+
+  /**
+   * StrictMode 이중 실행 경합 — 실화면에서 잡은 진짜 버그.
+   *
+   * 정리 단계의 `history.back()` 은 비동기다. 예전에는 정리에서 곧바로 back() 을 불렀는데,
+   * StrictMode 는 마운트 → 정리 → 재마운트를 연달아 돌아서 재마운트의 pushState 가 먼저
+   * 실행되고 back() 이 **뒤늦게** 도착했다. 계측하면 이렇게 찍혔다.
+   *
+   *   push {sheet:1} → back() → push {sheet:1} → (뒤늦게) popstate → state={depth:1}
+   *
+   * 결과: 시트는 열려 있는데 현재 항목은 시트 이전 것이라, 뒤로가기가 시트를 닫는 대신
+   * **화면을 넘겨버렸다**. sheetDepth 만 보면 1 이라 위 테스트는 통과한다 —
+   * 문제는 깊이가 아니라 "푸시를 몇 번 했는가"였다.
+   */
+  it('StrictMode 이중 실행에서 히스토리 푸시는 정확히 1회다 (되돌리기 경합)', async () => {
+    const pushSpy = vi.spyOn(window.history, 'pushState');
+    const backSpy = vi.spyOn(window.history, 'back');
+
+    render(
+      <StrictMode>
+        <Sheet onClose={vi.fn()} />
+      </StrictMode>,
+    );
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20));
+    });
+
+    expect(
+      pushSpy.mock.calls.length,
+      '두 번 쌓으면, 뒤늦게 도착하는 back() 이 그중 하나를 도로 까서 ' +
+        '"시트는 열려 있는데 현재 항목은 시트 이전"이 된다 → 뒤로가기가 화면을 넘긴다.',
+    ).toBe(1);
+    expect(backSpy, '재마운트가 항목을 물려받았으므로 되돌릴 것이 없다.').not.toHaveBeenCalled();
+
+    pushSpy.mockRestore();
+    backSpy.mockRestore();
   });
 
   it('중첩 상태에서 뒤로가기를 두 번 하면 바깥 시트까지 닫힌다', () => {

@@ -277,7 +277,7 @@ export function OnboardingFlow({ onComplete, onLogin }: Props) {
             수업 시작·끝 시각. 기본값을 쓰거나 직접 설정하세요. 설정에서 언제든 바꿀 수 있어요.
           </p>
         </div>
-        <div className="space-y-2.5">
+        <div className="space-y-2">
           {presetCard('preset7', '기본 7교시', '08:50 시작 · 40분 수업 · 10분 쉬는 시간')}
           {presetCard('preset6', '기본 6교시', '09:00 시작 · 45분 수업 · 10분 쉬는 시간')}
           {presetCard('custom', '직접 설정', '학교 일정에 맞춰 교시별 시각을 직접 입력')}

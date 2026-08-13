@@ -153,7 +153,7 @@ export function StudentRecordsFullSheet({
         </div>
 
         {/* 타임라인 */}
-        <div className="flex-1 overflow-y-auto px-5 py-3 space-y-5">
+        <div className="flex-1 overflow-y-auto px-5 py-3 space-y-4">
           {allRecords.length === 0 ? (
             <EmptyState
               mascot

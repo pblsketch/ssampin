@@ -379,7 +379,7 @@ export function StudentsPage() {
           <button
             onClick={() => setSelectedDate((d) => addDays(d, -1))}
             aria-label="하루 전"
-            className="grid place-items-center w-9 h-11 rounded-lg text-sp-muted active:bg-black/5 dark:active:bg-white/10"
+            className="grid place-items-center w-11 -mx-1 h-11 rounded-lg text-sp-muted active:bg-black/5 dark:active:bg-white/10"
           >
             <span className="material-symbols-outlined text-xl">chevron_left</span>
           </button>
@@ -401,7 +401,7 @@ export function StudentsPage() {
           <button
             onClick={() => setSelectedDate((d) => addDays(d, 1))}
             aria-label="하루 후"
-            className="grid place-items-center w-9 h-11 rounded-lg text-sp-muted active:bg-black/5 dark:active:bg-white/10"
+            className="grid place-items-center w-11 -mx-1 h-11 rounded-lg text-sp-muted active:bg-black/5 dark:active:bg-white/10"
           >
             <span className="material-symbols-outlined text-xl">chevron_right</span>
           </button>
