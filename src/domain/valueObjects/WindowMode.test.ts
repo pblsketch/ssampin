@@ -2,8 +2,14 @@ import { describe, expect, test } from 'vitest';
 import { isValidWindowMode, WINDOW_MODES, type WindowMode } from './WindowMode';
 
 describe('WindowMode value object', () => {
-  test('TC-01: WINDOW_MODES는 icon, widget, main 3개를 포함한다', () => {
-    expect(WINDOW_MODES).toEqual(['icon', 'widget', 'main']);
+  test('TC-01: WINDOW_MODES는 icon, widget, main, sidePin 4개를 포함한다', () => {
+    // 2026-08-14: 옆핀이 "앱을 접어 두는 형태" 중 하나로 확정되며 네 번째 모드가 됐다.
+    // 넷은 서로 배타적이다 — 하나를 켜면 나머지는 숨는다.
+    expect(WINDOW_MODES).toEqual(['icon', 'widget', 'main', 'sidePin']);
+  });
+
+  test('TC-01f: isValidWindowMode("sidePin") === true', () => {
+    expect(isValidWindowMode('sidePin')).toBe(true);
   });
 
   test('TC-01a: isValidWindowMode("icon") === true', () => {

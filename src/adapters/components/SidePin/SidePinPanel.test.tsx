@@ -21,6 +21,7 @@ function renderPanel(overrides: Partial<Parameters<typeof SidePinPanel>[0]> = {}
     memoSlot: <div>메모 자리</div>,
     onTogglePin: vi.fn(),
     onClose: vi.fn(),
+    onOpenMain: vi.fn(),
     ...overrides,
   };
   render(<SidePinPanel {...props} />);
@@ -46,6 +47,16 @@ describe('패널 구조', () => {
 
     expect(screen.getByRole('button', { name: '고정' })).toBeTruthy();
     expect(screen.getByRole('button', { name: '닫기' })).toBeTruthy();
+  });
+
+  test('메인 쌤핀으로 돌아갈 길이 반드시 있다', () => {
+    // 옆핀은 위젯·아이콘과 같은 계열의 "접어 둔 상태"라 메인 창이 숨어 있다.
+    // 돌아갈 버튼이 없으면 사용자는 트레이를 뒤지거나 앱을 다시 켠다.
+    const props = renderPanel();
+
+    fireEvent.click(screen.getByRole('button', { name: '쌤핀 열기' }));
+
+    expect(props.onOpenMain).toHaveBeenCalled();
   });
 });
 

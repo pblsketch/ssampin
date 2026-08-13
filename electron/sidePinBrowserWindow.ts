@@ -55,10 +55,24 @@ function adapt(win: BrowserWindow): SidePinWindowLike {
   };
 }
 
+/**
+ * 팩토리 + 방금 만든 창 꺼내기.
+ *
+ * 호스트는 창을 `SidePinWindowLike`로만 다루지만, `main.ts`는 진짜 `BrowserWindow`가
+ * 필요하다 — 데이터 변경 브로드캐스트 대상 목록에 넣어야 하기 때문이다.
+ */
+export interface SidePinBrowserWindowFactoryHandle {
+  readonly factory: SidePinWindowFactory;
+  /** 살아 있는 옆핀 창. 없으면 null */
+  getWindow(): BrowserWindow | null;
+}
+
 export function createSidePinBrowserWindowFactory(
   options: SidePinBrowserWindowOptions,
-): SidePinWindowFactory {
-  return {
+): SidePinBrowserWindowFactoryHandle {
+  let live: BrowserWindow | null = null;
+
+  const factory: SidePinWindowFactory = {
     create(bounds: SidePinBounds): SidePinWindowLike {
       const win = new BrowserWindow({
         ...bounds,
@@ -91,8 +105,18 @@ export function createSidePinBrowserWindowFactory(
         void win.loadFile(options.indexHtmlPath, { search: query });
       }
 
+      live = win;
+      win.on('closed', () => {
+        if (live === win) live = null;
+      });
+
       return adapt(win);
     },
+  };
+
+  return {
+    factory,
+    getWindow: () => (live !== null && !live.isDestroyed() ? live : null),
   };
 }
 

@@ -304,7 +304,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
               //   closeToWidget=false → 'tray'
               const explicit = (
                 saved.widget as unknown as {
-                  closeAction?: 'widget' | 'tray' | 'ask' | 'icon' | 'quit';
+                  closeAction?: 'widget' | 'tray' | 'ask' | 'icon' | 'quit' | 'sidePin';
                 }
               )?.closeAction;
               if (

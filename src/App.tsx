@@ -134,6 +134,7 @@ import { ShareModal } from '@adapters/components/Share/ShareModal';
 import { SharePromptOverlay } from '@adapters/components/Share/SharePromptOverlay';
 import { recordActiveDay } from '@adapters/stores/useShareStore';
 import { ShareWindowApp } from '@adapters/components/MultiSurvey/v2/Share/ShareWindowApp';
+import { SidePinApp } from '@adapters/components/SidePin/SidePinApp';
 import { WidgetSyncBanner } from '@widgets/components/WidgetSyncBanner';
 import { parseNavigationTarget } from '@adapters/utils/navigationTarget';
 
@@ -162,6 +163,11 @@ function isIconMode(): boolean {
 function isMultiSurveyShareMode(): boolean {
   const params = new URLSearchParams(window.location.search);
   return params.get('mode') === 'msShare';
+}
+
+function isSidePinMode(): boolean {
+  const params = new URLSearchParams(window.location.search);
+  return params.get('mode') === 'sidePin';
 }
 
 function getQuickAddKindFromUrl(): QuickAddKind {
@@ -544,6 +550,9 @@ export function App() {
   }
   if (isMultiSurveyShareMode()) {
     return <ShareWindowApp />;
+  }
+  if (isSidePinMode()) {
+    return <SidePinApp />;
   }
   return <MainApp />;
 }

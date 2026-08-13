@@ -838,6 +838,14 @@ export function resolveSidePinTransition(
       return closeNow(state, ctx, { pinnedZone: 'none' });
     }
 
+    case 'close-requested': {
+      if (!isSidePinResponsive(state)) return unchanged(state);
+      // 메모를 쓰는 중이면 편집기가 먼저 처리한다(저장·확인). 여기서 닫지 않는다.
+      if (isEditorBusy(state.editorActivity)) return unchanged(state);
+      if (state.surface === 'collapsed') return unchanged(state);
+      return closeNow(state, ctx, { pinnedZone: 'none' });
+    }
+
     case 'outside-click': {
       if (!isSidePinResponsive(state)) return unchanged(state);
       if (state.pinnedZone !== 'none') return unchanged(state);

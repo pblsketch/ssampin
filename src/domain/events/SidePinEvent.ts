@@ -30,6 +30,14 @@ export type SidePinEvent =
   | { readonly type: 'outside-click' }
   /** Esc를 눌렀다 (메모 편집기가 이미 소비한 경우에는 오지 않는다) */
   | { readonly type: 'escape-pressed' }
+  /**
+   * 패널의 닫기 버튼을 눌렀다.
+   *
+   * Esc와 따로 두는 이유: Esc는 "포커스를 가진 창"의 키 입력이라 남의 앱에서 누른 것과
+   * 구분해야 하지만, 닫기 버튼은 이 창을 직접 누른 것이라 포커스 여부를 따질 필요가 없다.
+   * 하나로 합치면 호버로 열린 패널에서 닫기 버튼이 먹통이 된다.
+   */
+  | { readonly type: 'close-requested' }
 
   // ── 제품 의도: 화면이 보낸다 ──
   /** 손잡이·영역 헤더·고정 아이콘을 클릭해 고정을 켜고 껐다 */

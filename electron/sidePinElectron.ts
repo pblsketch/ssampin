@@ -38,6 +38,8 @@ function toDisplayInfo(display: Electron.Display): SidePinDisplayInfo {
 
 export interface SidePinElectronHandle {
   readonly service: SidePinService;
+  /** 살아 있는 옆핀 창 (브로드캐스트 대상 목록에 넣기 위해). 없으면 null */
+  getWindow(): Electron.BrowserWindow | null;
   /** 모니터 변경 구독을 해제하고 타이머·창을 정리한다 */
   dispose(): void;
 }
@@ -45,13 +47,14 @@ export interface SidePinElectronHandle {
 export function createSidePinElectron(options: SidePinElectronOptions): SidePinElectronHandle {
   const userDataDir = app.getPath('userData');
   const scheduler = createSidePinScheduler();
+  const windows = createSidePinBrowserWindowFactory({
+    preloadPath: options.preloadPath,
+    devServerUrl: options.devServerUrl,
+    indexHtmlPath: resolveSidePinIndexHtml(options.appRoot),
+  });
 
   const service = createSidePinService({
-    factory: createSidePinBrowserWindowFactory({
-      preloadPath: options.preloadPath,
-      devServerUrl: options.devServerUrl,
-      indexHtmlPath: resolveSidePinIndexHtml(options.appRoot),
-    }),
+    factory: windows.factory,
     scheduler,
     readDisplays: () => ({
       displays: screen.getAllDisplays().map(toDisplayInfo),
@@ -74,6 +77,7 @@ export function createSidePinElectron(options: SidePinElectronOptions): SidePinE
 
   return {
     service,
+    getWindow: () => windows.getWindow(),
     dispose(): void {
       screen.removeListener('display-added', onDisplayChange);
       screen.removeListener('display-removed', onDisplayChange);

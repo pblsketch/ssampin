@@ -20,6 +20,13 @@ export interface SidePinPanelProps {
   readonly memoSlot: ReactNode;
   readonly onTogglePin: (zone: 'both') => void;
   readonly onClose: () => void;
+  /**
+   * 메인 쌤핀으로 돌아간다.
+   *
+   * 옆핀은 위젯·아이콘과 같은 계열의 "접어 둔 상태"라, 메인 창은 숨어 있다.
+   * 돌아갈 길이 눈에 보이지 않으면 사용자는 트레이를 뒤지거나 앱을 다시 켠다.
+   */
+  readonly onOpenMain: () => void;
   /** 메모를 편집 중이면 위젯 영역을 요약 높이로 접는다 */
   readonly memoEditing?: boolean;
 }
@@ -55,6 +62,7 @@ export function SidePinPanel({
   memoSlot,
   onTogglePin,
   onClose,
+  onOpenMain,
   memoEditing = false,
 }: SidePinPanelProps) {
   const pinned = pinnedZone !== 'none';
@@ -66,6 +74,8 @@ export function SidePinPanel({
     >
       <header className="flex shrink-0 items-center gap-1 border-b border-sp-border px-3 py-2">
         <h1 className="flex-1 truncate text-sm font-bold text-sp-text">옆핀</h1>
+        {/* 메인으로 돌아가는 길 — 옆핀은 접어 둔 상태라 메인 창이 숨어 있다 */}
+        <HeaderButton icon="open_in_full" label="쌤핀 열기" onClick={onOpenMain} />
         <HeaderButton
           icon={pinned ? 'keep' : 'keep_off'}
           label={pinned ? '고정 해제' : '고정'}

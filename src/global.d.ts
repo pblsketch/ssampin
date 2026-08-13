@@ -661,7 +661,19 @@ interface ElectronAPI {
   onAnalyticsFlush: (callback: () => void) => () => void;
   // Close action dialog
   onCloseActionAsk: (callback: () => void) => () => void;
-  respondCloseAction: (action: 'widget' | 'tray' | 'icon' | 'quit') => void;
+  respondCloseAction: (action: 'widget' | 'tray' | 'icon' | 'quit' | 'sidePin') => void;
+  /**
+   * 옆핀 — 화면은 상태를 받아 그리기만 하고, 사람이 한 일을 되돌려 보낸다.
+   * 판단(언제 펼치고 접을지)은 전부 main의 controller가 한다.
+   */
+  sidePin?: {
+    onStateChanged: (callback: (state: unknown) => void) => () => void;
+    reportPointerRegion: (region: string) => void;
+    togglePin: (zone: 'widget' | 'memo' | 'both') => void;
+    requestClose: () => void;
+    openMain: () => void;
+    reportPainted: () => void;
+  };
   // Cross-window data sync
   onDataChanged: (callback: (filename: string) => void) => () => void;
   // 절전/잠금 복귀 알림
