@@ -909,9 +909,11 @@ Claude 계열 리뷰어가 3라운드를 끝낸 뒤, **다른 모델 계열**로
 
 **2. `tsconfig.electron.json`은 현재 쓰이지 않고, 그대로 돌리면 실패한다.** `rootDir: "electron"` 때문에 `electron/ipc/board.ts`의 정상적인 src import까지 오류로 잡는다. `include`를 고쳐 electron 전체를 검사하면 **기존 오류 57건**이 나온다(`Object is possibly 'undefined'`, import 대소문자 불일치 등). 이 backlog 정리는 옆핀과 별개 작업이다.
 
-**3. electron은 src를 import할 수 있다 — 막히는 건 별칭뿐이다.** `archiveManager`의 "rootDir 제약으로 import 불가"라는 주석은 정확하지 않다. 실제 제약은 esbuild에 alias 설정이 없어 `@domain/*`가 안 되는 것이고, **상대 경로는 동작하며 이미 출시되고 있다**(`electron/ipc/board.ts` → `dist-electron/ipc/board.js` 752KB에 src 도메인 코드가 실제로 들어 있다).
+**3. electron은 src를 자유롭게 import할 수 있다 — 별칭까지 포함해서.** `archiveManager`의 "rootDir 제약으로 `@domain` import 불가"라는 주석은 사실이 아니다. 실증: `electron/`에 `import { SidePinController } from '../src/usecases/sidePin/SidePinController'`(내부에서 `@domain/*`를 값으로 쓰는 파일)를 넣고 `node scripts/build-electron.mjs`를 돌리면 **성공하고**, 산출물 25KB 안에 전이 함수 코드가 그대로 들어 있으며 미해결 별칭 문자열도 남지 않는다. **esbuild가 `tsconfig.json`의 `paths`를 자동으로 읽기 때문이다**(esbuild 기본 동작). `electron/ipc/board.ts`가 이미 상대 경로로 src를 가져다 출시되고 있는 것도 같은 맥락이다.
 
-> 그래서 §9-3부터는 **타입만 상대 경로로 가져온다.** 타입 import는 esbuild가 통째로 제거하므로 번들에 흔적이 남지 않는다(`dist-electron/sidePinWindow.js` 5.6KB, src 런타임 코드 0건). 값을 가져오면 board.ts처럼 무거워지므로, 값이 필요할 때만 신중히 판단한다. §9-4의 MIRROR 복제는 이 사실을 알기 전에 만든 것이라 지금은 불필요하지만, 미러 테스트가 어긋남을 막고 있어 그대로 뒀다.
+> ⚠️ 이 항목은 한 번 틀리게 적었다가 실험으로 바로잡은 것이다. 처음에는 "상대 경로만 되고 별칭은 안 된다"고 적었는데, 번들을 직접 만들어 보니 별칭도 해결됐다. **이 저장소의 빌드 동작은 추측하지 말고 `build-electron.mjs`를 돌려 확인할 것.**
+>
+> 실무 지침: **타입만 필요하면 `import type`을 쓴다.** esbuild가 통째로 제거해 번들에 흔적이 없다(`dist-electron/sidePinWindow.js` 5.6KB, src 런타임 코드 0건). 값이 필요하면 그냥 가져오되 번들이 커지는 것을 감안한다(`board.js` 752KB가 그 예). §9-4의 MIRROR 복제는 이 사실을 알기 전에 만든 것이라 **불필요하다.** 미러 테스트가 어긋남을 막고 있어 당장 위험하지는 않으나, 정리 대상으로 남긴다.
 
 ### §9-3 일부 완료 — 창 호스트와 공통 계약
 
@@ -924,7 +926,23 @@ Claude 계열 리뷰어가 3라운드를 끝낸 뒤, **다른 모델 계열**로
 
 계약은 "어떻게 했는가"가 아니라 **"결과가 같은가"**만 본다. A안은 창 크기를 바꾸고 D안은 창을 만들고 없애지만, "손잡이가 남아 있는가 / 패널이 보이는가 / 내용이 비워졌는가"의 답은 같아야 한다.
 
-**남은 §9-3**: 실제 `BrowserWindow` 팩토리 배선과 성능 실측. 실측은 실기기 필요.
+### §9-3 배선 완료 — Electron 자원까지 연결
+
+| 파일                               | 역할                                                                               |
+| ---------------------------------- | ---------------------------------------------------------------------------------- |
+| `electron/sidePinBrowserWindow.ts` | 진짜 `BrowserWindow`를 창 계약에 맞추는 어댑터. Electron을 아는 코드는 여기 하나뿐 |
+| `electron/sidePinScheduler.ts`     | 실제 타이머                                                                        |
+| `electron/sidePinService.ts`       | 조립부 — 규칙·창·위치 계산·기기 설정을 연결                                        |
+| `electron/sidePinElectron.ts`      | Electron 자원(`screen`·`app`·`BrowserWindow`) 주입 + 모니터 변경 구독              |
+| `electron/sidePinService.test.ts`  | 배선 테스트 12개                                                                   |
+
+창 옵션은 기획서 §6대로다. 테두리 없음·투명·작업 표시줄 제외, `alwaysOnTop`은 **`'normal'` 단계만** 쓴다(아이콘 모드가 쓰는 `screen-saver` 단계는 전체 화면 앱까지 덮으므로 금지). 만들 때 `show: false`로 두고 호스트가 위치를 잡은 뒤 띄운다 — 그러지 않으면 엉뚱한 자리에 잠깐 번쩍인다.
+
+조립부가 하는 일 중 눈여겨볼 것은 **저장된 모니터가 사라졌을 때 저장값까지 고치는 것**이다(AC-18). 고치지 않으면 켤 때마다 같은 대체가 반복되고 사용자는 자기가 고른 모니터가 왜 안 쓰이는지 영영 모른다. 같은 대체를 두 번 저장하지 않는 것도 테스트로 고정했다.
+
+> ⛔ **`main.ts` 연결은 일부러 하지 않았다.** 지금 연결하면 `mode=sidePin` 창이 뜨는데, `src/App.tsx`에 그 분기가 아직 없어(§9-6) 16 DIP 투명 창 안에 메인 화면이 통째로 렌더된다. **화면(§9-6)과 같은 작업 단위로 붙여야 한다.** 그때 `main.ts`가 할 일은 `createSidePinElectron({ preloadPath, devServerUrl, appRoot })` 한 줄과 `getAllAppWindows()`에 창을 추가하는 것뿐이다(그 함수 주석도 함께 고칠 것 — QA-08).
+
+**남은 §9-3**: 성능 실측(실기기 필요).
 
 ### 다음 세션이 여기서부터 시작한다 — §9-3 나머지
 
