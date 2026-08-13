@@ -505,9 +505,9 @@ const koContent = {
       content: (
         <>
           <p>
-            쌤핀의 일부 협업 기능과 Google 연동은 국외에 서버를 둔 사업자에게 개인정보 처리를
-            위탁하며, 이 과정에서 개인정보가 국외로 이전될 수 있습니다. 교사가 해당 기능을 사용하지
-            않으면 어떤 정보도 국외로 이전되지 않습니다.
+            쌤핀의 일부 협업 기능과 Google 연동, 그리고 AI 도우미는 국외에 서버를 둔 사업자에게
+            개인정보 처리를 위탁하며, 이 과정에서 개인정보가 국외로 이전될 수 있습니다. 교사가 해당
+            기능을 사용하지 않으면 어떤 정보도 국외로 이전되지 않습니다.
           </p>
           <ul>
             <li>
@@ -522,11 +522,13 @@ const koContent = {
               캘린더·Drive 백업·Tasks 데이터 처리 (제1조·제6조) ②AI 도우미에 질문을 보낼 때, 관련
               도움말을 찾기 위한 질문 텍스트 처리 및 예비 답변 생성 (제11조)
             </li>
+            <li>
+              <strong>주식회사 업스테이지</strong> (대한민국 법인, 처리 인프라 미국) — AI 도우미에
+              질문을 보낼 때의 답변 생성 (제11조). 업스테이지는 자사 개인정보처리방침에 따라 입력된
+              대화 내용의 시스템 운영·데이터 보관을 Amazon Web Services·Microsoft Azure·Google(모두
+              미국)에 재위탁하므로, 이 과정에서 정보가 국외로 이전될 수 있습니다.
+            </li>
           </ul>
-          <p>
-            AI 도우미의 답변 생성은 국내 사업자인 <strong>주식회사 업스테이지</strong>가 맡습니다
-            (제11조).
-          </p>
           <p>
             이전되는 항목·목적·보유 및 이용 기간은 제1조·제2조·제4조·제11조에 따르며, 전송 구간은
             HTTPS(TLS)로 암호화됩니다. 근거: 개인정보 보호법 제28조의8(개인정보의 국외 이전).
@@ -1187,10 +1189,10 @@ const enContent = {
       content: (
         <>
           <p>
-            Some of SsamPin&apos;s collaboration features and Google integrations consign personal
-            information processing to companies whose servers are located overseas, and personal
-            information may be transferred abroad in the process. If a teacher does not use these
-            features, no information is transferred overseas.
+            Some of SsamPin&apos;s collaboration features, Google integrations, and the AI assistant
+            consign personal information processing to companies whose servers are located overseas,
+            and personal information may be transferred abroad in the process. If a teacher does not
+            use these features, no information is transferred overseas.
           </p>
           <ul>
             <li>
@@ -1208,11 +1210,14 @@ const enContent = {
               your question text to retrieve relevant help articles, and fallback answer generation,
               when you use the AI assistant (Section 11)
             </li>
+            <li>
+              <strong>Upstage Inc.</strong> (a Korean company; processing infrastructure in the USA)
+              — answer generation when you use the AI assistant (Section 11). Under its own privacy
+              policy, Upstage sub-consigns system operation and data storage of submitted
+              conversations to Amazon Web Services, Microsoft Azure, and Google (all in the USA), so
+              information may be transferred abroad in that process.
+            </li>
           </ul>
-          <p>
-            Answer generation for the AI assistant is handled by <strong>Upstage Inc.</strong>, a
-            company based in Korea (Section 11).
-          </p>
           <p>
             The items, purposes, and retention/use periods of the transferred data follow Sections
             1, 2, 4, and 11, and data in transit is encrypted via HTTPS (TLS). Basis: Article 28-8
