@@ -9,8 +9,15 @@
  * 한 열거형으로 묶으면 조합이 폭발하고 빠뜨린 경우가 생긴다.
  */
 
-/** 패널이 접혀 있는지 펼쳐져 있는지 */
-export type SidePinSurface = 'collapsed' | 'expanded';
+/**
+ * 패널이 접혀 있는지, 여는 중인지, 펼쳐져 있는지.
+ *
+ * `opening`을 따로 둔 이유가 중요하다. 처음에는 "여는 중"을 `collapsed`로 표현했는데,
+ * 그러면 "아직 안 열렸다"와 "열려던 걸 그만뒀다"를 구분할 수 없어 여러 버그가 나왔다.
+ * 열기 요청을 보낸 뒤 취소했는데 늦게 도착한 "그렸다" 알림이 패널을 열어 버리는 식이다.
+ * 여는 중을 눈에 보이는 상태로 만들면, 그 의도를 취소하는 곳을 빠뜨렸는지 한눈에 보인다.
+ */
+export type SidePinSurface = 'collapsed' | 'opening' | 'expanded';
 
 /** 왜 열렸는지 — 호버로 열린 창은 포커스를 가지지 않는다 */
 export type SidePinOpenReason = 'hover' | 'click' | 'shortcut' | null;
@@ -93,6 +100,13 @@ export interface SidePinHostError {
 }
 
 export interface SidePinRuntimeState {
+  /**
+   * 옆핀이 켜져 있는가.
+   *
+   * 설정값과 별개로 실행 중 상태에도 둔다. 이게 없으면 사용자가 옆핀을 끈 뒤에도
+   * 마우스를 가져다 대는 것만으로 창 만들기가 다시 시작된다.
+   */
+  readonly enabled: boolean;
   readonly surface: SidePinSurface;
   readonly openReason: SidePinOpenReason;
   readonly activeZone: SidePinZone | null;
@@ -120,6 +134,7 @@ export type SidePinProtectReason =
 
 /** 앱을 막 켰을 때의 상태 — 항상 접힌 손잡이부터 */
 export const INITIAL_SIDE_PIN_RUNTIME_STATE: SidePinRuntimeState = {
+  enabled: false,
   surface: 'collapsed',
   openReason: null,
   activeZone: null,
@@ -143,4 +158,14 @@ export function isPointerInsideSidePin(region: SidePinPointerRegion): boolean {
 /** 메모 편집기가 무언가 하고 있어서 패널을 접으면 안 되는 상태인가 */
 export function isEditorBusy(activity: MemoEditorActivity): boolean {
   return activity !== 'idle';
+}
+
+/**
+ * 지금 옆핀이 사용자 입력에 반응해야 하는 상태인가.
+ *
+ * 꺼져 있거나 보호 상태(잠금·절전·전체화면·어댑터 이상)면 어떤 입력도 창 조작으로
+ * 이어지면 안 된다. 이 판단을 한 곳에 모아 두지 않으면 분기마다 빠뜨린다.
+ */
+export function isSidePinResponsive(state: SidePinRuntimeState): boolean {
+  return state.enabled && state.protectedReason === null;
 }

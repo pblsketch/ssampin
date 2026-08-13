@@ -106,6 +106,9 @@ class FakeHost implements SidePinWindowHost {
   preparePanel(ctx: SidePinHostCommandContext): Promise<SidePinHostCommandResult> {
     return this.respond('preparePanel', ctx);
   }
+  /** showPanel 처리 도중 창이 곧바로 알림을 보내는 상황을 흉내 낸다 */
+  emitDuringShow: (() => void) | null = null;
+
   showPanel(
     ctx: SidePinHostCommandContext,
     options: { focus: boolean },
@@ -114,6 +117,11 @@ class FakeHost implements SidePinWindowHost {
     const last = this.calls[this.calls.length - 1];
     if (last !== undefined) {
       this.calls[this.calls.length - 1] = { ...last, focus: options.focus };
+    }
+    const hook = this.emitDuringShow;
+    if (hook !== null) {
+      this.emitDuringShow = null;
+      hook();
     }
     return promise;
   }
@@ -224,7 +232,8 @@ describe('180ms 펼침 (AC-02a)', () => {
     scheduler.advanceTo(180);
     await flush();
 
-    expect(controller.getState().surface).toBe('collapsed');
+    // "여는 중"이지 "펼쳐짐"이 아니다.
+    expect(controller.getState().surface).toBe('opening');
 
     const show = host.callsOf('showPanel')[0];
     host.emit({
@@ -399,7 +408,8 @@ describe('늦게 도착한 응답 (AC-04b)', () => {
     });
     await flush();
 
-    expect(controller.getState().surface).toBe('collapsed');
+    // 짝이 없는 알림이므로 펼침이 확정되지 않는다.
+    expect(controller.getState().surface).toBe('opening');
   });
 });
 
@@ -436,6 +446,53 @@ describe('배선', () => {
     await flush();
 
     expect(host.callsOf('repositionAll')).toHaveLength(1);
+  });
+
+  it('창이 명령 처리 도중에 곧바로 알림을 보내도 타이머가 사라지지 않는다', async () => {
+    // 창은 showPanel을 처리하면서 그 자리에서 "그렸다"와 "마우스가 나갔다"를
+    // 보고할 수 있다. 처리가 중첩되면 안쪽이 먼저 끝나, 바깥이 낡은 예약으로
+    // 최신 예약을 덮어쓰고 타이머가 통째로 사라진다.
+    await enable();
+    // show 요청이 나가는 순간 창이 곧바로 "그렸다"와 "마우스가 나갔다"를 보고한다
+    host.emitDuringShow = () => {
+      const show = host.callsOf('showPanel')[0];
+      if (show === undefined) return;
+      host.emit({
+        type: 'panel-painted',
+        operationId: show.ctx.operationId,
+        requestedRevision: show.ctx.requestedRevision,
+      });
+      host.emit({ type: 'pointer-region-changed', region: 'outside' });
+    };
+
+    host.emit({ type: 'pointer-region-changed', region: 'rail-widget' });
+    await flush();
+    scheduler.advanceTo(180);
+    await flush();
+
+    // 펼쳐졌고 커서는 밖이므로 접힘 예약이 살아 있어야 한다.
+    // 처리가 중첩되면 낡은 감시 예약이 이 접힘 예약을 덮어써 타이머가 사라진다.
+    expect(controller.getState().surface).toBe('expanded');
+    expect(scheduler.hasPending).toBe(true);
+
+    scheduler.advanceTo(180 + 400 + 10);
+    await flush();
+    expect(host.callsOf('collapsePanel').length).toBeGreaterThan(0);
+  });
+
+  it('dispose 뒤에 도착한 창 응답은 상태를 바꾸지 않는다', async () => {
+    await enable();
+    host.deferMethod = 'preparePanel';
+    host.emit({ type: 'pointer-region-changed', region: 'rail-widget' });
+    await flush();
+    const before = controller.getState().revision;
+
+    controller.dispose();
+    host.deferMethod = null;
+    host.flushDeferred();
+    await flush();
+
+    expect(controller.getState().revision).toBe(before);
   });
 
   it('dispose하면 창 알림 구독과 예약을 모두 정리한다', async () => {

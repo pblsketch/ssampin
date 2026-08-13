@@ -159,7 +159,8 @@ describe('호버 펼침', () => {
     const fired = apply(entered.next, { type: 'timer-fired', transition: reveal }, 1_180);
 
     expect(hostCommandOf(fired, 'show-panel')).toBeDefined();
-    expect(fired.next.surface).toBe('collapsed');
+    // "여는 중"이지 "펼쳐짐"이 아니다 — 그려졌다는 답을 받아야 확정된다.
+    expect(fired.next.surface).toBe('opening');
   });
 
   it('실제로 그려졌다는 응답을 받아야 펼침이 확정된다', () => {
@@ -219,8 +220,10 @@ describe('호버 펼침', () => {
     const left = apply(entered.next, { type: 'pointer-region-changed', region: 'outside' }, 1_100);
 
     expect(left.commands).toContainEqual({ type: 'cancel-schedule' });
-    expect(left.next.pendingTransition).toBeNull();
     expect(left.next.surface).toBe('collapsed');
+    // 펼침 예약은 사라지고, 만들다 만 창을 없앨 예약으로 바뀐다.
+    // 이게 없으면 보이지도 않는 창이 계속 메모리에 남는다.
+    expect(left.next.pendingTransition?.type).toBe('dispose-panel');
   });
 
   it('취소된 뒤 도착한 타이머는 아무 일도 하지 않는다', () => {
@@ -295,10 +298,17 @@ describe('호버 펼침', () => {
   });
 
   it('접힌 손잡이를 클릭하면 고정만 되는 게 아니라 열린다', () => {
+    // 창이 아직 없으면 먼저 만들라고 시킨다. 손잡이만 상주하는 구조(D안)에서는
+    // 없는 창에 "보여줘"를 보내면 실패하기 때문이다.
     const clicked = apply(enabledState(), { type: 'toggle-pin', zone: 'widget' }, 1_000);
 
-    expect(hostCommandOf(clicked, 'show-panel').focus).toBe(true);
+    expect(hostCommandOf(clicked, 'prepare-panel')).toBeDefined();
+    expect(clicked.next.surface).toBe('opening');
     expect(clicked.next.pinnedZone).toBe('widget');
+
+    // 창이 준비되면 그때 보여달라고 하고, 클릭이므로 포커스까지 가져온다.
+    const prepared = ack(clicked.next, hostCommandOf(clicked, 'prepare-panel'), 1_050);
+    expect(hostCommandOf(prepared, 'show-panel').focus).toBe(true);
   });
 
   it('파기 대기 중인 패널이 있으면 다시 만들지 않고 재사용한다', () => {
@@ -655,6 +665,61 @@ describe('늦게 도착한 응답', () => {
     expect(painted.next.surface).toBe('collapsed');
   });
 
+  it('여는 중 같은 고정 지점을 다시 누르면 열기 자체가 취소된다', () => {
+    // 고정만 풀고 열기를 그대로 두면, 늦게 도착한 "그렸다" 알림에 패널이 혼자 열린다.
+    const first = apply(enabledState(), { type: 'toggle-pin', zone: 'widget' }, 1_000);
+    const prepared = ack(first.next, hostCommandOf(first, 'prepare-panel'), 1_050);
+    const show = hostCommandOf(prepared, 'show-panel');
+
+    const second = apply(prepared.next, { type: 'toggle-pin', zone: 'widget' }, 1_100);
+    expect(second.next.pinnedZone).toBe('none');
+    expect(second.next.surface).toBe('collapsed');
+
+    const painted = apply(second.next, {
+      type: 'panel-painted',
+      operationId: show.operationId,
+      requestedRevision: show.requestedRevision,
+    });
+
+    expect(painted.next.surface).toBe('collapsed');
+  });
+
+  it('옆핀을 끈 뒤에는 마우스를 올려도 새 창 작업이 시작되지 않는다', () => {
+    const off = apply(expandedByHover(), { type: 'enabled-changed', enabled: false }, 3_000);
+
+    const after = apply(off.next, { type: 'pointer-region-changed', region: 'rail-widget' }, 3_100);
+
+    expect(after.commands).toEqual([]);
+    expect(after.next).toBe(off.next);
+  });
+
+  it('연속으로 위치가 바뀌면 지난 재조정 요청은 밀려난다', () => {
+    // 새 위치가 성공한 뒤 오래된 위치의 실패가 도착해 화면을 숨겨 버리면 안 된다.
+    const first = apply(enabledState(), { type: 'layout-changed' }, 5_000);
+    const stale = hostCommandOf(first, 'reposition-all');
+    const second = apply(first.next, { type: 'layout-changed' }, 5_100);
+
+    const lateFailure = apply(second.next, {
+      type: 'host-operation-result',
+      operationId: stale.operationId,
+      requestedRevision: stale.requestedRevision,
+      status: 'failed',
+      code: 'ERR_OLD',
+    });
+
+    expect(lateFailure.next).toBe(second.next);
+  });
+
+  it('창 조작 대기 목록은 종류 수를 넘어 자라지 않는다', () => {
+    // 그려졌다는 답이 오기 전에 단축키를 여러 번 눌러도 요청이 쌓이면 안 된다.
+    let state = enabledState();
+    for (let i = 0; i < 20; i += 1) {
+      state = apply(state, { type: 'shortcut-toggle' }, 1_000 + i).next;
+    }
+
+    expect(state.pendingHostOperations.length).toBeLessThanOrEqual(9);
+  });
+
   it('식별자가 다른 응답은 무시한다', () => {
     const entered = apply(
       enabledState(),
@@ -673,7 +738,8 @@ describe('늦게 도착한 응답', () => {
       requestedRevision: show.requestedRevision,
     });
 
-    expect(painted.next.surface).toBe('collapsed');
+    // 여는 중 상태 그대로여야 하고, 펼쳐졌다고 확정되면 안 된다.
+    expect(painted.next.surface).toBe('opening');
     expect(painted.next).toBe(fired.next);
   });
 
@@ -695,7 +761,7 @@ describe('늦게 도착한 응답', () => {
       requestedRevision: show.requestedRevision + 99,
     });
 
-    expect(painted.next.surface).toBe('collapsed');
+    expect(painted.next.surface).toBe('opening');
   });
 
   it('취소된 요청의 늦은 성공 응답이 상태를 되살리지 않는다', () => {
@@ -747,8 +813,10 @@ describe('창 조작 실패', () => {
     });
 
     expect(failed.next.surface).toBe('collapsed');
-    expect(failed.next.panelLifecycle).toBe('absent');
     expect(failed.next.hostError).toEqual({ operationId: show.operationId, code: 'ERR_SHOW' });
+    // 상태만 되돌리면 부족하다. 반쯤 펼쳐진 창이 화면에 남을 수 있으므로
+    // 실제로 접으라고 시켜야 한다.
+    expect(hostCommandOf(failed, 'collapse-panel')).toBeDefined();
   });
 
   it('창 준비에 실패해도 손잡이 상태는 유지된다', () => {
@@ -1044,6 +1112,41 @@ describe('보호 상태', () => {
     expect(painted.next.surface).toBe('collapsed');
   });
 
+  it('잠금 직전에 예약된 접힘이 완료돼도 다시 펼침을 예약하지 않는다', () => {
+    // 커서가 패널 위에 있는 채로 잠기는 흔한 상황이다. 접힘 완료 처리가
+    // "커서가 안에 있으니 다시 열자"로 이어지면 잠금 화면 위로 메모가 노출된다.
+    const left = apply(
+      expandedByHover(),
+      { type: 'pointer-region-changed', region: 'outside' },
+      2_000,
+    );
+    const fired = apply(
+      left.next,
+      { type: 'timer-fired', transition: scheduledTransition(left) },
+      2_400,
+    );
+    const collapse = hostCommandOf(fired, 'collapse-panel');
+    const back = apply(fired.next, { type: 'pointer-region-changed', region: 'panel-memo' }, 2_410);
+    const locked = apply(back.next, { type: 'force-protect', reason: 'lock' }, 2_420);
+
+    const late = ack(locked.next, collapse, 2_500);
+
+    expect(late.next.pendingTransition?.type).not.toBe('reveal');
+    expect(late.next.protectedReason).toBe('lock');
+  });
+
+  it('보호가 풀리면 지난 숨김 요청이 손잡이를 다시 숨기지 못한다', () => {
+    // protect-released가 손잡이를 다시 만든 뒤에 지난 hide-all 완료가 도착하면,
+    // 손잡이가 사라진 채 복구할 길이 없어진다.
+    const locked = apply(expandedByHover(), { type: 'force-protect', reason: 'lock' }, 3_000);
+    const hide = hostCommandOf(locked, 'hide-all');
+    const released = apply(locked.next, { type: 'protect-released' }, 4_000);
+
+    const lateHide = ack(released.next, hide, 4_100);
+
+    expect(lateHide.next).toBe(released.next);
+  });
+
   it('보호가 풀리면 손잡이만 다시 준비한다', () => {
     const locked = apply(expandedByHover(), { type: 'force-protect', reason: 'lock' }, 3_000);
 
@@ -1058,12 +1161,15 @@ describe('보호 상태', () => {
 // ─── 단축키 ──────────────────────────────────────────────────────
 
 describe('단축키', () => {
-  it('접혀 있을 때 단축키는 포커스까지 가져오며 연다', () => {
+  it('접혀 있을 때 단축키는 창을 먼저 만들고 포커스까지 가져오며 연다', () => {
     const result = apply(enabledState(), { type: 'shortcut-toggle' }, 1_000);
 
-    const show = hostCommandOf(result, 'show-panel');
-    expect(show.focus).toBe(true);
+    expect(hostCommandOf(result, 'prepare-panel')).toBeDefined();
+    expect(result.next.surface).toBe('opening');
     expect(result.next.openReason).toBe('shortcut');
+
+    const prepared = ack(result.next, hostCommandOf(result, 'prepare-panel'), 1_050);
+    expect(hostCommandOf(prepared, 'show-panel').focus).toBe(true);
   });
 
   it('펼쳐져 있을 때 단축키는 고정을 풀고 접는다', () => {

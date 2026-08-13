@@ -36,6 +36,10 @@ export interface SidePinControllerDeps {
 export class SidePinController {
   private state: SidePinRuntimeState = INITIAL_SIDE_PIN_RUNTIME_STATE;
   private readonly unsubscribeHost: () => void;
+  /** 처리 대기 중인 사건 — 처리 도중 새 사건이 들어오면 여기 쌓인다 */
+  private readonly queue: SidePinEvent[] = [];
+  private draining = false;
+  private disposed = false;
 
   constructor(private readonly deps: SidePinControllerDeps) {
     this.unsubscribeHost = deps.host.subscribe((event) => {
@@ -49,11 +53,40 @@ export class SidePinController {
   }
 
   dispose(): void {
+    this.disposed = true;
+    this.queue.length = 0;
     this.unsubscribeHost();
     this.deps.scheduler.cancel();
   }
 
+  /**
+   * 사건을 처리한다.
+   *
+   * 처리 도중에 또 사건이 들어올 수 있다 — 창에 명령을 내리는 순간 그 창이 곧바로
+   * "그렸다"나 "마우스가 나갔다"를 알려오는 경우다. 그때 안쪽 처리가 먼저 끝나 버리면,
+   * 바깥 처리가 이어서 낡은 예약으로 최신 예약을 덮어써 타이머가 사라진다.
+   * 그래서 한 번에 하나씩만 처리하고 나머지는 줄을 세운다.
+   */
   dispatch(event: SidePinEvent): void {
+    if (this.disposed) return;
+
+    this.queue.push(event);
+    if (this.draining) return;
+
+    this.draining = true;
+    try {
+      while (this.queue.length > 0) {
+        const next = this.queue.shift();
+        if (next === undefined) break;
+        this.handle(next);
+        if (this.disposed) return;
+      }
+    } finally {
+      this.draining = false;
+    }
+  }
+
+  private handle(event: SidePinEvent): void {
     const { next, commands } = resolveSidePinTransition(this.state, event, {
       nowMs: this.deps.scheduler.now(),
       operationId: this.deps.createOperationId(),
@@ -138,6 +171,8 @@ export class SidePinController {
   }
 
   private onHostSettled(result: SidePinHostCommandResult): void {
+    // dispose 뒤에 도착한 완료는 무시한다. 그러지 않으면 정리한 뒤에 새 타이머가 걸린다.
+    if (this.disposed) return;
     this.dispatch({
       type: 'host-operation-result',
       operationId: result.operationId,
