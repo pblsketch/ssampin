@@ -464,8 +464,9 @@ const koContent = {
           </p>
           <ul>
             <li>
-              학생 정보는 <strong>기본적으로 교사의 PC에만 로컬 저장</strong>되며, 쌤핀 개발자
-              서버로 전송·수집되지 않습니다.
+              출결·관찰·상담 기록 등 앱 본체의 학생 정보는 <strong>교사의 PC에만 로컬 저장</strong>
+              되며, 개발자가 따로 수집하지 않습니다. 다만 아래 협업 기능을 사용할 때는 해당 자료가
+              클라우드(수탁자)에 저장됩니다(제11조).
             </li>
             <li>
               상담 예약·설문·체크리스트 등 온라인 협업 기능에서는 학생을{' '}
@@ -473,8 +474,9 @@ const koContent = {
               암호화한 뒤 전송합니다(제11조).
             </li>
             <li>
-              과제 수합·전자 서명 기능은 기능 특성상 학생 이름이 포함될 수 있으므로, 교사가 꼭
-              필요한 범위에서만 사용하고 목적을 달성한 뒤에는 삭제하는 것을 원칙으로 합니다.
+              <strong>과제 수합과 전자 서명은 기능 특성상 학생 이름이 포함</strong>되며, 그 이름은
+              암호화되지 않은 형태로 클라우드에 저장됩니다(전자 서명은 서명 이미지도 함께). 교사가
+              꼭 필요한 범위에서만 사용하고, 목적을 달성한 뒤에는 삭제하는 것을 원칙으로 합니다.
             </li>
             <li>
               외부 AI로 데이터를 보내는 경우(제10조)에는 실명·연락처·생년월일 등 신원 정보를 불투명
@@ -1114,9 +1116,11 @@ const enContent = {
           </p>
           <ul>
             <li>
-              Student information is{' '}
-              <strong>stored locally on the teacher&apos;s PC by default</strong> and is not
-              transmitted to or collected by any SsamPin developer server.
+              Student information is Student information held by the app itself (attendance,
+              observation and counseling records) is{' '}
+              <strong>stored only on the teacher&apos;s PC</strong> and is not separately collected
+              by the developer. However, when the collaboration features below are used, that data
+              is stored with our cloud consignee (Section 11).
             </li>
             <li>
               In online collaboration features (consultation booking, surveys, checklists), students
@@ -1125,9 +1129,13 @@ const enContent = {
               11).
             </li>
             <li>
-              Assignment collection and e-signature features may, by their nature, include a
-              student&apos;s name; teachers are expected to use them only to the extent necessary
-              and to delete the data once the purpose is fulfilled.
+              <strong>
+                Assignment collection and e-signature do, by their nature, include a student&apos;s
+                name
+              </strong>
+              , and that name is stored in the cloud unencrypted (for e-signature, together with the
+              signature image). Teachers are expected to use these features only to the extent
+              necessary and to delete the data once the purpose is fulfilled.
             </li>
             <li>
               When data is sent to an external AI (Section 10), identifying information such as
