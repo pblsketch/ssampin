@@ -60,7 +60,10 @@ export function TodayRemaining({
   return (
     <section className="px-4">
       <h3 className="text-xs font-semibold text-sp-muted mb-2 px-1">오늘 남은 일</h3>
-      <div className="space-y-2">
+      {/* space-y-3(12px) — 홈의 벤토 그리드가 gap-3 을 쓰므로 카드끼리는 12px 이 이 화면의
+          기준이다. 처음에 space-y-2(8px)로 뒀더니 한 화면에 8·12·16px 세 종류가 섞여
+          "카드 간격이 안 맞아 보인다"는 지적을 받았다. */}
+      <div className="space-y-3">
         {attendanceMissingCount > 0 && (
           <button
             onClick={onOpenAttendance}

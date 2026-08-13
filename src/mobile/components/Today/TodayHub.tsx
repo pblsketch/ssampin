@@ -13,6 +13,7 @@ import { useMobileProgressStore } from '@mobile/stores/useMobileProgressStore';
 import { useMobileStudentStore } from '@mobile/stores/useMobileStudentStore';
 import { useMobileHomeLayoutStore } from '@mobile/stores/useMobileHomeLayoutStore';
 import { isStudentActive } from '@domain/rules/studentActivity';
+import { findMatchingClass } from '@domain/rules/matchingRules';
 import { CollapsibleCard } from '@mobile/components/common/CollapsibleCard';
 import { HomeScheduleCarousel } from './HomeScheduleCarousel';
 import { AttendanceSummaryCard } from './AttendanceSummaryCard';
@@ -61,6 +62,8 @@ export function TodayHub({ onNavigateAttendance, onNavigateTodo }: Props) {
   const isSyncAuthenticated = useMobileDriveSyncStore((s) => s.isAuthenticated);
 
   const loadTeachingClasses = useMobileTeachingClassStore((s) => s.load);
+  const teachingClasses = useMobileTeachingClassStore((s) => s.classes);
+  const teachingClassesLoaded = useMobileTeachingClassStore((s) => s.loaded);
   const loadProgress = useMobileProgressStore((s) => s.load);
 
   const homeroomStudents = useMobileStudentStore((s) => s.students);
@@ -149,6 +152,24 @@ export function TodayHub({ onNavigateAttendance, onNavigateTodo }: Props) {
   const totalStudents = homeroomStudents.filter(isStudentActive).length;
   const homeroomRecord = getTodayRecord(settings.className);
 
+  /**
+   * 지금 수업의 실제 수업반.
+   *
+   * 시간표의 `classroom`은 "3학년 2반" 같은 표시 이름이고 수업반 id 는 UUID 라, 이름을
+   * id 자리에 넣으면 조회가 항상 빗나간다. 여기서 한 번 매칭해 두고 조회·이동에 함께 쓴다.
+   * 못 찾으면 예전처럼 표시 이름을 넘긴다 — 수업반을 아직 안 만든 교사에게서 유일한
+   * 출결 입구가 사라지는 것보다는 낫다(빈 명단 저장은 화면 쪽에서 이미 막는다).
+   */
+  const currentTeachingClass = useMemo(
+    () =>
+      currentClass?.classroom
+        ? findMatchingClass(teachingClasses, currentClass.classroom, currentClass.subject)
+        : null,
+    [currentClass, teachingClasses],
+  );
+  const currentClassId = currentTeachingClass?.id ?? currentClass?.classroom ?? '';
+  const currentClassName = currentTeachingClass?.name ?? currentClass?.classroom ?? '';
+
   const showHomeroomCard = isHomeroom && !isHidden('homeroomAttendance');
   const showClassCard =
     Boolean(periodInfo.currentPeriod && currentClass) && !isHidden('classAttendance');
@@ -178,21 +199,41 @@ export function TodayHub({ onNavigateAttendance, onNavigateTodo }: Props) {
       });
     }
 
-    for (let i = 0; i < (daySchedule?.length ?? 0); i += 1) {
-      const slot = daySchedule?.[i];
-      if (!slot?.classroom) continue;
-      const period = i + 1;
-      if (getTodayRecord(slot.classroom, period)) continue;
-      items.push({
-        label: `${slot.classroom} ${period}\uAD50\uC2DC`,
-        classId: slot.classroom,
-        className: slot.classroom,
-        period,
-        type: 'class',
-      });
+    // \uC218\uC5C5\uBC18\uC744 \uC544\uC9C1 \uBAA8\uB974\uBA74 \uD310\uB2E8\uD558\uC9C0 \uC54A\uB294\uB2E4 \u2014 \uB85C\uB4DC \uC804\uC5D4 \uBAA8\uB450 "\uBBF8\uC785\uB825"\uC73C\uB85C \uBCF4\uC778\uB2E4.
+    if (teachingClassesLoaded) {
+      for (let i = 0; i < (daySchedule?.length ?? 0); i += 1) {
+        const slot = daySchedule?.[i];
+        if (!slot?.classroom) continue;
+        const period = i + 1;
+
+        // \uC2DC\uAC04\uD45C\uC758 classroom \uC740 "3\uD559\uB144 2\uBC18" \uAC19\uC740 **\uD45C\uC2DC \uC774\uB984**\uC774\uACE0,
+        // \uC218\uC5C5\uBC18 id \uB294 UUID \uB77C \uB458\uC740 \uC808\uB300 \uAC19\uC544\uC9C0\uC9C0 \uC54A\uB294\uB2E4. \uC774\uB984\uC744 id \uCC98\uB7FC \uB123\uC73C\uBA74
+        // \uC870\uD68C\uAC00 \uD56D\uC0C1 \uBE44\uC5B4 \uC788\uB294 \uAC83\uC73C\uB85C \uB098\uC640 "\uC774\uBBF8 \uB123\uC5C8\uB294\uB370 \uC548 \uB123\uC5C8\uB2E4\uACE0 \uD558\uB294" \uD654\uBA74\uC774 \uB41C\uB2E4.
+        const matched = findMatchingClass(teachingClasses, slot.classroom, slot.subject);
+        // \uC5B4\uB290 \uC218\uC5C5\uBC18\uC778\uC9C0 \uD655\uC2E4\uD558\uC9C0 \uC54A\uC73C\uBA74 \uC904\uC744 \uB744\uC6B0\uC9C0 \uC54A\uB294\uB2E4 \u2014 \uB204\uB974\uBA74 \uBE48 \uBA85\uB2E8\uC774 \uC5F4\uB9AC\uACE0,
+        // \uADF8 \uC0C1\uD0DC\uB85C \uC800\uC7A5\uB418\uBA74 \uCD9C\uACB0\uC744 \uB36E\uC5B4\uC4F8 \uC218 \uC788\uB2E4.
+        if (!matched) continue;
+        if (getTodayRecord(matched.id, period, matched.groupId)) continue;
+
+        items.push({
+          label: `${matched.name} ${period}\uAD50\uC2DC`,
+          classId: matched.id,
+          className: matched.name,
+          period,
+          type: 'class',
+        });
+      }
     }
     return items;
-  }, [isHomeroom, settings.className, homeroomRecord, daySchedule, getTodayRecord]);
+  }, [
+    isHomeroom,
+    settings.className,
+    homeroomRecord,
+    daySchedule,
+    getTodayRecord,
+    teachingClasses,
+    teachingClassesLoaded,
+  ]);
 
   const today = new Date();
   const dateStr = format(today, 'M\uC6D4 d\uC77C (EEEE)', { locale: ko });
@@ -320,11 +361,15 @@ export function TodayHub({ onNavigateAttendance, onNavigateTodo }: Props) {
               className="h-full"
             >
               <AttendanceSummaryCard
-                record={getTodayRecord(currentClass.classroom, periodInfo.currentPeriod)}
+                record={getTodayRecord(
+                  currentClassId,
+                  periodInfo.currentPeriod,
+                  currentTeachingClass?.groupId,
+                )}
                 onCheckAttendance={() =>
                   onNavigateAttendance({
-                    classId: currentClass.classroom,
-                    className: currentClass.classroom,
+                    classId: currentClassId,
+                    className: currentClassName,
                     period: periodInfo.currentPeriod!,
                     type: 'class',
                   })

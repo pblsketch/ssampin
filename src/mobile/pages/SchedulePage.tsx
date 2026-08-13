@@ -71,6 +71,8 @@ export function SchedulePage() {
   /** 월 전체 펼침. 기본은 이번 주 한 줄. */
   const [monthExpanded, setMonthExpanded] = useState(false);
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
+  /** 접힌 주 보기에서 화살표로 옮겨 둔 주(그 주의 아무 날). 선택한 날이 있으면 그쪽이 우선. */
+  const [weekAnchorDate, setWeekAnchorDate] = useState<Date | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
 
   useBottomSheet(showAddModal);
@@ -90,10 +92,10 @@ export function SchedulePage() {
 
   /**
    * 기준일이 속한 주(일~토) 7칸.
-   * 선택한 날이 있으면 그 주를, 없으면 오늘이 속한 주를 보여준다 —
-   * 날짜를 고르고 나서 그 주가 사라지면 맥락을 잃는다.
+   * 선택한 날이 있으면 그 주를, 없으면 화살표로 옮겨 둔 주를, 그것도 없으면 오늘이 속한
+   * 주를 보여준다 — 날짜를 고르고 나서 그 주가 사라지면 맥락을 잃는다.
    */
-  const weekAnchor = selectedDay ?? new Date();
+  const weekAnchor = selectedDay ?? weekAnchorDate ?? new Date();
   const weekStart = new Date(weekAnchor);
   weekStart.setDate(weekAnchor.getDate() - weekAnchor.getDay());
   const weekCells: Date[] = Array.from({ length: 7 }, (_, i) => {
@@ -173,8 +175,29 @@ export function SchedulePage() {
       .sort((a, b) => a.date.localeCompare(b.date));
   })();
 
-  const handlePrevMonth = () => setCurrentMonth((m) => subMonths(m, 1));
-  const handleNextMonth = () => setCurrentMonth((m) => addMonths(m, 1));
+  /**
+   * 좌우 화살표 — **보이는 것을** 옮긴다.
+   *
+   * 월 전체를 펼쳤으면 달을, 접힌 주 보기에서는 주를 옮긴다.
+   * 접힌 상태에서 달만 바꾸면 제목과 목록은 다음 달로 가는데 날짜줄은 이번 주 그대로라,
+   * 사용자에겐 "버튼이 제목만 바꾸는" 고장으로 보인다.
+   */
+  const shiftPeriod = (dir: -1 | 1) => {
+    if (monthExpanded) {
+      setCurrentMonth((m) => (dir === 1 ? addMonths(m, 1) : subMonths(m, 1)));
+      return;
+    }
+    const next = new Date(weekAnchor);
+    next.setDate(weekAnchor.getDate() + dir * 7);
+    // 다른 주로 옮겼으면 이전 주에서 고른 날은 더 이상 맞지 않는다.
+    setSelectedDay(null);
+    setWeekAnchorDate(next);
+    // 제목과 아래 목록도 그 주가 속한 달을 따라간다.
+    setCurrentMonth(next);
+  };
+
+  const handlePrevMonth = () => shiftPeriod(-1);
+  const handleNextMonth = () => shiftPeriod(1);
 
   const handleDayClick = (day: Date) => {
     if (selectedDay && isSameDay(day, selectedDay)) {
@@ -244,7 +267,8 @@ export function SchedulePage() {
           <button
             onClick={handlePrevMonth}
             className="flex items-center justify-center w-11 h-11 rounded-full hover:bg-black/5 active:bg-black/10 dark:hover:bg-white/5 dark:active:bg-white/10 transition-colors"
-            aria-label="이전 달"
+            // 접힌 주 보기에서는 주를 옮기므로 읽어주는 말도 그에 맞춘다.
+            aria-label={monthExpanded ? '이전 달' : '이전 주'}
           >
             <span className="material-symbols-outlined text-sp-text text-xl">chevron_left</span>
           </button>
@@ -254,7 +278,7 @@ export function SchedulePage() {
           <button
             onClick={handleNextMonth}
             className="flex items-center justify-center w-11 h-11 rounded-full hover:bg-black/5 active:bg-black/10 dark:hover:bg-white/5 dark:active:bg-white/10 transition-colors"
-            aria-label="다음 달"
+            aria-label={monthExpanded ? '다음 달' : '다음 주'}
           >
             <span className="material-symbols-outlined text-sp-text text-xl">chevron_right</span>
           </button>
@@ -286,6 +310,7 @@ export function SchedulePage() {
             return (
               <button
                 key={`${day.getFullYear()}-${day.getMonth()}-${day.getDate()}`}
+                data-day={format(day, 'yyyy-MM-dd')}
                 onClick={() => handleDayClick(day)}
                 className={`flex flex-col items-center py-1 rounded-lg min-h-[44px] transition-colors ${
                   isSelected && !isToday ? 'ring-2 ring-blue-500' : ''
