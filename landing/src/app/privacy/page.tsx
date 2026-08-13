@@ -17,18 +17,47 @@ const koContent = {
   lang: 'ko',
   title: '개인정보처리방침',
   subtitle: '쌤핀 (SsamPin)',
-  lastUpdated: '최종 수정일: 2026년 7월 10일',
+  lastUpdated: '최종 수정일: 2026년 8월 14일',
   switchLang: 'View in English',
   switchHref: '?lang=en',
   sections: [
     {
       number: '1',
-      title: '수집하는 정보',
+      title: '처리하는 정보',
       content: (
         <>
           <p>
-            쌤핀은 사용자가 <strong>Google 연동 기능을 명시적으로 활성화한 경우에 한해</strong> 다음
-            정보를 수집합니다. 연동 기능을 사용하지 않는 경우, 어떠한 개인정보도 수집하지 않습니다.
+            <strong>가. 교사가 쌤핀에 입력하는 학생·학급 정보</strong> — 아래 정보는 교사가 직무
+            목적으로 직접 입력하며, <strong>교사의 컴퓨터에만 저장</strong>되고 쌤핀 개발자 서버로는
+            전송되지 않습니다. 모든 항목은 <strong>입력하지 않아도 앱이 동작하는 선택 항목</strong>
+            이며, 필요한 항목만 입력하시면 됩니다.
+          </p>
+          <ul>
+            <li>
+              <strong>학생 기본 정보</strong> — 이름, 학번, 생년월일, 학생 연락처, 보호자
+              연락처(최대 2인)와 관계(아버지·어머니 등), 재적 상태(재학·전출·유예 등)와 사유 메모
+            </li>
+            <li>
+              <strong>출결 기록</strong> — 날짜, 교시, 출결 구분(결석·지각·조퇴·결과), 사유, 증빙
+              서류 제출 여부, NEIS 반영 여부
+            </li>
+            <li>
+              <strong>관찰·상담 기록</strong> — 분류, 기록 내용, 날짜, 상담 방법, 후속 조치 내용
+            </li>
+            <li>
+              <strong>학급 운영 자료</strong> — 시간표, 자리 배치, 진도, 과제 제출 현황,
+              설문·체크리스트 응답, 평가 기록
+            </li>
+          </ul>
+          <p>
+            <strong>보유 기간:</strong> 교사가 앱에서 삭제하거나 앱을 제거할 때까지 보유하며, 학년도
+            마무리 기능을 실행하면 보관함으로 이동합니다. 삭제 시 해당 JSON 파일에서 즉시
+            지워집니다.
+          </p>
+          <p className="mt-4">
+            <strong>나. Google 연동 시 처리하는 정보</strong> — 사용자가{' '}
+            <strong>Google 연동 기능을 명시적으로 활성화한 경우에 한해</strong> 다음 정보를
+            처리합니다. 연동 기능을 사용하지 않는 경우 아래 정보는 일절 처리되지 않습니다.
           </p>
           <ul>
             <li>
@@ -236,18 +265,45 @@ const koContent = {
     },
     {
       number: '7',
-      title: '사용자 권리',
+      title: '정보주체의 권리와 행사 방법',
       content: (
         <>
-          <p>사용자는 언제든지 다음 권리를 행사할 수 있습니다:</p>
+          <p>
+            정보주체는 언제든지 개인정보의 <strong>열람·정정·삭제·처리정지</strong>를 요구할 수
+            있습니다(개인정보 보호법 제35조~제37조).
+          </p>
+          <p>
+            <strong>가. 앱 안에서 직접 하실 수 있는 것</strong>
+          </p>
           <ul>
             <li>앱 내 설정 &gt; Google 연동 탭에서 계정 연결 해제 (모든 OAuth 토큰 즉시 삭제)</li>
             <li>앱 데이터 백업 토글 OFF 또는 &quot;클라우드 데이터 전체 삭제&quot; 실행</li>
             <li>Google Tasks 토글 OFF로 동기화 중단</li>
             <li>Google 계정 앱 권한 페이지에서 직접 접근 권한 철회</li>
+            <li>학생·학급 정보는 앱 화면에서 직접 열람·수정·삭제 (제1조 가목)</li>
+          </ul>
+          <p>
+            <strong>나. 학생·보호자의 권리 행사</strong> — 학생에 관한 정보는 교사가 소속 학교의
+            직무 목적으로 처리하므로, 그 정보의 열람·정정·삭제·처리정지 요구는{' '}
+            <strong>담당 교사 또는 소속 학교</strong>에 하시는 것이 가장 빠릅니다. 상담 예약·전자
+            서명·설문 등 온라인 협업 기능에 남은 정보에 대해서는 아래 연락처로도 요구하실 수
+            있습니다.
+          </p>
+          <p>
+            <strong>다. 접수 창구와 처리 기한</strong>
+          </p>
+          <ul>
             <li>
-              개인정보 처리 현황에 관한 열람·수정·삭제 요청:{' '}
-              <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
+              접수: <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a> (개인정보 보호책임자,
+              제15조)
+            </li>
+            <li>
+              처리 기한: 요구를 받은 날부터 <strong>10일 이내</strong>에 조치하고 결과를
+              알려드립니다. 기간 내 처리가 어려우면 사유와 예상 기간을 먼저 통지합니다.
+            </li>
+            <li>
+              법정대리인이나 위임을 받은 사람을 통해서도 요구하실 수 있습니다. 다른 법령에서 보존을
+              의무화한 정보는 삭제·처리정지가 제한될 수 있으며, 이 경우 그 사유를 알려드립니다.
             </li>
           </ul>
         </>
@@ -445,6 +501,76 @@ const koContent = {
     },
     {
       number: '14',
+      title: '개인정보의 안전성 확보조치',
+      content: (
+        <>
+          <p>
+            쌤핀은 개인정보가 분실·도난·유출·위조·변조 또는 훼손되지 않도록 다음과 같은 조치를 하고
+            있습니다. 근거: 개인정보 보호법 제29조(안전조치의무).
+          </p>
+          <p>
+            <strong>가. 기술적 조치</strong>
+          </p>
+          <ul>
+            <li>
+              <strong>전송 구간 암호화</strong> — 모든 통신은 HTTPS(TLS)로 암호화하며, HTTP 접속은
+              HTTPS로 강제 전환합니다(HSTS 적용).
+            </li>
+            <li>
+              <strong>저장 시 암호화</strong> — Google OAuth 토큰은 OS 키체인(Windows DPAPI /
+              Electron safeStorage)에, 클라우드에 보관되는 토큰은 AES-256-GCM으로 암호화합니다. 상담
+              예약의 연락처·메모는 <strong>사용자 단말에서 암호화한 뒤</strong> 전송합니다.
+            </li>
+            <li>
+              <strong>접근 통제</strong> — 클라우드 데이터에는 행 수준 접근 제어(RLS)를 적용해, 권한
+              없는 요청이 다른 사람의 자료를 조회할 수 없도록 차단합니다.
+            </li>
+            <li>
+              <strong>식별정보 최소화</strong> — 전자 서명의 접속 IP와 기기정보(User-Agent)는 원문이
+              아니라 해시값으로만 저장하고, 외부 AI로 보내는 데이터는 신원 정보를 불투명 토큰으로
+              가명처리합니다(제10조).
+            </li>
+            <li>
+              <strong>웹 보안 설정</strong> — 악성 스크립트 삽입(XSS)과 화면 가로채기(클릭재킹)를
+              막기 위해 Content-Security-Policy, X-Frame-Options, X-Content-Type-Options,
+              Referrer-Policy, Permissions-Policy 응답 헤더를 적용합니다.
+            </li>
+          </ul>
+          <p>
+            <strong>나. 관리적 조치</strong>
+          </p>
+          <ul>
+            <li>
+              개인정보를 취급하는 인원을 개발·운영자 1인(제15조 보호책임자)으로 최소화하고, 그 외
+              누구에게도 접근 권한을 부여하지 않습니다.
+            </li>
+            <li>
+              서버 전용 비밀키는 이용자 브라우저로 내려가는 코드에 포함하지 않고 서버에서만
+              사용합니다.
+            </li>
+            <li>
+              외부 보안 점검 도구로 응답 헤더·접근 통제·비밀키 노출·민감 파일 노출 여부를 점검하고,
+              발견된 사항을 수정해 반영합니다.
+            </li>
+          </ul>
+          <p>
+            <strong>다. 물리적 조치</strong>
+          </p>
+          <ul>
+            <li>
+              쌤핀은 자체 물리 서버를 운영하지 않습니다. 학생·학급 정보의 원본은 교사가 관리하는
+              컴퓨터에 있으며, 그 물리적 보안(잠금·계정 분리 등)은 교사와 소속 학교가 관리합니다.
+            </li>
+            <li>
+              협업 기능이 사용하는 클라우드 설비의 물리적 보안은 해당 사업자(Supabase·Vercel·Google,
+              제11조·제13조)의 데이터센터 보호 조치를 따릅니다.
+            </li>
+          </ul>
+        </>
+      ),
+    },
+    {
+      number: '15',
       title: '개인정보 보호책임자',
       content: (
         <>
@@ -477,19 +603,54 @@ const enContent = {
   lang: 'en',
   title: 'Privacy Policy',
   subtitle: 'SsamPin',
-  lastUpdated: 'Last updated: July 10, 2026',
+  lastUpdated: 'Last updated: August 14, 2026',
   switchLang: '한국어로 보기',
   switchHref: '?lang=ko',
   sections: [
     {
       number: '1',
-      title: 'Information We Collect',
+      title: 'Information We Process',
       content: (
         <>
           <p>
-            SsamPin collects the following information{' '}
+            <strong>A. Student and class information entered by the teacher</strong> — The
+            information below is entered directly by the teacher for professional purposes. It is{' '}
+            <strong>stored only on the teacher&apos;s computer</strong> and is never transmitted to
+            any SsamPin developer server. Every field is <strong>optional</strong> — the app works
+            without them, so teachers enter only what they need.
+          </p>
+          <ul>
+            <li>
+              <strong>Basic student information</strong> — name, student number, date of birth,
+              student contact number, up to two guardian contact numbers with their relationship
+              (father, mother, etc.), and enrollment status (enrolled, transferred, on leave, etc.)
+              with a reason note
+            </li>
+            <li>
+              <strong>Attendance records</strong> — date, class period, attendance type (absence,
+              late arrival, early leave, missed class), reason, whether supporting documents were
+              submitted, and whether it was reported to NEIS
+            </li>
+            <li>
+              <strong>Observation and counseling records</strong> — category, record content, date,
+              counseling method, and follow-up actions
+            </li>
+            <li>
+              <strong>Class management data</strong> — timetable, seating charts, curriculum
+              progress, assignment submission status, survey/checklist responses, and assessment
+              records
+            </li>
+          </ul>
+          <p>
+            <strong>Retention:</strong> retained until the teacher deletes it in the app or
+            uninstalls the app; running the school-year wrap-up moves it to the archive. Deleting an
+            item removes it from the corresponding JSON file immediately.
+          </p>
+          <p className="mt-4">
+            <strong>B. Information processed through Google integrations</strong> — SsamPin
+            processes the following{' '}
             <strong>only when you explicitly enable a specific Google integration feature</strong>.
-            If you do not use any integration feature, no personal information is collected.
+            If you do not use any integration feature, none of the information below is processed.
           </p>
           <ul>
             <li>
@@ -712,10 +873,17 @@ const enContent = {
     },
     {
       number: '7',
-      title: 'Your Rights',
+      title: 'Data Subject Rights and How to Exercise Them',
       content: (
         <>
-          <p>You may exercise the following rights at any time:</p>
+          <p>
+            Data subjects may at any time request{' '}
+            <strong>access, correction, deletion, or suspension of processing</strong> of their
+            personal information (Articles 35–37 of the Personal Information Protection Act).
+          </p>
+          <p>
+            <strong>A. What you can do inside the app</strong>
+          </p>
           <ul>
             <li>
               Disconnect your Google account in Settings &gt; Google Integration (all OAuth tokens
@@ -725,8 +893,35 @@ const enContent = {
             <li>Turn off Google Tasks to stop synchronization</li>
             <li>Revoke access directly from the Google Account app permissions page</li>
             <li>
-              Request access, correction, or deletion of personal data processing:{' '}
-              <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
+              View, correct, and delete student and class information directly on the app screens
+              (Section 1.A)
+            </li>
+          </ul>
+          <p>
+            <strong>B. Requests by students and guardians</strong> — Information about students is
+            processed by teachers for the professional purposes of their school, so requests for
+            access, correction, deletion, or suspension of processing are handled fastest by the{' '}
+            <strong>teacher in charge or the school</strong>. For information held by the online
+            collaboration features (consultation booking, e-signature, surveys), you may also
+            contact us at the address below.
+          </p>
+          <p>
+            <strong>C. Where to file and how long it takes</strong>
+          </p>
+          <ul>
+            <li>
+              Contact: <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a> (Personal Information
+              Protection Officer, Section 15)
+            </li>
+            <li>
+              Response time: we act on the request and notify you of the result{' '}
+              <strong>within 10 days</strong> of receiving it. If we cannot meet that deadline, we
+              notify you of the reason and the expected timeframe first.
+            </li>
+            <li>
+              Requests may also be made through a legal representative or an authorized agent.
+              Deletion or suspension may be restricted where other laws require retention; in that
+              case we will explain the reason.
             </li>
           </ul>
         </>
@@ -944,6 +1139,81 @@ const enContent = {
     },
     {
       number: '14',
+      title: 'Security Measures for Personal Information',
+      content: (
+        <>
+          <p>
+            SsamPin takes the following measures to prevent personal information from being lost,
+            stolen, leaked, forged, altered, or damaged. Basis: Article 29 of the Personal
+            Information Protection Act (duty to take security measures).
+          </p>
+          <p>
+            <strong>A. Technical measures</strong>
+          </p>
+          <ul>
+            <li>
+              <strong>Encryption in transit</strong> — all communication is encrypted with HTTPS
+              (TLS), and HTTP requests are forced to HTTPS (HSTS applied).
+            </li>
+            <li>
+              <strong>Encryption at rest</strong> — Google OAuth tokens are stored in the OS
+              keychain (Windows DPAPI / Electron safeStorage), and tokens kept in the cloud are
+              encrypted with AES-256-GCM. Contact details and memos in consultation booking are{' '}
+              <strong>encrypted on your device before transmission</strong>.
+            </li>
+            <li>
+              <strong>Access control</strong> — row-level security (RLS) is applied to cloud data so
+              that unauthorized requests cannot read another person&apos;s records.
+            </li>
+            <li>
+              <strong>Minimizing identifiers</strong> — the access IP and device information
+              (User-Agent) for e-signatures are stored only as hashes, and identifying information
+              sent to external AI tools is pseudonymized with opaque tokens (Section 10).
+            </li>
+            <li>
+              <strong>Web security headers</strong> — Content-Security-Policy, X-Frame-Options,
+              X-Content-Type-Options, Referrer-Policy, and Permissions-Policy response headers are
+              applied to block script injection (XSS) and clickjacking.
+            </li>
+          </ul>
+          <p>
+            <strong>B. Administrative measures</strong>
+          </p>
+          <ul>
+            <li>
+              The number of people handling personal information is kept to one — the
+              developer/operator (Protection Officer, Section 15) — and no one else is granted
+              access.
+            </li>
+            <li>
+              Server-only secret keys are never included in the code delivered to users&apos;
+              browsers and are used only on the server.
+            </li>
+            <li>
+              External security scanning tools are used to check response headers, access control,
+              secret exposure, and sensitive file exposure, and findings are fixed and deployed.
+            </li>
+          </ul>
+          <p>
+            <strong>C. Physical measures</strong>
+          </p>
+          <ul>
+            <li>
+              SsamPin operates no physical servers of its own. The original student and class
+              information resides on the computer the teacher manages, and its physical security
+              (screen lock, separate accounts, etc.) is managed by the teacher and their school.
+            </li>
+            <li>
+              Physical security of the cloud infrastructure used by the collaboration features
+              follows the data-center protections of the respective providers (Supabase, Vercel,
+              Google; Sections 11 and 13).
+            </li>
+          </ul>
+        </>
+      ),
+    },
+    {
+      number: '15',
       title: 'Personal Information Protection Officer',
       content: (
         <>

@@ -30,11 +30,36 @@ export function PublicPageHeader({ title, showPrivacyNote = true }: PublicPageHe
   );
 }
 
-/** 공개 페이지 공통 푸터 — submit/check 톤 통일 */
+/**
+ * 공개 페이지 공통 푸터 — submit/check/booking 톤 통일
+ *
+ * 개인정보처리방침·이용약관 링크는 학생·보호자가 개인정보를 입력하는
+ * 모든 공개 화면에 노출되어야 한다(교육부 학습지원 소프트웨어 필수기준 ①·③).
+ * 작성 중인 폼이 날아가지 않도록 새 탭으로 연다.
+ */
 export function PublicPageFooter() {
   return (
     <footer className="border-t border-sp-border/30 py-4 text-center">
       <p className="text-xs text-sp-muted/60">Powered by 쌤핀</p>
+      <p className="mt-1.5 flex items-center justify-center gap-1.5 text-[11px] text-sp-muted/70">
+        <a
+          href="/privacy"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline underline-offset-2 transition-colors hover:text-sp-text"
+        >
+          개인정보처리방침
+        </a>
+        <span className="text-sp-muted/40">·</span>
+        <a
+          href="/terms"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline underline-offset-2 transition-colors hover:text-sp-text"
+        >
+          이용약관
+        </a>
+      </p>
     </footer>
   );
 }

@@ -387,6 +387,29 @@ function SignatureShell({
           )}
         </header>
         {children}
+        {/*
+         * 서명자가 이름·서명 이미지를 남기는 화면이므로 방침 고지 필수 (필수기준 ①·③).
+         * m.ssampin.com/privacy 는 vercel.json redirect 로 실제 방침 페이지로 이동한다.
+         */}
+        <footer className="mt-2 flex items-center justify-center gap-1.5 pb-2 text-[11px] text-sp-muted">
+          <a
+            href="/privacy"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline underline-offset-2 transition-colors hover:text-sp-text"
+          >
+            개인정보처리방침
+          </a>
+          <span className="opacity-50">·</span>
+          <a
+            href="/terms"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline underline-offset-2 transition-colors hover:text-sp-text"
+          >
+            이용약관
+          </a>
+        </footer>
       </div>
     </div>
   );

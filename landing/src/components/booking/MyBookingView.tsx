@@ -390,6 +390,26 @@ export function MyBookingView({ scheduleId }: MyBookingViewProps) {
 
       <footer className="border-t border-gray-200 py-4 text-center">
         <p className="text-xs text-gray-400">Powered by 쌤핀</p>
+        {/* 보호자가 예약 내용을 조회·변경하는 화면이므로 방침 고지 필수 (필수기준 ①·③) */}
+        <p className="mt-1.5 flex items-center justify-center gap-1.5 text-[11px] text-gray-400">
+          <a
+            href="/privacy"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline underline-offset-2 transition-colors hover:text-gray-600"
+          >
+            개인정보처리방침
+          </a>
+          <span className="text-gray-300">·</span>
+          <a
+            href="/terms"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline underline-offset-2 transition-colors hover:text-gray-600"
+          >
+            이용약관
+          </a>
+        </p>
       </footer>
     </div>
   );
