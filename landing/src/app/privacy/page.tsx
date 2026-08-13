@@ -28,9 +28,11 @@ const koContent = {
         <>
           <p>
             <strong>가. 교사가 쌤핀에 입력하는 학생·학급 정보</strong> — 아래 정보는 교사가 직무
-            목적으로 직접 입력하며, <strong>교사의 컴퓨터에만 저장</strong>되고 쌤핀 개발자 서버로는
-            전송되지 않습니다. 모든 항목은 <strong>입력하지 않아도 앱이 동작하는 선택 항목</strong>
-            이며, 필요한 항목만 입력하시면 됩니다.
+            목적으로 직접 입력하며, <strong>원칙적으로 교사의 컴퓨터에만 저장</strong>됩니다. 다만
+            교사가 과제 수합·설문·상담 예약·전자 서명 등 협업 기능을 사용하면 그 기능에 필요한
+            항목은 클라우드에 저장됩니다(제11조). 모든 항목은{' '}
+            <strong>입력하지 않아도 앱이 동작하는 선택 항목</strong>이며, 필요한 항목만 입력하시면
+            됩니다.
           </p>
           <ul>
             <li>
@@ -125,8 +127,9 @@ const koContent = {
           <p>쌤핀은 서버리스(Serverless) 구조로 설계되었습니다:</p>
           <ul>
             <li>
-              <strong>로컬 저장:</strong> 모든 활성 사용 데이터는 사용자의 PC(
-              <code>userData/data/*.json</code>)에만 저장됩니다.
+              <strong>로컬 저장:</strong> 활성 사용 데이터는 원칙적으로 사용자의 PC(
+              <code>userData/data/*.json</code>)에 저장됩니다. 협업 기능에서 학생·보호자와 주고받는
+              자료는 예외이며, 그 범위는 제11조에 있습니다.
             </li>
             <li>
               <strong>쌤핀 개발자 서버 미보관:</strong> 쌤핀 개발자는 사용자 데이터를 저장·처리하는
@@ -632,10 +635,12 @@ const enContent = {
         <>
           <p>
             <strong>A. Student and class information entered by the teacher</strong> — The
-            information below is entered directly by the teacher for professional purposes. It is{' '}
-            <strong>stored only on the teacher&apos;s computer</strong> and is never transmitted to
-            any SsamPin developer server. Every field is <strong>optional</strong> — the app works
-            without them, so teachers enter only what they need.
+            information below is entered directly by the teacher for professional purposes and is{' '}
+            <strong>as a rule stored only on the teacher&apos;s computer</strong>. However, if the
+            teacher uses a collaboration feature (assignment collection, surveys, consultation
+            booking, e-signature), the fields that feature needs are stored in the cloud (Section
+            11). Every field is <strong>optional</strong> — the app works without them, so teachers
+            enter only what they need.
           </p>
           <ul>
             <li>
@@ -748,8 +753,10 @@ const enContent = {
           <p>SsamPin is designed with a serverless architecture:</p>
           <ul>
             <li>
-              <strong>Local storage only:</strong> All active user data is stored exclusively on
-              your PC (<code>userData/data/*.json</code>).
+              <strong>Local storage by default:</strong> Active user data is, as a rule, stored on
+              your PC (<code>userData/data/*.json</code>). Data exchanged with students and
+              guardians through the collaboration features is the exception; its scope is set out in
+              Section 11.
             </li>
             <li>
               <strong>No SsamPin developer servers:</strong> The SsamPin developer does not operate
