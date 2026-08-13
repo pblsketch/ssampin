@@ -7,22 +7,8 @@
 
 // ── DB row types (snake_case) ──────────────────────────────────────────────
 
-interface ScheduleRow {
-  id: string;
-  title: string;
-  type: string;
-  methods: string[];
-  slot_minutes: number;
-  dates: unknown;
-  target_class_name: string;
-  target_students: unknown;
-  message: string | null;
-  admin_key: string;
-  is_archived: boolean;
-  closed_at: string | null;
-  expires_at: string | null;
-  created_at: string;
-}
+// ScheduleRow 는 getSchedule() 과 함께 삭제했다 (2026-08-14, 마이그레이션 044 참조).
+// 유일한 사용처였고, admin_key 필드를 갖고 있어 남겨두면 오해를 준다.
 
 interface SlotRow {
   id: string;
@@ -213,38 +199,15 @@ export class ConsultationSupabaseClient {
     }
   }
 
-  /**
-   * 상담 일정 조회
+  /*
+   * getSchedule() 은 2026-08-14 에 삭제했다.
+   *
+   * 호출부가 없는 죽은 코드였고, select 목록에 admin_key 가 들어 있었다.
+   * 마이그레이션 044 에서 anon 역할의 admin_key 컬럼 SELECT 권한을 회수했으므로
+   * 되살리면 조용히 실패한다. 교사 앱은 adminKey 를 로컬 Consultation 엔티티에
+   * 이미 보관하므로(ConsultationDetail.tsx 의 공유 링크·복호화 경로) 서버에서
+   * 다시 받아올 이유가 없다.
    */
-  async getSchedule(id: string): Promise<SchedulePublic | null> {
-    this.ensureConfigured();
-    const res = await fetch(
-      `${this.baseUrl}/rest/v1/consultation_schedules?id=eq.${id}&select=id,title,type,methods,slot_minutes,dates,target_class_name,target_students,message,admin_key,is_archived,closed_at,expires_at,created_at`,
-      { headers: this.headers() },
-    );
-
-    if (!res.ok) return null;
-    const rows = (await res.json()) as ScheduleRow[];
-    if (rows.length === 0) return null;
-
-    const row = rows[0]!;
-    return {
-      id: row.id,
-      title: row.title,
-      type: row.type as SchedulePublic['type'],
-      methods: row.methods as SchedulePublic['methods'],
-      slotMinutes: row.slot_minutes,
-      dates: row.dates as SchedulePublic['dates'],
-      targetClassName: row.target_class_name,
-      targetStudents: row.target_students as SchedulePublic['targetStudents'],
-      message: row.message ?? undefined,
-      adminKey: row.admin_key,
-      isArchived: row.is_archived,
-      closedAt: row.closed_at ?? undefined,
-      expiresAt: row.expires_at ?? undefined,
-      createdAt: row.created_at,
-    };
-  }
 
   /**
    * 슬롯 목록 조회 (날짜·시작시간 순)

@@ -109,21 +109,23 @@ export async function verifyPin(
   pin: string,
 ): Promise<boolean | NetworkError> {
   try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/surveys?id=eq.${surveyId}&select=pin_hashes`, {
+    // pin_hashes 를 통째로 내려받아 클라이언트에서 비교하던 것을 서버 비교로 옮겼다.
+    // (익명 누구나 모든 설문의 PIN 해시를 열람할 수 있었음 — 마이그레이션 044)
+    // 해시 계산은 그대로 여기서 한다. 원문 PIN 은 서버로 보내지 않는다.
+    const inputHash = await hashPin(pin);
+
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/verify_survey_pin`, {
+      method: 'POST',
       headers: headers(),
+      body: JSON.stringify({
+        p_survey_id: surveyId,
+        p_student_number: studentNumber,
+        p_pin_hash: inputHash,
+      }),
     });
     if (!res.ok) return NETWORK_ERROR;
-    const rows = (await res.json()) as Array<{ pin_hashes: Record<string, string> | null }>;
-    if (rows.length === 0) return false;
 
-    const hashes = rows[0]!.pin_hashes;
-    if (!hashes) return true; // PIN 없으면 통과
-
-    const expectedHash = hashes[String(studentNumber)];
-    if (!expectedHash) return false;
-
-    const inputHash = await hashPin(pin);
-    return inputHash === expectedHash;
+    return (await res.json()) === true;
   } catch {
     // 네트워크 실패를 "PIN이 올바르지 않습니다"로 오표시하지 않도록 구분
     return NETWORK_ERROR;
