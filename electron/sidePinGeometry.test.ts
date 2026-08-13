@@ -5,6 +5,7 @@
  */
 import { describe, expect, test } from 'vitest';
 import {
+  SIDE_PIN_RAIL_HEIGHT,
   SIDE_PIN_RAIL_WIDTH,
   resolveSidePinLayout,
   type SidePinDisplayInfo,
@@ -44,15 +45,36 @@ function isInside(rect: SidePinRect, area: SidePinRect): boolean {
 }
 
 describe('resolveSidePinLayout — 오른쪽 가장자리 배치', () => {
-  test('손잡이는 작업 영역 오른쪽 끝에 붙는다', () => {
+  test('손잡이는 오른쪽 끝, 세로 가운데에 짧은 탭으로 놓인다', () => {
     const layout = layoutOf();
 
     expect(layout?.rail).toEqual({
       x: 1920 - SIDE_PIN_RAIL_WIDTH,
-      y: 0,
+      y: Math.round((1040 - SIDE_PIN_RAIL_HEIGHT) / 2),
       width: SIDE_PIN_RAIL_WIDTH,
-      height: 1040,
+      height: SIDE_PIN_RAIL_HEIGHT,
     });
+  });
+
+  test('손잡이가 화면 가장자리를 위아래로 막지 않는다', () => {
+    // 손잡이 창은 항상 위에 떠 있다. 가장자리 전체를 덮으면 그 줄이 통째로
+    // 클릭을 가로채, 최대화한 창의 스크롤바를 누를 수 없게 된다.
+    const layout = layoutOf();
+    const rail = layout!.rail;
+
+    expect(rail.y).toBeGreaterThan(PRIMARY.workArea.y);
+    expect(rail.y + rail.height).toBeLessThan(PRIMARY.workArea.y + PRIMARY.workArea.height);
+  });
+
+  test('손잡이보다 짧은 화면에서는 화면 높이에 맞춘다', () => {
+    const short: SidePinDisplayInfo = {
+      id: 's',
+      workArea: { x: 0, y: 0, width: 800, height: 100 },
+    };
+    const layout = layoutOf({ displays: [short], primaryDisplayId: 's' });
+
+    expect(layout?.rail.height).toBe(100);
+    expect(isInside(layout!.rail, short.workArea)).toBe(true);
   });
 
   test('패널도 같은 오른쪽 경계를 공유한다', () => {

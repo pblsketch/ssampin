@@ -13,6 +13,18 @@
 /** 접힌 손잡이 너비 (DIP) — 기획서 §5.1 */
 export const SIDE_PIN_RAIL_WIDTH = 16;
 
+/**
+ * 접힌 손잡이 높이 (DIP).
+ *
+ * 작업 영역 전체 높이로 하지 않는 이유가 중요하다. 손잡이 창은 항상 위에 떠 있으므로,
+ * 화면 오른쪽 가장자리 전체를 덮으면 **그 줄 전체가 클릭을 가로채는 죽은 구역**이 된다.
+ * 최대화한 창의 스크롤바가 바로 거기 있어서, 사용자는 스크롤바를 못 누르게 된다.
+ * (v2.3.8 위젯 손잡이 사고 — "겹쳐 보이는 것보다 안 눌리는 게 컸다"와 같은 계열)
+ *
+ * 그래서 세로 가운데에 짧은 탭으로 둔다. 위젯 구역과 메모 구역을 절반씩 나눠 갖는다.
+ */
+export const SIDE_PIN_RAIL_HEIGHT = 168;
+
 export interface SidePinRect {
   readonly x: number;
   readonly y: number;
@@ -92,6 +104,18 @@ function rightEdgeRect(area: SidePinRect, desiredWidth: number): SidePinRect {
   };
 }
 
+/** 오른쪽 끝, 세로 가운데에 놓이는 짧은 탭 */
+function rightEdgeTab(area: SidePinRect, desiredWidth: number, desiredHeight: number): SidePinRect {
+  const width = Math.min(Math.max(1, Math.round(desiredWidth)), area.width);
+  const height = Math.min(Math.max(1, Math.round(desiredHeight)), area.height);
+  return {
+    x: area.x + area.width - width,
+    y: area.y + Math.round((area.height - height) / 2),
+    width,
+    height,
+  };
+}
+
 /**
  * 손잡이와 패널의 위치·크기를 계산한다.
  *
@@ -107,7 +131,7 @@ export function resolveSidePinLayout(input: SidePinLayoutInput): SidePinLayout |
 
   return {
     displayId: picked.display.id,
-    rail: rightEdgeRect(area, SIDE_PIN_RAIL_WIDTH),
+    rail: rightEdgeTab(area, SIDE_PIN_RAIL_WIDTH, SIDE_PIN_RAIL_HEIGHT),
     panel: rightEdgeRect(area, input.panelWidth),
     usedFallbackDisplay: picked.usedFallbackDisplay,
   };

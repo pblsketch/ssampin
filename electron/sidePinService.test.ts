@@ -6,7 +6,11 @@
  */
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { createSidePinService, type SidePinDisplaySnapshot } from './sidePinService';
-import { SIDE_PIN_RAIL_WIDTH, type SidePinDisplayInfo } from './sidePinGeometry';
+import {
+  SIDE_PIN_RAIL_HEIGHT,
+  SIDE_PIN_RAIL_WIDTH,
+  type SidePinDisplayInfo,
+} from './sidePinGeometry';
 import {
   DEFAULT_SIDE_PIN_DEVICE_STATE,
   type SidePinDeviceState,
@@ -149,11 +153,12 @@ describe('켜고 끄기', () => {
 
     expect(h.windows).toHaveLength(1);
     expect(h.windows[0]?.visible).toBe(true);
+    // 손잡이는 가장자리를 다 덮지 않고 세로 가운데에 짧게 놓인다
     expect(h.windows[0]?.bounds).toEqual({
       x: 1920 - SIDE_PIN_RAIL_WIDTH,
-      y: 0,
+      y: Math.round((1040 - SIDE_PIN_RAIL_HEIGHT) / 2),
       width: SIDE_PIN_RAIL_WIDTH,
-      height: 1040,
+      height: SIDE_PIN_RAIL_HEIGHT,
     });
   });
 
@@ -261,9 +266,9 @@ describe('모니터 구성 변경', () => {
 
     expect(h.windows[0]?.bounds).toEqual({
       x: 1920 + 1600 - SIDE_PIN_RAIL_WIDTH,
-      y: 0,
+      y: Math.round((900 - SIDE_PIN_RAIL_HEIGHT) / 2),
       width: SIDE_PIN_RAIL_WIDTH,
-      height: 900,
+      height: SIDE_PIN_RAIL_HEIGHT,
     });
   });
 });
