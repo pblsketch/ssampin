@@ -901,7 +901,32 @@ Claude 계열 리뷰어가 3라운드를 끝낸 뒤, **다른 모델 계열**로
 
 > ⚠️ **기획서 대비 축소 1건 — 사용자 판단 필요.** §4는 Win32 `ReplaceFileW`/`MoveFileExW`를 koffi로 직접 호출하라고 한다. 여기서는 node의 `fs.renameSync`를 썼다. Windows에서 `fs.rename`은 `MoveFileEx(REPLACE_EXISTING)`로 매핑돼 같은 볼륨에서는 이미 원자적 교체이고, koffi FFI 바인딩의 정확성은 **설치된 release 빌드에서만** 확인할 수 있는데(§8 패키지 게이트도 그렇게 요구한다) 지금은 그 빌드가 없다. 검증 없이 FFI 코드만 늘리지 않으려고 §9-3 패키지 게이트와 함께 처리하기로 미뤘다.
 
-### 다음 세션이 여기서부터 시작한다 — §9-3
+### ⚠️ 이 저장소에서 확인한 사실 3가지 — electron 작업 전 반드시 읽을 것
+
+구현하면서 실험으로 확정한 것들이다. 셋 다 기존 통념과 다르다.
+
+**1. `npx tsc --noEmit`은 `electron/`을 검사하지 않는다.** `tsconfig.json`의 `include`가 `["src"]`이고 `tsconfig.electron.json`을 참조하지 않는다. `electron/sidePinGeometry.ts`에 `const x: number = "문자열"`을 넣고 돌려도 **exit 0**이 나온다. 즉 CLAUDE.md 검증 게이트 1단계는 electron 코드에 대해 아무것도 보장하지 않는다. electron 파일을 만들면 별칭이 포함된 설정으로 따로 검사해야 한다.
+
+**2. `tsconfig.electron.json`은 현재 쓰이지 않고, 그대로 돌리면 실패한다.** `rootDir: "electron"` 때문에 `electron/ipc/board.ts`의 정상적인 src import까지 오류로 잡는다. `include`를 고쳐 electron 전체를 검사하면 **기존 오류 57건**이 나온다(`Object is possibly 'undefined'`, import 대소문자 불일치 등). 이 backlog 정리는 옆핀과 별개 작업이다.
+
+**3. electron은 src를 import할 수 있다 — 막히는 건 별칭뿐이다.** `archiveManager`의 "rootDir 제약으로 import 불가"라는 주석은 정확하지 않다. 실제 제약은 esbuild에 alias 설정이 없어 `@domain/*`가 안 되는 것이고, **상대 경로는 동작하며 이미 출시되고 있다**(`electron/ipc/board.ts` → `dist-electron/ipc/board.js` 752KB에 src 도메인 코드가 실제로 들어 있다).
+
+> 그래서 §9-3부터는 **타입만 상대 경로로 가져온다.** 타입 import는 esbuild가 통째로 제거하므로 번들에 흔적이 남지 않는다(`dist-electron/sidePinWindow.js` 5.6KB, src 런타임 코드 0건). 값을 가져오면 board.ts처럼 무거워지므로, 값이 필요할 때만 신중히 판단한다. §9-4의 MIRROR 복제는 이 사실을 알기 전에 만든 것이라 지금은 불필요하지만, 미러 테스트가 어긋남을 막고 있어 그대로 뒀다.
+
+### §9-3 일부 완료 — 창 호스트와 공통 계약
+
+| 파일                                      | 역할                                                                    |
+| ----------------------------------------- | ----------------------------------------------------------------------- |
+| `electron/sidePinWindow.ts`               | A안(한 창) 호스트. Electron을 직접 import하지 않고 창 생성을 주입받는다 |
+| `electron/sidePinWindow.contract.test.ts` | **A안·D안 공통 계약 스위트** + A안 고유 동작 (20개)                     |
+
+기획서 §9-3의 첫 요구사항인 공통 계약 스위트를 먼저 만들었다. `runSidePinHostContract(label, harness)`를 export하므로, D안을 만들 때 그대로 불러 쓰면 **두 구조가 어긋나는 순간 빨간불이 난다.** "성능 게이트에서 host만 갈아 끼운다"는 이 기획서의 핵심 전제가 실제로 성립하는지를 지키는 장치다.
+
+계약은 "어떻게 했는가"가 아니라 **"결과가 같은가"**만 본다. A안은 창 크기를 바꾸고 D안은 창을 만들고 없애지만, "손잡이가 남아 있는가 / 패널이 보이는가 / 내용이 비워졌는가"의 답은 같아야 한다.
+
+**남은 §9-3**: 실제 `BrowserWindow` 팩토리 배선과 성능 실측. 실측은 실기기 필요.
+
+### 다음 세션이 여기서부터 시작한다 — §9-3 나머지
 
 **§9-3(WindowHost 성능 spike)은 AI가 단독으로 통과 판정할 수 없다.** 게이트 기준이 다음을 요구하기 때문이다.
 
