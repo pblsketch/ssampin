@@ -85,7 +85,23 @@ const koContent = {
       title: '정보 사용 목적',
       content: (
         <>
-          <p>수집된 정보는 다음 목적으로만 사용됩니다:</p>
+          <p>처리하는 정보는 다음 목적으로만 사용됩니다:</p>
+          <p>
+            <strong>가. 학생·학급 정보 (제1조 가목)</strong>
+          </p>
+          <ul>
+            <li>출결 확인·기록과 학교생활기록부 기재를 위한 자료 정리</li>
+            <li>학생 관찰·상담 내용의 기록과 후속 지도</li>
+            <li>학급 운영(시간표·자리 배치·진도·과제·평가) 관리</li>
+            <li>보호자 상담 일정 조율과 가정 연락</li>
+          </ul>
+          <p>
+            위 목적은 모두 <strong>교사의 학급 운영·학생 지도 직무 수행</strong>을 위한 것이며, 그
+            밖의 목적으로는 사용하지 않습니다.
+          </p>
+          <p className="mt-4">
+            <strong>나. Google 연동 정보 (제1조 나목)</strong>
+          </p>
           <ul>
             <li>쌤핀 앱과 Google Calendar 간 일정 양방향 동기화</li>
             <li>
@@ -680,7 +696,29 @@ const enContent = {
       title: 'How We Use Your Information',
       content: (
         <>
-          <p>The collected information is used solely for the following purposes:</p>
+          <p>The information processed is used solely for the following purposes:</p>
+          <p>
+            <strong>A. Student and class information (Section 1.A)</strong>
+          </p>
+          <ul>
+            <li>
+              Checking and recording attendance, and organizing material for the official school
+              record
+            </li>
+            <li>Recording student observations and counseling, and following up on them</li>
+            <li>
+              Managing class operations (timetable, seating, curriculum progress, assignments,
+              assessment)
+            </li>
+            <li>Arranging guardian consultation schedules and contacting families</li>
+          </ul>
+          <p>
+            All of the above serve the <strong>teacher&apos;s professional duties</strong> of class
+            management and student guidance, and are not used for any other purpose.
+          </p>
+          <p className="mt-4">
+            <strong>B. Google integration information (Section 1.B)</strong>
+          </p>
           <ul>
             <li>Two-way synchronization of events between the SsamPin app and Google Calendar</li>
             <li>
