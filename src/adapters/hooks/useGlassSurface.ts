@@ -12,8 +12,9 @@
  * 반드시 `useThemeApplier()` **다음에** 부를 것. 그쪽이 `--sp-card-base` 를 먼저 정하고
  * 이 훅이 그 위에 투명도를 얹기 때문이다. 순서가 뒤집히면 한 박자 늦은 색이 적용된다.
  */
-import { useLayoutEffect } from 'react';
+import { useLayoutEffect, useState } from 'react';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+import { useGlassPerformanceGuard } from './useGlassPerformanceGuard';
 import {
   resolveGlassSurface,
   type GlassContext,
@@ -27,13 +28,29 @@ export function useGlassSurface(context: GlassContext): void {
   const opacity = useSettingsStore((s) => s.settings.widget?.opacity);
   const cardOpacity = useSettingsStore((s) => s.settings.widget?.cardOpacity);
   const blur = useSettingsStore((s) => s.settings.widget?.blur);
+  const optIn = useSettingsStore((s) => s.settings.widget?.glassDashboardOptIn);
+
+  // 흐림이 실제로 걸렸을 때만 성능을 재본다. 안 걸렸으면 잴 것도 없다.
+  const [blurActive, setBlurActive] = useState(false);
+  useGlassPerformanceGuard(blurActive);
 
   useLayoutEffect(() => {
-    const input: GlassInput = {
-      bgOpacity: typeof opacity === 'number' ? opacity : FALLBACK.bgOpacity,
-      cardOpacity: typeof cardOpacity === 'number' ? cardOpacity : FALLBACK.cardOpacity,
-      blur: typeof blur === 'number' ? blur : FALLBACK.blur,
-    };
+    /*
+      대시보드는 사용자가 한 번이라도 직접 조절한 뒤부터 이 값을 따른다.
+
+      `opacity`·`cardOpacity` 는 원래 위젯 창 전용이었다. 위젯을 반투명하게 맞춰 둔
+      선생님이 업데이트했을 때 손대지도 않은 대시보드까지 반투명해지면 안 된다.
+      위젯·옆핀은 원래 이 값을 쓰던 자리라 그대로 적용한다.
+    */
+    const skip = context === 'dashboard' && optIn === false;
+
+    const input: GlassInput = skip
+      ? FALLBACK
+      : {
+          bgOpacity: typeof opacity === 'number' ? opacity : FALLBACK.bgOpacity,
+          cardOpacity: typeof cardOpacity === 'number' ? cardOpacity : FALLBACK.cardOpacity,
+          blur: typeof blur === 'number' ? blur : FALLBACK.blur,
+        };
     const surface = resolveGlassSurface(input, context);
     const root = document.documentElement;
 
@@ -49,8 +66,9 @@ export function useGlassSurface(context: GlassContext): void {
     }
 
     root.style.setProperty('--sp-glass-blur', `${surface.blurPx}px`);
+    setBlurActive(surface.blurPx > 0);
     // 유리가 켜졌는지 CSS 에서 알 수 있게 표시한다. 흐림 레이어를 아예 만들지 않기 위해
     // 클래스로 둔다 — 변수만으로는 "0px 흐림"도 합성 레이어를 만들어 성능을 깎는다.
     root.classList.toggle('sp-glass-on', surface.blurPx > 0 || surface.cardAlpha < 1);
-  }, [opacity, cardOpacity, blur, context]);
+  }, [opacity, cardOpacity, blur, optIn, context]);
 }

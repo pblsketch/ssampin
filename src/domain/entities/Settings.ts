@@ -201,6 +201,19 @@ export interface WidgetSettings {
    *                 `generated` 로 자동으로 되돌아간다.
    */
   readonly backdrop?: 'none' | 'generated' | 'os';
+  /**
+   * 이 투명도 값을 **대시보드에도** 적용해도 되는가 (기본 true).
+   *
+   * 예전에는 `opacity`·`cardOpacity` 가 위젯 창에만 적용됐다. 위젯을 반투명하게 맞춰 둔
+   * 선생님이 업데이트하면, 아무것도 건드리지 않았는데 대시보드까지 갑자기 반투명해진다.
+   *
+   * 그래서 **업데이트 전부터 있던 설정 파일에는 false 를 넣어 준다**(useSettingsStore 의
+   * 이전 처리). 그 상태에서는 위젯만 예전처럼 동작하고 대시보드는 불투명하게 남는다.
+   * 사용자가 투명도나 유리 효과를 한 번이라도 직접 조절하면 true 가 되어 대시보드도 따라온다.
+   *
+   * 새로 설치하는 사용자는 기본 true — 값이 모두 기본값(불투명)이라 아무 차이가 없다.
+   */
+  readonly glassDashboardOptIn?: boolean;
   readonly alwaysOnTop: boolean;
   readonly closeToWidget: boolean; // keep for backward compat
   /**

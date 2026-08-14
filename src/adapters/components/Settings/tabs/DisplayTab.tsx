@@ -83,7 +83,9 @@ export function DisplayTab({ draft, patch }: Props) {
               step={5}
               value={Math.round(draft.widget.opacity * 100)}
               unit="%"
-              onChange={(v) => patch({ widget: { ...draft.widget, opacity: v / 100 } })}
+              onChange={(v) =>
+                patch({ widget: { ...draft.widget, opacity: v / 100, glassDashboardOptIn: true } })
+              }
             />
             <SliderRow
               label="카드 투명도"
@@ -92,7 +94,11 @@ export function DisplayTab({ draft, patch }: Props) {
               step={5}
               value={Math.round((draft.widget.cardOpacity ?? 1) * 100)}
               unit="%"
-              onChange={(v) => patch({ widget: { ...draft.widget, cardOpacity: v / 100 } })}
+              onChange={(v) =>
+                patch({
+                  widget: { ...draft.widget, cardOpacity: v / 100, glassDashboardOptIn: true },
+                })
+              }
             />
             {/* 위 두 막대를 한 번에 정하는 3단계. 조절 자리가 네 곳이라 공용 부품으로 뺐다. */}
             <GlassControls

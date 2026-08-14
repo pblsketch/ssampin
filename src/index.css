@@ -342,6 +342,16 @@ html.sp-glass-on .bg-sp-card:not(.bg-sp-card .bg-sp-card) {
   -webkit-backdrop-filter: blur(var(--sp-glass-blur, 0px)) saturate(140%);
 }
 
+/* 느린 기기에서는 흐림만 뺀다.
+   그래픽 가속이 없는 환경 실측 — 흐림 끔 16.7ms(60fps) vs 흐림 켬 71.9ms(13.9fps).
+   4.3배 차이라 스크롤이 눈에 띄게 끊긴다. 비싼 것은 흐림뿐이고 반투명은 공짜라,
+   흐림만 빼면 유리 인상은 남기면서 속도를 되찾는다.
+   `useGlassPerformanceGuard` 가 실제로 재본 뒤에만 이 표시를 붙인다. */
+html.sp-glass-slow .bg-sp-card:not(.bg-sp-card .bg-sp-card) {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
 /* ③ 데이터가 빽빽한 영역은 유리에서 제외한다.
    시간표 시안에서 대비는 3.0 미만 0건으로 통과했는데도 읽기 어려웠다. 표 뒤로 배경색이
    칸마다 다르게 지나가 가로세로로 훑는 눈이 계속 걸렸기 때문이다. 대비 계산으로는
@@ -1141,59 +1151,11 @@ html.sp-glass-on [data-sp-tool-tile] {
 }
 
 /*
-  옆핀 패널 등장 — 오른쪽 가장자리에서 미끄러져 나온다.
-
-  처음에는 6px만 움직이는 짧은 페이드였는데 **뚝딱거린다는 지적을 받았다**(2026-08-14).
-  원인은 연출이 아니라 창이었다. 창 크기가 손잡이(30×168)에서 패널(400×전체높이)로
-  한 프레임에 튀고, 그 다음에야 내용이 나타나니 "확 커진 뒤 뒤늦게 채워지는" 것으로 보였다.
-
-  창이 투명하다는 점을 쓴다. 창이 커져도 **내용이 화면 밖에 있으면 아무것도 안 보이므로**
-  창이 튀는 순간은 눈에 띄지 않는다. 그 상태에서 패널이 제 너비만큼 미끄러져 들어온다.
-
-  220ms에 뒤로 갈수록 느려지는 곡선을 쓴다 — 거리의 대부분을 앞쪽에서 지나가므로
-  체감은 여전히 빠르면서, 멈출 때만 부드럽다.
+  Anime.js가 이 한 장만 합성 레이어에서 움직이게 한다. 패널 안쪽의 위젯과 유리 배경을
+  매 프레임 다시 배치하지 않아도 되고, 닫힘 도중 다시 열리면 현재 위치에서 방향만 바뀐다.
 */
-@keyframes sidepin-enter {
-  from {
-    transform: translateX(100%);
-  }
-  to {
-    transform: translateX(0);
-  }
-}
-.sidepin-enter {
-  animation: sidepin-enter 220ms var(--sp-ease-out-cubic, cubic-bezier(0.215, 0.61, 0.355, 1));
-  /* 브라우저에 미리 알려 첫 프레임에서 합성 레이어를 만들게 한다 — 없으면 시작이 한 박 끊긴다 */
-  will-change: transform;
-}
-
-/*
-  옆핀 패널 퇴장 — 들어온 길로 되돌아 나간다.
-
-  이 연출이 도는 동안 창은 아직 패널 크기다(도메인의 `closing` 상태). 창을 먼저 줄이면
-  패널이 손잡이 크기로 잘려 연출할 자리가 없다.
-
-  들어올 때(220ms)보다 짧다. 닫는 것은 이미 결정된 일이라 기다리는 느낌이 들면 안 된다.
-  `SIDE_PIN_CLOSE_ANIMATION_MS`와 같은 값이어야 한다 — 연출이 더 길면 끝나기 전에 잘리고,
-  더 짧으면 빈 화면이 잠깐 보인다.
-*/
-@keyframes sidepin-exit {
-  from {
-    transform: translateX(0);
-  }
-  to {
-    transform: translateX(100%);
-  }
-}
-.sidepin-exit {
-  animation: sidepin-exit 180ms var(--sp-ease-out, ease-out) forwards;
-  will-change: transform;
-}
-
-/* 모션을 줄이도록 설정한 사용자에게는 움직이지 않는다 */
-@media (prefers-reduced-motion: reduce) {
-  .sidepin-enter,
-  .sidepin-exit {
-    animation: none;
-  }
+.sidepin-motion {
+  backface-visibility: hidden;
+  contain: paint;
+  will-change: transform, opacity;
 }

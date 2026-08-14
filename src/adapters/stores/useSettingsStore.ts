@@ -83,6 +83,9 @@ const DEFAULT_SETTINGS: Settings = {
     // 비치게 하고 싶은 사람만 낮춘다.
     opacity: 1.0,
     cardOpacity: 1.0,
+    // 새 설치는 대시보드에도 바로 적용해도 된다 — 값이 모두 불투명이라 차이가 없다.
+    // 예전 설정 파일에는 load 시 false 가 들어간다(위 이전 처리 주석 참조).
+    glassDashboardOptIn: true,
     alwaysOnTop: true,
     closeToWidget: true,
     closeAction: 'widget',
@@ -251,6 +254,26 @@ interface SettingsState {
   resetShortcuts: () => Promise<void>;
 }
 
+/**
+ * 저장된 투명도 값을 **대시보드에도** 적용해도 되는지 정한다.
+ *
+ * `opacity`·`cardOpacity` 는 원래 위젯 창에만 적용되던 값이다. 이제 대시보드·옆핀도
+ * 같은 값을 쓰는데, 위젯을 반투명하게 맞춰 둔 선생님이 업데이트하면 아무것도 건드리지
+ * 않았는데 대시보드까지 갑자기 반투명해진다.
+ *
+ * - 저장된 설정이 아예 없으면(새 설치) `true` — 값이 모두 불투명이라 차이가 없다.
+ * - 이 항목이 없는 예전 파일이면 `false` — 대시보드를 지금 모습 그대로 둔다.
+ * - 값이 있으면 그대로 존중한다. 사용자가 한 번이라도 직접 조절하면 `true` 가 저장된다.
+ *
+ * 테스트에서 실제 함수를 그대로 부르기 위해 내보낸다(로직을 복제해 검증하면 정작
+ * 실제 코드가 바뀌었을 때 테스트가 놓친다).
+ */
+export function resolveGlassDashboardOptIn(savedWidget: unknown): boolean {
+  if (savedWidget === undefined || savedWidget === null) return true;
+  const value = (savedWidget as { glassDashboardOptIn?: unknown }).glassDashboardOptIn;
+  return typeof value === 'boolean' ? value : false;
+}
+
 export const useSettingsStore = create<SettingsState>((set, get) => ({
   settings: DEFAULT_SETTINGS,
   loaded: false,
@@ -269,6 +292,21 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
           widget: {
             ...DEFAULT_SETTINGS.widget,
             ...(saved.widget ?? {}),
+            /*
+              투명도 적용 범위 이전 처리 (2026-08-14).
+
+              `opacity`·`cardOpacity` 는 원래 위젯 창에만 적용되던 값인데, 이제 대시보드·
+              옆핀도 같은 값을 쓴다. 위젯을 반투명하게 맞춰 둔 선생님이 업데이트하면
+              아무것도 건드리지 않았는데 대시보드까지 갑자기 반투명해진다.
+
+              그래서 **이 항목이 없는 예전 설정 파일에는 false 를 넣어** 대시보드를
+              지금 모습 그대로 둔다. 사용자가 투명도나 유리 효과를 한 번이라도 직접
+              조절하면 true 가 되어 그때부터 대시보드도 따라온다.
+
+              `saved.widget` 자체가 없으면(사실상 새 설치) 기본값 true 를 그대로 쓴다 —
+              값이 모두 불투명이라 차이가 없다.
+            */
+            glassDashboardOptIn: resolveGlassDashboardOptIn(saved.widget),
             visibleSections: (() => {
               const savedVis =
                 (saved.widget as unknown as { visibleSections?: Record<string, unknown> })

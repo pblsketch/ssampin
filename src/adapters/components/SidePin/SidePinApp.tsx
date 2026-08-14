@@ -195,8 +195,12 @@ export function SidePinApp() {
             <SidePinAppearancePopover
               opacity={appearance.opacity}
               cardOpacity={appearance.cardOpacity}
-              onOpacityChange={(value) => void saveAppearance({ opacity: value })}
-              onCardOpacityChange={(value) => void saveAppearance({ cardOpacity: value })}
+              onOpacityChange={(value) =>
+                void saveAppearance({ opacity: value, glassDashboardOptIn: true })
+              }
+              onCardOpacityChange={(value) =>
+                void saveAppearance({ cardOpacity: value, glassDashboardOptIn: true })
+              }
               onClose={() => setAppearanceOpen(false)}
               widget={widgetSettings}
               onPatch={(p) => void saveAppearance(p)}

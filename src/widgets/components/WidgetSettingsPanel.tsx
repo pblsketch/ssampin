@@ -257,7 +257,9 @@ function StyleTab() {
           value={Math.round(settings.widget.opacity * 100)}
           unit="%"
           onChange={(v) =>
-            void updateSettings({ widget: { ...settings.widget, opacity: v / 100 } })
+            void updateSettings({
+              widget: { ...settings.widget, opacity: v / 100, glassDashboardOptIn: true },
+            })
           }
         />
         <SliderRow
@@ -269,7 +271,9 @@ function StyleTab() {
           value={Math.round((settings.widget.cardOpacity ?? 1) * 100)}
           unit="%"
           onChange={(v) =>
-            void updateSettings({ widget: { ...settings.widget, cardOpacity: v / 100 } })
+            void updateSettings({
+              widget: { ...settings.widget, cardOpacity: v / 100, glassDashboardOptIn: true },
+            })
           }
         />
         {/* 위 두 막대를 한 번에 정하는 3단계. 조절 자리가 네 곳이라 공용 부품으로 뺐다. */}

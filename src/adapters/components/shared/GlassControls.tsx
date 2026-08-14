@@ -58,8 +58,17 @@ export function GlassControls({ widget, onPatch, compact = false }: GlassControl
   const glassOn = current !== 'none';
   const isWindows = typeof navigator !== 'undefined' && /Win/i.test(navigator.platform || '');
 
+  /*
+    사용자가 직접 조절했다는 표시를 함께 남긴다.
+
+    예전 설정 파일은 이 값이 false 로 시작한다(위젯 창 전용이던 값이 대시보드까지
+    번지지 않게). 여기서 한 번이라도 조절하면 "이제 대시보드에도 적용해 달라"는 뜻이므로
+    그때 켜 준다.
+  */
+  const patch = (p: Partial<WidgetSettings>) => onPatch({ ...p, glassDashboardOptIn: true });
+
   const applyLevel = (level: GlassLevel) =>
-    onPatch({
+    patch({
       opacity: GLASS_PRESETS[level].bgOpacity,
       cardOpacity: GLASS_PRESETS[level].cardOpacity,
       blur: GLASS_PRESETS[level].blur,
@@ -124,7 +133,7 @@ export function GlassControls({ widget, onPatch, compact = false }: GlassControl
           compact={compact}
           unit="px"
           value={Math.round(widget.blur ?? 0)}
-          onChange={(v) => onPatch({ blur: v })}
+          onChange={(v) => patch({ blur: v })}
         />
       )}
 
@@ -138,7 +147,7 @@ export function GlassControls({ widget, onPatch, compact = false }: GlassControl
           <input
             type="checkbox"
             checked={widget.backdrop === 'os'}
-            onChange={(e) => onPatch({ backdrop: e.target.checked ? 'os' : 'generated' })}
+            onChange={(e) => patch({ backdrop: e.target.checked ? 'os' : 'generated' })}
             className="mt-0.5 w-3.5 h-3.5 text-sp-accent focus:ring-sp-accent"
           />
           <div className="flex-1">
