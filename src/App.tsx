@@ -124,6 +124,7 @@ import { validateShareFile } from '@domain/rules/shareRules';
 import { useThemeApplier } from '@adapters/hooks/useThemeApplier';
 import { useGlassSurface } from '@adapters/hooks/useGlassSurface';
 import { AppBackdrop } from '@adapters/components/common/AppBackdrop';
+import { WindowDragStrip } from '@adapters/components/common/WindowDragStrip';
 import { useFontApplier } from '@adapters/hooks/useFontApplier';
 import { useDesktopModeFallback } from '@adapters/hooks/useDesktopModeFallback';
 import { useNativeDesktopAvWarning } from '@adapters/hooks/useNativeDesktopAvWarning';
@@ -1245,15 +1246,24 @@ function MainApp() {
             onFeedback={() => setShowFeedback(true)}
           />
         )}
-        <main className={`flex-1 overflow-y-auto ${isFullscreen ? 'p-4' : 'p-8'}`}>
-          {renderPage(currentPage, setCurrentPage, isFullscreen, {
-            onRequestDualMode: handleRequestDualMode,
-            lastSingleTool,
-            settingsInitialTab,
-            timetableInitialIntent,
-            onTimetableIntentConsumed: handleTimetableIntentConsumed,
-          })}
-        </main>
+        {/*
+          드래그 띠를 왼쪽 패널 **바깥**(오른쪽 내용 칸 위)에만 둔다.
+          전체 폭에 두면 패널까지 아래로 밀려 창 맨 위에 빈 줄이 생긴다 — 패널이 위쪽을
+          채우지 못하고 어색해 보였다(2026-08-14 지적). 이렇게 두면 패널은 창 맨 위까지
+          올라가고, 창을 옮기는 손잡이와 창 조작 버튼 자리는 오른쪽에서 확보된다.
+        */}
+        <div className="flex flex-1 min-h-0 flex-col">
+          <WindowDragStrip />
+          <main className={`flex-1 min-h-0 overflow-y-auto ${isFullscreen ? 'p-4' : 'p-8'}`}>
+            {renderPage(currentPage, setCurrentPage, isFullscreen, {
+              onRequestDualMode: handleRequestDualMode,
+              lastSingleTool,
+              settingsInitialTab,
+              timetableInitialIntent,
+              onTimetableIntentConsumed: handleTimetableIntentConsumed,
+            })}
+          </main>
+        </div>
         <ModalCoordinator />
         <UpdateNotification />
         <EventPopup />

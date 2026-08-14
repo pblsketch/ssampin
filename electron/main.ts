@@ -126,8 +126,7 @@ function getAllAppWindows(): BrowserWindow[] {
   if (mainWindow && !mainWindow.isDestroyed()) windows.push(mainWindow);
   if (widgetWindow && !widgetWindow.isDestroyed()) windows.push(widgetWindow);
   if (iconWindow && !iconWindow.isDestroyed()) windows.push(iconWindow);
-  const sidePinWindow = sidePin?.getWindow();
-  if (sidePinWindow) windows.push(sidePinWindow);
+  for (const sidePinWindow of sidePin?.getWindows() ?? []) windows.push(sidePinWindow);
   return windows;
 }
 
@@ -1659,9 +1658,8 @@ function ensureSidePin(): void {
     appRoot: path.join(__dirname, '..'),
     onStateChanged: (state) => {
       // 화면은 이 상태를 그대로 그리기만 한다(스스로 판단하지 않는다).
-      const win = sidePin?.getWindow();
-      if (win && !win.isDestroyed()) {
-        win.webContents.send('sidePin:state-changed', state);
+      for (const win of sidePin?.getWindows() ?? []) {
+        if (!win.isDestroyed()) win.webContents.send('sidePin:state-changed', state);
       }
 
       // 옆핀이 스스로 꺼졌으면(어댑터 이상 등) 메인으로 되돌린다.
@@ -1890,6 +1888,27 @@ function createWindow(): void {
       기본 단축키가 이 메뉴의 role 에 묶여 있어 함께 사라지기 때문이다. 감추기만 한다.
     */
     autoHideMenuBar: true,
+    /*
+      제목 표시줄을 없애고 창 조작 버튼(최소화·최대화·닫기)만 화면 위에 띄운다.
+
+      이유 — 윈도우 11 내장 유리는 **창 전체**에 입혀진다. 제목 표시줄만 골라 불투명하게
+      남길 방법이 OS 차원에 없어서, 바탕화면 비치기를 켜면 그 줄까지 비쳐 어색했다
+      (2026-08-14 지적). 표시줄 자체를 없애면 유리가 창 맨 위까지 자연스럽게 이어진다.
+
+      `color` 를 투명으로 둬서 버튼 뒤로도 유리가 그대로 보이게 한다. 버튼 아이콘 색은
+      어두운 테마를 기준으로 밝게 잡는다 — 유리 위라 배경이 일정하지 않은데, 밝은 쪽이
+      바탕화면이 어둡든 밝든 형태가 남는다.
+
+      윈도우에서만 켠다. macOS 는 신호등 버튼 위치·여백 규칙이 달라 같은 처리를 하면
+      버튼이 내용과 겹친다. 화면 쪽은 `navigator.windowControlsOverlay` 로 이 모드인지
+      직접 확인하므로, 여기서 켜지 않은 플랫폼은 아무것도 달라지지 않는다.
+    */
+    ...(process.platform === 'win32'
+      ? {
+          titleBarStyle: 'hidden' as const,
+          titleBarOverlay: { color: '#00000000', symbolColor: '#d4d4d8', height: 32 },
+        }
+      : {}),
     show: false,
   });
 
@@ -2701,7 +2720,15 @@ function registerIpcHandlers(): void {
   // 화면이 "다 그렸다"고 알려오면, 지금 기다리고 있는 표시 요청과 짝지어 확정한다.
   // 어느 요청인지 대조하는 일은 화면이 아니라 여기서 한다 — 화면에 꼬리표를 들려 보내면
   // 그걸 되돌려 보내는 과정에서 낡은 값이 섞일 수 있다.
-  ipcMain.on('sidePin:painted', () => {
+  ipcMain.handle('sidePin:get-state', (event) => {
+    const owned = sidePin?.getWindows().some((window) => window.webContents.id === event.sender.id);
+    return owned ? (sidePin?.service.getState() ?? null) : null;
+  });
+
+  ipcMain.on('sidePin:painted', (event) => {
+    const panelWindow = sidePin?.getWindow('panel');
+    if (panelWindow === null || panelWindow === undefined) return;
+    if (panelWindow.webContents.id !== event.sender.id) return;
     const state = sidePin?.service.getState();
     const pending = state?.pendingHostOperations.find((op) => op.kind === 'show-panel');
     if (!pending) return;
