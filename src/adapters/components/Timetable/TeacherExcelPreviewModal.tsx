@@ -1,8 +1,12 @@
 import type { TeacherScheduleData } from '@domain/entities/Timetable';
+import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
+import { resolvePeriodShortLabel } from '@domain/rules/periodLabel';
 
 interface TeacherExcelPreviewModalProps {
   schedule: TeacherScheduleData;
   maxPeriods: number;
+  /** 교시 이름 표시용 — 이름을 붙인 교시는 번호 대신 이름이 보인다. */
+  periodTimes?: readonly PeriodTime[];
   activeDays: readonly string[];
   onConfirm: () => void;
   onCancel: () => void;
@@ -11,6 +15,7 @@ interface TeacherExcelPreviewModalProps {
 export function TeacherExcelPreviewModal({
   schedule,
   maxPeriods,
+  periodTimes,
   activeDays,
   onConfirm,
   onCancel,
@@ -22,10 +27,7 @@ export function TeacherExcelPreviewModal({
   );
   const allDays = [...days, ...extraDays];
 
-  const maxRows = Math.max(
-    maxPeriods,
-    ...allDays.map((d) => schedule[d]?.length ?? 0),
-  );
+  const maxRows = Math.max(maxPeriods, ...allDays.map((d) => schedule[d]?.length ?? 0));
 
   const totalPeriods = allDays.reduce(
     (sum, d) => sum + (schedule[d]?.filter((p) => p !== null).length ?? 0),
@@ -57,7 +59,10 @@ export function TeacherExcelPreviewModal({
                   교시
                 </th>
                 {allDays.map((d) => (
-                  <th key={d} className="p-2.5 border-b border-r border-sp-border text-sp-text font-bold text-center">
+                  <th
+                    key={d}
+                    className="p-2.5 border-b border-r border-sp-border text-sp-text font-bold text-center"
+                  >
                     {d}
                   </th>
                 ))}
@@ -67,7 +72,7 @@ export function TeacherExcelPreviewModal({
               {Array.from({ length: maxRows }, (_, i) => (
                 <tr key={i} className="hover:bg-sp-card/30 transition-colors">
                   <td className="p-2 border-b border-r border-sp-border text-center font-medium text-sp-muted bg-sp-card/50">
-                    {i + 1}
+                    {resolvePeriodShortLabel(i + 1, periodTimes)}
                   </td>
                   {allDays.map((d) => {
                     const period = schedule[d]?.[i] ?? null;

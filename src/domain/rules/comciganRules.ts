@@ -7,6 +7,7 @@
  *   - '>' 접두 문자열 코드는 당일 변경 표시 (숫자 부분은 동일 규칙)
  * 컴시간이 공식을 바꾸면 이 파일만 고치면 된다.
  */
+import { mergePeriodLabels } from './periodLabel';
 import type {
   ComciganLesson,
   ComciganRawSchoolData,
@@ -438,8 +439,11 @@ export interface ComciganPeriodTimesPatch {
  */
 export function periodTimesToSettingsPatch(
   parsed: ParsedComciganPeriodTimes,
+  currentPeriodTimes: readonly PeriodTime[] = [],
 ): ComciganPeriodTimesPatch {
-  const { periodTimes, lunchAfterPeriod } = parsed;
+  const { lunchAfterPeriod } = parsed;
+  // 컴시간은 시각만 준다 — 선생님이 붙인 교시 이름을 덮어쓰지 않는다
+  const periodTimes = mergePeriodLabels(currentPeriodTimes, parsed.periodTimes);
   if (lunchAfterPeriod == null) return { periodTimes };
   const idx = periodTimes.findIndex((p) => p.period === lunchAfterPeriod);
   if (idx < 0 || idx + 1 >= periodTimes.length) return { periodTimes };

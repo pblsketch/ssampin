@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import type { AttendancePeriodEntry } from '@domain/entities/StudentRecord';
 import type { AttendanceStatus, AttendanceReason } from '@domain/entities/Attendance';
 import {
@@ -9,12 +10,13 @@ import {
 } from '@domain/entities/Attendance';
 import { validateAttendancePeriods } from '@domain/rules/attendanceRules';
 
-const ATTENDANCE_STATUS_OPTIONS: { value: Exclude<AttendanceStatus, 'present'>; label: string }[] = [
-  { value: 'absent', label: '결석' },
-  { value: 'late', label: '지각' },
-  { value: 'earlyLeave', label: '조퇴' },
-  { value: 'classAbsence', label: '결과' },
-];
+const ATTENDANCE_STATUS_OPTIONS: { value: Exclude<AttendanceStatus, 'present'>; label: string }[] =
+  [
+    { value: 'absent', label: '결석' },
+    { value: 'late', label: '지각' },
+    { value: 'earlyLeave', label: '조퇴' },
+    { value: 'classAbsence', label: '결과' },
+  ];
 
 const REASON_NONE = '__none__';
 
@@ -31,6 +33,7 @@ export function PeriodRowEditor({
   regularPeriodCount,
   compact,
 }: PeriodRowEditorProps) {
+  const periodTimes = useSettingsStore((s) => s.settings.periodTimes);
   const periodOptions = useMemo(() => {
     const list: number[] = [PERIOD_MORNING];
     for (let i = 1; i <= regularPeriodCount; i += 1) list.push(i);
@@ -43,16 +46,17 @@ export function PeriodRowEditor({
     [entries, regularPeriodCount],
   );
 
-  const duplicatePeriod =
-    validation?.code === 'DUPLICATE_PERIOD' ? validation.period : undefined;
+  const duplicatePeriod = validation?.code === 'DUPLICATE_PERIOD' ? validation.period : undefined;
 
   const updateAt = (idx: number, patch: Partial<AttendancePeriodEntry>) => {
     const next = entries.map((e, i) => {
       if (i !== idx) return e;
       const merged = { ...e, ...patch };
       // reason 제거 신호
-      if ((patch as { reason?: AttendanceReason | undefined }).reason === undefined &&
-          Object.prototype.hasOwnProperty.call(patch, 'reason')) {
+      if (
+        (patch as { reason?: AttendanceReason | undefined }).reason === undefined &&
+        Object.prototype.hasOwnProperty.call(patch, 'reason')
+      ) {
         const { reason: _reason, ...rest } = merged;
         return rest as AttendancePeriodEntry;
       }
@@ -75,10 +79,7 @@ export function PeriodRowEditor({
         break;
       }
     }
-    onChange([
-      ...entries,
-      { period: nextPeriod, status: 'absent' as const },
-    ]);
+    onChange([...entries, { period: nextPeriod, status: 'absent' as const }]);
   };
 
   const inputBase = `bg-sp-surface border border-sp-border rounded-lg text-sp-text focus:outline-none focus:ring-1 focus:ring-sp-accent ${
@@ -113,7 +114,7 @@ export function PeriodRowEditor({
             >
               {periodOptions.map((p) => (
                 <option key={p} value={p}>
-                  {formatPeriodLabel(p)}
+                  {formatPeriodLabel(p, periodTimes)}
                 </option>
               ))}
             </select>
@@ -171,7 +172,7 @@ export function PeriodRowEditor({
 
       {duplicatePeriod !== undefined && (
         <p role="alert" className="text-detail text-red-400 ml-1">
-          {formatPeriodLabel(duplicatePeriod)}가 중복됩니다
+          {formatPeriodLabel(duplicatePeriod, periodTimes)}가 중복됩니다
         </p>
       )}
 

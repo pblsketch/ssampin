@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { resolvePeriodLabel } from '@domain/rules/periodLabel';
 import { useMobileProgressStore } from '@mobile/stores/useMobileProgressStore';
 import { useMobileTeachingClassStore } from '@mobile/stores/useMobileTeachingClassStore';
 import { useMobileScheduleStore } from '@mobile/stores/useMobileScheduleStore';
@@ -51,6 +52,7 @@ export function ClassProgressTab({ classId, className }: ClassProgressTabProps) 
   const loadSchedule = useMobileScheduleStore((s) => s.load);
 
   const loadSettings = useMobileSettingsStore((s) => s.load);
+  const periodTimes = useMobileSettingsStore((s) => s.settings.periodTimes);
 
   const [modalState, setModalState] = useState<ModalState>({ type: 'closed' });
 
@@ -210,6 +212,7 @@ export function ClassProgressTab({ classId, className }: ClassProgressTabProps) 
                         <li key={entry.id}>
                           <ClassProgressEntryItem
                             entry={entry}
+                            periodTimes={periodTimes}
                             isMatchingPeriod={matching.includes(entry.period)}
                             onCycleStatus={handleCycleStatus}
                             onLongPress={openActionSheet}
@@ -264,7 +267,8 @@ export function ClassProgressTab({ classId, className }: ClassProgressTabProps) 
           title="진도 항목 삭제"
           message={
             <>
-              {modalState.entry.unit} ({modalState.entry.period}교시)을(를) 삭제하시겠어요?
+              {modalState.entry.unit} ({resolvePeriodLabel(modalState.entry.period, periodTimes)}
+              )을(를) 삭제하시겠어요?
             </>
           }
           onConfirm={() => void handleConfirmDelete(modalState.entry)}

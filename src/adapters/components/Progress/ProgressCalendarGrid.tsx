@@ -2,6 +2,8 @@ import { toLocalDateString } from '@shared/utils/localDate';
 import { cellKey } from '@domain/rules/progressCalendarRules';
 import type { WeeklyProgressCell } from '@domain/rules/progressCalendarRules';
 import type { SubjectColorMap } from '@domain/valueObjects/SubjectColor';
+import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
+import { resolvePeriodLabel } from '@domain/rules/periodLabel';
 import { ProgressCalendarCell } from './ProgressCalendarCell';
 
 /**
@@ -11,6 +13,8 @@ export interface ProgressCalendarGridProps {
   weekDates: readonly string[];
   dayLabels: readonly string[];
   periods: readonly number[];
+  /** 교시 이름 표시용 */
+  periodTimes?: readonly PeriodTime[];
   grid: Map<string, WeeklyProgressCell>;
   colorBy: 'subject' | 'classroom';
   subjectColors?: SubjectColorMap;
@@ -32,6 +36,7 @@ export function ProgressCalendarGrid({
   weekDates,
   dayLabels,
   periods,
+  periodTimes,
   grid,
   colorBy,
   subjectColors,
@@ -105,7 +110,7 @@ export function ProgressCalendarGrid({
               {periods.map((period) => (
                 <tr key={period} className="border-b border-sp-border last:border-b-0">
                   <td className="border-r border-sp-border bg-sp-card px-2 py-2 text-center text-sm font-medium text-sp-muted">
-                    {period}교시
+                    {resolvePeriodLabel(period, periodTimes)}
                   </td>
                   {weekDates.map((_date, dayIndex) => {
                     const cell = grid.get(cellKey(dayIndex, period));

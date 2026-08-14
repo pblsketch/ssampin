@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { resolvePeriodLabel } from '@domain/rules/periodLabel';
 import type { TouchEvent } from 'react';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
@@ -250,7 +251,7 @@ export function TodayHub({ onNavigateAttendance }: Props) {
           <div className={showHomeroomCard ? 'col-span-1' : 'col-span-2'}>
             <CollapsibleCard
               cardId="classAttendance"
-              title={`${periodInfo.currentPeriod}교시 · ${currentClass.classroom}`}
+              title={`${resolvePeriodLabel(periodInfo.currentPeriod, settings.periodTimes)} · ${currentClass.classroom}`}
               icon="fact_check"
               iconClass="text-sp-accent"
               className="h-full"

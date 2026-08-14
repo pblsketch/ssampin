@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { resolvePeriodLabel } from '@domain/rules/periodLabel';
 import { useMobileProgressStore } from '@mobile/stores/useMobileProgressStore';
 import { useMobileTeachingClassStore } from '@mobile/stores/useMobileTeachingClassStore';
 import { useMobileSettingsStore } from '@mobile/stores/useMobileSettingsStore';
@@ -349,7 +350,7 @@ export function MobileProgressLogModal({
                 >
                   {Array.from({ length: maxPeriods }, (_, i) => i + 1).map((p) => (
                     <option key={p} value={p}>
-                      {p}교시
+                      {resolvePeriodLabel(p, settings.periodTimes)}
                     </option>
                   ))}
                 </select>
@@ -408,6 +409,7 @@ export function MobileProgressLogModal({
                   onToggle={toggleFanoutClass}
                   onClear={clearFanoutClasses}
                   preview={fanoutPreview}
+                  periodTimes={settings.periodTimes}
                 />
               )}
 
@@ -418,7 +420,7 @@ export function MobileProgressLogModal({
                   <ul className="space-y-0.5">
                     {todayEntries.map((e) => (
                       <li key={e.id} className="text-xs text-sp-text">
-                        {e.period}교시 · {e.unit}
+                        {resolvePeriodLabel(e.period, settings.periodTimes)} · {e.unit}
                         <span className="text-sp-muted mx-1">›</span>
                         {e.lesson}
                       </li>

@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import type { FanoutCandidate, FanoutPreviewRow } from '@domain/rules/progressFanout';
+import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
+import { resolvePeriodLabel } from '@domain/rules/periodLabel';
 
 /**
  * "이 진도를 다른 반에도 함께 기록" 선택 UI.
@@ -27,6 +29,8 @@ interface ProgressFanoutPickerProps {
   onClear: () => void;
   /** 저장 시 각 반이 어디에 들어갈지 (선택이 없으면 빈 배열) */
   preview: readonly FanoutPreviewRow[];
+  /** 교시 이름 표시용 — 이름을 붙인 교시는 번호 대신 이름이 보인다. */
+  periodTimes?: readonly PeriodTime[];
   compact?: boolean;
 }
 
@@ -36,6 +40,7 @@ export function ProgressFanoutPicker({
   onToggle,
   onClear,
   preview,
+  periodTimes,
   compact = false,
 }: ProgressFanoutPickerProps) {
   const [expanded, setExpanded] = useState(selectedIds.size > 0);
@@ -118,7 +123,8 @@ export function ProgressFanoutPicker({
                   {row.placement.ok ? (
                     <>
                       <span className="text-sp-text">
-                        {formatDate(row.placement.date)} {row.placement.period}교시
+                        {formatDate(row.placement.date)}{' '}
+                        {resolvePeriodLabel(row.placement.period, periodTimes)}
                       </span>
                       <span className="truncate text-sp-muted/60">
                         {KIND_HINT[row.placement.kind]}

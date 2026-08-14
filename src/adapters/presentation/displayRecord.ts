@@ -1,4 +1,5 @@
-import type { AttendanceStatus } from '@domain/entities/Attendance';
+import { type AttendanceStatus, formatPeriodLabel } from '@domain/entities/Attendance';
+import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import type { StudentRecord } from '@domain/entities/StudentRecord';
 import type { RecordCategoryItem } from '@domain/valueObjects/RecordCategory';
 import type { Student } from '@domain/entities/Student';
@@ -60,7 +61,10 @@ export interface MixedDisplayInput {
 }
 
 /** 수업 통합 기록 → DisplayRecord. */
-export function mixedRecordToDisplay(r: MixedDisplayInput): DisplayRecord {
+export function mixedRecordToDisplay(
+  r: MixedDisplayInput,
+  periodTimes?: readonly PeriodTime[],
+): DisplayRecord {
   if (r.type === 'attendance') {
     return {
       key: `attendance-${r.date}-${r.studentKey}-${r.period ?? 0}`,
@@ -73,14 +77,7 @@ export function mixedRecordToDisplay(r: MixedDisplayInput): DisplayRecord {
       kindLabel: '출결',
       status: r.status,
       reason: r.reason,
-      periodLabel:
-        r.period == null
-          ? undefined
-          : r.period === 0
-            ? '조회'
-            : r.period === 9
-              ? '종례'
-              : `${r.period}교시`,
+      periodLabel: r.period == null ? undefined : formatPeriodLabel(r.period, periodTimes),
       content: r.memo ?? '',
     };
   }

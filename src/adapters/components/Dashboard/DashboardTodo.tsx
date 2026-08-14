@@ -4,6 +4,7 @@ import { useToastStore } from '@adapters/components/common/Toast';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { useEventsStore } from '@adapters/stores/useEventsStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+import { resolvePeriodLabel } from '@domain/rules/periodLabel';
 import type { Todo } from '@domain/entities/Todo';
 import { filterActive, sortTodos } from '@domain/rules/todoRules';
 import { getDayOfWeek } from '@domain/rules/periodRules';
@@ -78,7 +79,7 @@ export function DashboardTodo({ isCompactMode = true }: DashboardTodoProps) {
           id: `tt-${idx + 1}`,
           type: 'timetable',
           time: periodTime?.start ?? null,
-          title: `${idx + 1}교시 ${p.subject}`,
+          title: `${resolvePeriodLabel(idx + 1, settings.periodTimes)} ${p.subject}`,
           icon: '📚',
         });
       });
@@ -92,7 +93,7 @@ export function DashboardTodo({ isCompactMode = true }: DashboardTodoProps) {
             id: `tt-${idx + 1}`,
             type: 'timetable',
             time: periodTime?.start ?? null,
-            title: `${idx + 1}교시 ${p.subject}`,
+            title: `${resolvePeriodLabel(idx + 1, settings.periodTimes)} ${p.subject}`,
             icon: '📚',
           });
         });

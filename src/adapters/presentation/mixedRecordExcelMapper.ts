@@ -5,7 +5,8 @@
  *
  * 설계 원칙:
  * - 컴포넌트(ClassRecordSearchView)에 직접 의존하지 않고 자체 표시 인터페이스를 정의한다.
- * - 도메인 엔티티를 직접 import하지 않는다(infrastructure 역방향 의존 방지).
+ * - 교시 라벨은 도메인 정본(formatPeriodLabel)을 재사용한다. adapters → domain 은 허용 방향이며
+ *   (docs/architecture-rules.md), 사본을 두면 교시 이름 기능이 엑셀에서만 빠지는 사고가 난다.
  * - 출결 status는 한글 라벨로 변환한다.
  * - present(출석) 행은 입력 데이터가 이미 제외했다고 간주하고 그대로 보존한다.
  *
@@ -16,6 +17,8 @@
 // 평탄 행 타입(MixedRecordFlatRow)의 정본은 infra(ExcelExporter)에 있다.
 // 매퍼는 그 입력 계약을 향해 변환하므로 infra 타입을 import 한다(adapters→infra, 허용).
 import type { MixedRecordFlatRow } from '@infrastructure/export/ExcelExporter';
+import { formatPeriodLabel } from '@domain/entities/Attendance';
+import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 
 /** 출결 상태 한글 라벨 (attendanceStatusStyle.ts와 동일, 도메인 import 없이 복제) */
 const ATTENDANCE_STATUS_KO: Record<string, string> = {
@@ -62,12 +65,6 @@ export type MixedExcelRow = AttendanceExcelRow | ObservationExcelRow;
 
 // ─── 헬퍼 ──────────────────────────────────────────────────────────────────
 
-function formatPeriodLabel(period: number): string {
-  if (period === 0) return '조회';
-  if (period === 9) return '종례';
-  return `${period}교시`;
-}
-
 // ─── 매퍼 ──────────────────────────────────────────────────────────────────
 
 /**
@@ -76,7 +73,10 @@ function formatPeriodLabel(period: number): string {
  * - 입력 순서를 보존한다(정렬은 호출처 책임).
  * - present 필터링은 이미 호출처에서 완료된 것으로 간주하고 그대로 통과시킨다.
  */
-export function mapMixedRecordsToFlatRows(rows: readonly MixedExcelRow[]): MixedRecordFlatRow[] {
+export function mapMixedRecordsToFlatRows(
+  rows: readonly MixedExcelRow[],
+  periodTimes?: readonly PeriodTime[],
+): MixedRecordFlatRow[] {
   return rows.map((row): MixedRecordFlatRow => {
     if (row.type === 'attendance') {
       return {
@@ -87,7 +87,7 @@ export function mapMixedRecordsToFlatRows(rows: readonly MixedExcelRow[]): Mixed
         statusOrTags: ATTENDANCE_STATUS_KO[row.status] ?? row.status,
         reason: row.reason ?? '',
         content: row.memo ?? '',
-        periodLabel: formatPeriodLabel(row.period),
+        periodLabel: formatPeriodLabel(row.period, periodTimes),
       };
     } else {
       return {

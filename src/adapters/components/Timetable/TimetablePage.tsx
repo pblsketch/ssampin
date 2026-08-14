@@ -26,6 +26,7 @@ import { periodTimesToSettingsPatch } from '@domain/rules/comciganRules';
 import type { ParsedComciganPeriodTimes } from '@domain/rules/comciganRules';
 import type { DayOfWeekFull } from '@domain/valueObjects/DayOfWeek';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
+import { periodTimeLabel } from '@domain/rules/periodLabel';
 import type { TeacherPeriod, ClassPeriod, TimetableOverride } from '@domain/entities/Timetable';
 import type { SubjectColorMap, SubjectColorId } from '@domain/valueObjects/SubjectColor';
 import { DEFAULT_SUBJECT_COLORS } from '@domain/valueObjects/SubjectColor';
@@ -354,6 +355,7 @@ export function TimetablePage({ initialIntent = null, onIntentConsumed }: Timeta
               classSchedule,
               settings.maxPeriods,
               settings.subjectColors,
+              settings.periodTimes,
             );
             defaultFileName = '학급시간표.xlsx';
           } else {
@@ -363,15 +365,24 @@ export function TimetablePage({ initialIntent = null, onIntentConsumed }: Timeta
               settings.subjectColors,
               colorBy,
               classroomColors,
+              settings.periodTimes,
             );
             defaultFileName = '교사시간표.xlsx';
           }
         } else {
           if (tab === 'class') {
-            data = await exportClassScheduleToHwpx(classSchedule, settings.maxPeriods);
+            data = await exportClassScheduleToHwpx(
+              classSchedule,
+              settings.maxPeriods,
+              settings.periodTimes,
+            );
             defaultFileName = '학급시간표.hwpx';
           } else {
-            data = await exportTeacherScheduleToHwpx(teacherSchedule, settings.maxPeriods);
+            data = await exportTeacherScheduleToHwpx(
+              teacherSchedule,
+              settings.maxPeriods,
+              settings.periodTimes,
+            );
             defaultFileName = '교사시간표.hwpx';
           }
         }
@@ -751,7 +762,7 @@ export function TimetablePage({ initialIntent = null, onIntentConsumed }: Timeta
     if (!previewSchedule) return;
     // 교시 시각을 먼저 적용해 아래 maxPeriods·색상 설정 갱신과 저장이 겹치지 않게 직렬화한다.
     if (previewPeriodTimes) {
-      await updateSettings(periodTimesToSettingsPatch(previewPeriodTimes));
+      await updateSettings(periodTimesToSettingsPatch(previewPeriodTimes, settings.periodTimes));
     }
     await updateTeacherSchedule(previewSchedule);
 
@@ -807,6 +818,7 @@ export function TimetablePage({ initialIntent = null, onIntentConsumed }: Timeta
     setPreviewFingerprint(null);
     setPendingComciganReview(null);
   }, [
+    settings.periodTimes,
     previewSchedule,
     previewPeriodTimes,
     previewFingerprint,
@@ -1163,6 +1175,7 @@ export function TimetablePage({ initialIntent = null, onIntentConsumed }: Timeta
           currentSubject={tempChangeTarget.subject}
           currentClassroom={tempChangeTarget.classroom}
           maxPeriods={settings.maxPeriods}
+          periodTimes={settings.periodTimes}
           defaultScope={tab === 'class' ? 'class' : 'teacher'}
           resolveBaseSubject={(d, p) => {
             const dObj = new Date(d + 'T00:00:00');
@@ -1227,6 +1240,7 @@ export function TimetablePage({ initialIntent = null, onIntentConsumed }: Timeta
           mode="create"
           slotEditable
           maxPeriods={settings.maxPeriods}
+          periodTimes={settings.periodTimes}
           defaultScope={tab === 'class' ? 'class' : 'teacher'}
           resolveBaseSubject={(d, p) => {
             const dateObj = new Date(d + 'T00:00:00');
@@ -1290,6 +1304,7 @@ export function TimetablePage({ initialIntent = null, onIntentConsumed }: Timeta
           currentSubject={editTarget.subject}
           currentClassroom={editTarget.classroom}
           maxPeriods={settings.maxPeriods}
+          periodTimes={settings.periodTimes}
           resolveBaseSubject={(d, p) => {
             const dObj = new Date(d + 'T00:00:00');
             const day = getDayOfWeek(dObj, settings.enableWeekendDays);
@@ -1408,6 +1423,7 @@ export function TimetablePage({ initialIntent = null, onIntentConsumed }: Timeta
         <TeacherExcelPreviewModal
           schedule={previewSchedule}
           maxPeriods={settings.maxPeriods}
+          periodTimes={settings.periodTimes}
           activeDays={activeDays}
           onConfirm={() => void handleExcelConfirm()}
           onCancel={() => {
@@ -1430,6 +1446,7 @@ export function TimetablePage({ initialIntent = null, onIntentConsumed }: Timeta
           matchingPeriods={[progressModal.cell.period]}
           accentColor={progressAccentFor(progressModal.cell)}
           maxPeriods={settings.maxPeriods}
+          periodTimes={settings.periodTimes}
           fanout={progressFanout}
           onSubmit={handleProgressSubmit}
           onDelete={progressModal.mode === 'edit' ? handleProgressDelete : undefined}
@@ -1470,7 +1487,10 @@ function TimetableHeader({ dayOfWeek, activeDays }: TimetableHeaderProps) {
   return (
     <thead>
       <tr className="bg-sp-surface border-b border-sp-border">
-        <th className="px-4 py-4 text-center text-sp-text font-bold text-sm w-20 border-r border-sp-border">
+        {/* break-keep: 한글은 글자 사이 어디서나 줄바꿈돼서, 이름을 붙이면 열이 최소폭까지
+            찌그러지고 "자율탐구활동"이 세로 6줄이 된다. keep-all 로 한 덩어리로 묶으면
+            표가 이름 길이에 맞춰 열 너비를 잡아준다(이름이 없으면 그대로 좁게 유지). */}
+        <th className="px-2 py-4 text-center text-sp-text font-bold text-sm min-w-[3.5rem] break-keep border-r border-sp-border">
           교시
         </th>
         <th className="px-4 py-4 text-center text-sp-text font-bold text-sm w-24 border-r border-sp-border">
@@ -1575,13 +1595,13 @@ function PeriodRow({
       >
         {/* 교시 셀 */}
         <td
-          className={`px-4 py-4 text-center font-medium text-sm border-r border-sp-border ${
+          className={`px-2 py-4 text-center font-medium text-sm break-keep border-r border-sp-border ${
             isCurrent
               ? 'text-amber-400 font-bold border-l-4 border-l-amber-400 bg-sp-card'
               : 'text-sp-muted bg-sp-card'
           }`}
         >
-          {periodTime.period}교시
+          {periodTimeLabel(periodTime)}
         </td>
 
         {/* 시간 셀 */}

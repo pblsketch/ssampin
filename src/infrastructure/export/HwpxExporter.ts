@@ -1,6 +1,8 @@
 import { HwpxDocument, fetchSkeletonHwpx, loadSkeletonHwpx } from '@ubermensch1218/hwpxcore';
 import JSZip from 'jszip';
 import type { ClassScheduleData, TeacherScheduleData } from '@domain/entities/Timetable';
+import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
+import { resolvePeriodLabel } from '@domain/rules/periodLabel';
 import type { SeatingData } from '@domain/entities/Seating';
 import type { Student } from '@domain/entities/Student';
 import type { StudentRecord } from '@domain/entities/StudentRecord';
@@ -293,6 +295,7 @@ function setTableAbsolutePosition(
 export async function exportClassScheduleToHwpx(
   schedule: ClassScheduleData,
   maxPeriods: number,
+  periodTimes?: readonly PeriodTime[],
 ): Promise<Uint8Array> {
   const doc = await createDoc();
 
@@ -324,7 +327,7 @@ export async function exportClassScheduleToHwpx(
 
   // 데이터 행
   for (let p = 0; p < maxPeriods; p++) {
-    table.setCellText(p + 1, 0, `${p + 1}교시`);
+    table.setCellText(p + 1, 0, resolvePeriodLabel(p + 1, periodTimes));
     for (const [d, day] of DAYS.entries()) {
       const cp = schedule[day]?.[p];
       const text = cp ? (cp.teacher ? `${cp.subject} (${cp.teacher})` : cp.subject) : '';
@@ -345,6 +348,7 @@ export async function exportClassScheduleToHwpx(
 export async function exportTeacherScheduleToHwpx(
   schedule: TeacherScheduleData,
   maxPeriods: number,
+  periodTimes?: readonly PeriodTime[],
 ): Promise<Uint8Array> {
   const doc = await createDoc();
 
@@ -374,7 +378,7 @@ export async function exportTeacherScheduleToHwpx(
   }
 
   for (let p = 0; p < maxPeriods; p++) {
-    table.setCellText(p + 1, 0, `${p + 1}교시`);
+    table.setCellText(p + 1, 0, resolvePeriodLabel(p + 1, periodTimes));
     for (const [d, day] of DAYS.entries()) {
       const period = schedule[day]?.[p];
       const text = period ? `${period.subject} (${period.classroom})` : '';

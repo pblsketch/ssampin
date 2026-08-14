@@ -1,3 +1,6 @@
+import type { PeriodTime } from '../valueObjects/PeriodTime';
+import { resolvePeriodLabel, resolvePeriodShortLabel } from '../rules/periodLabel';
+
 export type AttendanceStatus = 'present' | 'absent' | 'late' | 'earlyLeave' | 'classAbsence';
 
 export type AttendanceReason = '질병' | '인정' | '미인정' | '기타';
@@ -115,16 +118,20 @@ export const PERIOD_MORNING = 0;
 /** 종례(하교 종례) — 8교시 후 담임 점검 시간대 */
 export const PERIOD_CLOSING = 9;
 
-/** 교시 번호 → 표시 라벨 ("1교시" / "조회" / "종례") */
-export function formatPeriodLabel(period: number): string {
+/**
+ * 교시 번호 → 표시 라벨 ("1교시" / "조회" / "종례").
+ * periodTimes를 넘기면 교사가 붙인 교시 이름("창체" 등)을 우선 사용한다.
+ * 조회·종례는 periodTimes 밖의 담임 전용 칸이라 이름 설정 대상이 아니다.
+ */
+export function formatPeriodLabel(period: number, periodTimes?: readonly PeriodTime[]): string {
   if (period === PERIOD_MORNING) return '조회';
   if (period === PERIOD_CLOSING) return '종례';
-  return `${period}교시`;
+  return resolvePeriodLabel(period, periodTimes);
 }
 
 /** 교시 번호 → 짧은 라벨 ("1" / "조회" / "종례") — 좁은 칸에서 사용 */
-export function formatPeriodShort(period: number): string {
+export function formatPeriodShort(period: number, periodTimes?: readonly PeriodTime[]): string {
   if (period === PERIOD_MORNING) return '조회';
   if (period === PERIOD_CLOSING) return '종례';
-  return String(period);
+  return resolvePeriodShortLabel(period, periodTimes);
 }

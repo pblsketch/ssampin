@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import type { AttendanceStatus, StudentAttendance } from '@domain/entities/Attendance';
 import { formatPeriodLabel } from '@domain/entities/Attendance';
 import { pickRepresentativeAttendance } from '@domain/rules/attendanceRules';
@@ -24,6 +25,8 @@ export interface SeatPeriodPopoverProps {
   /** 현재 학생의 교시→출결 row (matrix[studentKey]) */
   row: Record<number, LocalStudentAttendance | undefined>;
   periods: readonly number[];
+  /** 교시 이름 표시용 — 호스트가 주입 */
+  periodTimes?: readonly PeriodTime[];
   /** 팔레트 종류(적용될 상태) — 라벨 표시용 */
   isEraser: boolean;
   /** 팔레트 선택 라벨 (예: "지각 · 질병" / "지우개") */
@@ -40,6 +43,7 @@ export function SeatPeriodPopover({
   student,
   row,
   periods,
+  periodTimes,
   isEraser,
   paletteLabel,
   anchorRect,
@@ -129,7 +133,7 @@ export function SeatPeriodPopover({
                 key={p}
                 type="button"
                 onClick={() => onCellClick(p)}
-                title={`${formatPeriodLabel(p)} ${cfg.label}`}
+                title={`${formatPeriodLabel(p, periodTimes)} ${cfg.label}`}
                 className={`flex flex-col items-center justify-center gap-0.5 h-12 rounded-lg border transition-colors ${
                   isPresent
                     ? 'border-sp-border bg-sp-surface/40 hover:border-sp-accent/50 text-sp-muted'
@@ -139,7 +143,9 @@ export function SeatPeriodPopover({
                 <span className="material-symbols-outlined text-base leading-none">
                   {isPresent ? 'radio_button_unchecked' : cfg.icon}
                 </span>
-                <span className="text-caption leading-none">{formatPeriodLabel(p)}</span>
+                <span className="text-caption leading-none">
+                  {formatPeriodLabel(p, periodTimes)}
+                </span>
               </button>
             );
           })}

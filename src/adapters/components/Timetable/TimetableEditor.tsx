@@ -14,6 +14,11 @@ import type {
   ClassPeriod,
 } from '@domain/entities/Timetable';
 import { parseMinutes } from '@domain/rules/periodRules';
+import {
+  normalizePeriodLabel,
+  resolvePeriodLabel,
+  PERIOD_LABEL_MAX_LENGTH,
+} from '@domain/rules/periodLabel';
 import { getLunchBreakIndex, formatLunchBreakTime } from '@adapters/presenters/timetablePresenter';
 import { NeisImportModal } from './NeisImportModal';
 import { TeacherExcelPreviewModal } from './TeacherExcelPreviewModal';
@@ -242,8 +247,9 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
             : (PERIOD_DURATION_MAP[settings.schoolLevel] ?? 45);
         const startMin = parseMinutes(newStart);
         const endMin = startMin + dur;
+        // 시각만 바꾼다 — 붙여둔 교시 이름(label)은 그대로 둔다
         arr[periodIdx] = {
-          period: existing.period,
+          ...existing,
           start: newStart,
           end: formatTimeFromMinutes(endMin),
         };
@@ -252,6 +258,20 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
     },
     [settings.schoolLevel, settings.customPeriodDuration],
   );
+
+  /** 시간표 화면에서 교시 이름을 바로 고친다 (설정 화면과 같은 정규화 규칙) */
+  const handlePeriodLabelChange = useCallback((periodIdx: number, raw: string) => {
+    setLocalPeriodTimes((prev) => {
+      const arr = [...prev];
+      const existing = arr[periodIdx];
+      if (!existing) return prev;
+      const label = normalizePeriodLabel(raw);
+      arr[periodIdx] = label
+        ? { period: existing.period, start: existing.start, end: existing.end, label }
+        : { period: existing.period, start: existing.start, end: existing.end };
+      return arr;
+    });
+  }, []);
 
   // 교시 추가
   const addPeriod = useCallback(() => {
@@ -639,7 +659,9 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
               <table className="w-full min-w-[800px] border-collapse">
                 <thead>
                   <tr className="bg-sp-surface/50 border-b border-sp-border">
-                    <th className="px-4 py-3 text-center text-sp-text font-bold text-sm w-20 border-r border-sp-border">
+                    {/* 입력칸은 내용에 맞춰 늘어나지 못하므로(보기 화면과 달리) 열 너비를
+                        6글자가 들어갈 만큼 고정한다. w-20 이면 두 글자만 보여서 뭘 썼는지 모른다. */}
+                    <th className="px-2 py-3 text-center text-sp-text font-bold text-sm w-28 border-r border-sp-border">
                       교시
                     </th>
                     <th className="px-4 py-3 text-center text-sp-text font-bold text-sm w-24 border-r border-sp-border">
@@ -677,6 +699,7 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
                       onColorChange={handleColorChange}
                       activeDays={activeDays}
                       onPeriodTimeChange={handlePeriodTimeChange}
+                      onPeriodLabelChange={handlePeriodLabelChange}
                     />
                   ))}
                 </tbody>
@@ -794,6 +817,7 @@ interface EditorPeriodRowProps {
   onColorChange: (subject: string, colorId: SubjectColorId) => void;
   activeDays: readonly DayOfWeekFull[];
   onPeriodTimeChange: (periodIdx: number, newStart: string) => void;
+  onPeriodLabelChange: (periodIdx: number, label: string) => void;
 }
 
 function EditorPeriodRow({
@@ -814,6 +838,7 @@ function EditorPeriodRow({
   onColorChange,
   activeDays,
   onPeriodTimeChange,
+  onPeriodLabelChange,
 }: EditorPeriodRowProps) {
   const [colorPickerDay, setColorPickerDay] = useState<number | null>(null);
 
@@ -845,8 +870,19 @@ function EditorPeriodRow({
       )}
 
       <tr className="hover:bg-sp-card/30 transition-colors">
-        <td className="px-4 py-3 text-center text-sp-muted font-medium text-sm bg-sp-card border-r border-sp-border">
-          {periodTime.period}교시
+        <td className="px-2 py-3 text-center bg-sp-card border-r border-sp-border">
+          <input
+            type="text"
+            value={periodTime.label ?? ''}
+            onChange={(e) => onPeriodLabelChange(periodIdx, e.target.value)}
+            maxLength={PERIOD_LABEL_MAX_LENGTH}
+            placeholder={resolvePeriodLabel(periodTime.period)}
+            aria-label={`${resolvePeriodLabel(periodTime.period)} 이름`}
+            title="교시 이름을 바꿀 수 있어요 (비우면 기본값)"
+            // 여기는 교시 번호를 따로 보여주는 열이 없다 — 이 칸이 곧 그 교시의 이름이라
+            // 비었을 때 기본 라벨("1교시")을 흐리게 보여주는 편이 맞다(설정 표와 반대).
+            className="w-full rounded-lg border border-transparent bg-transparent px-2 py-1 text-center text-sm font-medium text-sp-muted transition-colors placeholder:text-sp-muted hover:border-sp-border focus:border-sp-accent focus:text-sp-text focus:outline-none"
+          />
         </td>
         <td className="px-4 py-3 text-center text-sp-muted text-sm border-r border-sp-border font-mono">
           <input

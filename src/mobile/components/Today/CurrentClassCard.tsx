@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { resolvePeriodLabel } from '@domain/rules/periodLabel';
+import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import type { CurrentPeriodInfo } from '@mobile/hooks/useCurrentPeriod';
 import type { TeacherScheduleData } from '@domain/entities/Timetable';
 import { CollapsibleCard } from '@mobile/components/common/CollapsibleCard';
@@ -14,10 +16,13 @@ function formatMinutes(min: number): string {
 interface Props {
   periodInfo: CurrentPeriodInfo;
   teacherSchedule: TeacherScheduleData;
+  /** 교시 이름 표시용 */
+  periodTimes?: readonly PeriodTime[];
 }
 
 interface DayScheduleOverviewProps {
   daySchedule: readonly ({ subject: string; classroom: string } | null)[];
+  periodTimes?: readonly PeriodTime[];
   currentPeriod: number | null;
   nextPeriod: number | null;
   isBreak: boolean;
@@ -28,6 +33,7 @@ function DayScheduleOverview({
   currentPeriod,
   nextPeriod,
   isBreak,
+  periodTimes,
 }: DayScheduleOverviewProps) {
   const entries = daySchedule
     .map((entry, idx) => ({ period: idx + 1, entry }))
@@ -88,7 +94,7 @@ function DayScheduleOverview({
                 <span
                   className={`font-semibold ${isCurrent ? 'text-sp-accent' : isNext ? 'text-sp-success' : ''}`}
                 >
-                  {period}교시
+                  {resolvePeriodLabel(period, periodTimes)}
                 </span>
               </div>
               <span className="font-medium leading-tight text-center" style={{ fontSize: '11px' }}>
@@ -107,7 +113,7 @@ function DayScheduleOverview({
   );
 }
 
-export function CurrentClassCard({ periodInfo, teacherSchedule }: Props) {
+export function CurrentClassCard({ periodInfo, teacherSchedule, periodTimes }: Props) {
   const {
     currentPeriod,
     nextPeriod,
@@ -136,7 +142,9 @@ export function CurrentClassCard({ periodInfo, teacherSchedule }: Props) {
     iconClass = 'text-amber-500';
     title = '등교 전';
     variant = 'accent';
-    summary = nextPeriod ? `${formatMinutes(remainingMinutes)} 후 1교시 시작` : '오늘 일과 준비 중';
+    summary = nextPeriod
+      ? `${formatMinutes(remainingMinutes)} 후 ${resolvePeriodLabel(1, periodTimes)} 시작`
+      : '오늘 일과 준비 중';
     body = (
       <>
         <p className="text-sp-text font-bold text-lg">{summary}</p>
@@ -151,6 +159,7 @@ export function CurrentClassCard({ periodInfo, teacherSchedule }: Props) {
             currentPeriod={null}
             nextPeriod={nextPeriod}
             isBreak={false}
+            periodTimes={periodTimes}
           />
         )}
       </>
@@ -171,6 +180,7 @@ export function CurrentClassCard({ periodInfo, teacherSchedule }: Props) {
             currentPeriod={null}
             nextPeriod={null}
             isBreak={false}
+            periodTimes={periodTimes}
           />
         )}
       </>
@@ -180,7 +190,9 @@ export function CurrentClassCard({ periodInfo, teacherSchedule }: Props) {
     iconClass = 'text-green-500';
     title = '쉬는 시간';
     variant = 'default';
-    summary = nextPeriod ? `${formatMinutes(remainingMinutes)} 후 ${nextPeriod}교시` : '쉬는 시간';
+    summary = nextPeriod
+      ? `${formatMinutes(remainingMinutes)} 후 ${resolvePeriodLabel(nextPeriod, periodTimes)}`
+      : '쉬는 시간';
     body = (
       <>
         <p className="text-sp-text font-bold text-lg">{summary}</p>
@@ -190,6 +202,7 @@ export function CurrentClassCard({ periodInfo, teacherSchedule }: Props) {
             currentPeriod={null}
             nextPeriod={nextPeriod}
             isBreak={true}
+            periodTimes={periodTimes}
           />
         )}
       </>
@@ -199,7 +212,9 @@ export function CurrentClassCard({ periodInfo, teacherSchedule }: Props) {
     classInfo = currentPeriod && daySchedule ? (daySchedule[currentPeriod - 1] ?? null) : null;
     icon = 'school';
     iconClass = 'text-sp-accent';
-    title = `${currentPeriod}교시`;
+    // 이 분기(쉬는 시간·등교 전·하교 후가 모두 아님)에서는 currentPeriod가 있지만,
+    // 타입상 null 가능이라 명시적으로 방어한다. 기존 코드는 이 경우 "null교시"를 그렸다.
+    title = currentPeriod == null ? '수업 중' : resolvePeriodLabel(currentPeriod, periodTimes);
     variant = 'accent';
     summary = classInfo
       ? `${classInfo.subject} · ${classInfo.classroom}`
@@ -240,6 +255,7 @@ export function CurrentClassCard({ periodInfo, teacherSchedule }: Props) {
             currentPeriod={currentPeriod}
             nextPeriod={nextPeriod}
             isBreak={false}
+            periodTimes={periodTimes}
           />
         )}
       </>

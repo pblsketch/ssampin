@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback } from 'react';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+import { resolvePeriodLabel } from '@domain/rules/periodLabel';
 import { CalendarPicker } from '@adapters/components/common/CalendarPicker';
 import { ScrollRow } from '@adapters/components/common/ScrollRow';
 import { ProgressEntryFields } from './ProgressEntryFields';
@@ -509,6 +510,7 @@ export function ProgressTab({ classId }: ProgressTabProps) {
             onToggle={toggleFanoutClass}
             onClear={clearFanoutClasses}
             preview={fanoutPreview}
+            periodTimes={settings.periodTimes}
           />
           <div className="flex justify-end gap-2 pt-1">
             <button
@@ -583,7 +585,8 @@ export function ProgressTab({ classId }: ProgressTabProps) {
                                 const isMatch = matching.includes(p);
                                 return (
                                   <option key={p} value={p}>
-                                    {p}교시{isMatch ? ' ✦' : ''}
+                                    {resolvePeriodLabel(p, settings.periodTimes)}
+                                    {isMatch ? ' ✦' : ''}
                                   </option>
                                 );
                               },
@@ -650,7 +653,7 @@ export function ProgressTab({ classId }: ProgressTabProps) {
                     <div className="flex items-center gap-3">
                       {/* 교시 */}
                       <div className="text-xs text-sp-muted shrink-0 w-14">
-                        <span>{entry.period}교시</span>
+                        <span>{resolvePeriodLabel(entry.period, settings.periodTimes)}</span>
                       </div>
 
                       {/* 단원 > 차시 */}
@@ -935,7 +938,7 @@ export function ProgressTab({ classId }: ProgressTabProps) {
                                 accentColor={subjectAccent}
                               />
                               <span className="text-xs text-sp-muted text-center">
-                                {entry.period}교시
+                                {resolvePeriodLabel(entry.period, settings.periodTimes)}
                               </span>
                             </div>
                             <button

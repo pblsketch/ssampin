@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { resolvePeriodLabel } from '@domain/rules/periodLabel';
 import type {
   AttendanceStatus,
   AttendanceReason,
@@ -449,9 +450,9 @@ export function AttendanceCheckPage({
       textInput,
       students.map((s) => ({ number: s.number, name: s.name })),
       periodCount,
-      { requirePeriod: false },
+      { requirePeriod: false, periodTimes: settings.periodTimes },
     );
-  }, [textSheetOpen, textInput, students, periodCount]);
+  }, [textSheetOpen, textInput, students, periodCount, settings.periodTimes]);
 
   const okLineCount = useMemo(() => parsedLines.filter((l) => l.ok).length, [parsedLines]);
 
@@ -553,7 +554,9 @@ export function AttendanceCheckPage({
           </button>
           <div className="flex-1">
             <h2 className="text-sp-text font-bold">
-              {type === 'homeroom' ? '담임 출결' : `${selectedPeriod}교시 출결`}
+              {type === 'homeroom'
+                ? '담임 출결'
+                : `${resolvePeriodLabel(selectedPeriod, settings.periodTimes)} 출결`}
             </h2>
             <p className="text-sp-muted text-xs">{className}</p>
           </div>
@@ -600,7 +603,9 @@ export function AttendanceCheckPage({
             className="inline-flex items-center gap-1 glass-card rounded-lg border border-sp-border px-3 py-1.5 min-h-[44px] active:scale-[0.98] transition-transform"
           >
             <span className="material-symbols-outlined text-sp-muted text-icon-md">schedule</span>
-            <span className="text-sp-text text-sm font-bold">{selectedPeriod}교시</span>
+            <span className="text-sp-text text-sm font-bold">
+              {resolvePeriodLabel(selectedPeriod, settings.periodTimes)}
+            </span>
             <span className="material-symbols-outlined text-sp-muted text-icon-md">
               expand_more
             </span>
@@ -639,7 +644,7 @@ export function AttendanceCheckPage({
                   }`}
                 >
                   <span className="flex items-center gap-2">
-                    <span>{p}교시</span>
+                    <span>{resolvePeriodLabel(p, settings.periodTimes)}</span>
                     {start && <span className="text-sp-muted text-xs">{start}</span>}
                   </span>
                   {isCurrent && (

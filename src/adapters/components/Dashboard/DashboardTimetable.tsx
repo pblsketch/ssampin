@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { getDayOfWeek, getCurrentPeriod } from '@domain/rules/periodRules';
+import { periodTimeLabel, resolvePeriodLabel } from '@domain/rules/periodLabel';
 import type { TeacherPeriod, ClassPeriod } from '@domain/entities/Timetable';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import type { SubjectColorMap } from '@domain/valueObjects/SubjectColor';
@@ -246,6 +247,7 @@ function ClassTimetableList({
       {periods.slice(0, Math.max(periods.length, maxPeriods)).map((cp, idx) => {
         const period = idx + 1;
         const pt = periodTimeMap.get(period);
+        const periodLabel = pt ? periodTimeLabel(pt) : resolvePeriodLabel(period);
         const isCurrent = currentPeriod === period;
         const subject = cp.subject;
         const colorClass = getSubjectTextColor(subject, subjectColors) ?? 'text-sp-text';
@@ -261,9 +263,10 @@ function ClassTimetableList({
             }`}
           >
             <span
-              className={`w-12 text-xs ${isCurrent ? 'text-sp-highlight font-bold' : 'text-sp-muted font-medium'}`}
+              title={periodLabel}
+              className={`min-w-[3rem] shrink-0 truncate text-xs ${isCurrent ? 'text-sp-highlight font-bold' : 'text-sp-muted font-medium'}`}
             >
-              {period}교시
+              {periodLabel}
             </span>
             {isCurrent && (
               <span className="w-2 h-2 rounded-full bg-sp-highlight animate-pulse mr-1.5 shrink-0" />
@@ -311,6 +314,7 @@ function TeacherTimetableList({
       {periods.slice(0, Math.max(periods.length, maxPeriods)).map((tp, idx) => {
         const period = idx + 1;
         const pt = periodTimeMap.get(period);
+        const periodLabel = pt ? periodTimeLabel(pt) : resolvePeriodLabel(period);
         const isCurrent = currentPeriod === period;
         const subject = tp?.subject ?? '';
         const cellStyle = tp
@@ -330,9 +334,10 @@ function TeacherTimetableList({
             }`}
           >
             <span
-              className={`w-12 text-xs ${isCurrent ? 'text-sp-highlight font-bold' : 'text-sp-muted font-medium'}`}
+              title={periodLabel}
+              className={`min-w-[3rem] shrink-0 truncate text-xs ${isCurrent ? 'text-sp-highlight font-bold' : 'text-sp-muted font-medium'}`}
             >
-              {period}교시
+              {periodLabel}
             </span>
             {isCurrent && (
               <span className="w-2 h-2 rounded-full bg-sp-highlight animate-pulse mr-1.5 shrink-0" />

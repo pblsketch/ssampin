@@ -2,6 +2,8 @@ import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { useObservationStore } from '@adapters/stores/useObservationStore';
 import { useToastStore } from '@adapters/components/common/Toast';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+import { resolvePeriodLabel } from '@domain/rules/periodLabel';
 import { studentKey } from '@domain/entities/TeachingClass';
 import { isStudentActive } from '@domain/rules/studentActivity';
 import type { AttendanceStatus, AttendanceReason } from '@domain/entities/Attendance';
@@ -74,6 +76,7 @@ interface ClassRecordSearchViewProps {
 }
 
 export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
+  const settings = useSettingsStore((s) => s.settings);
   const [studentFilter, setStudentFilter] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
   const [tagFilter, setTagFilter] = useState<string[]>([]);
@@ -257,13 +260,16 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
     return groups;
   }, [filtered]);
 
-  const displayRecords = useMemo(() => filtered.map((r) => mixedRecordToDisplay(r)), [filtered]);
+  const displayRecords = useMemo(
+    () => filtered.map((r) => mixedRecordToDisplay(r, settings.periodTimes)),
+    [filtered, settings.periodTimes],
+  );
 
   // 좌측 학생 점프 리스트 — 학생 단위 그룹핑(컨텍스트=teaching, 반=classId로 안전 키).
   // 카운트는 studentFilter 무관(전체 학생 네비게이션용)하도록 mixedRecords 기준.
   const allDisplayRecords = useMemo(
-    () => mixedRecords.map((r) => mixedRecordToDisplay(r)),
-    [mixedRecords],
+    () => mixedRecords.map((r) => mixedRecordToDisplay(r, settings.periodTimes)),
+    [mixedRecords, settings.periodTimes],
   );
   const countByStudentKey = useMemo(() => {
     const m = new Map<string, number>();
@@ -686,7 +692,9 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
                             <>
                               <AttendanceStatusBadge status={r.status} />
                               {r.period && (
-                                <span className="text-xs text-sp-muted">{r.period}교시</span>
+                                <span className="text-xs text-sp-muted">
+                                  {resolvePeriodLabel(r.period, settings.periodTimes)}
+                                </span>
                               )}
                               {r.reason && (
                                 <span className="text-xs text-sp-muted">({r.reason})</span>
