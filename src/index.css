@@ -317,6 +317,17 @@ body {
   color: var(--sp-accent-fg, white) !important;
 }
 
+/* 알파 변형(text-white/70 등)까지 — 앞경계 고정 쌍.
+   계기: 뉴트럴 다크(accent 가 거의 흰색)에서 모바일 안내 배너의 닫기 버튼이
+   흰 배경 위 흰 아이콘(1.03:1)으로 사라졌다. 배너 본체는 `text-white` 라 위 규칙이
+   잡았지만 닫기 버튼만 `text-white/70` 이라 정확 매치를 빠져나갔다.
+   슬래시까지 포함해 매치하므로 알파 변형만 잡고, `hover:text-white` 같은
+   상태 변형은 접두사 때문에 매치되지 않아 그대로 남는다. */
+.bg-sp-accent [class^='text-white/'],
+.bg-sp-accent [class*=' text-white/'] {
+  color: var(--sp-accent-fg, white) !important;
+}
+
 /* Subject/category color backgrounds */
 .theme-light [class*='bg-blue-'].text-white,
 .theme-light [class*='bg-blue-'] .text-white {

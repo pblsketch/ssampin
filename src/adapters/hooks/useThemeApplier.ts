@@ -1,6 +1,6 @@
 import { useLayoutEffect } from 'react';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
-import { getPresetTheme, PRESET_THEMES } from '@domain/entities/DashboardTheme';
+import { computeTodayBg, getPresetTheme, PRESET_THEMES } from '@domain/entities/DashboardTheme';
 import type { ThemeColors } from '@domain/entities/DashboardTheme';
 import { DEFAULT_WIDGET_STYLE, SHADOW_MAP, FONT_MAP } from '@domain/entities/DashboardTheme';
 import type { WidgetStyleSettings, FontFamily } from '@domain/entities/Settings';
@@ -57,8 +57,11 @@ function applyThemeColors(colors: ThemeColors): void {
   root.style.setProperty('--sp-text', colors.text);
   root.style.setProperty('--sp-muted', colors.muted);
   root.style.setProperty('--sp-widget-rgb', hexToRgb(colors.bg));
-  root.style.setProperty('--sp-today-bg', isLightColor(colors.bg) ? '#dbeafe' : 'rgba(30, 41, 59, 0.8)');
-  root.style.setProperty('--memo-dot-color', isLightColor(colors.bg) ? 'rgba(0, 0, 0, 0.12)' : '#223149');
+  root.style.setProperty('--sp-today-bg', computeTodayBg(colors));
+  root.style.setProperty(
+    '--memo-dot-color',
+    isLightColor(colors.bg) ? 'rgba(0, 0, 0, 0.12)' : '#223149',
+  );
 
   // theme-light/theme-dark CSS 클래스 적용 (기존 CSS 오버라이드 규칙 호환)
   const light = isLightColor(colors.bg);
@@ -110,7 +113,10 @@ function applyWidgetStyle(ws: WidgetStyleSettings | undefined): void {
   // 레이아웃 변수
   root.style.setProperty('--sp-card-radius', `${s.borderRadius}px`);
   root.style.setProperty('--sp-card-gap', `${s.cardGap}px`);
-  root.style.setProperty('--sp-card-border', s.showBorder ? `${s.borderWidth}px solid ${s.borderColor ?? 'var(--sp-border)'}` : 'none');
+  root.style.setProperty(
+    '--sp-card-border',
+    s.showBorder ? `${s.borderWidth}px solid ${s.borderColor ?? 'var(--sp-border)'}` : 'none',
+  );
   root.style.setProperty('--sp-card-shadow', SHADOW_MAP[s.shadow]);
   root.style.setProperty('--sp-font-family', FONT_MAP[s.fontFamily]);
 

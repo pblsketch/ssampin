@@ -60,7 +60,11 @@ function getColors(s: MessageStyle) {
   return MESSAGE_COLOR_MAP[s.colorPreset];
 }
 
-function MessageStyleEditor({ style, onUpdate, onClose }: {
+function MessageStyleEditor({
+  style,
+  onUpdate,
+  onClose,
+}: {
   style: MessageStyle;
   onUpdate: (patch: Partial<MessageStyle>) => void;
   onClose: () => void;
@@ -79,7 +83,9 @@ function MessageStyleEditor({ style, onUpdate, onClose }: {
 
       {/* 아이콘 선택 */}
       <div>
-        <label className="text-caption text-gray-500 uppercase tracking-wider mb-1.5 block">아이콘</label>
+        <label className="text-caption text-gray-500 uppercase tracking-wider mb-1.5 block">
+          아이콘
+        </label>
         <div className="flex flex-wrap gap-1.5">
           {ICON_OPTIONS.map((opt) => (
             <button
@@ -104,7 +110,9 @@ function MessageStyleEditor({ style, onUpdate, onClose }: {
 
       {/* 색상 */}
       <div>
-        <label className="text-caption text-gray-500 uppercase tracking-wider mb-1.5 block">색상</label>
+        <label className="text-caption text-gray-500 uppercase tracking-wider mb-1.5 block">
+          색상
+        </label>
 
         {/* 테마 연동 토글 */}
         <button
@@ -119,13 +127,13 @@ function MessageStyleEditor({ style, onUpdate, onClose }: {
             {isThemeSync ? 'link' : 'link_off'}
           </span>
           위젯 테마 연동
-          {isThemeSync && (
-            <span className="ml-auto text-caption text-blue-500">활성</span>
-          )}
+          {isThemeSync && <span className="ml-auto text-caption text-blue-500">활성</span>}
         </button>
 
         {/* 수동 프리셋 (테마 연동 꺼져 있을 때만 활성) */}
-        <div className={`flex flex-wrap gap-1.5 transition-opacity ${isThemeSync ? 'opacity-30 pointer-events-none' : ''}`}>
+        <div
+          className={`flex flex-wrap gap-1.5 transition-opacity ${isThemeSync ? 'opacity-30 pointer-events-none' : ''}`}
+        >
           {COLOR_OPTIONS.map((opt) => (
             <button
               key={opt.id}
@@ -153,13 +161,17 @@ function MessageStyleEditor({ style, onUpdate, onClose }: {
 
       {/* 부제목 */}
       <div>
-        <label className="text-caption text-gray-500 uppercase tracking-wider mb-1.5 block">부제목</label>
+        <label className="text-caption text-gray-500 uppercase tracking-wider mb-1.5 block">
+          부제목
+        </label>
         <input
           type="text"
           value={subtitleDraft}
           onChange={(e) => setSubtitleDraft(e.target.value)}
           onBlur={() => onUpdate({ subtitle: subtitleDraft.trim() })}
-          onKeyDown={(e) => { if (e.key === 'Enter') onUpdate({ subtitle: subtitleDraft.trim() }); }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') onUpdate({ subtitle: subtitleDraft.trim() });
+          }}
           placeholder="예: 오늘도 힘내자! 💪"
           className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 text-xs text-gray-800 placeholder:text-gray-400 focus:outline-none focus:border-blue-400"
         />
@@ -167,7 +179,9 @@ function MessageStyleEditor({ style, onUpdate, onClose }: {
 
       {/* 초기화 */}
       <button
-        onClick={() => onUpdate({ icon: 'verified', colorPreset: 'theme', subtitle: '', customColor: undefined })}
+        onClick={() =>
+          onUpdate({ icon: 'verified', colorPreset: 'theme', subtitle: '', customColor: undefined })
+        }
         className="w-full py-1.5 text-caption rounded-lg border border-gray-200 text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors"
       >
         기본으로 초기화
@@ -251,21 +265,29 @@ export function MessageBanner() {
         tabIndex={!isEditing ? 0 : undefined}
         onKeyDown={
           !isEditing
-            ? (e) => { if (e.key === 'Enter' || e.key === ' ') startEdit(); }
+            ? (e) => {
+                if (e.key === 'Enter' || e.key === ' ') startEdit();
+              }
             : undefined
         }
-        aria-label={
-          !isEditing
-            ? isCollapsed ? '오늘의 메시지 펼치기' : '메시지 편집'
-            : undefined
-        }
+        aria-label={!isEditing ? (isCollapsed ? '오늘의 메시지 펼치기' : '메시지 편집') : undefined}
         aria-expanded={!isCollapsed}
       >
-        {/* 아이콘 */}
+        {/*
+          아이콘 — 글자색을 배경과 함께 인라인으로 지정한다. `text-white` 클래스를 쓰면
+          라이트 테마 보정(`.theme-light .text-white` → 본문색 강제)에 걸려
+          어두운 배경 위에 어두운 아이콘이 된다. 그 보정의 예외 목록은
+          `bg-blue-` 같은 Tailwind 배경 클래스만 알아보는데, 여기 배경은
+          테마 설정에 따라 달라지는 인라인 값이라 예외에 걸리지 않는다.
+          뉴트럴 테마(강조색이 검정)에서 아이콘이 완전히 안 보였던 원인.
+        */}
         {s.icon !== 'none' && (
           <div
-            className={`rounded-full text-white flex shrink-0 ${isCollapsed ? 'p-1' : 'p-2'}`}
-            style={{ background: colors.icon }}
+            className={`rounded-full flex shrink-0 ${isCollapsed ? 'p-1' : 'p-2'}`}
+            style={{
+              background: colors.icon,
+              color: s.colorPreset === 'theme' ? 'var(--sp-accent-fg)' : '#ffffff',
+            }}
           >
             <span
               className="material-symbols-outlined"

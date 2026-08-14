@@ -110,7 +110,10 @@ const TAB_GROUPS: TabGroup[] = [
         id: 'system',
         icon: 'settings_applications',
         label: '시스템',
-        color: 'bg-gray-500/10 text-gray-400',
+        // 아이콘 색만 테마 토큰을 쓴다. 형제 항목들은 유채색(amber/red/violet)이라
+        // 라이트 테마 보정이 자동으로 어둡게 잡아주지만, 중성색(gray)은 그 보정 대상에서
+        // 빠져 있어 밝은 배경에서 2.33:1 로 혼자 흐려졌다. 토큰은 테마별로 따라간다.
+        color: 'bg-gray-500/10 text-sp-muted',
       },
       { id: 'about', icon: 'info', label: '앱 정보', color: 'bg-violet-500/10 text-violet-400' },
     ],
