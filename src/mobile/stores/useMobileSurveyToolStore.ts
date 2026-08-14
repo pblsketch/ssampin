@@ -123,7 +123,13 @@ export const useMobileSurveyToolStore = create<MobileSurveyToolState>((set, get)
     }));
 
     try {
-      const responses = await surveySupabaseClient.getResponses(surveyId);
+      // 응답 조회는 해당 설문의 adminKey 를 함께 보내야 한다(마이그레이션 046).
+      // 예전에는 survey_responses 를 직접 조회해 필터만 빼면 전 행이 나왔다.
+      const adminKey = get().surveys.find((s) => s.id === surveyId)?.adminKey;
+      if (!adminKey) {
+        throw new Error('이 설문의 관리 키를 찾지 못했습니다. 설문을 만든 기기에서 확인해 주세요.');
+      }
+      const responses = await surveySupabaseClient.getResponses(surveyId, adminKey);
       set((s) => ({
         responses: { ...s.responses, [surveyId]: responses },
         responseStatus: {

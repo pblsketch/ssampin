@@ -155,9 +155,32 @@ RLS 는 행 단위라 열을 못 가리지만 GRANT 는 가린다 — 훨씬 작
 > 경우에도 업데이트 안내가 뜬다. 3단계에서 **응답 본문을 함께 봐서** 두 경우를
 > 구분해야 한다(권한 회수로 인한 실패 vs 관리 키 불일치).
 
-3. 랜딩 + 데스크톱을 RPC 경유로 전환, 데스크톱 릴리즈에 실어 배포
-   - 위 401 구분 처리를 함께 넣을 것
-4. 자동 업데이트가 충분히 퍼진 뒤 테이블 SELECT 권한 회수
+**3단계 완료** (2026-08-14, 마이그레이션 047 + 클라이언트 전환)
+
+- [x] 랜딩(즉시 배포): `checkAlreadyBooked`·`checkAlreadyResponded` → boolean RPC
+- [x] 앱 공용 클라이언트: `getBookings`·`getResponses` → `adminKey` 인자를 받는 RPC.
+      `startPolling` 두 곳, `checkAlreadyResponded`, `cancelBooking` 도 함께 전환
+- [x] 마지막 남은 직접 SELECT(예약 취소 시 `slot_id` 조회) → `get_consultation_booking_slot`
+      RPC 신설(047). 이걸 안 닫으면 4단계에서 예약 취소가 깨진다
+- [x] 401 구분 처리: 같은 401 이라도 본문에 "관리 키가 일치하지 않습니다"가 있으면
+      업데이트 안내 대신 그 사유를 전한다 (회귀 테스트 포함)
+- [x] 호출부 전수 갱신 — 타입 검사가 목록을 뽑아줬다:
+      `ConsultationDetail`·`SurveyStudentDetail`·`useConsultationStore`(4곳)·
+      `useMobileSurveyToolStore`
+
+> **모바일도 이 클라이언트를 쓴다.** 앞서 테이블명으로만 grep 해서 "모바일 미사용"으로
+> 잘못 적었는데, `useMobileSurveyToolStore` 가 공용 `SurveySupabaseClient` 를 경유한다.
+> 모바일은 즉시 배포되므로 오히려 유리하다.
+
+**남은 직접 접근 (SELECT 아님 → 4단계와 무관)**
+
+- `survey_responses` POST(INSERT, `return=minimal`) — 되읽기 없음
+- `consultation_bookings` DELETE — SELECT 권한과 별개
+
+4. **남음**: 자동 업데이트가 충분히 퍼진 뒤 테이블 SELECT 권한 회수
+   - 회수 대상: `consultation_bookings`·`survey_responses` 의 `FOR SELECT USING (TRUE)`
+   - 선행: 데스크톱 릴리즈 배포 + 어느 정도 업데이트 확산
+   - 구버전은 401 을 받고 "최신 버전으로 업데이트해 주세요" 안내가 뜬다(1단계에서 준비)
 
 ##### (참고) 원래 막혔던 이유
 

@@ -10,12 +10,20 @@ import type { Survey, SurveyResponse, StudentPinMap } from '@domain/entities/Sur
 import { isStudentActive, isStudentInactive } from '@domain/rules/studentActivity';
 import { hashPin } from '@infrastructure/crypto/pinHash';
 import { getStudentResponseProgress } from '@domain/rules/surveyRules';
-import type { SurveySupabaseClient, SurveyResponsePublic } from '@infrastructure/supabase/SurveySupabaseClient';
+import type {
+  SurveySupabaseClient,
+  SurveyResponsePublic,
+} from '@infrastructure/supabase/SurveySupabaseClient';
 import { shortLinkClient } from '@adapters/di/container';
 
 /* ──────────────── 타입 ──────────────── */
 
-type StudentLike = { readonly id: string; readonly name: string; readonly isVacant?: boolean; readonly number?: number };
+type StudentLike = {
+  readonly id: string;
+  readonly name: string;
+  readonly isVacant?: boolean;
+  readonly number?: number;
+};
 
 /* ──────────────── Props ──────────────── */
 
@@ -28,7 +36,12 @@ interface SurveyStudentDetailProps {
 
 /* ──────────────── 컴포넌트 ──────────────── */
 
-export function SurveyStudentDetail({ survey, onBack, supabaseClient, students: studentsProp }: SurveyStudentDetailProps) {
+export function SurveyStudentDetail({
+  survey,
+  onBack,
+  supabaseClient,
+  students: studentsProp,
+}: SurveyStudentDetailProps) {
   const storeStudents = useStudentStore((s) => s.students);
   const students = (studentsProp ?? storeStudents) as readonly StudentLike[];
   const { archiveSurvey, deleteSurvey } = useSurveyStore();
@@ -42,10 +55,7 @@ export function SurveyStudentDetail({ survey, onBack, supabaseClient, students: 
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const stopPollingRef = useRef<(() => void) | null>(null);
 
-  const totalStudents = useMemo(
-    () => students.filter(isStudentActive).length,
-    [students],
-  );
+  const totalStudents = useMemo(() => students.filter(isStudentActive).length, [students]);
 
   /* ── 온라인 상태 감시 ── */
   useEffect(() => {
@@ -71,7 +81,9 @@ export function SurveyStudentDetail({ survey, onBack, supabaseClient, students: 
           let studentPinHashes: Record<string, string> | undefined;
           if (survey.pinProtection && survey.studentPins) {
             const entries = await Promise.all(
-              Object.entries(survey.studentPins).map(async ([num, pin]) => [num, await hashPin(pin)] as const)
+              Object.entries(survey.studentPins).map(
+                async ([num, pin]) => [num, await hashPin(pin)] as const,
+              ),
             );
             studentPinHashes = Object.fromEntries(entries);
           }
@@ -98,10 +110,13 @@ export function SurveyStudentDetail({ survey, onBack, supabaseClient, students: 
 
   /* ── 폴링 (30초) ── */
   useEffect(() => {
-    if (!supabaseClient || !isOnline) return;
+    // adminKey 는 응답 조회 RPC 의 인자다(마이그레이션 046). 없으면 폴링하지 않는다.
+    if (!supabaseClient || !isOnline || !survey.adminKey) return;
+    const adminKey = survey.adminKey;
 
     const stop = supabaseClient.startPolling(
       survey.id,
+      adminKey,
       (data) => setResponses(data),
       30_000,
     );
@@ -111,7 +126,7 @@ export function SurveyStudentDetail({ survey, onBack, supabaseClient, students: 
       stop();
       stopPollingRef.current = null;
     };
-  }, [survey.id, supabaseClient, isOnline]);
+  }, [survey.id, survey.adminKey, supabaseClient, isOnline]);
 
   /* ── 진행률 ── */
   const domainResponses: readonly SurveyResponse[] = useMemo(() => {
@@ -183,9 +198,7 @@ export function SurveyStudentDetail({ survey, onBack, supabaseClient, students: 
       values: respondedMap,
       renderValue: (v) => (v === 'responded' ? '✓' : '(미응)'),
       valueStyle: (v) =>
-        v === 'responded'
-          ? 'bg-green-500/20 text-green-400'
-          : 'bg-sp-surface text-sp-muted',
+        v === 'responded' ? 'bg-green-500/20 text-green-400' : 'bg-sp-surface text-sp-muted',
       renderSub: (studentId) => {
         const sIdx = students.findIndex((s) => s.id === studentId);
         if (sIdx === -1) return undefined;
@@ -269,14 +282,20 @@ export function SurveyStudentDetail({ survey, onBack, supabaseClient, students: 
                 <div className="fixed inset-0 z-40" onClick={() => setShowMenu(false)} />
                 <div className="absolute right-0 top-full mt-1 z-50 bg-sp-card border border-sp-border rounded-lg shadow-xl py-1 min-w-[120px]">
                   <button
-                    onClick={() => { setShowMenu(false); void handleArchive(); }}
+                    onClick={() => {
+                      setShowMenu(false);
+                      void handleArchive();
+                    }}
                     className="w-full text-left px-3 py-2 text-xs text-sp-text hover:bg-sp-surface transition-colors flex items-center gap-2"
                   >
                     <span className="material-symbols-outlined text-sm">archive</span>
                     보관
                   </button>
                   <button
-                    onClick={() => { setShowMenu(false); void handleDelete(); }}
+                    onClick={() => {
+                      setShowMenu(false);
+                      void handleDelete();
+                    }}
                     className="w-full text-left px-3 py-2 text-xs text-red-400 hover:bg-sp-surface transition-colors flex items-center gap-2"
                   >
                     <span className="material-symbols-outlined text-sm">delete</span>
@@ -293,7 +312,9 @@ export function SurveyStudentDetail({ survey, onBack, supabaseClient, students: 
       <div className="text-xs text-sp-muted mb-3 flex items-center gap-2 flex-wrap">
         <span>📱 학생 응답</span>
         <span>·</span>
-        <span>{progress.completed}/{progress.total}명 응답 ({progress.percentage}%)</span>
+        <span>
+          {progress.completed}/{progress.total}명 응답 ({progress.percentage}%)
+        </span>
         {survey.dueDate && (
           <>
             <span>·</span>
@@ -312,18 +333,17 @@ export function SurveyStudentDetail({ survey, onBack, supabaseClient, students: 
 
       {/* 응답 현황 그리드 */}
       <div className="flex-1 overflow-y-auto">
-        <StudentGrid
-          students={students}
-          gridMode={readonlyConfig}
-          columns={5}
-          hideVacant
-        />
+        <StudentGrid students={students} gridMode={readonlyConfig} columns={5} hideVacant />
       </div>
 
       {/* 하단 통계 */}
       <div className="mt-3 pt-3 border-t border-sp-border flex flex-wrap gap-3 text-xs text-sp-muted">
-        <span>✓ 응답: <strong className="text-green-400">{progress.completed}명</strong></span>
-        <span>미응답: <strong>{progress.total - progress.completed}명</strong></span>
+        <span>
+          ✓ 응답: <strong className="text-green-400">{progress.completed}명</strong>
+        </span>
+        <span>
+          미응답: <strong>{progress.total - progress.completed}명</strong>
+        </span>
       </div>
 
       {/* PIN 확인/인쇄 모달 */}
@@ -382,7 +402,10 @@ function PinListModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      onClick={onClose}
+    >
       <div
         className="bg-sp-card rounded-xl shadow-2xl w-full max-w-md mx-4 max-h-[80vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
@@ -401,7 +424,10 @@ function PinListModal({
               <span className="material-symbols-outlined text-sm">print</span>
               인쇄
             </button>
-            <button onClick={onClose} className="text-sp-muted hover:text-sp-text transition-colors">
+            <button
+              onClick={onClose}
+              className="text-sp-muted hover:text-sp-text transition-colors"
+            >
               <span className="material-symbols-outlined text-lg">close</span>
             </button>
           </div>
@@ -424,7 +450,9 @@ function PinListModal({
                   <tr key={student.id} className="border-t border-sp-border/50">
                     <td className="py-2 text-sp-muted">{student._num}</td>
                     <td className="py-2 text-sp-text">{student.name}</td>
-                    <td className="py-2 text-center font-mono text-sp-accent font-bold tracking-widest">{pin}</td>
+                    <td className="py-2 text-center font-mono text-sp-accent font-bold tracking-widest">
+                      {pin}
+                    </td>
                   </tr>
                 );
               })}
@@ -440,7 +468,9 @@ function PinListModal({
               const pin = studentPins[student._num] ?? '-';
               return (
                 <div key={student.id} className="border border-gray-300 rounded-lg p-3 text-center">
-                  <p className="text-sm font-bold">{student._num}번 {student.name}</p>
+                  <p className="text-sm font-bold">
+                    {student._num}번 {student.name}
+                  </p>
                   <p className="text-2xl font-mono font-bold mt-1 tracking-widest">{pin}</p>
                   <p className="text-xs text-gray-400 mt-1">설문 PIN 코드</p>
                 </div>
@@ -478,12 +508,19 @@ function ShareModal({ title, url: initialUrl, survey, onClose }: ShareModalProps
   useEffect(() => {
     if (survey.shortUrl || !survey.shareUrl) return;
     let cancelled = false;
-    shortLinkClient.createShortLink(survey.shareUrl).then((result) => {
-      if (cancelled || result === survey.shareUrl) return;
-      setUrl(result);
-      void useSurveyStore.getState().updateSurvey({ ...survey, shortUrl: result });
-    }).catch(() => { /* 네트워크 실패는 무시 */ });
-    return () => { cancelled = true; };
+    shortLinkClient
+      .createShortLink(survey.shareUrl)
+      .then((result) => {
+        if (cancelled || result === survey.shareUrl) return;
+        setUrl(result);
+        void useSurveyStore.getState().updateSurvey({ ...survey, shortUrl: result });
+      })
+      .catch(() => {
+        /* 네트워크 실패는 무시 */
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [survey]);
 
   useEffect(() => {
@@ -522,7 +559,10 @@ function ShareModal({ title, url: initialUrl, survey, onClose }: ShareModalProps
   }, [title, showToast]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      onClick={onClose}
+    >
       <div
         className="bg-sp-card rounded-xl shadow-2xl w-full max-w-sm mx-4 flex flex-col"
         onClick={(e) => e.stopPropagation()}

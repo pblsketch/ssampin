@@ -279,7 +279,7 @@ export const useConsultationStore = create<ConsultationState>((set, get) => ({
     try {
       [slots, bookingsPublic] = await Promise.all([
         consultationSupabaseClient.getSlots(id),
-        consultationSupabaseClient.getBookings(id),
+        consultationSupabaseClient.getBookings(id, current.adminKey),
       ]);
     } catch (e) {
       return { ok: false, reason: `현재 예약 정보를 불러오지 못했습니다: ${String(e)}` };
@@ -300,7 +300,7 @@ export const useConsultationStore = create<ConsultationState>((set, get) => ({
     if (options.onAffectedBookings === 'cancel' && impact.affected.length > 0) {
       for (const a of impact.affected) {
         try {
-          await consultationSupabaseClient.cancelBooking(a.booking.id, id);
+          await consultationSupabaseClient.cancelBooking(a.booking.id, id, current.adminKey);
         } catch (e) {
           return {
             ok: false,
@@ -381,8 +381,13 @@ export const useConsultationStore = create<ConsultationState>((set, get) => ({
   },
 
   cancelBooking: async (scheduleId, bookingId) => {
+    // adminKey 는 취소 RPC 의 인자다(마이그레이션 047). 일정을 못 찾으면 진행하지 않는다.
+    const schedule = get().schedules.find((s) => s.id === scheduleId);
+    if (!schedule) {
+      return { ok: false, reason: '예약 취소 실패: 상담 일정을 찾을 수 없습니다' };
+    }
     try {
-      await consultationSupabaseClient.cancelBooking(bookingId, scheduleId);
+      await consultationSupabaseClient.cancelBooking(bookingId, scheduleId, schedule.adminKey);
       return { ok: true };
     } catch (e) {
       return { ok: false, reason: `예약 취소 실패: ${String(e)}` };
@@ -400,7 +405,7 @@ export const useConsultationStore = create<ConsultationState>((set, get) => ({
     try {
       [slots, bookings] = await Promise.all([
         consultationSupabaseClient.getSlots(scheduleId),
-        consultationSupabaseClient.getBookings(scheduleId),
+        consultationSupabaseClient.getBookings(scheduleId, schedule.adminKey),
       ]);
     } catch {
       return { blockedAdded: 0, availableRestored: 0, conflictedBookingIds: [] };

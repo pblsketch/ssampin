@@ -67,10 +67,40 @@ describe('ConsultationSupabaseClient.getBookings — 실패를 빈 목록으로 
   it('401 이면 업데이트 안내로 throw 한다 (빈 배열 금지)', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue({ ok: false, status: 401, statusText: 'Unauthorized' }),
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 401,
+        statusText: 'Unauthorized',
+        text: async () => 'permission denied for table consultation_bookings',
+      }),
     );
     const client = await makeClient();
-    await expect(client.getBookings('sched-1')).rejects.toThrow(/최신 버전으로 업데이트/);
+    await expect(client.getBookings('sched-1', 'admin-key')).rejects.toThrow(
+      /최신 버전으로 업데이트/,
+    );
+  });
+
+  it('같은 401 이라도 관리 키 불일치는 업데이트 안내로 오인하지 않는다', async () => {
+    // 마이그레이션 046 의 교사용 RPC 는 admin_key 가 틀리면 401 + 사유 문구를 준다.
+    // 상태 코드만 보면 "앱을 업데이트하세요"라는 엉뚱한 처방이 나간다.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 401,
+        statusText: 'Unauthorized',
+        text: async () => '{"message":"상담 일정의 관리 키가 일치하지 않습니다"}',
+      }),
+    );
+    const client = await makeClient();
+    try {
+      await client.getBookings('sched-1', 'wrong-key');
+      expect.unreachable('throw 했어야 한다');
+    } catch (e) {
+      const msg = (e as Error).message;
+      expect(msg).toMatch(/관리 키가 일치하지 않습니다/);
+      expect(msg).not.toMatch(/최신 버전으로 업데이트/);
+    }
   });
 
   it('권한 오류가 아닌 실패도 throw 한다 (조용한 "예약 없음" 방지)', async () => {
@@ -84,7 +114,7 @@ describe('ConsultationSupabaseClient.getBookings — 실패를 빈 목록으로 
       }),
     );
     const client = await makeClient();
-    await expect(client.getBookings('sched-1')).rejects.toThrow(/getBookings failed/);
+    await expect(client.getBookings('sched-1', 'admin-key')).rejects.toThrow(/getBookings failed/);
   });
 
   it('정상 응답은 그대로 매핑한다', async () => {
@@ -108,7 +138,7 @@ describe('ConsultationSupabaseClient.getBookings — 실패를 빈 목록으로 
       }),
     );
     const client = await makeClient();
-    const rows = await client.getBookings('sched-1');
+    const rows = await client.getBookings('sched-1', 'admin-key');
     expect(rows).toHaveLength(1);
     expect(rows[0]?.studentNumber).toBe(3);
     expect(rows[0]?.bookerInfoEncrypted).toBeUndefined();

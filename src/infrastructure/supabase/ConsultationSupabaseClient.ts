@@ -239,20 +239,25 @@ export class ConsultationSupabaseClient {
 
   /**
    * 예약 목록 조회 (학생 번호 순)
+   *
+   * 예전에는 consultation_bookings 를 직접 조회했다. PostgREST 는 클라이언트가 보낸
+   * 필터를 신뢰할 뿐이라 필터를 뺀 요청으로 전 행이 나왔다(2026-08-14 실측 256행).
+   * 지금은 adminKey 를 함께 보내 **그 일정의 예약만** 받는다 — 마이그레이션 046.
    */
-  async getBookings(scheduleId: string): Promise<BookingPublic[]> {
+  async getBookings(scheduleId: string, adminKey: string): Promise<BookingPublic[]> {
     this.ensureConfigured();
-    const res = await fetch(
-      `${this.baseUrl}/rest/v1/consultation_bookings?schedule_id=eq.${scheduleId}&order=student_number.asc`,
-      { headers: this.headers() },
-    );
+    const res = await fetch(`${this.baseUrl}/rest/v1/rpc/get_consultation_bookings`, {
+      method: 'POST',
+      headers: this.headers(),
+      body: JSON.stringify({ p_schedule_id: scheduleId, p_admin_key: adminKey }),
+    });
 
     // 실패를 빈 목록으로 삼키면 화면에 "예약 없음"으로 보여 선생님이 자료가
     // 사라졌다고 판단한다. 설문 쪽(getResponses)은 같은 이유로 이미 throw 한다
     // — 2026-05-14 사용자 신고 사례. 상담에도 같은 규칙을 적용한다.
     if (!res.ok) {
-      throwIfPermissionError(res.status, '예약 목록');
       const body = await res.text().catch(() => '');
+      throwIfPermissionError(res.status, '예약 목록', body);
       console.error(
         `[ConsultationSupabaseClient.getBookings] HTTP ${res.status} ${res.statusText} | scheduleId=${scheduleId} | body=${body.slice(0, 200)}`,
       );
@@ -310,24 +315,30 @@ export class ConsultationSupabaseClient {
   /**
    * 예약 취소 — 예약 삭제 후 슬롯 상태를 available로 복구
    */
-  async cancelBooking(bookingId: string, scheduleId: string): Promise<void> {
+  async cancelBooking(bookingId: string, scheduleId: string, adminKey: string): Promise<void> {
     this.ensureConfigured();
-    // 예약 정보에서 slotId 확인
-    const bookingRes = await fetch(
-      `${this.baseUrl}/rest/v1/consultation_bookings?id=eq.${bookingId}&schedule_id=eq.${scheduleId}&select=id,slot_id`,
-      { headers: this.headers() },
-    );
+    // 슬롯 복구용 slotId 조회 — 예전에는 consultation_bookings 를 직접 읽었다.
+    // 목록 조회를 RPC 로 옮긴 뒤에도 이 한 줄이 남아 있었다 (마이그레이션 047).
+    const bookingRes = await fetch(`${this.baseUrl}/rest/v1/rpc/get_consultation_booking_slot`, {
+      method: 'POST',
+      headers: this.headers(),
+      body: JSON.stringify({
+        p_booking_id: bookingId,
+        p_schedule_id: scheduleId,
+        p_admin_key: adminKey,
+      }),
+    });
 
     if (!bookingRes.ok) {
-      throw new Error('Failed to fetch booking for cancellation');
+      const body = await bookingRes.text().catch(() => '');
+      throwIfPermissionError(bookingRes.status, '예약 정보', body);
+      throw new Error(`Failed to fetch booking for cancellation: ${body.slice(0, 200)}`);
     }
 
-    const bookings = (await bookingRes.json()) as Array<{ id: string; slot_id: string }>;
-    if (bookings.length === 0) {
+    const slotId = (await bookingRes.json()) as string | null;
+    if (!slotId) {
       throw new Error('Booking not found');
     }
-
-    const slotId = bookings[0]!.slot_id;
 
     // 예약 삭제
     const deleteRes = await fetch(
@@ -621,6 +632,7 @@ export class ConsultationSupabaseClient {
    */
   startPolling(
     scheduleId: string,
+    adminKey: string,
     onUpdate: (slots: SlotPublic[], bookings: BookingPublic[]) => void,
     intervalMs = 30_000,
   ): () => void {
@@ -630,7 +642,7 @@ export class ConsultationSupabaseClient {
       try {
         const [slots, bookings] = await Promise.all([
           this.getSlots(scheduleId),
-          this.getBookings(scheduleId),
+          this.getBookings(scheduleId, adminKey),
         ]);
         onUpdate(slots, bookings);
       } catch {

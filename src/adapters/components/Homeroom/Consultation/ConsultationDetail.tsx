@@ -217,7 +217,7 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
     try {
       const [newSlots, newBookings] = await Promise.all([
         consultationSupabaseClient.getSlots(schedule.id),
-        consultationSupabaseClient.getBookings(schedule.id),
+        consultationSupabaseClient.getBookings(schedule.id, schedule.adminKey),
       ]);
       setSlots(newSlots);
       setBookings(newBookings);
@@ -269,6 +269,7 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
     if (!isOnline) return;
     const stop = consultationSupabaseClient.startPolling(
       schedule.id,
+      schedule.adminKey,
       (newSlots, newBookings) => {
         setSlots(newSlots);
         setBookings(newBookings);

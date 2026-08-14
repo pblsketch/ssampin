@@ -17,11 +17,33 @@ function isPermissionStatus(status: number): boolean {
 }
 
 /**
+ * 관리 키 불일치 RPC 응답의 표식.
+ *
+ * 마이그레이션 046 의 교사용 RPC 는 admin_key 가 틀리면
+ * ERRCODE 42501 로 예외를 던지고, PostgREST 는 이를 **401** 로 내려준다
+ * (046 주석엔 403 이라 적었으나 실측은 401).
+ *
+ * 401 이라는 이유만으로 "앱을 업데이트하세요"라고 안내하면 엉뚱한 처방이 된다.
+ * 그래서 본문의 사유 문구까지 보고 두 경우를 갈라낸다.
+ */
+const ADMIN_KEY_MISMATCH_MARK = '관리 키가 일치하지 않습니다';
+
+/**
  * 서버가 권한 오류를 돌려준 경우에 한해, 사용자가 이해할 수 있는 문구로 throw 한다.
  * 그 밖의 실패는 이 함수가 관여하지 않는다(호출부의 기존 처리에 맡긴다).
+ *
+ * @param body 응답 본문(있으면 관리 키 불일치와 권한 회수를 구분하는 데 쓴다)
  */
-export function throwIfPermissionError(status: number, context: string): void {
+export function throwIfPermissionError(status: number, context: string, body?: string): void {
   if (!isPermissionStatus(status)) return;
+
+  // 관리 키 불일치 — 업데이트해도 해결되지 않는다. 서버가 준 사유를 그대로 전한다.
+  if (body && body.includes(ADMIN_KEY_MISMATCH_MARK)) {
+    throw new Error(
+      `${context}을(를) 불러오지 못했습니다. ${ADMIN_KEY_MISMATCH_MARK}. ` +
+        `이 일정·설문을 만든 기기에서 다시 시도해 주세요.`,
+    );
+  }
 
   throw new Error(
     `${context}을(를) 불러올 권한이 없습니다. 쌤핀을 최신 버전으로 업데이트한 뒤 다시 시도해 주세요. ` +
