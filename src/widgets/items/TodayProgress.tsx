@@ -5,6 +5,7 @@ import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import type { DayOfWeekFull } from '@domain/valueObjects/DayOfWeek';
 import type { ProgressEntry } from '@domain/entities/CurriculumProgress';
 import { findMatchingClass } from '@domain/rules/matchingRules';
+import { resolvePeriodShortLabel } from '@domain/rules/periodLabel';
 import { filterActiveClasses } from '@domain/rules/teachingClassArchive';
 import { getDayOfWeek } from '@domain/rules/periodRules';
 import { toLocalDateString } from '@shared/utils/localDate';
@@ -204,8 +205,15 @@ export function TodayProgress() {
             <div key={lesson.period} className="rounded-xl bg-sp-bg/50 p-3">
               {/* Header */}
               <div className="flex items-center gap-2 mb-1">
-                <div className="flex-shrink-0 w-7 h-7 rounded-lg bg-sp-accent/10 text-sp-accent text-xs font-bold flex items-center justify-center">
-                  {lesson.period}
+                {/* 번호만 있을 때는 정사각 배지 그대로, 이름을 붙이면 알약처럼 늘어난다.
+                    (w-7 고정으로 두면 6글자 이름이 배지를 뚫고 나온다) */}
+                <div className="flex-shrink-0 min-w-7 h-7 px-1.5 max-w-24 rounded-lg bg-sp-accent/10 text-sp-accent text-xs font-bold flex items-center justify-center">
+                  <span
+                    className="max-w-full truncate"
+                    title={resolvePeriodShortLabel(lesson.period, settings.periodTimes)}
+                  >
+                    {resolvePeriodShortLabel(lesson.period, settings.periodTimes)}
+                  </span>
                 </div>
                 <span className="text-sm font-medium text-sp-text truncate flex-1">
                   {lesson.classroom} {lesson.subject}

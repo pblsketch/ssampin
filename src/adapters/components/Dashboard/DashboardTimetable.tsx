@@ -264,7 +264,9 @@ function ClassTimetableList({
           >
             <span
               title={periodLabel}
-              className={`min-w-[3rem] shrink-0 truncate text-xs ${isCurrent ? 'text-sp-highlight font-bold' : 'text-sp-muted font-medium'}`}
+              /* mr-2: 최소폭(3rem)만 있으면 짧은 "2교시"에만 틈이 생기고, 6글자 이름은 최소폭을
+                 꽉 채워 옆 과목명과 붙어 버린다("창의체험활동공강"). 여백을 명시해 항상 띄운다. */
+              className={`mr-2 min-w-[3rem] shrink-0 truncate text-xs ${isCurrent ? 'text-sp-highlight font-bold' : 'text-sp-muted font-medium'}`}
             >
               {periodLabel}
             </span>
@@ -335,7 +337,9 @@ function TeacherTimetableList({
           >
             <span
               title={periodLabel}
-              className={`min-w-[3rem] shrink-0 truncate text-xs ${isCurrent ? 'text-sp-highlight font-bold' : 'text-sp-muted font-medium'}`}
+              /* mr-2: 최소폭(3rem)만 있으면 짧은 "2교시"에만 틈이 생기고, 6글자 이름은 최소폭을
+                 꽉 채워 옆 과목명과 붙어 버린다("창의체험활동공강"). 여백을 명시해 항상 띄운다. */
+              className={`mr-2 min-w-[3rem] shrink-0 truncate text-xs ${isCurrent ? 'text-sp-highlight font-bold' : 'text-sp-muted font-medium'}`}
             >
               {periodLabel}
             </span>

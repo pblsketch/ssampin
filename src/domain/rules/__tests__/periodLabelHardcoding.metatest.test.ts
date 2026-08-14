@@ -22,6 +22,16 @@ const SRC = resolve(__dirname, '../../..');
 const HARDCODE = /\$\{[^}]*\}교시|\}교시/;
 
 /**
+ * 교시 번호를 JSX 본문에 그대로 그리는 패턴 — 예: <span>{period}</span>.
+ *
+ * ⚠️ 위 HARDCODE 는 "교시"라는 **글자가 붙은 경우만** 잡는다. 그래서 번호만 그리는 화면은
+ * 그물을 그냥 통과했고, 실제로 위젯 3곳(WeeklyTimetable·ClassTimetable·TodayProgress)이
+ * 교시 이름을 무시한 채 "1"만 표시했다. 자동 검사가 전부 초록이었는데도 **실화면을 열어
+ * 봐야만** 드러났다. 그 구멍을 여기서 막는다.
+ */
+const BARE_PERIOD_JSX = />\s*\{\s*(?:[A-Za-z_$][\w$]*\.)?period\s*\}\s*</;
+
+/**
  * 허용 목록 — 각 항목은 "왜 교시 이름 대상이 아닌지"를 함께 적는다.
  * 새 항목을 추가하려면 그 자리가 '특정 교시를 가리키는 이름'이 아님을 설명할 수 있어야 한다.
  */
@@ -85,6 +95,15 @@ describe('교시 라벨 하드코딩 금지', () => {
 
   it('허용 목록 밖에서 "N교시"를 직접 만들지 않는다', () => {
     expect(offenders).toEqual([]);
+  });
+
+  const bareOffenders = walk(SRC)
+    .filter((full) => BARE_PERIOD_JSX.test(readFileSync(full, 'utf-8')))
+    .map((full) => relative(SRC, full).replace(/\\/g, '/'))
+    .filter((rel) => !ALLOWLIST.some((a) => a.file === rel));
+
+  it('교시 번호를 화면에 그대로 그리지 않는다 (이름이 조용히 무시된다)', () => {
+    expect(bareOffenders).toEqual([]);
   });
 
   it('허용 목록의 모든 항목에 사유가 적혀 있다', () => {
