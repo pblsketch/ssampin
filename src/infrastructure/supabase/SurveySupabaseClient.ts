@@ -3,7 +3,12 @@
  *
  * survey_responses 테이블은 RLS로 Public read/insert가 열려있으므로
  * anon key만으로 직접 REST API 호출이 가능하다.
+ *
+ * ⚠️ 위 "Public read" 는 정리 대상이다(계획서 P0-3). 응답 내용이 평문이라
+ *    상담 예약보다 우선순위가 높다.
  */
+
+import { throwIfPermissionError } from './supabaseAccessError';
 
 interface SurveyRow {
   id: string;
@@ -162,6 +167,8 @@ export class SurveySupabaseClient {
     );
 
     if (!res.ok) {
+      // 권한 오류는 "무엇을 해야 하는지" 알려준다 (계획서 P0-3 — 익명 SELECT 회수 예정)
+      throwIfPermissionError(res.status, '설문 응답');
       const body = await res.text().catch(() => '');
       console.error(
         `[SurveySupabaseClient.getResponses] HTTP ${res.status} ${res.statusText} | surveyId=${surveyId} | body=${body.slice(0, 200)}`,

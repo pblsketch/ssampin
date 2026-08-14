@@ -3,7 +3,12 @@
  *
  * consultation_schedules, consultation_slots, consultation_bookings 테이블은
  * RLS로 Public read/insert가 열려있으므로 anon key만으로 직접 REST API 호출이 가능하다.
+ *
+ * ⚠️ 위 "Public read" 는 정리 대상이다(계획서 P0-3). 서버에서 익명 SELECT 를 회수하면
+ *    구버전 앱은 401/403 을 받으므로, 실패를 빈 값으로 삼키지 말고 업데이트를 안내한다.
  */
+
+import { throwIfPermissionError } from './supabaseAccessError';
 
 // ── DB row types (snake_case) ──────────────────────────────────────────────
 
@@ -242,7 +247,17 @@ export class ConsultationSupabaseClient {
       { headers: this.headers() },
     );
 
-    if (!res.ok) return [];
+    // 실패를 빈 목록으로 삼키면 화면에 "예약 없음"으로 보여 선생님이 자료가
+    // 사라졌다고 판단한다. 설문 쪽(getResponses)은 같은 이유로 이미 throw 한다
+    // — 2026-05-14 사용자 신고 사례. 상담에도 같은 규칙을 적용한다.
+    if (!res.ok) {
+      throwIfPermissionError(res.status, '예약 목록');
+      const body = await res.text().catch(() => '');
+      console.error(
+        `[ConsultationSupabaseClient.getBookings] HTTP ${res.status} ${res.statusText} | scheduleId=${scheduleId} | body=${body.slice(0, 200)}`,
+      );
+      throw new Error(`Supabase getBookings failed: ${res.status} ${res.statusText}`);
+    }
     const rows = (await res.json()) as BookingRow[];
 
     return rows.map((r) => ({

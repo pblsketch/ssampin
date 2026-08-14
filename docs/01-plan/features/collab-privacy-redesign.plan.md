@@ -115,7 +115,36 @@ RLS 는 행 단위라 열을 못 가리지만 GRANT 는 가린다 — 훨씬 작
 한계: 공개 GET 은 여전히 URL 을 아는 사람은 볼 수 있다(obscurity). 근본 해결은 P2.
 `signature-previews` 버킷에 같은 결함이 남아 있으나 객체 0건이라 제외했다.
 
-#### ⚠️ P0-3 — 같은 날 처리 불가. 데스크톱 앱 배포가 선행되어야 한다
+#### 🔄 P0-3 — 진행 중. "자동 업데이트 + 구버전 고지"로 해소 (2026-08-14 결정)
+
+**결정**: 데스크톱 배포 지연은 자동 업데이트로 흡수하고, 그때까지 구버전이 기능을 쓰면
+**명시적으로 고지**한다. 조용히 깨지지 않게 하는 것이 핵심.
+
+**1단계 완료** — 실패를 눈에 보이게 만들기
+
+- [x] `supabaseAccessError.ts` 신설 — 401/403 을 "쌤핀을 최신 버전으로 업데이트해 주세요"
+      문구로 바꿔 throw. 그 밖의 실패는 관여하지 않는다
+- [x] `ConsultationSupabaseClient.getBookings` 의 `if (!res.ok) return []` 제거
+      → **가장 위험했던 지점.** 권한을 회수하면 화면에 "예약 없음"으로 보여
+      선생님이 자료가 사라졌다고 판단한다. 설문 쪽(`getResponses`)은 같은 이유로
+      이미 throw 하고 있었고(2026-05-14 사용자 신고 사례 주석), 상담에만 빠져 있었다
+- [x] `SurveySupabaseClient.getResponses` 에도 같은 안내 문구 적용
+- [x] 회귀 그물 `__tests__/supabaseAccessError.test.ts` (7건) —
+      **옛 버그(`return []`)를 일부러 되살려 2건이 빨간불 나는 것까지 실증**
+
+> 이 1단계는 그 자체로 배포 가치가 있다. 권한 회수와 무관하게, 네트워크·서버 오류로
+> 예약 조회가 실패해도 지금까지는 "예약 없음"으로 보였다.
+
+**남은 단계**
+
+2. RPC 신설 (순수 추가라 무해)
+   - 익명용: `has_consultation_booking(schedule_id, student_number) → boolean`,
+     `has_survey_response(survey_id, student_number) → boolean`
+   - 교사용: `admin_key` 를 인자로 받아 해당 일정/설문 것만 반환하는 조회 RPC
+3. 랜딩 + 데스크톱을 RPC 경유로 전환, 데스크톱 릴리즈에 실어 배포
+4. 자동 업데이트가 충분히 퍼진 뒤 테이블 SELECT 권한 회수
+
+##### (참고) 원래 막혔던 이유
 
 - [ ] `consultation_bookings`(256행) · `survey_responses`(129행) 전 행 익명 열람 차단 (D1)
 
