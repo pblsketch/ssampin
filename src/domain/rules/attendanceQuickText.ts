@@ -1,5 +1,6 @@
 import type { AttendanceStatus, AttendanceReason } from '@domain/entities/Attendance';
 import { PERIOD_MORNING, PERIOD_CLOSING, formatPeriodLabel } from '@domain/entities/Attendance';
+import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import { computeAutoPeriods } from '@domain/rules/attendanceRules';
 
 /**
@@ -64,6 +65,8 @@ export interface QuickTextParseOptions {
    * 기본 true — 데스크톱 그리드 동작 불변.
    */
   requirePeriod?: boolean;
+  /** 교시 이름 표시용. 넘기면 미리보기 문구에 교사가 붙인 이름("창체")이 나온다. */
+  periodTimes?: readonly PeriodTime[];
 }
 
 /** 교시 토큰 해석 — 조회/종례/N교시/순수 N. 실패 시 null. */
@@ -82,17 +85,17 @@ function parsePeriodToken(tok: string, periodCount: number): number | null {
   return null;
 }
 
-function rangeLabel(periods: number[]): string {
+function rangeLabel(periods: number[], periodTimes?: readonly PeriodTime[]): string {
   if (periods.length === 0) return '';
   const sorted = [...periods].sort((a, b) => a - b);
   const first = sorted[0]!;
   const last = sorted[sorted.length - 1]!;
-  if (first === last) return formatPeriodLabel(first);
+  if (first === last) return formatPeriodLabel(first, periodTimes);
   // 연속이면 범위, 아니면 나열(대부분 연속)
   const isContiguous = sorted.every((p, i) => i === 0 || p === sorted[i - 1]! + 1);
   return isContiguous
-    ? `${formatPeriodLabel(first)}~${formatPeriodLabel(last)}`
-    : sorted.map(formatPeriodLabel).join(',');
+    ? `${formatPeriodLabel(first, periodTimes)}~${formatPeriodLabel(last, periodTimes)}`
+    : sorted.map((p) => formatPeriodLabel(p, periodTimes)).join(',');
 }
 
 function parseLine(
@@ -101,6 +104,7 @@ function parseLine(
   roster: readonly { number: number; name: string }[],
   periodCount: number,
   requirePeriod: boolean,
+  periodTimes?: readonly PeriodTime[],
 ): QuickTextParsedLine | null {
   const trimmed = raw.trim();
   if (trimmed === '') return null; // 빈 줄 무시
@@ -189,7 +193,7 @@ function parseLine(
   const periods = [...computeAutoPeriods(status, referencePeriod, periodCount)].sort(
     (a, b) => a - b,
   );
-  const preview = `${student.name} — ${STATUS_LABEL[status]}(${reason}) ${rangeLabel(periods)}${
+  const preview = `${student.name} — ${STATUS_LABEL[status]}(${reason}) ${rangeLabel(periods, periodTimes)}${
     memo ? ` · ${memo}` : ''
   }`;
 
@@ -227,7 +231,14 @@ export function parseAttendanceQuickText(
   const out: QuickTextParsedLine[] = [];
   const lines = text.split(/\r?\n/);
   for (let i = 0; i < lines.length; i += 1) {
-    const parsed = parseLine(lines[i]!, i + 1, roster, periodCount, requirePeriod);
+    const parsed = parseLine(
+      lines[i]!,
+      i + 1,
+      roster,
+      periodCount,
+      requirePeriod,
+      options?.periodTimes,
+    );
     if (parsed) out.push(parsed);
   }
   return out;

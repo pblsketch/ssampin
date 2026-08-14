@@ -4,6 +4,7 @@ import { ProgressFanoutPicker } from './ProgressFanoutPicker';
 import type { ProgressEntryFieldValues } from '@adapters/components/ClassManagement/ProgressEntryFields';
 import type { FanoutCandidate, FanoutPreviewRow } from '@domain/rules/progressFanout';
 import type { ProgressStatus } from '@domain/entities/CurriculumProgress';
+import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 
 /** "다른 반에도 함께 기록" 선택 상태 — useProgressQuickEntry가 그대로 넘겨준다 */
 export interface ProgressQuickEntryFanout {
@@ -35,6 +36,8 @@ interface ProgressQuickEntryModalProps {
   lessonDays?: readonly number[];
   accentColor?: { text: string; bg: string; bgSolid: string };
   maxPeriods: number;
+  /** 교시 이름 표시용 — 이름을 붙인 교시는 번호 대신 이름이 보인다. */
+  periodTimes?: readonly PeriodTime[];
   /** 추가 모드에서만 노출되는 "다른 반에도 함께 기록" 선택 */
   fanout?: ProgressQuickEntryFanout;
   onSubmit: (values: ProgressEntryFieldValues, status: ProgressStatus) => void | Promise<void>;
@@ -51,6 +54,7 @@ export function ProgressQuickEntryModal({
   lessonDays,
   accentColor,
   maxPeriods,
+  periodTimes,
   fanout,
   onSubmit,
   onDelete,
@@ -124,6 +128,7 @@ export function ProgressQuickEntryModal({
             lessonDays={lessonDays}
             accentColor={accentColor}
             maxPeriods={maxPeriods}
+            periodTimes={periodTimes}
           />
 
           {/* 다른 반에도 함께 기록 (추가 모드 전용) */}
@@ -134,6 +139,7 @@ export function ProgressQuickEntryModal({
               onToggle={fanout.onToggle}
               onClear={fanout.onClear}
               preview={fanoutPreview}
+              periodTimes={periodTimes}
               compact
             />
           )}

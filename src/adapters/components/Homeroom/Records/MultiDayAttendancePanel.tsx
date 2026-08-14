@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import type { Student } from '@domain/entities/Student';
 import type {
   AttendanceStatus,
@@ -66,6 +67,7 @@ export function MultiDayAttendancePanel({
   initialType = 'absent',
   onClose,
 }: MultiDayAttendancePanelProps) {
+  const periodTimes = useSettingsStore((s) => s.settings.periodTimes);
   const getDayAttendance = useTeachingClassStore((s) => s.getDayAttendance);
   const saveDayAttendance = useTeachingClassStore((s) => s.saveDayAttendance);
   const bridgeHomeroomDayAttendance = useStudentRecordsStore((s) => s.bridgeHomeroomDayAttendance);
@@ -252,7 +254,7 @@ export function MultiDayAttendancePanel({
                   >
                     {periods.map((p) => (
                       <option key={p} value={p}>
-                        {formatPeriodLabel(p)}
+                        {formatPeriodLabel(p, periodTimes)}
                       </option>
                     ))}
                   </select>

@@ -111,6 +111,7 @@ export function StudentRecordsEditor() {
   } = useTeachingClassStore();
   const className = useSettingsStore((s) => s.settings.className);
   const periodCount = useSettingsStore((s) => s.settings.maxPeriods) ?? 7;
+  const periodTimes = useSettingsStore((s) => s.settings.periodTimes);
   const showToast = useToastStore((s) => s.show);
 
   const [form, setForm] = useState<FormState>({ ...EMPTY_FORM });
@@ -432,7 +433,7 @@ export function StudentRecordsEditor() {
               const isSelected = editingId === record.id;
               const attendancePeriodLines =
                 record.category === 'attendance'
-                  ? formatAttendancePeriodLines(record.attendancePeriods)
+                  ? formatAttendancePeriodLines(record.attendancePeriods, periodTimes)
                   : [];
               return (
                 <div
@@ -573,6 +574,7 @@ export function StudentRecordsEditor() {
                       selected={selectedPeriods}
                       onChange={setSelectedPeriods}
                       accent={ACCENT_FROM_TYPE[attendanceType]}
+                      periodTimes={periodTimes}
                     />
                   )}
                   {attendanceType && (

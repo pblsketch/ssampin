@@ -1,4 +1,5 @@
 import { useRef, useState, useCallback, useEffect, type ReactNode } from 'react';
+import { useMobileSettingsStore } from '@mobile/stores/useMobileSettingsStore';
 import type { CurrentPeriodInfo } from '@mobile/hooks/useCurrentPeriod';
 import type { ClassScheduleData, TeacherScheduleData } from '@domain/entities/Timetable';
 import { CurrentClassCard } from './CurrentClassCard';
@@ -23,6 +24,7 @@ function hasClassContent(classSchedule: ClassScheduleData | null): boolean {
  * 별도 라이브러리 없이 CSS scroll-snap + 스크롤 위치로 활성 슬라이드를 추적한다.
  */
 export function HomeScheduleCarousel({ periodInfo, teacherSchedule, classSchedule }: Props) {
+  const periodTimes = useMobileSettingsStore((s) => s.settings.periodTimes);
   const scrollRef = useRef<HTMLDivElement>(null);
   const slideRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [active, setActive] = useState(0);
@@ -34,7 +36,13 @@ export function HomeScheduleCarousel({ periodInfo, teacherSchedule, classSchedul
   const slides: { key: string; node: ReactNode }[] = [
     {
       key: 'today',
-      node: <CurrentClassCard periodInfo={periodInfo} teacherSchedule={teacherSchedule} />,
+      node: (
+        <CurrentClassCard
+          periodInfo={periodInfo}
+          teacherSchedule={teacherSchedule}
+          periodTimes={periodTimes}
+        />
+      ),
     },
     {
       key: 'teacher',

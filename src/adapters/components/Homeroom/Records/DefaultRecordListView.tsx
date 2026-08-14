@@ -49,6 +49,7 @@ function DefaultRecordListView({
 }: DefaultRecordListViewProps) {
   // M4: 서류 배지 노출 게이트 — 증빙서류 요구 정책
   const documentPolicy = useSettingsStore((s) => s.settings.attendanceDocumentPolicy);
+  const periodTimes = useSettingsStore((s) => s.settings.periodTimes);
   const {
     editingId,
     editContent,
@@ -93,7 +94,7 @@ function DefaultRecordListView({
                 const isEditing = editingId === record.id;
                 const periodLines =
                   record.category === 'attendance'
-                    ? formatAttendancePeriodLines(record.attendancePeriods)
+                    ? formatAttendancePeriodLines(record.attendancePeriods, periodTimes)
                     : [];
                 return (
                   <div

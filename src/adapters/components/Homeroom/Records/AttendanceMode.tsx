@@ -47,6 +47,7 @@ export function AttendanceMode({ students, selectedDate, onDateChange }: Attenda
   const bridgeHomeroomDayAttendance = useStudentRecordsStore((s) => s.bridgeHomeroomDayAttendance);
   const className = useSettingsStore((s) => s.settings.className);
   const maxPeriods = useSettingsStore((s) => s.settings.maxPeriods);
+  const periodTimes = useSettingsStore((s) => s.settings.periodTimes);
   // 교시 목록은 settings(maxPeriods) 단일 출처 — computeAutoPeriods 의 periodCount 와 동일 기준.
   const periodCount = maxPeriods ?? 7;
   const showToast = useToastStore((s) => s.show);
@@ -286,6 +287,7 @@ export function AttendanceMode({ students, selectedDate, onDateChange }: Attenda
             loadDayRecords={loadGridDayRecords}
             onSaveDay={saveGridDay}
             periods={gridPeriods}
+            periodTimes={periodTimes}
             seating={seatingProp}
             onExceptionEdited={handleExceptionEdited}
           />

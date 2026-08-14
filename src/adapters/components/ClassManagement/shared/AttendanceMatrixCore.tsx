@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import type {
   AttendanceRecord,
   AttendanceStatus,
@@ -65,6 +66,7 @@ export function AttendanceMatrixCore({
   hideDateInput = false,
   emptyMessage = '명렬표에 학생을 먼저 등록해주세요.',
 }: AttendanceMatrixCoreProps) {
+  const periodTimes = useSettingsStore((s) => s.settings.periodTimes);
   const PERIODS = (periodsProp ?? DEFAULT_PERIODS) as readonly number[];
 
   const effectiveMatchingPeriods = useMemo(
@@ -320,6 +322,7 @@ export function AttendanceMatrixCore({
 
       {/* ── 매트릭스 테이블 (공용 headless 그리드 뷰) ── */}
       <AttendanceGridView
+        periodTimes={periodTimes}
         students={students}
         matrix={matrix}
         periods={PERIODS}
@@ -373,7 +376,7 @@ export function AttendanceMatrixCore({
         >
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-medium text-sp-text">
-              {popoverStudent?.name} {formatPeriodLabel(popover.period)}
+              {popoverStudent?.name} {formatPeriodLabel(popover.period, periodTimes)}
             </span>
             <button
               type="button"

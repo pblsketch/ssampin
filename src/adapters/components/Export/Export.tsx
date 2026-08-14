@@ -32,7 +32,12 @@ import {
 import { ExportPreviewModal } from './ExportPreviewModal';
 /* eslint-enable no-restricted-imports */
 
-export type ExportItem = 'classSchedule' | 'teacherSchedule' | 'seating' | 'events' | 'studentRecords';
+export type ExportItem =
+  | 'classSchedule'
+  | 'teacherSchedule'
+  | 'seating'
+  | 'events'
+  | 'studentRecords';
 export type ExportFormat = 'excel' | 'hwpx' | 'pdf';
 
 interface ExportItemConfig {
@@ -124,6 +129,7 @@ export function Export() {
   const events = useEventsStore((s) => s.events);
   const loadEvents = useEventsStore((s) => s.load);
   const maxPeriods = useSettingsStore((s) => s.settings.maxPeriods);
+  const periodTimes = useSettingsStore((s) => s.settings.periodTimes);
   const className = useSettingsStore((s) => s.settings.className);
   const loadSettings = useSettingsStore((s) => s.load);
   const studentRecords = useStudentRecordsStore((s) => s.records);
@@ -178,10 +184,22 @@ export function Export() {
 
         if (selectedFormat === 'excel') {
           if (item === 'classSchedule') {
-            data = await exportClassScheduleToExcel(classSchedule, maxPeriods);
+            data = await exportClassScheduleToExcel(
+              classSchedule,
+              maxPeriods,
+              undefined,
+              periodTimes,
+            );
             defaultFileName = '학급시간표.xlsx';
           } else if (item === 'teacherSchedule') {
-            data = await exportTeacherScheduleToExcel(teacherSchedule, maxPeriods);
+            data = await exportTeacherScheduleToExcel(
+              teacherSchedule,
+              maxPeriods,
+              undefined,
+              undefined,
+              undefined,
+              periodTimes,
+            );
             defaultFileName = '교사시간표.xlsx';
           } else if (item === 'seating') {
             data = await exportSeatingToExcel(seating, getStudent, students, className);
@@ -195,29 +213,26 @@ export function Export() {
           }
         } else if (selectedFormat === 'hwpx') {
           if (item === 'classSchedule') {
-            data = await exportClassScheduleToHwpx(classSchedule, maxPeriods);
+            data = await exportClassScheduleToHwpx(classSchedule, maxPeriods, periodTimes);
             defaultFileName = '학급시간표.hwpx';
           } else if (item === 'teacherSchedule') {
-            data = await exportTeacherScheduleToHwpx(teacherSchedule, maxPeriods);
+            data = await exportTeacherScheduleToHwpx(teacherSchedule, maxPeriods, periodTimes);
             defaultFileName = '교사시간표.hwpx';
           } else if (item === 'seating') {
             data = await exportSeatingToHwpx(seating, getStudent, students, className);
             defaultFileName = '학급자리배치도.hwpx';
           } else if (item === 'studentRecords') {
-            data = await exportStudentRecordsToHwpx(
-              studentRecords, students, studentCategories,
-              { schoolName, className, teacherName },
-            );
+            data = await exportStudentRecordsToHwpx(studentRecords, students, studentCategories, {
+              schoolName,
+              className,
+              teacherName,
+            });
             defaultFileName = '담임기록부.hwpx';
           }
         } else if (selectedFormat === 'pdf') {
           // 미리보기에서 만든 바이트가 있으면 재사용 (첫 item 에 해당)
           let reused: ArrayBuffer | null = null;
-          if (
-            selectedItems.size === 1 &&
-            pdfPreviewBytes &&
-            pdfPreviewBytes.byteLength > 0
-          ) {
+          if (selectedItems.size === 1 && pdfPreviewBytes && pdfPreviewBytes.byteLength > 0) {
             try {
               const copy = new ArrayBuffer(pdfPreviewBytes.byteLength);
               new Uint8Array(copy).set(new Uint8Array(pdfPreviewBytes));
@@ -251,7 +266,7 @@ export function Export() {
         // Uint8Array → ArrayBuffer 변환 (writeFile/Blob 호환)
         const normalized: ArrayBuffer | string =
           data instanceof Uint8Array
-            ? data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer
+            ? (data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer)
             : data;
 
         if (window.electronAPI) {
@@ -297,6 +312,7 @@ export function Export() {
       setIsExporting(false);
     }
   }, [
+    periodTimes,
     selectedItems,
     selectedFormat,
     classSchedule,
@@ -323,168 +339,174 @@ export function Export() {
         iconIsMaterial
         title="내보내기"
         leftAddon={
-          <span className="text-sp-muted text-sm font-sp-medium">
-            데이터를 파일로 내보냅니다
-          </span>
+          <span className="text-sp-muted text-sm font-sp-medium">데이터를 파일로 내보냅니다</span>
         }
       />
       <div className="flex-1 min-h-0 overflow-y-auto p-8">
-      <div className='max-w-3xl mx-auto'>
-
-      {/* Step 1: 항목 선택 */}
-      <div className='mb-8'>
-        <h3 className='text-white font-semibold mb-4 flex items-center gap-2'>
-          <span className='bg-sp-accent text-white w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold'>
-            1
-          </span>
-          내보낼 항목 선택
-        </h3>
-        <div className='grid grid-cols-2 gap-3'>
-          {EXPORT_ITEMS.map((item) => {
-            const isSelected = selectedItems.has(item.id);
-            return (
-              <button
-                key={item.id}
-                onClick={() => toggleItem(item.id)}
-                className={`flex items-center gap-4 p-4 rounded-xl border transition-all text-left ${isSelected
-                  ? 'bg-sp-accent/10 border-sp-accent'
-                  : 'bg-sp-card border-sp-border hover:border-sp-accent/50'
-                  }`}
-              >
-                <div className={`p-2 rounded-lg ${isSelected ? 'bg-sp-accent/20' : 'bg-white/5'}`}>
-                  <span
-                    className={`material-symbols-outlined ${isSelected ? 'text-sp-accent' : 'text-sp-muted'}`}
-                  >
-                    {item.icon}
-                  </span>
-                </div>
-                <div className='flex-1 min-w-0'>
-                  <p
-                    className={`font-medium text-sm ${isSelected ? 'text-white' : 'text-sp-text'}`}
-                  >
-                    {item.label}
-                  </p>
-                  <p className='text-xs text-sp-muted truncate'>{item.description}</p>
-                </div>
-                <div
-                  className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${isSelected ? 'bg-sp-accent border-sp-accent' : 'border-sp-border'
-                    }`}
-                >
-                  {isSelected && (
-                    <span className='material-symbols-outlined text-white text-sm'>check</span>
-                  )}
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Step 2: 형식 선택 */}
-      {selectedItems.size > 0 && (
-        <div className='mb-8'>
-          <h3 className='text-white font-semibold mb-4 flex items-center gap-2'>
-            <span className='bg-sp-accent text-white w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold'>
-              2
-            </span>
-            파일 형식 선택
-          </h3>
-          {availableFormats.length > 0 ? (
-            <div className='flex gap-3'>
-              {availableFormats.map((fmt) => {
-                const config = FORMAT_CONFIG[fmt];
-                const isSelected = selectedFormat === fmt;
+        <div className="max-w-3xl mx-auto">
+          {/* Step 1: 항목 선택 */}
+          <div className="mb-8">
+            <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
+              <span className="bg-sp-accent text-white w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold">
+                1
+              </span>
+              내보낼 항목 선택
+            </h3>
+            <div className="grid grid-cols-2 gap-3">
+              {EXPORT_ITEMS.map((item) => {
+                const isSelected = selectedItems.has(item.id);
                 return (
                   <button
-                    key={fmt}
-                    onClick={() => setSelectedFormat(fmt)}
-                    className={`flex-1 flex flex-col items-center gap-2 p-5 rounded-xl border transition-all ${isSelected
-                      ? 'bg-sp-accent/10 border-sp-accent'
-                      : 'bg-sp-card border-sp-border hover:border-sp-accent/50'
-                      }`}
+                    key={item.id}
+                    onClick={() => toggleItem(item.id)}
+                    className={`flex items-center gap-4 p-4 rounded-xl border transition-all text-left ${
+                      isSelected
+                        ? 'bg-sp-accent/10 border-sp-accent'
+                        : 'bg-sp-card border-sp-border hover:border-sp-accent/50'
+                    }`}
                   >
-                    <span
-                      className={`material-symbols-outlined text-3xl ${isSelected ? 'text-sp-accent' : 'text-sp-muted'}`}
+                    <div
+                      className={`p-2 rounded-lg ${isSelected ? 'bg-sp-accent/20' : 'bg-white/5'}`}
                     >
-                      {config.icon}
-                    </span>
-                    <span
-                      className={`font-semibold text-sm ${isSelected ? 'text-white' : 'text-sp-text'}`}
+                      <span
+                        className={`material-symbols-outlined ${isSelected ? 'text-sp-accent' : 'text-sp-muted'}`}
+                      >
+                        {item.icon}
+                      </span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p
+                        className={`font-medium text-sm ${isSelected ? 'text-white' : 'text-sp-text'}`}
+                      >
+                        {item.label}
+                      </p>
+                      <p className="text-xs text-sp-muted truncate">{item.description}</p>
+                    </div>
+                    <div
+                      className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                        isSelected ? 'bg-sp-accent border-sp-accent' : 'border-sp-border'
+                      }`}
                     >
-                      {config.label}
-                    </span>
-                    <span className='text-xs text-sp-muted'>{config.description}</span>
+                      {isSelected && (
+                        <span className="material-symbols-outlined text-white text-sm">check</span>
+                      )}
+                    </div>
                   </button>
                 );
               })}
             </div>
-          ) : (
-            <p className='text-sp-muted text-sm text-center py-4'>
-              선택한 항목들의 공통 지원 형식이 없습니다. 항목을 개별로 선택해주세요.
-            </p>
+          </div>
+
+          {/* Step 2: 형식 선택 */}
+          {selectedItems.size > 0 && (
+            <div className="mb-8">
+              <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
+                <span className="bg-sp-accent text-white w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold">
+                  2
+                </span>
+                파일 형식 선택
+              </h3>
+              {availableFormats.length > 0 ? (
+                <div className="flex gap-3">
+                  {availableFormats.map((fmt) => {
+                    const config = FORMAT_CONFIG[fmt];
+                    const isSelected = selectedFormat === fmt;
+                    return (
+                      <button
+                        key={fmt}
+                        onClick={() => setSelectedFormat(fmt)}
+                        className={`flex-1 flex flex-col items-center gap-2 p-5 rounded-xl border transition-all ${
+                          isSelected
+                            ? 'bg-sp-accent/10 border-sp-accent'
+                            : 'bg-sp-card border-sp-border hover:border-sp-accent/50'
+                        }`}
+                      >
+                        <span
+                          className={`material-symbols-outlined text-3xl ${isSelected ? 'text-sp-accent' : 'text-sp-muted'}`}
+                        >
+                          {config.icon}
+                        </span>
+                        <span
+                          className={`font-semibold text-sm ${isSelected ? 'text-white' : 'text-sp-text'}`}
+                        >
+                          {config.label}
+                        </span>
+                        <span className="text-xs text-sp-muted">{config.description}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-sp-muted text-sm text-center py-4">
+                  선택한 항목들의 공통 지원 형식이 없습니다. 항목을 개별로 선택해주세요.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* 내보내기 버튼 */}
+          {selectedFormat && (
+            <button
+              onClick={() => {
+                setShowPreview(true);
+                if (selectedFormat === 'pdf') {
+                  // 단일 항목일 때만 미리보기 렌더. 복수 선택이면 placeholder 유지.
+                  if (selectedItems.size !== 1) {
+                    setPdfPreviewBytes(null);
+                    return;
+                  }
+                  const only = [...selectedItems][0]!;
+                  setPdfPreviewBytes(null);
+                  let promise: Promise<ArrayBuffer> | null = null;
+                  if (only === 'seating') {
+                    promise = exportSeatingToPdf(seating, getStudent, students, className);
+                  } else if (only === 'events') {
+                    promise = exportEventsToPdf(events.filter((e) => !e.isHidden));
+                  } else if (only === 'classSchedule') {
+                    promise = exportClassScheduleToPdf(classSchedule, maxPeriods);
+                  } else if (only === 'teacherSchedule') {
+                    promise = exportTeacherScheduleToPdf(teacherSchedule, maxPeriods);
+                  } else if (only === 'studentRecords') {
+                    promise = exportStudentRecordsToPdf(
+                      studentRecords,
+                      students,
+                      studentCategories,
+                    );
+                  }
+                  if (promise) {
+                    void promise
+                      .then((bytes) => setPdfPreviewBytes(bytes))
+                      .catch(() => setPdfPreviewBytes(null));
+                  }
+                }
+              }}
+              className="w-full py-4 bg-sp-accent hover:bg-sp-accent/90 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
+            >
+              <span className="material-symbols-outlined">preview</span>
+              미리보기 후 내보내기
+            </button>
+          )}
+
+          {/* 미리보기 모달 */}
+          {showPreview && selectedFormat && (
+            <ExportPreviewModal
+              items={selectedItems}
+              format={selectedFormat}
+              isExporting={isExporting}
+              pdfPreviewBytes={pdfPreviewBytes}
+              onConfirm={() => {
+                void handleExport().then(() => {
+                  setShowPreview(false);
+                  setPdfPreviewBytes(null);
+                });
+              }}
+              onCancel={() => {
+                setShowPreview(false);
+                setPdfPreviewBytes(null);
+              }}
+            />
           )}
         </div>
-      )}
-
-      {/* 내보내기 버튼 */}
-      {selectedFormat && (
-        <button
-          onClick={() => {
-            setShowPreview(true);
-            if (selectedFormat === 'pdf') {
-              // 단일 항목일 때만 미리보기 렌더. 복수 선택이면 placeholder 유지.
-              if (selectedItems.size !== 1) {
-                setPdfPreviewBytes(null);
-                return;
-              }
-              const only = [...selectedItems][0]!;
-              setPdfPreviewBytes(null);
-              let promise: Promise<ArrayBuffer> | null = null;
-              if (only === 'seating') {
-                promise = exportSeatingToPdf(seating, getStudent, students, className);
-              } else if (only === 'events') {
-                promise = exportEventsToPdf(events.filter((e) => !e.isHidden));
-              } else if (only === 'classSchedule') {
-                promise = exportClassScheduleToPdf(classSchedule, maxPeriods);
-              } else if (only === 'teacherSchedule') {
-                promise = exportTeacherScheduleToPdf(teacherSchedule, maxPeriods);
-              } else if (only === 'studentRecords') {
-                promise = exportStudentRecordsToPdf(studentRecords, students, studentCategories);
-              }
-              if (promise) {
-                void promise
-                  .then((bytes) => setPdfPreviewBytes(bytes))
-                  .catch(() => setPdfPreviewBytes(null));
-              }
-            }
-          }}
-          className='w-full py-4 bg-sp-accent hover:bg-sp-accent/90 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2'
-        >
-          <span className='material-symbols-outlined'>preview</span>
-          미리보기 후 내보내기
-        </button>
-      )}
-
-      {/* 미리보기 모달 */}
-      {showPreview && selectedFormat && (
-        <ExportPreviewModal
-          items={selectedItems}
-          format={selectedFormat}
-          isExporting={isExporting}
-          pdfPreviewBytes={pdfPreviewBytes}
-          onConfirm={() => {
-            void handleExport().then(() => {
-              setShowPreview(false);
-              setPdfPreviewBytes(null);
-            });
-          }}
-          onCancel={() => {
-            setShowPreview(false);
-            setPdfPreviewBytes(null);
-          }}
-        />
-      )}
-      </div>
       </div>
     </div>
   );
