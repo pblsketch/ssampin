@@ -133,6 +133,10 @@ export function WeeklyTimetable() {
       </div>
       <div className="flex-1 min-h-0 overflow-auto">
         <div
+          // 데이터가 빽빽한 면 표시. 유리를 켰을 때 이 격자만 불투명하게 남긴다 —
+          // 뒤 배경이 칸마다 다르게 비치면 가로세로로 훑는 눈이 계속 걸린다.
+          // (`<table>` 은 규칙이 자동으로 잡지만 이 격자는 div 라 표시가 필요하다)
+          data-sp-dense
           className="grid border border-sp-border/40 h-full"
           style={{
             // 교시 이름을 붙인 경우에만 교시 열을 넓힌다 — 번호만 쓰는 사용자의 화면은 그대로 둔다.
