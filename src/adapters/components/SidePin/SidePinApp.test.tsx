@@ -32,8 +32,21 @@ class ResizeObserverStub {
   disconnect(): void {}
 }
 
+/**
+ * 주제 색을 입히는 부분이 `matchMedia`로 시스템 다크 모드를 확인하는데 jsdom에는 없다.
+ * 실제 앱에는 있으므로 제품 문제가 아니라 시험 환경의 빈 자리다.
+ */
+function stubMatchMedia(): void {
+  (window as unknown as { matchMedia: unknown }).matchMedia = () => ({
+    matches: false,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  });
+}
+
 beforeEach(() => {
   (globalThis as { ResizeObserver?: unknown }).ResizeObserver = ResizeObserverStub;
+  stubMatchMedia();
   push = null;
   bridge = {
     onStateChanged: vi.fn((cb: (s: unknown) => void) => {

@@ -18,6 +18,7 @@ function renderPanel(overrides: Partial<Parameters<typeof SidePinPanel>[0]> = {}
   const props = {
     pinnedZone: 'none' as const,
     activeZone: null,
+    backgroundColor: 'rgba(var(--sp-widget-rgb), 1)',
     widgetSlot: <div>위젯 자리</div>,
     memoSlot: <div>메모 자리</div>,
     onTogglePin: vi.fn(),

@@ -76,32 +76,39 @@ describe('고른 것을 자르지 않는다', () => {
       selectedIds: ['a', 'a'],
     });
 
-    expect(result.items.map((i) => i.id)).toEqual(['a', 'b']);
+    expect(result.items.map((i) => i.id)).toEqual(['a']);
   });
 });
 
-describe('빈 자리 채우기', () => {
-  it('고른 것이 빠지면 다음 적격 위젯으로 채운다 — 빈 자리로 두지 않는다', () => {
+describe('빠진 자리를 다른 위젯으로 채우지 않는다', () => {
+  it('고르지도 않은 위젯을 끼워 넣지 않는다', () => {
+    // 목록은 선생님이 대시보드에서 고른 것이다. 하나가 옆핀에 못 올라간다고 해서
+    // 다른 것을 대신 넣으면, 왜 그게 거기 있는지 설명할 길이 없다.
     const result = selectSidePinWidgets({
       definitions: [
         widget('빠짐', { eligible: false, unavailableReason: '안 됩니다' }),
-        ok('대타'),
+        ok('남은것'),
       ],
       selectedIds: ['빠짐'],
     });
 
-    expect(result.items.map((i) => i.id)).toEqual(['대타']);
-    // 그래도 무엇이 왜 빠졌는지는 알린다 — 저장값을 조용히 고쳐 쓰지 않는다.
-    expect(result.corrections.map((c) => c.id)).toEqual(['빠짐']);
+    expect(result.items).toEqual([]);
+    // 대신 무엇이 왜 빠졌는지는 반드시 알린다 — 말없이 사라지면 고장으로 여긴다.
+    expect(result.corrections).toEqual([{ id: '빠짐', reason: '안 됩니다' }]);
   });
 
-  it('채울 위젯이 없으면 그냥 비워 둔다', () => {
+  it('고른 것 중 올릴 수 있는 것만 순서대로 남긴다', () => {
     const result = selectSidePinWidgets({
-      definitions: [widget('빠짐', { eligible: false, unavailableReason: '안 됩니다' })],
-      selectedIds: ['빠짐'],
+      definitions: [
+        ok('a'),
+        widget('개인정보', { eligible: false, unavailableReason: '학생 개인정보입니다' }),
+        ok('c'),
+      ],
+      selectedIds: ['a', '개인정보', 'c'],
     });
 
-    expect(result.items).toEqual([]);
+    expect(result.items.map((i) => i.id)).toEqual(['a', 'c']);
+    expect(result.corrections.map((c) => c.reason)).toEqual(['학생 개인정보입니다']);
   });
 });
 

@@ -23,6 +23,15 @@ export interface SidePinPanelProps {
    * 메모를 덮는 셈이 되어, 위아래로 나란히 둔 이유가 사라진다. 넓이만 바꾼다.
    */
   readonly activeZone: SidePinZone | null;
+  /**
+   * 배경색. 설정한 투명도가 여기 담겨 온다.
+   *
+   * 클래스가 아니라 인라인으로 칠한다 — 이 저장소에서 `bg-sp-*` 에 투명도 수식을 붙이면
+   * CSS 자체가 만들어지지 않는다. 위젯 모드도 같은 이유로 인라인을 쓴다.
+   */
+  readonly backgroundColor: string;
+  /** 나가는 중인가. 창은 아직 큰 상태이고, 연출이 끝나야 줄어든다 */
+  readonly leaving?: boolean;
   readonly widgetSlot: ReactNode;
   readonly memoSlot: ReactNode;
   readonly onTogglePin: (zone: 'both') => void;
@@ -78,6 +87,8 @@ function zoneGrowth(activeZone: SidePinZone | null): { widget: string; memo: str
 export function SidePinPanel({
   pinnedZone,
   activeZone,
+  backgroundColor,
+  leaving = false,
   widgetSlot,
   memoSlot,
   onTogglePin,
@@ -91,7 +102,8 @@ export function SidePinPanel({
   return (
     <section
       aria-label="옆핀"
-      className="sidepin-enter flex h-full w-full flex-col overflow-hidden rounded-l-xl border border-r-0 border-sp-border bg-sp-bg"
+      style={{ backgroundColor }}
+      className={`${leaving ? 'sidepin-exit' : 'sidepin-enter'} flex h-full w-full flex-col overflow-hidden rounded-l-xl border border-r-0 border-sp-border`}
     >
       <header className="flex shrink-0 items-center gap-1 border-b border-sp-border px-3 py-2">
         <h1 className="flex-1 truncate text-sm font-bold text-sp-text">옆핀</h1>

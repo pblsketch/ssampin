@@ -21,13 +21,8 @@ import { SidePinPanel } from './SidePinPanel';
 import { SidePinMemoZone } from './SidePinMemoZone';
 import { SidePinWidgetZone } from './SidePinWidgetZone';
 import { WIDGET_DEFINITIONS } from '@widgets/registry';
-
-/**
- * 어떤 위젯을 옆핀에 올릴지 고르는 설정은 아직 없다(§9-9). 그때까지는 기본값을 쓴다.
- *
- * 빈 배열을 매번 새로 만들면 참조가 달라져 화면이 계속 다시 그려진다. 한 번만 만든다.
- */
-const SIDE_PIN_DEFAULT_WIDGET_IDS: readonly string[] = [];
+import { useSidePinWidgetIds } from './useSidePinWidgetIds';
+import { useSidePinAppearance } from './useSidePinAppearance';
 
 /** 화면이 그리는 데 필요한 것만 추린 상태 */
 interface SidePinViewState {
@@ -94,6 +89,10 @@ export function toViewState(raw: unknown): SidePinViewState | null {
 
 export function SidePinApp() {
   const [view, setView] = useState<SidePinViewState>(INITIAL_VIEW);
+  // 옆핀 전용으로 또 고르게 하지 않는다 — 대시보드에서 고른 것을 그대로 따른다.
+  const widgetIds = useSidePinWidgetIds();
+  // 주제 색과 배경 투명도. 이게 없으면 옆핀만 늘 밝은 색으로 뜬다.
+  const appearance = useSidePinAppearance();
 
   /**
    * 창은 투명한데 **문서 배경은 흰색**이라, 손잡이가 덮지 않은 자리가 흰 판으로 드러난다.
@@ -121,6 +120,10 @@ export function SidePinApp() {
     });
   }, []);
 
+  // `closing`도 패널을 계속 그린다 — 나가는 연출이 끝나야 창이 줄어들기 때문이다.
+  // 여기서 빼면 연출할 것이 사라져, 창만 큰 채로 빈 화면이 잠깐 보인다.
+  const showPanel =
+    view.surface === 'expanded' || view.surface === 'opening' || view.surface === 'closing';
   const expanded = view.surface === 'expanded' || view.surface === 'opening';
 
   // 패널을 그린 다음 프레임에 "다 그렸다"고 알린다.
@@ -151,13 +154,14 @@ export function SidePinApp() {
     window.electronAPI?.sidePin?.reportEditorActivity?.(activity);
   }, []);
 
-  if (!expanded) {
+  if (!showPanel) {
     // 창 높이를 그대로 채운다. 부모 높이에 기대면(h-full) 높이 사슬이 한 군데만
     // 끊겨도 내용 높이로 쪼그라들어, 창 위쪽 일부만 차지하고 나머지가 빈 채로 남는다.
     return (
       <div className="h-screen w-screen">
         <SidePinRail
           pointerRegion={view.pointerRegion}
+          backgroundColor={appearance.backgroundColor}
           onZoneEnter={report}
           onZoneLeave={() => report('outside')}
           onZoneClick={(zone) => window.electronAPI?.sidePin?.togglePin(zone)}
@@ -175,6 +179,8 @@ export function SidePinApp() {
       <SidePinPanel
         pinnedZone={view.pinnedZone}
         activeZone={view.activeZone}
+        backgroundColor={appearance.backgroundColor}
+        leaving={view.surface === 'closing'}
         onTogglePin={(zone) => window.electronAPI?.sidePin?.togglePin(zone)}
         onClose={() => window.electronAPI?.sidePin?.requestClose()}
         onOpenMain={() => window.electronAPI?.sidePin?.openMain()}
@@ -182,8 +188,7 @@ export function SidePinApp() {
         widgetSlot={
           <SidePinWidgetZone
             definitions={WIDGET_DEFINITIONS}
-            // 어떤 위젯을 올릴지 고르는 설정은 아직 없다(§9-9). 그때까지는 기본값을 쓴다.
-            selectedIds={SIDE_PIN_DEFAULT_WIDGET_IDS}
+            selectedIds={widgetIds}
             // 이미 있는 화면 이동 통로를 쓴다. 메인 창을 띄우고 그 화면으로 보낸 뒤,
             // 창 모드까지 되돌리는 일은 main이 한다.
             onOpenInApp={(target) => void window.electronAPI?.navigateToPage(target)}

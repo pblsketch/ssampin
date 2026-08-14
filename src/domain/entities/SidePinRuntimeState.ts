@@ -16,8 +16,16 @@
  * 그러면 "아직 안 열렸다"와 "열려던 걸 그만뒀다"를 구분할 수 없어 여러 버그가 나왔다.
  * 열기 요청을 보낸 뒤 취소했는데 늦게 도착한 "그렸다" 알림이 패널을 열어 버리는 식이다.
  * 여는 중을 눈에 보이는 상태로 만들면, 그 의도를 취소하는 곳을 빠뜨렸는지 한눈에 보인다.
+ *
+ * `closing`도 같은 이유로 눈에 보이는 상태다. 접힐 때 창을 바로 줄여 버리면 나가는
+ * 연출을 할 자리가 없다(창이 손잡이 크기로 잘려 버린다). 그래서 **연출이 끝날 때까지
+ * 창 크기를 그대로 둔 채** 이 상태에 머문다. 이 사이에 마우스가 돌아오면 접기를
+ * 되돌린다 — 창도 화면도 그대로라 되돌리는 값이 싸다.
+ *
+ * 단, 오류·보호(잠금·절전·그리기 실패) 때는 이 상태를 거치지 않는다. 그때는
+ * "부드럽게"보다 "지금 당장 가리기"가 먼저다.
  */
-export type SidePinSurface = 'collapsed' | 'opening' | 'expanded';
+export type SidePinSurface = 'collapsed' | 'opening' | 'expanded' | 'closing';
 
 /** 왜 열렸는지 — 호버로 열린 창은 포커스를 가지지 않는다 */
 export type SidePinOpenReason = 'hover' | 'click' | 'shortcut' | null;
@@ -56,7 +64,7 @@ export interface SidePinPendingTransition {
    * `show-timeout`은 "보여줘"라고 했는데 그려졌다는 답이 끝내 오지 않는 경우를 위한 감시다.
    * 이게 없으면 렌더러가 죽었을 때 패널은 떠 있는데 상태는 영영 접힌 것으로 남는다.
    */
-  readonly type: 'reveal' | 'collapse' | 'dispose-panel' | 'show-timeout';
+  readonly type: 'reveal' | 'collapse' | 'close-animation' | 'dispose-panel' | 'show-timeout';
   /**
    * 예약할 때의 revision.
    *
@@ -65,6 +73,14 @@ export interface SidePinPendingTransition {
    */
   readonly scheduledRevision: number;
   readonly dueAtMs: number;
+  /**
+   * 사용자가 직접 닫아서 생긴 예약인가 (`close-animation` 전용).
+   *
+   * 나가는 연출 도중 마우스가 패널 위에 있을 수 있다. Esc로 닫았는데 마우스가 거기
+   * 있다는 이유로 다시 열리면, 사용자는 닫을 방법이 없다고 느낀다. 그래서 "누가 닫았는지"를
+   * 예약에 실어 보낸다 — 상태에 따로 필드를 두면 언제 지워야 하는지가 또 하나의 규칙이 된다.
+   */
+  readonly userInitiated?: boolean;
 }
 
 /** 창을 실제로 조작하는 명령의 종류 */

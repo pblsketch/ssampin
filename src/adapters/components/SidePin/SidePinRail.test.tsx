@@ -17,6 +17,7 @@ afterEach(cleanup);
 function renderRail(overrides: Partial<Parameters<typeof SidePinRail>[0]> = {}) {
   const props = {
     pointerRegion: 'outside' as const,
+    backgroundColor: 'rgba(var(--sp-widget-rgb), 1)',
     onZoneEnter: vi.fn(),
     onZoneLeave: vi.fn(),
     onZoneClick: vi.fn(),

@@ -14,6 +14,7 @@ import type {
   SidePinLayout,
   SidePinWindowHost,
 } from './SidePinWindowHost';
+import { SIDE_PIN_CLOSE_ANIMATION_MS } from '@domain/services/resolveSidePinTransition';
 
 // ─── 가짜 시계 ───────────────────────────────────────────────────
 
@@ -287,12 +288,19 @@ describe('400ms 접힘 (AC-03, AC-04)', () => {
     expect(host.callsOf('collapsePanel')).toHaveLength(0);
   });
 
-  it('400ms에 접힌다', async () => {
+  it('400ms에 접기 시작하고, 나가는 연출이 끝나야 창을 줄인다', async () => {
     await expand();
     host.emit({ type: 'pointer-region-changed', region: 'outside' });
     await flush();
 
     scheduler.advanceTo(180 + 400);
+    await flush();
+
+    // 아직 창을 건드리지 않는다 — 줄이면 패널이 잘려 나가는 연출을 할 자리가 없다.
+    expect(host.callsOf('collapsePanel')).toHaveLength(0);
+    expect(controller.getState().surface).toBe('closing');
+
+    scheduler.advanceTo(180 + 400 + SIDE_PIN_CLOSE_ANIMATION_MS);
     await flush();
 
     expect(host.callsOf('collapsePanel')).toHaveLength(1);
@@ -475,7 +483,11 @@ describe('배선', () => {
     expect(controller.getState().surface).toBe('expanded');
     expect(scheduler.hasPending).toBe(true);
 
+    // 접힘 예약 → 나가는 연출 → 그제서야 창을 줄인다.
+    // 연출 예약은 접힘이 처리된 뒤에야 잡히므로, 시계를 두 걸음으로 감아야 한다.
     scheduler.advanceTo(180 + 400 + 10);
+    await flush();
+    scheduler.advanceTo(180 + 400 + SIDE_PIN_CLOSE_ANIMATION_MS + 20);
     await flush();
     expect(host.callsOf('collapsePanel').length).toBeGreaterThan(0);
   });

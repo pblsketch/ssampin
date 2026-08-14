@@ -281,6 +281,33 @@ export function WidgetTab({ draft, patch }: Props) {
             className="w-full h-2 bg-sp-border rounded-full appearance-none cursor-pointer accent-sp-accent"
           />
         </div>
+        <div className="space-y-3">
+          <div className="flex justify-between">
+            <span className="text-sm font-medium text-sp-text">옆핀 배경 투명도</span>
+            <span className="text-sm font-bold text-sp-accent">
+              {Math.round((draft.widget.sidePin?.opacity ?? 1) * 100)}%
+            </span>
+          </div>
+          {/*
+            위젯과 같은 방식이다 — 창 자체가 아니라 배경색의 알파만 낮춘다.
+            0%여도 글자와 아이콘은 또렷하게 남는다.
+          */}
+          <p className="text-xs text-sp-muted">
+            화면 가장자리에 붙는 옆핀의 배경이 얼마나 비쳐 보일지 정합니다.
+          </p>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={Math.round((draft.widget.sidePin?.opacity ?? 1) * 100)}
+            onChange={(e) =>
+              patchWidget({
+                sidePin: { ...draft.widget.sidePin, opacity: Number(e.target.value) / 100 },
+              })
+            }
+            className="w-full h-2 bg-sp-border rounded-full appearance-none cursor-pointer accent-sp-accent"
+          />
+        </div>
         <div className="space-y-1.5">
           <span className="text-sm font-medium text-sp-text">창 닫기 동작</span>
           <p className="text-xs text-sp-muted mb-2">X 버튼을 누를 때의 동작을 선택합니다.</p>

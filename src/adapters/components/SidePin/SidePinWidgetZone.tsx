@@ -42,7 +42,8 @@ export function SidePinWidgetZone({
   );
 
   return (
-    <section aria-label="위젯" className="flex h-full flex-col bg-sp-bg">
+    /* 바탕을 칠하지 않는다 — 패널이 깔아 둔 (투명도가 적용된) 배경이 비쳐야 한다 */
+    <section aria-label="위젯" className="flex h-full flex-col">
       <SidePinZoneHeader icon="dashboard" title="위젯" />
 
       {/* min-h-0 이 없으면 안쪽 스크롤이 부모를 밀어내 머리말이 잘린다. */}

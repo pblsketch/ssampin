@@ -44,6 +44,15 @@ export const SIDE_PIN_REVEAL_DELAY_MS = 180;
 /** 패널 밖으로 나간 뒤 접히기까지 기다리는 시간 — 잠깐 벗어나도 안 닫히게 */
 export const SIDE_PIN_COLLAPSE_DELAY_MS = 400;
 
+/**
+ * 나가는 연출에 주는 시간.
+ *
+ * 이 동안에는 **창을 줄이지 않는다** — 줄이면 패널이 손잡이 크기로 잘려 연출할 자리가 없다.
+ * 들어올 때(220ms)보다 짧게 둔다. 닫는 동작은 이미 결정된 일이라 기다리는 느낌이 들면 안 된다.
+ * `src/index.css`의 `sidepin-exit` 길이와 같아야 한다.
+ */
+export const SIDE_PIN_CLOSE_ANIMATION_MS = 180;
+
 /** 접힌 뒤 패널 창을 없애기까지 기다리는 시간 — 다시 들어오면 재사용 */
 export const SIDE_PIN_DISPOSE_DELAY_MS = 10_000;
 
@@ -89,8 +98,9 @@ function scheduleOf(
   revision: number,
   nowMs: number,
   delayMs: number,
+  userInitiated = false,
 ): SidePinPendingTransition {
-  return { type, scheduledRevision: revision, dueAtMs: nowMs + delayMs };
+  return { type, scheduledRevision: revision, dueAtMs: nowMs + delayMs, userInitiated };
 }
 
 function hostCommand(
@@ -286,8 +296,13 @@ function abandonPrepare(
   };
 }
 
-/** 사용자가 직접 닫았다 (Esc·단축키·고정 해제) */
-function closeNow(
+/**
+ * 지금 즉시 접는다 — 연출 없이.
+ *
+ * 오류·보호 상황(그리기 실패, 잠금·절전, 옆핀 끄기)에서 쓴다. 그때는 "부드럽게"보다
+ * **지금 당장 가리기**가 먼저다.
+ */
+function collapseImmediately(
   state: SidePinRuntimeState,
   ctx: SidePinTransitionContext,
   patch: Partial<SidePinRuntimeState> = {},
@@ -306,6 +321,42 @@ function closeNow(
       ),
     }),
     commands: [...cancelIfScheduled(state), hostCommand('collapse-panel', ctx, revision)],
+  };
+}
+
+/**
+ * 사용자가 직접 닫았다 (Esc·단축키·고정 해제) — 나가는 연출을 거친다.
+ *
+ * **창을 아직 줄이지 않는다.** 여기서 바로 줄이면 패널이 손잡이 크기로 잘려,
+ * 나가는 연출을 할 자리가 없다. 연출이 끝나면(`close-animation` 타이머) 그때 줄인다.
+ *
+ * 아직 펼쳐지지 않았다면 연출할 것도 없으므로 곧바로 접는다.
+ */
+function closeNow(
+  state: SidePinRuntimeState,
+  ctx: SidePinTransitionContext,
+  patch: Partial<SidePinRuntimeState> = {},
+): SidePinTransitionResult {
+  if (state.surface !== 'expanded') return collapseImmediately(state, ctx, patch);
+
+  const revision = state.revision + 1;
+  const transition = scheduleOf(
+    'close-animation',
+    revision,
+    ctx.nowMs,
+    SIDE_PIN_CLOSE_ANIMATION_MS,
+    true,
+  );
+  return {
+    next: bump(state, {
+      ...patch,
+      surface: 'closing',
+      openReason: null,
+      pendingTransition: transition,
+      // 여는 중이던 요청이 남아 있으면 연출 도중에 패널이 되살아난다.
+      pendingHostOperations: withoutKind(state.pendingHostOperations, 'show-panel'),
+    }),
+    commands: [...cancelIfScheduled(state), { type: 'schedule', transition }],
   };
 }
 
@@ -358,6 +409,23 @@ function onPointerRegionChanged(
     }
     return {
       next: bump(state, { pointerRegion: region, pendingTransition: null }),
+      commands: [{ type: 'cancel-schedule' }],
+    };
+  }
+
+  // 나가는 연출 도중에 다시 들어왔다 → 접기를 되돌린다.
+  //
+  // 창도 화면도 아직 그대로라 되돌리는 값이 싸다. 그냥 두면 손잡이 크기로 줄었다가
+  // 곧바로 다시 펼쳐져, 스쳐 지나갈 때마다 창이 두 번 요동친다.
+  //
+  // 단, 사용자가 직접 닫은 경우(Esc·닫기 버튼)는 되돌리지 않는다. 그때 마우스는
+  // 대개 패널 위에 있어서, 되돌리면 닫을 방법이 없어진다.
+  if (inside && state.surface === 'closing') {
+    if (state.pendingTransition?.userInitiated === true) {
+      return { next: bump(state, { pointerRegion: region }), commands: [] };
+    }
+    return {
+      next: bump(state, { pointerRegion: region, surface: 'expanded', pendingTransition: null }),
       commands: [{ type: 'cancel-schedule' }],
     };
   }
@@ -453,12 +521,28 @@ function onTimerFired(
   }
 
   if (transition.type === 'collapse') {
+    // 아직 창을 줄이지 않는다. 나가는 연출에 자리를 내주고, 연출이 끝나면 그때 줄인다.
+    const closing = scheduleOf('close-animation', revision, ctx.nowMs, SIDE_PIN_CLOSE_ANIMATION_MS);
+    return {
+      next: bump(state, { surface: 'closing', pendingTransition: closing }),
+      commands: [{ type: 'schedule', transition: closing }],
+    };
+  }
+
+  if (transition.type === 'close-animation') {
+    // 연출이 끝났다. 이제 창을 손잡이 크기로 줄인다.
+    //
+    // 사용자가 직접 닫았다면 그 사실을 창 조작에 실어 보낸다. 그러지 않으면 접기가
+    // 끝나는 순간 "커서가 안에 있으니 다시 열기"가 발동해, Esc로 닫아도 곧바로 되열린다.
     return {
       next: bump(state, {
+        surface: 'collapsed',
+        openReason: null,
+        activeZone: null,
         pendingTransition: null,
         pendingHostOperations: withPending(
           state.pendingHostOperations,
-          pendingOf('collapse-panel', ctx, revision),
+          pendingOf('collapse-panel', ctx, revision, transition.userInitiated === true),
         ),
       }),
       commands: [hostCommand('collapse-panel', ctx, revision)],

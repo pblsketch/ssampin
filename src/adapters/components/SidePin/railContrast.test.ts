@@ -87,8 +87,20 @@ describe('위젯 칸과 메모 칸이 구분되는가', () => {
     const panel = readFileSync(resolve(__dirname, 'SidePinPanel.tsx'), 'utf-8');
     const header = readFileSync(resolve(__dirname, 'SidePinZoneHeader.tsx'), 'utf-8');
 
-    expect(panel).toContain('bg-sp-bg');
+    // 패널 바탕은 설정한 투명도가 실린 색을 인라인으로 칠한다(`--sp-widget-rgb` = 주제 바탕색).
+    // 클래스로는 투명도를 못 준다 — 이 저장소에서 bg-sp-*/50 은 CSS가 만들어지지 않는다.
+    expect(panel).toContain('backgroundColor');
     expect(header).toContain('bg-sp-surface');
+  });
+
+  test('칸 바탕을 따로 칠하지 않는다 — 칠하면 투명도가 가려진다', () => {
+    // 칸이 자기 배경을 칠하면 패널이 깔아 둔 반투명 배경을 통째로 덮어,
+    // 투명도를 아무리 낮춰도 뒤가 비치지 않는다.
+    for (const file of ['SidePinMemoList.tsx', 'SidePinWidgetZone.tsx']) {
+      const source = readFileSync(resolve(__dirname, file), 'utf-8');
+      const sectionTag = source.match(/<section[^>]*>/)?.[0] ?? '';
+      expect(sectionTag).not.toMatch(/bg-sp-/);
+    }
   });
 
   test('구분이 사라지는 sp-card 조합으로 되돌아가지 않는다', () => {

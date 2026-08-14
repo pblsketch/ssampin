@@ -56,6 +56,11 @@ import { registerAiBridgeHandlers } from './ipc/aiBridge';
 import { registerLiveSyncHost, type LiveSyncHost } from './ipc/aiBridgeLiveSyncHost';
 import { createSidePinElectron, type SidePinElectronHandle } from './sidePinElectron';
 import {
+  createSidePinProtectionTracker,
+  type SidePinPowerReason,
+  type SidePinProtectionDecision,
+} from './sidePinProtection';
+import {
   registerRealtimeWallBoardHandlers,
   saveDirtyWallBoardsSync,
 } from './ipc/realtimeWallBoard';
@@ -1616,6 +1621,35 @@ let windowTransitionInProgress: Promise<void> = Promise.resolve();
  * 지우지 않기 위해서다.
  */
 let sidePin: SidePinElectronHandle | null = null;
+
+/**
+ * 옆핀을 강제로 숨겨야 하는 이유를 **모아서** 들고 있는다.
+ *
+ * 하나만 들고 있으면 안 되는 이유가 있다. 잠금과 절전은 겹쳐서 일어난다 —
+ * 잠근 채로 절전에 들어갔다가 깨어나면 `resume`이 먼저 오고, `unlock-screen`은
+ * 사용자가 실제로 로그인해야 온다. 그 사이에 보호를 풀어 버리면
+ * **잠금 화면 위로 손잡이와 메모 내용이 그대로 드러난다.**
+ *
+ * 그래서 이유를 모아 두고, 하나도 남지 않았을 때만 푼다.
+ */
+const sidePinProtection = createSidePinProtectionTracker();
+
+function applySidePinProtection(decision: SidePinProtectionDecision): void {
+  if (decision.kind === 'none') return;
+  if (decision.kind === 'protect') {
+    sidePin?.service.dispatch({ type: 'force-protect', reason: decision.reason });
+    return;
+  }
+  sidePin?.service.dispatch({ type: 'protect-released' });
+}
+
+function protectSidePin(reason: SidePinPowerReason): void {
+  applySidePinProtection(sidePinProtection.protect(reason));
+}
+
+function releaseSidePinProtection(reason: SidePinPowerReason): void {
+  applySidePinProtection(sidePinProtection.release(reason));
+}
 
 function ensureSidePin(): void {
   if (sidePin !== null) return;
@@ -5268,6 +5302,7 @@ if (!gotTheLock) {
     powerMonitor.on('suspend', () => {
       console.log('[power] 시스템 suspend 감지');
       isSystemSuspending = true;
+      protectSidePin('suspend');
       widgetActiveBeforeSleep =
         widgetWasActive || (widgetWindow !== null && !widgetWindow.isDestroyed());
     });
@@ -5275,6 +5310,7 @@ if (!gotTheLock) {
     powerMonitor.on('resume', () => {
       console.log('[power] 시스템 resume 감지');
       isSystemSuspending = false;
+      releaseSidePinProtection('suspend');
       setTimeout(() => restoreWidgetAfterSleep(), 1000);
       // 바탕화면 아이콘 아래 모드: WorkerW가 절전 복귀 후 stale일 수 있어 재검사.
       if (currentDesktopMode === 'native-desktop' && widgetWindow && !widgetWindow.isDestroyed()) {
@@ -5313,6 +5349,7 @@ if (!gotTheLock) {
     powerMonitor.on('lock-screen', () => {
       console.log('[power] 화면 잠금 감지');
       isSystemSuspending = true;
+      protectSidePin('lock');
       widgetActiveBeforeSleep =
         widgetWasActive || (widgetWindow !== null && !widgetWindow.isDestroyed());
     });
@@ -5320,6 +5357,7 @@ if (!gotTheLock) {
     powerMonitor.on('unlock-screen', () => {
       console.log('[power] 화면 잠금 해제 감지');
       isSystemSuspending = false;
+      releaseSidePinProtection('lock');
       setTimeout(() => restoreWidgetAfterSleep(), 500);
       if (currentDesktopMode === 'native-desktop' && widgetWindow && !widgetWindow.isDestroyed()) {
         setTimeout(() => {

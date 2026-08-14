@@ -203,6 +203,8 @@ export interface WidgetSettings {
   readonly memorySaverMode?: boolean;
   /** 아이콘 모드 옵션 (v2.0.2~) */
   readonly icon?: IconModeOptions;
+  /** 옆핀 모드 옵션 */
+  readonly sidePin?: SidePinModeOptions;
   /**
    * Phase 7-E (v2.1.0~) — 사용자가 native-desktop 모드를 처음 활성화할 때 노출되는 AV 안내
    * 토스트를 봤는지 여부. true이면 다시 노출 안 함.
@@ -235,6 +237,23 @@ export interface WidgetSettings {
 export interface IconModeOptions {
   /** 첫 활성화 코치마크 노출 여부 (기본 true → 첫 진입 후 false로 갱신) */
   readonly showCoachMark: boolean;
+}
+
+/**
+ * 옆핀 모드 옵션.
+ *
+ * 아이콘 모드 옵션과 같은 자리에 둔다 — 옆핀도 X 버튼으로 들어가는 "접어 둔 상태"의
+ * 하나이고, 그 선택(`closeAction`)이 이미 여기 있기 때문이다.
+ */
+export interface SidePinModeOptions {
+  /**
+   * 배경 투명도 (0~1, 기본 1).
+   *
+   * 위젯 모드와 같은 방식이다 — 창 자체의 투명도가 아니라 **배경색의 알파**만 낮춘다.
+   * 창을 투명하게 만드는 OS 기능은 이 앱에서 쓰지 않는다(Windows에서 동작하지 않고,
+   * 글자까지 흐려져 읽을 수 없게 된다). 배경만 비치고 글자는 또렷하게 남는다.
+   */
+  readonly opacity?: number;
 }
 
 export interface SystemSettings {

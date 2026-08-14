@@ -37,6 +37,13 @@ import type { SidePinPointerRegion } from '@domain/entities/SidePinRuntimeState'
 export interface SidePinRailProps {
   /** 지금 포인터가 어느 구역에 있는지 (창이 알려 준다) */
   readonly pointerRegion: SidePinPointerRegion;
+  /**
+   * 배경색. 설정한 투명도가 여기 담겨 온다.
+   *
+   * 클래스가 아니라 인라인으로 칠하는 이유는, 이 저장소에서 `bg-sp-*` 에 투명도 수식을
+   * 붙이면 CSS 자체가 만들어지지 않기 때문이다. 위젯 모드도 같은 이유로 인라인을 쓴다.
+   */
+  readonly backgroundColor: string;
   readonly onZoneEnter: (region: 'rail-widget' | 'rail-memo') => void;
   readonly onZoneLeave: () => void;
   readonly onZoneClick: (zone: 'widget' | 'memo') => void;
@@ -94,6 +101,7 @@ function RailZone({ icon, label, active, onEnter, onClick }: ZoneProps) {
 
 export function SidePinRail({
   pointerRegion,
+  backgroundColor,
   onZoneEnter,
   onZoneLeave,
   onZoneClick,
@@ -101,7 +109,8 @@ export function SidePinRail({
   return (
     <div
       onMouseLeave={onZoneLeave}
-      className="flex h-full w-full flex-col overflow-hidden rounded-l-lg border border-r-0 border-sp-border bg-sp-surface"
+      style={{ backgroundColor }}
+      className="flex h-full w-full flex-col overflow-hidden rounded-l-lg border border-r-0 border-sp-border"
     >
       <RailZone
         icon="dashboard"

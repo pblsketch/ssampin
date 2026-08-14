@@ -36,7 +36,8 @@ export interface SidePinMemoListProps {
 
 export function SidePinMemoList({ items, loaded, onOpen, onAdd }: SidePinMemoListProps) {
   return (
-    <section aria-label="메모" className="flex h-full flex-col bg-sp-bg">
+    /* 바탕을 칠하지 않는다 — 패널이 깔아 둔 (투명도가 적용된) 배경이 비쳐야 한다 */
+    <section aria-label="메모" className="flex h-full flex-col">
       <SidePinZoneHeader
         icon="sticky_note_2"
         title="메모"

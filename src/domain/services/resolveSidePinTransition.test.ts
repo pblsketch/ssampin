@@ -76,6 +76,21 @@ function ack(state: SidePinRuntimeState, command: HostCommand, nowMs = 0): SideP
   );
 }
 
+/**
+ * 나가는 연출이 끝난 뒤의 결과.
+ *
+ * 접기는 두 걸음이다 — 먼저 `closing`으로 들어가 연출에 자리를 내주고,
+ * 연출이 끝나야 창을 손잡이 크기로 줄인다. 창을 먼저 줄이면 패널이 잘려
+ * 나가는 연출을 할 자리가 없다.
+ */
+function afterCloseAnimation(result: SidePinTransitionResult, nowMs = 0): SidePinTransitionResult {
+  return apply(
+    result.next,
+    { type: 'timer-fired', transition: scheduledTransition(result) },
+    nowMs,
+  );
+}
+
 /** 옆핀을 켜고 손잡이가 준비된 상태까지 만든다 */
 function enabledState(): SidePinRuntimeState {
   const started = apply(INITIAL_SIDE_PIN_RUNTIME_STATE, { type: 'enabled-changed', enabled: true });
@@ -350,7 +365,8 @@ describe('호버 펼침', () => {
       { type: 'timer-fired', transition: scheduledTransition(left) },
       2_400,
     );
-    state = ack(collapseFired.next, hostCommandOf(collapseFired, 'collapse-panel'), 2_400).next;
+    const closed = afterCloseAnimation(collapseFired, 2_580);
+    state = ack(closed.next, hostCommandOf(closed, 'collapse-panel'), 2_580).next;
     expect(state.panelLifecycle).toBe('cooldown');
 
     const reentered = apply(state, { type: 'pointer-region-changed', region: 'rail-memo' }, 2_500);
@@ -409,29 +425,87 @@ describe('접힘', () => {
     expect(moved2.next.surface).toBe('expanded');
   });
 
-  it('접히는 도중에 다시 들어오면 접힌 채로 남지 않는다', () => {
-    // 접기 명령은 이미 나갔는데 그 사이 커서가 패널로 돌아온 상황.
-    // 그대로 두면 커서가 패널 위에 있는데 화면은 접힌 채로 굳는다.
+  it('접힘 예약이 끝나도 창을 바로 줄이지 않는다 — 연출할 자리를 남긴다', () => {
+    // 창을 먼저 줄이면 패널이 손잡이 크기로 잘려, 나가는 연출을 할 자리가 없다.
     const left = apply(
       expandedByHover(),
       { type: 'pointer-region-changed', region: 'outside' },
       2_000,
     );
+
     const fired = apply(
       left.next,
       { type: 'timer-fired', transition: scheduledTransition(left) },
       2_400,
     );
-    const back = apply(fired.next, { type: 'pointer-region-changed', region: 'panel-memo' }, 2_410);
 
-    const collapsed = ack(back.next, hostCommandOf(fired, 'collapse-panel'), 2_420);
-
-    // 파기 예약이 아니라 다시 펼치는 쪽으로 가야 한다.
-    expect(scheduledTransition(collapsed).type).toBe('reveal');
+    expect(fired.next.surface).toBe('closing');
+    expect(hostCommands(fired)).toEqual([]);
+    expect(scheduledTransition(fired).type).toBe('close-animation');
   });
 
-  it('접히는 도중 재진입이 열고 닫기를 반복하지 않고 펼친 상태로 안정된다', () => {
-    // "접힘 적용 → 다시 펼침 예약"이 서로를 부르며 진동할 여지가 없는지 확인한다.
+  it('연출이 끝나야 창을 줄인다', () => {
+    const left = apply(
+      expandedByHover(),
+      { type: 'pointer-region-changed', region: 'outside' },
+      2_000,
+    );
+    const fired = apply(
+      left.next,
+      { type: 'timer-fired', transition: scheduledTransition(left) },
+      2_400,
+    );
+
+    const closed = afterCloseAnimation(fired, 2_580);
+
+    expect(hostCommandOf(closed, 'collapse-panel')).toBeDefined();
+    expect(closed.next.surface).toBe('collapsed');
+  });
+
+  it('그리기가 끝내 실패하면 연출 없이 곧바로 숨는다', () => {
+    // 오류·보호 상황에서는 "부드럽게"보다 "지금 당장 가리기"가 먼저다.
+    let state = enabledState();
+    const entered = apply(state, { type: 'pointer-region-changed', region: 'rail-widget' }, 1_000);
+    const fired = apply(entered.next, {
+      type: 'timer-fired',
+      transition: scheduledTransition(entered),
+    });
+    state = fired.next;
+
+    const timedOut = apply(
+      state,
+      { type: 'timer-fired', transition: scheduledTransition(fired) },
+      5_000,
+    );
+
+    expect(timedOut.next.surface).toBe('collapsed');
+    expect(hostCommandOf(timedOut, 'collapse-panel')).toBeDefined();
+  });
+
+  it('나가는 연출 도중에 다시 들어오면 접기를 되돌린다', () => {
+    // 창도 화면도 아직 그대로라 되돌리는 값이 싸다. 그냥 두면 손잡이 크기로 줄었다가
+    // 곧바로 다시 펼쳐져, 스쳐 지나갈 때마다 창이 두 번 요동친다.
+    const left = apply(
+      expandedByHover(),
+      { type: 'pointer-region-changed', region: 'outside' },
+      2_000,
+    );
+    const fired = apply(
+      left.next,
+      { type: 'timer-fired', transition: scheduledTransition(left) },
+      2_400,
+    );
+    expect(fired.next.surface).toBe('closing');
+
+    const back = apply(fired.next, { type: 'pointer-region-changed', region: 'panel-memo' }, 2_410);
+
+    expect(back.next.surface).toBe('expanded');
+    expect(back.next.pendingTransition).toBeNull();
+    // 창을 건드리지 않는다 — 줄인 적이 없으니 되돌릴 것도 없다.
+    expect(hostCommands(back)).toEqual([]);
+  });
+
+  it('되돌린 뒤에는 열고 닫기를 반복하지 않는다', () => {
     const left = apply(
       expandedByHover(),
       { type: 'pointer-region-changed', region: 'outside' },
@@ -443,24 +517,26 @@ describe('접힘', () => {
       2_400,
     );
     const back = apply(fired.next, { type: 'pointer-region-changed', region: 'panel-memo' }, 2_410);
-    const collapsed = ack(back.next, hostCommandOf(fired, 'collapse-panel'), 2_420);
 
-    // 다시 펼침 예약 → show 요청 → 그려짐
-    const reFired = apply(
-      collapsed.next,
-      { type: 'timer-fired', transition: scheduledTransition(collapsed) },
-      2_600,
+    // 포인터가 안에 있으므로 더 이상 아무것도 예약되지 않는다 = 진동 없음
+    expect(back.next.surface).toBe('expanded');
+    expect(hasSchedule(back)).toBe(false);
+  });
+
+  it('사용자가 직접 닫았다면 연출 도중 마우스가 위에 있어도 되열리지 않는다', () => {
+    // Esc를 눌렀을 때 마우스는 대개 패널 위에 있다. 되돌리면 닫을 방법이 없어진다.
+    let state = expandedByHover();
+    state = apply(state, { type: 'window-focus-changed', focused: true }).next;
+    const escaped = apply(state, { type: 'escape-pressed' }, 2_100);
+    expect(escaped.next.surface).toBe('closing');
+
+    const hover = apply(
+      escaped.next,
+      { type: 'pointer-region-changed', region: 'panel-memo' },
+      2_150,
     );
-    const show = hostCommandOf(reFired, 'show-panel');
-    const painted = apply(reFired.next, {
-      type: 'panel-painted',
-      operationId: show.operationId,
-      requestedRevision: show.requestedRevision,
-    });
 
-    expect(painted.next.surface).toBe('expanded');
-    // 포인터가 안에 있으므로 더 이상 접힘이 예약되지 않는다 = 진동 없음
-    expect(painted.next.pendingTransition).toBeNull();
+    expect(hover.next.surface).toBe('closing');
   });
 
   it('접기가 끝나면 10초 뒤 패널을 없애도록 예약한다', () => {
@@ -474,13 +550,14 @@ describe('접힘', () => {
       { type: 'timer-fired', transition: scheduledTransition(left) },
       2_400,
     );
-    const collapsed = ack(fired.next, hostCommandOf(fired, 'collapse-panel'), 2_400);
+    const closed = afterCloseAnimation(fired, 2_580);
+    const collapsed = ack(closed.next, hostCommandOf(closed, 'collapse-panel'), 2_580);
 
     expect(collapsed.next.surface).toBe('collapsed');
     expect(collapsed.next.panelLifecycle).toBe('cooldown');
     const dispose = scheduledTransition(collapsed);
     expect(dispose.type).toBe('dispose-panel');
-    expect(dispose.dueAtMs).toBe(2_400 + SIDE_PIN_DISPOSE_DELAY_MS);
+    expect(dispose.dueAtMs).toBe(2_580 + SIDE_PIN_DISPOSE_DELAY_MS);
   });
 });
 
@@ -608,7 +685,9 @@ describe('Esc와 바깥 클릭', () => {
     const escaped = apply(pinned.next, { type: 'escape-pressed' }, 2_100);
 
     expect(escaped.next.pinnedZone).toBe('none');
-    expect(hostCommandOf(escaped, 'collapse-panel')).toBeDefined();
+    // 연출에 자리를 내준 뒤 창을 줄인다.
+    expect(escaped.next.surface).toBe('closing');
+    expect(hostCommandOf(afterCloseAnimation(escaped, 2_280), 'collapse-panel')).toBeDefined();
   });
 
   it('커서가 패널 위에 있어도 Esc로 닫으면 다시 열리지 않는다', () => {
@@ -622,7 +701,8 @@ describe('Esc와 바깥 클릭', () => {
     );
     const escaped = apply(inside.next, { type: 'escape-pressed' }, 2_100);
 
-    const collapsed = ack(escaped.next, hostCommandOf(escaped, 'collapse-panel'), 2_120);
+    const closed = afterCloseAnimation(escaped, 2_280);
+    const collapsed = ack(closed.next, hostCommandOf(closed, 'collapse-panel'), 2_300);
 
     expect(collapsed.next.surface).toBe('collapsed');
     expect(collapsed.next.pinnedZone).toBe('none');
@@ -637,7 +717,8 @@ describe('Esc와 바깥 클릭', () => {
     );
     const toggled = apply(inside.next, { type: 'shortcut-toggle' }, 2_100);
 
-    const collapsed = ack(toggled.next, hostCommandOf(toggled, 'collapse-panel'), 2_120);
+    const closed = afterCloseAnimation(toggled, 2_280);
+    const collapsed = ack(closed.next, hostCommandOf(closed, 'collapse-panel'), 2_300);
 
     expect(collapsed.next.surface).toBe('collapsed');
     expect(collapsed.next.pendingTransition?.type).not.toBe('reveal');
@@ -648,7 +729,8 @@ describe('Esc와 바깥 클릭', () => {
 
     const clicked = apply(focused.next, { type: 'outside-click' }, 2_100);
 
-    expect(hostCommandOf(clicked, 'collapse-panel')).toBeDefined();
+    expect(clicked.next.surface).toBe('closing');
+    expect(hostCommandOf(afterCloseAnimation(clicked, 2_280), 'collapse-panel')).toBeDefined();
   });
 
   it('호버로만 열린(포커스 없는) 창은 Esc도 근거로 삼지 않는다', () => {
@@ -1012,7 +1094,8 @@ describe('창 조작 실패', () => {
       { type: 'timer-fired', transition: scheduledTransition(left) },
       2_400,
     );
-    state = ack(fired.next, hostCommandOf(fired, 'collapse-panel'), 2_400).next;
+    const closed = afterCloseAnimation(fired, 2_580);
+    state = ack(closed.next, hostCommandOf(closed, 'collapse-panel'), 2_580).next;
     const disposeTimer = state.pendingTransition;
     const disposeFired = apply(state, { type: 'timer-fired', transition: disposeTimer! }, 12_400);
     const dispose = hostCommandOf(disposeFired, 'dispose-panel');
@@ -1037,7 +1120,8 @@ describe('창 조작 실패', () => {
       { type: 'timer-fired', transition: scheduledTransition(left) },
       2_400,
     );
-    state = ack(fired.next, hostCommandOf(fired, 'collapse-panel'), 2_400).next;
+    const closed = afterCloseAnimation(fired, 2_580);
+    state = ack(closed.next, hostCommandOf(closed, 'collapse-panel'), 2_580).next;
 
     expect(state.pendingHostOperations).toEqual([]);
   });
@@ -1156,9 +1240,14 @@ describe('보호 상태', () => {
       { type: 'timer-fired', transition: scheduledTransition(left) },
       2_400,
     );
-    const collapse = hostCommandOf(fired, 'collapse-panel');
-    const back = apply(fired.next, { type: 'pointer-region-changed', region: 'panel-memo' }, 2_410);
-    const locked = apply(back.next, { type: 'force-protect', reason: 'lock' }, 2_420);
+    const closed = afterCloseAnimation(fired, 2_580);
+    const collapse = hostCommandOf(closed, 'collapse-panel');
+    const back = apply(
+      closed.next,
+      { type: 'pointer-region-changed', region: 'panel-memo' },
+      2_600,
+    );
+    const locked = apply(back.next, { type: 'force-protect', reason: 'lock' }, 2_620);
 
     const late = ack(locked.next, collapse, 2_500);
 
@@ -1208,7 +1297,8 @@ describe('단축키', () => {
 
     const toggled = apply(pinned.next, { type: 'shortcut-toggle' }, 2_100);
 
-    expect(hostCommandOf(toggled, 'collapse-panel')).toBeDefined();
+    expect(toggled.next.surface).toBe('closing');
+    expect(hostCommandOf(afterCloseAnimation(toggled, 2_280), 'collapse-panel')).toBeDefined();
     expect(toggled.next.pinnedZone).toBe('none');
   });
 });
