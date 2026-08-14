@@ -39,11 +39,16 @@ function isDarkTheme(): boolean {
 
 export function GlassControls({ widget, onPatch, compact = false }: GlassControlsProps) {
   /*
-    밝은 테마에서는 보여주지 않는다. 밝은 테마는 카드가 거의 흰색이라 뒤가 밝으면
-    "흰색 위에 흰색"이 되어 아무리 투명도를 낮춰도 유리로 보이지 않는다(실측).
-    되지도 않는 설정을 켜게 두면 "켰는데 왜 그대로죠?" 가 된다.
+    밝은 테마에서도 **보여준다.**
+
+    처음에는 아예 숨겼다. 밝은 테마는 카드가 거의 흰색이라 뒤가 밝으면 "흰색 위에 흰색"이
+    되어 아무리 투명도를 낮춰도 유리로 보이지 않기 때문이다(실측).
+
+    그런데 준일님이 밝은 테마(뉴트럴)를 쓰고 계셔서, 네 곳에 다 넣어 놓고도 정작 화면에서는
+    설정이 하나도 보이지 않았다 — "조절할 수가 없더라"의 원인이 이것이었다.
+    없는 걸 찾아 헤매는 것보다, 보여주고 "여기서는 효과가 약하다"고 알려 주는 편이 낫다.
   */
-  if (!isDarkTheme()) return null;
+  const dark = isDarkTheme();
 
   const current = matchGlassPreset({
     bgOpacity: widget.opacity ?? 1,
@@ -77,6 +82,17 @@ export function GlassControls({ widget, onPatch, compact = false }: GlassControl
         <p className="text-xs text-sp-muted">
           앱 뒤에 은은한 배경을 깔고 카드가 비쳐 보이게 합니다. 시간표·출결처럼 빽빽한 표는 읽기
           편하도록 그대로 둡니다.
+        </p>
+      )}
+
+      {/*
+        밝은 테마에서는 효과가 약하다는 것을 미리 알린다. 켜고 나서 "왜 그대로죠?" 하고
+        의아해하는 것보다, 켜기 전에 이유를 아는 편이 낫다.
+      */}
+      {!dark && (
+        <p className="text-caption text-sp-muted leading-relaxed">
+          지금 쓰는 밝은 테마에서는 카드가 거의 흰색이라 효과가 약합니다. 어두운 테마에서 가장 잘
+          보입니다.
         </p>
       )}
 
