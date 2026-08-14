@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useManagedTimeout } from '@adapters/motion';
 import { usePinStore } from '@adapters/stores/usePinStore';
 
 interface PinOverlayProps {
@@ -19,6 +20,7 @@ export function PinOverlay({ onSuccess, onCancel }: PinOverlayProps) {
   const [lockoutRemaining, setLockoutRemaining] = useState(0);
   const verify = usePinStore((s) => s.verify);
   const overlayRef = useRef<HTMLDivElement>(null);
+  const schedule = useManagedTimeout();
 
   // 잠금 대기 카운트다운
   useEffect(() => {
@@ -39,41 +41,47 @@ export function PinOverlay({ onSuccess, onCancel }: PinOverlayProps) {
     return () => clearInterval(id);
   }, [lockoutEnd]);
 
-  const handleSubmit = useCallback((pin: string) => {
-    if (lockoutEnd !== null) return;
+  const handleSubmit = useCallback(
+    (pin: string) => {
+      if (lockoutEnd !== null) return;
 
-    const ok = verify(pin);
-    if (ok) {
-      setSuccess(true);
-      setTimeout(() => onSuccess(), 400);
-    } else {
-      const next = attempts + 1;
-      setAttempts(next);
-      setError('PIN이 일치하지 않습니다');
-      setShake(true);
-      setTimeout(() => {
-        setShake(false);
-        setDigits([]);
-      }, 500);
+      const ok = verify(pin);
+      if (ok) {
+        setSuccess(true);
+        schedule(onSuccess, 400);
+      } else {
+        const next = attempts + 1;
+        setAttempts(next);
+        setError('PIN이 일치하지 않습니다');
+        setShake(true);
+        schedule(() => {
+          setShake(false);
+          setDigits([]);
+        }, 500);
 
-      if (next >= MAX_ATTEMPTS) {
-        setLockoutEnd(Date.now() + LOCKOUT_SECONDS * 1000);
-        setError('');
+        if (next >= MAX_ATTEMPTS) {
+          setLockoutEnd(Date.now() + LOCKOUT_SECONDS * 1000);
+          setError('');
+        }
       }
-    }
-  }, [verify, onSuccess, attempts, lockoutEnd]);
+    },
+    [verify, onSuccess, attempts, lockoutEnd, schedule],
+  );
 
-  const addDigit = useCallback((d: string) => {
-    if (lockoutEnd !== null || success) return;
-    setError('');
-    setDigits((prev) => {
-      const next = [...prev, d];
-      if (next.length === 4) {
-        setTimeout(() => handleSubmit(next.join('')), 100);
-      }
-      return next.length <= 4 ? next : prev;
-    });
-  }, [handleSubmit, lockoutEnd, success]);
+  const addDigit = useCallback(
+    (d: string) => {
+      if (lockoutEnd !== null || success) return;
+      setError('');
+      setDigits((prev) => {
+        const next = [...prev, d];
+        if (next.length === 4) {
+          schedule(() => handleSubmit(next.join('')), 100);
+        }
+        return next.length <= 4 ? next : prev;
+      });
+    },
+    [handleSubmit, lockoutEnd, schedule, success],
+  );
 
   const removeDigit = useCallback(() => {
     if (lockoutEnd !== null || success) return;
@@ -118,9 +126,7 @@ export function PinOverlay({ onSuccess, onCancel }: PinOverlayProps) {
             </div>
           ) : (
             <div className="w-16 h-16 rounded-full bg-sp-accent/20 flex items-center justify-center">
-              <span className="material-symbols-outlined text-sp-accent text-4xl">
-                lock
-              </span>
+              <span className="material-symbols-outlined text-sp-accent text-4xl">lock</span>
             </div>
           )}
         </div>
@@ -131,9 +137,7 @@ export function PinOverlay({ onSuccess, onCancel }: PinOverlayProps) {
         </h3>
 
         {/* 에러 메시지 */}
-        {error && (
-          <p className="text-center text-xs text-red-400 mb-3">{error}</p>
-        )}
+        {error && <p className="text-center text-xs text-red-400 mb-3">{error}</p>}
 
         {/* 잠금 대기 메시지 */}
         {isLocked && (

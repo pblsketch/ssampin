@@ -843,7 +843,21 @@ export function resolveSidePinTransition(
 ): SidePinTransitionResult {
   switch (event.type) {
     case 'enabled-changed': {
-      if (state.enabled === event.enabled) return unchanged(state);
+      if (state.enabled === event.enabled) {
+        if (!event.enabled || state.protectedReason !== null) return unchanged(state);
+
+        const revision = state.revision + 1;
+        const kind: SidePinHostOperationKind = 'ensure-rail';
+        return {
+          next: {
+            ...INITIAL_SIDE_PIN_RUNTIME_STATE,
+            enabled: true,
+            revision,
+            pendingHostOperations: [pendingOf(kind, ctx, revision, true)],
+          },
+          commands: [...cancelIfScheduled(state), hostCommand(kind, ctx, revision)],
+        };
+      }
       const revision = state.revision + 1;
       const kind: SidePinHostOperationKind = event.enabled ? 'ensure-rail' : 'destroy-all';
       return {

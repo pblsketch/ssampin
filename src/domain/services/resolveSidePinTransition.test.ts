@@ -142,6 +142,15 @@ describe('앱 시작 / 켜고 끄기', () => {
     expect(result.next.surface).toBe('collapsed');
     expect(result.next.panelLifecycle).toBe('absent');
   });
+
+  it('이미 켜진 상태에서 다시 켜면 숨은 손잡이를 복구하도록 상태를 초기화한다', () => {
+    const result = apply(expandedByHover(), { type: 'enabled-changed', enabled: true });
+
+    expect(hostCommandOf(result, 'ensure-rail')).toBeDefined();
+    expect(result.next.surface).toBe('collapsed');
+    expect(result.next.pointerRegion).toBe('outside');
+    expect(result.next.enabled).toBe(true);
+  });
 });
 
 // ─── 호버 펼침 (180ms) ───────────────────────────────────────────

@@ -28,6 +28,8 @@ interface ToastState {
   dismiss: (id: string) => void;
 }
 
+const dismissTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
 export const useToastStore = create<ToastState>((set) => ({
   toasts: [],
   show: (message, type = 'success', action, durationMs = 3000) => {
@@ -35,13 +37,18 @@ export const useToastStore = create<ToastState>((set) => ({
     set((state) => ({
       toasts: [...state.toasts, { id, message, type, action }],
     }));
-    setTimeout(() => {
+    const timer = setTimeout(() => {
+      dismissTimers.delete(id);
       set((state) => ({
         toasts: state.toasts.filter((t) => t.id !== id),
       }));
     }, durationMs);
+    dismissTimers.set(id, timer);
   },
   dismiss: (id) => {
+    const timer = dismissTimers.get(id);
+    if (timer !== undefined) clearTimeout(timer);
+    dismissTimers.delete(id);
     set((state) => ({
       toasts: state.toasts.filter((t) => t.id !== id),
     }));
@@ -81,7 +88,7 @@ function ToastItem({ toast, onDismiss }: { toast: ToastData; onDismiss: () => vo
     <div
       role="alert"
       aria-live="polite"
-      className={`animate-slide-in-right flex items-center gap-3 border rounded-xl px-4 py-3 shadow-xl min-w-[320px] max-w-[400px] ${
+      className={`animate-slide-in-right motion-reduce:animate-none flex items-center gap-3 border rounded-xl px-4 py-3 shadow-xl min-w-[320px] max-w-[400px] ${
         isInfo ? 'bg-slate-50 border-slate-300' : 'bg-sp-card border-sp-border'
       }`}
     >

@@ -1673,143 +1673,150 @@ function ensureSidePin(): void {
 
 function executeWindowTransition(target: WindowMode): Promise<void> {
   diagLog('icon', `executeWindowTransition queued target=${target}`);
-  windowTransitionInProgress = windowTransitionInProgress.then(async () => {
-    const opts = readSettingsWidgetOptions();
-    diagLog(
-      'icon',
-      `executeWindowTransition running target=${target} currentWindowMode=${currentWindowMode}`,
-    );
+  windowTransitionInProgress = windowTransitionInProgress
+    .catch((error: unknown) => {
+      diagWarn(
+        'icon',
+        `previous window transition failed; recovering queue: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    })
+    .then(async () => {
+      const opts = readSettingsWidgetOptions();
+      diagLog(
+        'icon',
+        `executeWindowTransition running target=${target} currentWindowMode=${currentWindowMode}`,
+      );
 
-    switch (target) {
-      case 'icon': {
-        diagLog('icon', `case icon: lastUserMode=${lastUserMode} (preserved)`);
-        currentWindowMode = 'icon';
+      switch (target) {
+        case 'icon': {
+          diagLog('icon', `case icon: lastUserMode=${lastUserMode} (preserved)`);
+          currentWindowMode = 'icon';
 
-        // 3) 아이콘 윈도우 보장 + fade-in
-        const needsBuild = !iconWindow || iconWindow.isDestroyed();
-        diagLog(
-          'icon',
-          `case icon: needsBuild=${needsBuild} iconWindow=${!!iconWindow} destroyed=${iconWindow?.isDestroyed()}`,
-        );
-        if (needsBuild) buildIconWindow();
-        if (iconWindow && !iconWindow.isDestroyed()) {
-          collapseIconWindow(); // 항상 compact(핀만) 상태로 표시 시작
-          const wasVisible = iconWindow.isVisible();
-          diagLog('icon', `case icon: pre-fadeIn isVisible=${wasVisible}`);
-          if (!wasVisible) iconWindow.setOpacity(0);
-          await fadeInIconWindow(220);
-          ensureIconOnScreen();
-          // 렌더러에 진입 통지 — UI 상태 초기화 + 진입 분석 이벤트
-          iconWindow.webContents.send('icon:shown');
+          // 3) 아이콘 윈도우 보장 + fade-in
+          const needsBuild = !iconWindow || iconWindow.isDestroyed();
           diagLog(
             'icon',
-            `case icon: post-fadeIn bounds=${JSON.stringify(iconWindow.getBounds())} isVisible=${iconWindow.isVisible()}`,
+            `case icon: needsBuild=${needsBuild} iconWindow=${!!iconWindow} destroyed=${iconWindow?.isDestroyed()}`,
           );
-        } else {
-          diagWarn('icon', 'case icon: iconWindow null/destroyed AFTER buildIconWindow attempt');
-        }
+          if (needsBuild) buildIconWindow();
+          if (iconWindow && !iconWindow.isDestroyed()) {
+            collapseIconWindow(); // 항상 compact(핀만) 상태로 표시 시작
+            const wasVisible = iconWindow.isVisible();
+            diagLog('icon', `case icon: pre-fadeIn isVisible=${wasVisible}`);
+            if (!wasVisible) iconWindow.setOpacity(0);
+            await fadeInIconWindow(220);
+            ensureIconOnScreen();
+            // 렌더러에 진입 통지 — UI 상태 초기화 + 진입 분석 이벤트
+            iconWindow.webContents.send('icon:shown');
+            diagLog(
+              'icon',
+              `case icon: post-fadeIn bounds=${JSON.stringify(iconWindow.getBounds())} isVisible=${iconWindow.isVisible()}`,
+            );
+          } else {
+            diagWarn('icon', 'case icon: iconWindow null/destroyed AFTER buildIconWindow attempt');
+          }
 
-        // 4) 다른 윈도우 숨김
-        if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
-          hideOrDestroyMainWindow(opts.memorySaverMode);
-        }
-        if (widgetWindow && !widgetWindow.isDestroyed() && widgetWindow.isVisible()) {
-          widgetWindow.hide();
-        }
-        diagLog('icon', 'case icon: complete');
-        break;
-      }
-
-      case 'widget': {
-        currentWindowMode = 'widget';
-        lastUserMode = 'widget'; // icon 진입 시 복원할 위치 즉시 기록
-
-        // 1) 아이콘 fade-out 먼저 (위젯 표시 전에 사라지게)
-        if (iconWindow && !iconWindow.isDestroyed() && iconWindow.isVisible()) {
-          await fadeOutIconWindow(180);
-          iconWindow.hide();
-          collapseIconWindow(); // 다음 표시가 compact 로 시작하도록
-        }
-
-        // 2) 위젯 보장 + show. 새로 생성하는 경우 ready-to-show 콜백으로
-        //    main hide 타이밍 동기화 (gap 방지 — 기존 패턴 보존)
-        if (!widgetWindow || widgetWindow.isDestroyed()) {
-          await new Promise<void>((resolve) => {
-            createWidgetWindow(opts, () => {
-              if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
-                hideOrDestroyMainWindow(opts.memorySaverMode);
-              }
-              resolve();
-            });
-          });
-        } else {
-          widgetWindow.show();
+          // 4) 다른 윈도우 숨김
           if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
             hideOrDestroyMainWindow(opts.memorySaverMode);
           }
+          if (widgetWindow && !widgetWindow.isDestroyed() && widgetWindow.isVisible()) {
+            widgetWindow.hide();
+          }
+          diagLog('icon', 'case icon: complete');
+          break;
         }
-        break;
+
+        case 'widget': {
+          currentWindowMode = 'widget';
+          lastUserMode = 'widget'; // icon 진입 시 복원할 위치 즉시 기록
+
+          // 1) 아이콘 fade-out 먼저 (위젯 표시 전에 사라지게)
+          if (iconWindow && !iconWindow.isDestroyed() && iconWindow.isVisible()) {
+            await fadeOutIconWindow(180);
+            iconWindow.hide();
+            collapseIconWindow(); // 다음 표시가 compact 로 시작하도록
+          }
+
+          // 2) 위젯 보장 + show. 새로 생성하는 경우 ready-to-show 콜백으로
+          //    main hide 타이밍 동기화 (gap 방지 — 기존 패턴 보존)
+          if (!widgetWindow || widgetWindow.isDestroyed()) {
+            await new Promise<void>((resolve) => {
+              createWidgetWindow(opts, () => {
+                if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
+                  hideOrDestroyMainWindow(opts.memorySaverMode);
+                }
+                resolve();
+              });
+            });
+          } else {
+            widgetWindow.show();
+            if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
+              hideOrDestroyMainWindow(opts.memorySaverMode);
+            }
+          }
+          break;
+        }
+
+        case 'main': {
+          currentWindowMode = 'main';
+          lastUserMode = 'main'; // icon 진입 시 복원할 위치 즉시 기록
+
+          // 1) 메인 보장 + show + focus
+          if (!mainWindow || mainWindow.isDestroyed()) {
+            createWindow();
+          } else {
+            mainWindow.show();
+            mainWindow.focus();
+          }
+
+          // 2) 아이콘 fade-out 후 hide
+          if (iconWindow && !iconWindow.isDestroyed() && iconWindow.isVisible()) {
+            await fadeOutIconWindow(180);
+            iconWindow.hide();
+            collapseIconWindow(); // 다음 표시가 compact 로 시작하도록
+          }
+
+          // 3) 위젯 숨김
+          if (widgetWindow && !widgetWindow.isDestroyed() && widgetWindow.isVisible()) {
+            widgetWindow.hide();
+          }
+          break;
+        }
+
+        case 'sidePin': {
+          currentWindowMode = 'sidePin';
+          lastUserMode = 'main'; // 옆핀에서 나가면 메인으로 (위젯 계열과 다른 점)
+
+          // 1) 옆핀 보장 — 손잡이가 뜬다
+          ensureSidePin();
+          sidePin?.service.enable();
+
+          // 2) 아이콘 fade-out 후 hide
+          if (iconWindow && !iconWindow.isDestroyed() && iconWindow.isVisible()) {
+            await fadeOutIconWindow(180);
+            iconWindow.hide();
+            collapseIconWindow();
+          }
+
+          // 3) 다른 창 숨김. 옆핀은 위젯·아이콘과 같은 계열의 "접어 둔 상태"라
+          //    메인 창은 보이지 않는다(2026-08-14 제품 결정).
+          if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
+            hideOrDestroyMainWindow(opts.memorySaverMode);
+          }
+          if (widgetWindow && !widgetWindow.isDestroyed() && widgetWindow.isVisible()) {
+            widgetWindow.hide();
+          }
+          break;
+        }
       }
 
-      case 'main': {
-        currentWindowMode = 'main';
-        lastUserMode = 'main'; // icon 진입 시 복원할 위치 즉시 기록
-
-        // 1) 메인 보장 + show + focus
-        if (!mainWindow || mainWindow.isDestroyed()) {
-          createWindow();
-        } else {
-          mainWindow.show();
-          mainWindow.focus();
-        }
-
-        // 2) 아이콘 fade-out 후 hide
-        if (iconWindow && !iconWindow.isDestroyed() && iconWindow.isVisible()) {
-          await fadeOutIconWindow(180);
-          iconWindow.hide();
-          collapseIconWindow(); // 다음 표시가 compact 로 시작하도록
-        }
-
-        // 3) 위젯 숨김
-        if (widgetWindow && !widgetWindow.isDestroyed() && widgetWindow.isVisible()) {
-          widgetWindow.hide();
-        }
-        break;
+      // 옆핀 모드가 아니면 손잡이는 떠 있으면 안 된다.
+      // 각 case마다 끄는 코드를 흩어 놓으면 새 모드를 추가할 때 반드시 빠뜨린다.
+      if (currentWindowMode !== 'sidePin') {
+        sidePin?.service.disable();
       }
-
-      case 'sidePin': {
-        currentWindowMode = 'sidePin';
-        lastUserMode = 'main'; // 옆핀에서 나가면 메인으로 (위젯 계열과 다른 점)
-
-        // 1) 옆핀 보장 — 손잡이가 뜬다
-        ensureSidePin();
-        sidePin?.service.enable();
-
-        // 2) 아이콘 fade-out 후 hide
-        if (iconWindow && !iconWindow.isDestroyed() && iconWindow.isVisible()) {
-          await fadeOutIconWindow(180);
-          iconWindow.hide();
-          collapseIconWindow();
-        }
-
-        // 3) 다른 창 숨김. 옆핀은 위젯·아이콘과 같은 계열의 "접어 둔 상태"라
-        //    메인 창은 보이지 않는다(2026-08-14 제품 결정).
-        if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
-          hideOrDestroyMainWindow(opts.memorySaverMode);
-        }
-        if (widgetWindow && !widgetWindow.isDestroyed() && widgetWindow.isVisible()) {
-          widgetWindow.hide();
-        }
-        break;
-      }
-    }
-
-    // 옆핀 모드가 아니면 손잡이는 떠 있으면 안 된다.
-    // 각 case마다 끄는 코드를 흩어 놓으면 새 모드를 추가할 때 반드시 빠뜨린다.
-    if (currentWindowMode !== 'sidePin') {
-      sidePin?.service.disable();
-    }
-  });
+    });
 
   return windowTransitionInProgress;
 }
@@ -2060,12 +2067,7 @@ function createTray(): void {
     tray.setContextMenu(contextMenu);
 
     tray.on('double-click', () => {
-      if (mainWindow) {
-        mainWindow.show();
-        mainWindow.focus();
-      } else {
-        createWindow();
-      }
+      void executeWindowTransition('main');
     });
   } catch {
     // ignore tray error if icon not found
@@ -2078,14 +2080,9 @@ function createTray(): void {
  * memorySaver로 메인 렌더러가 destroy된 경우 createWindow()로 복원한다(tray double-click과 동형).
  */
 function focusForReminder(reminderId: string): void {
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    if (mainWindow.isMinimized()) mainWindow.restore();
-    mainWindow.show();
-    mainWindow.focus();
-  } else {
-    createWindow();
-  }
-  broadcastToAllWindows('reminder:click', reminderId);
+  void executeWindowTransition('main').then(() => {
+    broadcastToAllWindows('reminder:click', reminderId);
+  });
 }
 
 function applySystemSettings(): void {
@@ -2685,10 +2682,13 @@ function registerIpcHandlers(): void {
     return (MEMO_EDITOR_ACTIVITIES as readonly string[]).includes(value);
   }
 
-  ipcMain.on('sidePin:pointer-region', (_event, region: string) => {
+  ipcMain.on('sidePin:pointer-region', (event, region: string) => {
     // 알 수 없는 값은 버린다 — 화면이 보내는 값을 그대로 믿지 않는다.
     if (!isSidePinRegion(region)) return;
-    sidePin?.service.dispatch({ type: 'pointer-region-changed', region });
+    const owned = sidePin?.getWindows().some((window) => window.webContents.id === event.sender.id);
+    if (!owned) return;
+    // 창을 숨기는 순간 발생한 mouseleave는 이미 낡은 신호다. 실제 커서 위치를 다시 읽는다.
+    sidePin?.syncPointerRegion();
   });
 
   ipcMain.on('sidePin:toggle-pin', (_event, zone: string) => {
@@ -2720,6 +2720,10 @@ function registerIpcHandlers(): void {
   // 화면이 "다 그렸다"고 알려오면, 지금 기다리고 있는 표시 요청과 짝지어 확정한다.
   // 어느 요청인지 대조하는 일은 화면이 아니라 여기서 한다 — 화면에 꼬리표를 들려 보내면
   // 그걸 되돌려 보내는 과정에서 낡은 값이 섞일 수 있다.
+  ipcMain.on('sidePin:renderer-ready', (event) => {
+    sidePin?.markRendererReady(event.sender.id);
+  });
+
   ipcMain.handle('sidePin:get-state', (event) => {
     const owned = sidePin?.getWindows().some((window) => window.webContents.id === event.sender.id);
     return owned ? (sidePin?.service.getState() ?? null) : null;
@@ -5229,15 +5233,13 @@ if (!gotTheLock) {
 } else {
   app.on('second-instance', (_event, argv) => {
     const fileArg = argv.find((arg) => arg.endsWith('.ssampin'));
-    if (fileArg && fs.existsSync(fileArg)) {
-      const content = fs.readFileSync(fileArg, 'utf-8');
-      mainWindow?.webContents.send('share:file-opened', content);
-    }
-    if (mainWindow) {
-      mainWindow.show();
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.focus();
-    }
+    const sharedContent =
+      fileArg !== undefined && fs.existsSync(fileArg) ? fs.readFileSync(fileArg, 'utf-8') : null;
+    void executeWindowTransition('main').then(() => {
+      if (sharedContent !== null) {
+        mainWindow?.webContents.send('share:file-opened', sharedContent);
+      }
+    });
   });
 
   app.whenReady().then(() => {

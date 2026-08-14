@@ -127,10 +127,9 @@ describe('디자인 규칙', () => {
     expect(source).not.toMatch(/\btext-white\b/);
   });
 
-  test('칩 크기를 고정 px로 두지 않는다 — 창 폭이 기기마다 30~52 DIP로 다르다', () => {
-    // Windows가 창 최소 폭을 물리 52픽셀로 강제해, 같은 손잡이가 배율 175%에서는
-    // 30 DIP, 100%에서는 52 DIP로 들어온다. 한쪽에 맞춰 고정하면 다른 쪽이 깨진다.
-    // 이 전제가 실제로 어긋나 재설계까지 갔으므로 수식 사용 자체를 못박아 둔다.
-    expect(source).toMatch(/clamp\(/);
+  test('칩은 24px 고정이며 호버 때 비율로 다시 계산하지 않는다', () => {
+    expect(source).toMatch(/h-\[24px\] w-\[24px\] shrink-0/);
+    expect(source).not.toMatch(/clamp\(/);
+    expect(source).not.toMatch(/\bh-6\b|\bw-6\b/);
   });
 });

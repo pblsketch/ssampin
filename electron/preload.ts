@@ -1050,12 +1050,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 옆핀 — 창이 알려 주는 상태를 받고, 화면의 의도를 되돌려 보낸다.
   // 판단은 전부 main의 controller가 하므로 여기서는 나르기만 한다.
   sidePin: {
+    reportReady: (): void => ipcRenderer.send('sidePin:renderer-ready'),
+    getState: (): Promise<unknown> => ipcRenderer.invoke('sidePin:get-state'),
     onStateChanged: (callback: (state: unknown) => void): (() => void) => {
       const handler = (_event: unknown, state: unknown) => callback(state);
       ipcRenderer.on('sidePin:state-changed', handler);
       return () => {
         ipcRenderer.removeListener('sidePin:state-changed', handler);
       };
+    },
+    onPanelShown: (callback: () => void): (() => void) => {
+      const handler = (): void => callback();
+      ipcRenderer.on('sidePin:panel-shown', handler);
+      return () => ipcRenderer.removeListener('sidePin:panel-shown', handler);
     },
     /** 포인터가 손잡이·패널의 어느 구역에 있는지 (물리 입력 보고) */
     reportPointerRegion: (region: string): void => {

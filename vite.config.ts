@@ -53,6 +53,12 @@ export default defineConfig(({ mode }) => {
     base: './',
     build: {
       outDir: 'dist',
+      rollupOptions: {
+        input: {
+          main: path.resolve(__dirname, 'index.html'),
+          sidepin: path.resolve(__dirname, 'sidepin.html'),
+        },
+      },
     },
     optimizeDeps: {
       // pdfjs-dist 는 서식관리/내보내기 프리뷰에서 동적 import — 사전 번들 제외

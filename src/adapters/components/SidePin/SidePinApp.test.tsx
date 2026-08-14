@@ -8,10 +8,12 @@
  */
 import { describe, expect, test, vi, beforeEach, afterEach } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { SidePinApp, toViewState } from './SidePinApp';
+import { getSidePinRendererSurface, SidePinApp, toViewState } from './SidePinApp';
 
 interface Bridge {
+  getState: ReturnType<typeof vi.fn>;
   onStateChanged: ReturnType<typeof vi.fn>;
+  onPanelShown: ReturnType<typeof vi.fn>;
   reportPointerRegion: ReturnType<typeof vi.fn>;
   togglePin: ReturnType<typeof vi.fn>;
   requestClose: ReturnType<typeof vi.fn>;
@@ -21,6 +23,7 @@ interface Bridge {
 
 let bridge: Bridge;
 let push: ((state: unknown) => void) | null = null;
+let showPanel: (() => void) | null = null;
 
 /**
  * 위젯 칸은 진짜 위젯을 그린다. 그 안에서 `ResizeObserver`를 쓰는데 jsdom에는 없다.
@@ -48,11 +51,19 @@ beforeEach(() => {
   (globalThis as { ResizeObserver?: unknown }).ResizeObserver = ResizeObserverStub;
   stubMatchMedia();
   push = null;
+  showPanel = null;
   bridge = {
+    getState: vi.fn(() => Promise.resolve(null)),
     onStateChanged: vi.fn((cb: (s: unknown) => void) => {
       push = cb;
       return () => {
         push = null;
+      };
+    }),
+    onPanelShown: vi.fn((cb: () => void) => {
+      showPanel = cb;
+      return () => {
+        showPanel = null;
       };
     }),
     reportPointerRegion: vi.fn(),
@@ -67,7 +78,77 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  window.history.replaceState({}, '', '/');
   delete (window as unknown as { electronAPI?: unknown }).electronAPI;
+});
+
+describe('손잡이 창과 패널 창 분리', () => {
+  test('창 주소의 surface 값으로 역할을 고정한다', () => {
+    expect(getSidePinRendererSurface('?mode=sidePin&surface=rail')).toBe('rail');
+    expect(getSidePinRendererSurface('?mode=sidePin&surface=panel')).toBe('panel');
+  });
+
+  test('손잡이 창은 열림 상태를 받아도 패널을 그리지 않는다', () => {
+    window.history.replaceState({}, '', '/?mode=sidePin&surface=rail');
+    const { container } = render(<SidePinApp />);
+
+    send({ surface: 'expanded' });
+
+    expect(container.querySelector('[data-sidepin-rail-shell]')).toBeTruthy();
+    expect(container.querySelector('[data-sidepin-panel]')).toBeNull();
+  });
+
+  test('패널 창은 열림 상태를 받기 전 완전히 빈 투명 화면이다', () => {
+    window.history.replaceState({}, '', '/?mode=sidePin&surface=panel');
+    const { container } = render(<SidePinApp />);
+
+    expect(container.querySelector('[data-sidepin-panel-blank]')).toBeTruthy();
+    expect(container.querySelector('[data-sidepin-rail-shell]')).toBeNull();
+  });
+
+  test('패널 창은 실제 표시 신호 전에는 모션과 painted 보고를 시작하지 않는다', async () => {
+    window.history.replaceState({}, '', '/?mode=sidePin&surface=panel');
+    const { container } = render(<SidePinApp />);
+    send({ surface: 'opening', revision: 3 });
+
+    await act(async () => {
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    });
+    expect(container.querySelector<HTMLElement>('.sidepin-motion')?.style.transform).toBe(
+      'translate3d(100%, 0, 0)',
+    );
+    expect(bridge.reportPainted).not.toHaveBeenCalled();
+
+    act(() => showPanel?.());
+    await act(async () => {
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    });
+
+    expect(bridge.reportPainted).toHaveBeenCalledTimes(1);
+  });
+
+  test('손잡이 창의 mouseleave는 본체 포인터 판정을 덮어쓰지 않는다', () => {
+    window.history.replaceState({}, '', '/?mode=sidePin&surface=rail');
+    render(<SidePinApp />);
+
+    fireEvent.mouseEnter(screen.getByRole('button', { name: '메모 열기' }));
+    fireEvent.mouseLeave(screen.getByRole('button', { name: '메모 열기' }));
+
+    expect(bridge.reportPointerRegion).not.toHaveBeenCalled();
+  });
+
+  test('패널 창의 mouseleave도 본체 포인터 판정을 덮어쓰지 않는다', () => {
+    window.history.replaceState({}, '', '/?mode=sidePin&surface=panel');
+    const { container } = render(<SidePinApp />);
+    send({ surface: 'expanded' });
+    const panelWindow = container.firstElementChild;
+    expect(panelWindow).toBeTruthy();
+
+    fireEvent.mouseEnter(panelWindow!);
+    fireEvent.mouseLeave(panelWindow!);
+
+    expect(bridge.reportPointerRegion).not.toHaveBeenCalled();
+  });
 });
 
 /** main이 상태를 보내온 상황 */
@@ -129,13 +210,20 @@ describe('무엇을 그리는가', () => {
     expect(screen.getByRole('region', { name: '위젯' })).toBeTruthy();
   });
 
-  test('접힌 손잡이가 창 높이를 그대로 채운다 — 안 그러면 아래가 빈 채로 남는다', () => {
-    // 부모 높이에 기대면(h-full) 높이 사슬이 한 군데만 끊겨도 손잡이가 내용 높이로
-    // 쪼그라들어, 창 위쪽 일부만 차지하고 나머지가 흰 판처럼 드러난다.
+  test('접힌 화면의 바깥 껍데기가 창을 채운다 — 손잡이 위치 기준이 흔들리지 않는다', () => {
     const { container } = render(<SidePinApp />);
     send({ surface: 'collapsed' });
 
     expect(container.querySelector('.h-screen')).toBeTruthy();
+  });
+
+  test('손잡이는 현재 고정 창만 채우고 별도 폭을 누적하지 않는다', () => {
+    const { container } = render(<SidePinApp />);
+    const shell = container.querySelector<HTMLElement>('[data-sidepin-rail-shell]');
+
+    expect(shell?.className).toContain('w-screen');
+    expect(shell?.className).toContain('h-screen');
+    expect(shell?.getAttribute('style')).toBeNull();
   });
 
   test('문서 배경을 투명하게 만든다 — 창은 투명한데 문서가 희면 흰 판이 보인다', () => {
@@ -168,7 +256,7 @@ describe('빠뜨리면 조용히 망가지는 신호', () => {
     send({ surface: 'opening' });
 
     await act(async () => {
-      await new Promise((r) => requestAnimationFrame(() => r(null)));
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     });
 
     expect(bridge.reportPainted).toHaveBeenCalled();

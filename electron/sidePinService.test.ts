@@ -30,18 +30,22 @@ const SECOND: SidePinDisplayInfo = {
 };
 
 class FakeWindow implements SidePinWindowLike {
-  bounds: SidePinBounds | null = null;
+  bounds: SidePinBounds | null;
   destroyed = false;
   visible = false;
   readonly sent: string[] = [];
 
-  setBounds(bounds: SidePinBounds): void {
+  constructor(bounds: SidePinBounds) {
     this.bounds = bounds;
   }
-  showInactive(): void {
+
+  setPosition(bounds: SidePinBounds): void {
+    this.bounds = bounds;
+  }
+  async showInactive(): Promise<void> {
     this.visible = true;
   }
-  focus(): void {
+  async focus(): Promise<void> {
     this.visible = true;
   }
   hide(): void {
@@ -102,8 +106,8 @@ function makeHarness(overrides: { device?: SidePinDeviceState } = {}): Harness {
 
   const service = createSidePinService({
     factory: {
-      create: () => {
-        const w = new FakeWindow();
+      create: (_role, bounds) => {
+        const w = new FakeWindow(bounds);
         windows.push(w);
         return w;
       },
@@ -151,8 +155,9 @@ describe('켜고 끄기', () => {
     h.service.enable();
     await flush();
 
-    expect(h.windows).toHaveLength(1);
+    expect(h.windows).toHaveLength(2);
     expect(h.windows[0]?.visible).toBe(true);
+    expect(h.windows[1]?.visible).toBe(false);
     // 손잡이는 가장자리를 다 덮지 않고 세로 가운데에 짧게 놓인다
     expect(h.windows[0]?.bounds).toEqual({
       x: 1920 - SIDE_PIN_RAIL_WIDTH,
@@ -160,6 +165,7 @@ describe('켜고 끄기', () => {
       width: SIDE_PIN_RAIL_WIDTH,
       height: SIDE_PIN_RAIL_HEIGHT,
     });
+    expect(h.windows[1]?.bounds).toEqual({ x: 1520, y: 0, width: 400, height: 1040 });
   });
 
   test('끄면 창이 사라진다', async () => {
@@ -170,6 +176,26 @@ describe('켜고 끄기', () => {
     await flush();
 
     expect(h.windows[0]?.destroyed).toBe(true);
+  });
+
+  test('이미 켜진 옆핀에 다시 진입하면 숨은 손잡이를 복구하고 패널을 닫는다', async () => {
+    h.service.enable();
+    await flush();
+    const rail = h.windows[0]!;
+    const panel = h.windows[1]!;
+
+    await panel.showInactive();
+    rail.hide();
+    expect(rail.visible).toBe(false);
+    expect(panel.visible).toBe(true);
+
+    h.service.enable();
+    await flush();
+
+    expect(rail.visible).toBe(true);
+    expect(panel.visible).toBe(false);
+    expect(h.service.getState().surface).toBe('collapsed');
+    expect(h.service.getState().enabled).toBe(true);
   });
 
   test('꺼진 상태에서는 마우스를 올려도 창을 만들지 않는다', async () => {
@@ -193,7 +219,7 @@ describe('호버로 펼치기 — 배선 전 구간', () => {
     // 창이 준비되고 보여달라는 요청까지 갔다
     expect(h.service.getState().surface).toBe('opening');
 
-    const win = h.windows[0];
+    const win = h.windows[1];
     expect(win?.bounds?.width).toBe(DEFAULT_SIDE_PIN_DEVICE_STATE.panelWidth);
   });
 });
@@ -289,7 +315,7 @@ describe('정리', () => {
   });
 
   test('창 만드는 일은 주입받는다 — Electron 없이 전 구간이 시험된다', () => {
-    const create = vi.fn(() => new FakeWindow());
+    const create = vi.fn((_role, bounds: SidePinBounds) => new FakeWindow(bounds));
     const service = createSidePinService({
       factory: { create },
       scheduler: fakeScheduler(),

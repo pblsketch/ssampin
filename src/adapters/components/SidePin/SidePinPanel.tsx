@@ -8,11 +8,16 @@
  * 화면 오른쪽 끝에 붙으므로 왼쪽만 둥글다. 손잡이와 같은 규칙이라, 접혔다 펴져도
  * 같은 물건이 커진 것처럼 보인다.
  *
- * 등장은 짧게(140ms) 한 번만 움직인다. 펼침 예산이 300ms인데 연출이 그걸 먹으면
- * 사용자에게는 느린 앱이 된다.
+ * 등장은 260ms 안에 부드럽게 멈추고, 퇴장은 150ms 안에 빠르게 빠진다. 펼침 예산 300ms와
+ * Electron 창 축소 마감 180ms 안에서 각각 끝나야 조작이 느리거나 끝 프레임이 잘리지 않는다.
  */
 import type { ReactNode } from 'react';
 import type { SidePinPinnedZone, SidePinZone } from '@domain/entities/SidePinRuntimeState';
+import {
+  SIDE_PIN_HIDDEN_OPACITY,
+  SIDE_PIN_HIDDEN_TRANSFORM,
+  useSidePinMotion,
+} from './useSidePinMotion';
 
 export interface SidePinPanelProps {
   readonly pinnedZone: SidePinPinnedZone;
@@ -32,6 +37,8 @@ export interface SidePinPanelProps {
   readonly backgroundColor: string;
   /** 나가는 중인가. 창은 아직 큰 상태이고, 연출이 끝나야 줄어든다 */
   readonly leaving?: boolean;
+  /** 네이티브 패널 창이 실제로 표시된 뒤에만 첫 열기 모션을 시작한다. */
+  readonly motionActive?: boolean;
   /** 안쪽 면 투명도를 얹는 스타일 — 토큰을 덮어써 아래 요소가 모두 따라온다 */
   readonly surfaceStyle?: Record<string, string>;
   /** 모양 조절 판. 열려 있을 때만 넣는다 */
@@ -95,6 +102,7 @@ export function SidePinPanel({
   activeZone,
   backgroundColor,
   leaving = false,
+  motionActive = true,
   surfaceStyle,
   appearanceSlot,
   onToggleAppearance,
@@ -108,12 +116,19 @@ export function SidePinPanel({
 }: SidePinPanelProps) {
   const pinned = pinnedZone !== 'none';
   const growth = zoneGrowth(activeZone);
+  const panelRef = useSidePinMotion(leaving, motionActive);
 
   return (
     <section
+      ref={panelRef}
       aria-label="옆핀"
-      style={{ backgroundColor, ...surfaceStyle }}
-      className={`${leaving ? 'sidepin-exit' : 'sidepin-enter'} flex h-full w-full flex-col overflow-hidden rounded-l-xl border border-r-0 border-sp-border`}
+      style={{
+        backgroundColor,
+        ...surfaceStyle,
+        transform: SIDE_PIN_HIDDEN_TRANSFORM,
+        opacity: SIDE_PIN_HIDDEN_OPACITY,
+      }}
+      className="sidepin-motion flex h-full w-full flex-col overflow-hidden rounded-l-xl border border-r-0 border-sp-border"
     >
       <header className="flex shrink-0 items-center gap-1 border-b border-sp-border px-3 py-2">
         <h1 className="flex-1 truncate text-sm font-bold text-sp-text">옆핀</h1>

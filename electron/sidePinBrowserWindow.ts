@@ -1,114 +1,166 @@
-/**
- * 실제 Electron 창을 옆핀 호스트가 쓰는 모양으로 맞춰 주는 어댑터.
- *
- * `sidePinWindow.ts`(호스트)는 Electron을 모른다. 그래야 창을 띄우지 않고 시험할 수 있다.
- * Electron을 아는 코드는 이 파일 하나로 몰아 둔다.
- *
- * 창 옵션의 근거는 기획서 §6 "공통 창 옵션"이다.
- * - 테두리 없음·투명: 손잡이가 화면 가장자리에 얇게 붙어야 한다.
- * - 작업 표시줄에 안 나옴: 옆핀은 별도 앱이 아니라 보조 화면이다.
- * - `alwaysOnTop`은 `'normal'` 단계만 쓴다. 아이콘 모드가 쓰는 `screen-saver` 단계는
- *   전체 화면 앱까지 덮어 버리는데, 옆핀은 그러면 안 된다.
- */
 import { BrowserWindow } from 'electron';
 import path from 'path';
 import type { SidePinBounds } from '../src/usecases/sidePin/SidePinWindowHost';
-import type { SidePinWindowFactory, SidePinWindowLike } from './sidePinWindow';
-import { anchorRightEdge } from './sidePinGeometry';
+import type { SidePinWindowFactory, SidePinWindowLike, SidePinWindowRole } from './sidePinWindow';
 
-/** 렌더러가 옆핀 화면으로 뜨도록 알리는 쿼리 (`src/App.tsx`의 분기와 짝을 이룬다) */
 export const SIDE_PIN_RENDERER_MODE = 'sidePin';
+export const SIDE_PIN_SURFACE_QUERY = 'surface';
 
 export interface SidePinBrowserWindowOptions {
-  /** preload 스크립트 절대 경로 */
   readonly preloadPath: string;
-  /** 개발 서버 주소. 없으면 빌드된 파일을 연다 */
   readonly devServerUrl?: string | undefined;
-  /** 빌드된 renderer의 index.html 절대 경로 */
   readonly indexHtmlPath: string;
 }
 
-/**
- * 요청한 크기대로 놓이지 않으면 **오른쪽 끝을 기준으로 다시 맞춘다.**
- *
- * Windows는 창의 최소 폭을 **물리 52픽셀**로 강제한다(실측: 배율 175%에서 30 DIP,
- * 100%에서 52 DIP — 물리로는 둘 다 52). 무엇을 요청하든 그 아래로 내려가지 않으므로,
- * 16 DIP짜리 손잡이 창은 이 OS에서 만들 수 없다.
- *
- * 문제는 손잡이를 화면 오른쪽 끝에 붙인다는 점이다. 창이 요청보다 넓어지면 왼쪽이 아니라
- * **오른쪽으로 넘쳐** 옆 모니터 화면을 침범한다(실기기에서 실제로 발생: 주 175% +
- * 보조 100%, 경계 x=1646에서 25 물리픽셀이 보조 모니터 왼쪽에 나타남).
- *
- * 그래서 커진 만큼 왼쪽으로 밀어 오른쪽 끝을 원래 자리에 고정한다. OS가 최소 크기를
- * 어떻게 정하든, 다른 화면을 침범하지 않는다는 것만은 지켜진다.
- */
-function applyBoundsKeepingRightEdge(win: BrowserWindow, requested: SidePinBounds): void {
-  const actual = win.getBounds();
-  if (actual.width === requested.width && actual.height === requested.height) return;
-
-  win.setBounds(anchorRightEdge(requested, actual));
+interface RendererReadyGate {
+  readonly promise: Promise<void>;
+  resolve(): void;
 }
 
-/** BrowserWindow를 호스트가 요구하는 최소 능력으로 감싼다 */
-function adapt(win: BrowserWindow): SidePinWindowLike {
+function createRendererReadyGate(win: BrowserWindow): RendererReadyGate {
+  let markReady = (): void => {};
+  const promise = new Promise<void>((resolve, reject) => {
+    let settled = false;
+    let loadFallback: ReturnType<typeof setTimeout> | null = null;
+    const timeout = setTimeout(() => finish(new Error('SIDE_PIN_READY_TIMEOUT')), 10_000);
+    timeout.unref();
+    const cleanup = (): void => {
+      clearTimeout(timeout);
+      if (loadFallback !== null) clearTimeout(loadFallback);
+      win.removeListener('closed', onClosed);
+      win.webContents.removeListener('did-finish-load', onLoadFinished);
+      win.webContents.removeListener('did-fail-load', onLoadFailed);
+    };
+    const finish = (error?: Error): void => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      if (error === undefined) resolve();
+      else reject(error);
+    };
+    const onClosed = (): void => finish(new Error('SIDE_PIN_CLOSED_BEFORE_READY'));
+    const waitForReactCommit = async (): Promise<void> => {
+      if (settled || win.isDestroyed()) return;
+      try {
+        const committed = await win.webContents.executeJavaScript(
+          "document.getElementById('splash') === null",
+          true,
+        );
+        if (committed === true) {
+          finish();
+          return;
+        }
+      } catch {
+        // 로드 중 실행 실패는 다음 확인에서 다시 본다. 전체 제한 시간은 위 timeout이 맡는다.
+      }
+      loadFallback = setTimeout(() => void waitForReactCommit(), 50);
+    };
+    const onLoadFinished = (): void => {
+      // IPC가 유실돼도 복구하되, 공용 스플래시가 React로 교체된 뒤에만 창을 보여준다.
+      loadFallback = setTimeout(() => void waitForReactCommit(), 50);
+    };
+    const onLoadFailed = (
+      _event: Electron.Event,
+      errorCode: number,
+      _description: string,
+      _url: string,
+      isMainFrame: boolean,
+    ): void => {
+      if (isMainFrame && errorCode !== -3) finish(new Error('SIDE_PIN_LOAD_FAILED'));
+    };
+    markReady = (): void => finish();
+    win.once('closed', onClosed);
+    win.webContents.once('did-finish-load', onLoadFinished);
+    win.webContents.once('did-fail-load', onLoadFailed);
+  });
+  return { promise, resolve: () => markReady() };
+}
+
+function adapt(
+  win: BrowserWindow,
+  ready: Promise<void>,
+  initialBounds: SidePinBounds,
+): SidePinWindowLike {
+  let requestedBounds = initialBounds;
+  const applyFixedBounds = (): void => {
+    // Windows가 표시 과정에서 바꾼 현재 크기는 다시 입력으로 쓰지 않고 원래 사각형을 복원한다.
+    win.setBounds(requestedBounds, false);
+  };
   return {
-    setBounds(bounds: SidePinBounds): void {
-      win.setBounds(bounds);
-      applyBoundsKeepingRightEdge(win, bounds);
+    setPosition(bounds: SidePinBounds): void {
+      requestedBounds = bounds;
+      applyFixedBounds();
     },
-    showInactive(): void {
+    async showInactive(): Promise<void> {
+      await ready;
+      if (win.isDestroyed()) throw new Error('SIDE_PIN_DESTROYED_BEFORE_SHOW');
+      applyFixedBounds();
       win.showInactive();
+      applyFixedBounds();
     },
-    focus(): void {
+    async focus(): Promise<void> {
+      await ready;
+      if (win.isDestroyed()) throw new Error('SIDE_PIN_DESTROYED_BEFORE_SHOW');
+      applyFixedBounds();
+      win.show();
+      applyFixedBounds();
       win.focus();
     },
     hide(): void {
-      win.hide();
+      if (!win.isDestroyed()) win.hide();
     },
     destroy(): void {
-      win.destroy();
+      if (!win.isDestroyed()) win.destroy();
     },
     isDestroyed(): boolean {
       return win.isDestroyed();
     },
     send(channel: string, payload?: unknown): void {
-      if (win.isDestroyed()) return;
-      win.webContents.send(channel, payload);
+      if (!win.isDestroyed()) win.webContents.send(channel, payload);
     },
   };
 }
 
-/**
- * 팩토리 + 방금 만든 창 꺼내기.
- *
- * 호스트는 창을 `SidePinWindowLike`로만 다루지만, `main.ts`는 진짜 `BrowserWindow`가
- * 필요하다 — 데이터 변경 브로드캐스트 대상 목록에 넣어야 하기 때문이다.
- */
 export interface SidePinBrowserWindowFactoryHandle {
   readonly factory: SidePinWindowFactory;
-  /** 살아 있는 옆핀 창. 없으면 null */
-  getWindow(): BrowserWindow | null;
+  getWindows(): BrowserWindow[];
+  getWindow(role: SidePinWindowRole): BrowserWindow | null;
+  markRendererReady(webContentsId: number): boolean;
 }
 
+/**
+ * 손잡이와 패널을 별도의 투명 창으로 만든다.
+ * 두 창은 생성 이후 열기/닫기 때문에 크기가 바뀌지 않는다.
+ */
 export function createSidePinBrowserWindowFactory(
   options: SidePinBrowserWindowOptions,
 ): SidePinBrowserWindowFactoryHandle {
-  let live: BrowserWindow | null = null;
+  const live = new Set<{
+    readonly role: SidePinWindowRole;
+    readonly window: BrowserWindow;
+    readonly readyGate: RendererReadyGate;
+  }>();
 
   const factory: SidePinWindowFactory = {
-    create(bounds: SidePinBounds): SidePinWindowLike {
+    create(role: SidePinWindowRole, bounds: SidePinBounds): SidePinWindowLike {
       const win = new BrowserWindow({
         ...bounds,
         frame: false,
         transparent: true,
+        backgroundColor: '#00000000',
+        hasShadow: false,
         skipTaskbar: true,
         resizable: false,
         movable: false,
         minimizable: false,
         maximizable: false,
         fullscreenable: false,
-        // 처음에는 감춰 두고 호스트가 showInactive로 띄운다.
-        // 그러지 않으면 위치를 잡기 전에 잠깐 엉뚱한 자리에 번쩍인다.
+        ...(process.platform === 'win32'
+          ? {
+              thickFrame: false,
+              roundedCorners: false,
+            }
+          : {}),
         show: false,
         webPreferences: {
           preload: options.preloadPath,
@@ -118,32 +170,55 @@ export function createSidePinBrowserWindowFactory(
         },
       });
 
-      // 일반 창 위에는 있되 전체 화면 앱까지 덮지는 않는다.
+      const readyGate = createRendererReadyGate(win);
+      void readyGate.promise.catch(() => {
+        if (!win.isDestroyed()) win.destroy();
+      });
       win.setAlwaysOnTop(true, 'normal');
 
-      const query = `mode=${SIDE_PIN_RENDERER_MODE}`;
+      const query = `mode=${SIDE_PIN_RENDERER_MODE}&${SIDE_PIN_SURFACE_QUERY}=${role}`;
       if (options.devServerUrl !== undefined && options.devServerUrl !== '') {
-        void win.loadURL(`${options.devServerUrl}?${query}`);
+        const base = options.devServerUrl.endsWith('/')
+          ? options.devServerUrl
+          : `${options.devServerUrl}/`;
+        const sidePinUrl = new URL('sidepin.html', base);
+        sidePinUrl.search = query;
+        void win.loadURL(sidePinUrl.toString());
       } else {
         void win.loadFile(options.indexHtmlPath, { search: query });
       }
 
-      live = win;
+      const entry = { role, window: win, readyGate } as const;
+      live.add(entry);
       win.on('closed', () => {
-        if (live === win) live = null;
+        live.delete(entry);
       });
 
-      return adapt(win);
+      return adapt(win, readyGate.promise, bounds);
     },
   };
 
   return {
     factory,
-    getWindow: () => (live !== null && !live.isDestroyed() ? live : null),
+    getWindows: () =>
+      [...live].map((entry) => entry.window).filter((window) => !window.isDestroyed()),
+    getWindow: (role) => {
+      const candidates = [...live].filter(
+        (entry) => entry.role === role && !entry.window.isDestroyed(),
+      );
+      return candidates.at(-1)?.window ?? null;
+    },
+    markRendererReady: (webContentsId) => {
+      const entry = [...live].find(
+        (candidate) => candidate.window.webContents.id === webContentsId,
+      );
+      if (entry === undefined) return false;
+      entry.readyGate.resolve();
+      return true;
+    },
   };
 }
 
-/** 빌드된 renderer의 index.html 경로 (main.ts의 기존 계산과 같은 규칙) */
 export function resolveSidePinIndexHtml(appRoot: string): string {
-  return path.join(appRoot, 'dist', 'index.html');
+  return path.join(appRoot, 'dist', 'sidepin.html');
 }

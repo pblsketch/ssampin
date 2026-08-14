@@ -169,4 +169,9 @@ describe('디자인 규칙', () => {
     const minH0 = source.match(/min-h-0/g) ?? [];
     expect(minH0.length).toBeGreaterThanOrEqual(scrollAreas.length);
   });
+
+  test('Anime.js가 시작하기 전부터 패널은 화면 오른쪽 바깥에 있다', () => {
+    expect(source).toMatch(/transform:\s*SIDE_PIN_HIDDEN_TRANSFORM/);
+    expect(source).toMatch(/opacity:\s*SIDE_PIN_HIDDEN_OPACITY/);
+  });
 });

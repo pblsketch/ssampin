@@ -10,8 +10,12 @@
  * 모니터를 뺐다 꽂으면 좌표가 통째로 달라지기 때문이다.
  */
 
-/** 접힌 손잡이 너비 (DIP) — 기획서 §5.1 */
-export const SIDE_PIN_RAIL_WIDTH = 16;
+/** Windows가 프레임 없는 창에도 적용하는 실측 최소 물리 폭. */
+export const SIDE_PIN_RAIL_MIN_PHYSICAL_WIDTH = 52;
+/** 화면 배율 정보가 없을 때 쓰는 안전한 손잡이 너비 (DIP). */
+export const SIDE_PIN_RAIL_WIDTH = 52;
+/** 아이콘이 잘리지 않는 최소 논리 폭. */
+const SIDE_PIN_RAIL_MIN_DIP_WIDTH = 30;
 
 /**
  * 접힌 손잡이 높이 (DIP).
@@ -34,8 +38,15 @@ export interface SidePinRect {
 
 export interface SidePinDisplayInfo {
   readonly id: string;
+  readonly scaleFactor?: number;
   /** 작업 표시줄 등을 뺀 실제로 쓸 수 있는 영역 (DIP) */
   readonly workArea: SidePinRect;
+}
+
+export function resolveSidePinRailWidth(scaleFactor: number | undefined): number {
+  const scale =
+    scaleFactor !== undefined && Number.isFinite(scaleFactor) && scaleFactor > 0 ? scaleFactor : 1;
+  return Math.max(SIDE_PIN_RAIL_MIN_DIP_WIDTH, Math.ceil(SIDE_PIN_RAIL_MIN_PHYSICAL_WIDTH / scale));
 }
 
 export interface SidePinLayoutInput {
@@ -187,7 +198,11 @@ export function resolveSidePinLayout(input: SidePinLayoutInput): SidePinLayout |
 
   return {
     displayId: picked.display.id,
-    rail: rightEdgeTab(usable, SIDE_PIN_RAIL_WIDTH, SIDE_PIN_RAIL_HEIGHT),
+    rail: rightEdgeTab(
+      usable,
+      resolveSidePinRailWidth(picked.display.scaleFactor),
+      SIDE_PIN_RAIL_HEIGHT,
+    ),
     panel: rightEdgeRect(usable, input.panelWidth),
     usedFallbackDisplay: picked.usedFallbackDisplay,
   };

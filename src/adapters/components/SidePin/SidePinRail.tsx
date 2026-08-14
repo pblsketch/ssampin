@@ -19,8 +19,8 @@
  *    "아무것도 없는 회색 막대"로 읽혔다. 칩을 상시 노출해 "여기 눌리는 것이 있다"를
  *    처음부터 알린다.
  *
- * 폭이 기기마다 다르므로 **칩 크기를 고정 px로 두지 않는다.** `clamp`로 폭의 60%를
- * 따라가되 22~28px를 벗어나지 않게 해, 배율별 분기 없이 한 수식으로 대응한다.
+ * 칩은 24px로 고정한다. 창 폭 비율로 다시 계산하면 혼합 배율에서 호버할 때마다 시각적인
+ * 크기가 달라질 수 있다. 30~52 DIP 어느 창에서도 들어가는 크기만 고르고 상태 변화는 색으로만 낸다.
  *
  * 칩 배경에 `sp-card`가 아니라 `sp-border`를 쓰는 이유가 중요하다. 라이트 모드에서
  * `sp-card`는 `sp-surface`와 **밝기 차이가 2도 안 되는 사실상 같은 색**이라, 칩을 그려도
@@ -77,18 +77,15 @@ function RailZone({ icon, label, active, onEnter, onClick }: ZoneProps) {
           active ? 'opacity-100' : 'opacity-0'
         }`}
       />
-      {/*
-        칩 — 폭이 30~52 DIP 어디든 올 수 있으므로 고정 px 대신 clamp로 따라간다.
-        가장 좁을 때도 22px 밑으로, 가장 넓을 때도 28px 위로는 가지 않는다.
-      */}
+      {/* 칩 — 크기는 고정하고 호버·활성 상태에서는 색만 바꾼다. */}
       <span
         aria-hidden
-        className={`flex aspect-square w-[clamp(1.375rem,60%,1.75rem)] items-center justify-center rounded-lg transition-colors duration-sp-quick ${
+        className={`flex h-[24px] w-[24px] shrink-0 items-center justify-center rounded-lg transition-colors duration-sp-quick ${
           active ? 'bg-sp-accent' : 'bg-sp-border'
         }`}
       >
         <span
-          className={`material-symbols-outlined text-icon-md leading-none transition-colors duration-sp-quick ${
+          className={`material-symbols-outlined text-[18px] leading-none transition-colors duration-sp-quick ${
             active ? 'text-sp-accent-fg' : 'text-sp-text'
           }`}
         >
@@ -110,7 +107,7 @@ export function SidePinRail({
     <div
       onMouseLeave={onZoneLeave}
       style={{ backgroundColor }}
-      className="flex h-full w-full flex-col overflow-hidden rounded-l-lg border border-r-0 border-sp-border"
+      className="box-border flex h-full w-full flex-col overflow-hidden rounded-l-lg border border-r-0 border-sp-border"
     >
       <RailZone
         icon="dashboard"

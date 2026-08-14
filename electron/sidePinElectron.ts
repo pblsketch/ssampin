@@ -13,6 +13,8 @@ import { createSidePinBrowserWindowFactory, resolveSidePinIndexHtml } from './si
 import { loadSidePinDeviceState, saveSidePinDeviceState } from './sidePinDeviceState';
 import type { SidePinDisplayInfo } from './sidePinGeometry';
 import type { SidePinRuntimeState } from '../src/domain/entities/SidePinRuntimeState';
+import type { SidePinWindowRole } from './sidePinWindow';
+import { resolveSidePinPointerRegion, shouldRecoverSidePinRail } from './sidePinPointerRegion';
 
 export interface SidePinElectronOptions {
   readonly preloadPath: string;
@@ -27,6 +29,7 @@ function toDisplayInfo(display: Electron.Display): SidePinDisplayInfo {
   return {
     // Electron은 숫자로 주지만 저장·비교는 문자열로 통일한다.
     id: String(display.id),
+    scaleFactor: display.scaleFactor,
     workArea: {
       x: display.workArea.x,
       y: display.workArea.y,
@@ -39,7 +42,11 @@ function toDisplayInfo(display: Electron.Display): SidePinDisplayInfo {
 export interface SidePinElectronHandle {
   readonly service: SidePinService;
   /** 살아 있는 옆핀 창 (브로드캐스트 대상 목록에 넣기 위해). 없으면 null */
-  getWindow(): Electron.BrowserWindow | null;
+  getWindows(): Electron.BrowserWindow[];
+  getWindow(role: SidePinWindowRole): Electron.BrowserWindow | null;
+  markRendererReady(webContentsId: number): boolean;
+  /** 화면의 enter/leave 알림을 믿지 않고 실제 커서와 보이는 창으로 위치를 다시 맞춘다. */
+  syncPointerRegion(): void;
   /** 모니터 변경 구독을 해제하고 타이머·창을 정리한다 */
   dispose(): void;
 }
@@ -68,6 +75,38 @@ export function createSidePinElectron(options: SidePinElectronOptions): SidePinE
     },
   });
 
+  const syncPointerRegion = (): void => {
+    const point = screen.getCursorScreenPoint();
+    const state = service.getState();
+    const rail = windows.getWindow('rail');
+    if (
+      shouldRecoverSidePinRail(
+        state,
+        rail !== null && !rail.isDestroyed(),
+        rail !== null && !rail.isDestroyed() && rail.isVisible(),
+      )
+    ) {
+      if (options.devServerUrl !== undefined) {
+        console.warn('[sidePin] hidden rail detected; restoring');
+      }
+      service.enable();
+      return;
+    }
+    const next = resolveSidePinPointerRegion(point, service.getLayout(), state);
+
+    // React 창의 mouseleave가 늦게 도착해도 다음 판정에서 반드시 실제 위치로 복구한다.
+    if (next === state.pointerRegion) return;
+    service.dispatch({ type: 'pointer-region-changed', region: next });
+    if (options.devServerUrl !== undefined) {
+      console.log(
+        `[sidePin] native-pointer ${state.pointerRegion}->${next} surface=${state.surface} x=${point.x} y=${point.y}`,
+      );
+    }
+  };
+
+  const pointerTimer = setInterval(syncPointerRegion, 50);
+  pointerTimer.unref();
+
   // 모니터를 뺐다 꽂거나 배율을 바꾸면 오른쪽 끝이 달라진다.
   // 위치 계산은 저장된 좌표가 아니라 그때그때의 작업 영역을 쓰므로 다시 부르기만 하면 된다.
   const onDisplayChange = (): void => service.handleDisplayChange();
@@ -77,8 +116,12 @@ export function createSidePinElectron(options: SidePinElectronOptions): SidePinE
 
   return {
     service,
-    getWindow: () => windows.getWindow(),
+    getWindows: () => windows.getWindows(),
+    getWindow: (role) => windows.getWindow(role),
+    markRendererReady: (webContentsId) => windows.markRendererReady(webContentsId),
+    syncPointerRegion,
     dispose(): void {
+      clearInterval(pointerTimer);
       screen.removeListener('display-added', onDisplayChange);
       screen.removeListener('display-removed', onDisplayChange);
       screen.removeListener('display-metrics-changed', onDisplayChange);

@@ -669,7 +669,10 @@ interface ElectronAPI {
    * 판단(언제 펼치고 접을지)은 전부 main의 controller가 한다.
    */
   sidePin?: {
+    reportReady: () => void;
+    getState: () => Promise<unknown>;
     onStateChanged: (callback: (state: unknown) => void) => () => void;
+    onPanelShown: (callback: () => void) => () => void;
     reportPointerRegion: (region: string) => void;
     togglePin: (zone: 'widget' | 'memo' | 'both') => void;
     requestClose: () => void;
