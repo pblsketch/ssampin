@@ -1,0 +1,51 @@
+-- =====================================================================
+-- 045_block_signature_bucket_listing.sql
+--
+-- P0-2: sigv2-signatures 버킷의 익명 목록 조회(LIST)를 차단한다.
+--
+-- 배경 (2026-08-14 실측):
+--   공개 anon 키로 아래가 가능했다.
+--     POST /storage/v1/object/list/sigv2-signatures  → 객체 목록 반환
+--   즉 누구나 학생 서명 이미지를 훑어 내려받을 수 있었다.
+--
+-- 원인:
+--   035 가 만든 정책
+--     CREATE POLICY "sigv2_signatures_public_read" ON storage.objects
+--       FOR SELECT USING (bucket_id = 'sigv2-signatures');
+--   035 의 주석은 이 정책의 의도를 "객체 직접 GET 허용, 버킷 LIST 는 이 정책으로 막힘"
+--   이라고 적었지만, **실제로는 정반대다.** storage.objects 에 SELECT 를 열어주는 것이
+--   곧 LIST 를 열어주는 것이고, 직접 GET 은 이 정책과 무관하게 동작한다.
+--
+-- 왜 정책을 지워도 이미지가 계속 보이나:
+--   이 버킷은 `public = TRUE` 로 만들어졌다(035 의 storage.buckets INSERT).
+--   public 버킷의 `/storage/v1/object/public/<bucket>/<key>` 경로는 RLS 를 타지 않고
+--   그대로 서빙된다. 반면 LIST(`/storage/v1/object/list/...`)는 storage.objects 에
+--   대한 SELECT 권한을 요구하므로 정책을 지우면 막힌다.
+--   → 직접 GET 은 살고, 목록 훑기만 죽는다.
+--
+-- 이 기능이 왜 공개 GET 을 필요로 하는가 (지우면 안 되는 이유):
+--   서명 이미지는 교사의 Google Sheets 로 내보낼 때 `=IMAGE(url)` 수식으로 들어간다
+--   (signatureRosterLogic.ts). 이 수식은 **구글 서버가** 해당 URL 을 인증 없이
+--   가져가므로, 만료되는 서명 URL(signed URL)로 바꾸면 이미 배포된 시트가 깨진다.
+--   그래서 "공개 GET 유지 + LIST 차단" 이 이 단계의 정답이다.
+--
+-- 영향 범위 (사전 확인 완료):
+--   - 코드가 쓰는 storage 경로는 `/object/public`(공개 GET)과 `/object/sign` 둘뿐이고,
+--     `/object/sign` 은 관리자 분석 페이지가 **service_role** 로만 호출한다(RLS 무관)
+--   - 인증 경로(`/object/<bucket>/<key>`)로 이 버킷을 읽는 코드는 없다
+--   - service_role 정책(sigv2_signatures_service_write)은 그대로 유지되므로
+--     엣지 함수의 업로드·삭제는 영향 없음
+--
+-- 남은 한계 (계획서 P2 에서 해소):
+--   공개 GET 은 여전히 "URL 을 아는 사람은 볼 수 있다"(obscurity). 객체 키가
+--   추측 불가능하다는 데 기대는 구조이므로, 근본 해결은 이름·이미지 자체를
+--   링크 키로 보호하는 P2 에서 다룬다.
+--
+-- 같은 결함이 남은 곳 (별도 처리):
+--   signature-previews 버킷의 `signature_previews_public_read` 정책도 동일 형태다.
+--   현재 객체가 0건이라 노출 실물은 없어 이번 범위에서 제외했다.
+--
+-- 근거 문서: docs/01-plan/features/collab-privacy-redesign.plan.md
+-- =====================================================================
+
+DROP POLICY IF EXISTS "sigv2_signatures_public_read" ON storage.objects;
