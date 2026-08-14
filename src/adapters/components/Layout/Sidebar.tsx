@@ -254,7 +254,13 @@ export function Sidebar({ currentPage, onNavigate, onFeedback }: SidebarProps) {
       <div className={`p-4 flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3'}`}>
         {!sidebarCollapsed && (
           <div className="bg-sp-accent/20 p-2 rounded-lg shrink-0">
-            <img src={`${import.meta.env.BASE_URL}icon_new.svg`} alt="쌤핀" className="w-8 h-8" />
+            {/* 마스코트 쌤핀이 — 로딩 화면·아이콘 모드·앱 아이콘과 같은 그림 (icon_new.svg 압정 마크 대체) */}
+            <img
+              src={`${import.meta.env.BASE_URL}floating-pin.png`}
+              alt="쌤핀"
+              className="w-8 h-8 select-none"
+              draggable={false}
+            />
           </div>
         )}
         {!sidebarCollapsed && (
