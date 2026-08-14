@@ -248,6 +248,9 @@ export function Sidebar({ currentPage, onNavigate, onFeedback }: SidebarProps) {
 
   return (
     <aside
+      // 유리를 켰을 때 함께 비치는 면. `aside` 는 이 앱에 여러 개라(성적 개관·발제 콘솔 등)
+      // 통째로 잡을 수 없어 표시를 붙인다. 이게 없으면 왼쪽 패널만 혼자 불투명하게 남는다.
+      data-sp-glass-surface
       className={`${sidebarCollapsed ? 'w-16' : 'w-64'} h-full bg-sp-surface flex flex-col border-r border-sp-border shrink-0 transition-[width] duration-200 ease-in-out overflow-hidden`}
     >
       {/* 로고 */}

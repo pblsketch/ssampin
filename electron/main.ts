@@ -1878,6 +1878,18 @@ function createWindow(): void {
       webviewTag: true,
     },
     backgroundColor: '#0a0e17',
+    /*
+      File / Edit / View / Window 표시줄을 평소에는 감춘다 (Alt 를 누르면 나온다).
+
+      이건 우리가 만든 메뉴가 아니라 **Electron 기본 메뉴가 그대로 새어 나온 것**이다
+      (이 파일 어디에도 메뉴를 정한 곳이 없다). 쌤핀은 자기 화면 안에 모든 이동 수단을
+      갖고 있어서 이 표시줄이 하는 일이 없고, 유리를 켜면 창 위쪽에 불투명한 흰 띠로
+      남아 특히 어색하다(2026-08-14 지적).
+
+      메뉴를 아예 없애지(setApplicationMenu(null)) 않는 이유는, 복사·붙여넣기 같은
+      기본 단축키가 이 메뉴의 role 에 묶여 있어 함께 사라지기 때문이다. 감추기만 한다.
+    */
+    autoHideMenuBar: true,
     show: false,
   });
 

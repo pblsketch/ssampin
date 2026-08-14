@@ -30,6 +30,21 @@ export function useGlassSurface(context: GlassContext): void {
   const blur = useSettingsStore((s) => s.settings.widget?.blur);
   const optIn = useSettingsStore((s) => s.settings.widget?.glassDashboardOptIn);
 
+  /*
+    `useThemeApplier` 가 반응하는 것과 **같은 값들을 함께 본다.**
+
+    `--sp-card` 를 쓰는 곳이 둘이다 — 테마 훅이 원래 색으로 되돌리고, 이 훅이 그 위에
+    투명도를 얹는다. 그런데 테마 훅만 다시 도는 경우(설정 저장·스타일 변경·시스템 테마
+    전환 등)에는 이 훅이 감시하는 값이 그대로라 다시 돌지 않아, 배경이 되살아난다.
+    "위젯 카드 투명도가 풀렸다가 유리 효과를 다시 누르면 돌아온다"가 이 증상이었다.
+
+    같은 신호를 함께 보게 하면 둘이 항상 짝으로 실행된다. 부르는 쪽에서 이 훅을
+    `useThemeApplier()` **다음에** 두므로 순서상 이 훅이 나중에 덮어써 이긴다.
+  */
+  const dashboardTheme = useSettingsStore((s) => s.settings.dashboardTheme);
+  const theme = useSettingsStore((s) => s.settings.theme);
+  const widgetStyle = useSettingsStore((s) => s.settings.widgetStyle);
+
   // 흐림이 실제로 걸렸을 때만 성능을 재본다. 안 걸렸으면 잴 것도 없다.
   const [blurActive, setBlurActive] = useState(false);
   useGlassPerformanceGuard(blurActive);
@@ -65,10 +80,22 @@ export function useGlassSurface(context: GlassContext): void {
       );
     }
 
+    /*
+      왼쪽 패널처럼 `bg-sp-surface` 를 쓰는 뼈대용 면. 카드보다 조금 더 진하게 둔다 —
+      늘 보이는 뼈대라 내용이 훤히 비치면 어지럽다. 1 을 넘지 않게 자른다.
+    */
+    const surfaceAlpha = Math.min(1, surface.cardAlpha * 1.4);
+    root.style.setProperty(
+      '--sp-glass-surface',
+      surfaceAlpha >= 1
+        ? 'var(--sp-surface-base)'
+        : `color-mix(in srgb, var(--sp-surface-base) ${surfaceAlpha * 100}%, transparent)`,
+    );
+
     root.style.setProperty('--sp-glass-blur', `${surface.blurPx}px`);
     setBlurActive(surface.blurPx > 0);
     // 유리가 켜졌는지 CSS 에서 알 수 있게 표시한다. 흐림 레이어를 아예 만들지 않기 위해
     // 클래스로 둔다 — 변수만으로는 "0px 흐림"도 합성 레이어를 만들어 성능을 깎는다.
     root.classList.toggle('sp-glass-on', surface.blurPx > 0 || surface.cardAlpha < 1);
-  }, [opacity, cardOpacity, blur, optIn, context]);
+  }, [opacity, cardOpacity, blur, optIn, context, dashboardTheme, theme, widgetStyle]);
 }
