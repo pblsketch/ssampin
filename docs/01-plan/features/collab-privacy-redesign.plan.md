@@ -137,11 +137,26 @@ RLS 는 행 단위라 열을 못 가리지만 GRANT 는 가린다 — 훨씬 작
 
 **남은 단계**
 
-2. RPC 신설 (순수 추가라 무해)
-   - 익명용: `has_consultation_booking(schedule_id, student_number) → boolean`,
-     `has_survey_response(survey_id, student_number) → boolean`
-   - 교사용: `admin_key` 를 인자로 받아 해당 일정/설문 것만 반환하는 조회 RPC
+**2단계 완료** (2026-08-14, 마이그레이션 046 — 순수 추가라 기존 동작 무영향)
+
+- [x] 익명용 `has_consultation_booking` · `has_survey_response` → **boolean 만** 반환.
+      남의 예약·응답 내용은 한 글자도 나가지 않는다
+- [x] 교사용 `get_consultation_bookings` · `get_survey_responses` →
+      `admin_key` 대조 후 해당 일정/설문 것만. 반환형은 `SETOF <테이블>` 로 두어
+      컬럼 추가·변경 시 타입 불일치로 조용히 깨지지 않게 했다
+- [x] 틀린 `admin_key` 는 빈 결과가 아니라 **예외**로 실패 (조용한 "예약 없음" 방지)
+
+**적용 후 실측**: boolean RPC → HTTP 200 `false` / 교사 RPC(틀린 키) → **HTTP 401 +
+한국어 사유 메시지**.
+
+> ⚠️ 3단계에서 주의할 점: 틀린 `admin_key` 응답이 **401** 로 나온다(마이그레이션 046
+> 주석에는 403 이라고 적었으나 실측은 401 — 주석이 틀렸다). 그런데 클라이언트의
+> `throwIfPermissionError` 는 401·403 을 "앱을 업데이트하세요"로 바꾼다. 즉 키가 틀린
+> 경우에도 업데이트 안내가 뜬다. 3단계에서 **응답 본문을 함께 봐서** 두 경우를
+> 구분해야 한다(권한 회수로 인한 실패 vs 관리 키 불일치).
+
 3. 랜딩 + 데스크톱을 RPC 경유로 전환, 데스크톱 릴리즈에 실어 배포
+   - 위 401 구분 처리를 함께 넣을 것
 4. 자동 업데이트가 충분히 퍼진 뒤 테이블 SELECT 권한 회수
 
 ##### (참고) 원래 막혔던 이유
