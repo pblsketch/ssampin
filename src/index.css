@@ -364,6 +364,20 @@ html.sp-glass-on .bg-sp-card .bg-sp-surface {
   background-color: color-mix(in srgb, var(--sp-text) 10%, transparent);
 }
 
+/* ⑤ 도구 타일은 유리에서 불투명 받침 + 또렷한 글자로 바꾼다.
+   타일 배경이 20% 틴트(`bg-blue-500/20` 등 19개 색 계열)라 뒤가 그대로 비쳐, 유리를 켜면
+   글자가 배경 밝기에 휘둘린다. 실측에서 화면 전체 중 대비가 가장 낮은 자리였다
+   (자리뽑기 2.67 · 랜덤뽑기 2.67 · 타이머 3.85 · 활동기호 4.09 — 유리를 켜지 않아도 낮았다).
+
+   색 계열마다 규칙을 19개 쓰는 대신 타일에 표시(`data-sp-tool-tile`)를 붙였다. 파스텔 틴트
+   대신 카드 기준 받침을 쓰므로 색 구분은 옅어지지만, 아이콘이 그대로라 무엇인지 알 수 있고
+   무엇보다 글자가 안전해진다. 유리를 끄면 원래 색 그대로다. */
+html.sp-glass-on [data-sp-tool-tile] {
+  background-color: color-mix(in srgb, var(--sp-text) 13%, var(--sp-card-base));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sp-text) 14%, transparent);
+  color: var(--sp-text);
+}
+
 /* ─── Auto-contrast: accent 배경 위 텍스트 가독성 보장 ─── */
 /* --sp-accent-fg는 useThemeApplier에서 accent 밝기 기반으로 자동 계산 */
 /* Same element: e.g. <button class="bg-sp-accent text-white"> */

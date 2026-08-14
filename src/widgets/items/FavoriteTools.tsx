@@ -73,6 +73,9 @@ export function FavoriteTools({ isCompactMode = true }: FavoriteToolsProps = {})
             <button
               key={tool.id}
               onClick={() => handleToolClick(tool)}
+              // 유리를 켰을 때만 손보는 자리. 타일 배경은 20% 틴트라 뒤가 그대로 비쳐
+              // 글자가 배경 밝기에 휘둘린다(실측 2.67~4.09:1 — 화면에서 가장 낮았다).
+              data-sp-tool-tile
               className={`min-w-6 min-h-6 flex flex-col items-center justify-center gap-1.5 p-2 rounded-xl ${tool.color} hover:scale-105 active:scale-95 transition-all`}
             >
               <span className="text-xl">{tool.icon}</span>
@@ -229,6 +232,7 @@ function FavoriteToolsExpandedEditor({
                   onClick={() => add(tool.id)}
                   disabled={disabled}
                   title="선택"
+                  data-sp-tool-tile
                   className={`min-w-6 min-h-6 flex flex-col items-center justify-center gap-1.5 p-2 rounded-xl transition-all ${
                     disabled
                       ? 'opacity-30 cursor-not-allowed bg-sp-bg text-sp-muted'
