@@ -8,9 +8,15 @@
  * 옆핀만 그대로"가 된다. (메모 목록·위젯 목록과 같은 이유)
  */
 import { useEffect } from 'react';
-import type { SidePinModeOptions } from '@domain/entities/Settings';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useThemeApplier } from '@adapters/hooks/useThemeApplier';
+import { resolveGlassSurface } from '@domain/rules/glassSurface';
+
+/** 옆핀에서 조절할 수 있는 값. 저장되는 곳은 위젯·대시보드와 **같은 공용 항목**이다. */
+export interface SidePinAppearancePatch {
+  readonly opacity?: number;
+  readonly cardOpacity?: number;
+}
 
 /** 설정이 담긴 데이터 파일 이름 — 이 파일이 바뀔 때만 다시 읽는다 */
 const SETTINGS_DATA_FILE = 'settings';
@@ -39,8 +45,10 @@ export interface SidePinAppearance {
 
 export function useSidePinAppearance(): SidePinAppearance {
   const load = useSettingsStore((state) => state.load);
-  const opacityRaw = useSettingsStore((state) => state.settings.widget?.sidePin?.opacity);
-  const cardOpacityRaw = useSettingsStore((state) => state.settings.widget?.sidePin?.cardOpacity);
+  // 옆핀 전용 값이 아니라 **공용 값**을 읽는다. 위젯·대시보드와 하나로 합쳤다.
+  const opacityRaw = useSettingsStore((state) => state.settings.widget?.opacity);
+  const cardOpacityRaw = useSettingsStore((state) => state.settings.widget?.cardOpacity);
+  const blurRaw = useSettingsStore((state) => state.settings.widget?.blur);
 
   useEffect(() => {
     void load();
@@ -60,14 +68,23 @@ export function useSidePinAppearance(): SidePinAppearance {
   // 주제 색을 이 창에도 입힌다. 이게 없으면 index.css 의 기본값(밝은 색)만 적용된다.
   useThemeApplier();
 
+  // 사용자가 정한 값 그대로 — 조절 막대에 보여줄 숫자다.
   const opacity = normalizeOpacity(opacityRaw);
   const cardOpacity = normalizeOpacity(cardOpacityRaw);
 
+  // 화면에 실제로 칠할 값 — 옆핀은 바탕화면 위에 떠 있어 뒤에 무엇이 올지 알 수 없다.
+  // 그래서 공용 규칙이 불투명 쪽으로 조금 끌어올린다. 알파 1은 그대로 1이라
+  // 꺼진 상태에서는 아무것도 달라지지 않는다.
+  const surface = resolveGlassSurface(
+    { bgOpacity: opacity, cardOpacity, blur: typeof blurRaw === 'number' ? blurRaw : 0 },
+    'sidePin',
+  );
+
   return {
-    backgroundColor: `rgba(var(--sp-widget-rgb), ${opacity})`,
+    backgroundColor: `rgba(var(--sp-widget-rgb), ${surface.bgAlpha})`,
     opacity,
     surfaceStyle: {
-      '--sp-surface': `color-mix(in srgb, var(--sp-surface-base) ${cardOpacity * 100}%, transparent)`,
+      '--sp-surface': `color-mix(in srgb, var(--sp-surface-base) ${surface.cardAlpha * 100}%, transparent)`,
     },
     cardOpacity,
   };
@@ -79,16 +96,15 @@ export function useSidePinAppearance(): SidePinAppearance {
  * 기존 값을 펼쳐서 얹는다. 그러지 않으면 배경을 바꿀 때 카드 값이 지워진다 —
  * 이 저장소에서 여러 번 겪은 실수라 한 곳에 모아 둔다.
  */
-export function useSaveSidePinAppearance(): (patch: SidePinModeOptions) => Promise<void> {
+export function useSaveSidePinAppearance(): (patch: SidePinAppearancePatch) => Promise<void> {
   const settings = useSettingsStore((state) => state.settings);
   const update = useSettingsStore((state) => state.update);
 
+  // 옆핀 전용 항목이 아니라 **공용 항목**을 고친다. 그래서 옆핀에서 조절하면
+  // 위젯 모드와 대시보드도 같이 따라온다 — "설정은 하나" 원칙.
   return (patch) =>
     update({
-      widget: {
-        ...settings.widget,
-        sidePin: { ...settings.widget?.sidePin, ...patch },
-      },
+      widget: { ...settings.widget, ...patch },
     });
 }
 

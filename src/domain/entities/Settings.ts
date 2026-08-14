@@ -213,8 +213,6 @@ export interface WidgetSettings {
   readonly memorySaverMode?: boolean;
   /** 아이콘 모드 옵션 (v2.0.2~) */
   readonly icon?: IconModeOptions;
-  /** 옆핀 모드 옵션 */
-  readonly sidePin?: SidePinModeOptions;
   /**
    * Phase 7-E (v2.1.0~) — 사용자가 native-desktop 모드를 처음 활성화할 때 노출되는 AV 안내
    * 토스트를 봤는지 여부. true이면 다시 노출 안 함.
@@ -255,23 +253,16 @@ export interface IconModeOptions {
  * 아이콘 모드 옵션과 같은 자리에 둔다 — 옆핀도 X 버튼으로 들어가는 "접어 둔 상태"의
  * 하나이고, 그 선택(`closeAction`)이 이미 여기 있기 때문이다.
  */
-export interface SidePinModeOptions {
-  /**
-   * 배경 투명도 (0~1, 기본 1).
-   *
-   * 위젯 모드와 같은 방식이다 — 창 자체의 투명도가 아니라 **배경색의 알파**만 낮춘다.
-   * 창을 투명하게 만드는 OS 기능은 이 앱에서 쓰지 않는다(Windows에서 동작하지 않고,
-   * 글자까지 흐려져 읽을 수 없게 된다). 배경만 비치고 글자는 또렷하게 남는다.
-   */
-  readonly opacity?: number;
-  /**
-   * 안쪽 면(위젯 카드·칸 머리말)의 투명도 (0~1, 기본 1).
-   *
-   * 배경과 따로 두는 이유는 위젯 모드와 같다. 바탕만 비치게 하고 카드는 또렷하게
-   * 두고 싶을 수도, 반대로 전체를 은은하게 하고 싶을 수도 있다.
-   */
-  readonly cardOpacity?: number;
-}
+/*
+  옆핀 전용 투명도(`opacity`·`cardOpacity`)가 여기 있었는데 없앴다.
+  위젯 모드·옆핀·대시보드가 `WidgetSettings` 의 `opacity`·`cardOpacity`·`blur` 를
+  **함께 쓴다** — 설정을 하나로 합치기로 했다.
+
+  자리마다 뒤에 있는 것이 다르므로(바탕화면 위 / 창 안) 같은 값을 그대로 쓰지는 않는다.
+  자리별 환산은 `domain/rules/glassSurface.ts` 가 맡는다.
+
+  v2.3.8 이후 추가된 미출시 항목이라 저장된 사용자 값이 없다. 그래서 승계 없이 지웠다.
+*/
 
 export interface SystemSettings {
   readonly autoLaunch: boolean;

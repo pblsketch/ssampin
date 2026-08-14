@@ -256,6 +256,10 @@ export function WidgetTab({ draft, patch }: Props) {
             영구 차단). 0%여도 BrowserWindow 자체는 100% 유지 → 텍스트는 항상 가시.
             스타일 탭(WidgetSettingsPanel·DisplayTab)의 동일 슬라이더가 min={0}이므로 통일.
           */}
+          <p className="text-xs text-sp-muted">
+            위젯 모드·옆핀·대시보드에 함께 적용됩니다. 옆핀은 펼친 뒤 머리말의 조절 버튼에서 바로
+            맞출 수도 있습니다.
+          </p>
           <input
             type="range"
             min={0}
@@ -281,54 +285,12 @@ export function WidgetTab({ draft, patch }: Props) {
             className="w-full h-2 bg-sp-border rounded-full appearance-none cursor-pointer accent-sp-accent"
           />
         </div>
-        <div className="space-y-3">
-          <div className="flex justify-between">
-            <span className="text-sm font-medium text-sp-text">옆핀 배경 투명도</span>
-            <span className="text-sm font-bold text-sp-accent">
-              {Math.round((draft.widget.sidePin?.opacity ?? 1) * 100)}%
-            </span>
-          </div>
-          {/*
-            위젯과 같은 방식이다 — 창 자체가 아니라 배경색의 알파만 낮춘다.
-            0%여도 글자와 아이콘은 또렷하게 남는다.
-          */}
-          <p className="text-xs text-sp-muted">
-            화면 가장자리에 붙는 옆핀의 배경이 얼마나 비쳐 보일지 정합니다. 옆핀을 펼친 뒤 머리말의
-            조절 버튼에서 바로 맞출 수도 있습니다.
-          </p>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            value={Math.round((draft.widget.sidePin?.opacity ?? 1) * 100)}
-            onChange={(e) =>
-              patchWidget({
-                sidePin: { ...draft.widget.sidePin, opacity: Number(e.target.value) / 100 },
-              })
-            }
-            className="w-full h-2 bg-sp-border rounded-full appearance-none cursor-pointer accent-sp-accent"
-          />
-        </div>
-        <div className="space-y-3">
-          <div className="flex justify-between">
-            <span className="text-sm font-medium text-sp-text">옆핀 카드 투명도</span>
-            <span className="text-sm font-bold text-sp-accent">
-              {Math.round((draft.widget.sidePin?.cardOpacity ?? 1) * 100)}%
-            </span>
-          </div>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            value={Math.round((draft.widget.sidePin?.cardOpacity ?? 1) * 100)}
-            onChange={(e) =>
-              patchWidget({
-                sidePin: { ...draft.widget.sidePin, cardOpacity: Number(e.target.value) / 100 },
-              })
-            }
-            className="w-full h-2 bg-sp-border rounded-full appearance-none cursor-pointer accent-sp-accent"
-          />
-        </div>
+        {/*
+          옆핀 전용 투명도 막대가 여기 따로 있었는데 없앴다. 위 두 막대가 위젯 모드·옆핀·
+          대시보드에 모두 적용된다 — 설정을 하나로 합치기로 했다.
+          자리마다 뒤에 있는 것이 달라(바탕화면 위 / 창 안) 같은 값이 같은 인상을 주지
+          않으므로, 자리별 환산은 domain/rules/glassSurface.ts 가 맡는다.
+        */}
         <div className="space-y-1.5">
           <span className="text-sm font-medium text-sp-text">창 닫기 동작</span>
           <p className="text-xs text-sp-muted mb-2">X 버튼을 누를 때의 동작을 선택합니다.</p>
