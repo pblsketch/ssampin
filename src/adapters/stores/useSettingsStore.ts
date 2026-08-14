@@ -77,7 +77,11 @@ const DEFAULT_SETTINGS: Settings = {
     width: 380,
     height: 650,
     transparent: false,
-    opacity: 0.8,
+    // 위젯·옆핀·대시보드가 함께 쓰는 공용 값. 기본은 **불투명**이다.
+    // 0.8 이던 것을 1 로 올렸다 — 이 값이 위젯 창 하나만 담당할 때는 "살짝 비치는"
+    // 기본이 어울렸지만, 앱 전체 기준이 된 지금은 켜지 않은 상태가 기본이어야 한다.
+    // 비치게 하고 싶은 사람만 낮춘다.
+    opacity: 1.0,
     cardOpacity: 1.0,
     alwaysOnTop: true,
     closeToWidget: true,

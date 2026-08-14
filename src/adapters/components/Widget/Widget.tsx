@@ -32,6 +32,7 @@ import { WidgetModeFallbackModal } from '@widgets/components/WidgetModeFallbackM
 import { WidgetModeCoachTour } from '@widgets/components/WidgetModeCoachTour';
 import type { WidgetDesktopMode, WidgetLayoutMode } from '@domain/entities/Settings';
 import { DEFAULT_WIDGET_STYLE } from '@domain/entities/DashboardTheme';
+import { resolveGlassSurface } from '@domain/rules/glassSurface';
 import { useNearScrollbar } from '@adapters/hooks/useNearScrollbar';
 import { useFirstRunModeCoachTour } from '@adapters/hooks/useFirstRunModeCoachTour';
 
@@ -395,6 +396,17 @@ export function Widget() {
   // 한 줄에 두면 폭이 부족해 눌린다. 좁은 모드에선 헤더를 2행(시계 / 버튼)으로 분리한다.
   const isNarrow = layoutMode === 'sidebar-right';
 
+  // 투명도·흐림은 위젯·옆핀·대시보드가 **같은 설정**을 쓴다. 다만 위젯은 바탕화면 위에
+  // 떠 있어 뒤에 무엇이 올지 알 수 없으므로, 공용 규칙이 불투명 쪽으로 조금 끌어올린다.
+  const glass = resolveGlassSurface(
+    {
+      bgOpacity: settings.widget.opacity,
+      cardOpacity: settings.widget.cardOpacity ?? 1,
+      blur: settings.widget.blur ?? 0,
+    },
+    'widget',
+  );
+
   return (
     <>
       <div
@@ -408,8 +420,8 @@ export function Widget() {
         style={
           {
             fontFamily: 'inherit',
-            backgroundColor: `rgba(var(--sp-widget-rgb), ${settings.widget.opacity})`,
-            '--sp-card': `color-mix(in srgb, var(--sp-card-base) ${(settings.widget.cardOpacity ?? 1) * 100}%, transparent)`,
+            backgroundColor: `rgba(var(--sp-widget-rgb), ${glass.bgAlpha})`,
+            '--sp-card': `color-mix(in srgb, var(--sp-card-base) ${glass.cardAlpha * 100}%, transparent)`,
           } as React.CSSProperties
         }
       >
