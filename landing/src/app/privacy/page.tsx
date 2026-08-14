@@ -451,6 +451,18 @@ const koContent = {
               질문에 개인정보를 직접 적으면 그 내용도 함께 전송되므로, 질문에는 학생 이름·연락처
               등을 넣지 않는 것을 권장합니다.
             </li>
+            <li>
+              <strong>개발자 전달(버그 신고·건의사항)</strong> — 사이드바의 &quot;건의사항
+              보내기&quot;나 AI 도우미의 신고 창으로 보내는 내용입니다. 작성하신 내용, 회신
+              이메일(적으신 경우에만), 직전 대화 내용, <strong>첨부하신 스크린샷</strong>(최대
+              3장)이 저장되고 개발자에게 이메일로 전달됩니다.{' '}
+              <strong>
+                AI 도우미가 오류·기능 요청으로 판단하면 신고 창을 띄우면서 그 질문과 직전 대화를
+                먼저 기록합니다
+              </strong>
+              — 신고 창을 닫으셔도 그 기록은 남으며, 아래 연락처로 요청하시면 삭제해 드립니다.
+              스크린샷에는 학생 이름이 찍힐 수 있으니 첨부 전에 확인해 주세요.
+            </li>
           </ul>
           <p>
             <strong>위탁받는 자:</strong> Supabase Inc.(클라우드 인프라) · 주식회사 업스테이지(AI
@@ -1121,6 +1133,21 @@ const enContent = {
               records — is <strong>not transmitted</strong>. However, personal information you type
               into the question itself is transmitted with it, so we recommend not including student
               names or contact details in your questions.
+            </li>
+            <li>
+              <strong>Reports to the developer (bug reports and suggestions)</strong> — what you
+              send via &quot;Send feedback&quot; in the sidebar or the report form in the AI
+              assistant. The text you write, a reply email address (only if you provide one), the
+              immediately preceding conversation, and <strong>any screenshots you attach</strong>{' '}
+              (up to 3) are stored and emailed to the developer.{' '}
+              <strong>
+                When the AI assistant judges your message to be a bug or a feature request, it
+                records that question and the preceding conversation at the moment it opens the
+                report form
+              </strong>{' '}
+              — the record remains even if you close the form, and we will delete it on request via
+              the contact below. Screenshots may capture student names, so please check before
+              attaching.
             </li>
           </ul>
           <p>
