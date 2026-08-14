@@ -82,14 +82,36 @@ anon 키는 앱 번들에 들어 있어 **누구나 볼 수 있다.** 그 키로
 
 목표: **D1·D2·D3 를 먼저 닫는다.** 설계를 기다리지 않는다.
 
-- [ ] `consultation_schedules` `surveys` 의 `USING (TRUE)` SELECT 정책 제거
-      → 공개 조회용 RPC 신설(반환 열에서 `admin_key` 제외)
-- [ ] `consultation_bookings` `survey_responses` 도 동일 처리
-      (지금은 남의 예약·응답을 전부 읽을 수 있다)
-- [ ] `sigv2-signatures` 버킷 공개 읽기 정책 제거 → **서명 URL을 만료 있는 서명된 URL로 전환**
-- [ ] 회귀 확인: 학부모 예약 화면, 설문 응답 화면, 서명 화면, 교사 현황 화면이 그대로 동작하는지 실제로 열어볼 것
+#### ✅ P0-1 완료 (2026-08-14, `f41969a5`, 마이그레이션 044)
+
+`USING (TRUE)` 정책을 건드리는 대신 **컬럼 단위 GRANT** 로 민감 열만 가렸다.
+RLS 는 행 단위라 열을 못 가리지만 GRANT 는 가린다 — 훨씬 작은 변경으로 D2 를 닫았다.
+
+- [x] `consultation_schedules.admin_key` · `surveys.admin_key` · `surveys.pin_hashes`
+      익명 SELECT 권한 회수 (테이블 권한 회수 후 민감 컬럼 제외하고 재부여,
+      컬럼 목록은 `information_schema` 에서 도출해 향후 컬럼 추가에도 자동 대응)
+- [x] `verify_survey_pin` RPC 신설 — pin_hashes 를 통째로 내려보내던 것을 서버 비교로 전환
+- [x] 죽은 코드 `ConsultationSupabaseClient.getSchedule()` 삭제 (select 에 admin_key 포함돼 있었음)
+
+**적용 후 실측**: `admin_key`·`pin_hashes` 요청 → HTTP 401 / 학부모·학생 화면이 쓰는 열 → HTTP 200 /
+`verify_survey_pin` → 정상 / 배포 번들에 RPC 포함 확인 / `/check`·`/booking` 200.
+
+#### 남은 P0
+
+- [ ] **P0-2**: `sigv2-signatures` 버킷 익명 목록 조회 차단 (D3)
+      — 현재 `USING (bucket_id = ...)` 뿐이라 누구나 서명 이미지를 훑어 내려받을 수 있다.
+      만료 있는 서명된 URL로 전환. **선행 확인**: `signature_public_url` 이 이미 배포된
+      링크·시트에 박혀 있으면 전환 시 깨진다 (열린 질문 3번)
+- [ ] **P0-3**: `consultation_bookings`(256행) · `survey_responses`(129행) 전 행 익명 열람 차단 (D1)
+      — 공개 조회용 RPC 로 좁힌다. 학부모 화면은 "이 학번이 이미 예약/응답했나" 여부만
+      필요하므로 boolean 반환 RPC 로 충분하다
+- [ ] 회귀 확인: 교사 현황 화면(상담 예약 상세·설문 응답 현황)을 실제로 열어볼 것
+      — P0-1 은 익명 조회만 검증했고 교사 앱 실화면은 아직 확인하지 않았다
 
 **위험**: 정책을 조이면 학부모·학생 화면이 조용히 깨질 수 있다. 반드시 실화면 확인 후 배포.
+
+> 🔑 작업용 임시 권한: `.claude/settings.local.json` 에 `npx supabase:*` 허용 규칙을 넣어 뒀다.
+> **P0 가 끝나면 제거할 것** (운영 DB 변경이 확인 없이 나가는 상태).
 
 ### P1 — 열쇠 분리 (D4)
 
