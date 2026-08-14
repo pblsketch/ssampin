@@ -399,7 +399,13 @@ export function AttendanceTab({ classId }: AttendanceTabProps) {
       return;
     }
     try {
-      const buffer = await exportAttendanceToExcel(allRecords, cls.students, cls.name);
+      const buffer = await exportAttendanceToExcel(
+        allRecords,
+        cls.students,
+        cls.name,
+        undefined,
+        periodTimes,
+      );
       const defaultFileName = `${cls.name}_출결기록.xlsx`;
       if (window.electronAPI) {
         const saved = await window.electronAPI.showSaveDialog({
@@ -430,7 +436,7 @@ export function AttendanceTab({ classId }: AttendanceTabProps) {
     } catch {
       showToast('내보내기 중 오류가 발생했습니다', 'error');
     }
-  }, [cls, classId, showToast]);
+  }, [cls, classId, showToast, periodTimes]);
 
   // 교시 버튼 목록: 학교별 maxPeriods 기준으로 동적 생성 (조회/종례는 양 끝에 고정)
   const periodButtons = useMemo<readonly number[]>(() => {
@@ -554,7 +560,7 @@ export function AttendanceTab({ classId }: AttendanceTabProps) {
                 {periodButtons.map((p) => {
                   const isMatching = matchingPeriods.has(p);
                   const special = isSpecialPeriod(p);
-                  const label = formatPeriodShort(p);
+                  const label = formatPeriodShort(p, periodTimes);
                   return (
                     <button
                       key={p}

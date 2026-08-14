@@ -7,6 +7,7 @@ import type {
   AttendancePeriodEntry,
 } from '@domain/entities/StudentRecord';
 import { formatPeriodLabel } from '@domain/entities/Attendance';
+import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import { reassignConflictingNumbers } from '@domain/rules/studentNumberRules';
 import {
   enumerateRange,
@@ -291,6 +292,7 @@ const ATTENDANCE_STATUS_TEXT: Record<AttendancePeriodEntry['status'], string> = 
  */
 export function formatAttendancePeriodLines(
   entries: readonly AttendancePeriodEntry[] | undefined,
+  periodTimes?: readonly PeriodTime[],
 ): string[] {
   if (!entries || entries.length === 0) return [];
 
@@ -307,7 +309,7 @@ export function formatAttendancePeriodLines(
   }
 
   const renderPeriods = (periods: readonly number[]): string =>
-    periods.map(formatPeriodLabel).join(', ');
+    periods.map((p) => formatPeriodLabel(p, periodTimes)).join(', ');
 
   // 단일 그룹: 교시 나열만 (subcategory 태그가 유형 표시)
   if (groups.size === 1) {

@@ -88,6 +88,7 @@ export function NeisAttendanceSection({
   periodLabel: string;
 }) {
   const className = useSettingsStore((s) => s.settings.className);
+  const periodTimes = useSettingsStore((s) => s.settings.periodTimes);
   const attendanceRecords = useTeachingClassStore((s) => s.attendanceRecords);
   // 사유 상세(질병/미인정/기타 분해)를 기본으로 펼쳐 보여준다(사용자 피드백 2026-07).
   const [showBreakdown, setShowBreakdown] = useState(true);
@@ -689,8 +690,8 @@ export function NeisAttendanceSection({
                         </td>
                         <td className="px-2 py-1.5 text-center text-sm text-sp-muted whitespace-nowrap">
                           {e.periodStart === e.periodEnd
-                            ? formatPeriodLabel(e.periodStart)
-                            : `${formatPeriodLabel(e.periodStart)}~${formatPeriodLabel(e.periodEnd)}`}
+                            ? formatPeriodLabel(e.periodStart, periodTimes)
+                            : `${formatPeriodLabel(e.periodStart, periodTimes)}~${formatPeriodLabel(e.periodEnd, periodTimes)}`}
                         </td>
                         <td className="px-2 py-1.5 text-center text-sm text-sp-text">
                           {ATT_STATUS_LABEL[e.status]}

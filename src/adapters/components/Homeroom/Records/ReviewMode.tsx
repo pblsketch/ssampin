@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import type { Student } from '@domain/entities/Student';
 import type { StudentRecord } from '@domain/entities/StudentRecord';
 import type { RecordCategoryItem } from '@domain/valueObjects/RecordCategory';
@@ -52,6 +53,7 @@ export function ReviewMode({
   edit,
   onEdit,
 }: ReviewModeProps) {
+  const periodTimes = useSettingsStore((s) => s.settings.periodTimes);
   const bulkMarkNeisReported = useStudentRecordsStore((s) => s.bulkMarkNeisReported);
   const bulkMarkDocumentSubmitted = useStudentRecordsStore((s) => s.bulkMarkDocumentSubmitted);
   const bulkMarkFollowUpDone = useStudentRecordsStore((s) => s.bulkMarkFollowUpDone);
@@ -357,7 +359,7 @@ export function ReviewMode({
             const isSelected = selectedIds.has(record.id);
             const periodLines =
               record.category === 'attendance'
-                ? formatAttendancePeriodLines(record.attendancePeriods)
+                ? formatAttendancePeriodLines(record.attendancePeriods, periodTimes)
                 : [];
             return (
               <div

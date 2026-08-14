@@ -111,6 +111,7 @@ export function ProgressCalendarView() {
         weekDates={weekDates}
         dayLabels={activeDays}
         periods={periods}
+        periodTimes={settings.periodTimes}
         grid={grid}
         colorBy={colorBy}
         subjectColors={settings.subjectColors}

@@ -9,6 +9,7 @@ import { PERIOD_MORNING, PERIOD_CLOSING, ATTENDANCE_REASONS } from '@domain/enti
 import { computeAutoPeriods, summarizeTotal } from '@domain/rules/attendanceRules';
 import { parseAttendanceQuickText } from '@domain/rules/attendanceQuickText';
 import { studentKey } from '@domain/entities/TeachingClass';
+import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import { AttendanceGridView } from '@adapters/components/attendance/shared/AttendanceGridView';
 import { SeatAttendanceView } from './SeatAttendanceView';
 import { SeatPeriodPopover } from './SeatPeriodPopover';
@@ -55,6 +56,11 @@ export interface HomeroomAttendanceGridProps {
   ) => Promise<void>;
   /** 교시 목록 — settings(maxPeriods) 단일 출처에서 호스트가 구성 */
   periods: readonly number[];
+  /**
+   * 교시 이름 표시용(선택) — 호스트가 settings.periodTimes를 주입한다.
+   * 이 셸은 스토어를 직접 import 하지 않으므로(단일 기록자 메타 가드) prop으로만 받는다.
+   */
+  periodTimes?: readonly PeriodTime[];
   /**
    * 좌석 뷰 데이터(선택) — 호스트(AttendanceMode)가 useSeatingStore에서 읽어 주입한다.
    * 그리드 셸은 스토어를 직접 import 하지 않으므로(메타 가드), 데이터·매핑을 prop으로만 받는다(§3.10-4).
@@ -110,6 +116,7 @@ export function HomeroomAttendanceGrid({
   loadDayRecords,
   onSaveDay,
   periods,
+  periodTimes,
   seating,
   onExceptionEdited,
 }: HomeroomAttendanceGridProps) {
@@ -546,8 +553,9 @@ export function HomeroomAttendanceGrid({
       textInput,
       students.map((s) => ({ number: s.number, name: s.name })),
       regularPeriodCount,
+      { periodTimes },
     );
-  }, [showTextPanel, textInput, students, regularPeriodCount]);
+  }, [showTextPanel, textInput, students, regularPeriodCount, periodTimes]);
 
   const okLineCount = useMemo(() => parsedLines.filter((l) => l.ok).length, [parsedLines]);
 
@@ -872,6 +880,7 @@ export function HomeroomAttendanceGrid({
           )
         ) : (
           <AttendanceGridView
+            periodTimes={periodTimes}
             students={students}
             matrix={matrix}
             periods={periods}
@@ -1001,6 +1010,7 @@ export function HomeroomAttendanceGrid({
           if (!student) return null;
           return (
             <SeatPeriodPopover
+              periodTimes={periodTimes}
               student={{ number: student.number, name: student.name }}
               row={matrix[seatPopover.sKey] ?? {}}
               periods={periods}

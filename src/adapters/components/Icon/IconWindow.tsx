@@ -248,7 +248,7 @@ export function IconWindow() {
       : {}),
     ...(settings.lunchStart !== undefined ? { lunchStartFallback: settings.lunchStart } : {}),
   });
-  const peekCandidate = decidePeek(pinInfo);
+  const peekCandidate = decidePeek(pinInfo, settings.periodTimes);
   const dueCount = pinInfo.dueTodos.count;
   const peekKey = peekCandidate ? `${peekCandidate.state}:${peekCandidate.text}` : null;
 
@@ -403,7 +403,7 @@ export function IconWindow() {
   }, []);
 
   // 호버 요약 + 현재 펫 동작 결정
-  const summary = buildSummary(pinInfo);
+  const summary = buildSummary(pinInfo, settings.periodTimes);
   let pinState: PinState = 'idle';
   if (hovered) pinState = 'wave';
   else if (celebrating) pinState = 'celebrate';
