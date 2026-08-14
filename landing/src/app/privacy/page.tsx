@@ -427,13 +427,18 @@ const koContent = {
               예약자 연락처·메모는 사용자 단말에서 암호화한 뒤 전송·저장합니다.
             </li>
             <li>
-              <strong>과제 수합</strong> — 과제 정보와 제출 현황(학생 이름·번호). 제출물은 교사의
-              Google Drive 링크로 보관되며, 교사 본인 확인은 Google 계정으로 처리합니다.
+              <strong>과제 수합</strong> — 과제 정보와 제출 현황(학생 이름·번호). 학생이 목록에서
+              자기 이름을 골라 제출하는 방식이므로,{' '}
+              <strong>교사가 과제를 만드는 시점에 대상 명단(이름·번호·학년·반)이 함께 저장</strong>
+              되고 제출 링크를 받은 사람에게 표시됩니다. 제출물은 교사의 Google Drive 링크로
+              보관되며, 교사 본인 확인은 Google 계정으로 처리합니다.
             </li>
             <li>
               <strong>전자 서명(서명받기)</strong> — 서명자 이름과 제출 항목, 서명 이미지(클라우드
-              저장). 접속 IP·기기정보(User-Agent)는 원문이 아니라 <strong>해시값</strong>으로만
-              저장합니다.
+              저장). 과제 수합과 마찬가지로 서명자가 목록에서 자기 이름을 고르는 방식이라,{' '}
+              <strong>교사가 서명을 만드는 시점에 대상 명단(이름·소속)이 함께 저장</strong>되고 서명
+              링크를 받은 사람에게 표시됩니다. 접속 IP·기기정보(User-Agent)는 원문이 아니라{' '}
+              <strong>해시값</strong>으로만 저장합니다.
             </li>
             <li>
               <strong>설문·체크리스트</strong> — 학생 번호와 응답 내용.
@@ -501,8 +506,13 @@ const koContent = {
             </li>
             <li>
               <strong>과제 수합과 전자 서명은 기능 특성상 학생 이름이 포함</strong>되며, 그 이름은
-              암호화되지 않은 형태로 클라우드에 저장됩니다(전자 서명은 서명 이미지도 함께). 교사가
-              꼭 필요한 범위에서만 사용하고, 목적을 달성한 뒤에는 삭제하는 것을 원칙으로 합니다.
+              암호화되지 않은 형태로 클라우드에 저장됩니다(전자 서명은 서명 이미지도 함께). 두
+              기능은 학생이 목록에서 자기 이름을 골라야 하므로{' '}
+              <strong>
+                제출한 학생뿐 아니라 대상 명단 전체가 저장되고, 링크를 받은 사람에게 보입니다.
+              </strong>{' '}
+              교사가 꼭 필요한 범위에서만 사용하고, 목적을 달성한 뒤에는 삭제하는 것을 원칙으로
+              합니다.
             </li>
             <li>
               외부 AI로 데이터를 보내는 경우(제10조)에는 실명·연락처·생년월일 등 신원 정보를 불투명
@@ -1113,13 +1123,25 @@ const enContent = {
             </li>
             <li>
               <strong>Assignment collection</strong> — assignment information and submission status
-              (student name and number); submissions are stored as links in the teacher&apos;s
-              Google Drive. Teacher identity is verified via the Google account.
+              (student name and number). Because students submit by picking their own name from a
+              list,{' '}
+              <strong>
+                the target roster (name, number, grade, class) is stored when the teacher creates
+                the assignment
+              </strong>{' '}
+              and is shown to anyone holding the submission link. Submissions are stored as links in
+              the teacher&apos;s Google Drive. Teacher identity is verified via the Google account.
             </li>
             <li>
               <strong>E-signature</strong> — the signer&apos;s name, submitted fields, and the
-              signature image (cloud storage). Access IP and device information (User-Agent) are
-              stored only as <strong>hashes</strong>, not in raw form.
+              signature image (cloud storage). As with assignment collection, signers pick their own
+              name from a list, so{' '}
+              <strong>
+                the target roster (name, affiliation) is stored when the teacher creates the
+                signature request
+              </strong>{' '}
+              and is shown to anyone holding the signing link. Access IP and device information
+              (User-Agent) are stored only as <strong>hashes</strong>, not in raw form.
             </li>
             <li>
               <strong>Surveys / checklists</strong> — student number and response content.
@@ -1202,8 +1224,14 @@ const enContent = {
                 name
               </strong>
               , and that name is stored in the cloud unencrypted (for e-signature, together with the
-              signature image). Teachers are expected to use these features only to the extent
-              necessary and to delete the data once the purpose is fulfilled.
+              signature image). Because both features require a student to pick their own name from
+              a list,{' '}
+              <strong>
+                the entire target roster — not only those who submitted — is stored and shown to
+                anyone holding the link.
+              </strong>{' '}
+              Teachers are expected to use these features only to the extent necessary and to delete
+              the data once the purpose is fulfilled.
             </li>
             <li>
               When data is sent to an external AI (Section 10), identifying information such as
