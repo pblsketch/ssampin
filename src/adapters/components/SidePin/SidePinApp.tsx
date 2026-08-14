@@ -22,7 +22,8 @@ import { SidePinMemoZone } from './SidePinMemoZone';
 import { SidePinWidgetZone } from './SidePinWidgetZone';
 import { WIDGET_DEFINITIONS } from '@widgets/registry';
 import { useSidePinWidgetIds } from './useSidePinWidgetIds';
-import { useSidePinAppearance } from './useSidePinAppearance';
+import { useSidePinAppearance, useSaveSidePinAppearance } from './useSidePinAppearance';
+import { SidePinAppearancePopover } from './SidePinAppearancePopover';
 
 /** 화면이 그리는 데 필요한 것만 추린 상태 */
 interface SidePinViewState {
@@ -93,6 +94,8 @@ export function SidePinApp() {
   const widgetIds = useSidePinWidgetIds();
   // 주제 색과 배경 투명도. 이게 없으면 옆핀만 늘 밝은 색으로 뜬다.
   const appearance = useSidePinAppearance();
+  const [appearanceOpen, setAppearanceOpen] = useState(false);
+  const saveAppearance = useSaveSidePinAppearance();
 
   /**
    * 창은 투명한데 **문서 배경은 흰색**이라, 손잡이가 덮지 않은 자리가 흰 판으로 드러난다.
@@ -181,6 +184,20 @@ export function SidePinApp() {
         activeZone={view.activeZone}
         backgroundColor={appearance.backgroundColor}
         leaving={view.surface === 'closing'}
+        surfaceStyle={appearance.surfaceStyle}
+        appearanceOpen={appearanceOpen}
+        onToggleAppearance={() => setAppearanceOpen((open) => !open)}
+        appearanceSlot={
+          appearanceOpen ? (
+            <SidePinAppearancePopover
+              opacity={appearance.opacity}
+              cardOpacity={appearance.cardOpacity}
+              onOpacityChange={(value) => void saveAppearance({ opacity: value })}
+              onCardOpacityChange={(value) => void saveAppearance({ cardOpacity: value })}
+              onClose={() => setAppearanceOpen(false)}
+            />
+          ) : undefined
+        }
         onTogglePin={(zone) => window.electronAPI?.sidePin?.togglePin(zone)}
         onClose={() => window.electronAPI?.sidePin?.requestClose()}
         onOpenMain={() => window.electronAPI?.sidePin?.openMain()}

@@ -16,8 +16,21 @@ import { resolve } from 'node:path';
 
 const CSS = readFileSync(resolve(__dirname, '../../../index.css'), 'utf-8');
 
-/** 손잡이 바탕 */
-const BACKGROUND_TOKEN = '--sp-surface';
+/**
+ * 손잡이·패널 바탕.
+ *
+ * 손잡이 배경은 주제의 바탕색(`--sp-widget-rgb` = `--sp-bg`)을 인라인으로 칠한다.
+ * 그래서 칩이 구분되는지는 `--sp-surface`가 아니라 이 색과 견줘야 한다.
+ */
+const BACKGROUND_TOKEN = '--sp-bg';
+
+/**
+ * 칸 머리말 띠에 쓰는 면.
+ *
+ * `--sp-surface`는 투명도를 얹기 위해 `var(--sp-surface-base)`를 가리키는 참조가 됐다.
+ * 실제 색은 이 기준 변수에 있다.
+ */
+const RAISED_TOKEN = '--sp-surface-base';
 /** 칩 바탕 — `SidePinRail.tsx`가 쓰는 값과 같아야 한다 */
 const CHIP_TOKEN = '--sp-border';
 
@@ -69,8 +82,8 @@ describe('손잡이 칩이 배경과 구분되는가', () => {
 
 describe('위젯 칸과 메모 칸이 구분되는가', () => {
   // 패널 바탕은 sp-bg, 칸 머리말과 위젯 카드는 한 단계 어두운 sp-surface를 쓴다.
-  const bases = readTokenValues('--sp-bg');
-  const raised = readTokenValues(BACKGROUND_TOKEN);
+  const bases = readTokenValues(BACKGROUND_TOKEN);
+  const raised = readTokenValues(RAISED_TOKEN);
 
   test('바탕과 머리말 띠의 밝기 차이가 충분하다', () => {
     // 처음에는 sp-surface 위에 sp-card를 얹었는데 밝기 차이가 1.2뿐이라,

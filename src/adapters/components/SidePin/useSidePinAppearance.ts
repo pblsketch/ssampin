@@ -8,6 +8,7 @@
  * 옆핀만 그대로"가 된다. (메모 목록·위젯 목록과 같은 이유)
  */
 import { useEffect } from 'react';
+import type { SidePinModeOptions } from '@domain/entities/Settings';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useThemeApplier } from '@adapters/hooks/useThemeApplier';
 
@@ -26,11 +27,20 @@ export interface SidePinAppearance {
    */
   readonly backgroundColor: string;
   readonly opacity: number;
+  /**
+   * 안쪽 면 투명도를 얹은 스타일.
+   *
+   * 요소를 하나하나 고치지 않고 **토큰 자체를 덮어쓴다.** 이러면 그 아래 모든
+   * `bg-sp-surface`가 한 번에 따라온다 — 위젯 모드가 카드에 쓰는 방식과 같다.
+   */
+  readonly surfaceStyle: Record<string, string>;
+  readonly cardOpacity: number;
 }
 
 export function useSidePinAppearance(): SidePinAppearance {
   const load = useSettingsStore((state) => state.load);
   const opacityRaw = useSettingsStore((state) => state.settings.widget?.sidePin?.opacity);
+  const cardOpacityRaw = useSettingsStore((state) => state.settings.widget?.sidePin?.cardOpacity);
 
   useEffect(() => {
     void load();
@@ -51,11 +61,35 @@ export function useSidePinAppearance(): SidePinAppearance {
   useThemeApplier();
 
   const opacity = normalizeOpacity(opacityRaw);
+  const cardOpacity = normalizeOpacity(cardOpacityRaw);
 
   return {
     backgroundColor: `rgba(var(--sp-widget-rgb), ${opacity})`,
     opacity,
+    surfaceStyle: {
+      '--sp-surface': `color-mix(in srgb, var(--sp-surface-base) ${cardOpacity * 100}%, transparent)`,
+    },
+    cardOpacity,
   };
+}
+
+/**
+ * 옆핀 안에서 바꾼 모양을 저장한다.
+ *
+ * 기존 값을 펼쳐서 얹는다. 그러지 않으면 배경을 바꿀 때 카드 값이 지워진다 —
+ * 이 저장소에서 여러 번 겪은 실수라 한 곳에 모아 둔다.
+ */
+export function useSaveSidePinAppearance(): (patch: SidePinModeOptions) => Promise<void> {
+  const settings = useSettingsStore((state) => state.settings);
+  const update = useSettingsStore((state) => state.update);
+
+  return (patch) =>
+    update({
+      widget: {
+        ...settings.widget,
+        sidePin: { ...settings.widget?.sidePin, ...patch },
+      },
+    });
 }
 
 /**

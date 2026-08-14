@@ -254,6 +254,13 @@ export interface SidePinModeOptions {
    * 글자까지 흐려져 읽을 수 없게 된다). 배경만 비치고 글자는 또렷하게 남는다.
    */
   readonly opacity?: number;
+  /**
+   * 안쪽 면(위젯 카드·칸 머리말)의 투명도 (0~1, 기본 1).
+   *
+   * 배경과 따로 두는 이유는 위젯 모드와 같다. 바탕만 비치게 하고 카드는 또렷하게
+   * 두고 싶을 수도, 반대로 전체를 은은하게 하고 싶을 수도 있다.
+   */
+  readonly cardOpacity?: number;
 }
 
 export interface SystemSettings {

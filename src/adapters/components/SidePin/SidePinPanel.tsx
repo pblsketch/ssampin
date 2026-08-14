@@ -32,6 +32,12 @@ export interface SidePinPanelProps {
   readonly backgroundColor: string;
   /** 나가는 중인가. 창은 아직 큰 상태이고, 연출이 끝나야 줄어든다 */
   readonly leaving?: boolean;
+  /** 안쪽 면 투명도를 얹는 스타일 — 토큰을 덮어써 아래 요소가 모두 따라온다 */
+  readonly surfaceStyle?: Record<string, string>;
+  /** 모양 조절 판. 열려 있을 때만 넣는다 */
+  readonly appearanceSlot?: ReactNode;
+  readonly onToggleAppearance: () => void;
+  readonly appearanceOpen: boolean;
   readonly widgetSlot: ReactNode;
   readonly memoSlot: ReactNode;
   readonly onTogglePin: (zone: 'both') => void;
@@ -89,6 +95,10 @@ export function SidePinPanel({
   activeZone,
   backgroundColor,
   leaving = false,
+  surfaceStyle,
+  appearanceSlot,
+  onToggleAppearance,
+  appearanceOpen,
   widgetSlot,
   memoSlot,
   onTogglePin,
@@ -102,13 +112,20 @@ export function SidePinPanel({
   return (
     <section
       aria-label="옆핀"
-      style={{ backgroundColor }}
+      style={{ backgroundColor, ...surfaceStyle }}
       className={`${leaving ? 'sidepin-exit' : 'sidepin-enter'} flex h-full w-full flex-col overflow-hidden rounded-l-xl border border-r-0 border-sp-border`}
     >
       <header className="flex shrink-0 items-center gap-1 border-b border-sp-border px-3 py-2">
         <h1 className="flex-1 truncate text-sm font-bold text-sp-text">옆핀</h1>
         {/* 메인으로 돌아가는 길 — 옆핀은 접어 둔 상태라 메인 창이 숨어 있다 */}
         <HeaderButton icon="open_in_full" label="쌤핀 열기" onClick={onOpenMain} />
+        {/* 뒤에 무엇이 있느냐에 따라 알맞은 투명도가 달라져, 설정 창을 열면 정작 맞출 화면이 가려진다 */}
+        <HeaderButton
+          icon="tune"
+          label="모양"
+          active={appearanceOpen}
+          onClick={onToggleAppearance}
+        />
         <HeaderButton
           icon={pinned ? 'keep' : 'keep_off'}
           label={pinned ? '고정 해제' : '고정'}
@@ -117,6 +134,8 @@ export function SidePinPanel({
         />
         <HeaderButton icon="close" label="닫기" onClick={onClose} />
       </header>
+
+      {appearanceSlot}
 
       {/*
         들어온 칸이 더 넓다. 메모를 쓰는 중에는 위젯을 요약 높이로 접어

@@ -47,7 +47,10 @@ function computeAccentFg(accent: string): string {
 function applyThemeColors(colors: ThemeColors): void {
   const root = document.documentElement;
   root.style.setProperty('--sp-bg', colors.bg);
-  root.style.setProperty('--sp-surface', colors.surface);
+  // surface·card 모두 "원래 색"을 따로 둔다. 투명도를 얹는 쪽(옆핀·위젯)이
+  // 그 원래 색을 기준으로 color-mix 하기 때문이다. 한 변수만 두면 자기 참조가 된다.
+  root.style.setProperty('--sp-surface-base', colors.surface);
+  root.style.setProperty('--sp-surface', 'var(--sp-surface-base)');
   root.style.setProperty('--sp-card-base', colors.card);
   root.style.setProperty('--sp-card', 'var(--sp-card-base)');
   root.style.setProperty('--sp-border', colors.border);

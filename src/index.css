@@ -15,7 +15,11 @@
 @layer base {
   :root {
     --sp-bg: #ffffff;
-    --sp-surface: #f7f6f3;
+    /* surface 도 card 와 같은 두 겹 구조로 둔다.
+       투명도를 얹으려면 "원래 색"이 따로 있어야 한다 — 한 변수만 있으면
+       자기 자신을 참조하게 되어 값이 무너진다. (옆핀 배경 투명도에서 필요) */
+    --sp-surface-base: #f7f6f3;
+    --sp-surface: var(--sp-surface-base);
     --sp-card-base: #f5f5f3;
     --sp-card: var(--sp-card-base);
     --sp-border: #e9e9e7;
@@ -213,7 +217,8 @@ body {
  */
 .theme-light {
   --sp-bg: #e0e2e6;
-  --sp-surface: #d7d9de;
+  --sp-surface-base: #d7d9de;
+  --sp-surface: var(--sp-surface-base);
   --sp-card-base: #e6e7eb;
   --sp-card: var(--sp-card-base);
   --sp-border: #b0b5bf;
@@ -233,7 +238,8 @@ body {
 
 .theme-dark {
   --sp-bg: #0f172a;
-  --sp-surface: #1e2d42;
+  --sp-surface-base: #1e2d42;
+  --sp-surface: var(--sp-surface-base);
   --sp-card-base: #1e2d42;
   --sp-card: var(--sp-card-base);
   --sp-border: #2a3f5c;

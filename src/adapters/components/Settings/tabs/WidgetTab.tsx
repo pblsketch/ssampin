@@ -293,7 +293,8 @@ export function WidgetTab({ draft, patch }: Props) {
             0%여도 글자와 아이콘은 또렷하게 남는다.
           */}
           <p className="text-xs text-sp-muted">
-            화면 가장자리에 붙는 옆핀의 배경이 얼마나 비쳐 보일지 정합니다.
+            화면 가장자리에 붙는 옆핀의 배경이 얼마나 비쳐 보일지 정합니다. 옆핀을 펼친 뒤 머리말의
+            조절 버튼에서 바로 맞출 수도 있습니다.
           </p>
           <input
             type="range"
@@ -303,6 +304,26 @@ export function WidgetTab({ draft, patch }: Props) {
             onChange={(e) =>
               patchWidget({
                 sidePin: { ...draft.widget.sidePin, opacity: Number(e.target.value) / 100 },
+              })
+            }
+            className="w-full h-2 bg-sp-border rounded-full appearance-none cursor-pointer accent-sp-accent"
+          />
+        </div>
+        <div className="space-y-3">
+          <div className="flex justify-between">
+            <span className="text-sm font-medium text-sp-text">옆핀 카드 투명도</span>
+            <span className="text-sm font-bold text-sp-accent">
+              {Math.round((draft.widget.sidePin?.cardOpacity ?? 1) * 100)}%
+            </span>
+          </div>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={Math.round((draft.widget.sidePin?.cardOpacity ?? 1) * 100)}
+            onChange={(e) =>
+              patchWidget({
+                sidePin: { ...draft.widget.sidePin, cardOpacity: Number(e.target.value) / 100 },
               })
             }
             className="w-full h-2 bg-sp-border rounded-full appearance-none cursor-pointer accent-sp-accent"
