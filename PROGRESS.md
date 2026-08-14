@@ -12,8 +12,11 @@
 2. **릴리즈 노트** — `public/release-notes.json`에 v2.4.0 항목 신설(changes 13건).
 3. **챗봇 KB** — `scripts/ingest-chatbot-qa.mjs`에 v2.4.0 Q&A 5건 신설(옆핀·유리 효과·제목 표시줄 없음·뉴트럴 테마·모바일 개편) + 기능 요약 3건(위젯·설정·모바일) 갱신. 키 로테이션 → `ssampin-embed` 배포 → ingest **372/372 성공**.
 4. **사용자 가이드** — `landing/src/content/docs.ts`: `features/mobile`에 "화면 구조(v2.4.0에서 개편)" 절 신설, `features/settings > display`에 뉴트럴 테마 2줄 추가, `releases` 페이지 "최근 반영된 주요 기능"에 v2.4.0 4건 추가. 해당 문서 `lastUpdated` 갱신. 유리 효과·옆핀·교시 이름은 구현 커밋에서 이미 문서화돼 있어 확인만 함.
-5. **검증** — tsc 0 · lint 0 error(경고 135 기존 부채) · vitest **410파일 4,933 passed**·10 skipped · regression **40/40** · 랜딩 `docs:check`(문서 41·링크 8·이미지 16) + `build` 통과.
-   6~8. 커밋·푸시 → GHA Windows/macOS 빌드 → GitHub 릴리즈 + 다운로드 URL 302 검증.
+5. **검증** — tsc 0 · lint 0 error(경고 135 기존 부채) · vitest **410파일 4,933 passed**·10 skipped · regression **40/40** · 랜딩 `docs:check`(문서 41·링크 8·이미지 16) + `build` 통과. 6. **커밋·푸시** — `91daae79` (10파일, 명시 path 커밋으로 인덱스 우회) → `origin/main`.
+6. **빌드** — GHA `Build Windows`(run 31820801427) · `Build macOS`(run 31820806098) 동시 실행, 둘 다 성공. 산출물 파일명은 아티팩트가 준 그대로 사용(rename 금지 규칙 준수).
+7. **GitHub 릴리즈** — `v2.4.0` 생성, 첨부 8개(Setup.exe 291MB·blockmap·latest.yml / arm64.dmg 343MB·x64.dmg 345MB·blockmap 2개·latest-mac.yml). Latest 태그 `v2.4.0` 확인. **다운로드 URL 7개 전부 302** (버전 고정 2개 + latest 5개).
+
+**출시 완료 — 현재 배포 버전 v2.4.0** (2026-08-15, tag `v2.4.0`, main `91daae79`).
 
 **KB 실동작 확인**(ingest 성공 로그만 믿지 않고 실제로 물어봄): "옆핀이 뭔가요?" · "무채색 뉴트럴 테마가 있나요?" · "안드로이드에서 뒤로가기를 누르면 앱이 꺼져요" 3건 모두 HTTP 200 + 새 문서 기반 정답(4.8~10.1초).
 
