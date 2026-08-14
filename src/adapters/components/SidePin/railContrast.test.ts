@@ -66,3 +66,37 @@ describe('손잡이 칩이 배경과 구분되는가', () => {
     expect(source).toContain(`bg-${CHIP_TOKEN.replace('--', '')}`);
   });
 });
+
+describe('위젯 칸과 메모 칸이 구분되는가', () => {
+  // 패널 바탕은 sp-bg, 칸 머리말과 위젯 카드는 한 단계 어두운 sp-surface를 쓴다.
+  const bases = readTokenValues('--sp-bg');
+  const raised = readTokenValues(BACKGROUND_TOKEN);
+
+  test('바탕과 머리말 띠의 밝기 차이가 충분하다', () => {
+    // 처음에는 sp-surface 위에 sp-card를 얹었는데 밝기 차이가 1.2뿐이라,
+    // 두 칸이 눈으로 전혀 갈라지지 않았다(2026-08-14 사용자 지적).
+    const tooClose = bases
+      .map((base, i) => ({ base, raised: raised[i] as string }))
+      .map((pair) => ({ ...pair, diff: Math.abs(luminance(pair.base) - luminance(pair.raised)) }))
+      .filter((pair) => pair.diff < MIN_DIFFERENCE);
+
+    expect(tooClose).toEqual([]);
+  });
+
+  test('두 칸이 실제로 이 조합을 쓴다', () => {
+    const panel = readFileSync(resolve(__dirname, 'SidePinPanel.tsx'), 'utf-8');
+    const header = readFileSync(resolve(__dirname, 'SidePinZoneHeader.tsx'), 'utf-8');
+
+    expect(panel).toContain('bg-sp-bg');
+    expect(header).toContain('bg-sp-surface');
+  });
+
+  test('구분이 사라지는 sp-card 조합으로 되돌아가지 않는다', () => {
+    // sp-card 는 sp-surface 와 사실상 같은 색이다. 칸이나 카드 바탕으로 쓰면
+    // 코드는 멀쩡한데 화면에서는 아무 경계도 보이지 않는다.
+    for (const file of ['SidePinPanel.tsx', 'SidePinZoneHeader.tsx', 'SidePinWidgetZone.tsx']) {
+      const source = readFileSync(resolve(__dirname, file), 'utf-8');
+      expect(source).not.toMatch(/(?<!hover:)bg-sp-card\b/);
+    }
+  });
+});

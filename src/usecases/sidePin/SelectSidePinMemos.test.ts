@@ -4,7 +4,6 @@ import type { MemoImage } from '@domain/valueObjects/MemoImage';
 import {
   SIDE_PIN_EMPTY_MEMO_LABEL,
   SIDE_PIN_MEMO_LABEL_MAX,
-  SIDE_PIN_MEMO_LIMIT,
   deriveSidePinMemoLabel,
   deriveSidePinMemoPreview,
   selectSidePinMemos,
@@ -98,12 +97,14 @@ describe('selectSidePinMemos', () => {
     expect(result.map((m) => m.id)).toEqual(['살아있음']);
   });
 
-  it(`기본 ${SIDE_PIN_MEMO_LIMIT}개까지만 돌려준다`, () => {
+  it('개수를 자르지 않는다 — 옆핀 안에서 스크롤로 전부 볼 수 있어야 한다', () => {
+    // 5개만 보여주고 나머지를 메인 쌤핀으로 넘기면, 메모 하나 찾으러 매번 본체를
+    // 열어야 한다. "잠깐 확인하고 닫는다"는 목적이 무너진다.
     const memos = Array.from({ length: 12 }, (_, i) =>
       memo({ id: `m${i}`, updatedAt: `2026-08-${String(i + 1).padStart(2, '0')}T00:00:00.000Z` }),
     );
 
-    expect(selectSidePinMemos({ locked: false, memos })).toHaveLength(SIDE_PIN_MEMO_LIMIT);
+    expect(selectSidePinMemos({ locked: false, memos })).toHaveLength(12);
   });
 
   it('개수를 직접 지정할 수 있다', () => {

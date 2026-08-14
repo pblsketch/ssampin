@@ -19,6 +19,15 @@ import type {
 import { SidePinRail } from './SidePinRail';
 import { SidePinPanel } from './SidePinPanel';
 import { SidePinMemoZone } from './SidePinMemoZone';
+import { SidePinWidgetZone } from './SidePinWidgetZone';
+import { WIDGET_DEFINITIONS } from '@widgets/registry';
+
+/**
+ * 어떤 위젯을 옆핀에 올릴지 고르는 설정은 아직 없다(§9-9). 그때까지는 기본값을 쓴다.
+ *
+ * 빈 배열을 매번 새로 만들면 참조가 달라져 화면이 계속 다시 그려진다. 한 번만 만든다.
+ */
+const SIDE_PIN_DEFAULT_WIDGET_IDS: readonly string[] = [];
 
 /** 화면이 그리는 데 필요한 것만 추린 상태 */
 interface SidePinViewState {
@@ -170,33 +179,20 @@ export function SidePinApp() {
         onClose={() => window.electronAPI?.sidePin?.requestClose()}
         onOpenMain={() => window.electronAPI?.sidePin?.openMain()}
         memoEditing={memoEditing}
-        widgetSlot={<ZonePlaceholder icon="dashboard" title="위젯" />}
-        memoSlot={
-          <SidePinMemoZone
-            locked={view.locked}
-            onOpenMain={() => window.electronAPI?.sidePin?.openMain()}
-            onEditorActivityChange={reportEditorActivity}
+        widgetSlot={
+          <SidePinWidgetZone
+            definitions={WIDGET_DEFINITIONS}
+            // 어떤 위젯을 올릴지 고르는 설정은 아직 없다(§9-9). 그때까지는 기본값을 쓴다.
+            selectedIds={SIDE_PIN_DEFAULT_WIDGET_IDS}
+            // 이미 있는 화면 이동 통로를 쓴다. 메인 창을 띄우고 그 화면으로 보낸 뒤,
+            // 창 모드까지 되돌리는 일은 main이 한다.
+            onOpenInApp={(target) => void window.electronAPI?.navigateToPage(target)}
           />
         }
+        memoSlot={
+          <SidePinMemoZone locked={view.locked} onEditorActivityChange={reportEditorActivity} />
+        }
       />
-    </div>
-  );
-}
-
-/**
- * 아직 내용이 붙지 않은 영역.
- *
- * 위젯 카드와 메모 목록은 기존 화면을 재사용해 붙일 예정이라, 지금은 자리와 크기만
- * 확인할 수 있게 둔다. 가짜 내용을 채워 넣으면 "다 된 것처럼" 보여 판단을 흐린다.
- */
-function ZonePlaceholder({ icon, title }: { readonly icon: string; readonly title: string }) {
-  return (
-    <div className="flex h-full flex-col items-center justify-center gap-2 px-4 py-6 text-center">
-      <span aria-hidden className="material-symbols-outlined text-icon-md text-sp-muted">
-        {icon}
-      </span>
-      <p className="text-sm font-medium text-sp-text">{title}</p>
-      <p className="text-caption text-sp-muted">다음 단계에서 내용이 들어갑니다</p>
     </div>
   );
 }

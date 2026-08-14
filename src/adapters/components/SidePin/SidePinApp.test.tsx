@@ -22,7 +22,18 @@ interface Bridge {
 let bridge: Bridge;
 let push: ((state: unknown) => void) | null = null;
 
+/**
+ * 위젯 칸은 진짜 위젯을 그린다. 그 안에서 `ResizeObserver`를 쓰는데 jsdom에는 없다.
+ * 실제 앱(Electron)에는 있으므로 제품 문제가 아니라 시험 환경의 빈 자리다.
+ */
+class ResizeObserverStub {
+  observe(): void {}
+  unobserve(): void {}
+  disconnect(): void {}
+}
+
 beforeEach(() => {
+  (globalThis as { ResizeObserver?: unknown }).ResizeObserver = ResizeObserverStub;
   push = null;
   bridge = {
     onStateChanged: vi.fn((cb: (s: unknown) => void) => {
@@ -98,13 +109,11 @@ describe('무엇을 그리는가', () => {
     expect(screen.getByRole('region', { name: '옆핀' })).toBeTruthy();
   });
 
-  test('아직 안 만든 위젯 칸은 빈 자리임을 숨기지 않는다', () => {
-    // 메모 칸은 만들었으므로 빈 자리는 위젯 하나뿐이다.
-    // 가짜 내용을 채워 넣으면 "다 된 것처럼" 보여 판단을 흐린다.
+  test('위젯 칸에도 실제 위젯 화면이 들어간다', () => {
     render(<SidePinApp />);
     send({ surface: 'expanded' });
 
-    expect(screen.getAllByText('다음 단계에서 내용이 들어갑니다').length).toBe(1);
+    expect(screen.getByRole('region', { name: '위젯' })).toBeTruthy();
   });
 
   test('접힌 손잡이가 창 높이를 그대로 채운다 — 안 그러면 아래가 빈 채로 남는다', () => {

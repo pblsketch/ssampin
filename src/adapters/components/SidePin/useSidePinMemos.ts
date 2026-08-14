@@ -20,13 +20,6 @@ export interface UseSidePinMemosResult {
   readonly items: readonly SidePinMemoListItem[];
   /** 처음 불러오기가 끝났는가. 끝나기 전에는 "메모 없음"을 보여주면 안 된다 */
   readonly loaded: boolean;
-  /**
-   * 보관하지 않은 메모의 전체 개수.
-   *
-   * 목록은 5개까지만 보여주므로, 이 값이 더 크면 "여기 보이는 게 전부가 아니다"를
-   * 알려야 한다. 그러지 않으면 6번째 메모가 사라진 것처럼 보인다.
-   */
-  readonly totalActive: number;
 }
 
 /**
@@ -53,7 +46,5 @@ export function useSidePinMemos(locked: boolean): UseSidePinMemosResult {
   }, [load]);
 
   const items = useMemo(() => selectSidePinMemos({ memos, locked }), [memos, locked]);
-  const totalActive = useMemo(() => memos.filter((memo) => !memo.archived).length, [memos]);
-
-  return { items, loaded, totalActive };
+  return { items, loaded };
 }

@@ -10,6 +10,7 @@
  */
 import type { MemoColor } from '@domain/valueObjects/MemoColor';
 import type { SidePinMemoListItem } from '@usecases/sidePin/SelectSidePinMemos';
+import { SidePinZoneHeader } from './SidePinZoneHeader';
 
 const COLOR_BAR: Record<MemoColor, string> = {
   yellow: 'bg-yellow-300',
@@ -23,43 +24,40 @@ export const SIDE_PIN_MEMO_FOCUS =
   'focus-visible:outline focus-visible:outline-2 focus-visible:outline-sp-accent focus-visible:-outline-offset-2';
 
 export interface SidePinMemoListProps {
+  /**
+   * 보여줄 메모 전부. 개수를 자르지 않는다 — 옆핀 안에서 위아래로 훑어
+   * 모두 볼 수 있어야 한다. 메모 하나 찾으러 본체를 열게 하면 안 된다.
+   */
   readonly items: readonly SidePinMemoListItem[];
   readonly loaded: boolean;
-  readonly totalActive: number;
   readonly onOpen: (id: string) => void;
   readonly onAdd: () => void;
-  /** 메인 쌤핀에서 메모 전체를 본다 */
-  readonly onOpenAll: () => void;
 }
 
-export function SidePinMemoList({
-  items,
-  loaded,
-  totalActive,
-  onOpen,
-  onAdd,
-  onOpenAll,
-}: SidePinMemoListProps) {
+export function SidePinMemoList({ items, loaded, onOpen, onAdd }: SidePinMemoListProps) {
   return (
-    <section aria-label="메모" className="flex h-full flex-col">
-      <header className="flex shrink-0 items-center gap-2 px-3 pb-1 pt-2">
-        <h2 className="flex-1 text-caption font-semibold text-sp-muted">메모</h2>
-        <button
-          type="button"
-          onClick={onAdd}
-          className={`flex items-center gap-1 rounded-lg px-2 py-1 text-caption font-medium text-sp-muted transition-colors duration-sp-quick hover:bg-sp-card hover:text-sp-text ${SIDE_PIN_MEMO_FOCUS}`}
-        >
-          <span aria-hidden className="material-symbols-outlined text-icon-sm leading-none">
-            add
-          </span>
-          새 메모
-        </button>
-      </header>
+    <section aria-label="메모" className="flex h-full flex-col bg-sp-bg">
+      <SidePinZoneHeader
+        icon="sticky_note_2"
+        title="메모"
+        action={
+          <button
+            type="button"
+            onClick={onAdd}
+            className={`flex items-center gap-1 rounded-lg px-2 py-0.5 text-caption font-medium text-sp-muted transition-colors duration-sp-quick hover:bg-sp-bg hover:text-sp-text ${SIDE_PIN_MEMO_FOCUS}`}
+          >
+            <span aria-hidden className="material-symbols-outlined text-icon-sm leading-none">
+              add
+            </span>
+            새 메모
+          </button>
+        }
+      />
 
       {/*
         min-h-0 이 없으면 안쪽 스크롤이 부모를 밀어내 머리말이 잘린다.
       */}
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+      <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
         {!loaded ? (
           // 다 불러오기 전에 "없습니다"를 보여주면, 있는데 없다고 말하는 셈이 된다.
           <p className="px-1 py-3 text-caption text-sp-muted">메모를 불러오는 중입니다…</p>
@@ -75,16 +73,6 @@ export function SidePinMemoList({
           </ul>
         )}
       </div>
-
-      {loaded && totalActive > items.length && (
-        <button
-          type="button"
-          onClick={onOpenAll}
-          className={`shrink-0 border-t border-sp-border px-3 py-1.5 text-caption text-sp-muted transition-colors duration-sp-quick hover:text-sp-text ${SIDE_PIN_MEMO_FOCUS}`}
-        >
-          쌤핀에서 메모 {totalActive}개 모두 보기
-        </button>
-      )}
     </section>
   );
 }
@@ -100,7 +88,7 @@ function MemoRow({
     <button
       type="button"
       onClick={() => onOpen(item.id)}
-      className={`flex w-full items-start gap-2.5 rounded-lg px-2 py-2 text-left transition-colors duration-sp-quick hover:bg-sp-card ${SIDE_PIN_MEMO_FOCUS}`}
+      className={`flex w-full items-start gap-2.5 rounded-lg px-2 py-2 text-left transition-colors duration-sp-quick hover:bg-sp-surface ${SIDE_PIN_MEMO_FOCUS}`}
     >
       <span aria-hidden className={`mt-1 h-7 w-1 shrink-0 rounded-full ${COLOR_BAR[item.color]}`} />
       <span className="min-w-0 flex-1">

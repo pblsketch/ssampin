@@ -52,7 +52,7 @@ function HeaderButton({ icon, label, active = false, onClick }: HeaderButtonProp
       aria-label={label}
       aria-pressed={active}
       onClick={onClick}
-      className={`flex h-7 w-7 items-center justify-center rounded-lg transition-colors duration-150 hover:bg-sp-card ${
+      className={`flex h-7 w-7 items-center justify-center rounded-lg transition-colors duration-150 hover:bg-sp-surface ${
         active ? 'text-sp-accent' : 'text-sp-muted'
       }`}
     >
@@ -91,7 +91,7 @@ export function SidePinPanel({
   return (
     <section
       aria-label="옆핀"
-      className="sidepin-enter flex h-full w-full flex-col overflow-hidden rounded-l-xl border border-r-0 border-sp-border bg-sp-surface"
+      className="sidepin-enter flex h-full w-full flex-col overflow-hidden rounded-l-xl border border-r-0 border-sp-border bg-sp-bg"
     >
       <header className="flex shrink-0 items-center gap-1 border-b border-sp-border px-3 py-2">
         <h1 className="flex-1 truncate text-sm font-bold text-sp-text">옆핀</h1>
@@ -119,7 +119,12 @@ export function SidePinPanel({
         {widgetSlot}
       </div>
 
-      <span aria-hidden className="mx-3 h-px shrink-0 bg-sp-border" />
+      {/*
+        두 칸 사이 이음매. 폭 안쪽으로 들여 짧게 그으면 "같은 목록의 구분선"으로 읽혀
+        칸이 나뉜 줄 모른다. 끝에서 끝까지 그어야 **다른 칸이 시작된다**로 읽힌다.
+        각 칸의 머리말이 한 단계 어두운 띠라 이 선과 함께 경계를 이룬다.
+      */}
+      <span aria-hidden className="h-px shrink-0 bg-sp-border" />
 
       <div
         className={`min-h-0 basis-0 overflow-y-auto transition-[flex-grow] duration-sp-base ${growth.memo}`}

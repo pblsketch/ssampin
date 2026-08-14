@@ -84,14 +84,10 @@ function seed(memos: Memo[]): void {
 // 가짜 함수도 실제 계약과 같은 모양이어야 한다. 헐겁게 두면 계약이 바뀌어도
 // 테스트가 그대로 통과해, 그물이 있는데 아무것도 못 잡는 상태가 된다.
 let onActivity: ReturnType<typeof vi.fn<(activity: MemoEditorActivity) => void>>;
-let onOpenMain: ReturnType<typeof vi.fn<() => void>>;
 
 function renderZone(locked = false) {
   onActivity = vi.fn<(activity: MemoEditorActivity) => void>();
-  onOpenMain = vi.fn<() => void>();
-  return render(
-    <SidePinMemoZone locked={locked} onOpenMain={onOpenMain} onEditorActivityChange={onActivity} />,
-  );
+  return render(<SidePinMemoZone locked={locked} onEditorActivityChange={onActivity} />);
 }
 
 /** 마지막으로 창에 알린 편집 상태 */
@@ -111,32 +107,42 @@ afterEach(() => {
 });
 
 describe('목록', () => {
-  test('최근에 고친 것부터 최대 5개까지 보여준다', () => {
+  test('최근에 고친 것이 위로 온다', () => {
     seed([
       memo('a', '가장 오래된', '2026-01-01T00:00:00.000Z'),
-      memo('b', '둘째', '2026-01-02T00:00:00.000Z'),
-      memo('c', '셋째', '2026-01-03T00:00:00.000Z'),
-      memo('d', '넷째', '2026-01-04T00:00:00.000Z'),
-      memo('e', '다섯째', '2026-01-05T00:00:00.000Z'),
       memo('f', '가장 최근', '2026-01-06T00:00:00.000Z'),
     ]);
     renderZone();
 
-    expect(screen.getByRole('button', { name: /가장 최근/ })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: /가장 오래된/ })).toBeNull();
+    const labels = screen
+      .getAllByRole('button')
+      .map((b) => b.textContent ?? '')
+      .filter((t) => t.includes('가장'));
+    expect(labels[0]).toContain('가장 최근');
   });
 
-  test('5개를 넘으면 나머지가 있다는 것을 알린다 — 사라진 것처럼 보이면 안 된다', () => {
+  test('개수를 자르지 않는다 — 옆핀 안에서 위아래로 훑어 전부 볼 수 있다', () => {
+    // 5개만 보여주고 나머지를 본체로 넘기면, 메모 하나 찾으러 매번 앱을 열어야 한다.
     seed(
-      Array.from({ length: 7 }, (_, i) =>
+      Array.from({ length: 9 }, (_, i) =>
         memo(`m${i}`, `할 일 ${i}`, `2026-01-0${i + 1}T00:00:00.000Z`),
       ),
     );
     renderZone();
 
-    fireEvent.click(screen.getByRole('button', { name: /모두 보기/ }));
+    for (let i = 0; i < 9; i += 1) {
+      expect(screen.getByRole('button', { name: new RegExp(`할 일 ${i}`) })).toBeTruthy();
+    }
+  });
 
-    expect(onOpenMain).toHaveBeenCalled();
+  test('목록이 스크롤된다 — 길어져도 머리말이 밀려나지 않는다', () => {
+    seed([memo('a', '하나', '2026-01-01T00:00:00.000Z')]);
+    const { container } = renderZone();
+
+    const scroller = container.querySelector('.overflow-y-auto');
+    expect(scroller).toBeTruthy();
+    // min-h-0 이 없으면 안쪽 스크롤이 부모를 밀어내 머리말이 잘린다.
+    expect(scroller?.className).toContain('min-h-0');
   });
 
   test('보관한 메모는 목록에 나오지 않는다', () => {
@@ -266,9 +272,7 @@ describe('바깥에서 벌어진 일', () => {
     const { rerender } = renderZone();
     fireEvent.click(screen.getByRole('button', { name: /비밀 항목/ }));
 
-    rerender(
-      <SidePinMemoZone locked onOpenMain={onOpenMain} onEditorActivityChange={onActivity} />,
-    );
+    rerender(<SidePinMemoZone locked onEditorActivityChange={onActivity} />);
 
     expect(screen.queryByRole('textbox', { name: '메모 내용' })).toBeNull();
   });

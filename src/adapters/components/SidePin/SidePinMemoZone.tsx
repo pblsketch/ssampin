@@ -33,18 +33,12 @@ type Mode = { readonly kind: 'list' } | { readonly kind: 'edit'; readonly id: st
 export interface SidePinMemoZoneProps {
   /** 잠금·절전 등 보호 상태 */
   readonly locked: boolean;
-  /** 메인 쌤핀으로 돌아간다 */
-  readonly onOpenMain: () => void;
   /** 지금 메모를 쓰는 중인지 창에 알린다 */
   readonly onEditorActivityChange: (activity: MemoEditorActivity) => void;
 }
 
-export function SidePinMemoZone({
-  locked,
-  onOpenMain,
-  onEditorActivityChange,
-}: SidePinMemoZoneProps) {
-  const { items, loaded, totalActive } = useSidePinMemos(locked);
+export function SidePinMemoZone({ locked, onEditorActivityChange }: SidePinMemoZoneProps) {
+  const { items, loaded } = useSidePinMemos(locked);
   const memos = useMemoStore((state) => state.memos);
   const addMemo = useMemoStore((state) => state.addMemo);
   const updateMemo = useMemoStore((state) => state.updateMemo);
@@ -176,10 +170,8 @@ export function SidePinMemoZone({
     <SidePinMemoList
       items={items}
       loaded={loaded}
-      totalActive={totalActive}
       onOpen={openMemo}
       onAdd={() => void quickAdd()}
-      onOpenAll={onOpenMain}
     />
   );
 }

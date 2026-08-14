@@ -34,6 +34,10 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
   // ─── 시간표 카테고리 ───
   {
     id: 'weekly-timetable',
+    sidePin: {
+      eligible: false,
+      unavailableReason: '월~금 5칸 표라서 옆핀의 좁은 폭에서는 읽을 수 없습니다',
+    },
     name: '교사 주간시간표',
     icon: '📅',
     description: '월~금 교사 시간표를 한눈에 확인합니다',
@@ -52,6 +56,7 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
   },
   {
     id: 'today-class',
+    sidePin: { eligible: true, navigationTarget: 'timetable' },
     name: '오늘 수업',
     icon: '🕐',
     description: '오늘의 수업 시간표를 확인합니다',
@@ -90,6 +95,10 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
   // ─── 학급 카테고리 ───
   {
     id: 'seating',
+    sidePin: {
+      eligible: false,
+      unavailableReason: '자리 배치는 넓은 화면이 필요합니다',
+    },
     name: '자리배치',
     icon: '💺',
     description: '학급 자리배치를 미리봅니다',
@@ -109,6 +118,7 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
   },
   {
     id: 'today-progress',
+    sidePin: { eligible: true, navigationTarget: 'class-management' },
     name: '오늘 수업 진도',
     icon: '📚',
     description: '오늘 가르칠 학급별 진도 상태를 확인합니다',
@@ -127,6 +137,10 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
   },
   {
     id: 'student-records',
+    sidePin: {
+      eligible: false,
+      unavailableReason: '학생 개인정보가 담겨 있어, 화면에 늘 떠 있는 옆핀에는 올리지 않습니다',
+    },
     name: '담임 메모장',
     icon: '👩‍🏫',
     description: '오늘의 학생 기록을 확인합니다',
@@ -146,6 +160,10 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
   },
   {
     id: 'grade-summary',
+    sidePin: {
+      eligible: false,
+      unavailableReason: '성적은 학생 개인정보라, 화면에 늘 떠 있는 옆핀에는 올리지 않습니다',
+    },
     name: '성적 현황',
     icon: '📊',
     description: '점수 미입력·반영비율 미완성 평가를 한눈에 (개인 점수 미표시)',
@@ -166,6 +184,7 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
   // ─── 정보 카테고리 ───
   {
     id: 'meal',
+    sidePin: { eligible: true, navigationTarget: 'meal' },
     name: '급식 메뉴',
     icon: '🍱',
     description: '오늘의 급식 메뉴를 확인합니다',
@@ -184,6 +203,7 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
   },
   {
     id: 'events',
+    sidePin: { eligible: true, navigationTarget: 'schedule' },
     name: '다가오는 일정',
     icon: '📆',
     description: '앞으로의 일정과 D-Day를 확인합니다',
@@ -202,6 +222,7 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
   },
   {
     id: 'mini-calendar',
+    sidePin: { eligible: true, navigationTarget: 'schedule' },
     name: '미니 캘린더',
     icon: '📅',
     description: '월간 달력으로 일정을 한눈에 확인합니다',
@@ -220,6 +241,7 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
   },
   {
     id: 'memo',
+    sidePin: { eligible: false, unavailableReason: '옆핀에는 메모 칸이 따로 있습니다' },
     name: '메모',
     icon: '📝',
     description: '최근 메모를 미리봅니다',
@@ -255,6 +277,7 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
   },
   {
     id: 'todo',
+    sidePin: { eligible: true, navigationTarget: 'todo' },
     name: '할 일',
     icon: '✅',
     description: '할 일 목록을 관리합니다',
@@ -276,6 +299,7 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
   // ─── D-Day 카운터 ───
   {
     id: 'dday-counter',
+    sidePin: { eligible: true, navigationTarget: 'schedule' },
     name: 'D-Day 카운터',
     icon: '🎯',
     description: '중요한 날까지 남은 일수를 확인합니다',
@@ -337,6 +361,7 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
   // ─── 자주 쓰는 도구 ───
   {
     id: 'favorite-tools',
+    sidePin: { eligible: true, navigationTarget: 'tools' },
     name: '자주 쓰는 도구',
     icon: '🛠️',
     description: '자주 사용하는 쌤도구를 바로 실행합니다',
@@ -358,6 +383,7 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
   // ─── 즐겨찾기 카테고리 ───
   {
     id: 'bookmarks',
+    sidePin: { eligible: true, navigationTarget: 'bookmarks' },
     name: '즐겨찾기',
     icon: '⭐',
     description: '자주 사용하는 사이트 바로가기',

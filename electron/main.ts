@@ -2903,6 +2903,12 @@ function registerIpcHandlers(): void {
     if (widgetWindow && !widgetWindow.isDestroyed()) {
       widgetWindow.close();
     }
+
+    // 옆핀에서 온 이동이면 창 모드도 되돌린다.
+    // 그러지 않으면 메인 창이 떠 있는데 손잡이도 그대로 남아, 둘이 동시에 떠 있게 된다.
+    if (currentWindowMode === 'sidePin') {
+      void executeWindowTransition('main');
+    }
   });
 
   // window:setWidgetLayout — 레이아웃 모드에 따라 위젯 창 크기 변경

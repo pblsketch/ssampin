@@ -11,9 +11,6 @@
 import type { Memo } from '@domain/entities/Memo';
 import type { MemoColor } from '@domain/valueObjects/MemoColor';
 
-/** 옆핀 메모 목록에 기본으로 보여줄 개수 */
-export const SIDE_PIN_MEMO_LIMIT = 5;
-
 /** 제목처럼 쓰는 첫 줄의 최대 글자 수 */
 export const SIDE_PIN_MEMO_LABEL_MAX = 40;
 
@@ -65,11 +62,18 @@ export function deriveSidePinMemoPreview(content: string): string {
 }
 
 /**
- * 보관하지 않은 메모를 최근 수정순으로 골라 옆핀 표시용 목록을 만든다.
+ * 보관하지 않은 메모를 최근 수정순으로 옆핀 표시용 목록으로 만든다.
+ *
+ * **개수를 자르지 않는다.** 처음에는 5개만 보여주고 나머지는 메인 쌤핀으로 넘겼는데,
+ * 그러면 옆핀 안에서 일을 끝낼 수 없다 — 메모 하나 찾으려고 매번 본체를 열어야 하면
+ * "잠깐 확인하고 닫는다"는 목적이 무너진다. 화면에서 위아래로 훑게 한다.
+ * (2026-08-14 제품 결정 — 기획서 §4의 "최대 5개"를 대체한다)
+ *
+ * `limit`은 시험용으로만 남겨 둔다.
  */
 export function selectSidePinMemos(input: SelectSidePinMemosInput): readonly SidePinMemoListItem[] {
-  const limit = input.limit ?? SIDE_PIN_MEMO_LIMIT;
-  if (limit <= 0) return [];
+  const limit = input.limit;
+  if (limit !== undefined && limit <= 0) return [];
 
   const active = input.memos.filter((memo) => !memo.archived);
   // 원본 배열을 건드리지 않도록 복사한 뒤 정렬한다.
@@ -80,7 +84,9 @@ export function selectSidePinMemos(input: SelectSidePinMemosInput): readonly Sid
     return a.updatedAt < b.updatedAt ? 1 : -1;
   });
 
-  return sorted.slice(0, limit).map((memo) => ({
+  const shown = limit === undefined ? sorted : sorted.slice(0, limit);
+
+  return shown.map((memo) => ({
     id: memo.id,
     label: input.locked ? '' : deriveSidePinMemoLabel(memo.content),
     preview: input.locked ? '' : deriveSidePinMemoPreview(memo.content),

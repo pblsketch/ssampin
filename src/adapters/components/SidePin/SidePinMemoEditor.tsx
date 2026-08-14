@@ -68,7 +68,7 @@ export function SidePinMemoEditor({
           type="button"
           onClick={onBack}
           aria-label="메모 목록으로"
-          className={`flex h-7 items-center gap-1 rounded-lg px-1.5 text-caption font-medium text-sp-muted transition-colors duration-sp-quick hover:bg-sp-card hover:text-sp-text ${SIDE_PIN_MEMO_FOCUS}`}
+          className={`flex h-7 items-center gap-1 rounded-lg px-1.5 text-caption font-medium text-sp-muted transition-colors duration-sp-quick hover:bg-sp-surface hover:text-sp-text ${SIDE_PIN_MEMO_FOCUS}`}
         >
           <span aria-hidden className="material-symbols-outlined text-icon-sm leading-none">
             arrow_back
@@ -104,7 +104,7 @@ export function SidePinMemoEditor({
           type="button"
           onClick={onAskDelete}
           aria-label="메모 삭제"
-          className={`ml-1 flex h-7 w-7 items-center justify-center rounded-lg text-sp-muted transition-colors duration-sp-quick hover:bg-sp-card hover:text-sp-text ${SIDE_PIN_MEMO_FOCUS}`}
+          className={`ml-1 flex h-7 w-7 items-center justify-center rounded-lg text-sp-muted transition-colors duration-sp-quick hover:bg-sp-surface hover:text-sp-text ${SIDE_PIN_MEMO_FOCUS}`}
         >
           <span aria-hidden className="material-symbols-outlined text-icon-sm leading-none">
             delete
@@ -136,7 +136,7 @@ export function SidePinMemoEditor({
           <button
             type="button"
             onClick={onCancelDelete}
-            className={`rounded-lg px-2 py-1 text-caption font-medium text-sp-muted transition-colors duration-sp-quick hover:bg-sp-card hover:text-sp-text ${SIDE_PIN_MEMO_FOCUS}`}
+            className={`rounded-lg px-2 py-1 text-caption font-medium text-sp-muted transition-colors duration-sp-quick hover:bg-sp-surface hover:text-sp-text ${SIDE_PIN_MEMO_FOCUS}`}
           >
             취소
           </button>
