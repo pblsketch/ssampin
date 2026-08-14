@@ -239,7 +239,11 @@ export const PRESET_THEMES: readonly DashboardTheme[] = [
       card: '#ffffff',
       border: '#e6e6ea',
       accent: '#1c1c1e',
-      highlight: '#b91c1c',
+      // highlight 는 레퍼런스의 빨강이 아니라 앰버다. 레퍼런스에서 빨강은 `실패·막힘`
+      // 상태용인데, 쌤핀에서 이 토큰이 실제로 칠하는 자리는 시간표의 "지금 이 교시"라
+      // 의미가 다르다 — 화면에서 "지금"이 아니라 "문제 생김"으로 읽혔다.
+      // 기존 11개 프리셋 중 9개가 앰버·금색 계열이라 그쪽에 맞춘다.
+      highlight: '#b45309',
       text: '#17171a',
       muted: '#6e6e73',
     },
@@ -262,7 +266,9 @@ export const PRESET_THEMES: readonly DashboardTheme[] = [
       card: '#161618',
       border: '#2a2a2e',
       accent: '#fafafa',
-      highlight: '#f87171',
+      // 라이트와 같은 이유로 앰버. 값은 네이비·포레스트·선셋과 동일해 어두운 테마끼리
+      // "지금"의 색이 일관된다.
+      highlight: '#fbbf24',
       text: '#ededf0',
       muted: '#8e8e93',
     },
