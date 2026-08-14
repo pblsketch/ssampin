@@ -178,6 +178,11 @@ RLS 는 행 단위라 열을 못 가리지만 GRANT 는 가린다 — 훨씬 작
 - `consultation_bookings` DELETE — SELECT 권한과 별개
 
 4. **남음**: 자동 업데이트가 충분히 퍼진 뒤 테이블 SELECT 권한 회수
+   - ⚠️ **4단계가 끝나면 방침 문구를 되돌릴 것.** 제14조 "접근 통제"는 원래
+     "권한 없는 요청이 다른 사람의 자료를 조회할 수 없도록 차단합니다"라고 적혀 있었는데,
+     `consultation_bookings`·`survey_responses` 가 아직 `USING (TRUE)` 라 **사실이 아니어서**
+     2026-08-14 에 실제 있는 보호만 적도록 낮췄다. 권한을 회수하면 그때 다시 단정할 수 있다.
+     같은 문장이 `docs/edzip/학운위-심의자료.md`·`에듀집-등록-초안.md` 에도 있으니 함께 볼 것.
    - 회수 대상: `consultation_bookings`·`survey_responses` 의 `FOR SELECT USING (TRUE)`
    - 선행: 데스크톱 릴리즈 배포 + 어느 정도 업데이트 확산
    - 구버전은 401 을 받고 "최신 버전으로 업데이트해 주세요" 안내가 뜬다(1단계에서 준비)

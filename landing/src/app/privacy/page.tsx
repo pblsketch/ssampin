@@ -573,8 +573,10 @@ const koContent = {
               예약의 연락처·메모는 <strong>사용자 단말에서 암호화한 뒤</strong> 전송합니다.
             </li>
             <li>
-              <strong>접근 통제</strong> — 클라우드 데이터에는 행 수준 접근 제어(RLS)를 적용해, 권한
-              없는 요청이 다른 사람의 자료를 조회할 수 없도록 차단합니다.
+              <strong>접근 통제</strong> — 클라우드 자료에는 행 수준 접근 제어(RLS)와{' '}
+              <strong>컬럼 단위 권한</strong>을 적용합니다. 교사용 관리 키와 설문 PIN 해시는 공개
+              요청으로 조회할 수 없고, 서명 이미지 보관함은 목록 조회를 차단합니다. 앱의 예약·응답
+              조회는 <strong>해당 일정·설문의 관리 키를 확인하는 경로로만</strong> 동작합니다.
             </li>
             <li>
               <strong>식별정보 최소화</strong> — 전자 서명의 접속 IP와 기기정보(User-Agent)는 원문이
@@ -1283,8 +1285,12 @@ const enContent = {
               <strong>encrypted on your device before transmission</strong>.
             </li>
             <li>
-              <strong>Access control</strong> — row-level security (RLS) is applied to cloud data so
-              that unauthorized requests cannot read another person&apos;s records.
+              <strong>Access control</strong> — cloud data is protected by row-level security (RLS)
+              and <strong>column-level privileges</strong>. Teacher admin keys and survey PIN hashes
+              cannot be read by public requests, and listing of the signature-image bucket is
+              blocked. The app reads bookings and survey responses{' '}
+              <strong>only through a path that verifies the admin key</strong> of that schedule or
+              survey.
             </li>
             <li>
               <strong>Minimizing identifiers</strong> — the access IP and device information
