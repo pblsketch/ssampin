@@ -383,6 +383,8 @@ html.sp-glass-on [data-sp-glass-surface] {
   background-color: var(--sp-glass-surface, var(--sp-surface));
   backdrop-filter: blur(var(--sp-glass-blur, 0px)) saturate(140%);
   -webkit-backdrop-filter: blur(var(--sp-glass-blur, 0px)) saturate(140%);
+  /* 불투명 테두리는 유리 위에서 판을 잘라 놓은 것처럼 보인다. 얇은 빛줄기로 바꾼다. */
+  border-color: color-mix(in srgb, var(--sp-text) 10%, transparent);
 }
 html.sp-glass-slow [data-sp-glass-surface] {
   backdrop-filter: none;

@@ -81,10 +81,15 @@ export function useGlassSurface(context: GlassContext): void {
     }
 
     /*
-      왼쪽 패널처럼 `bg-sp-surface` 를 쓰는 뼈대용 면. 카드보다 조금 더 진하게 둔다 —
-      늘 보이는 뼈대라 내용이 훤히 비치면 어지럽다. 1 을 넘지 않게 자른다.
+      왼쪽 패널처럼 `bg-sp-surface` 를 쓰는 뼈대용 면.
+
+      처음에는 카드보다 1.4배 진하게 뒀다 — "늘 보이는 뼈대라 내용이 훤히 비치면 어지럽다"는
+      생각이었는데, 실제로 보니 **사이드바만 혼자 하얗게 떠 보였다**(2026-08-14 지적).
+      유리에서 사이드바는 카드보다 **뒤에 있는 면**이라, 더 진하면 층 순서가 뒤집혀 보인다.
+
+      카드와 같은 알파를 쓴다. 같은 재질로 읽히고, 카드가 그 위에 얹힌 것처럼 보인다.
     */
-    const surfaceAlpha = Math.min(1, surface.cardAlpha * 1.4);
+    const surfaceAlpha = surface.cardAlpha;
     root.style.setProperty(
       '--sp-glass-surface',
       surfaceAlpha >= 1
