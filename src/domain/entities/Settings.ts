@@ -179,6 +179,16 @@ export interface WidgetSettings {
   readonly transparent: boolean;
   readonly opacity: number;
   readonly cardOpacity: number;
+  /**
+   * 흐림 세기 (px, 기본 0 = 흐리지 않음).
+   *
+   * `opacity`·`cardOpacity` 와 한 벌로 쓰이는 **공용 값**이다. 위젯·옆핀·대시보드가
+   * 같은 값을 쓰고, 자리별 환산은 `domain/rules/glassSurface.ts` 가 맡는다.
+   *
+   * optional 인 이유는 기존 사용자 설정 파일에 이 항목이 없기 때문이다. 없으면 0으로
+   * 읽혀 지금과 똑같이 동작한다.
+   */
+  readonly blur?: number;
   readonly alwaysOnTop: boolean;
   readonly closeToWidget: boolean; // keep for backward compat
   /**

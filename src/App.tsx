@@ -122,6 +122,7 @@ import { reloadStores } from '@adapters/hooks/useDriveSync';
 import { SYNC_REGISTRY } from '@usecases/sync/syncRegistry';
 import { validateShareFile } from '@domain/rules/shareRules';
 import { useThemeApplier } from '@adapters/hooks/useThemeApplier';
+import { useGlassSurface } from '@adapters/hooks/useGlassSurface';
 import { useFontApplier } from '@adapters/hooks/useFontApplier';
 import { useDesktopModeFallback } from '@adapters/hooks/useDesktopModeFallback';
 import { useNativeDesktopAvWarning } from '@adapters/hooks/useNativeDesktopAvWarning';
@@ -1198,6 +1199,11 @@ function MainApp() {
 
   // 테마 CSS 변수 주입 (useLayoutEffect)
   useThemeApplier();
+
+  // 투명도·흐림 적용. 반드시 useThemeApplier 다음이어야 한다 — 그쪽이 정한
+  // `--sp-card-base` 위에 투명도를 얹기 때문이다.
+  // 기본값(카드 불투명도 1)에서는 아무것도 바뀌지 않는다.
+  useGlassSurface('dashboard');
 
   // 글꼴 종류 적용
   useFontApplier(settings.fontFamily ?? 'noto-sans', settings.customFont);
