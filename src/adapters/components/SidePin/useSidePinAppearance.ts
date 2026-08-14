@@ -8,15 +8,16 @@
  * 옆핀만 그대로"가 된다. (메모 목록·위젯 목록과 같은 이유)
  */
 import { useEffect } from 'react';
+import type { WidgetSettings } from '@domain/entities/Settings';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useThemeApplier } from '@adapters/hooks/useThemeApplier';
 import { resolveGlassSurface } from '@domain/rules/glassSurface';
 
-/** 옆핀에서 조절할 수 있는 값. 저장되는 곳은 위젯·대시보드와 **같은 공용 항목**이다. */
-export interface SidePinAppearancePatch {
-  readonly opacity?: number;
-  readonly cardOpacity?: number;
-}
+/**
+ * 옆핀에서 조절할 수 있는 값. 저장되는 곳은 위젯·대시보드와 **같은 공용 항목**이다.
+ * 유리 3단계(흐림·배경)도 여기서 바꿀 수 있어야 해서 `WidgetSettings` 의 일부를 그대로 받는다.
+ */
+export type SidePinAppearancePatch = Partial<WidgetSettings>;
 
 /** 설정이 담긴 데이터 파일 이름 — 이 파일이 바뀔 때만 다시 읽는다 */
 const SETTINGS_DATA_FILE = 'settings';

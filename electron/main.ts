@@ -3043,6 +3043,46 @@ function registerIpcHandlers(): void {
     }
   });
 
+  /**
+   * window:setBackdropMaterial — 윈도우 11 내장 유리(Acrylic)를 켜고 끈다.
+   *
+   * 창 만들 때가 아니라 실행 중에 바꾼다. 설정에서 껐다 켤 수 있어야 하는데, 창 생성
+   * 옵션으로만 두면 앱을 다시 켜야 반영되기 때문이다.
+   *
+   * 켜면 OS 가 창 뒤의 바탕화면을 흐려서 창 배경으로 합성해 준다. 그래서 앱이 배경
+   * 이미지를 고르고 저장하고 동기화할 필요가 사라진다.
+   *
+   * 배경색을 투명으로 같이 바꿔야 한다 — 불투명한 배경색이 남아 있으면 재질이 그대로
+   * 가려져 "켰는데 아무 변화가 없다"가 된다.
+   *
+   * 윈도우 11 22H2 미만·윈도우 10·macOS 에서는 조용히 실패한다. 그래서 결과를 돌려주고,
+   * 부르는 쪽이 앱이 만드는 배경으로 되돌아갈 수 있게 한다.
+   */
+  ipcMain.handle(
+    'window:setBackdropMaterial',
+    async (_event, enabled: boolean): Promise<{ ok: boolean; reason?: string }> => {
+      if (!mainWindow || mainWindow.isDestroyed()) return { ok: false, reason: 'no-window' };
+      if (process.platform !== 'win32') return { ok: false, reason: 'not-windows' };
+
+      const win = mainWindow as BrowserWindow & {
+        setBackgroundMaterial?: (material: string) => void;
+      };
+      if (typeof win.setBackgroundMaterial !== 'function') {
+        return { ok: false, reason: 'unsupported-electron' };
+      }
+
+      try {
+        // 순서가 중요하다. 배경색을 먼저 투명으로 만들고 재질을 건다.
+        win.setBackgroundColor(enabled ? '#00000000' : '#0a0e17');
+        win.setBackgroundMaterial(enabled ? 'acrylic' : 'none');
+        return { ok: true };
+      } catch (error) {
+        // 구형 윈도우에서 던지는 경우가 있어 앱이 죽지 않게 감싼다.
+        return { ok: false, reason: error instanceof Error ? error.message : String(error) };
+      }
+    },
+  );
+
   // window:applyWidgetSettings — 설정 페이지에서 위젯 설정 변경 시 실시간 적용
   ipcMain.handle(
     'window:applyWidgetSettings',

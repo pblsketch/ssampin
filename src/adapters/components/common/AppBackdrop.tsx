@@ -15,7 +15,7 @@
  * 색은 테마 토큰에서 파생한다. 어떤 테마를 쓰든 그 테마의 색으로 배경이 만들어지므로
  * 따로 이미지를 담아둘 필요가 없고, 용량도 늘지 않는다.
  */
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 
 /** 흐림이 실제로 뭉갤 미세한 결. 이것이 없으면 흐림 설정이 눈에 보이지 않는다. */
@@ -24,15 +24,45 @@ const GRAIN_SVG =
 
 export function AppBackdrop() {
   const backdrop = useSettingsStore((s) => s.settings.widget?.backdrop);
-  const active = backdrop === 'generated';
+  const wantsOs = backdrop === 'os';
+  const active = backdrop === 'generated' || wantsOs;
+
+  /**
+   * OS 재질이 실제로 걸렸는가. `null` 은 아직 확인 전.
+   *
+   * 윈도우 11 22H2 미만·윈도우 10·macOS·브라우저에서는 걸리지 않는다. 그때는 앱이 만드는
+   * 배경으로 되돌아간다 — "켰는데 아무 변화가 없다"를 막기 위해서다.
+   */
+  const [osApplied, setOsApplied] = useState<boolean | null>(null);
 
   useEffect(() => {
-    // 앱 껍데기의 배경색을 비워야 이 레이어가 보인다. CSS 쪽 규칙과 짝을 이룬다.
+    const api = window.electronAPI?.setBackdropMaterial;
+    if (!api) {
+      setOsApplied(false);
+      return;
+    }
+    let cancelled = false;
+    void api(wantsOs)
+      .then((r) => {
+        if (!cancelled) setOsApplied(r.ok);
+      })
+      .catch(() => {
+        if (!cancelled) setOsApplied(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [wantsOs]);
+
+  useEffect(() => {
+    // 앱 껍데기의 배경색을 비워야 뒤가 보인다. 앱이 만든 배경이든 OS 재질이든 같다.
     document.documentElement.classList.toggle('sp-backdrop-on', active);
     return () => document.documentElement.classList.remove('sp-backdrop-on');
   }, [active]);
 
+  // OS 재질이 걸렸으면 앱이 배경을 그리지 않는다. 두 겹을 깔면 OS 가 만든 유리가 가려진다.
   if (!active) return null;
+  if (wantsOs && osApplied !== false) return null;
 
   return (
     <div aria-hidden className="fixed inset-0 -z-10 pointer-events-none">

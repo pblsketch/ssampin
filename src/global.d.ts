@@ -188,6 +188,8 @@ interface ElectronAPI {
   requestModalInput?: () => Promise<void>;
   releaseModalInput?: () => Promise<void>;
   applyWidgetSettings: (widget: { opacity: number; desktopMode: string }) => Promise<void>;
+  /** 윈도우 11 내장 유리(Acrylic) 켜기/끄기. 안 되는 환경에서는 ok:false 로 돌아온다. */
+  setBackdropMaterial?: (enabled: boolean) => Promise<{ ok: boolean; reason?: string }>;
   /**
    * Phase 7-C (native-desktop) — widget 헤더 드래그 영역 등록.
    * mount/resize 시 호출. 빈 배열이면 drag 비활성화.

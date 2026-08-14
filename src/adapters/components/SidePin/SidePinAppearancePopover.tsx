@@ -9,6 +9,8 @@
  * 값은 곧바로 저장한다. 옆핀에는 "확인" 버튼을 둘 자리가 없고, 슬라이더를 움직이는
  * 동안 결과가 바로 보이는 편이 맞추기도 쉽다.
  */
+import type { WidgetSettings } from '@domain/entities/Settings';
+import { GlassControls } from '@adapters/components/shared/GlassControls';
 import { SIDE_PIN_MEMO_FOCUS } from './SidePinMemoList';
 
 export interface SidePinAppearancePopoverProps {
@@ -17,6 +19,12 @@ export interface SidePinAppearancePopoverProps {
   readonly onOpacityChange: (value: number) => void;
   readonly onCardOpacityChange: (value: number) => void;
   readonly onClose: () => void;
+  /**
+   * 유리 효과 3단계를 함께 보여주기 위한 값. 없으면 막대 두 개만 나온다.
+   * 옆핀은 다른 창이라 설정을 스스로 들고 있어야 해서 밖에서 넣어 준다.
+   */
+  readonly widget?: WidgetSettings;
+  readonly onPatch?: (patch: Partial<WidgetSettings>) => void;
 }
 
 export function SidePinAppearancePopover({
@@ -25,6 +33,8 @@ export function SidePinAppearancePopover({
   onOpacityChange,
   onCardOpacityChange,
   onClose,
+  widget,
+  onPatch,
 }: SidePinAppearancePopoverProps) {
   return (
     <section
@@ -53,6 +63,17 @@ export function SidePinAppearancePopover({
 
       <OpacitySlider label="배경 투명도" value={opacity} onChange={onOpacityChange} />
       <OpacitySlider label="카드 투명도" value={cardOpacity} onChange={onCardOpacityChange} />
+
+      {/*
+        위 두 막대를 한 번에 정하는 3단계. 옆핀에서 바꿔도 위젯 모드·대시보드가 같이
+        따라온다 — 투명도 설정은 하나로 합쳐져 있다.
+        조절 자리가 네 곳이라 같은 것을 네 번 만들지 않도록 공용 부품을 쓴다.
+      */}
+      {widget && onPatch && (
+        <div className="mt-2 border-t border-sp-border pt-2">
+          <GlassControls widget={widget} onPatch={onPatch} compact />
+        </div>
+      )}
     </section>
   );
 }

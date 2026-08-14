@@ -6,7 +6,7 @@ import { isWindows } from '@adapters/hooks/shortcut/keyNormalize';
 import { useFirstRunModeCoachTour } from '@adapters/hooks/useFirstRunModeCoachTour';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { PIN_NAME } from '@adapters/components/Icon/pinName';
-import { GLASS_PRESETS, matchGlassPreset } from '@domain/rules/glassSurface';
+import { GlassControls } from '../../shared/GlassControls';
 
 interface Props {
   draft: Settings;
@@ -54,19 +54,6 @@ export function WidgetTab({ draft, patch }: Props) {
     },
     [draft.widget, patch],
   );
-
-  // 지금 값이 어느 단계인지. 막대로 직접 조절한 상태면 null 이라 "직접 조절"로 표시된다 —
-  // 미세 조정한 사용자를 억지로 3단계 중 하나로 밀어 넣지 않는다.
-  const currentGlassLevel = matchGlassPreset({
-    bgOpacity: draft.widget.opacity ?? 1,
-    cardOpacity: draft.widget.cardOpacity ?? 1,
-    blur: draft.widget.blur ?? 0,
-  });
-
-  // 어두운 테마에서만 유리 설정을 보여준다. `theme-dark` 는 useThemeApplier 가 테마
-  // 배경색의 밝기를 보고 붙이는 클래스라, "어두운 테마인가"의 단일 기준이다.
-  const isDarkTheme =
-    typeof document !== 'undefined' && document.documentElement.classList.contains('theme-dark');
 
   const [showMemory, setShowMemory] = useState(false);
   const metrics = useMemoryMetrics(showMemory);
@@ -260,61 +247,10 @@ export function WidgetTab({ draft, patch }: Props) {
 
         {/*
           유리 효과 — 투명도·흐림·배경을 한 번에 정하는 3단계.
-          아래 막대들은 세부 조정용으로 남긴다. 대부분의 사용자는 여기서 끝나고,
-          더 만지고 싶은 사람만 막대를 쓴다.
-
-          밝은 테마에서는 보여주지 않는다. 밝은 테마는 카드가 거의 흰색이라 뒤가 밝으면
-          "흰색 위에 흰색"이 되어 아무리 투명도를 낮춰도 유리로 보이지 않는다(실측).
-          되지도 않는 설정을 켜게 두면 "켰는데 왜 그대로죠?" 가 된다.
+          조절할 수 있는 자리가 네 곳(설정 디스플레이·설정 위젯·위젯 모드 스타일 패널·옆핀)이라
+          같은 것을 네 번 만들지 않도록 공용 부품으로 뺐다.
         */}
-        {isDarkTheme && (
-          <div className="space-y-3 pt-4 border-t border-sp-border">
-            <div className="flex justify-between">
-              <span className="text-sm font-medium text-sp-text">유리 효과</span>
-              <span className="text-sm font-bold text-sp-accent">
-                {currentGlassLevel === 'none'
-                  ? '없음'
-                  : currentGlassLevel === 'soft'
-                    ? '약하게'
-                    : currentGlassLevel === 'strong'
-                      ? '강하게'
-                      : '직접 조절'}
-              </span>
-            </div>
-            <p className="text-xs text-sp-muted">
-              앱 뒤에 은은한 배경을 깔고 카드가 비쳐 보이게 합니다. 시간표·출결처럼 빽빽한 표는 읽기
-              편하도록 그대로 둡니다.
-            </p>
-            <div className="flex gap-2">
-              {(
-                [
-                  { level: 'none', label: '없음' },
-                  { level: 'soft', label: '약하게' },
-                  { level: 'strong', label: '강하게' },
-                ] as const
-              ).map(({ level, label }) => (
-                <button
-                  key={level}
-                  onClick={() =>
-                    patchWidget({
-                      opacity: GLASS_PRESETS[level].bgOpacity,
-                      cardOpacity: GLASS_PRESETS[level].cardOpacity,
-                      blur: GLASS_PRESETS[level].blur,
-                      backdrop: level === 'none' ? 'none' : 'generated',
-                    })
-                  }
-                  className={`flex-1 rounded-lg border px-3 py-2 text-sm transition-colors ${
-                    currentGlassLevel === level
-                      ? 'bg-sp-accent text-sp-accent-fg border-sp-accent font-medium'
-                      : 'border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
+        <GlassControls widget={draft.widget} onPatch={patchWidget} />
 
         <div className="space-y-3 pt-4 border-t border-sp-border">
           <div className="flex justify-between">

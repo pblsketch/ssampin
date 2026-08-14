@@ -22,6 +22,7 @@ import { SidePinMemoZone } from './SidePinMemoZone';
 import { SidePinWidgetZone } from './SidePinWidgetZone';
 import { WIDGET_DEFINITIONS } from '@widgets/registry';
 import { useSidePinWidgetIds } from './useSidePinWidgetIds';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useSidePinAppearance, useSaveSidePinAppearance } from './useSidePinAppearance';
 import { SidePinAppearancePopover } from './SidePinAppearancePopover';
 
@@ -94,6 +95,8 @@ export function SidePinApp() {
   const widgetIds = useSidePinWidgetIds();
   // 주제 색과 배경 투명도. 이게 없으면 옆핀만 늘 밝은 색으로 뜬다.
   const appearance = useSidePinAppearance();
+  // 유리 3단계는 공용 설정 전체를 보고 판단한다(지금 어느 단계인지·바탕화면 비치기 여부).
+  const widgetSettings = useSettingsStore((s) => s.settings.widget);
   const [appearanceOpen, setAppearanceOpen] = useState(false);
   const saveAppearance = useSaveSidePinAppearance();
 
@@ -195,6 +198,8 @@ export function SidePinApp() {
               onOpacityChange={(value) => void saveAppearance({ opacity: value })}
               onCardOpacityChange={(value) => void saveAppearance({ cardOpacity: value })}
               onClose={() => setAppearanceOpen(false)}
+              widget={widgetSettings}
+              onPatch={(p) => void saveAppearance(p)}
             />
           ) : undefined
         }

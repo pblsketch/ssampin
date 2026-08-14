@@ -21,6 +21,7 @@ import {
   ColorSwatchRow,
 } from '@adapters/components/shared/StyleControls';
 import { BackgroundImageSection } from '@adapters/components/shared/BackgroundImageSection';
+import { GlassControls } from '@adapters/components/shared/GlassControls';
 
 type PanelTab = 'widgets' | 'style';
 
@@ -270,6 +271,12 @@ function StyleTab() {
           onChange={(v) =>
             void updateSettings({ widget: { ...settings.widget, cardOpacity: v / 100 } })
           }
+        />
+        {/* 위 두 막대를 한 번에 정하는 3단계. 조절 자리가 네 곳이라 공용 부품으로 뺐다. */}
+        <GlassControls
+          widget={settings.widget}
+          compact
+          onPatch={(p) => void updateSettings({ widget: { ...settings.widget, ...p } })}
         />
       </StyleSection>
 

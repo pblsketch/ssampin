@@ -196,8 +196,11 @@ export interface WidgetSettings {
    * - `none`      : 지금 그대로. 배경 레이어를 아예 만들지 않는다.
    * - `generated` : 테마 색에서 만든 배경. 이미지 파일이 없어 용량이 늘지 않고,
    *                 밝기를 앱이 정하므로 글자가 안전하다.
+   * - `os`        : 윈도우 11 내장 유리(Acrylic). OS 가 바탕화면을 흐려 창 배경으로
+   *                 합성해 준다. 앱이 이미지를 다룰 필요가 없다. 안 되는 환경에서는
+   *                 `generated` 로 자동으로 되돌아간다.
    */
-  readonly backdrop?: 'none' | 'generated';
+  readonly backdrop?: 'none' | 'generated' | 'os';
   readonly alwaysOnTop: boolean;
   readonly closeToWidget: boolean; // keep for backward compat
   /**

@@ -125,6 +125,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   releaseModalInput: (): Promise<void> => ipcRenderer.invoke('widget:release-modal-input'),
   applyWidgetSettings: (widget: { opacity: number; desktopMode: string }): Promise<void> =>
     ipcRenderer.invoke('window:applyWidgetSettings', widget),
+  /** 윈도우 11 내장 유리(Acrylic) 켜기/끄기. 안 되는 환경에서는 ok:false 로 돌아온다. */
+  setBackdropMaterial: (enabled: boolean): Promise<{ ok: boolean; reason?: string }> =>
+    ipcRenderer.invoke('window:setBackdropMaterial', enabled),
   /**
    * Phase 7-C (native-desktop) — widget 헤더(`-webkit-app-region: drag`) 영역의 client DIP rect를
    * main에 등록한다. WH_MOUSE_LL hook이 LBUTTONDOWN을 헤더 안에서 받으면 widget을 마우스 따라
