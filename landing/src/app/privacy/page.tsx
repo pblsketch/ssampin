@@ -216,9 +216,11 @@ const koContent = {
             <li>
               쌤핀은 Google Calendar·Drive·Tasks API와 직접 통신합니다. 또한 상담 예약·과제
               수합·전자 서명·설문 등 <strong>온라인 협업 기능</strong>을 사용할 때는, 그 기능 제공에
-              필요한 범위에서 일부 데이터가 클라우드 백엔드(Supabase)로 전송·저장됩니다. 이는 제3자
-              제공이 아니라 기능 제공을 위한 <strong>처리위탁</strong>이며, 자세한 내용은 제11조에
-              따릅니다. 그 외 어떤 외부 서비스에도 데이터를 전달하지 않습니다.
+              필요한 범위에서 일부 데이터가 클라우드 백엔드(Supabase)로 전송·저장됩니다. 또한 앱 내
+              AI 도우미에 질문하면 그 질문과 직전 대화가 답변 생성을 위해 주식회사 업스테이지·Google
+              LLC로 전송됩니다. 이는 제3자 제공이 아니라 기능 제공을 위한 <strong>처리위탁</strong>
+              이며, 자세한 내용은 제11조에 따릅니다. 제11조에 적힌 곳 외에 어떤 외부 서비스에도
+              데이터를 전달하지 않습니다.
             </li>
             <li>사용자 데이터를 광고주, 데이터 브로커 또는 정보 재판매자에게 이전하지 않습니다.</li>
             <li>
@@ -873,9 +875,12 @@ const enContent = {
               SsamPin communicates directly with the Google Calendar, Drive, and Tasks APIs. In
               addition, when you use <strong>online collaboration features</strong> (consultation
               booking, assignment collection, e-signature, surveys, etc.), some data is transmitted
-              to and stored on a cloud backend (Supabase) as needed to provide those features. This
-              is a <strong>processing consignment</strong> for feature delivery, not third-party
-              provision; see Section 11 for details. No data is sent to any other external services.
+              to and stored on a cloud backend (Supabase) as needed to provide those features. In
+              addition, when you ask the in-app AI assistant a question, that question and the
+              preceding conversation are sent to Upstage Inc. and Google LLC to generate an answer.
+              This is a <strong>processing consignment</strong> for feature delivery, not
+              third-party provision; see Section 11 for details. No data is sent to external
+              services other than those listed in Section 11.
             </li>
             <li>
               We do not transfer user data to advertisers, data brokers, or information resellers.

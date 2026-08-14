@@ -287,9 +287,9 @@ const enContent = {
             </li>
             <li>
               Some features — Google integrations (Calendar, Drive backup, Tasks), consultation
-              booking, assignment collection, e-signature, surveys, etc. — operate only when you
-              explicitly use them, and are processed according to our{' '}
-              <Link href="/privacy">Privacy Policy</Link>.
+              booking, assignment collection, e-signature, surveys, the in-app AI assistant, and
+              sending feedback to the developer — operate only when you explicitly use them, and are
+              processed according to our <Link href="/privacy">Privacy Policy</Link>.
             </li>
             <li>
               The Service is currently provided free of charge, and its scope and features may
