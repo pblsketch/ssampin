@@ -54,6 +54,7 @@ import { registerBoardHandlers, endActiveBoardSessionSync } from './ipc/board';
 import { registerMultiSurveyShareHandlers } from './ipc/multiSurveyShare';
 import { registerAiBridgeHandlers } from './ipc/aiBridge';
 import { registerLiveSyncHost, type LiveSyncHost } from './ipc/aiBridgeLiveSyncHost';
+import { createSidePinElectron, type SidePinElectronHandle } from './sidePinElectron';
 import {
   registerRealtimeWallBoardHandlers,
   saveDirtyWallBoardsSync,
@@ -110,16 +111,18 @@ let isQuitting = false;
  * 데이터 동기화 브로드캐스트(data:changed), autoUpdater 알림, system:resume,
  * analytics:flush 등을 모든 콘텐츠 윈도우에 일관되게 전파하기 위한 단일 진실 원천.
  *
- * 포함: mainWindow, widgetWindow (alive 상태인 것만)
+ * 포함: mainWindow, widgetWindow, iconWindow, 옆핀 창 (alive 상태인 것만)
  * 제외: quickAddWindow, stickerPickerWindow (사용자 콘텐츠 아님 — popup utility)
  *
- * 향후 iconWindow 추가 시 이 함수에 한 줄만 추가하면 모든 브로드캐스트 사이트에 자동 반영된다.
+ * 새 콘텐츠 창을 만들면 이 함수에 한 줄만 추가하면 모든 브로드캐스트 사이트에 자동 반영된다.
  */
 function getAllAppWindows(): BrowserWindow[] {
   const windows: BrowserWindow[] = [];
   if (mainWindow && !mainWindow.isDestroyed()) windows.push(mainWindow);
   if (widgetWindow && !widgetWindow.isDestroyed()) windows.push(widgetWindow);
   if (iconWindow && !iconWindow.isDestroyed()) windows.push(iconWindow);
+  const sidePinWindow = sidePin?.getWindow();
+  if (sidePinWindow) windows.push(sidePinWindow);
   return windows;
 }
 
@@ -157,13 +160,14 @@ type WidgetDesktopMode = 'normal' | 'topmost' | 'native-desktop';
  * src/domain/entities/Settings.ts의 WidgetSettings['closeAction']와 동일하게 유지해야 한다.
  * (electron rootDir 분리로 직접 import 불가 — WidgetDesktopMode와 같은 의도적 미러링)
  *
- * - 'widget': 위젯 모드로 전환 (기본)
- * - 'icon':   아이콘 모드로 접기
- * - 'tray':   트레이로만 숨김
- * - 'quit':   앱 완전 종료
- * - 'ask':    매번 다이얼로그로 물어봄
+ * - 'widget':  위젯 모드로 전환 (기본)
+ * - 'icon':    아이콘 모드로 접기
+ * - 'sidePin': 옆핀으로 접기 (화면 오른쪽 가장자리)
+ * - 'tray':    트레이로만 숨김
+ * - 'quit':    앱 완전 종료
+ * - 'ask':     매번 다이얼로그로 물어봄
  */
-const CLOSE_ACTIONS = ['widget', 'tray', 'ask', 'icon', 'quit'] as const;
+const CLOSE_ACTIONS = ['widget', 'tray', 'ask', 'icon', 'quit', 'sidePin'] as const;
 type CloseAction = (typeof CLOSE_ACTIONS)[number];
 
 /**
@@ -1198,7 +1202,7 @@ let lastUserMode: 'main' | 'widget' = 'main';
  * 현재 활성 윈도우 모드. Win+D 폴링이 'icon' 상태에서 위젯을 잘못 복원하는 것을
  * 방지하기 위한 가드 (executeWindowTransition에서 갱신).
  */
-let currentWindowMode: 'main' | 'widget' | 'icon' = 'main';
+let currentWindowMode: 'main' | 'widget' | 'icon' | 'sidePin' = 'main';
 /**
  * 아이콘 창 확장 상태 (v2.2.7 창 구조 재설계).
  * 평소 compact(64×64, 핀만). 말풍선·팝오버·메뉴가 필요할 때만 확장한다 —
@@ -1601,8 +1605,39 @@ function fadeOutIconWindow(duration = 180): Promise<void> {
  * 3-state 윈도우 전환 단일 진입점.
  * Promise chain으로 큐잉하여 race condition 차단.
  */
-type WindowMode = 'icon' | 'widget' | 'main';
+// MIRROR of src/domain/valueObjects/WindowMode.ts — 값을 늘리면 양쪽을 함께 고친다.
+type WindowMode = 'icon' | 'widget' | 'main' | 'sidePin';
 let windowTransitionInProgress: Promise<void> = Promise.resolve();
+
+/**
+ * 옆핀 — 화면 오른쪽 가장자리에 접어 두는 모드.
+ *
+ * 처음 필요해질 때 만든다. 옆핀을 한 번도 안 쓰는 사용자에게 창·타이머 비용을
+ * 지우지 않기 위해서다.
+ */
+let sidePin: SidePinElectronHandle | null = null;
+
+function ensureSidePin(): void {
+  if (sidePin !== null) return;
+  sidePin = createSidePinElectron({
+    preloadPath: path.join(__dirname, 'preload.js'),
+    devServerUrl: process.env['VITE_DEV_SERVER_URL'],
+    appRoot: path.join(__dirname, '..'),
+    onStateChanged: (state) => {
+      // 화면은 이 상태를 그대로 그리기만 한다(스스로 판단하지 않는다).
+      const win = sidePin?.getWindow();
+      if (win && !win.isDestroyed()) {
+        win.webContents.send('sidePin:state-changed', state);
+      }
+
+      // 옆핀이 스스로 꺼졌으면(어댑터 이상 등) 메인으로 되돌린다.
+      // 그러지 않으면 아무 창도 없는 상태가 되어 사용자가 앱을 잃어버린다.
+      if (!state.enabled && currentWindowMode === 'sidePin') {
+        void executeWindowTransition('main');
+      }
+    },
+  });
+}
 
 function executeWindowTransition(target: WindowMode): Promise<void> {
   diagLog('icon', `executeWindowTransition queued target=${target}`);
@@ -1709,6 +1744,38 @@ function executeWindowTransition(target: WindowMode): Promise<void> {
         }
         break;
       }
+
+      case 'sidePin': {
+        currentWindowMode = 'sidePin';
+        lastUserMode = 'main'; // 옆핀에서 나가면 메인으로 (위젯 계열과 다른 점)
+
+        // 1) 옆핀 보장 — 손잡이가 뜬다
+        ensureSidePin();
+        sidePin?.service.enable();
+
+        // 2) 아이콘 fade-out 후 hide
+        if (iconWindow && !iconWindow.isDestroyed() && iconWindow.isVisible()) {
+          await fadeOutIconWindow(180);
+          iconWindow.hide();
+          collapseIconWindow();
+        }
+
+        // 3) 다른 창 숨김. 옆핀은 위젯·아이콘과 같은 계열의 "접어 둔 상태"라
+        //    메인 창은 보이지 않는다(2026-08-14 제품 결정).
+        if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
+          hideOrDestroyMainWindow(opts.memorySaverMode);
+        }
+        if (widgetWindow && !widgetWindow.isDestroyed() && widgetWindow.isVisible()) {
+          widgetWindow.hide();
+        }
+        break;
+      }
+    }
+
+    // 옆핀 모드가 아니면 손잡이는 떠 있으면 안 된다.
+    // 각 case마다 끄는 코드를 흩어 놓으면 새 모드를 추가할 때 반드시 빠뜨린다.
+    if (currentWindowMode !== 'sidePin') {
+      sidePin?.service.disable();
     }
   });
 
@@ -1831,6 +1898,11 @@ function createWindow(): void {
 
       if (opts.closeAction === 'icon') {
         void executeWindowTransition('icon');
+        return;
+      }
+
+      if (opts.closeAction === 'sidePin') {
+        void executeWindowTransition('sidePin');
         return;
       }
 
@@ -2504,6 +2576,8 @@ function registerIpcHandlers(): void {
       void executeWindowTransition('widget');
     } else if (action === 'icon') {
       void executeWindowTransition('icon');
+    } else if (action === 'sidePin') {
+      void executeWindowTransition('sidePin');
     } else if (action === 'quit') {
       // 완전 종료 — 트레이 '완전히 종료' / window:closeApp과 동일 경로
       isQuitting = true;
@@ -2513,6 +2587,56 @@ function registerIpcHandlers(): void {
       currentWindowMode = 'main';
       mainWindow?.hide();
     }
+  });
+
+  // ─── 옆핀 ───────────────────────────────────────────────────────
+  // 판단은 전부 main의 controller가 한다. 여기서는 화면이 보고한 것을 넘기기만 한다.
+  // 화면이 스스로 "이제 펼쳐야지"를 정하면 두 곳이 서로 다른 결론을 내게 된다.
+
+  const SIDE_PIN_REGIONS = [
+    'outside',
+    'rail-widget',
+    'rail-memo',
+    'panel-widget',
+    'panel-memo',
+  ] as const;
+  type SidePinRegion = (typeof SIDE_PIN_REGIONS)[number];
+
+  function isSidePinRegion(value: string): value is SidePinRegion {
+    return (SIDE_PIN_REGIONS as readonly string[]).includes(value);
+  }
+
+  ipcMain.on('sidePin:pointer-region', (_event, region: string) => {
+    // 알 수 없는 값은 버린다 — 화면이 보내는 값을 그대로 믿지 않는다.
+    if (!isSidePinRegion(region)) return;
+    sidePin?.service.dispatch({ type: 'pointer-region-changed', region });
+  });
+
+  ipcMain.on('sidePin:toggle-pin', (_event, zone: string) => {
+    if (zone !== 'widget' && zone !== 'memo' && zone !== 'both') return;
+    sidePin?.service.dispatch({ type: 'toggle-pin', zone });
+  });
+
+  ipcMain.on('sidePin:request-close', () => {
+    sidePin?.service.dispatch({ type: 'close-requested' });
+  });
+
+  ipcMain.on('sidePin:open-main', () => {
+    void executeWindowTransition('main');
+  });
+
+  // 화면이 "다 그렸다"고 알려오면, 지금 기다리고 있는 표시 요청과 짝지어 확정한다.
+  // 어느 요청인지 대조하는 일은 화면이 아니라 여기서 한다 — 화면에 꼬리표를 들려 보내면
+  // 그걸 되돌려 보내는 과정에서 낡은 값이 섞일 수 있다.
+  ipcMain.on('sidePin:painted', () => {
+    const state = sidePin?.service.getState();
+    const pending = state?.pendingHostOperations.find((op) => op.kind === 'show-panel');
+    if (!pending) return;
+    sidePin?.service.dispatch({
+      type: 'panel-painted',
+      operationId: pending.operationId,
+      requestedRevision: pending.requestedRevision,
+    });
   });
 
   // data:read — userData/data/{filename}.json 읽기 (손상 감지 + 백업 복구)

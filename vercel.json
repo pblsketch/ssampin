@@ -1,4 +1,8 @@
 {
+  "redirects": [
+    { "source": "/privacy", "destination": "https://www.ssampin.com/privacy", "permanent": false },
+    { "source": "/terms", "destination": "https://www.ssampin.com/terms", "permanent": false }
+  ],
   "rewrites": [
     { "source": "/neis-api/:path*", "destination": "https://open.neis.go.kr/:path*" },
     { "source": "/weather-api/:path*", "destination": "https://api.weatherapi.com/:path*" },

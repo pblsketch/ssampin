@@ -1,6 +1,12 @@
 import { useState, useMemo, useEffect } from 'react';
-import type { TimetableOverride, TimetableOverrideKind, TimetableOverrideScope } from '@domain/entities/Timetable';
+import type {
+  TimetableOverride,
+  TimetableOverrideKind,
+  TimetableOverrideScope,
+} from '@domain/entities/Timetable';
 import { Modal } from '@adapters/components/common/Modal';
+import { resolvePeriodLabel } from '@domain/rules/periodLabel';
+import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 
 const REASON_PRESETS = ['수업 교환', '자습', '시험', '행사', '보충수업', '출장', '기타'] as const;
 
@@ -23,6 +29,8 @@ interface TempChangeModalBaseProps {
   currentSubject: string;
   currentClassroom?: string;
   onClose: () => void;
+  /** 교시 이름 표시용 — 교사가 붙인 이름("창체")이 있으면 번호 대신 그것으로 보인다. */
+  periodTimes?: readonly PeriodTime[];
 }
 
 /** create 모드에서 swap일 때 호출. 두 개의 변경을 원자적으로 저장할지 여부는 호출측 결정. */
@@ -65,10 +73,7 @@ interface TempChangeModalEditProps extends TempChangeModalBaseProps {
   maxPeriods?: number;
   resolveBaseSubject?: (date: string, period: number) => string;
   resolveBaseClassroom?: (date: string, period: number) => string;
-  onSaveEdit: (
-    oldId: string,
-    input: SingleOverrideInput,
-  ) => void;
+  onSaveEdit: (oldId: string, input: SingleOverrideInput) => void;
 }
 
 export type TempChangeModalProps = TempChangeModalCreateProps | TempChangeModalEditProps;
@@ -81,7 +86,8 @@ export function TempChangeModal(props: TempChangeModalProps) {
   const isEdit = props.mode === 'edit';
   const isCreate = !isEdit;
   // create에서 slotEditable 또는 edit에서는 언제나 슬롯 편집 가능
-  const slotEditable = isEdit || (isCreate && (props as TempChangeModalCreateProps).slotEditable === true);
+  const slotEditable =
+    isEdit || (isCreate && (props as TempChangeModalCreateProps).slotEditable === true);
 
   // 변동 유형 (create 전용)
   const [kind, setKind] = useState<TimetableOverrideKind>(
@@ -112,9 +118,7 @@ export function TempChangeModal(props: TempChangeModalProps) {
     ? (props as TempChangeModalEditProps).initialOverride
     : {};
 
-  const [subject, setSubject] = useState(
-    isEdit ? (initial.subject ?? '') : props.currentSubject,
-  );
+  const [subject, setSubject] = useState(isEdit ? (initial.subject ?? '') : props.currentSubject);
   const [classroom, setClassroom] = useState(
     isEdit ? (initial.classroom ?? '') : (props.currentClassroom ?? ''),
   );
@@ -123,8 +127,8 @@ export function TempChangeModal(props: TempChangeModalProps) {
     isEdit ? (initial.substituteTeacher ?? '') : '',
   );
 
-  const createProps = (isCreate ? (props as TempChangeModalCreateProps) : null);
-  const editProps = (isEdit ? (props as TempChangeModalEditProps) : null);
+  const createProps = isCreate ? (props as TempChangeModalCreateProps) : null;
+  const editProps = isEdit ? (props as TempChangeModalEditProps) : null;
 
   // resolveBaseSubject/Classroom은 create/edit 양쪽 모두 지원
   const resolveBaseSubject = createProps?.resolveBaseSubject ?? editProps?.resolveBaseSubject;
@@ -152,7 +156,8 @@ export function TempChangeModal(props: TempChangeModalProps) {
     return resolveBaseClassroom(dateA, periodA);
   }, [resolveBaseClassroom, dateA, periodA]);
 
-  const maxPeriods = (createProps?.maxPeriods ?? editProps?.maxPeriods) ?? 10;
+  const maxPeriods = createProps?.maxPeriods ?? editProps?.maxPeriods ?? 10;
+  const periodTimes = props.periodTimes;
 
   // edit 모드에서도 유형 변경 UI는 숨김(기존 kind 유지). swap/substitute/cancel/custom 로직은 create 전용.
   const isSwap = isCreate && kind === 'swap';
@@ -161,26 +166,33 @@ export function TempChangeModal(props: TempChangeModalProps) {
 
   const handleSubmit = () => {
     if (isEdit) {
-      editProps!.onSaveEdit(
-        editProps!.initialOverride.id,
-        {
-          date: dateA,
-          period: periodA,
-          subject,
-          classroom: classroom || undefined,
-          reason: reason || undefined,
-          kind: editProps!.initialOverride.kind ?? 'custom',
-          substituteTeacher: substituteTeacher || undefined,
-          scope,
-        },
-      );
+      editProps!.onSaveEdit(editProps!.initialOverride.id, {
+        date: dateA,
+        period: periodA,
+        subject,
+        classroom: classroom || undefined,
+        reason: reason || undefined,
+        kind: editProps!.initialOverride.kind ?? 'custom',
+        substituteTeacher: substituteTeacher || undefined,
+        scope,
+      });
       props.onClose();
       return;
     }
     if (isSwap) {
       createProps!.onSaveSwap({
-        slotA: { date: dateA, period: periodA, subject: swapSubjectA, classroom: baseClassroomA || undefined },
-        slotB: { date: dateB, period: periodB, subject: swapSubjectB, classroom: createProps?.resolveBaseClassroom?.(dateB, periodB) || undefined },
+        slotA: {
+          date: dateA,
+          period: periodA,
+          subject: swapSubjectA,
+          classroom: baseClassroomA || undefined,
+        },
+        slotB: {
+          date: dateB,
+          period: periodB,
+          subject: swapSubjectB,
+          classroom: createProps?.resolveBaseClassroom?.(dateB, periodB) || undefined,
+        },
         reason: reason || '수업 교환',
         scope,
       });
@@ -193,7 +205,7 @@ export function TempChangeModal(props: TempChangeModalProps) {
         classroom: classroom || undefined,
         reason: reason || undefined,
         kind,
-        substituteTeacher: isSubstitute ? (substituteTeacher || undefined) : undefined,
+        substituteTeacher: isSubstitute ? substituteTeacher || undefined : undefined,
         scope,
       });
     }
@@ -225,11 +237,13 @@ export function TempChangeModal(props: TempChangeModalProps) {
         {/* 적용 범위 (항상 노출) */}
         <label className="block text-xs font-medium text-sp-muted mb-1.5">적용 범위</label>
         <div className="grid grid-cols-3 gap-1.5 mb-4">
-          {([
-            { key: 'teacher', label: '교사 시간표', desc: '내 일정만' },
-            { key: 'class', label: '학급 시간표', desc: '우리 반만' },
-            { key: 'both', label: '양쪽 모두', desc: '교사·학급' },
-          ] as const).map((opt) => (
+          {(
+            [
+              { key: 'teacher', label: '교사 시간표', desc: '내 일정만' },
+              { key: 'class', label: '학급 시간표', desc: '우리 반만' },
+              { key: 'both', label: '양쪽 모두', desc: '교사·학급' },
+            ] as const
+          ).map((opt) => (
             <button
               key={opt.key}
               type="button"
@@ -240,7 +254,9 @@ export function TempChangeModal(props: TempChangeModalProps) {
                   : 'bg-sp-bg/50 border-sp-border hover:border-sp-muted'
               }`}
             >
-              <div className={`text-xs font-bold ${scope === opt.key ? 'text-sp-accent' : 'text-sp-text'}`}>
+              <div
+                className={`text-xs font-bold ${scope === opt.key ? 'text-sp-accent' : 'text-sp-text'}`}
+              >
                 {opt.label}
               </div>
               <div className="text-caption text-sp-muted mt-0.5">{opt.desc}</div>
@@ -279,7 +295,9 @@ export function TempChangeModal(props: TempChangeModalProps) {
                     >
                       {opt.label}
                     </div>
-                    <div className="text-caption text-sp-muted mt-0.5 leading-tight">{opt.desc}</div>
+                    <div className="text-caption text-sp-muted mt-0.5 leading-tight">
+                      {opt.desc}
+                    </div>
                   </div>
                 </button>
               ))}
@@ -312,24 +330,27 @@ export function TempChangeModal(props: TempChangeModalProps) {
                   className="w-full bg-sp-bg border border-sp-border rounded-md px-2 py-1.5 text-xs text-sp-text focus:border-sp-accent focus:outline-none"
                 >
                   {Array.from({ length: maxPeriods }, (_, i) => i + 1).map((p) => (
-                    <option key={p} value={p}>{p}교시</option>
+                    <option key={p} value={p}>
+                      {resolvePeriodLabel(p, periodTimes)}
+                    </option>
                   ))}
                 </select>
               </div>
             </div>
           ) : (
             <div className="text-xs text-sp-muted mb-1">
-              {formatDotted(dateA)} · {periodA}교시
+              {formatDotted(dateA)} · {resolvePeriodLabel(periodA, periodTimes)}
             </div>
           )}
           <div className="text-xs text-sp-text mb-2">
-            원래 과목:{' '}
-            <span className="font-semibold">{baseSubjectA || '(빈 교시)'}</span>
+            원래 과목: <span className="font-semibold">{baseSubjectA || '(빈 교시)'}</span>
             {baseClassroomA && <span className="text-sp-muted ml-1">@{baseClassroomA}</span>}
           </div>
           {isSwap && (
             <>
-              <label className="block text-caption text-sp-muted mb-0.5">A 교시에 들어올 과목</label>
+              <label className="block text-caption text-sp-muted mb-0.5">
+                A 교시에 들어올 과목
+              </label>
               <input
                 type="text"
                 value={swapSubjectA}
@@ -363,14 +384,15 @@ export function TempChangeModal(props: TempChangeModalProps) {
                   className="w-full bg-sp-bg border border-sp-border rounded-md px-2 py-1.5 text-xs text-sp-text focus:border-sp-accent focus:outline-none"
                 >
                   {Array.from({ length: maxPeriods }, (_, i) => i + 1).map((p) => (
-                    <option key={p} value={p}>{p}교시</option>
+                    <option key={p} value={p}>
+                      {resolvePeriodLabel(p, periodTimes)}
+                    </option>
                   ))}
                 </select>
               </div>
             </div>
             <div className="text-xs text-sp-text mb-2">
-              원래 과목:{' '}
-              <span className="font-semibold">{baseSubjectB || '(빈 교시)'}</span>
+              원래 과목: <span className="font-semibold">{baseSubjectB || '(빈 교시)'}</span>
             </div>
             <label className="block text-caption text-sp-muted mb-0.5">B 교시에 들어올 과목</label>
             <input
@@ -409,7 +431,9 @@ export function TempChangeModal(props: TempChangeModalProps) {
             {/* 보강 교사 (substitute 전용) */}
             {isSubstitute && (
               <>
-                <label className="block text-xs font-medium text-sp-muted mb-1">보강 교사 (선택)</label>
+                <label className="block text-xs font-medium text-sp-muted mb-1">
+                  보강 교사 (선택)
+                </label>
                 <input
                   type="text"
                   value={substituteTeacher}

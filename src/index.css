@@ -1037,3 +1037,29 @@ body {
 .animate-sp-fade-in {
   animation: sp-fade-in var(--sp-duration-base, 160ms) var(--sp-ease-out, ease-out);
 }
+
+/*
+  옆핀 패널 등장 — 오른쪽 가장자리에서 나온다.
+  펼침 예산이 300ms인데 연출이 그걸 먹으면 사용자에게는 느린 앱이 되므로,
+  위 페이드와 같은 토큰을 쓰고 이동 거리도 6px로 짧게 둔다.
+*/
+@keyframes sidepin-enter {
+  from {
+    opacity: 0;
+    transform: translateX(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+.sidepin-enter {
+  animation: sidepin-enter var(--sp-duration-base, 160ms) var(--sp-ease-out, ease-out);
+}
+
+/* 모션을 줄이도록 설정한 사용자에게는 움직이지 않는다 */
+@media (prefers-reduced-motion: reduce) {
+  .sidepin-enter {
+    animation: none;
+  }
+}

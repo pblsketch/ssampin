@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
+import { periodTimeLabel, mergePeriodLabels } from '@domain/rules/periodLabel';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useMealStore } from '@adapters/stores/useMealStore';
 import { useCalendarSyncStore } from '@adapters/stores/useCalendarSyncStore';
@@ -250,14 +251,8 @@ export function Onboarding() {
 
       // 학교급 자동 감지 → 교시 프리셋도 자동 전환
       const detected = detectSchoolLevel(school.schoolType);
-      let levelUpdate:
-        | Pick<Settings, 'schoolLevel' | 'maxPeriods' | 'periodTimes'>
-        | Record<string, never> = {};
-      if (detected) {
-        const p = getDefaultPreset(detected);
-        const times = generatePeriodTimes(p);
-        levelUpdate = { schoolLevel: detected, maxPeriods: times.length, periodTimes: times };
-      }
+      // 교시 이름 승계는 setDraft 안에서 prev 기준으로 한다 — 클로저의 낡은 draft를 읽지 않도록.
+      const detectedTimes = detected ? generatePeriodTimes(getDefaultPreset(detected)) : null;
 
       // ②-A 날씨 자동설정: 학교 주소 → 시·군 좌표(순수·오프라인, 네트워크/키 없음).
       // 못 찾으면 건너뛰고 사용자가 설정에서 직접 고른다(best-effort, §13).
@@ -273,7 +268,13 @@ export function Onboarding() {
           ...(prev.neis ?? {}),
           ...neisUpdate,
         },
-        ...levelUpdate,
+        ...(detected && detectedTimes
+          ? {
+              schoolLevel: detected,
+              maxPeriods: detectedTimes.length,
+              periodTimes: mergePeriodLabels(prev.periodTimes ?? [], detectedTimes),
+            }
+          : {}),
         ...(location
           ? { weather: { location, refreshIntervalMin: prev.weather?.refreshIntervalMin ?? 30 } }
           : {}),
@@ -308,7 +309,8 @@ export function Onboarding() {
       ...prev,
       schoolLevel: level,
       maxPeriods: times.length,
-      periodTimes: times,
+      // 학교급을 바꿔 교시 시각을 다시 만들어도 이미 붙여둔 이름은 승계한다
+      periodTimes: mergePeriodLabels(prev.periodTimes ?? [], times),
     }));
   };
 
@@ -332,29 +334,20 @@ export function Onboarding() {
         const delta = parseMinutes(value) - parseMinutes(existing.start);
 
         // 현재 교시: 시작 시간 변경 + 종료 시간 자동 계산
-        arr[index] = {
-          period: existing.period,
-          start: value,
-          end: toTimeStr(parseMinutes(value) + duration),
-        };
+        arr[index] = { ...existing, start: value, end: toTimeStr(parseMinutes(value) + duration) };
 
         // 이후 교시: 동일한 delta만큼 시작·종료 시간 이동
         for (let i = index + 1; i < arr.length; i++) {
           const p = arr[i];
           if (!p) continue;
           arr[i] = {
-            period: p.period,
+            ...p,
             start: toTimeStr(parseMinutes(p.start) + delta),
             end: toTimeStr(parseMinutes(p.end) + delta),
           };
         }
       } else {
-        arr[index] = {
-          period: existing.period,
-          start: existing.start,
-          end: existing.end,
-          [field]: value,
-        };
+        arr[index] = { ...existing, [field]: value };
       }
 
       return { ...prev, periodTimes: arr };
@@ -383,9 +376,14 @@ export function Onboarding() {
           {step === 1 && (
             <div className="text-center animate-in fade-in slide-in-from-bottom-4 zoom-in-95 duration-500">
               <div className="mx-auto w-24 h-24 bg-sp-accent/20 rounded-full flex items-center justify-center mb-6">
-                <span className="material-symbols-outlined text-5xl text-sp-accent">
-                  emoji_people
-                </span>
+                {/* 마스코트 쌤핀이 — 사이드바 로고·앱 아이콘과 같은 그림 (emoji_people 아이콘 대체) */}
+                <img
+                  src={`${import.meta.env.BASE_URL}floating-pin.png`}
+                  alt=""
+                  aria-hidden
+                  className="w-16 h-16 object-contain select-none"
+                  draggable={false}
+                />
               </div>
               <h1 className="text-4xl font-black text-sp-text tracking-tight mb-4">
                 쌤핀에 오신 것을 환영합니다!
@@ -804,7 +802,7 @@ export function Onboarding() {
                     <tbody className="divide-y divide-sp-border">
                       {(draft.periodTimes ?? []).map((pt, i) => (
                         <tr key={pt.period} className="hover:bg-sp-surface/30 transition-colors">
-                          <td className="py-2 text-sp-muted">{i + 1}교시</td>
+                          <td className="py-2 text-sp-muted">{periodTimeLabel(pt)}</td>
                           <td className="py-2">
                             <input
                               type="time"

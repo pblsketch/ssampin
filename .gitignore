@@ -87,3 +87,8 @@ dist-mobile/
 .fablize/
 .omx/
 _nul_test.mjs
+
+# 개인정보가 들어간 제출 서식 (재직 학교·성명·서명 등)
+# 이 저장소는 공개(GPL)라 채워진 서식을 올리면 그대로 공개된다.
+# 작성 지침(docs/edzip/*.md)만 추적하고, 채운 파일은 바탕화면 등 로컬에 둔다.
+docs/edzip/제출서식/

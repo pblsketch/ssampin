@@ -4,6 +4,7 @@ import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { getSubjectWidgetStyle } from '@adapters/presenters/timetablePresenter';
 import { toLocalDateString } from '@shared/utils/localDate';
 import type { ClassPeriod } from '@domain/entities/Timetable';
+import { resolvePeriodShortLabel } from '@domain/rules/periodLabel';
 
 import type { DayOfWeek } from '@domain/valueObjects/DayOfWeek';
 
@@ -15,13 +16,17 @@ const DAYS: readonly { key: DayOfWeek; label: string }[] = [
   { key: '금', label: '금' },
 ];
 
-
 /**
  * 학급 시간표 위젯 (초등 담임용)
  * 월~금 학급 시간표를 격자로 보여줌
  */
 export function ClassTimetable() {
-  const { classSchedule, overrides, getEffectiveClassSchedule, load: loadSchedule } = useScheduleStore();
+  const {
+    classSchedule,
+    overrides,
+    getEffectiveClassSchedule,
+    load: loadSchedule,
+  } = useScheduleStore();
   const { settings, load: loadSettings } = useSettingsStore();
 
   useEffect(() => {
@@ -35,6 +40,12 @@ export function ClassTimetable() {
   const periods = useMemo(() => {
     return Array.from({ length: maxPeriods }, (_, i) => i + 1);
   }, [maxPeriods]);
+
+  /** 교시 이름을 하나라도 붙였는지 — 붙였을 때만 교시 열을 넓힌다. */
+  const hasPeriodLabel = useMemo(
+    () => settings.periodTimes.some((pt) => pt.label),
+    [settings.periodTimes],
+  );
 
   const isEmpty = useMemo(() => {
     return DAYS.every(({ key }) => {
@@ -73,20 +84,26 @@ export function ClassTimetable() {
   return (
     <div className="rounded-xl bg-sp-card p-4 h-full flex flex-col overflow-hidden">
       <div className="mb-3 flex items-center justify-between shrink-0">
-        <h3 className="text-sm font-bold text-sp-text flex items-center gap-1.5"><span>📋</span>학급 시간표</h3>
+        <h3 className="text-sm font-bold text-sp-text flex items-center gap-1.5">
+          <span>📋</span>학급 시간표
+        </h3>
       </div>
       <div className="flex-1 min-h-0 overflow-auto">
         <div
           className="grid gap-px bg-sp-border/20 h-full"
           style={{
-            gridTemplateColumns: `2.5rem repeat(${DAYS.length}, 1fr)`,
+            // 교시 이름을 붙인 경우에만 교시 열을 넓힌다 — 번호만 쓰면 2.5rem 그대로.
+            gridTemplateColumns: `${hasPeriodLabel ? '4.5rem' : '2.5rem'} repeat(${DAYS.length}, 1fr)`,
             gridTemplateRows: `auto repeat(${periods.length}, 1fr)`,
           }}
         >
           {/* 헤더 행 */}
           <div className="bg-sp-card" />
           {DAYS.map(({ key, label }) => (
-            <div key={key} className="bg-sp-card py-1 text-center text-sp-muted text-xs font-medium">
+            <div
+              key={key}
+              className="bg-sp-card py-1 text-center text-sp-muted text-xs font-medium"
+            >
               {label}
             </div>
           ))}
@@ -94,8 +111,13 @@ export function ClassTimetable() {
           {/* 교시별 행 */}
           {periods.map((period) => (
             <Fragment key={period}>
-              <div className="bg-sp-card flex items-center justify-center text-sp-muted text-xs">
-                {period}
+              <div className="bg-sp-card flex items-center justify-center text-sp-muted text-xs overflow-hidden">
+                <span
+                  className="max-w-full truncate px-0.5"
+                  title={resolvePeriodShortLabel(period, settings.periodTimes)}
+                >
+                  {resolvePeriodShortLabel(period, settings.periodTimes)}
+                </span>
               </div>
               {DAYS.map(({ key }) => {
                 const dayData = effectiveByDay.get(key);
@@ -108,7 +130,9 @@ export function ClassTimetable() {
                 return (
                   <div key={key} className="bg-sp-card p-0.5">
                     {subject ? (
-                      <div className={`rounded h-full flex items-center justify-center text-xs font-medium ${colorClass}`}>
+                      <div
+                        className={`rounded h-full flex items-center justify-center text-xs font-medium ${colorClass}`}
+                      >
                         {subject}
                       </div>
                     ) : (

@@ -1,4 +1,6 @@
 import { useLongPress } from '@mobile/hooks/useLongPress';
+import { resolvePeriodLabel } from '@domain/rules/periodLabel';
+import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import type { ProgressEntry, ProgressStatus } from '@domain/entities/CurriculumProgress';
 
 const STATUS_BADGE_TW: Record<ProgressStatus, string> = {
@@ -15,6 +17,8 @@ const STATUS_LABEL: Record<ProgressStatus, string> = {
 
 interface ClassProgressEntryItemProps {
   entry: ProgressEntry;
+  /** 교시 이름 표시용 */
+  periodTimes?: readonly PeriodTime[];
   /** 시간표 매칭 교시 여부 — true면 ✦ 표시 */
   isMatchingPeriod?: boolean;
   /** 상태 배지 탭 → 사이클 핸들러 (planned → completed → skipped → planned) */
@@ -31,6 +35,7 @@ interface ClassProgressEntryItemProps {
  */
 export function ClassProgressEntryItem({
   entry,
+  periodTimes,
   isMatchingPeriod = false,
   onCycleStatus,
   onLongPress,
@@ -59,7 +64,9 @@ export function ClassProgressEntryItem({
       <div className="flex items-start gap-3">
         {/* 교시 + ✦ */}
         <div className="flex flex-col items-center justify-center min-w-12 pt-0.5">
-          <div className="text-sp-text font-bold text-sm tabular-nums">{entry.period}교시</div>
+          <div className="text-sp-text font-bold text-sm tabular-nums">
+            {resolvePeriodLabel(entry.period, periodTimes)}
+          </div>
           {isMatchingPeriod && (
             <span className="text-sp-accent text-xs mt-0.5" aria-label="시간표 매칭">
               ✦

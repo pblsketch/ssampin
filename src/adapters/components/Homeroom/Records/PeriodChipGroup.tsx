@@ -1,4 +1,6 @@
-import { PERIOD_MORNING, PERIOD_CLOSING } from '@domain/entities/Attendance';
+import { PERIOD_MORNING, PERIOD_CLOSING, formatPeriodLabel } from '@domain/entities/Attendance';
+import { resolvePeriodShortLabel } from '@domain/rules/periodLabel';
+import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 
 export type AccentColor = 'red' | 'amber' | 'orange' | 'purple';
 
@@ -56,9 +58,17 @@ interface Props {
   selected: Set<number>;
   onChange: (next: Set<number>) => void;
   accent?: AccentColor;
+  /** 교시 이름 표시용 — 이름을 붙인 교시는 번호 대신 이름이 보인다. */
+  periodTimes?: readonly PeriodTime[];
 }
 
-export function PeriodChipGroup({ periodCount, selected, onChange, accent = 'red' }: Props) {
+export function PeriodChipGroup({
+  periodCount,
+  selected,
+  onChange,
+  accent = 'red',
+  periodTimes,
+}: Props) {
   const classes = ACCENT_CLASSES[accent];
   // "전체"는 1~N 교시 전체 선택을 의미 (조회/종례는 별도 선택)
   const regularPeriods = Array.from({ length: periodCount }, (_, i) => i + 1);
@@ -97,9 +107,7 @@ export function PeriodChipGroup({ periodCount, selected, onChange, accent = 'red
   // "전체" 활성: 정규 교시가 전부 선택됐거나, 아무것도 선택 안 됐을 때(기본 = 전체 의미)
   const allActive = allRegularSelected || noneSelected;
   const sortedSelected = Array.from(selected).sort((a, b) => a - b);
-  const selectedLabels = sortedSelected.map((p) =>
-    p === PERIOD_MORNING ? '조회' : p === PERIOD_CLOSING ? '종례' : `${p}교시`,
-  );
+  const selectedLabels = sortedSelected.map((p) => formatPeriodLabel(p, periodTimes));
 
   return (
     <div className={`ml-2 pl-3 border-l-2 ${classes.border} space-y-1.5`}>
@@ -138,7 +146,7 @@ export function PeriodChipGroup({ periodCount, selected, onChange, accent = 'red
                 on ? classes.periodActive : classes.periodInactive,
               ].join(' ')}
             >
-              {p}
+              {resolvePeriodShortLabel(p, periodTimes)}
             </button>
           );
         })}

@@ -46,7 +46,8 @@
     "migration-roundtrip:5-report": "node scripts/migration-roundtrip-5-report.mjs",
     "check-flag-usage": "node scripts/check-flag-usage.mjs",
     "check-hex-hardcoding": "node scripts/check-hex-hardcoding.mjs",
-    "check-sp-coverage": "node scripts/check-sp-coverage.mjs"
+    "check-sp-coverage": "node scripts/check-sp-coverage.mjs",
+    "icons:generate": "node scripts/generate-mascot-icons.mjs"
   },
   "dependencies": {
     "@blocknote/ariakit": "~0.47.3",

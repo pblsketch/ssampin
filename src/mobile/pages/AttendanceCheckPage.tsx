@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { resolvePeriodLabel } from '@domain/rules/periodLabel';
 import type {
   AttendanceStatus,
   AttendanceReason,
@@ -480,9 +481,9 @@ export function AttendanceCheckPage({
       textInput,
       students.map((s) => ({ number: s.number, name: s.name })),
       periodCount,
-      { requirePeriod: false },
+      { requirePeriod: false, periodTimes: settings.periodTimes },
     );
-  }, [textSheetOpen, textInput, students, periodCount]);
+  }, [textSheetOpen, textInput, students, periodCount, settings.periodTimes]);
 
   const okLineCount = useMemo(() => parsedLines.filter((l) => l.ok).length, [parsedLines]);
 
@@ -585,20 +586,21 @@ export function AttendanceCheckPage({
           <button onClick={onBack} className="touch-target flex items-center justify-center">
             <span className="material-symbols-outlined text-sp-text">arrow_back</span>
           </button>
-          {/* min-w-0 + truncate 가 없으면 390px 에서 오른쪽 버튼 3개(텍스트·여러 날·완료)에
-              밀려 "담임 출결" 이 "담임 출 / 결" 로 쪼개진다. flex 자식의 기본 min-width 는
-              auto 라서 콘텐츠보다 작아지지 않고, 대신 줄바꿈이 일어난다. */}
           {/* 반 이름을 제목 자리에 둔다.
               ① 390px 에서 오른쪽 버튼 3개(텍스트·여러 날·완료)에 밀려 "담임 출결" 이
                  "담임 출 / 결" 로 쪼개졌다. min-w-0+truncate 로 줄바꿈은 막히지만
                  정작 중요한 반 이름이 작은 글씨로 아래에 남는다.
               ② 이 앱은 반을 잘못 고르면 다른 반 출결에 기록이 들어간다. 화면에서
                  가장 크고 굵은 자리는 "무엇을 하는 화면인가"(담임 출결)가 아니라
-                 "어느 반인가"(3학년 2반)가 차지해야 한다. */}
+                 "어느 반인가"(3학년 2반)가 차지해야 한다.
+              교시 표기는 하드코딩하지 않고 resolvePeriodLabel 을 쓴다 — 0교시·보충처럼
+              학교마다 다른 교시 이름을 설정에서 정할 수 있다. */}
           <div className="flex-1 min-w-0">
             <h2 className="text-sp-text font-bold truncate">{className}</h2>
             <p className="text-sp-muted text-xs truncate">
-              {type === 'homeroom' ? '담임 출결' : `${selectedPeriod}교시 출결`}
+              {type === 'homeroom'
+                ? '담임 출결'
+                : `${resolvePeriodLabel(selectedPeriod, settings.periodTimes)} 출결`}
             </p>
           </div>
           {type === 'homeroom' && (
@@ -644,7 +646,9 @@ export function AttendanceCheckPage({
             className="inline-flex items-center gap-1 glass-card rounded-lg border border-sp-border px-3 py-1.5 min-h-[44px] active:scale-[0.98] transition-transform"
           >
             <span className="material-symbols-outlined text-sp-muted text-icon-md">schedule</span>
-            <span className="text-sp-text text-sm font-bold">{selectedPeriod}교시</span>
+            <span className="text-sp-text text-sm font-bold">
+              {resolvePeriodLabel(selectedPeriod, settings.periodTimes)}
+            </span>
             <span className="material-symbols-outlined text-sp-muted text-icon-md">
               expand_more
             </span>
@@ -683,7 +687,7 @@ export function AttendanceCheckPage({
                   }`}
                 >
                   <span className="flex items-center gap-2">
-                    <span>{p}교시</span>
+                    <span>{resolvePeriodLabel(p, settings.periodTimes)}</span>
                     {start && <span className="text-sp-muted text-xs">{start}</span>}
                   </span>
                   {isCurrent && (

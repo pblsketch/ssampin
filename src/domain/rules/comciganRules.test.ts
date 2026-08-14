@@ -283,7 +283,9 @@ describe('periodTimesToSettingsPatch — 교시 시각 → 설정 payload', () =
     expect(patch.lunchAfterPeriod).toBe(4);
     expect(patch.lunchStart).toBe('12:30'); // 4교시 끝
     expect(patch.lunchEnd).toBe('13:40'); // 5교시 시작(컴시간 정확값)
-    expect(patch.periodTimes).toBe(parsed.periodTimes);
+    // 값은 그대로 통과한다. 다만 동일 참조는 아니다 —
+    // 기존 교시 이름을 승계(mergePeriodLabels)하느라 새 배열을 만들기 때문.
+    expect(patch.periodTimes).toEqual(parsed.periodTimes);
   });
 
   it('점심을 못 찾으면 periodTimes만 담고 점심 필드는 비운다', () => {

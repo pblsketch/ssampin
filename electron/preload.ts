@@ -1041,8 +1041,42 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.removeListener('close-action:ask', handler);
     };
   },
-  respondCloseAction: (action: 'widget' | 'tray' | 'icon' | 'quit'): void => {
+  respondCloseAction: (action: 'widget' | 'tray' | 'icon' | 'quit' | 'sidePin'): void => {
     ipcRenderer.send('close-action:respond', action);
+  },
+  // 옆핀 — 창이 알려 주는 상태를 받고, 화면의 의도를 되돌려 보낸다.
+  // 판단은 전부 main의 controller가 하므로 여기서는 나르기만 한다.
+  sidePin: {
+    onStateChanged: (callback: (state: unknown) => void): (() => void) => {
+      const handler = (_event: unknown, state: unknown) => callback(state);
+      ipcRenderer.on('sidePin:state-changed', handler);
+      return () => {
+        ipcRenderer.removeListener('sidePin:state-changed', handler);
+      };
+    },
+    /** 포인터가 손잡이·패널의 어느 구역에 있는지 (물리 입력 보고) */
+    reportPointerRegion: (region: string): void => {
+      ipcRenderer.send('sidePin:pointer-region', region);
+    },
+    togglePin: (zone: 'widget' | 'memo' | 'both'): void => {
+      ipcRenderer.send('sidePin:toggle-pin', zone);
+    },
+    requestClose: (): void => {
+      ipcRenderer.send('sidePin:request-close');
+    },
+    /** 메인 쌤핀으로 돌아간다 */
+    openMain: (): void => {
+      ipcRenderer.send('sidePin:open-main');
+    },
+    /**
+     * 패널을 실제로 그렸다.
+     *
+     * 이 신호가 있어야 "여는 중"이 "펼쳐짐"으로 확정된다. 없으면 3초 뒤 감시에 걸려
+     * 도로 닫힌다. 어느 요청에 대한 응답인지는 main이 대조하므로 여기서는 알 필요 없다.
+     */
+    reportPainted: (): void => {
+      ipcRenderer.send('sidePin:painted');
+    },
   },
   // Cross-window data sync
   onDataChanged: (callback: (filename: string) => void): (() => void) => {

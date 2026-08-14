@@ -10,6 +10,7 @@
  * 모든 시간 비교는 주입된 now 기준 — 테스트에서 고정 시각으로 검증 가능.
  */
 import type { Todo } from '@domain/entities/Todo';
+import { resolvePeriodLabel } from '@domain/rules/periodLabel';
 import type { SchoolEvent } from '@domain/entities/SchoolEvent';
 import type { TeacherScheduleData } from '@domain/entities/Timetable';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
@@ -271,10 +272,16 @@ export function derivePinInfo(params: DerivePinInfoParams): PinInfo {
  * 할 일이 하루 종일 남아 있어도 시간성 알림이 창이 열리는 순간 끼어들 수 있게.
  * 알릴 게 없으면 null(평상시 idle).
  */
-export function decidePeek(info: PinInfo): { state: PinState; text: string } | null {
+export function decidePeek(
+  info: PinInfo,
+  periodTimes?: readonly PeriodTime[],
+): { state: PinState; text: string } | null {
   if (info.next && info.next.minutesUntil > 0 && info.next.minutesUntil <= 5) {
     const room = info.next.classroom ? ` · ${info.next.classroom}` : '';
-    return { state: 'wave', text: `곧 ${info.next.number}교시 ${info.next.subject}${room}` };
+    return {
+      state: 'wave',
+      text: `곧 ${resolvePeriodLabel(info.next.number, periodTimes)} ${info.next.subject}${room}`,
+    };
   }
   // 아침 브리핑 — 오늘 첫 수업 시작 30분 전부터 (수업 전이므로 current 없음)
   if (
@@ -288,7 +295,7 @@ export function decidePeek(info: PinInfo): { state: PinState; text: string } | n
     const room = info.next.classroom ? ` · ${info.next.classroom}` : '';
     return {
       state: 'wave',
-      text: `오늘 수업 ${info.todayClassCount}개 · 첫 수업 ${info.next.number}교시 ${info.next.subject}${room} (${formatMinutesUntil(info.next.minutesUntil)})`,
+      text: `오늘 수업 ${info.todayClassCount}개 · 첫 수업 ${resolvePeriodLabel(info.next.number, periodTimes)} ${info.next.subject}${room} (${formatMinutesUntil(info.next.minutesUntil)})`,
     };
   }
   // 급식 브리핑 — 점심 시작 60분 전부터 시작 전까지
@@ -394,17 +401,22 @@ export function listTopDueTodos(
 }
 
 /** 마우스 호버 시 보여줄 전체 요약(제목 1줄 + 보조 줄들) */
-export function buildSummary(info: PinInfo): { title: string; lines: string[] } {
+export function buildSummary(
+  info: PinInfo,
+  periodTimes?: readonly PeriodTime[],
+): { title: string; lines: string[] } {
   const lines: string[] = [];
   const title = info.current
-    ? `${info.current.number}교시 ${info.current.subject || '수업'}${info.current.classroom ? ` · ${info.current.classroom}` : ''}`
+    ? `${resolvePeriodLabel(info.current.number, periodTimes)} ${info.current.subject || '수업'}${info.current.classroom ? ` · ${info.current.classroom}` : ''}`
     : '쉬는 시간';
 
   if (info.next) {
     const room = info.next.classroom ? ` · ${info.next.classroom}` : '';
     const when =
       info.next.minutesUntil > 0 ? ` (${formatMinutesUntil(info.next.minutesUntil)})` : '';
-    lines.push(`다음: ${info.next.number}교시 ${info.next.subject}${room}${when}`);
+    lines.push(
+      `다음: ${resolvePeriodLabel(info.next.number, periodTimes)} ${info.next.subject}${room}${when}`,
+    );
   }
   if (info.dueTodos.count > 0) {
     const top = info.dueTodos.topText ? ` · ${info.dueTodos.topText}` : '';

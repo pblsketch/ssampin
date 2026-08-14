@@ -3,26 +3,17 @@
  *
  * consultation_schedules, consultation_slots, consultation_bookings 테이블은
  * RLS로 Public read/insert가 열려있으므로 anon key만으로 직접 REST API 호출이 가능하다.
+ *
+ * ⚠️ 위 "Public read" 는 정리 대상이다(계획서 P0-3). 서버에서 익명 SELECT 를 회수하면
+ *    구버전 앱은 401/403 을 받으므로, 실패를 빈 값으로 삼키지 말고 업데이트를 안내한다.
  */
+
+import { throwIfPermissionError } from './supabaseAccessError';
 
 // ── DB row types (snake_case) ──────────────────────────────────────────────
 
-interface ScheduleRow {
-  id: string;
-  title: string;
-  type: string;
-  methods: string[];
-  slot_minutes: number;
-  dates: unknown;
-  target_class_name: string;
-  target_students: unknown;
-  message: string | null;
-  admin_key: string;
-  is_archived: boolean;
-  closed_at: string | null;
-  expires_at: string | null;
-  created_at: string;
-}
+// ScheduleRow 는 getSchedule() 과 함께 삭제했다 (2026-08-14, 마이그레이션 044 참조).
+// 유일한 사용처였고, admin_key 필드를 갖고 있어 남겨두면 오해를 준다.
 
 interface SlotRow {
   id: string;
@@ -213,38 +204,15 @@ export class ConsultationSupabaseClient {
     }
   }
 
-  /**
-   * 상담 일정 조회
+  /*
+   * getSchedule() 은 2026-08-14 에 삭제했다.
+   *
+   * 호출부가 없는 죽은 코드였고, select 목록에 admin_key 가 들어 있었다.
+   * 마이그레이션 044 에서 anon 역할의 admin_key 컬럼 SELECT 권한을 회수했으므로
+   * 되살리면 조용히 실패한다. 교사 앱은 adminKey 를 로컬 Consultation 엔티티에
+   * 이미 보관하므로(ConsultationDetail.tsx 의 공유 링크·복호화 경로) 서버에서
+   * 다시 받아올 이유가 없다.
    */
-  async getSchedule(id: string): Promise<SchedulePublic | null> {
-    this.ensureConfigured();
-    const res = await fetch(
-      `${this.baseUrl}/rest/v1/consultation_schedules?id=eq.${id}&select=id,title,type,methods,slot_minutes,dates,target_class_name,target_students,message,admin_key,is_archived,closed_at,expires_at,created_at`,
-      { headers: this.headers() },
-    );
-
-    if (!res.ok) return null;
-    const rows = (await res.json()) as ScheduleRow[];
-    if (rows.length === 0) return null;
-
-    const row = rows[0]!;
-    return {
-      id: row.id,
-      title: row.title,
-      type: row.type as SchedulePublic['type'],
-      methods: row.methods as SchedulePublic['methods'],
-      slotMinutes: row.slot_minutes,
-      dates: row.dates as SchedulePublic['dates'],
-      targetClassName: row.target_class_name,
-      targetStudents: row.target_students as SchedulePublic['targetStudents'],
-      message: row.message ?? undefined,
-      adminKey: row.admin_key,
-      isArchived: row.is_archived,
-      closedAt: row.closed_at ?? undefined,
-      expiresAt: row.expires_at ?? undefined,
-      createdAt: row.created_at,
-    };
-  }
 
   /**
    * 슬롯 목록 조회 (날짜·시작시간 순)
@@ -271,15 +239,30 @@ export class ConsultationSupabaseClient {
 
   /**
    * 예약 목록 조회 (학생 번호 순)
+   *
+   * 예전에는 consultation_bookings 를 직접 조회했다. PostgREST 는 클라이언트가 보낸
+   * 필터를 신뢰할 뿐이라 필터를 뺀 요청으로 전 행이 나왔다(2026-08-14 실측 256행).
+   * 지금은 adminKey 를 함께 보내 **그 일정의 예약만** 받는다 — 마이그레이션 046.
    */
-  async getBookings(scheduleId: string): Promise<BookingPublic[]> {
+  async getBookings(scheduleId: string, adminKey: string): Promise<BookingPublic[]> {
     this.ensureConfigured();
-    const res = await fetch(
-      `${this.baseUrl}/rest/v1/consultation_bookings?schedule_id=eq.${scheduleId}&order=student_number.asc`,
-      { headers: this.headers() },
-    );
+    const res = await fetch(`${this.baseUrl}/rest/v1/rpc/get_consultation_bookings`, {
+      method: 'POST',
+      headers: this.headers(),
+      body: JSON.stringify({ p_schedule_id: scheduleId, p_admin_key: adminKey }),
+    });
 
-    if (!res.ok) return [];
+    // 실패를 빈 목록으로 삼키면 화면에 "예약 없음"으로 보여 선생님이 자료가
+    // 사라졌다고 판단한다. 설문 쪽(getResponses)은 같은 이유로 이미 throw 한다
+    // — 2026-05-14 사용자 신고 사례. 상담에도 같은 규칙을 적용한다.
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throwIfPermissionError(res.status, '예약 목록', body);
+      console.error(
+        `[ConsultationSupabaseClient.getBookings] HTTP ${res.status} ${res.statusText} | scheduleId=${scheduleId} | body=${body.slice(0, 200)}`,
+      );
+      throw new Error(`Supabase getBookings failed: ${res.status} ${res.statusText}`);
+    }
     const rows = (await res.json()) as BookingRow[];
 
     return rows.map((r) => ({
@@ -332,24 +315,30 @@ export class ConsultationSupabaseClient {
   /**
    * 예약 취소 — 예약 삭제 후 슬롯 상태를 available로 복구
    */
-  async cancelBooking(bookingId: string, scheduleId: string): Promise<void> {
+  async cancelBooking(bookingId: string, scheduleId: string, adminKey: string): Promise<void> {
     this.ensureConfigured();
-    // 예약 정보에서 slotId 확인
-    const bookingRes = await fetch(
-      `${this.baseUrl}/rest/v1/consultation_bookings?id=eq.${bookingId}&schedule_id=eq.${scheduleId}&select=id,slot_id`,
-      { headers: this.headers() },
-    );
+    // 슬롯 복구용 slotId 조회 — 예전에는 consultation_bookings 를 직접 읽었다.
+    // 목록 조회를 RPC 로 옮긴 뒤에도 이 한 줄이 남아 있었다 (마이그레이션 047).
+    const bookingRes = await fetch(`${this.baseUrl}/rest/v1/rpc/get_consultation_booking_slot`, {
+      method: 'POST',
+      headers: this.headers(),
+      body: JSON.stringify({
+        p_booking_id: bookingId,
+        p_schedule_id: scheduleId,
+        p_admin_key: adminKey,
+      }),
+    });
 
     if (!bookingRes.ok) {
-      throw new Error('Failed to fetch booking for cancellation');
+      const body = await bookingRes.text().catch(() => '');
+      throwIfPermissionError(bookingRes.status, '예약 정보', body);
+      throw new Error(`Failed to fetch booking for cancellation: ${body.slice(0, 200)}`);
     }
 
-    const bookings = (await bookingRes.json()) as Array<{ id: string; slot_id: string }>;
-    if (bookings.length === 0) {
+    const slotId = (await bookingRes.json()) as string | null;
+    if (!slotId) {
       throw new Error('Booking not found');
     }
-
-    const slotId = bookings[0]!.slot_id;
 
     // 예약 삭제
     const deleteRes = await fetch(
@@ -643,6 +632,7 @@ export class ConsultationSupabaseClient {
    */
   startPolling(
     scheduleId: string,
+    adminKey: string,
     onUpdate: (slots: SlotPublic[], bookings: BookingPublic[]) => void,
     intervalMs = 30_000,
   ): () => void {
@@ -652,7 +642,7 @@ export class ConsultationSupabaseClient {
       try {
         const [slots, bookings] = await Promise.all([
           this.getSlots(scheduleId),
-          this.getBookings(scheduleId),
+          this.getBookings(scheduleId, adminKey),
         ]);
         onUpdate(slots, bookings);
       } catch {

@@ -1,6 +1,103 @@
 # Progress
 
-마지막 업데이트: 2026-08-12 KST
+마지막 업데이트: 2026-08-14 KST
+
+## 🎨 앱·홈페이지 아이콘을 마스코트 쌤핀이로 통일 — 커밋 완료 (2026-08-14, main `789a3318`)
+
+2026-08-13에 구현만 끝나고 커밋되지 않은 채 세션이 끊긴 작업을 이어받아 검증·커밋했다.
+
+**배경**: 데스크톱 앱 아이콘·파비콘·랜딩 로고만 3D 압정 일러스트였고, 앱 안(로딩 화면·아이콘 모드·모바일 PWA)은 이미 마스코트 쌤핀이였다. 두 갈래를 쌤핀이 하나로 합쳤다. 사용자 결정 = **배경 없이 투명, 로고까지 전부**.
+
+**구성**: 생성기 `scripts/generate-mascot-icons.mjs` 하나가 `public/floating-pin.png` 한 장에서 전 세트를 굽는다(`npm run icons:generate`). 산출 = `build/icon.png`(1024) · `build/icon.ico`(16~256 7종) · `build/iconTemplate.png`+`@2x`(macOS 트레이 검정 실루엣) · `public/favicon.ico`(16·32·48) · `landing/src/app/{favicon.ico, icon.png, apple-icon.png}`. 코드 2곳 = `Sidebar.tsx`(`icon_new.svg`→`floating-pin.png`), `BridgeDiagram.tsx`(인라인 압정 SVG 194줄 → `next/image "/icon.png"`).
+
+**이번 세션 검증**
+
+- **재현성**: `npm run icons:generate` 재실행 후 8개 파일 md5 **전부 동일** → 커밋된 바이너리가 생성기 산출물과 정확히 일치. 프리티어가 스크립트를 재포맷한 뒤에도 동일.
+- **규격**: `.ico` 3종을 항목별로 디코드해 디렉터리 표기 크기와 실제 PNG 크기 일치 확인(`build/icon.ico`·`landing` 7항목, `public/favicon.ico` 3항목). `apple-icon.png`만 alpha 255 고정 + 모서리 `#FAF7F0`(iOS가 투명을 검정으로 합성하므로 여기만 크림 배경), 나머지는 투명. 트레이 템플릿은 RGB 0 고정 + 알파 보존.
+- **연결부**: `electron/main.ts`의 창 아이콘·트레이 경로, `electron-builder.yml`의 `icon:` 3곳이 모두 새로 구운 파일을 가리킴. `icon_new.svg` 실참조 0(주석만 남음).
+- **랜딩**: `next build` 산출에 `○ /icon.png`가 정적 경로로 등재 → `BridgeDiagram`의 이미지 주소가 실제 존재함을 빌드 산출로 확인(같은 주소를 `LandingNav`·`PublicPageHeader`가 이미 사용 중).
+- **게이트 4종**: tsc 0 · lint 0 error(경고 133 기존 부채) · vitest **4699 passed**·10 skipped(실패 2건은 `src/infrastructure/export/pdf` 타임아웃 **부하 flaky**, 단독 재실행 **31/31 8.4초 통과**) · regression **39/39** · 랜딩 `docs:check`(문서 41) + `build` 통과.
+- 모바일 PWA 아이콘(`public/icons/`)은 2026-07-03부터 이미 쌤핀이라 **변경 없음**.
+
+**⚠️ 다중 세션 사고 재발**: 커밋 훅(husky)이 node를 못 찾아 커밋이 두 번 실패하는 사이, `git add` 해 둔 신규 파일 `scripts/generate-mascot-icons.mjs`가 **다른 세션의 커밋 `9a247e66`(docs(보안): 재설계 계획서에 P0-1 완료 반영)에 딸려 들어가 이미 푸시됐다.** 내용은 온전하고 재현성도 확인했지만 커밋 메시지와 파일이 무관하다. 이미 원격에 올라가 있어 히스토리 정정은 하지 않았다. 교훈은 기존 `feedback_multisession_git_index_is_shared` 그대로 — **신규 파일이라도 `git add` 후 방치 금지**. 훅 PATH 함정 회피법: Bash에서 `export PATH="/c/Program Files/nodejs:$PATH"` 후 커밋.
+
+**남음**: 실기기 확인(설치본 작업표시줄·시작메뉴 아이콘, macOS 트레이) · 푸시 · 다음 릴리즈 고지.
+
+## 🤖 고객지원 챗봇 LLM 교체 — Gemini → 업스테이지 Solar Pro 3 (2026-08-14, ADR-048) · 미배포
+
+**계기**: Upstage x AWS AI initiative 프로그램으로 **2027-03-31까지 Solar-Pro 무료** 권한 획득.
+
+**핵심 발견**: 챗봇의 Gemini는 한 덩어리가 아니라 **두 역할**이었다 — ①답변 생성 3곳(HyDE 가상답변·문서 재정렬·최종 답변) ②임베딩(`gemini-embedding-001`, 768차원). Solar Pro 3은 대화 모델이라 **①만 대체 가능**.
+
+**범위(사용자 확정)**: ①만 교체, ②는 Gemini 유지. ②까지 옮기면 업스테이지 임베딩이 4096차원이라 `ssampin_docs.embedding vector(768)` 컬럼 교체 + 전체 재적재가 필요하고, pgvector 색인은 2000차원까지만 지원해 색인을 떼야 한다. 무료 범위도 "Solar-Pro / Document-Parse"로만 적혀 있어 임베딩 유료 가능성이 있다.
+
+**변경 파일**
+
+- `supabase/functions/_shared/chatLlm.ts` (신규) — 업스테이지(OpenAI 호환 `chat/completions`) 우선 + 실패 시 Gemini 자동 폴백. 요청 형태가 Gemini와 전혀 달라(시스템 지시 위치·`assistant`↔`model`·`max_tokens`↔`maxOutputTokens`·`reasoning_effort`↔`thinkingConfig`) 호출을 한 곳에 모았다.
+- `supabase/functions/ssampin-chat/index.ts` — 3개 호출부가 `generateText()` 하나를 쓰도록 교체. `GOOGLE_API_KEY`는 `embeddingApiKey`로 이름을 바꿔 **임베딩 전용**임을 못 박음.
+- `scripts/test-upstage.mjs` (신규) — 챗봇이 실제 보내는 것과 같은 요청으로 계정 유효성 점검. 키는 출력하지 않음.
+- `.env.example` · `docs/chatbot-env-setup.md` — `UPSTAGE_API_KEY`/`UPSTAGE_MODEL`/`UPSTAGE_BASE_URL`/`GEMINI_MODEL` 추가. 모델 교체·롤백 절차 명시.
+
+**롤백**: `UPSTAGE_API_KEY`를 지우면 코드 변경 없이 Gemini 단독으로 복귀.
+
+**검증**
+
+- `deno check` — `_shared/chatLlm.ts` 통과. `ssampin-chat/index.ts`는 오류 8건이나 **변경 전 HEAD 버전과 개수·내용이 완전히 동일**(supabase-js 제네릭 경고, 기존 것). ⚠️ `npx tsc --noEmit`·`npm run lint`는 `src/**` 한정이라 edge function을 **검사하지 않는다** — `deno check`가 유일한 그물.
+- 게이트: tsc 0 · lint 통과 · regression 39/39 · 테스트 4695/4707 통과(실패 2건은 `src/infrastructure/export/pdf` 타임아웃 flaky, **단독 재실행 31/31 통과**로 확인 — 이번 변경과 무관)
+
+**실측·배포 완료 (2026-08-14)**
+
+- `node scripts/test-upstage.mjs` — 계정 모델 10개 확인(`solar-pro3` 포함), 요청 형태 3종 전부 정상 응답
+- **모델 선택 근거(실측)**: 같은 한 줄 질문에 **pro3 = 0.7초 / reasoning_tokens 0**, **pro4 = 16.5초 / reasoning_tokens 990**. pro4는 추론이 실제로 돌아 지원 챗봇에 부적합(가격도 2배). → pro3 확정. 단 pro4 대비해 `REASONING_TOKEN_HEADROOM` 1024→4096.
+- **배포**: Supabase Secrets `UPSTAGE_API_KEY` 등록 + `functions deploy ssampin-chat --use-api` (`_shared/chatLlm.ts` 함께 업로드 확인)
+- **품질 비교 (`scripts/test-chatbot.ts` 27문항)** — 기준선을 안 재면 점수가 의미 없어 시크릿 unset→재배포로 Gemini를 실측했다:
+
+  |           | Gemini(기준선) | **Solar Pro 3** |
+  | --------- | -------------- | --------------- |
+  | 통과      | 18/27 (67%)    | **19/27 (70%)** |
+  | 평균 응답 | 8,432ms        | **6,588ms**     |
+  | 10초 초과 | 5건            | **1건**         |
+
+  이 과정이 **롤백 경로(`secrets unset` + 재배포)가 실제로 동작함**도 함께 실증했다. 측정 후 Solar로 원복 완료.
+
+- **비교로만 드러난 것**: 에스컬레이션 미발동 3건(#16 버그·#17 기능요청·#18 크래시)은 **Gemini에서도 똑같이 실패**했다 → Solar 회귀가 아니라 SYSTEM_PROMPT의 "에스컬레이션은 최후의 수단" 지시(또는 낡은 기대값) 문제. 기준선 없이 봤으면 오진했을 것. 나머지 실패 5건은 내용은 맞는데 `mustInclude` 단어를 안 쓴 판정.
+
+## 🧹 챗봇 지식베이스 중복 정리 + 위젯 교시 이름 누락 수정 (2026-08-14, ADR-050)
+
+**지식베이스**: `upsert` 액션이 실제로는 `insert` 라 릴리즈마다 전량이 복사돼 쌓였다. **12,191행인데 서로 다른 문서는 478건**(같은 문서 최대 26벌). 중복 사본이 검색 상위 10건을 차지해 답변 품질을 깎고 있었다.
+
+- **전부 지우고 다시 채우면 안 된다** — 스크립트가 만들지 않은 문서 **76건**(`docs/user-guide.md` 40 · `troubleshoot-guide.md` 21 · `FAQ.tsx` 8 · `README.md` 7)이 섞여 있어 조용히 사라진다.
+- 내용 해시로 완전 중복 11,713행 삭제 → 이어서 옛 버전 28행 정리 → **12,191 → 450행**. 삭제 전 전량 로컬 백업 + 모의 실행 + "출처가 통째로 사라지면 중단" 가드.
+- 재발 방지: `ingest-chatbot-qa.mjs` 가 소유 출처 2개를 지운 뒤 넣는다(`bcbb6240`).
+- **효과**: 27문항 19/27(70%)·6,588ms → **22/27(81%)·5,791ms**, 재측정 21/27·5,850ms. (Gemini 기준선 18/27·8,432ms)
+
+**위젯 교시 이름 누락(`8027c135`)**: 실화면 확인에서 **위젯 3곳이 교시 이름을 무시하고 번호만 그리고 있었다** — `src/widgets/` 폴더가 ADR-047 작업에서 통째로 빠졌는데 **게이트 4종이 전부 초록**이었다. 메타테스트조차 통과했다(가드가 "교시" 글자 붙은 경우만 잡음). JSX 본문에 교시 번호를 그대로 그리는 패턴 검사를 추가하고 **버그를 되살려 빨간불을 실증**했다. 6글자 이름이 과목명과 붙어 읽히던 문제(`mr-2`)와 배지가 터지던 문제(`min-w-7`)도 함께 수정.
+
+## 🐛 챗봇 버그 신고가 개발자에게 안 가던 문제 — 해결 (2026-08-14, ADR-049)
+
+**원인**: 프롬프트 자기모순이 **두 군데**였다. ①"버그면 반드시 에스컬레이션" 바로 아래 "⚠️ 최후의 수단, 먼저 답변하라" ②문제 해결 원칙 9 "안내한 후 **그래도 안 되면** 에스컬레이션". **①만 고쳤을 때 #16만 고쳐지고 #17·#18은 그대로였다.**
+
+**해결 2단**
+
+1. **답변과 전달을 배타에서 병행으로** — 답변 뒤에 JSON 한 줄을 붙이게 하고 서버가 떼어내 `답변 + 전달 안내`를 한 메시지로 조립. 두 클라이언트가 이미 escalation 응답의 message를 렌더한 뒤 폼을 띄우므로 **화면 코드 변경 0**.
+2. **규칙 안전망 `detectReportIntent`** — 예시까지 넣었는데도 Solar가 **예시 문장을 그대로 따라 쓰면서 JSON 줄만 빠뜨렸다.** 질문 자체를 정규식으로 판정해 얹는다. "안 돼요"·"실패해요"는 환경 문제일 수 있어 **일부러 제외**(신고함 노이즈 방지).
+
+**검증** — ★같은 코드로 27문항을 두 번 돌려 **17/27과 21/27**이 나왔다(실패 절반이 응답시간 초과, 같은 문항이 10초↔21초). **한 번 점수로 회귀 판정 불가.** 목표 3건(#16·#17·#18)은 두 실행 모두 통과, 두 실행 공통 실패는 4건뿐. 타깃 프로브 5문항도 전부 통과.
+
+**테스트 기대값 1건 변경**: #24 "데이터가 다 사라졌어요" `answer`→`escalation`(사유 주석 기재). 데이터 소실은 개발자가 알아야 한다. 안내는 그대로 나가므로 사용자 손해 없음.
+
+## 🔐 개인정보처리방침 — 챗봇 LLM 공급자 명시 (2026-08-14)
+
+Gemini 시절부터 **방침에 챗봇 LLM 공급자가 아예 없던 공백**을 메웠다(국·영문 양쪽).
+
+- 제11조(처리위탁): 'AI 도우미' 항목 신설 — 전송되는 것은 **질문 텍스트·직전 대화·현재 화면 이름**뿐이고 앱에 저장된 학생·출결·관찰·상담 기록은 전송되지 않음을 명시. 수탁자에 주식회사 업스테이지·Google LLC 추가.
+- 제13조(국외이전): Google LLC 목적에 챗봇 질문 처리 추가 + **주식회사 업스테이지 항목 신설**.
+- **★정정 (`9d10cc2f`)**: 처음엔 "업스테이지는 국내 법인이라 국외이전 아님"으로 적었는데 **틀렸다.** 업스테이지 자사 방침(2026-06-01)의 국외 이전 표에 **AWS·Azure·Google(모두 미국)이 "입력된 대화 및 업로드한 파일"의 데이터 보관 수탁자**로 명시돼 있다. **법인 소재지가 아니라 그 회사 방침의 재위탁 대상으로 판단해야 한다.**
+- 검증: `docs:check` 통과(문서 41개) · `landing build` 성공(55페이지)
+
+**커밋**: 코드·문서는 `7d507a5e`(다른 세션 커밋에 섞임) · ADR은 `1b59fc28` · 방침 정정은 `9d10cc2f`. 전부 push 완료.
+
+**남음**: 다른 세션의 ADR-047(교시 이름) **구현 코드가 여전히 미커밋**(`src/domain/rules/periodLabel.ts` 등이 `??` 상태). ADR 문서만 `1b59fc28`에 딸려 들어갔다 — 해당 세션에 알려야 한다.
 
 ## 🚀 v2.3.8 출시 (2026-08-12, tag `v2.3.8`, main `177c557b`)
 

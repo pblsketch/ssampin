@@ -5,6 +5,7 @@ import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { useEventsStore } from '@adapters/stores/useEventsStore';
 import { PageHeader } from '@adapters/components/common/PageHeader';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+import { resolvePeriodLabel } from '@domain/rules/periodLabel';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { toLocalDateString } from '@shared/utils/localDate';
 import type { Todo as TodoType, TodoPriority, TodoCategory } from '@domain/entities/Todo';
@@ -291,7 +292,7 @@ export function Todo() {
             id: `tt-${idx + 1}`,
             type: 'timetable',
             time: periodTime?.start ?? null,
-            title: `${idx + 1}교시 ${p.subject}`,
+            title: `${resolvePeriodLabel(idx + 1, settings.periodTimes)} ${p.subject}`,
             subtitle: p.classroom || undefined,
             color: 'text-purple-400',
             icon: '📚',
@@ -307,7 +308,7 @@ export function Todo() {
             id: `tt-${idx + 1}`,
             type: 'timetable',
             time: periodTime?.start ?? null,
-            title: `${idx + 1}교시 ${p.subject}`,
+            title: `${resolvePeriodLabel(idx + 1, settings.periodTimes)} ${p.subject}`,
             subtitle: p.teacher || undefined,
             color: 'text-purple-400',
             icon: '📚',

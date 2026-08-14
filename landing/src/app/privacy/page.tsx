@@ -17,18 +17,49 @@ const koContent = {
   lang: 'ko',
   title: '개인정보처리방침',
   subtitle: '쌤핀 (SsamPin)',
-  lastUpdated: '최종 수정일: 2026년 7월 10일',
+  lastUpdated: '최종 수정일: 2026년 8월 14일',
   switchLang: 'View in English',
   switchHref: '?lang=en',
   sections: [
     {
       number: '1',
-      title: '수집하는 정보',
+      title: '처리하는 정보',
       content: (
         <>
           <p>
-            쌤핀은 사용자가 <strong>Google 연동 기능을 명시적으로 활성화한 경우에 한해</strong> 다음
-            정보를 수집합니다. 연동 기능을 사용하지 않는 경우, 어떠한 개인정보도 수집하지 않습니다.
+            <strong>가. 교사가 쌤핀에 입력하는 학생·학급 정보</strong> — 아래 정보는 교사가 직무
+            목적으로 직접 입력하며, <strong>원칙적으로 교사의 컴퓨터에만 저장</strong>됩니다. 다만
+            교사가 과제 수합·설문·상담 예약·전자 서명 등 협업 기능을 사용하면 그 기능에 필요한
+            항목은 클라우드에 저장됩니다(제11조). 모든 항목은{' '}
+            <strong>입력하지 않아도 앱이 동작하는 선택 항목</strong>이며, 필요한 항목만 입력하시면
+            됩니다.
+          </p>
+          <ul>
+            <li>
+              <strong>학생 기본 정보</strong> — 이름, 학번, 생년월일, 학생 연락처, 보호자
+              연락처(최대 2인)와 관계(아버지·어머니 등), 재적 상태(재학·전출·유예 등)와 사유 메모
+            </li>
+            <li>
+              <strong>출결 기록</strong> — 날짜, 교시, 출결 구분(결석·지각·조퇴·결과), 사유, 증빙
+              서류 제출 여부, NEIS 반영 여부
+            </li>
+            <li>
+              <strong>관찰·상담 기록</strong> — 분류, 기록 내용, 날짜, 상담 방법, 후속 조치 내용
+            </li>
+            <li>
+              <strong>학급 운영 자료</strong> — 시간표, 자리 배치, 진도, 과제 제출 현황,
+              설문·체크리스트 응답, 평가 기록
+            </li>
+          </ul>
+          <p>
+            <strong>보유 기간:</strong> 교사가 앱에서 삭제하거나 앱을 제거할 때까지 보유하며, 학년도
+            마무리 기능을 실행하면 보관함으로 이동합니다. 삭제 시 해당 JSON 파일에서 즉시
+            지워집니다.
+          </p>
+          <p className="mt-4">
+            <strong>나. Google 연동 시 처리하는 정보</strong> — 사용자가{' '}
+            <strong>Google 연동 기능을 명시적으로 활성화한 경우에 한해</strong> 다음 정보를
+            처리합니다. 연동 기능을 사용하지 않는 경우 아래 정보는 일절 처리되지 않습니다.
           </p>
           <ul>
             <li>
@@ -56,7 +87,23 @@ const koContent = {
       title: '정보 사용 목적',
       content: (
         <>
-          <p>수집된 정보는 다음 목적으로만 사용됩니다:</p>
+          <p>처리하는 정보는 다음 목적으로만 사용됩니다:</p>
+          <p>
+            <strong>가. 학생·학급 정보 (제1조 가목)</strong>
+          </p>
+          <ul>
+            <li>출결 확인·기록과 학교생활기록부 기재를 위한 자료 정리</li>
+            <li>학생 관찰·상담 내용의 기록과 후속 지도</li>
+            <li>학급 운영(시간표·자리 배치·진도·과제·평가) 관리</li>
+            <li>보호자 상담 일정 조율과 가정 연락</li>
+          </ul>
+          <p>
+            위 목적은 모두 <strong>교사의 학급 운영·학생 지도 직무 수행</strong>을 위한 것이며, 그
+            밖의 목적으로는 사용하지 않습니다.
+          </p>
+          <p className="mt-4">
+            <strong>나. Google 연동 정보 (제1조 나목)</strong>
+          </p>
           <ul>
             <li>쌤핀 앱과 Google Calendar 간 일정 양방향 동기화</li>
             <li>
@@ -80,8 +127,9 @@ const koContent = {
           <p>쌤핀은 서버리스(Serverless) 구조로 설계되었습니다:</p>
           <ul>
             <li>
-              <strong>로컬 저장:</strong> 모든 활성 사용 데이터는 사용자의 PC(
-              <code>userData/data/*.json</code>)에만 저장됩니다.
+              <strong>로컬 저장:</strong> 활성 사용 데이터는 원칙적으로 사용자의 PC(
+              <code>userData/data/*.json</code>)에 저장됩니다. 협업 기능에서 학생·보호자와 주고받는
+              자료는 예외이며, 그 범위는 제11조에 있습니다.
             </li>
             <li>
               <strong>쌤핀 개발자 서버 미보관:</strong> 쌤핀 개발자는 사용자 데이터를 저장·처리하는
@@ -168,9 +216,11 @@ const koContent = {
             <li>
               쌤핀은 Google Calendar·Drive·Tasks API와 직접 통신합니다. 또한 상담 예약·과제
               수합·전자 서명·설문 등 <strong>온라인 협업 기능</strong>을 사용할 때는, 그 기능 제공에
-              필요한 범위에서 일부 데이터가 클라우드 백엔드(Supabase)로 전송·저장됩니다. 이는 제3자
-              제공이 아니라 기능 제공을 위한 <strong>처리위탁</strong>이며, 자세한 내용은 제11조에
-              따릅니다. 그 외 어떤 외부 서비스에도 데이터를 전달하지 않습니다.
+              필요한 범위에서 일부 데이터가 클라우드 백엔드(Supabase)로 전송·저장됩니다. 또한 앱 내
+              AI 도우미에 질문하면 그 질문과 직전 대화가 답변 생성을 위해 주식회사 업스테이지·Google
+              LLC로 전송됩니다. 이는 제3자 제공이 아니라 기능 제공을 위한 <strong>처리위탁</strong>
+              이며, 자세한 내용은 제11조에 따릅니다. 제11조에 적힌 곳 외에 어떤 외부 서비스에도
+              데이터를 전달하지 않습니다.
             </li>
             <li>사용자 데이터를 광고주, 데이터 브로커 또는 정보 재판매자에게 이전하지 않습니다.</li>
             <li>
@@ -236,18 +286,45 @@ const koContent = {
     },
     {
       number: '7',
-      title: '사용자 권리',
+      title: '정보주체의 권리와 행사 방법',
       content: (
         <>
-          <p>사용자는 언제든지 다음 권리를 행사할 수 있습니다:</p>
+          <p>
+            정보주체는 언제든지 개인정보의 <strong>열람·정정·삭제·처리정지</strong>를 요구할 수
+            있습니다(개인정보 보호법 제35조~제37조).
+          </p>
+          <p>
+            <strong>가. 앱 안에서 직접 하실 수 있는 것</strong>
+          </p>
           <ul>
             <li>앱 내 설정 &gt; Google 연동 탭에서 계정 연결 해제 (모든 OAuth 토큰 즉시 삭제)</li>
             <li>앱 데이터 백업 토글 OFF 또는 &quot;클라우드 데이터 전체 삭제&quot; 실행</li>
             <li>Google Tasks 토글 OFF로 동기화 중단</li>
             <li>Google 계정 앱 권한 페이지에서 직접 접근 권한 철회</li>
+            <li>학생·학급 정보는 앱 화면에서 직접 열람·수정·삭제 (제1조 가목)</li>
+          </ul>
+          <p>
+            <strong>나. 학생·보호자의 권리 행사</strong> — 학생에 관한 정보는 교사가 소속 학교의
+            직무 목적으로 처리하므로, 그 정보의 열람·정정·삭제·처리정지 요구는{' '}
+            <strong>담당 교사 또는 소속 학교</strong>에 하시는 것이 가장 빠릅니다. 상담 예약·전자
+            서명·설문 등 온라인 협업 기능에 남은 정보에 대해서는 아래 연락처로도 요구하실 수
+            있습니다.
+          </p>
+          <p>
+            <strong>다. 접수 창구와 처리 기한</strong>
+          </p>
+          <ul>
             <li>
-              개인정보 처리 현황에 관한 열람·수정·삭제 요청:{' '}
-              <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
+              접수: <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a> (개인정보 보호책임자,
+              제15조)
+            </li>
+            <li>
+              처리 기한: 요구를 받은 날부터 <strong>10일 이내</strong>에 조치하고 결과를
+              알려드립니다. 기간 내 처리가 어려우면 사유와 예상 기간을 먼저 통지합니다.
+            </li>
+            <li>
+              법정대리인이나 위임을 받은 사람을 통해서도 요구하실 수 있습니다. 다른 법령에서 보존을
+              의무화한 정보는 삭제·처리정지가 제한될 수 있으며, 이 경우 그 사유를 알려드립니다.
             </li>
           </ul>
         </>
@@ -369,11 +446,32 @@ const koContent = {
               <strong>Google 연동 토큰 보관</strong> — 교사 이메일과 암호화된 OAuth
               토큰(AES-256-GCM).
             </li>
+            <li>
+              <strong>AI 도우미(고객지원 챗봇)</strong> — 사용자가 <strong>직접 입력한 질문</strong>
+              과 직전 대화 내용, 현재 보고 있는 화면 이름이 답변 생성을 위해 전송됩니다. 학생 명단,
+              출결·관찰·상담 기록 등 앱에 저장된 자료는 <strong>전송되지 않습니다</strong>. 다만
+              질문에 개인정보를 직접 적으면 그 내용도 함께 전송되므로, 질문에는 학생 이름·연락처
+              등을 넣지 않는 것을 권장합니다.
+            </li>
+            <li>
+              <strong>개발자 전달(버그 신고·건의사항)</strong> — 사이드바의 &quot;건의사항
+              보내기&quot;나 AI 도우미의 신고 창으로 보내는 내용입니다. 작성하신 내용, 회신
+              이메일(적으신 경우에만), 직전 대화 내용, <strong>첨부하신 스크린샷</strong>(최대
+              3장)이 저장되고 개발자에게 이메일로 전달됩니다.{' '}
+              <strong>
+                AI 도우미가 오류·기능 요청으로 판단하면 신고 창을 띄우면서 그 질문과 직전 대화를
+                먼저 기록합니다
+              </strong>
+              — 신고 창을 닫으셔도 그 기록은 남으며, 아래 연락처로 요청하시면 삭제해 드립니다.
+              스크린샷에는 학생 이름이 찍힐 수 있으니 첨부 전에 확인해 주세요.
+            </li>
           </ul>
           <p>
-            <strong>위탁받는 자:</strong> Supabase Inc.(클라우드 인프라).{' '}
-            <strong>위탁 목적:</strong> 위 협업 기능 제공. <strong>보관·삭제:</strong> 각 기능에서
-            자료를 삭제하거나 보관 기간(예: 실시간 링크 만료)이 지나면 삭제됩니다. 전송 구간은
+            <strong>위탁받는 자:</strong> Supabase Inc.(클라우드 인프라) · 주식회사 업스테이지(AI
+            도우미 답변 생성) · Google LLC(AI 도우미 질문 검색 처리 및 예비 답변 생성).{' '}
+            <strong>위탁 목적:</strong> 위 협업 기능과 AI 도우미 제공. <strong>보관·삭제:</strong>{' '}
+            각 기능에서 자료를 삭제하거나 보관 기간(예: 실시간 링크 만료)이 지나면 삭제됩니다. AI
+            도우미 대화는 답변 품질 개선을 위해 보관되며 요청 시 삭제합니다. 전송 구간은
             HTTPS(TLS)로 암호화됩니다.
           </p>
         </>
@@ -392,8 +490,9 @@ const koContent = {
           </p>
           <ul>
             <li>
-              학생 정보는 <strong>기본적으로 교사의 PC에만 로컬 저장</strong>되며, 쌤핀 개발자
-              서버로 전송·수집되지 않습니다.
+              출결·관찰·상담 기록 등 앱 본체의 학생 정보는 <strong>교사의 PC에만 로컬 저장</strong>
+              되며, 개발자가 따로 수집하지 않습니다. 다만 아래 협업 기능을 사용할 때는 해당 자료가
+              클라우드(수탁자)에 저장됩니다(제11조).
             </li>
             <li>
               상담 예약·설문·체크리스트 등 온라인 협업 기능에서는 학생을{' '}
@@ -401,8 +500,9 @@ const koContent = {
               암호화한 뒤 전송합니다(제11조).
             </li>
             <li>
-              과제 수합·전자 서명 기능은 기능 특성상 학생 이름이 포함될 수 있으므로, 교사가 꼭
-              필요한 범위에서만 사용하고 목적을 달성한 뒤에는 삭제하는 것을 원칙으로 합니다.
+              <strong>과제 수합과 전자 서명은 기능 특성상 학생 이름이 포함</strong>되며, 그 이름은
+              암호화되지 않은 형태로 클라우드에 저장됩니다(전자 서명은 서명 이미지도 함께). 교사가
+              꼭 필요한 범위에서만 사용하고, 목적을 달성한 뒤에는 삭제하는 것을 원칙으로 합니다.
             </li>
             <li>
               외부 AI로 데이터를 보내는 경우(제10조)에는 실명·연락처·생년월일 등 신원 정보를 불투명
@@ -419,9 +519,9 @@ const koContent = {
       content: (
         <>
           <p>
-            쌤핀의 일부 협업 기능과 Google 연동은 국외에 서버를 둔 사업자에게 개인정보 처리를
-            위탁하며, 이 과정에서 개인정보가 국외로 이전될 수 있습니다. 교사가 해당 기능을 사용하지
-            않으면 어떤 정보도 국외로 이전되지 않습니다.
+            쌤핀의 일부 협업 기능과 Google 연동, 그리고 AI 도우미는 국외에 서버를 둔 사업자에게
+            개인정보 처리를 위탁하며, 이 과정에서 개인정보가 국외로 이전될 수 있습니다. 교사가 해당
+            기능을 사용하지 않으면 어떤 정보도 국외로 이전되지 않습니다.
           </p>
           <ul>
             <li>
@@ -432,8 +532,15 @@ const koContent = {
               <strong>Vercel Inc.</strong> (미국) — 협업 기능이 사용하는 웹페이지 호스팅
             </li>
             <li>
-              <strong>Google LLC</strong> (미국) — 사용자가 Google 연동을 활성화한 경우 캘린더·Drive
-              백업·Tasks 데이터 처리 (제1조·제6조)
+              <strong>Google LLC</strong> (미국) — ①사용자가 Google 연동을 활성화한 경우
+              캘린더·Drive 백업·Tasks 데이터 처리 (제1조·제6조) ②AI 도우미에 질문을 보낼 때, 관련
+              도움말을 찾기 위한 질문 텍스트 처리 및 예비 답변 생성 (제11조)
+            </li>
+            <li>
+              <strong>주식회사 업스테이지</strong> (대한민국 법인, 처리 인프라 미국) — AI 도우미에
+              질문을 보낼 때의 답변 생성 (제11조). 업스테이지는 자사 개인정보처리방침에 따라 입력된
+              대화 내용의 시스템 운영·데이터 보관을 Amazon Web Services·Microsoft Azure·Google(모두
+              미국)에 재위탁하므로, 이 과정에서 정보가 국외로 이전될 수 있습니다.
             </li>
           </ul>
           <p>
@@ -445,6 +552,78 @@ const koContent = {
     },
     {
       number: '14',
+      title: '개인정보의 안전성 확보조치',
+      content: (
+        <>
+          <p>
+            쌤핀은 개인정보가 분실·도난·유출·위조·변조 또는 훼손되지 않도록 다음과 같은 조치를 하고
+            있습니다. 근거: 개인정보 보호법 제29조(안전조치의무).
+          </p>
+          <p>
+            <strong>가. 기술적 조치</strong>
+          </p>
+          <ul>
+            <li>
+              <strong>전송 구간 암호화</strong> — 모든 통신은 HTTPS(TLS)로 암호화하며, HTTP 접속은
+              HTTPS로 강제 전환합니다(HSTS 적용).
+            </li>
+            <li>
+              <strong>저장 시 암호화</strong> — Google OAuth 토큰은 OS 키체인(Windows DPAPI /
+              Electron safeStorage)에, 클라우드에 보관되는 토큰은 AES-256-GCM으로 암호화합니다. 상담
+              예약의 연락처·메모는 <strong>사용자 단말에서 암호화한 뒤</strong> 전송합니다.
+            </li>
+            <li>
+              <strong>접근 통제</strong> — 클라우드 자료에는 행 수준 접근 제어(RLS)와{' '}
+              <strong>컬럼 단위 권한</strong>을 적용합니다. 교사용 관리 키와 설문 PIN 해시는 공개
+              요청으로 조회할 수 없고, 서명 이미지 보관함은 목록 조회를 차단합니다. 앱의 예약·응답
+              조회는 <strong>해당 일정·설문의 관리 키를 확인하는 경로로만</strong> 동작합니다.
+            </li>
+            <li>
+              <strong>식별정보 최소화</strong> — 전자 서명의 접속 IP와 기기정보(User-Agent)는 원문이
+              아니라 해시값으로만 저장하고, 외부 AI로 보내는 데이터는 신원 정보를 불투명 토큰으로
+              가명처리합니다(제10조).
+            </li>
+            <li>
+              <strong>웹 보안 설정</strong> — 악성 스크립트 삽입(XSS)과 화면 가로채기(클릭재킹)를
+              막기 위해 Content-Security-Policy, X-Frame-Options, X-Content-Type-Options,
+              Referrer-Policy, Permissions-Policy 응답 헤더를 적용합니다.
+            </li>
+          </ul>
+          <p>
+            <strong>나. 관리적 조치</strong>
+          </p>
+          <ul>
+            <li>
+              개인정보를 취급하는 인원을 개발·운영자 1인(제15조 보호책임자)으로 최소화하고, 그 외
+              누구에게도 접근 권한을 부여하지 않습니다.
+            </li>
+            <li>
+              서버 전용 비밀키는 이용자 브라우저로 내려가는 코드에 포함하지 않고 서버에서만
+              사용합니다.
+            </li>
+            <li>
+              외부 보안 점검 도구로 응답 헤더·접근 통제·비밀키 노출·민감 파일 노출 여부를 점검하고,
+              발견된 사항을 수정해 반영합니다.
+            </li>
+          </ul>
+          <p>
+            <strong>다. 물리적 조치</strong>
+          </p>
+          <ul>
+            <li>
+              쌤핀은 자체 물리 서버를 운영하지 않습니다. 학생·학급 정보의 원본은 교사가 관리하는
+              컴퓨터에 있으며, 그 물리적 보안(잠금·계정 분리 등)은 교사와 소속 학교가 관리합니다.
+            </li>
+            <li>
+              협업 기능이 사용하는 클라우드 설비의 물리적 보안은 해당 사업자(Supabase·Vercel·Google,
+              제11조·제13조)의 데이터센터 보호 조치를 따릅니다.
+            </li>
+          </ul>
+        </>
+      ),
+    },
+    {
+      number: '15',
       title: '개인정보 보호책임자',
       content: (
         <>
@@ -477,19 +656,56 @@ const enContent = {
   lang: 'en',
   title: 'Privacy Policy',
   subtitle: 'SsamPin',
-  lastUpdated: 'Last updated: July 10, 2026',
+  lastUpdated: 'Last updated: August 14, 2026',
   switchLang: '한국어로 보기',
   switchHref: '?lang=ko',
   sections: [
     {
       number: '1',
-      title: 'Information We Collect',
+      title: 'Information We Process',
       content: (
         <>
           <p>
-            SsamPin collects the following information{' '}
+            <strong>A. Student and class information entered by the teacher</strong> — The
+            information below is entered directly by the teacher for professional purposes and is{' '}
+            <strong>as a rule stored only on the teacher&apos;s computer</strong>. However, if the
+            teacher uses a collaboration feature (assignment collection, surveys, consultation
+            booking, e-signature), the fields that feature needs are stored in the cloud (Section
+            11). Every field is <strong>optional</strong> — the app works without them, so teachers
+            enter only what they need.
+          </p>
+          <ul>
+            <li>
+              <strong>Basic student information</strong> — name, student number, date of birth,
+              student contact number, up to two guardian contact numbers with their relationship
+              (father, mother, etc.), and enrollment status (enrolled, transferred, on leave, etc.)
+              with a reason note
+            </li>
+            <li>
+              <strong>Attendance records</strong> — date, class period, attendance type (absence,
+              late arrival, early leave, missed class), reason, whether supporting documents were
+              submitted, and whether it was reported to NEIS
+            </li>
+            <li>
+              <strong>Observation and counseling records</strong> — category, record content, date,
+              counseling method, and follow-up actions
+            </li>
+            <li>
+              <strong>Class management data</strong> — timetable, seating charts, curriculum
+              progress, assignment submission status, survey/checklist responses, and assessment
+              records
+            </li>
+          </ul>
+          <p>
+            <strong>Retention:</strong> retained until the teacher deletes it in the app or
+            uninstalls the app; running the school-year wrap-up moves it to the archive. Deleting an
+            item removes it from the corresponding JSON file immediately.
+          </p>
+          <p className="mt-4">
+            <strong>B. Information processed through Google integrations</strong> — SsamPin
+            processes the following{' '}
             <strong>only when you explicitly enable a specific Google integration feature</strong>.
-            If you do not use any integration feature, no personal information is collected.
+            If you do not use any integration feature, none of the information below is processed.
           </p>
           <ul>
             <li>
@@ -519,7 +735,29 @@ const enContent = {
       title: 'How We Use Your Information',
       content: (
         <>
-          <p>The collected information is used solely for the following purposes:</p>
+          <p>The information processed is used solely for the following purposes:</p>
+          <p>
+            <strong>A. Student and class information (Section 1.A)</strong>
+          </p>
+          <ul>
+            <li>
+              Checking and recording attendance, and organizing material for the official school
+              record
+            </li>
+            <li>Recording student observations and counseling, and following up on them</li>
+            <li>
+              Managing class operations (timetable, seating, curriculum progress, assignments,
+              assessment)
+            </li>
+            <li>Arranging guardian consultation schedules and contacting families</li>
+          </ul>
+          <p>
+            All of the above serve the <strong>teacher&apos;s professional duties</strong> of class
+            management and student guidance, and are not used for any other purpose.
+          </p>
+          <p className="mt-4">
+            <strong>B. Google integration information (Section 1.B)</strong>
+          </p>
           <ul>
             <li>Two-way synchronization of events between the SsamPin app and Google Calendar</li>
             <li>
@@ -547,8 +785,10 @@ const enContent = {
           <p>SsamPin is designed with a serverless architecture:</p>
           <ul>
             <li>
-              <strong>Local storage only:</strong> All active user data is stored exclusively on
-              your PC (<code>userData/data/*.json</code>).
+              <strong>Local storage by default:</strong> Active user data is, as a rule, stored on
+              your PC (<code>userData/data/*.json</code>). Data exchanged with students and
+              guardians through the collaboration features is the exception; its scope is set out in
+              Section 11.
             </li>
             <li>
               <strong>No SsamPin developer servers:</strong> The SsamPin developer does not operate
@@ -637,9 +877,12 @@ const enContent = {
               SsamPin communicates directly with the Google Calendar, Drive, and Tasks APIs. In
               addition, when you use <strong>online collaboration features</strong> (consultation
               booking, assignment collection, e-signature, surveys, etc.), some data is transmitted
-              to and stored on a cloud backend (Supabase) as needed to provide those features. This
-              is a <strong>processing consignment</strong> for feature delivery, not third-party
-              provision; see Section 11 for details. No data is sent to any other external services.
+              to and stored on a cloud backend (Supabase) as needed to provide those features. In
+              addition, when you ask the in-app AI assistant a question, that question and the
+              preceding conversation are sent to Upstage Inc. and Google LLC to generate an answer.
+              This is a <strong>processing consignment</strong> for feature delivery, not
+              third-party provision; see Section 11 for details. No data is sent to external
+              services other than those listed in Section 11.
             </li>
             <li>
               We do not transfer user data to advertisers, data brokers, or information resellers.
@@ -712,10 +955,17 @@ const enContent = {
     },
     {
       number: '7',
-      title: 'Your Rights',
+      title: 'Data Subject Rights and How to Exercise Them',
       content: (
         <>
-          <p>You may exercise the following rights at any time:</p>
+          <p>
+            Data subjects may at any time request{' '}
+            <strong>access, correction, deletion, or suspension of processing</strong> of their
+            personal information (Articles 35–37 of the Personal Information Protection Act).
+          </p>
+          <p>
+            <strong>A. What you can do inside the app</strong>
+          </p>
           <ul>
             <li>
               Disconnect your Google account in Settings &gt; Google Integration (all OAuth tokens
@@ -725,8 +975,35 @@ const enContent = {
             <li>Turn off Google Tasks to stop synchronization</li>
             <li>Revoke access directly from the Google Account app permissions page</li>
             <li>
-              Request access, correction, or deletion of personal data processing:{' '}
-              <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
+              View, correct, and delete student and class information directly on the app screens
+              (Section 1.A)
+            </li>
+          </ul>
+          <p>
+            <strong>B. Requests by students and guardians</strong> — Information about students is
+            processed by teachers for the professional purposes of their school, so requests for
+            access, correction, deletion, or suspension of processing are handled fastest by the{' '}
+            <strong>teacher in charge or the school</strong>. For information held by the online
+            collaboration features (consultation booking, e-signature, surveys), you may also
+            contact us at the address below.
+          </p>
+          <p>
+            <strong>C. Where to file and how long it takes</strong>
+          </p>
+          <ul>
+            <li>
+              Contact: <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a> (Personal Information
+              Protection Officer, Section 15)
+            </li>
+            <li>
+              Response time: we act on the request and notify you of the result{' '}
+              <strong>within 10 days</strong> of receiving it. If we cannot meet that deadline, we
+              notify you of the reason and the expected timeframe first.
+            </li>
+            <li>
+              Requests may also be made through a legal representative or an authorized agent.
+              Deletion or suspension may be restricted where other laws require retention; in that
+              case we will explain the reason.
             </li>
           </ul>
         </>
@@ -855,13 +1132,39 @@ const enContent = {
               <strong>Google integration token storage</strong> — the teacher&apos;s email and
               encrypted OAuth tokens (AES-256-GCM).
             </li>
+            <li>
+              <strong>AI assistant (support chatbot)</strong> — the{' '}
+              <strong>question you type</strong>, the immediately preceding conversation, and the
+              name of the screen you are viewing are transmitted in order to generate an answer.
+              Data stored in the app — student rosters, attendance, observation and counseling
+              records — is <strong>not transmitted</strong>. However, personal information you type
+              into the question itself is transmitted with it, so we recommend not including student
+              names or contact details in your questions.
+            </li>
+            <li>
+              <strong>Reports to the developer (bug reports and suggestions)</strong> — what you
+              send via &quot;Send feedback&quot; in the sidebar or the report form in the AI
+              assistant. The text you write, a reply email address (only if you provide one), the
+              immediately preceding conversation, and <strong>any screenshots you attach</strong>{' '}
+              (up to 3) are stored and emailed to the developer.{' '}
+              <strong>
+                When the AI assistant judges your message to be a bug or a feature request, it
+                records that question and the preceding conversation at the moment it opens the
+                report form
+              </strong>{' '}
+              — the record remains even if you close the form, and we will delete it on request via
+              the contact below. Screenshots may capture student names, so please check before
+              attaching.
+            </li>
           </ul>
           <p>
-            <strong>Consignee:</strong> Supabase Inc. (cloud infrastructure).{' '}
-            <strong>Purpose:</strong> providing the collaboration features above.{' '}
-            <strong>Retention/Deletion:</strong> data is deleted when you remove it within each
-            feature or when its retention period (e.g., real-time link expiry) passes. Data in
-            transit is encrypted via HTTPS (TLS).
+            <strong>Consignees:</strong> Supabase Inc. (cloud infrastructure); Upstage Inc. (AI
+            assistant answer generation); Google LLC (AI assistant question retrieval and fallback
+            answer generation). <strong>Purpose:</strong> providing the collaboration features above
+            and the AI assistant. <strong>Retention/Deletion:</strong> data is deleted when you
+            remove it within each feature or when its retention period (e.g., real-time link expiry)
+            passes. AI assistant conversations are retained to improve answer quality and are
+            deleted on request. Data in transit is encrypted via HTTPS (TLS).
           </p>
         </>
       ),
@@ -881,9 +1184,11 @@ const enContent = {
           </p>
           <ul>
             <li>
-              Student information is{' '}
-              <strong>stored locally on the teacher&apos;s PC by default</strong> and is not
-              transmitted to or collected by any SsamPin developer server.
+              Student information is Student information held by the app itself (attendance,
+              observation and counseling records) is{' '}
+              <strong>stored only on the teacher&apos;s PC</strong> and is not separately collected
+              by the developer. However, when the collaboration features below are used, that data
+              is stored with our cloud consignee (Section 11).
             </li>
             <li>
               In online collaboration features (consultation booking, surveys, checklists), students
@@ -892,9 +1197,13 @@ const enContent = {
               11).
             </li>
             <li>
-              Assignment collection and e-signature features may, by their nature, include a
-              student&apos;s name; teachers are expected to use them only to the extent necessary
-              and to delete the data once the purpose is fulfilled.
+              <strong>
+                Assignment collection and e-signature do, by their nature, include a student&apos;s
+                name
+              </strong>
+              , and that name is stored in the cloud unencrypted (for e-signature, together with the
+              signature image). Teachers are expected to use these features only to the extent
+              necessary and to delete the data once the purpose is fulfilled.
             </li>
             <li>
               When data is sent to an external AI (Section 10), identifying information such as
@@ -914,10 +1223,10 @@ const enContent = {
       content: (
         <>
           <p>
-            Some of SsamPin&apos;s collaboration features and Google integrations consign personal
-            information processing to companies whose servers are located overseas, and personal
-            information may be transferred abroad in the process. If a teacher does not use these
-            features, no information is transferred overseas.
+            Some of SsamPin&apos;s collaboration features, Google integrations, and the AI assistant
+            consign personal information processing to companies whose servers are located overseas,
+            and personal information may be transferred abroad in the process. If a teacher does not
+            use these features, no information is transferred overseas.
           </p>
           <ul>
             <li>
@@ -930,8 +1239,17 @@ const enContent = {
               features
             </li>
             <li>
-              <strong>Google LLC</strong> (USA) — processing of Calendar, Drive backup, and Tasks
-              data when you enable Google integration (Sections 1 and 6)
+              <strong>Google LLC</strong> (USA) — (i) processing of Calendar, Drive backup, and
+              Tasks data when you enable Google integration (Sections 1 and 6); (ii) processing of
+              your question text to retrieve relevant help articles, and fallback answer generation,
+              when you use the AI assistant (Section 11)
+            </li>
+            <li>
+              <strong>Upstage Inc.</strong> (a Korean company; processing infrastructure in the USA)
+              — answer generation when you use the AI assistant (Section 11). Under its own privacy
+              policy, Upstage sub-consigns system operation and data storage of submitted
+              conversations to Amazon Web Services, Microsoft Azure, and Google (all in the USA), so
+              information may be transferred abroad in that process.
             </li>
           </ul>
           <p>
@@ -944,6 +1262,85 @@ const enContent = {
     },
     {
       number: '14',
+      title: 'Security Measures for Personal Information',
+      content: (
+        <>
+          <p>
+            SsamPin takes the following measures to prevent personal information from being lost,
+            stolen, leaked, forged, altered, or damaged. Basis: Article 29 of the Personal
+            Information Protection Act (duty to take security measures).
+          </p>
+          <p>
+            <strong>A. Technical measures</strong>
+          </p>
+          <ul>
+            <li>
+              <strong>Encryption in transit</strong> — all communication is encrypted with HTTPS
+              (TLS), and HTTP requests are forced to HTTPS (HSTS applied).
+            </li>
+            <li>
+              <strong>Encryption at rest</strong> — Google OAuth tokens are stored in the OS
+              keychain (Windows DPAPI / Electron safeStorage), and tokens kept in the cloud are
+              encrypted with AES-256-GCM. Contact details and memos in consultation booking are{' '}
+              <strong>encrypted on your device before transmission</strong>.
+            </li>
+            <li>
+              <strong>Access control</strong> — cloud data is protected by row-level security (RLS)
+              and <strong>column-level privileges</strong>. Teacher admin keys and survey PIN hashes
+              cannot be read by public requests, and listing of the signature-image bucket is
+              blocked. The app reads bookings and survey responses{' '}
+              <strong>only through a path that verifies the admin key</strong> of that schedule or
+              survey.
+            </li>
+            <li>
+              <strong>Minimizing identifiers</strong> — the access IP and device information
+              (User-Agent) for e-signatures are stored only as hashes, and identifying information
+              sent to external AI tools is pseudonymized with opaque tokens (Section 10).
+            </li>
+            <li>
+              <strong>Web security headers</strong> — Content-Security-Policy, X-Frame-Options,
+              X-Content-Type-Options, Referrer-Policy, and Permissions-Policy response headers are
+              applied to block script injection (XSS) and clickjacking.
+            </li>
+          </ul>
+          <p>
+            <strong>B. Administrative measures</strong>
+          </p>
+          <ul>
+            <li>
+              The number of people handling personal information is kept to one — the
+              developer/operator (Protection Officer, Section 15) — and no one else is granted
+              access.
+            </li>
+            <li>
+              Server-only secret keys are never included in the code delivered to users&apos;
+              browsers and are used only on the server.
+            </li>
+            <li>
+              External security scanning tools are used to check response headers, access control,
+              secret exposure, and sensitive file exposure, and findings are fixed and deployed.
+            </li>
+          </ul>
+          <p>
+            <strong>C. Physical measures</strong>
+          </p>
+          <ul>
+            <li>
+              SsamPin operates no physical servers of its own. The original student and class
+              information resides on the computer the teacher manages, and its physical security
+              (screen lock, separate accounts, etc.) is managed by the teacher and their school.
+            </li>
+            <li>
+              Physical security of the cloud infrastructure used by the collaboration features
+              follows the data-center protections of the respective providers (Supabase, Vercel,
+              Google; Sections 11 and 13).
+            </li>
+          </ul>
+        </>
+      ),
+    },
+    {
+      number: '15',
       title: 'Personal Information Protection Officer',
       content: (
         <>

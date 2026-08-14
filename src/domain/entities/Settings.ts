@@ -189,7 +189,7 @@ export interface WidgetSettings {
    * - 'quit': 앱 완전 종료
    * - 'ask': 매번 다이얼로그
    */
-  readonly closeAction?: 'widget' | 'tray' | 'ask' | 'icon' | 'quit';
+  readonly closeAction?: 'widget' | 'tray' | 'ask' | 'icon' | 'quit' | 'sidePin';
   readonly visibleSections: WidgetVisibleSections;
   readonly layoutMode: WidgetLayoutMode;
   readonly desktopMode: WidgetDesktopMode;

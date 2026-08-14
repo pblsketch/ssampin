@@ -1,4 +1,6 @@
 import { CalendarPicker } from '@adapters/components/common/CalendarPicker';
+import { resolvePeriodLabel } from '@domain/rules/periodLabel';
+import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 
 /**
  * 진도 입력 필드 본문 (완전 controlled, 버튼·컨테이너·저장 로직 없음).
@@ -26,6 +28,8 @@ interface ProgressEntryFieldsProps {
   accentColor?: { text: string; bg: string; bgSolid: string };
   /** 선택 가능한 최대 교시 수 */
   maxPeriods: number;
+  /** 교시 이름 표시용 */
+  periodTimes?: readonly PeriodTime[];
   /** 날짜 변경 시 교시 자동 선택 등 부모 훅이 필요할 때 (없으면 onChange({date})만) */
   onDateChange?: (date: string) => void;
   /** 컴팩트 간격 (모달/좁은 폼용) */
@@ -39,6 +43,7 @@ export function ProgressEntryFields({
   lessonDays,
   accentColor,
   maxPeriods,
+  periodTimes,
   onDateChange,
   compact = false,
 }: ProgressEntryFieldsProps) {
@@ -67,7 +72,8 @@ export function ProgressEntryFields({
               const isMatch = matchingPeriods.includes(p);
               return (
                 <option key={p} value={p}>
-                  {p}교시{isMatch ? ' ✦' : ''}
+                  {resolvePeriodLabel(p, periodTimes)}
+                  {isMatch ? ' ✦' : ''}
                 </option>
               );
             })}

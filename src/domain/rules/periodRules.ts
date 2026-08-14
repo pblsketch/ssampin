@@ -203,8 +203,9 @@ export function shiftPeriodsFrom(
 ): PeriodTime[] {
   return periodTimes.map((pt, i) => {
     if (i < fromIndex) return pt;
+    // 스프레드 — 시각만 옮기고 교시 이름(label) 등 나머지 필드는 그대로 태워 보낸다
     return {
-      period: pt.period,
+      ...pt,
       start: formatTime(parseMinutes(pt.start) + deltaMinutes),
       end: formatTime(parseMinutes(pt.end) + deltaMinutes),
     };

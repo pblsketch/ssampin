@@ -197,8 +197,9 @@ describe('updateSchedule', () => {
 
     expect(result.ok).toBe(true);
     expect(clientFakes.cancelBooking).toHaveBeenCalledTimes(2);
-    expect(clientFakes.cancelBooking).toHaveBeenCalledWith('bk-1', 'sch-1');
-    expect(clientFakes.cancelBooking).toHaveBeenCalledWith('bk-2', 'sch-1');
+    // adminKey 는 취소 RPC 의 인자다 (마이그레이션 047)
+    expect(clientFakes.cancelBooking).toHaveBeenCalledWith('bk-1', 'sch-1', 'abcd1234');
+    expect(clientFakes.cancelBooking).toHaveBeenCalledWith('bk-2', 'sch-1', 'abcd1234');
     expect(clientFakes.updateSchedule).toHaveBeenCalledTimes(1);
     expect(clientFakes.replaceSlots).toHaveBeenCalledTimes(1);
   });
@@ -261,7 +262,15 @@ describe('cancelBooking', () => {
   it('성공 → ok:true', async () => {
     const result = await useConsultationStore.getState().cancelBooking('sch-1', 'bk-1');
     expect(result.ok).toBe(true);
-    expect(clientFakes.cancelBooking).toHaveBeenCalledWith('bk-1', 'sch-1');
+    expect(clientFakes.cancelBooking).toHaveBeenCalledWith('bk-1', 'sch-1', 'abcd1234');
+  });
+
+  it('일정을 찾지 못하면 호출하지 않고 ok:false', async () => {
+    // adminKey 없이 RPC 를 부르면 서버가 거부한다. 헛호출 대신 이유를 돌려준다.
+    const result = await useConsultationStore.getState().cancelBooking('없는-일정', 'bk-1');
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toMatch(/상담 일정을 찾을 수 없습니다/);
+    expect(clientFakes.cancelBooking).not.toHaveBeenCalled();
   });
 
   it('인프라 에러 → ok:false + 한국어 메시지', async () => {

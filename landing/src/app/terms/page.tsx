@@ -47,9 +47,9 @@ const koContent = {
               <strong>인터넷 없이 동작하며 데이터를 사용자 PC에 로컬 저장</strong>합니다.
             </li>
             <li>
-              Google 연동(캘린더·Drive 백업·Tasks), 상담 예약·과제 수합·전자 서명·설문 등 일부
-              기능은 사용자가 명시적으로 사용할 때만 동작하며, 그 처리 기준은{' '}
-              <Link href="/privacy">개인정보처리방침</Link>에 따릅니다.
+              Google 연동(캘린더·Drive 백업·Tasks), 상담 예약·과제 수합·전자 서명·설문, 앱 내 AI
+              도우미와 건의사항 보내기 등 일부 기능은 사용자가 명시적으로 사용할 때만 동작하며, 그
+              처리 기준은 <Link href="/privacy">개인정보처리방침</Link>에 따릅니다.
             </li>
             <li>서비스는 현재 무료로 제공되며, 제공 범위·기능은 변경될 수 있습니다.</li>
           </ul>
@@ -287,9 +287,9 @@ const enContent = {
             </li>
             <li>
               Some features — Google integrations (Calendar, Drive backup, Tasks), consultation
-              booking, assignment collection, e-signature, surveys, etc. — operate only when you
-              explicitly use them, and are processed according to our{' '}
-              <Link href="/privacy">Privacy Policy</Link>.
+              booking, assignment collection, e-signature, surveys, the in-app AI assistant, and
+              sending feedback to the developer — operate only when you explicitly use them, and are
+              processed according to our <Link href="/privacy">Privacy Policy</Link>.
             </li>
             <li>
               The Service is currently provided free of charge, and its scope and features may

@@ -28,6 +28,8 @@ import type { SubjectColorMap } from '@domain/valueObjects/SubjectColor';
 import { getSubjectArgb, getClassroomArgb } from '@domain/valueObjects/SubjectColor';
 import type { AttendanceRecord, AttendanceStatus } from '@domain/entities/Attendance';
 import { formatPeriodLabel } from '@domain/entities/Attendance';
+import { resolvePeriodLabel } from '@domain/rules/periodLabel';
+import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import type { TeachingClassStudent } from '@domain/entities/TeachingClass';
 import { studentKey } from '@domain/entities/TeachingClass';
 import type { GroupResult } from '@domain/rules/groupingRules';
@@ -81,6 +83,7 @@ export async function exportClassScheduleToExcel(
   schedule: ClassScheduleData,
   maxPeriods: number,
   subjectColors?: SubjectColorMap,
+  periodTimes?: readonly PeriodTime[],
 ): Promise<ArrayBuffer> {
   const workbook = new ExcelJS.Workbook();
   const ws = workbook.addWorksheet('학급 시간표');
@@ -96,7 +99,7 @@ export async function exportClassScheduleToExcel(
   // Data rows
   for (let p = 0; p < maxPeriods; p++) {
     const row = ws.addRow([
-      `${p + 1}교시`,
+      resolvePeriodLabel(p + 1, periodTimes),
       ...DAYS.map((day) => {
         const cp = schedule[day]?.[p];
         if (!cp) return '';
@@ -124,6 +127,7 @@ export async function exportTeacherScheduleToExcel(
   subjectColors?: SubjectColorMap,
   colorBy?: 'subject' | 'classroom',
   classroomColors?: SubjectColorMap,
+  periodTimes?: readonly PeriodTime[],
 ): Promise<ArrayBuffer> {
   const workbook = new ExcelJS.Workbook();
   const ws = workbook.addWorksheet('교사 시간표');
@@ -138,7 +142,7 @@ export async function exportTeacherScheduleToExcel(
   for (let p = 0; p < maxPeriods; p++) {
     const periods = DAYS.map((day) => schedule[day]?.[p] ?? null);
     const row = ws.addRow([
-      `${p + 1}교시`,
+      resolvePeriodLabel(p + 1, periodTimes),
       ...periods.map((period) => {
         if (!period) return '';
         return `${period.subject} (${period.classroom})`;
@@ -1476,6 +1480,7 @@ export async function exportAttendanceToExcel(
   students: readonly TeachingClassStudent[],
   className: string,
   period?: { start: string; end: string },
+  periodTimes?: readonly PeriodTime[],
 ): Promise<ArrayBuffer> {
   const workbook = new ExcelJS.Workbook();
 
@@ -1650,7 +1655,7 @@ export async function exportAttendanceToExcel(
       const student = activeStudents.find((s) => studentKey(s) === studentKey(sa));
       const row = ws3.addRow([
         record.date,
-        formatPeriodLabel(record.period),
+        formatPeriodLabel(record.period, periodTimes),
         sa.number,
         student?.name ?? '',
         ATTENDANCE_STATUS_LABEL[sa.status],

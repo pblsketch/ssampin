@@ -3,7 +3,12 @@
  *
  * survey_responses 테이블은 RLS로 Public read/insert가 열려있으므로
  * anon key만으로 직접 REST API 호출이 가능하다.
+ *
+ * ⚠️ 위 "Public read" 는 정리 대상이다(계획서 P0-3). 응답 내용이 평문이라
+ *    상담 예약보다 우선순위가 높다.
  */
+
+import { throwIfPermissionError } from './supabaseAccessError';
 
 interface SurveyRow {
   id: string;
@@ -154,15 +159,23 @@ export class SurveySupabaseClient {
    * 실패 시 빈 배열로 silent fail 하면 사용자가 "응답 0건"으로 오인하고
    * 동기화 문제로 신고하게 된다(2026-05-14 사용자 신고 사례). 실패는 throw 한다.
    */
-  async getResponses(surveyId: string): Promise<SurveyResponsePublic[]> {
+  /**
+   * 예전에는 survey_responses 를 직접 조회했다. PostgREST 는 클라이언트가 보낸 필터를
+   * 신뢰할 뿐이라 필터를 뺀 요청으로 전 행이 나왔다(2026-08-14 실측 129행, answers 평문).
+   * 지금은 adminKey 를 함께 보내 **그 설문의 응답만** 받는다 — 마이그레이션 046.
+   */
+  async getResponses(surveyId: string, adminKey: string): Promise<SurveyResponsePublic[]> {
     this.ensureConfigured();
-    const res = await fetch(
-      `${this.baseUrl}/rest/v1/survey_responses?survey_id=eq.${surveyId}&order=student_number.asc`,
-      { headers: this.headers() },
-    );
+    const res = await fetch(`${this.baseUrl}/rest/v1/rpc/get_survey_responses`, {
+      method: 'POST',
+      headers: this.headers(),
+      body: JSON.stringify({ p_survey_id: surveyId, p_admin_key: adminKey }),
+    });
 
     if (!res.ok) {
       const body = await res.text().catch(() => '');
+      // 권한 오류는 "무엇을 해야 하는지" 알려준다 (관리 키 불일치와 구분)
+      throwIfPermissionError(res.status, '설문 응답', body);
       console.error(
         `[SurveySupabaseClient.getResponses] HTTP ${res.status} ${res.statusText} | surveyId=${surveyId} | body=${body.slice(0, 200)}`,
       );
@@ -216,10 +229,12 @@ export class SurveySupabaseClient {
    */
   async checkAlreadyResponded(surveyId: string, studentNumber: number): Promise<boolean> {
     this.ensureConfigured();
-    const res = await fetch(
-      `${this.baseUrl}/rest/v1/survey_responses?survey_id=eq.${surveyId}&student_number=eq.${studentNumber}&select=id`,
-      { headers: this.headers() },
-    );
+    // 여부만 필요하므로 boolean RPC 사용 — 남의 응답 내용은 나가지 않는다 (마이그레이션 046)
+    const res = await fetch(`${this.baseUrl}/rest/v1/rpc/has_survey_response`, {
+      method: 'POST',
+      headers: this.headers(),
+      body: JSON.stringify({ p_survey_id: surveyId, p_student_number: studentNumber }),
+    });
 
     if (!res.ok) {
       const body = await res.text().catch(() => '');
@@ -228,8 +243,7 @@ export class SurveySupabaseClient {
       );
       throw new Error(`Supabase checkAlreadyResponded failed: ${res.status} ${res.statusText}`);
     }
-    const rows = (await res.json()) as Array<{ id: string }>;
-    return rows.length > 0;
+    return (await res.json()) === true;
   }
 
   /**
@@ -237,6 +251,7 @@ export class SurveySupabaseClient {
    */
   startPolling(
     surveyId: string,
+    adminKey: string,
     onUpdate: (responses: SurveyResponsePublic[]) => void,
     intervalMs = 30_000,
   ): () => void {
@@ -244,7 +259,7 @@ export class SurveySupabaseClient {
 
     const poll = async () => {
       try {
-        const responses = await this.getResponses(surveyId);
+        const responses = await this.getResponses(surveyId, adminKey);
         onUpdate(responses);
       } catch {
         // 폴링 에러 무시

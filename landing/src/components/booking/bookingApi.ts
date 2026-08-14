@@ -166,13 +166,19 @@ export async function checkAlreadyBooked(
   studentNumber: number,
 ): Promise<boolean> {
   try {
-    const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/consultation_bookings?schedule_id=eq.${scheduleId}&student_number=eq.${studentNumber}&select=id`,
-      { headers: headers() },
-    );
+    // 예전에는 consultation_bookings 를 직접 조회했는데, 필터를 뺀 요청으로
+    // 전 행이 열람 가능했다(2026-08-14 실측 256행). 이 화면에 필요한 건
+    // "이미 예약했나" 여부뿐이라 boolean 만 돌려주는 RPC 로 바꿨다 — 마이그레이션 046.
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/has_consultation_booking`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({
+        p_schedule_id: scheduleId,
+        p_student_number: studentNumber,
+      }),
+    });
     if (!res.ok) return false;
-    const rows = (await res.json()) as Array<{ id: string }>;
-    return rows.length > 0;
+    return (await res.json()) === true;
   } catch {
     return false;
   }

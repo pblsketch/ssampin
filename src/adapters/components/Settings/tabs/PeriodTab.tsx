@@ -12,6 +12,13 @@ import {
   moveLunchToAfterPeriod,
   inferLunchAfterPeriod,
 } from '@domain/rules/periodRules';
+import {
+  mergePeriodLabels,
+  renumberPeriodsKeepingLabels,
+  normalizePeriodLabel,
+  resolvePeriodLabel,
+  PERIOD_LABEL_MAX_LENGTH,
+} from '@domain/rules/periodLabel';
 import { getLunchBreakIndex, formatLunchBreakTime } from '@adapters/presenters/timetablePresenter';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { SettingsSection } from '../shared/SettingsSection';
@@ -41,19 +48,29 @@ export function PeriodTab({ draft, patch }: Props) {
         const endH = Math.floor((startMin + duration) / 60);
         const endM = (startMin + duration) % 60;
         const endStr = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
-        arr[index] = { period: existing.period, start: value, end: endStr };
+        arr[index] = { ...existing, start: value, end: endStr };
       } else {
-        arr[index] = {
-          period: existing.period,
-          start: existing.start,
-          end: existing.end,
-          [field]: value,
-        };
+        arr[index] = { ...existing, [field]: value };
       }
 
       patch({ periodTimes: arr });
     },
     [draft.periodTimes, draft.schoolLevel, patch],
+  );
+
+  /** 교시 이름 편집 — 빈 값/공백만 입력하면 이름 없음(undefined)으로 되돌린다 */
+  const updatePeriodLabel = useCallback(
+    (index: number, value: string) => {
+      const arr = [...draft.periodTimes] as PeriodTime[];
+      const existing = arr[index];
+      if (!existing) return;
+      const label = normalizePeriodLabel(value);
+      arr[index] = label
+        ? { period: existing.period, start: existing.start, end: existing.end, label }
+        : { period: existing.period, start: existing.start, end: existing.end };
+      patch({ periodTimes: arr });
+    },
+    [draft.periodTimes, patch],
   );
 
   const addPeriod = useCallback(() => {
@@ -68,7 +85,8 @@ export function PeriodTab({ draft, patch }: Props) {
   const deletePeriod = useCallback(
     (index: number) => {
       const arr = draft.periodTimes.filter((_, i) => i !== index);
-      const renumbered = arr.map((p, i) => ({ ...p, period: i + 1 }));
+      // 이름은 번호가 아니라 남은 행을 따라간다
+      const renumbered = renumberPeriodsKeepingLabels(arr);
       patch({ periodTimes: renumbered, maxPeriods: renumbered.length });
     },
     [draft.periodTimes, patch],
@@ -99,11 +117,7 @@ export function PeriodTab({ draft, patch }: Props) {
           const p = arr[i]!;
           const newStart = parseMinutes(p.start) + diff;
           const newEnd = parseMinutes(p.end) + diff;
-          arr[i] = {
-            period: p.period,
-            start: formatTime(newStart),
-            end: formatTime(newEnd),
-          };
+          arr[i] = { ...p, start: formatTime(newStart), end: formatTime(newEnd) };
         }
         patch({ periodTimes: arr, lunchEnd: value });
       } else if (field === 'start') {
@@ -167,7 +181,8 @@ export function PeriodTab({ draft, patch }: Props) {
   const canMoveDown = resolvedLunchAfter >= 1 && resolvedLunchAfter < draft.periodTimes.length - 1;
 
   const handleApplyPreset = useCallback(() => {
-    const generated = generatePeriodTimes(preset);
+    // 자동 생성은 시각만 다시 만든다 — 붙여둔 교시 이름은 승계한다
+    const generated = mergePeriodLabels(draft.periodTimes, generatePeriodTimes(preset));
     const lunchPeriod = generated[preset.lunchAfterPeriod - 1];
     const afterLunch = generated[preset.lunchAfterPeriod];
     patch({
@@ -181,7 +196,7 @@ export function PeriodTab({ draft, patch }: Props) {
       lunchAfterPeriod: preset.lunchAfterPeriod,
     });
     setShowPreset(false);
-  }, [preset, patch]);
+  }, [preset, patch, draft.periodTimes]);
 
   const handleSchoolLevelChange = useCallback((level: SchoolLevel) => {
     const newPreset = getDefaultPreset(level);
@@ -505,9 +520,17 @@ export function PeriodTab({ draft, patch }: Props) {
               )
             </span>
           </div>
-          <p className="mt-2 text-detail text-sp-muted/80 leading-relaxed flex items-center gap-1">
+          {/* sp-* 토큰에는 Tailwind 투명도 수식(/80)을 쓰지 않는다 — 토큰이 raw CSS 변수라
+              알파가 적용되지 않고 선언이 통째로 무효가 된다. 두 안내문이 나란히 붙어 있어
+              한쪽만 고치면 서로 다르게 보이므로 함께 정리했다. */}
+          <p className="mt-2 text-detail text-sp-muted leading-relaxed flex items-center gap-1">
             <span className="material-symbols-outlined text-icon-sm text-sp-muted">info</span>
             아래 표의 점심 행에서 ↑↓ 버튼으로 위치를 옮기세요.
+          </p>
+          <p className="mt-1 text-detail text-sp-muted leading-relaxed flex items-center gap-1">
+            <span className="material-symbols-outlined text-icon-sm text-sp-muted">label</span>
+            이름 칸에 «창체»처럼 적으면 그 교시가 «7교시» 대신 그 이름으로 보여요. 비워두면 그대로
+            «7교시»예요.
           </p>
         </div>
 
@@ -515,7 +538,8 @@ export function PeriodTab({ draft, patch }: Props) {
           <table className="w-full text-sm text-left">
             <thead className="bg-sp-bg/80 text-xs text-sp-muted uppercase font-semibold">
               <tr>
-                <th className="px-4 py-3 w-20">교시</th>
+                <th className="px-4 py-3 w-16">교시</th>
+                <th className="px-4 py-3 w-32">이름</th>
                 <th className="px-4 py-3">시작</th>
                 <th className="px-4 py-3">종료</th>
                 <th className="px-4 py-3 w-10" />
@@ -531,11 +555,11 @@ export function PeriodTab({ draft, patch }: Props) {
                   <PeriodRows
                     key={pt.period}
                     period={pt}
-                    index={i}
                     showLunchBefore={isAfterLunch}
                     lunchTimeStr={lunchTimeStr}
                     onChangeStart={(v) => updatePeriod(i, 'start', v)}
                     onChangeEnd={(v) => updatePeriod(i, 'end', v)}
+                    onChangeLabel={(v) => updatePeriodLabel(i, v)}
                     onChangeLunchStart={
                       isAfterLunch ? (v) => updateLunchTime('start', v) : undefined
                     }
@@ -573,11 +597,11 @@ export function PeriodTab({ draft, patch }: Props) {
 
 function PeriodRows({
   period,
-  index,
   showLunchBefore,
   lunchTimeStr,
   onChangeStart,
   onChangeEnd,
+  onChangeLabel,
   onChangeLunchStart,
   onChangeLunchEnd,
   onDelete,
@@ -588,11 +612,11 @@ function PeriodRows({
   canMoveLunchDown,
 }: {
   period: PeriodTime;
-  index: number;
   showLunchBefore: boolean;
   lunchTimeStr: string;
   onChangeStart: (v: string) => void;
   onChangeEnd: (v: string) => void;
+  onChangeLabel: (v: string) => void;
   onChangeLunchStart?: (v: string) => void;
   onChangeLunchEnd?: (v: string) => void;
   onDelete: () => void;
@@ -618,7 +642,11 @@ function PeriodRows({
           }}
           className="bg-amber-100 border-y-2 border-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-400/60"
         >
-          <td className="px-4 py-2 font-medium text-amber-700 flex items-center gap-1.5">
+          {/* 교시 + 이름 두 칸을 함께 차지한다 — 점심은 이름을 붙이는 대상이 아니다 */}
+          <td
+            className="px-4 py-2 font-medium text-amber-700 flex items-center gap-1.5"
+            colSpan={2}
+          >
             <span className="material-symbols-outlined text-icon">restaurant</span>
             점심
           </td>
@@ -697,7 +725,21 @@ function PeriodRows({
         </tr>
       )}
       <tr className="bg-sp-card hover:bg-sp-text/5 transition-colors">
-        <td className="px-4 py-2 font-medium text-sp-text">{index + 1}교시</td>
+        <td className="px-4 py-2 font-medium text-sp-text tabular-nums">{period.period}교시</td>
+        <td className="px-4 py-2">
+          <input
+            type="text"
+            value={period.label ?? ''}
+            onChange={(e) => onChangeLabel(e.target.value)}
+            maxLength={PERIOD_LABEL_MAX_LENGTH}
+            // 왼쪽 교시 열이 이미 "1교시"를 보여준다. 여기서 같은 글자를 흐리게 또 쓰면
+            // 이름이 채워진 열처럼 보여서 "설정된 교시"와 "빈 교시"를 눈으로 구분할 수 없다.
+            // 무엇을 적는 칸인지는 표 위 안내문이 한 번만 설명한다.
+            placeholder="—"
+            aria-label={`${resolvePeriodLabel(period.period)} 이름`}
+            className="w-full rounded-lg border border-transparent bg-transparent px-2 py-1 text-sp-text transition-colors placeholder:text-sp-muted hover:border-sp-border focus:border-sp-accent focus:outline-none"
+          />
+        </td>
         <td className="px-4 py-2">
           <input
             type="time"

@@ -9,6 +9,7 @@
 
 import type { SchoolLevel } from '@domain/entities/Settings';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
+import { periodTimeLabel, mergePeriodLabels } from '@domain/rules/periodLabel';
 import {
   PERIOD_DURATION,
   generatePeriodTimes,
@@ -57,7 +58,11 @@ export function Step3Profile({ profile, onChange }: Props) {
       return;
     }
     const times = generatePeriodTimes(getDefaultPreset(level));
-    patch({ schoolLevel: level, maxPeriods: times.length, periodTimes: times });
+    patch({
+      schoolLevel: level,
+      maxPeriods: times.length,
+      periodTimes: mergePeriodLabels(profile.periodTimes, times),
+    });
   };
 
   const regenerateCustom = () => {
@@ -67,7 +72,10 @@ export function Step3Profile({ profile, onChange }: Props) {
       customPeriodDuration: profile.customPeriodDuration ?? 50,
     };
     const times = generatePeriodTimes(preset);
-    patch({ periodTimes: times, maxPeriods: times.length });
+    patch({
+      periodTimes: mergePeriodLabels(profile.periodTimes, times),
+      maxPeriods: times.length,
+    });
   };
 
   // 온보딩과 동일 규칙: 시작 시각 변경 시 수업 길이만큼 종료 자동 계산 + 이후 교시 평행 이동.
@@ -81,22 +89,18 @@ export function Step3Profile({ profile, onChange }: Props) {
           ? profile.customPeriodDuration
           : PERIOD_DURATION[profile.schoolLevel];
       const delta = parseMinutes(value) - parseMinutes(existing.start);
-      arr[index] = {
-        period: existing.period,
-        start: value,
-        end: toTimeStr(parseMinutes(value) + duration),
-      };
+      arr[index] = { ...existing, start: value, end: toTimeStr(parseMinutes(value) + duration) };
       for (let i = index + 1; i < arr.length; i++) {
         const p = arr[i];
         if (!p) continue;
         arr[i] = {
-          period: p.period,
+          ...p,
           start: toTimeStr(parseMinutes(p.start) + delta),
           end: toTimeStr(parseMinutes(p.end) + delta),
         };
       }
     } else {
-      arr[index] = { period: existing.period, start: existing.start, end: value };
+      arr[index] = { ...existing, end: value };
     }
     patch({ periodTimes: arr });
   };
@@ -271,13 +275,13 @@ export function Step3Profile({ profile, onChange }: Props) {
               <tbody className="divide-y divide-sp-border bg-sp-bg">
                 {profile.periodTimes.map((pt, i) => (
                   <tr key={pt.period}>
-                    <td className="py-1.5 text-sp-muted">{i + 1}교시</td>
+                    <td className="py-1.5 text-sp-muted">{periodTimeLabel(pt)}</td>
                     <td className="py-1.5">
                       <input
                         type="time"
                         value={pt.start}
                         onChange={(e) => updatePeriod(i, 'start', e.target.value)}
-                        aria-label={`${i + 1}교시 시작 시각`}
+                        aria-label={`${periodTimeLabel(pt)} 시작 시각`}
                         className="rounded border border-sp-border bg-sp-bg px-2 py-1 text-sm text-sp-text focus:outline-none focus:ring-2 focus:ring-sp-accent"
                       />
                     </td>
@@ -286,7 +290,7 @@ export function Step3Profile({ profile, onChange }: Props) {
                         type="time"
                         value={pt.end}
                         onChange={(e) => updatePeriod(i, 'end', e.target.value)}
-                        aria-label={`${i + 1}교시 종료 시각`}
+                        aria-label={`${periodTimeLabel(pt)} 종료 시각`}
                         className="rounded border border-sp-border bg-sp-bg px-2 py-1 text-sm text-sp-text focus:outline-none focus:ring-2 focus:ring-sp-accent"
                       />
                     </td>

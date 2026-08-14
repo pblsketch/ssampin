@@ -3,6 +3,7 @@ import { useConsultationStore } from '@adapters/stores/useConsultationStore';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+import { periodTimeLabel } from '@domain/rules/periodLabel';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { consultationSupabaseClient, shortLinkClient } from '@adapters/di/container';
 import { validateCustomCode } from '@infrastructure/supabase/ShortLinkClient';
@@ -99,7 +100,7 @@ function computeBreakPresets(
     // 수업 시간
     presets.push({
       id: `period-${sorted[i]!.period}`,
-      label: `${sorted[i]!.period}교시`,
+      label: periodTimeLabel(sorted[i]!),
       startTime: sorted[i]!.start,
       endTime: sorted[i]!.end,
     });
@@ -116,7 +117,7 @@ function computeBreakPresets(
           : i === longestGapIdx && longestGap >= 30;
       presets.push({
         id: isLunch ? 'lunch' : `break-${sorted[i]!.period}`,
-        label: isLunch ? '점심 시간' : `${sorted[i]!.period}교시 후 쉬는 시간`,
+        label: isLunch ? '점심 시간' : `${periodTimeLabel(sorted[i]!)} 후 쉬는 시간`,
         startTime: sorted[i]!.end,
         endTime: sorted[i + 1]!.start,
       });

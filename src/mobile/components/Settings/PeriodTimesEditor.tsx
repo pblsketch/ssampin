@@ -1,5 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
+import {
+  normalizePeriodLabel,
+  resolvePeriodLabel,
+  PERIOD_LABEL_MAX_LENGTH,
+} from '@domain/rules/periodLabel';
 
 interface PeriodTimesEditorProps {
   initial: readonly PeriodTime[];
@@ -14,6 +19,8 @@ interface PeriodTimesEditorProps {
 interface Row {
   start: string; // "HH:mm"
   end: string;
+  /** 교사가 붙인 교시 이름 — 정렬·재번호를 해도 이 행을 따라간다 */
+  label?: string;
 }
 
 function rowInvalid(r: Row): boolean {
@@ -24,7 +31,11 @@ function rowInvalid(r: Row): boolean {
 function toPeriodTimes(rows: Row[]): PeriodTime[] {
   return [...rows]
     .sort((a, b) => a.start.localeCompare(b.start))
-    .map((r, idx) => ({ period: idx + 1, start: r.start, end: r.end }));
+    .map((r, idx) => {
+      const label = normalizePeriodLabel(r.label);
+      const base = { period: idx + 1, start: r.start, end: r.end };
+      return label ? { ...base, label } : base;
+    });
 }
 
 /** 교시 시간(periodTimes) 편집 — 행마다 시작/종료 시각 + 행 추가/삭제. 저장 시 시작순 정렬·1..N 재번호. */
@@ -36,7 +47,7 @@ export function PeriodTimesEditor({
 }: PeriodTimesEditorProps) {
   const [rows, setRows] = useState<Row[]>(() =>
     initial.length > 0
-      ? initial.map((p) => ({ start: p.start, end: p.end }))
+      ? initial.map((p) => ({ start: p.start, end: p.end, label: p.label }))
       : [{ start: '', end: '' }],
   );
   const [saved, setSaved] = useState(false);
@@ -75,28 +86,38 @@ export function PeriodTimesEditor({
       <div className="space-y-2">
         {rows.map((r, i) => {
           const bad = rowInvalid(r);
+          // 이름이 없으면 기본 라벨(N교시)이 안내 문구·스크린리더 이름으로 쓰인다
+          const rowLabel = normalizePeriodLabel(r.label) ?? resolvePeriodLabel(i + 1);
           return (
             <div key={i} className="flex items-center gap-2">
-              <span className="w-10 shrink-0 text-xs text-sp-muted">{i + 1}교시</span>
+              <input
+                type="text"
+                value={r.label ?? ''}
+                onChange={(e) => setRow(i, 'label', e.target.value)}
+                maxLength={PERIOD_LABEL_MAX_LENGTH}
+                placeholder={resolvePeriodLabel(i + 1)}
+                aria-label={`${rowLabel} 이름`}
+                className="glass-input w-20 shrink-0 rounded-lg px-2 py-1.5 text-xs text-sp-text"
+              />
               <input
                 type="time"
                 value={r.start}
                 onChange={(e) => setRow(i, 'start', e.target.value)}
-                aria-label={`${i + 1}교시 시작 시각`}
-                className={`glass-input text-sm flex-1 ${bad ? 'border-red-500/60' : ''}`}
+                aria-label={`${rowLabel} 시작 시각`}
+                className={`glass-input flex-1 rounded-lg px-2 py-1.5 text-sm text-sp-text ${bad ? 'border-red-500/60' : ''}`}
               />
               <span className="text-xs text-sp-muted">~</span>
               <input
                 type="time"
                 value={r.end}
                 onChange={(e) => setRow(i, 'end', e.target.value)}
-                aria-label={`${i + 1}교시 종료 시각`}
-                className={`glass-input text-sm flex-1 ${bad ? 'border-red-500/60' : ''}`}
+                aria-label={`${rowLabel} 종료 시각`}
+                className={`glass-input flex-1 rounded-lg px-2 py-1.5 text-sm text-sp-text ${bad ? 'border-red-500/60' : ''}`}
               />
               <button
                 type="button"
                 onClick={() => removeRow(i)}
-                aria-label={`${i + 1}교시 삭제`}
+                aria-label={`${rowLabel} 삭제`}
                 disabled={rows.length <= 1}
                 className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sp-muted transition-colors active:bg-black/5 disabled:opacity-30 dark:active:bg-white/5"
               >

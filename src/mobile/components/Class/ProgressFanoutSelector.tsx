@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { resolvePeriodLabel } from '@domain/rules/periodLabel';
+import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import { DAY_LABELS } from '@mobile/utils/date';
 import type { FanoutCandidate, FanoutPreviewRow } from '@domain/rules/progressFanout';
 
@@ -27,6 +29,8 @@ interface ProgressFanoutSelectorProps {
   onToggle: (classId: string) => void;
   onClear: () => void;
   preview: readonly FanoutPreviewRow[];
+  /** 교시 이름 표시용 */
+  periodTimes?: readonly PeriodTime[];
 }
 
 export function ProgressFanoutSelector({
@@ -35,6 +39,7 @@ export function ProgressFanoutSelector({
   onToggle,
   onClear,
   preview,
+  periodTimes,
 }: ProgressFanoutSelectorProps) {
   const [expanded, setExpanded] = useState(selectedIds.size > 0);
 
@@ -120,7 +125,8 @@ export function ProgressFanoutSelector({
                   {row.placement.ok ? (
                     <>
                       <span className="text-sp-text shrink-0">
-                        {formatShortDate(row.placement.date)} {row.placement.period}교시
+                        {formatShortDate(row.placement.date)}{' '}
+                        {resolvePeriodLabel(row.placement.period, periodTimes)}
                       </span>
                       <span className="text-sp-muted truncate">
                         {KIND_HINT[row.placement.kind]}

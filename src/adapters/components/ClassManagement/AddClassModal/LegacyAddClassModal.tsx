@@ -1,11 +1,10 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
+import { resolvePeriodLabel } from '@domain/rules/periodLabel';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
-import type {
-  ClassScheduleData,
-  TeacherScheduleData,
-} from '@domain/entities/Timetable';
+import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
+import type { ClassScheduleData, TeacherScheduleData } from '@domain/entities/Timetable';
 
 interface LegacyAddClassModalProps {
   onClose: () => void;
@@ -19,7 +18,10 @@ interface TimetableClassItem {
 
 const DAYS = ['월', '화', '수', '목', '금', '토'] as const;
 
-function extractFromTeacher(schedule: TeacherScheduleData | null | undefined): TimetableClassItem[] {
+function extractFromTeacher(
+  schedule: TeacherScheduleData | null | undefined,
+  periodTimes?: readonly PeriodTime[],
+): TimetableClassItem[] {
   const seen = new Map<string, TimetableClassItem>();
   if (!schedule) return [];
   for (const day of DAYS) {
@@ -31,7 +33,7 @@ function extractFromTeacher(schedule: TeacherScheduleData | null | undefined): T
       if (!seen.has(key)) {
         seen.set(key, { classroom: slot.classroom, subject: slot.subject, periods: [] });
       }
-      seen.get(key)!.periods.push(`${day} ${idx + 1}교시`);
+      seen.get(key)!.periods.push(`${day} ${resolvePeriodLabel(idx + 1, periodTimes)}`);
     });
   }
   return [...seen.values()];
@@ -40,6 +42,7 @@ function extractFromTeacher(schedule: TeacherScheduleData | null | undefined): T
 function extractFromClass(
   schedule: ClassScheduleData | null | undefined,
   classroom: string,
+  periodTimes?: readonly PeriodTime[],
 ): TimetableClassItem[] {
   const seen = new Map<string, TimetableClassItem>();
   if (!schedule) return [];
@@ -52,7 +55,7 @@ function extractFromClass(
       if (!seen.has(key)) {
         seen.set(key, { classroom, subject: slot.subject, periods: [] });
       }
-      seen.get(key)!.periods.push(`${day} ${idx + 1}교시`);
+      seen.get(key)!.periods.push(`${day} ${resolvePeriodLabel(idx + 1, periodTimes)}`);
     });
   }
   return [...seen.values()];
@@ -67,6 +70,7 @@ export function LegacyAddClassModal({ onClose }: LegacyAddClassModalProps) {
   const teacherSchedule = useScheduleStore((s) => s.teacherSchedule);
   const classSchedule = useScheduleStore((s) => s.classSchedule);
   const settingsClassName = useSettingsStore((s) => s.settings.className);
+  const periodTimes = useSettingsStore((s) => s.settings.periodTimes);
 
   const [mode, setMode] = useState<'select' | 'manual'>('select');
   const [name, setName] = useState('');
@@ -75,11 +79,14 @@ export function LegacyAddClassModal({ onClose }: LegacyAddClassModalProps) {
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
 
   // 양쪽 시간표에서 각각 추출 (raw, 중복 필터 전)
-  const teacherRaw = useMemo(() => extractFromTeacher(teacherSchedule), [teacherSchedule]);
+  const teacherRaw = useMemo(
+    () => extractFromTeacher(teacherSchedule, periodTimes),
+    [teacherSchedule, periodTimes],
+  );
   const classroomLabel = (settingsClassName && settingsClassName.trim()) || '우리 반';
   const classRaw = useMemo(
-    () => extractFromClass(classSchedule, classroomLabel),
-    [classSchedule, classroomLabel],
+    () => extractFromClass(classSchedule, classroomLabel, periodTimes),
+    [classSchedule, classroomLabel, periodTimes],
   );
 
   const hasTeacher = teacherRaw.length > 0;
@@ -246,34 +253,38 @@ export function LegacyAddClassModal({ onClose }: LegacyAddClassModalProps) {
                 )}
                 <div className="space-y-1.5 max-h-60 overflow-y-auto">
                   {timetableClasses.map((item) => {
-                  const key = `${item.classroom}__${item.subject}`;
-                  const isChecked = selectedItems.has(key);
-                  return (
-                    <label
-                      key={key}
-                      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition-colors ${
-                        isChecked ? 'bg-sp-accent/10 ring-1 ring-sp-accent/30' : 'hover:bg-sp-surface/50'
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={isChecked}
-                        onChange={() => toggleItem(key)}
-                        className="w-4 h-4 rounded border-sp-border text-sp-accent focus:ring-sp-accent"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-sp-text">{item.classroom}</span>
-                          <span className="text-xs text-sp-muted bg-sp-surface px-1.5 py-0.5 rounded">
-                            {item.subject}
-                          </span>
+                    const key = `${item.classroom}__${item.subject}`;
+                    const isChecked = selectedItems.has(key);
+                    return (
+                      <label
+                        key={key}
+                        className={`flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition-colors ${
+                          isChecked
+                            ? 'bg-sp-accent/10 ring-1 ring-sp-accent/30'
+                            : 'hover:bg-sp-surface/50'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => toggleItem(key)}
+                          className="w-4 h-4 rounded border-sp-border text-sp-accent focus:ring-sp-accent"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-sp-text">
+                              {item.classroom}
+                            </span>
+                            <span className="text-xs text-sp-muted bg-sp-surface px-1.5 py-0.5 rounded">
+                              {item.subject}
+                            </span>
+                          </div>
+                          <p className="text-caption text-sp-muted mt-0.5 truncate">
+                            {item.periods.join(', ')}
+                          </p>
                         </div>
-                        <p className="text-caption text-sp-muted mt-0.5 truncate">
-                          {item.periods.join(', ')}
-                        </p>
-                      </div>
-                    </label>
-                  );
+                      </label>
+                    );
                   })}
                 </div>
               </>

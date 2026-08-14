@@ -291,6 +291,11 @@ export function WidgetTab({ draft, patch }: Props) {
               desc: '작은 위젯 창으로 전환합니다',
             },
             {
+              value: 'sidePin' as const,
+              label: '옆핀으로 접기',
+              desc: '화면 오른쪽 가장자리에 접어 둡니다 (마우스를 올리면 펼쳐집니다)',
+            },
+            {
               value: 'icon' as const,
               label: '아이콘 모드로 접기',
               desc: '화면에 떠 있는 작은 아이콘으로 접습니다 (NEW)',

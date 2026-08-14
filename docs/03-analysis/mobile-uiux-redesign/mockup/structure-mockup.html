@@ -848,7 +848,7 @@ body::before {
               <h2 class="htitle">3학년 2반</h2>
               <div class="datestep">
                 <button type="button"><span class="ms">chevron_left</span></button>
-                <span class="datestep__d">8월 12일 (화)</span>
+                <span class="datestep__d">8월 12일 (수)</span>
                 <button type="button"><span class="ms">chevron_right</span></button>
               </div>
             </div>
@@ -977,7 +977,7 @@ body::before {
 
             <div class="hrow g-chrome g-header">
               <div>
-                <h2 class="htitle">8월 12일 화요일</h2>
+                <h2 class="htitle">8월 12일 수요일</h2>
                 <div style="font-size:12.5px;color:var(--sp-muted)">2학기 · 개학 4일째</div>
               </div>
               <button class="iconbtn" type="button"><span class="ms">sync</span></button>
@@ -1111,7 +1111,7 @@ body::before {
               <div class="datebar hrow--layer" data-layer="3" style="padding-right:34px">
                 <button class="iconbtn" type="button"><span class="ms">chevron_left</span></button>
                 <div class="datebar__mid">
-                  <span class="datebar__d">8월 12일 (화)</span>
+                  <span class="datebar__d">8월 12일 (수)</span>
                   <button class="chip-today" type="button">오늘로</button>
                 </div>
                 <button class="iconbtn" type="button"><span class="ms">chevron_right</span></button>
@@ -1159,7 +1159,7 @@ body::before {
                 <button class="classpick" type="button">2학년 5반<span class="ms">expand_more</span></button>
                 <div class="datestep">
                   <button type="button"><span class="ms">chevron_left</span></button>
-                  <span class="datestep__d">8월 12일 (화)</span>
+                  <span class="datestep__d">8월 12일 (수)</span>
                   <button type="button"><span class="ms">chevron_right</span></button>
                 </div>
               </div>
@@ -1221,7 +1221,7 @@ body::before {
                 <button class="classpick" type="button">2학년 5반<span class="ms">expand_less</span></button>
                 <div class="datestep">
                   <button type="button"><span class="ms">chevron_left</span></button>
-                  <span class="datestep__d">8월 12일 (화)</span>
+                  <span class="datestep__d">8월 12일 (수)</span>
                   <button type="button"><span class="ms">chevron_right</span></button>
                 </div>
               </div>
@@ -1247,7 +1247,7 @@ body::before {
             <div class="sheet">
               <div class="sheet__grip"></div>
               <div class="sheet__t">수업반 고르기</div>
-              <div class="sheet__sub">8월 12일 (화) 기준 · 담임반은 학급 탭에 있어요</div>
+              <div class="sheet__sub">8월 12일 (수) 기준 · 담임반은 학급 탭에 있어요</div>
               <div class="sheet__opt" style="background:var(--sp-subtle)">
                 <span class="ms" style="color:var(--sp-accent)">radio_button_checked</span>
                 <span style="flex:1">2학년 5반 <span class="classcard__tag">3교시</span></span>
@@ -1297,12 +1297,25 @@ body::before {
       </ul>
     </div>
 
-    <div class="decide">
-      <div class="decide__k">결정됨 ②-b · 2026-08-12</div>
-      <h4>출결 저장 직전 확인 — 넣는 것으로 확정</h4>
+    <div class="decide" style="border-color:var(--doc-bad)">
+      <div class="decide__k" style="color:var(--doc-bad)">번복됨 ②-b · 2026-08-13</div>
+      <h4>저장 직전 확인은 <b>넣지 않습니다</b> — 헤더로 해결</h4>
       <ul>
-        <li>반과 날짜를 한 번 더 보여주고 저장합니다. 화면은 <b>03번 아래</b>에 그려두었습니다.</li>
-        <li>매번 한 번 더 누르는 비용을 <b>감수하기로</b> 했습니다.</li>
+        <li>
+          <b>전제가 틀렸습니다.</b> 구현에 들어가 보니 출결 화면에는 "출결 저장" 버튼이
+          없습니다. <b>2초 디바운스 자동 저장</b>입니다. 즉 "저장 직전"이라는 순간 자체가
+          없고, 저장 시점에 확인창을 띄우면 2초마다 뜨는 꼴이 됩니다.
+        </li>
+        <li>
+          대신 <b>반 이름을 제목 자리로 올렸습니다.</b> 화면에서 가장 크고 굵게 항상
+          보입니다. 드롭다운으로 작아지는 만큼을 여기서 되찾습니다.
+        </li>
+        <li>
+          매일 여러 번 쓰는 화면에 매번 한 번씩 더 누르는 비용을 붙이지 않는 쪽을 택했습니다.
+        </li>
+        <li>
+          아래 "저장 확인" 시안은 <b>구현하지 않습니다.</b> 이 결정의 근거로만 남겨둡니다.
+        </li>
       </ul>
     </div>
   </section>
@@ -1551,12 +1564,20 @@ body::before {
 
     <div class="sec__head" style="margin-top:64px;margin-bottom:34px">
       <h2 style="font-family:'Nanum Myeongjo',serif;font-weight:800;font-size:clamp(22px,3vw,30px);margin:0 0 14px">
-        그리고 저장 직전에 한 번 더 묻습니다
+        <s style="text-decoration-thickness:2px">그리고 저장 직전에 한 번 더 묻습니다</s>
+        <span style="display:block;font-size:.6em;color:var(--doc-bad);margin-top:8px">
+          ✕ 구현하지 않음 (2026-08-13 번복)
+        </span>
       </h2>
       <p class="sec__lead">
-        반 선택이 드롭다운으로 바뀌면 <strong>지금 어느 반인지가 지금보다 덜 눈에 띕니다.</strong>
-        이 앱은 반을 잘못 고르면 다른 반 출결에 기록이 들어가고, 과거에 출결이 지워진 사고도 있었습니다.
-        그래서 <strong>마지막 관문을 하나 둡니다.</strong>
+        이 시안은 "저장 버튼을 누르면 확인창" 을 전제했는데, 구현에 들어가 보니
+        <strong>출결 화면에는 저장 버튼이 없었습니다.</strong> 2초 디바운스 자동 저장입니다.
+        저장 시점에 확인창을 띄우면 2초마다 뜨는 꼴이라 성립하지 않습니다.
+      </p>
+      <p class="sec__lead">
+        대신 <strong>반 이름을 제목 자리로 올려</strong> 화면에서 가장 크고 굵게 항상 보이도록
+        했습니다. 아래 화면은 <strong>구현하지 않으며</strong>, 어떤 정보를 보여주려 했는지에 대한
+        기록으로만 남깁니다.
       </p>
     </div>
 
@@ -1596,7 +1617,7 @@ body::before {
                 <div style="font-size:13px;color:var(--sp-muted);margin-bottom:6px">이렇게 저장할까요?</div>
                 <div style="font-size:21px;font-weight:680;line-height:1.35">3학년 2반</div>
                 <div style="font-size:15px;font-weight:590;color:var(--sp-text);margin-top:2px">
-                  8월 12일 (화) · 조회
+                  8월 12일 (수) · 조회
                 </div>
 
                 <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:16px;padding-top:14px;border-top:1px solid var(--sp-border);font-size:13.5px">
@@ -2069,58 +2090,59 @@ body::before {
                 <div class="dowrow">
                   <span class="sun">일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span class="sat">토</span>
                 </div>
+                <!-- 2026년 8월: 8/1=토, 8/12=수 (실제 달력 기준) -->
                 <div class="mgrid">
-                  <button><span class="dnum dnum--out dnum--sun">27</span><span class="ddots"></span></button>
+                  <button><span class="dnum dnum--out dnum--sun">26</span><span class="ddots"></span></button>
+                  <button><span class="dnum dnum--out">27</span><span class="ddots"></span></button>
                   <button><span class="dnum dnum--out">28</span><span class="ddots"></span></button>
                   <button><span class="dnum dnum--out">29</span><span class="ddots"></span></button>
                   <button><span class="dnum dnum--out">30</span><span class="ddots"></span></button>
                   <button><span class="dnum dnum--out">31</span><span class="ddots"></span></button>
-                  <button><span class="dnum">1</span><span class="ddots"></span></button>
-                  <button><span class="dnum dnum--sat">2</span><span class="ddots"></span></button>
+                  <button><span class="dnum dnum--sat">1</span><span class="ddots"></span></button>
 
-                  <button><span class="dnum dnum--sun">3</span><span class="ddots"></span></button>
-                  <button><span class="dnum">4</span><span class="ddots"><i style="background:var(--sp-accent)"></i></span></button>
+                  <button><span class="dnum dnum--sun">2</span><span class="ddots"></span></button>
+                  <button><span class="dnum">3</span><span class="ddots"><i style="background:var(--sp-accent)"></i></span></button>
+                  <button><span class="dnum">4</span><span class="ddots"></span></button>
                   <button><span class="dnum">5</span><span class="ddots"></span></button>
-                  <button><span class="dnum">6</span><span class="ddots"></span></button>
-                  <button><span class="dnum">7</span><span class="ddots"><i style="background:var(--sp-warning)"></i></span></button>
-                  <button><span class="dnum">8</span><span class="ddots"></span></button>
-                  <button><span class="dnum dnum--sat">9</span><span class="ddots"></span></button>
+                  <button><span class="dnum">6</span><span class="ddots"><i style="background:var(--sp-warning)"></i></span></button>
+                  <button><span class="dnum">7</span><span class="ddots"></span></button>
+                  <button><span class="dnum dnum--sat">8</span><span class="ddots"></span></button>
 
-                  <button><span class="dnum dnum--sun">10</span><span class="ddots"></span></button>
+                  <button><span class="dnum dnum--sun">9</span><span class="ddots"></span></button>
+                  <button><span class="dnum">10</span><span class="ddots"></span></button>
                   <button><span class="dnum">11</span><span class="ddots"><i style="background:var(--sp-accent)"></i></span></button>
                   <button><span class="dnum dnum--today">12</span><span class="ddots"><i style="background:var(--sp-highlight)"></i><i style="background:var(--sp-accent)"></i></span></button>
                   <button><span class="dnum">13</span><span class="ddots"></span></button>
                   <button><span class="dnum">14</span><span class="ddots"></span></button>
-                  <button><span class="dnum">15</span><span class="ddots"><i style="background:var(--sp-error)"></i></span></button>
-                  <button><span class="dnum dnum--sat">16</span><span class="ddots"></span></button>
+                  <button><span class="dnum dnum--sat">15</span><span class="ddots"><i style="background:var(--sp-error)"></i></span></button>
 
-                  <button><span class="dnum dnum--sun">17</span><span class="ddots"></span></button>
-                  <button><span class="dnum">18</span><span class="ddots"></span></button>
-                  <button><span class="dnum">19</span><span class="ddots"><i style="background:var(--sp-highlight)"></i></span></button>
+                  <button><span class="dnum dnum--sun">16</span><span class="ddots"></span></button>
+                  <button><span class="dnum">17</span><span class="ddots"></span></button>
+                  <button><span class="dnum">18</span><span class="ddots"><i style="background:var(--sp-highlight)"></i></span></button>
+                  <button><span class="dnum">19</span><span class="ddots"></span></button>
                   <button><span class="dnum">20</span><span class="ddots"></span></button>
                   <button><span class="dnum">21</span><span class="ddots"></span></button>
-                  <button><span class="dnum">22</span><span class="ddots"></span></button>
-                  <button><span class="dnum dnum--sat">23</span><span class="ddots"></span></button>
+                  <button><span class="dnum dnum--sat">22</span><span class="ddots"></span></button>
 
-                  <button><span class="dnum dnum--sun">24</span><span class="ddots"></span></button>
+                  <button><span class="dnum dnum--sun">23</span><span class="ddots"></span></button>
+                  <button><span class="dnum">24</span><span class="ddots"></span></button>
                   <button><span class="dnum">25</span><span class="ddots"></span></button>
                   <button><span class="dnum">26</span><span class="ddots"></span></button>
                   <button><span class="dnum">27</span><span class="ddots"></span></button>
                   <button><span class="dnum">28</span><span class="ddots"></span></button>
-                  <button><span class="dnum">29</span><span class="ddots"></span></button>
-                  <button><span class="dnum dnum--sat">30</span><span class="ddots"></span></button>
+                  <button><span class="dnum dnum--sat">29</span><span class="ddots"></span></button>
 
-                  <button><span class="dnum dnum--sun">31</span><span class="ddots"></span></button>
+                  <button><span class="dnum dnum--sun">30</span><span class="ddots"></span></button>
+                  <button><span class="dnum">31</span><span class="ddots"></span></button>
                   <button><span class="dnum dnum--out">1</span><span class="ddots"></span></button>
                   <button><span class="dnum dnum--out">2</span><span class="ddots"></span></button>
                   <button><span class="dnum dnum--out">3</span><span class="ddots"></span></button>
                   <button><span class="dnum dnum--out">4</span><span class="ddots"></span></button>
-                  <button><span class="dnum dnum--out">5</span><span class="ddots"></span></button>
-                  <button><span class="dnum dnum--out dnum--sat">6</span><span class="ddots"></span></button>
+                  <button><span class="dnum dnum--out dnum--sat">5</span><span class="ddots"></span></button>
                 </div>
               </div>
 
-              <div class="sectitle">8월 12일 (화)</div>
+              <div class="sectitle">8월 12일 (수)</div>
               <div class="evrow">
                 <span class="evbar" style="background:var(--sp-highlight)"></span>
                 <div><div class="evt">2학기 학부모 상담 주간 안내</div><div class="evm">종일</div></div>
@@ -2158,20 +2180,21 @@ body::before {
                   <button type="button" style="flex:1">할 일</button>
                 </div>
               </div>
+              <!-- 8/12(수) 가 포함된 주: 9(일) ~ 15(토) -->
               <div class="weekstrip">
-                <button><span class="dowrow" style="display:contents"></span><span class="wdow" style="font-size:11px;color:#f87171">일</span><span class="dnum dnum--sun">10</span><span class="ddots"></span></button>
-                <button><span class="wdow" style="font-size:11px;color:var(--sp-muted)">월</span><span class="dnum">11</span><span class="ddots"><i style="background:var(--sp-accent)"></i></span></button>
-                <button><span class="wdow" style="font-size:11px;color:var(--sp-muted)">화</span><span class="dnum dnum--today">12</span><span class="ddots"><i style="background:var(--sp-highlight)"></i><i style="background:var(--sp-accent)"></i></span></button>
-                <button><span class="wdow" style="font-size:11px;color:var(--sp-muted)">수</span><span class="dnum">13</span><span class="ddots"></span></button>
-                <button><span class="wdow" style="font-size:11px;color:var(--sp-muted)">목</span><span class="dnum">14</span><span class="ddots"></span></button>
-                <button><span class="wdow" style="font-size:11px;color:var(--sp-muted)">금</span><span class="dnum">15</span><span class="ddots"><i style="background:var(--sp-error)"></i></span></button>
-                <button><span class="wdow" style="font-size:11px;color:#60a5fa">토</span><span class="dnum dnum--sat">16</span><span class="ddots"></span></button>
+                <button><span class="wdow" style="font-size:11px;color:#f87171">일</span><span class="dnum dnum--sun">9</span><span class="ddots"></span></button>
+                <button><span class="wdow" style="font-size:11px;color:var(--sp-muted)">월</span><span class="dnum">10</span><span class="ddots"></span></button>
+                <button><span class="wdow" style="font-size:11px;color:var(--sp-muted)">화</span><span class="dnum">11</span><span class="ddots"><i style="background:var(--sp-accent)"></i></span></button>
+                <button><span class="wdow" style="font-size:11px;color:var(--sp-muted)">수</span><span class="dnum dnum--today">12</span><span class="ddots"><i style="background:var(--sp-highlight)"></i><i style="background:var(--sp-accent)"></i></span></button>
+                <button><span class="wdow" style="font-size:11px;color:var(--sp-muted)">목</span><span class="dnum">13</span><span class="ddots"></span></button>
+                <button><span class="wdow" style="font-size:11px;color:var(--sp-muted)">금</span><span class="dnum">14</span><span class="ddots"></span></button>
+                <button><span class="wdow" style="font-size:11px;color:#60a5fa">토</span><span class="dnum dnum--sat">15</span><span class="ddots"><i style="background:var(--sp-error)"></i></span></button>
               </div>
               <div class="expandmonth"><span class="ms">expand_more</span>8월 전체 보기</div>
             </div>
 
             <div class="scroll">
-              <div class="sectitle">8월 12일 (화) · 오늘</div>
+              <div class="sectitle">8월 12일 (수) · 오늘</div>
               <div class="evrow">
                 <span class="evbar" style="background:var(--sp-highlight)"></span>
                 <div><div class="evt">2학기 학부모 상담 주간 안내</div><div class="evm">종일</div></div>
@@ -2181,13 +2204,13 @@ body::before {
                 <div><div class="evt">교과협의회</div><div class="evm">15:00 – 16:00 · 3층 회의실</div></div>
               </div>
 
-              <div class="sectitle">8월 13일 (수)</div>
+              <div class="sectitle">8월 13일 (목)</div>
               <div class="evrow">
                 <span class="evbar" style="background:var(--sp-muted)"></span>
                 <div><div class="evt">동아리 활동</div><div class="evm">6 – 7교시</div></div>
               </div>
 
-              <div class="sectitle">8월 15일 (금)</div>
+              <div class="sectitle">8월 15일 (토)</div>
               <div class="evrow">
                 <span class="evbar" style="background:var(--sp-error)"></span>
                 <div><div class="evt">광복절 — 휴업일</div><div class="evm">종일</div></div>
@@ -2285,7 +2308,7 @@ body::before {
 
             <div class="hrow g-chrome g-header">
               <div>
-                <h2 class="htitle">8월 12일 화요일</h2>
+                <h2 class="htitle">8월 12일 수요일</h2>
                 <div style="font-size:12.5px;color:var(--sp-muted)">2학기 · 개학 4일째</div>
               </div>
               <button class="iconbtn" type="button"><span class="ms">sync</span></button>
@@ -2463,8 +2486,11 @@ body::before {
         <li><b>학급 탭</b> — 기본은 표시, 설정에서 숨길 수 있음. 담임이 없으면 안내 문구.</li>
         <li><b>도구</b> — 더보기 안에 유지. "쌤도구" 중간 문만 없애 3번 → 2번.</li>
         <li><b>반 선택</b> — 눌러서 고르는 방식. 헤더 3층 → 1층.</li>
-        <li><b>출결</b> — 다른 학생만 누르는 방식. 3,180px → 1,350px.</li>
-        <li><b>출결 저장</b> — 직전에 반·날짜 확인 한 번.</li>
+        <li><b>출결</b> — 다른 학생만 누르는 방식. 3,180px → 1,350px. <b>구현 완료</b>(실측 일치).</li>
+        <li>
+          <b>출결 저장 확인</b> — <b>넣지 않기로 번복</b>(2026-08-13). 자동 저장이라 "저장 직전"이
+          없다. 대신 반 이름을 제목 자리로 올려 항상 크게 보이게 했다.
+        </li>
         <li><b>일정 / 할 일</b> — 세그먼트 유지. 보관함은 유지하되 목록 맨 아래로 자리 이동.</li>
         <li><b>일정 달력</b> — 주 단위 기본, 월은 펼쳐서 봄.</li>
         <li><b>홈</b> — "오늘 남은 일"에 출결과 할 일 합류.</li>

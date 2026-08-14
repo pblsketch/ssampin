@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { resolvePeriodLabel } from '@domain/rules/periodLabel';
 import type { TouchEvent } from 'react';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
@@ -216,7 +217,7 @@ export function TodayHub({ onNavigateAttendance, onNavigateTodo }: Props) {
         if (getTodayRecord(matched.id, period, matched.groupId)) continue;
 
         items.push({
-          label: `${matched.name} ${period}\uAD50\uC2DC`,
+          label: `${matched.name} ${resolvePeriodLabel(period, settings.periodTimes)}`,
           classId: matched.id,
           className: matched.name,
           period,
@@ -233,6 +234,7 @@ export function TodayHub({ onNavigateAttendance, onNavigateTodo }: Props) {
     getTodayRecord,
     teachingClasses,
     teachingClassesLoaded,
+    settings.periodTimes,
   ]);
 
   const today = new Date();
@@ -355,7 +357,7 @@ export function TodayHub({ onNavigateAttendance, onNavigateTodo }: Props) {
           <div className={showHomeroomCard ? 'col-span-1' : 'col-span-2'}>
             <CollapsibleCard
               cardId="classAttendance"
-              title={`${periodInfo.currentPeriod}교시 · ${currentClass.classroom}`}
+              title={`${resolvePeriodLabel(periodInfo.currentPeriod, settings.periodTimes)} · ${currentClass.classroom}`}
               icon="fact_check"
               iconClass="text-sp-accent"
               className="h-full"

@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect } from 'react';
+import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import type { AttendanceStatus, StudentAttendance } from '@domain/entities/Attendance';
 import { formatPeriodLabel } from '@domain/entities/Attendance';
 import {
@@ -40,6 +41,8 @@ export interface AttendanceGridViewProps {
   students: readonly MatrixStudent[];
   matrix: MatrixState;
   periods: readonly number[];
+  /** 교시 이름 표시용 — 호스트가 주입(이 뷰는 스토어를 읽지 않는다) */
+  periodTimes?: readonly PeriodTime[];
   /** 하이라이트할 매칭 교시 Set. undefined 이면 하이라이트 없음 */
   matchingPeriods?: ReadonlySet<number>;
   onCellClick: (sKey: string, period: number) => void;
@@ -113,6 +116,7 @@ export function AttendanceGridView({
   students,
   matrix,
   periods,
+  periodTimes,
   matchingPeriods,
   onCellClick,
   onCellContextMenu,
@@ -240,7 +244,7 @@ export function AttendanceGridView({
                         : 'text-sp-muted bg-sp-surface'
                   }`}
                 >
-                  {formatPeriodLabel(p)}
+                  {formatPeriodLabel(p, periodTimes)}
                 </th>
               );
             })}
@@ -335,7 +339,7 @@ export function AttendanceGridView({
                   const att = row[p];
                   const status: AttendanceStatus = att?.status ?? 'present';
                   const config = STATUS_CONFIG[status];
-                  const periodLabel = formatPeriodLabel(p);
+                  const periodLabel = formatPeriodLabel(p, periodTimes);
                   const isPresent = status === 'present';
                   const titleParts = [
                     periodLabel,
