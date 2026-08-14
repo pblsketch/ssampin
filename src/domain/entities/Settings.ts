@@ -189,6 +189,15 @@ export interface WidgetSettings {
    * 읽혀 지금과 똑같이 동작한다.
    */
   readonly blur?: number;
+  /**
+   * 앱 뒤에 깔 배경 (기본 `none` = 깔지 않음).
+   *
+   * 유리는 뒤에 비칠 것이 있어야 성립하므로, 투명도·흐림과 한 벌로 쓰인다.
+   * - `none`      : 지금 그대로. 배경 레이어를 아예 만들지 않는다.
+   * - `generated` : 테마 색에서 만든 배경. 이미지 파일이 없어 용량이 늘지 않고,
+   *                 밝기를 앱이 정하므로 글자가 안전하다.
+   */
+  readonly backdrop?: 'none' | 'generated';
   readonly alwaysOnTop: boolean;
   readonly closeToWidget: boolean; // keep for backward compat
   /**

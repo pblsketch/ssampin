@@ -123,6 +123,7 @@ import { SYNC_REGISTRY } from '@usecases/sync/syncRegistry';
 import { validateShareFile } from '@domain/rules/shareRules';
 import { useThemeApplier } from '@adapters/hooks/useThemeApplier';
 import { useGlassSurface } from '@adapters/hooks/useGlassSurface';
+import { AppBackdrop } from '@adapters/components/common/AppBackdrop';
 import { useFontApplier } from '@adapters/hooks/useFontApplier';
 import { useDesktopModeFallback } from '@adapters/hooks/useDesktopModeFallback';
 import { useNativeDesktopAvWarning } from '@adapters/hooks/useNativeDesktopAvWarning';
@@ -1233,6 +1234,8 @@ function MainApp() {
 
   return (
     <div className="flex flex-col h-screen bg-sp-bg">
+      {/* 유리가 비칠 배경. 설정이 꺼져 있으면 아무것도 그리지 않는다. */}
+      <AppBackdrop />
       <MobileAnnouncementBanner />
       <div className="flex flex-1 min-h-0">
         {!isFullscreen && (

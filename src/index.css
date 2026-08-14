@@ -311,6 +311,15 @@ body {
    유채색 옅은 텍스트(text-*-100~400) 보정은 아래 "Darken colored text" 통합 구역 참조.
    (2026-07-14 통합 — 이 자리에 있던 amber/red/orange/purple 부분 매치 가드 흡수) */
 
+/* ─── 배경 레이어가 켜지면 앱 껍데기의 배경색을 비운다 ───
+   `AppBackdrop` 이 `<html>` 에 이 클래스를 붙인다. 껍데기가 자기 배경색을 계속 칠하면
+   뒤에 깔린 배경 레이어가 가려져 아무것도 안 보인다.
+   범위를 앱 최상위 한 겹으로 좁힌 이유는, 카드 안쪽에서 쓰는 `bg-sp-bg`(가라앉은 면)까지
+   투명해지면 층 관계가 무너지기 때문이다. */
+html.sp-backdrop-on #root > div {
+  background-color: transparent;
+}
+
 /* ─── Auto-contrast: accent 배경 위 텍스트 가독성 보장 ─── */
 /* --sp-accent-fg는 useThemeApplier에서 accent 밝기 기반으로 자동 계산 */
 /* Same element: e.g. <button class="bg-sp-accent text-white"> */
