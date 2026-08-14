@@ -117,6 +117,58 @@ function rightEdgeTab(area: SidePinRect, desiredWidth: number, desiredHeight: nu
 }
 
 /**
+ * OS가 창을 요청보다 크게 만들었을 때, **오른쪽 끝을 원래 자리에 고정**하도록 좌표를 고친다.
+ *
+ * Windows는 창의 최소 폭을 물리 52픽셀로 강제한다(실측: 배율 175%에서 30 DIP, 100%에서
+ * 52 DIP). 무엇을 요청하든 그 아래로 내려가지 않으므로 16 DIP짜리 손잡이 창은 만들 수 없다.
+ *
+ * 손잡이는 화면 오른쪽 끝에 붙으므로, 창이 커지면 **오른쪽으로 넘쳐 옆 모니터를 침범한다.**
+ * 커진 만큼 왼쪽으로 밀어 오른쪽 경계를 지킨다.
+ */
+export function anchorRightEdge(
+  requested: SidePinRect,
+  actual: { readonly width: number; readonly height: number },
+): SidePinRect {
+  return {
+    x: requested.x + requested.width - actual.width,
+    y: requested.y,
+    width: actual.width,
+    height: actual.height,
+  };
+}
+
+/**
+ * 옆에 다른 모니터가 붙어 있을 때 오른쪽 끝에서 물러나는 여백 (DIP).
+ *
+ * Electron이 알려주는 작업 영역 너비는 실제 픽셀을 배율로 나눠 **반올림한** 값이다.
+ * 배율 175%에서 실제 2880픽셀은 1645.71인데 1646으로 올라온다. 그 1646에 오른쪽 끝을
+ * 맞추면 되돌릴 때 2880.5가 되어, 옆 모니터의 첫 칸을 정확히 한 칸 침범한다.
+ * (실측 2026-08-14: 창 오른쪽 끝 2881 vs 주 모니터 끝 2880)
+ *
+ * 배율이 얼마든 이 오차는 1 DIP를 넘지 않으므로 1만큼 물러나면 충분하다.
+ */
+const NEIGHBOR_SAFETY_INSET = 1;
+
+/**
+ * 이 화면의 오른쪽 끝에 다른 모니터가 맞닿아 있는가.
+ *
+ * 맞닿아 있을 때만 물러나는 이유가 있다. 화면 오른쪽 끝은 원래 커서를 끝까지 밀기만 하면
+ * 잡히는 자리라 조준이 필요 없는데, 물러나면 그 이점이 사라진다. 다만 **모니터가 맞닿은
+ * 경계에서는 커서가 멈추지 않고 옆 화면으로 그냥 넘어가므로** 애초에 그 이점이 없다.
+ * 그러니 한 대만 쓰거나 이 화면이 맨 오른쪽이면 끝까지 붙이고, 맞닿았을 때만 물러난다.
+ */
+function hasDisplayToTheRight(displays: readonly SidePinDisplayInfo[], area: SidePinRect): boolean {
+  const right = area.x + area.width;
+  return displays.some((d) => {
+    const other = roundRect(d.workArea);
+    // 우리 오른쪽 경계 바로 그 자리를 다른 화면이 차지하고 있는가
+    if (other.x > right || other.x + other.width <= right) return false;
+    // 위아래로 완전히 어긋난 화면은 옆에 있다고 보지 않는다
+    return other.y < area.y + area.height && other.y + other.height > area.y;
+  });
+}
+
+/**
  * 손잡이와 패널의 위치·크기를 계산한다.
  *
  * 쓸 수 있는 모니터가 하나도 없으면 null을 돌려준다. 이때 창을 띄우면 어디에 그릴지
@@ -129,10 +181,14 @@ export function resolveSidePinLayout(input: SidePinLayoutInput): SidePinLayout |
   const area = roundRect(picked.display.workArea);
   if (area.width <= 0 || area.height <= 0) return null;
 
+  // 옆 모니터를 침범하지 않도록 오른쪽 경계만 안쪽으로 당긴다 (위치·높이는 그대로).
+  const inset = hasDisplayToTheRight(input.displays, area) ? NEIGHBOR_SAFETY_INSET : 0;
+  const usable: SidePinRect = { ...area, width: Math.max(1, area.width - inset) };
+
   return {
     displayId: picked.display.id,
-    rail: rightEdgeTab(area, SIDE_PIN_RAIL_WIDTH, SIDE_PIN_RAIL_HEIGHT),
-    panel: rightEdgeRect(area, input.panelWidth),
+    rail: rightEdgeTab(usable, SIDE_PIN_RAIL_WIDTH, SIDE_PIN_RAIL_HEIGHT),
+    panel: rightEdgeRect(usable, input.panelWidth),
     usedFallbackDisplay: picked.usedFallbackDisplay,
   };
 }

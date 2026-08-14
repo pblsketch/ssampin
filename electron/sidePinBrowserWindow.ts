@@ -14,6 +14,7 @@ import { BrowserWindow } from 'electron';
 import path from 'path';
 import type { SidePinBounds } from '../src/usecases/sidePin/SidePinWindowHost';
 import type { SidePinWindowFactory, SidePinWindowLike } from './sidePinWindow';
+import { anchorRightEdge } from './sidePinGeometry';
 
 /** 렌더러가 옆핀 화면으로 뜨도록 알리는 쿼리 (`src/App.tsx`의 분기와 짝을 이룬다) */
 export const SIDE_PIN_RENDERER_MODE = 'sidePin';
@@ -27,11 +28,33 @@ export interface SidePinBrowserWindowOptions {
   readonly indexHtmlPath: string;
 }
 
+/**
+ * 요청한 크기대로 놓이지 않으면 **오른쪽 끝을 기준으로 다시 맞춘다.**
+ *
+ * Windows는 창의 최소 폭을 **물리 52픽셀**로 강제한다(실측: 배율 175%에서 30 DIP,
+ * 100%에서 52 DIP — 물리로는 둘 다 52). 무엇을 요청하든 그 아래로 내려가지 않으므로,
+ * 16 DIP짜리 손잡이 창은 이 OS에서 만들 수 없다.
+ *
+ * 문제는 손잡이를 화면 오른쪽 끝에 붙인다는 점이다. 창이 요청보다 넓어지면 왼쪽이 아니라
+ * **오른쪽으로 넘쳐** 옆 모니터 화면을 침범한다(실기기에서 실제로 발생: 주 175% +
+ * 보조 100%, 경계 x=1646에서 25 물리픽셀이 보조 모니터 왼쪽에 나타남).
+ *
+ * 그래서 커진 만큼 왼쪽으로 밀어 오른쪽 끝을 원래 자리에 고정한다. OS가 최소 크기를
+ * 어떻게 정하든, 다른 화면을 침범하지 않는다는 것만은 지켜진다.
+ */
+function applyBoundsKeepingRightEdge(win: BrowserWindow, requested: SidePinBounds): void {
+  const actual = win.getBounds();
+  if (actual.width === requested.width && actual.height === requested.height) return;
+
+  win.setBounds(anchorRightEdge(requested, actual));
+}
+
 /** BrowserWindow를 호스트가 요구하는 최소 능력으로 감싼다 */
 function adapt(win: BrowserWindow): SidePinWindowLike {
   return {
     setBounds(bounds: SidePinBounds): void {
       win.setBounds(bounds);
+      applyBoundsKeepingRightEdge(win, bounds);
     },
     showInactive(): void {
       win.showInactive();

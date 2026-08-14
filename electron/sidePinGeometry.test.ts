@@ -5,6 +5,7 @@
  */
 import { describe, expect, test } from 'vitest';
 import {
+  anchorRightEdge,
   SIDE_PIN_RAIL_HEIGHT,
   SIDE_PIN_RAIL_WIDTH,
   resolveSidePinLayout,
@@ -102,7 +103,8 @@ describe('AC-17 — 화면 밖으로 나가지 않는다', () => {
     });
 
     expect(layout?.displayId).toBe('2');
-    expect(layout?.rail.x).toBe(-1600 + 1600 - SIDE_PIN_RAIL_WIDTH);
+    // 이 화면의 오른쪽 끝(0)에 주 모니터가 맞닿아 있으므로 1 DIP 물러난다.
+    expect(layout!.rail.x + layout!.rail.width).toBe(-1);
     expect(isInside(layout!.rail, LEFT_SECONDARY.workArea)).toBe(true);
     expect(isInside(layout!.panel, LEFT_SECONDARY.workArea)).toBe(true);
   });
@@ -126,6 +128,32 @@ describe('AC-17 — 화면 밖으로 나가지 않는다', () => {
     };
     expect(isInside(layout!.rail, rounded)).toBe(true);
     expect(isInside(layout!.panel, rounded)).toBe(true);
+  });
+
+  test('배율이 섞인 실제 배치(주 175% + 보조 100%)에서 손잡이가 주 모니터 안에 있다', () => {
+    // 2026-08-14 실기기 배치. Electron이 주는 DIP 좌표에서 주 모니터는 0~1646,
+    // 보조 모니터는 정확히 1646에서 시작한다 — 손잡이가 그 경계에 딱 붙는다.
+    // 배율이 섞이면 이 경계에서 좌표 변환이 어긋나 옆 모니터로 넘어가는 일이 있어,
+    // 계산 자체는 경계 안쪽에 있음을 못박아 둔다(넘어가면 계산이 아니라 배치 문제).
+    const mainDisplay: SidePinDisplayInfo = {
+      id: '3183574757',
+      workArea: { x: 0, y: 0, width: 1646, height: 981 },
+    };
+    const subDisplay: SidePinDisplayInfo = {
+      id: '748019706',
+      workArea: { x: 1646, y: 0, width: 1920, height: 1032 },
+    };
+
+    const layout = layoutOf({
+      displays: [mainDisplay, subDisplay],
+      primaryDisplayId: '3183574757',
+      preferredDisplayId: null,
+    });
+
+    expect(layout?.displayId).toBe('3183574757');
+    expect(isInside(layout!.rail, mainDisplay.workArea)).toBe(true);
+    // 보조 모니터 영역을 한 칸도 침범하지 않는다
+    expect(layout!.rail.x + layout!.rail.width).toBeLessThanOrEqual(subDisplay.workArea.x);
   });
 
   test('소수 좌표는 정수로 맞춘다 — 경계가 1px 어긋나지 않도록', () => {
@@ -160,6 +188,93 @@ describe('AC-17 — 화면 밖으로 나가지 않는다', () => {
 
     expect(layout?.rail.width).toBe(10);
     expect(isInside(layout!.rail, tiny.workArea)).toBe(true);
+  });
+});
+
+describe('맞닿은 옆 모니터를 침범하지 않는다 (배율 반올림)', () => {
+  /** 실기기 배치: 주 175%(물리 2880 → DIP 1646으로 올림), 보조 100%가 오른쪽에 붙음 */
+  const MAIN: SidePinDisplayInfo = {
+    id: 'main',
+    workArea: { x: 0, y: 0, width: 1646, height: 981 },
+  };
+  const RIGHT: SidePinDisplayInfo = {
+    id: 'right',
+    workArea: { x: 1646, y: 0, width: 1920, height: 1032 },
+  };
+
+  test('오른쪽에 모니터가 맞닿아 있으면 경계에서 1 DIP 물러난다', () => {
+    // 1646에 딱 붙이면 물리로 되돌릴 때 2880.5가 되어 옆 화면 첫 칸을 침범한다.
+    const layout = layoutOf({ displays: [MAIN, RIGHT], primaryDisplayId: 'main' });
+
+    expect(layout!.rail.x + layout!.rail.width).toBe(1645);
+    expect(layout!.panel.x + layout!.panel.width).toBe(1645);
+  });
+
+  test('오른쪽이 비어 있으면 끝까지 붙인다 — 가장자리 조준을 지킨다', () => {
+    // 커서를 오른쪽 끝까지 밀면 그냥 잡히는 이점은 옆에 화면이 없을 때만 성립한다.
+    const layout = layoutOf({ displays: [MAIN], primaryDisplayId: 'main' });
+
+    expect(layout!.rail.x + layout!.rail.width).toBe(1646);
+  });
+
+  test('왼쪽에 있는 모니터는 물러날 이유가 없다', () => {
+    const layout = layoutOf({ displays: [PRIMARY, LEFT_SECONDARY], primaryDisplayId: '1' });
+
+    expect(layout!.rail.x + layout!.rail.width).toBe(1920);
+  });
+
+  test('사이가 떨어져 있으면 맞닿은 것이 아니다', () => {
+    const far: SidePinDisplayInfo = {
+      id: 'far',
+      workArea: { x: 2000, y: 0, width: 1920, height: 1032 },
+    };
+    const layout = layoutOf({ displays: [MAIN, far], primaryDisplayId: 'main' });
+
+    expect(layout!.rail.x + layout!.rail.width).toBe(1646);
+  });
+
+  test('위아래로 완전히 어긋난 모니터도 맞닿은 것이 아니다', () => {
+    const above: SidePinDisplayInfo = {
+      id: 'above',
+      workArea: { x: 1646, y: -1032, width: 1920, height: 1032 },
+    };
+    const layout = layoutOf({ displays: [MAIN, above], primaryDisplayId: 'main' });
+
+    expect(layout!.rail.x + layout!.rail.width).toBe(1646);
+  });
+});
+
+describe('OS가 창을 요청보다 크게 만들 때 (실기기 재현)', () => {
+  test('넘친 만큼 왼쪽으로 밀어 오른쪽 끝을 지킨다', () => {
+    // Windows는 창 최소 폭을 물리 52픽셀로 강제한다. 배율 175%에서 16 DIP를 요청하면
+    // 30 DIP가 되고, 오른쪽 끝에 붙인 손잡이는 그만큼 옆 모니터를 침범한다.
+    const requested = { x: 1630, y: 407, width: 16, height: 168 };
+
+    const fixed = anchorRightEdge(requested, { width: 30, height: 168 });
+
+    expect(fixed.x).toBe(1616);
+    // 오른쪽 끝(1646)은 그대로 — 옆 모니터를 침범하지 않는다
+    expect(fixed.x + fixed.width).toBe(requested.x + requested.width);
+  });
+
+  test('배율 100% 모니터(최소 52 DIP)에서도 오른쪽 끝을 지킨다', () => {
+    const requested = { x: 3550, y: 432, width: 16, height: 168 };
+
+    const fixed = anchorRightEdge(requested, { width: 52, height: 168 });
+
+    expect(fixed.x + fixed.width).toBe(3566);
+  });
+
+  test('세로 위치는 건드리지 않는다 — 넘침은 가로에서만 생긴다', () => {
+    const requested = { x: 1630, y: 407, width: 16, height: 168 };
+
+    expect(anchorRightEdge(requested, { width: 30, height: 168 }).y).toBe(407);
+  });
+
+  test('패널처럼 요청대로 만들어진 창은 그대로 둔다', () => {
+    const requested = { x: 1246, y: 0, width: 400, height: 981 };
+
+    expect(anchorRightEdge(requested, { width: 400, height: 981 })).toEqual(requested);
   });
 });
 
