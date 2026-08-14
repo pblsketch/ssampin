@@ -139,7 +139,13 @@ export function HomeScheduleCarousel({ periodInfo, teacherSchedule, classSchedul
               onClick={() => goTo(i)}
               aria-label={`${i + 1}번째 카드로 이동`}
               aria-current={isActive ? 'true' : undefined}
-              className="flex items-center justify-center px-1 py-2"
+              /*
+               * 점은 서로 붙어 있어 가로로 44px 씩 넓히면 옆 점의 영역과 겹쳐 오히려 오조작이
+               * 는다. 그래서 **세로만** 44px 로 넓히고(위아래엔 이웃이 없다) 가로는 24px 을
+               * 지킨다 — WCAG 2.2 AA(2.5.8 Target Size Minimum)의 최소치다.
+               * 카드는 스와이프로도 넘길 수 있어 이 점을 못 눌러도 막히는 길은 없다.
+               */
+              className="flex items-center justify-center min-w-[24px] min-h-[44px] -my-[11px] px-1"
             >
               <span
                 className={`block rounded-full transition-all ${

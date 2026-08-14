@@ -64,8 +64,19 @@ input[type='datetime-local'] {
 }
 
 /* ── Glass 카드 ── */
-.glass-card {
+/*
+ * 모서리 반경만 :where() 로 감싸 특이도를 0 으로 만든다.
+ *
+ * 이 파일은 Tailwind 뒤에 로드된다. 그래서 반경을 그냥 `.glass-card` 에 두면 사용처에서
+ * 붙인 `rounded-xl`(12px) 같은 유틸을 조용히 덮어써, 시안은 12px 인데 실제 화면은
+ * 20px 로 나온다("카드가 시안과 다르다"의 원인). :where() 는 특이도가 0 이라
+ * 유틸을 붙인 곳은 유틸이 이기고, 안 붙인 곳은 아래 기본값 20px 을 그대로 쓴다.
+ */
+:where(.glass-card, .glass-card-accent) {
   border-radius: 20px;
+}
+
+.glass-card {
   border: 1px solid rgba(255, 255, 255, 0.2);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.06);
   background: rgba(255, 255, 255, 0.7);
@@ -81,7 +92,6 @@ input[type='datetime-local'] {
 
 /* Glass 카드 — 강조 (현재 수업) */
 .glass-card-accent {
-  border-radius: 20px;
   border: 1px solid rgba(59, 130, 246, 0.25);
   box-shadow: 0 8px 32px rgba(59, 130, 246, 0.08);
   background: rgba(59, 130, 246, 0.06);
@@ -207,8 +217,8 @@ input[type='datetime-local'] {
   padding-top: env(safe-area-inset-top);
 }
 
-/* ── 스와이프 빠른 기록: "되돌리기" 토스트 잔여 시간 진행바 ── */
-@keyframes swipe-undo-progress {
+/* ── 스낵바(되돌리기) 잔여 시간 진행바 ── */
+@keyframes snackbar-progress {
   from {
     transform: scaleX(1);
   }
@@ -217,7 +227,16 @@ input[type='datetime-local'] {
   }
 }
 
-.swipe-undo-progress-bar {
+.snackbar-progress-bar {
   transform-origin: left;
-  animation: swipe-undo-progress 5s linear forwards;
+  animation: snackbar-progress 5s linear forwards;
+}
+
+/* 모션 감소를 켠 사용자에게는 줄어드는 막대를 숨긴다.
+   스낵바는 5초 뒤 어차피 사라지므로 정보가 사라지지 않는다. */
+@media (prefers-reduced-motion: reduce) {
+  .snackbar-progress-bar {
+    animation: none;
+    display: none;
+  }
 }

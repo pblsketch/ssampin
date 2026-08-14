@@ -68,10 +68,14 @@ export function SchedulePage() {
   const addEvent = useMobileEventsStore((s) => s.addEvent);
 
   const [currentMonth, setCurrentMonth] = useState(() => new Date());
+  /** 월 전체 펼침. 기본은 이번 주 한 줄. */
+  const [monthExpanded, setMonthExpanded] = useState(false);
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
+  /** 접힌 주 보기에서 화살표로 옮겨 둔 주(그 주의 아무 날). 선택한 날이 있으면 그쪽이 우선. */
+  const [weekAnchorDate, setWeekAnchorDate] = useState<Date | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
 
-  useBottomSheet(showAddModal);
+  useBottomSheet(showAddModal, () => setShowAddModal(false));
 
   // Add modal form state
   const [newTitle, setNewTitle] = useState('');
@@ -85,6 +89,20 @@ export function SchedulePage() {
     void loadEvents();
     void loadSettings();
   }, [loadEvents, loadSettings]);
+
+  /**
+   * 기준일이 속한 주(일~토) 7칸.
+   * 선택한 날이 있으면 그 주를, 없으면 화살표로 옮겨 둔 주를, 그것도 없으면 오늘이 속한
+   * 주를 보여준다 — 날짜를 고르고 나서 그 주가 사라지면 맥락을 잃는다.
+   */
+  const weekAnchor = selectedDay ?? weekAnchorDate ?? new Date();
+  const weekStart = new Date(weekAnchor);
+  weekStart.setDate(weekAnchor.getDate() - weekAnchor.getDay());
+  const weekCells: Date[] = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(weekStart);
+    d.setDate(weekStart.getDate() + i);
+    return d;
+  });
 
   // Build calendar days grid
   const monthStart = startOfMonth(currentMonth);
@@ -114,6 +132,17 @@ export function SchedulePage() {
   }
 
   const allCells = [...prevDays, ...daysInMonth, ...nextDays];
+
+  /**
+   * 기본은 이번 주 한 줄, 필요하면 월 전체로 펼친다.
+   *
+   * 월 달력은 실측 기준 화면의 57%(620px 중 355px)를 먹었다. 8월처럼 일정이 있는 날이
+   * 며칠뿐이어도 6주치가 항상 펼쳐져 있어서, 정작 일정 목록은 아래에 두 줄만 남았다.
+   * 교사의 일상 단위는 "이번 주"라 주를 기본으로 두는 편이 맞다.
+   *
+   * 없애는 게 아니라 접는 것이다. 월 전체가 필요할 때가 분명히 있다(다음 달 행사 확인 등).
+   */
+  const visibleCells = monthExpanded ? allCells : weekCells;
 
   const today = startOfDay(new Date());
 
@@ -146,8 +175,29 @@ export function SchedulePage() {
       .sort((a, b) => a.date.localeCompare(b.date));
   })();
 
-  const handlePrevMonth = () => setCurrentMonth((m) => subMonths(m, 1));
-  const handleNextMonth = () => setCurrentMonth((m) => addMonths(m, 1));
+  /**
+   * 좌우 화살표 — **보이는 것을** 옮긴다.
+   *
+   * 월 전체를 펼쳤으면 달을, 접힌 주 보기에서는 주를 옮긴다.
+   * 접힌 상태에서 달만 바꾸면 제목과 목록은 다음 달로 가는데 날짜줄은 이번 주 그대로라,
+   * 사용자에겐 "버튼이 제목만 바꾸는" 고장으로 보인다.
+   */
+  const shiftPeriod = (dir: -1 | 1) => {
+    if (monthExpanded) {
+      setCurrentMonth((m) => (dir === 1 ? addMonths(m, 1) : subMonths(m, 1)));
+      return;
+    }
+    const next = new Date(weekAnchor);
+    next.setDate(weekAnchor.getDate() + dir * 7);
+    // 다른 주로 옮겼으면 이전 주에서 고른 날은 더 이상 맞지 않는다.
+    setSelectedDay(null);
+    setWeekAnchorDate(next);
+    // 제목과 아래 목록도 그 주가 속한 달을 따라간다.
+    setCurrentMonth(next);
+  };
+
+  const handlePrevMonth = () => shiftPeriod(-1);
+  const handleNextMonth = () => shiftPeriod(1);
 
   const handleDayClick = (day: Date) => {
     if (selectedDay && isSameDay(day, selectedDay)) {
@@ -217,9 +267,12 @@ export function SchedulePage() {
           <button
             onClick={handlePrevMonth}
             className="flex items-center justify-center w-11 h-11 rounded-full hover:bg-black/5 active:bg-black/10 dark:hover:bg-white/5 dark:active:bg-white/10 transition-colors"
-            aria-label="이전 달"
+            // 접힌 주 보기에서는 주를 옮기므로 읽어주는 말도 그에 맞춘다.
+            aria-label={monthExpanded ? '이전 달' : '이전 주'}
           >
-            <span className="material-symbols-outlined text-sp-text text-xl">chevron_left</span>
+            <span className="material-symbols-outlined text-sp-text text-xl" aria-hidden="true">
+              chevron_left
+            </span>
           </button>
           <h2 className="text-sp-text font-bold text-base">
             {format(currentMonth, 'yyyy년 M월', { locale: ko })}
@@ -227,9 +280,11 @@ export function SchedulePage() {
           <button
             onClick={handleNextMonth}
             className="flex items-center justify-center w-11 h-11 rounded-full hover:bg-black/5 active:bg-black/10 dark:hover:bg-white/5 dark:active:bg-white/10 transition-colors"
-            aria-label="다음 달"
+            aria-label={monthExpanded ? '다음 달' : '다음 주'}
           >
-            <span className="material-symbols-outlined text-sp-text text-xl">chevron_right</span>
+            <span className="material-symbols-outlined text-sp-text text-xl" aria-hidden="true">
+              chevron_right
+            </span>
           </button>
         </div>
 
@@ -248,8 +303,8 @@ export function SchedulePage() {
         </div>
 
         {/* Day Grid */}
-        <div className="grid grid-cols-7 px-2 pb-3 gap-y-0.5">
-          {allCells.map((day, idx) => {
+        <div className="grid grid-cols-7 px-2 gap-y-0.5">
+          {visibleCells.map((day, idx) => {
             const isCurrentMonth = isSameMonth(day, currentMonth);
             const isToday = isSameDay(day, today);
             const isSelected = selectedDay ? isSameDay(day, selectedDay) : false;
@@ -259,6 +314,7 @@ export function SchedulePage() {
             return (
               <button
                 key={`${day.getFullYear()}-${day.getMonth()}-${day.getDate()}`}
+                data-day={format(day, 'yyyy-MM-dd')}
                 onClick={() => handleDayClick(day)}
                 className={`flex flex-col items-center py-1 rounded-lg min-h-[44px] transition-colors ${
                   isSelected && !isToday ? 'ring-2 ring-blue-500' : ''
@@ -295,6 +351,23 @@ export function SchedulePage() {
             );
           })}
         </div>
+
+        {/* 월 전체 펼치기 — 없애는 게 아니라 접는 것이다.
+            기본을 주로 두면 달력이 화면의 57% 대신 한 줄만 차지하고, 그만큼 일정 목록이
+            더 보인다. 월 전체가 필요한 순간(다음 달 행사 확인 등)은 여기서 편다. */}
+        <button
+          onClick={() => setMonthExpanded((v) => !v)}
+          aria-expanded={monthExpanded}
+          className="flex items-center justify-center gap-1 w-full py-2 text-xs text-sp-muted active:bg-black/5 dark:active:bg-white/10"
+          style={{ minHeight: 44 }}
+        >
+          <span className="material-symbols-outlined text-base" aria-hidden="true">
+            {monthExpanded ? 'expand_less' : 'expand_more'}
+          </span>
+          {monthExpanded
+            ? '이번 주만 보기'
+            : `${format(currentMonth, 'M월', { locale: ko })} 전체 보기`}
+        </button>
       </div>
 
       {/* Events List — 전체 스크롤 컨테이너 안의 일반 블록 (하단 FAB 여백 확보) */}

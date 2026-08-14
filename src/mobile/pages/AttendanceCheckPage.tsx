@@ -128,7 +128,10 @@ export function AttendanceCheckPage({
   const [textSheetOpen, setTextSheetOpen] = useState(false);
   const [textInput, setTextInput] = useState('');
 
-  useBottomSheet(periodMenuOpen || multiDateSheetOpen || textSheetOpen);
+  // 시트마다 따로 등록한다 — 하나로 묶으면 뒤로가기가 "어느 시트를 닫을지" 알 수 없다.
+  useBottomSheet(periodMenuOpen, () => setPeriodMenuOpen(false));
+  useBottomSheet(multiDateSheetOpen, () => setMultiDateSheetOpen(false));
+  useBottomSheet(textSheetOpen, () => setTextSheetOpen(false));
   const periodCount = settings.periodTimes.length > 0 ? settings.periodTimes.length : 7;
 
   const [studentStatuses, setStudentStatuses] = useState<Map<string, AttendanceStatus>>(new Map());
@@ -360,6 +363,24 @@ export function AttendanceCheckPage({
     }, 2000);
   }, [doSave, openPending, closePending]);
 
+  /**
+   * 사용자가 직접 펼쳐 둔 학생.
+   *
+   * 출석이 아닌 학생은 이 집합과 무관하게 항상 펼쳐진다(사유·메모를 봐야 하므로).
+   * 이 집합은 "출석인데도 열어둔" 경우만 담는다 — 예를 들어 눌렀다가 다시 출석으로
+   * 되돌린 직후, 손이 닿는 자리에 버튼이 남아 있어야 다시 고칠 수 있다.
+   */
+  const [expandedKeys, setExpandedKeys] = useState<ReadonlySet<string>>(new Set());
+
+  const toggleExpanded = useCallback((sKey: string) => {
+    setExpandedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(sKey)) next.delete(sKey);
+      else next.add(sKey);
+      return next;
+    });
+  }, []);
+
   // 상태 변경 핸들러
   const setStatus = useCallback(
     (sKey: string, status: AttendanceStatus) => {
@@ -368,6 +389,16 @@ export function AttendanceCheckPage({
         next.set(sKey, status);
         return next;
       });
+      // 출석으로 되돌리면 펼쳐둔 것도 함께 접는다. 그래야 목록이 다시 짧아진다.
+      // (출석이 아닌 상태는 어차피 항상 펼쳐지므로 여기서 add 할 필요가 없다)
+      if (status === 'present') {
+        setExpandedKeys((prev) => {
+          if (!prev.has(sKey)) return prev;
+          const next = new Set(prev);
+          next.delete(sKey);
+          return next;
+        });
+      }
       scheduleSave();
     },
     [scheduleSave],
@@ -541,9 +572,12 @@ export function AttendanceCheckPage({
       {/* 헤더 — embedded 모드에서는 생략 (ClassDetailPage가 이미 학급 헤더를 그림)
           minHeight + paddingTop으로 App.tsx 헤더 패턴 일치: --header-height 토큰이
           이미 env(safe-area-inset-top)을 포함하므로 iPhone 노치/다이나믹 아일랜드 자동 회피 */}
+      {/* gap-2 인 이유: 390px 에서 헤더가 정확히 꽉 찬다(뒤로 44 + 제목 + 텍스트 71 +
+          여러 날 74 + 완료 56 + 여백). gap-3 이면 제목에 8px 이 모자라 반 이름이 잘린다.
+          반 이름은 잘못된 반에 기록되는 사고를 막는 정보라 잘리면 안 된다. */}
       {!embedded && (
         <header
-          className="glass-header flex items-center gap-3 px-4 shrink-0"
+          className="glass-header flex items-center gap-2 px-4 shrink-0"
           style={{
             minHeight: headerTopInset ? 'var(--header-height)' : '3.5rem',
             paddingTop: headerTopInset ? 'env(safe-area-inset-top)' : 0,
@@ -552,13 +586,22 @@ export function AttendanceCheckPage({
           <button onClick={onBack} className="touch-target flex items-center justify-center">
             <span className="material-symbols-outlined text-sp-text">arrow_back</span>
           </button>
-          <div className="flex-1">
-            <h2 className="text-sp-text font-bold">
+          {/* 반 이름을 제목 자리에 둔다.
+              ① 390px 에서 오른쪽 버튼 3개(텍스트·여러 날·완료)에 밀려 "담임 출결" 이
+                 "담임 출 / 결" 로 쪼개졌다. min-w-0+truncate 로 줄바꿈은 막히지만
+                 정작 중요한 반 이름이 작은 글씨로 아래에 남는다.
+              ② 이 앱은 반을 잘못 고르면 다른 반 출결에 기록이 들어간다. 화면에서
+                 가장 크고 굵은 자리는 "무엇을 하는 화면인가"(담임 출결)가 아니라
+                 "어느 반인가"(3학년 2반)가 차지해야 한다.
+              교시 표기는 하드코딩하지 않고 resolvePeriodLabel 을 쓴다 — 0교시·보충처럼
+              학교마다 다른 교시 이름을 설정에서 정할 수 있다. */}
+          <div className="flex-1 min-w-0">
+            <h2 className="text-sp-text font-bold truncate">{className}</h2>
+            <p className="text-sp-muted text-xs truncate">
               {type === 'homeroom'
                 ? '담임 출결'
                 : `${resolvePeriodLabel(selectedPeriod, settings.periodTimes)} 출결`}
-            </h2>
-            <p className="text-sp-muted text-xs">{className}</p>
+            </p>
           </div>
           {type === 'homeroom' && (
             <button
@@ -659,32 +702,35 @@ export function AttendanceCheckPage({
         </div>
       )}
 
-      {/* 실시간 카운터 — 6칸 고정 grid (항상 한 줄) */}
-      <div className="glass-card grid grid-cols-6 items-center gap-1 mx-4 mt-3 px-3 py-3 rounded-xl shrink-0">
-        <div className="text-center">
-          <p className="text-green-500 font-bold text-lg">{presentCount}</p>
-          <p className="text-sp-muted text-xs">출석</p>
-        </div>
-        <div className="text-center">
-          <p className="text-yellow-500 font-bold text-lg">{lateCount}</p>
-          <p className="text-sp-muted text-xs">지각</p>
-        </div>
-        <div className="text-center">
-          <p className="text-red-500 font-bold text-lg">{absentCount}</p>
-          <p className="text-sp-muted text-xs">결석</p>
-        </div>
-        <div className="text-center">
-          <p className="text-orange-500 font-bold text-lg">{earlyLeaveCount}</p>
-          <p className="text-sp-muted text-xs">조퇴</p>
-        </div>
-        <div className="text-center">
-          <p className="text-purple-500 font-bold text-lg">{classAbsenceCount}</p>
-          <p className="text-sp-muted text-xs">결과</p>
-        </div>
-        <div className="text-center">
-          <p className="text-sp-text font-bold text-lg">{students.length}</p>
-          <p className="text-sp-muted text-xs">전체</p>
-        </div>
+      {/* 실시간 카운터 — 한 줄 요약.
+          예전에는 6칸 카드가 세로로 두 줄(약 70px)을 차지하며 스크롤 영역 밖에 고정돼
+          있었다. 대부분 0인 항목까지 자리를 잡아먹어, 명단이 보이는 높이를 깎았다.
+          0인 항목은 숨기고 한 줄로 줄인다. 색은 상태 버튼과 같은 것을 쓴다. */}
+      <div className="flex items-center justify-center flex-wrap gap-x-3 gap-y-1 px-4 py-2 text-sm shrink-0 border-b border-sp-divider">
+        <span className="text-sp-muted">
+          출석 <b className="text-green-500 font-bold">{presentCount}</b>
+        </span>
+        {lateCount > 0 && (
+          <span className="text-sp-muted">
+            지각 <b className="text-yellow-500 font-bold">{lateCount}</b>
+          </span>
+        )}
+        {absentCount > 0 && (
+          <span className="text-sp-muted">
+            결석 <b className="text-red-500 font-bold">{absentCount}</b>
+          </span>
+        )}
+        {earlyLeaveCount > 0 && (
+          <span className="text-sp-muted">
+            조퇴 <b className="text-orange-500 font-bold">{earlyLeaveCount}</b>
+          </span>
+        )}
+        {classAbsenceCount > 0 && (
+          <span className="text-sp-muted">
+            결과 <b className="text-purple-500 font-bold">{classAbsenceCount}</b>
+          </span>
+        )}
+        <span className="text-sp-muted">전체 {students.length}</span>
       </div>
 
       {/* 번호 없는 학생 안내 — 출결은 번호로 식별돼 번호 없는 학생은 목록에서 제외된다 */}
@@ -711,8 +757,41 @@ export function AttendanceCheckPage({
               const sKey = studentKey(student);
               const currentStatus = studentStatuses.get(sKey) ?? 'present';
 
+              // 출석인 학생은 한 줄로 접어둔다. 기록이 없으면 이미 '출석'으로 간주되므로
+              // (위 `?? 'present'`) 아무것도 누르지 않고 나가도 전원 출석이 그대로 유지된다.
+              // 펼치는 경우: ①출석이 아닌 학생 ②사용자가 직접 펼친 학생
+              const isExpanded = currentStatus !== 'present' || expandedKeys.has(sKey);
+              const statusConfig = STATUS_CONFIG[currentStatus];
+
+              if (!isExpanded) {
+                return (
+                  <li key={sKey}>
+                    <button
+                      type="button"
+                      onClick={() => toggleExpanded(sKey)}
+                      aria-expanded={false}
+                      className="w-full flex items-center gap-2 px-4 text-left active:bg-sp-subtle"
+                      style={{ minHeight: 44 }}
+                    >
+                      <span className="text-sp-muted text-sm shrink-0 w-6">{student.number}</span>
+                      <span className="text-sp-text font-medium truncate flex-1">
+                        {student.name}
+                      </span>
+                      {student.grade != null && student.classNum != null && (
+                        <span className="text-sp-muted text-xs shrink-0">
+                          ({student.grade}-{student.classNum})
+                        </span>
+                      )}
+                      <span className="text-sp-muted text-xs shrink-0 px-2 py-0.5 rounded-lg bg-sp-subtle">
+                        {statusConfig.label}
+                      </span>
+                    </button>
+                  </li>
+                );
+              }
+
               return (
-                <li key={sKey} className="px-4 py-3">
+                <li key={sKey} className="px-4 py-3 bg-sp-subtle">
                   {/* 번호 + 이름 */}
                   <div className="flex items-baseline gap-1 min-w-0">
                     <span className="text-sp-muted text-sm shrink-0">{student.number}</span>
@@ -721,6 +800,19 @@ export function AttendanceCheckPage({
                       <span className="text-sp-muted text-xs shrink-0">
                         ({student.grade}-{student.classNum})
                       </span>
+                    )}
+                    {/* 출석인데 열어둔 경우에만 접기를 제공한다. 출석이 아닌 학생은
+                        사유·메모를 봐야 하므로 접히면 안 된다. */}
+                    {currentStatus === 'present' && (
+                      <button
+                        type="button"
+                        onClick={() => toggleExpanded(sKey)}
+                        aria-label={`${student.name} 접기`}
+                        className="ml-auto shrink-0 self-center grid place-items-center rounded-lg text-sp-muted active:bg-black/5 dark:active:bg-white/10"
+                        style={{ minWidth: 44, minHeight: 44 }}
+                      >
+                        <span className="material-symbols-outlined text-lg">expand_less</span>
+                      </button>
                     )}
                   </div>
 

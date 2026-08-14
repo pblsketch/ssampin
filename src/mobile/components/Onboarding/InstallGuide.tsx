@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useIsAnyBottomSheetOpen } from '@mobile/stores/useMobileBottomSheetStore';
 
 type Platform = 'ios' | 'android' | 'unknown';
 
@@ -25,6 +26,7 @@ const DISMISS_KEY = 'install-guide-dismissed';
 
 export function InstallGuide() {
   const [show, setShow] = useState(false);
+  const anyBottomSheetOpen = useIsAnyBottomSheetOpen();
   const [platform] = useState(detectPlatform);
   const deferredPrompt = useRef<BeforeInstallPromptEvent | null>(null);
   const [canInstall, setCanInstall] = useState(false);
@@ -76,6 +78,10 @@ export function InstallGuide() {
   };
 
   if (!show) return null;
+  // 바텀시트가 열려 있으면 물러난다. 같은 z-50 이라 나중에 그려지는 쪽이 위로 오는데,
+  // 안내 배너가 시트 내용(예: 반 고르기 목록)을 가려 선택을 막는다.
+  // QuickAddFab 이 쓰는 것과 같은 전역 시트 카운터를 본다.
+  if (anyBottomSheetOpen) return null;
 
   return (
     <div className="fixed bottom-[calc(var(--tab-bar-height)+5.5rem)] left-4 right-4 z-50 glass-card p-4 animate-slide-up">
@@ -112,8 +118,14 @@ export function InstallGuide() {
             </p>
           )}
         </div>
-        <button onClick={dismiss} className="text-sp-muted hover:text-sp-text text-xs p-1 shrink-0">
-          <span className="material-symbols-outlined text-icon">close</span>
+        <button
+          onClick={dismiss}
+          aria-label="안내 닫기"
+          className="grid place-items-center w-11 h-11 -m-2 text-sp-muted hover:text-sp-text text-xs shrink-0"
+        >
+          <span className="material-symbols-outlined text-icon" aria-hidden="true">
+            close
+          </span>
         </button>
       </div>
     </div>

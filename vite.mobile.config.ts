@@ -5,13 +5,35 @@ import path from 'path';
 import pkg from './package.json';
 
 // dev 서버에서 index.html 대신 mobile.html을 서빙
+/**
+ * 개발 서버에서 이 경로를 mobile.html 로 넘길지 판단한다.
+ *
+ * 주소 기반 화면 전환(src/mobile/routing) 도입 후 `/more/tools/dice` 같은 딥링크가
+ * 생겼다. 이걸 그냥 두면 vite 가 루트 index.html(교사용 앱)을 서빙해 엉뚱한 앱이 뜬다.
+ * 배포(Vercel)는 vercel.json 의 `/(.*)` → `/mobile.html` rewrite 가 처리하지만
+ * dev 에는 그게 없으므로 같은 규칙을 여기서 준다.
+ *
+ * 넘기지 않는 것: vite 내부 경로(/@...), 의존성, 확장자가 있는 실제 파일 요청,
+ * API 프록시 경로. 이걸 걸러내지 않으면 JS·CSS 요청까지 HTML 로 답해 앱이 죽는다.
+ */
+function shouldServeMobileHtml(pathname: string): boolean {
+  if (pathname === '/' || pathname === '/index.html') return true;
+  if (pathname.startsWith('/@')) return false;
+  if (pathname.startsWith('/node_modules')) return false;
+  if (pathname.startsWith('/src/')) return false;
+  if (pathname.startsWith('/neis-api') || pathname.startsWith('/weather-api')) return false;
+  // 확장자가 있으면 실제 파일 요청(.js/.css/.png/.webmanifest 등)
+  if (/\.[a-zA-Z0-9]+$/.test(pathname)) return false;
+  return true;
+}
+
 function serveMobileHtml(): Plugin {
   return {
     name: 'serve-mobile-html',
     configureServer(server) {
       server.middlewares.use((req, _res, next) => {
         const pathname = req.url?.split('?')[0] ?? '';
-        if (pathname === '/' || pathname === '/index.html') {
+        if (shouldServeMobileHtml(pathname)) {
           req.url =
             '/mobile.html' +
             (req.url?.includes('?') ? req.url.substring(req.url.indexOf('?')) : '');
@@ -80,7 +102,13 @@ export default defineConfig(({ mode, command }) => {
         },
         workbox: {
           navigateFallback: 'mobile.html',
-          navigateFallbackAllowlist: [/^\/$/],
+          /**
+           * 주소 기반 화면 전환 도입 전에는 화면이 `/` 하나뿐이라 이 목록으로 충분했다.
+           * 이제 `/more/settings` 같은 딥링크가 생겼고, 오프라인에서 그 주소를
+           * 새로고침하면 서비스워커가 폴백을 안 해줘 실패한다. 앱 경로 전반을 허용한다.
+           * API 프록시 경로는 제외 — 문서가 아니라 데이터 요청이다.
+           */
+          navigateFallbackAllowlist: [/^(?!\/(neis-api|weather-api)\/).*/],
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
           runtimeCaching: [
             {

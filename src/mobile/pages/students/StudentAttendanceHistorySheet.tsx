@@ -105,7 +105,7 @@ export function StudentAttendanceHistorySheet({
   studentName,
   onClose,
 }: StudentAttendanceHistorySheetProps) {
-  useBottomSheet();
+  useBottomSheet(true, onClose);
   const load = useMobileStudentRecordsStore((s) => s.load);
   const records = useMobileStudentRecordsStore((s) => s.records);
   const [activeStat, setActiveStat] = useState<StatKey | null>(null);
@@ -199,7 +199,7 @@ export function StudentAttendanceHistorySheet({
         </div>
 
         {/* 타임라인 */}
-        <div className="flex-1 overflow-y-auto px-5 py-3 space-y-5">
+        <div className="flex-1 overflow-y-auto px-5 py-3 space-y-4">
           {filtered.length === 0 ? (
             <EmptyState icon="event_available" text="해당 유형의 기록이 없습니다." />
           ) : (

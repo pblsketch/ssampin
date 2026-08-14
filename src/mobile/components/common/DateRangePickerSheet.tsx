@@ -26,7 +26,7 @@ export function DateRangePickerSheet({
   onApply,
   onClose,
 }: DateRangePickerSheetProps) {
-  useBottomSheet();
+  useBottomSheet(true, onClose);
   const [start, setStart] = useState<string | undefined>(initialStart);
   const [end, setEnd] = useState<string | undefined>(initialEnd);
 

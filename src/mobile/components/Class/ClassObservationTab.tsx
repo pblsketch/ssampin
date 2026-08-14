@@ -312,7 +312,7 @@ function ClassWideObservationList({
   }
 
   return (
-    <div className="flex-1 overflow-y-auto px-4 pb-4 pt-3 space-y-5">
+    <div className="flex-1 overflow-y-auto px-4 pb-4 pt-3 space-y-4">
       {monthGroups.map((group) => (
         <div key={group.key}>
           <p className="text-sp-muted text-xs font-semibold mb-2 px-1 sticky top-0 bg-sp-card py-1 -mx-1">

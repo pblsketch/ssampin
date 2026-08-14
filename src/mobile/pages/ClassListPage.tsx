@@ -1,16 +1,23 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { filterActiveClasses } from '@domain/rules/teachingClassArchive';
 import { useMobileTeachingClassStore } from '@mobile/stores/useMobileTeachingClassStore';
 import { ClassDetailPage } from './ClassDetailPage';
 
-interface SelectedClass {
-  classId: string;
-  className: string;
-}
-
 interface ClassListPageProps {
   /** 상위 메뉴로 복귀 (예: 더보기 진입로 등) — 하단탭 진입 시에는 미전달 */
   onBack?: () => void;
+  /**
+   * 상세를 열 반. 주소(`/teaching/:classId`)에서 온다.
+   *
+   * 예전에는 이 화면이 `selected` 로컬 상태로 상세를 열었다. 주소가 안 바뀌니
+   * 안드로이드 뒤로가기가 목록이 아니라 이전 화면으로 나가버렸고, 새로고침하면
+   * 상세가 사라졌다.
+   */
+  selectedClassId?: string;
+  /** 반 카드를 눌렀을 때 — 라우터에 맡긴다. */
+  onSelectClass?: (classId: string) => void;
+  /** 상세에서 목록으로. */
+  onBackToList?: () => void;
 }
 
 /**
@@ -20,11 +27,15 @@ interface ClassListPageProps {
  * Plan §3.2 + Design §3.1 — 기존 `AttendanceListPage`에서 rename.
  * 라우팅 컴포넌트만 ClassDetailPage로 교체, 학급 리스트 디자인은 동일 유지.
  */
-export function ClassListPage({ onBack }: ClassListPageProps = {}) {
+export function ClassListPage({
+  onBack,
+  selectedClassId,
+  onSelectClass,
+  onBackToList,
+}: ClassListPageProps = {}) {
   const classes = useMobileTeachingClassStore((s) => s.classes);
   const loaded = useMobileTeachingClassStore((s) => s.loaded);
   const load = useMobileTeachingClassStore((s) => s.load);
-  const [selected, setSelected] = useState<SelectedClass | null>(null);
   // 보관된 반은 목록에서 숨김 — 필터는 뷰 단에서만(스토어 셀렉터 금지, plan S1.4-D).
   // 기존 상세 진입(classId 전달)은 무변경이라 보관된 반 상세는 계속 열린다.
   const visibleClasses = filterActiveClasses(classes);
@@ -43,13 +54,21 @@ export function ClassListPage({ onBack }: ClassListPageProps = {}) {
     );
   }
 
-  // 학급 선택됨 → 상세 페이지
-  if (selected) {
+  // 주소에 반이 있으면 상세.
+  // 이름은 주소가 아니라 스토어에서 찾는다 — 이름이 바뀌어도 항상 최신이고,
+  // 딥링크로 바로 들어와도 표시가 비지 않는다.
+  if (selectedClassId !== undefined) {
+    const detail = classes.find((c) => c.id === selectedClassId);
+    // 없는 반(삭제됐거나 잘못된 주소)이면 목록으로 되돌린다.
+    if (!detail) {
+      onBackToList?.();
+      return null;
+    }
     return (
       <ClassDetailPage
-        classId={selected.classId}
-        className={selected.className}
-        onBack={() => setSelected(null)}
+        classId={detail.id}
+        className={detail.name}
+        onBack={() => onBackToList?.()}
       />
     );
   }
@@ -84,7 +103,7 @@ export function ClassListPage({ onBack }: ClassListPageProps = {}) {
           visibleClasses.map((cls) => (
             <button
               key={cls.id}
-              onClick={() => setSelected({ classId: cls.id, className: cls.name })}
+              onClick={() => onSelectClass?.(cls.id)}
               className="w-full flex items-center gap-3 px-4 py-3 rounded-xl glass-card active:scale-[0.98] transition-transform text-left"
               style={{ minHeight: 56 }}
             >

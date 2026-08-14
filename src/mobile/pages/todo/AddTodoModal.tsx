@@ -14,7 +14,7 @@ export function AddTodoModal({ onAdd, onCancel }: AddTodoModalProps) {
   const [priority, setPriority] = useState<TodoPriority>('none');
   const [dueDate, setDueDate] = useState('');
 
-  useBottomSheet();
+  useBottomSheet(true, onCancel);
 
   const handleAdd = useCallback(() => {
     const trimmed = text.trim();

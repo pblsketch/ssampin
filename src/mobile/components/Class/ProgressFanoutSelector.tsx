@@ -76,7 +76,7 @@ export function ProgressFanoutSelector({
       </button>
 
       {expanded && (
-        <div className="px-3 py-2.5 border-t border-sp-border space-y-2.5">
+        <div className="px-3 py-2.5 border-t border-sp-border space-y-2">
           {/* 반 선택 칩 */}
           <div className="flex flex-wrap gap-2">
             {candidates.map((c) => {

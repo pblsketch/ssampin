@@ -16,7 +16,7 @@ export function YearTransitionNotice() {
   if (term === null) return null;
 
   return (
-    <div className="mx-4 mt-2 flex items-start gap-2.5 rounded-xl border border-sp-border bg-sp-surface px-3.5 py-3">
+    <div className="mx-4 mt-2 flex items-start gap-2 rounded-xl border border-sp-border bg-sp-surface px-3.5 py-3">
       <span aria-hidden className="material-symbols-outlined text-sp-accent text-icon-md shrink-0">
         inventory_2
       </span>

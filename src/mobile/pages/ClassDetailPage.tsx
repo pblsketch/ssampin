@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ClassAttendanceTab } from '@mobile/components/Class/ClassAttendanceTab';
 import { ClassProgressTab } from '@mobile/components/Class/ClassProgressTab';
 import { ClassObservationTab } from '@mobile/components/Class/ClassObservationTab';
+import { MobileHeader } from '@mobile/components/common/MobileHeader';
 
 type ClassSubTab = 'attendance' | 'progress' | 'observation';
 
@@ -31,17 +32,12 @@ export function ClassDetailPage({
   return (
     <div className="flex flex-col h-full">
       {/* 학급 헤더 */}
-      <header className="glass-header flex items-center gap-3 px-4 py-3 shrink-0">
-        <button
-          onClick={onBack}
-          className="flex items-center justify-center w-10 h-10"
-          style={{ minWidth: 44, minHeight: 44 }}
-          aria-label="학급 리스트로 돌아가기"
-        >
-          <span className="material-symbols-outlined text-sp-text">arrow_back</span>
-        </button>
-        <h2 className="flex-1 text-sp-text font-bold text-base truncate">{className}</h2>
-      </header>
+      <MobileHeader
+        variant="fullscreen"
+        title={className}
+        onBack={onBack}
+        backLabel="학급 리스트로 돌아가기"
+      />
 
       {/* 서브탭 바 */}
       <div

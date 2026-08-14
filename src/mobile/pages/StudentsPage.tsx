@@ -15,9 +15,9 @@ import { useMobileAttendanceStore } from '@mobile/stores/useMobileAttendanceStor
 import { seatingRepository } from '@mobile/di/container';
 import { useMobileStudentRecordsStore } from '@mobile/stores/useMobileStudentRecordsStore';
 import { useMobileProgressStore } from '@mobile/stores/useMobileProgressStore';
-import { SwipeUndoToast } from '@mobile/components/SwipeRow/SwipeUndoToast';
-import { useSwipeUndoStore } from '@mobile/stores/useMobileSwipeUndoStore';
+import { useSnackbarStore } from '@mobile/stores/useMobileSnackbarStore';
 import { PraiseMemoSheet } from '@mobile/components/Students/PraiseMemoSheet';
+import { BottomSheet } from '@mobile/components/common/BottomSheet';
 import { SwipeHintBanner } from '@mobile/components/Students/SwipeHintBanner';
 import { SeatingView } from '@mobile/pages/students/SeatingView';
 import { TeachingSeatingView } from '@mobile/pages/students/TeachingSeatingView';
@@ -157,6 +157,16 @@ export function StudentsPage() {
 
   const homeroomName = settings.className || '담임반';
 
+  /** 헤더 제목에 쓰는 현재 반 이름 */
+  const currentClassName =
+    selectedClass === 'homeroom' ? homeroomName : (selectedTeachingClass?.name ?? '수업반');
+
+  /** 좌석 보기가 가능한 경우에만 전환 아이콘을 낸다(수업반은 좌석표가 없을 수 있다) */
+  const canToggleView = selectedClass === 'homeroom' || selectedTeachingClass?.seating != null;
+
+  /** 반 고르기 바텀시트 */
+  const [classPickerOpen, setClassPickerOpen] = useState(false);
+
   const isLoading = !studentsLoaded || !teachingClassesLoaded;
 
   // 담임반 학생을 바텀시트 형식으로 변환
@@ -235,13 +245,13 @@ export function StudentsPage() {
     async (student: HomeroomStudent, status: QuickStatus) => {
       // 번호 없는 학생은 출결이 번호로 저장돼 서로 뭉개지므로 기록을 막고 안내한다.
       if (student.studentNumber == null || student.studentNumber <= 0) {
-        useSwipeUndoStore
+        useSnackbarStore
           .getState()
           .show('번호가 없어 출결을 기록할 수 없어요. 명렬표에서 번호를 지정해주세요.');
         return;
       }
       await writeHomeroomStatus(student, status);
-      useSwipeUndoStore
+      useSnackbarStore
         .getState()
         .show(`${student.name} · ${QUICK_LABEL[status]}`, () =>
           writeHomeroomStatus(student, 'present'),
@@ -292,13 +302,13 @@ export function StudentsPage() {
     async (tc: TeachingClass, student: TeachingClassStudent, status: QuickStatus) => {
       // 번호 없는 학생은 출결이 번호로 저장돼 서로 뭉개지므로 기록을 막고 안내한다.
       if (student.number == null || student.number <= 0) {
-        useSwipeUndoStore
+        useSnackbarStore
           .getState()
           .show('번호가 없어 출결을 기록할 수 없어요. 명렬표에서 번호를 지정해주세요.');
         return;
       }
       await writeClassStatus(tc, student, status);
-      useSwipeUndoStore
+      useSnackbarStore
         .getState()
         .show(`${student.name} · ${QUICK_LABEL[status]}`, () =>
           writeClassStatus(tc, student, 'present'),
@@ -322,9 +332,7 @@ export function StudentsPage() {
         // Q2: 칭찬을 태그로도 기록(통계 영구 이중기준 + 표시 tags 정합). subcategory='칭찬'은 호환 유지.
         tags: ['칭찬'],
       });
-      useSwipeUndoStore
-        .getState()
-        .show(`${name} · 칭찬 메모 저장됨`, () => deleteStudentRecord(id));
+      useSnackbarStore.getState().show(`${name} · 칭찬 메모 저장됨`, () => deleteStudentRecord(id));
     },
     [addStudentRecord, deleteStudentRecord, selectedDateStr],
   );
@@ -336,145 +344,97 @@ export function StudentsPage() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* 헤더 */}
-      <header className="flex flex-col gap-0 glass-header shrink-0">
-        {/* 상단 행: 제목 + 뷰 토글 */}
-        <div className="flex items-center justify-between px-4 py-3">
-          <h2 className="text-sp-text font-bold text-base">
-            {selectedClass === 'homeroom'
-              ? homeroomName
-              : (selectedTeachingClass?.name ?? '수업반')}
+      {/* 헤더 — 한 줄.
+          예전에는 세 줄이었다(제목+토글 / 반 선택 가로탭 / 날짜 이동바). 첫 학생이
+          보이기까지 콘텐츠 위로 약 140px 을 지나야 했다.
+          판단 기준은 "스크롤하는 내내 진짜로 계속 보여야 하는가" 였다.
+            · 반 이름 — 예. 모르면 다른 반에 기록이 들어간다
+            · 날짜 — 예. 어느 날 기록인지가 데이터 정합성의 핵심
+            · 보기 전환(좌석/명단) — 한 번 정하면 그 화면 내내 유지. 아이콘 하나로 축약
+            · 기록 보기 — 다른 화면으로 나가는 입구. 아이콘으로 축약
+          반이 여러 개면 가로 스크롤 탭 대신 눌러서 고른다. 6개를 넘으면 가로 스크롤은
+          뒤쪽 반이 화면 밖으로 숨는데, 담임반 1개 + 수업반 N개라 대부분 6개를 넘는다. */}
+      <header className="flex items-center gap-1.5 px-3 py-2 glass-header shrink-0">
+        {/* 반 선택 — 수업반이 있을 때만 고를 수 있다 */}
+        {teachingClasses.length > 0 ? (
+          <button
+            onClick={() => setClassPickerOpen(true)}
+            aria-haspopup="dialog"
+            className="flex items-center gap-0.5 min-w-0 shrink rounded-lg px-2 py-1 -ml-1 active:bg-black/5 dark:active:bg-white/10"
+            style={{ minHeight: 44 }}
+          >
+            <span className="text-sp-text font-bold text-base truncate">{currentClassName}</span>
+            <span className="material-symbols-outlined text-lg text-sp-muted shrink-0">
+              expand_more
+            </span>
+          </button>
+        ) : (
+          <h2 className="text-sp-text font-bold text-base truncate min-w-0 shrink px-1">
+            {currentClassName}
           </h2>
-
-          <div className="flex items-center gap-2">
-            {/* 반 전체 기록 보기 (담임반 선택 시만) */}
-            {selectedClass === 'homeroom' && (
-              <button
-                onClick={() => setShowRecordsOverview(true)}
-                className="flex items-center justify-center rounded-lg text-sp-muted hover:text-sp-text active:bg-black/5 dark:active:bg-white/10"
-                style={{ minWidth: 44, minHeight: 44 }}
-                aria-label="반 전체 기록 보기"
-              >
-                <span className="material-symbols-outlined text-xl">history_edu</span>
-              </button>
-            )}
-
-            {/* 담임반일 때만 뷰 토글 표시 */}
-            {selectedClass === 'homeroom' && (
-              <div className="flex items-center gap-1 bg-black/5 dark:bg-white/5 rounded-lg p-1">
-                <button
-                  onClick={() => changeViewMode('seating')}
-                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                    viewMode === 'seating'
-                      ? 'bg-sp-accent text-sp-accent-fg'
-                      : 'text-sp-muted hover:text-sp-text'
-                  }`}
-                >
-                  좌석
-                </button>
-                <button
-                  onClick={() => changeViewMode('list')}
-                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                    viewMode === 'list'
-                      ? 'bg-sp-accent text-sp-accent-fg'
-                      : 'text-sp-muted hover:text-sp-text'
-                  }`}
-                >
-                  명단
-                </button>
-              </div>
-            )}
-
-            {/* 수업반일 때 뷰 토글 (명단/좌석, 좌석이 있을 때) */}
-            {selectedClass !== 'homeroom' && selectedTeachingClass?.seating && (
-              <div className="flex items-center gap-1 bg-black/5 dark:bg-white/5 rounded-lg p-1">
-                <button
-                  onClick={() => changeViewMode('list')}
-                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                    viewMode === 'list'
-                      ? 'bg-sp-accent text-sp-accent-fg'
-                      : 'text-sp-muted hover:text-sp-text'
-                  }`}
-                >
-                  명단
-                </button>
-                <button
-                  onClick={() => changeViewMode('seating')}
-                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                    viewMode === 'seating'
-                      ? 'bg-sp-accent text-sp-accent-fg'
-                      : 'text-sp-muted hover:text-sp-text'
-                  }`}
-                >
-                  좌석
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* 학급 선택 탭 (담임반 + 수업반들)
-            data-no-tab-swipe: 가로 스크롤 영역이므로 글로벌 탭 스와이프 무력화 */}
-        {teachingClasses.length > 0 && (
-          <div data-no-tab-swipe className="flex overflow-x-auto gap-2 px-4 pb-3 no-scrollbar">
-            {/* 담임반 탭 */}
-            <button
-              onClick={() => setSelectedClass('homeroom')}
-              className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-                selectedClass === 'homeroom'
-                  ? 'bg-sp-accent/15 border-sp-accent/40 text-sp-accent'
-                  : 'glass-card border-transparent text-sp-muted hover:text-sp-text'
-              }`}
-            >
-              담임반
-            </button>
-
-            {/* 수업반 탭들 */}
-            {teachingClasses.map((tc) => (
-              <button
-                key={tc.id}
-                onClick={() => setSelectedClass(tc.id)}
-                className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-                  selectedClass === tc.id
-                    ? 'bg-sp-accent/15 border-sp-accent/40 text-sp-accent'
-                    : 'glass-card border-transparent text-sp-muted hover:text-sp-text'
-                }`}
-              >
-                {tc.name}
-              </button>
-            ))}
-          </div>
         )}
 
-        {/* 날짜 선택기 */}
-        <div className="flex items-center justify-between px-4 pb-3 gap-2">
+        {/* 날짜 이동 */}
+        <div className="flex items-center ml-auto shrink-0">
           <button
             onClick={() => setSelectedDate((d) => addDays(d, -1))}
-            className="p-1 rounded-lg text-sp-muted hover:text-sp-text transition-colors active:bg-sp-surface"
+            aria-label="하루 전"
+            className="grid place-items-center w-11 -mx-1 h-11 rounded-lg text-sp-muted active:bg-black/5 dark:active:bg-white/10"
           >
             <span className="material-symbols-outlined text-xl">chevron_left</span>
           </button>
-
-          <div className="flex items-center gap-2">
-            <span className="text-sp-text text-sm font-medium">
-              {format(selectedDate, 'M월 d일 (EEEE)', { locale: ko })}
+          {/* 오늘이 아니면 날짜 자체가 "오늘로 돌아가기" 버튼이 된다.
+              별도 칩을 두면 한 줄에 들어가지 않는다. */}
+          {isToday ? (
+            <span className="text-sp-text text-sm font-medium tabular-nums whitespace-nowrap px-0.5">
+              {format(selectedDate, 'M월 d일 (EEE)', { locale: ko })}
             </span>
-            {!isToday && (
-              <button
-                onClick={() => setSelectedDate(new Date())}
-                className="px-2 py-0.5 rounded-full bg-sp-accent text-sp-accent-fg text-xs font-medium"
-              >
-                오늘로 가기
-              </button>
-            )}
-          </div>
-
+          ) : (
+            <button
+              onClick={() => setSelectedDate(new Date())}
+              aria-label="오늘로 가기"
+              className="text-sp-accent text-sm font-bold tabular-nums whitespace-nowrap px-0.5 underline decoration-dotted underline-offset-4"
+            >
+              {format(selectedDate, 'M월 d일 (EEE)', { locale: ko })}
+            </button>
+          )}
           <button
             onClick={() => setSelectedDate((d) => addDays(d, 1))}
-            className="p-1 rounded-lg text-sp-muted hover:text-sp-text transition-colors active:bg-sp-surface"
+            aria-label="하루 후"
+            className="grid place-items-center w-11 -mx-1 h-11 rounded-lg text-sp-muted active:bg-black/5 dark:active:bg-white/10"
           >
             <span className="material-symbols-outlined text-xl">chevron_right</span>
           </button>
+        </div>
+
+        <div className="flex items-center shrink-0">
+          {/* 반 전체 기록 보기 (담임반 선택 시만) */}
+          {selectedClass === 'homeroom' && (
+            <button
+              onClick={() => setShowRecordsOverview(true)}
+              className="flex items-center justify-center rounded-lg text-sp-muted hover:text-sp-text active:bg-black/5 dark:active:bg-white/10"
+              style={{ minWidth: 44, minHeight: 44 }}
+              aria-label="반 전체 기록 보기"
+            >
+              <span className="material-symbols-outlined text-xl">history_edu</span>
+            </button>
+          )}
+
+          {/* 보기 전환 — 2버튼 토글에서 아이콘 하나로.
+              한 번 정하면 그 화면 내내 유지되는 설정이라 상시 두 칸을 쓸 이유가 없다.
+              누르면 반대 보기로 바뀌고, 아이콘이 "지금 누르면 갈 곳"을 가리킨다. */}
+          {canToggleView && (
+            <button
+              onClick={() => changeViewMode(viewMode === 'seating' ? 'list' : 'seating')}
+              aria-label={viewMode === 'seating' ? '명단으로 보기' : '좌석으로 보기'}
+              className="grid place-items-center rounded-lg text-sp-muted active:bg-black/5 dark:active:bg-white/10"
+              style={{ minWidth: 44, minHeight: 44 }}
+            >
+              <span className="material-symbols-outlined text-xl">
+                {viewMode === 'seating' ? 'format_list_bulleted' : 'grid_view'}
+              </span>
+            </button>
+          )}
         </div>
       </header>
 
@@ -565,8 +525,58 @@ export function StudentsPage() {
         />
       )}
 
-      {/* 스와이프 빠른 기록 "되돌리기" 토스트 */}
-      <SwipeUndoToast />
+      {/* 반 고르기 — 가로 스크롤 탭을 대체한다.
+          반이 몇 개든 한 번에 다 보이고, 뒤쪽 반이 화면 밖으로 숨지 않는다. */}
+      {classPickerOpen && (
+        <BottomSheet onClose={() => setClassPickerOpen(false)} ariaLabel="반 고르기">
+          <div className="px-5 pt-1 pb-2">
+            <p className="text-sp-text font-bold">반 고르기</p>
+            <p className="text-sp-muted text-xs mt-0.5">
+              {format(selectedDate, 'M월 d일 (EEE)', { locale: ko })} 기준
+            </p>
+          </div>
+          <ul className="max-h-[60vh] overflow-y-auto">
+            {[{ id: 'homeroom', name: homeroomName, isHomeroom: true }, ...teachingClasses].map(
+              (c) => {
+                const isSelected = selectedClass === c.id;
+                return (
+                  <li key={c.id}>
+                    <button
+                      onClick={() => {
+                        setSelectedClass(c.id);
+                        setClassPickerOpen(false);
+                      }}
+                      aria-current={isSelected ? 'true' : undefined}
+                      className={`w-full flex items-center gap-3 px-5 text-left ${
+                        isSelected ? 'bg-sp-subtle' : 'active:bg-sp-subtle'
+                      }`}
+                      style={{ minHeight: 52 }}
+                    >
+                      <span
+                        className={`material-symbols-outlined text-xl ${
+                          isSelected ? 'text-sp-accent' : 'text-sp-muted'
+                        }`}
+                      >
+                        {isSelected ? 'radio_button_checked' : 'radio_button_unchecked'}
+                      </span>
+                      <span className="flex-1 min-w-0 truncate text-sp-text text-sm font-medium">
+                        {c.name}
+                      </span>
+                      {'isHomeroom' in c && c.isHomeroom && (
+                        /* sp-* 토큰에 Tailwind 투명도 수식(/12)을 붙이면 토큰이 CSS 변수라
+                           알파 합성이 안 돼 배경이 조용히 사라진다. 단색 토큰을 쓴다. */
+                        <span className="shrink-0 text-xs text-sp-accent px-2 py-0.5 rounded-lg bg-sp-subtle">
+                          담임
+                        </span>
+                      )}
+                    </button>
+                  </li>
+                );
+              },
+            )}
+          </ul>
+        </BottomSheet>
+      )}
     </div>
   );
 }
