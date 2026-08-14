@@ -1077,6 +1077,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
     reportPainted: (): void => {
       ipcRenderer.send('sidePin:painted');
     },
+    /**
+     * 메모를 쓰는 중인지 알린다.
+     *
+     * 옆핀은 마우스가 벗어나면 접힌다. 그런데 글을 쓰는 사람은 키보드만 쓰고 마우스는
+     * 아무 데나 두므로, 이 신호가 없으면 **타이핑 도중 패널이 접혀 쓰던 글이 날아간다.**
+     */
+    reportEditorActivity: (activity: string): void => {
+      ipcRenderer.send('sidePin:editor-activity', activity);
+    },
   },
   // Cross-window data sync
   onDataChanged: (callback: (filename: string) => void): (() => void) => {

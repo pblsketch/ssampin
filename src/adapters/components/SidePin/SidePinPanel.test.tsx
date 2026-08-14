@@ -17,6 +17,7 @@ afterEach(cleanup);
 function renderPanel(overrides: Partial<Parameters<typeof SidePinPanel>[0]> = {}) {
   const props = {
     pinnedZone: 'none' as const,
+    activeZone: null,
     widgetSlot: <div>위젯 자리</div>,
     memoSlot: <div>메모 자리</div>,
     onTogglePin: vi.fn(),
@@ -27,6 +28,45 @@ function renderPanel(overrides: Partial<Parameters<typeof SidePinPanel>[0]> = {}
   render(<SidePinPanel {...props} />);
   return props;
 }
+
+describe('들어온 칸이 더 넓다', () => {
+  /** 두 칸을 감싸는 요소의 클래스를 꺼낸다 */
+  function zoneClasses(): { widget: string; memo: string } {
+    const widget = screen.getByText('위젯 자리').parentElement;
+    const memo = screen.getByText('메모 자리').parentElement;
+    return { widget: widget?.className ?? '', memo: memo?.className ?? '' };
+  }
+
+  test('메모 칸으로 들어오면 메모가 더 넓다', () => {
+    renderPanel({ activeZone: 'memo' });
+
+    const { widget, memo } = zoneClasses();
+    expect(memo).toContain('flex-[3]');
+    expect(widget).toContain('flex-[2]');
+  });
+
+  test('위젯 칸으로 들어오면 위젯이 더 넓다', () => {
+    renderPanel({ activeZone: 'widget' });
+
+    const { widget, memo } = zoneClasses();
+    expect(widget).toContain('flex-[3]');
+    expect(memo).toContain('flex-[2]');
+  });
+
+  test('가리킨 곳이 없으면(단축키 등) 임의로 메모를 키우지 않는다', () => {
+    // 사용자가 정하지 않은 것을 앱이 정하면 안 된다. 기본은 위젯이 넓은 쪽이다.
+    renderPanel({ activeZone: null });
+
+    expect(zoneClasses().widget).toContain('flex-[3]');
+  });
+
+  test('한쪽을 아예 숨기지는 않는다 — 위아래로 나란히 둔 이유가 사라진다', () => {
+    renderPanel({ activeZone: 'memo' });
+
+    expect(screen.getByText('위젯 자리')).toBeTruthy();
+    expect(screen.getByText('메모 자리')).toBeTruthy();
+  });
+});
 
 describe('패널 구조', () => {
   test('위젯과 메모가 동시에 보인다 — 탭으로 갈아 끼우지 않는다', () => {

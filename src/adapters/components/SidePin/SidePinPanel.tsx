@@ -12,10 +12,17 @@
  * 사용자에게는 느린 앱이 된다.
  */
 import type { ReactNode } from 'react';
-import type { SidePinPinnedZone } from '@domain/entities/SidePinRuntimeState';
+import type { SidePinPinnedZone, SidePinZone } from '@domain/entities/SidePinRuntimeState';
 
 export interface SidePinPanelProps {
   readonly pinnedZone: SidePinPinnedZone;
+  /**
+   * 어느 칸으로 들어와 열렸는가. 그 칸이 더 넓어진다.
+   *
+   * 들어온 칸을 아예 통째로 보여주고 다른 칸을 숨기지는 않는다. 그러면 위젯을 보려고
+   * 메모를 덮는 셈이 되어, 위아래로 나란히 둔 이유가 사라진다. 넓이만 바꾼다.
+   */
+  readonly activeZone: SidePinZone | null;
   readonly widgetSlot: ReactNode;
   readonly memoSlot: ReactNode;
   readonly onTogglePin: (zone: 'both') => void;
@@ -56,8 +63,21 @@ function HeaderButton({ icon, label, active = false, onClick }: HeaderButtonProp
   );
 }
 
+/**
+ * 두 칸의 넓이 비율.
+ *
+ * 메모로 들어왔으면 메모가 더 넓다. 그 외에는 위젯이 넓다 — 단축키처럼 가리킨 곳이
+ * 없을 때 임의로 메모를 키우면, 사용자가 정하지 않은 것을 앱이 정한 셈이 된다.
+ */
+function zoneGrowth(activeZone: SidePinZone | null): { widget: string; memo: string } {
+  return activeZone === 'memo'
+    ? { widget: 'flex-[2]', memo: 'flex-[3]' }
+    : { widget: 'flex-[3]', memo: 'flex-[2]' };
+}
+
 export function SidePinPanel({
   pinnedZone,
+  activeZone,
   widgetSlot,
   memoSlot,
   onTogglePin,
@@ -66,6 +86,7 @@ export function SidePinPanel({
   memoEditing = false,
 }: SidePinPanelProps) {
   const pinned = pinnedZone !== 'none';
+  const growth = zoneGrowth(activeZone);
 
   return (
     <section
@@ -86,13 +107,13 @@ export function SidePinPanel({
       </header>
 
       {/*
-        위젯 60% · 메모 40%. 메모를 쓰는 중에는 위젯을 요약 높이로 접어
+        들어온 칸이 더 넓다. 메모를 쓰는 중에는 위젯을 요약 높이로 접어
         편집기가 넓게 쓰도록 한다.
         min-h-0 이 없으면 안쪽 스크롤이 부모를 밀어내 헤더가 잘린다.
       */}
       <div
-        className={`min-h-0 shrink-0 overflow-y-auto transition-[flex-basis] duration-150 ${
-          memoEditing ? 'h-12 flex-none' : 'flex-[3] basis-0'
+        className={`min-h-0 shrink-0 overflow-y-auto transition-[flex-grow] duration-sp-base ${
+          memoEditing ? 'h-12 flex-none' : `${growth.widget} basis-0`
         }`}
       >
         {widgetSlot}
@@ -100,7 +121,11 @@ export function SidePinPanel({
 
       <span aria-hidden className="mx-3 h-px shrink-0 bg-sp-border" />
 
-      <div className="min-h-0 flex-[2] basis-0 overflow-y-auto">{memoSlot}</div>
+      <div
+        className={`min-h-0 basis-0 overflow-y-auto transition-[flex-grow] duration-sp-base ${growth.memo}`}
+      >
+        {memoSlot}
+      </div>
     </section>
   );
 }

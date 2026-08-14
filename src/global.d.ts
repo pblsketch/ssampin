@@ -673,6 +673,19 @@ interface ElectronAPI {
     requestClose: () => void;
     openMain: () => void;
     reportPainted: () => void;
+    /**
+     * 메모를 쓰는 중인지 알린다.
+     *
+     * 옆핀은 마우스가 벗어나면 접힌다. 글 쓰는 사람은 키보드만 쓰므로,
+     * 이 신호가 없으면 타이핑 도중 접혀 쓰던 글이 날아간다.
+     *
+     * **없을 수 있다.** preload는 앱을 다시 켜야 갱신되는데 화면 코드는 즉시 갱신되므로,
+     * 개발 중에는 새 화면이 옛 preload 위에서 도는 시간이 생긴다. 그때 이 함수를 그냥
+     * 부르면 메모 칸 전체가 죽는다. 부르는 쪽에서 `?.()`로 감싸야 한다.
+     */
+    reportEditorActivity?: (
+      activity: 'idle' | 'editing' | 'saving' | 'dialog-open' | 'save-error',
+    ) => void;
   };
   // Cross-window data sync
   onDataChanged: (callback: (filename: string) => void) => () => void;

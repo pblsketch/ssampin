@@ -66,14 +66,36 @@ describe('손잡이 동작', () => {
     expect(props.onZoneLeave).toHaveBeenCalled();
   });
 
-  test('들어간 구역만 강조된다', () => {
+  test('들어간 구역만 강조된다 — 면이 통째로 뒤집힌다', () => {
+    // `text-sp-accent` 로 부분 문자열 검사를 하면 안 된다. 활성 아이콘 색인
+    // `text-sp-accent-fg` 가 그 글자를 포함해, 실제로는 구분이 사라져도 통과한다.
     renderRail({ pointerRegion: 'rail-widget' });
 
     const widget = screen.getByRole('button', { name: '위젯 열기' });
     const memo = screen.getByRole('button', { name: '메모 열기' });
 
-    expect(widget.innerHTML).toContain('text-sp-accent');
-    expect(memo.innerHTML).not.toContain('text-sp-accent');
+    // 활성: 칩이 강조색으로 반전되고 글자색도 뒤집힌다
+    expect(widget.innerHTML).toContain('bg-sp-accent ');
+    expect(widget.innerHTML).toContain('text-sp-accent-fg');
+    expect(widget.innerHTML).toContain('opacity-100');
+
+    // 비활성: 칩은 기본 면, 아이콘은 흐린 색, 방향선은 숨는다
+    expect(memo.innerHTML).toContain('bg-sp-border');
+    // 흐린 색(text-sp-muted)이 아니라 본문 색이어야 한다. 손잡이는 폭이 1.4cm뿐이라
+    // 아이콘이 흐리면 무엇이 있는지 보이지 않는다.
+    expect(memo.innerHTML).toContain('text-sp-text');
+    expect(memo.innerHTML).toContain('opacity-0');
+    expect(memo.innerHTML).not.toContain('text-sp-accent-fg');
+  });
+
+  test('마우스를 올리기 전에도 칩이 보인다 — "빈 막대"로 읽히면 안 된다', () => {
+    // 이 손잡이는 늘 화면에 떠 있다. 아무 표시가 없으면 처음 본 교사는
+    // 여기에 무엇이 있는지, 마우스를 대면 뭐가 열리는지 알 수 없다.
+    renderRail({ pointerRegion: 'outside' });
+
+    for (const name of ['위젯 열기', '메모 열기']) {
+      expect(screen.getByRole('button', { name }).innerHTML).toContain('bg-sp-border');
+    }
   });
 });
 
@@ -96,11 +118,18 @@ describe('디자인 규칙', () => {
   });
 
   test('sp-* 토큰에 투명도 수식을 붙이지 않는다 — 조용히 투명해진다', () => {
-    // 예: bg-sp-card/50 은 이 저장소에서 동작하지 않는다
+    // 예: bg-sp-border/50 은 이 저장소에서 동작하지 않는다
     expect(source).not.toMatch(/-sp-[a-z-]+\/\d/);
   });
 
   test('raw text-white 를 쓰지 않는다 — 라이트 모드에서 안 보인다', () => {
     expect(source).not.toMatch(/\btext-white\b/);
+  });
+
+  test('칩 크기를 고정 px로 두지 않는다 — 창 폭이 기기마다 30~52 DIP로 다르다', () => {
+    // Windows가 창 최소 폭을 물리 52픽셀로 강제해, 같은 손잡이가 배율 175%에서는
+    // 30 DIP, 100%에서는 52 DIP로 들어온다. 한쪽에 맞춰 고정하면 다른 쪽이 깨진다.
+    // 이 전제가 실제로 어긋나 재설계까지 갔으므로 수식 사용 자체를 못박아 둔다.
+    expect(source).toMatch(/clamp\(/);
   });
 });

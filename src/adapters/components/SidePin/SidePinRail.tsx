@@ -11,7 +11,23 @@
  *    아니라 가장자리에 꽂힌 책갈피처럼 읽히게 한다. 이름 그대로 '핀'이다.
  *
  * 3. **빛나지 않는다.** 이 제품의 안티레퍼런스가 "과도한 네온·글로우"다. 상태 변화는
- *    밝기가 아니라 왼쪽 가장자리에 얇은 강조선이 서는 것으로 알린다.
+ *    밝기가 아니라 면이 통째로 뒤집히는 것으로 알린다.
+ *
+ * 4. **아이콘에 앉을 면(칩)을 항상 그린다.** 초기 구현은 16 DIP 폭을 전제로 아이콘만
+ *    띄웠는데, Windows가 창 최소 폭을 물리 52픽셀로 강제해 실제로는 **30~52 DIP**로
+ *    들어온다(배율 175%면 30, 100%면 52). 그 넓은 칸에 14px 아이콘 하나만 있으니
+ *    "아무것도 없는 회색 막대"로 읽혔다. 칩을 상시 노출해 "여기 눌리는 것이 있다"를
+ *    처음부터 알린다.
+ *
+ * 폭이 기기마다 다르므로 **칩 크기를 고정 px로 두지 않는다.** `clamp`로 폭의 60%를
+ * 따라가되 22~28px를 벗어나지 않게 해, 배율별 분기 없이 한 수식으로 대응한다.
+ *
+ * 칩 배경에 `sp-card`가 아니라 `sp-border`를 쓰는 이유가 중요하다. 라이트 모드에서
+ * `sp-card`는 `sp-surface`와 **밝기 차이가 2도 안 되는 사실상 같은 색**이라, 칩을 그려도
+ * 화면에는 아무것도 없는 흰 막대만 보인다(2026-08-14 실제 발생). 토큰이 있는지만 보고
+ * 값이 실제로 다른지 확인하지 않은 것이 원인이었다.
+ *
+ * 이 조합이 다시 무너지지 않도록 색 값 자체를 재는 검사를 `railContrast.test.ts`에 뒀다.
  *
  * 위아래 두 구역은 각각 위젯·메모로 들어가는 입구다. 어느 쪽에 들어왔는지에 따라
  * 펼쳤을 때 먼저 보여 줄 곳이 달라진다.
@@ -42,22 +58,35 @@ function RailZone({ icon, label, active, onEnter, onClick }: ZoneProps) {
       onMouseEnter={onEnter}
       onFocus={onEnter}
       onClick={onClick}
-      className="relative flex flex-1 items-center justify-center outline-none focus-visible:bg-sp-card"
+      className="relative flex flex-1 items-center justify-center outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-sp-accent focus-visible:-outline-offset-2"
     >
-      {/* 상태 표시는 밝기가 아니라 얇은 강조선으로 — 글로우 금지 */}
+      {/*
+        펼쳐질 방향(화면 안쪽)을 미리 알리는 얇은 선.
+        창이 `overflow-hidden`이라 바깥으로 그리는 표시는 잘린다 — 안쪽에 붙인다.
+      */}
       <span
         aria-hidden
-        className={`absolute left-0 top-1 bottom-1 w-[2px] rounded-r bg-sp-accent transition-opacity duration-150 ${
+        className={`absolute left-0 top-2 bottom-2 w-[2px] rounded-r-full bg-sp-accent transition-opacity duration-sp-quick ${
           active ? 'opacity-100' : 'opacity-0'
         }`}
       />
+      {/*
+        칩 — 폭이 30~52 DIP 어디든 올 수 있으므로 고정 px 대신 clamp로 따라간다.
+        가장 좁을 때도 22px 밑으로, 가장 넓을 때도 28px 위로는 가지 않는다.
+      */}
       <span
         aria-hidden
-        className={`material-symbols-outlined text-icon-sm leading-none transition-colors duration-150 ${
-          active ? 'text-sp-accent' : 'text-sp-muted'
+        className={`flex aspect-square w-[clamp(1.375rem,60%,1.75rem)] items-center justify-center rounded-lg transition-colors duration-sp-quick ${
+          active ? 'bg-sp-accent' : 'bg-sp-border'
         }`}
       >
-        {icon}
+        <span
+          className={`material-symbols-outlined text-icon-md leading-none transition-colors duration-sp-quick ${
+            active ? 'text-sp-accent-fg' : 'text-sp-text'
+          }`}
+        >
+          {icon}
+        </span>
       </span>
     </button>
   );

@@ -8,7 +8,7 @@
  */
 import { describe, expect, test, vi, beforeEach, afterEach } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { SidePinApp } from './SidePinApp';
+import { SidePinApp, toViewState } from './SidePinApp';
 
 interface Bridge {
   onStateChanged: ReturnType<typeof vi.fn>;
@@ -53,6 +53,27 @@ function send(state: Record<string, unknown>): void {
   });
 }
 
+describe('보호 상태 판단 — 뒤집히면 잠금 화면 위로 메모가 샌다', () => {
+  const base = { surface: 'collapsed', pinnedZone: 'none', pointerRegion: 'outside' };
+
+  test('보호 이유가 없을 때만 잠기지 않은 것으로 본다', () => {
+    expect(toViewState({ ...base, protectedReason: null })?.locked).toBe(false);
+  });
+
+  test.each(['lock', 'suspend', 'fullscreen', 'virtual-desktop-hidden', 'adapter-unhealthy'])(
+    '보호 이유 %s 는 잠긴 것으로 본다',
+    (reason) => {
+      expect(toViewState({ ...base, protectedReason: reason })?.locked).toBe(true);
+    },
+  );
+
+  test('값이 아예 없으면 잠긴 쪽으로 판단한다 — 애매할 때 보여주면 안 된다', () => {
+    // 형식이 어긋난 전문이 왔을 때 내용을 보여주는 쪽으로 기울면,
+    // 정작 가려야 할 순간에 새는 것은 이쪽이다.
+    expect(toViewState(base)?.locked).toBe(true);
+  });
+});
+
 describe('무엇을 그리는가', () => {
   test('접혔을 때는 손잡이만 보인다', () => {
     render(<SidePinApp />);
@@ -77,11 +98,45 @@ describe('무엇을 그리는가', () => {
     expect(screen.getByRole('region', { name: '옆핀' })).toBeTruthy();
   });
 
-  test('내용이 아직 없는 영역임을 숨기지 않는다', () => {
+  test('아직 안 만든 위젯 칸은 빈 자리임을 숨기지 않는다', () => {
+    // 메모 칸은 만들었으므로 빈 자리는 위젯 하나뿐이다.
+    // 가짜 내용을 채워 넣으면 "다 된 것처럼" 보여 판단을 흐린다.
     render(<SidePinApp />);
     send({ surface: 'expanded' });
 
-    expect(screen.getAllByText('다음 단계에서 내용이 들어갑니다').length).toBe(2);
+    expect(screen.getAllByText('다음 단계에서 내용이 들어갑니다').length).toBe(1);
+  });
+
+  test('접힌 손잡이가 창 높이를 그대로 채운다 — 안 그러면 아래가 빈 채로 남는다', () => {
+    // 부모 높이에 기대면(h-full) 높이 사슬이 한 군데만 끊겨도 손잡이가 내용 높이로
+    // 쪼그라들어, 창 위쪽 일부만 차지하고 나머지가 흰 판처럼 드러난다.
+    const { container } = render(<SidePinApp />);
+    send({ surface: 'collapsed' });
+
+    expect(container.querySelector('.h-screen')).toBeTruthy();
+  });
+
+  test('문서 배경을 투명하게 만든다 — 창은 투명한데 문서가 희면 흰 판이 보인다', () => {
+    render(<SidePinApp />);
+
+    expect(document.body.classList.contains('ssampin-sidepin')).toBe(true);
+    expect(document.body.style.background).toBe('transparent');
+  });
+
+  test('화면이 사라지면 문서 배경을 되돌린다 — 다른 창까지 투명해지면 안 된다', () => {
+    const { unmount } = render(<SidePinApp />);
+
+    unmount();
+
+    expect(document.body.classList.contains('ssampin-sidepin')).toBe(false);
+    expect(document.body.style.background).toBe('');
+  });
+
+  test('메모 칸에는 실제 메모 화면이 들어간다', () => {
+    render(<SidePinApp />);
+    send({ surface: 'expanded' });
+
+    expect(screen.getByRole('region', { name: '메모' })).toBeTruthy();
   });
 });
 

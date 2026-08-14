@@ -32,6 +32,7 @@ import {
   type SidePinOpenReason,
   type SidePinPendingHostOperation,
   type SidePinPendingTransition,
+  type SidePinPointerRegion,
   type SidePinRuntimeState,
   type SidePinZone,
 } from '../entities/SidePinRuntimeState';
@@ -163,6 +164,21 @@ function focusFor(reason: SidePinOpenReason): boolean {
   return reason === 'click' || reason === 'shortcut';
 }
 
+/**
+ * 어느 칸으로 들어왔는지 정한다.
+ *
+ * **다 그려진 뒤에 정하면 안 된다.** 패널이 뜨는 사이 마우스는 이미 패널 위나 바깥으로
+ * 옮겨가 있어서, 처음 들어온 칸을 알 수 없다. 열기 시작하는 시점에 정해 그대로 들고 간다.
+ *
+ * 단축키처럼 가리킨 곳이 없으면 양쪽을 함께 연다 — 임의로 한쪽을 고르면
+ * 사용자가 지정하지 않은 것을 앱이 정한 셈이 된다.
+ */
+function entryZoneOf(region: SidePinPointerRegion): SidePinZone {
+  if (region === 'rail-widget' || region === 'panel-widget') return 'widget';
+  if (region === 'rail-memo' || region === 'panel-memo') return 'memo';
+  return 'both';
+}
+
 /** 예약을 취소해야 하면 취소 명령을 낸다 */
 function cancelIfScheduled(state: SidePinRuntimeState): SidePinCommand[] {
   return state.pendingTransition !== null ? [{ type: 'cancel-schedule' }] : [];
@@ -198,6 +214,8 @@ function beginOpen(
 
   return {
     next: bump(state, {
+      // patch보다 먼저 둔다 — 클릭처럼 칸을 명시하는 쪽이 이 판단을 덮을 수 있어야 한다.
+      activeZone: entryZoneOf(state.pointerRegion),
       ...patch,
       surface: 'opening',
       openReason: reason,
@@ -475,7 +493,8 @@ function onPanelPainted(
   return {
     next: bump(state, {
       surface: 'expanded',
-      activeZone: 'both',
+      // activeZone은 열기 시작할 때 정해 뒀다. 여기서 덮으면 어느 칸으로 들어왔는지가
+      // 사라져, 두 손잡이 버튼이 똑같은 결과를 낸다.
       panelLifecycle: 'visible',
       pendingTransition: null,
       pendingHostOperations: withoutKind(withoutPending(state, operationId), 'prepare-panel'),
@@ -689,6 +708,8 @@ function onTogglePin(
     return {
       next: bump(state, {
         pinnedZone: zone,
+        // 펼쳐진 상태에서 다른 칸을 누르면 그 칸으로 무게중심을 옮긴다.
+        activeZone: zone,
         openReason: 'click',
         pendingTransition: null,
         pendingHostOperations: withPending(
@@ -700,7 +721,8 @@ function onTogglePin(
     };
   }
 
-  return beginOpen(state, ctx, 'click', { pinnedZone: zone });
+  // 누른 칸이 곧 들어온 칸이다 — 마우스 위치보다 명시적인 의사표시라 이쪽을 따른다.
+  return beginOpen(state, ctx, 'click', { pinnedZone: zone, activeZone: zone });
 }
 
 function onEditorActivityChanged(

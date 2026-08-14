@@ -83,10 +83,10 @@ function enabledState(): SidePinRuntimeState {
 }
 
 /** 호버로 패널이 실제로 펼쳐진 상태까지 만든다 */
-function expandedByHover(): SidePinRuntimeState {
+function expandedByHover(region: 'rail-widget' | 'rail-memo' = 'rail-widget'): SidePinRuntimeState {
   let state = enabledState();
 
-  const entered = apply(state, { type: 'pointer-region-changed', region: 'rail-widget' }, 1_000);
+  const entered = apply(state, { type: 'pointer-region-changed', region }, 1_000);
   const reveal = scheduledTransition(entered);
   state = entered.next;
 
@@ -167,9 +167,40 @@ describe('호버 펼침', () => {
     const state = expandedByHover();
 
     expect(state.surface).toBe('expanded');
-    expect(state.activeZone).toBe('both');
     expect(state.panelLifecycle).toBe('visible');
     expect(state.openReason).toBe('hover');
+  });
+
+  it('들어온 칸을 기억한다 — 위젯 쪽으로 들어오면 위젯이다', () => {
+    expect(expandedByHover('rail-widget').activeZone).toBe('widget');
+  });
+
+  it('메모 쪽으로 들어오면 메모다 — 두 손잡이 버튼이 같은 결과를 내면 안 된다', () => {
+    expect(expandedByHover('rail-memo').activeZone).toBe('memo');
+  });
+
+  it('다 그려진 뒤에 정하지 않는다 — 그 사이 마우스는 이미 다른 곳에 가 있다', () => {
+    // 손잡이(메모)로 들어와 여는 중에 포인터가 패널 위젯 쪽으로 옮겨가도,
+    // 처음 들어온 칸은 메모여야 한다.
+    let state = enabledState();
+    const entered = apply(state, { type: 'pointer-region-changed', region: 'rail-memo' }, 1_000);
+    const reveal = scheduledTransition(entered);
+    const fired = apply(entered.next, { type: 'timer-fired', transition: reveal }, 1_180);
+    const show = hostCommandOf(fired, 'show-panel');
+    state = fired.next;
+
+    const moved = apply(state, { type: 'pointer-region-changed', region: 'panel-widget' }, 1_190);
+    const painted = apply(
+      moved.next,
+      {
+        type: 'panel-painted',
+        operationId: show.operationId,
+        requestedRevision: show.requestedRevision,
+      },
+      1_200,
+    );
+
+    expect(painted.next.activeZone).toBe('memo');
   });
 
   it('"요청 접수" 응답이 먼저 와도 뒤이은 "그려짐" 알림이 펼침을 확정한다', () => {

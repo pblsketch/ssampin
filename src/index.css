@@ -180,6 +180,24 @@ body {
     background: transparent !important;
     background-color: transparent !important;
   }
+  /* 옆핀 — 아이콘 모드와 같은 이유로 구조 요소만 투명 강제한다.
+     이 규칙이 없으면 창은 투명한데 문서 배경이 흰색이라, 손잡이가 덮지 않은 부분이
+     "흰 판"으로 드러난다(2026-08-14 실제 발생 — 손잡이 아래로 흰 사각형이 보였다).
+     height 100%도 함께 준다. 부모에 높이가 없으면 손잡이의 h-full이 내용 높이로
+     쪼그라들어 창 위쪽 일부만 차지한다. */
+  body.ssampin-sidepin,
+  html:has(body.ssampin-sidepin),
+  body.ssampin-sidepin #root {
+    background: transparent !important;
+    background-color: transparent !important;
+    height: 100% !important;
+  }
+  body.ssampin-sidepin {
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+
   body.ssampin-icon-popup {
     margin: 0 !important;
     padding: 0 !important;

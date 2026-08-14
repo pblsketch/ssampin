@@ -2606,6 +2606,20 @@ function registerIpcHandlers(): void {
     return (SIDE_PIN_REGIONS as readonly string[]).includes(value);
   }
 
+  // MIRROR: src/domain/entities/SidePinRuntimeState.ts 의 MemoEditorActivity
+  const MEMO_EDITOR_ACTIVITIES = [
+    'idle',
+    'editing',
+    'saving',
+    'dialog-open',
+    'save-error',
+  ] as const;
+  type MemoEditorActivityMirror = (typeof MEMO_EDITOR_ACTIVITIES)[number];
+
+  function isMemoEditorActivity(value: string): value is MemoEditorActivityMirror {
+    return (MEMO_EDITOR_ACTIVITIES as readonly string[]).includes(value);
+  }
+
   ipcMain.on('sidePin:pointer-region', (_event, region: string) => {
     // 알 수 없는 값은 버린다 — 화면이 보내는 값을 그대로 믿지 않는다.
     if (!isSidePinRegion(region)) return;
@@ -2619,6 +2633,19 @@ function registerIpcHandlers(): void {
 
   ipcMain.on('sidePin:request-close', () => {
     sidePin?.service.dispatch({ type: 'close-requested' });
+  });
+
+  /**
+   * 메모를 쓰는 중인지 알린다.
+   *
+   * 이 신호가 없으면 **타이핑하는 도중 패널이 저절로 접혀 쓰던 글이 사라진다.**
+   * 옆핀은 마우스가 벗어나면 접히도록 되어 있는데, 글을 쓰는 사람은 키보드만 쓰고
+   * 마우스는 아무 데나 두기 때문이다. 저장 중·대화상자가 열린 동안도 마찬가지다.
+   */
+  ipcMain.on('sidePin:editor-activity', (_event, activity: string) => {
+    // 알 수 없는 값은 버린다 — 화면이 보내는 값을 그대로 믿지 않는다.
+    if (!isMemoEditorActivity(activity)) return;
+    sidePin?.service.dispatch({ type: 'editor-activity-changed', activity });
   });
 
   ipcMain.on('sidePin:open-main', () => {
