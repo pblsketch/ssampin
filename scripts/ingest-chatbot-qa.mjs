@@ -2566,10 +2566,37 @@ async function ingestDocuments(documents) {
   console.log(`\n🎉 총 ${total}개 문서 임베딩 완료!`);
 }
 
+/**
+ * 이 스크립트가 소유한 출처 — 재수집 전에 통째로 지운다.
+ *
+ * ⚠️ ssampin-embed 의 'upsert' 액션은 이름과 달리 실제로는 insert 다. 그래서 이 스크립트를
+ * 그냥 다시 돌리면 문서가 매번 통째로 복사돼 쌓인다. 실제로 2026-08-14 확인 시 DB 에
+ * 12,191행이 있었는데 서로 다른 문서는 478건뿐이었다(같은 문서가 최대 26벌). 중복 사본이
+ * 벡터 검색 상위 10건을 차지해 답변 품질까지 떨어뜨렸다.
+ *
+ * 아래 두 출처는 이 파일이 유일한 원본이므로 '지우고 다시 넣기'가 안전하다. 문서 파일에서
+ * 만들어지는 출처(docs/user-guide.md 등, scripts/embed-docs.ts 소관)는 건드리지 않는다.
+ */
+const OWNED_SOURCES = ['system-qa', 'feature-summary'];
+
+async function deleteSource(source) {
+  const response = await fetch(`${SUPABASE_URL}/functions/v1/ssampin-embed`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${EMBED_AUTH_TOKEN}` },
+    body: JSON.stringify({ action: 'delete', source }),
+  });
+  if (!response.ok) throw new Error(`'${source}' 삭제 실패: ${await response.text()}`);
+  console.log(`🧹 기존 '${source}' 문서 삭제 완료`);
+}
+
 async function main() {
   const allDocs = [...QA_DOCUMENTS, ...FEATURE_DOCUMENTS];
   console.log(`📚 총 ${allDocs.length}개 문서 임베딩 시작...`);
   console.log(`   Q&A: ${QA_DOCUMENTS.length}개, 기능 요약: ${FEATURE_DOCUMENTS.length}개\n`);
+
+  // 지운 뒤 다시 넣는다 — 이 사이 짧게 해당 문서들이 비는 구간이 있으므로 릴리즈 중에만 돌린다.
+  for (const source of OWNED_SOURCES) await deleteSource(source);
+
   await ingestDocuments(allDocs);
 }
 
