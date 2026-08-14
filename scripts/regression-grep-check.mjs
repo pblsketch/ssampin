@@ -17,6 +17,7 @@
  * package.json `prebuild` 또는 별도 `regression-check` script에 통합.
  */
 
+import { execFileSync } from 'node:child_process';
 import { readFileSync, statSync, readdirSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -413,6 +414,37 @@ function readFileSafe(path) {
 }
 
 // ============================================================
+// 추적 금지 경로 검사 (git 이 실제로 무엇을 들고 있는지 확인)
+// ============================================================
+//
+// REGRESSION #52 (2026-08-14): 이 저장소는 공개(GPL)다. 학생 이름·생기부·점수가 든
+// 파일이 한 번 올라가면 이력·포크·크롤러에 남아 되돌릴 수 없다.
+//
+// 실제 사고: 다른 작업 도중 `git add .` 로 문서 1,013개(187MB)가 통째로 스테이징됐고,
+// 그 안에 생기부 표본·학생명렬표·시험점수·자리배치도·사용자 문의 메일이 섞여 있었다.
+// 커밋 직전에 발견해 되돌렸다. 일부는 과거 커밋(b1d4f641)에서 일부러 지웠던 파일이라,
+// 지우는 것만으로는 재발을 막지 못한다는 뜻이다.
+//
+// .gitignore 만으로는 부족하다. 이미 추적 중인 파일에는 효력이 없고, `git add -f` 로
+// 우회된다. 그래서 여기서는 파일 내용이 아니라 **git 이 실제로 추적하는 목록**을 본다.
+const forbiddenTrackedPaths = [
+  {
+    name: 'REGRESSION #52: 학생 개인정보가 든 표본 문서는 공개 저장소에 추적되면 안 된다',
+    // git pathspec. 디렉터리를 주면 그 아래 전부를 뜻한다.
+    paths: ['docs/markdown-converter-test-docs', 'docs/sample-scores', 'docs/edzip/제출서식'],
+    // 이미 추적 중이지만 사람이 열어 보고 "실제 학생 정보 아님"을 확인한 파일.
+    // 2026-08-14 확인: 두 파일 모두 제목이 "… 성적표 (가상)" 이고 이름도 예시 이름이다.
+    // 성적 분석 기능(1ddba40a)의 시험용 표본이라 추적이 맞다.
+    // 새 파일을 여기 넣으려면 반드시 먼저 열어서 실제 학생 정보가 없는지 확인할 것.
+    allowTracked: [
+      'docs/sample-scores/2-1-1회고사-점수.xlsx',
+      'docs/sample-scores/2-1-2회고사-점수.xlsx',
+    ],
+    hint: '.gitignore 에 이미 등재돼 있다. 추적되고 있다면 `git add -f` 로 우회했거나 과거에 추적된 파일이다. `git rm --cached <경로>` 로 추적만 해제할 것(디스크 파일은 남는다). 실제 학생 정보가 아님을 직접 확인했다면 이 검사의 allowTracked 에 근거와 함께 추가할 것.',
+  },
+];
+
+// ============================================================
 // 실행
 // ============================================================
 
@@ -465,6 +497,48 @@ for (const c of absenceChecks) {
     failures.push({ name: c.name, hits });
   } else {
     console.log(`OK ${c.name}  (scanned ${files.length} file(s))`);
+    passed++;
+  }
+}
+
+// --- 추적 금지 경로 검사 ---
+for (const c of forbiddenTrackedPaths) {
+  let tracked;
+  try {
+    const out = execFileSync('git', ['ls-files', '-z', '--', ...c.paths], {
+      cwd: ROOT,
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    // 한글 파일명은 자모 결합 방식이 두 가지라(NFC/NFD) 글자가 같아도 문자열 비교가 어긋난다.
+    // 양쪽을 같은 방식으로 맞춘 뒤 비교한다.
+    const allowed = new Set((c.allowTracked ?? []).map((f) => f.normalize('NFC')));
+    tracked = out
+      .split('\0')
+      .filter(Boolean)
+      .filter((f) => !allowed.has(f.normalize('NFC')));
+  } catch {
+    // git 이 없거나 저장소가 아니면(배포용 압축본 등) 검사할 대상 자체가 없다.
+    // 조용히 넘기지 않고 눈에 띄게 남긴다 — 개수가 줄면 왜 줄었는지 알 수 없기 때문.
+    console.log(`OK ${c.name}  (git 저장소가 아니라 건너뜀)`);
+    passed++;
+    continue;
+  }
+
+  if (tracked.length > 0) {
+    console.error(`X ${c.name}`);
+    console.error(`     추적 중인 파일 ${tracked.length}개:`);
+    for (const f of tracked.slice(0, 20)) {
+      console.error(`     - ${f}`);
+    }
+    if (tracked.length > 20) {
+      console.error(`     ... 외 ${tracked.length - 20}개`);
+    }
+    console.error(`     → ${c.hint}`);
+    failed++;
+    failures.push({ name: c.name, hits: tracked });
+  } else {
+    console.log(`OK ${c.name}  (검사 경로 ${c.paths.length}개, 추적 0건)`);
     passed++;
   }
 }
