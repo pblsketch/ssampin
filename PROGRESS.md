@@ -2,6 +2,27 @@
 
 마지막 업데이트: 2026-08-14 KST
 
+## 🎨 앱·홈페이지 아이콘을 마스코트 쌤핀이로 통일 — 커밋 완료 (2026-08-14, main `789a3318`)
+
+2026-08-13에 구현만 끝나고 커밋되지 않은 채 세션이 끊긴 작업을 이어받아 검증·커밋했다.
+
+**배경**: 데스크톱 앱 아이콘·파비콘·랜딩 로고만 3D 압정 일러스트였고, 앱 안(로딩 화면·아이콘 모드·모바일 PWA)은 이미 마스코트 쌤핀이였다. 두 갈래를 쌤핀이 하나로 합쳤다. 사용자 결정 = **배경 없이 투명, 로고까지 전부**.
+
+**구성**: 생성기 `scripts/generate-mascot-icons.mjs` 하나가 `public/floating-pin.png` 한 장에서 전 세트를 굽는다(`npm run icons:generate`). 산출 = `build/icon.png`(1024) · `build/icon.ico`(16~256 7종) · `build/iconTemplate.png`+`@2x`(macOS 트레이 검정 실루엣) · `public/favicon.ico`(16·32·48) · `landing/src/app/{favicon.ico, icon.png, apple-icon.png}`. 코드 2곳 = `Sidebar.tsx`(`icon_new.svg`→`floating-pin.png`), `BridgeDiagram.tsx`(인라인 압정 SVG 194줄 → `next/image "/icon.png"`).
+
+**이번 세션 검증**
+
+- **재현성**: `npm run icons:generate` 재실행 후 8개 파일 md5 **전부 동일** → 커밋된 바이너리가 생성기 산출물과 정확히 일치. 프리티어가 스크립트를 재포맷한 뒤에도 동일.
+- **규격**: `.ico` 3종을 항목별로 디코드해 디렉터리 표기 크기와 실제 PNG 크기 일치 확인(`build/icon.ico`·`landing` 7항목, `public/favicon.ico` 3항목). `apple-icon.png`만 alpha 255 고정 + 모서리 `#FAF7F0`(iOS가 투명을 검정으로 합성하므로 여기만 크림 배경), 나머지는 투명. 트레이 템플릿은 RGB 0 고정 + 알파 보존.
+- **연결부**: `electron/main.ts`의 창 아이콘·트레이 경로, `electron-builder.yml`의 `icon:` 3곳이 모두 새로 구운 파일을 가리킴. `icon_new.svg` 실참조 0(주석만 남음).
+- **랜딩**: `next build` 산출에 `○ /icon.png`가 정적 경로로 등재 → `BridgeDiagram`의 이미지 주소가 실제 존재함을 빌드 산출로 확인(같은 주소를 `LandingNav`·`PublicPageHeader`가 이미 사용 중).
+- **게이트 4종**: tsc 0 · lint 0 error(경고 133 기존 부채) · vitest **4699 passed**·10 skipped(실패 2건은 `src/infrastructure/export/pdf` 타임아웃 **부하 flaky**, 단독 재실행 **31/31 8.4초 통과**) · regression **39/39** · 랜딩 `docs:check`(문서 41) + `build` 통과.
+- 모바일 PWA 아이콘(`public/icons/`)은 2026-07-03부터 이미 쌤핀이라 **변경 없음**.
+
+**⚠️ 다중 세션 사고 재발**: 커밋 훅(husky)이 node를 못 찾아 커밋이 두 번 실패하는 사이, `git add` 해 둔 신규 파일 `scripts/generate-mascot-icons.mjs`가 **다른 세션의 커밋 `9a247e66`(docs(보안): 재설계 계획서에 P0-1 완료 반영)에 딸려 들어가 이미 푸시됐다.** 내용은 온전하고 재현성도 확인했지만 커밋 메시지와 파일이 무관하다. 이미 원격에 올라가 있어 히스토리 정정은 하지 않았다. 교훈은 기존 `feedback_multisession_git_index_is_shared` 그대로 — **신규 파일이라도 `git add` 후 방치 금지**. 훅 PATH 함정 회피법: Bash에서 `export PATH="/c/Program Files/nodejs:$PATH"` 후 커밋.
+
+**남음**: 실기기 확인(설치본 작업표시줄·시작메뉴 아이콘, macOS 트레이) · 푸시 · 다음 릴리즈 고지.
+
 ## 🤖 고객지원 챗봇 LLM 교체 — Gemini → 업스테이지 Solar Pro 3 (2026-08-14, ADR-048) · 미배포
 
 **계기**: Upstage x AWS AI initiative 프로그램으로 **2027-03-31까지 Solar-Pro 무료** 권한 획득.
