@@ -31,11 +31,16 @@
  *
  * 위아래 두 구역은 각각 위젯·메모로 들어가는 입구다. 어느 쪽에 들어왔는지에 따라
  * 펼쳤을 때 먼저 보여 줄 곳이 달라진다.
+ *
+ * 5. **끌어 옮기는 자리는 여는 자리와 분리한다.** 두 버튼 사이 가운데에 32 DIP짜리
+ *    전용 자리를 두고, 손잡이 위치 이동은 오직 여기서만 시작한다. 처음에는 손잡이
+ *    아무 데나 눌러 끌 수 있게 했는데, 그러면 **잡으려는 순간 호버 펼침(180ms)이
+ *    먼저 터져** 패널이 열리고 손잡이 창이 숨어(rail은 패널이 보이면 hide된다)
+ *    잡을 대상이 손 밑에서 사라졌다. 여는 자리와 옮기는 자리를 나누면, 옮기는
+ *    자리는 `rail-grip`으로 판정돼 펼침을 아예 예약하지 않는다.
  */
 import type { SidePinPointerRegion } from '@domain/entities/SidePinRuntimeState';
-import { useRef } from 'react';
-
-const RAIL_DRAG_THRESHOLD_PX = 4;
+import { useRef, type PointerEvent as ReactPointerEvent } from 'react';
 
 export interface SidePinRailProps {
   /** 지금 포인터가 어느 구역에 있는지 (창이 알려 준다) */
@@ -105,70 +110,66 @@ export function SidePinRail({
   onZoneLeave,
   onZoneClick,
 }: SidePinRailProps) {
-  const dragRef = useRef<{
-    readonly pointerId: number;
-    readonly startScreenY: number;
-    dragging: boolean;
-  } | null>(null);
-  const suppressClickRef = useRef(false);
+  const dragPointerRef = useRef<number | null>(null);
 
-  const finishDrag = (pointerId: number): void => {
-    const drag = dragRef.current;
-    if (drag === null || drag.pointerId !== pointerId) return;
-    dragRef.current = null;
-    if (!drag.dragging) return;
-    suppressClickRef.current = true;
-    window.electronAPI?.sidePin?.endRailDrag?.();
-    window.setTimeout(() => {
-      suppressClickRef.current = false;
-    }, 0);
+  const startDrag = (event: ReactPointerEvent<HTMLDivElement>): void => {
+    if (event.button !== 0 || !event.isPrimary) return;
+    dragPointerRef.current = event.pointerId;
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    window.electronAPI?.sidePin?.startRailDrag?.();
   };
 
-  const clickZone = (zone: 'widget' | 'memo'): void => {
-    if (suppressClickRef.current) return;
-    onZoneClick(zone);
+  const finishDrag = (pointerId: number): void => {
+    if (dragPointerRef.current !== pointerId) return;
+    dragPointerRef.current = null;
+    window.electronAPI?.sidePin?.endRailDrag?.();
   };
 
   return (
     <div
       data-sidepin-rail
       onMouseLeave={onZoneLeave}
-      onPointerDown={(event) => {
-        if (event.button !== 0 || !event.isPrimary) return;
-        dragRef.current = {
-          pointerId: event.pointerId,
-          startScreenY: event.screenY,
-          dragging: false,
-        };
-        event.currentTarget.setPointerCapture(event.pointerId);
-      }}
-      onPointerMove={(event) => {
-        const drag = dragRef.current;
-        if (drag === null || drag.pointerId !== event.pointerId || drag.dragging) return;
-        if (Math.abs(event.screenY - drag.startScreenY) < RAIL_DRAG_THRESHOLD_PX) return;
-        drag.dragging = true;
-        window.electronAPI?.sidePin?.startRailDrag?.();
-      }}
-      onPointerUp={(event) => finishDrag(event.pointerId)}
-      onPointerCancel={(event) => finishDrag(event.pointerId)}
       style={{ backgroundColor }}
-      className="box-border flex h-full w-full flex-col overflow-hidden rounded-l-lg border border-r-0 border-sp-border"
+      className="relative box-border flex h-full w-full flex-col overflow-hidden rounded-l-lg border border-r-0 border-sp-border"
     >
       <RailZone
         icon="dashboard"
         label="위젯 열기"
         active={pointerRegion === 'rail-widget'}
         onEnter={() => onZoneEnter('rail-widget')}
-        onClick={() => clickZone('widget')}
+        onClick={() => onZoneClick('widget')}
       />
-      {/* 두 구역을 나누는 선 — 손잡이가 하나가 아니라 둘임을 알린다 */}
-      <span aria-hidden className="mx-1 h-px shrink-0 bg-sp-border" />
+      {/*
+        끌어 옮기는 자리 — 두 구역을 나누는 표시를 겸한다.
+
+        두 버튼의 세로 위치(25%·75%)를 흐트러뜨리지 않으려고 흐름에서 빼고 가운데에
+        겹쳐 둔다. 여기 높이를 flex 로 차지하게 하면 버튼이 밀려 내려가, 메인이
+        커서로 판정하는 위치(`railClickTarget`)와 화면에 그려진 위치가 어긋난다.
+
+        여는 버튼과 겹치지 않는 32 DIP 안에만 둔다 — 메인의 `railGripTarget`과 같은 값이다.
+      */}
+      <div
+        aria-hidden
+        data-sidepin-rail-grip
+        onPointerDown={startDrag}
+        onPointerUp={(event) => finishDrag(event.pointerId)}
+        onPointerCancel={(event) => finishDrag(event.pointerId)}
+        className="absolute left-1/2 top-1/2 flex h-8 w-11 -translate-x-1/2 -translate-y-1/2 cursor-grab items-center justify-center rounded-md active:cursor-grabbing"
+      >
+        <span
+          className={`material-symbols-outlined text-[16px] leading-none transition-colors duration-sp-quick ${
+            pointerRegion === 'rail-grip' ? 'text-sp-text' : 'text-sp-muted'
+          }`}
+        >
+          drag_indicator
+        </span>
+      </div>
       <RailZone
         icon="sticky_note_2"
         label="메모 열기"
         active={pointerRegion === 'rail-memo'}
         onEnter={() => onZoneEnter('rail-memo')}
-        onClick={() => clickZone('memo')}
+        onClick={() => onZoneClick('memo')}
       />
     </div>
   );

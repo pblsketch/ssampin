@@ -44,6 +44,7 @@ export type SidePinPointerRegion =
   | 'outside'
   | 'rail-widget'
   | 'rail-memo'
+  | 'rail-grip'
   | 'panel-widget'
   | 'panel-memo';
 
@@ -166,9 +167,19 @@ export const INITIAL_SIDE_PIN_RUNTIME_STATE: SidePinRuntimeState = {
   protectedReason: null,
 };
 
-/** 포인터가 옆핀 안(손잡이 또는 패널) 어딘가에 있는가 */
+/**
+ * 포인터가 옆핀 안(손잡이 또는 패널) 어딘가에 있는가.
+ *
+ * ⚠️ `rail-grip`은 손잡이 창 위인데도 **밖으로 친다.** 이 구역은 손잡이를 끌어
+ * 옮기는 자리라서, 여기서 펼침을 예약하면 잡으려는 순간 패널이 열리고 손잡이 창이
+ * 숨어 버린다(패널이 보이면 rail은 hide된다). 잡을 대상이 손 밑에서 사라지는 것을
+ * 막으려면 이 구역만은 "머무는 곳"이 아니라 "지나가는 곳"이어야 한다.
+ *
+ * 옮긴 뒤 손을 떼도 커서는 여전히 이 구역에 있으므로, 옮기자마자 패널이 열리는
+ * 일도 같은 규칙으로 함께 막힌다.
+ */
 export function isPointerInsideSidePin(region: SidePinPointerRegion): boolean {
-  return region !== 'outside';
+  return region !== 'outside' && region !== 'rail-grip';
 }
 
 /** 메모 편집기가 무언가 하고 있어서 패널을 접으면 안 되는 상태인가 */

@@ -172,6 +172,39 @@ describe('호버 펼침', () => {
     expect(result.next.surface).toBe('collapsed');
   });
 
+  it('끌어 옮기는 자리에서는 펼치지 않는다 — 잡으려는 순간 열리면 손잡이 창이 숨는다', () => {
+    const result = apply(
+      enabledState(),
+      { type: 'pointer-region-changed', region: 'rail-grip' },
+      1_000,
+    );
+
+    expect(result.next.pendingTransition?.type).not.toBe('reveal');
+    expect(result.next.surface).toBe('collapsed');
+    // 예약도 창 준비도 시키지 않는다 — 지나가는 곳으로 취급한다
+    expect(result.commands).toEqual([]);
+  });
+
+  it('여는 버튼에서 끌기 자리로 넘어가면 예약된 펼침을 취소한다', () => {
+    // 손잡이를 옮기려고 버튼을 스쳐 끌기 자리로 내려오는 경로. 여기서 예약이
+    // 남아 있으면 끌기를 시작하기도 전에 패널이 열린다.
+    const entered = apply(
+      enabledState(),
+      { type: 'pointer-region-changed', region: 'rail-widget' },
+      1_000,
+    );
+    expect(scheduledTransition(entered).type).toBe('reveal');
+
+    const moved = apply(
+      entered.next,
+      { type: 'pointer-region-changed', region: 'rail-grip' },
+      1_050,
+    );
+
+    expect(moved.next.pendingTransition?.type).not.toBe('reveal');
+    expect(moved.next.surface).toBe('collapsed');
+  });
+
   it('180ms가 지나도 "보여줘"라고 요청만 하고 펼침을 확정하지 않는다', () => {
     const entered = apply(
       enabledState(),

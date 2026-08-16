@@ -30,6 +30,18 @@ function renderRail(overrides: Partial<Parameters<typeof SidePinRail>[0]> = {}) 
   return props;
 }
 
+/**
+ * 끌기 자리를 집어 온다.
+ *
+ * 포인터 캡처는 jsdom에 없거나 알 수 없는 pointerId 로 던지므로 여기서 갈아 끼운다.
+ * 실제 Chromium 에서는 그대로 동작한다.
+ */
+function gripOf(): HTMLElement {
+  const grip = document.querySelector('[data-sidepin-rail-grip]') as HTMLElement;
+  Object.defineProperty(grip, 'setPointerCapture', { configurable: true, value: vi.fn() });
+  return grip;
+}
+
 describe('손잡이 동작', () => {
   test('위젯·메모 두 입구를 한국어 이름으로 제공한다', () => {
     renderRail();
@@ -62,7 +74,26 @@ describe('손잡이 동작', () => {
     expect(props.onZoneClick).toHaveBeenCalledWith('widget');
   });
 
-  test('4px 이상 세로로 끌면 열지 않고 손잡이 이동을 시작하고 끝낸다', () => {
+  test('끌기 자리를 누르면 손잡이 이동을 시작하고, 떼면 끝낸다', () => {
+    const startRailDrag = vi.fn();
+    const endRailDrag = vi.fn();
+    Object.defineProperty(window, 'electronAPI', {
+      configurable: true,
+      value: { sidePin: { startRailDrag, endRailDrag } },
+    });
+    renderRail();
+    const grip = gripOf();
+
+    fireEvent.pointerDown(grip, { button: 0, isPrimary: true, pointerId: 1 });
+    expect(startRailDrag).toHaveBeenCalledTimes(1);
+
+    fireEvent.pointerUp(grip, { pointerId: 1 });
+    expect(endRailDrag).toHaveBeenCalledTimes(1);
+  });
+
+  test('여는 버튼을 눌러 끌어도 손잡이는 움직이지 않는다 — 잡는 순간 패널이 열리는 것을 막는다', () => {
+    // 예전에는 손잡이 아무 데나 눌러 끌 수 있었다. 그러면 커서가 버튼에 닿는 순간
+    // 시작된 180ms 펼침 예약이 먼저 터져, 잡으려던 손잡이 창이 숨어 버렸다.
     const startRailDrag = vi.fn();
     const endRailDrag = vi.fn();
     Object.defineProperty(window, 'electronAPI', {
@@ -71,20 +102,32 @@ describe('손잡이 동작', () => {
     });
     const props = renderRail();
     const button = screen.getByRole('button', { name: '위젯 열기' });
-    const rail = button.closest('[data-sidepin-rail]') as HTMLElement;
-    Object.defineProperty(rail, 'setPointerCapture', { value: vi.fn() });
 
     fireEvent.pointerDown(button, { button: 0, isPrimary: true, pointerId: 1, screenY: 100 });
-    fireEvent.pointerMove(rail, { pointerId: 1, screenY: 103 });
-    expect(startRailDrag).not.toHaveBeenCalled();
-
-    fireEvent.pointerMove(rail, { pointerId: 1, screenY: 105 });
-    fireEvent.pointerUp(rail, { pointerId: 1, screenY: 105 });
+    fireEvent.pointerMove(button, { pointerId: 1, screenY: 140 });
+    fireEvent.pointerUp(button, { pointerId: 1, screenY: 140 });
     fireEvent.click(button);
 
-    expect(startRailDrag).toHaveBeenCalledTimes(1);
-    expect(endRailDrag).toHaveBeenCalledTimes(1);
-    expect(props.onZoneClick).not.toHaveBeenCalled();
+    expect(startRailDrag).not.toHaveBeenCalled();
+    expect(endRailDrag).not.toHaveBeenCalled();
+    // 여는 자리는 여전히 순수하게 열기만 한다
+    expect(props.onZoneClick).toHaveBeenCalledWith('widget');
+  });
+
+  test('끌기 자리는 여는 버튼이 아니다 — 접근성 이름을 가진 버튼으로 새지 않는다', () => {
+    renderRail();
+
+    expect(screen.getAllByRole('button')).toHaveLength(2);
+    expect(gripOf().getAttribute('aria-hidden')).toBe('true');
+  });
+
+  test('끌기 자리에 커서가 있으면 표시가 또렷해진다', () => {
+    renderRail({ pointerRegion: 'rail-grip' });
+    expect(gripOf().innerHTML).toContain('text-sp-text');
+
+    cleanup();
+    renderRail({ pointerRegion: 'outside' });
+    expect(gripOf().innerHTML).toContain('text-sp-muted');
   });
 
   test('손잡이를 벗어나면 알린다', () => {

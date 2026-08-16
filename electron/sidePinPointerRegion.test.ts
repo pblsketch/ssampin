@@ -45,10 +45,48 @@ describe('resolveSidePinPointerRegion', () => {
     );
   });
 
-  test('손잡이 창 안이어도 두 버튼 밖의 투명 영역은 바깥으로 판정한다', () => {
+  test('손잡이 창 안이어도 버튼·끌기 자리 밖의 투명 영역은 바깥으로 판정한다', () => {
+    // 위 끝(456~474)과 아래 끝(606~624)은 아무것도 없는 투명 영역이다
     expect(resolveSidePinPointerRegion({ x: 1900, y: 460 }, LAYOUT, ACTIVE_STATE)).toBe('outside');
-    expect(resolveSidePinPointerRegion({ x: 1900, y: 540 }, LAYOUT, ACTIVE_STATE)).toBe('outside');
+    expect(resolveSidePinPointerRegion({ x: 1900, y: 470 }, LAYOUT, ACTIVE_STATE)).toBe('outside');
+    expect(resolveSidePinPointerRegion({ x: 1900, y: 610 }, LAYOUT, ACTIVE_STATE)).toBe('outside');
     expect(resolveSidePinPointerRegion({ x: 1869, y: 500 }, LAYOUT, ACTIVE_STATE)).toBe('outside');
+  });
+
+  test('두 버튼 사이 가운데는 끌어 옮기는 자리다', () => {
+    // rail 456~624, 가운데 540. 끌기 자리는 32 높이라 524~556.
+    expect(resolveSidePinPointerRegion({ x: 1900, y: 540 }, LAYOUT, ACTIVE_STATE)).toBe(
+      'rail-grip',
+    );
+    expect(resolveSidePinPointerRegion({ x: 1900, y: 526 }, LAYOUT, ACTIVE_STATE)).toBe(
+      'rail-grip',
+    );
+    expect(resolveSidePinPointerRegion({ x: 1900, y: 554 }, LAYOUT, ACTIVE_STATE)).toBe(
+      'rail-grip',
+    );
+  });
+
+  test('끌기 자리는 세로로만 좁다 — 버튼과 같은 가로 폭 밖은 통과시킨다', () => {
+    expect(resolveSidePinPointerRegion({ x: 1869, y: 540 }, LAYOUT, ACTIVE_STATE)).toBe('outside');
+  });
+
+  test('버튼과 끌기 자리의 슬롭이 겹치는 한 줄에서는 여는 쪽이 이긴다', () => {
+    // 위 버튼 슬롭은 474~522, 끌기 자리 슬롭은 522~558. 522는 둘 다에 걸린다.
+    expect(resolveSidePinPointerRegion({ x: 1900, y: 522 }, LAYOUT, ACTIVE_STATE)).toBe(
+      'rail-widget',
+    );
+    expect(resolveSidePinPointerRegion({ x: 1900, y: 558 }, LAYOUT, ACTIVE_STATE)).toBe(
+      'rail-memo',
+    );
+  });
+
+  test('손잡이가 짧아 버튼 사이에 여유가 없으면 끌기 자리를 만들지 않는다', () => {
+    const shortRail: SidePinLayout = { ...LAYOUT, rail: { ...LAYOUT.rail, height: 80 } };
+
+    // 버튼 두 개가 40씩 맞물려 손잡이를 가득 채운다 — 가운데에 남는 공간이 없다
+    expect(resolveSidePinPointerRegion({ x: 1900, y: 496 }, shortRail, ACTIVE_STATE)).toBe(
+      'rail-widget',
+    );
   });
 
   test.each(['opening', 'expanded', 'closing'] as const)(
@@ -81,10 +119,12 @@ describe('resolveSidePinPointerRegion', () => {
 });
 
 describe('shouldIgnoreSidePinRailMouse', () => {
-  test('접힌 손잡이의 버튼 밖에서만 클릭을 통과시킨다', () => {
+  test('접힌 손잡이의 버튼·끌기 자리 밖에서만 클릭을 통과시킨다', () => {
     expect(shouldIgnoreSidePinRailMouse(ACTIVE_STATE, 'outside', false)).toBe(true);
     expect(shouldIgnoreSidePinRailMouse(ACTIVE_STATE, 'rail-widget', false)).toBe(false);
     expect(shouldIgnoreSidePinRailMouse(ACTIVE_STATE, 'rail-memo', false)).toBe(false);
+    // 끌기 자리는 펼침을 예약하지 않지만 마우스는 받아야 한다 — 여기서 끌기가 시작된다
+    expect(shouldIgnoreSidePinRailMouse(ACTIVE_STATE, 'rail-grip', false)).toBe(false);
   });
 
   test('드래그 중이거나 보호·비활성·패널 상태이면 클릭 통과를 켜지 않는다', () => {
