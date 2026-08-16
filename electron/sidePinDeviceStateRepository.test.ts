@@ -29,7 +29,12 @@ afterEach(() => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-const SAMPLE: SidePinDeviceState = { schemaVersion: 1, displayId: '12345', panelWidth: 420 };
+const SAMPLE: SidePinDeviceState = {
+  schemaVersion: 1,
+  displayId: '12345',
+  panelWidth: 420,
+  railSlot: 6,
+};
 
 function primaryFile(): string {
   return path.join(dir, SIDE_PIN_DEVICE_STATE_FILENAME);
@@ -67,9 +72,15 @@ describe('저장과 읽기', () => {
   });
 
   test('범위 밖 값은 저장 전에 정규화된다', () => {
-    saveSidePinDeviceState(dir, { schemaVersion: 1, displayId: '1', panelWidth: 9999 });
+    saveSidePinDeviceState(dir, {
+      schemaVersion: 1,
+      displayId: '1',
+      panelWidth: 9999,
+      railSlot: 99,
+    });
 
     expect(loadSidePinDeviceState(dir).panelWidth).toBe(SIDE_PIN_WIDTH_MAX);
+    expect(loadSidePinDeviceState(dir).railSlot).toBe(7);
   });
 });
 
@@ -112,6 +123,7 @@ describe('AC-21 — 누락·파손·구버전 복구', () => {
       schemaVersion: 1,
       displayId: '777',
       panelWidth: 360,
+      railSlot: DEFAULT_SIDE_PIN_DEVICE_STATE.railSlot,
     });
   });
 

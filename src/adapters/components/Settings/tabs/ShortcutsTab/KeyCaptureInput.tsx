@@ -1,44 +1,66 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { Kbd } from '@adapters/components/common/Kbd';
-import { eventToCombo, comboToDisplay, isMacOS } from '@adapters/hooks/shortcut/keyNormalize';
+import {
+  eventToCombo,
+  comboToDisplay,
+  isMacOS,
+  isSafeGlobalCombo,
+} from '@adapters/hooks/shortcut/keyNormalize';
 
 interface Props {
   combo: string;
   onChange: (combo: string) => void;
+  capturing: boolean;
+  onCapturingChange: (capturing: boolean) => void;
+  onInvalid: () => void;
   disabled?: boolean;
 }
 
 const CAPTURE_TIMEOUT_MS = 10_000;
 const MAC = isMacOS();
 
-export function KeyCaptureInput({ combo, onChange, disabled }: Props): JSX.Element {
-  const [capturing, setCapturing] = useState(false);
+export function KeyCaptureInput({
+  combo,
+  onChange,
+  capturing,
+  onCapturingChange,
+  onInvalid,
+  disabled,
+}: Props): JSX.Element {
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!capturing) return;
 
+    window.electronAPI?.setShortcutCaptureActive?.(true);
+
     const handler = (e: KeyboardEvent): void => {
+      e.stopImmediatePropagation();
       if (e.key === 'Escape') {
         e.preventDefault();
-        setCapturing(false);
+        onCapturingChange(false);
         return;
       }
       const next = eventToCombo(e);
       if (!next) return; // 모디파이어만 누른 경우 대기
       e.preventDefault();
+      if (!isSafeGlobalCombo(next)) {
+        onInvalid();
+        return;
+      }
       onChange(next);
-      setCapturing(false);
+      onCapturingChange(false);
     };
 
     window.addEventListener('keydown', handler, true);
-    timeoutRef.current = setTimeout(() => setCapturing(false), CAPTURE_TIMEOUT_MS);
+    timeoutRef.current = setTimeout(() => onCapturingChange(false), CAPTURE_TIMEOUT_MS);
 
     return () => {
       window.removeEventListener('keydown', handler, true);
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      window.electronAPI?.setShortcutCaptureActive?.(false);
     };
-  }, [capturing, onChange]);
+  }, [capturing, onCapturingChange, onChange, onInvalid]);
 
   const display = comboToDisplay(combo, MAC);
 
@@ -53,7 +75,7 @@ export function KeyCaptureInput({ combo, onChange, disabled }: Props): JSX.Eleme
       )}
       <button
         type="button"
-        onClick={() => setCapturing((c) => !c)}
+        onClick={() => onCapturingChange(!capturing)}
         disabled={disabled}
         className="px-2.5 py-1 rounded-md text-xs text-sp-muted hover:text-sp-text hover:bg-sp-text/5 transition-colors disabled:opacity-50"
       >

@@ -161,7 +161,7 @@ describe('켜고 끄기', () => {
     // 손잡이는 가장자리를 다 덮지 않고 세로 가운데에 짧게 놓인다
     expect(h.windows[0]?.bounds).toEqual({
       x: 1920 - SIDE_PIN_RAIL_WIDTH,
-      y: Math.round((1040 - SIDE_PIN_RAIL_HEIGHT) / 2),
+      y: Math.round(((1040 - SIDE_PIN_RAIL_HEIGHT) * DEFAULT_SIDE_PIN_DEVICE_STATE.railSlot) / 7),
       width: SIDE_PIN_RAIL_WIDTH,
       height: SIDE_PIN_RAIL_HEIGHT,
     });
@@ -292,10 +292,35 @@ describe('모니터 구성 변경', () => {
 
     expect(h.windows[0]?.bounds).toEqual({
       x: 1920 + 1600 - SIDE_PIN_RAIL_WIDTH,
-      y: Math.round((900 - SIDE_PIN_RAIL_HEIGHT) / 2),
+      y: Math.round(((900 - SIDE_PIN_RAIL_HEIGHT) * DEFAULT_SIDE_PIN_DEVICE_STATE.railSlot) / 7),
       width: SIDE_PIN_RAIL_WIDTH,
       height: SIDE_PIN_RAIL_HEIGHT,
     });
+  });
+});
+
+describe('손잡이 높이 이동', () => {
+  test('드래그 위치를 8단계로 저장하고 현재 창을 즉시 옮긴다', async () => {
+    h.service.enable();
+    await flush();
+
+    h.service.setRailTop(PRIMARY.workArea.height);
+    await flush();
+
+    expect(h.saved.at(-1)?.railSlot).toBe(7);
+    expect(h.windows[0]?.bounds?.y).toBe(PRIMARY.workArea.height - SIDE_PIN_RAIL_HEIGHT);
+  });
+
+  test('같은 단계 안에서 움직이면 다시 저장하거나 창을 옮기지 않는다', async () => {
+    h.service.enable();
+    await flush();
+    const before = h.windows[0]?.bounds;
+
+    h.service.setRailTop(before?.y ?? 0);
+    await flush();
+
+    expect(h.saved).toEqual([]);
+    expect(h.windows[0]?.bounds).toEqual(before);
   });
 });
 

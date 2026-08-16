@@ -33,6 +33,9 @@
  * 펼쳤을 때 먼저 보여 줄 곳이 달라진다.
  */
 import type { SidePinPointerRegion } from '@domain/entities/SidePinRuntimeState';
+import { useRef } from 'react';
+
+const RAIL_DRAG_THRESHOLD_PX = 4;
 
 export interface SidePinRailProps {
   /** 지금 포인터가 어느 구역에 있는지 (창이 알려 준다) */
@@ -59,40 +62,39 @@ interface ZoneProps {
 
 function RailZone({ icon, label, active, onEnter, onClick }: ZoneProps) {
   return (
-    <button
-      type="button"
-      aria-label={label}
-      onMouseEnter={onEnter}
-      onFocus={onEnter}
-      onClick={onClick}
-      className="relative flex flex-1 items-center justify-center outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-sp-accent focus-visible:-outline-offset-2"
-    >
-      {/*
-        펼쳐질 방향(화면 안쪽)을 미리 알리는 얇은 선.
-        창이 `overflow-hidden`이라 바깥으로 그리는 표시는 잘린다 — 안쪽에 붙인다.
-      */}
-      <span
-        aria-hidden
-        className={`absolute left-0 top-2 bottom-2 w-[2px] rounded-r-full bg-sp-accent transition-opacity duration-sp-quick ${
-          active ? 'opacity-100' : 'opacity-0'
-        }`}
-      />
-      {/* 칩 — 크기는 고정하고 호버·활성 상태에서는 색만 바꾼다. */}
-      <span
-        aria-hidden
-        className={`flex h-[24px] w-[24px] shrink-0 items-center justify-center rounded-lg transition-colors duration-sp-quick ${
-          active ? 'bg-sp-accent' : 'bg-sp-border'
-        }`}
+    <div className="flex flex-1 items-center justify-center">
+      <button
+        type="button"
+        aria-label={label}
+        onMouseEnter={onEnter}
+        onFocus={onEnter}
+        onClick={onClick}
+        className="relative flex h-11 w-11 items-center justify-center outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-sp-accent focus-visible:-outline-offset-2"
       >
+        {/* 펼쳐질 방향(화면 안쪽)을 미리 알리는 얇은 선. */}
         <span
-          className={`material-symbols-outlined text-[18px] leading-none transition-colors duration-sp-quick ${
-            active ? 'text-sp-accent-fg' : 'text-sp-text'
+          aria-hidden
+          className={`absolute left-0 top-2 bottom-2 w-[2px] rounded-r-full bg-sp-accent transition-opacity duration-sp-quick ${
+            active ? 'opacity-100' : 'opacity-0'
+          }`}
+        />
+        {/* 칩 — 크기는 고정하고 호버·활성 상태에서는 색만 바꾼다. */}
+        <span
+          aria-hidden
+          className={`flex h-[24px] w-[24px] shrink-0 items-center justify-center rounded-lg transition-colors duration-sp-quick ${
+            active ? 'bg-sp-accent' : 'bg-sp-border'
           }`}
         >
-          {icon}
+          <span
+            className={`material-symbols-outlined text-[18px] leading-none transition-colors duration-sp-quick ${
+              active ? 'text-sp-accent-fg' : 'text-sp-text'
+            }`}
+          >
+            {icon}
+          </span>
         </span>
-      </span>
-    </button>
+      </button>
+    </div>
   );
 }
 
@@ -103,9 +105,52 @@ export function SidePinRail({
   onZoneLeave,
   onZoneClick,
 }: SidePinRailProps) {
+  const dragRef = useRef<{
+    readonly pointerId: number;
+    readonly startScreenY: number;
+    dragging: boolean;
+  } | null>(null);
+  const suppressClickRef = useRef(false);
+
+  const finishDrag = (pointerId: number): void => {
+    const drag = dragRef.current;
+    if (drag === null || drag.pointerId !== pointerId) return;
+    dragRef.current = null;
+    if (!drag.dragging) return;
+    suppressClickRef.current = true;
+    window.electronAPI?.sidePin?.endRailDrag?.();
+    window.setTimeout(() => {
+      suppressClickRef.current = false;
+    }, 0);
+  };
+
+  const clickZone = (zone: 'widget' | 'memo'): void => {
+    if (suppressClickRef.current) return;
+    onZoneClick(zone);
+  };
+
   return (
     <div
+      data-sidepin-rail
       onMouseLeave={onZoneLeave}
+      onPointerDown={(event) => {
+        if (event.button !== 0 || !event.isPrimary) return;
+        dragRef.current = {
+          pointerId: event.pointerId,
+          startScreenY: event.screenY,
+          dragging: false,
+        };
+        event.currentTarget.setPointerCapture(event.pointerId);
+      }}
+      onPointerMove={(event) => {
+        const drag = dragRef.current;
+        if (drag === null || drag.pointerId !== event.pointerId || drag.dragging) return;
+        if (Math.abs(event.screenY - drag.startScreenY) < RAIL_DRAG_THRESHOLD_PX) return;
+        drag.dragging = true;
+        window.electronAPI?.sidePin?.startRailDrag?.();
+      }}
+      onPointerUp={(event) => finishDrag(event.pointerId)}
+      onPointerCancel={(event) => finishDrag(event.pointerId)}
       style={{ backgroundColor }}
       className="box-border flex h-full w-full flex-col overflow-hidden rounded-l-lg border border-r-0 border-sp-border"
     >
@@ -114,7 +159,7 @@ export function SidePinRail({
         label="위젯 열기"
         active={pointerRegion === 'rail-widget'}
         onEnter={() => onZoneEnter('rail-widget')}
-        onClick={() => onZoneClick('widget')}
+        onClick={() => clickZone('widget')}
       />
       {/* 두 구역을 나누는 선 — 손잡이가 하나가 아니라 둘임을 알린다 */}
       <span aria-hidden className="mx-1 h-px shrink-0 bg-sp-border" />
@@ -123,7 +168,7 @@ export function SidePinRail({
         label="메모 열기"
         active={pointerRegion === 'rail-memo'}
         onEnter={() => onZoneEnter('rail-memo')}
-        onClick={() => onZoneClick('memo')}
+        onClick={() => clickZone('memo')}
       />
     </div>
   );

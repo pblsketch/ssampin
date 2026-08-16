@@ -55,6 +55,8 @@ import { registerMultiSurveyShareHandlers } from './ipc/multiSurveyShare';
 import { registerAiBridgeHandlers } from './ipc/aiBridge';
 import { registerLiveSyncHost, type LiveSyncHost } from './ipc/aiBridgeLiveSyncHost';
 import { createSidePinElectron, type SidePinElectronHandle } from './sidePinElectron';
+import { createShortcutTriggerGate } from './shortcutTriggerGate';
+import { createOwnedGlobalShortcutRegistry } from './ownedGlobalShortcutRegistry';
 import {
   createSidePinProtectionTracker,
   type SidePinPowerReason,
@@ -567,6 +569,15 @@ function comboToAccelerator(combo: string): string {
   return parts.join('+');
 }
 
+function isSafeGlobalShortcutCombo(combo: string): boolean {
+  const tokens = combo
+    .toLowerCase()
+    .split('+')
+    .map((token) => token.trim())
+    .filter(Boolean);
+  return tokens.some((token) => ['mod', 'ctrl', 'cmd', 'meta', 'alt', 'option'].includes(token));
+}
+
 function isMainWindowVisible(): boolean {
   if (!mainWindow || mainWindow.isDestroyed()) return false;
   return mainWindow.isVisible();
@@ -833,7 +844,7 @@ function createOrFocusStickerPickerWindow(): void {
     if (stickerPickerWindow.isMinimized()) stickerPickerWindow.restore();
     showStickerPickerWindowAt();
     if (wasHidden) fadeInStickerPickerWindow();
-    stickerPickerWindow.webContents.send('shortcut:triggered', 'sticker-picker:toggle');
+    stickerPickerWindow.webContents.send('shortcut:triggered', 'sticker-picker:show');
     return;
   }
   buildStickerPickerWindow(false);
@@ -845,13 +856,28 @@ function destroyStickerPickerWindow(): void {
   stickerPickerWindow = null;
 }
 
+const stickerShortcutGate = createShortcutTriggerGate();
+const sidePinShortcutGate = createShortcutTriggerGate();
+
+function triggerSidePinShortcut(): void {
+  if (!sidePinShortcutGate.shouldDispatch()) return;
+  sidePin?.service.dispatch({ type: 'shortcut-toggle' });
+}
+
 function triggerShortcut(commandId: string): void {
   // ─── sticker-picker:toggle (PRD §3.1.3) ───
   // 토글 동작: 피커가 visible이면 hide, 아니면 항상 별도 팝업으로 띄운다.
   // ★ 메인창 visible 여부와 무관 — 다른 quickAdd 단축키와 달리 sticker picker는
   //   별도 frameless BrowserWindow이므로 mainWindow에 IPC를 보내봤자 처리 핸들러가 없다.
   //   COMMAND_TO_KIND 매핑이 없는 commandId라 useGlobalShortcuts onShortcutTriggered가 무시함.
+  // 옆핀 열기/닫기 — 상태 기계는 sidePinService가 갖는다. 여기서는 배선만.
+  // 꺼져 있으면(enabled=false) 전이 규칙이 알아서 무시한다.
+  if (commandId === 'sidePin:toggle') {
+    triggerSidePinShortcut();
+    return;
+  }
   if (commandId === 'sticker-picker:toggle') {
+    if (!stickerShortcutGate.shouldDispatch()) return;
     if (
       stickerPickerWindow &&
       !stickerPickerWindow.isDestroyed() &&
@@ -1058,13 +1084,26 @@ async function releaseModalInputMode(): Promise<void> {
   });
 }
 
+const userShortcutRegistry = createOwnedGlobalShortcutRegistry(globalShortcut);
+let lastShortcutConfig: ShortcutSyncConfig | null = null;
+let shortcutCaptureActive = false;
+
+function clearUserGlobalShortcuts(): void {
+  userShortcutRegistry.clear();
+}
+
 function applyGlobalShortcuts(config: ShortcutSyncConfig): {
   registered: string[];
   failed: string[];
 } {
-  globalShortcut.unregisterAll();
+  lastShortcutConfig = config;
+  clearUserGlobalShortcuts();
   const registered: string[] = [];
   const failed: string[] = [];
+  if (shortcutCaptureActive) {
+    console.log('[shortcuts] key capture active, pausing user shortcut registrations');
+    return { registered, failed };
+  }
   if (!config.globalEnabled) {
     console.log('[shortcuts] globalEnabled=false, skipping all registrations');
     return { registered, failed };
@@ -1073,13 +1112,13 @@ function applyGlobalShortcuts(config: ShortcutSyncConfig): {
   for (const b of config.bindings) {
     if (!b.enabled) continue;
     const accel = comboToAccelerator(b.combo);
-    if (!accel) {
+    if (!accel || !isSafeGlobalShortcutCombo(b.combo)) {
       console.log(`[shortcuts] ${b.id} → "${b.combo}" REGISTRATION FAILED (invalid accelerator)`);
       failed.push(b.id);
       continue;
     }
     try {
-      const ok = globalShortcut.register(accel, () => {
+      const ok = userShortcutRegistry.register(accel, () => {
         triggerShortcut(b.id);
       });
       if (ok) {
@@ -2691,6 +2730,18 @@ function registerIpcHandlers(): void {
     sidePin?.syncPointerRegion();
   });
 
+  ipcMain.on('sidePin:rail-drag-start', (event) => {
+    const rail = sidePin?.getWindow('rail');
+    if (rail === null || rail === undefined || rail.webContents.id !== event.sender.id) return;
+    sidePin?.setRailDragging(true);
+  });
+
+  ipcMain.on('sidePin:rail-drag-end', (event) => {
+    const rail = sidePin?.getWindow('rail');
+    if (rail === null || rail === undefined || rail.webContents.id !== event.sender.id) return;
+    sidePin?.setRailDragging(false);
+  });
+
   ipcMain.on('sidePin:toggle-pin', (_event, zone: string) => {
     if (zone !== 'widget' && zone !== 'memo' && zone !== 'both') return;
     sidePin?.service.dispatch({ type: 'toggle-pin', zone });
@@ -2698,6 +2749,11 @@ function registerIpcHandlers(): void {
 
   ipcMain.on('sidePin:request-close', () => {
     sidePin?.service.dispatch({ type: 'close-requested' });
+  });
+
+  // 단축키 토글 — triggerShortcut(전역)과 useGlobalShortcuts(렌더러 폴백)가 같은 사건으로 잇는다.
+  ipcMain.on('sidePin:toggle-shortcut', () => {
+    triggerSidePinShortcut();
   });
 
   /**
@@ -5306,6 +5362,15 @@ if (!gotTheLock) {
     // 글로벌 퀵애드 단축키 IPC
     ipcMain.handle('shortcuts:sync', (_event, config: ShortcutSyncConfig) => {
       return applyGlobalShortcuts(config);
+    });
+    ipcMain.on('shortcuts:capture-active', (_event, active: unknown) => {
+      if (typeof active !== 'boolean') return;
+      shortcutCaptureActive = active;
+      if (active) {
+        clearUserGlobalShortcuts();
+      } else if (lastShortcutConfig) {
+        applyGlobalShortcuts(lastShortcutConfig);
+      }
     });
     // QuickAdd 팝업 창 prewarm (앱 시작 5초 후) — 첫 단축키 latency 제거
     setTimeout(() => prewarmQuickAddWindow(), 5000);

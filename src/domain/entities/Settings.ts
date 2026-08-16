@@ -439,7 +439,8 @@ export type QuickAddShortcutId =
   | 'quickAdd.memo'
   | 'quickAdd.note'
   | 'quickAdd.bookmark'
-  | 'sticker-picker:toggle';
+  | 'sticker-picker:toggle'
+  | 'sidePin:toggle';
 
 export interface ShortcutBinding {
   /** 정규화 조합 문자열, 예: "mod+alt+t" */

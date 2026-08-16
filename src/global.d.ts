@@ -674,8 +674,11 @@ interface ElectronAPI {
     onStateChanged: (callback: (state: unknown) => void) => () => void;
     onPanelShown: (callback: () => void) => () => void;
     reportPointerRegion: (region: string) => void;
+    startRailDrag?: () => void;
+    endRailDrag?: () => void;
     togglePin: (zone: 'widget' | 'memo' | 'both') => void;
     requestClose: () => void;
+    toggleShortcut?: () => void;
     openMain: () => void;
     reportPainted: () => void;
     /**
@@ -848,6 +851,7 @@ interface ElectronAPI {
     globalEnabled: boolean;
     bindings: Array<{ id: string; combo: string; enabled: boolean }>;
   }) => Promise<{ registered: string[]; failed: string[] }>;
+  setShortcutCaptureActive?: (active: boolean) => void;
   onShortcutTriggered?: (callback: (commandId: string) => void) => () => void;
 
   // === 실시간 담벼락 영속 보드 (v1.13 Stage A) ===

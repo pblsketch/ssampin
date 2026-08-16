@@ -18,7 +18,11 @@ import {
   type SidePinWindowFactory,
   type SidePinWindowHostHandle,
 } from './sidePinWindow';
-import { resolveSidePinLayout, type SidePinDisplayInfo } from './sidePinGeometry';
+import {
+  resolveSidePinLayout,
+  resolveSidePinRailSlotFromTop,
+  type SidePinDisplayInfo,
+} from './sidePinGeometry';
 import type { SidePinDeviceState, SidePinDeviceStateSaveResult } from './sidePinDeviceState';
 
 export interface SidePinDisplaySnapshot {
@@ -47,6 +51,8 @@ export interface SidePinService {
   dispatch(event: SidePinEvent): void;
   /** 모니터 구성이 바뀌었다 */
   handleDisplayChange(): void;
+  /** 드래그한 손잡이 윗변을 가장 가까운 위치에 저장하고 창을 옮긴다. */
+  setRailTop(screenY: number): void;
   getState(): SidePinRuntimeState;
   getLayout(): SidePinLayout | null;
   dispose(): void;
@@ -70,6 +76,7 @@ export function createSidePinService(deps: SidePinServiceDeps): SidePinService {
       primaryDisplayId: snapshot.primaryDisplayId,
       preferredDisplayId: device.displayId,
       panelWidth: device.panelWidth,
+      railSlot: device.railSlot,
     });
     if (layout === null) return null;
 
@@ -118,6 +125,27 @@ export function createSidePinService(deps: SidePinServiceDeps): SidePinService {
     },
 
     handleDisplayChange(): void {
+      controller.dispatch({ type: 'layout-changed' });
+    },
+
+    setRailTop(screenY: number): void {
+      if (!Number.isFinite(screenY)) return;
+      const snapshot = deps.readDisplays();
+      const layout = resolveSidePinLayout({
+        displays: snapshot.displays,
+        primaryDisplayId: snapshot.primaryDisplayId,
+        preferredDisplayId: device.displayId,
+        panelWidth: device.panelWidth,
+        railSlot: device.railSlot,
+      });
+      if (layout === null) return;
+      const display = snapshot.displays.find((candidate) => candidate.id === layout.displayId);
+      if (display === undefined) return;
+
+      const railSlot = resolveSidePinRailSlotFromTop(display.workArea, screenY, layout.rail.height);
+      if (railSlot === device.railSlot) return;
+      device = { ...device, railSlot };
+      deps.saveDeviceState(device);
       controller.dispatch({ type: 'layout-changed' });
     },
 

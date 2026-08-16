@@ -2,21 +2,44 @@ import { useMemo, useState } from 'react';
 import { useSettingsStore, DEFAULT_SHORTCUTS } from '@adapters/stores/useSettingsStore';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { KeyCaptureInput } from './ShortcutsTab/KeyCaptureInput';
+import type { QuickAddShortcutId } from '@domain/entities/Settings';
+import { canonicalizeCombo } from '@adapters/hooks/shortcut/keyNormalize';
 
 interface CommandRow {
-  readonly id: string;
+  readonly id: QuickAddShortcutId;
   readonly label: string;
   readonly icon: string;
   readonly iconColor: string;
 }
 
 const COMMANDS: readonly CommandRow[] = [
-  { id: 'quickAdd.todo',         label: '할일 추가',              icon: 'check_circle',   iconColor: 'text-sp-accent' },
-  { id: 'quickAdd.event',        label: '일정 추가',              icon: 'event',          iconColor: 'text-sp-highlight' },
-  { id: 'quickAdd.memo',         label: '메모 추가',              icon: 'sticky_note_2',  iconColor: 'text-emerald-400' },
-  { id: 'quickAdd.note',         label: '노트 새 페이지',          icon: 'description',    iconColor: 'text-violet-400' },
-  { id: 'quickAdd.bookmark',     label: '즐겨찾기 추가',          icon: 'bookmark',       iconColor: 'text-amber-400' },
-  { id: 'sticker-picker:toggle', label: '내 이모티콘 피커 열기/닫기', icon: 'mood',           iconColor: 'text-pink-400' },
+  { id: 'quickAdd.todo', label: '할일 추가', icon: 'check_circle', iconColor: 'text-sp-accent' },
+  { id: 'quickAdd.event', label: '일정 추가', icon: 'event', iconColor: 'text-sp-highlight' },
+  { id: 'quickAdd.memo', label: '메모 추가', icon: 'sticky_note_2', iconColor: 'text-emerald-400' },
+  {
+    id: 'quickAdd.note',
+    label: '노트 새 페이지',
+    icon: 'description',
+    iconColor: 'text-violet-400',
+  },
+  {
+    id: 'quickAdd.bookmark',
+    label: '즐겨찾기 추가',
+    icon: 'bookmark',
+    iconColor: 'text-amber-400',
+  },
+  {
+    id: 'sticker-picker:toggle',
+    label: '내 이모티콘 피커 열기/닫기',
+    icon: 'mood',
+    iconColor: 'text-pink-400',
+  },
+  {
+    id: 'sidePin:toggle',
+    label: '옆핀 열기/닫기',
+    icon: 'view_sidebar',
+    iconColor: 'text-sp-accent',
+  },
 ];
 
 export function ShortcutsTab(): JSX.Element {
@@ -26,6 +49,7 @@ export function ShortcutsTab(): JSX.Element {
   const resetShortcuts = useSettingsStore((s) => s.resetShortcuts);
   const showToast = useToastStore((s) => s.show);
   const [confirmReset, setConfirmReset] = useState(false);
+  const [capturingCommandId, setCapturingCommandId] = useState<QuickAddShortcutId | null>(null);
 
   const shortcuts = settings.shortcuts ?? DEFAULT_SHORTCUTS;
 
@@ -34,7 +58,8 @@ export function ShortcutsTab(): JSX.Element {
     const counts = new Map<string, number>();
     for (const [id, b] of Object.entries(shortcuts.bindings)) {
       if (!b.enabled) continue;
-      const key = b.combo;
+      const key = canonicalizeCombo(b.combo);
+      if (!key) continue;
       counts.set(key, (counts.get(key) ?? 0) + 1);
       void id;
     }
@@ -45,14 +70,28 @@ export function ShortcutsTab(): JSX.Element {
     return dup;
   }, [shortcuts.bindings]);
 
+  const findConflict = (
+    commandId: string,
+    combo: string,
+  ): [string, { combo: string; enabled: boolean }] | undefined => {
+    const canonical = canonicalizeCombo(combo);
+    return Object.entries(shortcuts.bindings).find(
+      ([id, binding]) =>
+        id !== commandId && binding.enabled && canonicalizeCombo(binding.combo) === canonical,
+    );
+  };
+
+  const showConflict = (conflictId: string): void => {
+    const conflictLabel =
+      COMMANDS.find((command) => command.id === conflictId)?.label ?? conflictId;
+    showToast(`이미 "${conflictLabel}"에 사용 중인 조합입니다.`, 'error');
+  };
+
   const handleChangeCombo = async (commandId: string, newCombo: string): Promise<void> => {
     // 다른 커맨드와 중복 체크 (자기 자신 제외)
-    const conflict = Object.entries(shortcuts.bindings).find(
-      ([id, b]) => id !== commandId && b.enabled && b.combo === newCombo,
-    );
+    const conflict = findConflict(commandId, newCombo);
     if (conflict) {
-      const conflictLabel = COMMANDS.find((c) => c.id === conflict[0])?.label ?? conflict[0];
-      showToast(`이미 "${conflictLabel}"에 사용 중인 조합입니다.`, 'error');
+      showConflict(conflict[0]);
       return;
     }
     await setShortcut(commandId, newCombo);
@@ -61,6 +100,13 @@ export function ShortcutsTab(): JSX.Element {
   const handleToggleEnabled = async (commandId: string, enabled: boolean): Promise<void> => {
     const existing = shortcuts.bindings[commandId];
     if (!existing) return;
+    if (enabled) {
+      const conflict = findConflict(commandId, existing.combo);
+      if (conflict) {
+        showConflict(conflict[0]);
+        return;
+      }
+    }
     await setShortcut(commandId, existing.combo, enabled);
   };
 
@@ -75,7 +121,7 @@ export function ShortcutsTab(): JSX.Element {
       <div>
         <h2 className="text-lg font-sp-semibold text-sp-text mb-2">단축키</h2>
         <p className="text-sm text-sp-muted">
-          앱 어디서든 단축키 한 번으로 빠르게 항목을 추가하세요.
+          자주 쓰는 추가 화면과 옆핀·이모티콘 기능을 키보드로 빠르게 실행하세요.
         </p>
       </div>
 
@@ -91,17 +137,22 @@ export function ShortcutsTab(): JSX.Element {
           <button
             type="button"
             role="switch"
+            aria-label="글로벌 단축키 활성화"
             aria-checked={shortcuts.globalEnabled}
             onClick={() => void toggleGlobal(!shortcuts.globalEnabled)}
-            className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${
-              shortcuts.globalEnabled ? 'bg-sp-accent' : 'bg-sp-border'
-            }`}
+            className="flex h-11 w-11 flex-shrink-0 items-center justify-center"
           >
             <span
-              className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${
-                shortcuts.globalEnabled ? 'translate-x-5' : 'translate-x-0'
+              className={`relative h-6 w-11 rounded-full transition-colors ${
+                shortcuts.globalEnabled ? 'bg-sp-accent' : 'bg-sp-border'
               }`}
-            />
+            >
+              <span
+                className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${
+                  shortcuts.globalEnabled ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </span>
           </button>
         </div>
 
@@ -109,7 +160,7 @@ export function ShortcutsTab(): JSX.Element {
         <div className="divide-y divide-sp-border/40">
           {COMMANDS.map((cmd) => {
             const binding = shortcuts.bindings[cmd.id] ?? DEFAULT_SHORTCUTS.bindings[cmd.id]!;
-            const isDuplicate = duplicates.has(binding.combo);
+            const isDuplicate = duplicates.has(canonicalizeCombo(binding.combo));
             return (
               <div key={cmd.id} className="flex items-center gap-3 h-14">
                 {/* 좌측: 개별 토글 + 아이콘 + 라벨 */}
@@ -119,14 +170,22 @@ export function ShortcutsTab(): JSX.Element {
                   aria-checked={binding.enabled}
                   aria-label={`${cmd.label} 단축키 활성화`}
                   onClick={() => void handleToggleEnabled(cmd.id, !binding.enabled)}
-                  className={`w-3 h-3 rounded-full transition-colors flex-shrink-0 ${
-                    binding.enabled ? 'bg-sp-accent' : 'bg-sp-border'
-                  }`}
-                />
-                <span className={`material-symbols-outlined text-icon-md ${binding.enabled ? cmd.iconColor : 'text-sp-muted'}`}>
+                  className="-ml-4 flex h-11 w-11 flex-shrink-0 items-center justify-center"
+                >
+                  <span
+                    className={`h-3 w-3 rounded-full transition-colors ${
+                      binding.enabled ? 'bg-sp-accent' : 'bg-sp-border'
+                    }`}
+                  />
+                </button>
+                <span
+                  className={`material-symbols-outlined text-icon-md ${binding.enabled ? cmd.iconColor : 'text-sp-muted'}`}
+                >
                   {cmd.icon}
                 </span>
-                <span className={`text-sm font-sp-medium ${binding.enabled ? 'text-sp-text' : 'text-sp-muted line-through'}`}>
+                <span
+                  className={`text-sm font-sp-medium ${binding.enabled ? 'text-sp-text' : 'text-sp-muted line-through'}`}
+                >
                   {cmd.label}
                 </span>
 
@@ -140,6 +199,11 @@ export function ShortcutsTab(): JSX.Element {
                   <KeyCaptureInput
                     combo={binding.combo}
                     onChange={(c) => void handleChangeCombo(cmd.id, c)}
+                    capturing={capturingCommandId === cmd.id}
+                    onCapturingChange={(capturing) =>
+                      setCapturingCommandId(capturing ? cmd.id : null)
+                    }
+                    onInvalid={() => showToast('Ctrl/Cmd 또는 Alt와 함께 눌러주세요.', 'error')}
                     disabled={!binding.enabled}
                   />
                 </div>

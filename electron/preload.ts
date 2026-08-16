@@ -1068,8 +1068,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
     reportPointerRegion: (region: string): void => {
       ipcRenderer.send('sidePin:pointer-region', region);
     },
+    startRailDrag: (): void => {
+      ipcRenderer.send('sidePin:rail-drag-start');
+    },
+    endRailDrag: (): void => {
+      ipcRenderer.send('sidePin:rail-drag-end');
+    },
     togglePin: (zone: 'widget' | 'memo' | 'both'): void => {
       ipcRenderer.send('sidePin:toggle-pin', zone);
+    },
+    /** 단축키로 옆핀을 열고 닫는다 (메인 창 포커스 시 렌더러 keydown 폴백용) */
+    toggleShortcut: (): void => {
+      ipcRenderer.send('sidePin:toggle-shortcut');
     },
     requestClose: (): void => {
       ipcRenderer.send('sidePin:request-close');
@@ -1427,6 +1437,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     bindings: Array<{ id: string; combo: string; enabled: boolean }>;
   }): Promise<{ registered: string[]; failed: string[] }> =>
     ipcRenderer.invoke('shortcuts:sync', config),
+  setShortcutCaptureActive: (active: boolean): void => {
+    ipcRenderer.send('shortcuts:capture-active', active);
+  },
   onShortcutTriggered: (callback: (commandId: string) => void): (() => void) => {
     const handler = (_event: unknown, commandId: string) => callback(commandId);
     ipcRenderer.on('shortcut:triggered', handler);

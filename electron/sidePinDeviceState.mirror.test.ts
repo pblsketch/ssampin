@@ -55,8 +55,10 @@ const DISPLAY_ID_CORPUS: readonly unknown[] = [
   '한글-모니터',
 ];
 
+const RAIL_SLOT_CORPUS: readonly unknown[] = [0, 3, 7, -1, 8, 4.6, NaN, Infinity, '3', null];
+
 const STATE_CORPUS: readonly unknown[] = [
-  { schemaVersion: 1, displayId: '12345', panelWidth: 420 },
+  { schemaVersion: 1, displayId: '12345', panelWidth: 420, railSlot: 6 },
   { schemaVersion: 0, displayId: null, panelWidth: 400 },
   { schemaVersion: 99, displayId: 777, panelWidth: 5000 },
   { displayId: '  x  ', panelWidth: '넓게' },
@@ -84,6 +86,12 @@ describe('상수 동치', () => {
     );
   });
 
+  test('손잡이 위치 경계와 기본값이 같다', () => {
+    expect(mirror.SIDE_PIN_RAIL_SLOT_MIN).toBe(domainState.SIDE_PIN_RAIL_SLOT_MIN);
+    expect(mirror.SIDE_PIN_RAIL_SLOT_MAX).toBe(domainState.SIDE_PIN_RAIL_SLOT_MAX);
+    expect(mirror.SIDE_PIN_RAIL_SLOT_DEFAULT).toBe(domainState.SIDE_PIN_RAIL_SLOT_DEFAULT);
+  });
+
   test('기본값이 같다', () => {
     expect(mirror.DEFAULT_SIDE_PIN_DEVICE_STATE).toEqual(domainState.DEFAULT_SIDE_PIN_DEVICE_STATE);
   });
@@ -102,6 +110,15 @@ describe('순수 함수 동치', () => {
     (_label, value) => {
       expect(mirror.normalizeSidePinDisplayId(value)).toBe(
         domainState.normalizeSidePinDisplayId(value),
+      );
+    },
+  );
+
+  test.each(RAIL_SLOT_CORPUS.map((v) => [JSON.stringify(v) ?? String(v), v] as const))(
+    'normalizeSidePinRailSlot(%s)',
+    (_label, value) => {
+      expect(mirror.normalizeSidePinRailSlot(value)).toBe(
+        domainState.normalizeSidePinRailSlot(value),
       );
     },
   );

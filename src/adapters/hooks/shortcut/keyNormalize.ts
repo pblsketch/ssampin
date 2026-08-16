@@ -44,15 +44,43 @@ export function eventToCombo(e: KeyboardEvent): string {
  */
 export function parseCombo(combo: string): ParsedCombo | null {
   if (!combo.trim()) return null;
-  const tokens = combo.toLowerCase().split('+').map((t) => t.trim()).filter(Boolean);
+  const tokens = combo
+    .toLowerCase()
+    .split('+')
+    .map((t) => t.trim())
+    .filter(Boolean);
   if (tokens.length === 0) return null;
 
-  const mod = tokens.includes('mod') || tokens.includes('ctrl') || tokens.includes('cmd') || tokens.includes('meta');
+  const mod =
+    tokens.includes('mod') ||
+    tokens.includes('ctrl') ||
+    tokens.includes('cmd') ||
+    tokens.includes('meta');
   const alt = tokens.includes('alt') || tokens.includes('option');
   const shift = tokens.includes('shift');
-  const key = tokens.find((t) => !['mod', 'ctrl', 'cmd', 'meta', 'alt', 'option', 'shift'].includes(t));
+  const key = tokens.find(
+    (t) => !['mod', 'ctrl', 'cmd', 'meta', 'alt', 'option', 'shift'].includes(t),
+  );
   if (!key) return null;
   return { mod, alt, shift, key };
+}
+
+/** 같은 조합을 같은 문자열로 비교하기 위한 표준 형태. */
+export function canonicalizeCombo(combo: string): string {
+  const parsed = parseCombo(combo);
+  if (!parsed) return '';
+  const parts: string[] = [];
+  if (parsed.mod) parts.push('mod');
+  if (parsed.alt) parts.push('alt');
+  if (parsed.shift) parts.push('shift');
+  parts.push(parsed.key);
+  return parts.join('+');
+}
+
+/** 일반 문자 입력을 가로채지 않도록 글로벌 단축키에는 Ctrl/Cmd 또는 Alt를 요구한다. */
+export function isSafeGlobalCombo(combo: string): boolean {
+  const parsed = parseCombo(combo);
+  return parsed !== null && (parsed.mod || parsed.alt);
 }
 
 /**

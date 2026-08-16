@@ -1,9 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import {
   DEFAULT_SIDE_PIN_DEVICE_STATE,
+  SIDE_PIN_RAIL_SLOT_DEFAULT,
   SIDE_PIN_DEVICE_STATE_SCHEMA_VERSION,
   normalizeSidePinDeviceState,
   normalizeSidePinDisplayId,
+  normalizeSidePinRailSlot,
 } from './SidePinDeviceState';
 import {
   SIDE_PIN_WIDTH_DEFAULT,
@@ -74,15 +76,22 @@ describe('normalizeSidePinDeviceState', () => {
     expect(normalizeSidePinDeviceState(undefined)).toEqual(DEFAULT_SIDE_PIN_DEVICE_STATE);
     expect(DEFAULT_SIDE_PIN_DEVICE_STATE.displayId).toBeNull();
     expect(DEFAULT_SIDE_PIN_DEVICE_STATE.panelWidth).toBe(SIDE_PIN_WIDTH_DEFAULT);
+    expect(DEFAULT_SIDE_PIN_DEVICE_STATE.railSlot).toBe(SIDE_PIN_RAIL_SLOT_DEFAULT);
   });
 
   it('정상 저장값을 보존한다', () => {
     expect(
-      normalizeSidePinDeviceState({ schemaVersion: 1, displayId: '12345', panelWidth: 420 }),
+      normalizeSidePinDeviceState({
+        schemaVersion: 1,
+        displayId: '12345',
+        panelWidth: 420,
+        railSlot: 6,
+      }),
     ).toEqual({
       schemaVersion: SIDE_PIN_DEVICE_STATE_SCHEMA_VERSION,
       displayId: '12345',
       panelWidth: 420,
+      railSlot: 6,
     });
   });
 
@@ -93,7 +102,15 @@ describe('normalizeSidePinDeviceState', () => {
       schemaVersion: SIDE_PIN_DEVICE_STATE_SCHEMA_VERSION,
       displayId: null,
       panelWidth: SIDE_PIN_WIDTH_DEFAULT,
+      railSlot: SIDE_PIN_RAIL_SLOT_DEFAULT,
     });
+  });
+
+  it('손잡이 위치는 0~7 정수로 반올림하고 누락 시 기본 위치를 쓴다', () => {
+    expect(normalizeSidePinRailSlot(undefined)).toBe(SIDE_PIN_RAIL_SLOT_DEFAULT);
+    expect(normalizeSidePinRailSlot(-10)).toBe(0);
+    expect(normalizeSidePinRailSlot(4.6)).toBe(5);
+    expect(normalizeSidePinRailSlot(99)).toBe(7);
   });
 
   it('범위 밖 너비는 잘라내고 나머지 값은 살린다', () => {

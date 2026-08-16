@@ -11,6 +11,9 @@ import { clampSidePinWidth, SIDE_PIN_WIDTH_DEFAULT } from '../valueObjects/SideP
 
 /** 기기 전용 상태 파일 스키마 버전 */
 export const SIDE_PIN_DEVICE_STATE_SCHEMA_VERSION = 1;
+export const SIDE_PIN_RAIL_SLOT_MIN = 0;
+export const SIDE_PIN_RAIL_SLOT_MAX = 7;
+export const SIDE_PIN_RAIL_SLOT_DEFAULT = 3;
 
 export interface SidePinDeviceState {
   readonly schemaVersion: number;
@@ -24,13 +27,21 @@ export interface SidePinDeviceState {
   readonly displayId: string | null;
   /** 펼친 패널 너비 (DIP) */
   readonly panelWidth: number;
+  /** 손잡이 세로 위치. 0은 맨 위, 7은 맨 아래다. */
+  readonly railSlot: number;
 }
 
 export const DEFAULT_SIDE_PIN_DEVICE_STATE: SidePinDeviceState = {
   schemaVersion: SIDE_PIN_DEVICE_STATE_SCHEMA_VERSION,
   displayId: null,
   panelWidth: SIDE_PIN_WIDTH_DEFAULT,
+  railSlot: SIDE_PIN_RAIL_SLOT_DEFAULT,
 };
+
+export function normalizeSidePinRailSlot(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return SIDE_PIN_RAIL_SLOT_DEFAULT;
+  return Math.min(SIDE_PIN_RAIL_SLOT_MAX, Math.max(SIDE_PIN_RAIL_SLOT_MIN, Math.round(value)));
+}
 
 /**
  * 모니터 식별자를 정규화한다.
@@ -63,5 +74,6 @@ export function normalizeSidePinDeviceState(value: unknown): SidePinDeviceState 
     schemaVersion: SIDE_PIN_DEVICE_STATE_SCHEMA_VERSION,
     displayId: normalizeSidePinDisplayId(raw.displayId),
     panelWidth: clampSidePinWidth(raw.panelWidth),
+    railSlot: normalizeSidePinRailSlot(raw.railSlot),
   };
 }

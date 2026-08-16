@@ -13,6 +13,8 @@ export type SidePinWindowRole = 'rail' | 'panel';
 export interface SidePinWindowLike {
   /** 크기는 유지하고 화면상 위치만 옮긴다. */
   setPosition(bounds: SidePinBounds): void;
+  /** 손잡이의 빈 영역에서 아래 창이 클릭을 받도록 한다. */
+  setClickThrough?(enabled: boolean): void;
   /** 창의 첫 화면 준비가 끝난 뒤 표시한다. */
   showInactive(): Promise<void>;
   /** 창의 첫 화면 준비가 끝난 뒤 표시하고 포커스를 준다. */

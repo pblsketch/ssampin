@@ -82,6 +82,7 @@ function adapt(
   initialBounds: SidePinBounds,
 ): SidePinWindowLike {
   let requestedBounds = initialBounds;
+  let clickThrough = false;
   const applyFixedBounds = (): void => {
     // Windows가 표시 과정에서 바꾼 현재 크기는 다시 입력으로 쓰지 않고 원래 사각형을 복원한다.
     win.setBounds(requestedBounds, false);
@@ -90,6 +91,11 @@ function adapt(
     setPosition(bounds: SidePinBounds): void {
       requestedBounds = bounds;
       applyFixedBounds();
+    },
+    setClickThrough(enabled: boolean): void {
+      if (clickThrough === enabled || win.isDestroyed()) return;
+      clickThrough = enabled;
+      win.setIgnoreMouseEvents(enabled, { forward: enabled });
     },
     async showInactive(): Promise<void> {
       await ready;
@@ -125,6 +131,7 @@ export interface SidePinBrowserWindowFactoryHandle {
   readonly factory: SidePinWindowFactory;
   getWindows(): BrowserWindow[];
   getWindow(role: SidePinWindowRole): BrowserWindow | null;
+  setClickThrough(role: SidePinWindowRole, enabled: boolean): void;
   markRendererReady(webContentsId: number): boolean;
 }
 
@@ -138,6 +145,7 @@ export function createSidePinBrowserWindowFactory(
   const live = new Set<{
     readonly role: SidePinWindowRole;
     readonly window: BrowserWindow;
+    readonly adapter: SidePinWindowLike;
     readonly readyGate: RendererReadyGate;
   }>();
 
@@ -188,13 +196,14 @@ export function createSidePinBrowserWindowFactory(
         void win.loadFile(options.indexHtmlPath, { search: query });
       }
 
-      const entry = { role, window: win, readyGate } as const;
+      const adapter = adapt(win, readyGate.promise, bounds);
+      const entry = { role, window: win, adapter, readyGate } as const;
       live.add(entry);
       win.on('closed', () => {
         live.delete(entry);
       });
 
-      return adapt(win, readyGate.promise, bounds);
+      return adapter;
     },
   };
 
@@ -207,6 +216,12 @@ export function createSidePinBrowserWindowFactory(
         (entry) => entry.role === role && !entry.window.isDestroyed(),
       );
       return candidates.at(-1)?.window ?? null;
+    },
+    setClickThrough: (role, enabled) => {
+      const candidates = [...live].filter(
+        (entry) => entry.role === role && !entry.window.isDestroyed(),
+      );
+      candidates.at(-1)?.adapter.setClickThrough?.(enabled);
     },
     markRendererReady: (webContentsId) => {
       const entry = [...live].find(

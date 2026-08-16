@@ -224,6 +224,7 @@ const DEFAULT_SETTINGS: Settings = {
       'quickAdd.note': { combo: 'mod+alt+n', enabled: true },
       'quickAdd.bookmark': { combo: 'mod+alt+b', enabled: true },
       'sticker-picker:toggle': { combo: 'mod+shift+e', enabled: true },
+      'sidePin:toggle': { combo: 'mod+alt+p', enabled: true },
     },
     migratedAutoEnableV2: true,
   },
@@ -238,9 +239,25 @@ export const DEFAULT_SHORTCUTS: ShortcutSettings = {
     'quickAdd.note': { combo: 'mod+alt+n', enabled: true },
     'quickAdd.bookmark': { combo: 'mod+alt+b', enabled: true },
     'sticker-picker:toggle': { combo: 'mod+shift+e', enabled: true },
+    'sidePin:toggle': { combo: 'mod+alt+p', enabled: true },
   },
   migratedAutoEnableV2: true,
 };
+
+/** 저장된 단축키에 새 기본 명령을 보강하면서 사용자가 바꾼 조합과 켜짐 상태는 보존한다. */
+export function normalizeShortcutSettings(
+  savedShortcuts: Partial<ShortcutSettings> | undefined,
+): ShortcutSettings {
+  if (!savedShortcuts) return DEFAULT_SHORTCUTS;
+  const alreadyMigrated = savedShortcuts.migratedAutoEnableV2 === true;
+  return {
+    globalEnabled: alreadyMigrated
+      ? (savedShortcuts.globalEnabled ?? DEFAULT_SHORTCUTS.globalEnabled)
+      : true,
+    bindings: { ...DEFAULT_SHORTCUTS.bindings, ...(savedShortcuts.bindings ?? {}) },
+    migratedAutoEnableV2: true,
+  };
+}
 
 interface SettingsState {
   settings: Settings;
@@ -441,20 +458,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
           shortcuts: (() => {
             const savedShortcuts = (saved as unknown as { shortcuts?: Partial<ShortcutSettings> })
               .shortcuts;
-            // 레거시 사용자(shortcuts 키 자체가 없음) → DEFAULT_SHORTCUTS 사용 (이미 globalEnabled=true + migrated=true)
-            if (!savedShortcuts) return DEFAULT_SHORTCUTS;
-            // v2 자동 활성화 마이그레이션:
-            // - migratedAutoEnableV2=true 인 사용자: 본인 선택 존중 (globalEnabled 그대로)
-            // - migratedAutoEnableV2 미설정 (v2.0.0 이하 저장본): 강제로 true 1회 전환 후 플래그 박음
-            const alreadyMigrated =
-              (savedShortcuts as { migratedAutoEnableV2?: boolean }).migratedAutoEnableV2 === true;
-            return {
-              globalEnabled: alreadyMigrated
-                ? (savedShortcuts.globalEnabled ?? DEFAULT_SHORTCUTS.globalEnabled)
-                : true,
-              bindings: { ...DEFAULT_SHORTCUTS.bindings, ...(savedShortcuts.bindings ?? {}) },
-              migratedAutoEnableV2: true,
-            };
+            return normalizeShortcutSettings(savedShortcuts);
           })(),
           dashboardTheme: (saved as unknown as { dashboardTheme?: DashboardThemeSettings })
             .dashboardTheme,

@@ -12,7 +12,10 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { SidePinRail } from './SidePinRail';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  Reflect.deleteProperty(window, 'electronAPI');
+});
 
 function renderRail(overrides: Partial<Parameters<typeof SidePinRail>[0]> = {}) {
   const props = {
@@ -59,10 +62,36 @@ describe('손잡이 동작', () => {
     expect(props.onZoneClick).toHaveBeenCalledWith('widget');
   });
 
+  test('4px 이상 세로로 끌면 열지 않고 손잡이 이동을 시작하고 끝낸다', () => {
+    const startRailDrag = vi.fn();
+    const endRailDrag = vi.fn();
+    Object.defineProperty(window, 'electronAPI', {
+      configurable: true,
+      value: { sidePin: { startRailDrag, endRailDrag } },
+    });
+    const props = renderRail();
+    const button = screen.getByRole('button', { name: '위젯 열기' });
+    const rail = button.closest('[data-sidepin-rail]') as HTMLElement;
+    Object.defineProperty(rail, 'setPointerCapture', { value: vi.fn() });
+
+    fireEvent.pointerDown(button, { button: 0, isPrimary: true, pointerId: 1, screenY: 100 });
+    fireEvent.pointerMove(rail, { pointerId: 1, screenY: 103 });
+    expect(startRailDrag).not.toHaveBeenCalled();
+
+    fireEvent.pointerMove(rail, { pointerId: 1, screenY: 105 });
+    fireEvent.pointerUp(rail, { pointerId: 1, screenY: 105 });
+    fireEvent.click(button);
+
+    expect(startRailDrag).toHaveBeenCalledTimes(1);
+    expect(endRailDrag).toHaveBeenCalledTimes(1);
+    expect(props.onZoneClick).not.toHaveBeenCalled();
+  });
+
   test('손잡이를 벗어나면 알린다', () => {
     const props = renderRail();
 
-    fireEvent.mouseLeave(screen.getByRole('button', { name: '위젯 열기' }).parentElement!);
+    const rail = screen.getByRole('button', { name: '위젯 열기' }).closest('[data-sidepin-rail]');
+    fireEvent.mouseLeave(rail!);
 
     expect(props.onZoneLeave).toHaveBeenCalled();
   });
@@ -131,5 +160,9 @@ describe('디자인 규칙', () => {
     expect(source).toMatch(/h-\[24px\] w-\[24px\] shrink-0/);
     expect(source).not.toMatch(/clamp\(/);
     expect(source).not.toMatch(/\bh-6\b|\bw-6\b/);
+  });
+
+  test('실제 클릭 대상도 네이티브 hitbox와 같은 44px다', () => {
+    expect(source).toMatch(/h-11 w-11/);
   });
 });

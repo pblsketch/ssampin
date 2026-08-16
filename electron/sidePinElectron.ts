@@ -14,7 +14,11 @@ import { loadSidePinDeviceState, saveSidePinDeviceState } from './sidePinDeviceS
 import type { SidePinDisplayInfo } from './sidePinGeometry';
 import type { SidePinRuntimeState } from '../src/domain/entities/SidePinRuntimeState';
 import type { SidePinWindowRole } from './sidePinWindow';
-import { resolveSidePinPointerRegion, shouldRecoverSidePinRail } from './sidePinPointerRegion';
+import {
+  resolveSidePinPointerRegion,
+  shouldIgnoreSidePinRailMouse,
+  shouldRecoverSidePinRail,
+} from './sidePinPointerRegion';
 
 export interface SidePinElectronOptions {
   readonly preloadPath: string;
@@ -47,6 +51,7 @@ export interface SidePinElectronHandle {
   markRendererReady(webContentsId: number): boolean;
   /** 화면의 enter/leave 알림을 믿지 않고 실제 커서와 보이는 창으로 위치를 다시 맞춘다. */
   syncPointerRegion(): void;
+  setRailDragging(dragging: boolean): void;
   /** 모니터 변경 구독을 해제하고 타이머·창을 정리한다 */
   dispose(): void;
 }
@@ -74,10 +79,16 @@ export function createSidePinElectron(options: SidePinElectronOptions): SidePinE
       console.log(`[sidePin] 저장된 모니터를 찾지 못해 ${correctedTo} 으로 옮김`);
     },
   });
+  let railDragging = false;
+  let railDragOffsetY: number | null = null;
+  let railDragSafetyTimer: ReturnType<typeof setTimeout> | null = null;
 
   const syncPointerRegion = (): void => {
     const point = screen.getCursorScreenPoint();
     const state = service.getState();
+    if (railDragging && railDragOffsetY !== null) {
+      service.setRailTop(point.y - railDragOffsetY);
+    }
     const rail = windows.getWindow('rail');
     if (
       shouldRecoverSidePinRail(
@@ -92,7 +103,10 @@ export function createSidePinElectron(options: SidePinElectronOptions): SidePinE
       service.enable();
       return;
     }
-    const next = resolveSidePinPointerRegion(point, service.getLayout(), state);
+    const next = railDragging
+      ? 'outside'
+      : resolveSidePinPointerRegion(point, service.getLayout(), state);
+    windows.setClickThrough('rail', shouldIgnoreSidePinRailMouse(state, next, railDragging));
 
     // React 창의 mouseleave가 늦게 도착해도 다음 판정에서 반드시 실제 위치로 복구한다.
     if (next === state.pointerRegion) return;
@@ -107,6 +121,33 @@ export function createSidePinElectron(options: SidePinElectronOptions): SidePinE
   const pointerTimer = setInterval(syncPointerRegion, 50);
   pointerTimer.unref();
 
+  const setRailDragging = (dragging: boolean): void => {
+    if (railDragSafetyTimer !== null) {
+      clearTimeout(railDragSafetyTimer);
+      railDragSafetyTimer = null;
+    }
+
+    if (dragging) {
+      const layout = service.getLayout();
+      const point = screen.getCursorScreenPoint();
+      railDragOffsetY = layout === null ? null : point.y - layout.rail.y;
+      railDragging = true;
+      if (service.getState().pointerRegion !== 'outside') {
+        service.dispatch({ type: 'pointer-region-changed', region: 'outside' });
+      }
+      railDragSafetyTimer = setTimeout(() => setRailDragging(false), 5_000);
+      railDragSafetyTimer.unref();
+    } else {
+      if (railDragging && railDragOffsetY !== null) {
+        const point = screen.getCursorScreenPoint();
+        service.setRailTop(point.y - railDragOffsetY);
+      }
+      railDragging = false;
+      railDragOffsetY = null;
+    }
+    syncPointerRegion();
+  };
+
   // 모니터를 뺐다 꽂거나 배율을 바꾸면 오른쪽 끝이 달라진다.
   // 위치 계산은 저장된 좌표가 아니라 그때그때의 작업 영역을 쓰므로 다시 부르기만 하면 된다.
   const onDisplayChange = (): void => service.handleDisplayChange();
@@ -120,8 +161,10 @@ export function createSidePinElectron(options: SidePinElectronOptions): SidePinE
     getWindow: (role) => windows.getWindow(role),
     markRendererReady: (webContentsId) => windows.markRendererReady(webContentsId),
     syncPointerRegion,
+    setRailDragging,
     dispose(): void {
       clearInterval(pointerTimer);
+      if (railDragSafetyTimer !== null) clearTimeout(railDragSafetyTimer);
       screen.removeListener('display-added', onDisplayChange);
       screen.removeListener('display-removed', onDisplayChange);
       screen.removeListener('display-metrics-changed', onDisplayChange);

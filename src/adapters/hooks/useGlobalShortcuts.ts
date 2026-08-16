@@ -2,7 +2,8 @@ import { useEffect, useRef } from 'react';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useQuickAddStore } from '@adapters/stores/useQuickAddStore';
 import type { QuickAddKind } from '@adapters/stores/useQuickAddStore';
-import { matchesCombo } from './shortcut/keyNormalize';
+import { useToastStore } from '@adapters/components/common/Toast';
+import { isSafeGlobalCombo, matchesCombo } from './shortcut/keyNormalize';
 
 const COMMAND_TO_KIND: Record<string, QuickAddKind> = {
   'quickAdd.todo': 'todo',
@@ -38,6 +39,7 @@ export function useGlobalShortcuts(): void {
   // Renderer keydown
   useEffect(() => {
     const lastStickerFiredAt = { at: 0 };
+    const lastSidePinFiredAt = { at: 0 };
 
     const handler = (e: KeyboardEvent): void => {
       const bindings = useSettingsStore.getState().settings.shortcuts?.bindings;
@@ -45,6 +47,7 @@ export function useGlobalShortcuts(): void {
 
       for (const [commandId, binding] of Object.entries(bindings)) {
         if (!binding.enabled) continue;
+        if (!isSafeGlobalCombo(binding.combo)) continue;
         if (!matchesCombo(e, binding.combo)) continue;
 
         // sticker-picker:toggle 은 별도 윈도우 토글 — main process IPC로 위임.
@@ -56,6 +59,15 @@ export function useGlobalShortcuts(): void {
           lastStickerFiredAt.at = now;
           e.preventDefault();
           void window.electronAPI?.sticker?.triggerToggle?.();
+          return;
+        }
+        // 옆핀 토글도 메인 프로세스가 정본이다(globalShortcut 등록 실패 환경 폴백).
+        if (commandId === 'sidePin:toggle') {
+          const now = Date.now();
+          if (now - lastSidePinFiredAt.at < 250) return; // globalShortcut과 이중 트리거 방지
+          lastSidePinFiredAt.at = now;
+          e.preventDefault();
+          void window.electronAPI?.sidePin?.toggleShortcut?.();
           return;
         }
 
@@ -108,6 +120,21 @@ export function useGlobalShortcuts(): void {
         enabled: b.enabled,
       })),
     };
-    void api.syncShortcuts(payload);
+    void api
+      .syncShortcuts(payload)
+      .then(({ failed }) => {
+        if (failed.length === 0) return;
+        useToastStore
+          .getState()
+          .show(
+            `${failed.length}개 단축키를 시스템에 등록하지 못했습니다. 다른 조합을 선택해주세요.`,
+            'error',
+          );
+      })
+      .catch(() => {
+        useToastStore
+          .getState()
+          .show('단축키 설정을 시스템에 반영하지 못했습니다. 잠시 후 다시 시도해주세요.', 'error');
+      });
   }, [settings.shortcuts]);
 }

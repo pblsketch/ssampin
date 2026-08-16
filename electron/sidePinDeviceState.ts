@@ -32,18 +32,28 @@ export const SIDE_PIN_WIDTH_MIN = 360;
 export const SIDE_PIN_WIDTH_MAX = 460;
 export const SIDE_PIN_WIDTH_DEFAULT = 400;
 export const SIDE_PIN_DEVICE_STATE_SCHEMA_VERSION = 1;
+export const SIDE_PIN_RAIL_SLOT_MIN = 0;
+export const SIDE_PIN_RAIL_SLOT_MAX = 7;
+export const SIDE_PIN_RAIL_SLOT_DEFAULT = 3;
 
 export interface SidePinDeviceState {
   readonly schemaVersion: number;
   readonly displayId: string | null;
   readonly panelWidth: number;
+  readonly railSlot: number;
 }
 
 export const DEFAULT_SIDE_PIN_DEVICE_STATE: SidePinDeviceState = {
   schemaVersion: SIDE_PIN_DEVICE_STATE_SCHEMA_VERSION,
   displayId: null,
   panelWidth: SIDE_PIN_WIDTH_DEFAULT,
+  railSlot: SIDE_PIN_RAIL_SLOT_DEFAULT,
 };
+
+export function normalizeSidePinRailSlot(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return SIDE_PIN_RAIL_SLOT_DEFAULT;
+  return Math.min(SIDE_PIN_RAIL_SLOT_MAX, Math.max(SIDE_PIN_RAIL_SLOT_MIN, Math.round(value)));
+}
 
 export function clampSidePinWidth(value: unknown): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
@@ -74,6 +84,7 @@ export function normalizeSidePinDeviceState(value: unknown): SidePinDeviceState 
     schemaVersion: SIDE_PIN_DEVICE_STATE_SCHEMA_VERSION,
     displayId: normalizeSidePinDisplayId(raw.displayId),
     panelWidth: clampSidePinWidth(raw.panelWidth),
+    railSlot: normalizeSidePinRailSlot(raw.railSlot),
   };
 }
 

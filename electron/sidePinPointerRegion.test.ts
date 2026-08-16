@@ -1,7 +1,11 @@
 import { describe, expect, test } from 'vitest';
 import type { SidePinRuntimeState } from '../src/domain/entities/SidePinRuntimeState';
 import type { SidePinLayout } from './sidePinGeometry';
-import { resolveSidePinPointerRegion, shouldRecoverSidePinRail } from './sidePinPointerRegion';
+import {
+  resolveSidePinPointerRegion,
+  shouldIgnoreSidePinRailMouse,
+  shouldRecoverSidePinRail,
+} from './sidePinPointerRegion';
 
 const LAYOUT: SidePinLayout = {
   displayId: 'primary',
@@ -32,13 +36,19 @@ describe('resolveSidePinPointerRegion', () => {
     expect(resolveSidePinPointerRegion(point, null, ACTIVE_STATE)).toBe('outside');
   });
 
-  test('접힌 손잡이의 위·아래 영역을 각각 위젯과 메모로 구분한다', () => {
+  test('접힌 손잡이의 위·아래 버튼을 각각 위젯과 메모로 구분한다', () => {
     expect(resolveSidePinPointerRegion({ x: 1900, y: 500 }, LAYOUT, ACTIVE_STATE)).toBe(
       'rail-widget',
     );
     expect(resolveSidePinPointerRegion({ x: 1900, y: 580 }, LAYOUT, ACTIVE_STATE)).toBe(
       'rail-memo',
     );
+  });
+
+  test('손잡이 창 안이어도 두 버튼 밖의 투명 영역은 바깥으로 판정한다', () => {
+    expect(resolveSidePinPointerRegion({ x: 1900, y: 460 }, LAYOUT, ACTIVE_STATE)).toBe('outside');
+    expect(resolveSidePinPointerRegion({ x: 1900, y: 540 }, LAYOUT, ACTIVE_STATE)).toBe('outside');
+    expect(resolveSidePinPointerRegion({ x: 1869, y: 500 }, LAYOUT, ACTIVE_STATE)).toBe('outside');
   });
 
   test.each(['opening', 'expanded', 'closing'] as const)(
@@ -63,10 +73,31 @@ describe('resolveSidePinPointerRegion', () => {
   });
 
   test('화면 배율 반올림으로 생기는 2 DIP 경계 오차만 흡수한다', () => {
-    expect(resolveSidePinPointerRegion({ x: 1922, y: 500 }, LAYOUT, ACTIVE_STATE)).toBe(
+    expect(resolveSidePinPointerRegion({ x: 1918, y: 500 }, LAYOUT, ACTIVE_STATE)).toBe(
       'rail-widget',
     );
-    expect(resolveSidePinPointerRegion({ x: 1923, y: 500 }, LAYOUT, ACTIVE_STATE)).toBe('outside');
+    expect(resolveSidePinPointerRegion({ x: 1919, y: 500 }, LAYOUT, ACTIVE_STATE)).toBe('outside');
+  });
+});
+
+describe('shouldIgnoreSidePinRailMouse', () => {
+  test('접힌 손잡이의 버튼 밖에서만 클릭을 통과시킨다', () => {
+    expect(shouldIgnoreSidePinRailMouse(ACTIVE_STATE, 'outside', false)).toBe(true);
+    expect(shouldIgnoreSidePinRailMouse(ACTIVE_STATE, 'rail-widget', false)).toBe(false);
+    expect(shouldIgnoreSidePinRailMouse(ACTIVE_STATE, 'rail-memo', false)).toBe(false);
+  });
+
+  test('드래그 중이거나 보호·비활성·패널 상태이면 클릭 통과를 켜지 않는다', () => {
+    expect(shouldIgnoreSidePinRailMouse(ACTIVE_STATE, 'outside', true)).toBe(false);
+    expect(
+      shouldIgnoreSidePinRailMouse({ ...ACTIVE_STATE, enabled: false }, 'outside', false),
+    ).toBe(false);
+    expect(
+      shouldIgnoreSidePinRailMouse({ ...ACTIVE_STATE, protectedReason: 'lock' }, 'outside', false),
+    ).toBe(false);
+    expect(
+      shouldIgnoreSidePinRailMouse({ ...ACTIVE_STATE, surface: 'expanded' }, 'outside', false),
+    ).toBe(false);
   });
 });
 
