@@ -28,7 +28,6 @@ const SIDE_PIN_RAIL_MIN_DIP_WIDTH = 30;
  * 그래서 세로 가운데에 짧은 탭으로 둔다. 위젯 구역과 메모 구역을 절반씩 나눠 갖는다.
  */
 export const SIDE_PIN_RAIL_HEIGHT = 168;
-export const SIDE_PIN_RAIL_SLOT_COUNT = 8;
 
 export interface SidePinRect {
   readonly x: number;
@@ -57,8 +56,8 @@ export interface SidePinLayoutInput {
   readonly preferredDisplayId: string | null;
   /** 이미 360~460으로 정규화된 패널 너비 */
   readonly panelWidth: number;
-  /** 0은 맨 위, 7은 맨 아래인 손잡이 위치 */
-  readonly railSlot: number;
+  /** 0은 맨 위, 1은 맨 아래인 손잡이 위치 (쓸 수 있는 높이 대비 비율) */
+  readonly railPosition: number;
 }
 
 export interface SidePinLayout {
@@ -118,26 +117,50 @@ function rightEdgeRect(area: SidePinRect, desiredWidth: number): SidePinRect {
   };
 }
 
-/** 오른쪽 끝, 세로 가운데에 놓이는 짧은 탭 */
+/** 오른쪽 끝, 정해진 높이 비율에 놓이는 짧은 탭 */
 function rightEdgeTab(
   area: SidePinRect,
   desiredWidth: number,
   desiredHeight: number,
-  railSlot: number,
+  railPosition: number,
 ): SidePinRect {
   const width = Math.min(Math.max(1, Math.round(desiredWidth)), area.width);
   const height = Math.min(Math.max(1, Math.round(desiredHeight)), area.height);
-  const slot = Math.min(SIDE_PIN_RAIL_SLOT_COUNT - 1, Math.max(0, Math.round(railSlot)));
+  const ratio = Number.isFinite(railPosition) ? Math.min(1, Math.max(0, railPosition)) : 0;
   return {
     x: area.x + area.width - width,
-    y: area.y + Math.round(((area.height - height) * slot) / (SIDE_PIN_RAIL_SLOT_COUNT - 1)),
+    y: area.y + Math.round((area.height - height) * ratio),
     width,
     height,
   };
 }
 
-/** 드래그한 손잡이 윗변을 가장 가까운 8단계 위치로 바꾼다. */
-export function resolveSidePinRailSlotFromTop(
+/**
+ * 끌고 있는 동안의 손잡이 윗변을 작업 영역 안에 가둔다.
+ *
+ * 끄는 중에도 놓을 때도 반올림하지 않는다. 예전에는 8단계로 맞췄는데, 한 칸이
+ * 124 DIP라 손을 뗄 때 창이 커서 밑에서 최대 반 칸 빠져나갔다. 그러면 끌기 자리가
+ * 손 밑에 없어 **두 번째 끌기가 시작되지 않는다**(2026-08-17 실기기).
+ */
+export function clampSidePinRailTop(
+  workArea: SidePinRect,
+  railTop: number,
+  railHeight = SIDE_PIN_RAIL_HEIGHT,
+): number {
+  const area = roundRect(workArea);
+  if (!Number.isFinite(railTop)) return area.y;
+  const height = Math.min(Math.max(1, Math.round(railHeight)), area.height);
+  const maxTop = area.y + Math.max(0, area.height - height);
+  return Math.min(maxTop, Math.max(area.y, Math.round(railTop)));
+}
+
+/**
+ * 놓은 손잡이 윗변을 저장할 비율(0~1)로 바꾼다.
+ *
+ * `rightEdgeTab`의 역함수다. 반올림이 없으므로 놓은 자리를 그대로 다시 그린다 —
+ * 창이 손 밑에서 튀지 않아야 곧바로 다시 끌 수 있다.
+ */
+export function resolveSidePinRailPositionFromTop(
   workArea: SidePinRect,
   railTop: number,
   railHeight = SIDE_PIN_RAIL_HEIGHT,
@@ -147,7 +170,7 @@ export function resolveSidePinRailSlotFromTop(
   const travel = Math.max(0, area.height - height);
   if (travel === 0 || !Number.isFinite(railTop)) return 0;
   const relativeTop = Math.min(travel, Math.max(0, railTop - area.y));
-  return Math.round((relativeTop * (SIDE_PIN_RAIL_SLOT_COUNT - 1)) / travel);
+  return relativeTop / travel;
 }
 
 /**
@@ -225,7 +248,7 @@ export function resolveSidePinLayout(input: SidePinLayoutInput): SidePinLayout |
       usable,
       resolveSidePinRailWidth(picked.display.scaleFactor),
       SIDE_PIN_RAIL_HEIGHT,
-      input.railSlot,
+      input.railPosition,
     ),
     panel: rightEdgeRect(usable, input.panelWidth),
     usedFallbackDisplay: picked.usedFallbackDisplay,

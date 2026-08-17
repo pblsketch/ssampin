@@ -55,9 +55,23 @@ const DISPLAY_ID_CORPUS: readonly unknown[] = [
   '한글-모니터',
 ];
 
-const RAIL_SLOT_CORPUS: readonly unknown[] = [0, 3, 7, -1, 8, 4.6, NaN, Infinity, '3', null];
+const RAIL_POSITION_CORPUS: readonly unknown[] = [
+  0,
+  0.5,
+  1,
+  -1,
+  2,
+  0.46,
+  3 / 7,
+  NaN,
+  Infinity,
+  '0.5',
+  null,
+];
 
 const STATE_CORPUS: readonly unknown[] = [
+  { schemaVersion: 1, displayId: '12345', panelWidth: 420, railPosition: 0.6 },
+  // 8단계 칸 번호로 저장된 예전 개발본 — 양쪽이 똑같이 비율로 옮겨야 한다
   { schemaVersion: 1, displayId: '12345', panelWidth: 420, railSlot: 6 },
   { schemaVersion: 0, displayId: null, panelWidth: 400 },
   { schemaVersion: 99, displayId: 777, panelWidth: 5000 },
@@ -87,9 +101,7 @@ describe('상수 동치', () => {
   });
 
   test('손잡이 위치 경계와 기본값이 같다', () => {
-    expect(mirror.SIDE_PIN_RAIL_SLOT_MIN).toBe(domainState.SIDE_PIN_RAIL_SLOT_MIN);
-    expect(mirror.SIDE_PIN_RAIL_SLOT_MAX).toBe(domainState.SIDE_PIN_RAIL_SLOT_MAX);
-    expect(mirror.SIDE_PIN_RAIL_SLOT_DEFAULT).toBe(domainState.SIDE_PIN_RAIL_SLOT_DEFAULT);
+    expect(mirror.SIDE_PIN_RAIL_POSITION_DEFAULT).toBe(domainState.SIDE_PIN_RAIL_POSITION_DEFAULT);
   });
 
   test('기본값이 같다', () => {
@@ -114,11 +126,11 @@ describe('순수 함수 동치', () => {
     },
   );
 
-  test.each(RAIL_SLOT_CORPUS.map((v) => [JSON.stringify(v) ?? String(v), v] as const))(
-    'normalizeSidePinRailSlot(%s)',
+  test.each(RAIL_POSITION_CORPUS.map((v) => [JSON.stringify(v) ?? String(v), v] as const))(
+    'normalizeSidePinRailPosition(%s)',
     (_label, value) => {
-      expect(mirror.normalizeSidePinRailSlot(value)).toBe(
-        domainState.normalizeSidePinRailSlot(value),
+      expect(mirror.normalizeSidePinRailPosition(value)).toBe(
+        domainState.normalizeSidePinRailPosition(value),
       );
     },
   );

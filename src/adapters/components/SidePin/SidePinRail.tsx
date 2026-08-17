@@ -40,7 +40,7 @@
  *    자리는 `rail-grip`으로 판정돼 펼침을 아예 예약하지 않는다.
  */
 import type { SidePinPointerRegion } from '@domain/entities/SidePinRuntimeState';
-import { useRef, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 
 export interface SidePinRailProps {
   /** 지금 포인터가 어느 구역에 있는지 (창이 알려 준다) */
@@ -103,6 +103,18 @@ function RailZone({ icon, label, active, onEnter, onClick }: ZoneProps) {
   );
 }
 
+/**
+ * 끌기 자리 점 표시의 색.
+ *
+ * 손잡이는 8단계로만 움직여서 화면 높이에 따라 한 칸이 100픽셀을 넘는다. 조금 끌면
+ * 창이 그대로 있으므로, **끄는 중이라는 사실 자체를 색으로 알려야** 눌리지 않은
+ * 것으로 오해하지 않는다.
+ */
+function gripToneOf(dragging: boolean, pointerRegion: SidePinPointerRegion): string {
+  if (dragging) return 'text-sp-accent';
+  return pointerRegion === 'rail-grip' ? 'text-sp-text' : 'text-sp-muted';
+}
+
 export function SidePinRail({
   pointerRegion,
   backgroundColor,
@@ -111,19 +123,56 @@ export function SidePinRail({
   onZoneClick,
 }: SidePinRailProps) {
   const dragPointerRef = useRef<number | null>(null);
+  /**
+   * 끌고 있는지는 화면이 직접 기억한다.
+   *
+   * `pointerRegion`으로 판단하면 안 된다 — 메인은 끌기가 시작되면 판정을
+   * `outside`로 고정한다(끌다가 패널이 펼쳐지는 것을 막으려고). 그 값을 그대로
+   * 쓰면 **누르는 순간 표시가 흐려져** 눌리지 않은 것처럼 보인다.
+   */
+  const [dragging, setDragging] = useState(false);
+
+  const finishDrag = (pointerId: number): void => {
+    if (dragPointerRef.current !== pointerId) return;
+    dragPointerRef.current = null;
+    setDragging(false);
+    window.electronAPI?.sidePin?.endRailDrag?.();
+  };
 
   const startDrag = (event: ReactPointerEvent<HTMLDivElement>): void => {
     if (event.button !== 0 || !event.isPrimary) return;
     dragPointerRef.current = event.pointerId;
     event.currentTarget.setPointerCapture?.(event.pointerId);
+    setDragging(true);
     window.electronAPI?.sidePin?.startRailDrag?.();
   };
 
-  const finishDrag = (pointerId: number): void => {
-    if (dragPointerRef.current !== pointerId) return;
-    dragPointerRef.current = null;
-    window.electronAPI?.sidePin?.endRailDrag?.();
-  };
+  /**
+   * 놓는 신호는 **창(window) 전체**에서 받는다.
+   *
+   * 끄는 동안 이 창은 50ms마다 자리를 옮긴다. 그 사이 포인터 캡처가 풀리거나 손을
+   * 뗀 자리가 이 요소 밖이면 요소에 붙인 `pointerup`이 오지 않는다. 그러면 메인은
+   * 끌기가 끝난 줄 모르고 **5초 안전장치가 돌 때까지 손잡이가 커서를 계속 쫓아온다**
+   * (2026-08-17 실기기: "처음 두세 번만 되고 그 뒤로는 거의 안 됨").
+   */
+  useEffect(() => {
+    if (!dragging) return;
+    const onRelease = (event: PointerEvent): void => finishDrag(event.pointerId);
+    window.addEventListener('pointerup', onRelease);
+    window.addEventListener('pointercancel', onRelease);
+    // 창이 포커스를 잃으면 버튼을 뗀 것을 영영 못 볼 수 있다.
+    const onBlur = (): void => {
+      const pointerId = dragPointerRef.current;
+      if (pointerId !== null) finishDrag(pointerId);
+    };
+    window.addEventListener('blur', onBlur);
+    return () => {
+      window.removeEventListener('pointerup', onRelease);
+      window.removeEventListener('pointercancel', onRelease);
+      window.removeEventListener('blur', onBlur);
+    };
+    // finishDrag는 ref와 setState만 쓰므로 끌기가 시작될 때 한 번만 붙이면 된다.
+  }, [dragging]);
 
   return (
     <div
@@ -157,9 +206,7 @@ export function SidePinRail({
         className="absolute left-1/2 top-1/2 flex h-8 w-11 -translate-x-1/2 -translate-y-1/2 cursor-grab items-center justify-center rounded-md active:cursor-grabbing"
       >
         <span
-          className={`material-symbols-outlined text-[16px] leading-none transition-colors duration-sp-quick ${
-            pointerRegion === 'rail-grip' ? 'text-sp-text' : 'text-sp-muted'
-          }`}
+          className={`material-symbols-outlined text-[16px] leading-none transition-colors duration-sp-quick ${gripToneOf(dragging, pointerRegion)}`}
         >
           drag_indicator
         </span>

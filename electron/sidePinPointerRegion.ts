@@ -60,6 +60,29 @@ export function resolveSidePinPointerRegion(
   return 'outside';
 }
 
+/**
+ * 손잡이를 놓은 직후에는 그 자리에서 펼치지 않는다.
+ *
+ * 놓는 순간 창은 가장 가까운 8단계 자리로 맞춰지므로, 손이 있던 곳과 창이 최대
+ * 반 칸(수십 DIP) 어긋난다. 그러면 커서가 여는 버튼 위에 남아 **옮길 때마다
+ * 패널이 열린다.** 커서가 손잡이를 완전히 벗어나야 다시 열 수 있게 한다.
+ *
+ * 여는 버튼 자리를 `rail-grip`으로 바꿔 돌려주므로, 창은 계속 마우스를 받아
+ * 클릭으로 여는 길과 다시 끄는 길은 그대로 열려 있다.
+ */
+export function resolveSidePinHoverArm(
+  armed: boolean,
+  region: SidePinPointerRegion,
+): { readonly region: SidePinPointerRegion; readonly armed: boolean } {
+  if (armed) return { region, armed: true };
+  if (isSidePinRailRegion(region)) return { region: 'rail-grip', armed: false };
+  return { region, armed: true };
+}
+
+function isSidePinRailRegion(region: SidePinPointerRegion): boolean {
+  return region === 'rail-widget' || region === 'rail-memo' || region === 'rail-grip';
+}
+
 /** 접힌 손잡이의 실제 버튼 밖에서는 아래 창이 클릭을 받는다. */
 export function shouldIgnoreSidePinRailMouse(
   state: PointerState,
@@ -86,23 +109,31 @@ function railGripTarget(rail: SidePinRect): SidePinRect | null {
   const available = rail.height / 2 - buttonHeight;
   if (available <= 0) return null;
 
-  const width = Math.min(SIDE_PIN_RAIL_CLICK_TARGET_SIZE, rail.width);
   const height = Math.min(SIDE_PIN_RAIL_GRIP_HEIGHT, available);
   return {
-    x: rail.x + (rail.width - width) / 2,
+    x: rail.x,
     y: rail.y + rail.height / 2 - height / 2,
-    width,
+    width: rail.width,
     height,
   };
 }
 
+/**
+ * 여닫는 버튼과 끌기 자리는 **손잡이 폭을 통째로** 쓴다.
+ *
+ * 예전에는 44 DIP만 받고 좌우 4 DIP씩을 클릭 통과로 뒀는데, 그 오른쪽 4 DIP가
+ * 하필 **화면의 맨 끝**이다. 가장자리 손잡이는 마우스를 화면 끝까지 밀어 잡는 것이
+ * 자연스러운 동작이라, 가장 자주 노리는 자리가 안 눌렸다(2026-08-17 실기기).
+ *
+ * 클릭 통과의 이득은 어차피 세로 여백에서 나온다 — 스크롤바는 이미 44 DIP 판정에
+ * 가려져 있었으므로 폭을 넓혀도 잃는 것이 없다.
+ */
 function railClickTarget(rail: SidePinRect, verticalRatio: number): SidePinRect {
-  const width = Math.min(SIDE_PIN_RAIL_CLICK_TARGET_SIZE, rail.width);
   const height = Math.min(SIDE_PIN_RAIL_CLICK_TARGET_SIZE, rail.height / 2);
   return {
-    x: rail.x + (rail.width - width) / 2,
+    x: rail.x,
     y: rail.y + rail.height * verticalRatio - height / 2,
-    width,
+    width: rail.width,
     height,
   };
 }

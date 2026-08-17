@@ -15,6 +15,7 @@ import type { SidePinDisplayInfo } from './sidePinGeometry';
 import type { SidePinRuntimeState } from '../src/domain/entities/SidePinRuntimeState';
 import type { SidePinWindowRole } from './sidePinWindow';
 import {
+  resolveSidePinHoverArm,
   resolveSidePinPointerRegion,
   shouldIgnoreSidePinRailMouse,
   shouldRecoverSidePinRail,
@@ -82,12 +83,14 @@ export function createSidePinElectron(options: SidePinElectronOptions): SidePinE
   let railDragging = false;
   let railDragOffsetY: number | null = null;
   let railDragSafetyTimer: ReturnType<typeof setTimeout> | null = null;
+  /** 손잡이를 놓은 뒤 커서가 손잡이를 벗어날 때까지 false. 그동안은 펼치지 않는다. */
+  let railHoverArmed = true;
 
   const syncPointerRegion = (): void => {
     const point = screen.getCursorScreenPoint();
     const state = service.getState();
     if (railDragging && railDragOffsetY !== null) {
-      service.setRailTop(point.y - railDragOffsetY);
+      service.setRailDragTop(point.y - railDragOffsetY);
     }
     const rail = windows.getWindow('rail');
     if (
@@ -103,9 +106,12 @@ export function createSidePinElectron(options: SidePinElectronOptions): SidePinE
       service.enable();
       return;
     }
-    const next = railDragging
+    const resolved = railDragging
       ? 'outside'
       : resolveSidePinPointerRegion(point, service.getLayout(), state);
+    const arm = resolveSidePinHoverArm(railHoverArmed, resolved);
+    railHoverArmed = arm.armed;
+    const next = arm.region;
     windows.setClickThrough('rail', shouldIgnoreSidePinRailMouse(state, next, railDragging));
 
     // React 창의 mouseleave가 늦게 도착해도 다음 판정에서 반드시 실제 위치로 복구한다.
@@ -138,12 +144,18 @@ export function createSidePinElectron(options: SidePinElectronOptions): SidePinE
       railDragSafetyTimer = setTimeout(() => setRailDragging(false), 5_000);
       railDragSafetyTimer.unref();
     } else {
+      const wasDragging = railDragging;
       if (railDragging && railDragOffsetY !== null) {
         const point = screen.getCursorScreenPoint();
-        service.setRailTop(point.y - railDragOffsetY);
+        service.setRailDragTop(point.y - railDragOffsetY);
       }
       railDragging = false;
       railDragOffsetY = null;
+      if (wasDragging) {
+        // 여기서 창이 가장 가까운 칸으로 맞춰지며 손이 있던 자리에서 벗어난다.
+        service.commitRailDrag();
+        railHoverArmed = false;
+      }
     }
     syncPointerRegion();
   };

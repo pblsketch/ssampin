@@ -121,6 +121,25 @@ describe('손잡이 동작', () => {
     expect(gripOf().getAttribute('aria-hidden')).toBe('true');
   });
 
+  test('누르는 동안에는 표시가 흐려지지 않는다 — 메인이 판정을 outside로 고정하기 때문', () => {
+    // 손잡이는 8단계로만 움직여 한 칸이 100픽셀을 넘는다. 조금 끌면 창이 그대로라,
+    // 여기서 표시까지 흐려지면 "눌리지 않았다"로 읽힌다.
+    Object.defineProperty(window, 'electronAPI', {
+      configurable: true,
+      value: { sidePin: { startRailDrag: vi.fn(), endRailDrag: vi.fn() } },
+    });
+    renderRail({ pointerRegion: 'outside' });
+    const grip = gripOf();
+
+    fireEvent.pointerDown(grip, { button: 0, isPrimary: true, pointerId: 1 });
+
+    expect(grip.innerHTML).toContain('text-sp-accent');
+    expect(grip.innerHTML).not.toContain('text-sp-muted');
+
+    fireEvent.pointerUp(grip, { pointerId: 1 });
+    expect(grip.innerHTML).toContain('text-sp-muted');
+  });
+
   test('끌기 자리에 커서가 있으면 표시가 또렷해진다', () => {
     renderRail({ pointerRegion: 'rail-grip' });
     expect(gripOf().innerHTML).toContain('text-sp-text');

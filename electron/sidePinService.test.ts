@@ -161,7 +161,7 @@ describe('켜고 끄기', () => {
     // 손잡이는 가장자리를 다 덮지 않고 세로 가운데에 짧게 놓인다
     expect(h.windows[0]?.bounds).toEqual({
       x: 1920 - SIDE_PIN_RAIL_WIDTH,
-      y: Math.round(((1040 - SIDE_PIN_RAIL_HEIGHT) * DEFAULT_SIDE_PIN_DEVICE_STATE.railSlot) / 7),
+      y: Math.round((1040 - SIDE_PIN_RAIL_HEIGHT) * DEFAULT_SIDE_PIN_DEVICE_STATE.railPosition),
       width: SIDE_PIN_RAIL_WIDTH,
       height: SIDE_PIN_RAIL_HEIGHT,
     });
@@ -292,7 +292,7 @@ describe('모니터 구성 변경', () => {
 
     expect(h.windows[0]?.bounds).toEqual({
       x: 1920 + 1600 - SIDE_PIN_RAIL_WIDTH,
-      y: Math.round(((900 - SIDE_PIN_RAIL_HEIGHT) * DEFAULT_SIDE_PIN_DEVICE_STATE.railSlot) / 7),
+      y: Math.round((900 - SIDE_PIN_RAIL_HEIGHT) * DEFAULT_SIDE_PIN_DEVICE_STATE.railPosition),
       width: SIDE_PIN_RAIL_WIDTH,
       height: SIDE_PIN_RAIL_HEIGHT,
     });
@@ -300,23 +300,85 @@ describe('모니터 구성 변경', () => {
 });
 
 describe('손잡이 높이 이동', () => {
-  test('드래그 위치를 8단계로 저장하고 현재 창을 즉시 옮긴다', async () => {
+  test('끄는 동안 창이 손을 그대로 따라간다', async () => {
+    h.service.enable();
+    await flush();
+    const startY = h.windows[0]?.bounds?.y ?? 0;
+
+    h.service.setRailDragTop(startY + 10);
+    await flush();
+
+    expect(h.windows[0]?.bounds?.y).toBe(startY + 10);
+    // 아직 손을 떼지 않았으므로 저장하지 않는다
+    expect(h.saved).toEqual([]);
+  });
+
+  test('끄는 동안에도 작업 영역 밖으로는 나가지 않는다', async () => {
     h.service.enable();
     await flush();
 
-    h.service.setRailTop(PRIMARY.workArea.height);
+    h.service.setRailDragTop(PRIMARY.workArea.height + 500);
+    await flush();
+    expect(h.windows[0]?.bounds?.y).toBe(PRIMARY.workArea.height - SIDE_PIN_RAIL_HEIGHT);
+
+    h.service.setRailDragTop(-500);
+    await flush();
+    expect(h.windows[0]?.bounds?.y).toBe(PRIMARY.workArea.y);
+  });
+
+  test('맨 아래까지 끌면 비율 1로 저장한다', async () => {
+    h.service.enable();
     await flush();
 
-    expect(h.saved.at(-1)?.railSlot).toBe(7);
+    h.service.setRailDragTop(PRIMARY.workArea.height);
+    h.service.commitRailDrag();
+    await flush();
+
+    expect(h.saved.at(-1)?.railPosition).toBe(1);
     expect(h.windows[0]?.bounds?.y).toBe(PRIMARY.workArea.height - SIDE_PIN_RAIL_HEIGHT);
   });
 
-  test('같은 단계 안에서 움직이면 다시 저장하거나 창을 옮기지 않는다', async () => {
+  test('★손을 떼도 창이 튀지 않는다 — 놓은 자리를 그대로 저장한다', async () => {
+    // 8단계로 맞추던 때는 놓는 순간 창이 최대 반 칸(62 DIP) 빠져나가, 끌기 자리가
+    // 손 밑에 없어 두 번째 끌기가 시작되지 않았다(2026-08-17 실기기).
+    h.service.enable();
+    await flush();
+    const releasedY = (h.windows[0]?.bounds?.y ?? 0) + 10;
+
+    h.service.setRailDragTop(releasedY);
+    await flush();
+    h.service.commitRailDrag();
+    await flush();
+
+    expect(h.windows[0]?.bounds?.y).toBe(releasedY);
+  });
+
+  test('저장한 비율이 다음에 켤 때 같은 자리를 준다', async () => {
+    h.service.enable();
+    await flush();
+    const releasedY = (h.windows[0]?.bounds?.y ?? 0) + 37;
+
+    h.service.setRailDragTop(releasedY);
+    h.service.commitRailDrag();
+    await flush();
+
+    const saved = h.saved.at(-1);
+    if (saved === undefined) throw new Error('놓았는데 저장이 일어나지 않았다');
+
+    // 앱을 다시 켠 셈 — 저장된 비율만으로 같은 자리를 재현해야 한다
+    const restarted = makeHarness({ device: saved });
+    restarted.service.enable();
+    await flush();
+
+    expect(restarted.windows[0]?.bounds?.y).toBe(releasedY);
+  });
+
+  test('끌지 않았는데 놓으면 아무 일도 하지 않는다', async () => {
     h.service.enable();
     await flush();
     const before = h.windows[0]?.bounds;
 
-    h.service.setRailTop(before?.y ?? 0);
+    h.service.commitRailDrag();
     await flush();
 
     expect(h.saved).toEqual([]);

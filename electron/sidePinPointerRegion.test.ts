@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vitest';
 import type { SidePinRuntimeState } from '../src/domain/entities/SidePinRuntimeState';
 import type { SidePinLayout } from './sidePinGeometry';
 import {
+  resolveSidePinHoverArm,
   resolveSidePinPointerRegion,
   shouldIgnoreSidePinRailMouse,
   shouldRecoverSidePinRail,
@@ -50,7 +51,6 @@ describe('resolveSidePinPointerRegion', () => {
     expect(resolveSidePinPointerRegion({ x: 1900, y: 460 }, LAYOUT, ACTIVE_STATE)).toBe('outside');
     expect(resolveSidePinPointerRegion({ x: 1900, y: 470 }, LAYOUT, ACTIVE_STATE)).toBe('outside');
     expect(resolveSidePinPointerRegion({ x: 1900, y: 610 }, LAYOUT, ACTIVE_STATE)).toBe('outside');
-    expect(resolveSidePinPointerRegion({ x: 1869, y: 500 }, LAYOUT, ACTIVE_STATE)).toBe('outside');
   });
 
   test('두 버튼 사이 가운데는 끌어 옮기는 자리다', () => {
@@ -66,8 +66,20 @@ describe('resolveSidePinPointerRegion', () => {
     );
   });
 
-  test('끌기 자리는 세로로만 좁다 — 버튼과 같은 가로 폭 밖은 통과시킨다', () => {
-    expect(resolveSidePinPointerRegion({ x: 1869, y: 540 }, LAYOUT, ACTIVE_STATE)).toBe('outside');
+  test('★버튼과 끌기 자리는 손잡이 폭을 통째로 받는다 — 화면 맨 끝이 죽으면 안 된다', () => {
+    // 예전에는 가운데 44 DIP만 받아 좌우 4 DIP씩이 클릭 통과였다. 그 오른쪽 4 DIP가
+    // 하필 화면의 맨 끝이라, 마우스를 끝까지 밀어 잡는 가장 자연스러운 동작이
+    // 안 먹었다(2026-08-17 실기기).
+    const rightEdge = LAYOUT.rail.x + LAYOUT.rail.width - 1; // 1919
+    expect(resolveSidePinPointerRegion({ x: rightEdge, y: 540 }, LAYOUT, ACTIVE_STATE)).toBe(
+      'rail-grip',
+    );
+    expect(resolveSidePinPointerRegion({ x: rightEdge, y: 500 }, LAYOUT, ACTIVE_STATE)).toBe(
+      'rail-widget',
+    );
+    expect(resolveSidePinPointerRegion({ x: LAYOUT.rail.x, y: 580 }, LAYOUT, ACTIVE_STATE)).toBe(
+      'rail-memo',
+    );
   });
 
   test('버튼과 끌기 자리의 슬롭이 겹치는 한 줄에서는 여는 쪽이 이긴다', () => {
@@ -111,10 +123,15 @@ describe('resolveSidePinPointerRegion', () => {
   });
 
   test('화면 배율 반올림으로 생기는 2 DIP 경계 오차만 흡수한다', () => {
-    expect(resolveSidePinPointerRegion({ x: 1918, y: 500 }, LAYOUT, ACTIVE_STATE)).toBe(
+    // 손잡이는 1868~1920. 슬롭 2를 더해 1866~1922까지만 받는다.
+    expect(resolveSidePinPointerRegion({ x: 1922, y: 500 }, LAYOUT, ACTIVE_STATE)).toBe(
       'rail-widget',
     );
-    expect(resolveSidePinPointerRegion({ x: 1919, y: 500 }, LAYOUT, ACTIVE_STATE)).toBe('outside');
+    expect(resolveSidePinPointerRegion({ x: 1923, y: 500 }, LAYOUT, ACTIVE_STATE)).toBe('outside');
+    expect(resolveSidePinPointerRegion({ x: 1866, y: 500 }, LAYOUT, ACTIVE_STATE)).toBe(
+      'rail-widget',
+    );
+    expect(resolveSidePinPointerRegion({ x: 1865, y: 500 }, LAYOUT, ACTIVE_STATE)).toBe('outside');
   });
 });
 
@@ -138,6 +155,39 @@ describe('shouldIgnoreSidePinRailMouse', () => {
     expect(
       shouldIgnoreSidePinRailMouse({ ...ACTIVE_STATE, surface: 'expanded' }, 'outside', false),
     ).toBe(false);
+  });
+});
+
+describe('resolveSidePinHoverArm', () => {
+  test('평소에는 판정을 그대로 넘긴다', () => {
+    expect(resolveSidePinHoverArm(true, 'rail-widget')).toEqual({
+      region: 'rail-widget',
+      armed: true,
+    });
+  });
+
+  test('놓은 직후 손잡이 위에 남은 커서로는 펼치지 않는다', () => {
+    // 놓는 순간 창이 가장 가까운 칸으로 맞춰지며 커서가 여는 버튼 위에 남는다.
+    // 그대로 두면 손잡이를 옮길 때마다 패널이 열린다.
+    expect(resolveSidePinHoverArm(false, 'rail-widget')).toEqual({
+      region: 'rail-grip',
+      armed: false,
+    });
+    expect(resolveSidePinHoverArm(false, 'rail-memo')).toEqual({
+      region: 'rail-grip',
+      armed: false,
+    });
+  });
+
+  test('커서가 손잡이를 완전히 벗어나면 다시 열 수 있게 무장한다', () => {
+    expect(resolveSidePinHoverArm(false, 'outside')).toEqual({ region: 'outside', armed: true });
+  });
+
+  test('패널이 열려 있는 상태의 판정은 가로채지 않는다', () => {
+    expect(resolveSidePinHoverArm(false, 'panel-widget')).toEqual({
+      region: 'panel-widget',
+      armed: true,
+    });
   });
 });
 

@@ -19,8 +19,9 @@ import {
   type SidePinWindowHostHandle,
 } from './sidePinWindow';
 import {
+  clampSidePinRailTop,
   resolveSidePinLayout,
-  resolveSidePinRailSlotFromTop,
+  resolveSidePinRailPositionFromTop,
   type SidePinDisplayInfo,
 } from './sidePinGeometry';
 import type { SidePinDeviceState, SidePinDeviceStateSaveResult } from './sidePinDeviceState';
@@ -51,8 +52,10 @@ export interface SidePinService {
   dispatch(event: SidePinEvent): void;
   /** 모니터 구성이 바뀌었다 */
   handleDisplayChange(): void;
-  /** 드래그한 손잡이 윗변을 가장 가까운 위치에 저장하고 창을 옮긴다. */
-  setRailTop(screenY: number): void;
+  /** 끄는 동안의 손잡이 윗변. 8단계로 반올림하지 않고 커서를 그대로 따라간다. */
+  setRailDragTop(screenY: number): void;
+  /** 손을 뗐다. 지금 자리에서 가장 가까운 8단계 위치로 맞추고 저장한다. */
+  commitRailDrag(): void;
   getState(): SidePinRuntimeState;
   getLayout(): SidePinLayout | null;
   dispose(): void;
@@ -61,6 +64,8 @@ export interface SidePinService {
 export function createSidePinService(deps: SidePinServiceDeps): SidePinService {
   let device = deps.loadDeviceState();
   let operationSeq = 0;
+  /** 끄는 동안에만 쓰는 임시 윗변. 손을 떼면 8단계로 맞추고 지운다. */
+  let railDragTop: number | null = null;
 
   /**
    * 지금 화면 배치를 계산한다.
@@ -76,7 +81,7 @@ export function createSidePinService(deps: SidePinServiceDeps): SidePinService {
       primaryDisplayId: snapshot.primaryDisplayId,
       preferredDisplayId: device.displayId,
       panelWidth: device.panelWidth,
-      railSlot: device.railSlot,
+      railPosition: device.railPosition,
     });
     if (layout === null) return null;
 
@@ -86,7 +91,43 @@ export function createSidePinService(deps: SidePinServiceDeps): SidePinService {
       deps.onDisplayFallback?.(layout.displayId);
     }
 
-    return { rail: layout.rail, panel: layout.panel };
+    if (railDragTop === null) return { rail: layout.rail, panel: layout.panel };
+
+    // 끄는 중에는 저장된 칸이 아니라 손이 있는 자리를 그린다. 포인터 판정도 이
+    // 배치를 쓰므로, 손잡이 구역이 창과 함께 따라 움직인다.
+    const display = snapshot.displays.find((candidate) => candidate.id === layout.displayId);
+    if (display === undefined) return { rail: layout.rail, panel: layout.panel };
+    return {
+      rail: {
+        ...layout.rail,
+        y: clampSidePinRailTop(display.workArea, railDragTop, layout.rail.height),
+      },
+      panel: layout.panel,
+    };
+  }
+
+  /**
+   * 손잡이가 놓인 모니터와 그 배치를 함께 구한다.
+   *
+   * 끌기 계산은 그 모니터의 작업 영역을 기준으로 해야 한다 — `getLayout`의 임시
+   * 자리를 다시 입력으로 쓰면 값이 자기 자신을 먹고 표류한다.
+   */
+  function resolveDisplayForRail(): {
+    display: SidePinDisplayInfo;
+    layout: SidePinLayout;
+  } | null {
+    const snapshot = deps.readDisplays();
+    const layout = resolveSidePinLayout({
+      displays: snapshot.displays,
+      primaryDisplayId: snapshot.primaryDisplayId,
+      preferredDisplayId: device.displayId,
+      panelWidth: device.panelWidth,
+      railPosition: device.railPosition,
+    });
+    if (layout === null) return null;
+    const display = snapshot.displays.find((candidate) => candidate.id === layout.displayId);
+    if (display === undefined) return null;
+    return { display, layout };
   }
 
   const host: SidePinWindowHostHandle = createSidePinWindowHost({
@@ -128,24 +169,41 @@ export function createSidePinService(deps: SidePinServiceDeps): SidePinService {
       controller.dispatch({ type: 'layout-changed' });
     },
 
-    setRailTop(screenY: number): void {
+    setRailDragTop(screenY: number): void {
       if (!Number.isFinite(screenY)) return;
-      const snapshot = deps.readDisplays();
-      const layout = resolveSidePinLayout({
-        displays: snapshot.displays,
-        primaryDisplayId: snapshot.primaryDisplayId,
-        preferredDisplayId: device.displayId,
-        panelWidth: device.panelWidth,
-        railSlot: device.railSlot,
-      });
-      if (layout === null) return;
-      const display = snapshot.displays.find((candidate) => candidate.id === layout.displayId);
-      if (display === undefined) return;
+      const resolved = resolveDisplayForRail();
+      if (resolved === null) return;
 
-      const railSlot = resolveSidePinRailSlotFromTop(display.workArea, screenY, layout.rail.height);
-      if (railSlot === device.railSlot) return;
-      device = { ...device, railSlot };
-      deps.saveDeviceState(device);
+      const next = clampSidePinRailTop(
+        resolved.display.workArea,
+        screenY,
+        resolved.layout.rail.height,
+      );
+      // 손이 멈춰 있으면 창도 가만히 둔다 — 50ms마다 같은 자리로 다시 옮기지 않는다.
+      if (railDragTop === next) return;
+      railDragTop = next;
+      controller.dispatch({ type: 'layout-changed' });
+    },
+
+    commitRailDrag(): void {
+      if (railDragTop === null) return;
+      const releasedTop = railDragTop;
+      railDragTop = null;
+
+      const resolved = resolveDisplayForRail();
+      if (resolved !== null) {
+        const railPosition = resolveSidePinRailPositionFromTop(
+          resolved.display.workArea,
+          releasedTop,
+          resolved.layout.rail.height,
+        );
+        if (railPosition !== device.railPosition) {
+          device = { ...device, railPosition };
+          deps.saveDeviceState(device);
+        }
+      }
+      // 저장한 비율은 놓은 자리를 그대로 되돌려주므로 창은 튀지 않는다. 그래도 한 번
+      // 배치를 맞춰, 임시 자리를 지운 뒤의 상태와 화면을 일치시킨다.
       controller.dispatch({ type: 'layout-changed' });
     },
 

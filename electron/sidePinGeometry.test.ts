@@ -6,10 +6,10 @@
 import { describe, expect, test } from 'vitest';
 import {
   anchorRightEdge,
+  clampSidePinRailTop,
   SIDE_PIN_RAIL_HEIGHT,
-  SIDE_PIN_RAIL_SLOT_COUNT,
   SIDE_PIN_RAIL_WIDTH,
-  resolveSidePinRailSlotFromTop,
+  resolveSidePinRailPositionFromTop,
   resolveSidePinLayout,
   type SidePinDisplayInfo,
   type SidePinRect,
@@ -33,7 +33,7 @@ function layoutOf(overrides: Partial<Parameters<typeof resolveSidePinLayout>[0]>
     primaryDisplayId: '1',
     preferredDisplayId: null,
     panelWidth: 400,
-    railSlot: 3,
+    railPosition: 3 / 7,
     ...overrides,
   });
 }
@@ -49,27 +49,53 @@ function isInside(rect: SidePinRect, area: SidePinRect): boolean {
 }
 
 describe('resolveSidePinLayout — 오른쪽 가장자리 배치', () => {
-  test('손잡이는 오른쪽 끝, 저장된 8단계 높이에 짧은 탭으로 놓인다', () => {
+  test('손잡이는 오른쪽 끝, 저장된 높이 비율에 짧은 탭으로 놓인다', () => {
     const layout = layoutOf();
 
     expect(layout?.rail).toEqual({
       x: 1920 - SIDE_PIN_RAIL_WIDTH,
-      y: Math.round(((1040 - SIDE_PIN_RAIL_HEIGHT) * 3) / (SIDE_PIN_RAIL_SLOT_COUNT - 1)),
+      y: Math.round((1040 - SIDE_PIN_RAIL_HEIGHT) * (3 / 7)),
       width: SIDE_PIN_RAIL_WIDTH,
       height: SIDE_PIN_RAIL_HEIGHT,
     });
   });
 
-  test('0번은 맨 위, 7번은 맨 아래에 놓인다', () => {
-    expect(layoutOf({ railSlot: 0 })?.rail.y).toBe(0);
-    expect(layoutOf({ railSlot: 7 })?.rail.y).toBe(1040 - SIDE_PIN_RAIL_HEIGHT);
+  test('0은 맨 위, 1은 맨 아래에 놓인다', () => {
+    expect(layoutOf({ railPosition: 0 })?.rail.y).toBe(0);
+    expect(layoutOf({ railPosition: 1 })?.rail.y).toBe(1040 - SIDE_PIN_RAIL_HEIGHT);
   });
 
-  test('드래그한 윗변을 가장 가까운 8단계 위치로 바꾼다', () => {
-    expect(resolveSidePinRailSlotFromTop(PRIMARY.workArea, 0)).toBe(0);
-    expect(resolveSidePinRailSlotFromTop(PRIMARY.workArea, 1040)).toBe(7);
-    expect(resolveSidePinRailSlotFromTop(PRIMARY.workArea, 500)).toBe(4);
-    expect(resolveSidePinRailSlotFromTop(PRIMARY.workArea, Number.NaN)).toBe(0);
+  test('범위 밖 비율이 들어와도 화면 안에 놓는다', () => {
+    expect(layoutOf({ railPosition: -5 })?.rail.y).toBe(0);
+    expect(layoutOf({ railPosition: 9 })?.rail.y).toBe(1040 - SIDE_PIN_RAIL_HEIGHT);
+    expect(layoutOf({ railPosition: Number.NaN })?.rail.y).toBe(0);
+  });
+
+  test('★놓은 윗변 → 비율 → 다시 윗변이 그대로 돌아온다', () => {
+    // 이 왕복이 어긋나면 손을 뗄 때 창이 커서 밑에서 빠져나가, 끌기 자리가 손
+    // 밑에 없어 두 번째 끌기가 시작되지 않는다(2026-08-17 실기기).
+    for (const top of [0, 1, 373, 500, 501, 871, 1040 - SIDE_PIN_RAIL_HEIGHT]) {
+      const position = resolveSidePinRailPositionFromTop(PRIMARY.workArea, top);
+      expect(layoutOf({ railPosition: position })?.rail.y).toBe(top);
+    }
+  });
+
+  test('놓은 윗변을 0~1 비율로 바꾼다', () => {
+    expect(resolveSidePinRailPositionFromTop(PRIMARY.workArea, 0)).toBe(0);
+    expect(resolveSidePinRailPositionFromTop(PRIMARY.workArea, 1040)).toBe(1);
+    expect(resolveSidePinRailPositionFromTop(PRIMARY.workArea, Number.NaN)).toBe(0);
+  });
+
+  test('끄는 동안에는 작업 영역 안에만 가둔다', () => {
+    expect(clampSidePinRailTop(PRIMARY.workArea, 500)).toBe(500);
+    expect(clampSidePinRailTop(PRIMARY.workArea, 503)).toBe(503);
+    expect(clampSidePinRailTop(PRIMARY.workArea, -200)).toBe(0);
+    expect(clampSidePinRailTop(PRIMARY.workArea, 5_000)).toBe(1040 - SIDE_PIN_RAIL_HEIGHT);
+    expect(clampSidePinRailTop(PRIMARY.workArea, Number.NaN)).toBe(PRIMARY.workArea.y);
+  });
+
+  test('음수 좌표 모니터에서도 그 화면 안에 가둔다', () => {
+    expect(clampSidePinRailTop(LEFT_SECONDARY.workArea, -10_000)).toBe(LEFT_SECONDARY.workArea.y);
   });
 
   test('손잡이가 화면 가장자리를 위아래로 막지 않는다', () => {

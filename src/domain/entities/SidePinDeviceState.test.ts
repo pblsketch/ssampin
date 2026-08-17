@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import {
   DEFAULT_SIDE_PIN_DEVICE_STATE,
-  SIDE_PIN_RAIL_SLOT_DEFAULT,
+  SIDE_PIN_RAIL_POSITION_DEFAULT,
   SIDE_PIN_DEVICE_STATE_SCHEMA_VERSION,
   normalizeSidePinDeviceState,
   normalizeSidePinDisplayId,
-  normalizeSidePinRailSlot,
+  normalizeSidePinRailPosition,
 } from './SidePinDeviceState';
 import {
   SIDE_PIN_WIDTH_DEFAULT,
@@ -76,7 +76,7 @@ describe('normalizeSidePinDeviceState', () => {
     expect(normalizeSidePinDeviceState(undefined)).toEqual(DEFAULT_SIDE_PIN_DEVICE_STATE);
     expect(DEFAULT_SIDE_PIN_DEVICE_STATE.displayId).toBeNull();
     expect(DEFAULT_SIDE_PIN_DEVICE_STATE.panelWidth).toBe(SIDE_PIN_WIDTH_DEFAULT);
-    expect(DEFAULT_SIDE_PIN_DEVICE_STATE.railSlot).toBe(SIDE_PIN_RAIL_SLOT_DEFAULT);
+    expect(DEFAULT_SIDE_PIN_DEVICE_STATE.railPosition).toBe(SIDE_PIN_RAIL_POSITION_DEFAULT);
   });
 
   it('정상 저장값을 보존한다', () => {
@@ -85,13 +85,13 @@ describe('normalizeSidePinDeviceState', () => {
         schemaVersion: 1,
         displayId: '12345',
         panelWidth: 420,
-        railSlot: 6,
+        railPosition: 0.6,
       }),
     ).toEqual({
       schemaVersion: SIDE_PIN_DEVICE_STATE_SCHEMA_VERSION,
       displayId: '12345',
       panelWidth: 420,
-      railSlot: 6,
+      railPosition: 0.6,
     });
   });
 
@@ -102,15 +102,25 @@ describe('normalizeSidePinDeviceState', () => {
       schemaVersion: SIDE_PIN_DEVICE_STATE_SCHEMA_VERSION,
       displayId: null,
       panelWidth: SIDE_PIN_WIDTH_DEFAULT,
-      railSlot: SIDE_PIN_RAIL_SLOT_DEFAULT,
+      railPosition: SIDE_PIN_RAIL_POSITION_DEFAULT,
     });
   });
 
-  it('손잡이 위치는 0~7 정수로 반올림하고 누락 시 기본 위치를 쓴다', () => {
-    expect(normalizeSidePinRailSlot(undefined)).toBe(SIDE_PIN_RAIL_SLOT_DEFAULT);
-    expect(normalizeSidePinRailSlot(-10)).toBe(0);
-    expect(normalizeSidePinRailSlot(4.6)).toBe(5);
-    expect(normalizeSidePinRailSlot(99)).toBe(7);
+  it('손잡이 위치는 0~1 범위로 clamp하고 누락 시 기본 위치를 쓴다', () => {
+    expect(normalizeSidePinRailPosition(undefined)).toBe(SIDE_PIN_RAIL_POSITION_DEFAULT);
+    expect(normalizeSidePinRailPosition(-10)).toBe(0);
+    expect(normalizeSidePinRailPosition(0.46)).toBe(0.46);
+    expect(normalizeSidePinRailPosition(99)).toBe(1);
+  });
+
+  it('8단계 칸 번호로 저장된 예전 개발본을 비율로 옮긴다', () => {
+    // 칸 모델은 놓을 때 창이 커서 밑에서 튀어 두 번째 끌기를 막았다(2026-08-17).
+    // 이미 만들어진 파일이 남아 있어, 같은 자리를 가리키도록 옮겨 준다.
+    expect(normalizeSidePinDeviceState({ railSlot: 0 }).railPosition).toBe(0);
+    expect(normalizeSidePinDeviceState({ railSlot: 7 }).railPosition).toBe(1);
+    expect(normalizeSidePinDeviceState({ railSlot: 3 }).railPosition).toBe(3 / 7);
+    // 새 값이 있으면 그쪽이 정본이다
+    expect(normalizeSidePinDeviceState({ railSlot: 0, railPosition: 0.8 }).railPosition).toBe(0.8);
   });
 
   it('범위 밖 너비는 잘라내고 나머지 값은 살린다', () => {

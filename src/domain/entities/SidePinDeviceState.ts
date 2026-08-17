@@ -11,9 +11,10 @@ import { clampSidePinWidth, SIDE_PIN_WIDTH_DEFAULT } from '../valueObjects/SideP
 
 /** 기기 전용 상태 파일 스키마 버전 */
 export const SIDE_PIN_DEVICE_STATE_SCHEMA_VERSION = 1;
-export const SIDE_PIN_RAIL_SLOT_MIN = 0;
-export const SIDE_PIN_RAIL_SLOT_MAX = 7;
-export const SIDE_PIN_RAIL_SLOT_DEFAULT = 3;
+/** 손잡이 세로 위치의 기본값. 예전 8단계의 3번 칸과 같은 자리다. */
+export const SIDE_PIN_RAIL_POSITION_DEFAULT = 3 / 7;
+/** v2.4.0 이전 개발본이 쓰던 8단계 칸 번호의 최댓값. 비율로 옮길 때만 쓴다. */
+const LEGACY_RAIL_SLOT_MAX = 7;
 
 export interface SidePinDeviceState {
   readonly schemaVersion: number;
@@ -27,20 +28,45 @@ export interface SidePinDeviceState {
   readonly displayId: string | null;
   /** 펼친 패널 너비 (DIP) */
   readonly panelWidth: number;
-  /** 손잡이 세로 위치. 0은 맨 위, 7은 맨 아래다. */
-  readonly railSlot: number;
+  /**
+   * 손잡이 세로 위치. 0은 맨 위, 1은 맨 아래다.
+   *
+   * 픽셀이 아니라 **쓸 수 있는 높이 대비 비율**로 둔다. 해상도나 모니터가 바뀌어도
+   * 그대로 유효하고, 화면 밖으로 나갈 수 없다.
+   *
+   * 처음에는 8단계 칸 번호였는데, 한 칸이 124 DIP라 손을 뗄 때 창이 커서 밑에서
+   * 최대 반 칸 빠져나갔다. 그러면 끌기 자리가 손 밑에 없어 **두 번째 끌기가
+   * 시작되지 않는다**(2026-08-17 실기기). 튀지 않도록 놓은 자리를 그대로 쓴다.
+   */
+  readonly railPosition: number;
 }
 
 export const DEFAULT_SIDE_PIN_DEVICE_STATE: SidePinDeviceState = {
   schemaVersion: SIDE_PIN_DEVICE_STATE_SCHEMA_VERSION,
   displayId: null,
   panelWidth: SIDE_PIN_WIDTH_DEFAULT,
-  railSlot: SIDE_PIN_RAIL_SLOT_DEFAULT,
+  railPosition: SIDE_PIN_RAIL_POSITION_DEFAULT,
 };
 
-export function normalizeSidePinRailSlot(value: unknown): number {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return SIDE_PIN_RAIL_SLOT_DEFAULT;
-  return Math.min(SIDE_PIN_RAIL_SLOT_MAX, Math.max(SIDE_PIN_RAIL_SLOT_MIN, Math.round(value)));
+export function normalizeSidePinRailPosition(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return SIDE_PIN_RAIL_POSITION_DEFAULT;
+  return Math.min(1, Math.max(0, value));
+}
+
+/**
+ * 저장본에서 손잡이 위치를 읽는다.
+ *
+ * 8단계 칸 번호로 저장된 개발본이 남아 있어 비율로 옮겨 준다. 출시 후에는 지워도 된다.
+ */
+function readRailPosition(raw: {
+  readonly railPosition?: unknown;
+  readonly railSlot?: unknown;
+}): number {
+  if (raw.railPosition !== undefined) return normalizeSidePinRailPosition(raw.railPosition);
+  if (typeof raw.railSlot === 'number' && Number.isFinite(raw.railSlot)) {
+    return normalizeSidePinRailPosition(raw.railSlot / LEGACY_RAIL_SLOT_MAX);
+  }
+  return SIDE_PIN_RAIL_POSITION_DEFAULT;
 }
 
 /**
@@ -74,6 +100,8 @@ export function normalizeSidePinDeviceState(value: unknown): SidePinDeviceState 
     schemaVersion: SIDE_PIN_DEVICE_STATE_SCHEMA_VERSION,
     displayId: normalizeSidePinDisplayId(raw.displayId),
     panelWidth: clampSidePinWidth(raw.panelWidth),
-    railSlot: normalizeSidePinRailSlot(raw.railSlot),
+    railPosition: readRailPosition(
+      raw as { readonly railPosition?: unknown; readonly railSlot?: unknown },
+    ),
   };
 }

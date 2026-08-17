@@ -33,7 +33,7 @@ const SAMPLE: SidePinDeviceState = {
   schemaVersion: 1,
   displayId: '12345',
   panelWidth: 420,
-  railSlot: 6,
+  railPosition: 0.6,
 };
 
 function primaryFile(): string {
@@ -76,11 +76,11 @@ describe('저장과 읽기', () => {
       schemaVersion: 1,
       displayId: '1',
       panelWidth: 9999,
-      railSlot: 99,
+      railPosition: 99,
     });
 
     expect(loadSidePinDeviceState(dir).panelWidth).toBe(SIDE_PIN_WIDTH_MAX);
-    expect(loadSidePinDeviceState(dir).railSlot).toBe(7);
+    expect(loadSidePinDeviceState(dir).railPosition).toBe(1);
   });
 });
 
@@ -123,7 +123,7 @@ describe('AC-21 — 누락·파손·구버전 복구', () => {
       schemaVersion: 1,
       displayId: '777',
       panelWidth: 360,
-      railSlot: DEFAULT_SIDE_PIN_DEVICE_STATE.railSlot,
+      railPosition: DEFAULT_SIDE_PIN_DEVICE_STATE.railPosition,
     });
   });
 
