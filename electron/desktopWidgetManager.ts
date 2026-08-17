@@ -18,16 +18,82 @@
 
 import { screen } from 'electron';
 import type { BrowserWindow } from 'electron';
+import {
+  clampWidgetBoundsToWorkArea,
+  findBestWorkAreaForBounds,
+  DEFAULT_WIDGET_SCREEN_CLAMP_OPTIONS,
+} from './desktopWidgetBounds';
 import type {
   DesktopWidgetModeStatus,
   DipRect,
   DragState,
   PhysicalRect,
+  PhysicalWorkArea,
   ResizeRegion,
   ResizeState,
 } from './desktopWidgetTypes';
 import { dipToPhysical, isInsideAnyRect } from './desktopWidgetTypes';
 import { diagLog, diagWarn } from './nativeDesktopDiag';
+
+/** 각 모니터의 작업 영역(DIP)과 배율 — computePhysicalWorkAreas 입력용 최소 형태. */
+export interface WorkAreaSource {
+  readonly workArea: DipRect;
+  readonly scaleFactor: number;
+}
+
+/**
+ * 모든 모니터의 작업 영역(workArea)을 DIP → physical pixel로 변환한다.
+ *
+ * ★ 반드시 `screen.dipToScreenRect`를 써야 한다 (2026-05-06 멀티 모니터 결정적 fix와 동일 이유).
+ *   `workArea.x * scaleFactor` 단순 곱셈은 per-monitor DPI 환경에서 틀린다:
+ *   보조 모니터의 physical origin은 앞선 모니터들의 physical 폭 누적값이지, 자기 DIP 좌표에
+ *   자기 배율을 곱한 값이 아니다.
+ *   예) primary 1920×1080 @100% + 우측 보조 2560×1440 @150%(DIP 1707×960 @ x=1920)
+ *       → 보조의 physical x는 1920. 단순 곱셈은 1920×1.5=2880을 내놓아 960px 어긋나고,
+ *         그 결과 drag clamp가 실제 바탕화면 우측 끝(4480) 너머까지 위젯을 허용해
+ *         "화면 밖 이탈 방지"라는 목적 자체가 무너진다.
+ *
+ * @param displays screen.getAllDisplays() 결과 (workArea는 DIP)
+ * @param convert  DIP rect → physical rect 변환기. 실제 호출부는 `screen.dipToScreenRect(null, r)`.
+ *                 window에 null을 넘기면 Electron이 "그 rect에 가장 가까운 디스플레이" 기준으로
+ *                 변환하므로, 각 모니터의 workArea를 각자 올바른 배율로 환산할 수 있다.
+ *                 변환 실패 시 해당 모니터만 단순 곱셈으로 폴백한다(단일 모니터에서는 정확).
+ */
+export function computePhysicalWorkAreas(
+  displays: readonly WorkAreaSource[],
+  convert: (rect: DipRect) => DipRect,
+): PhysicalWorkArea[] {
+  return displays.map((d) => {
+    const scaleFactor = d.scaleFactor || 1;
+
+    // 최소 가시량 기준값은 DIP로 정의돼 있다(헤더 40 · 가로 100). 드래그 핫패스는 physical
+    // pixel로 계산하므로 이 모니터의 배율로 환산해서 넣는다.
+    // ★physical 40을 그대로 쓰면 배율이 높을수록 보장 폭이 줄어든다(150%에서 약 27 DIP =
+    //   헤더의 2/3). 헤더 높이 자체가 CSS(DIP)로 정의되므로 기준도 DIP여야 모드 전환 경로
+    //   (main.ts, DIP 기준)와 동일하게 동작한다.
+    const minima = {
+      minVisibleHeaderHeight: Math.round(
+        DEFAULT_WIDGET_SCREEN_CLAMP_OPTIONS.minVisibleHeaderHeight * scaleFactor,
+      ),
+      minVisibleWidth: Math.round(
+        DEFAULT_WIDGET_SCREEN_CLAMP_OPTIONS.minVisibleWidth * scaleFactor,
+      ),
+    };
+
+    try {
+      const physical = convert(d.workArea);
+      return {
+        x: Math.round(physical.x),
+        y: Math.round(physical.y),
+        width: Math.round(physical.width),
+        height: Math.round(physical.height),
+        ...minima,
+      };
+    } catch {
+      return { ...dipToPhysical(d.workArea, scaleFactor), ...minima };
+    }
+  });
+}
 
 export interface DesktopWidgetManager {
   /**
@@ -921,8 +987,30 @@ function createWin32Manager(win32: typeof import('./platform/win32Desktop')): De
             if (msgType === 0x0200) {
               const dx = p.x - dragState.startMouse.x;
               const dy = p.y - dragState.startMouse.y;
-              const newX = dragState.startWidget.x + dx;
-              const newY = dragState.startWidget.y + dy;
+              const rawX = dragState.startWidget.x + dx;
+              const rawY = dragState.startWidget.y + dy;
+
+              let newX = rawX;
+              let newY = rawY;
+              if (dragState.physicalWorkAreas && dragState.physicalWorkAreas.length > 0) {
+                const rawRect = {
+                  x: rawX,
+                  y: rawY,
+                  width: dragState.startBounds.width,
+                  height: dragState.startBounds.height,
+                };
+                const bestArea = findBestWorkAreaForBounds(rawRect, dragState.physicalWorkAreas);
+                if (bestArea) {
+                  // 최소 가시량은 그 모니터의 배율로 환산된 physical px를 쓴다 (DIP 기준 통일).
+                  const clamped = clampWidgetBoundsToWorkArea(rawRect, bestArea, {
+                    minVisibleHeaderHeight: bestArea.minVisibleHeaderHeight,
+                    minVisibleWidth: bestArea.minVisibleWidth,
+                  });
+                  newX = clamped.x;
+                  newY = clamped.y;
+                }
+              }
+
               dragState.moveCount = (dragState.moveCount ?? 0) + 1;
               try {
                 const moveOk = win32.moveWidget(
@@ -1206,15 +1294,26 @@ function createWin32Manager(win32: typeof import('./platform/win32Desktop')): De
           ) {
             // 아이콘 영역 체크 — 헤더는 보통 위젯 상단이라 아이콘과 안 겹치지만 안전 차단.
             if (!passThroughCheck(p) && cachedPhysicalBounds) {
+              // drag 시작(LBUTTONDOWN) 1회만 계산 — MOUSEMOVE 핫패스에는 부하 없음.
+              let physicalWorkAreas: PhysicalWorkArea[] = [];
+              try {
+                physicalWorkAreas = computePhysicalWorkAreas(screen.getAllDisplays(), (r) =>
+                  screen.dipToScreenRect(null, r),
+                );
+              } catch {
+                physicalWorkAreas = [];
+              }
+
               dragState = {
                 active: true,
                 startMouse: { x: p.x, y: p.y },
                 startWidget: { x: cachedPhysicalBounds.x, y: cachedPhysicalBounds.y },
                 startBounds: cachedPhysicalBounds,
+                physicalWorkAreas,
               };
               diagLog(
                 'native-desktop',
-                `[7-C] drag start mouse=(${p.x},${p.y}) widget=(${cachedPhysicalBounds.x},${cachedPhysicalBounds.y}) size=(${cachedPhysicalBounds.width}x${cachedPhysicalBounds.height})`,
+                `[7-C] drag start mouse=(${p.x},${p.y}) widget=(${cachedPhysicalBounds.x},${cachedPhysicalBounds.y}) size=(${cachedPhysicalBounds.width}x${cachedPhysicalBounds.height}) workAreas=${physicalWorkAreas.length}`,
               );
               // ★ Explorer rubber band 시작 차단: BUTTONDOWN을 OS에 흘리지 않음.
               return true; // drag 우선 — widget으로 LBUTTONDOWN 전달 안 함

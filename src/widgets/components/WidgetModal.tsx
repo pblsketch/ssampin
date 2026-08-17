@@ -271,6 +271,9 @@ export function WidgetModal({
     };
   }, [isOpen, isHead, isDesktopWidget]);
 
+  const saveAndCloseRef = useRef(saveAndClose);
+  saveAndCloseRef.current = saveAndClose;
+
   // native-desktop 모드(WS_CHILD) 폴백: 위젯이 keyboard focus 를 못 받아 renderer
   // keydown 이 안 잡히는 경우 main 의 globalShortcut('Escape')로 ESC 신호 수신.
   // 모달 닫히면 즉시 release 해서 다른 앱의 ESC 정상 복구.
@@ -280,13 +283,13 @@ export function WidgetModal({
     if (!api?.requestModalEscape || !api.onModalEscape || !api.releaseModalEscape) return;
     void api.requestModalEscape();
     const unsub = api.onModalEscape(() => {
-      saveAndClose();
+      saveAndCloseRef.current();
     });
     return () => {
       void api.releaseModalEscape?.();
       unsub?.();
     };
-  }, [isOpen, isHead, isDesktopWidget, saveAndClose]);
+  }, [isOpen, isHead, isDesktopWidget]);
 
   if (!isOpen || !isHead) return null;
 

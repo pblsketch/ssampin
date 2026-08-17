@@ -83,6 +83,12 @@ import {
 } from './archiveManager';
 import { isCorruptShortDataFile } from './dataFileRules';
 import { createDesktopWidgetManager, type DesktopWidgetManager } from './desktopWidgetManager';
+import {
+  clampWidgetBoundsToWorkArea,
+  findBestWorkAreaForBounds,
+  fitWidgetSizeToWorkArea,
+  isWidgetVisibleInWorkArea,
+} from './desktopWidgetBounds';
 import { sendCtrlV } from './platform/win32SendKeys';
 import type { DesktopModeFallbackEvent } from './desktopWidgetTypes';
 import { initNativeDesktopDiag, diagLog, diagLogVerbose, diagWarn } from './nativeDesktopDiag';
@@ -1215,6 +1221,66 @@ function getDefaultWidgetBounds(width: number): { x: number; y: number } {
   };
 }
 
+/**
+ * 위젯 윈도우가 연결된 모니터의 가시 작업 영역(workArea)을 벗어나지 않도록 검증하고 자동 보정한다.
+ *
+ * 위젯이 화면 밖으로 밀려나거나(예: 사용자 실수 드래그, 모니터 해상도 변경, 연결 해제),
+ * 상단 헤더가 화면 아래로 잠겨 조작할 수 없는 상태가 된 경우 가장 가까운 디스플레이의
+ * 작업 영역 안쪽으로 안전하게 되돌린다.
+ */
+function ensureWidgetBoundsWithinDisplays(targetWindow?: BrowserWindow | null): void {
+  const win = targetWindow ?? widgetWindow;
+  if (!win || win.isDestroyed()) return;
+
+  try {
+    const currentBounds = win.getBounds();
+    const displays = screen.getAllDisplays();
+    if (displays.length === 0) return;
+
+    const workAreas = displays.map((d) => d.workArea);
+    const bestWorkArea = findBestWorkAreaForBounds(currentBounds, workAreas);
+    if (!bestWorkArea) return;
+
+    // ① 크기 검증 — 가시성과 별개로 항상 수행한다.
+    //    화면보다 큰 위젯은 우/하단 크기 조절 손잡이가 모두 화면 밖에 놓이는데,
+    //    clamp가 y >= workArea.y를 강제하므로 손잡이를 화면 안으로 끌어올 수 없다.
+    //    = 사용자가 크기를 되돌릴 방법이 없는 상태로 고착된다 (해상도 하향 시 실제 도달 가능).
+    const [minWidth, minHeight] = win.getMinimumSize();
+    const sized = fitWidgetSizeToWorkArea(currentBounds, bestWorkArea, {
+      width: minWidth,
+      height: minHeight,
+    });
+    const needsResize =
+      sized.width !== currentBounds.width || sized.height !== currentBounds.height;
+
+    // ② 위치 검증 — 헤더를 잡을 수 있는 상태인지.
+    const isVisibleInAny = workAreas.some((wa) =>
+      isWidgetVisibleInWorkArea(currentBounds, wa, { minVisibleHeaderHeight: 40 }),
+    );
+
+    if (isVisibleInAny && !needsResize) return;
+
+    const clamped = clampWidgetBoundsToWorkArea(sized, bestWorkArea, {
+      minVisibleHeaderHeight: 40,
+    });
+
+    diagLog(
+      'widget',
+      `[screen-clamp] widget out of bounds (visible=${isVisibleInAny} oversized=${needsResize}) ` +
+        `(${currentBounds.x},${currentBounds.y},${currentBounds.width}x${currentBounds.height}) ` +
+        `-> corrected to (${clamped.x},${clamped.y},${clamped.width}x${clamped.height})`,
+    );
+
+    win.setBounds(clamped);
+    scheduleWidgetBoundsSave();
+  } catch (e) {
+    diagWarn(
+      'widget',
+      `[screen-clamp] failed to ensure widget visibility: ${e instanceof Error ? e.message : String(e)}`,
+    );
+  }
+}
+
 // ─── 아이콘 모드 (v2.0.2~) ─────────────────────────────────────────────
 // frameless transparent floating 아이콘. PoC #1, #3 검증 완료.
 // 패턴: stickerPickerWindow + fadeInQuickAddWindow 복제
@@ -1789,6 +1855,7 @@ function executeWindowTransition(target: WindowMode): Promise<void> {
               });
             });
           } else {
+            ensureWidgetBoundsWithinDisplays(widgetWindow);
             widgetWindow.show();
             if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
               hideOrDestroyMainWindow(opts.memorySaverMode);
@@ -2189,48 +2256,7 @@ function stopWinDRecovery(): void {
 }
 
 function ensureWidgetOnScreen(): void {
-  if (!widgetWindow || widgetWindow.isDestroyed()) return;
-  const bounds = widgetWindow.getBounds();
-
-  // 위젯이 속한 디스플레이 찾기 (화면 밖이면 primary로 폴백)
-  let display: Electron.Display;
-  try {
-    display = screen.getDisplayMatching(bounds);
-  } catch {
-    display = screen.getPrimaryDisplay();
-  }
-  const workArea = display.workArea;
-
-  let { x, y, width, height } = bounds;
-
-  // 크기가 화면보다 크면 축소
-  if (width > workArea.width) width = workArea.width;
-  if (height > workArea.height) height = workArea.height;
-
-  // 완전히 화면 밖이면 기본 위치로 리셋
-  const isCompletelyOutside =
-    x + width < workArea.x ||
-    y + height < workArea.y ||
-    x > workArea.x + workArea.width ||
-    y > workArea.y + workArea.height;
-
-  if (isCompletelyOutside) {
-    const defaultPos = getDefaultWidgetBounds(width);
-    x = defaultPos.x;
-    y = defaultPos.y;
-    console.log('[widget] 화면 밖 감지 — 기본 위치로 리셋');
-  } else {
-    // 부분적으로 밖이면 안쪽으로 밀기
-    if (x < workArea.x) x = workArea.x;
-    if (y < workArea.y) y = workArea.y;
-    if (x + width > workArea.x + workArea.width) x = workArea.x + workArea.width - width;
-    if (y + height > workArea.y + workArea.height) y = workArea.y + workArea.height - height;
-  }
-
-  if (x !== bounds.x || y !== bounds.y || width !== bounds.width || height !== bounds.height) {
-    widgetWindow.setBounds({ x, y, width, height });
-    saveWidgetBounds({ x, y, width, height });
-  }
+  ensureWidgetBoundsWithinDisplays(widgetWindow);
 }
 
 // ─── 절전/화면보호기 복귀 시 위젯 복원 ───
@@ -2363,29 +2389,42 @@ function createWidgetWindow(
   const savedBounds = readWidgetBounds();
   const defaultPos = getDefaultWidgetBounds(options.width);
 
-  // 저장된 bounds가 현재 화면 안에 있는지 검증
-  let validBounds = savedBounds;
+  // 저장된 bounds가 현재 화면 가시 영역(헤더 40px 이상) 안에 있는지 검증 및 보정
+  let initialBounds = {
+    x: savedBounds?.x ?? defaultPos.x,
+    y: savedBounds?.y ?? defaultPos.y,
+    width: savedBounds?.width ?? options.width,
+    height: savedBounds?.height ?? options.height,
+  };
+
   if (savedBounds) {
     const displays = screen.getAllDisplays();
-    const isOnAnyDisplay = displays.some((d) => {
-      const wa = d.workArea;
-      return (
-        savedBounds.x < wa.x + wa.width &&
-        savedBounds.x + (savedBounds.width ?? options.width) > wa.x &&
-        savedBounds.y < wa.y + wa.height &&
-        savedBounds.y + (savedBounds.height ?? options.height) > wa.y
-      );
-    });
-    if (!isOnAnyDisplay) {
-      console.log('[widget] 저장된 위치가 모든 디스플레이 밖 — 기본 위치 사용');
-      validBounds = null;
+    const workAreas = displays.map((d) => d.workArea);
+    const isVisible = workAreas.some((wa) =>
+      isWidgetVisibleInWorkArea(initialBounds, wa, { minVisibleHeaderHeight: 40 }),
+    );
+    if (!isVisible) {
+      const bestArea = findBestWorkAreaForBounds(initialBounds, workAreas);
+      if (bestArea) {
+        initialBounds = clampWidgetBoundsToWorkArea(initialBounds, bestArea, {
+          minVisibleHeaderHeight: 40,
+        });
+        console.log(
+          '[widget] 저장된 위치가 화면 밖/헤더 잠김 감지 — 안전 가시 위치로 보정:',
+          initialBounds,
+        );
+      } else {
+        initialBounds = {
+          x: defaultPos.x,
+          y: defaultPos.y,
+          width: options.width,
+          height: options.height,
+        };
+      }
     }
   }
 
-  const x = validBounds?.x ?? defaultPos.x;
-  const y = validBounds?.y ?? defaultPos.y;
-  const width = validBounds?.width ?? options.width;
-  const height = validBounds?.height ?? options.height;
+  const { x, y, width, height } = initialBounds;
 
   widgetWindow = new BrowserWindow({
     x,

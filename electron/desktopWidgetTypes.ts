@@ -50,6 +50,21 @@ export interface PhysicalRect {
 }
 
 /**
+ * 드래그 경계 제한용 모니터 작업 영역 (physical pixel) + 그 모니터에 적용할 최소 가시량.
+ *
+ * ★최소 가시량을 rect에 같이 실어 두는 이유: 기준값(헤더 40 · 가로 100)은 **DIP**로 정의되는데
+ *   드래그 핫패스는 physical pixel로만 계산한다. 모니터마다 배율이 다르면 환산값도 달라지므로
+ *   "어느 모니터의 작업 영역인가"와 "그 모니터에서 몇 physical px인가"는 반드시 함께 다녀야 한다.
+ *   (분리해 두면 핫패스에서 배열 인덱스를 맞추다 어긋나기 쉽다.)
+ */
+export interface PhysicalWorkArea extends PhysicalRect {
+  /** 이 모니터에서 헤더가 최소로 남아야 하는 높이 — DIP 기준값을 배율로 환산한 physical px */
+  readonly minVisibleHeaderHeight: number;
+  /** 이 모니터에서 최소로 걸쳐 있어야 하는 가로 폭 — DIP 기준값을 배율로 환산한 physical px */
+  readonly minVisibleWidth: number;
+}
+
+/**
  * Phase 7-C — 헤더 드래그 진행 상태.
  *
  * WS_CHILD가 된 widget은 nc drag가 부모(WorkerW)로 흘러 작동 안 함. WH_MOUSE_LL hook
@@ -75,6 +90,8 @@ export interface DragState {
   readonly startBounds: PhysicalRect;
   /** drag 진행 중 MOUSEMOVE 진입 카운트 (진단용 sampling). hot path mutate. */
   moveCount?: number;
+  /** 드래그 시 위젯 이탈 방지를 위한 디스플레이 작업 영역들 (physical screen rect) */
+  readonly physicalWorkAreas?: readonly PhysicalWorkArea[];
 }
 
 /**
@@ -140,12 +157,7 @@ export function isInsideAnyRect(
 ): boolean {
   for (let i = 0; i < rects.length; i++) {
     const r = rects[i]!;
-    if (
-      p.x >= r.x
-      && p.x < r.x + r.width
-      && p.y >= r.y
-      && p.y < r.y + r.height
-    ) {
+    if (p.x >= r.x && p.x < r.x + r.width && p.y >= r.y && p.y < r.y + r.height) {
       return true;
     }
   }
