@@ -8,6 +8,80 @@
  * exceljs 사용 패턴은 ExcelExporter.ts(exportRosterToExcel/parseRosterFromExcel)와 동일.
  */
 import ExcelJS from 'exceljs';
+import JSZip from 'jszip';
+
+/** 업로드 엑셀 읽기 실패 종류 — UI 메시지 분기용. */
+export type ExcelReadErrorKind = 'not-xlsx' | 'unreadable';
+
+/**
+ * 업로드 엑셀을 exceljs 로 읽지 못했을 때의 분류된 오류.
+ * - `not-xlsx`: zip(=xlsx) 구조 자체가 아님(구형 .xls·CSV·HTML·잘린 파일 등).
+ * - `unreadable`: zip 은 맞지만 살균 후에도 exceljs 가 읽지 못함(원인 불명).
+ */
+export class ExcelReadError extends Error {
+  readonly kind: ExcelReadErrorKind;
+  constructor(kind: ExcelReadErrorKind, cause?: unknown) {
+    super(kind === 'not-xlsx' ? 'NOT_XLSX' : 'UNREADABLE');
+    this.name = 'ExcelReadError';
+    this.kind = kind;
+    if (cause !== undefined) (this as { cause?: unknown }).cause = cause;
+  }
+}
+
+// XML 1.0 이 허용하지 않는 제어문자(탭 \x09·줄바꿈 \x0A·CR \x0D 는 보존).
+// HWP·PDF·웹에서 복사한 텍스트를 셀에 붙여넣으면 흔히 섞여 들어오며, 셀 값으로는
+// 보이지 않지만 저장 시 일부 앱은 원시 문자로 기록 → exceljs(saxes)가 "disallowed character"로 거부한다.
+// eslint-disable-next-line no-control-regex
+const ILLEGAL_XML_CHARS = /[\x00-\x08\x0B\x0C\x0E-\x1F]/g;
+
+/**
+ * 업로드 버퍼를 워크북으로 적재 — 1차 직접 시도, 실패 시 XML 내 불법 제어문자를
+ * 제거하고 재시도한다. zip 구조 자체가 깨졌으면 살균이 불가능하므로 분류된 오류를 던진다.
+ *
+ * 설계 근거: 정상 파일은 1차에서 그대로 통과(추가 비용 0). 실패 경로에서만 JSZip 으로
+ * 풀어 .xml 파트의 불법 문자를 지운 뒤 재적재하므로, '붙여넣기 때 섞인 제어문자' 때문에
+ * 업로드가 통째로 실패하던 문제를 사용자 개입 없이 복구한다.
+ */
+async function loadEvidenceWorkbook(buffer: ArrayBuffer): Promise<ExcelJS.Workbook> {
+  try {
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(buffer);
+    return workbook;
+  } catch (firstErr) {
+    // zip 으로조차 풀리지 않으면 xlsx 가 아님(구형 .xls·CSV·HTML·손상 파일).
+    let zip: JSZip;
+    try {
+      zip = await JSZip.loadAsync(buffer);
+    } catch {
+      throw new ExcelReadError('not-xlsx', firstErr);
+    }
+    // 모든 xml 파트에서 불법 제어문자 제거.
+    let sanitizedAny = false;
+    for (const name of Object.keys(zip.files)) {
+      if (!name.endsWith('.xml')) continue;
+      const entry = zip.file(name);
+      if (!entry) continue;
+      const xml = await entry.async('string');
+      const cleaned = xml.replace(ILLEGAL_XML_CHARS, '');
+      if (cleaned !== xml) {
+        zip.file(name, cleaned);
+        sanitizedAny = true;
+      }
+    }
+    if (!sanitizedAny) {
+      // 불법 문자 문제가 아니었음 — 살균으로 고칠 수 없는 원인.
+      throw new ExcelReadError('unreadable', firstErr);
+    }
+    const repaired = await zip.generateAsync({ type: 'arraybuffer' });
+    try {
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(repaired);
+      return workbook;
+    } catch (secondErr) {
+      throw new ExcelReadError('unreadable', secondErr);
+    }
+  }
+}
 
 /** 양식에 미리 채울 학생(식별키 = studentRef). */
 export interface EvidenceTemplateStudent {
@@ -133,8 +207,7 @@ function normalizeDate(raw: string): string | undefined {
 }
 
 export async function parseEvidenceFromExcel(buffer: ArrayBuffer): Promise<ParsedEvidenceRow[]> {
-  const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(buffer);
+  const workbook = await loadEvidenceWorkbook(buffer);
   const ws = workbook.worksheets[0];
   const result: ParsedEvidenceRow[] = [];
   if (!ws) return result;

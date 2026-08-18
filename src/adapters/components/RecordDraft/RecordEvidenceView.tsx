@@ -31,6 +31,7 @@ import {
 import {
   exportEvidenceTemplateToExcel,
   parseEvidenceFromExcel,
+  ExcelReadError,
 } from '@infrastructure/export/EvidenceExcel';
 
 /** 작성주체(담임/교과) — 노출 영역 집합과 끌어오기 출처를 결정. */
@@ -522,8 +523,16 @@ export function RecordEvidenceView({
         `${n}건을 미분류로 등록했습니다${errors.length > 0 ? ` · 오류 ${errors.length}건` : ''}. ‘미분류’ 탭에서 유형을 지정하세요.`,
       );
       setActiveTab(UNCLASSIFIED);
-    } catch {
-      setExcelMsg('엑셀을 읽는 중 오류가 발생했습니다(.xlsx 파일인지 확인하세요).');
+    } catch (err) {
+      // 실제 예외를 콘솔에 표면화(차후 신고 시 즉시 진단 — 기존엔 통째로 삼켜 원인 추적 불가했음).
+      console.error('[RecordEvidence] 엑셀 업로드 실패:', err);
+      if (err instanceof ExcelReadError && err.kind === 'not-xlsx') {
+        setExcelMsg(
+          '유효한 .xlsx 파일이 아닙니다. Excel에서 ‘다른 이름으로 저장 → Excel 통합 문서(.xlsx)’로 다시 저장한 뒤 업로드하세요(구형 .xls·CSV·웹에서 받은 파일은 안 됩니다).',
+        );
+      } else {
+        setExcelMsg('엑셀을 읽는 중 오류가 발생했습니다(.xlsx 파일인지 확인하세요).');
+      }
       setExcelErrors([]);
     }
     e.target.value = '';
