@@ -62,7 +62,7 @@ export function RecordsSubTab({
   };
 
   return (
-    <div className="px-5 py-4 space-y-4 max-h-[50vh] overflow-y-auto">
+    <div className="px-5 py-4 space-y-4 max-h-[50dvh] overflow-y-auto">
       {/* 최근 기록 (토글) */}
       <div>
         <div className="flex items-center justify-between mb-2">

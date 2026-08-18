@@ -42,7 +42,7 @@ export function QuickAddFab({ actions }: QuickAddFabProps) {
         aria-haspopup="dialog"
         aria-hidden={hide || undefined}
         tabIndex={hide ? -1 : 0}
-        className={`fixed right-4 bottom-[calc(var(--tab-bar-height)+1rem)] z-40 flex h-14 w-14 items-center justify-center rounded-full bg-sp-accent text-sp-accent-fg shadow-lg transition-all duration-200 active:scale-95 ${
+        className={`fab-anchor fixed bottom-[calc(var(--tab-bar-height)+1rem)] z-40 flex h-14 w-14 items-center justify-center rounded-full bg-sp-accent text-sp-accent-fg shadow-lg transition-all duration-200 active:scale-95 ${
           hide ? 'pointer-events-none opacity-0 scale-90' : 'opacity-100 scale-100'
         }`}
       >
@@ -51,11 +51,11 @@ export function QuickAddFab({ actions }: QuickAddFabProps) {
 
       {open && (
         <div
-          className="fixed inset-0 z-50 flex items-end bg-black/40 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-sm"
           onClick={() => setOpen(false)}
         >
           <div
-            className="w-full glass-card rounded-t-2xl pb-[env(safe-area-inset-bottom)]"
+            className="w-full max-w-md glass-card rounded-t-2xl pb-[env(safe-area-inset-bottom)]"
             onClick={(e) => e.stopPropagation()}
             role="dialog"
             aria-label="빠른 추가"

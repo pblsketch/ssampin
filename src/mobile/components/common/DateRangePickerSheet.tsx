@@ -52,7 +52,7 @@ export function DateRangePickerSheet({
 
       {/* 시트 */}
       <div
-        className="relative w-full max-h-[85vh] glass-card rounded-t-2xl pb-safe flex flex-col"
+        className="relative w-full max-h-[85dvh] glass-card rounded-t-2xl pb-safe flex flex-col"
         role="dialog"
         aria-modal="true"
         aria-label="기간 선택"

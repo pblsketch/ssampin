@@ -82,7 +82,11 @@ export default defineConfig(({ mode, command }) => {
           theme_color: '#0a0e17',
           background_color: '#0a0e17',
           display: 'standalone',
-          orientation: 'portrait',
+          // 태블릿 가로 사용 요청(2026-08-18). 'portrait' 는 홈화면에 설치한
+          // 안드로이드 PWA 에서 실제로 회전을 막는다(갤럭시탭 신고). 브라우저 탭과
+          // iOS 는 원래 이 값을 무시해 왔으므로, 세로 고정은 안드로이드 설치본에만
+          // 걸려 있던 셈이다. 'any' 로 기기 회전을 그대로 따른다.
+          orientation: 'any',
           start_url: '/',
           scope: '/',
           id: '/',

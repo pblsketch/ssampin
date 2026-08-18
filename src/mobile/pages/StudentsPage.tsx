@@ -535,7 +535,7 @@ export function StudentsPage() {
               {format(selectedDate, 'M월 d일 (EEE)', { locale: ko })} 기준
             </p>
           </div>
-          <ul className="max-h-[60vh] overflow-y-auto">
+          <ul className="max-h-[60dvh] overflow-y-auto">
             {[{ id: 'homeroom', name: homeroomName, isHomeroom: true }, ...teachingClasses].map(
               (c) => {
                 const isSelected = selectedClass === c.id;

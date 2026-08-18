@@ -44,11 +44,7 @@ export function MobileHeader({
 
   return (
     <header
-      className={
-        isApp
-          ? 'glass-header shrink-0 flex items-center justify-between px-4'
-          : 'glass-header shrink-0 flex flex-col'
-      }
+      className={isApp ? 'glass-header shrink-0 flex' : 'glass-header shrink-0 flex flex-col'}
       style={
         isApp
           ? { height: 'var(--header-height)', paddingTop: 'env(safe-area-inset-top)' }
@@ -56,14 +52,17 @@ export function MobileHeader({
       }
     >
       {isApp ? (
-        <>
+        // 유리 배경(header)은 화면 끝까지 두고, 제목·계정 버튼만 본문과 같은 폭으로
+        // 모은다. 그러지 않으면 태블릿 가로에서 제목은 왼쪽 끝, 계정은 오른쪽 끝으로
+        // 1200px 넘게 벌어져 한 줄로 안 읽힌다. 폰에서는 화면이 더 좁아 변화가 없다.
+        <div className="mobile-measure flex h-full items-center justify-between px-4">
           {typeof title === 'string' ? (
             <h1 className="text-lg font-bold text-sp-text">{title}</h1>
           ) : (
             title
           )}
           {actions}
-        </>
+        </div>
       ) : (
         <>
           <div className="flex items-center gap-3 px-4 py-3">

@@ -458,7 +458,7 @@ export function App() {
   };
 
   return (
-    <div className="flex flex-col h-dvh mobile-bg">
+    <div className="flex flex-col h-dvh mobile-bg mobile-safe-x">
       {/* 인앱 브라우저 경고 배너 */}
       <InAppBrowserBanner />
 
@@ -510,7 +510,7 @@ export function App() {
       {/* Content
           글로벌 좌우 스와이프로 탭 전환하던 동작은 제거됨 (사용자 요청, 2026-05-14).
           이유: 의도치 않은 탭 전환이 잦아 UX 안티패턴. 탭 전환은 하단 탭바 버튼만으로. */}
-      <main className="flex-1 overflow-hidden">
+      <main className="mobile-measure flex-1 overflow-hidden">
         {activeTab === 'home' && (
           <TodayHub
             onNavigateAttendance={openAttendance}
@@ -560,7 +560,10 @@ export function App() {
       {/* Tab Bar */}
       <nav
         aria-label="하단 내비게이션"
-        className="tab-bar flex items-center justify-around glass-tabbar shrink-0"
+        /* justify-center + 버튼 최대 폭(아래) — 넓은 화면(태블릿 가로)에서 탭 5개가
+           양 끝으로 흩어져 엄지에서 멀어지지 않게 본문 칸 폭만큼만 차지하고 가운데 모인다.
+           폰에서는 버튼이 flex-1 로 화면을 꽉 채워 지금과 똑같다. */
+        className="tab-bar flex items-center justify-center glass-tabbar shrink-0"
       >
         {tabs.map((tab) => {
           const active = activeTab === tab.key;
@@ -574,7 +577,7 @@ export function App() {
               onClick={() => setActiveTab(tab.key)}
               aria-label={`${tab.label} 탭`}
               aria-current={active ? 'page' : undefined}
-              className="flex flex-1 items-center justify-center py-1 transition-transform active:scale-95"
+              className="flex flex-1 max-w-[calc(var(--mobile-measure)/5)] items-center justify-center py-1 transition-transform active:scale-95"
             >
               <span
                 className={`flex flex-col items-center gap-0.5 rounded-xl px-3 py-1 transition-colors ${

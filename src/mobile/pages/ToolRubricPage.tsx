@@ -160,7 +160,7 @@ function GradingSheet({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md max-h-[85vh] bg-sp-card border-t border-sp-border rounded-t-2xl pb-[env(safe-area-inset-bottom)] flex flex-col"
+        className="w-full max-w-md max-h-[85dvh] bg-sp-card border-t border-sp-border rounded-t-2xl pb-[env(safe-area-inset-bottom)] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* 드래그 핸들 */}

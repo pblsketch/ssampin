@@ -84,7 +84,10 @@ export function InstallGuide() {
   if (anyBottomSheetOpen) return null;
 
   return (
-    <div className="fixed bottom-[calc(var(--tab-bar-height)+5.5rem)] left-4 right-4 z-50 glass-card p-4 animate-slide-up">
+    // 넓은 화면(태블릿 가로)에서 이 띠만 화면 끝까지 늘어나지 않도록 본문과 같은 폭으로 묶는다.
+    // left/right 를 그대로 두고 mx-auto 로 가운데 정렬해야 slide-up 애니메이션(translateY)과
+    // transform 이 충돌하지 않는다. 폰에서는 화면이 더 좁아 지금과 똑같이 보인다.
+    <div className="fixed bottom-[calc(var(--tab-bar-height)+5.5rem)] left-4 right-4 mx-auto max-w-[var(--mobile-measure)] z-50 glass-card p-4 animate-slide-up">
       <div className="flex items-start gap-3">
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-black/5 text-sp-accent dark:bg-white/10">
           <span className="material-symbols-outlined text-icon-lg">add_to_home_screen</span>

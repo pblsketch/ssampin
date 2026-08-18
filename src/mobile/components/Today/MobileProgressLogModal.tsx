@@ -252,7 +252,7 @@ export function MobileProgressLogModal({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="bg-sp-card border border-sp-border rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-md max-h-[90vh] flex flex-col">
+      <div className="bg-sp-card border border-sp-border rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-md max-h-[90dvh] flex flex-col">
         {/* 헤더 */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-sp-border">
           <div className="flex items-center gap-2">

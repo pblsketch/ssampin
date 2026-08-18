@@ -663,7 +663,7 @@ export function AttendanceCheckPage({
           onClick={() => setPeriodMenuOpen(false)}
         >
           <div
-            className="w-full max-w-xs glass-card rounded-xl p-2 max-h-[60vh] overflow-y-auto"
+            className="w-full max-w-xs glass-card rounded-xl p-2 max-h-[60dvh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
             role="listbox"
             aria-label="교시 선택"
@@ -909,7 +909,7 @@ export function AttendanceCheckPage({
           onClick={() => setMultiDateSheetOpen(false)}
         >
           <div
-            className="bg-sp-bg rounded-t-2xl max-h-[90vh] flex flex-col"
+            className="bg-sp-bg rounded-t-2xl max-h-[90dvh] flex flex-col"
             onClick={(e) => e.stopPropagation()}
             role="dialog"
             aria-modal="true"
@@ -955,7 +955,7 @@ export function AttendanceCheckPage({
           onClick={() => setTextSheetOpen(false)}
         >
           <div
-            className="bg-sp-bg rounded-t-2xl max-h-[90vh] flex flex-col"
+            className="bg-sp-bg rounded-t-2xl max-h-[90dvh] flex flex-col"
             onClick={(e) => e.stopPropagation()}
             role="dialog"
             aria-modal="true"

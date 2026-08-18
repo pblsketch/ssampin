@@ -240,3 +240,39 @@ input[type='datetime-local'] {
     display: none;
   }
 }
+
+/* ── 가로(태블릿) 본문 폭 제한 ──────────────────────────────────────────
+ *
+ * 모바일 화면은 폰 세로(320~428px) 한 줄 배치로만 만들어져 있다. 그대로 태블릿
+ * 가로(1280px 안팎)에 올리면 카드 한 장이 화면 폭을 다 먹고 글줄이 끝까지 늘어나
+ * 읽기 힘들어진다. 그래서 "본문이 놓이는 칸"의 최대 폭만 잠그고 가운데로 모은다.
+ *
+ * 폰에서는 화면이 이 값보다 좁아 아무 영향이 없다 — 즉 이 규칙은 넓은 화면에서만
+ * 깨어난다. 배경(유리 헤더·탭바)은 이 칸 밖까지 그대로 채워 화면이 끊겨 보이지 않게 한다.
+ *
+ * 값 조정은 여기 한 곳만 바꾸면 헤더·본문·탭바가 함께 따라온다.
+ */
+:root {
+  --mobile-measure: 720px;
+}
+
+.mobile-measure {
+  width: 100%;
+  max-width: var(--mobile-measure);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* 빠른 추가(+) 버튼은 화면 오른쪽 끝이 아니라 위 본문 칸의 오른쪽 끝에 붙는다.
+ * 그러지 않으면 넓은 화면에서 버튼만 저 멀리 빈 여백에 혼자 떠 있게 된다.
+ * 화면이 좁으면 max() 가 기본값(1rem)을 골라 지금과 똑같이 동작한다. */
+.fab-anchor {
+  right: max(1rem, calc((100vw - var(--mobile-measure)) / 2 + 1rem));
+}
+
+/* 가로로 눕혔을 때 좌우 안전영역(둥근 모서리·전면 카메라 영역) 회피.
+ * 세로에서는 이 값이 0 이라 지금 화면과 아무 차이가 없다. */
+.mobile-safe-x {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
