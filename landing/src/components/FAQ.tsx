@@ -1,10 +1,11 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import FadeIn from './FadeIn';
 
 const FEEDBACK_FORM_URL = 'https://forms.gle/o1X4zLYocUpFKCzy7';
 
-const faqs = [
+const faqs: { question: string; answer: ReactNode }[] = [
   {
     question: '무료인가요?',
     answer: '네, 완전 무료예요. 광고도 없어요.',
@@ -41,8 +42,22 @@ const faqs = [
   },
   {
     question: '학운위 심의를 받아야 하나요?',
-    answer:
-      '심의 대상인지는 학교가 판단하실 사항이라 저희가 단정해 드리지 않습니다. 판단에 필요한 사실만 정확히 말씀드리면, 쌤핀은 학생 계정을 만들지 않고 학생에게서 직접 정보를 받지도 않지만, 선생님이 과제 수합·전자 서명 같은 협업 기능을 쓰시면 학생 이름이 클라우드에 저장됩니다. 그래서 심의가 필요하다고 보시는 학교를 위해 심의자료와 개인정보 관련 서식을 미리 준비해 두었으니 pblsketch@gmail.com으로 요청해 주세요. 자세한 처리 내역은 개인정보처리방침에 공개하고 있습니다.',
+    answer: (
+      <>
+        심의 대상인지는 학교가 판단하실 사항이라 저희가 단정해 드리지 않습니다. 판단에 필요한 사실만
+        정확히 말씀드리면, 쌤핀은 학생 계정을 만들지 않고 학생에게서 직접 정보를 받지도 않지만,
+        선생님이 과제 수합·전자 서명 같은 협업 기능을 쓰시면 학생 이름이 클라우드에 저장됩니다.
+        쌤핀은 에듀집 학습지원 소프트웨어 필수기준 점검결과가 등록되어 있고, 심의가 필요하다고
+        보시는 학교를 위해 체크리스트와 도입 절차를{' '}
+        <a
+          href="/school-adoption"
+          className="font-medium text-sp-accent transition-colors hover:underline"
+        >
+          학교 도입 안내
+        </a>
+        페이지에 준비해 두었습니다. 자세한 처리 내역은 개인정보처리방침에 공개하고 있습니다.
+      </>
+    ),
   },
 ];
 

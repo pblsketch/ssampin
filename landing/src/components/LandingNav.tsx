@@ -6,6 +6,7 @@ const navItems = [
   { label: '기능', href: '#features' },
   { label: '모바일', href: '#mobile' },
   { label: 'AI 연결', href: '/ai-bridge' },
+  { label: '학교 도입', href: '/school-adoption' },
   { label: '다운로드', href: '#download' },
   { label: '사용자 가이드', href: GUIDE_URL, emphasis: true },
 ] as const;

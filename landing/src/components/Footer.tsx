@@ -74,6 +74,10 @@ export default function Footer() {
               AI 연결
             </a>
             <span className="text-sp-muted/40">·</span>
+            <a href="/school-adoption" className="transition-colors hover:text-sp-text">
+              학교 도입
+            </a>
+            <span className="text-sp-muted/40">·</span>
             <a href="/privacy" className="transition-colors hover:text-sp-text">
               개인정보처리방침
             </a>
