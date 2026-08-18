@@ -1281,6 +1281,118 @@ function ensureWidgetBoundsWithinDisplays(targetWindow?: BrowserWindow | null): 
   }
 }
 
+/**
+ * 계측(2026-08-18 듀얼 모니터 신고) — 일반 위젯 모드의 창 크기·위치 변화를 기록한다.
+ *
+ * 일반 위젯 모드의 드래그는 `-webkit-app-region: drag`로 Chromium이 직접 처리하므로
+ * 바탕화면 모드의 `[7-C] drag` 로그가 남지 않는다. 확인하려는 것은 하나다:
+ *
+ *   배율이 다른 모니터를 가로지를 때 Chromium이 "DIP 크기 유지"를 위해 창을 다시 재는가?
+ *
+ * 다시 잰다면 드래그 도중 창이 1.75배로 갑자기 커지고(오너 환경 기준), 창은 좌상단을
+ * 기준으로 커지므로 우측을 잡고 있던 커서가 창 왼쪽에 놓이게 된다 —
+ * "우측 상단을 잡았는데 좌측 상단을 잡은 것처럼"이라는 신고와 일치한다.
+ *
+ * move는 드래그 중 초당 수십 회 발생하므로 150ms로 throttle하고,
+ * resize는 원래 드물어야 하는 이벤트라 매번 남긴다(드래그 중 resize = 결정적 증거).
+ */
+let lastWidgetGeometryLogAt = 0;
+function logWidgetGeometry(reason: string, throttleMs = 0): void {
+  if (!widgetWindow || widgetWindow.isDestroyed()) return;
+  const now = Date.now();
+  if (throttleMs > 0 && now - lastWidgetGeometryLogAt < throttleMs) return;
+  lastWidgetGeometryLogAt = now;
+  try {
+    const b = widgetWindow.getBounds();
+    const display = screen.getDisplayMatching(b);
+    const physical = screen.dipToScreenRect(widgetWindow, b);
+    diagLog(
+      'widget',
+      `[dpi-probe] ${reason} dip=(${b.x},${b.y},${b.width}x${b.height}) ` +
+        `physical=(${physical.x},${physical.y},${physical.width}x${physical.height}) ` +
+        `display=${display.id} scale=${display.scaleFactor} ` +
+        `desktopMode=${currentDesktopMode}`,
+    );
+  } catch {
+    // 진단 실패는 무시 — 창 이동 경로를 막지 않는다.
+  }
+}
+
+/**
+ * 배율이 다른 모니터로 옮긴 뒤, 위젯이 그 화면에 안 들어가면 화면에 맞게 줄인다.
+ *
+ * ── 왜 필요한가 (2026-08-18 실측으로 확정) ──
+ * 일반 위젯 모드에서 위젯을 배율이 다른 모니터로 끌면, 경계를 넘는 순간 두 단계가 일어난다.
+ *   1) Windows가 WM_DPICHANGED로 창을 새 배율 기준으로 다시 잰다 (실제 크기 유지 — 올바름)
+ *   2) 15ms 뒤 Electron이 창의 DIP 크기를 원래대로 되돌린다 → **실제 크기가 배율비만큼 폭발**
+ * 실측: 보조(100%)를 꽉 채우던 1920×1032 위젯이 주(175%)로 넘어가며 3362×1808이 되어
+ * 주모니터(2880×1800)보다 커졌다. 그래서 "아무리 끌어도 주모니터에 절반만 뜬다"가 된다.
+ * (위치가 덜 간 것이 아니라 크기가 화면을 넘은 것이다.)
+ *
+ * ── 정책 ──
+ * "새 모니터에 안 들어갈 때만" 줄인다. 배율 높은 모니터에서 실제 크기가 커지는 것 자체는
+ * 정상 동작이므로 들어가는 크기면 손대지 않는다.
+ *
+ * ── 타이밍 ──
+ * 드래그 **중**에 보정하면 드래그와 보정이 서로 창을 밀어낸다. `move`가 멎고 나서
+ * (= 사용자가 놓은 뒤) 실행되도록 디바운스한다. Electron의 `moved` 이벤트는 플랫폼별
+ * 지원이 갈려 의존하지 않는다.
+ */
+let widgetRefitTimer: ReturnType<typeof setTimeout> | null = null;
+let lastWidgetMoveCursor: { x: number; y: number } | null = null;
+
+function scheduleWidgetDisplayRefit(): void {
+  if (widgetRefitTimer) {
+    clearTimeout(widgetRefitTimer);
+  }
+  widgetRefitTimer = setTimeout(() => {
+    widgetRefitTimer = null;
+    refitWidgetToDroppedDisplay();
+  }, 400);
+}
+
+function refitWidgetToDroppedDisplay(): void {
+  const win = widgetWindow;
+  if (!win || win.isDestroyed()) return;
+  // 바탕화면 모드는 대상이 아니다. WorkerW의 자식 창이라 배율 변경 통지를 받지 않고,
+  // 실측에서도 크기가 전혀 변하지 않았다(sizeErr=0). 자식 창 bounds를 건드리면
+  // attach 상태가 흔들릴 수 있으므로 제외한다.
+  if (desktopWidgetManager.isEnabled()) return;
+
+  try {
+    const bounds = win.getBounds();
+    // ★대상 모니터는 "겹침 면적"으로 고르면 안 된다.
+    //   위젯이 배율비만큼 커진 탓에 원래 있던 모니터와의 겹침이 더 커서, 사용자가 끌어온
+    //   방향과 반대로 되돌아가 버린다(실측: 커진 위젯의 57%가 출발 모니터에 남았다).
+    //   사용자가 끌고 간 방향 = 드래그 중 커서가 있던 모니터.
+    const reference = lastWidgetMoveCursor ?? screen.getCursorScreenPoint();
+    const target = screen.getDisplayNearestPoint(reference);
+
+    const [minWidth, minHeight] = win.getMinimumSize();
+    const sized = fitWidgetSizeToWorkArea(bounds, target.workArea, {
+      width: minWidth,
+      height: minHeight,
+    });
+    if (sized.width === bounds.width && sized.height === bounds.height) return;
+
+    const clamped = clampWidgetBoundsToWorkArea(sized, target.workArea, {
+      minVisibleHeaderHeight: 40,
+    });
+    diagLog(
+      'widget',
+      `[dpi-refit] 위젯이 이동한 모니터보다 큼 — 화면에 맞게 축소 ` +
+        `before=(${bounds.x},${bounds.y},${bounds.width}x${bounds.height}) ` +
+        `after=(${clamped.x},${clamped.y},${clamped.width}x${clamped.height}) ` +
+        `display=${target.id} scale=${target.scaleFactor} ` +
+        `workArea=(${target.workArea.width}x${target.workArea.height})`,
+    );
+    win.setBounds(clamped);
+    scheduleWidgetBoundsSave();
+  } catch (e) {
+    diagWarn('widget', `[dpi-refit] 실패: ${e instanceof Error ? e.message : String(e)}`);
+  }
+}
+
 // ─── 아이콘 모드 (v2.0.2~) ─────────────────────────────────────────────
 // frameless transparent floating 아이콘. PoC #1, #3 검증 완료.
 // 패턴: stickerPickerWindow + fadeInQuickAddWindow 복제
@@ -2540,12 +2652,22 @@ function createWidgetWindow(
 
   widgetWindow.on('move', () => {
     scheduleWidgetBoundsSave();
+    // 드래그 중 커서가 있던 모니터 = 사용자가 위젯을 옮기려는 목적지. refit 대상 판정에 쓴다.
+    try {
+      lastWidgetMoveCursor = screen.getCursorScreenPoint();
+    } catch {
+      lastWidgetMoveCursor = null;
+    }
+    scheduleWidgetDisplayRefit();
+    logWidgetGeometry('move', 500);
     if (desktopWidgetManager.isEnabled() && widgetWindow && !widgetWindow.isDestroyed()) {
       desktopWidgetManager.updateWidgetBounds(widgetWindow);
     }
   });
   widgetWindow.on('resize', () => {
     scheduleWidgetBoundsSave();
+    // throttle 없음 — 드래그 도중의 resize가 바로 결정적 증거다.
+    logWidgetGeometry('RESIZE', 0);
     if (desktopWidgetManager.isEnabled() && widgetWindow && !widgetWindow.isDestroyed()) {
       desktopWidgetManager.updateWidgetBounds(widgetWindow);
     }
@@ -2581,6 +2703,12 @@ function createWidgetWindow(
       `[diag] widget closed — isQuitting=${isQuitting}, isSystemSuspending=${isSystemSuspending}`,
     );
     stopWinDRecovery();
+    // 창이 사라진 뒤 예약된 refit이 떠 있지 않도록 정리 (다음 위젯 인스턴스에 튀는 것 방지)
+    if (widgetRefitTimer) {
+      clearTimeout(widgetRefitTimer);
+      widgetRefitTimer = null;
+    }
+    lastWidgetMoveCursor = null;
     // 바탕화면 아이콘 아래 모드: 위젯 창이 사라졌으므로 native attach 정리
     desktopWidgetManager.disable();
     widgetWindow = null;

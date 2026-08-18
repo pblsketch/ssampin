@@ -34,6 +34,7 @@ import type {
 } from './desktopWidgetTypes';
 import { dipToPhysical, isInsideAnyRect } from './desktopWidgetTypes';
 import { diagLog, diagWarn } from './nativeDesktopDiag';
+import { resolveDragEndBounds } from './desktopWidgetDpiRestore';
 
 /** 각 모니터의 작업 영역(DIP)과 배율 — computePhysicalWorkAreas 입력용 최소 형태. */
 export interface WorkAreaSource {
@@ -72,6 +73,7 @@ export function computePhysicalWorkAreas(
     //   헤더의 2/3). 헤더 높이 자체가 CSS(DIP)로 정의되므로 기준도 DIP여야 모드 전환 경로
     //   (main.ts, DIP 기준)와 동일하게 동작한다.
     const minima = {
+      scaleFactor,
       minVisibleHeaderHeight: Math.round(
         DEFAULT_WIDGET_SCREEN_CLAMP_OPTIONS.minVisibleHeaderHeight * scaleFactor,
       ),
@@ -854,6 +856,45 @@ function createWin32Manager(win32: typeof import('./platform/win32Desktop')): De
     }
   }
 
+  /**
+   * 진단 계측 — "우리가 요청한 위치·크기"와 "OS가 실제로 적용한 값"을 한 줄로 대조한다.
+   *
+   * 배율이 서로 다른 모니터를 가로지르는 드래그에서만 드러나는 두 어긋남을 잡기 위한 것:
+   *   ① 위치 어긋남 — `SetWindowPos`에 넘긴 좌표 vs `GetWindowRect`가 돌려주는 화면 좌표.
+   *      바탕화면 모드의 위젯은 WorkerW의 자식 창(WS_CHILD)이라 좌표계가 부모 클라이언트
+   *      기준이다. 가상 화면 원점이 (0,0)이 아니면(보조 모니터가 좌/상단 배치) 어긋난다.
+   *   ② 크기 어긋남 — drag 중 `startBounds`(출발 모니터 배율 기준 physical)를 매 프레임
+   *      강제하는데, 경계를 넘는 순간 Windows가 WM_DPICHANGED로 창을 다시 잰다. 둘이
+   *      서로 밀어내면 위젯이 경계에 붙어 더 나아가지 못한다.
+   *
+   * 사람이 로그만 보고 판정할 수 있도록 오차를 숫자로 적는다. 진단 실패는 무시한다
+   * (drag 경로를 절대 막지 않는다).
+   */
+  function describeApplied(requested: PhysicalRect): string {
+    let actual: PhysicalRect | null = null;
+    try {
+      actual = win32.getWindowRect(cachedWidgetHwnd);
+    } catch {
+      actual = null;
+    }
+    if (!actual) return 'actual=unavailable';
+
+    let scaleInfo = '';
+    try {
+      const dip = screen.screenToDipPoint({ x: actual.x, y: actual.y });
+      const display = screen.getDisplayNearestPoint(dip);
+      scaleInfo = ` display=${display.id} scale=${display.scaleFactor}`;
+    } catch {
+      scaleInfo = '';
+    }
+
+    return (
+      `actual=(${actual.x},${actual.y},${actual.width}x${actual.height}) ` +
+      `posErr=(${actual.x - requested.x},${actual.y - requested.y}) ` +
+      `sizeErr=(${actual.width - requested.width},${actual.height - requested.height})${scaleInfo}`
+    );
+  }
+
   return {
     async enable(window: BrowserWindow): Promise<DesktopWidgetModeStatus> {
       diagLog('native-desktop', 'win32 manager enable() invoked');
@@ -1020,11 +1061,20 @@ function createWin32Manager(win32: typeof import('./platform/win32Desktop')): De
                   dragState.startBounds.width,
                   dragState.startBounds.height,
                 );
+                dragState.lastRequested = { x: newX, y: newY };
                 // 진단: 매 30번째 MOUSEMOVE마다 진행 상황 dump (전체 누적이 아닌 sampling).
+                // ★실제 적용값(describeApplied) 대조는 sampling 시에만 — GetWindowRect는 FFI
+                //   호출이라 초당 수백 회의 MOUSEMOVE 전부에 붙이면 drag가 끊긴다.
                 if (dragState.moveCount % 30 === 1) {
+                  const applied = describeApplied({
+                    x: newX,
+                    y: newY,
+                    width: dragState.startBounds.width,
+                    height: dragState.startBounds.height,
+                  });
                   diagLog(
                     'native-desktop',
-                    `[7-C] drag move #${dragState.moveCount} mouse=(${p.x},${p.y}) delta=(${dx},${dy}) newPos=(${newX},${newY}) moveOk=${moveOk} hwnd=0x${cachedWidgetHwnd.toString(16)}`,
+                    `[7-C] drag move #${dragState.moveCount} mouse=(${p.x},${p.y}) delta=(${dx},${dy}) newPos=(${newX},${newY}) moveOk=${moveOk} ${applied} hwnd=0x${cachedWidgetHwnd.toString(16)}`,
                   );
                 }
               } catch (e) {
@@ -1043,11 +1093,101 @@ function createWin32Manager(win32: typeof import('./platform/win32Desktop')): De
             if (msgType === 0x0202) {
               const finalDx = p.x - dragState.startMouse.x;
               const finalDy = p.y - dragState.startMouse.y;
+              // ── 계측 핵심 ──
+              // "커서가 움직인 양(totalDelta)" vs "위젯이 실제로 움직인 양(actualTravel)".
+              // 같은 배율 안에서는 ratio가 1.000이어야 한다. 배율이 다른 모니터를 가로지를 때
+              // 1이 아니면 "위젯이 커서를 못 따라간다"는 신고가 수치로 확정된다.
+              const startX = dragState.startWidget.x;
+              const startY = dragState.startWidget.y;
+              const startW = dragState.startBounds.width;
+              const startH = dragState.startBounds.height;
+              const requested = dragState.lastRequested ?? dragState.startWidget;
+              const applied = describeApplied({
+                x: requested.x,
+                y: requested.y,
+                width: startW,
+                height: startH,
+              });
+              let travelInfo = 'actualTravel=unavailable';
+              try {
+                const rect = win32.getWindowRect(cachedWidgetHwnd);
+                if (rect) {
+                  const travelX = rect.x - startX;
+                  const travelY = rect.y - startY;
+                  const ratioX = finalDx === 0 ? 'n/a' : (travelX / finalDx).toFixed(3);
+                  const ratioY = finalDy === 0 ? 'n/a' : (travelY / finalDy).toFixed(3);
+                  travelInfo = `actualTravel=(${travelX},${travelY}) ratio=(${ratioX},${ratioY})`;
+                }
+              } catch {
+                travelInfo = 'actualTravel=unavailable';
+              }
               diagLog(
                 'native-desktop',
-                `[7-C] drag end mouse=(${p.x},${p.y}) totalDelta=(${finalDx},${finalDy})`,
+                `[7-C] drag end mouse=(${p.x},${p.y}) totalDelta=(${finalDx},${finalDy}) ` +
+                  `${travelInfo} startWidget=(${startX},${startY}) startSize=(${startW}x${startH}) ${applied}`,
               );
+              const dragStartDipSize = dragState.startDipSize;
+              const dragStartScale = dragState.startScale;
               dragState = null;
+
+              // ─── 배율이 다른 모니터에서 손을 뗀 경우 — 보이는 크기 복구 ───
+              //
+              // 바탕화면 모드의 위젯은 WorkerW의 자식 창이라 우리가 SetWindowPos로 직접 옮긴다.
+              // 그래서 일반 창이라면 Windows가 해 주는 "배율에 맞춘 크기 재조정"이 일어나지 않는다.
+              // 실측(2026-08-18) 결과 두 가지가 어긋난 채 남는다:
+              //   ① 물리 크기가 그대로라 위젯이 모니터마다 커졌다 작아졌다 한다.
+              //   ② 더 큰 문제 — Chromium이 배율 변화는 알아채면서(devicePixelRatio 변경)
+              //      화면 배치는 다시 하지 않아, 1232px 창에 705px만 칠해진다.
+              //      투명 창이라 나머지는 빈 공간 → 사용자에게는 "위젯이 절반만 보인다".
+              // setBounds로 DIP 기준 크기를 다시 알려주면 ①②가 함께 풀린다.
+              //   상세: docs/03-analysis/widget-dual-monitor-drag/widget-dual-monitor-drag.analysis.md §13
+              if (
+                dragStartDipSize &&
+                dragStartScale !== undefined &&
+                cachedWidgetWindow &&
+                !cachedWidgetWindow.isDestroyed()
+              ) {
+                try {
+                  const finalRect = win32.getWindowRect(cachedWidgetHwnd);
+                  if (finalRect) {
+                    const finalDipOrigin = screen.screenToDipPoint({
+                      x: finalRect.x,
+                      y: finalRect.y,
+                    });
+                    const target = screen.getDisplayNearestPoint(finalDipOrigin);
+                    const endScale = target.scaleFactor;
+                    const currentBounds = cachedWidgetWindow.getBounds();
+                    const [minDipWidth, minDipHeight] = cachedWidgetWindow.getMinimumSize();
+                    // DPI 복구 + "도착 모니터에 안 들어가면 축소"를 한 번에 결정한다.
+                    // setBounds를 두 번 부르면 창이 두 번 튄다. 판정 규칙은 순수 함수 쪽 주석 참조.
+                    const next = resolveDragEndBounds({
+                      startScale: dragStartScale,
+                      endScale,
+                      startDipSize: dragStartDipSize,
+                      finalDipOrigin,
+                      currentBounds,
+                      workArea: target.workArea,
+                      minSize: { width: minDipWidth, height: minDipHeight },
+                    });
+                    if (next) {
+                      cachedWidgetWindow.setBounds(next);
+                      diagLog(
+                        'native-desktop',
+                        `[7-C] drag end 크기 보정 — scale ${dragStartScale}→${endScale} ` +
+                          `before=(${currentBounds.x},${currentBounds.y},${currentBounds.width}x${currentBounds.height}) ` +
+                          `setBounds=(${next.x},${next.y},${next.width}x${next.height}) ` +
+                          `workArea=(${target.workArea.width}x${target.workArea.height})`,
+                      );
+                    }
+                  }
+                } catch (e) {
+                  diagWarn(
+                    'native-desktop',
+                    `[7-C] drag end DPI 복구 실패 (이동 자체는 유지): ${e instanceof Error ? e.message : String(e)}`,
+                  );
+                }
+              }
+
               // BrowserWindow.getBounds()는 SetWindowPos 후 즉시 반영되므로 cachedPhysicalBounds도
               // 갱신해야 다음 click 라우팅이 새 위치 기준으로 정확히 동작.
               if (cachedWidgetWindow && !cachedWidgetWindow.isDestroyed()) {
@@ -1304,16 +1444,48 @@ function createWin32Manager(win32: typeof import('./platform/win32Desktop')): De
                 physicalWorkAreas = [];
               }
 
+              // 출발 모니터의 배율과 그때의 DIP 크기를 함께 적어 둔다.
+              // 배율이 다른 모니터에서 손을 뗐을 때 "보이는 크기"를 원래대로 되돌리는 데 쓴다
+              // (drag end의 DPI 복구 — desktopWidgetDpiRestore.ts).
+              let startScaleValue: number | undefined;
+              let startDipSize: { width: number; height: number } | undefined;
+              let startScale = '';
+              try {
+                const dip = screen.screenToDipPoint({
+                  x: cachedPhysicalBounds.x,
+                  y: cachedPhysicalBounds.y,
+                });
+                const display = screen.getDisplayNearestPoint(dip);
+                startScaleValue = display.scaleFactor;
+                startScale = ` display=${display.id} scale=${display.scaleFactor}`;
+              } catch {
+                startScale = '';
+              }
+              if (cachedWidgetWindow && !cachedWidgetWindow.isDestroyed()) {
+                try {
+                  const dipBounds = cachedWidgetWindow.getBounds();
+                  startDipSize = { width: dipBounds.width, height: dipBounds.height };
+                } catch {
+                  startDipSize = undefined;
+                }
+              }
+
               dragState = {
                 active: true,
                 startMouse: { x: p.x, y: p.y },
                 startWidget: { x: cachedPhysicalBounds.x, y: cachedPhysicalBounds.y },
                 startBounds: cachedPhysicalBounds,
+                startDipSize,
+                startScale: startScaleValue,
                 physicalWorkAreas,
               };
+              const originX =
+                physicalWorkAreas.length > 0 ? Math.min(...physicalWorkAreas.map((w) => w.x)) : 0;
+              const originY =
+                physicalWorkAreas.length > 0 ? Math.min(...physicalWorkAreas.map((w) => w.y)) : 0;
               diagLog(
                 'native-desktop',
-                `[7-C] drag start mouse=(${p.x},${p.y}) widget=(${cachedPhysicalBounds.x},${cachedPhysicalBounds.y}) size=(${cachedPhysicalBounds.width}x${cachedPhysicalBounds.height}) workAreas=${physicalWorkAreas.length}`,
+                `[7-C] drag start mouse=(${p.x},${p.y}) widget=(${cachedPhysicalBounds.x},${cachedPhysicalBounds.y}) size=(${cachedPhysicalBounds.width}x${cachedPhysicalBounds.height}) workAreas=${physicalWorkAreas.length} workAreaOrigin=(${originX},${originY})${startScale} scales=[${physicalWorkAreas.map((w) => `${w.x}:${w.minVisibleHeaderHeight / 40}`).join(' ')}]`,
               );
               // ★ Explorer rubber band 시작 차단: BUTTONDOWN을 OS에 흘리지 않음.
               return true; // drag 우선 — widget으로 LBUTTONDOWN 전달 안 함

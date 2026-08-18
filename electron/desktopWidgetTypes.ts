@@ -62,6 +62,11 @@ export interface PhysicalWorkArea extends PhysicalRect {
   readonly minVisibleHeaderHeight: number;
   /** 이 모니터에서 최소로 걸쳐 있어야 하는 가로 폭 — DIP 기준값을 배율로 환산한 physical px */
   readonly minVisibleWidth: number;
+  /**
+   * 이 모니터의 배율. drag 종료 후 "이 화면에 들어가는가"를 판정할 때
+   * BrowserWindow의 최소 크기(DIP)를 physical로 환산하는 데 쓴다.
+   */
+  readonly scaleFactor: number;
 }
 
 /**
@@ -90,6 +95,23 @@ export interface DragState {
   readonly startBounds: PhysicalRect;
   /** drag 진행 중 MOUSEMOVE 진입 카운트 (진단용 sampling). hot path mutate. */
   moveCount?: number;
+  /**
+   * 마지막으로 OS에 "여기로 옮겨달라"고 요청한 physical 좌표 (진단 계측용). hot path mutate.
+   *
+   * drag 종료 시 이 값과 `GetWindowRect`의 실제 결과를 비교해 "요청대로 놓였는가"를 판정한다.
+   * 배율이 다른 모니터를 가로지르는 드래그에서만 어긋나므로, 요청값을 남기지 않으면
+   * 로그만으로는 원인을 가릴 수 없다 (신고 2026-08-18 듀얼 모니터 건).
+   */
+  lastRequested?: { x: number; y: number };
+  /**
+   * 드래그 시작 시점의 DIP(논리) 크기와 출발 모니터 배율.
+   *
+   * 배율이 다른 모니터로 넘어간 드래그가 끝났을 때 "보이는 크기"를 원래대로 지키기 위해
+   * 필요하다 (`desktopWidgetDpiRestore.ts`). 화면 정보를 못 읽으면 생략되므로 optional.
+   */
+  readonly startDipSize?: { readonly width: number; readonly height: number };
+  /** 드래그를 시작한 모니터의 배율 (예: 1.75) */
+  readonly startScale?: number;
   /** 드래그 시 위젯 이탈 방지를 위한 디스플레이 작업 영역들 (physical screen rect) */
   readonly physicalWorkAreas?: readonly PhysicalWorkArea[];
 }
