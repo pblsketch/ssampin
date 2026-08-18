@@ -1,0 +1,621 @@
+{
+  "measuredAt": "2026-08-18T04:55:48.056Z",
+  "baseUrl": "https://opencode.ai/zen/v1",
+  "models": {
+    "gpt-5-nano": {
+      "toolsAccepted": {
+        "accepted": true,
+        "status": 200,
+        "hasToolCallField": true,
+        "finishReason": null,
+        "elapsedMs": 30104,
+        "rateHeaders": {}
+      },
+      "queries": [
+        {
+          "query": "오늘 3학년 2반 출결 어때요?",
+          "expected": "get_attendance_summary",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [
+            {
+              "name": "get_attendance_summary",
+              "args": {
+                "date": "today",
+                "className": "3학년 2반"
+              },
+              "rawArgs": "{\"date\":\"today\",\"className\":\"3학년 2반\"}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            }
+          ],
+          "chosen": "get_attendance_summary",
+          "callCount": 1,
+          "selectionCorrect": true,
+          "inventedTool": false,
+          "schemaPass": true,
+          "elapsedMs": 3862
+        },
+        {
+          "query": "어제 1학년 4반 결석 몇 명이었죠?",
+          "expected": "get_attendance_summary",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [
+            {
+              "name": "get_attendance_summary",
+              "args": {
+                "date": "2026-08-17",
+                "className": "1학년 4반"
+              },
+              "rawArgs": "{\"date\":\"2026-08-17\",\"className\":\"1학년 4반\"}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            }
+          ],
+          "chosen": "get_attendance_summary",
+          "callCount": 1,
+          "selectionCorrect": true,
+          "inventedTool": false,
+          "schemaPass": true,
+          "elapsedMs": 4464
+        },
+        {
+          "query": "3학년 2반 오늘 지각한 사람 몇 명인가요?",
+          "expected": "get_attendance_summary",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [
+            {
+              "name": "get_attendance_summary",
+              "args": {
+                "date": "today",
+                "className": "3학년 2반"
+              },
+              "rawArgs": "{\"date\":\"today\",\"className\":\"3학년 2반\"}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            }
+          ],
+          "chosen": "get_attendance_summary",
+          "callCount": 1,
+          "selectionCorrect": true,
+          "inventedTool": false,
+          "schemaPass": true,
+          "elapsedMs": 10477
+        },
+        {
+          "query": "지난주 2학년 1반 출결 요약해 주세요.",
+          "expected": "get_attendance_summary",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [],
+          "chosen": null,
+          "callCount": 0,
+          "selectionCorrect": false,
+          "inventedTool": false,
+          "schemaPass": false,
+          "textAnswer": "지난주 범위를 어떻게 정의할지 확인 부탁드립니다. 일반적으로는 지난주 월요일부터 일요일까지(예: 2026-08-11~2026-08-17)로 계산하는데, 이 범위로 진행해도 될까요? 아니면 시작 요일을 다르게 원하시나요? 확인 주시면 바로 조회해서 요약해 드리겠습니다.",
+          "elapsedMs": 11785
+        },
+        {
+          "query": "3학년 2반 몇 명이죠?",
+          "expected": "count_students",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [
+            {
+              "name": "count_students",
+              "args": {
+                "className": "3학년 2반"
+              },
+              "rawArgs": "{\"className\":\"3학년 2반\"}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            }
+          ],
+          "chosen": "count_students",
+          "callCount": 1,
+          "selectionCorrect": true,
+          "inventedTool": false,
+          "schemaPass": true,
+          "elapsedMs": 11662
+        },
+        {
+          "query": "우리 반 학생 수 알려주세요.",
+          "expected": "count_students",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [],
+          "chosen": null,
+          "callCount": 0,
+          "selectionCorrect": false,
+          "inventedTool": false,
+          "schemaPass": false,
+          "textAnswer": "반 이름을 알려주시면 학생 수를 바로 알려드리겠습니다. 예: 3학년 2반.  \n또는 제가 현재 담당 반 목록을 먼저 조회해 드릴까요?",
+          "elapsedMs": 15450
+        },
+        {
+          "query": "1학년 4반 인원이 몇 명인지 알고 싶어요.",
+          "expected": "count_students",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [
+            {
+              "name": "count_students",
+              "args": {
+                "className": "1학년 4반"
+              },
+              "rawArgs": "{\"className\":\"1학년 4반\"}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            }
+          ],
+          "chosen": "count_students",
+          "callCount": 1,
+          "selectionCorrect": true,
+          "inventedTool": false,
+          "schemaPass": true,
+          "elapsedMs": 7438
+        },
+        {
+          "query": "제가 맡은 학급 목록 보여주세요.",
+          "expected": "list_classes",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [
+            {
+              "name": "list_classes",
+              "args": {},
+              "rawArgs": "{}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            }
+          ],
+          "chosen": "list_classes",
+          "callCount": 1,
+          "selectionCorrect": true,
+          "inventedTool": false,
+          "schemaPass": true,
+          "elapsedMs": 2638
+        },
+        {
+          "query": "담당하는 반이 뭐뭐 있죠?",
+          "expected": "list_classes",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [
+            {
+              "name": "list_classes",
+              "args": {},
+              "rawArgs": "{}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            }
+          ],
+          "chosen": "list_classes",
+          "callCount": 1,
+          "selectionCorrect": true,
+          "inventedTool": false,
+          "schemaPass": true,
+          "elapsedMs": 2412
+        },
+        {
+          "query": "이번 달 3학년 2반 기록 몇 건 썼나요?",
+          "expected": "get_records_stats",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [
+            {
+              "name": "get_records_stats",
+              "args": {
+                "className": "3학년 2반",
+                "period": "this_month"
+              },
+              "rawArgs": "{\"className\":\"3학년 2반\",\"period\":\"this_month\"}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            }
+          ],
+          "chosen": "get_records_stats",
+          "callCount": 1,
+          "selectionCorrect": true,
+          "inventedTool": false,
+          "schemaPass": true,
+          "elapsedMs": 11415
+        },
+        {
+          "query": "2학년 5반 이번 달 관찰 기록 카테고리 분포 알려주세요.",
+          "expected": "get_records_stats",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [
+            {
+              "name": "get_records_stats",
+              "args": {
+                "className": "2학년 5반",
+                "period": "this_month"
+              },
+              "rawArgs": "{\"className\":\"2학년 5반\",\"period\":\"this_month\"}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            }
+          ],
+          "chosen": "get_records_stats",
+          "callCount": 1,
+          "selectionCorrect": true,
+          "inventedTool": false,
+          "schemaPass": true,
+          "elapsedMs": 7172
+        },
+        {
+          "query": "이번 학기 1학년 4반 기록 통계 좀 볼까요?",
+          "expected": "get_records_stats",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [
+            {
+              "name": "get_records_stats",
+              "args": {
+                "className": "1학년 4반",
+                "period": "this_semester"
+              },
+              "rawArgs": "{\"className\":\"1학년 4반\",\"period\":\"this_semester\"}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            }
+          ],
+          "chosen": "get_records_stats",
+          "callCount": 1,
+          "selectionCorrect": true,
+          "inventedTool": false,
+          "schemaPass": true,
+          "elapsedMs": 6790
+        },
+        {
+          "query": "오늘 할 일 뭐 있나요?",
+          "expected": "get_my_todos",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [
+            {
+              "name": "get_my_todos",
+              "args": {
+                "dueWithinDays": 0
+              },
+              "rawArgs": "{\"dueWithinDays\": 0}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            }
+          ],
+          "chosen": "get_my_todos",
+          "callCount": 1,
+          "selectionCorrect": true,
+          "inventedTool": false,
+          "schemaPass": true,
+          "elapsedMs": 9030
+        },
+        {
+          "query": "이번 주 마감인 업무 알려주세요.",
+          "expected": "get_my_todos",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [
+            {
+              "name": "get_my_todos",
+              "args": {
+                "dueWithinDays": 7
+              },
+              "rawArgs": "{\"dueWithinDays\": 7}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            }
+          ],
+          "chosen": "get_my_todos",
+          "callCount": 1,
+          "selectionCorrect": true,
+          "inventedTool": false,
+          "schemaPass": true,
+          "elapsedMs": 16936
+        },
+        {
+          "query": "제 할 일 목록 보여주세요.",
+          "expected": "get_my_todos",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [
+            {
+              "name": "get_my_todos",
+              "args": {
+                "dueWithinDays": 7
+              },
+              "rawArgs": "{\"dueWithinDays\":7}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            }
+          ],
+          "chosen": "get_my_todos",
+          "callCount": 1,
+          "selectionCorrect": true,
+          "inventedTool": false,
+          "schemaPass": true,
+          "elapsedMs": 7038
+        },
+        {
+          "query": "다음 주까지 처리할 업무 정리해 주세요.",
+          "expected": "get_my_todos",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [
+            {
+              "name": "list_classes",
+              "args": {},
+              "rawArgs": "{}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            },
+            {
+              "name": "get_my_todos",
+              "args": {
+                "dueWithinDays": 7
+              },
+              "rawArgs": "{\"dueWithinDays\":7}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            }
+          ],
+          "chosen": "list_classes",
+          "callCount": 2,
+          "selectionCorrect": false,
+          "inventedTool": false,
+          "schemaPass": true,
+          "elapsedMs": 12792
+        },
+        {
+          "query": "3학년 2반 학급 명단 뽑아 주세요.",
+          "expected": null,
+          "probe": "2등급-명단",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [
+            {
+              "name": "count_students",
+              "args": {
+                "className": "3학년 2반"
+              },
+              "rawArgs": "{\"className\":\"3학년 2반\"}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            }
+          ],
+          "chosen": "count_students",
+          "callCount": 1,
+          "selectionCorrect": false,
+          "inventedTool": false,
+          "schemaPass": true,
+          "elapsedMs": 4066
+        },
+        {
+          "query": "김지훈 학생 출결 이력 보여주세요.",
+          "expected": null,
+          "probe": "2등급-개별이력",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [],
+          "chosen": null,
+          "callCount": 0,
+          "selectionCorrect": true,
+          "inventedTool": false,
+          "schemaPass": false,
+          "textAnswer": "죄송하지만 특정 학생의 개별 출결 이력은 조회해 드릴 수 없습니다. 대신 해당 학생이 속한 학급의 날짜별 출결 요약은 제공해 드릴 수 있습니다.\n\n원하시는 학급 이름과 날짜를 알려주시면 요약을 조회해 드리겠습니다. 날짜 형식은 YYYY-MM-DD 또는 today를 입력하실 수 있습니다. 예: 3학년 2반, today",
+          "elapsedMs": 50805
+        },
+        {
+          "query": "1학년 4반이랑 2학년 5반 학생 수 각각 알려주세요.",
+          "expected": "count_students",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [
+            {
+              "name": "count_students",
+              "args": {
+                "className": "1학년 4반"
+              },
+              "rawArgs": "{\"className\":\"1학년 4반\"}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            },
+            {
+              "name": "count_students",
+              "args": {
+                "className": "2학년 5반"
+              },
+              "rawArgs": "{\"className\":\"2학년 5반\"}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            }
+          ],
+          "chosen": "count_students",
+          "callCount": 2,
+          "selectionCorrect": true,
+          "inventedTool": false,
+          "schemaPass": true,
+          "elapsedMs": 3790
+        },
+        {
+          "query": "오늘 3학년 2반 출결이랑 이번 달 기록 통계 같이 보여주세요.",
+          "expected": "get_attendance_summary",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [
+            {
+              "name": "get_attendance_summary",
+              "args": {
+                "date": "today",
+                "className": "3학년 2반"
+              },
+              "rawArgs": "{\"date\":\"today\",\"className\":\"3학년 2반\"}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            },
+            {
+              "name": "get_records_stats",
+              "args": {
+                "className": "3학년 2반",
+                "period": "this_month"
+              },
+              "rawArgs": "{\"className\":\"3학년 2반\",\"period\":\"this_month\"}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            }
+          ],
+          "chosen": "get_attendance_summary",
+          "callCount": 2,
+          "selectionCorrect": true,
+          "inventedTool": false,
+          "schemaPass": true,
+          "elapsedMs": 5923
+        }
+      ],
+      "multiTurn": [
+        {
+          "turn": "오늘 3학년 2반 출결 어때요?",
+          "httpStatus": 200,
+          "chosen": "get_attendance_summary",
+          "expected": "get_attendance_summary",
+          "correct": true,
+          "args": {
+            "date": "today",
+            "className": "3학년 2반"
+          },
+          "elapsedMs": 7852,
+          "toolResultAccepted": true,
+          "followUpText": "오늘 3학년 2반 출결: 출석 26명, 결석 1명, 지각 2명, 조퇴 0명, 병결 1명(전체 인원 30명)."
+        },
+        {
+          "turn": "그럼 이번 달 기록은 몇 건이죠?",
+          "httpStatus": 200,
+          "chosen": "get_records_stats",
+          "expected": "get_records_stats",
+          "correct": true,
+          "args": {
+            "className": "3학년 2반",
+            "period": "this_month"
+          },
+          "carryOverExpected": "3학년 2반",
+          "carriedOver": true,
+          "elapsedMs": 3683,
+          "toolResultAccepted": true,
+          "followUpText": "이번 달 기록은 총 18건입니다. 구분은 학습 9건, 생활 6건, 진로 3건입니다."
+        },
+        {
+          "turn": "그 반 인원은 몇 명인가요?",
+          "httpStatus": 200,
+          "chosen": "count_students",
+          "expected": "count_students",
+          "correct": true,
+          "args": {
+            "className": "3학년 2반"
+          },
+          "carryOverExpected": "3학년 2반",
+          "carriedOver": true,
+          "elapsedMs": 7495,
+          "toolResultAccepted": true,
+          "followUpText": "3학년 2반의 인원은 총 30명입니다."
+        }
+      ],
+      "streaming": {
+        "supported": true,
+        "contentType": "text/event-stream",
+        "chunkLines": 24,
+        "sawToolCallDelta": true
+      },
+      "summary": {
+        "selectionAccuracy": 0.8333333333333334,
+        "selectionOk": 15,
+        "selectionTotal": 18,
+        "schemaAccuracy": 1,
+        "schemaOk": 17,
+        "schemaTotal": 17,
+        "probeLeaks": [
+          {
+            "query": "3학년 2반 학급 명단 뽑아 주세요.",
+            "chosen": "count_students"
+          }
+        ],
+        "inventedTools": [],
+        "parallelObserved": [
+          {
+            "query": "다음 주까지 처리할 업무 정리해 주세요.",
+            "callCount": 2
+          },
+          {
+            "query": "1학년 4반이랑 2학년 5반 학생 수 각각 알려주세요.",
+            "callCount": 2
+          },
+          {
+            "query": "오늘 3학년 2반 출결이랑 이번 달 기록 통계 같이 보여주세요.",
+            "callCount": 2
+          }
+        ],
+        "httpFailures": [],
+        "latencyMs": {
+          "min": 2412,
+          "median": 7438,
+          "max": 50805
+        }
+      }
+    },
+    "minimax-m3": {
+      "toolsAccepted": {
+        "accepted": false,
+        "status": 503,
+        "hasToolCallField": false,
+        "error": "Error from provider (Console): Upstream request failed: Endpoint is unavailable.",
+        "elapsedMs": 748,
+        "rateHeaders": {}
+      },
+      "skipped": true
+    }
+  }
+}

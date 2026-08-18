@@ -1,5 +1,9 @@
 # Phase 0 실측 ② — 무료 티어 사용 제한
 
+> **[2026-08-18 갱신] 이 문서는 키 없이 익명으로 측정한 결과다.**
+> $20 충전 후 키로 재측정하니 **REST는 열렸다**(이 문서의 "서버에서 부를 수 없다"는 결론은 뒤집혔다).
+> 다만 **무료 모델이 잔액으로 풀리지 않는다**는 점은 그대로다. 최신 결론은 `measure-4-with-key.md` 를 볼 것.
+
 측정일: 2026-08-18
 대상: OpenCode Zen (`https://opencode.ai/zen/v1`), 모델 `deepseek-v4-flash-free`
 계획서: `docs/01-plan/features/in-app-chatbot-zen.plan.md` §7 Phase 0 실측 ②

@@ -1,0 +1,58 @@
+{
+  "measuredAt": "2026-08-18T05:05:41.197Z",
+  "model": "gpt-5-nano",
+  "price": {
+    "in": 0.05,
+    "out": 0.4
+  },
+  "avgPromptTokens": 696.6,
+  "avgCompletionTokens": 938.8,
+  "costPerQuestionUsd": 0.00041034999999999997,
+  "rows": [
+    {
+      "question": "오늘 3학년 2반 출결 어때요?",
+      "toolCalls": ["get_attendance_summary"],
+      "modelCalls": 2,
+      "promptTokens": 693,
+      "completionTokens": 962,
+      "elapsedMs": 20576,
+      "answerPreview": "오늘 3학년 2반 출결은 총 30명 중 - 출석 26명 - 결석 1명 - 지각 2명 - 조퇴 0명 - 병결 1명 출석률 약 8"
+    },
+    {
+      "question": "이번 달 3학년 2반 기록 몇 건 썼나요?",
+      "toolCalls": ["get_records_stats"],
+      "modelCalls": 2,
+      "promptTokens": 710,
+      "completionTokens": 836,
+      "elapsedMs": 14597,
+      "answerPreview": "총 18건입니다. 분류: 학습 9건, 생활 6건, 진로 3건."
+    },
+    {
+      "question": "제가 맡은 학급 목록이랑 3학년 2반 인원 알려주세요.",
+      "toolCalls": ["list_classes"],
+      "modelCalls": 2,
+      "promptTokens": 682,
+      "completionTokens": 739,
+      "elapsedMs": 17463,
+      "answerPreview": ""
+    },
+    {
+      "question": "이번 주 마감인 할 일 정리해 주세요.",
+      "toolCalls": ["get_my_todos"],
+      "modelCalls": 2,
+      "promptTokens": 694,
+      "completionTokens": 1298,
+      "elapsedMs": 17799,
+      "answerPreview": "이번 주 마감 할 일 - 수행평가 채점 — 마감: 2026-08-20 — 상태: 미완료 - 학년 협의회 자료 준비 — 마감: "
+    },
+    {
+      "question": "어제 1학년 4반 결석 몇 명이었죠?",
+      "toolCalls": ["get_attendance_summary"],
+      "modelCalls": 2,
+      "promptTokens": 704,
+      "completionTokens": 859,
+      "elapsedMs": 16401,
+      "answerPreview": ""
+    }
+  ]
+}

@@ -1,0 +1,58 @@
+{
+  "measuredAt": "2026-08-18T05:06:34.449Z",
+  "model": "minimax-m3",
+  "price": {
+    "in": 0.3,
+    "out": 1.2
+  },
+  "avgPromptTokens": 1741.2,
+  "avgCompletionTokens": 254,
+  "costPerQuestionUsd": 0.0008271600000000001,
+  "rows": [
+    {
+      "question": "오늘 3학년 2반 출결 어때요?",
+      "toolCalls": ["list_classes"],
+      "modelCalls": 2,
+      "promptTokens": 1804,
+      "completionTokens": 289,
+      "elapsedMs": 4147,
+      "answerPreview": ""
+    },
+    {
+      "question": "이번 달 3학년 2반 기록 몇 건 썼나요?",
+      "toolCalls": ["list_classes"],
+      "modelCalls": 2,
+      "promptTokens": 1719,
+      "completionTokens": 235,
+      "elapsedMs": 4453,
+      "answerPreview": ""
+    },
+    {
+      "question": "제가 맡은 학급 목록이랑 3학년 2반 인원 알려주세요.",
+      "toolCalls": ["list_classes", "count_students"],
+      "modelCalls": 2,
+      "promptTokens": 1719,
+      "completionTokens": 206,
+      "elapsedMs": 2879,
+      "answerPreview": "📋 **담당 학급 목록** - 3학년 2반 - 1학년 4반 - 2학년 5반 👥 **3학년 2반 인원**: 30명 총 3개 "
+    },
+    {
+      "question": "이번 주 마감인 할 일 정리해 주세요.",
+      "toolCalls": ["get_my_todos"],
+      "modelCalls": 2,
+      "promptTokens": 1699,
+      "completionTokens": 273,
+      "elapsedMs": 7437,
+      "answerPreview": "이번 주(7일 이내) 마감인 할 일은 총 **2건**입니다. | 마감일 | 할 일 | 상태 | |---|---|---| | 2"
+    },
+    {
+      "question": "어제 1학년 4반 결석 몇 명이었죠?",
+      "toolCalls": ["get_attendance_summary"],
+      "modelCalls": 2,
+      "promptTokens": 1765,
+      "completionTokens": 267,
+      "elapsedMs": 6008,
+      "answerPreview": "먼저 담당 학급 목록을 확인해 보겠습니다."
+    }
+  ]
+}
