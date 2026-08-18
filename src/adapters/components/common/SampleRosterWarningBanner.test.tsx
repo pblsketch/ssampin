@@ -43,11 +43,23 @@ describe('SampleRosterWarningBanner — 정적 렌더', () => {
     );
   });
 
-  it('role="alert" + amber 좌측 stripe + 둥근 모서리(rounded-lg)', () => {
+  /*
+    2026-08-18 — 좌측 4px amber stripe 에서 "색조 면 + 아이콘 칩" 으로 바뀌었다.
+    검사 대상만 새 표현으로 옮기고 **의도는 그대로 지킨다**: 경고임을 스크린리더에 알리고
+    (role=alert), 경고 색이 실제로 칠해지며, 둥근 모서리를 유지한다.
+
+    `--sp-warning` 을 `color-mix` 로 확인하는 이유 — Tailwind 투명도 수식(`bg-sp-warning/7`)은
+    sp-* 토큰에 듣지 않아 조용히 무효가 된다. color-mix 문자열이 남아 있는지 보는 것이
+    "경고색이 실제로 칠해졌는가" 를 확인하는 방법이다.
+  */
+  it('role="alert" + 경고 색조 면 + 둥근 모서리(rounded-lg)', () => {
     const html = renderToString(<SampleRosterWarningBanner />);
     expect(html).toContain('role="alert"');
-    expect(html).toContain('border-l-amber-400');
+    expect(html).toContain('--sp-warning');
+    expect(html).toContain('color-mix');
     expect(html).toContain('rounded-lg');
+    // 옛 표현으로 되돌아가지 않았는지 — 되돌리면 이 줄이 빨간불이 된다.
+    expect(html).not.toContain('border-l-amber-400');
   });
 
   it('"지금 등록하기" CTA + 닫기 버튼(aria-label) 노출', () => {

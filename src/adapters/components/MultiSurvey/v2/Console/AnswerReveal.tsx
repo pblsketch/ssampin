@@ -147,7 +147,6 @@ function AnswerRevealImpl({ question, responses }: AnswerRevealProps): JSX.Eleme
               <div
                 key={`${i}-${t.slice(0, 8)}`}
                 className="rounded-lg border border-sp-border bg-sp-card px-4 py-3 font-sp-medium text-sp-text"
-                style={{ fontSize: 18 }}
               >
                 {t}
               </div>
@@ -158,8 +157,12 @@ function AnswerRevealImpl({ question, responses }: AnswerRevealProps): JSX.Eleme
 
       {isQuiz && question.explanation !== undefined && question.explanation.length > 0 && (
         <div
-          className="rounded-lg border-l-4 border-sp-accent bg-sp-card px-5 py-4 font-sp-medium text-sp-text"
-          style={{ fontSize: 18 }}
+          style={{
+            backgroundColor: 'color-mix(in srgb, var(--sp-accent) 8%, var(--sp-card))',
+            borderColor: 'color-mix(in srgb, var(--sp-accent) 22%, transparent)',
+            fontSize: 18,
+          }}
+          className="rounded-lg border px-5 py-4 font-sp-medium text-sp-text"
           aria-label="해설"
         >
           {question.explanation}

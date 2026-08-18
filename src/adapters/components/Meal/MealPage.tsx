@@ -231,7 +231,6 @@ export function MealPage() {
         icon="restaurant"
         iconIsMaterial
         title="급식"
-        sticky
         leftAddon={
           schoolName ? (
             <span className="text-sp-muted text-sm font-sp-medium">{schoolName}</span>
@@ -358,9 +357,12 @@ export function MealPage() {
                     <div
                       key={`meal-${date}`}
                       className={`rounded-b-xl p-3 min-h-[200px] flex flex-col ${
+                        /* ring 은 상자 바깥에 그려져 스크롤 영역에서 아래 선이 잘렸다
+                           ("급식의 강조 테두리 아래 선이 잘려 보인다" — 준일님, 2026-08-18).
+                           테두리는 안쪽 경계라 잘리지 않는다. */
                         isToday
-                          ? 'bg-sp-card ring-1 ring-sp-accent'
-                          : 'bg-sp-card ring-1 ring-sp-border'
+                          ? 'bg-sp-card border border-sp-accent'
+                          : 'bg-sp-card border border-sp-border'
                       }`}
                     >
                       <div className="flex-1">

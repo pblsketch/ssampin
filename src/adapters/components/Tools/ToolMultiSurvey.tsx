@@ -648,7 +648,7 @@ function CreateView({
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         placeholder="설문 제목 (선택사항)"
-        className="w-full bg-sp-card border border-sp-border border-l-4 border-l-sp-accent rounded-xl px-4 py-3 text-xl font-bold text-sp-text placeholder-sp-muted focus:border-sp-accent focus:outline-none transition-colors shrink-0"
+        className="w-full bg-sp-card border border-sp-border rounded-xl px-4 py-3 text-xl font-bold text-sp-text placeholder-sp-muted focus:border-sp-accent focus:outline-none transition-colors shrink-0"
         maxLength={100}
       />
 

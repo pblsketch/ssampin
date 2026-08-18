@@ -70,7 +70,6 @@ export function SchoolAnnouncementsPage({ onBack }: SchoolAnnouncementsPageProps
           icon="campaign"
           iconIsMaterial
           title="학교 알리미"
-          sticky
           leftAddon={
             <div className="flex items-center gap-2">
               <button

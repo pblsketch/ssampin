@@ -8,7 +8,14 @@
   가드 정책:
   - large container (여러 단어 안내 박스 — padding p-3 / p-4 / px-3 py-2 동반) 안에서
     amber bg + 옅은 amber text 조합 신규 추가 금지
-  - 대안: Notice variant="warning" 또는 bg-sp-card border-l-amber-400 text-sp-text
+  - 대안: <Notice variant="warning"> 를 쓴다.
+
+  권장 대안 변경 (2026-08-18) — 예전에는 `bg-sp-card + border-l-amber-400 + text-sp-text`
+  (좌측 4px stripe)를 권했다. 그 방식은 가독성 목적은 달성했지만 경고·분류색·현재상태·인용문이
+  전부 같은 띠가 되어 "AI 가 만든 화면" 으로 읽힌다는 지적을 받았다(준일님, 2026-08-18).
+  Notice 가 색조 면 + 아이콘 칩 방식으로 재설계되었으므로 **직접 만들지 말고 Notice 를 쓴다.**
+  직접 만들어야 한다면 색은 `color-mix(in srgb, var(--sp-warning) 7%, var(--sp-card))` 로 면에
+  녹이고 본문은 `text-sp-text` 로 둔다 — `bg-sp-warning/7` 같은 표기는 sp-* 토큰에 듣지 않는다.
 
   작은 badge/chip 케이스 (px-1.5 py-0.5, text-[10px] 등) 는 본 가드 범위 밖.
   점진적으로 화이트리스트를 줄여 가는 형태로 운영.
@@ -23,7 +30,7 @@ const repoRoot = path.resolve(__dirname, '..', '..', '..', '..');
 // 화이트리스트 — 작은 badge/chip 으로 가독성 영향이 적거나, 별도 작업으로 이관 예정인 위치.
 // 신규 항목 추가는 PR 코드리뷰에서 정당성 확인 후 허용.
 const ALLOWED_FILES: readonly string[] = [
-  // top bar 패턴 (border-b full-width) — Notice 의 box 외관(rounded-lg + border-l-4 stripe)과
+  // top bar 패턴 (border-b full-width) — Notice 의 box 외관(rounded-lg + 색조 면)과
   // 시각 동등 불가. 별도 TopAlertBar 컴포넌트 도입 시 재평가 (notice-phase2-migration, 2026-05-20)
   'src/adapters/components/Tools/InteractiveSlides/Presenter/LessonPresenter.tsx',
   'src/slides-student/pages/SlidePage.tsx',
@@ -115,8 +122,8 @@ describe('MT-D1: amber-on-amber large container 가독성 가드', () => {
           const rel = path.relative(repoRoot, file).replace(/\\/g, '/');
           violations.push(
             `${rel}:${i + 1} — large 안내 박스에 amber bg + 옅은 amber text 조합.\n` +
-              `    대신 <Notice variant="warning"> 또는 ` +
-              `bg-sp-card + border-l-amber-400 + text-sp-text 사용`,
+              `    대신 <Notice variant="warning"> 를 사용. 직접 만들어야 하면 ` +
+              `color-mix(in srgb, var(--sp-warning) 7%, var(--sp-card)) 배경 + text-sp-text 본문`,
           );
         }
       }

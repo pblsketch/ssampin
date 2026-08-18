@@ -111,7 +111,13 @@ export function StickerSettingsModal({ isOpen, onClose }: StickerSettingsModalPr
           />
 
           {isMacOS && (
-            <div className="text-detail bg-sp-accent/10 border-l-4 border-sp-accent rounded-r-md p-3 flex items-start gap-2.5">
+            <div
+              style={{
+                backgroundColor: 'color-mix(in srgb, var(--sp-accent) 8%, var(--sp-card))',
+                borderColor: 'color-mix(in srgb, var(--sp-accent) 22%, transparent)',
+              }}
+              className="text-detail border rounded-md p-3 flex items-start gap-2.5"
+            >
               <span
                 aria-hidden="true"
                 className="material-symbols-outlined icon-sm text-sp-accent mt-0.5 shrink-0"

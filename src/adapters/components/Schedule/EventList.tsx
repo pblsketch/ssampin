@@ -2,7 +2,12 @@ import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import type { SchoolEvent, CategoryItem } from '@domain/entities/SchoolEvent';
 import { sortByDate } from '@domain/rules/eventRules';
 import { calculateDDay } from '@domain/rules/ddayRules';
-import { getCategoryInfo, getColorsForCategory } from '@adapters/presenters/categoryPresenter';
+import {
+  getCategoryInfo,
+  getColorsForCategory,
+  getCategoryDisplayName,
+  countGoogleCategories,
+} from '@adapters/presenters/categoryPresenter';
 import { type HolidayInfo, getKoreanHolidays } from '@domain/rules/holidayRules';
 import { GoogleBadge } from '@adapters/components/Calendar/GoogleBadge';
 import { getGradeBadgeText } from '@domain/entities/NeisSchedule';
@@ -93,6 +98,9 @@ function EventCard({
   const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
 
   const categoryInfo = getCategoryInfo(event.category, categories);
+  /* 구글 캘린더 카테고리는 이름이 곧 계정 이메일이라 그대로 쓰면 카드마다 주소가 뜬다.
+     표시용 짧은 이름으로 바꾼다 — 저장값은 그대로다. */
+  const categoryLabel = getCategoryDisplayName(categoryInfo, countGoogleCategories(categories));
   const colors = getColorsForCategory(event.category, categories);
   const schoolLevel = useSettingsStore((s) => s.settings.schoolLevel);
 
@@ -113,15 +121,40 @@ function EventCard({
 
   return (
     <div
-      className={`rounded-xl px-4 pt-4 pb-5 border-l-4 ${colors.border} transition-all duration-sp-base ease-sp-out shadow-sp-sm group relative shrink-0 ${
-        isToday
-          ? 'bg-[var(--sp-today-bg)] ring-2 ring-sp-accent/40 shadow-sp-md'
-          : `bg-sp-card hover:border-sp-accent/30 hover:bg-sp-card/50 hover:shadow-sp-md`
-      } ${isSelected ? 'ring-2 ring-sp-accent/60' : ''}`}
+      /*
+        좌측 4px 색 띠 제거 (2026-08-18).
+
+        이 카드는 **같은 정보를 두 번** 담고 있었다 — 왼쪽 색 띠와 오른쪽 카테고리 칩이
+        똑같이 "어느 분류인가" 를 말한다. 띠를 지워도 정보가 줄지 않는다. 다만 목록을
+        세로로 훑는 스캔성은 지켜야 하므로, 색을 **눈이 이미 가는 자리**(날짜 앞)로 옮겨
+        `[●] 8월 18일 (화)` 처럼 읽히게 했다. 색이 장식이 아니라 문장의 일부가 된다.
+
+        선택/오늘 표시의 `ring-sp-accent/40` 계열은 `sp-*` 토큰에 Tailwind 투명도 수식이
+        듣지 않아 **원래 아무것도 그려지지 않고 있었다.** `color-mix` 로 살린다.
+      */
+      /*
+        강조를 **테두리 색**으로만 준다 (2026-08-18, 2차 수정).
+
+        처음엔 `box-shadow: 0 0 0 2px` 링을 썼는데, 그림자는 상자 **바깥**에 그려져
+        스크롤 컨테이너에 왼쪽이 잘렸다("강조 테두리의 왼쪽 선이 잘려 보인다" — 준일님).
+        컨테이너에 여백을 주는 방식으로는 조상 요소가 또 자르면 같은 일이 반복된다.
+        테두리는 상자 안쪽 경계라 **어떤 컨테이너에서도 잘리지 않는다.** 굵기를 1px로
+        고정해 두면 강조 상태가 바뀌어도 배치가 흔들리지 않는다.
+      */
+      style={{
+        borderColor: isSelected
+          ? 'var(--sp-accent)'
+          : isToday
+            ? 'color-mix(in srgb, var(--sp-accent) 55%, transparent)'
+            : undefined,
+      }}
+      className={`rounded-xl px-4 pt-4 pb-5 border border-sp-border transition-all duration-sp-base ease-sp-out shadow-sp-sm group relative shrink-0 ${
+        isToday ? 'bg-[var(--sp-today-bg)] shadow-sp-md' : 'bg-sp-card hover:shadow-sp-md'
+      }`}
     >
       {/* TODAY 배지 */}
       {isToday && (
-        <div className="absolute right-0 top-0 p-1 bg-sp-accent text-white text-tiny font-bold rounded-bl-lg">
+        <div className="absolute right-0 top-0 p-1 bg-sp-accent text-sp-accent-fg text-tiny font-bold rounded-tr-xl rounded-bl-lg">
           TODAY
         </div>
       )}
@@ -147,7 +180,9 @@ function EventCard({
           </button>
         )}
         <div className="flex flex-col">
-          <span className={`text-xs font-semibold ${colors.text} mb-0.5`}>
+          {/* 분류 색은 여기서 말한다 — 띠 대신 날짜 앞 색점. */}
+          <span className={`flex items-center gap-1.5 text-xs font-semibold ${colors.text} mb-0.5`}>
+            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${colors.dot}`} aria-hidden />
             {formatEventDate(event.date, showYear)}
           </span>
           <h4
@@ -189,7 +224,7 @@ function EventCard({
           )}
           {/* 카테고리 배지 */}
           <span className="bg-sp-surface text-sp-muted text-caption px-2 py-1 rounded-md font-medium max-w-[80px] truncate">
-            {categoryInfo.name}
+            {categoryLabel}
           </span>
           {/* 구글 배지 */}
           {event.source === 'google' && <GoogleBadge />}
@@ -280,7 +315,12 @@ function HolidayCard({ holiday, showYear }: { holiday: HolidayInfo; showYear?: b
   const dayName = DAY_NAMES[date.getDay()];
 
   return (
-    <div className="rounded-xl px-4 pt-3 pb-3 border-l-4 border-red-500/60 bg-red-950/20 shadow-sp-sm shrink-0 transition-all duration-sp-base ease-sp-out hover:shadow-sp-md hover:border-red-400/50">
+    /* 지난 일정: 빨간 띠로 "경고"하지 않는다 — 지나간 것은 위험이 아니라 흐려진 것이다.
+       면을 옅게 깔고 전체 투명도를 낮춰 목록에서 자연스럽게 뒤로 물러나게 한다. */
+    <div
+      style={{ backgroundColor: 'color-mix(in srgb, var(--sp-error) 6%, var(--sp-card))' }}
+      className="rounded-xl px-4 pt-3 pb-3 border border-sp-border opacity-75 hover:opacity-100 shadow-sp-sm shrink-0 transition-all duration-sp-base ease-sp-out hover:shadow-sp-md"
+    >
       <div className="flex items-center justify-between">
         <div className="flex flex-col">
           <span className="text-xs font-semibold text-red-400/80 mb-0.5">
@@ -636,7 +676,9 @@ export function EventList({
 
       <div
         ref={scrollRef}
-        className={`flex flex-col gap-4 overflow-y-auto pr-2 pb-10 ${hideTitle ? 'h-full' : 'flex-1 min-h-0'}`}
+        /* `overflow-y: auto` 는 가로도 함께 자른다. 강조는 이제 테두리(상자 안쪽)로 주므로
+           바깥 여백 트릭이 필요 없다 — `-mx-1` 로 부모 밖까지 넓히면 오히려 조상이 자른다. */
+        className={`flex flex-col gap-4 overflow-y-auto pr-3 pb-10 ${hideTitle ? 'h-full' : 'flex-1 min-h-0'}`}
       >
         {displayItems.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-sp-muted">

@@ -256,7 +256,13 @@ export function MessageBanner() {
   return (
     <div className="relative">
       <div
-        className={`rounded-xl flex items-center max-w-2xl w-full cursor-pointer border transition-all ${
+        /* 좁은 창에서는 배너가 가로 자리를 덜 먹게 한다. `max-w-2xl`(672px) 고정이면
+           남는 폭 700px 을 배너 혼자 차지해 시계·날씨가 전부 찌그러졌다.
+
+           `flex-1`·`w-full` 을 주지 않는 이유 — 배너는 헤더 오른쪽 덩어리 안에서 세로로
+           쌓이는 쪽이라, 폭을 채우게 하면 아래 아이콘 묶음과 오른쪽 끝이 어긋난다.
+           내용만큼만 차지하되 상한만 둔다. */
+        className={`rounded-xl flex items-center min-w-0 max-w-sm xl:max-w-xl cursor-pointer border transition-all ${
           isCollapsed ? 'px-3 py-1.5 gap-2' : 'p-4 gap-4'
         }`}
         style={{ background: colors.bg, borderColor: colors.border }}
@@ -302,7 +308,7 @@ export function MessageBanner() {
         <div className="flex-1 min-w-0">
           {isCollapsed ? (
             <p
-              className="text-sm font-medium truncate"
+              className="text-sm font-medium truncate break-keep"
               style={{ color: colors.text }}
               title={message || '오늘의 메시지'}
             >
@@ -323,7 +329,10 @@ export function MessageBanner() {
             />
           ) : (
             <>
-              <h3 className="font-bold text-lg leading-snug" style={{ color: colors.text }}>
+              <h3
+                className="font-bold text-base xl:text-lg leading-snug break-keep"
+                style={{ color: colors.text }}
+              >
                 {message !== '' ? message : '클릭하여 메시지를 입력하세요...'}
               </h3>
               {(message === '' || s.subtitle) && (

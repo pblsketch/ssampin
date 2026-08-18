@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { ParsedEvaluationPlan } from '@domain/entities/EvaluationPlan';
+import { Notice } from '@adapters/components/common/Notice';
 
 /**
  * 평가계획 문서를 학년별로 정리해 보여준다.
@@ -14,11 +15,11 @@ export function EvaluationPlanGradeView({ parsed }: { parsed: ParsedEvaluationPl
   if (parsed.needsOcr || grades.length === 0) {
     return (
       <div className="flex flex-col gap-2">
-        <div className="rounded-lg bg-sp-card border border-sp-border border-l-4 border-l-amber-400 px-3 py-2 text-xs text-sp-text">
+        <Notice variant="warning">
           {parsed.needsOcr
             ? '이미지로 된 문서라 학년별로 자동 정리하지 못했어요. 아래 원문을 참고해 주세요.'
             : '학년별 구조를 자동으로 읽지 못했어요. 아래 원문을 참고해 주세요.'}
-        </div>
+        </Notice>
         <pre className="text-xs text-sp-text bg-sp-card border border-sp-border rounded-lg p-4 max-h-[60vh] overflow-auto whitespace-pre-wrap break-words leading-relaxed">
           {parsed.markdown.slice(0, 50000) || '(표시할 내용이 없습니다)'}
         </pre>

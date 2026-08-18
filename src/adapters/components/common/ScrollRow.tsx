@@ -27,7 +27,16 @@ export const ScrollRow = forwardRef<HTMLDivElement, ScrollRowProps>(function Scr
   return (
     <div
       ref={ref}
-      className={`flex flex-nowrap items-center overflow-x-auto scrollbar-hide [&>*]:shrink-0 ${className}`.trim()}
+      /*
+        위아래 여백(py-1 -my-1)이 필요한 이유 (2026-08-18) — CSS 에서 `overflow-x: auto` 는
+        **세로 방향도 함께 잘린다.** 한 축만 `auto` 로 두면 다른 축의 `visible` 이 무효가 되어
+        `auto` 로 계산되기 때문이다(CSS Overflow 명세). 그래서 칩의 테두리·링·그림자가 위아래
+        끝에서 싹둑 잘려 보였다("박스 외곽선 일부가 잘려 보인다" — 준일님, 2026-08-18).
+
+        안쪽에 1칸 여백을 주고 바깥 여백을 같은 만큼 빼면, 잘릴 자리가 생기면서도 **레이아웃은
+        그대로**다. `overflow` 를 풀 수는 없다 — 가로 스크롤이 이 컴포넌트의 존재 이유다.
+      */
+      className={`flex flex-nowrap items-center overflow-x-auto scrollbar-hide py-1 -my-1 [&>*]:shrink-0 ${className}`.trim()}
       {...rest}
     >
       {children}

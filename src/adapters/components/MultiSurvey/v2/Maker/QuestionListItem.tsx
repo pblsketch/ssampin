@@ -3,7 +3,7 @@
  *
  * - 드래그 핸들 + 번호 + 유형 칩 + 타이머·점수
  * - hover 시 삭제 버튼 fade-in
- * - 선택된 문항에 border-l-4 border-sp-accent (부모 QuestionList가 적용)
+ * - 선택된 문항은 강조색 면으로 채운다 (2026-08-18: 좌측 4px 띠에서 변경)
  *
  * sp-* 토큰: sp-card, sp-border, sp-text, sp-muted, sp-accent, sp-duration-fast
  *      → 신규 Tailwind: duration-sp-quick(120ms)
@@ -69,7 +69,7 @@ export function QuestionListItem({
         'transition-colors duration-sp-quick motion-reduce:transition-none',
         'hover:border-sp-accent/40',
         'focus-visible:ring-2 focus-visible:ring-sp-accent',
-        selected ? 'border-l-4 border-l-sp-accent' : '',
+        selected ? '[background-color:color-mix(in_srgb,var(--sp-accent)_12%,var(--sp-card))]' : '',
         isDragging ? 'opacity-50' : '',
       ].join(' ')}
       data-question-id={question.id}

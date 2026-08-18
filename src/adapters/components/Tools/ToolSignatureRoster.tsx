@@ -61,6 +61,7 @@ import {
   SharePanel,
   type SignatureRetentionPreset,
 } from './SignatureRoster/SessionPanels';
+import { Notice } from '@adapters/components/common/Notice';
 
 // 순수 로직 재export — 기존 단위 테스트(ToolSignatureRoster.signatureMapping.test.ts) 호환.
 export {
@@ -1037,10 +1038,10 @@ export function ToolSignatureRoster({ onBack, isFullscreen }: ToolSignatureRoste
                 ))}
               </div>
               {!hasSignatureColumn && (
-                <p className="mt-3 rounded-xl border-l-4 border-l-amber-400 bg-sp-card p-3 text-xs text-sp-text">
+                <Notice variant="warning" className="mt-3">
                   서명을 받을 열이 없습니다. 열 타입을 '서명'으로 지정하면 참석자가 서명한 이미지가
                   시트·Excel에 들어갑니다.
-                </p>
+                </Notice>
               )}
             </div>
 

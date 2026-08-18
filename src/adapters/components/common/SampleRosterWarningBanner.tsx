@@ -38,14 +38,23 @@ export function SampleRosterWarningBanner(): JSX.Element {
   return (
     <div
       role="alert"
-      className="flex items-start gap-3 px-4 py-3 rounded-lg bg-sp-card ring-1 ring-sp-border border-l-4 border-l-amber-400 mx-4 mb-3"
+      /* 좌측 4px 띠 → 색조 면 + 아이콘 칩 (2026-08-18, Notice 와 같은 언어).
+         버튼이 한 줄에 함께 있어 Notice 컴포넌트로 갈아끼우지 않고 표현만 맞춘다. */
+      style={{
+        backgroundColor: 'color-mix(in srgb, var(--sp-warning) 7%, var(--sp-card))',
+        borderColor: 'color-mix(in srgb, var(--sp-warning) 22%, transparent)',
+      }}
+      className="flex items-start gap-3 px-4 py-3 rounded-lg border mx-4 mb-3"
     >
       <span
-        className="material-symbols-outlined text-amber-400 shrink-0"
+        className="w-6 h-6 rounded-full shrink-0 flex items-center justify-center"
         aria-hidden="true"
-        style={{ fontSize: '20px' }}
+        style={{
+          backgroundColor: 'color-mix(in srgb, var(--sp-warning) 16%, transparent)',
+          color: 'color-mix(in srgb, var(--sp-warning) 78%, var(--sp-text))',
+        }}
       >
-        warning
+        <span className="material-symbols-outlined text-[16px] leading-none">warning</span>
       </span>
 
       <p className="flex-1 text-sm text-sp-text leading-relaxed">

@@ -46,32 +46,24 @@ const COMPONENTS: Components = {
   // 학생/교사 동일 토큰 — viewerRole 분기 0건 (Padlet 동일뷰 §0.1).
   // 본문 sp-text와 같은 색상으로 대비 보장 (회귀 #7 96조합 정합).
   h1: ({ children }) => (
-    <h1 className="text-base font-bold text-sp-text leading-snug mb-1.5">
-      {children}
-    </h1>
+    <h1 className="text-base font-bold text-sp-text leading-snug mb-1.5">{children}</h1>
   ),
   p: ({ children }) => (
-    <p className="text-sm text-sp-text leading-relaxed whitespace-pre-wrap">
-      {children}
-    </p>
+    <p className="text-sm text-sp-text leading-relaxed whitespace-pre-wrap">{children}</p>
   ),
-  strong: ({ children }) => (
-    <strong className="font-bold text-sp-text">{children}</strong>
-  ),
+  strong: ({ children }) => <strong className="font-bold text-sp-text">{children}</strong>,
   em: ({ children }) => <em className="italic text-sp-text">{children}</em>,
   ul: ({ children }) => (
-    <ul className="list-disc list-inside text-sm text-sp-text space-y-0.5">
-      {children}
-    </ul>
+    <ul className="list-disc list-inside text-sm text-sp-text space-y-0.5">{children}</ul>
   ),
   ol: ({ children }) => (
-    <ol className="list-decimal list-inside text-sm text-sp-text space-y-0.5">
-      {children}
-    </ol>
+    <ol className="list-decimal list-inside text-sm text-sp-text space-y-0.5">{children}</ol>
   ),
   li: ({ children }) => <li>{children}</li>,
   blockquote: ({ children }) => (
-    <blockquote className="border-l-4 border-sky-400/40 pl-3 text-sm text-sp-muted italic my-2">
+    /* 인용문 좌측 선은 그대로 둔다 — 500년 된 활자 관습이라 "AI 티"의 사례가 아니다.
+       다만 4px 채색 띠는 과하므로 2px 중립 선으로 낮춘다. */
+    <blockquote className="border-l-2 border-sp-border pl-3 text-sm text-sp-muted italic my-2">
       {children}
     </blockquote>
   ),
@@ -82,10 +74,7 @@ interface RealtimeWallCardMarkdownProps {
   readonly className?: string;
 }
 
-export function RealtimeWallCardMarkdown({
-  text,
-  className,
-}: RealtimeWallCardMarkdownProps) {
+export function RealtimeWallCardMarkdown({ text, className }: RealtimeWallCardMarkdownProps) {
   if (!text || text.length === 0) return null;
   return (
     <div className={className}>

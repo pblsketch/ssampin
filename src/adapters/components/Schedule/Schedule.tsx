@@ -1,17 +1,23 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useEventsStore } from '@adapters/stores/useEventsStore';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import type { SchoolEvent } from '@domain/entities/SchoolEvent';
 import { getEventsForMonth, filterByCategory } from '@domain/rules/eventRules';
-import { getCategoryColors } from '@adapters/presenters/categoryPresenter';
+import {
+  getCategoryColors,
+  getCategoryDisplayName,
+  isGoogleCalendarId,
+} from '@adapters/presenters/categoryPresenter';
 import { getKoreanHolidays } from '@domain/rules/holidayRules';
 import { CalendarView } from './CalendarView';
+import { SplitDivider } from '@adapters/components/common/SplitDivider';
 import { EventList } from './EventList';
 import { EventFormModal } from './EventFormModal';
 import { CategoryManagementModal } from './CategoryManagementModal';
 import { ExportModal } from './ExportModal';
 import { ImportModal } from './ImportModal';
 import { DayScheduleModal } from './DayScheduleModal';
+import { toAddEventParams } from './eventFormMapping';
 import { YearView } from './YearView';
 import { SemesterView } from './SemesterView';
 import { BulkDeleteByCategoryModal } from './BulkDeleteByCategoryModal';
@@ -42,6 +48,21 @@ function formatDateStr(date: Date): string {
   const d = String(date.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
 }
+
+/**
+ * 달력 ↔ 일정 목록 폭 비율. 한쪽이 못 쓸 만큼 좁아지지 않게 30~75% 로 묶는다.
+ *
+ * 기본값 68% — 처음엔 기존과 같은 60% 로 뒀는데, 달력이 이 화면의 주인공이고 날짜 칸마다
+ * 일정 제목이 들어가야 해서 좁으면 제목이 바로 잘린다(준일님, 2026-08-19). 오른쪽 목록은
+ * 세로로 읽는 것이라 조금 좁아도 덜 답답하다.
+ *
+ * 사용자가 손잡이로 바꾼 값은 `localStorage` 에 남아 다음에 열 때 그대로 복원된다 —
+ * 이 기본값은 **한 번도 조절하지 않은 사람**에게만 적용된다.
+ */
+const SPLIT_STORAGE_KEY = 'ssampin:schedule-split';
+const SPLIT_DEFAULT = 68;
+const SPLIT_MIN = 30;
+const SPLIT_MAX = 75;
 
 export function Schedule() {
   const { track } = useAnalytics();
@@ -85,6 +106,52 @@ export function Schedule() {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
+  /* 구글 캘린더 카테고리 펼침 여부 (2026-08-18).
+     연동한 계정 수만큼 이메일 알약이 필터 줄에 늘어서서 줄을 통째로 잡아먹었다.
+     기본은 접어 두고, 계정별로 걸러 보고 싶을 때만 펼친다. */
+  const [showGoogleCategories, setShowGoogleCategories] = useState(false);
+
+  /*
+    달력 ↔ 이번 달 일정 폭 비율 (2026-08-18).
+
+    60:40 고정이었는데 "달력을 크게 보고 싶은 선생님도, 일정 목록을 넓게 보고 싶은 선생님도
+    있다"는 지적을 받았다. 드래그로 조절하고 그 값을 기억한다.
+
+    저장을 설정(settings)이 아니라 `localStorage` 에 두는 이유 — 이 값은 **이 컴퓨터의 이
+    화면을 어떻게 보느냐**일 뿐이라 기기 간 동기화 대상이 아니다. 설정에 넣으면 동기화·스키마·
+    충돌 해결까지 딸려 오는데 얻는 것이 없다. 시간표 탭 기억이 이미 같은 방식을 쓴다.
+  */
+  const splitContainerRef = useRef<HTMLDivElement>(null);
+  const [splitPercent, setSplitPercent] = useState<number>(() => {
+    try {
+      const saved = Number(localStorage.getItem(SPLIT_STORAGE_KEY));
+      // 저장값이 깨졌거나 범위 밖이면 조용히 기본값으로 — 화면이 못 쓰게 되면 안 된다.
+      if (Number.isFinite(saved) && saved >= SPLIT_MIN && saved <= SPLIT_MAX) return saved;
+    } catch {
+      /* 저장소를 못 쓰는 환경이면 기본값 */
+    }
+    return SPLIT_DEFAULT;
+  });
+
+  const handleSplitChange = useCallback((next: number) => {
+    setSplitPercent(next);
+    try {
+      localStorage.setItem(SPLIT_STORAGE_KEY, String(next));
+    } catch {
+      /* 저장 실패해도 이번 세션 동안은 조절이 동작해야 한다 */
+    }
+  }, []);
+
+  /* 필터 줄을 두 묶음으로 나눈다 — 내가 만든 카테고리는 그대로 늘어놓고,
+     구글에서 온 것은 알약 하나 뒤로 접는다. */
+  const ownCategories = useMemo(
+    () => categories.filter((c) => !isGoogleCalendarId(c.id)),
+    [categories],
+  );
+  const googleCategories = useMemo(
+    () => categories.filter((c) => isGoogleCalendarId(c.id)),
+    [categories],
+  );
 
   // 구글 캘린더 연결 상태
   const {
@@ -206,18 +273,7 @@ export function Schedule() {
       void updateEvent(event);
     } else {
       track('event_create', { category: event.category });
-      void addEvent({
-        title: event.title,
-        date: event.date,
-        category: event.category,
-        description: event.description,
-        endDate: event.endDate,
-        time: event.time,
-        location: event.location,
-        isDDay: event.isDDay,
-        alerts: event.alerts ? [...event.alerts] : undefined,
-        recurrence: event.recurrence,
-      });
+      void addEvent(toAddEventParams(event));
     }
     setShowEventModal(false);
     setEditingEvent(null);
@@ -469,7 +525,7 @@ export function Schedule() {
                     전체
                   </button>
 
-                  {categories.map((cat) => {
+                  {ownCategories.map((cat) => {
                     const colors = getCategoryColors(cat.color);
                     const isActive = selectedCategory === cat.id;
 
@@ -489,6 +545,66 @@ export function Schedule() {
                       </button>
                     );
                   })}
+
+                  {/*
+                    구글 캘린더 카테고리는 알약 하나로 접는다 (2026-08-18).
+
+                    연동한 계정 수만큼 `someone@gmail.com` 알약이 늘어서서 필터 줄을 통째로
+                    잡아먹었다(계정 3개면 줄의 대부분). 계정을 구분해 걸러 보는 일은 가끔이라
+                    기본은 접어 두고 필요할 때만 펼친다. 펼쳤을 때도 이메일 전체가 아니라
+                    짧은 표시 이름을 쓴다 — 카테고리 관리에서 이름을 직접 바꾸면 그 이름이 이긴다.
+                  */}
+                  {googleCategories.length > 0 && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setShowGoogleCategories((v) => !v)}
+                        aria-expanded={showGoogleCategories}
+                        className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-full text-sm font-medium transition-colors ring-1 flex items-center gap-1.5 shrink-0 ${
+                          googleCategories.some((c) => c.id === selectedCategory)
+                            ? 'bg-sp-accent text-white ring-sp-accent/30 font-bold'
+                            : 'bg-sp-card hover:bg-sp-surface text-sp-muted ring-sp-border/50'
+                        }`}
+                        title={
+                          showGoogleCategories ? '구글 캘린더 접기' : '구글 캘린더 계정별로 보기'
+                        }
+                      >
+                        <GoogleBadge />
+                        구글
+                        {googleCategories.length > 1 && (
+                          <span className="tabular-nums">{googleCategories.length}</span>
+                        )}
+                        <span className="material-symbols-outlined text-icon-md leading-none">
+                          {showGoogleCategories ? 'expand_less' : 'expand_more'}
+                        </span>
+                      </button>
+
+                      {showGoogleCategories &&
+                        googleCategories.map((cat) => {
+                          const colors = getCategoryColors(cat.color);
+                          const isActive = selectedCategory === cat.id;
+
+                          return (
+                            <button
+                              key={cat.id}
+                              type="button"
+                              onClick={() => setSelectedCategory(isActive ? null : cat.id)}
+                              title={cat.name}
+                              className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-full text-sm font-medium transition-colors ring-1 flex items-center gap-2 max-w-[12rem] ${
+                                isActive
+                                  ? 'bg-sp-accent text-white ring-sp-accent/30 font-bold'
+                                  : 'bg-sp-card hover:bg-sp-surface text-sp-muted ring-sp-border/50'
+                              }`}
+                            >
+                              <span className={`w-2 h-2 rounded-full shrink-0 ${colors.dot}`} />
+                              <span className="truncate">
+                                {getCategoryDisplayName(cat, googleCategories.length)}
+                              </span>
+                            </button>
+                          );
+                        })}
+                    </>
+                  )}
                 </ScrollRow>
 
                 {/* 우측 고정: 소스 필터 + 카테고리 관리 (좁은 창에서도 항상 접근 가능) */}
@@ -631,9 +747,20 @@ export function Schedule() {
                 </div>
               </div>
 
-              {/* 분할 레이아웃: 캘린더(60%) + 이벤트리스트(40%) */}
-              <div className="flex flex-col lg:flex-row gap-4 lg:gap-6 lg:flex-1 lg:min-h-0">
-                <div className="lg:w-[60%] min-h-[480px] lg:min-h-0 flex flex-col">
+              {/*
+                분할 레이아웃: 달력 + 이번 달 일정. 폭은 손잡이로 조절한다.
+
+                비율을 인라인 style 이 아니라 **CSS 변수**로 내리는 이유 — 인라인 폭은
+                화면 크기별 분기를 못 탄다. 좁은 화면에서는 위아래로 쌓여야 하는데
+                (`w-full`), 인라인으로 `width: 62%` 를 박으면 거기서도 62% 가 되어 버린다.
+                변수로 두면 `lg:w-[var(--sp-split)]` 처럼 **넓을 때만** 적용할 수 있다.
+              */}
+              <div
+                ref={splitContainerRef}
+                style={{ '--sp-split': `${splitPercent}%` } as React.CSSProperties}
+                className="flex flex-col lg:flex-row gap-4 lg:gap-0 lg:flex-1 lg:min-h-0"
+              >
+                <div className="lg:w-[var(--sp-split)] min-h-[480px] lg:min-h-0 flex flex-col lg:pr-3">
                   <CalendarView
                     year={year}
                     month={month}
@@ -646,7 +773,17 @@ export function Schedule() {
                   />
                 </div>
 
-                <div className="lg:w-[40%] min-h-[320px] lg:min-h-0 lg:overflow-hidden">
+                <SplitDivider
+                  value={splitPercent}
+                  onChange={handleSplitChange}
+                  containerRef={splitContainerRef}
+                  min={SPLIT_MIN}
+                  max={SPLIT_MAX}
+                  defaultValue={SPLIT_DEFAULT}
+                  ariaLabel="달력과 이번 달 일정의 폭 조절"
+                />
+
+                <div className="flex-1 min-w-0 min-h-[320px] lg:min-h-0 lg:overflow-hidden lg:pl-3">
                   <EventList
                     events={filteredEvents}
                     categories={categories}

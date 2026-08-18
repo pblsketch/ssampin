@@ -313,7 +313,13 @@ export function ComciganImportModal({ isOpen, onClose, onImport }: ComciganImpor
               {/* 해석 신뢰도 경고 — 비차단(계속 진행 가능). 밝은 표면 + amber 좌측 스트라이프
                   (다크모드 amber-on-amber 가독성 가드 준수) */}
               {anomaly?.suspicious && (
-                <div className="p-3 rounded-xl border border-sp-border border-l-4 border-l-amber-400 bg-sp-surface text-xs space-y-1">
+                <div
+                  style={{
+                    backgroundColor: 'color-mix(in srgb, var(--sp-warning) 7%, var(--sp-card))',
+                    borderColor: 'color-mix(in srgb, var(--sp-warning) 22%, transparent)',
+                  }}
+                  className="p-3 rounded-xl border text-xs space-y-1"
+                >
                   <p className="font-semibold text-sp-text flex items-center gap-1.5">
                     <span className="material-symbols-outlined text-sm text-amber-400">
                       warning

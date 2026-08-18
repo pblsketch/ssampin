@@ -252,8 +252,10 @@ export function NeisTeacherImportModal({ isOpen, onClose, onImport }: NeisTeache
                     {rows.map((r) => (
                       <div
                         key={r.classId}
-                        className={`grid grid-cols-[28px_minmax(0,1fr)_132px_48px_48px] gap-2.5 items-center px-3 py-2.5 border-l-4 transition-colors ${
-                          r.movement ? 'border-l-amber-500' : 'border-l-transparent'
+                        /* 이 행은 배경을 이미 include 상태가 쓰고 있어 '변동' 표시를 면으로 옮길 수 없다.
+                           띠를 남기되 4px → 2px 로 낮추고 의미 토큰을 쓴다. */
+                        className={`grid grid-cols-[28px_minmax(0,1fr)_132px_48px_48px] gap-2.5 items-center px-3 py-2.5 border-l-2 transition-colors ${
+                          r.movement ? 'border-l-sp-warning' : 'border-l-transparent'
                         } ${r.include ? 'bg-black/5 dark:bg-white/10' : 'bg-sp-card'}`}
                       >
                         <button

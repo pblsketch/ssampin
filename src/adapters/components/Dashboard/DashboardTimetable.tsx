@@ -256,17 +256,39 @@ function ClassTimetableList({
         return (
           <div
             key={period}
-            className={`flex items-center rounded-lg px-3 py-2 transition-colors ${
+            /*
+              "지금 이 교시" 강조 (2026-08-18 재작업).
+
+              이전: `border-l-4 + bg-sp-highlight/15 + ring-2 ring-sp-highlight/30 +
+              shadow-sp-highlight/15` 네 겹. 그런데 `sp-*` 토큰에는 Tailwind 투명도 수식이
+              듣지 않아(토큰이 `var(--sp-*)` 원본 문자열) **배경·링·그림자가 통째로 무효**였고
+              실제로는 왼쪽 4px 띠 하나만 그려지고 있었다. 의도의 1/4만 렌더된 셈이다.
+
+              지금: 면 하나로 말한다. 네 겹으로 쌓는 것은 이 앱이 안티 레퍼런스로 정한
+              "게이머 대시보드(과도한 네온/글로우)" 쪽이고, 브랜드 원칙은 "장식보다 데이터"다.
+              투명도는 `color-mix` 로 준다 — 위 함정을 피하는 유일한 방법.
+            */
+            style={
               isCurrent
-                ? 'border-l-4 border-sp-highlight bg-sp-highlight/15 ring-2 ring-sp-highlight/30 shadow-md shadow-sp-highlight/15'
-                : 'hover:bg-sp-surface/50'
+                ? {
+                    backgroundColor: 'color-mix(in srgb, var(--sp-highlight) 14%, transparent)',
+                    borderColor: 'color-mix(in srgb, var(--sp-highlight) 35%, transparent)',
+                  }
+                : undefined
+            }
+            className={`flex items-center rounded-lg border border-transparent px-3 py-2 transition-colors ${
+              isCurrent ? '' : 'hover:bg-sp-surface'
             }`}
           >
             <span
               title={periodLabel}
               /* mr-2: 최소폭(3rem)만 있으면 짧은 "2교시"에만 틈이 생기고, 6글자 이름은 최소폭을
                  꽉 채워 옆 과목명과 붙어 버린다("창의체험활동공강"). 여백을 명시해 항상 띄운다. */
-              className={`mr-2 min-w-[3rem] shrink-0 truncate text-xs ${isCurrent ? 'text-sp-highlight font-bold' : 'text-sp-muted font-medium'}`}
+              /* 강조된 줄에서는 라벨을 `text-sp-highlight` 로 두지 않는다 — 앰버 배경 위
+                 앰버 글자가 되어 대비 2.5:1 로 떨어진다(WCAG AA 4.5:1 미달). 이 앱이 예전에
+                 겪은 "베이지 위 노랑" 과 같은 실패다. 배경이 이미 "지금"을 말하므로 라벨은
+                 본문색+굵기로 충분하다(대비 13.5:1 라이트 / 8.9:1 다크). */
+              className={`mr-2 min-w-[3rem] shrink-0 truncate text-xs ${isCurrent ? 'text-sp-text font-bold' : 'text-sp-muted font-medium'}`}
             >
               {periodLabel}
             </span>
@@ -329,17 +351,39 @@ function TeacherTimetableList({
         return (
           <div
             key={period}
-            className={`flex items-center rounded-lg px-3 py-2 transition-colors ${
+            /*
+              "지금 이 교시" 강조 (2026-08-18 재작업).
+
+              이전: `border-l-4 + bg-sp-highlight/15 + ring-2 ring-sp-highlight/30 +
+              shadow-sp-highlight/15` 네 겹. 그런데 `sp-*` 토큰에는 Tailwind 투명도 수식이
+              듣지 않아(토큰이 `var(--sp-*)` 원본 문자열) **배경·링·그림자가 통째로 무효**였고
+              실제로는 왼쪽 4px 띠 하나만 그려지고 있었다. 의도의 1/4만 렌더된 셈이다.
+
+              지금: 면 하나로 말한다. 네 겹으로 쌓는 것은 이 앱이 안티 레퍼런스로 정한
+              "게이머 대시보드(과도한 네온/글로우)" 쪽이고, 브랜드 원칙은 "장식보다 데이터"다.
+              투명도는 `color-mix` 로 준다 — 위 함정을 피하는 유일한 방법.
+            */
+            style={
               isCurrent
-                ? 'border-l-4 border-sp-highlight bg-sp-highlight/15 ring-2 ring-sp-highlight/30 shadow-md shadow-sp-highlight/15'
-                : 'hover:bg-sp-surface/50'
+                ? {
+                    backgroundColor: 'color-mix(in srgb, var(--sp-highlight) 14%, transparent)',
+                    borderColor: 'color-mix(in srgb, var(--sp-highlight) 35%, transparent)',
+                  }
+                : undefined
+            }
+            className={`flex items-center rounded-lg border border-transparent px-3 py-2 transition-colors ${
+              isCurrent ? '' : 'hover:bg-sp-surface'
             }`}
           >
             <span
               title={periodLabel}
               /* mr-2: 최소폭(3rem)만 있으면 짧은 "2교시"에만 틈이 생기고, 6글자 이름은 최소폭을
                  꽉 채워 옆 과목명과 붙어 버린다("창의체험활동공강"). 여백을 명시해 항상 띄운다. */
-              className={`mr-2 min-w-[3rem] shrink-0 truncate text-xs ${isCurrent ? 'text-sp-highlight font-bold' : 'text-sp-muted font-medium'}`}
+              /* 강조된 줄에서는 라벨을 `text-sp-highlight` 로 두지 않는다 — 앰버 배경 위
+                 앰버 글자가 되어 대비 2.5:1 로 떨어진다(WCAG AA 4.5:1 미달). 이 앱이 예전에
+                 겪은 "베이지 위 노랑" 과 같은 실패다. 배경이 이미 "지금"을 말하므로 라벨은
+                 본문색+굵기로 충분하다(대비 13.5:1 라이트 / 8.9:1 다크). */
+              className={`mr-2 min-w-[3rem] shrink-0 truncate text-xs ${isCurrent ? 'text-sp-text font-bold' : 'text-sp-muted font-medium'}`}
             >
               {periodLabel}
             </span>

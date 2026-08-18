@@ -1253,7 +1253,9 @@ function MainApp() {
           올라가고, 창을 옮기는 손잡이와 창 조작 버튼 자리는 오른쪽에서 확보된다.
         */}
         <div className="flex flex-1 min-h-0 flex-col">
-          <WindowDragStrip />
+          {/* 개별 페이지에서는 창 버튼 줄을 제목줄과 같은 면으로 이어 붙인다.
+              대시보드는 배경이 창 맨 위까지 이어져야 하므로 투명하게 둔다. */}
+          <WindowDragStrip surface={currentPage !== 'dashboard'} />
           <main className={`flex-1 min-h-0 overflow-y-auto ${isFullscreen ? 'p-4' : 'p-8'}`}>
             {renderPage(currentPage, setCurrentPage, isFullscreen, {
               onRequestDualMode: handleRequestDualMode,

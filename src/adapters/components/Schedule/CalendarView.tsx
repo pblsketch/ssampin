@@ -146,7 +146,10 @@ function MultiDayBar({
 
   return (
     <div
-      className={`h-4 ${colors.bar} text-white text-caption leading-4 px-1 truncate cursor-pointer hover:brightness-110 transition-all duration-sp-quick ease-sp-out ${roundedLeft} ${roundedRight}`}
+      /* 단색 채움 + 흰 글자였다. 한 달치가 색 벽이 되고(특히 구글 일정은 전부 파랑)
+         라이트 테마에서 `text-white` 는 본문색으로 강제 치환돼 흰 배경에 흰 글자가 될
+         위험도 있었다. 옅은 면 + 본문색으로 바꿔 제목이 먼저 읽히게 한다. */
+      className={`flex h-4 items-center gap-1 ${colors.chip} text-sp-text text-caption leading-4 px-1 truncate cursor-pointer hover:brightness-95 transition-all duration-sp-quick ease-sp-out ${roundedLeft} ${roundedRight}`}
       style={{
         gridColumn: `${bar.startCol + 1} / span ${bar.span}`,
         gridRow: bar.row + 1,
@@ -154,7 +157,12 @@ function MultiDayBar({
       title={bar.title}
       onClick={onClick}
     >
-      {!bar.isContinuation && bar.title}
+      {!bar.isContinuation && (
+        <>
+          <span className={`w-1 h-1 shrink-0 rounded-full ${colors.dot}`} aria-hidden />
+          <span className="truncate">{bar.title}</span>
+        </>
+      )}
     </div>
   );
 }
@@ -162,24 +170,27 @@ function MultiDayBar({
 /** 단일 일정 칩 — 다일 바 없는 날의 이벤트를 표시 */
 function SingleEventChip({
   title,
-  barClass,
+  chipClass,
+  dotClass,
   onClick,
 }: {
   title: string;
-  barClass: string;
+  chipClass: string;
+  dotClass: string;
   onClick: () => void;
 }) {
   return (
     <button
       type="button"
-      className={`w-full text-left text-caption leading-none px-1 py-0.5 rounded-md text-white truncate cursor-pointer transition-all duration-sp-quick ease-sp-out hover:brightness-110 ${barClass}`}
+      className={`flex w-full items-center gap-1 text-left text-caption leading-none px-1 py-0.5 rounded-md text-sp-text truncate cursor-pointer transition-all duration-sp-quick ease-sp-out hover:brightness-95 ${chipClass}`}
       onClick={(e) => {
         e.stopPropagation();
         onClick();
       }}
       title={title}
     >
-      {title}
+      <span className={`w-1 h-1 shrink-0 rounded-full ${dotClass}`} aria-hidden />
+      <span className="truncate">{title}</span>
     </button>
   );
 }
@@ -366,14 +377,15 @@ export function CalendarView({
                               <SingleEventChip
                                 key={evt.id}
                                 title={evt.title}
-                                barClass={colors.bar}
+                                chipClass={colors.chip}
+                                dotClass={colors.dot}
                                 onClick={() => onSelectDate(d.date)}
                               />
                             );
                           })}
                           {chipOverflow > 0 && (
                             <span className="text-caption text-sp-muted hover:text-sp-accent font-sp-medium text-center leading-none transition-colors duration-sp-quick">
-                              +{chipOverflow}
+                              +{chipOverflow}개 더
                             </span>
                           )}
                         </div>

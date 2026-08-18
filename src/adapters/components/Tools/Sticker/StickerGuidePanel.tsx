@@ -70,7 +70,9 @@ export function StickerGuidePanel(): JSX.Element {
             title="개별 파일로 등록"
             description={
               <>
-                낱장 PNG 파일을 한 장 또는 여러 장 한꺼번에 골라서 등록해요. 모달에 그대로 드래그해서 떨어뜨려도 되고, 이름은 prefix로 자동 매겨진 뒤 카드의 ✏️로 개별 수정할 수 있어요.
+                낱장 PNG 파일을 한 장 또는 여러 장 한꺼번에 골라서 등록해요. 모달에 그대로
+                드래그해서 떨어뜨려도 되고, 이름은 prefix로 자동 매겨진 뒤 카드의 ✏️로 개별 수정할
+                수 있어요.
               </>
             }
           />
@@ -79,14 +81,17 @@ export function StickerGuidePanel(): JSX.Element {
             title="시트 분할로 한 번에"
             description={
               <>
-                AI가 4×4 격자로 16개를 한 장에 그려줬다면, 시트 한 장을 자동으로 잘라서 한꺼번에 등록할 수 있어요. 빈 칸이나 이미 등록된 이미지는 자동으로 건너뛰어요.
+                AI가 4×4 격자로 16개를 한 장에 그려줬다면, 시트 한 장을 자동으로 잘라서 한꺼번에
+                등록할 수 있어요. 빈 칸이나 이미 등록된 이미지는 자동으로 건너뛰어요.
               </>
             }
           />
         </div>
 
         <Tip>
-          이모티콘마다 <strong className="text-sp-text">이름</strong>과 <strong className="text-sp-text">태그</strong>를 달아두면 나중에 검색이 정말 편해요. 예: 이름 "화이팅", 태그 "응원, 힘내".
+          이모티콘마다 <strong className="text-sp-text">이름</strong>과{' '}
+          <strong className="text-sp-text">태그</strong>를 달아두면 나중에 검색이 정말 편해요. 예:
+          이름 "화이팅", 태그 "응원, 힘내".
         </Tip>
       </Step>
 
@@ -156,8 +161,9 @@ function StepAIContent(): JSX.Element {
   return (
     <>
       <p className="text-sp-text leading-relaxed mb-5">
-        아래 도구 중 하나를 열어 <strong>프롬프트</strong>를 붙여넣으면 이모티콘 이미지가 만들어져요.
-        같은 캐릭터로 여러 표정을 한 번에 받고 싶다면 <strong>4×4 시트 프롬프트</strong>를 추천해요.
+        아래 도구 중 하나를 열어 <strong>프롬프트</strong>를 붙여넣으면 이모티콘 이미지가
+        만들어져요. 같은 캐릭터로 여러 표정을 한 번에 받고 싶다면 <strong>4×4 시트 프롬프트</strong>
+        를 추천해요.
       </p>
 
       {/* 이미지 생성 지원 도구 */}
@@ -185,7 +191,9 @@ function StepAIContent(): JSX.Element {
         <ol className="space-y-1.5 text-sm text-sp-text leading-relaxed list-decimal list-inside marker:text-sp-muted">
           <li>위 도구 중 하나를 열어요</li>
           <li>마음에 드는 프롬프트를 복사해서 붙여넣어요</li>
-          <li>생성된 이미지를 <strong>PNG</strong>로 다운로드해요</li>
+          <li>
+            생성된 이미지를 <strong>PNG</strong>로 다운로드해요
+          </li>
           <li>다음 단계에서 배경을 지운 뒤 쌤핀에 등록해요</li>
         </ol>
       </div>
@@ -269,10 +277,9 @@ function PromptCard({ template }: { template: PromptTemplate }): JSX.Element {
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(template.prompt);
-      useToastStore.getState().show(
-        '프롬프트가 복사되었어요! AI 도구에 붙여넣어 보세요 ✨',
-        'success',
-      );
+      useToastStore
+        .getState()
+        .show('프롬프트가 복사되었어요! AI 도구에 붙여넣어 보세요 ✨', 'success');
     } catch {
       useToastStore.getState().show('복사에 실패했어요. 다시 시도해 주세요.', 'error');
     }
@@ -286,9 +293,7 @@ function PromptCard({ template }: { template: PromptTemplate }): JSX.Element {
         </div>
         <div className="min-w-0 flex-1">
           <h4 className="text-sm font-sp-semibold text-sp-text leading-snug">{template.title}</h4>
-          <p className="text-detail text-sp-muted mt-0.5">
-            4×4 시트 · {template.resultCount}개
-          </p>
+          <p className="text-detail text-sp-muted mt-0.5">4×4 시트 · {template.resultCount}개</p>
         </div>
       </div>
 
@@ -328,8 +333,7 @@ function PromptCard({ template }: { template: PromptTemplate }): JSX.Element {
                 : 'text-sp-muted ring-sp-border hover:text-sp-text hover:ring-sp-accent/40',
             ].join(' ')}
           >
-            <span aria-hidden="true">💡</span>
-            팁
+            <span aria-hidden="true">💡</span>팁
           </button>
         )}
       </div>
@@ -358,12 +362,16 @@ function StepBackgroundRemovalContent(): JSX.Element {
   return (
     <>
       <Callout tone="warning">
-        AI가 그려준 이미지는 보통 흰색이나 색깔 배경이 깔려 있어요. 이대로 등록하면 이모티콘이 아니라 그냥 사진처럼 보이니, <strong className="text-sp-text">반드시 배경을 지우고 PNG로 저장</strong>해주세요.
+        AI가 그려준 이미지는 보통 흰색이나 색깔 배경이 깔려 있어요. 이대로 등록하면 이모티콘이
+        아니라 그냥 사진처럼 보이니,{' '}
+        <strong className="text-sp-text">반드시 배경을 지우고 PNG로 저장</strong>해주세요.
       </Callout>
 
       <div className="mt-5 mb-6">
         <h3 className="text-sm font-sp-semibold text-sp-text mb-3 flex items-center gap-1.5">
-          <span className="material-symbols-outlined text-icon-md text-sp-muted">auto_fix_high</span>
+          <span className="material-symbols-outlined text-icon-md text-sp-muted">
+            auto_fix_high
+          </span>
           배경 제거를 지원하는 도구
         </h3>
         <div className="flex flex-wrap gap-2">
@@ -380,13 +388,19 @@ function StepBackgroundRemovalContent(): JSX.Element {
         </h3>
         <ol className="space-y-1.5 text-sm text-sp-text leading-relaxed list-decimal list-inside marker:text-sp-muted">
           <li>위 도구 중 하나에서 1단계에서 만든 이미지를 업로드해요</li>
-          <li>배경이 자동으로 제거되면 <strong>PNG</strong>로 다운로드해요 (JPG는 투명 배경이 안 돼요!)</li>
+          <li>
+            배경이 자동으로 제거되면 <strong>PNG</strong>로 다운로드해요 (JPG는 투명 배경이 안
+            돼요!)
+          </li>
           <li>4×4 시트로 만들었다면 통째로 배경 제거 → 다음 단계의 시트 분할 기능을 활용하세요</li>
         </ol>
       </div>
 
       <Tip>
-        ChatGPT 같은 일부 도구는 처음부터 <strong className="text-sp-text">투명 배경(transparent background)</strong>으로 그려달라고 요청하면 배경 제거 단계를 건너뛸 수도 있어요. 결과가 깔끔하지 않다면 위 도구로 다시 다듬어주세요.
+        ChatGPT 같은 일부 도구는 처음부터{' '}
+        <strong className="text-sp-text">투명 배경(transparent background)</strong>으로 그려달라고
+        요청하면 배경 제거 단계를 건너뛸 수도 있어요. 결과가 깔끔하지 않다면 위 도구로 다시
+        다듬어주세요.
       </Tip>
     </>
   );
@@ -406,7 +420,15 @@ function Kbd({ children }: { children: React.ReactNode }): JSX.Element {
 
 function Tip({ children }: { children: React.ReactNode }): JSX.Element {
   return (
-    <div className="mt-4 rounded-xl bg-sp-highlight/10 border-l-4 border-sp-highlight p-4 text-sm text-sp-text leading-relaxed">
+    <div
+      /* `bg-sp-highlight/10` 은 sp-* 토큰에 투명도 수식이 듣지 않아 실제로는 칠해지지
+         않았다. color-mix 로 살리고, 좌측 4px 띠는 면으로 대체한다. */
+      style={{
+        backgroundColor: 'color-mix(in srgb, var(--sp-highlight) 8%, var(--sp-card))',
+        borderColor: 'color-mix(in srgb, var(--sp-highlight) 22%, transparent)',
+      }}
+      className="mt-4 rounded-xl border p-4 text-sm text-sp-text leading-relaxed"
+    >
       <p className="flex items-start gap-2">
         <span aria-hidden="true" className="text-base shrink-0">
           💡
@@ -424,12 +446,14 @@ function Callout({
   tone: 'warning' | 'info';
   children: React.ReactNode;
 }): JSX.Element {
-  const styles = tone === 'warning'
-    ? 'bg-sp-highlight/10 border-sp-highlight'
-    : 'bg-sp-accent/10 border-sp-accent';
+  const toneVar = tone === 'warning' ? '--sp-highlight' : '--sp-accent';
+  const styles = {
+    backgroundColor: `color-mix(in srgb, var(${toneVar}) 8%, var(--sp-card))`,
+    borderColor: `color-mix(in srgb, var(${toneVar}) 22%, transparent)`,
+  };
   const icon = tone === 'warning' ? '⚠️' : 'ℹ️';
   return (
-    <div className={`rounded-xl border-l-4 ${styles} p-4 text-sm text-sp-text leading-relaxed`}>
+    <div style={styles} className="rounded-xl border p-4 text-sm text-sp-text leading-relaxed">
       <p className="flex items-start gap-2">
         <span aria-hidden="true" className="text-base shrink-0">
           {icon}
@@ -455,16 +479,16 @@ function ActionRow({
     <div
       className={[
         'flex items-start gap-4 p-4 rounded-xl ring-1 transition-all',
-        highlight
-          ? 'bg-sp-accent/8 ring-sp-accent/30'
-          : 'bg-sp-card ring-sp-border',
+        highlight ? 'bg-sp-accent/8 ring-sp-accent/30' : 'bg-sp-card ring-sp-border',
       ].join(' ')}
     >
       <div
         aria-hidden="true"
         className={[
           'shrink-0 w-9 h-9 rounded-full flex items-center justify-center font-sp-bold',
-          highlight ? 'bg-sp-accent text-sp-accent-fg' : 'bg-sp-bg text-sp-muted ring-1 ring-sp-border',
+          highlight
+            ? 'bg-sp-accent text-sp-accent-fg'
+            : 'bg-sp-bg text-sp-muted ring-1 ring-sp-border',
         ].join(' ')}
       >
         {badge}
@@ -491,7 +515,8 @@ function GuideFooter(): JSX.Element {
       <ul className="space-y-1 text-detail text-sp-muted leading-relaxed list-disc list-inside marker:text-sp-muted/50">
         <li>AI로 생성한 이미지의 저작권 및 사용 범위는 각 도구의 약관을 따릅니다.</li>
         <li>
-          카카오톡 이모티콘 스토어 판매를 원하시면 카카오 이모티콘 스튜디오의 심사 기준과 라이선스를 별도로 확인해주세요.
+          카카오톡 이모티콘 스토어 판매를 원하시면 카카오 이모티콘 스튜디오의 심사 기준과 라이선스를
+          별도로 확인해주세요.
         </li>
         <li>본 가이드는 교사의 개인적 사용을 전제로 합니다.</li>
       </ul>

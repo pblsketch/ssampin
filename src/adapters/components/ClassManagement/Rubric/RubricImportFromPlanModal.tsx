@@ -23,6 +23,7 @@ import type {
   ParsedEvaluationPlan,
   RubricCandidate,
 } from '@domain/entities/EvaluationPlan';
+import { Notice } from '@adapters/components/common/Notice';
 
 interface RubricImportFromPlanModalProps {
   classId: string;
@@ -342,11 +343,11 @@ export function RubricImportFromPlanModal({
             <div className="flex flex-col gap-3">
               {showViewerFallback ? (
                 <div className="flex flex-col gap-2">
-                  <div className="rounded-lg bg-sp-card border border-sp-border border-l-4 border-l-amber-400 px-3 py-2 text-xs text-sp-text">
+                  <Notice variant="warning">
                     {parsed.needsOcr
                       ? '이미지로 된 문서라 평가영역을 자동으로 읽지 못했어요. 아래 원문을 보고 직접 입력해 주세요.'
                       : '평가영역을 자동으로 찾지 못했어요. 아래 원문을 확인해 주세요.'}
-                  </div>
+                  </Notice>
                   <pre className="text-xs text-sp-text bg-sp-card border border-sp-border rounded-lg p-3 max-h-[40vh] overflow-auto whitespace-pre-wrap break-words">
                     {parsed.markdown.slice(0, 20000) || '(표시할 내용이 없습니다)'}
                   </pre>

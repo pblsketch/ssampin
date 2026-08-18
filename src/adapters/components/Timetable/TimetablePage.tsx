@@ -1022,7 +1022,15 @@ export function TimetablePage({ initialIntent = null, onIntentConsumed }: Timeta
 
       {/* 시간표 그리드 */}
       <div className="flex-1 overflow-auto p-8">
-        <div className="mx-auto max-w-7xl flex flex-col gap-6">
+        {/*
+          `min-h-full justify-center` — 표가 화면보다 짧을 때 위로 치우쳐 아래가 휑해 보였다
+          (준일님, 2026-08-18). 세로 가운데로 모은다.
+
+          `justify-center` 만 쓰면 안 된다 — 내용이 화면보다 길어지면 스크롤 컨테이너에서
+          **위쪽이 잘려 되돌아갈 수 없게** 된다. `min-h-full` 로 최소 높이를 확보해 두면
+          짧을 때만 가운데로 모이고, 길어지면 위에서부터 정상적으로 흐른다.
+        */}
+        <div className="mx-auto flex min-h-full max-w-7xl flex-col justify-center gap-6">
           {/* 새 학기 시간표 갱신 확인 — 경고가 아니라 질문(학교마다 실제 학기 시작이 다름) */}
           {termRefresh.kind === 'ask' && !termBannerDismissed && (
             <TimetableTermRefreshBanner
@@ -1043,7 +1051,13 @@ export function TimetablePage({ initialIntent = null, onIntentConsumed }: Timeta
           {/* 컴시간 변경 감지 배너 (비파괴 — 검토 후 적용). 밝은 카드 + amber 좌측 스트라이프
               (다크모드 amber-on-amber 가독성 가드 준수) */}
           {tab === 'teacher' && pendingComciganReview && (
-            <div className="flex flex-col gap-3 rounded-xl border border-sp-border border-l-4 border-l-amber-400 bg-sp-card px-4 py-3 sm:flex-row sm:items-center">
+            <div
+              style={{
+                backgroundColor: 'color-mix(in srgb, var(--sp-warning) 7%, var(--sp-card))',
+                borderColor: 'color-mix(in srgb, var(--sp-warning) 22%, transparent)',
+              }}
+              className="flex flex-col gap-3 rounded-xl border px-4 py-3 sm:flex-row sm:items-center"
+            >
               <div className="flex min-w-0 flex-1 items-start gap-2">
                 <span className="material-symbols-outlined shrink-0 text-xl text-amber-400">
                   sync_problem
@@ -1077,7 +1091,13 @@ export function TimetablePage({ initialIntent = null, onIntentConsumed }: Timeta
           {/* 압핀 변경 감지 배너 (비파괴 — 검토 후 적용). 대상 탭에서만 노출 */}
           {pendingAppinReview &&
             tab === (pendingAppinReview.target === 'class' ? 'class' : 'teacher') && (
-              <div className="flex flex-col gap-3 rounded-xl border border-sp-border border-l-4 border-l-amber-400 bg-sp-card px-4 py-3 sm:flex-row sm:items-center">
+              <div
+                style={{
+                  backgroundColor: 'color-mix(in srgb, var(--sp-warning) 7%, var(--sp-card))',
+                  borderColor: 'color-mix(in srgb, var(--sp-warning) 22%, transparent)',
+                }}
+                className="flex flex-col gap-3 rounded-xl border px-4 py-3 sm:flex-row sm:items-center"
+              >
                 <div className="flex min-w-0 flex-1 items-start gap-2">
                   <span className="material-symbols-outlined shrink-0 text-xl text-amber-400">
                     sync_problem
@@ -1597,7 +1617,7 @@ function PeriodRow({
         <td
           className={`px-2 py-4 text-center font-medium text-sm break-keep border-r border-sp-border ${
             isCurrent
-              ? 'text-amber-400 font-bold border-l-4 border-l-amber-400 bg-sp-card'
+              ? 'text-sp-text font-bold [background-color:color-mix(in_srgb,var(--sp-highlight)_14%,var(--sp-card))]'
               : 'text-sp-muted bg-sp-card'
           }`}
         >
