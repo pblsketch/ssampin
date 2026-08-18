@@ -32,9 +32,19 @@ import type {
   ResizeRegion,
   ResizeState,
 } from './desktopWidgetTypes';
-import { dipToPhysical, isInsideAnyRect } from './desktopWidgetTypes';
+import { dipToPhysical, isInsideAnyRect, WIDGET_ABSOLUTE_MIN_SIZE } from './desktopWidgetTypes';
 import { diagLog, diagWarn } from './nativeDesktopDiag';
 import { resolveDragEndBounds } from './desktopWidgetDpiRestore';
+import {
+  clearPreferredSize,
+  rememberSizeBeforeFit,
+  takePreferredSizeIfFits,
+} from './widgetPreferredSize';
+import {
+  clearActiveWidgetLayout,
+  resolveLayoutReapply,
+  setActiveWidgetLayout,
+} from './widgetLayout';
 
 /** 각 모니터의 작업 영역(DIP)과 배율 — computePhysicalWorkAreas 입력용 최소 형태. */
 export interface WorkAreaSource {
@@ -1147,6 +1157,9 @@ function createWin32Manager(win32: typeof import('./platform/win32Desktop')): De
                 cachedWidgetWindow &&
                 !cachedWidgetWindow.isDestroyed()
               ) {
+                // 레이아웃 재적용이 이미 창을 정리했는가 — 그렇다면 DPI 복구/축소는 건너뛴다
+                // (한 번의 drag end 에서 setBounds 를 두 번 부르면 창이 두 번 튄다).
+                let dragEndHandled = false;
                 try {
                   const finalRect = win32.getWindowRect(cachedWidgetHwnd);
                   if (finalRect) {
@@ -1157,18 +1170,53 @@ function createWin32Manager(win32: typeof import('./platform/win32Desktop')): De
                     const target = screen.getDisplayNearestPoint(finalDipOrigin);
                     const endScale = target.scaleFactor;
                     const currentBounds = cachedWidgetWindow.getBounds();
-                    const [minDipWidth, minDipHeight] = cachedWidgetWindow.getMinimumSize();
-                    // DPI 복구 + "도착 모니터에 안 들어가면 축소"를 한 번에 결정한다.
+
+                    // ① 레이아웃이 켜져 있으면 크기 보존보다 우선한다.
+                    //    레이아웃(전체·절반 등)은 고정 크기가 아니라 화면과의 관계이므로,
+                    //    모니터가 바뀌면 새 작업 영역 기준으로 다시 계산해야 한다.
+                    const reapply = resolveLayoutReapply(target.id, target.workArea);
+                    if (reapply) {
+                      cachedWidgetWindow.setMinimumSize(
+                        reapply.minSize.width,
+                        reapply.minSize.height,
+                      );
+                      cachedWidgetWindow.setBounds(reapply.bounds);
+                      setActiveWidgetLayout(reapply.mode, target.id);
+                      diagLog(
+                        'native-desktop',
+                        `[7-C] drag end 레이아웃 재적용 — ${reapply.mode} ` +
+                          `before=(${currentBounds.x},${currentBounds.y},${currentBounds.width}x${currentBounds.height}) ` +
+                          `after=(${reapply.bounds.x},${reapply.bounds.y},${reapply.bounds.width}x${reapply.bounds.height}) ` +
+                          `display=${target.id} workArea=(${target.workArea.width}x${target.workArea.height})`,
+                      );
+                      dragEndHandled = true;
+                    }
+
+                    // ★하한은 `getMinimumSize` 가 아니라 상수다. 위젯 창은 resizable:false라
+                    //   그 API가 "현재 크기"를 돌려줘 축소가 원리적으로 불가능해진다(상수 주석 참조).
+                    // ② DPI 복구 + "도착 모니터에 안 들어가면 축소"를 한 번에 결정한다.
                     // setBounds를 두 번 부르면 창이 두 번 튄다. 판정 규칙은 순수 함수 쪽 주석 참조.
-                    const next = resolveDragEndBounds({
-                      startScale: dragStartScale,
-                      endScale,
-                      startDipSize: dragStartDipSize,
-                      finalDipOrigin,
-                      currentBounds,
-                      workArea: target.workArea,
-                      minSize: { width: minDipWidth, height: minDipHeight },
-                    });
+                    // 이전에 줄이기 전 크기가 기억돼 있고 이번 화면에 들어가면 되살린다.
+                    const preferredSize = dragEndHandled
+                      ? null
+                      : takePreferredSizeIfFits(target.workArea);
+                    const decision = dragEndHandled
+                      ? { bounds: null, shrunkFrom: null }
+                      : resolveDragEndBounds({
+                          startScale: dragStartScale,
+                          endScale,
+                          startDipSize: dragStartDipSize,
+                          finalDipOrigin,
+                          currentBounds,
+                          workArea: target.workArea,
+                          minSize: WIDGET_ABSOLUTE_MIN_SIZE,
+                          preferredSize,
+                        });
+                    if (decision.shrunkFrom) {
+                      // 축소는 이 화면에서만 유효한 임시 조치 — 넓은 화면으로 돌아오면 되살린다.
+                      rememberSizeBeforeFit(decision.shrunkFrom);
+                    }
+                    const next = decision.bounds;
                     if (next) {
                       cachedWidgetWindow.setBounds(next);
                       diagLog(
@@ -1176,7 +1224,9 @@ function createWin32Manager(win32: typeof import('./platform/win32Desktop')): De
                         `[7-C] drag end 크기 보정 — scale ${dragStartScale}→${endScale} ` +
                           `before=(${currentBounds.x},${currentBounds.y},${currentBounds.width}x${currentBounds.height}) ` +
                           `setBounds=(${next.x},${next.y},${next.width}x${next.height}) ` +
-                          `workArea=(${target.workArea.width}x${target.workArea.height})`,
+                          `workArea=(${target.workArea.width}x${target.workArea.height}) ` +
+                          `restored=${preferredSize ? `${preferredSize.width}x${preferredSize.height}` : 'no'} ` +
+                          `remembered=${decision.shrunkFrom ? `${decision.shrunkFrom.width}x${decision.shrunkFrom.height}` : 'no'}`,
                       );
                     }
                   }
@@ -1285,6 +1335,10 @@ function createWin32Manager(win32: typeof import('./platform/win32Desktop')): De
                 `[7-D] resize end edge=${resizeState.edge} mouse=(${p.x},${p.y}) totalDelta=(${p.x - resizeState.startMouse.x},${p.y - resizeState.startMouse.y})`,
               );
               resizeState = null;
+              // 사용자가 가장자리를 끌어 크기를 직접 정했다 — 기억과 레이아웃을 모두 버린다.
+              // 안 버리면 다른 모니터로 옮길 때 방금 정한 크기가 옛 크기나 레이아웃으로 되돌아간다.
+              clearPreferredSize();
+              clearActiveWidgetLayout();
               if (cachedWidgetWindow && !cachedWidgetWindow.isDestroyed()) {
                 cachedPhysicalBounds = recalcPhysicalBounds(cachedWidgetWindow);
                 recalcHeaderRegionsPhysical(cachedWidgetWindow);

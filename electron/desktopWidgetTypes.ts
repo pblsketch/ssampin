@@ -50,6 +50,43 @@ export interface PhysicalRect {
 }
 
 /**
+ * 위젯을 화면에 맞게 줄일 때 쓰는 **절대 하한 크기 (DIP)**.
+ *
+ * ## ★`BrowserWindow.getMinimumSize()`를 쓰면 안 된다 (2026-08-18 실측)
+ *
+ * 위젯 창은 `resizable: false`로 만들어진다. 크기 조절 불가 창은 Windows/Chromium이
+ * 최소 크기를 **현재 크기와 같게** 보고한다. 실측:
+ *
+ * ```
+ * resizable:false  생성 직후            getMinimumSize=(903x703)   ← 지정한 640x480이 아님
+ *                  setBounds 839x985 후 getMinimumSize=(839x985)   ← 현재 크기를 따라감
+ * resizable:true   생성 직후            getMinimumSize=(640x480)   ← 대조군은 정상
+ * ```
+ *
+ * 그래서 `fitWidgetSizeToWorkArea(bounds, workArea, getMinimumSize())`는
+ * `max(현재크기, min(현재크기, 작업영역))` = **항상 현재 크기**가 되어,
+ * "화면보다 크면 줄인다"가 **원리적으로 한 번도 동작하지 않았다**(ADR-051 결정 6 포함).
+ *
+ * 하한을 상수로 두는 것이 옳은 이유: 이 하한의 목적은 "setBounds가 어차피 되돌릴 크기
+ * 아래로는 줄이지 않는다"였는데, `resizable: false` 창에서는 setBounds가 되돌리지 않고
+ * 최소 크기까지 함께 바꾼다(실측 ③에서 작업 영역 크기로의 축소가 실제로 먹혔다).
+ * 따라서 앱이 허용하는 가장 작은 값(사이드바 레이아웃 기준)을 하한으로 쓰면 충분하다.
+ */
+export const WIDGET_ABSOLUTE_MIN_SIZE = { width: 220, height: 320 } as const;
+
+/**
+ * 화면을 넘쳤다고 판정하는 최소 초과량 (DIP).
+ *
+ * ## ★왜 0이 아닌가 (2026-08-18 실측)
+ *
+ * 175% 같은 소수 배율에서 `setBounds(839x985)`를 부르면 실제로는 **840x986**이 된다
+ * (DIP→물리→DIP 반올림). 초과량 1px에도 보정을 걸면 setBounds가 다시 +1px을 만들어
+ * **줄이려다 오히려 창이 계속 커지는 래칫**이 된다(실기기 로그에서 폭 839→845 관측).
+ * 반올림 잡음보다 크게 넘칠 때만 개입한다.
+ */
+export const WIDGET_OVERFLOW_TOLERANCE = 2;
+
+/**
  * 드래그 경계 제한용 모니터 작업 영역 (physical pixel) + 그 모니터에 적용할 최소 가시량.
  *
  * ★최소 가시량을 rect에 같이 실어 두는 이유: 기준값(헤더 40 · 가로 100)은 **DIP**로 정의되는데

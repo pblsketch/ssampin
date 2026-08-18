@@ -91,6 +91,21 @@ import {
 } from './desktopWidgetBounds';
 import { sendCtrlV } from './platform/win32SendKeys';
 import type { DesktopModeFallbackEvent } from './desktopWidgetTypes';
+import { WIDGET_ABSOLUTE_MIN_SIZE, WIDGET_OVERFLOW_TOLERANCE } from './desktopWidgetTypes';
+import {
+  clearPreferredSize,
+  rememberSizeBeforeFit,
+  takePreferredSizeIfFits,
+} from './widgetPreferredSize';
+import {
+  clearActiveWidgetLayout,
+  computeWidgetLayoutBounds,
+  isWidgetLayoutMode,
+  resolveLayoutReapply,
+  setActiveWidgetLayout,
+  widgetLayoutMinimumSize,
+  WIDGET_FREE_MINIMUM_SIZE,
+} from './widgetLayout';
 import { initNativeDesktopDiag, diagLog, diagLogVerbose, diagWarn } from './nativeDesktopDiag';
 import {
   issueWriteHandle,
@@ -1245,13 +1260,14 @@ function ensureWidgetBoundsWithinDisplays(targetWindow?: BrowserWindow | null): 
     //    화면보다 큰 위젯은 우/하단 크기 조절 손잡이가 모두 화면 밖에 놓이는데,
     //    clamp가 y >= workArea.y를 강제하므로 손잡이를 화면 안으로 끌어올 수 없다.
     //    = 사용자가 크기를 되돌릴 방법이 없는 상태로 고착된다 (해상도 하향 시 실제 도달 가능).
-    const [minWidth, minHeight] = win.getMinimumSize();
-    const sized = fitWidgetSizeToWorkArea(currentBounds, bestWorkArea, {
-      width: minWidth,
-      height: minHeight,
-    });
+    //    ★하한은 `win.getMinimumSize` 호출이 아니라 상수여야 한다. 위젯 창은 resizable:false라
+    //      그 API가 "현재 크기"를 돌려주므로, 예전 구현은 max(현재, min(현재, 화면)) = 현재가 되어
+    //      **이 축소가 한 번도 동작하지 않았다**(2026-08-18 실측). 상수 주석 참조.
+    const sized = fitWidgetSizeToWorkArea(currentBounds, bestWorkArea, WIDGET_ABSOLUTE_MIN_SIZE);
+    //    초과량 기준 판정 — 소수 배율에서 setBounds가 1px 크게 잡히는 것에 반응하면 래칫이 된다.
     const needsResize =
-      sized.width !== currentBounds.width || sized.height !== currentBounds.height;
+      currentBounds.width - bestWorkArea.width > WIDGET_OVERFLOW_TOLERANCE ||
+      currentBounds.height - bestWorkArea.height > WIDGET_OVERFLOW_TOLERANCE;
 
     // ② 위치 검증 — 헤더를 잡을 수 있는 상태인지.
     const isVisibleInAny = workAreas.some((wa) =>
@@ -1260,7 +1276,9 @@ function ensureWidgetBoundsWithinDisplays(targetWindow?: BrowserWindow | null): 
 
     if (isVisibleInAny && !needsResize) return;
 
-    const clamped = clampWidgetBoundsToWorkArea(sized, bestWorkArea, {
+    // 위치만 되돌리는 경우(넘치지 않음)에는 크기를 건드리지 않는다 — 반올림 1px 축소가
+    // 쌓이지 않도록 축소는 needsResize일 때만 적용한다.
+    const clamped = clampWidgetBoundsToWorkArea(needsResize ? sized : currentBounds, bestWorkArea, {
       minVisibleHeaderHeight: 40,
     });
 
@@ -1368,23 +1386,72 @@ function refitWidgetToDroppedDisplay(): void {
     const reference = lastWidgetMoveCursor ?? screen.getCursorScreenPoint();
     const target = screen.getDisplayNearestPoint(reference);
 
-    const [minWidth, minHeight] = win.getMinimumSize();
-    const sized = fitWidgetSizeToWorkArea(bounds, target.workArea, {
-      width: minWidth,
-      height: minHeight,
-    });
-    if (sized.width === bounds.width && sized.height === bounds.height) return;
+    // ① 레이아웃이 켜져 있으면 크기 기억보다 우선한다 — 새 모니터 기준으로 다시 계산한다.
+    //    레이아웃은 고정 크기가 아니라 화면과의 관계다(전체=그 화면 전체, 절반=그 화면의 절반).
+    const reapply = resolveLayoutReapply(target.id, target.workArea);
+    if (reapply) {
+      win.setMinimumSize(reapply.minSize.width, reapply.minSize.height);
+      win.setBounds(reapply.bounds);
+      setActiveWidgetLayout(reapply.mode, target.id);
+      diagLog(
+        'widget',
+        `[layout-reapply] ${reapply.mode} 를 새 모니터 기준으로 다시 적용 ` +
+          `before=(${bounds.x},${bounds.y},${bounds.width}x${bounds.height}) ` +
+          `after=(${reapply.bounds.x},${reapply.bounds.y},${reapply.bounds.width}x${reapply.bounds.height}) ` +
+          `display=${target.id} scale=${target.scaleFactor} ` +
+          `workArea=(${target.workArea.width}x${target.workArea.height})`,
+      );
+      scheduleWidgetBoundsSave();
+      return;
+    }
 
-    const clamped = clampWidgetBoundsToWorkArea(sized, target.workArea, {
-      minVisibleHeaderHeight: 40,
-    });
+    // ② 레이아웃이 없으면(자유 크기) 줄이기 전 크기를 되살린다.
+    // 축소는 그 화면에서만 유효한 임시 조치다 — 넓은 화면으로 돌아왔는데 작은 채로 두면
+    // 사용자에게는 "왕복했더니 위젯이 작아져 있다"로 보인다(2026-08-18 실기기 확인).
+    const restored = takePreferredSizeIfFits(target.workArea);
+    const base = restored ? { ...bounds, width: restored.width, height: restored.height } : bounds;
+
+    // ★"넘쳤는가"는 초과량으로 판정하고, 하한은 상수를 쓴다.
+    //   `getMinimumSize` 는 resizable:false 창에서 현재 크기를 돌려줘 축소를 무력화하고,
+    //   1px 초과에 반응하면 setBounds가 다음 1px을 만들어 래칫이 된다 (상수 주석 참조).
+    const needsShrink =
+      base.width - target.workArea.width > WIDGET_OVERFLOW_TOLERANCE ||
+      base.height - target.workArea.height > WIDGET_OVERFLOW_TOLERANCE;
+    if (!restored && !needsShrink) return;
+
+    const sized = needsShrink
+      ? fitWidgetSizeToWorkArea(base, target.workArea, WIDGET_ABSOLUTE_MIN_SIZE)
+      : base;
+    if (needsShrink) {
+      rememberSizeBeforeFit({ width: base.width, height: base.height });
+    }
+
+    // 화면 크기로 줄인 창은 전부 보이게 놓는다 — clampWidgetBoundsToWorkArea는
+    // "최소 가시량만 남으면 통과"라 줄인 창이 화면 밖에 걸친 채 통과한다.
+    const clamped = {
+      x: Math.round(
+        Math.max(
+          target.workArea.x,
+          Math.min(target.workArea.x + target.workArea.width - sized.width, sized.x),
+        ),
+      ),
+      y: Math.round(
+        Math.max(
+          target.workArea.y,
+          Math.min(target.workArea.y + target.workArea.height - sized.height, sized.y),
+        ),
+      ),
+      width: sized.width,
+      height: sized.height,
+    };
     diagLog(
       'widget',
-      `[dpi-refit] 위젯이 이동한 모니터보다 큼 — 화면에 맞게 축소 ` +
+      `[dpi-refit] ${needsShrink ? '화면보다 커서 축소' : '줄이기 전 크기로 복원'} ` +
         `before=(${bounds.x},${bounds.y},${bounds.width}x${bounds.height}) ` +
         `after=(${clamped.x},${clamped.y},${clamped.width}x${clamped.height}) ` +
         `display=${target.id} scale=${target.scaleFactor} ` +
-        `workArea=(${target.workArea.width}x${target.workArea.height})`,
+        `workArea=(${target.workArea.width}x${target.workArea.height}) ` +
+        `restored=${restored ? `${restored.width}x${restored.height}` : 'no'}`,
     );
     win.setBounds(clamped);
     scheduleWidgetBoundsSave();
@@ -3217,81 +3284,44 @@ function registerIpcHandlers(): void {
 
     // 위젯이 현재 위치한 모니터의 작업 영역을 사용 (다중 모니터 지원)
     const currentBounds = widgetWindow.getBounds();
-    const workArea = screen.getDisplayMatching(currentBounds).workArea;
+    const display = screen.getDisplayMatching(currentBounds);
+    const workArea = display.workArea;
 
     // 최초 레이아웃 변경 시 원래 위치/크기 저장 (복원용)
     if (!widgetBoundsBeforeLayout) {
       widgetBoundsBeforeLayout = widgetWindow.getBounds();
     }
 
-    let bounds: { x: number; y: number; width: number; height: number };
-
-    switch (mode) {
-      case 'full':
-        // 전체화면: 작업 영역 전체
-        bounds = {
-          x: workArea.x,
-          y: workArea.y,
-          width: workArea.width,
-          height: workArea.height,
-        };
-        break;
-      case 'split-h':
-        // 좌우 분할: 화면 우측 절반
-        bounds = {
-          x: workArea.x + Math.floor(workArea.width / 2),
-          y: workArea.y,
-          width: Math.floor(workArea.width / 2),
-          height: workArea.height,
-        };
-        break;
-      case 'split-v':
-        // 상하 분할: 화면 하단 절반
-        bounds = {
-          x: workArea.x,
-          y: workArea.y + Math.floor(workArea.height / 2),
-          width: workArea.width,
-          height: Math.floor(workArea.height / 2),
-        };
-        break;
-      case 'quad':
-        // 4분할: 화면 우하단 1/4
-        bounds = {
-          x: workArea.x + Math.floor(workArea.width / 2),
-          y: workArea.y + Math.floor(workArea.height / 2),
-          width: Math.floor(workArea.width / 2),
-          height: Math.floor(workArea.height / 2),
-        };
-        break;
-      case 'sidebar-right':
-        // 우측 사이드: 화면을 가로로 4등분한 우측 1/4 영역(전체 높이)
-        bounds = {
-          x: workArea.x + Math.floor((workArea.width * 3) / 4),
-          y: workArea.y,
-          width: Math.floor(workArea.width / 4),
-          height: workArea.height,
-        };
-        break;
-      default:
-        // 알 수 없는 모드: 원래 크기로 복원
-        if (widgetBoundsBeforeLayout) {
-          widgetWindow.setMinimumSize(640, 480);
-          widgetWindow.setBounds(widgetBoundsBeforeLayout);
-          widgetBoundsBeforeLayout = null;
-        }
-        return;
+    if (!isWidgetLayoutMode(mode)) {
+      // 알 수 없는 모드 = 레이아웃 해제: 원래 크기로 복원
+      clearActiveWidgetLayout();
+      clearPreferredSize();
+      if (widgetBoundsBeforeLayout) {
+        widgetWindow.setMinimumSize(
+          WIDGET_FREE_MINIMUM_SIZE.width,
+          WIDGET_FREE_MINIMUM_SIZE.height,
+        );
+        widgetWindow.setBounds(widgetBoundsBeforeLayout);
+        widgetBoundsBeforeLayout = null;
+      }
+      return;
     }
+
+    const bounds = computeWidgetLayoutBounds(mode, workArea);
 
     // 'sidebar-right'는 1/4 폭(예: 1920→480)이라 기본 minWidth=640에 막혀
     // OS가 폭을 640으로 늘리고 우측 끝을 벗어나, ensureWidgetOnScreen()이
     // 좌측으로 밀어내면서 결과적으로 ~1/3 화면을 덮는 버그가 생긴다.
     // 모드별로 최소 크기를 조정한 뒤 setBounds 호출. minHeight 도 같이 낮춰
     // 한 줄 위젯 스택이 잘리지 않도록 한다.
-    if (mode === 'sidebar-right') {
-      widgetWindow.setMinimumSize(220, 320);
-    } else {
-      widgetWindow.setMinimumSize(640, 480);
-    }
+    const layoutMin = widgetLayoutMinimumSize(mode);
+    widgetWindow.setMinimumSize(layoutMin.width, layoutMin.height);
+
+    // ★레이아웃을 켠 동안에는 "크기 기억"이 아니라 "레이아웃 재적용"이 규칙이다.
+    //   레이아웃은 고정된 크기가 아니라 화면과의 관계라, 모니터를 옮기면 새 모니터
+    //   기준으로 다시 계산해야 한다(2026-08-18 실기기 신고). 크기 기억은 버린다.
+    clearPreferredSize();
+    setActiveWidgetLayout(mode, display.id);
 
     widgetWindow.setBounds(bounds);
     // 일부 환경(WS_CHILD/native-desktop + Win32 SetWindowPos race)에서 setBounds가

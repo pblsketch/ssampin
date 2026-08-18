@@ -22,6 +22,7 @@
  */
 
 import { fitWidgetSizeToWorkArea } from './desktopWidgetBounds';
+import { WIDGET_OVERFLOW_TOLERANCE } from './desktopWidgetTypes';
 
 /** 다시 지정할 DIP 기준 창 영역. `BrowserWindow.setBounds`에 그대로 넘긴다. */
 export interface DpiRestoreBounds {
@@ -86,6 +87,22 @@ export interface DragEndBoundsInput extends DpiRestoreInput {
   readonly workArea: DpiRestoreBounds;
   /** OS/앱이 강제하는 최소 창 크기 (DIP) */
   readonly minSize: { readonly width: number; readonly height: number };
+  /**
+   * 이전에 화면에 안 들어가 줄이기 전의 크기 (DIP). 이번 화면에 들어가면 되살린다.
+   * 호출자가 `takePreferredSizeIfFits`로 "들어가는 경우"만 넘겨준다.
+   */
+  readonly preferredSize?: { readonly width: number; readonly height: number } | null;
+}
+
+/** `resolveDragEndBounds` 결과. `bounds`가 null이면 아무것도 하지 않는다. */
+export interface DragEndDecision {
+  /** 창에 다시 지정할 DIP 영역. null이면 개입하지 않는다. */
+  readonly bounds: DpiRestoreBounds | null;
+  /**
+   * 축소가 일어났다면 **줄이기 전 크기**. 호출자가 이 값을 기억해 두었다가
+   * 더 넓은 화면으로 돌아왔을 때 되살린다. 축소가 없었으면 null.
+   */
+  readonly shrunkFrom: { readonly width: number; readonly height: number } | null;
 }
 
 /**
@@ -102,30 +119,55 @@ export interface DragEndBoundsInput extends DpiRestoreInput {
  * ★넘치지 않고 배율도 그대로면 `null`. 매 드래그마다 setBounds를 부르면 소수 배율에서
  *   DIP→물리→DIP 반올림이 한 방향으로 쌓여 위젯이 조금씩 커진다(래칫).
  */
-export function resolveDragEndBounds(input: DragEndBoundsInput): DpiRestoreBounds | null {
-  const { currentBounds, workArea, minSize } = input;
+export function resolveDragEndBounds(input: DragEndBoundsInput): DragEndDecision {
+  const { currentBounds, workArea, minSize, preferredSize } = input;
 
   const restore = resolveDpiRestoreBounds(input);
-  const base = restore ?? currentBounds;
+  const afterRestore = restore ?? currentBounds;
+
+  // 줄이기 전 크기를 되살린다 — 호출자가 "이번 화면에 들어간다"고 확인한 값만 넘어온다.
+  // 축소는 그 화면에서만 유효한 임시 조치이므로, 넓은 화면으로 돌아오면 원래 크기를 되찾아야 한다.
+  const usedPreferred = Boolean(preferredSize);
+  const base = preferredSize
+    ? { ...afterRestore, width: preferredSize.width, height: preferredSize.height }
+    : afterRestore;
+
+  // ★"넘쳤는가"는 fit 결과 비교가 아니라 **초과량**으로 판정한다.
+  //   소수 배율에서는 setBounds가 요청보다 1px 크게 잡히므로(실측), 1px 초과에도 개입하면
+  //   줄이려던 보정이 다음 1px을 만들어 창이 계속 커진다(래칫). 상수 주석 참조.
+  const overflowWidth = base.width - workArea.width;
+  const overflowHeight = base.height - workArea.height;
+  const needsShrink =
+    overflowWidth > WIDGET_OVERFLOW_TOLERANCE || overflowHeight > WIDGET_OVERFLOW_TOLERANCE;
+
+  if (!needsShrink) {
+    if (!restore && !usedPreferred) return { bounds: null, shrunkFrom: null };
+    // 크기를 되살린 경우 창이 커졌으므로 화면 밖으로 밀려나지 않게 안으로 넣는다.
+    return { bounds: usedPreferred ? containWithin(base, workArea) : base, shrunkFrom: null };
+  }
 
   const sized = fitWidgetSizeToWorkArea(base, workArea, minSize);
-  const needsShrink = sized.width !== base.width || sized.height !== base.height;
-
-  if (!restore && !needsShrink) return null;
-  if (!needsShrink) return base;
-
-  // 축소했으면 위치도 **화면 안으로 완전히** 되돌린다.
-  //
-  // ★여기서 `clampWidgetBoundsToWorkArea`를 쓰면 안 된다. 그 함수의 정책은
-  //   "최소 가시량(헤더 40 · 가로 100)만 남으면 통과"라서, 화면 크기로 줄인 창이
-  //   여전히 300px쯤 화면 밖에 걸친 채 통과한다(그물 `resolveDragEndBounds` 1번 케이스에서 실측).
-  //   축소까지 한 상황은 "이 화면에 겨우 들어가는 크기"이므로 전부 보이게 놓는 것이 옳다.
-  const maxX = workArea.x + workArea.width - sized.width;
-  const maxY = workArea.y + workArea.height - sized.height;
   return {
-    x: Math.round(Math.max(workArea.x, Math.min(maxX, sized.x))),
-    y: Math.round(Math.max(workArea.y, Math.min(maxY, sized.y))),
-    width: sized.width,
-    height: sized.height,
+    bounds: containWithin({ ...base, width: sized.width, height: sized.height }, workArea),
+    shrunkFrom: { width: base.width, height: base.height },
+  };
+}
+
+/**
+ * 창을 작업 영역 **안에 전부** 들어오도록 위치만 옮긴다.
+ *
+ * ★`clampWidgetBoundsToWorkArea`(ADR-051)를 쓰면 안 된다. 그 함수의 정책은
+ *   "최소 가시량(헤더 40 · 가로 100)만 남으면 통과"라서, 화면 크기로 줄인 창이
+ *   여전히 300px쯤 화면 밖에 걸친 채 통과한다(그물에서 실측으로 잡았다).
+ *   크기를 화면에 맞춘 상황은 전부 보이게 놓는 것이 옳다.
+ */
+function containWithin(bounds: DpiRestoreBounds, workArea: DpiRestoreBounds): DpiRestoreBounds {
+  const maxX = workArea.x + workArea.width - bounds.width;
+  const maxY = workArea.y + workArea.height - bounds.height;
+  return {
+    x: Math.round(Math.max(workArea.x, Math.min(maxX, bounds.x))),
+    y: Math.round(Math.max(workArea.y, Math.min(maxY, bounds.y))),
+    width: bounds.width,
+    height: bounds.height,
   };
 }

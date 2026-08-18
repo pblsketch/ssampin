@@ -370,6 +370,31 @@ const absenceChecks = [
     ],
     fileFilter: (path) => /recordIdentityAdapter\.ts$/.test(path) && !path.includes('.test.'),
   },
+  // ────────────────────────────────────────────────────────────────────────
+  // REGRESSION #53 — 위젯 크기 보정에 getMinimumSize() 금지 (ADR-053, 2026-08-18).
+  //
+  // 위젯 창은 `resizable: false` 로 만들어진다. 크기 조절 불가 창은 Windows/Chromium 이
+  // 최소 크기를 **현재 크기와 같게** 보고한다 (실측: 생성 직후 getMinimumSize=(903x703),
+  // setBounds 839x985 뒤 getMinimumSize=(839x985); resizable:true 대조군은 640x480).
+  //
+  // 그래서 `fitWidgetSizeToWorkArea(bounds, workArea, getMinimumSize())` 는
+  // max(현재, min(현재, 화면)) = 현재가 되어 **"화면보다 크면 줄인다"가 한 번도 동작하지
+  // 않았다.** ADR-051 결정 6 으로 넣은 보호 장치가 출시 후에도 무력 상태였고, 자동 검사가
+  // 전부 초록불이었는데도 아무도 몰랐다 (계산은 옳고 입력이 틀린 유형).
+  //
+  // 하한은 반드시 상수(WIDGET_ABSOLUTE_MIN_SIZE)를 쓴다.
+  // ────────────────────────────────────────────────────────────────────────
+  {
+    name: 'REGRESSION #53: 위젯 크기 보정이 getMinimumSize()를 하한으로 쓰지 않는다 (resizable:false 함정)',
+    roots: ['electron'],
+    extensions: ['.ts'],
+    patterns: [/getMinimumSize\s*\(\s*\)/],
+    // 크기 보정 로직이 사는 파일에만 적용한다. 프로브 스크립트와 테스트는 이 API 의
+    // 실제 거동을 관찰·문서화하는 것이 목적이므로 제외.
+    fileFilter: (path) =>
+      /(main|desktopWidgetManager|desktopWidgetDpiRestore)\.ts$/.test(path) &&
+      !path.includes('.test.'),
+  },
 ];
 
 // ============================================================

@@ -111,7 +111,7 @@ describe('resolveDragEndBounds', () => {
   it('보조를 꽉 채운 위젯을 배율 높은 주 모니터로 옮기면 주 모니터에 맞게 줄인다', () => {
     // 신고 재현: DIP 1920×1032 위젯이 175% 모니터에서는 물리 3360×1806 —
     // 주 모니터(물리 2880×1800)보다 커서 화면 밖으로 넘친다.
-    const next = resolveDragEndBounds({
+    const { bounds: next } = resolveDragEndBounds({
       startScale: 1,
       endScale: 1.75,
       startDipSize: { width: 1920, height: 1032 },
@@ -132,7 +132,7 @@ describe('resolveDragEndBounds', () => {
   });
 
   it('들어가는 크기면 DPI 복구만 하고 크기는 건드리지 않는다', () => {
-    const next = resolveDragEndBounds({
+    const { bounds: next } = resolveDragEndBounds({
       startScale: 1.75,
       endScale: 1,
       startDipSize: { width: 704, height: 523 },
@@ -155,13 +155,13 @@ describe('resolveDragEndBounds', () => {
         currentBounds: { x: 1700, y: 50, width: 700, height: 500 },
         workArea: SECONDARY_WORK_AREA,
         minSize: MIN_SIZE,
-      }),
+      }).bounds,
     ).toBeNull();
   });
 
   it('배율이 같아도 더 작은 모니터로 옮겨 넘치면 줄인다', () => {
     // 2560×1440 크기의 위젯을 1920×1032 작업영역으로 옮긴 경우 (둘 다 100%).
-    const next = resolveDragEndBounds({
+    const { bounds: next } = resolveDragEndBounds({
       startScale: 1,
       endScale: 1,
       startDipSize: { width: 2560, height: 1440 },
@@ -176,8 +176,68 @@ describe('resolveDragEndBounds', () => {
     expect(next!.height).toBe(1032);
   });
 
+  it('반올림으로 1px만 넘친 경우에는 개입하지 않는다 (래칫 방지)', () => {
+    // 175% 배율에서 setBounds(H)를 부르면 실제로는 H+1이 된다(실측).
+    // 이 1px에 반응해 다시 줄이면 그 setBounds가 또 +1을 만들어 창이 계속 커진다.
+    // 실기기 로그에서 폭이 839→845로 자란 것이 이 경로였다.
+    expect(
+      resolveDragEndBounds({
+        startScale: 1.75,
+        endScale: 1.75,
+        startDipSize: { width: 1646, height: 981 },
+        finalDipOrigin: { x: 0, y: 0 },
+        currentBounds: { x: 0, y: 0, width: 1647, height: 982 },
+        workArea: PRIMARY_WORK_AREA,
+        minSize: MIN_SIZE,
+      }).bounds,
+    ).toBeNull();
+  });
+
+  it('반올림 잡음보다 크게 넘치면(3px) 개입한다', () => {
+    const { bounds: next } = resolveDragEndBounds({
+      startScale: 1.75,
+      endScale: 1.75,
+      startDipSize: { width: 1649, height: 984 },
+      finalDipOrigin: { x: 0, y: 0 },
+      currentBounds: { x: 0, y: 0, width: 1649, height: 984 },
+      workArea: PRIMARY_WORK_AREA,
+      minSize: MIN_SIZE,
+    });
+
+    expect(next).not.toBeNull();
+    expect(next!.width).toBe(PRIMARY_WORK_AREA.width);
+    expect(next!.height).toBe(PRIMARY_WORK_AREA.height);
+  });
+
+  it('하한이 현재 크기로 들어오면 축소가 무력화된다 — 상수를 써야 하는 이유', () => {
+    // 위젯 창은 resizable:false라 getMinimumSize()가 "현재 크기"를 돌려준다(실측).
+    // 그 값을 하한으로 넘기면 max(현재, min(현재, 화면)) = 현재가 되어 한 톨도 안 줄어든다.
+    const oversized = { x: 0, y: 0, width: 1920, height: 1032 };
+    const { bounds: neutered } = resolveDragEndBounds({
+      startScale: 1,
+      endScale: 1,
+      startDipSize: { width: 1920, height: 1032 },
+      finalDipOrigin: { x: 0, y: 0 },
+      currentBounds: oversized,
+      workArea: PRIMARY_WORK_AREA,
+      minSize: { width: oversized.width, height: oversized.height }, // ← getMinimumSize()의 실제 거동
+    });
+    expect(neutered!.width).toBe(1920); // 안 줄어든다 = 버그 재현
+
+    const { bounds: withConstant } = resolveDragEndBounds({
+      startScale: 1,
+      endScale: 1,
+      startDipSize: { width: 1920, height: 1032 },
+      finalDipOrigin: { x: 0, y: 0 },
+      currentBounds: oversized,
+      workArea: PRIMARY_WORK_AREA,
+      minSize: MIN_SIZE, // ← 상수 하한
+    });
+    expect(withConstant!.width).toBe(PRIMARY_WORK_AREA.width); // 제대로 줄어든다
+  });
+
   it('최소 크기 아래로는 줄이지 않는다 (setBounds가 어차피 되돌린다)', () => {
-    const next = resolveDragEndBounds({
+    const { bounds: next } = resolveDragEndBounds({
       startScale: 1,
       endScale: 1,
       startDipSize: { width: 900, height: 800 },
@@ -190,5 +250,82 @@ describe('resolveDragEndBounds', () => {
     expect(next).not.toBeNull();
     expect(next!.width).toBe(MIN_SIZE.width);
     expect(next!.height).toBe(MIN_SIZE.height);
+  });
+
+  it('축소할 때 줄이기 전 크기를 함께 돌려준다 (호출자가 기억해 되살린다)', () => {
+    const decision = resolveDragEndBounds({
+      startScale: 1,
+      endScale: 1.75,
+      startDipSize: { width: 1920, height: 1032 },
+      finalDipOrigin: { x: 300, y: 100 },
+      currentBounds: { x: 300, y: 100, width: 1920, height: 1032 },
+      workArea: PRIMARY_WORK_AREA,
+      minSize: MIN_SIZE,
+    });
+
+    expect(decision.shrunkFrom).toEqual({ width: 1920, height: 1032 });
+  });
+
+  it('보조↔주 왕복 후에도 원래 크기를 되찾는다 (2026-08-18 실기기 신고)', () => {
+    // 실기기 증상: 보조를 꽉 채운 뒤 주로 옮기면 꽉 차는데, 다시 보조로 돌아오면
+    // 주 모니터에 맞춰 줄인 크기가 그대로 굳어 화면이 남았다.
+    const filledSecondary = { x: 1645, y: 0, width: 1920, height: 1032 };
+
+    // ① 보조 → 주 : 주 모니터 크기로 줄고, 줄이기 전 크기를 돌려준다
+    const toPrimary = resolveDragEndBounds({
+      startScale: 1,
+      endScale: 1.75,
+      startDipSize: { width: 1920, height: 1032 },
+      finalDipOrigin: { x: 100, y: 50 },
+      currentBounds: { ...filledSecondary, x: 100, y: 50 },
+      workArea: PRIMARY_WORK_AREA,
+      minSize: MIN_SIZE,
+    });
+    expect(toPrimary.bounds!.width).toBe(PRIMARY_WORK_AREA.width);
+    expect(toPrimary.shrunkFrom).toEqual({ width: 1920, height: 1032 });
+
+    // ② 주 → 보조 : 기억한 크기를 넘기면 되살아나야 한다
+    const backToSecondary = resolveDragEndBounds({
+      startScale: 1.75,
+      endScale: 1,
+      startDipSize: { width: PRIMARY_WORK_AREA.width, height: PRIMARY_WORK_AREA.height },
+      finalDipOrigin: { x: 1700, y: 20 },
+      currentBounds: {
+        x: 1700,
+        y: 20,
+        width: PRIMARY_WORK_AREA.width,
+        height: PRIMARY_WORK_AREA.height,
+      },
+      workArea: SECONDARY_WORK_AREA,
+      minSize: MIN_SIZE,
+      preferredSize: toPrimary.shrunkFrom,
+    });
+
+    expect(backToSecondary.bounds).not.toBeNull();
+    expect(backToSecondary.bounds!.width).toBe(1920);
+    expect(backToSecondary.bounds!.height).toBe(1032);
+    // 되살린 크기가 화면 안에 전부 들어와야 한다 (커졌으므로 밀려날 수 있다)
+    expect(backToSecondary.bounds!.x + backToSecondary.bounds!.width).toBeLessThanOrEqual(
+      SECONDARY_WORK_AREA.x + SECONDARY_WORK_AREA.width,
+    );
+    expect(backToSecondary.shrunkFrom).toBeNull();
+  });
+
+  it('기억한 크기가 이번 화면에도 안 들어가면 호출자가 넘기지 않는다 — 넘어오면 다시 줄인다', () => {
+    // 방어: 호출자(takePreferredSizeIfFits)가 걸러 주지만, 만약 넘어오더라도
+    // 화면을 넘치면 그대로 두지 않고 줄인다.
+    const decision = resolveDragEndBounds({
+      startScale: 1,
+      endScale: 1,
+      startDipSize: { width: 800, height: 600 },
+      finalDipOrigin: { x: 0, y: 0 },
+      currentBounds: { x: 0, y: 0, width: 800, height: 600 },
+      workArea: PRIMARY_WORK_AREA,
+      minSize: MIN_SIZE,
+      preferredSize: { width: 3000, height: 2000 },
+    });
+
+    expect(decision.bounds!.width).toBe(PRIMARY_WORK_AREA.width);
+    expect(decision.bounds!.height).toBe(PRIMARY_WORK_AREA.height);
   });
 });
