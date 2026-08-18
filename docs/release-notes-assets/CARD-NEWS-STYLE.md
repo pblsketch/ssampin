@@ -16,11 +16,11 @@
 
 ## 2. 카드 수 결정
 
-| 변경사항 수 | 카드 구성 |
-|-------------|-----------|
-| 1~2개 | 인트로 → 단일 콘텐츠(1장 또는 2컬럼) → 아웃트로 (총 3장) |
-| 3~4개 | 인트로 → 관련 묶기(2개 병치) + 단독(1~2개) → 아웃트로 (총 4~5장) |
-| 5개 이상 | 인트로 → 카테고리별 묶기 → 아웃트로 (총 5~7장) |
+| 변경사항 수 | 카드 구성                                                        |
+| ----------- | ---------------------------------------------------------------- |
+| 1~2개       | 인트로 → 단일 콘텐츠(1장 또는 2컬럼) → 아웃트로 (총 3장)         |
+| 3~4개       | 인트로 → 관련 묶기(2개 병치) + 단독(1~2개) → 아웃트로 (총 4~5장) |
+| 5개 이상    | 인트로 → 카테고리별 묶기 → 아웃트로 (총 5~7장)                   |
 
 v1.10.1 기준: 4개 변경사항 → 4장 구성 (인트로 · 출결 2묶음 · 좌석 단독 · 버그+아웃트로)
 
@@ -33,29 +33,29 @@ v1.10.1 기준: 4개 변경사항 → 4장 구성 (인트로 · 출결 2묶음 �
 
 ## 4. 색상 팔레트 (엄격 준수 — 다른 색 사용 금지)
 
-| 역할 | HEX | 용도 |
-|------|-----|------|
-| 외곽 프레임 | `#1F2937` | 다크 네이비 |
-| 카드 표면 | `#FAFAF7` | 웜 오프화이트 |
-| 프라이머리 텍스트 | `#1F2937` | 타이틀 |
-| 뮤티드 텍스트 | `#64748B` | 본문/캡션 |
-| 디바이더 | `#E8E5DE` | 카드 내 분리선 |
-| 브랜드 블루 | `#3B82F6` | 체크·아이콘 액센트 / "개선" 태그 |
-| 앰버 | `#F59E0B` | 핀 머리 / "신규" 태그 / 강조 요소 |
-| 그린 | `#10B981` | "수정" 태그 |
-| 그레이 | `#64748B` | "변경" 태그 |
-| 블루 틴트 | `#EEF2FF` | 날짜 알약 배경 |
+| 역할              | HEX       | 용도                              |
+| ----------------- | --------- | --------------------------------- |
+| 외곽 프레임       | `#1F2937` | 다크 네이비                       |
+| 카드 표면         | `#FAFAF7` | 웜 오프화이트                     |
+| 프라이머리 텍스트 | `#1F2937` | 타이틀                            |
+| 뮤티드 텍스트     | `#64748B` | 본문/캡션                         |
+| 디바이더          | `#E8E5DE` | 카드 내 분리선                    |
+| 브랜드 블루       | `#3B82F6` | 체크·아이콘 액센트 / "개선" 태그  |
+| 앰버              | `#F59E0B` | 핀 머리 / "신규" 태그 / 강조 요소 |
+| 그린              | `#10B981` | "수정" 태그                       |
+| 그레이            | `#64748B` | "변경" 태그                       |
+| 블루 틴트         | `#EEF2FF` | 날짜 알약 배경                    |
 
 **금지**: 그라디언트, 섀도우, 3D, 사진, 사실적 사람/얼굴, 이모지
 
 ## 5. 태그 알약 규칙 (release-notes.json의 `type` 매핑)
 
-| release-notes.json type | 한글 레이블 | 배경 HEX |
-|-------------------------|-------------|----------|
-| `improve` | 개선 | `#3B82F6` |
-| `new` | 신규 | `#F59E0B` |
-| `fix` | 수정 | `#10B981` |
-| `change` | 변경 | `#64748B` |
+| release-notes.json type | 한글 레이블 | 배경 HEX  |
+| ----------------------- | ----------- | --------- |
+| `improve`               | 개선        | `#3B82F6` |
+| `new`                   | 신규        | `#F59E0B` |
+| `fix`                   | 수정        | `#10B981` |
+| `change`                | 변경        | `#64748B` |
 
 형태: 둥근 사각형 ~28px 높이, 좌우 패딩 14px, 흰 텍스트.
 
@@ -75,48 +75,60 @@ v1.10.1 기준: 4개 변경사항 → 4장 구성 (인트로 · 출결 2묶음 �
 ## 8. 카드별 콘텐츠 템플릿
 
 ### 인트로 카드 (1/N)
+
 - 상단: 날짜 알약 `YYYY.MM.DD 릴리즈` (블루 틴트)
 - 센터: 대형 타이틀 `쌤핀 v{VERSION}` + 호기심 유발 한 줄
 - 앵커: 쌤핀 핀이 꽂힌 "쌤핀" 스티키노트 일러스트
 - 좌하단: `1 / N`
 
 ### 콘텐츠 카드 — 단독 항목 (`sparse`)
+
 - 상단 중앙 태그 알약 → 대형 타이틀 → 질문형 서브카피 → 중앙 일러스트 → 본문 2~3줄 → `N / 총수`
 
 ### 콘텐츠 카드 — 2컬럼 병치 (`balanced`)
+
 - 상단 좌측 카테고리 헤더 → 수직 디바이더로 2등분 → 각 컬럼 {태그 + 아이콘 + 타이틀 + 본문} → `N / 총수`
 
 ### 아웃트로 카드 (N/N)
+
 - (선택) 상단 수정 항목 1개
 - 가로 디바이더
 - "지금 바로 업데이트해 보세요" 헤드라인 + "쌤핀 데스크톱 앱 · ssampin.com"
 - 바닥: 앰버 핀 시그니처
 - 좌하단 `N / N`, 우하단 `made by 쌤핀 team`
 
-## 9. 생성 파이프라인
+## 9. 생성 파이프라인 (gpt-image-2 / Codex OAuth — 2026-07 채택)
 
-```bash
-# 1. 카드 1(앵커) 먼저 생성
-npx -y bun "C:/Users/wnsdl/.claude/skills/baoyu-imagine/scripts/main.ts" \
-  --promptfiles "docs/release-notes-assets/v{VERSION}/cards/prompts/01-card-intro.md" \
-  --image     "docs/release-notes-assets/v{VERSION}/cards/01-intro.png" \
-  --ar "1:1" --provider google --model "gemini-3-pro-image-preview"
+**백엔드: OpenAI `gpt-image-2` via Codex CLI (`image_gen` 내장 도구, OAuth).** API 키 불필요.
+한글 텍스트를 이미지 안에 정확히 렌더한다(요일 헤더·URL·버전 표기까지 무결). `roundup-2026-07/cards/`가 실제 산출 예시.
 
-# 2. 카드 2~N을 카드 1을 --ref로 참조하여 병렬 생성
-npx -y bun "..." \
-  --promptfiles "..../NN-card-*.md" \
-  --image     "..../NN-*.png" \
-  --ar "1:1" --provider google --model "gemini-3-pro-image-preview" \
-  --ref       "docs/release-notes-assets/v{VERSION}/cards/01-intro.png"
-```
+### 레시피 (Windows / PowerShell 기준)
 
-- 백엔드: `baoyu-imagine` + Google Gemini 3 Pro Image Preview
-- 품질: 2K (baoyu-imagine EXTEND.md 기본값)
-- API 키: `.baoyu-skills/.env` (gitignore 됨)
+1. **카드별 프롬프트를 UTF-8 `.txt`로 저장** — `cards/prompts/NN-*.txt`. 프롬프트는 §1·4·8 스타일을 영어로 상세 기술하되, 카드에 들어갈 **한글 문구는 정확한 완성형으로 그대로** 적는다.
+2. **격리 최소 `CODEX_HOME`을 만든다** — 사용자 전역 `~/.codex`는 플러그인·MCP·훅이 많아 `codex exec` 기동만 5~7분+ 걸리거나 멈춘다. 임시 폴더에 다음만 둔다:
+   - `config.toml`: `model = "gpt-5.6-sol"` · `approval_policy = "never"` · `sandbox_mode = "workspace-write"`
+   - `auth.json`: `~/.codex/auth.json`을 복사(OAuth 로그인 승계)
+     → 이러면 기동이 ~10초, 카드 1장 생성 ~2분.
+3. **앱 codex.exe로 실행**(최신 모델 지원). npm 전역 `codex`(구버전)는 기본 모델 미지원.
+   `$appCodex = 'C:\Users\<user>\AppData\Local\OpenAI\Codex\bin\<hash>\codex.exe'`
+4. **프롬프트는 인자/stdin이 아니라 "파일을 읽으라"는 ASCII 지시로 전달** — PowerShell 5.1이 인자·stdin의 한글을 깨뜨리므로:
+   ```powershell
+   $env:CODEX_HOME = $isolatedHome
+   $instr = "Read the UTF-8 text file at '<promptfile>'. Use its entire contents verbatim as the prompt for the built-in image_gen tool. Generate exactly one image, size 1024x1024, quality high. Then print DONE."
+   & $appCodex exec $instr -C '<repo>' -s workspace-write --skip-git-repo-check -c 'model_reasoning_effort="medium"'
+   ```
+5. **결과물은 직접 복사** — codex의 자동 copy 단계는 샌드박스가 `powershell.exe` 실행을 막아 실패한다(정상). 이미지는 `<CODEX_HOME>/generated_images/<session>/exec-*.png`에 생성되므로, **가장 최신 png를 목표 경로로 직접 `Copy-Item`** 한다. 여러 장 순차 생성 시 각 실행 전후 최신 png의 `LastWriteTime`을 비교해 새 이미지만 복사(오매칭 방지).
+
+### 함정
+
+- codex 기동이 느리면 원인은 전역 config의 플러그인/MCP/훅 → 반드시 격리 CODEX_HOME 사용.
+- 멈춘 codex 프로세스가 리소스를 잡으므로, 실행분(최근 몇 분 내 StartTime)만 골라 정리하고 **사용자 본인 세션은 건드리지 않는다**.
+- 이전 Gemini 3 Pro Image(baoyu-imagine) 파이프라인은 폐기(2026-07). 필요 시 git 이력 참조.
 
 ## 10. 템플릿
 
 `docs/release-notes-assets/templates/` 참조:
+
 - `_intro-card.template.md` — 인트로 카드 스켈레톤
 - `_content-card.template.md` — 내용 카드 (sparse/balanced 선택)
 - `_outro-card.template.md` — 아웃트로 카드
