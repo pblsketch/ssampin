@@ -104,3 +104,135 @@ docs/sample-scores/
 # 작업 중 만든 임시 파일·캐시 (화면 캡처, 진단 산출물, node 컴파일 캐시)
 # 위 사고에서 이 폴더 하나로 529개가 스테이징에 섞여 들어갔다.
 .qa-temp-t5/
+
+# ─────────────────────────────────────────────────────────────
+# 로컬 작업물 일괄 제외 (2026-08-19)
+#
+# 세션마다 쌓인 미추적 파일 90여 개를 정리한 것이다. 성격은 셋 중 하나다 —
+# ①공개하면 안 되는 문서, ②화면 캡처·시험 산출물 같은 부산물, ③아직 저장소에 넣을지
+# 정하지 않은 기획 메모. 어느 쪽도 "지금 커밋해야 할 것"이 아니라 목록에서 치운다.
+#
+# 개별 경로를 일일이 적은 이유 — `docs/**/*.md` 처럼 통째로 막으면 앞으로 만드는
+# PDCA 문서까지 조용히 사라져 "커밋했는데 왜 없지"가 된다. 넓게 막는 것보다
+# 길게 적는 쪽이 안전하다.
+
+## ① 개인정보·기관정보가 든 문서 — 확장자로 막는다(앞으로 생기는 것까지)
+# 실제로 들어 있던 것: 재직 학교명이 박힌 교육과정 편제표(.hwp), OSS 신청 서식(.xlsx),
+# 나이스 출결 업무 매뉴얼(.pdf), 사용자 문의 메일 원문(.eml).
+# 이 저장소는 공개(GPL)라 한 번 올라가면 이력·포크·크롤러에 남아 되돌릴 수 없다.
+docs/*.hwp
+docs/*.xlsx
+docs/*.pdf
+docs/*.eml
+# 편제표를 base64 로 풀어 둔 것 — 확장자만 다를 뿐 같은 문서다.
+/pyeonje-b64.txt
+/docs/signpath-application-email.txt
+
+## ② 저장소 루트에 떨어진 화면 캡처
+/01-home.png
+/01-main.png
+/02-homeroom.png
+/03-class-picker.png
+/04-teaching.png
+/05-attendance.png
+/06-attendance-expanded.png
+/07-schedule.png
+/08-todo.png
+/09-more.png
+/10-more-dark.png
+/sync-hardening-2-render-check.png
+/tools-1024.png
+/tools-1280.png
+
+## ③ 도구·시험 작업 폴더
+/.dorms-check/
+/.gjc/
+/.playwright-cli/
+/RESEARCH/
+/design examples/
+docs/03-analysis/calendar-may-screenshots/
+docs/03-analysis/mobile-landscape/
+docs/03-analysis/record-system-unification/
+docs/03-analysis/user-guide-docs-site/
+docs/archive/
+docs/mascot-profile-assets/
+docs/promo-cardnews/
+docs/release-notes-assets/roundup-2026-07/
+docs/release-notes-assets/v-ai-bridge/
+docs/release-notes-assets/v2.0.7/
+docs/release-notes-assets/v2.0.8/
+docs/release-notes-assets/v2.1.1/
+docs/release-notes-assets/v2.1.2-memo-share/
+docs/release-notes-assets/v2.1.2/
+docs/release-notes-assets/v2.1.3/
+docs/release-notes-assets/v2.2.0/
+docs/release-notes-assets/v2.2.2/
+docs/release-notes-assets/v2.2.3/
+docs/release-notes-assets/v2.2.4/
+docs/release-notes-assets/v2.2.7/
+docs/release-notes-assets/v2.2.8/
+docs/research/
+docs/screenshots/
+docs/sprite-gen-pin/
+/output/
+public/landing/
+spikes/sig-image-gate/
+tests/output/
+/tmp/
+
+## ④ 로컬 스크래치 파일·아직 정리 안 된 기획 메모
+/claude-code-prompts.md
+/deno.lock
+docs/01-plan/features/ai-bridge-contract-and-todo-enhance.plan.md
+docs/01-plan/features/ai-bridge-contract-and-todo-enhance.ralph-handoff.md
+docs/01-plan/features/attendance-dual-ledger-delete.handoff.md
+docs/01-plan/features/icon-mode-coachmark-stuck.handoff.md
+docs/01-plan/features/mobile-homeroom-roster-source.handoff.md
+docs/01-plan/features/neis-teacher-reconstruct.handoff.md
+docs/01-plan/features/progress-calendar.plan.md
+docs/01-plan/features/records-search-redesign.plan.md
+docs/01-plan/features/side-pin-enhancement-ideas.plan.md
+docs/02-design/features/record-system-unification-phase1.design.md
+docs/03-analysis/records-search-redesign/uiux-redesign-proposal.md
+docs/10-apin-parser-comparison.html
+docs/CLASS-MANAGEMENT-UX-SPEC.md
+docs/GOOGLE-CALENDAR-PRD.md
+docs/GOOGLE-CALENDAR-SPEC.md
+docs/MY-EMOTICON-PRD.md
+docs/NEIS-TIMETABLE-PRD.md
+docs/PLAN_발제피드백_응답모아보기.md
+docs/STUDENT-RECORDS-PRD.md
+docs/blog-개인구독-AI-붙이기.md
+docs/impeccable-audit-report.md
+docs/impeccable-audit-v2.md
+docs/local-handoff-G001.md
+docs/release-prep/v2.1.0-multisurvey-v2-chatbot-qa-additions.md
+docs/release-prep/v2.1.0-multisurvey-v2-kb-draft.md
+docs/signpath-application-email.txt
+docs/ssampin-analytics-prd.md
+docs/ssampin-assignment-spec (3).md
+docs/ssampin-feedback-implementation (2).md
+docs/ssampin-record-export-prompts.md
+docs/ssampin-v1-review.md
+docs/계획_변동시간표.md
+docs/계획_서식-관리.md
+docs/계획_쌤핀-노트.md
+docs/계획_자리뽑기-비공개-사전배정.md
+docs/계획_페이지헤더-통일.md
+docs/발제피드백_Phase3_kickoff.md
+docs/발제피드백_Phase3_새세션_시작프롬프트.md
+docs/압핀-시간표-연동-가능성-조사.md
+docs/압핀파서_교차검증리포트.html
+docs/완료_PDF-Exporter.md
+docs/외부노트앱_경쟁분석_노트서식.md
+/dorms-check.config.json
+landing/progress.txt
+/package_test.json
+/paseo.json
+/progress.txt
+/pyeonje-b64.txt
+scripts/gen-card-image.mjs
+scripts/render-card-html.cjs
+/test_el.cjs
+tests/fixtures/student-bundle-baseline.json
+
