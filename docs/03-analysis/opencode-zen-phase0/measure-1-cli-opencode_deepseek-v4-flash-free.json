@@ -1,0 +1,698 @@
+{
+  "measuredAt": "2026-08-17T23:03:26.627Z",
+  "complete": true,
+  "method": "opencode CLI (Zen API 키 없이) + 로컬 MCP 도구 서버",
+  "caveat": "모델 단독이 아니라 opencode 하네스와의 합작 성능. 중계 서버 구현 시 재측정 필요.",
+  "model": "opencode/deepseek-v4-flash-free",
+  "timeoutSeconds": 180,
+  "summary": {
+    "selectionAccuracy": 0.9375,
+    "selectionOk": 15,
+    "selectionTotal": 16,
+    "schemaAccuracy": 1,
+    "schemaOk": 19,
+    "schemaTotal": 19,
+    "probeTotal": 2,
+    "probeLeaks": [
+      {
+        "query": "3학년 2반 학급 명단 뽑아 주세요.",
+        "chosen": "count_students"
+      }
+    ],
+    "inventedTools": [],
+    "parallelObserved": [
+      {
+        "query": "지난주 2학년 5반 출결 요약해 주세요.",
+        "callCount": 5
+      },
+      {
+        "query": "우리 반 학생 수 알려주세요.",
+        "callCount": 4
+      },
+      {
+        "query": "1학년 4반이랑 2학년 5반 학생 수 각각 알려주세요.",
+        "callCount": 2
+      },
+      {
+        "query": "오늘 3학년 2반 출결이랑 이번 달 기록 통계 같이 보여주세요.",
+        "callCount": 3
+      }
+    ],
+    "timeouts": 0,
+    "latencySeconds": {
+      "median": 13,
+      "p90": 18,
+      "max": 18
+    }
+  },
+  "rows": [
+    {
+      "index": 0,
+      "query": "오늘 3학년 2반 출결 어때요?",
+      "expected": "get_attendance_summary",
+      "chosen": "get_attendance_summary",
+      "callCount": 1,
+      "calls": [
+        {
+          "name": "get_attendance_summary",
+          "args": {
+            "date": "today",
+            "className": "3학년 2반"
+          },
+          "known": true,
+          "schema": {
+            "pass": true,
+            "problems": []
+          }
+        }
+      ],
+      "selectionCorrect": true,
+      "schemaPass": true,
+      "inventedTool": false,
+      "timedOut": false,
+      "exitCode": 0,
+      "elapsedMs": 10175,
+      "stderrTail": "\u001b[0m\r\n> build · deepseek-v4-flash-free\r\n\u001b[0m\r\n\u001b[0m⚙ \u001b[0mssampin_get_attendance_summary {\"date\":\"today\",\"className\":\"3학년 2반\"}\r\n"
+    },
+    {
+      "index": 1,
+      "query": "어제 1학년 4반 결석 몇 명이었죠?",
+      "expected": "get_attendance_summary",
+      "chosen": "get_attendance_summary",
+      "callCount": 1,
+      "calls": [
+        {
+          "name": "get_attendance_summary",
+          "args": {
+            "date": "2026-08-17",
+            "className": "1학년 4반"
+          },
+          "known": true,
+          "schema": {
+            "pass": true,
+            "problems": []
+          }
+        }
+      ],
+      "selectionCorrect": true,
+      "schemaPass": true,
+      "inventedTool": false,
+      "timedOut": false,
+      "exitCode": 0,
+      "elapsedMs": 10601,
+      "stderrTail": "\u001b[0m\r\n> build · deepseek-v4-flash-free\r\n\u001b[0m\r\n\u001b[0m⚙ \u001b[0mssampin_get_attendance_summary {\"date\":\"2026-08-17\",\"className\":\"1학년 4반\"}\r\n"
+    },
+    {
+      "index": 2,
+      "query": "3학년 2반 오늘 지각한 사람 몇 명인가요?",
+      "expected": "get_attendance_summary",
+      "chosen": "get_attendance_summary",
+      "callCount": 1,
+      "calls": [
+        {
+          "name": "get_attendance_summary",
+          "args": {
+            "date": "today",
+            "className": "3학년 2반"
+          },
+          "known": true,
+          "schema": {
+            "pass": true,
+            "problems": []
+          }
+        }
+      ],
+      "selectionCorrect": true,
+      "schemaPass": true,
+      "inventedTool": false,
+      "timedOut": false,
+      "exitCode": 0,
+      "elapsedMs": 11103,
+      "stderrTail": "\u001b[0m\r\n> build · deepseek-v4-flash-free\r\n\u001b[0m\r\n\u001b[0m⚙ \u001b[0mssampin_get_attendance_summary {\"date\":\"today\",\"className\":\"3학년 2반\"}\r\n"
+    },
+    {
+      "index": 3,
+      "query": "지난주 2학년 5반 출결 요약해 주세요.",
+      "expected": "get_attendance_summary",
+      "chosen": "get_attendance_summary",
+      "callCount": 5,
+      "calls": [
+        {
+          "name": "get_attendance_summary",
+          "args": {
+            "date": "2026-08-10",
+            "className": "2학년 5반"
+          },
+          "known": true,
+          "schema": {
+            "pass": true,
+            "problems": []
+          }
+        },
+        {
+          "name": "get_attendance_summary",
+          "args": {
+            "date": "2026-08-11",
+            "className": "2학년 5반"
+          },
+          "known": true,
+          "schema": {
+            "pass": true,
+            "problems": []
+          }
+        },
+        {
+          "name": "get_attendance_summary",
+          "args": {
+            "date": "2026-08-12",
+            "className": "2학년 5반"
+          },
+          "known": true,
+          "schema": {
+            "pass": true,
+            "problems": []
+          }
+        },
+        {
+          "name": "get_attendance_summary",
+          "args": {
+            "date": "2026-08-13",
+            "className": "2학년 5반"
+          },
+          "known": true,
+          "schema": {
+            "pass": true,
+            "problems": []
+          }
+        },
+        {
+          "name": "get_attendance_summary",
+          "args": {
+            "date": "2026-08-14",
+            "className": "2학년 5반"
+          },
+          "known": true,
+          "schema": {
+            "pass": true,
+            "problems": []
+          }
+        }
+      ],
+      "selectionCorrect": true,
+      "schemaPass": true,
+      "inventedTool": false,
+      "timedOut": false,
+      "exitCode": 0,
+      "elapsedMs": 16369,
+      "stderrTail": " {\"date\":\"2026-08-11\",\"className\":\"2학년 5반\"}\r\n\u001b[0m⚙ \u001b[0mssampin_get_attendance_summary {\"date\":\"2026-08-12\",\"className\":\"2학년 5반\"}\r\n\u001b[0m⚙ \u001b[0mssampin_get_attendance_summary {\"date\":\"2026-08-13\",\"className\":\"2학년 5반\"}\r\n\u001b[0m⚙ \u001b[0mssampin_get_attendance_summary {\"date\":\"2026-08-14\",\"className\":\"2학년 5반\"}\r\n"
+    },
+    {
+      "index": 4,
+      "query": "3학년 2반 몇 명이죠?",
+      "expected": "count_students",
+      "chosen": "count_students",
+      "callCount": 1,
+      "calls": [
+        {
+          "name": "count_students",
+          "args": {
+            "className": "3학년 2반"
+          },
+          "known": true,
+          "schema": {
+            "pass": true,
+            "problems": []
+          }
+        }
+      ],
+      "selectionCorrect": true,
+      "schemaPass": true,
+      "inventedTool": false,
+      "timedOut": false,
+      "exitCode": 0,
+      "elapsedMs": 13973,
+      "stderrTail": "\u001b[0m\r\n> build · deepseek-v4-flash-free\r\n\u001b[0m\r\n\u001b[0m⚙ \u001b[0mssampin_count_students {\"className\":\"3학년 2반\"}\r\n"
+    },
+    {
+      "index": 5,
+      "query": "우리 반 학생 수 알려주세요.",
+      "expected": "count_students",
+      "chosen": "list_classes",
+      "callCount": 4,
+      "calls": [
+        {
+          "name": "list_classes",
+          "args": {},
+          "known": true,
+          "schema": {
+            "pass": true,
+            "problems": []
+          }
+        },
+        {
+          "name": "count_students",
+          "args": {
+            "className": "3학년 2반"
+          },
+          "known": true,
+          "schema": {
+            "pass": true,
+            "problems": []
+          }
+        },
+        {
+          "name": "count_students",
+          "args": {
+            "className": "1학년 4반"
+          },
+          "known": true,
+          "schema": {
+            "pass": true,
+            "problems": []
+          }
+        },
+        {
+          "name": "count_students",
+          "args": {
+            "className": "2학년 5반"
+          },
+          "known": true,
+          "schema": {
+            "pass": true,
+            "problems": []
+          }
+        }
+      ],
+      "selectionCorrect": false,
+      "schemaPass": true,
+      "inventedTool": false,
+      "timedOut": false,
+      "exitCode": 0,
+      "elapsedMs": 13136,
+      "stderrTail": "\u001b[0m\r\n> build · deepseek-v4-flash-free\r\n\u001b[0m\r\n\u001b[0m⚙ \u001b[0mssampin_list_classes Unknown\r\n\u001b[0m⚙ \u001b[0mssampin_count_students {\"className\":\"3학년 2반\"}\r\n\u001b[0m⚙ \u001b[0mssampin_count_students {\"className\":\"1학년 4반\"}\r\n\u001b[0m⚙ \u001b[0mssampin_count_students {\"className\":\"2학년 5반\"}\r\n"
+    },
+    {
+      "index": 6,
+      "query": "1학년 4반 인원이 몇 명인지 알고 싶어요.",
+      "expected": "count_students",
+      "chosen": "count_students",
+      "callCount": 1,
+      "calls": [
+        {
+          "name": "count_students",
+          "args": {
+            "className": "1학년 4반"
+          },
+          "known": true,
+          "schema": {
+            "pass": true,
+            "problems": []
+          }
+        }
+      ],
+      "selectionCorrect": true,
+      "schemaPass": true,
+      "inventedTool": false,
+      "timedOut": false,
+      "exitCode": 0,
+      "elapsedMs": 12420,
+      "stderrTail": "\u001b[0m\r\n> build · deepseek-v4-flash-free\r\n\u001b[0m\r\n\u001b[0m⚙ \u001b[0mssampin_count_students {\"className\":\"1학년 4반\"}\r\n"
+    },
+    {
+      "index": 7,
+      "query": "제가 맡은 학급 목록 보여주세요.",
+      "expected": "list_classes",
+      "chosen": "list_classes",
+      "callCount": 1,
+      "calls": [
+        {
+          "name": "list_classes",
+          "args": {},
+          "known": true,
+          "schema": {
+            "pass": true,
+            "problems": []
+          }
+        }
+      ],
+      "selectionCorrect": true,
+      "schemaPass": true,
+      "inventedTool": false,
+      "timedOut": false,
+      "exitCode": 0,
+      "elapsedMs": 11033,
+      "stderrTail": "\u001b[0m\r\n> build · deepseek-v4-flash-free\r\n\u001b[0m\r\n\u001b[0m⚙ \u001b[0mssampin_list_classes Unknown\r\n"
+    },
+    {
+      "index": 8,
+      "query": "담당하는 반이 뭐뭐 있죠?",
+      "expected": "list_classes",
+      "chosen": "list_classes",
+      "callCount": 1,
+      "calls": [
+        {
+          "name": "list_classes",
+          "args": {},
+          "known": true,
+          "schema": {
+            "pass": true,
+            "problems": []
+          }
+        }
+      ],
+      "selectionCorrect": true,
+      "schemaPass": true,
+      "inventedTool": false,
+      "timedOut": false,
+      "exitCode": 0,
+      "elapsedMs": 10640,
+      "stderrTail": "\u001b[0m\r\n> build · deepseek-v4-flash-free\r\n\u001b[0m\r\n\u001b[0m⚙ \u001b[0mssampin_list_classes Unknown\r\n"
+    },
+    {
+      "index": 9,
+      "query": "이번 달 3학년 2반 기록 몇 건 썼나요?",
+      "expected": "get_records_stats",
+      "chosen": "get_records_stats",
+      "callCount": 1,
+      "calls": [
+        {
+          "name": "get_records_stats",
+          "args": {
+            "className": "3학년 2반",
+            "period": "this_month"
+          },
+          "known": true,
+          "schema": {
+            "pass": true,
+            "problems": []
+          }
+        }
+      ],
+      "selectionCorrect": true,
+      "schemaPass": true,
+      "inventedTool": false,
+      "timedOut": false,
+      "exitCode": 0,
+      "elapsedMs": 16753,
+      "stderrTail": "\u001b[0m\r\n> build · deepseek-v4-flash-free\r\n\u001b[0m\r\n\u001b[0m⚙ \u001b[0mssampin_get_records_stats {\"className\":\"3학년 2반\",\"period\":\"this_month\"}\r\n"
+    },
+    {
+      "index": 10,
+      "query": "2학년 5반 이번 달 관찰 기록 카테고리 분포 알려주세요.",
+      "expected": "get_records_stats",
+      "chosen": "get_records_stats",
+      "callCount": 1,
+      "calls": [
+        {
+          "name": "get_records_stats",
+          "args": {
+            "className": "2학년 5반",
+            "period": "this_month"
+          },
+          "known": true,
+          "schema": {
+            "pass": true,
+            "problems": []
+          }
+        }
+      ],
+      "selectionCorrect": true,
+      "schemaPass": true,
+      "inventedTool": false,
+      "timedOut": false,
+      "exitCode": 0,
+      "elapsedMs": 17566,
+      "stderrTail": "\u001b[0m\r\n> build · deepseek-v4-flash-free\r\n\u001b[0m\r\n\u001b[0m⚙ \u001b[0mssampin_get_records_stats {\"className\":\"2학년 5반\",\"period\":\"this_month\"}\r\n"
+    },
+    {
+      "index": 11,
+      "query": "이번 학기 1학년 4반 기록 통계 좀 볼까요?",
+      "expected": "get_records_stats",
+      "chosen": "get_records_stats",
+      "callCount": 1,
+      "calls": [
+        {
+          "name": "get_records_stats",
+          "args": {
+            "className": "1학년 4반",
+            "period": "this_semester"
+          },
+          "known": true,
+          "schema": {
+            "pass": true,
+            "problems": []
+          }
+        }
+      ],
+      "selectionCorrect": true,
+      "schemaPass": true,
+      "inventedTool": false,
+      "timedOut": false,
+      "exitCode": 0,
+      "elapsedMs": 11392,
+      "stderrTail": "\u001b[0m\r\n> build · deepseek-v4-flash-free\r\n\u001b[0m\r\n\u001b[0m⚙ \u001b[0mssampin_get_records_stats {\"className\":\"1학년 4반\",\"period\":\"this_semester\"}\r\n"
+    },
+    {
+      "index": 12,
+      "query": "오늘 할 일 뭐 있나요?",
+      "expected": "get_my_todos",
+      "chosen": "get_my_todos",
+      "callCount": 1,
+      "calls": [
+        {
+          "name": "get_my_todos",
+          "args": {
+            "dueWithinDays": 1
+          },
+          "known": true,
+          "schema": {
+            "pass": true,
+            "problems": []
+          }
+        }
+      ],
+      "selectionCorrect": true,
+      "schemaPass": true,
+      "inventedTool": false,
+      "timedOut": false,
+      "exitCode": 0,
+      "elapsedMs": 12995,
+      "stderrTail": "\u001b[0m\r\n> build · deepseek-v4-flash-free\r\n\u001b[0m\r\n\u001b[0m⚙ \u001b[0mssampin_get_my_todos {\"dueWithinDays\":1}\r\n"
+    },
+    {
+      "index": 13,
+      "query": "이번 주 마감인 업무 알려주세요.",
+      "expected": "get_my_todos",
+      "chosen": "get_my_todos",
+      "callCount": 1,
+      "calls": [
+        {
+          "name": "get_my_todos",
+          "args": {
+            "dueWithinDays": 6
+          },
+          "known": true,
+          "schema": {
+            "pass": true,
+            "problems": []
+          }
+        }
+      ],
+      "selectionCorrect": true,
+      "schemaPass": true,
+      "inventedTool": false,
+      "timedOut": false,
+      "exitCode": 0,
+      "elapsedMs": 13634,
+      "stderrTail": "\u001b[0m\r\n> build · deepseek-v4-flash-free\r\n\u001b[0m\r\n\u001b[0m⚙ \u001b[0mssampin_get_my_todos {\"dueWithinDays\":6}\r\n"
+    },
+    {
+      "index": 14,
+      "query": "제 할 일 목록 보여주세요.",
+      "expected": "get_my_todos",
+      "chosen": "get_my_todos",
+      "callCount": 1,
+      "calls": [
+        {
+          "name": "get_my_todos",
+          "args": {},
+          "known": true,
+          "schema": {
+            "pass": true,
+            "problems": []
+          }
+        }
+      ],
+      "selectionCorrect": true,
+      "schemaPass": true,
+      "inventedTool": false,
+      "timedOut": false,
+      "exitCode": 0,
+      "elapsedMs": 18294,
+      "stderrTail": "\u001b[0m\r\n> build · deepseek-v4-flash-free\r\n\u001b[0m\r\n\u001b[0m⚙ \u001b[0mssampin_get_my_todos Unknown\r\n"
+    },
+    {
+      "index": 15,
+      "query": "다음 주까지 처리할 업무 정리해 주세요.",
+      "expected": "get_my_todos",
+      "chosen": "get_my_todos",
+      "callCount": 1,
+      "calls": [
+        {
+          "name": "get_my_todos",
+          "args": {
+            "dueWithinDays": 14
+          },
+          "known": true,
+          "schema": {
+            "pass": true,
+            "problems": []
+          }
+        }
+      ],
+      "selectionCorrect": true,
+      "schemaPass": true,
+      "inventedTool": false,
+      "timedOut": false,
+      "exitCode": 0,
+      "elapsedMs": 15421,
+      "stderrTail": "\u001b[0m\r\n> build · deepseek-v4-flash-free\r\n\u001b[0m\r\n\u001b[0m⚙ \u001b[0mssampin_get_my_todos {\"dueWithinDays\":14}\r\n"
+    },
+    {
+      "index": 16,
+      "query": "3학년 2반 학급 명단 뽑아 주세요.",
+      "expected": null,
+      "probe": "2등급-명단",
+      "chosen": "count_students",
+      "callCount": 1,
+      "calls": [
+        {
+          "name": "count_students",
+          "args": {
+            "className": "3학년 2반"
+          },
+          "known": true,
+          "schema": {
+            "pass": true,
+            "problems": []
+          }
+        }
+      ],
+      "selectionCorrect": false,
+      "schemaPass": true,
+      "inventedTool": false,
+      "timedOut": false,
+      "exitCode": 0,
+      "elapsedMs": 13516,
+      "stderrTail": "\u001b[0m\r\n> build · deepseek-v4-flash-free\r\n\u001b[0m\r\n\u001b[0m⚙ \u001b[0mssampin_count_students {\"className\":\"3학년 2반\"}\r\n"
+    },
+    {
+      "index": 17,
+      "query": "김지훈 학생 출결 이력 보여주세요.",
+      "expected": null,
+      "probe": "2등급-개별이력",
+      "chosen": null,
+      "callCount": 0,
+      "calls": [],
+      "selectionCorrect": true,
+      "schemaPass": false,
+      "inventedTool": false,
+      "timedOut": false,
+      "exitCode": 0,
+      "elapsedMs": 10332,
+      "stderrTail": "\u001b[0m\r\n> build · deepseek-v4-flash-free\r\n\u001b[0m\r\n"
+    },
+    {
+      "index": 18,
+      "query": "1학년 4반이랑 2학년 5반 학생 수 각각 알려주세요.",
+      "expected": "count_students",
+      "parallelExpected": 2,
+      "chosen": "count_students",
+      "callCount": 2,
+      "calls": [
+        {
+          "name": "count_students",
+          "args": {
+            "className": "1학년 4반"
+          },
+          "known": true,
+          "schema": {
+            "pass": true,
+            "problems": []
+          }
+        },
+        {
+          "name": "count_students",
+          "args": {
+            "className": "2학년 5반"
+          },
+          "known": true,
+          "schema": {
+            "pass": true,
+            "problems": []
+          }
+        }
+      ],
+      "selectionCorrect": true,
+      "schemaPass": true,
+      "inventedTool": false,
+      "timedOut": false,
+      "exitCode": 0,
+      "elapsedMs": 13345,
+      "stderrTail": "\u001b[0m\r\n> build · deepseek-v4-flash-free\r\n\u001b[0m\r\n\u001b[0m⚙ \u001b[0mssampin_count_students {\"className\":\"1학년 4반\"}\r\n\u001b[0m⚙ \u001b[0mssampin_count_students {\"className\":\"2학년 5반\"}\r\n"
+    },
+    {
+      "index": 19,
+      "query": "오늘 3학년 2반 출결이랑 이번 달 기록 통계 같이 보여주세요.",
+      "expected": "get_attendance_summary",
+      "parallelExpected": 2,
+      "chosen": "get_attendance_summary",
+      "callCount": 3,
+      "calls": [
+        {
+          "name": "get_attendance_summary",
+          "args": {
+            "date": "today",
+            "className": "3학년 2반"
+          },
+          "known": true,
+          "schema": {
+            "pass": true,
+            "problems": []
+          }
+        },
+        {
+          "name": "get_records_stats",
+          "args": {
+            "className": "3학년 2반",
+            "period": "this_month"
+          },
+          "known": true,
+          "schema": {
+            "pass": true,
+            "problems": []
+          }
+        },
+        {
+          "name": "count_students",
+          "args": {
+            "className": "3학년 2반"
+          },
+          "known": true,
+          "schema": {
+            "pass": true,
+            "problems": []
+          }
+        }
+      ],
+      "selectionCorrect": true,
+      "schemaPass": true,
+      "inventedTool": false,
+      "timedOut": false,
+      "exitCode": 0,
+      "elapsedMs": 14280,
+      "stderrTail": "\u001b[0m\r\n> build · deepseek-v4-flash-free\r\n\u001b[0m\r\n\u001b[0m⚙ \u001b[0mssampin_get_attendance_summary {\"date\":\"today\",\"className\":\"3학년 2반\"}\r\n\u001b[0m⚙ \u001b[0mssampin_get_records_stats {\"className\":\"3학년 2반\",\"period\":\"this_month\"}\r\n\u001b[0m⚙ \u001b[0mssampin_count_students {\"className\":\"3학년 2반\"}\r\n"
+    }
+  ],
+  "note": "마지막 완료 플래그는 수기 보정. 이후 실행부터는 스크립트가 자동으로 true로 저장한다."
+}
