@@ -399,10 +399,12 @@ function ToolsOrganizerModal({ initialOrder, initialHidden, onClose, onSave }: O
   const visibleCount = order.filter((id) => !hidden.has(id)).length;
 
   return (
+    // wrapping div 의 flex-1 min-h-0 은 필수 — 없으면 패널 높이 컨텍스트가 끊겨
+    // 아래 스크롤 영역이 발현되지 않고 푸터(저장/취소)가 화면 밖으로 잘린다.
     <Modal isOpen onClose={onClose} title="쌤도구 정리하기" srOnlyTitle size="xl">
-      <div className="flex flex-col">
+      <div className="flex flex-col flex-1 min-h-0">
         {/* 헤더 */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-sp-border">
+        <div className="shrink-0 flex items-center justify-between px-5 py-4 border-b border-sp-border">
           <div>
             <h3 className="text-lg font-bold text-sp-text flex items-center gap-2">
               <span className="material-symbols-outlined text-xl">tune</span>
@@ -417,7 +419,7 @@ function ToolsOrganizerModal({ initialOrder, initialHidden, onClose, onSave }: O
         </div>
 
         {/* 액션 */}
-        <div className="px-5 py-3 border-b border-sp-border flex flex-wrap gap-2">
+        <div className="shrink-0 px-5 py-3 border-b border-sp-border flex flex-wrap gap-2">
           <button
             type="button"
             onClick={resetOrder}
@@ -504,7 +506,7 @@ function ToolsOrganizerModal({ initialOrder, initialHidden, onClose, onSave }: O
         </div>
 
         {/* 푸터 */}
-        <div className="px-5 py-3 border-t border-sp-border flex justify-end gap-2">
+        <div className="shrink-0 px-5 py-3 border-t border-sp-border flex justify-end gap-2">
           <button
             type="button"
             onClick={onClose}

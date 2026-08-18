@@ -200,353 +200,358 @@ export function EventFormModal({
   const titleText = isEdit ? '일정 수정' : '일정 추가';
 
   return (
+    // wrapping div 의 flex-1 min-h-0 은 필수 — 없으면 스크롤 영역이 발현되지 않아 푸터가 잘린다.
     <Modal isOpen onClose={onClose} title={titleText} srOnlyTitle size="md">
-      <div className="overflow-hidden">
+      <div className="flex flex-col flex-1 min-h-0">
         {/* 헤더 */}
-        <div className="flex items-center justify-between p-6 pb-4 border-b border-sp-border">
+        <div className="shrink-0 flex items-center justify-between p-6 pb-4 border-b border-sp-border">
           <h3 className="text-lg font-bold text-sp-text">{titleText}</h3>
           <IconButton icon="close" label="닫기" variant="ghost" size="md" onClick={onClose} />
         </div>
 
-        {/* 폼 */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
-          {/* 구글 캘린더 일정 안내 */}
-          {isEdit && editEvent?.source === 'google' && (
-            <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
-              <span className="material-symbols-outlined text-blue-400 text-icon-md mt-0.5">
-                sync
-              </span>
-              <div className="text-xs text-blue-200/80">
-                <p className="font-medium mb-0.5">구글 캘린더에서 가져온 일정입니다</p>
-                <p>수정하면 구글 캘린더에도 반영됩니다.</p>
+        {/* 폼 — 입력 영역만 스크롤하고 저장/취소는 항상 보이도록 푸터로 분리 */}
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+          <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-4">
+            {/* 구글 캘린더 일정 안내 */}
+            {isEdit && editEvent?.source === 'google' && (
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                <span className="material-symbols-outlined text-blue-400 text-icon-md mt-0.5">
+                  sync
+                </span>
+                <div className="text-xs text-blue-200/80">
+                  <p className="font-medium mb-0.5">구글 캘린더에서 가져온 일정입니다</p>
+                  <p>수정하면 구글 캘린더에도 반영됩니다.</p>
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* NEIS 일정 안내 */}
-          {isEdit && editEvent?.source === 'neis' && (
-            <div className="flex items-start gap-2 p-3 rounded-lg bg-purple-500/10 border border-purple-500/20">
-              <span className="material-symbols-outlined text-purple-400 text-icon-md mt-0.5">
-                info
-              </span>
-              <div className="text-xs text-purple-200/80">
-                <p className="font-medium mb-0.5">NEIS에서 가져온 일정입니다</p>
-                <p>수정하면 다음 동기화 시 덮어씌워지지 않습니다.</p>
-                {editEvent.neis?.gradeYn && (
-                  <p className="mt-1 text-purple-300/60">
-                    해당 학년: {getGradeBadgeText(editEvent.neis.gradeYn) || '없음'}
-                    {editEvent.neis.subtractDayType && ` · ${editEvent.neis.subtractDayType}`}
-                  </p>
-                )}
+            {/* NEIS 일정 안내 */}
+            {isEdit && editEvent?.source === 'neis' && (
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-purple-500/10 border border-purple-500/20">
+                <span className="material-symbols-outlined text-purple-400 text-icon-md mt-0.5">
+                  info
+                </span>
+                <div className="text-xs text-purple-200/80">
+                  <p className="font-medium mb-0.5">NEIS에서 가져온 일정입니다</p>
+                  <p>수정하면 다음 동기화 시 덮어씌워지지 않습니다.</p>
+                  {editEvent.neis?.gradeYn && (
+                    <p className="mt-1 text-purple-300/60">
+                      해당 학년: {getGradeBadgeText(editEvent.neis.gradeYn) || '없음'}
+                      {editEvent.neis.subtractDayType && ` · ${editEvent.neis.subtractDayType}`}
+                    </p>
+                  )}
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* 제목 */}
-          <div>
-            <label className="block text-sm font-medium text-sp-muted mb-1.5">
-              제목 <span className="text-red-400">*</span>
-            </label>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="일정 제목을 입력하세요"
-              className="w-full bg-sp-bg border border-sp-border rounded-xl px-4 py-2.5 text-sm text-sp-text placeholder-sp-muted focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent"
-              required
-            />
-          </div>
-
-          {/* 날짜 (시작 / 종료) */}
-          <div className="grid grid-cols-2 gap-3">
+            {/* 제목 */}
             <div>
               <label className="block text-sm font-medium text-sp-muted mb-1.5">
-                시작일 <span className="text-red-400">*</span>
+                제목 <span className="text-red-400">*</span>
               </label>
               <input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="w-full bg-sp-bg border border-sp-border rounded-xl px-4 py-2.5 text-sm text-sp-text focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent [color-scheme:dark]"
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="일정 제목을 입력하세요"
+                className="w-full bg-sp-bg border border-sp-border rounded-xl px-4 py-2.5 text-sm text-sp-text placeholder-sp-muted focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent"
                 required
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-sp-muted mb-1.5">종료일</label>
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                min={date}
-                className="w-full bg-sp-bg border border-sp-border rounded-xl px-4 py-2.5 text-sm text-sp-text focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent [color-scheme:dark]"
-              />
+
+            {/* 날짜 (시작 / 종료) */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-sp-muted mb-1.5">
+                  시작일 <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  className="w-full bg-sp-bg border border-sp-border rounded-xl px-4 py-2.5 text-sm text-sp-text focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent [color-scheme:dark]"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-sp-muted mb-1.5">종료일</label>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  min={date}
+                  className="w-full bg-sp-bg border border-sp-border rounded-xl px-4 py-2.5 text-sm text-sp-text focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent [color-scheme:dark]"
+                />
+              </div>
             </div>
-          </div>
 
-          {/* 카테고리 */}
-          <div>
-            <label className="block text-sm font-medium text-sp-muted mb-1.5">카테고리</label>
-            <select
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              className="w-full bg-sp-bg border border-sp-border rounded-xl px-4 py-2.5 text-sm text-sp-text focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent"
-            >
-              {categories.map((cat) => (
-                <option key={cat.id} value={cat.id}>
-                  {cat.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* 교시 (시작 ~ 종료) */}
-          <div>
-            <label className="block text-sm font-medium text-sp-muted mb-1.5">교시</label>
-            <div className={`grid gap-3 ${/^[1-7]$/.test(period) ? 'grid-cols-2' : 'grid-cols-1'}`}>
+            {/* 카테고리 */}
+            <div>
+              <label className="block text-sm font-medium text-sp-muted mb-1.5">카테고리</label>
               <select
-                value={period}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setPeriod(v);
-                  // 숫자가 아닌 값이면 종료 교시 초기화
-                  if (!/^[1-7]$/.test(v)) {
-                    setPeriodEnd('');
-                  } else if (periodEnd && parseInt(periodEnd, 10) < parseInt(v, 10)) {
-                    // 시작이 종료보다 크면 종료를 시작으로 리셋
-                    setPeriodEnd(v);
-                  }
-                }}
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
                 className="w-full bg-sp-bg border border-sp-border rounded-xl px-4 py-2.5 text-sm text-sp-text focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent"
               >
-                {PERIOD_OPTIONS.map(({ key, label }) => (
-                  <option key={key} value={key}>
-                    {label}
+                {categories.map((cat) => (
+                  <option key={cat.id} value={cat.id}>
+                    {cat.name}
                   </option>
                 ))}
               </select>
-              {/^[1-7]$/.test(period) && (
+            </div>
+
+            {/* 교시 (시작 ~ 종료) */}
+            <div>
+              <label className="block text-sm font-medium text-sp-muted mb-1.5">교시</label>
+              <div
+                className={`grid gap-3 ${/^[1-7]$/.test(period) ? 'grid-cols-2' : 'grid-cols-1'}`}
+              >
                 <select
-                  value={periodEnd || period}
+                  value={period}
                   onChange={(e) => {
                     const v = e.target.value;
-                    setPeriodEnd(v === period ? '' : v);
+                    setPeriod(v);
+                    // 숫자가 아닌 값이면 종료 교시 초기화
+                    if (!/^[1-7]$/.test(v)) {
+                      setPeriodEnd('');
+                    } else if (periodEnd && parseInt(periodEnd, 10) < parseInt(v, 10)) {
+                      // 시작이 종료보다 크면 종료를 시작으로 리셋
+                      setPeriodEnd(v);
+                    }
                   }}
                   className="w-full bg-sp-bg border border-sp-border rounded-xl px-4 py-2.5 text-sm text-sp-text focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent"
                 >
-                  {Array.from({ length: 7 - parseInt(period, 10) + 1 }, (_, i) => {
-                    const n = parseInt(period, 10) + i;
-                    return (
-                      <option key={n} value={String(n)}>
-                        {n === parseInt(period, 10)
-                          ? `${resolvePeriodLabel(n, periodTimes)} (종료)`
-                          : resolvePeriodLabel(n, periodTimes)}
-                      </option>
-                    );
-                  })}
-                </select>
-              )}
-            </div>
-          </div>
-
-          {/* 시간 / 장소 */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-sp-muted mb-1.5">시간</label>
-              <input
-                type="text"
-                value={time}
-                onChange={(e) => setTime(e.target.value)}
-                placeholder="예: 09:00 또는 09:00 - 18:00"
-                className="w-full bg-sp-bg border border-sp-border rounded-xl px-4 py-2.5 text-sm text-sp-text placeholder-sp-muted focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-sp-muted mb-1.5">장소</label>
-              <input
-                type="text"
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                placeholder="예: 강당"
-                className="w-full bg-sp-bg border border-sp-border rounded-xl px-4 py-2.5 text-sm text-sp-text placeholder-sp-muted focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent"
-              />
-            </div>
-          </div>
-
-          {/* D-Day 표시 */}
-          <label className="flex items-center gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={isDDay}
-              onChange={(e) => setIsDDay(e.target.checked)}
-              className="w-4 h-4 rounded border-sp-border bg-sp-bg text-sp-accent focus:ring-sp-accent"
-            />
-            <span className="text-sm text-sp-text">D-Day 카운트다운 표시</span>
-          </label>
-
-          {/* 알림 설정 */}
-          <div>
-            <label className="block text-sm font-medium text-sp-muted mb-2">알림 설정</label>
-            {/* 프리셋 버튼 */}
-            <div className="flex flex-wrap gap-2">
-              {ALERT_PRESETS.map(({ key, label }) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => togglePreset(key)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                    alerts.includes(key)
-                      ? 'bg-sp-accent text-white'
-                      : 'bg-sp-bg border border-sp-border text-sp-muted hover:bg-sp-surface'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-              {/* 직접 입력 토글 버튼 */}
-              <button
-                type="button"
-                onClick={() => setShowCustomInput((v) => !v)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                  showCustomInput
-                    ? 'bg-sp-accent/20 text-sp-accent border border-sp-accent/40'
-                    : 'bg-sp-bg border border-dashed border-sp-border text-sp-muted hover:bg-sp-surface hover:text-sp-text'
-                }`}
-              >
-                <span className="inline-flex items-center gap-1">
-                  <span className="material-symbols-outlined text-sm">add</span>
-                  직접 입력
-                </span>
-              </button>
-            </div>
-
-            {/* 커스텀 알림 입력 영역 */}
-            {showCustomInput && (
-              <div className="mt-3 flex items-center gap-2 bg-sp-bg/50 border border-sp-border rounded-xl p-3">
-                <input
-                  type="number"
-                  min={1}
-                  max={999}
-                  value={customValue}
-                  onChange={(e) => setCustomValue(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      addCustomAlert();
-                    }
-                  }}
-                  placeholder="숫자"
-                  className="w-20 bg-sp-bg border border-sp-border rounded-lg px-3 py-1.5 text-sm text-sp-text text-center placeholder-sp-muted focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                  autoFocus
-                />
-                <select
-                  value={customUnit}
-                  onChange={(e) => setCustomUnit(e.target.value as CustomUnit)}
-                  className="bg-sp-bg border border-sp-border rounded-lg px-3 py-1.5 text-sm text-sp-text focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent"
-                >
-                  {CUSTOM_UNITS.map(({ key, label }) => (
+                  {PERIOD_OPTIONS.map(({ key, label }) => (
                     <option key={key} value={key}>
                       {label}
                     </option>
                   ))}
                 </select>
-                <span className="text-sm text-sp-muted">전</span>
+                {/^[1-7]$/.test(period) && (
+                  <select
+                    value={periodEnd || period}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setPeriodEnd(v === period ? '' : v);
+                    }}
+                    className="w-full bg-sp-bg border border-sp-border rounded-xl px-4 py-2.5 text-sm text-sp-text focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent"
+                  >
+                    {Array.from({ length: 7 - parseInt(period, 10) + 1 }, (_, i) => {
+                      const n = parseInt(period, 10) + i;
+                      return (
+                        <option key={n} value={String(n)}>
+                          {n === parseInt(period, 10)
+                            ? `${resolvePeriodLabel(n, periodTimes)} (종료)`
+                            : resolvePeriodLabel(n, periodTimes)}
+                        </option>
+                      );
+                    })}
+                  </select>
+                )}
+              </div>
+            </div>
+
+            {/* 시간 / 장소 */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-sp-muted mb-1.5">시간</label>
+                <input
+                  type="text"
+                  value={time}
+                  onChange={(e) => setTime(e.target.value)}
+                  placeholder="예: 09:00 또는 09:00 - 18:00"
+                  className="w-full bg-sp-bg border border-sp-border rounded-xl px-4 py-2.5 text-sm text-sp-text placeholder-sp-muted focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-sp-muted mb-1.5">장소</label>
+                <input
+                  type="text"
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  placeholder="예: 강당"
+                  className="w-full bg-sp-bg border border-sp-border rounded-xl px-4 py-2.5 text-sm text-sp-text placeholder-sp-muted focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent"
+                />
+              </div>
+            </div>
+
+            {/* D-Day 표시 */}
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={isDDay}
+                onChange={(e) => setIsDDay(e.target.checked)}
+                className="w-4 h-4 rounded border-sp-border bg-sp-bg text-sp-accent focus:ring-sp-accent"
+              />
+              <span className="text-sm text-sp-text">D-Day 카운트다운 표시</span>
+            </label>
+
+            {/* 알림 설정 */}
+            <div>
+              <label className="block text-sm font-medium text-sp-muted mb-2">알림 설정</label>
+              {/* 프리셋 버튼 */}
+              <div className="flex flex-wrap gap-2">
+                {ALERT_PRESETS.map(({ key, label }) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => togglePreset(key)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                      alerts.includes(key)
+                        ? 'bg-sp-accent text-white'
+                        : 'bg-sp-bg border border-sp-border text-sp-muted hover:bg-sp-surface'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+                {/* 직접 입력 토글 버튼 */}
                 <button
                   type="button"
-                  onClick={addCustomAlert}
-                  disabled={!customValue || parseInt(customValue, 10) <= 0}
-                  className="px-3 py-1.5 rounded-lg text-xs font-medium bg-sp-accent text-white hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  onClick={() => setShowCustomInput((v) => !v)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                    showCustomInput
+                      ? 'bg-sp-accent/20 text-sp-accent border border-sp-accent/40'
+                      : 'bg-sp-bg border border-dashed border-sp-border text-sp-muted hover:bg-sp-surface hover:text-sp-text'
+                  }`}
                 >
-                  추가
+                  <span className="inline-flex items-center gap-1">
+                    <span className="material-symbols-outlined text-sm">add</span>
+                    직접 입력
+                  </span>
                 </button>
               </div>
-            )}
 
-            {/* 커스텀 알림 칩 목록 */}
-            {alerts.filter(isCustomAlert).length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {alerts.filter(isCustomAlert).map((timing) => (
-                  <span
-                    key={timing}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-sp-accent/15 text-sp-accent border border-sp-accent/30"
+              {/* 커스텀 알림 입력 영역 */}
+              {showCustomInput && (
+                <div className="mt-3 flex items-center gap-2 bg-sp-bg/50 border border-sp-border rounded-xl p-3">
+                  <input
+                    type="number"
+                    min={1}
+                    max={999}
+                    value={customValue}
+                    onChange={(e) => setCustomValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        addCustomAlert();
+                      }
+                    }}
+                    placeholder="숫자"
+                    className="w-20 bg-sp-bg border border-sp-border rounded-lg px-3 py-1.5 text-sm text-sp-text text-center placeholder-sp-muted focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                    autoFocus
+                  />
+                  <select
+                    value={customUnit}
+                    onChange={(e) => setCustomUnit(e.target.value as CustomUnit)}
+                    className="bg-sp-bg border border-sp-border rounded-lg px-3 py-1.5 text-sm text-sp-text focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent"
                   >
-                    {alertTimingToLabel(timing)}
-                    <button
-                      type="button"
-                      onClick={() => removeAlert(timing)}
-                      className="hover:text-sp-text transition-colors ml-0.5"
-                    >
-                      <span className="material-symbols-outlined text-icon-sm leading-none">
-                        close
-                      </span>
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* 반복 설정 */}
-          <div>
-            <label className="block text-sm font-medium text-sp-muted mb-1.5">반복</label>
-            <select
-              value={recurrence}
-              onChange={(e) => setRecurrence(e.target.value as Recurrence | '')}
-              className="w-full bg-sp-bg border border-sp-border rounded-xl px-4 py-2.5 text-sm text-sp-text focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent"
-            >
-              {RECURRENCE_OPTIONS.map(({ key, label }) => (
-                <option key={key} value={key}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* 건너뛴 날짜 목록 (반복 일정 수정 시) */}
-          {recurrence && excludeDates.length > 0 && (
-            <div>
-              <label className="block text-sm font-medium text-sp-muted mb-1.5">
-                건너뛴 날짜 ({excludeDates.length}개)
-              </label>
-              <div className="flex flex-wrap gap-1.5 bg-sp-bg/50 border border-sp-border rounded-xl p-3">
-                {[...excludeDates].sort().map((d) => (
-                  <span
-                    key={d}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                    {CUSTOM_UNITS.map(({ key, label }) => (
+                      <option key={key} value={key}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="text-sm text-sp-muted">전</span>
+                  <button
+                    type="button"
+                    onClick={addCustomAlert}
+                    disabled={!customValue || parseInt(customValue, 10) <= 0}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium bg-sp-accent text-white hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                   >
-                    {d}
-                    <button
-                      type="button"
-                      onClick={() => handleRestoreDate(d)}
-                      className="hover:text-sp-text transition-colors ml-0.5"
-                      title="복원"
+                    추가
+                  </button>
+                </div>
+              )}
+
+              {/* 커스텀 알림 칩 목록 */}
+              {alerts.filter(isCustomAlert).length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {alerts.filter(isCustomAlert).map((timing) => (
+                    <span
+                      key={timing}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-sp-accent/15 text-sp-accent border border-sp-accent/30"
                     >
-                      <span className="material-symbols-outlined text-icon-sm leading-none">
-                        close
-                      </span>
-                    </button>
-                  </span>
-                ))}
-              </div>
-              <p className="text-detail text-sp-muted mt-1">
-                × 버튼으로 날짜를 복원하면 해당 날짜에 다시 일정이 표시됩니다
-              </p>
+                      {alertTimingToLabel(timing)}
+                      <button
+                        type="button"
+                        onClick={() => removeAlert(timing)}
+                        className="hover:text-sp-text transition-colors ml-0.5"
+                      >
+                        <span className="material-symbols-outlined text-icon-sm leading-none">
+                          close
+                        </span>
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
-          )}
 
-          {/* 메모 */}
-          <div>
-            <label className="block text-sm font-medium text-sp-muted mb-1.5">메모</label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="추가 메모를 입력하세요"
-              rows={2}
-              className="w-full bg-sp-bg border border-sp-border rounded-xl px-4 py-2.5 text-sm text-sp-text placeholder-sp-muted focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent resize-none"
-            />
+            {/* 반복 설정 */}
+            <div>
+              <label className="block text-sm font-medium text-sp-muted mb-1.5">반복</label>
+              <select
+                value={recurrence}
+                onChange={(e) => setRecurrence(e.target.value as Recurrence | '')}
+                className="w-full bg-sp-bg border border-sp-border rounded-xl px-4 py-2.5 text-sm text-sp-text focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent"
+              >
+                {RECURRENCE_OPTIONS.map(({ key, label }) => (
+                  <option key={key} value={key}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* 건너뛴 날짜 목록 (반복 일정 수정 시) */}
+            {recurrence && excludeDates.length > 0 && (
+              <div>
+                <label className="block text-sm font-medium text-sp-muted mb-1.5">
+                  건너뛴 날짜 ({excludeDates.length}개)
+                </label>
+                <div className="flex flex-wrap gap-1.5 bg-sp-bg/50 border border-sp-border rounded-xl p-3">
+                  {[...excludeDates].sort().map((d) => (
+                    <span
+                      key={d}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                    >
+                      {d}
+                      <button
+                        type="button"
+                        onClick={() => handleRestoreDate(d)}
+                        className="hover:text-sp-text transition-colors ml-0.5"
+                        title="복원"
+                      >
+                        <span className="material-symbols-outlined text-icon-sm leading-none">
+                          close
+                        </span>
+                      </button>
+                    </span>
+                  ))}
+                </div>
+                <p className="text-detail text-sp-muted mt-1">
+                  × 버튼으로 날짜를 복원하면 해당 날짜에 다시 일정이 표시됩니다
+                </p>
+              </div>
+            )}
+
+            {/* 메모 */}
+            <div>
+              <label className="block text-sm font-medium text-sp-muted mb-1.5">메모</label>
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="추가 메모를 입력하세요"
+                rows={2}
+                className="w-full bg-sp-bg border border-sp-border rounded-xl px-4 py-2.5 text-sm text-sp-text placeholder-sp-muted focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent resize-none"
+              />
+            </div>
           </div>
 
-          {/* 버튼 */}
-          <div className="flex gap-3 pt-2">
+          {/* 버튼 — 스크롤 영역 밖 고정 푸터 (내용이 길어도 항상 보임) */}
+          <div className="shrink-0 flex gap-3 p-6 pt-4 border-t border-sp-border">
             <button
               type="button"
               onClick={onClose}

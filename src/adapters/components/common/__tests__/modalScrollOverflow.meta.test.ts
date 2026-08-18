@@ -50,7 +50,75 @@ const MODALS_TO_GUARD: ReadonlyArray<readonly [filePath: string, label: string]>
   ['src/adapters/components/Tools/Sticker/StickerAddPickerModal.tsx', 'StickerAddPickerModal'],
   ['src/adapters/components/Tools/Sticker/StickerSettingsModal.tsx', 'StickerSettingsModal'],
   ['src/adapters/components/Memo/MemoShareModal.tsx', 'MemoShareModal'],
+  // 2026-08-18 전수 스캔에서 뒤늦게 발견된 누락분 3건 (아래 FOOTER_OUTSIDE_SCROLL 도 함께 지킨다)
+  ['src/adapters/components/Tools/ToolsGrid.tsx', 'ToolsGrid(쌤도구 정리하기)'],
+  ['src/adapters/components/Schedule/EventFormModal.tsx', 'EventFormModal'],
+  ['src/adapters/components/Timetable/TempChangeModal.tsx', 'TempChangeModal'],
 ];
+
+/**
+ * 푸터(확정 버튼 줄)가 스크롤 영역 '밖'에 있어야 하는 모달.
+ *
+ * 회귀 시나리오 (2026-08-18 전수 스캔):
+ *   저장/추가 버튼이 overflow-y-auto 안에 들어가 있으면, 입력이 길어질수록
+ *   버튼이 접힌 화면 아래로 밀려 "저장을 못 하겠다"가 된다. ToolsGrid 는
+ *   높이 컨텍스트까지 끊겨 마우스로는 아예 도달 불가였다(실측: 버튼 y=2064, 화면 900).
+ */
+const FOOTER_OUTSIDE_SCROLL: ReadonlyArray<readonly [filePath: string, label: string]> = [
+  ['src/adapters/components/Tools/ToolsGrid.tsx', 'ToolsGrid(쌤도구 정리하기)'],
+  ['src/adapters/components/Schedule/EventFormModal.tsx', 'EventFormModal'],
+  ['src/adapters/components/Timetable/TempChangeModal.tsx', 'TempChangeModal'],
+];
+
+/** 확정 성격의 버튼 라벨 — 이 버튼이 스크롤 영역 안에 있으면 안 된다. */
+const CONFIRM_LABELS = ['저장', '추가', '수정', '변동 등록', '교체 등록'];
+
+const TAG_RE = /<(\/?)([A-Za-z][\w.]*)((?:[^>"']|"[^"]*"|'[^']*')*?)(\/?)>/g;
+
+function classNameOf(attrs: string): string {
+  const m = attrs.match(/className=(?:"([^"]*)"|\{`([^`]*)`\})/);
+  return m ? (m[1] ?? m[2] ?? '') : '';
+}
+
+function isScrollContainer(cls: string): boolean {
+  return /overflow-y-auto|overflow-auto|overflow-y-scroll/.test(cls);
+}
+
+/** 확정 버튼이 스크롤 영역 안에 갇혀 있으면 그 스크롤 영역 className 을 돌려준다. */
+function findTrappedConfirmButton(source: string): string | null {
+  const start = source.search(/<Modal[\s\n]/);
+  if (start === -1) return null;
+  const region = source.slice(start);
+
+  TAG_RE.lastIndex = 0;
+  const stack: { tag: string; cls: string }[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = TAG_RE.exec(region)) !== null) {
+    const [, close, tag, attrs, selfClose] = m;
+    if (close) {
+      for (let i = stack.length - 1; i >= 0; i--) {
+        if (stack[i]!.tag === tag) {
+          stack.length = i;
+          break;
+        }
+      }
+      continue;
+    }
+    const attrText = attrs ?? '';
+    if (tag === 'button') {
+      const after = region.slice(m.index, m.index + 400);
+      const isConfirm =
+        /type="submit"/.test(attrText) ||
+        CONFIRM_LABELS.some((w) => new RegExp(`>\\s*${w}\\s*<`).test(after));
+      if (isConfirm) {
+        const scroller = stack.find((s) => isScrollContainer(s.cls));
+        if (scroller) return scroller.cls;
+      }
+    }
+    if (!selfClose) stack.push({ tag: tag ?? '', cls: classNameOf(attrText) });
+  }
+  return null;
+}
 
 /** Modal 베이스 컴포넌트가 보장해야 하는 패널 클래스. 베이스 회귀를 차단. */
 const MODAL_BASE_CLASSES = ['max-h-[calc(100vh-48px)]', 'overflow-hidden', 'flex flex-col'];
@@ -98,6 +166,23 @@ describe('Modal scroll overflow (meta)', () => {
           `\n` +
           `해결: <div className="flex flex-col flex-1 min-h-0"> 로 수정하세요.`,
       ).toBe(true);
+    });
+  }
+
+  for (const [relPath, label] of FOOTER_OUTSIDE_SCROLL) {
+    it(`${label} 의 확정 버튼은 스크롤 영역 밖에 있다`, () => {
+      const source = readFileSync(resolve(ROOT, relPath), 'utf8');
+      const trappedIn = findTrappedConfirmButton(source);
+
+      expect(
+        trappedIn,
+        `${label}: 저장/추가 같은 확정 버튼이 스크롤 영역 안에 있습니다.\n` +
+          `갇힌 스크롤 영역 className: "${trappedIn}"\n` +
+          `\n` +
+          `이유: 입력이 길어지면 버튼이 접힌 화면 아래로 밀려 사용자가 "저장이 안 된다"고 느낍니다.\n` +
+          `\n` +
+          `해결: 버튼 줄을 스크롤 <div> 바깥으로 빼고 shrink-0 을 주어 하단에 고정하세요.`,
+      ).toBeNull();
     });
   }
 });

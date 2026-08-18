@@ -227,262 +227,267 @@ export function TempChangeModal(props: TempChangeModalProps) {
   const titleText = isEdit ? '임시 시간표 수정' : '변동 시간표 추가';
 
   return (
+    // wrapping div 의 flex-1 min-h-0 은 필수 — 없으면 스크롤이 발현되지 않아 저장/취소가 잘린다.
     <Modal isOpen onClose={props.onClose} title={titleText} srOnlyTitle size="md">
-      <div className="p-6 overflow-y-auto">
-        <h3 className="text-base font-bold text-sp-text mb-3 flex items-center gap-2">
-          <span className="material-symbols-outlined text-amber-400 text-lg">push_pin</span>
-          {titleText}
-        </h3>
+      <div className="flex flex-col flex-1 min-h-0">
+        <div className="flex-1 min-h-0 overflow-y-auto p-6">
+          <h3 className="text-base font-bold text-sp-text mb-3 flex items-center gap-2">
+            <span className="material-symbols-outlined text-amber-400 text-lg">push_pin</span>
+            {titleText}
+          </h3>
 
-        {/* 적용 범위 (항상 노출) */}
-        <label className="block text-xs font-medium text-sp-muted mb-1.5">적용 범위</label>
-        <div className="grid grid-cols-3 gap-1.5 mb-4">
-          {(
-            [
-              { key: 'teacher', label: '교사 시간표', desc: '내 일정만' },
-              { key: 'class', label: '학급 시간표', desc: '우리 반만' },
-              { key: 'both', label: '양쪽 모두', desc: '교사·학급' },
-            ] as const
-          ).map((opt) => (
-            <button
-              key={opt.key}
-              type="button"
-              onClick={() => setScope(opt.key)}
-              className={`px-2 py-2 rounded-lg border text-center transition-all ${
-                scope === opt.key
-                  ? 'bg-sp-accent/10 border-sp-accent'
-                  : 'bg-sp-bg/50 border-sp-border hover:border-sp-muted'
-              }`}
-            >
-              <div
-                className={`text-xs font-bold ${scope === opt.key ? 'text-sp-accent' : 'text-sp-text'}`}
+          {/* 적용 범위 (항상 노출) */}
+          <label className="block text-xs font-medium text-sp-muted mb-1.5">적용 범위</label>
+          <div className="grid grid-cols-3 gap-1.5 mb-4">
+            {(
+              [
+                { key: 'teacher', label: '교사 시간표', desc: '내 일정만' },
+                { key: 'class', label: '학급 시간표', desc: '우리 반만' },
+                { key: 'both', label: '양쪽 모두', desc: '교사·학급' },
+              ] as const
+            ).map((opt) => (
+              <button
+                key={opt.key}
+                type="button"
+                onClick={() => setScope(opt.key)}
+                className={`px-2 py-2 rounded-lg border text-center transition-all ${
+                  scope === opt.key
+                    ? 'bg-sp-accent/10 border-sp-accent'
+                    : 'bg-sp-bg/50 border-sp-border hover:border-sp-muted'
+                }`}
               >
-                {opt.label}
-              </div>
-              <div className="text-caption text-sp-muted mt-0.5">{opt.desc}</div>
-            </button>
-          ))}
-        </div>
-
-        {/* 변동 유형 선택 (create 전용) */}
-        {isCreate && (
-          <>
-            <label className="block text-xs font-medium text-sp-muted mb-1.5">변동 유형</label>
-            <div className="grid grid-cols-2 gap-1.5 mb-4">
-              {KIND_OPTIONS.map((opt) => (
-                <button
-                  key={opt.key}
-                  type="button"
-                  onClick={() => setKind(opt.key)}
-                  className={`flex items-start gap-2 px-3 py-2 rounded-lg border text-left transition-all ${
-                    kind === opt.key
-                      ? 'bg-sp-accent/10 border-sp-accent'
-                      : 'bg-sp-bg/50 border-sp-border hover:border-sp-muted'
-                  }`}
+                <div
+                  className={`text-xs font-bold ${scope === opt.key ? 'text-sp-accent' : 'text-sp-text'}`}
                 >
-                  <span
-                    className={`material-symbols-outlined text-base mt-0.5 ${
-                      kind === opt.key ? 'text-sp-accent' : 'text-sp-muted'
+                  {opt.label}
+                </div>
+                <div className="text-caption text-sp-muted mt-0.5">{opt.desc}</div>
+              </button>
+            ))}
+          </div>
+
+          {/* 변동 유형 선택 (create 전용) */}
+          {isCreate && (
+            <>
+              <label className="block text-xs font-medium text-sp-muted mb-1.5">변동 유형</label>
+              <div className="grid grid-cols-2 gap-1.5 mb-4">
+                {KIND_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => setKind(opt.key)}
+                    className={`flex items-start gap-2 px-3 py-2 rounded-lg border text-left transition-all ${
+                      kind === opt.key
+                        ? 'bg-sp-accent/10 border-sp-accent'
+                        : 'bg-sp-bg/50 border-sp-border hover:border-sp-muted'
                     }`}
                   >
-                    {opt.icon}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <div
-                      className={`text-xs font-bold ${
-                        kind === opt.key ? 'text-sp-accent' : 'text-sp-text'
+                    <span
+                      className={`material-symbols-outlined text-base mt-0.5 ${
+                        kind === opt.key ? 'text-sp-accent' : 'text-sp-muted'
                       }`}
                     >
-                      {opt.label}
+                      {opt.icon}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div
+                        className={`text-xs font-bold ${
+                          kind === opt.key ? 'text-sp-accent' : 'text-sp-text'
+                        }`}
+                      >
+                        {opt.label}
+                      </div>
+                      <div className="text-caption text-sp-muted mt-0.5 leading-tight">
+                        {opt.desc}
+                      </div>
                     </div>
-                    <div className="text-caption text-sp-muted mt-0.5 leading-tight">
-                      {opt.desc}
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </>
-        )}
-
-        {/* ============ 슬롯 A ============ */}
-        <div className="mb-3 px-3 py-2.5 bg-sp-bg/40 border border-sp-border rounded-lg">
-          <div className="text-xs font-bold text-sp-muted mb-2">
-            {isSwap ? '① A 교시' : '변경 대상'}
-          </div>
-
-          {slotEditable ? (
-            <div className="grid grid-cols-2 gap-2 mb-2">
-              <div>
-                <label className="block text-caption text-sp-muted mb-0.5">날짜</label>
-                <input
-                  type="date"
-                  value={dateA}
-                  onChange={(e) => setDateA(e.target.value)}
-                  className="w-full bg-sp-bg border border-sp-border rounded-md px-2 py-1.5 text-xs text-sp-text focus:border-sp-accent focus:outline-none"
-                />
+                  </button>
+                ))}
               </div>
-              <div>
-                <label className="block text-caption text-sp-muted mb-0.5">교시</label>
-                <select
-                  value={periodA}
-                  onChange={(e) => setPeriodA(Number(e.target.value))}
-                  className="w-full bg-sp-bg border border-sp-border rounded-md px-2 py-1.5 text-xs text-sp-text focus:border-sp-accent focus:outline-none"
-                >
-                  {Array.from({ length: maxPeriods }, (_, i) => i + 1).map((p) => (
-                    <option key={p} value={p}>
-                      {resolvePeriodLabel(p, periodTimes)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          ) : (
-            <div className="text-xs text-sp-muted mb-1">
-              {formatDotted(dateA)} · {resolvePeriodLabel(periodA, periodTimes)}
-            </div>
-          )}
-          <div className="text-xs text-sp-text mb-2">
-            원래 과목: <span className="font-semibold">{baseSubjectA || '(빈 교시)'}</span>
-            {baseClassroomA && <span className="text-sp-muted ml-1">@{baseClassroomA}</span>}
-          </div>
-          {isSwap && (
-            <>
-              <label className="block text-caption text-sp-muted mb-0.5">
-                A 교시에 들어올 과목
-              </label>
-              <input
-                type="text"
-                value={swapSubjectA}
-                onChange={(e) => setSwapSubjectA(e.target.value)}
-                placeholder="예: 수학"
-                className="w-full bg-sp-bg border border-sp-border rounded-md px-2 py-1.5 text-sm text-sp-text placeholder:text-sp-muted/40 focus:border-sp-accent focus:outline-none"
-              />
             </>
           )}
-        </div>
 
-        {/* ============ 슬롯 B (swap 전용) ============ */}
-        {isSwap && (
+          {/* ============ 슬롯 A ============ */}
           <div className="mb-3 px-3 py-2.5 bg-sp-bg/40 border border-sp-border rounded-lg">
-            <div className="text-xs font-bold text-sp-muted mb-2">② B 교시</div>
-            <div className="grid grid-cols-2 gap-2 mb-2">
-              <div>
-                <label className="block text-caption text-sp-muted mb-0.5">날짜</label>
-                <input
-                  type="date"
-                  value={dateB}
-                  onChange={(e) => setDateB(e.target.value)}
-                  className="w-full bg-sp-bg border border-sp-border rounded-md px-2 py-1.5 text-xs text-sp-text focus:border-sp-accent focus:outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-caption text-sp-muted mb-0.5">교시</label>
-                <select
-                  value={periodB}
-                  onChange={(e) => setPeriodB(Number(e.target.value))}
-                  className="w-full bg-sp-bg border border-sp-border rounded-md px-2 py-1.5 text-xs text-sp-text focus:border-sp-accent focus:outline-none"
-                >
-                  {Array.from({ length: maxPeriods }, (_, i) => i + 1).map((p) => (
-                    <option key={p} value={p}>
-                      {resolvePeriodLabel(p, periodTimes)}
-                    </option>
-                  ))}
-                </select>
-              </div>
+            <div className="text-xs font-bold text-sp-muted mb-2">
+              {isSwap ? '① A 교시' : '변경 대상'}
             </div>
+
+            {slotEditable ? (
+              <div className="grid grid-cols-2 gap-2 mb-2">
+                <div>
+                  <label className="block text-caption text-sp-muted mb-0.5">날짜</label>
+                  <input
+                    type="date"
+                    value={dateA}
+                    onChange={(e) => setDateA(e.target.value)}
+                    className="w-full bg-sp-bg border border-sp-border rounded-md px-2 py-1.5 text-xs text-sp-text focus:border-sp-accent focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-caption text-sp-muted mb-0.5">교시</label>
+                  <select
+                    value={periodA}
+                    onChange={(e) => setPeriodA(Number(e.target.value))}
+                    className="w-full bg-sp-bg border border-sp-border rounded-md px-2 py-1.5 text-xs text-sp-text focus:border-sp-accent focus:outline-none"
+                  >
+                    {Array.from({ length: maxPeriods }, (_, i) => i + 1).map((p) => (
+                      <option key={p} value={p}>
+                        {resolvePeriodLabel(p, periodTimes)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            ) : (
+              <div className="text-xs text-sp-muted mb-1">
+                {formatDotted(dateA)} · {resolvePeriodLabel(periodA, periodTimes)}
+              </div>
+            )}
             <div className="text-xs text-sp-text mb-2">
-              원래 과목: <span className="font-semibold">{baseSubjectB || '(빈 교시)'}</span>
+              원래 과목: <span className="font-semibold">{baseSubjectA || '(빈 교시)'}</span>
+              {baseClassroomA && <span className="text-sp-muted ml-1">@{baseClassroomA}</span>}
             </div>
-            <label className="block text-caption text-sp-muted mb-0.5">B 교시에 들어올 과목</label>
-            <input
-              type="text"
-              value={swapSubjectB}
-              onChange={(e) => setSwapSubjectB(e.target.value)}
-              placeholder="예: 국어"
-              className="w-full bg-sp-bg border border-sp-border rounded-md px-2 py-1.5 text-sm text-sp-text placeholder:text-sp-muted/40 focus:border-sp-accent focus:outline-none"
-            />
-
-            {/* 미리보기 */}
-            <div className="mt-2 px-2 py-1.5 bg-sp-accent/10 rounded text-detail text-sp-accent">
-              🔄 A: {baseSubjectA || '(빈)'} → <strong>{swapSubjectA || '(비어있음)'}</strong>
-              {' · '}
-              B: {baseSubjectB || '(빈)'} → <strong>{swapSubjectB || '(비어있음)'}</strong>
-            </div>
-          </div>
-        )}
-
-        {/* ============ 유형별 입력 필드 ============ */}
-        {!isEdit && isSwap && null /* swap은 과목 입력 불필요 */}
-
-        {(!isCreate || !isSwap) && !isCancel && (
-          <>
-            {/* 변경할 과목 (substitute/custom/edit) */}
-            <label className="block text-xs font-medium text-sp-muted mb-1">변경할 과목</label>
-            <input
-              type="text"
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
-              placeholder={isSubstitute ? '예: 수학' : '비우면 공강/자습'}
-              className="w-full bg-sp-bg border border-sp-border rounded-lg px-3 py-2 text-sm text-sp-text placeholder:text-sp-muted/40 focus:border-sp-accent focus:outline-none focus:ring-1 focus:ring-sp-accent/50 mb-3"
-              autoFocus={!slotEditable}
-            />
-
-            {/* 보강 교사 (substitute 전용) */}
-            {isSubstitute && (
+            {isSwap && (
               <>
-                <label className="block text-xs font-medium text-sp-muted mb-1">
-                  보강 교사 (선택)
+                <label className="block text-caption text-sp-muted mb-0.5">
+                  A 교시에 들어올 과목
                 </label>
                 <input
                   type="text"
-                  value={substituteTeacher}
-                  onChange={(e) => setSubstituteTeacher(e.target.value)}
-                  placeholder="대신 수업하는 선생님 이름"
-                  className="w-full bg-sp-bg border border-sp-border rounded-lg px-3 py-2 text-sm text-sp-text placeholder:text-sp-muted/40 focus:border-sp-accent focus:outline-none focus:ring-1 focus:ring-sp-accent/50 mb-3"
+                  value={swapSubjectA}
+                  onChange={(e) => setSwapSubjectA(e.target.value)}
+                  placeholder="예: 수학"
+                  className="w-full bg-sp-bg border border-sp-border rounded-md px-2 py-1.5 text-sm text-sp-text placeholder:text-sp-muted/40 focus:border-sp-accent focus:outline-none"
                 />
               </>
             )}
-
-            {/* 교실 */}
-            <label className="block text-xs font-medium text-sp-muted mb-1">교실 (선택)</label>
-            <input
-              type="text"
-              value={classroom}
-              onChange={(e) => setClassroom(e.target.value)}
-              placeholder="교실"
-              className="w-full bg-sp-bg border border-sp-border rounded-lg px-3 py-2 text-sm text-sp-text placeholder:text-sp-muted/40 focus:border-sp-accent focus:outline-none focus:ring-1 focus:ring-sp-accent/50 mb-3"
-            />
-          </>
-        )}
-
-        {isCancel && (
-          <div className="mb-3 px-3 py-2 bg-sp-accent/5 border border-sp-accent/30 rounded-lg text-xs text-sp-text">
-            💤 이 교시는 <strong>자습/공강</strong>으로 표시됩니다.
           </div>
-        )}
 
-        {/* 사유 프리셋 (모든 모드) */}
-        <label className="block text-xs font-medium text-sp-muted mb-1.5">변경 사유</label>
-        <div className="flex flex-wrap gap-1.5 mb-4">
-          {REASON_PRESETS.map((r) => (
-            <button
-              key={r}
-              type="button"
-              onClick={() => setReason((prev) => (prev === r ? '' : r))}
-              className={`px-2.5 py-1 text-xs rounded-full border transition-all ${
-                reason === r
-                  ? 'bg-sp-accent/20 border-sp-accent text-sp-accent font-medium'
-                  : 'border-sp-border text-sp-muted hover:border-sp-muted hover:text-sp-text'
-              }`}
-            >
-              {r}
-            </button>
-          ))}
+          {/* ============ 슬롯 B (swap 전용) ============ */}
+          {isSwap && (
+            <div className="mb-3 px-3 py-2.5 bg-sp-bg/40 border border-sp-border rounded-lg">
+              <div className="text-xs font-bold text-sp-muted mb-2">② B 교시</div>
+              <div className="grid grid-cols-2 gap-2 mb-2">
+                <div>
+                  <label className="block text-caption text-sp-muted mb-0.5">날짜</label>
+                  <input
+                    type="date"
+                    value={dateB}
+                    onChange={(e) => setDateB(e.target.value)}
+                    className="w-full bg-sp-bg border border-sp-border rounded-md px-2 py-1.5 text-xs text-sp-text focus:border-sp-accent focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-caption text-sp-muted mb-0.5">교시</label>
+                  <select
+                    value={periodB}
+                    onChange={(e) => setPeriodB(Number(e.target.value))}
+                    className="w-full bg-sp-bg border border-sp-border rounded-md px-2 py-1.5 text-xs text-sp-text focus:border-sp-accent focus:outline-none"
+                  >
+                    {Array.from({ length: maxPeriods }, (_, i) => i + 1).map((p) => (
+                      <option key={p} value={p}>
+                        {resolvePeriodLabel(p, periodTimes)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="text-xs text-sp-text mb-2">
+                원래 과목: <span className="font-semibold">{baseSubjectB || '(빈 교시)'}</span>
+              </div>
+              <label className="block text-caption text-sp-muted mb-0.5">
+                B 교시에 들어올 과목
+              </label>
+              <input
+                type="text"
+                value={swapSubjectB}
+                onChange={(e) => setSwapSubjectB(e.target.value)}
+                placeholder="예: 국어"
+                className="w-full bg-sp-bg border border-sp-border rounded-md px-2 py-1.5 text-sm text-sp-text placeholder:text-sp-muted/40 focus:border-sp-accent focus:outline-none"
+              />
+
+              {/* 미리보기 */}
+              <div className="mt-2 px-2 py-1.5 bg-sp-accent/10 rounded text-detail text-sp-accent">
+                🔄 A: {baseSubjectA || '(빈)'} → <strong>{swapSubjectA || '(비어있음)'}</strong>
+                {' · '}
+                B: {baseSubjectB || '(빈)'} → <strong>{swapSubjectB || '(비어있음)'}</strong>
+              </div>
+            </div>
+          )}
+
+          {/* ============ 유형별 입력 필드 ============ */}
+          {!isEdit && isSwap && null /* swap은 과목 입력 불필요 */}
+
+          {(!isCreate || !isSwap) && !isCancel && (
+            <>
+              {/* 변경할 과목 (substitute/custom/edit) */}
+              <label className="block text-xs font-medium text-sp-muted mb-1">변경할 과목</label>
+              <input
+                type="text"
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+                placeholder={isSubstitute ? '예: 수학' : '비우면 공강/자습'}
+                className="w-full bg-sp-bg border border-sp-border rounded-lg px-3 py-2 text-sm text-sp-text placeholder:text-sp-muted/40 focus:border-sp-accent focus:outline-none focus:ring-1 focus:ring-sp-accent/50 mb-3"
+                autoFocus={!slotEditable}
+              />
+
+              {/* 보강 교사 (substitute 전용) */}
+              {isSubstitute && (
+                <>
+                  <label className="block text-xs font-medium text-sp-muted mb-1">
+                    보강 교사 (선택)
+                  </label>
+                  <input
+                    type="text"
+                    value={substituteTeacher}
+                    onChange={(e) => setSubstituteTeacher(e.target.value)}
+                    placeholder="대신 수업하는 선생님 이름"
+                    className="w-full bg-sp-bg border border-sp-border rounded-lg px-3 py-2 text-sm text-sp-text placeholder:text-sp-muted/40 focus:border-sp-accent focus:outline-none focus:ring-1 focus:ring-sp-accent/50 mb-3"
+                  />
+                </>
+              )}
+
+              {/* 교실 */}
+              <label className="block text-xs font-medium text-sp-muted mb-1">교실 (선택)</label>
+              <input
+                type="text"
+                value={classroom}
+                onChange={(e) => setClassroom(e.target.value)}
+                placeholder="교실"
+                className="w-full bg-sp-bg border border-sp-border rounded-lg px-3 py-2 text-sm text-sp-text placeholder:text-sp-muted/40 focus:border-sp-accent focus:outline-none focus:ring-1 focus:ring-sp-accent/50 mb-3"
+              />
+            </>
+          )}
+
+          {isCancel && (
+            <div className="mb-3 px-3 py-2 bg-sp-accent/5 border border-sp-accent/30 rounded-lg text-xs text-sp-text">
+              💤 이 교시는 <strong>자습/공강</strong>으로 표시됩니다.
+            </div>
+          )}
+
+          {/* 사유 프리셋 (모든 모드) */}
+          <label className="block text-xs font-medium text-sp-muted mb-1.5">변경 사유</label>
+          <div className="flex flex-wrap gap-1.5 mb-4">
+            {REASON_PRESETS.map((r) => (
+              <button
+                key={r}
+                type="button"
+                onClick={() => setReason((prev) => (prev === r ? '' : r))}
+                className={`px-2.5 py-1 text-xs rounded-full border transition-all ${
+                  reason === r
+                    ? 'bg-sp-accent/20 border-sp-accent text-sp-accent font-medium'
+                    : 'border-sp-border text-sp-muted hover:border-sp-muted hover:text-sp-text'
+                }`}
+              >
+                {r}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {/* 저장/취소 */}
-        <div className="flex gap-2">
+        {/* 저장/취소 — 스크롤 영역 밖 고정 푸터 (내용이 길어도 항상 보임) */}
+        <div className="shrink-0 flex gap-2 px-6 py-4 border-t border-sp-border">
           <button
             onClick={handleSubmit}
             disabled={submitDisabled}
