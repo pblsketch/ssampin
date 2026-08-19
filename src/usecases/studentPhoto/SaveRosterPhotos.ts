@@ -103,11 +103,15 @@ export async function saveRosterPhotos(
         STUDENT_PHOTO_LIMITS.JPEG_QUALITY,
       );
       if (resized.bytes.byteLength > STUDENT_PHOTO_LIMITS.MAX_STORED_BYTES) {
+        // ⚠️ forceReencode=true 가 없으면, 원본이 이미 320px 이하인 사진은
+        //    축소기가 "줄일 필요 없음"으로 원본을 그대로 돌려줘 재시도가 무의미해진다.
+        //    그러면 용량만 큰 작은 사진이 통째로 버려진다.
         resized = await deps.resizer.resize(
           candidate.bytes,
           candidate.mimeType,
           STUDENT_PHOTO_LIMITS.MAX_DIMENSION,
           RETRY_QUALITY,
+          true,
         );
       }
     } catch {

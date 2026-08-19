@@ -274,3 +274,69 @@ describe('parsePhotoRosterFile — 지원하지 않는 형식', () => {
     expect(outcome.guide).toMatch(/나이스|명렬표/);
   });
 });
+
+/**
+ * ★ QA 발견 C1 — 같은 줄 안에서 사진이 밀리는 경우.
+ *
+ * 좌표를 논리 격자로 **압축**하면 절대 위치가 사라져서, 검산이 사실상
+ * "줄별 인원수가 같은가"로 약해진다. 같은 줄에 로고가 1장 끼고 학생 사진이 1장 빠지면
+ * 개수가 그대로라 **경고 없이 전원이 한 칸씩 밀린다** — 이 기능의 유일한 치명 실패다.
+ */
+describe('parsePhotoRosterFile — HWPML 같은 줄 밀림 (C1)', () => {
+  /** 한 줄에 사진을 직접 배치한다. gaps 로 간격을 흐트러뜨릴 수 있다. */
+  function buildHwpmlRow(horzOffsets: readonly number[]): Uint8Array {
+    const pics = horzOffsets.map((h, i) => picture(i + 1, 13680, h)).join('');
+    const binaries = horzOffsets
+      .map((_, i) => `<BINDATA Id="${i + 1}" Size="3" Encoding="Base64">AAAA</BINDATA>`)
+      .join('');
+    const table =
+      `<TABLE>` +
+      NAMES.map(
+        (name, i) =>
+          `<CELL ColAddr="${COLS[i]}" RowAddr="1" ColSpan="1" RowSpan="1">` +
+          `<PARALIST><P><TEXT><CHAR>${i + 1}번  ${name}</CHAR></TEXT></P></PARALIST></CELL>`,
+      ).join('') +
+      `</TABLE>`;
+    const xml =
+      `<?xml version="1.0" encoding="UTF-8" standalone="no" ?><HWPML Style="embed" Version="2.1">` +
+      `<BODY>${pics}${table}</BODY><BINDATASTORAGE>${binaries}</BINDATASTORAGE></HWPML>`;
+    const body = new TextEncoder().encode(xml);
+    const out = new Uint8Array(3 + body.length);
+    out.set([0xef, 0xbb, 0xbf], 0);
+    out.set(body, 3);
+    return out;
+  }
+
+  /** 실물처럼 일정한 간격(7000)으로 4장 */
+  const EVEN = [6667, 13667, 20667, 27667];
+
+  it('간격이 고른 정상 파일은 그대로 통과한다', () => {
+    const outcome = parsePhotoRosterFile(buildHwpmlRow(EVEN));
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    expect(outcome.result.pairing.ok).toBe(true);
+  });
+
+  it('★1번 사진이 빠지고 같은 줄에 로고가 끼면 개수는 맞지만 반드시 걸러야 한다', () => {
+    // 1번 자리 사진이 없고, 3번과 4번 사이(간격 밖)에 로고가 한 장 들어갔다.
+    // 개수는 4장 그대로라 "줄별 인원수" 검산만으로는 통과해 버린다.
+    const withLogo = [13667, 20667, 24000, 27667];
+    const outcome = parsePhotoRosterFile(buildHwpmlRow(withLogo));
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+
+    expect(outcome.result.photos).toHaveLength(outcome.result.names.length); // 개수는 맞는 상황
+    expect(
+      outcome.result.pairing.ok,
+      '간격이 흐트러졌는데 자동 짝짓기를 통과시키면 얼굴이 밀린 채 저장된다',
+    ).toBe(false);
+  });
+
+  it('★사진 한 장이 빠져 간격이 두 배가 되면 걸러야 한다', () => {
+    const missing = [6667, 20667, 27667, 34667]; // 두 번째가 빠져 첫 간격이 2배
+    const outcome = parsePhotoRosterFile(buildHwpmlRow(missing));
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    expect(outcome.result.pairing.ok).toBe(false);
+  });
+});

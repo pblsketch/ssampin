@@ -42,7 +42,9 @@ import {
   type PhotoTargetCandidate,
 } from '@usecases/studentPhoto/resolvePhotoTargets';
 import { saveRosterPhotos } from '@usecases/studentPhoto/SaveRosterPhotos';
-import { studentPhotoRepository, imageResizer } from '@adapters/di/container';
+import { studentPhotoRepository, imageResizer, driveSyncRepository } from '@adapters/di/container';
+import { deleteStudentPhotos } from '@usecases/studentPhoto/DeleteStudentPhotos';
+import { resolveStudentPhotoCloud } from '@adapters/repositories/studentPhotoCloudGateway';
 import { generateUUID } from '@infrastructure/utils/uuid';
 
 export function RosterManagementTab() {
@@ -138,6 +140,23 @@ export function RosterManagementTab() {
     async (student: Student) => {
       const snapshot = students;
       await updateStudents(students.filter((s) => s.id !== student.id));
+      // 명단에서 지운 학생의 얼굴 사진도 함께 파기한다.
+      // 이걸 빠뜨리면 앱 어디에도 안 보이는 얼굴 사진이 컴퓨터·클라우드에 남는다 —
+      // 개인정보 처리방침의 "삭제 시 즉시 지워집니다"가 사실이 아니게 된다.
+      // (실행 취소로 학생을 되살려도 사진은 돌아오지 않는다 — 사진은 다시 넣어야 한다)
+      try {
+        const cloud = await resolveStudentPhotoCloud();
+        await deleteStudentPhotos(
+          {
+            repository: studentPhotoRepository,
+            syncRepository: driveSyncRepository,
+            ...(cloud ? { cloud } : {}),
+          },
+          { scope: 'student', studentId: student.id },
+        );
+      } catch (err) {
+        console.warn('[RosterManagementTab] 학생 사진 파기 실패:', err);
+      }
       showToast(`${student.name || '학생'}을(를) 명단에서 삭제했습니다`, 'success', {
         label: '실행 취소',
         onClick: () => void updateStudents([...snapshot]),
@@ -292,6 +311,10 @@ export function RosterManagementTab() {
   const handleConflictCancel = useCallback(() => {
     setConflictPlan(null);
     setConflictImported(null);
+    // ⚠️ 대기 중인 사진도 함께 버린다. 여기서 안 비우면 선생님이 취소한 사진이
+    //    다음에 다른 명단을 가져올 때 조용히 저장된다(같은 반영 함수를 지나가므로).
+    //    "안 넣기로 한 얼굴 사진이 저장된다"는 것 자체가 개인정보 사고다.
+    pendingPhotosRef.current = [];
   }, []);
 
   /**
@@ -1481,16 +1504,24 @@ export function RosterManagementTab() {
       {/* 사진 명렬표 가져오기 — 이름은 기존 병합 기계로, 사진은 그 뒤에 붙는다 */}
       <PhotoRosterImportModal
         isOpen={showPhotoImport}
-        onClose={() => setShowPhotoImport(false)}
+        onClose={() => {
+          // 창을 닫으면 아직 반영되지 않은 사진은 버린다 (취소와 같은 취급)
+          pendingPhotosRef.current = [];
+          setShowPhotoImport(false);
+        }}
         ownerKind="homeroom"
         ownerKey="homeroom"
         currentStudentCount={students.length}
         onConfirm={async (result) => {
           // 사진은 명단이 확정된 뒤에 붙여야 하므로 여기서는 들고만 있는다
           pendingPhotosRef.current = collectPhotoCandidates(result);
+          let applied = false;
           await tryImport(toImportReadyStudents(result.names), () => {
+            applied = true;
             setShowPhotoImport(false);
           });
+          // 충돌이 있으면 tryImport 는 충돌 창만 띄우고 끝난다 — 아직 반영 전이라고 알린다
+          return applied;
         }}
       />
 

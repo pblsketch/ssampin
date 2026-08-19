@@ -40,7 +40,15 @@ export interface PhotoRosterImportModalProps {
   /** 현재 명단 (미리보기 비교용) */
   currentStudentCount: number;
   /** 확인 완료 → 실제 반영. 부모가 명단 병합·사진 저장을 수행한다 */
-  onConfirm: (result: PhotoRosterParseResult) => Promise<void>;
+  /**
+   * 확인 완료 → 실제 반영. 부모가 명단 병합·사진 저장을 수행한다.
+   *
+   * ⚠️ **아직 반영되지 않았으면 `false` 를 돌려줘야 한다.**
+   * 이름이 달라 충돌 해결 창이 뜨는 경우, 부모는 그 창만 띄우고 정상 반환한다.
+   * 그때 이 창이 "반영했어요"를 띄우면 **아무것도 반영되지 않았는데 완료 화면**이 뜨고,
+   * 충돌 창과 두 개가 겹쳐 보인다(이 저장소에 모달 2개 겹침 사고 전례가 있다).
+   */
+  onConfirm: (result: PhotoRosterParseResult) => Promise<boolean | void>;
 }
 
 type Step = 'pick' | 'reading' | 'confirm' | 'done';
@@ -208,7 +216,13 @@ export function PhotoRosterImportModal({
     setApplying(true);
     setApplyError(null);
     try {
-      await onConfirm(parseResult);
+      const applied = await onConfirm(parseResult);
+      // false 를 받으면 아직 반영 전이다(충돌 해결 창이 떠 있다) — 완료 화면으로 넘어가지 않고
+      // 이 창을 닫아 충돌 창만 남긴다.
+      if (applied === false) {
+        onClose();
+        return;
+      }
       setStep('done');
     } catch (err) {
       setApplyError(
@@ -218,7 +232,7 @@ export function PhotoRosterImportModal({
     } finally {
       setApplying(false);
     }
-  }, [parseResult, canConfirm, onConfirm, showToast]);
+  }, [parseResult, canConfirm, onConfirm, onClose, showToast]);
 
   const handlePickAgain = useCallback(() => {
     setStep('pick');

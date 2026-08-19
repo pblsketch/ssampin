@@ -25,7 +25,12 @@
  * 실물에서 사진은 세로 3줄(8·8·6장)로 정확히 복원됐다.
  */
 
-import { gridPairKey, toGridIndex, pairRosterPhotos } from '@domain/rules/photoRosterPairing';
+import {
+  gridPairKey,
+  toGridIndex,
+  pairRosterPhotos,
+  hasUniformSpacing,
+} from '@domain/rules/photoRosterPairing';
 import type {
   PhotoRosterParseResult,
   RosterNameCandidate,
@@ -182,6 +187,17 @@ function toGridKeys<T>(
   });
 }
 
+/** 세로 좌표가 같은 사진끼리 묶는다 (한 줄 = 한 묶음) */
+function groupByRow(photos: readonly RawPhoto[]): RawPhoto[][] {
+  const rows = new Map<number, RawPhoto[]>();
+  for (const photo of photos) {
+    const bucket = rows.get(photo.vert) ?? [];
+    bucket.push(photo);
+    rows.set(photo.vert, bucket);
+  }
+  return [...rows.values()];
+}
+
 /**
  * HWPML 사진 명렬표를 해석한다.
  *
@@ -220,10 +236,24 @@ export function parseHwpmlPhotoRoster(xml: string): PhotoRosterParseResult {
     mimeType: 'image/jpeg',
   }));
 
+  // ⚠️ 압축 좌표만으로는 **같은 줄 안의 밀림**을 못 잡는다(검산이 "줄별 인원수"로 약해진다).
+  //    명렬표 사진은 줄마다 일정한 간격으로 놓이므로, 간격이 흐트러졌다는 건
+  //    사진이 빠졌거나(간격 2배) 로고 같은 게 끼어들었다는 신호다.
+  //    그때 자동 짝짓기를 포기하지 않으면 얼굴이 한 칸씩 밀린 채 저장된다.
+  const spacingOk = groupByRow(usablePhotos).every((row) =>
+    hasUniformSpacing(row.map((p) => p.horz)),
+  );
+
   return {
     format: 'hwpml',
     names,
     photos,
-    pairing: pairRosterPhotos(names, photos),
+    pairing: spacingOk
+      ? pairRosterPhotos(names, photos)
+      : {
+          ok: false,
+          reason: 'PHOTO_GRID_MISMATCH',
+          detail: '사진이 줄에 놓인 간격이 고르지 않습니다 (빠졌거나 다른 그림이 섞였을 수 있음)',
+        },
   };
 }

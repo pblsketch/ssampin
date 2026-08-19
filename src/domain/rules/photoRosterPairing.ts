@@ -145,3 +145,32 @@ export function toGridIndex(values: readonly number[], tolerance = 0): ReadonlyM
 export function gridPairKey(row: number, col: number): string {
   return `r${row}:c${col}`;
 }
+
+/**
+ * 한 줄에 놓인 좌표들이 **고른 간격**인지 본다.
+ *
+ * ## 왜 필요한가 — 압축만으로는 밀림을 못 잡는다
+ *
+ * 사진이 표 밖에 떠 있는 포맷(HWPML)에서는 사진 좌표와 이름 좌표의 좌표계가 달라서
+ * 양쪽을 각각 논리 격자로 **압축**해 맞춘다. 그런데 압축은 절대 위치를 버리기 때문에,
+ * 검산이 사실상 "줄별 인원수가 같은가"로 약해진다.
+ *
+ * 그래서 **같은 줄 안에서 밀리는 경우를 못 잡는다.** 예를 들어 1번 학생 사진이 빠지고
+ * 같은 줄에 학교 로고가 한 장 끼면, 개수는 그대로라 검산을 통과하면서
+ * 얼굴이 한 칸씩 밀린 채 저장된다 — 이 기능의 유일한 치명 실패다.
+ *
+ * 명렬표의 사진은 격자에 **일정한 간격**으로 놓인다. 그래서 간격이 흐트러졌다는 건
+ * 빠졌거나(간격 2배) 끼어들었다(간격이 어긋남)는 신호다. 그때는 자동 짝짓기를 포기한다.
+ *
+ * @param tolerance 간격 편차 허용 비율 (기본 20% — 렌더링 반올림 정도는 넘어간다)
+ */
+export function hasUniformSpacing(values: readonly number[], tolerance = 0.2): boolean {
+  if (values.length <= 2) return true; // 간격이 하나뿐이면 비교할 대상이 없다
+  const sorted = [...values].sort((a, b) => a - b);
+  const gaps: number[] = [];
+  for (let i = 1; i < sorted.length; i++) gaps.push(sorted[i]! - sorted[i - 1]!);
+
+  const median = [...gaps].sort((a, b) => a - b)[Math.floor(gaps.length / 2)]!;
+  if (median <= 0) return false;
+  return gaps.every((gap) => Math.abs(gap - median) / median <= tolerance);
+}

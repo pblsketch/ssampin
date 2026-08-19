@@ -15,6 +15,14 @@ export interface SyncResult {
   downloaded?: string[];
   skipped: string[];
   conflicts?: string[];
+  /**
+   * 업로드에 실패해 이번 회차에 건너뛴 바이너리 파일(사진·첨부).
+   *
+   * ⚠️ 이 값을 화면에 드러내지 않으면 얼굴 사진 22장이 전부 실패해도
+   * "동기화 성공"으로만 보인다. 일시적 실패는 다음 회차에 자연히 재시도되지만,
+   * 권한·용량 같은 항구적 실패는 **영영 모르게 된다.**
+   */
+  binaryFailures?: string[];
 }
 
 export type ImportSettingsResult =
@@ -131,8 +139,17 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
           timestamp: now,
           uploaded: result.uploaded,
           skipped: result.skipped,
+          binaryFailures: result.binaryFailures,
         },
       });
+
+      // 사진·첨부 업로드 실패는 조용히 넘기지 않는다 — 사용자가 알아야 재시도든 문의든 한다.
+      if (result.binaryFailures.length > 0) {
+        console.warn(
+          `[useDriveSyncStore] 바이너리 ${result.binaryFailures.length}건 업로드 실패 — 다음 동기화에서 재시도합니다`,
+          result.binaryFailures,
+        );
+      }
 
       // 마지막 동기화 시각은 **기기 전용 저장소**에 남긴다(ADR-040).
       // settings에 쓰면 동기화 대상 파일이 매번 바뀌어 ①매 주기 무조건 업로드

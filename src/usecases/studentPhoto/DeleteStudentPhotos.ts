@@ -16,12 +16,21 @@
  */
 
 import type { IDriveSyncPort } from '@domain/ports/IDriveSyncPort';
+import type { IDriveSyncRepository } from '@domain/repositories/IDriveSyncRepository';
 import type { IStudentPhotoRepository } from '@domain/repositories/IStudentPhotoRepository';
 import type { StudentPhotoOwnerKind } from '@domain/entities/StudentPhoto';
 import { toBinaryDriveFilename } from '@usecases/sync/binaryDriveFilename';
 
 export interface DeleteStudentPhotosDeps {
   readonly repository: IStudentPhotoRepository;
+  /**
+   * 동기화 장부. 지운 사진의 항목을 장부에서도 빼기 위해 필요하다.
+   *
+   * ⚠️ 이걸 안 지우면 **장부에는 있는데 실제 파일은 없는** 상태가 남는다.
+   * 다음 동기화가 "장부에 있는 파일이 클라우드에 없다"고 판단해 무결성 오류를 던지면
+   * 사진과 무관한 출결·기록 동기화까지 함께 멈춘다.
+   */
+  readonly syncRepository?: IDriveSyncRepository;
   /**
    * 클라우드 삭제 수단. 동기화를 쓰지 않는 상태(로그인 안 함 등)면 넘기지 않는다 —
    * 그때는 로컬만 지우면 그것이 완전한 파기다.
@@ -86,6 +95,25 @@ export async function deleteStudentPhotos(
         cloudFailures.push(photo.storageRef);
         console.warn(`[deleteStudentPhotos] 클라우드에서 ${photo.storageRef} 삭제 실패:`, err);
       }
+    }
+  }
+
+  // 3) 동기화 장부에서도 항목을 뺀다.
+  //    장부에만 남으면 다음 동기화가 "있어야 할 파일이 없다"고 판단해 무결성 오류를 던지고,
+  //    그 오류는 사이클 전체를 멈추므로 출결·기록 동기화까지 함께 죽는다.
+  if (deps.syncRepository) {
+    try {
+      const manifest = await deps.syncRepository.getLocalManifest();
+      if (manifest) {
+        const removed = new Set(targets.map((photo) => photo.storageRef));
+        const nextFiles = Object.fromEntries(
+          Object.entries(manifest.files).filter(([key]) => !removed.has(key)),
+        );
+        await deps.syncRepository.saveLocalManifest({ ...manifest, files: nextFiles });
+      }
+    } catch (err) {
+      // 장부 정리에 실패해도 파기 자체는 이미 끝났다 — 되돌리지 않고 알리기만 한다
+      console.warn('[deleteStudentPhotos] 동기화 장부 정리 실패:', err);
     }
   }
 

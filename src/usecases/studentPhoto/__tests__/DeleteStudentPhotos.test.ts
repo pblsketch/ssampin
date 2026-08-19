@@ -161,3 +161,69 @@ describe('deleteStudentPhotos — 클라우드까지 파기', () => {
     expect(result.cloudFailures).toHaveLength(3);
   });
 });
+
+/**
+ * ★ QA 발견 C2 — 지운 사진이 동기화 장부에 남으면 안 된다.
+ *
+ * 장부에만 남으면 다음 동기화가 "있어야 할 파일이 없다"고 판단해 무결성 오류를 던지고,
+ * 그 오류는 사이클 전체를 멈춘다 — 사진과 무관한 출결·기록 동기화까지 함께 죽는다.
+ */
+describe('deleteStudentPhotos — 동기화 장부 정리 (C2)', () => {
+  function fakeSyncRepo(files: Record<string, unknown>) {
+    const state = {
+      manifest: {
+        version: 1,
+        lastSyncedAt: '2026-08-19T00:00:00.000Z',
+        deviceId: 'dev-1',
+        deviceName: '내 기기',
+        files,
+      },
+    };
+    return {
+      state,
+      repo: {
+        getLocalManifest: () => Promise.resolve(state.manifest as never),
+        saveLocalManifest: (m: never) => {
+          state.manifest = m;
+          return Promise.resolve();
+        },
+      },
+    };
+  }
+
+  it('★지운 사진의 항목이 장부에서 빠진다', async () => {
+    const entry = { lastModified: '', checksum: 'x', size: 1 };
+    const { state, repo } = fakeSyncRepo({
+      'student-photos/s1.jpg': entry,
+      'student-photos/s2.jpg': entry,
+      'obs-attachments/keep.png': entry,
+      students: entry,
+    });
+
+    await deleteStudentPhotos(
+      { repository, syncRepository: repo },
+      { scope: 'owner', ownerKind: 'homeroom', ownerKey: 'homeroom' },
+    );
+
+    expect(Object.keys(state.manifest.files).sort()).toEqual([
+      'obs-attachments/keep.png',
+      'students',
+    ]);
+  });
+
+  it('장부 정리에 실패해도 파기 자체는 되돌리지 않는다', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const repo = {
+      getLocalManifest: () => Promise.reject(new Error('장부 못 읽음')),
+      saveLocalManifest: () => Promise.resolve(),
+    };
+
+    const result = await deleteStudentPhotos(
+      { repository, syncRepository: repo },
+      { scope: 'all' },
+    );
+
+    expect(result.deletedCount).toBe(3);
+    expect(repository.photos).toHaveLength(0);
+  });
+});

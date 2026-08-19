@@ -173,7 +173,10 @@ export class SyncToCloud {
     const findUniqueRemoteFile = (logicalKey: string, driveFilename: string) => {
       const matches = remoteFiles.filter((file) => file.name === driveFilename);
       if (matches.length > 1) {
-        throw new Error(
+        // ⚠️ 무결성 위반이다 — 어느 쪽이 진짜인지 알 수 없는 상태라 진행하면 안 된다.
+        //    평범한 Error 로 던지면 바이너리 루프의 항목별 catch 에 삼켜져
+        //    같은 사고가 파일 종류에 따라 다르게 처리된다(정적 파일은 멈추고 사진은 조용히 건너뜀).
+        throw new SyncIntegrityError(
           `클라우드 ${logicalKey} 파일이 중복되어 안전하게 동기화할 수 없습니다. 클라우드 데이터를 다시 구성해 주세요.`,
         );
       }

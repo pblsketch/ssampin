@@ -177,13 +177,23 @@ export function NameLearningMode({
     [seatList.length, photoSeatList],
   );
 
-  // 패널이 열릴 때마다 초기화
+  // 항상 최신 startSession 을 가리키는 참조 — 아래 초기화 effect 가 함수 신원 변화에
+  // 휘둘리지 않게 하기 위한 것이다(이유는 그 effect 주석 참조).
+  const startSessionRef = useRef(startSession);
+  startSessionRef.current = startSession;
+
+  // 패널이 열릴 때만 초기화한다.
+  //
+  // ⚠️ 의존성에 startSession 을 넣으면 안 된다.
+  //    사진은 비동기로 로드되므로 학습 모드를 연 뒤 잠시 뒤에 photoUrls 가 채워지는데,
+  //    그러면 photoSeatList → startSession 순으로 신원이 바뀌어 이 effect 가 다시 돈다.
+  //    결과: 사용자가 이미 [맞혀보기]로 몇 문제를 풀고 있는데 **사진 로딩이 끝나는 순간
+  //    모드가 '자유'로 되돌아가고 진행 상황이 전부 초기화**된다. 사진이 많을수록 잘 재현된다.
   useEffect(() => {
-    if (isOpen) {
-      setMode('free');
-      startSession('free');
-    }
-  }, [isOpen, startSession]);
+    if (!isOpen) return;
+    setMode('free');
+    startSessionRef.current('free');
+  }, [isOpen]);
 
   // sequential 모드: 학번 순서로 currentIndex 자동 진행
   const sortedSeatList = useMemo(() => {

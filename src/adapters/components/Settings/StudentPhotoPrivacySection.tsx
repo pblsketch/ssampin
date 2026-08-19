@@ -16,7 +16,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { SettingsSection } from './shared/SettingsSection';
-import { studentPhotoRepository } from '@adapters/di/container';
+import { studentPhotoRepository, driveSyncRepository } from '@adapters/di/container';
 import { deleteStudentPhotos } from '@usecases/studentPhoto/DeleteStudentPhotos';
 import { resolveStudentPhotoCloud } from '@adapters/repositories/studentPhotoCloudGateway';
 
@@ -53,7 +53,11 @@ export function StudentPhotoPrivacySection() {
     try {
       const cloud = await resolveStudentPhotoCloud();
       const result = await deleteStudentPhotos(
-        { repository: studentPhotoRepository, ...(cloud ? { cloud } : {}) },
+        {
+          repository: studentPhotoRepository,
+          syncRepository: driveSyncRepository,
+          ...(cloud ? { cloud } : {}),
+        },
         { scope: 'all' },
       );
       await refresh();

@@ -29,6 +29,7 @@ export class CanvasImageResizer implements IImageResizerPort {
     mimeType: string,
     maxDimension: number,
     quality: number,
+    forceReencode = false,
   ): Promise<ResizedImage> {
     if (!canUseCanvasPipeline()) {
       // 축소할 수 없는 환경에서는 조용히 원본을 저장하지 않는다 —
@@ -44,8 +45,9 @@ export class CanvasImageResizer implements IImageResizerPort {
         throw new Error('사진 크기를 읽지 못했습니다.');
       }
 
-      // 줄일 필요가 없으면 다시 압축하지 않는다 (재압축은 화질만 깎는다)
-      if (target.width === bitmap.width && target.height === bitmap.height) {
+      // 줄일 필요가 없으면 다시 압축하지 않는다 (재압축은 화질만 깎는다).
+      // 단 forceReencode 면 다시 압축한다 — 크기는 작은데 용량만 큰 사진을 줄이는 유일한 방법이다.
+      if (!forceReencode && target.width === bitmap.width && target.height === bitmap.height) {
         return { bytes, mimeType, width: bitmap.width, height: bitmap.height };
       }
 
