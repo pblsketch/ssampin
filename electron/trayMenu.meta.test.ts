@@ -48,6 +48,24 @@ describe('트레이 메뉴에 창 모드가 모두 있다', () => {
     );
   });
 
+  test('위치 초기화가 세 모드에 다 있다 — 되돌릴 길은 한자리에 모여 있어야 한다', () => {
+    const menu = trayMenuSource();
+    for (const label of ['위젯 위치 초기화', '아이콘 위치 초기화', '옆핀 손잡이 위치 초기화']) {
+      expect(menu, `트레이 메뉴에 "${label}" 이 없다`).toContain(`label: '${label}'`);
+    }
+  });
+
+  test('옆핀 위치 초기화는 옆핀을 안 연 상태에서도 저장값을 고친다', () => {
+    // 옆핀 창이 없다고 그냥 돌아가 버리면, 한 번 이상한 자리에 둔 사람은 옆핀을
+    // 열기 전에는 되돌릴 수 없고 열면 또 그 자리에 뜨는 순환에 갇힌다.
+    const menu = trayMenuSource();
+    const start = menu.indexOf("label: '옆핀 손잡이 위치 초기화'");
+    expect(start, '옆핀 위치 초기화 항목을 찾지 못했다').toBeGreaterThan(-1);
+    const item = menu.slice(start, start + 900);
+    expect(item, '옆핀이 떠 있을 때 service 를 부르지 않는다').toContain('resetRailPosition()');
+    expect(item, '옆핀이 없을 때 저장값을 고치지 않는다').toContain('saveSidePinDeviceState(');
+  });
+
   test('옆핀 항목은 눌러도 아무 일이 없으면 안 된다 — 꺼져 있어도 켜져야 한다', () => {
     // 옆핀에는 별도의 켜짐 설정이 있고 기본값이 꺼짐이다. 전환 분기가 enable()을
     // 함께 부르지 않으면, 메뉴는 있는데 눌러도 아무 일이 없는 상태가 된다.

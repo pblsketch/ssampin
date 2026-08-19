@@ -24,7 +24,11 @@ import {
   resolveSidePinRailPositionFromTop,
   type SidePinDisplayInfo,
 } from './sidePinGeometry';
-import type { SidePinDeviceState, SidePinDeviceStateSaveResult } from './sidePinDeviceState';
+import {
+  SIDE_PIN_RAIL_POSITION_DEFAULT,
+  type SidePinDeviceState,
+  type SidePinDeviceStateSaveResult,
+} from './sidePinDeviceState';
 
 export interface SidePinDisplaySnapshot {
   readonly displays: readonly SidePinDisplayInfo[];
@@ -52,10 +56,12 @@ export interface SidePinService {
   dispatch(event: SidePinEvent): void;
   /** 모니터 구성이 바뀌었다 */
   handleDisplayChange(): void;
-  /** 끄는 동안의 손잡이 윗변. 8단계로 반올림하지 않고 커서를 그대로 따라간다. */
+  /** 끄는 동안의 손잡이 윗변. 반올림하지 않고 커서를 그대로 따라간다. */
   setRailDragTop(screenY: number): void;
-  /** 손을 뗐다. 지금 자리에서 가장 가까운 8단계 위치로 맞추고 저장한다. */
+  /** 손을 뗐다. 놓은 자리를 비율(0~1)로 바꿔 저장한다. 칸으로 튀지 않는다. */
   commitRailDrag(): void;
+  /** 손잡이를 세로 기본 자리로 되돌린다 (트레이 "옆핀 손잡이 위치 초기화") */
+  resetRailPosition(): void;
   getState(): SidePinRuntimeState;
   getLayout(): SidePinLayout | null;
   dispose(): void;
@@ -204,6 +210,24 @@ export function createSidePinService(deps: SidePinServiceDeps): SidePinService {
       }
       // 저장한 비율은 놓은 자리를 그대로 되돌려주므로 창은 튀지 않는다. 그래도 한 번
       // 배치를 맞춰, 임시 자리를 지운 뒤의 상태와 화면을 일치시킨다.
+      controller.dispatch({ type: 'layout-changed' });
+    },
+
+    resetRailPosition(): void {
+      // 끌던 도중에 눌렀을 수도 있다. 임시 자리를 남겨 두면 되돌려 놓아도
+      // 손잡이가 끌던 자리에 그대로 머문다.
+      railDragTop = null;
+
+      if (device.railPosition !== SIDE_PIN_RAIL_POSITION_DEFAULT) {
+        device = { ...device, railPosition: SIDE_PIN_RAIL_POSITION_DEFAULT };
+        deps.saveDeviceState(device);
+      }
+
+      // **값이 이미 기본값이어도 반드시 다시 배치한다.** "같으면 아무것도 안 한다"로
+      // 두면, 모니터를 바꾸거나 해상도가 달라져 손잡이가 엉뚱한 자리에 있는데
+      // 저장값만 기본값인 경우 초기화가 아무 일도 하지 않는 막다른 길이 된다.
+      // v2.3.7에서 같은 판단(from === next면 조기 반환)이 "다시 시도" 버튼까지
+      // 죽였다(ADR-042·043). 되돌리는 기능은 언제 눌러도 되돌려야 한다.
       controller.dispatch({ type: 'layout-changed' });
     },
 

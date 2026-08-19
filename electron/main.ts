@@ -55,6 +55,11 @@ import { registerMultiSurveyShareHandlers } from './ipc/multiSurveyShare';
 import { registerAiBridgeHandlers } from './ipc/aiBridge';
 import { registerLiveSyncHost, type LiveSyncHost } from './ipc/aiBridgeLiveSyncHost';
 import { createSidePinElectron, type SidePinElectronHandle } from './sidePinElectron';
+import {
+  SIDE_PIN_RAIL_POSITION_DEFAULT,
+  loadSidePinDeviceState,
+  saveSidePinDeviceState,
+} from './sidePinDeviceState';
 import { registerStorageLocationHandlers } from './ipc/storageLocation';
 import { initContentRoot, getContentRoot } from './dataRoot';
 import { createShortcutTriggerGate } from './shortcutTriggerGate';
@@ -2351,6 +2356,28 @@ function createTray(): void {
             iconWindow.setBounds(fallback);
             saveIconBounds(fallback);
           }
+        },
+      },
+      {
+        // 손잡이는 세로로 끌어 옮길 수 있고(v2.4.1) 그 자리가 기기별로 저장된다.
+        // 위젯·아이콘과 달리 화면 밖으로는 못 나가지만, 모니터를 바꾸면 엉뚱한
+        // 높이에 남을 수 있어 되돌릴 길을 같은 자리에 둔다.
+        label: '옆핀 손잡이 위치 초기화',
+        click: () => {
+          if (sidePin !== null) {
+            sidePin.service.resetRailPosition();
+            return;
+          }
+          // 옆핀을 아직 한 번도 안 연 상태다. 여기서 ensureSidePin()을 부르면
+          // 쓰지도 않을 커서 폴링 타이머가 돌기 시작하므로, 저장값만 고쳐 두고
+          // 다음에 열 때 기본 자리에서 시작하게 한다.
+          const userDataDir = app.getPath('userData');
+          const state = loadSidePinDeviceState(userDataDir);
+          if (state.railPosition === SIDE_PIN_RAIL_POSITION_DEFAULT) return;
+          saveSidePinDeviceState(userDataDir, {
+            ...state,
+            railPosition: SIDE_PIN_RAIL_POSITION_DEFAULT,
+          });
         },
       },
       { type: 'separator' },

@@ -13,6 +13,7 @@ import {
 } from './sidePinGeometry';
 import {
   DEFAULT_SIDE_PIN_DEVICE_STATE,
+  SIDE_PIN_RAIL_POSITION_DEFAULT,
   type SidePinDeviceState,
   type SidePinDeviceStateSaveResult,
 } from './sidePinDeviceState';
@@ -383,6 +384,54 @@ describe('손잡이 높이 이동', () => {
 
     expect(h.saved).toEqual([]);
     expect(h.windows[0]?.bounds).toEqual(before);
+  });
+
+  test('위치 초기화는 손잡이를 기본 자리로 되돌린다', async () => {
+    h.service.enable();
+    await flush();
+    const home = h.windows[0]?.bounds?.y;
+
+    h.service.setRailDragTop((home ?? 0) + 120);
+    h.service.commitRailDrag();
+    await flush();
+    expect(h.windows[0]?.bounds?.y).not.toBe(home);
+
+    h.service.resetRailPosition();
+    await flush();
+
+    expect(h.windows[0]?.bounds?.y).toBe(home);
+    expect(h.saved.at(-1)?.railPosition).toBe(SIDE_PIN_RAIL_POSITION_DEFAULT);
+  });
+
+  test('★이미 기본값이어도 배치를 다시 한다 — 되돌리는 기능은 언제 눌러도 되돌려야 한다', async () => {
+    // "값이 같으면 아무것도 안 함"으로 두면, 모니터가 바뀌어 손잡이가 엉뚱한 높이에
+    // 있는데 저장값만 기본값인 경우 초기화가 막다른 길이 된다. v2.3.7에서 같은
+    // 판단(from === next 조기 반환)이 "다시 시도" 버튼까지 죽였다(ADR-042·043).
+    h.service.enable();
+    await flush();
+    const home = h.windows[0]?.bounds?.y;
+
+    // 저장값은 기본값 그대로 둔 채 창만 딴 자리로 밀어 둔다(모니터 변경 흉내).
+    h.windows[0]?.setPosition({ x: 0, y: (home ?? 0) + 300, width: 52, height: 168 });
+
+    h.service.resetRailPosition();
+    await flush();
+
+    expect(h.windows[0]?.bounds?.y).toBe(home);
+  });
+
+  test('끌던 도중에 눌러도 그 자리에 머물지 않는다', async () => {
+    h.service.enable();
+    await flush();
+    const home = h.windows[0]?.bounds?.y;
+
+    h.service.setRailDragTop((home ?? 0) + 200);
+    await flush();
+    // 손을 떼지 않은 채(commit 없이) 초기화를 누른 상황
+    h.service.resetRailPosition();
+    await flush();
+
+    expect(h.windows[0]?.bounds?.y).toBe(home);
   });
 });
 
