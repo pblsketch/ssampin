@@ -358,6 +358,36 @@ export const SYNC_REGISTRY: SyncDomain[] = [
       invalidateArchiveFileCache();
     },
   },
+  // 32. student-photos ─ 학생 얼굴 사진 메타(JSON). 관찰 첨부(#29)와 같은 구조다.
+  //
+  // subscribeExcluded: true — **구독할 스토어가 없다.**
+  // 사진은 명렬표 가져오기·삭제 때만 바뀌고, 화면은 학습 모드를 열 때 리포지토리에서 직접 읽는다
+  // (`useStudentPhotoUrls`). 사진 바이트가 화면에 들어오는 관문을 하나로 좁혀 두려고
+  // 일부러 스토어를 만들지 않았으므로, 자동 업로드 구독 대상에서도 빠진다.
+  // 변경분은 다음 동기화(수동·주기)에서 매니페스트 비교로 자연히 올라간다.
+  {
+    fileName: 'student-photos',
+    subscribeExcluded: true,
+    reload: async () => {
+      // 사진 메타에는 대응 스토어가 없다 — 화면이 열릴 때 리포지토리에서 직접 읽는다
+      // (`useStudentPhotoUrls`). 사진 바이트가 화면에 들어오는 관문을 하나로 좁혀 두기 위한 설계라,
+      // 여기서 스토어를 새로 만들면 그 관문이 둘이 된다.
+    },
+  },
+  // 33. student-photo-binary ─ 학생 얼굴 사진 본체 (동적, 학생마다 1파일).
+  // 실제 열거는 `collectBinarySyncKeys`(관찰 첨부와 합쳐 저장소별 실패를 격리)가 담당하고,
+  // 여기 enumerateDynamic 은 메타테스트 정합성용 placeholder 다 — #30 과 같은 계약.
+  // subscribeExcluded: true — 메타(#32)가 대표 구독 키다.
+  {
+    fileName: 'student-photo-binary',
+    subscribeExcluded: true,
+    isDynamic: true,
+    enumerateDynamic: async () => [],
+    reload: async () => {
+      // 바이너리는 store 재로드가 필요 없다 — 다운로드된 파일은 writeBinary 로 직접 기록되고,
+      // 다음에 학습 모드를 열 때 읽힌다.
+    },
+  },
 ];
 
 /**

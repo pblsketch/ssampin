@@ -450,4 +450,27 @@ export class DriveSyncAdapter implements IDriveSyncPort {
       body: JSON.stringify({ trashed: true }),
     });
   }
+
+  /**
+   * 동기화 폴더 안의 파일 하나를 **즉시 소멸**시킨다 (휴지통 아님).
+   *
+   * 학생 얼굴 사진 파기용이다. 휴지통으로 보내면 30일간 남아 있어
+   * "지웠습니다"라는 안내가 사실이 아니게 된다.
+   * 파일이 이미 없으면 조용히 넘어간다(멱등) — 파기는 여러 번 시도돼도 안전해야 한다.
+   */
+  async deleteSyncFile(folderId: string, filename: string): Promise<void> {
+    const escaped = filename.replace(/'/g, "\\'");
+    const data = await this.request<FilesListResponse>(
+      `/files?q='${folderId}' in parents and name='${encodeURIComponent(escaped)}' and trashed=false&fields=files(id)`,
+    );
+    for (const file of data.files ?? []) {
+      try {
+        await this.request(`/files/${file.id}`, { method: 'DELETE' });
+      } catch (err) {
+        // 404(이미 지워짐)는 성공으로 본다 — 나머지 파일 파기를 막지 않는다
+        console.warn(`[DriveSyncAdapter] ${filename} 삭제 실패:`, err);
+        throw err;
+      }
+    }
+  }
 }

@@ -96,10 +96,14 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
       const getToken = () => authenticateGoogle.getValidAccessToken();
       const drivePort = getDriveSyncAdapter(getToken);
 
-      const { noteRepository, observationAttachmentRepository } =
+      const { noteRepository, observationAttachmentRepository, studentPhotoRepository } =
         await import('@adapters/di/container');
+      const { collectBinarySyncKeys } = await import('@adapters/repositories/binarySyncKeys');
       const getDynamicSyncFiles = () => noteRepository.listPageBodyKeys();
-      const getBinaryDynamicSyncFiles = () => observationAttachmentRepository.listBinaryKeys();
+      // 관찰 첨부 + 학생 사진. 저장소별로 실패를 격리한다 —
+      // 한쪽 열거가 실패해도 다른 쪽 동기화까지 멈추면 안 된다.
+      const getBinaryDynamicSyncFiles = () =>
+        collectBinarySyncKeys({ observationAttachmentRepository, studentPhotoRepository });
       // (S4.1) 아카이브 훅 — 데스크톱(archive IPC 존재)에서만 주입. 미주입=기존 동작 그대로.
       const archiveSync = await import('@adapters/repositories/archiveSyncGateway');
       const archiveEnabled = archiveSync.hasArchiveSync();
@@ -201,10 +205,14 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
       const getToken = () => authenticateGoogle.getValidAccessToken();
       const drivePort = getDriveSyncAdapter(getToken);
 
-      const { noteRepository, observationAttachmentRepository } =
+      const { noteRepository, observationAttachmentRepository, studentPhotoRepository } =
         await import('@adapters/di/container');
+      const { collectBinarySyncKeys } = await import('@adapters/repositories/binarySyncKeys');
       const getDynamicSyncFiles = () => noteRepository.listPageBodyKeys();
-      const getBinaryDynamicSyncFiles = () => observationAttachmentRepository.listBinaryKeys();
+      // 관찰 첨부 + 학생 사진. 저장소별로 실패를 격리한다 —
+      // 한쪽 열거가 실패해도 다른 쪽 동기화까지 멈추면 안 된다.
+      const getBinaryDynamicSyncFiles = () =>
+        collectBinarySyncKeys({ observationAttachmentRepository, studentPhotoRepository });
       // (S4.1) 아카이브 훅 — 데스크톱(archive IPC 존재)에서만 주입. 미주입=기존 동작 그대로.
       const archiveSync = await import('@adapters/repositories/archiveSyncGateway');
       const archiveEnabled = archiveSync.hasArchiveSync();

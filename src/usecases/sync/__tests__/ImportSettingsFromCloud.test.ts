@@ -180,6 +180,9 @@ function makeFakeDrive(state: FakeDriveState): IDriveSyncPort {
     async deleteSyncFolder() {
       throw new Error('not used in test');
     },
+    async deleteSyncFile() {
+      throw new Error('not used in test');
+    },
   };
 }
 

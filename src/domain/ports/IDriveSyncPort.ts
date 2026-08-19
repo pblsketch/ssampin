@@ -51,4 +51,17 @@ export interface IDriveSyncPort {
   listSyncFiles(folderId: string): Promise<DriveSyncFileListItem[]>;
   /** 동기화 폴더 내 모든 파일 삭제 (클라우드 데이터 초기화) */
   deleteSyncFolder(folderId: string): Promise<void>;
+  /**
+   * 동기화 폴더 안의 **파일 하나**를 지운다. 없으면 아무 일도 하지 않는다(멱등).
+   *
+   * ## 왜 폴더 삭제만으로는 부족한가
+   *
+   * 학생 얼굴 사진처럼 **개인정보를 파기해야 하는 자료**가 생기면서 필요해졌다.
+   * 지금까지 클라우드 삭제 수단은 `deleteSyncFolder`(전부 지우기)뿐이라,
+   * "이 반 사진만 지우기"를 하면 **로컬에서만 사라지고 클라우드에는 그대로 남았다.**
+   * 그 상태로 "사진을 지웠습니다"라고 안내하면 사실이 아니게 된다.
+   *
+   * 휴지통이 아니라 **즉시 소멸**이어야 한다 — 휴지통에 30일 남아 있으면 파기가 아니다.
+   */
+  deleteSyncFile(folderId: string, filename: string): Promise<void>;
 }
