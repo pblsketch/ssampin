@@ -35,6 +35,11 @@ import { DEFAULT_WIDGET_STYLE } from '@domain/entities/DashboardTheme';
 import { resolveGlassSurface } from '@domain/rules/glassSurface';
 import { useNearScrollbar } from '@adapters/hooks/useNearScrollbar';
 import { useFirstRunModeCoachTour } from '@adapters/hooks/useFirstRunModeCoachTour';
+import {
+  computeWidgetResizeRects,
+  WIDGET_RESIZE_CURSORS,
+  WIDGET_RESIZE_EDGES,
+} from './widgetResizeGeometry';
 
 interface ContextMenuState {
   x: number;
@@ -322,6 +327,23 @@ export function Widget() {
     return dispose;
   }, [setLayoutMode]);
 
+  // 손잡이 DOM 과 main 등록 rect 가 같은 정본에서 나오도록 한 번만 계산한다.
+  // 창 크기가 바뀌면 다시 계산해야 하므로 window resize 를 구독한다.
+  const [widgetClientSize, setWidgetClientSize] = useState({
+    width: window.innerWidth,
+    height: window.innerHeight,
+  });
+  useEffect(() => {
+    const onResize = (): void =>
+      setWidgetClientSize({ width: window.innerWidth, height: window.innerHeight });
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+  const resizeRects = useMemo(
+    () => computeWidgetResizeRects(widgetClientSize.width, widgetClientSize.height),
+    [widgetClientSize],
+  );
+
   // Phase 7-D — native-desktop 모드(WS_CHILD)에선 nc resize가 작동 안 하므로 main이 hook으로
   // 처리. renderer는 8개 resize edge의 client DIP rect를 IPC로 등록만 하면 된다.
   // 일반/topmost 모드에서는 noop manager가 받으므로 모드 분기 없이 매번 호출.
@@ -330,20 +352,11 @@ export function Widget() {
     const setRegion = window.electronAPI?.setWidgetResizeRegion;
     if (!setRegion) return;
     const update = (): void => {
-      const w = window.innerWidth;
-      const h = window.innerHeight;
-      // 4 edge: 가장자리 변. 모서리 12px씩 비워(corner와 겹치지 않도록).
-      // 4 corner: 12×12 모서리.
-      const regions = [
-        { edge: 'top' as const, dipRect: { x: 8, y: 0, width: w - 16, height: 6 } },
-        { edge: 'bottom' as const, dipRect: { x: 8, y: h - 6, width: w - 16, height: 6 } },
-        { edge: 'left' as const, dipRect: { x: 0, y: 8, width: 6, height: h - 16 } },
-        { edge: 'right' as const, dipRect: { x: w - 6, y: 8, width: 6, height: h - 16 } },
-        { edge: 'top-left' as const, dipRect: { x: 0, y: 0, width: 12, height: 12 } },
-        { edge: 'top-right' as const, dipRect: { x: w - 12, y: 0, width: 12, height: 12 } },
-        { edge: 'bottom-left' as const, dipRect: { x: 0, y: h - 12, width: 12, height: 12 } },
-        { edge: 'bottom-right' as const, dipRect: { x: w - 12, y: h - 12, width: 12, height: 12 } },
-      ];
+      // ★좌표는 손잡이 DOM 과 같은 정본에서 나온다(widgetResizeGeometry.ts).
+      //   예전에는 여기와 DOM style 에 같은 숫자를 각각 적어 두고 "정확히 일치해야 함"이라는
+      //   주석으로 지켰다. 어긋나면 보이는 자리와 실제로 잡히는 자리가 달라진다.
+      const rects = computeWidgetResizeRects(window.innerWidth, window.innerHeight);
+      const regions = WIDGET_RESIZE_EDGES.map((edge) => ({ edge, dipRect: rects[edge] }));
       void setRegion(regions);
     };
     update();
@@ -739,45 +752,27 @@ export function Widget() {
         </div>
 
         {/* ── 리사이즈 핸들 (JS 기반, thickFrame: false 대응) ── */}
-        {[
-          'top',
-          'bottom',
-          'left',
-          'right',
-          'top-left',
-          'top-right',
-          'bottom-left',
-          'bottom-right',
-        ].map((edge) => (
+        {/*
+          바탕화면 아래 모드에서는 OS 커서를 ↔ 로 바꿀 수 없다 — 위젯이 바탕화면 아이콘
+          목록보다 아래에 깔린 창이라 마우스 메시지를 못 받는다(desktopWidgetManager.ts 의
+          7-D 주석). 그래서 "여기를 잡으면 크기가 조절된다"를 위젯이 직접 그린다.
+          마우스 이동은 sendInputEvent 로 여기까지 전달되므로 :hover 는 살아 있다.
+
+          ★반투명은 opacity 유틸로만 낼 것. `bg-sp-accent/40` 같은 수식은 이 프로젝트에서
+            클래스가 아예 생성되지 않아 조용히 투명이 된다 — 2026-06-11 에 이 손잡이가
+            바로 그 이유로 "보이는데 안 보이는" 상태였다.
+        */}
+        {WIDGET_RESIZE_EDGES.map((edge) => (
           <div
             key={edge}
-            className="absolute"
+            className="group absolute"
             style={
               {
-                ...(edge === 'right'
-                  ? { right: 0, top: 8, bottom: 8, width: 6, cursor: 'ew-resize' }
-                  : {}),
-                ...(edge === 'bottom'
-                  ? { bottom: 0, left: 8, right: 8, height: 6, cursor: 'ns-resize' }
-                  : {}),
-                ...(edge === 'left'
-                  ? { left: 0, top: 8, bottom: 8, width: 6, cursor: 'ew-resize' }
-                  : {}),
-                ...(edge === 'top'
-                  ? { top: 0, left: 8, right: 8, height: 6, cursor: 'ns-resize' }
-                  : {}),
-                ...(edge === 'bottom-right'
-                  ? { bottom: 0, right: 0, width: 12, height: 12, cursor: 'nwse-resize' }
-                  : {}),
-                ...(edge === 'bottom-left'
-                  ? { bottom: 0, left: 0, width: 12, height: 12, cursor: 'nesw-resize' }
-                  : {}),
-                ...(edge === 'top-right'
-                  ? { top: 0, right: 0, width: 12, height: 12, cursor: 'nesw-resize' }
-                  : {}),
-                ...(edge === 'top-left'
-                  ? { top: 0, left: 0, width: 12, height: 12, cursor: 'nwse-resize' }
-                  : {}),
+                left: resizeRects[edge].x,
+                top: resizeRects[edge].y,
+                width: resizeRects[edge].width,
+                height: resizeRects[edge].height,
+                cursor: WIDGET_RESIZE_CURSORS[edge],
                 WebkitAppRegion: 'no-drag',
                 zIndex: 50,
               } as React.CSSProperties
@@ -824,7 +819,37 @@ export function Widget() {
               document.addEventListener('pointermove', onMove);
               document.addEventListener('pointerup', onUp);
             }}
-          />
+          >
+            <span
+              aria-hidden
+              className={[
+                'pointer-events-none absolute opacity-0 transition-opacity duration-150 ease-out',
+                'group-hover:opacity-100',
+                edge === 'top' ? 'inset-x-2 top-1 h-0.5 rounded-full bg-sp-accent shadow-md' : '',
+                edge === 'bottom'
+                  ? 'inset-x-2 bottom-1 h-0.5 rounded-full bg-sp-accent shadow-md'
+                  : '',
+                edge === 'left' ? 'inset-y-2 left-1 w-0.5 rounded-full bg-sp-accent shadow-md' : '',
+                edge === 'right'
+                  ? 'inset-y-2 right-1 w-0.5 rounded-full bg-sp-accent shadow-md'
+                  : '',
+                edge === 'top-left'
+                  ? 'inset-1 rounded-tl-2xl border-l-2 border-t-2 border-sp-accent'
+                  : '',
+                edge === 'top-right'
+                  ? 'inset-1 rounded-tr-2xl border-r-2 border-t-2 border-sp-accent'
+                  : '',
+                edge === 'bottom-left'
+                  ? 'inset-1 rounded-bl-2xl border-b-2 border-l-2 border-sp-accent'
+                  : '',
+                edge === 'bottom-right'
+                  ? 'inset-1 rounded-br-2xl border-b-2 border-r-2 border-sp-accent'
+                  : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+            />
+          </div>
         ))}
       </div>
 

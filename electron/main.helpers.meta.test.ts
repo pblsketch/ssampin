@@ -15,6 +15,17 @@ import * as path from 'path';
 
 const MAIN_TS_PATH = path.join(__dirname, 'main.ts');
 
+/**
+ * 정적 검사 전에 주석을 걷어낸다.
+ *
+ * ★필요한 이유: 이 파일의 검사들은 "이 호출이 코드에 없어야 한다"를 본다. 그런데 그 결정을
+ *   설명하는 주석에 바로 그 호출 모양을 적어 두는 일이 잦다(적어 두는 게 옳다). 주석을 안
+ *   걷어내면 설명이 곧 위반으로 잡혀 거짓 실패가 난다 — 실제로 한 번 겪었다.
+ */
+function stripComments(source: string): string {
+  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+}
+
 function readMainTs(): string {
   return fs.readFileSync(MAIN_TS_PATH, 'utf-8');
 }
@@ -83,10 +94,10 @@ describe('electron/main.ts window broadcast helpers', () => {
     // setBounds 를 직접 부르면 그 크기가 "의도"로 기록되지 않아, 다음 측정에서
     // "사용자가 크기를 바꿨다"로 오인되고 래칫이 되살아난다.
     const sources: readonly [string, string][] = [
-      ['electron/main.ts', readMainTs()],
+      ['electron/main.ts', stripComments(readMainTs())],
       [
         'electron/desktopWidgetManager.ts',
-        fs.readFileSync(path.join(__dirname, 'desktopWidgetManager.ts'), 'utf-8'),
+        stripComments(fs.readFileSync(path.join(__dirname, 'desktopWidgetManager.ts'), 'utf-8')),
       ],
     ];
 
@@ -111,6 +122,19 @@ describe('electron/main.ts window broadcast helpers', () => {
     expect(body, '저장 경로가 잰 값을 그대로 쓴다').not.toMatch(/widgetWindow\.getBounds\s*\(/);
   });
 
+  test('바탕화면 모드에서 커서를 직접 바꾸지 않는다 — 이길 수 없는 싸움이라 깜빡임만 만든다', () => {
+    // 2026-08-19 신고 "커서가 잘 안 바뀌고 깜빡거려".
+    // 저수준 마우스 후킹은 메시지가 창에 전달되기 **전에** 실행되므로, 우리가 SetCursor(↔)
+    // 를 불러도 곧바로 탐색기가 WM_SETCURSOR 로 화살표를 덮어쓴다. 탐색기가 항상 뒤에
+    // 오므로 항상 이긴다 — ↔ 는 그 사이의 짧은 틈에만 보였고 그게 깜빡임이었다.
+    // 대신 위젯이 스스로 가장자리를 그린다(Widget.tsx 의 리사이즈 손잡이).
+    const src = stripComments(
+      fs.readFileSync(path.join(__dirname, 'desktopWidgetManager.ts'), 'utf-8'),
+    );
+    const calls = src.match(/win32\.setResizeCursor\s*\(/g) ?? [];
+    expect(calls.length, 'setResizeCursor 를 다시 부르고 있다 — 커서 깜빡임이 되살아난다').toBe(0);
+  });
+
   test('위젯 복구에 느슨한 clampWidgetBoundsToWorkArea 를 쓰지 않는다', () => {
     // 2026-08-19 신고 재발 방지.
     // clampWidgetBoundsToWorkArea 의 규칙은 "최소 가시량(헤더 40px)만 남으면 통과"다.
@@ -119,7 +143,7 @@ describe('electron/main.ts window broadcast helpers', () => {
     // 처리된다 — 선생님 눈에는 여전히 위젯이 없다. 특히 바탕화면 아래 모드에서는
     // 그 띠마저 바탕화면 아이콘 뒤라 아무것도 안 보인다.
     // 복구는 placeWidgetFullyInsideWorkArea(통째로 화면 안)만 쓴다.
-    const src = readMainTs();
+    const src = stripComments(readMainTs());
     const looseCalls = src.match(/clampWidgetBoundsToWorkArea\s*\(/g) ?? [];
     expect(
       looseCalls.length,

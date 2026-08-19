@@ -1374,28 +1374,34 @@ function createWin32Manager(win32: typeof import('./platform/win32Desktop')): De
             }
           }
 
-          // ─── Phase 7-D — resize edge cursor ───
-          // WS_CHILD widget은 cursor 결정 권한이 부모(WorkerW)로 빠져 DOM의 cursor:ew-resize
-          // 등이 적용 안 됨. MOUSEMOVE마다 hook이 직접 SetCursor를 호출해 OS가 매 프레임 cursor를
-          // resize 기호로 그리게 만든다. resize 활성 중에도 동일 cursor 유지.
-          // 비-MOUSEMOVE는 cursor 갱신 안 함(클릭 시점에는 OS가 자동 처리).
-          if (msgType === 0x0200 && cachedResizeRegions.length > 0) {
-            const hoveredEdge =
-              resizeState && resizeState.active ? resizeState.edge : findResizeEdgeAtPoint(p);
-            if (hoveredEdge) {
-              // edge → cursor kind 매핑.
-              let kind: 'ns' | 'we' | 'nwse' | 'nesw';
-              if (hoveredEdge === 'top' || hoveredEdge === 'bottom') kind = 'ns';
-              else if (hoveredEdge === 'left' || hoveredEdge === 'right') kind = 'we';
-              else if (hoveredEdge === 'top-left' || hoveredEdge === 'bottom-right') kind = 'nwse';
-              else kind = 'nesw'; // top-right | bottom-left
-              try {
-                win32.setResizeCursor(kind);
-              } catch {
-                // cursor SetCursor는 hot path에서 throw하면 안 됨 — silent swallow.
-              }
-            }
-          }
+          // ─── Phase 7-D — resize edge cursor: 의도적으로 하지 않는다 ───────────────
+          //
+          // 예전에는 MOUSEMOVE 마다 `win32.setResizeCursor()` 를 불러 커서를 ↔ 로 바꿨다.
+          // 그 방식은 **원리적으로 이길 수 없고, 깜빡임만 만든다**(2026-08-19 사용자 신고
+          // "커서가 잘 안 바뀌고 깜빡거려" → 코드 조사로 확인):
+          //
+          //   1. 우리 후킹(WH_MOUSE_LL)  → SetCursor(↔)
+          //   2. 메시지가 탐색기 아이콘 목록(SysListView32)에 전달
+          //   3. 탐색기 → WM_SETCURSOR  → SetCursor(화살표)      ← 항상 우리 뒤
+          //
+          // 저수준 마우스 후킹은 메시지가 창에 **전달되기 전에** 실행되므로 탐색기가 언제나
+          // 마지막이고, 따라서 언제나 이긴다. ↔ 는 1번과 3번 사이의 짧은 틈에만 보였다 —
+          // 그게 사용자가 본 깜빡임이다.
+          //
+          // 근본 원인은 z-order 다. 위젯은 `attachToShellDefView` 가 `SetWindowPos(HWND_BOTTOM)`
+          // 으로 아이콘 목록 **아래**에 일부러 깔아 둔 창이라(그게 이 모드의 존재 이유다),
+          // 마우스 메시지를 받지 못하고 Chromium 도 WM_SETCURSOR 를 못 받는다. 그래서 DOM 의
+          // `cursor: ew-resize` 도 동작할 수 없다.
+          //
+          // MOUSEMOVE 를 차단해 3번을 막는 길은 검토했다가 접었다 — 이 파일 [7-C] 주석에
+          // "MOUSEMOVE 를 차단하면 후킹이 다음 이동을 못 받을 수 있음(totalDelta=0,0 회귀)"
+          // 이라는 실측 기록이 이미 있다. 커서 모양 하나를 얻자고 드래그 전체를 걸 수 없다.
+          //
+          // 대신 **위젯이 스스로 가장자리를 표시한다** — 마우스 이동은 sendInputEvent 로 위젯
+          // 화면까지 실제로 전달되므로(WM_MOUSEMOVE → 'mouseMove'), DOM 의 :hover 가 살아 있다.
+          // Widget.tsx 의 리사이즈 손잡이가 그 신호를 그린다.
+          //
+          // ★여기에 SetCursor 를 다시 넣지 말 것. main.helpers.meta.test.ts 가 막고 있다.
 
           if (!isInsideCachedBoundsLocal(p)) {
             routingStats.skippedOutOfBounds++;
