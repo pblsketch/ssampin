@@ -55,6 +55,86 @@ describe('트레이 메뉴에 창 모드가 모두 있다', () => {
     }
   });
 
+  test('위젯 위치 초기화는 위젯을 안 연 상태에서도 저장값을 고치고, 실제로 위젯을 띄운다', () => {
+    // 2026-08-19 신고 재발 방지. 위젯을 화면 밖으로 놓친 사람에게 이 메뉴는 유일한
+    // 탈출구인데, 하필 그 상황에서 아무 일도 하지 않았다:
+    //   ① 위젯 창이 살아 있을 때만 동작 → 전체 앱·아이콘 모드에서는 통째로 no-op.
+    //      위젯을 잃어버리면 위젯 모드로 갈 수도 없으니 영영 못 되찾는 순환에 갇힌다.
+    //   ② 좌표만 고치고 창을 안 띄움 → 화면에는 아무 변화가 없어 "고장 났다"로 보인다.
+    const menu = trayMenuSource();
+    const menuStart = menu.indexOf("label: '위젯 위치 초기화'");
+    expect(menuStart, '위젯 위치 초기화 항목을 찾지 못했다').toBeGreaterThan(-1);
+    expect(menu.slice(menuStart, menuStart + 300)).toContain('resetWidgetPosition()');
+
+    const source = readMainTs();
+    const fnStart = source.indexOf('async function resetWidgetPosition(');
+    expect(fnStart, 'resetWidgetPosition() 을 찾지 못했다').toBeGreaterThan(-1);
+    const fn = source.slice(fnStart, source.indexOf('\n}\n', fnStart));
+
+    const savePos = fn.indexOf('saveWidgetBounds(');
+    const guardPos = fn.indexOf('if (widgetWindow');
+    expect(savePos, '저장값을 고치지 않는다').toBeGreaterThan(-1);
+    expect(guardPos, '살아 있는 위젯 창을 옮기지 않는다').toBeGreaterThan(-1);
+    expect(
+      savePos,
+      '저장이 "위젯 창이 있으면" 조건 안에 갇혀 있다 — 창이 없으면 또 no-op이 된다',
+    ).toBeLessThan(guardPos);
+
+    expect(fn, '초기화만 하고 위젯을 띄우지 않는다').toContain("executeWindowTransition('widget')");
+    expect(fn, '되돌린 자리가 화면 안이라는 보장이 없다').toContain('resolveWidgetResetBounds(');
+  });
+
+  test('아이콘 위치 초기화도 아이콘을 안 연 상태에서 저장값을 고치고, 아이콘을 띄운다', () => {
+    // 위젯과 같은 계열의 구멍이었다 — 아이콘 창이 없으면 통째로 no-op이라,
+    // 저장값이 그대로 남아 다음에 아이콘 모드로 가면 또 화면 밖에서 시작했다.
+    const menu = trayMenuSource();
+    const menuStart = menu.indexOf("label: '아이콘 위치 초기화'");
+    expect(menuStart, '아이콘 위치 초기화 항목을 찾지 못했다').toBeGreaterThan(-1);
+    expect(menu.slice(menuStart, menuStart + 300)).toContain('resetIconPosition()');
+
+    const source = readMainTs();
+    const fnStart = source.indexOf('async function resetIconPosition(');
+    expect(fnStart, 'resetIconPosition() 을 찾지 못했다').toBeGreaterThan(-1);
+    const fn = source.slice(fnStart, source.indexOf('\n}\n', fnStart));
+
+    const savePos = fn.indexOf('saveIconBounds(');
+    const guardPos = fn.indexOf('if (iconWindow');
+    expect(savePos, '저장값을 고치지 않는다').toBeGreaterThan(-1);
+    expect(guardPos, '살아 있는 아이콘 창을 옮기지 않는다').toBeGreaterThan(-1);
+    expect(
+      savePos,
+      '저장이 "아이콘 창이 있으면" 조건 안에 갇혀 있다 — 창이 없으면 또 no-op이 된다',
+    ).toBeLessThan(guardPos);
+
+    expect(fn, '초기화만 하고 아이콘을 띄우지 않는다').toContain("executeWindowTransition('icon')");
+    expect(fn, '확장 상태를 접지 않아 렌더러와 창 크기가 어긋난다').toContain(
+      'collapseIconWindow()',
+    );
+  });
+
+  test('위치 초기화는 예약된 아이콘 저장을 먼저 끊는다 — 되돌린 값이 덮어써지면 안 된다', () => {
+    // scheduleIconBoundsSave 는 저장할 좌표를 인자로 붙잡아 둔다(위젯 쪽과 다르다).
+    // 끊지 않으면 초기화 500ms 뒤에 예약분이 깨어나 옛 좌표를 다시 써 넣는다.
+    // 아이콘을 화면 밖으로 끌어 놓친 직후 메뉴를 여는 흐름이 정확히 그 500ms 안이다.
+    const source = readMainTs();
+    expect(source, 'cancelScheduledIconBoundsSave() 헬퍼가 없다').toMatch(
+      /function cancelScheduledIconBoundsSave\s*\(\s*\)/,
+    );
+
+    for (const [name, marker] of [
+      ['트레이', 'async function resetIconPosition('],
+      ['핀 우클릭 메뉴', "ipcMain.handle('icon:reset-position'"],
+    ] as const) {
+      const start = source.indexOf(marker);
+      expect(start, `${name} 초기화 경로를 찾지 못했다`).toBeGreaterThan(-1);
+      const body = source.slice(start, source.indexOf('\n  });\n', start) + 1);
+      const scoped = body.length > 0 ? body : source.slice(start, start + 1200);
+      expect(scoped, `${name} 초기화가 예약된 저장을 끊지 않는다`).toContain(
+        'cancelScheduledIconBoundsSave()',
+      );
+    }
+  });
+
   test('옆핀 위치 초기화는 옆핀을 안 연 상태에서도 저장값을 고친다', () => {
     // 옆핀 창이 없다고 그냥 돌아가 버리면, 한 번 이상한 자리에 둔 사람은 옆핀을
     // 열기 전에는 되돌릴 수 없고 열면 또 그 자리에 뜨는 순환에 갇힌다.

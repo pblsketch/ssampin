@@ -5,6 +5,8 @@ import {
   fitWidgetSizeToWorkArea,
   getIntersectionArea,
   isWidgetVisibleInWorkArea,
+  placeWidgetFullyInsideWorkArea,
+  resolveWidgetResetBounds,
   type ScreenRect,
 } from './screenBoundsClamp';
 
@@ -230,6 +232,105 @@ describe('screenBoundsClamp', () => {
 
       expect(fitted.width).toBe(920); // 그대로
       expect(fitted.height).toBe(1040); // 축소
+    });
+  });
+
+  describe('placeWidgetFullyInsideWorkArea', () => {
+    it('이미 화면 안에 있으면 그대로 둔다', () => {
+      const bounds: ScreenRect = { x: 100, y: 100, width: 920, height: 700 };
+      expect(placeWidgetFullyInsideWorkArea(bounds, fhdWorkArea)).toEqual(bounds);
+    });
+
+    it('화면 밖으로 나간 위젯을 네 변 모두 화면 안으로 들여놓는다', () => {
+      const bounds: ScreenRect = { x: 2000, y: -200, width: 920, height: 700 };
+      const placed = placeWidgetFullyInsideWorkArea(bounds, fhdWorkArea);
+
+      expect(placed.x).toBe(1000); // 1920 - 920
+      expect(placed.y).toBe(0);
+      expect(placed.x + placed.width).toBeLessThanOrEqual(1920);
+      expect(placed.y + placed.height).toBeLessThanOrEqual(1040);
+    });
+
+    it('★느슨한 clamp가 남기던 "화면 바닥 40px 띠"를 만들지 않는다 (2026-08-19 신고 실측값)', () => {
+      // 선생님 로그의 실제 저장값. 크기는 화면에 맞춰 줄인 뒤 위치를 정한다.
+      const escaped: ScreenRect = { x: -295, y: 1063, width: 1923, height: 1024 };
+      const sized = fitWidgetSizeToWorkArea(escaped, fhdWorkArea);
+
+      // 기존 정책(느슨한 clamp)은 가로가 화면 밖에 남고 세로는 40px만 걸친 채 통과했다.
+      const loose = clampWidgetBoundsToWorkArea(sized, fhdWorkArea, { minVisibleHeaderHeight: 40 });
+      expect(loose.y).toBe(1000); // 헤더 40px만 보이는 상태 = 사용자에겐 여전히 "안 보임"
+
+      const placed = placeWidgetFullyInsideWorkArea(sized, fhdWorkArea);
+      expect(placed).toEqual({ x: 0, y: 16, width: 1920, height: 1024 });
+    });
+
+    it('화면보다 큰 위젯은 좌상단에 맞춘다 — 헤더를 잡을 수 있는 쪽을 살린다', () => {
+      const huge: ScreenRect = { x: -500, y: -500, width: 3000, height: 2000 };
+      const placed = placeWidgetFullyInsideWorkArea(huge, fhdWorkArea);
+
+      expect(placed.x).toBe(0);
+      expect(placed.y).toBe(0);
+      expect(placed.width).toBe(3000); // 크기는 건드리지 않는다
+      expect(placed.height).toBe(2000);
+    });
+
+    it('보조 모니터(음수 좌표계)에서도 그 모니터 안으로 들여놓는다', () => {
+      const leftMonitor: ScreenRect = { x: -1920, y: 0, width: 1920, height: 1080 };
+      const bounds: ScreenRect = { x: -2500, y: 900, width: 920, height: 700 };
+      const placed = placeWidgetFullyInsideWorkArea(bounds, leftMonitor);
+
+      expect(placed.x).toBe(-1920);
+      expect(placed.y).toBe(380); // 1080 - 700
+    });
+  });
+
+  describe('resolveWidgetResetBounds', () => {
+    it('기본 크기 위젯을 우측 상단 여백 16 자리로 되돌린다', () => {
+      const reset = resolveWidgetResetBounds({ width: 920, height: 700 }, fhdWorkArea);
+
+      expect(reset).toEqual({ x: 984, y: 16, width: 920, height: 700 }); // 1920-920-16
+    });
+
+    it('★되돌린 자리는 항상 화면 안이다 — 위젯이 화면만큼 커져 있어도 (2026-08-19 신고 재현)', () => {
+      // 신고자의 위젯은 1923x1024까지 커져 있었다. 예전 구현은 위치를 "현재 폭"으로,
+      // 크기는 920으로 따로 계산해 x = 1920 - 1923 - 16 = -19를 만들었다.
+      const reset = resolveWidgetResetBounds({ width: 1923, height: 1024 }, fhdWorkArea);
+
+      expect(reset.x).toBeGreaterThanOrEqual(fhdWorkArea.x);
+      expect(reset.y).toBeGreaterThanOrEqual(fhdWorkArea.y);
+      expect(reset.x + reset.width).toBeLessThanOrEqual(fhdWorkArea.x + fhdWorkArea.width);
+      expect(reset.y + reset.height).toBeLessThanOrEqual(fhdWorkArea.y + fhdWorkArea.height);
+    });
+
+    it('화면보다 큰 설정 크기는 화면에 맞춰 줄인다', () => {
+      const reset = resolveWidgetResetBounds({ width: 3000, height: 2000 }, fhdWorkArea);
+
+      expect(reset.width).toBe(1920);
+      expect(reset.height).toBe(1040);
+      expect(reset.x).toBe(0);
+      expect(reset.y).toBe(0);
+    });
+
+    it('최소 창 크기 아래로는 줄이지 않는다', () => {
+      const tinyWorkArea: ScreenRect = { x: 0, y: 0, width: 400, height: 300 };
+      const reset = resolveWidgetResetBounds({ width: 920, height: 700 }, tinyWorkArea, {
+        width: 640,
+        height: 480,
+      });
+
+      expect(reset.width).toBe(640);
+      expect(reset.height).toBe(480);
+      // 화면보다 큰 창은 좌상단 — 헤더를 잡을 수 있는 쪽을 살린다.
+      expect(reset.x).toBe(0);
+      expect(reset.y).toBe(0);
+    });
+
+    it('작업표시줄이 왼쪽/위에 있는 화면에서도 그 작업 영역 기준으로 계산한다', () => {
+      const offsetWorkArea: ScreenRect = { x: 80, y: 60, width: 1840, height: 1020 };
+      const reset = resolveWidgetResetBounds({ width: 920, height: 700 }, offsetWorkArea);
+
+      expect(reset.x).toBe(984); // 80 + 1840 - 920 - 16
+      expect(reset.y).toBe(76); // 60 + 16
     });
   });
 });

@@ -63,6 +63,39 @@ describe('desktopWidgetBounds mirror parity', () => {
     }
   });
 
+  it('placeWidgetFullyInsideWorkArea 결과가 도메인과 100% 일치한다', () => {
+    const testCases: electronMirror.WidgetScreenRect[] = [
+      { x: 100, y: 100, width: 920, height: 700 }, // 이미 안쪽 — 그대로
+      { x: -295, y: 1063, width: 1923, height: 1024 }, // 2026-08-19 신고 실측값
+      { x: 2000, y: -200, width: 920, height: 700 }, // 우측·상단 밖
+      { x: 0, y: 0, width: 3000, height: 2000 }, // 작업 영역보다 큼 → 좌상단
+    ];
+
+    for (const tc of testCases) {
+      const domainResult = domain.placeWidgetFullyInsideWorkArea(tc, fhdWorkArea);
+      const electronResult = electronMirror.placeWidgetFullyInsideWorkArea(tc, fhdWorkArea);
+      expect(electronResult).toEqual(domainResult);
+    }
+  });
+
+  it('resolveWidgetResetBounds 결과가 도메인과 100% 일치한다', () => {
+    const sizes = [
+      { width: 920, height: 700 },
+      { width: 1923, height: 1024 }, // 2026-08-19 신고 실측값
+      { width: 3000, height: 2000 },
+    ];
+    const minSizes = [undefined, { width: 640, height: 480 }];
+
+    for (const size of sizes) {
+      for (const min of minSizes) {
+        const domainResult = domain.resolveWidgetResetBounds(size, fhdWorkArea, min);
+        const electronResult = electronMirror.resolveWidgetResetBounds(size, fhdWorkArea, min);
+        expect(electronResult).toEqual(domainResult);
+      }
+    }
+    expect(electronMirror.WIDGET_DEFAULT_MARGIN).toBe(domain.WIDGET_DEFAULT_MARGIN);
+  });
+
   it('[UltraQA] 멀티 모니터, 상단 작업표시줄, 초고해상도 등 극단적 케이스에서 도메인과 100% 동일하다', () => {
     const multiDisplays = [
       { x: -1920, y: 0, width: 1920, height: 1080 },

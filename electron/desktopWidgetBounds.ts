@@ -90,6 +90,70 @@ export function fitWidgetSizeToWorkArea(
 }
 
 /**
+ * 위젯을 작업 영역 안에 **통째로** 들여놓는다 (크기는 건드리지 않음).
+ *
+ * ★`clampWidgetBoundsToWorkArea`와 목적이 다르다. 그쪽은 "최소 가시량만 남으면 통과"라
+ *   드래그 중 화면 가장자리에 붙이는 것을 허용하는 느슨한 규칙이다. 그래서 **복구용으로
+ *   쓰면 안 된다** — 화면 밖으로 나간 위젯을 넣어 봐야 헤더 40px짜리 띠만 화면 바닥에
+ *   남고, 사용자에게는 여전히 "위젯이 안 보인다"이다.
+ *   (2026-08-19 신고 실측: 저장값 (-295,1063,1923x1024) → 느슨한 clamp 결과 (-295,992)로
+ *    가로는 295px 밖에 나간 채, 세로는 40px만 걸친 채 "복구 완료"가 됐다.)
+ *
+ * 위젯이 작업 영역보다 큰 경우에는 좌상단에 맞춘다 — 헤더를 잡을 수 있는 쪽을 살린다.
+ * 크기 축소가 필요하면 호출 전에 `fitWidgetSizeToWorkArea`를 거칠 것.
+ */
+export function placeWidgetFullyInsideWorkArea(
+  bounds: WidgetScreenRect,
+  workArea: WidgetScreenRect,
+): WidgetScreenRect {
+  const maxX = workArea.x + workArea.width - bounds.width;
+  const maxY = workArea.y + workArea.height - bounds.height;
+
+  return {
+    x: Math.round(Math.max(workArea.x, Math.min(maxX, bounds.x))),
+    y: Math.round(Math.max(workArea.y, Math.min(maxY, bounds.y))),
+    width: bounds.width,
+    height: bounds.height,
+  };
+}
+
+/** 기본 위치의 화면 가장자리 여백(px). */
+export const WIDGET_DEFAULT_MARGIN = 16;
+
+/**
+ * "위젯 위치 초기화"가 되돌릴 자리를 계산한다 — 작업 영역 우측 상단, 여백 `WIDGET_DEFAULT_MARGIN`.
+ *
+ * ★크기를 한 번만 정하고 그 값으로 위치까지 계산하는 것이 이 함수의 존재 이유다.
+ *   예전 구현은 위치를 "현재 위젯 폭"으로 계산하고 실제로는 다른 폭을 적용해서,
+ *   폭 1923짜리 위젯을 초기화하면 x = 1920 - 1923 - 16 = -19가 나왔다.
+ *   되돌린 자리부터 화면 왼쪽 밖이었다는 뜻이다 (2026-08-19 신고).
+ *
+ * @param preferredSize 설정에 저장된 위젯 크기. 화면에 안 들어가면 줄인다 — 되돌린 위젯이
+ *                      다시 화면 밖으로 삐져나오면 초기화를 한 의미가 없다.
+ */
+export function resolveWidgetResetBounds(
+  preferredSize: { readonly width: number; readonly height: number },
+  workArea: WidgetScreenRect,
+  minSize?: { readonly width: number; readonly height: number },
+): WidgetScreenRect {
+  const sized = fitWidgetSizeToWorkArea(
+    { x: 0, y: 0, width: preferredSize.width, height: preferredSize.height },
+    workArea,
+    minSize,
+  );
+
+  return placeWidgetFullyInsideWorkArea(
+    {
+      x: workArea.x + workArea.width - sized.width - WIDGET_DEFAULT_MARGIN,
+      y: workArea.y + WIDGET_DEFAULT_MARGIN,
+      width: sized.width,
+      height: sized.height,
+    },
+    workArea,
+  );
+}
+
+/**
  * 위젯이 특정 화면 작업 영역(WorkArea) 내에서 충분히 조작 가능한 상태(가시 영역에 헤더가 존재)인지 검사.
  */
 export function isWidgetVisibleInWorkArea(

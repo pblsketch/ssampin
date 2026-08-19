@@ -72,4 +72,23 @@ describe('electron/main.ts window broadcast helpers', () => {
       'data:changed는 broadcastToAllWindows를 사용해야 한다',
     ).toBe(false);
   });
+
+  test('위젯 복구에 느슨한 clampWidgetBoundsToWorkArea 를 쓰지 않는다', () => {
+    // 2026-08-19 신고 재발 방지.
+    // clampWidgetBoundsToWorkArea 의 규칙은 "최소 가시량(헤더 40px)만 남으면 통과"다.
+    // 드래그 중 화면 가장자리에 붙이는 것을 허용하려고 일부러 느슨하게 만든 규칙이라,
+    // 복구에 쓰면 화면 밖으로 나간 위젯이 "화면 바닥의 40px 띠"가 된 채 복구 완료로
+    // 처리된다 — 선생님 눈에는 여전히 위젯이 없다. 특히 바탕화면 아래 모드에서는
+    // 그 띠마저 바탕화면 아이콘 뒤라 아무것도 안 보인다.
+    // 복구는 placeWidgetFullyInsideWorkArea(통째로 화면 안)만 쓴다.
+    const src = readMainTs();
+    const looseCalls = src.match(/clampWidgetBoundsToWorkArea\s*\(/g) ?? [];
+    expect(
+      looseCalls.length,
+      'main.ts 가 느슨한 clamp 를 호출한다 — 복구 자리는 placeWidgetFullyInsideWorkArea 로 정해야 한다',
+    ).toBe(0);
+    expect(src, '복구 경로가 placeWidgetFullyInsideWorkArea 를 쓰지 않는다').toContain(
+      'placeWidgetFullyInsideWorkArea(',
+    );
+  });
 });

@@ -91,10 +91,11 @@ import {
 import { isCorruptShortDataFile } from './dataFileRules';
 import { createDesktopWidgetManager, type DesktopWidgetManager } from './desktopWidgetManager';
 import {
-  clampWidgetBoundsToWorkArea,
   findBestWorkAreaForBounds,
   fitWidgetSizeToWorkArea,
   isWidgetVisibleInWorkArea,
+  placeWidgetFullyInsideWorkArea,
+  resolveWidgetResetBounds,
 } from './desktopWidgetBounds';
 import { sendCtrlV } from './platform/win32SendKeys';
 import type { DesktopModeFallbackEvent } from './desktopWidgetTypes';
@@ -1286,9 +1287,19 @@ function ensureWidgetBoundsWithinDisplays(targetWindow?: BrowserWindow | null): 
 
     // 위치만 되돌리는 경우(넘치지 않음)에는 크기를 건드리지 않는다 — 반올림 1px 축소가
     // 쌓이지 않도록 축소는 needsResize일 때만 적용한다.
-    const clamped = clampWidgetBoundsToWorkArea(needsResize ? sized : currentBounds, bestWorkArea, {
-      minVisibleHeaderHeight: 40,
-    });
+    //
+    // ★되돌릴 자리는 `clampWidgetBoundsToWorkArea`가 아니라 `placeWidgetFullyInsideWorkArea`로
+    //   정한다. 전자는 "최소 가시량만 남으면 통과"라 복구를 시켜도 헤더 40px짜리 띠만
+    //   화면 바닥에 남는다 — 사용자에게는 여전히 "위젯이 안 보인다"이다.
+    //   (2026-08-19 신고: 저장값 (-295,1063,1923x1024)가 그 규칙으로 (-295,992)가 되어
+    //    가로 295px은 화면 밖, 세로는 40px만 걸친 채 "복구 완료" 처리됐다. 바탕화면 아래
+    //    모드는 그 띠마저 바탕화면 아이콘 뒤라 사실상 아무것도 안 보인다.)
+    //   발동 조건(isVisibleInAny)은 느슨한 채로 둔다 — 선생님이 일부러 가장자리에 걸쳐
+    //   놓은 위젯을 끌어당기면 안 되므로, 고치는 것은 "이미 못 잡는 상태"일 때뿐이다.
+    const clamped = placeWidgetFullyInsideWorkArea(
+      needsResize ? sized : currentBounds,
+      bestWorkArea,
+    );
 
     diagLog(
       'widget',
@@ -1305,6 +1316,81 @@ function ensureWidgetBoundsWithinDisplays(targetWindow?: BrowserWindow | null): 
       `[screen-clamp] failed to ensure widget visibility: ${e instanceof Error ? e.message : String(e)}`,
     );
   }
+}
+
+/**
+ * 트레이 "위젯 위치 초기화" — 위젯을 기본 자리로 되돌리고 화면에 띄운다.
+ *
+ * 이 메뉴는 위젯을 화면 밖으로 놓친 사람의 **유일한 탈출구**다. 그런데 예전 구현에는
+ * 구멍이 셋 있어서, 하필 그 상황에서 아무 일도 하지 않았다 (2026-08-19 신고: "눌러도 안 뜬다").
+ *
+ *   ① 위젯 창이 살아 있을 때만 동작했다 — 전체 앱·아이콘 모드에서 누르면 통째로 no-op.
+ *      위젯을 잃어버린 사람은 위젯 모드로 갈 수도 없으니 영영 못 되찾는다.
+ *      → 창이 없어도 저장값을 고쳐, 다음에 열릴 위젯이 기본 자리에서 시작하게 한다.
+ *   ② 기본 위치를 "현재 폭"으로 계산하고 실제로는 920을 적용했다 — 폭 1923짜리 위젯이면
+ *      x = 1920 - 1923 - 16 = -19라, 되돌린 자리부터 이미 화면 왼쪽 밖이었다.
+ *      → 넘기는 폭과 적용할 폭을 하나로 묶는다.
+ *   ③ 좌표만 고치고 창을 띄우지 않았다 — 숨어 있는 창의 자리만 바뀌니 화면에는 변화가 없다.
+ *      → 위젯 모드로 전환해 실제로 보이게 한다.
+ */
+async function resetWidgetPosition(): Promise<void> {
+  const options = readSettingsWidgetOptions();
+  const bounds = resolveWidgetResetBounds(
+    { width: options.width, height: options.height },
+    screen.getPrimaryDisplay().workArea,
+    WIDGET_ABSOLUTE_MIN_SIZE,
+  );
+
+  diagLog(
+    'widget',
+    `[reset-position] 위젯을 기본 자리로 되돌린다 -> (${bounds.x},${bounds.y},${bounds.width}x${bounds.height}) ` +
+      `windowAlive=${!!widgetWindow && !widgetWindow.isDestroyed()}`,
+  );
+
+  saveWidgetBounds(bounds);
+
+  if (widgetWindow && !widgetWindow.isDestroyed()) {
+    // 바탕화면 아래 모드에서도 이 한 줄이면 된다 — setBounds가 'move'를 발생시키고,
+    // 그 핸들러가 desktopWidgetManager.updateWidgetBounds까지 불러 클릭 라우팅 좌표를
+    // 함께 갱신한다. 갱신을 빠뜨리면 위젯은 옮겨졌는데 클릭만 옛 자리로 가는 상태가 된다.
+    widgetWindow.setBounds(bounds);
+  }
+
+  await executeWindowTransition('widget');
+}
+
+/**
+ * 트레이 "아이콘 위치 초기화" — 핀 아이콘을 기본 자리(우하단)로 되돌리고 화면에 띄운다.
+ *
+ * 위젯 초기화와 같은 구멍이 있었다 (배경은 `resetWidgetPosition` 주석 참조).
+ *   ① 아이콘 창이 살아 있을 때만 동작 — 전체 앱·위젯 모드에서 누르면 통째로 no-op이었다.
+ *      저장값이 그대로 남으니, 다음에 아이콘 모드로 가면 또 화면 밖에서 시작한다.
+ *   ② 좌표만 고치고 창을 띄우지 않았다.
+ *
+ * 아이콘에만 있던 문제도 하나 더 있다:
+ *   ③ 확장 상태(말풍선·메뉴가 열려 창이 커진 상태)를 접지 않은 채 64x64로 줄여서,
+ *      렌더러는 "확장"이라고 믿는데 창은 compact인 어긋난 상태가 남았다.
+ *      같은 일을 하는 IPC(`icon:reset-position`)와 `ensureIconOnScreen`은 둘 다 접는다.
+ */
+async function resetIconPosition(): Promise<void> {
+  const fallback = getDefaultIconBounds();
+
+  diagLog(
+    'icon',
+    `[reset-position] 아이콘을 기본 자리로 되돌린다 -> ${JSON.stringify(fallback)} ` +
+      `windowAlive=${!!iconWindow && !iconWindow.isDestroyed()}`,
+  );
+
+  // 예약된 저장이 깨어나 방금 되돌린 값을 옛 좌표로 덮어쓰지 않도록 먼저 끊는다.
+  cancelScheduledIconBoundsSave();
+  saveIconBounds(fallback);
+
+  if (iconWindow && !iconWindow.isDestroyed()) {
+    collapseIconWindow();
+    iconWindow.setBounds(fallback);
+  }
+
+  await executeWindowTransition('icon');
 }
 
 /**
@@ -1436,22 +1522,7 @@ function refitWidgetToDroppedDisplay(): void {
 
     // 화면 크기로 줄인 창은 전부 보이게 놓는다 — clampWidgetBoundsToWorkArea는
     // "최소 가시량만 남으면 통과"라 줄인 창이 화면 밖에 걸친 채 통과한다.
-    const clamped = {
-      x: Math.round(
-        Math.max(
-          target.workArea.x,
-          Math.min(target.workArea.x + target.workArea.width - sized.width, sized.x),
-        ),
-      ),
-      y: Math.round(
-        Math.max(
-          target.workArea.y,
-          Math.min(target.workArea.y + target.workArea.height - sized.height, sized.y),
-        ),
-      ),
-      width: sized.width,
-      height: sized.height,
-    };
+    const clamped = placeWidgetFullyInsideWorkArea(sized, target.workArea);
     diagLog(
       'widget',
       `[dpi-refit] ${needsShrink ? '화면보다 커서 축소' : '줄이기 전 크기로 복원'} ` +
@@ -1550,6 +1621,20 @@ function scheduleIconBoundsSave(bounds: IconBounds): void {
     saveIconBounds(bounds);
     saveIconBoundsTimer = null;
   }, 500);
+}
+
+/**
+ * 예약된 아이콘 위치 저장을 취소한다.
+ *
+ * ★위치 초기화 전에 반드시 불러야 한다. 이 예약은 위젯 쪽(`scheduleWidgetBoundsSave`)과 달리
+ *   **저장할 좌표를 인자로 붙잡아 둔다** — 취소하지 않으면 초기화 직후 500ms 안에 예약분이
+ *   깨어나 방금 되돌린 값을 옛 좌표로 덮어쓴다. 아이콘을 화면 밖으로 끌어 놓친 직후
+ *   트레이 메뉴를 여는 흐름이 정확히 그 500ms 안이라, 하필 가장 필요한 순간에 터진다.
+ */
+function cancelScheduledIconBoundsSave(): void {
+  if (saveIconBoundsTimer === null) return;
+  clearTimeout(saveIconBoundsTimer);
+  saveIconBoundsTimer = null;
 }
 
 /** 현재 "핀"의 화면 사각형 — 확장 상태면 창 bounds 에서 역산 (위치 저장·화면 이탈 검사용) */
@@ -2340,22 +2425,13 @@ function createTray(): void {
       {
         label: '위젯 위치 초기화',
         click: () => {
-          if (widgetWindow && !widgetWindow.isDestroyed()) {
-            const defaultPos = getDefaultWidgetBounds(widgetWindow.getBounds().width);
-            const bounds = { x: defaultPos.x, y: defaultPos.y, width: 920, height: 700 };
-            widgetWindow.setBounds(bounds);
-            saveWidgetBounds(bounds);
-          }
+          void resetWidgetPosition();
         },
       },
       {
         label: '아이콘 위치 초기화',
         click: () => {
-          if (iconWindow && !iconWindow.isDestroyed()) {
-            const fallback = getDefaultIconBounds();
-            iconWindow.setBounds(fallback);
-            saveIconBounds(fallback);
-          }
+          void resetIconPosition();
         },
       },
       {
@@ -2627,9 +2703,14 @@ function createWidgetWindow(
     if (!isVisible) {
       const bestArea = findBestWorkAreaForBounds(initialBounds, workAreas);
       if (bestArea) {
-        initialBounds = clampWidgetBoundsToWorkArea(initialBounds, bestArea, {
-          minVisibleHeaderHeight: 40,
-        });
+        // ★크기부터 화면에 맞춘 뒤 통째로 들여놓는다.
+        //   예전에는 위치만 고쳐서, 화면보다 큰 위젯이 화면 밖에 걸친 채 살아남았다.
+        //   이 경로는 앱을 다시 켤 때마다 지나가는 길이라, 여기서 못 고치면 선생님은
+        //   업데이트를 해도 위젯을 되찾지 못한다 (2026-08-19 신고).
+        initialBounds = placeWidgetFullyInsideWorkArea(
+          fitWidgetSizeToWorkArea(initialBounds, bestArea, WIDGET_ABSOLUTE_MIN_SIZE),
+          bestArea,
+        );
         console.log(
           '[widget] 저장된 위치가 화면 밖/헤더 잠김 감지 — 안전 가시 위치로 보정:',
           initialBounds,
@@ -3684,11 +3765,17 @@ function registerIpcHandlers(): void {
     stopIconDrag();
   });
 
+  // 핀 우클릭 메뉴의 "아이콘 위치 초기화". 여기서는 아이콘이 화면에 떠 있는 것이
+  // 호출 조건이라 창 유무 가드를 그대로 둔다 — 트레이 쪽(resetIconPosition)과 달리
+  // "창이 없는데 눌린" 경우가 없다.
   ipcMain.handle('icon:reset-position', (): void => {
     if (!iconWindow || iconWindow.isDestroyed()) return;
     collapseIconWindow();
     const fallback = getDefaultIconBounds();
     iconWindow.setBounds(fallback);
+    // 드래그로 끌어 놓친 직후 우클릭하는 흐름이 예약 저장(500ms) 안에 들어온다 —
+    // 끊지 않으면 예약분이 깨어나 옛 좌표를 다시 써 넣는다.
+    cancelScheduledIconBoundsSave();
     saveIconBounds(fallback);
   });
 
