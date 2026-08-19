@@ -47,6 +47,9 @@ import type { IToolTemplateRepository } from '@domain/repositories/IToolTemplate
 import type { IToolResultRepository } from '@domain/repositories/IToolResultRepository';
 import type { IObservationRepository } from '@domain/repositories/IObservationRepository';
 import type { IObservationAttachmentRepository } from '@domain/repositories/IObservationAttachmentRepository';
+import type { IStudentPhotoRepository } from '@domain/repositories/IStudentPhotoRepository';
+import type { IImageResizerPort } from '@domain/ports/IImageResizerPort';
+import type { IPhotoRosterParserPort } from '@domain/ports/IPhotoRosterParserPort';
 import type { IRecordDraftsRepository } from '@domain/repositories/IRecordDraftsRepository';
 import type { IRecordEvidenceRepository } from '@domain/repositories/IRecordEvidenceRepository';
 import type { IReminderFireRepository } from '@domain/repositories/IReminderFireRepository';
@@ -112,6 +115,9 @@ import { JsonToolTemplateRepository } from '@adapters/repositories/JsonToolTempl
 import { JsonToolResultRepository } from '@adapters/repositories/JsonToolResultRepository';
 import { JsonObservationRepository } from '@adapters/repositories/JsonObservationRepository';
 import { JsonObservationAttachmentRepository } from '@adapters/repositories/JsonObservationAttachmentRepository';
+import { JsonStudentPhotoRepository } from '@adapters/repositories/JsonStudentPhotoRepository';
+import { CanvasImageResizer } from '@infrastructure/image/CanvasImageResizer';
+import { PhotoRosterParserAdapter } from '@infrastructure/parse/PhotoRosterParserAdapter';
 import { JsonRecordDraftsRepository } from '@adapters/repositories/JsonRecordDraftsRepository';
 import { JsonRecordEvidenceRepository } from '@adapters/repositories/JsonRecordEvidenceRepository';
 import { JsonReminderFireRepository } from '@adapters/repositories/JsonReminderFireRepository';
@@ -236,6 +242,21 @@ export const observationRepository: IObservationRepository = new JsonObservation
 
 export const observationAttachmentRepository: IObservationAttachmentRepository =
   new JsonObservationAttachmentRepository(storage);
+
+/**
+ * 학생 사진 (얼굴-이름 학습).
+ *
+ * 관찰 첨부와 같은 구조 — 메타는 JSON, 사진 본체는 별도 바이너리 파일.
+ * ⚠️ 학생 화면(`dist-student`)·위젯·옆핀에서는 이 저장소에 닿으면 안 된다.
+ *    사진 바이트가 화면으로 들어오는 유일한 관문이 여기이므로, 여기만 막으면 노출이 원천 차단된다.
+ */
+export const studentPhotoRepository: IStudentPhotoRepository = new JsonStudentPhotoRepository(
+  storage,
+);
+
+export const imageResizer: IImageResizerPort = new CanvasImageResizer();
+
+export const photoRosterParser: IPhotoRosterParserPort = new PhotoRosterParserAdapter();
 
 export const recordDraftsRepository: IRecordDraftsRepository = new JsonRecordDraftsRepository(
   storage,
