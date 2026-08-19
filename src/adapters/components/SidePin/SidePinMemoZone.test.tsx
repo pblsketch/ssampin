@@ -550,7 +550,7 @@ describe('이미지', () => {
 });
 
 describe('메모 찾기', () => {
-  /** 검색 칸이 뜰 만큼(5개) 메모를 깔아 둔다 */
+  /** 검색 칸이 뜨고도 남을 만큼(5개) 메모를 깔아 둔다 */
   function seedMany(): void {
     seed([
       memo('a', '3월 학년 회의', '2026-01-05T00:00:00.000Z'),
@@ -611,6 +611,29 @@ describe('메모 찾기', () => {
     renderZone();
 
     expect(screen.queryByRole('searchbox', { name: '메모 찾기' })).toBeNull();
+  });
+
+  // 아래 두 개가 기준값(SIDE_PIN_SEARCH_MIN_MEMOS)을 실제로 붙잡는 그물이다.
+  // 위의 "메모 1개" 테스트만으로는 기준이 3이든 5든 똑같이 통과해 버린다.
+  test('메모 2개까지는 검색 칸이 안 뜬다 — 기준값 바로 아래', () => {
+    seed([
+      memo('a', '3월 학년 회의', '2026-01-05T00:00:00.000Z'),
+      memo('b', '급식 신청 마감', '2026-01-04T00:00:00.000Z'),
+    ]);
+    renderZone();
+
+    expect(screen.queryByRole('searchbox', { name: '메모 찾기' })).toBeNull();
+  });
+
+  test('메모 3개부터 검색 칸이 뜬다 — 기준값을 5에서 낮춘 지점', () => {
+    seed([
+      memo('a', '3월 학년 회의', '2026-01-05T00:00:00.000Z'),
+      memo('b', '급식 신청 마감', '2026-01-04T00:00:00.000Z'),
+      memo('c', '동아리 명단', '2026-01-03T00:00:00.000Z'),
+    ]);
+    renderZone();
+
+    expect(screen.getByRole('searchbox', { name: '메모 찾기' })).toBeTruthy();
   });
 
   test('새 메모를 만들면 찾던 말을 지운다 — 안 지우면 방금 만든 것이 목록에서 사라진다', async () => {

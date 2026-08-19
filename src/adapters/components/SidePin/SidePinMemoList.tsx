@@ -23,8 +23,13 @@ const COLOR_BAR: Record<MemoColor, string> = {
 export const SIDE_PIN_MEMO_FOCUS =
   'focus-visible:outline focus-visible:outline-2 focus-visible:outline-sp-accent focus-visible:-outline-offset-2';
 
-/** 검색 칸을 띄우기 시작하는 메모 개수 — 이보다 적으면 훑는 게 더 빠르다 */
-export const SIDE_PIN_SEARCH_MIN_MEMOS = 5;
+/**
+ * 검색 칸을 띄우기 시작하는 메모 개수 — 이보다 적으면 훑는 게 더 빠르다.
+ *
+ * 처음에는 5였으나 3으로 낮췄다(2026-08-19). 실사용에서 메모 3~4개를 쓰는 사람에게는
+ * 검색 기능이 있다는 사실 자체가 보이지 않아, 아낀 한 줄보다 잃는 것이 컸다.
+ */
+export const SIDE_PIN_SEARCH_MIN_MEMOS = 3;
 
 export interface SidePinMemoListProps {
   /**
@@ -88,7 +93,7 @@ export function SidePinMemoList({
       />
 
       {showSearch && (
-        <div className="shrink-0 px-2 pb-1">
+        <div className="shrink-0 px-2 pt-2">
           <div className="flex items-center gap-1 rounded-lg bg-sp-surface px-2 py-1">
             <span
               aria-hidden
