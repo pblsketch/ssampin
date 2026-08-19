@@ -1,5 +1,6 @@
 import {
   app,
+  crashReporter,
   BrowserWindow,
   ipcMain,
   screen,
@@ -121,6 +122,7 @@ import {
   WIDGET_FREE_MINIMUM_SIZE,
 } from './widgetLayout';
 import { initNativeDesktopDiag, diagLog, diagLogVerbose, diagWarn } from './nativeDesktopDiag';
+import { installCrashReporter, reportCrashEvidence } from './crashEvidence';
 import {
   issueWriteHandle,
   issueOpenHandle,
@@ -5633,6 +5635,12 @@ function createStartupBackups(): void {
   }
 }
 
+// 크래시 증거 수집은 **가장 먼저** 붙인다 — app ready 이후에 붙이면 그 전에 난 크래시를
+// 놓친다. 2026-08-19 에 위젯 크기 조절 중 앱이 즉사했는데 덤프가 한 개도 없었다:
+// crashReporter 를 부른 적이 없어 Crashpad 가 아예 연결되지 않았기 때문이다
+// (로그의 "crashpad ... not connected"). 상세는 electron/crashEvidence.ts 참조.
+const crashDumpDir = installCrashReporter({ app, crashReporter });
+
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
   app.quit();
@@ -5684,6 +5692,16 @@ if (!gotTheLock) {
     diagLog(
       'native-desktop',
       `nativeDesktopDiag initialized — log file=${app.getPath('userData')}/native-desktop-diag.log`,
+    );
+    // 지난 실행에서 앱이 즉사했다면 여기서 드러난다. 크래시가 없으면 아무것도 안 적는다.
+    reportCrashEvidence(
+      {
+        app,
+        crashReporter,
+        log: (m) => diagLog('native-desktop', m),
+        warn: (m) => diagWarn('native-desktop', m),
+      },
+      crashDumpDir,
     );
     createStartupBackups();
     checkInstallation();
