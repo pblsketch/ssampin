@@ -32,6 +32,17 @@ import { planImport } from '@domain/rules/rosterImportPlan';
 import type { ImportAction, PlanResult } from '@domain/rules/rosterImportPlan';
 import { detectStudentNumberIssues } from '@domain/rules/studentNumberRules';
 import { applyImportPlan } from '@usecases/roster/applyImportPlan';
+import { PhotoRosterImportModal } from './RosterImport/PhotoRosterImportModal';
+import {
+  collectPhotoCandidates,
+  toImportReadyStudents,
+} from '@usecases/studentPhoto/photoRosterImport';
+import {
+  resolvePhotoTargets,
+  type PhotoTargetCandidate,
+} from '@usecases/studentPhoto/resolvePhotoTargets';
+import { saveRosterPhotos } from '@usecases/studentPhoto/SaveRosterPhotos';
+import { studentPhotoRepository, imageResizer } from '@adapters/di/container';
 import { generateUUID } from '@infrastructure/utils/uuid';
 
 export function RosterManagementTab() {
@@ -48,6 +59,15 @@ export function RosterManagementTab() {
 
   const [isEditing, setIsEditing] = useState(false);
   const [showBulkImport, setShowBulkImport] = useState(false);
+  const [showPhotoImport, setShowPhotoImport] = useState(false);
+  /**
+   * 사진 명렬표에서 읽은 사진 후보를 명단 반영이 끝날 때까지 들고 있는다.
+   *
+   * ⚠️ 사진을 먼저 저장하면 안 된다 — 새 학생의 불변 id 는 `applyImportPlan` 이
+   * 돌아야 확정되기 때문이다. 그래서 명단이 실제로 반영된 뒤(`applyImportToStore` 끝)에
+   * 확정된 명단을 보고 사진을 붙인다. 충돌 해결 모달을 거치는 경로에서도 같은 지점을 지난다.
+   */
+  const pendingPhotosRef = useRef<readonly PhotoTargetCandidate[]>([]);
   const [bulkText, setBulkText] = useState('');
   // 3-step wizard state
   const [bulkStep, setBulkStep] = useState<1 | 2 | 3>(1);
@@ -198,6 +218,26 @@ export function RosterManagementTab() {
       const newStudents = applyImportPlan(students, plan, resolutions, generateUUID);
       prevStudentsRef.current = students;
       await updateStudents(newStudents);
+
+      // 사진 명렬표로 들어온 경우에만 — 명단이 확정된 **뒤에** 사진을 붙인다.
+      // 붙이지 못한 사진(학번·이름이 어긋난 학생)은 저장하지 않고 건수만 알린다.
+      let photoNote = '';
+      const pendingPhotos = pendingPhotosRef.current;
+      pendingPhotosRef.current = [];
+      if (pendingPhotos.length > 0) {
+        const { resolved, unresolved } = resolvePhotoTargets(newStudents, pendingPhotos);
+        const saveResult = await saveRosterPhotos(
+          { repository: studentPhotoRepository, resizer: imageResizer },
+          {
+            ownerKind: 'homeroom',
+            ownerKey: 'homeroom',
+            photos: resolved,
+            now: new Date().toISOString(),
+          },
+        );
+        const missed = unresolved.length + saveResult.skipped.length;
+        photoNote = ` · 사진 ${saveResult.savedCount}장${missed > 0 ? ` (${missed}장 못 넣음)` : ''}`;
+      }
       // 번호 누락/중복 경고: 담임 명단은 학생 id·출결(번호 브리지)이 얽혀 있어
       // 자동 재번호가 위험하므로 경고만 한다. 요약 토스트에 접어 실행취소 액션을 보존.
       const numberIssues = detectStudentNumberIssues(
@@ -205,7 +245,7 @@ export function RosterManagementTab() {
       );
       const summary = `${importedReady.length}명 처리 (보존 ${plan.matched.length} · 신규 ${plan.newOnly.length}${
         plan.conflicts.length > 0 ? ` · 결정 ${plan.conflicts.length}` : ''
-      })${numberIssues.hasCollisionRisk ? ' · ⚠️ 번호 확인 필요' : ''}`;
+      })${photoNote}${numberIssues.hasCollisionRisk ? ' · ⚠️ 번호 확인 필요' : ''}`;
       showToast(summary, 'success', {
         label: '실행 취소',
         onClick: () => void updateStudents([...prevStudentsRef.current]),
@@ -478,6 +518,18 @@ export function RosterManagementTab() {
             <span className="material-symbols-outlined text-lg">group_add</span>
             <span>일괄 입력</span>
           </button>
+
+          {/* 사진 명렬표 가져오기 — 이름과 얼굴 사진을 함께 읽어 온다 */}
+          <div className="flex flex-col items-start gap-1">
+            <button
+              onClick={() => setShowPhotoImport(true)}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface text-sm font-medium text-sp-text transition-colors shadow-sm"
+            >
+              <span className="material-symbols-outlined text-lg">photo_library</span>
+              <span>사진 명렬표</span>
+            </button>
+            <FormatHint formats=".hwp .xlsx" />
+          </div>
 
           {/* 엑셀 가져오기 */}
           <div className="flex flex-col items-start gap-1">
@@ -1425,6 +1477,22 @@ export function RosterManagementTab() {
           </div>
         </div>
       )}
+
+      {/* 사진 명렬표 가져오기 — 이름은 기존 병합 기계로, 사진은 그 뒤에 붙는다 */}
+      <PhotoRosterImportModal
+        isOpen={showPhotoImport}
+        onClose={() => setShowPhotoImport(false)}
+        ownerKind="homeroom"
+        ownerKey="homeroom"
+        currentStudentCount={students.length}
+        onConfirm={async (result) => {
+          // 사진은 명단이 확정된 뒤에 붙여야 하므로 여기서는 들고만 있는다
+          pendingPhotosRef.current = collectPhotoCandidates(result);
+          await tryImport(toImportReadyStudents(result.names), () => {
+            setShowPhotoImport(false);
+          });
+        }}
+      />
 
       {/* Phase 3 — Import 충돌 해결 모달 */}
       {conflictPlan && conflictImported && (
