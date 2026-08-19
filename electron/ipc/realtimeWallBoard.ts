@@ -15,21 +15,18 @@
  *
  * Stage A는 Main 직접 저장 경로만 제공. clone/승인 정책 IPC는 Stage C/D에서 추가.
  */
-import { app, ipcMain } from 'electron';
+import { ipcMain } from 'electron';
 import fs from 'fs';
 import path from 'path';
+import { getContentRoot } from '../dataRoot';
 
-import type {
-  WallBoard,
-  WallBoardId,
-  WallBoardMeta,
-} from '../../src/domain/entities/RealtimeWall';
+import type { WallBoard, WallBoardId, WallBoardMeta } from '../../src/domain/entities/RealtimeWall';
 
 const INDEX_FILE = 'wall-boards-index.json';
 const BOARD_FILE_PREFIX = 'wall-board-';
 
 function getDataDir(): string {
-  const dir = path.join(app.getPath('userData'), 'data');
+  const dir = path.join(getContentRoot(), 'data');
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
@@ -87,11 +84,7 @@ function readBoardSync(id: WallBoardId): WallBoard | null {
 }
 
 function writeBoardSync(board: WallBoard): void {
-  fs.writeFileSync(
-    boardFilePath(board.id),
-    JSON.stringify(board, null, 2),
-    'utf-8',
-  );
+  fs.writeFileSync(boardFilePath(board.id), JSON.stringify(board, null, 2), 'utf-8');
 }
 
 /**
@@ -127,9 +120,7 @@ function upsertIndexEntry(board: WallBoard): void {
   const meta = toWallBoardMeta(board);
   const existing = idx.boards.findIndex((b) => b.id === board.id);
   const nextBoards =
-    existing >= 0
-      ? idx.boards.map((b, i) => (i === existing ? meta : b))
-      : [...idx.boards, meta];
+    existing >= 0 ? idx.boards.map((b, i) => (i === existing ? meta : b)) : [...idx.boards, meta];
   writeIndexSync({ version: 1, boards: nextBoards });
 }
 
@@ -140,12 +131,9 @@ function removeIndexEntry(id: WallBoardId): void {
 }
 
 export function registerRealtimeWallBoardHandlers(): void {
-  ipcMain.handle(
-    'realtime-wall:board:list-meta',
-    async (): Promise<readonly WallBoardMeta[]> => {
-      return readIndexSync().boards;
-    },
-  );
+  ipcMain.handle('realtime-wall:board:list-meta', async (): Promise<readonly WallBoardMeta[]> => {
+    return readIndexSync().boards;
+  });
 
   ipcMain.handle(
     'realtime-wall:board:load',

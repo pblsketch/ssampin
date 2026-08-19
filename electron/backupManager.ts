@@ -22,8 +22,9 @@
  * 수집·복원·검증은 `archiveManager.ts`(collect/restore/validateArchivesSection)가 담당한다.
  */
 
-import { app, BrowserWindow, dialog, shell } from 'electron';
+import { BrowserWindow, dialog, shell } from 'electron';
 import path from 'path';
+import { getContentRoot } from './dataRoot';
 import fs from 'fs';
 import { collectArchivesSection, restoreArchivesSection } from './archiveManager';
 
@@ -36,7 +37,7 @@ const EXCLUDED_FILENAMES: ReadonlySet<string> = new Set(['widget-bounds', 'icon-
 const VALID_FILENAME_RE = /^[A-Za-z0-9_.-]+$/;
 
 export interface BackupDataLocation {
-  /** 앱 사용자 데이터 루트 (`app.getPath('userData')`) */
+  /** 쌤핀 자료 루트 (기본값 `app.getPath('userData')`, 사용자가 옮겼으면 그 폴더) */
   readonly userDataPath: string;
   /** JSON 데이터 디렉토리 (`{userData}/data`) */
   readonly dataDirPath: string;
@@ -90,7 +91,7 @@ export interface BackupImportResult {
 
 /** dataDir이 없으면 생성하지 않고 path만 반환 (백업 시점 외엔 부수효과 회피) */
 function getDataDir(): string {
-  return path.join(app.getPath('userData'), 'data');
+  return path.join(getContentRoot(), 'data');
 }
 
 function ensureDir(dir: string): void {
@@ -136,7 +137,7 @@ function buildDefaultBackupFilename(now: Date): string {
 /** =================  데이터 위치 표시  ================= */
 
 export function getDataLocationInfo(): BackupDataLocation {
-  const userDataPath = app.getPath('userData');
+  const userDataPath = getContentRoot();
   const dataDirPath = getDataDir();
   return {
     userDataPath,
@@ -187,7 +188,7 @@ export async function exportBackup(
 
   // (S2.1b) 아카이브 수집 — 로컬 전용(ADR-036)인 아카이브의 유일한 기기 간 이동 수단이
   // 수동 백업이므로(함정 ⑯), 있으면 반드시 담는다. 수집 실패는 숨기지 않고 결과에 표면화.
-  const collected = collectArchivesSection(app.getPath('userData'));
+  const collected = collectArchivesSection(getContentRoot());
   const archiveTermCount = collected.ok ? collected.termCount : 0;
   const archiveTotalBytes = collected.ok ? collected.totalBytes : 0;
   const archiveError = collected.ok ? undefined : collected.error;
@@ -487,7 +488,7 @@ export async function importBackup(
   let restoredArchiveTerms: readonly string[] = [];
   let skippedArchiveTerms: readonly string[] = [];
   if (archivesRaw !== undefined) {
-    const archiveResult = restoreArchivesSection(app.getPath('userData'), archivesRaw);
+    const archiveResult = restoreArchivesSection(getContentRoot(), archivesRaw);
     if (!archiveResult.ok) {
       return {
         canceled: false,

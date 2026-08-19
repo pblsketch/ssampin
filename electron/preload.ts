@@ -1,6 +1,18 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { installDropGuard } from './security-guards';
 
+/** 저장 공간 상태 뷰 — main의 StorageStatePayload와 형태를 맞춘다. */
+interface StorageStateView {
+  contentRoot: string;
+  defaultRoot: string;
+  configuredRoot: string | null;
+  reason: 'default' | 'custom' | 'fallback-missing' | 'fallback-unwritable' | 'fallback-invalid';
+  isCustom: boolean;
+  contentBytes: number;
+  cacheBytes: number;
+  contentDirs: readonly { name: string; bytes: number }[];
+}
+
 // 가장 먼저 등록 — BrowserWindow의 어떤 dragover/drop 이벤트보다 일찍 가드.
 // 모든 5개 BrowserWindow(main, widget, icon, quickAdd, stickerPicker)가 동일
 // preload.js를 공유하므로 본 호출 1회로 전체 보호.
@@ -1517,6 +1529,43 @@ contextBridge.exposeInMainWorld('electronAPI', {
     /** 안전 백업 즉시 생성 (S2.4 전환 실행 1단계). 실패는 {ok:false}로 표면화 — throw 없음. */
     createSafetyBackup: (): Promise<{ ok: true; path: string } | { ok: false; error: string }> =>
       ipcRenderer.invoke('backup:createSafety'),
+  },
+
+  // === 저장 공간 — 자료 폴더 위치 변경 + 임시 파일 정리 ===
+  // 자료(data·forms·obs-attachments·miniapps)만 옮긴다. Chromium 캐시·로그인 세션은
+  // 기본 위치에 남으므로 폴더를 옮겨도 재로그인이 필요 없다. 상세는 electron/dataRoot.ts.
+  storage: {
+    /** 현재 자료 폴더 위치 + 자료/임시파일 용량 */
+    getState: (): Promise<StorageStateView> => ipcRenderer.invoke('storage:getState'),
+    /** 자료 폴더를 OS 탐색기로 열기 */
+    openContentFolder: (): Promise<{ ok: boolean; reason?: string }> =>
+      ipcRenderer.invoke('storage:openContentFolder'),
+    /** 폴더 선택 → 검증 → 이사. 성공 시 needsRestart=true. */
+    chooseAndMove: (): Promise<{
+      canceled: boolean;
+      ok?: boolean;
+      message?: string;
+      contentRoot?: string;
+      preservedOriginals?: readonly string[];
+      needsRestart?: boolean;
+      state?: StorageStateView;
+    }> => ipcRenderer.invoke('storage:chooseAndMove'),
+    /** 기본 위치로 되돌리기(실제 이사 수행) */
+    resetLocation: (): Promise<{
+      ok: boolean;
+      message?: string;
+      needsRestart?: boolean;
+      state?: StorageStateView;
+    }> => ipcRenderer.invoke('storage:resetLocation'),
+    /** 임시 파일 정리 — 자료·로그인 상태는 건드리지 않는다 */
+    clearCache: (): Promise<{
+      ok: boolean;
+      freedBytes: number;
+      skipped: readonly string[];
+      state: StorageStateView;
+    }> => ipcRenderer.invoke('storage:clearCache'),
+    /** 앱 재시작 */
+    relaunch: (): Promise<void> => ipcRenderer.invoke('storage:relaunch'),
   },
 
   // === 학년도 보관함(아카이브) — S2.1 ===

@@ -13,6 +13,7 @@
 import { app, ipcMain } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
+import { getContentRoot } from '../dataRoot';
 import {
   buildEntry,
   clientConfigPath,
@@ -39,7 +40,7 @@ function bridgeServerPath(): string {
 
 /** 쌤핀 데이터 디렉토리 — getDataDir()(main.ts)와 동일하게 userData/data. */
 function ssampinDataDir(): string {
-  return path.join(app.getPath('userData'), 'data');
+  return path.join(getContentRoot(), 'data');
 }
 
 function entryCtx() {

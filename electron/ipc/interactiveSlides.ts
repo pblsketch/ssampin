@@ -15,6 +15,7 @@ import { app, BrowserWindow, ipcMain } from 'electron';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { getContentRoot } from '../dataRoot';
 import { WebSocket } from 'ws';
 import {
   startSessionedWebSocketServer,
@@ -199,6 +200,7 @@ function getSlidesStudentDistRoot(): string {
   return path.join(app.getAppPath(), SLIDES_STUDENT_DIST_NAME);
 }
 
+// 슬라이드 이미지 캐시는 재생성 가능한 부산물 — 자료 루트가 아니라 기본 위치에 둔다.
 function getSlidesCacheRoot(): string {
   return path.join(app.getPath('userData'), 'cache', 'slides');
 }
@@ -374,16 +376,9 @@ async function handleJoinSession(
   // rejoin 처리: previousToken이 60초 내 disconnect한 학생과 일치하면 그대로 사용
   let token: StudentToken;
   const now = Date.now();
-  const rejoinToken = msg.rejoin?.previousToken
-    ? asStudentToken(msg.rejoin.previousToken)
-    : null;
+  const rejoinToken = msg.rejoin?.previousToken ? asStudentToken(msg.rejoin.previousToken) : null;
   if (rejoinToken) {
-    const recent = liveStore.findRecentlyDisconnected(
-      cur.sessionId,
-      rejoinToken,
-      now,
-      60_000,
-    );
+    const recent = liveStore.findRecentlyDisconnected(cur.sessionId, rejoinToken, now, 60_000);
     if (recent) {
       token = rejoinToken;
       liveStore.markStudentPresence(cur.sessionId, token, true);
@@ -604,10 +599,7 @@ const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 function ensurePipaSweepScheduler(): void {
   if (pipaSweepTimer != null) return;
   const runSweep = (): void => {
-    void PurgeExpiredSessions(
-      { sessionRepo, clock: () => Date.now() },
-      {},
-    ).catch(() => {
+    void PurgeExpiredSessions({ sessionRepo, clock: () => Date.now() }, {}).catch(() => {
       /* swallow — 다음 회차에 재시도 */
     });
   };
@@ -619,7 +611,7 @@ function ensurePipaSweepScheduler(): void {
 export function registerInteractiveSlidesHandlers(mainWindow: BrowserWindow): void {
   // app.whenReady() 이후 호출이 보장되므로 여기서 1회 초기화 안전.
   if (!sessionRepo) {
-    sessionRepo = new JsonInteractiveLessonRepository(app.getPath('userData'));
+    sessionRepo = new JsonInteractiveLessonRepository(getContentRoot());
   }
 
   // PIPA sweep 스케줄러 시작 (Plan §11.1 P0 법적 요건)
@@ -628,12 +620,9 @@ export function registerInteractiveSlidesHandlers(mainWindow: BrowserWindow): vo
   const broadcaster = buildBroadcaster(mainWindow, () => active);
 
   // ─── 메인 IPC: 로컬 IPv4 후보 (Plan §11.7 다중 NIC 처리) ───
-  ipcMain.handle(
-    'slides-session:get-local-ip',
-    (): Promise<{ candidates: readonly string[] }> => {
-      return Promise.resolve({ candidates: detectLocalIpCandidates() });
-    },
-  );
+  ipcMain.handle('slides-session:get-local-ip', (): Promise<{ candidates: readonly string[] }> => {
+    return Promise.resolve({ candidates: detectLocalIpCandidates() });
+  });
 
   // ─── 교사 heartbeat (Plan §7.4) — 렌더러가 5초마다 호출 ───
   ipcMain.handle('slides-session:teacher-heartbeat', (): void => {
@@ -644,18 +633,15 @@ export function registerInteractiveSlidesHandlers(mainWindow: BrowserWindow): vo
   ipcMain.handle('slides-session:tunnel-available', (): boolean => {
     return isTunnelAvailable();
   });
-  ipcMain.handle(
-    'slides-session:tunnel-start',
-    async (): Promise<{ tunnelUrl: string }> => {
-      if (!active) throw new Error('진행 중인 세션이 없습니다');
-      const address = active.handle.httpServer.address();
-      if (!address || typeof address === 'string') {
-        throw new Error('서버가 준비되지 않았습니다');
-      }
-      const tunnelUrl = await openTunnel(address.port);
-      return { tunnelUrl };
-    },
-  );
+  ipcMain.handle('slides-session:tunnel-start', async (): Promise<{ tunnelUrl: string }> => {
+    if (!active) throw new Error('진행 중인 세션이 없습니다');
+    const address = active.handle.httpServer.address();
+    if (!address || typeof address === 'string') {
+      throw new Error('서버가 준비되지 않았습니다');
+    }
+    const tunnelUrl = await openTunnel(address.port);
+    return { tunnelUrl };
+  });
 
   ipcMain.handle(
     'slides-session:start',
@@ -674,23 +660,22 @@ export function registerInteractiveSlidesHandlers(mainWindow: BrowserWindow): vo
     }> => {
       await closeActiveSession();
 
-      const handle = await startSessionedWebSocketServer<
-        ClientToServerMsg,
-        ServerToStudentMessage
-      >({
-        port: 0,
-        maxPayloadBytes: 2 * 1024 * 1024, // Plan §3 페이로드 한도
-        clientMessageSchema: ClientToServerMsgSchema,
-        debugTag: '[interactive-slides]',
-        handleHttpRequest: handleSlidesStudentHttp,
-        onClientMessage: async (ws, msg) => {
-          await handleClientMessage(ws, msg, mainWindow, broadcaster);
+      const handle = await startSessionedWebSocketServer<ClientToServerMsg, ServerToStudentMessage>(
+        {
+          port: 0,
+          maxPayloadBytes: 2 * 1024 * 1024, // Plan §3 페이로드 한도
+          clientMessageSchema: ClientToServerMsgSchema,
+          debugTag: '[interactive-slides]',
+          handleHttpRequest: handleSlidesStudentHttp,
+          onClientMessage: async (ws, msg) => {
+            await handleClientMessage(ws, msg, mainWindow, broadcaster);
+          },
+          onClientDisconnect: (ws) => {
+            handleClientDisconnect(ws, broadcaster);
+          },
+          closedMessage: { type: 'lesson-ended' } as ServerToStudentMessage,
         },
-        onClientDisconnect: (ws) => {
-          handleClientDisconnect(ws, broadcaster);
-        },
-        closedMessage: { type: 'lesson-ended' } as ServerToStudentMessage,
-      });
+      );
 
       try {
         const session: LessonSession = await StartLessonSession(
@@ -727,7 +712,7 @@ export function registerInteractiveSlidesHandlers(mainWindow: BrowserWindow): vo
       } catch (err) {
         await handle.close();
         if (err instanceof ShortCodeCollisionError) {
-          throw new Error('세션 코드 발급에 실패했습니다. 다시 시도해 주세요.');
+          throw new Error('세션 코드 발급에 실패했습니다. 다시 시도해 주세요.', { cause: err });
         }
         throw err;
       }
@@ -853,4 +838,3 @@ export const __test__ = {
   getActive: (): ActiveSession | null => active,
   closeActiveSession,
 };
-

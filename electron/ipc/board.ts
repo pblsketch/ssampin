@@ -12,7 +12,8 @@
  *
  * Design §3.2-bis before-quit 동기 저장 경로는 `endActiveBoardSessionSync` export로 제공.
  */
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { BrowserWindow, ipcMain } from 'electron';
+import { getContentRoot } from '../dataRoot';
 
 import {
   ManageBoard,
@@ -76,11 +77,11 @@ let userTemplateRepo: IUserTemplateRepo | null = null;
 export function registerBoardHandlers(mainWindow: BrowserWindow): void {
   // idempotent 초기화 (main.ts에서 한 번만 호출되지만 방어적)
   if (!repo) {
-    persistence = new BoardFilePersistence(app.getPath('userData'));
+    persistence = new BoardFilePersistence(getContentRoot());
     repo = new FileBoardRepository(persistence);
     serverPort = new YDocBoardServer((ctx) => generateBoardHTML(ctx));
     tunnelPort = new BoardTunnelCoordinator(tunnelDriver);
-    userTemplateRepo = new FileUserTemplateRepo(app.getPath('userData'));
+    userTemplateRepo = new FileUserTemplateRepo(getContentRoot());
   }
 
   const snapshotCodec = new BoardSnapshotCodec();

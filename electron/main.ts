@@ -55,6 +55,8 @@ import { registerMultiSurveyShareHandlers } from './ipc/multiSurveyShare';
 import { registerAiBridgeHandlers } from './ipc/aiBridge';
 import { registerLiveSyncHost, type LiveSyncHost } from './ipc/aiBridgeLiveSyncHost';
 import { createSidePinElectron, type SidePinElectronHandle } from './sidePinElectron';
+import { registerStorageLocationHandlers } from './ipc/storageLocation';
+import { initContentRoot, getContentRoot } from './dataRoot';
 import { createShortcutTriggerGate } from './shortcutTriggerGate';
 import { createOwnedGlobalShortcutRegistry } from './ownedGlobalShortcutRegistry';
 import {
@@ -530,7 +532,8 @@ interface WidgetBounds {
 }
 
 function getDataDir(): string {
-  const dir = path.join(app.getPath('userData'), 'data');
+  // 자료 루트는 선생님이 다른 드라이브로 옮겼을 수 있다(electron/dataRoot.ts).
+  const dir = path.join(getContentRoot(), 'data');
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
@@ -2316,6 +2319,18 @@ function createTray(): void {
           void executeWindowTransition('icon');
         },
       },
+      {
+        // 옆핀도 위젯·아이콘과 같은 계열의 창 모드다(2026-08-14 제품 결정). 그런데
+        // 트레이에만 빠져 있어서, 설정에서 "앱 닫기 동작"을 옆핀으로 바꿔 두지 않은
+        // 사람은 옆핀으로 갈 길이 없었다.
+        //
+        // 옆핀이 꺼져 있어도 눌리면 켜진다 — 전환 분기가 service.enable()을 함께
+        // 부른다. 눌러도 아무 일이 없는 메뉴를 두지 않기 위해 확인한 사항이다.
+        label: '옆핀 모드',
+        click: () => {
+          void executeWindowTransition('sidePin');
+        },
+      },
       { type: 'separator' },
       {
         label: '위젯 위치 초기화',
@@ -4003,7 +4018,7 @@ function registerIpcHandlers(): void {
     'archive:create',
     (_event, term: string, fileKeys: string[], opts?: { label?: string }) => {
       try {
-        return createArchive(app.getPath('userData'), app.getVersion(), term, fileKeys, opts);
+        return createArchive(getContentRoot(), app.getVersion(), term, fileKeys, opts);
       } catch (err) {
         return {
           ok: false as const,
@@ -4015,7 +4030,7 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('archive:list', () => {
     try {
-      return listArchives(app.getPath('userData'));
+      return listArchives(getContentRoot());
     } catch (err) {
       return {
         ok: false as const,
@@ -4026,7 +4041,7 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('archive:read', (_event, term: string, fileKey: string) => {
     try {
-      return readArchiveFile(app.getPath('userData'), term, fileKey);
+      return readArchiveFile(getContentRoot(), term, fileKey);
     } catch (err) {
       return {
         ok: false as const,
@@ -4039,7 +4054,7 @@ function registerIpcHandlers(): void {
   // 매니페스트 체크섬 전건 일치 시에만 스테이징+rename으로 원자적 배치.
   ipcMain.handle('archive:import', (_event, term: string, files: unknown) => {
     try {
-      return importArchive(app.getPath('userData'), term, files);
+      return importArchive(getContentRoot(), term, files);
     } catch (err) {
       return {
         ok: false as const,
@@ -4050,7 +4065,7 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('archive:delete', (_event, term: string) => {
     try {
-      return deleteArchive(app.getPath('userData'), term);
+      return deleteArchive(getContentRoot(), term);
     } catch (err) {
       return {
         ok: false as const,
@@ -4251,9 +4266,10 @@ function registerIpcHandlers(): void {
     if (path.isAbsolute(relPath)) {
       throw new Error('forms: 절대 경로는 허용되지 않습니다');
     }
-    const userData = app.getPath('userData');
-    const absolute = path.resolve(userData, relPath);
-    const rel = path.relative(userData, absolute);
+    // 서식·관찰첨부도 자료 루트를 따라 이동한다 — 경계 검사 기준도 함께 옮겨야 한다.
+    const contentRoot = getContentRoot();
+    const absolute = path.resolve(contentRoot, relPath);
+    const rel = path.relative(contentRoot, absolute);
     if (rel.startsWith('..') || path.isAbsolute(rel)) {
       throw new Error('forms: userData 경계를 벗어난 경로 거부');
     }
@@ -5496,6 +5512,14 @@ if (!gotTheLock) {
   });
 
   app.whenReady().then(() => {
+    // 자료 루트를 가장 먼저 확정한다 — 이후 모든 저장 경로가 여기에 의존한다.
+    // 포인터가 가리키는 폴더가 없으면(외장 드라이브 미연결) 기본 위치로 폴백한다.
+    const rootState = initContentRoot(app.getPath('userData'));
+    if (rootState.reason !== 'default') {
+      console.log(
+        `[dataRoot] contentRoot=${rootState.contentRoot} (reason=${rootState.reason}, configured=${rootState.configuredRoot ?? '-'})`,
+      );
+    }
     applySystemSettings();
     // Content-Security-Policy (security-hardening P1-2 / 감사 M-1).
     // dev 모드(Vite HMR: inline script + eval + ws://localhost)에서는 붙이지 않는다 —
@@ -5528,8 +5552,9 @@ if (!gotTheLock) {
     checkInstallation();
     registerIpcHandlers();
     registerSecureStorageHandlers();
+    registerStorageLocationHandlers(() => mainWindow);
     // 미니앱: persist:miniapps 세션에 miniapp:// 프로토콜 핸들러 등록(defaultSession 아님) + 파일 IPC.
-    registerMiniAppProtocol(app.getPath('userData'));
+    registerMiniAppProtocol(getContentRoot());
     registerMiniAppHandlers();
     createWindow();
     registerOAuthHandlers(mainWindow!);

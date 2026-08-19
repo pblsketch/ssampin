@@ -16,9 +16,10 @@
  * 설계 문서: docs/01-plan/features/miniapp-my-apps.plan.md §2 infrastructure
  */
 
-import { app, ipcMain } from 'electron';
+import { ipcMain } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
+import { getContentRoot } from '../dataRoot';
 
 /** 미니앱 id 형식 — 영숫자·하이픈·언더스코어 1~64자. `miniapp-protocol.ts`의 SAFE_APP_ID와 동일 규칙. */
 const SAFE_APP_ID = /^[A-Za-z0-9_-]{1,64}$/;
@@ -35,7 +36,7 @@ function assertSafeAppId(id: unknown): asserts id is string {
 
 /** `<userData>/miniapps` 루트 경로. */
 function miniappsRoot(): string {
-  return path.join(app.getPath('userData'), 'miniapps');
+  return path.join(getContentRoot(), 'miniapps');
 }
 
 /** 입력 바이트(Uint8Array | ArrayBuffer)를 Buffer로 정규화. */

@@ -874,6 +874,7 @@ interface ElectronAPI {
   // === 백업·복원·데이터 위치 센터 (v2.0.3+) ===
   // 외부 서버 전송 없음 — main 프로세스 fs/dialog/shell만 사용.
   backup?: BackupElectronAPI;
+  storage?: StorageElectronAPI;
 
   // === 학년도 보관함(아카이브) (S2.1) ===
   // {userData}/data/archives/{term}/ 스냅샷 + manifest.json(체크섬).
@@ -1051,6 +1052,61 @@ interface BackupElectronAPI {
    * 실패는 {ok:false, error}로 표면화 — throw하지 않는다.
    */
   createSafetyBackup: () => Promise<{ ok: true; path: string } | { ok: false; error: string }>;
+}
+
+/** 자료 폴더 위치 상태 + 용량. 바이트 단위. */
+interface StorageStateView {
+  readonly contentRoot: string;
+  readonly defaultRoot: string;
+  readonly configuredRoot: string | null;
+  /**
+   * fallback-* 은 포인터가 가리키는 폴더를 이번 실행에서 쓰지 못했다는 뜻이다
+   * (외장 드라이브 미연결 등). 이 경우 기본 위치로 동작하며 포인터는 보존된다.
+   */
+  readonly reason:
+    | 'default'
+    | 'custom'
+    | 'fallback-missing'
+    | 'fallback-unwritable'
+    | 'fallback-invalid';
+  readonly isCustom: boolean;
+  readonly contentBytes: number;
+  readonly cacheBytes: number;
+  readonly contentDirs: readonly { readonly name: string; readonly bytes: number }[];
+}
+
+/**
+ * 저장 공간 API — 자료 폴더 위치 변경 + 임시 파일 정리.
+ * 옮기는 대상은 선생님 자료(data·forms·obs-attachments·miniapps)뿐이며
+ * Chromium 캐시·로그인 세션은 기본 위치에 남는다 → 폴더를 옮겨도 재로그인이 필요 없다.
+ */
+interface StorageElectronAPI {
+  getState: () => Promise<StorageStateView>;
+  openContentFolder: () => Promise<{ ok: boolean; reason?: string }>;
+  /** 폴더 선택 다이얼로그 → 검증 → 복사·검증·전환. 성공 시 needsRestart=true. */
+  chooseAndMove: () => Promise<{
+    canceled: boolean;
+    ok?: boolean;
+    message?: string;
+    contentRoot?: string;
+    /** 원본은 지우지 않고 `data.moved-…` 로 보존된다. 사용자가 직접 삭제하도록 안내한다. */
+    preservedOriginals?: readonly string[];
+    needsRestart?: boolean;
+    state?: StorageStateView;
+  }>;
+  resetLocation: () => Promise<{
+    ok: boolean;
+    message?: string;
+    needsRestart?: boolean;
+    state?: StorageStateView;
+  }>;
+  clearCache: () => Promise<{
+    ok: boolean;
+    freedBytes: number;
+    skipped: readonly string[];
+    state: StorageStateView;
+  }>;
+  relaunch: () => Promise<void>;
 }
 
 /** 보관함 목록의 학기 1건 요약 (archive.list). manifestOk=false면 error에 사유. */

@@ -5,16 +5,17 @@
  * OS 키체인/DPAPI 로 암호화 저장한다.
  * safeStorage 사용 불가 환경에서는 평문으로 폴백(경고 출력).
  */
-import { ipcMain, safeStorage, app } from 'electron';
+import { ipcMain, safeStorage } from 'electron';
 import fs from 'fs';
 import path from 'path';
+import { getContentRoot } from '../dataRoot';
 
 /**
  * 보안 파일 경로 생성
  * userData/data/.<key> 형식으로 저장 (숨김 파일)
  */
 function getSecurePath(key: string): string {
-  const dir = path.join(app.getPath('userData'), 'data');
+  const dir = path.join(getContentRoot(), 'data');
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
