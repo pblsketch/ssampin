@@ -682,6 +682,19 @@ export function Seating(props?: { embedded?: boolean }) {
               </>
             )}
           </ScrollRow>
+          {/* 이름 학습 — 학기 초에 가장 자주 쓰는 도구라 ⋯ 더보기 안이 아니라 툴바에 직접 노출한다.
+              (수업 관리 자리배치 탭은 이미 툴바 노출이라 두 화면의 진입 경로를 맞춘 것이기도 하다)
+              교사 시점 전용 — 학생 화면에는 절대 노출하지 않는다. 학생이 0명이면 숨김. */}
+          {isTeacherView && totalStudents > 0 && (
+            <button
+              onClick={() => setShowNameLearning(true)}
+              title="학생 이름 외우기 모드"
+              className="shrink-0 whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface text-sm font-medium text-sp-text transition-colors shadow-sm"
+            >
+              <span className="material-symbols-outlined text-lg">quiz</span>
+              <span>이름 학습</span>
+            </button>
+          )}
           {/* 더보기 메뉴 — ScrollRow(오버플로우 클립) 밖에 두어야 드롭다운이 잘리지 않는다.
               내보내기 버튼 왼쪽에 배치. */}
           <div className="relative shrink-0" ref={moreMenuRef}>
@@ -709,20 +722,6 @@ export function Seating(props?: { embedded?: boolean }) {
                   <span className="material-symbols-outlined text-sp-muted text-lg">history</span>
                   <span>배치 기록</span>
                 </button>
-                {/* 이름 학습 (Phase 3a) — 교사 시점 전용 도구. 학생이 0명이면 항목 숨김 */}
-                {isTeacherView && totalStudents > 0 && (
-                  <button
-                    onClick={() => {
-                      setShowMoreMenu(false);
-                      setShowNameLearning(true);
-                    }}
-                    className="w-full flex items-center gap-3 px-4 py-3 text-sm text-sp-text hover:bg-sp-accent/10 transition-colors border-t border-sp-border"
-                    title="학생 이름 외우기 모드"
-                  >
-                    <span className="material-symbols-outlined text-sp-muted text-lg">quiz</span>
-                    <span>이름 학습</span>
-                  </button>
-                )}
                 {/* Phase 3b: 프리셋 배치 — 교사 시점 전용 도구 (학생 화면에는 절대 노출 X) */}
                 {isTeacherView &&
                   (hasPreset ? (

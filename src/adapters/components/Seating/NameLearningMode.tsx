@@ -76,8 +76,10 @@ export function NameLearningMode({
   const [revealed, setRevealed] = useState<Set<string>>(new Set());
   const [currentIndex, setCurrentIndex] = useState<number>(0); // sequential / quiz 의 현재 학생 index (seatList 기준)
   const [answers, setAnswers] = useState<Map<string, boolean>>(new Map());
-  const [quizPhase, setQuizPhase] = useState<'asking' | 'revealed'>('asking');
+  const [quizPhase, setQuizPhase] = useState<'asking' | 'revealed' | 'scored'>('asking');
+  const [quizFinished, setQuizFinished] = useState(false);
   const [startTime, setStartTime] = useState<number>(() => Date.now());
+  const [elapsedAtFinish, setElapsedAtFinish] = useState<number>(0);
 
   const previousOverflowRef = useRef<string>('');
 
@@ -100,17 +102,36 @@ export function NameLearningMode({
     };
   }, [isOpen, onClose]);
 
+  /**
+   * 세션 초기화 — 시작 지점이 모드마다 다르다.
+   * currentIndex 를 sequential 과 quiz 가 공유하므로 무조건 0(또는 무조건 랜덤)으로 두면
+   * 한쪽이 망가진다: 랜덤으로 통일하면 "순서" 모드가 3번 학생부터 시작하고,
+   * 0으로 통일하면 "맞혀보기" 첫 문제가 항상 같은 학생이 된다.
+   */
+  const startSession = useCallback(
+    (nextMode: LearningMode) => {
+      setRevealed(new Set());
+      setAnswers(new Map());
+      setQuizPhase('asking');
+      setQuizFinished(false);
+      setElapsedAtFinish(0);
+      setStartTime(Date.now());
+      setCurrentIndex(
+        nextMode === 'quiz' && seatList.length > 0
+          ? Math.floor(Math.random() * seatList.length)
+          : 0,
+      );
+    },
+    [seatList.length],
+  );
+
   // 패널이 열릴 때마다 초기화
   useEffect(() => {
     if (isOpen) {
       setMode('free');
-      setRevealed(new Set());
-      setCurrentIndex(0);
-      setAnswers(new Map());
-      setQuizPhase('asking');
-      setStartTime(Date.now());
+      startSession('free');
     }
-  }, [isOpen]);
+  }, [isOpen, startSession]);
 
   // sequential 모드: 학번 순서로 currentIndex 자동 진행
   const sortedSeatList = useMemo(() => {
@@ -123,7 +144,7 @@ export function NameLearningMode({
   }, [seatList, getStudent]);
 
   const handleCardClick = useCallback(
-    (studentId: string, index: number) => {
+    (studentId: string) => {
       if (mode === 'free') {
         setRevealed((prev) => {
           const next = new Set(prev);
@@ -142,8 +163,12 @@ export function NameLearningMode({
           }
         }
       } else if (mode === 'quiz') {
-        // quiz: 현재 강조된 카드만, 1회 클릭으로 공개 단계로 이동
-        const currentSeat = seatList[index];
+        // quiz: 강조된 카드만 반응한다.
+        // ⚠️ 이전 구현은 seatList[index] 와 비교했는데 index 가 곧 그 studentId 의 인덱스라
+        //    조건이 항상 참이었다 → 아무 카드나 열리는데 채점은 seatList[currentIndex](강조된 학생)에
+        //    기록되어 "엉뚱한 카드를 열었는데 다른 학생이 정답으로 뜨는" 불일치가 생겼다.
+        //    sequential 과 동일하게 currentIndex 기준으로 막는다.
+        const currentSeat = seatList[currentIndex];
         if (currentSeat && currentSeat.studentId === studentId && quizPhase === 'asking') {
           setQuizPhase('revealed');
           setRevealed((prev) => new Set([...prev, studentId]));
@@ -161,38 +186,37 @@ export function NameLearningMode({
     setRevealed(new Set());
     setAnswers(new Map());
     setQuizPhase('asking');
+    setQuizFinished(false);
   }, []);
 
-  const resetSession = useCallback(() => {
-    setRevealed(new Set());
-    setCurrentIndex(0);
-    setAnswers(new Map());
-    setQuizPhase('asking');
-    setStartTime(Date.now());
-  }, []);
+  const resetSession = useCallback(() => startSession(mode), [startSession, mode]);
 
-  // quiz 모드: "맞춤"/"틀림" 자가 채점 후 다음 문제
+  // quiz 모드: "맞춤"/"틀림" 자가 채점.
+  // ⚠️ 여기서 다음 문제를 고르지 않는다 — 이전 구현은 answers 클로저(채점 반영 전 값)를 읽어
+  //    remaining 이 한 틱 늦었고, 그래서 마지막 1명이 출제되지 않은 채 화면이 멈췄다.
+  //    채점만 기록하고 'scored' 로 넘긴 뒤, 반영된 answers 를 보는 effect 가 다음 문제를 정한다.
   const recordAnswer = useCallback(
     (correct: boolean) => {
       const currentSeat = seatList[currentIndex];
       if (!currentSeat) return;
-      setAnswers((prev) => {
-        const next = new Map(prev);
-        next.set(currentSeat.studentId, correct);
-        return next;
-      });
-      // 다음 랜덤 카드로 (이미 푼 카드는 제외)
-      const remaining = seatList
-        .map((_, i) => i)
-        .filter((i) => i !== currentIndex && !answers.has(seatList[i]!.studentId));
-      if (remaining.length > 0) {
-        const nextIdx = remaining[Math.floor(Math.random() * remaining.length)]!;
-        setCurrentIndex(nextIdx);
-        setQuizPhase('asking');
-      }
+      setAnswers((prev) => new Map(prev).set(currentSeat.studentId, correct));
+      setQuizPhase('scored');
     },
-    [currentIndex, seatList, answers],
+    [currentIndex, seatList],
   );
+
+  // quiz 모드: 채점이 반영된 뒤 다음 문제를 고르거나, 남은 문제가 없으면 결과 요약으로 넘어간다
+  useEffect(() => {
+    if (mode !== 'quiz' || quizPhase !== 'scored') return;
+    const remaining = seatList.map((_, i) => i).filter((i) => !answers.has(seatList[i]!.studentId));
+    if (remaining.length === 0) {
+      setElapsedAtFinish(Math.floor((Date.now() - startTime) / 1000));
+      setQuizFinished(true);
+      return;
+    }
+    setCurrentIndex(remaining[Math.floor(Math.random() * remaining.length)]!);
+    setQuizPhase('asking');
+  }, [mode, quizPhase, answers, seatList, startTime]);
 
   if (!isOpen) return null;
 
@@ -200,6 +224,12 @@ export function NameLearningMode({
   const elapsedSeconds = Math.floor((Date.now() - startTime) / 1000);
   const correctCount = [...answers.values()].filter((v) => v).length;
   const answeredCount = answers.size;
+  // 결과 요약용 — 틀린 학생을 학번 순으로 모은다(다음에 뭘 더 외워야 하는지가 요약의 핵심)
+  const wrongNames = quizFinished
+    ? sortedSeatList
+        .filter((s) => answers.get(s.studentId) === false)
+        .map((s) => getStudent(s.studentId)?.name ?? '?')
+    : [];
 
   const currentSeqSeat = mode === 'sequential' ? sortedSeatList[currentIndex] : null;
   const currentQuizSeat = mode === 'quiz' ? seatList[currentIndex] : null;
@@ -245,7 +275,7 @@ export function NameLearningMode({
               [
                 { value: 'free', label: '자유' },
                 { value: 'sequential', label: '순서' },
-                { value: 'quiz', label: '퀴즈' },
+                { value: 'quiz', label: '맞혀보기' },
               ] as ReadonlyArray<{ value: LearningMode; label: string }>
             ).map((opt) => {
               const active = mode === opt.value;
@@ -257,7 +287,9 @@ export function NameLearningMode({
                   aria-checked={active}
                   onClick={() => {
                     setMode(opt.value);
-                    resetSession();
+                    // ⚠️ resetSession() 이 아니라 새 모드를 직접 넘긴다 —
+                    //    setMode 는 비동기라 resetSession 은 아직 이전 모드를 보고 초기화한다.
+                    startSession(opt.value);
                   }}
                   className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                     active
@@ -297,7 +329,39 @@ export function NameLearningMode({
         </header>
 
         {/* 자리 그리드 */}
-        <div className="flex-1 overflow-auto p-6 flex items-start justify-center">
+        <div className="flex-1 overflow-auto p-6 flex flex-col items-center gap-4">
+          {/* 맞혀보기 결과 요약 — 마지막 문제까지 채점하면 나타난다.
+              (이전에는 마지막 문제를 풀어도 화면이 그대로 멈춰 있어 끝났다는 신호가 없었다) */}
+          {quizFinished && (
+            <section
+              aria-live="polite"
+              className="w-full max-w-5xl rounded-xl bg-sp-card ring-1 ring-sp-border px-5 py-4"
+            >
+              <div className="flex items-center gap-3 flex-wrap">
+                <span className="material-symbols-outlined text-sp-accent" aria-hidden="true">
+                  check_circle
+                </span>
+                <h3 className="text-base font-bold text-sp-text">
+                  {total}명 중 {correctCount}명 맞혔어요
+                </h3>
+                <span className="text-sm text-sp-muted">{elapsedAtFinish}초 걸렸습니다</span>
+                <button
+                  type="button"
+                  onClick={resetSession}
+                  className="ml-auto px-3 py-1.5 rounded-md bg-sp-accent text-white text-sm font-medium"
+                >
+                  다시 하기
+                </button>
+              </div>
+              {wrongNames.length > 0 && (
+                <p className="mt-3 text-sm text-sp-text break-keep">
+                  <span className="text-sp-muted">아직 못 외운 학생 {wrongNames.length}명 · </span>
+                  {wrongNames.join(', ')}
+                </p>
+              )}
+            </section>
+          )}
+
           {total === 0 ? (
             <div className="text-center py-16 text-sp-muted">
               <span className="material-symbols-outlined text-3xl block mb-2 opacity-60">
@@ -326,7 +390,6 @@ export function NameLearningMode({
                   }
                   const student = getStudent(studentId);
                   const isRevealed = revealed.has(studentId);
-                  const seatIndex = seatList.findIndex((s) => s.studentId === studentId);
                   const answerEntry = answers.get(studentId);
                   const answerState =
                     answerEntry === undefined ? undefined : answerEntry ? 'correct' : 'wrong';
@@ -341,7 +404,7 @@ export function NameLearningMode({
                       revealed={isRevealed}
                       highlighted={highlightedStudentId === studentId}
                       answerState={answerState}
-                      onClick={() => handleCardClick(studentId, seatIndex)}
+                      onClick={() => handleCardClick(studentId)}
                     />
                   );
                 }),
