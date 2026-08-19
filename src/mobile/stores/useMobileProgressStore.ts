@@ -1,6 +1,10 @@
 import { create } from 'zustand';
 import { generateUUID } from '@infrastructure/utils/uuid';
-import type { ProgressEntry, ProgressStatus } from '@domain/entities/CurriculumProgress';
+import type {
+  LessonDayAdjustment,
+  ProgressEntry,
+  ProgressStatus,
+} from '@domain/entities/CurriculumProgress';
 import { ManageCurriculumProgress } from '@usecases/classManagement/ManageCurriculumProgress';
 import { teachingClassRepository } from '@mobile/di/container';
 import { useMobileDriveSyncStore } from '@mobile/stores/useMobileDriveSyncStore';
@@ -10,6 +14,14 @@ const manageProgress = new ManageCurriculumProgress(teachingClassRepository);
 
 interface MobileProgressState {
   entries: readonly ProgressEntry[];
+  /** 수업일 추정에 대한 사용자 정정 — PC와 같은 파일(진도)의 형제 필드다. */
+  lessonDayAdjustments: readonly LessonDayAdjustment[];
+  /** 그날 수업 여부를 직접 정한다. kind가 null이면 정정을 지우고 앱 판정으로 되돌린다. */
+  setLessonDayAdjustment: (
+    classId: string,
+    date: string,
+    kind: LessonDayAdjustment['kind'] | null,
+  ) => Promise<void>;
   loaded: boolean;
   load: () => Promise<void>;
   reload: () => Promise<void>;
@@ -39,13 +51,17 @@ interface MobileProgressState {
 
 export const useMobileProgressStore = create<MobileProgressState>((set, get) => ({
   entries: [],
+  lessonDayAdjustments: [],
   loaded: false,
 
   load: async () => {
     if (get().loaded) return;
     try {
-      const entries = await manageProgress.getAll();
-      set({ entries, loaded: true });
+      const [entries, lessonDayAdjustments] = await Promise.all([
+        manageProgress.getAll(),
+        manageProgress.getAdjustments(),
+      ]);
+      set({ entries, lessonDayAdjustments, loaded: true });
     } catch {
       set({ loaded: true });
     }
@@ -67,6 +83,11 @@ export const useMobileProgressStore = create<MobileProgressState>((set, get) => 
     return get()
       .entries.filter((e) => e.classId === classId && e.date === today)
       .sort((a, b) => a.period - b.period);
+  },
+
+  setLessonDayAdjustment: async (classId, date, kind) => {
+    const next = await manageProgress.saveAdjustment(classId, date, kind, new Date().toISOString());
+    set({ lessonDayAdjustments: next });
   },
 
   addEntry: async (classId, date, period, unit, lesson, note, status = 'completed') => {

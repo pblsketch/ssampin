@@ -11,6 +11,9 @@ import { Spinner } from '@mobile/components/common/Spinner';
 import { EmptyState } from '@mobile/components/common/EmptyState';
 import { formatDateLabel } from '@mobile/utils/date';
 import { ClassProgressEntryItem } from './ClassProgressEntryItem';
+import { MobileLessonCountSummary } from './MobileLessonCountSummary';
+import { useMobileLessonCountEstimate } from '@mobile/hooks/useMobileLessonCountEstimate';
+import { mergeOverridesIntoTeacherSchedule } from '@domain/rules/timetableRules';
 import { getMatchingPeriods, type DayTeacherSlot } from '@domain/rules/progressMatching';
 import { getDayOfWeek } from '@domain/rules/periodRules';
 import type { ProgressEntry, ProgressStatus } from '@domain/entities/CurriculumProgress';
@@ -49,10 +52,17 @@ export function ClassProgressTab({ classId, className }: ClassProgressTabProps) 
   const loadClasses = useMobileTeachingClassStore((s) => s.load);
 
   const teacherSchedule = useMobileScheduleStore((s) => s.teacherSchedule);
+  const mobileClassSchedule = useMobileScheduleStore((s) => s.classSchedule);
+  const overrides = useMobileScheduleStore((s) => s.overrides);
   const loadSchedule = useMobileScheduleStore((s) => s.load);
+  const setLessonDayAdjustment = useMobileProgressStore((s) => s.setLessonDayAdjustment);
 
   const loadSettings = useMobileSettingsStore((s) => s.load);
   const periodTimes = useMobileSettingsStore((s) => s.settings.periodTimes);
+  const weekendDays = useMobileSettingsStore((s) => s.settings.enableWeekendDays);
+
+  /** 학기 차시 추정 — 데스크톱과 같은 계산·같은 재료를 쓴다. */
+  const lessonCountView = useMobileLessonCountEstimate(classId);
 
   const [modalState, setModalState] = useState<ModalState>({ type: 'closed' });
 
@@ -99,22 +109,27 @@ export function ClassProgressTab({ classId, className }: ClassProgressTabProps) 
     return groups;
   }, [classEntries]);
 
-  // 시간표 매칭 — 그룹 안의 각 날짜별로 매칭 교시 set 계산 (모바일은 변동 머지 미지원이라 baseline만)
-  // mobile schedule store는 변동(override) 머지 함수가 없으므로, 요일 기준 baseline 시간표를 그대로 사용한다.
+  /**
+   * 시간표 매칭 — 날짜별 매칭 교시(✦ 표시용).
+   *
+   * ⚠️ 예전에는 변동 시간표·주말 설정·학급 시간표가 모바일에 없다는 이유로 **기본 시간표만**
+   * 봤다. 이제 셋 다 들어오므로 데스크톱과 같은 재료를 쓴다 — 안 그러면 같은 화면에서
+   * ✦ 표시와 학기 차시 숫자가 **서로 다른 기준**을 쓰게 된다.
+   */
   const matchingPeriodsByDate = useMemo(() => {
     const result = new Map<string, readonly number[]>();
     const cls = classes.find((c) => c.id === classId);
     if (!cls) return result;
 
-    // 모바일에는 settings.enableWeekendDays 필드가 없음 → undefined 전달
-    const weekendDays = undefined;
-    // 모바일에는 ClassSchedule(우리반 시간표) 데이터가 없음 → 빈 객체 전달 (3단계 폴백 비활성)
-    const classSchedule: ClassScheduleData = {};
+    const classSchedule: ClassScheduleData = mobileClassSchedule ?? {};
 
     for (const { date } of grouped) {
       const dayOfWeek = getDayOfWeek(new Date(date + 'T00:00:00'), weekendDays);
       const baseline = dayOfWeek ? (teacherSchedule[dayOfWeek] ?? []) : [];
-      const dayTeacherSchedule = baseline as ReadonlyArray<TeacherPeriod | null>;
+      const dayTeacherSchedule = mergeOverridesIntoTeacherSchedule(
+        baseline as ReadonlyArray<TeacherPeriod | null>,
+        overrides.filter((o) => o.date === date),
+      );
 
       result.set(
         date,
@@ -129,7 +144,7 @@ export function ClassProgressTab({ classId, className }: ClassProgressTabProps) 
       );
     }
     return result;
-  }, [grouped, classes, classId, teacherSchedule]);
+  }, [grouped, classes, classId, teacherSchedule, mobileClassSchedule, overrides, weekendDays]);
 
   const handleCycleStatus = async (entry: ProgressEntry) => {
     const next = STATUS_CYCLE[entry.status];
@@ -173,6 +188,17 @@ export function ClassProgressTab({ classId, className }: ClassProgressTabProps) 
               <span className="text-green-400">완료 {stats.completed}</span>
               <span className="text-amber-400">미실시 {stats.skipped}</span>
               <span className="text-blue-400">예정 {stats.planned}</span>
+            </div>
+            {/* 학기 차시 — 기존 진도율(입력 기준)은 그대로 두고 아래에 학기 기준을 덧붙인다 */}
+            <div className="mt-2">
+              <MobileLessonCountSummary
+                view={lessonCountView}
+                completedCount={stats.completed}
+                periodTimes={periodTimes}
+                onAdjust={(date, kind) => {
+                  void setLessonDayAdjustment(classId, date, kind);
+                }}
+              />
             </div>
           </div>
           {/* + 버튼 — Design §2.2 (MemoPage·TodoPage 일관 패턴) */}

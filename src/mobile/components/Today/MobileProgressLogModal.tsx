@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { suggestNextLessonValue } from '@domain/rules/lessonNumberPattern';
 import { resolvePeriodLabel } from '@domain/rules/periodLabel';
 import { useMobileProgressStore } from '@mobile/stores/useMobileProgressStore';
 import { useMobileTeachingClassStore } from '@mobile/stores/useMobileTeachingClassStore';
@@ -174,6 +175,30 @@ export function MobileProgressLogModal({
     const all = useMobileProgressStore.getState().getEntriesByClass(selectedClassId);
     return all[0]?.unit ?? '';
   }, [selectedClassId, mode]);
+
+  /**
+   * 직전 기록의 차시 표기를 이어받은 제안값.
+   *
+   * **앱이 센 누적 차시가 아니다** — 선생님마다 차시를 세는 단위가 달라(학기 통·대단원·소단원)
+   * 앱이 세면 다수에게 틀린 값이 된다. 읽을 수 없으면 빈 문자열이고, 그때는 제안하지 않는다.
+   *
+   * 데스크톱은 폼을 열 때 자동으로 채우지만, 폰에서는 **탭해서 채우는 칩**으로 둔다.
+   * 이 화면이 이미 '최근 단원 그대로 사용'을 같은 방식으로 제공하고 있어 관습을 맞췄고,
+   * 좁은 화면에서 미리 채워진 값은 눈에 안 띈 채 저장될 수 있다.
+   */
+  const suggestedLesson = useMemo(() => {
+    if (!selectedClassId || mode === 'edit') return '';
+    const all = useMobileProgressStore.getState().getEntriesByClass(selectedClassId);
+    const previous = all[0];
+    if (previous === undefined) return '';
+    return (
+      suggestNextLessonValue({
+        previousLesson: previous.lesson,
+        previousUnit: previous.unit,
+        nextUnit: unit,
+      }) ?? ''
+    );
+  }, [selectedClassId, mode, unit]);
 
   // 학급 표시 정보 (lockClass=true일 때 readonly 한 줄로 보여줄 때 사용)
   const lockedClass = useMemo(() => {
@@ -387,6 +412,15 @@ export function MobileProgressLogModal({
                   placeholder="예: 1차시 - 소설의 구성요소"
                   className="w-full px-3 py-2 bg-sp-surface border border-sp-border rounded-lg text-sp-text text-sm focus:outline-none focus:border-sp-accent placeholder:text-sp-muted/50"
                 />
+                {suggestedLesson !== '' && lesson === '' && (
+                  <button
+                    type="button"
+                    onClick={() => setLesson(suggestedLesson)}
+                    className="mt-1 text-xs text-sp-accent hover:underline"
+                  >
+                    이어서 쓰기 ({suggestedLesson})
+                  </button>
+                )}
               </div>
 
               {/* 비고 (선택) */}

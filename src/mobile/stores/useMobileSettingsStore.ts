@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { Settings } from '@domain/entities/Settings';
+import type { WeekendDay } from '@domain/valueObjects/DayOfWeek';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import { settingsRepository } from '@mobile/di/container';
 
@@ -28,6 +29,16 @@ interface MobileSettings {
    */
   termStartDates?: Readonly<Record<string, string>>;
   currentTerm?: string;
+  /**
+   * 학기 마지막 수업일 — 같은 이유로 내려온다. 이게 없으면 폰에서는 학기 차시를 셀 수 없어
+   * "학기 마지막 수업일을 알려주세요"만 계속 뜬다(PC에서는 이미 답한 상태인데도).
+   */
+  termEndDates?: Readonly<Record<string, string>>;
+  /**
+   * 주말 수업 설정 — 토·일에 수업이 있는 학교에서 이 값이 없으면 폰만 그 날들을 빼고 세어
+   * **PC와 차시가 달라진다.**
+   */
+  enableWeekendDays?: readonly WeekendDay[];
 }
 
 const DEFAULT_MOBILE_SETTINGS: MobileSettings = {
@@ -119,6 +130,8 @@ export const useMobileSettingsStore = create<MobileSettingsState>((set, get) => 
             },
             termStartDates: s.termStartDates,
             currentTerm: s.currentTerm,
+            termEndDates: s.termEndDates,
+            enableWeekendDays: s.enableWeekendDays,
           },
           loaded: true,
         });
