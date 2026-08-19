@@ -3,12 +3,13 @@
 import { useEffect, useState } from 'react';
 import FadeIn from './FadeIn';
 import WindowsProtectionAnimation from './WindowsProtectionAnimation';
+import DownloadButton from './DownloadButton';
 
 const steps = [
   {
     number: '01',
     title: '다운로드',
-    description: '아래 버튼을 클릭해 설치 파일을 받으세요.',
+    description: '위 다운로드 버튼을 클릭해 설치 파일을 받으세요.',
   },
   {
     number: '02',
@@ -193,6 +194,18 @@ export default function InstallGuide() {
           <h2 className="text-3xl font-bold text-sp-text md:text-4xl">설치는 3단계면 끝</h2>
           <p className="mt-3 text-base text-sp-muted">다운로드부터 실행까지 1분 이내</p>
         </FadeIn>
+
+        {/*
+          다운로드 탭(#download)으로 건너뛴 사람이 바로 받을 수 있게 버튼을 여기 둔다.
+          2026-08-19 제보 — "'아래 버튼을 클릭해 설치 파일을 받으세요'라는 멘트는 있지만
+          그 버튼이 없다." 실제로 버튼은 이 구역이 아니라 맨 아래 푸터·중간 CTA 에만 있었다.
+          휴대폰에서는 바로 아래 안내와 내용이 겹쳐서 넣지 않는다.
+        */}
+        {os !== 'mobile' && (
+          <FadeIn className="mt-8 flex justify-center" delay={0.05}>
+            <DownloadButton />
+          </FadeIn>
+        )}
 
         {os === 'mobile' && (
           <FadeIn className="mt-6" delay={0.05}>
