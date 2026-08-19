@@ -14,6 +14,7 @@ import type { ProgressEntry, ProgressStatus } from '@domain/entities/CurriculumP
 import type { TeachingClass } from '@domain/entities/TeachingClass';
 import { resolvePreset, resolveClassroomPreset } from '@domain/valueObjects/SubjectColor';
 import { getMatchingPeriods as getMatchingPeriodsRule } from '@domain/rules/progressMatching';
+import { TermEndPromptModal } from '@adapters/components/SchoolYearWizard/TermEndPromptModal';
 
 /* ──────────────────────── 유틸 ──────────────────────── */
 
@@ -397,6 +398,13 @@ export function ProgressTab({ classId }: ProgressTabProps) {
 
   return (
     <div className="flex flex-col gap-4">
+      {/*
+        학기 마지막 수업일을 아직 모르면 여기서 한 번 묻는다. 앱 시작이 아니라 이 화면에 둔 이유는
+        종료일이 여기서만 쓰이기 때문 — 진도를 안 쓰는 선생님에게는 평생 필요 없는 질문이다.
+        화면을 벗어나면 함께 언마운트되므로 "지금 이 화면에 있다"는 신호를 따로 들고 다니지 않는다.
+      */}
+      <TermEndPromptModal />
+
       {/* ── 진도 요약 + 추가 버튼 ── */}
       <div className="flex items-center justify-between">
         <div className="flex-1 mr-4">

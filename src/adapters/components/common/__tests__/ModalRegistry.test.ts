@@ -13,6 +13,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { selectHead, PRIORITY_ORDER } from '@adapters/stores/useModalCoordinatorStore';
 
 const ROOT = resolve(__dirname, '../../../../..');
 
@@ -69,6 +70,18 @@ describe('ModalRegistry 정합성 메타테스트', () => {
         priorities: ['SHARE_PROMPT'],
         label: 'SharePromptOverlay',
       },
+      // 학사 확인 팝업 2종 — 반드시 **둘 다** 있어야 한다. 코디네이터는 등록된 것끼리만
+      // 줄을 세우므로, 한쪽만 등록하면 나머지는 그대로 독립 노출돼 겹친다.
+      {
+        file: 'src/adapters/components/SchoolYearWizard/TermStartPromptModal.tsx',
+        priorities: ['TERM_START_PROMPT'],
+        label: 'TermStartPromptModal',
+      },
+      {
+        file: 'src/adapters/components/SchoolYearWizard/TermEndPromptModal.tsx',
+        priorities: ['TERM_END_PROMPT'],
+        label: 'TermEndPromptModal',
+      },
     ];
 
     for (const spec of modalSpecs) {
@@ -102,11 +115,59 @@ describe('ModalRegistry 정합성 메타테스트', () => {
         'NORMAL_UPDATE',
         'EVENT_ALERT',
         'RECORD_REMINDER',
+        // 학사 확인 팝업 2종 — 8월에 조건이 겹쳐 focus trap 두 개가 동시에 뜨던 경로를 막는다.
+        // 코디네이터는 등록된 것끼리만 줄을 세우므로 한쪽만 넣으면 의미가 없다.
+        'TERM_START_PROMPT',
+        'TERM_END_PROMPT',
         'SHARE_PROMPT',
       ];
       for (const p of expectedPriorities) {
         expect(storeSource).toContain(p);
       }
+    });
+  });
+
+  describe('학사 확인 팝업 2종이 동시에 뜨지 않는다 (2026-08 온보딩 사고 재발 방지)', () => {
+    /**
+     * 8월에 처음 쓰는 선생님은 개학일도 종료일도 등록돼 있지 않아 **두 팝업의 조건이 동시에
+     * 참**이 된다. 둘 다 큐에 있으면 하나만 head가 되지만, 한쪽이라도 빠지면 그 창은 큐 밖에서
+     * 독립적으로 떠서 focus trap이 겹친다 — 그게 입력칸 먹통 사고의 경로였다.
+     */
+    const now = Date.now();
+
+    it('둘 다 열려 있으면 head는 하나뿐이고 개학일 쪽이 먼저다', () => {
+      const entries = [
+        { id: 'start', priority: 'TERM_START_PROMPT' as const, isOpen: true, registeredAt: now },
+        { id: 'end', priority: 'TERM_END_PROMPT' as const, isOpen: true, registeredAt: now + 1 },
+      ];
+      expect(selectHead(entries)).toBe('start');
+    });
+
+    it('개학일을 답하고 나면 종료일 쪽이 head가 된다', () => {
+      const entries = [
+        { id: 'start', priority: 'TERM_START_PROMPT' as const, isOpen: false, registeredAt: now },
+        { id: 'end', priority: 'TERM_END_PROMPT' as const, isOpen: true, registeredAt: now + 1 },
+      ];
+      expect(selectHead(entries)).toBe('end');
+    });
+
+    it('두 팝업은 기록 알림보다 늦고 코치 투어보다 이르다', () => {
+      expect(PRIORITY_ORDER.RECORD_REMINDER).toBeLessThan(PRIORITY_ORDER.TERM_START_PROMPT);
+      expect(PRIORITY_ORDER.TERM_START_PROMPT).toBeLessThan(PRIORITY_ORDER.TERM_END_PROMPT);
+      expect(PRIORITY_ORDER.TERM_END_PROMPT).toBeLessThan(PRIORITY_ORDER.WIDGET_MODE_COACH);
+    });
+
+    it('더 급한 창(보안 업데이트·동기화 충돌)이 있으면 학사 확인은 뒤로 밀린다', () => {
+      const entries = [
+        { id: 'start', priority: 'TERM_START_PROMPT' as const, isOpen: true, registeredAt: now },
+        {
+          id: 'conflict',
+          priority: 'DRIVE_CONFLICT' as const,
+          isOpen: true,
+          registeredAt: now + 1,
+        },
+      ];
+      expect(selectHead(entries)).toBe('conflict');
     });
   });
 });

@@ -26,6 +26,8 @@ export type ModalPriority =
   | 'WIDGET_EXPAND'
   | 'EVENT_ALERT'
   | 'RECORD_REMINDER'
+  | 'TERM_START_PROMPT'
+  | 'TERM_END_PROMPT'
   | 'WIDGET_MODE_COACH'
   | 'SHARE_PROMPT';
 
@@ -42,6 +44,12 @@ export type ModalPriority =
  * WIDGET_EXPAND: 위젯 확장 모달 — 업데이트 안내와 행사 알림 사이 (4.5)
  * EVENT_ALERT: 오늘 행사 알림
  * RECORD_REMINDER: 학생 관찰 기록 알림 — 행사 알림 다음, 코치 투어 전 (5.2)
+ * TERM_START_PROMPT: 개학일 확인 — 학사 설정 확인이라 알림보다 늦고 교육용 투어보다 이르다 (5.25)
+ * TERM_END_PROMPT: 학기 종료일 확인 — 개학일 확인 바로 다음 (5.3)
+ *   ⚠️ 이 둘은 **반드시 함께 큐에 있어야 한다.** 코디네이터는 참가자끼리만 직렬화하므로
+ *   한쪽만 등록하면 나머지는 그대로 독립 노출된다. 8월에 처음 쓰는 선생님은 개학일도 종료일도
+ *   비어 있어 두 조건이 동시에 참이 되고, 그때 focus trap 두 개가 겹치면 입력이 먹통이 된다
+ *   (2026-08 온보딩 사고의 재현 경로).
  * WIDGET_MODE_COACH: 위젯 모드 첫 진입 코치 투어 — 교육 성격, 알림보다 후순위 (v2.1.x, 5.5)
  * SHARE_PROMPT: 충성 사용자 공유 권유 — 마케팅 성격, 가장 후순위
  */
@@ -55,6 +63,8 @@ export const PRIORITY_ORDER: Record<ModalPriority, number> = {
   WIDGET_EXPAND: 4.5,
   EVENT_ALERT: 5,
   RECORD_REMINDER: 5.2,
+  TERM_START_PROMPT: 5.25,
+  TERM_END_PROMPT: 5.3,
   WIDGET_MODE_COACH: 5.5,
   SHARE_PROMPT: 6,
 };

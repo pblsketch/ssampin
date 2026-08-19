@@ -163,6 +163,23 @@ const presenceChecks = [
       /useRegisterModal\(\s*['"]OAUTH_FLOW['"][\s\S]+useRegisterModal\(\s*['"]OAUTH_FLOW['"][\s\S]+useRegisterModal\(\s*['"]OAUTH_FLOW['"]/,
     name: 'REGRESSION #16: OAuthModalsProvider 3개 sub-modal 모두 OAUTH_FLOW priority 등록',
   },
+  // ────────────────────────────────────────────────────────────────────────
+  // REGRESSION #54~#55 — 학사 확인 팝업 2종 (2026-08-20)
+  // 8월에 처음 쓰는 선생님은 개학일도 종료일도 비어 있어 두 팝업 조건이 동시에 참이 된다.
+  // 코디네이터는 **등록된 것끼리만** 줄을 세우므로, 한쪽만 등록하면 나머지는 큐 밖에서
+  // 독립적으로 떠 focus trap이 겹치고 입력칸이 먹통이 된다(2026-08 온보딩 사고 경로).
+  // 반드시 둘 다 등록되어야 하므로 두 항목을 따로 건다.
+  // ────────────────────────────────────────────────────────────────────────
+  {
+    file: 'src/adapters/components/SchoolYearWizard/TermStartPromptModal.tsx',
+    pattern: /useRegisterModal\(\s*['"]TERM_START_PROMPT['"]/,
+    name: 'REGRESSION #54: 개학일 확인 팝업이 TERM_START_PROMPT priority로 큐 등록',
+  },
+  {
+    file: 'src/adapters/components/SchoolYearWizard/TermEndPromptModal.tsx',
+    pattern: /useRegisterModal\(\s*['"]TERM_END_PROMPT['"]/,
+    name: 'REGRESSION #55: 학기 종료일 확인 팝업이 TERM_END_PROMPT priority로 큐 등록',
+  },
   {
     file: 'src/adapters/components/Share/SharePromptOverlay.tsx',
     pattern: /useRegisterModal\(\s*['"]SHARE_PROMPT['"]/,
