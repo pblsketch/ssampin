@@ -1,4 +1,8 @@
-import type { ProgressEntry, CurriculumProgressData } from '@domain/entities/CurriculumProgress';
+import type {
+  ProgressEntry,
+  CurriculumProgressData,
+  LessonDayAdjustment,
+} from '@domain/entities/CurriculumProgress';
 import type { ITeachingClassRepository } from '@domain/repositories/ITeachingClassRepository';
 
 /**
@@ -59,7 +63,48 @@ export class ManageCurriculumProgress {
     await this.repository.saveProgress(updatedData);
   }
 
-  async saveAll(entries: readonly ProgressEntry[], force = false): Promise<void> {
+  /** 수업일 정정 목록. 없으면 빈 배열. */
+  async getAdjustments(): Promise<readonly LessonDayAdjustment[]> {
+    const data = await this.repository.getProgress();
+    return data?.lessonDayAdjustments ?? [];
+  }
+
+  /**
+   * 한 날짜의 정정을 세우거나 지운다. `kind`가 null이면 그 날의 정정을 없앤다(앱 판정으로 복귀).
+   *
+   * ⚠️ 저장은 반드시 루트를 보존한다(`{ ...data, ... }`) — 여기서 `entries`를 빠뜨리면
+   * 정정 한 번에 진도 기록이 통째로 사라진다. 클래스 머리말의 규칙이 새 메서드에도 그대로 적용된다.
+   */
+  async saveAdjustment(
+    classId: string,
+    date: string,
+    kind: LessonDayAdjustment['kind'] | null,
+    now: string,
+  ): Promise<readonly LessonDayAdjustment[]> {
+    const data = await this.repository.getProgress();
+    const existing = data?.lessonDayAdjustments ?? [];
+    const others = existing.filter((a) => !(a.classId === classId && a.date === date));
+    const next: readonly LessonDayAdjustment[] =
+      kind === null ? others : [...others, { classId, date, kind, updatedAt: now }];
+
+    await this.repository.saveProgress({
+      ...(data ?? {}),
+      entries: data?.entries ?? [],
+      lessonDayAdjustments: next,
+    });
+    return next;
+  }
+
+  /**
+   * @param adjustments 넘기면 정정 목록을 이 값으로 바꾼다. 생략하면 기존 값을 그대로 둔다.
+   *   반을 지울 때 그 반의 정정도 함께 지우기 위한 통로 — 안 지우면 삭제된 반의 정정이 영구히
+   *   남고, 그건 이 필드를 진도 파일에 둔 이유(반과 수명을 같이한다) 자체를 무너뜨린다.
+   */
+  async saveAll(
+    entries: readonly ProgressEntry[],
+    force = false,
+    adjustments?: readonly LessonDayAdjustment[],
+  ): Promise<void> {
     // 루트 보존을 위해 force 여부와 무관하게 먼저 읽는다.
     // (예전에는 !force일 때만 읽어서, force 저장이 형제 필드를 통째로 날렸다.)
     const existing = await this.repository.getProgress();
@@ -75,7 +120,11 @@ export class ManageCurriculumProgress {
       }
     }
 
-    const updatedData: CurriculumProgressData = { ...(existing ?? {}), entries };
+    const updatedData: CurriculumProgressData = {
+      ...(existing ?? {}),
+      entries,
+      ...(adjustments === undefined ? {} : { lessonDayAdjustments: adjustments }),
+    };
     await this.repository.saveProgress(updatedData);
   }
 }

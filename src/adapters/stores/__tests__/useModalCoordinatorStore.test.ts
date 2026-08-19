@@ -223,10 +223,19 @@ describe('useModalCoordinatorStore', () => {
       }
     });
 
-    it('PRIORITY_ORDER 값은 단조 증가 (sparse 허용: 2.5, 4.5, 5.2, 5.5)', () => {
+    it('PRIORITY_ORDER 값은 단조 증가 (sparse 허용: 2.5, 4.5, 5.2, 5.25, 5.3, 5.5)', () => {
       const values = Object.values(PRIORITY_ORDER).sort((a, b) => a - b);
-      // 0,1,2,2.5,3,4,4.5,5,5.2,5.5,6 — record-reminder로 5.2 추가.
-      expect(values).toEqual([0, 1, 2, 2.5, 3, 4, 4.5, 5, 5.2, 5.5, 6]);
+      // 0,1,2,2.5,3,4,4.5,5,5.2,5.25,5.3,5.5,6
+      // — record-reminder로 5.2, 학사 확인 팝업 2종으로 5.25·5.3 추가.
+      expect(values).toEqual([0, 1, 2, 2.5, 3, 4, 4.5, 5, 5.2, 5.25, 5.3, 5.5, 6]);
+    });
+
+    it('학사 확인 팝업 2종(5.25·5.3)은 기록 알림(5.2)과 코치 투어(5.5) 사이', () => {
+      expect(PRIORITY_ORDER.TERM_START_PROMPT).toBe(5.25);
+      expect(PRIORITY_ORDER.TERM_END_PROMPT).toBe(5.3);
+      expect(PRIORITY_ORDER.RECORD_REMINDER).toBeLessThan(PRIORITY_ORDER.TERM_START_PROMPT);
+      expect(PRIORITY_ORDER.TERM_START_PROMPT).toBeLessThan(PRIORITY_ORDER.TERM_END_PROMPT);
+      expect(PRIORITY_ORDER.TERM_END_PROMPT).toBeLessThan(PRIORITY_ORDER.WIDGET_MODE_COACH);
     });
 
     it('WIDGET_MODE_FALLBACK(2.5)는 DRIVE_CONFLICT(2)와 OAUTH_FLOW(3) 사이 — widget-mode-discovery', () => {

@@ -24,6 +24,7 @@ import type {
 import { teachingClassRepository } from '@adapters/di/container';
 import { ManageTeachingClasses } from '@usecases/classManagement/ManageTeachingClasses';
 import { ManageCurriculumProgress } from '@usecases/classManagement/ManageCurriculumProgress';
+import type { LessonDayAdjustment } from '@domain/entities/CurriculumProgress';
 import { ManageAttendance } from '@usecases/classManagement/ManageAttendance';
 import { generateUUID } from '@infrastructure/utils/uuid';
 
@@ -56,6 +57,11 @@ function getGroupClassIds(classes: readonly TeachingClass[], classId: string): s
 interface TeachingClassState {
   classes: readonly TeachingClass[];
   progressEntries: readonly ProgressEntry[];
+  /**
+   * 수업일 추정에 대한 사용자 정정("이 날은 수업했어요 / 안 했어요").
+   * 진도 파일의 형제 필드라 반과 수명을 같이한다 — 반을 지우면 함께 지운다.
+   */
+  lessonDayAdjustments: readonly LessonDayAdjustment[];
   attendanceRecords: readonly AttendanceRecord[];
   selectedClassId: string | null;
   loaded: boolean;
@@ -100,6 +106,14 @@ interface TeachingClassState {
   ) => Promise<void>;
   updateProgressEntry: (entry: ProgressEntry) => Promise<void>;
   deleteProgressEntry: (id: string) => Promise<void>;
+  /**
+   * 그날 수업 여부를 사용자가 직접 정한다. `kind`가 null이면 정정을 지우고 앱 판정으로 되돌린다.
+   */
+  setLessonDayAdjustment: (
+    classId: string,
+    date: string,
+    kind: LessonDayAdjustment['kind'] | null,
+  ) => Promise<void>;
   getAttendanceRecord: (
     classId: string,
     date: string,
@@ -205,6 +219,7 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
   return {
     classes: [],
     progressEntries: [],
+    lessonDayAdjustments: [],
     attendanceRecords: [],
     selectedClassId: null,
     loaded: false,
@@ -214,11 +229,13 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
       // force=true: 동기화 리로드용 — loaded를 유지한 채 데이터만 조용히 갱신
       if (get().loaded && !force) return;
       try {
-        const [classes, progressEntries, attendanceRecords] = await Promise.all([
-          manageClasses.getAll(),
-          manageProgress.getAll(),
-          manageAttendance.getAll(),
-        ]);
+        const [classes, progressEntries, lessonDayAdjustments, attendanceRecords] =
+          await Promise.all([
+            manageClasses.getAll(),
+            manageProgress.getAll(),
+            manageProgress.getAdjustments(),
+            manageAttendance.getAll(),
+          ]);
 
         // status ↔ isVacant 양방향 마이그레이션. 변경된 클래스만 저장소에 반영.
         const migratedDirtyClasses: TeachingClass[] = [];
@@ -245,6 +262,7 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
         set({
           classes: sorted,
           progressEntries,
+          lessonDayAdjustments,
           attendanceRecords,
           loaded: true,
           loadFailed: false,
@@ -394,8 +412,11 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
       // 진도(curriculum-progress)는 의도적으로 스냅샷 저장 유지 — 본 트랙(sync-hardening-2)의
       // 락·intent 전환 범위는 record-merge 도메인(attendance 등)이다(R5 잔여, 후속 PDCA).
       const progressToKeep = get().progressEntries.filter((e) => e.classId !== id);
+      // 정정 목록도 함께 지운다. 안 지우면 삭제된 반의 정정이 파일에 영구히 남아,
+      // 이 필드를 진도 파일에 둔 이유(반과 수명을 같이한다)가 무너진다.
+      const adjustmentsToKeep = get().lessonDayAdjustments.filter((a) => a.classId !== id);
 
-      await manageProgress.saveAll(progressToKeep, true);
+      await manageProgress.saveAll(progressToKeep, true, adjustmentsToKeep);
       // 출결은 변경 의도만 넘긴다 — 삭제 대상 계산과 "그룹 마지막 학급" 판정 모두
       // usecase가 락 안 fresh 데이터로 수행한다(in-memory 스냅샷 판정은 동기화로
       // 방금 추가된 그룹 학급을 못 보고 그룹 출결을 오삭제할 수 있다).
@@ -403,6 +424,7 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
       set((state) => ({
         classes: state.classes.filter((c) => c.id !== id),
         progressEntries: progressToKeep,
+        lessonDayAdjustments: adjustmentsToKeep,
         attendanceRecords: [...savedAttendance],
         selectedClassId: state.selectedClassId === id ? null : state.selectedClassId,
       }));
@@ -485,6 +507,16 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
         progressEntries: state.progressEntries.map((e) => (e.id === entry.id ? entry : e)),
       }));
       await manageProgress.update(entry);
+    },
+
+    setLessonDayAdjustment: async (classId, date, kind) => {
+      const next = await manageProgress.saveAdjustment(
+        classId,
+        date,
+        kind,
+        new Date().toISOString(),
+      );
+      set({ lessonDayAdjustments: next });
     },
 
     deleteProgressEntry: async (id) => {

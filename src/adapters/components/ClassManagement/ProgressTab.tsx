@@ -15,6 +15,9 @@ import type { TeachingClass } from '@domain/entities/TeachingClass';
 import { resolvePreset, resolveClassroomPreset } from '@domain/valueObjects/SubjectColor';
 import { getMatchingPeriods as getMatchingPeriodsRule } from '@domain/rules/progressMatching';
 import { TermEndPromptModal } from '@adapters/components/SchoolYearWizard/TermEndPromptModal';
+import { LessonCountSummary } from '@adapters/components/Progress/LessonCountSummary';
+import { ExcludedDaysPanel } from '@adapters/components/Progress/ExcludedDaysPanel';
+import { useLessonCountEstimate } from '@adapters/hooks/useLessonCountEstimate';
 
 /* ──────────────────────── 유틸 ──────────────────────── */
 
@@ -111,6 +114,18 @@ export function ProgressTab({ classId }: ProgressTabProps) {
   const [selectedImportIds, setSelectedImportIds] = useState<ReadonlySet<string>>(new Set());
   const [importDateOverrides, setImportDateOverrides] = useState<Map<string, string>>(new Map());
   const [importDateShiftDays, setImportDateShiftDays] = useState(0);
+  const [showLessonCountDetails, setShowLessonCountDetails] = useState(false);
+
+  /** 학기 총 차시 추정 — 계산은 전부 도메인이 하고 여기서는 결과만 받는다. */
+  const lessonCountView = useLessonCountEstimate(classId);
+  const setLessonDayAdjustment = useTeachingClassStore((s) => s.setLessonDayAdjustment);
+
+  const handleLessonDayAdjust = useCallback(
+    (date: string, kind: 'hasLesson' | 'noLesson' | null) => {
+      void setLessonDayAdjustment(classId, date, kind);
+    },
+    [classId, setLessonDayAdjustment],
+  );
 
   // 해당 학급 진도 항목만 필터, 날짜 내림차순 → 교시 오름차순 정렬
   const entries = useMemo(() => {
@@ -404,6 +419,17 @@ export function ProgressTab({ classId }: ProgressTabProps) {
         화면을 벗어나면 함께 언마운트되므로 "지금 이 화면에 있다"는 신호를 따로 들고 다니지 않는다.
       */}
       <TermEndPromptModal />
+
+      {/* ── 학기 총 차시 추정 + 근거 ── */}
+      <LessonCountSummary
+        view={lessonCountView}
+        entryStats={stats}
+        detailsOpen={showLessonCountDetails}
+        onToggleDetails={() => setShowLessonCountDetails((v) => !v)}
+      />
+      {showLessonCountDetails && lessonCountView.status === 'ok' && (
+        <ExcludedDaysPanel view={lessonCountView} onAdjust={handleLessonDayAdjust} />
+      )}
 
       {/* ── 진도 요약 + 추가 버튼 ── */}
       <div className="flex items-center justify-between">
