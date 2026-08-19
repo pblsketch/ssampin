@@ -556,6 +556,67 @@ function createWin32Manager(win32: typeof import('./platform/win32Desktop')): De
    */
   let resizeState: ResizeState | null = null;
   /**
+   * 후킹 **밖에서** 적용할 리사이즈 목표 (physical px).
+   *
+   * ## 왜 미루는가 (2026-08-19 크래시 덤프로 확정)
+   *
+   * 크기 조절 중 앱이 통째로 죽는 신고가 있었고, 덤프 두 개가 같은 지점을 가리켰다:
+   *
+   *   예외 0x80000003 STATUS_BREAKPOINT @ electron.exe+0x37856  (두 덤프 동일)
+   *   스택: koffi.node -> win32u/USER32 -> Chromium 창 프로시저 -> USER32
+   *         -> Chromium 창 프로시저(재진입) -> f_sps.dll(Fasoo DRM) -> 중단
+   *
+   * `moveAndResizeWidgetSync` 는 `SWP_ASYNCWINDOWPOS` 를 **일부러 뺀** 동기 호출이라
+   * (2026-05-23, "위젯이 한 번에 사라짐" 회귀를 막으려고) 창 메시지를 그 자리에서 전달한다.
+   * 그걸 저수준 마우스 후킹의 JS 콜백 안에서 부르면 이렇게 된다:
+   *
+   *   윈도우 후킹 -> 우리 JS -> 동기 SetWindowPos -> 창 프로시저가 즉시 실행
+   *     -> Chromium + 주입된 서드파티 훅(Fasoo)이 그 안에서 돌고
+   *     -> **JS 가 아직 스택에 있는데 JS 가 또 실행된다** -> Chromium 이 중단시킨다
+   *
+   * 빠르게 끌면 이 중첩이 초당 190회 일어난다. 창을 끄는 7-C 는 `SWP_ASYNCWINDOWPOS` 를
+   * 쓰는 `moveWidget` 이라 큐잉되고 재진입이 없어 멀쩡했다 — 크기 조절에서만 죽은 이유다.
+   *
+   * ## 해결
+   *
+   * 후킹 안에서는 목표 좌표만 적어 두고, 후킹이 풀린 뒤(setImmediate)에 실제로 부른다.
+   * 동기 호출은 그대로 유지되므로 2026-05-23 수정이 깨지지 않고, 창 프로시저가 후킹 안에서
+   * 돌지 않으므로 재진입이 사라진다. 덤으로 한 틱에 여러 번의 마우스 이동이 한 번의
+   * SetWindowPos 로 합쳐진다(화면 쪽 리사이즈가 이미 쓰는 방식).
+   *
+   * ★여기서 `moveAndResizeWidgetSync` 를 후킹 콜백 안으로 다시 옮기지 말 것.
+   *   `desktopWidgetManager.meta.test.ts` 가 막고 있다.
+   */
+  let pendingResizeRect: { x: number; y: number; width: number; height: number } | null = null;
+  let resizeApplyScheduled = false;
+
+  /** 미뤄 둔 리사이즈를 실제로 적용한다. 반드시 후킹 콜백 **밖에서** 불린다. */
+  function applyPendingResize(): void {
+    resizeApplyScheduled = false;
+    const rect = pendingResizeRect;
+    pendingResizeRect = null;
+    if (!rect || cachedWidgetHwnd === 0n) return;
+    try {
+      win32.moveAndResizeWidgetSync(cachedWidgetHwnd, rect.x, rect.y, rect.width, rect.height);
+    } catch (e) {
+      diagWarn(
+        'native-desktop',
+        `[7-D] moveAndResizeWidgetSync 실패: ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
+  }
+
+  /** 후킹 안에서 호출 — 목표만 적어 두고 다음 틱에 한 번 적용되게 예약한다. */
+  function queueResizeApply(rect: { x: number; y: number; width: number; height: number }): void {
+    pendingResizeRect = rect;
+    // 아직 창에는 반영 전이지만 "의도한 자리"를 캐시에 즉시 반영한다 — hover·passThrough 등
+    // 다른 후킹 경로가 한 틱 뒤처진 좌표로 판정하지 않도록(기존 동기 구현과 같은 성질).
+    cachedPhysicalBounds = { ...rect };
+    if (resizeApplyScheduled) return;
+    resizeApplyScheduled = true;
+    setImmediate(applyPendingResize);
+  }
+  /**
    * renderer가 IPC로 등록한 resize edge 영역 — widget client area 기준 DIP rect + edge 식별자.
    * widget이 move/resize될 때마다 cachedResizeRegions(physical screen)를 재계산하기 위해
    * 원본 DIP rect는 별도로 보관.
@@ -1308,26 +1369,14 @@ function createWin32Manager(win32: typeof import('./platform/win32Desktop')): De
               //     `moveAndResizeWidgetSync` (SWP_ASYNCWINDOWPOS 제외 sync 변형) 도입.
               //
               // 좌표는 physical pixel 그대로 사용 — DPI 변환 불필요 (SetWindowPos는 physical 기대).
-              let setOk = false;
-              try {
-                setOk = win32.moveAndResizeWidgetSync(cachedWidgetHwnd, newX, newY, newW, newH);
-                // cachedPhysicalBounds 동기 갱신 — BrowserWindow.getBounds()는 WS_CHILD에서
-                // stale할 수 있어 의도값으로 직접 set. 다음 MOUSEMOVE의 start 비교 기준은
-                // resizeState.startBounds (frozen)이라 본 갱신은 다른 hook 경로(passThrough,
-                // hover 등)와의 일관성용.
-                if (setOk) {
-                  cachedPhysicalBounds = { x: newX, y: newY, width: newW, height: newH };
-                }
-              } catch (e) {
-                diagWarn(
-                  'native-desktop',
-                  `[7-D] moveAndResizeWidgetSync 실패: ${e instanceof Error ? e.message : String(e)}`,
-                );
-              }
+              // ★후킹 안에서 창을 건드리지 않는다 — 목표만 적어 두고 다음 틱에 적용한다.
+              //   여기서 동기 SetWindowPos 를 부르면 창 프로시저가 이 콜백 안에서 실행돼
+              //   JS 재진입이 일어나고 Chromium 이 앱을 중단시킨다(위 pendingResizeRect 주석).
+              queueResizeApply({ x: newX, y: newY, width: newW, height: newH });
               if (resizeState.moveCount % 30 === 1) {
                 diagLog(
                   'native-desktop',
-                  `[7-D] resize move #${resizeState.moveCount} edge=${resizeState.edge} mouse=(${p.x},${p.y}) delta=(${dx},${dy}) newRect=(${newX},${newY},${newW}x${newH}) setOk=${setOk}`,
+                  `[7-D] resize move #${resizeState.moveCount} edge=${resizeState.edge} mouse=(${p.x},${p.y}) delta=(${dx},${dy}) newRect=(${newX},${newY},${newW}x${newH}) queued`,
                 );
               }
               // MOUSEMOVE는 차단하지 않음 (drag와 동일 — Win11 24H2 회귀 회피).
@@ -1344,11 +1393,16 @@ function createWin32Manager(win32: typeof import('./platform/win32Desktop')): De
               // 안 버리면 다른 모니터로 옮길 때 방금 정한 크기가 옛 크기나 레이아웃으로 되돌아간다.
               clearPreferredSize();
               clearActiveWidgetLayout();
-              if (cachedWidgetWindow && !cachedWidgetWindow.isDestroyed()) {
-                cachedPhysicalBounds = recalcPhysicalBounds(cachedWidgetWindow);
-                recalcHeaderRegionsPhysical(cachedWidgetWindow);
-                recalcResizeRegionsPhysical(cachedWidgetWindow);
-              }
+              // 마무리도 후킹 밖에서 한다. 남은 목표를 먼저 적용해야 그 다음 재측정이 맞는다
+              // (setImmediate 는 FIFO 라 앞서 예약된 적용이 먼저 끝난다).
+              setImmediate(() => {
+                applyPendingResize();
+                if (cachedWidgetWindow && !cachedWidgetWindow.isDestroyed()) {
+                  cachedPhysicalBounds = recalcPhysicalBounds(cachedWidgetWindow);
+                  recalcHeaderRegionsPhysical(cachedWidgetWindow);
+                  recalcResizeRegionsPhysical(cachedWidgetWindow);
+                }
+              });
               return true;
             }
             // resize 중 다른 버튼/메시지는 차단(클릭 흘러가지 않게).
