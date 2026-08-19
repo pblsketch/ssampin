@@ -19,6 +19,7 @@ import { SeatZoneModal } from './SeatZoneModal';
 import { ConstraintHintBadge } from './ConstraintHintBadge';
 import { SeatingHistoryPanel } from './SeatingHistoryPanel';
 import { NameLearningMode } from './NameLearningMode';
+import { useStudentPhotoUrls } from '@adapters/hooks/useStudentPhotoUrls';
 import { RosterEmptyState } from '@adapters/components/common/RosterEmptyState';
 import { ScrollRow } from '@adapters/components/common/ScrollRow';
 import { buildPairGroups, adjustPairGroupsForRow } from '@domain/rules/seatingLayoutRules';
@@ -285,6 +286,8 @@ export function Seating(props?: { embedded?: boolean }) {
   const [showConstraintModal, setShowConstraintModal] = useState(false);
   const [showHistoryPanel, setShowHistoryPanel] = useState(false);
   const [showNameLearning, setShowNameLearning] = useState(false);
+  // 얼굴 사진은 학습 모드를 열 때만 읽고, 닫으면 곧바로 해제한다 (메모리·노출 표면 최소화)
+  const learningPhotoUrls = useStudentPhotoUrls(showNameLearning);
   const [showPresetDialog, setShowPresetDialog] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);
   const moreMenuRef = useRef<HTMLDivElement>(null);
@@ -1212,11 +1215,12 @@ export function Seating(props?: { embedded?: boolean }) {
         {/* 자리배치 히스토리 패널 (Phase 1) */}
         <SeatingHistoryPanel isOpen={showHistoryPanel} onClose={() => setShowHistoryPanel(false)} />
 
-        {/* 이름 학습 모드 (Phase 3a) */}
+        {/* 이름 학습 모드 (Phase 3a) — 사진은 학습 모드를 열 때만 읽는다 */}
         <NameLearningMode
           isOpen={showNameLearning}
           onClose={() => setShowNameLearning(false)}
           seating={seating}
+          photoUrls={learningPhotoUrls}
         />
 
         {/* 자유 배치 프리셋 다이얼로그 (Phase 4) */}
