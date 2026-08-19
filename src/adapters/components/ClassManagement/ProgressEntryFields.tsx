@@ -32,6 +32,17 @@ interface ProgressEntryFieldsProps {
   periodTimes?: readonly PeriodTime[];
   /** 날짜 변경 시 교시 자동 선택 등 부모 훅이 필요할 때 (없으면 onChange({date})만) */
   onDateChange?: (date: string) => void;
+  /**
+   * 차시 칸 옆에 붙는 **참고 표시**(예: '이번 학기 13번째 수업').
+   *
+   * ⚠️ 이 값은 절대 입력칸에 들어가지 않는다. 앱이 센 누적 차시를 값으로 넣으면 대단원·소단원
+   * 단위로 차시를 세는 선생님에게 틀린 숫자를 강요하게 된다. 참고로만 보여주고 판단은 맡긴다.
+   */
+  lessonOrdinalHint?: string | null;
+  /** 이전/다음 수업일로 이동 — 수업 없는 날·공휴일을 건너뛴다. null이면 버튼을 막는다. */
+  onStepLessonDate?: (direction: 'prev' | 'next') => void;
+  /** 그 방향에 갈 수 있는 수업일이 있는가. 없으면 버튼 비활성화. */
+  canStepLessonDate?: { prev: boolean; next: boolean };
   /** 컴팩트 간격 (모달/좁은 폼용) */
   compact?: boolean;
 }
@@ -45,6 +56,9 @@ export function ProgressEntryFields({
   maxPeriods,
   periodTimes,
   onDateChange,
+  lessonOrdinalHint,
+  onStepLessonDate,
+  canStepLessonDate,
   compact = false,
 }: ProgressEntryFieldsProps) {
   const inputPad = compact ? 'px-2.5 py-1' : 'px-3 py-1.5';
@@ -52,7 +66,37 @@ export function ProgressEntryFields({
     <div className={compact ? 'space-y-2' : 'space-y-3'}>
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-xs text-sp-muted mb-1">날짜</label>
+          <div className="mb-1 flex items-center gap-1">
+            <label className="text-xs text-sp-muted">날짜</label>
+            {onStepLessonDate !== undefined && (
+              <span className="ml-auto flex items-center gap-0.5">
+                <button
+                  type="button"
+                  aria-label="이전 수업일로"
+                  title="이전 수업일로 (수업 없는 날은 건너뜁니다)"
+                  disabled={canStepLessonDate?.prev === false}
+                  onClick={() => onStepLessonDate('prev')}
+                  className="rounded-lg border border-sp-border px-1 leading-none text-sp-muted transition-all duration-sp-base ease-sp-out hover:text-sp-text active:scale-95 disabled:opacity-30"
+                >
+                  <span aria-hidden className="material-symbols-outlined text-sm align-middle">
+                    chevron_left
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  aria-label="다음 수업일로"
+                  title="다음 수업일로 (수업 없는 날은 건너뜁니다)"
+                  disabled={canStepLessonDate?.next === false}
+                  onClick={() => onStepLessonDate('next')}
+                  className="rounded-lg border border-sp-border px-1 leading-none text-sp-muted transition-all duration-sp-base ease-sp-out hover:text-sp-text active:scale-95 disabled:opacity-30"
+                >
+                  <span aria-hidden className="material-symbols-outlined text-sm align-middle">
+                    chevron_right
+                  </span>
+                </button>
+              </span>
+            )}
+          </div>
           <CalendarPicker
             value={values.date}
             onChange={(date) => (onDateChange ? onDateChange(date) : onChange({ date }))}
@@ -93,7 +137,13 @@ export function ProgressEntryFields({
         />
       </div>
       <div>
-        <label className="block text-xs text-sp-muted mb-1">차시/주제</label>
+        <div className="mb-1 flex items-baseline gap-2">
+          <label className="text-xs text-sp-muted">차시/주제</label>
+          {lessonOrdinalHint != null && lessonOrdinalHint !== '' && (
+            // 참고 표시 — 입력값이 아니다. 선생님마다 차시를 세는 단위가 다르다.
+            <span className="text-[11px] text-sp-muted opacity-80">{lessonOrdinalHint}</span>
+          )}
+        </div>
         <input
           type="text"
           value={values.lesson}

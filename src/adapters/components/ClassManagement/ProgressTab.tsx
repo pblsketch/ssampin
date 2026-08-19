@@ -17,7 +17,13 @@ import { getMatchingPeriods as getMatchingPeriodsRule } from '@domain/rules/prog
 import { TermEndPromptModal } from '@adapters/components/SchoolYearWizard/TermEndPromptModal';
 import { LessonCountSummary } from '@adapters/components/Progress/LessonCountSummary';
 import { ExcludedDaysPanel } from '@adapters/components/Progress/ExcludedDaysPanel';
+import {
+  PlannedBulkFillModal,
+  type BulkFillTarget,
+} from '@adapters/components/Progress/PlannedBulkFillModal';
 import { useLessonCountEstimate } from '@adapters/hooks/useLessonCountEstimate';
+import { suggestNextLessonValue } from '@domain/rules/lessonNumberPattern';
+import { findNextLessonDate } from '@domain/rules/lessonCountRules';
 
 /* ──────────────────────── 유틸 ──────────────────────── */
 
@@ -115,6 +121,7 @@ export function ProgressTab({ classId }: ProgressTabProps) {
   const [importDateOverrides, setImportDateOverrides] = useState<Map<string, string>>(new Map());
   const [importDateShiftDays, setImportDateShiftDays] = useState(0);
   const [showLessonCountDetails, setShowLessonCountDetails] = useState(false);
+  const [showBulkFill, setShowBulkFill] = useState(false);
 
   /** 학기 총 차시 추정 — 계산은 전부 도메인이 하고 여기서는 결과만 받는다. */
   const lessonCountView = useLessonCountEstimate(classId);
@@ -203,7 +210,108 @@ export function ProgressTab({ classId }: ProgressTabProps) {
     return indices;
   }, [getMatchingPeriods]);
 
-  // 날짜 변경 핸들러 (교시 자동 선택 포함)
+  /**
+   * 지금 입력하려는 자리 **직전**의 진도 기록.
+   * `entries`는 날짜 내림차순 · 같은 날 안에서는 교시 오름차순이라, 후보를 추린 뒤
+   * 가장 최근 날짜의 마지막 교시를 고른다.
+   */
+  const previousEntry = useMemo(() => {
+    const before = entries.filter(
+      (e) => e.date < formDate || (e.date === formDate && e.period < formPeriod),
+    );
+    if (before.length === 0) return null;
+    const latestDate = before[0]!.date;
+    const sameDate = before.filter((e) => e.date === latestDate);
+    return sameDate[sameDate.length - 1] ?? null;
+  }, [entries, formDate, formPeriod]);
+
+  /**
+   * 차시 칸에 넣을 제안값. **앱이 센 누적 차시가 아니라 직전 기록의 표기를 이어받는다** —
+   * 선생님마다 차시를 세는 단위가 달라(학기 통·대단원·소단원) 앱이 세면 다수에게 틀린다.
+   * 읽을 수 없으면 null이고, 그때는 빈칸으로 둔다(추측해서 틀린 숫자를 넣지 않는다).
+   */
+  const suggestLessonFor = useCallback(
+    (nextUnit: string): string => {
+      if (previousEntry === null) return '';
+      return (
+        suggestNextLessonValue({
+          previousLesson: previousEntry.lesson,
+          previousUnit: previousEntry.unit,
+          nextUnit,
+        }) ?? ''
+      );
+    },
+    [previousEntry],
+  );
+
+  /** 참고 표시용 — 이 자리가 이번 학기 몇 번째 수업인지. 입력칸에는 넣지 않는다. */
+  const lessonOrdinalHint = useMemo(() => {
+    if (lessonCountView.status !== 'ok') return null;
+    let n = 0;
+    for (const d of lessonCountView.lessonDays) {
+      if (d.date < formDate) n += d.periods.length;
+      else if (d.date === formDate) n += d.periods.filter((p) => p <= formPeriod).length;
+    }
+    return n > 0 ? `이번 학기 ${n}번째 수업` : null;
+  }, [lessonCountView, formDate, formPeriod]);
+
+  /**
+   * 기록이 빠진 수업일 — 지난 수업일인데 진도를 한 건도 안 적은 날.
+   *
+   * 진도율만 보면 이걸 알 수 없다. '입력 기준' 진도율은 **적어 둔 것 중** 완료 비율이라,
+   * 세 번 적고 세 번 다 완료하면 100%가 뜬다. 빠뜨린 날은 분모에 아예 들어오지 않는다.
+   */
+  const missedLessonDays = useMemo(() => {
+    if (lessonCountView.status !== 'ok') return [];
+    const today = todayString();
+    const recorded = new Set(entries.map((e) => e.date));
+    return lessonCountView.lessonDays
+      .filter((d) => d.date <= today && !recorded.has(d.date))
+      .map((d) => d.date);
+  }, [lessonCountView, entries]);
+
+  /**
+   * 일괄 생성 — 기존 '가져오기'와 같은 방식으로 한 건씩 만든다.
+   * 만들어진 항목을 그대로 돌려주어 창이 되돌리기용 id를 들고 있게 한다.
+   */
+  const handleBulkCreate = useCallback(
+    async (targets: readonly BulkFillTarget[], unit: string) => {
+      const created: ProgressEntry[] = [];
+      for (const t of targets) {
+        created.push(await addProgressEntry(classId, t.date, t.period, unit, '', ''));
+      }
+      showToast(`${created.length}개의 수업 칸을 만들었어요`);
+      return created;
+    },
+    [addProgressEntry, classId, showToast],
+  );
+
+  const handleBulkUndo = useCallback(
+    async (ids: readonly string[]) => {
+      for (const id of ids) {
+        await deleteProgressEntry(id);
+      }
+      showToast('방금 만든 칸을 모두 지웠어요');
+    },
+    [deleteProgressEntry, showToast],
+  );
+
+  /** 이전/다음 수업일 — 수업 없는 날·공휴일·방학을 건너뛴다. */
+  const stepTargets = useMemo(() => {
+    if (lessonCountView.status !== 'ok') return { prev: null, next: null };
+    const index = new Map(
+      lessonCountView.lessonDays.map((d) => [
+        d.date,
+        { periods: d.periods, matchStage: d.matchStage },
+      ]),
+    );
+    return {
+      prev: findNextLessonDate({ fromIso: formDate, lessonDayIndex: index, direction: 'backward' }),
+      next: findNextLessonDate({ fromIso: formDate, lessonDayIndex: index }),
+    };
+  }, [lessonCountView, formDate]);
+
+  // 날짜 변경 핸들러 (교시 자동 선택 + 차시 제안 포함)
   const handleDateChange = useCallback(
     (newDate: string) => {
       setFormDate(newDate);
@@ -213,6 +321,18 @@ export function ProgressTab({ classId }: ProgressTabProps) {
       }
     },
     [getMatchingPeriods],
+  );
+
+  const handleStepLessonDate = useCallback(
+    (direction: 'prev' | 'next') => {
+      const target = direction === 'prev' ? stepTargets.prev : stepTargets.next;
+      if (target === null) {
+        showToast('이 방향에는 더 이상 수업일이 없어요');
+        return;
+      }
+      handleDateChange(target);
+    },
+    [stepTargets, handleDateChange, showToast],
   );
 
   // 저장 전 "어느 반 · 언제 · 몇 교시에 들어가는지" 미리보기 (폼이 열려 있을 때만 계산)
@@ -227,9 +347,10 @@ export function ProgressTab({ classId }: ProgressTabProps) {
     const matching = getMatchingPeriods(today);
     setFormPeriod(matching[0] ?? 1);
     setFormUnit('');
-    setFormLesson('');
+    // 직전 기록의 표기를 이어받아 차시 칸을 미리 채운다. 못 읽으면 빈칸.
+    setFormLesson(suggestLessonFor(''));
     setFormNote('');
-  }, [getMatchingPeriods]);
+  }, [getMatchingPeriods, suggestLessonFor]);
 
   const handleAdd = useCallback(async () => {
     if (!formUnit.trim() || !formLesson.trim()) return;
@@ -431,6 +552,53 @@ export function ProgressTab({ classId }: ProgressTabProps) {
         <ExcludedDaysPanel view={lessonCountView} onAdjust={handleLessonDayAdjust} />
       )}
 
+      {showBulkFill && (
+        <PlannedBulkFillModal
+          view={lessonCountView}
+          existingEntries={entries}
+          todayIso={todayString()}
+          periodTimes={settings.periodTimes}
+          onClose={() => setShowBulkFill(false)}
+          onCreate={handleBulkCreate}
+          onUndo={handleBulkUndo}
+        />
+      )}
+
+      {missedLessonDays.length > 0 && (
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-dashed border-sp-border px-3 py-2">
+          <span aria-hidden className="material-symbols-outlined text-base text-sp-muted">
+            edit_note
+          </span>
+          <span className="text-xs text-sp-text">
+            기록이 빠진 수업일{' '}
+            <b className="font-semibold tabular-nums">{missedLessonDays.length}</b>일
+          </span>
+          <span className="flex flex-wrap gap-1">
+            {missedLessonDays.slice(0, 6).map((date) => (
+              <button
+                key={date}
+                type="button"
+                onClick={() => {
+                  handleDateChange(date);
+                  if (!showForm) {
+                    setShowForm(true);
+                    setFormUnit('');
+                    setFormLesson(suggestLessonFor(''));
+                    setFormNote('');
+                  }
+                }}
+                className="rounded-lg border border-sp-border px-1.5 py-0.5 text-[11px] text-sp-muted tabular-nums transition-all duration-sp-base ease-sp-out hover:text-sp-text active:scale-95"
+              >
+                {date.slice(5).replace('-', '/')}
+              </button>
+            ))}
+            {missedLessonDays.length > 6 && (
+              <span className="text-[11px] text-sp-muted">외 {missedLessonDays.length - 6}일</span>
+            )}
+          </span>
+        </div>
+      )}
+
       {/* ── 진도 요약 + 추가 버튼 ── */}
       <div className="flex items-center justify-between">
         <div className="flex-1 mr-4">
@@ -466,6 +634,18 @@ export function ProgressTab({ classId }: ProgressTabProps) {
           </div>
         </div>
         <ScrollRow className="gap-2 shrink-0">
+          {lessonCountView.status === 'ok' && (
+            <button
+              onClick={() => setShowBulkFill(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-sp-surface border border-sp-border
+                         text-sp-muted rounded-lg hover:text-sp-text hover:border-sp-accent/50
+                         transition-colors text-sm font-medium whitespace-nowrap"
+              title="남은 수업일에 '예정' 칸을 한 번에 만듭니다"
+            >
+              <span className="material-symbols-outlined text-lg">event_repeat</span>
+              남은 수업일에 계획 깔기
+            </button>
+          )}
           <button
             onClick={() => setShowImportModal(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-sp-surface border border-sp-border
@@ -537,6 +717,13 @@ export function ProgressTab({ classId }: ProgressTabProps) {
             lessonDays={lessonDayIndices}
             accentColor={subjectAccent}
             maxPeriods={settings.maxPeriods ?? 8}
+            periodTimes={settings.periodTimes}
+            lessonOrdinalHint={lessonOrdinalHint}
+            onStepLessonDate={handleStepLessonDate}
+            canStepLessonDate={{
+              prev: stepTargets.prev !== null,
+              next: stepTargets.next !== null,
+            }}
           />
           <ProgressFanoutPicker
             candidates={fanoutCandidates}

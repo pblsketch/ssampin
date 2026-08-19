@@ -103,7 +103,7 @@ interface TeachingClassState {
     lesson: string,
     note?: string,
     status?: ProgressStatus,
-  ) => Promise<void>;
+  ) => Promise<ProgressEntry>;
   updateProgressEntry: (entry: ProgressEntry) => Promise<void>;
   deleteProgressEntry: (id: string) => Promise<void>;
   /**
@@ -500,6 +500,9 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
       };
       await manageProgress.add(entry);
       set((state) => ({ progressEntries: [...state.progressEntries, entry] }));
+      // 만든 항목을 돌려준다 — 일괄 생성이 되돌리기용으로 id를 들고 있어야 한다.
+      // 기존 호출처는 반환값을 쓰지 않으므로 동작이 달라지지 않는다.
+      return entry;
     },
 
     updateProgressEntry: async (entry) => {

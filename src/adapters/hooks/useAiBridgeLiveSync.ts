@@ -357,15 +357,18 @@ export function useAiBridgeLiveSync(): void {
         progress: {
           // 수업 진도 추가 — store 액션이 UUID 발급·메모리 반영·파일 저장을 일원화한다.
           add: (input) =>
-            tc.addProgressEntry(
-              input.classId,
-              input.date,
-              input.period,
-              input.unit,
-              input.lesson ?? '',
-              input.note ?? '',
-              coerceProgressStatus(input.status),
-            ),
+            tc
+              .addProgressEntry(
+                input.classId,
+                input.date,
+                input.period,
+                input.unit,
+                input.lesson ?? '',
+                input.note ?? '',
+                coerceProgressStatus(input.status),
+                // 브릿지 계약은 void 를 돌려준다 — store 가 만든 항목을 돌려주게 되면서 추가.
+              )
+              .then(() => undefined),
           update: async (id, changes) => {
             const found = tc.progressEntries.find((e) => e.id === id);
             if (!found) return;
