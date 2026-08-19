@@ -61,6 +61,20 @@ export interface LessonDayIndexInput {
   readonly targetClassId: string;
 }
 
+/**
+ * 색인이 비어 있는 이유. `null`이면 "정상적으로 계산했는데 수업일이 없다"는 뜻이다.
+ *
+ * 이걸 나누지 않으면 화면이 오진한다 — 보관한 반을 열었을 뿐인데 "시간표를 먼저 등록해
+ * 주세요"가 뜨면, 시간표가 멀쩡한 선생님이 엉뚱한 안내를 받는다.
+ */
+export type LessonDayIndexUnavailable = 'classNotFound' | 'archivedClass' | 'invalidTerm';
+
+export interface LessonDayIndexResult {
+  readonly index: ReadonlyMap<string, LessonDayEntry>;
+  /** 정상 계산이면 `null`. */
+  readonly unavailable: LessonDayIndexUnavailable | null;
+}
+
 export interface LessonDayEntry {
   /** 1-based 교시 번호들. */
   readonly periods: readonly number[];
@@ -99,15 +113,28 @@ function toIso(d: Date): string {
 export function buildLessonDayIndex(
   input: LessonDayIndexInput,
 ): ReadonlyMap<string, LessonDayEntry> {
+  return buildLessonDayIndexResult(input).index;
+}
+
+/**
+ * `buildLessonDayIndex`와 같은 계산을 하되 **비어 있는 이유**도 함께 돌려준다.
+ *
+ * 화면은 이 쪽을 써야 한다. "수업일이 0건"과 "보관된 반이라 계산을 안 했다"와 "학기 날짜가
+ * 잘못됐다"는 사용자가 할 행동이 전혀 다른데, 빈 Map 하나로는 구분할 수 없다.
+ */
+export function buildLessonDayIndexResult(input: LessonDayIndexInput): LessonDayIndexResult {
   const result = new Map<string, LessonDayEntry>();
 
   const start = parseIso(input.termStart);
   const end = parseIso(input.termEnd);
-  if (start === null || end === null || start.getTime() > end.getTime()) return result;
+  if (start === null || end === null || start.getTime() > end.getTime()) {
+    return { index: result, unavailable: 'invalidTerm' };
+  }
 
   const target = input.classes.find((c) => c.id === input.targetClassId);
+  if (target === undefined) return { index: result, unavailable: 'classNotFound' };
   // 보관된 반은 새 진도의 대상이 아니다 — 판정은 공용 헬퍼만 쓴다(직접 비교 금지).
-  if (target === undefined || isTeachingClassArchived(target)) return result;
+  if (isTeachingClassArchived(target)) return { index: result, unavailable: 'archivedClass' };
 
   // P1 — 변동을 날짜별로 한 번만 모은다.
   const overridesByDate = new Map<string, TimetableOverride[]>();
@@ -163,5 +190,5 @@ export function buildLessonDayIndex(
     cursor.setDate(cursor.getDate() + 1);
   }
 
-  return result;
+  return { index: result, unavailable: null };
 }

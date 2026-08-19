@@ -87,9 +87,17 @@ const RESTORE_LABEL_BY_REASON: Readonly<Record<LessonDayExclusionReason, string>
   noScheduledLesson: '시간표에 수업 없음',
 };
 
-/** 방학식·종업식처럼 `…식`으로 끝나는 항목인가. 이런 날은 등교일이므로 자동 제외하지 않는다. */
+/**
+ * 방학식·종업식 같은 **등교일** 항목인가. 이런 날은 자동 제외하지 않는다.
+ *
+ * ⚠️ `endsWith('식')`으로 판정하면 `'여름방학식(1~2학년)'`·`'여름방학식 및 방과후 안내'`처럼
+ * 뒤에 뭐가 붙는 순간 뚫린다. 그러면 그 날이 방학으로 자동 제외되면서 동시에
+ * `termEndFromSchedule`이 학기 종료일 후보로 올려, 이 파일 머리말이 피하려던 자기 모순이
+ * 그대로 되살아난다. 그래서 위치가 아니라 **포함**으로 본다.
+ */
 function isCeremonyEvent(title: string): boolean {
-  return title.replace(/\s+/g, '').endsWith('식');
+  const n = title.replace(/\s+/g, '');
+  return n.includes('방학식') || n.includes('종업식');
 }
 
 /**

@@ -71,9 +71,26 @@ describe('classifyLessonDayExclusion — A-a13: 방학식·종업식은 자동 �
     ).toBeNull();
   });
 
-  it('공백이 섞여도 …식으로 끝나면 같은 처리', () => {
+  it('공백이 섞여도 같은 처리', () => {
     expect(
-      classifyLessonDayExclusion({ ...LESSON_DAY, events: [evt('여름 방학 식', 'vacation')] }),
+      classifyLessonDayExclusion({ ...LESSON_DAY, events: [evt('여름 방학식', 'vacation')] }),
+    ).toBeNull();
+  });
+
+  it('뒤에 뭐가 붙어도 방학식이면 제외하지 않는다', () => {
+    // '…으로 끝나는가'로 판정하면 여기서 뚫린다. 뚫리면 그 날이 방학으로 자동 제외되면서
+    // 동시에 학기 종료일 후보로 올라가, 이 규칙이 피하려던 자기 모순이 되살아난다.
+    for (const title of ['여름방학식(1~2학년)', '여름방학식 및 방과후 안내', '겨울방학식·종업식']) {
+      expect(
+        classifyLessonDayExclusion({ ...LESSON_DAY, events: [evt(title, 'vacation')] }),
+        title,
+      ).toBeNull();
+    }
+  });
+
+  it('종업식도 접미가 붙어도 제외되지 않는다', () => {
+    expect(
+      classifyLessonDayExclusion({ ...LESSON_DAY, events: [evt('종업식(전학년)', 'vacation')] }),
     ).toBeNull();
   });
 

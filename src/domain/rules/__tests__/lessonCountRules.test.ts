@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { estimateLessonCount, findNextLessonDate } from '../lessonCountRules';
-import { buildLessonDayIndex } from '../buildLessonDayIndex';
+import { buildLessonDayIndex, buildLessonDayIndexResult } from '../buildLessonDayIndex';
 import type { LessonDayEntry } from '../buildLessonDayIndex';
 import type { LessonDayEvent } from '../lessonDayExclusion';
 import type { TeacherScheduleData } from '@domain/entities/Timetable';
@@ -104,8 +104,10 @@ describe('estimateLessonCount — A-a10: 시간표를 모르면 0이 아니라 "
     expect(got.totalPeriods).toBe(0);
   });
 
-  it('보관된 반은 색인이 비어 noTimetable로 이어진다 (A-a7)', () => {
-    const index = buildLessonDayIndex({
+  it('보관된 반은 계산 대상이 아니다 — 시간표 등록을 시키면 안 된다 (A-a7)', () => {
+    // 빈 색인을 전부 noTimetable로 뭉개면, 시간표가 멀쩡한 선생님이 보관한 반을 열었을 때
+    // "시간표를 먼저 등록해 주세요"라는 엉뚱한 안내를 받는다.
+    const { index, unavailable } = buildLessonDayIndexResult({
       termStart: '2026-09-01',
       termEnd: '2026-09-30',
       teacherSchedule: TEACHER_SCHEDULE,
@@ -114,9 +116,77 @@ describe('estimateLessonCount — A-a10: 시간표를 모르면 0이 아니라 "
       classes: [{ ...CLASS, archived: true }],
       targetClassId: 'tc-1',
     });
-    expect(estimateLessonCount({ lessonDayIndex: index, todayIso: '2026-09-15' }).status).toBe(
-      'noTimetable',
-    );
+    expect(unavailable).toBe('archivedClass');
+    expect(
+      estimateLessonCount({
+        lessonDayIndex: index,
+        todayIso: '2026-09-15',
+        indexUnavailable: unavailable,
+      }).status,
+    ).toBe('archivedClass');
+  });
+
+  it('학기 날짜가 잘못되면 invalidTerm — 시간표 문제가 아니다', () => {
+    const { index, unavailable } = buildLessonDayIndexResult({
+      termStart: '2026-09-30',
+      termEnd: '2026-09-01', // 뒤집힘
+      teacherSchedule: TEACHER_SCHEDULE,
+      classSchedule: {},
+      overrides: [],
+      classes: [CLASS],
+      targetClassId: 'tc-1',
+    });
+    expect(unavailable).toBe('invalidTerm');
+    expect(
+      estimateLessonCount({
+        lessonDayIndex: index,
+        todayIso: '2026-09-15',
+        indexUnavailable: unavailable,
+      }).status,
+    ).toBe('invalidTerm');
+  });
+
+  it('반을 못 찾으면 classNotFound', () => {
+    const { unavailable } = buildLessonDayIndexResult({
+      termStart: '2026-09-01',
+      termEnd: '2026-09-30',
+      teacherSchedule: TEACHER_SCHEDULE,
+      classSchedule: {},
+      overrides: [],
+      classes: [CLASS],
+      targetClassId: 'tc-없음',
+    });
+    expect(unavailable).toBe('classNotFound');
+  });
+
+  it('정상 계산이면 unavailable 이 null 이다', () => {
+    const { unavailable } = buildLessonDayIndexResult({
+      termStart: '2026-09-01',
+      termEnd: '2026-09-30',
+      teacherSchedule: TEACHER_SCHEDULE,
+      classSchedule: {},
+      overrides: [],
+      classes: [CLASS],
+      targetClassId: 'tc-1',
+    });
+    expect(unavailable).toBeNull();
+    expect(
+      estimateLessonCount({ lessonDayIndex: septemberIndex(), todayIso: '2026-09-15' }).status,
+    ).toBe('ok');
+  });
+
+  it('기존 buildLessonDayIndex 래퍼는 색인만 돌려준다 (하위호환)', () => {
+    expect(
+      buildLessonDayIndex({
+        termStart: '2026-09-01',
+        termEnd: '2026-09-30',
+        teacherSchedule: TEACHER_SCHEDULE,
+        classSchedule: {},
+        overrides: [],
+        classes: [CLASS],
+        targetClassId: 'tc-1',
+      }).size,
+    ).toBe(8);
   });
 });
 

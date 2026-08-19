@@ -31,7 +31,7 @@ import {
   type LessonDayExclusion,
   type LessonDayNotice,
 } from './lessonDayExclusion';
-import type { LessonDayEntry } from './buildLessonDayIndex';
+import type { LessonDayEntry, LessonDayIndexUnavailable } from './buildLessonDayIndex';
 import type { ProgressMatchStage } from './progressMatching';
 
 /** 사용자 정정 — 반·날짜 단위. */
@@ -52,6 +52,14 @@ export interface LessonCountInput extends LessonDayContext {
   readonly lessonDayIndex: ReadonlyMap<string, LessonDayEntry>;
   /** 오늘 'YYYY-MM-DD' — 지난 수업과 남은 수업을 가르는 기준. */
   readonly todayIso: string;
+  /**
+   * 색인이 비어 있는 이유(`buildLessonDayIndexResult`가 준 값).
+   *
+   * 넘기지 않으면 빈 색인을 전부 '시간표 미등록'으로 본다 — 보관한 반을 열었을 뿐인
+   * 선생님에게 "시간표를 먼저 등록해 주세요"가 뜨는 오진이 생기므로, 화면은 반드시
+   * 이 값을 함께 넘겨야 한다.
+   */
+  readonly indexUnavailable?: LessonDayIndexUnavailable | null;
 }
 
 export interface LessonDayDetail {
@@ -70,9 +78,25 @@ export interface ExcludedDayDetail {
   readonly notices: readonly LessonDayNotice[];
 }
 
+/**
+ * 숫자를 보여 줄 수 있는 상태인가, 아니면 무엇을 안내해야 하는가.
+ *
+ * `ok`가 아니면 **숫자를 보여 주지 않는다.** 특히 0차시를 그대로 내보내면 고장으로 읽힌다.
+ * 상태마다 사용자가 할 행동이 다르므로 하나로 뭉치지 않는다:
+ *  - `noTimetable` — 시간표를 먼저 등록해 주세요
+ *  - `archivedClass` — 보관된 반입니다 (안내만, 등록 유도 금지)
+ *  - `invalidTerm` — 학기 시작·종료일을 확인해 주세요
+ *  - `classNotFound` — 반을 찾을 수 없습니다 (삭제된 반을 보고 있는 상태)
+ */
+export type LessonCountStatus =
+  | 'ok'
+  | 'noTimetable'
+  | 'archivedClass'
+  | 'invalidTerm'
+  | 'classNotFound';
+
 export interface LessonCountEstimate {
-  /** `noTimetable`이면 숫자를 보여 주지 말고 시간표 등록을 안내한다. */
-  readonly status: 'ok' | 'noTimetable';
+  readonly status: LessonCountStatus;
   /** 학기 전체 교시 수 합계(제외한 날 빼고). */
   readonly totalPeriods: number;
   /** 오늘까지의 교시 수 합계. */
@@ -90,15 +114,19 @@ export interface LessonCountEstimate {
   readonly hasFutureEstimate: boolean;
 }
 
-const EMPTY_ESTIMATE: LessonCountEstimate = {
-  status: 'noTimetable',
+function emptyEstimate(status: LessonCountStatus): LessonCountEstimate {
+  return { ...EMPTY_BASE, status };
+}
+
+const EMPTY_BASE = {
+  status: 'noTimetable' as LessonCountStatus,
   totalPeriods: 0,
   pastPeriods: 0,
   remainingPeriods: 0,
   lessonDays: [],
   excludedDays: [],
   hasFutureEstimate: false,
-};
+} satisfies LessonCountEstimate;
 
 /** 그날이 최종적으로 수업일인지 판정하고, 아니면 사유를 준다. */
 function verdictFor(
@@ -126,7 +154,8 @@ function verdictFor(
  * 결정론적이다: 같은 입력이면 언제 호출해도 같은 결과가 나온다(오늘 날짜도 인자로 받는다).
  */
 export function estimateLessonCount(input: LessonCountInput): LessonCountEstimate {
-  if (input.lessonDayIndex.size === 0) return EMPTY_ESTIMATE;
+  if (input.indexUnavailable != null) return emptyEstimate(input.indexUnavailable);
+  if (input.lessonDayIndex.size === 0) return emptyEstimate('noTimetable');
 
   const lessonDays: LessonDayDetail[] = [];
   const excludedDays: ExcludedDayDetail[] = [];

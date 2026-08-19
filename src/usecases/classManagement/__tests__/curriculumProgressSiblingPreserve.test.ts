@@ -143,7 +143,9 @@ describe('curriculum-progress 형제 필드 보존 계약', () => {
 
   it('saveAll(force) — 의도적 전량 삭제에도 형제 키가 살아남는다', async () => {
     // force 경로는 예전에 기존 파일을 아예 읽지 않아서, 형제 키가 통째로 날아가던 자리다.
-    // 반 삭제·학년도 전환이 이 경로를 쓴다.
+    // 실제로 이 경로를 쓰는 곳은 반 삭제 한 곳이다(useTeachingClassStore).
+    // 학년도 전환은 이 함수를 거치지 않고 저장소에 직접 쓰므로(ExecuteYearTransition)
+    // 지금도 루트를 비운다 — 그건 의도된 동작이고 이 계약의 대상이 아니다.
     const { repo, manage } = seed([entry('p1')]);
 
     await manage.saveAll([], true);
