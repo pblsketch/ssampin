@@ -73,6 +73,44 @@ describe('electron/main.ts window broadcast helpers', () => {
     ).toBe(false);
   });
 
+  test('위젯 창 크기는 setBounds 를 직접 부르지 않는다 — 전부 applyWidgetWindowBounds 를 거친다', () => {
+    // 2026-08-19 실측: 175% 배율에서 setBounds(W) 직후 getBounds() 는 W+1 을 돌려주고,
+    // 그 값을 다시 지정하면 또 +1 이다(100% 에서는 오차 0). 그래서 "재서 → 고쳐서 →
+    // 다시 지정"하는 코드는 부를 때마다 위젯을 키웠고, 드래그 한 번에 +4 DIP 씩 자라
+    // 위젯 오른쪽이 화면 밖(옆 모니터)으로 밀려났다. 커진 값이 파일에도 저장돼
+    // 재시작 후에도 이어졌다.
+    //
+    // setBounds 를 직접 부르면 그 크기가 "의도"로 기록되지 않아, 다음 측정에서
+    // "사용자가 크기를 바꿨다"로 오인되고 래칫이 되살아난다.
+    const sources: readonly [string, string][] = [
+      ['electron/main.ts', readMainTs()],
+      [
+        'electron/desktopWidgetManager.ts',
+        fs.readFileSync(path.join(__dirname, 'desktopWidgetManager.ts'), 'utf-8'),
+      ],
+    ];
+
+    for (const [name, src] of sources) {
+      const rawWrites = src.match(/\b(widgetWindow|cachedWidgetWindow|win)\.setBounds\s*\(/g) ?? [];
+      expect(
+        rawWrites.length,
+        `${name} 이 위젯 창에 setBounds 를 직접 부른다 (${rawWrites.join(', ')}) — ` +
+          'applyWidgetWindowBounds 를 써야 소수 배율 래칫이 안 생긴다',
+      ).toBe(0);
+    }
+  });
+
+  test('위젯 위치 저장은 잰 값이 아니라 의도값을 쓴다', () => {
+    // 잰 값을 저장하면 불어난 크기가 widget-bounds.json 에 남아 재시작 후에도 이어진다.
+    const src = readMainTs();
+    const start = src.indexOf('function scheduleWidgetBoundsSave(');
+    expect(start, 'scheduleWidgetBoundsSave() 를 찾지 못했다').toBeGreaterThan(-1);
+    const body = src.slice(start, src.indexOf('\n}\n', start));
+
+    expect(body, '저장 경로가 의도값을 안 쓴다').toContain('readWidgetWindowBounds(');
+    expect(body, '저장 경로가 잰 값을 그대로 쓴다').not.toMatch(/widgetWindow\.getBounds\s*\(/);
+  });
+
   test('위젯 복구에 느슨한 clampWidgetBoundsToWorkArea 를 쓰지 않는다', () => {
     // 2026-08-19 신고 재발 방지.
     // clampWidgetBoundsToWorkArea 의 규칙은 "최소 가시량(헤더 40px)만 남으면 통과"다.

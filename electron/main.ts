@@ -101,6 +101,12 @@ import { sendCtrlV } from './platform/win32SendKeys';
 import type { DesktopModeFallbackEvent } from './desktopWidgetTypes';
 import { WIDGET_ABSOLUTE_MIN_SIZE, WIDGET_OVERFLOW_TOLERANCE } from './desktopWidgetTypes';
 import {
+  applyWidgetWindowBounds,
+  readWidgetWindowBounds,
+  rememberWidgetSizeIntent,
+  resetWidgetSizeIntent,
+} from './widgetGeometryIntent';
+import {
   clearPreferredSize,
   rememberSizeBeforeFit,
   takePreferredSizeIfFits,
@@ -1228,8 +1234,11 @@ function scheduleWidgetBoundsSave(): void {
     clearTimeout(savePositionTimer);
   }
   savePositionTimer = setTimeout(() => {
-    if (widgetWindow && !widgetWindow.isDestroyed()) {
-      const bounds = widgetWindow.getBounds();
+    // ★잰 값이 아니라 의도값을 저장한다. 소수 배율에서 getBounds()는 매번 1px 크게
+    //   돌려주므로(widgetGeometryIntent.ts), 잰 값을 저장하면 앱을 껐다 켤 때마다
+    //   위젯이 조금씩 커진 채로 이어진다.
+    const bounds = readWidgetWindowBounds(widgetWindow);
+    if (bounds) {
       saveWidgetBounds(bounds);
     }
     savePositionTimer = null;
@@ -1257,7 +1266,8 @@ function ensureWidgetBoundsWithinDisplays(targetWindow?: BrowserWindow | null): 
   if (!win || win.isDestroyed()) return;
 
   try {
-    const currentBounds = win.getBounds();
+    const currentBounds = readWidgetWindowBounds(win);
+    if (!currentBounds) return;
     const displays = screen.getAllDisplays();
     if (displays.length === 0) return;
 
@@ -1308,7 +1318,7 @@ function ensureWidgetBoundsWithinDisplays(targetWindow?: BrowserWindow | null): 
         `-> corrected to (${clamped.x},${clamped.y},${clamped.width}x${clamped.height})`,
     );
 
-    win.setBounds(clamped);
+    applyWidgetWindowBounds(win, clamped);
     scheduleWidgetBoundsSave();
   } catch (e) {
     diagWarn(
@@ -1353,7 +1363,7 @@ async function resetWidgetPosition(): Promise<void> {
     // 바탕화면 아래 모드에서도 이 한 줄이면 된다 — setBounds가 'move'를 발생시키고,
     // 그 핸들러가 desktopWidgetManager.updateWidgetBounds까지 불러 클릭 라우팅 좌표를
     // 함께 갱신한다. 갱신을 빠뜨리면 위젯은 옮겨졌는데 클릭만 옛 자리로 가는 상태가 된다.
-    widgetWindow.setBounds(bounds);
+    applyWidgetWindowBounds(widgetWindow, bounds);
   }
 
   await executeWindowTransition('widget');
@@ -1472,7 +1482,8 @@ function refitWidgetToDroppedDisplay(): void {
   if (desktopWidgetManager.isEnabled()) return;
 
   try {
-    const bounds = win.getBounds();
+    const bounds = readWidgetWindowBounds(win);
+    if (!bounds) return;
     // ★대상 모니터는 "겹침 면적"으로 고르면 안 된다.
     //   위젯이 배율비만큼 커진 탓에 원래 있던 모니터와의 겹침이 더 커서, 사용자가 끌어온
     //   방향과 반대로 되돌아가 버린다(실측: 커진 위젯의 57%가 출발 모니터에 남았다).
@@ -1485,7 +1496,7 @@ function refitWidgetToDroppedDisplay(): void {
     const reapply = resolveLayoutReapply(target.id, target.workArea);
     if (reapply) {
       win.setMinimumSize(reapply.minSize.width, reapply.minSize.height);
-      win.setBounds(reapply.bounds);
+      applyWidgetWindowBounds(win, reapply.bounds);
       setActiveWidgetLayout(reapply.mode, target.id);
       diagLog(
         'widget',
@@ -1532,7 +1543,7 @@ function refitWidgetToDroppedDisplay(): void {
         `workArea=(${target.workArea.width}x${target.workArea.height}) ` +
         `restored=${restored ? `${restored.width}x${restored.height}` : 'no'}`,
     );
-    win.setBounds(clamped);
+    applyWidgetWindowBounds(win, clamped);
     scheduleWidgetBoundsSave();
   } catch (e) {
     diagWarn('widget', `[dpi-refit] 실패: ${e instanceof Error ? e.message : String(e)}`);
@@ -2582,7 +2593,7 @@ async function doRestoreWidget(): Promise<void> {
   if (widgetWindow && !widgetWindow.isDestroyed()) {
     // ── 케이스 A: 창이 살아있는 경우 ──
     console.log('[widget] 절전 복귀 — 위젯 리프레시 시도');
-    const bounds = widgetWindow.getBounds();
+    const bounds = readWidgetWindowBounds(widgetWindow);
 
     widgetWindow.hide();
 
@@ -2594,7 +2605,7 @@ async function doRestoreWidget(): Promise<void> {
         }
 
         widgetWindow.show();
-        widgetWindow.setBounds(bounds);
+        if (bounds) applyWidgetWindowBounds(widgetWindow, bounds);
 
         if (currentDesktopMode === 'topmost') {
           widgetWindow.setAlwaysOnTop(true);
@@ -2673,6 +2684,7 @@ function recreateWidget(): void {
     widgetWindow.destroy();
   }
   widgetWindow = null;
+  resetWidgetSizeIntent();
 
   const opts = readSettingsWidgetOptions();
   createWidgetWindow(opts);
@@ -2727,6 +2739,10 @@ function createWidgetWindow(
   }
 
   const { x, y, width, height } = initialBounds;
+
+  // 새 창의 시작 크기가 곧 첫 의도다. 이걸 안 심으면 첫 측정에서 드리프트가 섞인 값이
+  // 의도로 굳어, 그 뒤 모든 보정이 1px 큰 기준 위에서 돌아간다.
+  rememberWidgetSizeIntent({ width, height });
 
   widgetWindow = new BrowserWindow({
     x,
@@ -2902,6 +2918,7 @@ function createWidgetWindow(
     // 바탕화면 아이콘 아래 모드: 위젯 창이 사라졌으므로 native attach 정리
     desktopWidgetManager.disable();
     widgetWindow = null;
+    resetWidgetSizeIntent();
     currentDesktopMode = 'normal';
     if (!isQuitting && !isSystemSuspending) {
       widgetWasActive = false;
@@ -3347,6 +3364,7 @@ function registerIpcHandlers(): void {
       stopWinDRecovery();
       widgetWindow.destroy();
       widgetWindow = null;
+      resetWidgetSizeIntent();
       currentDesktopMode = 'normal';
       ensureMainWindow();
     } else {
@@ -3406,13 +3424,14 @@ function registerIpcHandlers(): void {
     if (!widgetWindow || widgetWindow.isDestroyed()) return;
 
     // 위젯이 현재 위치한 모니터의 작업 영역을 사용 (다중 모니터 지원)
-    const currentBounds = widgetWindow.getBounds();
+    const currentBounds = readWidgetWindowBounds(widgetWindow);
+    if (!currentBounds) return;
     const display = screen.getDisplayMatching(currentBounds);
     const workArea = display.workArea;
 
     // 최초 레이아웃 변경 시 원래 위치/크기 저장 (복원용)
     if (!widgetBoundsBeforeLayout) {
-      widgetBoundsBeforeLayout = widgetWindow.getBounds();
+      widgetBoundsBeforeLayout = readWidgetWindowBounds(widgetWindow);
     }
 
     if (!isWidgetLayoutMode(mode)) {
@@ -3424,7 +3443,7 @@ function registerIpcHandlers(): void {
           WIDGET_FREE_MINIMUM_SIZE.width,
           WIDGET_FREE_MINIMUM_SIZE.height,
         );
-        widgetWindow.setBounds(widgetBoundsBeforeLayout);
+        applyWidgetWindowBounds(widgetWindow, widgetBoundsBeforeLayout);
         widgetBoundsBeforeLayout = null;
       }
       return;
@@ -3446,9 +3465,10 @@ function registerIpcHandlers(): void {
     clearPreferredSize();
     setActiveWidgetLayout(mode, display.id);
 
-    widgetWindow.setBounds(bounds);
+    applyWidgetWindowBounds(widgetWindow, bounds);
     // 일부 환경(WS_CHILD/native-desktop + Win32 SetWindowPos race)에서 setBounds가
     // 정확히 반영 안 되는 사례 보고. 동기 setSize/setPosition 으로 한 번 더 강제.
+    // (같은 값이라 applyWidgetWindowBounds 가 기록한 의도는 그대로 유효하다.)
     widgetWindow.setPosition(bounds.x, bounds.y);
     widgetWindow.setSize(bounds.width, bounds.height);
     const applied = widgetWindow.getBounds();
@@ -3567,7 +3587,10 @@ function registerIpcHandlers(): void {
   // window:resizeWidget — 위젯 JS 리사이즈 (thickFrame: false 대응)
   ipcMain.handle('window:resizeWidget', (_event, edge: string, dx: number, dy: number) => {
     if (!widgetWindow || widgetWindow.isDestroyed()) return;
-    const bounds = widgetWindow.getBounds();
+    // ★기준은 잰 값이 아니라 의도값이다. 잰 값을 기준으로 dx 를 더하면 소수 배율에서
+    //   프레임마다 드리프트 1px 이 함께 쌓여, 조금만 끌어도 위젯이 걷잡을 수 없이 커진다.
+    const bounds = readWidgetWindowBounds(widgetWindow);
+    if (!bounds) return;
 
     const newBounds = { ...bounds };
     if (edge.includes('right')) newBounds.width = Math.max(300, bounds.width + dx);
@@ -3581,7 +3604,7 @@ function registerIpcHandlers(): void {
       newBounds.height = Math.max(200, bounds.height - dy);
     }
 
-    widgetWindow.setBounds(newBounds);
+    applyWidgetWindowBounds(widgetWindow, newBounds);
     scheduleWidgetBoundsSave();
     if (desktopWidgetManager.isEnabled()) {
       desktopWidgetManager.updateWidgetBounds(widgetWindow);

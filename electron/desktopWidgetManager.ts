@@ -33,6 +33,7 @@ import type {
   ResizeState,
 } from './desktopWidgetTypes';
 import { dipToPhysical, isInsideAnyRect, WIDGET_ABSOLUTE_MIN_SIZE } from './desktopWidgetTypes';
+import { applyWidgetWindowBounds, readWidgetWindowBounds } from './widgetGeometryIntent';
 import { diagLog, diagWarn } from './nativeDesktopDiag';
 import { resolveDragEndBounds } from './desktopWidgetDpiRestore';
 import {
@@ -1169,7 +1170,11 @@ function createWin32Manager(win32: typeof import('./platform/win32Desktop')): De
                     });
                     const target = screen.getDisplayNearestPoint(finalDipOrigin);
                     const endScale = target.scaleFactor;
-                    const currentBounds = cachedWidgetWindow.getBounds();
+                    // ★잰 값이 아니라 의도값 기준. 소수 배율에서 getBounds()는 매번 1px
+                    //   크게 돌려주므로, 잰 값으로 축소를 판정하면 드래그마다 위젯이
+                    //   자란다(widgetGeometryIntent.ts 의 실측).
+                    const currentBounds =
+                      readWidgetWindowBounds(cachedWidgetWindow) ?? cachedWidgetWindow.getBounds();
 
                     // ① 레이아웃이 켜져 있으면 크기 보존보다 우선한다.
                     //    레이아웃(전체·절반 등)은 고정 크기가 아니라 화면과의 관계이므로,
@@ -1180,7 +1185,7 @@ function createWin32Manager(win32: typeof import('./platform/win32Desktop')): De
                         reapply.minSize.width,
                         reapply.minSize.height,
                       );
-                      cachedWidgetWindow.setBounds(reapply.bounds);
+                      applyWidgetWindowBounds(cachedWidgetWindow, reapply.bounds);
                       setActiveWidgetLayout(reapply.mode, target.id);
                       diagLog(
                         'native-desktop',
@@ -1218,7 +1223,7 @@ function createWin32Manager(win32: typeof import('./platform/win32Desktop')): De
                     }
                     const next = decision.bounds;
                     if (next) {
-                      cachedWidgetWindow.setBounds(next);
+                      applyWidgetWindowBounds(cachedWidgetWindow, next);
                       diagLog(
                         'native-desktop',
                         `[7-C] drag end 크기 보정 — scale ${dragStartScale}→${endScale} ` +
@@ -1517,7 +1522,9 @@ function createWin32Manager(win32: typeof import('./platform/win32Desktop')): De
               }
               if (cachedWidgetWindow && !cachedWidgetWindow.isDestroyed()) {
                 try {
-                  const dipBounds = cachedWidgetWindow.getBounds();
+                  // 도착지에서 "보이는 크기"를 되돌릴 기준값이라 의도값을 써야 한다.
+                  const dipBounds =
+                    readWidgetWindowBounds(cachedWidgetWindow) ?? cachedWidgetWindow.getBounds();
                   startDipSize = { width: dipBounds.width, height: dipBounds.height };
                 } catch {
                   startDipSize = undefined;
