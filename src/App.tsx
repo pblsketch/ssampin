@@ -770,7 +770,7 @@ function MainApp() {
   }, []);
   const handleRequestDualMode = useCallbackForDualEntry(setCurrentPage);
   const { setShareFile, setShowImportModal } = useEventsStore();
-  const { settings } = useSettingsStore();
+  const { settings, isFirstRun } = useSettingsStore();
   useAnalyticsLifecycle();
   const { track } = useAnalytics();
 
@@ -1267,37 +1267,55 @@ function MainApp() {
           </main>
         </div>
         <ModalCoordinator />
-        <UpdateNotification />
-        <EventPopup />
-        <ReminderPopup />
         <ToastContainer />
         <Onboarding />
-        {driveConflicts.length > 0 && (
-          <DriveSyncConflictModal
-            conflicts={driveConflicts}
-            onResolve={async (conflict, resolution) => {
-              await useDriveSyncStore.getState().resolveConflict(conflict, resolution);
-              // 'remote' 해결 시 스토어 리로드
-              if (resolution === 'remote') {
-                await reloadStores([conflict.filename]);
-              }
-            }}
-            onClose={() => useDriveSyncStore.getState().resetStatus()}
-          />
+        {/*
+          첫 실행 안내(온보딩)가 떠 있는 동안에는 앱이 먼저 말을 걸지 않는다.
+
+          배경(2026-08-19) — 8월에 처음 설치한 선생님이 "학교 정보 입력"에서 아무 칸에도
+          글을 쓸 수 없다고 신고했다. 원인은 온보딩 바로 뒤에서 같이 열린 "2학기가 시작됐나요?"
+          창이었다. 안 보이는 그 창이 자기 안에 커서를 묶어두는(focus trap) 서류라, 온보딩 입력칸을
+          눌러도 커서가 뒤창으로 다시 끌려가 글자가 안 써졌다. 버튼은 눌렸기 때문에 "다음 단계만
+          되는" 증상으로 보였다.
+
+          한 창만 막으면 같은 사고가 다른 창으로 또 생긴다(구글 연동 후 첫 동기화 확인 등). 그래서
+          앱이 먼저 띄우는 창을 통째로 미룬다 — 온보딩을 마치면 그때 순서대로 뜨게 된다.
+          반대로 사용자가 직접 여는 창(명령 팔레트·빠른 입력)과 온보딩 5단계에서 쓰는 구글 로그인
+          창(OAuthModalsProvider)은 그대로 둔다.
+        */}
+        {!isFirstRun && (
+          <>
+            <UpdateNotification />
+            <EventPopup />
+            <ReminderPopup />
+            {driveConflicts.length > 0 && (
+              <DriveSyncConflictModal
+                conflicts={driveConflicts}
+                onResolve={async (conflict, resolution) => {
+                  await useDriveSyncStore.getState().resolveConflict(conflict, resolution);
+                  // 'remote' 해결 시 스토어 리로드
+                  if (resolution === 'remote') {
+                    await reloadStores([conflict.filename]);
+                  }
+                }}
+                onClose={() => useDriveSyncStore.getState().resetStatus()}
+              />
+            )}
+            <FirstSyncConfirmModalContainer />
+            {/* 8월 접속 시 "2학기가 시작됐나요?" 1회 확인 — 학기가 틀린 줄 모르는 사용자는 설정에
+                들어올 이유가 없으므로 앱이 먼저 묻는다(8월에만·학기당 1회, ADR-046). */}
+            <TermStartPromptModal />
+            <SharePromptOverlay />
+            <NeisSyncSuggestionBanner />
+            <CommandPaletteHint />
+          </>
         )}
-        <FirstSyncConfirmModalContainer />
-        {/* 8월 접속 시 "2학기가 시작됐나요?" 1회 확인 — 학기가 틀린 줄 모르는 사용자는 설정에
-            들어올 이유가 없으므로 앱이 먼저 묻는다(8월에만·학기당 1회, ADR-046). */}
-        <TermStartPromptModal />
         {showFeedback && <FeedbackModal onClose={() => setShowFeedback(false)} />}
         <ShareModal />
-        <SharePromptOverlay />
         <HelpChatPanel />
         <CloseActionDialog />
         <OAuthModalsProvider />
-        <NeisSyncSuggestionBanner />
         <CommandPalette onNavigate={setCurrentPage} />
-        <CommandPaletteHint />
         <QuickAddModal />
       </div>
     </div>
