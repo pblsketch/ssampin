@@ -188,3 +188,67 @@ describe('selectSidePinMemos', () => {
     });
   });
 });
+
+describe('메모 찾기', () => {
+  it('본문 아래쪽에 있는 말도 찾는다 — 첫 줄만 보면 있는 메모를 없다고 말한다', () => {
+    const items = selectSidePinMemos({
+      memos: [memo({ id: 'a', content: '3월 학년 회의\n장소는 시청각실\n준비물 명렬표' })],
+      locked: false,
+      query: '명렬표',
+    });
+
+    expect(items).toHaveLength(1);
+  });
+
+  it('대소문자를 가리지 않는다', () => {
+    const items = selectSidePinMemos({
+      memos: [memo({ id: 'a', content: 'Zoom 링크 정리' })],
+      locked: false,
+      query: 'zoom',
+    });
+
+    expect(items).toHaveLength(1);
+  });
+
+  it('걸리지 않은 메모는 뺀다', () => {
+    const items = selectSidePinMemos({
+      memos: [memo({ id: 'a', content: '학년 회의' }), memo({ id: 'b', content: '급식 신청' })],
+      locked: false,
+      query: '급식',
+    });
+
+    expect(items.map((item) => item.id)).toEqual(['b']);
+  });
+
+  it('찾는 말이 공백뿐이면 거르지 않는다', () => {
+    const items = selectSidePinMemos({
+      memos: [memo({ id: 'a', content: '학년 회의' }), memo({ id: 'b', content: '급식 신청' })],
+      locked: false,
+      query: '   ',
+    });
+
+    expect(items).toHaveLength(2);
+  });
+
+  it('걸린 줄을 미리보기로 보여준다 — 왜 나왔는지 보여야 고를 수 있다', () => {
+    const [item] = selectSidePinMemos({
+      memos: [memo({ id: 'a', content: '3월 학년 회의\n장소는 시청각실\n준비물 명렬표' })],
+      locked: false,
+      query: '명렬표',
+    });
+
+    expect(item?.preview).toContain('준비물 명렬표');
+  });
+
+  it('잠겨 있으면 찾는 말을 무시한다 — 개수만으로 내용이 새어 나간다', () => {
+    // 내용을 지우면서 걸러 주기까지 하면, 남은 개수가 "그 낱말이 든 메모 수"가 된다.
+    const items = selectSidePinMemos({
+      memos: [memo({ id: 'a', content: '학년 회의' }), memo({ id: 'b', content: '급식 신청' })],
+      locked: true,
+      query: '급식',
+    });
+
+    expect(items).toHaveLength(2);
+    expect(items.every((item) => item.label === '')).toBe(true);
+  });
+});

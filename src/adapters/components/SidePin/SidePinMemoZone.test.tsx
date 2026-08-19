@@ -10,6 +10,10 @@
  * - "쓰는 중"을 안 알리면 타이핑 도중 패널이 접혀 글이 날아간다
  * - 화면을 떠나며 손을 떼지 않으면 창이 영영 접히지 않는다
  * - 바깥에서 지운 메모를 열어 두면 저장이 조용히 실패한다
+ * - 파일 대화상자를 보는 동안 "쓰는 중"을 안 걸면 패널이 접혀 고른 그림이 붙지 못한다
+ * - 이미지 안내를 안 치우면 다음에 연 메모에 엉뚱하게 붙어 있다
+ * - 검색 칸을 "쓰는 중"으로 안 치면 찾는 말을 치는 도중에 패널이 접힌다
+ * - 검색 결과가 없을 때 "첫 메모 쓰기"를 내밀면 있는 메모를 없다고 말하는 셈이 된다
  */
 import { describe, expect, test, vi, beforeEach, afterEach } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
@@ -45,6 +49,38 @@ vi.mock('@adapters/stores/useMemoStore', async () => {
     updateColor: vi.fn(async (id: string, color: string) => {
       set({
         memos: (get()['memos'] as Memo[]).map((m) => (m.id === id ? { ...m, color } : m)),
+      });
+    }),
+    updateFontSize: vi.fn(async (id: string, fontSize: string) => {
+      set({
+        memos: (get()['memos'] as Memo[]).map((m) => (m.id === id ? { ...m, fontSize } : m)),
+      });
+    }),
+    // 진짜 attachImage는 크기·형식을 보고 리사이즈까지 한다. 여기서는 그 결과만 흉내 낸다.
+    attachImage: vi.fn(async (id: string, blob: Blob, fileName: string) => {
+      if (!['image/png', 'image/jpeg', 'image/webp'].includes(blob.type)) {
+        return { ok: false as const, reason: 'mime' as const };
+      }
+      const image = {
+        dataUrl: 'data:image/png;base64,AAAA',
+        fileName,
+        mimeType: blob.type,
+        width: 10,
+        height: 10,
+        originalSize: blob.size,
+      };
+      set({
+        memos: (get()['memos'] as Memo[]).map((m) => (m.id === id ? { ...m, image } : m)),
+      });
+      return { ok: true as const };
+    }),
+    detachImage: vi.fn(async (id: string) => {
+      set({
+        memos: (get()['memos'] as Memo[]).map((m) => {
+          if (m.id !== id) return m;
+          const { image: _dropped, ...rest } = m;
+          return rest as Memo;
+        }),
       });
     }),
     deleteMemo: vi.fn(async (id: string) => {
@@ -354,5 +390,251 @@ describe('Esc', () => {
 
     expect(screen.queryByText('이 메모를 지울까요?')).toBeNull();
     expect(screen.getByRole('textbox', { name: '메모 내용' })).toBeTruthy();
+  });
+});
+
+describe('글자 크기', () => {
+  test('고른 크기를 저장한다 — 본체 메모와 같은 값을 함께 쓴다', async () => {
+    seed([memo('a', '오늘 할 일', '2026-01-05T00:00:00.000Z')]);
+    renderZone();
+
+    fireEvent.click(screen.getByRole('button', { name: /오늘 할 일/ }));
+    fireEvent.click(screen.getByRole('button', { name: '글자 크기' }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '크게' }));
+    });
+
+    expect(useMemoStore.getState()['updateFontSize']).toHaveBeenCalledWith('a', 'lg');
+  });
+
+  test('고른 크기가 글 쓰는 칸에 실제로 적용된다', async () => {
+    // 저장만 되고 화면이 그대로면 사람 눈에는 "안 먹는 기능"이다.
+    seed([memo('a', '오늘 할 일', '2026-01-05T00:00:00.000Z')]);
+    renderZone();
+
+    fireEvent.click(screen.getByRole('button', { name: /오늘 할 일/ }));
+    fireEvent.click(screen.getByRole('button', { name: '글자 크기' }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '아주 크게' }));
+    });
+
+    expect(screen.getByRole('textbox', { name: '메모 내용' }).className).toContain('text-xl');
+  });
+
+  test('글자 크기 줄이 펴져 있으면 Esc는 그 줄만 닫는다', () => {
+    seed([memo('a', '오늘 할 일', '2026-01-05T00:00:00.000Z')]);
+    renderZone();
+
+    fireEvent.click(screen.getByRole('button', { name: /오늘 할 일/ }));
+    fireEvent.click(screen.getByRole('button', { name: '글자 크기' }));
+    fireEvent.keyDown(screen.getByRole('textbox', { name: '메모 내용' }), { key: 'Escape' });
+
+    expect(screen.queryByRole('button', { name: '크게' })).toBeNull();
+    expect(screen.getByRole('textbox', { name: '메모 내용' })).toBeTruthy();
+  });
+});
+
+describe('이미지', () => {
+  /** 파일 선택 창을 여는 단추를 누른다 */
+  function openPicker(): void {
+    fireEvent.click(screen.getByRole('button', { name: '이미지 넣기' }));
+  }
+
+  function pngFile(): File {
+    return new File(['x'], '칠판.png', { type: 'image/png' });
+  }
+
+  test('파일 선택 창을 여는 동안 "쓰는 중"을 건다 — 안 걸면 패널이 접혀 그림이 붙지 못한다', () => {
+    seed([memo('a', '오늘 할 일', '2026-01-05T00:00:00.000Z')]);
+    renderZone();
+
+    fireEvent.click(screen.getByRole('button', { name: /오늘 할 일/ }));
+    openPicker();
+
+    expect(lastActivity()).toBe('dialog-open');
+  });
+
+  test('아무것도 고르지 않고 닫으면 "쓰는 중"이 풀린다 — 안 그러면 패널이 영영 안 접힌다', async () => {
+    seed([memo('a', '오늘 할 일', '2026-01-05T00:00:00.000Z')]);
+    const { container } = renderZone();
+
+    fireEvent.click(screen.getByRole('button', { name: /오늘 할 일/ }));
+    openPicker();
+
+    const input = container.querySelector('input[type="file"]');
+    expect(input).toBeTruthy();
+    await act(async () => {
+      // 취소하면 파일 없이 change가 온다.
+      fireEvent.change(input as HTMLInputElement, { target: { files: [] } });
+    });
+
+    expect(lastActivity()).not.toBe('dialog-open');
+  });
+
+  test('고른 그림을 메모에 붙인다', async () => {
+    seed([memo('a', '오늘 할 일', '2026-01-05T00:00:00.000Z')]);
+    const { container } = renderZone();
+
+    fireEvent.click(screen.getByRole('button', { name: /오늘 할 일/ }));
+    openPicker();
+    await act(async () => {
+      fireEvent.change(container.querySelector('input[type="file"]') as HTMLInputElement, {
+        target: { files: [pngFile()] },
+      });
+    });
+
+    expect(useMemoStore.getState()['attachImage']).toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: '이미지 크게 보기' })).toBeTruthy();
+  });
+
+  test('붙일 수 없는 파일이면 이유를 사람 말로 알려 준다 — 조용히 실패하면 안 된다', async () => {
+    seed([memo('a', '오늘 할 일', '2026-01-05T00:00:00.000Z')]);
+    const { container } = renderZone();
+
+    fireEvent.click(screen.getByRole('button', { name: /오늘 할 일/ }));
+    openPicker();
+    await act(async () => {
+      fireEvent.change(container.querySelector('input[type="file"]') as HTMLInputElement, {
+        target: { files: [new File(['x'], '보고서.pdf', { type: 'application/pdf' })] },
+      });
+    });
+
+    expect(screen.getByRole('alert').textContent).toContain('PNG');
+  });
+
+  test('목록으로 나가면 안내가 사라진다 — 다음에 연 메모에 엉뚱하게 붙어 있으면 안 된다', async () => {
+    seed([
+      memo('a', '오늘 할 일', '2026-01-05T00:00:00.000Z'),
+      memo('b', '다른 메모', '2026-01-04T00:00:00.000Z'),
+    ]);
+    const { container } = renderZone();
+
+    fireEvent.click(screen.getByRole('button', { name: /오늘 할 일/ }));
+    openPicker();
+    await act(async () => {
+      fireEvent.change(container.querySelector('input[type="file"]') as HTMLInputElement, {
+        target: { files: [new File(['x'], '보고서.pdf', { type: 'application/pdf' })] },
+      });
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '메모 목록으로' }));
+    });
+    fireEvent.click(screen.getByRole('button', { name: /다른 메모/ }));
+
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  test('붙은 그림을 뺄 수 있다', async () => {
+    seed([
+      {
+        ...memo('a', '오늘 할 일', '2026-01-05T00:00:00.000Z'),
+        image: {
+          dataUrl: 'data:image/png;base64,AAAA',
+          fileName: '칠판.png',
+          mimeType: 'image/png',
+          width: 10,
+          height: 10,
+          originalSize: 100,
+        },
+      },
+    ]);
+    renderZone();
+
+    fireEvent.click(screen.getByRole('button', { name: /오늘 할 일/ }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '이미지 빼기' }));
+    });
+
+    expect(useMemoStore.getState()['detachImage']).toHaveBeenCalledWith('a');
+  });
+});
+
+describe('메모 찾기', () => {
+  /** 검색 칸이 뜰 만큼(5개) 메모를 깔아 둔다 */
+  function seedMany(): void {
+    seed([
+      memo('a', '3월 학년 회의', '2026-01-05T00:00:00.000Z'),
+      memo('b', '급식 신청 마감', '2026-01-04T00:00:00.000Z'),
+      memo('c', '동아리 명단', '2026-01-03T00:00:00.000Z'),
+      memo('d', '체험학습 안내', '2026-01-02T00:00:00.000Z'),
+      memo('e', '상담 일정', '2026-01-01T00:00:00.000Z'),
+    ]);
+  }
+
+  test('찾는 말에 걸리는 메모만 남는다', () => {
+    seedMany();
+    renderZone();
+
+    fireEvent.change(screen.getByRole('searchbox', { name: '메모 찾기' }), {
+      target: { value: '급식' },
+    });
+
+    expect(screen.getByRole('button', { name: /급식 신청 마감/ })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /3월 학년 회의/ })).toBeNull();
+  });
+
+  test('검색 칸에 손이 가 있으면 "쓰는 중"을 건다 — 안 걸면 치는 도중에 접힌다', () => {
+    seedMany();
+    renderZone();
+
+    fireEvent.focus(screen.getByRole('searchbox', { name: '메모 찾기' }));
+
+    expect(lastActivity()).toBe('editing');
+  });
+
+  test('검색 칸에서 손을 떼면 "쓰는 중"이 풀린다 — 안 그러면 패널이 영영 안 접힌다', () => {
+    seedMany();
+    renderZone();
+
+    const box = screen.getByRole('searchbox', { name: '메모 찾기' });
+    fireEvent.focus(box);
+    fireEvent.blur(box);
+
+    expect(lastActivity()).toBe('idle');
+  });
+
+  test('걸린 게 없으면 "첫 메모 쓰기"가 아니라 "찾는 메모가 없습니다"를 보여준다', () => {
+    // 메모는 있는데 없다고 말하면, 찾는 말을 지우면 나온다는 걸 알 길이 없다.
+    seedMany();
+    renderZone();
+
+    fireEvent.change(screen.getByRole('searchbox', { name: '메모 찾기' }), {
+      target: { value: '있을 리 없는 말' },
+    });
+
+    expect(screen.getByText('찾는 메모가 없습니다')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: '첫 메모 쓰기' })).toBeNull();
+  });
+
+  test('메모가 몇 개 없으면 검색 칸을 띄우지 않는다 — 자리만 차지한다', () => {
+    seed([memo('a', '하나뿐인 메모', '2026-01-05T00:00:00.000Z')]);
+    renderZone();
+
+    expect(screen.queryByRole('searchbox', { name: '메모 찾기' })).toBeNull();
+  });
+
+  test('새 메모를 만들면 찾던 말을 지운다 — 안 지우면 방금 만든 것이 목록에서 사라진다', async () => {
+    seedMany();
+    renderZone();
+
+    fireEvent.change(screen.getByRole('searchbox', { name: '메모 찾기' }), {
+      target: { value: '급식' },
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '새 메모' }));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '메모 목록으로' }));
+    });
+
+    expect(screen.getByRole('searchbox', { name: '메모 찾기' })).toHaveProperty('value', '');
+    expect(screen.getByRole('button', { name: /3월 학년 회의/ })).toBeTruthy();
+  });
+
+  test('잠기면 검색 칸이 사라진다 — 쳐도 걸러지지 않으므로 남겨 두면 고장으로 보인다', () => {
+    seedMany();
+    renderZone(true);
+
+    expect(screen.queryByRole('searchbox', { name: '메모 찾기' })).toBeNull();
   });
 });

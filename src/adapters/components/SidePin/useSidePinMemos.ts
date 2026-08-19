@@ -20,12 +20,20 @@ export interface UseSidePinMemosResult {
   readonly items: readonly SidePinMemoListItem[];
   /** 처음 불러오기가 끝났는가. 끝나기 전에는 "메모 없음"을 보여주면 안 된다 */
   readonly loaded: boolean;
+  /**
+   * 검색으로 거르기 **전** 개수.
+   *
+   * 화면이 "아직 한 개도 없다"와 "있는데 검색에 안 걸렸다"를 구별하려면 이 값이 필요하다.
+   * 둘을 같은 말로 보여주면, 찾는 말을 지우면 나온다는 사실을 알 길이 없다.
+   */
+  readonly total: number;
 }
 
 /**
  * @param locked 잠금·절전 등 보호 상태. 참이면 내용을 아예 만들지 않는다.
+ * @param query  찾을 말. 거르는 규칙은 여기가 아니라 `selectSidePinMemos`가 정한다.
  */
-export function useSidePinMemos(locked: boolean): UseSidePinMemosResult {
+export function useSidePinMemos(locked: boolean, query = ''): UseSidePinMemosResult {
   const memos = useMemoStore((state) => state.memos);
   const loaded = useMemoStore((state) => state.loaded);
   const load = useMemoStore((state) => state.load);
@@ -45,6 +53,8 @@ export function useSidePinMemos(locked: boolean): UseSidePinMemosResult {
     });
   }, [load]);
 
-  const items = useMemo(() => selectSidePinMemos({ memos, locked }), [memos, locked]);
-  return { items, loaded };
+  const items = useMemo(() => selectSidePinMemos({ memos, locked, query }), [memos, locked, query]);
+  // 보관한 메모는 옆핀에 애초에 안 나오므로 전체 개수에서도 뺀다.
+  const total = useMemo(() => memos.filter((memo) => !memo.archived).length, [memos]);
+  return { items, loaded, total };
 }
