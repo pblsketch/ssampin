@@ -42,6 +42,17 @@ export type SidePinEvent =
   // ── 제품 의도: 화면이 보낸다 ──
   /** 손잡이·영역 헤더·고정 아이콘을 클릭해 고정을 켜고 껐다 */
   | { readonly type: 'toggle-pin'; readonly zone: SidePinZone }
+  /**
+   * 펼쳐진 패널에서 볼 칸만 바꾼다 — 접힌 띠를 눌렀을 때.
+   *
+   * `toggle-pin`과 나눈 이유: 저쪽은 고정까지 함께 걸고 창 포커스를 가져오지만,
+   * 이쪽은 **무게중심만 옮긴다.** 띠를 눌렀다고 고정까지 걸리면 마우스를 빼도
+   * 접히지 않아, 잠깐 보고 닫는다는 옆핀의 목적과 어긋난다.
+   *
+   * 열고 닫는 일은 하지 않는다(`surface` 불변). 이 이벤트에 여닫기까지 얹으면
+   * "칸 바꾸기"와 "닫기"가 한 통로에 섞여 나중에 어느 쪽이 닫았는지 추적할 수 없다.
+   */
+  | { readonly type: 'focus-zone'; readonly zone: SidePinZone }
   /** 메모 편집기의 상태가 바뀌었다 */
   | { readonly type: 'editor-activity-changed'; readonly activity: MemoEditorActivity }
   /** 단축키로 열고 닫는다 */

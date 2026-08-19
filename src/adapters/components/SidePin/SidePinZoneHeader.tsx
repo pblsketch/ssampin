@@ -19,6 +19,17 @@ export interface SidePinZoneHeaderProps {
   readonly action?: React.ReactNode;
 }
 
+/**
+ * 두 칸의 아이콘과 이름 — 머리말과 접힌 띠가 같은 것을 써야 한다.
+ *
+ * 띠는 접힌 칸의 머리말이 그대로 내려앉은 것이므로, 값이 갈라지면 접었다 폈을 때
+ * 아이콘이 바뀌는 것처럼 보인다.
+ */
+export const SIDE_PIN_ZONE_META = {
+  widget: { icon: 'dashboard', title: '위젯' },
+  memo: { icon: 'sticky_note_2', title: '메모' },
+} as const;
+
 export function SidePinZoneHeader({ icon, title, action }: SidePinZoneHeaderProps) {
   return (
     <header className="flex shrink-0 items-center gap-1.5 border-b border-sp-border bg-sp-surface px-3 py-1.5">
@@ -31,5 +42,72 @@ export function SidePinZoneHeader({ icon, title, action }: SidePinZoneHeaderProp
       <h2 className="flex-1 text-caption font-semibold text-sp-text">{title}</h2>
       {action}
     </header>
+  );
+}
+
+/**
+ * 접힌 칸의 띠 — 누르면 그 칸으로 넘어간다.
+ *
+ * 머리말과 같은 높이(48px)·같은 색이라 "접힌 머리말"로 읽힌다. 다른 점은 두 가지다.
+ * ①띠 전체가 버튼이다 — 제목 글자만 누르게 하면 표적이 너무 작다.
+ * ②**오른쪽 슬롯("새 메모")을 그리지 않는다** — 48px 안에 누를 곳이 둘이면
+ *   띠를 펴려다 새 메모가 만들어진다.
+ *
+ * `expandable`이 거짓이면(편집 때문에 접힌 경우) 누를 수 없는 띠로 그린다.
+ * 눌러도 편집이 이겨 그대로이므로, 눌리는 척하면 고장으로 보인다.
+ */
+export interface SidePinCollapsedZoneBandProps {
+  readonly icon: string;
+  readonly title: string;
+  readonly expandable: boolean;
+  readonly onExpand: () => void;
+}
+
+export function SidePinCollapsedZoneBand({
+  icon,
+  title,
+  expandable,
+  onExpand,
+}: SidePinCollapsedZoneBandProps) {
+  const body = (
+    <>
+      <span
+        aria-hidden
+        className="material-symbols-outlined text-icon-sm leading-none text-sp-muted"
+      >
+        {icon}
+      </span>
+      <span className="flex-1 text-left text-caption font-semibold text-sp-text">{title}</span>
+      {expandable && (
+        <span
+          aria-hidden
+          className="material-symbols-outlined text-icon-sm leading-none text-sp-muted"
+        >
+          unfold_more
+        </span>
+      )}
+    </>
+  );
+
+  const shared =
+    'flex h-12 w-full shrink-0 items-center gap-1.5 border-b border-sp-border bg-sp-surface px-3';
+
+  if (!expandable) {
+    return (
+      <div aria-hidden className={shared}>
+        {body}
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onExpand}
+      aria-label={`${title} 칸 펼치기`}
+      className={`${shared} transition-colors duration-sp-quick hover:bg-sp-bg focus-visible:outline focus-visible:outline-2 focus-visible:outline-sp-accent focus-visible:-outline-offset-2`}
+    >
+      {body}
+    </button>
   );
 }

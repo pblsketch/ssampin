@@ -677,6 +677,13 @@ interface ElectronAPI {
     startRailDrag?: () => void;
     endRailDrag?: () => void;
     togglePin: (zone: 'widget' | 'memo' | 'both') => void;
+    /**
+     * 접힌 띠를 눌러 볼 칸만 바꾼다 — 고정은 걸지 않는다.
+     *
+     * **없을 수 있다.** preload는 앱을 다시 켜야 갱신되므로 새 화면이 옛 preload
+     * 위에서 도는 시간이 있다. 그냥 부르면 패널이 통째로 죽으니 `?.()`로 감쌀 것.
+     */
+    focusZone?: (zone: 'widget' | 'memo' | 'both') => void;
     requestClose: () => void;
     toggleShortcut?: () => void;
     openMain: () => void;

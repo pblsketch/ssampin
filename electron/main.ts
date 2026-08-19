@@ -3123,6 +3123,12 @@ function registerIpcHandlers(): void {
     sidePin?.service.dispatch({ type: 'toggle-pin', zone });
   });
 
+  // 접힌 띠를 눌렀다 — 볼 칸만 옮긴다. 고정도, 여닫기도 하지 않는다.
+  ipcMain.on('sidePin:focus-zone', (_event, zone: string) => {
+    if (zone !== 'widget' && zone !== 'memo' && zone !== 'both') return;
+    sidePin?.service.dispatch({ type: 'focus-zone', zone });
+  });
+
   ipcMain.on('sidePin:request-close', () => {
     sidePin?.service.dispatch({ type: 'close-requested' });
   });

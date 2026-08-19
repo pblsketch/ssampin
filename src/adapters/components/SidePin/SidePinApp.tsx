@@ -283,6 +283,9 @@ export function SidePinApp() {
           ) : undefined
         }
         onTogglePin={(zone) => window.electronAPI?.sidePin?.togglePin(zone)}
+        // `?.()`로 감싼다 — 옛 preload 위에서 돌면 이 함수가 없는데, 그냥 부르면
+        // 패널이 통째로 죽는다. 띠를 못 누르는 편이 낫다.
+        onFocusZone={(zone) => window.electronAPI?.sidePin?.focusZone?.(zone)}
         onClose={() => window.electronAPI?.sidePin?.requestClose()}
         onOpenMain={() => window.electronAPI?.sidePin?.openMain()}
         memoEditing={memoEditing}

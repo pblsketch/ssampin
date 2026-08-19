@@ -1089,6 +1089,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     togglePin: (zone: 'widget' | 'memo' | 'both'): void => {
       ipcRenderer.send('sidePin:toggle-pin', zone);
     },
+    /** 접힌 띠를 눌러 볼 칸만 바꾼다 — 고정은 걸지 않는다 */
+    focusZone: (zone: 'widget' | 'memo' | 'both'): void => {
+      ipcRenderer.send('sidePin:focus-zone', zone);
+    },
     /** 단축키로 옆핀을 열고 닫는다 (메인 창 포커스 시 렌더러 keydown 폴백용) */
     toggleShortcut: (): void => {
       ipcRenderer.send('sidePin:toggle-shortcut');

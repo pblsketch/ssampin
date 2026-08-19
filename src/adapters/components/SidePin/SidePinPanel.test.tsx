@@ -3,8 +3,9 @@
  *
  * 옆핀 패널 렌더 테스트.
  *
- * 이 기능의 핵심 결정 하나를 여기서 지킨다 — **위젯과 메모를 탭으로 갈아 끼우지 않는다.**
- * 둘이 동시에 보이지 않으면 "잠깐 확인하고 닫는다"는 목적이 무너진다.
+ * 이 기능의 핵심 결정 하나를 여기서 지킨다 — **접힌 칸도 화면에서 사라지지 않는다.**
+ * 들어온 칸이 화면을 거의 다 쓰되 반대 칸은 48px 띠로 남아, 누르면 돌아올 수 있어야 한다.
+ * 띠마저 사라지면 탭이 되고, 반대 칸의 존재 자체가 안 보인다.
  */
 import { describe, expect, test, vi, afterEach } from 'vitest';
 import { cleanup, render, screen, fireEvent } from '@testing-library/react';
@@ -24,6 +25,7 @@ function renderPanel(overrides: Partial<Parameters<typeof SidePinPanel>[0]> = {}
     widgetSlot: <div>위젯 자리</div>,
     memoSlot: <div>메모 자리</div>,
     onTogglePin: vi.fn(),
+    onFocusZone: vi.fn(),
     onClose: vi.fn(),
     onOpenMain: vi.fn(),
     ...overrides,
@@ -32,47 +34,73 @@ function renderPanel(overrides: Partial<Parameters<typeof SidePinPanel>[0]> = {}
   return props;
 }
 
-describe('들어온 칸이 더 넓다', () => {
-  /** 두 칸을 감싸는 요소의 클래스를 꺼낸다 */
-  function zoneClasses(): { widget: string; memo: string } {
-    const widget = screen.getByText('위젯 자리').parentElement;
-    const memo = screen.getByText('메모 자리').parentElement;
-    return { widget: widget?.className ?? '', memo: memo?.className ?? '' };
+describe('들어온 칸이 화면을 거의 다 쓴다', () => {
+  /** 두 칸을 감싸는 요소를 꺼낸다 */
+  function zoneOf(zone: 'widget' | 'memo'): HTMLElement {
+    const el = document.querySelector(`[data-sidepin-zone="${zone}"]`);
+    if (el === null) throw new Error(`${zone} 칸을 찾을 수 없다`);
+    return el as HTMLElement;
   }
 
-  test('메모 칸으로 들어오면 메모가 더 넓다', () => {
+  test('메모 칸으로 들어오면 메모가 펼쳐지고 위젯은 띠가 된다', () => {
     renderPanel({ activeZone: 'memo' });
 
-    const { widget, memo } = zoneClasses();
-    expect(memo).toContain('flex-[3]');
-    expect(widget).toContain('flex-[2]');
+    expect(zoneOf('memo').getAttribute('data-sidepin-zone-fit')).toBe('full');
+    expect(zoneOf('widget').getAttribute('data-sidepin-zone-fit')).toBe('band');
   });
 
-  test('위젯 칸으로 들어오면 위젯이 더 넓다', () => {
+  test('위젯 칸으로 들어오면 거울이다', () => {
     renderPanel({ activeZone: 'widget' });
 
-    const { widget, memo } = zoneClasses();
-    expect(widget).toContain('flex-[3]');
-    expect(memo).toContain('flex-[2]');
+    expect(zoneOf('widget').getAttribute('data-sidepin-zone-fit')).toBe('full');
+    expect(zoneOf('memo').getAttribute('data-sidepin-zone-fit')).toBe('band');
   });
 
-  test('가리킨 곳이 없으면(단축키 등) 임의로 메모를 키우지 않는다', () => {
-    // 사용자가 정하지 않은 것을 앱이 정하면 안 된다. 기본은 위젯이 넓은 쪽이다.
-    renderPanel({ activeZone: null });
+  test.each([['both'], [null]] as const)(
+    '가리킨 곳이 없으면(%s) 둘 다 나눠 쓴다 — 임의로 한쪽을 키우지 않는다',
+    (activeZone) => {
+      renderPanel({ activeZone });
 
-    expect(zoneClasses().widget).toContain('flex-[3]');
-  });
+      expect(zoneOf('widget').getAttribute('data-sidepin-zone-fit')).toBe('shared');
+      expect(zoneOf('widget').className).toContain('flex-[3]');
+      expect(zoneOf('memo').className).toContain('flex-[2]');
+    },
+  );
 
-  test('한쪽을 아예 숨기지는 않는다 — 위아래로 나란히 둔 이유가 사라진다', () => {
+  test('접힌 칸도 화면에서 사라지지 않는다 — 띠로 남는다', () => {
     renderPanel({ activeZone: 'memo' });
 
+    expect(screen.getByRole('button', { name: '위젯 칸 펼치기' })).toBeTruthy();
+  });
+
+  test('접힌 칸의 본문은 들어내지 않고 감춘다 — 들어내면 스크롤·검색어가 초기화된다', () => {
+    renderPanel({ activeZone: 'memo' });
+
+    // 여전히 DOM에 있다(= 다시 만들어지지 않는다)
     expect(screen.getByText('위젯 자리')).toBeTruthy();
-    expect(screen.getByText('메모 자리')).toBeTruthy();
+    expect(screen.getByText('위젯 자리').parentElement?.className).toContain('hidden');
+  });
+
+  test('접힌 칸은 스크롤되지 않는다 — 머리말이 밀려 나가면 펼칠 곳이 사라진다', () => {
+    renderPanel({ activeZone: 'memo' });
+
+    const widget = zoneOf('widget').className;
+    expect(widget).toContain('overflow-hidden');
+    expect(widget).not.toContain('overflow-y-auto');
+  });
+
+  test('띠를 누르면 그 칸으로 넘어가자고 알린다', () => {
+    const props = renderPanel({ activeZone: 'memo' });
+
+    fireEvent.click(screen.getByRole('button', { name: '위젯 칸 펼치기' }));
+
+    expect(props.onFocusZone).toHaveBeenCalledTimes(1);
+    expect(props.onFocusZone).toHaveBeenCalledWith('widget');
   });
 });
 
 describe('패널 구조', () => {
-  test('위젯과 메모가 동시에 보인다 — 탭으로 갈아 끼우지 않는다', () => {
+  test('가리킨 곳이 없으면 위젯과 메모가 동시에 보인다', () => {
     renderPanel();
 
     expect(screen.getByText('위젯 자리')).toBeTruthy();
@@ -103,20 +131,44 @@ describe('패널 구조', () => {
   });
 });
 
-describe('고정', () => {
-  test('고정 버튼을 누르면 두 영역을 함께 고정한다', () => {
-    const props = renderPanel();
+describe('고정 — 지금 보는 칸을 겨눈다', () => {
+  test('가리킨 곳이 없으면 두 칸을 함께 고정한다', () => {
+    const props = renderPanel({ activeZone: null });
 
     fireEvent.click(screen.getByRole('button', { name: '고정' }));
 
     expect(props.onTogglePin).toHaveBeenCalledWith('both');
   });
 
-  test('고정된 상태는 눌린 상태로 표시되고 이름이 해제로 바뀐다', () => {
-    renderPanel({ pinnedZone: 'both' });
+  test('메모 칸을 보는 중이면 메모를 고정한다', () => {
+    // 늘 both 를 넘기면 손잡이로 한 칸을 고정해 둔 상태에서 해제가 아니라 재고정이 되고,
+    // activeZone 까지 함께 풀려 화면이 반으로 갈라진다.
+    const props = renderPanel({ activeZone: 'memo' });
+
+    fireEvent.click(screen.getByRole('button', { name: '메모 고정' }));
+
+    expect(props.onTogglePin).toHaveBeenCalledWith('memo');
+  });
+
+  test('지금 칸이 고정돼 있으면 이름이 해제로 바뀐다', () => {
+    renderPanel({ activeZone: 'memo', pinnedZone: 'memo' });
 
     const button = screen.getByRole('button', { name: '고정 해제' });
     expect(button.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  test('다른 칸이 고정돼 있으면 "고정 해제"라고 쓰지 않는다 — 눌러도 안 풀린다', () => {
+    // 손잡이 위젯 버튼으로 고정한 뒤 메모 칸으로 넘어온 상황.
+    renderPanel({ activeZone: 'memo', pinnedZone: 'widget' });
+
+    expect(screen.queryByRole('button', { name: '고정 해제' })).toBeNull();
+    expect(screen.getByRole('button', { name: '메모 고정' })).toBeTruthy();
+  });
+
+  test('양쪽 고정 상태에서 두 칸을 나눠 보고 있으면 해제로 표시된다', () => {
+    renderPanel({ activeZone: 'both', pinnedZone: 'both' });
+
+    expect(screen.getByRole('button', { name: '고정 해제' })).toBeTruthy();
   });
 
   test('닫기를 누르면 알린다', () => {
@@ -134,6 +186,12 @@ describe('메모 편집 중', () => {
 
     expect(screen.getByText('위젯 자리')).toBeTruthy();
     expect(screen.getByText('메모 자리')).toBeTruthy();
+  });
+
+  test('편집 때문에 접힌 띠는 누를 수 없다 — 눌러도 편집이 이겨 그대로다', () => {
+    renderPanel({ memoEditing: true });
+
+    expect(screen.queryByRole('button', { name: '위젯 칸 펼치기' })).toBeNull();
   });
 });
 
@@ -179,8 +237,8 @@ describe('디자인 규칙', () => {
 describe('쓰는 칸에 자리를 몰아준다', () => {
   function zoneClassesOf(): { widget: string; memo: string } {
     return {
-      widget: screen.getByText('위젯 자리').parentElement?.className ?? '',
-      memo: screen.getByText('메모 자리').parentElement?.className ?? '',
+      widget: document.querySelector('[data-sidepin-zone="widget"]')?.className ?? '',
+      memo: document.querySelector('[data-sidepin-zone="memo"]')?.className ?? '',
     };
   }
 

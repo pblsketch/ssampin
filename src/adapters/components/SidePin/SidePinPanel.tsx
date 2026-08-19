@@ -1,9 +1,10 @@
 /**
  * 옆핀 패널 — 펼쳤을 때 보이는 본체.
  *
- * 위는 위젯, 아래는 메모다. 둘을 탭으로 갈아 끼우지 않고 위아래로 나란히 두는 것이
- * 이 기능의 핵심 결정이다. 위젯을 보려고 메모를 덮어 버리면, "잠깐 확인하고 닫는다"는
- * 목적이 무너진다.
+ * 위는 위젯, 아래는 메모다. 들어온 칸이 화면을 거의 다 쓰고 반대 칸은 48px 띠로 접히되,
+ * **띠는 화면에서 사라지지 않는다.** 탭으로 갈아 끼우면 반대 칸의 존재 자체가 안 보여
+ * "위젯 어디 갔지"가 되므로, 접어도 그 자리에 남겨 두고 누르면 돌아오게 한다.
+ * 배치를 정하는 규칙은 `sidePinZoneLayout.ts` 하나뿐이다.
  *
  * 화면 오른쪽 끝에 붙으므로 왼쪽만 둥글다. 손잡이와 같은 규칙이라, 접혔다 펴져도
  * 같은 물건이 커진 것처럼 보인다.
@@ -13,6 +14,8 @@
  */
 import type { ReactNode } from 'react';
 import type { SidePinPinnedZone, SidePinZone } from '@domain/entities/SidePinRuntimeState';
+import { SIDE_PIN_ZONE_META, SidePinCollapsedZoneBand } from './SidePinZoneHeader';
+import { resolveSidePinZoneLayout, type SidePinZoneFit } from './sidePinZoneLayout';
 import {
   SIDE_PIN_HIDDEN_OPACITY,
   SIDE_PIN_HIDDEN_TRANSFORM,
@@ -22,10 +25,10 @@ import {
 export interface SidePinPanelProps {
   readonly pinnedZone: SidePinPinnedZone;
   /**
-   * 어느 칸으로 들어와 열렸는가. 그 칸이 더 넓어진다.
+   * 어느 칸으로 들어와 열렸는가. 그 칸이 화면을 거의 다 쓴다.
    *
-   * 들어온 칸을 아예 통째로 보여주고 다른 칸을 숨기지는 않는다. 그러면 위젯을 보려고
-   * 메모를 덮는 셈이 되어, 위아래로 나란히 둔 이유가 사라진다. 넓이만 바꾼다.
+   * `both`·`null`(단축키·끌기 자리처럼 가리킨 곳이 없을 때)이면 둘 다 보여 준다 —
+   * 사용자가 고르지 않은 것을 앱이 대신 고르지 않는다.
    */
   readonly activeZone: SidePinZone | null;
   /**
@@ -47,7 +50,15 @@ export interface SidePinPanelProps {
   readonly appearanceOpen: boolean;
   readonly widgetSlot: ReactNode;
   readonly memoSlot: ReactNode;
-  readonly onTogglePin: (zone: 'both') => void;
+  /**
+   * 고정을 켜고 끈다. **지금 보는 칸**을 넘긴다.
+   *
+   * 늘 `both`를 넘기면, 손잡이로 한 칸을 고정해 둔 상태에서 이 버튼이 해제가 아니라
+   * `both` 재고정이 되고 `activeZone`까지 함께 풀려 화면이 반으로 갈라진다.
+   */
+  readonly onTogglePin: (zone: SidePinZone) => void;
+  /** 접힌 띠를 눌러 볼 칸을 옮긴다 — 고정은 걸지 않는다 */
+  readonly onFocusZone: (zone: SidePinZone) => void;
   readonly onClose: () => void;
   /**
    * 메인 쌤핀으로 돌아간다.
@@ -91,15 +102,51 @@ function HeaderButton({ icon, label, active = false, onClick }: HeaderButtonProp
 }
 
 /**
- * 두 칸의 넓이 비율.
+ * 한 칸을 그린다.
  *
- * 메모로 들어왔으면 메모가 더 넓다. 그 외에는 위젯이 넓다 — 단축키처럼 가리킨 곳이
- * 없을 때 임의로 메모를 키우면, 사용자가 정하지 않은 것을 앱이 정한 셈이 된다.
+ * 접혔을 때 **본문을 들어내지 않고 감춘다**(`hidden`). 들어내면 그 칸이 통째로
+ * 다시 만들어져 스크롤 위치·검색어·열어 둔 위젯이 전부 초기화된다. 메모를 쓰는 동안
+ * 위젯 칸이 접히는 기존 동작에서도 같은 문제가 생기므로 여기서 함께 막는다.
  */
-function zoneGrowth(activeZone: SidePinZone | null): { widget: string; memo: string } {
-  return activeZone === 'memo'
-    ? { widget: 'flex-[2]', memo: 'flex-[3]' }
-    : { widget: 'flex-[3]', memo: 'flex-[2]' };
+function ZoneSlot({
+  fit,
+  zone,
+  share,
+  onExpand,
+  children,
+}: {
+  readonly fit: SidePinZoneFit;
+  readonly zone: 'widget' | 'memo';
+  /** 둘이 나눠 쓸 때의 몫 */
+  readonly share: string;
+  readonly onExpand: () => void;
+  readonly children: ReactNode;
+}) {
+  const meta = SIDE_PIN_ZONE_META[zone];
+  const collapsed = fit.kind === 'band';
+
+  return (
+    <div
+      data-sidepin-zone={zone}
+      data-sidepin-zone-fit={fit.kind}
+      className={`min-h-0 shrink-0 transition-[flex-grow] duration-sp-base ${
+        collapsed
+          ? // 접힌 띠는 스크롤되면 안 된다 — 머리말이 위로 밀려 나가면 펼칠 곳이 사라진다.
+            'h-12 flex-none overflow-hidden'
+          : `${fit.kind === 'full' ? 'flex-1' : share} basis-0 overflow-y-auto`
+      }`}
+    >
+      {collapsed && (
+        <SidePinCollapsedZoneBand
+          icon={meta.icon}
+          title={meta.title}
+          expandable={fit.expandable}
+          onExpand={onExpand}
+        />
+      )}
+      <div className={collapsed ? 'hidden' : 'h-full'}>{children}</div>
+    </div>
+  );
 }
 
 export function SidePinPanel({
@@ -115,25 +162,29 @@ export function SidePinPanel({
   widgetSlot,
   memoSlot,
   onTogglePin,
+  onFocusZone,
   onClose,
   onOpenMain,
   memoEditing = false,
   widgetEditing = false,
 }: SidePinPanelProps) {
-  const pinned = pinnedZone !== 'none';
-  const growth = zoneGrowth(activeZone);
+  const layout = resolveSidePinZoneLayout({ activeZone, memoEditing, widgetEditing });
   /**
-   * 지금 자리를 몰아줄 칸.
+   * 고정 버튼이 겨누는 칸 — 지금 보고 있는 칸이다.
    *
-   * 두 칸이 동시에 편집 중일 수는 없다 — 한 칸이 48px 띠로 접히면 그 안에서 편집을
-   * 시작할 방법이 없기 때문이다. 그래도 둘 다 참으로 들어오면 **둘 다 접혀 아무것도
-   * 안 보이는** 최악이 되므로, 한쪽만 고르도록 여기서 좁힌다.
+   * 가리킨 곳이 없어 둘 다 보이는 중이면 `both`가 맞다. 그때는 한 칸만 고정하는 것이
+   * 무엇을 뜻하는지 화면으로 설명할 수 없다.
    */
-  const focusedZone: 'memo' | 'widget' | null = memoEditing
-    ? 'memo'
-    : widgetEditing
-      ? 'widget'
-      : null;
+  const pinTarget: SidePinZone =
+    activeZone === 'widget' || activeZone === 'memo' ? activeZone : 'both';
+  const pinned = pinnedZone === pinTarget;
+  const pinLabel = pinned
+    ? '고정 해제'
+    : pinTarget === 'widget'
+      ? '위젯 고정'
+      : pinTarget === 'memo'
+        ? '메모 고정'
+        : '고정';
   const panelRef = useSidePinMotion(leaving, motionActive);
 
   return (
@@ -161,9 +212,9 @@ export function SidePinPanel({
         />
         <HeaderButton
           icon={pinned ? 'keep' : 'keep_off'}
-          label={pinned ? '고정 해제' : '고정'}
+          label={pinLabel}
           active={pinned}
-          onClick={() => onTogglePin('both')}
+          onClick={() => onTogglePin(pinTarget)}
         />
         <HeaderButton icon="close" label="닫기" onClick={onClose} />
       </header>
@@ -171,17 +222,17 @@ export function SidePinPanel({
       {appearanceSlot}
 
       {/*
-        들어온 칸이 더 넓다. 한쪽에서 쓰는 중이면 **다른 칸을 요약 높이로 접어**
-        쓰는 칸이 넓게 쓰도록 한다 — 메모를 쓰면 위젯이, 위젯을 고치면 메모가 접힌다.
+        들어온 칸이 화면을 거의 다 쓰고 반대 칸은 띠로 접힌다. 편집 중이면 편집이 이긴다.
         min-h-0 이 없으면 안쪽 스크롤이 부모를 밀어내 헤더가 잘린다.
       */}
-      <div
-        className={`min-h-0 shrink-0 overflow-y-auto transition-[flex-grow] duration-sp-base ${
-          focusedZone === 'memo' ? 'h-12 flex-none' : `${growth.widget} basis-0`
-        }`}
+      <ZoneSlot
+        fit={layout.widget}
+        zone="widget"
+        share="flex-[3]"
+        onExpand={() => onFocusZone('widget')}
       >
         {widgetSlot}
-      </div>
+      </ZoneSlot>
 
       {/*
         두 칸 사이 이음매. 폭 안쪽으로 들여 짧게 그으면 "같은 목록의 구분선"으로 읽혀
@@ -190,13 +241,9 @@ export function SidePinPanel({
       */}
       <span aria-hidden className="h-px shrink-0 bg-sp-border" />
 
-      <div
-        className={`min-h-0 overflow-y-auto transition-[flex-grow] duration-sp-base ${
-          focusedZone === 'widget' ? 'h-12 flex-none' : `${growth.memo} basis-0`
-        }`}
-      >
+      <ZoneSlot fit={layout.memo} zone="memo" share="flex-[2]" onExpand={() => onFocusZone('memo')}>
         {memoSlot}
-      </div>
+      </ZoneSlot>
     </section>
   );
 }

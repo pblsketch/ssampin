@@ -19,6 +19,13 @@ interface Bridge {
   requestClose: ReturnType<typeof vi.fn>;
   openMain: ReturnType<typeof vi.fn>;
   reportPainted: ReturnType<typeof vi.fn>;
+  /**
+   * 접힌 띠를 눌러 볼 칸을 옮긴다.
+   *
+   * **일부러 선택 항목으로 둔다** — 실제 preload 도 그렇다. 앱을 다시 켜야 preload 가
+   * 갱신되므로 새 화면이 옛 preload 위에서 도는 시간이 있고, 그때 죽지 않아야 한다.
+   */
+  focusZone?: ReturnType<typeof vi.fn>;
 }
 
 let bridge: Bridge;
@@ -298,6 +305,31 @@ describe('사람이 한 일을 되돌려 보낸다', () => {
     fireEvent.click(screen.getByRole('button', { name: '닫기' }));
 
     expect(bridge.requestClose).toHaveBeenCalled();
+  });
+
+  test('접힌 띠를 누르면 볼 칸을 옮기자고 알린다', () => {
+    const focusZone = vi.fn();
+    bridge.focusZone = focusZone;
+    render(<SidePinApp />);
+    send({ surface: 'expanded', activeZone: 'memo' });
+
+    fireEvent.click(screen.getByRole('button', { name: '위젯 칸 펼치기' }));
+
+    expect(focusZone).toHaveBeenCalledTimes(1);
+    expect(focusZone).toHaveBeenCalledWith('widget');
+  });
+
+  test('옛 preload 라 focusZone 이 없어도 죽지 않는다 — 띠를 못 누르는 편이 낫다', () => {
+    // preload 는 앱을 다시 켜야 갱신되는데 화면 코드는 즉시 갱신된다. 그 사이의 시간에
+    // 그냥 부르면 패널이 통째로 죽어 아예 못 쓰게 된다.
+    expect(bridge.focusZone).toBeUndefined();
+    render(<SidePinApp />);
+    send({ surface: 'expanded', activeZone: 'memo' });
+
+    expect(() => {
+      fireEvent.click(screen.getByRole('button', { name: '위젯 칸 펼치기' }));
+    }).not.toThrow();
+    expect(screen.getByRole('button', { name: '위젯 칸 펼치기' })).toBeTruthy();
   });
 
   test('쌤핀 열기 버튼 — 메인으로 돌아갈 유일한 길', () => {

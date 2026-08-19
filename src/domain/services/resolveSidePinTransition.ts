@@ -770,6 +770,22 @@ function onHostResult(
   }
 }
 
+/**
+ * 볼 칸만 바꾼다 — 접힌 띠를 눌렀을 때.
+ *
+ * **여닫지 않는다.** 접혀 있으면 아무 일도 하지 않는데, 손잡이가 이미 "어느 칸으로
+ * 열지"를 정하는 통로라서다. 여기서 열기까지 하면 같은 일을 하는 길이 둘이 된다.
+ *
+ * 닫히는 중(`closing`)에도 하지 않는다. 사라질 화면의 배치를 고치는 셈이고,
+ * 되돌아온 뒤 무엇이 보일지가 손잡이가 아니라 마지막 클릭에 좌우된다.
+ */
+function onFocusZone(state: SidePinRuntimeState, zone: SidePinZone): SidePinTransitionResult {
+  if (!isSidePinResponsive(state)) return unchanged(state);
+  if (state.surface !== 'expanded' && state.surface !== 'opening') return unchanged(state);
+  if (state.activeZone === zone) return unchanged(state);
+  return { next: bump(state, { activeZone: zone }), commands: [] };
+}
+
 function onTogglePin(
   state: SidePinRuntimeState,
   zone: SidePinZone,
@@ -939,6 +955,9 @@ export function resolveSidePinTransition(
 
     case 'toggle-pin':
       return onTogglePin(state, event.zone, ctx);
+
+    case 'focus-zone':
+      return onFocusZone(state, event.zone);
 
     case 'editor-activity-changed':
       return onEditorActivityChanged(state, event.activity, ctx);

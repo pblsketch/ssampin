@@ -605,6 +605,61 @@ describe('접힘', () => {
 
 // ─── 고정 ────────────────────────────────────────────────────────
 
+describe('볼 칸 옮기기(focus-zone)', () => {
+  it('펼쳐진 상태에서 볼 칸만 바꾼다 — 고정도, 여닫기도 하지 않는다', () => {
+    const state = expandedByHover('rail-widget');
+
+    const moved = apply(state, { type: 'focus-zone', zone: 'memo' }, 2_000);
+
+    expect(moved.next.activeZone).toBe('memo');
+    expect(moved.next.surface).toBe(state.surface);
+    expect(moved.next.pinnedZone).toBe(state.pinnedZone);
+    expect(moved.next.pendingTransition).toBe(state.pendingTransition);
+    expect(moved.commands).toEqual([]);
+  });
+
+  it('접혀 있으면 아무 일도 하지 않는다 — 여는 통로는 손잡이 하나뿐이다', () => {
+    const state = enabledState();
+
+    const moved = apply(state, { type: 'focus-zone', zone: 'memo' }, 1_000);
+
+    expect(moved.next).toBe(state);
+  });
+
+  it('같은 칸을 다시 지정하면 상태를 건드리지 않는다', () => {
+    const state = expandedByHover('rail-widget');
+
+    const moved = apply(state, { type: 'focus-zone', zone: 'widget' }, 2_000);
+
+    expect(moved.next).toBe(state);
+  });
+
+  it('잠금·절전 중에는 무시한다 — 보호 상태에서 화면을 만들지 않는다', () => {
+    const protectedState = apply(
+      expandedByHover('rail-widget'),
+      { type: 'force-protect', reason: 'lock' },
+      2_000,
+    ).next;
+
+    const moved = apply(protectedState, { type: 'focus-zone', zone: 'memo' }, 2_100);
+
+    expect(moved.next).toBe(protectedState);
+  });
+
+  it('대조 — 같은 칸을 겨눈 toggle-pin 과 activeZone 결과가 같다', () => {
+    // activeZone 을 쓰는 곳이 둘이 되었으므로, 한쪽만 고치는 사고를 여기서 막는다.
+    const state = expandedByHover('rail-widget');
+
+    const focused = apply(state, { type: 'focus-zone', zone: 'memo' }, 2_000);
+    const pinned = apply(state, { type: 'toggle-pin', zone: 'memo' }, 2_000);
+
+    expect(focused.next.activeZone).toBe(pinned.next.activeZone);
+    // 다른 점은 분명하다 — 고정은 고정까지 걸고 창 포커스를 가져온다.
+    expect(focused.next.pinnedZone).toBe('none');
+    expect(pinned.next.pinnedZone).toBe('memo');
+  });
+});
+
 describe('고정', () => {
   it('고정하면 포커스를 가져오고 예약된 접힘을 취소한다', () => {
     const left = apply(
