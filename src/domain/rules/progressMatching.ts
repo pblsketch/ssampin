@@ -47,7 +47,35 @@ export interface MatchingInput {
  * @see src/adapters/components/ClassManagement/ProgressTab.tsx:136-191 (원본 인라인 함수)
  */
 export function getMatchingPeriods(input: MatchingInput): readonly number[] {
-  if (!input.date) return [];
+  return getMatchingPeriodsDetailed(input).periods;
+}
+
+/**
+ * 어느 단계에서 매칭됐는지.
+ *  - 1 = 교실명 + 과목 동시 일치 (가장 정확)
+ *  - 2 = 교실명만 부분 일치 — `'3-1'`이 `'3-10'`에, `'화학'`이 `'화학실'`에 걸릴 수 있다
+ *  - 3 = 담임반 시간표 폴백
+ */
+export type ProgressMatchStage = 1 | 2 | 3;
+
+export interface DetailedMatchResult {
+  readonly periods: readonly number[];
+  /** 매칭 0건이면 null. */
+  readonly matchStage: ProgressMatchStage | null;
+}
+
+/**
+ * `getMatchingPeriods`와 **완전히 같은 판정**을 하되 어느 단계에서 걸렸는지도 돌려준다.
+ *
+ * 왜 필요한가: 이 함수를 하루가 아니라 **학기 100일치에 무인 반복 적용**해 하나의 숫자로 접는
+ * 화면이 생겼다(학기 총 차시). 지금까지는 사용자가 눈앞에서 보며 써서 2단계 과대 매칭이 나도
+ * 즉시 보이고 손으로 고쳤지만, 접어 놓은 숫자에서는 알아챌 방법이 없다. 그래서 **어느 날이
+ * 느슨한 근거로 들어갔는지** 화면에 열어 보일 수 있어야 한다.
+ *
+ * 판정 로직은 한 벌만 유지한다 — `getMatchingPeriods`가 이 함수를 감싸므로 두 결과가 갈릴 수 없다.
+ */
+export function getMatchingPeriodsDetailed(input: MatchingInput): DetailedMatchResult {
+  if (!input.date) return { periods: [], matchStage: null };
   const periods: number[] = [];
   const className = input.className;
   const subjectName = input.classSubject;
@@ -65,8 +93,10 @@ export function getMatchingPeriods(input: MatchingInput): readonly number[] {
     }
   });
 
+  if (periods.length > 0) return { periods, matchStage: 1 };
+
   // 2단계: 교실명만으로 매칭 (과목명이 약간 다른 경우 커버)
-  if (periods.length === 0) {
+  {
     input.dayTeacherSchedule.forEach((slot, idx) => {
       if (!slot) return;
       const classroomMatch =
@@ -79,8 +109,10 @@ export function getMatchingPeriods(input: MatchingInput): readonly number[] {
     });
   }
 
+  if (periods.length > 0) return { periods, matchStage: 2 };
+
   // 3단계: 담임반 시간표 폴백 (교사 시간표가 없는 경우)
-  if (periods.length === 0) {
+  {
     const dayOfWeek = getDayOfWeek(new Date(input.date + 'T00:00:00'), input.weekendDays);
     const dayScheduleClass = dayOfWeek ? input.classSchedule[dayOfWeek] : undefined;
     if (dayScheduleClass && dayScheduleClass.length > 0) {
@@ -92,5 +124,5 @@ export function getMatchingPeriods(input: MatchingInput): readonly number[] {
     }
   }
 
-  return periods;
+  return periods.length > 0 ? { periods, matchStage: 3 } : { periods: [], matchStage: null };
 }

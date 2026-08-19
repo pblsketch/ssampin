@@ -521,6 +521,26 @@ export interface Settings {
    */
   readonly termStartPromptSkipped?: string;
   /**
+   * 학기별 **실제 종료일**('2026-2' → '2026-12-31') — `termStartDates`와 짝을 이루는 반대쪽 끝.
+   *
+   * 학기 총 수업 차시를 세려면 시작과 끝이 둘 다 필요한데, **앱은 끝도 알 수 없다**(ADR-037 —
+   * 방학 날짜는 학교마다 다르고, 달력으로 단정하면 시작일과 똑같은 이유로 틀린다). 그래서
+   * 시작일과 같은 규칙을 쓴다: **학교가 알려준 값만** 담는다.
+   *
+   * 채우는 경로 2가지: 학사일정에서 찾은 후보를 사용자가 확인 · 직접 입력.
+   * 미설정이면 차시 계산을 **하지 않고** 종료일을 묻는 안내를 띄운다 — 앱이 임의의 날짜를
+   * 채워 넣고 그 위에서 숫자를 만들지 않는다.
+   *
+   * 후보 탐색 정본: `@domain/rules/termEndFromSchedule`
+   */
+  readonly termEndDates?: Readonly<Record<string, string>>;
+  /**
+   * 종료일 확인 팝업을 사용자가 "나중에"로 넘긴 학기 라벨 — 같은 학기에 다시 묻지 않는다.
+   * `termStartPromptSkipped`와 같은 규칙이라, 답을 하면(termEndDates에 등록되면) 이 값과
+   * 무관하게 조용해지므로 별도 해제가 필요 없다.
+   */
+  readonly termEndPromptSkipped?: string;
+  /**
    * 시간표가 "이 학기 기준으로 최신"임을 확인한 학기 라벨('2026-1' 형식).
    *
    * 시간표는 학기가 바뀌어도 자동으로 갱신되지 않는데(원본은 학교가 올려야 한다) 그 사실을
