@@ -20,6 +20,7 @@ import { ConstraintHintBadge } from './ConstraintHintBadge';
 import { SeatingHistoryPanel } from './SeatingHistoryPanel';
 import { NameLearningMode } from './NameLearningMode';
 import { useStudentPhotoUrls } from '@adapters/hooks/useStudentPhotoUrls';
+import { FEATURE_FLAGS } from '@adapters/config/featureFlags';
 import { RosterEmptyState } from '@adapters/components/common/RosterEmptyState';
 import { ScrollRow } from '@adapters/components/common/ScrollRow';
 import { buildPairGroups, adjustPairGroupsForRow } from '@domain/rules/seatingLayoutRules';
@@ -287,7 +288,9 @@ export function Seating(props?: { embedded?: boolean }) {
   const [showHistoryPanel, setShowHistoryPanel] = useState(false);
   const [showNameLearning, setShowNameLearning] = useState(false);
   // 얼굴 사진은 학습 모드를 열 때만 읽고, 닫으면 곧바로 해제한다 (메모리·노출 표면 최소화)
-  const learningPhotoUrls = useStudentPhotoUrls(showNameLearning);
+  // 사진 기능 출시 보류 중에는 아예 읽지 않는다 — 사진이 안 넘어가면 이름 학습은
+  // 예전처럼 이름만 가지고 동작하고, "이름 쓰기" 모드는 스스로 잠긴다.
+  const learningPhotoUrls = useStudentPhotoUrls(FEATURE_FLAGS.studentPhotos && showNameLearning);
   const [showPresetDialog, setShowPresetDialog] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);
   const moreMenuRef = useRef<HTMLDivElement>(null);

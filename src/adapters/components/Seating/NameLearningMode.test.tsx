@@ -139,3 +139,25 @@ describe('NameLearningMode — 모드별 시작 지점', () => {
     expect(highlighted(container).getAttribute('aria-label')).toContain('1번');
   });
 });
+
+describe('사진 기능 출시 보류 — 꺼진 상태에서 "이름 쓰기"가 안 보인다', () => {
+  /**
+   * 수업반 사진 지원이 끝날 때까지 얼굴 사진 기능은 `FEATURE_FLAGS.studentPhotos = false`
+   * 로 나간다. 이 파일은 그 값을 바꾸지 않으므로 **출시되는 상태 그대로** 검사한다.
+   *
+   * 항목을 남겨 두면 눌러도 아무 일도 없는 버튼 옆에 "학생 사진이 있어야 써요" 안내만
+   * 뜬다 — 선생님은 어디서 사진을 넣는지 찾다가 못 찾는다(넣는 입구도 함께 막혀 있으므로).
+   * 사진 지원을 다시 열 때 이 테스트가 빨간불이 되면서 "여기도 되돌려라"라고 알려 준다.
+   */
+  it('모드 선택에 "이름 쓰기"가 없고 안내 문구도 뜨지 않는다', () => {
+    renderPanel();
+
+    expect(screen.queryByRole('radio', { name: '이름 쓰기' })).toBeNull();
+    expect(screen.queryByText(/'이름 쓰기'는 학생 사진이 있어야 써요/)).toBeNull();
+
+    // 출시된 3가지 모드는 그대로 있어야 한다 (같이 숨기면 이름 학습 자체가 망가진 것)
+    expect(screen.getByRole('radio', { name: '자유' })).toBeTruthy();
+    expect(screen.getByRole('radio', { name: '순서' })).toBeTruthy();
+    expect(screen.getByRole('radio', { name: '맞혀보기' })).toBeTruthy();
+  });
+});

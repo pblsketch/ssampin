@@ -4,6 +4,7 @@ import type { SeatingData } from '@domain/entities/Seating';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { gradeNameAnswer, acceptedNamesFor, toChosungHint } from '@domain/rules/nameAnswerGrading';
 import { LearningCard } from './LearningCard';
+import { FEATURE_FLAGS } from '@adapters/config/featureFlags';
 
 type LearningMode = 'free' | 'sequential' | 'quiz' | 'write';
 
@@ -424,7 +425,12 @@ export function NameLearningMode({
                 { value: 'free', label: '자유' },
                 { value: 'sequential', label: '순서' },
                 { value: 'quiz', label: '맞혀보기' },
-                { value: 'write', label: '이름 쓰기' },
+                // 이름 쓰기는 얼굴 사진이 있어야 성립한다. 사진 기능 출시 보류 중에는
+                // 항목 자체를 숨긴다 — 남겨 두면 "사진을 등록하세요" 안내만 뜨는,
+                // 영영 눌리지 않는 버튼이 된다.
+                ...(FEATURE_FLAGS.studentPhotos
+                  ? [{ value: 'write' as const, label: '이름 쓰기' }]
+                  : []),
               ] as ReadonlyArray<{ value: LearningMode; label: string }>
             ).map((opt) => {
               const active = mode === opt.value;
@@ -457,7 +463,7 @@ export function NameLearningMode({
                 </button>
               );
             })}
-            {!canUseWrite && (
+            {FEATURE_FLAGS.studentPhotos && !canUseWrite && (
               <span className="text-xs text-sp-muted ml-1 break-keep">
                 ('이름 쓰기'는 학생 사진이 있어야 써요)
               </span>

@@ -12,8 +12,18 @@
  * 2. **채점은 완전 일치만 정답** — 한 글자만 달라도 오답이고 재시도가 없다(오너 확정).
  *
  * 3. **사진이 없으면 이 모드를 못 쓴다** — 사진 보고 이름 맞히기가 성립하지 않기 때문.
+ *
+ * ⚠️ 이 파일은 **사진 기능이 켜진 상태**를 검사한다. 지금 앱은 수업반 사진 지원이 끝날 때까지
+ * `FEATURE_FLAGS.studentPhotos = false` 로 나가므로(출시 보류), 여기서 켠 값으로 바꿔 둔다.
+ * 안 그러면 "이름 쓰기" 항목이 화면에 아예 없어 이 가드가 통째로 죽는다.
+ * 꺼진 상태의 가드는 `NameLearningMode.test.tsx` 에 따로 있다.
  */
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
+
+vi.mock('@adapters/config/featureFlags', () => ({
+  FEATURE_FLAGS: { inlineAutosave: true, studentPhotos: true },
+}));
+
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import type { SeatingData } from '@domain/entities/Seating';
 import { NameLearningMode, type LearningStudentInfo } from './NameLearningMode';

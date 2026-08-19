@@ -33,6 +33,7 @@ import type { ImportAction, PlanResult } from '@domain/rules/rosterImportPlan';
 import { detectStudentNumberIssues } from '@domain/rules/studentNumberRules';
 import { applyImportPlan } from '@usecases/roster/applyImportPlan';
 import { PhotoRosterImportModal } from './RosterImport/PhotoRosterImportModal';
+import { FEATURE_FLAGS } from '@adapters/config/featureFlags';
 import {
   collectPhotoCandidates,
   toImportReadyStudents,
@@ -542,17 +543,20 @@ export function RosterManagementTab() {
             <span>일괄 입력</span>
           </button>
 
-          {/* 사진 명렬표 가져오기 — 이름과 얼굴 사진을 함께 읽어 온다 */}
-          <div className="flex flex-col items-start gap-1">
-            <button
-              onClick={() => setShowPhotoImport(true)}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface text-sm font-medium text-sp-text transition-colors shadow-sm"
-            >
-              <span className="material-symbols-outlined text-lg">photo_library</span>
-              <span>사진 명렬표</span>
-            </button>
-            <FormatHint formats=".hwp .xlsx" />
-          </div>
+          {/* 사진 명렬표 가져오기 — 이름과 얼굴 사진을 함께 읽어 온다.
+              수업반 사진 지원이 끝날 때까지 출시 보류라 입구를 막아 둔다 (FEATURE_FLAGS.studentPhotos) */}
+          {FEATURE_FLAGS.studentPhotos && (
+            <div className="flex flex-col items-start gap-1">
+              <button
+                onClick={() => setShowPhotoImport(true)}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface text-sm font-medium text-sp-text transition-colors shadow-sm"
+              >
+                <span className="material-symbols-outlined text-lg">photo_library</span>
+                <span>사진 명렬표</span>
+              </button>
+              <FormatHint formats=".hwp .xlsx" />
+            </div>
+          )}
 
           {/* 엑셀 가져오기 */}
           <div className="flex flex-col items-start gap-1">
@@ -1501,29 +1505,32 @@ export function RosterManagementTab() {
         </div>
       )}
 
-      {/* 사진 명렬표 가져오기 — 이름은 기존 병합 기계로, 사진은 그 뒤에 붙는다 */}
-      <PhotoRosterImportModal
-        isOpen={showPhotoImport}
-        onClose={() => {
-          // 창을 닫으면 아직 반영되지 않은 사진은 버린다 (취소와 같은 취급)
-          pendingPhotosRef.current = [];
-          setShowPhotoImport(false);
-        }}
-        ownerKind="homeroom"
-        ownerKey="homeroom"
-        currentStudentCount={students.length}
-        onConfirm={async (result) => {
-          // 사진은 명단이 확정된 뒤에 붙여야 하므로 여기서는 들고만 있는다
-          pendingPhotosRef.current = collectPhotoCandidates(result);
-          let applied = false;
-          await tryImport(toImportReadyStudents(result.names), () => {
-            applied = true;
+      {/* 사진 명렬표 가져오기 — 이름은 기존 병합 기계로, 사진은 그 뒤에 붙는다.
+          입구를 막아 두면 열릴 일이 없지만, 창 자체를 안 그려야 사진 코드가 아예 안 돈다. */}
+      {FEATURE_FLAGS.studentPhotos && (
+        <PhotoRosterImportModal
+          isOpen={showPhotoImport}
+          onClose={() => {
+            // 창을 닫으면 아직 반영되지 않은 사진은 버린다 (취소와 같은 취급)
+            pendingPhotosRef.current = [];
             setShowPhotoImport(false);
-          });
-          // 충돌이 있으면 tryImport 는 충돌 창만 띄우고 끝난다 — 아직 반영 전이라고 알린다
-          return applied;
-        }}
-      />
+          }}
+          ownerKind="homeroom"
+          ownerKey="homeroom"
+          currentStudentCount={students.length}
+          onConfirm={async (result) => {
+            // 사진은 명단이 확정된 뒤에 붙여야 하므로 여기서는 들고만 있는다
+            pendingPhotosRef.current = collectPhotoCandidates(result);
+            let applied = false;
+            await tryImport(toImportReadyStudents(result.names), () => {
+              applied = true;
+              setShowPhotoImport(false);
+            });
+            // 충돌이 있으면 tryImport 는 충돌 창만 띄우고 끝난다 — 아직 반영 전이라고 알린다
+            return applied;
+          }}
+        />
+      )}
 
       {/* Phase 3 — Import 충돌 해결 모달 */}
       {conflictPlan && conflictImported && (
