@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 번들 격리 게이트 — 학생 SPA 에 exceljs 누설 차단 + 교사 SPA 에 exceljs 존재 확인.
+ * 번들 격리 게이트 — 학생 SPA 에 특정 코드 누설 차단 + 교사 SPA 에 존재 확인.
  *
  * 동작 원칙: two-way assertion (vacuous-gate prevention).
  * - 학생 SPA(dist-student/assets/*.js) 에 'exceljs' 0회 등장
@@ -26,17 +26,42 @@ import { resolve, join } from 'node:path';
 
 const TEACHER_DIST = resolve('dist/assets');
 const STUDENT_DIST = resolve('dist-student/assets');
-const NEEDLE = 'exceljs';
+/**
+ * 감시 대상. 각 항목은 **학생 SPA 에 0회, 교사 SPA 에 1회 이상** 이어야 한다.
+ *
+ * ⚠️ needle 은 **압축(minify)에도 살아남는 문자열**이어야 한다.
+ * 클래스·함수 이름은 압축 과정에서 바뀔 수 있으므로 쓰면 안 되고,
+ * 패키지 이름이나 저장 경로 같은 문자열 리터럴을 쓴다.
+ */
+const NEEDLES = [
+  {
+    needle: 'exceljs',
+    studentLeakHint: "XlsxExporter.ts 의 `await import('exceljs')` 경로를 확인하라.",
+    teacherMissingHint:
+      'XlsxExporter 가 호출되는 모든 코드 경로가 dead-code-eliminated 됐는지 확인하라.',
+  },
+  {
+    // 학생 얼굴 사진. 학생 화면에 "지금은 안 뜬다"가 아니라 "뜨게 만들 수 없다"를 보장한다 —
+    // 사진 바이트가 화면으로 들어오는 유일한 관문이 이 저장 경로이므로,
+    // 학생 번들에 이 문자열이 없으면 사진을 렌더할 방법이 원리적으로 없다.
+    needle: 'student-photos',
+    studentLeakHint:
+      '학생 화면이 사진 저장소에 닿았다. StudentApp 계열에서 DI 컨테이너(studentPhotoRepository) 로 이어지는 import 를 끊어라.',
+    teacherMissingHint:
+      '교사 앱에서 학생 사진 저장소가 통째로 트리셰이킹됐다 — 이름 학습 사진 기능이 끊겼는지 확인하라.',
+  },
+];
 
 /**
  * @param {string} dir
- * @returns {boolean} true if any `.js` file inside contains `NEEDLE`.
+ * @param {string} needle
+ * @returns {boolean} true if any `.js` file inside contains `needle`.
  */
-function anyJsContainsNeedle(dir) {
+function anyJsContainsNeedle(dir, needle) {
   const files = readdirSync(dir).filter((f) => f.endsWith('.js'));
   for (const f of files) {
     const content = readFileSync(join(dir, f), 'utf-8');
-    if (content.toLowerCase().includes(NEEDLE)) return true;
+    if (content.toLowerCase().includes(needle)) return true;
   }
   return false;
 }
@@ -66,22 +91,18 @@ if (!existsSync(TEACHER_DIST)) {
   );
 }
 
-const studentLeak = anyJsContainsNeedle(STUDENT_DIST);
-if (studentLeak) {
-  fail(
-    1,
-    `학생 SPA 번들에 '${NEEDLE}' 발견 — dynamic import 격리 깨짐. XlsxExporter.ts 의 \`await import('exceljs')\` 경로를 확인하라.`,
-  );
-}
-
-const teacherHasNeedle = anyJsContainsNeedle(TEACHER_DIST);
-if (!teacherHasNeedle) {
-  fail(
-    1,
-    `교사 SPA 번들에 '${NEEDLE}' 부재 — XlsxExporter dynamic import 가 의도치 않게 끊겨 있을 수 있음 (vacuous-gate prevention). XlsxExporter 가 호출되는 모든 코드 경로가 dead-code-eliminated 됐는지 확인하라.`,
-  );
+for (const { needle, studentLeakHint, teacherMissingHint } of NEEDLES) {
+  if (anyJsContainsNeedle(STUDENT_DIST, needle)) {
+    fail(1, `학생 SPA 번들에 '${needle}' 발견 — 격리 깨짐. ${studentLeakHint}`);
+  }
+  if (!anyJsContainsNeedle(TEACHER_DIST, needle)) {
+    fail(
+      1,
+      `교사 SPA 번들에 '${needle}' 부재 — 게이트가 헛돌 위험 (vacuous-gate prevention). ${teacherMissingHint}`,
+    );
+  }
 }
 
 ok(
-  `학생 SPA(${STUDENT_DIST}) 에 '${NEEDLE}' 부재 + 교사 SPA(${TEACHER_DIST}) 에 '${NEEDLE}' 존재.`,
+  `감시 대상 ${NEEDLES.length}건(${NEEDLES.map((n) => n.needle).join(', ')}) 모두 학생 SPA 부재 + 교사 SPA 존재.`,
 );
