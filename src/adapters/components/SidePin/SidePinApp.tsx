@@ -202,12 +202,31 @@ export function SidePinApp() {
    * 한 박자 늦게 접혀 편집기가 덜컥거린다. 접힘을 막는 판단은 그대로 창이 한다.
    */
   const [memoEditing, setMemoEditing] = useState(false);
-  const reportEditorActivity = useCallback((activity: MemoEditorActivity): void => {
-    setMemoEditing(activity !== 'idle');
+  const [widgetEditing, setWidgetEditing] = useState(false);
+  /**
+   * "쓰는 중"을 창에 알린다 — 이게 걸려 있는 동안 패널이 접히지 않는다.
+   *
+   * 알림 자체는 두 칸이 함께 쓰지만, **배치는 칸마다 다르다.** 메모를 쓰면 위젯 칸이
+   * 접히고, 위젯을 고치면 메모 칸이 접힌다. 그래서 보낸 곳을 구분해 기억한다 —
+   * 하나로 합치면 위젯을 여는 순간 **위젯 칸이 접혀** 방금 연 것이 사라진다.
+   */
+  const reportActivity = useCallback((zone: 'memo' | 'widget', activity: MemoEditorActivity) => {
+    const busy = activity !== 'idle';
+    if (zone === 'memo') setMemoEditing(busy);
+    else setWidgetEditing(busy);
     // `?.()`로 감싼다. 옛 preload 위에서 돌면 이 함수가 없는데, 그냥 부르면
-    // 메모 칸 전체가 죽어 메모를 아예 못 쓰게 된다. 접힘 방지가 안 되는 편이 낫다.
+    // 그 칸 전체가 죽어 아예 못 쓰게 된다. 접힘 방지가 안 되는 편이 낫다.
     window.electronAPI?.sidePin?.reportEditorActivity?.(activity);
   }, []);
+
+  const reportMemoActivity = useCallback(
+    (activity: MemoEditorActivity) => reportActivity('memo', activity),
+    [reportActivity],
+  );
+  const reportWidgetActivity = useCallback(
+    (activity: MemoEditorActivity) => reportActivity('widget', activity),
+    [reportActivity],
+  );
 
   if (rendererSurface === 'rail' || (rendererSurface === 'legacy' && !showPanel)) {
     // 바깥 껍데기는 창을 채우되 손잡이는 실제 접힌 크기로 가운데 오른쪽에 고정한다.
@@ -267,6 +286,7 @@ export function SidePinApp() {
         onClose={() => window.electronAPI?.sidePin?.requestClose()}
         onOpenMain={() => window.electronAPI?.sidePin?.openMain()}
         memoEditing={memoEditing}
+        widgetEditing={widgetEditing}
         widgetSlot={
           <SidePinWidgetZone
             definitions={WIDGET_DEFINITIONS}
@@ -274,10 +294,11 @@ export function SidePinApp() {
             // 이미 있는 화면 이동 통로를 쓴다. 메인 창을 띄우고 그 화면으로 보낸 뒤,
             // 창 모드까지 되돌리는 일은 main이 한다.
             onOpenInApp={(target) => void window.electronAPI?.navigateToPage(target)}
+            onEditorActivityChange={reportWidgetActivity}
           />
         }
         memoSlot={
-          <SidePinMemoZone locked={view.locked} onEditorActivityChange={reportEditorActivity} />
+          <SidePinMemoZone locked={view.locked} onEditorActivityChange={reportMemoActivity} />
         }
       />
     </div>

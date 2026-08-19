@@ -58,6 +58,11 @@ export interface SidePinPanelProps {
   readonly onOpenMain: () => void;
   /** 메모를 편집 중이면 위젯 영역을 요약 높이로 접는다 */
   readonly memoEditing?: boolean;
+  /**
+   * 위젯 하나를 열어 고치는 중인가. 참이면 메모 칸을 요약 높이로 접는다.
+   * `memoEditing`의 거울이다 — 쓰는 칸에 자리를 몰아준다.
+   */
+  readonly widgetEditing?: boolean;
 }
 
 interface HeaderButtonProps {
@@ -113,9 +118,22 @@ export function SidePinPanel({
   onClose,
   onOpenMain,
   memoEditing = false,
+  widgetEditing = false,
 }: SidePinPanelProps) {
   const pinned = pinnedZone !== 'none';
   const growth = zoneGrowth(activeZone);
+  /**
+   * 지금 자리를 몰아줄 칸.
+   *
+   * 두 칸이 동시에 편집 중일 수는 없다 — 한 칸이 48px 띠로 접히면 그 안에서 편집을
+   * 시작할 방법이 없기 때문이다. 그래도 둘 다 참으로 들어오면 **둘 다 접혀 아무것도
+   * 안 보이는** 최악이 되므로, 한쪽만 고르도록 여기서 좁힌다.
+   */
+  const focusedZone: 'memo' | 'widget' | null = memoEditing
+    ? 'memo'
+    : widgetEditing
+      ? 'widget'
+      : null;
   const panelRef = useSidePinMotion(leaving, motionActive);
 
   return (
@@ -153,13 +171,13 @@ export function SidePinPanel({
       {appearanceSlot}
 
       {/*
-        들어온 칸이 더 넓다. 메모를 쓰는 중에는 위젯을 요약 높이로 접어
-        편집기가 넓게 쓰도록 한다.
+        들어온 칸이 더 넓다. 한쪽에서 쓰는 중이면 **다른 칸을 요약 높이로 접어**
+        쓰는 칸이 넓게 쓰도록 한다 — 메모를 쓰면 위젯이, 위젯을 고치면 메모가 접힌다.
         min-h-0 이 없으면 안쪽 스크롤이 부모를 밀어내 헤더가 잘린다.
       */}
       <div
         className={`min-h-0 shrink-0 overflow-y-auto transition-[flex-grow] duration-sp-base ${
-          memoEditing ? 'h-12 flex-none' : `${growth.widget} basis-0`
+          focusedZone === 'memo' ? 'h-12 flex-none' : `${growth.widget} basis-0`
         }`}
       >
         {widgetSlot}
@@ -173,7 +191,9 @@ export function SidePinPanel({
       <span aria-hidden className="h-px shrink-0 bg-sp-border" />
 
       <div
-        className={`min-h-0 basis-0 overflow-y-auto transition-[flex-grow] duration-sp-base ${growth.memo}`}
+        className={`min-h-0 overflow-y-auto transition-[flex-grow] duration-sp-base ${
+          focusedZone === 'widget' ? 'h-12 flex-none' : `${growth.memo} basis-0`
+        }`}
       >
         {memoSlot}
       </div>

@@ -24,6 +24,15 @@ export interface SidePinWidgetItem {
   readonly id: string;
   readonly name: string;
   readonly navigationTarget: SidePinNavigationTarget;
+  /**
+   * 옆핀 안에서 열어 고칠 수 있는가.
+   *
+   * 위젯 카드에 들어가는 요약본과 **고치는 화면은 같은 컴포넌트**다. 옵션(`isCompactMode`)
+   * 하나로 갈린다(`WidgetCard.tsx`). 그래서 옆핀도 같은 것을 크게 그리기만 하면 되는데,
+   * **아무 위젯이나 크게 그린다고 고칠 수 있는 것은 아니다** — 크게 보기만 하는 위젯
+   * (`expanded`)을 열어 두면 "왜 아무것도 못 고치지"가 된다. 등록부가 밝힌 것만 연다.
+   */
+  readonly editable: boolean;
 }
 
 /** 저장값이 현실과 어긋나 화면에서 뺀 항목 */
@@ -49,10 +58,25 @@ function eligibleOnly(definitions: readonly WidgetDefinition[]): WidgetDefinitio
   return definitions.filter((d) => d.sidePin?.eligible === true);
 }
 
+/**
+ * 등록부의 `modalMode` 중 **실제로 고칠 수 있는** 값.
+ *
+ * `expanded`·`view`·`large-only`는 크게 보기만 한다. 여기 없는 값이 새로 생기면
+ * 조용히 "못 고침"이 된다 — 그 편이 안전하다. 늘 위에 떠 있는 창에서 뜻하지 않게
+ * 고쳐지는 것보다, 못 고치는 편이 되돌리기 쉽다.
+ */
+const EDITABLE_MODAL_MODES: readonly string[] = ['edit', 'view+edit'];
+
 function toItem(definition: WidgetDefinition): SidePinWidgetItem | null {
   const meta = definition.sidePin;
   if (meta === undefined || !meta.eligible) return null;
-  return { id: definition.id, name: definition.name, navigationTarget: meta.navigationTarget };
+  return {
+    id: definition.id,
+    name: definition.name,
+    navigationTarget: meta.navigationTarget,
+    editable:
+      definition.modalMode !== undefined && EDITABLE_MODAL_MODES.includes(definition.modalMode),
+  };
 }
 
 /**

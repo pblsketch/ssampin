@@ -175,3 +175,45 @@ describe('디자인 규칙', () => {
     expect(source).toMatch(/opacity:\s*SIDE_PIN_HIDDEN_OPACITY/);
   });
 });
+
+describe('쓰는 칸에 자리를 몰아준다', () => {
+  function zoneClassesOf(): { widget: string; memo: string } {
+    return {
+      widget: screen.getByText('위젯 자리').parentElement?.className ?? '',
+      memo: screen.getByText('메모 자리').parentElement?.className ?? '',
+    };
+  }
+
+  test('메모를 쓰는 중이면 위젯 칸이 접힌다', () => {
+    renderPanel({ memoEditing: true });
+
+    const { widget, memo } = zoneClassesOf();
+    expect(widget).toContain('h-12');
+    expect(memo).not.toContain('h-12');
+  });
+
+  test('위젯을 고치는 중이면 메모 칸이 접힌다 — 메모의 거울이다', () => {
+    renderPanel({ widgetEditing: true });
+
+    const { widget, memo } = zoneClassesOf();
+    expect(memo).toContain('h-12');
+    expect(widget).not.toContain('h-12');
+  });
+
+  test('둘 다 참으로 들어와도 둘 다 접히지는 않는다 — 아무것도 안 보이는 화면이 된다', () => {
+    // 실제로는 한 칸이 48px 띠면 그 안에서 편집을 시작할 수 없어 동시에 참일 수 없다.
+    // 그래도 방어한다. 둘 다 접히면 사용자가 되돌릴 방법이 없다.
+    renderPanel({ memoEditing: true, widgetEditing: true });
+
+    const { widget, memo } = zoneClassesOf();
+    expect([widget.includes('h-12'), memo.includes('h-12')]).toContain(false);
+  });
+
+  test('아무 데도 안 쓰면 둘 다 펴져 있다 — 동시에 보이는 것이 이 기능의 전제다', () => {
+    renderPanel();
+
+    const { widget, memo } = zoneClassesOf();
+    expect(widget).not.toContain('h-12');
+    expect(memo).not.toContain('h-12');
+  });
+});

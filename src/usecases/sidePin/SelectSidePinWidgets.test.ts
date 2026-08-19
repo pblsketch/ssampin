@@ -141,3 +141,40 @@ describe('아무것도 고르지 않았을 때', () => {
     expect(result.items).toHaveLength(1);
   });
 });
+
+describe('옆핀 안에서 고칠 수 있는가', () => {
+  /** 적격 + modalMode 를 함께 지정한 위젯 */
+  function editableWidget(id: string, modalMode?: WidgetDefinition['modalMode']): WidgetDefinition {
+    return {
+      ...widget(id, { eligible: true, navigationTarget: 'schedule' as const }),
+      ...(modalMode === undefined ? {} : { modalMode }),
+    };
+  }
+
+  it("'view+edit' 위젯은 열어 고칠 수 있다", () => {
+    const result = selectSidePinWidgets({
+      definitions: [editableWidget('할일', 'view+edit')],
+      selectedIds: ['할일'],
+    });
+
+    expect(result.items[0]?.editable).toBe(true);
+  });
+
+  it("'expanded' 위젯은 크게 보기만 한다 — 열어 놓고 못 고치면 고장으로 보인다", () => {
+    const result = selectSidePinWidgets({
+      definitions: [editableWidget('급식', 'expanded')],
+      selectedIds: ['급식'],
+    });
+
+    expect(result.items[0]?.editable).toBe(false);
+  });
+
+  it('modalMode 를 안 적은 위젯은 못 고치는 쪽으로 둔다 — 늘 떠 있는 창에서는 그 편이 안전하다', () => {
+    const result = selectSidePinWidgets({
+      definitions: [editableWidget('무설정')],
+      selectedIds: ['무설정'],
+    });
+
+    expect(result.items[0]?.editable).toBe(false);
+  });
+});
