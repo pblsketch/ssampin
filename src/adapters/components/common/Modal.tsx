@@ -96,6 +96,9 @@ export function Modal({
           aria-labelledby={titleId}
           tabIndex={-1}
           data-modal-fallback
+          /* 유리(반투명) 설정에서 제외되는 표면 표시 — index.css 규칙 ⑥.
+             모달은 판단이 필요한 내용을 담는 면이라 뒤가 비치면 안 된다. */
+          data-sp-overlay-surface
           className={[
             'bg-sp-card border border-sp-border rounded-xl shadow-sp-lg ring-1 ring-white/5 overflow-hidden flex flex-col',
             'animate-scale-in motion-reduce:animate-none',

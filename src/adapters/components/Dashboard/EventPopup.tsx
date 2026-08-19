@@ -41,13 +41,24 @@ interface DDayBadgeProps {
 
 function DDayBadge({ dday }: DDayBadgeProps) {
   const isUrgent = dday <= 3;
+  /*
+    받침이 다크 전용이었다(`bg-red-900/30`). 라이트 테마에서는 짙은 빨강 위에 라이트
+    보정으로 어두워진 글씨가 얹혀 거의 읽히지 않았다(실측 대비 1.5:1 수준).
+    받침만 옅은 틴트로 바꾸면 글자색은 기존 라이트 보정 규칙이 그대로 처리한다.
+
+    실측(크로뮴 getComputedStyle + WCAG 계산, 라이트/다크 카드 위):
+      red-300   4.91 / 6.47   ← 채택
+      orange-300 4.11 / 6.80  ← 라이트에서 AA(4.5) 미달이라 200 단계로
+      orange-200 7.43 / 8.48  ← 채택
+    `text-sp-error`(3.66/4.44)도 재봤지만 둘 다 AA 를 못 넘겨 쓰지 않았다.
+  */
   const bgClass = isUrgent
-    ? 'bg-red-900/30 text-red-300 ring-red-400/20'
-    : 'bg-orange-900/30 text-orange-300 ring-orange-400/20';
+    ? 'bg-red-500/15 text-red-300 ring-red-500/30'
+    : 'bg-orange-500/15 text-orange-200 ring-orange-500/30';
 
   return (
     <span
-      className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset ${bgClass}`}
+      className={`inline-flex shrink-0 items-center rounded-md px-2 py-1 text-xs font-bold tabular-nums ring-1 ring-inset ${bgClass}`}
     >
       D-{dday}
     </span>
@@ -65,7 +76,9 @@ function EventItem({ event, categories }: EventItemProps) {
   const icon = getCategoryIcon(event.category);
 
   return (
-    <div className="flex items-start gap-3 p-3 rounded-lg bg-sp-bg/50 hover:bg-sp-bg transition-colors">
+    // `bg-sp-bg/50` 이었다 — sp-* 토큰은 투명도 수식이 무효라 클래스가 아예 만들어지지
+    // 않고 조용히 투명으로 렌더됐다. 받침 없이 글자만 떠 있던 상태.
+    <div className="flex items-start gap-3 p-3 rounded-lg bg-sp-bg border border-sp-border hover:bg-sp-surface transition-colors">
       <div className="flex items-center justify-center shrink-0 mt-0.5">
         <span className={`material-symbols-outlined ${colors.text} text-icon-xl`}>{icon}</span>
       </div>
@@ -163,23 +176,29 @@ export function EventPopup() {
           <>
             <div className="h-px bg-sp-border mb-4 w-full" />
             <div className="mb-2">
-              <h5 className="text-xs font-bold text-sp-muted uppercase tracking-wider mb-3 ml-1">
-                Upcoming
-              </h5>
+              {/* 영문 라벨 'Upcoming' 이었다 — UI 텍스트는 한국어(CLAUDE.md 규칙 4). */}
+              <h5 className="text-sm font-bold text-sp-text mb-3 ml-1">다가오는 행사</h5>
               <div className="space-y-2">
                 {alertResult.upcomingEvents.map(({ event, dday }) => (
                   <div
                     key={event.id}
-                    className="flex items-center justify-between p-2.5 rounded-lg border border-sp-border bg-sp-bg/20"
+                    className="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-sp-border bg-sp-bg"
                   >
-                    <div className="flex items-center gap-2">
+                    {/* 제목이 길면 두 줄로 흐르는데, 그때 D-Day 배지가 눌려
+                        "D-" 와 "3" 이 세로로 쪼개졌다. 제목 쪽만 늘어나게 하고
+                        배지는 shrink-0 으로 지킨다. */}
+                    <div className="flex min-w-0 flex-1 items-start gap-2">
                       <span
-                        className={`flex h-2 w-2 rounded-full ${
+                        className={`mt-1.5 flex h-2 w-2 shrink-0 rounded-full ${
                           dday <= 3 ? 'bg-red-500' : 'bg-orange-500'
                         }`}
                       />
-                      <span className="text-sm font-medium text-sp-text">{event.title}</span>
-                      <span className="text-xs text-sp-muted">({formatShortDate(event.date)})</span>
+                      <span className="min-w-0 text-sm font-medium leading-snug text-sp-text break-keep">
+                        {event.title}{' '}
+                        <span className="text-xs font-normal text-sp-muted whitespace-nowrap">
+                          ({formatShortDate(event.date)})
+                        </span>
+                      </span>
                     </div>
                     <DDayBadge dday={dday} />
                   </div>
@@ -195,7 +214,7 @@ export function EventPopup() {
         <button
           type="button"
           onClick={snoozePopup}
-          className="flex-1 flex items-center justify-center gap-2 rounded-lg border border-sp-border px-4 py-2.5 text-sm font-semibold text-sp-muted hover:bg-sp-surface transition-all"
+          className="flex-1 flex items-center justify-center gap-2 rounded-lg border border-sp-border bg-sp-bg px-4 py-2.5 text-sm font-semibold text-sp-text hover:bg-sp-surface transition-all"
         >
           <span className="material-symbols-outlined text-icon-md">snooze</span>
           다시 알림 (1시간 후)

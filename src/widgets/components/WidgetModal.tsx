@@ -398,6 +398,8 @@ export function WidgetModal({
         aria-label={definition.name}
         tabIndex={-1}
         data-widget-modal-body
+        /* 유리 설정에서 제외 — index.css 규칙 ⑥ */
+        data-sp-overlay-surface
         onClick={(e) => e.stopPropagation()}
         onMouseDown={(e) => e.stopPropagation()}
         className={[

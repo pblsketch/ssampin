@@ -433,6 +433,49 @@ html.sp-glass-on [data-sp-tool-tile] {
    도드라져 보였다. 대비 확보는 위의 배경·글자색이 하는 일이고 이 선은 장식이었으므로,
    빼도 가독성 수치(원래 문제였던 2.67:1)는 그대로다. */
 
+/* ⑥ 떠 있는 창(모달·알림 카드)은 유리에서 제외한다.
+
+   준일님 지적(2026-08-19): "처음 실행하고 뜨는 팝업창들이 투명도가 들어가서
+   가독성이 떨어진다." 실측 값으로 카드 불투명도 42%(유리 강함) 이므로
+   행사 알림·업데이트 안내 뒤로 시간표가 그대로 비친다.
+
+   일반 카드는 "앞에 있는 면이 다음 면을 비추는" 재질로 읽혀도 괜찮지만,
+   모달·알림은 **지금 판단해야 하는 내용**을 담는 면이라 뒤에 내용이 지나가면
+   안 된다. 게다가 모달은 이미 검은 막(bg-black/60 + 흐림) 위에 서 있어 따로
+   비치게 할 이유가 없고, 불투명해지면 패널 자체의 흐림 레이어도 필요 없어진다.
+
+   컴포넌트마다 색을 고치는 대신 표시(`data-sp-overlay-surface`) 하나로 처리한다 —
+   공용 `Modal` 이 자동으로 붙이므로 새 모달은 가만히 두어도 따라온다.
+   공용 Modal 을 안 쓰고 직접 만든 대화 상자도 있어서 `[role='dialog']` 도 함께 받는다.
+   다만 그쪽은 껍데기 div 에 role 이 붙은 경우가 있어(예: 관찰 기록 알림) **이미
+   `bg-sp-card` 를 쓰는 면에만** 건다 — 안 그러면 투명해야 할 껍데기에 색이 칠해진다.
+   유리를 끄면 이 구역 전체가 죽은 코드라 화면이 조금도 달라지지 않는다.
+
+   선택자가 여러 줄인 이유는 위 ①·④ 규칙과 **특이도가 같기 때문**이다(둘 다
+   클래스 3개+타입 1개). 뒤에 있어서 이기므로 이 블록을 앞으로 옮기지 말 것. */
+html.sp-glass-on [data-sp-overlay-surface],
+html.sp-glass-on .bg-sp-card [data-sp-overlay-surface],
+html.sp-glass-on [data-sp-overlay-surface] .bg-sp-card,
+html.sp-glass-on [data-sp-overlay-surface] .bg-sp-card .bg-sp-card,
+html.sp-glass-on [role='dialog'].bg-sp-card,
+html.sp-glass-on [role='dialog'] .bg-sp-card,
+html.sp-glass-on [role='dialog'] .bg-sp-card .bg-sp-card {
+  background-color: var(--sp-card-base);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* 모달 안의 "가라앉은 면"도 유리용 틴트(규칙 ④) 대신 원래 색으로 되돌린다.
+   패널이 불투명해졌으므로 유리를 껐을 때와 똑같은 층 관계가 다시 유효하다. */
+html.sp-glass-on [data-sp-overlay-surface] .bg-sp-bg,
+html.sp-glass-on [role='dialog'] .bg-sp-bg {
+  background-color: var(--sp-bg);
+}
+html.sp-glass-on [data-sp-overlay-surface] .bg-sp-surface,
+html.sp-glass-on [role='dialog'] .bg-sp-surface {
+  background-color: var(--sp-surface-base);
+}
+
 /* ─── Auto-contrast: accent 배경 위 텍스트 가독성 보장 ─── */
 /* --sp-accent-fg는 useThemeApplier에서 accent 밝기 기반으로 자동 계산 */
 /* Same element: e.g. <button class="bg-sp-accent text-white"> */

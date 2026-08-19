@@ -125,6 +125,9 @@ export function ReminderPrompt({
     <div
       role="group"
       aria-labelledby={headingId}
+      /* 유리 설정에서 제외 — index.css 규칙 ⑥. 이 카드는 검은 막 없이 대시보드
+         위에 그대로 떠 있어서, 반투명하면 뒤 내용과 글자가 곧바로 겹친다. */
+      data-sp-overlay-surface
       className="w-[min(480px,calc(100vw-32px))] flex flex-col bg-sp-card border border-sp-border rounded-xl shadow-sp-lg ring-1 ring-white/5"
     >
       {/* 헤더 */}

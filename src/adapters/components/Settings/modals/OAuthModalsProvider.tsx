@@ -28,6 +28,7 @@ function OAuthErrorModal({
       onClick={onClose}
     >
       <div
+        data-sp-overlay-surface
         className="w-full max-w-md rounded-xl bg-sp-card border border-sp-border p-6 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
@@ -143,6 +144,7 @@ function PKCEFallbackModal({
       onClick={onClose}
     >
       <div
+        data-sp-overlay-surface
         className="w-full max-w-md rounded-xl bg-sp-card border border-sp-border p-6 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
@@ -228,6 +230,7 @@ function FallbackSuggestionModal({
       onClick={onDismiss}
     >
       <div
+        data-sp-overlay-surface
         className="w-full max-w-md rounded-xl bg-sp-card border border-sp-border p-6 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
