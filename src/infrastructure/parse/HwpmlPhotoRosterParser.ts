@@ -31,14 +31,12 @@ import {
   pairRosterPhotos,
   hasUniformSpacing,
 } from '@domain/rules/photoRosterPairing';
+import { parseRosterNameCell } from '@domain/rules/rosterNameCell';
 import type {
   PhotoRosterParseResult,
   RosterNameCandidate,
   RosterPhotoCandidate,
 } from '@domain/valueObjects/PhotoRoster';
-
-/** `1번  강나영` → { studentNumber: 1, name: '강나영' } */
-const NAME_CELL_PATTERN = /^(\d+)\s*번\s*(.+)$/;
 
 interface RawPhoto {
   readonly binItemId: number;
@@ -47,6 +45,8 @@ interface RawPhoto {
 }
 
 interface RawName {
+  readonly grade?: number;
+  readonly classNum?: number;
   /**
    * 이름이 속한 표의 순번.
    *
@@ -129,13 +129,15 @@ function extractNames(body: string): RawName[] {
       .map((m) => decodeXmlText(m[1]!))
       .join('')
       .trim();
-    const matched = NAME_CELL_PATTERN.exec(text);
-    if (!matched) continue;
+    const parsed = parseRosterNameCell(text);
+    if (!parsed) continue;
     names.push({
       tableIndex: tableIndexAt(offsets, cell.index),
       colAddr,
-      studentNumber: Number(matched[1]),
-      name: matched[2]!.trim(),
+      studentNumber: parsed.studentNumber,
+      name: parsed.name,
+      ...(parsed.grade !== undefined ? { grade: parsed.grade } : {}),
+      ...(parsed.classNum !== undefined ? { classNum: parsed.classNum } : {}),
     });
   }
   return names;
@@ -221,6 +223,8 @@ export function parseHwpmlPhotoRoster(xml: string): PhotoRosterParseResult {
     pairKey: nameKeys[i]!,
     studentNumber: raw.studentNumber,
     name: raw.name,
+    ...(raw.grade !== undefined ? { grade: raw.grade } : {}),
+    ...(raw.classNum !== undefined ? { classNum: raw.classNum } : {}),
   }));
 
   // 실제 이미지 데이터가 있는 그림만 후보로 삼는다

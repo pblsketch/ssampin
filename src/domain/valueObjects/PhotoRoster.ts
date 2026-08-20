@@ -16,6 +16,15 @@ export interface RosterNameCandidate {
   readonly pairKey: string;
   readonly studentNumber: number;
   readonly name: string;
+  /**
+   * 학년·반 — **수업반(교과) 명렬표에만 있다.**
+   *
+   * 담임 명렬표는 한 반이라 이름 칸이 `1번  강나영` 이지만,
+   * 수업반은 여러 반 학생이 섞이므로 `3학년 1반 2번  권지민` 처럼 소속이 함께 적힌다.
+   * 이 조합(학년-반-번호)이 앱이 수업반 학생을 구분할 때 이미 쓰는 키와 정확히 같다.
+   */
+  readonly grade?: number;
+  readonly classNum?: number;
 }
 
 /** 명렬표에서 읽어 낸 사진 1장 */

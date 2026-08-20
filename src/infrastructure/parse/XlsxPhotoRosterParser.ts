@@ -32,14 +32,12 @@
 
 import { unzipSync, strFromU8 } from 'fflate';
 import { gridPairKey, pairRosterPhotos } from '@domain/rules/photoRosterPairing';
+import { parseRosterNameCell } from '@domain/rules/rosterNameCell';
 import type {
   PhotoRosterParseResult,
   RosterNameCandidate,
   RosterPhotoCandidate,
 } from '@domain/valueObjects/PhotoRoster';
-
-/** `1번  고재우` → { studentNumber: 1, name: '고재우' } */
-const NAME_CELL_PATTERN = /^(\d+)\s*번\s*(.+)$/;
 
 const MIME_BY_EXTENSION: Record<string, string> = {
   jpeg: 'image/jpeg',
@@ -193,13 +191,15 @@ export function parseXlsxPhotoRoster(bytes: Uint8Array): PhotoRosterParseResult 
 
     // ── 이름: `N번 이름` 형태의 셀만 골라낸다 (제목·학교명·머리글은 걸러진다)
     for (const cell of readSheetCells(sheetXml, sharedStrings)) {
-      const matched = NAME_CELL_PATTERN.exec(cell.text);
-      if (!matched) continue;
+      const parsed = parseRosterNameCell(cell.text);
+      if (!parsed) continue;
       // 이름은 사진 바로 아래 줄에 있다 → 사진 줄 기준으로 키를 만든다
       names.push({
         pairKey: gridPairKey(cell.row - 1, cell.col),
-        studentNumber: Number(matched[1]),
-        name: matched[2]!.trim(),
+        studentNumber: parsed.studentNumber,
+        name: parsed.name,
+        ...(parsed.grade !== undefined ? { grade: parsed.grade } : {}),
+        ...(parsed.classNum !== undefined ? { classNum: parsed.classNum } : {}),
       });
     }
 
