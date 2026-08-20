@@ -11,6 +11,11 @@ import {
   parseTeachingClassRosterFromExcel,
 } from '@infrastructure/export';
 import { useToastStore } from '@adapters/components/common/Toast';
+import { PhotoRosterImportModal } from '@adapters/components/Homeroom/RosterImport/PhotoRosterImportModal';
+import { FEATURE_FLAGS } from '@adapters/config/featureFlags';
+import { resolveTeachingClassPhotoTargets } from '@usecases/studentPhoto/resolveTeachingClassPhotoTargets';
+import { saveRosterPhotos } from '@usecases/studentPhoto/SaveRosterPhotos';
+import { studentPhotoRepository, imageResizer } from '@adapters/di/container';
 import {
   STUDENT_STATUS_LABELS,
   STUDENT_STATUS_COLORS,
@@ -36,6 +41,7 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
   const students = cls?.students ?? [];
 
   /* ── 편집 모드 상태 ── */
+  const [showPhotoImport, setShowPhotoImport] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [sortBy, setSortBy] = useState<'number' | 'name' | 'grade'>('number');
   const [editStudents, setEditStudents] = useState<TeachingClassStudent[]>([]);
@@ -527,6 +533,16 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
                 <span className="material-symbols-outlined text-sm">upload_file</span>
                 엑셀 가져오기
               </button>
+              {FEATURE_FLAGS.studentPhotos && (
+                <button
+                  onClick={() => setShowPhotoImport(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-sp-muted hover:text-sp-text bg-sp-card border border-sp-border rounded-lg hover:border-sp-accent transition-colors"
+                  title="나이스 사진 명렬표에서 얼굴 사진 가져오기"
+                >
+                  <span className="material-symbols-outlined text-sm">photo_library</span>
+                  사진 명렬표
+                </button>
+              )}
               <button
                 onClick={startEdit}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-sp-accent bg-sp-accent/10 rounded-lg hover:bg-sp-accent/20 transition-colors"
@@ -894,6 +910,56 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
       </div>
 
       {/* ── 통합 내보내기 모달 ── */}
+      {/* 사진 명렬표 가져오기 — 수업반은 파일에 학년·반·번호가 있어 명단을 건드리지 않고 사진만 붙인다 */}
+      {FEATURE_FLAGS.studentPhotos && cls && (
+        <PhotoRosterImportModal
+          isOpen={showPhotoImport}
+          onClose={() => setShowPhotoImport(false)}
+          ownerKind="teaching-class"
+          ownerKey={cls.id}
+          currentStudentCount={students.length}
+          onConfirm={async (result) => {
+            if (!result.pairing.ok) {
+              // 사진 짝짓기에 실패하면 사진은 저장하지 않는다 (이름은 수업반 명단을 건드리지 않는다)
+              showToast('사진 위치를 확실히 읽지 못해 사진을 가져오지 않았어요.', 'error');
+              return;
+            }
+            const { resolved, unresolved } = resolveTeachingClassPhotoTargets(
+              cls.id,
+              students,
+              result.pairing.pairs.map((pair) => {
+                const meta = result.names.find(
+                  (n) => n.studentNumber === pair.studentNumber && n.name === pair.name,
+                );
+                return {
+                  studentNumber: pair.studentNumber,
+                  name: pair.name,
+                  ...(meta?.grade !== undefined ? { grade: meta.grade } : {}),
+                  ...(meta?.classNum !== undefined ? { classNum: meta.classNum } : {}),
+                  bytes: pair.photo.bytes,
+                  mimeType: pair.photo.mimeType,
+                };
+              }),
+            );
+            const saveResult = await saveRosterPhotos(
+              { repository: studentPhotoRepository, resizer: imageResizer },
+              {
+                ownerKind: 'teaching-class',
+                ownerKey: cls.id,
+                photos: resolved,
+                now: new Date().toISOString(),
+              },
+            );
+            const missed = unresolved.length + saveResult.skipped.length;
+            showToast(
+              `사진 ${saveResult.savedCount}장을 넣었어요${missed > 0 ? ` (${missed}장은 명단과 맞지 않아 넣지 못했어요)` : ''}`,
+              missed > 0 ? 'error' : 'success',
+            );
+            setShowPhotoImport(false);
+          }}
+        />
+      )}
+
       {showExportModal && cls && (
         <UnifiedExportModal classId={classId} onClose={() => setShowExportModal(false)} />
       )}

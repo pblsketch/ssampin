@@ -11,6 +11,7 @@ import { exportSeatingToExcel, exportSeatingToHwpx } from '@infrastructure/expor
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { buildPairGroups, adjustPairGroupsForRow } from '@domain/rules/seatingLayoutRules';
 import { NameLearningMode } from '@adapters/components/Seating/NameLearningMode';
+import { useStudentPhotoUrls } from '@adapters/hooks/useStudentPhotoUrls';
 import type { LearningStudentInfo } from '@adapters/components/Seating/NameLearningMode';
 
 interface ClassSeatingTabProps {
@@ -41,6 +42,12 @@ export function ClassSeatingTab({ classId, onOpenRecordSeatView }: ClassSeatingT
   const [isEditing, setIsEditing] = useState(false);
   const [isTeacherView, setIsTeacherView] = useState(seatingDefaultView === 'teacher');
   const [showNameLearning, setShowNameLearning] = useState(false);
+  // 얼굴 사진은 학습 모드를 열 때만 읽고 닫으면 해제한다.
+  // 이 수업반 사진만 골라 좌석이 쓰는 `학년-반-번호` 열쇠로 받아 온다.
+  const learningPhotoUrls = useStudentPhotoUrls(showNameLearning, {
+    ownerKind: 'teaching-class',
+    ownerKey: classId,
+  });
 
   // Phase 3a: NameLearningMode 에 학생 정보 매핑 — TeachingClassStudent.studentKey 기반
   const resolveLearningStudent = useCallback(
@@ -575,6 +582,7 @@ export function ClassSeatingTab({ classId, onOpenRecordSeatView }: ClassSeatingT
         <NameLearningMode
           isOpen={showNameLearning}
           onClose={() => setShowNameLearning(false)}
+          photoUrls={learningPhotoUrls}
           seating={{
             rows: cls.seating.rows,
             cols: cls.seating.cols,

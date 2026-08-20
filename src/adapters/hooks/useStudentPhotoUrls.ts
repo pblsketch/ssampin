@@ -17,14 +17,26 @@
 
 import { useEffect, useState } from 'react';
 import { studentPhotoRepository } from '@adapters/di/container';
+import type { StudentPhotoOwnerKind } from '@domain/entities/StudentPhoto';
 
 const EMPTY: ReadonlyMap<string, string> = new Map();
 
 /**
  * @param enabled 필요할 때만 읽는다 (학습 모드를 열 때만 true)
- * @returns subjectKey → 사진 URL
+ * ## 돌려주는 열쇠는 화면이 쓰는 열쇠다
+ *
+ * 저장소는 사진을 `subjectKey` 로 갖고 있는데, 그 값이 명단 종류마다 다르다
+ * (담임은 `Student.id`, 수업반은 `{반id}--{학년-반-번호}`).
+ * 화면(좌석 격자)은 각자 자기 식별자로 조회하므로, **여기서 화면이 쓰는 열쇠로 바꿔서** 돌려준다.
+ * 이 변환을 화면마다 따로 하면 한쪽만 고쳐져 "담임은 되는데 수업반은 안 되는" 상태가 된다.
+ *
+ * @param scope 수업반이면 그 반 사진만 골라 `학년-반-번호` 로 열쇠를 바꾼다. 없으면 담임.
+ * @returns 화면 식별자 → 사진 URL
  */
-export function useStudentPhotoUrls(enabled: boolean): ReadonlyMap<string, string> {
+export function useStudentPhotoUrls(
+  enabled: boolean,
+  scope?: { readonly ownerKind: StudentPhotoOwnerKind; readonly ownerKey: string },
+): ReadonlyMap<string, string> {
   const [urls, setUrls] = useState<ReadonlyMap<string, string>>(EMPTY);
 
   useEffect(() => {
@@ -39,7 +51,11 @@ export function useStudentPhotoUrls(enabled: boolean): ReadonlyMap<string, strin
     void (async () => {
       const next = new Map<string, string>();
       try {
-        const photos = await studentPhotoRepository.list();
+        const all = await studentPhotoRepository.list();
+        // 수업반이면 그 반 사진만. 담임이면 담임 사진만.
+        const wantKind: StudentPhotoOwnerKind = scope?.ownerKind ?? 'homeroom';
+        const wantKey = scope?.ownerKey ?? 'homeroom';
+        const photos = all.filter((p) => p.ownerKind === wantKind && p.ownerKey === wantKey);
         for (const photo of photos) {
           const bytes = await studentPhotoRepository.readPhoto(photo.subjectKey);
           if (!bytes) continue;
@@ -47,7 +63,12 @@ export function useStudentPhotoUrls(enabled: boolean): ReadonlyMap<string, strin
             new Blob([bytes as unknown as BlobPart], { type: photo.mimeType }),
           );
           created.push(url);
-          next.set(photo.subjectKey, url);
+          // 수업반 키에서 반 번호 접두사를 떼어 좌석이 쓰는 `학년-반-번호` 로 맞춘다
+          const viewKey =
+            wantKind === 'teaching-class'
+              ? photo.subjectKey.slice(`${wantKey}--`.length)
+              : photo.subjectKey;
+          next.set(viewKey, url);
         }
       } catch {
         // 사진을 못 읽어도 이름 학습 자체는 되어야 한다 — 사진 없이 진행한다
@@ -63,7 +84,7 @@ export function useStudentPhotoUrls(enabled: boolean): ReadonlyMap<string, strin
       cancelled = true;
       for (const url of created) URL.revokeObjectURL(url);
     };
-  }, [enabled]);
+  }, [enabled, scope?.ownerKind, scope?.ownerKey]);
 
   return urls;
 }
