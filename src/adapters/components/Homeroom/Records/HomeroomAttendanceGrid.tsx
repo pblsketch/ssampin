@@ -6,7 +6,11 @@ import type {
   StudentAttendance,
 } from '@domain/entities/Attendance';
 import { PERIOD_MORNING, PERIOD_CLOSING, ATTENDANCE_REASONS } from '@domain/entities/Attendance';
-import { computeAutoPeriods, summarizeTotal } from '@domain/rules/attendanceRules';
+import {
+  computeAutoPeriods,
+  mergeAttendanceFill,
+  summarizeTotal,
+} from '@domain/rules/attendanceRules';
 import { parseAttendanceQuickText } from '@domain/rules/attendanceQuickText';
 import { studentKey } from '@domain/entities/TeachingClass';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
@@ -28,8 +32,10 @@ import {
 /**
  * 담임 오늘 출결 그리드 — 담임 소유 얇은 셸 (attendance-grid-v2 팔레트 + 자동 저장).
  *
- * 인터랙션: 팔레트(종류·사유·비고) 사전 설정 → 교시 칸 클릭 = 기준 교시로 행 전체
- * 재작성(§3.10-5). 지우개(칸/이름), 텍스트 빠른 입력, undo/redo(Ctrl+Z), 오늘 비우기.
+ * 인터랙션: 팔레트(종류·사유·비고) 사전 설정 → 교시 칸 클릭 = 그 칸(자동 채움 구간)에만
+ * **덧쓰기**(ADR-059, mergeAttendanceFill). 하루에 여러 예외가 공존한다 —
+ * "1교시 지각 · 3교시 결과 · 6교시 조퇴", "3·4·5교시 결과". 정정은 되돌리기(Ctrl+Z)와
+ * 지우개(칸/이름)가 담당한다. 텍스트 빠른 입력, undo/redo, 오늘 비우기.
  *
  * 자동 저장(§3.10-1): 편집 시 800ms 디바운스로 조용히 저장한다. 성공 토스트 없이
  * "저장됨 ✓" 상태칩만. **dirty-gate가 주 메커니즘**(편집 중이면 외부 스냅샷 변경으로
@@ -99,9 +105,9 @@ const TYPE_ITEMS: readonly Exclude<AttendanceStatus, 'present'>[] = [
 
 const TYPE_HINT: Record<Exclude<AttendanceStatus, 'present'>, string> = {
   absent: '아무 칸이나 클릭 → 전 교시 결석',
-  late: '등교한 교시 칸 클릭 → 조회~그 교시 지각',
-  earlyLeave: '하교한 교시 칸 클릭 → 그 교시~종례 조퇴',
-  classAbsence: '해당 교시 칸 클릭 → 그 교시만 결과',
+  late: '등교한 교시 칸 클릭 → 조회~그 교시 지각 (다른 교시 기록은 그대로 남아요)',
+  earlyLeave: '하교한 교시 칸 클릭 → 그 교시~종례 조퇴 (다른 교시 기록은 그대로 남아요)',
+  classAbsence: '해당 교시 칸 클릭 → 그 교시만 결과 (여러 교시에 각각 찍을 수 있어요)',
 };
 
 const AUTOSAVE_DEBOUNCE_MS = 800;
@@ -379,13 +385,19 @@ export function HomeroomAttendanceGrid({
         const fill = computeAutoPeriods(status, period, regularPeriodCount);
         const memoText = paletteMemo.trim() || undefined;
         setMatrix((prev) => {
-          // §3.10-5 전-행 재작성: 찍힌 교시 외 clear, 전 교시 동일 사유·비고
-          const row: Record<number, LocalStudentAttendance | undefined> = {};
-          for (const p of periods) {
-            row[p] = fill.has(p)
-              ? { number: student.number, status, reason: paletteReason, memo: memoText }
-              : undefined;
-          }
+          // ADR-059 덧쓰기: 찍힌 교시만 덮고 나머지 교시의 기존 기록은 보존한다.
+          // (하루에 "1교시 지각 · 3교시 결과 · 6교시 조퇴"가 공존해야 하므로)
+          const row = mergeAttendanceFill<LocalStudentAttendance>(
+            prev[sKey],
+            periods,
+            fill,
+            () => ({
+              number: student.number,
+              status,
+              reason: paletteReason,
+              memo: memoText,
+            }),
+          );
           return { ...prev, [sKey]: row };
         });
         // M2: 예외 편집 알림 — 지우개·undo/redo 경로에서는 호출하지 않는다.
@@ -579,14 +591,20 @@ export function HomeroomAttendanceGrid({
     setMatrix((prev) => {
       const next = { ...prev };
       for (const { student, res } of applies) {
-        const fill = new Set(res.periods);
-        const row: Record<number, LocalStudentAttendance | undefined> = {};
-        for (const p of periods) {
-          row[p] = fill.has(p)
-            ? { number: student.number, status: res.status, reason: res.reason, memo: res.memo }
-            : undefined;
-        }
-        next[studentKey(student)] = row;
+        // ADR-059 덧쓰기 — 한 학생에 여러 줄("3번 1교시 지각" + "3번 3교시 결과")을
+        // 붙여 넣으면 줄마다 쌓인다(뒷줄이 앞줄을 지우지 않는다).
+        const sKey = studentKey(student);
+        next[sKey] = mergeAttendanceFill<LocalStudentAttendance>(
+          next[sKey],
+          periods,
+          new Set(res.periods),
+          () => ({
+            number: student.number,
+            status: res.status,
+            reason: res.reason,
+            memo: res.memo,
+          }),
+        );
       }
       return next;
     });
@@ -642,6 +660,8 @@ export function HomeroomAttendanceGrid({
                 key={type}
                 type="button"
                 onClick={() => setPaletteType(type)}
+                aria-label={`${STATUS_CONFIG[type].label} 팔레트`}
+                aria-pressed={active}
                 className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
                   active
                     ? 'bg-sp-accent/15 text-sp-accent border-sp-accent/50'
@@ -658,6 +678,8 @@ export function HomeroomAttendanceGrid({
           <button
             type="button"
             onClick={() => setPaletteType('eraser')}
+            aria-label="지우개 팔레트"
+            aria-pressed={isEraser}
             className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
               isEraser
                 ? 'bg-sp-accent/15 text-sp-accent border-sp-accent/50'

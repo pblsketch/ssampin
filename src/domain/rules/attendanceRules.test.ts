@@ -8,6 +8,7 @@ import {
   pickRepresentativeAttendance,
   validateAttendancePeriods,
   computeAutoPeriods,
+  mergeAttendanceFill,
   summarizeNeisAttendance,
   countWithReasonFilter,
   isPerfectAttendance,
@@ -509,5 +510,61 @@ describe('countWithReasonFilter / isPerfectAttendance (개근 파악, M1)', () =
     // 원본 counts는 변형되지 않는다
     expect(c2.absent).toBe(1);
     expect(c2.byReason['질병'].absent).toBe(1);
+  });
+});
+
+// ── mergeAttendanceFill (ADR-059 덧쓰기) ───────────────────────────
+describe('mergeAttendanceFill — 하루 안 복합 예외 (ADR-059)', () => {
+  const PERIODS = [PERIOD_MORNING, 1, 2, 3, 4, 5, 6, 7, PERIOD_CLOSING];
+  const mark = (s: string) => () => s;
+
+  it('fill 밖 교시의 기존 기록을 보존한다 (회귀: 전-행 재작성으로 한 종류만 남던 버그)', () => {
+    const row = { 3: '결과' } as Record<number, string | undefined>;
+    const next = mergeAttendanceFill(row, PERIODS, new Set([4]), mark('결과'));
+    expect(next[3]).toBe('결과');
+    expect(next[4]).toBe('결과');
+  });
+
+  it('fill 안 교시는 새 값으로 덮어쓴다', () => {
+    const row = { 3: '지각' } as Record<number, string | undefined>;
+    const next = mergeAttendanceFill(row, PERIODS, new Set([3]), mark('결과'));
+    expect(next[3]).toBe('결과');
+  });
+
+  it('결석 자동 채움은 조회~종례 전 교시를 덮어 하루 전체가 된다', () => {
+    const row = { 3: '결과' } as Record<number, string | undefined>;
+    const fill = computeAutoPeriods('absent', 1, 7);
+    const next = mergeAttendanceFill(row, PERIODS, fill, mark('결석'));
+    expect(PERIODS.every((p) => next[p] === '결석')).toBe(true);
+  });
+
+  it('지각(앞구간)과 조퇴(뒷구간)를 겹쳐 찍으면 둘 다 남는다', () => {
+    let row: Record<number, string | undefined> = {};
+    row = mergeAttendanceFill(row, PERIODS, computeAutoPeriods('late', 1, 7), mark('지각'));
+    row = mergeAttendanceFill(row, PERIODS, computeAutoPeriods('classAbsence', 3, 7), mark('결과'));
+    row = mergeAttendanceFill(row, PERIODS, computeAutoPeriods('earlyLeave', 6, 7), mark('조퇴'));
+    expect(row).toEqual({
+      [PERIOD_MORNING]: '지각',
+      1: '지각',
+      2: undefined,
+      3: '결과',
+      4: undefined,
+      5: undefined,
+      6: '조퇴',
+      7: '조퇴',
+      [PERIOD_CLOSING]: '조퇴',
+    });
+  });
+
+  it('원본 row를 변형하지 않는다 (순수 함수)', () => {
+    const row = { 3: '결과' } as Record<number, string | undefined>;
+    mergeAttendanceFill(row, PERIODS, new Set([3]), mark('지각'));
+    expect(row[3]).toBe('결과');
+  });
+
+  it('row가 없어도(첫 입력) 동작한다', () => {
+    const next = mergeAttendanceFill(undefined, PERIODS, new Set([2]), mark('결과'));
+    expect(next[2]).toBe('결과');
+    expect(next[1]).toBeUndefined();
   });
 });

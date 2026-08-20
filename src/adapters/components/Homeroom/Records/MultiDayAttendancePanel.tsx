@@ -77,6 +77,13 @@ export function MultiDayAttendancePanel({
   const [reason, setReason] = useState<AttendanceReason>('질병');
   const [memo, setMemo] = useState('');
   const [referencePeriod, setReferencePeriod] = useState<number>(1);
+  /**
+   * 켜면 선택 학생의 그날 기존 출결을 먼저 전부 지우고 새로 넣는다(ADR-059).
+   * 기본값 꺼짐 = 덧쓰기 — 이래야 "1교시 지각 · 3교시 결과"가 한 날에 공존한다.
+   * 켜는 쪽은 "전일 결석으로 잘못 넣은 걸 2교시 지각으로 정정" 같은 되돌리기용이다
+   * (이 패널에는 되돌리기가 없어 그리드처럼 Ctrl+Z로 수습할 수 없다).
+   */
+  const [replaceDay, setReplaceDay] = useState(false);
 
   const [dateMode, setDateMode] = useState<'range' | 'multi'>('range');
   const [startDate, setStartDate] = useState(defaultDate);
@@ -151,20 +158,24 @@ export function MultiDayAttendancePanel({
         const existing = getDayAttendance(className, date);
         const byPeriod = new Map<number, StudentAttendance[]>();
         for (const r of existing) byPeriod.set(r.period, [...r.students]);
-        // §3.10-5 전-행 재작성: 선택 학생의 기존 교시 기록을 먼저 전부 지운다(다른 학생 기록은 보존).
-        // 이렇게 해야 기존에 전일 결석이던 학생을 2교시 지각으로 바꿀 때 3교시~종례에 결석이 남지 않는다.
-        for (const [p, arr] of byPeriod) {
-          const cleaned = arr.filter((sa) => !pickedNumbers.has(sa.number));
-          if (cleaned.length !== arr.length) byPeriod.set(p, cleaned);
-        }
-        // 그다음 fill 교시에만 선택 학생 엔트리를 넣는다(그리드의 팔레트 적용과 동일 계약).
-        for (const student of picked) {
-          const number = student.studentNumber!;
-          for (const p of fill) {
-            const arr = byPeriod.get(p) ?? [];
-            arr.push({ number, status: type, reason, memo: memoText });
-            byPeriod.set(p, arr);
+        // '기존 기록 지우고 넣기'를 켠 경우에만 선택 학생의 그날 전 교시를 먼저 비운다
+        // (다른 학생 기록은 보존). 끄면 아래 덧쓰기만 일어난다.
+        if (replaceDay) {
+          for (const [p, arr] of byPeriod) {
+            const cleaned = arr.filter((sa) => !pickedNumbers.has(sa.number));
+            if (cleaned.length !== arr.length) byPeriod.set(p, cleaned);
           }
+        }
+        // ADR-059 덧쓰기(그리드의 팔레트 적용과 동일 계약): fill 교시에 있던 선택 학생
+        // 엔트리만 새 값으로 교체하고, fill 밖 교시의 기존 기록은 건드리지 않는다.
+        // 하루에 "1교시 지각 · 3교시 결과"가 공존해야 하므로 전-행 선삭제를 기본으로 두지 않는다.
+        // (결석은 computeAutoPeriods가 조회~종례 전 교시를 채우므로 결과적으로 하루를 다 덮는다.)
+        for (const p of fill) {
+          const arr = (byPeriod.get(p) ?? []).filter((sa) => !pickedNumbers.has(sa.number));
+          for (const student of picked) {
+            arr.push({ number: student.studentNumber!, status: type, reason, memo: memoText });
+          }
+          byPeriod.set(p, arr);
         }
         await saveDayAttendance(className, date, byPeriod);
         await bridgeHomeroomDayAttendance({ className, date, recordsByPeriod: byPeriod, students });
@@ -189,6 +200,7 @@ export function MultiDayAttendancePanel({
     type,
     referencePeriod,
     regularPeriodCount,
+    replaceDay,
     memo,
     reason,
     rosterStudents,
@@ -286,6 +298,20 @@ export function MultiDayAttendancePanel({
                 className="flex-1 min-w-[10rem] bg-sp-surface border border-sp-border rounded-lg px-2.5 py-1 text-xs text-sp-text placeholder:text-sp-muted/60 focus:outline-none focus:border-sp-accent"
               />
             </div>
+            <label className="flex items-center gap-2 text-xs text-sp-muted cursor-pointer w-fit">
+              <input
+                type="checkbox"
+                checked={replaceDay}
+                onChange={(e) => setReplaceDay(e.target.checked)}
+                className="accent-sp-accent"
+              />
+              그날 기존 출결을 지우고 새로 넣기
+            </label>
+            <p className="text-caption text-sp-muted">
+              {replaceDay
+                ? '선택한 학생의 그날 출결을 전부 지운 뒤 새로 넣어요. 잘못 넣은 기록을 정정할 때 쓰세요.'
+                : '선택한 교시만 새로 덮어써요. 같은 날 다른 교시에 이미 넣어 둔 기록(예: 1교시 지각)은 그대로 남습니다.'}
+            </p>
           </div>
 
           {/* 날짜 선택 */}

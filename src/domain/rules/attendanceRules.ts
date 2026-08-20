@@ -256,9 +256,11 @@ export function validateAttendancePeriods(
  * 예외가 전 교시로 잘못 저장되는 데이터 오염이 된다.
  *
  * 반환값은 초기값일 뿐이며 사용자는 교시 단위로 자유롭게 override할 수 있다.
- * 지각의 등교 전 교시를 '결과'로 바꾸는 자동화는 제공하지 않는다 —
+ * 지각의 등교 전 교시를 '결과'로 바꾸는 **자동화**는 제공하지 않는다 —
  * 같은 날 지각·조퇴·결과는 한 가지로만 처리하는 것이 학교생활기록부 기재
- * 원칙이라(2026 기재요령 별표 8 §3 바) 이중 집계를 만들지 않는다.
+ * 원칙이라(2026 기재요령 별표 8 §3 바) 자동으로 이중 집계를 만들지 않는다.
+ * 다만 교사가 **직접** 교시별로 다른 유형을 찍는 것은 허용된다(ADR-059) — 사실 기록과
+ * 나이스 집계는 층이 다르고, 집계는 `summarizeNeisAttendance`가 하루 대표 1건으로 접는다.
  *
  * @param status             선택한 출결 유형
  * @param referencePeriod    기준 교시 (지각=등교 교시, 조퇴=하교 교시, 결과=해당 교시.
@@ -314,6 +316,38 @@ export function computeAutoPeriods(
       return result;
     }
   }
+}
+
+/**
+ * 팔레트/빠른 입력 적용을 기존 하루 행에 **덧쓰기(누적)** 로 합성한다 (ADR-059).
+ *
+ * `computeAutoPeriods`가 고른 교시(`fill`)만 새 값으로 덮고, 나머지 교시에 이미 있던
+ * 기록은 **그대로 둔다**. 이 규칙이 있어야 하루 안에 여러 예외가 공존한다:
+ * "1교시 지각 · 3교시 결과 · 6교시 조퇴", "3·4·5교시 결과 3건".
+ *
+ * 이전 계약(§3.10-5 '전-행 재작성')은 칸을 찍을 때마다 그 학생의 하루를 통째로 다시 써서
+ * **마지막에 찍은 한 종류만 남았다** — 결과를 세 교시에 찍어도 한 칸만 남는 실버그의 원인.
+ * 되돌리기(Ctrl+Z)·지우개(칸/이름)가 이미 있으므로 정정 동선은 그쪽이 담당한다.
+ *
+ * 결석(absent)은 `computeAutoPeriods`가 조회~종례 전 교시를 채우므로 덧쓰기여도 하루를
+ * 전부 덮는다 — '전일 결석'의 의미가 그대로 유지된다.
+ *
+ * @param row       기존 교시→엔트리 맵 (없는 교시는 undefined)
+ * @param periods   화면에 존재하는 교시 목록 (조회·1..N·종례)
+ * @param fill      새로 칠할 교시 집합 (`computeAutoPeriods` 결과)
+ * @param makeEntry 칠할 교시의 엔트리 생성기
+ */
+export function mergeAttendanceFill<T>(
+  row: Readonly<Record<number, T | undefined>> | undefined,
+  periods: readonly number[],
+  fill: ReadonlySet<number>,
+  makeEntry: (period: number) => T,
+): Record<number, T | undefined> {
+  const next: Record<number, T | undefined> = {};
+  for (const p of periods) {
+    next[p] = fill.has(p) ? makeEntry(p) : row?.[p];
+  }
+  return next;
 }
 
 /** 생기부(나이스)식 공식 사유 축 — 학교생활기록부 기재요령 별표 8 §3 마 */

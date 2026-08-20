@@ -508,7 +508,8 @@ export function AttendanceCheckPage({
       const sKey = studentKey(student);
       nextStatuses.set(sKey, res.status);
       nextReasons.set(sKey, res.reason);
-      // 한 줄이 그 학생의 새 예외 상태 전체를 서술한다 — 비고 생략 시 기존 메모도 비움(데스크톱 행 재작성과 동일 의미)
+      // 모바일은 한 화면이 한 교시라 한 줄 = 그 학생의 그 교시 상태 전체다 —
+      // 비고 생략 시 기존 메모도 비운다.
       if (res.memo) nextMemos.set(sKey, res.memo);
       else nextMemos.delete(sKey);
       appliedCount += 1;
