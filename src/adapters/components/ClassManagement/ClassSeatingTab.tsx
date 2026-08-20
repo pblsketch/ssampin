@@ -12,6 +12,7 @@ import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { buildPairGroups, adjustPairGroupsForRow } from '@domain/rules/seatingLayoutRules';
 import { NameLearningMode } from '@adapters/components/Seating/NameLearningMode';
 import { useStudentPhotoUrls } from '@adapters/hooks/useStudentPhotoUrls';
+import { FEATURE_FLAGS } from '@adapters/config/featureFlags';
 import type { LearningStudentInfo } from '@adapters/components/Seating/NameLearningMode';
 
 interface ClassSeatingTabProps {
@@ -44,7 +45,7 @@ export function ClassSeatingTab({ classId, onOpenRecordSeatView }: ClassSeatingT
   const [showNameLearning, setShowNameLearning] = useState(false);
   // 얼굴 사진은 학습 모드를 열 때만 읽고 닫으면 해제한다.
   // 이 수업반 사진만 골라 좌석이 쓰는 `학년-반-번호` 열쇠로 받아 온다.
-  const learningPhotoUrls = useStudentPhotoUrls(showNameLearning, {
+  const learningPhotoUrls = useStudentPhotoUrls(FEATURE_FLAGS.studentPhotos && showNameLearning, {
     ownerKind: 'teaching-class',
     ownerKey: classId,
   });
