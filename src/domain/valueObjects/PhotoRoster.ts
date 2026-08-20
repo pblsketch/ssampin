@@ -39,6 +39,14 @@ export interface RosterPairedStudent {
   readonly studentNumber: number;
   readonly name: string;
   readonly photo: RosterPhotoCandidate;
+  /**
+   * 수업반 명렬표에만 있다 (`3학년 1반 2번  권지민`).
+   *
+   * ⚠️ **여기서 버리면 안 된다.** 예전에는 짝짓기 결과에서 소속을 떨어뜨리고 나중에
+   * `이름 + 번호`로 원본을 되찾았는데, 수업반은 번호가 겹쳐 엉뚱한 학생을 집을 수 있었다.
+   */
+  readonly grade?: number;
+  readonly classNum?: number;
 }
 
 /**

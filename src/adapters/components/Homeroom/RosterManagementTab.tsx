@@ -1513,8 +1513,13 @@ export function RosterManagementTab() {
         <PhotoRosterImportModal
           isOpen={showPhotoImport}
           onClose={() => {
-            // 창을 닫으면 아직 반영되지 않은 사진은 버린다 (취소와 같은 취급)
+            // 사용자가 그만둔 것이다 — 아직 반영되지 않은 사진은 버린다.
             pendingPhotosRef.current = [];
+            setShowPhotoImport(false);
+          }}
+          onHandOff={() => {
+            // 충돌 해결 창으로 넘어간 것이다 — 아직 진행 중이므로 사진을 **버리지 않는다.**
+            // (이걸 onClose 와 같게 두었다가 "이름은 들어가고 사진만 0장" 사고가 났다)
             setShowPhotoImport(false);
           }}
           ownerKind="homeroom"

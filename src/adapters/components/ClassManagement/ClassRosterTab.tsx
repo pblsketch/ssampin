@@ -14,6 +14,7 @@ import { useToastStore } from '@adapters/components/common/Toast';
 import { PhotoRosterImportModal } from '@adapters/components/Homeroom/RosterImport/PhotoRosterImportModal';
 import { FEATURE_FLAGS } from '@adapters/config/featureFlags';
 import { resolveTeachingClassPhotoTargets } from '@usecases/studentPhoto/resolveTeachingClassPhotoTargets';
+import { mergeRosterFromPhotoRoster } from '@domain/rules/teachingClassRosterMerge';
 import { saveRosterPhotos } from '@usecases/studentPhoto/SaveRosterPhotos';
 import { studentPhotoRepository, imageResizer } from '@adapters/di/container';
 import {
@@ -90,17 +91,28 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
     setEditStudents([]);
   }, []);
 
+  /**
+   * 명단을 실제로 저장한다.
+   *
+   * 그룹으로 묶인 수업반은 혼자 저장하면 나머지 반과 어긋나므로 갈래를 나눈다 —
+   * 저장 경로가 두 벌이 되지 않도록 `saveEdit` 과 사진 명렬표가 이 함수를 함께 쓴다.
+   */
+  const persistStudents = useCallback(
+    async (next: readonly TeachingClassStudent[]) => {
+      if (!cls) return;
+      // Phase 6 — independent 모드 클래스는 그룹 동기화 우회하고 단일 저장
+      if (cls.groupId && cls.studentSyncMode !== 'independent') {
+        await syncGroupStudents(cls.groupId, [...next]);
+      } else {
+        await updateClass({ ...cls, students: [...next] });
+      }
+    },
+    [cls, syncGroupStudents, updateClass],
+  );
+
   const saveEdit = useCallback(async () => {
     if (!cls) return;
-    // Phase 6 — independent 모드 클래스는 그룹 동기화 우회하고 단일 저장
-    if (cls.groupId && cls.studentSyncMode !== 'independent') {
-      await syncGroupStudents(cls.groupId, editStudents);
-    } else {
-      await updateClass({
-        ...cls,
-        students: editStudents,
-      });
-    }
+    await persistStudents(editStudents);
     setIsEditing(false);
     // 번호 누락/중복 경고: 기존 명렬표는 출결·좌석이 번호에 묶여 있어 자동 재번호가
     // 위험하므로, 자동 정리 대신 경고만 하고 사용자가 직접 번호를 고치도록 안내한다.
@@ -111,7 +123,7 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
         'info',
       );
     }
-  }, [cls, editStudents, updateClass, syncGroupStudents, showToast]);
+  }, [cls, editStudents, persistStudents, showToast]);
 
   const updateStudentName = useCallback((index: number, name: string) => {
     setEditStudents((prev) => {
@@ -910,7 +922,7 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
       </div>
 
       {/* ── 통합 내보내기 모달 ── */}
-      {/* 사진 명렬표 가져오기 — 수업반은 파일에 학년·반·번호가 있어 명단을 건드리지 않고 사진만 붙인다 */}
+      {/* 사진 명렬표 가져오기 — 명단(이름)과 사진을 함께 반영한다 */}
       {FEATURE_FLAGS.studentPhotos && cls && (
         <PhotoRosterImportModal
           isOpen={showPhotoImport}
@@ -919,27 +931,36 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
           ownerKey={cls.id}
           currentStudentCount={students.length}
           onConfirm={async (result) => {
+            // ① 명단 먼저 — 파일에 학년·반·번호·이름이 다 있으므로 붙여넣기와 똑같이 명단이 된다.
+            //    (예전에는 사진만 붙여서, 명단이 빈 수업반에서는 "0장 넣었어요"만 뜨고
+            //     선생님은 왜 안 되는지 알 수 없었다.)
+            const merged = mergeRosterFromPhotoRoster(students, result.names);
+            if (merged.added > 0) await persistStudents(merged.students);
+
             if (!result.pairing.ok) {
-              // 사진 짝짓기에 실패하면 사진은 저장하지 않는다 (이름은 수업반 명단을 건드리지 않는다)
-              showToast('사진 위치를 확실히 읽지 못해 사진을 가져오지 않았어요.', 'error');
+              // 사진 자리를 확신할 수 없으면 사진만 포기한다 — 이름은 위에서 이미 살렸다.
+              showToast(
+                merged.added > 0
+                  ? `학생 ${merged.added}명을 명단에 넣었어요. 다만 사진 위치를 확실히 읽지 못해 사진은 넣지 않았어요.`
+                  : '사진 위치를 확실히 읽지 못해 사진을 가져오지 않았어요.',
+                'error',
+              );
+              setShowPhotoImport(false);
               return;
             }
+
+            // ② 사진 — 짝짓기 결과가 소속을 그대로 싣고 오므로 이름으로 되찾지 않는다
             const { resolved, unresolved } = resolveTeachingClassPhotoTargets(
               cls.id,
-              students,
-              result.pairing.pairs.map((pair) => {
-                const meta = result.names.find(
-                  (n) => n.studentNumber === pair.studentNumber && n.name === pair.name,
-                );
-                return {
-                  studentNumber: pair.studentNumber,
-                  name: pair.name,
-                  ...(meta?.grade !== undefined ? { grade: meta.grade } : {}),
-                  ...(meta?.classNum !== undefined ? { classNum: meta.classNum } : {}),
-                  bytes: pair.photo.bytes,
-                  mimeType: pair.photo.mimeType,
-                };
-              }),
+              merged.students,
+              result.pairing.pairs.map((pair) => ({
+                studentNumber: pair.studentNumber,
+                name: pair.name,
+                ...(pair.grade !== undefined ? { grade: pair.grade } : {}),
+                ...(pair.classNum !== undefined ? { classNum: pair.classNum } : {}),
+                bytes: pair.photo.bytes,
+                mimeType: pair.photo.mimeType,
+              })),
             );
             const saveResult = await saveRosterPhotos(
               { repository: studentPhotoRepository, resizer: imageResizer },
@@ -951,8 +972,9 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
               },
             );
             const missed = unresolved.length + saveResult.skipped.length;
+            const namePart = merged.added > 0 ? `학생 ${merged.added}명과 ` : '';
             showToast(
-              `사진 ${saveResult.savedCount}장을 넣었어요${missed > 0 ? ` (${missed}장은 명단과 맞지 않아 넣지 못했어요)` : ''}`,
+              `${namePart}사진 ${saveResult.savedCount}장을 넣었어요${missed > 0 ? ` (${missed}장은 명단과 맞지 않아 넣지 못했어요)` : ''}`,
               missed > 0 ? 'error' : 'success',
             );
             setShowPhotoImport(false);

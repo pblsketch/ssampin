@@ -21,6 +21,7 @@
  * "직접 맞춰 주세요"(보정 화면)를 받는다. 안전을 지키면서 기능이 죽지 않게 하는 선택이다.
  */
 
+import { compareRosterRows } from '@domain/rules/rosterNameCell';
 import type {
   RosterNameCandidate,
   RosterPairedStudent,
@@ -107,11 +108,18 @@ export function pairRosterPhotos(
   const pairs: RosterPairedStudent[] = photos.map((photo) => {
     // 위에서 고아 사진이 0장임을 확인했으므로 반드시 존재한다
     const matched = nameByKey.get(photo.pairKey)!;
-    return { studentNumber: matched.studentNumber, name: matched.name, photo };
+    return {
+      studentNumber: matched.studentNumber,
+      name: matched.name,
+      photo,
+      // 수업반은 번호가 겹치므로 소속을 반드시 함께 넘긴다 (버리면 되찾을 수 없다)
+      ...(matched.grade !== undefined ? { grade: matched.grade } : {}),
+      ...(matched.classNum !== undefined ? { classNum: matched.classNum } : {}),
+    };
   });
 
-  // 학번 순으로 정렬 — 화면·테스트가 파일 내부 순서에 흔들리지 않게 한다
-  pairs.sort((a, b) => a.studentNumber - b.studentNumber);
+  // 명렬표 순(학년 → 반 → 번호)으로 정렬 — 화면·테스트가 파일 내부 순서에 흔들리지 않게 한다
+  pairs.sort(compareRosterRows);
 
   return { ok: true, pairs };
 }

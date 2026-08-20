@@ -13,7 +13,7 @@
  *    `answers` 클로저를 읽어 remaining 계산이 한 틱 늦었고, 남은 문제가 0이 되는 분기 자체가 없어
  *    화면이 그대로 멈췄다.
  */
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, cleanup, within } from '@testing-library/react';
 import type { SeatingData } from '@domain/entities/Seating';
 import { NameLearningMode, type LearningStudentInfo } from './NameLearningMode';
@@ -140,24 +140,53 @@ describe('NameLearningMode — 모드별 시작 지점', () => {
   });
 });
 
-describe('사진 기능 출시 보류 — 꺼진 상태에서 "이름 쓰기"가 안 보인다', () => {
+describe('사진 기능 스위치 — 꺼져 있으면 "이름 쓰기"가 안 보인다', () => {
   /**
-   * 수업반 사진 지원이 끝날 때까지 얼굴 사진 기능은 `FEATURE_FLAGS.studentPhotos = false`
-   * 로 나간다. 이 파일은 그 값을 바꾸지 않으므로 **출시되는 상태 그대로** 검사한다.
+   * 얼굴 사진 기능은 수업반 지원·실기기 확인이 끝날 때까지 `FEATURE_FLAGS.studentPhotos`
+   * 로 막아 둔다.
    *
    * 항목을 남겨 두면 눌러도 아무 일도 없는 버튼 옆에 "학생 사진이 있어야 써요" 안내만
    * 뜬다 — 선생님은 어디서 사진을 넣는지 찾다가 못 찾는다(넣는 입구도 함께 막혀 있으므로).
-   * 사진 지원을 다시 열 때 이 테스트가 빨간불이 되면서 "여기도 되돌려라"라고 알려 준다.
+   *
+   * ⚠️ **주변 환경(.env.local)에 기대지 않는다.**
+   * 스위치 설명은 "개발·실기기 확인 중에는 .env.local 로 켜라"고 안내한다. 그 말대로 켠
+   * 사람의 컴퓨터에서만 이 시험이 빨간불이 되면 안내와 그물이 서로 모순되고, 진짜 결함이
+   * 아닌 빨간불에 익숙해진다. 그래서 값을 직접 갈아 끼워 **켠 상태와 끈 상태를 둘 다** 본다.
    */
-  it('모드 선택에 "이름 쓰기"가 없고 안내 문구도 뜨지 않는다', () => {
-    renderPanel();
+  async function renderWithFlag(studentPhotos: boolean) {
+    vi.doMock('@adapters/config/featureFlags', () => ({
+      FEATURE_FLAGS: { studentPhotos },
+    }));
+    vi.resetModules();
+    const mod = await import('./NameLearningMode');
+    const Panel = mod.NameLearningMode;
+    return render(
+      <Panel isOpen onClose={() => {}} seating={SEATING} resolveStudent={(id) => STUDENTS[id]} />,
+    );
+  }
+
+  afterEach(() => {
+    vi.doUnmock('@adapters/config/featureFlags');
+    vi.resetModules();
+  });
+
+  it('꺼져 있으면 모드 선택에 "이름 쓰기"가 없고 안내 문구도 뜨지 않는다', async () => {
+    await renderWithFlag(false);
 
     expect(screen.queryByRole('radio', { name: '이름 쓰기' })).toBeNull();
     expect(screen.queryByText(/'이름 쓰기'는 학생 사진이 있어야 써요/)).toBeNull();
 
-    // 출시된 3가지 모드는 그대로 있어야 한다 (같이 숨기면 이름 학습 자체가 망가진 것)
+    // 나머지 3가지 모드는 그대로 있어야 한다 (같이 숨기면 이름 학습 자체가 망가진 것)
     expect(screen.getByRole('radio', { name: '자유' })).toBeTruthy();
     expect(screen.getByRole('radio', { name: '순서' })).toBeTruthy();
     expect(screen.getByRole('radio', { name: '맞혀보기' })).toBeTruthy();
+  });
+
+  it('켜져 있으면 "이름 쓰기"가 보인다 — 사진을 안 넘겼으므로 잠긴 채로', async () => {
+    await renderWithFlag(true);
+
+    const radio = screen.getByRole('radio', { name: '이름 쓰기' }) as HTMLButtonElement;
+    expect(radio.disabled).toBe(true);
+    expect(screen.getByText(/'이름 쓰기'는 학생 사진이 있어야 써요/)).toBeTruthy();
   });
 });

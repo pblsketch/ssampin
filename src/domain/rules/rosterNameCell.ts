@@ -63,3 +63,49 @@ export function parseRosterNameCell(text: string): RosterNameCell | null {
 export function isTeachingClassNameCell(cell: RosterNameCell): boolean {
   return cell.grade !== undefined && cell.classNum !== undefined;
 }
+
+/**
+ * 화면·짝짓기에서 학생 한 명을 가리키는 열쇠.
+ *
+ * ⚠️ **번호만으로는 안 된다.** 수업반 명렬표는 여러 반이 섞여 있어 `5번`이 두 명, `14번`이
+ * 세 명일 수 있다. 번호만 열쇠로 쓰면 뒤 학생이 앞 학생을 덮어써서 **여러 학생에게 같은
+ * 얼굴이 붙어 보인다** — 실제로 그렇게 터졌다(2026-08-20, 수업반 미리보기).
+ */
+export function rosterRowKey(cell: {
+  readonly studentNumber: number;
+  readonly grade?: number;
+  readonly classNum?: number;
+}): string {
+  return cell.grade !== undefined && cell.classNum !== undefined
+    ? `${cell.grade}-${cell.classNum}-${cell.studentNumber}`
+    : `${cell.studentNumber}`;
+}
+
+/**
+ * 사람에게 보여 줄 이름표.
+ *
+ * 수업반은 소속을 빼면 `5번 박지효`·`5번 김예림` 처럼 **같은 번호가 여러 번 보여**
+ * 선생님이 잘못 들어간 줄 알게 된다. 소속이 있으면 함께 적는다.
+ */
+export function rosterRowLabel(cell: {
+  readonly studentNumber: number;
+  readonly name: string;
+  readonly grade?: number;
+  readonly classNum?: number;
+}): string {
+  return cell.grade !== undefined && cell.classNum !== undefined
+    ? `${cell.grade}학년 ${cell.classNum}반 ${cell.studentNumber}번 ${cell.name}`
+    : `${cell.studentNumber}번 ${cell.name}`;
+}
+
+/** 명렬표 순서 — 학년 → 반 → 번호 (번호만 있으면 번호순) */
+export function compareRosterRows(
+  a: { readonly studentNumber: number; readonly grade?: number; readonly classNum?: number },
+  b: { readonly studentNumber: number; readonly grade?: number; readonly classNum?: number },
+): number {
+  return (
+    (a.grade ?? 0) - (b.grade ?? 0) ||
+    (a.classNum ?? 0) - (b.classNum ?? 0) ||
+    a.studentNumber - b.studentNumber
+  );
+}

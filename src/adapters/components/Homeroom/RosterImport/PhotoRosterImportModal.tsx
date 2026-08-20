@@ -20,6 +20,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { Modal } from '@adapters/components/common/Modal';
 import { IconButton } from '@adapters/components/common/IconButton';
+import { compareRosterRows, rosterRowKey, rosterRowLabel } from '@domain/rules/rosterNameCell';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { photoRosterParser } from '@adapters/di/container';
 import {
@@ -49,13 +50,31 @@ export interface PhotoRosterImportModalProps {
    * 충돌 창과 두 개가 겹쳐 보인다(이 저장소에 모달 2개 겹침 사고 전례가 있다).
    */
   onConfirm: (result: PhotoRosterParseResult) => Promise<boolean | void>;
+  /**
+   * `onConfirm` 이 `false` 를 돌려줬을 때(= 충돌 해결 창으로 넘어감) 호출된다.
+   *
+   * ⚠️ **`onClose` 를 대신 쓰면 안 된다.** `onClose` 는 "사용자가 그만둠"이라
+   * 부모가 대기 중인 사진을 버리는데, 이 경우는 아직 진행 중이라 사진이 그대로 필요하다.
+   * (실제로 이 둘을 같은 것으로 묶었다가 "이름은 들어가고 사진만 0장" 사고가 났다)
+   */
+  onHandOff?: () => void;
 }
 
 type Step = 'pick' | 'reading' | 'confirm' | 'done';
 
 interface RosterRow {
+  /**
+   * 이 줄을 가리키는 열쇠.
+   *
+   * ⚠️ **번호를 열쇠로 쓰면 안 된다.** 수업반은 여러 반이 섞여 `5번`이 둘, `14번`이 셋일 수
+   * 있어, 번호를 열쇠로 쓰면 사진이 서로 덮여 **여러 학생에게 같은 얼굴이 보인다.**
+   */
+  readonly key: string;
   readonly studentNumber: number;
   readonly name: string;
+  /** 수업반 명렬표에만 있다 */
+  readonly grade?: number;
+  readonly classNum?: number;
   readonly photoUrl: string | null;
 }
 
@@ -95,6 +114,7 @@ export function PhotoRosterImportModal({
   ownerKey,
   currentStudentCount,
   onConfirm,
+  onHandOff,
 }: PhotoRosterImportModalProps) {
   const showToast = useToastStore((s) => s.show);
 
@@ -106,7 +126,7 @@ export function PhotoRosterImportModal({
   const [confirmedFirst, setConfirmedFirst] = useState(false);
   const [applying, setApplying] = useState(false);
   const [applyError, setApplyError] = useState<string | null>(null);
-  const [brokenPhotos, setBrokenPhotos] = useState<ReadonlySet<number>>(new Set());
+  const [brokenPhotos, setBrokenPhotos] = useState<ReadonlySet<string>>(new Set());
   const inputRef = useRef<HTMLInputElement>(null);
 
   const resetAll = useCallback(() => {
@@ -127,16 +147,16 @@ export function PhotoRosterImportModal({
   }, [isOpen, resetAll]);
 
   /* ── 사진 미리보기 URL — 자동 짝짓기가 성공한 경우에만 만든다 ── */
-  const [photoUrls, setPhotoUrls] = useState<ReadonlyMap<number, string>>(new Map());
+  const [photoUrls, setPhotoUrls] = useState<ReadonlyMap<string, string>>(new Map());
   useEffect(() => {
     if (!parseResult || !parseResult.pairing.ok) {
       setPhotoUrls(new Map());
       return;
     }
-    const urls = new Map<number, string>();
+    const urls = new Map<string, string>();
     for (const pair of parseResult.pairing.pairs) {
       const blob = new Blob([pair.photo.bytes as BlobPart], { type: pair.photo.mimeType });
-      urls.set(pair.studentNumber, URL.createObjectURL(blob));
+      urls.set(rosterRowKey(pair), URL.createObjectURL(blob));
     }
     setPhotoUrls(urls);
     return () => {
@@ -189,21 +209,27 @@ export function PhotoRosterImportModal({
     [handleFiles],
   );
 
-  /* ── 확인 단계에서 보여줄 행 목록 (학번 오름차순) ── */
+  /* ── 확인 단계에서 보여줄 행 목록 (학년 → 반 → 번호 순) ── */
   const rows: readonly RosterRow[] = useMemo(() => {
     if (!parseResult) return [];
+    const toRow = (
+      n: { studentNumber: number; name: string; grade?: number; classNum?: number },
+      withPhoto: boolean,
+    ): RosterRow => {
+      const key = rosterRowKey(n);
+      return {
+        key,
+        studentNumber: n.studentNumber,
+        name: n.name,
+        ...(n.grade !== undefined ? { grade: n.grade } : {}),
+        ...(n.classNum !== undefined ? { classNum: n.classNum } : {}),
+        photoUrl: withPhoto ? (photoUrls.get(key) ?? null) : null,
+      };
+    };
     if (parseResult.pairing.ok) {
-      return [...parseResult.pairing.pairs]
-        .sort((a, b) => a.studentNumber - b.studentNumber)
-        .map((p) => ({
-          studentNumber: p.studentNumber,
-          name: p.name,
-          photoUrl: photoUrls.get(p.studentNumber) ?? null,
-        }));
+      return [...parseResult.pairing.pairs].sort(compareRosterRows).map((p) => toRow(p, true));
     }
-    return [...parseResult.names]
-      .sort((a, b) => a.studentNumber - b.studentNumber)
-      .map((n) => ({ studentNumber: n.studentNumber, name: n.name, photoUrl: null }));
+    return [...parseResult.names].sort(compareRosterRows).map((n) => toRow(n, false));
   }, [parseResult, photoUrls]);
 
   const studentCount = rows.length;
@@ -220,7 +246,9 @@ export function PhotoRosterImportModal({
       // false 를 받으면 아직 반영 전이다(충돌 해결 창이 떠 있다) — 완료 화면으로 넘어가지 않고
       // 이 창을 닫아 충돌 창만 남긴다.
       if (applied === false) {
-        onClose();
+        // 아직 반영 전이다(충돌 해결 창이 떠 있다). 완료 화면으로 넘어가지 않고 이 창만 접는다 —
+        // 대기 중인 사진은 그대로 두어야 충돌 해결 뒤에 저장된다.
+        (onHandOff ?? onClose)();
         return;
       }
       setStep('done');
@@ -232,7 +260,7 @@ export function PhotoRosterImportModal({
     } finally {
       setApplying(false);
     }
-  }, [parseResult, canConfirm, onConfirm, onClose, showToast]);
+  }, [parseResult, canConfirm, onConfirm, onClose, onHandOff, showToast]);
 
   const handlePickAgain = useCallback(() => {
     setStep('pick');
@@ -308,7 +336,7 @@ export function PhotoRosterImportModal({
               onToggleCount={setConfirmedCount}
               onToggleFirst={setConfirmedFirst}
               brokenPhotos={brokenPhotos}
-              onPhotoBroken={(n) => setBrokenPhotos((prev) => new Set(prev).add(n))}
+              onPhotoBroken={(key) => setBrokenPhotos((prev) => new Set(prev).add(key))}
               currentStudentCount={currentStudentCount}
             />
           )}
@@ -483,8 +511,8 @@ interface ConfirmStepProps {
   confirmedFirst: boolean;
   onToggleCount: (v: boolean) => void;
   onToggleFirst: (v: boolean) => void;
-  brokenPhotos: ReadonlySet<number>;
-  onPhotoBroken: (studentNumber: number) => void;
+  brokenPhotos: ReadonlySet<string>;
+  onPhotoBroken: (rowKey: string) => void;
   currentStudentCount: number;
 }
 
@@ -577,10 +605,10 @@ function ConfirmStep({
             <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-3">
               {rows.map((row) => (
                 <RosterCell
-                  key={row.studentNumber}
+                  key={row.key}
                   row={row}
-                  broken={brokenPhotos.has(row.studentNumber)}
-                  onBroken={() => onPhotoBroken(row.studentNumber)}
+                  broken={brokenPhotos.has(row.key)}
+                  onBroken={() => onPhotoBroken(row.key)}
                 />
               ))}
             </div>
@@ -622,8 +650,12 @@ function ConfirmStep({
                 />
                 <span className="text-sm text-sp-text">
                   명렬표 맨 앞,{' '}
-                  <span className="font-semibold text-sp-accent">{firstRow.studentNumber}번</span>이{' '}
-                  <span className="font-semibold text-sp-accent">"{firstRow.name}"</span>인 게
+                  <span className="font-semibold text-sp-accent">
+                    {firstRow.grade !== undefined && firstRow.classNum !== undefined
+                      ? `${firstRow.grade}학년 ${firstRow.classNum}반 ${firstRow.studentNumber}번`
+                      : `${firstRow.studentNumber}번`}
+                  </span>
+                  이 <span className="font-semibold text-sp-accent">"{firstRow.name}"</span>인 게
                   맞습니까?
                 </span>
               </label>
@@ -651,7 +683,7 @@ function RosterCell({ row, broken, onBroken }: RosterCellProps) {
         {showPhoto ? (
           <img
             src={row.photoUrl ?? undefined}
-            alt={`${row.studentNumber}번 ${row.name}`}
+            alt={rosterRowLabel(row)}
             className="w-full h-full object-cover"
             onError={onBroken}
           />
@@ -664,8 +696,12 @@ function RosterCell({ row, broken, onBroken }: RosterCellProps) {
           </span>
         )}
       </div>
-      <span className="text-xs text-sp-text text-center truncate w-full">
-        {row.studentNumber}번 {row.name}
+      {/* 수업반은 소속까지 보여야 한다 — `5번`이 두 명이면 잘못 들어간 줄 알게 된다 */}
+      <span
+        className="text-xs text-sp-text text-center truncate w-full"
+        title={rosterRowLabel(row)}
+      >
+        {rosterRowLabel(row)}
       </span>
     </div>
   );
