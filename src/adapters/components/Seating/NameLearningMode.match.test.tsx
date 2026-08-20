@@ -69,6 +69,18 @@ function optionButtons(): HTMLButtonElement[] {
   return Array.from(within(list).getAllByRole('button')) as HTMLButtonElement[];
 }
 
+/**
+ * 진행률 문구를 통째로 읽는다.
+ *
+ * 숫자가 바뀔 때 짧게 굴러 올라가는 연출(2026-08-20) 때문에 숫자만 별도 요소로 감쌌다.
+ * 그래서 `getByText('1/3명 짝지음 …')` 처럼 한 요소에서 문장 전체를 찾을 수 없다.
+ * 검사하는 내용은 그대로 두고, 읽는 방법만 컨테이너 기준으로 바꾼다.
+ */
+function progressText(): string {
+  const region = document.querySelector('[aria-live="polite"][aria-atomic="true"]');
+  return (region?.textContent ?? '').replace(/\s+/g, ' ');
+}
+
 describe('매칭하기 모드', () => {
   it('사진이 있으면 모드를 고를 수 있고, 왼쪽 얼굴과 오른쪽 명단이 함께 뜬다', () => {
     openMatchMode();
@@ -93,14 +105,14 @@ describe('매칭하기 모드', () => {
     openMatchMode(); // Math.random=0 → 첫 학생(강나영)이 문제
     fireEvent.click(optionButtons()[0]!); // 강나영
     expect(screen.getByText('맞았어요!')).toBeTruthy();
-    expect(screen.getByText(/1\/3명 짝지음 · 정답 1/)).toBeTruthy();
+    expect(progressText()).toContain('1/3명 짝지음 · 정답 1');
   });
 
   it('★틀린 이름을 고르면 정답이 무엇이었는지 알려 준다', () => {
     openMatchMode();
     fireEvent.click(optionButtons()[1]!); // 김가영 (정답은 강나영)
     expect(screen.getByText('정답: 1번 강나영')).toBeTruthy();
-    expect(screen.getByText(/1\/3명 짝지음 · 정답 0/)).toBeTruthy();
+    expect(progressText()).toContain('1/3명 짝지음 · 정답 0');
   });
 
   it('★채점이 끝나면 다른 이름을 더 고를 수 없다 (재시도 없음)', () => {
@@ -110,7 +122,7 @@ describe('매칭하기 모드', () => {
 
     // 다시 눌러도 점수가 바뀌지 않는다
     fireEvent.click(optionButtons()[0]!);
-    expect(screen.getByText(/1\/3명 짝지음 · 정답 0/)).toBeTruthy();
+    expect(progressText()).toContain('1/3명 짝지음 · 정답 0');
   });
 
   it('★한 번 나온 학생은 명단에서 빠지고 다시 출제되지 않는다', () => {
@@ -145,7 +157,7 @@ describe('매칭하기 모드', () => {
       fireEvent.click(screen.getByRole('button', { name: '다음 →' }));
     }
     fireEvent.click(screen.getByRole('button', { name: /틀린 학생만 다시/ }));
-    expect(screen.getByText(/0\/1명 짝지음/)).toBeTruthy();
+    expect(progressText()).toContain('0/1명 짝지음');
   });
 
   it('모드를 바꿔도 다른 모드의 진행이 새어 들어가지 않는다', () => {
@@ -153,6 +165,6 @@ describe('매칭하기 모드', () => {
     fireEvent.click(optionButtons()[0]!);
     fireEvent.click(screen.getByRole('radio', { name: '맞혀보기' }));
     fireEvent.click(screen.getByRole('radio', { name: '매칭하기' }));
-    expect(screen.getByText(/0\/3명 짝지음 · 정답 0/)).toBeTruthy();
+    expect(progressText()).toContain('0/3명 짝지음 · 정답 0');
   });
 });

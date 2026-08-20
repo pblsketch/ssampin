@@ -5,6 +5,13 @@ import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { gradeNameAnswer, acceptedNamesFor, toChosungHint } from '@domain/rules/nameAnswerGrading';
 import { buildMatchOptions, pickNextMatchTarget } from '@domain/rules/nameMatchingSession';
 import { LearningCard } from './LearningCard';
+import {
+  LearningProgressBar,
+  LearningStage,
+  MatchOptionRow,
+  RollingCount,
+  StaggeredNames,
+} from './LearningStage';
 import { FEATURE_FLAGS } from '@adapters/config/featureFlags';
 
 type LearningMode = 'free' | 'sequential' | 'quiz' | 'write' | 'match';
@@ -597,25 +604,50 @@ export function NameLearningMode({
           </div>
 
           {/* 진행률 (aria-live 로 스크린리더에도 안내) */}
-          <div aria-live="polite" aria-atomic="true" className="text-sm text-sp-muted ml-auto">
+          <div
+            aria-live="polite"
+            aria-atomic="true"
+            className="text-sm text-sp-muted ml-auto flex items-center gap-3"
+          >
             {mode === 'quiz' ? (
-              <span>
-                {answeredCount}/{total}명 풀이 · 정답 {correctCount}
-              </span>
+              <>
+                <span>
+                  <RollingCount value={answeredCount} />/{total}명 풀이 · 정답{' '}
+                  <RollingCount value={correctCount} className="text-sp-accent font-semibold" />
+                </span>
+                <LearningProgressBar done={answeredCount} total={total} />
+              </>
             ) : mode === 'match' ? (
-              <span>
-                {matchAnswers.size}/{matchPool.length}명 짝지음 · 정답 {matchCorrectCount}
-              </span>
+              <>
+                <span>
+                  <RollingCount value={matchAnswers.size} />/{matchPool.length}명 짝지음 · 정답{' '}
+                  <RollingCount
+                    value={matchCorrectCount}
+                    className="text-sp-accent font-semibold"
+                  />
+                </span>
+                <LearningProgressBar done={matchAnswers.size} total={matchPool.length} />
+              </>
             ) : mode === 'write' ? (
-              <span>
-                {writeAnswers.size}/{writePool.length}명 풀이 · 정답 {writeCorrectCount}
-              </span>
+              <>
+                <span>
+                  <RollingCount value={writeAnswers.size} />/{writePool.length}명 풀이 · 정답{' '}
+                  <RollingCount
+                    value={writeCorrectCount}
+                    className="text-sp-accent font-semibold"
+                  />
+                </span>
+                <LearningProgressBar done={writeAnswers.size} total={writePool.length} />
+              </>
             ) : (
-              <span>
-                {revealedCount}/{total}명 공개
-              </span>
+              <>
+                <span>
+                  <RollingCount value={revealedCount} />/{total}명 공개
+                </span>
+                <LearningProgressBar done={revealedCount} total={total} />
+              </>
             )}
-            <span className="ml-3 text-xs">{elapsedSeconds}초</span>
+            <span className="text-xs">{elapsedSeconds}초</span>
           </div>
 
           <button
@@ -655,10 +687,13 @@ export function NameLearningMode({
                 </button>
               </div>
               {wrongNames.length > 0 && (
-                <p className="mt-3 text-sm text-sp-text break-keep">
+                <div
+                  data-testid="learning-wrong-names"
+                  className="mt-3 flex flex-wrap items-center gap-1.5 text-sm text-sp-text break-keep"
+                >
                   <span className="text-sp-muted">아직 못 외운 학생 {wrongNames.length}명 · </span>
-                  {wrongNames.join(', ')}
-                </p>
+                  <StaggeredNames names={wrongNames} />
+                </div>
               )}
             </section>
           )}
@@ -771,7 +806,10 @@ export function NameLearningMode({
                  오른쪽 목록만 스크롤시키고 왼쪽은 고정 폭으로 둔다. */
               <div className="w-full max-w-4xl flex flex-col sm:flex-row gap-6 py-2">
                 {/* 왼쪽 — 얼굴 */}
-                <div className="sm:w-64 shrink-0 flex flex-col items-center gap-3">
+                <LearningStage
+                  trigger={matchCurrentId ?? ''}
+                  className="sm:w-64 shrink-0 flex flex-col items-center gap-3"
+                >
                   <LearningCard
                     size="large"
                     focusable={false}
@@ -787,6 +825,7 @@ export function NameLearningMode({
                           : 'wrong'
                         : undefined
                     }
+                    motionKey={matchCurrentId ?? ''}
                     onClick={() => {}}
                   />
 
@@ -816,7 +855,7 @@ export function NameLearningMode({
                       </button>
                     </div>
                   )}
-                </div>
+                </LearningStage>
 
                 {/* 오른쪽 — 학생 명단 */}
                 <div className="flex-1 min-w-0 flex flex-col gap-2">
@@ -825,36 +864,18 @@ export function NameLearningMode({
                   </p>
                   <div className="rounded-xl bg-sp-card ring-1 ring-sp-border p-2 overflow-y-auto max-h-[min(52vh,440px)]">
                     <div className="grid grid-cols-2 lg:grid-cols-3 gap-1.5">
-                      {matchOptions.map((opt) => {
-                        const isPicked = matchPickedId === opt.studentId;
-                        // 골랐던 줄만 정오답 색으로 물들인다 — 나머지는 짝이 지어졌다는 표시만
-                        const pickedTone = isPicked
-                          ? currentMatchVerdict
-                            ? 'bg-green-500/20 text-green-300 ring-green-500/40'
-                            : 'bg-red-500/20 text-red-300 ring-red-500/40'
-                          : '';
-                        return (
-                          <button
-                            key={opt.studentId}
-                            type="button"
-                            disabled={opt.matched || matchPhase !== 'asking'}
-                            onClick={() => pickMatchAnswer(opt.studentId)}
-                            className={`px-2.5 py-2 rounded-lg text-sm text-left truncate ring-1 transition-colors ${
-                              pickedTone ||
-                              (opt.matched
-                                ? 'bg-sp-surface text-sp-muted ring-sp-border opacity-50 line-through cursor-not-allowed'
-                                : 'bg-sp-surface text-sp-text ring-sp-border hover:bg-sp-card disabled:opacity-60')
-                            }`}
-                          >
-                            {opt.studentNumber !== undefined && (
-                              <span className="font-mono text-xs text-sp-muted mr-1.5">
-                                {String(opt.studentNumber).padStart(2, '0')}
-                              </span>
-                            )}
-                            {opt.name}
-                          </button>
-                        );
-                      })}
+                      {matchOptions.map((opt) => (
+                        <MatchOptionRow
+                          key={opt.studentId}
+                          label={opt.name}
+                          studentNumber={opt.studentNumber}
+                          matched={opt.matched}
+                          picked={matchPickedId === opt.studentId}
+                          verdict={matchPhase === 'graded' ? (currentMatchVerdict ?? null) : null}
+                          disabled={opt.matched || matchPhase !== 'asking'}
+                          onPick={() => pickMatchAnswer(opt.studentId)}
+                        />
+                      ))}
                     </div>
                   </div>
                 </div>
@@ -869,7 +890,10 @@ export function NameLearningMode({
                 <p>사진이 등록된 학생이 없어요.</p>
               </div>
             ) : (
-              <div className="w-full max-w-sm flex flex-col items-center gap-4 py-4">
+              <LearningStage
+                trigger={writeCurrentId ?? ''}
+                className="w-full max-w-sm flex flex-col items-center gap-4 py-4"
+              >
                 <LearningCard
                   size="large"
                   focusable={false}
@@ -879,6 +903,7 @@ export function NameLearningMode({
                   revealed={writePhase === 'graded'}
                   highlighted={writePhase === 'asking'}
                   answerState={writeAnswerState}
+                  motionKey={writeCurrentId ?? ''}
                   onClick={() => {}}
                 />
 
@@ -968,7 +993,7 @@ export function NameLearningMode({
                     </button>
                   </div>
                 )}
-              </div>
+              </LearningStage>
             )
           ) : (
             <div

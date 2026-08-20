@@ -1239,6 +1239,26 @@ html.sp-glass-on [role='dialog'] .bg-sp-surface {
 }
 
 /*
+  이름 학습(2026-08-20) — 결과 요약에서 못 외운 학생 이름이 차례로 나타난다.
+  한꺼번에 뜨면 몇 명인지 세어야 하지만, 차례로 나타나면 세지 않아도 양이 느껴진다.
+  간격은 JS(staggerDelayMs)가 animation-delay 로 준다.
+  ⚠️ 동작 줄이기 설정은 위쪽 전역 규칙(@media prefers-reduced-motion)이 이미 무력화한다.
+*/
+@keyframes sp-name-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.animate-sp-name-in {
+  animation: sp-name-in var(--sp-duration-slow, 200ms) var(--sp-ease-out, ease-out) both;
+}
+
+/*
   Anime.js가 이 한 장만 합성 레이어에서 움직이게 한다. 패널 안쪽의 위젯과 유리 배경을
   매 프레임 다시 배치하지 않아도 되고, 닫힘 도중 다시 열리면 현재 위치를 이어서 움직인다.
 */

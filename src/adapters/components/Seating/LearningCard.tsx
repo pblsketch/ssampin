@@ -1,4 +1,7 @@
-import { forwardRef } from 'react';
+import { forwardRef, useCallback } from 'react';
+import { useReducedMotion } from '@adapters/motion';
+import { resolveLearningMotion } from './learningMotion';
+import { useLearningMotion } from './useLearningMotion';
 
 interface LearningCardProps {
   /** 학생 학번 (앞면에 항상 표시 — 단, 사진이 있고 아직 공개 전이면 가린다) */
@@ -29,6 +32,13 @@ interface LearningCardProps {
    * 아래 입력칸이 주 조작 대상이라, 탭 순서에서 비켜 둔다(기본 true).
    */
   focusable?: boolean;
+  /**
+   * 같은 카드 자리에서 문제만 바뀔 때(이름 쓰기·매칭하기의 큰 카드) 연출을 다시 실행할 기준.
+   *
+   * 없으면 연달아 두 번 맞혔을 때 두 번째 축하가 조용히 넘어간다 — React 가 보기에는
+   * 같은 요소의 같은 상태라 아무 일도 일어나지 않기 때문이다.
+   */
+  motionKey?: string | number;
   onClick: () => void;
 }
 
@@ -39,7 +49,11 @@ interface LearningCardProps {
  * - 뒷면(공개): 학번 + 학생 이름 (사진이 있으면 사진도 함께)
  * - 클릭 또는 Enter/Space 로 플립
  * - 외곽선: highlighted=노란 ring (현재 문제), correct=초록, wrong=빨강
- * - prefers-reduced-motion: 회전 전환 비활성
+ *
+ * 연출(2026-08-20 추가) — 맞으면 커졌다 돌아오고(pop), 틀리면 흔들리고(shake),
+ * 공개되면 세로축으로 돌아가며 드러난다(reveal). 무엇을 할지는 `learningMotion.ts`가 정하고
+ * 실행은 `useLearningMotion`이 한다. **동작 줄이기 설정에서는 전부 멈추되 색 표시는 남는다** —
+ * 연출만 빼고 정보는 그대로여야 한다.
  */
 export const LearningCard = forwardRef<HTMLButtonElement, LearningCardProps>(function LearningCard(
   {
@@ -53,10 +67,25 @@ export const LearningCard = forwardRef<HTMLButtonElement, LearningCardProps>(fun
     col,
     size = 'grid',
     focusable = true,
+    motionKey,
     onClick,
   },
   ref,
 ) {
+  const reducedMotion = useReducedMotion();
+  // 맞고 틀린 것을 아는 일이 카드가 열리는 일보다 앞선다(규칙은 learningMotion.ts).
+  const motion = resolveLearningMotion({ answerState, revealed, reducedMotion });
+  const motionRef = useLearningMotion<HTMLButtonElement>(motion, `${motionKey ?? ''}:${revealed}`);
+
+  /** 바깥에서 준 ref(포커스 이동용)와 연출용 ref 를 함께 채운다 */
+  const setRefs = useCallback(
+    (node: HTMLButtonElement | null) => {
+      (motionRef as { current: HTMLButtonElement | null }).current = node;
+      if (typeof ref === 'function') ref(node);
+      else if (ref !== null) (ref as { current: HTMLButtonElement | null }).current = node;
+    },
+    [motionRef, ref],
+  );
   const isLarge = size === 'large';
   // 사진이 있고 아직 공개 전이면 학번도 가린다 — 학번으로 맞히기 방지
   const numberHiddenByPhoto = Boolean(photoUrl) && !revealed;
@@ -85,9 +114,10 @@ export const LearningCard = forwardRef<HTMLButtonElement, LearningCardProps>(fun
 
   return (
     <button
-      ref={ref}
+      ref={setRefs}
       type="button"
       role="button"
+      data-learning-motion={motion}
       aria-pressed={revealed}
       aria-label={labelBase}
       tabIndex={focusable ? undefined : -1}

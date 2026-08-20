@@ -121,8 +121,9 @@ describe('NameLearningMode — 맞혀보기 모드', () => {
     }
 
     expect(screen.getByText('4명 중 0명 맞혔어요')).toBeTruthy();
-    // 라벨(span)과 이름 목록이 같은 문단 안에 나뉘어 있으므로 문단 전체를 본다
-    const summary = screen.getByText(/아직 못 외운 학생 4명/).closest('p');
+    // 라벨(span)과 이름 목록이 한 덩어리 안에 나뉘어 있으므로 그 덩어리 전체를 본다.
+    // (2026-08-20 연출 추가로 이름이 하나씩 칩으로 분리되어 문단 태그가 아니게 됐다)
+    const summary = screen.getByTestId('learning-wrong-names');
     expect(summary).toBeTruthy();
     expect(summary!.textContent).toContain('강나영');
     expect(summary!.textContent).toContain('김드보라');
