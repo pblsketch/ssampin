@@ -48,7 +48,7 @@ export type DeleteStudentPhotosTarget =
       readonly ownerKind: StudentPhotoOwnerKind;
       readonly ownerKey: string;
     }
-  | { readonly scope: 'student'; readonly studentId: string };
+  | { readonly scope: 'student'; readonly subjectKey: string };
 
 export interface DeleteStudentPhotosResult {
   /** 로컬에서 지운 사진 수 */
@@ -67,7 +67,7 @@ export async function deleteStudentPhotos(
   const all = await deps.repository.list();
   const targets = all.filter((photo) => {
     if (target.scope === 'all') return true;
-    if (target.scope === 'student') return photo.studentId === target.studentId;
+    if (target.scope === 'student') return photo.subjectKey === target.subjectKey;
     return photo.ownerKind === target.ownerKind && photo.ownerKey === target.ownerKey;
   });
 
@@ -77,7 +77,7 @@ export async function deleteStudentPhotos(
   if (target.scope === 'all') {
     await deps.repository.deleteAll();
   } else if (target.scope === 'student') {
-    await deps.repository.delete(target.studentId);
+    await deps.repository.delete(target.subjectKey);
   } else {
     await deps.repository.deleteByOwner(target.ownerKind, target.ownerKey);
   }

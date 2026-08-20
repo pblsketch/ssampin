@@ -86,7 +86,7 @@ export function resolvePhotoTargets(
     const target = matches[0]!;
     usedIds.add(target.id);
     resolved.push({
-      studentId: target.id,
+      subjectKey: target.id,
       studentNumber: photo.studentNumber,
       studentName: photo.name,
       bytes: photo.bytes,

@@ -12,15 +12,15 @@ import { studentPhotoStorageRef } from '@domain/rules/studentPhotoRules';
 import { deleteStudentPhotos } from '../DeleteStudentPhotos';
 
 function makePhoto(
-  studentId: string,
+  subjectKey: string,
   ownerKind: StudentPhoto['ownerKind'] = 'homeroom',
   ownerKey = 'homeroom',
 ): StudentPhoto {
   return {
-    studentId,
+    subjectKey,
     ownerKind,
     ownerKey,
-    storageRef: studentPhotoStorageRef(studentId),
+    storageRef: studentPhotoStorageRef(subjectKey),
     mimeType: 'image/jpeg',
     byteSize: 10,
     width: 240,
@@ -44,9 +44,9 @@ class FakeRepository implements IStudentPhotoRepository {
   readPhoto(): Promise<Uint8Array | null> {
     return Promise.resolve(null);
   }
-  delete(studentId: string): Promise<void> {
-    this.calls.push(`delete:${studentId}`);
-    this.photos = this.photos.filter((p) => p.studentId !== studentId);
+  delete(subjectKey: string): Promise<void> {
+    this.calls.push(`delete:${subjectKey}`);
+    this.photos = this.photos.filter((p) => p.subjectKey !== subjectKey);
     return Promise.resolve();
   }
   deleteByOwner(kind: StudentPhoto['ownerKind'], key: string): Promise<void> {
@@ -89,11 +89,14 @@ describe('deleteStudentPhotos — 로컬', () => {
       { scope: 'owner', ownerKind: 'homeroom', ownerKey: 'homeroom' },
     );
     expect(result.deletedCount).toBe(2);
-    expect(repository.photos.map((p) => p.studentId)).toEqual(['t1']);
+    expect(repository.photos.map((p) => p.subjectKey)).toEqual(['t1']);
   });
 
   it('한 명만 삭제', async () => {
-    const result = await deleteStudentPhotos({ repository }, { scope: 'student', studentId: 's1' });
+    const result = await deleteStudentPhotos(
+      { repository },
+      { scope: 'student', subjectKey: 's1' },
+    );
     expect(result.deletedCount).toBe(1);
     expect(repository.calls).toEqual(['delete:s1']);
   });
@@ -101,7 +104,7 @@ describe('deleteStudentPhotos — 로컬', () => {
   it('지울 게 없으면 아무 일도 하지 않는다', async () => {
     const result = await deleteStudentPhotos(
       { repository },
-      { scope: 'student', studentId: '없음' },
+      { scope: 'student', subjectKey: '없음' },
     );
     expect(result).toEqual({ deletedCount: 0, cloudFailures: [] });
     expect(repository.calls).toEqual([]);
@@ -142,7 +145,7 @@ describe('deleteStudentPhotos — 클라우드까지 파기', () => {
     );
 
     // 로컬 파기는 반드시 끝난다 (인터넷이 없다고 파기가 막히면 안 된다)
-    expect(repository.photos.map((p) => p.studentId)).toEqual(['t1']);
+    expect(repository.photos.map((p) => p.subjectKey)).toEqual(['t1']);
     // 그러나 클라우드에 남은 것을 조용히 넘기지 않는다
     expect(result.cloudFailures).toEqual(['student-photos/s1.jpg']);
     expect(result.deletedCount).toBe(2);

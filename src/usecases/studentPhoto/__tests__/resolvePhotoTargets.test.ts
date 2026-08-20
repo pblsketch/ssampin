@@ -27,7 +27,7 @@ describe('resolvePhotoTargets', () => {
     const result = resolvePhotoTargets(students, [photo(1, '강나영'), photo(2, '김가영', 2)]);
 
     expect(result.unresolved).toEqual([]);
-    expect(result.resolved.map((r) => r.studentId)).toEqual(['id-1', 'id-2']);
+    expect(result.resolved.map((r) => r.subjectKey)).toEqual(['id-1', 'id-2']);
     expect(result.resolved[1]!.bytes[2]).toBe(2);
   });
 
@@ -35,7 +35,7 @@ describe('resolvePhotoTargets', () => {
     const students = [student('id-1', 1, '남궁 민수')];
     const result = resolvePhotoTargets(students, [photo(1, '남궁민수')]);
     expect(result.resolved).toHaveLength(1);
-    expect(result.resolved[0]!.studentId).toBe('id-1');
+    expect(result.resolved[0]!.subjectKey).toBe('id-1');
   });
 
   it('★학번은 같은데 이름이 다르면 붙이지 않는다 (다른 학생일 수 있다)', () => {

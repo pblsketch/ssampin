@@ -42,7 +42,7 @@ export const SKIP_REASON_MESSAGES: Record<SkipReason, string> = {
 
 export interface RosterPhotoToSave {
   /** 명단 병합이 끝난 뒤 확정된 불변 id */
-  readonly studentId: string;
+  readonly subjectKey: string;
   readonly studentNumber?: number;
   readonly studentName?: string;
   readonly bytes: Uint8Array;
@@ -60,7 +60,7 @@ export interface SaveRosterPhotosInput {
 export interface SaveRosterPhotosResult {
   readonly savedCount: number;
   readonly skipped: ReadonlyArray<{
-    readonly studentId: string;
+    readonly subjectKey: string;
     readonly studentName?: string;
     readonly reason: SkipReason;
   }>;
@@ -74,12 +74,12 @@ export async function saveRosterPhotos(
   input: SaveRosterPhotosInput,
 ): Promise<SaveRosterPhotosResult> {
   const entries: Array<{ photo: StudentPhoto; bytes: Uint8Array }> = [];
-  const skipped: Array<{ studentId: string; studentName?: string; reason: SkipReason }> = [];
+  const skipped: Array<{ subjectKey: string; studentName?: string; reason: SkipReason }> = [];
 
   for (const candidate of input.photos) {
     const skip = (reason: SkipReason): void => {
       skipped.push({
-        studentId: candidate.studentId,
+        subjectKey: candidate.subjectKey,
         ...(candidate.studentName !== undefined ? { studentName: candidate.studentName } : {}),
         reason,
       });
@@ -126,10 +126,10 @@ export async function saveRosterPhotos(
 
     entries.push({
       photo: {
-        studentId: candidate.studentId,
+        subjectKey: candidate.subjectKey,
         ownerKind: input.ownerKind,
         ownerKey: input.ownerKey,
-        storageRef: studentPhotoStorageRef(candidate.studentId),
+        storageRef: studentPhotoStorageRef(candidate.subjectKey),
         mimeType: resized.mimeType,
         byteSize: resized.bytes.byteLength,
         width: resized.width,

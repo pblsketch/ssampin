@@ -27,13 +27,44 @@ export function isAllowedStudentPhotoMime(mime: string): mime is AllowedStudentP
   return (STUDENT_PHOTO_LIMITS.ALLOWED_MIME as readonly string[]).includes(mime);
 }
 
-/** 바이너리 저장 경로. 키는 **불변 studentId** 다 (학번 금지 — 학번은 다른 학생을 가리키게 된다). */
-export function studentPhotoStorageRef(studentId: string): string {
-  return `student-photos/${studentId}.jpg`;
+/**
+ * 사진 한 장을 가리키는 키를 만든다.
+ *
+ * 명단 종류마다 학생을 구분하는 방식이 다르다.
+ *
+ * | 종류 | 앱이 학생을 구분하는 방식 | 사진 키 |
+ * |---|---|---|
+ * | 담임 | 불변 `Student.id` | 그대로 사용 |
+ * | 수업반 | `학년-반-번호`(`studentKey`) | `{수업반 id}--{학년-반-번호}` |
+ *
+ * ⚠️ **수업반 키에 수업반 id 를 앞에 붙이는 이유**: 한 학생이 여러 수업반에 들어갈 수 있는데,
+ * 키를 공유하면 **한 수업반의 사진을 지울 때 다른 수업반 것까지 사라진다.**
+ * 반별로 따로 두면 용량이 조금 늘지만(반당 1MB 남짓) 삭제가 예측대로 동작한다.
+ *
+ * ⚠️ 수업반 키는 **학년-반-번호라 바뀔 수 있다.** 다만 수업반의 출결·좌석·수업 기록이
+ * 이미 같은 키를 쓰므로, 사진만 더 엄격한 식별을 요구할 이유가 없다(오너 확정).
+ * 어긋나면 사진 명렬표를 다시 넣는 것으로 바로잡힌다.
+ */
+export function photoSubjectKey(
+  ownerKind: StudentPhotoOwnerKind,
+  ownerKey: string,
+  studentRef: string,
+): string {
+  return ownerKind === 'homeroom' ? studentRef : `${ownerKey}--${studentRef}`;
 }
 
-/** `student-photos/` 아래 파일명에서 studentId 를 되돌린다 (고아 파일 청소용) */
-export function studentIdFromStorageRef(storageRef: string): string | null {
+/**
+ * 바이너리 저장 경로.
+ *
+ * ⚠️ 파일명에 쓸 수 없는 글자를 걸러 낸다. 윈도우는 `:` 같은 글자를 파일명에 못 쓰는데,
+ * 그대로 두면 저장이 조용히 실패해 사진이 사라진다.
+ */
+export function studentPhotoStorageRef(subjectKey: string): string {
+  return `student-photos/${subjectKey.replace(/[^A-Za-z0-9_-]/g, '_')}.jpg`;
+}
+
+/** `student-photos/` 아래 파일명에서 키를 되돌린다 (고아 파일 청소용) */
+export function subjectKeyFromStorageRef(storageRef: string): string | null {
   const matched = /^student-photos\/(.+)\.jpg$/.exec(storageRef);
   return matched ? matched[1]! : null;
 }

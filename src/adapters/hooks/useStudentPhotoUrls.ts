@@ -22,7 +22,7 @@ const EMPTY: ReadonlyMap<string, string> = new Map();
 
 /**
  * @param enabled 필요할 때만 읽는다 (학습 모드를 열 때만 true)
- * @returns studentId → 사진 URL
+ * @returns subjectKey → 사진 URL
  */
 export function useStudentPhotoUrls(enabled: boolean): ReadonlyMap<string, string> {
   const [urls, setUrls] = useState<ReadonlyMap<string, string>>(EMPTY);
@@ -41,13 +41,13 @@ export function useStudentPhotoUrls(enabled: boolean): ReadonlyMap<string, strin
       try {
         const photos = await studentPhotoRepository.list();
         for (const photo of photos) {
-          const bytes = await studentPhotoRepository.readPhoto(photo.studentId);
+          const bytes = await studentPhotoRepository.readPhoto(photo.subjectKey);
           if (!bytes) continue;
           const url = URL.createObjectURL(
             new Blob([bytes as unknown as BlobPart], { type: photo.mimeType }),
           );
           created.push(url);
-          next.set(photo.studentId, url);
+          next.set(photo.subjectKey, url);
         }
       } catch {
         // 사진을 못 읽어도 이름 학습 자체는 되어야 한다 — 사진 없이 진행한다

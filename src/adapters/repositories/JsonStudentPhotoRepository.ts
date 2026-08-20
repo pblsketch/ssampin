@@ -37,23 +37,23 @@ export class JsonStudentPhotoRepository implements IStudentPhotoRepository {
       await this.storage.writeBinary(photo.storageRef, bytes);
     }
     const all = await this.list();
-    const incoming = new Set(entries.map((e) => e.photo.studentId));
-    const kept = all.filter((p) => !incoming.has(p.studentId));
+    const incoming = new Set(entries.map((e) => e.photo.subjectKey));
+    const kept = all.filter((p) => !incoming.has(p.subjectKey));
     await this.writeMeta([...kept, ...entries.map((e) => e.photo)]);
   }
 
-  async readPhoto(studentId: string): Promise<Uint8Array | null> {
-    const target = (await this.list()).find((p) => p.studentId === studentId);
+  async readPhoto(subjectKey: string): Promise<Uint8Array | null> {
+    const target = (await this.list()).find((p) => p.subjectKey === subjectKey);
     if (!target) return null;
     return this.storage.readBinary(target.storageRef);
   }
 
-  async delete(studentId: string): Promise<void> {
+  async delete(subjectKey: string): Promise<void> {
     const all = await this.list();
-    const target = all.find((p) => p.studentId === studentId);
+    const target = all.find((p) => p.subjectKey === subjectKey);
     if (!target) return;
     await this.storage.removeBinary(target.storageRef);
-    await this.writeMeta(all.filter((p) => p.studentId !== studentId));
+    await this.writeMeta(all.filter((p) => p.subjectKey !== subjectKey));
   }
 
   async deleteByOwner(ownerKind: StudentPhoto['ownerKind'], ownerKey: string): Promise<void> {

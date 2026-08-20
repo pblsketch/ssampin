@@ -11,24 +11,25 @@ import {
   computePhotoResizeTarget,
   isAllowedStudentPhotoMime,
   photoOwnerId,
-  studentIdFromStorageRef,
+  photoSubjectKey,
+  subjectKeyFromStorageRef,
   studentPhotoStorageRef,
 } from '@domain/rules/studentPhotoRules';
 
 describe('studentPhotoStorageRef', () => {
-  it('불변 studentId 로 경로를 만든다', () => {
+  it('키로 경로를 만든다', () => {
     expect(studentPhotoStorageRef('stu-abc-123')).toBe('student-photos/stu-abc-123.jpg');
   });
 
-  it('경로에서 studentId 를 되돌린다 (고아 파일 청소용)', () => {
-    expect(studentIdFromStorageRef('student-photos/stu-abc-123.jpg')).toBe('stu-abc-123');
-    expect(studentIdFromStorageRef('obs-attachments/x.png')).toBeNull();
-    expect(studentIdFromStorageRef('student-photos/x.png')).toBeNull();
+  it('경로에서 키를 되돌린다 (고아 파일 청소용)', () => {
+    expect(subjectKeyFromStorageRef('student-photos/stu-abc-123.jpg')).toBe('stu-abc-123');
+    expect(subjectKeyFromStorageRef('obs-attachments/x.png')).toBeNull();
+    expect(subjectKeyFromStorageRef('student-photos/x.png')).toBeNull();
   });
 
   it('왕복이 성립한다', () => {
     const id = 'a1b2-c3d4';
-    expect(studentIdFromStorageRef(studentPhotoStorageRef(id))).toBe(id);
+    expect(subjectKeyFromStorageRef(studentPhotoStorageRef(id))).toBe(id);
   });
 });
 
@@ -71,6 +72,32 @@ describe('허용 형식과 상한', () => {
   it('상한 값이 계획대로다 (바뀌면 용량 추정이 어긋나므로 고정한다)', () => {
     expect(STUDENT_PHOTO_LIMITS.MAX_DIMENSION).toBe(320);
     expect(STUDENT_PHOTO_LIMITS.MAX_STORED_BYTES).toBe(80 * 1024);
+  });
+});
+
+describe('photoSubjectKey — 명단 종류마다 다른 키', () => {
+  it('담임은 불변 Student.id 를 그대로 쓴다', () => {
+    expect(photoSubjectKey('homeroom', 'homeroom', 'stu-abc-123')).toBe('stu-abc-123');
+  });
+
+  it('★수업반은 반 id 를 앞에 붙인다 — 한 반을 지울 때 다른 반이 안 지워지게', () => {
+    expect(photoSubjectKey('teaching-class', 'tc-1', '3-1-2')).toBe('tc-1--3-1-2');
+  });
+
+  it('★같은 학생이 두 수업반에 있어도 키가 갈린다', () => {
+    const a = photoSubjectKey('teaching-class', 'tc-1', '3-1-2');
+    const b = photoSubjectKey('teaching-class', 'tc-2', '3-1-2');
+    expect(a).not.toBe(b);
+  });
+});
+
+describe('studentPhotoStorageRef — 파일명 안전성', () => {
+  it('★파일명에 못 쓰는 글자를 걸러 낸다 (윈도우에서 저장이 조용히 실패한다)', () => {
+    expect(studentPhotoStorageRef('tc:1/3-1-2')).toBe('student-photos/tc_1_3-1-2.jpg');
+  });
+
+  it('안전한 글자는 그대로 둔다', () => {
+    expect(studentPhotoStorageRef('tc-1--3-1-2')).toBe('student-photos/tc-1--3-1-2.jpg');
   });
 });
 

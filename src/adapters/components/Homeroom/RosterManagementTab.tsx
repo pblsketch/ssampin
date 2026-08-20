@@ -43,6 +43,7 @@ import {
   type PhotoTargetCandidate,
 } from '@usecases/studentPhoto/resolvePhotoTargets';
 import { saveRosterPhotos } from '@usecases/studentPhoto/SaveRosterPhotos';
+import { photoSubjectKey } from '@domain/rules/studentPhotoRules';
 import { studentPhotoRepository, imageResizer, driveSyncRepository } from '@adapters/di/container';
 import { deleteStudentPhotos } from '@usecases/studentPhoto/DeleteStudentPhotos';
 import { resolveStudentPhotoCloud } from '@adapters/repositories/studentPhotoCloudGateway';
@@ -153,7 +154,8 @@ export function RosterManagementTab() {
             syncRepository: driveSyncRepository,
             ...(cloud ? { cloud } : {}),
           },
-          { scope: 'student', studentId: student.id },
+          // 담임 명단이므로 사진 키는 불변 Student.id 그대로다
+          { scope: 'student', subjectKey: photoSubjectKey('homeroom', 'homeroom', student.id) },
         );
       } catch (err) {
         console.warn('[RosterManagementTab] 학생 사진 파기 실패:', err);

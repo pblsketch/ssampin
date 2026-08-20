@@ -49,15 +49,15 @@ class FakeStorage implements IStoragePort {
 }
 
 function makePhoto(
-  studentId: string,
+  subjectKey: string,
   ownerKind: StudentPhoto['ownerKind'],
   ownerKey: string,
 ): StudentPhoto {
   return {
-    studentId,
+    subjectKey,
     ownerKind,
     ownerKey,
-    storageRef: studentPhotoStorageRef(studentId),
+    storageRef: studentPhotoStorageRef(subjectKey),
     mimeType: 'image/jpeg',
     byteSize: 3,
     width: 240,
@@ -132,7 +132,7 @@ describe('JsonStudentPhotoRepository', () => {
     await repo.deleteByOwner('homeroom', 'homeroom');
 
     const left = await repo.list();
-    expect(left.map((p) => p.studentId)).toEqual(['t1']);
+    expect(left.map((p) => p.subjectKey)).toEqual(['t1']);
     // 파일도 실제로 사라졌는지 — 파기는 메타만 지우면 안 된다
     expect(storage.binary.has('student-photos/s1.jpg')).toBe(false);
     expect(storage.binary.has('student-photos/s2.jpg')).toBe(false);
@@ -145,7 +145,7 @@ describe('JsonStudentPhotoRepository', () => {
       { photo: makePhoto('b', 'teaching-class', 'tc-2'), bytes: BYTES(2) },
     ]);
     await repo.deleteByOwner('teaching-class', 'tc-1');
-    expect((await repo.list()).map((p) => p.studentId)).toEqual(['b']);
+    expect((await repo.list()).map((p) => p.subjectKey)).toEqual(['b']);
   });
 
   it('★전체 삭제 후 남은 사진 0장, 남은 파일 0개', async () => {

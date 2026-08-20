@@ -66,7 +66,7 @@ class FakeResizer implements IImageResizerPort {
 
 function candidate(overrides: Partial<RosterPhotoToSave> = {}): RosterPhotoToSave {
   return {
-    studentId: 's1',
+    subjectKey: 's1',
     studentNumber: 1,
     studentName: '강나영',
     bytes: new Uint8Array(1000).fill(1),
@@ -91,7 +91,7 @@ describe('saveRosterPhotos', () => {
     expect(result.skipped).toEqual([]);
     const saved = repository.saved[0]!;
     expect(saved.photo).toMatchObject({
-      studentId: 's1',
+      subjectKey: 's1',
       ownerKind: 'homeroom',
       storageRef: 'student-photos/s1.jpg',
       width: 240,
@@ -101,7 +101,7 @@ describe('saveRosterPhotos', () => {
     });
   });
 
-  it('학번·이름은 표시용으로만 함께 저장된다 (식별은 studentId 로)', async () => {
+  it('학번·이름은 표시용으로만 함께 저장된다 (식별은 subjectKey 로)', async () => {
     await saveRosterPhotos(
       { repository, resizer: new FakeResizer() },
       { ownerKind: 'teaching-class', ownerKey: 'tc-1', photos: [candidate()], now: NOW },
@@ -123,22 +123,22 @@ describe('saveRosterPhotos', () => {
         ownerKind: 'homeroom',
         ownerKey: 'homeroom',
         photos: [
-          candidate({ studentId: 'ok1' }),
+          candidate({ subjectKey: 'ok1' }),
           candidate({
-            studentId: 'bad',
+            subjectKey: 'bad',
             studentName: '김가영',
             bytes: new Uint8Array(1000).fill(9),
           }),
-          candidate({ studentId: 'ok2' }),
+          candidate({ subjectKey: 'ok2' }),
         ],
         now: NOW,
       },
     );
 
     expect(result.savedCount).toBe(2);
-    expect(repository.saved.map((s) => s.photo.studentId)).toEqual(['ok1', 'ok2']);
+    expect(repository.saved.map((s) => s.photo.subjectKey)).toEqual(['ok1', 'ok2']);
     expect(result.skipped).toEqual([
-      { studentId: 'bad', studentName: '김가영', reason: 'RESIZE_FAILED' },
+      { subjectKey: 'bad', studentName: '김가영', reason: 'RESIZE_FAILED' },
     ]);
   });
 

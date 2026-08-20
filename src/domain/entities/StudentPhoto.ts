@@ -8,12 +8,16 @@
  * JSON 에 인라인하면 그 파일이 수 MB 가 되고, 동기화가 매번 전량 전송·전량 병합이 된다
  * (v2.3.5·v2.3.6 동기화 충돌 사고와 같은 계열의 위험).
  *
- * ## 저장 키가 학번이 아니라 `studentId` 인 이유
+ * ## 저장 키(`subjectKey`)는 명단 종류마다 다르다
  *
- * ⚠️ 학번은 **바뀐다.** 전학·번호 재부여·학년도 전환 때 같은 학번이 다른 학생을 가리킨다.
- * 이 저장소에는 이미 같은 원인의 사고 기록이 있다(담임 출결이 학번으로 학생을 식별해
- * 번호가 겹치자 기록이 통째로 오염된 건). 사진은 얼굴이라 오염되면 더 나쁘다.
- * 그래서 **불변 `Student.id`** 를 키로 쓴다. 학번·이름은 진단·표시용 사본으로만 둔다.
+ * - **담임**: 불변 `Student.id`. 학번은 전학·번호 재부여·학년도 전환에서 다른 학생을
+ *   가리키게 되므로 절대 쓰지 않는다(담임 출결이 학번으로 식별하다 기록이 오염된 전례가 있다).
+ * - **수업반**: `{수업반 id}--{학년-반-번호}`. 수업반 학생에게는 불변 id 가 없고,
+ *   출결·좌석·수업 기록이 이미 `학년-반-번호` 로 저장되고 있다. 사진만 더 엄격한 식별을
+ *   요구할 이유가 없다는 판단(오너 확정)이며, 어긋나면 명렬표를 다시 넣어 바로잡는다.
+ *   수업반 id 를 앞에 붙이는 이유는 **한 반의 사진을 지울 때 다른 반 것까지 사라지지 않게** 하기 위해서다.
+ *
+ * 학번·이름은 진단·표시용 사본으로만 둔다 — 식별에 쓰지 말 것.
  *
  * ## AI 브릿지 미러링 대상이 아니다
  *
@@ -24,19 +28,19 @@
 export type StudentPhotoOwnerKind = 'homeroom' | 'teaching-class';
 
 export interface StudentPhoto {
-  /** 불변 Student.id — 저장 경로의 키 */
-  readonly studentId: string;
+  /** 저장 경로의 키 — 담임은 Student.id, 수업반은 `{반id}--{학년-반-번호}` (위 설명 참조) */
+  readonly subjectKey: string;
   /** 어느 명단에서 들어온 사진인지 (반별 삭제·묶음 동기화의 단위) */
   readonly ownerKind: StudentPhotoOwnerKind;
   /** 담임이면 'homeroom', 수업반이면 TeachingClass.id */
   readonly ownerKey: string;
-  /** 바이너리 상대경로: 'student-photos/{studentId}.jpg' */
+  /** 바이너리 상대경로: 'student-photos/{subjectKey}.jpg' */
   readonly storageRef: string;
   readonly mimeType: string;
   readonly byteSize: number;
   readonly width: number;
   readonly height: number;
-  /** 표시·진단용 사본 (식별에 쓰지 말 것 — 식별은 studentId 로만) */
+  /** 표시·진단용 사본 (식별에 쓰지 말 것 — 식별은 subjectKey 로만) */
   readonly studentNumber?: number;
   readonly studentName?: string;
   /** ISO 8601 */
