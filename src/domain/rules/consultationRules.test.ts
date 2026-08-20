@@ -273,7 +273,10 @@ describe('resolveEventTimeRange', () => {
     expect(resolveEventTimeRange(ev, r)).toEqual({ start: '09:00', end: '11:35' });
   });
 
-  it('period=allDay → 00:00 ~ 23:59', () => {
+  // 종일 일정은 busy 로 잡지 않는다.
+  // 예전에는 00:00~23:59 로 잡아서, 캘린더에 '학부모 상담 주간' 같은 종일 일정을
+  // 하나 적어두면 바로 그 날 상담 슬롯이 전부 '차단된 슬롯' 이 되던 실제 결함이 있었다.
+  it('period=allDay → null (종일은 시각 정보가 아니므로 차단하지 않는다)', () => {
     const ev = event({
       id: 'e1',
       date: '2026-06-01',
@@ -281,7 +284,20 @@ describe('resolveEventTimeRange', () => {
       category: 'etc',
       period: 'allDay',
     });
-    expect(resolveEventTimeRange(ev, r)).toEqual({ start: '00:00', end: '23:59' });
+    expect(resolveEventTimeRange(ev, r)).toBeNull();
+  });
+
+  it('allDay 라도 startTime/endTime 이 있으면 그 시각을 쓴다', () => {
+    const ev = event({
+      id: 'e1',
+      date: '2026-06-01',
+      title: '',
+      category: 'etc',
+      period: 'allDay',
+      startTime: '13:00',
+      endTime: '14:00',
+    });
+    expect(resolveEventTimeRange(ev, r)).toEqual({ start: '13:00', end: '14:00' });
   });
 
   it('아무 시간 정보 없으면 null', () => {
@@ -372,6 +388,51 @@ describe('buildBusyPeriods', () => {
       endTime: '10:40',
       source: 'event',
     });
+  });
+
+  // 실제 사용자 신고 재현: "예약도 안 됐는데 왜 차단된 슬롯인가요?"
+  // 원인은 상담 날짜에 걸쳐 있던 종일 일정이었다.
+  it('종일 일정은 그날 상담 슬롯을 차단하지 않는다', () => {
+    const result = buildBusyPeriods({
+      events: [
+        event({
+          id: 'e1',
+          date: '2026-06-01',
+          title: '학부모 상담 주간',
+          category: 'school',
+          period: 'allDay',
+        }),
+      ],
+      overrides: [],
+      targetDates,
+      resolvePeriodTime: r,
+    });
+    expect(result).toHaveLength(0);
+
+    const slots = [
+      { date: '2026-06-01', startTime: '14:00', endTime: '14:30' },
+      { date: '2026-06-01', startTime: '14:30', endTime: '15:00' },
+    ];
+    expect(slots.every((sl) => !isSlotBlockedByTimetable(sl, result))).toBe(true);
+  });
+
+  it('여러 날에 걸친 종일 일정도 어느 날도 차단하지 않는다', () => {
+    const result = buildBusyPeriods({
+      events: [
+        event({
+          id: 'e1',
+          date: '2026-06-01',
+          endDate: '2026-06-02',
+          title: '체육대회',
+          category: 'school',
+          period: 'allDay',
+        }),
+      ],
+      overrides: [],
+      targetDates,
+      resolvePeriodTime: r,
+    });
+    expect(result).toHaveLength(0);
   });
 
   it("TimetableOverride.kind='cancel' 은 busy 에서 제외 (휴강 → 가용)", () => {

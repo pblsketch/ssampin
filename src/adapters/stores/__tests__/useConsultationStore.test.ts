@@ -18,6 +18,7 @@ const { clientFakes, repoFakes } = vi.hoisted(() => ({
     rescheduleBooking: vi.fn(),
     cancelBooking: vi.fn(),
     bulkUpdateSlotStatus: vi.fn(),
+    setSlotBlockedByTeacher: vi.fn(),
     setClosed: vi.fn(),
     setArchived: vi.fn(),
     setExpiresAt: vi.fn(),
@@ -368,6 +369,134 @@ describe('recomputeSlotAvailability', () => {
     expect(result.blockedAdded).toBe(0);
     expect(result.availableRestored).toBe(0);
     expect(clientFakes.bulkUpdateSlotStatus).not.toHaveBeenCalled();
+  });
+
+  // ── 차단 주체 구분 (ADR-060) ──────────────────────────────────────
+  //
+  // 2026-08-20 사용자 신고의 핵심. 이 구분이 없던 시절에는 교사가 막아 둔 슬롯을
+  // "겹치는 일정이 없다" 는 이유로 되돌려서, 막아 둔 시간에 학부모 예약이 들어올
+  // 수 있었다.
+
+  it('교사가 막은 슬롯(blockedBy=teacher)은 겹침이 없어도 풀리지 않는다', async () => {
+    useConsultationStore.setState({ schedules: [SCHEDULE], loaded: true });
+    clientFakes.getSlots.mockResolvedValue([
+      {
+        id: 'slot-teacher',
+        scheduleId: 'sch-1',
+        date: '2026-06-01',
+        startTime: '14:00',
+        endTime: '14:20',
+        status: 'blocked',
+        blockedBy: 'teacher',
+      },
+    ]);
+    clientFakes.getBookings.mockResolvedValue([]);
+
+    const result = await useConsultationStore.getState().recomputeSlotAvailability('sch-1');
+
+    expect(result.availableRestored).toBe(0);
+    expect(clientFakes.bulkUpdateSlotStatus).not.toHaveBeenCalled();
+  });
+
+  it('자동으로 막힌 슬롯(blockedBy=auto)은 겹침이 사라지면 풀린다', async () => {
+    useConsultationStore.setState({ schedules: [SCHEDULE], loaded: true });
+    clientFakes.getSlots.mockResolvedValue([
+      {
+        id: 'slot-auto',
+        scheduleId: 'sch-1',
+        date: '2026-06-01',
+        startTime: '14:00',
+        endTime: '14:20',
+        status: 'blocked',
+        blockedBy: 'auto',
+      },
+    ]);
+    clientFakes.getBookings.mockResolvedValue([]);
+
+    const result = await useConsultationStore.getState().recomputeSlotAvailability('sch-1');
+
+    expect(result.availableRestored).toBe(1);
+    expect(clientFakes.bulkUpdateSlotStatus).toHaveBeenCalledWith(['slot-auto'], 'available');
+  });
+
+  it('한 일정에 교사 차단과 자동 차단이 섞여 있으면 자동 차단만 풀린다', async () => {
+    useConsultationStore.setState({ schedules: [SCHEDULE], loaded: true });
+    clientFakes.getSlots.mockResolvedValue([
+      {
+        id: 'slot-teacher',
+        scheduleId: 'sch-1',
+        date: '2026-06-01',
+        startTime: '14:00',
+        endTime: '14:20',
+        status: 'blocked',
+        blockedBy: 'teacher',
+      },
+      {
+        id: 'slot-auto',
+        scheduleId: 'sch-1',
+        date: '2026-06-01',
+        startTime: '14:20',
+        endTime: '14:40',
+        status: 'blocked',
+        blockedBy: 'auto',
+      },
+    ]);
+    clientFakes.getBookings.mockResolvedValue([]);
+
+    await useConsultationStore.getState().recomputeSlotAvailability('sch-1');
+
+    expect(clientFakes.bulkUpdateSlotStatus).toHaveBeenCalledTimes(1);
+    expect(clientFakes.bulkUpdateSlotStatus).toHaveBeenCalledWith(['slot-auto'], 'available');
+  });
+
+  // 마이그레이션 048 이전에 만들어진 행은 blockedBy 가 없다. 048 이 이런 행을
+  // 'auto' 로 채우지만, 채우기 전에 앱이 먼저 돌 수도 있으므로 동작을 못 박아 둔다.
+  it('blockedBy 가 없는 옛 슬롯은 자동 차단으로 보고 푼다', async () => {
+    useConsultationStore.setState({ schedules: [SCHEDULE], loaded: true });
+    clientFakes.getSlots.mockResolvedValue([
+      {
+        id: 'slot-legacy',
+        scheduleId: 'sch-1',
+        date: '2026-06-01',
+        startTime: '14:00',
+        endTime: '14:20',
+        status: 'blocked',
+      },
+    ]);
+    clientFakes.getBookings.mockResolvedValue([]);
+
+    const result = await useConsultationStore.getState().recomputeSlotAvailability('sch-1');
+
+    expect(result.availableRestored).toBe(1);
+  });
+});
+
+// ── 교사 직접 차단/해제 (상세 화면 버튼) ─────────────────────────────
+
+describe('setSlotBlocked', () => {
+  beforeEach(() => {
+    clientFakes.setSlotBlockedByTeacher.mockReset();
+  });
+
+  it('차단 요청을 클라이언트에 그대로 넘긴다', async () => {
+    clientFakes.setSlotBlockedByTeacher.mockResolvedValue(undefined);
+    const result = await useConsultationStore.getState().setSlotBlocked('slot-1', true);
+    expect(result.ok).toBe(true);
+    expect(clientFakes.setSlotBlockedByTeacher).toHaveBeenCalledWith('slot-1', true);
+  });
+
+  it('해제 요청도 그대로 넘긴다', async () => {
+    clientFakes.setSlotBlockedByTeacher.mockResolvedValue(undefined);
+    const result = await useConsultationStore.getState().setSlotBlocked('slot-1', false);
+    expect(result.ok).toBe(true);
+    expect(clientFakes.setSlotBlockedByTeacher).toHaveBeenCalledWith('slot-1', false);
+  });
+
+  it('실패하면 사용자에게 보여줄 이유와 함께 ok:false', async () => {
+    clientFakes.setSlotBlockedByTeacher.mockRejectedValue(new Error('network'));
+    const result = await useConsultationStore.getState().setSlotBlocked('slot-1', true);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toMatch(/막지 못했습니다/);
   });
 });
 

@@ -35,6 +35,10 @@ export type CancelBookingResult =
   | { readonly ok: true }
   | { readonly ok: false; readonly reason: string };
 
+export type SetSlotBlockedResult =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly reason: string };
+
 export interface RecomputeResult {
   readonly blockedAdded: number;
   readonly availableRestored: number;
@@ -85,6 +89,14 @@ interface ConsultationState {
   ) => Promise<RescheduleBookingResult>;
 
   cancelBooking: (scheduleId: string, bookingId: string) => Promise<CancelBookingResult>;
+
+  /**
+   * 교사가 슬롯을 직접 막거나 푼다 (상담 상세 화면의 차단/해제 버튼).
+   *
+   * 여기서 건 차단은 `blockedBy: 'teacher'` 로 남아 자동 재계산이 손대지 않는다.
+   * 예약이 있는 슬롯은 호출자가 먼저 걸러야 한다.
+   */
+  setSlotBlocked: (slotId: string, blocked: boolean) => Promise<SetSlotBlockedResult>;
 
   /**
    * 일정표/시간표 변경을 반영해 슬롯 가용성을 재계산한다 (Phase 2).
@@ -394,6 +406,20 @@ export const useConsultationStore = create<ConsultationState>((set, get) => ({
     }
   },
 
+  setSlotBlocked: async (slotId, blocked) => {
+    try {
+      await consultationSupabaseClient.setSlotBlockedByTeacher(slotId, blocked);
+      return { ok: true };
+    } catch (e) {
+      return {
+        ok: false,
+        reason: blocked
+          ? `슬롯을 막지 못했습니다: ${String(e)}`
+          : `차단을 풀지 못했습니다: ${String(e)}`,
+      };
+    }
+  },
+
   recomputeSlotAvailability: async (scheduleId) => {
     const schedule = get().schedules.find((s) => s.id === scheduleId);
     if (!schedule || schedule.isArchived) {
@@ -442,7 +468,15 @@ export const useConsultationStore = create<ConsultationState>((set, get) => ({
         continue;
       }
 
+      // 교사가 직접 막은 슬롯: 자동 재계산이 절대 건드리지 않는다.
+      //
+      // 이 가드가 없던 시절에는 "겹치는 일정이 없다" 는 이유로 교사의 수동 차단을
+      // available 로 되돌렸고, 막아 둔 시간에 학부모 예약이 들어올 수 있었다
+      // (2026-08-20 사용자 신고 · ADR-060). 해제는 상세 화면의 해제 버튼으로만 한다.
+      if (slot.blockedBy === 'teacher') continue;
+
       if (collides && slot.status === 'available') toBlock.push(slot.id);
+      // 남은 blocked 는 전부 자동 차단이므로 겹침이 사라지면 되돌린다
       else if (!collides && slot.status === 'blocked') toRestore.push(slot.id);
     }
 

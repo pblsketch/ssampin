@@ -22,6 +22,7 @@ interface SlotRow {
   start_time: string;
   end_time: string;
   status: string;
+  blocked_by?: string | null;
 }
 
 interface BookingRow {
@@ -61,6 +62,11 @@ export interface SlotPublic {
   startTime: string;
   endTime: string;
   status: 'available' | 'booked' | 'blocked';
+  /**
+   * 차단 주체. status === 'blocked' 일 때만 의미가 있다.
+   * 'teacher' 는 자동 재계산이 손대지 않는다(ADR-060).
+   */
+  blockedBy?: 'teacher' | 'auto';
 }
 
 export interface BookingPublic {
@@ -167,6 +173,7 @@ export class ConsultationSupabaseClient {
       start_time: string;
       end_time: string;
       status: string;
+      blocked_by: string | null;
     }> = [];
 
     // slotMinutes 단위로 분할 (학생/학부모 동일)
@@ -176,12 +183,16 @@ export class ConsultationSupabaseClient {
       const end = parseTime(d.endTime);
       while (current + params.slotMinutes <= end) {
         const startTimeStr = formatTime(current);
+        // 여기서 막히는 슬롯은 교사가 생성 화면에서 직접 고른 것이다 →
+        // 'teacher' 로 표시해 자동 재계산이 되돌리지 못하게 한다(ADR-060).
+        const isBlocked = blockedSet.has(`${d.date}_${startTimeStr}`);
         slots.push({
           schedule_id: params.id,
           date: d.date,
           start_time: startTimeStr,
           end_time: formatTime(current + params.slotMinutes),
-          status: blockedSet.has(`${d.date}_${startTimeStr}`) ? 'blocked' : 'available',
+          status: isBlocked ? 'blocked' : 'available',
+          blocked_by: isBlocked ? 'teacher' : null,
         });
         current += params.slotMinutes;
       }
@@ -234,6 +245,8 @@ export class ConsultationSupabaseClient {
       startTime: r.start_time,
       endTime: r.end_time,
       status: r.status as SlotPublic['status'],
+      // 마이그레이션 048 이전 행이나 차단이 아닌 행은 null → undefined 로 정규화
+      ...(r.blocked_by === 'teacher' || r.blocked_by === 'auto' ? { blockedBy: r.blocked_by } : {}),
     }));
   }
 
@@ -541,6 +554,8 @@ export class ConsultationSupabaseClient {
         start_time: d.startTime,
         end_time: d.endTime,
         status: d.blocked ? 'blocked' : 'available',
+        // 편집 화면에서 교사가 고른 차단 → 자동 재계산이 손대지 않도록 'teacher'
+        blocked_by: d.blocked ? 'teacher' : null,
       }));
     if (toInsert.length > 0) {
       const insRes = await fetch(`${this.baseUrl}/rest/v1/consultation_slots`, {
@@ -606,8 +621,11 @@ export class ConsultationSupabaseClient {
   }
 
   /**
-   * 슬롯 상태 배치 변경 (Phase 2 동기화에서 활용).
-   * Phase 1 에서는 호출자가 없어도 export 만 유지한다.
+   * 슬롯 상태 배치 변경 — **일정표 자동 동기화 전용**.
+   *
+   * 여기서 거는 차단은 전부 `blocked_by='auto'` 다. 교사가 직접 막은 슬롯은
+   * 이 경로로 들어오면 안 된다(호출자인 recomputeSlotAvailability 가 걸러낸다).
+   * 해제 시에는 blocked_by 도 함께 NULL 로 되돌려 상태가 어긋나지 않게 한다.
    */
   async bulkUpdateSlotStatus(
     slotIds: readonly string[],
@@ -619,11 +637,36 @@ export class ConsultationSupabaseClient {
     const res = await fetch(`${this.baseUrl}/rest/v1/consultation_slots?id=in.(${ids})`, {
       method: 'PATCH',
       headers: { ...this.headers(), Prefer: 'return=minimal' },
-      body: JSON.stringify({ status }),
+      body: JSON.stringify({ status, blocked_by: status === 'blocked' ? 'auto' : null }),
     });
     if (!res.ok) {
       const err = await res.text();
       throw new Error(`Failed to bulk update slot status: ${err}`);
+    }
+  }
+
+  /**
+   * 교사가 슬롯을 직접 막거나 푼다 (상담 상세 화면의 차단/해제 버튼).
+   *
+   * `bulkUpdateSlotStatus` 와 달리 `blocked_by='teacher'` 를 남기므로
+   * 이후 자동 재계산이 이 슬롯을 건드리지 않는다(ADR-060).
+   *
+   * 예약이 있는 슬롯은 호출자가 막아야 한다(이 메서드는 status 를 덮어쓴다).
+   */
+  async setSlotBlockedByTeacher(slotId: string, blocked: boolean): Promise<void> {
+    this.ensureConfigured();
+    const res = await fetch(`${this.baseUrl}/rest/v1/consultation_slots?id=eq.${slotId}`, {
+      method: 'PATCH',
+      headers: { ...this.headers(), Prefer: 'return=minimal' },
+      body: JSON.stringify(
+        blocked
+          ? { status: 'blocked', blocked_by: 'teacher' }
+          : { status: 'available', blocked_by: null },
+      ),
+    });
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`Failed to update slot block state: ${err}`);
     }
   }
 

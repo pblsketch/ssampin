@@ -170,6 +170,48 @@ function ConsultationShareModal({ schedule, onClose, onCopyLink }: ConsultationS
   );
 }
 
+/**
+ * 예약이 없는 슬롯을 교사가 직접 막거나 푸는 버튼.
+ *
+ * 여기서 건 차단은 `blockedBy: 'teacher'` 로 남아 일정표 자동 재계산이 손대지 않는다.
+ * 이 버튼이 없으면 실수로 막았을 때 앱에서 되돌릴 방법이 없다(ADR-060).
+ */
+function SlotBlockToggle({
+  slot,
+  blocked,
+  disabled,
+  busy,
+  onToggle,
+}: {
+  slot: SlotPublic;
+  blocked: boolean;
+  disabled: boolean;
+  busy: boolean;
+  onToggle: (slot: SlotPublic, nextBlocked: boolean) => void;
+}) {
+  const label = blocked ? '차단 풀기' : '이 시간 막기';
+  return (
+    <button
+      type="button"
+      data-testid={`slot-${slot.id}-toggle-block`}
+      onClick={() => onToggle(slot, !blocked)}
+      disabled={disabled}
+      title={label}
+      aria-label={`${slot.startTime.slice(0, 5)} ${label}`}
+      className={`flex items-center gap-1 rounded-md px-1.5 py-0.5 text-caption font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+        blocked
+          ? 'text-sp-muted hover:text-sp-accent hover:bg-sp-accent/10'
+          : 'text-sp-muted/50 hover:text-red-400 hover:bg-red-500/10'
+      }`}
+    >
+      <span className="material-symbols-outlined text-sm leading-none">
+        {busy ? 'hourglass_empty' : blocked ? 'lock_open' : 'block'}
+      </span>
+      {label}
+    </button>
+  );
+}
+
 /* ──────────────── 컴포넌트 ──────────────── */
 
 export function ConsultationDetail({ schedule, onBack, onWriteRecord }: ConsultationDetailProps) {
@@ -182,6 +224,8 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
 
   const [slots, setSlots] = useState<SlotPublic[]>([]);
   const [bookings, setBookings] = useState<BookingPublic[]>([]);
+  /** 차단/해제 요청 중인 슬롯 id — 연타로 중복 요청이 나가지 않게 막는다 */
+  const [togglingSlotId, setTogglingSlotId] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [decryptedInfoMap, setDecryptedInfoMap] = useState<Map<string, string>>(new Map());
   const [decryptedMemoMap, setDecryptedMemoMap] = useState<Map<string, string>>(new Map());
@@ -225,6 +269,32 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
       // 폴링이 다음 주기에 따라잡음
     }
   }, [schedule.id]);
+
+  /** 슬롯 차단/해제 (교사 직접 조작) */
+  const handleToggleBlock = useCallback(
+    (slot: SlotPublic, nextBlocked: boolean) => {
+      if (togglingSlotId) return;
+      setTogglingSlotId(slot.id);
+      void useConsultationStore
+        .getState()
+        .setSlotBlocked(slot.id, nextBlocked)
+        .then(async (res) => {
+          if (!res.ok) {
+            showToast(res.reason, 'error');
+            return;
+          }
+          showToast(
+            nextBlocked
+              ? `${slot.startTime.slice(0, 5)} 시간을 막았습니다.`
+              : `${slot.startTime.slice(0, 5)} 차단을 풀었습니다.`,
+            'success',
+          );
+          await refreshNow();
+        })
+        .finally(() => setTogglingSlotId(null));
+    },
+    [togglingSlotId, showToast, refreshNow],
+  );
 
   // Phase 2: 충돌(일정표 변경으로 예약 슬롯이 차단 시간과 겹침) booking id 집합
   const [conflictedBookingIds, setConflictedBookingIds] = useState<ReadonlySet<string>>(
@@ -701,7 +771,6 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
                             ? 'bg-sp-surface/40 border border-sp-border/30 opacity-60'
                             : 'bg-transparent border border-dashed border-sp-border/60 hover:bg-sp-accent/5 hover:border-sp-accent/40'
                       }`}
-                      {...(isBlocked ? { 'aria-disabled': 'true' } : {})}
                     >
                       {/* 시간 */}
                       <div className="flex flex-col items-end shrink-0 w-14">
@@ -931,10 +1000,24 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
                         ) : isBlocked ? (
                           <div className="flex items-center gap-1.5">
                             <span className="text-red-400 text-xs">차단된 슬롯</span>
+                            <SlotBlockToggle
+                              slot={slot}
+                              blocked
+                              disabled={isClosed || togglingSlotId === slot.id}
+                              busy={togglingSlotId === slot.id}
+                              onToggle={handleToggleBlock}
+                            />
                           </div>
                         ) : (
                           <div className="flex items-center gap-2">
                             <span className="text-xs text-sp-muted/70">예약 가능</span>
+                            <SlotBlockToggle
+                              slot={slot}
+                              blocked={false}
+                              disabled={isClosed || togglingSlotId === slot.id}
+                              busy={togglingSlotId === slot.id}
+                              onToggle={handleToggleBlock}
+                            />
                             <span className="ml-auto text-caption text-sp-accent/50 font-medium">
                               {schedule.slotMinutes}분
                             </span>

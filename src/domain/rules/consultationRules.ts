@@ -157,10 +157,16 @@ export interface BusyPeriod {
  * SchoolEvent 의 시간 범위를 우선순위에 따라 결정한다.
  *   1) startTime + endTime (HH:mm)
  *   2) time ("HH:mm - HH:mm" 형식)
- *   3) period — resolvePeriodTime 으로 변환. period 가 'allDay' 면 전일.
+ *   3) period — resolvePeriodTime 으로 변환.
  *      periodEnd 가 있으면 periodEnd 의 end 시각까지.
  *
  * 매칭 안 되면 null (busy 로 잡지 않음).
+ *
+ * period === 'allDay' 는 의도적으로 null 이다.
+ *   '종일' 은 "하루 내내 자리에 없다" 가 아니라 "시각이 정해지지 않은 하루짜리 일정"
+ *   (상담 주간·체육대회·시험기간 등) 으로 쓰이는 경우가 압도적이다. 이걸 00:00~23:59
+ *   busy 로 잡으면 그날 상담 슬롯이 통째로 차단되고, 화면에는 이유 없이 '차단된 슬롯'
+ *   만 뜬다(실제 사용자 신고). 종일 일정으로 상담을 막고 싶다면 슬롯을 직접 차단한다.
  */
 export function resolveEventTimeRange(
   ev: SchoolEvent,
@@ -178,7 +184,8 @@ export function resolveEventTimeRange(
     }
   }
   if (ev.period) {
-    if (ev.period === 'allDay') return { start: '00:00', end: '23:59' };
+    // '종일' 은 시각 정보가 아니므로 busy 로 잡지 않는다(위 주석 참고).
+    if (ev.period === 'allDay') return null;
     const start = resolvePeriodTime(ev.period);
     if (!start) return null;
     if (ev.periodEnd) {

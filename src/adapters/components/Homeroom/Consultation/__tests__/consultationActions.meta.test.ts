@@ -40,6 +40,21 @@ describe('ConsultationDetail 예약 카드 액션', () => {
     expect(src).toMatch(/from\s+['"]\.\/RescheduleBookingModal['"]/);
     expect(src).toMatch(/from\s+['"]\.\/CancelBookingConfirmDialog['"]/);
   });
+
+  /**
+   * 슬롯 차단/해제 버튼 회귀 차단 (2026-08-20 · ADR-060).
+   *
+   * 교사가 직접 막은 슬롯은 이제 자동 재계산이 되돌리지 않는다. 그래서 이 버튼이
+   * 사라지면 **실수로 막은 슬롯을 앱에서 되돌릴 방법이 아예 없어진다**
+   * (일정 생성 화면 말고는 차단을 조작할 진입점이 없다).
+   */
+  it('빈 슬롯에 차단/해제 버튼(toggle-block testid)이 존재한다', () => {
+    expect(src).toMatch(/data-testid=\{`slot-\$\{[^}]+\}-toggle-block`\}/);
+  });
+
+  it('차단/해제가 스토어의 setSlotBlocked 를 거친다', () => {
+    expect(src).toMatch(/setSlotBlocked\(/);
+  });
 });
 
 describe('ConsultationTab 일정 카드 액션', () => {

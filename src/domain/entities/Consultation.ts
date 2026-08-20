@@ -33,6 +33,20 @@ export interface ConsultationDate {
   readonly endTime: string;
 }
 
+/**
+ * 슬롯을 차단한 주체.
+ *
+ * - `'teacher'` — 교사가 직접 막았다. **자동 재계산이 절대 건드리지 않는다.**
+ * - `'auto'`    — 일정표·시간표와 겹쳐 앱이 막았다. 겹침이 사라지면 자동으로 풀린다.
+ *
+ * 이 구분이 없던 시절에는 교사가 막아 둔 슬롯을 재계산이 "잘못 막힌 것"으로 보고
+ * 되돌려서, 막아 둔 시간에 학부모 예약이 들어올 수 있었다(2026-08-20 사용자 신고).
+ *
+ * 사람이 읽는 차단 사유(겹친 일정 제목 등)는 여기 **저장하지 않는다** —
+ * `consultation_slots` 는 공개 읽기 테이블이라 교사의 일정 제목이 노출된다(ADR-060).
+ */
+export type SlotBlockedBy = 'teacher' | 'auto';
+
 /** 상담 슬롯 (자동 생성) */
 export interface ConsultationSlot {
   readonly id: string;
@@ -41,6 +55,8 @@ export interface ConsultationSlot {
   readonly startTime: string;
   readonly endTime: string;
   readonly status: SlotStatus;
+  /** status === 'blocked' 일 때만 의미가 있다. 그 외에는 undefined. */
+  readonly blockedBy?: SlotBlockedBy;
 }
 
 /** 상담 예약 건 */
