@@ -3,10 +3,11 @@ import { FocusTrap } from 'focus-trap-react';
 import type { SeatingData } from '@domain/entities/Seating';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { gradeNameAnswer, acceptedNamesFor, toChosungHint } from '@domain/rules/nameAnswerGrading';
+import { buildMatchOptions, pickNextMatchTarget } from '@domain/rules/nameMatchingSession';
 import { LearningCard } from './LearningCard';
 import { FEATURE_FLAGS } from '@adapters/config/featureFlags';
 
-type LearningMode = 'free' | 'sequential' | 'quiz' | 'write';
+type LearningMode = 'free' | 'sequential' | 'quiz' | 'write' | 'match';
 
 /** 카드에 표시할 최소 학생 정보. ClassSeatingTab(studentKey) ↔ Seating(student.id) 양쪽 호환. */
 export interface LearningStudentInfo {
@@ -51,6 +52,19 @@ function flattenSeats(seats: SeatingData['seats']): SeatPos[] {
   return list;
 }
 
+/** 좌석 목록을 매칭 규칙이 쓰는 후보 목록으로 바꾼다 (규칙은 좌석 좌표를 알 필요가 없다) */
+function makeToCandidates(getStudent: (id: string) => LearningStudentInfo | undefined) {
+  return (seats: readonly SeatPos[]) =>
+    seats.map((seat) => {
+      const student = getStudent(seat.studentId);
+      return {
+        studentId: seat.studentId,
+        name: student?.name ?? '?',
+        ...(student?.studentNumber !== undefined ? { studentNumber: student.studentNumber } : {}),
+      };
+    });
+}
+
 /**
  * 이름 학습 모드 — 자리 그리드 위에 학생 이름을 가리고 익히는 전체화면 오버레이.
  *
@@ -60,6 +74,9 @@ function flattenSeats(seats: SeatingData['seats']): SeatPos[] {
  * - quiz: 랜덤 퀴즈 — 랜덤 카드 강조, [정답 확인] 클릭 시 공개, [맞춤]/[틀림] 자가 채점
  * - write: 이름 쓰기 — 사진 한 장만 보고 이름을 직접 입력, 자동 채점(재시도 없음).
  *   사진이 등록된 학생이 한 명도 없으면 이 모드는 쓸 수 없다(라디오 비활성).
+ * - match: 매칭하기 — 왼쪽 사진 한 장, 오른쪽 학급 명단에서 이름을 골라 짝을 짓는다.
+ *   이름 쓰기가 "떠올려 쓰기"(회상)라면 이쪽은 "보기에서 고르기"(재인)라 훨씬 쉽다.
+ *   얼굴이 아직 안 익은 학기 초에 먼저 쓰는 단계이고, write 와 마찬가지로 사진이 필요하다.
  *
  * 키보드: ESC=종료, Tab=카드 순회, Enter/Space=현재 카드 플립
  * ARIA: role="dialog", aria-modal="true", aria-live 영역으로 진행률 알림
@@ -83,6 +100,8 @@ export function NameLearningMode({
     [resolveStudent, getStudentFromStore],
   );
 
+  const toCandidates = useMemo(() => makeToCandidates((id) => getStudent(id)), [getStudent]);
+
   const seatList = useMemo(() => flattenSeats(seating.seats), [seating.seats]);
   const total = seatList.length;
 
@@ -93,6 +112,8 @@ export function NameLearningMode({
     [seatList, photoUrls],
   );
   const canUseWrite = photoSeatList.length > 0;
+  // 매칭하기도 얼굴 사진이 있어야 성립한다 (조건이 같아 값 하나를 나눠 쓴다)
+  const canUseMatch = canUseWrite;
 
   const [mode, setMode] = useState<LearningMode>('free');
   const [revealed, setRevealed] = useState<Set<string>>(new Set());
@@ -115,10 +136,21 @@ export function NameLearningMode({
   const [writeHintShown, setWriteHintShown] = useState(false);
   const [writeFinished, setWriteFinished] = useState(false);
 
+  // "매칭하기" 모드 전용 상태. write 와 상태를 공유하지 않는다 —
+  // 두 모드가 같은 pool 을 도는 것처럼 보여도 진행 방식이 달라서(한쪽은 입력, 한쪽은 선택)
+  // 공유하면 모드를 바꿀 때 한쪽의 진행이 다른 쪽으로 새어 들어간다.
+  const [matchPool, setMatchPool] = useState<SeatPos[]>([]);
+  const [matchAnswers, setMatchAnswers] = useState<Map<string, boolean>>(new Map());
+  const [matchCurrentId, setMatchCurrentId] = useState<string | null>(null);
+  const [matchPhase, setMatchPhase] = useState<'asking' | 'graded'>('asking');
+  const [matchPickedId, setMatchPickedId] = useState<string | null>(null);
+  const [matchFinished, setMatchFinished] = useState(false);
+
   // 한글 입력 조합 추적 — compositionstart~compositionend 사이에는 Enter 를 제출로 보지 않는다.
   const isComposingRef = useRef(false);
   const writeInputRef = useRef<HTMLInputElement>(null);
   const writeNextButtonRef = useRef<HTMLButtonElement>(null);
+  const matchNextButtonRef = useRef<HTMLButtonElement>(null);
 
   const previousOverflowRef = useRef<string>('');
 
@@ -162,6 +194,16 @@ export function NameLearningMode({
           : 0,
       );
 
+      if (nextMode === 'match') {
+        const pool = photoSeatList;
+        setMatchPool(pool);
+        setMatchAnswers(new Map());
+        setMatchFinished(false);
+        setMatchPhase('asking');
+        setMatchPickedId(null);
+        setMatchCurrentId(pickNextMatchTarget(toCandidates(pool), new Set(), Math.random));
+      }
+
       if (nextMode === 'write') {
         const pool = photoSeatList;
         setWritePool(pool);
@@ -175,7 +217,7 @@ export function NameLearningMode({
         );
       }
     },
-    [seatList.length, photoSeatList],
+    [seatList.length, photoSeatList, toCandidates],
   );
 
   // 항상 최신 startSession 을 가리키는 참조 — 아래 초기화 effect 가 함수 신원 변화에
@@ -335,6 +377,67 @@ export function NameLearningMode({
     setWritePhase('asking');
   }, [writePool, writeAnswers]);
 
+  /**
+   * 매칭하기: 오른쪽 명단에서 이름을 하나 골랐다.
+   *
+   * 채점은 "이름 쓰기"와 **같은 규칙**을 쓴다 — 고른 이름의 글자가 정답과 같으면 정답.
+   * 그래서 같은 반에 `김민수`가 둘이면 어느 줄을 골라도 정답이다(구분할 방법이 없으므로).
+   * 재시도는 없다(오너 확정) — 한 번 고르면 그 학생은 명단에서 빠진다.
+   */
+  const pickMatchAnswer = useCallback(
+    (pickedId: string) => {
+      if (!matchCurrentId || matchPhase !== 'asking') return;
+      const target = getStudent(matchCurrentId);
+      const picked = getStudent(pickedId);
+      if (!target || !picked) return;
+      const allNames = seatList
+        .map((s) => getStudent(s.studentId)?.name)
+        .filter((n): n is string => Boolean(n));
+      const accepted = acceptedNamesFor(target.name, allNames);
+      const verdict = gradeNameAnswer(picked.name, target.name, accepted);
+      setMatchAnswers((prev) => new Map(prev).set(matchCurrentId, verdict === 'correct'));
+      setMatchPickedId(pickedId);
+      setMatchPhase('graded');
+    },
+    [matchCurrentId, matchPhase, getStudent, seatList],
+  );
+
+  /** 매칭하기: 다음 문제로. 남은 학생이 없으면 결과 요약으로 넘어간다 */
+  const advanceMatchQuestion = useCallback(() => {
+    const answered = new Set(matchAnswers.keys());
+    const next = pickNextMatchTarget(toCandidates(matchPool), answered, Math.random);
+    if (next === null) {
+      setElapsedAtFinish(Math.floor((Date.now() - startTime) / 1000));
+      setMatchFinished(true);
+      setMatchCurrentId(null);
+      return;
+    }
+    setMatchCurrentId(next);
+    setMatchPickedId(null);
+    setMatchPhase('asking');
+  }, [matchAnswers, matchPool, toCandidates, startTime]);
+
+  /** 매칭하기: 틀렸던 학생만 모아 새 라운드 */
+  const retryWrongMatchOnly = useCallback(() => {
+    const wrongSeats = matchPool.filter((s) => matchAnswers.get(s.studentId) === false);
+    if (wrongSeats.length === 0) return;
+    setMatchPool(wrongSeats);
+    setMatchAnswers(new Map());
+    setMatchFinished(false);
+    setMatchPickedId(null);
+    setMatchPhase('asking');
+    setStartTime(Date.now());
+    setElapsedAtFinish(0);
+    setMatchCurrentId(pickNextMatchTarget(toCandidates(wrongSeats), new Set(), Math.random));
+  }, [matchPool, matchAnswers, toCandidates]);
+
+  // 매칭하기: 채점 직후 "다음" 버튼에 자동 포커스 (Enter 로 바로 다음 문제로)
+  useEffect(() => {
+    if (isOpen && mode === 'match' && matchPhase === 'graded') {
+      matchNextButtonRef.current?.focus();
+    }
+  }, [isOpen, mode, matchPhase]);
+
   // write 모드: 새 문제로 넘어갈 때 입력칸에 자동 포커스
   useEffect(() => {
     if (isOpen && mode === 'write' && writePhase === 'asking') {
@@ -373,6 +476,24 @@ export function NameLearningMode({
       : mode === 'quiz'
         ? (currentQuizSeat?.studentId ?? null)
         : null;
+
+  // 매칭하기 파생값
+  const matchCandidates = toCandidates(matchPool);
+  const matchAnswered = new Set(matchAnswers.keys());
+  const matchOptions = buildMatchOptions(matchCandidates, matchAnswered);
+  const matchCorrectCount = [...matchAnswers.values()].filter(Boolean).length;
+  const currentMatchStudent = matchCurrentId ? getStudent(matchCurrentId) : null;
+  const currentMatchVerdict = matchCurrentId ? matchAnswers.get(matchCurrentId) : undefined;
+  const matchWrongSeats = matchFinished
+    ? [...matchPool]
+        .filter((s) => matchAnswers.get(s.studentId) === false)
+        .sort(
+          (a, b) =>
+            (getStudent(a.studentId)?.studentNumber ?? Number.MAX_SAFE_INTEGER) -
+            (getStudent(b.studentId)?.studentNumber ?? Number.MAX_SAFE_INTEGER),
+        )
+    : [];
+  const matchWrongNames = matchWrongSeats.map((s) => getStudent(s.studentId)?.name ?? '?');
 
   // write 모드 파생값
   const writeCorrectCount = [...writeAnswers.values()].filter(Boolean).length;
@@ -429,12 +550,17 @@ export function NameLearningMode({
                 // 항목 자체를 숨긴다 — 남겨 두면 "사진을 등록하세요" 안내만 뜨는,
                 // 영영 눌리지 않는 버튼이 된다.
                 ...(FEATURE_FLAGS.studentPhotos
-                  ? [{ value: 'write' as const, label: '이름 쓰기' }]
+                  ? [
+                      // 매칭하기가 이름 쓰기보다 쉬우므로(고르기 < 떠올리기) 앞에 둔다
+                      { value: 'match' as const, label: '매칭하기' },
+                      { value: 'write' as const, label: '이름 쓰기' },
+                    ]
                   : []),
               ] as ReadonlyArray<{ value: LearningMode; label: string }>
             ).map((opt) => {
               const active = mode === opt.value;
-              const disabled = opt.value === 'write' && !canUseWrite;
+              const needsPhoto = opt.value === 'write' || opt.value === 'match';
+              const disabled = needsPhoto && !(opt.value === 'write' ? canUseWrite : canUseMatch);
               return (
                 <button
                   key={opt.value}
@@ -465,7 +591,7 @@ export function NameLearningMode({
             })}
             {FEATURE_FLAGS.studentPhotos && !canUseWrite && (
               <span className="text-xs text-sp-muted ml-1 break-keep">
-                ('이름 쓰기'는 학생 사진이 있어야 써요)
+                ('매칭하기'와 '이름 쓰기'는 학생 사진이 있어야 써요)
               </span>
             )}
           </div>
@@ -475,6 +601,10 @@ export function NameLearningMode({
             {mode === 'quiz' ? (
               <span>
                 {answeredCount}/{total}명 풀이 · 정답 {correctCount}
+              </span>
+            ) : mode === 'match' ? (
+              <span>
+                {matchAnswers.size}/{matchPool.length}명 짝지음 · 정답 {matchCorrectCount}
               </span>
             ) : mode === 'write' ? (
               <span>
@@ -533,6 +663,50 @@ export function NameLearningMode({
             </section>
           )}
 
+          {/* 매칭하기 결과 요약 */}
+          {mode === 'match' && matchFinished && (
+            <section
+              aria-live="polite"
+              className="w-full max-w-5xl rounded-xl bg-sp-card ring-1 ring-sp-border px-5 py-4"
+            >
+              <div className="flex items-center gap-3 flex-wrap">
+                <span className="material-symbols-outlined text-sp-accent" aria-hidden="true">
+                  check_circle
+                </span>
+                <h3 className="text-base font-bold text-sp-text">
+                  {matchPool.length}명 중 {matchCorrectCount}명 맞혔어요
+                </h3>
+                <span className="text-sm text-sp-muted">{elapsedAtFinish}초 걸렸습니다</span>
+                <div className="ml-auto flex items-center gap-2">
+                  {matchWrongSeats.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={retryWrongMatchOnly}
+                      className="px-3 py-1.5 rounded-md bg-red-500/10 hover:bg-red-500/20 text-red-300 ring-1 ring-red-500/30 text-sm font-medium"
+                    >
+                      틀린 학생만 다시 ({matchWrongSeats.length}명)
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={resetSession}
+                    className="px-3 py-1.5 rounded-md bg-sp-accent text-white text-sm font-medium"
+                  >
+                    다시 하기
+                  </button>
+                </div>
+              </div>
+              {matchWrongNames.length > 0 && (
+                <p className="mt-3 text-sm text-sp-text break-keep">
+                  <span className="text-sp-muted">
+                    아직 못 외운 학생 {matchWrongNames.length}명 ·{' '}
+                  </span>
+                  {matchWrongNames.join(', ')}
+                </p>
+              )}
+            </section>
+          )}
+
           {/* 이름 쓰기 결과 요약 */}
           {mode === 'write' && writeFinished && (
             <section
@@ -584,6 +758,108 @@ export function NameLearningMode({
               </span>
               <p>학습할 학생이 없습니다.</p>
             </div>
+          ) : mode === 'match' ? (
+            matchFinished ? null : matchPool.length === 0 ? (
+              <div className="text-center py-16 text-sp-muted">
+                <span className="material-symbols-outlined text-3xl block mb-2 opacity-60">
+                  photo_camera
+                </span>
+                <p>사진이 등록된 학생이 없어요.</p>
+              </div>
+            ) : (
+              /* 왼쪽 얼굴 · 오른쪽 명단. 세로가 좁은 노트북에서도 사진이 잘리지 않도록
+                 오른쪽 목록만 스크롤시키고 왼쪽은 고정 폭으로 둔다. */
+              <div className="w-full max-w-4xl flex flex-col sm:flex-row gap-6 py-2">
+                {/* 왼쪽 — 얼굴 */}
+                <div className="sm:w-64 shrink-0 flex flex-col items-center gap-3">
+                  <LearningCard
+                    size="large"
+                    focusable={false}
+                    studentNumber={currentMatchStudent?.studentNumber}
+                    studentName={currentMatchStudent?.name ?? '?'}
+                    photoUrl={matchCurrentId ? photoUrls?.get(matchCurrentId) : undefined}
+                    revealed={matchPhase === 'graded'}
+                    highlighted={matchPhase === 'asking'}
+                    answerState={
+                      matchPhase === 'graded'
+                        ? currentMatchVerdict
+                          ? 'correct'
+                          : 'wrong'
+                        : undefined
+                    }
+                    onClick={() => {}}
+                  />
+
+                  {matchPhase === 'graded' && currentMatchStudent && (
+                    <div className="w-full flex flex-col items-center gap-2">
+                      <p
+                        aria-live="polite"
+                        className={`text-base font-bold text-center break-keep ${
+                          currentMatchVerdict ? 'text-green-400' : 'text-red-400'
+                        }`}
+                      >
+                        {currentMatchVerdict
+                          ? '맞았어요!'
+                          : `정답: ${
+                              currentMatchStudent.studentNumber !== undefined
+                                ? `${currentMatchStudent.studentNumber}번 `
+                                : ''
+                            }${currentMatchStudent.name}`}
+                      </p>
+                      <button
+                        ref={matchNextButtonRef}
+                        type="button"
+                        onClick={advanceMatchQuestion}
+                        className="px-4 py-2 rounded-md bg-sp-accent text-white text-sm font-medium"
+                      >
+                        다음 →
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* 오른쪽 — 학생 명단 */}
+                <div className="flex-1 min-w-0 flex flex-col gap-2">
+                  <p className="text-sm text-sp-muted shrink-0">
+                    이 얼굴의 이름을 명단에서 골라 주세요.
+                  </p>
+                  <div className="rounded-xl bg-sp-card ring-1 ring-sp-border p-2 overflow-y-auto max-h-[min(52vh,440px)]">
+                    <div className="grid grid-cols-2 lg:grid-cols-3 gap-1.5">
+                      {matchOptions.map((opt) => {
+                        const isPicked = matchPickedId === opt.studentId;
+                        // 골랐던 줄만 정오답 색으로 물들인다 — 나머지는 짝이 지어졌다는 표시만
+                        const pickedTone = isPicked
+                          ? currentMatchVerdict
+                            ? 'bg-green-500/20 text-green-300 ring-green-500/40'
+                            : 'bg-red-500/20 text-red-300 ring-red-500/40'
+                          : '';
+                        return (
+                          <button
+                            key={opt.studentId}
+                            type="button"
+                            disabled={opt.matched || matchPhase !== 'asking'}
+                            onClick={() => pickMatchAnswer(opt.studentId)}
+                            className={`px-2.5 py-2 rounded-lg text-sm text-left truncate ring-1 transition-colors ${
+                              pickedTone ||
+                              (opt.matched
+                                ? 'bg-sp-surface text-sp-muted ring-sp-border opacity-50 line-through cursor-not-allowed'
+                                : 'bg-sp-surface text-sp-text ring-sp-border hover:bg-sp-card disabled:opacity-60')
+                            }`}
+                          >
+                            {opt.studentNumber !== undefined && (
+                              <span className="font-mono text-xs text-sp-muted mr-1.5">
+                                {String(opt.studentNumber).padStart(2, '0')}
+                              </span>
+                            )}
+                            {opt.name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )
           ) : mode === 'write' ? (
             writeFinished ? null : writePool.length === 0 ? (
               <div className="text-center py-16 text-sp-muted">
@@ -770,7 +1046,7 @@ export function NameLearningMode({
           )}
 
           <div className="ml-auto flex items-center gap-1.5">
-            {mode !== 'write' && (
+            {mode !== 'write' && mode !== 'match' && (
               <>
                 <button
                   type="button"
