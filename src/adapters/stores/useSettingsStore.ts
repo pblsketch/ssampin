@@ -8,6 +8,7 @@ import type {
   WidgetStyleSettings,
   ShortcutSettings,
 } from '@domain/entities/Settings';
+import { resolveStartupMode } from '@domain/entities/Settings';
 import { DEFAULT_TODO_SETTINGS } from '@domain/entities/TodoSettings';
 import { DEFAULT_REMINDER_SETTINGS } from '@domain/entities/RecordReminder';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
@@ -89,6 +90,8 @@ const DEFAULT_SETTINGS: Settings = {
     alwaysOnTop: true,
     closeToWidget: true,
     closeAction: 'widget',
+    // 새 설치는 전체 화면으로 시작한다. 예전 설정 파일은 load 시 transparent 로 승계된다.
+    startupMode: 'main',
     icon: {
       showCoachMark: true,
     },
@@ -371,7 +374,10 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
                 explicit === 'tray' ||
                 explicit === 'ask' ||
                 explicit === 'icon' ||
-                explicit === 'quit'
+                explicit === 'quit' ||
+                // 'sidePin' 이 이 목록에서 빠져 있었다. 그래서 "옆핀으로 접기" 를 고르면
+                // 다음 실행에 조용히 '위젯' 으로 되돌아갔다(저장은 됐지만 화면이 못 읽음).
+                explicit === 'sidePin'
               ) {
                 return explicit;
               }
@@ -379,6 +385,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
               if (legacy === false) return 'tray' as const;
               return 'widget' as const;
             })(),
+            // 시작 모습 — 새 항목이 없으면 legacy `transparent` 로 승계한다(도메인 규칙 한 벌).
+            startupMode: resolveStartupMode(saved.widget),
             icon: (() => {
               // v2.0.2~: 아이콘 모드 옵션 폴백
               const savedIcon = (

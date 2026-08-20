@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { Settings, WidgetSettings, WidgetDesktopMode } from '@domain/entities/Settings';
+import { resolveStartupMode } from '@domain/entities/Settings';
 import { SettingsSection } from '../shared/SettingsSection';
 import { Toggle } from '../shared/Toggle';
 import { isWindows } from '@adapters/hooks/shortcut/keyNormalize';
@@ -347,17 +348,47 @@ export function WidgetTab({ draft, patch }: Props) {
             </label>
           ))}
         </div>
-        <div className="flex items-center justify-between pt-4 border-t border-sp-border">
-          <div className="flex flex-col">
-            <span className="text-sm font-medium text-sp-text">시작 시 위젯 모드</span>
-            <span className="text-xs text-sp-muted">
-              앱 실행 시 전체화면 대신 위젯으로 시작합니다.
-            </span>
-          </div>
-          <Toggle
-            checked={draft.widget.transparent}
-            onChange={(v) => patchWidget({ transparent: v })}
-          />
+        <div className="space-y-1.5 pt-4 border-t border-sp-border">
+          <span className="text-sm font-medium text-sp-text">앱 시작 시 모습</span>
+          <p className="text-xs text-sp-muted mb-2">
+            컴퓨터를 켜거나 쌤핀을 실행할 때 어떤 모습으로 열지 선택합니다.
+          </p>
+          {[
+            { value: 'main' as const, label: '전체 화면', desc: '평소처럼 큰 창으로 시작합니다' },
+            {
+              value: 'widget' as const,
+              label: '위젯 모드',
+              desc: '작은 위젯 창으로 시작합니다',
+            },
+            {
+              value: 'sidePin' as const,
+              label: '옆핀',
+              desc: '화면 오른쪽 가장자리에 접힌 채로 시작합니다 (마우스를 올리면 펼쳐집니다)',
+            },
+          ].map((opt) => (
+            <label
+              key={opt.value}
+              className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sp-surface/50 cursor-pointer transition-colors"
+            >
+              <input
+                type="radio"
+                name="startupMode"
+                checked={resolveStartupMode(draft.widget) === opt.value}
+                /*
+                  legacy `transparent` 도 함께 맞춰 둔다 — 예전 버전으로 되돌아가도
+                  "시작 시 위젯 모드" 가 사용자의 선택과 어긋나지 않게.
+                */
+                onChange={() =>
+                  patchWidget({ startupMode: opt.value, transparent: opt.value === 'widget' })
+                }
+                className="w-3.5 h-3.5 text-sp-accent focus:ring-sp-accent"
+              />
+              <div>
+                <span className="text-xs font-medium text-sp-text">{opt.label}</span>
+                <p className="text-caption text-sp-muted">{opt.desc}</p>
+              </div>
+            </label>
+          ))}
         </div>
         <div className="flex items-center justify-between pt-4 border-t border-sp-border">
           <div className="flex flex-col">

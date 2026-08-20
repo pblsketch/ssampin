@@ -173,9 +173,40 @@ export interface WidgetVisibleSections {
   readonly todo: boolean;
 }
 
+/**
+ * 앱을 켤 때의 모습 (`WidgetSettings['startupMode']`).
+ *
+ * `WindowMode` 넷 중 아이콘을 뺀 셋이다 — 아이콘은 "잠깐 치워 두는" 자리라 시작 모습이
+ * 될 수 없다. 여기에 값을 늘리면 `electron/main.ts` 의 `STARTUP_MODES` 도 함께 늘려야
+ * 한다(미러 테스트가 강제한다).
+ */
+export type WindowStartupMode = 'main' | 'widget' | 'sidePin';
+
+export const WINDOW_STARTUP_MODES = ['main', 'widget', 'sidePin'] as const;
+
+/**
+ * 저장된 설정에서 시작 모습을 정한다. 설정 파일을 읽는 곳이 화면(스토어)과
+ * electron 두 군데라, 판단이 갈리지 않도록 규칙을 여기 한 벌만 둔다.
+ *
+ * 승계 규칙 — `startupMode` 가 없던 시절에는 `transparent` 가 "시작 시 위젯 모드"
+ * 토글이었다(이름과 하는 일이 어긋난 채로 굳은 값이다). 그래서 새 항목이 없으면
+ * 그 값을 그대로 읽어 예전 사용자의 선택을 지킨다.
+ */
+export function resolveStartupMode(widget: unknown): WindowStartupMode {
+  const w = widget as { startupMode?: unknown; transparent?: unknown } | null | undefined;
+  const explicit = w?.startupMode;
+  if (explicit === 'main' || explicit === 'widget' || explicit === 'sidePin') return explicit;
+  return w?.transparent === true ? 'widget' : 'main';
+}
+
 export interface WidgetSettings {
   readonly width: number;
   readonly height: number;
+  /**
+   * @deprecated 이름과 달리 창 투명도가 아니라 **"시작 시 위젯 모드"** 토글이었다.
+   * 지금은 `startupMode` 가 정본이고, 이 값은 예전 버전으로 되돌아갔을 때를 위해
+   * 함께 맞춰 써 둘 뿐이다(`startupMode === 'widget'` 과 같은 뜻).
+   */
   readonly transparent: boolean;
   readonly opacity: number;
   readonly cardOpacity: number;
@@ -220,11 +251,26 @@ export interface WidgetSettings {
    * X 버튼 동작.
    * - 'widget': 위젯 모드로 전환 (기본)
    * - 'icon': 아이콘 모드(56×56 floating)로 접기 (v2.0.2~)
+   * - 'sidePin': 옆핀으로 접기 (화면 오른쪽 가장자리)
    * - 'tray': 트레이로만 숨김
    * - 'quit': 앱 완전 종료
    * - 'ask': 매번 다이얼로그
    */
   readonly closeAction?: 'widget' | 'tray' | 'ask' | 'icon' | 'quit' | 'sidePin';
+  /**
+   * 앱을 켤 때 어떤 모습으로 시작할지.
+   *
+   * - 'main':    전체 화면 (기본)
+   * - 'widget':  위젯 모드
+   * - 'sidePin': 옆핀 (화면 오른쪽 가장자리 손잡이)
+   *
+   * optional 인 이유는 예전 설정 파일에 이 항목이 없기 때문이다. 없으면 `transparent`
+   * 로 판단한다 — 그 값이 원래 "시작 시 위젯 모드" 토글이었다(`resolveStartupMode`).
+   *
+   * 아이콘 모드는 뺐다. 아이콘은 "잠깐 치워 두는" 자리라 앱을 켜는 순간의 모습으로
+   * 어울리지 않고, 지금도 시작 모드로 고를 수 없다.
+   */
+  readonly startupMode?: WindowStartupMode;
   readonly visibleSections: WidgetVisibleSections;
   readonly layoutMode: WidgetLayoutMode;
   readonly desktopMode: WidgetDesktopMode;

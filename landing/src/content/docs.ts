@@ -964,7 +964,7 @@ export const docsArticles: readonly DocArticle[] = [
     title: '위젯 모드',
     description: '대시보드를 작은 창, 아이콘 모드(핀 캐릭터), 옆핀, 바탕화면 아래 모드로 띄웁니다.',
     category: 'features',
-    lastUpdated: '2026-08-19',
+    lastUpdated: '2026-08-20',
     image: { src: '/docs/screenshots/settings-widget.png', alt: '쌤핀 위젯 설정 화면' },
     sections: [
       {
@@ -975,6 +975,16 @@ export const docsArticles: readonly DocArticle[] = [
           '항상 위에: 다른 창 위에 고정합니다.',
           '아이콘 모드: 화면 위에 떠 있는 작은 핀 캐릭터로 접습니다. 아래에서 자세히 소개합니다.',
           '바탕화면 아이콘 아래 모드: Windows에서 바탕화면 일부처럼 씁니다.',
+        ],
+      },
+      {
+        id: 'startup-mode',
+        title: '앱을 켤 때의 모습 (앱 시작 시 모습)',
+        bullets: [
+          '설정 → 위젯 → "앱 시작 시 모습"에서 컴퓨터를 켜거나 쌤핀을 실행할 때 어떤 모습으로 열지 고릅니다.',
+          '전체 화면 / 위젯 모드 / 옆핀 중에서 선택합니다. 기본값은 전체 화면입니다.',
+          '옆핀으로 두면 앱이 화면 오른쪽 가장자리에 접힌 채로 열립니다. 손잡이에 마우스를 올리면 펼쳐지고, 전체 화면이 필요할 때 언제든 되돌아올 수 있습니다.',
+          '설정 → 시스템의 "시작 시 자동 실행"과 함께 쓰면, 컴퓨터를 켜자마자 원하는 모습으로 대기시킬 수 있습니다.',
         ],
       },
       {

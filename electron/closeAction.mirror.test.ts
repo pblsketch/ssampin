@@ -30,6 +30,21 @@ function readDomainCloseActions(): string[] {
   return [...m[1].matchAll(/'([^']+)'/g)].map((x) => x[1] as string).sort();
 }
 
+/**
+ * useSettingsStore.ts의 `explicit === '...'` 허용 목록에서 값을 뽑는다.
+ *
+ * 목록이 여기에도 한 벌 더 있다. 화면이 설정을 읽을 때 이 목록에 없는 값은 조용히
+ * 기본값으로 떨어지고, 그 상태로 다시 저장되면 **사용자의 선택이 사라진다**.
+ * 실제로 'sidePin' 이 빠져 있어서 "옆핀으로 접기" 가 다음 실행에 위젯으로 돌아갔다.
+ */
+function readStoreCloseActions(): string[] {
+  const src = readFileSync(resolve(REPO_ROOT, 'src/adapters/stores/useSettingsStore.ts'), 'utf-8');
+  const values = [...src.matchAll(/explicit === '([^']+)'/g)].map((x) => x[1] as string);
+  if (values.length === 0)
+    throw new Error('useSettingsStore.ts에서 closeAction 허용 목록을 찾지 못했다');
+  return [...new Set(values)].sort();
+}
+
 describe('창 닫기 동작 — 도메인과 electron 미러', () => {
   test('두 목록이 정확히 같다', () => {
     expect(readElectronCloseActions()).toEqual(readDomainCloseActions());
@@ -38,6 +53,10 @@ describe('창 닫기 동작 — 도메인과 electron 미러', () => {
   test('옆핀이 양쪽에 있다', () => {
     expect(readElectronCloseActions()).toContain('sidePin');
     expect(readDomainCloseActions()).toContain('sidePin');
+  });
+
+  test('설정을 읽는 화면(스토어)도 같은 목록을 안다 — 빠진 값은 조용히 기본값으로 되돌아간다', () => {
+    expect(readStoreCloseActions()).toEqual(readDomainCloseActions());
   });
 
   test('main.ts가 모든 동작을 실제로 처리한다 — 목록에만 있고 분기가 없으면 조용히 기본값으로 떨어진다', () => {

@@ -214,6 +214,31 @@ const CLOSE_ACTIONS = ['widget', 'tray', 'ask', 'icon', 'quit', 'sidePin'] as co
 type CloseAction = (typeof CLOSE_ACTIONS)[number];
 
 /**
+ * 앱을 켤 때의 모습.
+ *
+ * src/domain/entities/Settings.ts의 `WindowStartupMode`와 동일하게 유지해야 한다.
+ * (electron rootDir 분리로 직접 import 불가 — CLOSE_ACTIONS와 같은 의도적 미러링)
+ *
+ * - 'main':    전체 화면 (기본)
+ * - 'widget':  위젯 모드
+ * - 'sidePin': 옆핀 (화면 오른쪽 가장자리 손잡이)
+ */
+const STARTUP_MODES = ['main', 'widget', 'sidePin'] as const;
+type StartupMode = (typeof STARTUP_MODES)[number];
+
+/**
+ * 저장값에서 시작 모습을 정한다. 도메인의 `resolveStartupMode`와 같은 규칙이다.
+ *
+ * 승계 — `startupMode`가 없던 시절에는 `transparent`가 "시작 시 위젯 모드" 토글이었다.
+ * 새 항목이 없으면 그 값을 읽어 예전 사용자의 선택을 그대로 지킨다.
+ */
+function normalizeStartupMode(value: unknown, legacyTransparent: unknown): StartupMode {
+  const found = STARTUP_MODES.find((mode) => mode === value);
+  if (found !== undefined) return found;
+  return legacyTransparent === true ? 'widget' : 'main';
+}
+
+/**
  * 임의 입력값을 안전하게 WidgetDesktopMode로 정규화.
  *
  * 기존 `value === 'topmost' ? 'topmost' : 'normal'` 패턴이 'native-desktop'을
@@ -2259,6 +2284,12 @@ function checkInstallation(): void {
   }
 }
 
+/**
+ * 앱을 켤 때 처음 만들어지는 메인 창의 첫 표시를 한 번만 건너뛰게 하는 표시.
+ * 시작 모습이 위젯·옆핀일 때만 켜지고, 소비되면 곧바로 꺼진다(이후 복귀는 정상 표시).
+ */
+let suppressInitialMainShow = false;
+
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -2328,6 +2359,18 @@ function createWindow(): void {
   });
 
   mainWindow.once('ready-to-show', () => {
+    /*
+      시작 모습이 위젯·옆핀이면 메인 창은 아예 보여주지 않는다.
+
+      메인 창은 `show: false` 로 만들어졌다가 여기서 처음 뜬다. 그런데 시작 모드 전환은
+      창이 준비되기 **전에** 끝나 버려서(그 시점엔 아직 안 보이니 숨길 것도 없다), 뒤늦게
+      뜬 이 show 가 옆핀 위로 전체 화면을 올려놓는다. 그래서 이 한 번만 건너뛴다.
+    */
+    if (suppressInitialMainShow) {
+      suppressInitialMainShow = false;
+      diagLog('icon', 'ready-to-show 억제 — 시작 모습이 메인이 아니다');
+      return;
+    }
     mainWindow?.show();
   });
 
@@ -2940,7 +2983,7 @@ function createWidgetWindow(
 function readSettingsWidgetOptions(): {
   width: number;
   height: number;
-  startInWidgetMode: boolean;
+  startupMode: StartupMode;
   closeAction: CloseAction;
   desktopMode: WidgetDesktopMode;
   memorySaverMode: boolean;
@@ -2955,6 +2998,7 @@ function readSettingsWidgetOptions(): {
           width?: number;
           height?: number;
           transparent?: boolean;
+          startupMode?: string;
           closeToWidget?: boolean;
           desktopMode?: string;
           memorySaverMode?: boolean;
@@ -2983,7 +3027,10 @@ function readSettingsWidgetOptions(): {
       return {
         width: settings.widget?.width ?? 920,
         height: settings.widget?.height ?? 700,
-        startInWidgetMode: settings.widget?.transparent ?? false,
+        startupMode: normalizeStartupMode(
+          settings.widget?.startupMode,
+          settings.widget?.transparent,
+        ),
         closeAction,
         desktopMode,
         memorySaverMode: settings.widget?.memorySaverMode ?? true,
@@ -2995,7 +3042,7 @@ function readSettingsWidgetOptions(): {
   return {
     width: 920,
     height: 700,
-    startInWidgetMode: false,
+    startupMode: 'main',
     closeAction: 'widget',
     desktopMode: 'normal',
     memorySaverMode: true,
@@ -5717,6 +5764,8 @@ if (!gotTheLock) {
     // 미니앱: persist:miniapps 세션에 miniapp:// 프로토콜 핸들러 등록(defaultSession 아님) + 파일 IPC.
     registerMiniAppProtocol(getContentRoot());
     registerMiniAppHandlers();
+    // 시작 모습이 위젯·옆핀이면 메인 창을 한 번도 보여주지 않는다(아래 시작 분기와 한 쌍).
+    suppressInitialMainShow = readSettingsWidgetOptions().startupMode !== 'main';
     createWindow();
     registerOAuthHandlers(mainWindow!);
     registerPKCEFallbackHandlers();
@@ -5810,12 +5859,22 @@ if (!gotTheLock) {
       }, 500);
     });
 
-    // Start in widget mode if the setting is enabled
+    /*
+      시작 모습 — 설정대로 위젯·옆핀으로 접은 채 시작한다(기본은 전체 화면).
+
+      메인 창은 이미 만들어졌지만 아직 뜨지 않았고(`suppressInitialMainShow`), 여기서
+      접어 둔다. `executeWindowTransition` 의 "보이는 창만 숨긴다" 가드에 걸려 그냥 두면
+      메인이 살아남으므로, 옆핀 쪽은 접는 것을 직접 한 번 더 부른다.
+    */
     const widgetOptions = readSettingsWidgetOptions();
-    if (widgetOptions.startInWidgetMode) {
+    if (widgetOptions.startupMode === 'widget') {
       createWidgetWindow(widgetOptions, () =>
         hideOrDestroyMainWindow(widgetOptions.memorySaverMode),
       );
+    } else if (widgetOptions.startupMode === 'sidePin') {
+      void executeWindowTransition('sidePin').then(() => {
+        hideOrDestroyMainWindow(widgetOptions.memorySaverMode);
+      });
     }
 
     // Handle .ssampin file open from CLI args
