@@ -228,6 +228,9 @@ const DEFAULT_SETTINGS: Settings = {
       'quickAdd.bookmark': { combo: 'mod+alt+b', enabled: true },
       'sticker-picker:toggle': { combo: 'mod+shift+e', enabled: true },
       'sidePin:toggle': { combo: 'mod+alt+p', enabled: true },
+      // 손잡이의 위 버튼이 위젯, 아래 버튼이 메모다. 화살표가 그 배치와 그대로 맞는다.
+      'sidePin:openWidget': { combo: 'mod+alt+arrowup', enabled: true },
+      'sidePin:openMemo': { combo: 'mod+alt+arrowdown', enabled: true },
     },
     migratedAutoEnableV2: true,
   },
@@ -243,6 +246,9 @@ export const DEFAULT_SHORTCUTS: ShortcutSettings = {
     'quickAdd.bookmark': { combo: 'mod+alt+b', enabled: true },
     'sticker-picker:toggle': { combo: 'mod+shift+e', enabled: true },
     'sidePin:toggle': { combo: 'mod+alt+p', enabled: true },
+    // 손잡이의 위 버튼이 위젯, 아래 버튼이 메모다. 화살표가 그 배치와 그대로 맞는다.
+    'sidePin:openWidget': { combo: 'mod+alt+arrowup', enabled: true },
+    'sidePin:openMemo': { combo: 'mod+alt+arrowdown', enabled: true },
   },
   migratedAutoEnableV2: true,
 };

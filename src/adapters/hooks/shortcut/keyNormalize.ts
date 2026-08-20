@@ -15,14 +15,42 @@ export interface ParsedCombo {
 
 const MODIFIER_KEYS = new Set(['Control', 'Meta', 'Shift', 'Alt', 'Cmd']);
 
+/**
+ * 키 이름을 저장·비교용 정본으로 바꾼다 — **전부 소문자다.**
+ *
+ * 예전에는 `ArrowUp`·`F5`만 원형을 유지했는데, 조합을 읽는 `parseCombo`가 문자열을
+ * 통째로 소문자화하는 탓에 두 값이 **영원히 어긋났다.** 그래서 설정에서 화살표나
+ * F키 조합을 지정할 수는 있어도 눌러서 동작한 적이 없다(2026-08-20 수리).
+ * 화면 표기와 Electron 등록 이름은 아래 두 표에서 되돌린다.
+ */
 function normalizeKey(rawKey: string): string {
-  // 한글/IME 키 등 특수 처리는 단순화: lowercase 처리만
-  // Arrow/Function 키는 원형 유지
-  if (rawKey.length === 1) return rawKey.toLowerCase();
-  if (rawKey.startsWith('Arrow')) return rawKey;
-  if (/^F\d+$/.test(rawKey)) return rawKey;
-  // Enter/Escape/Tab/Space 등은 lowercase 통일
   return rawKey.toLowerCase();
+}
+
+/** 소문자 정본 → 화면에 보여줄 이름 */
+const DISPLAY_KEY_NAMES: Readonly<Record<string, string>> = {
+  arrowup: '↑',
+  arrowdown: '↓',
+  arrowleft: '←',
+  arrowright: '→',
+};
+
+/**
+ * 소문자 정본 → Electron 가속기 이름.
+ *
+ * **`electron/shortcutAccelerator.ts`에 같은 표가 있다.** 한쪽만 고치면 화면에는
+ * 멀쩡히 보이는데 등록이 실패한다. `shortcutAccelerator.mirror.test.ts`가 두 벌을 맞대어 본다.
+ */
+const ACCELERATOR_KEY_NAMES: Readonly<Record<string, string>> = {
+  arrowup: 'Up',
+  arrowdown: 'Down',
+  arrowleft: 'Left',
+  arrowright: 'Right',
+};
+
+/** 함수 키(f1~f12)는 대문자로 되돌린다 */
+function functionKeyName(key: string): string | null {
+  return /^f([1-9]|1[0-2])$/.test(key) ? key.toUpperCase() : null;
 }
 
 /**
@@ -107,13 +135,31 @@ export function comboToDisplay(combo: string, isMac: boolean = false): string {
   if (parsed.mod) parts.push(isMac ? 'Cmd' : 'Ctrl');
   if (parsed.alt) parts.push(isMac ? 'Option' : 'Alt');
   if (parsed.shift) parts.push('Shift');
-  parts.push(parsed.key.length === 1 ? parsed.key.toUpperCase() : parsed.key);
+  parts.push(displayKeyName(parsed.key));
   return parts.join('+');
+}
+
+/** 소문자 정본 키 이름 → 화면 표기 */
+export function displayKeyName(key: string): string {
+  const special = DISPLAY_KEY_NAMES[key];
+  if (special !== undefined) return special;
+  const fkey = functionKeyName(key);
+  if (fkey !== null) return fkey;
+  return key.length === 1 ? key.toUpperCase() : key;
+}
+
+/** 소문자 정본 키 이름 → Electron 가속기 이름 */
+export function acceleratorKeyName(key: string): string {
+  const special = ACCELERATOR_KEY_NAMES[key];
+  if (special !== undefined) return special;
+  const fkey = functionKeyName(key);
+  if (fkey !== null) return fkey;
+  return key.length === 1 ? key.toUpperCase() : key;
 }
 
 /**
  * canonical 조합 → Electron globalShortcut accelerator.
- * 예: "mod+alt+t" → "CommandOrControl+Alt+T".
+ * 예: "mod+alt+t" → "CommandOrControl+Alt+T", "mod+alt+arrowup" → "CommandOrControl+Alt+Up".
  */
 export function comboToAccelerator(combo: string): string {
   const parsed = parseCombo(combo);
@@ -122,7 +168,7 @@ export function comboToAccelerator(combo: string): string {
   if (parsed.mod) parts.push('CommandOrControl');
   if (parsed.alt) parts.push('Alt');
   if (parsed.shift) parts.push('Shift');
-  parts.push(parsed.key.length === 1 ? parsed.key.toUpperCase() : parsed.key);
+  parts.push(acceleratorKeyName(parsed.key));
   return parts.join('+');
 }
 

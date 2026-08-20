@@ -13,6 +13,18 @@ interface CommandRow {
 }
 
 const COMMANDS: readonly CommandRow[] = [
+  {
+    id: 'sidePin:openWidget',
+    label: '옆핀 위젯 열기',
+    icon: 'dashboard',
+    iconColor: 'text-sp-accent',
+  },
+  {
+    id: 'sidePin:openMemo',
+    label: '옆핀 메모 열기',
+    icon: 'sticky_note_2',
+    iconColor: 'text-emerald-400',
+  },
   { id: 'quickAdd.todo', label: '할일 추가', icon: 'check_circle', iconColor: 'text-sp-accent' },
   { id: 'quickAdd.event', label: '일정 추가', icon: 'event', iconColor: 'text-sp-highlight' },
   { id: 'quickAdd.memo', label: '메모 추가', icon: 'sticky_note_2', iconColor: 'text-emerald-400' },

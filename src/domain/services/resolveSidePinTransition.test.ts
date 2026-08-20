@@ -646,6 +646,19 @@ describe('볼 칸 옮기기(focus-zone)', () => {
     expect(moved.next).toBe(protectedState);
   });
 
+  it('단축키로 연 직후(opening)에도 칸을 지정할 수 있다 — Ctrl+Alt+위/아래의 전제', () => {
+    // main 은 "열기(shortcut-toggle) 다음 칸 지정(focus-zone)" 두 번으로 배선한다.
+    // 여는 순간 상태는 'opening' 이므로, 여기서 막히면 단축키가 늘 3:2 로만 열린다.
+    const opened = apply(enabledState(), { type: 'shortcut-toggle' }, 1_000);
+    expect(opened.next.surface).toBe('opening');
+    expect(opened.next.activeZone).toBe('both');
+
+    const zoned = apply(opened.next, { type: 'focus-zone', zone: 'memo' }, 1_010);
+
+    expect(zoned.next.activeZone).toBe('memo');
+    expect(zoned.next.surface).toBe('opening');
+  });
+
   it('대조 — 같은 칸을 겨눈 toggle-pin 과 activeZone 결과가 같다', () => {
     // activeZone 을 쓰는 곳이 둘이 되었으므로, 한쪽만 고치는 사고를 여기서 막는다.
     const state = expandedByHover('rail-widget');

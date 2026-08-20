@@ -29,6 +29,7 @@ import {
   MINIAPP_PARTITION,
 } from './miniapp-protocol';
 import { registerMiniAppHandlers } from './ipc/miniapp';
+import { comboToAccelerator, isSafeGlobalShortcutCombo } from './shortcutAccelerator';
 import { registerReminderIpc } from './ipc/reminder';
 import { computeExpandedBounds, pinFromExpanded, type IconAnchor } from './iconWindowGeometry';
 import { attachCsp, installCspViolationLogger } from './security/csp';
@@ -222,8 +223,9 @@ type CloseAction = (typeof CLOSE_ACTIONS)[number];
  * - 'main':    전체 화면 (기본)
  * - 'widget':  위젯 모드
  * - 'sidePin': 옆핀 (화면 오른쪽 가장자리 손잡이)
+ * - 'icon':    아이콘 모드 (화면에 떠 있는 작은 핀 캐릭터)
  */
-const STARTUP_MODES = ['main', 'widget', 'sidePin'] as const;
+const STARTUP_MODES = ['main', 'widget', 'sidePin', 'icon'] as const;
 type StartupMode = (typeof STARTUP_MODES)[number];
 
 /**
@@ -607,40 +609,6 @@ type ShortcutSyncConfig = {
   bindings: Array<{ id: string; combo: string; enabled: boolean }>;
 };
 
-function comboToAccelerator(combo: string): string {
-  const tokens = combo
-    .toLowerCase()
-    .split('+')
-    .map((t) => t.trim())
-    .filter(Boolean);
-  const mod =
-    tokens.includes('mod') ||
-    tokens.includes('ctrl') ||
-    tokens.includes('cmd') ||
-    tokens.includes('meta');
-  const alt = tokens.includes('alt') || tokens.includes('option');
-  const shift = tokens.includes('shift');
-  const key = tokens.find(
-    (t) => !['mod', 'ctrl', 'cmd', 'meta', 'alt', 'option', 'shift'].includes(t),
-  );
-  if (!key) return '';
-  const parts: string[] = [];
-  if (mod) parts.push('CommandOrControl');
-  if (alt) parts.push('Alt');
-  if (shift) parts.push('Shift');
-  parts.push(key.length === 1 ? key.toUpperCase() : key);
-  return parts.join('+');
-}
-
-function isSafeGlobalShortcutCombo(combo: string): boolean {
-  const tokens = combo
-    .toLowerCase()
-    .split('+')
-    .map((token) => token.trim())
-    .filter(Boolean);
-  return tokens.some((token) => ['mod', 'ctrl', 'cmd', 'meta', 'alt', 'option'].includes(token));
-}
-
 function isMainWindowVisible(): boolean {
   if (!mainWindow || mainWindow.isDestroyed()) return false;
   return mainWindow.isVisible();
@@ -927,6 +895,33 @@ function triggerSidePinShortcut(): void {
   sidePin?.service.dispatch({ type: 'shortcut-toggle' });
 }
 
+/**
+ * 칸을 지정해 옆핀을 연다 - Ctrl+Alt+위/아래.
+ *
+ * 세 갈래다.
+ * - 접혀 있으면: 연 다음 그 칸으로 무게중심을 옮긴다(여는 일 자체는 기존 통로를 쓴다).
+ * - 다른 칸을 보고 있으면: 칸만 바꾼다.
+ * - 같은 칸을 다시 누르면 닫는다 - 누를 때마다 아무 일도 안 일어나면 고장으로 보인다.
+ *
+ * 여기는 배선일 뿐이고 판단은 전부 상태 기계가 한다.
+ */
+function triggerSidePinZoneShortcut(zone: 'widget' | 'memo'): void {
+  if (!sidePinShortcutGate.shouldDispatch()) return;
+  const service = sidePin?.service;
+  if (service === undefined) return;
+
+  const state = service.getState();
+  const open = state.surface === 'expanded' || state.surface === 'opening';
+
+  if (open && state.activeZone === zone) {
+    service.dispatch({ type: 'shortcut-toggle' });
+    return;
+  }
+  // 여는 쪽은 both 로 열린다(가리킨 곳이 없으므로). 그다음 칸을 지정한다.
+  if (!open) service.dispatch({ type: 'shortcut-toggle' });
+  service.dispatch({ type: 'focus-zone', zone });
+}
+
 function triggerShortcut(commandId: string): void {
   // ─── sticker-picker:toggle (PRD §3.1.3) ───
   // 토글 동작: 피커가 visible이면 hide, 아니면 항상 별도 팝업으로 띄운다.
@@ -937,6 +932,14 @@ function triggerShortcut(commandId: string): void {
   // 꺼져 있으면(enabled=false) 전이 규칙이 알아서 무시한다.
   if (commandId === 'sidePin:toggle') {
     triggerSidePinShortcut();
+    return;
+  }
+  if (commandId === 'sidePin:openWidget') {
+    triggerSidePinZoneShortcut('widget');
+    return;
+  }
+  if (commandId === 'sidePin:openMemo') {
+    triggerSidePinZoneShortcut('memo');
     return;
   }
   if (commandId === 'sticker-picker:toggle') {
@@ -5873,6 +5876,12 @@ if (!gotTheLock) {
       );
     } else if (widgetOptions.startupMode === 'sidePin') {
       void executeWindowTransition('sidePin').then(() => {
+        hideOrDestroyMainWindow(widgetOptions.memorySaverMode);
+      });
+    } else if (widgetOptions.startupMode === 'icon') {
+      // 아이콘으로 시작하면 핀을 더블클릭했을 때 돌아갈 곳이 필요하다. `lastUserMode` 의
+      // 초기값이 'main' 이라 그대로 두면 전체 화면으로 복귀한다(의도한 동작).
+      void executeWindowTransition('icon').then(() => {
         hideOrDestroyMainWindow(widgetOptions.memorySaverMode);
       });
     }
