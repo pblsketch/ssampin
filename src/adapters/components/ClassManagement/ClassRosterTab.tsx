@@ -15,8 +15,11 @@ import { PhotoRosterImportModal } from '@adapters/components/Homeroom/RosterImpo
 import { FEATURE_FLAGS } from '@adapters/config/featureFlags';
 import { resolveTeachingClassPhotoTargets } from '@usecases/studentPhoto/resolveTeachingClassPhotoTargets';
 import { mergeRosterFromPhotoRoster } from '@domain/rules/teachingClassRosterMerge';
+import { deleteStudentPhotos } from '@usecases/studentPhoto/DeleteStudentPhotos';
+import { photoSubjectKey } from '@domain/rules/studentPhotoRules';
+import { resolveStudentPhotoCloud } from '@adapters/repositories/studentPhotoCloudGateway';
 import { saveRosterPhotos } from '@usecases/studentPhoto/SaveRosterPhotos';
-import { studentPhotoRepository, imageResizer } from '@adapters/di/container';
+import { studentPhotoRepository, imageResizer, driveSyncRepository } from '@adapters/di/container';
 import {
   STUDENT_STATUS_LABELS,
   STUDENT_STATUS_COLORS,
@@ -106,8 +109,40 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
       } else {
         await updateClass({ ...cls, students: [...next] });
       }
+
+      // ⚠️ 명단에서 빠진 학생의 얼굴 사진도 함께 파기한다.
+      //
+      // 이걸 빠뜨리면 **앱 어디에도 안 보이는 얼굴 사진이 컴퓨터·클라우드에 남는다.**
+      // 담임 명렬(RosterManagementTab)은 이미 이렇게 하고 있었는데 수업반만 빠져 있었다
+      // (수업반 사진 지원을 나중에 붙이면서 생긴 구멍, 2026-08-20 발견).
+      // 개인정보 처리방침이 "명단에서 지우면 사진도 지워진다"고 약속하므로 사실이어야 한다.
+      //
+      // 저장 경로가 여기 하나뿐이라(행 삭제·엑셀 가져오기·붙여넣기 전부 이 함수를 지난다)
+      // 여기서 한 번만 훑으면 모든 경우가 덮인다.
+      const survivingKeys = new Set(next.map(studentKey));
+      const removed = students.filter((s) => !survivingKeys.has(studentKey(s)));
+      if (removed.length === 0) return;
+      try {
+        const cloud = await resolveStudentPhotoCloud();
+        for (const student of removed) {
+          await deleteStudentPhotos(
+            {
+              repository: studentPhotoRepository,
+              syncRepository: driveSyncRepository,
+              ...(cloud ? { cloud } : {}),
+            },
+            {
+              scope: 'student',
+              subjectKey: photoSubjectKey('teaching-class', cls.id, studentKey(student)),
+            },
+          );
+        }
+      } catch (err) {
+        // 사진 파기에 실패해도 명단 저장은 이미 끝났다 — 여기서 되돌리면 명단이 날아간다.
+        console.warn('[ClassRosterTab] 수업반 학생 사진 파기 실패:', err);
+      }
     },
-    [cls, syncGroupStudents, updateClass],
+    [cls, students, syncGroupStudents, updateClass],
   );
 
   const saveEdit = useCallback(async () => {
@@ -402,14 +437,15 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
   /* ── 엑셀 가져오기 적용 ── */
   const applyExcelImport = useCallback(async () => {
     if (!excelPreview || !cls) return;
-    await updateClass({ ...cls, students: excelPreview });
+    // persistStudents 를 거쳐야 명단에서 빠진 학생의 얼굴 사진도 함께 파기된다
+    await persistStudents(excelPreview);
     showToast(`${excelPreview.length}명의 학생을 가져왔습니다`, 'success');
     setExcelPreview(null);
     if (isEditing) {
       setIsEditing(false);
       setEditStudents([]);
     }
-  }, [excelPreview, cls, updateClass, showToast, isEditing]);
+  }, [excelPreview, cls, persistStudents, showToast, isEditing]);
 
   /* ── 붙여넣기 미리보기 ── */
   const parsedPreview = useMemo(() => {

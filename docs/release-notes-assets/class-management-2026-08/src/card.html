@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+  @font-face { font-family:'Pretendard'; font-weight:800; src:url('./fonts/Pretendard-ExtraBold.woff2') format('woff2'); }
+  @font-face { font-family:'Pretendard'; font-weight:700; src:url('./fonts/Pretendard-Bold.woff2') format('woff2'); }
+  @font-face { font-family:'Pretendard'; font-weight:600; src:url('./fonts/Pretendard-SemiBold.woff2') format('woff2'); }
+  @font-face { font-family:'Pretendard'; font-weight:500; src:url('./fonts/Pretendard-Medium.woff2') format('woff2'); }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { width:1080px; height:1350px; overflow:hidden; }
+  body { font-family:'Pretendard', sans-serif; background:#000; -webkit-font-smoothing:antialiased; }
+
+  .card {
+    position:relative; width:1080px; height:1350px; overflow:hidden;
+    background:
+      radial-gradient(1000px 620px at 50% 30%, rgba(37,99,235,.16) 0%, rgba(37,99,235,0) 62%),
+      radial-gradient(760px 520px at 50% 8%, rgba(245,158,11,.09) 0%, rgba(245,158,11,0) 60%),
+      linear-gradient(180deg, #05070c 0%, #05070c 46%, #080d16 78%, #0a1120 100%);
+  }
+  .card::after {
+    content:''; position:absolute; left:0; right:0; bottom:0; height:560px;
+    background:linear-gradient(180deg, rgba(5,7,12,0) 0%, rgba(5,7,12,.92) 34%, #05070c 100%);
+    pointer-events:none;
+  }
+
+  .page { position:absolute; top:56px; right:66px; z-index:5;
+    font-size:21px; font-weight:600; letter-spacing:.14em; color:rgba(255,255,255,.30); }
+
+  .stage { position:absolute; top:84px; left:0; right:0; height:620px; z-index:3;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:30px; }
+  .row { display:flex; flex-direction:row; align-items:flex-start; justify-content:center; gap:26px; }
+  .col { display:flex; flex-direction:column; align-items:center; gap:14px; }
+
+  .shot { border-radius:18px; overflow:hidden; display:block;
+    border:1px solid rgba(255,255,255,.10);
+    box-shadow:0 18px 44px rgba(0,0,0,.55), 0 2px 0 rgba(255,255,255,.05) inset; }
+  .shot img { display:block; }
+  .shot.rel { position:relative; }
+  .shot .ov { position:absolute; border-radius:12px; box-shadow:0 14px 34px rgba(0,0,0,.7); }
+  .vslot { box-shadow:0 22px 54px rgba(0,0,0,.62); }
+
+  .caplabel { font-size:21px; font-weight:700; letter-spacing:.10em; color:rgba(255,255,255,.42); }
+
+  .mascot { display:block; image-rendering:pixelated;
+    filter:drop-shadow(0 22px 46px rgba(37,99,235,.42)); }
+
+  .copy { position:absolute; left:66px; right:66px; top:740px; z-index:5; }
+
+  .eyebrow { display:flex; align-items:center; gap:16px; }
+  .eyebrow i { display:block; width:5px; height:26px; border-radius:3px; background:#f5a524; }
+  .eyebrow span { font-size:26px; font-weight:700; letter-spacing:.11em; color:#e9edf4; }
+
+  h1 { margin-top:22px; font-size:68px; font-weight:800; line-height:1.20;
+       letter-spacing:-.030em; color:#fff; }
+  h1 em { font-style:normal; color:#7fb2ff; }
+
+  .sub { margin-top:26px; font-size:28px; font-weight:500; line-height:1.52;
+         letter-spacing:-.012em; color:#7d8a9d; }
+
+  .bullets { margin-top:30px; display:flex; flex-direction:column; gap:15px; }
+  .bullets li { list-style:none; position:relative; padding-left:26px;
+    font-size:25px; font-weight:500; line-height:1.40; letter-spacing:-.015em; color:#96a3b6; }
+  .bullets li::before { content:''; position:absolute; left:2px; top:14px;
+    width:7px; height:7px; border-radius:50%; background:#f5a524; opacity:.85; }
+  .bullets li b { font-weight:700; color:#dde4ee; }
+
+  .steps { margin-top:30px; display:flex; gap:12px; }
+  .steps b { font-size:25px; font-weight:700; letter-spacing:-.01em; color:#dfe6f0;
+             padding:15px 26px; border-radius:999px;
+             border:1px solid rgba(255,255,255,.14); background:rgba(255,255,255,.045); }
+  .steps b.hot { color:#0a0d13; background:#f5a524; border-color:#f5a524; }
+
+  .sig { position:absolute; left:0; right:0; bottom:66px; text-align:center; z-index:5; }
+  .sig .n { font-size:31px; font-weight:800; letter-spacing:.14em; color:#fff; text-indent:.14em; }
+  .sig .d { margin-top:11px; font-size:19px; font-weight:500; letter-spacing:.05em; color:rgba(255,255,255,.34); }
+
+  .card.center .copy { text-align:center; top:770px; }
+  .card.center .eyebrow { justify-content:center; }
+  .card.center .steps { justify-content:center; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="./cards.data.js"></script>
+<script>
+const { brand, cards, sizes } = CARD_DATA;
+const Q = new URLSearchParams(location.search);
+const i = Math.max(1, Math.min(cards.length, parseInt(Q.get('i') || '1', 10)));
+const c = cards[i - 1];
+
+/** 크롭 원본 비율로 높이를 구한다 — 손으로 계산하다 틀린 적이 있어 자동화. */
+function fit(id, w) {
+  const s = sizes[id];
+  if (!s) throw new Error('크롭 없음: ' + id);
+  return Math.round(s[1] * w / s[0]);
+}
+
+function shot(it) {
+  const h = fit(it.img, it.w);
+  let inner = `<img src="../crops/${it.img}.png" width="${it.w}" height="${h}">`;
+  let cls = 'shot';
+  if (it.overlay) {
+    const o = it.overlay;
+    const oh = fit(o.img, o.w);
+    const pos = [
+      o.right != null ? `right:${o.right}px` : `left:${o.left || 0}px`,
+      o.bottom != null ? `bottom:${o.bottom}px` : `top:${o.top || 0}px`,
+    ].join(';');
+    inner += `<span class="shot ov" style="${pos}"><img src="../crops/${o.img}.png" width="${o.w}" height="${oh}"></span>`;
+    cls += ' rel';
+  }
+  const box = `<span class="${cls}">${inner}</span>`;
+  return it.label ? `<span class="col"><span class="caplabel">${it.label}</span>${box}</span>` : box;
+}
+
+function item(it) {
+  if (it.type === 'mascot') {
+    return `<img class="mascot" src="./${brand.mascot}" width="${it.size}" height="${it.size}">`;
+  }
+  return shot(it);
+}
+
+// bare=1 : 영상 슬라이드용 바탕 프레임 (화면 자리를 빈 상자로 그림)
+let stageHtml;
+if (Q.get('bare') === '1') {
+  const vw = parseInt(Q.get('vw'), 10), vh = parseInt(Q.get('vh'), 10);
+  stageHtml = `<span class="shot vslot" style="width:${vw}px;height:${vh}px;background:#080c14"></span>`;
+} else {
+  const inner = (c.stage ? c.stage.items : []).map(item).join('');
+  stageHtml = c.stage && c.stage.layout === 'row' ? `<div class="row">${inner}</div>` : inner;
+}
+
+document.getElementById('root').innerHTML = `
+  <div class="card${c.center ? ' center' : ''}">
+    <div class="page">${String(i).padStart(2, '0')} / ${String(cards.length).padStart(2, '0')}</div>
+    <div class="stage">${stageHtml}</div>
+    <div class="copy">
+      <div class="eyebrow"><i></i><span>${c.eyebrow}</span></div>
+      <h1>${c.h}</h1>
+      ${c.sub ? `<div class="sub">${c.sub}</div>` : ''}
+      ${c.bullets ? `<ul class="bullets">${c.bullets.map(b => `<li>${b}</li>`).join('')}</ul>` : ''}
+      ${c.steps ? `<div class="steps">${c.steps.map((s, n) => `<b${n === c.steps.length - 1 ? ' class="hot"' : ''}>${s}</b>`).join('')}</div>` : ''}
+    </div>
+    <div class="sig">
+      <div class="n">${brand.name}</div>
+      <div class="d">${brand.tagline}</div>
+    </div>
+  </div>`;
+</script>
+</body>
+</html>

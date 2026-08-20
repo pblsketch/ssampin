@@ -50,6 +50,37 @@ const koContent = {
               <strong>학급 운영 자료</strong> — 시간표, 자리 배치, 진도, 과제 제출 현황,
               설문·체크리스트 응답, 평가 기록
             </li>
+            <li>
+              <strong>학생 얼굴 사진</strong>(사진 명렬표를 넣은 경우에만) — 교사가 NEIS에서
+              내려받은 사진 명렬표 파일을 쌤핀에 넣으면, 그 파일에 들어 있는 학생 얼굴 사진과
+              이름·번호가 교사의 컴퓨터에 저장됩니다. 학생 얼굴을 이름과 함께 익히는{' '}
+              <strong>이름 학습</strong> 기능에만 사용합니다.
+              <ul>
+                <li>
+                  사진은 <strong>가로·세로 320픽셀 이하로 줄여</strong> 저장하며, 원본 파일은
+                  보관하지 않습니다.
+                </li>
+                <li>
+                  <strong>
+                    학생에게 보이는 화면(교실 화면 공유·설문·과제 제출 링크 등)과 바탕화면 위젯에는
+                    표시되지 않습니다.
+                  </strong>
+                </li>
+                <li>
+                  얼굴 인식·자동 분류 등 어떤 형태의 생체 정보 처리도 하지 않습니다. 사진은 화면에
+                  보여 주기만 합니다.
+                </li>
+                <li>
+                  <strong>삭제</strong> — 설정 &gt; 백업/복원 &gt; 학생 사진에서 언제든 모두 지울 수
+                  있고, 학생을 명단에서 지우면 그 학생의 사진도 함께 지워집니다. 지우면 컴퓨터와
+                  Google Drive의 사본이 함께 지워집니다. 다만{' '}
+                  <strong>
+                    쌤핀을 컴퓨터 두 대 이상에서 사용하는 경우, 삭제는 다른 컴퓨터로 자동 전파되지
+                    않으므로 컴퓨터마다 따로 지워야 합니다.
+                  </strong>
+                </li>
+              </ul>
+            </li>
           </ul>
           <p>
             <strong>보유 기간:</strong> 교사가 앱에서 삭제하거나 앱을 제거할 때까지 보유하며, 학년도
@@ -71,8 +102,10 @@ const koContent = {
             <li>
               <strong>쌤핀 앱 데이터 백업 파일</strong>(앱 데이터 백업 활성 시) —
               시간표·좌석·메모·할 일 등 사용자가 쌤핀 안에서 생성한 데이터를 JSON 형태로 Google
-              Drive의 <em>쌤핀 전용 폴더(appDataFolder)</em>에 저장. 이 폴더는 다른 Google 앱(Drive
-              웹, Docs 등)에서 보이지 않습니다.
+              Drive의 <em>&quot;쌤핀 동기화&quot; 폴더</em>에 저장합니다(사진 명렬표를 넣은 경우
+              학생 얼굴 사진도 이 폴더에 함께 저장됩니다). 이 폴더는{' '}
+              <strong>사용자 본인의 Google Drive에서 직접 열어 볼 수 있으며</strong>, 쌤핀은 자신이
+              만든 파일만 접근합니다.
             </li>
             <li>
               <strong>Google Tasks 할 일 데이터</strong>(Tasks 연동 시) — 제목, 완료 상태, 마감일,
@@ -136,10 +169,11 @@ const koContent = {
               별도 서버를 운영하지 않습니다.
             </li>
             <li>
-              <strong>Google Drive appDataFolder:</strong> &quot;앱 데이터 백업&quot; 기능을
-              활성화하면 쌤핀 데이터의 사본이 Google Drive의 앱 전용 숨김 폴더에 저장됩니다. 이
-              폴더는 사용자의 Google Drive 저장 공간을 사용하지만 일반 Drive 인터페이스에서는 접근할
-              수 없고, 오직 쌤핀 앱만이 접근합니다.
+              <strong>Google Drive &quot;쌤핀 동기화&quot; 폴더:</strong> &quot;앱 데이터 백업&quot;
+              기능을 활성화하면 쌤핀 데이터의 사본이 사용자 본인의 Google Drive에 만들어진
+              &quot;쌤핀 동기화&quot; 폴더에 저장됩니다. 이 폴더는 사용자의 Google Drive 저장 공간을
+              사용하며 <strong>사용자가 Drive에서 직접 열어 보고 지울 수 있습니다.</strong> 쌤핀은
+              자신이 만든 파일만 접근할 수 있고, 사용자의 다른 Drive 파일에는 접근하지 않습니다.
             </li>
             <li>
               <strong>암호화 저장:</strong> OAuth 인증 토큰은 Windows DPAPI(Electron safeStorage)를
@@ -259,8 +293,8 @@ const koContent = {
               <strong>
                 <code>.../auth/drive.file</code>
               </strong>{' '}
-              — 쌤핀이 직접 만든 앱 전용 폴더(appDataFolder)의 파일만 접근합니다. 사용자의 다른
-              Drive 파일(문서, 사진 등)에는 접근할 수 없습니다.
+              — 쌤핀이 직접 만든 파일(&quot;쌤핀 동기화&quot; 폴더 안의 파일)만 접근합니다. 사용자의
+              다른 Drive 파일(문서, 사진 등)에는 접근할 수 없습니다.
             </li>
             <li>
               <strong>
@@ -705,6 +739,16 @@ const enContent = {
               progress, assignment submission status, survey/checklist responses, and assessment
               records
             </li>
+            <li>
+              <strong>Student face photos</strong> (only if you import a NEIS photo roster) — face
+              photos with names and numbers, used solely for the <strong>name-learning</strong>{' '}
+              feature. Photos are downscaled to 320px or less and the original file is not kept.
+              They are never shown on student-facing screens or the desktop widget. No facial
+              recognition or other biometric processing is performed. You can delete them at any
+              time in Settings &gt; Backup/Restore &gt; Student photos, and removing a student from
+              the roster deletes that student&apos;s photo as well. Deletion does not propagate to
+              your other computers, so delete on each computer.
+            </li>
           </ul>
           <p>
             <strong>Retention:</strong> retained until the teacher deletes it in the app or
@@ -728,9 +772,10 @@ const enContent = {
             <li>
               <strong>SsamPin app-data backup files</strong> (when App-Data Backup is enabled) — a
               JSON copy of the timetable, seating, memos, to-dos, and other data you create inside
-              SsamPin, stored in a <em>hidden app-specific folder (appDataFolder)</em> on your
-              Google Drive. This folder is invisible to other Google apps (Drive web UI, Docs,
-              etc.).
+              SsamPin, stored in a folder named <em>&quot;쌤핀 동기화&quot;</em> on your own Google
+              Drive (student face photos are stored here as well if you import a photo roster). You
+              can open and delete this folder yourself in Drive; SsamPin only accesses files it
+              created.
             </li>
             <li>
               <strong>Google Tasks data</strong> (when Tasks sync is enabled) — title, completion
@@ -805,10 +850,11 @@ const enContent = {
               any server that stores or processes user data.
             </li>
             <li>
-              <strong>Google Drive appDataFolder:</strong> When the &quot;App-Data Backup&quot;
-              feature is enabled, a copy of your SsamPin data is stored in a hidden app-specific
-              folder on your own Google Drive. This folder uses your Google Drive quota but is
-              inaccessible via the regular Drive interface — only the SsamPin app can access it.
+              <strong>Google Drive &quot;쌤핀 동기화&quot; folder:</strong> When the &quot;App-Data
+              Backup&quot; feature is enabled, a copy of your SsamPin data is stored in a folder
+              SsamPin creates on your own Google Drive. It uses your Google Drive quota and{' '}
+              <strong>you can browse and delete it yourself</strong>; SsamPin can only access files
+              it created, not your other Drive files.
             </li>
             <li>
               <strong>Encrypted storage:</strong> OAuth tokens are encrypted and stored in the OS
@@ -938,8 +984,9 @@ const enContent = {
               <strong>
                 <code>.../auth/drive.file</code>
               </strong>{' '}
-              — accesses only the app-specific folder (appDataFolder) SsamPin creates. Your other
-              Drive files (documents, photos, etc.) remain inaccessible to SsamPin.
+              — accesses only the files SsamPin itself creates (inside the &quot;쌤핀 동기화&quot;
+              folder). Your other Drive files (documents, photos, etc.) remain inaccessible to
+              SsamPin.
             </li>
             <li>
               <strong>

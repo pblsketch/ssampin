@@ -123,15 +123,41 @@ export function StudentPhotoPrivacySection() {
           학생 화면·바탕화면 위젯에는 표시되지 않아요.
         </p>
 
+        {/*
+          ⚠️ 삭제가 다른 컴퓨터까지 전파되지 않는다는 사실을 반드시 알린다.
+          지운 줄 알았는데 학교 컴퓨터에 얼굴 사진이 남아 있는 것은 선생님이 감당할 위험이고,
+          말하지 않으면 "지웠습니다"가 거짓말이 된다.
+          (전파 구현은 별도 작업 — 그때까지는 안내로 대신한다)
+        */}
+        {count !== null && count > 0 && (
+          <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-sp-text break-keep flex items-start gap-1.5">
+            <span
+              className="material-symbols-outlined text-sm leading-5 text-amber-400"
+              aria-hidden="true"
+            >
+              info
+            </span>
+            <span>
+              쌤핀을 <strong>컴퓨터 두 대 이상</strong>에서 쓰신다면, 사진은 컴퓨터마다 따로 지워
+              주세요. 한 대에서 지워도 다른 컴퓨터에 있는 사진은 그대로 남고, 그 컴퓨터에서 동기화가
+              멈출 수 있어요.
+            </span>
+          </p>
+        )}
+
         {confirming && (
           <div
             role="alert"
             className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 space-y-3"
           >
             <p className="text-sm text-sp-text break-keep">
-              저장된 사진 <strong>{count}장</strong>을 모두 지울까요? 이 컴퓨터와 클라우드에서 함께
+              저장된 사진 <strong>{count}장</strong>을 모두 지울까요? 이 컴퓨터와 구글 드라이브에서
               지워지고, <strong>되돌릴 수 없어요.</strong> 다시 쓰려면 사진 명렬표를 다시 넣어야
               해요.
+              <br />
+              <span className="text-sp-muted">
+                다른 컴퓨터에서도 쌤핀을 쓰신다면 그 컴퓨터에서도 따로 지워 주세요.
+              </span>
             </p>
             <div className="flex items-center gap-2">
               <button
