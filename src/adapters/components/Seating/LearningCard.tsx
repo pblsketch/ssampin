@@ -104,7 +104,9 @@ export const LearningCard = forwardRef<HTMLButtonElement, LearningCardProps>(fun
         <div
           className={`overflow-hidden rounded-lg ring-1 ring-sp-border bg-sp-surface ${photoWrapSizeClasses}`}
         >
-          <img src={photoUrl} alt="" draggable={false} className="w-full h-full object-cover" />
+          {/* ⚠️ object-cover 로 두면 3:4 가 아닌 사진의 얼굴이 확대·잘려 "옆으로 퍼져" 보인다
+              (실제 신고 2026-08-20). 얼굴을 익히는 기능이므로 자르지 않고 통째로 보여 준다. */}
+          <img src={photoUrl} alt="" draggable={false} className="w-full h-full object-contain" />
         </div>
       ) : (
         <span className={`font-mono text-sp-accent font-bold ${numberSizeClasses}`}>

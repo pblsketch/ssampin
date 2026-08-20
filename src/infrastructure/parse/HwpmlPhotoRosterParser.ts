@@ -189,14 +189,49 @@ function toGridKeys<T>(
   });
 }
 
-/** 세로 좌표가 같은 사진끼리 묶는다 (한 줄 = 한 묶음) */
-function groupByRow(photos: readonly RawPhoto[]): RawPhoto[][] {
-  const rows = new Map<number, RawPhoto[]>();
+/**
+ * 쪽 번호를 매긴다 — **2쪽짜리 명렬표를 살리는 핵심.**
+ *
+ * 사진 위치가 `VertRelTo="Page"`(쪽 기준)라, 2쪽이 시작되면 세로값이 **맨 위부터 다시**
+ * 센다. 그래서 2쪽 첫 줄과 1쪽 첫 줄의 세로값이 똑같다. 이걸 그대로 쓰면 두 줄이 한 줄로
+ * 뭉개져 자리가 겹치고, 검산이 막아 주는 대신 **사진을 통째로 못 쓰게 된다.**
+ *
+ * 문서에 적힌 순서대로 읽다가 세로값이 **뒤로 되돌아가면** 새 쪽이 시작된 것으로 본다.
+ * (같은 쪽 안에서는 위에서 아래로만 진행한다.)
+ */
+function assignPageIndex(photos: readonly RawPhoto[]): number[] {
+  const pages: number[] = [];
+  let page = 0;
+  let maxVert = Number.NEGATIVE_INFINITY;
   for (const photo of photos) {
-    const bucket = rows.get(photo.vert) ?? [];
-    bucket.push(photo);
-    rows.set(photo.vert, bucket);
+    if (photo.vert < maxVert) {
+      page += 1;
+      maxVert = photo.vert;
+    } else {
+      maxVert = Math.max(maxVert, photo.vert);
+    }
+    pages.push(page);
   }
+  return pages;
+}
+
+/**
+ * 쪽과 세로 좌표를 하나의 "줄 좌표"로 합친다.
+ *
+ * 값 자체는 의미가 없고 **크기 순서만** 쓰이므로(`toGridIndex` 가 정렬해 번호를 매긴다),
+ * 쪽이 다르면 무조건 더 큰 값이 되도록 충분히 큰 간격을 둔다.
+ */
+const PAGE_STRIDE = 100_000_000;
+
+/** 같은 줄(같은 쪽 + 같은 세로 좌표)의 사진끼리 묶는다 */
+function groupByRow(photos: readonly RawPhoto[], pages: readonly number[]): RawPhoto[][] {
+  const rows = new Map<number, RawPhoto[]>();
+  photos.forEach((photo, i) => {
+    const key = pages[i]! * PAGE_STRIDE + photo.vert;
+    const bucket = rows.get(key) ?? [];
+    bucket.push(photo);
+    rows.set(key, bucket);
+  });
   return [...rows.values()];
 }
 
@@ -229,9 +264,12 @@ export function parseHwpmlPhotoRoster(xml: string): PhotoRosterParseResult {
 
   // 실제 이미지 데이터가 있는 그림만 후보로 삼는다
   const usablePhotos = rawPhotos.filter((p) => binaries.has(p.binItemId));
+  // 2쪽 이상이면 세로 좌표가 쪽마다 처음으로 되돌아간다 → 쪽을 함께 세어 줄을 가른다
+  const photoPages = assignPageIndex(usablePhotos);
+  const photoIndexOf = new Map(usablePhotos.map((p, i) => [p, i]));
   const photoKeys = toGridKeys(
     usablePhotos,
-    (p) => p.vert,
+    (p) => photoPages[photoIndexOf.get(p)!]! * PAGE_STRIDE + p.vert,
     (p) => p.horz,
   );
   const photos: RosterPhotoCandidate[] = usablePhotos.map((raw, i) => ({
@@ -244,7 +282,7 @@ export function parseHwpmlPhotoRoster(xml: string): PhotoRosterParseResult {
   //    명렬표 사진은 줄마다 일정한 간격으로 놓이므로, 간격이 흐트러졌다는 건
   //    사진이 빠졌거나(간격 2배) 로고 같은 게 끼어들었다는 신호다.
   //    그때 자동 짝짓기를 포기하지 않으면 얼굴이 한 칸씩 밀린 채 저장된다.
-  const spacingOk = groupByRow(usablePhotos).every((row) =>
+  const spacingOk = groupByRow(usablePhotos, photoPages).every((row) =>
     hasUniformSpacing(row.map((p) => p.horz)),
   );
 

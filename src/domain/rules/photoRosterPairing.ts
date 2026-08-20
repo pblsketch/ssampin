@@ -149,9 +149,16 @@ export function toGridIndex(values: readonly number[], tolerance = 0): ReadonlyM
   return result;
 }
 
-/** 격자 좌표를 pairKey 문자열로 만든다 (사진·이름이 같은 규칙을 써야 맞물린다) */
-export function gridPairKey(row: number, col: number): string {
-  return `r${row}:c${col}`;
+/**
+ * 격자 좌표를 pairKey 문자열로 만든다 (사진·이름이 같은 규칙을 써야 맞물린다).
+ *
+ * @param section 자리가 처음부터 다시 시작되는 구역 번호 (엑셀 시트 번호 등).
+ *   ⚠️ 명렬표가 2쪽을 넘어가면 **같은 `(행, 열)` 이 다시 나온다.** 구역을 안 나누면
+ *   서로 다른 학생의 사진이 같은 자리로 뭉개져 짝짓기가 통째로 실패한다(사진 전부 못 씀).
+ *   기본값 0 은 예전과 똑같은 열쇠를 만든다.
+ */
+export function gridPairKey(row: number, col: number, section = 0): string {
+  return section === 0 ? `r${row}:c${col}` : `s${section}:r${row}:c${col}`;
 }
 
 /**
@@ -181,4 +188,45 @@ export function hasUniformSpacing(values: readonly number[], tolerance = 0.2): b
   const median = [...gaps].sort((a, b) => a - b)[Math.floor(gaps.length / 2)]!;
   if (median <= 0) return false;
   return gaps.every((gap) => Math.abs(gap - median) / median <= tolerance);
+}
+
+/**
+ * 한 줄의 사진과 이름을 **놓인 순서대로** 맞물린다.
+ *
+ * ## 왜 "같은 열"로는 안 되는가 (실물에서 확인, 2026-08-20)
+ *
+ * 나이스 엑셀은 사진을 셀에 맞춰 붙이지 않고 **절대 좌표(EMU)** 로 놓는다. 그 좌표가 어느
+ * 칸에 걸치느냐에 따라 `from.col` 이 정해지므로, 사진 칸 번호가 이름 칸 번호와 **다르다.**
+ *
+ * ```
+ * 사진 열: 1  2  5  7  11  15  18  23
+ * 이름 열: 1  3  6  8  12  16  19  24     ← 첫 칸 말고는 전부 다르다
+ * ```
+ *
+ * 그래서 "열이 같아야 짝"이라는 규칙으로는 실물 파일의 사진을 **한 장도 못 붙인다.**
+ *
+ * ## 그럼 순서만 믿어도 되나 — 아니다
+ *
+ * 순서로만 맞추면 사진이 한 장 빠지거나 로고가 끼었을 때 **전원이 한 칸씩 밀린 채**
+ * 통과한다. 이 기능의 유일한 치명 실패가 정확히 그것이다.
+ *
+ * 그래서 **자리 순서가 서로 어긋나지 않는지** 함께 본다 —
+ * `i` 번째 이름은 `i` 번째 사진보다 오른쪽에 있고, `i+1` 번째 사진보다는 왼쪽이어야 한다.
+ * 한 칸이라도 밀리면 이 조건이 깨진다.
+ *
+ * @returns 맞물릴 수 있으면 `true`
+ */
+export function rowOrderMatches(
+  photoCols: readonly number[],
+  nameCols: readonly number[],
+): boolean {
+  if (photoCols.length !== nameCols.length) return false;
+  const photos = [...photoCols].sort((a, b) => a - b);
+  const names = [...nameCols].sort((a, b) => a - b);
+  for (let i = 0; i < names.length; i++) {
+    if (names[i]! < photos[i]!) return false;
+    const nextPhoto = photos[i + 1];
+    if (nextPhoto !== undefined && names[i]! >= nextPhoto) return false;
+  }
+  return true;
 }

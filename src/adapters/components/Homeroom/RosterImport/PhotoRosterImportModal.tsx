@@ -684,7 +684,8 @@ function RosterCell({ row, broken, onBroken }: RosterCellProps) {
           <img
             src={row.photoUrl ?? undefined}
             alt={rosterRowLabel(row)}
-            className="w-full h-full object-cover"
+            // 자르지 않는다 — 사진마다 비율이 달라 cover 로 채우면 얼굴이 확대·잘려 퍼져 보인다
+            className="w-full h-full object-contain"
             onError={onBroken}
           />
         ) : (

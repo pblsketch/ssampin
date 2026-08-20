@@ -10,12 +10,20 @@
  *
  * 부수 효과로 이 경로에서 exceljs 의존이 사라져 학생용 번들 격리 걱정도 없어졌다.
  *
- * ## 왜 짝짓기가 여기서 제일 튼튼한가
+ * ## 짝짓기 — "같은 열"이 아니라 "같은 줄의 같은 순서"
  *
- * 엑셀은 사진이 **셀에 고정된 앵커**를 갖는다(실물 22장 전부 `twoCellAnchor`, 떠 있는 앵커 0개).
- * 그래서 사진과 이름이 **같은 좌표계**를 쓰고, 논리 격자로 압축할 필요 없이
- * 시트 좌표를 그대로 맞물릴 수 있다 — 사진 `(행 r, 열 c)` ↔ 이름 `(행 r+1, 같은 열 c)`.
- * 좌표를 압축하지 않으므로 사진이 몇 장 빠져도 남은 사진이 밀리지 않는다.
+ * ⚠️ 예전에는 사진 `(행 r, 열 c)` ↔ 이름 `(행 r+1, **같은 열 c**)` 로 맞물렸다.
+ * 그런데 실물을 열어 보니 **틀린 전제였다**(2026-08-20 확인). 나이스는 사진을 셀에 맞춰
+ * 붙이지 않고 **절대 좌표(EMU)** 로 놓기 때문에, 그 좌표가 어느 칸에 걸치느냐에 따라
+ * `from.col` 이 정해진다 — 이름 칸 열과 다르다.
+ *
+ * ```
+ * 사진 열: 1  2  5  7  11  15  18  23
+ * 이름 열: 1  3  6  8  12  16  19  24     ← 첫 칸 말고는 전부 다르다
+ * ```
+ *
+ * 그래서 **줄 안에서 놓인 순서**로 맞물리고, 밀림은 `rowOrderMatches` 로 막는다
+ * (i번째 이름은 i번째 사진보다 오른쪽, i+1번째 사진보다 왼쪽이어야 한다).
  *
  * ## 실물 구조 (2026-08-19 확인)
  *
@@ -28,11 +36,17 @@
  *
  * 행·열 값은 **하드코딩하지 않는다.** 28명 반이면 네 번째 줄이 생기고 양식이 바뀌면 깨진다.
  * 앵커 좌표에서 그때그때 읽어 낸다.
+ *
+ * ## 2쪽을 넘어가는 명렬표
+ *
+ * 인쇄만 2쪽이면 같은 시트에서 행 번호가 계속 커지므로 그대로 돌아간다.
+ * 그러나 **시트가 두 장으로 나뉘면 `(행, 열)` 이 처음부터 다시 시작해서** 서로 다른 학생의
+ * 사진이 같은 자리로 뭉개진다. 그래서 자리 열쇠에 시트 번호를 함께 넣는다.
  */
 
 import { unzipSync, strFromU8 } from 'fflate';
-import { gridPairKey, pairRosterPhotos } from '@domain/rules/photoRosterPairing';
-import { parseRosterNameCell } from '@domain/rules/rosterNameCell';
+import { gridPairKey, pairRosterPhotos, rowOrderMatches } from '@domain/rules/photoRosterPairing';
+import { parseRosterNameCell, type RosterNameCell } from '@domain/rules/rosterNameCell';
 import type {
   PhotoRosterParseResult,
   RosterNameCandidate,
@@ -180,30 +194,31 @@ export function parseXlsxPhotoRoster(bytes: Uint8Array): PhotoRosterParseResult 
   const sharedStrings = readSharedStrings(textOf('xl/sharedStrings.xml'));
   const names: RosterNameCandidate[] = [];
   const photos: RosterPhotoCandidate[] = [];
+  /** 사진 순서가 이름 순서와 어긋난 줄 (사진이 빠졌거나 다른 그림이 섞였다) */
+  const misalignedRows: string[] = [];
 
   const sheetPaths = Object.keys(zip)
     .filter((path) => /^xl\/worksheets\/[^/]+\.xml$/.test(path))
     .sort();
 
-  for (const sheetPath of sheetPaths) {
+  sheetPaths.forEach((sheetPath, sheetIndex) => {
     const sheetXml = textOf(sheetPath);
-    if (!sheetXml) continue;
+    if (!sheetXml) return;
 
     // ── 이름: `N번 이름` 형태의 셀만 골라낸다 (제목·학교명·머리글은 걸러진다)
+    //    사진은 이름 바로 윗줄에 놓이므로 사진 줄 번호로 묶는다
+    const nameRows = new Map<number, { col: number; cell: RosterNameCell }[]>();
     for (const cell of readSheetCells(sheetXml, sharedStrings)) {
       const parsed = parseRosterNameCell(cell.text);
       if (!parsed) continue;
-      // 이름은 사진 바로 아래 줄에 있다 → 사진 줄 기준으로 키를 만든다
-      names.push({
-        pairKey: gridPairKey(cell.row - 1, cell.col),
-        studentNumber: parsed.studentNumber,
-        name: parsed.name,
-        ...(parsed.grade !== undefined ? { grade: parsed.grade } : {}),
-        ...(parsed.classNum !== undefined ? { classNum: parsed.classNum } : {}),
-      });
+      const photoRow = cell.row - 1;
+      const bucket = nameRows.get(photoRow) ?? [];
+      bucket.push({ col: cell.col, cell: parsed });
+      nameRows.set(photoRow, bucket);
     }
 
     // ── 사진: 시트 → 그리기 → 이미지 순으로 관계를 따라간다
+    const photoRows = new Map<number, { col: number; bytes: Uint8Array; mimeType: string }[]>();
     const sheetRels = readRelationships(
       textOf(`${dirOf(sheetPath)}/_rels/${sheetPath.split('/').pop()}.rels`),
     );
@@ -222,19 +237,64 @@ export function parseXlsxPhotoRoster(bytes: Uint8Array): PhotoRosterParseResult 
         const mediaBytes = zip[mediaPath];
         if (!mediaBytes) continue;
         const extension = mediaPath.split('.').pop()?.toLowerCase() ?? '';
-        photos.push({
-          pairKey: gridPairKey(anchor.row, anchor.col),
+        const bucket = photoRows.get(anchor.row) ?? [];
+        bucket.push({
+          col: anchor.col,
           bytes: mediaBytes,
           mimeType: MIME_BY_EXTENSION[extension] ?? 'image/jpeg',
         });
+        photoRows.set(anchor.row, bucket);
       }
     }
-  }
+
+    // ── 줄마다 놓인 순서대로 맞물린다 (열 번호가 서로 달라도 된다)
+    for (const [row, rowNames] of nameRows) {
+      const sortedNames = [...rowNames].sort((a, b) => a.col - b.col);
+      const rowPhotos = [...(photoRows.get(row) ?? [])].sort((a, b) => a.col - b.col);
+
+      // 순서가 어긋나면(빠졌거나 다른 그림이 끼었으면) 그 줄은 사진 없이 이름만 살린다.
+      // 여기서 봐주면 얼굴이 한 칸씩 밀린 채 저장된다 — 이 기능의 유일한 치명 실패다.
+      const aligned = rowOrderMatches(
+        rowPhotos.map((p) => p.col),
+        sortedNames.map((n) => n.col),
+      );
+
+      sortedNames.forEach((entry, ordinal) => {
+        names.push({
+          pairKey: gridPairKey(row, ordinal, sheetIndex + 1),
+          studentNumber: entry.cell.studentNumber,
+          name: entry.cell.name,
+          ...(entry.cell.grade !== undefined ? { grade: entry.cell.grade } : {}),
+          ...(entry.cell.classNum !== undefined ? { classNum: entry.cell.classNum } : {}),
+        });
+      });
+
+      if (!aligned) {
+        // 이 줄은 사진을 버린다. 여기서 봐주면 얼굴이 한 칸씩 밀린 채 저장된다.
+        misalignedRows.push(`${row + 1}번째 줄`);
+        continue;
+      }
+      rowPhotos.forEach((photo, ordinal) => {
+        photos.push({
+          pairKey: gridPairKey(row, ordinal, sheetIndex + 1),
+          bytes: photo.bytes,
+          mimeType: photo.mimeType,
+        });
+      });
+    }
+  });
 
   return {
     format: 'xlsx',
     names,
     photos,
-    pairing: pairRosterPhotos(names, photos),
+    pairing:
+      misalignedRows.length > 0
+        ? {
+            ok: false,
+            reason: 'PHOTO_GRID_MISMATCH',
+            detail: `사진과 이름의 자리가 어긋납니다 (${misalignedRows.join(', ')}) — 사진이 빠졌거나 다른 그림이 섞였을 수 있음`,
+          }
+        : pairRosterPhotos(names, photos),
   };
 }

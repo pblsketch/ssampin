@@ -190,7 +190,9 @@ describe('parsePhotoRosterFile — .xlsx', () => {
     if (!outcome.ok) return;
     expect(outcome.result.pairing.ok).toBe(false);
     if (outcome.result.pairing.ok) return;
-    expect(outcome.result.pairing.reason).toBe('PHOTO_COUNT_MISMATCH');
+    // 실물은 사진 열과 이름 열이 달라 "줄 안의 순서"로 맞물린다.
+    // 한 장이 빠지면 그 줄 전체가 밀리므로 줄 단위로 포기한다.
+    expect(outcome.result.pairing.reason).toBe('PHOTO_GRID_MISMATCH');
     // ★ 이름은 그대로 남아 있어야 한다 — 사진만 포기하고 보정 화면으로 넘어간다
     expect(outcome.result.names).toHaveLength(4);
   });
@@ -201,10 +203,12 @@ describe('parsePhotoRosterFile — .xlsx', () => {
     );
     expect(outcome.ok).toBe(true);
     if (!outcome.ok) return;
-    expect(outcome.result.photos).toHaveLength(outcome.result.names.length);
+    // ★ 개수가 같아도(로고 1장 + 사진 1장 누락) 통과시키면 얼굴이 한 칸씩 밀린다
     expect(outcome.result.pairing.ok).toBe(false);
     if (outcome.result.pairing.ok) return;
-    expect(outcome.result.pairing.reason).toBe('PHOTO_ANCHOR_MISMATCH');
+    expect(outcome.result.pairing.reason).toBe('PHOTO_GRID_MISMATCH');
+    // 이름은 살아 있어야 한다
+    expect(outcome.result.names).toHaveLength(4);
   });
 });
 
