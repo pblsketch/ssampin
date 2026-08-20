@@ -190,60 +190,53 @@ export function WidgetTab({ draft, patch }: Props) {
               </button>
             </div>
           )}
-          {/* 아이콘 모드 승격 카드 (v2.2.7) — 기존에는 '창 닫기 동작' 옵션 안에만 숨어
-              있어 사용자가 "화면 모드"로 인지할 수 없었다. 표시 모드 섹션에서 함께 소개. */}
-          <div
-            className="mt-3 px-3 py-2.5 rounded-lg bg-sp-surface/50 border border-sp-border"
-            data-testid="settings-icon-mode-card"
-          >
-            <div className="flex items-start gap-3">
+          {/*
+            아이콘 모드 "승격 카드"(v2.2.7)가 여기 있었는데 없앴다.
+
+            그 카드는 아이콘 모드가 '창 닫기 동작' 안에만 숨어 있던 시절, 새 기능을
+            알리려고 둔 자리다. 이제 아래 '창 닫기 동작'과 '앱 시작 시 모습' 양쪽에
+            정식 항목으로 들어가 있어 따로 소개할 자리가 필요 없다. NEW 배지도 함께
+            뗐다 — 몇 번의 업데이트를 지난 기능에 계속 붙어 있으면 배지가 "새것"이
+            아니라 "장식"이 된다.
+
+            기능인 '지금 접기' 버튼만 평범한 바로가기로 남긴다.
+          */}
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                void window.electronAPI?.iconShow();
+              }}
+              className="text-xs text-sp-accent hover:text-sp-accent/80 underline-offset-2 hover:underline"
+              data-testid="settings-icon-mode-try"
+            >
               <span
-                className="material-symbols-outlined text-sp-accent mt-0.5"
-                style={{ fontSize: 20 }}
+                className="material-symbols-outlined align-middle mr-1"
+                style={{ fontSize: 14 }}
               >
                 push_pin
               </span>
-              <div className="flex-1">
-                <span className="text-xs font-medium text-sp-text">
-                  아이콘 모드 — 핀 캐릭터 {PIN_NAME}
-                  <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 text-[10px] font-semibold">
-                    NEW
-                  </span>
-                </span>
-                <p className="text-caption text-sp-muted mt-0.5 leading-relaxed">
-                  화면 위에 떠 있는 작은 핀 캐릭터가 수업 시작 전·급식·할 일 마감을 말풍선으로 먼저
-                  알려줍니다. 핀을 클릭하면 오늘 요약(수업·할 일·빠른 추가)이 그 자리에서 열려요.
-                  아래 &lsquo;창 닫기 동작&rsquo;을 &lsquo;아이콘 모드로 접기&rsquo;로 두면 X 버튼
-                  한 번으로 접힙니다.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    void window.electronAPI?.iconShow();
-                  }}
-                  className="mt-1.5 px-2.5 py-1 rounded-lg bg-sp-accent text-white text-xs font-medium hover:opacity-90 transition-opacity"
-                  data-testid="settings-icon-mode-try"
-                >
-                  지금 아이콘 모드로 접기
-                </button>
-              </div>
-            </div>
+              지금 아이콘 모드로 접기
+            </button>
+            {/* 모드 가이드 다시 보기 — settings.widget.modeTour.shown=false reset → 다음 위젯 모드 진입에서 표시 */}
+            <button
+              type="button"
+              className="text-xs text-sp-accent hover:text-sp-accent/80 underline-offset-2 hover:underline"
+              onClick={() => {
+                void coachTour.reset();
+                showToast('모드 가이드가 다음 위젯 모드 진입 시 다시 표시됩니다.', 'success');
+              }}
+              data-testid="settings-mode-tour-reset"
+            >
+              <span
+                className="material-symbols-outlined align-middle mr-1"
+                style={{ fontSize: 14 }}
+              >
+                help
+              </span>
+              모드 가이드 다시 보기
+            </button>
           </div>
-          {/* 모드 가이드 다시 보기 — settings.widget.modeTour.shown=false reset → 다음 위젯 모드 진입에서 표시 */}
-          <button
-            type="button"
-            className="mt-2 text-xs text-sp-accent hover:text-sp-accent/80 underline-offset-2 hover:underline"
-            onClick={() => {
-              void coachTour.reset();
-              showToast('모드 가이드가 다음 위젯 모드 진입 시 다시 표시됩니다.', 'success');
-            }}
-            data-testid="settings-mode-tour-reset"
-          >
-            <span className="material-symbols-outlined align-middle mr-1" style={{ fontSize: 14 }}>
-              help
-            </span>
-            모드 가이드 다시 보기
-          </button>
         </div>
 
         {/*
@@ -317,7 +310,7 @@ export function WidgetTab({ draft, patch }: Props) {
             {
               value: 'icon' as const,
               label: '아이콘 모드로 접기',
-              desc: '화면에 떠 있는 작은 아이콘으로 접습니다 (NEW)',
+              desc: '화면에 떠 있는 작은 아이콘으로 접습니다',
             },
             { value: 'tray' as const, label: '트레이로 최소화', desc: '시스템 트레이로 숨깁니다' },
             {
@@ -364,6 +357,11 @@ export function WidgetTab({ draft, patch }: Props) {
               value: 'sidePin' as const,
               label: '옆핀',
               desc: '화면 오른쪽 가장자리에 접힌 채로 시작합니다 (마우스를 올리면 펼쳐집니다)',
+            },
+            {
+              value: 'icon' as const,
+              label: '아이콘 모드',
+              desc: `화면에 떠 있는 작은 핀 캐릭터 ${PIN_NAME}로 접힌 채로 시작합니다`,
             },
           ].map((opt) => (
             <label

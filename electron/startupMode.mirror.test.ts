@@ -45,7 +45,10 @@ describe('앱 시작 모습 — 도메인과 electron 미러', () => {
 
   test('main.ts가 기본값 아닌 모습을 실제로 처리한다 — 목록에만 있으면 조용히 전체 화면이 된다', () => {
     const src = readFileSync(MAIN_TS, 'utf-8');
-    for (const mode of ['widget', 'sidePin']) {
+    // 'main'은 아무것도 접지 않는 기본 경로라 분기가 없다. 나머지는 전부 있어야 한다.
+    const needsBranch = readDomainStartupModes().filter((mode) => mode !== 'main');
+    expect(needsBranch.length).toBeGreaterThan(0);
+    for (const mode of needsBranch) {
       expect(src).toContain(`widgetOptions.startupMode === '${mode}'`);
     }
   });

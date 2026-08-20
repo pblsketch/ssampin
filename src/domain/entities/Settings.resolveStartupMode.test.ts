@@ -30,8 +30,15 @@ describe('resolveStartupMode', () => {
   });
 
   it('모르는 값은 전체 화면으로 떨어진다 — 다만 legacy 가 켜져 있으면 그쪽을 존중한다', () => {
-    expect(resolveStartupMode({ startupMode: 'icon' })).toBe('main');
-    expect(resolveStartupMode({ startupMode: 'icon', transparent: true })).toBe('widget');
+    // 미래 버전에서 저장한 값이나 손으로 고친 설정 파일이 여기로 온다.
+    expect(resolveStartupMode({ startupMode: 'hologram' })).toBe('main');
+    expect(resolveStartupMode({ startupMode: 'hologram', transparent: true })).toBe('widget');
+    expect(resolveStartupMode({ startupMode: 42 })).toBe('main');
+  });
+
+  it('아이콘 모드도 정식 값이다 — 예전에는 목록에 없어 전체 화면으로 떨어졌다', () => {
+    expect(resolveStartupMode({ startupMode: 'icon' })).toBe('icon');
+    expect(resolveStartupMode({ startupMode: 'icon', transparent: true })).toBe('icon');
   });
 
   it('새 값이 있으면 legacy 보다 우선한다 — 옆핀을 골랐는데 위젯으로 뜨면 안 된다', () => {
