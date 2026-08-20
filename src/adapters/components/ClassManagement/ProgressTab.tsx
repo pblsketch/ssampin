@@ -17,6 +17,7 @@ import { getMatchingPeriods as getMatchingPeriodsRule } from '@domain/rules/prog
 import { TermEndPromptModal } from '@adapters/components/SchoolYearWizard/TermEndPromptModal';
 import { LessonCountSummary } from '@adapters/components/Progress/LessonCountSummary';
 import { ExcludedDaysPanel } from '@adapters/components/Progress/ExcludedDaysPanel';
+import { ProgressBulkDeleteConfirm } from '@adapters/components/Progress/ProgressBulkDeleteConfirm';
 import {
   PlannedBulkFillModal,
   type BulkFillTarget,
@@ -122,10 +123,15 @@ export function ProgressTab({ classId }: ProgressTabProps) {
   const [importDateShiftDays, setImportDateShiftDays] = useState(0);
   const [showLessonCountDetails, setShowLessonCountDetails] = useState(false);
   const [showBulkFill, setShowBulkFill] = useState(false);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
+  const [showBulkDelete, setShowBulkDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   /** 학기 총 차시 추정 — 계산은 전부 도메인이 하고 여기서는 결과만 받는다. */
   const lessonCountView = useLessonCountEstimate(classId);
   const setLessonDayAdjustment = useTeachingClassStore((s) => s.setLessonDayAdjustment);
+  const deleteProgressEntries = useTeachingClassStore((s) => s.deleteProgressEntries);
 
   const handleLessonDayAdjust = useCallback(
     (date: string, kind: 'hasLesson' | 'noLesson' | null) => {
@@ -269,6 +275,52 @@ export function ProgressTab({ classId }: ProgressTabProps) {
       .filter((d) => d.date <= today && !recorded.has(d.date))
       .map((d) => d.date);
   }, [lessonCountView, entries]);
+
+  /* ── 여러 건 선택해서 지우기 ── */
+
+  const selectedEntries = useMemo(
+    () => entries.filter((e) => selectedIds.has(e.id)),
+    [entries, selectedIds],
+  );
+
+  const toggleSelected = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  /** 그 날짜의 항목을 한 번에 켜고 끈다 — 이미 다 켜져 있으면 끈다. */
+  const toggleGroupSelected = useCallback((dateIds: readonly string[]) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      const allOn = dateIds.every((id) => next.has(id));
+      for (const id of dateIds) {
+        if (allOn) next.delete(id);
+        else next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
+  const exitSelection = useCallback(() => {
+    setSelectionMode(false);
+    setSelectedIds(new Set());
+  }, []);
+
+  const handleBulkDelete = useCallback(async () => {
+    setDeleting(true);
+    try {
+      const removed = await deleteProgressEntries([...selectedIds]);
+      showToast(`진도 ${removed}건을 지웠어요`);
+      setShowBulkDelete(false);
+      exitSelection();
+    } finally {
+      setDeleting(false);
+    }
+  }, [deleteProgressEntries, selectedIds, showToast, exitSelection]);
 
   /**
    * 일괄 생성 — 기존 '가져오기'와 같은 방식으로 한 건씩 만든다.
@@ -634,6 +686,21 @@ export function ProgressTab({ classId }: ProgressTabProps) {
           </div>
         </div>
         <ScrollRow className="gap-2 shrink-0">
+          {entries.length > 0 && (
+            <button
+              onClick={() => (selectionMode ? exitSelection() : setSelectionMode(true))}
+              className={`flex items-center gap-1.5 px-3 py-1.5 border rounded-lg
+                         transition-colors text-sm font-medium whitespace-nowrap ${
+                           selectionMode
+                             ? 'bg-sp-accent border-sp-accent text-sp-accent-fg'
+                             : 'bg-sp-surface border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/50'
+                         }`}
+              title="여러 건을 골라 한 번에 지웁니다"
+            >
+              <span className="material-symbols-outlined text-lg">checklist</span>
+              {selectionMode ? '선택 끝내기' : '선택해서 삭제'}
+            </button>
+          )}
           {lessonCountView.status === 'ok' && (
             <button
               onClick={() => setShowBulkFill(true)}
@@ -753,6 +820,46 @@ export function ProgressTab({ classId }: ProgressTabProps) {
         </div>
       )}
 
+      {selectionMode && (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-sp-accent bg-sp-surface px-4 py-2.5">
+          <span className="text-sm text-sp-text">
+            <b className="font-semibold tabular-nums">{selectedIds.size}</b>건 선택
+          </span>
+          <button
+            type="button"
+            onClick={() => setSelectedIds(new Set(entries.map((e) => e.id)))}
+            className="rounded-lg border border-sp-border px-2.5 py-1 text-xs font-sp-medium text-sp-muted transition-all duration-sp-base ease-sp-out hover:text-sp-text active:scale-95"
+          >
+            전체 선택 ({entries.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelectedIds(new Set())}
+            disabled={selectedIds.size === 0}
+            className="rounded-lg border border-sp-border px-2.5 py-1 text-xs font-sp-medium text-sp-muted transition-all duration-sp-base ease-sp-out hover:text-sp-text active:scale-95 disabled:opacity-40"
+          >
+            선택 해제
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowBulkDelete(true)}
+            disabled={selectedIds.size === 0}
+            className="ml-auto rounded-lg bg-red-500 px-3 py-1.5 text-xs font-semibold text-white transition-all duration-sp-base ease-sp-out hover:brightness-110 active:scale-95 disabled:opacity-40"
+          >
+            선택한 {selectedIds.size}건 지우기
+          </button>
+        </div>
+      )}
+
+      {showBulkDelete && (
+        <ProgressBulkDeleteConfirm
+          entries={selectedEntries}
+          busy={deleting}
+          onCancel={() => setShowBulkDelete(false)}
+          onConfirm={() => void handleBulkDelete()}
+        />
+      )}
+
       {/* ── 진도 목록 ── */}
       {entries.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-sp-muted">
@@ -767,6 +874,16 @@ export function ProgressTab({ classId }: ProgressTabProps) {
           {groupedEntries.map((group, gi) => (
             <div key={group.date} className="space-y-1.5">
               <div className={`flex items-center gap-2 pb-1 ${gi > 0 ? 'pt-3' : ''}`}>
+                {selectionMode && (
+                  <button
+                    type="button"
+                    onClick={() => toggleGroupSelected(group.items.map((e) => e.id))}
+                    aria-label={`${group.date} 전체 선택`}
+                    className="rounded-lg border border-sp-border px-1.5 py-0.5 text-[11px] text-sp-muted transition-all duration-sp-base ease-sp-out hover:text-sp-text active:scale-95"
+                  >
+                    {group.items.every((e) => selectedIds.has(e.id)) ? '이 날 해제' : '이 날 전체'}
+                  </button>
+                )}
                 <span className="text-xs font-medium text-sp-muted">
                   {group.date} ({getDayLabel(group.date)})
                 </span>
@@ -872,6 +989,15 @@ export function ProgressTab({ classId }: ProgressTabProps) {
                   ) : (
                     /* ── 표시 모드 ── */
                     <div className="flex items-center gap-3">
+                      {selectionMode && (
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(entry.id)}
+                          onChange={() => toggleSelected(entry.id)}
+                          aria-label={`${entry.date} ${resolvePeriodLabel(entry.period, settings.periodTimes)} 선택`}
+                          className="shrink-0 h-4 w-4 accent-sp-accent"
+                        />
+                      )}
                       {/* 교시 */}
                       <div className="text-xs text-sp-muted shrink-0 w-14">
                         <span>{resolvePeriodLabel(entry.period, settings.periodTimes)}</span>

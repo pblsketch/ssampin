@@ -107,6 +107,11 @@ interface TeachingClassState {
   updateProgressEntry: (entry: ProgressEntry) => Promise<void>;
   deleteProgressEntry: (id: string) => Promise<void>;
   /**
+   * 여러 진도를 한 번에 지운다. 파일 쓰기도 한 번뿐이다 —
+   * 하나씩 지우면 35건에 35번 읽고 쓰게 되고, 중간에 실패하면 절반만 지워진 상태가 남는다.
+   */
+  deleteProgressEntries: (ids: readonly string[]) => Promise<number>;
+  /**
    * 그날 수업 여부를 사용자가 직접 정한다. `kind`가 null이면 정정을 지우고 앱 판정으로 되돌린다.
    */
   setLessonDayAdjustment: (
@@ -510,6 +515,20 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
         progressEntries: state.progressEntries.map((e) => (e.id === entry.id ? entry : e)),
       }));
       await manageProgress.update(entry);
+    },
+
+    deleteProgressEntries: async (ids) => {
+      const targets = new Set(ids);
+      if (targets.size === 0) return 0;
+      const remaining = get().progressEntries.filter((e) => !targets.has(e.id));
+      const removed = get().progressEntries.length - remaining.length;
+      if (removed === 0) return 0;
+
+      // force는 "정말 비우려는 것"일 때만 켠다. 빈 배열 덮어쓰기 차단은 버그로 목록이
+      // 통째로 비는 사고를 막는 그물이라, 의도가 확실할 때만 통과시킨다.
+      await manageProgress.saveAll(remaining, remaining.length === 0);
+      set({ progressEntries: remaining });
+      return removed;
     },
 
     setLessonDayAdjustment: async (classId, date, kind) => {
