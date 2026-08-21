@@ -13,7 +13,11 @@
  *       API 키는 어디에도 출력하지 않는다.
  */
 
-const BASE_URL = 'https://opencode.ai/zen/v1';
+// 공급자 비교를 위해 엔드포인트를 갈아끼울 수 있다. 기본값은 원래대로 Zen.
+//   LLM_BASE_URL=https://api.upstage.ai/v1  LLM_KEY_NAME=UPSTAGE_API_KEY
+const BASE_URL = process.env.LLM_BASE_URL || 'https://opencode.ai/zen/v1';
+const KEY_NAME = process.env.LLM_KEY_NAME || 'ZEN_API_KEY|OPENCODE_API_KEY';
+const OUT_TAG = process.env.LLM_OUT_TAG || '';
 
 import { readFileSync } from 'node:fs';
 
@@ -22,7 +26,7 @@ function readKeyFromEnvFile() {
   try {
     const text = readFileSync(new URL('../../.env', import.meta.url), 'utf8');
     for (const line of text.split(/\r?\n/)) {
-      const m = line.match(/^\s*(ZEN_API_KEY|OPENCODE_API_KEY)\s*=\s*(.+)\s*$/);
+      const m = line.match(new RegExp(`^\\s*(${KEY_NAME})\\s*=\\s*(.+)\\s*$`));
       if (m) return m[2].trim().replace(/^["']|["']$/g, '');
     }
   } catch {
@@ -30,7 +34,11 @@ function readKeyFromEnvFile() {
   }
   return null;
 }
-const API_KEY = process.env.ZEN_API_KEY || process.env.OPENCODE_API_KEY || readKeyFromEnvFile();
+const API_KEY =
+  process.env.LLM_API_KEY ||
+  process.env.ZEN_API_KEY ||
+  process.env.OPENCODE_API_KEY ||
+  readKeyFromEnvFile();
 
 const args = process.argv.slice(2);
 const readFlag = (name, fallback) => {
@@ -510,7 +518,9 @@ async function main() {
   console.log(`요청 간격: ${DELAY_MS}ms\n`);
 
   // 사전 확인 — 모델 목록에 대상이 실제로 있는가 (키 불필요)
-  const listRes = await fetch(`${BASE_URL}/models`);
+  const listRes = await fetch(`${BASE_URL}/models`, {
+    headers: { Authorization: `Bearer ${API_KEY}` },
+  });
   const list = await listRes.json();
   const available = new Set((list.data || []).map((m) => m.id));
   for (const m of MODELS) {
@@ -580,7 +590,7 @@ async function main() {
   const fs = await import('node:fs/promises');
   const outDir = 'docs/03-analysis/opencode-zen-phase0';
   await fs.mkdir(outDir, { recursive: true });
-  const outPath = `${outDir}/measure-1-function-calling.json`;
+  const outPath = `${outDir}/measure-1-function-calling${OUT_TAG}.json`;
   await fs.writeFile(outPath, JSON.stringify(report, null, 2), 'utf8');
   console.log(`\n원자료 저장: ${outPath}`);
 }

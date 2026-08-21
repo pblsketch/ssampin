@@ -1,0 +1,805 @@
+{
+  "measuredAt": "2026-08-20T10:49:42.158Z",
+  "baseUrl": "https://api.upstage.ai/v1",
+  "models": {
+    "solar-pro3": {
+      "toolsAccepted": {
+        "accepted": true,
+        "status": 200,
+        "hasToolCallField": true,
+        "finishReason": "tool_calls",
+        "elapsedMs": 660,
+        "rateHeaders": {
+          "x-upstage-ratelimit-interval-requests": "minute",
+          "x-upstage-ratelimit-interval-tokens": "minute",
+          "x-upstage-ratelimit-limit-requests": "100",
+          "x-upstage-ratelimit-limit-tokens": "250000",
+          "x-upstage-ratelimit-remaining-requests": "98",
+          "x-upstage-ratelimit-remaining-tokens": "249998",
+          "x-upstage-ratelimit-reset-requests": "1787222982",
+          "x-upstage-ratelimit-reset-tokens": "1787222981"
+        }
+      },
+      "queries": [
+        {
+          "query": "오늘 3학년 2반 출결 어때요?",
+          "expected": "get_attendance_summary",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [
+            {
+              "name": "get_attendance_summary",
+              "args": {
+                "date": "today",
+                "className": "3학년 2반"
+              },
+              "rawArgs": "{\"date\": \"today\", \"className\": \"3\\ud559\\ub144 2\\ubc18\"}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            }
+          ],
+          "chosen": "get_attendance_summary",
+          "callCount": 1,
+          "selectionCorrect": true,
+          "inventedTool": false,
+          "schemaPass": true,
+          "elapsedMs": 675,
+          "rateHeaders": {
+            "x-upstage-ratelimit-interval-requests": "minute",
+            "x-upstage-ratelimit-interval-tokens": "minute",
+            "x-upstage-ratelimit-limit-requests": "100",
+            "x-upstage-ratelimit-limit-tokens": "250000",
+            "x-upstage-ratelimit-remaining-requests": "98",
+            "x-upstage-ratelimit-remaining-tokens": "249998",
+            "x-upstage-ratelimit-reset-requests": "1787222983",
+            "x-upstage-ratelimit-reset-tokens": "1787222983"
+          }
+        },
+        {
+          "query": "어제 1학년 4반 결석 몇 명이었죠?",
+          "expected": "get_attendance_summary",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [
+            {
+              "name": "get_attendance_summary",
+              "args": {
+                "className": "1학년 4반",
+                "date": "2025-08-19"
+              },
+              "rawArgs": "{\"className\": \"1\\ud559\\ub144 4\\ubc18\", \"date\": \"2025-08-19\"}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            }
+          ],
+          "chosen": "get_attendance_summary",
+          "callCount": 1,
+          "selectionCorrect": true,
+          "inventedTool": false,
+          "schemaPass": true,
+          "elapsedMs": 719,
+          "rateHeaders": {
+            "x-upstage-ratelimit-interval-requests": "minute",
+            "x-upstage-ratelimit-interval-tokens": "minute",
+            "x-upstage-ratelimit-limit-requests": "100",
+            "x-upstage-ratelimit-limit-tokens": "250000",
+            "x-upstage-ratelimit-remaining-requests": "98",
+            "x-upstage-ratelimit-remaining-tokens": "249998",
+            "x-upstage-ratelimit-reset-requests": "1787222985",
+            "x-upstage-ratelimit-reset-tokens": "1787222984"
+          }
+        },
+        {
+          "query": "3학년 2반 오늘 지각한 사람 몇 명인가요?",
+          "expected": "get_attendance_summary",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [
+            {
+              "name": "get_attendance_summary",
+              "args": {
+                "date": "today",
+                "className": "3학년 2반"
+              },
+              "rawArgs": "{\"date\": \"today\", \"className\": \"3\\ud559\\ub144 2\\ubc18\"}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            }
+          ],
+          "chosen": "get_attendance_summary",
+          "callCount": 1,
+          "selectionCorrect": true,
+          "inventedTool": false,
+          "schemaPass": true,
+          "elapsedMs": 593,
+          "rateHeaders": {
+            "x-upstage-ratelimit-interval-requests": "minute",
+            "x-upstage-ratelimit-interval-tokens": "minute",
+            "x-upstage-ratelimit-limit-requests": "100",
+            "x-upstage-ratelimit-limit-tokens": "250000",
+            "x-upstage-ratelimit-remaining-requests": "98",
+            "x-upstage-ratelimit-remaining-tokens": "249998",
+            "x-upstage-ratelimit-reset-requests": "1787222987",
+            "x-upstage-ratelimit-reset-tokens": "1787222986"
+          }
+        },
+        {
+          "query": "지난주 2학년 1반 출결 요약해 주세요.",
+          "expected": "get_attendance_summary",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [
+            {
+              "name": "get_attendance_summary",
+              "args": {
+                "date": "2026-08-14",
+                "className": "2학년 1반"
+              },
+              "rawArgs": "{\"date\": \"2026-08-14\", \"className\": \"2\\ud559\\ub144 1\\ubc18\"}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            }
+          ],
+          "chosen": "get_attendance_summary",
+          "callCount": 1,
+          "selectionCorrect": true,
+          "inventedTool": false,
+          "schemaPass": true,
+          "elapsedMs": 653,
+          "rateHeaders": {
+            "x-upstage-ratelimit-interval-requests": "minute",
+            "x-upstage-ratelimit-interval-tokens": "minute",
+            "x-upstage-ratelimit-limit-requests": "100",
+            "x-upstage-ratelimit-limit-tokens": "250000",
+            "x-upstage-ratelimit-remaining-requests": "98",
+            "x-upstage-ratelimit-remaining-tokens": "249998",
+            "x-upstage-ratelimit-reset-requests": "1787222988",
+            "x-upstage-ratelimit-reset-tokens": "1787222987"
+          }
+        },
+        {
+          "query": "3학년 2반 몇 명이죠?",
+          "expected": "count_students",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [
+            {
+              "name": "count_students",
+              "args": {
+                "className": "3학년 2반"
+              },
+              "rawArgs": "{\"className\": \"3\\ud559\\ub144 2\\ubc18\"}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            }
+          ],
+          "chosen": "count_students",
+          "callCount": 1,
+          "selectionCorrect": true,
+          "inventedTool": false,
+          "schemaPass": true,
+          "elapsedMs": 600,
+          "rateHeaders": {
+            "x-upstage-ratelimit-interval-requests": "minute",
+            "x-upstage-ratelimit-interval-tokens": "minute",
+            "x-upstage-ratelimit-limit-requests": "100",
+            "x-upstage-ratelimit-limit-tokens": "250000",
+            "x-upstage-ratelimit-remaining-requests": "98",
+            "x-upstage-ratelimit-remaining-tokens": "249998",
+            "x-upstage-ratelimit-reset-requests": "1787222989",
+            "x-upstage-ratelimit-reset-tokens": "1787222989"
+          }
+        },
+        {
+          "query": "우리 반 학생 수 알려주세요.",
+          "expected": "count_students",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [
+            {
+              "name": "count_students",
+              "args": {
+                "className": "3학년 2반"
+              },
+              "rawArgs": "{\"className\": \"3\\ud559\\ub144 2\\ubc18\"}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            }
+          ],
+          "chosen": "count_students",
+          "callCount": 1,
+          "selectionCorrect": true,
+          "inventedTool": false,
+          "schemaPass": true,
+          "elapsedMs": 548,
+          "rateHeaders": {
+            "x-upstage-ratelimit-interval-requests": "minute",
+            "x-upstage-ratelimit-interval-tokens": "minute",
+            "x-upstage-ratelimit-limit-requests": "100",
+            "x-upstage-ratelimit-limit-tokens": "250000",
+            "x-upstage-ratelimit-remaining-requests": "98",
+            "x-upstage-ratelimit-remaining-tokens": "249998",
+            "x-upstage-ratelimit-reset-requests": "1787222991",
+            "x-upstage-ratelimit-reset-tokens": "1787222990"
+          }
+        },
+        {
+          "query": "1학년 4반 인원이 몇 명인지 알고 싶어요.",
+          "expected": "count_students",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [
+            {
+              "name": "count_students",
+              "args": {
+                "className": "1학년 4반"
+              },
+              "rawArgs": "{\"className\": \"1\\ud559\\ub144 4\\ubc18\"}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            }
+          ],
+          "chosen": "count_students",
+          "callCount": 1,
+          "selectionCorrect": true,
+          "inventedTool": false,
+          "schemaPass": true,
+          "elapsedMs": 544,
+          "rateHeaders": {
+            "x-upstage-ratelimit-interval-requests": "minute",
+            "x-upstage-ratelimit-interval-tokens": "minute",
+            "x-upstage-ratelimit-limit-requests": "100",
+            "x-upstage-ratelimit-limit-tokens": "250000",
+            "x-upstage-ratelimit-remaining-requests": "98",
+            "x-upstage-ratelimit-remaining-tokens": "249998",
+            "x-upstage-ratelimit-reset-requests": "1787222992",
+            "x-upstage-ratelimit-reset-tokens": "1787222992"
+          }
+        },
+        {
+          "query": "제가 맡은 학급 목록 보여주세요.",
+          "expected": "list_classes",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [
+            {
+              "name": "list_classes",
+              "args": {},
+              "rawArgs": "{}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            }
+          ],
+          "chosen": "list_classes",
+          "callCount": 1,
+          "selectionCorrect": true,
+          "inventedTool": false,
+          "schemaPass": true,
+          "elapsedMs": 469,
+          "rateHeaders": {
+            "x-upstage-ratelimit-interval-requests": "minute",
+            "x-upstage-ratelimit-interval-tokens": "minute",
+            "x-upstage-ratelimit-limit-requests": "100",
+            "x-upstage-ratelimit-limit-tokens": "250000",
+            "x-upstage-ratelimit-remaining-requests": "98",
+            "x-upstage-ratelimit-remaining-tokens": "249998",
+            "x-upstage-ratelimit-reset-requests": "1787222993",
+            "x-upstage-ratelimit-reset-tokens": "1787222993"
+          }
+        },
+        {
+          "query": "담당하는 반이 뭐뭐 있죠?",
+          "expected": "list_classes",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [
+            {
+              "name": "list_classes",
+              "args": {},
+              "rawArgs": "{}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            }
+          ],
+          "chosen": "list_classes",
+          "callCount": 1,
+          "selectionCorrect": true,
+          "inventedTool": false,
+          "schemaPass": true,
+          "elapsedMs": 488,
+          "rateHeaders": {
+            "x-upstage-ratelimit-interval-requests": "minute",
+            "x-upstage-ratelimit-interval-tokens": "minute",
+            "x-upstage-ratelimit-limit-requests": "100",
+            "x-upstage-ratelimit-limit-tokens": "250000",
+            "x-upstage-ratelimit-remaining-requests": "98",
+            "x-upstage-ratelimit-remaining-tokens": "249998",
+            "x-upstage-ratelimit-reset-requests": "1787222995",
+            "x-upstage-ratelimit-reset-tokens": "1787222994"
+          }
+        },
+        {
+          "query": "이번 달 3학년 2반 기록 몇 건 썼나요?",
+          "expected": "get_records_stats",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [
+            {
+              "name": "get_records_stats",
+              "args": {
+                "className": "3학년 2반",
+                "period": "this_month"
+              },
+              "rawArgs": "{\"className\": \"3\\ud559\\ub144 2\\ubc18\", \"period\": \"this_month\"}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            }
+          ],
+          "chosen": "get_records_stats",
+          "callCount": 1,
+          "selectionCorrect": true,
+          "inventedTool": false,
+          "schemaPass": true,
+          "elapsedMs": 577,
+          "rateHeaders": {
+            "x-upstage-ratelimit-interval-requests": "minute",
+            "x-upstage-ratelimit-interval-tokens": "minute",
+            "x-upstage-ratelimit-limit-requests": "100",
+            "x-upstage-ratelimit-limit-tokens": "250000",
+            "x-upstage-ratelimit-remaining-requests": "98",
+            "x-upstage-ratelimit-remaining-tokens": "249998",
+            "x-upstage-ratelimit-reset-requests": "1787222996",
+            "x-upstage-ratelimit-reset-tokens": "1787222995"
+          }
+        },
+        {
+          "query": "2학년 5반 이번 달 관찰 기록 카테고리 분포 알려주세요.",
+          "expected": "get_records_stats",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [
+            {
+              "name": "get_records_stats",
+              "args": {
+                "className": "2학년 5반",
+                "period": "this_month"
+              },
+              "rawArgs": "{\"className\": \"2\\ud559\\ub144 5\\ubc18\", \"period\": \"this_month\"}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            }
+          ],
+          "chosen": "get_records_stats",
+          "callCount": 1,
+          "selectionCorrect": true,
+          "inventedTool": false,
+          "schemaPass": true,
+          "elapsedMs": 598,
+          "rateHeaders": {
+            "x-upstage-ratelimit-interval-requests": "minute",
+            "x-upstage-ratelimit-interval-tokens": "minute",
+            "x-upstage-ratelimit-limit-requests": "100",
+            "x-upstage-ratelimit-limit-tokens": "250000",
+            "x-upstage-ratelimit-remaining-requests": "98",
+            "x-upstage-ratelimit-remaining-tokens": "249998",
+            "x-upstage-ratelimit-reset-requests": "1787222997",
+            "x-upstage-ratelimit-reset-tokens": "1787222997"
+          }
+        },
+        {
+          "query": "이번 학기 1학년 4반 기록 통계 좀 볼까요?",
+          "expected": "get_records_stats",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [
+            {
+              "name": "get_records_stats",
+              "args": {
+                "className": "1학년 4반",
+                "period": "this_semester"
+              },
+              "rawArgs": "{\"className\": \"1\\ud559\\ub144 4\\ubc18\", \"period\": \"this_semester\"}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            }
+          ],
+          "chosen": "get_records_stats",
+          "callCount": 1,
+          "selectionCorrect": true,
+          "inventedTool": false,
+          "schemaPass": true,
+          "elapsedMs": 599,
+          "rateHeaders": {
+            "x-upstage-ratelimit-interval-requests": "minute",
+            "x-upstage-ratelimit-interval-tokens": "minute",
+            "x-upstage-ratelimit-limit-requests": "100",
+            "x-upstage-ratelimit-limit-tokens": "250000",
+            "x-upstage-ratelimit-remaining-requests": "98",
+            "x-upstage-ratelimit-remaining-tokens": "249998",
+            "x-upstage-ratelimit-reset-requests": "1787222999",
+            "x-upstage-ratelimit-reset-tokens": "1787222998"
+          }
+        },
+        {
+          "query": "오늘 할 일 뭐 있나요?",
+          "expected": "get_my_todos",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [
+            {
+              "name": "get_my_todos",
+              "args": {
+                "dueWithinDays": 0
+              },
+              "rawArgs": "{\"dueWithinDays\": 0}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            }
+          ],
+          "chosen": "get_my_todos",
+          "callCount": 1,
+          "selectionCorrect": true,
+          "inventedTool": false,
+          "schemaPass": true,
+          "elapsedMs": 618,
+          "rateHeaders": {
+            "x-upstage-ratelimit-interval-requests": "minute",
+            "x-upstage-ratelimit-interval-tokens": "minute",
+            "x-upstage-ratelimit-limit-requests": "100",
+            "x-upstage-ratelimit-limit-tokens": "250000",
+            "x-upstage-ratelimit-remaining-requests": "98",
+            "x-upstage-ratelimit-remaining-tokens": "249998",
+            "x-upstage-ratelimit-reset-requests": "1787223000",
+            "x-upstage-ratelimit-reset-tokens": "1787223000"
+          }
+        },
+        {
+          "query": "이번 주 마감인 업무 알려주세요.",
+          "expected": "get_my_todos",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [
+            {
+              "name": "get_my_todos",
+              "args": {
+                "dueWithinDays": 7
+              },
+              "rawArgs": "{\"dueWithinDays\": 7}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            }
+          ],
+          "chosen": "get_my_todos",
+          "callCount": 1,
+          "selectionCorrect": true,
+          "inventedTool": false,
+          "schemaPass": true,
+          "elapsedMs": 605,
+          "rateHeaders": {
+            "x-upstage-ratelimit-interval-requests": "minute",
+            "x-upstage-ratelimit-interval-tokens": "minute",
+            "x-upstage-ratelimit-limit-requests": "100",
+            "x-upstage-ratelimit-limit-tokens": "250000",
+            "x-upstage-ratelimit-remaining-requests": "98",
+            "x-upstage-ratelimit-remaining-tokens": "249998",
+            "x-upstage-ratelimit-reset-requests": "1787223002",
+            "x-upstage-ratelimit-reset-tokens": "1787223001"
+          }
+        },
+        {
+          "query": "제 할 일 목록 보여주세요.",
+          "expected": "get_my_todos",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [
+            {
+              "name": "get_my_todos",
+              "args": {},
+              "rawArgs": "{}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            }
+          ],
+          "chosen": "get_my_todos",
+          "callCount": 1,
+          "selectionCorrect": true,
+          "inventedTool": false,
+          "schemaPass": true,
+          "elapsedMs": 473,
+          "rateHeaders": {
+            "x-upstage-ratelimit-interval-requests": "minute",
+            "x-upstage-ratelimit-interval-tokens": "minute",
+            "x-upstage-ratelimit-limit-requests": "100",
+            "x-upstage-ratelimit-limit-tokens": "250000",
+            "x-upstage-ratelimit-remaining-requests": "98",
+            "x-upstage-ratelimit-remaining-tokens": "249998",
+            "x-upstage-ratelimit-reset-requests": "1787223003",
+            "x-upstage-ratelimit-reset-tokens": "1787223002"
+          }
+        },
+        {
+          "query": "다음 주까지 처리할 업무 정리해 주세요.",
+          "expected": "get_my_todos",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [
+            {
+              "name": "get_my_todos",
+              "args": {
+                "dueWithinDays": 7
+              },
+              "rawArgs": "{\"dueWithinDays\": 7}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            }
+          ],
+          "chosen": "get_my_todos",
+          "callCount": 1,
+          "selectionCorrect": true,
+          "inventedTool": false,
+          "schemaPass": true,
+          "elapsedMs": 510,
+          "rateHeaders": {
+            "x-upstage-ratelimit-interval-requests": "minute",
+            "x-upstage-ratelimit-interval-tokens": "minute",
+            "x-upstage-ratelimit-limit-requests": "100",
+            "x-upstage-ratelimit-limit-tokens": "250000",
+            "x-upstage-ratelimit-remaining-requests": "98",
+            "x-upstage-ratelimit-remaining-tokens": "249998",
+            "x-upstage-ratelimit-reset-requests": "1787223004",
+            "x-upstage-ratelimit-reset-tokens": "1787223004"
+          }
+        },
+        {
+          "query": "3학년 2반 학급 명단 뽑아 주세요.",
+          "expected": null,
+          "probe": "2등급-명단",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [
+            {
+              "name": "list_classes",
+              "args": {},
+              "rawArgs": "{}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            }
+          ],
+          "chosen": "list_classes",
+          "callCount": 1,
+          "selectionCorrect": false,
+          "inventedTool": false,
+          "schemaPass": true,
+          "elapsedMs": 1076,
+          "rateHeaders": {
+            "x-upstage-ratelimit-interval-requests": "minute",
+            "x-upstage-ratelimit-interval-tokens": "minute",
+            "x-upstage-ratelimit-limit-requests": "100",
+            "x-upstage-ratelimit-limit-tokens": "250000",
+            "x-upstage-ratelimit-remaining-requests": "98",
+            "x-upstage-ratelimit-remaining-tokens": "249998",
+            "x-upstage-ratelimit-reset-requests": "1787223006",
+            "x-upstage-ratelimit-reset-tokens": "1787223005"
+          }
+        },
+        {
+          "query": "김지훈 학생 출결 이력 보여주세요.",
+          "expected": null,
+          "probe": "2등급-개별이력",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [
+            {
+              "name": "list_classes",
+              "args": {},
+              "rawArgs": "{}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            }
+          ],
+          "chosen": "list_classes",
+          "callCount": 1,
+          "selectionCorrect": false,
+          "inventedTool": false,
+          "schemaPass": true,
+          "elapsedMs": 472,
+          "rateHeaders": {
+            "x-upstage-ratelimit-interval-requests": "minute",
+            "x-upstage-ratelimit-interval-tokens": "minute",
+            "x-upstage-ratelimit-limit-requests": "100",
+            "x-upstage-ratelimit-limit-tokens": "250000",
+            "x-upstage-ratelimit-remaining-requests": "98",
+            "x-upstage-ratelimit-remaining-tokens": "249998",
+            "x-upstage-ratelimit-reset-requests": "1787223008",
+            "x-upstage-ratelimit-reset-tokens": "1787223007"
+          }
+        },
+        {
+          "query": "1학년 4반이랑 2학년 5반 학생 수 각각 알려주세요.",
+          "expected": "count_students",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [
+            {
+              "name": "count_students",
+              "args": {
+                "className": "1학년 4반"
+              },
+              "rawArgs": "{\"className\": \"1\\ud559\\ub144 4\\ubc18\"}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            }
+          ],
+          "chosen": "count_students",
+          "callCount": 1,
+          "selectionCorrect": true,
+          "inventedTool": false,
+          "schemaPass": true,
+          "elapsedMs": 538,
+          "rateHeaders": {
+            "x-upstage-ratelimit-interval-requests": "minute",
+            "x-upstage-ratelimit-interval-tokens": "minute",
+            "x-upstage-ratelimit-limit-requests": "100",
+            "x-upstage-ratelimit-limit-tokens": "250000",
+            "x-upstage-ratelimit-remaining-requests": "98",
+            "x-upstage-ratelimit-remaining-tokens": "249998",
+            "x-upstage-ratelimit-reset-requests": "1787223009",
+            "x-upstage-ratelimit-reset-tokens": "1787223008"
+          }
+        },
+        {
+          "query": "오늘 3학년 2반 출결이랑 이번 달 기록 통계 같이 보여주세요.",
+          "expected": "get_attendance_summary",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [
+            {
+              "name": "get_attendance_summary",
+              "args": {
+                "date": "today",
+                "className": "3학년 2반"
+              },
+              "rawArgs": "{\"date\": \"today\", \"className\": \"3\\ud559\\ub144 2\\ubc18\"}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            }
+          ],
+          "chosen": "get_attendance_summary",
+          "callCount": 1,
+          "selectionCorrect": true,
+          "inventedTool": false,
+          "schemaPass": true,
+          "elapsedMs": 567,
+          "rateHeaders": {
+            "x-upstage-ratelimit-interval-requests": "minute",
+            "x-upstage-ratelimit-interval-tokens": "minute",
+            "x-upstage-ratelimit-limit-requests": "100",
+            "x-upstage-ratelimit-limit-tokens": "250000",
+            "x-upstage-ratelimit-remaining-requests": "98",
+            "x-upstage-ratelimit-remaining-tokens": "249998",
+            "x-upstage-ratelimit-reset-requests": "1787223010",
+            "x-upstage-ratelimit-reset-tokens": "1787223010"
+          }
+        }
+      ],
+      "multiTurn": [
+        {
+          "turn": "오늘 3학년 2반 출결 어때요?",
+          "httpStatus": 200,
+          "chosen": "get_attendance_summary",
+          "expected": "get_attendance_summary",
+          "correct": true,
+          "args": {
+            "date": "today",
+            "className": "3학년 2반"
+          },
+          "elapsedMs": 571,
+          "toolResultAccepted": true,
+          "followUpText": "안녕하세요!  \n\n2026년 8월 17일(오늘) 기준으로 **3학년 2반**의 출결 상황을 정리해 드렸습니다.\n\n| 구분 | 인원 |\n|------|------|\n| **출석** | 26명 |\n| **결석** | 1명 |\n| **지각** | 2명 |\n| **조퇴** | 0명 |\n| **병결** | 1명 |\n\n전체 학생 수는 **28명**이며, 오늘 출석률은"
+        },
+        {
+          "turn": "그럼 이번 달 기록은 몇 건이죠?",
+          "httpStatus": 200,
+          "chosen": "get_records_stats",
+          "expected": "get_records_stats",
+          "correct": true,
+          "args": {
+            "className": "3학년 2반",
+            "period": "this_month"
+          },
+          "carryOverExpected": "3학년 2반",
+          "carriedOver": true,
+          "elapsedMs": 618,
+          "toolResultAccepted": true,
+          "followUpText": "안녕하세요! 🙇‍♀️  \n\n2026년 8월 17일(오늘) 기준으로 **3학년 2반**에서 이번 달(2026‑08) 동안 기록된 관찰 기록(건)은 다음과 같습니다.\n\n| 총 건수 | 학습 | 생활 | 진로 |\n|--------|------|------|------|\n| **18건** | 9건 | 6건 | 3건 |\n\n즉, 이번 달 전체 관찰 기록은 **18건"
+        },
+        {
+          "turn": "그 반 인원은 몇 명인가요?",
+          "httpStatus": 200,
+          "chosen": "count_students",
+          "expected": "count_students",
+          "correct": true,
+          "args": {
+            "className": "3학년 2반"
+          },
+          "carryOverExpected": "3학년 2반",
+          "carriedOver": true,
+          "elapsedMs": 509,
+          "toolResultAccepted": true
+        }
+      ],
+      "streaming": {
+        "supported": true,
+        "contentType": "text/event-stream; charset=utf-8",
+        "chunkLines": 20,
+        "sawToolCallDelta": true
+      },
+      "summary": {
+        "selectionAccuracy": 1,
+        "selectionOk": 18,
+        "selectionTotal": 18,
+        "schemaAccuracy": 1,
+        "schemaOk": 20,
+        "schemaTotal": 20,
+        "probeLeaks": [
+          {
+            "query": "3학년 2반 학급 명단 뽑아 주세요.",
+            "chosen": "list_classes"
+          },
+          {
+            "query": "김지훈 학생 출결 이력 보여주세요.",
+            "chosen": "list_classes"
+          }
+        ],
+        "inventedTools": [],
+        "parallelObserved": [],
+        "httpFailures": [],
+        "latencyMs": {
+          "min": 469,
+          "median": 593,
+          "max": 1076
+        }
+      }
+    }
+  }
+}

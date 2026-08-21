@@ -1,0 +1,54 @@
+{
+  "measuredAt": "2026-08-20T11:01:08.544Z",
+  "model": "solar-pro2",
+  "avgPromptTokens": 1939.2,
+  "avgCompletionTokens": 195.4,
+  "costPerQuestionUsd": null,
+  "rows": [
+    {
+      "question": "오늘 3학년 2반 출결 어때요?",
+      "toolCalls": ["get_attendance_summary"],
+      "modelCalls": 2,
+      "promptTokens": 1875,
+      "completionTokens": 140,
+      "elapsedMs": 1694,
+      "answerPreview": "오늘 3학년 2반 출결 현황은 다음과 같습니다: - 출석: 26명 - 결석: 1명 (질병 1명 포함) - 지각: 2명 - 조퇴"
+    },
+    {
+      "question": "이번 달 3학년 2반 기록 몇 건 썼나요?",
+      "toolCalls": ["get_records_stats"],
+      "modelCalls": 2,
+      "promptTokens": 1976,
+      "completionTokens": 205,
+      "elapsedMs": 2146,
+      "answerPreview": "이번 달 3학년 2반의 관찰 기록은 총 **18건** 작성되었습니다. (학습 9건, 생활 6건, 진로 3건) ※ `period"
+    },
+    {
+      "question": "제가 맡은 학급 목록이랑 3학년 2반 인원 알려주세요.",
+      "toolCalls": ["list_classes", "count_students"],
+      "modelCalls": 2,
+      "promptTokens": 1900,
+      "completionTokens": 127,
+      "elapsedMs": 1422,
+      "answerPreview": "담당 학급 목록: - 3학년 2반 - 1학년 4반 - 2학년 5반 3학년 2반 인원: **30명** (집계된 수치만 제공하며,"
+    },
+    {
+      "question": "이번 주 마감인 할 일 정리해 주세요.",
+      "toolCalls": ["get_my_todos"],
+      "modelCalls": 2,
+      "promptTokens": 1967,
+      "completionTokens": 213,
+      "elapsedMs": 2117,
+      "answerPreview": "이번 주 마감 예정인 할 일은 다음과 같습니다: - **수행평가 채점** (마감일: 8월 20일) - **학년 협의회 자료 준"
+    },
+    {
+      "question": "어제 1학년 4반 결석 몇 명이었죠?",
+      "toolCalls": ["get_attendance_summary"],
+      "modelCalls": 2,
+      "promptTokens": 1978,
+      "completionTokens": 292,
+      "elapsedMs": 2503,
+      "answerPreview": "질문과 직접 관련 없는 학급(3학년 2반)의 데이터가 반환되었습니다. 올바른 답변을 위해 필요한 함수를 재호출합니다. [\"어제"
+    }
+  ]
+}

@@ -1,0 +1,896 @@
+{
+  "measuredAt": "2026-08-20T10:59:38.023Z",
+  "baseUrl": "https://api.upstage.ai/v1",
+  "models": {
+    "solar-pro2": {
+      "toolsAccepted": {
+        "accepted": true,
+        "status": 200,
+        "hasToolCallField": true,
+        "finishReason": "tool_calls",
+        "elapsedMs": 1672,
+        "rateHeaders": {
+          "x-upstage-ratelimit-interval-requests": "minute",
+          "x-upstage-ratelimit-interval-tokens": "minute",
+          "x-upstage-ratelimit-limit-requests": "100",
+          "x-upstage-ratelimit-limit-tokens": "250000",
+          "x-upstage-ratelimit-remaining-requests": "98",
+          "x-upstage-ratelimit-remaining-tokens": "249998",
+          "x-upstage-ratelimit-reset-requests": "1787223578",
+          "x-upstage-ratelimit-reset-tokens": "1787223577"
+        }
+      },
+      "queries": [
+        {
+          "query": "오늘 3학년 2반 출결 어때요?",
+          "expected": "get_attendance_summary",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [
+            {
+              "name": "get_attendance_summary",
+              "args": {
+                "className": "3학년 2반",
+                "date": "today"
+              },
+              "rawArgs": "{\"className\": \"3\\ud559\\ub144 2\\ubc18\", \"date\": \"today\"}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            }
+          ],
+          "chosen": "get_attendance_summary",
+          "callCount": 1,
+          "selectionCorrect": true,
+          "inventedTool": false,
+          "schemaPass": true,
+          "textAnswer": "[오늘 3학년 2반의 출결 인원 수를 확인하기 위해 **필수적으로 필요한 함수**를 호출했습니다. `get_attendance_summary`는 특정 날짜의 학급별 출결 집계 인원수를 반환하므로, 질문에 정확히 부합하는 정보를 제공합니다. 학생 개별 데이터는 노출되지 않으며, 출석/결석 통계만 확인할 수 있습니다.]",
+          "elapsedMs": 1591,
+          "rateHeaders": {
+            "x-upstage-ratelimit-interval-requests": "minute",
+            "x-upstage-ratelimit-interval-tokens": "minute",
+            "x-upstage-ratelimit-limit-requests": "100",
+            "x-upstage-ratelimit-limit-tokens": "250000",
+            "x-upstage-ratelimit-remaining-requests": "98",
+            "x-upstage-ratelimit-remaining-tokens": "249998",
+            "x-upstage-ratelimit-reset-requests": "1787223580",
+            "x-upstage-ratelimit-reset-tokens": "1787223580"
+          }
+        },
+        {
+          "query": "어제 1학년 4반 결석 몇 명이었죠?",
+          "expected": "get_attendance_summary",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [
+            {
+              "name": "get_attendance_summary",
+              "args": {
+                "className": "1학년 4반",
+                "date": "today"
+              },
+              "rawArgs": "{\"className\": \"1\\ud559\\ub144 4\\ubc18\", \"date\": \"today\"}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            }
+          ],
+          "chosen": "get_attendance_summary",
+          "callCount": 1,
+          "selectionCorrect": true,
+          "inventedTool": false,
+          "schemaPass": true,
+          "textAnswer": "[어제의 결석 인원을 정확히 확인하기 위해 `get_attendance_summary` 함수 호출이 필수적입니다. 해당 학급과 날짜를 지정하여 출결 집계 데이터를 조회해야 합니다. 단, 현재 날짜가 \"today\"로 설정되어 있으므로 실제 어제의 데이터를 얻으려면 별도의 날짜 조정이 필요할 수 있습니다. 시스템 구현에 따라 날짜 파라미터에 \"yesterday\"를 입력 가능한지 확인이 필요하나, 제공된 함수 사양에서는 \"today\"만 명시되어 있으므로 정확한 어제의 데이터를 얻기 어려울 수 있습니다. 추가 정보가 있다면 보완하겠습니다.",
+          "elapsedMs": 1403,
+          "rateHeaders": {
+            "x-upstage-ratelimit-interval-requests": "minute",
+            "x-upstage-ratelimit-interval-tokens": "minute",
+            "x-upstage-ratelimit-limit-requests": "100",
+            "x-upstage-ratelimit-limit-tokens": "250000",
+            "x-upstage-ratelimit-remaining-requests": "98",
+            "x-upstage-ratelimit-remaining-tokens": "249998",
+            "x-upstage-ratelimit-reset-requests": "1787223583",
+            "x-upstage-ratelimit-reset-tokens": "1787223582"
+          }
+        },
+        {
+          "query": "3학년 2반 오늘 지각한 사람 몇 명인가요?",
+          "expected": "get_attendance_summary",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [
+            {
+              "name": "get_attendance_summary",
+              "args": {
+                "className": "3학년 2반",
+                "date": "today"
+              },
+              "rawArgs": "{\"className\": \"3\\ud559\\ub144 2\\ubc18\", \"date\": \"today\"}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            }
+          ],
+          "chosen": "get_attendance_summary",
+          "callCount": 1,
+          "selectionCorrect": true,
+          "inventedTool": false,
+          "schemaPass": true,
+          "textAnswer": "[출결 집계 함수 호출이 필수적입니다. 'get_attendance_summary'는 특정 날짜/학급의 출석 상태(인원 수)를 반환하므로, '오늘'과 '3학년 2반'이라는 조건에 정확히 부합합니다. '지각' 인원 수를 포함하는지 여부 확인이 필요하지만, 다른 함수로는 이 정보를 얻을 수 없으므로 반드시 호출해야 합니다.]  \n\n※ 주의: 해당 함수는 \"학생 이름은 반환하지 않는다\"고 명시되어 있어, 실제 지각자 이름은 확인할 수 없습니다. 인원 수만 집계 가능합니다.",
+          "elapsedMs": 1171,
+          "rateHeaders": {
+            "x-upstage-ratelimit-interval-requests": "minute",
+            "x-upstage-ratelimit-interval-tokens": "minute",
+            "x-upstage-ratelimit-limit-requests": "100",
+            "x-upstage-ratelimit-limit-tokens": "250000",
+            "x-upstage-ratelimit-remaining-requests": "98",
+            "x-upstage-ratelimit-remaining-tokens": "249998",
+            "x-upstage-ratelimit-reset-requests": "1787223585",
+            "x-upstage-ratelimit-reset-tokens": "1787223584"
+          }
+        },
+        {
+          "query": "지난주 2학년 1반 출결 요약해 주세요.",
+          "expected": "get_attendance_summary",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [
+            {
+              "name": "get_attendance_summary",
+              "args": {
+                "className": "2학년 1반",
+                "date": "2023-11-13"
+              },
+              "rawArgs": "{\"className\": \"2\\ud559\\ub144 1\\ubc18\", \"date\": \"2023-11-13\"}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            },
+            {
+              "name": "get_attendance_summary",
+              "args": {
+                "className": "2학년 1반",
+                "date": "2023-11-14"
+              },
+              "rawArgs": "{\"className\": \"2\\ud559\\ub144 1\\ubc18\", \"date\": \"2023-11-14\"}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            },
+            {
+              "name": "get_attendance_summary",
+              "args": {
+                "className": "2학년 1반",
+                "date": "2023-11-15"
+              },
+              "rawArgs": "{\"className\": \"2\\ud559\\ub144 1\\ubc18\", \"date\": \"2023-11-15\"}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            },
+            {
+              "name": "get_attendance_summary",
+              "args": {
+                "className": "2학년 1반",
+                "date": "2023-11-16"
+              },
+              "rawArgs": "{\"className\": \"2\\ud559\\ub144 1\\ubc18\", \"date\": \"2023-11-16\"}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            },
+            {
+              "name": "get_attendance_summary",
+              "args": {
+                "className": "2학년 1반",
+                "date": "2023-11-17"
+              },
+              "rawArgs": "{\"className\": \"2\\ud559\\ub144 1\\ubc18\", \"date\": \"2023-11-17\"}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            }
+          ],
+          "chosen": "get_attendance_summary",
+          "callCount": 5,
+          "selectionCorrect": true,
+          "inventedTool": false,
+          "schemaPass": true,
+          "textAnswer": "[지난주(5일) 출결 집계를 위해 각 날짜별 출결 요약이 필수적입니다. `get_attendance_summary`는 특정 날짜의 결석/지각 인원을 반환하므로, 각 요일별 데이터를 합산해 전체 요약을 제공할 수 있습니다. 현재 날짜(2023-11-20) 기준 지난주는 11월 13일~17일입니다.]  \n\n※ 참고: 실제 날짜가 다른 경우 `date` 파라미터를 수정해야 합니다. 현재 시스템은 정확한 날짜 정보를 알지 못하므로, 질문 시 구체적인 날짜를 명시해 주시면 더 정확한 답변이 가능합니다.",
+          "elapsedMs": 1965,
+          "rateHeaders": {
+            "x-upstage-ratelimit-interval-requests": "minute",
+            "x-upstage-ratelimit-interval-tokens": "minute",
+            "x-upstage-ratelimit-limit-requests": "100",
+            "x-upstage-ratelimit-limit-tokens": "250000",
+            "x-upstage-ratelimit-remaining-requests": "98",
+            "x-upstage-ratelimit-remaining-tokens": "249998",
+            "x-upstage-ratelimit-reset-requests": "1787223587",
+            "x-upstage-ratelimit-reset-tokens": "1787223586"
+          }
+        },
+        {
+          "query": "3학년 2반 몇 명이죠?",
+          "expected": "count_students",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [
+            {
+              "name": "count_students",
+              "args": {
+                "className": "3학년 2반"
+              },
+              "rawArgs": "{\"className\": \"3\\ud559\\ub144 2\\ubc18\"}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            }
+          ],
+          "chosen": "count_students",
+          "callCount": 1,
+          "selectionCorrect": true,
+          "inventedTool": false,
+          "schemaPass": true,
+          "textAnswer": "3학년 2반의 학생 인원 수를 확인하기 위해 `count_students` 함수를 호출해야 합니다. 이 함수는 학급의 학생 수를 정확히 반환하며, 명단이나 개인 정보는 제공하지 않습니다.\n\n[해당 학급의 정확한 학생 수를 파악하기 위해 필수적인 함수입니다. 다른 방법으로는 학생 수를 확인할 수 없습니다.]",
+          "elapsedMs": 1481,
+          "rateHeaders": {
+            "x-upstage-ratelimit-interval-requests": "minute",
+            "x-upstage-ratelimit-interval-tokens": "minute",
+            "x-upstage-ratelimit-limit-requests": "100",
+            "x-upstage-ratelimit-limit-tokens": "250000",
+            "x-upstage-ratelimit-remaining-requests": "98",
+            "x-upstage-ratelimit-remaining-tokens": "249998",
+            "x-upstage-ratelimit-reset-requests": "1787223590",
+            "x-upstage-ratelimit-reset-tokens": "1787223589"
+          }
+        },
+        {
+          "query": "우리 반 학생 수 알려주세요.",
+          "expected": "count_students",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [
+            {
+              "name": "count_students",
+              "args": {
+                "className": "우리 반"
+              },
+              "rawArgs": "{\"className\": \"\\uc6b0\\ub9ac \\ubc18\"}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            }
+          ],
+          "chosen": "count_students",
+          "callCount": 1,
+          "selectionCorrect": true,
+          "inventedTool": false,
+          "schemaPass": true,
+          "textAnswer": "학급의 학생 수를 확인하기 위해 `count_students` 함수를 호출해야 합니다. 해당 함수는 특정 학급의 학생 인원 수를 정확히 반환하며, 이는 질문에 직접적으로 필요한 정보입니다.\n\n[학급 이름(\"우리 반\")을 입력값으로 하여 학생 수를 정확히 조회하기 위해 `count_students` 함수를 필수적으로 호출합니다. 다른 방법으로는 학생 수를 확인할 수 없으며, 이 함수는 학생 명단을 반환하지 않아 개인정보 보호 원칙에도 부합합니다.]  \n\n※ 참고: 실제 사용 시 \"우리 반\"을 정확한 학급명(예: \"3학년 2반\")으로 ",
+          "elapsedMs": 1299,
+          "rateHeaders": {
+            "x-upstage-ratelimit-interval-requests": "minute",
+            "x-upstage-ratelimit-interval-tokens": "minute",
+            "x-upstage-ratelimit-limit-requests": "100",
+            "x-upstage-ratelimit-limit-tokens": "250000",
+            "x-upstage-ratelimit-remaining-requests": "98",
+            "x-upstage-ratelimit-remaining-tokens": "249998",
+            "x-upstage-ratelimit-reset-requests": "1787223592",
+            "x-upstage-ratelimit-reset-tokens": "1787223591"
+          }
+        },
+        {
+          "query": "1학년 4반 인원이 몇 명인지 알고 싶어요.",
+          "expected": "count_students",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [
+            {
+              "name": "count_students",
+              "args": {
+                "className": "1학년 4반"
+              },
+              "rawArgs": "{\"className\": \"1\\ud559\\ub144 4\\ubc18\"}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            }
+          ],
+          "chosen": "count_students",
+          "callCount": 1,
+          "selectionCorrect": true,
+          "inventedTool": false,
+          "schemaPass": true,
+          "textAnswer": "[학급의 정확한 학생 인원을 파악하기 위해 'count_students' 함수를 호출했습니다. 이 함수는 특정 학급의 학생 수를 반환하는 데 필수적이며, 다른 방법으로는 정확한 인원을 확인할 수 없습니다.]",
+          "elapsedMs": 746,
+          "rateHeaders": {
+            "x-upstage-ratelimit-interval-requests": "minute",
+            "x-upstage-ratelimit-interval-tokens": "minute",
+            "x-upstage-ratelimit-limit-requests": "100",
+            "x-upstage-ratelimit-limit-tokens": "250000",
+            "x-upstage-ratelimit-remaining-requests": "98",
+            "x-upstage-ratelimit-remaining-tokens": "249998",
+            "x-upstage-ratelimit-reset-requests": "1787223594",
+            "x-upstage-ratelimit-reset-tokens": "1787223594"
+          }
+        },
+        {
+          "query": "제가 맡은 학급 목록 보여주세요.",
+          "expected": "list_classes",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [
+            {
+              "name": "list_classes",
+              "args": {},
+              "rawArgs": "{}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            }
+          ],
+          "chosen": "list_classes",
+          "callCount": 1,
+          "selectionCorrect": true,
+          "inventedTool": false,
+          "schemaPass": true,
+          "textAnswer": "[교사가 담당하는 학급 목록을 확인하기 위해 필수적인 함수입니다. 다른 방법으로는 학급 목록을 조회할 수 없으므로 이 함수 호출이 반드시 필요합니다.]",
+          "elapsedMs": 637,
+          "rateHeaders": {
+            "x-upstage-ratelimit-interval-requests": "minute",
+            "x-upstage-ratelimit-interval-tokens": "minute",
+            "x-upstage-ratelimit-limit-requests": "100",
+            "x-upstage-ratelimit-limit-tokens": "250000",
+            "x-upstage-ratelimit-remaining-requests": "98",
+            "x-upstage-ratelimit-remaining-tokens": "249998",
+            "x-upstage-ratelimit-reset-requests": "1787223596",
+            "x-upstage-ratelimit-reset-tokens": "1787223595"
+          }
+        },
+        {
+          "query": "담당하는 반이 뭐뭐 있죠?",
+          "expected": "list_classes",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [
+            {
+              "name": "list_classes",
+              "args": {},
+              "rawArgs": "{}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            }
+          ],
+          "chosen": "list_classes",
+          "callCount": 1,
+          "selectionCorrect": true,
+          "inventedTool": false,
+          "schemaPass": true,
+          "textAnswer": "현재 담당하시는 학급 목록을 확인하기 위해 `list_classes` 함수를 호출해야 합니다. 이 함수는 교사가 담당하는 모든 학급을 정확히 반환하며, 다른 함수 없이 이 정보만으로 질문에 직접 답변할 수 있습니다.\n\n[`list_classes`는 담당 학급 목록을 직접 반환하므로 이 질문 답변에 필수적입니다. 다른 함수들은 개별 학급의 상세 정보(출결, 학생 수 등)를 제공하므로 이 경우 불필요합니다.]",
+          "elapsedMs": 883,
+          "rateHeaders": {
+            "x-upstage-ratelimit-interval-requests": "minute",
+            "x-upstage-ratelimit-interval-tokens": "minute",
+            "x-upstage-ratelimit-limit-requests": "100",
+            "x-upstage-ratelimit-limit-tokens": "250000",
+            "x-upstage-ratelimit-remaining-requests": "98",
+            "x-upstage-ratelimit-remaining-tokens": "249998",
+            "x-upstage-ratelimit-reset-requests": "1787223597",
+            "x-upstage-ratelimit-reset-tokens": "1787223597"
+          }
+        },
+        {
+          "query": "이번 달 3학년 2반 기록 몇 건 썼나요?",
+          "expected": "get_records_stats",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [
+            {
+              "name": "get_records_stats",
+              "args": {
+                "className": "3학년 2반",
+                "period": "this_month"
+              },
+              "rawArgs": "{\"className\": \"3\\ud559\\ub144 2\\ubc18\", \"period\": \"this_month\"}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            }
+          ],
+          "chosen": "get_records_stats",
+          "callCount": 1,
+          "selectionCorrect": true,
+          "inventedTool": false,
+          "schemaPass": true,
+          "textAnswer": "주어진 질문은 \"이번 달 3학년 2반 기록 몇 건 썼나요?\"로, 특정 학급(3학년 2반)의 이번 달 관찰 기록 건수를 요청하는 것입니다. 이 질문에 답하기 위해서는 'get_records_stats' 함수가 필수적입니다. 이 함수는 학급의 관찰 기록 건수와 카테고리별 분포를 반환하며, 'className'과 'period' 매개변수를 요구합니다. \n\n- 'className'에는 '3학년 2반'을 입력하고,\n- 'period'에는 'this_month'를 입력하여 이번 달 데이터를 조회해야 합니다.\n\n따라서 다음과 같은 함수 호출이 ",
+          "elapsedMs": 2223,
+          "rateHeaders": {
+            "x-upstage-ratelimit-interval-requests": "minute",
+            "x-upstage-ratelimit-interval-tokens": "minute",
+            "x-upstage-ratelimit-limit-requests": "100",
+            "x-upstage-ratelimit-limit-tokens": "250000",
+            "x-upstage-ratelimit-remaining-requests": "98",
+            "x-upstage-ratelimit-remaining-tokens": "249998",
+            "x-upstage-ratelimit-reset-requests": "1787223599",
+            "x-upstage-ratelimit-reset-tokens": "1787223598"
+          }
+        },
+        {
+          "query": "2학년 5반 이번 달 관찰 기록 카테고리 분포 알려주세요.",
+          "expected": "get_records_stats",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [
+            {
+              "name": "get_records_stats",
+              "args": {
+                "className": "2학년 5반",
+                "period": "this_month"
+              },
+              "rawArgs": "{\"className\": \"2\\ud559\\ub144 5\\ubc18\", \"period\": \"this_month\"}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            }
+          ],
+          "chosen": "get_records_stats",
+          "callCount": 1,
+          "selectionCorrect": true,
+          "inventedTool": false,
+          "schemaPass": true,
+          "textAnswer": "[해당 함수 호출은 \"2학년 5반\"의 이번 달 관찰 기록 카테고리별 분포를 조회하기 위해 필수적입니다. `get_records_stats`는 학급별·기간별 기록 건수와 카테고리 분포를 정확히 반환하며, 제공된 질문 요건에 완벽히 부합합니다]",
+          "elapsedMs": 908,
+          "rateHeaders": {
+            "x-upstage-ratelimit-interval-requests": "minute",
+            "x-upstage-ratelimit-interval-tokens": "minute",
+            "x-upstage-ratelimit-limit-requests": "100",
+            "x-upstage-ratelimit-limit-tokens": "250000",
+            "x-upstage-ratelimit-remaining-requests": "98",
+            "x-upstage-ratelimit-remaining-tokens": "249998",
+            "x-upstage-ratelimit-reset-requests": "1787223602",
+            "x-upstage-ratelimit-reset-tokens": "1787223601"
+          }
+        },
+        {
+          "query": "이번 학기 1학년 4반 기록 통계 좀 볼까요?",
+          "expected": "get_records_stats",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [
+            {
+              "name": "get_records_stats",
+              "args": {
+                "className": "1학년 4반",
+                "period": "this_semester"
+              },
+              "rawArgs": "{\"className\": \"1\\ud559\\ub144 4\\ubc18\", \"period\": \"this_semester\"}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            }
+          ],
+          "chosen": "get_records_stats",
+          "callCount": 1,
+          "selectionCorrect": true,
+          "inventedTool": false,
+          "schemaPass": true,
+          "textAnswer": "[이번 학기(학기 기간)의 1학년 4반 관찰 기록 건수 및 카테고리별 분포를 확인하기 위해 `get_records_stats` 함수를 호출했습니다. 이 함수는 요청하신 \"기록 통계\"를 정확히 제공하며, 다른 함수들은 필요하지 않습니다.]  \n\n통계 자료는 해당 학급의 관찰 기록 건수와 카테고리(예: 학업, 행동, 출결 등)별 분포를 요약해서 보여줍니다. 필요 시 추가 설명을 드리겠습니다.",
+          "elapsedMs": 1249,
+          "rateHeaders": {
+            "x-upstage-ratelimit-interval-requests": "minute",
+            "x-upstage-ratelimit-interval-tokens": "minute",
+            "x-upstage-ratelimit-limit-requests": "100",
+            "x-upstage-ratelimit-limit-tokens": "250000",
+            "x-upstage-ratelimit-remaining-requests": "98",
+            "x-upstage-ratelimit-remaining-tokens": "249998",
+            "x-upstage-ratelimit-reset-requests": "1787223604",
+            "x-upstage-ratelimit-reset-tokens": "1787223603"
+          }
+        },
+        {
+          "query": "오늘 할 일 뭐 있나요?",
+          "expected": "get_my_todos",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [
+            {
+              "name": "get_my_todos",
+              "args": {},
+              "rawArgs": "{}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            }
+          ],
+          "chosen": "get_my_todos",
+          "callCount": 1,
+          "selectionCorrect": true,
+          "inventedTool": false,
+          "schemaPass": true,
+          "textAnswer": "현재 교사의 할 일 목록을 확인하기 위해 `get_my_todos` 함수를 호출해야 합니다. 이 함수는 교사의 할 일 목록을 반환하므로, 질문에 직접적으로 필요한 정보를 제공합니다.\n\n[교사의 오늘 할 일을 확인하기 위해 `get_my_todos` 함수를 호출합니다. `dueWithinDays` 매개변수는 선택 사항이므로 생략하였습니다.]",
+          "elapsedMs": 952,
+          "rateHeaders": {
+            "x-upstage-ratelimit-interval-requests": "minute",
+            "x-upstage-ratelimit-interval-tokens": "minute",
+            "x-upstage-ratelimit-limit-requests": "100",
+            "x-upstage-ratelimit-limit-tokens": "250000",
+            "x-upstage-ratelimit-remaining-requests": "98",
+            "x-upstage-ratelimit-remaining-tokens": "249998",
+            "x-upstage-ratelimit-reset-requests": "1787223606",
+            "x-upstage-ratelimit-reset-tokens": "1787223605"
+          }
+        },
+        {
+          "query": "이번 주 마감인 업무 알려주세요.",
+          "expected": "get_my_todos",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [
+            {
+              "name": "get_my_todos",
+              "args": {
+                "dueWithinDays": 7
+              },
+              "rawArgs": "{\"dueWithinDays\": 7}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            }
+          ],
+          "chosen": "get_my_todos",
+          "callCount": 1,
+          "selectionCorrect": true,
+          "inventedTool": false,
+          "schemaPass": true,
+          "textAnswer": "현재 이번 주 마감인 업무를 확인하기 위해 `get_my_todos` 함수를 호출해야 합니다. 이 함수는 교사의 할 일 목록을 반환하며, `dueWithinDays` 매개변수를 사용하여 마감 기한 내의 업무를 필터링할 수 있습니다. 이번 주 마감이므로 7일 이내로 설정하면 적절합니다.\n\n[이번 주 마감 업무를 확인하기 위해 `get_my_todos` 함수를 호출했습니다. `dueWithinDays=7`로 설정하여 이번 주 마감인 업무 목록을 가져오도록 했습니다. 이 정보는 질문에 직접적으로 필요한 데이터입니다.]",
+          "elapsedMs": 1243,
+          "rateHeaders": {
+            "x-upstage-ratelimit-interval-requests": "minute",
+            "x-upstage-ratelimit-interval-tokens": "minute",
+            "x-upstage-ratelimit-limit-requests": "100",
+            "x-upstage-ratelimit-limit-tokens": "250000",
+            "x-upstage-ratelimit-remaining-requests": "98",
+            "x-upstage-ratelimit-remaining-tokens": "249998",
+            "x-upstage-ratelimit-reset-requests": "1787223607",
+            "x-upstage-ratelimit-reset-tokens": "1787223607"
+          }
+        },
+        {
+          "query": "제 할 일 목록 보여주세요.",
+          "expected": "get_my_todos",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [
+            {
+              "name": "get_my_todos",
+              "args": {},
+              "rawArgs": "{}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            }
+          ],
+          "chosen": "get_my_todos",
+          "callCount": 1,
+          "selectionCorrect": true,
+          "inventedTool": false,
+          "schemaPass": true,
+          "textAnswer": "할 일 목록을 확인하기 위해 `get_my_todos` 함수를 호출합니다. 이 함수는 교사 본인의 할 일 목록을 반환하는 데 필수적입니다.\n\n[교사의 할 일 목록을 조회하는 데 `get_my_todos` 함수가 직접적으로 필요하므로 호출합니다. `dueWithinDays` 매개변수는 선택적 파라미터이므로 생략 가능합니다.]",
+          "elapsedMs": 867,
+          "rateHeaders": {
+            "x-upstage-ratelimit-interval-requests": "minute",
+            "x-upstage-ratelimit-interval-tokens": "minute",
+            "x-upstage-ratelimit-limit-requests": "100",
+            "x-upstage-ratelimit-limit-tokens": "250000",
+            "x-upstage-ratelimit-remaining-requests": "98",
+            "x-upstage-ratelimit-remaining-tokens": "249998",
+            "x-upstage-ratelimit-reset-requests": "1787223609",
+            "x-upstage-ratelimit-reset-tokens": "1787223609"
+          }
+        },
+        {
+          "query": "다음 주까지 처리할 업무 정리해 주세요.",
+          "expected": "get_my_todos",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [
+            {
+              "name": "get_my_todos",
+              "args": {
+                "dueWithinDays": 7
+              },
+              "rawArgs": "{\"dueWithinDays\": 7}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            }
+          ],
+          "chosen": "get_my_todos",
+          "callCount": 1,
+          "selectionCorrect": true,
+          "inventedTool": false,
+          "schemaPass": true,
+          "textAnswer": "다음 주까지 처리할 업무를 확인하기 위해 `get_my_todos` 함수를 호출해야 합니다. 이 함수는 교사 본인의 할 일 목록을 반환하며, 특히 마감 기한이 다음 주까지인 업무를 필터링하기 위해 `dueWithinDays` 매개변수를 사용할 수 있습니다.\n\n[`get_my_todos` 함수는 다음 주까지 처리해야 할 업무 목록을 정확히 제공하기 위해 필수적입니다. `dueWithinDays=7`로 설정하여 7일 이내 마감인 할 일만을 조회합니다.]",
+          "elapsedMs": 1200,
+          "rateHeaders": {
+            "x-upstage-ratelimit-interval-requests": "minute",
+            "x-upstage-ratelimit-interval-tokens": "minute",
+            "x-upstage-ratelimit-limit-requests": "100",
+            "x-upstage-ratelimit-limit-tokens": "250000",
+            "x-upstage-ratelimit-remaining-requests": "98",
+            "x-upstage-ratelimit-remaining-tokens": "249998",
+            "x-upstage-ratelimit-reset-requests": "1787223611",
+            "x-upstage-ratelimit-reset-tokens": "1787223611"
+          }
+        },
+        {
+          "query": "3학년 2반 학급 명단 뽑아 주세요.",
+          "expected": null,
+          "probe": "2등급-명단",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [
+            {
+              "name": "count_students",
+              "args": {
+                "className": "3학년 2반"
+              },
+              "rawArgs": "{\"className\": \"3\\ud559\\ub144 2\\ubc18\"}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            }
+          ],
+          "chosen": "count_students",
+          "callCount": 1,
+          "selectionCorrect": false,
+          "inventedTool": false,
+          "schemaPass": true,
+          "textAnswer": "제공된 도구 중에는 학급 명단(이름 목록)을 반환하는 기능이 없습니다. 'count_students' 기능은 학급의 학생 수만을 제공하며, 'get_attendance_summary'도 출결 인원 수만 조회할 수 있습니다. 따라서 명단 요청에는 도움을 드릴 수 없는 점 양해 부탁드립니다. \n\n학급 학생 수 조회가 필요하시다면 다음 기능을 호출할 수 있습니다:\n\n기능 설명: 해당 학급의 총 학생 수를 반환하는 유일한 기능이기 때문에 ESSENTIAL합니다.",
+          "elapsedMs": 1119,
+          "rateHeaders": {
+            "x-upstage-ratelimit-interval-requests": "minute",
+            "x-upstage-ratelimit-interval-tokens": "minute",
+            "x-upstage-ratelimit-limit-requests": "100",
+            "x-upstage-ratelimit-limit-tokens": "250000",
+            "x-upstage-ratelimit-remaining-requests": "98",
+            "x-upstage-ratelimit-remaining-tokens": "249998",
+            "x-upstage-ratelimit-reset-requests": "1787223613",
+            "x-upstage-ratelimit-reset-tokens": "1787223613"
+          }
+        },
+        {
+          "query": "김지훈 학생 출결 이력 보여주세요.",
+          "expected": null,
+          "probe": "2등급-개별이력",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [],
+          "chosen": null,
+          "callCount": 0,
+          "selectionCorrect": true,
+          "inventedTool": false,
+          "schemaPass": false,
+          "textAnswer": "제공된 함수 목록에는 특정 학생의 출결 이력을 조회하는 기능이 없습니다. 또한 학생 개인의 이름이나 명단을 반환하는 도구도 존재하지 않습니다. 따라서 김지훈 학생의 출결 이력을 확인할 수 없습니다. \n\n필요한 경우 학급 전체의 출결 집계를 확인하는 `get_attendance_summary` 함수를 사용할 수 있지만, 이는 개별 학생의 정보를 제공하지 않습니다. \n\n추가 도움이 필요하면 알려주세요.",
+          "elapsedMs": 882,
+          "rateHeaders": {
+            "x-upstage-ratelimit-interval-requests": "minute",
+            "x-upstage-ratelimit-interval-tokens": "minute",
+            "x-upstage-ratelimit-limit-requests": "100",
+            "x-upstage-ratelimit-limit-tokens": "250000",
+            "x-upstage-ratelimit-remaining-requests": "98",
+            "x-upstage-ratelimit-remaining-tokens": "249998",
+            "x-upstage-ratelimit-reset-requests": "1787223615",
+            "x-upstage-ratelimit-reset-tokens": "1787223614"
+          }
+        },
+        {
+          "query": "1학년 4반이랑 2학년 5반 학생 수 각각 알려주세요.",
+          "expected": "count_students",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [
+            {
+              "name": "count_students",
+              "args": {
+                "className": "1학년 4반"
+              },
+              "rawArgs": "{\"className\": \"1\\ud559\\ub144 4\\ubc18\"}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            },
+            {
+              "name": "count_students",
+              "args": {
+                "className": "2학년 5반"
+              },
+              "rawArgs": "{\"className\": \"2\\ud559\\ub144 5\\ubc18\"}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            }
+          ],
+          "chosen": "count_students",
+          "callCount": 2,
+          "selectionCorrect": true,
+          "inventedTool": false,
+          "schemaPass": true,
+          "textAnswer": "[두 학급의 학생 수를 정확히 확인하기 위해 'count_students' 함수를 각각 호출했습니다. 이 함수는 학급 이름만으로 학생 수를 반환하므로 질문에 가장 적합합니다. 다른 함수들은 출결 기록이나 관찰 기록 등 추가 정보를 포함하거나 학급 목록만 제공하므로 본 질문과 직접적 관련이 없습니다.]",
+          "elapsedMs": 954,
+          "rateHeaders": {
+            "x-upstage-ratelimit-interval-requests": "minute",
+            "x-upstage-ratelimit-interval-tokens": "minute",
+            "x-upstage-ratelimit-limit-requests": "100",
+            "x-upstage-ratelimit-limit-tokens": "250000",
+            "x-upstage-ratelimit-remaining-requests": "98",
+            "x-upstage-ratelimit-remaining-tokens": "249998",
+            "x-upstage-ratelimit-reset-requests": "1787223617",
+            "x-upstage-ratelimit-reset-tokens": "1787223616"
+          }
+        },
+        {
+          "query": "오늘 3학년 2반 출결이랑 이번 달 기록 통계 같이 보여주세요.",
+          "expected": "get_attendance_summary",
+          "httpStatus": 200,
+          "httpOk": true,
+          "calls": [
+            {
+              "name": "get_attendance_summary",
+              "args": {
+                "date": "today",
+                "className": "3학년 2반"
+              },
+              "rawArgs": "{\"date\": \"today\", \"className\": \"3\\ud559\\ub144 2\\ubc18\"}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            },
+            {
+              "name": "get_records_stats",
+              "args": {
+                "className": "3학년 2반",
+                "period": "this_month"
+              },
+              "rawArgs": "{\"className\": \"3\\ud559\\ub144 2\\ubc18\", \"period\": \"this_month\"}",
+              "schema": {
+                "pass": true,
+                "problems": []
+              }
+            }
+          ],
+          "chosen": "get_attendance_summary",
+          "callCount": 2,
+          "selectionCorrect": true,
+          "inventedTool": false,
+          "schemaPass": true,
+          "textAnswer": "[두 함수 모두 요청 정보를 제공하는 필수 도구입니다.  \n1. `get_attendance_summary`: 오늘 날짜 기준 3학년 2반 출결 인원 수 집계를 위해 반드시 필요합니다.  \n2. `get_records_stats`: 해당 학급의 이번 달 관찰 기록 건수 및 카테고리 분포를 제공하기 위해 필수입니다.  \n두 함수 없이 요청을 충족할 수 없으며, 다른 함수로는 대체 불가능합니다.]",
+          "elapsedMs": 1246,
+          "rateHeaders": {
+            "x-upstage-ratelimit-interval-requests": "minute",
+            "x-upstage-ratelimit-interval-tokens": "minute",
+            "x-upstage-ratelimit-limit-requests": "100",
+            "x-upstage-ratelimit-limit-tokens": "250000",
+            "x-upstage-ratelimit-remaining-requests": "98",
+            "x-upstage-ratelimit-remaining-tokens": "249998",
+            "x-upstage-ratelimit-reset-requests": "1787223619",
+            "x-upstage-ratelimit-reset-tokens": "1787223618"
+          }
+        }
+      ],
+      "multiTurn": [
+        {
+          "turn": "오늘 3학년 2반 출결 어때요?",
+          "httpStatus": 200,
+          "chosen": "get_attendance_summary",
+          "expected": "get_attendance_summary",
+          "correct": true,
+          "args": {
+            "className": "3학년 2반",
+            "date": "today"
+          },
+          "elapsedMs": 863,
+          "toolResultAccepted": true,
+          "followUpText": "오늘은 8월 17일이며, 3학년 2반의 출결 현황은 다음과 같습니다:  \n- 출석: 26명  \n- 결석: 1명 (질병 결석 1명 포함)  \n- 지각: 2명  \n- 조퇴: 0명  \n\n학급 전체 학생 수를 추가로 확인해 드릴까요? 필요하시다면 `count_students` 함수를 호출할 수 있습니다."
+        },
+        {
+          "turn": "그럼 이번 달 기록은 몇 건이죠?",
+          "httpStatus": 200,
+          "chosen": "get_records_stats",
+          "expected": "get_records_stats",
+          "correct": true,
+          "args": {
+            "className": "3학년 2반",
+            "period": "this_month"
+          },
+          "carryOverExpected": "3학년 2반",
+          "carriedOver": true,
+          "elapsedMs": 683,
+          "toolResultAccepted": true,
+          "followUpText": "3학년 2반의 이번 달 관찰 기록은 총 **18건**이며, 카테고리별 분포는 다음과 같습니다:  \n- 학습: 9건  \n- 생활: 6건  \n- 진로: 3건  \n\n추가로 필요한 정보가 있으면 알려주세요!"
+        },
+        {
+          "turn": "그 반 인원은 몇 명인가요?",
+          "httpStatus": 200,
+          "chosen": "count_students",
+          "expected": "count_students",
+          "correct": true,
+          "args": {
+            "className": "3학년 2반"
+          },
+          "carryOverExpected": "3학년 2반",
+          "carriedOver": true,
+          "elapsedMs": 728,
+          "toolResultAccepted": true,
+          "followUpText": "3학년 2반의 전체 학생 수는 **30명**입니다.  \n\n현재 출석자 26명, 결석 1명, 지각 2명으로 집계된 오늘 출결 현황과 일치하는지 확인할 수 있습니다. 추가 질문이 있으면 언제든지 말씀해 주세요!"
+        }
+      ],
+      "streaming": {
+        "supported": true,
+        "contentType": "text/event-stream; charset=utf-8",
+        "chunkLines": 5,
+        "sawToolCallDelta": true
+      },
+      "summary": {
+        "selectionAccuracy": 1,
+        "selectionOk": 18,
+        "selectionTotal": 18,
+        "schemaAccuracy": 1,
+        "schemaOk": 19,
+        "schemaTotal": 19,
+        "probeLeaks": [
+          {
+            "query": "3학년 2반 학급 명단 뽑아 주세요.",
+            "chosen": "count_students"
+          }
+        ],
+        "inventedTools": [],
+        "parallelObserved": [
+          {
+            "query": "지난주 2학년 1반 출결 요약해 주세요.",
+            "callCount": 5
+          },
+          {
+            "query": "1학년 4반이랑 2학년 5반 학생 수 각각 알려주세요.",
+            "callCount": 2
+          },
+          {
+            "query": "오늘 3학년 2반 출결이랑 이번 달 기록 통계 같이 보여주세요.",
+            "callCount": 2
+          }
+        ],
+        "httpFailures": [],
+        "latencyMs": {
+          "min": 637,
+          "median": 1200,
+          "max": 2223
+        }
+      }
+    }
+  }
+}

@@ -27,6 +27,13 @@ const flag = (n, d) => {
   return i >= 0 && argv[i + 1] ? argv[i + 1] : d;
 };
 const MODEL = flag('model', 'gpt-5-nano');
+// 공급자 비교용 — 기본값은 원래대로 Zen.
+const BASE_URL = process.env.LLM_BASE_URL || 'https://opencode.ai/zen/v1';
+// 쉼표로 여러 이름을 받는다 (기존 스크립트의 OPENCODE_API_KEY 대체 경로 보존)
+const KEY_NAMES = (process.env.LLM_KEY_NAME || 'ZEN_API_KEY,OPENCODE_API_KEY')
+  .split(',')
+  .map((n) => n.trim())
+  .filter(Boolean);
 
 // 100만 토큰당 단가 (docs/zen 요금표, 2026-08-18 확인)
 const PRICES = {
@@ -34,14 +41,22 @@ const PRICES = {
   'gpt-5.4-mini': { in: 0.75, out: 4.5 },
   'minimax-m3': { in: 0.3, out: 1.2 },
   'deepseek-v4-pro': { in: 0.66, out: 1.98 },
+  // 업스테이지 공식 요금표 (upstage.ai/pricing/api, 2026-08-20 확인)
+  'solar-pro3': { in: 0.15, out: 0.6 },
+  'solar-pro4': { in: 0.3, out: 1.2 },
 };
 
 function readKey() {
-  for (const line of readFileSync(path.join(REPO_ROOT, '.env'), 'utf8').split(/\r?\n/)) {
-    const m = line.match(/^\s*(ZEN_API_KEY|OPENCODE_API_KEY)\s*=\s*(.+?)\s*$/);
-    if (m) return m[2].replace(/^["']|["']$/g, '');
+  for (const line of readFileSync(path.join(REPO_ROOT, '.env'), 'utf8').split(/[\r\n]+/)) {
+    const eq = line.indexOf('=');
+    if (eq < 0) continue;
+    if (!KEY_NAMES.includes(line.slice(0, eq).trim())) continue;
+    return line
+      .slice(eq + 1)
+      .trim()
+      .replace(/^["']|["']$/g, '');
   }
-  console.error('.env 에 ZEN_API_KEY 가 없습니다.');
+  console.error(`.env 에 ${KEY_NAMES.join(' 또는 ')} 가 없습니다.`);
   process.exit(2);
 }
 const KEY = readKey();
@@ -160,7 +175,7 @@ const QUESTIONS = [
 ];
 
 async function chat(messages) {
-  const res = await fetch('https://opencode.ai/zen/v1/chat/completions', {
+  const res = await fetch(`${BASE_URL}/chat/completions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${KEY}` },
     body: JSON.stringify({ model: MODEL, messages, tools: TOOLS, max_tokens: 800 }),
