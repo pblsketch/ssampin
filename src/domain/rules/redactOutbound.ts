@@ -23,7 +23,7 @@ import { checkOutboundText, checkOutboundValue } from './assertNoPii';
 export interface RedactionResult {
   /** 이름을 지우고 관문을 통과한 값 */
   readonly data: ModelSafe<ToolResultShape>;
-  /** 몇 곳을 지웠는지. 화면의 "이름 N개 지움" 표시에 쓴다 */
+  /** 몇 곳을 지웠는지. 카드 아래 "이름·연락처 N곳을 지웠어요" 안내에 쓴다 */
   readonly redactedCount: number;
   /** ★true 면 자유 입력이 아닌 곳에서 걸렸다는 뜻 — 이 카드는 보내지 않는다 */
   readonly blocked: boolean;
