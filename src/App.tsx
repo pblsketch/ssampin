@@ -24,6 +24,12 @@ const FormsPage = React.lazy(() =>
 const NotePage = React.lazy(() =>
   import('@adapters/components/Note/NotePage').then((m) => ({ default: m.NotePage })),
 );
+// 온라인 교무실은 이 탭에 들어갈 때만 필요한 온라인 전용 화면이라 늦게 불러온다
+const StaffRoomPage = React.lazy(() =>
+  import('@adapters/components/StaffRoom/StaffRoomPage').then((m) => ({
+    default: m.StaffRoomPage,
+  })),
+);
 import { ToolsGrid } from '@adapters/components/Tools/ToolsGrid';
 import { BookmarksPage } from '@adapters/components/Tools/BookmarksPage';
 import { SchoolAnnouncementsPage } from '@adapters/components/SchoolAnnouncements/SchoolAnnouncementsPage';
@@ -327,6 +333,19 @@ function renderPage(
       <PinGuard feature="bookmarks">
         <BookmarksPage />
       </PinGuard>
+    );
+  }
+  if (page === 'staffroom') {
+    return (
+      <Suspense
+        fallback={
+          <div className="flex h-full items-center justify-center">
+            <p className="text-sp-muted text-lg">온라인 교무실을 준비하는 중...</p>
+          </div>
+        }
+      >
+        <StaffRoomPage />
+      </Suspense>
     );
   }
   if (page === 'tool-school-announcements') {

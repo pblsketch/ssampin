@@ -1,0 +1,319 @@
+/**
+ * 온라인 교무실 스토어 (M1)
+ *
+ * 계획서: docs/01-plan/features/online-staffroom.plan.md §9(M1)
+ *
+ * 이 탭만 온라인 전용이라(§10.2) "왜 안 되는지"를 항상 남긴다 —
+ * 구글 미연결·인터넷 없음·권한 없음을 각각 구분해 한국어로 알린다.
+ * 조용히 빈 화면을 띄우는 경로를 만들지 않는다.
+ */
+import { create } from 'zustand';
+import type {
+  StaffRoomDepartment,
+  StaffRoomInvite,
+  StaffRoomMember,
+  StaffRoomRole,
+} from '@domain/entities/StaffRoom';
+import { isInviteCode, normalizeInviteCode } from '@domain/valueObjects/StaffRoomInviteCode';
+import { isDepartmentAdmin } from '@domain/rules/staffRoomPermission';
+import { StaffRoomHttpError } from '@domain/errors/StaffRoomError';
+
+/** 구글 계정이 연결되어 있지 않을 때의 안내 */
+const NEEDS_GOOGLE_MESSAGE =
+  '온라인 교무실은 구글 로그인이 필요합니다. 설정 > 구글 계정에서 연결해주세요.';
+
+interface StaffRoomState {
+  /** 내가 멤버인 부서 목록 */
+  departments: StaffRoomDepartment[];
+  /** 들어가 있는 부서. null 이면 목록 화면 */
+  currentDepartment: StaffRoomDepartment | null;
+  members: StaffRoomMember[];
+  invites: StaffRoomInvite[];
+
+  isLoading: boolean;
+  /** 부서 목록을 한 번이라도 불러왔는가 — 빈 상태와 로딩 전을 구분한다 */
+  hasLoadedDepartments: boolean;
+  error: string | null;
+  /** 구글 계정 연결이 필요한 상태인지 — 화면이 연결 버튼을 띄운다 */
+  needsGoogleConnect: boolean;
+
+  loadDepartments: () => Promise<void>;
+  createDepartment: (name: string, description: string) => Promise<StaffRoomDepartment | null>;
+  openDepartment: (departmentId: string) => Promise<void>;
+  closeDepartment: () => void;
+
+  createInvite: (expiresInDays: number | null) => Promise<StaffRoomInvite | null>;
+  revokeInvite: (inviteId: string) => Promise<void>;
+
+  joinByCode: (code: string) => Promise<boolean>;
+
+  setMemberRole: (memberId: string, role: StaffRoomRole) => Promise<void>;
+  removeMember: (memberId: string) => Promise<void>;
+
+  clearError: () => void;
+}
+
+/** 실패 원인을 한국어 한 줄로 — 서버가 준 문구가 있으면 그걸 그대로 쓴다 */
+function messageOf(err: unknown): string {
+  if (err instanceof Error && err.message) return err.message;
+  return '요청 처리 중 오류가 발생했습니다.';
+}
+
+/**
+ * 구글 access token 을 가져온다.
+ * 연결이 안 돼 있으면 null 을 돌려주고, 부르는 쪽이 안내를 띄운다.
+ */
+async function getGoogleToken(): Promise<string | null> {
+  try {
+    const { authenticateGoogle } = await import('@adapters/di/container');
+    if (!(await authenticateGoogle.isConnected())) return null;
+    return await authenticateGoogle.getValidAccessToken();
+  } catch {
+    return null;
+  }
+}
+
+export const useStaffRoomStore = create<StaffRoomState>((set, get) => ({
+  departments: [],
+  currentDepartment: null,
+  members: [],
+  invites: [],
+  isLoading: false,
+  hasLoadedDepartments: false,
+  error: null,
+  needsGoogleConnect: false,
+
+  clearError: () => set({ error: null }),
+
+  closeDepartment: () => set({ currentDepartment: null, members: [], invites: [] }),
+
+  loadDepartments: async () => {
+    set({ isLoading: true, error: null, needsGoogleConnect: false });
+    const token = await getGoogleToken();
+    if (!token) {
+      set({ isLoading: false, needsGoogleConnect: true, error: NEEDS_GOOGLE_MESSAGE });
+      return;
+    }
+    try {
+      const { staffRoomPort } = await import('@adapters/di/container');
+      const departments = await staffRoomPort.listDepartments(token);
+      set({ departments, isLoading: false, hasLoadedDepartments: true });
+    } catch (err) {
+      set({ isLoading: false, error: messageOf(err) });
+    }
+  },
+
+  createDepartment: async (name, description) => {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      set({ error: '부서 이름을 입력해주세요.' });
+      return null;
+    }
+
+    set({ isLoading: true, error: null, needsGoogleConnect: false });
+    const token = await getGoogleToken();
+    if (!token) {
+      set({ isLoading: false, needsGoogleConnect: true, error: NEEDS_GOOGLE_MESSAGE });
+      return null;
+    }
+
+    try {
+      const { staffRoomPort, authenticateGoogle } = await import('@adapters/di/container');
+      const department = await staffRoomPort.createDepartment(token, {
+        name: trimmed,
+        description: description.trim(),
+      });
+
+      // 자료가 쌓일 드라이브의 주인 자격을 서버가 대신 쓸 수 있게 토큰을 맡긴다(§3.2).
+      // 실패해도 부서 자체는 만들어진 것이므로 목록 갱신은 그대로 진행한다 —
+      // 자료실이 생기는 M3 에서 관리자 재로그인 안내로 회복한다(§10.1).
+      try {
+        const refreshToken = await authenticateGoogle.getRefreshToken();
+        if (refreshToken) {
+          const expiresAtMs = await authenticateGoogle.getExpiresAt();
+          await staffRoomPort.saveAdminToken(department.id, {
+            accessToken: token,
+            refreshToken,
+            expiresAt: expiresAtMs
+              ? new Date(expiresAtMs).toISOString()
+              : new Date(Date.now() + 3600 * 1000).toISOString(),
+          });
+        }
+      } catch (tokenErr) {
+        console.error('[StaffRoom] 관리자 토큰 저장 실패:', tokenErr);
+      }
+
+      set((state) => ({
+        departments: [...state.departments, department],
+        isLoading: false,
+        hasLoadedDepartments: true,
+      }));
+      return department;
+    } catch (err) {
+      set({ isLoading: false, error: messageOf(err) });
+      return null;
+    }
+  },
+
+  openDepartment: async (departmentId) => {
+    set({ isLoading: true, error: null, needsGoogleConnect: false });
+    const token = await getGoogleToken();
+    if (!token) {
+      set({ isLoading: false, needsGoogleConnect: true, error: NEEDS_GOOGLE_MESSAGE });
+      return;
+    }
+
+    try {
+      const { staffRoomPort } = await import('@adapters/di/container');
+      const [department, members] = await Promise.all([
+        staffRoomPort.getDepartment(token, departmentId),
+        staffRoomPort.listMembers(token, departmentId),
+      ]);
+
+      // 초대 목록은 관리자만 볼 수 있다 — 일반 멤버로 호출하면 403 이 난다.
+      // 실패해도 부서 화면 전체를 막지는 않되, 조용히 삼키지는 않는다(원인 추적용).
+      const invites = isDepartmentAdmin(department.myRole)
+        ? await staffRoomPort.listInvites(token, departmentId).catch((inviteErr: unknown) => {
+            console.error('[StaffRoom] 초대 목록 불러오기 실패:', inviteErr);
+            return [];
+          })
+        : [];
+
+      set({ currentDepartment: department, members, invites, isLoading: false });
+    } catch (err) {
+      set({ isLoading: false, error: messageOf(err) });
+    }
+  },
+
+  createInvite: async (expiresInDays) => {
+    const department = get().currentDepartment;
+    if (!department) return null;
+
+    set({ isLoading: true, error: null });
+    const token = await getGoogleToken();
+    if (!token) {
+      set({ isLoading: false, needsGoogleConnect: true, error: NEEDS_GOOGLE_MESSAGE });
+      return null;
+    }
+
+    try {
+      const { staffRoomPort } = await import('@adapters/di/container');
+      const invite = await staffRoomPort.createInvite(token, {
+        departmentId: department.id,
+        expiresInDays,
+      });
+      set((state) => ({ invites: [invite, ...state.invites], isLoading: false }));
+      return invite;
+    } catch (err) {
+      set({ isLoading: false, error: messageOf(err) });
+      return null;
+    }
+  },
+
+  revokeInvite: async (inviteId) => {
+    const department = get().currentDepartment;
+    if (!department) return;
+
+    set({ isLoading: true, error: null });
+    const token = await getGoogleToken();
+    if (!token) {
+      set({ isLoading: false, needsGoogleConnect: true, error: NEEDS_GOOGLE_MESSAGE });
+      return;
+    }
+
+    try {
+      const { staffRoomPort } = await import('@adapters/di/container');
+      const updated = await staffRoomPort.revokeInvite(token, department.id, inviteId);
+      set((state) => ({
+        invites: state.invites.map((i) => (i.id === updated.id ? updated : i)),
+        isLoading: false,
+      }));
+    } catch (err) {
+      set({ isLoading: false, error: messageOf(err) });
+    }
+  },
+
+  joinByCode: async (rawCode) => {
+    const code = normalizeInviteCode(rawCode);
+    if (!isInviteCode(code)) {
+      // 서버를 부르기 전에 화면에서 먼저 걸러 준다 — 헛걸음과 한도 소모를 줄인다
+      set({ error: '초대 코드는 영문·숫자 6자리입니다. 코드를 다시 확인해주세요.' });
+      return false;
+    }
+
+    set({ isLoading: true, error: null, needsGoogleConnect: false });
+    const token = await getGoogleToken();
+    if (!token) {
+      // 코드만으로는 들어갈 수 없다 — 입장은 구글 로그인으로만 이뤄진다(§7)
+      set({ isLoading: false, needsGoogleConnect: true, error: NEEDS_GOOGLE_MESSAGE });
+      return false;
+    }
+
+    try {
+      const { staffRoomPort } = await import('@adapters/di/container');
+      const result = await staffRoomPort.joinByCode(token, code);
+      set({ isLoading: false });
+      await get().loadDepartments();
+      await get().openDepartment(result.departmentId);
+      return true;
+    } catch (err) {
+      // 이미 그 부서의 멤버라면 막다른 오류로 두지 말고 그 부서로 데려간다 —
+      // 코드를 두 번 넣은 선생님이 "왜 안 되지"로 끝나지 않게 한다
+      const departmentId = err instanceof StaffRoomHttpError ? err.departmentId : null;
+      if (departmentId) {
+        set({ isLoading: false, error: null });
+        await get().loadDepartments();
+        await get().openDepartment(departmentId);
+        return true;
+      }
+      set({ isLoading: false, error: messageOf(err) });
+      return false;
+    }
+  },
+
+  setMemberRole: async (memberId, role) => {
+    const department = get().currentDepartment;
+    if (!department) return;
+
+    set({ isLoading: true, error: null });
+    const token = await getGoogleToken();
+    if (!token) {
+      set({ isLoading: false, needsGoogleConnect: true, error: NEEDS_GOOGLE_MESSAGE });
+      return;
+    }
+
+    try {
+      const { staffRoomPort } = await import('@adapters/di/container');
+      const updated = await staffRoomPort.setMemberRole(token, department.id, memberId, role);
+      set((state) => ({
+        members: state.members.map((m) => (m.id === updated.id ? updated : m)),
+        isLoading: false,
+      }));
+    } catch (err) {
+      set({ isLoading: false, error: messageOf(err) });
+    }
+  },
+
+  removeMember: async (memberId) => {
+    const department = get().currentDepartment;
+    if (!department) return;
+
+    set({ isLoading: true, error: null });
+    const token = await getGoogleToken();
+    if (!token) {
+      set({ isLoading: false, needsGoogleConnect: true, error: NEEDS_GOOGLE_MESSAGE });
+      return;
+    }
+
+    try {
+      const { staffRoomPort } = await import('@adapters/di/container');
+      await staffRoomPort.removeMember(token, department.id, memberId);
+      set((state) => ({
+        members: state.members.filter((m) => m.id !== memberId),
+        isLoading: false,
+      }));
+    } catch (err) {
+      set({ isLoading: false, error: messageOf(err) });
+    }
+  },
+}));

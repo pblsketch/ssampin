@@ -32,6 +32,7 @@ import type { IGoogleDrivePort } from '@domain/ports/IGoogleDrivePort';
 import type { IGoogleTasksPort } from '@domain/ports/IGoogleTasksPort';
 import type { IAssignmentServicePort } from '@domain/ports/IAssignmentServicePort';
 import type { ISignaturePort } from '@domain/ports/ISignaturePort';
+import type { IStaffRoomPort } from '@domain/ports/IStaffRoomPort';
 import type { IGoogleSheetPort } from '@domain/ports/IGoogleSheetPort';
 import type { IConsultationRepository } from '@domain/repositories/IConsultationRepository';
 import type { ISurveyRepository } from '@domain/repositories/ISurveyRepository';
@@ -74,6 +75,7 @@ import { GoogleDriveClient } from '@infrastructure/google/GoogleDriveClient';
 import { GoogleTasksApiClient } from '@infrastructure/google/GoogleTasksApiClient';
 import { AssignmentSupabaseClient } from '@infrastructure/supabase/AssignmentSupabaseClient';
 import { SignatureSupabaseClient } from '@infrastructure/supabase/SignatureSupabaseClient';
+import { StaffRoomSupabaseClient } from '@infrastructure/supabase/StaffRoomSupabaseClient';
 import { GoogleSheetClient } from '@infrastructure/google/GoogleSheetClient';
 import { ShortLinkClient } from '@infrastructure/supabase/ShortLinkClient';
 import { MemoSharePresenceClient } from '@infrastructure/supabase/MemoSharePresenceClient';
@@ -358,6 +360,10 @@ export const assignmentServicePort: IAssignmentServicePort = assignmentSupabaseC
 export const signatureSupabaseClient = new SignatureSupabaseClient();
 
 export const signaturePort: ISignaturePort = signatureSupabaseClient;
+
+// === 온라인 교무실 (M1) ===
+
+export const staffRoomPort: IStaffRoomPort = new StaffRoomSupabaseClient();
 
 // GoogleSheetClient는 토큰 getter가 필요 → lazy 초기화
 let _sheetClient: GoogleSheetClient | null = null;
