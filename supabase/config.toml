@@ -103,3 +103,26 @@ verify_jwt = true
 # 인증 없음(anon key 옵션) + body 검증 + IP rate limit. security-hardening P0-C / 감사 F-2.
 [functions.oauth-exchange]
 verify_jwt = false
+
+# ── 온라인 교무실 (M1) ────────────────────────────────────────────────
+# 다섯 함수 모두 게이트웨이에서 JWT(anon key) 1차 검증 + 함수 자체 인증을 겹친다.
+# 자체 인증은 body 의 googleAccessToken 을 구글 userinfo 로 되물어 이메일을 확인하고,
+# 그 이메일이 staffroom_members 에 있는지 보는 방식이다(계획서 §7).
+# staffroom_* 표는 049 에서 service_role 전용으로 잠겨 있어 이 함수들이 유일한 통로다.
+
+[functions.staffroom-departments]
+verify_jwt = true
+
+[functions.staffroom-invites]
+verify_jwt = true
+
+[functions.staffroom-members]
+verify_jwt = true
+
+# 초대 코드 입력 — 위 검증에 더해 _shared/rateLimit.ts 를 IP·지메일 두 축으로 건다.
+[functions.staffroom-join]
+verify_jwt = true
+
+# 부서 관리자 구글 토큰 보관 — STAFFROOM_ENCRYPTION_KEY 로 AES-256-GCM 암호화(ADR-062).
+[functions.staffroom-save-admin-token]
+verify_jwt = true
