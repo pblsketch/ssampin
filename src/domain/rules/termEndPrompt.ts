@@ -11,6 +11,10 @@
  * ⚠️ 이건 ADR-037이 금지한 "앱이 학사 구간을 단정하는 것"이 아니다. 반대로 **모른다는 사실을
  * 인정하고 사용자에게 묻는다.** 답을 들으면 다시 묻지 않는다(등록되거나 넘기면 조용해진다).
  *
+ * ⚠️ "다시 묻지 않는다"는 **먼저 말 걸지 않는다**는 뜻이지 **못 고친다**는 뜻이 아니다. 종업식이
+ * 바뀌거나 날짜를 잘못 넣으면 학기 끝까지 틀린 차시를 보게 되므로, 사용자가 직접 부른
+ * 경우(`editRequested`)는 이미 답한 학기라도 연다.
+ *
  * ⚠️ 이 판정이 참이어도 팝업을 곧장 띄우면 안 된다. 8월에 처음 쓰는 선생님은 개학일 팝업과
  * 조건이 겹쳐 **focus trap 두 개가 동시에** 뜬다(2026년 8월 온보딩 먹통 사고의 재현 경로).
  * 두 팝업 모두 모달 코디네이터에 등록해 한 번에 하나만 뜨게 하는 것은 화면 쪽 책임이다.
@@ -30,6 +34,12 @@ export interface TermEndPromptInput {
    * 이 값이 false면 무조건 묻지 않는다 — 앱 시작만으로는 물을 이유가 없다.
    */
   readonly progressViewOpened: boolean;
+  /**
+   * 사용자가 "고칠래요"라고 직접 눌렀는가.
+   * 참이면 이미 등록됐거나 넘긴 학기라도 연다 — 침묵 규칙은 먼저 묻지 않기 위한 것이지
+   * 고치지 못하게 하려는 것이 아니다.
+   */
+  readonly editRequested?: boolean;
 }
 
 export type TermEndPromptDecision =
@@ -43,6 +53,9 @@ export type TermEndPromptDecision =
  *  - 그 학기 종료일이 이미 등록돼 있다 — 답을 들었다.
  *  - 사용자가 이미 넘겼다 — 같은 학기에 다시 묻지 않는다.
  *  - 학기 라벨이 형식에 맞지 않는다 — 추측하지 않고 조용히 넘어간다(예외를 던지지 않는다).
+ *
+ * 단, 아래 두 침묵(등록됨·넘김)은 **사용자가 직접 부르면 열린다**. 화면이 없는 상태(위 두 가지)는
+ * 부름으로도 열리지 않는다 — 종료일을 쓰지 않는 화면에서 팝업이 뜨면 그건 고장이다.
  */
 export function decideTermEndPrompt(input: TermEndPromptInput): TermEndPromptDecision {
   if (!input.progressViewOpened) return { kind: 'none' };
@@ -51,6 +64,7 @@ export function decideTermEndPrompt(input: TermEndPromptInput): TermEndPromptDec
   if (parsed === null) return { kind: 'none' };
 
   const term = input.currentTerm;
+  if (input.editRequested === true) return { kind: 'ask', term };
   if (input.termEndDates?.[term] !== undefined) return { kind: 'none' };
   if (input.skippedTerm === term) return { kind: 'none' };
 

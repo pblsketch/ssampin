@@ -40,6 +40,7 @@ function view(over: Partial<LessonCountView> = {}): LessonCountView {
     hasFutureEstimate: false,
     needsTermEnd: false,
     term: '2026-2',
+    termEndIso: '2026-12-31',
     ...over,
   };
 }
@@ -51,6 +52,7 @@ function render(v: LessonCountView, stats: EntryBasedStats = ENTRY_STATS): strin
       entryStats={stats}
       detailsOpen={false}
       onToggleDetails={() => {}}
+      onEditTermEnd={() => {}}
     />,
   );
 }
@@ -115,9 +117,35 @@ describe('LessonCountSummary — 셀 수 없는 상태는 숫자를 감춘다', 
     expect(html).not.toContain('시간표를 먼저 등록');
   });
 
-  it('학기 날짜가 잘못되면 그 사실을 말한다', () => {
+  it('학기 날짜가 잘못되면 그 사실을 말하고, 그 자리에서 고칠 문을 준다', () => {
+    // 날짜가 꼬여 숫자를 못 세는 상태에서 고칠 방법이 없으면 학기 끝까지 그대로 간다.
     const html = render(view({ status: 'invalidTerm', totalPeriods: 0 }));
     expect(html).toContain('학기 시작일');
+    expect(html).toContain('마지막 수업일 고치기');
+  });
+
+  it('시간표가 없어 못 세는 상태에는 날짜 고치기를 권하지 않는다', () => {
+    // 원인이 시간표인데 날짜를 고치라고 하면 엉뚱한 곳을 헤매게 된다.
+    expect(render(view({ status: 'noTimetable', totalPeriods: 0 }))).not.toContain(
+      '마지막 수업일 고치기',
+    );
+  });
+});
+
+describe('LessonCountSummary — 학기 마지막 수업일 고치기', () => {
+  it('언제까지로 세고 있는지 화면에 드러낸다', () => {
+    // 한 번 답하고 나면 팝업이 다시 뜨지 않으므로, 여기가 유일하게 확인·수정하는 자리다.
+    const html = render(view({ termEndIso: '2026-12-31' }));
+    // renderToString이 조각 사이에 주석 마커를 넣으므로 조각으로 나눠 본다.
+    expect(html).toContain('12월 31일');
+    expect(html).toContain('까지');
+    expect(html).toContain('학기 마지막 수업일 고치기'); // 버튼 title
+  });
+
+  it('종료일을 아직 모르면 날짜 대신 학기만 보여준다', () => {
+    const html = render(view({ termEndIso: null }));
+    expect(html).toContain('2026학년도 2학기');
+    expect(html).not.toContain('까지');
   });
 });
 

@@ -112,6 +112,8 @@ describe('termEndUnknownView — 숫자를 보여주지 않는 상태', () => {
     expect(v.needsTermEnd).toBe(true);
     expect(v.totalPeriods).toBe(0);
     expect(v.term).toBe('2026-2');
+    // 모르는 날짜를 아는 척 채우지 않는다 — 화면이 "○○까지"라고 말해 버리면 거짓말이 된다.
+    expect(v.termEndIso).toBeNull();
   });
 });
 

@@ -83,6 +83,6 @@ export function useLessonCountEstimate(classId: string): LessonCountView {
       adjustmentByDate,
       todayIso,
     });
-    return { ...estimate, needsTermEnd: false, term };
-  }, [indexResult, holidayNameByDate, eventsByDate, adjustmentByDate, todayIso, term]);
+    return { ...estimate, needsTermEnd: false, term, termEndIso: endIso };
+  }, [indexResult, holidayNameByDate, eventsByDate, adjustmentByDate, todayIso, term, endIso]);
 }

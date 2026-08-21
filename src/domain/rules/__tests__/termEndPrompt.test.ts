@@ -48,3 +48,34 @@ describe('decideTermEndPrompt — 묻지 않는 조건 4가지', () => {
     });
   });
 });
+
+describe('decideTermEndPrompt — 사용자가 직접 고치러 부른 경우', () => {
+  it('이미 등록된 학기라도 연다 — 종업식이 바뀌면 고칠 길이 있어야 한다', () => {
+    expect(
+      decideTermEndPrompt({
+        ...BASE,
+        termEndDates: { '2026-2': '2026-12-31' },
+        editRequested: true,
+      }),
+    ).toEqual({ kind: 'ask', term: '2026-2' });
+  });
+
+  it('"나중에"로 넘긴 학기도 연다', () => {
+    expect(decideTermEndPrompt({ ...BASE, skippedTerm: '2026-2', editRequested: true })).toEqual({
+      kind: 'ask',
+      term: '2026-2',
+    });
+  });
+
+  it('진도 화면이 아니면 불러도 열리지 않는다 — 종료일을 안 쓰는 곳에서 뜨면 고장이다', () => {
+    expect(
+      decideTermEndPrompt({ ...BASE, progressViewOpened: false, editRequested: true }),
+    ).toEqual({ kind: 'none' });
+  });
+
+  it('학기 라벨 형식이 아니면 불러도 열리지 않는다', () => {
+    expect(decideTermEndPrompt({ ...BASE, currentTerm: '2026-3', editRequested: true })).toEqual({
+      kind: 'none',
+    });
+  });
+});

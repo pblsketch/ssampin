@@ -21,6 +21,13 @@ export interface LessonCountView extends LessonCountEstimate {
   readonly needsTermEnd: boolean;
   /** 학기 라벨('2026-2') — 화면 문구에 쓴다. */
   readonly term: string;
+  /**
+   * 등록된 학기 마지막 수업일 'YYYY-MM-DD' — 아직 없으면 `null`.
+   *
+   * 화면이 "언제까지로 세고 있는지"를 보여주고 고칠 수 있게 하려면 이 값이 필요하다. 화면이
+   * 설정에서 따로 꺼내면 계산에 쓴 날짜와 화면에 쓴 날짜가 갈릴 수 있어 여기에 실어 보낸다.
+   */
+  readonly termEndIso: string | null;
 }
 
 /** 'YYYY-MM-DD'에서 연도만. 형식이 아니면 null. */
@@ -104,5 +111,6 @@ export function termEndUnknownView(term: string): LessonCountView {
     hasFutureEstimate: false,
     needsTermEnd: true,
     term,
+    termEndIso: null,
   };
 }

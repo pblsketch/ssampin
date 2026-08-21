@@ -14,9 +14,8 @@
  * 어제까지 보던 숫자가 달라지면 선생님은 고장으로 읽는다.
  */
 
-import { useCallback } from 'react';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
-import { formatTermKo } from '@domain/rules/academicCalendar';
+import { formatTermKo, formatMonthDayKo } from '@domain/rules/academicCalendar';
 import type { LessonCountView } from '@adapters/hooks/useLessonCountEstimate';
 
 export interface EntryBasedStats {
@@ -32,6 +31,13 @@ interface LessonCountSummaryProps {
   /** 근거 패널 열기/닫기 */
   readonly onToggleDetails: () => void;
   readonly detailsOpen: boolean;
+  /**
+   * 학기 마지막 수업일을 묻는/고치는 팝업을 연다.
+   *
+   * 종료일을 한 번 답하고 나면 팝업은 다시 뜨지 않으므로, **여기가 유일한 되돌아갈 문**이다.
+   * 종업식이 바뀌거나 날짜를 잘못 넣었을 때 문이 없으면 학기 끝까지 틀린 차시를 본다.
+   */
+  readonly onEditTermEnd: () => void;
 }
 
 /** 못 세는 상태별 안내 문구와 아이콘. */
@@ -50,14 +56,9 @@ export function LessonCountSummary({
   entryStats,
   onToggleDetails,
   detailsOpen,
+  onEditTermEnd,
 }: LessonCountSummaryProps) {
   const settings = useSettingsStore((s) => s.settings);
-  const updateSettings = useSettingsStore((s) => s.update);
-
-  /** "나중에"로 넘겼던 종료일 질문을 다시 띄운다. */
-  const handleAskTermEnd = useCallback(() => {
-    void updateSettings({ termEndPromptSkipped: '' });
-  }, [updateSettings]);
 
   const termLabel = formatTermKo(view.term);
 
@@ -75,7 +76,7 @@ export function LessonCountSummary({
           </p>
           <button
             type="button"
-            onClick={handleAskTermEnd}
+            onClick={onEditTermEnd}
             className="rounded-lg bg-sp-accent px-3 py-1.5 text-xs font-semibold text-sp-accent-fg transition-all duration-sp-base ease-sp-out hover:brightness-110 active:scale-95"
           >
             알려주기
@@ -95,11 +96,21 @@ export function LessonCountSummary({
     const msg = BLOCKED_MESSAGE[view.status] ?? BLOCKED_MESSAGE.classNotFound!;
     return (
       <div className="rounded-xl border border-dashed border-sp-border bg-sp-surface px-4 py-3">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <span aria-hidden className="material-symbols-outlined text-xl text-sp-muted">
             {msg.icon}
           </span>
-          <p className="text-sm text-sp-muted">{msg.text}</p>
+          <p className="flex-1 text-sm text-sp-muted">{msg.text}</p>
+          {/* 날짜가 꼬여서 못 세는 경우에만 고칠 문을 연다 — 시간표 문제는 여기서 못 고친다. */}
+          {view.status === 'invalidTerm' && (
+            <button
+              type="button"
+              onClick={onEditTermEnd}
+              className="rounded-lg border border-sp-border px-3 py-1.5 text-xs font-sp-medium text-sp-text transition-all duration-sp-base ease-sp-out hover:bg-sp-card active:scale-95"
+            >
+              마지막 수업일 고치기
+            </button>
+          )}
         </div>
       </div>
     );
@@ -115,7 +126,24 @@ export function LessonCountSummary({
     <div className="rounded-xl border border-sp-border bg-sp-surface px-4 py-3">
       {/* 숫자 줄 */}
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <span className="text-xs font-sp-medium text-sp-muted">{termLabel}</span>
+        {/*
+          학기 표시가 곧 "언제까지로 세고 있는지"이자 그걸 고치는 문이다. 별도 설정 화면을 두면
+          숫자를 보다가 이상하다고 느낀 자리에서 손댈 수 없어, 틀린 채로 학기가 끝난다.
+        */}
+        <button
+          type="button"
+          onClick={onEditTermEnd}
+          title="학기 마지막 수업일 고치기"
+          className="-ml-1.5 flex items-center gap-1 rounded-lg px-1.5 py-0.5 text-xs font-sp-medium text-sp-muted transition-all duration-sp-base ease-sp-out hover:bg-sp-card hover:text-sp-text active:scale-95"
+        >
+          <span>{termLabel}</span>
+          {view.termEndIso !== null && (
+            <span className="tabular-nums">· {formatMonthDayKo(view.termEndIso)}까지</span>
+          )}
+          <span aria-hidden className="material-symbols-outlined text-sm">
+            edit
+          </span>
+        </button>
 
         <span className="flex items-baseline gap-1.5">
           <span className="text-2xl font-bold leading-none text-sp-text tabular-nums">

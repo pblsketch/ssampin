@@ -53,6 +53,17 @@ export function formatTermKo(term: string): string {
 }
 
 /**
+ * 'YYYY-MM-DD' → '12월 31일'. 형식이 아니면 원문 그대로.
+ *
+ * 학기 종료일처럼 **올해 안의 날짜**를 문장 안에서 짧게 말할 때 쓴다. 화면마다 각자 정규식을
+ * 세우면 한쪽만 고쳤을 때 같은 날짜가 다른 모양으로 보인다(실제로 팝업과 요약줄 두 곳이 필요해졌다).
+ */
+export function formatMonthDayKo(iso: string): string {
+  const m = /^\d{4}-(\d{2})-(\d{2})$/.exec(iso);
+  return m === null ? iso : `${Number(m[1])}월 ${Number(m[2])}일`;
+}
+
+/**
  * 레코드의 `date`(YYYY-MM-DD, **사건 발생일**)에서 학기 라벨을 파생한다 — S2.2 term 스탬프의 정본.
  * (ADR-034: epoch = 레코드 단위 term 스탬프)
  *

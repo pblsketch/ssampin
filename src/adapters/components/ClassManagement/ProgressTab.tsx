@@ -122,6 +122,8 @@ export function ProgressTab({ classId }: ProgressTabProps) {
   const [importDateOverrides, setImportDateOverrides] = useState<Map<string, string>>(new Map());
   const [importDateShiftDays, setImportDateShiftDays] = useState(0);
   const [showLessonCountDetails, setShowLessonCountDetails] = useState(false);
+  /** 사용자가 학기 마지막 수업일을 직접 고치러 팝업을 부른 상태. */
+  const [editingTermEnd, setEditingTermEnd] = useState(false);
   const [showBulkFill, setShowBulkFill] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
@@ -591,7 +593,10 @@ export function ProgressTab({ classId }: ProgressTabProps) {
         종료일이 여기서만 쓰이기 때문 — 진도를 안 쓰는 선생님에게는 평생 필요 없는 질문이다.
         화면을 벗어나면 함께 언마운트되므로 "지금 이 화면에 있다"는 신호를 따로 들고 다니지 않는다.
       */}
-      <TermEndPromptModal />
+      <TermEndPromptModal
+        editRequested={editingTermEnd}
+        onEditDone={() => setEditingTermEnd(false)}
+      />
 
       {/* ── 학기 총 차시 추정 + 근거 ── */}
       <LessonCountSummary
@@ -599,6 +604,7 @@ export function ProgressTab({ classId }: ProgressTabProps) {
         entryStats={stats}
         detailsOpen={showLessonCountDetails}
         onToggleDetails={() => setShowLessonCountDetails((v) => !v)}
+        onEditTermEnd={() => setEditingTermEnd(true)}
       />
       {showLessonCountDetails && lessonCountView.status === 'ok' && (
         <ExcludedDaysPanel view={lessonCountView} onAdjust={handleLessonDayAdjust} />
