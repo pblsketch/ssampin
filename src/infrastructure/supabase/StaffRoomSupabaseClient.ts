@@ -13,6 +13,7 @@
  *  - staffroom-save-admin-token {departmentId, accessToken, refreshToken, expiresAt}
  *  - staffroom-library          {action: list|uploadSession|commit|download|delete|..., ...}
  *  - staffroom-rooms            {action: modules|addModule|discussions|vote|minutesList|..., ...}
+ *  - staffroom-plan             {action: list|mine|addEvent|addTask|toggleTask|..., ...}
  */
 import type {
   CreateStaffRoomDepartmentInput,
@@ -38,8 +39,12 @@ import type {
   StaffRoomMinutes,
   StaffRoomStance,
   StaffRoomTally,
+  StaffRoomEvent,
+  StaffRoomTask,
   StaffRoomVote,
+  WriteStaffRoomEventInput,
   WriteStaffRoomMinutesInput,
+  WriteStaffRoomTaskInput,
 } from '@domain/entities/StaffRoomRooms';
 import type {
   StaffRoomFile,
@@ -834,6 +839,122 @@ export class StaffRoomSupabaseClient implements IStaffRoomPort {
       googleAccessToken,
       departmentId,
       minutesId,
+    });
+  }
+
+  // ════════════════════════════════════════════════════════════════
+  // 부서 일정 · 업무 분담 (M4 · §8-B)
+  // ════════════════════════════════════════════════════════════════
+
+  async listPlan(
+    googleAccessToken: string,
+    departmentId: string,
+  ): Promise<{ events: StaffRoomEvent[]; tasks: StaffRoomTask[] }> {
+    return this.invoke('staffroom-plan', { action: 'list', googleAccessToken, departmentId });
+  }
+
+  async listMyPlan(
+    googleAccessToken: string,
+    departmentIds: readonly string[],
+  ): Promise<{ events: StaffRoomEvent[]; tasks: StaffRoomTask[] }> {
+    return this.invoke('staffroom-plan', { action: 'mine', googleAccessToken, departmentIds });
+  }
+
+  async addEvent(
+    googleAccessToken: string,
+    departmentId: string,
+    input: WriteStaffRoomEventInput,
+  ): Promise<StaffRoomEvent> {
+    const res = await this.invoke<{ event: StaffRoomEvent }>('staffroom-plan', {
+      action: 'addEvent',
+      googleAccessToken,
+      departmentId,
+      ...input,
+    });
+    return res.event;
+  }
+
+  async updateEvent(
+    googleAccessToken: string,
+    departmentId: string,
+    eventId: string,
+    input: WriteStaffRoomEventInput,
+  ): Promise<StaffRoomEvent> {
+    const res = await this.invoke<{ event: StaffRoomEvent }>('staffroom-plan', {
+      action: 'updateEvent',
+      googleAccessToken,
+      departmentId,
+      eventId,
+      ...input,
+    });
+    return res.event;
+  }
+
+  async deleteEvent(
+    googleAccessToken: string,
+    departmentId: string,
+    eventId: string,
+  ): Promise<void> {
+    await this.invoke('staffroom-plan', {
+      action: 'deleteEvent',
+      googleAccessToken,
+      departmentId,
+      eventId,
+    });
+  }
+
+  async addTask(
+    googleAccessToken: string,
+    departmentId: string,
+    input: WriteStaffRoomTaskInput,
+  ): Promise<StaffRoomTask> {
+    const res = await this.invoke<{ task: StaffRoomTask }>('staffroom-plan', {
+      action: 'addTask',
+      googleAccessToken,
+      departmentId,
+      ...input,
+    });
+    return res.task;
+  }
+
+  async updateTask(
+    googleAccessToken: string,
+    departmentId: string,
+    taskId: string,
+    input: WriteStaffRoomTaskInput,
+  ): Promise<StaffRoomTask> {
+    const res = await this.invoke<{ task: StaffRoomTask }>('staffroom-plan', {
+      action: 'updateTask',
+      googleAccessToken,
+      departmentId,
+      taskId,
+      ...input,
+    });
+    return res.task;
+  }
+
+  async toggleTaskDone(
+    googleAccessToken: string,
+    departmentId: string,
+    taskId: string,
+    done: boolean,
+  ): Promise<StaffRoomTask> {
+    const res = await this.invoke<{ task: StaffRoomTask }>('staffroom-plan', {
+      action: 'toggleTask',
+      googleAccessToken,
+      departmentId,
+      taskId,
+      done,
+    });
+    return res.task;
+  }
+
+  async deleteTask(googleAccessToken: string, departmentId: string, taskId: string): Promise<void> {
+    await this.invoke('staffroom-plan', {
+      action: 'deleteTask',
+      googleAccessToken,
+      departmentId,
+      taskId,
     });
   }
 }

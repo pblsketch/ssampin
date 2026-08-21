@@ -19,6 +19,8 @@ import { DiscussionView } from './DiscussionView';
 import { GalleryView } from './GalleryView';
 import { MinutesView } from './MinutesView';
 import { DepartmentBanner } from './DepartmentBanner';
+import { PlanView } from './PlanView';
+import { useStaffRoomPlanStore } from '@adapters/stores/useStaffRoomPlanStore';
 import { ModuleTabs } from './ModuleTabs';
 import { useStaffRoomRoomsStore } from '@adapters/stores/useStaffRoomRoomsStore';
 import { useStaffRoomLibraryStore } from '@adapters/stores/useStaffRoomLibraryStore';
@@ -32,7 +34,11 @@ import { MyNameModal, hasSkippedNamePrompt } from './MyNameModal';
  * 계획서 §6 대로 공간(모듈)은 관리자가 만들고 이름을 붙이므로, 탭을 코드에 박아 두지 않고
  * **공간 목록에서 그린다.** 멤버·초대만 부서 자체의 것이라 고정이다.
  */
-type DetailTab = { kind: 'module'; moduleId: string } | { kind: 'members' } | { kind: 'invites' };
+type DetailTab =
+  | { kind: 'module'; moduleId: string }
+  | { kind: 'plan' }
+  | { kind: 'members' }
+  | { kind: 'invites' };
 type BoardMode = 'list' | 'write' | 'edit';
 
 export function DepartmentDetail() {
@@ -48,6 +54,7 @@ export function DepartmentDetail() {
   const hasLoadedModules = useStaffRoomRoomsStore((s) => s.hasLoadedModules);
   const loadModules = useStaffRoomRoomsStore((s) => s.loadModules);
   const roomsReset = useStaffRoomRoomsStore((s) => s.reset);
+  const planReset = useStaffRoomPlanStore((s) => s.reset);
 
   const [tab, setTab] = useState<DetailTab>({ kind: 'members' });
   const [boardMode, setBoardMode] = useState<BoardMode>('list');
@@ -89,6 +96,7 @@ export function DepartmentDetail() {
     boardReset();
     libraryReset();
     roomsReset();
+    planReset();
     closeDepartment();
   };
 
@@ -129,6 +137,20 @@ export function DepartmentDetail() {
               setTab({ kind: 'module', moduleId });
             }}
           />
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab.kind === 'plan'}
+            onClick={() => setTab({ kind: 'plan' })}
+            className={`-mb-px flex items-center gap-1.5 border-b-2 px-3 py-2.5 text-sm font-sp-medium transition-colors ${
+              tab.kind === 'plan'
+                ? 'border-sp-accent text-sp-text'
+                : 'border-transparent text-sp-muted hover:text-sp-text'
+            }`}
+          >
+            <span className="material-symbols-outlined text-icon-sm">calendar_month</span>
+            일정·업무
+          </button>
           <button
             type="button"
             role="tab"
@@ -215,6 +237,7 @@ export function DepartmentDetail() {
               </div>
             );
           })()}
+        {tab.kind === 'plan' && <PlanView departmentId={currentDepartment.id} />}
         {tab.kind === 'members' && <MemberList />}
         {tab.kind === 'invites' && isAdmin && <InvitePanel />}
       </div>

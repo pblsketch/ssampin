@@ -33,8 +33,12 @@ import type {
   StaffRoomMinutes,
   StaffRoomStance,
   StaffRoomTally,
+  StaffRoomEvent,
+  StaffRoomTask,
   StaffRoomVote,
+  WriteStaffRoomEventInput,
   WriteStaffRoomMinutesInput,
+  WriteStaffRoomTaskInput,
 } from '@domain/entities/StaffRoomRooms';
 import type {
   StaffRoomFile,
@@ -451,4 +455,64 @@ export interface IStaffRoomPort {
 
   /** 회의록 지우기 (쓴 사람 또는 관리자) */
   deleteMinutes(googleAccessToken: string, departmentId: string, minutesId: string): Promise<void>;
+
+  // ════════════════════════════════════════════════════════════════
+  // 부서 일정 · 업무 분담 (M4 · §8-B)
+  //
+  // ★ 부서 일정을 개인 일정으로 **복사하지 않는다.** 부서가 주인이라 나가면 안 보여야 하고,
+  //   복사하면 부서에서 고쳐도 내 것은 안 바뀐다. 읽어서 겹쳐 보여줄 뿐이다.
+  // ════════════════════════════════════════════════════════════════
+
+  /** 이 부서의 일정·업무 */
+  listPlan(
+    googleAccessToken: string,
+    departmentId: string,
+  ): Promise<{ events: StaffRoomEvent[]; tasks: StaffRoomTask[] }>;
+
+  /**
+   * 내가 멤버인 여러 부서의 일정·업무를 한 번에.
+   * 내 달력·내 할 일 위에 겹쳐 보여줄 때 쓴다 — 부서마다 따로 부르면 왕복이 부서 수만큼 는다.
+   */
+  listMyPlan(
+    googleAccessToken: string,
+    departmentIds: readonly string[],
+  ): Promise<{ events: StaffRoomEvent[]; tasks: StaffRoomTask[] }>;
+
+  addEvent(
+    googleAccessToken: string,
+    departmentId: string,
+    input: WriteStaffRoomEventInput,
+  ): Promise<StaffRoomEvent>;
+
+  updateEvent(
+    googleAccessToken: string,
+    departmentId: string,
+    eventId: string,
+    input: WriteStaffRoomEventInput,
+  ): Promise<StaffRoomEvent>;
+
+  deleteEvent(googleAccessToken: string, departmentId: string, eventId: string): Promise<void>;
+
+  addTask(
+    googleAccessToken: string,
+    departmentId: string,
+    input: WriteStaffRoomTaskInput,
+  ): Promise<StaffRoomTask>;
+
+  updateTask(
+    googleAccessToken: string,
+    departmentId: string,
+    taskId: string,
+    input: WriteStaffRoomTaskInput,
+  ): Promise<StaffRoomTask>;
+
+  /** 끝냄 표시 — 맡은 본인 또는 관리자만 (§8-B) */
+  toggleTaskDone(
+    googleAccessToken: string,
+    departmentId: string,
+    taskId: string,
+    done: boolean,
+  ): Promise<StaffRoomTask>;
+
+  deleteTask(googleAccessToken: string, departmentId: string, taskId: string): Promise<void>;
 }
