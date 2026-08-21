@@ -85,6 +85,10 @@ export default function Footer() {
             <a href="/terms" className="transition-colors hover:text-sp-text">
               이용약관
             </a>
+            <span className="text-sp-muted/40">·</span>
+            <a href="/credits" className="transition-colors hover:text-sp-text">
+              오픈소스 고지
+            </a>
           </nav>
           <p className="mt-4 text-xs text-sp-muted/60">
             © 2026 SsamPin v{VERSION} · 기록은 사용자 PC에 저장되며, 온라인 협업 기능을 쓸 때만

@@ -19,6 +19,17 @@ interface StorageStateView {
 // Design §3.1, security-guards.ts 참조.
 installDropGuard();
 
+/** 쿨메신저 쪽지 — main의 CoolMessage와 형태를 맞춘다. */
+interface CoolMessageDto {
+  key: number;
+  sender: string;
+  /** 받은 시각 (ISO 8601) */
+  receivedAt: string;
+  title: string;
+  body: string;
+  isUnread: boolean;
+}
+
 /** 단일/복수 선택 집계 */
 type AggregatedSingleMulti = { counts: Record<string, number>; total: number };
 /** 스케일 집계 */
@@ -334,6 +345,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
       | { outcome: 'unsupported' }
       | { outcome: 'failed'; message: string }
     > => ipcRenderer.invoke('oneclick-portal:launch'),
+  },
+  coolMessenger: {
+    /** 쪽지함을 읽을 수 있는가 — 설정 스위치를 켤 때 확인한다 */
+    isAvailable: (): Promise<boolean> => ipcRenderer.invoke('cool-messenger:available'),
+    /** 최근 쪽지 목록 (본문은 앞부분만). 못 읽으면 오류가 그대로 올라온다. */
+    list: (): Promise<CoolMessageDto[]> => ipcRenderer.invoke('cool-messenger:list'),
+    /** 쪽지 한 건의 전문 */
+    get: (key: number): Promise<CoolMessageDto | null> =>
+      ipcRenderer.invoke('cool-messenger:get', key),
+    /** 교직원 명단 — 개인정보 이름 대조용 */
+    members: (): Promise<string[]> => ipcRenderer.invoke('cool-messenger:members'),
   },
   openPath: (folderPath: string): Promise<string> =>
     ipcRenderer.invoke('shell:openPath', folderPath),

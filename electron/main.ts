@@ -52,6 +52,7 @@ import { registerSchoolinfoEvaluationHandlers } from './ipc/schoolinfoEvaluation
 import { registerSchoolinfoDisclosureHandlers } from './ipc/schoolinfoDisclosure';
 import { registerComciganHandlers } from './ipc/comcigan';
 import { registerOneClickPortalHandlers } from './ipc/oneclickPortal';
+import { registerCoolMessengerHandlers } from './ipc/coolMessenger';
 import { registerAppinHandlers } from './ipc/appin';
 import { registerBoardHandlers, endActiveBoardSessionSync } from './ipc/board';
 import { registerMultiSurveyShareHandlers } from './ipc/multiSurveyShare';
@@ -5790,6 +5791,7 @@ if (!gotTheLock) {
     registerSchoolinfoDisclosureHandlers();
     registerComciganHandlers();
     registerOneClickPortalHandlers();
+    registerCoolMessengerHandlers();
     registerAppinHandlers();
     registerBoardHandlers(mainWindow!);
     registerRealtimeWallBoardHandlers();

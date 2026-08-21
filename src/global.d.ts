@@ -176,8 +176,33 @@ type OneClickPortalLaunchResult =
   | { outcome: 'unsupported' }
   | { outcome: 'failed'; message: string };
 
+/** 쿨메신저 쪽지 한 건 (`electron/coolMessengerReader.ts`의 CoolMessage와 같은 형태) */
+interface CoolMessageDto {
+  key: number;
+  sender: string;
+  /** 받은 시각 (ISO 8601) */
+  receivedAt: string;
+  title: string;
+  body: string;
+  isUnread: boolean;
+}
+
+/**
+ * 쿨메신저 쪽지 읽기.
+ *
+ * `list`/`get`은 쪽지함을 못 읽으면 **오류를 던진다.** 화면이 이유를 보여줘야 하므로
+ * 빈 배열로 덮지 않는다.
+ */
+interface CoolMessengerElectronAPI {
+  isAvailable: () => Promise<boolean>;
+  list: () => Promise<CoolMessageDto[]>;
+  get: (key: number) => Promise<CoolMessageDto | null>;
+  members: () => Promise<string[]>;
+}
+
 interface ElectronAPI {
   readData: (filename: string) => Promise<string | null>;
+  coolMessenger: CoolMessengerElectronAPI;
   writeData: (filename: string, data: string) => Promise<void>;
   removeData: (filename: string) => Promise<void>;
   aiBridge: AiBridgeElectronAPI;

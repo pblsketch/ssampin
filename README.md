@@ -8,7 +8,7 @@
 ## 🌟 주요 기능
 
 - **위젯 지원**: 화면의 일부를 차지하는 투명 위젯과 항상 위에 표시 모드 지원
-- **시간표 관리**: 학교급(초/중/고) 프리셋 설정, 시간 관리 
+- **시간표 관리**: 학교급(초/중/고) 프리셋 설정, 시간 관리
 - **학생명단 및 좌석**: 학생 명단 관리, 랜덤 좌석 배치, 드래그 앤 드롭 이동
 - **메모 및 할일**: 메모 드래그 편집, Todo 체킹
 - **일정 관리**: 컬러 라벨링된 일정과 학급 행사
@@ -30,7 +30,7 @@ graph TD
     Adapters -.->|Imports| UseCases
     Adapters -.->|Imports| Domain
     Infrastructure -.->|Implements| Domain
-    
+
     style Domain fill:#2d3748,stroke:#4fd1c5,stroke-width:2px,color:#fff
     style UseCases fill:#2d3748,stroke:#63b3ed,stroke-width:2px,color:#fff
     style Adapters fill:#2d3748,stroke:#f6ad55,stroke-width:2px,color:#fff
@@ -57,25 +57,54 @@ graph TD
 로컬 환경에서 직접 빌드하거나 개발 모드로 실행하려면 다음을 따르세요:
 
 ### 요구사항
+
 - Node.js 18 이상
 
 ### 의존성 설치
+
 ```bash
 npm install
 ```
 
 ### 개발 모드 실행
+
 ```bash
 npm run electron:dev
 ```
+
 - 브라우저 개발 모드: `npm run dev`
 
 ### 빌드 및 패키징
+
 ```bash
 npm run electron:build
 ```
+
 > Windows 환경에서 NSIS 인스톨러로 빌드됩니다. (release 폴더에 저장)
 
 ## 📄 라이선스
 
 이 프로젝트는 GPL-3.0 라이선스 하에 배포됩니다. 자세한 내용은 `LICENSE` 파일을 참고하세요.
+
+## 🙏 오픈소스 고지
+
+쌤핀은 다른 선생님들이 만든 오픈소스의 도움을 받았습니다.
+
+### COOL-비서 (coolm-helper) — 해밀고 황대연
+
+쿨메신저 쪽지에서 일정을 뽑아내는 기능은 **해밀고 황대연** 선생님이 만드신
+[coolm-helper](https://github.com/dacisosl/coolm-helper)를 기반으로 합니다.
+한국어 날짜 표현을 읽는 규칙과 쿨메신저 쪽지함에 안전하게 접근하는 방법을
+그대로 배워 TypeScript로 옮겼습니다.
+
+```
+Copyright (c) 2026 dacisosl · MIT License
+https://github.com/dacisosl/coolm-helper
+```
+
+원저작물은 MIT 라이선스이며, 저작자께서 이식을 명시적으로 허락해 주셨습니다.
+해당하는 소스 파일:
+
+- `src/domain/rules/coolMessageDateParser.ts` ← `parser/date_parser.py`
+- `src/domain/privacy/coolMessagePii.ts` ← `parser/pii_detector.py`
+- `electron/coolMessengerReader.ts` ← `parser/db_reader.py`

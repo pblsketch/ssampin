@@ -17,6 +17,7 @@ import { EventFormModal } from './EventFormModal';
 import { CategoryManagementModal } from './CategoryManagementModal';
 import { ExportModal } from './ExportModal';
 import { ImportModal } from './ImportModal';
+import { CoolImportButton } from '@adapters/components/CoolMessenger/CoolImportButton';
 import { DayScheduleModal } from './DayScheduleModal';
 import { toAddEventParams } from './eventFormMapping';
 import { YearView } from './YearView';
@@ -480,6 +481,8 @@ export function Schedule() {
               <span className="material-symbols-outlined text-icon-md">download</span>
               <span className="hidden lg:inline">가져오기</span>
             </button>
+            {/* 설정에서 켠 경우에만 보인다 (쿨메신저 안 쓰는 학교가 많다) */}
+            <CoolImportButton variant="toolbar" hideLabelOnNarrow />
             <button
               type="button"
               onClick={() => setShowExportModal(true)}

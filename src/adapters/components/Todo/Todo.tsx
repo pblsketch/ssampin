@@ -13,6 +13,7 @@ import type { TodoViewMode } from '@domain/entities/TodoSettings';
 import { DEFAULT_TODO_SETTINGS } from '@domain/entities/TodoSettings';
 import type { TodoSortMode } from '@domain/rules/todoRules';
 import { ViewToggle } from './components/ViewToggle';
+import { CoolImportButton } from '@adapters/components/CoolMessenger/CoolImportButton';
 import { WeeklyReviewCard } from './components/WeeklyReviewCard';
 
 // 프로 모드 뷰 — lazy 로딩 (기본 모드에서는 import 안 됨)
@@ -459,6 +460,8 @@ export function Todo() {
                 {completedCount}/{totalCount} ({progressPercent}%)
               </span>
             </div>
+            {/* 설정에서 켠 경우에만 보인다 (쿨메신저 안 쓰는 학교가 많다) */}
+            <CoolImportButton variant="toolbar" hideLabelOnNarrow />
             <button
               type="button"
               onClick={() => setViewMode(viewMode === 'active' ? 'archive' : 'active')}

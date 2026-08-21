@@ -634,6 +634,14 @@ export interface Settings {
   readonly comcigan?: ComciganSettings;
   /** 압핀 시간표 자동연동. optional — 압핀 미import 사용자는 없음. */
   readonly appin?: AppinSettings;
+  /**
+   * 쿨메신저 쪽지에서 일정·할일 가져오기.
+   *
+   * **기본값은 꺼짐이다.** 쿨메신저를 쓰지 않는 시도교육청이 많아서, 안 쓰는 선생님께는
+   * 버튼이 아예 안 보이는 게 맞다. 설정에서 켜야 일정·할일 화면에 버튼이 나온다.
+   * optional 이라 기존 사용자 데이터와 100% 호환된다(값이 없으면 꺼짐).
+   */
+  readonly coolMessengerImportEnabled?: boolean;
   /** 학교알리미 학교 연결 (평가계획 불러오기 학교 재검색 생략용, school-enrich ②-B) */
   readonly schoolInfo?: SchoolInfoLink;
   readonly pin: PinSettings;
