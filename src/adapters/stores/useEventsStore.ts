@@ -85,6 +85,8 @@ interface EventsState {
 
   // 일괄 삭제 액션
   deleteManyEvents: (ids: string[]) => Promise<number>;
+  /** 여러 일정을 한 번에 숨김 — 중복 일정 정리용 (지우지 않는다) */
+  hideManyEvents: (ids: readonly string[]) => Promise<number>;
   deleteEventsByCategory: (categoryId: string) => Promise<number>;
   deleteEventsByDateRange: (startDate: string, endDate: string) => Promise<number>;
 
@@ -340,6 +342,25 @@ export const useEventsStore = create<EventsState>((set) => {
         deleteEventFromGoogle(event);
       }
 
+      return count;
+    },
+
+    hideManyEvents: async (ids) => {
+      const count = await manageEvents.hideMany(ids);
+      if (count === 0) return 0;
+
+      const idSet = new Set(ids);
+      set((state) => ({
+        events: state.events.map((e) =>
+          idSet.has(e.id) && !e.isHidden ? { ...e, isHidden: true } : e,
+        ),
+      }));
+
+      /*
+        구글에는 알리지 않는다 (2026-08-21) — 숨김은 "쌤핀 화면에서 안 보이게" 하는
+        쌤핀 안쪽의 표시 설정이지, 선생님의 구글 캘린더를 고치라는 뜻이 아니다.
+        중복 정리는 수백 건이 한 번에 걸릴 수 있어 API 호출을 그만큼 날리는 것도 곤란하다.
+      */
       return count;
     },
 

@@ -1,8 +1,4 @@
-import type {
-  SchoolEvent,
-  SchoolEventsData,
-  CategoryItem,
-} from '@domain/entities/SchoolEvent';
+import type { SchoolEvent, SchoolEventsData, CategoryItem } from '@domain/entities/SchoolEvent';
 import { DEFAULT_CATEGORIES } from '@domain/entities/SchoolEvent';
 import type { IEventsRepository } from '@domain/repositories/IEventsRepository';
 
@@ -48,9 +44,7 @@ export class ManageEvents {
     const data = await this.eventsRepository.getEvents();
     const events = data?.events ?? [];
 
-    const updatedEvents: readonly SchoolEvent[] = events.filter(
-      (e) => e.id !== id,
-    );
+    const updatedEvents: readonly SchoolEvent[] = events.filter((e) => e.id !== id);
     const updatedData: SchoolEventsData = {
       events: updatedEvents,
       categories: data?.categories,
@@ -76,6 +70,36 @@ export class ManageEvents {
     });
 
     return deletedCount;
+  }
+
+  /**
+   * 여러 일정을 한 번에 숨김 처리 — 중복 일정 정리용.
+   *
+   * 지우지 않고 숨기는 이유 (2026-08-21) — 이 일정들은 구글·NEIS 에서 자동으로 들어온
+   * 사본이라 지워도 다음 동기화 때 되살아난다. 반대로 `isHidden` 은 동기화가 존중하므로
+   * (`SyncFromGoogle`, `SyncNeisSchedule` 모두 숨긴 일정은 건드리지 않는다) 다시 나타나지
+   * 않는다. 자료를 지우지 않아 되돌리기도 안전하다.
+   */
+  async hideMany(ids: readonly string[]): Promise<number> {
+    const data = await this.eventsRepository.getEvents();
+    const events = data?.events ?? [];
+    const idSet = new Set(ids);
+
+    let hiddenCount = 0;
+    const updatedEvents = events.map((e) => {
+      if (!idSet.has(e.id) || e.isHidden) return e;
+      hiddenCount += 1;
+      return { ...e, isHidden: true };
+    });
+
+    if (hiddenCount > 0) {
+      await this.eventsRepository.saveEvents({
+        events: updatedEvents,
+        categories: data?.categories,
+      });
+    }
+
+    return hiddenCount;
   }
 
   /**
@@ -141,9 +165,7 @@ export class ManageEvents {
     const data = await this.eventsRepository.getEvents();
     const categories = data?.categories ?? [...DEFAULT_CATEGORIES];
 
-    const updatedCategories: readonly CategoryItem[] = categories.filter(
-      (c) => c.id !== id,
-    );
+    const updatedCategories: readonly CategoryItem[] = categories.filter((c) => c.id !== id);
     const updatedData: SchoolEventsData = {
       events: data?.events ?? [],
       categories: updatedCategories,

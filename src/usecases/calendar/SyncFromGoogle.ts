@@ -8,6 +8,33 @@ import {
   resolveConflictByLatest,
 } from '@domain/rules/calendarSyncRules';
 
+/** NEIS 학사일정이 주인인 일정인가 — 쌤핀이 구글로 올려 보낸 것. */
+function isNeisOwned(event: SchoolEvent): boolean {
+  return event.source === 'neis' || !!event.neis?.eventId;
+}
+
+/**
+ * 구글이 준 내용은 받아들이되 **정체성은 로컬이 지킨다** (2026-08-21).
+ *
+ * 쌤핀에서 만들어 구글로 올린 일정이 되돌아왔을 때, 카테고리가 `학교` 에서 `구글 캘린더` 로
+ * 바뀌고 출처가 `google` 로 뒤집히면 선생님이 만든 일정이 남의 것처럼 보인다. 제목·날짜·
+ * 장소 같은 **내용**은 구글 쪽 수정을 반영해야 하지만, 어느 카테고리에 속하고 누가 만들었나는
+ * 로컬이 계속 쥐고 있어야 한다.
+ */
+function mergeKeepingIdentity(existing: SchoolEvent, incoming: SchoolEvent): SchoolEvent {
+  const locallyOwned = !!existing.source && existing.source !== 'google';
+  return {
+    ...incoming,
+    id: existing.id,
+    isHidden: existing.isHidden,
+    isModified: existing.isModified,
+    sortOrder: existing.sortOrder,
+    category: locallyOwned ? existing.category : incoming.category,
+    source: locallyOwned ? existing.source : incoming.source,
+    ...(existing.neis ? { neis: existing.neis } : {}),
+  };
+}
+
 /** 구글 → 쌤핀 역방향 동기화 유스케이스 */
 export class SyncFromGoogle {
   constructor(
@@ -20,7 +47,16 @@ export class SyncFromGoogle {
   /** 활성화된 모든 매핑 캘린더를 동기화 */
   async execute(): Promise<void> {
     const mappings = await this.syncRepo.getMappings();
-    const enabledMappings = mappings.filter((m) => m.syncEnabled && m.googleCalendarId);
+    /*
+      `toGoogle`(올리기 전용) 매핑은 내려받지 않는다 (2026-08-21).
+
+      NEIS 학사일정 매핑이 바로 이 방향인데, 지금까지 `syncDirection` 을 아무도 읽지 않아
+      올려 보낸 학사일정을 그대로 다시 내려받았다. 그러면서 "구글이 준 새 일정"으로 취급돼
+      같은 일정이 계속 불어났다.
+    */
+    const enabledMappings = mappings.filter(
+      (m) => m.syncEnabled && m.googleCalendarId && m.syncDirection !== 'toGoogle',
+    );
 
     const errors: string[] = [];
     for (const mapping of enabledMappings) {
@@ -126,25 +162,35 @@ export class SyncFromGoogle {
           // 사용자가 숨긴 일정은 구글 동기화로 복원하지 않음
           if (existing.isHidden) continue;
 
+          /*
+            NEIS 학사일정은 쌤핀이 구글로 **올려 보낸** 것이라, 되돌아온 사본에는
+            구글이 새로 알려 줄 내용이 없다 (2026-08-21). 예전에는 이걸 그대로 덮어써서
+            카테고리·출처·NEIS 메타가 통째로 날아갔고, 신분증을 잃은 학사일정은 다음
+            NEIS 동기화 때 "없는 일정"으로 판정돼 하나 더 만들어졌다. 같은 일정이 2개,
+            3개로 불어난 원인이다. 여기서는 동기화 흔적만 갱신하고 내용은 지킨다.
+          */
+          if (isNeisOwned(existing)) {
+            events[existingIdx] = {
+              ...existing,
+              googleEventId: gEvent.id,
+              googleCalendarId: existing.googleCalendarId ?? calendarId,
+              syncStatus: 'synced',
+              lastSyncedAt: new Date().toISOString(),
+              googleUpdatedAt: gEvent.updated,
+              etag: gEvent.etag,
+            };
+            continue;
+          }
+
           if (detectConflict(existing, gEvent)) {
             // 자동 해결: 최근 수정 우선
             const resolution = resolveConflictByLatest(existing, gEvent);
             if (resolution === 'remote') {
-              events[existingIdx] = {
-                ...newEvent,
-                id: existing.id,
-                isHidden: existing.isHidden,
-                isModified: existing.isModified,
-              };
+              events[existingIdx] = mergeKeepingIdentity(existing, newEvent);
             }
             // 'local' → 로컬 유지, 다음 push에서 구글에 반영
           } else {
-            events[existingIdx] = {
-              ...newEvent,
-              id: existing.id,
-              isHidden: existing.isHidden,
-              isModified: existing.isModified,
-            };
+            events[existingIdx] = mergeKeepingIdentity(existing, newEvent);
           }
         } else {
           events.push(newEvent);

@@ -3,6 +3,7 @@ import { useEventsStore } from '@adapters/stores/useEventsStore';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import type { SchoolEvent } from '@domain/entities/SchoolEvent';
 import { getEventsForMonth, filterByCategory } from '@domain/rules/eventRules';
+import { findDuplicateEventGroups, countDuplicateEvents } from '@domain/rules/eventDuplicateRules';
 import {
   getCategoryColors,
   getCategoryDisplayName,
@@ -22,6 +23,7 @@ import { YearView } from './YearView';
 import { SemesterView } from './SemesterView';
 import { BulkDeleteByCategoryModal } from './BulkDeleteByCategoryModal';
 import { BulkDeleteByDateRangeModal } from './BulkDeleteByDateRangeModal';
+import { DuplicateCleanupModal } from './DuplicateCleanupModal';
 import { useCalendarSyncStore } from '@adapters/stores/useCalendarSyncStore';
 import { useNeisScheduleStore } from '@adapters/stores/useNeisScheduleStore';
 import { GoogleBadge } from '@adapters/components/Calendar/GoogleBadge';
@@ -76,6 +78,7 @@ export function Schedule() {
     updateEvent,
     deleteEvent,
     deleteManyEvents,
+    hideManyEvents,
     deleteEventsByCategory,
     deleteEventsByDateRange,
     showExportModal,
@@ -194,6 +197,11 @@ export function Schedule() {
   const [showCategoryDeleteModal, setShowCategoryDeleteModal] = useState(false);
   const [showDateRangeDeleteModal, setShowDateRangeDeleteModal] = useState(false);
 
+  /* 중복 일정 안내 (2026-08-21) — 배너는 이번 세션 동안만 닫힌다.
+     정리하면 중복 자체가 사라져 배너도 같이 사라지므로 영구 저장까지는 필요 없다. */
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+  const [duplicateNoticeDismissed, setDuplicateNoticeDismissed] = useState(false);
+
   useEffect(() => {
     void load();
   }, [load]);
@@ -266,6 +274,16 @@ export function Schedule() {
 
   // 검색용 전체 이벤트 (숨긴 일정 제외)
   const allVisibleEvents = useMemo(() => events.filter((e) => !e.isHidden), [events]);
+
+  /*
+    겹쳐 보이는 일정 찾기 (2026-08-21, 문혜인 선생님 제보).
+
+    구글 캘린더를 연동한 뒤 같은 일정이 2~3줄씩 겹쳐 보이던 문제다. 새로 생기는 것은
+    `SyncFromGoogle` 에서 막았지만 이미 늘어난 사본은 선생님 자료라 임의로 지우지 않는다.
+    대신 몇 건인지 알려 주고, 선생님이 눌렀을 때만 한 줄로 줄인다.
+  */
+  const duplicateGroups = useMemo(() => findDuplicateEventGroups(events), [events]);
+  const duplicateCount = useMemo(() => countDuplicateEvents(duplicateGroups), [duplicateGroups]);
 
   // 이벤트 추가/수정 핸들러
   function handleEventSubmit(event: SchoolEvent) {
@@ -504,49 +522,83 @@ export function Schedule() {
         </div>
       )}
 
+      {/* 겹쳐 보이는 일정 안내 — 누르기 전에는 아무것도 바꾸지 않는다 */}
+      {duplicateCount > 0 && !duplicateNoticeDismissed && (
+        <div className="shrink-0 flex items-center gap-2 px-8 py-2 text-xs text-sp-text bg-sp-surface/60 border-b border-sp-border">
+          <span className="material-symbols-outlined text-icon text-sp-muted">content_copy</span>
+          <span className="flex-1 break-keep">
+            같은 일정이 겹쳐서 <span className="font-bold">{duplicateCount}줄</span> 더 보이고
+            있어요. 한 줄로 줄일 수 있습니다.
+          </span>
+          <button
+            type="button"
+            onClick={() => setShowDuplicateModal(true)}
+            className="px-3 py-1 rounded-lg bg-sp-accent text-sp-accent-fg text-xs font-bold hover:bg-sp-accent/90 transition-colors"
+          >
+            정리하기
+          </button>
+          <button
+            type="button"
+            onClick={() => setDuplicateNoticeDismissed(true)}
+            className="text-sp-muted hover:text-sp-text text-xs px-2 py-0.5 rounded hover:bg-sp-surface transition-colors"
+          >
+            나중에
+          </button>
+        </div>
+      )}
+
       {/* 콘텐츠 */}
       <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
         <div className="max-w-7xl mx-auto flex flex-col gap-4 sm:gap-5 lg:gap-6 lg:h-full">
           {/* 월간 뷰 */}
           {view === 'month' && (
             <>
-              {/* 카테고리 탭 */}
-              <div className="flex items-center gap-2 py-1.5 min-w-0">
-                <ScrollRow className="gap-3 flex-1 min-w-0">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedCategory(null)}
-                    className={`px-3 py-1.5 sm:px-5 sm:py-2 rounded-full text-sm font-bold shadow-sm ring-1 transition-colors ${
-                      selectedCategory === null
-                        ? 'bg-sp-accent text-white ring-sp-accent/30'
-                        : 'bg-sp-card hover:bg-sp-surface text-sp-muted ring-sp-border/50'
-                    }`}
-                  >
-                    전체
-                  </button>
+              {/*
+                카테고리 탭 (2026-08-21).
 
-                  {ownCategories.map((cat) => {
-                    const colors = getCategoryColors(cat.color);
-                    const isActive = selectedCategory === cat.id;
+                두 줄 구조인 이유 — 예전에는 `구글` 알약을 펼치면 계정 알약들이 **같은 줄
+                오른쪽에 이어 붙었다.** 그 줄은 넘치면 가로로 흐르는(`ScrollRow`) 줄이라
+                화면 밖으로 밀려 나가 끝이 싹둑 잘려 보였고, 스크롤바도 숨겨져 있어
+                "잘려서 몇 개가 나오는지 몰라요"(문혜인 선생님)라는 말이 나왔다.
+                펼친 목록은 아래 줄로 내려 **줄바꿈**시키면 몇 개든 전부 보인다.
+              */}
+              <div className="flex flex-col gap-2 py-1.5 min-w-0">
+                <div className="flex items-center gap-2 min-w-0">
+                  <ScrollRow className="gap-3 flex-1 min-w-0">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedCategory(null)}
+                      className={`px-3 py-1.5 sm:px-5 sm:py-2 rounded-full text-sm font-bold shadow-sm ring-1 transition-colors ${
+                        selectedCategory === null
+                          ? 'bg-sp-accent text-white ring-sp-accent/30'
+                          : 'bg-sp-card hover:bg-sp-surface text-sp-muted ring-sp-border/50'
+                      }`}
+                    >
+                      전체
+                    </button>
 
-                    return (
-                      <button
-                        key={cat.id}
-                        type="button"
-                        onClick={() => setSelectedCategory(isActive ? null : cat.id)}
-                        className={`px-3 py-1.5 sm:px-5 sm:py-2 rounded-full text-sm font-medium transition-colors ring-1 flex items-center gap-2 ${
-                          isActive
-                            ? 'bg-sp-accent text-white ring-sp-accent/30 font-bold'
-                            : 'bg-sp-card hover:bg-sp-surface text-sp-muted ring-sp-border/50'
-                        }`}
-                      >
-                        <span className={`w-2 h-2 rounded-full ${colors.dot}`} />
-                        {cat.name}
-                      </button>
-                    );
-                  })}
+                    {ownCategories.map((cat) => {
+                      const colors = getCategoryColors(cat.color);
+                      const isActive = selectedCategory === cat.id;
 
-                  {/*
+                      return (
+                        <button
+                          key={cat.id}
+                          type="button"
+                          onClick={() => setSelectedCategory(isActive ? null : cat.id)}
+                          className={`px-3 py-1.5 sm:px-5 sm:py-2 rounded-full text-sm font-medium transition-colors ring-1 flex items-center gap-2 ${
+                            isActive
+                              ? 'bg-sp-accent text-white ring-sp-accent/30 font-bold'
+                              : 'bg-sp-card hover:bg-sp-surface text-sp-muted ring-sp-border/50'
+                          }`}
+                        >
+                          <span className={`w-2 h-2 rounded-full ${colors.dot}`} />
+                          {cat.name}
+                        </button>
+                      );
+                    })}
+
+                    {/*
                     구글 캘린더 카테고리는 알약 하나로 접는다 (2026-08-18).
 
                     연동한 계정 수만큼 `someone@gmail.com` 알약이 늘어서서 필터 줄을 통째로
@@ -554,8 +606,7 @@ export function Schedule() {
                     기본은 접어 두고 필요할 때만 펼친다. 펼쳤을 때도 이메일 전체가 아니라
                     짧은 표시 이름을 쓴다 — 카테고리 관리에서 이름을 직접 바꾸면 그 이름이 이긴다.
                   */}
-                  {googleCategories.length > 0 && (
-                    <>
+                    {googleCategories.length > 0 && (
                       <button
                         type="button"
                         onClick={() => setShowGoogleCategories((v) => !v)}
@@ -578,107 +629,114 @@ export function Schedule() {
                           {showGoogleCategories ? 'expand_less' : 'expand_more'}
                         </span>
                       </button>
+                    )}
+                  </ScrollRow>
 
-                      {showGoogleCategories &&
-                        googleCategories.map((cat) => {
-                          const colors = getCategoryColors(cat.color);
-                          const isActive = selectedCategory === cat.id;
-
-                          return (
-                            <button
-                              key={cat.id}
-                              type="button"
-                              onClick={() => setSelectedCategory(isActive ? null : cat.id)}
-                              title={cat.name}
-                              className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-full text-sm font-medium transition-colors ring-1 flex items-center gap-2 max-w-[12rem] ${
-                                isActive
-                                  ? 'bg-sp-accent text-white ring-sp-accent/30 font-bold'
-                                  : 'bg-sp-card hover:bg-sp-surface text-sp-muted ring-sp-border/50'
-                              }`}
-                            >
-                              <span className={`w-2 h-2 rounded-full shrink-0 ${colors.dot}`} />
-                              <span className="truncate">
-                                {getCategoryDisplayName(cat, googleCategories.length)}
-                              </span>
-                            </button>
-                          );
-                        })}
-                    </>
-                  )}
-                </ScrollRow>
-
-                {/* 우측 고정: 소스 필터 + 카테고리 관리 (좁은 창에서도 항상 접근 가능) */}
-                <div className="flex items-center gap-1 shrink-0">
-                  {/* 소스 필터 (구글 또는 NEIS 연결 시) */}
-                  {(googleConnected || neisEnabled) && (
-                    <div className="flex items-center gap-1 border-l border-sp-border pl-3">
-                      <button
-                        type="button"
-                        onClick={() => setSourceFilter('all')}
-                        className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                          sourceFilter === 'all'
-                            ? 'bg-sp-accent text-white'
-                            : 'text-sp-muted hover:text-sp-text hover:bg-sp-surface'
-                        }`}
-                      >
-                        전체
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setSourceFilter('ssampin')}
-                        className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                          sourceFilter === 'ssampin'
-                            ? 'bg-sp-accent text-white'
-                            : 'text-sp-muted hover:text-sp-text hover:bg-sp-surface'
-                        }`}
-                      >
-                        쌤핀
-                      </button>
-                      {googleConnected && (
+                  {/* 우측 고정: 소스 필터 + 카테고리 관리 (좁은 창에서도 항상 접근 가능) */}
+                  <div className="flex items-center gap-1 shrink-0">
+                    {/* 소스 필터 (구글 또는 NEIS 연결 시) */}
+                    {(googleConnected || neisEnabled) && (
+                      <div className="flex items-center gap-1 border-l border-sp-border pl-3">
                         <button
                           type="button"
-                          onClick={() => setSourceFilter('google')}
+                          onClick={() => setSourceFilter('all')}
                           className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                            sourceFilter === 'google'
+                            sourceFilter === 'all'
                               ? 'bg-sp-accent text-white'
                               : 'text-sp-muted hover:text-sp-text hover:bg-sp-surface'
                           }`}
                         >
-                          <span className="flex items-center gap-1">
-                            <GoogleBadge /> 구글
-                          </span>
+                          전체
                         </button>
-                      )}
-                      {neisEnabled && (
                         <button
                           type="button"
-                          onClick={() => setSourceFilter('neis')}
+                          onClick={() => setSourceFilter('ssampin')}
                           className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                            sourceFilter === 'neis'
-                              ? 'bg-purple-500 text-white'
+                            sourceFilter === 'ssampin'
+                              ? 'bg-sp-accent text-white'
                               : 'text-sp-muted hover:text-sp-text hover:bg-sp-surface'
                           }`}
                         >
-                          <span className="flex items-center gap-1">
-                            <span className="text-tiny text-purple-300 bg-purple-500/15 px-1 py-0.5 rounded font-medium">
-                              N
+                          쌤핀
+                        </button>
+                        {googleConnected && (
+                          <button
+                            type="button"
+                            onClick={() => setSourceFilter('google')}
+                            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                              sourceFilter === 'google'
+                                ? 'bg-sp-accent text-white'
+                                : 'text-sp-muted hover:text-sp-text hover:bg-sp-surface'
+                            }`}
+                          >
+                            <span className="flex items-center gap-1">
+                              <GoogleBadge /> 구글
                             </span>
-                            NEIS{neisSyncStatus === 'syncing' && ' ⟳'}
+                          </button>
+                        )}
+                        {neisEnabled && (
+                          <button
+                            type="button"
+                            onClick={() => setSourceFilter('neis')}
+                            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                              sourceFilter === 'neis'
+                                ? 'bg-purple-500 text-white'
+                                : 'text-sp-muted hover:text-sp-text hover:bg-sp-surface'
+                            }`}
+                          >
+                            <span className="flex items-center gap-1">
+                              <span className="text-tiny text-purple-300 bg-purple-500/15 px-1 py-0.5 rounded font-medium">
+                                N
+                              </span>
+                              NEIS{neisSyncStatus === 'syncing' && ' ⟳'}
+                            </span>
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => setShowCategoryModal(true)}
+                      className="text-sp-muted text-sm font-medium hover:text-sp-accent transition-colors flex items-center gap-1 shrink-0 ml-1"
+                    >
+                      <span className="material-symbols-outlined text-icon-md">settings</span>
+                      <span className="hidden md:inline">카테고리 관리</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* 펼친 구글 계정 목록 — 넘치면 잘리지 않고 아래로 줄바꿈된다 */}
+                {showGoogleCategories && googleCategories.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-2 pl-1">
+                    <span className="text-xs text-sp-muted shrink-0">
+                      구글 캘린더 {googleCategories.length}개
+                    </span>
+                    {googleCategories.map((cat) => {
+                      const colors = getCategoryColors(cat.color);
+                      const isActive = selectedCategory === cat.id;
+
+                      return (
+                        <button
+                          key={cat.id}
+                          type="button"
+                          onClick={() => setSelectedCategory(isActive ? null : cat.id)}
+                          title={cat.name}
+                          className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-full text-sm font-medium transition-colors ring-1 flex items-center gap-2 max-w-[16rem] ${
+                            isActive
+                              ? 'bg-sp-accent text-white ring-sp-accent/30 font-bold'
+                              : 'bg-sp-card hover:bg-sp-surface text-sp-muted ring-sp-border/50'
+                          }`}
+                        >
+                          <span className={`w-2 h-2 rounded-full shrink-0 ${colors.dot}`} />
+                          <span className="truncate">
+                            {getCategoryDisplayName(cat, googleCategories.length)}
                           </span>
                         </button>
-                      )}
-                    </div>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={() => setShowCategoryModal(true)}
-                    className="text-sp-muted text-sm font-medium hover:text-sp-accent transition-colors flex items-center gap-1 shrink-0 ml-1"
-                  >
-                    <span className="material-symbols-outlined text-icon-md">settings</span>
-                    <span className="hidden md:inline">카테고리 관리</span>
-                  </button>
-                </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               {/* 일괄 관리 도구바 */}
@@ -901,6 +959,16 @@ export function Schedule() {
           events={events}
           onDelete={deleteEventsByDateRange}
           onClose={() => setShowDateRangeDeleteModal(false)}
+        />
+      )}
+
+      {/* 중복 일정 정리 모달 */}
+      {showDuplicateModal && (
+        <DuplicateCleanupModal
+          events={events}
+          categories={categories}
+          onCleanup={hideManyEvents}
+          onClose={() => setShowDuplicateModal(false)}
         />
       )}
     </div>

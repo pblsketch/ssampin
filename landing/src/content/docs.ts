@@ -1357,7 +1357,7 @@ export const docsArticles: readonly DocArticle[] = [
     description:
       'Google Calendar 일정을 쌤핀 일정과 함께 보고, 쌤핀 일정 변경을 Google에도 반영합니다.',
     category: 'sync',
-    lastUpdated: '2026-06-23',
+    lastUpdated: '2026-08-21',
     sections: [
       {
         id: 'connect',
@@ -1373,6 +1373,15 @@ export const docsArticles: readonly DocArticle[] = [
         title: '동기화 범위',
         body: [
           '쌤핀에서 일정을 추가, 수정, 삭제하면 Google Calendar와도 동기화됩니다. NEIS 학사일정을 Google Calendar에 보내는 제안 기능도 제공합니다.',
+        ],
+      },
+      {
+        id: 'duplicates',
+        title: '같은 일정이 겹쳐 보일 때',
+        body: [
+          'NEIS 학사일정을 Google Calendar로 보낸 뒤 그 일정이 다시 쌤핀으로 돌아오면서, 같은 일정이 두 줄, 세 줄로 겹쳐 보이는 경우가 있었습니다. 새로 겹치는 일은 없도록 고쳤습니다.',
+          '이미 겹쳐 있는 일정은 일정 관리 화면 위쪽에 몇 줄이 겹쳤는지 안내가 뜹니다. "정리하기"를 누르면 어떤 일정을 남기고 어떤 사본을 접을지 미리 보여드리고, 확인하시면 한 줄로 줄여 드립니다.',
+          '정리는 삭제가 아니라 숨김이라 원래 자료는 그대로 남습니다. 선생님이 직접 만든 일정은 접지 않고 항상 남깁니다.',
         ],
       },
     ],
