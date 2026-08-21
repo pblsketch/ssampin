@@ -44,6 +44,18 @@ export interface CustomFontSettings {
 
 export type ShadowLevel = 'none' | 'sm' | 'md' | 'lg';
 
+/**
+ * 배경 이미지를 영역에 맞추는 방식.
+ *
+ * - `cover`  — 빈틈이 없게 확대해 채운다. 창 비율이 사진과 다르면 넘치는 쪽이 잘린다.
+ * - `contain` — 사진 전체가 보이게 넣는다. 대신 남는 쪽에 여백이 생긴다.
+ *
+ * 창을 넓히면 `cover` 는 가로에 맞춰 확대되며 위아래를 잘라내므로 "사진 일부만 보인다"는
+ * 신고가 반복됐다(2026-08-21 사용자 피드백). 잘림 없이 보고 싶은 사용자를 위해 선택지를
+ * 열되, 기본은 기존 동작(`cover`)을 유지해 이미 배경을 쓰던 화면이 바뀌지 않게 한다.
+ */
+export type BackgroundImageFit = 'cover' | 'contain';
+
 export interface WidgetStyleSettings {
   /** 카드 테두리 라운드 (0~24px, 기본 12) */
   readonly borderRadius: number;
@@ -69,6 +81,13 @@ export interface WidgetStyleSettings {
   readonly backgroundImage: string | null;
   /** 배경 이미지 불투명도 (0.05~1, 기본 0.15) */
   readonly backgroundImageOpacity: number;
+  /**
+   * 배경 이미지 맞춤 방식 (기본 'cover').
+   *
+   * 나중에 추가된 항목이라 이 값이 없는 기존 저장 설정이 존재한다. 읽는 쪽에서 반드시
+   * `?? 'cover'` 로 기본값을 채운다.
+   */
+  readonly backgroundImageFit?: BackgroundImageFit;
   /** 폰트 */
   readonly fontFamily: FontFamily;
   /** 그리드 행 높이 (40~100px, 기본 80) */

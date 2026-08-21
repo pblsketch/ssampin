@@ -157,6 +157,7 @@ export function DisplayTab({ draft, patch }: Props) {
           <BackgroundImageSection
             value={ws.backgroundImage}
             opacity={ws.backgroundImageOpacity}
+            fit={ws.backgroundImageFit}
             onChange={(p) => updateStyle(p)}
           />
         </div>

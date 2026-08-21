@@ -394,6 +394,7 @@ function StyleTab() {
         <BackgroundImageSection
           value={ws.backgroundImage}
           opacity={ws.backgroundImageOpacity}
+          fit={ws.backgroundImageFit}
           onChange={(patch) => updateStyle(patch)}
           compact
         />

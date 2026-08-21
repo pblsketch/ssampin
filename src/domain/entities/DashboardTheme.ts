@@ -341,6 +341,7 @@ export const DEFAULT_WIDGET_STYLE: WidgetStyleSettings = {
   shadow: 'none',
   backgroundImage: null,
   backgroundImageOpacity: 0.15,
+  backgroundImageFit: 'cover',
   fontFamily: 'noto-sans',
   gridRowHeight: 80,
   hideWindowBorder: false,

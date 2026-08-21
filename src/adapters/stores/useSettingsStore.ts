@@ -189,6 +189,7 @@ const DEFAULT_SETTINGS: Settings = {
     shadow: 'none',
     backgroundImage: null,
     backgroundImageOpacity: 0.15,
+    backgroundImageFit: 'cover',
     fontFamily: 'pretendard',
     gridRowHeight: 80,
     hideWindowBorder: false,

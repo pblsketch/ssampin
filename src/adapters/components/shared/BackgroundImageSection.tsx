@@ -1,13 +1,31 @@
-import { SliderRow } from './StyleControls';
+import type { BackgroundImageFit } from '@domain/entities/Settings';
+import { SelectRow, SliderRow } from './StyleControls';
 
 interface BackgroundImageSectionProps {
   value: string | null;
   opacity: number;
-  onChange: (patch: { backgroundImage?: string | null; backgroundImageOpacity?: number }) => void;
+  /** 없으면 기존 동작인 'cover'. 이 값이 없는 기존 저장 설정이 있어 optional 이다. */
+  fit?: BackgroundImageFit;
+  onChange: (patch: {
+    backgroundImage?: string | null;
+    backgroundImageOpacity?: number;
+    backgroundImageFit?: BackgroundImageFit;
+  }) => void;
   compact?: boolean;
 }
 
-export function BackgroundImageSection({ value, opacity, onChange, compact = false }: BackgroundImageSectionProps) {
+const FIT_OPTIONS: { value: BackgroundImageFit; label: string }[] = [
+  { value: 'cover', label: '채우기 (잘릴 수 있음)' },
+  { value: 'contain', label: '전체 보기 (여백 생김)' },
+];
+
+export function BackgroundImageSection({
+  value,
+  opacity,
+  fit,
+  onChange,
+  compact = false,
+}: BackgroundImageSectionProps) {
   const isElectron = !!window.electronAPI?.showOpenDialog;
   const isCustomImage = value !== null && value.startsWith('file://');
 
@@ -47,7 +65,9 @@ export function BackgroundImageSection({ value, opacity, onChange, compact = fal
               compact ? 'text-caption' : 'text-xs'
             } ${isCustomImage ? '' : 'flex-1 justify-center'}`}
           >
-            <span className="material-symbols-outlined" style={{ fontSize: compact ? 12 : 14 }}>image</span>
+            <span className="material-symbols-outlined" style={{ fontSize: compact ? 12 : 14 }}>
+              image
+            </span>
             {isCustomImage ? '변경' : '이미지 선택'}
           </button>
         ) : (
@@ -56,13 +76,25 @@ export function BackgroundImageSection({ value, opacity, onChange, compact = fal
               compact ? 'text-caption' : 'text-xs'
             } ${isCustomImage ? '' : 'flex-1 justify-center'}`}
           >
-            <span className="material-symbols-outlined" style={{ fontSize: compact ? 12 : 14 }}>image</span>
+            <span className="material-symbols-outlined" style={{ fontSize: compact ? 12 : 14 }}>
+              image
+            </span>
             Electron에서만 사용 가능
           </div>
         )}
       </div>
 
-      {/* 불투명도 + 제거 (선택된 배경이 있을 때만) */}
+      {/* 맞춤 방식 + 불투명도 + 제거 (선택된 배경이 있을 때만) */}
+      {value !== null && (
+        <SelectRow
+          label="맞춤"
+          value={fit ?? 'cover'}
+          options={FIT_OPTIONS}
+          onChange={(v) => onChange({ backgroundImageFit: v })}
+          compact={compact}
+        />
+      )}
+
       {value !== null && (
         <div className="flex items-center gap-1">
           <div className="flex-1">
