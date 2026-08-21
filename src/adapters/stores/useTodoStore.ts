@@ -1,6 +1,12 @@
 import { create } from 'zustand';
-import type { Todo, TodoCategory, TodoPriority, TodoRecurrence, SubTask } from '@domain/entities/Todo';
-import { DEFAULT_TODO_CATEGORIES } from '@domain/entities/Todo';
+import type {
+  Todo,
+  TodoCategory,
+  TodoPriority,
+  TodoRecurrence,
+  SubTask,
+} from '@domain/entities/Todo';
+import { DEFAULT_TODO_CATEGORIES, TODO_LOCAL_ONLY_FIELDS } from '@domain/entities/Todo';
 import { todoRepository } from '@adapters/di/container';
 import { ManageTodos } from '@usecases/todo/ManageTodos';
 import { generateUUID } from '@infrastructure/utils/uuid';
@@ -24,7 +30,27 @@ interface TodoState {
   ) => Promise<void>;
   toggleTodo: (id: string) => Promise<void>;
   deleteTodo: (id: string) => Promise<void>;
-  updateTodo: (id: string, changes: Partial<Pick<Todo, 'text' | 'priority' | 'category' | 'recurrence' | 'dueDate' | 'startDate' | 'subTasks' | 'sortOrder' | 'time' | 'status' | 'completed'>>) => Promise<void>;
+  updateTodo: (
+    id: string,
+    changes: Partial<
+      Pick<
+        Todo,
+        | 'text'
+        | 'priority'
+        | 'category'
+        | 'recurrence'
+        | 'dueDate'
+        | 'startDate'
+        | 'subTasks'
+        | 'sortOrder'
+        | 'time'
+        | 'status'
+        | 'completed'
+        | 'checkAt'
+        | 'relatedStaff'
+      >
+    >,
+  ) => Promise<void>;
 
   // 서브태스크
   addSubTask: (todoId: string, text: string) => Promise<void>;
@@ -76,7 +102,7 @@ export const useTodoStore = create<TodoState>((set, get) => {
         // 기존 데이터 마이그레이션: priority 없으면 'none'
         const migrated = (data.todos ?? []).map((todo) => ({
           ...todo,
-          priority: todo.priority ?? 'none' as TodoPriority,
+          priority: todo.priority ?? ('none' as TodoPriority),
         }));
         const categories = (data.categories ?? [...DEFAULT_TODO_CATEGORIES]).map((cat) => ({
           ...cat,
@@ -94,7 +120,7 @@ export const useTodoStore = create<TodoState>((set, get) => {
         // 기존 데이터 마이그레이션: priority 없으면 'none'
         const migrated = (data.todos ?? []).map((todo) => ({
           ...todo,
-          priority: todo.priority ?? 'none' as TodoPriority,
+          priority: todo.priority ?? ('none' as TodoPriority),
         }));
         const categories = (data.categories ?? [...DEFAULT_TODO_CATEGORIES]).map((cat) => ({
           ...cat,
@@ -135,17 +161,22 @@ export const useTodoStore = create<TodoState>((set, get) => {
         todos: state.todos.map((todo) => {
           if (todo.id !== id) return todo;
           // 서브태스크가 있으면 모두 동기화
-          const subTasks = (todo.subTasks && todo.subTasks.length > 0)
-            ? todo.subTasks.map((st) => ({ ...st, completed: nextCompleted }))
-            : todo.subTasks;
+          const subTasks =
+            todo.subTasks && todo.subTasks.length > 0
+              ? todo.subTasks.map((st) => ({ ...st, completed: nextCompleted }))
+              : todo.subTasks;
           return {
             ...todo,
             completed: nextCompleted,
             subTasks,
             updatedAt: now,
             pendingRemoteOp: todo.archivedAt
-              ? (todo.googleTaskId ? 'delete' as const : undefined)
-              : (todo.googleTaskId ? 'update' as const : 'create' as const),
+              ? todo.googleTaskId
+                ? ('delete' as const)
+                : undefined
+              : todo.googleTaskId
+                ? ('update' as const)
+                : ('create' as const),
           };
         }),
       }));
@@ -182,6 +213,15 @@ export const useTodoStore = create<TodoState>((set, get) => {
       }
 
       const now = new Date().toISOString();
+      // 쌤핀 전용 항목(점검 날짜·관련인)만 바뀌었으면 구글 쓰기를 새로 걸지 않는다.
+      // 구글 Tasks 에는 대응하는 자리가 없어 올려도 사라지는데, 매번 쓰기를 걸면
+      // 동기화가 쉬지 않고 도는 핑퐁이 된다(ADR-039/040). 유스케이스 쪽
+      // ManageTodos.withSyncMeta 와 **같은 판정**을 여기서도 해야 화면과 저장이 어긋나지 않는다.
+      const changedKeys = Object.keys(syncedChanges);
+      const localOnlyChange =
+        changedKeys.length > 0 &&
+        changedKeys.every((k) => (TODO_LOCAL_ONLY_FIELDS as readonly string[]).includes(k));
+
       set((state) => ({
         todos: state.todos.map((todo) =>
           todo.id === id
@@ -189,9 +229,15 @@ export const useTodoStore = create<TodoState>((set, get) => {
                 ...todo,
                 ...syncedChanges,
                 updatedAt: now,
-                pendingRemoteOp: todo.archivedAt
-                  ? (todo.googleTaskId ? 'delete' as const : undefined)
-                  : (todo.googleTaskId ? 'update' as const : 'create' as const),
+                pendingRemoteOp: localOnlyChange
+                  ? todo.pendingRemoteOp
+                  : todo.archivedAt
+                    ? todo.googleTaskId
+                      ? ('delete' as const)
+                      : undefined
+                    : todo.googleTaskId
+                      ? ('update' as const)
+                      : ('create' as const),
               }
             : todo,
         ),
@@ -210,8 +256,12 @@ export const useTodoStore = create<TodoState>((set, get) => {
                 subTasks: [...(todo.subTasks ?? []), subTask],
                 updatedAt: now,
                 pendingRemoteOp: todo.archivedAt
-                  ? (todo.googleTaskId ? 'delete' as const : undefined)
-                  : (todo.googleTaskId ? 'update' as const : 'create' as const),
+                  ? todo.googleTaskId
+                    ? ('delete' as const)
+                    : undefined
+                  : todo.googleTaskId
+                    ? ('update' as const)
+                    : ('create' as const),
               }
             : todo,
         ),
@@ -230,7 +280,11 @@ export const useTodoStore = create<TodoState>((set, get) => {
           const allDone = subTasks.length > 0 && subTasks.every((st) => st.completed);
           const anyUndone = subTasks.some((st) => !st.completed);
           const completed = allDone ? true : anyUndone ? false : todo.completed;
-          const status = allDone ? 'done' as const : anyUndone && todo.status === 'done' ? 'todo' as const : todo.status;
+          const status = allDone
+            ? ('done' as const)
+            : anyUndone && todo.status === 'done'
+              ? ('todo' as const)
+              : todo.status;
           return {
             ...todo,
             subTasks,
@@ -238,8 +292,12 @@ export const useTodoStore = create<TodoState>((set, get) => {
             status,
             updatedAt: now,
             pendingRemoteOp: todo.archivedAt
-              ? (todo.googleTaskId ? 'delete' as const : undefined)
-              : (todo.googleTaskId ? 'update' as const : 'create' as const),
+              ? todo.googleTaskId
+                ? ('delete' as const)
+                : undefined
+              : todo.googleTaskId
+                ? ('update' as const)
+                : ('create' as const),
           };
         }),
       }));
@@ -257,8 +315,12 @@ export const useTodoStore = create<TodoState>((set, get) => {
             subTasks,
             updatedAt: now,
             pendingRemoteOp: todo.archivedAt
-              ? (todo.googleTaskId ? 'delete' as const : undefined)
-              : (todo.googleTaskId ? 'update' as const : 'create' as const),
+              ? todo.googleTaskId
+                ? ('delete' as const)
+                : undefined
+              : todo.googleTaskId
+                ? ('update' as const)
+                : ('create' as const),
           };
         }),
       }));
@@ -266,7 +328,10 @@ export const useTodoStore = create<TodoState>((set, get) => {
     },
 
     reorderTodos: async (todoIds) => {
-      const updates: { id: string; sortOrder: number }[] = todoIds.map((id, idx) => ({ id, sortOrder: idx }));
+      const updates: { id: string; sortOrder: number }[] = todoIds.map((id, idx) => ({
+        id,
+        sortOrder: idx,
+      }));
       set((state) => ({
         todos: state.todos.map((todo) => {
           const entry = updates.find((u) => u.id === todo.id);
@@ -289,7 +354,8 @@ export const useTodoStore = create<TodoState>((set, get) => {
                   ...todo,
                   archivedAt: now,
                   updatedAt: now,
-                  pendingRemoteOp: todo.googleTaskId && !todo.remoteDeletedAt ? 'delete' as const : undefined,
+                  pendingRemoteOp:
+                    todo.googleTaskId && !todo.remoteDeletedAt ? ('delete' as const) : undefined,
                 }
               : todo,
           ),

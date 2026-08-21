@@ -1,4 +1,5 @@
 import type { Todo, TodoCategory, TodosData, SubTask } from '@domain/entities/Todo';
+import { TODO_LOCAL_ONLY_FIELDS } from '@domain/entities/Todo';
 import type { ITodoRepository } from '@domain/repositories/ITodoRepository';
 import { calculateNextDueDate } from '@domain/rules/todoRules';
 import { generateUUID } from '@infrastructure/utils/uuid';
@@ -11,18 +12,35 @@ import { generateUUID } from '@infrastructure/utils/uuid';
  *
  * remoteDeletedAt(원격에서 의도적 삭제됨)이 마킹된 항목은 자동 push 대상에서 제외된다.
  */
-function nextPendingOp(todo: Pick<Todo, 'googleTaskId' | 'archivedAt' | 'remoteDeletedAt'>): Todo['pendingRemoteOp'] {
+function nextPendingOp(
+  todo: Pick<Todo, 'googleTaskId' | 'archivedAt' | 'remoteDeletedAt'>,
+): Todo['pendingRemoteOp'] {
   if (todo.remoteDeletedAt) return undefined;
   if (todo.archivedAt) return todo.googleTaskId ? 'delete' : undefined;
   return todo.googleTaskId ? 'update' : 'create';
 }
 
-/** mutation 시 메타데이터(updatedAt + pendingRemoteOp) 자동 부여 헬퍼. */
-function withSyncMeta<T extends Todo>(todo: T, now: string): T {
+/**
+ * mutation 시 메타데이터(updatedAt + pendingRemoteOp) 자동 부여 헬퍼.
+ *
+ * `changedKeys` 를 주면 **바뀐 항목이 전부 쌤핀 전용(`TODO_LOCAL_ONLY_FIELDS`)일 때
+ * 구글 쓰기를 예약하지 않는다.** 구글 Tasks 에는 점검 날짜·관련인에 대응하는 자리가
+ * 아예 없어서 올려 봤자 사라지는데, 그때마다 쓰기를 걸면 동기화가 쉬지 않고 도는
+ * 핑퐁이 된다(ADR-039/040 이 겪은 그 모양).
+ *
+ * 인자를 **생략하면 기존과 완전히 같다** — 이미 있는 호출부 6곳은 손대지 않는다.
+ */
+function withSyncMeta<T extends Todo>(todo: T, now: string, changedKeys?: readonly string[]): T {
+  const localOnly =
+    changedKeys !== undefined &&
+    changedKeys.length > 0 &&
+    changedKeys.every((k) => (TODO_LOCAL_ONLY_FIELDS as readonly string[]).includes(k));
+
   return {
     ...todo,
     updatedAt: now,
-    pendingRemoteOp: nextPendingOp(todo),
+    // 쌤핀 전용 항목만 바뀌었으면 기존 예약 상태를 그대로 둔다(새로 걸지 않는다).
+    pendingRemoteOp: localOnly ? todo.pendingRemoteOp : nextPendingOp(todo),
   };
 }
 
@@ -64,13 +82,36 @@ export class ManageTodos {
   /**
    * 투두를 부분 업데이트합니다 (우선순위, 카테고리 등).
    */
-  async updateTodo(id: string, changes: Partial<Pick<Todo, 'text' | 'priority' | 'category' | 'recurrence' | 'dueDate' | 'subTasks' | 'sortOrder' | 'time' | 'startDate' | 'status' | 'completed' | 'notes'>>): Promise<void> {
+  async updateTodo(
+    id: string,
+    changes: Partial<
+      Pick<
+        Todo,
+        | 'text'
+        | 'priority'
+        | 'category'
+        | 'recurrence'
+        | 'dueDate'
+        | 'subTasks'
+        | 'sortOrder'
+        | 'time'
+        | 'startDate'
+        | 'status'
+        | 'completed'
+        | 'notes'
+        | 'checkAt'
+        | 'relatedStaff'
+      >
+    >,
+  ): Promise<void> {
     const data = await this.todoRepository.getTodos();
     const currentTodos = data?.todos ?? [];
     const now = new Date().toISOString();
+    // 무엇이 바뀌었는지 넘겨, 쌤핀 전용 항목만 바뀌었으면 구글 쓰기를 걸지 않는다.
+    const changedKeys = Object.keys(changes);
 
     const updatedTodos: readonly Todo[] = currentTodos.map((todo) =>
-      todo.id === id ? withSyncMeta({ ...todo, ...changes }, now) : todo,
+      todo.id === id ? withSyncMeta({ ...todo, ...changes }, now, changedKeys) : todo,
     );
 
     await this.todoRepository.saveTodos({ todos: updatedTodos, categories: data?.categories });
@@ -105,13 +146,16 @@ export class ManageTodos {
           dueDate: nextDueDate,
           createdAt: now,
           updatedAt: now,
-          pendingRemoteOp: 'create',  // 새 인스턴스는 원격에 신규 생성 필요
+          pendingRemoteOp: 'create', // 새 인스턴스는 원격에 신규 생성 필요
         };
 
         const updated = currentTodos.map((t) =>
           t.id === id ? withSyncMeta({ ...t, completed: true }, now) : t,
         );
-        await this.todoRepository.saveTodos({ todos: [...updated, nextTodo], categories: data?.categories });
+        await this.todoRepository.saveTodos({
+          todos: [...updated, nextTodo],
+          categories: data?.categories,
+        });
         return nextTodo;
       }
     }
@@ -186,7 +230,10 @@ export class ManageTodos {
    * 완료된 할 일 일괄 아카이브.
    * Google Tasks와 연동된 항목은 pendingRemoteOp:'delete' + pendingDeleteIds 반환 → 호출 측에서 원격 삭제 큐에 등록.
    */
-  async archiveCompleted(): Promise<{ archivedCount: number; pendingDeleteIds: readonly string[] }> {
+  async archiveCompleted(): Promise<{
+    archivedCount: number;
+    pendingDeleteIds: readonly string[];
+  }> {
     const data = await this.todoRepository.getTodos();
     const todos = data?.todos ?? [];
     const now = new Date().toISOString();
@@ -245,7 +292,9 @@ export class ManageTodos {
    * 아카이브 항목 영구 삭제.
    * googleTaskId가 살아있는 항목들은 pendingDeleteIds로 반환 → 호출 측에서 원격 삭제 큐에 등록.
    */
-  async deleteArchived(ids?: string[]): Promise<{ deletedCount: number; pendingDeleteIds: readonly string[] }> {
+  async deleteArchived(
+    ids?: string[],
+  ): Promise<{ deletedCount: number; pendingDeleteIds: readonly string[] }> {
     const data = await this.todoRepository.getTodos();
     const todos = data?.todos ?? [];
 

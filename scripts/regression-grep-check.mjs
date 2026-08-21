@@ -358,6 +358,44 @@ const absenceChecks = [
     // 테스트 파일은 querySelector('input[type="file"]') 처럼 조회만 한다 — 제외.
     fileFilter: (path) => !/\.(test|spec)\.tsx?$/.test(path),
   },
+  // ────────────────────────────────────────────────────────────────────────
+  // REGRESSION #58·#59 — 할일 확장 4건 M0 (2026-08-22, ADR-066 계획)
+  //
+  // 게이트 4종 중 이 두 규칙을 검사하는 건 regression-check 뿐이다. tsc·lint 는
+  // "시계를 읽었는지"나 "인자를 빠뜨렸는지"를 모른다. grep 전용이라는 한계를
+  // 여기서는 오히려 도구로 쓴다.
+  // ────────────────────────────────────────────────────────────────────────
+  {
+    // #58 — 새 할일 도메인 규칙은 시계를 직접 읽지 않는다.
+    //
+    // `new Date('2026-08-21T14:00')` 형태는 **실행 머신의 시간대**로 해석돼, 같은 코드가
+    // 개발자 PC(KST)와 CI(UTC)에서 다른 값을 낸다. 알림이 몇 시간씩 어긋나는 고전적 함정이다.
+    // 오늘 날짜·시간대 오프셋은 바깥에서 주입받는다.
+    //
+    // ★ fileFilter 로 신규 4파일만 겨냥한다. `src/domain/rules/todo*.ts` 로 넓히면
+    //   기존 `todoRules.ts` 의 `new Date(` 8건에 걸려 손도 안 댄 파일 때문에 즉시 빨간불이
+    //   된다. 그 8건은 `isOverdue(todo, today = new Date())` 같은 **기본 인자**라 위반이 아니다.
+    name: 'REGRESSION #58: 새 할일 도메인 규칙은 시계를 직접 읽지 않는다 (시간대 무관 보장)',
+    roots: ['src/domain/rules'],
+    extensions: ['.ts'],
+    patterns: [/new Date\(/, /Date\.now\(/],
+    fileFilter: (path) => /todo(CheckRules|Time|AlarmRules|AutoBoard)\.ts$/.test(path),
+    // 주석에 적은 "이걸 쓰지 마라" 예시까지 잡히면, 설명을 잘 달수록 빨간불이 된다.
+    stripComments: true,
+  },
+  {
+    // #59 — 할일 알람 훅은 인자 없는 전체 삭제를 부르지 않는다.
+    //
+    // 알림 스케줄은 출처별로 나뉘어 있다. 기존 훅(useReminderOsPush)을 그대로 베끼면
+    // 인자 없는 `clearReminderSchedule()` 을 부르게 되고, 그러면 **학생 관찰 기록 알림이
+    // 통째로 사라진다.** 할일 알람을 끄려다 남의 알림을 끄는 셈이다.
+    // 반드시 `clearReminderSchedule('todo')` 처럼 출처를 지정해야 한다.
+    name: 'REGRESSION #59: 할일 알람 훅은 clearReminderSchedule()을 인자 없이 부르지 않는다 (기록 알림 전멸 방지)',
+    roots: ['src/adapters/hooks'],
+    extensions: ['.ts', '.tsx'],
+    patterns: [/clearReminderSchedule\(\s*\)/],
+    fileFilter: (path) => /useTodoAlarmOsPush\.tsx?$/.test(path),
+  },
   {
     name: 'REGRESSION #23: SAMPLE_STUDENTS 상수가 useStudentStore.ts 에 재도입되지 않았다',
     roots: ['src/adapters/stores'],
@@ -555,14 +593,28 @@ for (const c of presenceChecks) {
 }
 
 // --- 부재 검사 ---
+/**
+ * 주석을 걷어낸다 — `stripComments: true` 인 검사에만 쓴다.
+ *
+ * 왜 필요한가: "이걸 쓰지 마라"를 금지하는 검사일수록, 그 이유를 설명하는 주석에
+ * **금지 대상을 예시로 적게 된다.** 그러면 설명이 잘 달린 파일일수록 검사에 걸린다
+ * (실제 발생: `todoTime.ts` 가 "왜 시계를 직접 읽지 않는가"를 설명하다 자기 규칙에 걸렸다).
+ *
+ * `https://` 가 잘려 나가지 않도록 `//` 앞에 콜론이 없을 때만 줄 주석으로 본다.
+ */
+function stripComments(src) {
+  return src.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+}
+
 for (const c of absenceChecks) {
   const allFiles = c.roots.flatMap((root) => walk(join(ROOT, root), c.extensions, []));
   const files = c.fileFilter ? allFiles.filter((f) => c.fileFilter(f)) : allFiles;
 
   let hits = [];
   for (const file of files) {
-    const content = readFileSafe(file);
-    if (content === null) continue;
+    const raw = readFileSafe(file);
+    if (raw === null) continue;
+    const content = c.stripComments ? stripComments(raw) : raw;
     for (const pat of c.patterns) {
       if (pat.test(content)) {
         const rel = relative(ROOT, file).split(sep).join('/');
