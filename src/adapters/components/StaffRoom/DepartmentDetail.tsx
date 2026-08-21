@@ -14,11 +14,13 @@ import { isDepartmentAdmin } from '@domain/rules/staffRoomPermission';
 import { MemberList } from './MemberList';
 import { InvitePanel } from './InvitePanel';
 import { BoardView } from './BoardView';
+import { LibraryView } from './LibraryView';
+import { useStaffRoomLibraryStore } from '@adapters/stores/useStaffRoomLibraryStore';
 import { PostDetail } from './PostDetail';
 import { PostEditor } from './PostEditor';
 import { MyNameModal, hasSkippedNamePrompt } from './MyNameModal';
 
-type DetailTab = 'board' | 'members' | 'invites';
+type DetailTab = 'board' | 'library' | 'members' | 'invites';
 type BoardMode = 'list' | 'write' | 'edit';
 
 export function DepartmentDetail() {
@@ -30,6 +32,7 @@ export function DepartmentDetail() {
 
   const currentPost = useStaffRoomBoardStore((s) => s.currentPost);
   const boardReset = useStaffRoomBoardStore((s) => s.reset);
+  const libraryReset = useStaffRoomLibraryStore((s) => s.reset);
 
   const [tab, setTab] = useState<DetailTab>('board');
   const [boardMode, setBoardMode] = useState<BoardMode>('list');
@@ -50,6 +53,7 @@ export function DepartmentDetail() {
 
   const handleBack = () => {
     boardReset();
+    libraryReset();
     closeDepartment();
   };
 
@@ -96,6 +100,19 @@ export function DepartmentDetail() {
             }`}
           >
             게시판
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'library'}
+            onClick={() => setTab('library')}
+            className={`-mb-px border-b-2 px-3 py-2.5 text-sm font-sp-medium transition-colors ${
+              tab === 'library'
+                ? 'border-sp-accent text-sp-text'
+                : 'border-transparent text-sp-muted hover:text-sp-text'
+            }`}
+          >
+            자료실
           </button>
           <button
             type="button"
@@ -154,6 +171,7 @@ export function DepartmentDetail() {
               onWriteNew={() => setBoardMode('write')}
             />
           ))}
+        {tab === 'library' && <LibraryView departmentId={currentDepartment.id} />}
         {tab === 'members' && <MemberList />}
         {tab === 'invites' && isAdmin && <InvitePanel />}
       </div>

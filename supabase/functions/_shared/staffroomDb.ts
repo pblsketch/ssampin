@@ -49,7 +49,8 @@ export interface InviteRow {
   created_at: string;
 }
 
-type Db = ReturnType<typeof serviceClient>;
+/** service_role 클라이언트 타입 — 같은 폴더의 staffroomDrive.ts 도 쓴다 */
+export type Db = ReturnType<typeof serviceClient>;
 
 /** 부서의 멤버 전체를 읽는다 — 인가 판정과 목록 응답이 같은 데이터를 쓴다 */
 export async function loadMembers(db: Db, departmentId: string): Promise<MemberRow[]> {
@@ -280,5 +281,146 @@ export function toModuleResponse(row: ModuleRow, unreadCount: number) {
     name: row.name,
     position: row.position,
     unreadCount,
+  };
+}
+
+// ══════════════════════════════════════════════════════════════════
+// 자료실 (M3)
+//
+// ★ 이 표들에는 **파일 내용이 없다.** 관리자 드라이브를 가리키는 표찰만 있다.
+//   전송량과 개인정보 둘 다를 위해서다(계획서 §3.4 · 051 마이그레이션 헤더).
+// ══════════════════════════════════════════════════════════════════
+
+/** DB 에서 읽은 자료실 파일 행 */
+export interface FileRow {
+  id: string;
+  department_id: string;
+  module_id: string;
+  drive_file_id: string;
+  name: string;
+  mime_type: string;
+  size: number;
+  uploader_email: string;
+  uploaded_at: string;
+  version: number;
+  preview_file_id: string | null;
+  preview_size: number;
+}
+
+/** DB 에서 읽은 이전 판 행 */
+export interface FileVersionRow {
+  id: string;
+  file_id: string;
+  version: number;
+  drive_file_id: string;
+  name: string;
+  size: number;
+  uploader_email: string;
+  uploaded_at: string;
+  preview_file_id: string | null;
+}
+
+/** DB 에서 읽은 올리기 표 행 */
+export interface UploadTicketRow {
+  id: string;
+  department_id: string;
+  module_id: string;
+  uploader_email: string;
+  name: string;
+  mime_type: string;
+  size: number;
+  folder_id: string;
+  replaces_file_id: string | null;
+  kind: 'file' | 'preview';
+  created_at: string;
+  consumed_at: string | null;
+}
+
+export const FILE_COLUMNS =
+  'id, department_id, module_id, drive_file_id, name, mime_type, size, uploader_email, uploaded_at, version, preview_file_id, preview_size';
+
+/** 이 부서의 자료실 모듈을 찾는다 (M3 는 부서마다 1개) */
+export async function loadArchiveModule(db: Db, departmentId: string): Promise<ModuleRow | null> {
+  const { data, error } = await db
+    .from('staffroom_modules')
+    .select('id, department_id, kind, name, position')
+    .eq('department_id', departmentId)
+    .eq('kind', 'archive')
+    .order('position', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw new Error(`자료실 조회 실패: ${error.message}`);
+  return (data as ModuleRow | null) ?? null;
+}
+
+/**
+ * 자료실 모듈을 찾고, 없으면 만든다.
+ *
+ * M1·M2 로 이미 만들어진 부서는 051 마이그레이션이 채워 주지만, 마이그레이션이
+ * 돌기 전에 생긴 부서나 경합으로 빠진 부서가 있을 수 있어 여기서도 한 번 더 본다.
+ */
+export async function ensureArchiveModule(db: Db, departmentId: string): Promise<ModuleRow> {
+  const found = await loadArchiveModule(db, departmentId);
+  if (found) return found;
+
+  const { data, error } = await db
+    .from('staffroom_modules')
+    .insert({ department_id: departmentId, kind: 'archive', name: '자료실', position: 1 })
+    .select('id, department_id, kind, name, position')
+    .single();
+
+  if (error) throw new Error(`자료실 생성 실패: ${error.message}`);
+  return data as ModuleRow;
+}
+
+/** 이 부서의 파일 하나 — 남의 부서 파일 id 를 보내도 통하지 않게 부서로 좁혀 읽는다 */
+export async function loadFile(
+  db: Db,
+  fileId: string,
+  departmentId: string,
+): Promise<FileRow | null> {
+  const { data, error } = await db
+    .from('staffroom_files')
+    .select(FILE_COLUMNS)
+    .eq('id', fileId)
+    .eq('department_id', departmentId)
+    .maybeSingle();
+
+  if (error) throw new Error(`파일 조회 실패: ${error.message}`);
+  return (data as FileRow | null) ?? null;
+}
+
+/** 파일 행 → 클라이언트 응답 */
+export function toFileResponse(row: FileRow, names: Map<string, string | null>) {
+  return {
+    id: row.id,
+    departmentId: row.department_id,
+    moduleId: row.module_id,
+    driveFileId: row.drive_file_id,
+    name: row.name,
+    mimeType: row.mime_type,
+    size: Number(row.size),
+    uploaderEmail: row.uploader_email,
+    uploaderName: names.get(row.uploader_email.trim().toLowerCase()) ?? null,
+    uploadedAt: row.uploaded_at,
+    version: row.version,
+    previewFileId: row.preview_file_id,
+    previewSize: Number(row.preview_size),
+  };
+}
+
+/** 이전 판 행 → 클라이언트 응답 */
+export function toVersionResponse(row: FileVersionRow, names: Map<string, string | null>) {
+  return {
+    id: row.id,
+    fileId: row.file_id,
+    version: row.version,
+    driveFileId: row.drive_file_id,
+    name: row.name,
+    size: Number(row.size),
+    uploaderEmail: row.uploader_email,
+    uploaderName: names.get(row.uploader_email.trim().toLowerCase()) ?? null,
+    uploadedAt: row.uploaded_at,
   };
 }

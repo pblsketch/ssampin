@@ -10,7 +10,10 @@
  * action:
  *   list    { departmentId }
  *   setRole { departmentId, memberId, role }
- *   remove  { departmentId, memberId }
+ *   remove  { departmentId, memberId, deleteUploads? }
+ *
+ * M3 부터 `remove` 는 자료실 몫까지 함께 한다 — 내준 드라이브 읽기 권한을 거두고(§3.4-나),
+ * 관리자가 고르면 그분이 올린 파일도 정리한다(§10.6, 기본값은 남기기).
  */
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import {
@@ -33,7 +36,14 @@ import {
   loadMembers,
   toAccessMembers,
   toMemberResponse,
+  type Db,
 } from '../_shared/staffroomDb.ts';
+import {
+  AdminTokenError,
+  adminAccessToken,
+  revokePermission,
+  trashDriveFile,
+} from '../_shared/staffroomDrive.ts';
 
 serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
@@ -148,6 +158,10 @@ serve(async (req: Request) => {
         return errorResponse(denialMessage(decision.reason), denialStatus(decision.reason));
       }
 
+      // 지우기 전에 지메일을 확보한다 — 지운 뒤에는 누구의 권한을 거둘지 알 수 없다
+      const target = members.find((m) => m.id === memberId);
+      if (!target) return errorResponse('내보낼 분을 찾을 수 없습니다', 404);
+
       const { error } = await db
         .from('staffroom_members')
         .delete()
@@ -162,9 +176,22 @@ serve(async (req: Request) => {
         );
       }
 
-      // M1 은 부서와 사람만 다룬다. 내보낸 분이 올린 파일 정리(계획서 §10.6)는
-      // 자료실이 생기는 M3 의 몫이다.
-      return jsonResponse({ removedMemberId: memberId });
+      // ★ 내보내기는 명단에서 지우는 것으로 끝나지 않는다 (M3 · 계획서 §3.4-나 · §10.6).
+      //
+      // 자료실 내려받기는 서버가 바이트를 나르는 대신 **그 분 지메일에 드라이브
+      // 읽기 권한을 줘서** 푼다. 명단만 지우고 권한을 그대로 두면 부서에서 나간 뒤에도
+      // 이미 한 번 열어본 파일은 계속 열린다 — 내보낸 것이 아니게 된다.
+      const removedEmail = target.member_email.trim().toLowerCase();
+      const revoked = await revokeAllGrants(db, departmentId, removedEmail);
+
+      // 올린 파일을 함께 지울지는 관리자가 고른다. **기본값은 남기기** —
+      // 부서 자료는 보통 개인 것이 아니라 업무 산출물이다(§10.6 오너 결정).
+      let removedFileCount = 0;
+      if (body?.deleteUploads === true) {
+        removedFileCount = await deleteUploadsOf(db, departmentId, removedEmail);
+      }
+
+      return jsonResponse({ removedMemberId: memberId, revokedGrants: revoked, removedFileCount });
     }
 
     return errorResponse('알 수 없는 요청입니다', 400);
@@ -172,3 +199,101 @@ serve(async (req: Request) => {
     return internalErrorResponse('staffroom-members', err);
   }
 });
+
+/**
+ * 내보낸 분에게 내줬던 드라이브 읽기 권한을 전부 거둔다 (계획서 §3.4-나 · §10.6).
+ *
+ * ★ 관리자 연결이 끊겨 있어도 **명단에서 지우는 일은 이미 끝났다.** 여기서 던지면
+ *   "내보내기가 실패했다"고 보이지만 사실 나간 상태라 화면과 실제가 어긋난다.
+ *   그래서 권한 회수 실패는 경고만 남기고 넘어가고, 몇 건을 거뒀는지 돌려준다.
+ *   (남은 권한은 관리자가 구글 연결을 되살린 뒤 다시 내보내면 정리된다.)
+ */
+async function revokeAllGrants(db: Db, departmentId: string, email: string): Promise<number> {
+  const { data, error } = await db
+    .from('staffroom_file_grants')
+    .select('id, drive_file_id, permission_id')
+    .eq('department_id', departmentId)
+    .eq('member_email', email);
+
+  if (error) {
+    console.error('[staffroom-members] 권한 목록 조회 실패:', error.message);
+    return 0;
+  }
+
+  const grants = (data ?? []) as Array<{
+    id: string;
+    drive_file_id: string;
+    permission_id: string;
+  }>;
+  if (grants.length === 0) return 0;
+
+  let token: string;
+  try {
+    token = await adminAccessToken(db, departmentId);
+  } catch (err) {
+    if (!(err instanceof AdminTokenError)) throw err;
+    console.warn('[staffroom-members] 관리자 연결이 끊겨 드라이브 권한을 못 거뒀습니다');
+    return 0;
+  }
+
+  let revoked = 0;
+  for (const grant of grants) {
+    try {
+      await revokePermission(token, grant.drive_file_id, grant.permission_id);
+      await db.from('staffroom_file_grants').delete().eq('id', grant.id);
+      revoked += 1;
+    } catch {
+      // 한 건이 실패해도 나머지는 계속 거둔다
+      console.warn('[staffroom-members] 권한 회수 건너뜀:', grant.drive_file_id);
+    }
+  }
+  return revoked;
+}
+
+/**
+ * 내보낸 분이 올린 파일을 함께 지운다 — **관리자가 고를 때만** (§10.6).
+ *
+ * 기본값이 "남기기"인 이유: 부서 자료는 보통 개인 것이 아니라 업무 산출물이다.
+ * 담당이 바뀌었다고 작년 계획서가 사라지면 그게 더 큰 사고다.
+ * 드라이브에서는 휴지통으로만 보내므로 관리자가 되돌릴 수 있다.
+ */
+async function deleteUploadsOf(db: Db, departmentId: string, email: string): Promise<number> {
+  const { data, error } = await db
+    .from('staffroom_files')
+    .select('id, drive_file_id, preview_file_id')
+    .eq('department_id', departmentId)
+    .eq('uploader_email', email);
+
+  if (error) {
+    console.error('[staffroom-members] 파일 목록 조회 실패:', error.message);
+    return 0;
+  }
+
+  const files = (data ?? []) as Array<{
+    id: string;
+    drive_file_id: string;
+    preview_file_id: string | null;
+  }>;
+  if (files.length === 0) return 0;
+
+  let token: string | null = null;
+  try {
+    token = await adminAccessToken(db, departmentId);
+  } catch (err) {
+    if (!(err instanceof AdminTokenError)) throw err;
+    console.warn('[staffroom-members] 관리자 연결이 끊겨 드라이브 파일을 못 지웠습니다');
+  }
+
+  for (const file of files) {
+    if (token) {
+      try {
+        await trashDriveFile(token, file.drive_file_id);
+        if (file.preview_file_id) await trashDriveFile(token, file.preview_file_id);
+      } catch {
+        console.warn('[staffroom-members] 드라이브 삭제 건너뜀:', file.drive_file_id);
+      }
+    }
+    await db.from('staffroom_files').delete().eq('id', file.id).eq('department_id', departmentId);
+  }
+  return files.length;
+}

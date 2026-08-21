@@ -7,7 +7,7 @@
  * 이메일을 확인하고, 그 이메일이 부서 멤버인지 본 뒤에만 응답한다(§7).
  * 앱이 "나는 아무개입니다"라고 문자열로 주장하는 경로는 만들지 않는다.
  *
- * M1 범위 밖(게시판·자료실·토론방·갤러리)은 여기에 선언하지 않는다.
+ * M2 에서 게시판, M3 에서 자료실이 더해졌다. 토론방·갤러리는 M4 이므로 아직 없다.
  */
 import type {
   CreateStaffRoomDepartmentInput,
@@ -26,6 +26,14 @@ import type {
   StaffRoomReadStatus,
   WriteStaffRoomPostInput,
 } from '@domain/entities/StaffRoomBoard';
+import type {
+  StaffRoomFile,
+  StaffRoomFileVersion,
+  StaffRoomSearchHit,
+  StaffRoomStorageUsage,
+  StaffRoomUploadTicket,
+  UploadStaffRoomFileInput,
+} from '@domain/entities/StaffRoomLibrary';
 
 /** 초대 코드로 참여한 결과 */
 export interface JoinStaffRoomResult {
@@ -210,4 +218,101 @@ export interface IStaffRoomPort {
     departmentId: string,
     displayName: string,
   ): Promise<StaffRoomMember>;
+
+  // ════════════════════════════════════════════════════════════════
+  // 자료실 (M3)
+  //
+  // ★ 파일 바이트는 이 포트를 지나지 않는다(계획서 §3.4 · ADR-065).
+  //   올릴 때는 `createUploadSession` 이 받아 온 주소로 앱이 구글에 곧장 올리고,
+  //   내려받을 때는 `getDownloadUrl` 이 준 구글 링크를 그대로 연다.
+  //   여기 오가는 것은 표찰(이름·크기·올린 사람)과 검색용 글자뿐이다.
+  // ════════════════════════════════════════════════════════════════
+
+  /** 자료실 목록 + 부서가 쓰는 용량 */
+  listFiles(
+    googleAccessToken: string,
+    departmentId: string,
+  ): Promise<{
+    module: StaffRoomModule;
+    files: StaffRoomFile[];
+    usage: StaffRoomStorageUsage;
+    /** 관리자가 구글을 연결해 뒀는가. 아니면 올리기·내려받기가 안 된다(§3.2.1) */
+    driveConnected: boolean;
+  }>;
+
+  /** 올리기 세션 주소를 받는다 — 파일은 이 주소로 구글에 곧장 간다 */
+  createUploadSession(
+    googleAccessToken: string,
+    departmentId: string,
+    input: UploadStaffRoomFileInput,
+  ): Promise<StaffRoomUploadTicket>;
+
+  /** 다 올린 뒤 등록 — 서버가 드라이브에 되물어 표와 대조한다 */
+  commitUpload(
+    googleAccessToken: string,
+    departmentId: string,
+    ticketId: string,
+    driveFileId: string,
+  ): Promise<StaffRoomFile>;
+
+  /** 미리보기 글자를 올릴 주소를 받는다 (§3.4-가 — 글자도 드라이브로 간다) */
+  createPreviewSession(
+    googleAccessToken: string,
+    departmentId: string,
+    fileId: string,
+    size: number,
+  ): Promise<StaffRoomUploadTicket>;
+
+  /** 미리보기 글자 등록 */
+  commitPreview(
+    googleAccessToken: string,
+    departmentId: string,
+    ticketId: string,
+    driveFileId: string,
+    fileId: string,
+  ): Promise<void>;
+
+  /**
+   * 내려받기 — 서버가 내 지메일에 읽기 권한을 주고 구글 링크를 돌려준다(§3.4-나).
+   * 파일은 구글에서 곧장 오므로 쌤핀 서버를 지나지 않는다.
+   */
+  getDownloadUrl(
+    googleAccessToken: string,
+    departmentId: string,
+    fileId: string,
+  ): Promise<{ url: string; name: string }>;
+
+  /** 자료 지우기 — 올린 사람 본인 또는 관리자 */
+  deleteFile(googleAccessToken: string, departmentId: string, fileId: string): Promise<void>;
+
+  /** 접어 둔 이전 판 (§8-C) */
+  listFileVersions(
+    googleAccessToken: string,
+    departmentId: string,
+    fileId: string,
+  ): Promise<StaffRoomFileVersion[]>;
+
+  /**
+   * 검색에 쓸 글자를 받아 온다 (§3.4-가).
+   *
+   * `drive.file` 권한 탓에 앱이 관리자 드라이브의 글자 파일을 직접 못 읽어서
+   * 서버가 대신 읽어 준다. 한 번에 30개까지, 받은 것은 앱이 갈무리해 둔다.
+   */
+  fetchPreviews(
+    googleAccessToken: string,
+    departmentId: string,
+    fileIds: readonly string[],
+  ): Promise<Array<{ fileId: string; text: string }>>;
+
+  /**
+   * 글에서 찾기 (§8-A 부서 전체 검색).
+   *
+   * 자료는 앱이 받아 둔 글자로 직접 찾지만, **글 본문은 앱에 없다**(§3.5-다 —
+   * 목록에 본문을 싣지 않는다). 그래서 글만 서버가 찾고 걸린 것만 돌려준다.
+   */
+  searchPosts(
+    googleAccessToken: string,
+    departmentId: string,
+    query: string,
+  ): Promise<StaffRoomSearchHit[]>;
 }

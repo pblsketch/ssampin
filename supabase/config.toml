@@ -137,3 +137,6 @@ verify_jwt = true
 
 [functions.staffroom-drafts]
 verify_jwt = true
+
+[functions.staffroom-library]
+verify_jwt = true

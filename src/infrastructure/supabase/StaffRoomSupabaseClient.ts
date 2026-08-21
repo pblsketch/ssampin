@@ -11,6 +11,7 @@
  *  - staffroom-members          {action: list|setRole|remove, googleAccessToken, departmentId, ...}
  *  - staffroom-join             {code, googleAccessToken}
  *  - staffroom-save-admin-token {departmentId, accessToken, refreshToken, expiresAt}
+ *  - staffroom-library          {action: list|uploadSession|commit|download|delete|..., ...}
  */
 import type {
   CreateStaffRoomDepartmentInput,
@@ -29,6 +30,14 @@ import type {
   StaffRoomReadStatus,
   WriteStaffRoomPostInput,
 } from '@domain/entities/StaffRoomBoard';
+import type {
+  StaffRoomFile,
+  StaffRoomFileVersion,
+  StaffRoomSearchHit,
+  StaffRoomStorageUsage,
+  StaffRoomUploadTicket,
+  UploadStaffRoomFileInput,
+} from '@domain/entities/StaffRoomLibrary';
 import type { IStaffRoomPort, JoinStaffRoomResult } from '@domain/ports/IStaffRoomPort';
 import { StaffRoomHttpError } from '@domain/errors/StaffRoomError';
 
@@ -417,5 +426,168 @@ export class StaffRoomSupabaseClient implements IStaffRoomPort {
       displayName,
     });
     return res.member;
+  }
+
+  // ════════════════════════════════════════════════════════════════
+  // 자료실 (M3)
+  //
+  // ★ 파일 바이트가 이 클래스를 지나지 않는다(계획서 §3.4 · ADR-065).
+  //   업로드는 `uploadToSession` 이 구글 주소로 곧장 보내고, 다운로드는
+  //   서버가 준 구글 링크를 화면이 그대로 연다.
+  // ════════════════════════════════════════════════════════════════
+
+  async listFiles(
+    googleAccessToken: string,
+    departmentId: string,
+  ): Promise<{
+    module: StaffRoomModule;
+    files: StaffRoomFile[];
+    usage: StaffRoomStorageUsage;
+    driveConnected: boolean;
+  }> {
+    return this.invoke('staffroom-library', {
+      action: 'list',
+      googleAccessToken,
+      departmentId,
+    });
+  }
+
+  async createUploadSession(
+    googleAccessToken: string,
+    departmentId: string,
+    input: UploadStaffRoomFileInput,
+  ): Promise<StaffRoomUploadTicket> {
+    return this.invoke('staffroom-library', {
+      action: 'uploadSession',
+      googleAccessToken,
+      departmentId,
+      name: input.name,
+      mimeType: input.mimeType,
+      size: input.size,
+      replacesFileId: input.replacesFileId,
+    });
+  }
+
+  async commitUpload(
+    googleAccessToken: string,
+    departmentId: string,
+    ticketId: string,
+    driveFileId: string,
+  ): Promise<StaffRoomFile> {
+    const res = await this.invoke<{ file: StaffRoomFile }>('staffroom-library', {
+      action: 'commit',
+      googleAccessToken,
+      departmentId,
+      ticketId,
+      driveFileId,
+    });
+    return res.file;
+  }
+
+  async createPreviewSession(
+    googleAccessToken: string,
+    departmentId: string,
+    fileId: string,
+    size: number,
+  ): Promise<StaffRoomUploadTicket> {
+    return this.invoke('staffroom-library', {
+      action: 'previewSession',
+      googleAccessToken,
+      departmentId,
+      fileId,
+      size,
+    });
+  }
+
+  async commitPreview(
+    googleAccessToken: string,
+    departmentId: string,
+    ticketId: string,
+    driveFileId: string,
+    fileId: string,
+  ): Promise<void> {
+    await this.invoke('staffroom-library', {
+      action: 'commitPreview',
+      googleAccessToken,
+      departmentId,
+      ticketId,
+      driveFileId,
+      fileId,
+    });
+  }
+
+  async getDownloadUrl(
+    googleAccessToken: string,
+    departmentId: string,
+    fileId: string,
+  ): Promise<{ url: string; name: string }> {
+    return this.invoke('staffroom-library', {
+      action: 'download',
+      googleAccessToken,
+      departmentId,
+      fileId,
+    });
+  }
+
+  async deleteFile(googleAccessToken: string, departmentId: string, fileId: string): Promise<void> {
+    await this.invoke('staffroom-library', {
+      action: 'delete',
+      googleAccessToken,
+      departmentId,
+      fileId,
+    });
+  }
+
+  async listFileVersions(
+    googleAccessToken: string,
+    departmentId: string,
+    fileId: string,
+  ): Promise<StaffRoomFileVersion[]> {
+    const res = await this.invoke<{ versions: StaffRoomFileVersion[] }>('staffroom-library', {
+      action: 'versions',
+      googleAccessToken,
+      departmentId,
+      fileId,
+    });
+    return res.versions;
+  }
+
+  async fetchPreviews(
+    googleAccessToken: string,
+    departmentId: string,
+    fileIds: readonly string[],
+  ): Promise<Array<{ fileId: string; text: string }>> {
+    const res = await this.invoke<{ previews: Array<{ fileId: string; text: string }> }>(
+      'staffroom-library',
+      { action: 'previews', googleAccessToken, departmentId, fileIds },
+    );
+    return res.previews;
+  }
+
+  async searchPosts(
+    googleAccessToken: string,
+    departmentId: string,
+    query: string,
+  ): Promise<StaffRoomSearchHit[]> {
+    const res = await this.invoke<{
+      posts: Array<{
+        id: string;
+        moduleId: string;
+        title: string;
+        snippet: string;
+        matchedInContent: boolean;
+        updatedAt: string;
+      }>;
+    }>('staffroom-library', { action: 'searchPosts', googleAccessToken, departmentId, query });
+
+    return res.posts.map((p) => ({
+      kind: 'post' as const,
+      id: p.id,
+      moduleId: p.moduleId,
+      title: p.title,
+      snippet: p.snippet,
+      matchedInContent: p.matchedInContent,
+      updatedAt: p.updatedAt,
+    }));
   }
 }

@@ -241,3 +241,137 @@ export function checkDisplayName(raw: unknown): DisplayNameCheck {
   }
   return { ok: true, value: trimmed };
 }
+
+// ══════════════════════════════════════════════════════════════════
+// 자료실 (M3)
+//
+// 계획서 §8-C(새 버전) · §10.6(200MB 상한) · §3.4-나(내려받기 권한)
+// `src/domain/rules/staffRoomLibraryRules.ts` 와 같은 규칙이다.
+// 한쪽만 고치면 화면과 서버가 어긋나므로 둘을 함께 고칠 것.
+// ══════════════════════════════════════════════════════════════════
+
+/**
+ * 파일 하나의 크기 상한 — 200MB (§10.6 오너 결정).
+ * 화면(`StaffRoomLibrary.ts`)과 **같은 값이어야 한다.**
+ *
+ * 화면에서 이미 막지만 서버가 다시 본다 — 화면 검사는 방어가 아니다.
+ * 누구나 anon key 로 staffroom-library 를 직접 부를 수 있다.
+ */
+export const LIBRARY_FILE_MAX_BYTES = 200 * 1024 * 1024;
+
+/** 파일 이름 최대 길이 — 화면과 같은 값 */
+export const LIBRARY_FILE_NAME_MAX_LENGTH = 200;
+
+/** 파일을 올릴 수 있는가 — 멤버면 누구나(§10.6: 업로드 승인 절차를 두지 않는다) */
+export function canUploadFile(members: readonly AccessMember[], email: string): AccessResult {
+  return requireMember(members, email);
+}
+
+/** 파일을 지울 수 있는가 — 올린 사람 본인 또는 관리자 */
+export function canDeleteFile(
+  members: readonly AccessMember[],
+  viewerEmail: string,
+  uploaderEmail: string,
+): AccessResult {
+  const found = requireMember(members, viewerEmail);
+  if (!found.ok) return found;
+  if (found.member.role === 'admin') return found;
+  if (norm(viewerEmail) === norm(uploaderEmail)) return found;
+  return { ok: false, reason: 'not_author' };
+}
+
+/** 올리기 입력 검사 결과 */
+export type UploadCheck =
+  | { readonly ok: true; readonly name: string }
+  | { readonly ok: false; readonly message: string };
+
+/**
+ * 올릴 파일의 이름·크기를 검사한다.
+ *
+ * ★ 이 검사가 서버에도 있어야 하는 이유 — 파일 바이트가 서버를 지나지 않으므로
+ *   (ADR-065) 서버는 "실제로 무엇이 올라갔는지"를 나중에야 안다. 그래서 세션을
+ *   내주기 **전에** 여기서 걸러야 200MB 짜리가 관리자 드라이브에 들어갔다 나오는
+ *   일을 막을 수 있다. 커밋 때 드라이브에 되물어 한 번 더 대조한다.
+ */
+export function checkUploadInput(name: unknown, size: unknown): UploadCheck {
+  if (typeof name !== 'string' || name.trim().length === 0) {
+    return { ok: false, message: '파일 이름이 없습니다.' };
+  }
+  const trimmed = name.trim();
+  if (trimmed.length > LIBRARY_FILE_NAME_MAX_LENGTH) {
+    return {
+      ok: false,
+      message: `파일 이름은 ${LIBRARY_FILE_NAME_MAX_LENGTH}자까지 쓸 수 있습니다.`,
+    };
+  }
+  if (trimmed.includes('/') || trimmed.includes('\\')) {
+    return { ok: false, message: '파일 이름에 / 나 \\ 는 쓸 수 없습니다.' };
+  }
+  if (typeof size !== 'number' || !Number.isFinite(size) || size <= 0) {
+    return { ok: false, message: '파일 크기를 알 수 없습니다.' };
+  }
+  if (size > LIBRARY_FILE_MAX_BYTES) {
+    return { ok: false, message: '파일 하나는 200MB까지 올릴 수 있습니다.' };
+  }
+  return { ok: true, name: trimmed };
+}
+
+/**
+ * 올라온 파일이 표(ticket)와 맞는가 — 커밋 때 대조 (ADR-065).
+ *
+ * ★ 멤버가 "다 올렸습니다" 하며 보내는 드라이브 파일 id 를 그대로 믿으면 안 된다.
+ *   관리자 드라이브의 **아무 파일 id** 나 보내면 그 파일이 자료실에 등록되고,
+ *   그 순간 부서 멤버 전원이 그 파일을 열 수 있게 된다(§3.4-나 가 권한을 주므로).
+ *   관리자 선생님의 개인 파일이 새어 나가는 길이다.
+ *
+ * 그래서 세 가지를 본다: 부서 폴더 안에 있는가 · 이름이 같은가 · 크기가 같은가.
+ */
+export function matchesTicket(
+  ticket: { readonly name: string; readonly size: number; readonly folderId: string },
+  actual: {
+    readonly name: string;
+    readonly size: number;
+    readonly parents: readonly string[];
+    readonly trashed: boolean;
+  },
+): { readonly ok: true } | { readonly ok: false; readonly message: string } {
+  if (actual.trashed) {
+    return { ok: false, message: '올라간 파일을 찾을 수 없습니다. 다시 올려주세요.' };
+  }
+  if (!actual.parents.includes(ticket.folderId)) {
+    return { ok: false, message: '이 부서 자료실에 올라간 파일이 아닙니다.' };
+  }
+  if (actual.name !== ticket.name) {
+    return { ok: false, message: '올린 파일의 이름이 처음 알린 것과 다릅니다.' };
+  }
+  if (actual.size !== ticket.size) {
+    return { ok: false, message: '올린 파일의 크기가 처음 알린 것과 다릅니다.' };
+  }
+  return { ok: true };
+}
+
+/** 올리기 표의 유효 시간 — 하루 지나면 못 쓴다 */
+export const UPLOAD_TICKET_TTL_MS = 24 * 60 * 60 * 1000;
+
+/** 이 표를 아직 쓸 수 있는가 */
+export function isTicketUsable(
+  ticket: {
+    readonly uploaderEmail: string;
+    readonly createdAt: string;
+    readonly consumedAt: string | null;
+  },
+  email: string,
+  nowMs: number,
+): { readonly ok: true } | { readonly ok: false; readonly message: string } {
+  if (ticket.consumedAt) {
+    return { ok: false, message: '이미 등록된 파일입니다.' };
+  }
+  if (norm(ticket.uploaderEmail) !== norm(email)) {
+    return { ok: false, message: '이 파일을 올린 분만 등록할 수 있습니다.' };
+  }
+  const created = new Date(ticket.createdAt).getTime();
+  if (!Number.isFinite(created) || nowMs - created > UPLOAD_TICKET_TTL_MS) {
+    return { ok: false, message: '올리기 시간이 지났습니다. 다시 올려주세요.' };
+  }
+  return { ok: true };
+}
