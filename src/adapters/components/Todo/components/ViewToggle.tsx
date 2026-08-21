@@ -11,6 +11,8 @@ const VIEW_OPTIONS: { key: TodoViewMode; label: string; icon: string }[] = [
   { key: 'list', label: '테이블', icon: 'table_rows' },
   { key: 'timeline', label: '타임라인', icon: 'timeline' },
   { key: 'matrix', label: '매트릭스', icon: 'grid_view' },
+  // 자동 보드 — 날짜가 자리를 정한다. 칸반과 달리 카드를 손으로 정리하지 않아도 된다.
+  { key: 'autoBoard', label: '자동 보드', icon: 'auto_awesome_motion' },
 ];
 
 export function ViewToggle({ currentView, onViewChange }: ViewToggleProps) {

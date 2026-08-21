@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import type { Todo, TodoStatus } from '@domain/entities/Todo';
+import type { Todo } from '@domain/entities/Todo';
 import type { TodoCategory } from '@domain/entities/Todo';
 import { PRIORITY_CONFIG } from '@domain/valueObjects/TodoPriority';
 import { isOverdue } from '@domain/rules/todoRules';
 
 interface KanbanCardProps {
   todo: Todo;
-  columnKey: TodoStatus;
+  /** 칸 식별자. 수동 칸반은 TodoStatus, 자동 보드는 AutoBoardBucket 을 넘긴다. */
+  columnKey: string;
   categories: readonly TodoCategory[];
   onEdit?: (todo: Todo) => void;
   onToggleSubTask?: (todoId: string, subTaskId: string) => Promise<void>;

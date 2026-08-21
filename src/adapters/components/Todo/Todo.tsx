@@ -24,6 +24,9 @@ const ListView = lazy(() => import('./views/ListView').then((m) => ({ default: m
 const TimelineView = lazy(() =>
   import('./views/TimelineView').then((m) => ({ default: m.TimelineView })),
 );
+const AutoBoardView = lazy(() =>
+  import('./views/AutoBoardView').then((m) => ({ default: m.AutoBoardView })),
+);
 const MatrixView = lazy(() =>
   import('./views/MatrixView').then((m) => ({ default: m.MatrixView })),
 );
@@ -640,6 +643,9 @@ export function Todo() {
                           {proViewMode === 'matrix' && (
                             <MatrixView categoryFilter={categoryFilter} />
                           )}
+                          {proViewMode === 'autoBoard' && (
+                            <AutoBoardView categoryFilter={categoryFilter} />
+                          )}
                         </Suspense>
                       </div>
                       <div className="w-full lg:w-80 lg:shrink-0 flex flex-col gap-4 bg-sp-card rounded-xl p-4 ring-1 ring-sp-border overflow-y-auto">
@@ -703,6 +709,9 @@ export function Todo() {
                     {proViewMode === 'list' && <ListView categoryFilter={categoryFilter} />}
                     {proViewMode === 'timeline' && <TimelineView categoryFilter={categoryFilter} />}
                     {proViewMode === 'matrix' && <MatrixView categoryFilter={categoryFilter} />}
+                    {proViewMode === 'autoBoard' && (
+                      <AutoBoardView categoryFilter={categoryFilter} />
+                    )}
                   </Suspense>
                 )
               ) : (
