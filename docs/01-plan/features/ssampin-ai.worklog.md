@@ -51,7 +51,8 @@
 7. **이름 확정 + 실측 ③ 폐기 반영**
 8. **입력 안전장치 재설계 (차단 → 경고)**
 9. **Phase 1 구현 완료** — 도구 등급제 + egress 4중 그물 + 집계 함수 5종
-10. **Phase 2 구현 완료** — 중계 함수 `ssampin-assist` ← 이번
+10. **Phase 2 구현 완료** — 중계 함수 `ssampin-assist`
+11. **Phase 3 구현 완료** — 화면 연결 + 옵트인 ← 이번
 
 ### ⏭️ 다음
 
@@ -342,6 +343,96 @@
 - **`Sidebar.tsx`·`App.tsx` 를 처음 건드린다** — 다른 세션이 작업 중이라 **조율 필수.**
 - 배포 시 secret 4개: `ASSIST_UPSTAGE_API_KEY`(챗봇과 **다른 키**) · `ASSIST_UPSTAGE_MODEL` ·
   `ASSIST_UPSTAGE_BASE_URL` · `ASSIST_DAILY_GLOBAL_LIMIT`
+
+---
+
+## Phase 3 완료 (2026-08-21) — 화면 연결 + 옵트인
+
+### 만든 파일 8개 · 고친 파일 4곳(순수 추가)
+
+| 파일                                            | 역할                                                 |
+| ----------------------------------------------- | ---------------------------------------------------- |
+| `src/domain/ports/AssistPort.ts`                | 바깥과 이야기하는 창구. **`ModelSafe<T>` 만 받는다** |
+| `src/infrastructure/ai/AssistClient.ts`         | 중계 함수(`ssampin-assist`)만 부른다                 |
+| `src/adapters/stores/useAssistStore.ts`         | 옵트인·대화 상태                                     |
+| `src/adapters/components/Assist/AssistDock.tsx` | 도킹 패널(384/320px)                                 |
+| `.../Assist/AssistThread.tsx`                   | 숫자 카드 + AI 해설                                  |
+| `.../Assist/OutboundLine.tsx`                   | **「나갈 문장」 줄** — 이 패널의 시그니처            |
+| `.../Assist/AssistDockContainer.tsx`            | 도구 실행(로컬)                                      |
+| `.../Settings/aiBridge/InAppAssistCard.tsx`     | 설정 옵트인 카드 + 고지문                            |
+| 테스트                                          | `stores/__tests__/assistStore.test.ts` 12건          |
+
+기존 파일: `App.tsx`(+4) · `Sidebar.tsx`(+21) · `AiBridgeTab.tsx`(+3) · `container.ts`(DI 등록).
+**삭제한 줄 0건** — 다른 세션과의 충돌 면적을 최소로 뒀다.
+
+### ★Phase 1 의 숙제 해결 — 그물 ②의 컴파일 강제가 살아났다
+
+적대적 검토에서 *"`ModelSafe<T>` 를 소비하는 자리가 0곳이라 강제가 공허하다"*는 지적을 받았다.
+**포트가 그 타입만 받게 하니 실제로 작동한다.** 뚫어서 확인했다:
+
+```
+재구성 안 거친 생 객체를 port.ask() 에 넘김
+→ error TS2322: Type '{ className: string; studentName: string; }'
+   is not assignable to type 'ModelSafe<ToolResultShape>'
+```
+
+**★중간에 `as` 캐스팅을 하나 넣었다가 스스로 발견해 뺐다.**
+스토어가 `ToolResultShape` 를 받아 포트에 넘길 때 캐스팅하고 있었는데,
+그러면 **강제가 무의미해진다.** 스토어 타입도 `ModelSafe` 로 올려 sanitize → 스토어 → 포트가
+한 줄로 이어지게 했다. 이 경로에 캐스팅은 **0건**이다.
+
+### ★아키텍처 규칙 위반을 lint 가 잡았다
+
+`AssistDockContainer` 가 `AssistClient` 를 직접 import 했다. **adapters 는 infrastructure 를
+직접 쓸 수 없다**(DI 만 예외 — `docs/architecture-rules.md`).
+→ DI 컨테이너에 `assistPort` 를 등록하고 거기서 받아 쓰도록 고쳤다. **규칙을 끄지 않았다.**
+
+### "꺼짐이 차단선" — 네 겹으로 강제
+
+성공 기준 5 는 _"꺼짐 상태에서 `ssampin-assist` 요청이 0건"_ 이다.
+**화면이 안 보이는 것만으로는 부족하다** — 화면을 우회해 불러도 안 나가야 한다.
+
+| 층                 | 가드                                              |
+| ------------------ | ------------------------------------------------- |
+| 사이드바 진입점    | `assistEnabled &&` — 꺼져 있으면 항목 자체가 없다 |
+| 컨테이너           | `if (!enabled) return null`                       |
+| 패널               | `if (!enabled \|\| !open) return null`            |
+| **스토어 `ask()`** | **`if (!get().enabled) return`** ← 마지막 층      |
+
+마지막 층을 테스트로 고정했다(스토어 테스트 12건).
+
+### 다른 설계 판단
+
+- **대화 내용을 저장하지 않는다**(§5.5). `persist` 의 `partialize` 가 설정·식별자만 남긴다.
+- **대화 이력을 모델에 다시 보내지 않는다**(§8.2). 테스트로 고정 — 두 번째 질문에도 턴이 1개다.
+- **숫자 카드를 먼저 넣고 답을 나중에 채운다.** AI 가 실패해도 카드는 남는다(P5, 테스트로 고정).
+- **말풍선을 쓰지 않는다.** 카드(앱) vs 평문(AI) 대비로 구분해 기존 챗봇과 시각적으로 갈린다.
+
+### ⚠️ 정직하게 밝히는 범위 축소
+
+**도구 선택을 지금은 앱이 한다**(계획서 옵션 B 형태). 모델이 스스로 고르게 하려면
+도구 스키마 전달과 2턴 왕복이 필요한데 Phase 3 범위를 넘는다.
+지금은 제안 칩 + 간단한 의도 판정으로 고르고, 모델은 **숫자를 문장으로 바꾸는 일**만 한다.
+실측에서 `solar-pro3` 의 도구 선택이 100% 였으므로 **옵션 A 로 올리는 길은 열려 있다**
+(서버는 이미 `tools` 를 받을 수 있다). 코드 주석에 그 사실을 적어 두었다.
+
+### 검증
+
+| 게이트                     | 결과                                              |
+| -------------------------- | ------------------------------------------------- |
+| `npx tsc --noEmit`         | 0 errors                                          |
+| `npm run lint`             | 0 errors (내 파일 경고 0 — 아키텍처 위반 수정 후) |
+| 스토어 테스트              | 12건 통과                                         |
+| `npm run regression-check` | 44/44                                             |
+| 전체 테스트                | **6,405건 통과 · 실패 0**                         |
+| 다른 세션 파일             | 삭제 0줄, 순수 추가만                             |
+
+### ⏭️ 남은 것
+
+- **Phase 4**: 개인정보처리방침·`/docs` 사용자 가이드 정합화. **"자동으로 막습니다"라고 쓰지 않는다.**
+- **배포 전 실기기 확인** — 계획서가 요구하는 실렌더 항목(저해상도 1280/1024, 다크·라이트).
+- **Supabase secret 4개** 설정 후 실제 응답 확인.
+- 리뷰어 권고 잔여 3건(필드 전수 분류 강제 · `nestedFields` 강제 일반화 · 필드만 비우기).
 
 ---
 

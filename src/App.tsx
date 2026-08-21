@@ -77,6 +77,7 @@ import { UpdateNotification } from '@adapters/components/common/UpdateNotificati
 import { ModalCoordinator } from '@adapters/components/common/ModalCoordinator';
 import { FeedbackModal } from '@adapters/components/common/FeedbackModal';
 import { HelpChatPanel } from '@adapters/components/HelpChat';
+import { AssistDockContainer } from '@adapters/components/Assist/AssistDockContainer';
 import { CloseActionDialog } from '@adapters/components/common/CloseActionDialog';
 import { CommandPalette, CommandPaletteHint } from '@adapters/components/common/CommandPalette';
 import { QuickAddModal } from '@adapters/components/common/QuickAdd';
@@ -1295,6 +1296,9 @@ function MainApp() {
             })}
           </main>
         </div>
+        {/* 쌤핀 AI — 본문의 오른쪽 형제. 덮지 않고 밀어낸다(사이드바와 같은 구조).
+            꺼져 있으면 아무것도 렌더하지 않는다(성공 기준 5). */}
+        <AssistDockContainer />
         <ModalCoordinator />
         <ToastContainer />
         <Onboarding />

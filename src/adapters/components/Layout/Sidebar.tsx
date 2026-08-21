@@ -63,6 +63,7 @@ import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { SyncStatusBar } from '@adapters/components/Calendar/SyncStatusBar';
 import { DriveSyncIndicator } from '@adapters/components/common/DriveSyncIndicator';
 import { useNewVersionAvailable } from '@adapters/hooks/useNewVersionAvailable';
+import { useAssistStore } from '@adapters/stores/useAssistStore';
 import {
   useUpdatePreferencesStore,
   shouldShowSidebarBadge,
@@ -183,6 +184,12 @@ export function Sidebar({ currentPage, onNavigate, onFeedback }: SidebarProps) {
   // 표시 조건: 학생 0명 AND 명단 한 번도 수정한 적 없음 (everEditedRoster!==true).
   // 학생을 등록하거나 명단을 한 번이라도 만지는 순간 자동 사라진다.
   // 디자인 §3.6 — 빨간 점(w-2 h-2) + transition-opacity duration-300.
+  // 쌤핀 AI — 설정에서 켠 선생님에게만 진입점이 보인다(옵트인 기본 꺼짐).
+  const assistEnabled = useAssistStore((s) => s.enabled);
+  const assistOpen = useAssistStore((s) => s.open);
+  const setAssistOpen = useAssistStore((s) => s.setOpen);
+  const toggleAssist = (): void => setAssistOpen(!assistOpen);
+
   const studentsCount = useStudentStore((s) => s.students.length);
   const everEditedRoster = settings.everEditedRoster ?? false;
   const showRosterEmptyBadge = studentsCount === 0 && !everEditedRoster;
@@ -447,6 +454,20 @@ export function Sidebar({ currentPage, onNavigate, onFeedback }: SidebarProps) {
           >
             <span className="material-symbols-outlined text-icon-md">rate_review</span>
             <span className="text-xs font-medium">건의사항 보내기</span>
+          </button>
+        )}
+
+        {/* 쌤핀 AI — 설정에서 켠 선생님에게만 보인다(옵트인 기본 꺼짐).
+            새 플로팅 버튼도 새 전역 단축키도 만들지 않는다(성공 기준 13). */}
+        {!sidebarCollapsed && assistEnabled && (
+          <button
+            type="button"
+            onClick={toggleAssist}
+            aria-pressed={assistOpen}
+            className="flex items-center gap-3 px-4 py-2 rounded-xl transition-all w-full text-left text-sp-muted hover:text-sp-text hover:bg-sp-text/5 mt-1"
+          >
+            <span className="material-symbols-outlined text-icon-md">auto_awesome</span>
+            <span className="text-xs font-medium">쌤핀 AI</span>
           </button>
         )}
 

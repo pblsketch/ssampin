@@ -6,6 +6,7 @@ import type { IStoragePort } from '@domain/ports/IStoragePort';
 import type { INeisPort } from '@domain/ports/INeisPort';
 import type { IComciganPort } from '@domain/ports/IComciganPort';
 import type { IAppinPort } from '@domain/ports/IAppinPort';
+import type { AssistPort } from '@domain/ports/AssistPort';
 import type { IScheduleRepository } from '@domain/repositories/IScheduleRepository';
 import type { ISeatingRepository } from '@domain/repositories/ISeatingRepository';
 import type { ISeatingSnapshotRepository } from '@domain/repositories/ISeatingSnapshotRepository';
@@ -69,6 +70,7 @@ import { LocalStorageAdapter } from '@infrastructure/storage/LocalStorageAdapter
 import { NeisApiClient } from '@infrastructure/neis/NeisApiClient';
 import { ComciganApiClient } from '@infrastructure/comcigan/ComciganApiClient';
 import { AppinApiClient } from '@infrastructure/appin/AppinApiClient';
+import { AssistClient } from '@infrastructure/ai/AssistClient';
 import { GoogleOAuthClient } from '@infrastructure/google/GoogleOAuthClient';
 import { GoogleCalendarApiClient } from '@infrastructure/google/GoogleCalendarApiClient';
 import { SupabaseAnalyticsAdapter } from '@infrastructure/analytics/SupabaseAnalyticsAdapter';
@@ -307,6 +309,14 @@ export const comciganPort: IComciganPort = new ComciganApiClient();
 // === 압핀 (appin, sgpap.com) — 학급/교사 시간표 불러오기 ===
 // 통신은 electron main('appin:fetch' IPC, safeFetch 경유)에 위임, 브라우저 dev 는 vite 프록시.
 export const appinPort: IAppinPort = new AppinApiClient();
+
+/**
+ * 쌤핀 AI 중계 창구.
+ *
+ * ★adapters 는 infrastructure 를 직접 import 할 수 없다(아키텍처 규칙).
+ * 화면은 이 컨테이너에서 받아 쓴다 - lint 규칙이 그걸 강제한다.
+ */
+export const assistPort: AssistPort = new AssistClient();
 
 // === Google Calendar 관련 ===
 

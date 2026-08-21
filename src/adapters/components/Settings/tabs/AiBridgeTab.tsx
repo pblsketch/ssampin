@@ -1,4 +1,5 @@
 import { AiBridgeCard } from '../aiBridge/AiBridgeCard';
+import { InAppAssistCard } from '../aiBridge/InAppAssistCard';
 
 export function AiBridgeTab() {
   return (
@@ -10,6 +11,8 @@ export function AiBridgeTab() {
           하나로 연결됩니다.
         </p>
       </div>
+      <InAppAssistCard />
+
       <AiBridgeCard />
     </div>
   );
