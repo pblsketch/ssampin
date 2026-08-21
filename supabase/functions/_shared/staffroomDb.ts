@@ -424,3 +424,191 @@ export function toVersionResponse(row: FileVersionRow, names: Map<string, string
     uploadedAt: row.uploaded_at,
   };
 }
+
+// ══════════════════════════════════════════════════════════════════
+// 토론방 · 회의록 · 공간 관리 (M4)
+// ══════════════════════════════════════════════════════════════════
+
+/** DB 에서 읽은 안건 행 */
+export interface DiscussionRow {
+  id: string;
+  module_id: string;
+  department_id: string;
+  author_email: string;
+  title: string;
+  body: string;
+  closed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** DB 에서 읽은 투표 행 */
+export interface VoteRow {
+  id: string;
+  discussion_id: string;
+  member_email: string;
+  stance: 'agree' | 'disagree' | 'abstain';
+  comment: string;
+  updated_at: string;
+}
+
+/** DB 에서 읽은 회의록 행 */
+export interface MinutesRow {
+  id: string;
+  module_id: string;
+  department_id: string;
+  author_email: string;
+  title: string;
+  met_on: string;
+  attendees: string;
+  agenda: string;
+  discussion: string;
+  decisions: string;
+  from_discussion_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export const DISCUSSION_COLUMNS =
+  'id, module_id, department_id, author_email, title, body, closed_at, created_at, updated_at';
+
+export const MINUTES_COLUMNS =
+  'id, module_id, department_id, author_email, title, met_on, attendees, agenda, discussion, decisions, from_discussion_id, created_at, updated_at';
+
+/** 이 부서의 공간(모듈) 전체 — 탭 순서대로 */
+export async function loadModules(db: Db, departmentId: string): Promise<ModuleRow[]> {
+  const { data, error } = await db
+    .from('staffroom_modules')
+    .select('id, department_id, kind, name, position')
+    .eq('department_id', departmentId)
+    .order('position', { ascending: true })
+    .order('created_at', { ascending: true });
+
+  if (error) throw new Error(`공간 조회 실패: ${error.message}`);
+  return (data ?? []) as ModuleRow[];
+}
+
+/** 이 부서의 안건 하나 — 남의 부서 id 를 보내도 통하지 않게 부서로 좁혀 읽는다 */
+export async function loadDiscussion(
+  db: Db,
+  discussionId: string,
+  departmentId: string,
+): Promise<DiscussionRow | null> {
+  const { data, error } = await db
+    .from('staffroom_discussions')
+    .select(DISCUSSION_COLUMNS)
+    .eq('id', discussionId)
+    .eq('department_id', departmentId)
+    .maybeSingle();
+
+  if (error) throw new Error(`안건 조회 실패: ${error.message}`);
+  return (data as DiscussionRow | null) ?? null;
+}
+
+/** 이 부서의 회의록 하나 */
+export async function loadMinutes(
+  db: Db,
+  minutesId: string,
+  departmentId: string,
+): Promise<MinutesRow | null> {
+  const { data, error } = await db
+    .from('staffroom_minutes')
+    .select(MINUTES_COLUMNS)
+    .eq('id', minutesId)
+    .eq('department_id', departmentId)
+    .maybeSingle();
+
+  if (error) throw new Error(`회의록 조회 실패: ${error.message}`);
+  return (data as MinutesRow | null) ?? null;
+}
+
+/** 안건 행 → 클라이언트 응답 */
+export function toDiscussionResponse(
+  row: DiscussionRow,
+  names: Map<string, string | null>,
+  opts: {
+    tally: { agree: number; disagree: number; abstain: number };
+    myVote: VoteRow | null;
+  },
+) {
+  return {
+    id: row.id,
+    moduleId: row.module_id,
+    departmentId: row.department_id,
+    title: row.title,
+    body: row.body,
+    authorEmail: row.author_email,
+    authorName: names.get(row.author_email.trim().toLowerCase()) ?? null,
+    closedAt: row.closed_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    tally: opts.tally,
+    myVote: opts.myVote ? toVoteResponse(opts.myVote, names) : null,
+  };
+}
+
+/** 투표 행 → 클라이언트 응답 */
+export function toVoteResponse(row: VoteRow, names: Map<string, string | null>) {
+  return {
+    memberEmail: row.member_email,
+    memberName: names.get(row.member_email.trim().toLowerCase()) ?? null,
+    stance: row.stance,
+    comment: row.comment,
+    updatedAt: row.updated_at,
+  };
+}
+
+/** 회의록 행 → 클라이언트 응답 */
+export function toMinutesResponse(row: MinutesRow, names: Map<string, string | null>) {
+  return {
+    id: row.id,
+    moduleId: row.module_id,
+    departmentId: row.department_id,
+    title: row.title,
+    metOn: row.met_on,
+    attendees: row.attendees,
+    agenda: row.agenda,
+    discussion: row.discussion,
+    decisions: row.decisions,
+    fromDiscussionId: row.from_discussion_id,
+    authorEmail: row.author_email,
+    authorName: names.get(row.author_email.trim().toLowerCase()) ?? null,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+/**
+ * 안건들의 찬반을 한 번에 센다.
+ *
+ * 앱이 투표를 전부 받아 세지 않는다 — 30명 부서에서 안건 20개면 600줄인데
+ * 화면에 필요한 건 숫자 세 개다(계획서 §3.5-다 전송량).
+ */
+export async function loadTallies(
+  db: Db,
+  discussionIds: readonly string[],
+): Promise<Map<string, { agree: number; disagree: number; abstain: number }>> {
+  const empty = { agree: 0, disagree: 0, abstain: 0 };
+  const map = new Map<string, { agree: number; disagree: number; abstain: number }>();
+  for (const id of discussionIds) map.set(id, { ...empty });
+  if (discussionIds.length === 0) return map;
+
+  const { data, error } = await db.rpc('staffroom_discussion_tally', {
+    p_discussion_ids: discussionIds,
+  });
+  if (error) throw new Error(`집계 실패: ${error.message}`);
+
+  for (const row of (data ?? []) as Array<{
+    discussion_id: string;
+    agree_count: number;
+    disagree_count: number;
+    abstain_count: number;
+  }>) {
+    map.set(row.discussion_id, {
+      agree: Number(row.agree_count),
+      disagree: Number(row.disagree_count),
+      abstain: Number(row.abstain_count),
+    });
+  }
+  return map;
+}

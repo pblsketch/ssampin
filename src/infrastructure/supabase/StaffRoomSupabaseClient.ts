@@ -12,6 +12,7 @@
  *  - staffroom-join             {code, googleAccessToken}
  *  - staffroom-save-admin-token {departmentId, accessToken, refreshToken, expiresAt}
  *  - staffroom-library          {action: list|uploadSession|commit|download|delete|..., ...}
+ *  - staffroom-rooms            {action: modules|addModule|discussions|vote|minutesList|..., ...}
  */
 import type {
   CreateStaffRoomDepartmentInput,
@@ -25,11 +26,21 @@ import type {
   StaffRoomComment,
   StaffRoomDraft,
   StaffRoomModule,
+  StaffRoomModuleKind,
   StaffRoomPost,
   StaffRoomPostSummary,
   StaffRoomReadStatus,
   WriteStaffRoomPostInput,
 } from '@domain/entities/StaffRoomBoard';
+import type {
+  StaffRoomBanner,
+  StaffRoomDiscussion,
+  StaffRoomMinutes,
+  StaffRoomStance,
+  StaffRoomTally,
+  StaffRoomVote,
+  WriteStaffRoomMinutesInput,
+} from '@domain/entities/StaffRoomRooms';
 import type {
   StaffRoomFile,
   StaffRoomFileVersion,
@@ -589,5 +600,237 @@ export class StaffRoomSupabaseClient implements IStaffRoomPort {
       matchedInContent: p.matchedInContent,
       updatedAt: p.updatedAt,
     }));
+  }
+
+  // ════════════════════════════════════════════════════════════════
+  // 공간(모듈) · 배너 · 토론방 · 회의록 (M4)
+  // ════════════════════════════════════════════════════════════════
+
+  async listModules(
+    googleAccessToken: string,
+    departmentId: string,
+  ): Promise<{ modules: StaffRoomModule[]; banner: StaffRoomBanner }> {
+    return this.invoke('staffroom-rooms', { action: 'modules', googleAccessToken, departmentId });
+  }
+
+  async addModule(
+    googleAccessToken: string,
+    departmentId: string,
+    kind: StaffRoomModuleKind,
+    name: string,
+  ): Promise<StaffRoomModule> {
+    const res = await this.invoke<{ module: StaffRoomModule }>('staffroom-rooms', {
+      action: 'addModule',
+      googleAccessToken,
+      departmentId,
+      kind,
+      name,
+    });
+    return res.module;
+  }
+
+  async renameModule(
+    googleAccessToken: string,
+    departmentId: string,
+    moduleId: string,
+    name: string,
+  ): Promise<void> {
+    await this.invoke('staffroom-rooms', {
+      action: 'renameModule',
+      googleAccessToken,
+      departmentId,
+      moduleId,
+      name,
+    });
+  }
+
+  async moveModule(
+    googleAccessToken: string,
+    departmentId: string,
+    moduleId: string,
+    direction: 'up' | 'down',
+  ): Promise<void> {
+    await this.invoke('staffroom-rooms', {
+      action: 'moveModule',
+      googleAccessToken,
+      departmentId,
+      moduleId,
+      direction,
+    });
+  }
+
+  async deleteModule(
+    googleAccessToken: string,
+    departmentId: string,
+    moduleId: string,
+  ): Promise<void> {
+    await this.invoke('staffroom-rooms', {
+      action: 'deleteModule',
+      googleAccessToken,
+      departmentId,
+      moduleId,
+    });
+  }
+
+  async setBanner(
+    googleAccessToken: string,
+    departmentId: string,
+    banner: StaffRoomBanner,
+  ): Promise<void> {
+    await this.invoke('staffroom-rooms', {
+      action: 'setBanner',
+      googleAccessToken,
+      departmentId,
+      kind: banner.kind,
+      value: banner.value,
+    });
+  }
+
+  async listDiscussions(
+    googleAccessToken: string,
+    departmentId: string,
+    moduleId: string,
+  ): Promise<{ discussions: StaffRoomDiscussion[]; memberCount: number }> {
+    return this.invoke('staffroom-rooms', {
+      action: 'discussions',
+      googleAccessToken,
+      departmentId,
+      moduleId,
+    });
+  }
+
+  async getDiscussion(
+    googleAccessToken: string,
+    departmentId: string,
+    discussionId: string,
+  ): Promise<{ discussion: StaffRoomDiscussion; votes: StaffRoomVote[]; memberCount: number }> {
+    return this.invoke('staffroom-rooms', {
+      action: 'getDiscussion',
+      googleAccessToken,
+      departmentId,
+      discussionId,
+    });
+  }
+
+  async addDiscussion(
+    googleAccessToken: string,
+    departmentId: string,
+    moduleId: string,
+    input: { title: string; body: string },
+  ): Promise<StaffRoomDiscussion> {
+    const res = await this.invoke<{ discussion: StaffRoomDiscussion }>('staffroom-rooms', {
+      action: 'addDiscussion',
+      googleAccessToken,
+      departmentId,
+      moduleId,
+      title: input.title,
+      body: input.body,
+    });
+    return res.discussion;
+  }
+
+  async voteOnDiscussion(
+    googleAccessToken: string,
+    departmentId: string,
+    discussionId: string,
+    stance: StaffRoomStance,
+    comment: string,
+  ): Promise<StaffRoomTally> {
+    const res = await this.invoke<{ tally: StaffRoomTally }>('staffroom-rooms', {
+      action: 'vote',
+      googleAccessToken,
+      departmentId,
+      discussionId,
+      stance,
+      comment,
+    });
+    return res.tally;
+  }
+
+  async setDiscussionClosed(
+    googleAccessToken: string,
+    departmentId: string,
+    discussionId: string,
+    closed: boolean,
+  ): Promise<void> {
+    await this.invoke('staffroom-rooms', {
+      action: 'closeDiscussion',
+      googleAccessToken,
+      departmentId,
+      discussionId,
+      closed,
+    });
+  }
+
+  async deleteDiscussion(
+    googleAccessToken: string,
+    departmentId: string,
+    discussionId: string,
+  ): Promise<void> {
+    await this.invoke('staffroom-rooms', {
+      action: 'deleteDiscussion',
+      googleAccessToken,
+      departmentId,
+      discussionId,
+    });
+  }
+
+  async listMinutes(
+    googleAccessToken: string,
+    departmentId: string,
+    moduleId: string,
+  ): Promise<StaffRoomMinutes[]> {
+    const res = await this.invoke<{ minutes: StaffRoomMinutes[] }>('staffroom-rooms', {
+      action: 'minutesList',
+      googleAccessToken,
+      departmentId,
+      moduleId,
+    });
+    return res.minutes;
+  }
+
+  async addMinutes(
+    googleAccessToken: string,
+    departmentId: string,
+    moduleId: string,
+    input: WriteStaffRoomMinutesInput,
+  ): Promise<StaffRoomMinutes> {
+    const res = await this.invoke<{ minutes: StaffRoomMinutes }>('staffroom-rooms', {
+      action: 'addMinutes',
+      googleAccessToken,
+      departmentId,
+      moduleId,
+      ...input,
+    });
+    return res.minutes;
+  }
+
+  async updateMinutes(
+    googleAccessToken: string,
+    departmentId: string,
+    minutesId: string,
+    input: WriteStaffRoomMinutesInput,
+  ): Promise<StaffRoomMinutes> {
+    const res = await this.invoke<{ minutes: StaffRoomMinutes }>('staffroom-rooms', {
+      action: 'updateMinutes',
+      googleAccessToken,
+      departmentId,
+      minutesId,
+      ...input,
+    });
+    return res.minutes;
+  }
+
+  async deleteMinutes(
+    googleAccessToken: string,
+    departmentId: string,
+    minutesId: string,
+  ): Promise<void> {
+    await this.invoke('staffroom-rooms', {
+      action: 'deleteMinutes',
+      googleAccessToken,
+      departmentId,
+      minutesId,
+    });
   }
 }

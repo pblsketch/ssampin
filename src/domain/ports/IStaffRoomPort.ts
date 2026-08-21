@@ -21,11 +21,21 @@ import type {
   StaffRoomComment,
   StaffRoomDraft,
   StaffRoomModule,
+  StaffRoomModuleKind,
   StaffRoomPost,
   StaffRoomPostSummary,
   StaffRoomReadStatus,
   WriteStaffRoomPostInput,
 } from '@domain/entities/StaffRoomBoard';
+import type {
+  StaffRoomBanner,
+  StaffRoomDiscussion,
+  StaffRoomMinutes,
+  StaffRoomStance,
+  StaffRoomTally,
+  StaffRoomVote,
+  WriteStaffRoomMinutesInput,
+} from '@domain/entities/StaffRoomRooms';
 import type {
   StaffRoomFile,
   StaffRoomFileVersion,
@@ -315,4 +325,124 @@ export interface IStaffRoomPort {
     departmentId: string,
     query: string,
   ): Promise<StaffRoomSearchHit[]>;
+
+  // ════════════════════════════════════════════════════════════════
+  // 공간(모듈) · 배너 · 토론방 · 회의록 (M4)
+  // ════════════════════════════════════════════════════════════════
+
+  /** 부서의 공간 목록 + 배너 (§6) */
+  listModules(
+    googleAccessToken: string,
+    departmentId: string,
+  ): Promise<{ modules: StaffRoomModule[]; banner: StaffRoomBanner }>;
+
+  /** 공간 만들기 (관리자만) */
+  addModule(
+    googleAccessToken: string,
+    departmentId: string,
+    kind: StaffRoomModuleKind,
+    name: string,
+  ): Promise<StaffRoomModule>;
+
+  /** 공간 이름 바꾸기 (관리자만) */
+  renameModule(
+    googleAccessToken: string,
+    departmentId: string,
+    moduleId: string,
+    name: string,
+  ): Promise<void>;
+
+  /** 탭 순서 한 칸 옮기기 (관리자만) */
+  moveModule(
+    googleAccessToken: string,
+    departmentId: string,
+    moduleId: string,
+    direction: 'up' | 'down',
+  ): Promise<void>;
+
+  /** 공간 지우기 (관리자만). 마지막 게시판·자료실은 서버가 막는다 */
+  deleteModule(googleAccessToken: string, departmentId: string, moduleId: string): Promise<void>;
+
+  /** 배너 정하기 (관리자만) */
+  setBanner(
+    googleAccessToken: string,
+    departmentId: string,
+    banner: StaffRoomBanner,
+  ): Promise<void>;
+
+  /** 안건 목록 + 집계 */
+  listDiscussions(
+    googleAccessToken: string,
+    departmentId: string,
+    moduleId: string,
+  ): Promise<{ discussions: StaffRoomDiscussion[]; memberCount: number }>;
+
+  /** 안건 하나 + 낸 뜻 전부 */
+  getDiscussion(
+    googleAccessToken: string,
+    departmentId: string,
+    discussionId: string,
+  ): Promise<{
+    discussion: StaffRoomDiscussion;
+    votes: StaffRoomVote[];
+    memberCount: number;
+  }>;
+
+  /** 안건 내기 (멤버 누구나) */
+  addDiscussion(
+    googleAccessToken: string,
+    departmentId: string,
+    moduleId: string,
+    input: { title: string; body: string },
+  ): Promise<StaffRoomDiscussion>;
+
+  /** 뜻 내기 — 사람마다 안건당 한 줄이라 다시 내면 고쳐진다 */
+  voteOnDiscussion(
+    googleAccessToken: string,
+    departmentId: string,
+    discussionId: string,
+    stance: StaffRoomStance,
+    comment: string,
+  ): Promise<StaffRoomTally>;
+
+  /** 마감 / 마감 풀기 (낸 사람 또는 관리자) */
+  setDiscussionClosed(
+    googleAccessToken: string,
+    departmentId: string,
+    discussionId: string,
+    closed: boolean,
+  ): Promise<void>;
+
+  /** 안건 지우기 (낸 사람 또는 관리자) */
+  deleteDiscussion(
+    googleAccessToken: string,
+    departmentId: string,
+    discussionId: string,
+  ): Promise<void>;
+
+  /** 회의록 목록 (§8-C) */
+  listMinutes(
+    googleAccessToken: string,
+    departmentId: string,
+    moduleId: string,
+  ): Promise<StaffRoomMinutes[]>;
+
+  /** 회의록 쓰기 */
+  addMinutes(
+    googleAccessToken: string,
+    departmentId: string,
+    moduleId: string,
+    input: WriteStaffRoomMinutesInput,
+  ): Promise<StaffRoomMinutes>;
+
+  /** 회의록 고치기 (쓴 사람 또는 관리자) */
+  updateMinutes(
+    googleAccessToken: string,
+    departmentId: string,
+    minutesId: string,
+    input: WriteStaffRoomMinutesInput,
+  ): Promise<StaffRoomMinutes>;
+
+  /** 회의록 지우기 (쓴 사람 또는 관리자) */
+  deleteMinutes(googleAccessToken: string, departmentId: string, minutesId: string): Promise<void>;
 }

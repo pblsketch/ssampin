@@ -140,3 +140,6 @@ verify_jwt = true
 
 [functions.staffroom-library]
 verify_jwt = true
+
+[functions.staffroom-rooms]
+verify_jwt = true

@@ -375,3 +375,137 @@ export function isTicketUsable(
   }
   return { ok: true };
 }
+
+// ══════════════════════════════════════════════════════════════════
+// 토론방 · 회의록 · 부서 일정 · 업무 분담 (M4)
+//
+// 계획서 §6 · §8-B · §8-C · §8-E
+// `src/domain/rules/staffRoomRoomRules.ts` 와 같은 규칙이다.
+// 한쪽만 고치면 화면과 서버가 어긋나므로 둘을 함께 고칠 것.
+// ══════════════════════════════════════════════════════════════════
+
+/** 공간(모듈)을 만들고 이름을 바꾸고 지우는 것은 관리자만 (§6 — 부서 설정) */
+export function canManageModules(members: readonly AccessMember[], email: string): AccessResult {
+  return requireAdmin(members, email);
+}
+
+/** 부서 하나가 가질 수 있는 공간 수 — 화면(StaffRoomRooms.ts)과 같은 값 */
+export const MAX_MODULES = 12;
+
+/** 공간 이름 최대 길이 — 화면과 같은 값 */
+export const MODULE_NAME_MAX_LENGTH = 20;
+
+/** 안건·회의록 제목 최대 길이 — 화면과 같은 값 */
+export const ROOM_TITLE_MAX_LENGTH = 100;
+
+/** 만들 수 있는 공간 종류 */
+export const MODULE_KINDS = ['board', 'archive', 'discussion', 'gallery', 'minutes'] as const;
+
+/** 낼 수 있는 뜻 */
+export const STANCES = ['agree', 'disagree', 'abstain'] as const;
+
+/** 글자 검사 결과 */
+export type TextCheck =
+  | { readonly ok: true; readonly value: string }
+  | { readonly ok: false; readonly message: string };
+
+/** 길이가 정해진 글자를 다듬고 검사한다 */
+export function checkText(raw: unknown, max: number, label: string): TextCheck {
+  if (typeof raw !== 'string') return { ok: false, message: `${label}을(를) 입력해주세요.` };
+  const value = raw.trim();
+  if (value.length === 0) return { ok: false, message: `${label}을(를) 입력해주세요.` };
+  if (value.length > max) {
+    return { ok: false, message: `${label}은(는) ${max}자까지 쓸 수 있습니다.` };
+  }
+  return { ok: true, value };
+}
+
+/**
+ * 이 공간을 지울 수 있는가.
+ *
+ * ★ 게시판과 자료실은 **마지막 하나를 지울 수 없다.** 부서를 만들 때 기본으로 깔아주는
+ *   둘이고(§6), 지우면 그 안에 있던 글·자료가 함께 사라진다.
+ */
+export function canDeleteModule(
+  modules: readonly { readonly id: string; readonly kind: string }[],
+  moduleId: string,
+): { readonly ok: true } | { readonly ok: false; readonly message: string } {
+  const target = modules.find((m) => m.id === moduleId);
+  if (!target) return { ok: false, message: '지울 공간을 찾을 수 없습니다.' };
+  if (target.kind === 'board' || target.kind === 'archive') {
+    const sameKind = modules.filter((m) => m.kind === target.kind).length;
+    if (sameKind <= 1) {
+      const label = target.kind === 'board' ? '게시판' : '자료실';
+      return { ok: false, message: `${label}은(는) 부서에 하나는 있어야 해서 지울 수 없습니다.` };
+    }
+  }
+  return { ok: true };
+}
+
+/** 안건을 마감하거나 안건·회의록을 고치고 지울 수 있는가 — 쓴 사람 또는 관리자 */
+export function canEditRoomItem(
+  members: readonly AccessMember[],
+  viewerEmail: string,
+  authorEmail: string,
+): AccessResult {
+  const found = requireMember(members, viewerEmail);
+  if (!found.ok) return found;
+  if (found.member.role === 'admin') return found;
+  if (norm(viewerEmail) === norm(authorEmail)) return found;
+  return { ok: false, reason: 'not_author' };
+}
+
+/**
+ * 이 업무를 끝냈다고 표시할 수 있는가.
+ *
+ * **맡은 본인**과 관리자다. 남의 일을 끝났다고 표시하면 실제로는 안 끝난 일이
+ * 목록에서 사라진다. 아직 아무도 안 맡은 일은 멤버 누구나 집어 갈 수 있다.
+ */
+export function canToggleTaskDone(
+  members: readonly AccessMember[],
+  viewerEmail: string,
+  assigneeEmail: string | null,
+): AccessResult {
+  const found = requireMember(members, viewerEmail);
+  if (!found.ok) return found;
+  if (found.member.role === 'admin') return found;
+  if (assigneeEmail === null) return found;
+  if (norm(viewerEmail) === norm(assigneeEmail)) return found;
+  return { ok: false, reason: 'not_author' };
+}
+
+/** 담당자로 지정할 수 있는 사람인가 — 이 부서 멤버만 */
+export function normalizeAssignee(members: readonly AccessMember[], raw: unknown): string | null {
+  if (typeof raw !== 'string' || raw.trim().length === 0) return null;
+  const target = norm(raw);
+  const found = members.find((m) => norm(m.email) === target);
+  return found ? norm(found.email) : null;
+}
+
+/**
+ * YYYY-MM-DD 인가.
+ *
+ * ★ **UTC 로 따진다.** 현지 시각으로 읽으면 한국(UTC+9)에서 되돌릴 때 전날이 나와
+ *   멀쩡한 날짜가 전부 거부된다. 형식만 보지 않고 되돌려 맞추는 이유는
+ *   2026-02-31 같은 없는 날을 걸러내기 위해서다.
+ */
+export function isDateString(raw: unknown): raw is string {
+  if (typeof raw !== 'string') return false;
+  const matched = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+  if (!matched) return false;
+  const parsed = new Date(Date.UTC(Number(matched[1]), Number(matched[2]) - 1, Number(matched[3])));
+  if (Number.isNaN(parsed.getTime())) return false;
+  return parsed.toISOString().slice(0, 10) === raw;
+}
+
+/** "14:30" 인가 */
+export function isTimeString(raw: unknown): raw is string {
+  return typeof raw === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(raw);
+}
+
+/** 비어 있으면 null 로 (화면 입력칸이 비면 빈 문자열로 온다) */
+export function emptyToNull(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const value = raw.trim();
+  return value.length === 0 ? null : value;
+}
