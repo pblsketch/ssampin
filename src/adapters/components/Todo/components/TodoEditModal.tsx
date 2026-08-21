@@ -19,6 +19,7 @@ interface TodoEditModalProps {
         | 'dueDate'
         | 'startDate'
         | 'time'
+        | 'checkAt'
         | 'status'
         | 'recurrence'
       >
@@ -39,6 +40,7 @@ export function TodoEditModal({ todo, categories, onUpdate, onClose }: TodoEditM
   const [dueDate, setDueDate] = useState(todo.dueDate ?? '');
   const [startDate, setStartDate] = useState(todo.startDate ?? '');
   const [time, setTime] = useState(todo.time ?? '');
+  const [checkAt, setCheckAt] = useState(todo.checkAt ?? '');
   const [priority, setPriority] = useState<TodoPriority>(todo.priority ?? 'none');
   const [category, setCategory] = useState(todo.category ?? '');
   const [status, setStatus] = useState<TodoStatus>(todo.status ?? 'todo');
@@ -59,6 +61,7 @@ export function TodoEditModal({ todo, categories, onUpdate, onClose }: TodoEditM
     if (dueDate !== (todo.dueDate ?? '')) changes.dueDate = dueDate || undefined;
     if (startDate !== (todo.startDate ?? '')) changes.startDate = startDate || undefined;
     if (time !== (todo.time ?? '')) changes.time = time || undefined;
+    if (checkAt !== (todo.checkAt ?? '')) changes.checkAt = checkAt || undefined;
     if (priority !== (todo.priority ?? 'none')) changes.priority = priority;
     if (category !== (todo.category ?? '')) changes.category = category || undefined;
     if (status !== (todo.status ?? 'todo')) changes.status = status;
@@ -94,6 +97,7 @@ export function TodoEditModal({ todo, categories, onUpdate, onClose }: TodoEditM
     dueDate,
     startDate,
     time,
+    checkAt,
     priority,
     category,
     status,
@@ -180,6 +184,49 @@ export function TodoEditModal({ todo, categories, onUpdate, onClose }: TodoEditM
               </button>
             )}
           </div>
+        </div>
+
+        {/* 다시 확인할 날 — 마감일과 다르다. 시각은 위 "시간"이 담당하므로 여기엔 넣지 않는다. */}
+        <div className="mb-3">
+          <div className="flex items-center gap-2">
+            {checkAt ? (
+              <div className="flex items-center gap-2 px-3 py-2 bg-sp-surface rounded-lg border border-sp-border text-sm text-sp-text">
+                <span className="material-symbols-outlined text-base text-sp-accent">
+                  event_repeat
+                </span>
+                <input
+                  type="date"
+                  value={checkAt}
+                  onChange={(e) => setCheckAt(e.target.value)}
+                  aria-label="다시 확인할 날"
+                  className="bg-transparent text-sp-text text-sm focus:outline-none [color-scheme:dark]"
+                />
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setCheckAt(toLocalDateString())}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed border-sp-border hover:border-sp-accent/50 hover:text-sp-text transition-colors text-sm text-sp-muted"
+              >
+                <span className="material-symbols-outlined text-base">event_repeat</span>
+                <span>다시 확인할 날</span>
+              </button>
+            )}
+            {checkAt && (
+              <button
+                type="button"
+                onClick={() => setCheckAt('')}
+                className="p-1.5 rounded-lg text-sp-muted hover:text-sp-error hover:bg-sp-error/10 transition-colors"
+                title="다시 확인할 날 제거"
+              >
+                <span className="material-symbols-outlined text-base">close</span>
+              </button>
+            )}
+          </div>
+          <p className="mt-1.5 text-xs text-sp-muted">
+            공문 회신, 제출물 확인처럼 &apos;끝내는 날&apos;과 &apos;다시 볼 날&apos;이 다를 때
+            씁니다.
+          </p>
         </div>
 
         {/* 시간 */}

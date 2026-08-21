@@ -4,6 +4,8 @@ import type { Todo } from '@domain/entities/Todo';
 import type { TodoCategory } from '@domain/entities/Todo';
 import { TodoEditModal } from '../components/TodoEditModal';
 import { PRIORITY_CONFIG } from '@domain/valueObjects/TodoPriority';
+import { isCheckDue } from '@domain/rules/todoCheckRules';
+import { toLocalDateString } from '@shared/utils/localDate';
 import {
   inferStatus,
   filterActive,
@@ -313,6 +315,20 @@ function ListViewRow({
           {todo.dueDate && (
             <span className={`text-xs ${overdue ? 'text-sp-error font-medium' : 'text-sp-muted'}`}>
               {todo.dueDate.slice(5)}
+            </span>
+          )}
+          {/* 다시 확인할 날 — 오늘이거나 지났으면 눈에 띄게. 마감일과 다른 개념이라 아이콘을 붙인다. */}
+          {todo.checkAt && (
+            <span
+              title={`다시 확인할 날 ${todo.checkAt}`}
+              className={`inline-flex items-center gap-0.5 text-xs ${
+                isCheckDue(todo, toLocalDateString())
+                  ? 'text-sp-accent font-medium'
+                  : 'text-sp-muted'
+              }`}
+            >
+              <span className="material-symbols-outlined text-sm leading-none">event_repeat</span>
+              {todo.checkAt.slice(5)}
             </span>
           )}
         </div>

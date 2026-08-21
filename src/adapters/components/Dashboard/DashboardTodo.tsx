@@ -7,6 +7,8 @@ import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { resolvePeriodLabel } from '@domain/rules/periodLabel';
 import type { Todo } from '@domain/entities/Todo';
 import { filterActive, sortTodos } from '@domain/rules/todoRules';
+import { isCheckDue } from '@domain/rules/todoCheckRules';
+import { toLocalDateString } from '@shared/utils/localDate';
 import { getDayOfWeek } from '@domain/rules/periodRules';
 import { PRIORITY_CONFIG } from '@domain/valueObjects/TodoPriority';
 import { TodoEditor } from '@adapters/components/Todo/TodoEditor';
@@ -290,6 +292,7 @@ function TodoItem({ todo, onToggle }: TodoItemProps) {
   const priorityConfig = PRIORITY_CONFIG[todo.priority ?? 'none'];
   const showPriority = todo.priority && todo.priority !== 'none';
   const dueDateLabel = getDueDateLabel(todo.dueDate);
+  const checkDue = isCheckDue(todo, toLocalDateString());
 
   return (
     <li
@@ -318,6 +321,12 @@ function TodoItem({ todo, onToggle }: TodoItemProps) {
       >
         {todo.text}
       </span>
+
+      {/* 오늘 확인 — 마감일과 별개로 "다시 볼 날"이 도래한 할 일.
+          마감일이 없어도 떠야 한다(계획서 M1 완료 판정 1). */}
+      {checkDue && !todo.completed && (
+        <span className="text-detail flex-shrink-0 text-sp-accent font-medium">오늘 확인</span>
+      )}
 
       {/* 마감일 라벨 */}
       {dueDateLabel && !todo.completed && (
