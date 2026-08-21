@@ -13,7 +13,11 @@ import { useMemo } from 'react';
 
 import { AssistThread } from './AssistThread';
 import { OutboundLine } from './OutboundLine';
-import { removeFinding, type AssistInputFinding } from '@domain/rules/screenAssistInput';
+import {
+  ASSIST_MAX_QUESTION_CHARS,
+  removeFinding,
+  type AssistInputFinding,
+} from '@domain/rules/screenAssistInput';
 import { useAssistStore } from '@adapters/stores/useAssistStore';
 
 /**
@@ -22,7 +26,7 @@ import { useAssistStore } from '@adapters/stores/useAssistStore';
  * 누르면 미리 정해진 안전한 질문이 그대로 나가므로 자유 타이핑 자체가 줄어든다.
  * 계획서는 이걸 "우회·완곡 표현에 대한 유일한 실질 방어"라고 부른다(§5.7.2).
  */
-const SUGGESTIONS: readonly string[] = [
+export const SUGGESTIONS: readonly string[] = [
   '오늘 우리 반 출결',
   '이번 달 기록 몇 건',
   '이번 주 할 일',
@@ -108,12 +112,7 @@ export function AssistDock({ onAsk }: Props) {
 
       {/* 입력부 */}
       <div className="shrink-0 border-t border-sp-border p-3">
-        <OutboundLine
-          text={draft}
-          screening={screening}
-          removedNameCount={0}
-          onRemoveFinding={handleRemoveFinding}
-        />
+        <OutboundLine text={draft} screening={screening} onRemoveFinding={handleRemoveFinding} />
 
         <textarea
           value={draft}
@@ -126,13 +125,19 @@ export function AssistDock({ onAsk }: Props) {
               send();
             }
           }}
+          maxLength={ASSIST_MAX_QUESTION_CHARS}
           placeholder="예: 오늘 3학년 2반 출결 어때요?"
           aria-label="쌤핀 AI에게 물어보기"
           className="mt-2 max-h-[160px] min-h-[72px] w-full resize-none rounded-lg border border-sp-border bg-sp-bg px-3 py-2 text-sm text-sp-text placeholder:text-sp-muted"
         />
 
         <div className="mt-2 flex items-center justify-between gap-2">
-          <span className="text-xs text-sp-muted">이름은 보내기 전에 지워집니다</span>
+          {/* 상한에 가까워질 때만 알린다 — 평소에 숫자를 띄우면 글자 수를 세게 만든다. */}
+          <span className="text-xs text-sp-muted">
+            {draft.length > ASSIST_MAX_QUESTION_CHARS - 200
+              ? `${ASSIST_MAX_QUESTION_CHARS - draft.length}자 더 쓸 수 있어요`
+              : '이름은 보내기 전에 지워집니다'}
+          </span>
           <button
             type="button"
             onClick={send}

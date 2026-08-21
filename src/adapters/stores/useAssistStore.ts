@@ -13,6 +13,9 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 import { screenAssistInput, type AssistInputScreening } from '@domain/rules/screenAssistInput';
+import { redactOutbound } from '@domain/rules/redactOutbound';
+import { findAssistTool } from '@domain/services/assistToolRegistry';
+import type { KeywordGroup } from '@domain/privacy/types';
 import type { AssistDegraded, AssistPort, AssistTurnPayload } from '@domain/ports/AssistPort';
 import { AssistBlockedError } from '@domain/ports/AssistPort';
 import type { ToolResultShape } from '@domain/services/sanitizeToolResult';
@@ -46,6 +49,8 @@ export interface AssistTurn {
   readonly status: 'thinking' | 'done' | 'blocked';
   /** 전송이 막혔을 때 보여줄 한국어 문구 */
   readonly blockedMessage?: string;
+  /** ★보내기 직전에 지운 이름·연락처 자리 수. 0 이면 표시하지 않는다 */
+  readonly redactedNameCount: number;
 }
 
 interface AssistState {
@@ -68,15 +73,38 @@ interface AssistActions {
   /** 입력창 위 「나갈 문장」 줄이 쓰는 판정. **막지 않는다 — 표시만 한다.** */
   screenDraft: () => AssistInputScreening;
   clearConversation: () => void;
-  ask: (port: AssistPort, question: string, cards: readonly AssistCard[]) => Promise<void>;
+  /**
+   * @param roster 학생 이름 명단. **domain 이 스토어를 import 하지 않으므로 주입한다.**
+   *   생략할 수 없게 필수로 뒀다 — 빠뜨리면 이름이 그대로 나간다(QA 에서 실제로 그랬다).
+   */
+  ask: (
+    port: AssistPort,
+    question: string,
+    cards: readonly AssistCard[],
+    roster: readonly KeywordGroup[],
+  ) => Promise<void>;
 }
 
 export type AssistStore = AssistState & AssistActions;
 
+/**
+ * ★폴백도 반드시 **UUID 모양**이어야 한다.
+ *
+ * 예전 폴백은 `t_1787...` 형태였는데, 서버는 `installId` 를 UUID 정규식으로만 받는다
+ * (`supabase/functions/_shared/assistRequest.ts`). `crypto.randomUUID` 가 없는 환경에서
+ * 선생님은 **이유를 알 수 없는 실패**만 보게 된다 — QA 에서 잡힌 결함.
+ */
+/** `crypto.randomUUID` 가 없을 때 쓰는 대체 생성기. **테스트에서 직접 부르려고 내보낸다.** */
+export function uuidFallback(): string {
+  const hex = (n: number): string =>
+    Array.from({ length: n }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+  // 버전 4, variant 8~b 자리를 규격대로 채운다.
+  const variant = '89ab'[Math.floor(Math.random() * 4)];
+  return `${hex(8)}-${hex(4)}-4${hex(3)}-${variant}${hex(3)}-${hex(12)}`;
+}
+
 function newId(): string {
-  return (
-    globalThis.crypto?.randomUUID?.() ?? `t_${Date.now()}_${Math.random().toString(36).slice(2)}`
-  );
+  return globalThis.crypto?.randomUUID?.() ?? uuidFallback();
 }
 
 /** 대화 이력은 모델에 다시 보내지 않는다(§8.2). 화면 표시용으로만 쌓인다. */
@@ -110,16 +138,39 @@ export const useAssistStore = create<AssistStore>()(
 
       clearConversation: () => set({ turns: [], draft: '' }),
 
-      ask: async (port, question, cards) => {
+      ask: async (port, question, cards, roster) => {
         // ★차단선. 꺼져 있으면 **요청이 나가지 않는다**(성공 기준 5).
         if (!get().enabled) return;
+
+        // ★그물 ③ — 나가기 직전 관문. **여기 말고 다른 통로가 없다.**
+        //   화면에는 원본 카드가 그대로 남고(이름은 화면에 남는다),
+        //   포트로 넘기는 것은 이름을 지운 사본이다(숫자만 밖으로 나간다).
+        let redactedNameCount = 0;
+        const outbound: AssistCard[] = [];
+        for (const card of cards) {
+          const tool = findAssistTool(card.tool);
+          if (!tool) continue; // 레지스트리에 없는 도구는 보내지 않는다
+          const result = redactOutbound(tool, card.data, roster);
+          redactedNameCount += result.redactedCount;
+          // 자유 입력이 아닌 자리에서 걸렸다면 화이트리스트 설계가 잘못된 것이다 — 통째로 뺀다.
+          if (result.blocked) continue;
+          outbound.push({ tool: card.tool, data: result.data });
+        }
 
         const id = newId();
         // 숫자 카드를 **먼저** 넣는다. 모델이 느려도, 심지어 죽어도 답의 절반은 이미 보인다.
         set((s) => ({
           turns: [
             ...s.turns,
-            { id, question, cards, answer: '', degraded: null, status: 'thinking' as const },
+            {
+              id,
+              question,
+              cards,
+              answer: '',
+              degraded: null,
+              status: 'thinking' as const,
+              redactedNameCount,
+            },
           ].slice(-MAX_TURNS_KEPT),
           draft: '',
         }));
@@ -137,7 +188,8 @@ export const useAssistStore = create<AssistStore>()(
             turns,
             // ★`as` 가 없다. `c.data` 는 이미 `ModelSafe` 라 그대로 들어간다 —
             //   재구성을 안 거친 객체는 애초에 여기까지 못 온다(그물 ② 컴파일 강제).
-            toolResults: cards.map((c) => ({ tool: c.tool, grade: 1 as const, data: c.data })),
+            //   ★`cards` 가 아니라 `outbound` 다 — 이름을 지운 쪽만 나간다.
+            toolResults: outbound.map((c) => ({ tool: c.tool, grade: 1 as const, data: c.data })),
           });
           patch({ answer: answer.text, degraded: answer.degraded, status: 'done' });
         } catch (err) {

@@ -31,6 +31,20 @@ const ROOT = resolve(__dirname, '..');
 
 const presenceChecks = [
   {
+    // REGRESSION #57 (2026-08-21, UltraQA) — 쌤핀 AI 그물 ③ 배선.
+    //
+    // `redactOutbound`(전송 직전 이름·연락처 제거)를 만들어 놓고 **부르는 곳이 없었다.**
+    // 그런데 개인정보처리방침(§11)과 패널 문구는 둘 다 "이름은 보내기 전에 지워집니다"라고
+    // 약속하고 있었다 — 코드가 방침을 못 지키는 상태로 통과할 뻔했다.
+    //
+    // 이 프로젝트에서 "층은 만들었는데 배선을 잊은" 사고가 세 번 반복됐다.
+    // `useAssistStore.ask()` 가 `redactOutbound` 를 부르고, 포트로는 원본(`cards`)이 아니라
+    // 걸러낸 쪽(`outbound`)을 넘기는지를 여기서 못 박는다.
+    file: 'src/adapters/stores/useAssistStore.ts',
+    pattern: /redactOutbound\([\s\S]{0,2500}?toolResults:\s*outbound\.map\(/,
+    name: 'REGRESSION #57: 쌤핀 AI 는 이름을 지운 사본만 전송한다 (그물 ③ 배선)',
+  },
+  {
     // REGRESSION #28 (2026-05-23): native-desktop modal text input may try
     // in-place Win32 focus, but must only accept confirmed focus. When Windows
     // cannot confirm it, fall back to the top-level window path without the

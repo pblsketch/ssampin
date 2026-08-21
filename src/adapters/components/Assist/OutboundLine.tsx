@@ -14,7 +14,6 @@ import type { AssistInputFinding, AssistInputScreening } from '@domain/rules/scr
 interface Props {
   readonly text: string;
   readonly screening: AssistInputScreening;
-  readonly removedNameCount: number;
   readonly onRemoveFinding: (finding: AssistInputFinding) => void;
 }
 
@@ -48,7 +47,7 @@ function Highlighted({
   return <>{parts}</>;
 }
 
-export function OutboundLine({ text, screening, removedNameCount, onRemoveFinding }: Props) {
+export function OutboundLine({ text, screening, onRemoveFinding }: Props) {
   const warned = screening.severity !== null;
   const first = screening.findings[0];
 
@@ -75,9 +74,6 @@ export function OutboundLine({ text, screening, removedNameCount, onRemoveFindin
             <Highlighted text={text} findings={screening.findings} />
           )}
         </span>
-        {removedNameCount > 0 && (
-          <span className="shrink-0 text-sp-success">이름 {removedNameCount}개 지움</span>
-        )}
       </div>
 
       {warned && first && (

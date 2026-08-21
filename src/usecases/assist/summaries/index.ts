@@ -15,3 +15,6 @@ export type { RecordLike, SummarizeRecordsOptions, RecordsSummary } from './summ
 
 export { summarizeTodos } from './summarizeTodos';
 export type { TodoLike, SummarizeTodosOptions, TodosSummary } from './summarizeTodos';
+
+export { toAttendanceRoll } from './toAttendanceRoll';
+export type { AttendanceRecordSource, ToAttendanceRollOptions } from './toAttendanceRoll';

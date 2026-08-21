@@ -92,7 +92,13 @@ export function filterByDateRange(
  * 새 형식: "결석 (질병)" → "결석"
  * 구 형식: "생리결석", "병결", "무단결석" → "결석" / "지각" → "지각" 등
  */
-function extractAttendanceType(subcategory: string): string {
+/**
+ * 출결 소분류에서 유형만 뽑는다. 예: `"결석 (질병)"` → `"결석"`.
+ *
+ * ★내보내는 이유: 쌤핀 AI 의 출결 집계도 같은 판정을 써야 한다.
+ * 이 파싱을 복사해 두면 형식이 바뀔 때 한쪽만 고쳐져 숫자가 갈린다.
+ */
+export function extractAttendanceType(subcategory: string): string {
   // 새 형식: "유형 (사유)"
   const parenIdx = subcategory.indexOf(' (');
   if (parenIdx !== -1) return subcategory.slice(0, parenIdx);

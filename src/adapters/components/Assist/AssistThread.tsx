@@ -89,6 +89,14 @@ export function AssistThread({ turns }: { readonly turns: readonly AssistTurn[] 
             <DataCard key={`${turn.id}-${index}`} tool={card.tool} data={card.data} />
           ))}
 
+          {/* ★"이름은 화면에 남고, 숫자만 밖으로 나간다"를 눈으로 확인시켜 주는 줄.
+              위 카드는 원본이고, AI 에 보낸 사본에서는 이만큼을 지웠다는 뜻이다. */}
+          {turn.redactedNameCount > 0 && (
+            <p className="text-xs text-sp-success">
+              보내기 전에 이름·연락처 {turn.redactedNameCount}곳을 지웠어요. 위 카드는 그대로예요.
+            </p>
+          )}
+
           {turn.status === 'thinking' && (
             <p role="status" aria-live="polite" className="text-sm text-sp-muted">
               생각 중…

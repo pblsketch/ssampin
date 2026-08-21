@@ -103,6 +103,15 @@ const CATEGORY_LABEL: Readonly<Record<AssistInputCategory, string>> = {
 };
 
 /** 걸린 구간 하나. `start`·`end` 로 화면에서 밑줄을 긋고 그 부분만 지울 수 있다. */
+/**
+ * 질문 한 건의 글자 수 상한.
+ *
+ * ★서버(`supabase/functions/_shared/assistRequest.ts` 의 `LIMITS.maxTurnChars`)와 **같아야 한다.**
+ * 앱이 더 관대하면 선생님은 길게 써서 보낸 뒤에야 거절당한다 — 왕복 한 번을 버리는 셈이다.
+ * 두 숫자가 어긋나지 않는지는 `assistContract.qa.test.ts` 가 지킨다.
+ */
+export const ASSIST_MAX_QUESTION_CHARS = 2_000;
+
 export interface AssistInputFinding {
   readonly word: string;
   readonly category: AssistInputCategory;
