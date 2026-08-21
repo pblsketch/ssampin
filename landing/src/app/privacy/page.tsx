@@ -17,7 +17,7 @@ const koContent = {
   lang: 'ko',
   title: '개인정보처리방침',
   subtitle: '쌤핀 (SsamPin)',
-  lastUpdated: '최종 수정일: 2026년 8월 14일',
+  lastUpdated: '최종 수정일: 2026년 8월 21일',
   switchLang: 'View in English',
   switchHref: '?lang=en',
   sections: [
@@ -777,7 +777,7 @@ const enContent = {
   lang: 'en',
   title: 'Privacy Policy',
   subtitle: 'SsamPin',
-  lastUpdated: 'Last updated: August 14, 2026',
+  lastUpdated: 'Last updated: August 21, 2026',
   switchLang: '한국어로 보기',
   switchHref: '?lang=ko',
   sections: [
@@ -1279,6 +1279,52 @@ const enContent = {
               encrypted OAuth tokens (AES-256-GCM).
             </li>
             <li>
+              <strong>Online Staff Room</strong> — a space where teachers share notices and files
+              within a school department. It operates{' '}
+              <strong>only if you join via an invitation</strong>.
+              <ul>
+                <li>
+                  <strong>Stored in the cloud</strong> — the department name and description, the{' '}
+                  <strong>Google account email</strong> of each participant and the display name
+                  they choose, invitation codes, board posts and comments, discussion topics and
+                  positions (for/against/abstain), meeting minutes, department schedules and task
+                  assignments, and records of who read what and when.
+                </li>
+                <li>
+                  <strong>
+                    Files uploaded to the library or gallery are not stored on SsamPin servers.
+                  </strong>{' '}
+                  Files are sent{' '}
+                  <strong>directly to the department administrator&apos;s Google Drive</strong>;
+                  SsamPin servers keep only a label (file name, size, uploader). Downloads also come
+                  directly from Google and do not pass through SsamPin servers.
+                </li>
+                <li>
+                  <strong>★ An extracted-text copy is created — please read this carefully.</strong>{' '}
+                  The library lets you search <strong>inside file contents</strong>, not just file
+                  names. To make this possible, when you upload an HWP, Word, Excel, or PDF file,
+                  the text is extracted <strong>on your own computer</strong> (up to the first
+                  50,000 characters) and uploaded as a{' '}
+                  <strong>separate file to the same Google Drive</strong> alongside the original.
+                  That text is then{' '}
+                  <strong>
+                    downloaded to and kept on the computers of other members of the same department
+                  </strong>{' '}
+                  so they can search it. Both the parsing and the searching happen entirely on each
+                  person&apos;s computer, and{' '}
+                  <strong>this text is never stored on SsamPin servers</strong>. Consequently, if
+                  you upload a document containing student names, that content will also reside on
+                  your colleagues&apos; computers — please review what you upload.
+                </li>
+                <li>
+                  <strong>If you leave or are removed from a department</strong> — the Drive access
+                  previously granted to you is revoked and you can no longer open those files.
+                  However, SsamPin cannot recall material already downloaded to individual
+                  computers.
+                </li>
+              </ul>
+            </li>
+            <li>
               <strong>AI assistant (support chatbot)</strong> — the{' '}
               <strong>question you type</strong>, the immediately preceding conversation, and the
               name of the screen you are viewing are transmitted in order to generate an answer.
@@ -1395,7 +1441,14 @@ const enContent = {
               <strong>Google LLC</strong> (USA) — (i) processing of Calendar, Drive backup, and
               Tasks data when you enable Google integration (Sections 1 and 6); (ii) processing of
               your question text to retrieve relevant help articles, and fallback answer generation,
-              when you use the AI assistant (Section 11)
+              when you use the AI assistant (Section 11);{' '}
+              <strong>
+                (iii) storage of files uploaded to the Online Staff Room library or gallery, and of
+                the text extracted from those files for search (Section 11)
+              </strong>{' '}
+              — this material is kept in the{' '}
+              <strong>department administrator&apos;s Google Drive</strong> rather than on SsamPin
+              servers, so it is transferred overseas at that point.
             </li>
             <li>
               <strong>Upstage Inc.</strong> (a Korean company) — answer generation when you use the
