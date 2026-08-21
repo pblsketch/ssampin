@@ -238,15 +238,26 @@ describe('★그물 ③ — 이름이 포트까지 못 간다', () => {
     expect(JSON.stringify(port.calls[0]?.toolResults)).not.toContain('김지훈');
   });
 
-  it('모델이 별칭을 망가뜨려도 원문이 새지는 않는다', async () => {
+  it('★모델이 괄호를 흘려도 되돌아온다 (실측: 원형 보존은 16.7%뿐이었다)', async () => {
+    // solar-pro3 는 ［이름1］ 을 〈이름1〉·(이름1)·이름1 등으로 바꿔 돌려준다.
+    // 정확 일치만 보면 선생님이 찌꺼기를 그대로 보게 된다.
     const port: AssistPort = {
       ask: vi.fn(async () => ({ text: '이름1 학생 면담이 급해요.', degraded: null })),
     };
 
     await useAssistStore.getState().ask(port, '할 일', [todoCard(['김지훈 상담'])], ROSTER);
 
-    // 되돌리기가 실패하면 별칭이 그대로 보일 뿐, 다른 학생 이름이 끼어들지 않는다.
-    expect(useAssistStore.getState().turns[0]?.answer).toBe('이름1 학생 면담이 급해요.');
+    expect(useAssistStore.getState().turns[0]?.answer).toBe('김지훈 학생 면담이 급해요.');
+  });
+
+  it('매핑에 없는 별칭은 그대로 둔다 — 엉뚱한 이름이 끼어들지 않는다', async () => {
+    const port: AssistPort = {
+      ask: vi.fn(async () => ({ text: '［이름7］ 면담이 급해요.', degraded: null })),
+    };
+
+    await useAssistStore.getState().ask(port, '할 일', [todoCard(['김지훈 상담'])], ROSTER);
+
+    expect(useAssistStore.getState().turns[0]?.answer).toBe('［이름7］ 면담이 급해요.');
   });
 
   it('★crypto.randomUUID 가 없어도 서버 정규식을 통과한다', () => {

@@ -13,8 +13,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 import { screenAssistInput, type AssistInputScreening } from '@domain/rules/screenAssistInput';
-import { redactOutbound } from '@domain/rules/redactOutbound';
-import { restore } from '@domain/privacy/maskEngine';
+import { redactOutbound, restoreModelText } from '@domain/rules/redactOutbound';
 import type { MaskMapping } from '@domain/privacy/types';
 import { findAssistTool } from '@domain/services/assistToolRegistry';
 import type { KeywordGroup } from '@domain/privacy/types';
@@ -204,9 +203,9 @@ export const useAssistStore = create<AssistStore>()(
           });
           // ★별칭을 실제 이름으로 되돌린 뒤 화면에 올린다.
           //   모델은 ［이름1］ 만 봤고, 선생님은 "김지훈"을 본다.
-          //   모델이 별칭을 망가뜨리면 되돌리기가 그 부분만 실패한다 — 원문이 새지는 않는다.
+          //   ★실측상 모델이 괄호를 자주 바꾸므로(〈이름1〉 등) 관대하게 되돌린다.
           patch({
-            answer: restore(answer.text, mappings),
+            answer: restoreModelText(answer.text, mappings),
             degraded: answer.degraded,
             status: 'done',
           });

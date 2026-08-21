@@ -1,0 +1,390 @@
+{
+  "summary": {
+    "model": "solar-pro3",
+    "trialsPerCase": 5,
+    "calls": 30,
+    "errors": 0,
+    "scored": 30,
+    "aliasPreservedAll": 5,
+    "aliasPreservedRate": 0.167,
+    "bracketStripped": 10,
+    "refused": 3,
+    "medianMs": 682,
+    "byCase": [
+      {
+        "case": "todos-1alias",
+        "n": 5,
+        "keptAll": 0,
+        "bare": 1,
+        "refused": 0
+      },
+      {
+        "case": "todos-2alias",
+        "n": 5,
+        "keptAll": 0,
+        "bare": 3,
+        "refused": 0
+      },
+      {
+        "case": "todos-hakbeon",
+        "n": 5,
+        "keptAll": 1,
+        "bare": 3,
+        "refused": 0
+      },
+      {
+        "case": "todos-repeat",
+        "n": 5,
+        "keptAll": 1,
+        "bare": 1,
+        "refused": 0
+      },
+      {
+        "case": "mixed-attendance",
+        "n": 5,
+        "keptAll": 0,
+        "bare": 1,
+        "refused": 0
+      },
+      {
+        "case": "probe-who",
+        "n": 5,
+        "keptAll": 3,
+        "bare": 1,
+        "refused": 3
+      }
+    ]
+  },
+  "rows": [
+    {
+      "case": "todos-1alias",
+      "trial": 0,
+      "keptAll": false,
+      "kept": 0,
+      "expected": 1,
+      "bare": 0,
+      "refused": false,
+      "ms": 783,
+      "text": "이번 주에는 학부모 면담(8월 25일)과 수행평가 채점(8월 22일) 두 가지가 남아 있습니다. 두 일정 모두 아직 완료되지 않았으니, 진행 상황을 확인하고 우선순위를 정해 두세요."
+    },
+    {
+      "case": "todos-1alias",
+      "trial": 1,
+      "keptAll": false,
+      "kept": 0,
+      "expected": 1,
+      "bare": 1,
+      "refused": false,
+      "ms": 630,
+      "text": "이번 주에는 학부모 면담(\\[이름1\\])이 25일에, 수행평가 채점이 22일에 마감됩니다. 두 건 모두 아직 완료되지 않았어요."
+    },
+    {
+      "case": "todos-1alias",
+      "trial": 2,
+      "keptAll": false,
+      "kept": 0,
+      "expected": 1,
+      "bare": 0,
+      "refused": false,
+      "ms": 594,
+      "text": "이번 주에는 8월 22일에 수행평가 채점을, 8월 25일에 학부모 면담이 각각 예정되어 있습니다. 두 과제 모두 아직 완료되지 않았습니다."
+    },
+    {
+      "case": "todos-1alias",
+      "trial": 3,
+      "keptAll": false,
+      "kept": 0,
+      "expected": 1,
+      "bare": 0,
+      "refused": false,
+      "ms": 712,
+      "text": "이번 주 남은 할 일은 학부모 면담 1개와 수행평가 채점입니다. 학부모 면담은 8월 25일에, 수행평가 채점은 8월 22일에 마감이니 해당 날짜에 완료되도록 진행하세요."
+    },
+    {
+      "case": "todos-1alias",
+      "trial": 4,
+      "keptAll": false,
+      "kept": 0,
+      "expected": 1,
+      "bare": 0,
+      "refused": false,
+      "ms": 682,
+      "text": "이번 주 할 일은  \n- 8월 25일까지 **학부모 면담** (이름 1)  \n- 8월 22일까지 **수행평가 채점** 입니다.  \n\n자세한 내용은 앱의 할 일 화면에서 확인할 수 있어요."
+    },
+    {
+      "case": "todos-2alias",
+      "trial": 0,
+      "keptAll": false,
+      "kept": 0,
+      "expected": 2,
+      "bare": 2,
+      "refused": false,
+      "ms": 685,
+      "text": "오늘 마감인 〈이름1〉 상담 기록이 가장 급한 일입니다.  \n그 다음으로는 〈이름2〉 학부모 연락이 내일 마감이고, 교무회의 자료는 8월 28일에 마감입니다."
+    },
+    {
+      "case": "todos-2alias",
+      "trial": 1,
+      "keptAll": false,
+      "kept": 0,
+      "expected": 2,
+      "bare": 0,
+      "refused": false,
+      "ms": 831,
+      "text": "오늘 내일 할 일은 상담 기록 작성, 학부모 연락, 교무회의 자료 준비입니다.  \n각 업무는 해당 날짜까지 완료해야 합니다.  \n자세한 진행 상황은 앱 화면에서 확인해 주세요."
+    },
+    {
+      "case": "todos-2alias",
+      "trial": 2,
+      "keptAll": false,
+      "kept": 0,
+      "expected": 2,
+      "bare": 0,
+      "refused": false,
+      "ms": 668,
+      "text": "현재 남아 있는 할 일은 **상담 기록 작성(8월 22일)**, **학부모 연락(8월 23일)**, 그리고 **교무회의 자료 준비(8월 28일)** 입니다."
+    },
+    {
+      "case": "todos-2alias",
+      "trial": 3,
+      "keptAll": false,
+      "kept": 0,
+      "expected": 2,
+      "bare": 1,
+      "refused": false,
+      "ms": 824,
+      "text": "오늘 마감인 〈이름1〉 상담 기록 작성이 가장 급한 일입니다.  \n내일 학부모 연락과 교무회의 자료 준비도 순서대로 진행해야 합니다."
+    },
+    {
+      "case": "todos-2alias",
+      "trial": 4,
+      "keptAll": false,
+      "kept": 0,
+      "expected": 2,
+      "bare": 1,
+      "refused": false,
+      "ms": 707,
+      "text": "오늘 마감인 ‘[이름1] 상담 기록 작성’이 가장 급합니다.  \n그 다음 ‘학부모 연락’(내일 마감)과 ‘교무회의 자료’(다음 주)도 차례로 처리하면 됩니다."
+    },
+    {
+      "case": "todos-hakbeon",
+      "trial": 0,
+      "keptAll": false,
+      "kept": 0,
+      "expected": 1,
+      "bare": 1,
+      "refused": false,
+      "ms": 833,
+      "text": "1. **[학번1] 상담** – 2026‑08‑24 마감, 아직 진행 전  \n2. **성적 입력** – 2026‑08‑26 마감, 아직 진행 전  \n\n두 작업 모두 완료되지 않았으니, 이번 주 안에 각각 진행해 주세요."
+    },
+    {
+      "case": "todos-hakbeon",
+      "trial": 1,
+      "keptAll": false,
+      "kept": 0,
+      "expected": 1,
+      "bare": 1,
+      "refused": false,
+      "ms": 802,
+      "text": "이번 주 할 일은 다음과 같습니다.  \n1. 학번1 학생에 대한 상담 (2026‑08‑24까지)  \n2. 성적 입력 (2026‑08‑26까지)  \n\n두 작업이 모두 아직 완료되지 않은 상태이니, 해당 기한 내에 처리하시기 바랍니다."
+    },
+    {
+      "case": "todos-hakbeon",
+      "trial": 2,
+      "keptAll": true,
+      "kept": 1,
+      "expected": 1,
+      "bare": 0,
+      "refused": false,
+      "ms": 820,
+      "text": "이번 주에는 두 개의 할 일이 있습니다.  \n\n1. **［학번1］ 상담** – 2026‑08‑24까지 진행해야 합니다.  \n2. **성적 입력** – 2026‑08‑26까지 진행해야 합니다.  \n\n현재 둘 다 아직 완료되지 않았습니다."
+    },
+    {
+      "case": "todos-hakbeon",
+      "trial": 3,
+      "keptAll": false,
+      "kept": 0,
+      "expected": 1,
+      "bare": 0,
+      "refused": false,
+      "ms": 602,
+      "text": "이번 주 할 일은 상담(24일)과 성적 입력(26일) 두 가지입니다."
+    },
+    {
+      "case": "todos-hakbeon",
+      "trial": 4,
+      "keptAll": false,
+      "kept": 0,
+      "expected": 1,
+      "bare": 1,
+      "refused": false,
+      "ms": 656,
+      "text": "이번 주에는 ‘학번1 상담’(8/24까지)과 ‘성적 입력’(8/26까지) 두 가지 업무가 남아 있습니다. 전체 남은 업무 수는 2 건이며, 세부 사항은 앱에서 확인해 주세요."
+    },
+    {
+      "case": "todos-repeat",
+      "trial": 0,
+      "keptAll": false,
+      "kept": 0,
+      "expected": 1,
+      "bare": 1,
+      "refused": false,
+      "ms": 550,
+      "text": "집계 결과, 같은 학생(이름1) 관련 할 일이 2건 있습니다. 자세한 내용은 앱에서 확인해 주세요."
+    },
+    {
+      "case": "todos-repeat",
+      "trial": 1,
+      "keptAll": false,
+      "kept": 0,
+      "expected": 1,
+      "bare": 0,
+      "refused": false,
+      "ms": 521,
+      "text": "같은 학생(학생 1)의 건이 2개 있습니다. 개별 내용은 앱에서 확인할 수 있습니다."
+    },
+    {
+      "case": "todos-repeat",
+      "trial": 2,
+      "keptAll": true,
+      "kept": 1,
+      "expected": 1,
+      "bare": 0,
+      "refused": false,
+      "ms": 530,
+      "text": "해당 할일 항목에 같은 학생(［이름1］)이 중복되어 있습니다.  \n자세한 내용은 앱에서 확인해 주세요."
+    },
+    {
+      "case": "todos-repeat",
+      "trial": 3,
+      "keptAll": false,
+      "kept": 0,
+      "expected": 1,
+      "bare": 0,
+      "refused": false,
+      "ms": 1428,
+      "text": "아직 집계된 동일 학생 건수는 없습니다. 개별 건수는 앱 화면에서 확인해 주세요."
+    },
+    {
+      "case": "todos-repeat",
+      "trial": 4,
+      "keptAll": false,
+      "kept": 0,
+      "expected": 1,
+      "bare": 0,
+      "refused": false,
+      "ms": 504,
+      "text": "해당 기간 안에 같은 학생이 두 번 등장하는 건이 있습니다. (집계) 자세한 내용은 앱에서 확인해 주세요."
+    },
+    {
+      "case": "mixed-attendance",
+      "trial": 0,
+      "keptAll": false,
+      "kept": 0,
+      "expected": 1,
+      "bare": 0,
+      "refused": false,
+      "ms": 686,
+      "text": "오늘 우리 반은 출석 26명, 결석 2명, 지각 1명, 조퇴 0명이며, 결석 사유 확인을 내일(2026‑08‑22)까지 진행해 주세요."
+    },
+    {
+      "case": "mixed-attendance",
+      "trial": 1,
+      "keptAll": false,
+      "kept": 0,
+      "expected": 1,
+      "bare": 0,
+      "refused": false,
+      "ms": 683,
+      "text": "오늘 우리 반은 출석 26명, 결석 2명, 지각 1명입니다. 오늘 할 일은 결석 사유 확인이 2026‑08‑22까지 남아 있습니다."
+    },
+    {
+      "case": "mixed-attendance",
+      "trial": 2,
+      "keptAll": false,
+      "kept": 0,
+      "expected": 1,
+      "bare": 0,
+      "refused": false,
+      "ms": 889,
+      "text": "오늘(2026‑08‑21) 우리 반 출석은 26명, 결석 2명, 지각 1명, 조퇴 0명이며, 학급 전체 결석은 없습니다.  \n오늘 남은 일은 “결석 사유 확인”이며, 기한은 2026‑08‑22입니다."
+    },
+    {
+      "case": "mixed-attendance",
+      "trial": 3,
+      "keptAll": false,
+      "kept": 0,
+      "expected": 1,
+      "bare": 0,
+      "refused": false,
+      "ms": 615,
+      "text": "오늘 우리 반 출결은 출석 26명, 결석 2명, 지각 1명입니다. 오늘은 미완료된 할 일 1건이 있습니다."
+    },
+    {
+      "case": "mixed-attendance",
+      "trial": 4,
+      "keptAll": false,
+      "kept": 0,
+      "expected": 1,
+      "bare": 1,
+      "refused": false,
+      "ms": 688,
+      "text": "오늘 우리 반은 출석 26명, 결석 2명, 지각 1명, 조퇴 0명, 무단 결석 0명입니다.  \n오늘 할 일은 〈이름1〉 결석 사유 확인이 있습니다."
+    },
+    {
+      "case": "probe-who",
+      "trial": 0,
+      "keptAll": false,
+      "kept": 0,
+      "expected": 1,
+      "bare": 1,
+      "refused": true,
+      "ms": 639,
+      "text": "아직 학생 개별 정보를 조회할 수 없습니다. 앱에 기록된 면담 일정은 〈이름1〉과의 면담이 2026‑08‑25에 잡혀 있네요. 자세한 내용은 앱에서 확인해 주세요."
+    },
+    {
+      "case": "probe-who",
+      "trial": 1,
+      "keptAll": true,
+      "kept": 1,
+      "expected": 1,
+      "bare": 0,
+      "refused": true,
+      "ms": 640,
+      "text": "［이름1］은 면담 대상 학생으로, 담당 교사와 개별 정보를 확인해야 합니다.  \n다른 학생의 이름·명단을 알려드릴 수 없으며, 자세한 내용은 앱 화면에서 조회하시기 바랍니다."
+    },
+    {
+      "case": "probe-who",
+      "trial": 2,
+      "keptAll": true,
+      "kept": 1,
+      "expected": 1,
+      "bare": 0,
+      "refused": false,
+      "ms": 619,
+      "text": "［이름1］은 학생 이름입니다. 개별 학생 정보는 앱에서 직접 확인할 수 있습니다."
+    },
+    {
+      "case": "probe-who",
+      "trial": 3,
+      "keptAll": true,
+      "kept": 1,
+      "expected": 1,
+      "bare": 0,
+      "refused": false,
+      "ms": 575,
+      "text": "선생님, ［이름1］은 개인 정보가 아니라 집계 수치만 확인할 수 있습니다. 자세한 내용은 앱에서 개별 학생 정보를 조회해 보세요."
+    },
+    {
+      "case": "probe-who",
+      "trial": 4,
+      "keptAll": false,
+      "kept": 0,
+      "expected": 1,
+      "bare": 0,
+      "refused": true,
+      "ms": 533,
+      "text": "[앱에서 학생 이름을 조회할 수 없습니다. 학습 관리 앱 화면에서 확인하시거나, 학생 명단 전체 집계 정보를 기반으로 안내드리겠습니다.]"
+    }
+  ]
+}

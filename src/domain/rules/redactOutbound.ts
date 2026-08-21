@@ -193,3 +193,50 @@ export function redactOutbound(
     blocked: gate.blocked,
   };
 }
+
+/**
+ * ★모델이 돌려준 문장에서 별칭을 실제 이름으로 되돌린다.
+ *
+ * `maskEngine.restore` 는 **정확히 일치**할 때만 되돌리는데, 실측해 보니 그걸로는 부족했다.
+ * solar-pro3 는 `［이름1］` 을 다음처럼 **11가지 형태로 바꿔서** 돌려준다(30회 중 16회 등장):
+ *
+ *   〈이름1〉 · ［이름1］ · [이름1] · [이름1 · (이름1) · (이름 1) · 학번1 · 학번1␠ …
+ *
+ * 정확 일치만 보면 6개만 잡혀 **선생님이 `〈이름1〉` 같은 찌꺼기를 그대로 본다.**
+ * 그래서 괄호 종류·유무·공백을 무시하고 `접두사 + 번호` 만으로 되돌린다.
+ *
+ * 나머지 14회는 모델이 별칭을 아예 언급하지 않고 문장을 풀어 썼다 —
+ * 되돌릴 것이 없고 답변도 자연스러우므로 그대로 둔다.
+ *
+ * ★번호가 긴 것부터 처리한다. `이름1` 규칙이 `이름11` 을 먼저 먹으면 안 된다.
+ */
+export function restoreModelText(text: string, mappings: readonly MaskMapping[]): string {
+  const parsed = mappings
+    .map((m) => {
+      const parsed = /^［(.+?)(\d+)］$/.exec(m.alias);
+      return parsed ? { prefix: parsed[1], num: parsed[2], original: m.original } : null;
+    })
+    .filter((v): v is { prefix: string; num: string; original: string } => v !== null)
+    .sort((a, b) => b.num.length - a.num.length || Number(b.num) - Number(a.num));
+
+  let out = text;
+  for (const { prefix, num, original } of parsed) {
+    // ★규칙은 둘뿐이다 — **우리 괄호만 떼고, 모델이 쓴 괄호는 그대로 둔다.**
+    //
+    //   ① `［이름1］` 은 우리가 붙인 별칭 표기이므로 괄호째 바꾼다 → `김지훈`
+    //   ② 그 밖의 `〈이름1〉` `(이름1)` `[이름1]` `이름1` 은 **속만** 바꾼다 → `〈김지훈〉` `(김지훈)`
+    //
+    //   ②에서 괄호까지 떼려다 두 번 실패했다:
+    //   - 뒤 공백을 같이 먹어 `학번1 상담` → `15번상담`
+    //   - 괄호를 떼니 `면담(이름1)이` → `면담김지훈이` 로 한글이 붙어 버림
+    //   모델이 괄호를 **구분자로 쓴 건지 삽입구로 쓴 건지 알 수 없으므로** 건드리지 않는 쪽이 안전하다.
+    //
+    // ★`String.raw` 를 쓴다. 일반 템플릿 문자열은 `\s` 를 `s` 로 먹어 버려서
+    //   조용히 "공백" 이 아니라 "문자 s" 를 찾는 정규식이 된다(실제로 한 번 그렇게 깨졌다).
+    const core = prefix + String.raw`\s*` + num + String.raw`(?![0-9])`;
+    out = out
+      .replace(new RegExp('［' + core + '］', 'g'), original)
+      .replace(new RegExp(core, 'g'), original);
+  }
+  return out;
+}
