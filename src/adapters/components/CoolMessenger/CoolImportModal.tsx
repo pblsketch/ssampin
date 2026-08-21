@@ -79,6 +79,7 @@ export function CoolImportModal({
   const [detail, setDetail] = useState<CoolMessage | null>(null);
   const [rows, setRows] = useState<readonly CandidateRow[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
   const now = useMemo(() => new Date(), []);
@@ -149,6 +150,7 @@ export function CoolImportModal({
   const handleSubmit = async () => {
     if (chosen.length === 0 || selectedKey === null) return;
     setSubmitting(true);
+    setSubmitError(null);
     try {
       await onSubmit(
         chosen.map((r) => ({
@@ -161,6 +163,10 @@ export function CoolImportModal({
         })),
       );
       onClose();
+    } catch (err: unknown) {
+      // ★ 저장이 실패했는데 조용히 닫으면 선생님은 등록된 줄 알고 넘어간다.
+      //   모달을 열어 둔 채로 이유를 보여주고, 다시 누를 수 있게 한다.
+      setSubmitError(err instanceof Error ? err.message : '알 수 없는 이유로 실패했습니다.');
     } finally {
       setSubmitting(false);
     }
@@ -283,11 +289,17 @@ export function CoolImportModal({
 
       {/* 꼬리말 */}
       <footer className="flex items-center gap-3 px-5 py-3 border-t border-sp-border">
-        <p className="text-xs text-sp-muted flex-1">
-          {chosen.length > 0
-            ? `${chosen.length}건을 등록합니다.`
-            : '등록할 항목을 하나 이상 선택하세요.'}
-        </p>
+        {submitError !== null ? (
+          <p className="text-xs text-sp-error flex-1" role="alert">
+            등록하지 못했습니다 — {submitError}
+          </p>
+        ) : (
+          <p className="text-xs text-sp-muted flex-1">
+            {chosen.length > 0
+              ? `${chosen.length}건을 등록합니다.`
+              : '등록할 항목을 하나 이상 선택하세요.'}
+          </p>
+        )}
         <button
           type="button"
           onClick={onClose}

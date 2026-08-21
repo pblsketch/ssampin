@@ -32,6 +32,22 @@ function toTimeKey(d: Date): string {
 /** 가져온 일정이 어디서 왔는지 알 수 있게 남긴다 */
 const SOURCE_NOTE = '쿨메신저 쪽지에서 가져옴';
 
+/**
+ * Electron IPC 오류에 붙는 기계어 껍데기를 벗긴다.
+ *
+ * 그대로 두면 선생님 화면에
+ * `Error invoking remote method 'cool-messenger:list': Error: 쿨메신저 쪽지함 구조가…`
+ * 처럼 보인다. 정작 필요한 한국어 설명은 맨 뒤에 파묻힌다.
+ */
+export function readableIpcError(err: unknown): Error {
+  const raw = err instanceof Error ? err.message : String(err);
+  const cleaned = raw
+    .replace(/^Error invoking remote method '[^']*':\s*/, '')
+    .replace(/^(?:\w*Error):\s*/, '')
+    .trim();
+  return new Error(cleaned || '쪽지함을 읽지 못했습니다.');
+}
+
 /** 화면마다 도구모음 버튼 모양이 달라서, 통째로 갈아끼울 수 있게 둔다 */
 const VARIANT_CLASS = {
   /** 기본 — 단독으로 놓을 때 */
@@ -81,13 +97,21 @@ export function CoolImportButton({
       .members()
       .then(setStaffNames)
       .catch(() => setStaffNames([]));
-    return api.list();
+    try {
+      return await api.list();
+    } catch (err: unknown) {
+      throw readableIpcError(err);
+    }
   }, []);
 
   const loadMessage = useCallback(async (key: number): Promise<CoolMessage | null> => {
     const api = window.electronAPI?.coolMessenger;
     if (!api) return null;
-    return api.get(key);
+    try {
+      return await api.get(key);
+    } catch (err: unknown) {
+      throw readableIpcError(err);
+    }
   }, []);
 
   const handleSubmit = useCallback(

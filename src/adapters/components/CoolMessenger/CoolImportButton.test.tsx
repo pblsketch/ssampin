@@ -28,7 +28,7 @@ vi.mock('@adapters/stores/useStudentStore', () => ({
     selector({ students: [] }),
 }));
 
-import { CoolImportButton } from './CoolImportButton';
+import { CoolImportButton, readableIpcError } from './CoolImportButton';
 
 afterEach(cleanup);
 
@@ -64,5 +64,32 @@ describe('노출 규칙', () => {
     settingsState.settings = { coolMessengerImportEnabled: true };
     render(<CoolImportButton />);
     expect(screen.queryByRole('dialog')).toBeNull();
+  });
+});
+
+describe('★ 오류 문구를 사람이 읽을 수 있게 정리한다', () => {
+  it('Electron IPC 껍데기를 벗기고 한국어 설명만 남긴다', () => {
+    const raw = new Error(
+      "Error invoking remote method 'cool-messenger:list': CoolSchemaMismatchError: 쿨메신저 쪽지함 구조가 예상과 다릅니다: tbl_recv 표가 없습니다",
+    );
+    expect(readableIpcError(raw).message).toBe(
+      '쿨메신저 쪽지함 구조가 예상과 다릅니다: tbl_recv 표가 없습니다',
+    );
+  });
+
+  it('평범한 오류는 그대로 둔다', () => {
+    expect(readableIpcError(new Error('쪽지함을 찾을 수 없습니다')).message).toBe(
+      '쪽지함을 찾을 수 없습니다',
+    );
+  });
+
+  it('Error가 아닌 것이 올라와도 문구를 만든다', () => {
+    expect(readableIpcError('그냥 문자열').message).toBe('그냥 문자열');
+    expect(readableIpcError(undefined).message).toBeTruthy();
+  });
+
+  it('벗기고 나서 빈 문자열이면 기본 안내로 대체한다', () => {
+    const raw = new Error("Error invoking remote method 'cool-messenger:list': Error:");
+    expect(readableIpcError(raw).message).toBe('쪽지함을 읽지 못했습니다.');
   });
 });

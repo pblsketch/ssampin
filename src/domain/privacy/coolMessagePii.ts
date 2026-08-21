@@ -188,7 +188,9 @@ export function detectCoolPii(text: string, roster?: ReadonlySet<string>): CoolP
   // 3) 명렬 대조 — 단어 경계를 둬서 다른 낱말 속에 우연히 든 경우를 뺀다
   //    (명렬의 '이수'가 '이수 기준'의 일부로 잡히는 것 방지)
   for (const name of roster ?? []) {
-    if (name.length < 2) continue;
+    // 공백뿐인 이름을 그냥 두면 **본문의 공백이 개인정보로 잡힌다**('AB  CD' → 'AB○○○CD').
+    // 학생 명렬에 잘못 들어온 값 하나가 글을 망가뜨리지 않도록 여기서 거른다.
+    if (name.trim().length < 2) continue;
     const re = new RegExp(`(?<![가-힣])${escapeRegExp(name)}(?![가-힣])`, 'g');
     for (const m of text.matchAll(re)) {
       spans.push({ start: m.index, end: m.index + name.length, kind: 'roster', text: name });
@@ -210,9 +212,24 @@ export function maskCoolPii(
   roster?: ReadonlySet<string>,
 ): string {
   const target = spans ?? detectCoolPii(text, roster);
+  // 이상한 span 은 조용히 무시한다. 예전엔 그대로 slice 해서 **원문이 복제되거나 잘렸다**
+  // (인자를 잘못 넘기면 `text + ○○○ + text` 가 나왔다). 선생님 달력에 들어갈 글이라
+  // 망가진 글을 내놓느니 아무것도 안 가리는 편이 낫다.
+  const valid = [...target].filter(isUsableSpan(text.length));
   let out = text;
-  for (const s of [...target].sort((a, b) => b.start - a.start)) {
+  for (const s of valid.sort((a, b) => b.start - a.start)) {
     out = out.slice(0, s.start) + COOL_MASK + out.slice(s.end);
   }
   return out;
+}
+
+/** 원문 범위 안의 정상 구간인지 */
+function isUsableSpan(textLength: number) {
+  return (s: CoolPiiSpan | undefined): s is CoolPiiSpan =>
+    s != null &&
+    Number.isInteger(s.start) &&
+    Number.isInteger(s.end) &&
+    s.start >= 0 &&
+    s.start < s.end &&
+    s.end <= textLength;
 }
