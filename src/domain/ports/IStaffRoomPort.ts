@@ -238,10 +238,16 @@ export interface IStaffRoomPort {
   //   여기 오가는 것은 표찰(이름·크기·올린 사람)과 검색용 글자뿐이다.
   // ════════════════════════════════════════════════════════════════
 
-  /** 자료실 목록 + 부서가 쓰는 용량 */
+  /**
+   * 자료실 목록 + 부서가 쓰는 용량.
+   *
+   * `moduleId` 를 주면 **그 공간의 자료만** 온다(M4 — 자료실·갤러리가 여러 개일 수 있다).
+   * 안 주면 부서의 기본 자료실로 떨어진다.
+   */
   listFiles(
     googleAccessToken: string,
     departmentId: string,
+    moduleId?: string,
   ): Promise<{
     module: StaffRoomModule;
     files: StaffRoomFile[];

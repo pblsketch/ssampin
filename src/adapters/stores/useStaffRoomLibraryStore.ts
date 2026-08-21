@@ -69,7 +69,7 @@ interface StaffRoomLibraryState {
   hasLoaded: boolean;
   error: string | null;
 
-  loadFiles: (departmentId: string) => Promise<void>;
+  loadFiles: (departmentId: string, moduleId?: string) => Promise<void>;
   uploadFile: (
     departmentId: string,
     file: File,
@@ -124,7 +124,7 @@ export const useStaffRoomLibraryStore = create<StaffRoomLibraryState>((set, get)
       error: null,
     }),
 
-  loadFiles: async (departmentId) => {
+  loadFiles: async (departmentId, moduleId) => {
     set({ isLoading: true, error: null });
     try {
       const token = await getGoogleToken();
@@ -133,7 +133,7 @@ export const useStaffRoomLibraryStore = create<StaffRoomLibraryState>((set, get)
         return;
       }
       const { staffRoomPort } = await import('@adapters/di/container');
-      const res = await staffRoomPort.listFiles(token, departmentId);
+      const res = await staffRoomPort.listFiles(token, departmentId, moduleId);
       set({
         files: res.files,
         usage: res.usage,
@@ -211,7 +211,7 @@ export const useStaffRoomLibraryStore = create<StaffRoomLibraryState>((set, get)
       }
 
       set({ upload: null });
-      await get().loadFiles(departmentId);
+      await get().loadFiles(departmentId, get().moduleId ?? undefined);
       return true;
     } catch (err) {
       set({ upload: null, error: messageOf(err) });
@@ -253,7 +253,7 @@ export const useStaffRoomLibraryStore = create<StaffRoomLibraryState>((set, get)
 
       const { [fileId]: _removed, ...restPreviews } = get().previews;
       set({ files: get().files.filter((f) => f.id !== fileId), previews: restPreviews });
-      await get().loadFiles(departmentId);
+      await get().loadFiles(departmentId, get().moduleId ?? undefined);
       return true;
     } catch (err) {
       set({ error: messageOf(err) });

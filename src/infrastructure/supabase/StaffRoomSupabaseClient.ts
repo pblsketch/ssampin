@@ -450,6 +450,7 @@ export class StaffRoomSupabaseClient implements IStaffRoomPort {
   async listFiles(
     googleAccessToken: string,
     departmentId: string,
+    moduleId?: string,
   ): Promise<{
     module: StaffRoomModule;
     files: StaffRoomFile[];
@@ -460,6 +461,7 @@ export class StaffRoomSupabaseClient implements IStaffRoomPort {
       action: 'list',
       googleAccessToken,
       departmentId,
+      moduleId,
     });
   }
 
@@ -472,6 +474,7 @@ export class StaffRoomSupabaseClient implements IStaffRoomPort {
       action: 'uploadSession',
       googleAccessToken,
       departmentId,
+      moduleId: input.moduleId,
       name: input.name,
       mimeType: input.mimeType,
       size: input.size,

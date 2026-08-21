@@ -53,8 +53,10 @@ import {
 import {
   serviceClient,
   ensureArchiveModule,
+  loadModules,
   loadFile,
   loadMembers,
+  moduleBelongsTo,
   nameMapOf,
   toAccessMembers,
   toFileResponse,
@@ -131,14 +133,38 @@ serve(async (req: Request) => {
     const dept = deptData as { id: string; name: string; drive_folder_id: string | null } | null;
     if (!dept) return errorResponse('부서를 찾을 수 없습니다', 404);
 
-    const archive = await ensureArchiveModule(db, departmentId);
+    // ★ 어느 공간(모듈)의 자료인가 (M4).
+    //
+    // M3 까지는 부서에 자료실이 하나뿐이라 찾아서 쓰면 됐다. M4 에서 관리자가 자료실과
+    // 갤러리를 여러 개 만들 수 있게 되면서, **요청이 어느 공간인지 말해야** 한다.
+    // 안 보내면 기본 자료실로 떨어진다 — M3 시절 앱이 그대로 동작하게.
+    const requestedModuleId = typeof body?.moduleId === 'string' ? body.moduleId : '';
+    let archive: {
+      id: string;
+      department_id: string;
+      kind: string;
+      name: string;
+      position: number;
+    };
+    if (requestedModuleId) {
+      if (!(await moduleBelongsTo(db, requestedModuleId, departmentId))) {
+        return errorResponse('이 부서의 공간이 아닙니다', 403);
+      }
+      const found = (await loadModules(db, departmentId)).find((m) => m.id === requestedModuleId);
+      if (!found) return errorResponse('공간을 찾을 수 없습니다', 404);
+      archive = found;
+    } else {
+      archive = await ensureArchiveModule(db, departmentId);
+    }
 
     // ── 목록 + 용량 ─────────────────────────────────────────────────
     if (action === 'list') {
+      // ★ 이 공간의 자료만 준다. 안 좁히면 갤러리에 자료실 파일이 섞여 나온다.
       const { data, error } = await db
         .from('staffroom_files')
         .select(FILE_COLUMNS)
         .eq('department_id', departmentId)
+        .eq('module_id', archive.id)
         .order('uploaded_at', { ascending: false })
         .limit(PAGE_SIZE);
 

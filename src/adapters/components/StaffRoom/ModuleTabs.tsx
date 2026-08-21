@@ -7,9 +7,6 @@
  * 그래서 탭을 코드에 박아 두지 않고 부서의 공간 목록에서 그린다.
  * 관리자에게만 ＋ 단추가 보이고, 이름 바꾸기·순서·지우기도 여기서 한다.
  *
- * ★ 지금 만들 수 있는 종류는 **화면이 있는 것뿐이다.** 갤러리·회의록은 서버는
- *   준비됐지만 화면이 아직이라 목록에 넣지 않았다 — 만들 수는 있는데 열면
- *   빈 화면이 나오는 상태를 만들지 않는다.
  */
 import { useState } from 'react';
 import { useStaffRoomRoomsStore } from '@adapters/stores/useStaffRoomRoomsStore';
@@ -26,8 +23,14 @@ import {
 import type { StaffRoomModule, StaffRoomModuleKind } from '@domain/entities/StaffRoomBoard';
 import type { StaffRoomRole } from '@domain/entities/StaffRoom';
 
-/** 지금 만들 수 있는 종류 — 화면이 준비된 것만 */
-const ADDABLE_KINDS: readonly StaffRoomModuleKind[] = ['board', 'archive', 'discussion'];
+/** 만들 수 있는 종류 — 계획서 §6 의 다섯 가지 전부 */
+const ADDABLE_KINDS: readonly StaffRoomModuleKind[] = [
+  'board',
+  'archive',
+  'discussion',
+  'gallery',
+  'minutes',
+];
 
 interface ModuleTabsProps {
   departmentId: string;
@@ -244,10 +247,6 @@ export function ModuleTabs({
               <span className="material-symbols-outlined text-icon-sm">add</span>새 공간 만들기
             </button>
           )}
-
-          <p className="mt-3 text-xs leading-relaxed text-sp-muted">
-            갤러리와 회의록은 다음 작업에서 열립니다.
-          </p>
         </div>
       )}
     </div>

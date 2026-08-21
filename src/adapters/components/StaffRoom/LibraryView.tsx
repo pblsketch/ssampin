@@ -31,6 +31,8 @@ import { FilePreviewModal } from './FilePreviewModal';
 
 interface LibraryViewProps {
   departmentId: string;
+  /** 어느 공간의 자료인가 (M4 — 자료실·갤러리가 여러 개일 수 있다) */
+  moduleId: string;
 }
 
 /** 파일 종류에 맞는 아이콘 — 목록에서 한눈에 갈라 보이게 */
@@ -207,7 +209,7 @@ function FileRow({
   );
 }
 
-export function LibraryView({ departmentId }: LibraryViewProps) {
+export function LibraryView({ departmentId, moduleId }: LibraryViewProps) {
   const files = useStaffRoomLibraryStore((s) => s.files);
   const isLoading = useStaffRoomLibraryStore((s) => s.isLoading);
   const hasLoaded = useStaffRoomLibraryStore((s) => s.hasLoaded);
@@ -234,9 +236,9 @@ export function LibraryView({ departmentId }: LibraryViewProps) {
   const [replacing, setReplacing] = useState<StaffRoomFile | null>(null);
 
   useEffect(() => {
-    void loadFiles(departmentId);
+    void loadFiles(departmentId, moduleId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [departmentId]);
+  }, [departmentId, moduleId]);
 
   // 목록을 받고 나면 검색용 글자를 뒤따라 받아 둔다(§3.4-가).
   // 목록보다 늦게 와도 되는 것이라 화면을 붙잡지 않는다.

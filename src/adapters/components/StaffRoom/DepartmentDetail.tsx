@@ -16,6 +16,9 @@ import { InvitePanel } from './InvitePanel';
 import { BoardView } from './BoardView';
 import { LibraryView } from './LibraryView';
 import { DiscussionView } from './DiscussionView';
+import { GalleryView } from './GalleryView';
+import { MinutesView } from './MinutesView';
+import { DepartmentBanner } from './DepartmentBanner';
 import { ModuleTabs } from './ModuleTabs';
 import { useStaffRoomRoomsStore } from '@adapters/stores/useStaffRoomRoomsStore';
 import { useStaffRoomLibraryStore } from '@adapters/stores/useStaffRoomLibraryStore';
@@ -100,18 +103,14 @@ export function DepartmentDetail() {
           <span className="material-symbols-outlined text-icon">arrow_back</span>
           목록으로
         </button>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="truncate text-xl font-sp-bold text-sp-text">{currentDepartment.name}</h1>
-            {currentDepartment.description && (
-              <p className="mt-1 text-sm text-sp-muted">{currentDepartment.description}</p>
-            )}
-          </div>
-          <div className="flex shrink-0 items-center gap-1.5 text-sm text-sp-muted">
-            <span className="material-symbols-outlined text-icon-md">group</span>
-            멤버 {currentDepartment.memberCount}명
-          </div>
-        </div>
+        {/* 배너 — 부서 이름·한 줄 소개가 여기 얹힌다 (계획서 §6) */}
+        <DepartmentBanner
+          departmentId={currentDepartment.id}
+          name={currentDepartment.name}
+          description={currentDepartment.description}
+          memberCount={currentDepartment.memberCount}
+          myRole={currentDepartment.myRole}
+        />
       </header>
 
       <div className="flex-1 min-h-0 overflow-y-auto p-8">
@@ -189,22 +188,29 @@ export function DepartmentDetail() {
             }
 
             if (active.kind === 'archive') {
-              return <LibraryView departmentId={currentDepartment.id} />;
+              return <LibraryView departmentId={currentDepartment.id} moduleId={active.id} />;
             }
 
             if (active.kind === 'discussion') {
               return <DiscussionView departmentId={currentDepartment.id} moduleId={active.id} />;
             }
 
-            // 갤러리·회의록은 서버는 준비됐지만 화면이 아직이다. 만들 수 있는 목록에서
-            // 빼 뒀으므로 보통은 여기 오지 않지만, 예전에 만들어진 부서를 위해 남긴다.
+            if (active.kind === 'gallery') {
+              return <GalleryView departmentId={currentDepartment.id} moduleId={active.id} />;
+            }
+
+            if (active.kind === 'minutes') {
+              return <MinutesView departmentId={currentDepartment.id} moduleId={active.id} />;
+            }
+
+            // 여기 오면 모르는 종류다. 나중에 종류가 늘 때를 위해 남겨 둔다.
             return (
               <div className="mx-auto flex max-w-lg flex-col items-center gap-3 rounded-xl border border-dashed border-sp-border bg-sp-card px-8 py-14 text-center">
                 <span className="material-symbols-outlined text-icon-xl text-sp-muted">
                   construction
                 </span>
                 <p className="text-sm leading-relaxed text-sp-muted">
-                  이 공간은 다음 작업에서 열립니다.
+                  이 공간은 아직 열 수 없습니다. 쌤핀을 최신 버전으로 올려주세요.
                 </p>
               </div>
             );

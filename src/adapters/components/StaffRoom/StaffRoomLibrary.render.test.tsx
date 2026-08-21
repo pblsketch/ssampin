@@ -119,7 +119,10 @@ function makeFile(over: Partial<StaffRoomFile> = {}): StaffRoomFile {
  * 같은 문자열로 맞춘 뒤 확인한다.
  */
 function render(): string {
-  return renderToString(<LibraryView departmentId="dept-1" />).replace(/<!-- -->/g, '');
+  return renderToString(<LibraryView departmentId="dept-1" moduleId="archive-1" />).replace(
+    /<!-- -->/g,
+    '',
+  );
 }
 
 beforeEach(() => {
