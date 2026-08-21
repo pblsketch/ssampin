@@ -184,11 +184,12 @@ describe('★그물 ③ — 이름이 포트까지 못 간다', () => {
 
     const sent = JSON.stringify(port.calls[0]?.toolResults);
     expect(sent, '학생 이름이 그대로 나갔다').not.toContain('김지훈');
-    // 이름이 없는 제목은 살아남아야 한다 — 통째로 버리면 AI 가 쓸 말이 없어진다.
+    // ★이름 자리는 별칭으로 남는다 — 지워버리면 AI 가 '면담이 있다'는 말조차 못 한다.
+    expect(sent).toContain('학부모 면담');
     expect(sent).toContain('수행평가 채점');
   });
 
-  it('연락처가 든 제목도 비운다', async () => {
+  it('연락처가 든 제목은 통째로 비운다 (가리지 않는다)', async () => {
     const port = fakePort();
     await useAssistStore
       .getState()
@@ -203,7 +204,7 @@ describe('★그물 ③ — 이름이 포트까지 못 간다', () => {
 
     const [turn] = useAssistStore.getState().turns;
     expect(JSON.stringify(turn?.cards)).toContain('김지훈');
-    expect(turn?.redactedNameCount).toBe(1);
+    expect(turn?.maskedCount).toBe(1);
   });
 
   it('정상 집계는 하나도 지워지지 않는다 (그물이 과하게 잡으면 기능이 죽는다)', async () => {
@@ -213,8 +214,39 @@ describe('★그물 ③ — 이름이 포트까지 못 간다', () => {
       .ask(port, '할 일', [todoCard(['교무회의 자료 준비', '성적 입력'])], ROSTER);
 
     const [turn] = useAssistStore.getState().turns;
-    expect(turn?.redactedNameCount).toBe(0);
+    expect(turn?.maskedCount).toBe(0);
+    expect(turn?.blankedCount).toBe(0);
     expect(port.calls[0]?.toolResults).toHaveLength(1);
+  });
+
+  it('★AI 답변의 별칭은 화면에 띄우기 전에 실제 이름으로 되돌아온다', async () => {
+    // 모델은 ［이름1］ 만 봤고, 선생님은 "김지훈"을 본다.
+    // 이름이 컴퓨터 밖으로 나가지 않으면서도 답변은 자연스럽게 읽힌다.
+    const port: AssistPort & { calls: AssistRequestPayload[] } = {
+      calls: [],
+      ask: vi.fn(async (payload: AssistRequestPayload) => {
+        port.calls.push(payload);
+        return { text: '［이름1］ 학부모 면담이 가장 급해요.', degraded: null };
+      }),
+    };
+
+    await useAssistStore.getState().ask(port, '할 일', [todoCard(['김지훈 학부모 면담'])], ROSTER);
+
+    const [turn] = useAssistStore.getState().turns;
+    expect(turn?.answer).toBe('김지훈 학부모 면담이 가장 급해요.');
+    // 그래도 **나간 것**에는 이름이 없어야 한다.
+    expect(JSON.stringify(port.calls[0]?.toolResults)).not.toContain('김지훈');
+  });
+
+  it('모델이 별칭을 망가뜨려도 원문이 새지는 않는다', async () => {
+    const port: AssistPort = {
+      ask: vi.fn(async () => ({ text: '이름1 학생 면담이 급해요.', degraded: null })),
+    };
+
+    await useAssistStore.getState().ask(port, '할 일', [todoCard(['김지훈 상담'])], ROSTER);
+
+    // 되돌리기가 실패하면 별칭이 그대로 보일 뿐, 다른 학생 이름이 끼어들지 않는다.
+    expect(useAssistStore.getState().turns[0]?.answer).toBe('이름1 학생 면담이 급해요.');
   });
 
   it('★crypto.randomUUID 가 없어도 서버 정규식을 통과한다', () => {

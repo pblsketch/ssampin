@@ -90,10 +90,12 @@ export function AssistThread({ turns }: { readonly turns: readonly AssistTurn[] 
           ))}
 
           {/* ★"이름은 화면에 남고, 숫자만 밖으로 나간다"를 눈으로 확인시켜 주는 줄.
-              위 카드는 원본이고, AI 에 보낸 사본에서는 이만큼을 지웠다는 뜻이다. */}
-          {turn.redactedNameCount > 0 && (
+              가린 것과 통째로 뺀 것은 뜻이 달라서 따로 말한다. */}
+          {(turn.maskedCount > 0 || turn.blankedCount > 0) && (
             <p className="text-xs text-sp-success">
-              보내기 전에 이름·연락처 {turn.redactedNameCount}곳을 지웠어요. 위 카드는 그대로예요.
+              {turn.maskedCount > 0 && `이름·학번 ${turn.maskedCount}곳을 가리고 보냈어요. `}
+              {turn.blankedCount > 0 && `연락처가 있어 ${turn.blankedCount}칸은 빼고 보냈어요. `}위
+              카드는 그대로예요.
             </p>
           )}
 

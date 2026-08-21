@@ -26,7 +26,7 @@ import {
 } from '../../../../supabase/functions/_shared/assistRequest';
 import { ASSIST_MAX_QUESTION_CHARS } from '@domain/rules/screenAssistInput';
 
-const ROSTER = rosterFrom(['김지훈', '박서연']);
+const ROSTER = rosterFrom([{ name: '김지훈', studentNumber: 15 }, { name: '박서연' }]);
 const INSTALL_ID = '3f1a2b4c-5d6e-4f70-8a91-b2c3d4e5f607';
 
 /** 서버가 실제로 받는 모양 그대로 조립한다. */

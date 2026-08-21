@@ -72,7 +72,7 @@ function toCard(toolId: string, raw: ToolResultShape): Card | null {
 
 /** 의도 판정에 필요한 앱 데이터. 스토어 자체가 아니라 **읽은 값**만 넘긴다. */
 export interface IntentSources {
-  readonly students: readonly { readonly name: string }[];
+  readonly students: readonly { readonly name: string; readonly studentNumber?: number }[];
   readonly classes: readonly {
     readonly id: string;
     readonly name: string;
@@ -178,7 +178,10 @@ export function AssistDockContainer() {
 
   // ★그물 ③ 이 쓸 명단. 이름을 지우려면 "무엇이 이름인지"를 알아야 하는데,
   //   domain 은 스토어를 import 하지 않으므로 여기서 만들어 넘긴다.
-  const roster = useMemo(() => rosterFrom(students.map((s) => s.name)), [students]);
+  const roster = useMemo(
+    () => rosterFrom(students.map((s) => ({ name: s.name, studentNumber: s.studentNumber }))),
+    [students],
+  );
 
   const handleAsk = useMemo(
     () =>

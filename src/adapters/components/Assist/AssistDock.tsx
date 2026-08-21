@@ -136,7 +136,7 @@ export function AssistDock({ onAsk }: Props) {
           <span className="text-xs text-sp-muted">
             {draft.length > ASSIST_MAX_QUESTION_CHARS - 200
               ? `${ASSIST_MAX_QUESTION_CHARS - draft.length}자 더 쓸 수 있어요`
-              : '이름은 보내기 전에 지워집니다'}
+              : '이름은 보내기 전에 가려집니다'}
           </span>
           <button
             type="button"

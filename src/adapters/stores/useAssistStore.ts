@@ -14,6 +14,8 @@ import { persist } from 'zustand/middleware';
 
 import { screenAssistInput, type AssistInputScreening } from '@domain/rules/screenAssistInput';
 import { redactOutbound } from '@domain/rules/redactOutbound';
+import { restore } from '@domain/privacy/maskEngine';
+import type { MaskMapping } from '@domain/privacy/types';
 import { findAssistTool } from '@domain/services/assistToolRegistry';
 import type { KeywordGroup } from '@domain/privacy/types';
 import type { AssistDegraded, AssistPort, AssistTurnPayload } from '@domain/ports/AssistPort';
@@ -49,8 +51,10 @@ export interface AssistTurn {
   readonly status: 'thinking' | 'done' | 'blocked';
   /** 전송이 막혔을 때 보여줄 한국어 문구 */
   readonly blockedMessage?: string;
-  /** ★보내기 직전에 지운 이름·연락처 자리 수. 0 이면 표시하지 않는다 */
-  readonly redactedNameCount: number;
+  /** ★보내기 직전에 별칭으로 가린 곳 수. 0 이면 표시하지 않는다 */
+  readonly maskedCount: number;
+  /** ★연락처·주민번호가 있어 통째로 뺀 칸 수 */
+  readonly blankedCount: number;
 }
 
 interface AssistState {
@@ -144,16 +148,22 @@ export const useAssistStore = create<AssistStore>()(
 
         // ★그물 ③ — 나가기 직전 관문. **여기 말고 다른 통로가 없다.**
         //   화면에는 원본 카드가 그대로 남고(이름은 화면에 남는다),
-        //   포트로 넘기는 것은 이름을 지운 사본이다(숫자만 밖으로 나간다).
-        let redactedNameCount = 0;
+        //   포트로 넘기는 것은 이름을 별칭으로 가린 사본이다(숫자만 밖으로 나간다).
+        let maskedCount = 0;
+        let blankedCount = 0;
         const outbound: AssistCard[] = [];
+        // ★별칭 매핑은 **개인정보다.** 이 함수 안에서만 살고 상태에 저장하지 않는다.
+        //   AI 답변을 화면에 띄우기 직전 되돌리는 데에만 쓴다.
+        const mappings: MaskMapping[] = [];
         for (const card of cards) {
           const tool = findAssistTool(card.tool);
           if (!tool) continue; // 레지스트리에 없는 도구는 보내지 않는다
           const result = redactOutbound(tool, card.data, roster);
-          redactedNameCount += result.redactedCount;
+          maskedCount += result.maskedCount;
+          blankedCount += result.blankedCount;
           // 자유 입력이 아닌 자리에서 걸렸다면 화이트리스트 설계가 잘못된 것이다 — 통째로 뺀다.
           if (result.blocked) continue;
+          mappings.push(...result.mappings);
           outbound.push({ tool: card.tool, data: result.data });
         }
 
@@ -169,7 +179,8 @@ export const useAssistStore = create<AssistStore>()(
               answer: '',
               degraded: null,
               status: 'thinking' as const,
-              redactedNameCount,
+              maskedCount,
+              blankedCount,
             },
           ].slice(-MAX_TURNS_KEPT),
           draft: '',
@@ -191,7 +202,14 @@ export const useAssistStore = create<AssistStore>()(
             //   ★`cards` 가 아니라 `outbound` 다 — 이름을 지운 쪽만 나간다.
             toolResults: outbound.map((c) => ({ tool: c.tool, grade: 1 as const, data: c.data })),
           });
-          patch({ answer: answer.text, degraded: answer.degraded, status: 'done' });
+          // ★별칭을 실제 이름으로 되돌린 뒤 화면에 올린다.
+          //   모델은 ［이름1］ 만 봤고, 선생님은 "김지훈"을 본다.
+          //   모델이 별칭을 망가뜨리면 되돌리기가 그 부분만 실패한다 — 원문이 새지는 않는다.
+          patch({
+            answer: restore(answer.text, mappings),
+            degraded: answer.degraded,
+            status: 'done',
+          });
         } catch (err) {
           if (err instanceof AssistBlockedError) {
             patch({ status: 'blocked', blockedMessage: err.message });
