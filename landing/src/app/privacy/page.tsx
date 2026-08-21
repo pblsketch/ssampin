@@ -493,6 +493,24 @@ const koContent = {
               등을 넣지 않는 것을 권장합니다.
             </li>
             <li>
+              <strong>쌤핀 AI(앱 안 업무 도우미)</strong> — <strong>설정에서 켠 경우에만</strong>{' '}
+              동작합니다(기본 꺼짐). 켜면 사용자가 입력한 질문과, 앱이{' '}
+              <strong>이 컴퓨터 안에서 계산한 집계 수치</strong>(예: &quot;출석 27명, 결석
+              1명&quot;) 가 답변 생성을 위해 전송됩니다. 학생 이름·학번은 전송 전에 지워지며,
+              명단·기록 본문· 출결 사유·상담 내용은 <strong>전송되지 않습니다</strong>. 조회는 전부
+              사용자의 컴퓨터에서 이루어지고, 서버는 이미 계산된 숫자만 받습니다.
+              <br />
+              <strong>
+                다만 지금은 이 AI를 무료로 제공받아 사용하고 있어, 전송된 내용이 인공지능 모델
+                학습에 활용될 수 있으며 이를 거부할 방법이 없습니다.
+              </strong>{' '}
+              그래서 개인정보가 전송되지 않는 범위로만 기능을 구성했습니다. 질문에 가정 형편·건강·
+              상담 내용처럼 민감할 수 있는 표현이 있으면{' '}
+              <strong>화면에 표시해 알려 드립니다</strong>— 전송을 자동으로 차단하지는 않으며,
+              보낼지 여부는 사용자가 결정합니다. 다만 연락처· 주민등록번호 형태의 문자열과 명단에
+              있는 학생 이름은 전송 전에 차단·삭제됩니다.
+            </li>
+            <li>
               <strong>개발자 전달(버그 신고·건의사항)</strong> — 사이드바의 &quot;건의사항
               보내기&quot;나 AI 도우미의 신고 창으로 보내는 내용입니다. 작성하신 내용, 회신
               이메일(적으신 경우에만), 직전 대화 내용, <strong>첨부하신 스크린샷</strong>(최대
@@ -507,11 +525,11 @@ const koContent = {
           </ul>
           <p>
             <strong>위탁받는 자:</strong> Supabase Inc.(클라우드 인프라) · 주식회사 업스테이지(AI
-            도우미 답변 생성) · Google LLC(AI 도우미 질문 검색 처리 및 예비 답변 생성).{' '}
-            <strong>위탁 목적:</strong> 위 협업 기능과 AI 도우미 제공. <strong>보관·삭제:</strong>{' '}
-            각 기능에서 자료를 삭제하거나 보관 기간(예: 실시간 링크 만료)이 지나면 삭제됩니다. AI
-            도우미 대화는 답변 품질 개선을 위해 보관되며 요청 시 삭제합니다. 전송 구간은
-            HTTPS(TLS)로 암호화됩니다.
+            도우미 및 쌤핀 AI 답변 생성) · Google LLC(AI 도우미 질문 검색 처리 및 예비 답변 생성).{' '}
+            <strong>위탁 목적:</strong> 위 협업 기능과 AI 도우미·쌤핀 AI 제공.{' '}
+            <strong>보관·삭제:</strong> 각 기능에서 자료를 삭제하거나 보관 기간(예: 실시간 링크
+            만료)이 지나면 삭제됩니다. AI 도우미 대화는 답변 품질 개선을 위해 보관되며 요청 시
+            삭제합니다. 전송 구간은 HTTPS(TLS)로 암호화됩니다.
           </p>
         </>
       ),
@@ -563,9 +581,10 @@ const koContent = {
       content: (
         <>
           <p>
-            쌤핀의 일부 협업 기능과 Google 연동, 그리고 AI 도우미는 국외에 서버를 둔 사업자에게
-            개인정보 처리를 위탁하며, 이 과정에서 개인정보가 국외로 이전될 수 있습니다. 교사가 해당
-            기능을 사용하지 않으면 어떤 정보도 국외로 이전되지 않습니다.
+            쌤핀의 일부 협업 기능과 Google 연동, 그리고 AI 도우미·쌤핀 AI는 국외에 서버를 둔
+            사업자에게 개인정보 처리를 위탁하며, 이 과정에서 개인정보가 국외로 이전될 수 있습니다.
+            교사가 해당 기능을 사용하지 않으면 어떤 정보도 국외로 이전되지 않습니다.{' '}
+            <strong>쌤핀 AI는 기본이 꺼짐이며, 켜지 않으면 아무것도 전송되지 않습니다.</strong>
           </p>
           <ul>
             <li>
@@ -581,10 +600,21 @@ const koContent = {
               도움말을 찾기 위한 질문 텍스트 처리 및 예비 답변 생성 (제11조)
             </li>
             <li>
-              <strong>주식회사 업스테이지</strong> (대한민국 법인, 처리 인프라 미국) — AI 도우미에
-              질문을 보낼 때의 답변 생성 (제11조). 업스테이지는 자사 개인정보처리방침에 따라 입력된
-              대화 내용의 시스템 운영·데이터 보관을 Amazon Web Services·Microsoft Azure·Google(모두
-              미국)에 재위탁하므로, 이 과정에서 정보가 국외로 이전될 수 있습니다.
+              <strong>주식회사 업스테이지</strong> (대한민국 법인) — AI 도우미 및{' '}
+              <strong>쌤핀 AI</strong>에 질문을 보낼 때의 답변 생성 (제11조).{' '}
+              <strong>법인은 국내이지만 실제 처리 인프라는 국외입니다.</strong> 업스테이지는 자사
+              개인정보처리방침(2026-06-01 기준)에 따라 입력된 대화 내용을 아래에 재위탁하므로, 이
+              과정에서 정보가 국외로 이전될 수 있습니다.
+              <ul>
+                <li>
+                  시스템 운영·데이터 보관 — Amazon Web Services · Microsoft Azure · Google (모두
+                  미국)
+                </li>
+                <li>
+                  <strong>추론(실제 답변 생성)</strong> — Fireworks.ai · Tavily Inc. · RunPod Inc.
+                  (모두 미국)
+                </li>
+              </ul>
             </li>
           </ul>
           <p>
@@ -1227,13 +1257,14 @@ const enContent = {
             </li>
           </ul>
           <p>
-            <strong>Consignees:</strong> Supabase Inc. (cloud infrastructure); Upstage Inc. (AI
-            assistant answer generation); Google LLC (AI assistant question retrieval and fallback
-            answer generation). <strong>Purpose:</strong> providing the collaboration features above
-            and the AI assistant. <strong>Retention/Deletion:</strong> data is deleted when you
-            remove it within each feature or when its retention period (e.g., real-time link expiry)
-            passes. AI assistant conversations are retained to improve answer quality and are
-            deleted on request. Data in transit is encrypted via HTTPS (TLS).
+            <strong>Consignees:</strong> Supabase Inc. (cloud infrastructure); Upstage Inc. (answer
+            generation for the AI assistant and for Ssampin AI); Google LLC (AI assistant question
+            retrieval and fallback answer generation). <strong>Purpose:</strong> providing the
+            collaboration features above, the AI assistant, and Ssampin AI.{' '}
+            <strong>Retention/Deletion:</strong> data is deleted when you remove it within each
+            feature or when its retention period (e.g., real-time link expiry) passes. AI assistant
+            conversations are retained to improve answer quality and are deleted on request. Data in
+            transit is encrypted via HTTPS (TLS).
           </p>
         </>
       ),
@@ -1320,11 +1351,21 @@ const enContent = {
               when you use the AI assistant (Section 11)
             </li>
             <li>
-              <strong>Upstage Inc.</strong> (a Korean company; processing infrastructure in the USA)
-              — answer generation when you use the AI assistant (Section 11). Under its own privacy
-              policy, Upstage sub-consigns system operation and data storage of submitted
-              conversations to Amazon Web Services, Microsoft Azure, and Google (all in the USA), so
+              <strong>Upstage Inc.</strong> (a Korean company) — answer generation when you use the
+              AI assistant or <strong>Ssampin AI</strong> (Section 11). The company is Korean, but
+              its actual processing infrastructure is located abroad. Under its own privacy policy
+              (as of 2026-06-01), Upstage sub-consigns submitted conversations as follows, so
               information may be transferred abroad in that process.
+              <ul>
+                <li>
+                  System operation and data storage — Amazon Web Services, Microsoft Azure, Google
+                  (all in the USA)
+                </li>
+                <li>
+                  <strong>Inference (actual answer generation)</strong> — Fireworks.ai, Tavily Inc.,
+                  RunPod Inc. (all in the USA)
+                </li>
+              </ul>
             </li>
           </ul>
           <p>
