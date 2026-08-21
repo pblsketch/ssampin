@@ -29,8 +29,12 @@ function formatDayLabel(dateStr: string): string {
  * 중복 일정 정리 — 같은 날 같은 이름으로 여러 번 들어온 일정을 한 줄로 줄인다.
  *
  * 왜 "삭제"가 아니라 "정리(숨김)"인가 — 접는 대상은 구글·NEIS 에서 자동으로 들어온 사본이라
- * 지워도 다음 동기화 때 되살아난다. 숨김은 동기화가 존중하므로 다시 나타나지 않고, 자료가
- * 남아 있어 되돌리기도 안전하다. 그래서 문구도 "삭제"라고 쓰지 않는다.
+ * 지워도 다음 동기화 때 되살아난다. 숨김은 동기화가 존중하므로 다시 나타나지 않고, 자료도
+ * 남는다. 그래서 문구도 "삭제"라고 쓰지 않는다.
+ *
+ * 다만 **앱에는 숨김을 되돌리는 버튼이 아직 없다**(2026-08-21 확인). NEIS 일정 삭제도 같은
+ * 숨김을 쓰는데 마찬가지다. 그래서 안내 문구에 "언제든 되돌릴 수 있다"고 쓰지 않는다 —
+ * 실제 복구 경로는 설정 → 백업/복원뿐이다. 숨김 해제 화면은 별도 과제.
  */
 export function DuplicateCleanupModal({ events, categories, onCleanup, onClose }: Props) {
   const [isWorking, setIsWorking] = useState(false);
@@ -64,8 +68,8 @@ export function DuplicateCleanupModal({ events, categories, onCleanup, onClose }
         {doneCount !== null ? (
           <div className="px-6 py-8">
             <Notice variant="success" size="md" title={`${doneCount}건을 정리했어요`}>
-              달력에서 겹쳐 보이던 줄이 하나로 줄었습니다. 정리한 일정은 지워진 것이 아니라 숨긴
-              것이라, 언제든 되돌릴 수 있어요.
+              달력에서 겹쳐 보이던 줄이 하나로 줄었습니다. 정리한 일정은 지운 것이 아니라 숨긴
+              것이라 자료는 그대로 남아 있어요 — 되돌리려면 설정 → 백업/복원을 쓰셔야 합니다.
             </Notice>
           </div>
         ) : groups.length === 0 ? (
@@ -79,7 +83,7 @@ export function DuplicateCleanupModal({ events, categories, onCleanup, onClose }
                 남기는 일정은{' '}
                 <span className="font-bold">선생님이 직접 만든 것 → 학사일정(NEIS)</span> 순서로
                 고릅니다. 접히는 쪽은 구글에서 되돌아온 사본이라 없어도 달력이 비지 않아요. 지우는
-                것이 아니라 숨기는 것이라 되돌릴 수 있습니다.
+                것이 아니라 숨기는 것이라 자료 자체는 그대로 남습니다.
               </Notice>
             </div>
 
