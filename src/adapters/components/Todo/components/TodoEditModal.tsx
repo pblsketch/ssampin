@@ -1,9 +1,14 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import type { Todo, TodoPriority, TodoCategory, TodoStatus } from '@domain/entities/Todo';
 import { PRIORITY_CONFIG } from '@domain/valueObjects/TodoPriority';
 import { RECURRENCE_PRESETS } from '@domain/valueObjects/TodoRecurrence';
 import { DatePopover } from './DatePopover';
 import { toLocalDateString } from '@shared/utils/localDate';
+import type { TodoRelatedPerson } from '@domain/entities/Todo';
+import type { StaffContact } from '@domain/entities/StaffContact';
+import { extractMentionQuery, applyMention } from '@domain/rules/todoMention';
+import { MentionPopover } from './MentionPopover';
+import { RelatedStaffChips } from './RelatedStaffChips';
 
 interface TodoEditModalProps {
   todo: Todo;
@@ -20,6 +25,7 @@ interface TodoEditModalProps {
         | 'startDate'
         | 'time'
         | 'checkAt'
+        | 'relatedStaff'
         | 'status'
         | 'recurrence'
       >
@@ -41,6 +47,12 @@ export function TodoEditModal({ todo, categories, onUpdate, onClose }: TodoEditM
   const [startDate, setStartDate] = useState(todo.startDate ?? '');
   const [time, setTime] = useState(todo.time ?? '');
   const [checkAt, setCheckAt] = useState(todo.checkAt ?? '');
+  const [relatedStaff, setRelatedStaff] = useState<readonly TodoRelatedPerson[]>(
+    todo.relatedStaff ?? [],
+  );
+  /** "@" 뒤에 친 글자. null 이면 팝오버가 닫힌 상태. */
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const textInputRef = useRef<HTMLInputElement>(null);
   const [priority, setPriority] = useState<TodoPriority>(todo.priority ?? 'none');
   const [category, setCategory] = useState(todo.category ?? '');
   const [status, setStatus] = useState<TodoStatus>(todo.status ?? 'todo');
@@ -55,6 +67,45 @@ export function TodoEditModal({ todo, categories, onUpdate, onClose }: TodoEditM
     return idx >= 0 ? idx : 0;
   });
 
+  /** 글자가 바뀔 때마다 커서 자리가 멘션 입력 중인지 본다. */
+  const handleTextChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const next = e.target.value;
+    setText(next);
+    const mention = extractMentionQuery(next, e.target.selectionStart ?? next.length);
+    setMentionQuery(mention === null ? null : mention.query);
+  }, []);
+
+  /**
+   * 목록에서 교직원을 고르면 본문의 "@김민" 을 "@김민호 " 로 채우고 관련인에 더한다.
+   *
+   * `nameSnapshot` 은 이 순간의 이름을 적어 두는 것이고 **다시 갱신하지 않는다** —
+   * 정본은 언제나 연락처다(칩이 연락처에서 현재 이름을 다시 읽는다).
+   */
+  const handleMentionPick = useCallback(
+    (contact: StaffContact) => {
+      const input = textInputRef.current;
+      const caret = input?.selectionStart ?? text.length;
+      const applied = applyMention(text, caret, contact.name);
+      setText(applied.text);
+      setMentionQuery(null);
+      setRelatedStaff((prev) =>
+        prev.some((p) => p.staffId === contact.id)
+          ? prev
+          : [...prev, { staffId: contact.id, nameSnapshot: contact.name }],
+      );
+      // 이름을 넣은 뒤 커서를 그 끝으로 돌려놓는다(안 하면 맨 뒤로 튄다).
+      window.setTimeout(() => {
+        input?.focus();
+        input?.setSelectionRange(applied.caretIndex, applied.caretIndex);
+      }, 0);
+    },
+    [text],
+  );
+
+  const handleRemoveRelated = useCallback((staffId: string) => {
+    setRelatedStaff((prev) => prev.filter((p) => p.staffId !== staffId));
+  }, []);
+
   const handleSave = useCallback(() => {
     const changes: Record<string, unknown> = {};
     if (text.trim() !== todo.text) changes.text = text.trim();
@@ -62,6 +113,12 @@ export function TodoEditModal({ todo, categories, onUpdate, onClose }: TodoEditM
     if (startDate !== (todo.startDate ?? '')) changes.startDate = startDate || undefined;
     if (time !== (todo.time ?? '')) changes.time = time || undefined;
     if (checkAt !== (todo.checkAt ?? '')) changes.checkAt = checkAt || undefined;
+    // 관련인은 배열이라 내용 비교가 필요하다. id 목록이 같으면 바뀌지 않은 것으로 본다.
+    const prevIds = (todo.relatedStaff ?? []).map((p) => p.staffId).join(',');
+    const nextIds = relatedStaff.map((p) => p.staffId).join(',');
+    if (prevIds !== nextIds) {
+      changes.relatedStaff = relatedStaff.length > 0 ? relatedStaff : undefined;
+    }
     if (priority !== (todo.priority ?? 'none')) changes.priority = priority;
     if (category !== (todo.category ?? '')) changes.category = category || undefined;
     if (status !== (todo.status ?? 'todo')) changes.status = status;
@@ -98,6 +155,7 @@ export function TodoEditModal({ todo, categories, onUpdate, onClose }: TodoEditM
     startDate,
     time,
     checkAt,
+    relatedStaff,
     priority,
     category,
     status,
@@ -128,14 +186,37 @@ export function TodoEditModal({ todo, categories, onUpdate, onClose }: TodoEditM
           </button>
         </div>
 
-        {/* 텍스트 */}
-        <input
-          type="text"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          className="w-full bg-sp-surface text-sp-text text-sm px-3 py-2 rounded-lg border border-sp-border focus:border-sp-accent focus:outline-none mb-3"
-          autoFocus
-        />
+        {/* 텍스트 — "@" 를 치면 교직원 고르기 목록이 뜬다 */}
+        <div className="relative mb-3">
+          <input
+            ref={textInputRef}
+            type="text"
+            value={text}
+            onChange={handleTextChange}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape' && mentionQuery !== null) {
+                e.stopPropagation();
+                setMentionQuery(null);
+              }
+            }}
+            className="w-full bg-sp-surface text-sp-text text-sm px-3 py-2 rounded-lg border border-sp-border focus:border-sp-accent focus:outline-none"
+            autoFocus
+          />
+          {mentionQuery !== null && (
+            <MentionPopover
+              query={mentionQuery}
+              onPick={handleMentionPick}
+              onClose={() => setMentionQuery(null)}
+            />
+          )}
+        </div>
+
+        {/* 관련인 — "이건 누구한테 물어봐야 하는 일" */}
+        {relatedStaff.length > 0 && (
+          <div className="mb-3">
+            <RelatedStaffChips related={relatedStaff} onRemove={handleRemoveRelated} />
+          </div>
+        )}
 
         {/* 날짜 */}
         <div className="mb-3">

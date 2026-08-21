@@ -5,6 +5,7 @@ import type { TodoCategory } from '@domain/entities/Todo';
 import { TodoEditModal } from '../components/TodoEditModal';
 import { PRIORITY_CONFIG } from '@domain/valueObjects/TodoPriority';
 import { isCheckDue } from '@domain/rules/todoCheckRules';
+import { RelatedStaffChips } from '../components/RelatedStaffChips';
 import { toLocalDateString } from '@shared/utils/localDate';
 import {
   inferStatus,
@@ -316,6 +317,10 @@ function ListViewRow({
             <span className={`text-xs ${overdue ? 'text-sp-error font-medium' : 'text-sp-muted'}`}>
               {todo.dueDate.slice(5)}
             </span>
+          )}
+          {/* 관련인 — 본 화면에서만 보여준다. 위젯·옆핀에는 넣지 않는다(개인정보). */}
+          {todo.relatedStaff && todo.relatedStaff.length > 0 && (
+            <RelatedStaffChips related={todo.relatedStaff} />
           )}
           {/* 다시 확인할 날 — 오늘이거나 지났으면 눈에 띄게. 마감일과 다른 개념이라 아이콘을 붙인다. */}
           {todo.checkAt && (
