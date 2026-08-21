@@ -35,6 +35,7 @@ interface LibraryMockState {
   files: StaffRoomFile[];
   usage: StaffRoomStorageUsage;
   driveConnected: boolean;
+  driveStatus: 'connected' | 'missing' | 'broken';
   moduleId: string | null;
   previews: Record<string, string>;
   postHits: StaffRoomSearchHit[];
@@ -49,6 +50,7 @@ const libraryState: LibraryMockState = {
   files: [],
   usage: { departmentBytes: 0, driveUsedBytes: 0, driveLimitBytes: 0 },
   driveConnected: true,
+  driveStatus: 'connected',
   moduleId: 'archive-1',
   previews: {},
   postHits: [],
@@ -129,6 +131,7 @@ beforeEach(() => {
   libraryState.files = [];
   libraryState.usage = { departmentBytes: 0, driveUsedBytes: 0, driveLimitBytes: 0 };
   libraryState.driveConnected = true;
+  libraryState.driveStatus = 'connected';
   libraryState.previews = {};
   libraryState.postHits = [];
   libraryState.upload = null;
@@ -189,6 +192,7 @@ describe('200MB 상한 안내 (계획서 §10.6)', () => {
 describe('관리자 구글 연결 (계획서 §3.2.1)', () => {
   it('★ 연결이 없으면 멤버에게 관리자에게 요청하라고 알려 준다', () => {
     libraryState.driveConnected = false;
+    libraryState.driveStatus = 'missing';
     const html = render();
     expect(html).toContain('관리자');
     expect(html).toContain('요청');
@@ -196,13 +200,38 @@ describe('관리자 구글 연결 (계획서 §3.2.1)', () => {
 
   it('관리자 본인에게는 본인이 연결하라고 알려 준다', () => {
     libraryState.driveConnected = false;
+    libraryState.driveStatus = 'missing';
     myRole = 'admin';
     expect(render()).toContain('부서 설정에서 구글 드라이브를 연결');
   });
 
   it('연결이 없으면 올리기 단추가 막힌다', () => {
     libraryState.driveConnected = false;
+    libraryState.driveStatus = 'missing';
     expect(render()).toContain('disabled');
+  });
+
+  it('★★ 끊어진 것과 아직 연결 안 한 것을 구분해 말한다', () => {
+    // 조치가 다르다 — 앞은 "다시 로그인", 뒤는 "처음 연결"이다.
+    // 하나로 뭉개면 화면이 사실과 다른 안내를 하게 된다.
+    libraryState.driveConnected = false;
+    libraryState.driveStatus = 'broken';
+    const broken = render();
+    expect(broken).toContain('끊어져');
+    expect(broken).toContain('다시');
+    expect(broken).not.toContain('아직 구글 드라이브를 연결하지 않아');
+
+    libraryState.driveStatus = 'missing';
+    const missing = render();
+    expect(missing).toContain('아직 구글 드라이브를 연결하지 않아');
+    expect(missing).not.toContain('끊어져');
+  });
+
+  it('관리자 본인에게는 끊어졌을 때 본인이 다시 로그인하라고 한다', () => {
+    libraryState.driveConnected = false;
+    libraryState.driveStatus = 'broken';
+    myRole = 'admin';
+    expect(render()).toContain('구글 로그인을 다시');
   });
 });
 

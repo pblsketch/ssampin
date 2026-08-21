@@ -57,6 +57,8 @@ interface StaffRoomLibraryState {
   usage: StaffRoomStorageUsage;
   /** 관리자가 구글을 연결해 뒀는가. 아니면 올리기·내려받기가 안 된다(§3.2.1) */
   driveConnected: boolean;
+  /** 왜 안 되는가 — missing(처음 연결 필요) · broken(다시 로그인 필요) */
+  driveStatus: 'connected' | 'missing' | 'broken';
   moduleId: string | null;
 
   /** 파일 id → 검색용 글자. 받아 두면 인터넷 없이도 찾을 수 있다(§3.4-가) */
@@ -99,6 +101,7 @@ export const useStaffRoomLibraryStore = create<StaffRoomLibraryState>((set, get)
   files: [],
   usage: EMPTY_USAGE,
   driveConnected: false,
+  driveStatus: 'missing',
   moduleId: null,
   previews: {},
   postHits: [],
@@ -115,6 +118,7 @@ export const useStaffRoomLibraryStore = create<StaffRoomLibraryState>((set, get)
       files: [],
       usage: EMPTY_USAGE,
       driveConnected: false,
+      driveStatus: 'missing',
       moduleId: null,
       previews: {},
       postHits: [],
@@ -138,6 +142,7 @@ export const useStaffRoomLibraryStore = create<StaffRoomLibraryState>((set, get)
         files: res.files,
         usage: res.usage,
         driveConnected: res.driveConnected,
+        driveStatus: res.driveStatus,
         moduleId: res.module.id,
         isLoading: false,
         hasLoaded: true,

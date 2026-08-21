@@ -258,6 +258,11 @@ export interface IStaffRoomPort {
     usage: StaffRoomStorageUsage;
     /** 관리자가 구글을 연결해 뒀는가. 아니면 올리기·내려받기가 안 된다(§3.2.1) */
     driveConnected: boolean;
+    /**
+     * 왜 안 되는가 — 조치가 다르므로 구분한다.
+     * `missing` 아직 연결 안 함(처음 연결해야 한다) · `broken` 끊어짐(다시 로그인해야 한다)
+     */
+    driveStatus: 'connected' | 'missing' | 'broken';
   }>;
 
   /** 올리기 세션 주소를 받는다 — 파일은 이 주소로 구글에 곧장 간다 */

@@ -48,11 +48,22 @@ export const ADMIN_TOKEN_MISSING_MESSAGE =
   '부서 관리자 선생님이 아직 구글 드라이브를 연결하지 않아 자료실을 쓸 수 없습니다. ' +
   '관리자 선생님께 부서 설정에서 구글 연결을 부탁해주세요.';
 
-/** 관리자 토큰 문제 — 부르는 쪽이 409 로 돌려주도록 구분한다 */
+/**
+ * 관리자 토큰 문제 — 부르는 쪽이 409 로 돌려주도록 구분한다.
+ *
+ * ★ `kind` 를 따로 들고 다니는 이유 — 화면이 "아직 연결 안 함"과 "연결이 끊어짐"에
+ *   **다른 안내**를 해야 하는데(앞은 처음 연결, 뒤는 다시 로그인), 이걸 한국어 문구에
+ *   특정 낱말이 있는지로 판단하면 문구를 다듬는 순간 조용히 어긋난다.
+ */
+export type AdminTokenProblem = 'missing' | 'broken';
+
 export class AdminTokenError extends Error {
-  constructor(message: string) {
+  readonly kind: AdminTokenProblem;
+
+  constructor(message: string, kind: AdminTokenProblem) {
     super(message);
     this.name = 'AdminTokenError';
+    this.kind = kind;
   }
 }
 
@@ -93,7 +104,7 @@ interface AdminTokenRow {
  */
 export async function adminAccessToken(db: Db, departmentId: string): Promise<string> {
   const keyHex = staffroomEncryptionKey();
-  if (!keyHex) throw new AdminTokenError(ADMIN_TOKEN_MISSING_MESSAGE);
+  if (!keyHex) throw new AdminTokenError(ADMIN_TOKEN_MISSING_MESSAGE, 'missing');
 
   const { data, error } = await db
     .from('staffroom_admin_tokens')
@@ -102,7 +113,7 @@ export async function adminAccessToken(db: Db, departmentId: string): Promise<st
     .maybeSingle();
 
   if (error) throw new Error(`관리자 토큰 조회 실패: ${error.message}`);
-  if (!data) throw new AdminTokenError(ADMIN_TOKEN_MISSING_MESSAGE);
+  if (!data) throw new AdminTokenError(ADMIN_TOKEN_MISSING_MESSAGE, 'missing');
 
   const row = data as AdminTokenRow;
 
@@ -114,7 +125,7 @@ export async function adminAccessToken(db: Db, departmentId: string): Promise<st
 
   const clientId = Deno.env.get('GOOGLE_CLIENT_ID');
   const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET');
-  if (!clientId || !clientSecret) throw new AdminTokenError(ADMIN_TOKEN_BROKEN_MESSAGE);
+  if (!clientId || !clientSecret) throw new AdminTokenError(ADMIN_TOKEN_BROKEN_MESSAGE, 'broken');
 
   const refreshToken = await decrypt(
     row.encrypted_refresh_token,
@@ -137,7 +148,7 @@ export async function adminAccessToken(db: Db, departmentId: string): Promise<st
   if (!res.ok) {
     // refresh_token 이 무효화됐다 — 관리자가 다시 로그인해야 한다
     console.error('[staffroomDrive] 관리자 토큰 갱신 실패:', res.status);
-    throw new AdminTokenError(ADMIN_TOKEN_BROKEN_MESSAGE);
+    throw new AdminTokenError(ADMIN_TOKEN_BROKEN_MESSAGE, 'broken');
   }
 
   const fresh = (await res.json()) as { access_token: string; expires_in: number };
@@ -171,7 +182,7 @@ async function driveRequest<T>(accessToken: string, path: string, init?: Request
   if (!res.ok) {
     const detail = await res.text();
     if (res.status === 401 || res.status === 403) {
-      throw new AdminTokenError(ADMIN_TOKEN_BROKEN_MESSAGE);
+      throw new AdminTokenError(ADMIN_TOKEN_BROKEN_MESSAGE, 'broken');
     }
     throw new Error(`Drive API ${res.status}: ${detail}`);
   }
@@ -292,7 +303,7 @@ export async function createUploadSession(
   if (!res.ok) {
     const detail = await res.text();
     if (res.status === 401 || res.status === 403) {
-      throw new AdminTokenError(ADMIN_TOKEN_BROKEN_MESSAGE);
+      throw new AdminTokenError(ADMIN_TOKEN_BROKEN_MESSAGE, 'broken');
     }
     throw new Error(`업로드 세션 발급 실패 ${res.status}: ${detail}`);
   }
@@ -386,7 +397,7 @@ export async function readTextFile(accessToken: string, fileId: string): Promise
   });
   if (!res.ok) {
     if (res.status === 401 || res.status === 403) {
-      throw new AdminTokenError(ADMIN_TOKEN_BROKEN_MESSAGE);
+      throw new AdminTokenError(ADMIN_TOKEN_BROKEN_MESSAGE, 'broken');
     }
     throw new Error(`미리보기 읽기 실패 ${res.status}`);
   }

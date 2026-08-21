@@ -461,6 +461,7 @@ export class StaffRoomSupabaseClient implements IStaffRoomPort {
     files: StaffRoomFile[];
     usage: StaffRoomStorageUsage;
     driveConnected: boolean;
+    driveStatus: 'connected' | 'missing' | 'broken';
   }> {
     return this.invoke('staffroom-library', {
       action: 'list',

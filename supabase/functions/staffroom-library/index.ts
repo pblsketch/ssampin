@@ -182,14 +182,29 @@ serve(async (req: Request) => {
       // 관리자 드라이브 전체 사용량 — 토큰이 없으면 0 으로 두고 화면이 안내한다
       let driveUsed = 0;
       let driveLimit = 0;
+      // ★ "연결됐는가"를 **용량 숫자로 판단하지 않는다.**
+      //   구글 워크스페이스(학교 계정)는 용량이 무제한이면 총량을 아예 알려주지 않아
+      //   limit 이 0 으로 온다. `limit > 0` 으로 따지면 제대로 연결한 관리자에게도
+      //   "구글을 연결하지 않았습니다"가 계속 뜬다. 한국 학교 계정에서 흔한 조건이다.
+      //   그래서 **토큰이 실제로 통했는가**를 따로 기록한다.
+      let driveConnected = false;
+      // ★ "아직 연결 안 함"과 "연결이 끊어짐"을 구분해서 돌려준다.
+      //   조치가 다르기 때문이다 — 앞은 관리자가 **처음 연결**해야 하고,
+      //   뒤는 **다시 로그인**해야 한다. 하나로 뭉개면 화면이 "아직 연결하지
+      //   않으셨다"고 말하는데 실제로는 끊긴 것이라 거짓 안내가 된다.
+      let driveStatus: 'connected' | 'missing' | 'broken' = 'missing';
       try {
         const token = await adminAccessToken(db, departmentId);
+        driveConnected = true;
+        driveStatus = 'connected';
         const quota = await driveQuota(token);
         driveUsed = quota.used;
         driveLimit = quota.limit;
       } catch (error) {
         if (!(error instanceof AdminTokenError)) throw error;
         // 관리자 연결이 끊겼어도 목록은 보여준다 — 무엇이 있는지는 알 수 있어야 한다
+        driveConnected = false;
+        driveStatus = error.kind;
       }
 
       return jsonResponse({
@@ -207,7 +222,8 @@ serve(async (req: Request) => {
           driveUsedBytes: driveUsed,
           driveLimitBytes: driveLimit,
         },
-        driveConnected: driveLimit > 0,
+        driveConnected,
+        driveStatus,
       });
     }
 
@@ -353,7 +369,11 @@ serve(async (req: Request) => {
         .from('staffroom_files')
         .insert({
           department_id: departmentId,
-          module_id: archive.id,
+          // ★ 어느 공간에 넣을지는 **표에 적힌 것**을 쓴다. `archive.id`(지금 요청이 가리키는
+          //   공간)를 쓰면 안 된다 — 올리기 세션과 등록은 **서로 다른 요청**이고, 등록할 때는
+          //   앱이 공간을 다시 알려주지 않아서 기본 자료실로 떨어진다.
+          //   그러면 **갤러리에 올린 사진이 자료실로 들어가 갤러리가 영영 비어 보인다.**
+          module_id: ticket.module_id,
           drive_file_id: driveFileId,
           name: ticket.name,
           mime_type: ticket.mime_type,

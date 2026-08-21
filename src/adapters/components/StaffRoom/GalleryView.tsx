@@ -83,6 +83,7 @@ export function GalleryView({ departmentId, moduleId }: GalleryViewProps) {
   const hasLoaded = useStaffRoomLibraryStore((s) => s.hasLoaded);
   const error = useStaffRoomLibraryStore((s) => s.error);
   const driveConnected = useStaffRoomLibraryStore((s) => s.driveConnected);
+  const driveStatus = useStaffRoomLibraryStore((s) => s.driveStatus);
   const upload = useStaffRoomLibraryStore((s) => s.upload);
   const loadFiles = useStaffRoomLibraryStore((s) => s.loadFiles);
   const uploadFile = useStaffRoomLibraryStore((s) => s.uploadFile);
@@ -126,9 +127,13 @@ export function GalleryView({ departmentId, moduleId }: GalleryViewProps) {
       {hasLoaded && !driveConnected && (
         <div className="rounded-xl border border-sp-highlight bg-sp-surface p-4">
           <p className="text-sm leading-relaxed text-sp-text">
-            {myRole === 'admin'
-              ? '사진을 올리려면 부서 설정에서 구글 드라이브를 연결해주세요.'
-              : '부서 관리자 선생님이 아직 구글 드라이브를 연결하지 않아 사진을 올리거나 볼 수 없습니다.'}
+            {driveStatus === 'broken'
+              ? myRole === 'admin'
+                ? '구글 연결이 끊어졌습니다. 쌤핀에서 구글 로그인을 다시 해주시면 갤러리가 열립니다.'
+                : '부서 관리자 선생님의 구글 연결이 끊어져 사진을 올리거나 볼 수 없습니다. 관리자 선생님께 다시 로그인을 요청해주세요.'
+              : myRole === 'admin'
+                ? '사진을 올리려면 부서 설정에서 구글 드라이브를 연결해주세요.'
+                : '부서 관리자 선생님이 아직 구글 드라이브를 연결하지 않아 사진을 올리거나 볼 수 없습니다.'}
           </p>
         </div>
       )}

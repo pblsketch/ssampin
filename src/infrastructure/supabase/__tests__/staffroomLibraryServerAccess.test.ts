@@ -7,6 +7,8 @@
  * 떠받치는 부분이라 돌지 않는 테스트로 둘 수 없어, 순수 함수만 상대경로로 불러와 검증한다.
  */
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import {
   canDeleteFile,
   canUploadFile,
@@ -193,5 +195,61 @@ describe('올리기 표의 유효성 (ADR-065)', () => {
 
   it('만든 시각을 알 수 없으면 거부한다', () => {
     expect(isTicketUsable(ticket({ createdAt: '알수없음' }), MEMBER.email, NOW).ok).toBe(false);
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════
+// UltraQA 로 찾은 결함 재발 방지 (2026-08-22)
+//
+// 아래는 전부 **게이트 4종을 통과한 채로 살아 있던 결함**이다. tsc·lint·test·regression 은
+// "타입이 맞는가"를 보지 "뜻이 맞는가"를 못 본다. 그래서 함수 원문을 글자로 읽어 잠근다.
+// ══════════════════════════════════════════════════════════════════
+describe('★ UltraQA 결함 재발 방지 — 자료실 서버 함수', () => {
+  const source = readFileSync(
+    resolve(__dirname, '../../../../supabase/functions/staffroom-library/index.ts'),
+    'utf-8',
+  );
+
+  it('★ 등록(commit)은 파일을 넣을 공간을 **표에 적힌 것**으로 정한다', () => {
+    // 결함: `module_id: archive.id` 를 쓰면 기본 자료실로 떨어진다.
+    // 올리기 세션과 등록은 서로 다른 요청이고, 등록할 때 앱이 공간을 다시 알려주지 않는다.
+    // 그래서 **갤러리에 올린 사진이 자료실로 들어가 갤러리가 영영 비어 보였다.**
+    const commitBlock = source.slice(
+      source.indexOf("if (action === 'commit')"),
+      source.indexOf("if (action === 'previewSession')"),
+    );
+    expect(commitBlock).toContain('module_id: ticket.module_id');
+    expect(commitBlock).not.toContain('module_id: archive.id');
+  });
+
+  it('★ 목록은 그 공간의 자료만 준다 — 안 좁히면 갤러리에 자료실 파일이 섞인다', () => {
+    const listBlock = source.slice(
+      source.indexOf("if (action === 'list')"),
+      source.indexOf("if (action === 'uploadSession')"),
+    );
+    expect(listBlock).toContain("eq('module_id'");
+  });
+
+  it('★ 구글 연결 여부를 **용량 숫자로 판단하지 않는다**', () => {
+    // 결함: `driveConnected: driveLimit > 0` 이면, 용량 무제한인 구글 워크스페이스
+    // (학교 계정)는 총량을 안 알려줘 limit 이 0 으로 오고 → 제대로 연결한 관리자에게도
+    // "구글을 연결하지 않았습니다"가 계속 떴다.
+    expect(source).not.toContain('driveConnected: driveLimit > 0');
+    expect(source).toContain("driveStatus: 'connected' | 'missing' | 'broken'");
+  });
+
+  it('★ "아직 연결 안 함"과 "연결이 끊어짐"을 **값으로** 구분한다', () => {
+    // 조치가 다르다 — 앞은 처음 연결, 뒤는 다시 로그인이다.
+    // ★ 한국어 문구에 특정 낱말이 있는지로 판단하면 문구를 다듬는 순간 조용히 어긋난다.
+    expect(source).toContain('driveStatus = error.kind');
+    expect(source).not.toMatch(/error\.message\.includes/);
+
+    const drive = readFileSync(
+      resolve(__dirname, '../../../../supabase/functions/_shared/staffroomDrive.ts'),
+      'utf-8',
+    );
+    expect(drive).toContain('readonly kind: AdminTokenProblem');
+    expect(drive).toContain("ADMIN_TOKEN_MISSING_MESSAGE, 'missing'");
+    expect(drive).toContain("ADMIN_TOKEN_BROKEN_MESSAGE, 'broken'");
   });
 });

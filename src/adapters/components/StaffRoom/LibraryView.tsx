@@ -215,6 +215,7 @@ export function LibraryView({ departmentId, moduleId }: LibraryViewProps) {
   const hasLoaded = useStaffRoomLibraryStore((s) => s.hasLoaded);
   const error = useStaffRoomLibraryStore((s) => s.error);
   const driveConnected = useStaffRoomLibraryStore((s) => s.driveConnected);
+  const driveStatus = useStaffRoomLibraryStore((s) => s.driveStatus);
   const loadFiles = useStaffRoomLibraryStore((s) => s.loadFiles);
   const syncPreviews = useStaffRoomLibraryStore((s) => s.syncPreviews);
   const uploadFile = useStaffRoomLibraryStore((s) => s.uploadFile);
@@ -312,9 +313,13 @@ export function LibraryView({ departmentId, moduleId }: LibraryViewProps) {
       {hasLoaded && !driveConnected && (
         <div className="rounded-xl border border-sp-highlight bg-sp-surface p-4">
           <p className="text-sm leading-relaxed text-sp-text">
-            {myRole === 'admin'
-              ? '자료실을 쓰려면 부서 설정에서 구글 드라이브를 연결해주세요. 자료는 선생님의 구글 드라이브에 쌓입니다.'
-              : '부서 관리자 선생님이 아직 구글 드라이브를 연결하지 않아 자료를 올리거나 내려받을 수 없습니다. 관리자 선생님께 요청해주세요.'}
+            {driveStatus === 'broken'
+              ? myRole === 'admin'
+                ? '구글 연결이 끊어졌습니다. 쌤핀에서 구글 로그인을 다시 해주시면 자료실이 열립니다.'
+                : '부서 관리자 선생님의 구글 연결이 끊어져 자료를 올리거나 내려받을 수 없습니다. 관리자 선생님께 쌤핀에서 구글 로그인을 다시 해달라고 요청해주세요.'
+              : myRole === 'admin'
+                ? '자료실을 쓰려면 부서 설정에서 구글 드라이브를 연결해주세요. 자료는 선생님의 구글 드라이브에 쌓입니다.'
+                : '부서 관리자 선생님이 아직 구글 드라이브를 연결하지 않아 자료를 올리거나 내려받을 수 없습니다. 관리자 선생님께 요청해주세요.'}
           </p>
         </div>
       )}
