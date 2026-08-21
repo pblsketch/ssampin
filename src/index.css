@@ -550,6 +550,56 @@ html.sp-glass-on [role='dialog'] .bg-sp-surface {
   color: white !important;
 }
 
+/* ─── 어두운 스크림 위의 흰 글씨는 라이트 모드에서도 흰색을 지킨다 ───
+
+   위 화이트리스트는 "유채색 배경"만 다뤘다. 그런데 사진 위에 얹는 반투명 검정
+   스크림(`bg-black/55`)이나 고정 회색 버튼(`bg-gray-800`)은 **라이트 모드에서도
+   여전히 어둡다.** 그런데도 `.theme-light .text-white` 규칙이 글씨를 sp-text(어두움)로
+   바꿔 버려서 어두운 바탕에 어두운 글씨가 된다.
+
+   실제로 걸린 곳(2026-08-21 전수조사): 관찰 첨부 썸네일의 파일명·삭제 버튼,
+   도움말 챗 이미지 파일명, 메모 이미지 삭제 버튼, 수업자료 PDF 쪽수 배지,
+   실시간 담벼락 이미지 선택기 삭제 버튼, 멀티설문 라이브보드 재시도 버튼,
+   학생 페이지 첨부 미리보기 삭제 버튼.
+
+   ⚠️ **자손 선택자를 쓰면 안 된다.** 위 유채색 규칙들은 `[class*='bg-blue-'] .text-white`
+   처럼 자손까지 잡지만, `bg-black/NN` 은 이 앱에서 대부분 **모달 배경막**이다(실측 180곳
+   중 대다수가 `fixed inset-0 bg-black/50`). 자손까지 잡으면 배경막 안에 있는 **밝은
+   카드 위의 글씨까지 흰색으로 강제**돼 지금 고치려는 문제가 그대로 뒤집힌다.
+   조사된 9곳이 전부 "배경과 글씨가 같은 요소"였으므로 같은 요소만 잡는다.
+
+   `bg-black/`는 슬래시까지 포함해 매치한다 — 불투명 `bg-black`(스크림이 아니라 진짜
+   검정 면)까지 끌어들이지 않기 위해서다. 회색 계열은 어두운 구간(600~900)만 잡는다.
+   500 이하는 라이트 모드에서 밝은 면이라 어두운 글씨가 맞다. */
+.theme-light [class*='bg-black/'].text-white,
+.theme-light [class*='bg-gray-6'].text-white,
+.theme-light [class*='bg-gray-7'].text-white,
+.theme-light [class*='bg-gray-8'].text-white,
+.theme-light [class*='bg-gray-9'].text-white,
+.theme-light [class*='bg-slate-6'].text-white,
+.theme-light [class*='bg-slate-7'].text-white,
+.theme-light [class*='bg-slate-8'].text-white,
+.theme-light [class*='bg-slate-9'].text-white,
+.theme-light [class*='bg-zinc-7'].text-white,
+.theme-light [class*='bg-zinc-8'].text-white,
+.theme-light [class*='bg-zinc-9'].text-white,
+.theme-light [class*='bg-neutral-7'].text-white,
+.theme-light [class*='bg-neutral-8'].text-white,
+.theme-light [class*='bg-neutral-9'].text-white {
+  color: white !important;
+}
+
+/* 같은 요소의 알파 변형(text-white/70 등)도 함께 지킨다.
+   bg-sp-accent 쪽에서 이미 겪은 함정 — 본문은 `text-white` 라 잡히는데 닫기 버튼만
+   `text-white/70` 이라 빠져나가 혼자 사라졌다. */
+.theme-light [class*='bg-black/'][class*='text-white/'],
+.theme-light [class*='bg-gray-8'][class*='text-white/'],
+.theme-light [class*='bg-gray-9'][class*='text-white/'],
+.theme-light [class*='bg-slate-8'][class*='text-white/'],
+.theme-light [class*='bg-slate-9'][class*='text-white/'] {
+  color: white !important;
+}
+
 /* text-slate-300 → muted in light mode */
 .theme-light .text-slate-300 {
   color: var(--sp-muted) !important;

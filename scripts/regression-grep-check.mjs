@@ -318,6 +318,32 @@ const absenceChecks = [
   //   - src/domain/rules/sampleRosterSignature.test.ts
   //   - src/usecases/roster/cleanupSampleRoster.test.ts
   // ────────────────────────────────────────────────────────────────────────
+  // ────────────────────────────────────────────────────────────────────────
+  // REGRESSION #56 — 브라우저 기본 파일 선택 버튼 노출 금지 (2026-08-21)
+  //
+  // `<input type="file">` 을 그대로 두면 브라우저가 그린 "파일 선택" 버튼이 나온다.
+  // 이 버튼은 우리 테마 색을 안정적으로 먹지 않아 **흰 바탕에 흰 글씨로 사라졌다**
+  // (연락처 엑셀 등록 모달 실제 발생 — 사용자 신고 스크린샷).
+  // `file:bg-sp-accent` 규칙이 CSS 에 생성돼 있는데도 그랬다.
+  //
+  // 그래서 이 저장소의 파일 업로드 20여 곳은 전부 input 을 숨기고(`hidden`/`sr-only`)
+  // 직접 만든 버튼을 누르면 `inputRef.current?.click()` 하는 방식을 쓴다.
+  // 새로 만든 업로드가 이 관례를 빠뜨리면 같은 사고가 반복된다.
+  //
+  // 검사 방법: `type="file"` 이 있는 줄부터 몇 줄 안에 `className` 이 나오는데
+  // 그 안에 `hidden` 도 `sr-only` 도 없으면 실패로 본다.
+  // ────────────────────────────────────────────────────────────────────────
+  {
+    name: 'REGRESSION #56: 브라우저 기본 파일 선택 버튼을 노출하지 않는다 (input[type=file]은 숨기고 직접 만든 버튼 사용)',
+    roots: ['src'],
+    extensions: ['.tsx'],
+    patterns: [
+      // type="file" 뒤 200자 안의 className 에 hidden/sr-only 가 없는 경우
+      /type="file"(?![\s\S]{0,200}className="[^"]*\b(?:hidden|sr-only)\b)[\s\S]{0,200}className="/,
+    ],
+    // 테스트 파일은 querySelector('input[type="file"]') 처럼 조회만 한다 — 제외.
+    fileFilter: (path) => !/\.(test|spec)\.tsx?$/.test(path),
+  },
   {
     name: 'REGRESSION #23: SAMPLE_STUDENTS 상수가 useStudentStore.ts 에 재도입되지 않았다',
     roots: ['src/adapters/stores'],
