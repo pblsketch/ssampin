@@ -16,4 +16,7 @@ export const PIN_FEATURE_MAP: Record<string, ProtectedFeatureKey> = {
   meal: 'meal',
   memo: 'memo',
   todo: 'todo',
+  // 연락처 위젯은 검색하면 학생·보호자 번호까지 나온다. 연락처 화면을 PIN으로
+  // 잠갔는데 대시보드 타일로 그대로 새어 나가면 잠근 의미가 없다.
+  contacts: 'contacts',
 };

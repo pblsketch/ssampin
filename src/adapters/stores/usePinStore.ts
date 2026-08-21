@@ -1,5 +1,9 @@
 import { create } from 'zustand';
-import type { PinSettings, ProtectedFeatures, ProtectedFeatureKey } from '@domain/entities/PinSettings';
+import type {
+  PinSettings,
+  ProtectedFeatures,
+  ProtectedFeatureKey,
+} from '@domain/entities/PinSettings';
 import { hashPin, verifyPin, validatePinFormat } from '@domain/rules/pinRules';
 import { checkAccess } from '@usecases/pin/CheckAccess';
 import { useSettingsStore } from './useSettingsStore';
@@ -104,6 +108,7 @@ export const usePinStore = create<PinState>((set, get) => ({
         todo: false,
         classManagement: false,
         bookmarks: false,
+        contacts: false,
       },
       autoLockMinutes: 5,
     };

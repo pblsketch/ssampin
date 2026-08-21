@@ -153,6 +153,7 @@ const DEFAULT_SETTINGS: Settings = {
       todo: false,
       classManagement: false,
       bookmarks: false,
+      contacts: false,
     },
     autoLockMinutes: 5,
   },

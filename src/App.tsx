@@ -32,6 +32,7 @@ const StaffRoomPage = React.lazy(() =>
 );
 import { ToolsGrid } from '@adapters/components/Tools/ToolsGrid';
 import { BookmarksPage } from '@adapters/components/Tools/BookmarksPage';
+import { ContactsPage } from '@adapters/components/Contacts/ContactsPage';
 import { SchoolAnnouncementsPage } from '@adapters/components/SchoolAnnouncements/SchoolAnnouncementsPage';
 import { DualToolContainer } from '@adapters/components/Tools/DualToolContainer';
 import {
@@ -108,6 +109,7 @@ import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { useSurveyStore } from '@adapters/stores/useSurveyStore';
 import { useSeatConstraintsStore } from '@adapters/stores/useSeatConstraintsStore';
 import { useDDayStore } from '@adapters/stores/useDDayStore';
+import { useStaffContactStore } from '@adapters/stores/useStaffContactStore';
 import { useConsultationStore } from '@adapters/stores/useConsultationStore';
 import { useObservationStore } from '@adapters/stores/useObservationStore';
 import { useRecordDraftsStore } from '@adapters/stores/useRecordDraftsStore';
@@ -332,6 +334,13 @@ function renderPage(
     return (
       <PinGuard feature="bookmarks">
         <BookmarksPage />
+      </PinGuard>
+    );
+  }
+  if (page === 'contacts') {
+    return (
+      <PinGuard feature="contacts">
+        <ContactsPage />
       </PinGuard>
     );
   }
@@ -1099,6 +1108,7 @@ function MainApp() {
       'seat-constraints': (cb) => useSeatConstraintsStore.subscribe(cb),
       'teaching-classes': (cb) => useTeachingClassStore.subscribe(cb),
       dday: (cb) => useDDayStore.subscribe(cb),
+      'staff-contacts': (cb) => useStaffContactStore.subscribe(cb),
       consultations: (cb) => useConsultationStore.subscribe(cb),
       observations: (cb) => useObservationStore.subscribe(cb),
       'record-drafts': (cb) => useRecordDraftsStore.subscribe(cb),

@@ -201,6 +201,14 @@ export function MorePage({ onNavigate }: Props) {
               description="PC에서 등록한 링크 열기"
               onClick={() => onNavigate('bookmarks')}
             />
+            <MenuItem
+              icon="contacts"
+              iconBg="bg-sp-accent/12"
+              iconText="text-sp-accent"
+              label="연락처"
+              description="교직원·학생·보호자에게 바로 전화"
+              onClick={() => onNavigate('contacts')}
+            />
             {/* '쌤도구' 항목을 없앴다. 도구 14종이 이 화면 위쪽에 바로 펼쳐져 있어
                 한 단계를 더 들어갈 이유가 없다(3번 → 2번). */}
             <MenuItem

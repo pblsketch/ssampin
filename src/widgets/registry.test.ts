@@ -20,12 +20,21 @@ const allDefs = WIDGET_DEFINITIONS;
 const NO_MODAL_WIDGETS = new Set<string>(['desktop-organize']);
 
 describe('WIDGET_DEFINITIONS', () => {
-  it('전체 엔트리 수 22개 (grade-summary 추가)', () => {
-    expect(allDefs).toHaveLength(22);
+  it('전체 엔트리 수 23개 (contacts 추가)', () => {
+    expect(allDefs).toHaveLength(23);
   });
 
   it('grade-summary(성적 현황) 위젯이 존재한다', () => {
     expect(allDefs.find((d) => d.id === 'grade-summary')).toBeDefined();
+  });
+
+  it('contacts(연락처) 위젯이 존재한다', () => {
+    expect(allDefs.find((d) => d.id === 'contacts')).toBeDefined();
+  });
+
+  it('contacts: 학생·보호자 번호를 찾을 수 있으므로 옆핀에는 올리지 않는다', () => {
+    const contacts = allDefs.find((d) => d.id === 'contacts');
+    expect(contacts?.sidePin?.eligible).toBe(false);
   });
 
   it('memo-focus 가 레지스트리에 존재하지 않음', () => {

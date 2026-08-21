@@ -218,6 +218,14 @@ export const SYNC_REGISTRY: SyncDomain[] = [
       await useDDayStore.getState().load(true);
     },
   },
+  // 18-1. staff-contacts ─ 교직원 연락처 (학생·보호자 연락처는 students 키에 이미 포함)
+  {
+    fileName: 'staff-contacts',
+    reload: async () => {
+      const { useStaffContactStore } = await import('@adapters/stores/useStaffContactStore');
+      await useStaffContactStore.getState().load(true);
+    },
+  },
   // 19. consultations
   {
     fileName: 'consultations',

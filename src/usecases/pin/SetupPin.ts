@@ -69,6 +69,7 @@ export class SetupPinUseCase {
           todo: false,
           classManagement: false,
           bookmarks: false,
+          contacts: false,
         },
         autoLockMinutes: 5,
       },

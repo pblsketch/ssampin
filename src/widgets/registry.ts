@@ -12,6 +12,7 @@ import { Memo } from './items/Memo';
 import { StudentRecords } from './items/StudentRecords';
 import { TodoWidget } from './items/TodoWidget';
 import { BookmarksWidget } from './items/Bookmarks';
+import { ContactsWidget } from './items/ContactsWidget';
 import { DDayCounter } from './items/DDayCounter';
 import { SurveyWidget } from './items/SurveyWidget';
 import { ConsultationWidget } from './items/ConsultationWidget';
@@ -400,6 +401,29 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
     modalSize: 'md',
     modalMode: 'view+edit',
     inplaceCapable: true,
+  },
+  {
+    id: 'contacts',
+    sidePin: {
+      eligible: false,
+      unavailableReason:
+        '학생·보호자 전화번호까지 찾을 수 있어, 화면에 늘 떠 있는 옆핀에는 올리지 않습니다',
+    },
+    name: '연락처',
+    icon: '📇',
+    description: '교직원·학생·보호자 연락처를 찾아 번호를 복사합니다',
+    category: 'info',
+    defaultSize: { w: 1, h: 3 },
+    minSize: { w: 1, h: 2 },
+    availableFor: {
+      schoolLevel: ['elementary', 'middle', 'high', 'custom'],
+      role: ['homeroom', 'subject', 'admin'],
+    },
+    component: ContactsWidget,
+    navigateTo: 'contacts',
+    navigateLabel: '연락처 전체 보기',
+    modalSize: 'md',
+    modalMode: 'expanded',
   },
 
   // ─── 이미지 스티커 ───

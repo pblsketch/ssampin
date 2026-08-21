@@ -1,23 +1,24 @@
 import type { SyncResult } from '@adapters/stores/useDriveSyncStore';
 
 const SYNC_FILE_LABELS: Record<string, string> = {
-  'settings': '설정',
+  settings: '설정',
   'class-schedule': '학급 시간표',
   'teacher-schedule': '교사 시간표',
-  'students': '학생 명단 (담임)',
-  'seating': '좌석 배치',
-  'events': '일정',
-  'memos': '메모',
-  'todos': '할 일',
+  students: '학생 명단 (담임)',
+  seating: '좌석 배치',
+  events: '일정',
+  memos: '메모',
+  todos: '할 일',
   'student-records': '학생 기록',
-  'bookmarks': '즐겨찾기',
-  'surveys': '설문',
+  bookmarks: '즐겨찾기',
+  surveys: '설문',
   'seat-constraints': '좌석 제한',
   'teaching-classes': '수업 관리 (학급)',
-  'dday': 'D-Day',
+  dday: 'D-Day',
+  'staff-contacts': '교직원 연락처',
   'curriculum-progress': '진도 관리',
-  'attendance': '출결',
-  'consultations': '상담 기록',
+  attendance: '출결',
+  consultations: '상담 기록',
 };
 
 export function getFileLabel(filename: string): string {
@@ -32,11 +33,13 @@ interface SyncResultSummaryProps {
 
 export function SyncResultSummary({ result, compact }: SyncResultSummaryProps) {
   const isUpload = result.direction === 'upload';
-  const successList = isUpload ? result.uploaded ?? [] : result.downloaded ?? [];
+  const successList = isUpload ? (result.uploaded ?? []) : (result.downloaded ?? []);
   const conflictList = result.conflicts ?? [];
 
   return (
-    <div className={`${compact ? 'mt-2 p-2.5' : 'mt-3 p-3'} rounded-xl bg-sp-bg border border-sp-border text-xs`}>
+    <div
+      className={`${compact ? 'mt-2 p-2.5' : 'mt-3 p-3'} rounded-xl bg-sp-bg border border-sp-border text-xs`}
+    >
       {/* 헤더 */}
       <div className="flex items-center justify-between mb-2">
         <span className="font-medium text-sp-text">
@@ -51,9 +54,7 @@ export function SyncResultSummary({ result, compact }: SyncResultSummaryProps) {
       {successList.length > 0 && (
         <div className="mb-1.5">
           <span className="text-green-400">성공 ({successList.length})</span>
-          <span className="text-sp-muted ml-2">
-            {successList.map(getFileLabel).join(', ')}
-          </span>
+          <span className="text-sp-muted ml-2">{successList.map(getFileLabel).join(', ')}</span>
         </div>
       )}
 
@@ -76,9 +77,7 @@ export function SyncResultSummary({ result, compact }: SyncResultSummaryProps) {
       {conflictList.length > 0 && (
         <div className="mb-1.5">
           <span className="text-amber-400">충돌 ({conflictList.length})</span>
-          <span className="text-sp-muted ml-2">
-            {conflictList.map(getFileLabel).join(', ')}
-          </span>
+          <span className="text-sp-muted ml-2">{conflictList.map(getFileLabel).join(', ')}</span>
         </div>
       )}
 
@@ -90,9 +89,7 @@ export function SyncResultSummary({ result, compact }: SyncResultSummaryProps) {
       {/* 전체 스킵 시 */}
       {successList.length === 0 && conflictList.length === 0 && (
         <div className="text-sp-muted">
-          {isUpload
-            ? '업로드할 변경 사항이 없습니다.'
-            : '다운로드할 새 데이터가 없습니다.'}
+          {isUpload ? '업로드할 변경 사항이 없습니다.' : '다운로드할 새 데이터가 없습니다.'}
         </div>
       )}
     </div>

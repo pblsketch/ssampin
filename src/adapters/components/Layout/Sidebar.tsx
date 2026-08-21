@@ -13,6 +13,7 @@ export type PageId =
   | 'todo'
   | 'class-management'
   | 'bookmarks'
+  | 'contacts'
   | 'staffroom'
   | 'export'
   | 'tools'
@@ -93,6 +94,7 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'todo', label: '할 일', icon: 'check_circle' },
   { id: 'class-management', label: '수업 관리', icon: 'menu_book' },
   { id: 'bookmarks', label: '즐겨찾기', icon: 'bookmark' },
+  { id: 'contacts', label: '연락처', icon: 'contacts' },
   { id: 'staffroom', label: '온라인 교무실', icon: 'groups' },
   { id: 'tools', label: '쌤도구', icon: 'construction' },
   { id: 'meal', label: '급식', icon: 'restaurant' },
@@ -124,6 +126,7 @@ const PAGE_TO_FEATURE_KEY: Partial<Record<PageId, ProtectedFeatureKey>> = {
   todo: 'todo',
   'class-management': 'classManagement',
   bookmarks: 'bookmarks',
+  contacts: 'contacts',
 };
 
 /** PIN 보호 불가 페이지 (대시보드, 내보내기, 쌤도구, 설정) */

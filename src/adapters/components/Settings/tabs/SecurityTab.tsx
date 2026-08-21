@@ -1,6 +1,10 @@
 import { useState } from 'react';
 import type { Settings } from '@domain/entities/Settings';
-import type { PinSettings, ProtectedFeatures, ProtectedFeatureKey } from '@domain/entities/PinSettings';
+import type {
+  PinSettings,
+  ProtectedFeatures,
+  ProtectedFeatureKey,
+} from '@domain/entities/PinSettings';
 import { PROTECTABLE_PAGES } from '@adapters/components/Layout/Sidebar';
 import { usePinStore } from '@adapters/stores/usePinStore';
 import { useToastStore } from '@adapters/components/common/Toast';
@@ -74,7 +78,19 @@ export function SecurityTab({ draft, patch }: Props) {
           pin: {
             enabled: false,
             pinHash: null,
-            protectedFeatures: { timetable: false, seating: false, schedule: false, studentRecords: false, meal: false, memo: false, note: false, todo: false, classManagement: false, bookmarks: false },
+            protectedFeatures: {
+              timetable: false,
+              seating: false,
+              schedule: false,
+              studentRecords: false,
+              meal: false,
+              memo: false,
+              note: false,
+              todo: false,
+              classManagement: false,
+              bookmarks: false,
+              contacts: false,
+            },
             autoLockMinutes: 5,
           },
         });
@@ -202,12 +218,19 @@ export function SecurityTab({ draft, patch }: Props) {
           <div className="p-4 rounded-lg bg-sp-surface/80 border border-sp-border space-y-4">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium text-sp-text">
-                {pinMode === 'remove' ? '현재 PIN 입력 (4자리)' :
-                  pinStep === 'old' ? '현재 PIN 입력 (4자리)' :
-                    pinStep === 'input' ? '새 PIN 입력 (4자리)' :
-                      'PIN 확인 (4자리, 한 번 더)'}
+                {pinMode === 'remove'
+                  ? '현재 PIN 입력 (4자리)'
+                  : pinStep === 'old'
+                    ? '현재 PIN 입력 (4자리)'
+                    : pinStep === 'input'
+                      ? '새 PIN 입력 (4자리)'
+                      : 'PIN 확인 (4자리, 한 번 더)'}
               </span>
-              <button type="button" onClick={resetPinForm} className="text-xs text-sp-muted hover:text-sp-text">
+              <button
+                type="button"
+                onClick={resetPinForm}
+                className="text-xs text-sp-muted hover:text-sp-text"
+              >
                 취소
               </button>
             </div>
@@ -218,9 +241,11 @@ export function SecurityTab({ draft, patch }: Props) {
                 inputMode="numeric"
                 maxLength={4}
                 value={
-                  pinStep === 'old' || pinMode === 'remove' ? pinOld :
-                    pinStep === 'confirm' ? pinConfirm :
-                      pinDigits
+                  pinStep === 'old' || pinMode === 'remove'
+                    ? pinOld
+                    : pinStep === 'confirm'
+                      ? pinConfirm
+                      : pinDigits
                 }
                 onChange={(e) => {
                   const v = e.target.value.replace(/\D/g, '').slice(0, 4);
@@ -229,7 +254,9 @@ export function SecurityTab({ draft, patch }: Props) {
                   else setPinDigits(v);
                   setPinError('');
                 }}
-                onKeyDown={(e) => { if (e.key === 'Enter') handlePinSubmit(); }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handlePinSubmit();
+                }}
                 placeholder="····"
                 className="flex-1 bg-sp-card border border-sp-border rounded-lg px-4 py-2.5 text-sp-text text-center text-xl tracking-[0.5em] placeholder-sp-border focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent"
                 autoFocus
@@ -239,30 +266,30 @@ export function SecurityTab({ draft, patch }: Props) {
                 onClick={handlePinSubmit}
                 className="px-4 py-2.5 rounded-lg bg-sp-accent hover:bg-blue-600 text-white text-sm font-medium transition-colors"
               >
-                {pinStep === 'confirm' ? '완료' :
-                  pinMode === 'remove' ? '해제' : '다음'}
+                {pinStep === 'confirm' ? '완료' : pinMode === 'remove' ? '해제' : '다음'}
               </button>
             </div>
 
             <div className="flex justify-center gap-2">
               {Array.from({ length: 4 }).map((_, i) => {
-                const currentValue = pinStep === 'old' || pinMode === 'remove' ? pinOld :
-                  pinStep === 'confirm' ? pinConfirm : pinDigits;
+                const currentValue =
+                  pinStep === 'old' || pinMode === 'remove'
+                    ? pinOld
+                    : pinStep === 'confirm'
+                      ? pinConfirm
+                      : pinDigits;
                 return (
                   <div
                     key={i}
-                    className={`w-2.5 h-2.5 rounded-full transition-all ${i < currentValue.length
-                        ? 'bg-sp-accent'
-                        : 'bg-sp-border/50'
-                      }`}
+                    className={`w-2.5 h-2.5 rounded-full transition-all ${
+                      i < currentValue.length ? 'bg-sp-accent' : 'bg-sp-border/50'
+                    }`}
                   />
                 );
               })}
             </div>
 
-            {pinError && (
-              <p className="text-xs text-red-400 text-center">{pinError}</p>
-            )}
+            {pinError && <p className="text-xs text-red-400 text-center">{pinError}</p>}
           </div>
         )}
 
@@ -276,7 +303,9 @@ export function SecurityTab({ draft, patch }: Props) {
                 {FEATURE_LABELS.map(({ key, icon, label }) => (
                   <div key={key} className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className="material-symbols-outlined text-sp-muted text-icon-md">{icon}</span>
+                      <span className="material-symbols-outlined text-sp-muted text-icon-md">
+                        {icon}
+                      </span>
                       <span className="text-sm font-medium text-sp-text">{label}</span>
                     </div>
                     <Toggle
@@ -306,7 +335,9 @@ export function SecurityTab({ draft, patch }: Props) {
                   className="bg-sp-surface border border-sp-border rounded-lg px-3 py-2 text-sm text-sp-text focus:outline-none focus:ring-2 focus:ring-sp-accent"
                 >
                   {AUTO_LOCK_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
                   ))}
                 </select>
               </div>

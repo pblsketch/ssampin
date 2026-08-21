@@ -13,11 +13,12 @@ const VALID_FEATURE_KEYS: ReadonlySet<ProtectedFeatureKey> = new Set([
   'todo',
   'classManagement',
   'bookmarks',
+  'contacts',
 ]);
 
 describe('PIN_FEATURE_MAP', () => {
-  it('has exactly 9 entries', () => {
-    expect(Object.keys(PIN_FEATURE_MAP)).toHaveLength(9);
+  it('has exactly 10 entries', () => {
+    expect(Object.keys(PIN_FEATURE_MAP)).toHaveLength(10);
   });
 
   it('maps each widget ID to the correct ProtectedFeatureKey', () => {
@@ -30,6 +31,7 @@ describe('PIN_FEATURE_MAP', () => {
     expect(PIN_FEATURE_MAP['meal']).toBe('meal');
     expect(PIN_FEATURE_MAP['memo']).toBe('memo');
     expect(PIN_FEATURE_MAP['todo']).toBe('todo');
+    expect(PIN_FEATURE_MAP['contacts']).toBe('contacts');
   });
 
   it('every value is a valid ProtectedFeatureKey', () => {

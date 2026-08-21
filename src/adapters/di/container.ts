@@ -26,6 +26,7 @@ import type { ITeachingClassRepository } from '@domain/repositories/ITeachingCla
 import type { IBookmarkRepository } from '@domain/repositories/IBookmarkRepository';
 import type { IDesktopOrganizeRepository } from '@domain/repositories/IDesktopOrganizeRepository';
 import type { IDDayRepository } from '@domain/repositories/IDDayRepository';
+import type { IStaffContactRepository } from '@domain/repositories/IStaffContactRepository';
 import type { IAnalyticsPort } from '@domain/ports/IAnalyticsPort';
 import type { IAssignmentRepository } from '@domain/repositories/IAssignmentRepository';
 import type { IGoogleDrivePort } from '@domain/ports/IGoogleDrivePort';
@@ -103,6 +104,7 @@ import { JsonTeachingClassRepository } from '@adapters/repositories/JsonTeaching
 import { JsonBookmarkRepository } from '@adapters/repositories/JsonBookmarkRepository';
 import { JsonDesktopOrganizeRepository } from '@adapters/repositories/JsonDesktopOrganizeRepository';
 import { JsonDDayRepository } from '@adapters/repositories/JsonDDayRepository';
+import { JsonStaffContactRepository } from '@adapters/repositories/JsonStaffContactRepository';
 import { JsonAssignmentRepository } from '@adapters/repositories/JsonAssignmentRepository';
 import { JsonConsultationRepository } from '@adapters/repositories/JsonConsultationRepository';
 import { JsonSurveyRepository } from '@adapters/repositories/JsonSurveyRepository';
@@ -224,6 +226,10 @@ export const desktopOrganizeRepository: IDesktopOrganizeRepository =
   new JsonDesktopOrganizeRepository(storage);
 
 export const ddayRepository: IDDayRepository = new JsonDDayRepository(storage);
+
+export const staffContactRepository: IStaffContactRepository = new JsonStaffContactRepository(
+  storage,
+);
 
 export const interactiveLessonRepository: IInteractiveLessonRepository =
   new JsonInteractiveLessonsRepository(storage);

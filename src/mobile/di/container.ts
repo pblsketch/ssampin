@@ -17,6 +17,7 @@ import type { ISeatConstraintsRepository } from '@domain/repositories/ISeatConst
 import type { ITeachingClassRepository } from '@domain/repositories/ITeachingClassRepository';
 import type { IBookmarkRepository } from '@domain/repositories/IBookmarkRepository';
 import type { IDDayRepository } from '@domain/repositories/IDDayRepository';
+import type { IStaffContactRepository } from '@domain/repositories/IStaffContactRepository';
 import type { IGoogleAuthPort } from '@domain/ports/IGoogleAuthPort';
 import type { IDriveSyncPort } from '@domain/ports/IDriveSyncPort';
 import type { IDriveSyncRepository } from '@domain/repositories/IDriveSyncRepository';
@@ -41,6 +42,7 @@ import { JsonSeatConstraintsRepository } from '@adapters/repositories/JsonSeatCo
 import { JsonTeachingClassRepository } from '@adapters/repositories/JsonTeachingClassRepository';
 import { JsonBookmarkRepository } from '@adapters/repositories/JsonBookmarkRepository';
 import { JsonDDayRepository } from '@adapters/repositories/JsonDDayRepository';
+import { JsonStaffContactRepository } from '@adapters/repositories/JsonStaffContactRepository';
 import { JsonDriveSyncRepository } from '@adapters/repositories/JsonDriveSyncRepository';
 import { JsonObservationRepository } from '@adapters/repositories/JsonObservationRepository';
 import { JsonRubricRepository } from '@adapters/repositories/JsonRubricRepository';
@@ -69,6 +71,9 @@ export const teachingClassRepository: ITeachingClassRepository = new JsonTeachin
 );
 export const bookmarkRepository: IBookmarkRepository = new JsonBookmarkRepository(storage);
 export const ddayRepository: IDDayRepository = new JsonDDayRepository(storage);
+export const staffContactRepository: IStaffContactRepository = new JsonStaffContactRepository(
+  storage,
+);
 export const driveSyncRepository: IDriveSyncRepository = new JsonDriveSyncRepository(storage);
 export const observationRepository: IObservationRepository = new JsonObservationRepository(storage);
 export const rubricRepository: IRubricRepository = new JsonRubricRepository(storage);
