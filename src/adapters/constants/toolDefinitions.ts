@@ -82,6 +82,20 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
     color: 'bg-blue-600/20 text-blue-700',
     externalUrl: 'https://pblsketch.xyz',
   },
+  {
+    id: 'tool-dorms',
+    name: 'DoRms',
+    icon: '💬',
+    color: 'bg-violet-600/20 text-violet-700',
+    externalUrl: 'https://dorms.school',
+  },
+  {
+    id: 'tool-dorms-arcade',
+    name: '도름스 오락실',
+    icon: '🕹️',
+    color: 'bg-rose-600/20 text-rose-700',
+    externalUrl: 'https://dorms.school/arcade',
+  },
   { id: 'tool-forms', name: '서식', icon: '📄', color: 'bg-indigo-500/20 text-indigo-600' },
   {
     id: 'tool-markdown-convert',

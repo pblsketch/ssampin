@@ -138,6 +138,22 @@ export const TOOLS: ToolCard[] = [
     description: '수업 및 평가 설계 도구',
     externalUrl: 'https://pblsketch.xyz',
   },
+  {
+    id: 'tool-dorms',
+    emoji: '💬',
+    name: 'DoRms',
+    description: 'AI로 현장 문제를 푸는 교사 커뮤니티',
+    externalUrl: 'https://dorms.school',
+    badge: 'NEW',
+  },
+  {
+    id: 'tool-dorms-arcade',
+    emoji: '🕹️',
+    name: '도름스 오락실',
+    description: '교사들이 학생들을 위해 만든 무료 게임 모음',
+    externalUrl: 'https://dorms.school/arcade',
+    badge: 'NEW',
+  },
 ];
 
 const DEFAULT_TOOL_ORDER: readonly PageId[] = TOOLS.map((t) => t.id);

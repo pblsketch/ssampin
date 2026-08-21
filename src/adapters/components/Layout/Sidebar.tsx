@@ -36,6 +36,8 @@ export type PageId =
   | 'tool-seat-picker'
   | 'tool-supsori'
   | 'tool-pblsketch'
+  | 'tool-dorms'
+  | 'tool-dorms-arcade'
   | 'tool-assignment'
   | 'tool-assignment-detail'
   | 'tool-grouping'
