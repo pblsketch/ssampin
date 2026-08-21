@@ -50,7 +50,7 @@ export function MentionPopover({ query, onPick, onClose }: MentionPopoverProps) 
               <button
                 type="button"
                 onClick={() => onPick(contact)}
-                className="flex min-h-6 w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-sp-accent/10"
+                className="flex min-h-6 w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-sp-surface"
               >
                 <span className="material-symbols-outlined shrink-0 text-base text-sp-muted">
                   badge
@@ -71,7 +71,7 @@ export function MentionPopover({ query, onPick, onClose }: MentionPopoverProps) 
       <button
         type="button"
         onClick={onClose}
-        className="min-h-6 w-full border-t border-sp-border/50 px-3 py-1.5 text-[11px] text-sp-muted hover:text-sp-text transition-colors"
+        className="min-h-6 w-full border-t border-sp-border px-3 py-1.5 text-[11px] text-sp-muted hover:text-sp-text transition-colors"
       >
         닫기
       </button>

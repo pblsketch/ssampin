@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import type { TodoRelatedPerson } from '@domain/entities/Todo';
 import { useStaffContactStore } from '@adapters/stores/useStaffContactStore';
 import { formatPhoneNumber } from '@domain/rules/contactRules';
@@ -21,6 +21,16 @@ interface RelatedStaffChipsProps {
  */
 export function RelatedStaffChips({ related, onRemove }: RelatedStaffChipsProps) {
   const contacts = useStaffContactStore((s) => s.contacts);
+  const load = useStaffContactStore((s) => s.load);
+
+  // ★ 칩이 직접 불러온다. 앱 부팅 때 연락처를 미리 읽는 곳이 없어서(App.tsx 의 초기
+  //   로드 목록에 staff-contacts 가 없다), 이걸 빠뜨리면 **재시작 직후 살아 있는
+  //   교직원이 전부 "연락처에 없음"** 으로 보인다. 같은 세션에서 방금 @ 로 붙였을 때는
+  //   팝오버가 이미 불러와 정상으로 보이므로 개발 중에는 드러나지 않는다.
+  //   store 의 load 에는 중복 방지 가드가 있어 여러 칩이 불러도 안전하다.
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   const chips = useMemo(
     () =>
@@ -52,10 +62,13 @@ export function RelatedStaffChips({ related, onRemove }: RelatedStaffChipsProps)
                   .filter(Boolean)
                   .join(' · ')
           }
+          // sp-* 토큰에는 Tailwind 투명도 수식(/50 등)이 듣지 않는다 — 규칙 자체가
+          // 생성되지 않아 조용히 아무 색도 안 입는다. 그래서 흐림은 투명도가 아니라
+          // 색 토큰(text-sp-muted)과 기울임으로 낸다.
           className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs border ${
             chip.missing
-              ? 'border-sp-border/50 bg-sp-surface/40 text-sp-muted/70 italic'
-              : 'border-sp-accent/30 bg-sp-accent/10 text-sp-text'
+              ? 'border-sp-border bg-sp-surface text-sp-muted italic'
+              : 'border-sp-border bg-sp-surface text-sp-text'
           }`}
         >
           <span className="material-symbols-outlined text-sm leading-none">badge</span>

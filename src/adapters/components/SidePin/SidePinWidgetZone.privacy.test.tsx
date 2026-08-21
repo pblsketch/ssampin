@@ -22,7 +22,16 @@ function sourceOf(path: string): string {
   return readFileSync(path, 'utf8');
 }
 
-describe('옆핀 위젯 칸 — 관련인 미노출', () => {
+/**
+ * ⚠️ 이 테스트가 보장하는 범위를 정확히 적어 둔다 — 과장하면 통과 표시가 거짓말이 된다.
+ *
+ * 보장하는 것: **`relatedStaff` 데이터**가 위젯·옆핀 경로로 흐르지 않는다.
+ * 보장하지 **못하는** 것: 멘션을 고르면 본문(`todo.text`)에 `@김민호` 가 남고, 본문은
+ *   위젯·옆핀에 그대로 그려진다. `text` 는 로컬 전용 필드가 아니라 구글 Tasks 로도 올라간다.
+ *   이건 계획서가 `applyMention` 으로 직접 지시한 설계라 구현 이탈이 아니며,
+ *   "본문에 이름을 남길 것인가"는 오너 결정 사항으로 남아 있다(M3 후속).
+ */
+describe('옆핀 위젯 칸 — 관련인 데이터 미노출', () => {
   it('옆핀 위젯 칸이 relatedStaff 를 읽지 않는다', () => {
     expect(sourceOf(SIDEPIN_ZONE)).not.toContain('relatedStaff');
   });
