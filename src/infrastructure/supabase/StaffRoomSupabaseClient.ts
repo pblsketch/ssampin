@@ -20,6 +20,15 @@ import type {
   StaffRoomMember,
   StaffRoomRole,
 } from '@domain/entities/StaffRoom';
+import type {
+  StaffRoomComment,
+  StaffRoomDraft,
+  StaffRoomModule,
+  StaffRoomPost,
+  StaffRoomPostSummary,
+  StaffRoomReadStatus,
+  WriteStaffRoomPostInput,
+} from '@domain/entities/StaffRoomBoard';
 import type { IStaffRoomPort, JoinStaffRoomResult } from '@domain/ports/IStaffRoomPort';
 import { StaffRoomHttpError } from '@domain/errors/StaffRoomError';
 
@@ -91,13 +100,16 @@ export class StaffRoomSupabaseClient implements IStaffRoomPort {
   async getDepartment(
     googleAccessToken: string,
     departmentId: string,
-  ): Promise<StaffRoomDepartment> {
-    const res = await this.invoke<{ department: StaffRoomDepartment }>('staffroom-departments', {
+  ): Promise<{ department: StaffRoomDepartment; board: StaffRoomModule | null }> {
+    const res = await this.invoke<{
+      department: StaffRoomDepartment;
+      board: StaffRoomModule | null;
+    }>('staffroom-departments', {
       action: 'get',
       googleAccessToken,
       departmentId,
     });
-    return res.department;
+    return { department: res.department, board: res.board ?? null };
   }
 
   async createDepartment(
@@ -202,5 +214,208 @@ export class StaffRoomSupabaseClient implements IStaffRoomPort {
       refreshToken: tokens.refreshToken,
       expiresAt: tokens.expiresAt,
     });
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // 게시판 (M2)
+  // ══════════════════════════════════════════════════════════════
+
+  async listPosts(
+    googleAccessToken: string,
+    departmentId: string,
+    moduleId?: string,
+  ): Promise<{ moduleId: string; posts: StaffRoomPostSummary[]; myRole: StaffRoomRole }> {
+    return this.invoke('staffroom-posts', {
+      action: 'list',
+      googleAccessToken,
+      departmentId,
+      moduleId,
+    });
+  }
+
+  async getPost(
+    googleAccessToken: string,
+    departmentId: string,
+    postId: string,
+  ): Promise<{ post: StaffRoomPost; myRole: StaffRoomRole }> {
+    return this.invoke('staffroom-posts', {
+      action: 'get',
+      googleAccessToken,
+      departmentId,
+      postId,
+    });
+  }
+
+  async createPost(
+    googleAccessToken: string,
+    departmentId: string,
+    input: WriteStaffRoomPostInput,
+  ): Promise<StaffRoomPost> {
+    const res = await this.invoke<{ post: StaffRoomPost }>('staffroom-posts', {
+      action: 'create',
+      googleAccessToken,
+      departmentId,
+      moduleId: input.moduleId,
+      title: input.title,
+      body: input.body,
+      isRequired: input.isRequired,
+      mentionedEmails: input.mentionedEmails,
+    });
+    return res.post;
+  }
+
+  async updatePost(
+    googleAccessToken: string,
+    departmentId: string,
+    postId: string,
+    input: { title: string; body: string; mentionedEmails: readonly string[] },
+  ): Promise<StaffRoomPost> {
+    const res = await this.invoke<{ post: StaffRoomPost }>('staffroom-posts', {
+      action: 'update',
+      googleAccessToken,
+      departmentId,
+      postId,
+      title: input.title,
+      body: input.body,
+      mentionedEmails: input.mentionedEmails,
+    });
+    return res.post;
+  }
+
+  async setPostRequired(
+    googleAccessToken: string,
+    departmentId: string,
+    postId: string,
+    isRequired: boolean,
+  ): Promise<void> {
+    await this.invoke<{ postId: string }>('staffroom-posts', {
+      action: 'setRequired',
+      googleAccessToken,
+      departmentId,
+      postId,
+      isRequired,
+    });
+  }
+
+  async deletePost(googleAccessToken: string, departmentId: string, postId: string): Promise<void> {
+    await this.invoke<{ deletedPostId: string }>('staffroom-posts', {
+      action: 'delete',
+      googleAccessToken,
+      departmentId,
+      postId,
+    });
+  }
+
+  async getPostReaders(
+    googleAccessToken: string,
+    departmentId: string,
+    postId: string,
+  ): Promise<StaffRoomReadStatus & { isRequired: boolean }> {
+    return this.invoke('staffroom-posts', {
+      action: 'readers',
+      googleAccessToken,
+      departmentId,
+      postId,
+    });
+  }
+
+  async listComments(
+    googleAccessToken: string,
+    departmentId: string,
+    postId: string,
+  ): Promise<StaffRoomComment[]> {
+    const res = await this.invoke<{ comments: StaffRoomComment[] }>('staffroom-comments', {
+      action: 'list',
+      googleAccessToken,
+      departmentId,
+      postId,
+    });
+    return res.comments;
+  }
+
+  async createComment(
+    googleAccessToken: string,
+    departmentId: string,
+    postId: string,
+    body: string,
+  ): Promise<StaffRoomComment> {
+    const res = await this.invoke<{ comment: StaffRoomComment }>('staffroom-comments', {
+      action: 'create',
+      googleAccessToken,
+      departmentId,
+      postId,
+      body,
+    });
+    return res.comment;
+  }
+
+  async deleteComment(
+    googleAccessToken: string,
+    departmentId: string,
+    commentId: string,
+  ): Promise<void> {
+    await this.invoke<{ deletedCommentId: string }>('staffroom-comments', {
+      action: 'delete',
+      googleAccessToken,
+      departmentId,
+      commentId,
+    });
+  }
+
+  async getDraft(
+    googleAccessToken: string,
+    departmentId: string,
+    moduleId?: string,
+  ): Promise<StaffRoomDraft | null> {
+    const res = await this.invoke<{ draft: StaffRoomDraft | null }>('staffroom-drafts', {
+      action: 'get',
+      googleAccessToken,
+      departmentId,
+      moduleId,
+    });
+    return res.draft;
+  }
+
+  async saveDraft(
+    googleAccessToken: string,
+    departmentId: string,
+    input: { moduleId?: string; title: string; body: string },
+  ): Promise<StaffRoomDraft | null> {
+    const res = await this.invoke<{ draft: StaffRoomDraft | null }>('staffroom-drafts', {
+      action: 'save',
+      googleAccessToken,
+      departmentId,
+      moduleId: input.moduleId,
+      title: input.title,
+      body: input.body,
+    });
+    return res.draft;
+  }
+
+  async clearDraft(
+    googleAccessToken: string,
+    departmentId: string,
+    moduleId?: string,
+  ): Promise<void> {
+    await this.invoke<{ draft: null }>('staffroom-drafts', {
+      action: 'clear',
+      googleAccessToken,
+      departmentId,
+      moduleId,
+    });
+  }
+
+  async setMyName(
+    googleAccessToken: string,
+    departmentId: string,
+    displayName: string,
+  ): Promise<StaffRoomMember> {
+    const res = await this.invoke<{ member: StaffRoomMember }>('staffroom-members', {
+      action: 'setMyName',
+      googleAccessToken,
+      departmentId,
+      displayName,
+    });
+    return res.member;
   }
 }

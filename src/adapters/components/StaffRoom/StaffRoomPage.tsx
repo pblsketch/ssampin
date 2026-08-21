@@ -101,9 +101,16 @@ function DepartmentCard({
       {department.description && (
         <p className="line-clamp-2 text-sm text-sp-muted">{department.description}</p>
       )}
-      <div className="mt-auto flex items-center gap-1.5 text-xs text-sp-muted">
-        <span className="material-symbols-outlined text-icon-sm">group</span>
-        멤버 {department.memberCount}명
+      <div className="mt-auto flex w-full items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5 text-xs text-sp-muted">
+          <span className="material-symbols-outlined text-icon-sm">group</span>
+          멤버 {department.memberCount}명
+        </div>
+        {department.unreadCount > 0 && (
+          <span className="flex shrink-0 items-center gap-1 rounded-full bg-sp-accent px-2 py-0.5 text-xs font-sp-semibold text-white">
+            안 읽음 {department.unreadCount}
+          </span>
+        )}
       </div>
     </button>
   );

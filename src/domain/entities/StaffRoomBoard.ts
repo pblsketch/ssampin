@@ -1,0 +1,117 @@
+/**
+ * 온라인 교무실 — 게시판 엔티티 (M2)
+ *
+ * 계획서: docs/01-plan/features/online-staffroom.plan.md §6 · §8-A · §9(M2)
+ *
+ * M2 범위는 **글과 댓글까지**다. 첨부파일은 오너 결정(2026-08-21)으로 M3 자료실과
+ * 함께 만든다 — 남이 파일을 열게 해주는 부품(§3.4-나)이 M3 에 있어서, M2 에 넣으면
+ * "올릴 수는 있는데 남이 못 여는" 상태가 되기 때문이다.
+ *
+ * domain 레이어이므로 외부 의존성을 import 하지 않는다.
+ */
+
+/**
+ * 모듈 종류.
+ *
+ * M2 에서 실제로 만드는 건 `board` 하나뿐이다. 나머지는 계획서 §6 의 구성이고
+ * M3~M4 에서 열린다. 지금 타입에 함께 적어 두는 이유는, 나중에 종류가 늘 때
+ * 데이터베이스 제약을 다시 고치지 않기 위해서다.
+ */
+export type StaffRoomModuleKind = 'board' | 'archive' | 'discussion' | 'gallery' | 'minutes';
+
+/** 부서 안의 모듈 하나 (M2 에서는 부서마다 게시판 1개) */
+export interface StaffRoomModule {
+  readonly id: string;
+  readonly departmentId: string;
+  readonly kind: StaffRoomModuleKind;
+  /** 관리자가 붙인 이름. 이름 바꾸기는 M4 이므로 M2 에서는 기본값 "게시판" */
+  readonly name: string;
+  readonly position: number;
+  /** 내가 아직 안 읽은 글 수 — 목록 응답에 함께 온다 */
+  readonly unreadCount: number;
+}
+
+/**
+ * 글 목록 한 줄.
+ *
+ * **본문(body)이 없다.** 계획서 §3.5-다 — 목록을 통째로 받으면 교사 1,500명 기준
+ * 월 전송량이 8.6GB 로 무료 등급을 넘는다. 제목·작성자·시각만 보내면 2.5KB 다.
+ */
+export interface StaffRoomPostSummary {
+  readonly id: string;
+  readonly moduleId: string;
+  readonly title: string;
+  readonly authorEmail: string;
+  /** 작성자가 부서에서 쓰는 이름. 안 정했으면 null 이고 화면은 지메일을 보여준다 */
+  readonly authorName: string | null;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  /** 필독 — 목록 맨 위에 붙박이로 뜨고, 이 글에만 사람별 읽음 기록이 쌓인다 */
+  readonly isRequired: boolean;
+  readonly commentCount: number;
+  /** 내가 마지막으로 게시판을 본 시각 이후에 올라왔는가 */
+  readonly isUnread: boolean;
+  /** 이 글이 나를 불렀는가(@멘션) */
+  readonly mentionsMe: boolean;
+}
+
+/** 글 하나 (본문 포함) */
+export interface StaffRoomPost extends StaffRoomPostSummary {
+  readonly body: string;
+  /** 본문에서 불린 사람들의 지메일 */
+  readonly mentionedEmails: readonly string[];
+}
+
+/** 댓글 */
+export interface StaffRoomComment {
+  readonly id: string;
+  readonly postId: string;
+  readonly authorEmail: string;
+  readonly authorName: string | null;
+  readonly body: string;
+  readonly createdAt: string;
+}
+
+/** 필독 글의 읽음 현황 — 누가 봤고 누가 안 봤는지 */
+export interface StaffRoomReadStatus {
+  readonly read: readonly {
+    readonly email: string;
+    readonly name: string | null;
+    readonly readAt: string;
+  }[];
+  readonly unread: readonly { readonly email: string; readonly name: string | null }[];
+}
+
+/** 임시저장 — 사람마다 게시판마다 한 벌 */
+export interface StaffRoomDraft {
+  readonly moduleId: string;
+  readonly title: string;
+  readonly body: string;
+  readonly updatedAt: string;
+}
+
+/** 글 쓰기 입력 */
+export interface WriteStaffRoomPostInput {
+  readonly moduleId: string;
+  readonly title: string;
+  readonly body: string;
+  readonly isRequired: boolean;
+  readonly mentionedEmails: readonly string[];
+}
+
+/** 제목 최대 길이 */
+export const STAFFROOM_POST_TITLE_MAX_LENGTH = 100;
+
+/**
+ * 본문 권고 상한.
+ *
+ * 계획서 §2 는 "길이로 막지 않는다"이므로 이건 **거부 기준이 아니라 안내 기준**이다.
+ * 넘으면 화면이 "너무 길어요"라고 알려 주되 저장은 막지 않는다.
+ */
+export const STAFFROOM_POST_BODY_ADVISORY_LENGTH = 200_000;
+
+/** 댓글 최대 길이 */
+export const STAFFROOM_COMMENT_MAX_LENGTH = 2_000;
+
+/** 부서에서 쓰는 표시 이름 최대 길이 */
+export const STAFFROOM_DISPLAY_NAME_MAX_LENGTH = 20;

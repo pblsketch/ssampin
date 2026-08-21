@@ -30,6 +30,8 @@ export interface StaffRoomDepartment {
   readonly myRole: StaffRoomRole;
   /** 현재 멤버 수 */
   readonly memberCount: number;
+  /** 내가 아직 안 읽은 글 수 (M2). 게시판이 없던 시절 부서는 0 */
+  readonly unreadCount: number;
 }
 
 /** 부서 멤버 — 신원은 구글 로그인으로 확인한 지메일이 정본이다(§7). */

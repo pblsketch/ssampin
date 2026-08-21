@@ -21,6 +21,13 @@ import {
   normalizeInviteCode,
   requireAdmin,
   requireMember,
+  canWritePost,
+  canEditPost,
+  canDeletePost,
+  canDeleteComment,
+  canSetRequired,
+  checkDisplayName,
+  DISPLAY_NAME_MAX_LENGTH,
   type AccessMember,
 } from '../../../../supabase/functions/_shared/staffroomAccess.ts';
 
@@ -185,5 +192,110 @@ describe('거절 문구', () => {
       expect(/[가-힣]/.test(denialMessage(reason))).toBe(true);
       expect(denialStatus(reason)).toBeGreaterThanOrEqual(400);
     }
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════
+// 게시판 (M2)
+// ══════════════════════════════════════════════════════════════════
+
+describe('글 쓰기 — 서버 판정', () => {
+  it('멤버면 누구나 쓸 수 있다', () => {
+    expect(canWritePost(SOLO, 'lee@school.kr').ok).toBe(true);
+    expect(canWritePost(SOLO, 'kim@school.kr').ok).toBe(true);
+  });
+
+  it('★ 비멤버는 글 목록 조회조차 못 한다', () => {
+    expect(canWritePost(SOLO, 'stranger@other.kr')).toEqual({ ok: false, reason: 'not_member' });
+    expect(requireMember(SOLO, 'stranger@other.kr')).toEqual({ ok: false, reason: 'not_member' });
+  });
+});
+
+describe('글 고치기·지우기 — 서버 판정', () => {
+  it('내가 쓴 글은 내가 고친다', () => {
+    expect(canEditPost(SOLO, 'lee@school.kr', 'lee@school.kr').ok).toBe(true);
+  });
+
+  it('★ 남의 글을 일반 멤버가 고칠 수 없다', () => {
+    const r = canEditPost(SOLO, 'lee@school.kr', 'kim@school.kr');
+    expect(r).toEqual({ ok: false, reason: 'not_author' });
+    if (!r.ok) expect(denialStatus(r.reason)).toBe(403);
+  });
+
+  it('★ 남의 글을 일반 멤버가 지울 수 없다', () => {
+    expect(canDeletePost(SOLO, 'lee@school.kr', 'kim@school.kr')).toEqual({
+      ok: false,
+      reason: 'not_author',
+    });
+  });
+
+  it('관리자는 남의 글도 고치고 지울 수 있다', () => {
+    expect(canEditPost(SOLO, 'kim@school.kr', 'lee@school.kr').ok).toBe(true);
+    expect(canDeletePost(SOLO, 'kim@school.kr', 'lee@school.kr').ok).toBe(true);
+  });
+
+  it('강퇴된 사람은 자기가 쓴 글도 못 고친다', () => {
+    expect(canEditPost(SOLO, 'gone@other.kr', 'gone@other.kr')).toEqual({
+      ok: false,
+      reason: 'not_member',
+    });
+  });
+
+  it('지메일 대소문자·공백이 달라도 같은 사람으로 본다', () => {
+    expect(canEditPost(SOLO, '  LEE@School.KR ', 'lee@school.kr').ok).toBe(true);
+  });
+
+  it('댓글 지우기도 같은 기준이다', () => {
+    expect(canDeleteComment(SOLO, 'lee@school.kr', 'kim@school.kr')).toEqual({
+      ok: false,
+      reason: 'not_author',
+    });
+    expect(canDeleteComment(SOLO, 'kim@school.kr', 'lee@school.kr').ok).toBe(true);
+    expect(canDeleteComment(SOLO, 'lee@school.kr', 'lee@school.kr').ok).toBe(true);
+  });
+});
+
+describe('필독 지정 — 서버 판정 (관리자만)', () => {
+  it('일반 멤버는 필독으로 못 만든다', () => {
+    expect(canSetRequired(SOLO, 'lee@school.kr')).toEqual({ ok: false, reason: 'not_admin' });
+  });
+
+  it('관리자는 할 수 있다', () => {
+    expect(canSetRequired(SOLO, 'kim@school.kr').ok).toBe(true);
+  });
+
+  it('비멤버는 not_member 다', () => {
+    expect(canSetRequired(SOLO, 'stranger@other.kr')).toEqual({
+      ok: false,
+      reason: 'not_member',
+    });
+  });
+});
+
+describe('표시 이름 검사 — 서버 판정', () => {
+  it('앞뒤 공백을 정리해 받아들인다', () => {
+    expect(checkDisplayName('  3학년부 김철수 ')).toEqual({ ok: true, value: '3학년부 김철수' });
+  });
+
+  it('공백만이면 거부', () => {
+    expect(checkDisplayName('   ').ok).toBe(false);
+  });
+
+  it('문자열이 아니면 거부 (클라이언트가 아무거나 보내도 안전)', () => {
+    expect(checkDisplayName(null).ok).toBe(false);
+    expect(checkDisplayName(123).ok).toBe(false);
+    expect(checkDisplayName(undefined).ok).toBe(false);
+    expect(checkDisplayName({}).ok).toBe(false);
+  });
+
+  it(`${DISPLAY_NAME_MAX_LENGTH}자까지 되고 넘으면 거부한다`, () => {
+    expect(checkDisplayName('가'.repeat(DISPLAY_NAME_MAX_LENGTH)).ok).toBe(true);
+    expect(checkDisplayName('가'.repeat(DISPLAY_NAME_MAX_LENGTH + 1)).ok).toBe(false);
+  });
+
+  it('거절 문구가 한국어다', () => {
+    const r = checkDisplayName('');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(/[가-힣]/.test(r.message)).toBe(true);
   });
 });

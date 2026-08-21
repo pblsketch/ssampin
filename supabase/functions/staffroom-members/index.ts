@@ -23,6 +23,7 @@ import { verifyGoogleIdentity } from '../_shared/googleIdentity.ts';
 import {
   canChangeRole,
   canRemoveMember,
+  checkDisplayName,
   denialMessage,
   denialStatus,
   requireMember,
@@ -66,6 +67,41 @@ serve(async (req: Request) => {
         return errorResponse(denialMessage(viewer.reason), denialStatus(viewer.reason));
       }
       return jsonResponse({ members: members.map(toMemberResponse) });
+    }
+
+    // ── 내 이름 정하기 (본인만) ────────────────────────────────────
+    //
+    // 구글이 이름을 주지 않는다 — 쌤핀은 이메일 권한만 받고 `profile` 권한을
+    // 요청하지 않는다(새 권한을 더하면 OAuth 재심사 대상이다). 그래서 멤버가 직접 적는다.
+    //
+    // ★ 대상 멤버를 body 로 받지 않는다. 요청자 본인 행만 고친다 —
+    //   관리자라도 남의 이름을 바꿀 수 없다.
+    if (action === 'setMyName') {
+      const viewer = requireMember(access, identity.email);
+      if (!viewer.ok) {
+        return errorResponse(denialMessage(viewer.reason), denialStatus(viewer.reason));
+      }
+
+      const checked = checkDisplayName(body?.displayName);
+      if (!checked.ok) return errorResponse(checked.message, 400);
+
+      const { data, error } = await db
+        .from('staffroom_members')
+        .update({ display_name: checked.value })
+        .eq('department_id', departmentId)
+        .eq('member_email', identity.email)
+        .select('id, department_id, member_email, display_name, role, joined_at')
+        .single();
+
+      if (error || !data) {
+        return internalErrorResponse(
+          'staffroom-members.setMyName',
+          error,
+          '이름을 저장하지 못했습니다',
+        );
+      }
+
+      return jsonResponse({ member: toMemberResponse(data) });
     }
 
     const memberId = typeof body?.memberId === 'string' ? body.memberId : '';

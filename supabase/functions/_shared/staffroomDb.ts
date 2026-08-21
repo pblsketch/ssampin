@@ -111,3 +111,174 @@ export function toInviteResponse(row: InviteRow) {
     createdAt: row.created_at,
   };
 }
+
+// ══════════════════════════════════════════════════════════════════
+// 게시판 (M2)
+// ══════════════════════════════════════════════════════════════════
+
+/** DB 에서 읽은 모듈 행 */
+export interface ModuleRow {
+  id: string;
+  department_id: string;
+  kind: string;
+  name: string;
+  position: number;
+}
+
+/** DB 에서 읽은 글 행 (목록용 — body 없음) */
+export interface PostSummaryRow {
+  id: string;
+  module_id: string;
+  title: string;
+  author_email: string;
+  is_required: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+/** DB 에서 읽은 글 행 (본문 포함) */
+export interface PostRow extends PostSummaryRow {
+  department_id: string;
+  body: string;
+}
+
+/** DB 에서 읽은 댓글 행 */
+export interface CommentRow {
+  id: string;
+  post_id: string;
+  author_email: string;
+  body: string;
+  created_at: string;
+}
+
+/** 목록 조회에서 가져오는 컬럼 — **body 를 넣지 말 것**(계획서 §3.5-다 전송량) */
+export const POST_SUMMARY_COLUMNS =
+  'id, module_id, title, author_email, is_required, created_at, updated_at';
+
+/** 본문까지 가져오는 컬럼 */
+export const POST_FULL_COLUMNS =
+  'id, module_id, department_id, title, body, author_email, is_required, created_at, updated_at';
+
+/**
+ * 지메일 → 부서에서 쓰는 표시 이름.
+ *
+ * 구글이 이름을 주지 않아서(쌤핀은 이메일 권한만 받는다) 멤버가 직접 적은 값이다.
+ * 안 적었으면 null 이고, 화면이 지메일을 대신 보여준다.
+ */
+export function nameMapOf(members: readonly MemberRow[]): Map<string, string | null> {
+  const map = new Map<string, string | null>();
+  for (const m of members) {
+    map.set(m.member_email.trim().toLowerCase(), m.display_name);
+  }
+  return map;
+}
+
+/** 이 부서의 게시판 모듈을 찾는다 (M2 는 부서마다 1개) */
+export async function loadBoardModule(db: Db, departmentId: string): Promise<ModuleRow | null> {
+  const { data, error } = await db
+    .from('staffroom_modules')
+    .select('id, department_id, kind, name, position')
+    .eq('department_id', departmentId)
+    .eq('kind', 'board')
+    .order('position', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw new Error(`게시판 조회 실패: ${error.message}`);
+  return (data as ModuleRow | null) ?? null;
+}
+
+/** 모듈이 이 부서 것인지 확인한다 — 남의 부서 모듈 id 를 보내도 통하지 않게 */
+export async function moduleBelongsTo(
+  db: Db,
+  moduleId: string,
+  departmentId: string,
+): Promise<boolean> {
+  const { data, error } = await db
+    .from('staffroom_modules')
+    .select('id')
+    .eq('id', moduleId)
+    .eq('department_id', departmentId)
+    .maybeSingle();
+
+  if (error) throw new Error(`게시판 확인 실패: ${error.message}`);
+  return data !== null;
+}
+
+/** 이 사람이 이 게시판을 마지막으로 본 시각. 한 번도 안 봤으면 null */
+export async function loadLastSeenAt(
+  db: Db,
+  moduleId: string,
+  email: string,
+): Promise<string | null> {
+  const { data, error } = await db
+    .from('staffroom_module_reads')
+    .select('last_seen_at')
+    .eq('module_id', moduleId)
+    .eq('member_email', email)
+    .maybeSingle();
+
+  if (error) throw new Error(`읽음 기록 조회 실패: ${error.message}`);
+  return (data as { last_seen_at: string } | null)?.last_seen_at ?? null;
+}
+
+/**
+ * "마지막으로 본 시각"을 지금으로 갱신한다.
+ *
+ * ★ 반드시 **안 읽음 판정을 끝낸 뒤에** 부를 것. 먼저 갱신하면 목록을 여는 순간
+ *   모든 글이 읽은 것으로 바뀌어 방금 올라온 글을 놓친다.
+ */
+export async function touchLastSeen(db: Db, moduleId: string, email: string): Promise<void> {
+  const { error } = await db
+    .from('staffroom_module_reads')
+    .upsert(
+      { module_id: moduleId, member_email: email, last_seen_at: new Date().toISOString() },
+      { onConflict: 'module_id,member_email' },
+    );
+  if (error) console.error('[staffroomDb] 읽음 기록 갱신 실패:', error.message);
+}
+
+/** 글 행 → 클라이언트 응답(목록용). body 는 담지 않는다 */
+export function toPostSummaryResponse(
+  row: PostSummaryRow,
+  names: Map<string, string | null>,
+  opts: { commentCount: number; isUnread: boolean; mentionsMe: boolean },
+) {
+  return {
+    id: row.id,
+    moduleId: row.module_id,
+    title: row.title,
+    authorEmail: row.author_email,
+    authorName: names.get(row.author_email.trim().toLowerCase()) ?? null,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    isRequired: row.is_required,
+    commentCount: opts.commentCount,
+    isUnread: opts.isUnread,
+    mentionsMe: opts.mentionsMe,
+  };
+}
+
+/** 댓글 행 → 클라이언트 응답 */
+export function toCommentResponse(row: CommentRow, names: Map<string, string | null>) {
+  return {
+    id: row.id,
+    postId: row.post_id,
+    authorEmail: row.author_email,
+    authorName: names.get(row.author_email.trim().toLowerCase()) ?? null,
+    body: row.body,
+    createdAt: row.created_at,
+  };
+}
+
+/** 모듈 행 → 클라이언트 응답 */
+export function toModuleResponse(row: ModuleRow, unreadCount: number) {
+  return {
+    id: row.id,
+    departmentId: row.department_id,
+    kind: row.kind,
+    name: row.name,
+    position: row.position,
+    unreadCount,
+  };
+}

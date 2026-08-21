@@ -1,33 +1,64 @@
 /**
- * 온라인 교무실 — 부서 상세 화면 (M1)
+ * 온라인 교무실 — 부서 상세 화면 (M1 + M2)
  *
- * M1 범위는 부서를 만들고 사람을 모으는 데까지다. 게시판·자료실은 아직
- * 없으므로, 빈 화면처럼 보이지 않게 "준비 중" 안내 카드를 항상 보여준다.
+ * M1 은 부서를 만들고 사람을 모으는 화면이고, M2 는 그 부서의 게시판이다.
+ * 게시판 탭 안에서 "목록 → 글 보기 → 글 쓰기/고치기"를 로컬 상태(`boardMode`)로만
+ * 오간다 — 실제로 어떤 글이 열려 있는지는 스토어의 `currentPost` 가 정본이고,
+ * 여기서는 그 위에 어떤 화면을 보여줄지만 결정한다.
  */
 import { useState } from 'react';
 import { useStaffRoomStore } from '@adapters/stores/useStaffRoomStore';
+import { useStaffRoomBoardStore } from '@adapters/stores/useStaffRoomBoardStore';
+import { useGoogleAccountStore } from '@adapters/stores/useGoogleAccountStore';
 import { isDepartmentAdmin } from '@domain/rules/staffRoomPermission';
 import { MemberList } from './MemberList';
 import { InvitePanel } from './InvitePanel';
+import { BoardView } from './BoardView';
+import { PostDetail } from './PostDetail';
+import { PostEditor } from './PostEditor';
+import { MyNameModal, hasSkippedNamePrompt } from './MyNameModal';
 
-type DetailTab = 'members' | 'invites';
+type DetailTab = 'board' | 'members' | 'invites';
+type BoardMode = 'list' | 'write' | 'edit';
 
 export function DepartmentDetail() {
   const currentDepartment = useStaffRoomStore((s) => s.currentDepartment);
+  const currentBoard = useStaffRoomStore((s) => s.currentBoard);
   const members = useStaffRoomStore((s) => s.members);
   const closeDepartment = useStaffRoomStore((s) => s.closeDepartment);
-  const [tab, setTab] = useState<DetailTab>('members');
+  const myEmail = useGoogleAccountStore((s) => s.email);
+
+  const currentPost = useStaffRoomBoardStore((s) => s.currentPost);
+  const boardReset = useStaffRoomBoardStore((s) => s.reset);
+
+  const [tab, setTab] = useState<DetailTab>('board');
+  const [boardMode, setBoardMode] = useState<BoardMode>('list');
+  const [nameModalDismissed, setNameModalDismissed] = useState(false);
 
   if (!currentDepartment) return null;
 
   const isAdmin = isDepartmentAdmin(currentDepartment.myRole);
+
+  const myMember = myEmail
+    ? members.find((m) => m.email.toLowerCase() === myEmail.toLowerCase())
+    : undefined;
+  const showNameModal =
+    !nameModalDismissed &&
+    myMember !== undefined &&
+    myMember.displayName === null &&
+    !hasSkippedNamePrompt(currentDepartment.id);
+
+  const handleBack = () => {
+    boardReset();
+    closeDepartment();
+  };
 
   return (
     <div className="-m-8 flex h-[calc(100%+4rem)] flex-col">
       <header className="shrink-0 border-b border-sp-border bg-sp-surface px-8 py-4">
         <button
           type="button"
-          onClick={closeDepartment}
+          onClick={handleBack}
           className="mb-3 flex items-center gap-1.5 text-sm text-sp-muted transition-colors hover:text-sp-text"
         >
           <span className="material-symbols-outlined text-icon">arrow_back</span>
@@ -48,20 +79,24 @@ export function DepartmentDetail() {
       </header>
 
       <div className="flex-1 min-h-0 overflow-y-auto p-8">
-        <div className="mb-6 flex items-start gap-3 rounded-xl border border-sp-border bg-sp-card px-4 py-3.5">
-          <span className="material-symbols-outlined shrink-0 text-icon-md text-sp-accent">
-            construction
-          </span>
-          <p className="text-sm leading-relaxed text-sp-text">
-            게시판·자료실은 준비 중입니다. 지금은 부서를 만들고 함께할 선생님을 모으는 단계예요.
-          </p>
-        </div>
-
         <div
-          className="mb-5 flex gap-2 border-b border-sp-border"
+          className="mb-6 flex gap-2 border-b border-sp-border"
           role="tablist"
           aria-label="부서 탭"
         >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'board'}
+            onClick={() => setTab('board')}
+            className={`-mb-px border-b-2 px-3 py-2.5 text-sm font-sp-medium transition-colors ${
+              tab === 'board'
+                ? 'border-sp-accent text-sp-text'
+                : 'border-transparent text-sp-muted hover:text-sp-text'
+            }`}
+          >
+            게시판
+          </button>
           <button
             type="button"
             role="tab"
@@ -92,9 +127,43 @@ export function DepartmentDetail() {
           )}
         </div>
 
+        {tab === 'board' &&
+          (currentBoard === null ? (
+            <div className="mx-auto flex max-w-lg flex-col items-center gap-3 rounded-xl border border-dashed border-sp-border bg-sp-card px-8 py-14 text-center">
+              <span className="material-symbols-outlined text-icon-xl text-sp-accent">
+                construction
+              </span>
+              <p className="text-sm leading-relaxed text-sp-muted">
+                이 부서는 게시판을 준비하는 중이에요. 잠시 후 다시 열어봐 주세요.
+              </p>
+            </div>
+          ) : boardMode === 'write' || boardMode === 'edit' ? (
+            <PostEditor
+              departmentId={currentDepartment.id}
+              boardId={currentBoard.id}
+              mode={boardMode === 'write' ? 'create' : 'edit'}
+              onDone={() => setBoardMode('list')}
+              onCancel={() => setBoardMode('list')}
+            />
+          ) : currentPost ? (
+            <PostDetail departmentId={currentDepartment.id} onEdit={() => setBoardMode('edit')} />
+          ) : (
+            <BoardView
+              departmentId={currentDepartment.id}
+              boardId={currentBoard.id}
+              onWriteNew={() => setBoardMode('write')}
+            />
+          ))}
         {tab === 'members' && <MemberList />}
         {tab === 'invites' && isAdmin && <InvitePanel />}
       </div>
+
+      {showNameModal && (
+        <MyNameModal
+          departmentId={currentDepartment.id}
+          onClose={() => setNameModalDismissed(true)}
+        />
+      )}
     </div>
   );
 }

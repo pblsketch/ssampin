@@ -31,6 +31,7 @@ export interface AccessMember {
 export type AccessDenialReason =
   | 'not_member'
   | 'not_admin'
+  | 'not_author'
   | 'last_admin'
   | 'invite_revoked'
   | 'invite_expired'
@@ -43,6 +44,7 @@ const DENIAL_TABLE: Readonly<
 > = {
   not_member: { message: '이 부서의 멤버가 아니라 볼 수 없습니다.', status: 403 },
   not_admin: { message: '부서 관리자만 할 수 있습니다.', status: 403 },
+  not_author: { message: '글을 쓴 분이나 부서 관리자만 할 수 있습니다.', status: 403 },
   last_admin: {
     message: '부서에 관리자가 한 분뿐이라 바꿀 수 없습니다. 다른 분을 먼저 관리자로 올려주세요.',
     status: 409,
@@ -162,4 +164,80 @@ export function isInviteCodeFormat(code: string): boolean {
 /** 입력 코드 정리 — 공백·하이픈 제거 후 대문자 */
 export function normalizeInviteCode(raw: string): string {
   return raw.replace(/[\s-]/g, '').toUpperCase();
+}
+
+// ══════════════════════════════════════════════════════════════════
+// 게시판 (M2)
+//
+// 계획서 §8-A — 필독 지정은 관리자만. 글·댓글 고치기·지우기는 쓴 사람 또는 관리자.
+// `src/domain/rules/staffRoomBoardPermission.ts` 와 같은 규칙이다.
+// 한쪽만 고치면 화면과 서버가 어긋나므로 둘을 함께 고칠 것.
+// ══════════════════════════════════════════════════════════════════
+
+/** 글을 쓸 수 있는가 — 멤버면 누구나(읽기 전용 등급을 만들지 않았다) */
+export function canWritePost(members: readonly AccessMember[], email: string): AccessResult {
+  return requireMember(members, email);
+}
+
+/** 글을 고칠 수 있는가 — 쓴 사람 본인 또는 관리자 */
+export function canEditPost(
+  members: readonly AccessMember[],
+  viewerEmail: string,
+  postAuthorEmail: string,
+): AccessResult {
+  const found = requireMember(members, viewerEmail);
+  if (!found.ok) return found;
+  if (found.member.role === 'admin') return found;
+  if (norm(viewerEmail) === norm(postAuthorEmail)) return found;
+  return { ok: false, reason: 'not_author' };
+}
+
+/** 글을 지울 수 있는가 — 고치기와 같은 기준 */
+export function canDeletePost(
+  members: readonly AccessMember[],
+  viewerEmail: string,
+  postAuthorEmail: string,
+): AccessResult {
+  return canEditPost(members, viewerEmail, postAuthorEmail);
+}
+
+/** 댓글을 지울 수 있는가 — 쓴 사람 본인 또는 관리자 */
+export function canDeleteComment(
+  members: readonly AccessMember[],
+  viewerEmail: string,
+  commentAuthorEmail: string,
+): AccessResult {
+  return canEditPost(members, viewerEmail, commentAuthorEmail);
+}
+
+/**
+ * 필독으로 지정할 수 있는가 — **관리자만**.
+ * 필독 글에만 사람별 읽음이 쌓이므로(§3.5-나), 아무나 지정하면 행 수 설계가 무너진다.
+ */
+export function canSetRequired(members: readonly AccessMember[], email: string): AccessResult {
+  return requireAdmin(members, email);
+}
+
+/** 부서에서 쓰는 표시 이름 최대 길이 — 화면(StaffRoomBoard.ts)과 같은 값 */
+export const DISPLAY_NAME_MAX_LENGTH = 20;
+
+/** 표시 이름 검사 결과 */
+export type DisplayNameCheck =
+  | { readonly ok: true; readonly value: string }
+  | { readonly ok: false; readonly message: string };
+
+/**
+ * 표시 이름을 다듬고 검사한다.
+ *
+ * 구글이 이름을 주지 않는다(쌤핀은 이메일 권한만 받고 `profile` 권한을 요청하지 않는다 —
+ * 새 권한을 추가하면 OAuth 재심사 대상이다). 그래서 멤버가 직접 적는다.
+ */
+export function checkDisplayName(raw: unknown): DisplayNameCheck {
+  if (typeof raw !== 'string') return { ok: false, message: '이름을 입력해주세요.' };
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) return { ok: false, message: '이름을 입력해주세요.' };
+  if (trimmed.length > DISPLAY_NAME_MAX_LENGTH) {
+    return { ok: false, message: `이름은 ${DISPLAY_NAME_MAX_LENGTH}자까지 쓸 수 있습니다.` };
+  }
+  return { ok: true, value: trimmed };
 }

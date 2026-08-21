@@ -126,3 +126,14 @@ verify_jwt = true
 # 부서 관리자 구글 토큰 보관 — STAFFROOM_ENCRYPTION_KEY 로 AES-256-GCM 암호화(ADR-062).
 [functions.staffroom-save-admin-token]
 verify_jwt = true
+
+# 게시판 글·댓글·임시저장 (M2). 위 다섯과 같은 겹 검증 —
+# 게이트웨이 JWT(anon key) + 함수 자체의 구글 신원 확인 + 멤버십 확인.
+[functions.staffroom-posts]
+verify_jwt = true
+
+[functions.staffroom-comments]
+verify_jwt = true
+
+[functions.staffroom-drafts]
+verify_jwt = true

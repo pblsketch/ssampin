@@ -14,6 +14,7 @@ import type {
   StaffRoomMember,
   StaffRoomRole,
 } from '@domain/entities/StaffRoom';
+import type { StaffRoomModule } from '@domain/entities/StaffRoomBoard';
 import { isInviteCode, normalizeInviteCode } from '@domain/valueObjects/StaffRoomInviteCode';
 import { isDepartmentAdmin } from '@domain/rules/staffRoomPermission';
 import { StaffRoomHttpError } from '@domain/errors/StaffRoomError';
@@ -27,6 +28,8 @@ interface StaffRoomState {
   departments: StaffRoomDepartment[];
   /** 들어가 있는 부서. null 이면 목록 화면 */
   currentDepartment: StaffRoomDepartment | null;
+  /** 그 부서의 게시판(M2 는 부서당 1개). M2 이전 부서에는 없을 수 있다 */
+  currentBoard: StaffRoomModule | null;
   members: StaffRoomMember[];
   invites: StaffRoomInvite[];
 
@@ -41,6 +44,9 @@ interface StaffRoomState {
   createDepartment: (name: string, description: string) => Promise<StaffRoomDepartment | null>;
   openDepartment: (departmentId: string) => Promise<void>;
   closeDepartment: () => void;
+
+  /** 내 표시 이름 정하기 — 서버가 본인 행만 고친다 */
+  setMyName: (displayName: string) => Promise<boolean>;
 
   createInvite: (expiresInDays: number | null) => Promise<StaffRoomInvite | null>;
   revokeInvite: (inviteId: string) => Promise<void>;
@@ -76,6 +82,7 @@ async function getGoogleToken(): Promise<string | null> {
 export const useStaffRoomStore = create<StaffRoomState>((set, get) => ({
   departments: [],
   currentDepartment: null,
+  currentBoard: null,
   members: [],
   invites: [],
   isLoading: false,
@@ -85,7 +92,8 @@ export const useStaffRoomStore = create<StaffRoomState>((set, get) => ({
 
   clearError: () => set({ error: null }),
 
-  closeDepartment: () => set({ currentDepartment: null, members: [], invites: [] }),
+  closeDepartment: () =>
+    set({ currentDepartment: null, currentBoard: null, members: [], invites: [] }),
 
   loadDepartments: async () => {
     set({ isLoading: true, error: null, needsGoogleConnect: false });
@@ -165,10 +173,11 @@ export const useStaffRoomStore = create<StaffRoomState>((set, get) => ({
 
     try {
       const { staffRoomPort } = await import('@adapters/di/container');
-      const [department, members] = await Promise.all([
+      const [detail, members] = await Promise.all([
         staffRoomPort.getDepartment(token, departmentId),
         staffRoomPort.listMembers(token, departmentId),
       ]);
+      const { department, board } = detail;
 
       // 초대 목록은 관리자만 볼 수 있다 — 일반 멤버로 호출하면 403 이 난다.
       // 실패해도 부서 화면 전체를 막지는 않되, 조용히 삼키지는 않는다(원인 추적용).
@@ -179,9 +188,40 @@ export const useStaffRoomStore = create<StaffRoomState>((set, get) => ({
           })
         : [];
 
-      set({ currentDepartment: department, members, invites, isLoading: false });
+      set({
+        currentDepartment: department,
+        currentBoard: board,
+        members,
+        invites,
+        isLoading: false,
+      });
     } catch (err) {
       set({ isLoading: false, error: messageOf(err) });
+    }
+  },
+
+  setMyName: async (displayName) => {
+    const department = get().currentDepartment;
+    if (!department) return false;
+
+    set({ isLoading: true, error: null });
+    const token = await getGoogleToken();
+    if (!token) {
+      set({ isLoading: false, needsGoogleConnect: true, error: NEEDS_GOOGLE_MESSAGE });
+      return false;
+    }
+
+    try {
+      const { staffRoomPort } = await import('@adapters/di/container');
+      const updated = await staffRoomPort.setMyName(token, department.id, displayName);
+      set((state) => ({
+        members: state.members.map((m) => (m.id === updated.id ? updated : m)),
+        isLoading: false,
+      }));
+      return true;
+    } catch (err) {
+      set({ isLoading: false, error: messageOf(err) });
+      return false;
     }
   },
 

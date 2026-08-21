@@ -23,8 +23,10 @@ import { denialMessage, denialStatus, requireMember } from '../_shared/staffroom
 import {
   serviceClient,
   loadMembers,
+  loadBoardModule,
   toAccessMembers,
   toDepartmentResponse,
+  toModuleResponse,
   type DepartmentRow,
   type MemberRow,
 } from '../_shared/staffroomDb.ts';
@@ -104,7 +106,23 @@ serve(async (req: Request) => {
         );
       }
 
-      return jsonResponse({ department: toDepartmentResponse(department, 'admin', 1) });
+      // 기본 게시판을 함께 깐다(계획서 §6 — 부서를 만들 때 기본 세트를 깔아준다).
+      // M2 는 게시판 1개만. 자료실은 M3, 이름 바꾸기·추가는 M4.
+      const { error: moduleError } = await db.from('staffroom_modules').insert({
+        department_id: department.id,
+        kind: 'board',
+        name: '게시판',
+        position: 0,
+      });
+      if (moduleError) {
+        // 게시판이 없으면 부서가 빈 껍데기가 된다 — 조용히 넘기지 않고 로그를 남긴다.
+        // 부서 자체는 살리고, 050 마이그레이션의 보정 INSERT 가 다음 배포에서 메운다.
+        console.error('[staffroom-departments] 기본 게시판 생성 실패:', moduleError.message);
+      }
+
+      return jsonResponse({
+        department: { ...toDepartmentResponse(department, 'admin', 1), unreadCount: 0 },
+      });
     }
 
     // ── 내 부서 목록 ───────────────────────────────────────────────
@@ -162,9 +180,32 @@ serve(async (req: Request) => {
 
       const roleById = new Map(memberships.map((m) => [m.department_id, m.role]));
 
-      const departments = ((deptRows ?? []) as DepartmentRow[]).map((row) =>
-        toDepartmentResponse(row, roleById.get(row.id) ?? 'member', counts.get(row.id) ?? 0),
-      );
+      // 안 읽은 글 수는 데이터베이스가 센다 — 글을 통째로 받아 세면
+      // 계획서 §3.5-다 의 전송량 설계가 무너진다.
+      const unreadByDepartment = new Map<string, number>();
+      const { data: unreadRows, error: unreadError } = await db.rpc('staffroom_unread_counts', {
+        p_email: identity.email,
+        p_department_ids: ids,
+      });
+      if (unreadError) {
+        // 개수를 못 세도 목록 자체는 보여준다(배지만 0 으로 뜬다)
+        console.error('[staffroom-departments] 안 읽은 개수 조회 실패:', unreadError.message);
+      } else {
+        for (const row of (unreadRows ?? []) as {
+          department_id: string;
+          unread_count: number;
+        }[]) {
+          unreadByDepartment.set(
+            row.department_id,
+            (unreadByDepartment.get(row.department_id) ?? 0) + Number(row.unread_count ?? 0),
+          );
+        }
+      }
+
+      const departments = ((deptRows ?? []) as DepartmentRow[]).map((row) => ({
+        ...toDepartmentResponse(row, roleById.get(row.id) ?? 'member', counts.get(row.id) ?? 0),
+        unreadCount: unreadByDepartment.get(row.id) ?? 0,
+      }));
 
       return jsonResponse({ departments });
     }
@@ -190,12 +231,26 @@ serve(async (req: Request) => {
         return errorResponse('부서를 찾을 수 없습니다', 404);
       }
 
+      // 클라이언트가 글을 읽으려면 게시판 id 를 알아야 한다.
+      // 050 이전에 만들어진 부서에는 없을 수 있으므로 없으면 null 로 준다.
+      const board = await loadBoardModule(db, departmentId);
+      let unreadCount = 0;
+      if (board) {
+        const { data: unreadRows } = await db.rpc('staffroom_unread_counts', {
+          p_email: identity.email,
+          p_department_ids: [departmentId],
+        });
+        for (const row of (unreadRows ?? []) as { module_id: string; unread_count: number }[]) {
+          if (row.module_id === board.id) unreadCount = Number(row.unread_count ?? 0);
+        }
+      }
+
       return jsonResponse({
-        department: toDepartmentResponse(
-          deptRow as DepartmentRow,
-          access.member.role,
-          members.length,
-        ),
+        department: {
+          ...toDepartmentResponse(deptRow as DepartmentRow, access.member.role, members.length),
+          unreadCount,
+        },
+        board: board ? toModuleResponse(board, unreadCount) : null,
       });
     }
 
