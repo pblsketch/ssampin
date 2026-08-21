@@ -23,6 +23,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { EventList } from './EventList';
 import { Modal } from '@adapters/components/common/Modal';
 import { IconButton } from '@adapters/components/common/IconButton';
+import { StaffRoomDayEvents } from '@adapters/components/StaffRoom/StaffRoomPlanOverlay';
 
 interface DayScheduleModalProps {
   date: Date;
@@ -171,6 +172,13 @@ export function DayScheduleModal({
               currentDate={dateStr}
             />
           )}
+
+          {/*
+            온라인 교무실의 부서 일정을 이 날짜에 겹쳐 보여준다 (계획서 §8-B).
+            개인 일정 목록에 섞지 않고 따로 그리는 이유는 StaffRoomPlanOverlay 주석 참고 —
+            섞으면 누르는 순간 개인 일정 편집·동기화 경로로 흘러간다.
+          */}
+          <StaffRoomDayEvents dateKey={dateStr} />
         </div>
 
         <div className="p-4 border-t border-sp-border shrink-0 bg-sp-surface">

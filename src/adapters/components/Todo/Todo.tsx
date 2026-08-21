@@ -62,6 +62,8 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { formatDistanceToNow, isToday, isThisWeek, isThisMonth, parseISO } from 'date-fns';
 import { ko } from 'date-fns/locale';
+import { StaffRoomMyTasks } from '@adapters/components/StaffRoom/StaffRoomPlanOverlay';
+import { useGoogleAccountStore } from '@adapters/stores/useGoogleAccountStore';
 
 type DateFilter = 'all' | 'today' | 'week';
 type ViewMode = 'active' | 'archive';
@@ -156,6 +158,10 @@ interface TimelineItem {
 /* ─── Main Todo Component ─── */
 
 export function Todo() {
+  // ★ 훅은 컴포넌트 맨 위에 둔다. 아래에 조건부 return 이 있어서
+  //   그 뒤에 두면 렌더마다 훅 순서가 달라져 React 가 상태를 잘못 짚는다.
+  const staffRoomEmail = useGoogleAccountStore((s) => s.email);
+
   const {
     todos,
     categories,
@@ -488,6 +494,13 @@ export function Todo() {
             <>
               {/* 위클리 요약 KPI 카드 — 규칙 기반 순수 집계(접이식) */}
               <WeeklyReviewCard />
+
+              {/*
+                온라인 교무실에서 나에게 맡겨진 부서 업무 (계획서 §8-B).
+                개인 할 일 목록에 섞지 않는다 — 부서가 주인이고, 섞으면 여기서 지웠을 때
+                부서 쪽과 어긋난다. 끝냄 표시도 교무실에서 한다.
+              */}
+              <StaffRoomMyTasks myEmail={staffRoomEmail} />
               {/* 필터 탭 */}
               <div className="flex flex-col gap-3">
                 {/* 날짜 필터 + 정렬 모드 */}
