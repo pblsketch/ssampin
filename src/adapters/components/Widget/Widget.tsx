@@ -650,8 +650,17 @@ export function Widget() {
         )}
 
         {/* ── 대시보드 카드 ── */}
-        <div className="flex-1 flex min-h-0" style={{ zoom: settings.dashboardFontScale ?? 1 }}>
-          <div className="flex-1 overflow-hidden px-4 py-3 min-h-0">
+        {/*
+          ★글씨 크기 배율(zoom)은 **카드 영역에만** 건다. 이 줄(카드 + 오른쪽 설정 패널)에
+            걸면 스타일 편집 패널 자체가 같이 커졌다 작아져서, 슬라이더를 끌고 있는 동안
+            손잡이가 커서 밑에서 달아난다(2026-08-21 준일님 피드백). 조절하는 도구는
+            조절 대상에 포함되면 안 된다.
+        */}
+        <div className="flex-1 flex min-h-0">
+          <div
+            className="flex-1 overflow-hidden px-4 py-3 min-h-0"
+            style={{ zoom: settings.dashboardFontScale ?? 1 }}
+          >
             {visibleWidgets.length === 0 && panelMode === 'closed' ? (
               <div className="flex flex-col items-center justify-center h-full text-sp-muted">
                 <span className="mb-3 text-4xl">📌</span>
