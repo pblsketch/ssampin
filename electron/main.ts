@@ -51,6 +51,7 @@ import { registerMarkdownConvertHandlers } from './ipc/markdownConvert';
 import { registerSchoolinfoEvaluationHandlers } from './ipc/schoolinfoEvaluation';
 import { registerSchoolinfoDisclosureHandlers } from './ipc/schoolinfoDisclosure';
 import { registerComciganHandlers } from './ipc/comcigan';
+import { registerOneClickPortalHandlers } from './ipc/oneclickPortal';
 import { registerAppinHandlers } from './ipc/appin';
 import { registerBoardHandlers, endActiveBoardSessionSync } from './ipc/board';
 import { registerMultiSurveyShareHandlers } from './ipc/multiSurveyShare';
@@ -5788,6 +5789,7 @@ if (!gotTheLock) {
     registerSchoolinfoEvaluationHandlers();
     registerSchoolinfoDisclosureHandlers();
     registerComciganHandlers();
+    registerOneClickPortalHandlers();
     registerAppinHandlers();
     registerBoardHandlers(mainWindow!);
     registerRealtimeWallBoardHandlers();

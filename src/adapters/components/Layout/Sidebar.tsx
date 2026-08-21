@@ -13,6 +13,7 @@ export type PageId =
   | 'todo'
   | 'class-management'
   | 'bookmarks'
+  | 'staffroom'
   | 'export'
   | 'tools'
   | 'tool-forms'
@@ -38,6 +39,7 @@ export type PageId =
   | 'tool-pblsketch'
   | 'tool-dorms'
   | 'tool-dorms-arcade'
+  | 'tool-oneclick-portal'
   | 'tool-assignment'
   | 'tool-assignment-detail'
   | 'tool-grouping'
@@ -91,6 +93,7 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'todo', label: '할 일', icon: 'check_circle' },
   { id: 'class-management', label: '수업 관리', icon: 'menu_book' },
   { id: 'bookmarks', label: '즐겨찾기', icon: 'bookmark' },
+  { id: 'staffroom', label: '온라인 교무실', icon: 'groups' },
   { id: 'tools', label: '쌤도구', icon: 'construction' },
   { id: 'meal', label: '급식', icon: 'restaurant' },
   { id: 'export', label: '내보내기', icon: 'ios_share' },
@@ -127,6 +130,7 @@ const PAGE_TO_FEATURE_KEY: Partial<Record<PageId, ProtectedFeatureKey>> = {
 const NON_PROTECTABLE: ReadonlySet<PageId> = new Set([
   'dashboard',
   'export',
+  'staffroom',
   'tools',
   'tool-forms',
   'tool-timer',

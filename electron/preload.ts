@@ -316,6 +316,25 @@ contextBridge.exposeInMainWorld('electronAPI', {
     };
   },
   openExternal: (url: string): Promise<void> => ipcRenderer.invoke('shell:openExternal', url),
+  /**
+   * 원클릭업무포털(외부 프로그램) 실행 통로.
+   * 실행 경로는 renderer 가 정하지 않는다 — 메인이 레지스트리에서 직접 찾는다.
+   */
+  oneclickPortal: {
+    getStatus: (): Promise<{
+      supported: boolean;
+      installed: boolean;
+      running: boolean;
+      version: string | null;
+    }> => ipcRenderer.invoke('oneclick-portal:status'),
+    launch: (): Promise<
+      | { outcome: 'launched' }
+      | { outcome: 'already-running' }
+      | { outcome: 'not-installed' }
+      | { outcome: 'unsupported' }
+      | { outcome: 'failed'; message: string }
+    > => ipcRenderer.invoke('oneclick-portal:launch'),
+  },
   openPath: (folderPath: string): Promise<string> =>
     ipcRenderer.invoke('shell:openPath', folderPath),
   showOpenDialog: (options: {

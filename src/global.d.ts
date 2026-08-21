@@ -160,6 +160,22 @@ interface AiBridgeCapabilityStatus {
   allowRecordWrite: boolean;
 }
 
+/** 원클릭업무포털(외부 윈도우 전용 프로그램) 설치·실행 상태 */
+interface OneClickPortalStatus {
+  /** 윈도우가 아니면 false */
+  supported: boolean;
+  installed: boolean;
+  running: boolean;
+  version: string | null;
+}
+
+type OneClickPortalLaunchResult =
+  | { outcome: 'launched' }
+  | { outcome: 'already-running' }
+  | { outcome: 'not-installed' }
+  | { outcome: 'unsupported' }
+  | { outcome: 'failed'; message: string };
+
 interface ElectronAPI {
   readData: (filename: string) => Promise<string | null>;
   writeData: (filename: string, data: string) => Promise<void>;
@@ -299,6 +315,14 @@ interface ElectronAPI {
   readClipboardText: () => Promise<string>;
   onFileOpened: (callback: (filePath: string) => void) => () => void;
   openExternal: (url: string) => Promise<void>;
+  /**
+   * 원클릭업무포털(외부 윈도우 프로그램) 실행 통로.
+   * 쌤핀이 만든 기능이 아니라 별개 프로그램을 실행만 도와주는 것이다.
+   */
+  oneclickPortal?: {
+    getStatus: () => Promise<OneClickPortalStatus>;
+    launch: () => Promise<OneClickPortalLaunchResult>;
+  };
   openPath: (folderPath: string) => Promise<string>;
   showOpenDialog: (options: {
     title?: string;

@@ -96,6 +96,15 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
     color: 'bg-rose-600/20 text-rose-700',
     externalUrl: 'https://dorms.school/arcade',
   },
+  {
+    // 외부 윈도우 프로그램(청완초 온영범 선생님 제작)을 실행하는 도구.
+    // externalUrl 을 두지 않는 이유 — 웹사이트를 여는 게 아니라 설치된 프로그램을 실행하기 때문이다.
+    // 클릭 처리는 useOneClickPortalLauncher 가 가로챈다.
+    id: 'tool-oneclick-portal',
+    name: '원클릭업무포털',
+    icon: '🏫',
+    color: 'bg-sky-600/20 text-sky-700',
+  },
   { id: 'tool-forms', name: '서식', icon: '📄', color: 'bg-indigo-500/20 text-indigo-600' },
   {
     id: 'tool-markdown-convert',

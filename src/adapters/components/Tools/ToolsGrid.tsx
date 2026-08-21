@@ -7,6 +7,11 @@ import { Modal } from '@adapters/components/common/Modal';
 import { IconButton } from '@adapters/components/common/IconButton';
 import { MiniAppsSection } from '@adapters/components/Tools/MiniApps/MiniAppsSection';
 import { MiniAppRunner } from '@adapters/components/Tools/MiniApps/MiniAppRunner';
+import { OneClickPortalLaunchModal } from '@adapters/components/Tools/OneClickPortalLaunchModal';
+import {
+  ONECLICK_PORTAL_TOOL_ID,
+  useOneClickPortalLauncher,
+} from '@adapters/components/Tools/useOneClickPortalLauncher';
 
 interface ToolsGridProps {
   onNavigate: (page: PageId) => void;
@@ -154,6 +159,14 @@ export const TOOLS: ToolCard[] = [
     externalUrl: 'https://dorms.school/arcade',
     badge: 'NEW',
   },
+  {
+    // 웹사이트가 아니라 설치된 외부 프로그램을 실행한다 — externalUrl 대신 전용 클릭 처리를 쓴다.
+    id: 'tool-oneclick-portal',
+    emoji: '🏫',
+    name: '원클릭업무포털',
+    description: '나이스·에듀파인 업무 화면까지 한 번에',
+    badge: 'NEW',
+  },
 ];
 
 const DEFAULT_TOOL_ORDER: readonly PageId[] = TOOLS.map((t) => t.id);
@@ -197,6 +210,8 @@ export function ToolsGrid({ onNavigate }: ToolsGridProps) {
   const [organizing, setOrganizing] = useState(false);
   // 실행 중인 미니앱("내가 만든 앱"). PageId 유니온에 넣지 않아 사이드바를 오염시키지 않는다.
   const [openApp, setOpenApp] = useState<MiniApp | null>(null);
+  // 원클릭업무포털(외부 프로그램) 실행 흐름 — 설치·실행 여부에 따라 모달/토스트가 갈린다.
+  const oneclickPortal = useOneClickPortalLauncher();
 
   // 개발 모드(npm run dev / npm run electron:dev)에서는 hidden: true 도구도 노출해 내부 QA 가능.
   // 프로덕션 빌드에서는 hidden: true 도구는 '전체 보기'에서도 제외.
@@ -284,9 +299,19 @@ export function ToolsGrid({ onNavigate }: ToolsGridProps) {
                 {visibleTools.map((tool) => (
                   <button
                     key={tool.id}
-                    onClick={() =>
-                      tool.externalUrl ? openExternal(tool.externalUrl) : onNavigate(tool.id)
-                    }
+                    onClick={() => {
+                      // 원클릭업무포털은 웹사이트가 아니라 설치된 외부 프로그램이라
+                      // 설치·실행 여부를 확인하는 전용 흐름을 탄다.
+                      if (tool.id === ONECLICK_PORTAL_TOOL_ID) {
+                        void oneclickPortal.handleCardClick();
+                        return;
+                      }
+                      if (tool.externalUrl) {
+                        openExternal(tool.externalUrl);
+                        return;
+                      }
+                      onNavigate(tool.id);
+                    }}
                     className="bg-sp-card rounded-2xl p-6 text-left border border-transparent hover:border-blue-500/30 hover:scale-[1.02] transition-all group"
                   >
                     <div className="text-4xl mb-3">{tool.emoji}</div>
@@ -313,6 +338,14 @@ export function ToolsGrid({ onNavigate }: ToolsGridProps) {
           <MiniAppsSection onOpen={setOpenApp} />
         </div>
       </div>
+
+      <OneClickPortalLaunchModal
+        open={oneclickPortal.modalMode !== null}
+        mode={oneclickPortal.modalMode ?? 'first-run'}
+        onClose={oneclickPortal.closeModal}
+        onLaunch={oneclickPortal.handleLaunchFromModal}
+        onOpenSite={oneclickPortal.openSite}
+      />
 
       {organizing && (
         <ToolsOrganizerModal

@@ -6,6 +6,11 @@ import {
   getToolDefinition,
 } from '@adapters/constants/toolDefinitions';
 import type { ToolDefinition } from '@adapters/constants/toolDefinitions';
+import { OneClickPortalLaunchModal } from '@adapters/components/Tools/OneClickPortalLaunchModal';
+import {
+  ONECLICK_PORTAL_TOOL_ID,
+  useOneClickPortalLauncher,
+} from '@adapters/components/Tools/useOneClickPortalLauncher';
 
 interface FavoriteToolsProps {
   /** false일 때(모달 확장 뷰) 전체 편집 레이아웃 렌더. 기본값 true(카드 뷰) */
@@ -16,8 +21,17 @@ export function FavoriteTools({ isCompactMode = true }: FavoriteToolsProps = {})
   const favoriteTools = useSettingsStore((s) => s.settings.favoriteTools) ?? DEFAULT_FAVORITE_TOOLS;
   const update = useSettingsStore((s) => s.update);
   const [showPicker, setShowPicker] = useState(false);
+  // 위젯 창에는 ToastContainer 가 없어 토스트는 보이지 않는다. 안내가 꼭 필요한 경우(첫 실행
+  // 고지·미설치)는 모달로 뜨므로, 위젯에서도 중요한 안내는 놓치지 않는다.
+  const oneclickPortal = useOneClickPortalLauncher();
 
   const handleToolClick = (tool: ToolDefinition) => {
+    // 원클릭업무포털은 웹사이트도 앱 내 페이지도 아닌 외부 프로그램이라 전용 흐름을 탄다.
+    // 이 분기가 없으면 존재하지 않는 페이지로 이동해 빈 화면이 된다.
+    if (tool.id === ONECLICK_PORTAL_TOOL_ID) {
+      void oneclickPortal.handleCardClick();
+      return;
+    }
     // 외부 URL 도구는 브라우저로 열기
     if (tool.externalUrl) {
       if (window.electronAPI?.openExternal) {
@@ -103,6 +117,14 @@ export function FavoriteTools({ isCompactMode = true }: FavoriteToolsProps = {})
           onCancel={() => setShowPicker(false)}
         />
       )}
+
+      <OneClickPortalLaunchModal
+        open={oneclickPortal.modalMode !== null}
+        mode={oneclickPortal.modalMode ?? 'first-run'}
+        onClose={oneclickPortal.closeModal}
+        onLaunch={oneclickPortal.handleLaunchFromModal}
+        onOpenSite={oneclickPortal.openSite}
+      />
     </div>
   );
 }
