@@ -25,6 +25,8 @@ import { SemesterView } from './SemesterView';
 import { BulkDeleteByCategoryModal } from './BulkDeleteByCategoryModal';
 import { BulkDeleteByDateRangeModal } from './BulkDeleteByDateRangeModal';
 import { DuplicateCleanupModal } from './DuplicateCleanupModal';
+import { HiddenEventsModal } from './HiddenEventsModal';
+import { getRestorableHiddenEvents } from '@domain/rules/hiddenEventRules';
 import { useCalendarSyncStore } from '@adapters/stores/useCalendarSyncStore';
 import { useNeisScheduleStore } from '@adapters/stores/useNeisScheduleStore';
 import { GoogleBadge } from '@adapters/components/Calendar/GoogleBadge';
@@ -80,6 +82,7 @@ export function Schedule() {
     deleteEvent,
     deleteManyEvents,
     hideManyEvents,
+    unhideManyEvents,
     deleteEventsByCategory,
     deleteEventsByDateRange,
     showExportModal,
@@ -201,6 +204,7 @@ export function Schedule() {
   /* 중복 일정 안내 (2026-08-21) — 배너는 이번 세션 동안만 닫힌다.
      정리하면 중복 자체가 사라져 배너도 같이 사라지므로 영구 저장까지는 필요 없다. */
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+  const [showHiddenModal, setShowHiddenModal] = useState(false);
   const [duplicateNoticeDismissed, setDuplicateNoticeDismissed] = useState(false);
 
   useEffect(() => {
@@ -283,6 +287,9 @@ export function Schedule() {
     `SyncFromGoogle` 에서 막았지만 이미 늘어난 사본은 선생님 자료라 임의로 지우지 않는다.
     대신 몇 건인지 알려 주고, 선생님이 눌렀을 때만 한 줄로 줄인다.
   */
+  /* 숨긴 일정 — 되돌리는 길이 있다는 걸 알리려면 개수를 화면에 띄워야 한다 */
+  const hiddenCount = useMemo(() => getRestorableHiddenEvents(events).length, [events]);
+
   const duplicateGroups = useMemo(() => findDuplicateEventGroups(events), [events]);
   const duplicateCount = useMemo(() => countDuplicateEvents(duplicateGroups), [duplicateGroups]);
 
@@ -304,10 +311,16 @@ export function Schedule() {
   }
 
   function handleDeleteEvent(id: string) {
-    // NEIS 일정은 숨기기 처리 (isHidden=true)
+    // NEIS 일정은 지우지 않고 숨긴다 — 지워도 다음 동기화에 되살아나기 때문이다.
+    // 숨긴 이유를 남겨야 "숨긴 일정 다시 보기"에서 중복 정리로 접힌 것과 구분해 보여 줄 수 있다.
     const event = events.find((e) => e.id === id);
     if (event?.source === 'neis') {
-      void updateEvent({ ...event, isHidden: true });
+      void updateEvent({
+        ...event,
+        isHidden: true,
+        hiddenReason: 'manual',
+        hiddenAt: new Date().toISOString(),
+      });
       return;
     }
     void deleteEvent(id);
@@ -772,6 +785,19 @@ export function Schedule() {
                   </>
                 )}
 
+                {/* 숨긴 일정 다시 보기 — 숨긴 게 있을 때만 나온다 */}
+                {hiddenCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowHiddenModal(true)}
+                    className="text-xs px-3 py-1.5 rounded-lg bg-sp-card text-sp-muted hover:text-sp-text border border-sp-border flex items-center gap-1.5"
+                    title="숨긴 일정을 다시 보이게 되돌립니다"
+                  >
+                    <span className="material-symbols-outlined text-icon">visibility_off</span>
+                    숨긴 일정 <span className="tabular-nums">{hiddenCount}</span>
+                  </button>
+                )}
+
                 {/* 일괄 삭제 드롭다운 */}
                 <div className="relative ml-auto">
                   <button
@@ -965,12 +991,22 @@ export function Schedule() {
         />
       )}
 
+      {/* 숨긴 일정 다시 보기 모달 */}
+      {showHiddenModal && (
+        <HiddenEventsModal
+          events={events}
+          categories={categories}
+          onRestore={unhideManyEvents}
+          onClose={() => setShowHiddenModal(false)}
+        />
+      )}
+
       {/* 중복 일정 정리 모달 */}
       {showDuplicateModal && (
         <DuplicateCleanupModal
           events={events}
           categories={categories}
-          onCleanup={hideManyEvents}
+          onCleanup={(ids) => hideManyEvents(ids, 'duplicate')}
           onClose={() => setShowDuplicateModal(false)}
         />
       )}

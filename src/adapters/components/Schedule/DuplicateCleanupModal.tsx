@@ -32,9 +32,9 @@ function formatDayLabel(dateStr: string): string {
  * 지워도 다음 동기화 때 되살아난다. 숨김은 동기화가 존중하므로 다시 나타나지 않고, 자료도
  * 남는다. 그래서 문구도 "삭제"라고 쓰지 않는다.
  *
- * 다만 **앱에는 숨김을 되돌리는 버튼이 아직 없다**(2026-08-21 확인). NEIS 일정 삭제도 같은
- * 숨김을 쓰는데 마찬가지다. 그래서 안내 문구에 "언제든 되돌릴 수 있다"고 쓰지 않는다 —
- * 실제 복구 경로는 설정 → 백업/복원뿐이다. 숨김 해제 화면은 별도 과제.
+ * 되돌리는 길은 일정 화면 도구바의 **"숨긴 일정"** 버튼이다(`HiddenEventsModal`). 이 화면이
+ * 생기기 전에는 되돌릴 방법이 백업 복원뿐이라 안내 문구에서 "되돌릴 수 있다"는 말을 뺐었는데,
+ * 이제 약속을 지킬 수 있어 되살렸다.
  */
 export function DuplicateCleanupModal({ events, categories, onCleanup, onClose }: Props) {
   const [isWorking, setIsWorking] = useState(false);
@@ -69,7 +69,8 @@ export function DuplicateCleanupModal({ events, categories, onCleanup, onClose }
           <div className="px-6 py-8">
             <Notice variant="success" size="md" title={`${doneCount}건을 정리했어요`}>
               달력에서 겹쳐 보이던 줄이 하나로 줄었습니다. 정리한 일정은 지운 것이 아니라 숨긴
-              것이라 자료는 그대로 남아 있어요 — 되돌리려면 설정 → 백업/복원을 쓰셔야 합니다.
+              것이라, 도구바의 <span className="font-bold">숨긴 일정</span> 버튼에서 언제든 다시
+              꺼낼 수 있어요.
             </Notice>
           </div>
         ) : groups.length === 0 ? (
@@ -83,7 +84,8 @@ export function DuplicateCleanupModal({ events, categories, onCleanup, onClose }
                 남기는 일정은{' '}
                 <span className="font-bold">선생님이 직접 만든 것 → 학사일정(NEIS)</span> 순서로
                 고릅니다. 접히는 쪽은 구글에서 되돌아온 사본이라 없어도 달력이 비지 않아요. 지우는
-                것이 아니라 숨기는 것이라 자료 자체는 그대로 남습니다.
+                것이 아니라 숨기는 것이라, 도구바의 <span className="font-bold">숨긴 일정</span>{' '}
+                버튼에서 다시 꺼낼 수 있습니다.
               </Notice>
             </div>
 

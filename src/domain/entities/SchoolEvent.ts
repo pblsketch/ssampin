@@ -1,21 +1,10 @@
 import type { GradeYn } from './NeisSchedule';
 
 /** @deprecated 커스텀 카테고리 시스템으로 대체됨. CategoryItem 사용 권장 */
-export type EventCategory =
-  | 'school'
-  | 'class'
-  | 'exam'
-  | 'holiday'
-  | 'etc';
+export type EventCategory = 'school' | 'class' | 'exam' | 'holiday' | 'etc';
 
 /** 알림 타이밍 프리셋 */
-export type AlertTimingPreset =
-  | 'onTime'
-  | '5min'
-  | '30min'
-  | '1hour'
-  | '1day'
-  | '3day';
+export type AlertTimingPreset = 'onTime' | '5min' | '30min' | '1hour' | '1day' | '3day';
 
 /** 알림 타이밍 (프리셋 또는 커스텀 분 단위: "custom:{totalMinutes}") */
 export type AlertTiming = AlertTimingPreset | `custom:${number}`;
@@ -34,12 +23,18 @@ export function getCustomAlertMinutes(timing: AlertTiming): number | null {
 /** AlertTiming을 표시 문자열로 변환 */
 export function alertTimingToLabel(timing: AlertTiming): string {
   switch (timing) {
-    case 'onTime': return '정시';
-    case '5min': return '5분 전';
-    case '30min': return '30분 전';
-    case '1hour': return '1시간 전';
-    case '1day': return '1일 전';
-    case '3day': return '3일 전';
+    case 'onTime':
+      return '정시';
+    case '5min':
+      return '5분 전';
+    case '30min':
+      return '30분 전';
+    case '1hour':
+      return '1시간 전';
+    case '1day':
+      return '1일 전';
+    case '3day':
+      return '3일 전';
     default: {
       const minutes = getCustomAlertMinutes(timing);
       if (minutes == null) return timing;
@@ -75,49 +70,64 @@ export const DEFAULT_CATEGORIES: readonly CategoryItem[] = [
 
 /** 카테고리 컬러 프리셋 */
 export const CATEGORY_COLOR_PRESETS = [
-  'blue', 'green', 'yellow', 'purple', 'red', 'pink', 'indigo', 'teal',
+  'blue',
+  'green',
+  'yellow',
+  'purple',
+  'red',
+  'pink',
+  'indigo',
+  'teal',
 ] as const;
 
 export interface SchoolEvent {
   readonly id: string;
   readonly title: string;
-  readonly date: string;          // "YYYY-MM-DD"
-  readonly endDate?: string;      // "YYYY-MM-DD" (여러 날짜 걸칠 때)
-  readonly category: string;      // 카테고리 ID
+  readonly date: string; // "YYYY-MM-DD"
+  readonly endDate?: string; // "YYYY-MM-DD" (여러 날짜 걸칠 때)
+  readonly category: string; // 카테고리 ID
   readonly description?: string;
-  readonly time?: string;         // "HH:mm" 또는 "HH:mm - HH:mm"
+  readonly time?: string; // "HH:mm" 또는 "HH:mm - HH:mm"
   readonly location?: string;
   readonly isDDay?: boolean;
   readonly alerts?: readonly AlertTiming[];
   readonly recurrence?: Recurrence;
   /** 반복 일정에서 제외할 날짜 목록 (YYYY-MM-DD) */
   readonly excludeDates?: readonly string[];
-  readonly period?: string;  // "1"~"7", "afterSchool", "allDay" 또는 undefined
-  readonly periodEnd?: string;  // 종료 교시: "1"~"7" (period가 숫자일 때만 유효)
+  readonly period?: string; // "1"~"7", "afterSchool", "allDay" 또는 undefined
+  readonly periodEnd?: string; // 종료 교시: "1"~"7" (period가 숫자일 때만 유효)
 
   // 구글 캘린더 동기화 필드 (모두 optional, 하위 호환성 유지)
   readonly googleEventId?: string;
   readonly googleCalendarId?: string;
   readonly syncStatus?: 'synced' | 'pending' | 'error';
-  readonly lastSyncedAt?: string;       // ISO 8601
-  readonly googleUpdatedAt?: string;    // ISO 8601
+  readonly lastSyncedAt?: string; // ISO 8601
+  readonly googleUpdatedAt?: string; // ISO 8601
   readonly etag?: string;
   readonly source?: 'ssampin' | 'google' | 'neis' | 'birthday';
-  readonly startTime?: string;          // "HH:mm"
-  readonly endTime?: string;            // "HH:mm"
+  readonly startTime?: string; // "HH:mm"
+  readonly endTime?: string; // "HH:mm"
 
   // NEIS 학사일정 전용 필드 (모두 optional, 하위 호환성 유지)
   readonly neis?: {
-    readonly eventId: string;        // `${AA_YMD}_${hash(EVENT_NM)}` 고유 키
-    readonly eventName: string;      // 원본 행사명
-    readonly schoolYear: string;     // 학년도
+    readonly eventId: string; // `${AA_YMD}_${hash(EVENT_NM)}` 고유 키
+    readonly eventName: string; // 원본 행사명
+    readonly schoolYear: string; // 학년도
     readonly gradeYn: GradeYn;
     readonly subtractDayType: string; // 수업공제일 구분 (공휴일/해당없음)
-    readonly loadDate: string;        // 데이터 적재일
-    readonly lastSyncAt: string;      // 마지막 동기화 시간
+    readonly loadDate: string; // 데이터 적재일
+    readonly lastSyncAt: string; // 마지막 동기화 시간
   };
-  readonly isModified?: boolean;     // 사용자가 편집했으면 true → 동기화 시 보호
-  readonly isHidden?: boolean;       // 숨기기 처리
+  readonly isModified?: boolean; // 사용자가 편집했으면 true → 동기화 시 보호
+  readonly isHidden?: boolean; // 숨기기 처리
+  /**
+   * 왜 숨겼는가 (2026-08-21). 숨긴 일정을 다시 꺼내는 화면에서 "선생님이 직접 치운 것"과
+   * "중복이라 접힌 사본"을 구분해 보여 주려고 남긴다. 옛 데이터에는 없을 수 있어 optional 이고,
+   * 없으면 이유 없이 목록에만 올린다.
+   */
+  readonly hiddenReason?: 'manual' | 'duplicate';
+  /** 숨긴 시각 (ISO 8601) — 최근에 치운 것부터 보여 주는 데 쓴다 */
+  readonly hiddenAt?: string;
   /** 같은 날짜 내 수동 정렬 순서 (낮을수록 위에 표시, 미설정 시 0) */
   readonly sortOrder?: number;
 }

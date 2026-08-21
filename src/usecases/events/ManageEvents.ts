@@ -80,16 +80,20 @@ export class ManageEvents {
    * (`SyncFromGoogle`, `SyncNeisSchedule` 모두 숨긴 일정은 건드리지 않는다) 다시 나타나지
    * 않는다. 자료를 지우지 않아 되돌리기도 안전하다.
    */
-  async hideMany(ids: readonly string[]): Promise<number> {
+  async hideMany(
+    ids: readonly string[],
+    reason: NonNullable<SchoolEvent['hiddenReason']> = 'manual',
+  ): Promise<number> {
     const data = await this.eventsRepository.getEvents();
     const events = data?.events ?? [];
     const idSet = new Set(ids);
+    const hiddenAt = new Date().toISOString();
 
     let hiddenCount = 0;
     const updatedEvents = events.map((e) => {
       if (!idSet.has(e.id) || e.isHidden) return e;
       hiddenCount += 1;
-      return { ...e, isHidden: true };
+      return { ...e, isHidden: true, hiddenReason: reason, hiddenAt };
     });
 
     if (hiddenCount > 0) {
@@ -100,6 +104,35 @@ export class ManageEvents {
     }
 
     return hiddenCount;
+  }
+
+  /**
+   * 숨긴 일정을 다시 보이게 되돌린다.
+   *
+   * 숨김 이유·시각도 같이 지운다 — 되돌린 뒤에도 "중복이라 접혔던 것" 딱지가 남아 있으면
+   * 다음에 다시 숨길 때 잘못된 이유가 붙는다.
+   */
+  async unhideMany(ids: readonly string[]): Promise<number> {
+    const data = await this.eventsRepository.getEvents();
+    const events = data?.events ?? [];
+    const idSet = new Set(ids);
+
+    let restoredCount = 0;
+    const updatedEvents = events.map((e) => {
+      if (!idSet.has(e.id) || !e.isHidden) return e;
+      restoredCount += 1;
+      const { isHidden: _isHidden, hiddenReason: _reason, hiddenAt: _at, ...rest } = e;
+      return rest;
+    });
+
+    if (restoredCount > 0) {
+      await this.eventsRepository.saveEvents({
+        events: updatedEvents,
+        categories: data?.categories,
+      });
+    }
+
+    return restoredCount;
   }
 
   /**
