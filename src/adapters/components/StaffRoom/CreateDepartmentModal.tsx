@@ -10,6 +10,7 @@ import {
   STAFFROOM_DESCRIPTION_MAX_LENGTH,
   STAFFROOM_NAME_MAX_LENGTH,
 } from '@domain/entities/StaffRoom';
+import { STAFFROOM_STORAGE_NOTICE } from '@domain/rules/staffRoomLibraryRules';
 
 interface CreateDepartmentModalProps {
   onClose: () => void;
@@ -89,6 +90,19 @@ export function CreateDepartmentModal({ onClose }: CreateDepartmentModalProps) {
             {description.length}/{STAFFROOM_DESCRIPTION_MAX_LENGTH}
           </p>
         </div>
+
+        {/*
+          ★ 부서를 만들 때 한 번 보여주는 안내 (계획서 §10.6).
+
+          자료실 업로드에 승인 절차를 두지 않기로 했으므로 **이 문구가 유일한 방어선이다.**
+          관리자 선생님이 "감수하고 여는 것"과 "모르고 당하는 것"은 다르다.
+        */}
+        <p className="flex items-start gap-1.5 rounded-lg border border-sp-border bg-sp-surface px-3 py-2.5 text-xs leading-relaxed text-sp-muted">
+          <span className="material-symbols-outlined text-icon-sm shrink-0 text-sp-highlight">
+            info
+          </span>
+          {STAFFROOM_STORAGE_NOTICE}
+        </p>
 
         {error && (
           <p className="flex items-start gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2.5 text-xs leading-relaxed text-sp-text">
