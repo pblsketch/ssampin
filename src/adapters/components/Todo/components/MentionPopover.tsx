@@ -45,27 +45,28 @@ export function MentionPopover({ query, onPick, onClose }: MentionPopoverProps) 
         <p className="px-3 py-2.5 text-xs text-sp-muted">찾는 교직원이 없습니다</p>
       ) : (
         <ul className="max-h-48 overflow-y-auto">
-          {matches.map((contact) => (
-            <li key={contact.id}>
-              <button
-                type="button"
-                onClick={() => onPick(contact)}
-                className="flex min-h-6 w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-sp-surface"
-              >
-                <span className="material-symbols-outlined shrink-0 text-base text-sp-muted">
-                  badge
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm text-sp-text">{contact.name}</span>
-                  {(contact.department ?? contact.position) !== undefined && (
-                    <span className="block truncate text-[11px] text-sp-muted">
-                      {[contact.department, contact.position].filter(Boolean).join(' · ')}
-                    </span>
-                  )}
-                </span>
-              </button>
-            </li>
-          ))}
+          {matches.map((contact) => {
+            const subtitle = [contact.department, contact.position].filter(Boolean).join(' · ');
+            return (
+              <li key={contact.id}>
+                <button
+                  type="button"
+                  onClick={() => onPick(contact)}
+                  className="flex min-h-6 w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-sp-surface"
+                >
+                  <span className="material-symbols-outlined shrink-0 text-base text-sp-muted">
+                    badge
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm text-sp-text">{contact.name}</span>
+                    {subtitle !== '' && (
+                      <span className="block truncate text-[11px] text-sp-muted">{subtitle}</span>
+                    )}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
         </ul>
       )}
       <button
