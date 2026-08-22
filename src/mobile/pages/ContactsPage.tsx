@@ -50,7 +50,7 @@ function ContactRow({ entry }: { entry: ContactEntry }) {
         </p>
       </div>
       {href !== null && (
-        <div className="flex items-center justify-center w-9 h-9 rounded-full bg-sp-success/15 shrink-0">
+        <div className="flex items-center justify-center w-9 h-9 rounded-full bg-sp-surface shrink-0">
           <span className="material-symbols-outlined text-sp-success text-icon-lg">call</span>
         </div>
       )}
@@ -107,7 +107,7 @@ export function ContactsPage({ onBack }: Props) {
 
   return (
     <div className="flex flex-col h-full">
-      <header className="flex items-center gap-3 px-4 py-3 border-b border-sp-border/30">
+      <header className="flex items-center gap-3 px-4 py-3 border-b border-sp-border">
         <button onClick={onBack} className="text-sp-muted active:scale-95 transition-transform">
           <span className="material-symbols-outlined">arrow_back</span>
         </button>
@@ -134,7 +134,7 @@ export function ContactsPage({ onBack }: Props) {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="이름·번호로 찾기 (초성도 됩니다)"
-          className="w-full bg-black/5 rounded-xl px-4 py-3 text-sm text-sp-text placeholder-sp-muted/60 focus:outline-none"
+          className="w-full bg-black/5 rounded-xl px-4 py-3 text-sm text-sp-text placeholder-sp-muted focus:outline-none"
           style={{ minHeight: 44 }}
         />
       </div>

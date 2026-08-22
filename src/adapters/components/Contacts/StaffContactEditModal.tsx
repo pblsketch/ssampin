@@ -4,7 +4,7 @@ import type { StaffContact } from '@domain/entities/StaffContact';
 import type { StaffContactDraft } from '@adapters/stores/useStaffContactStore';
 
 const FIELD_CLASS =
-  'w-full bg-sp-surface border border-sp-border rounded-lg px-3 py-2.5 text-sm text-sp-text placeholder-sp-muted/50 focus:border-sp-accent focus:outline-none transition-colors';
+  'w-full bg-sp-surface border border-sp-border rounded-lg px-3 py-2.5 text-sm text-sp-text placeholder-sp-muted focus:border-sp-accent focus:outline-none transition-colors';
 
 interface StaffContactEditModalProps {
   isOpen: boolean;

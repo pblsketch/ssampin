@@ -9,7 +9,7 @@ const KIND_ICON: Record<ContactEntry['kind'], string> = {
 };
 
 const KIND_ACCENT: Record<ContactEntry['kind'], string> = {
-  staff: 'text-sp-accent bg-sp-accent/10',
+  staff: 'text-sp-accent bg-sp-surface',
   student: 'text-emerald-400 bg-emerald-500/10',
   guardian: 'text-amber-400 bg-amber-500/10',
 };
@@ -42,7 +42,7 @@ export function ContactRow({ entry, actions }: ContactRowProps) {
   };
 
   return (
-    <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-sp-surface/60 border border-sp-border/50 hover:border-sp-border transition-colors">
+    <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-sp-surface border border-sp-border hover:border-sp-border transition-colors">
       <div
         className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${KIND_ACCENT[entry.kind]}`}
       >
@@ -66,7 +66,7 @@ export function ContactRow({ entry, actions }: ContactRowProps) {
           type="button"
           onClick={() => void copy(entry.phone ?? '', '전화번호')}
           title="전화번호 복사"
-          className="text-sp-text text-sm font-mono px-2 py-1 rounded-lg hover:bg-sp-accent/10 transition-colors shrink-0"
+          className="text-sp-text text-sm font-mono px-2 py-1 rounded-lg hover:bg-sp-surface transition-colors shrink-0"
         >
           {formatPhoneNumber(entry.phone)}
         </button>
@@ -77,7 +77,7 @@ export function ContactRow({ entry, actions }: ContactRowProps) {
           type="button"
           onClick={() => void copy(entry.email ?? '', '이메일')}
           title="이메일 복사"
-          className="w-8 h-8 rounded-lg flex items-center justify-center text-sp-muted hover:text-sp-accent hover:bg-sp-accent/10 transition-colors shrink-0"
+          className="w-8 h-8 rounded-lg flex items-center justify-center text-sp-muted hover:text-sp-accent hover:bg-sp-surface transition-colors shrink-0"
         >
           <span className="material-symbols-outlined text-lg">mail</span>
         </button>

@@ -136,7 +136,7 @@ export function ContactsPage() {
       <div className="flex-1 min-h-0 overflow-y-auto p-8 space-y-4">
         {/* 탭 + 검색 */}
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-1 p-1 rounded-xl bg-sp-surface/60 border border-sp-border/50">
+          <div className="flex items-center gap-1 p-1 rounded-xl bg-sp-surface border border-sp-border">
             {(Object.keys(TAB_LABELS) as ContactTab[]).map((t) => (
               <button
                 key={t}
@@ -161,7 +161,7 @@ export function ContactsPage() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="이름·부서·번호로 찾기 (초성도 됩니다)"
-              className="w-full bg-sp-surface border border-sp-border rounded-lg pl-10 pr-3 py-2.5 text-sm text-sp-text placeholder-sp-muted/50 focus:border-sp-accent focus:outline-none transition-colors"
+              className="w-full bg-sp-surface border border-sp-border rounded-lg pl-10 pr-3 py-2.5 text-sm text-sp-text placeholder-sp-muted focus:border-sp-accent focus:outline-none transition-colors"
             />
           </div>
 
@@ -179,7 +179,7 @@ export function ContactsPage() {
         {/* 목록 */}
         {visible.length === 0 ? (
           <div className="py-16 text-center">
-            <span className="material-symbols-outlined text-5xl text-sp-muted/40 mb-3 block">
+            <span className="material-symbols-outlined text-5xl text-sp-muted mb-3 block">
               {empty.icon}
             </span>
             <p className="text-sp-text">{empty.title}</p>
@@ -210,7 +210,7 @@ export function ContactsPage() {
                         type="button"
                         onClick={() => openEdit(entry.sourceId)}
                         title="수정"
-                        className="w-8 h-8 rounded-lg flex items-center justify-center text-sp-muted hover:text-sp-accent hover:bg-sp-accent/10 transition-colors"
+                        className="w-8 h-8 rounded-lg flex items-center justify-center text-sp-muted hover:text-sp-accent hover:bg-sp-surface transition-colors"
                       >
                         <span className="material-symbols-outlined text-lg">edit</span>
                       </button>

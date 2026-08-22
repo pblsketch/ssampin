@@ -156,7 +156,7 @@ export function StaffExcelImportModal({
     <Modal isOpen={isOpen} onClose={handleClose} title="엑셀로 교직원 연락처 등록" size="lg">
       <div className="p-6 space-y-5">
         {/* 1단계 — 양식 */}
-        <section className="rounded-xl border border-sp-border/50 bg-sp-surface/40 p-4">
+        <section className="rounded-xl border border-sp-border bg-sp-surface p-4">
           <p className="text-sp-text font-sp-medium text-sm mb-1">1. 양식 내려받기</p>
           <p className="text-sp-muted text-xs mb-3">
             처음이라면 빈 양식을 받아 채우세요. 이미 쓰던 명부 파일이 있으면 그대로 올려도 됩니다 —
@@ -173,7 +173,7 @@ export function StaffExcelImportModal({
         </section>
 
         {/* 2단계 — 파일 선택 (끌어다 놓기 또는 고르기) */}
-        <section className="rounded-xl border border-sp-border/50 bg-sp-surface/40 p-4">
+        <section className="rounded-xl border border-sp-border bg-sp-surface p-4">
           <p className="text-sp-text font-sp-medium text-sm mb-3">2. 파일 올리기</p>
 
           {/*
@@ -188,8 +188,8 @@ export function StaffExcelImportModal({
             onDrop={(e) => void handleDrop(e)}
             className={`flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-4 py-8 text-center transition-colors ${
               dragging
-                ? 'border-sp-accent bg-sp-accent/10'
-                : 'border-sp-border bg-sp-bg/30 hover:border-sp-accent/60'
+                ? 'border-sp-accent bg-sp-surface'
+                : 'border-sp-border bg-sp-bg hover:border-sp-accent'
             }`}
           >
             <span
@@ -238,7 +238,7 @@ export function StaffExcelImportModal({
         )}
 
         {result !== null && !headerMissing && (
-          <section className="rounded-xl border border-sp-border/50 bg-sp-surface/40 p-4 space-y-3">
+          <section className="rounded-xl border border-sp-border bg-sp-surface p-4 space-y-3">
             <p className="text-sp-text font-sp-medium text-sm">3. 확인하고 등록</p>
 
             <div className="flex flex-wrap gap-3 text-sm">
@@ -259,7 +259,7 @@ export function StaffExcelImportModal({
 
             {/* 문제가 있는 줄만 보여준다 — 정상인 줄까지 나열하면 오히려 안 읽는다. */}
             {result.rows.some((r) => r.issues.length > 0) && (
-              <div className="max-h-40 overflow-y-auto space-y-1 rounded-lg bg-sp-bg/40 p-2">
+              <div className="max-h-40 overflow-y-auto space-y-1 rounded-lg bg-sp-bg p-2">
                 {result.rows
                   .filter((r) => r.issues.length > 0)
                   .map((r) => (

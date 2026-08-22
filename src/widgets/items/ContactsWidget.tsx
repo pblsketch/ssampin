@@ -98,13 +98,13 @@ export function ContactsWidget({ isCompactMode = true }: ContactsWidgetProps = {
           onChange={(e) => setQuery(e.target.value)}
           placeholder="이름·번호로 찾기"
           aria-label="연락처 검색"
-          className="min-h-6 min-w-6 w-full rounded-lg border border-sp-border bg-sp-surface py-1.5 pl-8 pr-2 text-sm text-sp-text placeholder-sp-muted/60 transition-colors focus:border-sp-accent focus:outline-none"
+          className="min-h-6 min-w-6 w-full rounded-lg border border-sp-border bg-sp-surface py-1.5 pl-8 pr-2 text-sm text-sp-text placeholder-sp-muted transition-colors focus:border-sp-accent focus:outline-none"
         />
       </div>
 
       {rows.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-1.5 px-2 text-center">
-          <span className="material-symbols-outlined text-2xl text-sp-muted/50">contacts</span>
+          <span className="material-symbols-outlined text-2xl text-sp-muted">contacts</span>
           <p className="text-xs leading-relaxed text-sp-muted">{emptyHint()}</p>
         </div>
       ) : (
@@ -115,7 +115,7 @@ export function ContactsWidget({ isCompactMode = true }: ContactsWidgetProps = {
                 type="button"
                 onClick={() => void copy(entry)}
                 title={entry.phone !== undefined ? '번호 복사' : '등록된 번호 없음'}
-                className="flex min-h-6 min-w-6 w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-sp-accent/10"
+                className="flex min-h-6 min-w-6 w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-sp-surface"
               >
                 <span className="material-symbols-outlined shrink-0 text-base text-sp-muted">
                   {KIND_ICON[entry.kind]}
