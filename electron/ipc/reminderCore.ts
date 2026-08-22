@@ -88,6 +88,37 @@ export function normalizePayload(payload: unknown): {
   return { source: 'record', items: [] };
 }
 
+/**
+ * 두 예약 목록이 **내용까지 같은가.**
+ *
+ * 왜 필요한가: 화면 쪽 저장소는 같은 자료를 다시 읽을 때도 **새 배열·새 객체를 만든다.**
+ * 그래서 "바뀌었나"를 참조로 판단하면 아무것도 안 바뀐 순간에도 바뀐 것처럼 보이고,
+ * 그때마다 예약을 다시 보내면 **로그와 파일 쓰기가 끝없이 쌓인다**(실제로 그렇게 됐다).
+ * 내용으로 비교해서 같으면 아무 일도 하지 않는다.
+ */
+export function sameItems(
+  a: readonly ReminderScheduleItem[],
+  b: readonly ReminderScheduleItem[],
+): boolean {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const x = a[i] as ReminderScheduleItem;
+    const y = b[i] as ReminderScheduleItem;
+    if (
+      x.reminderId !== y.reminderId ||
+      x.fireAt !== y.fireAt ||
+      x.expiresAt !== y.expiresAt ||
+      x.title !== y.title ||
+      x.body !== y.body ||
+      x.studentDedupKey !== y.studentDedupKey
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
 /** 해당 출처의 칸만 통째로 갈아 끼운다. 다른 칸은 건드리지 않는다. */
 export function applySchedule(
   buckets: ReminderBuckets,

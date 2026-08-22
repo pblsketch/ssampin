@@ -10,6 +10,7 @@ import {
   diagnostics,
   normalizePayload,
   pruneFiredLedger,
+  sameItems,
   selectDue,
   type FiredEntry,
   type ReminderBuckets,
@@ -207,11 +208,19 @@ export function registerReminderIpc(hooks: ReminderIpcHooks): () => void {
     }
 
     const now = Date.now();
-    buckets = applySchedule(buckets, source, items);
+    // 화면이 살아 있다는 표시라 내용이 같아도 갱신한다.
     observations = {
       ...observations,
       lastPushedAt: { ...observations.lastPushedAt, [source]: now },
     };
+
+    // ★ 내용이 같으면 아무 일도 하지 않는다 — 로그도, 파일 쓰기도 없다.
+    //   화면 쪽 저장소는 같은 자료를 다시 읽을 때도 **새 배열을 만든다.** 그래서 실제로는
+    //   아무것도 안 바뀐 순간에도 예약이 계속 날아온다. 그대로 받아 적으면 진단 로그가
+    //   같은 줄로 뒤덮여 **정작 봐야 할 줄이 묻히고**, 30초마다 파일을 새로 쓴다.
+    if (sameItems(buckets[source], items)) return;
+
+    buckets = applySchedule(buckets, source, items);
     notifyLog('예약 받음', { source, count: items.length });
     if (source === 'todo') persist(now);
   };
@@ -219,6 +228,14 @@ export function registerReminderIpc(hooks: ReminderIpcHooks): () => void {
   const onClear = (_e: unknown, source?: unknown): void => {
     const target: ReminderSource | undefined =
       source === 'record' || source === 'todo' ? source : undefined;
+
+    // ★ 이미 비어 있으면 아무 일도 하지 않는다(위와 같은 이유).
+    const alreadyEmpty =
+      target === undefined
+        ? buckets.record.length === 0 && buckets.todo.length === 0
+        : buckets[target].length === 0;
+    if (alreadyEmpty) return;
+
     buckets = applyClear(buckets, target);
     notifyLog('예약 비움', { source: target ?? '전체' });
     if (target !== 'record') persist(Date.now());

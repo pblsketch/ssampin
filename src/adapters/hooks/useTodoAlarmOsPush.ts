@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useTodoStore } from '@adapters/stores/useTodoStore';
 import {
@@ -26,11 +26,16 @@ import { buildTodoAlarmSchedule } from '@domain/rules/todoAlarmRules';
  *
  * 브라우저 모드(electronAPI 없음)에서는 조용히 아무것도 하지 않는다.
  */
+/** "비웠다"를 나타내는 표식. 예약 목록의 지문(JSON)과 겹치지 않는 값이면 된다. */
+const CLEARED = '__cleared__';
+
 export function useTodoAlarmOsPush(): void {
   const todos = useTodoStore((s) => s.todos);
   const todosLoaded = useTodoStore((s) => s.loaded);
   const todoSettings = useSettingsStore((s) => s.settings.todoSettings) ?? DEFAULT_TODO_SETTINGS;
   const [alarmEnabled, setAlarmEnabled] = useState<boolean | null>(null);
+  /** 마지막으로 보낸 내용의 지문. 같은 것을 두 번 보내지 않기 위한 것뿐이다. */
+  const lastSentRef = useRef<string | null>(null);
 
   // 할 일 목록을 직접 불러온다. 지금까지는 할 일 화면이나 대시보드 카드가 먼저 떠야
   // 목록이 채워졌는데, 그러면 **대시보드에서 할 일 카드를 빼 둔 선생님은 알람이 아예
@@ -61,7 +66,10 @@ export function useTodoAlarmOsPush(): void {
 
     // 꺼져 있거나 아직 할 일을 못 읽었으면 **우리 칸만** 비운다.
     if (!alarmEnabled || !todosLoaded) {
-      api.clearReminderSchedule('todo');
+      if (lastSentRef.current !== CLEARED) {
+        lastSentRef.current = CLEARED;
+        api.clearReminderSchedule('todo');
+      }
       return;
     }
 
@@ -71,6 +79,17 @@ export function useTodoAlarmOsPush(): void {
       Date.now(),
       -new Date().getTimezoneOffset(),
     );
+
+    // ★ 방금 보낸 것과 같으면 다시 보내지 않는다.
+    //
+    // 할 일 저장소는 동기화가 자료를 다시 읽을 때마다 **내용이 같아도 새 배열을 만든다.**
+    // 그래서 이 함수는 아무것도 안 바뀐 순간에도 계속 다시 불린다. 그때마다 보내면
+    // 앱 속 알맹이가 매번 진단 로그를 쓰고 예약 파일을 새로 저장해서, **로그가 같은 줄로
+    // 뒤덮여 정작 봐야 할 줄이 묻힌다.** (실제로 그렇게 됐다.)
+    const signature = JSON.stringify(items);
+    if (lastSentRef.current === signature) return;
+    lastSentRef.current = signature;
+
     api.scheduleReminders('todo', [...items]);
   }, [alarmEnabled, todos, todosLoaded, todoSettings]);
 

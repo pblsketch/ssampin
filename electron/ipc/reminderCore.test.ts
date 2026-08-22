@@ -19,6 +19,7 @@ import {
   isValidItem,
   isFiredEntry,
   pruneFiredLedger,
+  sameItems,
   FIRED_LEDGER_MAX_AGE_MS,
   type ReminderScheduleItem,
 } from './reminderCore';
@@ -241,6 +242,27 @@ describe('기록 알림 회귀 — 할일 알람을 붙여도 예전 그대로�
     const off = applyClear(b, 'todo');
     expect(off.todo).toHaveLength(0);
     expect(off.record).toHaveLength(2);
+  });
+});
+
+describe('sameItems — 헛일을 걸러낸다', () => {
+  it('내용이 같으면 배열이 달라도 같다고 본다', () => {
+    // 화면 쪽 저장소가 같은 자료를 다시 읽으면 **새 배열·새 객체**가 만들어진다.
+    // 참조로 비교하면 이 순간이 "바뀐 것"으로 보여 로그와 파일 쓰기가 끝없이 쌓인다.
+    expect(sameItems([item()], [{ ...item() }])).toBe(true);
+    expect(sameItems([], [])).toBe(true);
+  });
+
+  it('한 글자라도 다르면 다르다고 본다', () => {
+    expect(sameItems([item()], [item({ body: '다른 문구' })])).toBe(false);
+    expect(sameItems([item()], [item({ fireAt: NOW + 1 })])).toBe(false);
+    expect(sameItems([item()], [item({ expiresAt: NOW + 1 })])).toBe(false);
+    expect(sameItems([item()], [])).toBe(false);
+    expect(sameItems([item()], [item(), item({ reminderId: 'r2' })])).toBe(false);
+  });
+
+  it('만료 시각이 생기거나 사라진 것도 잡는다', () => {
+    expect(sameItems([item({ expiresAt: undefined })], [item({ expiresAt: NOW })])).toBe(false);
   });
 });
 
