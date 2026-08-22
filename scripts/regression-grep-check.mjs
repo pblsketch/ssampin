@@ -395,6 +395,11 @@ const absenceChecks = [
     extensions: ['.ts', '.tsx'],
     patterns: [/clearReminderSchedule\(\s*\)/],
     fileFilter: (path) => /useTodoAlarmOsPush\.tsx?$/.test(path),
+    // ★ 주석은 걷어내고 본다. 이 훅의 머리 주석은 "인자 없이 부르면 기록 알림이 전멸한다"를
+    //   경고하느라 금지 대상을 예시로 적을 수밖에 없다. 걷어내지 않으면 **경고를 잘 써 둘수록
+    //   빨간불**이 된다 — #58 이 겪은 것과 같은 함정이다. 진짜 호출은 그대로 잡힌다.
+    //   "todo 를 지정해 부르는 줄이 실제로 있는가"는 appEntryReminder.contract.test.ts 가 본다.
+    stripComments: true,
   },
   {
     name: 'REGRESSION #23: SAMPLE_STUDENTS 상수가 useStudentStore.ts 에 재도입되지 않았다',

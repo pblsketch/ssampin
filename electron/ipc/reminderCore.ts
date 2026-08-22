@@ -8,8 +8,9 @@
  * ★ 이 파일은 `ipcMain`·`Notification`·`setInterval`·`fs` 를 import 하지 않는다.
  *   관례: `aiBridgeCore.ts` · `aiBridgeLiveSyncCore.ts`
  *
- * ★ 이 커밋(M4-a)에서는 **동작이 하나도 바뀌지 않는다.** 모듈 전역 변수로 흩어져 있던
- *   상태를 인자로 주고받는 형태로 옮기기만 한다. 출처별 병합·만료·정본 조회는 다음 커밋.
+ * ★ 여기에는 **파일·타이머·토스트가 없다.** 스냅샷 파일 읽기/쓰기는 `reminderState.ts`,
+ *   IPC 배선·발화는 `reminder.ts` 가 맡는다. 정본 확인(`isStillValid`)도 껍데기가 주입한다 —
+ *   이 모듈은 "무엇을 울릴지"만 판단한다.
  */
 
 /**
@@ -179,14 +180,103 @@ export function selectDue(
   };
 }
 
-export interface ReminderDiagnostics {
+/**
+ * 발화 장부 한 줄. 언제 울렸는지를 함께 적어 **오래된 줄을 정리할 수 있게** 한다.
+ *
+ * 이름만 모아 두면 파일이 영원히 자란다. 실제로 이 앱은 예전에 "지우는 규칙이 없는 목록"이
+ * 조용히 불어나 파일을 무겁게 만든 적이 있다.
+ */
+export interface FiredEntry {
+  readonly reminderId: string;
+  /** 발화 시각 (Unix ms) */
+  readonly firedAt: number;
+  /**
+   * 어느 칸에서 울린 것인지.
+   *
+   * ★ 이 값이 필요한 이유: **파일에 남기는 것은 `todo` 것만**이다. 학생 관찰 기록 알림은
+   *   출시된 동작을 한 글자도 바꾸지 않기로 했고, 그쪽은 렌더러가 자기 장부를 이미 들고
+   *   있다. 그런데 발화 이력은 두 칸이 한 목록을 같이 쓰므로, 저장할 때 골라내려면
+   *   줄마다 출처가 적혀 있어야 한다. `reminderId` 앞글자로 가르는 방법도 있지만
+   *   그건 식별자 형식에 기대는 약한 약속이라 쓰지 않는다.
+   */
+  readonly source: ReminderSource;
+}
+
+/** 발화 장부 기본 보관 기간 — 30일. 예약 지평(14일)의 두 배라 재발화를 막기에 충분하다. */
+export const FIRED_LEDGER_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+/** 발화 장부 기본 상한 — 최근 500건. 기간 정리가 실패해도 파일이 무한정 자라지 않게 한다. */
+export const FIRED_LEDGER_CAP = 500;
+
+export function isFiredEntry(x: unknown): x is FiredEntry {
+  if (typeof x !== 'object' || x === null) return false;
+  const e = x as Record<string, unknown>;
+  return (
+    typeof e['reminderId'] === 'string' && typeof e['firedAt'] === 'number' && isSource(e['source'])
+  );
+}
+
+/**
+ * 발화 장부를 정리한다 — 오래된 줄을 버리고, 그래도 많으면 **최근 것부터** 남긴다.
+ *
+ * 같은 `reminderId` 가 여러 줄이면 마지막 발화만 남긴다(재시작 직후 중복 기록 방지).
+ */
+export function pruneFiredLedger(
+  entries: readonly FiredEntry[],
+  now: number,
+  maxAgeMs: number = FIRED_LEDGER_MAX_AGE_MS,
+  cap: number = FIRED_LEDGER_CAP,
+): readonly FiredEntry[] {
+  const latest = new Map<string, FiredEntry>();
+  for (const e of entries) {
+    if (!isFiredEntry(e)) continue;
+    if (now - e.firedAt > maxAgeMs) continue;
+    const prev = latest.get(e.reminderId);
+    if (prev === undefined || e.firedAt > prev.firedAt) latest.set(e.reminderId, e);
+  }
+  const sorted = [...latest.values()].sort((a, b) => a.firedAt - b.firedAt);
+  return sorted.length > cap ? sorted.slice(sorted.length - cap) : sorted;
+}
+
+/**
+ * 진단 화면·로그가 볼 값 중 **예약 칸 바깥**에서 오는 것들.
+ *
+ * ★ `restoredFromSnapshotAt`·`snapshotItemCount` 는 **렌더러 push 로 덮이지 않는다.**
+ *   왜 굳이 그렇게 두는가: 콜드 부팅이 잘 됐는지 확인하려고 설정 화면을 여는 순간
+ *   메인 렌더러가 살아나 `'todo'` 칸을 자기 계산으로 덮어쓴다 — **확인하는 행위가 증거를
+ *   지워 버린다.** 이 두 값은 그 덮어쓰기를 견디고 "부팅 때 몇 건을 되살렸는지"를 남긴다.
+ */
+export interface ReminderObservations {
+  /** 출처별 마지막 push 시각 (Unix ms) */
+  readonly lastPushedAt: Readonly<Partial<Record<ReminderSource, number>>>;
+  /** 부팅 시 스냅샷 복원 시각 (Unix ms). 복원한 적 없으면 null */
+  readonly restoredFromSnapshotAt: number | null;
+  /** 부팅 시 스냅샷에서 되살린 건수 */
+  readonly snapshotItemCount: number;
+}
+
+export const EMPTY_OBSERVATIONS: ReminderObservations = {
+  lastPushedAt: {},
+  restoredFromSnapshotAt: null,
+  snapshotItemCount: 0,
+};
+
+export interface ReminderDiagnostics extends ReminderObservations {
   readonly counts: Readonly<Record<ReminderSource, number>>;
   /** 가장 이른 예정 시각 (Unix ms). 없으면 null */
   readonly nextFireAt: number | null;
+  /** 지금부터 가장 이른 발화까지 남은 시간(ms). 없으면 null */
+  readonly nextFireInMs: number | null;
+  /** 발화 장부에 남아 있는 줄 수 */
+  readonly firedCount: number;
 }
 
 /** 진단 화면에 보여줄 값. 알림은 조용히 실패하므로 "지금 몇 건 걸려 있는지"를 볼 수 있어야 한다. */
-export function diagnostics(buckets: ReminderBuckets): ReminderDiagnostics {
+export function diagnostics(
+  buckets: ReminderBuckets,
+  now: number,
+  observations: ReminderObservations = EMPTY_OBSERVATIONS,
+  firedCount = 0,
+): ReminderDiagnostics {
   let nextFireAt: number | null = null;
   for (const source of REMINDER_SOURCES) {
     for (const item of buckets[source]) {
@@ -196,5 +286,8 @@ export function diagnostics(buckets: ReminderBuckets): ReminderDiagnostics {
   return {
     counts: { record: buckets.record.length, todo: buckets.todo.length },
     nextFireAt,
+    nextFireInMs: nextFireAt === null ? null : nextFireAt - now,
+    firedCount,
+    ...observations,
   };
 }

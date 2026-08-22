@@ -1181,21 +1181,26 @@ contextBridge.exposeInMainWorld('electronAPI', {
     };
   },
 
-  // === 학생 관찰 기록 알림 — OS 토스트 발화 (reminder, P3) ===
-  // 렌더러가 forward 스케줄을 계산해 push → main 상시 타이머가 예정 시각에 발화(S1).
+  // === 알림 — OS 토스트 발화 (reminder) ===
+  // 렌더러가 예약 목록을 계산해 push → main 상시 타이머가 예정 시각에 발화.
+  // ★ 예약 칸은 **출처별**이다('record' = 학생 관찰 기록, 'todo' = 할 일 알람).
+  //   출처를 빠뜨리면 남의 칸까지 덮거나 지운다.
   scheduleReminders: (
+    source: 'record' | 'todo',
     items: Array<{
       reminderId: string;
       fireAt: number;
+      expiresAt?: number;
       title: string;
       body: string;
       studentDedupKey: string;
     }>,
   ): void => {
-    ipcRenderer.send('reminder:schedule', items);
+    ipcRenderer.send('reminder:schedule', { source, items });
   },
-  clearReminderSchedule: (): void => {
-    ipcRenderer.send('reminder:clear');
+  // 출처를 주면 그 칸만 비운다. 안 주면 전부 — 구버전 호환용이라 새로 쓰는 쪽은 반드시 지정한다.
+  clearReminderSchedule: (source?: 'record' | 'todo'): void => {
+    ipcRenderer.send('reminder:clear', source);
   },
   // 토스트 클릭 시 opaque reminderId 수신 (학생/프롬프트 해석은 렌더러 몫 — 레이어·프라이버시).
   onReminderClick: (callback: (reminderId: string) => void): (() => void) => {
@@ -1205,14 +1210,28 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.removeListener('reminder:click', handler);
     };
   },
-  // 토스트 발화 직후 dedup 키 수신 → 렌더러 발화 장부에 기록(중복 방지).
-  onReminderFired: (callback: (studentDedupKey: string) => void): (() => void) => {
-    const handler = (_event: unknown, studentDedupKey: string) => callback(studentDedupKey);
+  // 토스트 발화 직후 dedup 키 + 출처 수신 → 렌더러 발화 장부에 기록(중복 방지).
+  // preload 가 IPC 페이로드를 풀어 위치 인자로 넘기는 이 저장소의 관용구를 그대로 유지한다.
+  onReminderFired: (
+    callback: (dedupKey: string, source: 'record' | 'todo') => void,
+  ): (() => void) => {
+    const handler = (_event: unknown, p: { dedupKey: string; source: 'record' | 'todo' }) =>
+      callback(p.dedupKey, p.source);
     ipcRenderer.on('reminder:fired', handler);
     return () => {
       ipcRenderer.removeListener('reminder:fired', handler);
     };
   },
+  // 알림 진단 — 출처별 예약 건수·다음 발화 시각·부팅 시 스냅샷 복원 결과.
+  getReminderDiagnostics: (): Promise<{
+    counts: { record: number; todo: number };
+    nextFireAt: number | null;
+    nextFireInMs: number | null;
+    firedCount: number;
+    lastPushedAt: { record?: number; todo?: number };
+    restoredFromSnapshotAt: number | null;
+    snapshotItemCount: number;
+  }> => ipcRenderer.invoke('reminder:diagnostics'),
   // 메모리 진단 (설정 화면 표시용)
   getMemoryMetrics: (): Promise<{
     totalBytes: number;

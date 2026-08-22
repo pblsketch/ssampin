@@ -31,6 +31,8 @@ import {
 import { registerMiniAppHandlers } from './ipc/miniapp';
 import { comboToAccelerator, isSafeGlobalShortcutCombo } from './shortcutAccelerator';
 import { registerReminderIpc } from './ipc/reminder';
+import { initReminderState } from './ipc/reminderState';
+import { initNotifyDiag } from './notifyDiag';
 import { computeExpandedBounds, pinFromExpanded, type IconAnchor } from './iconWindowGeometry';
 import { attachCsp, installCspViolationLogger } from './security/csp';
 import { registerOAuthHandlers } from './ipc/oauth';
@@ -5816,10 +5818,16 @@ if (!gotTheLock) {
     // Sticker picker prewarm (5.5초 — quickAdd와 약간 stagger)
     setTimeout(() => prewarmStickerPickerWindow(), 5500);
     createTray();
-    // 학생 관찰 기록 알림 — OS 토스트 발화 IPC(P3, S1). 렌더러가 push한 스케줄을 상시 타이머로 발화.
+    // 알림 — OS 토스트 발화 IPC. 렌더러가 push한 예약을 상시 타이머로 발화한다.
+    // ★ 진단 로그(userData/notify-diag.log)와 스냅샷(userData/notify-state.json)을 먼저 켠다 —
+    //   registerReminderIpc 가 시작하자마자 스냅샷을 읽고 로그를 남기기 때문이다.
+    initNotifyDiag(app.getPath('userData'));
+    initReminderState(app.getPath('userData'));
     registerReminderIpc({
       onReminderClick: (reminderId) => focusForReminder(reminderId),
-      onReminderFired: (dedupKey) => broadcastToAllWindows('reminder:fired', dedupKey),
+      // 와이어는 객체, preload 가 풀어서 위치 인자 2개로 렌더러에 넘긴다.
+      onReminderFired: (dedupKey, source) =>
+        broadcastToAllWindows('reminder:fired', { dedupKey, source }),
     });
     setupAutoUpdater();
 

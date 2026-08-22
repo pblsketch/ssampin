@@ -65,7 +65,11 @@ export function useReminderOsPush(onToastClicked?: (reminderId: string) => void)
   useEffect(() => {
     const api = window.electronAPI;
     if (!api?.onReminderFired) return;
-    return api.onReminderFired((dedupKey) => {
+    return api.onReminderFired((dedupKey, source) => {
+      // 할 일 알람이 울린 것까지 기록 장부에 적으면 안 된다 — 출처로 가른다.
+      // 키 접두 문자열로 가르지 않는 이유: 담임반 키는 `{sid}:{date}`, 수업반 키는
+      // `subject:{clsId}:{today}` 라서 둘 다 'record' 로 시작하지 않는다.
+      if (source !== 'record') return;
       void useReminderFireStore.getState().markFired(dedupKey);
     });
   }, []);
@@ -91,7 +95,9 @@ export function useReminderOsPush(onToastClicked?: (reminderId: string) => void)
       isReminderPaused(pausedUntil, Date.now()) ||
       isReminderSnoozed(snoozeUntil, Date.now())
     ) {
-      api.clearReminderSchedule();
+      // ★ 출처를 반드시 지정한다. 인자를 빼면 할 일 알람 예약까지 같이 지워진다 —
+      //   "스누즈를 눌렀더니 할 일 알람이 죽는" 구멍이 여기 있었다.
+      api.clearReminderSchedule('record');
       return;
     }
 
@@ -177,7 +183,7 @@ export function useReminderOsPush(onToastClicked?: (reminderId: string) => void)
       }
     }
 
-    api.scheduleReminders(items);
+    api.scheduleReminders('record', items);
   }, [
     rr,
     periodTimes,

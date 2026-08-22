@@ -138,6 +138,7 @@ import { useFontApplier } from '@adapters/hooks/useFontApplier';
 import { useDesktopModeFallback } from '@adapters/hooks/useDesktopModeFallback';
 import { useNativeDesktopAvWarning } from '@adapters/hooks/useNativeDesktopAvWarning';
 import { useNativeDesktopDiagListener } from '@adapters/hooks/useNativeDesktopDiagListener';
+import { useTodoAlarmOsPush } from '@adapters/hooks/useTodoAlarmOsPush';
 import { useUpdateBanner } from '@adapters/hooks/useUpdateBanner';
 import { useAnalytics, useAnalyticsLifecycle } from '@adapters/hooks/useAnalytics';
 import { MobileAnnouncementBanner } from '@adapters/components/MobileAnnouncementBanner';
@@ -784,6 +785,12 @@ function MainApp() {
 
   // native-desktop / widget 진단 로그 listener (G1 게이트 디버깅 임시)
   useNativeDesktopDiagListener();
+
+  // 할 일 시각 알람 — OS 토스트 예약을 main 으로 보낸다.
+  // ★ 반드시 MainApp 안에 둔다. App() 은 훅이 없는 분기 함수이고, 위젯·아이콘·빠른 입력·
+  //   스티커·멀티설문 공유 창이 전부 같은 번들을 쓰기 때문에 거기 두면 여러 창이 같은
+  //   'todo' 칸에 동시에 써서 서로를 덮어쓴다(appEntryReminder.contract.test.ts 가 검사).
+  useTodoAlarmOsPush();
 
   // 듀얼 모드 진입 시 초기 좌측 도구 힌트로 쓰일, 마지막으로 본 단일 듀얼지원 도구
   const [lastSingleTool, setLastSingleTool] = useState<DualToolId | null>(null);

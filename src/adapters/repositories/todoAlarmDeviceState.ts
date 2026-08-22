@@ -43,8 +43,36 @@ export async function saveTodoAlarmEnabled(alarmEnabled: boolean): Promise<boole
   try {
     const { storage } = await import('@adapters/di/container');
     await storage.write<TodoAlarmDeviceState>(TODO_ALARM_DEVICE_STATE_KEY, { alarmEnabled });
+    notify(alarmEnabled);
     return true;
   } catch {
     return false;
   }
+}
+
+/**
+ * 켬/끔이 바뀌면 알려 준다.
+ *
+ * 이 값은 동기화되는 설정(`settings.json`)이 아니라 기기 전용 저장소에 있어서, 설정 화면의
+ * 스위치를 껐을 때 **알람을 실제로 보내는 훅이 그 사실을 알 방법이 없다.** 이 구독이 그
+ * 다리다. 스위치를 끄자마자 예약이 비워져야 "껐는데도 울린다"가 생기지 않는다.
+ */
+type Listener = (alarmEnabled: boolean) => void;
+const listeners = new Set<Listener>();
+
+function notify(alarmEnabled: boolean): void {
+  for (const listener of listeners) {
+    try {
+      listener(alarmEnabled);
+    } catch {
+      // 구독자 하나가 실패해도 나머지에게는 전달한다.
+    }
+  }
+}
+
+export function subscribeTodoAlarmEnabled(listener: Listener): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
 }

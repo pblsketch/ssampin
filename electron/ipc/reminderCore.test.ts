@@ -1,11 +1,12 @@
 /**
- * 알림 판정 로직 고정 — M4-(a).
- *
- * 이 커밋의 목적은 **기존 동작을 그대로 붙잡아 두는 것**이다. 다음 커밋에서 출처별 병합·
- * 만료·정본 조회를 넣을 때, 무엇이 원래 동작이었는지 이 테스트가 기준이 된다.
+ * 알림 판정 로직.
  *
  * 알림은 조용히 실패하는 기능이다 — 안 울린 알림은 아무도 신고하지 않는다.
  * 그래서 "울려야 할 때 울리는가"만큼 **"울리지 말아야 할 때 안 울리는가"** 를 함께 잠근다.
+ *
+ * ★ 특히 **할 일 알람을 붙이면서 학생 관찰 기록 알림이 조용히 죽지 않는가**를 반복해서
+ *   확인한다. 그게 이 변경에서 가장 비싼 실패다 — 아무 에러도 안 나고 몇 달 동안
+ *   아무도 눈치채지 못한 채 알림만 안 온다.
  */
 import { describe, it, expect } from 'vitest';
 import {
@@ -16,6 +17,9 @@ import {
   selectDue,
   diagnostics,
   isValidItem,
+  isFiredEntry,
+  pruneFiredLedger,
+  FIRED_LEDGER_MAX_AGE_MS,
   type ReminderScheduleItem,
 } from './reminderCore';
 
@@ -185,6 +189,114 @@ describe('selectDue — 새 안전장치', () => {
   });
 });
 
+describe('기록 알림 회귀 — 할일 알람을 붙여도 예전 그대로여야 한다', () => {
+  it('구형 배열 payload 5건이 record 칸에 그대로 예약된다', () => {
+    const raw = Array.from({ length: 5 }, (_, i) => item({ reminderId: `r${i}` }));
+    const { source, items } = normalizePayload(raw);
+    const b = applySchedule(EMPTY_BUCKETS, source, items);
+
+    expect(b.record).toHaveLength(5);
+    expect(b.todo).toHaveLength(0);
+  });
+
+  it('record 5건 + todo 3건 → 8건. record 를 다시 보내도 todo 3건이 살아 있다', () => {
+    let b = applySchedule(
+      EMPTY_BUCKETS,
+      'record',
+      Array.from({ length: 5 }, (_, i) => item({ reminderId: `r${i}` })),
+    );
+    b = applySchedule(
+      b,
+      'todo',
+      Array.from({ length: 3 }, (_, i) => item({ reminderId: `t${i}` })),
+    );
+    expect(b.record.length + b.todo.length).toBe(8);
+
+    b = applySchedule(
+      b,
+      'record',
+      Array.from({ length: 3 }, (_, i) => item({ reminderId: `r${i}` })),
+    );
+    expect(b.record).toHaveLength(3);
+    expect(b.todo).toHaveLength(3); // ★ 남의 칸은 건드리지 않았다
+  });
+
+  it("clearReminderSchedule('record') 를 해도 todo 3건은 살아 있다", () => {
+    let b = applySchedule(EMPTY_BUCKETS, 'record', [item()]);
+    b = applySchedule(
+      b,
+      'todo',
+      Array.from({ length: 3 }, (_, i) => item({ reminderId: `t${i}` })),
+    );
+
+    const cleared = applyClear(b, 'record');
+    expect(cleared.record).toHaveLength(0);
+    expect(cleared.todo).toHaveLength(3);
+  });
+
+  it('알람을 끄면(todo 칸 비움) record 칸은 그대로다', () => {
+    let b = applySchedule(EMPTY_BUCKETS, 'record', [item(), item({ reminderId: 'r2' })]);
+    b = applySchedule(b, 'todo', [item({ reminderId: 't1' })]);
+
+    const off = applyClear(b, 'todo');
+    expect(off.todo).toHaveLength(0);
+    expect(off.record).toHaveLength(2);
+  });
+});
+
+describe('발화 장부 — 재시작해도 같은 알림이 또 울리지 않는다', () => {
+  it('형태 검사', () => {
+    expect(isFiredEntry({ reminderId: 'a', firedAt: NOW, source: 'todo' })).toBe(true);
+    expect(isFiredEntry({ reminderId: 'a', firedAt: NOW })).toBe(false);
+    expect(isFiredEntry({ reminderId: 'a' })).toBe(false);
+    expect(isFiredEntry(null)).toBe(false);
+  });
+
+  it('"14:00 발화 → 14:03 재시작" — 장부에 있으면 다시 울리지 않는다', () => {
+    const fired = pruneFiredLedger(
+      [{ reminderId: 'todo:t1:1', firedAt: NOW - 180_000, source: 'todo' }],
+      NOW,
+    );
+    const b = applySchedule(EMPTY_BUCKETS, 'todo', [item({ reminderId: 'todo:t1:1' })]);
+
+    const r = selectDue(b, NOW, new Set(fired.map((e) => e.reminderId)));
+    expect(r.toFire).toHaveLength(0);
+  });
+
+  it('보관 기간이 지난 줄은 버린다 — 파일이 영원히 자라지 않게', () => {
+    const kept = pruneFiredLedger(
+      [
+        { reminderId: 'old', firedAt: NOW - FIRED_LEDGER_MAX_AGE_MS - 1, source: 'todo' },
+        { reminderId: 'new', firedAt: NOW - 1000, source: 'todo' },
+      ],
+      NOW,
+    );
+    expect(kept.map((e) => e.reminderId)).toEqual(['new']);
+  });
+
+  it('상한을 넘으면 최근 것부터 남긴다', () => {
+    const many = Array.from({ length: 10 }, (_, i) => ({
+      reminderId: `r${i}`,
+      firedAt: NOW - (10 - i) * 1000,
+      source: 'todo' as const,
+    }));
+    const kept = pruneFiredLedger(many, NOW, FIRED_LEDGER_MAX_AGE_MS, 3);
+
+    expect(kept.map((e) => e.reminderId)).toEqual(['r7', 'r8', 'r9']);
+  });
+
+  it('같은 id 가 여러 줄이면 마지막 발화만 남는다', () => {
+    const kept = pruneFiredLedger(
+      [
+        { reminderId: 'r', firedAt: NOW - 5000, source: 'todo' },
+        { reminderId: 'r', firedAt: NOW - 1000, source: 'todo' },
+      ],
+      NOW,
+    );
+    expect(kept).toEqual([{ reminderId: 'r', firedAt: NOW - 1000, source: 'todo' }]);
+  });
+});
+
 describe('diagnostics', () => {
   it('칸별 건수와 가장 이른 예정 시각을 알려준다', () => {
     let b = applySchedule(EMPTY_BUCKETS, 'record', [item({ fireAt: NOW + 5000 })]);
@@ -193,12 +305,32 @@ describe('diagnostics', () => {
       item({ reminderId: 't2', fireAt: NOW + 9000 }),
     ]);
 
-    const d = diagnostics(b);
+    const d = diagnostics(b, NOW);
     expect(d.counts).toEqual({ record: 1, todo: 2 });
     expect(d.nextFireAt).toBe(NOW + 1000);
+    expect(d.nextFireInMs).toBe(1000);
   });
 
   it('아무것도 없으면 예정 시각은 null', () => {
-    expect(diagnostics(EMPTY_BUCKETS).nextFireAt).toBeNull();
+    const d = diagnostics(EMPTY_BUCKETS, NOW);
+    expect(d.nextFireAt).toBeNull();
+    expect(d.nextFireInMs).toBeNull();
+  });
+
+  it('★ 부팅 때 복원한 건수는 렌더러가 예약을 덮어써도 남는다', () => {
+    // 콜드 부팅 판정에 쓰는 값이다. 설정 화면을 여는 순간 메인 렌더러가 살아나 todo 칸을
+    // 자기 계산으로 덮어쓰는데, 그때 이 값까지 사라지면 확인 행위가 증거를 지우게 된다.
+    const observations = {
+      lastPushedAt: { todo: NOW },
+      restoredFromSnapshotAt: NOW - 60_000,
+      snapshotItemCount: 3,
+    };
+    const b = applySchedule(EMPTY_BUCKETS, 'todo', []); // 렌더러가 0건으로 덮어썼다
+
+    const d = diagnostics(b, NOW, observations, 7);
+    expect(d.counts.todo).toBe(0);
+    expect(d.snapshotItemCount).toBe(3); // ★ 그래도 "부팅 때 3건 되살렸다"는 남는다
+    expect(d.restoredFromSnapshotAt).toBe(NOW - 60_000);
+    expect(d.firedCount).toBe(7);
   });
 });

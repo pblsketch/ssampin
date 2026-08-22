@@ -755,19 +755,31 @@ interface ElectronAPI {
   onDataChanged: (callback: (filename: string) => void) => () => void;
   // 절전/잠금 복귀 알림
   onSystemResume?: (callback: () => void) => () => void;
-  // 학생 관찰 기록 알림 — OS 토스트 발화 (P3)
+  // 알림 — OS 토스트 발화. 예약 칸은 **출처별**이다(record = 학생 관찰 기록, todo = 할 일 알람).
   scheduleReminders?: (
+    source: 'record' | 'todo',
     items: Array<{
       reminderId: string;
       fireAt: number;
+      expiresAt?: number;
       title: string;
       body: string;
       studentDedupKey: string;
     }>,
   ) => void;
-  clearReminderSchedule?: () => void;
+  /** 출처를 주면 그 칸만 비운다. **인자 없이 부르면 남의 알림까지 지워진다.** */
+  clearReminderSchedule?: (source?: 'record' | 'todo') => void;
   onReminderClick?: (callback: (reminderId: string) => void) => () => void;
-  onReminderFired?: (callback: (studentDedupKey: string) => void) => () => void;
+  onReminderFired?: (callback: (dedupKey: string, source: 'record' | 'todo') => void) => () => void;
+  getReminderDiagnostics?: () => Promise<{
+    counts: { record: number; todo: number };
+    nextFireAt: number | null;
+    nextFireInMs: number | null;
+    firedCount: number;
+    lastPushedAt: { record?: number; todo?: number };
+    restoredFromSnapshotAt: number | null;
+    snapshotItemCount: number;
+  }>;
   // 메모리 진단
   getMemoryMetrics?: () => Promise<{
     totalBytes: number;
