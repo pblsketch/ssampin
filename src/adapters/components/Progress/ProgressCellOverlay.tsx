@@ -88,6 +88,9 @@ export function ProgressCellOverlay({
       ? `${representative.unit} > ${representative.lesson}`
       : representative.unit || representative.lesson || '';
 
+  /** 같은 칸에 여러 진도가 있으면 대표 1건만 보이므로, 숨은 건수를 드러낸다 */
+  const hiddenCount = cell.entries.length - 1;
+
   const content = (
     <>
       <span
@@ -124,16 +127,55 @@ export function ProgressCellOverlay({
     );
   }
 
+  /*
+   * B안(진도 캘린더) 셀 — 열 폭이 요일 수로 고정(table-fixed)되어 한 줄에 배지·텍스트·%를
+   * 나란히 두면 정작 읽어야 할 단원·차시가 몇 글자 만에 잘린다(F-1 신고).
+   * 그래서 가로로 늘어놓지 않고 위계대로 쌓는다:
+   *   1행 상태(+숨은 건수) · 진도율  →  2행 단원(보조)  →  3행 차시(본문, 2줄까지)
+   * 잘린 전문은 title(툴팁)과 클릭 시 열리는 편집 모달에서 그대로 볼 수 있다.
+   */
   return (
     <button
       onClick={(e) => {
         e.stopPropagation();
         onEntryClick?.();
       }}
-      title={summaryText || STATUS_LABEL[representative.status]}
-      className="flex w-full items-center gap-1 rounded-lg px-1 py-1 text-left transition-colors hover:bg-black/5 dark:hover:bg-white/10"
+      title={
+        [STATUS_LABEL[representative.status], summaryText].filter(Boolean).join(' · ') +
+        (hiddenCount > 0 ? ` (이 교시에 진도 ${cell.entries.length}건)` : '')
+      }
+      className="flex w-full min-w-0 flex-col gap-0.5 rounded-lg px-1 py-1 text-left transition-colors hover:bg-black/5 dark:hover:bg-white/10"
     >
-      {content}
+      <span className="flex w-full min-w-0 items-center gap-1">
+        <span
+          className={`shrink-0 rounded px-1.5 py-0.5 text-micro font-bold ${STATUS_BADGE[representative.status]}`}
+        >
+          {STATUS_LABEL[representative.status]}
+        </span>
+        {hiddenCount > 0 && (
+          <span className="shrink-0 rounded bg-black/10 px-1 py-0.5 text-micro font-semibold text-sp-muted dark:bg-white/10">
+            +{hiddenCount}
+          </span>
+        )}
+        {classSummary && classSummary.total > 0 && (
+          <span className="ml-auto shrink-0 text-micro font-semibold text-sp-accent">
+            {classSummary.percent}%
+          </span>
+        )}
+      </span>
+      {representative.unit && (
+        <span className="w-full min-w-0 truncate text-micro text-sp-muted">
+          {representative.unit}
+        </span>
+      )}
+      {representative.lesson && (
+        <span className="line-clamp-2 w-full min-w-0 text-detail leading-snug text-sp-text">
+          {representative.lesson}
+        </span>
+      )}
+      {!representative.unit && !representative.lesson && (
+        <span className="w-full min-w-0 truncate text-detail text-sp-muted">내용 없음</span>
+      )}
     </button>
   );
 }

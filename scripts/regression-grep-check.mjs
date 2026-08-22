@@ -269,6 +269,27 @@ const presenceChecks = [
     pattern: /surfaceKey:\s*JSON\.stringify\(\s*\[\s*context\s*,[\s\S]{0,60}?rawKey\s*\]\s*\)/,
     name: 'REGRESSION #49: recordIdentityAdapter 합성키가 context+classId+rawKey 분리 키 유지 (개인정보 오병합 hard gate)',
   },
+  // ────────────────────────────────────────────────────────────────────────
+  // REGRESSION #60·#61 — 진도 캘린더 "글씨 많으면 화면이 잘린다" 신고(F-1, 2026-08-21).
+  //
+  // 두 줄이 짝으로 있어야 잘림이 막힌다. 하나만 남으면 증상이 그대로 돌아온다.
+  //  #60 table-fixed  : 없으면(기본 auto) 칸 안의 긴 단원·차시 텍스트가 열 폭을 정해
+  //                     표가 창보다 넓어진다. 셀의 truncate/line-clamp 도 같이 무력화된다.
+  //  #61 min-w-0      : 없으면 flex 아이템 기본값 min-width:auto 때문에 본문 칸이 창보다
+  //                     넓어져, 페이지가 가진 overflow-x-auto 가 영영 켜지지 않고 넘친
+  //                     부분이 body 의 overflow-x:hidden 에 잘려 손댈 수 없게 된다.
+  //                     (실측: 1440px 창에서 목·금 두 요일이 통째로 사라졌다.)
+  // ────────────────────────────────────────────────────────────────────────
+  {
+    file: 'src/adapters/components/Progress/ProgressCalendarGrid.tsx',
+    pattern: /<table[^>]* table-fixed /,
+    name: 'REGRESSION #60: 진도 캘린더 표는 table-fixed 유지 (긴 진도 글이 열 폭을 밀어내 목·금이 잘리는 것 방지)',
+  },
+  {
+    file: 'src/App.tsx',
+    pattern: /className="flex flex-1 min-h-0 min-w-0 flex-col"/,
+    name: 'REGRESSION #61: 본문 칸은 min-w-0 유지 (넓은 표가 창을 밀어내 잘리지 않고 가로 스크롤되도록)',
+  },
 ];
 
 // ============================================================

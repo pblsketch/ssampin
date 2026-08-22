@@ -1289,7 +1289,13 @@ function MainApp() {
           채우지 못하고 어색해 보였다(2026-08-14 지적). 이렇게 두면 패널은 창 맨 위까지
           올라가고, 창을 옮기는 손잡이와 창 조작 버튼 자리는 오른쪽에서 확보된다.
         */}
-        <div className="flex flex-1 min-h-0 flex-col">
+        {/*
+          min-w-0 필수 — flex 아이템의 기본 min-width:auto는 "내용의 최소 폭"이라, 표처럼 넓은
+          내용이 있는 페이지에서 이 칸이 창보다 넓어져 버린다. 그러면 페이지 안에 만들어 둔
+          가로 스크롤(overflow-x-auto)은 영영 켜지지 않고, 넘친 부분은 body의 overflow-x:hidden에
+          그냥 잘려 손댈 수 없게 된다(진도 캘린더 목·금 실종 신고 F-1의 근본 원인).
+        */}
+        <div className="flex flex-1 min-h-0 min-w-0 flex-col">
           {/* 개별 페이지에서는 창 버튼 줄을 제목줄과 같은 면으로 이어 붙인다.
               대시보드는 배경이 창 맨 위까지 이어져야 하므로 투명하게 둔다. */}
           <WindowDragStrip surface={currentPage !== 'dashboard'} />

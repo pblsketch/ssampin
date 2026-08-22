@@ -32,7 +32,7 @@ export function ProgressCalendarCell({
   if (!slot) {
     // 공강 — 옅은 빈 칸
     return (
-      <div className="flex min-h-[84px] w-full items-center justify-center rounded-lg bg-black/5 text-xs text-sp-muted dark:bg-white/10">
+      <div className="flex min-h-[104px] w-full items-center justify-center rounded-lg bg-black/5 text-xs text-sp-muted dark:bg-white/10">
         —
       </div>
     );
@@ -42,17 +42,17 @@ export function ProgressCalendarCell({
 
   return (
     <div
-      className={`relative flex min-h-[84px] w-full flex-col gap-1.5 rounded-lg border p-2 ${style.bg} ${style.border}`}
+      className={`relative flex min-h-[104px] w-full min-w-0 flex-col gap-1 rounded-lg border p-2 ${style.bg} ${style.border}`}
     >
-      <div className="flex items-start justify-between gap-1">
-        <span className={`truncate text-sm font-bold ${style.text}`}>{slot.subject}</span>
+      <div className="flex min-w-0 items-start justify-between gap-1">
+        <span className={`min-w-0 truncate text-sm font-bold ${style.text}`}>{slot.subject}</span>
         {matchedClass && (
           <span className="shrink-0 rounded-full bg-black/10 px-1.5 py-0.5 text-micro font-semibold text-sp-muted dark:bg-white/10">
             {matchedClass.name}
           </span>
         )}
       </div>
-      <div className="mt-auto">
+      <div className="mt-auto min-w-0">
         <ProgressCellOverlay
           cell={cell}
           classSummary={classSummary}

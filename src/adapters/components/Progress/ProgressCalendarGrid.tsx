@@ -83,10 +83,26 @@ export function ProgressCalendarGrid({
       {/* 요일 × 교시 격자 */}
       <div className="overflow-hidden rounded-2xl border border-sp-border bg-sp-card shadow-2xl shadow-black/20">
         <div className="w-full overflow-x-auto">
-          <table className="w-full min-w-[720px] border-collapse">
+          {/*
+           * table-fixed 필수 — 기본값(auto)에서는 칸 안의 긴 단원·차시 텍스트가 열 폭을 정하기
+           * 때문에, 진도 글이 길어지면 표가 창보다 넓어지고 그 넘침이 조상 flex(min-width:auto)를
+           * 타고 올라가 body의 overflow-x:hidden에 잘린다 → 목·금이 화면 밖으로 사라짐(F-1 신고).
+           * colgroup으로 폭을 먼저 못박아야 셀 안의 truncate/line-clamp가 비로소 동작한다.
+           * (같은 골격을 attendance/shared/AttendanceGridView 가 이미 쓴다.)
+           */}
+          <table className="w-full min-w-[720px] table-fixed border-collapse">
+            <colgroup>
+              <col className="w-16" />
+              {dayLabels.map((label, dayIndex) => (
+                <col
+                  key={`col-${dayIndex}-${label}`}
+                  style={{ width: `${100 / dayLabels.length}%` }}
+                />
+              ))}
+            </colgroup>
             <thead>
               <tr className="border-b border-sp-border bg-sp-surface">
-                <th className="w-16 border-r border-sp-border px-2 py-3 text-center text-sm font-bold text-sp-text">
+                <th className="border-r border-sp-border px-2 py-3 text-center text-sm font-bold text-sp-text">
                   교시
                 </th>
                 {dayLabels.map((label, dayIndex) => {
@@ -97,7 +113,6 @@ export function ProgressCalendarGrid({
                       className={`relative border-r border-sp-border px-2 py-3 text-center text-sm font-bold last:border-r-0 ${
                         isToday ? 'bg-black/5 text-sp-accent dark:bg-white/10' : 'text-sp-text'
                       }`}
-                      style={{ width: `${100 / dayLabels.length}%` }}
                     >
                       {isToday && <div className="absolute left-0 top-0 h-1 w-full bg-sp-accent" />}
                       {label}
@@ -134,7 +149,7 @@ export function ProgressCalendarGrid({
                             onEntryClick={() => onEntryClick(cell)}
                           />
                         ) : (
-                          <div className="flex min-h-[84px] w-full items-center justify-center rounded-lg bg-black/5 text-xs text-sp-muted dark:bg-white/10">
+                          <div className="flex min-h-[104px] w-full items-center justify-center rounded-lg bg-black/5 text-xs text-sp-muted dark:bg-white/10">
                             —
                           </div>
                         )}
