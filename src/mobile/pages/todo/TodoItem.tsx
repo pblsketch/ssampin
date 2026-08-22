@@ -1,6 +1,47 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { PRIORITY_CONFIG, calcDDay } from './priorityConfig';
-import type { Todo } from '@domain/entities/Todo';
+import { useMobileStaffContactStore } from '@mobile/stores/useMobileStaffContactStore';
+import { isCheckDue } from '@domain/rules/todoCheckRules';
+import { toLocalDateString } from '@shared/utils/localDate';
+import type { Todo, TodoRelatedPerson } from '@domain/entities/Todo';
+
+/**
+ * 관련인 이름 — **글자만, 읽기 전용.**
+ *
+ * 붙이고 떼는 것은 데스크톱 쌤핀에서만 한다. 여기서도 고칠 수 있게 하면 같은 항목을
+ * 두 곳에서 고쳐 어느 쪽이 맞는지 알 수 없게 된다(연락처 화면이 이미 같은 이유로 읽기 전용이다).
+ *
+ * ★ 정본은 연락처다. `staffId` 로 지금 이름을 찾고, 할 일에 저장된 이름은 연락처에서
+ *   지워졌을 때만 쓰는 폴백이다. **여기서 저장을 다시 하지 않는다.**
+ */
+function RelatedStaffNames({ related }: { related: readonly TodoRelatedPerson[] }) {
+  const contacts = useMobileStaffContactStore((s) => s.contacts);
+  const load = useMobileStaffContactStore((s) => s.load);
+
+  // 연락처를 미리 읽어 두는 곳이 없어서, 이걸 빠뜨리면 살아 있는 교직원이 전부
+  // 저장해 둔 옛 이름으로 보인다. store 에 중복 방지 가드가 있어 여러 번 불러도 안전하다.
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const names = useMemo(
+    () =>
+      related.map((person) => {
+        const contact = contacts.find((c) => c.id === person.staffId);
+        return { staffId: person.staffId, name: contact?.name ?? person.nameSnapshot };
+      }),
+    [related, contacts],
+  );
+
+  if (names.length === 0) return null;
+
+  return (
+    <span className="inline-flex items-center gap-0.5 text-xs text-sp-muted">
+      <span className="material-symbols-outlined text-icon-sm">badge</span>
+      {names.map((n) => n.name).join(', ')}
+    </span>
+  );
+}
 
 interface TodoItemProps {
   todo: Todo;
@@ -14,6 +55,8 @@ export function TodoItem({ todo, onToggle, onDelete, onToggleSubTask }: TodoItem
   const priority = todo.priority ?? 'none';
   const priorityCfg = PRIORITY_CONFIG[priority];
   const dday = todo.dueDate ? calcDDay(todo.dueDate) : null;
+  const checkDue = todo.checkAt !== undefined && isCheckDue(todo, toLocalDateString());
+  const relatedStaff = todo.relatedStaff ?? [];
   const subTasks = todo.subTasks ?? [];
   const hasSubTasks = subTasks.length > 0;
   const completedCount = subTasks.filter((st) => st.completed).length;
@@ -74,6 +117,21 @@ export function TodoItem({ todo, onToggle, onDelete, onToggleSubTask }: TodoItem
             )}
             {/* D-Day 배지 */}
             {dday && <span className={`text-xs font-medium ${dday.colorClass}`}>{dday.label}</span>}
+            {/* 다시 확인할 날 — 마감일과 다른 개념이라 아이콘을 따로 붙인다.
+                오늘이거나 이미 지났으면 눈에 띄게. 데스크톱 목록과 같은 규칙을 쓴다. */}
+            {todo.checkAt && (
+              <span
+                title={`다시 확인할 날 ${todo.checkAt}`}
+                className={`inline-flex items-center gap-0.5 text-xs ${
+                  checkDue ? 'text-sp-accent font-medium' : 'text-sp-muted'
+                }`}
+              >
+                <span className="material-symbols-outlined text-icon-sm">event_repeat</span>
+                {todo.checkAt.slice(5)}
+              </span>
+            )}
+            {/* 관련인 — 이름만 보여준다. 편집은 데스크톱에서만. */}
+            {relatedStaff.length > 0 && <RelatedStaffNames related={relatedStaff} />}
             {/* 하위 할일 배지 */}
             {hasSubTasks && (
               <button
