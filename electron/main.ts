@@ -5701,6 +5701,23 @@ function createStartupBackups(): void {
 // (로그의 "crashpad ... not connected"). 상세는 electron/crashEvidence.ts 참조.
 const crashDumpDir = installCrashReporter({ app, crashReporter });
 
+/**
+ * 윈도우 알림 창에 뜨는 **앱 이름과 아이콘**을 정한다.
+ *
+ * 이 값은 `electron-builder.yml` 의 `appId` 와 **반드시 같아야 한다.** 설치 프로그램이
+ * 시작 메뉴 바로가기에 이 값을 새겨 넣고, 윈도우는 알림이 올라올 때 그 바로가기를 찾아
+ * 이름과 아이콘을 가져오기 때문이다. 어긋나면 못 찾아서 "Electron" 이라고 뜬다.
+ * (두 값이 벌어지지 않는지는 `electron/appUserModelId.contract.test.ts` 가 검사한다.)
+ *
+ * ⚠️ **개발 중(`npm run electron:dev`)에는 여전히 "Electron" 으로 보인다.** 시작 메뉴에
+ *    바로가기가 없기 때문이고, 설치한 앱에서만 제대로 보인다. 개발 화면만 보고
+ *    "안 고쳐졌다"고 판단하면 안 된다.
+ */
+const APP_USER_MODEL_ID = 'com.ssampin.app';
+if (process.platform === 'win32') {
+  app.setAppUserModelId(APP_USER_MODEL_ID);
+}
+
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
   app.quit();
@@ -5828,6 +5845,7 @@ if (!gotTheLock) {
       // 와이어는 객체, preload 가 풀어서 위치 인자 2개로 렌더러에 넘긴다.
       onReminderFired: (dedupKey, source) =>
         broadcastToAllWindows('reminder:fired', { dedupKey, source }),
+      getIcon: () => getAppIcon(),
     });
     setupAutoUpdater();
 

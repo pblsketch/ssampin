@@ -57,6 +57,14 @@ interface ReminderIpcHooks {
    * ★ 인자 2개다. 출처를 함께 넘기지 않으면 렌더러가 남의 알림까지 자기 장부에 적는다.
    */
   onReminderFired: (dedupKey: string, source: ReminderSource) => void;
+  /**
+   * 알림 창에 넣을 앱 아이콘. 없으면 넣지 않는다.
+   *
+   * 창 머리의 앱 이름·아이콘은 이것이 아니라 **시작 메뉴 바로가기**에서 온다
+   * (`main.ts` 의 `APP_USER_MODEL_ID` 주석 참조). 이건 알림 본문 쪽 그림이라
+   * 둘은 별개다 — 하나를 고쳤다고 다른 하나가 따라오지 않는다.
+   */
+  getIcon?: () => Electron.NativeImage;
 }
 
 let buckets: ReminderBuckets = EMPTY_BUCKETS;
@@ -152,7 +160,14 @@ function fireDue(hooks: ReminderIpcHooks): void {
     for (const { source, item } of result.toFire) {
       firedLedger = [...firedLedger, { reminderId: item.reminderId, firedAt: now, source }];
       try {
-        const n = new Notification({ title: item.title, body: item.body });
+        // 아이콘을 못 찾으면(비어 있으면) 아예 넘기지 않는다 — 빈 그림을 넘기면
+        // 알림이 안 뜨는 환경이 있다. 알림이 투박한 것보다 안 뜨는 게 나쁘다.
+        const icon = hooks.getIcon?.();
+        const n = new Notification({
+          title: item.title,
+          body: item.body,
+          ...(icon !== undefined && !icon.isEmpty() ? { icon } : {}),
+        });
         n.on('click', () => hooks.onReminderClick(item.reminderId));
         n.show();
         hooks.onReminderFired(item.studentDedupKey, source);
