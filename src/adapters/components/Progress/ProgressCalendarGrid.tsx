@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { toLocalDateString } from '@shared/utils/localDate';
 import { cellKey } from '@domain/rules/progressCalendarRules';
+import { canDropProgressCell } from '@domain/rules/progressMove';
 import type { WeeklyProgressCell } from '@domain/rules/progressCalendarRules';
 import type { SubjectColorMap } from '@domain/valueObjects/SubjectColor';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
@@ -30,6 +32,11 @@ export interface ProgressCalendarGridProps {
   onEmptyCellClick: (cell: WeeklyProgressCell) => void;
   /** 진도 있는 칸 클릭 */
   onEntryClick: (cell: WeeklyProgressCell) => void;
+  /**
+   * 진도를 끌어다 다른 칸에 놓았을 때. 넘기지 않으면 드래그 자체가 꺼진다
+   * (모바일·읽기 전용 화면에서 이 격자를 재사용할 때를 위해 선택 사항으로 둔다).
+   */
+  onMoveCell?: (source: WeeklyProgressCell, target: WeeklyProgressCell) => void;
 }
 
 export function ProgressCalendarGrid({
@@ -48,8 +55,14 @@ export function ProgressCalendarGrid({
   onToday,
   onEmptyCellClick,
   onEntryClick,
+  onMoveCell,
 }: ProgressCalendarGridProps) {
   const todayStr = toLocalDateString(new Date());
+
+  // 끌고 있는 칸 / 커서가 올라간 칸. 격자 안에서만 쓰는 화면 상태라 부모로 올리지 않는다.
+  const [dragKey, setDragKey] = useState<string | null>(null);
+  const [hoverKey, setHoverKey] = useState<string | null>(null);
+  const dragSource = dragKey ? (grid.get(dragKey) ?? null) : null;
 
   return (
     <div className="flex flex-col gap-3">
@@ -128,11 +141,28 @@ export function ProgressCalendarGrid({
                     {resolvePeriodLabel(period, periodTimes)}
                   </td>
                   {weekDates.map((_date, dayIndex) => {
-                    const cell = grid.get(cellKey(dayIndex, period));
+                    const key = cellKey(dayIndex, period);
+                    const cell = grid.get(key);
+                    const canDropHere = Boolean(
+                      dragSource && cell && canDropProgressCell(dragSource, cell).ok,
+                    );
                     return (
                       <td
                         key={`${dayIndex}-${period}`}
                         className="border-r border-sp-border p-1.5 align-top last:border-r-0"
+                        onDragOver={(e) => {
+                          if (!canDropHere) return;
+                          // preventDefault 를 해야만 브라우저가 이 칸을 놓을 수 있는 곳으로 인정한다
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = 'move';
+                          if (hoverKey !== key) setHoverKey(key);
+                        }}
+                        onDrop={(e) => {
+                          if (!canDropHere || !cell || !dragSource) return;
+                          e.preventDefault();
+                          onMoveCell?.(dragSource, cell);
+                          setHoverKey(null);
+                        }}
                       >
                         {cell ? (
                           <ProgressCalendarCell
@@ -147,6 +177,21 @@ export function ProgressCalendarGrid({
                             }
                             onAddClick={() => onEmptyCellClick(cell)}
                             onEntryClick={() => onEntryClick(cell)}
+                            draggable={Boolean(onMoveCell) && cell.entries.length > 0}
+                            isDragging={dragKey === key}
+                            isDropTarget={canDropHere}
+                            isDropHover={canDropHere && hoverKey === key}
+                            isDimmed={Boolean(dragSource) && !canDropHere && dragKey !== key}
+                            onDragStart={(e) => {
+                              e.dataTransfer.effectAllowed = 'move';
+                              // 일부 브라우저는 데이터가 없으면 드래그를 시작조차 하지 않는다
+                              e.dataTransfer.setData('text/plain', key);
+                              setDragKey(key);
+                            }}
+                            onDragEnd={() => {
+                              setDragKey(null);
+                              setHoverKey(null);
+                            }}
                           />
                         ) : (
                           <div className="flex min-h-[104px] w-full items-center justify-center rounded-lg bg-black/5 text-xs text-sp-muted dark:bg-white/10">

@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
+import { useToastStore } from '@adapters/components/common/Toast';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { getActiveDays } from '@domain/valueObjects/DayOfWeek';
@@ -9,6 +10,8 @@ import {
   summarizeClassProgress,
   type ClassProgressSummary,
 } from '@domain/rules/progressCalendarRules';
+import { canDropProgressCell, planProgressMove } from '@domain/rules/progressMove';
+import type { WeeklyProgressCell } from '@domain/rules/progressCalendarRules';
 import type { TeacherPeriod } from '@domain/entities/Timetable';
 import { ProgressCalendarGrid } from './ProgressCalendarGrid';
 import { ProgressQuickEntryModal } from './ProgressQuickEntryModal';
@@ -43,7 +46,8 @@ function formatWeekLabel(dates: readonly string[]): string {
  * selectedClassId를 참조하지 않는다(전체 반 뷰).
  */
 export function ProgressCalendarView() {
-  const { classes, progressEntries } = useTeachingClassStore();
+  const { classes, progressEntries, updateProgressEntry } = useTeachingClassStore();
+  const showToast = useToastStore((s) => s.show);
   const { getEffectiveTeacherSchedule } = useScheduleStore();
   const { settings } = useSettingsStore();
 
@@ -96,6 +100,52 @@ export function ProgressCalendarView() {
     return map;
   }, [classes, progressEntries]);
 
+  /*
+    진도를 끌어다 다른 칸에 놓았을 때 (2026-08-23).
+
+    실수로 끌리기 쉬운 조작이라 되돌리기를 함께 띄운다. 되돌리기는 "원래 값을 그대로 다시
+    저장"이면 충분하다 — 옮기기는 만들거나 지우지 않고 날짜·교시만 바꾸기 때문이다.
+    막는 판정과 새 값 계산은 도메인(canDropProgressCell / planProgressMove)이 맡는다.
+  */
+  const handleMoveCell = useCallback(
+    (source: WeeklyProgressCell, target: WeeklyProgressCell) => {
+      const check = canDropProgressCell(source, target);
+      if (!check.ok) {
+        showToast(check.reason, 'info');
+        return;
+      }
+      const plan = planProgressMove(source, target);
+      if (!plan) return;
+
+      // 되돌리기용 원본은 바꾸기 전에 붙잡아 둔다
+      const originals = [...source.entries, ...target.entries];
+
+      void (async () => {
+        for (const entry of [...plan.moved, ...plan.swapped]) {
+          await updateProgressEntry(entry);
+        }
+        const [, m, d] = target.date.split('-');
+        const where = `${Number(m)}월 ${Number(d)}일 ${target.period}교시`;
+        showToast(
+          plan.swapped.length > 0
+            ? `${where} 진도와 자리를 맞바꿨습니다`
+            : `진도를 ${where}로 옮겼습니다`,
+          'success',
+          {
+            label: '되돌리기',
+            onClick: () => {
+              void (async () => {
+                for (const entry of originals) await updateProgressEntry(entry);
+              })();
+            },
+          },
+          5000,
+        );
+      })();
+    },
+    [showToast, updateProgressEntry],
+  );
+
   if (classes.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-sp-muted">
@@ -123,6 +173,7 @@ export function ProgressCalendarView() {
         onToday={() => setWeekOffset(0)}
         onEmptyCellClick={openAdd}
         onEntryClick={openEntry}
+        onMoveCell={handleMoveCell}
       />
 
       {modal && modal.cell.matchedClass && (
