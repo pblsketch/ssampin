@@ -21,7 +21,7 @@ import { MinutesView } from './MinutesView';
 import { DepartmentBanner } from './DepartmentBanner';
 import { PlanView } from './PlanView';
 import { useStaffRoomPlanStore } from '@adapters/stores/useStaffRoomPlanStore';
-import { ModuleTabs } from './ModuleTabs';
+import { ModuleTabList, ModuleManageToggle, ModuleManagePanel } from './ModuleTabs';
 import { useStaffRoomRoomsStore } from '@adapters/stores/useStaffRoomRoomsStore';
 import { useStaffRoomLibraryStore } from '@adapters/stores/useStaffRoomLibraryStore';
 import { PostDetail } from './PostDetail';
@@ -57,6 +57,8 @@ export function DepartmentDetail() {
   const planReset = useStaffRoomPlanStore((s) => s.reset);
 
   const [tab, setTab] = useState<DetailTab>({ kind: 'members' });
+  // 공간 관리 패널의 여닫음 — 단추는 탭 줄 맨 오른쪽, 패널은 탭 줄 아래에 그린다
+  const [managingRooms, setManagingRooms] = useState(false);
   const [boardMode, setBoardMode] = useState<BoardMode>('list');
   const [nameModalDismissed, setNameModalDismissed] = useState(false);
 
@@ -127,12 +129,10 @@ export function DepartmentDetail() {
           role="tablist"
           aria-label="부서 탭"
         >
-          <ModuleTabs
-            departmentId={currentDepartment.id}
+          <ModuleTabList
             modules={modules}
-            myRole={currentDepartment.myRole}
             activeModuleId={tab.kind === 'module' ? tab.moduleId : null}
-            onSelect={(moduleId) => {
+            onSelect={(moduleId: string) => {
               setBoardMode('list');
               setTab({ kind: 'module', moduleId });
             }}
@@ -179,7 +179,21 @@ export function DepartmentDetail() {
               초대
             </button>
           )}
+
+          <ModuleManageToggle
+            myRole={currentDepartment.myRole}
+            managing={managingRooms}
+            onToggle={() => setManagingRooms((v) => !v)}
+          />
         </div>
+
+        {managingRooms && (
+          <ModuleManagePanel
+            departmentId={currentDepartment.id}
+            modules={modules}
+            myRole={currentDepartment.myRole}
+          />
+        )}
 
         {tab.kind === 'module' &&
           (() => {

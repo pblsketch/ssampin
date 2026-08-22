@@ -48,6 +48,12 @@ interface StaffRoomState {
   /** 내 표시 이름 정하기 — 서버가 본인 행만 고친다 */
   setMyName: (displayName: string) => Promise<boolean>;
 
+  /**
+   * 서버에 보관된 관리자 구글 연결을 지금 것으로 다시 잇는다 (관리자만 의미 있음).
+   * 자료실·갤러리가 "구글 연결이 끊어졌습니다"로 막혔을 때 쓴다.
+   */
+  reconnectAdminDrive: () => Promise<boolean>;
+
   createInvite: (expiresInDays: number | null) => Promise<StaffRoomInvite | null>;
   revokeInvite: (inviteId: string) => Promise<void>;
 
@@ -76,6 +82,46 @@ async function getGoogleToken(): Promise<string | null> {
     return await authenticateGoogle.getValidAccessToken();
   } catch {
     return null;
+  }
+}
+
+/**
+ * 서버에 보관된 **부서 관리자의 구글 연결**을 지금 토큰으로 갱신한다.
+ *
+ * 왜 필요한가 — 자료실·갤러리는 서버가 관리자 토큰으로 대신 읽어 주는 구조라(계획서 §3.2.1),
+ * 그 토큰이 끊기면 "새 파일이 안 올라간다"가 아니라 **부서 자료 전체가 모든 멤버에게 안 열린다.**
+ *
+ * 그런데 이 값은 **부서를 만들 때 딱 한 번만** 저장되고 그 뒤로 갱신하는 길이 없었다.
+ * 서버가 리프레시 토큰으로 스스로 늘려 쓰지만, 그 리프레시 토큰이 무효가 되면
+ * (관리자가 구글 연결을 끊었다 다시 잇거나 구글에서 권한을 회수한 경우)
+ * 앱에서 아무리 다시 로그인해도 **서버는 옛 토큰을 그대로 들고 있었다.**
+ * 화면은 "다시 로그인하면 열립니다"라고 안내했지만 실제로는 열리지 않았다
+ * (2026-08-22 오너 신고).
+ *
+ * @returns 갱신했으면 true. 구글 미연결이거나 리프레시 토큰이 없으면 false.
+ */
+async function pushAdminToken(departmentId: string): Promise<boolean> {
+  try {
+    const { staffRoomPort, authenticateGoogle } = await import('@adapters/di/container');
+    if (!(await authenticateGoogle.isConnected())) return false;
+
+    const accessToken = await authenticateGoogle.getValidAccessToken();
+    const refreshToken = await authenticateGoogle.getRefreshToken();
+    // 리프레시 토큰이 없으면 서버가 스스로 갱신할 수 없다 — 저장해도 한 시간짜리다
+    if (!refreshToken) return false;
+
+    const expiresAtMs = await authenticateGoogle.getExpiresAt();
+    await staffRoomPort.saveAdminToken(departmentId, {
+      accessToken,
+      refreshToken,
+      expiresAt: expiresAtMs
+        ? new Date(expiresAtMs).toISOString()
+        : new Date(Date.now() + 3600 * 1000).toISOString(),
+    });
+    return true;
+  } catch (err) {
+    console.error('[StaffRoom] 관리자 구글 연결 갱신 실패:', err);
+    return false;
   }
 }
 
@@ -126,7 +172,7 @@ export const useStaffRoomStore = create<StaffRoomState>((set, get) => ({
     }
 
     try {
-      const { staffRoomPort, authenticateGoogle } = await import('@adapters/di/container');
+      const { staffRoomPort } = await import('@adapters/di/container');
       const department = await staffRoomPort.createDepartment(token, {
         name: trimmed,
         description: description.trim(),
@@ -135,21 +181,7 @@ export const useStaffRoomStore = create<StaffRoomState>((set, get) => ({
       // 자료가 쌓일 드라이브의 주인 자격을 서버가 대신 쓸 수 있게 토큰을 맡긴다(§3.2).
       // 실패해도 부서 자체는 만들어진 것이므로 목록 갱신은 그대로 진행한다 —
       // 자료실이 생기는 M3 에서 관리자 재로그인 안내로 회복한다(§10.1).
-      try {
-        const refreshToken = await authenticateGoogle.getRefreshToken();
-        if (refreshToken) {
-          const expiresAtMs = await authenticateGoogle.getExpiresAt();
-          await staffRoomPort.saveAdminToken(department.id, {
-            accessToken: token,
-            refreshToken,
-            expiresAt: expiresAtMs
-              ? new Date(expiresAtMs).toISOString()
-              : new Date(Date.now() + 3600 * 1000).toISOString(),
-          });
-        }
-      } catch (tokenErr) {
-        console.error('[StaffRoom] 관리자 토큰 저장 실패:', tokenErr);
-      }
+      await pushAdminToken(department.id);
 
       set((state) => ({
         departments: [...state.departments, department],
@@ -195,9 +227,31 @@ export const useStaffRoomStore = create<StaffRoomState>((set, get) => ({
         invites,
         isLoading: false,
       });
+
+      // 관리자가 부서에 들어올 때마다 서버의 구글 연결을 지금 것으로 맞춰 둔다.
+      // 이게 없으면 관리자가 앱에서 다시 로그인해도 서버는 옛 토큰을 들고 있어
+      // 자료실이 계속 안 열린다(2026-08-22 오너 신고). 화면을 막지 않게 뒤에서 돌린다.
+      if (isDepartmentAdmin(department.myRole)) {
+        void pushAdminToken(departmentId);
+      }
     } catch (err) {
       set({ isLoading: false, error: messageOf(err) });
     }
+  },
+
+  reconnectAdminDrive: async () => {
+    const department = get().currentDepartment;
+    if (!department) return false;
+
+    set({ isLoading: true, error: null });
+    const ok = await pushAdminToken(department.id);
+    if (!ok) {
+      // 구글이 아예 안 이어져 있거나 리프레시 토큰이 없다 — 먼저 구글 로그인을 해야 한다
+      set({ isLoading: false, needsGoogleConnect: true, error: NEEDS_GOOGLE_MESSAGE });
+      return false;
+    }
+    set({ isLoading: false });
+    return true;
   },
 
   setMyName: async (displayName) => {

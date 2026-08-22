@@ -5,8 +5,18 @@
  * 예: 자료실을 '공문 보관함', 갤러리를 '체육대회 사진'."
  *
  * 그래서 탭을 코드에 박아 두지 않고 부서의 공간 목록에서 그린다.
- * 관리자에게만 ＋ 단추가 보이고, 이름 바꾸기·순서·지우기도 여기서 한다.
+ * 관리자에게만 관리 단추가 보이고, 이름 바꾸기·순서·지우기도 여기서 한다.
  *
+ * **셋으로 나눠 둔 이유** (2026-08-22 오너 지적):
+ *   관리 단추가 공간 탭 바로 뒤에 붙어 있어서 '일정·업무 / 멤버 / 초대' 앞에 끼어
+ *   줄 한가운데에 놓였다. 관리 단추는 탭이 아니라 **줄 전체의 오른쪽 끝**에 있어야 한다.
+ *   그러려면 다른 탭들보다 뒤에 놓여야 하는데, 한 덩어리로 묶여 있으면 그 사이에
+ *   다른 탭을 끼워 넣을 수 없다. 그래서 부모(DepartmentDetail)가 배치를 정하도록
+ *   `ModuleTabList`(탭들) · `ModuleManageToggle`(관리 단추) · `ModuleManagePanel`(관리 패널)
+ *   셋으로 나눴다.
+ *
+ *   패널도 이참에 탭 줄 **바깥**으로 내보냈다 — 전에는 `role="tablist"` 안에 들어가 있어서
+ *   화면을 읽어 주는 도구에 "탭 목록 안의 패널"로 잘못 전달됐다.
  */
 import { useState } from 'react';
 import { useStaffRoomRoomsStore } from '@adapters/stores/useStaffRoomRoomsStore';
@@ -32,21 +42,83 @@ const ADDABLE_KINDS: readonly StaffRoomModuleKind[] = [
   'minutes',
 ];
 
-interface ModuleTabsProps {
-  departmentId: string;
+interface ModuleTabListProps {
   modules: readonly StaffRoomModule[];
-  myRole: StaffRoomRole;
   activeModuleId: string | null;
   onSelect: (moduleId: string) => void;
 }
 
-export function ModuleTabs({
-  departmentId,
-  modules,
-  myRole,
-  activeModuleId,
-  onSelect,
-}: ModuleTabsProps) {
+/**
+ * 공간 탭들. 부모의 탭 줄에 그대로 늘어놓을 수 있게 조각(fragment)으로 돌려준다 —
+ * 감싸는 상자를 두면 '일정·업무 / 멤버 / 초대'와 한 줄로 정렬되지 않는다.
+ */
+export function ModuleTabList({ modules, activeModuleId, onSelect }: ModuleTabListProps) {
+  return (
+    <>
+      {modules.map((module) => (
+        <button
+          key={module.id}
+          type="button"
+          role="tab"
+          aria-selected={activeModuleId === module.id}
+          onClick={() => onSelect(module.id)}
+          className={`-mb-px flex items-center gap-1.5 border-b-2 px-3 py-2.5 text-sm font-sp-medium transition-colors ${
+            activeModuleId === module.id
+              ? 'border-sp-accent text-sp-text'
+              : 'border-transparent text-sp-muted hover:text-sp-text'
+          }`}
+        >
+          <span className="material-symbols-outlined text-icon-sm">
+            {STAFFROOM_MODULE_ICONS[module.kind] ?? 'widgets'}
+          </span>
+          {module.name}
+        </button>
+      ))}
+    </>
+  );
+}
+
+interface ModuleManageToggleProps {
+  myRole: StaffRoomRole;
+  managing: boolean;
+  onToggle: () => void;
+}
+
+/**
+ * 공간 관리 단추 — 관리자에게만.
+ *
+ * `ml-auto` 로 탭 줄의 **오른쪽 끝**으로 민다. 탭이 아니라 패널을 여닫는 단추라서
+ * `role="tab"` 을 주지 않고 `aria-expanded` 로 열림 상태를 알린다.
+ */
+export function ModuleManageToggle({ myRole, managing, onToggle }: ModuleManageToggleProps) {
+  if (!canManageModules(myRole)) return null;
+
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-label="공간 관리"
+      aria-expanded={managing}
+      title="공간 관리"
+      className={`-mb-px ml-auto border-b-2 px-2.5 py-2.5 transition-colors ${
+        managing
+          ? 'border-sp-accent text-sp-text'
+          : 'border-transparent text-sp-muted hover:text-sp-text'
+      }`}
+    >
+      <span className="material-symbols-outlined text-icon-sm">tune</span>
+    </button>
+  );
+}
+
+interface ModuleManagePanelProps {
+  departmentId: string;
+  modules: readonly StaffRoomModule[];
+  myRole: StaffRoomRole;
+}
+
+/** 공간 관리 패널 — 탭 줄 바깥(아래)에 그린다 */
+export function ModuleManagePanel({ departmentId, modules, myRole }: ModuleManagePanelProps) {
   const addModule = useStaffRoomRoomsStore((s) => s.addModule);
   const renameModule = useStaffRoomRoomsStore((s) => s.renameModule);
   const moveModule = useStaffRoomRoomsStore((s) => s.moveModule);
@@ -55,7 +127,6 @@ export function ModuleTabs({
   const [adding, setAdding] = useState(false);
   const [newKind, setNewKind] = useState<StaffRoomModuleKind>('discussion');
   const [newName, setNewName] = useState(defaultModuleName('discussion'));
-  const [managing, setManaging] = useState(false);
 
   const isAdmin = canManageModules(myRole);
 
@@ -97,157 +168,116 @@ export function ModuleTabs({
     if (ok) await removeModule(departmentId, module.id);
   };
 
+  if (!isAdmin) return null;
+
   return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap items-center gap-1">
-        {modules.map((module) => (
-          <button
+    <div className="mb-6 rounded-xl border border-sp-border bg-sp-card p-4">
+      <h4 className="text-sm font-sp-semibold text-sp-text">공간 관리</h4>
+      <p className="mt-1 text-xs leading-relaxed text-sp-muted">
+        이름을 부서에서 실제로 부르는 말로 바꿀 수 있습니다. 예를 들어 자료실을 &lsquo;공문
+        보관함&rsquo;으로.
+      </p>
+
+      <ul className="mt-3 space-y-1.5">
+        {modules.map((module, index) => (
+          <li
             key={module.id}
-            type="button"
-            role="tab"
-            aria-selected={activeModuleId === module.id}
-            onClick={() => onSelect(module.id)}
-            className={`-mb-px flex items-center gap-1.5 border-b-2 px-3 py-2.5 text-sm font-sp-medium transition-colors ${
-              activeModuleId === module.id
-                ? 'border-sp-accent text-sp-text'
-                : 'border-transparent text-sp-muted hover:text-sp-text'
-            }`}
+            className="flex flex-wrap items-center gap-2 rounded-lg border border-sp-border bg-sp-surface px-3 py-2"
           >
-            <span className="material-symbols-outlined text-icon-sm">
+            <span className="material-symbols-outlined text-icon-sm text-sp-muted">
               {STAFFROOM_MODULE_ICONS[module.kind] ?? 'widgets'}
             </span>
-            {module.name}
-          </button>
-        ))}
+            <span className="min-w-0 flex-1 truncate text-sm text-sp-text">{module.name}</span>
 
-        {isAdmin && (
-          <button
-            type="button"
-            onClick={() => setManaging((v) => !v)}
-            aria-label="공간 관리"
-            title="공간 관리"
-            className={`-mb-px border-b-2 px-2.5 py-2.5 transition-colors ${
-              managing
-                ? 'border-sp-accent text-sp-text'
-                : 'border-transparent text-sp-muted hover:text-sp-text'
-            }`}
-          >
-            <span className="material-symbols-outlined text-icon-sm">tune</span>
-          </button>
-        )}
-      </div>
-
-      {/* 공간 관리 — 관리자만 */}
-      {isAdmin && managing && (
-        <div className="rounded-xl border border-sp-border bg-sp-card p-4">
-          <h4 className="text-sm font-sp-semibold text-sp-text">공간 관리</h4>
-          <p className="mt-1 text-xs leading-relaxed text-sp-muted">
-            이름을 부서에서 실제로 부르는 말로 바꿀 수 있습니다. 예를 들어 자료실을 &lsquo;공문
-            보관함&rsquo;으로.
-          </p>
-
-          <ul className="mt-3 space-y-1.5">
-            {modules.map((module, index) => (
-              <li
-                key={module.id}
-                className="flex flex-wrap items-center gap-2 rounded-lg border border-sp-border bg-sp-surface px-3 py-2"
-              >
-                <span className="material-symbols-outlined text-icon-sm text-sp-muted">
-                  {STAFFROOM_MODULE_ICONS[module.kind] ?? 'widgets'}
-                </span>
-                <span className="min-w-0 flex-1 truncate text-sm text-sp-text">{module.name}</span>
-
-                <button
-                  type="button"
-                  onClick={() => void moveModule(departmentId, module.id, 'up')}
-                  disabled={index === 0}
-                  aria-label={`${module.name} 앞으로`}
-                  className="rounded-lg p-1.5 text-sp-muted transition-colors hover:text-sp-text disabled:opacity-30"
-                >
-                  <span className="material-symbols-outlined text-icon-sm">arrow_upward</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void moveModule(departmentId, module.id, 'down')}
-                  disabled={index === modules.length - 1}
-                  aria-label={`${module.name} 뒤로`}
-                  className="rounded-lg p-1.5 text-sp-muted transition-colors hover:text-sp-text disabled:opacity-30"
-                >
-                  <span className="material-symbols-outlined text-icon-sm">arrow_downward</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void handleRename(module)}
-                  aria-label={`${module.name} 이름 바꾸기`}
-                  className="rounded-lg p-1.5 text-sp-muted transition-colors hover:text-sp-text"
-                >
-                  <span className="material-symbols-outlined text-icon-sm">edit</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void handleDelete(module)}
-                  aria-label={`${module.name} 지우기`}
-                  className="rounded-lg p-1.5 text-sp-muted transition-colors hover:text-sp-danger"
-                >
-                  <span className="material-symbols-outlined text-icon-sm">delete</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-
-          {adding ? (
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <select
-                value={newKind}
-                onChange={(e) => {
-                  const kind = e.target.value as StaffRoomModuleKind;
-                  setNewKind(kind);
-                  setNewName(defaultModuleName(kind));
-                }}
-                aria-label="공간 종류"
-                className="rounded-xl border border-sp-border bg-sp-surface px-3 py-2 text-sm text-sp-text focus:border-sp-accent focus:outline-none"
-              >
-                {ADDABLE_KINDS.map((kind) => (
-                  <option key={kind} value={kind}>
-                    {defaultModuleName(kind)}
-                  </option>
-                ))}
-              </select>
-              <input
-                type="text"
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                maxLength={STAFFROOM_MODULE_NAME_MAX_LENGTH}
-                placeholder="부를 이름"
-                aria-label="공간 이름"
-                className="min-w-0 flex-1 rounded-xl border border-sp-border bg-sp-surface px-3 py-2 text-sm text-sp-text placeholder:text-sp-muted focus:border-sp-accent focus:outline-none"
-              />
-              <button
-                type="button"
-                onClick={() => void submitAdd()}
-                disabled={!checkModuleName(newName).ok}
-                className="rounded-xl bg-sp-accent px-4 py-2 text-sm font-sp-semibold text-white transition-all duration-sp-base ease-sp-out hover:shadow-sp-md disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                만들기
-              </button>
-              <button
-                type="button"
-                onClick={() => setAdding(false)}
-                className="rounded-xl border border-sp-border px-3 py-2 text-sm font-sp-medium text-sp-text transition-colors hover:bg-sp-surface"
-              >
-                취소
-              </button>
-            </div>
-          ) : (
             <button
               type="button"
-              onClick={() => setAdding(true)}
-              className="mt-3 flex items-center gap-1.5 rounded-xl border border-sp-border px-3 py-2 text-sm font-sp-medium text-sp-text transition-colors hover:bg-sp-surface"
+              onClick={() => void moveModule(departmentId, module.id, 'up')}
+              disabled={index === 0}
+              aria-label={`${module.name} 앞으로`}
+              className="rounded-lg p-1.5 text-sp-muted transition-colors hover:text-sp-text disabled:opacity-30"
             >
-              <span className="material-symbols-outlined text-icon-sm">add</span>새 공간 만들기
+              <span className="material-symbols-outlined text-icon-sm">arrow_upward</span>
             </button>
-          )}
+            <button
+              type="button"
+              onClick={() => void moveModule(departmentId, module.id, 'down')}
+              disabled={index === modules.length - 1}
+              aria-label={`${module.name} 뒤로`}
+              className="rounded-lg p-1.5 text-sp-muted transition-colors hover:text-sp-text disabled:opacity-30"
+            >
+              <span className="material-symbols-outlined text-icon-sm">arrow_downward</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleRename(module)}
+              aria-label={`${module.name} 이름 바꾸기`}
+              className="rounded-lg p-1.5 text-sp-muted transition-colors hover:text-sp-text"
+            >
+              <span className="material-symbols-outlined text-icon-sm">edit</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleDelete(module)}
+              aria-label={`${module.name} 지우기`}
+              className="rounded-lg p-1.5 text-sp-muted transition-colors hover:text-sp-danger"
+            >
+              <span className="material-symbols-outlined text-icon-sm">delete</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+
+      {adding ? (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <select
+            value={newKind}
+            onChange={(e) => {
+              const kind = e.target.value as StaffRoomModuleKind;
+              setNewKind(kind);
+              setNewName(defaultModuleName(kind));
+            }}
+            aria-label="공간 종류"
+            className="rounded-xl border border-sp-border bg-sp-surface px-3 py-2 text-sm text-sp-text focus:border-sp-accent focus:outline-none"
+          >
+            {ADDABLE_KINDS.map((kind) => (
+              <option key={kind} value={kind}>
+                {defaultModuleName(kind)}
+              </option>
+            ))}
+          </select>
+          <input
+            type="text"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            maxLength={STAFFROOM_MODULE_NAME_MAX_LENGTH}
+            placeholder="부를 이름"
+            aria-label="공간 이름"
+            className="min-w-0 flex-1 rounded-xl border border-sp-border bg-sp-surface px-3 py-2 text-sm text-sp-text placeholder:text-sp-muted focus:border-sp-accent focus:outline-none"
+          />
+          <button
+            type="button"
+            onClick={() => void submitAdd()}
+            disabled={!checkModuleName(newName).ok}
+            className="rounded-xl bg-sp-accent px-4 py-2 text-sm font-sp-semibold text-white transition-all duration-sp-base ease-sp-out hover:shadow-sp-md disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            만들기
+          </button>
+          <button
+            type="button"
+            onClick={() => setAdding(false)}
+            className="rounded-xl border border-sp-border px-3 py-2 text-sm font-sp-medium text-sp-text transition-colors hover:bg-sp-surface"
+          >
+            취소
+          </button>
         </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setAdding(true)}
+          className="mt-3 flex items-center gap-1.5 rounded-xl border border-sp-border px-3 py-2 text-sm font-sp-medium text-sp-text transition-colors hover:bg-sp-surface"
+        >
+          <span className="material-symbols-outlined text-icon-sm">add</span>새 공간 만들기
+        </button>
       )}
     </div>
   );

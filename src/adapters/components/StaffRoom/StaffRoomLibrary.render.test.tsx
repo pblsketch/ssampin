@@ -227,11 +227,24 @@ describe('관리자 구글 연결 (계획서 §3.2.1)', () => {
     expect(missing).not.toContain('끊어져');
   });
 
-  it('관리자 본인에게는 끊어졌을 때 본인이 다시 로그인하라고 한다', () => {
+  it('★ 관리자 본인에게는 끊어졌을 때 그 자리에서 회복할 단추를 준다', () => {
+    // 2026-08-22 오너 신고 — 전에는 "쌤핀에서 구글 로그인을 다시 해주세요"라고만 안내했는데,
+    // 서버에 새 자격을 보내는 길이 없어서 **그 말대로 해도 열리지 않았다.**
+    // 이제 안내 대신 실제로 동작하는 단추를 준다.
     libraryState.driveConnected = false;
     libraryState.driveStatus = 'broken';
     myRole = 'admin';
-    expect(render()).toContain('구글 로그인을 다시');
+    const html = render();
+    expect(html).toContain('구글 다시 잇기');
+  });
+
+  it('일반 멤버에게는 회복 단추를 주지 않는다 (관리자 자격만 서버에 올라가야 한다)', () => {
+    libraryState.driveConnected = false;
+    libraryState.driveStatus = 'broken';
+    myRole = 'member';
+    const html = render();
+    expect(html).not.toContain('구글 다시 잇기');
+    expect(html).toContain('관리자 선생님');
   });
 });
 

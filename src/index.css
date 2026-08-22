@@ -1319,3 +1319,27 @@ html.sp-glass-on [role='dialog'] .bg-sp-surface {
   contain: paint;
   will-change: transform, opacity;
 }
+
+/*
+  네이티브 드롭다운(select 목록)의 글자가 다크 모드에서 안 보이던 문제.
+
+  증상 — 다크 모드에서 select 를 펼치면 항목 글자가 흰 배경에 흐리게 묻혀 거의 안 읽힌다
+  (2026-08-21 온라인 교무실 '공간 관리'에서 신고).
+
+  원인 — 목록(popup)은 브라우저가 따로 그리는데, option 에 배경색을 지정하지 않으면
+  **흰 바탕**으로 그려진다. 반면 option 은 select 의 color 를 물려받으므로
+  다크 모드에서는 밝은 글자색(--sp-text)이 내려온다. 결과가 '흰 배경 + 밝은 글씨'다.
+  앱 어디에도 option 규칙이 없어서 select 를 쓰는 곳 전부가 같은 상태였다.
+
+  해결 — option 에 배경과 글자색을 **함께** 못박아 테마를 따라가게 한다.
+  둘 중 하나만 지정하면 반대 테마에서 같은 사고가 난다(글자만 지정 → 지금 상태,
+  배경만 지정 → 라이트 모드에서 어두운 배경에 어두운 글씨).
+
+  select 자체에 배경을 주는 것으로는 해결되지 않는다 — 닫힌 상태와 펼친 목록은
+  서로 다른 상자라서, 목록에 색이 가려면 option 에 직접 줘야 한다.
+*/
+select option,
+select optgroup {
+  background-color: var(--sp-card);
+  color: var(--sp-text);
+}

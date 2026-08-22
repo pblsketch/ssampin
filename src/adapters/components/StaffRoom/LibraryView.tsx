@@ -315,12 +315,27 @@ export function LibraryView({ departmentId, moduleId }: LibraryViewProps) {
           <p className="text-sm leading-relaxed text-sp-text">
             {driveStatus === 'broken'
               ? myRole === 'admin'
-                ? '구글 연결이 끊어졌습니다. 쌤핀에서 구글 로그인을 다시 해주시면 자료실이 열립니다.'
+                ? '구글 연결이 끊어졌습니다. 아래 단추를 누르면 지금 로그인된 구글 계정으로 다시 잇습니다.'
                 : '부서 관리자 선생님의 구글 연결이 끊어져 자료를 올리거나 내려받을 수 없습니다. 관리자 선생님께 쌤핀에서 구글 로그인을 다시 해달라고 요청해주세요.'
               : myRole === 'admin'
                 ? '자료실을 쓰려면 부서 설정에서 구글 드라이브를 연결해주세요. 자료는 선생님의 구글 드라이브에 쌓입니다.'
                 : '부서 관리자 선생님이 아직 구글 드라이브를 연결하지 않아 자료를 올리거나 내려받을 수 없습니다. 관리자 선생님께 요청해주세요.'}
           </p>
+          {driveStatus === 'broken' && myRole === 'admin' && (
+            <button
+              type="button"
+              onClick={() => {
+                void (async () => {
+                  const ok = await useStaffRoomStore.getState().reconnectAdminDrive();
+                  if (ok) window.location.reload();
+                })();
+              }}
+              className="mt-3 flex items-center gap-1.5 rounded-lg bg-sp-accent px-4 py-2 text-sm font-sp-semibold text-white transition-all duration-sp-base ease-sp-out active:scale-95"
+            >
+              <span className="material-symbols-outlined text-icon-sm">link</span>
+              구글 다시 잇기
+            </button>
+          )}
         </div>
       )}
 
