@@ -148,23 +148,23 @@ export function ProgressCellOverlay({
     >
       <span className="flex w-full min-w-0 items-center gap-1">
         <span
-          className={`shrink-0 rounded px-1.5 py-0.5 text-micro font-bold ${STATUS_BADGE[representative.status]}`}
+          className={`shrink-0 rounded px-1.5 py-0.5 text-caption font-bold ${STATUS_BADGE[representative.status]}`}
         >
           {STATUS_LABEL[representative.status]}
         </span>
         {hiddenCount > 0 && (
-          <span className="shrink-0 rounded bg-black/10 px-1 py-0.5 text-micro font-semibold text-sp-muted dark:bg-white/10">
+          <span className="shrink-0 rounded bg-black/10 px-1 py-0.5 text-caption font-semibold text-sp-muted dark:bg-white/10">
             +{hiddenCount}
           </span>
         )}
         {classSummary && classSummary.total > 0 && (
-          <span className="ml-auto shrink-0 text-micro font-semibold text-sp-accent">
+          <span className="ml-auto shrink-0 text-caption font-semibold text-sp-accent">
             {classSummary.percent}%
           </span>
         )}
       </span>
       {representative.unit && (
-        <span className="w-full min-w-0 truncate text-micro text-sp-muted">
+        <span className="w-full min-w-0 truncate text-detail text-sp-muted">
           {representative.unit}
         </span>
       )}
