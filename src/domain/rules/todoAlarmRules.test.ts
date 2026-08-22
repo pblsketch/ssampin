@@ -101,9 +101,46 @@ describe('buildTodoAlarmSchedule — 무엇이 후보가 되는가', () => {
     expect(items).toEqual([]);
   });
 
-  it('이미 지난 시각은 예약하지 않는다', () => {
+  it('유예 창까지 지난 시각은 예약하지 않는다', () => {
     const items = buildTodoAlarmSchedule([todo({ dueDate: '2026-08-20' })], settings(), NOW, KST);
     expect(items).toEqual([]);
+  });
+
+  it('★ 발화 시각이 막 지났어도 유예 창 안이면 목록에 남는다', () => {
+    // 이걸 빼면 **울려야 하는 바로 그 순간에 예약을 도로 거둬간다.** 울리는 쪽은 30초마다
+    // 확인하는데 그 사이에 이 함수가 다시 불리면 목록에서 사라져 알림이 영영 안 뜬다.
+    // 실측된 사고다 — 01:54:30 에 1건 예약 → 01:55:00 에 0건 → 발화 기록 없음.
+    const justPassed = NOW + 60_000; // 09:01 에 울릴 알림을
+    const items = buildTodoAlarmSchedule(
+      [todo({ dueDate: '2026-08-22', time: '09:01' })],
+      settings(),
+      justPassed + 1000, // 09:01:01 — 1초 지난 시점에 다시 계산해도
+      KST,
+    );
+    expect(items).toHaveLength(1); // 남아 있어야 한다
+  });
+
+  it('컴퓨터가 꺼져 있어 놓친 알림도 유예 창 안이면 살아 있다', () => {
+    // 09:00 알림을 10:00 에 켰다 — 유예 2시간 안이므로 아직 유효하다.
+    const oneHourLate = NOW + 60 * 60_000;
+    const items = buildTodoAlarmSchedule(
+      [todo({ dueDate: '2026-08-22', time: '09:00' })],
+      settings(),
+      oneHourLate,
+      KST,
+    );
+    expect(items).toHaveLength(1);
+
+    // 3시간 뒤에 켰으면 유예 창을 넘겼으므로 버린다.
+    const threeHoursLate = NOW + 3 * 60 * 60_000;
+    expect(
+      buildTodoAlarmSchedule(
+        [todo({ dueDate: '2026-08-22', time: '09:00' })],
+        settings(),
+        threeHoursLate,
+        KST,
+      ),
+    ).toEqual([]);
   });
 
   it('날짜 형식이 어긋나면 조용히 건너뛴다', () => {

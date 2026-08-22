@@ -139,6 +139,21 @@ function matchRecurrence(text: string): Matched<TodoRecurrence> | null {
 }
 
 // ─────────────────────────── 시간 ───────────────────────────
+
+/**
+ * "반"과 "N분" 중 적힌 쪽을 분으로 바꾼다. 둘 다 없으면 정각(0분).
+ *
+ * 범위를 벗어난 분("3시 90분")은 `null` 을 돌려 **그 시각 자체를 인식하지 않는다.**
+ * "3시"만 떼어 15:00 으로 읽으면 사용자가 적은 "90분"이 조용히 사라져, 화면에는 인식된
+ * 것처럼 보이는데 실제 값은 다른 상태가 된다. 차라리 인식하지 않고 원문을 남긴다.
+ */
+function minutesOf(half: string | undefined, minuteDigits: string | undefined): number | null {
+  if (half !== undefined) return 30;
+  if (minuteDigits === undefined) return 0;
+  const m = Number(minuteDigits);
+  return m <= 59 ? m : null;
+}
+
 function matchTime(text: string): Matched<string> | null {
   // HH:MM
   const hm = /\b(\d{1,2}):(\d{2})\b/.exec(text);
@@ -147,25 +162,25 @@ function matchTime(text: string): Matched<string> | null {
     const min = Number(hm[2]);
     if (h <= 23 && min <= 59) return { value: `${pad2(h)}:${pad2(min)}`, raw: hm[0] };
   }
-  // 오전/오후 N시(반)
-  const ampm = /(오전|오후)\s*(\d{1,2})\s*시(\s*반)?/.exec(text);
+  // 오전/오후 N시(반 | M분)
+  const ampm = /(오전|오후)\s*(\d{1,2})\s*시(?:\s*(반)|\s*(\d{1,2})\s*분)?/.exec(text);
   if (ampm) {
     let h = Number(ampm[2]);
-    const half = ampm[3] ? 30 : 0;
-    if (h >= 1 && h <= 12) {
+    const min = minutesOf(ampm[3], ampm[4]);
+    if (h >= 1 && h <= 12 && min !== null) {
       if (ampm[1] === '오후') h = h === 12 ? 12 : h + 12;
       else h = h === 12 ? 0 : h; // 오전 12시 = 00시
-      return { value: `${pad2(h)}:${pad2(half)}`, raw: ampm[0] };
+      return { value: `${pad2(h)}:${pad2(min)}`, raw: ampm[0] };
     }
   }
-  // 맨 N시(반) — 1~6시는 오후로 해석(학교 일과 맥락), 7~23시는 그대로.
-  const bare = /(\d{1,2})\s*시(\s*반)?/.exec(text);
+  // 맨 N시(반 | M분) — 1~6시는 오후로 해석(학교 일과 맥락), 7~23시는 그대로.
+  const bare = /(\d{1,2})\s*시(?:\s*(반)|\s*(\d{1,2})\s*분)?/.exec(text);
   if (bare) {
     let h = Number(bare[1]);
-    const half = bare[2] ? 30 : 0;
-    if (h >= 1 && h <= 23) {
+    const min = minutesOf(bare[2], bare[3]);
+    if (h >= 1 && h <= 23 && min !== null) {
       if (h >= 1 && h <= 6) h += 12;
-      return { value: `${pad2(h)}:${pad2(half)}`, raw: bare[0] };
+      return { value: `${pad2(h)}:${pad2(min)}`, raw: bare[0] };
     }
   }
   // 프리셋(아침/점심/저녁/밤)

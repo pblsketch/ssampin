@@ -115,7 +115,20 @@ export function buildTodoAlarmSchedule(
       const base = wallClockToEpochMs(dateStr, todo.time ?? defaultTime, offsetMinutes);
       if (base === null) continue;
       const fireAt = base - leadMinutes * MS_PER_MINUTE;
-      if (fireAt <= nowMs) continue; // 이미 지난 시각은 예약하지 않는다
+      const expiresAt = fireAt + graceMs;
+      /*
+        ★ 자르는 기준은 "발화 시각"이 아니라 **"유예 창까지 지났는가"** 다.
+
+        `fireAt <= nowMs` 로 자르면 **울려야 하는 바로 그 순간에 예약을 도로 거둬간다.**
+        울리는 쪽(main)은 30초마다 한 번씩 확인하는데, 그 사이에 이 함수가 다시 불리면
+        "이미 지난 시각"이라며 목록에서 빼 버리고, 그러면 알림은 영영 안 뜬다.
+        실측된 사고다 — 01:54:30 에 1건 예약 → 01:55:00 에 0건 → 발화 기록 없음.
+
+        유예 창까지 남겨 두면 "언제 버릴지"의 판단이 **울리는 쪽 한 곳**에만 있게 된다.
+        덤으로, 컴퓨터가 꺼져 있어 놓친 알림도 유예 창 안이면 켤 때 울린다 — `expiresAt`
+        을 만든 목적이 원래 그것이다.
+      */
+      if (expiresAt <= nowMs) continue;
       if (fireAt > horizonEnd) continue; // 지평 밖 — 그때 가서 다시 계산한다
 
       candidates.push({
@@ -123,7 +136,7 @@ export function buildTodoAlarmSchedule(
         item: {
           reminderId: `todo:${todo.id}:${fireAt}`,
           fireAt,
-          expiresAt: fireAt + graceMs,
+          expiresAt,
           title: TODO_ALARM_TITLE,
           body: buildBody(todo, exposure),
           // 출처별 중복 방지 열쇠. 할 일은 "그 날 그 할 일"이 단위다.

@@ -54,6 +54,24 @@ describe('parseQuickInput — 시간', () => {
     expect(parseQuickInput('오후 3시 반 회의', TODAY).time).toBe('15:30');
     expect(parseQuickInput('오전 12시 마감', TODAY).time).toBe('00:00');
   });
+  it('N시 M분 — "반" 말고 숫자로 적어도 알아본다', () => {
+    // 예전에는 "분"을 아예 못 읽어서 "3시 30분"이 15:00 이 됐다. 화면에는 인식된 것처럼
+    // 보이는데 실제 시각은 30분 이르다 — 사용자가 알아채기 어려운 종류의 어긋남이다.
+    expect(parseQuickInput('오늘 3시 30분에 회신', TODAY).time).toBe('15:30');
+    expect(parseQuickInput('오후 2시 45분 상담', TODAY).time).toBe('14:45');
+    expect(parseQuickInput('오전 9시 5분 조회', TODAY).time).toBe('09:05');
+    expect(parseQuickInput('9시30분 출근', TODAY).time).toBe('09:30');
+  });
+  it('N시 M분을 읽으면 본문에 "분"이 남지 않는다', () => {
+    const r = parseQuickInput('오늘 3시 30분에 학부모 회신', TODAY);
+    expect(r.time).toBe('15:30');
+    expect(r.text).not.toContain('30분');
+    expect(r.text).toContain('학부모 회신');
+  });
+  it('말이 안 되는 분은 시각 자체를 인식하지 않는다', () => {
+    // "3시"만 떼어 15:00 으로 읽으면 사용자가 적은 "90분"이 조용히 사라진다.
+    expect(parseQuickInput('3시 90분 회의', TODAY).time).toBeUndefined();
+  });
   it('HH:MM 직접', () => {
     expect(parseQuickInput('14:30 미팅', TODAY).time).toBe('14:30');
   });
