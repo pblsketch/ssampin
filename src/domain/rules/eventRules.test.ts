@@ -14,6 +14,9 @@ import {
   isMultiDayEvent,
   getMultiDayBarsForWeek,
   getMultiDayEventIdsOnDate,
+  toDateKey,
+  canMoveEventByDrag,
+  moveEventToDate,
 } from './eventRules';
 import type { SchoolEvent } from '@domain/entities/SchoolEvent';
 
@@ -267,5 +270,63 @@ describe('getMultiDayEventIdsOnDate', () => {
     ];
     expect(getMultiDayEventIdsOnDate(events, new Date(2026, 2, 10))).toEqual(['multi']);
     expect(getMultiDayEventIdsOnDate(events, new Date(2026, 2, 20))).toEqual([]);
+  });
+});
+
+describe('toDateKey / canMoveEventByDrag / moveEventToDate', () => {
+  it('toDateKey 는 로컬 기준 YYYY-MM-DD 로 0 을 채워 만든다', () => {
+    expect(toDateKey(new Date(2026, 0, 5))).toBe('2026-01-05');
+    expect(toDateKey(new Date(2026, 11, 31))).toBe('2026-12-31');
+  });
+
+  it('반복 일정과 생일은 드래그로 옮길 수 없다', () => {
+    expect(canMoveEventByDrag(ev({ date: '2026-03-10', recurrence: 'weekly' })).ok).toBe(false);
+    expect(canMoveEventByDrag(ev({ date: '2026-03-10', source: 'birthday' })).ok).toBe(false);
+    expect(canMoveEventByDrag(ev({ date: '2026-03-10' })).ok).toBe(true);
+  });
+
+  it('하루짜리 일정은 놓은 날짜로 이동한다', () => {
+    const moved = moveEventToDate(ev({ date: '2026-03-10' }), '2026-03-10', '2026-03-17');
+    expect(moved?.date).toBe('2026-03-17');
+    expect(moved?.endDate).toBeUndefined();
+  });
+
+  it('여러 날 일정은 기간 길이를 유지한 채 통째로 밀린다', () => {
+    const moved = moveEventToDate(
+      ev({ date: '2026-03-08', endDate: '2026-03-12' }),
+      '2026-03-10', // 가운데를 잡아도 잡은 날 기준으로 이동량이 정해진다
+      '2026-03-13',
+    );
+    expect(moved?.date).toBe('2026-03-11');
+    expect(moved?.endDate).toBe('2026-03-15');
+  });
+
+  it('월·연을 넘어가도 날짜가 정상 계산된다', () => {
+    expect(moveEventToDate(ev({ date: '2026-12-30' }), '2026-12-30', '2027-01-02')?.date).toBe(
+      '2027-01-02',
+    );
+    expect(moveEventToDate(ev({ date: '2026-01-31' }), '2026-01-31', '2026-02-01')?.date).toBe(
+      '2026-02-01',
+    );
+  });
+
+  it('같은 날에 놓거나 옮길 수 없는 일정이면 null 을 준다', () => {
+    expect(moveEventToDate(ev({ date: '2026-03-10' }), '2026-03-10', '2026-03-10')).toBeNull();
+    expect(
+      moveEventToDate(
+        ev({ date: '2026-03-10', recurrence: 'monthly' }),
+        '2026-03-10',
+        '2026-03-11',
+      ),
+    ).toBeNull();
+  });
+
+  it('나이스 일정을 옮기면 isModified 가 서서 다음 동기화에 되돌아가지 않는다', () => {
+    const moved = moveEventToDate(
+      ev({ date: '2026-03-10', source: 'neis' }),
+      '2026-03-10',
+      '2026-03-11',
+    );
+    expect(moved?.isModified).toBe(true);
   });
 });

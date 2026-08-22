@@ -9,6 +9,7 @@ export type AnalyticsEventName =
   | 'seating_shuffle'
   | 'seating_drag'
   | 'event_create'
+  | 'event_move_drag'
   | 'memo_create'
   | 'todo_toggle'
   | 'tool_use'
@@ -90,6 +91,7 @@ export interface AnalyticsEventProperties {
   seating_shuffle: { studentCount: number };
   seating_drag: Record<string, never>;
   event_create: { category: string };
+  event_move_drag: { category: string };
   memo_create: Record<string, never>;
   todo_toggle: { completed: boolean };
   tool_use: { tool: ToolName };

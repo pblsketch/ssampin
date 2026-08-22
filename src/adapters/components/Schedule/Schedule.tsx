@@ -2,7 +2,13 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useEventsStore } from '@adapters/stores/useEventsStore';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import type { SchoolEvent } from '@domain/entities/SchoolEvent';
-import { getEventsForMonth, filterByCategory } from '@domain/rules/eventRules';
+import {
+  getEventsForMonth,
+  filterByCategory,
+  canMoveEventByDrag,
+  moveEventToDate,
+  parseLocalDate,
+} from '@domain/rules/eventRules';
 import { findDuplicateEventGroups, countDuplicateEvents } from '@domain/rules/eventDuplicateRules';
 import {
   getCategoryColors,
@@ -341,6 +347,38 @@ export function Schedule() {
 
   function handleDateSelect(date: Date) {
     setSelectedDate(date);
+  }
+
+  /*
+    달력에서 일정을 끌어다 다른 날짜에 놓았을 때 (2026-08-22).
+
+    실수로 끌리는 일이 잦은 조작이라 되돌리기 버튼을 함께 띄운다. 나이스·구글에서 온
+    일정도 옮길 수 있게 두되, 되돌아가지 않도록 표시를 남기는 일은 도메인 규칙이 맡는다.
+  */
+  function handleMoveEvent(eventId: string, grabDateKey: string, dropDateKey: string) {
+    const original = events.find((e) => e.id === eventId);
+    if (!original) return;
+
+    const check = canMoveEventByDrag(original);
+    if (!check.ok) {
+      showToast(check.reason, 'info');
+      return;
+    }
+
+    const moved = moveEventToDate(original, grabDateKey, dropDateKey);
+    if (!moved) return;
+
+    void updateEvent(moved);
+    track('event_move_drag', { category: original.category });
+
+    const dropped = parseLocalDate(dropDateKey);
+    const label = `${dropped.getMonth() + 1}월 ${dropped.getDate()}일`;
+    showToast(
+      `'${original.title}' 일정을 ${label}로 옮겼습니다`,
+      'success',
+      { label: '되돌리기', onClick: () => void updateEvent(original) },
+      5000,
+    );
   }
 
   async function handleImportClick() {
@@ -857,6 +895,7 @@ export function Schedule() {
                     onSelectDate={handleDateSelect}
                     onPrevMonth={goPrevMonth}
                     onNextMonth={goNextMonth}
+                    onMoveEvent={handleMoveEvent}
                   />
                 </div>
 

@@ -1,6 +1,6 @@
-import { useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import type { SchoolEvent, CategoryItem } from '@domain/entities/SchoolEvent';
-import { getMultiDayBarsForWeek } from '@domain/rules/eventRules';
+import { canMoveEventByDrag, getMultiDayBarsForWeek } from '@domain/rules/eventRules';
 import type { CalendarBar, WeekBarsResult } from '@domain/rules/eventRules';
 import { getColorsForCategory } from '@adapters/presenters/categoryPresenter';
 import { getHolidayMapForMonth } from '@domain/rules/holidayRules';
@@ -16,6 +16,18 @@ interface CalendarViewProps {
   onSelectDate: (date: Date) => void;
   onPrevMonth: () => void;
   onNextMonth: () => void;
+  /**
+   * 일정을 끌어다 다른 날짜에 놓았을 때 (2026-08-22).
+   * `grabDateKey` 는 **잡은 날**이다 — 여러 날 일정의 가운데를 잡아도 잡은 지점 기준으로
+   * 이동량이 정해져야 손끝 느낌과 결과가 어긋나지 않는다.
+   */
+  onMoveEvent?: (eventId: string, grabDateKey: string, dropDateKey: string) => void;
+}
+
+/** 드래그 중인 일정 (잡은 날짜를 함께 기억해야 이동량을 셀 수 있다) */
+interface DragState {
+  readonly eventId: string;
+  readonly grabDateKey: string;
 }
 
 interface CalendarDay {
@@ -134,10 +146,18 @@ function MultiDayBar({
   bar,
   categories,
   onClick,
+  draggable = false,
+  isDragging = false,
+  onDragStart,
+  onDragEnd,
 }: {
   bar: CalendarBar;
   categories: readonly CategoryItem[];
   onClick?: () => void;
+  draggable?: boolean;
+  isDragging?: boolean;
+  onDragStart?: (e: React.DragEvent<HTMLDivElement>) => void;
+  onDragEnd?: () => void;
 }) {
   const colors = getColorsForCategory(bar.category, categories);
 
@@ -146,10 +166,13 @@ function MultiDayBar({
 
   return (
     <div
+      draggable={draggable}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
       /* 단색 채움 + 흰 글자였다. 한 달치가 색 벽이 되고(특히 구글 일정은 전부 파랑)
          라이트 테마에서 `text-white` 는 본문색으로 강제 치환돼 흰 배경에 흰 글자가 될
          위험도 있었다. 옅은 면 + 본문색으로 바꿔 제목이 먼저 읽히게 한다. */
-      className={`flex h-4 items-center gap-1 ${colors.chip} text-sp-text text-caption leading-4 px-1 truncate cursor-pointer hover:brightness-95 transition-all duration-sp-quick ease-sp-out ${roundedLeft} ${roundedRight}`}
+      className={`flex h-4 items-center gap-1 ${colors.chip} text-sp-text text-caption leading-4 px-1 truncate hover:brightness-95 transition-all duration-sp-quick ease-sp-out ${roundedLeft} ${roundedRight} ${draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${isDragging ? 'opacity-40' : ''}`}
       style={{
         gridColumn: `${bar.startCol + 1} / span ${bar.span}`,
         gridRow: bar.row + 1,
@@ -173,16 +196,27 @@ function SingleEventChip({
   chipClass,
   dotClass,
   onClick,
+  draggable = false,
+  isDragging = false,
+  onDragStart,
+  onDragEnd,
 }: {
   title: string;
   chipClass: string;
   dotClass: string;
   onClick: () => void;
+  draggable?: boolean;
+  isDragging?: boolean;
+  onDragStart?: (e: React.DragEvent<HTMLButtonElement>) => void;
+  onDragEnd?: () => void;
 }) {
   return (
     <button
       type="button"
-      className={`flex w-full items-center gap-1 text-left text-caption leading-none px-1 py-0.5 rounded-md text-sp-text truncate cursor-pointer transition-all duration-sp-quick ease-sp-out hover:brightness-95 ${chipClass}`}
+      draggable={draggable}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      className={`flex w-full items-center gap-1 text-left text-caption leading-none px-1 py-0.5 rounded-md text-sp-text truncate transition-all duration-sp-quick ease-sp-out hover:brightness-95 ${chipClass} ${draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${isDragging ? 'opacity-40' : ''}`}
       onClick={(e) => {
         e.stopPropagation();
         onClick();
@@ -217,8 +251,13 @@ export function CalendarView({
   onSelectDate,
   onPrevMonth,
   onNextMonth,
+  onMoveEvent,
 }: CalendarViewProps) {
   const days = useMemo(() => getCalendarDays(year, month), [year, month]);
+
+  /* 끌고 있는 일정과, 지금 손이 올라가 있는 날짜 칸 */
+  const [drag, setDrag] = useState<DragState | null>(null);
+  const [hoverDateKey, setHoverDateKey] = useState<string | null>(null);
 
   // 주 단위로 분할
   const weeks = useMemo(() => {
@@ -244,6 +283,69 @@ export function CalendarView({
     }
     return map;
   }, [days, events]);
+
+  /* 옮길 수 있는 일정인지 빠르게 보려고 id 로 찾아 둔다 */
+  const eventById = useMemo(() => {
+    const map = new Map<string, SchoolEvent>();
+    for (const e of events) map.set(e.id, e);
+    return map;
+  }, [events]);
+
+  const isMovable = useCallback(
+    (eventId: string) => {
+      const evt = eventById.get(eventId);
+      return onMoveEvent !== undefined && evt !== undefined && canMoveEventByDrag(evt).ok;
+    },
+    [eventById, onMoveEvent],
+  );
+
+  const beginDrag = useCallback((e: React.DragEvent, eventId: string, grabDateKey: string) => {
+    e.dataTransfer.effectAllowed = 'move';
+    /* 브라우저·다른 앱이 알아볼 수 있게 최소한의 텍스트도 같이 실어 준다 */
+    e.dataTransfer.setData('text/plain', eventId);
+    setDrag({ eventId, grabDateKey });
+  }, []);
+
+  const endDrag = useCallback(() => {
+    setDrag(null);
+    setHoverDateKey(null);
+  }, []);
+
+  /*
+    드롭은 **주 한 줄 전체**가 받는다. 날짜 칸만 받게 하면 다일 바를 잡았을 때
+    손이 이미 바 위(=칸 아래)에 있어서 위로 한참 올라와야 놓을 수 있다.
+    가로 위치로 요일을 계산하면 줄 어디에 놓아도 의도한 날에 떨어진다.
+  */
+  const dayKeyFromX = useCallback((e: React.DragEvent<HTMLDivElement>, weekDays: CalendarDay[]) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    if (rect.width <= 0) return null;
+    const col = Math.min(6, Math.max(0, Math.floor(((e.clientX - rect.left) / rect.width) * 7)));
+    return weekDays[col]?.dateKey ?? null;
+  }, []);
+
+  const handleWeekDragOver = useCallback(
+    (e: React.DragEvent<HTMLDivElement>, weekDays: CalendarDay[]) => {
+      if (!drag) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      const key = dayKeyFromX(e, weekDays);
+      if (key !== null && key !== hoverDateKey) setHoverDateKey(key);
+    },
+    [drag, dayKeyFromX, hoverDateKey],
+  );
+
+  const handleWeekDrop = useCallback(
+    (e: React.DragEvent<HTMLDivElement>, weekDays: CalendarDay[]) => {
+      if (!drag) return;
+      e.preventDefault();
+      const key = dayKeyFromX(e, weekDays);
+      if (key !== null && key !== drag.grabDateKey) {
+        onMoveEvent?.(drag.eventId, drag.grabDateKey, key);
+      }
+      endDrag();
+    },
+    [drag, dayKeyFromX, onMoveEvent, endDrag],
+  );
 
   const monthLabel = `${year}년 ${month + 1}월`;
 
@@ -304,7 +406,12 @@ export function CalendarView({
           }
 
           return (
-            <div key={weekIdx} className="flex flex-col overflow-visible">
+            <div
+              key={weekIdx}
+              className="flex flex-col overflow-visible"
+              onDragOver={(e) => handleWeekDragOver(e, weekDays)}
+              onDrop={(e) => handleWeekDrop(e, weekDays)}
+            >
               {/* 날짜 셀 */}
               <div className="grid grid-cols-7 gap-x-1 flex-shrink-0" style={{ minHeight: '2rem' }}>
                 {weekDays.map((d, dayIdx) => {
@@ -318,13 +425,19 @@ export function CalendarView({
                   const chipsToShow = singleEvts.slice(0, 2);
                   const chipOverflow = singleEvts.length - chipsToShow.length;
 
+                  /* 지금 놓으면 여기로 간다 — 잡은 날 그대로면 강조하지 않는다 */
+                  const isDropTarget =
+                    drag !== null && hoverDateKey === d.dateKey && drag.grabDateKey !== d.dateKey;
+
                   // ── cell 상태 클래스 ──
                   let cellClass =
                     'group relative flex flex-col py-1 px-0.5 rounded-xl cursor-pointer transition-all duration-sp-base ease-sp-out h-full overflow-hidden ';
 
                   // today는 숫자의 원형 파란 배지 + cell 하단 accent bar로 강조
                   // (ring-offset은 overflow-hidden 부모에 잘리므로 사용 안 함)
-                  if (isSelected) {
+                  if (isDropTarget) {
+                    cellClass += 'bg-sp-accent/20 border border-sp-accent border-dashed ';
+                  } else if (isSelected) {
                     cellClass += 'bg-sp-accent/15 border border-sp-accent/40 ';
                   } else {
                     cellClass +=
@@ -380,6 +493,10 @@ export function CalendarView({
                                 chipClass={colors.chip}
                                 dotClass={colors.dot}
                                 onClick={() => onSelectDate(d.date)}
+                                draggable={isMovable(evt.id)}
+                                isDragging={drag?.eventId === evt.id}
+                                onDragStart={(e) => beginDrag(e, evt.id, d.dateKey)}
+                                onDragEnd={endDrag}
                               />
                             );
                           })}
@@ -407,6 +524,25 @@ export function CalendarView({
                       bar={bar}
                       categories={categories}
                       onClick={() => onSelectDate(weekDays[bar.startCol]!.date)}
+                      draggable={isMovable(bar.eventId)}
+                      isDragging={drag?.eventId === bar.eventId}
+                      onDragStart={(e) => {
+                        /* 바의 어느 칸을 잡았는지 — 가운데를 잡으면 가운데 기준으로 움직인다 */
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        const offset =
+                          rect.width > 0
+                            ? Math.min(
+                                bar.span - 1,
+                                Math.max(
+                                  0,
+                                  Math.floor(((e.clientX - rect.left) / rect.width) * bar.span),
+                                ),
+                              )
+                            : 0;
+                        const grabDay = weekDays[bar.startCol + offset] ?? weekDays[bar.startCol]!;
+                        beginDrag(e, bar.eventId, grabDay.dateKey);
+                      }}
+                      onDragEnd={endDrag}
                     />
                   ))}
                 </div>

@@ -24,11 +24,11 @@ export interface CalendarBar {
   readonly eventId: string;
   readonly title: string;
   readonly category: string;
-  readonly startCol: number;    // 0-6: 해당 주에서의 시작 열
-  readonly span: number;        // 1-7: 바가 차지하는 열 수
+  readonly startCol: number; // 0-6: 해당 주에서의 시작 열
+  readonly span: number; // 1-7: 바가 차지하는 열 수
   readonly isContinuation: boolean; // 이전 주에서 이어지는 바인지
-  readonly isContinued: boolean;    // 다음 주로 이어지는 바인지
-  readonly row: number;         // 0-2: 겹침 처리 행
+  readonly isContinued: boolean; // 다음 주로 이어지는 바인지
+  readonly row: number; // 0-2: 겹침 처리 행
 }
 
 /**
@@ -107,10 +107,7 @@ export function isRecurring(event: SchoolEvent, targetDate: Date): boolean {
     case 'monthly':
       return eventDate.getDate() === target.getDate();
     case 'yearly':
-      return (
-        eventDate.getMonth() === target.getMonth() &&
-        eventDate.getDate() === target.getDate()
-      );
+      return eventDate.getMonth() === target.getMonth() && eventDate.getDate() === target.getDate();
     default:
       return false;
   }
@@ -168,20 +165,14 @@ export function getEventsForDate(
 /**
  * 이벤트가 특정 날짜에 존재하는지 (캘린더 dot 표시용)
  */
-export function hasEventOnDate(
-  events: readonly SchoolEvent[],
-  date: Date,
-): boolean {
+export function hasEventOnDate(events: readonly SchoolEvent[], date: Date): boolean {
   return getEventsForDate(events, date).length > 0;
 }
 
 /**
  * 특정 날짜에 있는 이벤트들의 카테고리 목록 (캘린더 컬러 dot용)
  */
-export function getCategoriesOnDate(
-  events: readonly SchoolEvent[],
-  date: Date,
-): readonly string[] {
+export function getCategoriesOnDate(events: readonly SchoolEvent[], date: Date): readonly string[] {
   const dateEvents = getEventsForDate(events, date);
   return [...new Set(dateEvents.map((e) => e.category))];
 }
@@ -243,7 +234,9 @@ export function getMultiDayBarsForWeek(
   for (const event of sorted) {
     const eStartMs = Math.max(parseLocalDate(event.date).getTime(), weekStartMs);
     const eEndMs = Math.min(
-      event.endDate ? parseLocalDate(event.endDate).getTime() : parseLocalDate(event.date).getTime(),
+      event.endDate
+        ? parseLocalDate(event.endDate).getTime()
+        : parseLocalDate(event.date).getTime(),
       weekEndMs,
     );
     const startCol = Math.round((eStartMs - weekStartMs) / DAY_MS);
@@ -251,7 +244,10 @@ export function getMultiDayBarsForWeek(
     const span = endCol - startCol + 1;
 
     const isContinuation = parseLocalDate(event.date).getTime() < weekStartMs;
-    const isContinued = (event.endDate ? parseLocalDate(event.endDate).getTime() : parseLocalDate(event.date).getTime()) > weekEndMs;
+    const isContinued =
+      (event.endDate
+        ? parseLocalDate(event.endDate).getTime()
+        : parseLocalDate(event.date).getTime()) > weekEndMs;
 
     // 겹치지 않는 행 찾기
     let assignedRow = -1;
@@ -307,4 +303,72 @@ export function getMultiDayEventIdsOnDate(
       return eStart <= targetMs && eEnd >= targetMs;
     })
     .map((e) => e.id);
+}
+
+/* ────────────────────────────────────────────────────────────
+   일정 드래그 이동 (달력에서 다른 날짜 칸으로 끌어다 놓기)
+   ──────────────────────────────────────────────────────────── */
+
+/** Date → "YYYY-MM-DD" (로컬 기준) */
+export function toDateKey(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+/** 드래그 이동 가능 여부 판정 결과 — 막을 때는 사용자에게 보여 줄 이유를 함께 준다 */
+export type DragMoveCheck = { readonly ok: true } | { readonly ok: false; readonly reason: string };
+
+/**
+ * 이 일정을 드래그로 옮겨도 되는가.
+ *
+ * 반복 일정(생일 포함)은 막는다 — 원본 날짜를 옮기면 그 뒤의 모든 반복이 함께 밀리고,
+ * "이 날만 건너뛰기"로 빼 둔 날짜(excludeDates)와도 어긋난다. 반복 규칙을 바꾸는 일은
+ * 편집 창에서 의도적으로 해야 안전하다.
+ */
+export function canMoveEventByDrag(event: SchoolEvent): DragMoveCheck {
+  if (event.recurrence) {
+    return {
+      ok: false,
+      reason: '반복 일정은 끌어서 옮길 수 없습니다. 편집 창에서 날짜를 바꿔 주세요',
+    };
+  }
+  if (event.source === 'birthday') {
+    return { ok: false, reason: '생일은 학생 정보에서 관리됩니다' };
+  }
+  return { ok: true };
+}
+
+/**
+ * 잡은 날짜(grab)에서 놓은 날짜(drop)까지의 이동량만큼 일정을 통째로 민다.
+ *
+ * - 여러 날 일정은 기간(길이)을 그대로 유지한 채 시작/종료가 함께 움직인다.
+ * - 나이스 학사일정은 `isModified` 를 세워 둔다 — 안 그러면 다음 동기화 때 원래 날짜로 되돌아간다.
+ * - 옮길 수 없는 일정이거나 이동량이 0이면 `null` (호출부는 아무 것도 하지 않으면 된다).
+ */
+export function moveEventToDate(
+  event: SchoolEvent,
+  grabDateKey: string,
+  dropDateKey: string,
+): SchoolEvent | null {
+  if (!canMoveEventByDrag(event).ok) return null;
+
+  const deltaMs = parseLocalDate(dropDateKey).getTime() - parseLocalDate(grabDateKey).getTime();
+  const deltaDays = Math.round(deltaMs / DAY_MS);
+  if (deltaDays === 0) return null;
+
+  const shift = (key: string): string => {
+    const d = parseLocalDate(key);
+    d.setDate(d.getDate() + deltaDays);
+    return toDateKey(d);
+  };
+
+  const moved: SchoolEvent = {
+    ...event,
+    date: shift(event.date),
+    ...(event.endDate ? { endDate: shift(event.endDate) } : {}),
+  };
+
+  return event.source === 'neis' ? { ...moved, isModified: true } : moved;
 }
