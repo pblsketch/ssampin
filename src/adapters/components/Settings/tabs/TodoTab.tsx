@@ -7,6 +7,7 @@ import {
   saveTodoAlarmEnabled,
 } from '@adapters/repositories/todoAlarmDeviceState';
 import {
+  ALARM_DAILY_CAP_UNLIMITED,
   DEFAULT_ALARM_DAILY_CAP,
   DEFAULT_ALARM_DEFAULT_TIME,
   DEFAULT_ALARM_LEAD_MINUTES,
@@ -38,7 +39,15 @@ const LEAD_OPTIONS: { minutes: number; label: string }[] = [
   { minutes: 30, label: '30분 전' },
 ];
 
-const CAP_OPTIONS = [3, 5, 8, 12, 20];
+/** `0` 은 제한 없음이다(ALARM_DAILY_CAP_UNLIMITED). 값이 없는 것과 다르다 — 아래 주석 참조. */
+const CAP_OPTIONS: { value: number; label: string }[] = [
+  { value: 3, label: '3건' },
+  { value: 5, label: '5건' },
+  { value: 8, label: '8건' },
+  { value: 12, label: '12건' },
+  { value: 20, label: '20건' },
+  { value: ALARM_DAILY_CAP_UNLIMITED, label: '제한 없음' },
+];
 
 /** 스위치 하나. 이 탭에서만 쓰이므로 파일 안에 둔다. */
 function Toggle({ on, onClick, label }: { on: boolean; onClick: () => void; label: string }) {
@@ -216,24 +225,31 @@ export function TodoTab({ draft, patch }: Props) {
               <div>
                 <span className="text-sm font-medium text-sp-text">하루에 최대 몇 건</span>
                 <p className="text-xs text-sp-muted mt-0.5">
-                  알림이 쏟아지면 결국 통째로 끄게 됩니다. 알림이 뜨는 날짜별로 셉니다.
+                  {dailyCap === ALARM_DAILY_CAP_UNLIMITED
+                    ? '개수를 제한하지 않습니다. 마감일과 다시 확인할 날이 있는 할 일은 모두 알립니다.'
+                    : `알림이 뜨는 날짜마다 따로 셉니다. 오늘 ${dailyCap}건까지, 내일도 ${dailyCap}건까지입니다 — 내일 울릴 알림이 오늘 몫을 미리 쓰지 않습니다.`}
                 </p>
                 <div className="flex flex-wrap gap-2 mt-2">
-                  {CAP_OPTIONS.map((cap) => (
+                  {CAP_OPTIONS.map(({ value, label }) => (
                     <button
-                      key={cap}
+                      key={value}
                       type="button"
-                      onClick={() => updateTodoSettings({ alarmDailyCap: cap })}
+                      onClick={() => updateTodoSettings({ alarmDailyCap: value })}
                       className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                        dailyCap === cap
+                        dailyCap === value
                           ? 'bg-sp-accent text-white'
                           : 'bg-sp-surface text-sp-muted hover:text-sp-text hover:bg-sp-card'
                       }`}
                     >
-                      {cap}건
+                      {label}
                     </button>
                   ))}
                 </div>
+                {dailyCap === ALARM_DAILY_CAP_UNLIMITED && (
+                  <p className="text-xs text-sp-muted mt-2 bg-sp-surface rounded-lg px-3 py-2">
+                    할 일이 몰린 날에는 알림이 한꺼번에 여러 개 뜹니다.
+                  </p>
+                )}
               </div>
 
               <label className="flex items-center justify-between gap-4 cursor-pointer">

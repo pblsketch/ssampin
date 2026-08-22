@@ -35,7 +35,12 @@ export interface TodoSettings {
 
   /** 예정 시각보다 몇 분 먼저 알릴지 (기본 0 = 정각) */
   readonly alarmLeadMinutes?: number;
-  /** 하루에 띄울 알림 최대 건수 (기본 8). 발화하는 **날짜별**로 적용한다 */
+  /**
+   * 하루에 띄울 알림 최대 건수 (기본 8). 발화하는 **날짜별**로 적용한다.
+   *
+   * `0` 은 **제한 없음**이다(`ALARM_DAILY_CAP_UNLIMITED`). 값이 아예 없는 것과 다르다 —
+   * 없으면 "정한 적 없음 = 8건", 0이면 "일부러 풀었음"이다.
+   */
   readonly alarmDailyCap?: number;
   /** 시각을 안 적은 할 일의 기본 알림 시각 "HH:mm" (기본 '09:00') */
   readonly alarmDefaultTime?: string;

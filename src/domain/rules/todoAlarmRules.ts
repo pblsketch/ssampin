@@ -27,6 +27,14 @@ export const TODO_ALARM_TITLE = '할 일 알림';
 
 export const DEFAULT_ALARM_LEAD_MINUTES = 0;
 export const DEFAULT_ALARM_DAILY_CAP = 8;
+/**
+ * 하루 상한 "제한 없음"을 뜻하는 값.
+ *
+ * `undefined` 를 쓰지 않는 이유: 그건 이미 "설정한 적 없음 = 기본값 8건"이라는 뜻이라
+ * "일부러 제한을 풀었다"와 구분되지 않는다. `Infinity` 도 쓰지 않는다 — 설정 파일이
+ * JSON 이라 저장하는 순간 `null` 이 되어 값이 조용히 사라진다.
+ */
+export const ALARM_DAILY_CAP_UNLIMITED = 0;
 export const DEFAULT_ALARM_DEFAULT_TIME = '09:00';
 export const DEFAULT_ALARM_HORIZON_DAYS = 14;
 /** 기본 유예 창 2시간 — 절전에서 늦게 깨어난 경우까지는 울리고, 그보다 오래 지나면 버린다. */
@@ -132,6 +140,11 @@ export function buildTodoAlarmSchedule(
     if (pr !== 0) return pr;
     return a.todo.id < b.todo.id ? -1 : a.todo.id > b.todo.id ? 1 : 0;
   });
+
+  // 상한이 `ALARM_DAILY_CAP_UNLIMITED`(0) 이면 거르지 않는다 — 사용자가 일부러 푼 것이다.
+  if (dailyCap <= ALARM_DAILY_CAP_UNLIMITED) {
+    return candidates.map((c) => c.item);
+  }
 
   // 하루 상한은 **울리는 날짜별**로 적용한다.
   const perDay = new Map<number, number>();

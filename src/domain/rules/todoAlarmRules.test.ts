@@ -3,6 +3,7 @@ import type { Todo } from '@domain/entities/Todo';
 import type { TodoSettings } from '@domain/entities/TodoSettings';
 import { DEFAULT_TODO_SETTINGS } from '@domain/entities/TodoSettings';
 import {
+  ALARM_DAILY_CAP_UNLIMITED,
   buildTodoAlarmSchedule,
   DEFAULT_ALARM_GRACE_MS,
   TODO_ALARM_TITLE,
@@ -193,6 +194,40 @@ describe('하루 상한 — 울리는 날짜별로 센다', () => {
     );
     // 상한이 1이어도 서로 다른 날이므로 둘 다 살아남는다.
     expect(items).toHaveLength(2);
+  });
+
+  it('제한 없음(0)이면 하나도 거르지 않는다', () => {
+    const todos: Todo[] = [];
+    for (let i = 0; i < 20; i++) {
+      todos.push(todo({ id: `a${i}`, dueDate: '2026-08-25', time: `1${i % 10}:00` }));
+    }
+    const items = buildTodoAlarmSchedule(
+      todos,
+      settings({ alarmDailyCap: ALARM_DAILY_CAP_UNLIMITED }),
+      NOW,
+      KST,
+    );
+    expect(items).toHaveLength(20);
+  });
+
+  it('제한 없음이어도 지평 밖은 여전히 빠진다 — 상한과 지평은 다른 장치다', () => {
+    const items = buildTodoAlarmSchedule(
+      [todo({ id: 'near', dueDate: '2026-09-04' }), todo({ id: 'far', dueDate: '2026-09-06' })],
+      settings({ alarmDailyCap: ALARM_DAILY_CAP_UNLIMITED }),
+      NOW,
+      KST,
+    );
+    expect(items.map((i) => i.reminderId.split(':')[1])).toEqual(['near']);
+  });
+
+  it('제한 없음이어도 완료한 일은 여전히 울리지 않는다', () => {
+    const items = buildTodoAlarmSchedule(
+      [todo({ dueDate: '2026-08-25', completed: true })],
+      settings({ alarmDailyCap: ALARM_DAILY_CAP_UNLIMITED }),
+      NOW,
+      KST,
+    );
+    expect(items).toEqual([]);
   });
 
   it('같은 시각이면 급한 것부터 남는다', () => {
