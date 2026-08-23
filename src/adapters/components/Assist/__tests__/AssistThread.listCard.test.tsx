@@ -19,7 +19,11 @@ import type { AssistTurn } from '@adapters/stores/useAssistStore';
 import { findAssistTool } from '@domain/services/assistToolRegistry';
 import { sanitizeToolResult } from '@domain/services/sanitizeToolResult';
 import type { ToolResultShape } from '@domain/services/sanitizeToolResult';
-import { summarizeBookmarks, summarizeTodos } from '@usecases/assist/summaries';
+import {
+  summarizeBookmarks,
+  summarizeHomeroomAttendance,
+  summarizeTodos,
+} from '@usecases/assist/summaries';
 
 afterEach(cleanup);
 
@@ -120,5 +124,56 @@ describe('AssistThread — 새 도구 카드도 백지가 아니다', () => {
     expect(screen.getByText('neis.go.kr')).toBeTruthy();
     // 주소 전체는 애초에 카드까지 오지 않는다(오너 결정 ② — 도메인만).
     expect(screen.queryByText(/sid=/)).toBeNull();
+  });
+});
+
+/**
+ * ★집계 도구에는 **글자 본문이 아예 없다.**
+ *
+ * 출결 기간 집계의 한 줄은 `{ date, absent, late, ... }` 뿐이라, 카드가 글자만 그리면
+ * "• 08-03" 만 남고 **정작 몇 명이 결석했는지가 사라진다.** AI 는 "3명 결석"이라고
+ * 말하는데 카드에는 그 숫자가 없으면, 선생님은 AI 말을 검증할 방법이 없다.
+ */
+describe('AssistThread — 집계 카드는 숫자를 본문으로 쓴다', () => {
+  it('출결 기간 — 날짜와 함께 결석·지각 인원이 화면에 남는다', () => {
+    const tool = findAssistTool('get_homeroom_attendance_stats');
+    if (!tool) throw new Error('도구 없음');
+    const summary = summarizeHomeroomAttendance(
+      [
+        { studentId: 's1', category: 'attendance', subcategory: '결석 (질병)', date: '2026-08-03' },
+        { studentId: 's2', category: 'attendance', subcategory: '지각 (인정)', date: '2026-08-03' },
+      ],
+      { className: '우리 반', from: '2026-08-01', to: '2026-08-31', rosterSize: 30 },
+    );
+
+    render(
+      <AssistThread
+        turns={[
+          {
+            id: 't3',
+            question: '이번 달 결석 몇 번이야',
+            cards: [
+              {
+                tool: tool.id,
+                data: sanitizeToolResult(
+                  tool,
+                  JSON.parse(JSON.stringify(summary)) as ToolResultShape,
+                ),
+              },
+            ],
+            answer: '',
+            outboundAnswer: '',
+            outboundCards: [],
+            degraded: null,
+            status: 'done',
+            maskedCount: 0,
+            blankedCount: 0,
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText('결석 1 · 지각 1')).toBeTruthy();
+    expect(screen.getByText('08-03')).toBeTruthy();
   });
 });

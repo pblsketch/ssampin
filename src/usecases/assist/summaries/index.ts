@@ -45,3 +45,28 @@ export type {
 } from './summarizeBookmarks';
 export { summarizeWeek } from './summarizeWeek';
 export type { SummarizeWeekOptions, WeekSummary } from './summarizeWeek';
+
+// ── 브릿지 동등화 Phase 2 (계획서 §2 B그룹 — 집계로 커버하는 읽기) ──
+export { attendanceStatusOf } from './toAttendanceRoll';
+export { summarizeHomeroomAttendance } from './summarizeHomeroomAttendance';
+export type {
+  SummarizeHomeroomAttendanceOptions,
+  HomeroomAttendanceSummary,
+} from './summarizeHomeroomAttendance';
+export { summarizeClassAttendance } from './summarizeClassAttendance';
+export type {
+  ClassAttendanceRecordLike,
+  SummarizeClassAttendanceOptions,
+  ClassAttendanceSummary,
+} from './summarizeClassAttendance';
+export { summarizeGrades } from './summarizeGrades';
+export type {
+  AssessmentPlanLike,
+  AssessmentScoreLike,
+  SummarizeGradesOptions,
+  GradesSummary,
+} from './summarizeGrades';
+export { summarizeSeating } from './summarizeSeating';
+export type { SeatingLike, SummarizeSeatingOptions, SeatingSummary } from './summarizeSeating';
+export { summarizeAssessment } from './summarizeAssessment';
+export type { SummarizeAssessmentOptions, AssessmentSummary } from './summarizeAssessment';

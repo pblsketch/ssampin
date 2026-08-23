@@ -28,6 +28,11 @@ const TOOL_LABEL: Readonly<Record<string, string>> = {
   get_note_list: '노트',
   get_bookmarks: '즐겨찾기',
   get_week_overview: '이번 주',
+  get_homeroom_attendance_stats: '출결 (기간)',
+  get_class_attendance_stats: '수업반 출결',
+  get_grade_stats: '성적 분포',
+  get_seating_stats: '자리 배치',
+  get_assessment_stats: '채점표',
 };
 
 /** 필드 이름 → 화면에 쓰는 한국어 */
@@ -44,6 +49,24 @@ const FIELD_LABEL: Readonly<Record<string, string>> = {
   total: '전체',
   undone: '미완료',
   todoUndone: '남은 할 일',
+  rosterSize: '학급 인원',
+  daysWithIssue: '이상 있던 날',
+  lessons: '수업',
+  layout: '배치',
+  seatCount: '자리',
+  assigned: '앉음',
+  empty: '빈자리',
+  groupCount: '모둠',
+  average: '평균',
+  highest: '최고',
+  lowest: '최저',
+  maxScore: '만점',
+  graded: '채점 완료',
+  partial: '채점 중',
+  marked: '채점',
+  fullScore: '만점',
+  subject: '과목',
+  kind: '종류',
 };
 
 /** 숫자 뒤에 붙일 단위. 기본은 '명'(사람 수 집계가 대부분이라서). */
@@ -53,6 +76,15 @@ const FIELD_UNIT: Readonly<Record<string, string>> = {
   // `total` 은 기록·메모·노트·즐겨찾기의 **건수**다. 기본값 '명'을 그대로 두면
   // "기록 34명"처럼 사람 수인 척하는 숫자가 화면에 남는다.
   total: '건',
+  lessons: '교시',
+  daysWithIssue: '일',
+  seatCount: '개',
+  groupCount: '개',
+  average: '점',
+  highest: '점',
+  lowest: '점',
+  maxScore: '점',
+  fullScore: '점',
 };
 
 function formatValue(key: string, value: unknown): string {
@@ -76,6 +108,7 @@ interface ListItem {
 const LIST_TITLE_KEYS: readonly string[] = [
   'title',
   'name',
+  'criterion',
   'subject',
   'unit',
   'content',
@@ -103,6 +136,27 @@ function firstText(item: ListItem, keys: readonly string[]): string {
     if (typeof value === 'string' && value.length > 0) return value;
   }
   return '';
+}
+
+/** 앞뒤에 이미 쓴 필드 — 본문에서 또 보여주지 않는다. */
+const LIST_SIDE_KEYS: ReadonlySet<string> = new Set(['date', ...LIST_TAIL_KEYS]);
+
+/**
+ * 글자 본문이 없는 목록 항목(출결 기간 집계 등)의 본문을 숫자로 만든다.
+ *
+ * ★없으면 "• 08-03" 만 남고 정작 몇 명이 결석했는지가 카드에서 사라진다. 집계 도구는
+ * 애초에 글자 본문이 없으므로, 숫자를 본문으로 쓰지 않으면 카드가 백지가 된다.
+ * 0 은 건너뛴다 — "지각 0 · 조퇴 0 · 결과 0"은 읽는 데 방해만 되고, 총계는 이미 위에 있다.
+ */
+function numericSummary(item: ListItem): string {
+  const parts: string[] = [];
+  for (const [key, value] of Object.entries(item)) {
+    if (parts.length >= 5) break;
+    if (LIST_SIDE_KEYS.has(key)) continue;
+    if (typeof value !== 'number' || value === 0) continue;
+    parts.push(`${FIELD_LABEL[key] ?? key} ${value}${FIELD_UNIT[key] ?? ''}`);
+  }
+  return parts.join(' · ');
 }
 
 function isListOfRecords(value: unknown): value is readonly ListItem[] {
@@ -154,7 +208,7 @@ function DataCard({ tool, data }: { readonly tool: string; readonly data: ToolRe
                 </span>
                 {lead.length > 0 && <span className="shrink-0 text-xs text-sp-muted">{lead}</span>}
                 <span className="min-w-0 flex-1 break-words text-sp-text">
-                  {firstText(item, LIST_TITLE_KEYS)}
+                  {firstText(item, LIST_TITLE_KEYS) || numericSummary(item)}
                 </span>
                 {tail.length > 0 && (
                   <span className="shrink-0 text-xs text-sp-muted">

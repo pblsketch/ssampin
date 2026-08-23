@@ -32,6 +32,19 @@ const TYPE_TO_STATUS: Readonly<Record<string, AttendanceStatus>> = {
   결과: 'classAbsence',
 };
 
+/**
+ * 기록 한 건이 어떤 출결 상태인가. 출결 기록이 아니거나 모르는 유형이면 null.
+ *
+ * ★기간 집계(`summarizeHomeroomAttendance`)도 **이 함수를 쓴다.** 판정을 복사해 두면
+ * 소분류 형식이 바뀔 때 한쪽만 고쳐져 "오늘 출결"과 "이번 달 출결"의 숫자가 갈린다.
+ */
+export function attendanceStatusOf(
+  record: Pick<AttendanceRecordSource, 'category' | 'subcategory'>,
+): AttendanceStatus | null {
+  if (record.category !== 'attendance') return null;
+  return TYPE_TO_STATUS[extractAttendanceType(record.subcategory)] ?? null;
+}
+
 export interface ToAttendanceRollOptions {
   readonly classId: string;
   readonly date: string;
@@ -52,11 +65,11 @@ export function toAttendanceRoll(
   const students: { status: AttendanceStatus }[] = [];
 
   for (const record of records) {
-    if (record.category !== 'attendance' || record.date !== opts.date) continue;
+    if (record.date !== opts.date) continue;
     // 한 학생이 같은 날 여러 건이면 첫 건만 센다 — 인원 합이 정원을 넘지 않게 한다.
     if (seen.has(record.studentId)) continue;
 
-    const status = TYPE_TO_STATUS[extractAttendanceType(record.subcategory)];
+    const status = attendanceStatusOf(record);
     if (!status) continue;
 
     seen.add(record.studentId);

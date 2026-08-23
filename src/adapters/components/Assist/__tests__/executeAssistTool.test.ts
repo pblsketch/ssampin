@@ -50,6 +50,69 @@ const SRC: ExecutorSources = {
   },
   bookmarks: [{ name: '나이스', url: 'https://neis.go.kr/detail?sid=20260315', groupId: 'g1' }],
   bookmarkGroups: [{ id: 'g1', name: '업무', archived: false }],
+  // ── Phase 2 ──
+  classAttendance: [
+    {
+      classId: 'c1',
+      date: '2026-08-03',
+      period: 1,
+      students: [{ status: 'present' }, { status: 'absent' }],
+    },
+  ],
+  gradePlans: [
+    {
+      id: 'a1',
+      teachingClassId: 'c1',
+      semester: '2',
+      subject: '수학',
+      title: '2학기 1차 지필',
+      kind: 'written-exam',
+      fullScore: 100,
+    },
+  ],
+  gradeScores: [
+    { assessmentId: 'a1', score: 95 },
+    { assessmentId: 'a1', score: 75 },
+  ],
+  seating: {
+    rows: 1,
+    cols: 3,
+    seats: [['stu-1', 'stu-2', null]],
+    layout: 'grid',
+  },
+  rubrics: [
+    {
+      id: 'r1',
+      classId: 'c1',
+      title: '토론 평가',
+      criteria: [
+        {
+          id: 'k1',
+          name: '주장의 명확성',
+          order: 0,
+          levels: [
+            { id: 'l1', name: '탁월함', score: 4 },
+            { id: 'l2', name: '잘함', score: 3 },
+          ],
+        },
+      ],
+      createdAt: '2026-08-01T00:00:00Z',
+      updatedAt: '2026-08-01T00:00:00Z',
+    },
+  ],
+  rubricGradings: [
+    {
+      id: 'g1',
+      rubricId: 'r1',
+      classId: 'c1',
+      studentId: 'stu-1',
+      status: 'graded',
+      marks: { k1: 'l1' },
+      criterionNotes: { k1: '김지훈 메모' },
+      overallFeedback: '김지훈 총평',
+      gradedAt: '2026-08-20T00:00:00Z',
+    },
+  ],
 };
 
 describe('executeAssistTool', () => {
@@ -189,5 +252,122 @@ describe('executeAssistTool', () => {
     const card = executeAssistTool('count_students', '{"className":"3학년 2반"}', SRC);
     expect((card?.data as { count?: number; className?: string }).count).toBe(2);
     expect((card?.data as { className?: string }).className).toBe('3학년 2반');
+  });
+
+  // ── Phase 2: 집계로 커버하는 읽기 ──
+
+  it('담임 출결 기간 — 출석은 세지 않는다(수업일 수를 모른다)', () => {
+    const card = executeAssistTool(
+      'get_homeroom_attendance_stats',
+      '{"from":"2026-08-01","to":"2026-08-31"}',
+      SRC,
+    );
+
+    expect(card?.tool).toBe('get_homeroom_attendance_stats');
+    expect(Object.keys(card?.data ?? {})).not.toContain('present');
+    expect((card?.data as { rosterSize?: number }).rosterSize).toBe(0);
+  });
+
+  it('수업반 출결 — 날짜별로 묶고 출석도 센다', () => {
+    const card = executeAssistTool(
+      'get_class_attendance_stats',
+      '{"from":"2026-08-01","to":"2026-08-31"}',
+      SRC,
+    );
+
+    const data = card?.data as { present?: number; days?: readonly { className?: string }[] };
+    expect(data.present).toBe(1);
+    expect(data.days?.[0]?.className).toBe('3학년 2반');
+  });
+
+  it('성적 — 평균과 성취도 분포를 준다. 학생 점수는 없다', () => {
+    const card = executeAssistTool('get_grade_stats', '{}', SRC);
+
+    const items = (card?.data as { items?: readonly { average?: number; distribution?: string }[] })
+      .items;
+    // 95점 → A, 75점 → C. 평균 85.
+    expect(items?.[0]?.average).toBe(85);
+    expect(items?.[0]?.distribution).toBe('A 1 · B 0 · C 1 · D 0 · E 0');
+    expect(JSON.stringify(card?.data)).not.toContain('studentKey');
+  });
+
+  it('성적 — 모델이 지어낸 학기 값은 버린다', () => {
+    const card = executeAssistTool('get_grade_stats', '{"semester":"2026-2"}', SRC);
+    expect((card?.data as { total?: number }).total).toBe(1);
+  });
+
+  it('★자리 배치 — 숫자만 나가고 좌석표는 안 나간다', () => {
+    const card = executeAssistTool('get_seating_stats', '{}', SRC);
+
+    const data = card?.data as { seatCount?: number; assigned?: number; empty?: number };
+    expect(data.seatCount).toBe(3);
+    expect(data.assigned).toBe(2);
+    expect(data.empty).toBe(1);
+    expect(JSON.stringify(card?.data)).not.toContain('stu-1');
+  });
+
+  it('★루브릭 — 분포만 나가고 학생별 총평·메모는 안 나간다', () => {
+    const card = executeAssistTool('get_assessment_stats', '{}', SRC);
+
+    const data = card?.data as {
+      sheets?: readonly { title?: string; graded?: number }[];
+      criteria?: readonly { distribution?: string }[];
+    };
+    expect(data.sheets?.[0]?.title).toBe('토론 평가');
+    expect(data.sheets?.[0]?.graded).toBe(1);
+    expect(data.criteria?.[0]?.distribution).toBe('탁월함 1 · 잘함 0');
+    expect(JSON.stringify(card?.data)).not.toContain('김지훈');
+  });
+
+  it('★반 이름이 딱 안 맞아도 한 반으로 좁혀진다 — 모델은 질문의 말을 그대로 옮긴다', () => {
+    // 실서버에서 "3학년 2반 수업 출결"을 물으면 className:"3학년 2반 수업" 이 온다.
+    const card = executeAssistTool(
+      'get_class_attendance_stats',
+      '{"from":"2026-08-01","to":"2026-08-31","className":"3학년 2반 수업"}',
+      SRC,
+    );
+
+    expect((card?.data as { className?: string }).className).toBe('3학년 2반');
+  });
+
+  it('★후보가 둘 이상이면 좁히지 않는다 — 엉뚱한 반 숫자를 맞다고 말하는 게 더 나쁘다', () => {
+    const twoClasses = {
+      ...SRC,
+      classes: [
+        { id: 'c1', name: '3학년 2반', grade: 3, students: [{}, {}] },
+        { id: 'c2', name: '3학년', grade: 3, students: [{}] },
+      ],
+    };
+    const card = executeAssistTool(
+      'get_class_attendance_stats',
+      '{"className":"3학년 2반 수업"}',
+      twoClasses,
+    );
+
+    expect((card?.data as { className?: string }).className).toBe('전체 수업반');
+  });
+
+  it('기록 통계 — 기간이 두 달 이상이면 달별로 묶어 준다', () => {
+    const withRecords = {
+      ...SRC,
+      records: [
+        { studentId: 's1', category: 'observation', subcategory: '학습', date: '2026-07-10' },
+        { studentId: 's2', category: 'observation', subcategory: '학습', date: '2026-08-10' },
+      ],
+    };
+    const wide = executeAssistTool(
+      'get_records_stats',
+      '{"from":"2026-07-01","to":"2026-08-31"}',
+      withRecords,
+    );
+    const narrow = executeAssistTool(
+      'get_records_stats',
+      '{"from":"2026-08-01","to":"2026-08-31"}',
+      withRecords,
+    );
+
+    expect((wide?.data as { byMonth?: readonly { month?: string }[] }).byMonth).toHaveLength(2);
+    // 한 달짜리에는 붙이지 않는다 — 같은 숫자를 두 번 보내면 토큰만 쓴다.
+    expect(Object.keys(narrow?.data ?? {})).not.toContain('byMonth');
   });
 });

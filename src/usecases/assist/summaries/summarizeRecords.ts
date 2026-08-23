@@ -28,6 +28,17 @@ export interface RecordsSummary {
   readonly period: string;
   readonly total: number;
   readonly byCategory: readonly { readonly category: string; readonly count: number }[];
+  /**
+   * 달별 건수. **기간이 두 달 이상일 때만 붙는다.**
+   *
+   * 기간에는 상한이 없으므로(오너 결정 ④) 한 학기·한 학년도를 통째로 물을 수 있는데,
+   * 그때 "전부 34건"만 보내면 언제 몰렸는지를 알 수 없다. 달로 묶으면 기간이 길어져도
+   * 줄 수가 열두어 개로 묶여 서버 상한(4,000자) 안에 들어간다(계획서 §4).
+   *
+   * 한 달짜리 조회에는 붙이지 않는다 — `byCategory` 와 총계로 이미 다 말할 수 있고,
+   * 같은 숫자를 두 번 보내면 토큰만 쓴다.
+   */
+  readonly byMonth?: readonly { readonly month: string; readonly count: number }[];
 }
 
 /**
@@ -45,14 +56,26 @@ export function summarizeRecords(
   );
 
   const byCategoryMap = new Map<string, number>();
+  const byMonthMap = new Map<string, number>();
   for (const r of matched) {
     byCategoryMap.set(r.category, (byCategoryMap.get(r.category) ?? 0) + 1);
+    const month = r.date.slice(0, 7);
+    byMonthMap.set(month, (byMonthMap.get(month) ?? 0) + 1);
   }
+
+  const spansMonths = opts.periodFrom.slice(0, 7) !== opts.periodTo.slice(0, 7);
 
   return {
     className: opts.className,
     period: opts.periodLabel,
     total: matched.length,
     byCategory: [...byCategoryMap.entries()].map(([category, count]) => ({ category, count })),
+    ...(spansMonths
+      ? {
+          byMonth: [...byMonthMap.entries()]
+            .map(([month, count]) => ({ month, count }))
+            .sort((a, b) => a.month.localeCompare(b.month)),
+        }
+      : {}),
   };
 }

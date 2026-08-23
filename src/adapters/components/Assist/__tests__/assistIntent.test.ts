@@ -12,16 +12,59 @@
 import { describe, expect, it } from 'vitest';
 
 import { ASSIST_PLACEHOLDER_EXAMPLE, SUGGESTIONS } from '../AssistDock';
-import { INTENT_RULES } from '../AssistDockContainer';
+import { INTENT_RULES, buildCards } from '../AssistDockContainer';
+import type { IntentSources } from '../AssistDockContainer';
 import { findAssistTool } from '@domain/services/assistToolRegistry';
 
 function toolsFor(question: string): string[] {
   return INTENT_RULES.filter((r) => r.pattern.test(question)).map((r) => r.tool);
 }
 
+const EMPTY_SOURCES: IntentSources = { students: [], classes: [], todos: [], records: [] };
+
+/** 실제 경로 그대로 — 물러남(steppedAsideWhen)까지 포함해 어떤 카드가 생기는지 본다. */
+function cardsFor(question: string): string[] {
+  return buildCards(question, EMPTY_SOURCES).map((c) => c.tool);
+}
+
 describe('★제안 칩은 반드시 카드를 만든다', () => {
   it.each([...SUGGESTIONS])('%s → 도구가 하나 이상 걸린다', (chip) => {
     expect(toolsFor(chip), `"${chip}" 이 어느 도구에도 안 걸린다`).not.toHaveLength(0);
+  });
+});
+
+describe('★지름길이 기간 도구를 가리지 않는다 (Phase 2)', () => {
+  // 배경: 정규식이 `출결` 을 통째로 잡아채는 바람에 "이번 달 결석 몇 번?"이
+  // **오늘 하루치 카드**로 답해졌고, 새로 만든 기간 도구는 모델에게 보이지도 않았다.
+  // 도구를 등록하는 것만으로는 부족하다 — 지름길이 먼저 걸리면 없는 것과 같다.
+
+  it.each([
+    '이번 달 우리 반 결석 몇 번이야',
+    '지난주 출결 어땠어',
+    '8월 21일 출결 알려줘',
+    '3학년 2반 수업 출결 이번 달 어땠어',
+  ])('%s → 카드를 만들지 않는다(모델이 도구를 고른다)', (question) => {
+    expect(cardsFor(question)).toHaveLength(0);
+  });
+
+  it('★"오늘" 질문은 그대로 지름길로 간다 — 왕복을 아끼는 이유가 사라지면 안 된다', () => {
+    expect(cardsFor('오늘 우리 반 출결 어때')).toEqual(['get_attendance_summary']);
+  });
+
+  it('끝낸 할 일까지 달라면 물러난다 — 기본값은 미완료만이다', () => {
+    expect(cardsFor('끝낸 것까지 포함해서 할 일 전부 보여줘')).toHaveLength(0);
+    expect(cardsFor('오늘 할 일 뭐 있어')).toEqual(['get_my_todos']);
+  });
+
+  it('다른 달 기록을 물으면 물러난다', () => {
+    expect(cardsFor('3월부터 지금까지 관찰 기록 몇 건이야')).toHaveLength(0);
+    expect(cardsFor('이번 달 기록 몇 건')).toEqual(['get_records_stats']);
+  });
+
+  it('★칩 4개는 전부 지름길을 탄다 — 물러나면 1왕복 이점이 사라진다', () => {
+    for (const chip of SUGGESTIONS) {
+      expect(cardsFor(chip), `"${chip}" 이 물러났다`).not.toHaveLength(0);
+    }
   });
 });
 

@@ -19,7 +19,8 @@ import type { AssistToolDef, AssistToolId } from '../entities/AssistTool';
  *
  * 처음 5종(출결·인원·학급·기록·할일)으로 시작해, 브릿지 동등화 계획서
  * (`docs/01-plan/features/assist-bridge-parity.plan.md` §2 A그룹)에 따라
- * 급식·디데이·일정(슬라이스 1) → 시간표·진도·메모·노트·즐겨찾기·주간요약(슬라이스 2)을 더했다.
+ * 급식·디데이·일정(슬라이스 1) → 시간표·진도·메모·노트·즐겨찾기·주간요약(슬라이스 2)
+ * → 출결 기간·수업반 출결·성적 분포·자리 배치·채점표(Phase 2 집계)를 더했다.
  *
  * 여기 없는 것은 "빠뜨린" 것이 아니라 **일부러 만들지 않은** 것이다 — 개별 학생 데이터를
  * 다루는 도구(명단·학생별 출결/기록)와 생기부 3종은 어느 Phase 에서도 등록하지 않는다.
@@ -29,7 +30,11 @@ export const ASSIST_TOOLS: readonly AssistToolDef[] = [
     id: 'get_attendance_summary',
     grade: 1,
     outbound: 'result',
-    description: '학급의 하루 출결을 인원 수로만 요약한다. 학생 이름·학번·사유는 반환하지 않는다.',
+    // ★설명이 세 갈래를 갈라 준다. "학급의 하루 출결"로만 적었을 때 실서버에서
+    //   "3학년 2반 수업 출결 이번 달"이 이 도구로 들어왔다(2026-08-23 실측).
+    //   담임/수업반과 하루/기간을 **설명 안에서 서로 가리키게** 해서 갈라낸다.
+    description:
+      '**담임 학급(우리 반) 한 반**의 **하루** 출결을 인원 수로만 요약한다. 학생 이름·학번·사유는 반환하지 않는다. 여러 날을 묶어 보려면 get_homeroom_attendance_stats, 내가 가르치는 교과 수업반은 get_class_attendance_stats 를 쓴다.',
     // ⚠️ 원래 스키마에 있던 `sick` 은 뺐다. 이 앱에서 질병은 status 가 아니라 reason 이라
     // 집계할 수 없었고, 0 을 고정으로 내보내면 모델이 "질병 결석 0명"이라고 사실과 다르게 답한다.
     // 대신 실제로 세고 있던 `classAbsence`(결과)를 내보낸다.
@@ -72,8 +77,9 @@ export const ASSIST_TOOLS: readonly AssistToolDef[] = [
     grade: 1,
     outbound: 'result',
     description: '관찰 기록을 카테고리별 건수로만 집계한다. 본문과 학생 식별자는 반환하지 않는다.',
-    resultFields: ['className', 'period', 'total', 'byCategory'],
-    nestedFields: { byCategory: ['category', 'count'] },
+    // byMonth 는 기간이 두 달 이상일 때만 붙는다. 없으면 재구성에서 그냥 빠진다.
+    resultFields: ['className', 'period', 'total', 'byCategory', 'byMonth'],
+    nestedFields: { byCategory: ['category', 'count'], byMonth: ['month', 'count'] },
     freeTextFields: [],
     params: {
       type: 'object',
@@ -247,6 +253,156 @@ export const ASSIST_TOOLS: readonly AssistToolDef[] = [
           type: 'boolean',
           description: '보관한 묶음도 포함할지(생략 시 false)',
         },
+      },
+    },
+  },
+  // ── 브릿지 동등화 Phase 2 (계획서 §2 B그룹 — 집계로 커버하는 읽기) ──
+  //
+  // ★여기서부터는 **원래 개별 학생 데이터인 것**을 다룬다. 그래서 규칙이 하나 더 붙는다:
+  //   요약 함수가 학생 식별자를 **인자 타입에서부터 받지 않거나**, 받더라도 결과에 담지
+  //   않는다. 화이트리스트로 지우는 것이 아니라 애초에 만들지 않는다.
+  {
+    // ★이름이 `get_attendance_stats` 였을 때 실서버에서 **수업반 질문을 빨아들였다**
+    //   (2026-08-23 실측). 이름이 총칭이라 "출결 통계 = 이것"으로 읽힌 것이다.
+    //   브릿지의 `get_homeroom_attendance` / `get_attendance_records` 처럼
+    //   **이름 자체가 범위를 말하게** 해서 짝을 맞춘다. 설명 문구보다 이름이 세다.
+    id: 'get_homeroom_attendance_stats',
+    grade: 1,
+    outbound: 'result',
+    description:
+      '**담임 학급(우리 반) 한 반**의 출결을 **여러 날에 걸쳐** 집계한다. 내가 수업으로 들어가는 반들은 여기 포함되지 않는다. 결석·지각·조퇴·결과의 기간 합계와 이상이 있었던 날짜별 인원 수. 출석 인원은 세지 않는다(수업일 수를 앱이 모른다). 하루만 볼 때는 get_attendance_summary, 내가 가르치는 교과 수업반은 get_class_attendance_stats 를 쓴다.',
+    resultFields: [
+      'className',
+      'period',
+      'rosterSize',
+      'absent',
+      'late',
+      'early',
+      'classAbsence',
+      'daysWithIssue',
+      'truncated',
+      'days',
+    ],
+    nestedFields: { days: ['date', 'absent', 'late', 'early', 'classAbsence'] },
+    freeTextFields: [],
+    params: {
+      type: 'object',
+      properties: {
+        from: { type: 'string', description: 'YYYY-MM-DD 시작일(생략 시 이번 달 1일)' },
+        to: { type: 'string', description: 'YYYY-MM-DD 종료일(생략 시 오늘)' },
+      },
+    },
+  },
+  {
+    id: 'get_class_attendance_stats',
+    grade: 1,
+    outbound: 'result',
+    // 수업반 명부에는 학생 번호·학년·반이 들어 있다. 요약 함수가 상태 말고는 받지 않는다.
+    description:
+      '**내가 가르치는 교과 수업반**(담임 학급이 아닌 반. 예: "3학년 2반 수업")의 출결을 날짜별로 집계한다. 수업 교시별로 적은 출결을 날짜로 묶어 인원을 센다. **여러 반을 한 번에** 볼 수 있다 — 반 이름을 주면 그 반만, 안 주면 담당 수업반 전체. 담임 학급(우리 반)은 get_attendance_summary·get_homeroom_attendance_stats 를 쓴다. 학생 번호·이름은 반환하지 않는다.',
+    resultFields: [
+      'period',
+      'className',
+      'present',
+      'absent',
+      'late',
+      'early',
+      'classAbsence',
+      'lessons',
+      'truncated',
+      'days',
+    ],
+    nestedFields: {
+      days: ['date', 'className', 'lessons', 'present', 'absent', 'late', 'early', 'classAbsence'],
+    },
+    freeTextFields: [],
+    params: {
+      type: 'object',
+      properties: {
+        from: { type: 'string', description: 'YYYY-MM-DD 시작일(생략 시 이번 달 1일)' },
+        to: { type: 'string', description: 'YYYY-MM-DD 종료일(생략 시 오늘)' },
+        className: { type: 'string', description: '수업반 이름(생략 시 전체)' },
+      },
+    },
+  },
+  {
+    id: 'get_grade_stats',
+    grade: 1,
+    outbound: 'result',
+    // 평가 제목·과목명은 선생님이 직접 적는다 — 자유 입력으로 본다.
+    description:
+      '평가(지필·수행)별 성적 분포를 돌려준다. 인원·평균·최고·최저와 성취도 A~E 구간별 인원 수(고정분할 90/80/70/60). 학생별 점수는 반환하지 않는다.',
+    resultFields: ['total', 'truncated', 'items'],
+    nestedFields: {
+      items: [
+        'className',
+        'subject',
+        'title',
+        'kind',
+        'fullScore',
+        'count',
+        'absent',
+        'average',
+        'highest',
+        'lowest',
+        'distribution',
+      ],
+    },
+    freeTextFields: ['title', 'subject'],
+    params: {
+      type: 'object',
+      properties: {
+        className: { type: 'string', description: '수업반 이름(생략 시 전체)' },
+        semester: { type: 'string', description: "'1' 또는 '2'(생략 시 전체)" },
+      },
+    },
+  },
+  {
+    id: 'get_seating_stats',
+    grade: 1,
+    outbound: 'result',
+    // ★좌석표 자체는 영구히 안 나간다 — "몇 번 자리에 누가"는 통째로 개별 학생 데이터다.
+    description:
+      '담임 학급 자리 배치를 숫자로만 요약한다. 배치 방식·줄칸·자리 수·앉은 인원·빈자리·모둠 수. 좌석표(누가 어디 앉는지)는 반환하지 않는다 — 그건 앱의 자리 배치 화면에서 본다.',
+    resultFields: [
+      'className',
+      'layout',
+      'rows',
+      'cols',
+      'seatCount',
+      'assigned',
+      'empty',
+      'groupCount',
+      'pairMode',
+    ],
+    freeTextFields: [],
+  },
+  {
+    id: 'get_assessment_stats',
+    grade: 1,
+    outbound: 'result',
+    // 채점표 제목·요소 이름·수준 이름은 전부 선생님이 지은 것이다 — 자유 입력.
+    description:
+      '루브릭(채점표) 진행 상황과 요소별 수준 분포를 돌려준다. 채점표별 인원·완료·결시·평균과, 평가 요소마다 어느 수준에 몇 명인지. 학생별 점수·총평은 반환하지 않는다.',
+    resultFields: ['total', 'truncated', 'sheets', 'criteria'],
+    nestedFields: {
+      sheets: [
+        'className',
+        'title',
+        'students',
+        'graded',
+        'partial',
+        'absent',
+        'maxScore',
+        'average',
+      ],
+      criteria: ['rubric', 'criterion', 'marked', 'distribution'],
+    },
+    freeTextFields: ['title', 'rubric', 'criterion', 'distribution'],
+    params: {
+      type: 'object',
+      properties: {
+        className: { type: 'string', description: '수업반 이름(생략 시 전체)' },
       },
     },
   },

@@ -26,15 +26,20 @@ import { useTodoStore } from '@adapters/stores/useTodoStore';
 import {
   addDays,
   countStudents,
+  summarizeAssessment,
   summarizeAttendance,
   summarizeBookmarks,
+  summarizeClassAttendance,
   summarizeDDays,
   summarizeEvents,
+  summarizeGrades,
+  summarizeHomeroomAttendance,
   summarizeMeals,
   summarizeMemos,
   summarizeNotes,
   summarizeProgress,
   summarizeRecords,
+  summarizeSeating,
   summarizeTimetable,
   summarizeTodos,
   summarizeWeek,
@@ -42,12 +47,17 @@ import {
   toClassSummaries,
 } from '@usecases/assist/summaries';
 import type {
+  AssessmentPlanLike,
+  AssessmentScoreLike,
   BookmarkGroupLike,
   BookmarkLike,
+  ClassAttendanceRecordLike,
   MemoLike,
   NoteSources,
   ProgressLike,
+  SeatingLike,
 } from '@usecases/assist/summaries';
+import type { Rubric, RubricGrading } from '@domain/entities/Rubric';
 import { useStudentRecordsStore } from '@adapters/stores/useStudentRecordsStore';
 import { useMealStore } from '@adapters/stores/useMealStore';
 import { useEventsStore } from '@adapters/stores/useEventsStore';
@@ -57,6 +67,9 @@ import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useMemoStore } from '@adapters/stores/useMemoStore';
 import { useNoteStore } from '@adapters/stores/useNoteStore';
 import { useBookmarkStore } from '@adapters/stores/useBookmarkStore';
+import { useGradeAnalysisStore } from '@adapters/stores/useGradeAnalysisStore';
+import { useRubricStore } from '@adapters/stores/useRubricStore';
+import { useSeatingStore } from '@adapters/stores/useSeatingStore';
 import { assistPort } from '@adapters/di/container';
 
 /**
@@ -188,6 +201,20 @@ function buildTodos(src: IntentSources, includeCompleted: boolean): ToolResultSh
 export const INTENT_RULES: readonly {
   readonly tool: string;
   readonly pattern: RegExp;
+  /**
+   * ★걸렸더라도 **여기에 걸리면 물러난다** — 모델이 도구를 고르게 넘긴다.
+   *
+   * 정규식 경로는 왕복을 아끼려고 만든 지름길인데, 조립기의 기본값(오늘·이번 달·미완료)이
+   * 질문과 다를 때는 **지름길이 오답을 만든다.** "이번 달 결석 몇 번?"이 `출결` 에 걸려
+   * 오늘 하루치 카드를 만들고, 모델은 그 숫자로 한 달을 답했다(2026-08-23 실측).
+   *
+   * 더 나쁜 것은 그 지름길이 **기간 도구를 통째로 가려 버린다는 점**이다. 도구를 만들어
+   * 등록해도 질문이 여기서 먼저 걸리면 모델은 그 도구를 볼 기회조차 없다.
+   *
+   * 그래서 "기본값으로는 답할 수 없는 질문"의 표시가 보이면 지름길을 포기한다.
+   * 칩 4개는 전부 기본값과 같은 질문이라 그대로 1왕복으로 남는다.
+   */
+  readonly steppedAsideWhen?: RegExp;
   readonly build: (question: string, src: IntentSources) => ToolResultShape;
 }[] = [
   {
@@ -206,16 +233,24 @@ export const INTENT_RULES: readonly {
   {
     tool: 'get_my_todos',
     pattern: /할 일|업무|마감/,
+    // 기본값은 "미완료만". 끝낸 것까지 달라는 질문이면 모델이 인자를 정하게 한다.
+    steppedAsideWhen: /완료|끝낸|끝난|마친/,
     build: (_q, src) => buildTodos(src, false),
   },
   {
     tool: 'get_attendance_summary',
     pattern: /출결|출석|결석|지각|조퇴/,
+    // 기본값은 "오늘 하루 · 담임 학급". 다른 기간이거나 교과 수업반이면 물러난다
+    // (get_homeroom_attendance_stats · get_class_attendance_stats 가 받는다).
+    steppedAsideWhen:
+      /이번 ?달|이번 ?주|지난 ?달|저번 ?달|지난 ?주|저번 ?주|올해|작년|학기|기간|최근|어제|엊그제|수업 ?출결|수업반|[0-9]+월|[0-9]+일/,
     build: (_q, src) => buildAttendanceSummary(src, todayKey()),
   },
   {
     tool: 'get_records_stats',
     pattern: /기록|관찰|상담|몇 건/,
+    // 기본값은 "이번 달". 다른 달·기간이면 물러난다.
+    steppedAsideWhen: /지난 ?달|저번 ?달|지난 ?주|저번 ?주|올해|작년|학기|부터|[0-9]+월/,
     build: (_q, src) => {
       const { periodFrom, periodTo } = monthRange();
       return buildRecordsStats(src, periodFrom, periodTo);
@@ -250,6 +285,45 @@ export interface ExecutorSources extends IntentSources {
   readonly notes: NoteSources;
   readonly bookmarks: readonly BookmarkLike[];
   readonly bookmarkGroups: readonly BookmarkGroupLike[];
+  // ── Phase 2 (집계로 커버하는 읽기) ──
+  /** 교과 수업반 출결 명부. ★상태 말고는 넘기지 않는다(번호·학년·반은 여기서 걸러진다) */
+  readonly classAttendance: readonly ClassAttendanceRecordLike[];
+  readonly gradePlans: readonly AssessmentPlanLike[];
+  readonly gradeScores: readonly AssessmentScoreLike[];
+  readonly seating: SeatingLike;
+  readonly rubrics: readonly Rubric[];
+  readonly rubricGradings: readonly RubricGrading[];
+}
+
+/** classId → 학급 이름. 저장된 값은 UUID 라 그대로 보내면 모델이 읽지 못한다. */
+function classNameMap(src: IntentSources): Record<string, string> {
+  return Object.fromEntries(src.classes.map((c) => [c.id, c.name]));
+}
+
+/**
+ * 모델이 준 학급 이름을 **실제로 있는 반일 때만** 쓴다.
+ *
+ * 없는 이름을 그대로 넘기면 결과가 조용히 0건이 되고, 모델은 "기록이 없습니다"라고
+ * 사실과 다르게 답한다. 지어낸 이름은 버리고 전체를 보는 편이 낫다.
+ *
+ * ★딱 맞지 않아도 한 번 더 본다. 실서버에서 "3학년 2반 수업 출결"을 물으면 모델이
+ * `className: "3학년 2반 수업"` 을 보낸다(2026-08-23 실측) — 질문의 말을 그대로 옮긴
+ * 것이라 사람 눈에는 맞는 반인데 글자로는 안 맞는다. 공백을 지우고 한쪽이 다른 쪽에
+ * 들어 있으면 같은 반으로 본다. **단, 후보가 둘 이상이면 쓰지 않는다** — 엉뚱한 반의
+ * 숫자를 맞는 반이라고 말하는 것이 전체를 보여주는 것보다 나쁘다.
+ */
+function namedClass(src: IntentSources, value: unknown): { className?: string } {
+  if (typeof value !== 'string' || value.trim().length === 0) return {};
+  const exact = src.classes.find((c) => c.name === value);
+  if (exact) return { className: exact.name };
+
+  const squash = (text: string): string => text.replace(/\s+/g, '');
+  const wanted = squash(value);
+  const loose = src.classes.filter((c) => {
+    const name = squash(c.name);
+    return name.length > 0 && (wanted.includes(name) || name.includes(wanted));
+  });
+  return loose.length === 1 ? { className: loose[0]!.name } : {};
 }
 
 /**
@@ -327,19 +401,13 @@ export function executeAssistTool(
     case 'get_progress': {
       // 진도는 "이번 달"을 묻는 일이 많아 기본 기간이 급식·일정과 다르다.
       const month = monthRange();
-      // 모델이 지어낸 학급 이름은 버린다 — 없는 학급으로 거르면 결과가 조용히 0건이 된다.
-      const wanted = args.className;
-      const className =
-        typeof wanted === 'string' && src.classes.some((c) => c.name === wanted)
-          ? wanted
-          : undefined;
       return toCard(
         name,
         summarizeProgress(src.progress, {
           from: dateArg('from', month.periodFrom),
           to: dateArg('to', month.periodTo),
-          classNames: Object.fromEntries(src.classes.map((c) => [c.id, c.name])),
-          ...(className === undefined ? {} : { className }),
+          classNames: classNameMap(src),
+          ...namedClass(src, args.className),
         }) as unknown as ToolResultShape,
       );
     }
@@ -380,6 +448,56 @@ export function executeAssistTool(
         }) as unknown as ToolResultShape,
       );
     }
+    // ── Phase 2: 집계로 커버하는 읽기 ──
+    case 'get_homeroom_attendance_stats': {
+      const month = monthRange();
+      return toCard(
+        name,
+        summarizeHomeroomAttendance(src.records, {
+          className: '우리 반',
+          from: dateArg('from', month.periodFrom),
+          to: dateArg('to', month.periodTo),
+          rosterSize: src.students.length,
+        }) as unknown as ToolResultShape,
+      );
+    }
+    case 'get_class_attendance_stats': {
+      const month = monthRange();
+      return toCard(
+        name,
+        summarizeClassAttendance(src.classAttendance, {
+          from: dateArg('from', month.periodFrom),
+          to: dateArg('to', month.periodTo),
+          classNames: classNameMap(src),
+          ...namedClass(src, args.className),
+        }) as unknown as ToolResultShape,
+      );
+    }
+    case 'get_grade_stats': {
+      // 학기는 '1'·'2' 뿐이다. 모델이 '2026-2' 같은 걸 보내면 버리고 전체를 본다.
+      const semester = args.semester === '1' || args.semester === '2' ? args.semester : undefined;
+      return toCard(
+        name,
+        summarizeGrades(src.gradePlans, src.gradeScores, {
+          classNames: classNameMap(src),
+          ...namedClass(src, args.className),
+          ...(semester === undefined ? {} : { semester }),
+        }) as unknown as ToolResultShape,
+      );
+    }
+    case 'get_seating_stats':
+      return toCard(
+        name,
+        summarizeSeating(src.seating, { className: '우리 반' }) as unknown as ToolResultShape,
+      );
+    case 'get_assessment_stats':
+      return toCard(
+        name,
+        summarizeAssessment(src.rubrics, src.rubricGradings, {
+          classNames: classNameMap(src),
+          ...namedClass(src, args.className),
+        }) as unknown as ToolResultShape,
+      );
     case 'count_students':
       return toCard(
         name,
@@ -410,6 +528,10 @@ export function buildCards(question: string, src: IntentSources): Card[] {
   const cards: Card[] = [];
   for (const rule of INTENT_RULES) {
     if (!rule.pattern.test(question)) continue;
+    // ★지름길이 오답을 만들 질문이면 카드를 만들지 않는다 — 카드가 하나도 없어야
+    //   스토어가 모델에게 도구 목록을 보여준다(2왕복). 여기서 억지로 만들면
+    //   기간 도구는 영영 불리지 않는다.
+    if (rule.steppedAsideWhen?.test(question) === true) continue;
     const card = toCard(rule.tool, rule.build(question, src));
     if (card) cards.push(card);
   }
@@ -435,6 +557,13 @@ export function AssistDockContainer() {
   const notePages = useNoteStore((s) => s.pagesMeta);
   const bookmarks = useBookmarkStore((s) => s.bookmarks);
   const bookmarkGroups = useBookmarkStore((s) => s.groups);
+  const classAttendance = useTeachingClassStore((s) => s.attendanceRecords);
+  const gradePlans = useGradeAnalysisStore((s) => s.plans);
+  const writtenResults = useGradeAnalysisStore((s) => s.writtenResults);
+  const performanceResults = useGradeAnalysisStore((s) => s.performanceResults);
+  const seating = useSeatingStore((s) => s.seating);
+  const rubrics = useRubricStore((s) => s.rubrics);
+  const rubricGradings = useRubricStore((s) => s.gradings);
   const weekendDays = useSettingsStore((s) => s.settings.enableWeekendDays);
 
   /**
@@ -458,6 +587,9 @@ export function AssistDockContainer() {
     void useBookmarkStore.getState().loadAll();
     void useScheduleStore.getState().load();
     void useSettingsStore.getState().load();
+    void useGradeAnalysisStore.getState().load();
+    void useRubricStore.getState().load();
+    void useSeatingStore.getState().load();
   }, [enabled]);
 
   // 오늘·이번 주 급식을 합치고 (날짜, 식사종류)로 중복 제거
@@ -481,6 +613,24 @@ export function AssistDockContainer() {
   const notes: NoteSources = useMemo(
     () => ({ notebooks, sections: noteSections, pages: notePages }),
     [notebooks, noteSections, notePages],
+  );
+
+  /**
+   * 지필과 수행은 저장 자리가 다르지만 **분포를 셀 때는 같은 모양**이다(평가 id + 점수).
+   * 요약 함수를 둘로 나누면 평균 내는 코드가 두 벌이 된다.
+   *
+   * 수행평가에는 결시 코드가 없다 — 점수가 비어 있는 것으로만 구분된다.
+   */
+  const gradeScores = useMemo(
+    () => [
+      ...writtenResults.map((r) => ({
+        assessmentId: r.assessmentId,
+        score: r.score,
+        ...(r.absenceCode === undefined ? {} : { absenceCode: r.absenceCode }),
+      })),
+      ...performanceResults.map((r) => ({ assessmentId: r.assessmentId, score: r.score })),
+    ],
+    [writtenResults, performanceResults],
   );
 
   /**
@@ -515,6 +665,12 @@ export function AssistDockContainer() {
           notes,
           bookmarks,
           bookmarkGroups,
+          classAttendance,
+          gradePlans,
+          gradeScores,
+          seating,
+          rubrics,
+          rubricGradings,
         };
         const cards = buildCards(question, src);
         void ask(assistPort, question, cards, roster, (name, rawArguments) =>
@@ -525,16 +681,22 @@ export function AssistDockContainer() {
       ask,
       bookmarkGroups,
       bookmarks,
+      classAttendance,
       classes,
       ddays,
       events,
       getDaySchedule,
+      gradePlans,
+      gradeScores,
       meals,
       memos,
       notes,
       progress,
       records,
       roster,
+      rubricGradings,
+      rubrics,
+      seating,
       students,
       todos,
     ],
