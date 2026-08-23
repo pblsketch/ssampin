@@ -1,0 +1,74 @@
+/**
+ * @vitest-environment jsdom
+ *
+ * 쌤핀 AI — 목록형 숫자 카드
+ *
+ * 배경(2026-08-23 오너 신고): "오늘 할 일 있나"의 카드가 **텅 비어** 있었다.
+ * 카드가 숫자·글자만 그렸기 때문에, 목록(`items`)으로 오는 할 일 결과는 그릴 게
+ * 없었던 것이다. AI 는 "8개"라고 말하는데 카드는 백지 — "앱이 조회한 사실이 먼저"
+ * 라는 이 기능의 약속이 목록형에서만 깨져 있었다.
+ *
+ * 여기서는 실제 경로 그대로(레지스트리 → 재구성) 만든 카드가
+ * 제목·마감·기한 지남 표시까지 화면에 남는지 본다.
+ */
+import { describe, it, expect, afterEach } from 'vitest';
+import { cleanup, render, screen } from '@testing-library/react';
+
+import { AssistThread } from '../AssistThread';
+import type { AssistTurn } from '@adapters/stores/useAssistStore';
+import { findAssistTool } from '@domain/services/assistToolRegistry';
+import { sanitizeToolResult } from '@domain/services/sanitizeToolResult';
+import type { ToolResultShape } from '@domain/services/sanitizeToolResult';
+import { summarizeTodos } from '@usecases/assist/summaries';
+
+afterEach(cleanup);
+
+function todoTurn(): AssistTurn {
+  const tool = findAssistTool('get_my_todos');
+  if (!tool) throw new Error('도구 없음');
+  const summary = summarizeTodos(
+    [
+      { text: '밀린 결재 처리', dueDate: '2026-08-19', completed: false },
+      { text: '수행평가 채점', dueDate: '2026-08-23', completed: false },
+    ],
+    { today: '2026-08-23' },
+  );
+  return {
+    id: 't1',
+    question: '오늘 할 일 있나',
+    cards: [
+      {
+        tool: tool.id,
+        // readonly 요약을 재구성 입력(가변 인덱스 시그니처)에 맞춘다 — 실제 경로
+        // (AssistDockContainer)와 같은 형태의 통과 지점이다.
+        data: sanitizeToolResult(tool, JSON.parse(JSON.stringify(summary)) as ToolResultShape),
+      },
+    ],
+    answer: '',
+    outboundAnswer: '',
+    outboundCards: [],
+    degraded: null,
+    status: 'done',
+    maskedCount: 0,
+    blankedCount: 0,
+  };
+}
+
+describe('AssistThread — 할 일 카드', () => {
+  it('★목록 항목이 화면에 남는다 — 카드가 백지면 AI 말을 검증할 수 없다', () => {
+    render(<AssistThread turns={[todoTurn()]} />);
+
+    expect(screen.getByText('밀린 결재 처리')).toBeTruthy();
+    expect(screen.getByText('수행평가 채점')).toBeTruthy();
+    // 미완료 건수 — AI 가 말하는 "N개"를 카드로 대조할 수 있다
+    expect(screen.getByText('미완료')).toBeTruthy();
+    expect(screen.getByText('2개')).toBeTruthy();
+  });
+
+  it('기한이 지난 항목에는 "지남" 표시가 붙는다 (색 단독 금지 — 글자로 전한다)', () => {
+    render(<AssistThread turns={[todoTurn()]} />);
+
+    // 8/19 만 지났고 8/23(오늘)은 아직이다
+    expect(screen.getAllByText('⚠ 지남')).toHaveLength(1);
+  });
+});
