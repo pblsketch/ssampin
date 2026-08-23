@@ -97,7 +97,15 @@ export interface ParsedCoolEvent {
   readonly end: Date | null;
   /** 시간이 안 붙었으면 종일 일정 */
   readonly allDay: boolean;
-  /** '까지/마감/제출'이 뒤따르면 true — 일정이 아니라 할일로 추천하는 근거 */
+  /**
+   * 같은 줄에 '까지/마감/제출'이 뒤따르는가 — 사실 그대로의 정보다.
+   *
+   * ⚠️ **이 값으로 일정이냐 할일이냐를 자동으로 정하지 말 것.**
+   * 예전에 `isDeadline ? 할일 : 일정` 으로 미리 골라 뒀다가 오너 지시로 걷어냈다.
+   * "8월 27일 14:00 회의 자료 제출"처럼 회의인데 할일로 잡히는 일이 생기고,
+   * 무엇보다 **어디에 넣을지는 선생님이 정할 몫**이다.
+   * 화면은 일정·할일·둘 다·안 함 네 가지를 그대로 보여주고, 기본은 '안 함'이다.
+   */
   readonly isDeadline: boolean;
   /** 매칭된 원문 조각 (로컬 표시용) */
   readonly sourceText: string;

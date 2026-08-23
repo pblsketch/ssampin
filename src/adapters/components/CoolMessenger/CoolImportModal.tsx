@@ -41,16 +41,33 @@ function formatReceived(iso: string, now: Date): string {
   return sameDay ? formatClock(d) : `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
+/**
+ * 이 후보를 어디에 넣을지 — **선생님이 직접 고른다.**
+ *
+ * 프로그램이 미리 정해 두지 않는다. "까지/제출" 같은 말이 붙었다고 할일로 단정하면,
+ * 회의를 할일로 넣거나 그 반대가 되는 일이 생긴다. 기계는 날짜만 찾아 주고
+ * 어디에 넣을지는 사람이 정한다.
+ */
+type CandidateChoice = 'none' | 'event' | 'todo' | 'both';
+
 /** 화면에서 편집 중인 후보 한 줄 */
 interface CandidateRow {
   readonly id: string;
-  readonly included: boolean;
+  /** 기본은 'none' — 고르지 않으면 등록되지 않는다 */
+  readonly choice: CandidateChoice;
   readonly title: string;
   readonly editing: boolean;
   readonly start: Date;
   readonly end: Date | null;
   readonly allDay: boolean;
-  readonly target: CoolImportTarget;
+}
+
+/** 고른 값 하나가 실제 등록 몇 건이 되는지 ('둘 다'는 일정 1 + 할일 1) */
+function targetsOf(choice: CandidateChoice): readonly CoolImportTarget[] {
+  if (choice === 'event') return ['event'];
+  if (choice === 'todo') return ['todo'];
+  if (choice === 'both') return ['event', 'todo'];
+  return [];
 }
 
 export interface CoolImportModalProps {
@@ -122,14 +139,13 @@ export function CoolImportModal({
         setRows(
           extractCoolEvents(haystack, base).map((ev, i) => ({
             id: `${msg.key}-${i}`,
-            included: true,
+            // ★ 미리 고르지 않는다 — 어디에 넣을지는 선생님이 정한다
+            choice: 'none' as CandidateChoice,
             title: fallbackTitle,
             editing: false,
             start: ev.start,
             end: ev.end,
             allDay: ev.allDay,
-            // '까지/마감/제출'이 붙은 건 일정보다 할일이 자연스럽다
-            target: ev.isDeadline ? 'todo' : 'event',
           })),
         );
       })
@@ -145,23 +161,27 @@ export function CoolImportModal({
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   }, []);
 
-  const chosen = rows.filter((r) => r.included);
+  /** 실제로 등록될 항목들 — '둘 다'는 일정·할일 두 건이 된다 */
+  const pending: readonly CoolImportItem[] =
+    selectedKey === null
+      ? []
+      : rows.flatMap((r) =>
+          targetsOf(r.choice).map((target) => ({
+            sourceMessageKey: selectedKey,
+            title: r.title.trim() || '제목 없음',
+            start: r.start,
+            end: r.end,
+            allDay: r.allDay,
+            target,
+          })),
+        );
 
   const handleSubmit = async () => {
-    if (chosen.length === 0 || selectedKey === null) return;
+    if (pending.length === 0) return;
     setSubmitting(true);
     setSubmitError(null);
     try {
-      await onSubmit(
-        chosen.map((r) => ({
-          sourceMessageKey: selectedKey,
-          title: r.title.trim() || '제목 없음',
-          start: r.start,
-          end: r.end,
-          allDay: r.allDay,
-          target: r.target,
-        })),
-      );
+      await onSubmit(pending);
       onClose();
     } catch (err: unknown) {
       // ★ 저장이 실패했는데 조용히 닫으면 선생님은 등록된 줄 알고 넘어간다.
@@ -295,9 +315,9 @@ export function CoolImportModal({
           </p>
         ) : (
           <p className="text-xs text-sp-muted flex-1">
-            {chosen.length > 0
-              ? `${chosen.length}건을 등록합니다.`
-              : '등록할 항목을 하나 이상 선택하세요.'}
+            {pending.length > 0
+              ? `${pendingSummary(pending)} 등록합니다.`
+              : '각 항목을 일정·할일·둘 다 중에서 골라 주세요.'}
           </p>
         )}
         <button
@@ -310,10 +330,10 @@ export function CoolImportModal({
         <button
           type="button"
           onClick={handleSubmit}
-          disabled={chosen.length === 0 || submitting}
+          disabled={pending.length === 0 || submitting}
           className="px-4 py-2 rounded-lg text-sm font-bold bg-sp-accent text-sp-accent-fg disabled:opacity-40 disabled:cursor-not-allowed transition-opacity duration-sp-base ease-sp-out"
         >
-          {submitting ? '등록 중…' : `${chosen.length}건 등록`}
+          {submitting ? '등록 중…' : `${pending.length}건 등록`}
         </button>
       </footer>
     </Modal>
@@ -321,6 +341,16 @@ export function CoolImportModal({
 }
 
 // ── 조각들 ────────────────────────────────────────────────────
+
+/** "일정 2건 · 할일 1건" 처럼 어디에 몇 건 들어가는지 알려 준다 */
+function pendingSummary(items: readonly CoolImportItem[]): string {
+  const events = items.filter((i) => i.target === 'event').length;
+  const todos = items.filter((i) => i.target === 'todo').length;
+  const parts: string[] = [];
+  if (events > 0) parts.push(`일정 ${events}건`);
+  if (todos > 0) parts.push(`할일 ${todos}건`);
+  return parts.join(' · ');
+}
 
 function Hint() {
   return (
@@ -404,18 +434,10 @@ function CandidateCard({
     <div
       className={[
         'rounded-xl border p-4 transition-colors duration-sp-base ease-sp-out',
-        row.included ? 'border-sp-accent bg-sp-card' : 'border-sp-border bg-sp-card',
+        row.choice === 'none' ? 'border-sp-border bg-sp-card' : 'border-sp-accent bg-sp-card',
       ].join(' ')}
     >
       <div className="flex items-start gap-3">
-        <input
-          type="checkbox"
-          checked={row.included}
-          onChange={(e) => onPatch({ included: e.target.checked })}
-          className="mt-1 w-4 h-4 shrink-0 accent-sp-accent"
-          aria-label="이 항목 등록하기"
-        />
-
         <div className="flex-1 min-w-0">
           {/* 제목 — 기본은 표시(빨간 표시가 살아 있음), 편집은 눌러서 */}
           {row.editing ? (
@@ -476,23 +498,35 @@ function CandidateCard({
             </div>
           )}
 
-          {/* 일정 / 할일 */}
+          {/* 어디에 넣을지 — 프로그램이 아니라 선생님이 고른다 */}
           <div
             className="inline-flex mt-3 rounded-lg border border-sp-border overflow-hidden"
             role="group"
-            aria-label="어디에 등록할지"
+            aria-label="어디에 등록할지 고르기"
           >
             <TargetButton
-              active={row.target === 'event'}
-              onClick={() => onPatch({ target: 'event' })}
+              active={row.choice === 'event'}
+              onClick={() => onPatch({ choice: 'event' })}
               icon="calendar_month"
-              label="일정으로"
+              label="일정"
             />
             <TargetButton
-              active={row.target === 'todo'}
-              onClick={() => onPatch({ target: 'todo' })}
+              active={row.choice === 'todo'}
+              onClick={() => onPatch({ choice: 'todo' })}
               icon="check_circle"
-              label="할일로"
+              label="할일"
+            />
+            <TargetButton
+              active={row.choice === 'both'}
+              onClick={() => onPatch({ choice: 'both' })}
+              icon="library_add_check"
+              label="둘 다"
+            />
+            <TargetButton
+              active={row.choice === 'none'}
+              onClick={() => onPatch({ choice: 'none' })}
+              icon="block"
+              label="안 함"
             />
           </div>
         </div>
@@ -517,6 +551,9 @@ function TargetButton({
       type="button"
       onClick={onClick}
       aria-pressed={active}
+      // 아이콘 글자(calendar_month 등)가 버튼 이름에 섞이지 않도록 label 을 못 박는다.
+      // 안 그러면 화면낭독기가 "calendar_month 일정"이라고 읽는다.
+      aria-label={label}
       className={[
         'inline-flex items-center gap-1 px-3 py-1.5 text-xs',
         'transition-colors duration-sp-base ease-sp-out',

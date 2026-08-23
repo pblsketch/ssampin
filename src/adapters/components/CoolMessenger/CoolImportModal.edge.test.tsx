@@ -53,6 +53,8 @@ describe('★ 등록 실패를 삼키지 않는다', () => {
       onSubmit: vi.fn().mockRejectedValue(new Error('저장 공간이 가득 찼습니다')),
     });
     await user.click(await screen.findByText('학폭위 심의'));
+    // 프로그램이 미리 고르지 않으므로, 먼저 '일정'을 눌러야 등록 버튼이 열린다
+    await user.click(await screen.findByRole('button', { name: '일정' }));
     await screen.findByRole('button', { name: '1건 등록' });
     await user.click(screen.getByRole('button', { name: '1건 등록' }));
 
@@ -64,6 +66,8 @@ describe('★ 등록 실패를 삼키지 않는다', () => {
   it('성공하면 모달이 닫힌다', async () => {
     const { onClose, user } = setup();
     await user.click(await screen.findByText('학폭위 심의'));
+    // 프로그램이 미리 고르지 않으므로, 먼저 '일정'을 눌러야 등록 버튼이 열린다
+    await user.click(await screen.findByRole('button', { name: '일정' }));
     await screen.findByRole('button', { name: '1건 등록' });
     await user.click(screen.getByRole('button', { name: '1건 등록' }));
     await waitFor(() => expect(onClose).toHaveBeenCalled());
@@ -83,6 +87,8 @@ describe('험한 조작', () => {
     );
     const { user } = setup({ onSubmit });
     await user.click(await screen.findByText('학폭위 심의'));
+    // 프로그램이 미리 고르지 않으므로, 먼저 '일정'을 눌러야 등록 버튼이 열린다
+    await user.click(await screen.findByRole('button', { name: '일정' }));
     await screen.findByRole('button', { name: '1건 등록' });
 
     const btn = screen.getByRole('button', { name: '1건 등록' });
