@@ -171,3 +171,51 @@ describe('본문 그리기 — 링크', () => {
     expect(html).not.toContain('<script');
   });
 });
+
+describe('본문 그리기 — 밑줄과 취소선을 함께 걸었을 때 (QA 에서 잡은 결함)', () => {
+  it('🐛 둘 다 보인다 — 한쪽이 조용히 사라지지 않는다', () => {
+    // 같은 CSS 속성이라 클래스 둘을 겹쳐 걸면 하나만 이긴다.
+    // 실제로 그렇게 만들었다가 밑줄이 사라졌다.
+    const html = renderToString(
+      // 밑줄(8) + 취소선(4) = 12
+      <StaffRoomRichText body={doc(text('둘다', { format: 12 }))} bodyFormat="lexical" />,
+    );
+    expect(html).toMatch(/text-decoration-line:\s*underline line-through/);
+  });
+
+  it('밑줄만 걸면 밑줄만', () => {
+    const html = renderToString(
+      <StaffRoomRichText body={doc(text('밑줄만', { format: 8 }))} bodyFormat="lexical" />,
+    );
+    expect(html).toMatch(/text-decoration-line:\s*underline(?!\s+line-through)/);
+  });
+
+  it('취소선만 걸면 취소선만', () => {
+    const html = renderToString(
+      <StaffRoomRichText body={doc(text('취소선만', { format: 4 }))} bodyFormat="lexical" />,
+    );
+    expect(html).toMatch(/text-decoration-line:\s*line-through/);
+  });
+
+  it('취소선이 걸린 링크에서도 밑줄이 남는다', () => {
+    const linked = JSON.stringify({
+      root: {
+        type: 'root',
+        children: [
+          {
+            type: 'paragraph',
+            children: [
+              {
+                type: 'link',
+                url: 'https://ssampin.com',
+                children: [text('취소된 링크', { format: 4 })],
+              },
+            ],
+          },
+        ],
+      },
+    });
+    const html = renderToString(<StaffRoomRichText body={linked} bodyFormat="lexical" />);
+    expect(html).toMatch(/text-decoration-line:\s*underline line-through/);
+  });
+});

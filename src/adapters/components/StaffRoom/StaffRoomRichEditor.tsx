@@ -30,6 +30,7 @@ import { LinkPlugin } from '@lexical/react/LexicalLinkPlugin';
 import { AutoLinkPlugin } from '@lexical/react/LexicalAutoLinkPlugin';
 import { ClickableLinkPlugin } from '@lexical/react/LexicalClickableLinkPlugin';
 import { TOGGLE_LINK_COMMAND, AutoLinkNode, LinkNode } from '@lexical/link';
+import { mergeRegister } from '@lexical/utils';
 import {
   $createParagraphNode,
   $createTextNode,
@@ -64,6 +65,40 @@ const FORMAT_BUTTONS: readonly {
   { format: 'underline', icon: 'format_underlined', label: '밑줄' },
   { format: 'strikethrough', icon: 'format_strikethrough', label: '취소선' },
 ];
+
+/**
+ * 붙여넣기로 들어온 **위험한 주소를 저장 전에 벗겨낸다.**
+ *
+ * 남의 문서를 복사해 붙이면 편집기가 그 안의 `<a>` 를 그대로 링크 조각으로
+ * 만든다. `javascript:alert(1)` 같은 주소도 함께 온다. 화면(StaffRoomRichText)이
+ * 그리는 단계에서 이미 막지만, **그건 마지막 방어선이다** — 그 전에 위험한
+ * 주소가 DB 에 저장되고 있었다(QA 에서 잡았다).
+ *
+ * 저장값에 남겨 두면 안 되는 이유:
+ *  - 나중에 본문을 그리는 자리가 하나 더 생기면 그쪽이 막는다는 보장이 없다.
+ *  - 내보내기·검색·백업 같은 다른 경로로 새어 나갈 수 있다.
+ *
+ * 링크만 벗기고 **글자는 남긴다.** 붙여넣은 문장이 통째로 사라지면 무엇이
+ * 없어졌는지도 모른다.
+ */
+function SanitizeLinksPlugin(): null {
+  const [editor] = useLexicalComposerContext();
+
+  useEffect(() => {
+    const strip = (node: LinkNode) => {
+      if (isValidStaffRoomLinkHref(node.getURL())) return;
+      // 링크 껍데기만 걷어내고 안쪽 글자를 그 자리에 남긴다
+      for (const child of node.getChildren()) node.insertBefore(child);
+      node.remove();
+    };
+    return mergeRegister(
+      editor.registerNodeTransform(LinkNode, strip),
+      editor.registerNodeTransform(AutoLinkNode, strip),
+    );
+  }, [editor]);
+
+  return null;
+}
 
 /**
  * 지금 고른 글자에 무엇이 걸려 있는가.
@@ -520,6 +555,7 @@ export function StaffRoomRichEditor({
           />
           {/* 편집 중에 링크를 눌러 열 수 있게 */}
           <ClickableLinkPlugin />
+          <SanitizeLinksPlugin />
           <OnChangePlugin onChange={handleChange} />
         </div>
       </LexicalComposer>

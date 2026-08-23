@@ -70,11 +70,24 @@ function spanClassName(span: StaffRoomTextSpan): string {
   const parts: string[] = [];
   if (span.bold) parts.push('font-bold');
   if (span.italic) parts.push('italic');
-  // 밑줄과 취소선은 한 속성이라 함께 걸어야 둘 다 보인다
-  if (span.underline && span.strikethrough) parts.push('underline', 'line-through');
-  else if (span.underline) parts.push('underline');
-  else if (span.strikethrough) parts.push('line-through');
   return parts.join(' ');
+}
+
+/**
+ * 밑줄·취소선을 **한 값으로 합쳐서** 준다.
+ *
+ * ⚠️ `underline` 과 `line-through` 클래스를 함께 걸면 안 된다. 둘 다 같은 속성
+ * (`text-decoration-line`)을 건드려서 나중에 정의된 하나만 이기고 **다른 하나는
+ * 조용히 사라진다.** 실제로 그렇게 만들었다가 QA 에서 잡았다 — 밑줄+취소선을
+ * 같이 건 글자에서 밑줄이 없어졌다.
+ *
+ * CSS 는 한 속성에 두 값을 함께 받으므로(`underline line-through`) 그렇게 준다.
+ */
+function decorationOf(span: StaffRoomTextSpan): string | undefined {
+  const parts: string[] = [];
+  if (span.underline) parts.push('underline');
+  if (span.strikethrough) parts.push('line-through');
+  return parts.length === 0 ? undefined : parts.join(' ');
 }
 
 interface StaffRoomRichTextProps {
@@ -118,6 +131,7 @@ export function StaffRoomRichText({
             const style = {
               color: STAFFROOM_TEXT_COLOR_STYLE[span.color],
               fontSize: STAFFROOM_TEXT_SIZE_STYLE[span.size],
+              textDecorationLine: decorationOf(span),
             };
 
             if (span.href !== null) {
@@ -134,8 +148,13 @@ export function StaffRoomRichText({
                   // 조작하지 못하게 한다
                   target="_blank"
                   rel="noopener noreferrer"
-                  className={`${spanClassName(span)} text-sp-accent underline underline-offset-2 hover:opacity-80`}
-                  style={style}
+                  className={`${spanClassName(span)} text-sp-accent underline-offset-2 hover:opacity-80`}
+                  // 링크는 밑줄이 기본이다. 여기서 style 로 함께 주지 않으면
+                  // 취소선이 걸린 링크에서 밑줄이 조용히 사라진다(같은 속성 다툼).
+                  style={{
+                    ...style,
+                    textDecorationLine: span.strikethrough ? 'underline line-through' : 'underline',
+                  }}
                 >
                   {span.text}
                 </a>

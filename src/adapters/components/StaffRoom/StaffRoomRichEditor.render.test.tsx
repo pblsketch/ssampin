@@ -121,3 +121,38 @@ describe('교무실 글쓰기 편집기 — 링크', () => {
     expect(source).toContain('isValidStaffRoomLinkHref');
   });
 });
+
+/**
+ * 붙여넣기로 들어온 위험한 주소는 **저장되기 전에** 벗겨진다.
+ *
+ * 화면(StaffRoomRichText)이 그릴 때도 막지만 그건 마지막 방어선이다.
+ * QA 에서 확인해 보니 `javascript:` 주소가 저장값에 그대로 들어가고 있었다 —
+ * 본문을 그리는 자리가 하나 더 생기거나 내보내기·백업 경로로 새면 살아난다.
+ */
+describe('교무실 글쓰기 편집기 — 위험한 링크를 저장 전에 벗긴다', () => {
+  it('링크를 걸러내는 장치가 편집기에 붙어 있다', async () => {
+    const source = await import('node:fs').then((fs) =>
+      fs.readFileSync(new URL('./StaffRoomRichEditor.tsx', import.meta.url), 'utf-8'),
+    );
+    expect(source).toContain('SanitizeLinksPlugin');
+    // 편집기에 실제로 꽂혀 있어야 한다 — 만들어만 두고 안 쓰면 소용없다
+    expect(source).toMatch(/<SanitizeLinksPlugin\s*\/>/);
+  });
+
+  it('링크 껍데기만 걷어내고 글자는 남긴다 (붙여넣은 문장이 통째로 사라지지 않게)', async () => {
+    const source = await import('node:fs').then((fs) =>
+      fs.readFileSync(new URL('./StaffRoomRichEditor.tsx', import.meta.url), 'utf-8'),
+    );
+    expect(source).toMatch(
+      /for \(const child of node\.getChildren\(\)\) node\.insertBefore\(child\)/,
+    );
+    expect(source).toContain('node.remove()');
+  });
+
+  it('걸러내는 기준은 도메인 검사를 그대로 쓴다 (두 벌로 만들지 않는다)', async () => {
+    const source = await import('node:fs').then((fs) =>
+      fs.readFileSync(new URL('./StaffRoomRichEditor.tsx', import.meta.url), 'utf-8'),
+    );
+    expect(source).toMatch(/isValidStaffRoomLinkHref\(node\.getURL\(\)\)/);
+  });
+});

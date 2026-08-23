@@ -117,6 +117,7 @@ vi.mock('@adapters/stores/useGoogleAccountStore', () => ({
 
 const { BoardView } = await import('./BoardView');
 const { PostDetail } = await import('./PostDetail');
+const { PostEditor } = await import('./PostEditor');
 
 // ── 표본 ─────────────────────────────────────────────────────────
 function summary(over: Partial<StaffRoomPostSummary> = {}): StaffRoomPostSummary {
@@ -476,5 +477,62 @@ describe('글 첨부 (055)', () => {
   it('첨부가 없는 글에는 첨부 영역이 없다', () => {
     boardState.currentPost = fullPost({ attachments: [] });
     expect(detail()).not.toContain('attach_file');
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════
+/**
+ * 글쓰기 화면 — QA 에서 잡은 결함 두 개를 못박는다.
+ *
+ * 둘 다 **화면을 눈으로 봐야만 드러나는** 종류였고, 기존 테스트는 통과했다.
+ */
+const editor = (mode: 'create' | 'edit') =>
+  renderToString(
+    <PostEditor
+      departmentId="dept-1"
+      boardId="board-1"
+      mode={mode}
+      onDone={noop}
+      onCancel={noop}
+    />,
+  );
+
+describe('글쓰기 — 새 글이 직전에 본 글에 오염되지 않는다', () => {
+  it('🐛 긴 글을 읽고 나와 새 글을 써도 "너무 길어요" 가 뜨지 않는다', () => {
+    // 스토어는 직전에 열어 본 글을 그대로 들고 있다. 그걸 새 글의 본문으로
+    // 착각하면, 빈 글인데도 길이 경고가 뜬다.
+    boardState.currentPost = fullPost({
+      body: '가'.repeat(200_001),
+      bodyFormat: 'plain',
+    });
+    expect(editor('create')).not.toContain('너무 길어요');
+  });
+
+  it('고치기일 때는 그 글의 길이를 제대로 센다', () => {
+    boardState.currentPost = fullPost({
+      body: '가'.repeat(200_001),
+      bodyFormat: 'plain',
+    });
+    expect(editor('edit')).toContain('너무 길어요');
+  });
+});
+
+describe('글쓰기 — 첨부 이름', () => {
+  it('🐛 자료실 목록이 아직 안 왔어도 멀쩡한 첨부를 "지워졌다"고 하지 않는다', () => {
+    // 자료실은 나중에 도착한다. 그때까지 글이 들고 있던 이름을 쓴다.
+    boardState.currentPost = fullPost({
+      attachments: [{ id: 'a1', fileId: 'f1', fileName: '9월 업무분장.hwp' }],
+    });
+    const html = editor('edit');
+    expect(html).toContain('9월 업무분장.hwp');
+    expect(html).not.toContain('자료실에서 지워진 파일');
+  });
+
+  it('정말로 지워진 파일은 그대로 알린다', () => {
+    boardState.currentPost = fullPost({
+      attachments: [{ id: 'a1', fileId: null, fileName: '지워진자료.hwp' }],
+    });
+    // fileId 가 null 이면 붙일 목록에 들어가지도 않는다 — 되살릴 수 없어서다
+    expect(editor('edit')).not.toContain('지워진자료.hwp');
   });
 });

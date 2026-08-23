@@ -66,11 +66,15 @@ export function PostEditor({ departmentId, boardId, mode, onDone, onCancel }: Po
   const [body, setBody] = useState(mode === 'edit' ? (currentPost?.body ?? '') : '');
   // 편집기가 만든 값은 구조(JSON)라 길이를 그대로 세면 빈 글도 수백 자로 나온다.
   // 글자 수 안내는 꾸밈을 뺀 순수 글자로 센다.
-  const [plainBody, setPlainBody] = useState(
-    mode === 'edit' && currentPost?.bodyFormat === 'lexical'
+  const [plainBody, setPlainBody] = useState(() => {
+    // ⚠️ 새 글일 때 `currentPost` 를 보면 안 된다. 스토어는 **직전에 열어 본 글**을
+    // 그대로 들고 있어서, 긴 글을 읽고 나와 새 글을 쓰면 빈 글인데도
+    // "내용이 너무 길어요" 가 뜬다. 실제로 그렇게 만들었다가 QA 에서 잡았다.
+    if (mode !== 'edit' || !currentPost) return '';
+    return currentPost.bodyFormat === 'lexical'
       ? staffRoomRichTextToPlain(currentPost.body)
-      : (currentPost?.body ?? ''),
-  );
+      : currentPost.body;
+  });
   const [mentionedEmails, setMentionedEmails] = useState<string[]>(
     mode === 'edit' ? [...(currentPost?.mentionedEmails ?? [])] : [],
   );
@@ -376,7 +380,14 @@ export function PostEditor({ departmentId, boardId, mode, onDone, onCancel }: Po
         <div className="mt-3">
           <div className="flex flex-wrap items-center gap-1.5">
             {fileIds.map((id) => {
-              const file = libraryFiles.find((f) => f.id === id);
+              // ⚠️ 자료실 목록은 **나중에 도착한다.** 그때까지 이름을 못 찾았다고
+              // "지워진 파일"이라 하면, 멀쩡한 첨부를 보고 선생님이 파일이 날아간
+              // 줄 안다. 글이 들고 있던 이름을 먼저 쓰고, 그것도 없을 때만
+              // 지워졌다고 말한다.
+              const name =
+                libraryFiles.find((f) => f.id === id)?.name ??
+                currentPost?.attachments.find((a) => a.fileId === id)?.fileName ??
+                null;
               return (
                 <span
                   key={id}
@@ -385,8 +396,8 @@ export function PostEditor({ departmentId, boardId, mode, onDone, onCancel }: Po
                   <span className="material-symbols-outlined text-icon-sm text-sp-muted">
                     attach_file
                   </span>
-                  {/* 자료실에서 지워진 파일이면 이름을 알 수 없다 — 솔직히 알린다 */}
-                  {file?.name ?? '자료실에서 지워진 파일'}
+                  {/* 어디서도 이름을 못 찾으면 그때만 지워졌다고 말한다 */}
+                  {name ?? '자료실에서 지워진 파일'}
                   <button
                     type="button"
                     onClick={() => setFileIds((prev) => prev.filter((f) => f !== id))}
