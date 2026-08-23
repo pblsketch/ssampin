@@ -24,12 +24,18 @@ import { useTodoStore } from '@adapters/stores/useTodoStore';
 import {
   countStudents,
   summarizeAttendance,
+  summarizeDDays,
+  summarizeEvents,
+  summarizeMeals,
   summarizeRecords,
   summarizeTodos,
   toAttendanceRoll,
   toClassSummaries,
 } from '@usecases/assist/summaries';
 import { useStudentRecordsStore } from '@adapters/stores/useStudentRecordsStore';
+import { useMealStore } from '@adapters/stores/useMealStore';
+import { useEventsStore } from '@adapters/stores/useEventsStore';
+import { useDDayStore } from '@adapters/stores/useDDayStore';
 import { assistPort } from '@adapters/di/container';
 
 /**
@@ -158,6 +164,106 @@ export const INTENT_RULES: readonly {
   },
 ];
 
+/** YYYY-MM-DD 에 일수를 더한다(로컬 기준). 실행기 인자 기본값 계산용 */
+function addDays(date: string, days: number): string {
+  const [y, m, d] = date.split('-').map(Number);
+  const next = new Date(y ?? 0, (m ?? 1) - 1, (d ?? 1) + days);
+  return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-${String(
+    next.getDate(),
+  ).padStart(2, '0')}`;
+}
+
+/** 실행기가 볼 추가 데이터 원천 (급식·일정·디데이) */
+export interface ExecutorSources extends IntentSources {
+  readonly meals: readonly {
+    readonly date: string;
+    readonly mealType: string;
+    readonly dishes: readonly { readonly name: string }[];
+    readonly calorie: string;
+  }[];
+  readonly events: Parameters<typeof summarizeEvents>[0];
+  readonly ddays: readonly {
+    readonly title: string;
+    readonly targetDate: string;
+    readonly pinned: boolean;
+  }[];
+}
+
+/**
+ * 모델이 고른 도구를 로컬에서 실행한다(옵션 A). 순수 함수 — 테스트에서 그대로 돈다.
+ *
+ * ★모델 인자는 항상 불신한다: JSON 파싱 실패·이상값이면 기본값으로 방어하고,
+ *   레지스트리에 없는 도구 이름은 null(무시)이다. 날짜 기본값은 오늘~+6일.
+ */
+export function executeAssistTool(
+  name: string,
+  rawArguments: string,
+  src: ExecutorSources,
+): Card | null {
+  const tool = findAssistTool(name);
+  if (!tool) return null;
+
+  let args: Record<string, unknown> = {};
+  try {
+    const parsed: unknown = JSON.parse(rawArguments.length > 0 ? rawArguments : '{}');
+    if (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      args = parsed as Record<string, unknown>;
+    }
+  } catch {
+    // 모델이 인자를 깨뜨렸다 — 기본값으로 진행한다.
+  }
+
+  const today = todayKey();
+  const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+  const dateArg = (key: string, fallback: string): string => {
+    const v = args[key];
+    return typeof v === 'string' && DATE_RE.test(v) ? v : fallback;
+  };
+
+  switch (name) {
+    case 'get_meals': {
+      const from = dateArg('from', today);
+      return toCard(
+        name,
+        summarizeMeals(src.meals, {
+          from,
+          to: dateArg('to', addDays(from, 6)),
+        }) as unknown as ToolResultShape,
+      );
+    }
+    case 'get_events': {
+      const from = dateArg('from', today);
+      return toCard(
+        name,
+        summarizeEvents(src.events, {
+          from,
+          to: dateArg('to', addDays(from, 6)),
+        }) as unknown as ToolResultShape,
+      );
+    }
+    case 'get_ddays':
+      return toCard(name, summarizeDDays(src.ddays, { today }) as unknown as ToolResultShape);
+    case 'count_students': {
+      const named =
+        typeof args.className === 'string'
+          ? src.classes.find((c) => c.name === args.className)
+          : undefined;
+      return toCard(
+        name,
+        (named
+          ? countStudents(named.students, named.name)
+          : countStudents(src.students, '우리 반')) as unknown as ToolResultShape,
+      );
+    }
+    default: {
+      // 기존 5종(출결·기록·학급·할일)은 정규식 build 를 재사용한다 — 두 정본 금지.
+      const rule = INTENT_RULES.find((r) => r.tool === name);
+      if (!rule) return null;
+      return toCard(name, rule.build('', src));
+    }
+  }
+}
+
 /** 질문 → 숫자 카드. 순수 함수라 테스트에서 그대로 돌릴 수 있다. */
 export function buildCards(question: string, src: IntentSources): Card[] {
   const cards: Card[] = [];
@@ -177,6 +283,21 @@ export function AssistDockContainer() {
   const classes = useTeachingClassStore((s) => s.classes);
   const todos = useTodoStore((s) => s.todos);
   const records = useStudentRecordsStore((s) => s.records);
+  const todayMeals = useMealStore((s) => s.todayMeals);
+  const weekMeals = useMealStore((s) => s.weekMeals);
+  const events = useEventsStore((s) => s.events);
+  const ddays = useDDayStore((s) => s.items);
+
+  // 오늘·이번 주 급식을 합치고 (날짜, 식사종류)로 중복 제거
+  const meals = useMemo(() => {
+    const seen = new Set<string>();
+    return [...todayMeals, ...weekMeals].filter((m) => {
+      const key = `${m.date}|${m.mealType}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [todayMeals, weekMeals]);
 
   // ★그물 ③ 이 쓸 명단. 이름을 지우려면 "무엇이 이름인지"를 알아야 하는데,
   //   domain 은 스토어를 import 하지 않으므로 여기서 만들어 넘긴다.
@@ -188,10 +309,13 @@ export function AssistDockContainer() {
   const handleAsk = useMemo(
     () =>
       (question: string): void => {
-        const cards = buildCards(question, { students, classes, todos, records });
-        void ask(assistPort, question, cards, roster);
+        const src: ExecutorSources = { students, classes, todos, records, meals, events, ddays };
+        const cards = buildCards(question, src);
+        void ask(assistPort, question, cards, roster, (name, rawArguments) =>
+          executeAssistTool(name, rawArguments, src),
+        );
       },
-    [ask, classes, records, roster, students, todos],
+    [ask, classes, ddays, events, meals, records, roster, students, todos],
   );
 
   if (!enabled) return null;

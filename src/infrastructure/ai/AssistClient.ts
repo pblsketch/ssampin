@@ -27,6 +27,23 @@ interface AssistResponseBody {
   readonly text?: string;
   readonly degraded?: string | null;
   readonly error?: string;
+  readonly toolCalls?: readonly { readonly name?: unknown; readonly rawArguments?: unknown }[];
+}
+
+/** 서버가 준 도구 호출 목록을 방어적으로 정리한다 — 형식이 어긋난 항목은 버린다. */
+function toToolCalls(
+  raw: AssistResponseBody['toolCalls'],
+): { name: string; rawArguments: string }[] {
+  if (!Array.isArray(raw)) return [];
+  const calls: { name: string; rawArguments: string }[] = [];
+  for (const item of raw) {
+    if (typeof item?.name !== 'string' || item.name.length === 0) continue;
+    calls.push({
+      name: item.name,
+      rawArguments: typeof item.rawArguments === 'string' ? item.rawArguments : '',
+    });
+  }
+  return calls;
 }
 
 function toDegraded(value: string | null | undefined): AssistDegraded | null {
@@ -69,6 +86,7 @@ export class AssistClient implements AssistPort {
           installId: payload.installId,
           turns: payload.turns,
           toolResults: payload.toolResults,
+          ...(payload.tools && payload.tools.length > 0 ? { tools: payload.tools } : {}),
         }),
         signal: AbortSignal.timeout(TIMEOUT_MS),
       });
@@ -92,6 +110,10 @@ export class AssistClient implements AssistPort {
     }
 
     const body = (await res.json()) as AssistResponseBody;
-    return { text: body.text ?? '', degraded: toDegraded(body.degraded) };
+    return {
+      text: body.text ?? '',
+      degraded: toDegraded(body.degraded),
+      toolCalls: toToolCalls(body.toolCalls),
+    };
   }
 }

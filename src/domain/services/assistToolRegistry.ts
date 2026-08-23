@@ -41,6 +41,12 @@ export const ASSIST_TOOLS: readonly AssistToolDef[] = [
     description: '학급 인원 수를 센다. 명단은 반환하지 않는다.',
     resultFields: ['className', 'count'],
     freeTextFields: [],
+    params: {
+      type: 'object',
+      properties: {
+        className: { type: 'string', description: '수업반 이름(생략 시 담임 학급)' },
+      },
+    },
   },
   {
     id: 'list_classes',
@@ -74,6 +80,53 @@ export const ASSIST_TOOLS: readonly AssistToolDef[] = [
     nestedFields: { items: ['title', 'due', 'done', 'overdue'] },
     freeTextFields: ['title'],
   },
+  // ── 브릿지 동등화 Phase 1 (계획서 assist-bridge-parity §2 A그룹) ──
+  {
+    id: 'get_meals',
+    grade: 1,
+    outbound: 'result',
+    // 나이스 공시 데이터라 학생 정보가 없다. 다만 수동 입력(CSV) 경로가 있어
+    // 메뉴 문자열은 자유 입력으로 취급한다 — 무엇이 적혀 있을지 보장할 수 없다.
+    description: '기간의 급식 식단을 돌려준다. 날짜·식사종류·메뉴·열량.',
+    resultFields: ['period', 'items'],
+    nestedFields: { items: ['date', 'mealType', 'dishes', 'calorie'] },
+    freeTextFields: ['dishes'],
+    params: {
+      type: 'object',
+      properties: {
+        from: { type: 'string', description: 'YYYY-MM-DD 시작일(생략 시 오늘)' },
+        to: { type: 'string', description: 'YYYY-MM-DD 종료일(생략 시 시작일+6일)' },
+      },
+    },
+  },
+  {
+    id: 'get_ddays',
+    grade: 1,
+    outbound: 'result',
+    // daysLeft 는 앱이 계산한 사실이다 — 모델의 날짜 추측 금지(할 일 overdue 와 같은 원칙).
+    description:
+      '디데이 목록을 돌려준다. 제목·날짜·남은 일수(daysLeft: 양수=앞으로, 음수=지남)·고정 여부.',
+    resultFields: ['items'],
+    nestedFields: { items: ['title', 'date', 'daysLeft', 'pinned'] },
+    freeTextFields: ['title'],
+  },
+  {
+    id: 'get_events',
+    grade: 1,
+    outbound: 'result',
+    // 설명(description)은 보내지 않는다 — 상담 메모 등 긴 자유 글이 들어가는 자리다.
+    description: '기간의 일정을 돌려준다. 날짜·제목·시간·장소. 반복 일정은 날짜별로 펼쳐져 있다.',
+    resultFields: ['period', 'truncated', 'items'],
+    nestedFields: { items: ['date', 'title', 'time', 'location'] },
+    freeTextFields: ['title', 'location'],
+    params: {
+      type: 'object',
+      properties: {
+        from: { type: 'string', description: 'YYYY-MM-DD 시작일(생략 시 오늘)' },
+        to: { type: 'string', description: 'YYYY-MM-DD 종료일(생략 시 시작일+6일)' },
+      },
+    },
+  },
 ];
 
 const TOOL_BY_ID: ReadonlyMap<AssistToolId, AssistToolDef> = new Map(
@@ -88,4 +141,28 @@ export function findAssistTool(id: AssistToolId): AssistToolDef | undefined {
 /** 등록된 모든 도구 id */
 export function assistToolIds(): readonly AssistToolId[] {
   return ASSIST_TOOLS.map((tool) => tool.id);
+}
+
+/**
+ * 레지스트리를 모델 도구 선택용 스키마(OpenAI function 형식)로 바꾼다.
+ *
+ * ★설명은 레지스트리의 것을 그대로 쓴다 — 두 벌로 관리하면 어긋난다.
+ * 서버(`assistRequest.ts`)는 이 형식(type/function/name/description/parameters)만 통과시킨다.
+ */
+export function toModelToolSchemas(): readonly {
+  readonly type: 'function';
+  readonly function: {
+    readonly name: string;
+    readonly description: string;
+    readonly parameters: Readonly<Record<string, unknown>>;
+  };
+}[] {
+  return ASSIST_TOOLS.map((tool) => ({
+    type: 'function' as const,
+    function: {
+      name: tool.id,
+      description: tool.description,
+      parameters: tool.params ?? { type: 'object', properties: {} },
+    },
+  }));
 }

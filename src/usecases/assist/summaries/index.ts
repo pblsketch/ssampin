@@ -18,3 +18,9 @@ export type { TodoLike, SummarizeTodosOptions, TodosSummary } from './summarizeT
 
 export { toAttendanceRoll } from './toAttendanceRoll';
 export type { AttendanceRecordSource, ToAttendanceRollOptions } from './toAttendanceRoll';
+export { summarizeMeals } from './summarizeMeals';
+export type { MealLike, SummarizeMealsOptions, MealsSummary } from './summarizeMeals';
+export { summarizeDDays } from './summarizeDDays';
+export type { DDayLike, SummarizeDDaysOptions, DDaysSummary } from './summarizeDDays';
+export { summarizeEvents } from './summarizeEvents';
+export type { SummarizeEventsOptions, EventsSummary } from './summarizeEvents';

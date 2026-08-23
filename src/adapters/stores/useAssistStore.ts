@@ -18,6 +18,7 @@ import type { MaskMapping } from '@domain/privacy/types';
 import { findAssistTool } from '@domain/services/assistToolRegistry';
 import type { KeywordGroup } from '@domain/privacy/types';
 import type { AssistDegraded, AssistPort, AssistTurnPayload } from '@domain/ports/AssistPort';
+import { toModelToolSchemas } from '@domain/services/assistToolRegistry';
 import { AssistBlockedError } from '@domain/ports/AssistPort';
 import type { ToolResultShape } from '@domain/services/sanitizeToolResult';
 import type { ModelSafe } from '@domain/entities/AssistTool';
@@ -93,6 +94,12 @@ interface AssistActions {
     question: string,
     cards: readonly AssistCard[],
     roster: readonly KeywordGroup[],
+    /**
+     * 모델이 고른 도구를 로컬에서 실행하는 함수(옵션 A, ADR-067 이후).
+     * 재구성(그물 ②)을 마친 카드를 돌려주거나, 모르는 도구면 null.
+     * 없으면 종전처럼 정규식 카드 + 직전 카드 재전송만으로 동작한다.
+     */
+    executeTool?: (name: string, rawArguments: string) => AssistCard | null,
   ) => Promise<void>;
 }
 
@@ -206,7 +213,7 @@ export const useAssistStore = create<AssistStore>()(
 
       clearConversation: () => set({ turns: [], draft: '' }),
 
-      ask: async (port, question, cards, roster) => {
+      ask: async (port, question, cards, roster, executeTool) => {
         // ★차단선. 꺼져 있으면 **요청이 나가지 않는다**(성공 기준 5).
         if (!get().enabled) return;
 
@@ -234,11 +241,13 @@ export const useAssistStore = create<AssistStore>()(
         // ★새 턴을 상태에 넣기 **전에** 이력을 만든다 — 자기 자신이 이력에 끼면 안 된다.
         const historyTurns = buildHistoryTurns(get().turns, question);
 
-        // 후속 질문("어떤 일인지 알려줘")은 의도 규칙에 안 걸려 카드가 없다.
-        // 그러면 모델이 직전에 본 숫자를 다시 봐야 답할 수 있으므로, **직전 턴에
-        // 나갔던 카드**를 다시 싣는다. 이미 한 번 나간(가려진) 자료라 새 노출은 없다.
+        // 정규식에 안 걸린 질문("이번 주 급식 뭐 나와?")의 두 경로:
+        //  - 실행기가 있으면(옵션 A) 1차 왕복에서 **모델이 도구를 고르게** 한다.
+        //  - 실행기가 없으면(테스트·구형 경로) 직전 턴의 (가려진) 카드를 다시 싣는다 —
+        //    이미 한 번 나간 자료라 새 노출은 없다.
+        const wantsToolSelection = outbound.length === 0 && executeTool !== undefined;
         let effectiveOutbound = outbound;
-        if (effectiveOutbound.length === 0) {
+        if (effectiveOutbound.length === 0 && !wantsToolSelection) {
           const lastWithCards = [...get().turns]
             .reverse()
             .find((t) => t.status === 'done' && t.outboundCards.length > 0);
@@ -274,7 +283,7 @@ export const useAssistStore = create<AssistStore>()(
         };
 
         try {
-          const answer = await port.ask({
+          let answer = await port.ask({
             installId: get().installId,
             turns: historyTurns,
             // ★`as` 가 없다. `c.data` 는 이미 `ModelSafe` 라 그대로 들어간다 —
@@ -285,7 +294,50 @@ export const useAssistStore = create<AssistStore>()(
               grade: 1 as const,
               data: c.data,
             })),
+            ...(wantsToolSelection ? { tools: toModelToolSchemas() } : {}),
           });
+
+          // ── 옵션 A 2왕복: 모델이 도구를 골랐으면 로컬 실행 후 결과를 실어 다시 묻는다 ──
+          if (wantsToolSelection && executeTool && (answer.toolCalls?.length ?? 0) > 0) {
+            const executed: AssistCard[] = [];
+            // 폭주 방어: 모델이 여러 개를 불러도 앞 3개만. 서버 상한(6)보다 보수적으로.
+            for (const call of (answer.toolCalls ?? []).slice(0, 3)) {
+              const card = executeTool(call.name, call.rawArguments);
+              if (card) executed.push(card);
+            }
+
+            if (executed.length > 0) {
+              // 실행 결과도 초기 카드와 **같은 관문**을 지난다 — 화면엔 원본, 밖엔 가린 사본.
+              const executedOutbound: AssistCard[] = [];
+              for (const card of executed) {
+                const tool = findAssistTool(card.tool);
+                if (!tool) continue;
+                const result = redactOutbound(tool, card.data, roster);
+                maskedCount += result.maskedCount;
+                blankedCount += result.blankedCount;
+                if (result.blocked) continue;
+                mappings.push(...result.mappings);
+                executedOutbound.push({ tool: card.tool, data: result.data });
+              }
+              patch({
+                cards: [...cards, ...executed],
+                maskedCount,
+                blankedCount,
+              });
+
+              const secondOutbound = executedOutbound.slice(0, ASSIST_SEND_LIMITS.maxToolResults);
+              effectiveOutbound = secondOutbound;
+              answer = await port.ask({
+                installId: get().installId,
+                turns: historyTurns,
+                toolResults: secondOutbound.map((c) => ({
+                  tool: c.tool,
+                  grade: 1 as const,
+                  data: c.data,
+                })),
+              });
+            }
+          }
           // ★별칭을 실제 이름으로 되돌린 뒤 화면에 올린다.
           //   모델은 ［이름1］ 만 봤고, 선생님은 "김지훈"을 본다.
           //   ★실측상 모델이 괄호를 자주 바꾸므로(〈이름1〉 등) 관대하게 되돌린다.
@@ -293,6 +345,8 @@ export const useAssistStore = create<AssistStore>()(
             answer: restoreModelText(answer.text, mappings),
             // 이력용으로는 되돌리기 전(별칭 그대로)을 남긴다 — 위 outboundAnswer 주석 참조.
             outboundAnswer: answer.text,
+            // 도구 선택 경로에서는 실행 결과가 이 턴의 "나갔던 카드"다 — 후속 질문 재전송용.
+            outboundCards: effectiveOutbound,
             degraded: answer.degraded,
             status: 'done',
           });

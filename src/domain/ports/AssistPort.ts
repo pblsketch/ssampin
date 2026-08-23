@@ -26,10 +26,28 @@ export interface AssistTurnPayload {
   readonly content: string;
 }
 
+/** 모델 도구 선택용 스키마 (OpenAI function 형식 — 서버 검증 형식과 일치) */
+export interface AssistToolSchemaPayload {
+  readonly type: 'function';
+  readonly function: {
+    readonly name: string;
+    readonly description: string;
+    readonly parameters: Readonly<Record<string, unknown>>;
+  };
+}
+
+/** 모델이 요청한 도구 호출. 인자는 모델이 만든 JSON 원문이라 **항상 불신**한다. */
+export interface AssistToolCallPayload {
+  readonly name: string;
+  readonly rawArguments: string;
+}
+
 export interface AssistRequestPayload {
   readonly installId: string;
   readonly turns: readonly AssistTurnPayload[];
   readonly toolResults: readonly AssistToolResultPayload[];
+  /** 있으면 모델이 도구를 고를 수 있다(옵션 A). 없으면 종전과 같은 단발 답변 */
+  readonly tools?: readonly AssistToolSchemaPayload[];
 }
 
 /**
@@ -58,6 +76,8 @@ export type AssistDegraded =
 export interface AssistAnswer {
   readonly text: string;
   readonly degraded: AssistDegraded | null;
+  /** 모델이 도구를 요청했으면 채워진다. 실행 여부·방법은 전적으로 앱이 정한다 */
+  readonly toolCalls?: readonly AssistToolCallPayload[];
 }
 
 /** 전송이 막힌 경우. 사용자에게 보여줄 한국어 문구를 담는다. */

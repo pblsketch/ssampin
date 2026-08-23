@@ -169,6 +169,73 @@ describe('켜져 있을 때 — 숫자 카드가 먼저 남는다', () => {
     expect(port.calls[1]?.toolResults).toHaveLength(1);
     expect(port.calls[1]?.toolResults[0]?.tool).toBe('count_students');
   });
+
+  it('★옵션 A — 카드 없는 질문에 실행기가 있으면 모델이 도구를 고르고, 실행 결과로 다시 묻는다', async () => {
+    const port: AssistPort & { calls: AssistRequestPayload[] } = {
+      calls: [],
+      ask: vi.fn(async (payload: AssistRequestPayload) => {
+        port.calls.push(payload);
+        // 1차: 도구 스키마가 왔으면 도구를 고른다. 2차: 결과를 보고 답한다.
+        if (payload.tools && payload.tools.length > 0) {
+          return {
+            text: '',
+            degraded: null,
+            toolCalls: [{ name: 'count_students', rawArguments: '{}' }],
+          };
+        }
+        return { text: '30명입니다.', degraded: null };
+      }),
+    };
+
+    await useAssistStore.getState().ask(port, '이번 주 급식 뭐 나와', [], [], () => safeCard());
+
+    // 1차엔 도구 스키마가 실리고 조회 결과는 비어 있다
+    expect(port.calls[0]?.tools?.length).toBeGreaterThan(0);
+    expect(port.calls[0]?.toolResults).toHaveLength(0);
+    // 2차엔 실행 결과가 실리고 도구 스키마는 없다
+    expect(port.calls[1]?.toolResults).toHaveLength(1);
+    expect(port.calls[1]?.tools).toBeUndefined();
+
+    const [turn] = useAssistStore.getState().turns;
+    expect(turn?.answer).toBe('30명입니다.');
+    // 실행 결과가 화면 카드로도 남는다 — "앱이 조회한 사실이 먼저"
+    expect(turn?.cards).toHaveLength(1);
+    expect(turn?.status).toBe('done');
+  });
+
+  it('옵션 A — 모델이 지어낸 도구만 불렀으면(전부 null) 1차 답을 그대로 쓴다', async () => {
+    const port: AssistPort & { calls: AssistRequestPayload[] } = {
+      calls: [],
+      ask: vi.fn(async (payload: AssistRequestPayload) => {
+        port.calls.push(payload);
+        if (payload.tools && payload.tools.length > 0) {
+          return {
+            text: '도구 없이 드리는 답',
+            degraded: null,
+            toolCalls: [{ name: 'made_up_tool', rawArguments: '{}' }],
+          };
+        }
+        return { text: '여기 오면 안 된다', degraded: null };
+      }),
+    };
+
+    await useAssistStore.getState().ask(port, '아무 질문', [], [], () => null);
+
+    expect(port.calls).toHaveLength(1); // 2차 호출 없음
+    const [turn] = useAssistStore.getState().turns;
+    expect(turn?.answer).toBe('도구 없이 드리는 답');
+  });
+
+  it('옵션 A — 실행기가 있어도 정규식 카드가 있으면 종전 1왕복 그대로다', async () => {
+    const port = fakePort();
+    const executor = vi.fn(() => safeCard());
+
+    await useAssistStore.getState().ask(port, '몇 명이야', [safeCard()], [], executor);
+
+    expect(port.calls).toHaveLength(1);
+    expect(port.calls[0]?.tools).toBeUndefined();
+    expect(executor).not.toHaveBeenCalled();
+  });
 });
 
 describe('이력 한도 — 서버가 거절하기 전에 앱이 자른다', () => {

@@ -138,6 +138,26 @@ describe('쌤핀 AI 파이프라인 — 정상 데이터는 끝까지 통과한�
       get_my_todos: {
         items: [{ title: '수행평가 채점', due: '2026-08-25', done: false }],
       },
+      // ── 브릿지 동등화 Phase 1 (2026-08-23) ──
+      get_meals: {
+        period: '2026-08-24 ~ 2026-08-28',
+        items: [
+          {
+            date: '2026-08-24',
+            mealType: '중식',
+            dishes: '차조밥, 콩나물국, 배추김치',
+            calorie: '690.9 Kcal',
+          },
+        ],
+      },
+      get_ddays: {
+        items: [{ title: '수능', date: '2026-11-19', daysLeft: 88, pinned: true }],
+      },
+      get_events: {
+        period: '2026-08-24 ~ 2026-08-30',
+        truncated: false,
+        items: [{ date: '2026-08-25', title: '학부모 총회', time: '14:00', location: '시청각실' }],
+      },
     };
 
     for (const def of ASSIST_TOOLS) {
@@ -215,6 +235,27 @@ describe('쌤핀 AI 파이프라인 — 함정을 심으면 반드시 걸린다'
       },
       get_my_todos: {
         items: [{ title: `${PLANTED} 학부모 면담`, due: '2026-08-26', done: false }],
+      },
+      // ── 브릿지 동등화 Phase 1 — 자유 입력 자리마다 이름을 심는다 ──
+      get_meals: {
+        period: '2026-08-24 ~ 2026-08-28',
+        // 수동 입력(CSV) 경로가 있어 메뉴 문자열은 자유 입력이다
+        items: [{ date: '2026-08-24', mealType: '중식', dishes: `${PLANTED} 특식`, calorie: '' }],
+      },
+      get_ddays: {
+        items: [{ title: `${PLANTED} 생일`, date: '2026-09-01', daysLeft: 9, pinned: false }],
+      },
+      get_events: {
+        period: '2026-08-24 ~ 2026-08-30',
+        truncated: false,
+        items: [
+          {
+            date: '2026-08-25',
+            title: `${PLANTED} 상담`,
+            time: '15:00',
+            location: `${PLANTED} 교실`,
+          },
+        ],
       },
     };
 

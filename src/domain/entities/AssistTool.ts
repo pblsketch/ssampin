@@ -30,6 +30,12 @@ export interface AssistToolDef {
    */
   readonly grade: AssistToolGrade;
   readonly outbound: AssistToolOutbound;
+  /**
+   * 모델에게 보여줄 인자 JSON 스키마 (도구 선택, ADR-067 이후 옵션 A).
+   * 없으면 인자 없는 도구다. 이 스키마는 **모델 안내용**일 뿐이며,
+   * 실행기는 모델이 준 인자를 항상 불신하고 기본값으로 방어한다.
+   */
+  readonly params?: Readonly<Record<string, unknown>>;
   /** 화면·프롬프트에 쓰는 한국어 설명 */
   readonly description: string;
   /**
