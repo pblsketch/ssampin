@@ -17,7 +17,11 @@ import { describe, expect, it } from 'vitest';
 
 import type { AssistToolDef } from '@domain/entities/AssistTool';
 import { checkOutboundValue } from '@domain/rules/assertNoPii';
-import { ASSIST_TOOLS, findAssistTool } from '@domain/services/assistToolRegistry';
+import {
+  ASSIST_READ_TOOLS,
+  ASSIST_WRITE_TOOLS,
+  findAssistTool,
+} from '@domain/services/assistToolRegistry';
 import { findDisallowedFields, sanitizeToolResult } from '@domain/services/sanitizeToolResult';
 import type { ToolResultShape } from '@domain/services/sanitizeToolResult';
 import {
@@ -321,7 +325,8 @@ describe('쌤핀 AI 파이프라인 — 정상 데이터는 끝까지 통과한�
       },
     };
 
-    for (const def of ASSIST_TOOLS) {
+    // ★쓰기 도구는 결과를 돌려주지 않으므로 이 루프의 대상이 아니다(아래에서 따로 본다).
+    for (const def of ASSIST_READ_TOOLS) {
       const raw = REAL[def.id];
       expect(raw, `${def.id} 대표 픽스처가 없다 - 도구를 추가하면 여기도 추가할 것`).toBeDefined();
       const gate = checkOutboundValue(sanitizeToolResult(def, raw ?? {}), FIXTURE_ROSTER, def);
@@ -598,7 +603,7 @@ describe('쌤핀 AI 파이프라인 — 함정을 심으면 반드시 걸린다'
       },
     };
 
-    for (const def of ASSIST_TOOLS) {
+    for (const def of ASSIST_READ_TOOLS) {
       const raw = TRAPS[def.id];
       expect(raw, `${def.id} 함정 픽스처가 없다 - 도구를 추가하면 여기도 추가할 것`).toBeDefined();
 
@@ -638,5 +643,32 @@ describe('쌤핀 AI 파이프라인 — 함정을 심으면 반드시 걸린다'
     const first = (safe.items as ToolResultShape[])[0];
     expect(Object.keys(first ?? {}).sort()).toEqual(['done', 'due', 'title']);
     expect(findDisallowedFields(tool('get_my_todos'), safe)).toEqual([]);
+  });
+});
+
+/**
+ * 쓰기 도구(Phase 3)는 그물 ②·③을 **지나지 않는다.** 지날 결과가 없기 때문이다.
+ * 그 대신 지켜야 할 것이 하나 있다: **결과로 내보낼 수 있는 필드가 0개**여야 한다.
+ * 하나라도 열리면 그 도구만 조용히 모델에게 무언가를 돌려주게 된다.
+ */
+describe('쌤핀 AI 쓰기 도구 — 모델에게 돌려줄 것이 없다', () => {
+  it('★쓰기 도구는 resultFields 가 비어 있다', () => {
+    expect(ASSIST_WRITE_TOOLS.length).toBeGreaterThan(0);
+    for (const def of ASSIST_WRITE_TOOLS) {
+      expect(def.resultFields, `${def.id} 가 결과 필드를 열었다`).toEqual([]);
+      expect(def.nestedFields, `${def.id} 가 중첩 결과 필드를 열었다`).toBeUndefined();
+      expect(def.outbound).toBe('args');
+    }
+  });
+
+  it('★쓰기 도구도 1등급뿐이다 (ADR-061 결정 7)', () => {
+    for (const def of ASSIST_WRITE_TOOLS) expect(def.grade).toBe(1);
+  });
+
+  it('★읽기와 쓰기가 이름을 겹쳐 쓰지 않는다', () => {
+    const readIds = new Set(ASSIST_READ_TOOLS.map((t) => t.id));
+    for (const def of ASSIST_WRITE_TOOLS) {
+      expect(readIds.has(def.id), `${def.id} 가 읽기와 이름이 겹친다`).toBe(false);
+    }
   });
 });

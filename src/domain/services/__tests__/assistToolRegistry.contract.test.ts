@@ -7,7 +7,13 @@
 import { describe, expect, it } from 'vitest';
 
 import { ALLOWED_GRADES, hasFreeText, isGradeAllowed } from '@domain/entities/AssistTool';
-import { ASSIST_TOOLS, assistToolIds, findAssistTool } from '@domain/services/assistToolRegistry';
+import {
+  ASSIST_READ_TOOLS,
+  ASSIST_TOOLS,
+  ASSIST_WRITE_TOOLS,
+  assistToolIds,
+  findAssistTool,
+} from '@domain/services/assistToolRegistry';
 
 describe('assistToolRegistry — 계약', () => {
   it('등록된 모든 도구가 허용 등급 안에 있다', () => {
@@ -32,8 +38,12 @@ describe('assistToolRegistry — 계약', () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it('모든 도구가 반환 필드 화이트리스트를 갖는다 (빈 목록 금지)', () => {
-    const empty = ASSIST_TOOLS.filter((tool) => tool.resultFields.length === 0).map((t) => t.id);
+  it('모든 **읽기** 도구가 반환 필드 화이트리스트를 갖는다 (빈 목록 금지)', () => {
+    // 읽기 도구에 빈 목록은 "재구성을 안 거친다"는 뜻이라 위험하다.
+    // 쓰기 도구는 반대다 — 빈 목록이 곧 "모델에게 돌려줄 것이 없다"는 보장이다(아래 참조).
+    const empty = ASSIST_READ_TOOLS.filter((tool) => tool.resultFields.length === 0).map(
+      (t) => t.id,
+    );
     expect(empty).toEqual([]);
   });
 
@@ -90,16 +100,37 @@ describe('assistToolRegistry — 계약', () => {
     expect(dangling).toEqual([]);
   });
 
-  it('★Phase 1 도구는 전부 outbound:"result" 다 - 쓰기 도구는 등급제로 못 막는다', () => {
-    // 읽기 도구는 *결과*가 나가고, 쓰기 도구는 *인자*가 나간다.
-    // add_observation("3학년 2반 김지훈, 오늘 발표에서...") 를 모델이 호출하려면 그 문장 전체를
-    // 모델이 지어내야 하고, 그러면 저장할 자유서술 원문이 요청 본문에 실려 나간다.
-    // 읽기 도구의 등급제로는 이걸 막을 수 없다(계획서 §4.2 "쓰기 도구").
-    // -> outbound:'args' 도구가 등록되면 별도 보호 모델이 필요하므로 여기서 빨간불을 낸다.
-    const nonResult = ASSIST_TOOLS.filter((t) => t.outbound !== 'result').map(
+  it('★쓰기 도구는 "별도 보호 모델" 아래에서만 존재한다 (Phase 3)', () => {
+    // ── 이 테스트의 내력 ──
+    // 원래 문구는 "outbound:'result' 가 아닌 도구가 **하나도 없어야 한다**"였다.
+    // 이유는 지금도 유효하다: 쓰기 도구는 저장할 문장을 모델이 지어내므로 읽기 쪽
+    // 등급제로 막을 수 없다. 그 가드는 "별도 보호 모델이 생기기 전까지 쓰기 금지"라는
+    // 뜻이었고, 그 조건을 Phase 3 이 채웠다(계획서 §2 C그룹) —
+    //   모델은 실행하지 못한다. 제안 → 미리보기 → 선생님의 [실행].
+    //
+    // 그래서 가드를 **지우지 않고 조건을 옮긴다.** 쓰기 도구가 있어도 되지만,
+    // 있으려면 아래 세 가지를 전부 지켜야 한다.
+    for (const tool of ASSIST_WRITE_TOOLS) {
+      // ① 모델에게 돌려줄 결과가 없다 — 하나라도 열리면 조용한 유출 통로가 된다.
+      expect(tool.resultFields, `${tool.id} 가 결과 필드를 열었다`).toEqual([]);
+      expect(tool.nestedFields, `${tool.id} 가 중첩 결과 필드를 열었다`).toBeUndefined();
+      // ② 나가는 것이 인자임을 레지스트리가 스스로 밝힌다.
+      expect(tool.outbound).toBe('args');
+      // ③ 등급 경계는 그대로다.
+      expect(tool.grade).toBe(1);
+    }
+
+    // 읽기 도구 쪽 원래 조건은 그대로 남는다 — 읽기가 몰래 쓰기가 되는 것을 막는다.
+    const nonResult = ASSIST_READ_TOOLS.filter((t) => t.outbound !== 'result').map(
       (t) => `${t.id}:${t.outbound}`,
     );
     expect(nonResult).toEqual([]);
+
+    // 학생 데이터에 닿는 쓰기는 **만들지 않는다**(계획서 §6 — 이 계획 밖).
+    const forbidden = ASSIST_WRITE_TOOLS.filter((t) =>
+      /attendance|observation|rubric|grading|record_draft|score/.test(t.id),
+    ).map((t) => t.id);
+    expect(forbidden).toEqual([]);
   });
 
   it('★opaqueFields 와 freeTextFields 는 겹칠 수 없다', () => {

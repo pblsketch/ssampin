@@ -44,8 +44,13 @@ const presenceChecks = [
     // 2026-08-23 (ADR-067): 걸러낸 변수가 `outbound` → `effectiveOutbound` 로 바뀌었다.
     // 후속 질문에 직전 턴의 카드를 다시 싣기 위해서인데, 그 재전송분(`outboundCards`)도
     // 걸러진 뒤 저장된 것이라 **포트에 닿는 것은 여전히 걸러진 쪽뿐**이다.
+    //
+    // 2026-08-23 (Phase 3, 쓰기): 두 지점 사이에 쓰기 **제안** 분기가 들어와 거리가 늘었다.
+    // 창을 2,500 → 4,000자로 넓힌다. **지키는 것은 그대로다** — 포트에 실리는 것이
+    // 원본 `cards` 가 아니라 걸러낸 `effectiveOutbound` 인가. 쓰기 분기는 애초에 포트를
+    // 부르지 않고(두 번째 왕복 없음) 화면에 제안만 띄우므로 이 경로에 새 통로를 열지 않는다.
     file: 'src/adapters/stores/useAssistStore.ts',
-    pattern: /redactOutbound\([\s\S]{0,2500}?toolResults:\s*effectiveOutbound\.map\(/,
+    pattern: /redactOutbound\([\s\S]{0,4000}?toolResults:\s*effectiveOutbound\.map\(/,
     name: 'REGRESSION #57: 쌤핀 AI 는 이름을 지운 사본만 전송한다 (그물 ③ 배선)',
   },
   {

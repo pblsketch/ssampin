@@ -22,6 +22,9 @@ import { toModelToolSchemas } from '@domain/services/assistToolRegistry';
 import { AssistBlockedError } from '@domain/ports/AssistPort';
 import type { ToolResultShape } from '@domain/services/sanitizeToolResult';
 import type { ModelSafe } from '@domain/entities/AssistTool';
+import type { AssistProposalState, AssistWriteProposal } from '@domain/entities/AssistWrite';
+import { isWriteProposal } from '@domain/entities/AssistWrite';
+import { isWriteTool } from '@usecases/assist/writes/buildWriteProposal';
 
 /** 고지문이 바뀌면 이 숫자를 올린다. 다음에 켤 때 안내가 다시 뜬다. */
 export const ASSIST_NOTICE_VERSION = 1;
@@ -63,6 +66,14 @@ export interface AssistTurn {
   readonly maskedCount: number;
   /** ★연락처·주민번호가 있어 통째로 뺀 칸 수 */
   readonly blankedCount: number;
+  /**
+   * ★쓰기 **제안**. 저장된 것이 아니라 "저장할까요?"라는 종이 한 장이다(Phase 3).
+   * 한 턴에 최대 하나 — 계획서의 "연속 실행·일괄 실행 없음(한 번에 한 건)".
+   */
+  readonly proposal?: AssistWriteProposal;
+  readonly proposalState?: AssistProposalState;
+  /** 실행 결과나 실패 사유. 선생님이 무슨 일이 일어났는지 알아야 한다 */
+  readonly proposalMessage?: string;
 }
 
 interface AssistState {
@@ -100,8 +111,23 @@ interface AssistActions {
      * 없으면 종전처럼 정규식 카드 + 직전 카드 재전송만으로 동작한다.
      */
     executeTool?: (name: string, rawArguments: string) => AssistCard | null,
+    /**
+     * 모델이 고른 **쓰기** 도구를 제안으로 바꾸는 함수(Phase 3).
+     *
+     * ★이 자리에 "실행하는 함수"를 넘기지 않는다는 것이 안전 구조의 전부다.
+     * 스토어는 저장할 방법을 아예 갖고 있지 않다 — 넘겨받은 것이 제안 조립기뿐이다.
+     */
+    proposeWrite?: (name: string, rawArguments: string) => AssistWriteOutcomeLike,
   ) => Promise<void>;
+  /**
+   * 제안의 상태를 바꾼다. 실제 저장은 **컨테이너**가 하고, 결과만 여기로 들어온다.
+   * 스토어는 끝까지 저장 능력을 갖지 않는다.
+   */
+  settleProposal: (turnId: string, state: AssistProposalState, message?: string) => void;
 }
+
+/** `buildWriteProposal` 의 반환형과 같은 모양. domain 을 다시 import 하지 않으려고 좁게 받는다 */
+export type AssistWriteOutcomeLike = AssistWriteProposal | { readonly reason: string };
 
 export type AssistStore = AssistState & AssistActions;
 
@@ -213,9 +239,31 @@ export const useAssistStore = create<AssistStore>()(
 
       clearConversation: () => set({ turns: [], draft: '' }),
 
-      ask: async (port, question, cards, roster, executeTool) => {
+      settleProposal: (turnId, state, message) =>
+        set((s) => ({
+          turns: s.turns.map((t) =>
+            t.id === turnId && t.proposal
+              ? {
+                  ...t,
+                  proposalState: state,
+                  ...(message === undefined ? {} : { proposalMessage: message }),
+                }
+              : t,
+          ),
+        })),
+
+      ask: async (port, question, cards, roster, executeTool, proposeWrite) => {
         // ★차단선. 꺼져 있으면 **요청이 나가지 않는다**(성공 기준 5).
         if (!get().enabled) return;
+
+        // ★계획서: "실행 없이 대화가 이어지면 제안은 소멸".
+        //   다음 질문을 던지는 순간 앞 제안의 [실행] 버튼은 죽는다 — 한참 전에 말한
+        //   내용이 대화 저 위에 살아 있다가 눌리는 것이 가장 위험한 모양이다.
+        set((s) => ({
+          turns: s.turns.map((t) =>
+            t.proposalState === 'pending' ? { ...t, proposalState: 'expired' as const } : t,
+          ),
+        }));
 
         // ★그물 ③ — 나가기 직전 관문. **여기 말고 다른 통로가 없다.**
         //   화면에는 원본 카드가 그대로 남고(이름은 화면에 남는다),
@@ -245,7 +293,11 @@ export const useAssistStore = create<AssistStore>()(
         //  - 실행기가 있으면(옵션 A) 1차 왕복에서 **모델이 도구를 고르게** 한다.
         //  - 실행기가 없으면(테스트·구형 경로) 직전 턴의 (가려진) 카드를 다시 싣는다 —
         //    이미 한 번 나간 자료라 새 노출은 없다.
-        const wantsToolSelection = outbound.length === 0 && executeTool !== undefined;
+        // ★도구 목록을 보낼지의 조건은 "실행기가 있는가"가 아니라 **"도구를 다룰 수단이
+        //   하나라도 있는가"**다. 읽기 실행기만 보고 판단했더니, 쓰기 제안만 붙인 경로에서
+        //   도구가 아예 안 나가 제안이 만들어지지 않았다(Phase 3 테스트에서 잡힘).
+        const canUseTools = executeTool !== undefined || proposeWrite !== undefined;
+        const wantsToolSelection = outbound.length === 0 && canUseTools;
         let effectiveOutbound = outbound;
         if (effectiveOutbound.length === 0 && !wantsToolSelection) {
           const lastWithCards = [...get().turns]
@@ -297,11 +349,57 @@ export const useAssistStore = create<AssistStore>()(
             ...(wantsToolSelection ? { tools: toModelToolSchemas() } : {}),
           });
 
+          // ── Phase 3: 쓰기 도구를 골랐으면 **실행하지 않고 제안만 만든다** ──
+          //
+          // ★여기서 두 번째 왕복을 하지 않는 것이 중요하다. 결과를 실어 다시 물으면
+          //   모델이 "저장했습니다"라고 앞질러 말하는데, 아직 아무것도 저장되지 않았다.
+          //   대신 앱이 고정된 문구로 안내하고 미리보기 카드를 띄운다.
+          /**
+           * 쓰기 제안을 턴에 붙이고 끝낸다. **저장은 하지 않는다.**
+           *
+           * 1왕복째에도, 조회를 한 번 하고 온 2왕복째에도 같은 자리를 쓴다.
+           */
+          const settleWithProposal = (
+            call: { name: string; rawArguments: string },
+            extra: Partial<AssistTurn>,
+          ): void => {
+            const outcome = proposeWrite?.(call.name, call.rawArguments);
+            if (outcome && isWriteProposal(outcome)) {
+              patch({
+                ...extra,
+                answer: '아래 내용을 확인하고 [실행]을 누르면 저장할게요.',
+                outboundAnswer: '',
+                degraded: answer.degraded,
+                status: 'done',
+                proposal: outcome,
+                proposalState: 'pending',
+              });
+            } else {
+              // 못 만든 이유를 그대로 보여준다 — 조용히 아무 일도 없는 것이 가장 나쁘다.
+              patch({
+                ...extra,
+                answer: outcome?.reason ?? '무엇을 하려는지 알아듣지 못했어요.',
+                outboundAnswer: '',
+                degraded: answer.degraded,
+                status: 'done',
+              });
+            }
+          };
+
+          const writeCall = (answer.toolCalls ?? []).find((call) => isWriteTool(call.name));
+          if (wantsToolSelection && proposeWrite && writeCall) {
+            settleWithProposal(writeCall, {});
+            return;
+          }
+
           // ── 옵션 A 2왕복: 모델이 도구를 골랐으면 로컬 실행 후 결과를 실어 다시 묻는다 ──
           if (wantsToolSelection && executeTool && (answer.toolCalls?.length ?? 0) > 0) {
             const executed: AssistCard[] = [];
             // 폭주 방어: 모델이 여러 개를 불러도 앞 3개만. 서버 상한(6)보다 보수적으로.
             for (const call of (answer.toolCalls ?? []).slice(0, 3)) {
+              // ★쓰기 도구는 이 루프에 절대 들어오지 않는다. 위에서 이미 갈라졌지만,
+              //   실행기가 쓰기 이름을 받는 경로 자체를 없애 두는 편이 안전하다.
+              if (isWriteTool(call.name)) continue;
               const card = executeTool(call.name, call.rawArguments);
               if (card) executed.push(card);
             }
@@ -335,7 +433,40 @@ export const useAssistStore = create<AssistStore>()(
                   grade: 1 as const,
                   data: c.data,
                 })),
+                // ★2왕복째에도 도구 목록을 함께 보낸다.
+                //
+                //   실측(2026-08-23): "장보기 할 일 지워줘"에 모델은 **먼저 목록을 본다** —
+                //   어떤 항목인지 확인하고 지우려는 것이고, 사람도 그렇게 한다. 그런데 예전에는
+                //   2왕복째에 도구를 안 보내서, 목록을 보고 온 모델이 **지우자고 말할 방법이
+                //   없었다.** 그래서 고치기·지우기 요청 7건이 전부 조회로 끝났다(0/7).
+                //   설명 문구를 두 번 고쳐도 소용없던 이유가 이것이다 — 낱말이 아니라 구조였다.
+                ...(proposeWrite ? { tools: toModelToolSchemas() } : {}),
               });
+
+              // 목록을 보고 온 모델이 이제 쓰기를 고르면, 그 제안을 조회 카드와 함께 띄운다.
+              const followUp = (answer.toolCalls ?? []).find((call) => isWriteTool(call.name));
+              if (proposeWrite && followUp) {
+                settleWithProposal(followUp, { outboundCards: secondOutbound });
+                return;
+              }
+
+              // ★도구 목록을 붙였더니 모델이 **문장 대신 또 도구를 부르는** 일이 생겼다
+              //   ("할 일 뭐 있어?"에 조회를 한 번 더 하자고 했고, text 는 빈 문자열이었다 —
+              //   2026-08-23 실측). 그대로 두면 카드만 뜨고 해설이 사라진다.
+              //
+              //   더 부르지는 않는다. **도구 없이 한 번만** 다시 물어 문장을 받는다 —
+              //   왕복 상한을 세 번으로 못 박아 두는 셈이다.
+              if (answer.text.trim().length === 0) {
+                answer = await port.ask({
+                  installId: get().installId,
+                  turns: historyTurns,
+                  toolResults: secondOutbound.map((c) => ({
+                    tool: c.tool,
+                    grade: 1 as const,
+                    data: c.data,
+                  })),
+                });
+              }
             }
           }
           // ★별칭을 실제 이름으로 되돌린 뒤 화면에 올린다.

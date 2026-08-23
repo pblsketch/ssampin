@@ -12,6 +12,7 @@
 import { useLayoutEffect, useMemo, useState } from 'react';
 
 import { AssistThread } from './AssistThread';
+import type { AssistWriteProposal } from '@domain/entities/AssistWrite';
 import { OutboundLine } from './OutboundLine';
 import { WindowDragStrip } from '@adapters/components/common/WindowDragStrip';
 import {
@@ -48,6 +49,13 @@ export const SUGGESTIONS: readonly string[] = [
 interface Props {
   /** 칩이나 입력창에서 질문이 확정됐을 때. 도구 실행은 바깥(유스케이스)이 한다. */
   readonly onAsk: (question: string) => void;
+  /**
+   * 미리보기 카드의 [실행]을 눌렀을 때(Phase 3).
+   *
+   * ★저장은 이 콜백을 받은 **바깥**에서만 일어난다. 화면은 "눌렸다"만 알리고,
+   * 무엇을 저장할지는 이미 만들어진 제안이 들고 있다.
+   */
+  readonly onRunProposal?: (turnId: string, proposal: AssistWriteProposal) => void;
 }
 
 /**
@@ -90,7 +98,7 @@ function usePublishDockWidth(): (node: HTMLElement | null) => void {
   return setNode;
 }
 
-export function AssistDock({ onAsk }: Props) {
+export function AssistDock({ onAsk, onRunProposal }: Props) {
   const enabled = useAssistStore((s) => s.enabled);
   const open = useAssistStore((s) => s.open);
   const turns = useAssistStore((s) => s.turns);
@@ -193,7 +201,7 @@ export function AssistDock({ onAsk }: Props) {
           </div>
         </div>
       ) : (
-        <AssistThread turns={turns} />
+        <AssistThread turns={turns} onRunProposal={onRunProposal} />
       )}
 
       {/* 입력부 */}

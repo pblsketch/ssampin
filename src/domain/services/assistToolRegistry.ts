@@ -25,7 +25,7 @@ import type { AssistToolDef, AssistToolId } from '../entities/AssistTool';
  * 여기 없는 것은 "빠뜨린" 것이 아니라 **일부러 만들지 않은** 것이다 — 개별 학생 데이터를
  * 다루는 도구(명단·학생별 출결/기록)와 생기부 3종은 어느 Phase 에서도 등록하지 않는다.
  */
-export const ASSIST_TOOLS: readonly AssistToolDef[] = [
+const READ_TOOLS: readonly AssistToolDef[] = [
   {
     id: 'get_attendance_summary',
     grade: 1,
@@ -425,6 +425,267 @@ export const ASSIST_TOOLS: readonly AssistToolDef[] = [
     },
   },
 ];
+
+/**
+ * 쓰기 도구 한 종. **표에서 찍어낸다.**
+ *
+ * ★`resultFields: []` 가 여기 한 번만 적혀 있다는 것이 핵심이다. 22개마다 손으로 적으면
+ * 언젠가 하나에 결과 필드가 들어가고, 그 도구만 조용히 모델에게 무언가를 돌려주게 된다.
+ * 찍어내면 **그런 도구를 만들 수 없다.**
+ *
+ * `outbound: 'args'` 는 "나가는 것은 결과가 아니라 인자"라는 뜻이다(AssistTool.ts).
+ * 다만 이 앱에서는 그 인자마저 모델이 스스로 지어낸 것이라 새로 나가는 정보가 없다 —
+ * 제안은 화면에만 뜨고, 저장은 선생님이 [실행]을 눌러야 일어난다.
+ */
+function writeTool(
+  id: string,
+  description: string,
+  properties: Readonly<Record<string, unknown>>,
+  required: readonly string[],
+): AssistToolDef {
+  return {
+    id,
+    grade: 1,
+    outbound: 'args',
+    description,
+    resultFields: [],
+    freeTextFields: [],
+    params: {
+      type: 'object',
+      properties,
+      ...(required.length > 0 ? { required } : {}),
+    },
+  };
+}
+
+const S = (description: string): Readonly<Record<string, unknown>> => ({
+  type: 'string',
+  description,
+});
+const N = (description: string): Readonly<Record<string, unknown>> => ({
+  type: 'integer',
+  description,
+});
+const B = (description: string): Readonly<Record<string, unknown>> => ({
+  type: 'boolean',
+  description,
+});
+
+/** 고칠·지울 대상을 가리키는 말. **모델은 내부 식별자를 모른다**(보여준 적이 없다). */
+const MATCH = S('대상을 가리키는 말(제목·내용의 일부). 앱이 딱 한 건을 찾으면 그것을 고른다');
+
+/**
+ * ── 쓰기 도구 22종 (계획서 §2 C그룹) ──
+ *
+ * ★**모델은 이 도구들을 실행하지 못한다.** 고르면 앱이 미리보기 카드를 띄우고,
+ * 선생님이 [실행]을 눌러야 저장된다.
+ *
+ * ★설명은 **하려는 일부터** 적는다("할 일을 지운다"). 처음에는 구현을 그대로 옮겨
+ * "…하자고 제안한다"로 썼는데, 실서버에서 **삭제 요청 4건이 전부 조회 도구로 갔다**
+ * (0/4, 2026-08-23 실측). 모델은 하려는 일과 설명을 맞춰 보는데, 우리가 적어 둔 것은
+ * 하려는 일이 아니라 우리 쪽 사정이었다. 안전 장치("확인 버튼을 누른 뒤에")는 그다음에
+ * 한 마디로 붙인다 — 모델이 "저장했습니다"라고 앞질러 말하지 않게.
+ *
+ * 제외(계획서 §2·§6): 출결 입력 · 관찰 추가 · 루브릭 채점 · 생기부 초안 저장.
+ * 학생 데이터에 닿는 쓰기는 **만들지 않는다** — 등록 누락이 아니라 존재하지 않는다.
+ */
+const WRITE_TOOLS: readonly AssistToolDef[] = [
+  // ── 할 일 (4) ──
+  writeTool(
+    'create_todo',
+    '할 일을 새로 만든다. 선생님이 확인 버튼을 누른 뒤에 저장된다.',
+    {
+      text: S('할 일 내용'),
+      dueDate: S('YYYY-MM-DD 마감일'),
+      time: S('HH:mm 시각'),
+      priority: S('중요도: high | medium | low | none'),
+    },
+    ['text'],
+  ),
+  writeTool(
+    'update_todo',
+    '이미 있는 할 일의 내용·마감·중요도를 고친다. 확인 버튼을 누른 뒤에 바뀐다.',
+    {
+      match: MATCH,
+      text: S('바꿀 내용'),
+      dueDate: S('YYYY-MM-DD 마감일'),
+      time: S('HH:mm 시각'),
+      priority: S('중요도: high | medium | low | none'),
+    },
+    ['match'],
+  ),
+  writeTool(
+    'complete_todo',
+    '할 일을 끝낸 것으로 표시한다(체크). undo=true 면 다시 안 끝낸 것으로 되돌린다. 확인 버튼을 누른 뒤에 바뀐다.',
+    { match: MATCH, undo: B('true 면 완료를 취소한다') },
+    ['match'],
+  ),
+  writeTool(
+    'delete_todo',
+    '할 일을 **지운다(삭제한다)**. 어떤 할 일인지 match 로 가리킨다. 목록만 보고 싶으면 get_my_todos 를 쓴다. 확인 버튼을 누른 뒤에 지워진다.',
+    { match: MATCH },
+    ['match'],
+  ),
+
+  // ── 일정 (3) ──
+  writeTool(
+    'create_event',
+    '일정을 새로 만든다(등록한다). 확인 버튼을 누른 뒤에 저장된다.',
+    {
+      title: S('일정 제목'),
+      date: S('YYYY-MM-DD 날짜'),
+      endDate: S('YYYY-MM-DD 종료일(여러 날 걸칠 때만)'),
+      time: S('HH:mm 시각'),
+      location: S('장소'),
+    },
+    ['title', 'date'],
+  ),
+  writeTool(
+    'update_event',
+    '이미 있는 일정의 제목·날짜·시각·장소를 고친다(변경한다). 확인 버튼을 누른 뒤에 바뀐다.',
+    {
+      match: MATCH,
+      title: S('바꿀 제목'),
+      date: S('YYYY-MM-DD 날짜'),
+      time: S('HH:mm 시각'),
+      location: S('장소'),
+    },
+    ['match'],
+  ),
+  writeTool(
+    'delete_event',
+    '일정을 **지운다(삭제한다·취소한다)**. 목록만 보고 싶으면 get_events 를 쓴다. 확인 버튼을 누른 뒤에 지워진다.',
+    { match: MATCH },
+    ['match'],
+  ),
+
+  // ── 메모 (3) ──
+  writeTool(
+    'create_memo',
+    '메모지를 새로 붙인다(적는다·남긴다). 확인 버튼을 누른 뒤에 저장된다.',
+    { content: S('메모 내용'), color: S('색: yellow | pink | green | blue') },
+    ['content'],
+  ),
+  writeTool(
+    'update_memo',
+    '이미 있는 메모의 내용을 바꾼다(고친다). 확인 버튼을 누른 뒤에 바뀐다.',
+    { match: MATCH, content: S('바꿀 내용') },
+    ['match', 'content'],
+  ),
+  writeTool(
+    'delete_memo',
+    '메모를 **지운다(삭제한다)**. 내용만 보고 싶으면 get_memos 를 쓴다. 확인 버튼을 누른 뒤에 지워진다.',
+    { match: MATCH },
+    ['match'],
+  ),
+
+  // ── 진도 (3) ──
+  writeTool(
+    'create_progress',
+    '수업 진도를 적는다(기록한다·넣는다). 같은 반·날짜·교시에 이미 있으면 만들지 않는다. 확인 버튼을 누른 뒤에 저장된다.',
+    {
+      className: S('수업반 이름'),
+      date: S('YYYY-MM-DD 날짜(생략 시 오늘)'),
+      period: N('교시(1~12)'),
+      unit: S('단원'),
+      lesson: S('차시'),
+      note: S('메모'),
+      status: S('상태: planned | completed | skipped (생략 시 completed)'),
+    },
+    ['className', 'period', 'unit'],
+  ),
+  writeTool(
+    'update_progress',
+    '이미 적어 둔 진도를 고친다(수정한다). 반·날짜·교시로 대상을 가리킨다. 확인 버튼을 누른 뒤에 바뀐다.',
+    {
+      className: S('수업반 이름'),
+      date: S('YYYY-MM-DD 날짜'),
+      period: N('교시(1~12)'),
+      unit: S('바꿀 단원'),
+      lesson: S('바꿀 차시'),
+      note: S('바꿀 메모'),
+      status: S('상태: planned | completed | skipped'),
+    },
+    ['className', 'date', 'period'],
+  ),
+  writeTool(
+    'delete_progress',
+    '적어 둔 진도를 **지운다(삭제한다)**. 반·날짜·교시로 대상을 가리킨다. 확인 버튼을 누른 뒤에 지워진다.',
+    { className: S('수업반 이름'), date: S('YYYY-MM-DD 날짜'), period: N('교시(1~12)') },
+    ['className', 'date', 'period'],
+  ),
+
+  // ── 즐겨찾기 (4) ──
+  writeTool(
+    'create_bookmark',
+    '즐겨찾기를 추가한다(등록한다·저장한다). 확인 버튼을 누른 뒤에 저장된다.',
+    { name: S('이름'), url: S('주소'), group: S('묶음 이름(생략 시 첫 묶음)') },
+    ['name', 'url'],
+  ),
+  writeTool(
+    'update_bookmark',
+    '즐겨찾기의 이름이나 주소를 고친다(바꾼다). 확인 버튼을 누른 뒤에 바뀐다.',
+    { match: MATCH, name: S('바꿀 이름'), url: S('바꿀 주소') },
+    ['match'],
+  ),
+  writeTool(
+    'delete_bookmark',
+    '즐겨찾기를 **지운다(삭제한다)**. 목록만 보고 싶으면 get_bookmarks 를 쓴다. 확인 버튼을 누른 뒤에 지워진다.',
+    { match: MATCH },
+    ['match'],
+  ),
+  writeTool(
+    'create_bookmark_group',
+    '즐겨찾기 묶음(폴더)을 만든다. 확인 버튼을 누른 뒤에 저장된다.',
+    { name: S('묶음 이름'), emoji: S('아이콘 이모지') },
+    ['name'],
+  ),
+
+  // ── 노트 (5) ──
+  writeTool(
+    'create_notebook',
+    '노트책을 만든다(새로 판다). 확인 버튼을 누른 뒤에 저장된다.',
+    { title: S('노트책 이름') },
+    ['title'],
+  ),
+  writeTool(
+    'create_note_section',
+    '노트책 안에 구역(섹션)을 만든다. 확인 버튼을 누른 뒤에 저장된다.',
+    { notebook: S('노트책 이름'), title: S('구역 이름') },
+    ['notebook', 'title'],
+  ),
+  writeTool(
+    'create_note_page',
+    '노트 구역 안에 페이지를 만든다. 본문은 만들지 않고 제목만 정한다. 확인 버튼을 누른 뒤에 저장된다.',
+    {
+      section: S('구역 이름'),
+      title: S('페이지 제목'),
+      notebook: S('노트책 이름(구역 이름이 여러 노트책에 겹칠 때)'),
+    },
+    ['section', 'title'],
+  ),
+  writeTool(
+    'rename_note_page',
+    '노트 페이지의 제목을 바꾼다(이름을 고친다). 확인 버튼을 누른 뒤에 바뀐다.',
+    { match: MATCH, title: S('바꿀 제목') },
+    ['match', 'title'],
+  ),
+  writeTool(
+    'delete_note_page',
+    '노트 페이지를 **지운다(삭제한다)**. 페이지 안의 글도 함께 사라진다. 목록만 보고 싶으면 get_note_list 를 쓴다. 확인 버튼을 누른 뒤에 지워진다.',
+    { match: MATCH },
+    ['match'],
+  ),
+];
+
+/** 읽기 19종 + 쓰기 22종. 여기 있는 것만 모델에게 보인다. */
+export const ASSIST_TOOLS: readonly AssistToolDef[] = [...READ_TOOLS, ...WRITE_TOOLS];
+
+/** 결과를 돌려주는(읽기) 도구만. 재구성·관문 계약 테스트가 도는 대상이다 */
+export const ASSIST_READ_TOOLS: readonly AssistToolDef[] = READ_TOOLS;
+
+/** 모델이 실행할 수 없는(쓰기) 도구만 */
+export const ASSIST_WRITE_TOOLS: readonly AssistToolDef[] = WRITE_TOOLS;
 
 const TOOL_BY_ID: ReadonlyMap<AssistToolId, AssistToolDef> = new Map(
   ASSIST_TOOLS.map((tool) => [tool.id, tool]),

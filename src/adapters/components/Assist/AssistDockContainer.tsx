@@ -17,6 +17,7 @@ import { findAssistTool } from '@domain/services/assistToolRegistry';
 import { rosterFrom } from '@domain/rules/redactOutbound';
 import { sanitizeToolResult } from '@domain/services/sanitizeToolResult';
 import type { ModelSafe } from '@domain/entities/AssistTool';
+import type { AssistWriteProposal } from '@domain/entities/AssistWrite';
 import type { TeacherPeriod } from '@domain/entities/Timetable';
 import type { ToolResultShape } from '@domain/services/sanitizeToolResult';
 import { useAssistStore } from '@adapters/stores/useAssistStore';
@@ -70,6 +71,10 @@ import { useBookmarkStore } from '@adapters/stores/useBookmarkStore';
 import { useGradeAnalysisStore } from '@adapters/stores/useGradeAnalysisStore';
 import { useRubricStore } from '@adapters/stores/useRubricStore';
 import { useSeatingStore } from '@adapters/stores/useSeatingStore';
+import { buildWriteProposal } from '@usecases/assist/writes/buildWriteProposal';
+import type { WriteSources } from '@usecases/assist/writes/writeSources';
+import { executeAssistWrite } from './executeAssistWrite';
+import type { WriteDeps } from './executeAssistWrite';
 import { assistPort } from '@adapters/di/container';
 
 /**
@@ -538,9 +543,68 @@ export function buildCards(question: string, src: IntentSources): Card[] {
   return cards;
 }
 
+/**
+ * 쓰기 제안을 실행할 때 부를 스토어 함수들을 모은다.
+ *
+ * ★훅 밖에서 `getState()` 로 집는다. [실행] 버튼은 제안을 만든 지 한참 뒤에 눌릴 수
+ * 있어서, 그때의 **최신 스토어**를 봐야 한다. 렌더 시점 값을 붙들고 있으면 그 사이에
+ * 다른 화면에서 바뀐 내용을 덮어쓴다.
+ */
+function writeDeps(): WriteDeps {
+  const todo = useTodoStore.getState();
+  const events = useEventsStore.getState();
+  const memos = useMemoStore.getState();
+  const teaching = useTeachingClassStore.getState();
+  const bookmarks = useBookmarkStore.getState();
+  const notes = useNoteStore.getState();
+
+  return {
+    addTodo: todo.addTodo,
+    updateTodo: todo.updateTodo,
+    toggleTodo: todo.toggleTodo,
+    deleteTodo: todo.deleteTodo,
+
+    addEvent: events.addEvent,
+    getEvent: (id) => useEventsStore.getState().events.find((e) => e.id === id),
+    updateEvent: events.updateEvent,
+    deleteEvent: events.deleteEvent,
+
+    addMemo: memos.addMemo,
+    updateMemo: memos.updateMemo,
+    deleteMemo: memos.deleteMemo,
+
+    addProgressEntry: teaching.addProgressEntry,
+    getProgress: (id) => useTeachingClassStore.getState().progressEntries.find((p) => p.id === id),
+    updateProgressEntry: teaching.updateProgressEntry,
+    deleteProgressEntry: teaching.deleteProgressEntry,
+
+    addBookmark: bookmarks.addBookmark,
+    updateBookmark: bookmarks.updateBookmark,
+    deleteBookmark: bookmarks.deleteBookmark,
+    addBookmarkGroup: bookmarks.addGroup,
+
+    createNotebook: notes.createNotebook,
+    renameNotebook: notes.renameNotebook,
+    createSection: notes.createSection,
+    renameSection: notes.renameSection,
+    createPage: notes.createPage,
+    renamePage: notes.renamePage,
+    deletePage: notes.deletePage,
+    noteSelection: () => {
+      const state = useNoteStore.getState();
+      return {
+        notebookId: state.activeNotebookId,
+        sectionId: state.activeSectionId,
+        pageId: state.activePageId,
+      };
+    },
+  };
+}
+
 export function AssistDockContainer() {
   const enabled = useAssistStore((s) => s.enabled);
   const ask = useAssistStore((s) => s.ask);
+  const settleProposal = useAssistStore((s) => s.settleProposal);
 
   const students = useStudentStore((s) => s.students);
   const classes = useTeachingClassStore((s) => s.classes);
@@ -565,6 +629,8 @@ export function AssistDockContainer() {
   const rubrics = useRubricStore((s) => s.rubrics);
   const rubricGradings = useRubricStore((s) => s.gradings);
   const weekendDays = useSettingsStore((s) => s.settings.enableWeekendDays);
+  // 교시 이름을 미리보기에 그대로 쓰기 위해 필요하다 — 선생님이 붙인 이름이 있으면 그것.
+  const periodTimes = useSettingsStore((s) => s.settings.periodTimes);
 
   /**
    * ★쌤핀 AI 가 읽는 자료를 **켜져 있을 때 한 번 불러온다.**
@@ -648,6 +714,86 @@ export function AssistDockContainer() {
     [weekendDays],
   );
 
+  /**
+   * 제안을 만들 때 보는 자료. **읽기 쪽과 달리 식별자를 담는다** — 어떤 항목을 고칠지
+   * 정해야 하기 때문이다. 이 식별자는 모델에게 한 번도 나가지 않는다.
+   */
+  const writeSources: WriteSources = useMemo(
+    () => ({
+      today: todayKey(),
+      periodTimes,
+      todos: todos.map((t) => ({
+        id: t.id,
+        text: t.text,
+        completed: t.completed,
+        ...(t.dueDate === undefined ? {} : { dueDate: t.dueDate }),
+      })),
+      events: events.map((e) => ({
+        id: e.id,
+        title: e.title,
+        date: e.date,
+        ...(e.time === undefined ? {} : { time: e.time }),
+        ...(e.location === undefined ? {} : { location: e.location }),
+      })),
+      memos: memos.map((m) => ({ id: m.id, content: m.content })),
+      progress: progress.map((p) => ({
+        id: p.id,
+        classId: p.classId,
+        date: p.date,
+        period: p.period,
+        unit: p.unit,
+        lesson: p.lesson,
+        status: p.status,
+        note: p.note,
+      })),
+      classes: classes.map((c) => ({ id: c.id, name: c.name })),
+      bookmarks: bookmarks.map((b) => ({
+        id: b.id,
+        name: b.name,
+        url: b.url,
+        groupId: b.groupId,
+      })),
+      bookmarkGroups: bookmarkGroups.map((g) => ({ id: g.id, name: g.name })),
+      notebooks: notebooks.map((n) => ({ id: n.id, title: n.title })),
+      noteSections: noteSections.map((s) => ({
+        id: s.id,
+        notebookId: s.notebookId,
+        title: s.title,
+      })),
+      notePages: notePages.map((p) => ({ id: p.id, sectionId: p.sectionId, title: p.title })),
+    }),
+    [
+      bookmarkGroups,
+      bookmarks,
+      classes,
+      events,
+      memos,
+      noteSections,
+      periodTimes,
+      notePages,
+      notebooks,
+      progress,
+      todos,
+    ],
+  );
+
+  /** [실행] — **여기서만** 저장이 일어난다. 모델은 이 함수를 부를 방법이 없다. */
+  const handleRunProposal = useMemo(
+    () =>
+      (turnId: string, proposal: AssistWriteProposal): void => {
+        void (async () => {
+          try {
+            const result = await executeAssistWrite(proposal, writeDeps());
+            settleProposal(turnId, result.ok ? 'done' : 'failed', result.message);
+          } catch (err) {
+            console.error('[assist] 쓰기 실행 실패', err);
+            settleProposal(turnId, 'failed', '저장하다가 문제가 생겼어요. 화면에서 직접 해주세요.');
+          }
+        })();
+      },
+    [settleProposal],
+  );
+
   const handleAsk = useMemo(
     () =>
       (question: string): void => {
@@ -673,8 +819,14 @@ export function AssistDockContainer() {
           rubricGradings,
         };
         const cards = buildCards(question, src);
-        void ask(assistPort, question, cards, roster, (name, rawArguments) =>
-          executeAssistTool(name, rawArguments, src),
+        void ask(
+          assistPort,
+          question,
+          cards,
+          roster,
+          (name, rawArguments) => executeAssistTool(name, rawArguments, src),
+          // ★제안만 만든다. 이 자리에 실행 함수를 넘기지 않는 것이 안전 구조의 전부다.
+          (name, rawArguments) => buildWriteProposal(name, rawArguments, writeSources),
         );
       },
     [
@@ -699,9 +851,10 @@ export function AssistDockContainer() {
       seating,
       students,
       todos,
+      writeSources,
     ],
   );
 
   if (!enabled) return null;
-  return <AssistDock onAsk={handleAsk} />;
+  return <AssistDock onAsk={handleAsk} onRunProposal={handleRunProposal} />;
 }

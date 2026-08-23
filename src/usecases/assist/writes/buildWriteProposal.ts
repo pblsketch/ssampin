@@ -1,0 +1,113 @@
+/**
+ * 쌤핀 AI 쓰기 — 도구 이름 → 제안 (순수 함수, 단일 진입점)
+ *
+ * ★쓰기 경로는 **반드시 여기를 지난다.** 도구를 더할 때 표에 한 줄만 넣으면 되고,
+ * 표에 없는 이름은 제안이 만들어지지 않는다(= 실행할 것이 없다). 모델이 지어낸 도구
+ * 이름을 거르는 관문이 읽기 쪽 `findAssistTool` 이라면, 쓰기 쪽은 이 표다.
+ *
+ * ★모델 인자는 JSON 조차 깨져 올 수 있다. 여기서 통째로 방어한다 — 깨진 인자로 저장이
+ * 일어나는 것보다 "무엇을 하려는지 못 알아들었다"고 말하는 편이 낫다.
+ */
+import type { AssistWriteOutcome } from '@domain/entities/AssistWrite';
+
+import type { WriteSources } from './writeSources';
+import type { RawArgs } from './writeArgs';
+import {
+  proposeCompleteTodo,
+  proposeCreateEvent,
+  proposeCreateTodo,
+  proposeDeleteEvent,
+  proposeDeleteTodo,
+  proposeUpdateEvent,
+  proposeUpdateTodo,
+} from './writeTodoEvent';
+import {
+  proposeCreateMemo,
+  proposeCreateProgress,
+  proposeDeleteMemo,
+  proposeDeleteProgress,
+  proposeUpdateMemo,
+  proposeUpdateProgress,
+} from './writeMemoProgress';
+import {
+  proposeCreateBookmark,
+  proposeCreateBookmarkGroup,
+  proposeCreateNoteSection,
+  proposeCreateNotePage,
+  proposeCreateNotebook,
+  proposeDeleteBookmark,
+  proposeDeleteNotePage,
+  proposeRenameNotePage,
+  proposeUpdateBookmark,
+} from './writeBookmarkNote';
+
+type Builder = (args: RawArgs, src: WriteSources) => AssistWriteOutcome;
+
+/** 계획서 §2 C그룹의 22종. 할일4 · 일정3 · 메모3 · 진도3 · 즐겨찾기4 · 노트5 */
+export const WRITE_BUILDERS: Readonly<Record<string, Builder>> = {
+  create_todo: proposeCreateTodo,
+  update_todo: proposeUpdateTodo,
+  complete_todo: proposeCompleteTodo,
+  delete_todo: proposeDeleteTodo,
+
+  create_event: proposeCreateEvent,
+  update_event: proposeUpdateEvent,
+  delete_event: proposeDeleteEvent,
+
+  create_memo: proposeCreateMemo,
+  update_memo: proposeUpdateMemo,
+  delete_memo: proposeDeleteMemo,
+
+  create_progress: proposeCreateProgress,
+  update_progress: proposeUpdateProgress,
+  delete_progress: proposeDeleteProgress,
+
+  create_bookmark: proposeCreateBookmark,
+  update_bookmark: proposeUpdateBookmark,
+  delete_bookmark: proposeDeleteBookmark,
+  create_bookmark_group: proposeCreateBookmarkGroup,
+
+  create_notebook: proposeCreateNotebook,
+  create_note_section: proposeCreateNoteSection,
+  create_note_page: proposeCreateNotePage,
+  rename_note_page: proposeRenameNotePage,
+  delete_note_page: proposeDeleteNotePage,
+};
+
+/** 이 이름이 쓰기 도구인가. 스토어가 "실행할까 제안할까"를 가르는 데 쓴다. */
+export function isWriteTool(name: string): boolean {
+  return Object.prototype.hasOwnProperty.call(WRITE_BUILDERS, name);
+}
+
+/** 등록된 쓰기 도구 이름 전부. 레지스트리 계약 테스트가 대조한다 */
+export function writeToolNames(): readonly string[] {
+  return Object.keys(WRITE_BUILDERS);
+}
+
+/**
+ * 모델이 고른 쓰기 도구를 **제안으로** 바꾼다. 저장은 하지 않는다.
+ *
+ * @returns 제안, 또는 왜 못 만들었는지(한국어). 둘 중 하나는 반드시 나온다 —
+ *   조용히 아무 일도 없는 것이 선생님에게는 가장 나쁘다.
+ */
+export function buildWriteProposal(
+  name: string,
+  rawArguments: string,
+  src: WriteSources,
+): AssistWriteOutcome {
+  const build = WRITE_BUILDERS[name];
+  if (!build) return { reason: '무엇을 하려는지 알아듣지 못했어요.' };
+
+  let args: RawArgs = {};
+  try {
+    const parsed: unknown = JSON.parse(rawArguments.length > 0 ? rawArguments : '{}');
+    if (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      args = parsed as RawArgs;
+    }
+  } catch {
+    // 인자가 깨졌다. 읽기와 달리 기본값으로 밀어붙이지 않는다 — 저장이 걸린 일이다.
+    return { reason: '무엇을 저장할지 정확히 알아듣지 못해서 아무것도 하지 않았어요.' };
+  }
+
+  return build(args, src);
+}

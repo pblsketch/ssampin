@@ -10,6 +10,7 @@
 import { useEffect, useRef } from 'react';
 
 import type { AssistTurn } from '@adapters/stores/useAssistStore';
+import type { AssistWriteProposal } from '@domain/entities/AssistWrite';
 import type { ToolResultShape } from '@domain/services/sanitizeToolResult';
 
 /** 도구 id → 화면에 쓰는 한국어 이름 */
@@ -232,6 +233,87 @@ function DataCard({ tool, data }: { readonly tool: string; readonly data: ToolRe
   );
 }
 
+/**
+ * 쓰기 **미리보기** 카드 (Phase 3).
+ *
+ * ★[실행]을 누르기 전에는 아무것도 바뀌지 않는다. 그래서 이 카드는 "무엇이 저장될지"를
+ * 하나도 빠뜨리지 않고 보여줘야 한다 — 감추면 버튼은 확인이 아니라 요식이 된다.
+ *
+ * ★지우기·고치기에는 **대상의 원문**을 함께 띄운다(계획서 요구사항). 무엇을 잃는지
+ * 모른 채 누르는 일이 없어야 한다. 그래서 삭제는 색이 아니라 **글자로** 경고한다.
+ */
+function ProposalCard({
+  turnId,
+  proposal,
+  state,
+  message,
+  onRun,
+}: {
+  readonly turnId: string;
+  readonly proposal: AssistWriteProposal;
+  readonly state: string | undefined;
+  readonly message: string | undefined;
+  readonly onRun?: (turnId: string, proposal: AssistWriteProposal) => void;
+}) {
+  const isDelete = proposal.action === 'delete';
+  const pending = state === 'pending';
+
+  return (
+    <div
+      className={`rounded-xl border p-3 ${
+        isDelete ? 'border-sp-warning bg-sp-card' : 'border-sp-border bg-sp-card'
+      }`}
+    >
+      <div className="mb-2 flex items-center gap-1.5">
+        <span className="rounded-full bg-sp-bg px-2 py-0.5 text-xs font-sp-medium text-sp-muted">
+          {pending ? '아직 저장 안 함' : '제안'}
+        </span>
+        <span className="text-xs font-sp-semibold text-sp-text">{proposal.title}</span>
+      </div>
+
+      {proposal.target && (
+        <div className="mb-2 rounded-lg bg-sp-bg px-2 py-1.5">
+          <p className="text-xs text-sp-muted">{proposal.target.label}</p>
+          <p className="break-words text-sm text-sp-text">{proposal.target.original}</p>
+        </div>
+      )}
+
+      <dl className="flex flex-col gap-1">
+        {proposal.fields.map((field) => (
+          <div key={field.label} className="flex items-baseline gap-2">
+            <dt className="shrink-0 text-xs text-sp-muted">{field.label}</dt>
+            <dd className="min-w-0 flex-1 break-words text-sm text-sp-text">{field.value}</dd>
+          </div>
+        ))}
+      </dl>
+
+      {pending && (
+        <div className="mt-3 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => onRun?.(turnId, proposal)}
+            className="rounded-lg bg-sp-accent px-3 py-1.5 text-sm font-sp-semibold text-sp-accent-fg"
+          >
+            {isDelete ? '지우기' : '실행'}
+          </button>
+          <span className="text-xs text-sp-muted">
+            {isDelete ? '누르면 위 내용이 사라져요' : '누르면 저장돼요'}
+          </span>
+        </div>
+      )}
+
+      {state === 'done' && <p className="mt-2 text-sm text-sp-success">✓ {message}</p>}
+      {state === 'failed' && <p className="mt-2 text-sm text-sp-text">⚠ {message}</p>}
+      {/* 실행 없이 대화가 이어지면 제안은 소멸한다(계획서). 왜 버튼이 없는지 말해 준다. */}
+      {state === 'expired' && (
+        <p className="mt-2 text-xs text-sp-muted">
+          다음 질문을 하셔서 이 제안은 취소됐어요. 필요하면 다시 말씀해 주세요.
+        </p>
+      )}
+    </div>
+  );
+}
+
 /** 축소 사유별 한국어 한 줄. **오류처럼 보이지 않게** 담담하게 쓴다. */
 const DEGRADED_MESSAGE: Readonly<Record<string, string>> = {
   budget: '이번 달 AI 사용량을 다 썼어요. 숫자는 그대로 보실 수 있어요.',
@@ -242,7 +324,13 @@ const DEGRADED_MESSAGE: Readonly<Record<string, string>> = {
   unreachable: 'AI 서버에 연결하지 못했어요. 숫자는 그대로 보실 수 있어요.',
 };
 
-export function AssistThread({ turns }: { readonly turns: readonly AssistTurn[] }) {
+export function AssistThread({
+  turns,
+  onRunProposal,
+}: {
+  readonly turns: readonly AssistTurn[];
+  readonly onRunProposal?: (turnId: string, proposal: AssistWriteProposal) => void;
+}) {
   // 새 답은 항상 맨 아래에 붙는다. 스크롤이 안 따라가면 답이 화면 밖에서 조용히 생긴다.
   const scrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -292,6 +380,16 @@ export function AssistThread({ turns }: { readonly turns: readonly AssistTurn[] 
 
           {turn.answer.length > 0 && (
             <p className="text-sm leading-relaxed text-sp-text">{turn.answer}</p>
+          )}
+
+          {turn.proposal && (
+            <ProposalCard
+              turnId={turn.id}
+              proposal={turn.proposal}
+              state={turn.proposalState}
+              message={turn.proposalMessage}
+              onRun={onRunProposal}
+            />
           )}
 
           {turn.degraded && (
