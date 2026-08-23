@@ -19,6 +19,7 @@ import { render, screen, waitFor, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { CoolImportModal } from './CoolImportModal';
 import type { CoolImportItem, CoolMessage } from '@domain/entities/CoolMessage';
+import { importKey } from '@domain/rules/coolImportHistory';
 
 afterEach(cleanup);
 
@@ -235,6 +236,47 @@ describe('등록 — 선생님이 고른 대로만 나간다', () => {
     const items = onSubmit.mock.calls[0]![0] as readonly CoolImportItem[];
     expect(items).toHaveLength(1);
     expect(items[0]!.start.getDate()).toBe(26);
+  });
+});
+
+describe('★ 이미 가져온 것을 알려 준다 (중복 등록 방지)', () => {
+  /** 학폭위 쪽지(1번)의 8/27 14:00 을 전에 '일정'으로 가져간 상태 */
+  const IMPORTED = importKey(1, new Date(2026, 7, 27, 14, 0).toISOString(), 'event');
+
+  it('목록에서 가져간 적 있는 쪽지에 표시가 붙는다', async () => {
+    setup({ hasImportedFrom: (k) => k === 1 });
+    await screen.findByText('학폭위 심의 안내');
+    expect(screen.getAllByText('가져옴')).toHaveLength(1);
+  });
+
+  it('후보 카드에 전에 어디로 가져갔는지 알려 준다', async () => {
+    const { user } = setup({ isImported: (k) => k === IMPORTED });
+    await user.click(await screen.findByText('학폭위 심의 안내'));
+    expect(await screen.findByText(/전에 일정\(으\)로 가져간 적이 있습니다/)).toBeTruthy();
+  });
+
+  it('일정·할일 둘 다 가져갔으면 둘 다 알려 준다', async () => {
+    const todoKey = importKey(1, new Date(2026, 7, 27, 14, 0).toISOString(), 'todo');
+    const { user } = setup({ isImported: (k) => k === IMPORTED || k === todoKey });
+    await user.click(await screen.findByText('학폭위 심의 안내'));
+    expect(await screen.findByText(/전에 일정·할일\(으\)로 가져간 적이 있습니다/)).toBeTruthy();
+  });
+
+  it('★ 알려만 주고 막지는 않는다 (일부러 또 넣을 수 있다)', async () => {
+    const { onSubmit, user } = setup({ isImported: (k) => k === IMPORTED });
+    await user.click(await screen.findByText('학폭위 심의 안내'));
+    await screen.findByText(/전에 일정/);
+    await user.click(screen.getByRole('button', { name: '일정' }));
+    await user.click(screen.getByRole('button', { name: '1건 등록' }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+  });
+
+  it('가져간 적 없으면 아무 표시도 없다', async () => {
+    const { user } = setup();
+    await user.click(await screen.findByText('학폭위 심의 안내'));
+    await screen.findByRole('button', { name: '안 함' });
+    expect(screen.queryByText('가져옴')).toBeNull();
+    expect(screen.queryByText(/전에 .*가져간 적이 있습니다/)).toBeNull();
   });
 });
 

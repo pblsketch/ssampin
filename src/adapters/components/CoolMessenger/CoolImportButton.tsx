@@ -3,6 +3,7 @@ import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useEventsStore } from '@adapters/stores/useEventsStore';
 import { useTodoStore } from '@adapters/stores/useTodoStore';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
+import { useCoolImportHistoryStore } from '@adapters/stores/useCoolImportHistoryStore';
 import { CoolImportModal } from './CoolImportModal';
 import type { CoolImportItem, CoolMessage } from '@domain/entities/CoolMessage';
 
@@ -78,6 +79,11 @@ export function CoolImportButton({
   const addEvent = useEventsStore((s) => s.addEvent);
   const addTodo = useTodoStore((s) => s.addTodo);
   const students = useStudentStore((s) => s.students);
+  const remember = useCoolImportHistoryStore((s) => s.remember);
+  const loadHistory = useCoolImportHistoryStore((s) => s.load);
+  const historyLoaded = useCoolImportHistoryStore((s) => s.loaded);
+  const isImported = useCoolImportHistoryStore((s) => s.isImported);
+  const hasImportedFrom = useCoolImportHistoryStore((s) => s.hasImportedFrom);
   const [open, setOpen] = useState(false);
 
   /** 이름 대조 사전 — 우리 반 학생 + 쿨메신저 교직원 명단을 합친다 */
@@ -116,6 +122,8 @@ export function CoolImportButton({
 
   const handleSubmit = useCallback(
     async (items: readonly CoolImportItem[]) => {
+      // 등록이 다 끝난 뒤에 기록한다 — 중간에 실패하면 기록도 남기지 않는다
+      const done: CoolImportItem[] = [];
       for (const item of items) {
         if (item.target === 'todo') {
           await addTodo(
@@ -136,9 +144,12 @@ export function CoolImportButton({
             ...(item.allDay ? {} : { time: toTimeKey(item.start) }),
           });
         }
+        done.push(item);
       }
+      // 실제로 등록된 것만 기록한다. 이게 있어야 다음에 열었을 때 '가져옴'으로 보인다.
+      await remember(done);
     },
-    [addEvent, addTodo],
+    [addEvent, addTodo, remember],
   );
 
   if (!enabled) return null;
@@ -147,7 +158,10 @@ export function CoolImportButton({
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          if (!historyLoaded) void loadHistory();
+          setOpen(true);
+        }}
         title="쿨메신저에서 가져오기"
         className={`${VARIANT_CLASS[variant]} ${className}`}
       >
@@ -163,6 +177,8 @@ export function CoolImportButton({
           loadMessage={loadMessage}
           roster={roster}
           onSubmit={handleSubmit}
+          isImported={isImported}
+          hasImportedFrom={hasImportedFrom}
         />
       )}
     </>

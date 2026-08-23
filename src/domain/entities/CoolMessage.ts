@@ -31,3 +31,29 @@ export interface CoolImportItem {
   readonly allDay: boolean;
   readonly target: CoolImportTarget;
 }
+
+/**
+ * 이미 가져온 항목 하나의 기록.
+ *
+ * ## 왜 남기나
+ * 이게 없으면 **같은 쪽지를 두 번 가져와도 아무도 모른다.** 목록을 다시 열면 이미
+ * 등록한 쪽지가 똑같이 보이고, 무심코 또 누르면 일정이 두 개가 된다.
+ *
+ * ## 왜 쪽지 번호만으로는 부족한가
+ * 한 쪽지에 날짜가 여럿일 수 있다("사전교육 / 체험 당일 / 보고서 제출").
+ * 오늘 첫 번째만 가져가고 내일 두 번째를 가져갈 수 있으므로,
+ * **쪽지 + 시각 + 어디에 넣었는지**까지 묶어야 정확하다.
+ */
+export interface CoolImportRecord {
+  readonly messageKey: number;
+  /** 등록한 항목의 시작 시각 (ISO 8601) */
+  readonly startsAt: string;
+  readonly target: CoolImportTarget;
+  /** 가져온 시각 (ISO 8601) — 오래된 기록 정리에 쓴다 */
+  readonly importedAt: string;
+}
+
+/** 저장 파일의 모양 */
+export interface CoolImportHistory {
+  readonly records: readonly CoolImportRecord[];
+}

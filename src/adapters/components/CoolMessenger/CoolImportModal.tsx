@@ -5,6 +5,7 @@ import { PiiText } from './PiiText';
 import type { CoolImportItem, CoolImportTarget, CoolMessage } from '@domain/entities/CoolMessage';
 import { extractCoolEvents, stripCoolDateExpressions } from '@domain/rules/coolMessageDateParser';
 import { detectCoolPii, maskCoolPii } from '@domain/privacy/coolMessagePii';
+import { importKey } from '@domain/rules/coolImportHistory';
 
 /**
  * 쿨메신저 쪽지에서 일정·할일을 골라 등록하는 화면.
@@ -80,6 +81,10 @@ export interface CoolImportModalProps {
   /** 이름 대조용 명렬 — 학생 명렬 + 쿨메신저 교직원 명단 */
   readonly roster?: ReadonlySet<string>;
   readonly onSubmit: (items: readonly CoolImportItem[]) => void | Promise<void>;
+  /** 이미 가져온 항목인지 (`importKey` 로 만든 열쇠). 없으면 표시하지 않는다. */
+  readonly isImported?: (key: string) => boolean;
+  /** 이 쪽지에서 무언가 가져간 적이 있는지 — 목록 '가져옴' 배지 */
+  readonly hasImportedFrom?: (messageKey: number) => boolean;
 }
 
 export function CoolImportModal({
@@ -89,6 +94,8 @@ export function CoolImportModal({
   loadMessage,
   roster,
   onSubmit,
+  isImported,
+  hasImportedFrom,
 }: CoolImportModalProps) {
   const [messages, setMessages] = useState<readonly CoolMessage[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -255,6 +262,11 @@ export function CoolImportModal({
                           />
                         )}
                         <span className="text-xs text-sp-muted truncate">{m.sender}</span>
+                        {hasImportedFrom?.(m.key) && (
+                          <span className="px-1.5 py-0.5 rounded text-[0.65rem] bg-sp-surface text-sp-muted border border-sp-border shrink-0">
+                            가져옴
+                          </span>
+                        )}
                         <span className="text-xs text-sp-muted ml-auto shrink-0">
                           {formatReceived(m.receivedAt, now)}
                         </span>
@@ -296,6 +308,8 @@ export function CoolImportModal({
                       <CandidateCard
                         row={row}
                         roster={roster}
+                        messageKey={selectedKey}
+                        isImported={isImported}
                         onPatch={(patch) => patchRow(row.id, patch)}
                       />
                     </li>
@@ -421,14 +435,30 @@ function MessagePreview({
 function CandidateCard({
   row,
   roster,
+  messageKey,
+  isImported,
   onPatch,
 }: {
   readonly row: CandidateRow;
   readonly roster?: ReadonlySet<string>;
+  readonly messageKey: number | null;
+  readonly isImported?: (key: string) => boolean;
   readonly onPatch: (patch: Partial<CandidateRow>) => void;
 }) {
   const spans = useMemo(() => detectCoolPii(row.title, roster), [row.title, roster]);
   const hasPii = spans.length > 0;
+
+  /** 이 후보를 전에 어디로 가져갔는지 — 중복 등록을 눈으로 막는다 */
+  const already = useMemo(() => {
+    if (!isImported || messageKey === null) return { event: false, todo: false };
+    const at = row.start.toISOString();
+    return {
+      event: isImported(importKey(messageKey, at, 'event')),
+      todo: isImported(importKey(messageKey, at, 'todo')),
+    };
+  }, [isImported, messageKey, row.start]);
+  const alreadyLabel =
+    already.event && already.todo ? '일정·할일' : already.event ? '일정' : '할일';
 
   return (
     <div
@@ -481,6 +511,16 @@ function CandidateCard({
               {row.allDay ? '종일' : formatClock(row.start)}
             </span>
           </div>
+
+          {/* 전에 가져간 적이 있으면 알려 준다 — 막지는 않는다(일부러 또 넣을 수도 있다) */}
+          {(already.event || already.todo) && (
+            <p className="flex items-center gap-1 mt-2 text-xs text-sp-muted">
+              <span className="material-symbols-outlined icon-xs" aria-hidden="true">
+                history
+              </span>
+              전에 {alreadyLabel}(으)로 가져간 적이 있습니다.
+            </p>
+          )}
 
           {/* 개인정보 안내 — 있을 때만 */}
           {hasPii && (
