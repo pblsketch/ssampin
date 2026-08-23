@@ -25,6 +25,7 @@ import type {
 } from '@domain/entities/StaffRoom';
 import type {
   StaffRoomBodyFormat,
+  StaffRoomCategory,
   StaffRoomComment,
   StaffRoomDraft,
   StaffRoomModule,
@@ -287,6 +288,8 @@ export class StaffRoomSupabaseClient implements IStaffRoomPort {
       bodyFormat: input.bodyFormat,
       isRequired: input.isRequired,
       mentionedEmails: input.mentionedEmails,
+      categoryId: input.categoryId,
+      tags: input.tags,
     });
     return res.post;
   }
@@ -300,6 +303,8 @@ export class StaffRoomSupabaseClient implements IStaffRoomPort {
       body: string;
       bodyFormat: StaffRoomBodyFormat;
       mentionedEmails: readonly string[];
+      categoryId: string | null;
+      tags: readonly string[];
     },
   ): Promise<StaffRoomPost> {
     const res = await this.invoke<{ post: StaffRoomPost }>('staffroom-posts', {
@@ -311,8 +316,67 @@ export class StaffRoomSupabaseClient implements IStaffRoomPort {
       body: input.body,
       bodyFormat: input.bodyFormat,
       mentionedEmails: input.mentionedEmails,
+      categoryId: input.categoryId,
+      tags: input.tags,
     });
     return res.post;
+  }
+
+  // ── 말머리 (054) ─────────────────────────────────────────────────
+
+  async listCategories(
+    googleAccessToken: string,
+    departmentId: string,
+  ): Promise<StaffRoomCategory[]> {
+    const res = await this.invoke<{ categories: StaffRoomCategory[] }>('staffroom-categories', {
+      action: 'list',
+      googleAccessToken,
+      departmentId,
+    });
+    return res.categories;
+  }
+
+  async createCategory(
+    googleAccessToken: string,
+    departmentId: string,
+    name: string,
+  ): Promise<StaffRoomCategory> {
+    const res = await this.invoke<{ category: StaffRoomCategory }>('staffroom-categories', {
+      action: 'create',
+      googleAccessToken,
+      departmentId,
+      name,
+    });
+    return res.category;
+  }
+
+  async renameCategory(
+    googleAccessToken: string,
+    departmentId: string,
+    categoryId: string,
+    name: string,
+  ): Promise<StaffRoomCategory> {
+    const res = await this.invoke<{ category: StaffRoomCategory }>('staffroom-categories', {
+      action: 'rename',
+      googleAccessToken,
+      departmentId,
+      categoryId,
+      name,
+    });
+    return res.category;
+  }
+
+  async removeCategory(
+    googleAccessToken: string,
+    departmentId: string,
+    categoryId: string,
+  ): Promise<void> {
+    await this.invoke<{ ok: true }>('staffroom-categories', {
+      action: 'remove',
+      googleAccessToken,
+      departmentId,
+      categoryId,
+    });
   }
 
   async setPostRequired(

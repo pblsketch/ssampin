@@ -39,6 +39,9 @@ interface BoardMockState {
   draftBody: string;
   draftMentions: string[];
   draftSavedAt: string | null;
+  categories: { id: string; departmentId: string; name: string; position: number }[];
+  filterCategoryId: string | null;
+  filterTag: string | null;
 }
 
 const noop = () => {};
@@ -56,6 +59,9 @@ const boardState: BoardMockState = {
   draftBody: '',
   draftMentions: [],
   draftSavedAt: null,
+  categories: [],
+  filterCategoryId: null,
+  filterTag: null,
 };
 
 let myRole: StaffRoomRole | null = 'member';
@@ -77,6 +83,10 @@ vi.mock('@adapters/stores/useStaffRoomBoardStore', () => ({
       loadDraft: asyncNoop,
       updateDraft: noop,
       discardDraft: asyncNoop,
+      loadCategories: asyncNoop,
+      addCategory: asyncNoop,
+      removeCategory: asyncNoop,
+      setFilter: noop,
       clearError: noop,
       reset: noop,
     }),
@@ -117,6 +127,8 @@ function summary(over: Partial<StaffRoomPostSummary> = {}): StaffRoomPostSummary
     commentCount: 0,
     isUnread: false,
     mentionsMe: false,
+    categoryId: null,
+    tags: [],
     ...over,
   };
 }
@@ -133,6 +145,9 @@ beforeEach(() => {
   boardState.isLoading = false;
   boardState.hasLoadedPosts = true;
   boardState.error = null;
+  boardState.categories = [];
+  boardState.filterCategoryId = null;
+  boardState.filterTag = null;
   myRole = 'member';
   myEmail = 'lee@school.kr';
 });
@@ -311,5 +326,82 @@ describe('글 상세 — 댓글', () => {
     boardState.currentPost = fullPost();
     boardState.comments = [];
     expect(detail()).toContain('댓글');
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════
+describe('말머리·해시태그 (054)', () => {
+  const 공지 = { id: 'c1', departmentId: 'dept-1', name: '공지', position: 0 };
+  const 회의록 = { id: 'c2', departmentId: 'dept-1', name: '회의록', position: 1 };
+
+  it('말머리가 없으면 걸러보기 줄을 그리지 않는다 — 빈 줄이 자리만 차지하지 않게', () => {
+    boardState.posts = [summary()];
+    boardState.categories = [];
+    expect(board()).not.toContain('전체');
+  });
+
+  it('말머리가 있으면 걸러보기 단추가 보인다', () => {
+    boardState.posts = [summary()];
+    boardState.categories = [공지, 회의록];
+    const html = board();
+    expect(html).toContain('전체');
+    expect(html).toContain('공지');
+    expect(html).toContain('회의록');
+  });
+
+  it('글에 붙은 말머리 이름이 목록에 보인다', () => {
+    boardState.categories = [공지];
+    boardState.posts = [summary({ title: '9월 업무 분장', categoryId: 'c1' })];
+    expect(board()).toContain('공지');
+  });
+
+  it('없어진 말머리를 가리키는 글이어도 목록이 깨지지 않는다', () => {
+    // 관리자가 말머리를 지우면 글의 말머리는 NULL 이 되지만(054 SET NULL),
+    // 목록을 다시 받기 전까지는 사라진 id 를 들고 있을 수 있다.
+    boardState.categories = [];
+    boardState.posts = [summary({ title: '살아있는 글', categoryId: '사라진-말머리' })];
+    expect(board()).toContain('살아있는 글');
+  });
+
+  it('말머리로 거르면 그 말머리 글만 남는다', () => {
+    boardState.categories = [공지, 회의록];
+    boardState.posts = [
+      summary({ id: 'p1', title: '공지글제목', categoryId: 'c1' }),
+      summary({ id: 'p2', title: '회의록글제목', categoryId: 'c2' }),
+    ];
+    boardState.filterCategoryId = 'c1';
+    const html = board();
+    expect(html).toContain('공지글제목');
+    expect(html).not.toContain('회의록글제목');
+  });
+
+  it('해시태그로 거르면 그 태그 글만 남는다', () => {
+    boardState.posts = [
+      summary({ id: 'p1', title: '체육대회글', tags: ['체육대회'] }),
+      summary({ id: 'p2', title: '상관없는글', tags: ['급식'] }),
+    ];
+    boardState.filterTag = '체육대회';
+    const html = board();
+    expect(html).toContain('체육대회글');
+    expect(html).not.toContain('상관없는글');
+  });
+
+  it('걸러서 아무것도 안 남으면 조용히 비우지 않고 알려 준다', () => {
+    boardState.categories = [공지];
+    boardState.posts = [summary({ categoryId: null })];
+    boardState.filterCategoryId = 'c1';
+    expect(board()).toContain('고른 조건에 맞는 글이 없어요');
+  });
+
+  it('글 상세에서 태그가 # 를 붙여 보인다', () => {
+    boardState.currentPost = fullPost({ tags: ['체육대회', '준비물'] });
+    const html = detail();
+    expect(html).toContain('#체육대회');
+    expect(html).toContain('#준비물');
+  });
+
+  it('태그가 없는 글에는 태그 영역이 없다', () => {
+    boardState.currentPost = fullPost({ tags: [] });
+    expect(detail()).not.toContain('#');
   });
 });

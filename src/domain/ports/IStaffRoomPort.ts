@@ -19,6 +19,7 @@ import type {
 } from '@domain/entities/StaffRoom';
 import type {
   StaffRoomBodyFormat,
+  StaffRoomCategory,
   StaffRoomComment,
   StaffRoomDraft,
   StaffRoomModule,
@@ -168,8 +169,38 @@ export interface IStaffRoomPort {
       body: string;
       bodyFormat: StaffRoomBodyFormat;
       mentionedEmails: readonly string[];
+      categoryId: string | null;
+      tags: readonly string[];
     },
   ): Promise<StaffRoomPost>;
+
+  // ── 말머리 (054) ─────────────────────────────────────────────────
+  //    목록은 멤버 누구나(글 쓸 때 골라야 한다), 나머지는 관리자만.
+
+  /** 부서의 말머리 목록 */
+  listCategories(googleAccessToken: string, departmentId: string): Promise<StaffRoomCategory[]>;
+
+  /** 말머리 만들기 (관리자) */
+  createCategory(
+    googleAccessToken: string,
+    departmentId: string,
+    name: string,
+  ): Promise<StaffRoomCategory>;
+
+  /** 말머리 이름 고치기 (관리자) */
+  renameCategory(
+    googleAccessToken: string,
+    departmentId: string,
+    categoryId: string,
+    name: string,
+  ): Promise<StaffRoomCategory>;
+
+  /** 말머리 지우기 (관리자). **글은 지워지지 않는다** — 말머리만 떨어진다 */
+  removeCategory(
+    googleAccessToken: string,
+    departmentId: string,
+    categoryId: string,
+  ): Promise<void>;
 
   /** 필독 지정·해제 (관리자만). 해제하면 사람별 읽음 기록도 지워진다 */
   setPostRequired(

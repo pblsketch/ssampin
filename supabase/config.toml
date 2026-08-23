@@ -146,3 +146,6 @@ verify_jwt = true
 
 [functions.staffroom-plan]
 verify_jwt = true
+
+[functions.staffroom-categories]
+verify_jwt = true

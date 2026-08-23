@@ -133,6 +133,8 @@ export interface PostSummaryRow {
   title: string;
   author_email: string;
   is_required: boolean;
+  /** 말머리. 안 붙였으면 null (054) */
+  category_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -156,11 +158,11 @@ export interface CommentRow {
 
 /** 목록 조회에서 가져오는 컬럼 — **body 를 넣지 말 것**(계획서 §3.5-다 전송량) */
 export const POST_SUMMARY_COLUMNS =
-  'id, module_id, title, author_email, is_required, created_at, updated_at';
+  'id, module_id, title, author_email, is_required, category_id, created_at, updated_at';
 
 /** 본문까지 가져오는 컬럼 */
 export const POST_FULL_COLUMNS =
-  'id, module_id, department_id, title, body, body_format, author_email, is_required, created_at, updated_at';
+  'id, module_id, department_id, title, body, body_format, author_email, is_required, category_id, created_at, updated_at';
 
 /**
  * 본문 형식으로 받아들일 값. (마이그레이션 053 · ADR-069)
@@ -175,6 +177,106 @@ export type StaffRoomBodyFormat = (typeof STAFFROOM_BODY_FORMATS)[number];
 
 export function normalizeBodyFormat(value: unknown): StaffRoomBodyFormat {
   return value === 'lexical' ? 'lexical' : 'plain';
+}
+
+// ══════════════════════════════════════════════════════════════════
+// 말머리·해시태그 (054)
+// ══════════════════════════════════════════════════════════════════
+
+/** 글 하나에 붙일 수 있는 해시태그 수 */
+export const POST_MAX_TAGS = 10;
+/** 해시태그 하나의 최대 길이 */
+export const TAG_MAX_LENGTH = 20;
+
+/**
+ * 해시태그 다듬기 — 앱의 `domain/rules/staffRoomTaxonomy.ts` 와 **같은 규칙**이다.
+ *
+ * 서버가 앱을 믿지 않기 때문에 여기서 다시 한다. 앱을 거치지 않고 부르는 경로가
+ * 있으면 `#체육대회` 와 `체육대회` 가 다른 태그로 갈려 저장된다.
+ *
+ * **규칙을 고칠 때는 두 곳을 함께 고쳐야 한다.**
+ */
+export function normalizeTags(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+
+  for (const item of raw) {
+    if (typeof item !== 'string') continue;
+    const tag = item.trim().replace(/^#+/, '').replace(/\s+/g, '').replace(/,/g, '');
+    if (tag === '' || tag.length > TAG_MAX_LENGTH) continue;
+    if (seen.has(tag)) continue;
+    seen.add(tag);
+    out.push(tag);
+    if (out.length >= POST_MAX_TAGS) break;
+  }
+  return out;
+}
+
+/**
+ * 이 말머리가 이 부서 것인지 확인한다.
+ *
+ * 남의 부서 말머리 id 를 보내도 통하지 않게 — 통하면 글 목록에서 남의 부서
+ * 말머리 이름이 비쳐 보인다.
+ */
+export async function categoryBelongsTo(
+  db: Db,
+  categoryId: string,
+  departmentId: string,
+): Promise<boolean> {
+  const { data, error } = await db
+    .from('staffroom_categories')
+    .select('id')
+    .eq('id', categoryId)
+    .eq('department_id', departmentId)
+    .maybeSingle();
+
+  if (error) throw new Error(`말머리 확인 실패: ${error.message}`);
+  return data !== null;
+}
+
+/** 글 여러 개의 태그를 한 번에 읽는다 — 글마다 따로 부르면 목록이 느려진다 */
+export async function loadTagsByPost(
+  db: Db,
+  postIds: readonly string[],
+): Promise<Map<string, string[]>> {
+  const map = new Map<string, string[]>();
+  if (postIds.length === 0) return map;
+
+  const { data, error } = await db
+    .from('staffroom_post_tags')
+    .select('post_id, tag')
+    .in('post_id', postIds as string[]);
+
+  if (error) throw new Error(`태그 조회 실패: ${error.message}`);
+  for (const row of (data ?? []) as { post_id: string; tag: string }[]) {
+    const list = map.get(row.post_id) ?? [];
+    list.push(row.tag);
+    map.set(row.post_id, list);
+  }
+  return map;
+}
+
+/**
+ * 글의 태그를 통째로 바꾼다 (지우고 다시 넣기).
+ *
+ * 하나씩 견주어 더하고 빼는 것보다 단순하고, 태그는 글마다 10개 이하라 비용도
+ * 작다. 순서를 지키기 위해서도 이 편이 낫다.
+ */
+export async function replacePostTags(
+  db: Db,
+  postId: string,
+  departmentId: string,
+  tags: readonly string[],
+): Promise<void> {
+  const { error: delError } = await db.from('staffroom_post_tags').delete().eq('post_id', postId);
+  if (delError) throw new Error(`태그 정리 실패: ${delError.message}`);
+
+  if (tags.length === 0) return;
+  const { error } = await db
+    .from('staffroom_post_tags')
+    .insert(tags.map((tag) => ({ post_id: postId, department_id: departmentId, tag })));
+  if (error) throw new Error(`태그 저장 실패: ${error.message}`);
 }
 
 /**
@@ -265,6 +367,7 @@ export function toPostSummaryResponse(
   return {
     id: row.id,
     moduleId: row.module_id,
+    categoryId: row.category_id ?? null,
     title: row.title,
     authorEmail: row.author_email,
     authorName: names.get(row.author_email.trim().toLowerCase()) ?? null,

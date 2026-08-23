@@ -22,6 +22,7 @@ import {
 import { STAFFROOM_COMMENT_MAX_LENGTH } from '@domain/entities/StaffRoomBoard';
 import { formatPostTime } from './boardFormat';
 import { StaffRoomRichText } from './StaffRoomRichText';
+import { formatStaffRoomTag } from '@domain/rules/staffRoomTaxonomy';
 
 interface PostDetailProps {
   departmentId: string;
@@ -33,6 +34,7 @@ export function PostDetail({ departmentId, onEdit }: PostDetailProps) {
   const comments = useStaffRoomBoardStore((s) => s.comments);
   const readStatus = useStaffRoomBoardStore((s) => s.readStatus);
   const closePost = useStaffRoomBoardStore((s) => s.closePost);
+  const setFilter = useStaffRoomBoardStore((s) => s.setFilter);
   const removePost = useStaffRoomBoardStore((s) => s.removePost);
   const setRequired = useStaffRoomBoardStore((s) => s.setRequired);
   const addComment = useStaffRoomBoardStore((s) => s.addComment);
@@ -168,6 +170,26 @@ export function PostDetail({ departmentId, onEdit }: PostDetailProps) {
           bodyFormat={currentPost.bodyFormat}
           className="mt-5 text-sm"
         />
+
+        {currentPost.tags.length > 0 && (
+          <div className="mt-5 flex flex-wrap items-center gap-1.5">
+            {currentPost.tags.map((tag) => (
+              <button
+                key={tag}
+                type="button"
+                // 태그를 누르면 목록으로 돌아가 그 태그만 모아 본다 —
+                // 태그를 붙이는 이유가 나중에 묶어 찾기 위해서다.
+                onClick={() => {
+                  setFilter({ categoryId: null, tag });
+                  closePost();
+                }}
+                className="rounded-full border border-sp-border px-2.5 py-1 text-xs text-sp-muted transition-colors hover:border-sp-accent hover:text-sp-text"
+              >
+                {formatStaffRoomTag(tag)}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {currentPost.isRequired && readStatus && (

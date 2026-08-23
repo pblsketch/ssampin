@@ -32,6 +32,19 @@ export interface StaffRoomModule {
 }
 
 /**
+ * 말머리(카테고리). 관리자가 부서마다 미리 정한다. (054)
+ *
+ * 자유 입력이 아니라 고른 목록인 이유는, 같은 뜻인데 `공지`·`공지사항`·`[공지]`
+ * 가 섞이면 걸러 보기가 쓸모없어지기 때문이다.
+ */
+export interface StaffRoomCategory {
+  readonly id: string;
+  readonly departmentId: string;
+  readonly name: string;
+  readonly position: number;
+}
+
+/**
  * 글 목록 한 줄.
  *
  * **본문(body)이 없다.** 계획서 §3.5-다 — 목록을 통째로 받으면 교사 1,500명 기준
@@ -53,6 +66,10 @@ export interface StaffRoomPostSummary {
   readonly isUnread: boolean;
   /** 이 글이 나를 불렀는가(@멘션) */
   readonly mentionsMe: boolean;
+  /** 말머리. 안 붙였으면 null (054) */
+  readonly categoryId: string | null;
+  /** 해시태그. 저장값에는 `#` 가 없다 — 보여줄 때만 붙인다 (054) */
+  readonly tags: readonly string[];
 }
 
 /**
@@ -123,6 +140,10 @@ export interface WriteStaffRoomPostInput {
   readonly bodyFormat: StaffRoomBodyFormat;
   readonly isRequired: boolean;
   readonly mentionedEmails: readonly string[];
+  /** 말머리. 안 고르면 null */
+  readonly categoryId: string | null;
+  /** 해시태그. `#` 를 뗀 값으로 넘긴다 */
+  readonly tags: readonly string[];
 }
 
 /** 제목 최대 길이 */

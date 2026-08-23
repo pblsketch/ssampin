@@ -20,6 +20,11 @@ import {
 import { formatClockTime } from './boardFormat';
 import { StaffRoomRichEditor } from './StaffRoomRichEditor';
 import { staffRoomRichTextToPlain } from '@domain/rules/staffRoomRichText';
+import {
+  formatStaffRoomTag,
+  splitStaffRoomTagInput,
+  STAFFROOM_POST_MAX_TAGS,
+} from '@domain/rules/staffRoomTaxonomy';
 
 interface PostEditorProps {
   departmentId: string;
@@ -44,6 +49,9 @@ export function PostEditor({ departmentId, boardId, mode, onDone, onCancel }: Po
   const editPost = useStaffRoomBoardStore((s) => s.editPost);
   const clearError = useStaffRoomBoardStore((s) => s.clearError);
 
+  const categories = useStaffRoomBoardStore((s) => s.categories);
+  const loadCategories = useStaffRoomBoardStore((s) => s.loadCategories);
+
   const members = useStaffRoomStore((s) => s.members);
   const myRole = useStaffRoomStore((s) => s.currentDepartment?.myRole ?? null);
   const myEmail = useGoogleAccountStore((s) => s.email);
@@ -64,6 +72,11 @@ export function PostEditor({ departmentId, boardId, mode, onDone, onCancel }: Po
   const [isRequired, setIsRequired] = useState(
     mode === 'edit' ? (currentPost?.isRequired ?? false) : false,
   );
+  const [categoryId, setCategoryId] = useState<string | null>(
+    mode === 'edit' ? (currentPost?.categoryId ?? null) : null,
+  );
+  const [tags, setTags] = useState<string[]>(mode === 'edit' ? [...(currentPost?.tags ?? [])] : []);
+  const [tagInput, setTagInput] = useState('');
   const [restoredDraft, setRestoredDraft] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -86,6 +99,7 @@ export function PostEditor({ departmentId, boardId, mode, onDone, onCancel }: Po
 
   useEffect(() => {
     clearError();
+    void loadCategories(departmentId);
     if (mode === 'create') void loadDraft(departmentId, boardId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -126,6 +140,30 @@ export function PostEditor({ departmentId, boardId, mode, onDone, onCancel }: Po
     if (mode === 'create') updateDraft(departmentId, { body: value, bodyFormat: 'lexical' });
   };
 
+  /**
+   * 적은 태그를 확정한다.
+   *
+   * 쉼표·공백·엔터 어느 것으로 끝내도 되게 했다 — 사람마다 습관이 다르고,
+   * "왜 안 붙지" 하고 헤매게 만들 이유가 없다.
+   */
+  const commitTags = (raw: string) => {
+    const added = splitStaffRoomTagInput(raw);
+    if (added.length === 0) {
+      setTagInput('');
+      return;
+    }
+    setTags((prev) => {
+      const merged = [...prev];
+      for (const tag of added) {
+        if (!merged.includes(tag) && merged.length < STAFFROOM_POST_MAX_TAGS) merged.push(tag);
+      }
+      return merged;
+    });
+    setTagInput('');
+  };
+
+  const removeTag = (tag: string) => setTags((prev) => prev.filter((t) => t !== tag));
+
   const toggleMention = (email: string) => {
     setMentionedEmails((prev) =>
       prev.includes(email) ? prev.filter((e) => e !== email) : [...prev, email],
@@ -151,13 +189,23 @@ export function PostEditor({ departmentId, boardId, mode, onDone, onCancel }: Po
     const bodyFormat = 'lexical' as const;
     const ok =
       mode === 'create'
-        ? await writePost(departmentId, { title, body, bodyFormat, isRequired, mentionedEmails })
+        ? await writePost(departmentId, {
+            title,
+            body,
+            bodyFormat,
+            isRequired,
+            mentionedEmails,
+            categoryId,
+            tags,
+          })
         : currentPost
           ? await editPost(departmentId, currentPost.id, {
               title,
               body,
               bodyFormat,
               mentionedEmails,
+              categoryId,
+              tags,
             })
           : false;
     setSubmitting(false);
@@ -219,6 +267,27 @@ export function PostEditor({ departmentId, boardId, mode, onDone, onCancel }: Po
           </p>
         </div>
 
+        {categories.length > 0 && (
+          <div className="mt-3 flex items-center gap-2">
+            <label htmlFor="post-category" className="shrink-0 text-xs text-sp-muted">
+              말머리
+            </label>
+            <select
+              id="post-category"
+              value={categoryId ?? ''}
+              onChange={(e) => setCategoryId(e.target.value === '' ? null : e.target.value)}
+              className="h-8 rounded-lg border border-sp-border bg-sp-bg px-2 text-xs text-sp-text focus:border-sp-accent focus:outline-none"
+            >
+              <option value="">말머리 없음</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
         <div className="mt-3">
           <StaffRoomRichEditor
             key={editorSeed}
@@ -227,6 +296,58 @@ export function PostEditor({ departmentId, boardId, mode, onDone, onCancel }: Po
             onChange={handleBodyChange}
           />
         </div>
+        {/* 해시태그 */}
+        <div className="mt-3">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {tags.map((tag) => (
+              <span
+                key={tag}
+                className="flex items-center gap-1 rounded-full border border-sp-border bg-sp-surface px-2.5 py-1 text-xs text-sp-text"
+              >
+                {formatStaffRoomTag(tag)}
+                <button
+                  type="button"
+                  onClick={() => removeTag(tag)}
+                  aria-label={`${formatStaffRoomTag(tag)} 빼기`}
+                  className="text-sp-muted transition-colors hover:text-sp-text"
+                >
+                  <span className="material-symbols-outlined text-icon-sm">close</span>
+                </button>
+              </span>
+            ))}
+            {tags.length < STAFFROOM_POST_MAX_TAGS && (
+              <input
+                type="text"
+                value={tagInput}
+                onChange={(e) => {
+                  // 쉼표·공백을 치면 그 자리에서 확정한다
+                  if (/[,\s]/.test(e.target.value)) commitTags(e.target.value);
+                  else setTagInput(e.target.value);
+                }}
+                onKeyDown={(e) => {
+                  // 한글 조합 중의 엔터는 "글자 확정"이지 "태그 확정"이 아니다.
+                  // 막지 않으면 "체육"을 치다가 태그가 잘려 붙는다.
+                  if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                    e.preventDefault();
+                    commitTags(tagInput);
+                  }
+                  if (e.key === 'Backspace' && tagInput === '' && tags.length > 0) {
+                    removeTag(tags[tags.length - 1]!);
+                  }
+                }}
+                onBlur={() => commitTags(tagInput)}
+                placeholder={tags.length === 0 ? '#태그 (쉼표나 엔터로 구분)' : '태그 추가'}
+                className="h-8 min-w-[9rem] flex-1 rounded-lg border border-sp-border bg-sp-bg px-2.5 text-xs text-sp-text placeholder-sp-muted focus:border-sp-accent focus:outline-none"
+              />
+            )}
+          </div>
+          {tags.length >= STAFFROOM_POST_MAX_TAGS && (
+            <p className="mt-1 text-xs text-sp-muted">
+              태그는 {STAFFROOM_POST_MAX_TAGS}개까지 붙일 수 있어요.
+            </p>
+          )}
+        </div>
+
         <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2 text-xs">
           {isBodyTooLong ? (
             <span className="text-sp-highlight">

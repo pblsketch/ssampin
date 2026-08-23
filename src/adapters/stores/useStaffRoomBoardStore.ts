@@ -13,6 +13,7 @@ import { create } from 'zustand';
 import { DEFAULT_STAFFROOM_BODY_FORMAT } from '@domain/entities/StaffRoomBoard';
 import type {
   StaffRoomBodyFormat,
+  StaffRoomCategory,
   StaffRoomComment,
   StaffRoomPost,
   StaffRoomPostSummary,
@@ -53,6 +54,13 @@ interface StaffRoomBoardState {
   /** 필독 글의 읽음 현황. 일반 글이면 null */
   readStatus: (StaffRoomReadStatus & { isRequired: boolean }) | null;
 
+  /** 부서의 말머리 목록 (054). 글을 쓸 때 고르고, 목록에서 걸러 볼 때 쓴다 */
+  categories: StaffRoomCategory[];
+  /** 지금 걸러 보고 있는 말머리. null 이면 전체 */
+  filterCategoryId: string | null;
+  /** 지금 걸러 보고 있는 해시태그. null 이면 전체 */
+  filterTag: string | null;
+
   /** 쓰던 글 */
   draftTitle: string;
   draftBody: string;
@@ -85,6 +93,8 @@ interface StaffRoomBoardState {
       bodyFormat: StaffRoomBodyFormat;
       isRequired: boolean;
       mentionedEmails: string[];
+      categoryId: string | null;
+      tags: string[];
     },
   ) => Promise<boolean>;
   editPost: (
@@ -95,6 +105,8 @@ interface StaffRoomBoardState {
       body: string;
       bodyFormat: StaffRoomBodyFormat;
       mentionedEmails: string[];
+      categoryId: string | null;
+      tags: string[];
     },
   ) => Promise<boolean>;
   setRequired: (departmentId: string, postId: string, isRequired: boolean) => Promise<void>;
@@ -113,6 +125,15 @@ interface StaffRoomBoardState {
   /** 쓰던 글 버리기 */
   discardDraft: (departmentId: string) => Promise<void>;
 
+  /** 말머리 목록 불러오기 (멤버 누구나) */
+  loadCategories: (departmentId: string) => Promise<void>;
+  /** 말머리 만들기 (관리자) */
+  addCategory: (departmentId: string, name: string) => Promise<boolean>;
+  /** 말머리 지우기 (관리자). **글은 지워지지 않는다** */
+  removeCategory: (departmentId: string, categoryId: string) => Promise<void>;
+  /** 목록 걸러 보기 */
+  setFilter: (patch: { categoryId?: string | null; tag?: string | null }) => void;
+
   clearError: () => void;
   reset: () => void;
 }
@@ -126,6 +147,9 @@ export const useStaffRoomBoardStore = create<StaffRoomBoardState>((set, get) => 
   currentPost: null,
   comments: [],
   readStatus: null,
+  categories: [],
+  filterCategoryId: null,
+  filterTag: null,
   draftTitle: '',
   draftBody: '',
   draftBodyFormat: DEFAULT_STAFFROOM_BODY_FORMAT,
@@ -136,6 +160,60 @@ export const useStaffRoomBoardStore = create<StaffRoomBoardState>((set, get) => 
   error: null,
 
   clearError: () => set({ error: null }),
+
+  setFilter: (patch) =>
+    set((state) => ({
+      filterCategoryId: patch.categoryId !== undefined ? patch.categoryId : state.filterCategoryId,
+      filterTag: patch.tag !== undefined ? patch.tag : state.filterTag,
+    })),
+
+  loadCategories: async (departmentId) => {
+    const token = await getGoogleToken();
+    if (!token) return;
+    try {
+      const { staffRoomPort } = await import('@adapters/di/container');
+      set({ categories: await staffRoomPort.listCategories(token, departmentId) });
+    } catch (err) {
+      // 말머리를 못 불러와도 글은 읽고 쓸 수 있어야 한다 — 화면을 막지 않는다
+      console.error('[StaffRoomBoard] 말머리 불러오기 실패:', err);
+    }
+  },
+
+  addCategory: async (departmentId, name) => {
+    const token = await getGoogleToken();
+    if (!token) {
+      set({ error: '구글 로그인이 필요합니다.' });
+      return false;
+    }
+    try {
+      const { staffRoomPort } = await import('@adapters/di/container');
+      const category = await staffRoomPort.createCategory(token, departmentId, name);
+      set((state) => ({ categories: [...state.categories, category], error: null }));
+      return true;
+    } catch (err) {
+      set({ error: messageOf(err) });
+      return false;
+    }
+  },
+
+  removeCategory: async (departmentId, categoryId) => {
+    const token = await getGoogleToken();
+    if (!token) {
+      set({ error: '구글 로그인이 필요합니다.' });
+      return;
+    }
+    try {
+      const { staffRoomPort } = await import('@adapters/di/container');
+      await staffRoomPort.removeCategory(token, departmentId, categoryId);
+      set((state) => ({
+        categories: state.categories.filter((c) => c.id !== categoryId),
+        // 지운 말머리로 걸러 보고 있었으면 전체로 되돌린다 — 안 그러면 빈 목록만 남는다
+        filterCategoryId: state.filterCategoryId === categoryId ? null : state.filterCategoryId,
+      }));
+    } catch (err) {
+      set({ error: messageOf(err) });
+    }
+  },
 
   reset: () => {
     if (draftTimer) {
@@ -148,6 +226,9 @@ export const useStaffRoomBoardStore = create<StaffRoomBoardState>((set, get) => 
       currentPost: null,
       comments: [],
       readStatus: null,
+      categories: [],
+      filterCategoryId: null,
+      filterTag: null,
       draftTitle: '',
       draftBody: '',
       draftBodyFormat: DEFAULT_STAFFROOM_BODY_FORMAT,
@@ -230,6 +311,8 @@ export const useStaffRoomBoardStore = create<StaffRoomBoardState>((set, get) => 
         bodyFormat: input.bodyFormat,
         isRequired: input.isRequired,
         mentionedEmails: input.mentionedEmails,
+        categoryId: input.categoryId,
+        tags: input.tags,
       });
       // 올렸으면 쓰던 글은 서버에서도 지워진다 — 화면 상태도 비운다
       set({

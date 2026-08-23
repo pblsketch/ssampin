@@ -18,7 +18,16 @@ interface BoardViewProps {
   onWriteNew: () => void;
 }
 
-function PostRow({ post, onOpen }: { post: StaffRoomPostSummary; onOpen: () => void }) {
+function PostRow({
+  post,
+  categoryName,
+  onOpen,
+}: {
+  post: StaffRoomPostSummary;
+  /** 말머리 이름. 목록이 이름을 알고 있으므로 행마다 다시 찾지 않는다 */
+  categoryName: string | null;
+  onOpen: () => void;
+}) {
   const authorLabel = displayNameOf({ email: post.authorEmail, displayName: post.authorName });
 
   return (
@@ -47,6 +56,11 @@ function PostRow({ post, onOpen }: { post: StaffRoomPostSummary; onOpen: () => v
               aria-label="안 읽음"
               title="안 읽음"
             />
+          )}
+          {categoryName !== null && (
+            <span className="shrink-0 rounded border border-sp-border px-1.5 py-0.5 text-[11px] font-sp-medium text-sp-muted">
+              {categoryName}
+            </span>
           )}
           <h3
             className={`truncate text-sm text-sp-text ${
@@ -82,11 +96,31 @@ export function BoardView({ departmentId, boardId, onWriteNew }: BoardViewProps)
   const loadPosts = useStaffRoomBoardStore((s) => s.loadPosts);
   const openPost = useStaffRoomBoardStore((s) => s.openPost);
   const clearError = useStaffRoomBoardStore((s) => s.clearError);
+  const categories = useStaffRoomBoardStore((s) => s.categories);
+  const loadCategories = useStaffRoomBoardStore((s) => s.loadCategories);
+  const filterCategoryId = useStaffRoomBoardStore((s) => s.filterCategoryId);
+  const filterTag = useStaffRoomBoardStore((s) => s.filterTag);
+  const setFilter = useStaffRoomBoardStore((s) => s.setFilter);
 
   useEffect(() => {
     void loadPosts(departmentId, boardId);
+    void loadCategories(departmentId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [departmentId, boardId]);
+
+  const categoryNameOf = (id: string | null): string | null =>
+    id === null ? null : (categories.find((c) => c.id === id)?.name ?? null);
+
+  /**
+   * 걸러 보기는 **화면에서 한다.** 서버에 다시 묻지 않는 이유는, 목록이 이미
+   * 한 번에 오고(최대 100건) 눌렀을 때 곧바로 반응하는 편이 낫기 때문이다.
+   * 글이 더 많아지면 그때 서버 쪽으로 옮긴다.
+   */
+  const visiblePosts = posts.filter((post) => {
+    if (filterCategoryId !== null && post.categoryId !== filterCategoryId) return false;
+    if (filterTag !== null && !post.tags.includes(filterTag)) return false;
+    return true;
+  });
 
   const isEmpty = hasLoadedPosts && posts.length === 0;
   const isInitialLoading = isLoading && !hasLoadedPosts;
@@ -147,10 +181,59 @@ export function BoardView({ departmentId, boardId, onWriteNew }: BoardViewProps)
         </div>
       ) : (
         <div className="space-y-2">
-          {posts.map((post) => (
+          {(categories.length > 0 || filterTag !== null) && (
+            <div className="flex flex-wrap items-center gap-1.5 pb-1">
+              <button
+                type="button"
+                onClick={() => setFilter({ categoryId: null, tag: null })}
+                className={`rounded-full border px-3 py-1 text-xs transition-colors ${
+                  filterCategoryId === null && filterTag === null
+                    ? 'border-sp-accent bg-sp-accent text-white'
+                    : 'border-sp-border text-sp-muted hover:text-sp-text'
+                }`}
+              >
+                전체
+              </button>
+              {categories.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() =>
+                    setFilter({ categoryId: filterCategoryId === c.id ? null : c.id, tag: null })
+                  }
+                  className={`rounded-full border px-3 py-1 text-xs transition-colors ${
+                    filterCategoryId === c.id
+                      ? 'border-sp-accent bg-sp-accent text-white'
+                      : 'border-sp-border text-sp-muted hover:text-sp-text'
+                  }`}
+                >
+                  {c.name}
+                </button>
+              ))}
+              {filterTag !== null && (
+                <button
+                  type="button"
+                  onClick={() => setFilter({ tag: null })}
+                  className="flex items-center gap-1 rounded-full border border-sp-accent bg-sp-accent px-3 py-1 text-xs text-white"
+                >
+                  #{filterTag}
+                  <span className="material-symbols-outlined text-icon-sm">close</span>
+                </button>
+              )}
+            </div>
+          )}
+
+          {visiblePosts.length === 0 && (
+            <p className="rounded-xl border border-sp-border bg-sp-card px-4 py-6 text-center text-sm text-sp-muted">
+              고른 조건에 맞는 글이 없어요.
+            </p>
+          )}
+
+          {visiblePosts.map((post) => (
             <PostRow
               key={post.id}
               post={post}
+              categoryName={categoryNameOf(post.categoryId)}
               onOpen={() => void openPost(departmentId, post.id)}
             />
           ))}

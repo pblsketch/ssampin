@@ -12,8 +12,10 @@
  * action:
  *   list        { departmentId, moduleId? }        → 목록(본문 없음) + 마지막 본 시각 갱신
  *   get         { departmentId, postId }           → 글 하나(본문 포함) + 필독이면 읽음 기록
- *   create      { departmentId, moduleId, title, body, isRequired, mentionedEmails }
- *   update      { departmentId, postId, title, body, mentionedEmails }
+ *   create      { departmentId, moduleId, title, body, bodyFormat, isRequired,
+ *                 mentionedEmails, categoryId?, tags? }
+ *   update      { departmentId, postId, title, body, bodyFormat, mentionedEmails,
+ *                 categoryId?, tags? }
  *   setRequired { departmentId, postId, isRequired }
  *   delete      { departmentId, postId }
  *   readers     { departmentId, postId }           → 필독 글의 읽은/안 읽은 사람
@@ -48,6 +50,10 @@ import {
   POST_FULL_COLUMNS,
   POST_SUMMARY_COLUMNS,
   normalizeBodyFormat,
+  normalizeTags,
+  categoryBelongsTo,
+  loadTagsByPost,
+  replacePostTags,
   type MemberRow,
   type PostRow,
   type PostSummaryRow,
@@ -165,6 +171,9 @@ serve(async (req: Request) => {
         }
       }
 
+      // 태그는 한 번에 읽는다 — 글마다 따로 부르면 목록이 느려진다
+      const tagsByPost = await loadTagsByPost(db, postIds);
+
       const seenMs = lastSeenAt === null ? null : new Date(lastSeenAt).getTime();
       const summaries = posts.map((row) => {
         const createdMs = new Date(row.created_at).getTime();
@@ -174,11 +183,14 @@ serve(async (req: Request) => {
             : Number.isNaN(createdMs) || Number.isNaN(seenMs)
               ? false
               : createdMs > seenMs;
-        return toPostSummaryResponse(row, names, {
-          commentCount: commentCounts.get(row.id) ?? 0,
-          isUnread,
-          mentionsMe: mentionedPostIds.has(row.id),
-        });
+        return {
+          ...toPostSummaryResponse(row, names, {
+            commentCount: commentCounts.get(row.id) ?? 0,
+            isUnread,
+            mentionsMe: mentionedPostIds.has(row.id),
+          }),
+          tags: tagsByPost.get(row.id) ?? [],
+        };
       });
 
       // 판정이 끝난 뒤에 갱신한다
@@ -241,6 +253,7 @@ serve(async (req: Request) => {
           }),
           body: post.body,
           bodyFormat: normalizeBodyFormat(post.body_format),
+          tags: (await loadTagsByPost(db, [post.id])).get(post.id) ?? [],
           mentionedEmails,
         },
         myRole,
@@ -256,6 +269,18 @@ serve(async (req: Request) => {
       const postBody = typeof body?.body === 'string' ? body.body : '';
       const bodyFormat = normalizeBodyFormat(body?.bodyFormat);
       const isRequired = body?.isRequired === true;
+      const tags = normalizeTags(body?.tags);
+
+      // 말머리는 **이 부서 것인지 확인한다** — 남의 부서 말머리 id 를 보내도
+      // 통하면 목록에서 남의 부서 말머리 이름이 비쳐 보인다.
+      const rawCategoryId = typeof body?.categoryId === 'string' ? body.categoryId : '';
+      let categoryId: string | null = null;
+      if (rawCategoryId) {
+        if (!(await categoryBelongsTo(db, rawCategoryId, departmentId))) {
+          return errorResponse('이 부서의 말머리가 아닙니다', 403);
+        }
+        categoryId = rawCategoryId;
+      }
 
       if (!title) return errorResponse('제목을 입력해주세요', 400);
       if (title.length > TITLE_MAX) {
@@ -290,6 +315,7 @@ serve(async (req: Request) => {
           body: postBody,
           body_format: bodyFormat,
           is_required: isRequired,
+          category_id: categoryId,
         })
         .select(POST_FULL_COLUMNS)
         .single();
@@ -315,6 +341,14 @@ serve(async (req: Request) => {
         if (mentionError) console.error('[staffroom-posts] 멘션 기록 실패:', mentionError.message);
       }
 
+      // 해시태그 — 실패해도 글은 이미 올라갔다. 글쓰기를 되돌리지 않고 기록만 남긴다
+      // (선생님 입장에서 "글이 안 올라갔다"가 "태그가 안 붙었다"보다 훨씬 나쁘다).
+      try {
+        await replacePostTags(db, post.id, departmentId, tags);
+      } catch (tagError) {
+        console.error('[staffroom-posts] 태그 저장 실패:', tagError);
+      }
+
       // 올렸으면 임시저장은 지운다
       await db
         .from('staffroom_drafts')
@@ -331,6 +365,7 @@ serve(async (req: Request) => {
           }),
           body: post.body,
           bodyFormat: normalizeBodyFormat(post.body_format),
+          tags: (await loadTagsByPost(db, [post.id])).get(post.id) ?? [],
           mentionedEmails: mentions,
         },
       });
@@ -374,6 +409,17 @@ serve(async (req: Request) => {
       // 맨글이던 옛 글을 서식 편집기로 고쳤을 때 형식이 맨글로 남아 기호가
       // 그대로 보인다.
       const bodyFormat = normalizeBodyFormat(body?.bodyFormat);
+      const tags = normalizeTags(body?.tags);
+
+      const rawCategoryId = typeof body?.categoryId === 'string' ? body.categoryId : '';
+      let categoryId: string | null = null;
+      if (rawCategoryId) {
+        if (!(await categoryBelongsTo(db, rawCategoryId, departmentId))) {
+          return errorResponse('이 부서의 말머리가 아닙니다', 403);
+        }
+        categoryId = rawCategoryId;
+      }
+
       if (!title) return errorResponse('제목을 입력해주세요', 400);
       if (title.length > TITLE_MAX) {
         return errorResponse(`제목은 ${TITLE_MAX}자까지 쓸 수 있습니다`, 400);
@@ -385,6 +431,7 @@ serve(async (req: Request) => {
           title,
           body: postBody,
           body_format: bodyFormat,
+          category_id: categoryId,
           updated_at: new Date().toISOString(),
         })
         .eq('id', postId)
@@ -398,6 +445,13 @@ serve(async (req: Request) => {
           updateError,
           '글을 고치지 못했습니다',
         );
+      }
+
+      // 해시태그를 새로 맞춘다 (지우고 다시 넣기)
+      try {
+        await replacePostTags(db, postId, departmentId, tags);
+      } catch (tagError) {
+        console.error('[staffroom-posts] 태그 저장 실패:', tagError);
       }
 
       // 부른 사람 목록을 새로 맞춘다
@@ -423,6 +477,7 @@ serve(async (req: Request) => {
           }),
           body: post.body,
           bodyFormat: normalizeBodyFormat(post.body_format),
+          tags: (await loadTagsByPost(db, [post.id])).get(post.id) ?? [],
           mentionedEmails: mentions,
         },
       });
