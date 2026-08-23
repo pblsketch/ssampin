@@ -562,6 +562,7 @@ function writeDeps(): WriteDeps {
     addTodo: todo.addTodo,
     updateTodo: todo.updateTodo,
     toggleTodo: todo.toggleTodo,
+    getTodo: (id) => useTodoStore.getState().todos.find((t) => t.id === id),
     deleteTodo: todo.deleteTodo,
 
     addEvent: events.addEvent,

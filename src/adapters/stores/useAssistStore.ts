@@ -25,6 +25,7 @@ import type { ModelSafe } from '@domain/entities/AssistTool';
 import type { AssistProposalState, AssistWriteProposal } from '@domain/entities/AssistWrite';
 import { isWriteProposal } from '@domain/entities/AssistWrite';
 import { isWriteTool } from '@usecases/assist/writes/buildWriteProposal';
+import { mentionsWriteIntent } from '@domain/rules/assistWriteIntent';
 
 /** 고지문이 바뀌면 이 숫자를 올린다. 다음에 켤 때 안내가 다시 뜬다. */
 export const ASSIST_NOTICE_VERSION = 1;
@@ -433,14 +434,22 @@ export const useAssistStore = create<AssistStore>()(
                   grade: 1 as const,
                   data: c.data,
                 })),
-                // ★2왕복째에도 도구 목록을 함께 보낸다.
+                // ★2왕복째에도 도구 목록을 보낸다 — **바꾸려는 말일 때만.**
                 //
                 //   실측(2026-08-23): "장보기 할 일 지워줘"에 모델은 **먼저 목록을 본다** —
                 //   어떤 항목인지 확인하고 지우려는 것이고, 사람도 그렇게 한다. 그런데 예전에는
                 //   2왕복째에 도구를 안 보내서, 목록을 보고 온 모델이 **지우자고 말할 방법이
                 //   없었다.** 그래서 고치기·지우기 요청 7건이 전부 조회로 끝났다(0/7).
                 //   설명 문구를 두 번 고쳐도 소용없던 이유가 이것이다 — 낱말이 아니라 구조였다.
-                ...(proposeWrite ? { tools: toModelToolSchemas() } : {}),
+                //
+                //   ★다만 **늘** 실으면 안 된다(UltraQA 실측): 도구가 있으면 이 모델은 문장
+                //   대신 도구를 한 번 더 부른다 — 조회 질문 5개 중 5개가 그랬다. 그러면 문장을
+                //   받으러 한 번 더 물어야 해서 조회 한 번이 3요청이 되고, 하루 상한
+                //   (40요청/설치) 안에서 물어볼 수 있는 횟수가 20번 → 13번으로 준다.
+                //   그래서 바꾸려는 말일 때만 싣는다. 조회는 예전처럼 2왕복이다.
+                ...(proposeWrite && mentionsWriteIntent(question)
+                  ? { tools: toModelToolSchemas() }
+                  : {}),
               });
 
               // 목록을 보고 온 모델이 이제 쓰기를 고르면, 그 제안을 조회 카드와 함께 띄운다.

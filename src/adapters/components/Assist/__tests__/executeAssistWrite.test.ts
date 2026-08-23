@@ -56,6 +56,7 @@ function fakeDeps(): { deps: WriteDeps; calls: string[] } {
     addTodo: track('addTodo'),
     updateTodo: track('updateTodo'),
     toggleTodo: track('toggleTodo'),
+    getTodo: () => ({ completed: false }),
     deleteTodo: track('deleteTodo'),
     addEvent: track('addEvent'),
     getEvent: () => ({ id: 'e1', title: '학부모 총회', date: '2026-08-25', category: 'school' }),
@@ -181,5 +182,79 @@ describe('실행이 어긋났을 때', () => {
     expect(result.ok).toBe(false);
     expect(result.message).toContain('실행할 수 없어요');
     expect(calls).toEqual([]);
+  });
+});
+
+/**
+ * ★UltraQA(2026-08-23)에서 잡은 두 가지. 둘 다 같은 부류다 —
+ * **하지 않은 일을 했다고 말하는 것.** 저장이 안 된 것보다 나쁘다. 안 된 줄 모르니까.
+ */
+describe('★한 일과 다른 말을 하지 않는다', () => {
+  it('노트 페이지 이름을 못 붙였으면 "만들었어요"라고 하지 않는다', async () => {
+    const outcome = buildWriteProposal(
+      'create_note_page',
+      JSON.stringify({ section: '수업 준비', title: '3월' }),
+      SRC,
+    );
+    if (!isWriteProposal(outcome)) throw new Error('제안이어야 한다');
+
+    const { deps, calls } = fakeDeps();
+    // 스토어가 새로 만든 것을 활성으로 못 잡은 상황
+    const blind = {
+      ...deps,
+      noteSelection: () => ({ notebookId: null, sectionId: null, pageId: null }),
+    } as unknown as WriteDeps;
+
+    const result = await executeAssistWrite(outcome, blind);
+
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain('이름을 붙이지 못했어요');
+    // 페이지는 만들어졌다 — 그 사실을 감추지도 않는다(문구가 그렇게 말한다).
+    expect(calls).toEqual(['createPage']);
+  });
+
+  it.each([
+    ['create_notebook', { title: 'x' }, '노트책'],
+    ['create_note_section', { notebook: '3학년 수학', title: 'x' }, '구역'],
+  ])('%s 도 같은 규칙을 따른다', async (tool, args, what) => {
+    const outcome = buildWriteProposal(tool, JSON.stringify(args), SRC);
+    if (!isWriteProposal(outcome)) throw new Error('제안이어야 한다');
+
+    const { deps } = fakeDeps();
+    const blind = {
+      ...deps,
+      noteSelection: () => ({ notebookId: null, sectionId: null, pageId: null }),
+    } as unknown as WriteDeps;
+
+    const result = await executeAssistWrite(outcome, blind);
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain(what);
+  });
+
+  it('★제안 뒤에 선생님이 직접 체크했으면 되뒤집지 않는다', async () => {
+    // 시나리오: "장보기 완료해줘" → 미리보기 → 선생님이 할 일 화면에서 직접 체크
+    //           → 돌아와서 [실행] → 그대로 toggle 하면 **완료가 풀린다.**
+    const outcome = buildWriteProposal('complete_todo', JSON.stringify({ match: '장보기' }), SRC);
+    if (!isWriteProposal(outcome)) throw new Error('제안이어야 한다');
+
+    const { deps, calls } = fakeDeps();
+    const alreadyDone = { ...deps, getTodo: () => ({ completed: true }) } as unknown as WriteDeps;
+
+    const result = await executeAssistWrite(outcome, alreadyDone);
+
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain('이미 끝낸');
+    expect(calls).toEqual([]);
+  });
+
+  it('상태가 그대로면 정상적으로 완료한다', async () => {
+    const outcome = buildWriteProposal('complete_todo', JSON.stringify({ match: '장보기' }), SRC);
+    if (!isWriteProposal(outcome)) throw new Error('제안이어야 한다');
+
+    const { deps, calls } = fakeDeps();
+    const result = await executeAssistWrite(outcome, deps);
+
+    expect(result.ok).toBe(true);
+    expect(calls).toEqual(['toggleTodo']);
   });
 });

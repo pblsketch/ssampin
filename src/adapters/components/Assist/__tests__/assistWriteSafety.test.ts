@@ -58,6 +58,7 @@ function spyDeps(): { deps: WriteDeps; calls: string[] } {
     addTodo: track('addTodo'),
     updateTodo: track('updateTodo'),
     toggleTodo: track('toggleTodo'),
+    getTodo: () => ({ completed: false }),
     deleteTodo: track('deleteTodo'),
     addEvent: track('addEvent'),
     getEvent: (id: string) => ({
@@ -341,44 +342,83 @@ describe('★조회를 한 번 하고 온 뒤에도 쓰기를 제안할 수 있�
     expect(calls).toEqual(['hop1:tools=true', 'hop2:tools=true']);
   });
 
-  it('★조회로 끝나는 질문은 문장이 비지 않는다 — 도구 없이 한 번 더 묻는다', async () => {
-    // 도구 목록을 붙였더니 모델이 문장 대신 또 도구를 불러 text 가 비었다(실측).
-    const calls: string[] = [];
-    const port: AssistPort = {
+  /** 왕복마다 도구를 실었는지 기록하는 포트 */
+  function portRecording(calls: string[], answers: readonly AssistAnswer[]): AssistPort {
+    return {
       ask: (payload): Promise<AssistAnswer> => {
         calls.push(payload.tools && payload.tools.length > 0 ? 'with-tools' : 'no-tools');
-        if (calls.length === 1) {
-          return Promise.resolve({
-            text: '',
-            degraded: null,
-            toolCalls: [{ name: 'get_my_todos', rawArguments: '{}' }],
-          });
-        }
-        if (calls.length === 2) {
-          // 문장 없이 또 조회를 부른다 — 쓰기가 아니므로 제안이 되지 않는다.
-          return Promise.resolve({
-            text: '',
-            degraded: null,
-            toolCalls: [{ name: 'get_week_overview', rawArguments: '{}' }],
-          });
-        }
-        return Promise.resolve({ text: '할 일은 1건 남아 있어요.', degraded: null });
+        return Promise.resolve(answers[calls.length - 1] ?? { text: '끝', degraded: null });
       },
     };
+  }
 
-    await useAssistStore.getState().ask(
-      port,
-      '할 일 뭐 있어?',
-      [],
-      [],
-      () => ({ tool: 'get_my_todos', data: { undone: 1 } as never }),
-      (n, a) => buildWriteProposal(n, a, SOURCES),
-    );
+  const readCard = () => ({ tool: 'get_my_todos', data: { undone: 1 } as never });
+  const askedTodos = {
+    text: '',
+    degraded: null,
+    toolCalls: [{ name: 'get_my_todos', rawArguments: '{}' }],
+  } as AssistAnswer;
+
+  it('★조회 질문은 2왕복이다 — 하루 상한(40요청)을 지키기 위해서다', async () => {
+    // 실측(UltraQA): 2왕복째에 도구를 실으면 이 모델은 문장 대신 도구를 한 번 더 부른다
+    // (조회 질문 5개 중 5개). 그러면 조회 한 번이 3요청이 되고, 하루에 물어볼 수 있는
+    // 횟수가 20번 → 13번으로 준다. 그래서 **바꾸려는 말일 때만** 2왕복째에 도구를 싣는다.
+    const calls: string[] = [];
+    const port = portRecording(calls, [
+      askedTodos,
+      { text: '할 일은 1건 남아 있어요.', degraded: null },
+    ]);
+
+    await useAssistStore
+      .getState()
+      .ask(port, '할 일 뭐 있어?', [], [], readCard, (n, a) => buildWriteProposal(n, a, SOURCES));
 
     const turn = useAssistStore.getState().turns[0];
     expect(turn?.answer).toBe('할 일은 1건 남아 있어요.');
     expect(turn?.proposal).toBeUndefined();
-    // ★왕복은 세 번을 넘지 않는다. 마지막은 도구 없이 문장만 받는다.
+    expect(calls).toEqual(['with-tools', 'no-tools']);
+  });
+
+  it('★바꾸려는 말이면 2왕복째에도 도구를 싣는다 — 그래야 제안이 나온다', async () => {
+    const calls: string[] = [];
+    const port = portRecording(calls, [
+      askedTodos,
+      {
+        text: '',
+        degraded: null,
+        toolCalls: [{ name: 'delete_todo', rawArguments: '{"match":"장보기"}' }],
+      },
+    ]);
+
+    await useAssistStore
+      .getState()
+      .ask(port, '장보기 할 일 지워줘', [], [], readCard, (n, a) =>
+        buildWriteProposal(n, a, SOURCES),
+      );
+
+    expect(useAssistStore.getState().turns[0]?.proposal?.tool).toBe('delete_todo');
+    expect(calls).toEqual(['with-tools', 'with-tools']);
+  });
+
+  it('★그래도 문장이 비면 도구 없이 한 번만 더 묻는다 (왕복 상한 3)', async () => {
+    const calls: string[] = [];
+    const port = portRecording(calls, [
+      askedTodos,
+      {
+        text: '',
+        degraded: null,
+        toolCalls: [{ name: 'get_week_overview', rawArguments: '{}' }],
+      },
+      { text: '할 일을 확인했어요.', degraded: null },
+    ]);
+
+    await useAssistStore
+      .getState()
+      .ask(port, '장보기 할 일 지워줘', [], [], readCard, (n, a) =>
+        buildWriteProposal(n, a, SOURCES),
+      );
+
+    expect(useAssistStore.getState().turns[0]?.answer).toBe('할 일을 확인했어요.');
     expect(calls).toEqual(['with-tools', 'with-tools', 'no-tools']);
   });
 });

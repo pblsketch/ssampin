@@ -33,6 +33,12 @@ export interface WriteDeps {
     changes: { text?: string; dueDate?: string; time?: string; priority?: TodoPriority },
   ) => Promise<void>;
   readonly toggleTodo: (id: string) => Promise<void>;
+  /**
+   * 지금 상태를 다시 본다. **제안을 만든 뒤 선생님이 화면에서 직접 체크했을 수 있다** —
+   * 그대로 뒤집으면 원하던 것과 정반대가 되고, 앱은 "완료했어요"라고 말한다.
+   * toggle 하나뿐인 스토어라 여기서 확인하는 수밖에 없다.
+   */
+  readonly getTodo: (id: string) => { readonly completed: boolean } | undefined;
   readonly deleteTodo: (id: string) => Promise<void>;
 
   readonly addEvent: (params: {
@@ -118,6 +124,19 @@ function needTarget(proposal: AssistWriteProposal): string | undefined {
   return proposal.targetId;
 }
 
+/**
+ * 노트는 "빈 것을 만들고 → 이름을 고치는" 두 걸음이라, **첫 걸음만 되고 둘째가 안 될 수**
+ * 있다. 그때 원래는 `if (created) rename` 으로 조용히 건너뛰고도 "만들었어요"라고
+ * 말했다 — 실제로는 "새 페이지"라는 이름으로 남아 있는데 선생님은 제 이름으로 만들어진
+ * 줄 안다. **한 일과 다른 말을 하지 않는다.**
+ */
+function unnamed(what: string): WriteResult {
+  return {
+    ok: false,
+    message: `${what}은(는) 만들어졌지만 이름을 붙이지 못했어요. 노트 화면에서 이름을 고쳐 주세요.`,
+  };
+}
+
 export async function executeAssistWrite(
   proposal: AssistWriteProposal,
   deps: WriteDeps,
@@ -157,11 +176,19 @@ export async function executeAssistWrite(
     }
     case 'complete_todo': {
       if (!id) return targetMissing;
+      const undo = proposal.values.undo === true;
+      // ★뒤집기 전에 지금 상태를 다시 본다(위 getTodo 주석 참조).
+      const now = deps.getTodo(id);
+      if (now && now.completed === !undo) {
+        return {
+          ok: false,
+          message: undo
+            ? '이미 안 끝낸 걸로 돼 있어서 그대로 뒀어요.'
+            : '이미 끝낸 걸로 돼 있어서 그대로 뒀어요.',
+        };
+      }
       await deps.toggleTodo(id);
-      return {
-        ok: true,
-        message: proposal.values.undo === true ? '할 일을 되돌렸어요.' : '할 일을 완료했어요.',
-      };
+      return { ok: true, message: undo ? '할 일을 되돌렸어요.' : '할 일을 완료했어요.' };
     }
     case 'delete_todo': {
       if (!id) return targetMissing;
@@ -326,7 +353,8 @@ export async function executeAssistWrite(
       if (title === undefined) return targetMissing;
       await deps.createNotebook();
       const created = deps.noteSelection().notebookId;
-      if (created) await deps.renameNotebook(created, title);
+      if (!created) return unnamed('노트책');
+      await deps.renameNotebook(created, title);
       // 노트책을 만들면 앱은 늘 기본 구역·페이지를 함께 만든다(화면에서 눌렀을 때와 같다).
       return { ok: true, message: `노트책 "${title}"을(를) 만들었어요.` };
     }
@@ -336,7 +364,8 @@ export async function executeAssistWrite(
       if (notebookId === undefined || title === undefined) return targetMissing;
       await deps.createSection(notebookId);
       const created = deps.noteSelection().sectionId;
-      if (created) await deps.renameSection(created, title);
+      if (!created) return unnamed('구역');
+      await deps.renameSection(created, title);
       return { ok: true, message: `구역 "${title}"을(를) 만들었어요.` };
     }
     case 'create_note_page': {
@@ -345,7 +374,8 @@ export async function executeAssistWrite(
       if (sectionId === undefined || title === undefined) return targetMissing;
       await deps.createPage(sectionId);
       const created = deps.noteSelection().pageId;
-      if (created) await deps.renamePage(created, title);
+      if (!created) return unnamed('페이지');
+      await deps.renamePage(created, title);
       return { ok: true, message: `페이지 "${title}"을(를) 만들었어요.` };
     }
     case 'rename_note_page': {
