@@ -72,6 +72,16 @@ function PostRow({
           >
             {post.title}
           </h3>
+          {post.attachmentCount > 0 && (
+            <span
+              className="flex shrink-0 items-center gap-0.5 text-xs text-sp-muted"
+              aria-label={`첨부 ${post.attachmentCount}개`}
+              title={`첨부 ${post.attachmentCount}개`}
+            >
+              <span className="material-symbols-outlined text-icon-sm">attach_file</span>
+              {post.attachmentCount}
+            </span>
+          )}
           {post.mentionsMe && (
             <span className="shrink-0 rounded-full border border-sp-highlight px-2 py-0.5 text-[11px] font-sp-semibold text-sp-highlight">
               나를 부름

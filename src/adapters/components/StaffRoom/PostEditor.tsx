@@ -20,6 +20,8 @@ import {
 import { formatClockTime } from './boardFormat';
 import { StaffRoomRichEditor } from './StaffRoomRichEditor';
 import { staffRoomRichTextToPlain } from '@domain/rules/staffRoomRichText';
+import { useStaffRoomLibraryStore } from '@adapters/stores/useStaffRoomLibraryStore';
+import { STAFFROOM_POST_MAX_ATTACHMENTS } from '@domain/entities/StaffRoomBoard';
 import {
   formatStaffRoomTag,
   splitStaffRoomTagInput,
@@ -49,6 +51,9 @@ export function PostEditor({ departmentId, boardId, mode, onDone, onCancel }: Po
   const editPost = useStaffRoomBoardStore((s) => s.editPost);
   const clearError = useStaffRoomBoardStore((s) => s.clearError);
 
+  const libraryFiles = useStaffRoomLibraryStore((s) => s.files);
+  const loadFiles = useStaffRoomLibraryStore((s) => s.loadFiles);
+
   const categories = useStaffRoomBoardStore((s) => s.categories);
   const loadCategories = useStaffRoomBoardStore((s) => s.loadCategories);
 
@@ -77,6 +82,22 @@ export function PostEditor({ departmentId, boardId, mode, onDone, onCancel }: Po
   );
   const [tags, setTags] = useState<string[]>(mode === 'edit' ? [...(currentPost?.tags ?? [])] : []);
   const [tagInput, setTagInput] = useState('');
+
+  /**
+   * 붙일 파일 — **자료실에 이미 올라간 것 중에서 고른다.**
+   *
+   * 글쓰기 화면에서 따로 올리는 길을 만들지 않는 이유: 자료실(M3)이 이미 드라이브에
+   * 올리고, 남이 열 수 있게 권한을 내주고, 미리보기까지 만든다. 여기서 또 만들면
+   * 같은 파일이 두 곳에 쌓이고 권한 규칙도 두 벌이 된다.
+   */
+  const [fileIds, setFileIds] = useState<string[]>(
+    mode === 'edit'
+      ? (currentPost?.attachments ?? [])
+          .map((a) => a.fileId)
+          .filter((id): id is string => id !== null)
+      : [],
+  );
+  const [pickingFiles, setPickingFiles] = useState(false);
   const [restoredDraft, setRestoredDraft] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -100,6 +121,7 @@ export function PostEditor({ departmentId, boardId, mode, onDone, onCancel }: Po
   useEffect(() => {
     clearError();
     void loadCategories(departmentId);
+    void loadFiles(departmentId);
     if (mode === 'create') void loadDraft(departmentId, boardId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -197,6 +219,7 @@ export function PostEditor({ departmentId, boardId, mode, onDone, onCancel }: Po
             mentionedEmails,
             categoryId,
             tags,
+            fileIds,
           })
         : currentPost
           ? await editPost(departmentId, currentPost.id, {
@@ -206,6 +229,7 @@ export function PostEditor({ departmentId, boardId, mode, onDone, onCancel }: Po
               mentionedEmails,
               categoryId,
               tags,
+              fileIds,
             })
           : false;
     setSubmitting(false);
@@ -344,6 +368,94 @@ export function PostEditor({ departmentId, boardId, mode, onDone, onCancel }: Po
           {tags.length >= STAFFROOM_POST_MAX_TAGS && (
             <p className="mt-1 text-xs text-sp-muted">
               태그는 {STAFFROOM_POST_MAX_TAGS}개까지 붙일 수 있어요.
+            </p>
+          )}
+        </div>
+
+        {/* 첨부 — 자료실에 올라간 파일 중에서 고른다 */}
+        <div className="mt-3">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {fileIds.map((id) => {
+              const file = libraryFiles.find((f) => f.id === id);
+              return (
+                <span
+                  key={id}
+                  className="flex items-center gap-1 rounded-lg border border-sp-border bg-sp-surface px-2.5 py-1 text-xs text-sp-text"
+                >
+                  <span className="material-symbols-outlined text-icon-sm text-sp-muted">
+                    attach_file
+                  </span>
+                  {/* 자료실에서 지워진 파일이면 이름을 알 수 없다 — 솔직히 알린다 */}
+                  {file?.name ?? '자료실에서 지워진 파일'}
+                  <button
+                    type="button"
+                    onClick={() => setFileIds((prev) => prev.filter((f) => f !== id))}
+                    aria-label="첨부 빼기"
+                    className="text-sp-muted transition-colors hover:text-sp-text"
+                  >
+                    <span className="material-symbols-outlined text-icon-sm">close</span>
+                  </button>
+                </span>
+              );
+            })}
+
+            {fileIds.length < STAFFROOM_POST_MAX_ATTACHMENTS && (
+              <button
+                type="button"
+                onClick={() => setPickingFiles((open) => !open)}
+                className="flex items-center gap-1 rounded-lg border border-sp-border px-2.5 py-1.5 text-xs text-sp-muted transition-colors hover:text-sp-text"
+              >
+                <span className="material-symbols-outlined text-icon-sm">attach_file</span>
+                자료실에서 파일 붙이기
+              </button>
+            )}
+          </div>
+
+          {pickingFiles && (
+            <div className="mt-2 max-h-56 overflow-y-auto rounded-lg border border-sp-border bg-sp-bg p-2">
+              {libraryFiles.length === 0 ? (
+                <p className="px-1 py-2 text-xs text-sp-muted">
+                  자료실에 올라간 파일이 없어요. 자료실 탭에서 먼저 올려주세요.
+                </p>
+              ) : (
+                <ul className="space-y-1">
+                  {libraryFiles.map((f) => {
+                    const picked = fileIds.includes(f.id);
+                    return (
+                      <li key={f.id}>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setFileIds((prev) =>
+                              picked
+                                ? prev.filter((id) => id !== f.id)
+                                : prev.length >= STAFFROOM_POST_MAX_ATTACHMENTS
+                                  ? prev
+                                  : [...prev, f.id],
+                            )
+                          }
+                          className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs transition-colors ${
+                            picked
+                              ? 'bg-sp-accent/10 text-sp-text'
+                              : 'text-sp-muted hover:text-sp-text'
+                          }`}
+                        >
+                          <span className="material-symbols-outlined text-icon-sm">
+                            {picked ? 'check_box' : 'check_box_outline_blank'}
+                          </span>
+                          <span className="truncate">{f.name}</span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          )}
+
+          {fileIds.length >= STAFFROOM_POST_MAX_ATTACHMENTS && (
+            <p className="mt-1 text-xs text-sp-muted">
+              파일은 {STAFFROOM_POST_MAX_ATTACHMENTS}개까지 붙일 수 있어요.
             </p>
           )}
         </div>

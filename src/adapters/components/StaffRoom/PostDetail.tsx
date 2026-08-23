@@ -23,6 +23,7 @@ import { STAFFROOM_COMMENT_MAX_LENGTH } from '@domain/entities/StaffRoomBoard';
 import { formatPostTime } from './boardFormat';
 import { StaffRoomRichText } from './StaffRoomRichText';
 import { formatStaffRoomTag } from '@domain/rules/staffRoomTaxonomy';
+import { useStaffRoomLibraryStore } from '@adapters/stores/useStaffRoomLibraryStore';
 
 interface PostDetailProps {
   departmentId: string;
@@ -35,6 +36,9 @@ export function PostDetail({ departmentId, onEdit }: PostDetailProps) {
   const readStatus = useStaffRoomBoardStore((s) => s.readStatus);
   const closePost = useStaffRoomBoardStore((s) => s.closePost);
   const setFilter = useStaffRoomBoardStore((s) => s.setFilter);
+  // 내려받기는 자료실이 맡는다 — 권한 내주기가 거기 있다(§3.4-나).
+  // 여기서 따로 만들면 권한 규칙이 두 벌이 된다.
+  const downloadFile = useStaffRoomLibraryStore((s) => s.downloadFile);
   const removePost = useStaffRoomBoardStore((s) => s.removePost);
   const setRequired = useStaffRoomBoardStore((s) => s.setRequired);
   const addComment = useStaffRoomBoardStore((s) => s.addComment);
@@ -170,6 +174,39 @@ export function PostDetail({ departmentId, onEdit }: PostDetailProps) {
           bodyFormat={currentPost.bodyFormat}
           className="mt-5 text-sm"
         />
+
+        {currentPost.attachments.length > 0 && (
+          <div className="mt-5 space-y-1.5">
+            {currentPost.attachments.map((a) => {
+              // fileId 가 null = 자료실에서 지워진 파일(055). 줄은 남기고
+              // 무엇이었는지 알린다 — 조용히 사라지면 글이 고쳐진 줄 안다.
+              const isGone = a.fileId === null;
+              return (
+                <button
+                  key={a.id}
+                  type="button"
+                  disabled={isGone}
+                  onClick={() => {
+                    if (a.fileId !== null) void downloadFile(departmentId, a.fileId);
+                  }}
+                  className={`flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-colors ${
+                    isGone
+                      ? 'cursor-default border-sp-border bg-sp-surface text-sp-muted'
+                      : 'border-sp-border bg-sp-card text-sp-text hover:border-sp-accent'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-icon shrink-0 text-sp-muted">
+                    {isGone ? 'link_off' : 'attach_file'}
+                  </span>
+                  <span className="truncate">{a.fileName}</span>
+                  {isGone && (
+                    <span className="ml-auto shrink-0 text-xs">자료실에서 지워졌어요</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {currentPost.tags.length > 0 && (
           <div className="mt-5 flex flex-wrap items-center gap-1.5">

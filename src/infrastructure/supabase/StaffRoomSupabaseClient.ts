@@ -290,6 +290,7 @@ export class StaffRoomSupabaseClient implements IStaffRoomPort {
       mentionedEmails: input.mentionedEmails,
       categoryId: input.categoryId,
       tags: input.tags,
+      fileIds: input.fileIds,
     });
     return res.post;
   }
@@ -305,6 +306,7 @@ export class StaffRoomSupabaseClient implements IStaffRoomPort {
       mentionedEmails: readonly string[];
       categoryId: string | null;
       tags: readonly string[];
+      fileIds: readonly string[];
     },
   ): Promise<StaffRoomPost> {
     const res = await this.invoke<{ post: StaffRoomPost }>('staffroom-posts', {
@@ -318,6 +320,7 @@ export class StaffRoomSupabaseClient implements IStaffRoomPort {
       mentionedEmails: input.mentionedEmails,
       categoryId: input.categoryId,
       tags: input.tags,
+      fileIds: input.fileIds,
     });
     return res.post;
   }

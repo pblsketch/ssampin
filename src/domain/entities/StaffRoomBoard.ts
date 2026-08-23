@@ -70,6 +70,11 @@ export interface StaffRoomPostSummary {
   readonly categoryId: string | null;
   /** 해시태그. 저장값에는 `#` 가 없다 — 보여줄 때만 붙인다 (054) */
   readonly tags: readonly string[];
+  /**
+   * 붙은 파일 **개수만**. 목록에는 이름까지 싣지 않는다 — 전송량 때문이고
+   * (계획서 §3.5-다 와 같은 결), 목록에서는 "첨부 있음" 이상을 보여주지 않는다.
+   */
+  readonly attachmentCount: number;
 }
 
 /**
@@ -93,12 +98,30 @@ export type StaffRoomBodyFormat = 'plain' | 'lexical';
 
 export const DEFAULT_STAFFROOM_BODY_FORMAT: StaffRoomBodyFormat = 'plain';
 
+/**
+ * 글에 붙인 자료실 파일 (055).
+ *
+ * 파일 자체는 자료실에 있고 여기는 가리키기만 한다. `fileId` 가 null 이면
+ * **자료실에서 지워진 것**이다 — 첨부 줄은 남겨서 "지워진 파일"로 알린다.
+ * 조용히 사라지면 글이 고쳐진 줄 안다.
+ */
+export interface StaffRoomPostAttachment {
+  readonly id: string;
+  readonly fileId: string | null;
+  readonly fileName: string;
+}
+
+/** 글 하나에 붙일 수 있는 파일 수 */
+export const STAFFROOM_POST_MAX_ATTACHMENTS = 10;
+
 /** 글 하나 (본문 포함) */
 export interface StaffRoomPost extends StaffRoomPostSummary {
   readonly body: string;
   readonly bodyFormat: StaffRoomBodyFormat;
   /** 본문에서 불린 사람들의 지메일 */
   readonly mentionedEmails: readonly string[];
+  /** 붙은 파일 — 글을 열 때만 이름까지 온다 */
+  readonly attachments: readonly StaffRoomPostAttachment[];
 }
 
 /** 댓글 */
@@ -144,6 +167,8 @@ export interface WriteStaffRoomPostInput {
   readonly categoryId: string | null;
   /** 해시태그. `#` 를 뗀 값으로 넘긴다 */
   readonly tags: readonly string[];
+  /** 붙일 자료실 파일 id. 이 부서 것인지는 서버가 확인한다 */
+  readonly fileIds: readonly string[];
 }
 
 /** 제목 최대 길이 */

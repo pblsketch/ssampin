@@ -95,6 +95,8 @@ interface StaffRoomBoardState {
       mentionedEmails: string[];
       categoryId: string | null;
       tags: string[];
+      /** 붙일 자료실 파일 id. 이 부서 것인지는 서버가 확인한다 */
+      fileIds: string[];
     },
   ) => Promise<boolean>;
   editPost: (
@@ -107,6 +109,8 @@ interface StaffRoomBoardState {
       mentionedEmails: string[];
       categoryId: string | null;
       tags: string[];
+      /** 붙일 자료실 파일 id. 이 부서 것인지는 서버가 확인한다 */
+      fileIds: string[];
     },
   ) => Promise<boolean>;
   setRequired: (departmentId: string, postId: string, isRequired: boolean) => Promise<void>;
@@ -313,6 +317,7 @@ export const useStaffRoomBoardStore = create<StaffRoomBoardState>((set, get) => 
         mentionedEmails: input.mentionedEmails,
         categoryId: input.categoryId,
         tags: input.tags,
+        fileIds: input.fileIds,
       });
       // 올렸으면 쓰던 글은 서버에서도 지워진다 — 화면 상태도 비운다
       set({

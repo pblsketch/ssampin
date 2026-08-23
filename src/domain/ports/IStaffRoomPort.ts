@@ -171,6 +171,7 @@ export interface IStaffRoomPort {
       mentionedEmails: readonly string[];
       categoryId: string | null;
       tags: readonly string[];
+      fileIds: readonly string[];
     },
   ): Promise<StaffRoomPost>;
 

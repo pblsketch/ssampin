@@ -105,6 +105,11 @@ vi.mock('@adapters/stores/useStaffRoomStore', () => ({
     }),
 }));
 
+vi.mock('@adapters/stores/useStaffRoomLibraryStore', () => ({
+  useStaffRoomLibraryStore: (selector: (s: Record<string, unknown>) => unknown) =>
+    selector({ files: [], loadFiles: asyncNoop, downloadFile: asyncNoop }),
+}));
+
 vi.mock('@adapters/stores/useGoogleAccountStore', () => ({
   useGoogleAccountStore: (selector: (s: Record<string, unknown>) => unknown) =>
     selector({ email: myEmail }),
@@ -129,12 +134,20 @@ function summary(over: Partial<StaffRoomPostSummary> = {}): StaffRoomPostSummary
     mentionsMe: false,
     categoryId: null,
     tags: [],
+    attachmentCount: 0,
     ...over,
   };
 }
 
 function fullPost(over: Partial<StaffRoomPost> = {}): StaffRoomPost {
-  return { ...summary(), body: '본문입니다', bodyFormat: 'plain', mentionedEmails: [], ...over };
+  return {
+    ...summary(),
+    body: '본문입니다',
+    bodyFormat: 'plain',
+    mentionedEmails: [],
+    attachments: [],
+    ...over,
+  };
 }
 
 beforeEach(() => {
@@ -421,5 +434,47 @@ describe('말머리 관리 (054, 관리자만)', () => {
     boardState.posts = [summary()];
     boardState.categories = [{ id: 'c1', departmentId: 'dept-1', name: '공지', position: 0 }];
     expect(board()).not.toContain('말머리 관리');
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════
+describe('글 첨부 (055)', () => {
+  it('첨부가 있으면 목록에 개수가 보인다', () => {
+    boardState.posts = [summary({ attachmentCount: 3 })];
+    expect(board()).toContain('aria-label="첨부 3개"');
+  });
+
+  it('첨부가 없으면 목록에 표시가 없다', () => {
+    boardState.posts = [summary({ attachmentCount: 0 })];
+    expect(board()).not.toContain('첨부');
+  });
+
+  it('상세에서 붙은 파일 이름이 보인다', () => {
+    boardState.currentPost = fullPost({
+      attachments: [{ id: 'a1', fileId: 'f1', fileName: '9월 업무분장.hwp' }],
+    });
+    expect(detail()).toContain('9월 업무분장.hwp');
+  });
+
+  it('🔒 자료실에서 지워진 파일은 조용히 사라지지 않고 이유를 알린다', () => {
+    // 줄까지 사라지면 글쓴이도 읽는 사람도 글이 고쳐진 줄 안다
+    boardState.currentPost = fullPost({
+      attachments: [{ id: 'a1', fileId: null, fileName: '지워진자료.hwp' }],
+    });
+    const html = detail();
+    expect(html).toContain('지워진자료.hwp');
+    expect(html).toContain('자료실에서 지워졌어요');
+  });
+
+  it('지워진 파일은 눌리지 않는다', () => {
+    boardState.currentPost = fullPost({
+      attachments: [{ id: 'a1', fileId: null, fileName: '지워진자료.hwp' }],
+    });
+    expect(detail()).toContain('disabled');
+  });
+
+  it('첨부가 없는 글에는 첨부 영역이 없다', () => {
+    boardState.currentPost = fullPost({ attachments: [] });
+    expect(detail()).not.toContain('attach_file');
   });
 });

@@ -54,6 +54,10 @@ import {
   categoryBelongsTo,
   loadTagsByPost,
   replacePostTags,
+  resolveDepartmentFiles,
+  loadAttachmentsByPost,
+  replacePostAttachments,
+  toAttachmentResponse,
   type MemberRow,
   type PostRow,
   type PostSummaryRow,
@@ -173,6 +177,7 @@ serve(async (req: Request) => {
 
       // 태그는 한 번에 읽는다 — 글마다 따로 부르면 목록이 느려진다
       const tagsByPost = await loadTagsByPost(db, postIds);
+      const attachmentsByPost = await loadAttachmentsByPost(db, postIds);
 
       const seenMs = lastSeenAt === null ? null : new Date(lastSeenAt).getTime();
       const summaries = posts.map((row) => {
@@ -190,6 +195,9 @@ serve(async (req: Request) => {
             mentionsMe: mentionedPostIds.has(row.id),
           }),
           tags: tagsByPost.get(row.id) ?? [],
+          // 목록에는 개수만 — 이름까지 실으면 전송량이 늘고, 목록에서는
+          // "첨부 있음" 이상을 보여주지 않는다(계획서 §3.5-다 와 같은 결)
+          attachmentCount: (attachmentsByPost.get(row.id) ?? []).length,
         };
       });
 
@@ -254,6 +262,9 @@ serve(async (req: Request) => {
           body: post.body,
           bodyFormat: normalizeBodyFormat(post.body_format),
           tags: (await loadTagsByPost(db, [post.id])).get(post.id) ?? [],
+          attachments: ((await loadAttachmentsByPost(db, [post.id])).get(post.id) ?? []).map(
+            toAttachmentResponse,
+          ),
           mentionedEmails,
         },
         myRole,
@@ -270,6 +281,15 @@ serve(async (req: Request) => {
       const bodyFormat = normalizeBodyFormat(body?.bodyFormat);
       const isRequired = body?.isRequired === true;
       const tags = normalizeTags(body?.tags);
+      // 붙이려는 파일이 이 부서 자료실 것인지 서버가 확인한다. 이름도 여기서
+      // 읽어 온다 — 앱이 보낸 이름을 믿으면 엉뚱한 이름이 박힌다(055).
+      const attachFiles = await resolveDepartmentFiles(
+        db,
+        Array.isArray(body?.fileIds)
+          ? body.fileIds.filter((v: unknown) => typeof v === 'string')
+          : [],
+        departmentId,
+      );
 
       // 말머리는 **이 부서 것인지 확인한다** — 남의 부서 말머리 id 를 보내도
       // 통하면 목록에서 남의 부서 말머리 이름이 비쳐 보인다.
@@ -345,8 +365,9 @@ serve(async (req: Request) => {
       // (선생님 입장에서 "글이 안 올라갔다"가 "태그가 안 붙었다"보다 훨씬 나쁘다).
       try {
         await replacePostTags(db, post.id, departmentId, tags);
+        await replacePostAttachments(db, post.id, departmentId, attachFiles);
       } catch (tagError) {
-        console.error('[staffroom-posts] 태그 저장 실패:', tagError);
+        console.error('[staffroom-posts] 태그·첨부 저장 실패:', tagError);
       }
 
       // 올렸으면 임시저장은 지운다
@@ -366,6 +387,9 @@ serve(async (req: Request) => {
           body: post.body,
           bodyFormat: normalizeBodyFormat(post.body_format),
           tags: (await loadTagsByPost(db, [post.id])).get(post.id) ?? [],
+          attachments: ((await loadAttachmentsByPost(db, [post.id])).get(post.id) ?? []).map(
+            toAttachmentResponse,
+          ),
           mentionedEmails: mentions,
         },
       });
@@ -410,6 +434,13 @@ serve(async (req: Request) => {
       // 그대로 보인다.
       const bodyFormat = normalizeBodyFormat(body?.bodyFormat);
       const tags = normalizeTags(body?.tags);
+      const attachFiles = await resolveDepartmentFiles(
+        db,
+        Array.isArray(body?.fileIds)
+          ? body.fileIds.filter((v: unknown) => typeof v === 'string')
+          : [],
+        departmentId,
+      );
 
       const rawCategoryId = typeof body?.categoryId === 'string' ? body.categoryId : '';
       let categoryId: string | null = null;
@@ -450,8 +481,9 @@ serve(async (req: Request) => {
       // 해시태그를 새로 맞춘다 (지우고 다시 넣기)
       try {
         await replacePostTags(db, postId, departmentId, tags);
+        await replacePostAttachments(db, postId, departmentId, attachFiles);
       } catch (tagError) {
-        console.error('[staffroom-posts] 태그 저장 실패:', tagError);
+        console.error('[staffroom-posts] 태그·첨부 저장 실패:', tagError);
       }
 
       // 부른 사람 목록을 새로 맞춘다
@@ -478,6 +510,9 @@ serve(async (req: Request) => {
           body: post.body,
           bodyFormat: normalizeBodyFormat(post.body_format),
           tags: (await loadTagsByPost(db, [post.id])).get(post.id) ?? [],
+          attachments: ((await loadAttachmentsByPost(db, [post.id])).get(post.id) ?? []).map(
+            toAttachmentResponse,
+          ),
           mentionedEmails: mentions,
         },
       });

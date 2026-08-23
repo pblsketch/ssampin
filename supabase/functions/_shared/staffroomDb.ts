@@ -213,6 +213,117 @@ export function normalizeTags(raw: unknown): string[] {
   return out;
 }
 
+// ══════════════════════════════════════════════════════════════════
+// 글 첨부 (055)
+// ══════════════════════════════════════════════════════════════════
+
+/** 글 하나에 붙일 수 있는 파일 수 */
+export const POST_MAX_ATTACHMENTS = 10;
+
+export interface AttachmentRow {
+  id: string;
+  post_id: string;
+  file_id: string | null;
+  file_name: string;
+  position: number;
+}
+
+/**
+ * 붙이려는 파일들이 **이 부서 자료실 것인지** 확인하고, 이름과 함께 돌려준다.
+ *
+ * 남의 부서 파일 id 를 보내도 통하지 않게 하려는 것이다. 통하면 글에 남의 부서
+ * 파일 이름이 뜨고, 누르는 순간 자료실이 권한을 내주려 시도한다.
+ *
+ * 이름을 여기서 읽어 오는 이유: 첨부는 파일이 지워진 뒤에도 이름을 보여줘야 해서
+ * (055) 붙일 때의 이름을 함께 적어 둔다. 앱이 보낸 이름을 믿으면 엉뚱한 이름이
+ * 박힌다.
+ */
+export async function resolveDepartmentFiles(
+  db: Db,
+  fileIds: readonly string[],
+  departmentId: string,
+): Promise<{ id: string; name: string }[]> {
+  if (fileIds.length === 0) return [];
+
+  const { data, error } = await db
+    .from('staffroom_files')
+    .select('id, name')
+    .eq('department_id', departmentId)
+    .in('id', fileIds as string[]);
+
+  if (error) throw new Error(`첨부 파일 확인 실패: ${error.message}`);
+  const found = new Map(
+    ((data ?? []) as { id: string; name: string }[]).map((f) => [f.id, f.name]),
+  );
+
+  // 보낸 순서를 지킨다 — 화면에 보이는 차례가 매번 바뀌면 어지럽다
+  const out: { id: string; name: string }[] = [];
+  for (const id of fileIds) {
+    const name = found.get(id);
+    if (name !== undefined) out.push({ id, name });
+    if (out.length >= POST_MAX_ATTACHMENTS) break;
+  }
+  return out;
+}
+
+/** 글 여러 개의 첨부를 한 번에 읽는다 — 글마다 따로 부르면 목록이 느려진다 */
+export async function loadAttachmentsByPost(
+  db: Db,
+  postIds: readonly string[],
+): Promise<Map<string, AttachmentRow[]>> {
+  const map = new Map<string, AttachmentRow[]>();
+  if (postIds.length === 0) return map;
+
+  const { data, error } = await db
+    .from('staffroom_post_attachments')
+    .select('id, post_id, file_id, file_name, position')
+    .in('post_id', postIds as string[])
+    .order('position', { ascending: true });
+
+  if (error) throw new Error(`첨부 조회 실패: ${error.message}`);
+  for (const row of (data ?? []) as AttachmentRow[]) {
+    const list = map.get(row.post_id) ?? [];
+    list.push(row);
+    map.set(row.post_id, list);
+  }
+  return map;
+}
+
+/** 글의 첨부를 통째로 바꾼다 (지우고 다시 넣기) — 태그와 같은 방식 */
+export async function replacePostAttachments(
+  db: Db,
+  postId: string,
+  departmentId: string,
+  files: readonly { id: string; name: string }[],
+): Promise<void> {
+  const { error: delError } = await db
+    .from('staffroom_post_attachments')
+    .delete()
+    .eq('post_id', postId);
+  if (delError) throw new Error(`첨부 정리 실패: ${delError.message}`);
+
+  if (files.length === 0) return;
+  const { error } = await db.from('staffroom_post_attachments').insert(
+    files.map((f, index) => ({
+      post_id: postId,
+      department_id: departmentId,
+      file_id: f.id,
+      file_name: f.name,
+      position: index,
+    })),
+  );
+  if (error) throw new Error(`첨부 저장 실패: ${error.message}`);
+}
+
+/** 첨부 행 → 클라이언트 응답. 파일이 지워졌으면 fileId 가 null 이다 */
+export function toAttachmentResponse(row: AttachmentRow) {
+  return {
+    id: row.id,
+    fileId: row.file_id,
+    fileName: row.file_name,
+  };
+}
+
 /**
  * 이 말머리가 이 부서 것인지 확인한다.
  *
