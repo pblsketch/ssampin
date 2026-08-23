@@ -18,6 +18,8 @@ import {
   STAFFROOM_POST_TITLE_MAX_LENGTH,
 } from '@domain/entities/StaffRoomBoard';
 import { formatClockTime } from './boardFormat';
+import { StaffRoomRichEditor } from './StaffRoomRichEditor';
+import { staffRoomRichTextToPlain } from '@domain/rules/staffRoomRichText';
 
 interface PostEditorProps {
   departmentId: string;
@@ -31,6 +33,7 @@ export function PostEditor({ departmentId, boardId, mode, onDone, onCancel }: Po
   const currentPost = useStaffRoomBoardStore((s) => s.currentPost);
   const draftTitle = useStaffRoomBoardStore((s) => s.draftTitle);
   const draftBody = useStaffRoomBoardStore((s) => s.draftBody);
+  const draftBodyFormat = useStaffRoomBoardStore((s) => s.draftBodyFormat);
   const draftSavedAt = useStaffRoomBoardStore((s) => s.draftSavedAt);
   const isLoading = useStaffRoomBoardStore((s) => s.isLoading);
   const error = useStaffRoomBoardStore((s) => s.error);
@@ -48,6 +51,13 @@ export function PostEditor({ departmentId, boardId, mode, onDone, onCancel }: Po
 
   const [title, setTitle] = useState(mode === 'edit' ? (currentPost?.title ?? '') : '');
   const [body, setBody] = useState(mode === 'edit' ? (currentPost?.body ?? '') : '');
+  // 편집기가 만든 값은 구조(JSON)라 길이를 그대로 세면 빈 글도 수백 자로 나온다.
+  // 글자 수 안내는 꾸밈을 뺀 순수 글자로 센다.
+  const [plainBody, setPlainBody] = useState(
+    mode === 'edit' && currentPost?.bodyFormat === 'lexical'
+      ? staffRoomRichTextToPlain(currentPost.body)
+      : (currentPost?.body ?? ''),
+  );
   const [mentionedEmails, setMentionedEmails] = useState<string[]>(
     mode === 'edit' ? [...(currentPost?.mentionedEmails ?? [])] : [],
   );
@@ -56,6 +66,23 @@ export function PostEditor({ departmentId, boardId, mode, onDone, onCancel }: Po
   );
   const [restoredDraft, setRestoredDraft] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  /**
+   * 편집기에 처음 넣을 내용.
+   *
+   * ⚠️ **편집기는 처음 만들어질 때의 내용만 읽는다.** 나중에 바뀐 값을 계속
+   * 밀어 넣으면 글자를 칠 때마다 커서가 맨 앞으로 튄다. 그런데 쓰던 글(임시저장)은
+   * 서버에서 **나중에** 도착한다 — 그대로 두면 "쓰시던 글을 불러왔어요"라고
+   * 안내해 놓고 정작 편집기는 비어 있는 상태가 된다.
+   *
+   * 그래서 내용이 통째로 바뀌는 순간(임시저장 도착·새로 쓰기)에만 `seed` 를
+   * 올려 편집기를 다시 만든다. 타자 중에는 바뀌지 않으므로 커서는 튀지 않는다.
+   */
+  const [editorSeed, setEditorSeed] = useState(0);
+  const [editorInitial, setEditorInitial] = useState(() => ({
+    body: mode === 'edit' ? (currentPost?.body ?? '') : '',
+    format: mode === 'edit' ? (currentPost?.bodyFormat ?? 'plain') : ('plain' as const),
+  }));
 
   useEffect(() => {
     clearError();
@@ -69,10 +96,13 @@ export function PostEditor({ departmentId, boardId, mode, onDone, onCancel }: Po
     if (draftTitle || draftBody) {
       setTitle(draftTitle);
       setBody(draftBody);
+      // 편집기를 다시 만들어 쓰던 내용을 실제로 보여준다
+      setEditorInitial({ body: draftBody, format: draftBodyFormat });
+      setEditorSeed((n) => n + 1);
       setRestoredDraft(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draftTitle, draftBody]);
+  }, [draftTitle, draftBody, draftBodyFormat]);
 
   const otherMembers = useMemo(
     () => members.filter((m) => m.email.toLowerCase() !== (myEmail ?? '').toLowerCase()),
@@ -80,7 +110,7 @@ export function PostEditor({ departmentId, boardId, mode, onDone, onCancel }: Po
   );
 
   const isTitleAtLimit = title.length >= STAFFROOM_POST_TITLE_MAX_LENGTH;
-  const isBodyTooLong = body.length > STAFFROOM_POST_BODY_ADVISORY_LENGTH;
+  const isBodyTooLong = plainBody.length > STAFFROOM_POST_BODY_ADVISORY_LENGTH;
   const canSubmit = title.trim().length > 0 && !submitting;
 
   const handleTitleChange = (value: string) => {
@@ -89,9 +119,11 @@ export function PostEditor({ departmentId, boardId, mode, onDone, onCancel }: Po
     if (mode === 'create') updateDraft(departmentId, { title: value });
   };
 
-  const handleBodyChange = (value: string) => {
+  const handleBodyChange = (value: string, plainText: string) => {
     setBody(value);
-    if (mode === 'create') updateDraft(departmentId, { body: value });
+    setPlainBody(plainText);
+    // 임시저장도 형식을 함께 보관한다 — 안 그러면 이어 쓸 때 서식이 풀린다
+    if (mode === 'create') updateDraft(departmentId, { body: value, bodyFormat: 'lexical' });
   };
 
   const toggleMention = (email: string) => {
@@ -104,17 +136,29 @@ export function PostEditor({ departmentId, boardId, mode, onDone, onCancel }: Po
     await discardDraft(departmentId);
     setTitle('');
     setBody('');
+    setPlainBody('');
+    // 편집기도 비워야 한다 — 상태만 비우면 화면에는 쓰던 글이 그대로 남는다
+    setEditorInitial({ body: '', format: 'plain' });
+    setEditorSeed((n) => n + 1);
     setRestoredDraft(false);
   };
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
     setSubmitting(true);
+    // 편집기가 만든 구조를 그대로 저장한다. 화면에 그릴 때 같은 형식 표시를
+    // 보고 판단하므로(ADR-069), 저장하는 쪽과 그리는 쪽이 어긋나지 않는다.
+    const bodyFormat = 'lexical' as const;
     const ok =
       mode === 'create'
-        ? await writePost(departmentId, { title, body, isRequired, mentionedEmails })
+        ? await writePost(departmentId, { title, body, bodyFormat, isRequired, mentionedEmails })
         : currentPost
-          ? await editPost(departmentId, currentPost.id, { title, body, mentionedEmails })
+          ? await editPost(departmentId, currentPost.id, {
+              title,
+              body,
+              bodyFormat,
+              mentionedEmails,
+            })
           : false;
     setSubmitting(false);
     if (ok) onDone();
@@ -175,13 +219,14 @@ export function PostEditor({ departmentId, boardId, mode, onDone, onCancel }: Po
           </p>
         </div>
 
-        <textarea
-          value={body}
-          onChange={(e) => handleBodyChange(e.target.value)}
-          placeholder="내용을 입력하세요"
-          rows={16}
-          className="mt-3 w-full resize-y rounded-lg border border-sp-border bg-sp-bg px-3.5 py-3 text-sm leading-relaxed text-sp-text placeholder-sp-muted focus:border-sp-accent focus:outline-none"
-        />
+        <div className="mt-3">
+          <StaffRoomRichEditor
+            key={editorSeed}
+            initialBody={editorInitial.body}
+            initialBodyFormat={editorInitial.format}
+            onChange={handleBodyChange}
+          />
+        </div>
         <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2 text-xs">
           {isBodyTooLong ? (
             <span className="text-sp-highlight">

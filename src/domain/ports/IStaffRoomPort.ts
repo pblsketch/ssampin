@@ -18,6 +18,7 @@ import type {
   StaffRoomRole,
 } from '@domain/entities/StaffRoom';
 import type {
+  StaffRoomBodyFormat,
   StaffRoomComment,
   StaffRoomDraft,
   StaffRoomModule,
@@ -162,7 +163,12 @@ export interface IStaffRoomPort {
     googleAccessToken: string,
     departmentId: string,
     postId: string,
-    input: { title: string; body: string; mentionedEmails: readonly string[] },
+    input: {
+      title: string;
+      body: string;
+      bodyFormat: StaffRoomBodyFormat;
+      mentionedEmails: readonly string[];
+    },
   ): Promise<StaffRoomPost>;
 
   /** 필독 지정·해제 (관리자만). 해제하면 사람별 읽음 기록도 지워진다 */
@@ -215,7 +221,7 @@ export interface IStaffRoomPort {
   saveDraft(
     googleAccessToken: string,
     departmentId: string,
-    input: { moduleId?: string; title: string; body: string },
+    input: { moduleId?: string; title: string; body: string; bodyFormat: StaffRoomBodyFormat },
   ): Promise<StaffRoomDraft | null>;
 
   /** 쓰던 글 버리기 */

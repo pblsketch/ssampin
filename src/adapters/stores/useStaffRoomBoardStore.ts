@@ -10,7 +10,9 @@
  *  - §8-A  임시저장은 자동으로 — 긴 글을 한 번 날리면 두 번 다시 안 쓴다.
  */
 import { create } from 'zustand';
+import { DEFAULT_STAFFROOM_BODY_FORMAT } from '@domain/entities/StaffRoomBoard';
 import type {
+  StaffRoomBodyFormat,
   StaffRoomComment,
   StaffRoomPost,
   StaffRoomPostSummary,
@@ -54,6 +56,14 @@ interface StaffRoomBoardState {
   /** 쓰던 글 */
   draftTitle: string;
   draftBody: string;
+  /**
+   * 쓰던 글의 본문 형식.
+   *
+   * 불러온 임시저장이 어떤 형식이었는지 기억해 두었다가 저장할 때 그대로
+   * 돌려보낸다. 기억하지 않으면 서식으로 쓰다 만 글을 이어 쓸 때 맨글로
+   * 덮어써져 서식이 풀린다.
+   */
+  draftBodyFormat: StaffRoomBodyFormat;
   draftMentions: string[];
   /** 마지막으로 자동 저장된 시각. 화면이 "자동 저장됨"을 보여줄 때 쓴다 */
   draftSavedAt: string | null;
@@ -68,12 +78,24 @@ interface StaffRoomBoardState {
 
   writePost: (
     departmentId: string,
-    input: { title: string; body: string; isRequired: boolean; mentionedEmails: string[] },
+    input: {
+      title: string;
+      body: string;
+      /** 본문을 무슨 형식으로 썼는지 — 편집기가 정해서 넘긴다 */
+      bodyFormat: StaffRoomBodyFormat;
+      isRequired: boolean;
+      mentionedEmails: string[];
+    },
   ) => Promise<boolean>;
   editPost: (
     departmentId: string,
     postId: string,
-    input: { title: string; body: string; mentionedEmails: string[] },
+    input: {
+      title: string;
+      body: string;
+      bodyFormat: StaffRoomBodyFormat;
+      mentionedEmails: string[];
+    },
   ) => Promise<boolean>;
   setRequired: (departmentId: string, postId: string, isRequired: boolean) => Promise<void>;
   removePost: (departmentId: string, postId: string) => Promise<boolean>;
@@ -86,7 +108,7 @@ interface StaffRoomBoardState {
   /** 타자에 따라 부르면 알아서 늦춰서 저장한다 */
   updateDraft: (
     departmentId: string,
-    patch: { title?: string; body?: string; mentions?: string[] },
+    patch: { title?: string; body?: string; bodyFormat?: StaffRoomBodyFormat; mentions?: string[] },
   ) => void;
   /** 쓰던 글 버리기 */
   discardDraft: (departmentId: string) => Promise<void>;
@@ -106,6 +128,7 @@ export const useStaffRoomBoardStore = create<StaffRoomBoardState>((set, get) => 
   readStatus: null,
   draftTitle: '',
   draftBody: '',
+  draftBodyFormat: DEFAULT_STAFFROOM_BODY_FORMAT,
   draftMentions: [],
   draftSavedAt: null,
   isLoading: false,
@@ -127,6 +150,7 @@ export const useStaffRoomBoardStore = create<StaffRoomBoardState>((set, get) => 
       readStatus: null,
       draftTitle: '',
       draftBody: '',
+      draftBodyFormat: DEFAULT_STAFFROOM_BODY_FORMAT,
       draftMentions: [],
       draftSavedAt: null,
       hasLoadedPosts: false,
@@ -203,11 +227,18 @@ export const useStaffRoomBoardStore = create<StaffRoomBoardState>((set, get) => 
         moduleId: context.moduleId ?? '',
         title: input.title,
         body: input.body,
+        bodyFormat: input.bodyFormat,
         isRequired: input.isRequired,
         mentionedEmails: input.mentionedEmails,
       });
       // 올렸으면 쓰던 글은 서버에서도 지워진다 — 화면 상태도 비운다
-      set({ draftTitle: '', draftBody: '', draftMentions: [], draftSavedAt: null });
+      set({
+        draftTitle: '',
+        draftBody: '',
+        draftBodyFormat: DEFAULT_STAFFROOM_BODY_FORMAT,
+        draftMentions: [],
+        draftSavedAt: null,
+      });
       await get().loadPosts(departmentId, context.moduleId ?? undefined);
       return true;
     } catch (err) {
@@ -352,9 +383,21 @@ export const useStaffRoomBoardStore = create<StaffRoomBoardState>((set, get) => 
         moduleId ?? context.moduleId ?? undefined,
       );
       if (draft) {
-        set({ draftTitle: draft.title, draftBody: draft.body, draftSavedAt: draft.updatedAt });
+        set({
+          draftTitle: draft.title,
+          draftBody: draft.body,
+          // 저장돼 있던 형식을 그대로 이어받는다 — 여기서 기본값으로 되돌리면
+          // 서식으로 쓰다 만 글이 이어 쓰는 순간 맨글로 바뀐다.
+          draftBodyFormat: draft.bodyFormat,
+          draftSavedAt: draft.updatedAt,
+        });
       } else {
-        set({ draftTitle: '', draftBody: '', draftSavedAt: null });
+        set({
+          draftTitle: '',
+          draftBody: '',
+          draftBodyFormat: DEFAULT_STAFFROOM_BODY_FORMAT,
+          draftSavedAt: null,
+        });
       }
     } catch (err) {
       // 쓰던 글을 못 불러와도 새 글은 쓸 수 있어야 한다 — 화면을 막지 않는다
@@ -366,6 +409,7 @@ export const useStaffRoomBoardStore = create<StaffRoomBoardState>((set, get) => 
     set((state) => ({
       draftTitle: patch.title ?? state.draftTitle,
       draftBody: patch.body ?? state.draftBody,
+      draftBodyFormat: patch.bodyFormat ?? state.draftBodyFormat,
       draftMentions: patch.mentions ?? state.draftMentions,
     }));
 
@@ -381,6 +425,8 @@ export const useStaffRoomBoardStore = create<StaffRoomBoardState>((set, get) => 
             moduleId: context.moduleId ?? undefined,
             title: get().draftTitle,
             body: get().draftBody,
+            // 임시저장은 글과 같은 형식으로 보관해야 이어 쓸 때 서식이 풀리지 않는다.
+            bodyFormat: get().draftBodyFormat,
           });
           set({ draftSavedAt: saved?.updatedAt ?? null });
         } catch (err) {
@@ -396,7 +442,13 @@ export const useStaffRoomBoardStore = create<StaffRoomBoardState>((set, get) => 
       clearTimeout(draftTimer);
       draftTimer = null;
     }
-    set({ draftTitle: '', draftBody: '', draftMentions: [], draftSavedAt: null });
+    set({
+      draftTitle: '',
+      draftBody: '',
+      draftBodyFormat: DEFAULT_STAFFROOM_BODY_FORMAT,
+      draftMentions: [],
+      draftSavedAt: null,
+    });
     const token = await getGoogleToken();
     if (!token) return;
     try {

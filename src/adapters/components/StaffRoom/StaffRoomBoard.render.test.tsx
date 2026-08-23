@@ -122,7 +122,7 @@ function summary(over: Partial<StaffRoomPostSummary> = {}): StaffRoomPostSummary
 }
 
 function fullPost(over: Partial<StaffRoomPost> = {}): StaffRoomPost {
-  return { ...summary(), body: '본문입니다', mentionedEmails: [], ...over };
+  return { ...summary(), body: '본문입니다', bodyFormat: 'plain', mentionedEmails: [], ...over };
 }
 
 beforeEach(() => {
@@ -298,6 +298,7 @@ describe('글 상세 — 댓글', () => {
         authorEmail: 'kim@school.kr',
         authorName: '김부장',
         body: '확인했습니다',
+        bodyFormat: 'plain',
         createdAt: '2026-08-20T03:00:00.000Z',
       },
     ];

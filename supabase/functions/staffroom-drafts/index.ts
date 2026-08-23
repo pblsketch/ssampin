@@ -26,12 +26,14 @@ import {
   loadBoardModule,
   moduleBelongsTo,
   toAccessMembers,
+  normalizeBodyFormat,
 } from '../_shared/staffroomDb.ts';
 
 interface DraftRow {
   module_id: string;
   title: string;
   body: string;
+  body_format: string;
   updated_at: string;
 }
 
@@ -80,7 +82,7 @@ serve(async (req: Request) => {
     if (action === 'get') {
       const { data, error } = await db
         .from('staffroom_drafts')
-        .select('module_id, title, body, updated_at')
+        .select('module_id, title, body, body_format, updated_at')
         .eq('module_id', moduleId)
         .eq('author_email', identity.email)
         .maybeSingle();
@@ -100,6 +102,7 @@ serve(async (req: Request) => {
               moduleId: draft.module_id,
               title: draft.title,
               body: draft.body,
+              bodyFormat: normalizeBodyFormat(draft.body_format),
               updatedAt: draft.updated_at,
             }
           : null,
@@ -110,6 +113,7 @@ serve(async (req: Request) => {
     if (action === 'save') {
       const title = typeof body?.title === 'string' ? body.title : '';
       const draftBody = typeof body?.body === 'string' ? body.body : '';
+      const draftFormat = normalizeBodyFormat(body?.bodyFormat);
 
       // 둘 다 비었으면 저장할 게 없다 — 빈 임시저장이 쌓이지 않게 지운다
       if (title.trim() === '' && draftBody.trim() === '') {
@@ -128,6 +132,7 @@ serve(async (req: Request) => {
           author_email: identity.email,
           title,
           body: draftBody,
+          body_format: draftFormat,
           updated_at: updatedAt,
         },
         { onConflict: 'module_id,author_email' },
@@ -141,7 +146,9 @@ serve(async (req: Request) => {
         );
       }
 
-      return jsonResponse({ draft: { moduleId, title, body: draftBody, updatedAt } });
+      return jsonResponse({
+        draft: { moduleId, title, body: draftBody, bodyFormat: draftFormat, updatedAt },
+      });
     }
 
     // ── 지우기 ─────────────────────────────────────────────────────

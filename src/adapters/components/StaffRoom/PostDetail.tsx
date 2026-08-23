@@ -1,7 +1,8 @@
 /**
  * 온라인 교무실 — 글 하나 보기 (M2)
  *
- * 본문은 순수 텍스트로만 렌더한다(`whitespace-pre-wrap`). 원시 HTML을 그대로 심는 방식을
+ * 본문은 `StaffRoomRichText` 한 곳에서만 그린다 — 맨글이든 서식 있는 글이든 그
+ * 부품이 형식을 보고 판단한다(ADR-069). 원시 HTML을 그대로 심는 방식을
  * 쓰면 다른 선생님의 글이 내 화면에서 스크립트로 실행될 수 있어 회귀 게이트가 이를 막는다.
  *
  * **읽음 현황(누가 읽고 누가 안 읽었는지)**은 필독 글에만 있고, 이 화면에서 가장
@@ -20,6 +21,7 @@ import {
 } from '@domain/rules/staffRoomBoardPermission';
 import { STAFFROOM_COMMENT_MAX_LENGTH } from '@domain/entities/StaffRoomBoard';
 import { formatPostTime } from './boardFormat';
+import { StaffRoomRichText } from './StaffRoomRichText';
 
 interface PostDetailProps {
   departmentId: string;
@@ -161,9 +163,11 @@ export function PostDetail({ departmentId, onEdit }: PostDetailProps) {
           </div>
         </div>
 
-        <p className="mt-5 whitespace-pre-wrap text-sm leading-relaxed text-sp-text">
-          {currentPost.body}
-        </p>
+        <StaffRoomRichText
+          body={currentPost.body}
+          bodyFormat={currentPost.bodyFormat}
+          className="mt-5 text-sm"
+        />
       </div>
 
       {currentPost.isRequired && readStatus && (

@@ -141,6 +141,7 @@ export interface PostSummaryRow {
 export interface PostRow extends PostSummaryRow {
   department_id: string;
   body: string;
+  body_format: string;
 }
 
 /** DB 에서 읽은 댓글 행 */
@@ -149,6 +150,7 @@ export interface CommentRow {
   post_id: string;
   author_email: string;
   body: string;
+  body_format: string;
   created_at: string;
 }
 
@@ -158,7 +160,22 @@ export const POST_SUMMARY_COLUMNS =
 
 /** 본문까지 가져오는 컬럼 */
 export const POST_FULL_COLUMNS =
-  'id, module_id, department_id, title, body, author_email, is_required, created_at, updated_at';
+  'id, module_id, department_id, title, body, body_format, author_email, is_required, created_at, updated_at';
+
+/**
+ * 본문 형식으로 받아들일 값. (마이그레이션 053 · ADR-069)
+ *
+ * 클라이언트가 보낸 값을 그대로 믿지 않는다 — 모르는 형식이 저장되면 화면이
+ * 그 글을 어떻게 그려야 할지 판단할 수 없고, DB 의 CHECK 제약에 걸려 저장
+ * 자체가 실패해 "글이 안 올라간다"는 신고로 돌아온다. 아는 값이 아니면
+ * 조용히 맨글로 떨어뜨린다(글을 잃는 것보다 덜 꾸며지는 편이 낫다).
+ */
+export const STAFFROOM_BODY_FORMATS = ['plain', 'lexical'] as const;
+export type StaffRoomBodyFormat = (typeof STAFFROOM_BODY_FORMATS)[number];
+
+export function normalizeBodyFormat(value: unknown): StaffRoomBodyFormat {
+  return value === 'lexical' ? 'lexical' : 'plain';
+}
 
 /**
  * 지메일 → 부서에서 쓰는 표시 이름.
@@ -268,6 +285,10 @@ export function toCommentResponse(row: CommentRow, names: Map<string, string | n
     authorEmail: row.author_email,
     authorName: names.get(row.author_email.trim().toLowerCase()) ?? null,
     body: row.body,
+    // 댓글에는 아직 서식 편집기가 없어 값은 항상 plain 이다. 그래도 응답에
+    // 실어 보내는 이유는, 화면이 글과 댓글을 같은 규칙으로 그리게 하기
+    // 위해서다 — 한쪽만 형식을 모르면 그리는 코드가 두 벌로 갈린다.
+    bodyFormat: normalizeBodyFormat(row.body_format),
     createdAt: row.created_at,
   };
 }

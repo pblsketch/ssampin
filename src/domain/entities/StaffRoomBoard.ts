@@ -55,9 +55,31 @@ export interface StaffRoomPostSummary {
   readonly mentionsMe: boolean;
 }
 
+/**
+ * 본문이 어떤 형식으로 쓰였는가. (마이그레이션 053 · ADR-069)
+ *
+ * - `plain`   — 맨글. 줄바꿈만 살리고 나머지 문자는 글자 그대로 보여준다.
+ * - `lexical` — 서식 있는 글. 편집기가 만든 구조를 그대로 담는다.
+ *
+ * **표시가 없으면 화면이 저장된 글자를 어떻게 읽을지 판단할 수 없다** — 꾸밈이
+ * 통째로 날아가거나, 저장된 구조가 글자로 보인다. 그래서 서식 편집기보다 이
+ * 칸이 먼저 들어갔다.
+ *
+ * `markdown` 과 `html` 은 일부러 없다.
+ *  - markdown 은 **글자색·글자크기를 적을 방법이 없어서** 뺐다(오너가 원한 화면에
+ *    그 둘이 있다). 화면이 그릴 줄 모르는 형식을 허용값에 남기지 않는다.
+ *  - html 은 교무실이 **남이 쓴 글을 내 화면에 펼치는 첫 기능**이라 뺐다. 앱에
+ *    소독 도구가 없다. lexical 형식은 화면이 아는 종류의 조각만 골라 그리는
+ *    구조라 소독 없이도 안전하다.
+ */
+export type StaffRoomBodyFormat = 'plain' | 'lexical';
+
+export const DEFAULT_STAFFROOM_BODY_FORMAT: StaffRoomBodyFormat = 'plain';
+
 /** 글 하나 (본문 포함) */
 export interface StaffRoomPost extends StaffRoomPostSummary {
   readonly body: string;
+  readonly bodyFormat: StaffRoomBodyFormat;
   /** 본문에서 불린 사람들의 지메일 */
   readonly mentionedEmails: readonly string[];
 }
@@ -69,6 +91,7 @@ export interface StaffRoomComment {
   readonly authorEmail: string;
   readonly authorName: string | null;
   readonly body: string;
+  readonly bodyFormat: StaffRoomBodyFormat;
   readonly createdAt: string;
 }
 
@@ -87,6 +110,8 @@ export interface StaffRoomDraft {
   readonly moduleId: string;
   readonly title: string;
   readonly body: string;
+  /** 글과 함께 왕복해야 이어 쓸 때 서식이 풀리지 않는다 */
+  readonly bodyFormat: StaffRoomBodyFormat;
   readonly updatedAt: string;
 }
 
@@ -95,6 +120,7 @@ export interface WriteStaffRoomPostInput {
   readonly moduleId: string;
   readonly title: string;
   readonly body: string;
+  readonly bodyFormat: StaffRoomBodyFormat;
   readonly isRequired: boolean;
   readonly mentionedEmails: readonly string[];
 }

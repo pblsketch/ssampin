@@ -33,7 +33,7 @@ import {
 } from '../_shared/staffroomDb.ts';
 
 const COMMENT_MAX = 2_000;
-const COMMENT_COLUMNS = 'id, post_id, author_email, body, created_at';
+const COMMENT_COLUMNS = 'id, post_id, author_email, body, body_format, created_at';
 
 serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {

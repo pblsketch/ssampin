@@ -24,6 +24,7 @@ import type {
   StaffRoomRole,
 } from '@domain/entities/StaffRoom';
 import type {
+  StaffRoomBodyFormat,
   StaffRoomComment,
   StaffRoomDraft,
   StaffRoomModule,
@@ -283,6 +284,7 @@ export class StaffRoomSupabaseClient implements IStaffRoomPort {
       moduleId: input.moduleId,
       title: input.title,
       body: input.body,
+      bodyFormat: input.bodyFormat,
       isRequired: input.isRequired,
       mentionedEmails: input.mentionedEmails,
     });
@@ -293,7 +295,12 @@ export class StaffRoomSupabaseClient implements IStaffRoomPort {
     googleAccessToken: string,
     departmentId: string,
     postId: string,
-    input: { title: string; body: string; mentionedEmails: readonly string[] },
+    input: {
+      title: string;
+      body: string;
+      bodyFormat: StaffRoomBodyFormat;
+      mentionedEmails: readonly string[];
+    },
   ): Promise<StaffRoomPost> {
     const res = await this.invoke<{ post: StaffRoomPost }>('staffroom-posts', {
       action: 'update',
@@ -302,6 +309,7 @@ export class StaffRoomSupabaseClient implements IStaffRoomPort {
       postId,
       title: input.title,
       body: input.body,
+      bodyFormat: input.bodyFormat,
       mentionedEmails: input.mentionedEmails,
     });
     return res.post;
@@ -404,7 +412,7 @@ export class StaffRoomSupabaseClient implements IStaffRoomPort {
   async saveDraft(
     googleAccessToken: string,
     departmentId: string,
-    input: { moduleId?: string; title: string; body: string },
+    input: { moduleId?: string; title: string; body: string; bodyFormat: StaffRoomBodyFormat },
   ): Promise<StaffRoomDraft | null> {
     const res = await this.invoke<{ draft: StaffRoomDraft | null }>('staffroom-drafts', {
       action: 'save',
@@ -413,6 +421,7 @@ export class StaffRoomSupabaseClient implements IStaffRoomPort {
       moduleId: input.moduleId,
       title: input.title,
       body: input.body,
+      bodyFormat: input.bodyFormat,
     });
     return res.draft;
   }

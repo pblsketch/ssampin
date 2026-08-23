@@ -47,6 +47,7 @@ import {
   toPostSummaryResponse,
   POST_FULL_COLUMNS,
   POST_SUMMARY_COLUMNS,
+  normalizeBodyFormat,
   type MemberRow,
   type PostRow,
   type PostSummaryRow,
@@ -239,6 +240,7 @@ serve(async (req: Request) => {
             mentionsMe: mentionedEmails.includes(identity.email),
           }),
           body: post.body,
+          bodyFormat: normalizeBodyFormat(post.body_format),
           mentionedEmails,
         },
         myRole,
@@ -252,6 +254,7 @@ serve(async (req: Request) => {
 
       const title = typeof body?.title === 'string' ? body.title.trim() : '';
       const postBody = typeof body?.body === 'string' ? body.body : '';
+      const bodyFormat = normalizeBodyFormat(body?.bodyFormat);
       const isRequired = body?.isRequired === true;
 
       if (!title) return errorResponse('제목을 입력해주세요', 400);
@@ -285,6 +288,7 @@ serve(async (req: Request) => {
           author_email: identity.email,
           title,
           body: postBody,
+          body_format: bodyFormat,
           is_required: isRequired,
         })
         .select(POST_FULL_COLUMNS)
@@ -326,6 +330,7 @@ serve(async (req: Request) => {
             mentionsMe: mentions.includes(identity.email),
           }),
           body: post.body,
+          bodyFormat: normalizeBodyFormat(post.body_format),
           mentionedEmails: mentions,
         },
       });
@@ -365,6 +370,10 @@ serve(async (req: Request) => {
 
       const title = typeof body?.title === 'string' ? body.title.trim() : '';
       const postBody = typeof body?.body === 'string' ? body.body : '';
+      // 고칠 때도 형식을 함께 받는다. 본문만 바꾸고 형식을 그대로 두면,
+      // 맨글이던 옛 글을 서식 편집기로 고쳤을 때 형식이 맨글로 남아 기호가
+      // 그대로 보인다.
+      const bodyFormat = normalizeBodyFormat(body?.bodyFormat);
       if (!title) return errorResponse('제목을 입력해주세요', 400);
       if (title.length > TITLE_MAX) {
         return errorResponse(`제목은 ${TITLE_MAX}자까지 쓸 수 있습니다`, 400);
@@ -372,7 +381,12 @@ serve(async (req: Request) => {
 
       const { data: updated, error: updateError } = await db
         .from('staffroom_posts')
-        .update({ title, body: postBody, updated_at: new Date().toISOString() })
+        .update({
+          title,
+          body: postBody,
+          body_format: bodyFormat,
+          updated_at: new Date().toISOString(),
+        })
         .eq('id', postId)
         .eq('department_id', departmentId)
         .select(POST_FULL_COLUMNS)
@@ -408,6 +422,7 @@ serve(async (req: Request) => {
             mentionsMe: mentions.includes(identity.email),
           }),
           body: post.body,
+          bodyFormat: normalizeBodyFormat(post.body_format),
           mentionedEmails: mentions,
         },
       });
