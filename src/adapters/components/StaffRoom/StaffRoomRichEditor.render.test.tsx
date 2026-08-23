@@ -66,16 +66,27 @@ describe('교무실 글쓰기 편집기 — 디자인 규칙', () => {
  *     끄고 쓴 "회의는" 이 굵어졌다(첫 누름이 통째로 무시된다).
  */
 describe('교무실 글쓰기 편집기 — 툴바가 편집기 초점을 뺏지 않는다', () => {
-  it('단추에 onMouseDown 과 onClick 이 모두 걸려 있다', async () => {
+  it('초점 뺏기를 막는 손잡이가 있고, 모든 단추가 그것을 쓴다', async () => {
     const source = await import('node:fs').then((fs) =>
       fs.readFileSync(new URL('./StaffRoomRichEditor.tsx', import.meta.url), 'utf-8'),
     );
 
-    // 초점 뺏기 방지 — 이게 빠지면 첫 누름이 무시된다
-    expect(source).toMatch(/onMouseDown=\{\(e\) => e\.preventDefault\(\)\}/);
-    // 명령은 선택이 자리잡은 뒤에 — 이게 onMouseDown 으로 올라가면 엉뚱한 곳에 걸린다
-    expect(source).toMatch(/onClick=\{\(\) => \{\s*editor\.dispatchCommand/);
-    // onMouseDown 안에서 명령을 보내지 않는다 (되돌아가기 방지)
+    // 손잡이 자체 — 이게 빠지면 첫 누름이 통째로 무시된다
+    expect(source).toMatch(/const keepFocus = \(e: React\.MouseEvent\) => e\.preventDefault\(\)/);
+
+    // 툴바의 모든 단추가 그것을 쓴다. 하나라도 빠지면 그 단추만 조용히 어긋난다.
+    const toolbarButtons = source.match(/<button\s/g) ?? [];
+    const keepFocusUses = source.match(/onMouseDown=\{keepFocus\}/g) ?? [];
+    expect(keepFocusUses.length).toBeGreaterThanOrEqual(toolbarButtons.length - 1);
+
+    // 명령은 선택이 자리잡은 뒤(onClick)에 보낸다
+    expect(source).toMatch(/onClick=\{\(\) => editor\.dispatchCommand/);
+  });
+
+  it('onMouseDown 안에서 서식 명령을 보내지 않는다 (되돌아가기 방지)', async () => {
+    const source = await import('node:fs').then((fs) =>
+      fs.readFileSync(new URL('./StaffRoomRichEditor.tsx', import.meta.url), 'utf-8'),
+    );
     expect(source).not.toMatch(/onMouseDown=\{\([^)]*\) => \{[\s\S]*?dispatchCommand/);
   });
 });

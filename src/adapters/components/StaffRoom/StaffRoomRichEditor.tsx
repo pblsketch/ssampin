@@ -17,7 +17,7 @@
  * 그래서 이 파일은 Lexical 타입을 밖으로 내보내지 않고, 글자(JSON 문자열)만
  * 주고받는다.
  */
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { LexicalComposer } from '@lexical/react/LexicalComposer';
 import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin';
 import { ContentEditable } from '@lexical/react/LexicalContentEditable';
@@ -25,7 +25,7 @@ import { HistoryPlugin } from '@lexical/react/LexicalHistoryPlugin';
 import { OnChangePlugin } from '@lexical/react/LexicalOnChangePlugin';
 import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
-import { $patchStyleText } from '@lexical/selection';
+import { $patchStyleText, $getSelectionStyleValueForProperty } from '@lexical/selection';
 import { LinkPlugin } from '@lexical/react/LexicalLinkPlugin';
 import { AutoLinkPlugin } from '@lexical/react/LexicalAutoLinkPlugin';
 import { ClickableLinkPlugin } from '@lexical/react/LexicalClickableLinkPlugin';
@@ -66,7 +66,58 @@ const FORMAT_BUTTONS: readonly {
 ];
 
 /**
+ * 지금 고른 글자에 무엇이 걸려 있는가.
+ *
+ * 이걸 안 보여주면 선생님은 **굵게가 켜져 있는지 알 수 없다.** 눌러 보고
+ * 글자를 쳐 봐야 아는 상태였다. 단추가 자기 상태를 말하게 한다.
+ */
+interface ActiveFormat {
+  bold: boolean;
+  italic: boolean;
+  underline: boolean;
+  strikethrough: boolean;
+  color: StaffRoomTextColor;
+  size: StaffRoomTextSize;
+}
+
+const EMPTY_ACTIVE: ActiveFormat = {
+  bold: false,
+  italic: false,
+  underline: false,
+  strikethrough: false,
+  color: 'default',
+  size: 'normal',
+};
+
+/** 편집기가 돌려준 꾸밈 값 → 우리가 아는 이름. 모르는 값이면 기본으로 */
+function nameOfColor(value: string): StaffRoomTextColor {
+  for (const name of Object.keys(STAFFROOM_TEXT_COLORS) as StaffRoomTextColor[]) {
+    if (name !== 'default' && staffRoomTextColorValue(name) === value) return name;
+  }
+  return 'default';
+}
+function nameOfSize(value: string): StaffRoomTextSize {
+  for (const name of Object.keys(STAFFROOM_TEXT_SIZES) as StaffRoomTextSize[]) {
+    if (name !== 'normal' && staffRoomTextSizeValue(name) === value) return name;
+  }
+  return 'normal';
+}
+
+/**
  * 툴바.
+ *
+ * 모양은 **앱이 이미 쓰는 말투를 따른다** — 메모 화면의 "색상 선택 + 동그라미"
+ * (design examples/ssampin_memo_and_notes_screen)가 바로 이 문제를 이미 풀어
+ * 놓았다. 새 미감을 지어내지 않고 그 방식을 정확히 가져왔다.
+ *
+ *   [ 가 보통 ]  [ 굵게 기울임 밑줄 취소선 ]  [ ● 기본 ]  [ 링크 ]
+ *      크기 알약       한 덩어리로 묶은 서식       색 알약     동작
+ *
+ * 서식 넷을 한 덩어리로 묶은 이유: 성격이 같은 것끼리 붙이면 눈이 한 번에
+ * 훑는다. 색·크기·링크는 각각 다른 일이라 떼어 놓았다.
+ *
+ * 서랍(크기·색·링크)은 **한 번에 하나만** 열린다. 둘이 겹쳐 뜨면 어지럽고,
+ * 편집기가 아래로 밀려 글이 안 보인다.
  *
  * ⚠️ **`onMouseDown` 과 `onClick` 의 역할을 나눠야 한다.** 둘 중 하나만 쓰면
  * 둘 다 틀린다. 브라우저 시험으로 양쪽 실패를 다 확인하고 정한 모양이다.
@@ -87,35 +138,33 @@ const FORMAT_BUTTONS: readonly {
  */
 function Toolbar(): JSX.Element {
   const [editor] = useLexicalComposerContext();
+  const [active, setActive] = useState<ActiveFormat>(EMPTY_ACTIVE);
 
-  /**
-   * 링크 입력줄의 여닫음.
-   *
-   * ⚠️ **`window.prompt` 를 쓰지 않는다.** 쌤핀은 Electron 앱인데 Electron 은
-   * `prompt` 를 지원하지 않는다 — 브라우저에서 개발할 때는 멀쩡히 되다가
-   * 실제 앱에서만 아무 일도 일어나지 않는다. 화면 안에서 받는다.
-   */
-  const [linkOpen, setLinkOpen] = useState(false);
+  /** 어떤 서랍이 열려 있는가. 한 번에 하나만 */
+  const [openMenu, setOpenMenu] = useState<'size' | 'color' | 'link' | null>(null);
+
   const [linkUrl, setLinkUrl] = useState('https://');
   const [linkError, setLinkError] = useState<string | null>(null);
 
-  const applyLink = () => {
-    const trimmed = linkUrl.trim();
-    if (trimmed === '' || trimmed === 'https://') {
-      setLinkError('주소를 붙여넣어 주세요.');
-      return;
-    }
-    if (!isValidStaffRoomLinkHref(trimmed)) {
-      // 여기서 먼저 막는다. 그냥 넣으면 저장은 되는데 보여줄 때 도메인 검사에
-      // 걸려 링크가 조용히 사라진다 — 쓴 사람은 이유를 모른다.
-      setLinkError('http, https, mailto 로 시작하는 주소만 넣을 수 있어요.');
-      return;
-    }
-    editor.dispatchCommand(TOGGLE_LINK_COMMAND, trimmed);
-    setLinkOpen(false);
-    setLinkUrl('https://');
-    setLinkError(null);
-  };
+  // 커서를 옮길 때마다 그 자리의 꾸밈을 읽어 단추에 비춘다
+  useEffect(
+    () =>
+      editor.registerUpdateListener(({ editorState }) => {
+        editorState.read(() => {
+          const selection = $getSelection();
+          if (!$isRangeSelection(selection)) return;
+          setActive({
+            bold: selection.hasFormat('bold'),
+            italic: selection.hasFormat('italic'),
+            underline: selection.hasFormat('underline'),
+            strikethrough: selection.hasFormat('strikethrough'),
+            color: nameOfColor($getSelectionStyleValueForProperty(selection, 'color', '')),
+            size: nameOfSize($getSelectionStyleValueForProperty(selection, 'font-size', '')),
+          });
+        });
+      }),
+    [editor],
+  );
 
   /**
    * 색·크기를 고른 글자에 입힌다.
@@ -130,96 +179,182 @@ function Toolbar(): JSX.Element {
         if (!$isRangeSelection(selection)) return;
         // 빈 값은 `''` 가 아니라 **null** 로 보낸다. `''` 를 보내면 저장된 값에
         // `font-size: ;` 같은 빈 항목이 남는다(브라우저 확인에서 실제로 봤다).
-        // 해롭진 않지만 글마다 쌓이고, 나중에 저장값을 읽는 사람을 헷갈리게 한다.
         $patchStyleText(selection, { [property]: value === '' ? null : value });
       });
     },
     [editor],
   );
 
-  const buttonClass =
-    'flex h-8 w-8 items-center justify-center rounded text-sp-muted transition-colors hover:bg-black/10 hover:text-sp-text';
-  const selectClass =
-    'h-8 rounded border border-sp-border bg-sp-surface px-2 text-xs text-sp-text transition-colors hover:bg-black/5';
+  const applyLink = () => {
+    const trimmed = linkUrl.trim();
+    if (trimmed === '' || trimmed === 'https://') {
+      setLinkError('주소를 붙여넣어 주세요.');
+      return;
+    }
+    if (!isValidStaffRoomLinkHref(trimmed)) {
+      // 여기서 먼저 막는다. 그냥 넣으면 저장은 되는데 보여줄 때 도메인 검사에
+      // 걸려 링크가 조용히 사라진다 — 쓴 사람은 이유를 모른다.
+      setLinkError('http, https, mailto 로 시작하는 주소만 넣을 수 있어요.');
+      return;
+    }
+    editor.dispatchCommand(TOGGLE_LINK_COMMAND, trimmed);
+    setOpenMenu(null);
+    setLinkUrl('https://');
+    setLinkError(null);
+  };
+
+  /** 초점을 뺏지 않는 단추 — 툴바의 모든 단추가 이걸 쓴다 */
+  const keepFocus = (e: React.MouseEvent) => e.preventDefault();
+
+  const toggleMenu = (menu: 'size' | 'color' | 'link') =>
+    setOpenMenu((current) => (current === menu ? null : menu));
+
+  /** 알약 하나. 눌린 상태면 강조색으로 채운다 */
+  const pill = (on: boolean) =>
+    `flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs transition-all duration-sp-base ease-sp-out active:scale-95 ${
+      on
+        ? 'border-sp-accent bg-sp-accent text-white'
+        : 'border-sp-border text-sp-muted hover:border-sp-accent hover:text-sp-text'
+    }`;
+
+  /** 지금 색을 보여주는 동그라미. 기본색은 글자색 그대로 */
+  const swatchColor = (name: StaffRoomTextColor): string =>
+    name === 'default' ? 'var(--sp-text)' : staffRoomTextColorValue(name);
 
   return (
     <>
-      <div className="flex flex-wrap items-center gap-1 border-b border-sp-border px-2 py-1.5">
+      <div className="flex flex-wrap items-center gap-1.5 border-b border-sp-border px-2.5 py-2">
         {/* 글자 크기 */}
-        <select
-          className={selectClass}
+        <button
+          type="button"
+          onMouseDown={keepFocus}
+          onClick={() => toggleMenu('size')}
+          className={pill(openMenu === 'size' || active.size !== 'normal')}
           aria-label="글자 크기"
+          aria-expanded={openMenu === 'size'}
           title="글자 크기"
-          defaultValue="normal"
-          onMouseDown={(e) => e.stopPropagation()}
-          onChange={(e) => {
-            const size = e.target.value as StaffRoomTextSize;
-            // '보통'은 빈 값 → 걸려 있던 크기를 지운다
-            patch('font-size', staffRoomTextSizeValue(size));
-          }}
         >
-          {(Object.keys(STAFFROOM_TEXT_SIZES) as StaffRoomTextSize[]).map((size) => (
-            <option key={size} value={size}>
-              {STAFFROOM_TEXT_SIZE_LABELS[size]}
-            </option>
-          ))}
-        </select>
+          <span className="material-symbols-outlined text-icon-sm">format_size</span>
+          {STAFFROOM_TEXT_SIZE_LABELS[active.size]}
+        </button>
 
-        <span className="mx-0.5 h-5 w-px bg-sp-border" aria-hidden />
+        {/* 서식 넷 — 성격이 같아 한 덩어리로 묶는다 */}
+        <div className="flex items-center gap-0.5 rounded-full border border-sp-border p-0.5">
+          {FORMAT_BUTTONS.map((btn) => {
+            const on = active[btn.format as keyof ActiveFormat] === true;
+            return (
+              <button
+                key={btn.format}
+                type="button"
+                // 초점 뺏기만 막고(onMouseDown), 실제 명령은 onClick 에서 보낸다.
+                onMouseDown={keepFocus}
+                onClick={() => editor.dispatchCommand(FORMAT_TEXT_COMMAND, btn.format)}
+                aria-label={btn.label}
+                aria-pressed={on}
+                title={btn.label}
+                className={`flex h-7 w-7 items-center justify-center rounded-full transition-all duration-sp-base ease-sp-out active:scale-90 ${
+                  on
+                    ? 'bg-sp-accent text-white'
+                    : 'text-sp-muted hover:bg-black/5 hover:text-sp-text'
+                }`}
+              >
+                <span className="material-symbols-outlined text-icon-sm">{btn.icon}</span>
+              </button>
+            );
+          })}
+        </div>
 
-        {FORMAT_BUTTONS.map((btn) => (
-          <button
-            key={btn.format}
-            type="button"
-            // 초점 뺏기만 막고(onMouseDown), 실제 명령은 onClick 에서 보낸다.
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => {
-              editor.dispatchCommand(FORMAT_TEXT_COMMAND, btn.format);
-            }}
-            className={buttonClass}
-            aria-label={btn.label}
-            title={btn.label}
-          >
-            <span className="material-symbols-outlined text-icon">{btn.icon}</span>
-          </button>
-        ))}
+        {/* 글자색 — 지금 색을 동그라미로 보여준다 */}
+        <button
+          type="button"
+          onMouseDown={keepFocus}
+          onClick={() => toggleMenu('color')}
+          className={pill(openMenu === 'color')}
+          aria-label="글자색"
+          aria-expanded={openMenu === 'color'}
+          title="글자색"
+        >
+          <span
+            className="h-3.5 w-3.5 rounded-full border border-sp-border"
+            style={{ backgroundColor: swatchColor(active.color) }}
+            aria-hidden
+          />
+          {STAFFROOM_TEXT_COLOR_LABELS[active.color]}
+        </button>
 
         {/* 링크 */}
         <button
           type="button"
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={() => setLinkOpen((open) => !open)}
-          className={buttonClass}
+          onMouseDown={keepFocus}
+          onClick={() => toggleMenu('link')}
+          className={pill(openMenu === 'link')}
           aria-label="링크"
+          aria-expanded={openMenu === 'link'}
           title="링크 붙여넣기"
         >
-          <span className="material-symbols-outlined text-icon">link</span>
+          <span className="material-symbols-outlined text-icon-sm">link</span>
+          링크
         </button>
-
-        <span className="mx-0.5 h-5 w-px bg-sp-border" aria-hidden />
-
-        {/* 글자색 */}
-        <select
-          className={selectClass}
-          aria-label="글자색"
-          title="글자색"
-          defaultValue="default"
-          onChange={(e) => {
-            const color = e.target.value as StaffRoomTextColor;
-            // '기본'은 빈 값 → 걸려 있던 색을 지운다
-            patch('color', staffRoomTextColorValue(color));
-          }}
-        >
-          {(Object.keys(STAFFROOM_TEXT_COLORS) as StaffRoomTextColor[]).map((color) => (
-            <option key={color} value={color}>
-              {STAFFROOM_TEXT_COLOR_LABELS[color]}
-            </option>
-          ))}
-        </select>
       </div>
 
-      {linkOpen && (
-        <div className="flex flex-wrap items-center gap-2 border-b border-sp-border bg-sp-bg px-2 py-2">
+      {/* ── 서랍 ─────────────────────────────────────────────────── */}
+
+      {openMenu === 'size' && (
+        <div className="flex flex-wrap items-center gap-1.5 border-b border-sp-border bg-sp-bg px-2.5 py-2">
+          {(Object.keys(STAFFROOM_TEXT_SIZES) as StaffRoomTextSize[]).map((size) => (
+            <button
+              key={size}
+              type="button"
+              onMouseDown={keepFocus}
+              onClick={() => {
+                patch('font-size', staffRoomTextSizeValue(size));
+                setOpenMenu(null);
+              }}
+              className={`rounded-lg border px-3 py-1.5 leading-none transition-all duration-sp-base ease-sp-out active:scale-95 ${
+                active.size === size
+                  ? 'border-sp-accent text-sp-text'
+                  : 'border-sp-border text-sp-muted hover:text-sp-text'
+              }`}
+              // 고를 크기 그대로 보여준다 — 이름만 읽고 고르면 매번 되돌리게 된다
+              style={{ fontSize: staffRoomTextSizeValue(size) || '1rem' }}
+            >
+              {STAFFROOM_TEXT_SIZE_LABELS[size]}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {openMenu === 'color' && (
+        <div className="flex flex-wrap items-center gap-2 border-b border-sp-border bg-sp-bg px-2.5 py-2.5">
+          {(Object.keys(STAFFROOM_TEXT_COLORS) as StaffRoomTextColor[]).map((color) => {
+            const on = active.color === color;
+            return (
+              <button
+                key={color}
+                type="button"
+                onMouseDown={keepFocus}
+                onClick={() => {
+                  patch('color', staffRoomTextColorValue(color));
+                  setOpenMenu(null);
+                }}
+                aria-label={STAFFROOM_TEXT_COLOR_LABELS[color]}
+                aria-pressed={on}
+                title={STAFFROOM_TEXT_COLOR_LABELS[color]}
+                className={`h-7 w-7 rounded-full border-2 transition-all duration-sp-base ease-sp-out hover:scale-110 active:scale-95 ${
+                  on ? 'border-sp-accent' : 'border-sp-border'
+                }`}
+                style={{ backgroundColor: swatchColor(color) }}
+              />
+            );
+          })}
+          <span className="ml-1 text-xs text-sp-muted">
+            {STAFFROOM_TEXT_COLOR_LABELS[active.color]}
+          </span>
+        </div>
+      )}
+
+      {openMenu === 'link' && (
+        <div className="flex flex-wrap items-center gap-2 border-b border-sp-border bg-sp-bg px-2.5 py-2">
           <input
             type="text"
             value={linkUrl}
@@ -234,29 +369,29 @@ function Toolbar(): JSX.Element {
                 e.preventDefault();
                 applyLink();
               }
-              if (e.key === 'Escape') setLinkOpen(false);
+              if (e.key === 'Escape') setOpenMenu(null);
             }}
             placeholder="https://"
             aria-label="링크 주소"
-            className="h-8 min-w-[14rem] flex-1 rounded border border-sp-border bg-sp-surface px-2 text-xs text-sp-text placeholder-sp-muted focus:border-sp-accent focus:outline-none"
+            className="h-8 min-w-[14rem] flex-1 rounded-lg border border-sp-border bg-sp-surface px-2.5 text-xs text-sp-text placeholder-sp-muted focus:border-sp-accent focus:outline-none"
           />
           <button
             type="button"
-            onMouseDown={(e) => e.preventDefault()}
+            onMouseDown={keepFocus}
             onClick={applyLink}
-            className="h-8 rounded bg-sp-accent px-3 text-xs font-sp-semibold text-white transition-all duration-sp-base ease-sp-out active:scale-95"
+            className="h-8 rounded-full bg-sp-accent px-3.5 text-xs font-sp-semibold text-white transition-all duration-sp-base ease-sp-out active:scale-95"
           >
             적용
           </button>
           <button
             type="button"
-            onMouseDown={(e) => e.preventDefault()}
+            onMouseDown={keepFocus}
             onClick={() => {
               // 고른 글자에서 링크를 뗀다
               editor.dispatchCommand(TOGGLE_LINK_COMMAND, null);
-              setLinkOpen(false);
+              setOpenMenu(null);
             }}
-            className="h-8 rounded border border-sp-border px-3 text-xs text-sp-muted transition-colors hover:text-sp-text"
+            className="h-8 rounded-full border border-sp-border px-3 text-xs text-sp-muted transition-colors hover:text-sp-text"
           >
             링크 떼기
           </button>
@@ -336,6 +471,9 @@ export function StaffRoomRichEditor({
                   }
                 : undefined,
           theme: {
+            // 쓰는 중에도 링크가 링크처럼 보이게 한다. 이게 없으면 주소를
+            // 붙여넣고도 링크가 걸렸는지 알 수 없어 한 번 더 누르게 된다.
+            link: 'text-sp-accent underline underline-offset-2 cursor-pointer',
             text: {
               bold: 'font-bold',
               italic: 'italic',
