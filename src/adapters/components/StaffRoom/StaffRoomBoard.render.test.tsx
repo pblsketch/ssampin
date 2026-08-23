@@ -405,3 +405,21 @@ describe('말머리·해시태그 (054)', () => {
     expect(detail()).not.toContain('#');
   });
 });
+
+// ══════════════════════════════════════════════════════════════════
+describe('말머리 관리 (054, 관리자만)', () => {
+  it('관리자에게는 말머리가 하나도 없어도 관리 단추가 보인다', () => {
+    // 없을 때 안 보이면 첫 말머리를 만들 길이 아예 없다
+    myRole = 'admin';
+    boardState.posts = [summary()];
+    boardState.categories = [];
+    expect(board()).toContain('말머리 관리');
+  });
+
+  it('일반 멤버에게는 관리 단추가 렌더되지 않는다 (숨김이 아니라 없음)', () => {
+    myRole = 'member';
+    boardState.posts = [summary()];
+    boardState.categories = [{ id: 'c1', departmentId: 'dept-1', name: '공지', position: 0 }];
+    expect(board()).not.toContain('말머리 관리');
+  });
+});

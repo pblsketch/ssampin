@@ -6,11 +6,14 @@
  * 시각적으로만 확실히 구분한다(테두리 2px + 배지) — 부장 선생님 공지가 새 글에
  * 묻히지 않게 하는 것이 이 기능의 존재 이유다.
  */
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useStaffRoomBoardStore } from '@adapters/stores/useStaffRoomBoardStore';
 import { displayNameOf } from '@domain/rules/staffRoomBoardPermission';
 import type { StaffRoomPostSummary } from '@domain/entities/StaffRoomBoard';
 import { formatPostTime } from './boardFormat';
+import { CategoryManager } from './CategoryManager';
+import { useStaffRoomStore } from '@adapters/stores/useStaffRoomStore';
+import { isDepartmentAdmin } from '@domain/rules/staffRoomPermission';
 
 interface BoardViewProps {
   departmentId: string;
@@ -101,6 +104,9 @@ export function BoardView({ departmentId, boardId, onWriteNew }: BoardViewProps)
   const filterCategoryId = useStaffRoomBoardStore((s) => s.filterCategoryId);
   const filterTag = useStaffRoomBoardStore((s) => s.filterTag);
   const setFilter = useStaffRoomBoardStore((s) => s.setFilter);
+  const myRole = useStaffRoomStore((s) => s.currentDepartment?.myRole ?? null);
+  const isAdmin = isDepartmentAdmin(myRole);
+  const [managingCategories, setManagingCategories] = useState(false);
 
   useEffect(() => {
     void loadPosts(departmentId, boardId);
@@ -181,7 +187,16 @@ export function BoardView({ departmentId, boardId, onWriteNew }: BoardViewProps)
         </div>
       ) : (
         <div className="space-y-2">
-          {(categories.length > 0 || filterTag !== null) && (
+          {managingCategories && (
+            <div className="pb-1">
+              <CategoryManager
+                departmentId={departmentId}
+                onClose={() => setManagingCategories(false)}
+              />
+            </div>
+          )}
+
+          {(categories.length > 0 || filterTag !== null || isAdmin) && (
             <div className="flex flex-wrap items-center gap-1.5 pb-1">
               <button
                 type="button"
@@ -218,6 +233,17 @@ export function BoardView({ departmentId, boardId, onWriteNew }: BoardViewProps)
                 >
                   #{filterTag}
                   <span className="material-symbols-outlined text-icon-sm">close</span>
+                </button>
+              )}
+
+              {isAdmin && !managingCategories && (
+                <button
+                  type="button"
+                  onClick={() => setManagingCategories(true)}
+                  className="ml-auto flex items-center gap-1 rounded-full border border-sp-border px-3 py-1 text-xs text-sp-muted transition-colors hover:text-sp-text"
+                >
+                  <span className="material-symbols-outlined text-icon-sm">label</span>
+                  말머리 관리
                 </button>
               )}
             </div>
