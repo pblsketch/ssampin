@@ -11,10 +11,15 @@ import {
   type ClassProgressSummary,
 } from '@domain/rules/progressCalendarRules';
 import { canDropProgressCell, planProgressMove } from '@domain/rules/progressMove';
+import { planProgressShift } from '@domain/rules/progressShift';
+import { resolvePeriodLabel } from '@domain/rules/periodLabel';
+import { useLessonCountEstimate } from '@adapters/hooks/useLessonCountEstimate';
+import { ProgressShiftModal } from './ProgressShiftModal';
 import type { WeeklyProgressCell } from '@domain/rules/progressCalendarRules';
 import type { TeacherPeriod } from '@domain/entities/Timetable';
 import { ProgressCalendarGrid } from './ProgressCalendarGrid';
 import { ProgressQuickEntryModal } from './ProgressQuickEntryModal';
+import type { ProgressEntry } from '@domain/entities/CurriculumProgress';
 import { useProgressQuickEntry } from './useProgressQuickEntry';
 
 /** 이번 주(오프셋 반영) 월요일 기준 날짜 문자열 배열 계산 */
@@ -101,6 +106,33 @@ export function ProgressCalendarView() {
   }, [classes, progressEntries]);
 
   /*
+    "여기부터 밀기" — 어느 칸을 기준으로 미는지만 들고 있고, 계산은 도메인이 한다.
+
+    학기 수업일(view.lessonDays)은 반마다 다르므로 훅에 반 id 를 준다. 훅은 조건부로 부를 수
+    없어 창이 닫혀 있을 때도 부르는데, 빈 문자열이면 훅이 빈 목록을 돌려주므로 안전하다.
+  */
+  const [shiftAnchor, setShiftAnchor] = useState<WeeklyProgressCell | null>(null);
+  const shiftClassId = shiftAnchor?.matchedClass?.id ?? '';
+  const lessonCountView = useLessonCountEstimate(shiftClassId);
+
+  const shiftPlan = useMemo(() => {
+    if (!shiftAnchor?.matchedClass) return null;
+    return planProgressShift({
+      entries: progressEntries,
+      classId: shiftAnchor.matchedClass.id,
+      from: { date: shiftAnchor.date, period: shiftAnchor.period },
+      lessonDays: lessonCountView.lessonDays,
+    });
+  }, [shiftAnchor, progressEntries, lessonCountView.lessonDays]);
+
+  const applyEntries = useCallback(
+    async (list: readonly ProgressEntry[]) => {
+      for (const entry of list) await updateProgressEntry(entry);
+    },
+    [updateProgressEntry],
+  );
+
+  /*
     진도를 끌어다 다른 칸에 놓았을 때 (2026-08-23).
 
     실수로 끌리기 쉬운 조작이라 되돌리기를 함께 띄운다. 되돌리기는 "원래 값을 그대로 다시
@@ -125,7 +157,9 @@ export function ProgressCalendarView() {
           await updateProgressEntry(entry);
         }
         const [, m, d] = target.date.split('-');
-        const where = `${Number(m)}월 ${Number(d)}일 ${target.period}교시`;
+        // 교시 이름을 붙인 선생님에겐 '3교시'가 틀린 표기다 — 라벨은 반드시 도메인이 만든다.
+        const periodLabel = resolvePeriodLabel(target.period, settings.periodTimes);
+        const where = `${Number(m)}월 ${Number(d)}일 ${periodLabel}`;
         showToast(
           plan.swapped.length > 0
             ? `${where} 진도와 자리를 맞바꿨습니다`
@@ -143,7 +177,7 @@ export function ProgressCalendarView() {
         );
       })();
     },
-    [showToast, updateProgressEntry],
+    [showToast, updateProgressEntry, settings.periodTimes],
   );
 
   if (classes.length === 0) {
@@ -188,7 +222,27 @@ export function ProgressCalendarView() {
           fanout={fanout}
           onSubmit={submit}
           onDelete={modal.mode === 'edit' ? remove : undefined}
+          onShiftFromHere={
+            modal.mode === 'edit'
+              ? () => {
+                  const anchor = modal.cell;
+                  close();
+                  setShiftAnchor(anchor);
+                }
+              : undefined
+          }
           onClose={close}
+        />
+      )}
+
+      {shiftAnchor?.matchedClass && shiftPlan && (
+        <ProgressShiftModal
+          plan={shiftPlan}
+          className={`${shiftAnchor.matchedClass.name} · ${shiftAnchor.matchedClass.subject}`}
+          periodTimes={settings.periodTimes}
+          onConfirm={applyEntries}
+          onUndo={applyEntries}
+          onClose={() => setShiftAnchor(null)}
         />
       )}
     </>
