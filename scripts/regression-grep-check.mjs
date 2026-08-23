@@ -39,9 +39,13 @@ const presenceChecks = [
     //
     // 이 프로젝트에서 "층은 만들었는데 배선을 잊은" 사고가 세 번 반복됐다.
     // `useAssistStore.ask()` 가 `redactOutbound` 를 부르고, 포트로는 원본(`cards`)이 아니라
-    // 걸러낸 쪽(`outbound`)을 넘기는지를 여기서 못 박는다.
+    // 걸러낸 쪽을 넘기는지를 여기서 못 박는다.
+    //
+    // 2026-08-23 (ADR-067): 걸러낸 변수가 `outbound` → `effectiveOutbound` 로 바뀌었다.
+    // 후속 질문에 직전 턴의 카드를 다시 싣기 위해서인데, 그 재전송분(`outboundCards`)도
+    // 걸러진 뒤 저장된 것이라 **포트에 닿는 것은 여전히 걸러진 쪽뿐**이다.
     file: 'src/adapters/stores/useAssistStore.ts',
-    pattern: /redactOutbound\([\s\S]{0,2500}?toolResults:\s*outbound\.map\(/,
+    pattern: /redactOutbound\([\s\S]{0,2500}?toolResults:\s*effectiveOutbound\.map\(/,
     name: 'REGRESSION #57: 쌤핀 AI 는 이름을 지운 사본만 전송한다 (그물 ③ 배선)',
   },
   {

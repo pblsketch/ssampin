@@ -12,7 +12,14 @@ import type { ModelSafe } from '@domain/entities/AssistTool';
 import type { ToolResultShape } from '@domain/services/sanitizeToolResult';
 import { findAssistTool } from '@domain/services/assistToolRegistry';
 import { sanitizeToolResult } from '@domain/services/sanitizeToolResult';
-import { useAssistStore, uuidFallback } from '@adapters/stores/useAssistStore';
+import {
+  ASSIST_SEND_LIMITS,
+  buildHistoryTurns,
+  useAssistStore,
+  uuidFallback,
+} from '@adapters/stores/useAssistStore';
+import type { AssistTurn } from '@adapters/stores/useAssistStore';
+import { LIMITS as SERVER_LIMITS } from '../../../../supabase/functions/_shared/assistRequest';
 
 /** 실제 경로 그대로 만든다 — 재구성을 거쳐야만 `ModelSafe` 가 된다. */
 function safeCard(): { tool: string; data: ModelSafe<ToolResultShape> } {
@@ -123,14 +130,95 @@ describe('켜져 있을 때 — 숫자 카드가 먼저 남는다', () => {
     expect(turn?.cards).toHaveLength(1);
   });
 
-  it('★대화 이력을 모델에 다시 보내지 않는다 (§8.2)', async () => {
+  it('★직전 대화를 함께 싣는다 — "어떤 일인지 알려줘"가 통해야 한다 (ADR-067, §8.2 뒤집음)', async () => {
     const port = fakePort();
     await useAssistStore.getState().ask(port, '첫 질문', [safeCard()], []);
     await useAssistStore.getState().ask(port, '두 번째 질문', [safeCard()], []);
 
-    // 두 번째 호출에도 턴이 1개뿐 - 앞 대화를 다시 싣지 않는다.
-    expect(port.calls[1]?.turns).toHaveLength(1);
-    expect(port.calls[1]?.turns[0]?.content).toBe('두 번째 질문');
+    // 두 번째 호출: [첫 질문, 첫 답, 두 번째 질문] — 모델이 앞 대화를 안다.
+    const turns = port.calls[1]?.turns ?? [];
+    expect(turns.map((t) => t.role)).toEqual(['user', 'assistant', 'user']);
+    expect(turns[0]?.content).toBe('첫 질문');
+    expect(turns[1]?.content).toBe('3학년 2반은 30명입니다.');
+    expect(turns[2]?.content).toBe('두 번째 질문');
+  });
+
+  it('막힌 턴은 이력에 싣지 않는다 — 서버가 같은 검사로 또 거절한다', async () => {
+    const blockedPort: AssistPort & { calls: AssistRequestPayload[] } = {
+      calls: [],
+      ask: vi.fn(async (payload: AssistRequestPayload) => {
+        blockedPort.calls.push(payload);
+        if (blockedPort.calls.length === 1) throw new AssistBlockedError('보낼 수 없는 내용');
+        return { text: '답', degraded: null };
+      }),
+    };
+    await useAssistStore.getState().ask(blockedPort, '막힐 질문', [safeCard()], []);
+    await useAssistStore.getState().ask(blockedPort, '다음 질문', [safeCard()], []);
+
+    const turns = blockedPort.calls[1]?.turns ?? [];
+    expect(turns).toHaveLength(1);
+    expect(turns[0]?.content).toBe('다음 질문');
+  });
+
+  it('카드가 없는 후속 질문에는 직전 턴의 (가려진) 카드를 다시 싣는다', async () => {
+    const port = fakePort();
+    await useAssistStore.getState().ask(port, '오늘 할 일 있나', [safeCard()], []);
+    // 의도 규칙에 안 걸린 후속 질문 - 카드 없음
+    await useAssistStore.getState().ask(port, '어떤 일인지 알려줘', [], []);
+
+    expect(port.calls[1]?.toolResults).toHaveLength(1);
+    expect(port.calls[1]?.toolResults[0]?.tool).toBe('count_students');
+  });
+});
+
+describe('이력 한도 — 서버가 거절하기 전에 앱이 자른다', () => {
+  it('★앱의 한도 거울값이 서버 한도와 같은 값이다', () => {
+    expect(ASSIST_SEND_LIMITS.maxTurns).toBe(SERVER_LIMITS.maxTurns);
+    expect(ASSIST_SEND_LIMITS.maxTurnChars).toBe(SERVER_LIMITS.maxTurnChars);
+    expect(ASSIST_SEND_LIMITS.maxTotalChars).toBe(SERVER_LIMITS.maxTotalChars);
+    expect(ASSIST_SEND_LIMITS.maxToolResults).toBe(SERVER_LIMITS.maxToolResults);
+  });
+
+  function doneTurn(i: number, answerChars = 10): AssistTurn {
+    return {
+      id: String(i),
+      question: `질문${i}`,
+      cards: [],
+      answer: 'ㅇ'.repeat(answerChars),
+      outboundAnswer: 'ㅇ'.repeat(answerChars),
+      outboundCards: [],
+      degraded: null,
+      status: 'done',
+      maskedCount: 0,
+      blankedCount: 0,
+    };
+  }
+
+  it('턴 수가 서버 상한(12)을 넘지 않는다 — 오래된 대화부터 떨어진다', () => {
+    const prior = Array.from({ length: 20 }, (_, i) => doneTurn(i));
+    const turns = buildHistoryTurns(prior, '현재 질문');
+
+    expect(turns.length).toBeLessThanOrEqual(SERVER_LIMITS.maxTurns);
+    expect(turns.at(-1)?.content).toBe('현재 질문');
+    // 최신 대화가 남는다
+    expect(turns.at(-2)?.content).toBe('ㅇ'.repeat(10));
+    expect(turns.at(-3)?.content).toBe('질문19');
+  });
+
+  it('글자 수가 서버 상한(8000)을 넘지 않는다', () => {
+    const prior = Array.from({ length: 10 }, (_, i) => doneTurn(i, 1_900));
+    const turns = buildHistoryTurns(prior, '현재 질문');
+
+    const total = turns.reduce((n, t) => n + t.content.length, 0);
+    expect(total).toBeLessThanOrEqual(SERVER_LIMITS.maxTotalChars);
+  });
+
+  it('축소(degraded)로 답이 빈 턴은 질문만 싣는다 — 빈 턴을 보내면 서버가 거절한다', () => {
+    const empty = { ...doneTurn(1), outboundAnswer: '' };
+    const turns = buildHistoryTurns([empty], '현재 질문');
+
+    expect(turns.map((t) => t.content)).toEqual(['질문1', '현재 질문']);
+    expect(turns.every((t) => t.content.length > 0)).toBe(true);
   });
 });
 
@@ -236,6 +324,26 @@ describe('★그물 ③ — 이름이 포트까지 못 간다', () => {
     expect(turn?.answer).toBe('김지훈 학부모 면담이 가장 급해요.');
     // 그래도 **나간 것**에는 이름이 없어야 한다.
     expect(JSON.stringify(port.calls[0]?.toolResults)).not.toContain('김지훈');
+  });
+
+  it('★이력으로 다시 나가는 답변도 별칭 그대로다 — 화면용을 실으면 이름이 샌다 (ADR-067)', async () => {
+    const port: AssistPort & { calls: AssistRequestPayload[] } = {
+      calls: [],
+      ask: vi.fn(async (payload: AssistRequestPayload) => {
+        port.calls.push(payload);
+        return { text: '［이름1］ 학부모 면담이 가장 급해요.', degraded: null };
+      }),
+    };
+
+    await useAssistStore.getState().ask(port, '할 일', [todoCard(['김지훈 학부모 면담'])], ROSTER);
+    // 화면에는 "김지훈"이 복원돼 있다. 이 상태에서 후속 질문을 하면 -
+    await useAssistStore.getState().ask(port, '어떤 것부터 할까', [], ROSTER);
+
+    const history = port.calls[1]?.turns ?? [];
+    const assistant = history.find((t) => t.role === 'assistant');
+    // 이력의 답변은 서버가 준 그대로(별칭)여야 한다. 복원본이면 이름이 다시 나간다.
+    expect(assistant?.content).toBe('［이름1］ 학부모 면담이 가장 급해요.');
+    expect(JSON.stringify(history)).not.toContain('김지훈');
   });
 
   it('★모델이 괄호를 흘려도 되돌아온다 (실측: 원형 보존은 16.7%뿐이었다)', async () => {

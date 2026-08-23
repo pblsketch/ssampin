@@ -69,7 +69,7 @@ export function OutboundLine({ text, screening, onRemoveFinding }: Props) {
         <span className="shrink-0 font-sp-medium text-sp-muted">나갈 문장</span>
         <span className="min-w-0 flex-1 break-words text-sp-text">
           {text.length === 0 ? (
-            <span className="text-sp-muted">아직 아무것도 나가지 않아요</span>
+            <span className="text-sp-muted">입력하면 나갈 문장이 여기 미리 보여요</span>
           ) : (
             <Highlighted text={text} findings={screening.findings} />
           )}

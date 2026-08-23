@@ -7,6 +7,8 @@
  * 말풍선을 쓰지 않는다 — **카드(앱 데이터) vs 평문(AI)** 의 대비로 구분한다.
  * 기존 고객지원 챗봇과 시각적으로 다른 물건임을 그렇게 드러낸다.
  */
+import { useEffect, useRef } from 'react';
+
 import type { AssistTurn } from '@adapters/stores/useAssistStore';
 import type { ToolResultShape } from '@domain/services/sanitizeToolResult';
 
@@ -31,12 +33,31 @@ const FIELD_LABEL: Readonly<Record<string, string>> = {
   count: '인원',
   period: '기간',
   total: '전체',
+  undone: '미완료',
 };
 
-function formatValue(value: unknown): string {
-  if (typeof value === 'number') return `${value}명`;
+/** 숫자 뒤에 붙일 단위. 기본은 '명'(사람 수 집계가 대부분이라서). */
+const FIELD_UNIT: Readonly<Record<string, string>> = {
+  undone: '개',
+};
+
+function formatValue(key: string, value: unknown): string {
+  if (typeof value === 'number') return `${value}${FIELD_UNIT[key] ?? '명'}`;
   if (typeof value === 'string') return value;
   return '';
+}
+
+/** 목록형 결과(할 일 등)의 한 항목. 화면 전용이라 느슨한 모양으로 받는다. */
+interface ListItem {
+  readonly [key: string]: unknown;
+}
+
+function isListOfRecords(value: unknown): value is readonly ListItem[] {
+  return (
+    Array.isArray(value) &&
+    value.length > 0 &&
+    value.every((v) => typeof v === 'object' && v !== null)
+  );
 }
 
 /** 숫자 카드 — 앱이 조회한 값. 모델을 거치지 않은 사실이다. */
@@ -44,6 +65,12 @@ function DataCard({ tool, data }: { readonly tool: string; readonly data: ToolRe
   const scalarEntries = Object.entries(data).filter(
     ([, v]) => typeof v === 'number' || typeof v === 'string',
   );
+  // 할 일처럼 목록으로 오는 결과. 예전에는 숫자·글자만 그려서 **할 일 카드가 텅 비었다**
+  // — "앱이 조회한 사실이 먼저"라는 약속이 목록형에서만 깨져 있었다(2026-08-23 신고).
+  const listEntries: (readonly [string, readonly ListItem[]])[] = [];
+  for (const [key, value] of Object.entries(data)) {
+    if (isListOfRecords(value)) listEntries.push([key, value]);
+  }
 
   return (
     <div className="rounded-xl border border-sp-border bg-sp-card p-3">
@@ -57,10 +84,36 @@ function DataCard({ tool, data }: { readonly tool: string; readonly data: ToolRe
         {scalarEntries.map(([key, value]) => (
           <div key={key} className="flex items-baseline justify-between gap-2">
             <dt className="text-xs text-sp-muted">{FIELD_LABEL[key] ?? key}</dt>
-            <dd className="text-sm font-sp-semibold text-sp-text">{formatValue(value)}</dd>
+            <dd className="text-sm font-sp-semibold text-sp-text">{formatValue(key, value)}</dd>
           </div>
         ))}
       </dl>
+
+      {listEntries.map(([key, items]) => (
+        <ul key={key} className="mt-2 flex flex-col gap-1 border-t border-sp-border pt-2">
+          {items.map((item, index) => (
+            <li key={index} className="flex items-baseline gap-2 text-sm">
+              <span aria-hidden="true" className="shrink-0 text-sp-muted">
+                {item.done === true ? '✓' : '•'}
+              </span>
+              <span className="min-w-0 flex-1 break-words text-sp-text">
+                {typeof item.title === 'string' ? item.title : ''}
+              </span>
+              {typeof item.due === 'string' && (
+                <span className="shrink-0 text-xs text-sp-muted">~{item.due.slice(5)}</span>
+              )}
+              {/* 색 단독 표기 금지 — 아이콘 + 한국어 라벨 + 굵기로 뜻을 전한다 */}
+              {item.overdue === true && (
+                <span className="shrink-0 text-xs font-sp-semibold text-sp-text">⚠ 지남</span>
+              )}
+            </li>
+          ))}
+        </ul>
+      ))}
+
+      {scalarEntries.length === 0 && listEntries.length === 0 && (
+        <p className="text-xs text-sp-muted">조회 결과가 없어요</p>
+      )}
     </div>
   );
 }
@@ -71,11 +124,20 @@ const DEGRADED_MESSAGE: Readonly<Record<string, string>> = {
   unavailable: 'AI 요약은 지금 사용할 수 없어요. 숫자는 그대로 보실 수 있어요.',
   upstream: 'AI가 잠시 응답하지 않아요. 숫자는 그대로 보실 수 있어요.',
   offline: '인터넷이 끊겨 AI 요약을 못 받았어요. 숫자는 그대로 보실 수 있어요.',
+  timeout: 'AI 응답이 늦어 기다리기를 멈췄어요. 숫자는 그대로 보실 수 있어요.',
+  unreachable: 'AI 서버에 연결하지 못했어요. 숫자는 그대로 보실 수 있어요.',
 };
 
 export function AssistThread({ turns }: { readonly turns: readonly AssistTurn[] }) {
+  // 새 답은 항상 맨 아래에 붙는다. 스크롤이 안 따라가면 답이 화면 밖에서 조용히 생긴다.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [turns]);
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-4">
+    <div ref={scrollRef} className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-4">
       {turns.map((turn) => (
         <div key={turn.id} className="flex flex-col gap-2">
           {/* 사용자 질문 — 오른쪽 정렬, 최대 88% */}

@@ -46,6 +46,14 @@ export interface AssistTurn {
   readonly cards: readonly AssistCard[];
   /** AI 해설. 아직 안 왔으면 빈 문자열 */
   readonly answer: string;
+  /**
+   * ★서버가 돌려준 **그대로의** 답(별칭이 살아 있는 쪽).
+   * 다음 질문에 대화 이력으로 실어 보낼 때는 이것만 쓴다 — `answer` 는 별칭을
+   * 실명으로 되돌린 화면용이라, 다시 보내면 가렸던 이름이 그대로 나가버린다.
+   */
+  readonly outboundAnswer: string;
+  /** 이 턴과 함께 실제로 나갔던(가려진) 카드. 후속 질문에 다시 실어 보낼 때 쓴다 */
+  readonly outboundCards: readonly AssistCard[];
   readonly degraded: AssistDegraded | null;
   readonly status: 'thinking' | 'done' | 'blocked';
   /** 전송이 막혔을 때 보여줄 한국어 문구 */
@@ -113,6 +121,63 @@ function newId(): string {
 /** 대화 이력은 모델에 다시 보내지 않는다(§8.2). 화면 표시용으로만 쌓인다. */
 const MAX_TURNS_KEPT = 30;
 
+/**
+ * 서버 검증 한도의 거울값 — `supabase/functions/_shared/assistRequest.ts` 의 `LIMITS`.
+ * 서버는 넘치면 400 으로 거절하므로 앱이 먼저 잘라 보낸다.
+ * 두 값이 어긋나면 테스트('서버 한도와 같은 값이다')가 잡는다.
+ */
+export const ASSIST_SEND_LIMITS = {
+  maxTurns: 12,
+  maxTurnChars: 2_000,
+  maxTotalChars: 8_000,
+  maxToolResults: 6,
+} as const;
+
+/**
+ * 서버로 보낼 대화 턴을 만든다 — **직전 대화를 함께 싣는다** (ADR-067).
+ *
+ * 예전에는 질문 하나만 보냈다(§8.2). 그 결과 "오늘 할 일 있나" → "8개" →
+ * "어떤 일인지 알려줘"에 모델이 앱 소개로 답했다 — 앞 대화를 전혀 모르니
+ * "어떤 일"이 뭘 가리키는지 알 수 없었던 것이다(2026-08-23 오너 신고).
+ *
+ * 개인정보 면에서 새로 나가는 것은 없다: 질문은 보낼 때 이미 나갔던 원문이고,
+ * 답변은 별칭이 살아 있는 `outboundAnswer` 쪽만 싣는다.
+ *
+ * 한도(서버 LIMITS)에 걸리면 **오래된 대화부터** 떨어져 나간다.
+ */
+export function buildHistoryTurns(
+  prior: readonly AssistTurn[],
+  question: string,
+): AssistTurnPayload[] {
+  const current: AssistTurnPayload = {
+    role: 'user',
+    content: question.slice(0, ASSIST_SEND_LIMITS.maxTurnChars),
+  };
+  let totalChars = current.content.length;
+  const history: AssistTurnPayload[] = [];
+
+  for (let i = prior.length - 1; i >= 0; i--) {
+    const t = prior[i]!;
+    // 막힌 턴은 서버가 또 거절하고(같은 검사를 다시 하므로), 진행 중 턴은 답이 없다.
+    if (t.status !== 'done') continue;
+
+    const pair: AssistTurnPayload[] = [];
+    const q = t.question.slice(0, ASSIST_SEND_LIMITS.maxTurnChars);
+    if (q.length > 0) pair.push({ role: 'user', content: q });
+    const a = t.outboundAnswer.slice(0, ASSIST_SEND_LIMITS.maxTurnChars);
+    if (a.length > 0) pair.push({ role: 'assistant', content: a });
+    if (pair.length === 0) continue;
+
+    const pairChars = pair.reduce((n, turn) => n + turn.content.length, 0);
+    if (history.length + pair.length + 1 > ASSIST_SEND_LIMITS.maxTurns) break;
+    if (totalChars + pairChars > ASSIST_SEND_LIMITS.maxTotalChars) break;
+    history.unshift(...pair);
+    totalChars += pairChars;
+  }
+
+  return [...history, current];
+}
+
 export const useAssistStore = create<AssistStore>()(
   persist(
     (set, get) => ({
@@ -166,6 +231,21 @@ export const useAssistStore = create<AssistStore>()(
           outbound.push({ tool: card.tool, data: result.data });
         }
 
+        // ★새 턴을 상태에 넣기 **전에** 이력을 만든다 — 자기 자신이 이력에 끼면 안 된다.
+        const historyTurns = buildHistoryTurns(get().turns, question);
+
+        // 후속 질문("어떤 일인지 알려줘")은 의도 규칙에 안 걸려 카드가 없다.
+        // 그러면 모델이 직전에 본 숫자를 다시 봐야 답할 수 있으므로, **직전 턴에
+        // 나갔던 카드**를 다시 싣는다. 이미 한 번 나간(가려진) 자료라 새 노출은 없다.
+        let effectiveOutbound = outbound;
+        if (effectiveOutbound.length === 0) {
+          const lastWithCards = [...get().turns]
+            .reverse()
+            .find((t) => t.status === 'done' && t.outboundCards.length > 0);
+          if (lastWithCards) effectiveOutbound = [...lastWithCards.outboundCards];
+        }
+        effectiveOutbound = effectiveOutbound.slice(0, ASSIST_SEND_LIMITS.maxToolResults);
+
         const id = newId();
         // 숫자 카드를 **먼저** 넣는다. 모델이 느려도, 심지어 죽어도 답의 절반은 이미 보인다.
         set((s) => ({
@@ -176,6 +256,8 @@ export const useAssistStore = create<AssistStore>()(
               question,
               cards,
               answer: '',
+              outboundAnswer: '',
+              outboundCards: effectiveOutbound,
               degraded: null,
               status: 'thinking' as const,
               maskedCount,
@@ -192,20 +274,25 @@ export const useAssistStore = create<AssistStore>()(
         };
 
         try {
-          const turns: AssistTurnPayload[] = [{ role: 'user', content: question }];
           const answer = await port.ask({
             installId: get().installId,
-            turns,
+            turns: historyTurns,
             // ★`as` 가 없다. `c.data` 는 이미 `ModelSafe` 라 그대로 들어간다 —
             //   재구성을 안 거친 객체는 애초에 여기까지 못 온다(그물 ② 컴파일 강제).
             //   ★`cards` 가 아니라 `outbound` 다 — 이름을 지운 쪽만 나간다.
-            toolResults: outbound.map((c) => ({ tool: c.tool, grade: 1 as const, data: c.data })),
+            toolResults: effectiveOutbound.map((c) => ({
+              tool: c.tool,
+              grade: 1 as const,
+              data: c.data,
+            })),
           });
           // ★별칭을 실제 이름으로 되돌린 뒤 화면에 올린다.
           //   모델은 ［이름1］ 만 봤고, 선생님은 "김지훈"을 본다.
           //   ★실측상 모델이 괄호를 자주 바꾸므로(〈이름1〉 등) 관대하게 되돌린다.
           patch({
             answer: restoreModelText(answer.text, mappings),
+            // 이력용으로는 되돌리기 전(별칭 그대로)을 남긴다 — 위 outboundAnswer 주석 참조.
+            outboundAnswer: answer.text,
             degraded: answer.degraded,
             status: 'done',
           });

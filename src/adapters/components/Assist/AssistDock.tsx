@@ -9,10 +9,11 @@
  *
  * 설계: docs/02-design/features/inapp-ai-assist.design.md §3
  */
-import { useMemo } from 'react';
+import { useLayoutEffect, useMemo, useState } from 'react';
 
 import { AssistThread } from './AssistThread';
 import { OutboundLine } from './OutboundLine';
+import { WindowDragStrip } from '@adapters/components/common/WindowDragStrip';
 import {
   ASSIST_MAX_QUESTION_CHARS,
   removeFinding,
@@ -26,6 +27,17 @@ import { useAssistStore } from '@adapters/stores/useAssistStore';
  * 누르면 미리 정해진 안전한 질문이 그대로 나가므로 자유 타이핑 자체가 줄어든다.
  * 계획서는 이걸 "우회·완곡 표현에 대한 유일한 실질 방어"라고 부른다(§5.7.2).
  */
+/**
+ * 입력칸 예시 질문.
+ *
+ * ★반드시 의도 규칙(INTENT_RULES)에 걸리는 문장이어야 한다. 예전 예시는
+ * "오늘 3학년 2반 출결 어때요?"였는데, 출결 조회는 담임 반 고정이라 **되지 않는
+ * 것을 앱이 권하는** 꼴이었다(2026-08-23 신고). 출결 기록 자체가 담임 반 것만
+ * 있으므로(명렬표·기록이 담임 학급 단위) 다른 반 출결은 보여줄 데이터가 없다.
+ * `assistIntent.test.ts` 가 이 문장이 규칙에 걸리는지 지킨다.
+ */
+export const ASSIST_PLACEHOLDER_EXAMPLE = '오늘 우리 반 출결 어때요?';
+
 export const SUGGESTIONS: readonly string[] = [
   '오늘 우리 반 출결',
   '이번 달 기록 몇 건',
@@ -38,6 +50,46 @@ interface Props {
   readonly onAsk: (question: string) => void;
 }
 
+/**
+ * 이 패널이 차지한 폭을 화면 전체에 알리는 CSS 변수.
+ *
+ * 이 패널은 본문을 **밀어내지만**, 화면에 고정(`position: fixed`)된 것들은 밀리지 않는다.
+ * 우하단 도우미 버튼이 그래서 패널의 보내기 버튼 위에 겹쳤다(2026-08-23 신고).
+ * 폭을 상수로 베껴 쓰면 창 크기별 폭(w-96 / max-[1280px]:w-80)과 조용히 어긋나므로,
+ * **실제로 그려진 폭**을 재서 알린다. 패널이 닫히면 값도 같이 사라진다.
+ */
+export const DOCK_WIDTH_VAR = '--sp-assist-dock-width';
+
+function usePublishDockWidth(): (node: HTMLElement | null) => void {
+  // ★ref 가 아니라 state 로 받는다 — 패널은 닫혀 있는 동안 아예 그려지지 않으므로,
+  //   ref 로 받으면 나중에 열려도 effect 가 다시 돌지 않는다.
+  const [node, setNode] = useState<HTMLElement | null>(null);
+
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+    if (!node) {
+      root.style.removeProperty(DOCK_WIDTH_VAR);
+      return;
+    }
+
+    const publish = () => root.style.setProperty(DOCK_WIDTH_VAR, `${node.offsetWidth}px`);
+    publish();
+
+    // jsdom 에는 ResizeObserver 가 없다. 없으면 한 번 알린 값으로 둔다.
+    if (typeof ResizeObserver === 'undefined') {
+      return () => root.style.removeProperty(DOCK_WIDTH_VAR);
+    }
+    const observer = new ResizeObserver(publish);
+    observer.observe(node);
+    return () => {
+      observer.disconnect();
+      root.style.removeProperty(DOCK_WIDTH_VAR);
+    };
+  }, [node]);
+
+  return setNode;
+}
+
 export function AssistDock({ onAsk }: Props) {
   const enabled = useAssistStore((s) => s.enabled);
   const open = useAssistStore((s) => s.open);
@@ -45,10 +97,16 @@ export function AssistDock({ onAsk }: Props) {
   const draft = useAssistStore((s) => s.draft);
   const setDraft = useAssistStore((s) => s.setDraft);
   const setOpen = useAssistStore((s) => s.setOpen);
+  const clearConversation = useAssistStore((s) => s.clearConversation);
 
   const screening = useAssistStore((s) => s.screenDraft)();
 
-  const canSend = draft.trim().length > 0;
+  const dockRef = usePublishDockWidth();
+
+  // 답을 기다리는 동안 새 질문을 막는다. 대화 이력을 싣기 시작하면서(ADR-067)
+  // 진행 중에 겹쳐 보내면 이력이 반쪽으로 실리고, 서버 분당 상한(6회)도 쉽게 닿는다.
+  const busy = turns.some((t) => t.status === 'thinking');
+  const canSend = draft.trim().length > 0 && !busy;
 
   const remainingHint = useMemo(
     () => (turns.length === 0 ? '숫자는 이 컴퓨터에서 찾고, 설명만 AI가 씁니다' : ''),
@@ -60,7 +118,7 @@ export function AssistDock({ onAsk }: Props) {
 
   const send = (): void => {
     const question = draft.trim();
-    if (question.length === 0) return;
+    if (question.length === 0 || busy) return;
     onAsk(question);
   };
 
@@ -70,22 +128,49 @@ export function AssistDock({ onAsk }: Props) {
 
   return (
     <aside
+      ref={dockRef}
       aria-label="쌤핀 AI"
       className="flex h-full w-96 shrink-0 flex-col border-l border-sp-border bg-sp-surface max-[1280px]:w-80"
     >
+      {/*
+        창 조작 버튼(최소화·복구·닫기) 자리 비우기.
+
+        이 패널은 본문 칸의 **오른쪽 형제**라, 본문 칸이 위에 둔 띠의 혜택을 못 받는다.
+        그런데 창 버튼은 창 오른쪽 위에 떠 있으므로 정확히 이 패널 머리 위에 내려앉는다.
+        그래서 패널의 닫기(✕)와 창의 닫기(✕)가 겹쳐 보였다(2026-08-23 신고).
+        같은 띠를 여기에도 둬서 헤더를 그만큼 아래로 내린다.
+
+        색은 주지 않는다(`surface` 미전달) — 이 패널이 이미 `bg-sp-surface` 라
+        투명하게 두면 유리를 켜든 껐든 패널과 한 덩어리로 보인다.
+      */}
+      <WindowDragStrip />
+
       {/* 헤더 */}
       <header className="flex h-12 shrink-0 items-center justify-between border-b border-sp-border px-4">
         <span className="flex items-center gap-1.5 text-sm font-sp-semibold text-sp-text">
           <span aria-hidden="true">✦</span> 쌤핀 AI
         </span>
-        <button
-          type="button"
-          onClick={() => setOpen(false)}
-          aria-label="쌤핀 AI 닫기"
-          className="rounded-lg px-2 py-1 text-sp-muted hover:bg-sp-card hover:text-sp-text"
-        >
-          ✕
-        </button>
+        <div className="flex items-center gap-1">
+          {/* 대화 이력이 답에 실리므로(ADR-067) 주제를 바꿀 때 비울 수단이 필요하다.
+              지난 얘기가 계속 실리면 엉뚱한 맥락으로 답하고, 보내는 글자 수도 는다. */}
+          {turns.length > 0 && (
+            <button
+              type="button"
+              onClick={clearConversation}
+              className="rounded-lg px-2 py-1 text-xs text-sp-muted hover:bg-sp-card hover:text-sp-text"
+            >
+              새 대화
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            aria-label="쌤핀 AI 닫기"
+            className="rounded-lg px-2 py-1 text-sp-muted hover:bg-sp-card hover:text-sp-text"
+          >
+            ✕
+          </button>
+        </div>
       </header>
 
       {/* 스레드 또는 빈 상태 */}
@@ -99,7 +184,8 @@ export function AssistDock({ onAsk }: Props) {
                 key={text}
                 type="button"
                 onClick={() => onAsk(text)}
-                className="rounded-full border border-sp-border bg-sp-card px-3 py-1.5 text-xs text-sp-text hover:bg-sp-bg"
+                disabled={busy}
+                className="rounded-full border border-sp-border bg-sp-card px-3 py-1.5 text-xs text-sp-text hover:bg-sp-bg disabled:opacity-50"
               >
                 {text}
               </button>
@@ -126,7 +212,7 @@ export function AssistDock({ onAsk }: Props) {
             }
           }}
           maxLength={ASSIST_MAX_QUESTION_CHARS}
-          placeholder="예: 오늘 3학년 2반 출결 어때요?"
+          placeholder={`예: ${ASSIST_PLACEHOLDER_EXAMPLE}`}
           aria-label="쌤핀 AI에게 물어보기"
           className="mt-2 max-h-[160px] min-h-[72px] w-full resize-none rounded-lg border border-sp-border bg-sp-bg px-3 py-2 text-sm text-sp-text placeholder:text-sp-muted"
         />

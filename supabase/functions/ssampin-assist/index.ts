@@ -32,7 +32,7 @@ import {
   type AssistTurn,
 } from '../_shared/assistLlm.ts';
 import {
-  ASSIST_SYSTEM_PROMPT,
+  buildAssistSystemPrompt,
   buildToolResultsTurn,
   validateAssistRequest,
   type ValidatedAssistRequest,
@@ -98,7 +98,19 @@ serve(async (req: Request): Promise<Response> => {
     if (limited) return degradedResponse('budget');
 
     const turns: AssistTurn[] = [
-      { role: 'system', content: ASSIST_SYSTEM_PROMPT },
+      // 한국 학교 기준(Asia/Seoul)의 오늘. 엣지 서버 시계는 UTC 라 그대로 쓰면
+      // 자정~오전 9시 사이에 하루 어긋난다. en-CA 로캘은 YYYY-MM-DD 꼴을 준다.
+      {
+        role: 'system',
+        content: buildAssistSystemPrompt(
+          new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date()) +
+            ' (' +
+            new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', weekday: 'short' }).format(
+              new Date(),
+            ) +
+            ')',
+        ),
+      },
       ...validated.turns,
     ];
     const resultsTurn = buildToolResultsTurn(validated.toolResults);

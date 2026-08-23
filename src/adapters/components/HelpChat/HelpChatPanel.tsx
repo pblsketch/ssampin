@@ -3,6 +3,7 @@ import { useHelpChat } from './useHelpChat';
 import { HelpChatWindow } from './HelpChatWindow';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+import { DOCK_WIDTH_VAR } from '@adapters/components/Assist/AssistDock';
 
 /** 플로팅 AI 도움말 패널 — 앱 어디서나 접근 가능 */
 export function HelpChatPanel() {
@@ -134,10 +135,13 @@ export function HelpChatPanel() {
       {/* 채팅 윈도우 */}
       {isOpen && (
         <div
-          className="fixed bottom-16 right-4 z-50 transition-all duration-200"
+          className="fixed bottom-16 z-50 transition-all duration-200"
           style={{
             height: 'min(560px, calc(100vh - 100px))',
             width: 'min(380px, calc(100vw - 32px))',
+            // 쌤핀 AI 패널이 열려 있으면 그 폭만큼 왼쪽으로 비켜선다. 이 변수는 패널이
+            // 스스로 실제 폭을 재서 넣어 주고, 닫히면 사라져 0px 로 되돌아간다.
+            right: `calc(1rem + var(${DOCK_WIDTH_VAR}, 0px))`,
           }}
         >
           <HelpChatWindow
@@ -162,7 +166,11 @@ export function HelpChatPanel() {
       {/* 플로팅 버튼 */}
       <button
         onClick={isOpen ? handleClose : handleOpen}
-        className="fixed bottom-4 right-4 z-50 flex h-12 w-12 items-center justify-center rounded-full bg-sp-accent shadow-lg shadow-sp-accent/30 transition-all duration-200 hover:scale-105 hover:bg-blue-600 active:scale-95"
+        className="fixed bottom-4 z-50 flex h-12 w-12 items-center justify-center rounded-full bg-sp-accent shadow-lg shadow-sp-accent/30 transition-all duration-200 hover:scale-105 hover:bg-blue-600 active:scale-95"
+        style={{
+          // 채팅창과 같은 이유로 비켜선다 — 안 그러면 쌤핀 AI 패널의 보내기 버튼을 덮는다.
+          right: `calc(1rem + var(${DOCK_WIDTH_VAR}, 0px))`,
+        }}
         aria-label={isOpen ? '채팅 닫기' : '쌤핀 AI에게 물어보기'}
       >
         {isOpen ? (

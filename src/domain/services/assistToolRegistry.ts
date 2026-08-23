@@ -69,8 +69,9 @@ export const ASSIST_TOOLS: readonly AssistToolDef[] = [
     // ⚠️ 교사 본인 데이터라 1등급이지만, 제목은 선생님이 자유롭게 적는다.
     // "김지훈 상담 전화" 처럼 학생 실명이 들어갈 수 있어 전송 직전 관문이 필수다.
     description: '교사 본인의 할 일 목록을 돌려준다. 제목은 자유 입력이라 별도 검사가 필요하다.',
-    resultFields: ['items'],
-    nestedFields: { items: ['title', 'due', 'done'] },
+    // undone(미완료 건수)·overdue(기한 지남)는 앱이 계산한 집계/불리언이라 1등급 그대로다.
+    resultFields: ['items', 'undone'],
+    nestedFields: { items: ['title', 'due', 'done', 'overdue'] },
     freeTextFields: ['title'],
   },
 ];

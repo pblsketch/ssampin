@@ -11,7 +11,7 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { SUGGESTIONS } from '../AssistDock';
+import { ASSIST_PLACEHOLDER_EXAMPLE, SUGGESTIONS } from '../AssistDock';
 import { INTENT_RULES } from '../AssistDockContainer';
 import { findAssistTool } from '@domain/services/assistToolRegistry';
 
@@ -50,5 +50,15 @@ describe('평범한 질문에 엉뚱한 도구가 딸려오지 않는다', () =>
     const many = toolsFor('담당 학급 인원이랑 출결이랑 할 일이랑 기록 알려줘');
     expect(many.length).toBeGreaterThan(1);
     expect(many.length).toBeLessThanOrEqual(6);
+  });
+});
+
+describe('입력칸 예시 질문', () => {
+  it('★예시가 의도 규칙에 걸린다 — 되지 않는 것을 앱이 권하면 안 된다', () => {
+    // 예전 예시 "오늘 3학년 2반 출결 어때요?"는 출결 규칙에 걸리긴 했지만
+    // 반 이름을 무시하고 담임 반 숫자를 돌려줬다(2026-08-23 신고).
+    // 지금 예시는 담임 반("우리 반") 기준이라 안내와 동작이 일치한다.
+    expect(INTENT_RULES.some((rule) => rule.pattern.test(ASSIST_PLACEHOLDER_EXAMPLE))).toBe(true);
+    expect(ASSIST_PLACEHOLDER_EXAMPLE).not.toMatch(/\d학년|\d반/);
   });
 });

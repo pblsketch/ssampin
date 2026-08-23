@@ -33,6 +33,22 @@ function toDegraded(value: string | null | undefined): AssistDegraded | null {
   return value === 'budget' || value === 'unavailable' || value === 'upstream' ? value : null;
 }
 
+/**
+ * fetch 가 실패한 이유를 사용자에게 설명할 수 있는 사유로 바꾼다.
+ *
+ * `navigator.onLine` 은 한쪽으로만 믿을 수 있다 — `false` 면 확실히 끊긴 것이지만,
+ * `true` 는 "랜선이 꽂혀 있다"는 뜻일 뿐 인터넷이 된다는 보장이 아니다. 그래서
+ * **끊겼다고 단정하는 것은 `false` 일 때뿐**이고, 나머지는 "서버에 못 닿았다"로 말한다.
+ */
+export function classifyFetchFailure(error: unknown): AssistDegraded {
+  // AbortSignal.timeout 이 터지면 TimeoutError 다. 사용자에겐 "느려서 그만뒀다"가 맞다.
+  if (error instanceof DOMException && error.name === 'TimeoutError') return 'timeout';
+
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return 'offline';
+
+  return 'unreachable';
+}
+
 export class AssistClient implements AssistPort {
   async ask(payload: AssistRequestPayload): Promise<AssistAnswer> {
     if (!ENDPOINT || !SUPABASE_ANON_KEY) {
@@ -56,10 +72,11 @@ export class AssistClient implements AssistPort {
         }),
         signal: AbortSignal.timeout(TIMEOUT_MS),
       });
-    } catch {
-      // 인터넷이 끊겼거나 시간이 초과됐다. **오류로 던지지 않는다** —
-      // 숫자 카드는 이미 화면에 있고, AI 해설만 쉬면 된다(P5).
-      return { text: '', degraded: 'offline' };
+    } catch (error) {
+      // 오류로 던지지 않는다 — 숫자 카드는 이미 화면에 있고, AI 해설만 쉬면 된다(P5).
+      // 다만 **사유는 구분한다.** 예전에는 전부 'offline' 이라, 인터넷이 멀쩡한데도
+      // "인터넷이 끊겼어요"가 떴다(2026-08-23 신고).
+      return { text: '', degraded: classifyFetchFailure(error) };
     }
 
     if (res.status === 400) {

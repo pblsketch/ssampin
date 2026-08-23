@@ -40,7 +40,20 @@ export interface AssistRequestPayload {
  * - `upstream`    공급자 장애
  * - `offline`     인터넷이 끊김
  */
-export type AssistDegraded = 'budget' | 'unavailable' | 'upstream' | 'offline';
+/**
+ * AI 해설을 못 받은 사유.
+ *
+ * ★`offline` 은 **인터넷이 실제로 끊겼을 때만** 쓴다. 예전에는 요청이 실패한 모든 경우를
+ * 여기로 몰아넣어, 인터넷이 멀쩡한데도 "인터넷이 끊겼다"고 알렸다(2026-08-23 사용자 신고).
+ * 원인이 다르면 사용자가 할 일도 다르므로 `timeout`·`unreachable` 로 나눈다.
+ */
+export type AssistDegraded =
+  | 'budget'
+  | 'unavailable'
+  | 'upstream'
+  | 'offline'
+  | 'timeout'
+  | 'unreachable';
 
 export interface AssistAnswer {
   readonly text: string;

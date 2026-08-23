@@ -126,7 +126,9 @@ export const INTENT_RULES: readonly {
   {
     tool: 'get_my_todos',
     pattern: /할 일|업무|마감/,
-    build: (_q, src) => summarizeTodos(src.todos) as unknown as ToolResultShape,
+    // ★오늘 날짜를 넘겨 기한 지남(overdue)을 앱이 계산한다. 모델은 오늘을 모른다.
+    build: (_q, src) =>
+      summarizeTodos(src.todos, { today: todayKey() }) as unknown as ToolResultShape,
   },
   {
     tool: 'get_attendance_summary',
