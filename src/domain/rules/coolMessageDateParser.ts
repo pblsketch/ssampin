@@ -258,6 +258,21 @@ const RANGE_GAP_MAX = 8;
 const DEADLINE_TAIL = 15;
 
 /**
+ * 날짜 뒤에 '까지/마감/제출'이 붙었는지 본다 — 붙었으면 일정이 아니라 할일로 추천한다.
+ *
+ * ★ **줄을 넘어가서 보면 안 된다.** 실제 쪽지는 여러 줄이라, 그냥 15글자를 읽으면
+ * 다음 줄의 단어를 집어온다:
+ *
+ *     체험 당일 8월 31일(월) 09:00     ← 일정이어야 하는데
+ *     보고서 제출 9월 4일까지           ← 이 '제출'을 집어와 할일이 돼 버렸다
+ */
+function looksLikeDeadline(text: string, from: number): boolean {
+  const tail = text.slice(from, from + DEADLINE_TAIL);
+  const sameLine = tail.split('\n', 1)[0] ?? '';
+  return DEADLINE_HINT.test(sameLine);
+}
+
+/**
  * 쪽지 본문에서 일정 후보를 뽑는다.
  *
  * @param text 쪽지 본문 (제목 + 본문을 이어 붙여 넣어도 된다)
@@ -311,7 +326,7 @@ export function extractCoolEvents(text: string, base: Date): ParsedCoolEvent[] {
           start: atMidnight(cur.date),
           end: atMidnight(next.date),
           allDay: true,
-          isDeadline: DEADLINE_HINT.test(normalized.slice(next.end, next.end + DEADLINE_TAIL)),
+          isDeadline: looksLikeDeadline(normalized, next.end),
           sourceText: normalized.slice(cur.start, next.end),
           spans: [[cur.start, next.end]],
         });
@@ -328,7 +343,7 @@ export function extractCoolEvents(text: string, base: Date): ParsedCoolEvent[] {
         : day,
       end: null,
       allDay: hm === null,
-      isDeadline: DEADLINE_HINT.test(normalized.slice(cur.end, cur.end + DEADLINE_TAIL)),
+      isDeadline: looksLikeDeadline(normalized, cur.end),
       sourceText: normalized.slice(cur.start, cur.end),
       spans: [[cur.start, cur.end]],
     });

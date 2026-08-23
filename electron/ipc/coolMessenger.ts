@@ -18,7 +18,7 @@
  *
  * @see docs/01-plan/features/coolmessenger-import.plan.md
  */
-import { ipcMain } from 'electron';
+import { app, ipcMain } from 'electron';
 import {
   defaultMemoDir,
   isCoolMessengerAvailable,
@@ -31,9 +31,28 @@ import {
 /** 목록에 담을 읽은 쪽지 수 (안읽은 쪽지는 이와 무관하게 전부 들어간다) */
 const LIST_LIMIT = 30;
 
+/**
+ * 개발 중에만 쓰는 쪽지함 경로 바꿔치기.
+ *
+ * 쿨메신저가 없는 PC에서도 실제 앱으로 전 과정을 확인하려면 가짜 쪽지함을 읽혀야 한다.
+ * `npm run cool:demo` 가 만들어 주는 폴더를 여기로 가리킨다.
+ *
+ * ⚠️ **배포본(`app.isPackaged`)에서는 무시한다.** 이 값을 실전에서 살려 두면
+ * "환경변수만 바꾸면 아무 SQLite나 읽어주는 통로"가 되어 §renderer 규칙이 무너진다.
+ */
+const DEV_MEMO_DIR_ENV = 'SSAMPIN_COOL_MEMO_DIR';
+
+export function resolveMemoDir(): string | null {
+  if (!app.isPackaged) {
+    const override = process.env[DEV_MEMO_DIR_ENV];
+    if (override && override.trim()) return override.trim();
+  }
+  return defaultMemoDir();
+}
+
 /** 쪽지함 위치를 정한다. 못 정하면 기능을 쓸 수 없다. */
 function requireMemoDir(): string {
-  const dir = defaultMemoDir();
+  const dir = resolveMemoDir();
   if (!dir) {
     throw new Error('쪽지함 위치를 찾을 수 없습니다. 윈도우에서만 쓸 수 있는 기능입니다.');
   }
@@ -44,7 +63,7 @@ export function registerCoolMessengerHandlers(): void {
   ipcMain.handle('cool-messenger:available', (): boolean => {
     // 여기서만은 예외를 삼킨다 — "쓸 수 있나?"라는 질문의 답은 true/false 뿐이다.
     try {
-      return isCoolMessengerAvailable();
+      return isCoolMessengerAvailable(resolveMemoDir());
     } catch {
       return false;
     }
