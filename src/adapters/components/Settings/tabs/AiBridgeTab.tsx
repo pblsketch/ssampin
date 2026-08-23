@@ -1,5 +1,4 @@
 import { AiBridgeCard } from '../aiBridge/AiBridgeCard';
-import { InAppAssistCard } from '../aiBridge/InAppAssistCard';
 
 export function AiBridgeTab() {
   return (
@@ -11,8 +10,7 @@ export function AiBridgeTab() {
           하나로 연결됩니다.
         </p>
       </div>
-      <InAppAssistCard />
-
+      {/* 쌤핀 AI(앱 안에서 묻고 답하기)는 설정 > 실험실 기능 탭으로 옮겼다 (2026-08-24 오너 결정) */}
       <AiBridgeCard />
     </div>
   );

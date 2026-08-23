@@ -25,6 +25,7 @@ export type SettingsTabId =
   | 'backup'
   | 'archive'
   | 'ai-bridge'
+  | 'labs'
   | 'about';
 
 interface SettingsPageProps {

@@ -13,7 +13,7 @@
 import { describe, expect, test } from 'vitest';
 import { TAB_GROUPS, TABS } from '../SettingsSidebar';
 
-/** 기존 18개 + archive — 순서 포함 전체 스냅샷. */
+/** 기존 18개 + archive + labs — 순서 포함 전체 스냅샷. */
 const EXPECTED_TABS: readonly { id: string; label: string }[] = [
   { id: 'school', label: '학교 정보' },
   { id: 'period', label: '교시 시간' },
@@ -31,13 +31,14 @@ const EXPECTED_TABS: readonly { id: string; label: string }[] = [
   { id: 'ai-bridge', label: 'AI 연결' },
   { id: 'backup', label: '백업/복원' },
   { id: 'archive', label: '학년도/학기' }, // S2.3 신규 — backup 바로 다음 (라벨 개명: ADR-046)
+  { id: 'labs', label: '실험실 기능' }, // 2026-08-24 신규 — 쌤핀 AI·온라인 교무실·쿨메신저 옵트인
   { id: 'security', label: '보안' },
   { id: 'system', label: '시스템' },
   { id: 'about', label: '앱 정보' },
 ];
 
 describe('설정 탭 id·라벨 계약 (S2.3)', () => {
-  test('탭은 정확히 19개 — 기존 18개 불변 + archive 추가', () => {
+  test('탭은 정확히 20개 — 기존 19개 불변 + labs 추가', () => {
     expect(TABS.map((t) => ({ id: t.id, label: t.label }))).toEqual(EXPECTED_TABS);
   });
 

@@ -17,6 +17,7 @@ import { BackupTab } from './tabs/BackupTab';
 import { AboutTab } from './tabs/AboutTab';
 import { GoogleIntegrationTab } from './tabs/GoogleIntegrationTab';
 import { AiBridgeTab } from './tabs/AiBridgeTab';
+import { LabsTab } from './tabs/LabsTab';
 import { SchoolYearArchiveTab } from '@adapters/components/SchoolYearWizard/SchoolYearArchiveTab';
 import { TodoTab } from './tabs/TodoTab';
 import { ToolsTab } from './tabs/ToolsTab';
@@ -191,6 +192,8 @@ function TabContent({
       return <SchoolYearArchiveTab />;
     case 'ai-bridge':
       return <AiBridgeTab />;
+    case 'labs':
+      return <LabsTab draft={draft} patch={patch} />;
     case 'about':
       return <AboutTab />;
     default:

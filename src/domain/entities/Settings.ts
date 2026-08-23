@@ -661,6 +661,14 @@ export interface Settings {
    * optional 이라 기존 사용자 데이터와 100% 호환된다(값이 없으면 꺼짐).
    */
   readonly coolMessengerImportEnabled?: boolean;
+  /**
+   * 온라인 교무실 (실험실 기능, 2026-08-24 오너 결정).
+   *
+   * **기본값은 꺼짐이다.** 설정 > 실험실 기능에서 켜야 사이드바에 메뉴가 나타나고,
+   * 일정·할 일 화면의 부서 겹쳐 보기도 이 값이 켜져 있을 때만 서버를 부른다.
+   * optional 이라 기존 사용자 데이터와 100% 호환된다(값이 없으면 꺼짐).
+   */
+  readonly staffRoomEnabled?: boolean;
   /** 학교알리미 학교 연결 (평가계획 불러오기 학교 재검색 생략용, school-enrich ②-B) */
   readonly schoolInfo?: SchoolInfoLink;
   readonly pin: PinSettings;

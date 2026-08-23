@@ -203,6 +203,50 @@ function useCallbackForDualEntry(setCurrentPage: (page: PageId) => void): () => 
   }, [setCurrentPage]);
 }
 
+/**
+ * 온라인 교무실 실험실 게이트 (2026-08-24 오너 결정).
+ *
+ * 사이드바 메뉴는 실험실을 켠 경우에만 나타나지만, 메뉴 순서 저장값이나 이벤트 경로로
+ * 'staffroom' 페이지에 직접 들어올 수 있으므로 라우트에서도 한 번 더 막는다.
+ * 켜는 길을 화면에서 바로 알려 준다 — 안내 없는 빈 화면은 고장으로 읽힌다.
+ */
+function StaffRoomLabGate() {
+  const enabled = useSettingsStore((s) => s.settings.staffRoomEnabled === true);
+
+  if (!enabled) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
+        <span className="material-symbols-outlined text-4xl text-sp-muted">science</span>
+        <p className="text-lg font-sp-semibold text-sp-text">온라인 교무실은 실험실 기능입니다</p>
+        <p className="text-sm text-sp-muted">
+          설정 &gt; 실험실 기능에서 켜면 사이드바에 메뉴가 나타납니다.
+        </p>
+        <button
+          type="button"
+          onClick={() =>
+            window.dispatchEvent(new CustomEvent('ssampin:navigate', { detail: 'settings#labs' }))
+          }
+          className="mt-1 rounded-xl bg-sp-accent px-4 py-2 text-sm font-sp-semibold text-white transition-all hover:brightness-110 active:scale-95"
+        >
+          실험실 기능 열기
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <Suspense
+      fallback={
+        <div className="flex h-full items-center justify-center">
+          <p className="text-sp-muted text-lg">온라인 교무실을 준비하는 중...</p>
+        </div>
+      }
+    >
+      <StaffRoomPage />
+    </Suspense>
+  );
+}
+
 interface RenderPageContext {
   readonly onRequestDualMode: () => void;
   readonly lastSingleTool: DualToolId | null;
@@ -347,17 +391,7 @@ function renderPage(
     );
   }
   if (page === 'staffroom') {
-    return (
-      <Suspense
-        fallback={
-          <div className="flex h-full items-center justify-center">
-            <p className="text-sp-muted text-lg">온라인 교무실을 준비하는 중...</p>
-          </div>
-        }
-      >
-        <StaffRoomPage />
-      </Suspense>
-    );
+    return <StaffRoomLabGate />;
   }
   if (page === 'tool-school-announcements') {
     return <SchoolAnnouncementsPage onBack={() => onNavigate('tools')} />;

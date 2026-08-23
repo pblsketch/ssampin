@@ -7,6 +7,7 @@
  *   §8-B  여러 부서가 겹쳐 뜨므로 **어느 부서 것인지**가 함께 보인다.
  *   §8-E  끝낸 일은 세지 않는다. "몇 개 끝냈다" 같은 표시가 생기면 안 된다.
  *   기본  교무실을 안 쓰는 선생님(부서 0개)에게는 **아무것도 안 보인다.**
+ *   실험실  설정 > 실험실 기능에서 안 켰으면 일정이 있어도 **아무것도 안 보인다** (2026-08-24).
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { renderToString } from 'react-dom/server';
@@ -18,6 +19,12 @@ const asyncNoop = async () => {};
 let departments: Array<{ id: string; name: string }> = [];
 let myEvents: StaffRoomEvent[] = [];
 let myTasks: StaffRoomTask[] = [];
+let staffRoomEnabled = true;
+
+vi.mock('@adapters/stores/useSettingsStore', () => ({
+  useSettingsStore: (selector: (s: Record<string, unknown>) => unknown) =>
+    selector({ settings: { staffRoomEnabled } }),
+}));
 
 vi.mock('@adapters/stores/useStaffRoomStore', () => ({
   useStaffRoomStore: (selector: (s: Record<string, unknown>) => unknown) =>
@@ -73,6 +80,21 @@ beforeEach(() => {
   departments = [{ id: 'd1', name: '2학년부' }];
   myEvents = [];
   myTasks = [];
+  staffRoomEnabled = true;
+});
+
+describe('실험실 게이트 — 설정에서 안 켰으면 아무것도 안 보인다 (2026-08-24)', () => {
+  it('일정이 있어도 안 뜬다', () => {
+    staffRoomEnabled = false;
+    myEvents = [makeEvent()];
+    expect(renderDay('2026-08-21')).toBe('');
+  });
+
+  it('맡은 일이 있어도 안 뜬다', () => {
+    staffRoomEnabled = false;
+    myTasks = [makeTask()];
+    expect(renderTasks('lee@school.kr')).toBe('');
+  });
 });
 
 describe('부서 일정 겹쳐 보기', () => {

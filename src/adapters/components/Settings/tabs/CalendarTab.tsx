@@ -12,7 +12,6 @@ import { Toggle } from '../shared/Toggle';
 import { DEFAULT_CAT_IDS } from '../shared/constants';
 import { NeisScheduleSection } from '../NeisScheduleSection';
 import { NeisTimetableAutoSyncSection } from '../NeisTimetableAutoSyncSection';
-import { CoolMessengerSection } from '../CoolMessengerSection';
 
 interface Props {
   draft: Settings;
@@ -204,8 +203,7 @@ export function CalendarTab({ draft, patch }: Props) {
         </>
       )}
 
-      {/* 쿨메신저 쪽지 가져오기 — 기본 꺼짐, 여기서 켜야 일정·할일 화면에 버튼이 생긴다 */}
-      <CoolMessengerSection draft={draft} patch={patch} />
+      {/* 쿨메신저 쪽지 가져오기 설정은 설정 > 실험실 기능 탭으로 옮겼다 (2026-08-24 오너 결정) */}
 
       {/* 구글 캘린더 연동 안내 — 실제 설정은 Google 연동 탭에서 */}
       <SettingsSection

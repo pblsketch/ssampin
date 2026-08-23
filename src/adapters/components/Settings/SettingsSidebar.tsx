@@ -103,6 +103,19 @@ const TAB_GROUPS: TabGroup[] = [
     ],
   },
   {
+    // 실험실 (2026-08-24 오너 결정) — 새로 나온 기능을 여기서 켜야 화면에 나타난다.
+    // 쌤핀 AI·온라인 교무실·쿨메신저 가져오기가 이 탭에 모여 있다(전부 기본 꺼짐).
+    label: '실험실',
+    tabs: [
+      {
+        id: 'labs',
+        icon: 'science',
+        label: '실험실 기능',
+        color: 'bg-fuchsia-500/10 text-fuchsia-400',
+      },
+    ],
+  },
+  {
     label: '시스템',
     tabs: [
       { id: 'security', icon: 'lock', label: '보안', color: 'bg-red-500/10 text-red-400' },

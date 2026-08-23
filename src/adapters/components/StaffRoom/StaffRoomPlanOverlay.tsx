@@ -16,6 +16,7 @@
  * 이 파일 하나에 불러오기·판정·표시를 다 담아, 일정·할 일 화면에는 몇 줄만 얹는다.
  */
 import { useEffect, useMemo } from 'react';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useStaffRoomStore } from '@adapters/stores/useStaffRoomStore';
 import { useStaffRoomPlanStore } from '@adapters/stores/useStaffRoomPlanStore';
 import { eventCoversDate, isTaskOverdue } from '@domain/rules/staffRoomRoomRules';
@@ -27,10 +28,18 @@ import type { StaffRoomEvent, StaffRoomTask } from '@domain/entities/StaffRoomRo
  * 부서 목록이 아직 없으면 함께 불러온다 — 일정 화면은 교무실을 한 번도 안 연
  * 상태에서도 열리기 때문이다.
  */
+const NO_EVENTS: readonly StaffRoomEvent[] = [];
+const NO_TASKS: readonly StaffRoomTask[] = [];
+
 export function useStaffRoomPlanOverlay(): {
   events: readonly StaffRoomEvent[];
   tasks: readonly StaffRoomTask[];
 } {
+  // 실험실 게이트 (2026-08-24 오너 결정) — 실험실에서 안 켠 선생님에게는 그리지도,
+  // **서버를 부르지도** 않는다. 일정·할 일 화면은 교무실과 무관하게 매일 열리는 화면이라
+  // 여기서 안 막으면 안 쓰는 대부분의 선생님 PC가 헛요청을 보낸다.
+  const staffRoomEnabled = useSettingsStore((s) => s.settings.staffRoomEnabled === true);
+
   const departments = useStaffRoomStore((s) => s.departments);
   const hasLoadedDepartments = useStaffRoomStore((s) => s.hasLoadedDepartments);
   const loadDepartments = useStaffRoomStore((s) => s.loadDepartments);
@@ -42,21 +51,24 @@ export function useStaffRoomPlanOverlay(): {
   //   교무실을 안 쓰는 선생님은 부서가 0개인데, 개수로 보면 할 일 화면을 열 때마다
   //   서버를 부르게 된다. 대부분의 선생님이 여기 해당한다.
   useEffect(() => {
+    if (!staffRoomEnabled) return;
     if (!hasLoadedDepartments) void loadDepartments();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasLoadedDepartments]);
+  }, [staffRoomEnabled, hasLoadedDepartments]);
 
   // 부서 목록이 바뀔 때만 다시 받는다 — 달을 넘길 때마다 부르지 않는다
   const departmentIds = useMemo(() => departments.map((d) => d.id).join(','), [departments]);
 
   useEffect(() => {
+    if (!staffRoomEnabled) return;
     if (departmentIds.length === 0) return;
     void loadMyPlan(departmentIds.split(','));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [departmentIds]);
+  }, [staffRoomEnabled, departmentIds]);
 
   // 부서가 하나도 없으면 그릴 것도 없다 — 교무실을 안 쓰는 분에게는 아무것도 안 보인다
 
+  if (!staffRoomEnabled) return { events: NO_EVENTS, tasks: NO_TASKS };
   return { events: myEvents, tasks: myTasks };
 }
 

@@ -9,7 +9,7 @@ import { useCoolImport } from './useCoolImport';
  * 실제 배선(읽기·등록·기록)은 `useCoolImport` 가 갖고 있다.
  *
  * ## 설정에서 켜지 않으면 아무것도 안 보인다
- * 쿨메신저를 안 쓰는 시도교육청이 많다. 기본은 꺼짐이고, 설정 > 일정에서 켜야 나온다.
+ * 쿨메신저를 안 쓰는 시도교육청이 많다. 기본은 꺼짐이고, 설정 > 실험실 기능에서 켜야 나온다.
  *
  * @see docs/01-plan/features/coolmessenger-import.plan.md
  */

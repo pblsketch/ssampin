@@ -208,10 +208,16 @@ export function Sidebar({ currentPage, onNavigate, onFeedback }: SidebarProps) {
   }, [settings.menuOrder]);
 
   const visibleItems = useMemo(() => {
+    // 온라인 교무실은 실험실 기능(설정 > 실험실 기능)에서 켠 선생님에게만 보인다.
+    // hiddenMenus(사용자 숨김)와 별개의 게이트다 — 실험실을 안 켰으면 숨김 설정과 무관하게 없다.
+    const labsFiltered =
+      settings.staffRoomEnabled === true
+        ? sortedItems
+        : sortedItems.filter((item) => item.id !== 'staffroom');
     const hidden = settings.hiddenMenus;
-    if (!hidden || hidden.length === 0) return sortedItems;
-    return sortedItems.filter((item) => !hidden.includes(item.id));
-  }, [sortedItems, settings.hiddenMenus]);
+    if (!hidden || hidden.length === 0) return labsFiltered;
+    return labsFiltered.filter((item) => !hidden.includes(item.id));
+  }, [sortedItems, settings.hiddenMenus, settings.staffRoomEnabled]);
 
   const handleDragStart = useCallback((e: React.DragEvent, id: PageId) => {
     setDraggedId(id);
