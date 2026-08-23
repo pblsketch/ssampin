@@ -42,6 +42,11 @@ interface ProgressQuickEntryModalProps {
   fanout?: ProgressQuickEntryFanout;
   onSubmit: (values: ProgressEntryFieldValues, status: ProgressStatus) => void | Promise<void>;
   onDelete?: () => void | Promise<void>;
+  /**
+   * "여기부터 밀기" — 편집 모드에서만 보인다. 넘기지 않으면 단추가 나오지 않는다
+   * (밀 자리를 계산하려면 학기 수업일이 필요한데, 그것을 아는 것은 호출부다).
+   */
+  onShiftFromHere?: () => void;
   onClose: () => void;
 }
 
@@ -58,6 +63,7 @@ export function ProgressQuickEntryModal({
   fanout,
   onSubmit,
   onDelete,
+  onShiftFromHere,
   onClose,
 }: ProgressQuickEntryModalProps) {
   const [values, setValues] = useState<ProgressEntryFieldValues>(initialValues);
@@ -181,6 +187,21 @@ export function ProgressQuickEntryModal({
             <span />
           )}
           <div className="flex gap-2">
+            {/*
+              계획대로 못 나간 차시에서 그 뒤를 통째로 미는 길. 편집 창에 두는 이유는,
+              "못 나간 그 차시"를 눌러 여기까지 온 상태가 곧 미는 기준점이기 때문이다.
+              한 건만 옮기려면 캘린더에서 끌어다 놓으면 된다.
+            */}
+            {mode === 'edit' && onShiftFromHere && (
+              <button
+                onClick={onShiftFromHere}
+                title="이 차시부터 뒤의 '예정'을 각각 다음 수업일로 옮겨요"
+                className="flex items-center gap-1 rounded-lg border border-sp-border px-3 py-1.5 text-sm text-sp-muted transition-colors hover:border-sp-accent hover:text-sp-accent"
+              >
+                <span className="material-symbols-outlined text-base">last_page</span>
+                여기부터 밀기
+              </button>
+            )}
             <button
               onClick={onClose}
               className="px-3 py-1.5 text-sm text-sp-muted transition-colors hover:text-sp-text"
