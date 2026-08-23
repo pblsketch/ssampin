@@ -19,6 +19,15 @@ const TOOL_LABEL: Readonly<Record<string, string>> = {
   list_classes: '담당 학급',
   get_records_stats: '기록 통계',
   get_my_todos: '할 일',
+  get_meals: '급식',
+  get_ddays: '디데이',
+  get_events: '일정',
+  get_timetable: '시간표',
+  get_progress: '진도',
+  get_memos: '메모',
+  get_note_list: '노트',
+  get_bookmarks: '즐겨찾기',
+  get_week_overview: '이번 주',
 };
 
 /** 필드 이름 → 화면에 쓰는 한국어 */
@@ -34,11 +43,16 @@ const FIELD_LABEL: Readonly<Record<string, string>> = {
   period: '기간',
   total: '전체',
   undone: '미완료',
+  todoUndone: '남은 할 일',
 };
 
 /** 숫자 뒤에 붙일 단위. 기본은 '명'(사람 수 집계가 대부분이라서). */
 const FIELD_UNIT: Readonly<Record<string, string>> = {
   undone: '개',
+  todoUndone: '개',
+  // `total` 은 기록·메모·노트·즐겨찾기의 **건수**다. 기본값 '명'을 그대로 두면
+  // "기록 34명"처럼 사람 수인 척하는 숫자가 화면에 남는다.
+  total: '건',
 };
 
 function formatValue(key: string, value: unknown): string {
@@ -50,6 +64,45 @@ function formatValue(key: string, value: unknown): string {
 /** 목록형 결과(할 일 등)의 한 항목. 화면 전용이라 느슨한 모양으로 받는다. */
 interface ListItem {
   readonly [key: string]: unknown;
+}
+
+/**
+ * 목록 항목의 **본문**으로 쓸 필드 — 앞에 있는 것부터 찾아 처음 비지 않은 값을 쓴다.
+ *
+ * ★도구마다 본문에 해당하는 필드 이름이 다르다(할 일은 title, 급식은 dishes, 시간표는
+ * subject…). 예전에는 `title` 하나만 그려서 **할 일 말고는 카드가 전부 백지**였다 —
+ * "앱이 조회한 사실이 먼저"라는 약속이 도구를 늘릴 때마다 조용히 깨지는 구조였다.
+ */
+const LIST_TITLE_KEYS: readonly string[] = [
+  'title',
+  'name',
+  'subject',
+  'unit',
+  'content',
+  'dishes',
+  'events',
+  'meal',
+];
+
+/** 항목 뒤에 작게 붙일 보조 정보. 역시 처음 비지 않은 것 하나만 쓴다. */
+const LIST_TAIL_KEYS: readonly string[] = [
+  'due',
+  'updated',
+  'domain',
+  'classroom',
+  'group',
+  'notebook',
+  'className',
+  'mealType',
+  'time',
+];
+
+function firstText(item: ListItem, keys: readonly string[]): string {
+  for (const key of keys) {
+    const value = item[key];
+    if (typeof value === 'string' && value.length > 0) return value;
+  }
+  return '';
 }
 
 function isListOfRecords(value: unknown): value is readonly ListItem[] {
@@ -91,23 +144,30 @@ function DataCard({ tool, data }: { readonly tool: string; readonly data: ToolRe
 
       {listEntries.map(([key, items]) => (
         <ul key={key} className="mt-2 flex flex-col gap-1 border-t border-sp-border pt-2">
-          {items.map((item, index) => (
-            <li key={index} className="flex items-baseline gap-2 text-sm">
-              <span aria-hidden="true" className="shrink-0 text-sp-muted">
-                {item.done === true ? '✓' : '•'}
-              </span>
-              <span className="min-w-0 flex-1 break-words text-sp-text">
-                {typeof item.title === 'string' ? item.title : ''}
-              </span>
-              {typeof item.due === 'string' && (
-                <span className="shrink-0 text-xs text-sp-muted">~{item.due.slice(5)}</span>
-              )}
-              {/* 색 단독 표기 금지 — 아이콘 + 한국어 라벨 + 굵기로 뜻을 전한다 */}
-              {item.overdue === true && (
-                <span className="shrink-0 text-xs font-sp-semibold text-sp-text">⚠ 지남</span>
-              )}
-            </li>
-          ))}
+          {items.map((item, index) => {
+            const lead = typeof item.date === 'string' ? item.date.slice(5) : '';
+            const tail = firstText(item, LIST_TAIL_KEYS);
+            return (
+              <li key={index} className="flex items-baseline gap-2 text-sm">
+                <span aria-hidden="true" className="shrink-0 text-sp-muted">
+                  {item.done === true ? '✓' : '•'}
+                </span>
+                {lead.length > 0 && <span className="shrink-0 text-xs text-sp-muted">{lead}</span>}
+                <span className="min-w-0 flex-1 break-words text-sp-text">
+                  {firstText(item, LIST_TITLE_KEYS)}
+                </span>
+                {tail.length > 0 && (
+                  <span className="shrink-0 text-xs text-sp-muted">
+                    {typeof item.due === 'string' && item.due === tail ? `~${tail.slice(5)}` : tail}
+                  </span>
+                )}
+                {/* 색 단독 표기 금지 — 아이콘 + 한국어 라벨 + 굵기로 뜻을 전한다 */}
+                {item.overdue === true && (
+                  <span className="shrink-0 text-xs font-sp-semibold text-sp-text">⚠ 지남</span>
+                )}
+              </li>
+            );
+          })}
         </ul>
       ))}
 

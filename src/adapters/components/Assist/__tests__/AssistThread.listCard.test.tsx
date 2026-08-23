@@ -19,7 +19,7 @@ import type { AssistTurn } from '@adapters/stores/useAssistStore';
 import { findAssistTool } from '@domain/services/assistToolRegistry';
 import { sanitizeToolResult } from '@domain/services/sanitizeToolResult';
 import type { ToolResultShape } from '@domain/services/sanitizeToolResult';
-import { summarizeTodos } from '@usecases/assist/summaries';
+import { summarizeBookmarks, summarizeTodos } from '@usecases/assist/summaries';
 
 afterEach(cleanup);
 
@@ -70,5 +70,55 @@ describe('AssistThread — 할 일 카드', () => {
 
     // 8/19 만 지났고 8/23(오늘)은 아직이다
     expect(screen.getAllByText('⚠ 지남')).toHaveLength(1);
+  });
+});
+
+/**
+ * ★도구를 늘릴 때마다 조용히 깨지던 자리.
+ *
+ * 카드가 `title` 필드 하나만 그리던 시절에는 할 일 말고는 **전부 백지**였다.
+ * 급식은 `dishes`, 시간표는 `subject`, 즐겨찾기는 `name` 에 본문이 들어 있는데
+ * 그 사실을 카드가 몰랐기 때문이다. 여기서 대표로 즐겨찾기를 잠근다.
+ */
+describe('AssistThread — 새 도구 카드도 백지가 아니다', () => {
+  it('즐겨찾기 — 이름과 도메인이 화면에 남는다', () => {
+    const tool = findAssistTool('get_bookmarks');
+    if (!tool) throw new Error('도구 없음');
+    const summary = summarizeBookmarks(
+      [{ name: '나이스', url: 'https://neis.go.kr/detail?sid=1', groupId: 'g1' }],
+      [{ id: 'g1', name: '업무' }],
+    );
+
+    render(
+      <AssistThread
+        turns={[
+          {
+            id: 't2',
+            question: '즐겨찾기 뭐 있어',
+            cards: [
+              {
+                tool: tool.id,
+                data: sanitizeToolResult(
+                  tool,
+                  JSON.parse(JSON.stringify(summary)) as ToolResultShape,
+                ),
+              },
+            ],
+            answer: '',
+            outboundAnswer: '',
+            outboundCards: [],
+            degraded: null,
+            status: 'done',
+            maskedCount: 0,
+            blankedCount: 0,
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText('나이스')).toBeTruthy();
+    expect(screen.getByText('neis.go.kr')).toBeTruthy();
+    // 주소 전체는 애초에 카드까지 오지 않는다(오너 결정 ② — 도메인만).
+    expect(screen.queryByText(/sid=/)).toBeNull();
   });
 });

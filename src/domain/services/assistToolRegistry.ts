@@ -15,12 +15,14 @@
 import type { AssistToolDef, AssistToolId } from '../entities/AssistTool';
 
 /**
- * Phase 1 등록 도구 — **로컬 집계로 완결되는 5종**.
+ * 등록 도구 — **선생님 컴퓨터 안의 로컬 집계로 완결되는 것만**.
  *
- * 계획서 §4.2 의 1등급 목록은 12종이지만, 나머지 7종은 외부 호출(`get_app_help`)이나
- * 자매 계획 소관(`polish_sentence`), 또는 아직 데이터 원본이 없는 것들이라
- * Phase 1(외부 통신 0) 범위 밖이다. 등급 판정은 이미 §4.2 에서 끝나 있고,
- * 여기서는 **지금 안전하게 만들 수 있는 것만** 등록한다.
+ * 처음 5종(출결·인원·학급·기록·할일)으로 시작해, 브릿지 동등화 계획서
+ * (`docs/01-plan/features/assist-bridge-parity.plan.md` §2 A그룹)에 따라
+ * 급식·디데이·일정(슬라이스 1) → 시간표·진도·메모·노트·즐겨찾기·주간요약(슬라이스 2)을 더했다.
+ *
+ * 여기 없는 것은 "빠뜨린" 것이 아니라 **일부러 만들지 않은** 것이다 — 개별 학생 데이터를
+ * 다루는 도구(명단·학생별 출결/기록)와 생기부 3종은 어느 Phase 에서도 등록하지 않는다.
  */
 export const ASSIST_TOOLS: readonly AssistToolDef[] = [
   {
@@ -33,6 +35,12 @@ export const ASSIST_TOOLS: readonly AssistToolDef[] = [
     // 대신 실제로 세고 있던 `classAbsence`(결과)를 내보낸다.
     resultFields: ['date', 'className', 'present', 'absent', 'late', 'early', 'classAbsence'],
     freeTextFields: [],
+    params: {
+      type: 'object',
+      properties: {
+        date: { type: 'string', description: 'YYYY-MM-DD 조회일(생략 시 오늘)' },
+      },
+    },
   },
   {
     id: 'count_students',
@@ -67,6 +75,13 @@ export const ASSIST_TOOLS: readonly AssistToolDef[] = [
     resultFields: ['className', 'period', 'total', 'byCategory'],
     nestedFields: { byCategory: ['category', 'count'] },
     freeTextFields: [],
+    params: {
+      type: 'object',
+      properties: {
+        from: { type: 'string', description: 'YYYY-MM-DD 시작일(생략 시 이번 달 1일)' },
+        to: { type: 'string', description: 'YYYY-MM-DD 종료일(생략 시 오늘)' },
+      },
+    },
   },
   {
     id: 'get_my_todos',
@@ -79,6 +94,15 @@ export const ASSIST_TOOLS: readonly AssistToolDef[] = [
     resultFields: ['items', 'undone'],
     nestedFields: { items: ['title', 'due', 'done', 'overdue'] },
     freeTextFields: ['title'],
+    params: {
+      type: 'object',
+      properties: {
+        includeCompleted: {
+          type: 'boolean',
+          description: '끝낸 할 일도 포함할지(생략 시 false — 미완료만)',
+        },
+      },
+    },
   },
   // ── 브릿지 동등화 Phase 1 (계획서 assist-bridge-parity §2 A그룹) ──
   {
@@ -119,6 +143,123 @@ export const ASSIST_TOOLS: readonly AssistToolDef[] = [
     resultFields: ['period', 'truncated', 'items'],
     nestedFields: { items: ['date', 'title', 'time', 'location'] },
     freeTextFields: ['title', 'location'],
+    params: {
+      type: 'object',
+      properties: {
+        from: { type: 'string', description: 'YYYY-MM-DD 시작일(생략 시 오늘)' },
+        to: { type: 'string', description: 'YYYY-MM-DD 종료일(생략 시 시작일+6일)' },
+      },
+    },
+  },
+  // ── 브릿지 동등화 Phase 1 슬라이스 2 (계획서 §2 A그룹 잔여) ──
+  {
+    id: 'get_timetable',
+    grade: 1,
+    outbound: 'result',
+    // 학생 정보가 없다. 과목·교실은 선생님이 손으로 고칠 수 있어 자유 입력으로 본다.
+    description:
+      '기간의 교사 본인 시간표를 돌려준다. 날짜·요일·교시(periodNo)·과목·교실. 교체·보강 같은 변동이 반영돼 있고, 빈 교시는 담기지 않는다.',
+    resultFields: ['period', 'truncated', 'items'],
+    nestedFields: { items: ['date', 'day', 'periodNo', 'subject', 'classroom'] },
+    freeTextFields: ['subject', 'classroom'],
+    params: {
+      type: 'object',
+      properties: {
+        from: { type: 'string', description: 'YYYY-MM-DD 시작일(생략 시 오늘)' },
+        to: { type: 'string', description: 'YYYY-MM-DD 종료일(생략 시 시작일+6일)' },
+      },
+    },
+  },
+  {
+    id: 'get_progress',
+    grade: 1,
+    outbound: 'result',
+    // 학생이 아니라 수업의 기록이다. 단원·차시·메모는 자유 입력이라 관문을 거친다.
+    description:
+      '기간의 수업 진도 기록을 돌려준다. 날짜·학급·교시(periodNo)·단원·차시·상태(planned/completed/skipped)·메모.',
+    resultFields: ['period', 'total', 'truncated', 'items'],
+    nestedFields: {
+      items: ['date', 'className', 'periodNo', 'unit', 'lesson', 'status', 'note'],
+    },
+    freeTextFields: ['unit', 'lesson', 'note'],
+    params: {
+      type: 'object',
+      properties: {
+        from: { type: 'string', description: 'YYYY-MM-DD 시작일(생략 시 이번 달 1일)' },
+        to: { type: 'string', description: 'YYYY-MM-DD 종료일(생략 시 오늘)' },
+        className: { type: 'string', description: '학급 이름(생략 시 전체)' },
+      },
+    },
+  },
+  {
+    id: 'get_memos',
+    grade: 1,
+    outbound: 'result',
+    // ★내용까지 보낸다 — 오너 결정 ①(2026-08-23). 대신 content 를 자유 입력으로 선언해
+    //   이름·연락처 관문(그물 ③)을 그대로 통과시킨다. 이 관문은 선택지가 아니다.
+    description: '메모지의 내용을 돌려준다. 최근에 고친 것부터.',
+    resultFields: ['total', 'truncated', 'items'],
+    nestedFields: { items: ['content', 'updated'] },
+    freeTextFields: ['content'],
+    params: {
+      type: 'object',
+      properties: {
+        includeArchived: {
+          type: 'boolean',
+          description: '보관함 메모도 포함할지(생략 시 false)',
+        },
+      },
+    },
+  },
+  {
+    id: 'get_note_list',
+    grade: 1,
+    outbound: 'result',
+    // 본문은 반환하지 않는다(계획서 §2 확정) — 노트에는 학생 개별 사정이 문단째 들어간다.
+    description:
+      '노트 페이지 **목록**을 돌려준다. 노트책·구역·제목·고정 여부·수정일. 본문은 반환하지 않는다.',
+    resultFields: ['total', 'truncated', 'items'],
+    nestedFields: { items: ['notebook', 'section', 'title', 'pinned', 'updated'] },
+    freeTextFields: ['notebook', 'section', 'title'],
+    params: {
+      type: 'object',
+      properties: {
+        includeArchived: {
+          type: 'boolean',
+          description: '보관한 노트책의 페이지도 포함할지(생략 시 false)',
+        },
+      },
+    },
+  },
+  {
+    id: 'get_bookmarks',
+    grade: 1,
+    outbound: 'result',
+    // ★주소는 도메인만 — 오너 결정 ②(2026-08-23). 경로·질의에 학번이 박힌 링크가 흔하다.
+    description: '즐겨찾기 목록을 돌려준다. 이름·묶음과 주소의 **도메인만** 반환한다.',
+    resultFields: ['total', 'truncated', 'items'],
+    nestedFields: { items: ['name', 'domain', 'group'] },
+    freeTextFields: ['name', 'group'],
+    params: {
+      type: 'object',
+      properties: {
+        includeArchived: {
+          type: 'boolean',
+          description: '보관한 묶음도 포함할지(생략 시 false)',
+        },
+      },
+    },
+  },
+  {
+    id: 'get_week_overview',
+    grade: 1,
+    outbound: 'result',
+    // 다른 요약들의 조합이다. 새로 세지 않으므로 등급도 구성 요소를 따른다.
+    description:
+      '한 주를 한눈에 — 날짜별 수업 교시 수·급식·일정·디데이와 미완료 할 일 수를 함께 돌려준다.',
+    resultFields: ['period', 'todoUndone', 'truncated', 'days'],
+    nestedFields: { days: ['date', 'day', 'lessons', 'meal', 'events', 'ddays'] },
+    freeTextFields: ['meal', 'events', 'ddays'],
     params: {
       type: 'object',
       properties: {

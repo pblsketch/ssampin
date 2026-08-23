@@ -158,6 +158,77 @@ describe('쌤핀 AI 파이프라인 — 정상 데이터는 끝까지 통과한�
         truncated: false,
         items: [{ date: '2026-08-25', title: '학부모 총회', time: '14:00', location: '시청각실' }],
       },
+      // ── 브릿지 동등화 Phase 1 슬라이스 2 (2026-08-23) ──
+      get_timetable: {
+        period: '2026-08-24 ~ 2026-08-30',
+        truncated: false,
+        items: [
+          { date: '2026-08-24', day: '월', periodNo: 1, subject: '수학', classroom: '3-2' },
+          { date: '2026-08-24', day: '월', periodNo: 4, subject: '과학', classroom: '과학실' },
+        ],
+      },
+      get_progress: {
+        period: '2026-08-01 ~ 2026-08-23',
+        total: 12,
+        truncated: false,
+        items: [
+          {
+            date: '2026-08-24',
+            className: '3학년 2반',
+            periodNo: 3,
+            unit: '2단원 함수',
+            lesson: '1차시',
+            status: 'completed',
+            note: '연습문제까지 마침',
+          },
+        ],
+      },
+      get_memos: {
+        total: 2,
+        truncated: false,
+        // ★내용까지 담는다(오너 결정 ①). 날짜가 섞인 평범한 메모가 막히지 않아야 한다 —
+        //   자유 입력에는 생년월일 패턴이 켜져 있어 여기가 정확히 오탐이 나던 자리다.
+        items: [
+          { content: '8/25 학년 회의 자료 뽑기', updated: '2026-08-23' },
+          { content: '2학기 수행평가 일정 정리', updated: '2026-08-20' },
+        ],
+      },
+      get_note_list: {
+        total: 3,
+        truncated: false,
+        items: [
+          {
+            notebook: '3학년 수학',
+            section: '수업 준비',
+            title: '2단원 지도안',
+            pinned: true,
+            updated: '2026-08-22',
+          },
+        ],
+      },
+      get_bookmarks: {
+        total: 2,
+        truncated: false,
+        items: [
+          { name: '나이스', domain: 'neis.go.kr', group: '업무' },
+          { name: '에듀파인', domain: 'klef.go.kr', group: '업무' },
+        ],
+      },
+      get_week_overview: {
+        period: '2026-08-24 ~ 2026-08-30',
+        todoUndone: 5,
+        truncated: false,
+        days: [
+          {
+            date: '2026-08-24',
+            day: '월',
+            lessons: 4,
+            meal: '중식 차조밥, 콩나물국, 배추김치',
+            events: '학부모 총회',
+            ddays: '',
+          },
+        ],
+      },
     };
 
     for (const def of ASSIST_TOOLS) {
@@ -254,6 +325,75 @@ describe('쌤핀 AI 파이프라인 — 함정을 심으면 반드시 걸린다'
             title: `${PLANTED} 상담`,
             time: '15:00',
             location: `${PLANTED} 교실`,
+          },
+        ],
+      },
+      // ── 슬라이스 2 — 자유 입력 자리마다 이름을 심는다 ──
+      get_timetable: {
+        period: '2026-08-24 ~ 2026-08-30',
+        truncated: false,
+        items: [
+          {
+            date: '2026-08-24',
+            day: '월',
+            periodNo: 1,
+            // 과목·교실은 손으로 고칠 수 있는 자리다("김지훈 보강" 처럼 적는 선생님이 있다)
+            subject: `${PLANTED} 보강`,
+            classroom: `${PLANTED} 교실`,
+          },
+        ],
+      },
+      get_progress: {
+        period: '2026-08-01 ~ 2026-08-23',
+        total: 1,
+        truncated: false,
+        items: [
+          {
+            date: '2026-08-24',
+            className: '3학년 2반',
+            periodNo: 3,
+            unit: `${PLANTED} 발표 단원`,
+            lesson: '1차시',
+            status: 'completed',
+            note: `${PLANTED} 개별 지도`,
+          },
+        ],
+      },
+      get_memos: {
+        total: 1,
+        truncated: false,
+        items: [{ content: `${PLANTED} 어머니께 전화드리기`, updated: '2026-08-23' }],
+      },
+      get_note_list: {
+        total: 1,
+        truncated: false,
+        items: [
+          {
+            notebook: `${PLANTED} 상담 기록`,
+            section: '2학기',
+            title: `${PLANTED} 면담`,
+            pinned: false,
+            updated: '2026-08-22',
+          },
+        ],
+      },
+      get_bookmarks: {
+        total: 1,
+        truncated: false,
+        items: [{ name: `${PLANTED} 생기부`, domain: 'neis.go.kr', group: `${PLANTED} 자료` }],
+      },
+      get_week_overview: {
+        period: '2026-08-24 ~ 2026-08-30',
+        todoUndone: 1,
+        truncated: false,
+        days: [
+          {
+            date: '2026-08-24',
+            day: '월',
+            lessons: 4,
+            meal: `${PLANTED} 특식`,
+            events: `${PLANTED} 상담`,
+            ddays: `${PLANTED} 생일`,
           },
         ],
       },
