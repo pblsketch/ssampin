@@ -43,6 +43,63 @@ describe('parseQuickInput — 날짜', () => {
   });
 });
 
+describe('parseQuickInput — 기간(부터~까지)', () => {
+  it('"오늘부터 내일까지" — 시작일과 마감일이 함께 잡힌다', () => {
+    const r = parseQuickInput('오늘부터 내일까지 출장', TODAY);
+    expect(r.startDate).toBe('2026-06-24');
+    expect(r.dueDate).toBe('2026-06-25');
+  });
+
+  it('★ 본문에 "부터 …까지" 부스러기가 남지 않는다', () => {
+    // 예전에는 "오늘"만 떼어 가서 본문이 "부터 내일까지 출장"이 됐다(실제 신고).
+    const r = parseQuickInput('오늘부터 내일까지 출장', TODAY);
+    expect(r.text).toBe('출장');
+  });
+
+  it('뒷쪽에 며칠만 적어도 앞쪽 달을 따라간다 — "8월 24일부터 27일까지"', () => {
+    const r = parseQuickInput('8월 24일부터 27일까지 수련회', TODAY);
+    expect(r.startDate).toBe('2026-08-24');
+    expect(r.dueDate).toBe('2026-08-27');
+    expect(r.text).toBe('수련회');
+  });
+
+  it('달을 넘어가는 기간 — "8월 30일부터 2일까지"는 9월 2일이 끝이다', () => {
+    const r = parseQuickInput('8월 30일부터 2일까지 캠프', TODAY);
+    expect(r.startDate).toBe('2026-08-30');
+    expect(r.dueDate).toBe('2026-09-02');
+  });
+
+  it('물결표와 "까지" 생략도 알아본다', () => {
+    expect(parseQuickInput('오늘~모레 워크숍', TODAY).dueDate).toBe('2026-06-26');
+    expect(parseQuickInput('오늘부터 모레 워크숍', TODAY).startDate).toBe('2026-06-24');
+  });
+
+  it('하루짜리에는 시작일을 만들어 넣지 않는다', () => {
+    // 시작일을 멋대로 채우면 하루 일정이 달력에 기간 막대로 그려진다.
+    const r = parseQuickInput('내일 회의', TODAY);
+    expect(r.dueDate).toBe('2026-06-25');
+    expect(r.startDate).toBeUndefined();
+  });
+
+  it('끝이 시작보다 이르면 기간으로 보지 않는다', () => {
+    // 사용자가 뭘 뜻했는지 알 수 없으므로 넘겨짚지 않는다.
+    const r = parseQuickInput('모레부터 오늘까지 이상한 입력', TODAY);
+    expect(r.startDate).toBeUndefined();
+  });
+
+  it('기간과 시간을 함께 적어도 둘 다 잡힌다', () => {
+    const r = parseQuickInput('오늘부터 내일까지 3시 30분 상담', TODAY);
+    expect(r.startDate).toBe('2026-06-24');
+    expect(r.dueDate).toBe('2026-06-25');
+    expect(r.time).toBe('15:30');
+    expect(r.text).toBe('상담');
+  });
+
+  it('기간이 잡히면 인식된 것으로 본다(미리보기 칩이 뜬다)', () => {
+    expect(hasRecognizedTokens(parseQuickInput('오늘부터 내일까지 출장', TODAY))).toBe(true);
+  });
+});
+
 describe('parseQuickInput — 시간', () => {
   it('맨 N시: 1~6시는 오후로, 7~12시는 그대로', () => {
     expect(parseQuickInput('내일 3시 회의', TODAY).time).toBe('15:00');

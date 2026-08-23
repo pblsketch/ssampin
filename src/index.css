@@ -348,6 +348,19 @@ html.sp-glass-on .bg-sp-card .bg-sp-card {
   background-color: transparent;
 }
 
+/* ①-예외: **떠 있는 것**은 배경을 지우지 않는다.
+   위 규칙은 "면 위에 얹힌 면"(카드 안 카드)을 위한 것이다. 그런데 달력 팝오버·드롭다운처럼
+   **위에 떠서 아래를 가려야 하는 것**도 카드 안에 있으면 똑같이 걸려, 배경이 통째로 사라져
+   뒤 내용과 글자가 겹쳐 보인다(2026-08-23 오너 신고 — 할 일 수정 창의 달력).
+   이 저장소는 같은 유형을 이미 한 번 겪었다: 아이콘 모드에서 전 자손 투명 강제가 팝오버
+   배경까지 지워 "그림자+테두리만 남은 유령 상자"가 됐다(175행 주석).
+   ★ 떠 있는 요소에는 `data-sp-floating` 을 달아 준다. 특이도가 위 규칙과 같으므로
+     **반드시 그 뒤에 와야 한다 — 순서를 바꾸지 말 것.** */
+html.sp-glass-on [data-sp-floating].bg-sp-card,
+html.sp-glass-on .bg-sp-card [data-sp-floating] {
+  background-color: var(--sp-card-base);
+}
+
 /* ② 흐림은 바깥 한 겹에만 건다. 안쪽까지 걸면 흐림이 두 번 쌓인다. */
 html.sp-glass-on .bg-sp-card:not(.bg-sp-card .bg-sp-card) {
   backdrop-filter: blur(var(--sp-glass-blur, 0px)) saturate(140%);

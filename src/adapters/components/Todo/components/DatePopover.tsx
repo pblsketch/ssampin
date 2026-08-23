@@ -180,7 +180,10 @@ export function DatePopover({
       </div>
 
       {open && (
-        <div className="absolute top-full left-0 mt-1 z-50 bg-sp-card rounded-xl shadow-xl ring-1 ring-sp-border p-4 w-72">
+        <div
+          data-sp-floating
+          className="absolute top-full left-0 mt-1 z-50 bg-sp-card rounded-xl shadow-xl ring-1 ring-sp-border p-4 w-72"
+        >
           {/* 월 네비게이션 */}
           <div className="flex items-center justify-between mb-3">
             <span className="text-sm font-bold text-sp-text">

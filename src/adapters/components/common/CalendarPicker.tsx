@@ -172,6 +172,8 @@ export function CalendarPicker({
   const dropdownContent = (
     <div
       ref={dropdownRef}
+      /* 유리 모드에서 카드 안 카드는 배경이 지워진다 — 떠 있는 것은 예외다(index.css ①-예외). */
+      data-sp-floating
       className={
         portal
           ? 'fixed z-[9999] bg-sp-card border border-sp-border rounded-xl shadow-xl p-3 w-[280px] select-none'

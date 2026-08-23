@@ -25,6 +25,13 @@ export interface QuickInputParseResult {
   readonly text: string;
   /** "YYYY-MM-DD" */
   readonly dueDate?: string;
+  /**
+   * 기간의 시작일 "YYYY-MM-DD". **"~부터 ~까지" 를 적었을 때만** 채워진다.
+   *
+   * 하루짜리 일에는 없다 — 시작일을 마음대로 채우면 "오늘 하루"라고 적은 일이
+   * 달력에서 기간 막대로 그려져 사용자가 적지 않은 일정을 앱이 지어내는 셈이 된다.
+   */
+  readonly startDate?: string;
   /** "HH:mm" */
   readonly time?: string;
   readonly priority?: TodoPriority;
@@ -191,41 +198,54 @@ function matchTime(text: string): Matched<string> | null {
 }
 
 // ─────────────────────────── 날짜 ───────────────────────────
-function matchDate(text: string, today: Date): Matched<string> | null {
-  // 상대 단어
-  const rel: ReadonlyArray<readonly [RegExp, number]> = [
-    [/모레|내일모레/, 2],
-    [/글피/, 3],
-    [/오늘/, 0],
-    [/내일|낼/, 1],
-  ];
-  for (const [re, offset] of rel) {
-    const m = re.exec(text);
-    if (m) return { value: formatDate(addDays(today, offset)), raw: m[0] };
-  }
 
-  // N일 뒤/후
-  const after = /(\d{1,3})\s*일\s*(뒤|후)/.exec(text);
-  if (after && after[1]) {
-    return { value: formatDate(addDays(today, Number(after[1]))), raw: after[0] };
-  }
+/**
+ * 날짜 하나를 나타내는 표현들. **적힌 순서가 곧 우선순위다** — 위에서부터 찾는다.
+ *
+ * 순서를 바꾸면 안 되는 곳이 있다. `\d일 뒤` 는 맨 뒤의 `\d일`(그 달의 며칠)보다
+ * **먼저** 와야 "3일 뒤"가 "3일"로 잘리지 않는다.
+ */
+const DATE_TOKEN_PATTERNS: readonly RegExp[] = [
+  /모레|내일모레/,
+  /글피/,
+  /오늘/,
+  /내일|낼/,
+  /(\d{1,3})\s*일\s*(뒤|후)/,
+  /(이번주|다음주|담주|다다음주)?\s*([월화수목금토일])요일?/,
+  /(\d{1,2})\s*월\s*(\d{1,2})\s*일/,
+];
+
+/**
+ * 찾아 놓은 날짜 표현 하나를 실제 날짜로 바꾼다.
+ *
+ * @param monthHint 그 달의 며칠만 적힌 표현("27일")을 풀 때 쓸 기준 날짜.
+ *   기간의 뒷쪽("8월 24일부터 **27일**까지")에서만 넘어온다. 없으면 이 형태를 인식하지
+ *   않는다 — 단독으로 쓰인 "27일"까지 날짜로 보면 "27일 남았다" 같은 문장이 오인식된다.
+ * @returns "YYYY-MM-DD". 풀 수 없으면 null.
+ */
+function resolveDateToken(token: string, today: Date, monthHint: Date | null): string | null {
+  if (/모레|내일모레/.test(token)) return formatDate(addDays(today, 2));
+  if (/글피/.test(token)) return formatDate(addDays(today, 3));
+  if (/오늘/.test(token)) return formatDate(today);
+  if (/내일|낼/.test(token)) return formatDate(addDays(today, 1));
+
+  const after = /(\d{1,3})\s*일\s*(뒤|후)/.exec(token);
+  if (after && after[1]) return formatDate(addDays(today, Number(after[1])));
 
   // (이번주|다음주|다다음주)? 요일 — base = 이번 주 기준 해당 요일까지의 일수(오늘이면 0).
-  const wk = /(이번주|다음주|담주|다다음주)?\s*([월화수목금토일])요일?/.exec(text);
+  const wk = /(이번주|다음주|담주|다다음주)?\s*([월화수목금토일])요일?/.exec(token);
   if (wk && wk[2]) {
     const target = WEEKDAY[wk[2]]!;
-    const cur = today.getDay();
-    const base = (target - cur + 7) % 7;
+    const base = (target - today.getDay() + 7) % 7;
     const which = wk[1];
     let delta = base;
     if (which === '다음주' || which === '담주') delta = base + 7;
     else if (which === '다다음주') delta = base + 14;
     // '이번주' 또는 수식어 없음 → base(다음 도래 요일, 오늘이면 오늘).
-    return { value: formatDate(addDays(today, delta)), raw: wk[0] };
+    return formatDate(addDays(today, delta));
   }
 
-  // N월 N일
-  const md = /(\d{1,2})\s*월\s*(\d{1,2})\s*일/.exec(text);
+  const md = /(\d{1,2})\s*월\s*(\d{1,2})\s*일/.exec(token);
   if (md && md[1] && md[2]) {
     const month = Number(md[1]);
     const day = Number(md[2]);
@@ -237,12 +257,83 @@ function matchDate(text: string, today: Date): Matched<string> | null {
         year += 1; // 이미 지난 월/일 → 내년
       }
       const valid = new Date(year, month - 1, day);
-      if (valid.getMonth() === month - 1 && valid.getDate() === day) {
-        return { value: formatDate(valid), raw: md[0] };
+      if (valid.getMonth() === month - 1 && valid.getDate() === day) return formatDate(valid);
+    }
+    return null;
+  }
+
+  // 그 달의 며칠만 적힌 형태 — 기준 날짜가 있을 때만 푼다.
+  if (monthHint !== null) {
+    const dayOnly = /^\s*(\d{1,2})\s*일\s*$/.exec(token);
+    if (dayOnly && dayOnly[1]) {
+      const day = Number(dayOnly[1]);
+      if (day >= 1 && day <= 31) {
+        let candidate = new Date(monthHint.getFullYear(), monthHint.getMonth(), day);
+        // 기준보다 이르면 다음 달이다("8월 30일부터 2일까지" → 9월 2일).
+        if (candidate.getTime() < monthHint.getTime()) {
+          candidate = new Date(monthHint.getFullYear(), monthHint.getMonth() + 1, day);
+        }
+        if (candidate.getDate() === day) return formatDate(candidate);
       }
     }
   }
 
+  return null;
+}
+
+function matchDate(text: string, today: Date): Matched<string> | null {
+  for (const re of DATE_TOKEN_PATTERNS) {
+    const m = re.exec(text);
+    if (!m) continue;
+    const value = resolveDateToken(m[0], today, null);
+    if (value !== null) return { value, raw: m[0] };
+  }
+  return null;
+}
+
+// ─────────────────────────── 기간 ───────────────────────────
+
+/** 날짜 표현 하나(찾기용). `DATE_TOKEN_PATTERNS` 와 같은 순서 + 맨 뒤에 "며칠"을 더한다. */
+const DATE_EXPR =
+  '(?:모레|내일모레|글피|오늘|내일|낼' +
+  '|\\d{1,3}\\s*일\\s*(?:뒤|후)' +
+  '|(?:이번주|다음주|담주|다다음주)?\\s*[월화수목금토일]요일?' +
+  '|\\d{1,2}\\s*월\\s*\\d{1,2}\\s*일' +
+  '|\\d{1,2}\\s*일)';
+
+/**
+ * "A부터 B까지" 같은 **기간**을 찾는다.
+ *
+ * 왜 따로 두는가: 이걸 모르면 "오늘부터 내일까지"에서 "오늘"만 떼어 가고 본문에
+ * **"부터 내일까지"** 라는 부스러기가 남는다. 날짜도 하루로만 잡힌다(실제 신고 사례).
+ *
+ * 뒷쪽에 "27일"처럼 며칠만 적는 경우가 흔해서, 앞쪽 날짜를 기준으로 풀어 준다.
+ */
+function matchDateRange(text: string, today: Date): Matched<{ start: string; end: string }> | null {
+  const patterns = [
+    new RegExp(`(${DATE_EXPR})\\s*(?:부터|에서)\\s*(${DATE_EXPR})\\s*까지`),
+    new RegExp(`(${DATE_EXPR})\\s*(?:부터|에서)\\s*(${DATE_EXPR})`),
+    new RegExp(`(${DATE_EXPR})\\s*~\\s*(${DATE_EXPR})`),
+  ];
+
+  for (const re of patterns) {
+    const m = re.exec(text);
+    if (!m || !m[1] || !m[2]) continue;
+
+    const start = resolveDateToken(m[1], today, null);
+    if (start === null) continue;
+
+    // 뒷쪽은 앞쪽을 기준으로 푼다 — "27일"이 몇 월인지는 앞쪽이 정한다.
+    const startDate = new Date(`${start}T00:00:00`);
+    const end = resolveDateToken(m[2], today, startDate);
+    if (end === null) continue;
+
+    // 끝이 시작보다 이르면 기간으로 보지 않는다. 사용자가 뭘 뜻했는지 알 수 없으므로
+    // 넘겨짚지 않고 원문을 남긴 뒤 하루짜리 인식에 맡긴다.
+    if (end < start) continue;
+
+    return { value: { start, end }, raw: m[0] };
+  }
   return null;
 }
 
@@ -270,7 +361,12 @@ export function parseQuickInput(raw: string, today: Date = new Date()): QuickInp
   const time = matchTime(working);
   if (time) working = strip(working, time.raw);
 
-  const date = matchDate(working, today);
+  // 기간을 **하루짜리보다 먼저** 본다. 나중에 보면 "오늘부터 내일까지"에서 "오늘"이
+  // 먼저 떨어져 나가 본문에 "부터 내일까지" 부스러기가 남는다.
+  const range = matchDateRange(working, today);
+  if (range) working = strip(working, range.raw);
+
+  const date = range ? null : matchDate(working, today);
   if (date) working = strip(working, date.raw);
 
   const text = collapse(working);
@@ -278,6 +374,7 @@ export function parseQuickInput(raw: string, today: Date = new Date()): QuickInp
   const result: {
     text: string;
     dueDate?: string;
+    startDate?: string;
     time?: string;
     priority?: TodoPriority;
     categoryHint?: string;
@@ -286,6 +383,10 @@ export function parseQuickInput(raw: string, today: Date = new Date()): QuickInp
     // 본문이 비면(전체가 토큰이었으면) 데이터 손실 방지를 위해 원문 트림으로 폴백.
     text: text.length > 0 ? text : original.trim(),
   };
+  if (range) {
+    result.startDate = range.value.start;
+    result.dueDate = range.value.end;
+  }
   if (date) result.dueDate = date.value;
   if (time) result.time = time.value;
   if (priority) result.priority = priority.value;
@@ -298,6 +399,7 @@ export function parseQuickInput(raw: string, today: Date = new Date()): QuickInp
 export function hasRecognizedTokens(r: QuickInputParseResult): boolean {
   return (
     r.dueDate !== undefined ||
+    r.startDate !== undefined ||
     r.time !== undefined ||
     r.priority !== undefined ||
     r.categoryHint !== undefined ||

@@ -391,7 +391,9 @@ export function Todo() {
     const priority = useParsed && parsed.priority ? parsed.priority : newPriority;
     const category = matchedCategory ?? (newCategory || undefined);
     const time = useParsed && parsed.time ? parsed.time : newTime || undefined;
-    void addTodo(text, dueDate, priority, category, recurrence ?? undefined, time, newStartDate);
+    // 기간("~부터 ~까지")을 알아들었으면 시작일도 함께 넣는다. 못 알아들었으면 손으로 고른 값.
+    const startDate = useParsed && parsed.startDate ? parsed.startDate : newStartDate;
+    void addTodo(text, dueDate, priority, category, recurrence ?? undefined, time, startDate);
     setNewText('');
     setNewPriority('none');
     setNewRecurrenceIdx(0);
@@ -620,6 +622,319 @@ export function Todo() {
                 )}
               </div>
 
+              {/* 추가 폼 — 프로 모드 보기(칸반·리스트·타임라인·매트릭스·자동 보드)에서도
+                  보이도록 분기 **밖**에 둔다. 전에는 else 안에 있어서 프로 모드에서는 할 일을
+                  추가할 방법이 아예 없었고, 보기를 되돌렸다 와야 했다(2026-08-23 오너 신고).
+                  같은 폼을 두 번 쓰지 않고 자리만 옮긴 것이라 동작·모양은 그대로다. */}
+              <div className="flex flex-col gap-3 bg-sp-card rounded-xl p-4 ring-1 ring-sp-border">
+                {/* 첫 번째 줄: 날짜 + 텍스트 + 추가 버튼 */}
+                <div className="flex gap-3 items-center">
+                  <DatePopover
+                    date={newDueDate}
+                    endDate={newStartDate ? newDueDate : undefined}
+                    noDueDate={noDueDate}
+                    onDateChange={(d) => {
+                      if (newStartDate) {
+                        setNewStartDate(d);
+                      } else {
+                        setNewDueDate(d);
+                        setNoDueDate(false);
+                      }
+                    }}
+                    onEndDateChange={(endDate) => {
+                      if (endDate) {
+                        setNewStartDate(newDueDate);
+                        setNewDueDate(endDate);
+                      } else {
+                        setNewStartDate(undefined);
+                      }
+                    }}
+                    onNoDueDateChange={(nd) => {
+                      setNoDueDate(nd);
+                      if (nd) {
+                        setNewDueDate('');
+                        setNewStartDate(undefined);
+                      } else setNewDueDate(toLocalDateString());
+                    }}
+                  >
+                    <div
+                      className={`flex items-center gap-2 shrink-0 bg-sp-surface text-sm px-3 py-2 rounded-lg border border-sp-border hover:border-sp-accent transition-colors ${
+                        noDueDate ? 'opacity-40 text-sp-muted' : 'text-sp-text'
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-icon">calendar_today</span>
+                      {noDueDate
+                        ? '기한 없음'
+                        : newStartDate
+                          ? `${newStartDate} → ${newDueDate}`
+                          : newDueDate || '날짜 선택'}
+                    </div>
+                  </DatePopover>
+                  <input
+                    type="text"
+                    value={newText}
+                    onChange={(e) => setNewText(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    placeholder={
+                      quickParseEnabled
+                        ? '예: 내일 3시 회의 !높음 #업무 (자동 인식)'
+                        : '할 일을 입력하세요...'
+                    }
+                    className="flex-1 bg-sp-surface text-sp-text text-sm px-4 py-2 rounded-lg border border-sp-border focus:border-sp-accent focus:outline-none transition-colors placeholder:text-sp-muted"
+                  />
+                  {quickParseEnabled && (
+                    <button
+                      type="button"
+                      onClick={() => setShowQuickParseHelp((v) => !v)}
+                      title="빠른 입력 예시 보기"
+                      aria-label="빠른 입력 예시 보기"
+                      aria-expanded={showQuickParseHelp}
+                      className="shrink-0 w-9 h-9 flex items-center justify-center rounded-lg text-sp-muted hover:text-sp-text hover:bg-sp-surface border border-sp-border transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-icon">help</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleAdd}
+                    disabled={!newText.trim()}
+                    className="flex items-center gap-2 bg-sp-accent hover:bg-sp-accent/90 disabled:opacity-40 disabled:cursor-not-allowed text-white px-5 py-2 rounded-xl transition-all shadow-sp-md text-sm font-bold"
+                  >
+                    <span className="material-symbols-outlined text-icon-md">add</span>
+                    추가
+                  </button>
+                </div>
+
+                {/* 첫 방문 1회 안내 — 예시 클릭 시 입력창 채움 + 닫기 영구 기억 */}
+                {quickParseEnabled && showQuickParseTip && !showQuickParse && (
+                  <div className="flex items-center gap-2 text-xs bg-sp-accent/10 text-sp-text rounded-lg ring-1 ring-sp-accent/30 px-3 py-2 -mt-1">
+                    <span>
+                      ✨ 한 줄로 빠르게! 예를 들어{' '}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNewText('내일 3시 회의 !높음 #업무');
+                          dismissQuickParseTip();
+                        }}
+                        className="font-bold text-sp-accent underline underline-offset-2"
+                      >
+                        내일 3시 회의 !높음 #업무
+                      </button>{' '}
+                      처럼 입력하면 날짜·시간·우선순위·분류가 자동 인식돼요.
+                    </span>
+                    <button
+                      type="button"
+                      onClick={dismissQuickParseTip}
+                      aria-label="안내 닫기"
+                      className="ml-auto shrink-0 text-sp-muted hover:text-sp-text transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-icon">close</span>
+                    </button>
+                  </div>
+                )}
+
+                {/* 빠른 입력 예시 도움말([?] 토글) — 칩을 누르면 입력창에 추가돼 미리보기 칩으로 학습 */}
+                {quickParseEnabled && showQuickParseHelp && (
+                  <div className="flex flex-col gap-1.5 text-xs bg-sp-card rounded-lg ring-1 ring-sp-border p-3 -mt-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-sp-text">
+                        빠른 입력 예시 — 칩을 누르면 입력창에 추가돼요
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setShowQuickParseHelp(false)}
+                        className="text-sp-muted hover:text-sp-text transition-colors"
+                      >
+                        닫기
+                      </button>
+                    </div>
+                    {[
+                      {
+                        label: '📅 날짜',
+                        tokens: ['오늘', '내일', '모레', '다음주 월요일', '7월 3일'],
+                      },
+                      { label: '⏰ 시간', tokens: ['3시', '오후 2시', '14:30', '아침'] },
+                      { label: '❗ 우선순위', tokens: ['!높음', '!중간', '!낮음'] },
+                      { label: '#️⃣ 분류', tokens: ['#업무', '#수업'] },
+                      { label: '🔁 반복', tokens: ['매주 월수금', '격주', '매월'] },
+                    ].map((row) => (
+                      <div key={row.label} className="flex items-center gap-1.5 flex-wrap">
+                        <span className="w-16 shrink-0 text-sp-muted">{row.label}</span>
+                        {row.tokens.map((tok) => (
+                          <button
+                            key={tok}
+                            type="button"
+                            onClick={() => appendQuickToken(tok)}
+                            className="px-2 py-0.5 rounded-md bg-sp-surface border border-sp-border text-sp-text hover:border-sp-accent hover:text-sp-accent transition-colors"
+                          >
+                            {tok}
+                          </button>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* 자연어 빠른입력 미리보기 — 인식된 토큰을 칩으로 보여주고, 끄기 토글 제공 */}
+                {showQuickParse && quickParse && (
+                  <div className="flex items-center gap-1.5 flex-wrap text-xs -mt-1">
+                    <span className="text-sp-muted">✨ 자동 인식</span>
+                    {quickParse.dueDate && (
+                      <span className="px-2 py-0.5 rounded-md bg-sp-surface border border-sp-border text-sp-text">
+                        {/* 기간이면 시작일 → 마감일을 함께 보여준다. 칩이 마감일만
+                            보여주면 "기간으로 인식됐는지"를 저장 전에는 알 수 없다. */}
+                        📅 {quickParse.startDate ? `${quickParse.startDate} → ` : ''}
+                        {quickParse.dueDate}
+                      </span>
+                    )}
+                    {quickParse.time && (
+                      <span className="px-2 py-0.5 rounded-md bg-sp-surface border border-sp-border text-sp-text">
+                        ⏰ {quickParse.time}
+                      </span>
+                    )}
+                    {quickParse.priority && (
+                      <span className="px-2 py-0.5 rounded-md bg-sp-surface border border-sp-border text-sp-text">
+                        {quickParse.priority === 'high'
+                          ? '🔴 높음'
+                          : quickParse.priority === 'medium'
+                            ? '🟡 중간'
+                            : '🔵 낮음'}
+                      </span>
+                    )}
+                    {quickParse.categoryHint && (
+                      <span className="px-2 py-0.5 rounded-md bg-sp-surface border border-sp-border text-sp-text">
+                        #{quickParse.categoryHint}
+                      </span>
+                    )}
+                    {quickParse.recurrence && (
+                      <span className="px-2 py-0.5 rounded-md bg-sp-surface border border-sp-border text-sp-text">
+                        🔁 {getRecurrenceLabel(quickParse.recurrence)}
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={toggleQuickParse}
+                      className="text-sp-muted hover:text-sp-error transition-colors underline underline-offset-2"
+                      title="자연어 자동 인식을 끕니다"
+                    >
+                      인식 끄기
+                    </button>
+                  </div>
+                )}
+                {!quickParseEnabled && (
+                  <button
+                    type="button"
+                    onClick={toggleQuickParse}
+                    className="self-start text-xs text-sp-muted hover:text-sp-accent transition-colors -mt-1"
+                    title="입력에서 날짜·시간·우선순위 등을 자동 인식합니다"
+                  >
+                    ✨ 자연어 인식 켜기
+                  </button>
+                )}
+
+                {/* 두 번째 줄: 시간 + 우선순위 + 반복 + 카테고리 */}
+                <div className="flex gap-2.5 items-center flex-wrap">
+                  {/* 시간 */}
+                  <div className="flex items-center gap-1.5">
+                    <span
+                      className="material-symbols-outlined text-icon text-sp-muted"
+                      title="시간"
+                    >
+                      schedule
+                    </span>
+                    <input
+                      type="time"
+                      value={newTime}
+                      onChange={(e) => setNewTime(e.target.value)}
+                      className="bg-sp-surface text-sp-text text-xs px-2 py-1 rounded-lg border border-sp-border focus:border-sp-accent focus:outline-none transition-colors"
+                    />
+                    {newTime && (
+                      <button
+                        type="button"
+                        onClick={() => setNewTime('')}
+                        aria-label="시간 지우기"
+                        className="text-sp-muted hover:text-sp-error transition-colors"
+                      >
+                        <span className="material-symbols-outlined text-icon-sm">close</span>
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="w-px h-5 bg-sp-border/60" aria-hidden="true" />
+
+                  {/* 우선순위 */}
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs text-sp-muted mr-1">우선순위</span>
+                    {PRIORITY_OPTIONS.map((p) => {
+                      const config = PRIORITY_CONFIG[p];
+                      return (
+                        <button
+                          key={p}
+                          type="button"
+                          onClick={() => setNewPriority(p)}
+                          aria-pressed={newPriority === p}
+                          className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-sp-accent focus-visible:outline-none ${
+                            newPriority === p
+                              ? `${config.bgColor || 'bg-sp-surface'} ${config.color} ring-1 ring-current`
+                              : 'text-sp-muted hover:text-sp-text hover:bg-sp-surface'
+                          }`}
+                        >
+                          <span>{config.icon}</span>
+                          <span className="leading-tight">{config.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="w-px h-5 bg-sp-border/60" aria-hidden="true" />
+
+                  {/* 반복 */}
+                  <div className="flex items-center gap-1.5">
+                    <span
+                      className="material-symbols-outlined text-icon text-sp-muted"
+                      title="반복"
+                    >
+                      repeat
+                    </span>
+                    <select
+                      value={newRecurrenceIdx}
+                      onChange={(e) => setNewRecurrenceIdx(Number(e.target.value))}
+                      className="bg-sp-surface text-sp-text text-xs px-2 py-1 rounded-lg border border-sp-border focus:border-sp-accent focus:outline-none transition-colors"
+                    >
+                      {RECURRENCE_PRESETS.map((preset, idx) => (
+                        <option key={idx} value={idx}>
+                          {preset.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="w-px h-5 bg-sp-border/60" aria-hidden="true" />
+
+                  {/* 카테고리 */}
+                  <div className="flex items-center gap-1.5">
+                    <span
+                      className="material-symbols-outlined text-icon text-sp-muted"
+                      title="카테고리"
+                    >
+                      folder
+                    </span>
+                    <select
+                      value={newCategory}
+                      onChange={(e) => setNewCategory(e.target.value)}
+                      className="bg-sp-surface text-sp-text text-xs px-2 py-1 rounded-lg border border-sp-border focus:border-sp-accent focus:outline-none transition-colors"
+                    >
+                      <option value="">없음</option>
+                      {categories.map((cat) => (
+                        <option key={cat.id} value={cat.id}>
+                          {cat.icon} {cat.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
               {/* 프로 모드 뷰 분기 */}
               {isProMode && proViewMode !== 'todo' ? (
                 proLayout === 'dual' ? (
@@ -716,315 +1031,6 @@ export function Todo() {
                 )
               ) : (
                 <>
-                  {/* 추가 폼 */}
-                  <div className="flex flex-col gap-3 bg-sp-card rounded-xl p-4 ring-1 ring-sp-border">
-                    {/* 첫 번째 줄: 날짜 + 텍스트 + 추가 버튼 */}
-                    <div className="flex gap-3 items-center">
-                      <DatePopover
-                        date={newDueDate}
-                        endDate={newStartDate ? newDueDate : undefined}
-                        noDueDate={noDueDate}
-                        onDateChange={(d) => {
-                          if (newStartDate) {
-                            setNewStartDate(d);
-                          } else {
-                            setNewDueDate(d);
-                            setNoDueDate(false);
-                          }
-                        }}
-                        onEndDateChange={(endDate) => {
-                          if (endDate) {
-                            setNewStartDate(newDueDate);
-                            setNewDueDate(endDate);
-                          } else {
-                            setNewStartDate(undefined);
-                          }
-                        }}
-                        onNoDueDateChange={(nd) => {
-                          setNoDueDate(nd);
-                          if (nd) {
-                            setNewDueDate('');
-                            setNewStartDate(undefined);
-                          } else setNewDueDate(toLocalDateString());
-                        }}
-                      >
-                        <div
-                          className={`flex items-center gap-2 shrink-0 bg-sp-surface text-sm px-3 py-2 rounded-lg border border-sp-border hover:border-sp-accent transition-colors ${
-                            noDueDate ? 'opacity-40 text-sp-muted' : 'text-sp-text'
-                          }`}
-                        >
-                          <span className="material-symbols-outlined text-icon">
-                            calendar_today
-                          </span>
-                          {noDueDate
-                            ? '기한 없음'
-                            : newStartDate
-                              ? `${newStartDate} → ${newDueDate}`
-                              : newDueDate || '날짜 선택'}
-                        </div>
-                      </DatePopover>
-                      <input
-                        type="text"
-                        value={newText}
-                        onChange={(e) => setNewText(e.target.value)}
-                        onKeyDown={handleKeyDown}
-                        placeholder={
-                          quickParseEnabled
-                            ? '예: 내일 3시 회의 !높음 #업무 (자동 인식)'
-                            : '할 일을 입력하세요...'
-                        }
-                        className="flex-1 bg-sp-surface text-sp-text text-sm px-4 py-2 rounded-lg border border-sp-border focus:border-sp-accent focus:outline-none transition-colors placeholder:text-sp-muted"
-                      />
-                      {quickParseEnabled && (
-                        <button
-                          type="button"
-                          onClick={() => setShowQuickParseHelp((v) => !v)}
-                          title="빠른 입력 예시 보기"
-                          aria-label="빠른 입력 예시 보기"
-                          aria-expanded={showQuickParseHelp}
-                          className="shrink-0 w-9 h-9 flex items-center justify-center rounded-lg text-sp-muted hover:text-sp-text hover:bg-sp-surface border border-sp-border transition-colors"
-                        >
-                          <span className="material-symbols-outlined text-icon">help</span>
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={handleAdd}
-                        disabled={!newText.trim()}
-                        className="flex items-center gap-2 bg-sp-accent hover:bg-sp-accent/90 disabled:opacity-40 disabled:cursor-not-allowed text-white px-5 py-2 rounded-xl transition-all shadow-sp-md text-sm font-bold"
-                      >
-                        <span className="material-symbols-outlined text-icon-md">add</span>
-                        추가
-                      </button>
-                    </div>
-
-                    {/* 첫 방문 1회 안내 — 예시 클릭 시 입력창 채움 + 닫기 영구 기억 */}
-                    {quickParseEnabled && showQuickParseTip && !showQuickParse && (
-                      <div className="flex items-center gap-2 text-xs bg-sp-accent/10 text-sp-text rounded-lg ring-1 ring-sp-accent/30 px-3 py-2 -mt-1">
-                        <span>
-                          ✨ 한 줄로 빠르게! 예를 들어{' '}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setNewText('내일 3시 회의 !높음 #업무');
-                              dismissQuickParseTip();
-                            }}
-                            className="font-bold text-sp-accent underline underline-offset-2"
-                          >
-                            내일 3시 회의 !높음 #업무
-                          </button>{' '}
-                          처럼 입력하면 날짜·시간·우선순위·분류가 자동 인식돼요.
-                        </span>
-                        <button
-                          type="button"
-                          onClick={dismissQuickParseTip}
-                          aria-label="안내 닫기"
-                          className="ml-auto shrink-0 text-sp-muted hover:text-sp-text transition-colors"
-                        >
-                          <span className="material-symbols-outlined text-icon">close</span>
-                        </button>
-                      </div>
-                    )}
-
-                    {/* 빠른 입력 예시 도움말([?] 토글) — 칩을 누르면 입력창에 추가돼 미리보기 칩으로 학습 */}
-                    {quickParseEnabled && showQuickParseHelp && (
-                      <div className="flex flex-col gap-1.5 text-xs bg-sp-card rounded-lg ring-1 ring-sp-border p-3 -mt-1">
-                        <div className="flex items-center justify-between">
-                          <span className="font-bold text-sp-text">
-                            빠른 입력 예시 — 칩을 누르면 입력창에 추가돼요
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => setShowQuickParseHelp(false)}
-                            className="text-sp-muted hover:text-sp-text transition-colors"
-                          >
-                            닫기
-                          </button>
-                        </div>
-                        {[
-                          {
-                            label: '📅 날짜',
-                            tokens: ['오늘', '내일', '모레', '다음주 월요일', '7월 3일'],
-                          },
-                          { label: '⏰ 시간', tokens: ['3시', '오후 2시', '14:30', '아침'] },
-                          { label: '❗ 우선순위', tokens: ['!높음', '!중간', '!낮음'] },
-                          { label: '#️⃣ 분류', tokens: ['#업무', '#수업'] },
-                          { label: '🔁 반복', tokens: ['매주 월수금', '격주', '매월'] },
-                        ].map((row) => (
-                          <div key={row.label} className="flex items-center gap-1.5 flex-wrap">
-                            <span className="w-16 shrink-0 text-sp-muted">{row.label}</span>
-                            {row.tokens.map((tok) => (
-                              <button
-                                key={tok}
-                                type="button"
-                                onClick={() => appendQuickToken(tok)}
-                                className="px-2 py-0.5 rounded-md bg-sp-surface border border-sp-border text-sp-text hover:border-sp-accent hover:text-sp-accent transition-colors"
-                              >
-                                {tok}
-                              </button>
-                            ))}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* 자연어 빠른입력 미리보기 — 인식된 토큰을 칩으로 보여주고, 끄기 토글 제공 */}
-                    {showQuickParse && quickParse && (
-                      <div className="flex items-center gap-1.5 flex-wrap text-xs -mt-1">
-                        <span className="text-sp-muted">✨ 자동 인식</span>
-                        {quickParse.dueDate && (
-                          <span className="px-2 py-0.5 rounded-md bg-sp-surface border border-sp-border text-sp-text">
-                            📅 {quickParse.dueDate}
-                          </span>
-                        )}
-                        {quickParse.time && (
-                          <span className="px-2 py-0.5 rounded-md bg-sp-surface border border-sp-border text-sp-text">
-                            ⏰ {quickParse.time}
-                          </span>
-                        )}
-                        {quickParse.priority && (
-                          <span className="px-2 py-0.5 rounded-md bg-sp-surface border border-sp-border text-sp-text">
-                            {quickParse.priority === 'high'
-                              ? '🔴 높음'
-                              : quickParse.priority === 'medium'
-                                ? '🟡 중간'
-                                : '🔵 낮음'}
-                          </span>
-                        )}
-                        {quickParse.categoryHint && (
-                          <span className="px-2 py-0.5 rounded-md bg-sp-surface border border-sp-border text-sp-text">
-                            #{quickParse.categoryHint}
-                          </span>
-                        )}
-                        {quickParse.recurrence && (
-                          <span className="px-2 py-0.5 rounded-md bg-sp-surface border border-sp-border text-sp-text">
-                            🔁 {getRecurrenceLabel(quickParse.recurrence)}
-                          </span>
-                        )}
-                        <button
-                          type="button"
-                          onClick={toggleQuickParse}
-                          className="text-sp-muted hover:text-sp-error transition-colors underline underline-offset-2"
-                          title="자연어 자동 인식을 끕니다"
-                        >
-                          인식 끄기
-                        </button>
-                      </div>
-                    )}
-                    {!quickParseEnabled && (
-                      <button
-                        type="button"
-                        onClick={toggleQuickParse}
-                        className="self-start text-xs text-sp-muted hover:text-sp-accent transition-colors -mt-1"
-                        title="입력에서 날짜·시간·우선순위 등을 자동 인식합니다"
-                      >
-                        ✨ 자연어 인식 켜기
-                      </button>
-                    )}
-
-                    {/* 두 번째 줄: 시간 + 우선순위 + 반복 + 카테고리 */}
-                    <div className="flex gap-2.5 items-center flex-wrap">
-                      {/* 시간 */}
-                      <div className="flex items-center gap-1.5">
-                        <span
-                          className="material-symbols-outlined text-icon text-sp-muted"
-                          title="시간"
-                        >
-                          schedule
-                        </span>
-                        <input
-                          type="time"
-                          value={newTime}
-                          onChange={(e) => setNewTime(e.target.value)}
-                          className="bg-sp-surface text-sp-text text-xs px-2 py-1 rounded-lg border border-sp-border focus:border-sp-accent focus:outline-none transition-colors"
-                        />
-                        {newTime && (
-                          <button
-                            type="button"
-                            onClick={() => setNewTime('')}
-                            aria-label="시간 지우기"
-                            className="text-sp-muted hover:text-sp-error transition-colors"
-                          >
-                            <span className="material-symbols-outlined text-icon-sm">close</span>
-                          </button>
-                        )}
-                      </div>
-
-                      <div className="w-px h-5 bg-sp-border/60" aria-hidden="true" />
-
-                      {/* 우선순위 */}
-                      <div className="flex items-center gap-1">
-                        <span className="text-xs text-sp-muted mr-1">우선순위</span>
-                        {PRIORITY_OPTIONS.map((p) => {
-                          const config = PRIORITY_CONFIG[p];
-                          return (
-                            <button
-                              key={p}
-                              type="button"
-                              onClick={() => setNewPriority(p)}
-                              aria-pressed={newPriority === p}
-                              className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-sp-accent focus-visible:outline-none ${
-                                newPriority === p
-                                  ? `${config.bgColor || 'bg-sp-surface'} ${config.color} ring-1 ring-current`
-                                  : 'text-sp-muted hover:text-sp-text hover:bg-sp-surface'
-                              }`}
-                            >
-                              <span>{config.icon}</span>
-                              <span className="leading-tight">{config.label}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-
-                      <div className="w-px h-5 bg-sp-border/60" aria-hidden="true" />
-
-                      {/* 반복 */}
-                      <div className="flex items-center gap-1.5">
-                        <span
-                          className="material-symbols-outlined text-icon text-sp-muted"
-                          title="반복"
-                        >
-                          repeat
-                        </span>
-                        <select
-                          value={newRecurrenceIdx}
-                          onChange={(e) => setNewRecurrenceIdx(Number(e.target.value))}
-                          className="bg-sp-surface text-sp-text text-xs px-2 py-1 rounded-lg border border-sp-border focus:border-sp-accent focus:outline-none transition-colors"
-                        >
-                          {RECURRENCE_PRESETS.map((preset, idx) => (
-                            <option key={idx} value={idx}>
-                              {preset.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div className="w-px h-5 bg-sp-border/60" aria-hidden="true" />
-
-                      {/* 카테고리 */}
-                      <div className="flex items-center gap-1.5">
-                        <span
-                          className="material-symbols-outlined text-icon text-sp-muted"
-                          title="카테고리"
-                        >
-                          folder
-                        </span>
-                        <select
-                          value={newCategory}
-                          onChange={(e) => setNewCategory(e.target.value)}
-                          className="bg-sp-surface text-sp-text text-xs px-2 py-1 rounded-lg border border-sp-border focus:border-sp-accent focus:outline-none transition-colors"
-                        >
-                          <option value="">없음</option>
-                          {categories.map((cat) => (
-                            <option key={cat.id} value={cat.id}>
-                              {cat.icon} {cat.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-
                   {/* 타임라인 통합 아이템 (시간표/일정) — 할 일 유무와 무관하게 표시 */}
                   {timelineItems.length > 0 && (
                     <div className="bg-sp-card rounded-xl ring-1 ring-sp-border overflow-hidden">

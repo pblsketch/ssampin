@@ -567,6 +567,8 @@ export function MultiDatePicker(props: MultiDatePickerProps) {
       aria-label={
         mode === 'multi' ? '여러 날짜 선택' : mode === 'range' ? '날짜 범위 선택' : '날짜 선택'
       }
+      /* 떠 있을 때만 표시한다 — inline·모바일 시트는 면 위에 얹힌 면이라 예외가 아니다. */
+      data-sp-floating={inline || mobileSheet ? undefined : true}
       className={
         inline && !mobileSheet
           ? 'bg-sp-card border border-sp-border rounded-xl shadow-xl p-3 select-none w-[280px]'
