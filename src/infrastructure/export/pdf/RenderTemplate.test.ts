@@ -29,9 +29,7 @@ async function extractPageTexts(pdfBytes: ArrayBuffer): Promise<string[]> {
   for (let i = 1; i <= doc.numPages; i++) {
     const page = await doc.getPage(i);
     const content = await page.getTextContent();
-    const text = content.items
-      .map((it) => ('str' in it ? it.str : ''))
-      .join(' ');
+    const text = content.items.map((it) => ('str' in it ? it.str : '')).join(' ');
     results.push(text);
   }
   return results;
@@ -80,7 +78,8 @@ describe('renderTemplate', () => {
     await primeFontCache();
   });
 
-  it('inputs 개수만큼 페이지가 생성되고 한글이 정확히 렌더된다', async () => {
+  // FillFormFields 쪽과 같은 이유(한글 폰트 임베딩 비용)로 제한을 늘린다.
+  it('inputs 개수만큼 페이지가 생성되고 한글이 정확히 렌더된다', { timeout: 30_000 }, async () => {
     const input: PdfTemplateInput = {
       template: MINIMAL_TEMPLATE,
       inputs: [
@@ -92,9 +91,7 @@ describe('renderTemplate', () => {
     const pdfBytes = await renderTemplate(input);
 
     // PDF 헤더 검증
-    const header = new TextDecoder('ascii').decode(
-      new Uint8Array(pdfBytes).slice(0, 5),
-    );
+    const header = new TextDecoder('ascii').decode(new Uint8Array(pdfBytes).slice(0, 5));
     expect(header).toBe('%PDF-');
 
     // pdf-lib 재파싱 가능 여부 + 페이지 수
@@ -152,9 +149,9 @@ describe('renderTemplate', () => {
   });
 
   it('inputs 가 빈 배열 → 명시적 throw', async () => {
-    await expect(
-      renderTemplate({ template: MINIMAL_TEMPLATE, inputs: [] }),
-    ).rejects.toThrow(/inputs 가 최소 1개 이상/);
+    await expect(renderTemplate({ template: MINIMAL_TEMPLATE, inputs: [] })).rejects.toThrow(
+      /inputs 가 최소 1개 이상/,
+    );
   });
 
   it('rare char "쌤" 포함 텍스트도 렌더 (KS X 1001 외 커버리지)', async () => {

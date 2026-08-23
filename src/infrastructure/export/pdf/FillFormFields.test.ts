@@ -1,11 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import {
-  PDFDocument,
-  PDFTextField,
-  PDFCheckBox,
-} from 'pdf-lib';
+import { PDFDocument, PDFTextField, PDFCheckBox } from 'pdf-lib';
 import { fillFormFields } from './FillFormFields';
 import { __resetFontCache, loadKoreanFontBuffers } from './FontRegistry';
 
@@ -44,10 +40,7 @@ async function buildAcroFormFixture(): Promise<ArrayBuffer> {
   consentField.addToPage(page, { x: 60, y: 400, width: 20, height: 20 });
 
   const bytes = await doc.save();
-  return bytes.buffer.slice(
-    bytes.byteOffset,
-    bytes.byteOffset + bytes.byteLength,
-  ) as ArrayBuffer;
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
 }
 
 /** pdfjs-dist 로 PDF 의 페이지별 텍스트 배열 추출. */
@@ -62,9 +55,7 @@ async function extractPageTexts(pdfBytes: ArrayBuffer): Promise<string[]> {
   for (let i = 1; i <= doc.numPages; i++) {
     const page = await doc.getPage(i);
     const content = await page.getTextContent();
-    const text = content.items
-      .map((it) => ('str' in it ? it.str : ''))
-      .join(' ');
+    const text = content.items.map((it) => ('str' in it ? it.str : '')).join(' ');
     results.push(text);
   }
   return results;
@@ -96,28 +87,34 @@ describe('fillFormFields', () => {
     expect(residualForm.getFields().length).toBe(0);
   });
 
-  it('각 페이지의 한글 값이 실제 content stream 에 baked 되어 있다', async () => {
-    const result = await fillFormFields({
-      sourcePdf: fixture,
-      rows: [
-        { studentName: '홍길동', memo: '출석 우수' },
-        { studentName: '김철수', memo: '수학 보충 필요' },
-      ],
-    });
+  // 한글 폰트 임베딩 + content stream 해독이 5초 기본값에 빠듯해 기계가 바쁘면
+  // 간헐 실패했다(게이트 재발 2회). 기능 회귀가 아니라 시간 예산 문제라 제한만 늘린다.
+  it(
+    '각 페이지의 한글 값이 실제 content stream 에 baked 되어 있다',
+    { timeout: 30_000 },
+    async () => {
+      const result = await fillFormFields({
+        sourcePdf: fixture,
+        rows: [
+          { studentName: '홍길동', memo: '출석 우수' },
+          { studentName: '김철수', memo: '수학 보충 필요' },
+        ],
+      });
 
-    const texts = await extractPageTexts(result);
-    expect(texts).toHaveLength(2);
+      const texts = await extractPageTexts(result);
+      expect(texts).toHaveLength(2);
 
-    // 페이지 1: 홍길동 + 출석 우수
-    expect(texts[0]).toMatch(/홍길동/);
-    expect(texts[0]).toMatch(/출석 우수/);
-    expect(texts[0]).not.toMatch(/김철수/); // 교차 오염 방지
+      // 페이지 1: 홍길동 + 출석 우수
+      expect(texts[0]).toMatch(/홍길동/);
+      expect(texts[0]).toMatch(/출석 우수/);
+      expect(texts[0]).not.toMatch(/김철수/); // 교차 오염 방지
 
-    // 페이지 2: 김철수 + 수학 보충 필요
-    expect(texts[1]).toMatch(/김철수/);
-    expect(texts[1]).toMatch(/수학 보충 필요/);
-    expect(texts[1]).not.toMatch(/홍길동/);
-  });
+      // 페이지 2: 김철수 + 수학 보충 필요
+      expect(texts[1]).toMatch(/김철수/);
+      expect(texts[1]).toMatch(/수학 보충 필요/);
+      expect(texts[1]).not.toMatch(/홍길동/);
+    },
+  );
 
   it('fieldMap 별칭으로 row 의 한글 키를 PDF 영문 필드에 매핑', async () => {
     const result = await fillFormFields({
@@ -177,9 +174,9 @@ describe('fillFormFields', () => {
   });
 
   it('rows 가 빈 배열 → 명시적 에러', async () => {
-    await expect(
-      fillFormFields({ sourcePdf: fixture, rows: [] }),
-    ).rejects.toThrow(/rows 가 최소 1개 이상/);
+    await expect(fillFormFields({ sourcePdf: fixture, rows: [] })).rejects.toThrow(
+      /rows 가 최소 1개 이상/,
+    );
   });
 
   it('sourcePdf 가 비어있음 → 명시적 에러', async () => {
@@ -192,14 +189,17 @@ describe('fillFormFields', () => {
   });
 
   it('title/author 메타데이터가 출력 PDF 에 기록된다', async () => {
-    const result = await fillFormFields({
-      sourcePdf: fixture,
-      rows: [{ studentName: '홍길동' }],
-      // 위 rows 1건
-    }, {
-      title: '학생 기록부 mail-merge',
-      author: '홍길동 담임',
-    });
+    const result = await fillFormFields(
+      {
+        sourcePdf: fixture,
+        rows: [{ studentName: '홍길동' }],
+        // 위 rows 1건
+      },
+      {
+        title: '학생 기록부 mail-merge',
+        author: '홍길동 담임',
+      },
+    );
 
     const parsed = await PDFDocument.load(result);
     expect(parsed.getTitle()).toBe('학생 기록부 mail-merge');
