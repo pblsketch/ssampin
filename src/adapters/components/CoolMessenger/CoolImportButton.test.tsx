@@ -28,7 +28,8 @@ vi.mock('@adapters/stores/useStudentStore', () => ({
     selector({ students: [] }),
 }));
 
-import { CoolImportButton, readableIpcError } from './CoolImportButton';
+import { CoolImportButton } from './CoolImportButton';
+import { readableIpcError } from './useCoolImport';
 
 afterEach(cleanup);
 

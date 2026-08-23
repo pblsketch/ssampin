@@ -6,6 +6,7 @@ import { DashboardHeader } from '@widgets/components/DashboardHeader';
 import { WidgetGrid } from '@widgets/components/WidgetGrid';
 import { WidgetSettingsPanel } from '@widgets/components/WidgetSettingsPanel';
 import { ReminderDashboardBadge } from '@adapters/components/Reminder/ReminderDashboardBadge';
+import { CoolImportBanner } from '@adapters/components/CoolMessenger/CoolImportBanner';
 
 interface DashboardProps {
   onNavigate?: (page: string) => void;
@@ -52,6 +53,9 @@ export function Dashboard({ onNavigate }: DashboardProps) {
 
         {/* 학생 관찰 기록 알림 — 은은형 배지(설정 on + 미기록 있을 때만 렌더) */}
         <ReminderDashboardBadge />
+
+        {/* 쿨메신저 등록 후보 쪽지 알림 (설정 on + 후보 있을 때만 렌더) */}
+        <CoolImportBanner />
       </div>
 
       {/* 본문: 그리드 + 사이드 패널 */}

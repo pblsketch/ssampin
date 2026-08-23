@@ -27,6 +27,13 @@ interface CoolImportHistoryState {
   isImported: (key: string) => boolean;
   /** 이 쪽지에서 무언가 가져간 적이 있는지 (목록 '가져옴' 배지) */
   hasImportedFrom: (messageKey: number) => boolean;
+
+  /**
+   * 이번 실행에서 알림 배너를 접었는지. **저장하지 않는다** — 껐다 켜면 다시 본다.
+   * 모듈 전역 변수로 두면 창이 여러 개일 때 새어나가고 테스트에서도 남는다.
+   */
+  readonly bannerDismissed: boolean;
+  dismissBanner: () => void;
 }
 
 export const useCoolImportHistoryStore = create<CoolImportHistoryState>((set, get) => ({
@@ -56,4 +63,7 @@ export const useCoolImportHistoryStore = create<CoolImportHistoryState>((set, ge
 
   isImported: (key) => importedKeySet(get().history).has(key),
   hasImportedFrom: (messageKey) => importedMessageKeys(get().history).has(messageKey),
+
+  bannerDismissed: false,
+  dismissBanner: () => set({ bannerDismissed: true }),
 }));
