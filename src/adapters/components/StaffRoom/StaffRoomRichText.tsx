@@ -12,6 +12,9 @@
  *   걸러진 결과를 **아는 모양으로만** 그린다.
  * - 색과 크기는 이름(토큰)으로 오고, 그 이름에 해당하는 값만 여기서 붙인다.
  *   저장된 문자열을 그대로 style 에 넣지 않는다.
+ * - 링크는 도메인에서 이미 `http`·`https`·`mailto` 만 통과시켰다. 그래도 여는 방식은
+ *   **바깥 브라우저**다 — 앱 창 안에서 남이 준 주소를 열면 그 페이지가 앱과 같은
+ *   자리에 앉는다.
  */
 import {
   parseStaffRoomRichText,
@@ -47,6 +50,21 @@ export const STAFFROOM_TEXT_SIZE_STYLE: Record<StaffRoomTextSize, string | undef
   large: '1.125rem',
   xlarge: '1.375rem',
 };
+
+/**
+ * 링크를 **앱 밖 브라우저**로 연다.
+ *
+ * 앱 창 안에서 열면 남이 올린 주소의 페이지가 쌤핀과 같은 자리에 앉는다.
+ * 옆핀 메모(MemoFormattedText)가 쓰는 방식과 같다.
+ */
+function openExternalLink(url: string): void {
+  const api = window.electronAPI;
+  if (api?.openExternal !== undefined) {
+    void api.openExternal(url);
+    return;
+  }
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
 
 function spanClassName(span: StaffRoomTextSpan): string {
   const parts: string[] = [];
@@ -96,18 +114,40 @@ export function StaffRoomRichText({
         // 문단은 순서가 바뀌지 않고 다시 그릴 때마다 통째로 만들어지므로
         // 자리(번호)로 구분해도 안전하다
         <p key={blockIndex} className="min-h-[1.5em] leading-relaxed">
-          {block.spans.map((span, spanIndex) => (
-            <span
-              key={spanIndex}
-              className={spanClassName(span)}
-              style={{
-                color: STAFFROOM_TEXT_COLOR_STYLE[span.color],
-                fontSize: STAFFROOM_TEXT_SIZE_STYLE[span.size],
-              }}
-            >
-              {span.text}
-            </span>
-          ))}
+          {block.spans.map((span, spanIndex) => {
+            const style = {
+              color: STAFFROOM_TEXT_COLOR_STYLE[span.color],
+              fontSize: STAFFROOM_TEXT_SIZE_STYLE[span.size],
+            };
+
+            if (span.href !== null) {
+              return (
+                <a
+                  key={spanIndex}
+                  href={span.href}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    openExternalLink(span.href!);
+                  }}
+                  // 혹시 기본 동작으로 열리더라도 새 창을 여는 쪽이 열린 창을
+                  // 조작하지 못하게 한다
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`${spanClassName(span)} text-sp-accent underline underline-offset-2 hover:opacity-80`}
+                  style={style}
+                >
+                  {span.text}
+                </a>
+              );
+            }
+
+            return (
+              <span key={spanIndex} className={spanClassName(span)} style={style}>
+                {span.text}
+              </span>
+            );
+          })}
         </p>
       ))}
     </div>

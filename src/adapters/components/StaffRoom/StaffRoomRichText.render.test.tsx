@@ -124,3 +124,50 @@ describe('본문 그리기 — 도메인과 화면의 목록이 어긋나지 않
     }
   });
 });
+
+describe('본문 그리기 — 링크', () => {
+  const linked = (url: string, label = '쌤핀') =>
+    JSON.stringify({
+      root: {
+        type: 'root',
+        children: [
+          { type: 'paragraph', children: [{ type: 'link', url, children: [text(label)] }] },
+        ],
+      },
+    });
+
+  it('허용된 주소는 링크로 그린다', () => {
+    const html = renderToString(
+      <StaffRoomRichText body={linked('https://ssampin.com')} bodyFormat="lexical" />,
+    );
+    expect(html).toContain('href="https://ssampin.com"');
+    expect(html).toContain('쌤핀');
+  });
+
+  it('새 창을 여는 쪽이 열린 창을 조작하지 못하게 한다', () => {
+    const html = renderToString(
+      <StaffRoomRichText body={linked('https://ssampin.com')} bodyFormat="lexical" />,
+    );
+    expect(html).toContain('rel="noopener noreferrer"');
+  });
+
+  it('🔒 javascript: 주소는 링크로 그려지지 않는다 — 글자만 남는다', () => {
+    const html = renderToString(
+      <StaffRoomRichText body={linked('javascript:alert(1)', '눌러보세요')} bodyFormat="lexical" />,
+    );
+    expect(html).not.toContain('javascript');
+    expect(html).not.toContain('<a ');
+    expect(html).toContain('눌러보세요');
+  });
+
+  it('🔒 data: 주소도 막힌다', () => {
+    const html = renderToString(
+      <StaffRoomRichText
+        body={linked('data:text/html,<script>alert(1)</script>')}
+        bodyFormat="lexical"
+      />,
+    );
+    expect(html).not.toContain('<a ');
+    expect(html).not.toContain('<script');
+  });
+});

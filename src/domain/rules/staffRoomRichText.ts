@@ -20,6 +20,16 @@
  */
 
 /**
+ * 링크 주소로 받아들일 것 — **`http` · `https` · `mailto` 만.**
+ *
+ * 옆핀 메모가 쓰는 검사를 **그대로 가져다 쓴다.** 복사하지 않는 이유가 있다:
+ * 이건 보안 검사라서 두 벌이 되면 한쪽만 고쳐지고, 그 한쪽으로 `javascript:`
+ * 같은 주소가 새어 들어온다. 링크를 누른 선생님의 앱 안에서 실행된다.
+ */
+export { isValidLinkHref as isValidStaffRoomLinkHref } from '@domain/rules/memoRules';
+import { isValidLinkHref } from '@domain/rules/memoRules';
+
+/**
  * Lexical 이 글자 꾸밈을 담는 방식 — 하나의 숫자에 비트로 얹는다.
  * (node_modules/lexical 에서 실제 값을 확인해 옮겨 적었다. 추측이 아니다.)
  */
@@ -112,6 +122,14 @@ export function staffRoomTextSizeValue(name: StaffRoomTextSize): string {
 /** 걸러낸 뒤의 글자 한 토막 */
 export interface StaffRoomTextSpan {
   readonly text: string;
+  /**
+   * 링크 주소. 링크가 아니면 null.
+   *
+   * **여기 담긴 값은 이미 검사를 통과한 것만이다.** 통과 못 한 주소는 링크를
+   * 떼고 글자만 남긴다 — 글을 통째로 버리는 것보다 낫고, 못 쓰는 주소가
+   * 눌리는 것보다 안전하다.
+   */
+  readonly href: string | null;
   readonly bold: boolean;
   readonly italic: boolean;
   readonly underline: boolean;
@@ -174,7 +192,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * 종류를 가리지 않고 `text` 만 건져 온다. 모르는 종류는 그리지 않고 글자만 살린다
  * — 새 종류가 생겨도 글이 사라지지 않는다.
  */
-function collectSpans(node: unknown, out: StaffRoomTextSpan[]): void {
+function collectSpans(node: unknown, out: StaffRoomTextSpan[], href: string | null = null): void {
   if (!isRecord(node)) return;
 
   if (node['type'] === 'text' && typeof node['text'] === 'string') {
@@ -188,6 +206,7 @@ function collectSpans(node: unknown, out: StaffRoomTextSpan[]): void {
       strikethrough: (format & FORMAT_STRIKETHROUGH) !== 0,
       color,
       size,
+      href,
     });
     return;
   }
@@ -202,13 +221,23 @@ function collectSpans(node: unknown, out: StaffRoomTextSpan[]): void {
       strikethrough: false,
       color: 'default',
       size: 'normal',
+      href: null,
     });
     return;
   }
 
+  // 링크 조각 — 안쪽 글자에 주소를 물려준다.
+  // `autolink` 는 주소를 그냥 붙여넣었을 때 편집기가 알아서 만든 것이다.
+  let inheritedHref = href;
+  if (node['type'] === 'link' || node['type'] === 'autolink') {
+    const url = node['url'];
+    // 검사를 통과한 주소만 물려준다. 못 통과하면 링크를 떼고 글자만 남는다.
+    inheritedHref = typeof url === 'string' && isValidLinkHref(url) ? url.trim() : null;
+  }
+
   const children = node['children'];
   if (Array.isArray(children)) {
-    for (const child of children) collectSpans(child, out);
+    for (const child of children) collectSpans(child, out, inheritedHref);
   }
 }
 
@@ -236,7 +265,7 @@ export function parseStaffRoomRichText(body: string): StaffRoomTextBlock[] {
   const blocks: StaffRoomTextBlock[] = [];
   for (const child of children) {
     const spans: StaffRoomTextSpan[] = [];
-    collectSpans(child, spans);
+    collectSpans(child, spans, null);
     blocks.push({ spans });
   }
   return blocks;

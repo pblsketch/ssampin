@@ -26,6 +26,10 @@ import { OnChangePlugin } from '@lexical/react/LexicalOnChangePlugin';
 import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
 import { $patchStyleText } from '@lexical/selection';
+import { LinkPlugin } from '@lexical/react/LexicalLinkPlugin';
+import { AutoLinkPlugin } from '@lexical/react/LexicalAutoLinkPlugin';
+import { ClickableLinkPlugin } from '@lexical/react/LexicalClickableLinkPlugin';
+import { TOGGLE_LINK_COMMAND, AutoLinkNode, LinkNode } from '@lexical/link';
 import {
   $createParagraphNode,
   $createTextNode,
@@ -36,6 +40,7 @@ import {
   type EditorState,
   type TextFormatType,
 } from 'lexical';
+import { isValidStaffRoomLinkHref } from '@domain/rules/staffRoomRichText';
 import {
   STAFFROOM_TEXT_COLORS,
   STAFFROOM_TEXT_COLOR_LABELS,
@@ -84,6 +89,35 @@ function Toolbar(): JSX.Element {
   const [editor] = useLexicalComposerContext();
 
   /**
+   * 링크 입력줄의 여닫음.
+   *
+   * ⚠️ **`window.prompt` 를 쓰지 않는다.** 쌤핀은 Electron 앱인데 Electron 은
+   * `prompt` 를 지원하지 않는다 — 브라우저에서 개발할 때는 멀쩡히 되다가
+   * 실제 앱에서만 아무 일도 일어나지 않는다. 화면 안에서 받는다.
+   */
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [linkUrl, setLinkUrl] = useState('https://');
+  const [linkError, setLinkError] = useState<string | null>(null);
+
+  const applyLink = () => {
+    const trimmed = linkUrl.trim();
+    if (trimmed === '' || trimmed === 'https://') {
+      setLinkError('주소를 붙여넣어 주세요.');
+      return;
+    }
+    if (!isValidStaffRoomLinkHref(trimmed)) {
+      // 여기서 먼저 막는다. 그냥 넣으면 저장은 되는데 보여줄 때 도메인 검사에
+      // 걸려 링크가 조용히 사라진다 — 쓴 사람은 이유를 모른다.
+      setLinkError('http, https, mailto 로 시작하는 주소만 넣을 수 있어요.');
+      return;
+    }
+    editor.dispatchCommand(TOGGLE_LINK_COMMAND, trimmed);
+    setLinkOpen(false);
+    setLinkUrl('https://');
+    setLinkError(null);
+  };
+
+  /**
    * 색·크기를 고른 글자에 입힌다.
    *
    * 값은 도메인이 정한 목록에서만 온다 — 자유 입력이 아니다. 화면에 글을 그릴 때
@@ -109,67 +143,127 @@ function Toolbar(): JSX.Element {
     'h-8 rounded border border-sp-border bg-sp-surface px-2 text-xs text-sp-text transition-colors hover:bg-black/5';
 
   return (
-    <div className="flex flex-wrap items-center gap-1 border-b border-sp-border px-2 py-1.5">
-      {/* 글자 크기 */}
-      <select
-        className={selectClass}
-        aria-label="글자 크기"
-        title="글자 크기"
-        defaultValue="normal"
-        onMouseDown={(e) => e.stopPropagation()}
-        onChange={(e) => {
-          const size = e.target.value as StaffRoomTextSize;
-          // '보통'은 빈 값 → 걸려 있던 크기를 지운다
-          patch('font-size', staffRoomTextSizeValue(size));
-        }}
-      >
-        {(Object.keys(STAFFROOM_TEXT_SIZES) as StaffRoomTextSize[]).map((size) => (
-          <option key={size} value={size}>
-            {STAFFROOM_TEXT_SIZE_LABELS[size]}
-          </option>
-        ))}
-      </select>
-
-      <span className="mx-0.5 h-5 w-px bg-sp-border" aria-hidden />
-
-      {FORMAT_BUTTONS.map((btn) => (
-        <button
-          key={btn.format}
-          type="button"
-          // 초점 뺏기만 막고(onMouseDown), 실제 명령은 onClick 에서 보낸다.
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={() => {
-            editor.dispatchCommand(FORMAT_TEXT_COMMAND, btn.format);
+    <>
+      <div className="flex flex-wrap items-center gap-1 border-b border-sp-border px-2 py-1.5">
+        {/* 글자 크기 */}
+        <select
+          className={selectClass}
+          aria-label="글자 크기"
+          title="글자 크기"
+          defaultValue="normal"
+          onMouseDown={(e) => e.stopPropagation()}
+          onChange={(e) => {
+            const size = e.target.value as StaffRoomTextSize;
+            // '보통'은 빈 값 → 걸려 있던 크기를 지운다
+            patch('font-size', staffRoomTextSizeValue(size));
           }}
-          className={buttonClass}
-          aria-label={btn.label}
-          title={btn.label}
         >
-          <span className="material-symbols-outlined text-icon">{btn.icon}</span>
-        </button>
-      ))}
+          {(Object.keys(STAFFROOM_TEXT_SIZES) as StaffRoomTextSize[]).map((size) => (
+            <option key={size} value={size}>
+              {STAFFROOM_TEXT_SIZE_LABELS[size]}
+            </option>
+          ))}
+        </select>
 
-      <span className="mx-0.5 h-5 w-px bg-sp-border" aria-hidden />
+        <span className="mx-0.5 h-5 w-px bg-sp-border" aria-hidden />
 
-      {/* 글자색 */}
-      <select
-        className={selectClass}
-        aria-label="글자색"
-        title="글자색"
-        defaultValue="default"
-        onChange={(e) => {
-          const color = e.target.value as StaffRoomTextColor;
-          // '기본'은 빈 값 → 걸려 있던 색을 지운다
-          patch('color', staffRoomTextColorValue(color));
-        }}
-      >
-        {(Object.keys(STAFFROOM_TEXT_COLORS) as StaffRoomTextColor[]).map((color) => (
-          <option key={color} value={color}>
-            {STAFFROOM_TEXT_COLOR_LABELS[color]}
-          </option>
+        {FORMAT_BUTTONS.map((btn) => (
+          <button
+            key={btn.format}
+            type="button"
+            // 초점 뺏기만 막고(onMouseDown), 실제 명령은 onClick 에서 보낸다.
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => {
+              editor.dispatchCommand(FORMAT_TEXT_COMMAND, btn.format);
+            }}
+            className={buttonClass}
+            aria-label={btn.label}
+            title={btn.label}
+          >
+            <span className="material-symbols-outlined text-icon">{btn.icon}</span>
+          </button>
         ))}
-      </select>
-    </div>
+
+        {/* 링크 */}
+        <button
+          type="button"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => setLinkOpen((open) => !open)}
+          className={buttonClass}
+          aria-label="링크"
+          title="링크 붙여넣기"
+        >
+          <span className="material-symbols-outlined text-icon">link</span>
+        </button>
+
+        <span className="mx-0.5 h-5 w-px bg-sp-border" aria-hidden />
+
+        {/* 글자색 */}
+        <select
+          className={selectClass}
+          aria-label="글자색"
+          title="글자색"
+          defaultValue="default"
+          onChange={(e) => {
+            const color = e.target.value as StaffRoomTextColor;
+            // '기본'은 빈 값 → 걸려 있던 색을 지운다
+            patch('color', staffRoomTextColorValue(color));
+          }}
+        >
+          {(Object.keys(STAFFROOM_TEXT_COLORS) as StaffRoomTextColor[]).map((color) => (
+            <option key={color} value={color}>
+              {STAFFROOM_TEXT_COLOR_LABELS[color]}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {linkOpen && (
+        <div className="flex flex-wrap items-center gap-2 border-b border-sp-border bg-sp-bg px-2 py-2">
+          <input
+            type="text"
+            value={linkUrl}
+            autoFocus
+            onChange={(e) => {
+              setLinkUrl(e.target.value);
+              setLinkError(null);
+            }}
+            onKeyDown={(e) => {
+              // 한글 조합 중의 엔터는 글자 확정이지 "적용"이 아니다
+              if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                e.preventDefault();
+                applyLink();
+              }
+              if (e.key === 'Escape') setLinkOpen(false);
+            }}
+            placeholder="https://"
+            aria-label="링크 주소"
+            className="h-8 min-w-[14rem] flex-1 rounded border border-sp-border bg-sp-surface px-2 text-xs text-sp-text placeholder-sp-muted focus:border-sp-accent focus:outline-none"
+          />
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={applyLink}
+            className="h-8 rounded bg-sp-accent px-3 text-xs font-sp-semibold text-white transition-all duration-sp-base ease-sp-out active:scale-95"
+          >
+            적용
+          </button>
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => {
+              // 고른 글자에서 링크를 뗀다
+              editor.dispatchCommand(TOGGLE_LINK_COMMAND, null);
+              setLinkOpen(false);
+            }}
+            className="h-8 rounded border border-sp-border px-3 text-xs text-sp-muted transition-colors hover:text-sp-text"
+          >
+            링크 떼기
+          </button>
+          {linkError !== null && <span className="text-xs text-sp-error">{linkError}</span>}
+        </div>
+      )}
+    </>
   );
 }
 
@@ -217,6 +311,9 @@ export function StaffRoomRichEditor({
       <LexicalComposer
         initialConfig={{
           namespace: 'staffroom-post',
+          // 링크 조각을 쓰려면 편집기에 먼저 알려야 한다. 빠뜨리면 저장된 글을
+          // 열 때 "모르는 조각"이라며 편집기가 오류를 낸다.
+          nodes: [LinkNode, AutoLinkNode],
           // 편집기 안에서 예상 못한 오류가 나도 글쓰기 화면 전체가 흰 화면이
           // 되지 않게 한다. 조용히 삼키지 않고 기록은 남긴다.
           onError: (error: Error) => {
@@ -267,6 +364,24 @@ export function StaffRoomRichEditor({
             ErrorBoundary={LexicalErrorBoundary}
           />
           <HistoryPlugin />
+          <LinkPlugin />
+          {/* 주소를 그냥 붙여넣어도 링크가 되게 — 단추를 못 찾는 사람을 위해 */}
+          <AutoLinkPlugin
+            matchers={[
+              (text: string) => {
+                const match = /https?:\/\/[^\s]+/.exec(text);
+                if (match === null) return null;
+                return {
+                  index: match.index,
+                  length: match[0].length,
+                  text: match[0],
+                  url: match[0],
+                };
+              },
+            ]}
+          />
+          {/* 편집 중에 링크를 눌러 열 수 있게 */}
+          <ClickableLinkPlugin />
           <OnChangePlugin onChange={handleChange} />
         </div>
       </LexicalComposer>

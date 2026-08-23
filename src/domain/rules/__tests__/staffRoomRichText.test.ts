@@ -162,3 +162,100 @@ describe('서식 본문 — 순수 글자 뽑기', () => {
     expect(staffRoomRichTextToPlain('{"root":')).toBe('');
   });
 });
+
+describe('서식 본문 — 링크', () => {
+  const linked = (url: string, label = '눌러보세요') =>
+    JSON.stringify({
+      root: {
+        type: 'root',
+        children: [
+          { type: 'paragraph', children: [{ type: 'link', url, children: [text(label)] }] },
+        ],
+      },
+    });
+
+  it('http·https 주소를 링크로 읽는다', () => {
+    for (const url of ['https://ssampin.com', 'http://school.kr/notice']) {
+      const span = parseStaffRoomRichText(linked(url))[0]!.spans[0]!;
+      expect(span.href, url).toBe(url);
+    }
+  });
+
+  it('mailto 도 통과한다 — 선생님끼리 메일 주소를 자주 적는다', () => {
+    expect(parseStaffRoomRichText(linked('mailto:kim@school.kr'))[0]!.spans[0]!.href).toBe(
+      'mailto:kim@school.kr',
+    );
+  });
+
+  it('붙여넣어 저절로 링크가 된 것(autolink)도 읽는다', () => {
+    const auto = JSON.stringify({
+      root: {
+        type: 'root',
+        children: [
+          {
+            type: 'paragraph',
+            children: [
+              { type: 'autolink', url: 'https://ssampin.com', children: [text('ssampin.com')] },
+            ],
+          },
+        ],
+      },
+    });
+    expect(parseStaffRoomRichText(auto)[0]!.spans[0]!.href).toBe('https://ssampin.com');
+  });
+
+  it('🔒 javascript: 주소는 링크가 되지 못한다 — 글자만 남는다', () => {
+    // 링크를 누른 선생님의 앱 안에서 실행된다. 글을 버리지는 않되 링크는 뗀다.
+    const span = parseStaffRoomRichText(linked('javascript:alert(1)', '눌러보세요'))[0]!.spans[0]!;
+    expect(span.href).toBeNull();
+    expect(span.text).toBe('눌러보세요');
+  });
+
+  it('🔒 다른 낯선 방식도 전부 막는다', () => {
+    for (const url of [
+      'data:text/html,<script>alert(1)</script>',
+      'file:///C:/Windows/System32',
+      'vbscript:msgbox(1)',
+      'JaVaScRiPt:alert(1)',
+      ' javascript:alert(1)',
+    ]) {
+      expect(parseStaffRoomRichText(linked(url))[0]!.spans[0]!.href, url).toBeNull();
+    }
+  });
+
+  it('주소가 글자가 아니면 링크로 보지 않는다', () => {
+    expect(parseStaffRoomRichText(linked(123 as unknown as string))[0]!.spans[0]!.href).toBeNull();
+  });
+
+  it('링크 안의 글자도 꾸밈을 그대로 지킨다', () => {
+    const doc2 = JSON.stringify({
+      root: {
+        type: 'root',
+        children: [
+          {
+            type: 'paragraph',
+            children: [
+              {
+                type: 'link',
+                url: 'https://ssampin.com',
+                children: [text('굵은 링크', { format: 1 })],
+              },
+            ],
+          },
+        ],
+      },
+    });
+    const span = parseStaffRoomRichText(doc2)[0]!.spans[0]!;
+    expect(span.href).toBe('https://ssampin.com');
+    expect(span.bold).toBe(true);
+  });
+
+  it('링크가 아닌 글자의 href 는 null 이다', () => {
+    expect(parseStaffRoomRichText(doc([text('그냥 글자')]))[0]!.spans[0]!.href).toBeNull();
+  });
+
+  it('순수 글자 뽑기에 주소가 섞여 나오지 않는다', () => {
+    // 검색이 주소 문자열을 본문으로 착각하면 안 된다
+    expect(staffRoomRichTextToPlain(linked('https://ssampin.com', '쌤핀'))).toBe('쌤핀');
+  });
+});

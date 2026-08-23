@@ -79,3 +79,34 @@ describe('교무실 글쓰기 편집기 — 툴바가 편집기 초점을 뺏지
     expect(source).not.toMatch(/onMouseDown=\{\([^)]*\) => \{[\s\S]*?dispatchCommand/);
   });
 });
+
+/**
+ * 링크 입력을 화면 안에서 받는다.
+ *
+ * ⚠️ **`window.prompt` 를 쓰면 안 된다.** 쌤핀은 Electron 앱인데 Electron 은
+ * `prompt` 를 지원하지 않는다 — 브라우저로 개발할 때는 멀쩡히 되다가 실제
+ * 앱에서만 아무 일도 일어나지 않는다. 실제로 그렇게 만들었다가 브라우저
+ * 확인 중에 잡았고, 되돌아가지 않도록 여기서 못박는다.
+ */
+describe('교무실 글쓰기 편집기 — 링크', () => {
+  const html = renderToString(<StaffRoomRichEditor />);
+
+  it('링크 단추가 한국어 이름으로 있다', () => {
+    expect(html).toContain('aria-label="링크"');
+  });
+
+  it('window.prompt·window.alert 를 쓰지 않는다 (Electron 에서 안 먹는다)', async () => {
+    const source = await import('node:fs').then((fs) =>
+      fs.readFileSync(new URL('./StaffRoomRichEditor.tsx', import.meta.url), 'utf-8'),
+    );
+    expect(source).not.toMatch(/window\.prompt\s*\(/);
+    expect(source).not.toMatch(/window\.alert\s*\(/);
+  });
+
+  it('주소 검사를 화면에서 먼저 한다 — 도메인 검사를 다시 만들지 않고 가져다 쓴다', async () => {
+    const source = await import('node:fs').then((fs) =>
+      fs.readFileSync(new URL('./StaffRoomRichEditor.tsx', import.meta.url), 'utf-8'),
+    );
+    expect(source).toContain('isValidStaffRoomLinkHref');
+  });
+});
