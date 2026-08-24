@@ -129,18 +129,32 @@ describe('electron-builder.yml macOS 서명 설정 보장', () => {
     ).toBe(true);
   });
 
-  it('mac 타깃이 universal 단일 아키텍처다 (칩 오선택 방지)', () => {
+  /**
+   * mac 은 칩별 2파일(x64·arm64) 유지 — 2026-08-24 오너 판단.
+   *
+   * universal 통합을 시도했다가 되돌렸다. 통합은 칩 오선택 사고를 없애지만 모든 사용자의
+   * 다운로드 용량이 2배(약 330MB → 640MB)가 되고, 실사용 인텔 Mac 이 사실상 없다
+   * (릴리즈당 x64 1건 vs arm64 4~14건). 대신 랜딩·앱 내 업데이트가 칩에 맞는 파일을 고른다.
+   *
+   * 파일명 규칙(ssampin-${arch}.dmg)은 latest-mac.yml·랜딩 URL·앱 내 업데이트가 모두 참조하므로
+   * 여기서 arch 목록이 바뀌면 그 세 곳도 함께 바뀌어야 한다.
+   */
+  it('mac 타깃이 x64·arm64 2종이다 (파일명·다운로드 URL 규칙과 일치)', () => {
     const src = readElectronBuilderYml();
     const macSection = src.slice(src.indexOf('\nmac:'), src.indexOf('\ndmg:'));
     expect(
-      /-\s*universal\b/.test(macSection),
-      'mac 타깃이 universal 이 아닙니다. arm64/x64 로 나누면 칩에 맞지 않는 DMG 를 받아 ' +
-        '"이 버전의 macOS에서 작동하는지 확인하려면 개발자에게 문의하십시오" 오류를 겪는 사고가 재발합니다.',
+      /^\s*-\s*x64\s*$/m.test(macSection),
+      'mac 타깃에 x64 가 없습니다. Intel Mac 사용자가 받을 DMG 가 사라집니다.',
     ).toBe(true);
     expect(
-      /-\s*(arm64|x64)\b/.test(macSection),
-      'mac 타깃에 arm64/x64 개별 아키텍처가 남아 있습니다. universal 하나만 두세요 ' +
-        '(파일명·다운로드 URL 이 ssampin-universal.dmg 기준으로 맞춰져 있습니다).',
+      /^\s*-\s*arm64\s*$/m.test(macSection),
+      'mac 타깃에 arm64 가 없습니다. Apple Silicon 사용자가 받을 DMG 가 사라집니다.',
+    ).toBe(true);
+    expect(
+      /-\s*universal\b/.test(macSection),
+      'mac 타깃이 universal 로 바뀌었습니다. 파일명이 ssampin-universal.dmg 로 바뀌므로 ' +
+        'landing/src/config.ts 의 다운로드 URL 과 electron/main.ts 의 update:download, ' +
+        '릴리즈 업로드 파일명을 함께 고쳐야 합니다(용량 2배 문제도 재검토할 것).',
     ).toBe(false);
   });
 });

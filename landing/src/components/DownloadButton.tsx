@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import {
   DOWNLOAD_URL,
-  DOWNLOAD_URL_MAC,
+  DOWNLOAD_URL_MAC_ARM,
+  DOWNLOAD_URL_MAC_X64,
   VERSION,
   FILE_SIZE,
   FILE_SIZE_MAC,
@@ -113,7 +114,7 @@ export default function DownloadButton({
     <div className="flex w-full flex-col items-center gap-3">
       {/* Primary 버튼 (감지된 OS) */}
       <a
-        href={primaryOs === 'mac' ? DOWNLOAD_URL_MAC : DOWNLOAD_URL}
+        href={primaryOs === 'mac' ? DOWNLOAD_URL_MAC_ARM : DOWNLOAD_URL}
         className={`inline-flex items-center gap-2 rounded-xl px-8 py-4 text-lg font-bold transition-all hover:-translate-y-0.5 ${
           isPrimary
             ? 'bg-sp-accent text-white shadow-lg shadow-sp-accent/25 hover:bg-sp-accent-hover hover:shadow-sp-accent/35'
@@ -131,7 +132,7 @@ export default function DownloadButton({
       {/* Primary OS 부가 정보 */}
       {primaryOs === 'mac' ? (
         <p className={`text-sm ${isPrimary ? 'text-sp-muted' : 'text-blue-100/70'}`}>
-          무료 · Apple Silicon·Intel 공용 · {FILE_SIZE_MAC} · 베타 지원
+          무료 · Apple Silicon (M1/M2/M3/M4) · {FILE_SIZE_MAC} · 베타 지원
         </p>
       ) : (
         <p className={`text-sm ${isPrimary ? 'text-sp-muted' : 'text-blue-100/70'}`}>
@@ -139,20 +140,29 @@ export default function DownloadButton({
         </p>
       )}
 
-      {/* macOS 통합 파일 안내 (macOS일 때만) — 칩을 고를 필요가 없어졌다는 점을 명시 */}
+      {/* macOS Intel 링크 (macOS일 때만) */}
       {primaryOs === 'mac' && (
         <p
           className={`text-center text-xs leading-relaxed ${isPrimary ? 'text-sp-muted/60' : 'text-blue-100/50'}`}
         >
-          Apple Silicon(M1~M4)과 Intel Mac 모두 이 파일 하나로 설치됩니다.
-          <br />
-          칩을 확인하실 필요 없어요.
+          Intel Mac을 사용하시나요?{' '}
+          <a
+            href={DOWNLOAD_URL_MAC_X64}
+            className={`underline underline-offset-2 hover:opacity-100 transition-opacity ${
+              isPrimary
+                ? 'text-sp-muted/80 hover:text-sp-muted'
+                : 'text-blue-100/70 hover:text-blue-100'
+            }`}
+          >
+            Intel 버전 받기 →
+          </a>
+          <br />내 칩 확인: 화면 왼쪽 위 🍎 메뉴 → &quot;이 Mac에 관하여&quot;의 칩 항목
         </p>
       )}
 
       {/* Secondary 버튼 (다른 OS) */}
       <a
-        href={primaryOs === 'mac' ? DOWNLOAD_URL : DOWNLOAD_URL_MAC}
+        href={primaryOs === 'mac' ? DOWNLOAD_URL : DOWNLOAD_URL_MAC_ARM}
         className={`inline-flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-medium transition-all hover:-translate-y-0.5 ${
           isPrimary
             ? 'border border-sp-border text-sp-muted hover:border-sp-accent/50 hover:text-sp-text'
@@ -236,6 +246,17 @@ export default function DownloadButton({
                     </span>
                   </li>
                 </ol>
+              </div>
+              <div className="mt-2 rounded-lg border border-amber-200 bg-white/70 p-3">
+                <p className="text-xs font-semibold text-amber-900">
+                  &quot;이 버전의 macOS에서 작동하는지 확인하려면 개발자에게 문의하십시오&quot;가 뜰
+                  때
+                </p>
+                <p className="mt-1.5 text-xs text-amber-800/85">
+                  내 Mac의 칩에 맞지 않는 파일을 받은 경우예요. 🍎 메뉴 → &quot;이 Mac에
+                  관하여&quot;에서 칩을 확인하고, 위에서 맞는 버전(Apple Silicon/Intel)을 다시
+                  받아주세요.
+                </p>
               </div>
               <div className="mt-2 rounded-lg border border-amber-200 bg-white/70 p-3">
                 <p className="text-xs font-semibold text-amber-900">

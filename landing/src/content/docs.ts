@@ -193,7 +193,7 @@ export const docsArticles: readonly DocArticle[] = [
     slug: 'start/install-macos',
     title: 'macOS에 설치하기 (베타 지원)',
     description:
-      'Apple Silicon과 Intel Mac 공용 DMG 파일을 내려받아 설치하고 보안 경고를 해결합니다.',
+      'Apple Silicon과 Intel Mac에서 내 칩에 맞는 DMG 파일을 고르고 보안 경고를 해결합니다.',
     category: 'start',
     lastUpdated: '2026-08-24',
     sections: [
@@ -206,11 +206,12 @@ export const docsArticles: readonly DocArticle[] = [
       },
       {
         id: 'choose-file',
-        title: '파일은 하나입니다 — 칩 확인 불필요',
+        title: '내 Mac에 맞는 파일 고르기',
         bullets: [
-          'ssampin.com의 macOS 다운로드 버튼을 누르면 Apple Silicon(M1~M4)과 Intel Mac에서 모두 동작하는 공용 파일(ssampin-universal.dmg)을 받습니다.',
-          '예전처럼 사과(🍎) 메뉴에서 칩을 확인해 arm64/x64 중 고를 필요가 없습니다.',
-          '예전에 받아둔 ssampin-arm64.dmg 또는 ssampin-x64.dmg 파일이 남아 있다면 지우고 새로 받으세요. 칩이 맞지 않으면 "이 버전의 macOS에서 작동하는지 확인하려면 개발자에게 문의하십시오" 오류가 납니다.',
+          'ssampin.com에 Mac으로 접속하면 Apple Silicon용(ssampin-arm64.dmg)이 기본으로 제공됩니다. 대부분의 선생님은 이 파일을 받으시면 됩니다.',
+          'Intel Mac이라면 다운로드 버튼 아래의 Intel 버전 받기 링크를 사용합니다(ssampin-x64.dmg).',
+          '내 칩이 궁금하면 화면 왼쪽 위 사과(🍎) 메뉴에서 이 Mac에 관하여를 열어 칩 항목을 확인합니다. Apple M1~M4면 Apple Silicon, Intel Core면 Intel입니다.',
+          '칩에 맞지 않는 파일을 받으면 "이 버전의 macOS에서 작동하는지 확인하려면 개발자에게 문의하십시오"라는 오류가 나며 실행되지 않습니다.',
         ],
       },
       {
@@ -2031,7 +2032,7 @@ export const docsArticles: readonly DocArticle[] = [
         id: 'wrong-chip',
         title: '이 버전의 macOS에서 작동하는지 확인하려면 개발자에게 문의하십시오',
         body: [
-          '예전에 받아둔 칩별 파일(ssampin-arm64.dmg 또는 ssampin-x64.dmg)을 실행할 때 나타나는 오류입니다. 지금은 Apple Silicon과 Intel Mac에서 모두 동작하는 공용 파일(ssampin-universal.dmg) 하나로 제공되므로, ssampin.com에서 최신 파일을 다시 받아 설치하면 해결됩니다.',
+          '내 Mac의 칩에 맞지 않는 파일을 받은 경우에 나타나는 오류입니다. 사과(🍎) 메뉴 → 이 Mac에 관하여에서 칩을 확인하세요. Apple M1~M4면 Apple Silicon용 DMG(ssampin-arm64.dmg), Intel Core면 Intel용 DMG(ssampin-x64.dmg)를 다시 받아 설치하면 해결됩니다.',
         ],
       },
       {
@@ -2039,14 +2040,14 @@ export const docsArticles: readonly DocArticle[] = [
         title: '손상 경고가 반복되거나 DMG가 열리지 않을 때',
         body: [
           '먼저 ssampin.com에서 최신 파일을 다시 받아보세요. 2.4.4 이하 버전의 DMG는 앱 서명이 없어 macOS가 손상된 앱으로 판단했고, 그 이후 버전에서 해결되었습니다.',
-          '최신 파일에서도 같은 경고가 반복되면 다운로드 보안 속성 때문일 수 있습니다. 터미널을 열고 `xattr -cr /Applications/쌤핀.app` 명령을 실행한 뒤 다시 실행해 보세요. DMG 파일 자체가 열리지 않으면 `xattr -cr ~/Downloads/ssampin-universal.dmg`를 실행합니다.',
+          '최신 파일에서도 같은 경고가 반복되면 다운로드 보안 속성 때문일 수 있습니다. 터미널을 열고 `xattr -cr /Applications/쌤핀.app` 명령을 실행한 뒤 다시 실행해 보세요. DMG 파일 자체가 열리지 않으면 `xattr -cr ~/Downloads/ssampin-arm64.dmg`(Intel은 ssampin-x64.dmg)를 실행합니다.',
         ],
       },
       {
         id: 'update',
         title: '자동 업데이트가 되지 않아요',
         body: [
-          'macOS 베타 지원에서는 앱 안 자동 설치가 제공되지 않습니다. 새 버전 알림에서 새 버전 다운로드를 누르면 DMG가 브라우저로 받아집니다. 받은 DMG를 열어 쌤핀을 응용 프로그램 폴더로 드래그해 덮어쓰면 업데이트 완료이며, 데이터는 그대로 유지됩니다.',
+          'macOS 베타 지원에서는 앱 안 자동 설치가 제공되지 않습니다. 새 버전 알림에서 새 버전 다운로드를 누르면 내 칩에 맞는 DMG가 브라우저로 받아집니다. 받은 DMG를 열어 쌤핀을 응용 프로그램 폴더로 드래그해 덮어쓰면 업데이트 완료이며, 데이터는 그대로 유지됩니다.',
         ],
       },
     ],

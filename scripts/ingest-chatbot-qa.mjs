@@ -964,7 +964,7 @@ const QA_DOCUMENTS = [
     metadata: { source: 'system-qa', category: 'platform', title: 'Q: macOS Tahoe 26 지원 (베타)' },
   },
   {
-    content: `Q: 맥에서 쌤핀 실행 시 "이 버전의 macOS에서 작동하는지 확인하려면 개발자에게 문의하십시오. 응용 프로그램을 다시 설치해야 할 수 있습니다"라는 오류가 떠요.\nA: 예전에 받아둔 칩별 설치 파일(ssampin-arm64.dmg 또는 ssampin-x64.dmg)을 실행한 경우예요(재설치나 macOS 업데이트로는 해결되지 않아요).\n\n**해결 방법**\n1. ssampin.com에서 macOS 다운로드 버튼을 눌러 최신 파일(**ssampin-universal.dmg**)을 받으세요\n2. 이 파일 하나가 Apple Silicon(M1~M4)과 Intel Mac 모두에서 동작하므로 칩을 확인할 필요가 없어요\n3. DMG를 열어 쌤핀을 응용 프로그램 폴더에 드래그 (기존 앱은 덮어쓰기, 데이터 유지)\n\n설치 후 첫 실행 시 "개발자를 확인할 수 없음" 경고가 뜨면: 경고 창에서 [완료] → 시스템 설정 > 개인정보 보호 및 보안 > [그래도 열기] → Mac 암호 입력. macOS는 현재 베타 지원이라 이 경고가 표시되지만 앱은 안전합니다.`,
+    content: `Q: 맥에서 쌤핀 실행 시 "이 버전의 macOS에서 작동하는지 확인하려면 개발자에게 문의하십시오. 응용 프로그램을 다시 설치해야 할 수 있습니다"라는 오류가 떠요.\nA: 내 Mac의 칩에 맞지 않는 설치 파일을 받은 경우예요(재설치나 macOS 업데이트로는 해결되지 않아요).\n\n**해결 방법**\n1. 🍎 메뉴 > "이 Mac에 관하여" 클릭 → "칩" 항목 확인\n2. **Apple M1/M2/M3/M4**로 표시되면 → Apple Silicon용 **ssampin-arm64.dmg**\n3. **Intel Core i5/i7/i9**로 표시되면 → Intel용 **ssampin-x64.dmg**\n4. ssampin.com에서 맞는 파일을 다시 받아 설치 (기존 앱은 덮어쓰기, 데이터 유지)\n\n설치 후 첫 실행 시 "개발자를 확인할 수 없음" 경고가 뜨면: 경고 창에서 [완료] → 시스템 설정 > 개인정보 보호 및 보안 > [그래도 열기] → Mac 암호 입력. macOS는 현재 베타 지원이라 이 경고가 표시되지만 앱은 안전합니다.`,
     metadata: {
       source: 'system-qa',
       category: 'install',
@@ -1765,11 +1765,11 @@ const QA_DOCUMENTS = [
     },
   },
   {
-    content: `Q: Mac 어느 칩을 쓰는지 어떻게 확인해요? Apple Silicon과 Intel 중 어떤 DMG를 받아야 하나요?\nA: 확인하실 필요 없어요. 쌤핀 macOS 설치 파일은 **ssampin-universal.dmg 하나**이고, Apple Silicon(M1~M4)과 Intel Mac 모두에서 동작하는 통합 파일이에요. ssampin.com의 macOS 다운로드 버튼을 그대로 누르시면 됩니다.\n\n예전(2.4.4 이하)에는 ssampin-arm64.dmg / ssampin-x64.dmg 로 나뉘어 있었고, 칩에 맞지 않는 파일을 받으면 "이 버전의 macOS에서 작동하는지 확인하려면 개발자에게 문의하십시오" 오류가 났어요. 그 오류가 보인다면 예전 파일을 실행한 것이니 최신 통합 파일을 다시 받아 설치하면 해결됩니다(데이터 유지).`,
-    metadata: { source: 'system-qa', category: 'sync', title: 'Q: Mac DMG는 통합 파일 하나' },
+    content: `Q: Mac 어느 칩을 쓰는지 어떻게 확인해요? Apple Silicon과 Intel 중 어떤 DMG를 받아야 하나요?\nA: 왼쪽 위 🍎 메뉴 > "이 Mac에 관하여"를 클릭하세요. "칩" 항목에 **Apple M1/M2/M3/M4** 같은 표기가 있으면 **Apple Silicon용 DMG(ssampin-arm64.dmg)**, **Intel Core i5/i7/i9** 같은 표기가 있으면 **Intel용 DMG(ssampin-x64.dmg)**를 받으시면 돼요.\n\n참고로 ssampin.com에 Mac으로 접속하면 Apple Silicon용이 기본으로 제공되고, Intel Mac은 버튼 아래 "Intel 버전 받기" 링크를 쓰시면 됩니다. 앱 안 [새 버전 다운로드]도 실행 중인 칩에 맞는 파일을 알아서 열어 줘요.\n\n칩에 맞지 않는 파일을 받으면 "이 버전의 macOS에서 작동하는지 확인하려면 개발자에게 문의하십시오" 오류가 나면서 실행되지 않아요. 이 오류가 보이면 반대쪽 DMG를 다시 받아 설치하면 해결됩니다(데이터 유지).`,
+    metadata: { source: 'system-qa', category: 'sync', title: 'Q: Mac arm64 vs x64 DMG 선택' },
   },
   {
-    content: `Q: 맥에서 "손상되었기 때문에 열 수 없습니다. 휴지통으로 이동해야 합니다"가 뜨고 [그래도 열기] 버튼도 보이지 않아요.\nA: 2.4.4 이하 macOS 설치 파일의 문제였고, 그 이후 버전에서 해결됐어요.\n\n원인: 예전 빌드는 앱에 서명(봉인)이 전혀 없어서 macOS가 "미확인 개발자"가 아니라 "손상된 앱"으로 판단했어요. 그래서 시스템 설정에 [그래도 열기] 항목이 나타나지 않았습니다.\n\n**해결 방법**\n1. ssampin.com에서 최신 macOS 파일(ssampin-universal.dmg)을 다시 받아 설치하세요\n2. 첫 실행 시 "개발자를 확인할 수 없음" 경고가 뜨면 [완료] → 시스템 설정 > 개인정보 보호 및 보안 > [그래도 열기] → Mac 암호 입력\n3. 그래도 "손상" 경고가 반복되면 터미널에서 \`xattr -cr /Applications/쌤핀.app\` 실행 후 다시 열어보세요\n\nApple 공증(notarization)은 여전히 없어서 첫 실행 경고 자체는 뜨지만, 한 번 허용하면 이후에는 경고 없이 실행됩니다.`,
+    content: `Q: 맥에서 "손상되었기 때문에 열 수 없습니다. 휴지통으로 이동해야 합니다"가 뜨고 [그래도 열기] 버튼도 보이지 않아요.\nA: 2.4.4 이하 macOS 설치 파일의 문제였고, 그 이후 버전에서 해결됐어요.\n\n원인: 예전 빌드는 앱에 서명(봉인)이 전혀 없어서 macOS가 "미확인 개발자"가 아니라 "손상된 앱"으로 판단했어요. 그래서 시스템 설정에 [그래도 열기] 항목이 나타나지 않았습니다.\n\n**해결 방법**\n1. ssampin.com에서 최신 macOS 파일을 다시 받아 설치하세요(Mac으로 접속하면 칩에 맞는 파일이 기본 제공됩니다)\n2. 첫 실행 시 "개발자를 확인할 수 없음" 경고가 뜨면 [완료] → 시스템 설정 > 개인정보 보호 및 보안 > [그래도 열기] → Mac 암호 입력\n3. 그래도 "손상" 경고가 반복되면 터미널에서 \`xattr -cr /Applications/쌤핀.app\` 실행 후 다시 열어보세요\n\nApple 공증(notarization)은 여전히 없어서 첫 실행 경고 자체는 뜨지만, 한 번 허용하면 이후에는 경고 없이 실행됩니다.`,
     metadata: {
       source: 'system-qa',
       category: 'sync',

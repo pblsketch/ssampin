@@ -111,34 +111,41 @@ nsis:
 mac:
   target:
     - target: dmg
-      # universal — 인텔/애플칩 통합 단일 파일(2026-08-24). 칩에 맞지 않는 DMG 를 받아
-      # "이 버전의 macOS에서 작동하는지 확인하려면 개발자에게 문의하십시오" 오류를 보던 사고를 원천 차단한다.
-      # 대가는 용량(arch 별 약 330MB → 통합 600MB대). 되돌릴 때는 landing/src/config.ts 의 다운로드 URL,
-      # electron/main.ts 의 update:download, .github/workflows/build-macos.yml 검증 단계도 함께 되돌릴 것.
+      # 칩별 2파일 유지 결정(2026-08-24, 오너 판단).
+      #
+      # universal 통합 단일 파일을 시도했다가 되돌렸다. 통합의 이득은 "칩에 맞지 않는 DMG 를 받아
+      # 실행되지 않는 사고"를 없애는 것인데, ① 랜딩이 접속 OS·칩 기준으로 arm64 를 기본 제공하고
+      # ② 앱 내 업데이트도 실행 중인 칩에 맞는 DMG 를 열어 주며 ③ 릴리즈당 x64 다운로드가 1건
+      # (arm64 는 4~14건)이라 실사용 인텔 Mac 이 사실상 없다. 반면 통합의 대가는 모든 사용자의
+      # 다운로드 용량 증가(실측 480MB vs 칩별 약 290MB)로, 학교망 환경에서 손해가 더 크다고 판단했다.
+      # 참고: 통합 빌드 자체는 성공을 확인했다(run 32717933662, archs=x86_64 arm64, 480MB).
+      #
+      # 다시 시도한다면: universal 은 x64·arm64 슬라이스를 lipo 로 합치므로 "칩 전용 바이너리를
+      # 품은 부품"이 모두 양쪽에 존재해야 한다. 빌드 러너가 Apple Silicon 이라 npm 이 arm64 판만
+      # 가져오는 부품들(@napi-rs/canvas·cloudflared·koffi·leveldown)이 차례로 병합을 막았고,
+      # 아래 제외 규칙들이 그때 확인된 결과다(모두 런타임 미사용으로 확인돼 제외 유지).
       arch:
-        - universal
-  # mac 전용 제외 — cloudflared 실행 바이너리(터널 기능).
+        - x64
+        - arm64
+  # mac 전용 제외 ① cloudflared 실행 바이너리(터널 기능) — 잘못된 칩 동봉을 막는 실제 버그 수정이다.
   #
-  # cloudflared npm 패키지는 postinstall 로 "빌드 머신의 칩에 맞는" 바이너리를 내려받아
-  # node_modules/cloudflared/bin/ 에 둔다. 맥 빌드 러너가 Apple Silicon 이라 arm64 바이너리만
-  # 들어오고, 그게 x64 슬라이스에도 그대로 복사돼 universal 병합을 막는다
-  # (@electron/universal: "same in both x64 and arm64 builds ... x64ArchFiles").
-  # 억지로 통과시키면 Intel Mac 에 arm64 바이너리가 실려 터널이 조용히 깨진다.
+  # cloudflared npm 패키지는 postinstall 로 "빌드 머신의 칩에 맞는" 바이너리만 내려받아
+  # node_modules/cloudflared/bin/ 에 둔다. 맥 빌드는 Apple Silicon 러너에서 도는데 x64 DMG 도
+  # 같은 node_modules 를 그대로 담으므로, **Intel Mac 용 DMG 에 arm64 cloudflared 가 실려 왔다**
+  # (칩별로 나눠 빌드하던 v2.4.4 이하도 마찬가지 — 인텔 Mac 에서 터널이 조용히 실패했을 것).
   #
-  # 애초에 쌤핀은 이 바이너리를 첫 사용 시 userData 로 직접 내려받는다
+  # 쌤핀은 이 바이너리를 첫 사용 시 userData 로 직접 내려받는다
   # (electron/ipc/tunnel.ts installTunnel(): "첫 사용 시, ~40MB 다운로드", userData 경로 우선).
-  # 동봉본은 이전 버전 호환 fallback 일 뿐이므로 mac 에서는 빼고 런타임 다운로드에 맡긴다.
+  # 동봉본은 이전 버전 호환 fallback 일 뿐이므로 mac 에서는 빼고 런타임 다운로드(칩에 맞는 판)에 맡긴다.
   # Windows 는 현행 유지(동봉) — 동작 변화 없음.
   #
-  # koffi(FFI)도 같은 이유로 mac 에서 뺀다. koffi 는 모든 플랫폼용 프리빌드
-  # (build/koffi/darwin_arm64, win32_x64 …)를 통째로 담고 있어 x64·arm64 슬라이스에
-  # 동일 파일로 들어가 병합을 막는다. 그리고 쌤핀에서 koffi 는 Win32 전용 경로에서만 쓴다:
+  # mac 전용 제외 ② koffi(FFI) — mac 에서 쓰지 않는 Win32 전용 부품이다.
   #   - desktopWidgetManager.ts: 비Win32면 아예 no-op manager 반환("절대 throw 하지 않는다")
   #   - win32SendKeys.ts: require('koffi') 가 함수 안 try/catch — 실패 시 autoPasted=false 로 graceful
-  # 따라서 mac 패키지에 없어도 동작에 영향이 없다.
+  # 모든 플랫폼용 프리빌드(build/koffi/darwin_arm64·win32_x64 …)를 통째로 담고 있어 용량만 차지한다.
   files:
-    - '!node_modules/cloudflared/bin/**'
-    - '!node_modules/koffi/**'
+    - '!**/node_modules/cloudflared/bin/**'
+    - '!**/node_modules/koffi/**'
   icon: build/icon.png
   category: public.app-category.education
   minimumSystemVersion: '12.0.0'
