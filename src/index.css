@@ -563,6 +563,29 @@ html.sp-glass-on [role='dialog'] .bg-sp-surface {
   color: white !important;
 }
 
+/* amber·yellow (2026-08-24 계약 검사 도입 때 목록 누락 발견) — 모바일 출결 버튼은
+   yellow(지각)·orange(조퇴)·red(결석)가 나란히 있는데 yellow 만 목록에 없어 라이트
+   모드에서 혼자 어두운 글씨가 됐다. 다른 유채색과 같은 규칙으로 맞춘다. */
+.theme-light [class*='bg-amber-'].text-white,
+.theme-light [class*='bg-amber-'] .text-white {
+  color: white !important;
+}
+
+.theme-light [class*='bg-yellow-'].text-white,
+.theme-light [class*='bg-yellow-'] .text-white {
+  color: white !important;
+}
+
+/* 테마 토큰이지만 라이트 모드에서도 진한 유채색으로 남는 배경 — 위 팔레트 색과 같은
+   이유로 흰 글씨를 지킨다 (sp-error 라이트 #dc2626 · sp-highlight 라이트 #d97706).
+   sp-surface·sp-card 같은 나머지 토큰은 라이트에서 밝아지므로 기본 반전이 맞다. */
+.theme-light .bg-sp-error.text-white,
+.theme-light .bg-sp-error .text-white,
+.theme-light .bg-sp-highlight.text-white,
+.theme-light .bg-sp-highlight .text-white {
+  color: white !important;
+}
+
 /* ─── 어두운 스크림 위의 흰 글씨는 라이트 모드에서도 흰색을 지킨다 ───
 
    위 화이트리스트는 "유채색 배경"만 다뤘다. 그런데 사진 위에 얹는 반투명 검정

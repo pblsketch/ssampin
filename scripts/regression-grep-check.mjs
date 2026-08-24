@@ -528,6 +528,149 @@ const absenceChecks = [
 ];
 
 // ============================================================
+// 계약 검사 — REGRESSION #62: text-white × 라이트 모드 보호 목록
+// ============================================================
+//
+// 라이트 모드는 `.theme-light .text-white` 로 흰 글씨를 본문색(어두움)으로 뒤집는다 —
+// "밝은 배경에 실수로 쓴 흰 글씨"를 살리는 안전장치다. 그런데 라이트 모드에서도
+// 어둡게/유채색으로 남는 배경(bg-red-500 · bg-gray-800 · bg-black/55 …) 위의 흰 글씨는
+// 뒤집으면 안 되고, 그 예외가 src/index.css 의 보호 목록(허용 셀렉터들)으로 관리된다.
+// 목록에 없는 배경이 들어오면 **어두운 바탕에 어두운 글씨**가 되어 조용히 사라진다.
+// 같은 사고가 이미 두 번 있었다: 9f54f58e(관찰 첨부·PDF 배지 등 9군데) ·
+// aeeb15d1(드롭다운 option 104곳).
+//
+// 검사: 한 클래스 문자열 안에 `text-white` 와 "라이트 모드에서도 어두운 정적 배경"이
+// 같이 있는데 index.css 보호 목록의 어떤 규칙에도 잡히지 않으면 실패.
+// 보호 목록은 하드코딩하지 않고 **index.css 에서 직접 파싱한다** — CSS 쪽에서 규칙을
+// 지우면 그 배경을 쓰는 컴포넌트가 즉시 빨간불이 되는 양방향 계약이다.
+//
+// 한계(의도된 범위): 문자열 리터럴 하나 안에서만 본다. text-white 와 bg-* 가 서로 다른
+// 문자열 조각에서 합쳐지는 경우는 못 본다 — 과거 사고 두 건 모두 한 문자열 안의 조합이었다.
+// 인라인 style 배경과 알파 변형(text-white/70)의 다른 구멍 두 개는
+// accent-bg-white-text.metatest.test.ts 가 따로 지킨다.
+
+const textWhiteContract = {
+  name: 'REGRESSION #62: text-white 는 라이트 모드에서도 어두운 배경과 함께면 index.css 보호 목록에 있어야 한다 (라이트 모드 흰 글씨 실종 계약)',
+  cssFile: 'src/index.css',
+  roots: ['src'],
+  extensions: ['.ts', '.tsx'],
+};
+
+/**
+ * index.css 에서 보호 목록을 파싱한다.
+ * - `[class*='bg-…']` 규칙은 CSS 와 같은 "부분 문자열" 의미로 본다.
+ * - `.bg-sp-…` 규칙은 정확한 클래스 토큰 의미로 본다.
+ */
+function parseTextWhiteProtectionList(css) {
+  const substrings = new Set();
+  for (const m of css.matchAll(/\.theme-light\s+\[class\*='(bg-[^']+)'\]\.text-white/g)) {
+    substrings.add(m[1]);
+  }
+  const exact = new Set();
+  for (const m of css.matchAll(/\.theme-light\s+\.(bg-sp-[a-z-]+)\.text-white/g)) {
+    exact.add(m[1]);
+  }
+  // 액센트 자동 대비 규칙(.bg-sp-accent.text-white)은 테마 무관 전역이라 따로 본다.
+  if (/\.bg-sp-accent\.text-white/.test(css)) exact.add('bg-sp-accent');
+  return { substrings, exact };
+}
+
+/** 색이 아닌 bg-* 유틸리티 (background-size/position/repeat 등) — 검사 대상이 아니다. */
+const NON_COLOR_BG =
+  /^bg-(none|auto|cover|contain|fixed|local|scroll|clip-|origin-|no-repeat|repeat|bottom|top|left|right|center|blend-|opacity-)/;
+
+/** 라이트 모드에서 밝은 배경 — 흰 글씨를 어두운 글씨로 뒤집는 기본 동작이 옳다. */
+const LIGHT_SAFE_BG = /^bg-(white|transparent|current|inherit)\b/;
+
+/**
+ * 테마 토큰 중 라이트 모드에서도 진하게 남는 것들 — 보호 목록에 있어야 한다.
+ * (sp-surface·sp-card 같은 나머지 sp 토큰은 라이트에서 밝아지므로 뒤집는 게 맞다.
+ * 라이트에서도 어두운 sp 토큰을 새로 만들면 여기와 index.css 에 함께 올릴 것.)
+ */
+const DARK_SP_TOKENS = new Set(['bg-sp-accent', 'bg-sp-error', 'bg-sp-highlight']);
+
+/** 이 배경 토큰이 text-white 와 만나면 보호 목록이 필요한가. */
+function bgNeedsProtection(token) {
+  if (NON_COLOR_BG.test(token) || LIGHT_SAFE_BG.test(token)) return false;
+  if (token.startsWith('bg-sp-')) return DARK_SP_TOKENS.has(token);
+  // 중립색 50~500 은 라이트 모드에서 밝은 면이라 뒤집는 게 맞다 — index.css 의
+  // "회색 계열은 어두운 구간(600~900)만 잡는다. 500 이하는 …" 정책과 같은 기준.
+  const neutral = token.match(/^bg-(gray|slate|zinc|neutral|stone)-(\d+)/);
+  if (neutral) return Number(neutral[2]) >= 600;
+  // 나머지 전부 — 팔레트 유채색, bg-black, bg-[임의값], bg-gradient-*(색이 from-* 에
+  // 있어 보호 목록이 못 잡는다) — 는 위험으로 보고, 목록에 없으면 사람이 판단하게 한다.
+  return true;
+}
+
+/**
+ * 주석을 공백으로 바꾸되 **줄 수는 보존**한다 — 실패 위치를 줄 번호로 보여주기 위해.
+ * (stripComments 와 같은 이유로 필요하다: 사고 설명 주석에 금지 조합을 예시로 적으면
+ * 설명을 잘 달수록 빨간불이 된다. `https://` 보호도 동일.)
+ */
+function stripCommentsKeepLines(src) {
+  return src
+    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
+    .replace(/(^|[^:])\/\/[^\n]*/g, (m, p1) => p1 + ' '.repeat(m.length - p1.length));
+}
+
+function runTextWhiteContract() {
+  const css = readFileSafe(join(ROOT, textWhiteContract.cssFile));
+  if (css === null) {
+    return { ok: false, scanned: 0, problems: [`${textWhiteContract.cssFile} 을 읽지 못했다`] };
+  }
+
+  const { substrings, exact } = parseTextWhiteProtectionList(css);
+  // 파싱 실패(셀렉터 형식 변경 등)가 조용히 "전부 위반"으로 보이지 않게 형태부터 확인한다.
+  if (substrings.size < 10 || !exact.has('bg-sp-accent')) {
+    return {
+      ok: false,
+      scanned: 0,
+      problems: [
+        `index.css 보호 목록 파싱 실패 — 부분일치 ${substrings.size}건, 정확일치 [${[...exact].join(', ')}]. ` +
+          '셀렉터 형식을 바꿨다면 parseTextWhiteProtectionList 를 함께 고칠 것.',
+      ],
+    };
+  }
+
+  const files = textWhiteContract.roots
+    .flatMap((root) => walk(join(ROOT, root), textWhiteContract.extensions, []))
+    .filter((f) => !/\.(test|spec)\.tsx?$/.test(f));
+
+  const problems = [];
+  for (const file of files) {
+    const raw = readFileSafe(file);
+    if (raw === null) continue;
+    const src = stripCommentsKeepLines(raw);
+
+    // 문자열 리터럴(따옴표 3종)을 훑는다. 템플릿 리터럴은 안쪽 분기 문자열까지
+    // 한 덩어리로 잡히므로, 따옴표를 공백으로 바꿔 토큰 경계로 만든 뒤 본다.
+    const literalRe = /(["'`])((?:(?!\1)[\s\S])*)\1/g;
+    let m;
+    while ((m = literalRe.exec(src))) {
+      const normalized = m[2].replace(/['"`]/g, ' ');
+      // 뒤집기 규칙(.theme-light .text-white)은 정확한 text-white 토큰에만 걸린다 —
+      // hover:text-white 와 text-white/70 은 별도 규칙 소관이라 여기서 안 본다.
+      if (!/(^|\s)text-white(?=\s|$)/.test(normalized)) continue;
+
+      const bgTokens = [...normalized.matchAll(/(?:^|\s)(bg-[^\s]+)/g)].map((t) => t[1]);
+      const dangerous = bgTokens.filter(bgNeedsProtection);
+      if (dangerous.length === 0) continue;
+
+      const isProtected =
+        [...substrings].some((s) => normalized.includes(s)) ||
+        [...exact].some((t) => new RegExp(`(^|\\s)${t}(?=\\s|$)`).test(normalized));
+      if (isProtected) continue;
+
+      const line = src.slice(0, m.index).split('\n').length;
+      const rel = relative(ROOT, file).split(sep).join('/');
+      problems.push(`${rel}:${line}  text-white + ${dangerous.join(', ')}`);
+    }
+  }
+
+  return { ok: problems.length === 0, scanned: files.length, problems };
+}
+
+// ============================================================
 // Glob walker (의존성 0)
 // ============================================================
 
@@ -666,6 +809,31 @@ for (const c of absenceChecks) {
     failures.push({ name: c.name, hits });
   } else {
     console.log(`OK ${c.name}  (scanned ${files.length} file(s))`);
+    passed++;
+  }
+}
+
+// --- 계약 검사: text-white × 라이트 모드 보호 목록 ---
+{
+  const result = runTextWhiteContract();
+  if (!result.ok) {
+    console.error(`X ${textWhiteContract.name}`);
+    for (const p of result.problems.slice(0, 30)) {
+      console.error(`     - ${p}`);
+    }
+    if (result.problems.length > 30) {
+      console.error(`     ... 외 ${result.problems.length - 30}건`);
+    }
+    console.error(
+      '     → 그 배경이 라이트 모드에서도 어둡게 남는 게 맞으면 src/index.css 보호 목록에 규칙을 추가하고,',
+    );
+    console.error(
+      '       테마를 따라 밝아지는 배경이면 text-white 대신 테마 글자색(text-sp-* 등)을 쓸 것.',
+    );
+    failed++;
+    failures.push({ name: textWhiteContract.name, hits: result.problems });
+  } else {
+    console.log(`OK ${textWhiteContract.name}  (scanned ${result.scanned} file(s))`);
     passed++;
   }
 }

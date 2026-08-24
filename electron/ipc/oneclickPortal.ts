@@ -15,8 +15,10 @@
  *   1. **renderer 는 경로를 넘기지 않는다.** "원클릭업무포털을 열어달라"는 의도만 보내고,
  *      실행 경로는 메인이 레지스트리에서 직접 찾는다. renderer 가 경로를 정할 수 있으면
  *      이 통로가 곧 임의 실행 구멍이 된다.
- *   2. **파일명을 검증한 뒤에만 실행한다.** 레지스트리 값이 다른 것을 가리켜도
- *      `OneClickPortal.exe` 가 아니면 실행하지 않는다.
+ *   2. **레지스트리 값이 예상 설치 위치를 가리킬 때만 실행한다.** 실행 파일명은 우리가
+ *      `InstallLocation` 뒤에 `OneClickPortal.exe` 를 직접 붙여 만들므로 파일명은 검증할
+ *      것이 없다(항상 이 이름이다). 실제로 확인해야 하는 것은 **폴더 쪽**이다 —
+ *      `InstallLocation` 이 %LOCALAPPDATA% 하위가 아니면 실행하지 않는다.
  *
  * 경로 판정 근거는 실기 검증으로 확인했다 —
  * `docs/03-analysis/oneclick-portal/integration-surface.analysis.md` §4.
@@ -24,7 +26,7 @@
 import { ipcMain } from 'electron';
 import { execFile, spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { basename, isAbsolute, join } from 'node:path';
+import { isAbsolute, join, win32 } from 'node:path';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
@@ -62,11 +64,46 @@ export type OneClickPortalLaunchResult =
 /**
  * `reg query` 출력에서 값 하나를 꺼낸다.
  * 출력 형식은 `    이름    REG_SZ    데이터` 로, 로캘과 무관하게 동일하다.
+ *
+ * (export 는 테스트용 — 이 파일 밖의 실행 코드는 부르지 않는다.)
  */
-function readRegistryValue(output: string, valueName: string): string | null {
-  const pattern = new RegExp(`^\\s*${valueName}\\s+REG_[A-Z_]+\\s+(.+?)\\s*$`, 'm');
+export function readRegistryValue(output: string, valueName: string): string | null {
+  // 값 이름에 정규식 특수문자가 있어도 글자 그대로 찾는다. 지금 부르는 이름 둘에는
+  // 특수문자가 없지만, `Install(Location)` 같은 이름이 오면 괄호가 캡처 그룹이 되어
+  // 데이터 대신 이름 조각을 돌려주는 식으로 조용히 어긋난다.
+  const escaped = valueName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pattern = new RegExp(`^\\s*${escaped}\\s+REG_[A-Z_]+\\s+(.+?)\\s*$`, 'm');
   const matched = pattern.exec(output);
   return matched?.[1] ?? null;
+}
+
+/**
+ * `InstallLocation` 이 예상 설치 위치의 하위 폴더인지 확인한다.
+ *
+ * Velopack per-user 설치는 항상 `%LOCALAPPDATA%\OneClickPortal` 에 깔린다(실기 검증 —
+ * integration-surface.analysis.md §4). 반면 HKCU 는 관리자 권한 없이 아무 프로세스나
+ * 고칠 수 있는 영역이라, 값이 조작되면 이 통로가 임의 폴더의 `OneClickPortal.exe` 를
+ * 실행하는 구멍이 된다. 그래서 %LOCALAPPDATA% 밖을 가리키는 값은 믿지 않는다.
+ *
+ * 비교는 정규화(`..` 풀기) 후 대소문자 무시로 한다 — 윈도우 파일 시스템 규칙.
+ * `win32` 경로 함수를 명시해 어느 OS 의 CI 에서도 같은 답이 나온다(실행 자체는
+ * 어차피 윈도우에서만 한다). export 는 테스트용.
+ *
+ * @param roots 예상 설치 루트 목록. 실전에서는 %LOCALAPPDATA% 하나다.
+ */
+export function isUnderExpectedInstallRoot(
+  location: string,
+  roots: readonly (string | undefined)[] = [process.env.LOCALAPPDATA],
+): boolean {
+  const target = win32.resolve(location).toLowerCase();
+  return roots.some((root) => {
+    if (root === undefined || root.trim() === '' || !win32.isAbsolute(root)) return false;
+    const base = win32.resolve(root).toLowerCase();
+    const baseWithSep = base.endsWith(win32.sep) ? base : `${base}${win32.sep}`;
+    // 루트 자신은 통과시키지 않는다 — 설치 루트는 항상 하위 폴더다.
+    // `\Local` 로 `\LocalEvil` 이 통과하지 않도록 구분자까지 붙여 비교한다.
+    return target.startsWith(baseWithSep);
+  });
 }
 
 interface InstalledInfo {
@@ -98,9 +135,13 @@ async function findInstalled(): Promise<InstalledInfo | null> {
   if (installLocation === null || !isAbsolute(installLocation)) {
     return null;
   }
+  // HKCU 값이 조작돼 엉뚱한 폴더를 가리키는 경우 — 예상 설치 위치 밖이면 없는 셈 친다.
+  if (!isUnderExpectedInstallRoot(installLocation)) {
+    return null;
+  }
 
   const executablePath = join(installLocation, EXECUTABLE_NAME);
-  if (basename(executablePath) !== EXECUTABLE_NAME || !existsSync(executablePath)) {
+  if (!existsSync(executablePath)) {
     return null;
   }
 

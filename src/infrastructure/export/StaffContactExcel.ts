@@ -11,6 +11,7 @@ import {
   STAFF_IMPORT_HEADERS,
   STAFF_IMPORT_FIELD_ORDER,
   EXAMPLE_ROW_PREFIX,
+  detectStaffColumns,
   findStaffHeaderRow,
   type StaffField,
 } from '@domain/rules/staffContactImportRules';
@@ -164,19 +165,28 @@ export async function exportStaffContacts(contacts: readonly StaffContact[]): Pr
  * 010-1234-5678을 숫자로 저장하면 1012345678(10자리),
  * 031-123-4567은 311234567(9자리)이 된다. 둘 다 앞에 0이 있어야 맞는 번호다.
  * 8자리 이하는 지역번호 없는 시내번호(1234-5678)나 내선일 수 있어 건드리지 않는다.
+ *
+ * ★복원은 휴대폰·내선번호 **열에만** 적용한다 (2026-08-24 UltraQA P2) — 모든 열에
+ * 적용하면 메모·담임학급에 적힌 9~10자리 정수(사번·계좌 조각 등)에도 0이 붙어
+ * 전화번호가 아닌 값이 조용히 바뀐다.
  */
 const DROPPED_ZERO_DIGIT_LENGTHS: ReadonlySet<number> = new Set([9, 10]);
 
 /** 셀 하나를 글자로 바꾼다. 숫자·날짜·수식·서식 있는 글자를 모두 다룬다. */
-function cellToText(value: ExcelJS.CellValue): string {
+function cellToText(value: ExcelJS.CellValue, restoreDroppedZero: boolean): string {
   if (value === null || value === undefined) return '';
 
   if (typeof value === 'string') return value.trim();
 
   if (typeof value === 'number') {
     const text = String(value);
-    // 전화번호에서 앞의 0이 날아간 경우를 되살린다.
-    if (Number.isInteger(value) && value > 0 && DROPPED_ZERO_DIGIT_LENGTHS.has(text.length)) {
+    // 전화번호에서 앞의 0이 날아간 경우를 되살린다 (전화번호 열일 때만 켠다).
+    if (
+      restoreDroppedZero &&
+      Number.isInteger(value) &&
+      value > 0 &&
+      DROPPED_ZERO_DIGIT_LENGTHS.has(text.length)
+    ) {
       return `0${text}`;
     }
     return text;
@@ -193,22 +203,38 @@ function cellToText(value: ExcelJS.CellValue): string {
         .trim();
     }
     if ('text' in value) return String(value.text).trim();
-    if ('result' in value) return cellToText(value.result as ExcelJS.CellValue);
+    if ('result' in value) return cellToText(value.result as ExcelJS.CellValue, restoreDroppedZero);
     if ('hyperlink' in value) return String(value.hyperlink).trim();
   }
 
   return String(value).trim();
 }
 
+interface SheetGrid {
+  readonly grid: string[][];
+  /**
+   * 앞의 0이 날아간 숫자로 보이는 칸의 좌표(0부터).
+   * 어떤 열이 전화번호인지는 머리글을 찾은 뒤에야 알 수 있어서,
+   * 변환 단계에서는 후보만 적어 두고 복원은 열 판정 후에 한다.
+   */
+  readonly droppedZeroCells: readonly { readonly row: number; readonly col: number }[];
+}
+
 /** 워크시트 하나를 글자 표로 바꾼다. */
-function sheetToGrid(ws: ExcelJS.Worksheet): string[][] {
+function sheetToGrid(ws: ExcelJS.Worksheet): SheetGrid {
   const grid: string[][] = [];
+  const droppedZeroCells: { row: number; col: number }[] = [];
   const columnCount = Math.max(ws.columnCount, STAFF_IMPORT_FIELD_ORDER.length);
 
   ws.eachRow({ includeEmpty: true }, (row, rowNumber) => {
     const cells: string[] = [];
     for (let col = 1; col <= columnCount; col++) {
-      cells.push(cellToText(row.getCell(col).value));
+      const value = row.getCell(col).value;
+      const text = cellToText(value, false);
+      if (cellToText(value, true) !== text) {
+        droppedZeroCells.push({ row: rowNumber - 1, col: col - 1 });
+      }
+      cells.push(text);
     }
     // eachRow는 1부터 세므로 배열 자리를 맞춘다 (빈 앞줄도 그대로 보존).
     grid[rowNumber - 1] = cells;
@@ -217,7 +243,30 @@ function sheetToGrid(ws: ExcelJS.Worksheet): string[][] {
   for (let i = 0; i < grid.length; i++) {
     grid[i] ??= [];
   }
-  return grid;
+  return { grid, droppedZeroCells };
+}
+
+/** 머리글에서 휴대폰·내선번호로 판정된 열의 데이터 행에만 앞의 0을 되살린다. */
+function restoreDroppedZeros({ grid, droppedZeroCells }: SheetGrid): void {
+  if (droppedZeroCells.length === 0) return;
+
+  const headerIndex = findStaffHeaderRow(grid);
+  if (headerIndex === -1) return;
+
+  const { columns } = detectStaffColumns(grid[headerIndex] ?? []);
+  const phoneColumns = new Set(
+    [columns.mobile, columns.officePhone].filter((c): c is number => c !== undefined),
+  );
+  if (phoneColumns.size === 0) return;
+
+  for (const { row, col } of droppedZeroCells) {
+    if (row <= headerIndex || !phoneColumns.has(col)) continue;
+    const line = grid[row];
+    const cell = line?.[col];
+    if (line !== undefined && cell !== undefined) {
+      line[col] = `0${cell}`;
+    }
+  }
 }
 
 /**
@@ -230,7 +279,10 @@ export async function parseStaffContactsFromExcel(buffer: ArrayBuffer): Promise<
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(buffer);
 
-  const grids = workbook.worksheets.map(sheetToGrid);
-  const withHeader = grids.find((g) => findStaffHeaderRow(g) !== -1);
-  return withHeader ?? grids[0] ?? [];
+  const sheets = workbook.worksheets.map(sheetToGrid);
+  const chosen = sheets.find((s) => findStaffHeaderRow(s.grid) !== -1) ?? sheets[0];
+  if (chosen === undefined) return [];
+
+  restoreDroppedZeros(chosen);
+  return chosen.grid;
 }
