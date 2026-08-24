@@ -12,6 +12,7 @@ import {
 } from '@domain/entities/RecordDraft';
 import { recordDraftsRepository } from '@adapters/di/container';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+import { detectProhibitedTerms } from '@domain/rules/prohibitedRecordTerms';
 import { generateUUID } from '@infrastructure/utils/uuid';
 
 /** (area + studentRef + subject) upsert 입력 — UI 직접 편집 / live-sync 수신 공통. */
@@ -124,6 +125,19 @@ export const useRecordDraftsStore = create<RecordDraftsState>((set, get) => {
         const limit = resolveAreaLimit(input.area, level);
         if (byteLength > limit) throw new RecordDraftLimitError(input.area, byteLength, limit);
       }
+      // 기재 금지 항목 최종 확인 — NEIS 에 실제로 들어가는 것은 초안이므로 **여기가 마지막 문**이다.
+      // ★막지 않고 경고만 한다(오너 결정 2026-08-25). 자동 판정은 오탐이 나고, 이 앱은 모든 초안에
+      //   교사 최종 검토를 강제하므로(requiresTeacherReview) 판단을 사람에게 남긴다.
+      // ★프롬프트로 시키지 않는 이유: 실측에서 금지 항목을 전부 열거하고 재강조해도 모델이
+      //   세특 본문에 그대로 옮겨 적었다(2/2 → 보강 후에도 2/2 실패). 코드가 봐야 한다.
+      // ★브릿지의 checkGrounding 은 이걸 못 잡는다 — 그건 "근거에 없는 말을 지어냈나"를 보는데,
+      //   관찰기록에 '최우수상'이 실제로 있으면 근거가 확실하다며 통과시킨다(정반대로 동작).
+      const prohibited = detectProhibitedTerms(input.content);
+      const flags = [
+        ...(input.groundingFlags ?? []),
+        ...(prohibited.length > 0 ? ['prohibited_item'] : []),
+      ];
+
       const existing = get().records.find((r) =>
         matchKey(r, input.area, input.studentRef, input.subject),
       );
@@ -142,9 +156,7 @@ export const useRecordDraftsStore = create<RecordDraftsState>((set, get) => {
         ...(input.studentKey !== undefined ? { studentKey: input.studentKey } : {}),
         ...(input.studentId !== undefined ? { studentId: input.studentId } : {}),
         ...(input.subject !== undefined ? { subject: input.subject } : {}),
-        ...(input.groundingFlags !== undefined
-          ? { groundingFlags: [...input.groundingFlags] }
-          : {}),
+        ...(flags.length > 0 ? { groundingFlags: flags } : {}),
       };
       const next = existing
         ? get().records.map((r) => (r.id === existing.id ? base : r))

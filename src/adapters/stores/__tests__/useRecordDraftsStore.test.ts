@@ -234,3 +234,43 @@ describe('P1-1 회귀 — level 미지정(브릿지 live-sync) 이 초등 초안
     expect(useRecordDraftsStore.getState().exists(id)).toBe(true);
   });
 });
+
+describe('기재 금지 항목 — 초안 저장 시 경고만 한다(막지 않는다)', () => {
+  it('금지 항목이 있으면 prohibited_item flag 가 붙고 저장은 된다', async () => {
+    useSettingsStore.setState((s) => ({
+      settings: { ...s.settings, schoolLevel: 'high' },
+      loaded: true,
+    }));
+    const id = await useRecordDraftsStore.getState().upsert({
+      area: 'subject',
+      studentRef: 'p1',
+      content: '교내 대회에서 최우수상을 수상함.',
+    });
+    const rec = useRecordDraftsStore.getState().records.find((r) => r.id === id);
+    // 막지 않는다 — 모든 초안은 교사 최종 검토가 강제되므로 판단을 사람에게 남긴다.
+    expect(rec).toBeDefined();
+    expect(rec?.groundingFlags).toContain('prohibited_item');
+  });
+
+  it('깨끗한 초안에는 flag 를 달지 않는다', async () => {
+    const id = await useRecordDraftsStore.getState().upsert({
+      area: 'subject',
+      studentRef: 'p2',
+      content: '자료의 출처를 스스로 확인하고 근거를 다시 정리함.',
+    });
+    const rec = useRecordDraftsStore.getState().records.find((r) => r.id === id);
+    expect(rec?.groundingFlags ?? []).not.toContain('prohibited_item');
+  });
+
+  it('브릿지가 보낸 기존 flag 를 덮어쓰지 않고 함께 싣는다', async () => {
+    const id = await useRecordDraftsStore.getState().upsert({
+      area: 'subject',
+      studentRef: 'p3',
+      content: '토익 점수를 언급함.',
+      groundingFlags: ['low_overlap'],
+    });
+    const flags = useRecordDraftsStore.getState().records.find((r) => r.id === id)?.groundingFlags;
+    expect(flags).toContain('low_overlap');
+    expect(flags).toContain('prohibited_item');
+  });
+});

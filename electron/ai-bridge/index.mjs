@@ -24930,6 +24930,67 @@ function recordGuidelines(query = {}) {
     disclaimer: DISCLAIMER_GUIDE,
   };
 }
+var PROHIBITED_IN_RECORD = [
+  '\uCD5C\uC6B0\uC218\uC0C1',
+  '\uC6B0\uC218\uC0C1',
+  '\uC7A5\uB824\uC0C1',
+  '\uAE08\uC0C1',
+  '\uC740\uC0C1',
+  '\uB3D9\uC0C1',
+  '\uC785\uC0C1',
+  '\uD45C\uCC3D',
+  '\uC218\uC0C1',
+  '\uACBD\uC9C4\uB300\uD68C',
+  '\uACF5\uBAA8\uC804',
+  '\uACBD\uC5F0',
+  '\uC62C\uB9BC\uD53C\uC544\uB4DC',
+  '\uB300\uD68C',
+  '\uAE08\uBA54\uB2EC',
+  '\uACF5\uC778\uC5B4\uD559',
+  '\uD1A0\uC775',
+  '\uD1A0\uD50C',
+  '\uD15D\uC2A4',
+  '\uC624\uD53D',
+  'TOEIC',
+  'TOEFL',
+  'TEPS',
+  'OPIc',
+  'IELTS',
+  'HSK',
+  'JLPT',
+  '\uC790\uACA9\uC99D',
+  '\uC778\uC99D\uC2DC\uD5D8',
+  '\uAE30\uB2A5\uC0AC',
+  '\uC0B0\uC5C5\uAE30\uC0AC',
+  '\uBAA8\uC758\uACE0\uC0AC',
+  '\uD559\uB825\uD3C9\uAC00',
+  '\uC804\uAD6D\uC5F0\uD569',
+  '\uB17C\uBB38',
+  '\uD559\uD68C',
+  '\uC800\uC11C',
+  '\uCD9C\uAC04',
+  '\uD2B9\uD5C8',
+  '\uC9C0\uC2DD\uC7AC\uC0B0\uAD8C',
+  '\uC7A5\uD559\uAE08',
+  '\uC7A5\uD559\uC0DD',
+  '\uBC29\uACFC\uD6C4',
+  '\uC5B4\uD559\uC6D0',
+  '\uACFC\uC678',
+  '\uD574\uC678\uBD09\uC0AC',
+  '\uD574\uC678\uC5F0\uC218',
+  '\uC5B4\uD559\uC5F0\uC218',
+];
+function hasProhibitedRecordItem(content) {
+  if (typeof content !== 'string' || content.length === 0) return false;
+  if (PROHIBITED_IN_RECORD.some((t) => content.includes(t))) return true;
+  let from = 0;
+  for (;;) {
+    const i = content.indexOf('\uD559\uC6D0', from);
+    if (i < 0) return false;
+    if (i === 0 || content[i - 1] !== '\uB300') return true;
+    from = i + 2;
+  }
+}
 
 // ../ssampin-ai-bridge/packages/core/dist/write.js
 var LOCK_ACQUIRE_TIMEOUT_MS = 5e3;
@@ -25382,6 +25443,7 @@ function validateRecordDraft(input) {
     const report = checkGrounding(claims, input.observations ?? [], query);
     for (const f of new Set(report.claims.flatMap((c) => c.flags))) flags.push(f);
   }
+  if (hasProhibitedRecordItem(content)) flags.push('prohibited_item');
   if (input.secretCorpus && input.secretCorpus.length > 0) {
     if (!scanForLeaks({ content }, input.secretCorpus).clean) flags.push('pii_leak');
   }
