@@ -127,7 +127,14 @@ export function MobileProgressLogModal({
     }
   }, [isOpen, loadClasses, loadProgress, loadSchedule]);
 
-  // 모달 오픈마다 폼 초기화 — mode 분기
+  /**
+   * 모달 오픈마다 폼 초기화 — mode 분기.
+   *
+   * ⚠️ 의존성에 `candidates`를 넣지 않는다. `candidates`는 학급 목록에서 파생된 배열이라
+   * **내용이 같아도 학급 목록을 다시 읽으면 새 배열**이 된다. 예전에는 이걸 의존성에 두어,
+   * 앱 복귀 시 도는 백그라운드 동기화가 학급 목록을 갱신하는 것만으로 입력 중이던
+   * 단원·차시가 통째로 지워졌다. 학급 자동 선택은 아래 별도 효과가 맡는다.
+   */
   useEffect(() => {
     if (!isOpen) return;
 
@@ -152,16 +159,25 @@ export function MobileProgressLogModal({
     setFormDate(todayISO());
     setSavedAt(null);
     setFanoutMessage(null);
+  }, [isOpen, mode, entryToEdit, defaultPeriod]);
 
-    // 학급 선택: defaultClassId 우선, 그다음 후보 첫 번째
+  /**
+   * 학급 자동 선택 — 후보가 늦게 도착해도 골라준다.
+   *
+   * 이미 고른 반이 후보에 남아 있으면 **그대로 둔다.** 여기서 무조건 첫 후보로 되돌리면
+   * 선생님이 직접 고른 반이 동기화 한 번에 딴 반으로 바뀐다.
+   */
+  useEffect(() => {
+    if (!isOpen || mode === 'edit') return;
+
     if (defaultClassId) {
       setSelectedClassId(defaultClassId);
-    } else if (candidates.length > 0 && candidates[0]) {
-      setSelectedClassId(candidates[0].id);
-    } else {
-      setSelectedClassId('');
+      return;
     }
-  }, [isOpen, mode, entryToEdit, defaultPeriod, defaultClassId, candidates]);
+    setSelectedClassId((prev) =>
+      prev !== '' && candidates.some((c) => c.id === prev) ? prev : (candidates[0]?.id ?? ''),
+    );
+  }, [isOpen, mode, defaultClassId, candidates]);
 
   // 오늘 이미 기록된 같은 학급의 진도 (요약 표시용 — 추가 모드 + 오늘 기록일 때만 가치 있음)
   const todayEntries = useMemo(() => {

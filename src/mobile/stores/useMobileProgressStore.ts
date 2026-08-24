@@ -23,7 +23,18 @@ interface MobileProgressState {
     kind: LessonDayAdjustment['kind'] | null,
   ) => Promise<void>;
   loaded: boolean;
-  load: () => Promise<void>;
+  /**
+   * @param force true면 이미 읽었어도 다시 읽는다. **`loaded`를 false로 되돌리지 않는다.**
+   */
+  load: (force?: boolean) => Promise<void>;
+  /**
+   * 백그라운드 동기화가 부르는 조용한 갱신.
+   *
+   * ⚠️ 여기서 `loaded:false`를 떨어뜨리면 안 된다 — 진도 탭(`ClassProgressTab`)이
+   * `if (!loaded) return <Spinner/>` 가드를 가지고 있어, 앱 복귀(visibilitychange)로
+   * 동기화가 도는 순간 **입력 중이던 진도 기록 모달이 통째로 언마운트**되고 타이핑이 사라진다.
+   * 데스크톱은 2026-07-07에 같은 이유로 `load(true)` 방식으로 옮겼다.
+   */
   reload: () => Promise<void>;
   getEntriesByClass: (classId: string) => readonly ProgressEntry[];
   getTodayEntries: (classId: string) => readonly ProgressEntry[];
@@ -54,8 +65,8 @@ export const useMobileProgressStore = create<MobileProgressState>((set, get) => 
   lessonDayAdjustments: [],
   loaded: false,
 
-  load: async () => {
-    if (get().loaded) return;
+  load: async (force = false) => {
+    if (!force && get().loaded) return;
     try {
       const [entries, lessonDayAdjustments] = await Promise.all([
         manageProgress.getAll(),
@@ -68,8 +79,7 @@ export const useMobileProgressStore = create<MobileProgressState>((set, get) => 
   },
 
   reload: async () => {
-    set({ loaded: false });
-    await get().load();
+    await get().load(true);
   },
 
   getEntriesByClass: (classId) => {

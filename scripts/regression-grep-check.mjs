@@ -306,6 +306,33 @@ const presenceChecks = [
 // ============================================================
 
 const absenceChecks = [
+  // ────────────────────────────────────────────────────────────────────────
+  // REGRESSION #63 — 모바일 스토어 reload()에서 `loaded:false` 금지 (2026-08-24).
+  //
+  // 신고: "모바일에서 진도 체크가 안 된다". 실제로는 **입력 소실**이었다.
+  //
+  // 모바일은 앱을 켤 때·다른 앱 갔다 돌아올 때(visibilitychange)·네트워크가 붙을 때마다
+  // `useSyncTrigger` → `syncFromCloud` → `reloadAllStores` 로 전 스토어를 다시 읽는다.
+  // 그때 reload 가 `loaded:false` 를 떨어뜨리면, `!loaded` 를 스피너로 갈아끼우는 화면들이
+  // **열려 있던 입력 시트째로 언마운트**된다. 타이핑·스크롤 위치·서브탭 선택이 함께 날아간다.
+  // (진도 탭·특기사항 탭·수행평가 채점은 early return 이라 시트가 통째로 사라졌다.)
+  //
+  // `loaded:false` 는 load() 의 조기 반환을 뚫으려는 용도였을 뿐, 데이터 갱신에는 필요 없다.
+  // 대신 `load(true)` 로 강제 갱신한다.
+  //
+  // 데스크톱은 2026-07-07 에 같은 사고(노트 "글 생겼다 없어졌다")로 이미 옮겨갔는데
+  // **모바일 스토어 17개는 옛 패턴 그대로 남아 있었다.** 같은 사고가 기기만 바꿔 재발했다.
+  // 이 검사가 없으면 새 모바일 스토어를 추가할 때 세 번째로 재발한다.
+  // ────────────────────────────────────────────────────────────────────────
+  {
+    name: 'REGRESSION #63: 모바일 스토어 reload()는 loaded:false 를 떨어뜨리지 않는다 (동기화 중 입력·화면 소실 방지)',
+    roots: ['src/mobile/stores'],
+    extensions: ['.ts'],
+    // reload 본문 안에서 loaded 를 false 로 되돌리는 형태만 잡는다.
+    // 초기 상태 선언(`loaded: false,`)은 정상이므로 건드리지 않는다.
+    patterns: [/reload:\s*async\s*\([^)]*\)\s*=>\s*\{[\s\S]{0,400}?loaded:\s*false/],
+    fileFilter: (path) => !path.includes('.test.'),
+  },
   {
     // 회귀 #6 — `C` 단축키 코드 부재 (학생 entry 한정)
     name: 'REGRESSION #6: `C` keyboard shortcut must NOT exist (학생 entry)',
