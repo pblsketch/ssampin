@@ -2463,6 +2463,55 @@ describe('동적 파일 삭제 전파', () => {
     expect(localState.manifest?.restorations?.[key]).toBeUndefined();
   });
 
+  it('★복원이 새 삭제 세대에 밀리면 로컬 파일이 남아 있어도 지운다 (파기 우선)', async () => {
+    // 위 "새로 넣은 파일은 지키기" 보호가 파기 의도를 무한히 되살리면 안 된다.
+    // 이미 복원을 시도한 키에 다른 기기가 **그 뒤 새 삭제 세대**를 올리면 삭제가 이긴다.
+    const key = 'student-photos/student-deleted-again-with-file.jpg';
+    const newerDeletion = {
+      deletedAt: '2026-08-24T10:00:00Z',
+      deletedBy: 'desktop-device',
+      deletionId: 'desktop-device:new-delete',
+    };
+    const remote = {
+      ...manifest({}, 'desktop-device'),
+      version: 2,
+      deletions: { [key]: newerDeletion },
+    };
+    const local = {
+      ...manifest({}, 'mobile-device'),
+      version: 2,
+      restorations: {
+        [key]: {
+          restoredAt: '2026-08-24T09:00:00Z',
+          restoredBy: 'mobile-device',
+          replacesDeletionId: 'mobile-device:old-delete',
+        },
+      },
+    };
+    const { storage } = makeStorage();
+    // 복원해 둔 로컬 파일이 실제로 존재한다 — 그래도 새 삭제 세대가 이겨야 한다.
+    vi.mocked(storage.readBinary).mockImplementation(async (relPath) =>
+      relPath === key ? new Uint8Array([5, 5, 5]) : null,
+    );
+    const { port } = makeDrive(remote, {});
+    const { repo, state: localState } = makeSyncRepo(local);
+
+    await new SyncFromCloud(
+      storage,
+      port,
+      repo,
+      'mobile-device',
+      '휴대폰',
+      'ask',
+      undefined,
+      async () => [key],
+    ).execute();
+
+    expect(storage.removeBinary).toHaveBeenCalledWith(key);
+    expect(localState.manifest?.deletions?.[key]).toEqual(newerDeletion);
+    expect(localState.manifest?.restorations?.[key]).toBeUndefined();
+  });
+
   it('삭제 시각이 같아도 더 새로운 원격 삭제 ID와 물리 세대를 로컬 장부에 반영한다', async () => {
     const key = 'student-photos/student-same-time-delete.jpg';
     const deletedAt = '2026-08-24T10:00:00Z';
@@ -2599,6 +2648,170 @@ describe('동적 파일 삭제 전파', () => {
       'note-body--page-1.json',
       '2026-08-24T08:00:00Z',
     );
+  });
+
+  it('★삭제 표식을 받기 전에 새로 넣은 학생 사진은 지우지 않고 복원 대기로 돌린다', async () => {
+    // 다른 기기가 08:00 에 지웠고, 이 기기는 그 표식을 받기 전 09:00 에 사진을 다시 넣었다.
+    // 표식을 그대로 적용하면 방금 넣은 사진이 조용히 사라진다.
+    const key = 'student-photos/student-readded.jpg';
+    const remoteDeletion = {
+      deletedAt: '2026-08-24T08:00:00Z',
+      deletedBy: 'desktop-device',
+      deletionId: 'desktop-device:delete-1',
+    };
+    const remote = {
+      ...manifest({}, 'desktop-device'),
+      version: 2,
+      deletions: { [key]: remoteDeletion },
+    };
+    // 로컬 장부에는 이 사진 항목이 없다 — 새로 넣고 아직 올리지 않은 상태.
+    const local = { ...manifest({}, 'mobile-device'), version: 2 };
+    const { storage } = makeStorage();
+    vi.mocked(storage.readBinary).mockImplementation(async (relPath) =>
+      relPath === key ? new Uint8Array([7, 7, 7]) : null,
+    );
+    const { port } = makeDrive(remote, {});
+    const { repo, state: localState } = makeSyncRepo(local);
+
+    await new SyncFromCloud(
+      storage,
+      port,
+      repo,
+      'mobile-device',
+      '휴대폰',
+      'ask',
+      undefined,
+      async () => [key],
+    ).execute();
+
+    expect(storage.removeBinary).not.toHaveBeenCalledWith(key);
+    expect(localState.manifest?.deletions?.[key]).toBeUndefined();
+    expect(localState.manifest?.restorations?.[key]?.replacesDeletionId).toBe(
+      'desktop-device:delete-1',
+    );
+    expect(localState.manifest?.restorations?.[key]?.completedAt).toBeUndefined();
+  });
+
+  it('★그렇게 지킨 사진은 다음 업로드에서 복원으로 올라가고 원격 표식을 해제한다', async () => {
+    const key = 'student-photos/student-readded-upload.jpg';
+    const bytes = new Uint8Array([7, 7, 7]);
+    const remoteDeletion = {
+      deletedAt: '2026-08-24T08:00:00Z',
+      deletedBy: 'desktop-device',
+      deletionId: 'desktop-device:delete-1',
+    };
+    const remote = {
+      ...manifest({}, 'desktop-device'),
+      version: 2,
+      deletions: { [key]: remoteDeletion },
+    };
+    const local = { ...manifest({}, 'mobile-device'), version: 2 };
+    const { storage } = makeStorage();
+    vi.mocked(storage.readBinary).mockImplementation(async (relPath) =>
+      relPath === key ? bytes : null,
+    );
+    const { port, state: remoteState } = makeDrive(remote, {});
+    const { repo, state: localState } = makeSyncRepo(local);
+
+    await new SyncFromCloud(
+      storage,
+      port,
+      repo,
+      'mobile-device',
+      '휴대폰',
+      'ask',
+      undefined,
+      async () => [key],
+    ).execute();
+
+    const afterDownload = localState.manifest;
+    expect(afterDownload?.restorations?.[key]).toBeDefined();
+
+    const result = await new SyncToCloud(
+      storage,
+      port,
+      repo,
+      'mobile-device',
+      '휴대폰',
+      undefined,
+      async () => [key],
+    ).execute();
+
+    expect(result.uploaded).toContain(key);
+    expect(remoteState.manifest?.deletions?.[key]).toBeUndefined();
+    expect(remoteState.manifest?.files[key]).toBeDefined();
+    expect(localState.manifest?.restorations?.[key]?.completedAt).toBeDefined();
+  });
+
+  it('마지막 동기화 그대로인 파일은 예정대로 지운다 — 파기는 계속 전파돼야 한다', async () => {
+    // 위 보호가 삭제 전파를 통째로 막지 않는지 확인한다.
+    const key = 'student-photos/student-untouched.jpg';
+    const bytes = new Uint8Array([1, 2, 3, 4]);
+    const wrapper = JSON.stringify({ __binaryBase64: 'AQIDBA==', __relPath: key });
+    const baseline = {
+      checksum: await computeSyncChecksum(wrapper),
+      lastModified: '2026-08-24T07:00:00Z',
+      size: wrapper.length,
+      uploadedBy: 'desktop-device',
+    };
+    const remote = {
+      ...manifest({}, 'desktop-device'),
+      version: 2,
+      deletions: {
+        [key]: {
+          deletedAt: '2026-08-24T08:00:00Z',
+          deletedBy: 'desktop-device',
+          deletionId: 'desktop-device:delete-1',
+        },
+      },
+    };
+    const local = { ...manifest({ [key]: baseline }, 'mobile-device'), version: 2 };
+    const { storage } = makeStorage();
+    vi.mocked(storage.readBinary).mockImplementation(async (relPath) =>
+      relPath === key ? bytes : null,
+    );
+    const { port } = makeDrive(remote, {});
+    const { repo, state: localState } = makeSyncRepo(local);
+
+    await new SyncFromCloud(
+      storage,
+      port,
+      repo,
+      'mobile-device',
+      '휴대폰',
+      'ask',
+      undefined,
+      async () => [key],
+    ).execute();
+
+    expect(storage.removeBinary).toHaveBeenCalledWith(key);
+    expect(localState.manifest?.restorations?.[key]).toBeUndefined();
+    expect(localState.manifest?.files[key]).toBeUndefined();
+  });
+
+  it('★삭제 표식을 받기 전에 새로 쓴 노트 본문도 지우지 않는다', async () => {
+    const key = 'note-body--page-readded';
+    const remote = {
+      ...manifest({}, 'desktop-device'),
+      version: 2,
+      deletions: {
+        [key]: {
+          deletedAt: '2026-08-24T08:00:00Z',
+          deletedBy: 'desktop-device',
+          deletionId: 'desktop-device:delete-note',
+        },
+      },
+    };
+    const local = { ...manifest({}, 'mobile-device'), version: 2 };
+    const { storage } = makeStorage({ [key]: { blocks: ['새로 쓴 본문'] } });
+    const { port } = makeDrive(remote, {});
+    const { repo, state: localState } = makeSyncRepo(local);
+
+    await new SyncFromCloud(storage, port, repo, 'mobile-device', '휴대폰', 'ask').execute();
+
+    expect(storage.remove).not.toHaveBeenCalledWith(key);
+    expect(localState.manifest?.deletions?.[key]).toBeUndefined();
+    expect(localState.manifest?.restorations?.[key]).toBeDefined();
   });
 
   it('삭제 장부 확정 뒤 파일 세대가 바뀌면 새 파일을 지우지 않는다', async () => {

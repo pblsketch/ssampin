@@ -978,6 +978,8 @@ export class SyncFromCloud {
       ...(remoteManifest.restorations ?? {}),
     };
     let staleRestorationRemoved = false;
+    /** 더 새로운 삭제 세대에 밀려 폐기된 복원 — 아래 삭제 보호에서 다시 살리지 않는다. */
+    const restorationsLostToNewerDeletion = new Set<string>();
     for (const [key, restoration] of Object.entries(updatedRestorations)) {
       const remoteDeletion = remoteManifest.deletions?.[key];
       if (restoration.completedAt) {
@@ -993,6 +995,7 @@ export class SyncFromCloud {
         driveSyncDeletionIdentity(remoteDeletion) !== restoration.replacesDeletionId
       ) {
         delete updatedRestorations[key];
+        restorationsLostToNewerDeletion.add(key);
         staleRestorationRemoved = true;
       } else {
         delete updatedDeletions[key];
@@ -1007,6 +1010,37 @@ export class SyncFromCloud {
       const isBinary = key.startsWith('obs-attachments/') || key.startsWith('student-photos/');
       const isDynamicJson = key.startsWith('note-body--');
       if (!isBinary && !isDynamicJson) continue;
+
+      // ★ 삭제도 3방향으로 판정한다.
+      //
+      // 다른 기기의 삭제 표식을 그대로 적용하면, **삭제 표식을 아직 받지 못한 사이에 이 기기가
+      // 새로 넣은 파일**(사진 다시 넣기, 첨부 다시 올리기)이 조용히 사라진다. 로컬 파일이
+      // 마지막 동기화 기준점(B)과 다르면 그것은 삭제 대상이던 그 파일이 아니라 **이 기기의 새
+      // 내용**이므로, 지우지 않고 복원(restoration)으로 돌려 다음 업로드에서 살려 올린다.
+      // 기준점과 같으면(= 지워진 그 파일 그대로) 예정대로 지운다 — 파기는 계속 전파돼야 한다.
+      const localBaselineChecksum = localManifest?.files[key]?.checksum ?? null;
+      const localCurrentChecksum = isBinary
+        ? await computeBinarySyncChecksum(key, await this.storage.readBinary(key))
+        : await this.readStoredChecksum(key);
+      if (
+        localCurrentChecksum !== null &&
+        localCurrentChecksum !== localBaselineChecksum &&
+        !isPendingRestoration(key) &&
+        // 이미 복원을 시도했는데 다른 기기가 **그 뒤 새 삭제 세대**를 올린 경우는 예외다.
+        // 파기 의도를 복원이 무한히 되살리면 지운 얼굴 사진이 계속 돌아온다(ADR-073 결정 3).
+        !restorationsLostToNewerDeletion.has(key)
+      ) {
+        updatedRestorations[key] = {
+          restoredAt: new Date().toISOString(),
+          restoredBy: this.deviceId,
+          replacesDeletionId: driveSyncDeletionIdentity(deletion),
+        };
+        delete updatedDeletions[key];
+        localManifestChanged = true;
+        skipped.push(key);
+        console.log(`[SyncFromCloud]   ${key}: DELETE skipped (로컬 새 내용 → 복원 대기)`);
+        continue;
+      }
 
       if (isBinary) await this.storage.removeBinary(key);
       else await this.storage.remove(key);

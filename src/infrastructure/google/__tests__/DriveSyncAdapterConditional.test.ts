@@ -515,6 +515,54 @@ describe('DriveSyncAdapter v2 네임스페이스', () => {
     expect(String(fetchMock.mock.calls[6]?.[0])).toContain('zz-mine');
   });
 
+  it('★최초 장부 생성이 쓰는 파일과 장부 읽기가 찾는 파일이 같다', async () => {
+    // SyncToCloud 는 논리 이름 'manifest.json' 으로 최초 장부를 만든다. 물리 이름 규칙이
+    // 어긋나면 "만들었는데 못 읽는" 상태가 되어 매 동기화가 장부를 새로 만들려 든다.
+    const initial = {
+      version: 2,
+      lastSyncedAt: EXPECTED,
+      deviceId: 'new-device',
+      deviceName: '새 기기',
+      files: {},
+    };
+    const createMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse({ files: [] }))
+      .mockResolvedValueOnce(
+        jsonResponse({ id: 'new-manifest', name: 'v2--manifest.json', modifiedTime: EXPECTED }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          files: [{ id: 'new-manifest', name: 'v2--manifest.json', modifiedTime: EXPECTED }],
+        }),
+      );
+    vi.stubGlobal('fetch', createMock);
+    const adapter = new DriveSyncAdapter(async () => 'test-token');
+
+    const created = await adapter.createSyncFileIfMissing(
+      'folder',
+      'manifest.json',
+      JSON.stringify(initial, null, 2),
+    );
+    expect(created).not.toBeNull();
+    const createdName = await (createMock.mock.calls[1]?.[1]?.body as Blob).text();
+    expect(createdName).toContain('"name":"v2--manifest.json"');
+
+    // 같은 이름을 getSyncManifest 가 찾는지 — 조회 질의에 그 이름이 들어가야 한다.
+    const readMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        jsonResponse({ files: [{ id: 'new-manifest', name: 'v2--manifest.json' }] }),
+      )
+      .mockResolvedValueOnce(new Response(JSON.stringify(initial), { status: 200 }));
+    vi.stubGlobal('fetch', readMock);
+
+    await expect(adapter.getSyncManifest('folder')).resolves.toEqual(initial);
+    expect(decodeURIComponent(String(readMock.mock.calls[0]?.[0]))).toContain(
+      "name='v2--manifest.json'",
+    );
+  });
+
   it('파일 목록에서 v2 파일만 논리 이름으로 돌려준다', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(
       jsonResponse({
