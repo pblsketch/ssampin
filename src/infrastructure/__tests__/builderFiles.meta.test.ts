@@ -64,19 +64,29 @@ const REQUIRED_NODE_MODULES_EXCLUSIONS = [
 ] as const;
 
 describe('electron-builder.yml 미사용 node_modules 배포 제외 보장', () => {
-  it.each(REQUIRED_NODE_MODULES_EXCLUSIONS)('files 섹션이 node_modules/%s 를 제외한다', (pkg) => {
-    const src = readElectronBuilderYml();
-    // `- '!node_modules/<pkg>/**'` — 따옴표/공백 변형 허용
-    const pattern = new RegExp(
-      `!\\s*node_modules/${pkg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/\\*\\*`,
-    );
-    expect(
-      pattern.test(src),
-      `electron-builder.yml files 섹션에 "!node_modules/${pkg}/**" 제외 규칙이 없습니다. ` +
-        '앱이 실행하지 않는 코드가 설치파일에 담겨 취약점 알림과 용량이 함께 늘어납니다. ' +
-        '정말 런타임에 필요해진 경우에만 이 테스트의 목록에서 항목을 빼세요.',
-    ).toBe(true);
-  });
+  it.each(REQUIRED_NODE_MODULES_EXCLUSIONS)(
+    'files 섹션이 **/node_modules/%s 를 제외한다',
+    (pkg) => {
+      const src = readElectronBuilderYml();
+      // `- '!**/node_modules/<pkg>/**'` — 따옴표/공백 변형 허용.
+      //
+      // '**/' 접두사를 강제하는 이유(2026-08-24): 'node_modules/x/**' 는 최상위 사본만 지운다.
+      // npm 은 버전 충돌·플랫폼별 optional 의존성 때문에 node_modules/<다른패키지>/node_modules/x
+      // 형태의 중첩 사본을 만드는데, 그건 규칙에 걸리지 않아 그대로 설치파일에 실렸다.
+      // macOS universal 빌드가 kordoc/node_modules/onnxruntime-node 의 dylib 때문에 실패하면서
+      // 드러났고, 그 전까지 Windows 설치파일에도 조용히 포함돼 있었다.
+      const pattern = new RegExp(
+        `!\\s*\\*\\*/node_modules/${pkg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/\\*\\*`,
+      );
+      expect(
+        pattern.test(src),
+        `electron-builder.yml files 섹션에 "!**/node_modules/${pkg}/**" 제외 규칙이 없습니다. ` +
+          '앱이 실행하지 않는 코드가 설치파일에 담겨 취약점 알림과 용량이 함께 늘어납니다. ' +
+          '"node_modules/…" 로만 쓰면 중첩 사본이 빠져나가니 "**/node_modules/…" 형태로 적으세요. ' +
+          '정말 런타임에 필요해진 경우에만 이 테스트의 목록에서 항목을 빼세요.',
+      ).toBe(true);
+    },
+  );
 });
 
 /**
