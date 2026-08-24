@@ -43,8 +43,10 @@ function isSameSlot(a: WeeklyProgressCell, b: WeeklyProgressCell): boolean {
  * 막는 경우마다 이유가 다르므로 문구도 나눈다.
  *  1. 출발 칸에 진도가 없다 — 옮길 것이 없다.
  *  2. 놓을 칸이 공강·자습이거나 반 매칭이 안 됐다 — 애초에 수업이 없는 자리다.
- *  3. 놓을 칸이 다른 반 수업이다 — 놓으면 캘린더에서 사라진다(위 주석 참조).
- *  4. 원래 있던 자리다 — 바뀌는 것이 없다. 화면이 출발 칸을 점선으로 밝히지 않도록 여기서 막는다.
+ *  3. 출발 칸에 여러 반의 진도가 섞여 있다 — 통째로 옮기면 어느 반이든 일부는 캘린더에서
+ *     사라진다. 대표 1건(entries[0])만 보고 판정하면 나머지 반 기록이 조용히 끌려간다.
+ *  4. 놓을 칸이 다른 반 수업이다 — 놓으면 캘린더에서 사라진다(위 주석 참조).
+ *  5. 원래 있던 자리다 — 바뀌는 것이 없다. 화면이 출발 칸을 점선으로 밝히지 않도록 여기서 막는다.
  */
 export function canDropProgressCell(
   source: WeeklyProgressCell,
@@ -56,7 +58,11 @@ export function canDropProgressCell(
   if (!target.matchedClass) {
     return { ok: false, reason: '수업이 없는 칸에는 놓을 수 없어요' };
   }
-  if (target.matchedClass.id !== source.entries[0]!.classId) {
+  const targetClassId = target.matchedClass.id;
+  if (source.entries.some((e) => e.classId !== source.entries[0]!.classId)) {
+    return { ok: false, reason: '여러 반의 진도가 섞인 칸이라 끌어서 옮길 수 없어요' };
+  }
+  if (!source.entries.every((e) => e.classId === targetClassId)) {
     return {
       ok: false,
       reason: `같은 반 수업 칸에만 놓을 수 있어요 (${target.matchedClass.name} 칸이에요)`,

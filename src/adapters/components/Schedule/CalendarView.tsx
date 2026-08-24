@@ -4,6 +4,7 @@ import { canMoveEventByDrag, getMultiDayBarsForWeek } from '@domain/rules/eventR
 import type { CalendarBar, WeekBarsResult } from '@domain/rules/eventRules';
 import { getColorsForCategory } from '@adapters/presenters/categoryPresenter';
 import { getHolidayMapForMonth } from '@domain/rules/holidayRules';
+import { columnIndexFromX } from './calendarDropColumn';
 
 const DAY_HEADERS = ['일', '월', '화', '수', '목', '금', '토'] as const;
 
@@ -315,12 +316,28 @@ export function CalendarView({
     드롭은 **주 한 줄 전체**가 받는다. 날짜 칸만 받게 하면 다일 바를 잡았을 때
     손이 이미 바 위(=칸 아래)에 있어서 위로 한참 올라와야 놓을 수 있다.
     가로 위치로 요일을 계산하면 줄 어디에 놓아도 의도한 날에 떨어진다.
+
+    요일 판정은 줄 너비 7 등분이 아니라 **실제 날짜 칸의 경계**로 한다 — 칸 사이 gap-x-1
+    때문에 등분 경계가 어긋나, 좁은 창에서 경계 근처 드롭이 하루 밀릴 수 있다. 계산 자체는
+    순수 함수(columnIndexFromX)에 있고 테스트가 잠근다.
   */
   const dayKeyFromX = useCallback((e: React.DragEvent<HTMLDivElement>, weekDays: CalendarDay[]) => {
+    const cells = e.currentTarget.querySelectorAll<HTMLElement>('[data-day-cell]');
+    const bounds = Array.from(cells, (cell) => {
+      const r = cell.getBoundingClientRect();
+      return { left: r.left, right: r.right };
+    });
+    const col = columnIndexFromX(e.clientX, bounds);
+    if (col !== null) return weekDays[col]?.dateKey ?? null;
+
+    // 칸을 못 쟀을 때(레이아웃 미확정 등)만 예전 등분 방식으로라도 받는다
     const rect = e.currentTarget.getBoundingClientRect();
     if (rect.width <= 0) return null;
-    const col = Math.min(6, Math.max(0, Math.floor(((e.clientX - rect.left) / rect.width) * 7)));
-    return weekDays[col]?.dateKey ?? null;
+    const fallbackCol = Math.min(
+      6,
+      Math.max(0, Math.floor(((e.clientX - rect.left) / rect.width) * 7)),
+    );
+    return weekDays[fallbackCol]?.dateKey ?? null;
   }, []);
 
   const handleWeekDragOver = useCallback(
@@ -459,6 +476,7 @@ export function CalendarView({
                   return (
                     <div
                       key={dayIdx}
+                      data-day-cell
                       className={cellClass}
                       onClick={() => onSelectDate(d.date)}
                       title={d.holidayName ?? undefined}

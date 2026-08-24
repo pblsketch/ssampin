@@ -68,6 +68,14 @@ export interface ProgressShiftPlan {
   /** 학기 밖으로 밀려나 옮기지 못하는 건수 */
   readonly overflowCount: number;
   /**
+   * 옮길 것 중 **다른 반에 같은 단원·차시 기록이 있는** 건수.
+   *
+   * 여러 반 동시 기록(팬아웃, ADR-044)의 사본에는 표식이 없어 내용이 같은지로 짐작만 한다.
+   * 판정에는 쓰지 않고, 화면이 "밀기는 이 반만 밀린다"를 미리 알리는 데만 쓴다 — 반마다
+   * 시간표가 달라 사본을 같이 밀 수는 없고, 말없이 이 반만 밀면 기대와 어긋나기 때문이다.
+   */
+  readonly otherClassCopyCount: number;
+  /**
    * 민 뒤에 이 반의 진도가 2건 이상 겹치게 되는 자리들.
    *
    * 밀기를 막지는 않지만 숨기지도 않는다(위 주석 참조). 이미 겹쳐 있던 자리도 잡히므로,
@@ -134,25 +142,38 @@ export function planProgressShift(input: ProgressShiftInput): ProgressShiftPlan 
     .sort((a, b) => slotKey(a).localeCompare(slotKey(b)));
 
   if (moving.length === 0 || steps <= 0) {
-    return { rows: [], moved: [], overflowCount: 0, collisions: [] };
+    return { rows: [], moved: [], overflowCount: 0, otherClassCopyCount: 0, collisions: [] };
   }
 
   // 옮기지 않기로 한 항목(완료·미실시)이 앉아 있는 자리는 후보에서 뺀다.
   const held = new Set(atOrAfter.filter((e) => e.status !== 'planned').map((e) => slotKey(e)));
 
-  const available = flattenSlots(input.lessonDays).filter(
-    (s) => slotKey(s) >= anchorKey && !held.has(slotKey(s)),
-  );
+  const allSlots = flattenSlots(input.lessonDays);
+  const lessonSlotKeys = new Set(allSlots.map(slotKey));
+  const available = allSlots.filter((s) => slotKey(s) >= anchorKey && !held.has(slotKey(s)));
   const indexOfSlot = new Map(available.map((s, i) => [slotKey(s), i]));
 
   const rows: ProgressShiftRow[] = moving.map((entry) => {
     const from: LessonSlot = { date: entry.date, period: entry.period };
-    const current = indexOfSlot.get(slotKey(entry));
+    const key = slotKey(entry);
+    let current = indexOfSlot.get(key);
+    let stepsFromHere = steps;
     if (current === undefined) {
-      // 시간표가 바뀌어 지금 자리가 학기 수업일에 없다 — 어디로 밀지 정할 근거가 없다.
-      return { entry, from, to: null, blocked: 'noSlot' };
+      if (!lessonSlotKeys.has(key)) {
+        // 시간표가 바뀌어 지금 자리가 학기 수업일에 없다 — 어디로 밀지 정할 근거가 없다.
+        return { entry, from, to: null, blocked: 'noSlot' };
+      }
+      // 완료·미실시가 차지한 자리에 겹쳐 있는 '예정'이다. 자기 자리는 held 라 색인에 없지만
+      // 시간표상 실제 수업 자리이므로 옮길 근거는 있다 — 'noSlot'("수업일 아님")으로 보내면
+      // 원인과 문구가 어긋난다. 뒤쪽 첫 빈 자리를 "한 칸 민 자리"로 삼아 이어서 센다.
+      const firstAfter = available.findIndex((s) => slotKey(s) > key);
+      if (firstAfter === -1) {
+        return { entry, from, to: null, blocked: 'pastTermEnd' };
+      }
+      current = firstAfter;
+      stepsFromHere = steps - 1;
     }
-    const target = available[current + steps];
+    const target = available[current + stepsFromHere];
     if (!target) {
       return { entry, from, to: null, blocked: 'pastTermEnd' };
     }
@@ -180,10 +201,23 @@ export function planProgressShift(input: ProgressShiftInput): ProgressShiftPlan 
   }
   collisions.sort((a, b) => slotKey(a).localeCompare(slotKey(b)));
 
+  // 다른 반에 같은 단원·차시가 있는지 — 팬아웃 사본 짐작용(위 otherClassCopyCount 주석 참조).
+  // 단원·차시가 둘 다 빈 항목은 아무하고나 겹치므로 세지 않는다.
+  const contentKey = (e: ProgressEntry): string => `${e.unit}#${e.lesson}`;
+  const otherClassContents = new Set(
+    input.entries
+      .filter((e) => e.classId !== input.classId && (e.unit !== '' || e.lesson !== ''))
+      .map(contentKey),
+  );
+  const otherClassCopyCount = moved.filter(
+    (e) => (e.unit !== '' || e.lesson !== '') && otherClassContents.has(contentKey(e)),
+  ).length;
+
   return {
     rows,
     moved,
     overflowCount: rows.filter((r) => r.to === null).length,
+    otherClassCopyCount,
     collisions,
   };
 }

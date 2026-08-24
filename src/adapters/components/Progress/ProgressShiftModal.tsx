@@ -179,6 +179,23 @@ export function ProgressShiftModal({
           </p>
         )}
 
+        {/*
+          여러 반 동시 기록(팬아웃)의 사본은 반마다 시간표가 달라 같이 밀 수 없다.
+          말없이 이 반만 밀면 "다른 반도 밀렸겠지"라는 기대와 어긋나므로 미리 알린다.
+        */}
+        {plan.otherClassCopyCount > 0 && (
+          <p className="mt-2 flex items-start gap-1.5 rounded-lg border border-dashed border-sp-border px-3 py-2 text-xs leading-relaxed text-sp-muted">
+            <span aria-hidden className="material-symbols-outlined text-sm">
+              groups
+            </span>
+            <span>
+              다른 반에도 함께 기록한 차시가 있어요.{' '}
+              <b className="font-semibold text-sp-text">밀기는 이 반만 밀려요</b> — 다른 반도 밀어야
+              하면 그 반 칸에서 따로 밀어 주세요.
+            </span>
+          </p>
+        )}
+
         {movable === 0 && (
           <p className="mt-2 rounded-lg border border-dashed border-sp-border px-3 py-2 text-xs text-sp-muted">
             옮길 차시가 없어요. 이 차시 뒤에 &lsquo;예정&rsquo;이 없거나, 남은 수업일이 없어요.

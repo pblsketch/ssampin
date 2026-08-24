@@ -93,6 +93,47 @@ describe('planProgressShift', () => {
     expect(plan.moved).toEqual([]);
   });
 
+  it("'완료'와 같은 칸에 겹친 '예정'은 noSlot 이 아니라 다음 빈 수업일로 밀린다", () => {
+    // 08-19 에 완료와 예정이 겹쳐 있다 — 예정의 자리는 held 지만 실제 수업 자리다.
+    // '수업일 아님'(noSlot)으로 보내면 원인과 문구가 어긋난다.
+    const plan = shift([e('done', '2026-08-19', 2, 'completed'), e('stacked', '2026-08-19', 2)]);
+    expect(plan.rows[0]?.blocked).toBeUndefined();
+    expect(plan.moved.map((m) => `${m.id}@${m.date}:${m.period}`)).toEqual([
+      'stacked@2026-08-24:1',
+    ]);
+  });
+
+  it('겹친 예정도 두 칸 이상(steps) 밀 수 있다', () => {
+    const plan = planProgressShift({
+      entries: [e('done', '2026-08-19', 2, 'completed'), e('stacked', '2026-08-19', 2)],
+      classId: 'c1',
+      from: { date: '2026-08-17', period: 1 },
+      lessonDays: LESSON_DAYS,
+      steps: 2,
+    });
+    expect(plan.moved.map((m) => `${m.id}@${m.date}`)).toEqual(['stacked@2026-08-26']);
+  });
+
+  it('겹친 예정 뒤에 빈 수업일이 없으면 noSlot 이 아니라 학기 밖(pastTermEnd)이다', () => {
+    const plan = shift([e('done', '2026-08-31', 1, 'completed'), e('stacked', '2026-08-31', 1)]);
+    expect(plan.rows[0]?.blocked).toBe('pastTermEnd');
+    expect(plan.moved).toEqual([]);
+  });
+
+  it('겹친 예정이 밀리면 그 뒤 예정과의 자리 배분도 이어진다', () => {
+    // 08-17 완료+예정 겹침, 08-19 에 별도 예정 — 겹친 것이 08-19 로 가면 그 자리 예정은 08-24 로.
+    const plan = shift([
+      e('done', '2026-08-17', 1, 'completed'),
+      e('stacked', '2026-08-17', 1),
+      e('next', '2026-08-19', 2),
+    ]);
+    expect(plan.moved.map((m) => `${m.id}@${m.date}`)).toEqual([
+      'stacked@2026-08-19',
+      'next@2026-08-24',
+    ]);
+    expect(plan.collisions).toEqual([]);
+  });
+
   it('다른 반 진도는 대상이 아니다', () => {
     const other = { ...e('x', '2026-08-17', 1), classId: 'c2' };
     const plan = shift([other, e('mine', '2026-08-19', 2)]);
@@ -144,6 +185,26 @@ describe('planProgressShift', () => {
       { ...e('c', '2026-08-31', 1), id: 'c' },
     ]);
     expect(plan.collisions.filter((c) => c.date === '2026-08-31')).toHaveLength(1);
+  });
+
+  it('다른 반에 같은 단원·차시가 있으면(팬아웃 사본 짐작) 건수를 알려 준다', () => {
+    // '1차시'가 c2 반에도 있다 — 화면이 "이 반만 밀린다"를 미리 알리는 데 쓴다.
+    const copy = { ...e('1', '2026-08-18', 3), id: 'copy', classId: 'c2' };
+    const plan = shift([e('1', '2026-08-17', 1), e('2', '2026-08-19', 2), copy]);
+    expect(plan.otherClassCopyCount).toBe(1);
+  });
+
+  it('다른 반에 같은 내용이 없으면 사본 건수는 0 이다', () => {
+    const other = { ...e('x', '2026-08-18', 3), classId: 'c2', lesson: '전혀 다른 차시' };
+    const plan = shift([e('1', '2026-08-17', 1), other]);
+    expect(plan.otherClassCopyCount).toBe(0);
+  });
+
+  it('단원·차시가 둘 다 빈 항목은 사본으로 세지 않는다 (아무하고나 겹치므로)', () => {
+    const blankMine = { ...e('1', '2026-08-17', 1), unit: '', lesson: '' };
+    const blankOther = { ...e('x', '2026-08-18', 3), classId: 'c2', unit: '', lesson: '' };
+    const plan = shift([blankMine, blankOther]);
+    expect(plan.otherClassCopyCount).toBe(0);
   });
 
   it('내용·상태는 그대로 두고 날짜·교시만 바꾼다', () => {

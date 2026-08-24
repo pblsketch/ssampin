@@ -71,6 +71,21 @@ describe('canDropProgressCell', () => {
     expect(canDropProgressCell(source(), source()).ok).toBe(false);
   });
 
+  it('여러 반 진도가 섞인 칸은 옮길 수 없다 — 대표 1건만 보면 다른 반 기록이 통째로 끌려간다', () => {
+    const mixed = source([entry(), entry({ id: 'e2', classId: 'b' })]);
+    const result = canDropProgressCell(mixed, target());
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.reason).toContain('섞인 칸');
+    // 계획 계산도 같은 판정을 거치므로 null 이어야 한다
+    expect(planProgressMove(mixed, target())).toBeNull();
+  });
+
+  it('대표 1건만 다른 반이어도(entries[0]가 우연히 일치) 끌려가지 않는다', () => {
+    // entries[0] 이 도착 반과 일치하는 배치 — 예전 판정(entries[0]만 확인)이 놓치던 경우
+    const mixed = source([entry(), entry({ id: 'e2', classId: 'b' })]);
+    expect(canDropProgressCell(mixed, target({ matchedClass: CLASS_A })).ok).toBe(false);
+  });
+
   it('날짜가 같아도 교시가 다르면 놓을 수 있다', () => {
     expect(canDropProgressCell(source(), target({ date: '2026-08-17', period: 5 })).ok).toBe(true);
   });

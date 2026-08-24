@@ -33,6 +33,7 @@ import { BulkDeleteByDateRangeModal } from './BulkDeleteByDateRangeModal';
 import { DuplicateCleanupModal } from './DuplicateCleanupModal';
 import { HiddenEventsModal } from './HiddenEventsModal';
 import { getRestorableHiddenEvents } from '@domain/rules/hiddenEventRules';
+import { planEventRemoval } from './eventRemovalPolicy';
 import { useCalendarSyncStore } from '@adapters/stores/useCalendarSyncStore';
 import { useNeisScheduleStore } from '@adapters/stores/useNeisScheduleStore';
 import { GoogleBadge } from '@adapters/components/Calendar/GoogleBadge';
@@ -319,14 +320,11 @@ export function Schedule() {
   function handleDeleteEvent(id: string) {
     // NEIS 일정은 지우지 않고 숨긴다 — 지워도 다음 동기화에 되살아나기 때문이다.
     // 숨긴 이유를 남겨야 "숨긴 일정 다시 보기"에서 중복 정리로 접힌 것과 구분해 보여 줄 수 있다.
-    const event = events.find((e) => e.id === id);
-    if (event?.source === 'neis') {
-      void updateEvent({
-        ...event,
-        isHidden: true,
-        hiddenReason: 'manual',
-        hiddenAt: new Date().toISOString(),
-      });
+    // 숨김은 반드시 hideManyEvents 로 — updateEvent 는 구글 푸시를 함께 타서, 아직 구글에
+    // 올라간 적 없는 NEIS 일정이면 구글 캘린더에 사본이 새로 생긴다(eventRemovalPolicy 참조).
+    const removal = planEventRemoval(events.find((e) => e.id === id));
+    if (removal.kind === 'hide') {
+      void hideManyEvents([id], removal.reason);
       return;
     }
     void deleteEvent(id);
