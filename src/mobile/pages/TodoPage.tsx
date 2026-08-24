@@ -3,7 +3,7 @@ import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { useMobileTodoStore } from '@mobile/stores/useMobileTodoStore';
 import { useMobileUiTriggerStore } from '@mobile/stores/useMobileUiTriggerStore';
-import { filterActive, filterArchived, groupByDate } from '@domain/rules/todoRules';
+import { filterActive, filterArchived, groupByDate, sortTodos } from '@domain/rules/todoRules';
 import { AddTodoModal } from './todo/AddTodoModal';
 import { TodoItem } from './todo/TodoItem';
 import { EmptyState } from '@mobile/components/common/EmptyState';
@@ -74,9 +74,13 @@ export function TodoPage() {
   const active = filterActive(todos);
   const archived = filterArchived(todos);
 
-  // 활성: 미완료 먼저, 완료 뒤
-  const incomplete = active.filter((t) => !t.completed);
-  const completed = active.filter((t) => t.completed);
+  // 활성: 미완료 먼저, 완료 뒤.
+  // 같은 묶음 안의 순서는 도메인 정본(sortTodos)에 맡긴다 — 수동 순서(sortOrder) →
+  // 우선순위 → 마감일. 예전에는 저장 파일 순서 그대로라 PC와 위아래가 달랐다.
+  // groupByDate 는 구간만 나누고 정렬은 하지 않으므로, 넣기 전에 정렬해야 한다.
+  const activeSorted = sortTodos(active);
+  const incomplete = activeSorted.filter((t) => !t.completed);
+  const completed = activeSorted.filter((t) => t.completed);
   const sorted = [...incomplete, ...completed];
 
   // 미완료만 마감 기준으로 묶는다. 완료는 아래 별도 묶음으로 보여준다.

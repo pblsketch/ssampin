@@ -14,6 +14,7 @@ import {
   shouldPropagateToSibling,
   unarchiveTeachingClass,
 } from '@domain/rules/teachingClassArchive';
+import { sortTeachingClasses } from '@domain/rules/teachingClassOrder';
 import type { OddColumnMode } from '@domain/rules/seatingLayoutRules';
 import type { ProgressEntry, ProgressStatus } from '@domain/entities/CurriculumProgress';
 import type {
@@ -36,15 +37,11 @@ function migrateStudentStatus(student: TeachingClassStudent): TeachingClassStude
   return normalizeStudentStatus(student);
 }
 
-/** order → createdAt 순 정렬 (load와 재정렬·복원이 같은 규칙을 쓴다). */
-function sortClasses(list: readonly TeachingClass[]): TeachingClass[] {
-  return [...list].sort((a, b) => {
-    const orderA = a.order ?? Infinity;
-    const orderB = b.order ?? Infinity;
-    if (orderA !== orderB) return orderA - orderB;
-    return a.createdAt.localeCompare(b.createdAt);
-  });
-}
+/**
+ * order → createdAt 순 정렬 (load와 재정렬·복원이 같은 규칙을 쓴다).
+ * 규칙 본체는 도메인에 있고 모바일 스토어와 같은 함수를 공유한다.
+ */
+const sortClasses = sortTeachingClasses;
 
 /** targetId가 가리키는 클래스를 포함하여 같은 groupId를 가진 모든 클래스 id 목록. groupId 없으면 단일. */
 function getGroupClassIds(classes: readonly TeachingClass[], classId: string): string[] {

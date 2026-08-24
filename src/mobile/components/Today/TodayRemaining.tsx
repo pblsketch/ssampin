@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useMobileTodoStore } from '@mobile/stores/useMobileTodoStore';
-import { filterActive, groupByDate } from '@domain/rules/todoRules';
+import { filterActive, groupByDate, sortTodos } from '@domain/rules/todoRules';
 
 interface Props {
   /** 아직 출결을 입력하지 않은 수업 수 (0이면 줄이 뜨지 않는다) */
@@ -36,7 +36,8 @@ export function TodayRemaining({
     void loadTodos();
   }, [loadTodos]);
 
-  const active = filterActive(todos).filter((t) => !t.completed);
+  // groupByDate 는 구간만 나눈다 — 구간 안 순서는 도메인 정본을 거쳐야 PC와 같다.
+  const active = sortTodos(filterActive(todos).filter((t) => !t.completed));
   const groups = groupByDate(active);
   const overdue = groups.overdue ?? [];
   const dueToday = groups.today ?? [];

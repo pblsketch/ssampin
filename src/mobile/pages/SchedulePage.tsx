@@ -7,6 +7,7 @@ import { useBottomSheet } from '@mobile/hooks/useBottomSheet';
 import { Toggle } from '@mobile/components/common/Toggle';
 import { EmptyState } from '@mobile/components/common/EmptyState';
 import type { SchoolEvent, CategoryItem } from '@domain/entities/SchoolEvent';
+import { getVisibleEvents, sortByDate } from '@domain/rules/eventRules';
 import {
   format,
   startOfMonth,
@@ -147,12 +148,14 @@ export function SchedulePage() {
   const today = startOfDay(new Date());
 
   // Visible (non-hidden) events
-  const visibleEvents = events.filter((e) => !e.isHidden);
+  const visibleEvents = getVisibleEvents(events);
 
   // Events for a given day
   const eventsOnDay = useCallback(
     (day: Date): readonly SchoolEvent[] =>
-      visibleEvents.filter((e) => isSameDay(new Date(e.date), day)),
+      // 같은 날 안의 순서는 사용자가 PC에서 정할 수 있다(sortOrder). 도메인 규칙을
+      // 거쳐야 PC 목록과 위아래가 같아진다.
+      sortByDate(visibleEvents.filter((e) => isSameDay(new Date(e.date), day))),
     [visibleEvents],
   );
 
@@ -165,14 +168,14 @@ export function SchedulePage() {
     }
     // Upcoming (current month): only today and after
     // Past/future month: full month
-    return [...visibleEvents]
-      .filter((e) => {
+    return sortByDate(
+      visibleEvents.filter((e) => {
         const eventDate = new Date(e.date);
         if (!isSameMonth(eventDate, currentMonth)) return false;
         if (isViewingCurrentMonth) return eventDate >= today;
         return true;
-      })
-      .sort((a, b) => a.date.localeCompare(b.date));
+      }),
+    );
   })();
 
   /**
