@@ -68,6 +68,17 @@ const TITLE_MAX = 100;
 /** 한 번에 내려보내는 글 수 — 목록이 무한정 커지지 않게 */
 const PAGE_SIZE = 100;
 
+/**
+ * 첨부 파일 id 는 **UUID 모양만** 통과시킨다.
+ * 아무 문자열이나 `.in('id', …)` 에 넣으면 Postgres 22P02(uuid 형식 오류)로 터져
+ * 정상 검사보다 앞서 500 이 된다 — 서버는 앱이 보낸 값을 믿지 않는다.
+ */
+const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function normalizeFileIds(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((v: unknown): v is string => typeof v === 'string' && UUID_SHAPE.test(v));
+}
+
 /** 본문에서 부른 사람 중 **실제 이 부서 멤버만** 남긴다 (아무 이메일이나 못 넣게) */
 function validMentions(raw: unknown, members: readonly MemberRow[]): string[] {
   if (!Array.isArray(raw)) return [];
@@ -281,13 +292,20 @@ serve(async (req: Request) => {
       const bodyFormat = normalizeBodyFormat(body?.bodyFormat);
       const isRequired = body?.isRequired === true;
       const tags = normalizeTags(body?.tags);
+
+      // 입력 오류(제목)를 파일·말머리 확인보다 **먼저** 본다 — 흔한 오류가 흔한 답을 받는다.
+      if (!title) return errorResponse('제목을 입력해주세요', 400);
+      if (title.length > TITLE_MAX) {
+        return errorResponse(`제목은 ${TITLE_MAX}자까지 쓸 수 있습니다`, 400);
+      }
+
       // 붙이려는 파일이 이 부서 자료실 것인지 서버가 확인한다. 이름도 여기서
       // 읽어 온다 — 앱이 보낸 이름을 믿으면 엉뚱한 이름이 박힌다(055).
+      // ★UUID 모양만 통과시킨다 — 아무 문자열이나 .in() 에 넣으면 Postgres 22P02 로
+      //   터져 500("글을 올리지 못했습니다")이 된다. 서버는 앱을 믿지 않는다.
       const attachFiles = await resolveDepartmentFiles(
         db,
-        Array.isArray(body?.fileIds)
-          ? body.fileIds.filter((v: unknown) => typeof v === 'string')
-          : [],
+        normalizeFileIds(body?.fileIds),
         departmentId,
       );
 
@@ -300,11 +318,6 @@ serve(async (req: Request) => {
           return errorResponse('이 부서의 말머리가 아닙니다', 403);
         }
         categoryId = rawCategoryId;
-      }
-
-      if (!title) return errorResponse('제목을 입력해주세요', 400);
-      if (title.length > TITLE_MAX) {
-        return errorResponse(`제목은 ${TITLE_MAX}자까지 쓸 수 있습니다`, 400);
       }
 
       // 필독은 관리자만 — 필독 글에만 사람별 읽음이 쌓이므로 아무나 지정하면 안 된다
@@ -377,6 +390,20 @@ serve(async (req: Request) => {
         .eq('module_id', moduleId)
         .eq('author_email', identity.email);
 
+      // ★응답용 태그·첨부 되읽기도 실패할 수 있다 — 여기서 throw 로 흘러나가면 글은
+      //   이미 저장됐는데 실패로 보인다(거짓 실패). 다시 누르면 중복 저장으로 이어진다.
+      //   저장이 성공한 뒤에는 500 을 내지 않는다.
+      let responseTags: string[] = [];
+      let responseAttachments: ReturnType<typeof toAttachmentResponse>[] = [];
+      try {
+        responseTags = (await loadTagsByPost(db, [post.id])).get(post.id) ?? [];
+        responseAttachments = ((await loadAttachmentsByPost(db, [post.id])).get(post.id) ?? []).map(
+          toAttachmentResponse,
+        );
+      } catch (loadError) {
+        console.error('[staffroom-posts] 응답용 태그·첨부 조회 실패:', loadError);
+      }
+
       return jsonResponse({
         post: {
           ...toPostSummaryResponse(post, names, {
@@ -386,10 +413,8 @@ serve(async (req: Request) => {
           }),
           body: post.body,
           bodyFormat: normalizeBodyFormat(post.body_format),
-          tags: (await loadTagsByPost(db, [post.id])).get(post.id) ?? [],
-          attachments: ((await loadAttachmentsByPost(db, [post.id])).get(post.id) ?? []).map(
-            toAttachmentResponse,
-          ),
+          tags: responseTags,
+          attachments: responseAttachments,
           mentionedEmails: mentions,
         },
       });
@@ -434,11 +459,10 @@ serve(async (req: Request) => {
       // 그대로 보인다.
       const bodyFormat = normalizeBodyFormat(body?.bodyFormat);
       const tags = normalizeTags(body?.tags);
+      // create 와 같은 이유 — UUID 모양만 .in() 에 넣는다.
       const attachFiles = await resolveDepartmentFiles(
         db,
-        Array.isArray(body?.fileIds)
-          ? body.fileIds.filter((v: unknown) => typeof v === 'string')
-          : [],
+        normalizeFileIds(body?.fileIds),
         departmentId,
       );
 
@@ -500,6 +524,20 @@ serve(async (req: Request) => {
       }
 
       const post = updated as PostRow;
+      // ★응답용 태그·첨부 되읽기도 실패할 수 있다 — 여기서 throw 로 흘러나가면 글은
+      //   이미 저장됐는데 실패로 보인다(거짓 실패). 다시 누르면 중복 저장으로 이어진다.
+      //   저장이 성공한 뒤에는 500 을 내지 않는다.
+      let responseTags: string[] = [];
+      let responseAttachments: ReturnType<typeof toAttachmentResponse>[] = [];
+      try {
+        responseTags = (await loadTagsByPost(db, [post.id])).get(post.id) ?? [];
+        responseAttachments = ((await loadAttachmentsByPost(db, [post.id])).get(post.id) ?? []).map(
+          toAttachmentResponse,
+        );
+      } catch (loadError) {
+        console.error('[staffroom-posts] 응답용 태그·첨부 조회 실패:', loadError);
+      }
+
       return jsonResponse({
         post: {
           ...toPostSummaryResponse(post, names, {
@@ -509,10 +547,8 @@ serve(async (req: Request) => {
           }),
           body: post.body,
           bodyFormat: normalizeBodyFormat(post.body_format),
-          tags: (await loadTagsByPost(db, [post.id])).get(post.id) ?? [],
-          attachments: ((await loadAttachmentsByPost(db, [post.id])).get(post.id) ?? []).map(
-            toAttachmentResponse,
-          ),
+          tags: responseTags,
+          attachments: responseAttachments,
           mentionedEmails: mentions,
         },
       });

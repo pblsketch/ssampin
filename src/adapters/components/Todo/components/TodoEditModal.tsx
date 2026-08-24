@@ -133,6 +133,8 @@ export function TodoEditModal({ todo, categories, onUpdate, onClose }: TodoEditM
     if (Object.keys(changes).length > 0) {
       onUpdate(
         todo.id,
+        // 단언 목록에 checkAt·relatedStaff 를 빠뜨리면, 하위 계층에서 두 필드 지원이
+        // 빠져도 타입 검사가 못 잡는다 — 실제로 changes 에 담는 필드 전부를 적는다.
         changes as Partial<
           Pick<
             Todo,
@@ -142,6 +144,8 @@ export function TodoEditModal({ todo, categories, onUpdate, onClose }: TodoEditM
             | 'dueDate'
             | 'startDate'
             | 'time'
+            | 'checkAt'
+            | 'relatedStaff'
             | 'status'
             | 'recurrence'
           >

@@ -300,6 +300,13 @@ export const useStaffRoomBoardStore = create<StaffRoomBoardState>((set, get) => 
       set({ error: '제목을 입력해주세요.' });
       return false;
     }
+    // ★자동 저장 타이머를 먼저 끊는다 (2026-08-24 UltraQA) — 마지막 글자를 치고 1.5초
+    //   안에 [올리기]를 누르면, 게시 처리 중 타이머가 발화해 방금 올린 내용이 임시저장으로
+    //   부활한다. 다음 글쓰기에 "쓰시던 글"로 떠서 같은 글이 두 번 올라가는 길이 된다.
+    if (draftTimer) {
+      clearTimeout(draftTimer);
+      draftTimer = null;
+    }
     set({ isLoading: true, error: null });
     const token = await getGoogleToken();
     if (!token) {
@@ -339,6 +346,11 @@ export const useStaffRoomBoardStore = create<StaffRoomBoardState>((set, get) => 
     if (!input.title.trim()) {
       set({ error: '제목을 입력해주세요.' });
       return false;
+    }
+    // writePost 와 같은 이유 — 고치기 저장 중에도 임시저장 타이머가 발화하면 안 된다.
+    if (draftTimer) {
+      clearTimeout(draftTimer);
+      draftTimer = null;
     }
     set({ isLoading: true, error: null });
     const token = await getGoogleToken();

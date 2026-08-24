@@ -34,6 +34,8 @@ export interface ReminderPersistedState {
   readonly todo: readonly ReminderScheduleItem[];
   /** 발화 이력 — 재시작 후 같은 알림이 또 울리는 것을 막는다 */
   readonly fired: readonly FiredEntry[];
+  /** 할 일 하루 발화 상한 (0 = 제한 없음, null/없음 = 모름 → 집행 안 함) */
+  readonly todoDailyCap?: number | null;
   /** 저장 시각 (Unix ms) */
   readonly savedAt: number;
 }
@@ -83,11 +85,16 @@ export function readReminderState(now: number): ReminderPersistedState {
   const obj = parsed as Record<string, unknown>;
   const todoRaw = obj['todo'];
   const firedRaw = obj['fired'];
+  const capRaw = obj['todoDailyCap'];
   const savedAt = typeof obj['savedAt'] === 'number' ? obj['savedAt'] : 0;
 
   return {
     todo: Array.isArray(todoRaw) ? todoRaw.filter(isValidItem) : [],
     fired: pruneFiredLedger(Array.isArray(firedRaw) ? firedRaw.filter(isFiredEntry) : [], now),
+    todoDailyCap:
+      typeof capRaw === 'number' && Number.isFinite(capRaw) && capRaw >= 0
+        ? Math.floor(capRaw)
+        : null,
     savedAt,
   };
 }

@@ -72,9 +72,10 @@ vi.mock('@adapters/stores/useCoolImportHistoryStore', () => ({
   ),
 }));
 
-const { CoolImportBanner } = await import('./CoolImportBanner');
+const { CoolImportBanner, resetCoolImportBannerSessionCache } = await import('./CoolImportBanner');
 
 beforeEach(() => {
+  resetCoolImportBannerSessionCache(); // 세션당 1회 캐시 — 테스트끼리는 격리한다
   settingsState.settings = { coolMessengerImportEnabled: true };
   historyState.history = { records: [] };
   historyState.bannerDismissed = false; // 앞 테스트의 '나중에'가 남지 않게

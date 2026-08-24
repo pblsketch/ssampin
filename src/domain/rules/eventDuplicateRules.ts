@@ -25,8 +25,9 @@ export interface DuplicateEventGroup {
  * 어느 쪽을 남길지 정하는 우선순위. 숫자가 작을수록 남긴다.
  *
  * 선생님이 직접 등록한 일정은 **절대 자동으로 접지 않는다** — 사본이 아니라 원본이다.
- * NEIS 학사일정과 구글 사본만 접기 대상이고, 둘 중에서는 NEIS 를 남긴다(구글 사본은
- * 쌤핀이 올려 보낸 것의 메아리라 원본이 아니다).
+ * ★NEIS 학사일정도 접지 않는다 (2026-08-24 UltraQA) — NEIS 일정을 접으면 수업일수
+ * 계산(`lessonCountViewParts`)에서 그날이 조용히 빠지고, 마지막 수업일·진도 밀기의
+ * 경계가 함께 틀어진다. 접기 대상은 **구글 사본(쌤핀이 올려 보낸 것의 메아리)뿐**이다.
  */
 function ownershipRank(event: SchoolEvent): number {
   if (event.source === 'neis' || event.neis?.eventId) return 1;
@@ -41,7 +42,18 @@ function normalizeTitle(title: string): string {
 
 /** 같은 일정으로 볼지 판정하는 묶음 키. */
 function groupKey(event: SchoolEvent): string {
-  return [event.date, event.endDate ?? '', event.time ?? '', normalizeTitle(event.title)].join('|');
+  return [
+    event.date,
+    event.endDate ?? '',
+    event.time ?? '',
+    normalizeTitle(event.title),
+    // ★장소·설명이 다르면 다른 일정이다 (2026-08-24 UltraQA) — 같은 날 09:00
+    //   "학부모 상담"이 학부모별로 두 건일 수 있다. 제목·시간만 보고 하나로 접으면
+    //   멀쩡한 일정이 사라져 보인다. (사본을 놓칠 수는 있지만, 놓친 사본은 눈에 보이고
+    //   잘못 접힌 원본은 안 보인다.)
+    (event.location ?? '').trim(),
+    (event.description ?? '').trim(),
+  ].join('|');
 }
 
 /**
@@ -85,8 +97,9 @@ export function findDuplicateEventGroups(
     // 순위가 같으면 원래 순서를 유지한다 (먼저 들어온 것을 남긴다).
     const sorted = [...bucket].sort((a, b) => ownershipRank(a) - ownershipRank(b));
     const keep = sorted[0]!;
-    // 남길 것보다 순위가 낮은(= 접어도 되는) 것만 대상. 같은 순위의 선생님 원본은 건드리지 않는다.
-    const duplicates = sorted.slice(1).filter((e) => ownershipRank(e) > 0);
+    // ★접는 것은 구글 사본(rank 2)뿐이다 — 선생님 원본은 물론 NEIS 원본도 접지 않는다.
+    //   (위 ownershipRank 주석 참조: NEIS 를 접으면 수업일수가 조용히 바뀐다.)
+    const duplicates = sorted.slice(1).filter((e) => ownershipRank(e) === 2);
     if (duplicates.length === 0) continue;
 
     groups.push({ key, keep, duplicates });

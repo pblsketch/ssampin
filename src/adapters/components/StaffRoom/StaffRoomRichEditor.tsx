@@ -232,6 +232,17 @@ function Toolbar(): JSX.Element {
       setLinkError('http, https, mailto 로 시작하는 주소만 넣을 수 있어요.');
       return;
     }
+    // ★글자를 고르지 않았으면 링크를 걸 곳이 없다 — 그냥 보내면 아무 일도 안 일어나는데
+    //   서랍은 닫히고 입력칸은 초기화돼, 쓴 사람은 "왜 안 걸리지"만 겪는다.
+    let hasSelection = false;
+    editor.getEditorState().read(() => {
+      const selection = $getSelection();
+      hasSelection = $isRangeSelection(selection) && !selection.isCollapsed();
+    });
+    if (!hasSelection) {
+      setLinkError('링크를 걸 글자를 먼저 선택해 주세요.');
+      return;
+    }
     editor.dispatchCommand(TOGGLE_LINK_COMMAND, trimmed);
     setOpenMenu(null);
     setLinkUrl('https://');

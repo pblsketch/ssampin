@@ -51,7 +51,7 @@ function formatWeekLabel(dates: readonly string[]): string {
  * selectedClassId를 참조하지 않는다(전체 반 뷰).
  */
 export function ProgressCalendarView() {
-  const { classes, progressEntries, updateProgressEntry } = useTeachingClassStore();
+  const { classes, progressEntries, updateProgressEntries } = useTeachingClassStore();
   const showToast = useToastStore((s) => s.show);
   const { getEffectiveTeacherSchedule } = useScheduleStore();
   const { settings } = useSettingsStore();
@@ -127,9 +127,10 @@ export function ProgressCalendarView() {
 
   const applyEntries = useCallback(
     async (list: readonly ProgressEntry[]) => {
-      for (const entry of list) await updateProgressEntry(entry);
+      // 한 건씩 저장하지 않는다 — 20차시를 밀면 20번 읽고 쓰다 중간 실패 시 절반만 밀린다.
+      await updateProgressEntries(list);
     },
-    [updateProgressEntry],
+    [updateProgressEntries],
   );
 
   /*
@@ -153,9 +154,7 @@ export function ProgressCalendarView() {
       const originals = [...source.entries, ...target.entries];
 
       void (async () => {
-        for (const entry of [...plan.moved, ...plan.swapped]) {
-          await updateProgressEntry(entry);
-        }
+        await updateProgressEntries([...plan.moved, ...plan.swapped]);
         const [, m, d] = target.date.split('-');
         // 교시 이름을 붙인 선생님에겐 '3교시'가 틀린 표기다 — 라벨은 반드시 도메인이 만든다.
         const periodLabel = resolvePeriodLabel(target.period, settings.periodTimes);
@@ -168,16 +167,14 @@ export function ProgressCalendarView() {
           {
             label: '되돌리기',
             onClick: () => {
-              void (async () => {
-                for (const entry of originals) await updateProgressEntry(entry);
-              })();
+              void updateProgressEntries(originals);
             },
           },
           5000,
         );
       })();
     },
-    [showToast, updateProgressEntry, settings.periodTimes],
+    [showToast, updateProgressEntries, settings.periodTimes],
   );
 
   if (classes.length === 0) {

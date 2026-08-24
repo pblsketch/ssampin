@@ -37,7 +37,21 @@ function StaffRoomLabSection({ draft, patch }: Props) {
               사이드바에 &ldquo;온라인 교무실&rdquo; 메뉴가 생깁니다.
             </p>
           </div>
-          <Toggle checked={enabled} onChange={(v) => patch({ staffRoomEnabled: v })} />
+          <Toggle
+            checked={enabled}
+            onChange={(v) =>
+              // 켤 때는 사이드바 숨김 목록에서도 빼 준다 — "켜면 메뉴가 생깁니다" 약속이
+              // 숨김 설정(온보딩·수동)에 가려 거짓이 되면 안 된다 (ADR-070).
+              patch(
+                v
+                  ? {
+                      staffRoomEnabled: true,
+                      hiddenMenus: (draft.hiddenMenus ?? []).filter((id) => id !== 'staffroom'),
+                    }
+                  : { staffRoomEnabled: false },
+              )
+            }
+          />
         </div>
         <p className="text-xs text-sp-muted">
           인터넷 연결이 필요한 기능입니다. 부서에 참여할 때 Google 로그인으로 본인 확인을 거치며, 꺼

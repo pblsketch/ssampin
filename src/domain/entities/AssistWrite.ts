@@ -87,4 +87,7 @@ export function isWriteProposal(outcome: AssistWriteOutcome): outcome is AssistW
  * - expired: 실행 없이 대화가 이어져 소멸했다(계획서: "제안은 소멸")
  * - failed: 실행하다 실패했다. 무엇이 안 됐는지 선생님이 알아야 한다
  */
-export type AssistProposalState = 'pending' | 'done' | 'expired' | 'failed';
+// - running: [실행]을 눌러 저장이 진행 중이다. 버튼이 사라져 **두 번 누를 수 없다** —
+//   저장은 파일 쓰기라 수백 ms 걸리는데, 그동안 버튼이 살아 있으면 이중 저장이 된다
+//   (2026-08-24 UltraQA).
+export type AssistProposalState = 'pending' | 'running' | 'done' | 'expired' | 'failed';

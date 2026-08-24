@@ -61,7 +61,12 @@ const PAGE_KEYWORDS: Partial<Record<PageId, string[]>> = {
 };
 
 export function buildDefaultCommands({ onNavigate }: BuildDefaultCommandsParams): Command[] {
-  const pageCommands: Command[] = NAV_ITEMS.map((item) => ({
+  // 온라인 교무실은 실험실 기능에서 켠 경우에만 명령으로 등록한다 (ADR-070).
+  // 팔레트는 열릴 때마다 다시 만들어지므로(CommandPalette.tsx) 설정 변화를 그대로 따라간다.
+  const staffRoomEnabled = useSettingsStore.getState().settings.staffRoomEnabled === true;
+  const pageCommands: Command[] = NAV_ITEMS.filter(
+    (item) => staffRoomEnabled || item.id !== 'staffroom',
+  ).map((item) => ({
     id: `navigate-${item.id}`,
     label: `${item.label}으로 이동`,
     group: '페이지' as const,

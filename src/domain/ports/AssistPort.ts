@@ -67,6 +67,9 @@ export interface AssistRequestPayload {
  */
 export type AssistDegraded =
   | 'budget'
+  // ★`busy` 는 분당 상한(잠깐 몰림)이다. 예전에는 월/일 한도(`budget`)와 한 값이어서
+  //   1분만 기다리면 되는 상황에 "이번 달 사용량을 다 썼다"고 말했다(2026-08-24 UltraQA).
+  | 'busy'
   | 'unavailable'
   | 'upstream'
   | 'offline'

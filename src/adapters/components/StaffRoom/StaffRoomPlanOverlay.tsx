@@ -51,7 +51,15 @@ export function useStaffRoomPlanOverlay(): {
   //   교무실을 안 쓰는 선생님은 부서가 0개인데, 개수로 보면 할 일 화면을 열 때마다
   //   서버를 부르게 된다. 대부분의 선생님이 여기 해당한다.
   useEffect(() => {
-    if (!staffRoomEnabled) return;
+    if (!staffRoomEnabled) {
+      // 끄면 캐시도 버린다 — 켜기→부서 가입→끄기→다시 켜기 흐름에서
+      // hasLoadedDepartments 가 true 로 남아 옛 부서 목록을 한 박자 그리는 것을 막는다.
+      if (useStaffRoomStore.getState().hasLoadedDepartments) {
+        useStaffRoomStore.setState({ departments: [], hasLoadedDepartments: false });
+        useStaffRoomPlanStore.getState().reset();
+      }
+      return;
+    }
     if (!hasLoadedDepartments) void loadDepartments();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [staffRoomEnabled, hasLoadedDepartments]);

@@ -1195,8 +1195,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
       body: string;
       studentDedupKey: string;
     }>,
+    // 하루 발화 상한(todo 전용, 0 = 제한 없음). 최종 판정은 main 의 발화 장부가 한다.
+    dailyCap?: number,
   ): void => {
-    ipcRenderer.send('reminder:schedule', { source, items });
+    ipcRenderer.send('reminder:schedule', {
+      source,
+      items,
+      ...(dailyCap === undefined ? {} : { dailyCap }),
+    });
   },
   // 출처를 주면 그 칸만 비운다. 안 주면 전부 — 구버전 호환용이라 새로 쓰는 쪽은 반드시 지정한다.
   clearReminderSchedule: (source?: 'record' | 'todo'): void => {

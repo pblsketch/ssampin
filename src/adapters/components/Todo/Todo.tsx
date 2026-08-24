@@ -392,7 +392,13 @@ export function Todo() {
     const category = matchedCategory ?? (newCategory || undefined);
     const time = useParsed && parsed.time ? parsed.time : newTime || undefined;
     // 기간("~부터 ~까지")을 알아들었으면 시작일도 함께 넣는다. 못 알아들었으면 손으로 고른 값.
-    const startDate = useParsed && parsed.startDate ? parsed.startDate : newStartDate;
+    // ★"마감일 없음"이면 시작일도 넣지 않는다 — 시작일만 남으면 마감일 표시 자리가
+    //   시작일을 마감일처럼 그린다(startDate 는 dueDate 를 동반한다는 전제).
+    const startDate = noDueDate
+      ? undefined
+      : useParsed && parsed.startDate
+        ? parsed.startDate
+        : newStartDate;
     void addTodo(text, dueDate, priority, category, recurrence ?? undefined, time, startDate);
     setNewText('');
     setNewPriority('none');

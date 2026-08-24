@@ -47,7 +47,9 @@ function toToolCalls(
 }
 
 function toDegraded(value: string | null | undefined): AssistDegraded | null {
-  return value === 'budget' || value === 'unavailable' || value === 'upstream' ? value : null;
+  return value === 'budget' || value === 'busy' || value === 'unavailable' || value === 'upstream'
+    ? value
+    : null;
 }
 
 /**

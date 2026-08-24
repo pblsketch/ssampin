@@ -49,10 +49,16 @@ export function DuplicateCleanupModal({ events, categories, onCleanup, onClose }
 
   const handleCleanup = async () => {
     setIsWorking(true);
-    const ids = groups.flatMap((g) => g.duplicates.map((e) => e.id));
-    const count = await onCleanup(ids);
-    setIsWorking(false);
-    setDoneCount(count);
+    try {
+      const ids = groups.flatMap((g) => g.duplicates.map((e) => e.id));
+      const count = await onCleanup(ids);
+      setDoneCount(count);
+    } catch (err) {
+      // 저장 실패가 버튼을 "정리하는 중..."에 영구 고착시키면 안 된다.
+      console.error('[일정] 중복 정리 실패:', err);
+    } finally {
+      setIsWorking(false);
+    }
   };
 
   return (

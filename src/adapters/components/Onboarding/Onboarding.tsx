@@ -26,6 +26,16 @@ import { ComciganPeriodTimesModal } from './ComciganPeriodTimesModal';
 import { periodTimesToSettingsPatch } from '@domain/rules/comciganRules';
 import { NAV_ITEMS } from '@adapters/components/Layout/Sidebar';
 import type { PageId } from '@adapters/components/Layout/Sidebar';
+
+/**
+ * 온보딩 메뉴 선택에서 다루는 목록 — 실험실 기능(온라인 교무실)은 뺀다 (ADR-070).
+ *
+ * 여기서 빼지 않으면 두 가지가 어긋난다:
+ * ① 추천 목록에 없는 항목이라 hiddenMenus 에 'staffroom' 이 저장되고, 나중에
+ *    설정 > 실험실 기능에서 켜도 사이드바에 안 나타난다("켜면 메뉴가 생깁니다" 약속 위반).
+ * ② 첫 실행 화면에 켜지지도 않는 메뉴 토글이 보인다.
+ */
+const ONBOARDING_NAV_ITEMS = NAV_ITEMS.filter((item) => item.id !== 'staffroom');
 import { ROLE_MENU_MAP, MENU_DESCRIPTIONS, type TeacherRoleId } from './menuRecommendations';
 import { getPresetKey } from '@widgets/presets';
 
@@ -104,7 +114,7 @@ export function Onboarding() {
   // 역할 선택에 따른 추천 메뉴 계산
   const recommendedMenuIds = useMemo(() => {
     if (selectedRoles.length === 0) {
-      return NAV_ITEMS.map((item) => item.id);
+      return ONBOARDING_NAV_ITEMS.map((item) => item.id);
     }
     const menuSet = new Set<PageId>();
     menuSet.add('dashboard');
@@ -122,7 +132,7 @@ export function Onboarding() {
   // 최종 메뉴 표시 상태 계산
   const menuVisibility = useMemo(() => {
     const result: Record<string, boolean> = {};
-    for (const item of NAV_ITEMS) {
+    for (const item of ONBOARDING_NAV_ITEMS) {
       const recommended = recommendedMenuIds.includes(item.id);
       result[item.id] = menuOverrides[item.id] ?? recommended;
     }
@@ -156,8 +166,10 @@ export function Onboarding() {
   const handleFinish = async () => {
     track('onboarding_complete', { step: 6 });
 
-    // hiddenMenus 계산
-    const hiddenMenus = NAV_ITEMS.filter((item) => !menuVisibility[item.id]).map((item) => item.id);
+    // hiddenMenus 계산 — 실험실 기능은 목록 밖이라 여기서 숨김으로 저장되지 않는다 (ADR-070)
+    const hiddenMenus = ONBOARDING_NAV_ITEMS.filter((item) => !menuVisibility[item.id]).map(
+      (item) => item.id,
+    );
 
     // NEIS 자동 동기화 설정 (학교+학년+반이 모두 설정된 경우)
     const neisWithAutoSync =
@@ -193,7 +205,7 @@ export function Onboarding() {
     track('onboarding_roles_selected', {
       roles: selectedRoles,
       hiddenMenuCount: hiddenMenus.length,
-      visibleMenuCount: NAV_ITEMS.length - hiddenMenus.length,
+      visibleMenuCount: ONBOARDING_NAV_ITEMS.length - hiddenMenus.length,
     });
 
     // 위젯 프리셋 결정
@@ -894,7 +906,7 @@ export function Onboarding() {
                     추천 메뉴
                   </p>
                   <div className="bg-sp-surface rounded-xl border border-sp-border overflow-hidden max-h-[240px] overflow-y-auto">
-                    {NAV_ITEMS.map((item) => {
+                    {ONBOARDING_NAV_ITEMS.map((item) => {
                       const isAlwaysVisible = item.id === 'dashboard';
                       const isVisible = menuVisibility[item.id] ?? true;
 

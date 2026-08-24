@@ -24,29 +24,51 @@ import { countCoolImportCandidates } from '@domain/rules/coolImportCandidates';
  * 나이스 학사일정 제안 배너(`NeisSyncSuggestionBanner`)와 같은 자리·같은 방식이다.
  */
 
+/**
+ * 앱 세션당 한 번만 세기 위한 캐시.
+ *
+ * ★Dashboard 는 탭을 오갈 때마다 언마운트→마운트를 반복하므로, 컴포넌트 상태로는
+ * "앱을 켤 때 한 번"이라는 위 약속을 지킬 수 없다 — 실제로는 대시보드에 들어올 때마다
+ * 쪽지함 전체를 복사해 읽고 있었다(2026-08-24 UltraQA). 모듈 변수로 올려 세션당
+ * 한 번만 센다. 다시 세고 싶으면 앱을 다시 켜면 된다(배너의 역할은 딱 그만큼이다).
+ */
+let sessionCount: number | null = null;
+
+/** 테스트 전용 — 세션 캐시를 비운다 */
+export function resetCoolImportBannerSessionCache(): void {
+  sessionCount = null;
+}
+
 export function CoolImportBanner() {
   const cool = useCoolImport();
   const loadHistory = useCoolImportHistoryStore((s) => s.load);
   const dismissed = useCoolImportHistoryStore((s) => s.bannerDismissed);
   const dismiss = useCoolImportHistoryStore((s) => s.dismissBanner);
 
-  const [count, setCount] = useState(0);
+  const [count, setCount] = useState(sessionCount ?? 0);
   const [open, setOpen] = useState(false);
 
   // 앱을 켤 때 한 번만 — 후보 쪽지가 있는지 센다
   const { enabled, loadMessages } = cool;
   useEffect(() => {
     if (!enabled) return;
+    if (sessionCount !== null) return; // 이 세션에서 이미 셌다 — 쪽지함을 또 읽지 않는다
     let alive = true;
     void (async () => {
       try {
         await loadHistory();
         const messages = await loadMessages();
         if (!alive) return;
-        setCount(countCoolImportCandidates(messages, useCoolImportHistoryStore.getState().history));
+        const counted = countCoolImportCandidates(
+          messages,
+          useCoolImportHistoryStore.getState().history,
+        );
+        sessionCount = counted;
+        setCount(counted);
       } catch {
         // 쪽지함을 못 읽으면 조용히 넘어간다 — 배너는 거들 뿐이라 여기서 오류를 띄우면
         // 쿨메신저를 지운 선생님에게 매번 경고가 뜬다. 창을 열면 그때 이유가 보인다.
+        sessionCount = 0;
         if (alive) setCount(0);
       }
     })();

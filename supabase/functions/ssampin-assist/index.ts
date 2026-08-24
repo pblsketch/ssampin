@@ -89,13 +89,27 @@ serve(async (req: Request): Promise<Response> => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
     );
 
-    // 상한 3중: IP / 설치 / 전역
-    const limited = await checkRateLimit(supabase, 'assist', [
-      { identifier: clientIpFrom(req), windowMs: 60_000, max: 6 },
+    // 상한 4중: 분당(설치·IP) / 일(설치) / 일(전역)
+    //
+    // ★분당 상한을 IP 로만 걸면 안 된다 (2026-08-24 UltraQA) — 한국 학교는 공인 IP
+    //   하나 뒤에 전 교직원이 있어(NAT), 한 학교에서 두 분이 1분에 두 번씩 물으면
+    //   세 번째 선생님부터 전부 막혔다. 분당은 설치 단위로 걸고, IP 상한은 설치 id 를
+    //   지어내는 남용을 막는 뒷선으로 크게 남긴다.
+    // ★식별자에 min:/minip: 접두사를 붙인다 — 이 테이블은 (identifier, endpoint) 로만
+    //   세므로, 같은 installId 를 분당·일간 두 규칙에 그대로 쓰면 요청 1건이 2건으로
+    //   기록돼 일 상한이 반토막 난다.
+    // ★분당(busy)과 일/전역(budget)을 따로 검사한다 — 사유가 다르면 화면 안내도 다르다.
+    //   "1분 뒤 다시"면 되는 상황에 "이번 달 사용량을 다 썼다"고 말하면 안 된다.
+    const minuteLimited = await checkRateLimit(supabase, 'assist', [
+      { identifier: `min:${validated.installId}`, windowMs: 60_000, max: 6 },
+      { identifier: `minip:${clientIpFrom(req)}`, windowMs: 60_000, max: 60 },
+    ]);
+    if (minuteLimited) return degradedResponse('busy');
+    const dailyLimited = await checkRateLimit(supabase, 'assist', [
       { identifier: validated.installId, windowMs: 86_400_000, max: 40 },
       { identifier: 'global', windowMs: 86_400_000, max: dailyGlobalLimit() },
     ]);
-    if (limited) return degradedResponse('budget');
+    if (dailyLimited) return degradedResponse('budget');
 
     const turns: AssistTurn[] = [
       // 한국 학교 기준(Asia/Seoul)의 오늘. 엣지 서버 시계는 UTC 라 그대로 쓰면

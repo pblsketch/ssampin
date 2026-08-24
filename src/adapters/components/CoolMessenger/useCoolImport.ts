@@ -108,31 +108,36 @@ export function useCoolImport(): CoolImportWiring {
 
   const onSubmit = useCallback(
     async (items: readonly CoolImportItem[]) => {
-      // 등록이 다 끝난 뒤에 기록한다 — 중간에 실패하면 기록도 남기지 않는다
+      // ★성공한 것까지는 반드시 기록한다 (2026-08-24 UltraQA) — 3건 중 2건을 등록하고
+      //   3번째에서 실패하면, 기록이 없을 때 선생님이 재시도하면서 1·2번이 **또** 등록된다.
+      //   성공분이 기록돼 있으면 카드의 "전에 가져간 적이 있습니다" 표시가 중복을 눈으로 막는다.
       const done: CoolImportItem[] = [];
-      for (const item of items) {
-        if (item.target === 'todo') {
-          await addTodo(
-            item.title,
-            toDateKey(item.start),
-            'none',
-            'admin',
-            undefined,
-            item.allDay ? undefined : toTimeKey(item.start),
-          );
-        } else {
-          await addEvent({
-            title: item.title,
-            date: toDateKey(item.start),
-            category: 'school',
-            description: SOURCE_NOTE,
-            ...(item.end ? { endDate: toDateKey(item.end) } : {}),
-            ...(item.allDay ? {} : { time: toTimeKey(item.start) }),
-          });
+      try {
+        for (const item of items) {
+          if (item.target === 'todo') {
+            await addTodo(
+              item.title,
+              toDateKey(item.start),
+              'none',
+              'admin',
+              undefined,
+              item.allDay ? undefined : toTimeKey(item.start),
+            );
+          } else {
+            await addEvent({
+              title: item.title,
+              date: toDateKey(item.start),
+              category: 'school',
+              description: SOURCE_NOTE,
+              ...(item.end ? { endDate: toDateKey(item.end) } : {}),
+              ...(item.allDay ? {} : { time: toTimeKey(item.start) }),
+            });
+          }
+          done.push(item);
         }
-        done.push(item);
+      } finally {
+        if (done.length > 0) await remember(done);
       }
-      await remember(done);
     },
     [addEvent, addTodo, remember],
   );

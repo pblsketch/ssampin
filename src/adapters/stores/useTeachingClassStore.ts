@@ -105,6 +105,11 @@ interface TeachingClassState {
     status?: ProgressStatus,
   ) => Promise<ProgressEntry>;
   updateProgressEntry: (entry: ProgressEntry) => Promise<void>;
+  /**
+   * 여러 진도를 한 번에 고친다. 파일 쓰기도 한 번뿐이다 — `deleteProgressEntries` 와
+   * 같은 이유(밀기·옮기기가 20차시면 20번 읽고 쓰다 중간 실패 시 반쪽이 남는다).
+   */
+  updateProgressEntries: (entries: readonly ProgressEntry[]) => Promise<void>;
   deleteProgressEntry: (id: string) => Promise<void>;
   /**
    * 여러 진도를 한 번에 지운다. 파일 쓰기도 한 번뿐이다 —
@@ -515,6 +520,15 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
         progressEntries: state.progressEntries.map((e) => (e.id === entry.id ? entry : e)),
       }));
       await manageProgress.update(entry);
+    },
+
+    updateProgressEntries: async (entries) => {
+      if (entries.length === 0) return;
+      const byId = new Map(entries.map((e) => [e.id, e]));
+      const nextList = get().progressEntries.map((e) => byId.get(e.id) ?? e);
+      // 통파일 1회 저장 — 밀기 도중 실패해도 "절반만 밀린" 상태가 파일에 남지 않는다.
+      await manageProgress.saveAll(nextList, false);
+      set({ progressEntries: nextList });
     },
 
     deleteProgressEntries: async (ids) => {

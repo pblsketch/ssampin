@@ -337,6 +337,12 @@ export function canMoveEventByDrag(event: SchoolEvent): DragMoveCheck {
   if (event.source === 'birthday') {
     return { ok: false, reason: '생일은 학생 정보에서 관리됩니다' };
   }
+  // ★외부 구독 캘린더(`ext:`)는 쌤핀이 값을 고칠 수 없다 — 옮겨 봤자 다음 새로고침이
+  //   소스 통째 교체로 되돌린다(SyncExternalCalendar). "옮겼습니다" 해 놓고 조용히
+  //   원위치되는 것보다 처음부터 막는 편이 정직하다. 중복 정리·숨김 규칙과 같은 판단.
+  if (event.id.startsWith('ext:')) {
+    return { ok: false, reason: '구독한 외부 캘린더 일정은 원본 캘린더에서만 옮길 수 있습니다' };
+  }
   return { ok: true };
 }
 
@@ -364,11 +370,20 @@ export function moveEventToDate(
     return toDateKey(d);
   };
 
+  // 같은 날짜 안의 수동 정렬값은 옮긴 날에서는 의미가 없다 — 들고 가면 그 날의 순서가 어긋난다.
+  const { sortOrder: _prevOrder, ...withoutOrder } = event;
+  void _prevOrder;
   const moved: SchoolEvent = {
-    ...event,
+    ...withoutOrder,
     date: shift(event.date),
     ...(event.endDate ? { endDate: shift(event.endDate) } : {}),
   };
 
-  return event.source === 'neis' ? { ...moved, isModified: true } : moved;
+  // ★구글 일정도 `isModified` 를 세운다 (2026-08-24 UltraQA) — 안 세우면 푸시가 실패한
+  //   상태에서 다음 SyncFromGoogle 이 충돌 없음으로 보고 **구글의 옛 날짜로 되돌린다.**
+  //   세워 두면 충돌 판정이 최근 수정(로컬) 우선으로 이동을 지켜 낸다(ADR-063 경계 유지 —
+  //   신분증이 아니라 내용 충돌 판정에만 쓰인다).
+  return event.source === 'neis' || event.source === 'google'
+    ? { ...moved, isModified: true }
+    : moved;
 }

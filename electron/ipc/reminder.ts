@@ -70,6 +70,14 @@ interface ReminderIpcHooks {
 let buckets: ReminderBuckets = EMPTY_BUCKETS;
 /** 발화 이력 — 파일에 저장돼 재시작 후에도 같은 알림이 또 울리지 않게 한다. */
 let firedLedger: readonly FiredEntry[] = [];
+/**
+ * 할 일 알람의 하루 발화 상한. null = 모른다(구버전 렌더러) → 집행하지 않는다. 0 = 제한 없음.
+ *
+ * ★상한의 최종 판정은 여기(main)다 (2026-08-24 UltraQA) — 렌더러의 예약 재계산은
+ * "이미 울리고 유예까지 지난 몫"을 셀 수 없어(후보에서 사라진다), 창 포커스마다
+ * 재계산되면서 하루 몫이 0부터 다시 세어졌다. 실제로 울린 개수의 정본은 발화 장부다.
+ */
+let todoDailyCap: number | null = null;
 /** 진단용 관측값. 렌더러 push 로 덮이지 않는 필드를 여기에 둔다. */
 let observations: ReminderObservations = {
   lastPushedAt: {},
@@ -93,8 +101,20 @@ function persist(now: number): void {
   writeReminderState({
     todo: buckets.todo,
     fired: firedLedger.filter((e) => e.source === 'todo'),
+    todoDailyCap,
     savedAt: now,
   });
+}
+
+/** 같은 (이 PC 기준) 달력 날짜인가 — 하루 상한은 날짜 단위로 센다 */
+function sameLocalDay(a: number, b: number): boolean {
+  const da = new Date(a);
+  const db = new Date(b);
+  return (
+    da.getFullYear() === db.getFullYear() &&
+    da.getMonth() === db.getMonth() &&
+    da.getDate() === db.getDate()
+  );
 }
 
 /**
@@ -156,8 +176,38 @@ function fireDue(hooks: ReminderIpcHooks): void {
     notifyLog('정본에 없거나 끝난 일이라 건너뜀', { source, id: item.reminderId });
   }
 
-  if (result.toFire.length > 0) {
-    for (const { source, item } of result.toFire) {
+  // ★하루 상한 집행 — 발화 장부에서 "오늘 실제로 울린 todo 개수"를 세어, 남은 몫만
+  //   울린다. 몫을 넘긴 항목은 버리지 않고 예약 칸에 되돌린다 — 자정을 넘겨 아직
+  //   유예 창 안이면 내일 몫으로 울릴 수 있다. record 칸은 이 상한과 무관하다.
+  let toFire = result.toFire;
+  if (todoDailyCap !== null && todoDailyCap > 0) {
+    const firedToday = firedLedger.filter(
+      (e) => e.source === 'todo' && sameLocalDay(e.firedAt, now),
+    ).length;
+    let budget = Math.max(0, todoDailyCap - firedToday);
+    const allowed: typeof result.toFire = [];
+    const held: ReminderScheduleItem[] = [];
+    for (const due of result.toFire) {
+      if (due.source !== 'todo') {
+        allowed.push(due);
+        continue;
+      }
+      if (budget > 0) {
+        budget -= 1;
+        allowed.push(due);
+      } else {
+        held.push(due.item);
+        notifyLog('하루 상한으로 보류', { source: due.source, id: due.item.reminderId });
+      }
+    }
+    if (held.length > 0) {
+      buckets = { ...buckets, todo: [...buckets.todo, ...held] };
+    }
+    toFire = allowed;
+  }
+
+  if (toFire.length > 0) {
+    for (const { source, item } of toFire) {
       firedLedger = [...firedLedger, { reminderId: item.reminderId, firedAt: now, source }];
       try {
         // 아이콘을 못 찾으면(비어 있으면) 아예 넘기지 않는다 — 빈 그림을 넘기면
@@ -193,6 +243,8 @@ function fireDue(hooks: ReminderIpcHooks): void {
 export function registerReminderIpc(hooks: ReminderIpcHooks): () => void {
   const bootNow = Date.now();
   const restored = readReminderState(bootNow);
+  // 상한도 함께 되살린다 — 콜드 부팅(렌더러 없음)에서도 하루 상한이 집행되게.
+  todoDailyCap = restored.todoDailyCap ?? null;
   if (restored.todo.length > 0 || restored.fired.length > 0) {
     buckets = applySchedule(buckets, 'todo', restored.todo);
     firedLedger = restored.fired;
@@ -229,11 +281,26 @@ export function registerReminderIpc(hooks: ReminderIpcHooks): () => void {
       lastPushedAt: { ...observations.lastPushedAt, [source]: now },
     };
 
+    // 하루 상한 — todo 예약과 함께 온다. 없으면(구버전 렌더러) 집행하지 않는다.
+    let capChanged = false;
+    if (source === 'todo') {
+      const rawCap = (payload as { dailyCap?: unknown } | null)?.dailyCap;
+      const nextCap =
+        typeof rawCap === 'number' && Number.isFinite(rawCap) && rawCap >= 0
+          ? Math.floor(rawCap)
+          : null;
+      capChanged = nextCap !== todoDailyCap;
+      todoDailyCap = nextCap;
+    }
+
     // ★ 내용이 같으면 아무 일도 하지 않는다 — 로그도, 파일 쓰기도 없다.
     //   화면 쪽 저장소는 같은 자료를 다시 읽을 때도 **새 배열을 만든다.** 그래서 실제로는
     //   아무것도 안 바뀐 순간에도 예약이 계속 날아온다. 그대로 받아 적으면 진단 로그가
     //   같은 줄로 뒤덮여 **정작 봐야 할 줄이 묻히고**, 30초마다 파일을 새로 쓴다.
-    if (sameItems(buckets[source], items)) return;
+    if (sameItems(buckets[source], items)) {
+      if (capChanged) persist(now); // 예약은 그대로여도 바뀐 상한은 남긴다
+      return;
+    }
 
     buckets = applySchedule(buckets, source, items);
     notifyLog('예약 받음', { source, count: items.length });

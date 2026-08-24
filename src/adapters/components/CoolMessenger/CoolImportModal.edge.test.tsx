@@ -138,9 +138,16 @@ describe('이상한 쪽지', () => {
     expect((await screen.findAllByText(/8월 27일/)).length).toBeGreaterThan(0);
   });
 
-  it('쪽지 전문을 못 가져오면 빈 화면 대신 안내가 남는다', async () => {
+  it('쪽지 전문을 못 가져오면 빈 화면 대신 실패 안내가 남는다', async () => {
+    // 예전에는 "여는 중…"에 영원히 멈췄다(null 을 로딩과 구분하지 못했다 — 2026-08-24 수정).
     const { user } = setup({ loadMessage: () => Promise.resolve(null) });
     await user.click(await screen.findByText('학폭위 심의'));
-    expect(await screen.findByText(/쪽지를 여는 중/)).toBeTruthy();
+    expect(await screen.findByText(/쪽지를 열지 못했습니다/)).toBeTruthy();
+  });
+
+  it('쪽지 읽기가 실패해도 실패 안내가 남는다', async () => {
+    const { user } = setup({ loadMessage: () => Promise.reject(new Error('쪽지함이 잠겼습니다')) });
+    await user.click(await screen.findByText('학폭위 심의'));
+    expect(await screen.findByText(/쪽지함이 잠겼습니다/)).toBeTruthy();
   });
 });

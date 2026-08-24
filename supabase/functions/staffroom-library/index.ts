@@ -85,6 +85,34 @@ import {
 /** 한 번에 내려보내는 파일 수 */
 const PAGE_SIZE = 300;
 
+/**
+ * 서식 글(lexical 저장 구조)에서 **사람이 읽는 글자만** 뽑는다 — 검색 미리보기용.
+ *
+ * 앱의 렌더 파서(staffRoomRichText)만큼 정밀할 필요는 없다: 글자를 이어 붙여 읽히는
+ * 문장만 되면 된다. 해석에 실패하면 빈 문자열 — 미리보기가 제목으로 대체될 뿐이다.
+ * (근본 해법은 평문 그림자 칸(body_plain)이지만, 그건 마이그레이션이 필요해 별건이다.)
+ */
+function lexicalToPlain(body: string): string {
+  try {
+    const parsed = JSON.parse(body) as Record<string, unknown>;
+    const out: string[] = [];
+    const walk = (node: unknown): void => {
+      if (node === null || typeof node !== 'object') return;
+      const n = node as Record<string, unknown>;
+      if (typeof n.text === 'string') out.push(n.text);
+      if (Array.isArray(n.children)) {
+        n.children.forEach(walk);
+        // 문단 경계는 공백으로 — 줄이 붙어 한 낱말이 되는 것을 막는다
+        out.push(' ');
+      }
+    };
+    walk(parsed.root ?? parsed);
+    return out.join('').replace(/\s+/g, ' ').trim();
+  } catch {
+    return '';
+  }
+}
+
 /** 미리보기 글자를 한 번에 몇 개까지 읽어 줄 것인가 — 한 요청이 너무 무거워지지 않게 */
 const PREVIEW_BATCH_MAX = 30;
 
@@ -628,31 +656,39 @@ serve(async (req: Request) => {
 
       const { data, error } = await db
         .from('staffroom_posts')
-        .select(`${POST_SUMMARY_COLUMNS}, body`)
+        .select(`${POST_SUMMARY_COLUMNS}, body, body_format`)
         .eq('department_id', departmentId)
         .or(`title.ilike.${pattern},body.ilike.${pattern}`)
         .order('created_at', { ascending: false })
         .limit(50);
 
       if (error) throw new Error(`글 검색 실패: ${error.message}`);
-      const rows = (data ?? []) as Array<PostSummaryRow & { body: string }>;
+      const rows = (data ?? []) as Array<PostSummaryRow & { body: string; body_format: string }>;
 
       // 본문을 통째로 돌려보내지 않는다 — 걸린 자리 주변만 잘라 보낸다(§3.5-다)
       // 잘라낸 뒤의 낱말로 찾아야 DB 가 걸러낸 것과 같은 자리를 가리킨다
+      //
+      // ★서식 글(lexical)은 **글자만 뽑은 뒤** 자른다 (2026-08-24 UltraQA) —
+      //   저장 구조(JSON)를 그대로 자르면 미리보기에 `…"type":"text"…` 덩어리가 뜬다.
+      //   그리고 DB ILIKE 가 JSON 의 영문 키(root·text 등)에 걸린 오탐 행은,
+      //   평문 기준으로 다시 확인해 제목에도 본문에도 없으면 버린다.
       const lowered = needle.toLowerCase();
-      return jsonResponse({
-        posts: rows.map((row) => {
-          const at = row.body.toLowerCase().indexOf(lowered);
-          const matchedInContent = at >= 0 && !row.title.toLowerCase().includes(lowered);
-          const start = at >= 0 ? Math.max(0, at - 40) : 0;
-          const snippet =
-            at >= 0
-              ? `${start > 0 ? '…' : ''}${row.body
-                  .slice(start, at + lowered.length + 40)
-                  .replace(/\s+/g, ' ')
-                  .trim()}…`
-              : row.title;
-          return {
+      const posts = rows.flatMap((row) => {
+        const readable = row.body_format === 'lexical' ? lexicalToPlain(row.body) : row.body;
+        const at = readable.toLowerCase().indexOf(lowered);
+        const inTitle = row.title.toLowerCase().includes(lowered);
+        if (at < 0 && !inTitle) return []; // JSON 키에만 걸린 오탐 — 검색 결과가 아니다
+        const matchedInContent = at >= 0 && !inTitle;
+        const start = at >= 0 ? Math.max(0, at - 40) : 0;
+        const snippet =
+          at >= 0
+            ? `${start > 0 ? '…' : ''}${readable
+                .slice(start, at + lowered.length + 40)
+                .replace(/\s+/g, ' ')
+                .trim()}…`
+            : row.title;
+        return [
+          {
             id: row.id,
             moduleId: row.module_id,
             title: row.title,
@@ -661,9 +697,10 @@ serve(async (req: Request) => {
             snippet,
             matchedInContent,
             updatedAt: row.updated_at,
-          };
-        }),
+          },
+        ];
       });
+      return jsonResponse({ posts });
     }
 
     return errorResponse('알 수 없는 요청입니다', 400);

@@ -63,6 +63,8 @@ function fakeDeps(): { deps: WriteDeps; calls: string[] } {
     updateEvent: track('updateEvent'),
     deleteEvent: track('deleteEvent'),
     addMemo: track('addMemo'),
+    // 대상 재확인(2026-08-24) — 존재하는 것으로 답해야 삭제·수정 분기가 실행까지 간다
+    getMemo: () => ({ id: 'm1' }),
     updateMemo: track('updateMemo'),
     deleteMemo: track('deleteMemo'),
     addProgressEntry: track('addProgressEntry'),
@@ -70,6 +72,7 @@ function fakeDeps(): { deps: WriteDeps; calls: string[] } {
     updateProgressEntry: track('updateProgressEntry'),
     deleteProgressEntry: track('deleteProgressEntry'),
     addBookmark: track('addBookmark'),
+    getBookmark: () => ({ id: 'b1' }),
     updateBookmark: track('updateBookmark'),
     deleteBookmark: track('deleteBookmark'),
     addBookmarkGroup: track('addBookmarkGroup'),
@@ -78,6 +81,7 @@ function fakeDeps(): { deps: WriteDeps; calls: string[] } {
     createSection: track('createSection'),
     renameSection: track('renameSection'),
     createPage: track('createPage'),
+    getNotePage: () => ({ id: 'p1' }),
     renamePage: track('renamePage'),
     deletePage: track('deletePage'),
     noteSelection: () => ({ notebookId: 'nb-new', sectionId: 's-new', pageId: 'p-new' }),
@@ -257,4 +261,37 @@ describe('★한 일과 다른 말을 하지 않는다', () => {
     expect(result.ok).toBe(true);
     expect(calls).toEqual(['toggleTodo']);
   });
+});
+
+/**
+ * ★삭제·수정 전 대상 재확인 (2026-08-24 UltraQA).
+ *
+ * 제안을 만든 뒤 선생님이 화면에서 직접 지웠을 수 있다. 스토어는 없는 id 에 조용히
+ * no-op 이라, 확인 없이 "지웠어요"라고 말하면 **거짓 성공**이 된다 — 그 경로를 잠근다.
+ */
+describe('★없는 대상에 성공을 말하지 않는다', () => {
+  const GONE_CASES: readonly (readonly [string, object, string, string])[] = [
+    ['delete_todo', { match: '장보기' }, 'getTodo', 'deleteTodo'],
+    ['update_todo', { match: '장보기', text: 'x' }, 'getTodo', 'updateTodo'],
+    ['delete_event', { match: '총회' }, 'getEvent', 'deleteEvent'],
+    ['delete_memo', { match: '회의' }, 'getMemo', 'deleteMemo'],
+    ['delete_bookmark', { match: '나이스' }, 'getBookmark', 'deleteBookmark'],
+    ['delete_note_page', { match: '2단원' }, 'getNotePage', 'deletePage'],
+  ] as const;
+
+  it.each(GONE_CASES)(
+    '%s — 대상이 사라졌으면 실패로 답하고 스토어를 부르지 않는다',
+    async (tool, args, getter, storeCall) => {
+      const outcome = buildWriteProposal(tool, JSON.stringify(args), SRC);
+      if (!isWriteProposal(outcome)) throw new Error(`제안이 아니다: ${outcome.reason}`);
+
+      const { deps, calls } = fakeDeps();
+      const gone = { ...deps, [getter]: () => undefined } as unknown as WriteDeps;
+      const result = await executeAssistWrite(outcome, gone);
+
+      expect(result.ok).toBe(false);
+      expect(result.message).toContain('이미 없어요');
+      expect(calls).not.toContain(storeCall);
+    },
+  );
 });

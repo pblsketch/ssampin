@@ -31,7 +31,7 @@
  * ─────────────────────────────────────────────────────────────────────────
  */
 import type { AssistToolDef, ModelSafe } from '../entities/AssistTool';
-import { applyMask } from '../privacy/maskEngine';
+import { applyMask, type MaskSession } from '../privacy/maskEngine';
 import { detectPatterns } from '../privacy/maskRules';
 import type { KeywordGroup, MaskMapping, PatternConfig } from '../privacy/types';
 import type { ToolResultShape, ToolResultValue } from '../services/sanitizeToolResult';
@@ -104,22 +104,31 @@ interface FieldOutcome {
 const EMPTY: Omit<FieldOutcome, 'value'> = { mappings: [], masked: 0, blanked: 0 };
 
 /** 자유 입력 한 칸을 처리한다 — 비우거나, 가리거나, 그대로 두거나. */
-function handleFreeText(value: ToolResultValue, roster: readonly KeywordGroup[]): FieldOutcome {
+function handleFreeText(
+  value: ToolResultValue,
+  roster: readonly KeywordGroup[],
+  session?: MaskSession,
+): FieldOutcome {
   if (typeof value === 'string') {
     // ① 연락처·주민번호·이메일이 있으면 이 칸은 통째로 비운다.
     if (detectPatterns(value, BLANK_PATTERNS).length > 0) {
       return { value: null, mappings: [], masked: 0, blanked: 1 };
     }
-    // ② 나머지는 별칭으로 가린다.
-    const { masked, mappings } = applyMask(value, {
-      patterns: MASK_PATTERNS,
-      keywordGroups: roster,
-    });
+    // ② 나머지는 별칭으로 가린다. 세션을 물려 **칸이 달라도 번호가 이어지게** 한다 —
+    //    안 물리면 다른 학생 둘이 똑같이 ［이름1］ 이 된다(2026-08-24 UltraQA).
+    const { masked, mappings } = applyMask(
+      value,
+      {
+        patterns: MASK_PATTERNS,
+        keywordGroups: roster,
+      },
+      session,
+    );
     return { value: masked, mappings, masked: mappings.length, blanked: 0 };
   }
 
   if (Array.isArray(value)) {
-    const results = value.map((item) => handleFreeText(item, roster));
+    const results = value.map((item) => handleFreeText(item, roster, session));
     return {
       value: results.map((r) => r.value),
       mappings: results.flatMap((r) => r.mappings),
@@ -134,7 +143,7 @@ function handleFreeText(value: ToolResultValue, roster: readonly KeywordGroup[])
     let masked = 0;
     let blanked = 0;
     for (const [key, child] of Object.entries(value)) {
-      const r = handleFreeText(child, roster);
+      const r = handleFreeText(child, roster, session);
       next[key] = r.value;
       mappings.push(...r.mappings);
       masked += r.masked;
@@ -156,6 +165,7 @@ export function redactOutbound(
   tool: AssistToolDef,
   data: ModelSafe<ToolResultShape>,
   roster: readonly KeywordGroup[],
+  session?: MaskSession,
 ): RedactionResult {
   const freeText = new Set(tool.freeTextFields);
   const mappings: MaskMapping[] = [];
@@ -164,7 +174,7 @@ export function redactOutbound(
 
   const walk = (value: ToolResultValue, key: string | undefined): ToolResultValue => {
     if (key !== undefined && freeText.has(key)) {
-      const r = handleFreeText(value, roster);
+      const r = handleFreeText(value, roster, session);
       mappings.push(...r.mappings);
       maskedCount += r.masked;
       blankedCount += r.blanked;
@@ -192,6 +202,29 @@ export function redactOutbound(
     blankedCount,
     blocked: gate.blocked,
   };
+}
+
+/**
+ * ★질문 원문도 카드와 **같은 그물**을 지난다 (2026-08-24 UltraQA — P0).
+ *
+ * 카드만 가리고 질문은 그대로 내보내고 있었는데, 공개 개인정보처리방침·고지문·화면
+ * 문구는 전부 "질문 속 이름도 가려진다"고 약속하고 있었다. 코드가 약속을 따라간다.
+ *
+ * 연락처·주민번호는 여기서 비우지 않는다 — 서버 관문(`assistRequest.ts`)이 그 형태를
+ * 거절하므로, 지우고 보내는 것보다 "이 질문은 못 보낸다"로 돌아오는 편이 정직하다.
+ * 세션을 물리면 카드에서 만든 별칭 번호와 이어진다(같은 학생 = 같은 별칭).
+ */
+export function redactQuestion(
+  question: string,
+  roster: readonly KeywordGroup[],
+  session?: MaskSession,
+): { readonly masked: string; readonly mappings: readonly MaskMapping[] } {
+  const { masked, mappings } = applyMask(
+    question,
+    { patterns: MASK_PATTERNS, keywordGroups: roster },
+    session,
+  );
+  return { masked, mappings };
 }
 
 /**

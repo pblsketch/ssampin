@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { GoogleTask, GoogleTaskList } from '@domain/ports/IGoogleTasksPort';
 import type { Todo } from '@domain/entities/Todo';
+import { TODO_LOCAL_ONLY_FIELDS } from '@domain/entities/Todo';
 import { generateUUID } from '@infrastructure/utils/uuid';
 
 interface TasksSyncState {
@@ -136,7 +137,9 @@ export const useTasksSyncStore = create<TasksSyncState>((set, get) => ({
       set({ showTaskListPicker: true });
       await get().fetchTaskLists();
     } catch (err) {
-      set({ error: err instanceof Error ? err.message : 'Tasks 동기화 활성화 중 오류가 발생했습니다.' });
+      set({
+        error: err instanceof Error ? err.message : 'Tasks 동기화 활성화 중 오류가 발생했습니다.',
+      });
     }
   },
 
@@ -242,7 +245,8 @@ export const useTasksSyncStore = create<TasksSyncState>((set, get) => ({
 
     tasksSyncPromise = (async () => {
       try {
-        const { authenticateGoogle, googleTasksPort, todoRepository } = await import('@adapters/di/container');
+        const { authenticateGoogle, googleTasksPort, todoRepository } =
+          await import('@adapters/di/container');
         const { useTodoStore } = await import('./useTodoStore');
 
         const accessToken = await authenticateGoogle.getValidAccessToken();
@@ -308,8 +312,8 @@ export const useTasksSyncStore = create<TasksSyncState>((set, get) => ({
         // ── 2. PUSH-CREATE ──
         for (const todo of [...workMap.values()]) {
           if (todo.pendingRemoteOp !== 'create') continue;
-          if (todo.googleTaskId) continue;          // 이미 원격 ID 있음
-          if (todo.archivedAt || todo.remoteDeletedAt) continue;  // archive/tombstone 제외
+          if (todo.googleTaskId) continue; // 이미 원격 ID 있음
+          if (todo.archivedAt || todo.remoteDeletedAt) continue; // archive/tombstone 제외
           try {
             const created = await googleTasksPort.createTask(accessToken, taskListId, {
               title: todo.text,
@@ -373,7 +377,10 @@ export const useTasksSyncStore = create<TasksSyncState>((set, get) => ({
         }
 
         // ── 4. PULL ──
-        const remoteTasks: readonly GoogleTask[] = await googleTasksPort.listTasks(accessToken, taskListId);
+        const remoteTasks: readonly GoogleTask[] = await googleTasksPort.listTasks(
+          accessToken,
+          taskListId,
+        );
         const localByGoogleId = new Map<string, Todo>();
         for (const t of workMap.values()) {
           if (t.googleTaskId) localByGoogleId.set(t.googleTaskId, t);
@@ -466,7 +473,7 @@ export const useTasksSyncStore = create<TasksSyncState>((set, get) => ({
         );
         for (const todo of [...workMap.values()]) {
           if (!todo.googleTaskId) continue;
-          if (todo.pendingRemoteOp) continue;          // 사용자가 변경 중인 항목 보호 (PUSH가 fallback create로 처리)
+          if (todo.pendingRemoteOp) continue; // 사용자가 변경 중인 항목 보호 (PUSH가 fallback create로 처리)
           if (remoteIds.has(todo.googleTaskId)) continue;
 
           if (todo.archivedAt) {
@@ -501,6 +508,35 @@ export const useTasksSyncStore = create<TasksSyncState>((set, get) => ({
 
         // (b) sync 도중 사용자가 수정한 todo → 사용자 변경 우선 + sync 메타데이터 합치기
         const initialMap = new Map<string, Todo>(initialTodos.map((t) => [t.id, t]));
+
+        /**
+         * sync 도중의 수정이 **쌤핀 전용 필드뿐**인지 판정한다 (ADR-066).
+         *
+         * 점검일(checkAt)·관련인(relatedStaff)만 고친 것은 구글에 보낼 변경이 아니다 —
+         * ManageTodos/useTodoStore 가 `pendingRemoteOp` 를 안 세우고 넘겼는데, 여기서
+         * `updatedAt` 만 보고 `?? 'update'` 로 채우면 그 가드를 도로 무너뜨려
+         * 의미 없는 구글 쓰기가 나간다(2026-08-24 UltraQA).
+         */
+        const onlyLocalFieldsChanged = (initial: Todo | undefined, stored: Todo): boolean => {
+          if (!initial) return false;
+          const META_KEYS = new Set([
+            'updatedAt',
+            'pendingRemoteOp',
+            'googleTaskId',
+            'googleTaskListId',
+            'lastSyncedAt',
+          ]);
+          const keys = new Set([...Object.keys(initial), ...Object.keys(stored)]);
+          for (const key of keys) {
+            if (META_KEYS.has(key)) continue;
+            const a = (initial as unknown as Record<string, unknown>)[key];
+            const b = (stored as unknown as Record<string, unknown>)[key];
+            if (JSON.stringify(a) === JSON.stringify(b)) continue;
+            if (!(TODO_LOCAL_ONLY_FIELDS as readonly string[]).includes(key)) return false;
+          }
+          return true;
+        };
+
         for (const stored of currentTodos) {
           const synced = workMap.get(stored.id);
           if (!synced) continue;
@@ -514,11 +550,16 @@ export const useTasksSyncStore = create<TasksSyncState>((set, get) => ({
               googleTaskId: stored.googleTaskId ?? synced.googleTaskId,
               googleTaskListId: stored.googleTaskListId ?? synced.googleTaskListId,
               lastSyncedAt: synced.lastSyncedAt ?? stored.lastSyncedAt,
-              pendingRemoteOp:
-                stored.pendingRemoteOp
-                ?? (stored.archivedAt
-                  ? (stored.googleTaskId ? 'delete' : undefined)
-                  : ((stored.googleTaskId ?? synced.googleTaskId) ? 'update' : 'create')),
+              pendingRemoteOp: onlyLocalFieldsChanged(initial, stored)
+                ? stored.pendingRemoteOp
+                : (stored.pendingRemoteOp ??
+                  (stored.archivedAt
+                    ? stored.googleTaskId
+                      ? 'delete'
+                      : undefined
+                    : (stored.googleTaskId ?? synced.googleTaskId)
+                      ? 'update'
+                      : 'create')),
             });
           }
         }
@@ -555,8 +596,9 @@ export const useTasksSyncStore = create<TasksSyncState>((set, get) => ({
         // 일일 쿼터 초과 — 다음 자정까지 모든 트리거 차단 + 1회성 토스트
         if (isDailyQuotaError(err)) {
           const cooldownUntil = nextQuotaResetISO();
-          const wasInCooldown = !!get().quotaCooldownUntil
-            && new Date(get().quotaCooldownUntil!).getTime() > Date.now();
+          const wasInCooldown =
+            !!get().quotaCooldownUntil &&
+            new Date(get().quotaCooldownUntil!).getTime() > Date.now();
 
           set({
             isSyncing: false,
@@ -581,10 +623,12 @@ export const useTasksSyncStore = create<TasksSyncState>((set, get) => ({
           if (!wasInCooldown) {
             try {
               const { useToastStore } = await import('@adapters/components/common/Toast');
-              useToastStore.getState().show(
-                'Google Tasks 일일 동기화 한도(50,000건)에 도달했어요. 자동 동기화를 잠시 멈추고 내일 새벽에 다시 시도합니다.',
-                'info',
-              );
+              useToastStore
+                .getState()
+                .show(
+                  'Google Tasks 일일 동기화 한도(50,000건)에 도달했어요. 자동 동기화를 잠시 멈추고 내일 새벽에 다시 시도합니다.',
+                  'info',
+                );
             } catch {
               // 토스트 표시 실패는 무시
             }

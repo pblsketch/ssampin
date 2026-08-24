@@ -14,7 +14,12 @@ export class SyncToGoogle {
   /** 이벤트를 구글 캘린더에 생성 또는 업데이트 */
   async syncEvent(event: SchoolEvent): Promise<SchoolEvent> {
     const mappings = await this.syncRepo.getMappings();
-    const mapping = mappings.find(m => m.categoryId === event.category && m.syncEnabled);
+    // 방향이 "구글 → 쌤핀 전용"인 매핑에는 올려 보내지 않는다 — SyncFromGoogle 은
+    // 이미 방향을 읽는데(ADR-063) 이쪽만 안 읽으면, 방향 설정 UI 가 생기는 순간
+    // "내려받기 전용"이 조용히 깨진다.
+    const mapping = mappings.find(
+      (m) => m.categoryId === event.category && m.syncEnabled && m.syncDirection !== 'fromGoogle',
+    );
     if (!mapping?.googleCalendarId) return event;
 
     const accessToken = await this.getAccessToken();
@@ -46,7 +51,7 @@ export class SyncToGoogle {
       lastSyncedAt: new Date().toISOString(),
       googleUpdatedAt: result.updated,
       etag: result.etag,
-      source: event.source || 'ssampin' as const,
+      source: event.source || ('ssampin' as const),
     };
   }
 
@@ -56,11 +61,7 @@ export class SyncToGoogle {
 
     const accessToken = await this.getAccessToken();
     try {
-      await this.calendarPort.deleteEvent(
-        accessToken,
-        event.googleCalendarId,
-        event.googleEventId,
-      );
+      await this.calendarPort.deleteEvent(accessToken, event.googleCalendarId, event.googleEventId);
     } catch (err) {
       // 이미 삭제된 경우 무시 (404/410)
       const code = (err as Error & { code?: number }).code;

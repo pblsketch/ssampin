@@ -6,7 +6,7 @@ import {
   subscribeTodoAlarmEnabled,
 } from '@adapters/repositories/todoAlarmDeviceState';
 import { DEFAULT_TODO_SETTINGS } from '@domain/entities/TodoSettings';
-import { buildTodoAlarmSchedule } from '@domain/rules/todoAlarmRules';
+import { buildTodoAlarmSchedule, DEFAULT_ALARM_DAILY_CAP } from '@domain/rules/todoAlarmRules';
 
 /**
  * 할 일 시각 알람 — OS 토스트 예약 push 훅.
@@ -80,17 +80,22 @@ export function useTodoAlarmOsPush(): void {
       -new Date().getTimezoneOffset(),
     );
 
+    // ★하루 상한을 main 에도 알린다 (2026-08-24 UltraQA) — 이 목록의 상한 필터는
+    //   "이미 울리고 유예까지 지난 몫"을 세지 못한다(후보에서 사라져 매번 0부터 센다).
+    //   실제로 울린 개수의 정본은 main 의 발화 장부라, 최종 상한 판정은 main 이 한다.
+    const dailyCap = todoSettings.alarmDailyCap ?? DEFAULT_ALARM_DAILY_CAP;
+
     // ★ 방금 보낸 것과 같으면 다시 보내지 않는다.
     //
     // 할 일 저장소는 동기화가 자료를 다시 읽을 때마다 **내용이 같아도 새 배열을 만든다.**
     // 그래서 이 함수는 아무것도 안 바뀐 순간에도 계속 다시 불린다. 그때마다 보내면
     // 앱 속 알맹이가 매번 진단 로그를 쓰고 예약 파일을 새로 저장해서, **로그가 같은 줄로
     // 뒤덮여 정작 봐야 할 줄이 묻힌다.** (실제로 그렇게 됐다.)
-    const signature = JSON.stringify(items);
+    const signature = JSON.stringify([dailyCap, items]);
     if (lastSentRef.current === signature) return;
     lastSentRef.current = signature;
 
-    api.scheduleReminders('todo', [...items]);
+    api.scheduleReminders('todo', [...items], dailyCap);
   }, [alarmEnabled, todos, todosLoaded, todoSettings]);
 
   useEffect(() => {

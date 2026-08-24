@@ -13,7 +13,8 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 import { screenAssistInput, type AssistInputScreening } from '@domain/rules/screenAssistInput';
-import { redactOutbound, restoreModelText } from '@domain/rules/redactOutbound';
+import { redactOutbound, redactQuestion, restoreModelText } from '@domain/rules/redactOutbound';
+import { createMaskSession } from '@domain/privacy/maskEngine';
 import type { MaskMapping } from '@domain/privacy/types';
 import { findAssistTool } from '@domain/services/assistToolRegistry';
 import type { KeywordGroup } from '@domain/privacy/types';
@@ -57,6 +58,11 @@ export interface AssistTurn {
    * 실명으로 되돌린 화면용이라, 다시 보내면 가렸던 이름이 그대로 나가버린다.
    */
   readonly outboundAnswer: string;
+  /**
+   * ★실제로 나갔던(이름을 가린) 질문. 대화 이력으로 다시 실을 때는 이것만 쓴다 —
+   * `question` 은 화면용 원문이라, 다시 보내면 가렸던 이름이 그대로 나가버린다.
+   */
+  readonly outboundQuestion?: string;
   /** 이 턴과 함께 실제로 나갔던(가려진) 카드. 후속 질문에 다시 실어 보낼 때 쓴다 */
   readonly outboundCards: readonly AssistCard[];
   readonly degraded: AssistDegraded | null;
@@ -196,7 +202,8 @@ export function buildHistoryTurns(
     if (t.status !== 'done') continue;
 
     const pair: AssistTurnPayload[] = [];
-    const q = t.question.slice(0, ASSIST_SEND_LIMITS.maxTurnChars);
+    // ★가려진 쪽(outboundQuestion)만 싣는다 — 원문을 실으면 이름이 매 턴 다시 나간다.
+    const q = (t.outboundQuestion ?? t.question).slice(0, ASSIST_SEND_LIMITS.maxTurnChars);
     if (q.length > 0) pair.push({ role: 'user', content: q });
     const a = t.outboundAnswer.slice(0, ASSIST_SEND_LIMITS.maxTurnChars);
     if (a.length > 0) pair.push({ role: 'assistant', content: a });
@@ -222,7 +229,20 @@ export const useAssistStore = create<AssistStore>()(
       turns: [],
       draft: '',
 
-      setEnabled: (value) => set({ enabled: value, ...(value ? {} : { open: false }) }),
+      setEnabled: (value) =>
+        set((s) => ({
+          enabled: value,
+          ...(value
+            ? {}
+            : {
+                open: false,
+                // ★끄는 순간 살아 있던 [실행] 버튼도 죽인다 — 꺼진 기능이 저장을
+                //   일으키는 경로를 남기지 않는다 (2026-08-24 UltraQA).
+                turns: s.turns.map((t) =>
+                  t.proposalState === 'pending' ? { ...t, proposalState: 'expired' as const } : t,
+                ),
+              }),
+        })),
 
       acknowledgeNotice: () => set({ acknowledgedNoticeVersion: ASSIST_NOTICE_VERSION }),
 
@@ -231,6 +251,17 @@ export const useAssistStore = create<AssistStore>()(
       setOpen: (value) => {
         // 꺼져 있으면 열 수 없다. 화면을 우회해 불러도 마찬가지다.
         if (value && !get().enabled) return;
+        if (!value) {
+          // ★닫으면 미실행 제안은 소멸한다 — 닫았다 한참 뒤에 다시 열어 [실행]을 누르면,
+          //   그 사이 화면에서 직접 지운 대상에 대해 "지웠어요"라고 거짓말하게 된다.
+          set((s) => ({
+            open: false,
+            turns: s.turns.map((t) =>
+              t.proposalState === 'pending' ? { ...t, proposalState: 'expired' as const } : t,
+            ),
+          }));
+          return;
+        }
         set({ open: value });
       },
 
@@ -275,10 +306,21 @@ export const useAssistStore = create<AssistStore>()(
         // ★별칭 매핑은 **개인정보다.** 이 함수 안에서만 살고 상태에 저장하지 않는다.
         //   AI 답변을 화면에 띄우기 직전 되돌리는 데에만 쓴다.
         const mappings: MaskMapping[] = [];
+        // ★별칭 번호를 이 질문(ask) 전체가 공유한다 — 질문·카드·2왕복 실행 결과까지.
+        //   세션이 없으면 칸마다 1번부터 다시 세어 다른 학생 둘이 같은 ［이름1］ 이 된다.
+        const maskSession = createMaskSession();
+
+        // ★질문 원문도 카드와 같은 그물을 지난다 — 방침·고지문이 그렇게 약속한다.
+        //   화면(turn.question)에는 원문이 남고, 밖으로는 가린 쪽만 나간다.
+        const questionRedaction = redactQuestion(question, roster, maskSession);
+        const outboundQuestion = questionRedaction.masked;
+        maskedCount += questionRedaction.mappings.length;
+        mappings.push(...questionRedaction.mappings);
+
         for (const card of cards) {
           const tool = findAssistTool(card.tool);
           if (!tool) continue; // 레지스트리에 없는 도구는 보내지 않는다
-          const result = redactOutbound(tool, card.data, roster);
+          const result = redactOutbound(tool, card.data, roster, maskSession);
           maskedCount += result.maskedCount;
           blankedCount += result.blankedCount;
           // 자유 입력이 아닌 자리에서 걸렸다면 화이트리스트 설계가 잘못된 것이다 — 통째로 뺀다.
@@ -288,7 +330,8 @@ export const useAssistStore = create<AssistStore>()(
         }
 
         // ★새 턴을 상태에 넣기 **전에** 이력을 만든다 — 자기 자신이 이력에 끼면 안 된다.
-        const historyTurns = buildHistoryTurns(get().turns, question);
+        //   현재 질문도 **가려진 쪽**을 싣는다.
+        const historyTurns = buildHistoryTurns(get().turns, outboundQuestion);
 
         // 정규식에 안 걸린 질문("이번 주 급식 뭐 나와?")의 두 경로:
         //  - 실행기가 있으면(옵션 A) 1차 왕복에서 **모델이 도구를 고르게** 한다.
@@ -298,7 +341,15 @@ export const useAssistStore = create<AssistStore>()(
         //   하나라도 있는가"**다. 읽기 실행기만 보고 판단했더니, 쓰기 제안만 붙인 경로에서
         //   도구가 아예 안 나가 제안이 만들어지지 않았다(Phase 3 테스트에서 잡힘).
         const canUseTools = executeTool !== undefined || proposeWrite !== undefined;
-        const wantsToolSelection = outbound.length === 0 && canUseTools;
+        // ★"카드가 있으면 도구를 안 보낸다"만으로 판단하면 안 된다 (2026-08-24 UltraQA P0):
+        //   "장보기 할 일 지워줘"는 정규식 지름길("할 일")에 걸려 조회 카드가 만들어지는데,
+        //   그 순간 도구 목록이 빠져 **모델이 쓰기를 고를 방법 자체가 없었다** — 흔한
+        //   한국어 쓰기 요청 전부가 조회로 강등됐다. 바꾸려는 말이면 카드가 있어도
+        //   도구를 함께 싣는다(그 카드는 대상 확인용 목록으로 같이 나간다).
+        const wantsToolSelection =
+          (outbound.length === 0 ||
+            (proposeWrite !== undefined && mentionsWriteIntent(question))) &&
+          canUseTools;
         let effectiveOutbound = outbound;
         if (effectiveOutbound.length === 0 && !wantsToolSelection) {
           const lastWithCards = [...get().turns]
@@ -319,6 +370,7 @@ export const useAssistStore = create<AssistStore>()(
               cards,
               answer: '',
               outboundAnswer: '',
+              outboundQuestion,
               outboundCards: effectiveOutbound,
               degraded: null,
               status: 'thinking' as const,
@@ -411,7 +463,7 @@ export const useAssistStore = create<AssistStore>()(
               for (const card of executed) {
                 const tool = findAssistTool(card.tool);
                 if (!tool) continue;
-                const result = redactOutbound(tool, card.data, roster);
+                const result = redactOutbound(tool, card.data, roster, maskSession);
                 maskedCount += result.maskedCount;
                 blankedCount += result.blankedCount;
                 if (result.blocked) continue;
@@ -465,7 +517,9 @@ export const useAssistStore = create<AssistStore>()(
               //
               //   더 부르지는 않는다. **도구 없이 한 번만** 다시 물어 문장을 받는다 —
               //   왕복 상한을 세 번으로 못 박아 두는 셈이다.
-              if (answer.text.trim().length === 0) {
+              // ★상한·장애로 빈 답이 온 경우는 다시 물어봐야 소용없다 — 모델이 도구를
+              //   또 부르느라 문장이 빈 경우(degraded 없음)에만 한 번 더 묻는다.
+              if (answer.degraded === null && answer.text.trim().length === 0) {
                 answer = await port.ask({
                   installId: get().installId,
                   turns: historyTurns,

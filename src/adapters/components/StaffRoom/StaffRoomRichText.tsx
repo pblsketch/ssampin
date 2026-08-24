@@ -109,6 +109,12 @@ export function StaffRoomRichText({
     );
   }
 
+  // 빈 본문은 깨진 본문이 아니다 — 제목만 쓴 글은 그냥 비워서 그린다.
+  // 이 구분이 없으면 멀쩡한 글이 아래의 "불러오지 못했습니다"로 보인다.
+  if (body.trim() === '') {
+    return <div className={className} />;
+  }
+
   const blocks = parseStaffRoomRichText(body);
 
   // 읽을 수 없는 본문 — 하얀 화면 대신 무슨 일인지 한국어로 알린다.

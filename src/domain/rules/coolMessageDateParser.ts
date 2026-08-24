@@ -139,20 +139,27 @@ function addDays(d: Date, days: number): Date {
 }
 
 /**
- * 연도 생략 시: 기준일에서 30일 이상 과거면 이듬해로 해석한다.
+ * 연도 생략 시의 해석 규칙:
+ * - 기준일에서 30일 안쪽(최근 과거 포함)이면 **올해**다.
+ * - 그보다 오래된 날짜는, **연말·연초 경계일 때만** 이듬해로 넘긴다 —
+ *   12월에 받은 쪽지의 "1월 10일"은 다음 해 1월이라는 뜻이다.
+ * - 그 밖의 "한 달 넘게 지난 날짜"는 후보로 만들지 않는다(null).
  *
- * 12월에 받은 쪽지의 "1월 10일"은 다음 해 1월이라는 뜻이다.
+ * ★예전에는 30일 넘게 지난 날짜를 **무조건** 이듬해로 넘겼다. 그러면 8월 쪽지의
+ * "지난 6월 5일 실시한 안전교육" 같은 회고 문장이 **내년 6월 5일**로 확정되는데,
+ * 카드에는 연도가 안 보여 아무도 모른 채 달력에 잘못 등록됐다(2026-08-24 UltraQA P0).
+ * 지나간 날짜 언급은 등록할 일정이 아니다 — 자신 있게 틀리느니 못 찾는 쪽을 택한다.
  */
 function resolveYear(month: number, day: number, base: Date): Date | null {
   const cutoff = addDays(atMidnight(base), -30);
-  let last: Date | null = null;
-  for (const year of [base.getFullYear(), base.getFullYear() + 1]) {
-    const d = makeDate(year, month, day);
-    if (d === null) return null;
-    last = d;
-    if (d.getTime() >= cutoff.getTime()) return d;
-  }
-  return last; // 둘 다 과거면 마지막 후보
+  const sameYear = makeDate(base.getFullYear(), month, day);
+  if (sameYear !== null && sameYear.getTime() >= cutoff.getTime()) return sameYear;
+
+  // 올해 달력에 없는 날짜(2월 29일 등)도 여기로 온다 — 경계 조건이 맞으면
+  // 이듬해(윤년)에서 다시 찾아본다. 예전에는 이 자리에서 바로 포기했다.
+  const crossesYearEnd = base.getMonth() + 1 >= 11 && month <= 2;
+  if (!crossesYearEnd) return null;
+  return makeDate(base.getFullYear() + 1, month, day);
 }
 
 function resolveAbs(groups: Record<string, string | undefined>, base: Date): Date | null {
@@ -187,6 +194,8 @@ function resolveTime(groups: Record<string, string | undefined>): readonly [numb
   if (ampm === '오후' && hour < 12) hour += 12;
   else if ((ampm === '저녁' || ampm === '밤') && hour < 12) hour += 12;
   else if (ampm === '낮' && hour <= 6) hour += 12;
+  // "오전 12시"·"밤 12시"는 자정이다 — 보정 없이 두면 12(정오)로 남는다.
+  else if ((ampm === '오전' || ampm === '밤') && hour === 12) hour = 0;
   if (hour > 24 || minute > 59) return null;
   return [hour % 24, minute];
 }
@@ -359,9 +368,12 @@ export function extractCoolEvents(text: string, base: Date): ParsedCoolEvent[] {
   }
 
   // 같은 시각 중복 제거 (본문에 같은 날짜가 여러 번 나오는 경우)
+  // ★열쇠에 isDeadline 을 넣지 않는다 — 자동 판단(기한→할일)을 걷어낸 뒤(cbcb96db)로는
+  //   화면에서 두 카드를 구분할 방법이 없어, 같은 날짜가 똑같은 카드 두 장으로 뜬다.
+  //   isDeadline 은 표시용 정보로만 남는다.
   const seen = new Set<string>();
   return events.filter((ev) => {
-    const key = `${ev.start.getTime()}${ev.isDeadline ? 'D' : ''}`;
+    const key = `${ev.start.getTime()}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;

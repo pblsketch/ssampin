@@ -55,6 +55,12 @@ export function StaffExcelImportModal({
   const [result, setResult] = useState<StaffImportResult | null>(null);
   const [mode, setMode] = useState<StaffImportMode>('merge');
   const [busy, setBusy] = useState(false);
+  /**
+   * "통째로 바꾸기"는 한 번 더 확인한다 (2026-08-24 UltraQA) — 라디오 하나로 기존 명부와
+   * 즐겨찾기가 즉시 사라지는데, 백업/복원 말고는 복구 경로가 없다. 중복 정리 모달처럼
+   * 몇 명이 지워지는지 숫자를 넣어 되묻는다.
+   */
+  const [confirmReplace, setConfirmReplace] = useState(false);
   const [dragging, setDragging] = useState(false);
   /**
    * 끌어다 놓기 중인지 세는 값.
@@ -88,7 +94,14 @@ export function StaffExcelImportModal({
   };
 
   const readFile = async (file: File): Promise<void> => {
-    if (!/\.xlsx?$/i.test(file.name)) {
+    // 옛 엑셀(.xls, BIFF)은 읽는 라이브러리가 지원하지 않는다 — 통과시키면
+    // "파일이 열려 있으면 닫고…"라는 엉뚱한 오류로 떨어진다. 나이스 내려받기가
+    // .xls 인 경우가 흔해서 무엇을 해야 하는지까지 말해 준다.
+    if (/\.xls$/i.test(file.name)) {
+      show('옛 엑셀(.xls)은 읽을 수 없습니다. 엑셀에서 .xlsx로 다시 저장해 올려주세요.', 'error');
+      return;
+    }
+    if (!/\.xlsx$/i.test(file.name)) {
       show('엑셀 파일(.xlsx)만 올릴 수 있습니다', 'error');
       return;
     }
@@ -282,7 +295,10 @@ export function StaffExcelImportModal({
                   type="radio"
                   name="staff-import-mode"
                   checked={mode === 'merge'}
-                  onChange={() => setMode('merge')}
+                  onChange={() => {
+                    setMode('merge');
+                    setConfirmReplace(false);
+                  }}
                   className="mt-1 accent-sp-accent"
                 />
                 <span className="text-sm text-sp-text">
@@ -297,7 +313,10 @@ export function StaffExcelImportModal({
                   type="radio"
                   name="staff-import-mode"
                   checked={mode === 'replace'}
-                  onChange={() => setMode('replace')}
+                  onChange={() => {
+                    setMode('replace');
+                    setConfirmReplace(false);
+                  }}
                   className="mt-1 accent-sp-accent"
                 />
                 <span className="text-sm text-sp-text">
@@ -321,11 +340,24 @@ export function StaffExcelImportModal({
           </button>
           <button
             type="button"
-            onClick={() => void handleImport()}
+            onClick={() => {
+              // 통째로 바꾸기는 첫 클릭에서 실행하지 않고 문구를 바꿔 되묻는다.
+              if (mode === 'replace' && existingCount > 0 && !confirmReplace) {
+                setConfirmReplace(true);
+                return;
+              }
+              void handleImport();
+            }}
             disabled={!canImport}
-            className="px-4 py-2 rounded-lg text-sm bg-sp-accent text-white disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition-all"
+            className={`px-4 py-2 rounded-lg text-sm text-white disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition-all ${
+              confirmReplace && mode === 'replace' ? 'bg-red-500' : 'bg-sp-accent'
+            }`}
           >
-            {busy ? '처리 중...' : '등록하기'}
+            {busy
+              ? '처리 중...'
+              : confirmReplace && mode === 'replace'
+                ? `정말 바꾸기 — 기존 ${existingCount}명이 지워집니다`
+                : '등록하기'}
           </button>
         </div>
       </div>

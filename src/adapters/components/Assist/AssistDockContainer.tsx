@@ -149,7 +149,10 @@ export interface IntentSources {
 
 /** 인원 수. 학급 이름을 주면 그 학급을, 아니면 담임 학급을 센다. */
 function buildCountStudents(src: IntentSources, className?: string): ToolResultShape {
-  const named = className === undefined ? undefined : src.classes.find((c) => c.name === className);
+  // ★다른 도구와 같은 느슨 매칭(namedClass)을 쓴다 — 모델이 "3학년 2반 수업"처럼
+  //   질문의 말을 그대로 옮겨 보내면, 정확 일치만 봐서는 조용히 담임 학급을 세어 버린다.
+  const resolved = namedClass(src, className).className;
+  const named = resolved === undefined ? undefined : src.classes.find((c) => c.name === resolved);
   return named
     ? (countStudents(named.students, named.name) as unknown as ToolResultShape)
     : (countStudents(src.students, '우리 반') as unknown as ToolResultShape);
@@ -571,6 +574,7 @@ function writeDeps(): WriteDeps {
     deleteEvent: events.deleteEvent,
 
     addMemo: memos.addMemo,
+    getMemo: (id) => useMemoStore.getState().memos.find((m) => m.id === id),
     updateMemo: memos.updateMemo,
     deleteMemo: memos.deleteMemo,
 
@@ -580,6 +584,7 @@ function writeDeps(): WriteDeps {
     deleteProgressEntry: teaching.deleteProgressEntry,
 
     addBookmark: bookmarks.addBookmark,
+    getBookmark: (id) => useBookmarkStore.getState().bookmarks.find((b) => b.id === id),
     updateBookmark: bookmarks.updateBookmark,
     deleteBookmark: bookmarks.deleteBookmark,
     addBookmarkGroup: bookmarks.addGroup,
@@ -589,6 +594,7 @@ function writeDeps(): WriteDeps {
     createSection: notes.createSection,
     renameSection: notes.renameSection,
     createPage: notes.createPage,
+    getNotePage: (id) => useNoteStore.getState().pagesMeta.find((p) => p.id === id),
     renamePage: notes.renamePage,
     deletePage: notes.deletePage,
     noteSelection: () => {
@@ -782,6 +788,15 @@ export function AssistDockContainer() {
   const handleRunProposal = useMemo(
     () =>
       (turnId: string, proposal: AssistWriteProposal): void => {
+        // ★실행 직전 재확인 (2026-08-24 UltraQA):
+        //   - 기능이 꺼졌으면 실행하지 않는다 — 옵트인 차단선은 실행 경로에도 있어야 한다.
+        //   - pending 이 아니면(이미 실행 중·소멸) 무시한다 — 이중 클릭 방어의 절반.
+        const current = useAssistStore.getState();
+        if (!current.enabled) return;
+        const turn = current.turns.find((t) => t.id === turnId);
+        if (!turn || turn.proposalState !== 'pending') return;
+        // 누르는 즉시 running 으로 — 버튼이 사라져 두 번 누를 수 없다(나머지 절반).
+        settleProposal(turnId, 'running');
         void (async () => {
           try {
             const result = await executeAssistWrite(proposal, writeDeps());

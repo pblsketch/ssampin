@@ -212,7 +212,11 @@ export function PostEditor({ departmentId, boardId, mode, onDone, onCancel }: Po
     setSubmitting(true);
     // 편집기가 만든 구조를 그대로 저장한다. 화면에 그릴 때 같은 형식 표시를
     // 보고 판단하므로(ADR-069), 저장하는 쪽과 그리는 쪽이 어긋나지 않는다.
-    const bodyFormat = 'lexical' as const;
+    //
+    // 단, 본문을 한 번도 안 건드리면 body 는 빈 문자열이다(제목에 autoFocus 가 있어
+    // 흔한 흐름이다). 빈 문자열을 'lexical' 로 저장하면 읽는 쪽 JSON 해석이 실패해
+    // 멀쩡한 글이 "내용을 불러오지 못했습니다"로 보인다 — 빈 본문은 'plain' 으로 남긴다.
+    const bodyFormat = body.trim() === '' ? ('plain' as const) : ('lexical' as const);
     const ok =
       mode === 'create'
         ? await writePost(departmentId, {
@@ -253,9 +257,11 @@ export function PostEditor({ departmentId, boardId, mode, onDone, onCancel }: Po
 
       {mode === 'create' && restoredDraft && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-sp-border bg-sp-surface px-4 py-3">
+          {/* 임시저장에는 제목·본문만 담긴다(서버 drafts 표가 그 둘뿐) — 말머리·태그·첨부까지
+              불러온 척하면 유실을 알아챌 단서가 없다. 거짓 안내가 유실보다 나쁘다. */}
           <p className="flex items-center gap-1.5 text-sm text-sp-text">
             <span className="material-symbols-outlined text-icon-md text-sp-accent">history</span>
-            쓰시던 글을 불러왔어요
+            쓰시던 제목·내용을 불러왔어요 (말머리·태그·첨부는 다시 골라주세요)
           </p>
           <button
             type="button"

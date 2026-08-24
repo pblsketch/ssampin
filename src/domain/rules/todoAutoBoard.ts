@@ -145,6 +145,12 @@ export function describeBucketMove(todo: Todo, target: AutoBoardBucket, todayStr
   if ('checkAt' in changes && changes.checkAt === undefined && parseCheckAt(todo) !== null) {
     parts.push('다시 확인할 날을 지웁니다');
   }
+  // 상태 전환은 세부 항목 체크를 함께 되돌린다(applyStatusChange) — 확인창의 존재 이유가
+  // "무엇이 바뀌는지 먼저 보여 준다"이므로, 이것도 말하지 않으면 조용한 유실이 된다.
+  if (changes.subTasks !== undefined) {
+    const uncheckedCount = (todo.subTasks ?? []).filter((st) => st.completed).length;
+    if (uncheckedCount > 0) parts.push(`세부 항목 체크 ${uncheckedCount}개가 풀립니다`);
+  }
 
   if (parts.length === 0) return '바뀌는 내용이 없습니다.';
   return `${parts.join(', ')}. 진행할까요?`;

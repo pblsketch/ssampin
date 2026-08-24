@@ -21,7 +21,10 @@ import { importKey } from '@domain/rules/coolImportHistory';
 const WEEKDAY_LABEL = ['일', '월', '화', '수', '목', '금', '토'] as const;
 
 function formatDay(d: Date): string {
-  return `${d.getMonth() + 1}월 ${d.getDate()}일 (${WEEKDAY_LABEL[d.getDay()]})`;
+  // ★올해가 아니면 연도를 함께 보여준다 (2026-08-24 UltraQA) — 연말 쪽지의 "1월 10일"은
+  //   이듬해로 해석되는데, 연도가 안 보이면 판단 근거가 사람 눈앞에 없다.
+  const yearPrefix = d.getFullYear() === new Date().getFullYear() ? '' : `${d.getFullYear()}년 `;
+  return `${yearPrefix}${d.getMonth() + 1}월 ${d.getDate()}일 (${WEEKDAY_LABEL[d.getDay()]})`;
 }
 
 function formatClock(d: Date): string {
@@ -101,6 +104,8 @@ export function CoolImportModal({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedKey, setSelectedKey] = useState<number | null>(null);
   const [detail, setDetail] = useState<CoolMessage | null>(null);
+  /** 쪽지 열기 실패 사유 — null 과 구분해야 "여는 중…"에 영원히 멈추지 않는다 */
+  const [detailError, setDetailError] = useState<string | null>(null);
   const [rows, setRows] = useState<readonly CandidateRow[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -134,10 +139,17 @@ export function CoolImportModal({
     if (selectedKey === null) return;
     let alive = true;
     setDetail(null);
+    setDetailError(null);
     setRows([]);
     loadMessage(selectedKey)
       .then((msg) => {
-        if (!alive || !msg) return;
+        if (!alive) return;
+        // ★null(쪽지 없음)도 실패의 한 형태다 — 그대로 두면 "여는 중…"에 영원히 멈춘다.
+        //   쿨메신저에서 그 사이 지운 쪽지를 클릭한 경우가 여기다 (2026-08-24 UltraQA).
+        if (!msg) {
+          setDetailError('쪽지를 열지 못했습니다. 쿨메신저에서 지워졌을 수 있어요.');
+          return;
+        }
         setDetail(msg);
         // 기준일은 오늘이 아니라 **쪽지를 받은 날**이다. 지난 쪽지의 "내일"이 밀리지 않게.
         const base = new Date(msg.receivedAt);
@@ -156,8 +168,14 @@ export function CoolImportModal({
           })),
         );
       })
-      .catch(() => {
-        if (alive) setDetail(null);
+      .catch((err: unknown) => {
+        if (!alive) return;
+        setDetail(null);
+        setDetailError(
+          err instanceof Error && err.message
+            ? err.message
+            : '쪽지를 열지 못했습니다. 잠시 뒤 다시 시도해 주세요.',
+        );
       });
     return () => {
       alive = false;
@@ -290,6 +308,11 @@ export function CoolImportModal({
         <div className="overflow-y-auto min-h-0 p-5">
           {selectedKey === null ? (
             <Hint />
+          ) : detailError !== null ? (
+            <div className="rounded-lg border border-sp-border bg-sp-surface p-3">
+              <p className="text-sm text-sp-error">{detailError}</p>
+              <p className="mt-1 text-xs text-sp-muted">다른 쪽지를 골라 계속하실 수 있어요.</p>
+            </div>
           ) : detail === null ? (
             <p className="text-sm text-sp-muted">쪽지를 여는 중…</p>
           ) : (
@@ -303,7 +326,12 @@ export function CoolImportModal({
                     <li
                       key={row.id}
                       className="animate-fade-in"
-                      style={{ animationDelay: `${i * 60}ms`, animationFillMode: 'backwards' }}
+                      // 지연은 8칸까지만 누적 — 날짜 50개짜리 쪽지에서 마지막 카드가
+                      // 3초 뒤에 나타나면 그동안 화면이 비어 보인다
+                      style={{
+                        animationDelay: `${Math.min(i, 8) * 60}ms`,
+                        animationFillMode: 'backwards',
+                      }}
                     >
                       <CandidateCard
                         row={row}

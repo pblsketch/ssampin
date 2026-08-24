@@ -302,6 +302,8 @@ function ProposalCard({
         </div>
       )}
 
+      {/* 실행 중 — 버튼을 없애 두 번 누르는 것을 막고, 멈춘 게 아니라는 것을 알린다 */}
+      {state === 'running' && <p className="mt-2 text-sm text-sp-muted">저장하는 중…</p>}
       {state === 'done' && <p className="mt-2 text-sm text-sp-success">✓ {message}</p>}
       {state === 'failed' && <p className="mt-2 text-sm text-sp-text">⚠ {message}</p>}
       {/* 실행 없이 대화가 이어지면 제안은 소멸한다(계획서). 왜 버튼이 없는지 말해 준다. */}
@@ -317,6 +319,7 @@ function ProposalCard({
 /** 축소 사유별 한국어 한 줄. **오류처럼 보이지 않게** 담담하게 쓴다. */
 const DEGRADED_MESSAGE: Readonly<Record<string, string>> = {
   budget: '이번 달 AI 사용량을 다 썼어요. 숫자는 그대로 보실 수 있어요.',
+  busy: '질문이 잠깐 몰렸어요. 1분쯤 뒤에 다시 물어봐 주세요.',
   unavailable: 'AI 요약은 지금 사용할 수 없어요. 숫자는 그대로 보실 수 있어요.',
   upstream: 'AI가 잠시 응답하지 않아요. 숫자는 그대로 보실 수 있어요.',
   offline: '인터넷이 끊겨 AI 요약을 못 받았어요. 숫자는 그대로 보실 수 있어요.',

@@ -20,6 +20,7 @@
  */
 import { app, ipcMain } from 'electron';
 import {
+  cleanupStaleCoolTempDirs,
   defaultMemoDir,
   isCoolMessengerAvailable,
   readCoolMemberNames,
@@ -60,6 +61,9 @@ function requireMemoDir(): string {
 }
 
 export function registerCoolMessengerHandlers(): void {
+  // 지난 실행이 강제 종료돼 남은 쪽지 사본(%TEMP%)을 지운다 — 개인정보 청소.
+  cleanupStaleCoolTempDirs();
+
   ipcMain.handle('cool-messenger:available', (): boolean => {
     // 여기서만은 예외를 삼킨다 — "쓸 수 있나?"라는 질문의 답은 true/false 뿐이다.
     try {

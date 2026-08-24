@@ -363,9 +363,19 @@ export type StaffImportMode =
   /** 기존 목록을 버리고 파일 내용으로 통째로 바꾼다. */
   | 'replace';
 
-/** 같은 사람인지 판정하는 열쇠 — 이름과 휴대폰이 모두 같아야 같은 사람으로 본다. */
+/**
+ * 같은 사람인지 판정하는 열쇠 — 이름과 휴대폰이 모두 같아야 같은 사람으로 본다.
+ *
+ * ★휴대폰이 비어 있으면 같은 사람으로 판정하지 않는다 (2026-08-24 UltraQA) —
+ * 휴대폰을 안 적는 학교(내선만 쓰는 경우가 흔하다)에서 열쇠가 `"김철수|"` 로 겹쳐,
+ * 기존 동명이인 두 명이 병합 한 번에 한 명으로 **조용히 소실**됐다. 빈 휴대폰은
+ * id 를 열쇠에 넣어 각자 고유하게 남긴다(대가: 휴대폰 없는 같은 사람은 중복 등록될 수
+ * 있지만, 중복은 눈에 보이고 소실은 보이지 않는다).
+ */
 function identityKey(c: StaffContact): string {
-  return `${c.name.trim()}|${normalizePhoneDigits(c.mobile ?? '')}`;
+  const phone = normalizePhoneDigits(c.mobile ?? '');
+  if (phone === '') return `__uniq:${c.id}`;
+  return `${c.name.trim()}|${phone}`;
 }
 
 /**

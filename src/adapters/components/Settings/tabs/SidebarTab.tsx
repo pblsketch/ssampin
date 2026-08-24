@@ -10,6 +10,33 @@ interface Props {
   patch: (p: Partial<Settings>) => void;
 }
 
+/**
+ * 저장 정본(menuOrder)은 항상 NAV_ITEMS 전체를 담는다 (ADR-070).
+ *
+ * 실험실로 감춘 항목(온라인 교무실)을 화면 목록에서 뺀 채 그 목록으로 menuOrder 를
+ * 통째로 다시 쓰면 저장값에서 떨어져 나가고, 나중에 실험실을 켰을 때 정렬 규칙이
+ * "모르는 항목은 맨 뒤"라 설계 위치(연락처와 쌤도구 사이) 대신 맨 끝에 붙는다.
+ * 그래서 드래그 저장 전에, 빠진 항목을 NAV_ITEMS 기준 제자리에 다시 끼워 넣는다.
+ */
+function fullMenuOrder(saved: readonly string[] | undefined): PageId[] {
+  const navIds = NAV_ITEMS.map((item) => item.id);
+  const order: PageId[] = (saved ?? []).filter((id): id is PageId => navIds.includes(id as PageId));
+  navIds.forEach((id, navIdx) => {
+    if (order.includes(id)) return;
+    // NAV_ITEMS 에서 바로 앞 이웃들 중 이미 자리 잡은 마지막 항목 뒤에 끼운다
+    let insertAt = 0;
+    for (let i = navIdx - 1; i >= 0; i--) {
+      const pos = order.indexOf(navIds[i]!);
+      if (pos >= 0) {
+        insertAt = pos + 1;
+        break;
+      }
+    }
+    order.splice(insertAt, 0, id);
+  });
+  return order;
+}
+
 export function SidebarTab({ draft, patch }: Props) {
   const [draggedId, setDraggedId] = useState<PageId | null>(null);
   const [dragOverId, setDragOverId] = useState<PageId | null>(null);
@@ -56,7 +83,7 @@ export function SidebarTab({ draft, patch }: Props) {
         setDragOverId(null);
         return;
       }
-      const currentOrder = sortedItems.map((item) => item.id);
+      const currentOrder = fullMenuOrder(draft.menuOrder);
       const dragIdx = currentOrder.indexOf(draggedId);
       const targetIdx = currentOrder.indexOf(targetId);
       const newOrder = [...currentOrder];
@@ -66,7 +93,7 @@ export function SidebarTab({ draft, patch }: Props) {
       setDraggedId(null);
       setDragOverId(null);
     },
-    [draggedId, sortedItems, patch],
+    [draggedId, draft.menuOrder, patch],
   );
 
   const handleDragEnd = useCallback(() => {

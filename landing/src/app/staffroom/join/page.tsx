@@ -29,6 +29,7 @@ function normalizeCode(raw: string | undefined): string | null {
 
 const STEPS = [
   '컴퓨터에서 쌤핀을 엽니다.',
+  '설정 > 실험실 기능에서 "온라인 교무실"을 켜고 저장합니다. (이미 켜져 있으면 건너뜁니다)',
   '왼쪽 메뉴에서 온라인 교무실을 누릅니다.',
   '초대 코드로 참여를 누르고 위 코드를 넣습니다.',
   '구글 계정으로 본인 확인을 하면 부서에 들어갑니다.',
@@ -74,6 +75,7 @@ export default async function StaffRoomJoinPage({
             <p className="font-semibold">초대 코드를 찾지 못했습니다.</p>
             <p className="mt-2 text-sm text-sp-muted">
               링크가 잘린 것 같습니다. 초대해 주신 선생님께 코드를 직접 여쭤보시고, 쌤핀 앱에서
+              <span className="text-sp-text"> 설정 &gt; 실험실 기능</span>의 온라인 교무실을 켠 뒤
               <span className="text-sp-text"> 온라인 교무실 &gt; 초대 코드로 참여</span>에
               넣어주세요.
             </p>

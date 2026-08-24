@@ -31,6 +31,29 @@ export function defaultMemoDir(): string | null {
   return join(local, 'CoolMessenger', 'Memo');
 }
 
+/**
+ * 앱이 강제 종료돼 못 지운 임시 사본을 쓸어낸다 — 시작 시 한 번 부른다.
+ *
+ * `withReadOnlyCopy` 의 `finally` 가 지우지만, 복사 도중 프로세스가 죽으면(작업 관리자
+ * 종료·크래시) `%TEMP%\ssampin-cool-*` 에 **쪽지 전문 사본**이 그대로 남는다.
+ * 개인정보라 다음 실행에서 반드시 청소한다. 실패해도 기능은 계속 간다.
+ */
+export function cleanupStaleCoolTempDirs(): void {
+  try {
+    const base = tmpdir();
+    for (const name of readdirSync(base)) {
+      if (!name.startsWith('ssampin-cool-')) continue;
+      try {
+        rmSync(join(base, name), { recursive: true, force: true });
+      } catch {
+        // 다른 프로세스가 잡고 있으면 다음 실행에서 다시 시도한다
+      }
+    }
+  } catch {
+    // temp 목록 자체를 못 읽는 환경 — 청소는 최선 노력이다
+  }
+}
+
 /** 쪽지함 구조가 예상과 다를 때 (쿨메신저 업데이트 등) — 조용히 실패하지 않고 이걸 던진다 */
 export class CoolSchemaMismatchError extends Error {
   constructor(detail: string) {

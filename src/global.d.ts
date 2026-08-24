@@ -766,6 +766,8 @@ interface ElectronAPI {
       body: string;
       studentDedupKey: string;
     }>,
+    /** 하루 발화 상한(todo 전용, 0 = 제한 없음). 최종 판정은 main 의 발화 장부가 한다 */
+    dailyCap?: number,
   ) => void;
   /** 출처를 주면 그 칸만 비운다. **인자 없이 부르면 남의 알림까지 지워진다.** */
   clearReminderSchedule?: (source?: 'record' | 'todo') => void;

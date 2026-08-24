@@ -54,6 +54,9 @@ export interface WriteDeps {
   readonly deleteEvent: (id: string) => Promise<void>;
 
   readonly addMemo: (content: string, color: MemoColor) => Promise<void>;
+  /** 삭제·수정 전 대상이 아직 있는지 다시 본다 — 없는 id 에 스토어가 조용히 no-op 이라
+   *  확인 없이 "지웠어요"라고 말하면 거짓 성공이 된다 (2026-08-24 UltraQA) */
+  readonly getMemo: (id: string) => unknown | undefined;
   readonly updateMemo: (id: string, content: string) => Promise<void>;
   readonly deleteMemo: (id: string) => Promise<void>;
 
@@ -78,6 +81,8 @@ export interface WriteDeps {
     iconValue: string;
     order: number;
   }) => Promise<unknown>;
+  /** 위 getMemo 와 같은 이유 — 삭제·수정 전 대상 재확인용 */
+  readonly getBookmark: (id: string) => unknown | undefined;
   readonly updateBookmark: (id: string, patch: { name?: string; url?: string }) => Promise<void>;
   readonly deleteBookmark: (id: string) => Promise<void>;
   readonly addBookmarkGroup: (input: {
@@ -93,6 +98,8 @@ export interface WriteDeps {
   readonly createSection: (notebookId: string) => Promise<void>;
   readonly renameSection: (id: string, title: string) => Promise<void>;
   readonly createPage: (sectionId: string) => Promise<void>;
+  /** 위 getMemo 와 같은 이유 — 이름 바꾸기·삭제 전 대상 재확인용 */
+  readonly getNotePage: (id: string) => unknown | undefined;
   readonly renamePage: (id: string, title: string) => Promise<void>;
   readonly deletePage: (id: string) => Promise<void>;
   /** 방금 만든 것의 id 를 알아내는 자리. 스토어가 새로 만든 것을 활성으로 잡아 준다 */
@@ -146,6 +153,13 @@ export async function executeAssistWrite(
     ok: false,
     message: '대상을 찾지 못해 아무것도 바꾸지 않았어요.',
   };
+  // ★삭제·수정 전 대상 재확인 (2026-08-24 UltraQA) — 제안을 만든 뒤 선생님이 화면에서
+  //   직접 지웠을 수 있다. 스토어는 없는 id 에 조용히 no-op 이라, 확인 없이 성공 문구를
+  //   말하면 거짓 성공이 된다.
+  const targetGone: WriteResult = {
+    ok: false,
+    message: '그 항목이 이미 없어요. 화면에서 지우셨다면 할 일이 끝난 거예요.',
+  };
 
   switch (proposal.tool) {
     // ── 할 일 ──
@@ -164,6 +178,7 @@ export async function executeAssistWrite(
     }
     case 'update_todo': {
       if (!id) return targetMissing;
+      if (deps.getTodo(id) === undefined) return targetGone;
       await deps.updateTodo(id, {
         ...(str(proposal, 'text') === undefined ? {} : { text: str(proposal, 'text') }),
         ...(str(proposal, 'dueDate') === undefined ? {} : { dueDate: str(proposal, 'dueDate') }),
@@ -192,6 +207,7 @@ export async function executeAssistWrite(
     }
     case 'delete_todo': {
       if (!id) return targetMissing;
+      if (deps.getTodo(id) === undefined) return targetGone;
       await deps.deleteTodo(id);
       return { ok: true, message: '할 일을 지웠어요.' };
     }
@@ -230,6 +246,7 @@ export async function executeAssistWrite(
     }
     case 'delete_event': {
       if (!id) return targetMissing;
+      if (deps.getEvent(id) === undefined) return targetGone;
       await deps.deleteEvent(id);
       return { ok: true, message: '일정을 지웠어요.' };
     }
@@ -244,11 +261,13 @@ export async function executeAssistWrite(
     case 'update_memo': {
       const content = str(proposal, 'content');
       if (!id || content === undefined) return targetMissing;
+      if (deps.getMemo(id) === undefined) return targetGone;
       await deps.updateMemo(id, content);
       return { ok: true, message: '메모를 고쳤어요.' };
     }
     case 'delete_memo': {
       if (!id) return targetMissing;
+      if (deps.getMemo(id) === undefined) return targetGone;
       await deps.deleteMemo(id);
       return { ok: true, message: '메모를 지웠어요.' };
     }
@@ -302,6 +321,7 @@ export async function executeAssistWrite(
     }
     case 'delete_progress': {
       if (!id) return targetMissing;
+      if (deps.getProgress(id) === undefined) return targetGone;
       await deps.deleteProgressEntry(id);
       return { ok: true, message: '진도를 지웠어요.' };
     }
@@ -324,6 +344,7 @@ export async function executeAssistWrite(
     }
     case 'update_bookmark': {
       if (!id) return targetMissing;
+      if (deps.getBookmark(id) === undefined) return targetGone;
       await deps.updateBookmark(id, {
         ...(str(proposal, 'name') === undefined ? {} : { name: str(proposal, 'name') }),
         ...(str(proposal, 'url') === undefined ? {} : { url: str(proposal, 'url') }),
@@ -332,6 +353,7 @@ export async function executeAssistWrite(
     }
     case 'delete_bookmark': {
       if (!id) return targetMissing;
+      if (deps.getBookmark(id) === undefined) return targetGone;
       await deps.deleteBookmark(id);
       return { ok: true, message: '즐겨찾기를 지웠어요.' };
     }
@@ -381,11 +403,13 @@ export async function executeAssistWrite(
     case 'rename_note_page': {
       const title = str(proposal, 'title');
       if (!id || title === undefined) return targetMissing;
+      if (deps.getNotePage(id) === undefined) return targetGone;
       await deps.renamePage(id, title);
       return { ok: true, message: `페이지 이름을 "${title}"(으)로 바꿨어요.` };
     }
     case 'delete_note_page': {
       if (!id) return targetMissing;
+      if (deps.getNotePage(id) === undefined) return targetGone;
       await deps.deletePage(id);
       return { ok: true, message: '페이지를 지웠어요.' };
     }
