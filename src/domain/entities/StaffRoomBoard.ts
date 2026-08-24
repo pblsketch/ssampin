@@ -152,6 +152,12 @@ export interface StaffRoomDraft {
   readonly body: string;
   /** 글과 함께 왕복해야 이어 쓸 때 서식이 풀리지 않는다 */
   readonly bodyFormat: StaffRoomBodyFormat;
+  /** 골라 둔 말머리 — 없으면 null. 관리자가 지우면 null 로 돌아온다(056 SET NULL) */
+  readonly categoryId: string | null;
+  /** 붙여 둔 해시태그 — 제목·본문처럼 함께 보관해야 이어 쓸 때 사라지지 않는다 */
+  readonly tags: readonly string[];
+  /** 붙여 둔 자료실 파일 id — 자료실에서 지워진 파일은 복원 시 화면이 알린다 */
+  readonly fileIds: readonly string[];
   readonly updatedAt: string;
 }
 

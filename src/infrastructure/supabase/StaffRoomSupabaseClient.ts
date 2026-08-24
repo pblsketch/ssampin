@@ -479,7 +479,15 @@ export class StaffRoomSupabaseClient implements IStaffRoomPort {
   async saveDraft(
     googleAccessToken: string,
     departmentId: string,
-    input: { moduleId?: string; title: string; body: string; bodyFormat: StaffRoomBodyFormat },
+    input: {
+      moduleId?: string;
+      title: string;
+      body: string;
+      bodyFormat: StaffRoomBodyFormat;
+      categoryId: string | null;
+      tags: readonly string[];
+      fileIds: readonly string[];
+    },
   ): Promise<StaffRoomDraft | null> {
     const res = await this.invoke<{ draft: StaffRoomDraft | null }>('staffroom-drafts', {
       action: 'save',
@@ -489,6 +497,10 @@ export class StaffRoomSupabaseClient implements IStaffRoomPort {
       title: input.title,
       body: input.body,
       bodyFormat: input.bodyFormat,
+      // 말머리·태그·첨부(056)도 함께 — 제목·본문만 보내면 이어 쓸 때 사라진다
+      categoryId: input.categoryId,
+      tags: input.tags,
+      fileIds: input.fileIds,
     });
     return res.draft;
   }

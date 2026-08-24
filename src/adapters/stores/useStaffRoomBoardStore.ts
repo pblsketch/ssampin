@@ -73,6 +73,10 @@ interface StaffRoomBoardState {
    */
   draftBodyFormat: StaffRoomBodyFormat;
   draftMentions: string[];
+  /** 쓰던 글의 말머리·태그·첨부(056) — 제목·본문처럼 왕복해야 이어 쓸 때 사라지지 않는다 */
+  draftCategoryId: string | null;
+  draftTags: string[];
+  draftFileIds: string[];
   /** 마지막으로 자동 저장된 시각. 화면이 "자동 저장됨"을 보여줄 때 쓴다 */
   draftSavedAt: string | null;
 
@@ -121,13 +125,29 @@ interface StaffRoomBoardState {
 
   /** 쓰던 글 불러오기 (글쓰기 화면을 열 때) */
   loadDraft: (departmentId: string, moduleId?: string) => Promise<void>;
-  /** 타자에 따라 부르면 알아서 늦춰서 저장한다 */
+  /**
+   * 타자에 따라 부르면 알아서 늦춰서 저장한다.
+   *
+   * moduleId 를 **인자로 받는다** — 전에는 loadPosts 가 채워 둔 전역 context 를
+   * 읽었는데, 그러면 이 함수의 동작이 "누가 먼저 목록을 열었나"에 묶인다.
+   * 글쓰기 화면(PostEditor)은 자기 게시판 id 를 알고 있으므로 직접 넘긴다.
+   */
   updateDraft: (
     departmentId: string,
-    patch: { title?: string; body?: string; bodyFormat?: StaffRoomBodyFormat; mentions?: string[] },
+    moduleId: string,
+    patch: {
+      title?: string;
+      body?: string;
+      bodyFormat?: StaffRoomBodyFormat;
+      mentions?: string[];
+      /** null 은 "말머리 없음"으로 고른 것 — 값이 없는 게 아니라 값이 null 이다 */
+      categoryId?: string | null;
+      tags?: string[];
+      fileIds?: string[];
+    },
   ) => void;
-  /** 쓰던 글 버리기 */
-  discardDraft: (departmentId: string) => Promise<void>;
+  /** 쓰던 글 버리기 — updateDraft 와 같은 이유로 moduleId 를 인자로 받는다 */
+  discardDraft: (departmentId: string, moduleId: string) => Promise<void>;
 
   /** 말머리 목록 불러오기 (멤버 누구나) */
   loadCategories: (departmentId: string) => Promise<void>;
@@ -158,6 +178,9 @@ export const useStaffRoomBoardStore = create<StaffRoomBoardState>((set, get) => 
   draftBody: '',
   draftBodyFormat: DEFAULT_STAFFROOM_BODY_FORMAT,
   draftMentions: [],
+  draftCategoryId: null,
+  draftTags: [],
+  draftFileIds: [],
   draftSavedAt: null,
   isLoading: false,
   hasLoadedPosts: false,
@@ -237,6 +260,9 @@ export const useStaffRoomBoardStore = create<StaffRoomBoardState>((set, get) => 
       draftBody: '',
       draftBodyFormat: DEFAULT_STAFFROOM_BODY_FORMAT,
       draftMentions: [],
+      draftCategoryId: null,
+      draftTags: [],
+      draftFileIds: [],
       draftSavedAt: null,
       hasLoadedPosts: false,
       error: null,
@@ -332,6 +358,9 @@ export const useStaffRoomBoardStore = create<StaffRoomBoardState>((set, get) => 
         draftBody: '',
         draftBodyFormat: DEFAULT_STAFFROOM_BODY_FORMAT,
         draftMentions: [],
+        draftCategoryId: null,
+        draftTags: [],
+        draftFileIds: [],
         draftSavedAt: null,
       });
       await get().loadPosts(departmentId, context.moduleId ?? undefined);
@@ -489,6 +518,11 @@ export const useStaffRoomBoardStore = create<StaffRoomBoardState>((set, get) => 
           // 저장돼 있던 형식을 그대로 이어받는다 — 여기서 기본값으로 되돌리면
           // 서식으로 쓰다 만 글이 이어 쓰는 순간 맨글로 바뀐다.
           draftBodyFormat: draft.bodyFormat,
+          // 말머리·태그·첨부도 함께 — 이 세 개를 빼먹은 것이 "다시 골라주세요"
+          // 배너를 낳은 P1 이었다(2026-08-24 UltraQA).
+          draftCategoryId: draft.categoryId,
+          draftTags: [...draft.tags],
+          draftFileIds: [...draft.fileIds],
           draftSavedAt: draft.updatedAt,
         });
       } else {
@@ -496,6 +530,9 @@ export const useStaffRoomBoardStore = create<StaffRoomBoardState>((set, get) => 
           draftTitle: '',
           draftBody: '',
           draftBodyFormat: DEFAULT_STAFFROOM_BODY_FORMAT,
+          draftCategoryId: null,
+          draftTags: [],
+          draftFileIds: [],
           draftSavedAt: null,
         });
       }
@@ -505,12 +542,16 @@ export const useStaffRoomBoardStore = create<StaffRoomBoardState>((set, get) => 
     }
   },
 
-  updateDraft: (departmentId, patch) => {
+  updateDraft: (departmentId, moduleId, patch) => {
     set((state) => ({
       draftTitle: patch.title ?? state.draftTitle,
       draftBody: patch.body ?? state.draftBody,
       draftBodyFormat: patch.bodyFormat ?? state.draftBodyFormat,
       draftMentions: patch.mentions ?? state.draftMentions,
+      // 말머리는 null("말머리 없음")도 고른 값이라 ?? 로 가르면 안 된다
+      draftCategoryId: patch.categoryId !== undefined ? patch.categoryId : state.draftCategoryId,
+      draftTags: patch.tags ?? state.draftTags,
+      draftFileIds: patch.fileIds ?? state.draftFileIds,
     }));
 
     // 타자 한 글자마다 서버를 부르지 않도록 늦춰서 한 번만 저장한다
@@ -522,11 +563,16 @@ export const useStaffRoomBoardStore = create<StaffRoomBoardState>((set, get) => 
         try {
           const { staffRoomPort } = await import('@adapters/di/container');
           const saved = await staffRoomPort.saveDraft(token, departmentId, {
-            moduleId: context.moduleId ?? undefined,
+            // 전역 context 가 아니라 부른 쪽이 넘긴 게시판에 저장한다 — context 는
+            // loadPosts 가 채우는 값이라, 목록을 아직 안 열었으면 비어 있다.
+            moduleId,
             title: get().draftTitle,
             body: get().draftBody,
             // 임시저장은 글과 같은 형식으로 보관해야 이어 쓸 때 서식이 풀리지 않는다.
             bodyFormat: get().draftBodyFormat,
+            categoryId: get().draftCategoryId,
+            tags: get().draftTags,
+            fileIds: get().draftFileIds,
           });
           set({ draftSavedAt: saved?.updatedAt ?? null });
         } catch (err) {
@@ -537,7 +583,7 @@ export const useStaffRoomBoardStore = create<StaffRoomBoardState>((set, get) => 
     }, DRAFT_SAVE_DELAY_MS);
   },
 
-  discardDraft: async (departmentId) => {
+  discardDraft: async (departmentId, moduleId) => {
     if (draftTimer) {
       clearTimeout(draftTimer);
       draftTimer = null;
@@ -547,13 +593,16 @@ export const useStaffRoomBoardStore = create<StaffRoomBoardState>((set, get) => 
       draftBody: '',
       draftBodyFormat: DEFAULT_STAFFROOM_BODY_FORMAT,
       draftMentions: [],
+      draftCategoryId: null,
+      draftTags: [],
+      draftFileIds: [],
       draftSavedAt: null,
     });
     const token = await getGoogleToken();
     if (!token) return;
     try {
       const { staffRoomPort } = await import('@adapters/di/container');
-      await staffRoomPort.clearDraft(token, departmentId, context.moduleId ?? undefined);
+      await staffRoomPort.clearDraft(token, departmentId, moduleId);
     } catch (err) {
       console.error('[StaffRoomBoard] 쓰던 글 지우기 실패:', err);
     }

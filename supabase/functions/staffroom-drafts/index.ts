@@ -8,8 +8,11 @@
  *
  * action:
  *   get   { departmentId, moduleId? }
- *   save  { departmentId, moduleId?, title, body }
+ *   save  { departmentId, moduleId?, title, body, bodyFormat?, categoryId?, tags?, fileIds? }
  *   clear { departmentId, moduleId? }
+ *
+ * 말머리·태그·첨부(056)도 왕복시킨다 — 임시저장이 제목·본문만 보관하면
+ * 이어 쓸 때 골라 둔 것들이 조용히 사라진다(v2.4.4 UltraQA P1).
  */
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import {
@@ -27,6 +30,9 @@ import {
   moduleBelongsTo,
   toAccessMembers,
   normalizeBodyFormat,
+  normalizeTags,
+  categoryBelongsTo,
+  POST_MAX_ATTACHMENTS,
 } from '../_shared/staffroomDb.ts';
 
 interface DraftRow {
@@ -34,7 +40,29 @@ interface DraftRow {
   title: string;
   body: string;
   body_format: string;
+  category_id: string | null;
+  tags: string[] | null;
+  file_ids: string[] | null;
   updated_at: string;
+}
+
+/**
+ * 첨부 파일 id 는 **UUID 모양만** 통과시킨다 — staffroom-posts 와 같은 이유.
+ * 아무 문자열이나 uuid[] 칸에 넣으면 Postgres 22P02(uuid 형식 오류)로 터져
+ * 정상 검사보다 앞서 500 이 된다. 서버는 앱이 보낸 값을 믿지 않는다.
+ * 글과 같은 상한(POST_MAX_ATTACHMENTS)을 걸어 임시저장만 무한정 커지지 않게 한다.
+ */
+const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function normalizeFileIds(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  for (const v of raw) {
+    if (typeof v !== 'string' || !UUID_SHAPE.test(v)) continue;
+    if (out.includes(v)) continue;
+    out.push(v);
+    if (out.length >= POST_MAX_ATTACHMENTS) break;
+  }
+  return out;
 }
 
 serve(async (req: Request) => {
@@ -82,7 +110,7 @@ serve(async (req: Request) => {
     if (action === 'get') {
       const { data, error } = await db
         .from('staffroom_drafts')
-        .select('module_id, title, body, body_format, updated_at')
+        .select('module_id, title, body, body_format, category_id, tags, file_ids, updated_at')
         .eq('module_id', moduleId)
         .eq('author_email', identity.email)
         .maybeSingle();
@@ -103,6 +131,9 @@ serve(async (req: Request) => {
               title: draft.title,
               body: draft.body,
               bodyFormat: normalizeBodyFormat(draft.body_format),
+              categoryId: draft.category_id,
+              tags: draft.tags ?? [],
+              fileIds: draft.file_ids ?? [],
               updatedAt: draft.updated_at,
             }
           : null,
@@ -115,7 +146,8 @@ serve(async (req: Request) => {
       const draftBody = typeof body?.body === 'string' ? body.body : '';
       const draftFormat = normalizeBodyFormat(body?.bodyFormat);
 
-      // 둘 다 비었으면 저장할 게 없다 — 빈 임시저장이 쌓이지 않게 지운다
+      // 둘 다 비었으면 저장할 게 없다 — 빈 임시저장이 쌓이지 않게 지운다.
+      // (말머리·태그·첨부만 골라 둔 상태는 잃어도 싼 것들이라 함께 버린다)
       if (title.trim() === '' && draftBody.trim() === '') {
         await db
           .from('staffroom_drafts')
@@ -125,6 +157,20 @@ serve(async (req: Request) => {
         return jsonResponse({ draft: null });
       }
 
+      // 말머리는 이 부서 것인지 확인한다(staffroom-posts 와 같은 이유 — 남의 부서
+      // 말머리 id 가 박히면 안 된다). 단, 게시와 달리 **오류로 끊지 않고 떼고 저장한다**
+      // — 자동 저장이 말머리 하나(글쓰는 중 관리자가 지웠다든가) 때문에 통째로
+      // 실패하면 제목·본문까지 잃는다. 그게 이 기능이 막으려는 바로 그 사고다.
+      const rawCategoryId = typeof body?.categoryId === 'string' ? body.categoryId : '';
+      const categoryId =
+        rawCategoryId && (await categoryBelongsTo(db, rawCategoryId, departmentId))
+          ? rawCategoryId
+          : null;
+
+      // 태그는 글과 같은 규칙으로 다듬고, 첨부는 UUID 모양만 통과시킨다
+      const tags = normalizeTags(body?.tags);
+      const fileIds = normalizeFileIds(body?.fileIds);
+
       const updatedAt = new Date().toISOString();
       const { error } = await db.from('staffroom_drafts').upsert(
         {
@@ -133,6 +179,9 @@ serve(async (req: Request) => {
           title,
           body: draftBody,
           body_format: draftFormat,
+          category_id: categoryId,
+          tags,
+          file_ids: fileIds,
           updated_at: updatedAt,
         },
         { onConflict: 'module_id,author_email' },
@@ -147,7 +196,16 @@ serve(async (req: Request) => {
       }
 
       return jsonResponse({
-        draft: { moduleId, title, body: draftBody, bodyFormat: draftFormat, updatedAt },
+        draft: {
+          moduleId,
+          title,
+          body: draftBody,
+          bodyFormat: draftFormat,
+          categoryId,
+          tags,
+          fileIds,
+          updatedAt,
+        },
       });
     }
 

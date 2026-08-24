@@ -249,11 +249,19 @@ export interface IStaffRoomPort {
     moduleId?: string,
   ): Promise<StaffRoomDraft | null>;
 
-  /** 쓰던 글 자동 저장 (제목·본문이 모두 비면 지운다) */
+  /** 쓰던 글 자동 저장 (제목·본문이 모두 비면 지운다). 말머리·태그·첨부도 함께 보관한다 */
   saveDraft(
     googleAccessToken: string,
     departmentId: string,
-    input: { moduleId?: string; title: string; body: string; bodyFormat: StaffRoomBodyFormat },
+    input: {
+      moduleId?: string;
+      title: string;
+      body: string;
+      bodyFormat: StaffRoomBodyFormat;
+      categoryId: string | null;
+      tags: readonly string[];
+      fileIds: readonly string[];
+    },
   ): Promise<StaffRoomDraft | null>;
 
   /** 쓰던 글 버리기 */

@@ -38,6 +38,9 @@ interface BoardMockState {
   draftTitle: string;
   draftBody: string;
   draftMentions: string[];
+  draftCategoryId: string | null;
+  draftTags: string[];
+  draftFileIds: string[];
   draftSavedAt: string | null;
   categories: { id: string; departmentId: string; name: string; position: number }[];
   filterCategoryId: string | null;
@@ -58,6 +61,9 @@ const boardState: BoardMockState = {
   draftTitle: '',
   draftBody: '',
   draftMentions: [],
+  draftCategoryId: null,
+  draftTags: [],
+  draftFileIds: [],
   draftSavedAt: null,
   categories: [],
   filterCategoryId: null,

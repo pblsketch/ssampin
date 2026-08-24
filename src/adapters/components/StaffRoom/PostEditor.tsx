@@ -38,9 +38,8 @@ interface PostEditorProps {
 
 export function PostEditor({ departmentId, boardId, mode, onDone, onCancel }: PostEditorProps) {
   const currentPost = useStaffRoomBoardStore((s) => s.currentPost);
-  const draftTitle = useStaffRoomBoardStore((s) => s.draftTitle);
-  const draftBody = useStaffRoomBoardStore((s) => s.draftBody);
-  const draftBodyFormat = useStaffRoomBoardStore((s) => s.draftBodyFormat);
+  // draft 내용 자체는 구독하지 않는다 — 복원은 loadDraft 완료 시 getState() 로
+  // 한 번만 읽는다(아래 effect). 구독하면 타자마다 재렌더만 는다.
   const draftSavedAt = useStaffRoomBoardStore((s) => s.draftSavedAt);
   const isLoading = useStaffRoomBoardStore((s) => s.isLoading);
   const error = useStaffRoomBoardStore((s) => s.error);
@@ -126,23 +125,36 @@ export function PostEditor({ departmentId, boardId, mode, onDone, onCancel }: Po
     clearError();
     void loadCategories(departmentId);
     void loadFiles(departmentId);
-    if (mode === 'create') void loadDraft(departmentId, boardId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
-  // 쓰던 글을 스토어가 불러오면 화면에 반영하고 안내를 띄운다 (새 글 모드에서만)
-  useEffect(() => {
-    if (mode !== 'create') return;
-    if (draftTitle || draftBody) {
-      setTitle(draftTitle);
-      setBody(draftBody);
-      // 편집기를 다시 만들어 쓰던 내용을 실제로 보여준다
-      setEditorInitial({ body: draftBody, format: draftBodyFormat });
-      setEditorSeed((n) => n + 1);
-      setRestoredDraft(true);
+    // 쓰던 글 복원은 **loadDraft 가 끝난 직후 딱 한 번**이다.
+    //
+    // 전에는 스토어의 draft 값들을 지켜보는 별도 effect 였는데, 그 값들은
+    // updateDraft 가 **타자마다** 갱신한다 — 지켜보면 글자를 칠 때마다 편집기가
+    // 다시 만들어져(seed 증가) 커서가 맨 앞으로 튀고, 안 불러온 것도
+    // "불러왔어요" 배너가 떴다. 위 editorSeed 설명의 의도("내용이 통째로
+    // 바뀌는 순간에만")를 구현이 배반하고 있었던 것. 그래서 복원 시점을
+    // 스토어 감시가 아니라 불러오기 완료에 못박는다.
+    if (mode === 'create') {
+      void (async () => {
+        await loadDraft(departmentId, boardId);
+        const s = useStaffRoomBoardStore.getState();
+        if (s.draftTitle || s.draftBody) {
+          setTitle(s.draftTitle);
+          setBody(s.draftBody);
+          // 골라 뒀던 말머리·태그·첨부도 되돌린다(056) — 제목·본문만 되돌리면
+          // "불러왔어요" 안내가 거짓이 된다. 그게 2026-08-24 UltraQA 의 P1 이었다.
+          setCategoryId(s.draftCategoryId);
+          setTags([...s.draftTags]);
+          setFileIds([...s.draftFileIds]);
+          // 편집기를 다시 만들어 쓰던 내용을 실제로 보여준다
+          setEditorInitial({ body: s.draftBody, format: s.draftBodyFormat });
+          setEditorSeed((n) => n + 1);
+          setRestoredDraft(true);
+        }
+      })();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draftTitle, draftBody, draftBodyFormat]);
+  }, []);
 
   const otherMembers = useMemo(
     () => members.filter((m) => m.email.toLowerCase() !== (myEmail ?? '').toLowerCase()),
@@ -156,14 +168,33 @@ export function PostEditor({ departmentId, boardId, mode, onDone, onCancel }: Po
   const handleTitleChange = (value: string) => {
     if (value.length > STAFFROOM_POST_TITLE_MAX_LENGTH) return;
     setTitle(value);
-    if (mode === 'create') updateDraft(departmentId, { title: value });
+    if (mode === 'create') updateDraft(departmentId, boardId, { title: value });
   };
 
   const handleBodyChange = (value: string, plainText: string) => {
     setBody(value);
     setPlainBody(plainText);
     // 임시저장도 형식을 함께 보관한다 — 안 그러면 이어 쓸 때 서식이 풀린다
-    if (mode === 'create') updateDraft(departmentId, { body: value, bodyFormat: 'lexical' });
+    if (mode === 'create')
+      updateDraft(departmentId, boardId, { body: value, bodyFormat: 'lexical' });
+  };
+
+  /** 말머리를 고르면 임시저장에도 실어 둔다 — 제목·본문과 같은 대접(056) */
+  const handleCategoryChange = (value: string | null) => {
+    setCategoryId(value);
+    if (mode === 'create') updateDraft(departmentId, boardId, { categoryId: value });
+  };
+
+  /** 태그·첨부 갱신도 임시저장으로 — setState 함수형 갱신 대신 다음 값을 직접
+   *  계산한다. 임시저장으로 보낼 값과 화면 값이 같아야 해서다. */
+  const applyTags = (next: string[]) => {
+    setTags(next);
+    if (mode === 'create') updateDraft(departmentId, boardId, { tags: next });
+  };
+
+  const applyFileIds = (next: string[]) => {
+    setFileIds(next);
+    if (mode === 'create') updateDraft(departmentId, boardId, { fileIds: next });
   };
 
   /**
@@ -178,17 +209,15 @@ export function PostEditor({ departmentId, boardId, mode, onDone, onCancel }: Po
       setTagInput('');
       return;
     }
-    setTags((prev) => {
-      const merged = [...prev];
-      for (const tag of added) {
-        if (!merged.includes(tag) && merged.length < STAFFROOM_POST_MAX_TAGS) merged.push(tag);
-      }
-      return merged;
-    });
+    const merged = [...tags];
+    for (const tag of added) {
+      if (!merged.includes(tag) && merged.length < STAFFROOM_POST_MAX_TAGS) merged.push(tag);
+    }
+    applyTags(merged);
     setTagInput('');
   };
 
-  const removeTag = (tag: string) => setTags((prev) => prev.filter((t) => t !== tag));
+  const removeTag = (tag: string) => applyTags(tags.filter((t) => t !== tag));
 
   const toggleMention = (email: string) => {
     setMentionedEmails((prev) =>
@@ -197,10 +226,13 @@ export function PostEditor({ departmentId, boardId, mode, onDone, onCancel }: Po
   };
 
   const handleStartFresh = async () => {
-    await discardDraft(departmentId);
+    await discardDraft(departmentId, boardId);
     setTitle('');
     setBody('');
     setPlainBody('');
+    setCategoryId(null);
+    setTags([]);
+    setFileIds([]);
     // 편집기도 비워야 한다 — 상태만 비우면 화면에는 쓰던 글이 그대로 남는다
     setEditorInitial({ body: '', format: 'plain' });
     setEditorSeed((n) => n + 1);
@@ -257,11 +289,12 @@ export function PostEditor({ departmentId, boardId, mode, onDone, onCancel }: Po
 
       {mode === 'create' && restoredDraft && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-sp-border bg-sp-surface px-4 py-3">
-          {/* 임시저장에는 제목·본문만 담긴다(서버 drafts 표가 그 둘뿐) — 말머리·태그·첨부까지
-              불러온 척하면 유실을 알아챌 단서가 없다. 거짓 안내가 유실보다 나쁘다. */}
+          {/* 056 부터 임시저장이 말머리·태그·첨부까지 보관하므로 "불러왔어요"가 사실이다.
+              한동안 "다시 골라주세요"였던 이유: 서버 표가 제목·본문뿐이던 시절의
+              거짓 안내를 사실대로 고친 임시 조치였다(2026-08-24 UltraQA P1). */}
           <p className="flex items-center gap-1.5 text-sm text-sp-text">
             <span className="material-symbols-outlined text-icon-md text-sp-accent">history</span>
-            쓰시던 제목·내용을 불러왔어요 (말머리·태그·첨부는 다시 골라주세요)
+            쓰시던 글을 불러왔어요
           </p>
           <button
             type="button"
@@ -309,7 +342,7 @@ export function PostEditor({ departmentId, boardId, mode, onDone, onCancel }: Po
             <select
               id="post-category"
               value={categoryId ?? ''}
-              onChange={(e) => setCategoryId(e.target.value === '' ? null : e.target.value)}
+              onChange={(e) => handleCategoryChange(e.target.value === '' ? null : e.target.value)}
               className="h-8 rounded-lg border border-sp-border bg-sp-bg px-2 text-xs text-sp-text focus:border-sp-accent focus:outline-none"
             >
               <option value="">말머리 없음</option>
@@ -406,7 +439,7 @@ export function PostEditor({ departmentId, boardId, mode, onDone, onCancel }: Po
                   {name ?? '자료실에서 지워진 파일'}
                   <button
                     type="button"
-                    onClick={() => setFileIds((prev) => prev.filter((f) => f !== id))}
+                    onClick={() => applyFileIds(fileIds.filter((f) => f !== id))}
                     aria-label="첨부 빼기"
                     className="text-sp-muted transition-colors hover:text-sp-text"
                   >
@@ -442,15 +475,13 @@ export function PostEditor({ departmentId, boardId, mode, onDone, onCancel }: Po
                       <li key={f.id}>
                         <button
                           type="button"
-                          onClick={() =>
-                            setFileIds((prev) =>
-                              picked
-                                ? prev.filter((id) => id !== f.id)
-                                : prev.length >= STAFFROOM_POST_MAX_ATTACHMENTS
-                                  ? prev
-                                  : [...prev, f.id],
-                            )
-                          }
+                          onClick={() => {
+                            if (picked) {
+                              applyFileIds(fileIds.filter((id) => id !== f.id));
+                            } else if (fileIds.length < STAFFROOM_POST_MAX_ATTACHMENTS) {
+                              applyFileIds([...fileIds, f.id]);
+                            }
+                          }}
                           className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs transition-colors ${
                             picked
                               ? 'bg-sp-accent/10 text-sp-text'
