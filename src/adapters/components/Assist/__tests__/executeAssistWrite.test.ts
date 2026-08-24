@@ -42,8 +42,10 @@ const SRC: WriteSources = {
   notePages: [{ id: 'p1', sectionId: 's1', title: '2단원 지도안' }],
 };
 
-function fakeDeps(): { deps: WriteDeps; calls: string[] } {
+function fakeDeps(): { deps: WriteDeps; calls: string[]; renamed: string[] } {
   const calls: string[] = [];
+  /** 이름 바꾸기가 **어느 id 에** 갔는지. 새로 생긴 id 만 받아야 한다(2026-08-24 P2) */
+  const renamed: string[] = [];
   const track =
     (label: string) =>
     async (...args: unknown[]): Promise<unknown> => {
@@ -51,6 +53,11 @@ function fakeDeps(): { deps: WriteDeps; calls: string[] } {
       void args;
       return undefined;
     };
+
+  // 진짜 스토어처럼 생성 호출이 목록에 id 를 더한다 — 실행기는 전후 차집합으로 찾는다.
+  const notebookIds = ['nb1'];
+  const sectionIds = ['s1'];
+  const pageIds = ['p1'];
 
   const deps = {
     addTodo: track('addTodo'),
@@ -76,18 +83,40 @@ function fakeDeps(): { deps: WriteDeps; calls: string[] } {
     updateBookmark: track('updateBookmark'),
     deleteBookmark: track('deleteBookmark'),
     addBookmarkGroup: track('addBookmarkGroup'),
-    createNotebook: track('createNotebook'),
-    renameNotebook: track('renameNotebook'),
-    createSection: track('createSection'),
-    renameSection: track('renameSection'),
-    createPage: track('createPage'),
+    createNotebook: async () => {
+      calls.push('createNotebook');
+      notebookIds.push('nb-new');
+    },
+    renameNotebook: async (id: string) => {
+      calls.push('renameNotebook');
+      renamed.push(id);
+    },
+    createSection: async () => {
+      calls.push('createSection');
+      sectionIds.push('s-new');
+    },
+    renameSection: async (id: string) => {
+      calls.push('renameSection');
+      renamed.push(id);
+    },
+    createPage: async () => {
+      calls.push('createPage');
+      pageIds.push('p-new');
+    },
     getNotePage: () => ({ id: 'p1' }),
-    renamePage: track('renamePage'),
+    renamePage: async (id: string) => {
+      calls.push('renamePage');
+      renamed.push(id);
+    },
     deletePage: track('deletePage'),
-    noteSelection: () => ({ notebookId: 'nb-new', sectionId: 's-new', pageId: 'p-new' }),
+    listNoteIds: () => ({
+      notebookIds: [...notebookIds],
+      sectionIds: [...sectionIds],
+      pageIds: [...pageIds],
+    }),
   } as unknown as WriteDeps;
 
-  return { deps, calls };
+  return { deps, calls, renamed };
 }
 
 async function run(tool: string, args: object): Promise<{ calls: string[]; message: string }> {
@@ -203,10 +232,12 @@ describe('★한 일과 다른 말을 하지 않는다', () => {
     if (!isWriteProposal(outcome)) throw new Error('제안이어야 한다');
 
     const { deps, calls } = fakeDeps();
-    // 스토어가 새로 만든 것을 활성으로 못 잡은 상황
+    // 스토어가 생성 후에도 id 목록을 못 갱신한 상황 — 새로 생긴 id 를 찾을 수 없다.
     const blind = {
       ...deps,
-      noteSelection: () => ({ notebookId: null, sectionId: null, pageId: null }),
+      createPage: async () => {
+        calls.push('createPage');
+      },
     } as unknown as WriteDeps;
 
     const result = await executeAssistWrite(outcome, blind);
@@ -218,21 +249,70 @@ describe('★한 일과 다른 말을 하지 않는다', () => {
   });
 
   it.each([
-    ['create_notebook', { title: 'x' }, '노트책'],
-    ['create_note_section', { notebook: '3학년 수학', title: 'x' }, '구역'],
-  ])('%s 도 같은 규칙을 따른다', async (tool, args, what) => {
+    ['create_notebook', { title: 'x' }, '노트책', 'createNotebook'],
+    ['create_note_section', { notebook: '3학년 수학', title: 'x' }, '구역', 'createSection'],
+  ])('%s 도 같은 규칙을 따른다', async (tool, args, what, createFn) => {
     const outcome = buildWriteProposal(tool, JSON.stringify(args), SRC);
     if (!isWriteProposal(outcome)) throw new Error('제안이어야 한다');
 
-    const { deps } = fakeDeps();
+    const { deps, calls } = fakeDeps();
     const blind = {
       ...deps,
-      noteSelection: () => ({ notebookId: null, sectionId: null, pageId: null }),
+      [createFn]: async () => {
+        calls.push(createFn);
+      },
     } as unknown as WriteDeps;
 
     const result = await executeAssistWrite(outcome, blind);
     expect(result.ok).toBe(false);
     expect(result.message).toContain(what);
+  });
+
+  it.each([
+    ['create_notebook', { title: '새 노트책' }, 'nb-new'],
+    ['create_note_section', { notebook: '3학년 수학', title: '2학기' }, 's-new'],
+    ['create_note_page', { section: '수업 준비', title: '3월' }, 'p-new'],
+  ])(
+    '★%s — 이름은 **새로 생긴 id** 에만 붙는다. 활성 선택은 보지 않는다 (2026-08-24 P2)',
+    async (tool, args, newId) => {
+      // 예전에는 활성 선택을 "방금 만든 것"으로 추정했다 — 선택이 다른 기존 항목을
+      // 가리키고 있으면 **그 기존 노트의 이름을 덮어썼다.** 지금은 전후 차집합이라
+      // 기존 id(nb1·s1·p1)에는 절대 이름이 가지 않는다.
+      const outcome = buildWriteProposal(tool, JSON.stringify(args), SRC);
+      if (!isWriteProposal(outcome)) throw new Error('제안이어야 한다');
+
+      const { deps, renamed } = fakeDeps();
+      const result = await executeAssistWrite(outcome, deps);
+
+      expect(result.ok).toBe(true);
+      expect(renamed).toEqual([newId]);
+    },
+  );
+
+  it('★새 id 를 확정할 수 없으면(한 번에 둘 생김) 기존 항목을 건드리지 않는다', async () => {
+    const outcome = buildWriteProposal(
+      'create_notebook',
+      JSON.stringify({ title: '새 노트책' }),
+      SRC,
+    );
+    if (!isWriteProposal(outcome)) throw new Error('제안이어야 한다');
+
+    const { deps, renamed } = fakeDeps();
+    const listed = [['nb1'], ['nb1', 'nb-a', 'nb-b']];
+    const ambiguous = {
+      ...deps,
+      listNoteIds: () => ({
+        notebookIds: listed.length > 1 ? listed.shift()! : listed[0]!,
+        sectionIds: [],
+        pageIds: [],
+      }),
+    } as unknown as WriteDeps;
+
+    const result = await executeAssistWrite(outcome, ambiguous);
+
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain('이름을 붙이지 못했어요');
+    expect(renamed).toEqual([]);
   });
 
   it('★제안 뒤에 선생님이 직접 체크했으면 되뒤집지 않는다', async () => {

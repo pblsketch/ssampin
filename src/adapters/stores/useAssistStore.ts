@@ -269,7 +269,15 @@ export const useAssistStore = create<AssistStore>()(
 
       screenDraft: () => screenAssistInput(get().draft),
 
-      clearConversation: () => set({ turns: [], draft: '' }),
+      clearConversation: () => {
+        // ★[실행]으로 저장이 진행 중이면 지우지 않는다 (2026-08-24 UltraQA P2).
+        //   지우면 settleProposal 이 결과를 적을 턴이 사라져, **저장은 됐는데 화면에는
+        //   아무 말도 없는** 상태가 된다. 저장은 로컬 파일 쓰기라 금방 끝난다 —
+        //   결과 문구가 뜬 뒤에 지우면 된다. 화면의 [새 대화] 버튼도 같은 조건으로
+        //   비활성화된다(AssistDock).
+        if (get().turns.some((t) => t.proposalState === 'running')) return;
+        set({ turns: [], draft: '' });
+      },
 
       settleProposal: (turnId, state, message) =>
         set((s) => ({

@@ -102,11 +102,18 @@ export interface WriteDeps {
   readonly getNotePage: (id: string) => unknown | undefined;
   readonly renamePage: (id: string, title: string) => Promise<void>;
   readonly deletePage: (id: string) => Promise<void>;
-  /** 방금 만든 것의 id 를 알아내는 자리. 스토어가 새로 만든 것을 활성으로 잡아 준다 */
-  readonly noteSelection: () => {
-    readonly notebookId: string | null;
-    readonly sectionId: string | null;
-    readonly pageId: string | null;
+  /**
+   * 노트책·구역·페이지의 **지금 id 목록**. 생성 호출 전후로 두 번 읽어
+   * "새로 생긴 id"를 찾는 데 쓴다.
+   *
+   * ★예전에는 활성 선택(activeNotebookId 등)을 "방금 만든 것"으로 추정했다 —
+   * 활성 선택이 다른 기존 항목을 가리키고 있으면 **그 기존 노트의 이름을 덮어썼다**
+   * (2026-08-24 UltraQA P2). 추정 대신 전후 차집합으로 확정한다.
+   */
+  readonly listNoteIds: () => {
+    readonly notebookIds: readonly string[];
+    readonly sectionIds: readonly string[];
+    readonly pageIds: readonly string[];
   };
 }
 
@@ -142,6 +149,26 @@ function unnamed(what: string): WriteResult {
     ok: false,
     message: `${what}은(는) 만들어졌지만 이름을 붙이지 못했어요. 노트 화면에서 이름을 고쳐 주세요.`,
   };
+}
+
+/** 실행 분기가 없는 도구에 내는 문구. 배선 계약 테스트가 이 값으로 대조한다 */
+export const NOT_WIRED_MESSAGE = '이 작업은 아직 실행할 수 없어요.';
+
+/**
+ * 생성 호출 전후의 id 목록을 견줘 **새로 생긴 id** 를 찾는다.
+ *
+ * ★정확히 하나일 때만 돌려준다. 0개면 스토어가 목록을 못 갱신한 것이고, 2개 이상이면
+ * 어느 것이 "방금 만든 것"인지 확정할 수 없다 — 추측으로 엉뚱한 항목의 이름을
+ * 덮어쓰느니 이름 붙이기를 포기하고 사실대로 말한다(unnamed 경로).
+ */
+async function createAndFindNewId(
+  list: () => readonly string[],
+  create: () => Promise<void>,
+): Promise<string | null> {
+  const before = new Set(list());
+  await create();
+  const added = list().filter((candidate) => !before.has(candidate));
+  return added.length === 1 ? added[0]! : null;
 }
 
 export async function executeAssistWrite(
@@ -370,12 +397,17 @@ export async function executeAssistWrite(
     }
 
     // ── 노트 (만들고 → 이름 고치기, 스토어 본래 구조 그대로) ──
+    // ★"방금 만든 것"은 활성 선택으로 추정하지 않는다 — 생성 전후 id 목록의 차집합으로
+    //   확정한다(createAndFindNewId 주석 참조). 못 찾으면 이름 붙이기를 포기하고
+    //   사실대로 말한다(unnamed).
     case 'create_notebook': {
       const title = str(proposal, 'title');
       if (title === undefined) return targetMissing;
-      await deps.createNotebook();
-      const created = deps.noteSelection().notebookId;
-      if (!created) return unnamed('노트책');
+      const created = await createAndFindNewId(
+        () => deps.listNoteIds().notebookIds,
+        () => deps.createNotebook(),
+      );
+      if (created === null) return unnamed('노트책');
       await deps.renameNotebook(created, title);
       // 노트책을 만들면 앱은 늘 기본 구역·페이지를 함께 만든다(화면에서 눌렀을 때와 같다).
       return { ok: true, message: `노트책 "${title}"을(를) 만들었어요.` };
@@ -384,9 +416,11 @@ export async function executeAssistWrite(
       const notebookId = str(proposal, 'notebookId');
       const title = str(proposal, 'title');
       if (notebookId === undefined || title === undefined) return targetMissing;
-      await deps.createSection(notebookId);
-      const created = deps.noteSelection().sectionId;
-      if (!created) return unnamed('구역');
+      const created = await createAndFindNewId(
+        () => deps.listNoteIds().sectionIds,
+        () => deps.createSection(notebookId),
+      );
+      if (created === null) return unnamed('구역');
       await deps.renameSection(created, title);
       return { ok: true, message: `구역 "${title}"을(를) 만들었어요.` };
     }
@@ -394,9 +428,11 @@ export async function executeAssistWrite(
       const sectionId = str(proposal, 'sectionId');
       const title = str(proposal, 'title');
       if (sectionId === undefined || title === undefined) return targetMissing;
-      await deps.createPage(sectionId);
-      const created = deps.noteSelection().pageId;
-      if (!created) return unnamed('페이지');
+      const created = await createAndFindNewId(
+        () => deps.listNoteIds().pageIds,
+        () => deps.createPage(sectionId),
+      );
+      if (created === null) return unnamed('페이지');
       await deps.renamePage(created, title);
       return { ok: true, message: `페이지 "${title}"을(를) 만들었어요.` };
     }
@@ -417,6 +453,6 @@ export async function executeAssistWrite(
     default:
       // 여기 오려면 제안이 만들어졌는데 실행 분기가 없다는 뜻이다 — 조립기와 실행기가
       // 어긋난 것이므로, 조용히 넘기지 않고 선생님에게 알린다.
-      return { ok: false, message: '이 작업은 아직 실행할 수 없어요.' };
+      return { ok: false, message: NOT_WIRED_MESSAGE };
   }
 }

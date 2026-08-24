@@ -597,12 +597,14 @@ function writeDeps(): WriteDeps {
     getNotePage: (id) => useNoteStore.getState().pagesMeta.find((p) => p.id === id),
     renamePage: notes.renamePage,
     deletePage: notes.deletePage,
-    noteSelection: () => {
+    // ★생성 전후 두 번 불리므로 매번 최신 상태를 읽는다 — 바깥의 `notes` 스냅샷을
+    //   쓰면 생성 후에도 옛 목록이 보여 "새로 생긴 id"를 영영 못 찾는다.
+    listNoteIds: () => {
       const state = useNoteStore.getState();
       return {
-        notebookId: state.activeNotebookId,
-        sectionId: state.activeSectionId,
-        pageId: state.activePageId,
+        notebookIds: state.notebooks.map((n) => n.id),
+        sectionIds: state.sections.map((s) => s.id),
+        pageIds: state.pagesMeta.map((p) => p.id),
       };
     },
   };

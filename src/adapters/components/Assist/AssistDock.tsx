@@ -115,6 +115,10 @@ export function AssistDock({ onAsk, onRunProposal }: Props) {
   // 진행 중에 겹쳐 보내면 이력이 반쪽으로 실리고, 서버 분당 상한(6회)도 쉽게 닿는다.
   const busy = turns.some((t) => t.status === 'thinking');
   const canSend = draft.trim().length > 0 && !busy;
+  // ★[실행] 저장이 진행 중이면 [새 대화]를 잠근다 — 지우면 결과 문구가 적힐 턴이
+  //   사라져 "저장은 됐는데 아무 말이 없는" 상태가 된다. 스토어(clearConversation)도
+  //   같은 조건으로 거부하므로, 이 버튼은 그 사실을 눈에 보이게 하는 쪽이다.
+  const saving = turns.some((t) => t.proposalState === 'running');
 
   const remainingHint = useMemo(
     () => (turns.length === 0 ? '숫자는 이 컴퓨터에서 찾고, 설명만 AI가 씁니다' : ''),
@@ -165,7 +169,9 @@ export function AssistDock({ onAsk, onRunProposal }: Props) {
             <button
               type="button"
               onClick={clearConversation}
-              className="rounded-lg px-2 py-1 text-xs text-sp-muted hover:bg-sp-card hover:text-sp-text"
+              disabled={saving}
+              title={saving ? '저장하는 중이에요. 잠시 뒤에 지울 수 있어요.' : undefined}
+              className="rounded-lg px-2 py-1 text-xs text-sp-muted hover:bg-sp-card hover:text-sp-text disabled:opacity-50 disabled:hover:bg-transparent"
             >
               새 대화
             </button>

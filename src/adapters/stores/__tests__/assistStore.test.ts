@@ -7,6 +7,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AssistPort, AssistRequestPayload } from '@domain/ports/AssistPort';
+import type { AssistProposalState, AssistWriteProposal } from '@domain/entities/AssistWrite';
 import { AssistBlockedError } from '@domain/ports/AssistPort';
 import type { ModelSafe } from '@domain/entities/AssistTool';
 import type { ToolResultShape } from '@domain/services/sanitizeToolResult';
@@ -286,6 +287,71 @@ describe('이력 한도 — 서버가 거절하기 전에 앱이 자른다', () 
 
     expect(turns.map((t) => t.content)).toEqual(['질문1', '현재 질문']);
     expect(turns.every((t) => t.content.length > 0)).toBe(true);
+  });
+});
+
+/**
+ * ★[실행] 저장이 도는 동안 [새 대화]가 대화를 지우면, settleProposal 이 결과를 적을
+ * 턴이 사라진다 — **저장은 됐는데 화면에는 아무 말도 없다** (2026-08-24 UltraQA P2).
+ * 그래서 running 턴이 있는 동안 clearConversation 은 잠긴다.
+ */
+describe('★실행 중에는 대화를 지울 수 없다', () => {
+  function proposalTurn(state: AssistProposalState): AssistTurn {
+    const proposal: AssistWriteProposal = {
+      tool: 'create_todo',
+      action: 'create',
+      title: '할 일 추가',
+      fields: [],
+      values: { text: '결재' },
+    };
+    return {
+      id: 'turn-1',
+      question: '결재 할 일 추가해줘',
+      cards: [],
+      answer: '',
+      outboundAnswer: '',
+      outboundCards: [],
+      degraded: null,
+      status: 'done',
+      maskedCount: 0,
+      blankedCount: 0,
+      proposal,
+      proposalState: state,
+    };
+  }
+
+  it('running 턴이 있으면 clearConversation 이 아무것도 지우지 않는다', () => {
+    useAssistStore.setState({ turns: [proposalTurn('running')], draft: '쓰던 질문' });
+
+    useAssistStore.getState().clearConversation();
+
+    // 턴이 남아 있어야 settleProposal 이 결과 문구를 적을 자리가 있다.
+    expect(useAssistStore.getState().turns).toHaveLength(1);
+    expect(useAssistStore.getState().draft).toBe('쓰던 질문');
+  });
+
+  it('실행이 끝난 뒤에는 결과가 화면에 적히고, 그다음 지울 수 있다', () => {
+    useAssistStore.setState({ turns: [proposalTurn('running')] });
+
+    // 지우기가 막혔으므로 실행 결과는 제자리에 적힌다.
+    useAssistStore.getState().clearConversation();
+    useAssistStore.getState().settleProposal('turn-1', 'done', '할 일을 추가했어요.');
+
+    const [turn] = useAssistStore.getState().turns;
+    expect(turn?.proposalState).toBe('done');
+    expect(turn?.proposalMessage).toBe('할 일을 추가했어요.');
+
+    // running 이 끝났으니 이제는 지워진다.
+    useAssistStore.getState().clearConversation();
+    expect(useAssistStore.getState().turns).toHaveLength(0);
+  });
+
+  it('pending(실행 전) 제안은 잠그지 않는다 — 아직 아무것도 저장되지 않았다', () => {
+    useAssistStore.setState({ turns: [proposalTurn('pending')] });
+
+    useAssistStore.getState().clearConversation();
+
+    expect(useAssistStore.getState().turns).toHaveLength(0);
   });
 });
 

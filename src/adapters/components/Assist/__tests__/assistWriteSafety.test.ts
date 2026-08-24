@@ -96,7 +96,7 @@ function spyDeps(): { deps: WriteDeps; calls: string[] } {
     createPage: track('createPage'),
     renamePage: track('renamePage'),
     deletePage: track('deletePage'),
-    noteSelection: () => ({ notebookId: 'nb-new', sectionId: 's-new', pageId: 'p-new' }),
+    listNoteIds: () => ({ notebookIds: ['nb1'], sectionIds: ['s1'], pageIds: ['p1'] }),
   } as unknown as WriteDeps;
   return { deps, calls };
 }
