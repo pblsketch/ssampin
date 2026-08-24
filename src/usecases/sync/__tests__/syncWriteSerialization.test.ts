@@ -14,10 +14,12 @@ import type {
   AttendanceStatus,
 } from '@domain/entities/Attendance';
 import type { ITeachingClassRepository } from '@domain/repositories/ITeachingClassRepository';
+import type { CurriculumProgressData, ProgressEntry } from '@domain/entities/CurriculumProgress';
 import { withFileLock, resetFileWriteLocksForTest } from '@usecases/shared/fileWriteLock';
 import { SYNC_FILE_KEYS } from '@usecases/sync/syncRegistry';
 import { ManageObservations } from '@usecases/classManagement/ManageObservations';
 import { ManageAttendance } from '@usecases/classManagement/ManageAttendance';
+import { ManageCurriculumProgress } from '@usecases/classManagement/ManageCurriculumProgress';
 import { mergeObservations } from '@usecases/sync/SyncFromCloud';
 
 function sleep(ms: number): Promise<void> {
@@ -91,6 +93,56 @@ describe('동기화 병합 쓰기 × 유스케이스 저장 직렬화 (A2a)', ()
 
     const ids = (repo.data?.records ?? []).map((r) => r.id).sort();
     expect(ids).toEqual(['remote-2', 'user-2']);
+  });
+});
+
+class FakeProgressRepo {
+  data: CurriculumProgressData = { entries: [] };
+
+  async getProgress(): Promise<CurriculumProgressData> {
+    await sleep(3);
+    return JSON.parse(JSON.stringify(this.data)) as CurriculumProgressData;
+  }
+
+  async saveProgress(data: CurriculumProgressData): Promise<void> {
+    await sleep(2);
+    this.data = data;
+  }
+}
+
+function makeProgress(id: string, status: ProgressEntry['status']): ProgressEntry {
+  return {
+    id,
+    classId: 'class-1',
+    date: '2026-08-24',
+    period: 1,
+    unit: '진도 동기화',
+    lesson: id,
+    status,
+    note: '',
+  };
+}
+
+describe('진도 원격 교체 × 사용자 입력 직렬화', () => {
+  beforeEach(() => {
+    resetFileWriteLocksForTest();
+  });
+
+  it('동기화가 최종 확인을 마친 직후 입력해도 원격 교체 뒤에 이어서 저장한다', async () => {
+    const repo = new FakeProgressRepo();
+    repo.data = { entries: [makeProgress('baseline', 'planned')] };
+    const manage = new ManageCurriculumProgress(repo as unknown as ITeachingClassRepository);
+
+    const syncReplace = withFileLock(SYNC_FILE_KEYS.curriculumProgress, async () => {
+      await repo.getProgress();
+      await sleep(10);
+      await repo.saveProgress({ entries: [makeProgress('remote', 'completed')] });
+    });
+    const userAdd = manage.add(makeProgress('mobile', 'planned'));
+
+    await Promise.all([syncReplace, userAdd]);
+
+    expect(repo.data.entries.map((entry) => entry.id)).toEqual(['remote', 'mobile']);
   });
 });
 

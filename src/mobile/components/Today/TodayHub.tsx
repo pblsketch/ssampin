@@ -20,7 +20,6 @@ import { HomeScheduleCarousel } from './HomeScheduleCarousel';
 import { AttendanceSummaryCard } from './AttendanceSummaryCard';
 import { MealCard } from './MealCard';
 import { WeatherCard } from './WeatherCard';
-import { SyncStatusBanner } from './SyncStatusBanner';
 import { TodayRemaining } from './TodayRemaining';
 import { SyncFreshnessIndicator } from './SyncFreshnessIndicator';
 import { haptic } from '@mobile/utils/haptic';
@@ -279,9 +278,6 @@ export function TodayHub({ onNavigateAttendance, onNavigateTodo }: Props) {
               : '당겨서 새로고침'}
         </span>
       </div>
-
-      {/* 동기화 상태 배너 */}
-      <SyncStatusBanner />
 
       {/* 날짜 헤더 */}
       <div className="px-4 flex items-center justify-between">

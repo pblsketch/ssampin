@@ -12,7 +12,7 @@
  * 시각 재기록 자체는 ADR-040(기기 전용 저장소 분리)로 제거했다 — 아래 두 번째 테스트.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { SyncToCloud } from '../SyncToCloud';
+import { SyncToCloud, computeSyncChecksum } from '../SyncToCloud';
 import { SyncFromCloud } from '../SyncFromCloud';
 import type { IStoragePort } from '@domain/ports/IStoragePort';
 import type { IDriveSyncPort } from '@domain/ports/IDriveSyncPort';
@@ -257,5 +257,282 @@ describe('빈 봉투 유실은 여전히 충돌로 회수한다 (v2.3.1 보호 �
     ).execute();
 
     expect(down.conflicts).toEqual([]);
+  });
+});
+
+describe('진도 데이터의 3방향 동기화 판정', () => {
+  it('휴대폰 변경이 없으면 PC에서만 바뀐 진도를 묻지 않고 내려받는다', async () => {
+    const baselineData = {
+      entries: [
+        {
+          id: 'entry-1',
+          classId: 'class-1',
+          date: '2026-08-19',
+          period: 6,
+          unit: '오리엔테이션',
+          lesson: 'OT',
+          status: 'planned',
+          note: '',
+        },
+      ],
+    };
+    const remoteData = {
+      entries: [
+        { ...baselineData.entries[0], status: 'completed' },
+        {
+          id: 'entry-2',
+          classId: 'class-1',
+          date: '2026-08-21',
+          period: 1,
+          unit: '평가',
+          lesson: '수행평가 안내',
+          status: 'completed',
+          note: '',
+        },
+      ],
+    };
+    const baselineContent = JSON.stringify(baselineData);
+    const remoteContent = JSON.stringify(remoteData);
+    const localInfo = {
+      checksum: await computeSyncChecksum(baselineContent),
+      lastModified: '2026-08-22T09:00:00.000Z',
+      size: new TextEncoder().encode(baselineContent).length,
+      uploadedBy: 'mobile-device',
+    };
+    const remoteInfo = {
+      checksum: await computeSyncChecksum(remoteContent),
+      lastModified: '2026-08-21T09:00:00.000Z',
+      size: new TextEncoder().encode(remoteContent).length,
+      uploadedBy: 'pc-device',
+    };
+    const { storage, files } = makeStorage({ 'curriculum-progress': baselineData });
+    const { port } = makeDrive(manifest({ 'curriculum-progress': remoteInfo }, 'pc-device'), {
+      'curriculum-progress': remoteContent,
+    });
+    const { repo, state: localState } = makeSyncRepo(
+      manifest({ 'curriculum-progress': localInfo }, 'mobile-device'),
+    );
+
+    const result = await new SyncFromCloud(
+      storage,
+      port,
+      repo,
+      'mobile-device',
+      '휴대폰',
+      'ask',
+    ).execute();
+
+    expect(result.conflicts).toEqual([]);
+    expect(result.downloaded).toContain('curriculum-progress');
+    expect(files['curriculum-progress']).toEqual(remoteData);
+    expect(localState.manifest?.files['curriculum-progress']).toEqual(remoteInfo);
+  });
+
+  it('PC와 휴대폰에서 모두 바뀐 진도는 ask 정책에서 충돌로 남긴다', async () => {
+    const entry = {
+      id: 'entry-1',
+      classId: 'class-1',
+      date: '2026-08-19',
+      period: 6,
+      unit: '오리엔테이션',
+      lesson: 'OT',
+      status: 'planned',
+      note: '',
+    };
+    const baselineData = { entries: [entry] };
+    const localData = { entries: [{ ...entry, status: 'skipped' }] };
+    const remoteData = { entries: [{ ...entry, status: 'completed' }] };
+    const baselineContent = JSON.stringify(baselineData);
+    const remoteContent = JSON.stringify(remoteData);
+    const localInfo = {
+      checksum: await computeSyncChecksum(baselineContent),
+      lastModified: '2026-08-19T09:00:00.000Z',
+      size: new TextEncoder().encode(baselineContent).length,
+      uploadedBy: 'mobile-device',
+    };
+    const remoteInfo = {
+      checksum: await computeSyncChecksum(remoteContent),
+      lastModified: '2026-08-21T09:00:00.000Z',
+      size: new TextEncoder().encode(remoteContent).length,
+      uploadedBy: 'pc-device',
+    };
+    const { storage, files } = makeStorage({ 'curriculum-progress': localData });
+    const { port } = makeDrive(manifest({ 'curriculum-progress': remoteInfo }, 'pc-device'), {
+      'curriculum-progress': remoteContent,
+    });
+    const { repo, state: localState } = makeSyncRepo(
+      manifest({ 'curriculum-progress': localInfo }, 'mobile-device'),
+    );
+
+    const result = await new SyncFromCloud(
+      storage,
+      port,
+      repo,
+      'mobile-device',
+      '휴대폰',
+      'ask',
+    ).execute();
+
+    expect(result.conflicts.map((conflict) => conflict.filename)).toEqual(['curriculum-progress']);
+    expect(result.downloaded).not.toContain('curriculum-progress');
+    expect(files['curriculum-progress']).toEqual(localData);
+    expect(localState.manifest?.files['curriculum-progress']).toEqual(localInfo);
+  });
+
+  it('실제 로컬 내용이 이미 원격과 같으면 낡은 장부만 원격 기준으로 고친다', async () => {
+    const baselineData = { entries: [{ id: 'entry-1', status: 'planned' }] };
+    const remoteData = { entries: [{ id: 'entry-1', status: 'completed' }] };
+    const baselineContent = JSON.stringify(baselineData);
+    const remoteContent = JSON.stringify(remoteData);
+    const localInfo = {
+      checksum: await computeSyncChecksum(baselineContent),
+      lastModified: '2026-08-19T09:00:00.000Z',
+      size: new TextEncoder().encode(baselineContent).length,
+      uploadedBy: 'mobile-device',
+    };
+    const remoteInfo = {
+      checksum: await computeSyncChecksum(remoteContent),
+      lastModified: '2026-08-21T09:00:00.000Z',
+      size: new TextEncoder().encode(remoteContent).length,
+      uploadedBy: 'pc-device',
+    };
+    const { storage } = makeStorage({ 'curriculum-progress': remoteData });
+    const { port } = makeDrive(manifest({ 'curriculum-progress': remoteInfo }, 'pc-device'), {
+      'curriculum-progress': remoteContent,
+    });
+    const { repo, state: localState } = makeSyncRepo(
+      manifest({ 'curriculum-progress': localInfo }, 'mobile-device'),
+    );
+
+    const result = await new SyncFromCloud(
+      storage,
+      port,
+      repo,
+      'mobile-device',
+      '휴대폰',
+      'ask',
+    ).execute();
+
+    expect(result.conflicts).toEqual([]);
+    expect(result.skipped).toContain('curriculum-progress');
+    expect(localState.manifest?.files['curriculum-progress']).toEqual(remoteInfo);
+
+    const upload = await new SyncToCloud(storage, port, repo, 'mobile-device', '휴대폰').execute();
+    expect(upload.uploaded).not.toContain('curriculum-progress');
+  });
+
+  it('장부만 남고 로컬 진도 파일이 없으면 원격 사본으로 복구한다', async () => {
+    const baselineData = { entries: [{ id: 'entry-1', status: 'planned' }] };
+    const remoteData = { entries: [{ id: 'entry-1', status: 'completed' }] };
+    const baselineContent = JSON.stringify(baselineData);
+    const remoteContent = JSON.stringify(remoteData);
+    const localInfo = {
+      checksum: await computeSyncChecksum(baselineContent),
+      lastModified: '2026-08-19T09:00:00.000Z',
+      size: new TextEncoder().encode(baselineContent).length,
+      uploadedBy: 'mobile-device',
+    };
+    const remoteInfo = {
+      checksum: await computeSyncChecksum(remoteContent),
+      lastModified: '2026-08-21T09:00:00.000Z',
+      size: new TextEncoder().encode(remoteContent).length,
+      uploadedBy: 'pc-device',
+    };
+    const { storage, files } = makeStorage();
+    const { port } = makeDrive(manifest({ 'curriculum-progress': remoteInfo }, 'pc-device'), {
+      'curriculum-progress': remoteContent,
+    });
+    const { repo } = makeSyncRepo(manifest({ 'curriculum-progress': localInfo }, 'mobile-device'));
+
+    const result = await new SyncFromCloud(
+      storage,
+      port,
+      repo,
+      'mobile-device',
+      '휴대폰',
+      'ask',
+    ).execute();
+
+    expect(result.conflicts).toEqual([]);
+    expect(result.downloaded).toContain('curriculum-progress');
+    expect(files['curriculum-progress']).toEqual(remoteData);
+  });
+
+  it('원격 다운로드 중 새로 입력한 휴대폰 진도는 덮어쓰지 않는다', async () => {
+    const baselineData = { entries: [{ id: 'entry-1', status: 'planned' }] };
+    const localDuringDownload = { entries: [{ id: 'entry-1', status: 'skipped' }] };
+    const remoteData = { entries: [{ id: 'entry-1', status: 'completed' }] };
+    const baselineContent = JSON.stringify(baselineData);
+    const remoteContent = JSON.stringify(remoteData);
+    const localInfo = {
+      checksum: await computeSyncChecksum(baselineContent),
+      lastModified: '2026-08-19T09:00:00.000Z',
+      size: new TextEncoder().encode(baselineContent).length,
+      uploadedBy: 'mobile-device',
+    };
+    const remoteInfo = {
+      checksum: await computeSyncChecksum(remoteContent),
+      lastModified: '2026-08-21T09:00:00.000Z',
+      size: new TextEncoder().encode(remoteContent).length,
+      uploadedBy: 'pc-device',
+    };
+    const { storage, files } = makeStorage({ 'curriculum-progress': baselineData });
+    const { port } = makeDrive(manifest({ 'curriculum-progress': remoteInfo }, 'pc-device'), {
+      'curriculum-progress': remoteContent,
+    });
+    port.downloadSyncFile = vi.fn(async () => {
+      files['curriculum-progress'] = localDuringDownload;
+      return remoteContent;
+    });
+    const { repo, state: localState } = makeSyncRepo(
+      manifest({ 'curriculum-progress': localInfo }, 'mobile-device'),
+    );
+
+    const result = await new SyncFromCloud(
+      storage,
+      port,
+      repo,
+      'mobile-device',
+      '휴대폰',
+      'ask',
+    ).execute();
+
+    expect(result.conflicts.map((conflict) => conflict.filename)).toEqual(['curriculum-progress']);
+    expect(files['curriculum-progress']).toEqual(localDuringDownload);
+    expect(localState.manifest?.files['curriculum-progress']).toEqual(localInfo);
+  });
+
+  it('원격 본문 체크섬이 장부와 다르면 로컬 진도를 그대로 두고 실패한다', async () => {
+    const baselineData = { entries: [{ id: 'entry-1', status: 'planned' }] };
+    const expectedRemoteData = { entries: [{ id: 'entry-1', status: 'completed' }] };
+    const unexpectedRemoteData = { entries: [{ id: 'entry-1', status: 'skipped' }] };
+    const baselineContent = JSON.stringify(baselineData);
+    const expectedRemoteContent = JSON.stringify(expectedRemoteData);
+    const localInfo = {
+      checksum: await computeSyncChecksum(baselineContent),
+      lastModified: '2026-08-19T09:00:00.000Z',
+      size: new TextEncoder().encode(baselineContent).length,
+      uploadedBy: 'mobile-device',
+    };
+    const remoteInfo = {
+      checksum: await computeSyncChecksum(expectedRemoteContent),
+      lastModified: '2026-08-21T09:00:00.000Z',
+      size: new TextEncoder().encode(expectedRemoteContent).length,
+      uploadedBy: 'pc-device',
+    };
+    const { storage, files } = makeStorage({ 'curriculum-progress': baselineData });
+    const { port } = makeDrive(manifest({ 'curriculum-progress': remoteInfo }, 'pc-device'), {
+      'curriculum-progress': JSON.stringify(unexpectedRemoteData),
+    });
+    const { repo, state: localState } = makeSyncRepo(
+      manifest({ 'curriculum-progress': localInfo }, 'mobile-device'),
+    );
+
+    await expect(
+      new SyncFromCloud(storage, port, repo, 'mobile-device', '휴대폰', 'ask').execute(),
+    ).rejects.toThrow('동기화 중 다시 변경되었습니다');
+
+    expect(files['curriculum-progress']).toEqual(baselineData);
+    expect(localState.manifest?.files['curriculum-progress']).toEqual(localInfo);
   });
 });

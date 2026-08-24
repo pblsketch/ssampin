@@ -31,6 +31,7 @@ import {
   type GetBinaryDynamicSyncFiles,
 } from './SyncToCloud';
 import { withFileLock } from '@usecases/shared/fileWriteLock';
+import { SYNC_FILE_KEYS } from './syncRegistry';
 import { base64ToUint8 } from './binaryBase64';
 
 /** Q2: 마이그레이션 여부 판별 보조 — tags 가 많을수록 정규화된 쪽으로 본다. */
@@ -709,6 +710,11 @@ export class SyncFromCloud {
     await this.storage.write(filename, data);
   }
 
+  private async readStoredChecksum(filename: string): Promise<string | null> {
+    const data = await this.storage.read<unknown>(filename);
+    return data === null ? null : await computeSyncChecksum(JSON.stringify(data));
+  }
+
   /**
    * 로컬 기록을 보존해 병합한 결과는 리모트 원본과 바이트가 다를 수 있다.
    * 그 결과에 리모트 원본 체크섬을 붙이면 다음 pull이 곧바로 content-mismatch가 된다.
@@ -870,6 +876,7 @@ export class SyncFromCloud {
     const conflicts: DriveSyncConflict[] = [];
     const skipped: string[] = [];
     const updatedFiles: Record<string, DriveSyncFileInfo> = { ...(localManifest?.files ?? {}) };
+    let localManifestChanged = false;
     const total = SYNC_FILES.length;
 
     let index = 0;
@@ -987,8 +994,73 @@ export class SyncFromCloud {
         );
       }
 
-      // 양쪽 다 변경됨 → 충돌
+      // 장부가 서로 다르면 실제 로컬 내용까지 확인해 원격 단독 변경과 실제 충돌을 가른다.
       if (localInfo && localInfo.checksum !== remoteInfo.checksum) {
+        if (filename === SYNC_FILE_KEYS.curriculumProgress) {
+          const localChecksumBeforeDownload = await this.readStoredChecksum(filename);
+
+          if (localChecksumBeforeDownload === remoteInfo.checksum) {
+            updatedFiles[filename] = remoteInfo;
+            localManifestChanged = true;
+            skipped.push(filename);
+            console.log(
+              `[SyncFromCloud]   ${filename}: SKIP (로컬 내용은 이미 리모트와 동일 — 장부만 갱신)`,
+            );
+            continue;
+          }
+
+          const localHasNotChanged =
+            localChecksumBeforeDownload === null ||
+            localChecksumBeforeDownload === localInfo.checksum;
+          if (localHasNotChanged) {
+            const driveFile = remoteFiles.find((file) => file.name === `${filename}.json`);
+            if (driveFile) {
+              const content = await this.drivePort.downloadSyncFile(driveFile.id);
+              const downloadedChecksum = await computeSyncChecksum(content);
+              if (downloadedChecksum !== remoteInfo.checksum) {
+                throw new Error(`드라이브 ${filename} 파일이 동기화 중 다시 변경되었습니다.`);
+              }
+
+              const replaced = await withFileLock(
+                SYNC_FILE_KEYS.curriculumProgress,
+                async (): Promise<boolean> => {
+                  const localChecksumAfterDownload = await this.readStoredChecksum(filename);
+                  const localChangedDuringDownload =
+                    localChecksumAfterDownload !== localChecksumBeforeDownload &&
+                    localChecksumAfterDownload !== remoteInfo.checksum;
+                  if (localChangedDuringDownload) return false;
+
+                  if (localChecksumAfterDownload !== remoteInfo.checksum) {
+                    await this.writeReplacedFile(filename, JSON.parse(content) as unknown);
+                  }
+                  return true;
+                },
+              );
+
+              if (!replaced) {
+                conflicts.push({
+                  filename,
+                  localModified: 'content-mismatch',
+                  remoteModified: remoteInfo.lastModified,
+                  localDeviceName: this.deviceName,
+                  remoteDeviceName: remoteManifest.deviceName,
+                });
+                console.log(
+                  `[SyncFromCloud]   ${filename}: ⛔ CONFLICT (다운로드 중 로컬 내용 변경)`,
+                );
+                continue;
+              }
+
+              updatedFiles[filename] = remoteInfo;
+              downloaded.push(filename);
+              console.log(
+                `[SyncFromCloud]   ${filename}: ⬇ DOWNLOAD (로컬 변경 없음, 리모트만 변경)`,
+              );
+              continue;
+            }
+          }
+        }
+
         const localIsNewer = new Date(localInfo.lastModified) > new Date(remoteInfo.lastModified);
         const remoteIsNewer = !localIsNewer;
 
@@ -1475,7 +1547,7 @@ export class SyncFromCloud {
     //  append-only id 기반이라 덮어쓰기 충돌 없음 — P2 예방 유지.)
 
     // 로컬 매니페스트 업데이트
-    if (downloaded.length > 0) {
+    if (downloaded.length > 0 || localManifestChanged) {
       const newLocalManifest: DriveSyncManifest = {
         version: 1,
         lastSyncedAt: new Date().toISOString(),

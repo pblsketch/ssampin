@@ -4,6 +4,8 @@ import type {
   LessonDayAdjustment,
 } from '@domain/entities/CurriculumProgress';
 import type { ITeachingClassRepository } from '@domain/repositories/ITeachingClassRepository';
+import { withFileLock } from '@usecases/shared/fileWriteLock';
+import { SYNC_FILE_KEYS } from '@usecases/sync/syncRegistry';
 
 /**
  * 진도 기록 유스케이스.
@@ -32,35 +34,41 @@ export class ManageCurriculumProgress {
   }
 
   async add(entry: ProgressEntry): Promise<void> {
-    const data = await this.repository.getProgress();
-    const entries = data?.entries ?? [];
+    return withFileLock(SYNC_FILE_KEYS.curriculumProgress, async () => {
+      const data = await this.repository.getProgress();
+      const entries = data?.entries ?? [];
 
-    const updatedEntries: readonly ProgressEntry[] = [...entries, entry];
-    const updatedData: CurriculumProgressData = { ...(data ?? {}), entries: updatedEntries };
+      const updatedEntries: readonly ProgressEntry[] = [...entries, entry];
+      const updatedData: CurriculumProgressData = { ...(data ?? {}), entries: updatedEntries };
 
-    await this.repository.saveProgress(updatedData);
+      await this.repository.saveProgress(updatedData);
+    });
   }
 
   async update(entry: ProgressEntry): Promise<void> {
-    const data = await this.repository.getProgress();
-    const entries = data?.entries ?? [];
+    return withFileLock(SYNC_FILE_KEYS.curriculumProgress, async () => {
+      const data = await this.repository.getProgress();
+      const entries = data?.entries ?? [];
 
-    const updatedEntries: readonly ProgressEntry[] = entries.map((e) =>
-      e.id === entry.id ? entry : e,
-    );
-    const updatedData: CurriculumProgressData = { ...(data ?? {}), entries: updatedEntries };
+      const updatedEntries: readonly ProgressEntry[] = entries.map((e) =>
+        e.id === entry.id ? entry : e,
+      );
+      const updatedData: CurriculumProgressData = { ...(data ?? {}), entries: updatedEntries };
 
-    await this.repository.saveProgress(updatedData);
+      await this.repository.saveProgress(updatedData);
+    });
   }
 
   async delete(id: string): Promise<void> {
-    const data = await this.repository.getProgress();
-    const entries = data?.entries ?? [];
+    return withFileLock(SYNC_FILE_KEYS.curriculumProgress, async () => {
+      const data = await this.repository.getProgress();
+      const entries = data?.entries ?? [];
 
-    const updatedEntries: readonly ProgressEntry[] = entries.filter((e) => e.id !== id);
-    const updatedData: CurriculumProgressData = { ...(data ?? {}), entries: updatedEntries };
+      const updatedEntries: readonly ProgressEntry[] = entries.filter((e) => e.id !== id);
+      const updatedData: CurriculumProgressData = { ...(data ?? {}), entries: updatedEntries };
 
-    await this.repository.saveProgress(updatedData);
+      await this.repository.saveProgress(updatedData);
+    });
   }
 
   /** 수업일 정정 목록. 없으면 빈 배열. */
@@ -81,18 +89,20 @@ export class ManageCurriculumProgress {
     kind: LessonDayAdjustment['kind'] | null,
     now: string,
   ): Promise<readonly LessonDayAdjustment[]> {
-    const data = await this.repository.getProgress();
-    const existing = data?.lessonDayAdjustments ?? [];
-    const others = existing.filter((a) => !(a.classId === classId && a.date === date));
-    const next: readonly LessonDayAdjustment[] =
-      kind === null ? others : [...others, { classId, date, kind, updatedAt: now }];
+    return withFileLock(SYNC_FILE_KEYS.curriculumProgress, async () => {
+      const data = await this.repository.getProgress();
+      const existing = data?.lessonDayAdjustments ?? [];
+      const others = existing.filter((a) => !(a.classId === classId && a.date === date));
+      const next: readonly LessonDayAdjustment[] =
+        kind === null ? others : [...others, { classId, date, kind, updatedAt: now }];
 
-    await this.repository.saveProgress({
-      ...(data ?? {}),
-      entries: data?.entries ?? [],
-      lessonDayAdjustments: next,
+      await this.repository.saveProgress({
+        ...(data ?? {}),
+        entries: data?.entries ?? [],
+        lessonDayAdjustments: next,
+      });
+      return next;
     });
-    return next;
   }
 
   /**
@@ -105,26 +115,28 @@ export class ManageCurriculumProgress {
     force = false,
     adjustments?: readonly LessonDayAdjustment[],
   ): Promise<void> {
-    // 루트 보존을 위해 force 여부와 무관하게 먼저 읽는다.
-    // (예전에는 !force일 때만 읽어서, force 저장이 형제 필드를 통째로 날렸다.)
-    const existing = await this.repository.getProgress();
+    return withFileLock(SYNC_FILE_KEYS.curriculumProgress, async () => {
+      // 루트 보존을 위해 force 여부와 무관하게 먼저 읽는다.
+      // (예전에는 !force일 때만 읽어서, force 저장이 형제 필드를 통째로 날렸다.)
+      const existing = await this.repository.getProgress();
 
-    // 방어: 기존 데이터가 있는데 빈 배열로 덮어쓰려 하면 차단 (force로 의도적 삭제 허용)
-    if (!force) {
-      const existingCount = existing?.entries?.length ?? 0;
-      if (existingCount > 0 && entries.length === 0) {
-        console.warn(
-          `[ManageProgress] 기존 진도 ${existingCount}건을 빈 배열로 덮어쓰기 시도 차단됨`,
-        );
-        return;
+      // 방어: 기존 데이터가 있는데 빈 배열로 덮어쓰려 하면 차단 (force로 의도적 삭제 허용)
+      if (!force) {
+        const existingCount = existing?.entries?.length ?? 0;
+        if (existingCount > 0 && entries.length === 0) {
+          console.warn(
+            `[ManageProgress] 기존 진도 ${existingCount}건을 빈 배열로 덮어쓰기 시도 차단됨`,
+          );
+          return;
+        }
       }
-    }
 
-    const updatedData: CurriculumProgressData = {
-      ...(existing ?? {}),
-      entries,
-      ...(adjustments === undefined ? {} : { lessonDayAdjustments: adjustments }),
-    };
-    await this.repository.saveProgress(updatedData);
+      const updatedData: CurriculumProgressData = {
+        ...(existing ?? {}),
+        entries,
+        ...(adjustments === undefined ? {} : { lessonDayAdjustments: adjustments }),
+      };
+      await this.repository.saveProgress(updatedData);
+    });
   }
 }

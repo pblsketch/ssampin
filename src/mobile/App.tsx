@@ -7,6 +7,7 @@ import { useMobileStudentStore } from './stores/useMobileStudentStore';
 import { useMobileStudentRecordsStore } from './stores/useMobileStudentRecordsStore';
 import { TodayHub } from './components/Today/TodayHub';
 import { YearTransitionNotice } from './components/common/YearTransitionNotice';
+import { SyncStatusBanner } from './components/Today/SyncStatusBanner';
 import { AttendanceCheckPage } from './pages/AttendanceCheckPage';
 import { HomeroomAttendanceView } from './pages/HomeroomAttendanceView';
 import { ClassListPage } from './pages/ClassListPage';
@@ -508,6 +509,10 @@ export function App() {
 
       {/* F8c(RT1) — 다른 기기의 학년도 마무리 1회 안내(동기화 다운로드가 currentTerm 전진 감지 시) */}
       <YearTransitionNotice />
+
+      <SyncStatusBanner
+        onOpenSyncSettings={() => navigate({ kind: 'moreSection', section: 'settings' })}
+      />
 
       {/* Content
           글로벌 좌우 스와이프로 탭 전환하던 동작은 제거됨 (사용자 요청, 2026-05-14).
