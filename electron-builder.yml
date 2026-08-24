@@ -39,6 +39,15 @@ files:
       - '!**/node_modules/@hyzyla/**'
       # adm-zip: onnxruntime-node 전용 전이 의존성. 위에서 onnxruntime 을 뺐으므로 도달 불가 코드.
       - '!**/node_modules/adm-zip/**'
+      # leveldown: 협업 보드 서버(y-websocket/bin/utils.cjs)의 optional 저장소 백엔드.
+      # utils.cjs 는 YPERSISTENCE 환경변수가 있을 때만 require('y-leveldb') 를 호출하는데
+      # 쌤핀은 그 변수를 설정하지 않는다(scripts/build-electron.mjs 도 같은 이유로 external 처리).
+      # 즉 런타임에 로드되지 않는 네이티브 모듈이다.
+      #
+      # 게다가 소스 컴파일 대상이라 universal 빌드에서 x64 슬라이스에도 arm64 바이너리가 들어가
+      # lipo 가 "have the same architectures (arm64)" 로 실패했다
+      # (@electron/rebuild 의 x64 패스가 기존 산출물을 보고 4ms 만에 건너뛴다).
+      - '!**/node_modules/leveldown/**'
       # sharp(+@img 네이티브 바이너리 20MB): 앱 런타임 미사용. 이미지 처리는 Electron nativeImage 로 한다
       # (electron/main.ts §이미지 변환 "sharp 미사용", StickerImageProcessor "sharp 없음").
       # 남은 사용처는 빌드용 아이콘 스크립트(scripts/*-icon-alpha.mjs)와 kordoc 의 optional 경로뿐이다.

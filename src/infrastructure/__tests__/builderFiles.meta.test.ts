@@ -61,6 +61,9 @@ const REQUIRED_NODE_MODULES_EXCLUSIONS = [
   // @napi-rs — pdfjs-dist 의 Node 전용 캔버스 백엔드. 쌤핀은 renderer 의 DOM 캔버스만 쓴다.
   // 칩/OS 전용 바이너리라 macOS universal 빌드의 x64·arm64 병합까지 막았다(2026-08-24).
   '@napi-rs',
+  // leveldown — 협업 보드 서버의 optional 저장소. y-websocket/bin/utils.cjs 가 YPERSISTENCE
+  // 환경변수가 있을 때만 require 하는데 쌤핀은 설정하지 않는다(build-electron.mjs 도 external 처리).
+  'leveldown',
 ] as const;
 
 describe('electron-builder.yml 미사용 node_modules 배포 제외 보장', () => {
