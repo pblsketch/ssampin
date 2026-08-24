@@ -146,24 +146,33 @@ export function RosterManagementTab() {
       // 이걸 빠뜨리면 앱 어디에도 안 보이는 얼굴 사진이 컴퓨터·클라우드에 남는다 —
       // 개인정보 처리방침의 "삭제 시 즉시 지워집니다"가 사실이 아니게 된다.
       // (실행 취소로 학생을 되살려도 사진은 돌아오지 않는다 — 사진은 다시 넣어야 한다)
+      let photoDeletionRecordFailed = false;
       try {
-        const cloud = await resolveStudentPhotoCloud();
-        await deleteStudentPhotos(
+        const cloudResolution = await resolveStudentPhotoCloud();
+        const result = await deleteStudentPhotos(
           {
             repository: studentPhotoRepository,
             syncRepository: driveSyncRepository,
-            ...(cloud ? { cloud } : {}),
+            ...(cloudResolution.status === 'ready' ? { cloud: cloudResolution.cloud } : {}),
           },
           // 담임 명단이므로 사진 키는 불변 Student.id 그대로다
           { scope: 'student', subjectKey: photoSubjectKey('homeroom', 'homeroom', student.id) },
         );
+        photoDeletionRecordFailed = result.cloudFailures.length > 0;
       } catch (err) {
         console.warn('[RosterManagementTab] 학생 사진 파기 실패:', err);
+        photoDeletionRecordFailed = true;
       }
-      showToast(`${student.name || '학생'}을(를) 명단에서 삭제했습니다`, 'success', {
-        label: '실행 취소',
-        onClick: () => void updateStudents([...snapshot]),
-      });
+      showToast(
+        photoDeletionRecordFailed
+          ? `${student.name || '학생'}을(를) 삭제했지만 사진의 클라우드 삭제 예약은 저장하지 못했어요.`
+          : `${student.name || '학생'}을(를) 명단에서 삭제했습니다`,
+        photoDeletionRecordFailed ? 'error' : 'success',
+        {
+          label: '실행 취소',
+          onClick: () => void updateStudents([...snapshot]),
+        },
+      );
     },
     [students, updateStudents, showToast],
   );
@@ -249,7 +258,12 @@ export function RosterManagementTab() {
       if (pendingPhotos.length > 0) {
         const { resolved, unresolved } = resolvePhotoTargets(newStudents, pendingPhotos);
         const saveResult = await saveRosterPhotos(
-          { repository: studentPhotoRepository, resizer: imageResizer },
+          {
+            repository: studentPhotoRepository,
+            resizer: imageResizer,
+            syncRepository: driveSyncRepository,
+            requireSyncManifest: settings.sync?.enabled === true,
+          },
           {
             ownerKind: 'homeroom',
             ownerKey: 'homeroom',
@@ -273,7 +287,7 @@ export function RosterManagementTab() {
         onClick: () => void updateStudents([...prevStudentsRef.current]),
       });
     },
-    [students, updateStudents, showToast],
+    [students, updateStudents, showToast, settings.sync?.enabled],
   );
 
   /**

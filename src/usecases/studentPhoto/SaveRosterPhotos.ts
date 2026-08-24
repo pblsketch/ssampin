@@ -15,12 +15,15 @@
 
 import type { IImageResizerPort } from '@domain/ports/IImageResizerPort';
 import type { IStudentPhotoRepository } from '@domain/repositories/IStudentPhotoRepository';
+import type { IDriveSyncRepository } from '@domain/repositories/IDriveSyncRepository';
 import type { StudentPhoto, StudentPhotoOwnerKind } from '@domain/entities/StudentPhoto';
+import { driveSyncDeletionIdentity } from '@domain/entities/DriveSyncState';
 import {
   STUDENT_PHOTO_LIMITS,
   isAllowedStudentPhotoMime,
   studentPhotoStorageRef,
 } from '@domain/rules/studentPhotoRules';
+import { withDataOperationLock } from '@usecases/shared/dataOperationMutex';
 
 /** 사진을 저장하지 못한 이유 — 사용자 안내와 진단에 그대로 쓴다 */
 export type SkipReason =
@@ -70,7 +73,13 @@ export interface SaveRosterPhotosResult {
 const RETRY_QUALITY = 0.6;
 
 export async function saveRosterPhotos(
-  deps: { readonly repository: IStudentPhotoRepository; readonly resizer: IImageResizerPort },
+  deps: {
+    readonly repository: IStudentPhotoRepository;
+    readonly resizer: IImageResizerPort;
+    readonly syncRepository?: IDriveSyncRepository;
+    /** 동기화가 켜진 호출은 장부 없이 사진을 쓰지 않는다. OFF 호출은 로컬 전용 저장을 허용한다. */
+    readonly requireSyncManifest?: boolean;
+  },
   input: SaveRosterPhotosInput,
 ): Promise<SaveRosterPhotosResult> {
   const entries: Array<{ photo: StudentPhoto; bytes: Uint8Array }> = [];
@@ -144,6 +153,49 @@ export async function saveRosterPhotos(
     });
   }
 
-  await deps.repository.saveMany(entries);
+  await withDataOperationLock(async () => {
+    if (entries.length === 0) return;
+    const manifest = deps.syncRepository ? await deps.syncRepository.getLocalManifest() : null;
+    if (deps.requireSyncManifest && !manifest) {
+      throw new Error('학생 사진을 넣기 전에 Google Drive 동기화를 한 번 실행해 주세요.');
+    }
+    if (!deps.syncRepository || !manifest) {
+      await deps.repository.saveMany(entries);
+      return;
+    }
+    const deletions = { ...(manifest.deletions ?? {}) };
+    const restorations = { ...(manifest.restorations ?? {}) };
+    let restorationRecorded = false;
+    for (const { photo } of entries) {
+      const replacedDeletion = deletions[photo.storageRef];
+      delete deletions[photo.storageRef];
+      if (!replacedDeletion) continue;
+      restorationRecorded = true;
+      restorations[photo.storageRef] = {
+        restoredAt: input.now,
+        restoredBy: manifest.deviceId,
+        replacesDeletionId: driveSyncDeletionIdentity(replacedDeletion),
+      };
+    }
+    if (!restorationRecorded) {
+      await deps.repository.saveMany(entries);
+      return;
+    }
+    const restoredManifest = {
+      ...manifest,
+      version: Math.max(2, manifest.version),
+      deletions,
+      restorations,
+    };
+    // 삭제 표식을 먼저 해제해야 장부 저장 실패 뒤 새 사진만 남아 다음 동기화에서
+    // 지워지는 상태를 만들지 않는다. 사진 저장 실패 시에는 이전 장부로 되돌린다.
+    await deps.syncRepository.saveLocalManifest(restoredManifest);
+    try {
+      await deps.repository.saveMany(entries);
+    } catch (error) {
+      await deps.syncRepository.saveLocalManifest(manifest);
+      throw error;
+    }
+  });
   return { savedCount: entries.length, skipped };
 }

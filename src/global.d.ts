@@ -204,6 +204,11 @@ interface ElectronAPI {
   readData: (filename: string) => Promise<string | null>;
   coolMessenger: CoolMessengerElectronAPI;
   writeData: (filename: string, data: string) => Promise<void>;
+  writeDataIfUnchanged: (
+    filename: string,
+    expectedData: string | null,
+    nextData: string,
+  ) => Promise<boolean>;
   removeData: (filename: string) => Promise<void>;
   aiBridge: AiBridgeElectronAPI;
   setAlwaysOnTop: (flag: boolean) => Promise<void>;
@@ -791,6 +796,11 @@ interface ElectronAPI {
   // === 서식 관리 (forms) — Phase 1 바이너리 IPC ===
   forms?: {
     writeBinary: (relPath: string, bytes: ArrayBuffer) => Promise<void>;
+    writeBinaryIfUnchanged: (
+      relPath: string,
+      expected: ArrayBuffer | null,
+      next: ArrayBuffer,
+    ) => Promise<boolean>;
     readBinary: (relPath: string) => Promise<ArrayBuffer | null>;
     removeBinary: (relPath: string) => Promise<void>;
     listBinary: (dirRelPath: string) => Promise<string[]>;

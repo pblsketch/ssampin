@@ -64,4 +64,10 @@ export interface IDriveSyncPort {
    * 휴지통이 아니라 **즉시 소멸**이어야 한다 — 휴지통에 30일 남아 있으면 파기가 아니다.
    */
   deleteSyncFile(folderId: string, filename: string): Promise<void>;
+  /** 파일 수정 시각이 기대값과 같을 때만 지운다. 변경됐으면 false. */
+  deleteSyncFileIfUnchanged?(
+    folderId: string,
+    filename: string,
+    expectedModifiedTime: string,
+  ): Promise<boolean>;
 }

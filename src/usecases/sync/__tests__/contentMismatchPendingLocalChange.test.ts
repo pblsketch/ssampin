@@ -260,6 +260,155 @@ describe('빈 봉투 유실은 여전히 충돌로 회수한다 (v2.3.1 보호 �
   });
 });
 
+const SNAPSHOT_SYNC_FILES = [
+  'settings',
+  'class-schedule',
+  'teacher-schedule',
+  'timetable-overrides',
+  'students',
+  'seating',
+  'events',
+  'memos',
+  'todos',
+  'bookmarks',
+  'surveys',
+  'assignments',
+  'seat-constraints',
+  'teaching-classes',
+  'dday',
+  'staff-contacts',
+  'consultations',
+  'manual-meals',
+  'note-notebooks',
+  'note-sections',
+  'note-pages-meta',
+  'stickers',
+  'rubrics',
+  'record-drafts',
+  'observation-attachments',
+  'student-photos',
+] as const;
+
+describe('스냅샷 JSON 파일의 공통 3방향 판정', () => {
+  it.each(SNAPSHOT_SYNC_FILES)(
+    '%s: 휴대폰 무수정 + PC 단독 변경은 ask에서도 자동 수신한다',
+    async (filename) => {
+      const baselineData = { items: ['baseline'] };
+      const remoteData = { items: ['pc-new'] };
+      const baselineContent = JSON.stringify(baselineData);
+      const remoteContent = JSON.stringify(remoteData);
+      const localInfo = {
+        checksum: await computeSyncChecksum(baselineContent),
+        lastModified: '2026-08-24T01:00:00.000Z',
+        size: new TextEncoder().encode(baselineContent).length,
+        uploadedBy: 'mobile-device',
+      };
+      const remoteInfo = {
+        checksum: await computeSyncChecksum(remoteContent),
+        lastModified: '2026-08-24T02:00:00.000Z',
+        size: new TextEncoder().encode(remoteContent).length,
+        uploadedBy: 'pc-device',
+      };
+      const { storage, files } = makeStorage({ [filename]: baselineData });
+      const { port } = makeDrive(manifest({ [filename]: remoteInfo }, 'pc-device'), {
+        [filename]: remoteContent,
+      });
+      const { repo, state } = makeSyncRepo(manifest({ [filename]: localInfo }, 'mobile-device'));
+
+      const result = await new SyncFromCloud(
+        storage,
+        port,
+        repo,
+        'mobile-device',
+        '휴대폰',
+        'ask',
+      ).execute();
+
+      expect(result.conflicts).toEqual([]);
+      expect(result.downloaded).toContain(filename);
+      expect(files[filename]).toEqual(remoteData);
+      expect(state.manifest?.files[filename]).toEqual(remoteInfo);
+    },
+  );
+
+  it('실제 양쪽 변경은 latest 정책에서도 자동 덮어쓰지 않는다', async () => {
+    const baselineData = { items: ['baseline'] };
+    const localData = { items: ['local-edit'] };
+    const remoteData = { items: ['remote-edit'] };
+    const baselineContent = JSON.stringify(baselineData);
+    const remoteContent = JSON.stringify(remoteData);
+    const localInfo = {
+      checksum: await computeSyncChecksum(baselineContent),
+      lastModified: '2026-08-24T01:00:00.000Z',
+      size: new TextEncoder().encode(baselineContent).length,
+      uploadedBy: 'desktop-device',
+    };
+    const remoteInfo = {
+      checksum: await computeSyncChecksum(remoteContent),
+      lastModified: '2026-08-24T02:00:00.000Z',
+      size: new TextEncoder().encode(remoteContent).length,
+      uploadedBy: 'other-device',
+    };
+    const { storage, files } = makeStorage({ events: localData });
+    const { port } = makeDrive(manifest({ events: remoteInfo }, 'other-device'), {
+      events: remoteContent,
+    });
+    const { repo, state } = makeSyncRepo(manifest({ events: localInfo }, 'desktop-device'));
+
+    const result = await new SyncFromCloud(
+      storage,
+      port,
+      repo,
+      'desktop-device',
+      'PC',
+      'latest',
+    ).execute();
+
+    expect(result.conflicts.map((conflict) => conflict.filename)).toEqual(['events']);
+    expect(files.events).toEqual(localData);
+    expect(state.manifest?.files.events).toEqual(localInfo);
+  });
+
+  it('동적 노트 본문도 PC 단독 변경이면 ask에서 자동 수신한다', async () => {
+    const filename = 'note-body--page-1';
+    const baselineData = { blocks: [{ text: 'baseline' }] };
+    const remoteData = { blocks: [{ text: 'pc-new' }] };
+    const baselineContent = JSON.stringify(baselineData);
+    const remoteContent = JSON.stringify(remoteData);
+    const localInfo = {
+      checksum: await computeSyncChecksum(baselineContent),
+      lastModified: '2026-08-24T01:00:00.000Z',
+      size: new TextEncoder().encode(baselineContent).length,
+      uploadedBy: 'desktop-device',
+    };
+    const remoteInfo = {
+      checksum: await computeSyncChecksum(remoteContent),
+      lastModified: '2026-08-24T02:00:00.000Z',
+      size: new TextEncoder().encode(remoteContent).length,
+      uploadedBy: 'other-device',
+    };
+    const { storage, files } = makeStorage({ [filename]: baselineData });
+    const { port } = makeDrive(manifest({ [filename]: remoteInfo }, 'other-device'), {
+      [filename]: remoteContent,
+    });
+    const { repo } = makeSyncRepo(manifest({ [filename]: localInfo }, 'desktop-device'));
+
+    const result = await new SyncFromCloud(
+      storage,
+      port,
+      repo,
+      'desktop-device',
+      'PC',
+      'ask',
+      async () => [filename],
+    ).execute();
+
+    expect(result.conflicts).toEqual([]);
+    expect(result.downloaded).toContain(filename);
+    expect(files[filename]).toEqual(remoteData);
+  });
+});
+
 describe('진도 데이터의 3방향 동기화 판정', () => {
   it('휴대폰 변경이 없으면 PC에서만 바뀐 진도를 묻지 않고 내려받는다', async () => {
     const baselineData = {

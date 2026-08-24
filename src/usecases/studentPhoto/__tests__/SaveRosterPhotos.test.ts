@@ -2,9 +2,10 @@
  * 명렬표 사진 저장 — **한 장이 실패해도 나머지는 저장된다**는 게 핵심이다.
  * 반 전체가 통째로 실패하면 교사는 왜 안 되는지 알 수 없다.
  */
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { IImageResizerPort, ResizedImage } from '@domain/ports/IImageResizerPort';
 import type { IStudentPhotoRepository } from '@domain/repositories/IStudentPhotoRepository';
+import type { DriveSyncManifest } from '@domain/entities/DriveSyncState';
 import type { StudentPhoto } from '@domain/entities/StudentPhoto';
 import { STUDENT_PHOTO_LIMITS } from '@domain/rules/studentPhotoRules';
 import { saveRosterPhotos, type RosterPhotoToSave } from '../SaveRosterPhotos';
@@ -101,6 +102,28 @@ describe('saveRosterPhotos', () => {
     });
   });
 
+  it('동기화 OFF이고 장부가 없으면 로컬 전용으로 저장한다', async () => {
+    const getLocalManifest = vi.fn(() => Promise.resolve(null));
+    const syncRepository = {
+      getLocalManifest,
+      saveLocalManifest: () => Promise.resolve(),
+    };
+
+    const result = await saveRosterPhotos(
+      {
+        repository,
+        resizer: new FakeResizer(),
+        syncRepository,
+        requireSyncManifest: false,
+      },
+      { ownerKind: 'homeroom', ownerKey: 'homeroom', photos: [candidate()], now: NOW },
+    );
+
+    expect(result.savedCount).toBe(1);
+    expect(repository.saved).toHaveLength(1);
+    expect(getLocalManifest).toHaveBeenCalledOnce();
+  });
+
   it('학번·이름은 표시용으로만 함께 저장된다 (식별은 subjectKey 로)', async () => {
     await saveRosterPhotos(
       { repository, resizer: new FakeResizer() },
@@ -108,6 +131,156 @@ describe('saveRosterPhotos', () => {
     );
     expect(repository.saved[0]!.photo.studentNumber).toBe(1);
     expect(repository.saved[0]!.photo.studentName).toBe('강나영');
+  });
+
+  it('동기화 OFF여도 기존 삭제 장부가 있으면 재등록을 복원으로 기록한다', async () => {
+    const key = 'student-photos/s1.jpg';
+    const state: { manifest: DriveSyncManifest } = {
+      manifest: {
+        version: 2,
+        lastSyncedAt: NOW,
+        deviceId: 'mobile-device',
+        deviceName: '휴대폰',
+        files: {},
+        deletions: { [key]: { deletedAt: '2026-08-19T08:00:00.000Z', deletedBy: 'mobile-device' } },
+      },
+    };
+    const syncRepository = {
+      getLocalManifest: () => Promise.resolve(state.manifest),
+      saveLocalManifest: (manifest: DriveSyncManifest) => {
+        state.manifest = manifest;
+        return Promise.resolve();
+      },
+    };
+
+    await saveRosterPhotos(
+      {
+        repository,
+        resizer: new FakeResizer(),
+        syncRepository,
+        requireSyncManifest: false,
+      },
+      { ownerKind: 'homeroom', ownerKey: 'homeroom', photos: [candidate()], now: NOW },
+    );
+
+    expect(state.manifest.deletions?.[key]).toBeUndefined();
+    expect(state.manifest.restorations?.[key]).toEqual({
+      restoredAt: NOW,
+      restoredBy: 'mobile-device',
+      replacesDeletionId: 'mobile-device:2026-08-19T08:00:00.000Z',
+    });
+  });
+
+  it('동기화 ON이고 장부가 있으면 정상 저장한다', async () => {
+    const manifest: DriveSyncManifest = {
+      version: 2,
+      lastSyncedAt: NOW,
+      deviceId: 'desktop-device',
+      deviceName: '교실 PC',
+      files: {},
+    };
+    const syncRepository = {
+      getLocalManifest: () => Promise.resolve(manifest),
+      saveLocalManifest: () => Promise.resolve(),
+    };
+
+    const result = await saveRosterPhotos(
+      {
+        repository,
+        resizer: new FakeResizer(),
+        syncRepository,
+        requireSyncManifest: true,
+      },
+      { ownerKind: 'homeroom', ownerKey: 'homeroom', photos: [candidate()], now: NOW },
+    );
+
+    expect(result.savedCount).toBe(1);
+    expect(repository.saved).toHaveLength(1);
+  });
+
+  it('복원 장부 저장이 실패하면 새 사진을 쓰지 않는다', async () => {
+    const key = 'student-photos/s1.jpg';
+    const manifest: DriveSyncManifest = {
+      version: 2,
+      lastSyncedAt: NOW,
+      deviceId: 'mobile-device',
+      deviceName: '휴대폰',
+      files: {},
+      deletions: { [key]: { deletedAt: '2026-08-19T08:00:00.000Z', deletedBy: 'mobile-device' } },
+    };
+    const syncRepository = {
+      getLocalManifest: () => Promise.resolve(manifest),
+      saveLocalManifest: vi.fn(() => Promise.reject(new Error('장부 저장 실패'))),
+    };
+
+    await expect(
+      saveRosterPhotos(
+        {
+          repository,
+          resizer: new FakeResizer(),
+          syncRepository,
+          requireSyncManifest: true,
+        },
+        { ownerKind: 'homeroom', ownerKey: 'homeroom', photos: [candidate()], now: NOW },
+      ),
+    ).rejects.toThrow('장부 저장 실패');
+    expect(repository.saved).toHaveLength(0);
+  });
+
+  it('복원 장부를 쓴 뒤 사진 저장이 실패하면 기존 삭제 표식으로 되돌린다', async () => {
+    const key = 'student-photos/s1.jpg';
+    const originalManifest: DriveSyncManifest = {
+      version: 2,
+      lastSyncedAt: NOW,
+      deviceId: 'mobile-device',
+      deviceName: '휴대폰',
+      files: {},
+      deletions: { [key]: { deletedAt: '2026-08-19T08:00:00.000Z', deletedBy: 'mobile-device' } },
+    };
+    const state = { manifest: originalManifest };
+    const saveLocalManifest = vi.fn((next: DriveSyncManifest) => {
+      state.manifest = next;
+      return Promise.resolve();
+    });
+    const syncRepository = {
+      getLocalManifest: () => Promise.resolve(state.manifest),
+      saveLocalManifest,
+    };
+    repository.saveMany = vi.fn(() => Promise.reject(new Error('사진 저장 실패')));
+
+    await expect(
+      saveRosterPhotos(
+        {
+          repository,
+          resizer: new FakeResizer(),
+          syncRepository,
+          requireSyncManifest: true,
+        },
+        { ownerKind: 'homeroom', ownerKey: 'homeroom', photos: [candidate()], now: NOW },
+      ),
+    ).rejects.toThrow('사진 저장 실패');
+    expect(saveLocalManifest).toHaveBeenCalledTimes(2);
+    expect(state.manifest).toEqual(originalManifest);
+  });
+
+  it('동기화가 켜졌지만 장부가 없으면 사진을 저장하기 전에 중단한다', async () => {
+    const syncRepository = {
+      getLocalManifest: () => Promise.resolve(null),
+      saveLocalManifest: () => Promise.resolve(),
+    };
+
+    await expect(
+      saveRosterPhotos(
+        {
+          repository,
+          resizer: new FakeResizer(),
+          syncRepository,
+          requireSyncManifest: true,
+        },
+        { ownerKind: 'homeroom', ownerKey: 'homeroom', photos: [candidate()], now: NOW },
+      ),
+    ).rejects.toThrow('Google Drive 동기화를 한 번 실행');
+    expect(repository.saved).toHaveLength(0);
   });
 
   it('★한 장이 실패해도 나머지는 저장하고, 누가 왜 빠졌는지 알려 준다', async () => {

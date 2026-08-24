@@ -17,6 +17,7 @@ import { SYNC_REGISTRY, SYNC_FILES } from '../syncRegistry';
  *  (d) settings 도메인이 subscribeExcluded:true인지 (무한루프 방지)
  *  (e) 모든 도메인에 reload 함수가 정의되어 있는지
  *  (f) isDynamic이면 enumerateDynamic 함수가 반드시 존재하는지
+ *  (g) 34개 도메인이 빠짐없이 명시적 동기화 전략을 갖는지
  *
  * 새 SYNC_REGISTRY 항목을 추가할 때:
  *   1. syncRegistry.ts에 SyncDomain 항목 추가
@@ -95,5 +96,32 @@ describe('syncRegistry 구조적 정합성', () => {
       invalid,
       `isDynamic이지만 enumerateDynamic이 없는 도메인: ${invalid.join(', ')}`,
     ).toEqual([]);
+  });
+
+  it('(g) 등록된 34개 도메인이 정적/동적 성격과 맞는 전략을 가져야 한다', () => {
+    expect(SYNC_REGISTRY).toHaveLength(34);
+
+    const staticStrategies = new Set(['snapshot', 'record-merge']);
+    const invalid = SYNC_REGISTRY.filter((domain) =>
+      domain.isDynamic
+        ? staticStrategies.has(domain.strategy)
+        : !staticStrategies.has(domain.strategy),
+    ).map((domain) => domain.fileName);
+
+    expect(invalid, `정적/동적 성격과 전략이 맞지 않는 도메인: ${invalid.join(', ')}`).toEqual([]);
+  });
+
+  it('(h) 병합·바이너리·보관함 전략 대상이 실제 전용 처리 경로와 일치해야 한다', () => {
+    const byStrategy = (strategy: (typeof SYNC_REGISTRY)[number]['strategy']) =>
+      SYNC_REGISTRY.filter((domain) => domain.strategy === strategy)
+        .map((domain) => domain.fileName)
+        .sort();
+
+    expect(byStrategy('record-merge')).toEqual(
+      ['attendance', 'observations', 'student-records'].sort(),
+    );
+    expect(byStrategy('dynamic-json')).toEqual(['note-body']);
+    expect(byStrategy('binary')).toEqual(['obs-attachment-binary', 'student-photo-binary'].sort());
+    expect(byStrategy('archive')).toEqual(['archives']);
   });
 });

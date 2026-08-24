@@ -38,6 +38,15 @@ export class LocalStorageAdapter implements IStoragePort {
     localStorage.setItem(PREFIX + filename, JSON.stringify(data));
   }
 
+  async replaceIfUnchanged<T>(filename: string, expected: T | null, next: T): Promise<boolean> {
+    const key = PREFIX + filename;
+    const raw = localStorage.getItem(key);
+    const current = raw === null ? null : (JSON.parse(raw) as T);
+    if (JSON.stringify(current) !== JSON.stringify(expected)) return false;
+    localStorage.setItem(key, JSON.stringify(next));
+    return true;
+  }
+
   async remove(filename: string): Promise<void> {
     localStorage.removeItem(PREFIX + filename);
   }
@@ -58,6 +67,25 @@ export class LocalStorageAdapter implements IStoragePort {
   async writeBinary(relPath: string, bytes: Uint8Array): Promise<void> {
     const db = await getBinDB();
     await db.put(BIN_STORE, bytes, relPath);
+  }
+
+  async replaceBinaryIfUnchanged(
+    relPath: string,
+    expected: Uint8Array | null,
+    next: Uint8Array,
+  ): Promise<boolean> {
+    const db = await getBinDB();
+    const tx = db.transaction(BIN_STORE, 'readwrite');
+    const raw = await tx.store.get(relPath);
+    const current =
+      raw instanceof Uint8Array ? raw : raw instanceof ArrayBuffer ? new Uint8Array(raw) : null;
+    if (!sameBytes(current, expected)) {
+      await tx.done;
+      return false;
+    }
+    await tx.store.put(next, relPath);
+    await tx.done;
+    return true;
   }
 
   async removeBinary(relPath: string): Promise<void> {
@@ -87,4 +115,10 @@ export class LocalStorageAdapter implements IStoragePort {
       return [];
     }
   }
+}
+
+function sameBytes(left: Uint8Array | null, right: Uint8Array | null): boolean {
+  if (left === null || right === null) return left === right;
+  if (left.byteLength !== right.byteLength) return false;
+  return left.every((byte, index) => byte === right[index]);
 }

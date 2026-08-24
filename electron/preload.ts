@@ -43,6 +43,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   readData: (filename: string): Promise<string | null> => ipcRenderer.invoke('data:read', filename),
   writeData: (filename: string, data: string): Promise<void> =>
     ipcRenderer.invoke('data:write', filename, data),
+  writeDataIfUnchanged: (
+    filename: string,
+    expectedData: string | null,
+    nextData: string,
+  ): Promise<boolean> =>
+    ipcRenderer.invoke('data:writeIfUnchanged', filename, expectedData, nextData),
   removeData: (filename: string): Promise<void> => ipcRenderer.invoke('data:remove', filename),
   // AI 브릿지 — 외부 AI(Claude/Codex/Antigravity) 연결
   aiBridge: {
@@ -1248,6 +1254,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   forms: {
     writeBinary: (relPath: string, bytes: ArrayBuffer): Promise<void> =>
       ipcRenderer.invoke('forms:writeBinary', { relPath, bytes }),
+    writeBinaryIfUnchanged: (
+      relPath: string,
+      expected: ArrayBuffer | null,
+      next: ArrayBuffer,
+    ): Promise<boolean> =>
+      ipcRenderer.invoke('forms:writeBinaryIfUnchanged', { relPath, expected, next }),
     readBinary: (relPath: string): Promise<ArrayBuffer | null> =>
       ipcRenderer.invoke('forms:readBinary', { relPath }),
     removeBinary: (relPath: string): Promise<void> =>

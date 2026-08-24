@@ -390,52 +390,19 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
 
       const getToken = () => authenticateGoogle.getValidAccessToken();
       const drivePort = getDriveSyncAdapter(getToken);
-      const folder = await drivePort.getOrCreateSyncFolder();
+      const { ResolveSyncConflict } = await import('@usecases/sync/ResolveSyncConflict');
+      const resolver = new ResolveSyncConflict(
+        storage,
+        drivePort,
+        driveSyncRepository,
+        sync.deviceId,
+        settings.teacherName || conflict.localDeviceName,
+      );
+      await resolver.execute(conflict, resolution);
 
       if (resolution === 'remote') {
-        // 리모트 데이터를 로컬에 적용
-        const remoteFiles = await drivePort.listSyncFiles(folder.id);
-        const driveFile = remoteFiles.find((f) => f.name === `${conflict.filename}.json`);
-        if (driveFile) {
-          const content = await drivePort.downloadSyncFile(driveFile.id);
-          let parsed = JSON.parse(content) as unknown;
-          if (conflict.filename === 'settings') {
-            // F3(H1): settings 통파일 교체는 충돌 해소 경로에서도 currentTerm "더 최신 학기 승" —
-            // 미전환 기기의 settings 채택이 옛 학년도 스킵 필터를 영구 비활성시키지 않게(qa3-C).
-            const { preserveNewerTermGuard } = await import('@usecases/sync/SyncFromCloud');
-            const { storage: st } = await import('@adapters/di/container');
-            let local: import('@usecases/sync/SyncFromCloud').TermGuardSnapshot | null = null;
-            try {
-              local =
-                await st.read<import('@usecases/sync/SyncFromCloud').TermGuardSnapshot>('settings');
-            } catch {
-              local = null;
-            }
-            parsed = preserveNewerTermGuard(parsed, local ?? {});
-          }
-          await storage.write(conflict.filename, parsed);
-        }
-      } else {
-        // 로컬 데이터를 클라우드에 업로드
-        const data = await storage.read<unknown>(conflict.filename);
-        if (data !== null) {
-          await drivePort.uploadSyncFile(
-            folder.id,
-            `${conflict.filename}.json`,
-            JSON.stringify(data),
-          );
-        }
-      }
-
-      // 로컬 매니페스트 갱신
-      const localManifest = await driveSyncRepository.getLocalManifest();
-      if (localManifest) {
-        const now = new Date().toISOString();
-        const updatedManifest = {
-          ...localManifest,
-          lastSyncedAt: now,
-        };
-        await driveSyncRepository.saveLocalManifest(updatedManifest);
+        const { reloadStores } = await import('@adapters/hooks/useDriveSync');
+        await reloadStores([conflict.filename]);
       }
 
       // 충돌 목록에서 제거
@@ -480,7 +447,7 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
 
       // 로컬 매니페스트도 초기화
       await driveSyncRepository.saveLocalManifest({
-        version: 1,
+        version: 2,
         lastSyncedAt: '',
         deviceId: sync.deviceId,
         deviceName: settings.teacherName || '내 기기',

@@ -173,3 +173,84 @@ describe('JsonStudentPhotoRepository', () => {
     expect(await repo.listBinaryKeys()).toEqual(['student-photos/s1.jpg']);
   });
 });
+
+/**
+ * 여러 장 저장이 중간에 끊겼을 때를 시험한다.
+ *
+ * 되돌리지 않으면 두 가지가 깨진다. (1) 메타에 없는 얼굴 사진이 디스크에 남아 파기 실패가 되고,
+ * (2) 메타는 예전 사진을 가리키는데 파일만 새 사진이라 동기화가 장부와 실제를 다르게 본다.
+ */
+describe('JsonStudentPhotoRepository 부분 저장 복구', () => {
+  /** N 번째 바이너리 쓰기 또는 메타 쓰기에서 실패하는 저장소 */
+  class FlakyStorage extends FakeStorage {
+    binaryWrites = 0;
+    failBinaryWriteAt: number | null = null;
+    failMetaWrite = false;
+
+    override writeBinary(relPath: string, bytes: Uint8Array): Promise<void> {
+      this.binaryWrites += 1;
+      if (this.failBinaryWriteAt === this.binaryWrites) {
+        return Promise.reject(new Error('디스크 쓰기 실패'));
+      }
+      return super.writeBinary(relPath, bytes);
+    }
+
+    override write<T>(filename: string, data: T): Promise<void> {
+      if (this.failMetaWrite && filename === 'student-photos') {
+        return Promise.reject(new Error('메타 저장 실패'));
+      }
+      return super.write(filename, data);
+    }
+  }
+
+  it('★두 번째 사진에서 실패하면 먼저 쓴 새 사진 파일도 남지 않는다', async () => {
+    const storage = new FlakyStorage();
+    const repo = new JsonStudentPhotoRepository(storage);
+    storage.failBinaryWriteAt = 2;
+
+    await expect(
+      repo.saveMany([
+        { photo: makePhoto('s1', 'homeroom', 'homeroom'), bytes: BYTES(1) },
+        { photo: makePhoto('s2', 'homeroom', 'homeroom'), bytes: BYTES(2) },
+      ]),
+    ).rejects.toThrow('디스크 쓰기 실패');
+
+    expect(await repo.list()).toHaveLength(0);
+    expect(await storage.listBinary('student-photos')).toHaveLength(0);
+  });
+
+  it('★덮어쓰던 중 실패하면 이전 사진 바이트가 그대로 복구된다', async () => {
+    const storage = new FlakyStorage();
+    const repo = new JsonStudentPhotoRepository(storage);
+    await repo.save(makePhoto('s1', 'homeroom', 'homeroom'), BYTES(1));
+    storage.failBinaryWriteAt = storage.binaryWrites + 2;
+
+    await expect(
+      repo.saveMany([
+        { photo: makePhoto('s1', 'homeroom', 'homeroom'), bytes: BYTES(7) },
+        { photo: makePhoto('s2', 'homeroom', 'homeroom'), bytes: BYTES(8) },
+      ]),
+    ).rejects.toThrow('디스크 쓰기 실패');
+
+    expect(await repo.readPhoto('s1')).toEqual(BYTES(1));
+    expect(await storage.listBinary('student-photos')).toEqual(['s1.jpg']);
+  });
+
+  it('★메타 저장이 실패해도 사진 파일은 저장 직전 상태로 돌아간다', async () => {
+    const storage = new FlakyStorage();
+    const repo = new JsonStudentPhotoRepository(storage);
+    await repo.save(makePhoto('s1', 'homeroom', 'homeroom'), BYTES(1));
+    storage.failMetaWrite = true;
+
+    await expect(
+      repo.saveMany([
+        { photo: makePhoto('s1', 'homeroom', 'homeroom'), bytes: BYTES(7) },
+        { photo: makePhoto('s2', 'homeroom', 'homeroom'), bytes: BYTES(8) },
+      ]),
+    ).rejects.toThrow('메타 저장 실패');
+
+    expect((await repo.list()).map((p) => p.subjectKey)).toEqual(['s1']);
+    expect(await repo.readPhoto('s1')).toEqual(BYTES(1));
+    expect(await storage.listBinary('student-photos')).toEqual(['s1.jpg']);
+  });
+});

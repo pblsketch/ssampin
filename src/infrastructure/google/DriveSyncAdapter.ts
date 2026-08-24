@@ -1,6 +1,6 @@
 /**
  * Google Drive 동기화 어댑터
- * IDriveSyncPort 구현체 — "쌤핀 동기화" 폴더에 데이터를 업로드/다운로드
+ * IDriveSyncPort 구현체 — "쌤핀 동기화" 폴더의 v2 전용 네임스페이스에 업로드/다운로드
  *
  * 과제수합 전용인 GoogleDriveClient와는 별개 클래스.
  * 내부적으로 동일한 Drive REST API v3를 사용하되, 동기화 전용 로직으로 구성.
@@ -16,7 +16,9 @@ const DRIVE_API_URL = 'https://www.googleapis.com/drive/v3';
 const DRIVE_UPLOAD_URL = 'https://www.googleapis.com/upload/drive/v3';
 const FOLDER_MIME_TYPE = 'application/vnd.google-apps.folder';
 const SYNC_FOLDER_NAME = '쌤핀 동기화';
-const MANIFEST_FILENAME = 'manifest.json';
+const MANIFEST_FILENAME = 'v2--manifest.json';
+const LEGACY_MANIFEST_FILENAME = 'manifest.json';
+const SYNC_FILE_PREFIX = 'v2--';
 
 /** Files.list API 응답 */
 interface FilesListResponse {
@@ -39,6 +41,184 @@ class DriveSyncPreconditionFailedError extends Error {}
 
 export class DriveSyncAdapter implements IDriveSyncPort {
   constructor(private readonly getAccessToken: () => Promise<string>) {}
+
+  /** 구버전 앱이 같은 폴더 ID를 잡고 있어도 v2 파일을 수정할 수 없게 물리 이름을 분리한다. */
+  private toPhysicalSyncFilename(filename: string): string {
+    return `${SYNC_FILE_PREFIX}${filename}`;
+  }
+
+  private async checksumText(content: string): Promise<string> {
+    const bytes = new TextEncoder().encode(content);
+    const hash = await crypto.subtle.digest('SHA-256', bytes);
+    return Array.from(new Uint8Array(hash))
+      .map((byte) => byte.toString(16).padStart(2, '0'))
+      .join('');
+  }
+
+  private parseManifest(content: string): DriveSyncManifest | null {
+    try {
+      const parsed = JSON.parse(content) as Partial<DriveSyncManifest>;
+      if (
+        typeof parsed.version !== 'number' ||
+        typeof parsed.lastSyncedAt !== 'string' ||
+        typeof parsed.deviceId !== 'string' ||
+        typeof parsed.deviceName !== 'string' ||
+        !parsed.files ||
+        typeof parsed.files !== 'object'
+      ) {
+        return null;
+      }
+      if (parsed.version > 2) {
+        throw new Error('더 최신 버전의 쌤핀이 만든 동기화 데이터입니다. 앱을 업데이트해 주세요.');
+      }
+      return parsed as DriveSyncManifest;
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('더 최신 버전')) throw error;
+      return null;
+    }
+  }
+
+  private legacyDriveFilename(
+    logicalKey: string,
+    info: DriveSyncManifest['files'][string],
+  ): string {
+    return info.driveFilename ?? `${logicalKey.replace(/\//g, '__')}.json`;
+  }
+
+  /**
+   * v1 장부와 파일을 읽기 전용 원본으로 두고 v2 이름으로 복사한다.
+   * 구버전이 같은 폴더 ID를 계속 사용해도 v2-- 파일과 장부 이름을 알지 못해 덮어쓸 수 없다.
+   */
+  private async migrateLegacyManifest(folderId: string): Promise<DriveSyncManifest | null> {
+    const legacyMatches = await this.findFilesByName(folderId, LEGACY_MANIFEST_FILENAME);
+    if (legacyMatches.length === 0) return null;
+    if (legacyMatches.length !== 1) {
+      throw new Error(
+        'Google Drive의 이전 쌤핀 동기화 장부가 중복되어 안전하게 이전할 수 없습니다.',
+      );
+    }
+    const legacyFile = legacyMatches[0]!;
+    const originalContent = await this.downloadText(legacyFile.id);
+    const legacyManifest = this.parseManifest(originalContent);
+    if (!legacyManifest) {
+      throw new Error('Google Drive의 이전 쌤핀 동기화 장부를 읽을 수 없습니다.');
+    }
+
+    const migratedFiles: Record<string, DriveSyncManifest['files'][string]> = {};
+    for (const [logicalKey, info] of Object.entries(legacyManifest.files)) {
+      const legacyFilename = this.legacyDriveFilename(logicalKey, info);
+      const sourceMatches = await this.findFilesByName(folderId, legacyFilename);
+      if (sourceMatches.length !== 1) {
+        throw new Error(`Google Drive의 이전 ${logicalKey} 파일을 하나로 확인할 수 없습니다.`);
+      }
+      const sourceContent = await this.downloadText(sourceMatches[0]!.id);
+      const sourceBytes = new TextEncoder().encode(sourceContent);
+      if (
+        (await this.checksumText(sourceContent)) !== info.checksum ||
+        sourceBytes.length !== info.size
+      ) {
+        throw new Error(
+          `Google Drive의 이전 ${logicalKey} 파일이 동기화 장부와 일치하지 않습니다.`,
+        );
+      }
+      // ⚠️ 이전 대상 v2 파일은 **있으면 그대로 채택하고 절대 덮어쓰지 않는다.**
+      //    두 기기가 동시에 이전하면 서로의 결과를 PATCH 로 지워 장부와 실제 내용이 어긋난다.
+      //    이미 다른 기기가 만들어 둔 파일이면 그 본문을 기준으로 장부를 적는다.
+      const adopted = await this.adoptOrCreateMigratedFile(
+        folderId,
+        this.toPhysicalSyncFilename(legacyFilename),
+        sourceContent,
+        logicalKey,
+      );
+      migratedFiles[logicalKey] = {
+        ...info,
+        lastModified: adopted.modifiedTime,
+        checksum: adopted.checksum,
+        size: adopted.size,
+      };
+    }
+
+    const latestLegacyContent = await this.downloadText(legacyFile.id);
+    if (latestLegacyContent !== originalContent) {
+      throw new Error('이전 버전 기기가 동기화 중입니다. 잠시 후 다시 동기화해 주세요.');
+    }
+    const migrated: DriveSyncManifest = {
+      ...legacyManifest,
+      version: 2,
+      files: migratedFiles,
+    };
+    const created = await this.uploadText(
+      { name: MANIFEST_FILENAME, parents: [folderId] },
+      JSON.stringify(migrated, null, 2),
+    );
+    const manifests = await this.findFilesByName(folderId, MANIFEST_FILENAME);
+    const canonicalManifest = this.canonicalFile(manifests);
+    if (!canonicalManifest) {
+      throw new Error('Google Drive의 v2 동기화 장부를 만들지 못했습니다. 다시 동기화해 주세요.');
+    }
+    if (canonicalManifest.id !== created.id) {
+      // 동시에 만들어졌다면 **양쪽이 같은 승자**(id 순 첫 번째)를 고르고 자기 것만 정리한다.
+      // 각자 상대 것을 지우면 장부가 통째로 사라진다.
+      await this.request(`/files/${created.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ trashed: true }),
+      });
+      return this.parseManifest(await this.downloadText(canonicalManifest.id));
+    }
+    return migrated;
+  }
+
+  /** 동시에 만들어진 같은 이름의 파일 중 모든 기기가 똑같이 고르는 승자 */
+  private canonicalFile<T extends { id: string }>(files: readonly T[]): T | undefined {
+    return [...files].sort((a, b) => a.id.localeCompare(b.id))[0];
+  }
+
+  /**
+   * 이전 대상 v2 파일을 채택하거나 없을 때만 만든다.
+   * 이미 있으면 그 본문을 그대로 인정하고, 장부에는 **실제 파일의 체크섬**을 적는다
+   * (장부와 실제 내용이 어긋나지 않게 하는 것이 이전보다 우선한다).
+   */
+  private async adoptOrCreateMigratedFile(
+    folderId: string,
+    physicalFilename: string,
+    sourceContent: string,
+    logicalKey: string,
+  ): Promise<{ modifiedTime: string; checksum: string; size: number }> {
+    const describe = async (file: { id: string; modifiedTime: string }) => {
+      const content = await this.downloadText(file.id);
+      return {
+        modifiedTime: file.modifiedTime,
+        checksum: await this.checksumText(content),
+        size: new TextEncoder().encode(content).length,
+      };
+    };
+
+    const existing = this.canonicalFile(await this.findFilesByName(folderId, physicalFilename));
+    if (existing) return describe(existing);
+
+    const created = await this.uploadText(
+      { name: physicalFilename, parents: [folderId] },
+      sourceContent,
+    );
+    const confirmed = this.canonicalFile(await this.findFilesByName(folderId, physicalFilename));
+    if (!confirmed) {
+      throw new Error(
+        `Google Drive의 v2 ${logicalKey} 파일을 만들지 못했습니다. 다시 동기화해 주세요.`,
+      );
+    }
+    if (confirmed.id !== created.id) {
+      await this.request(`/files/${created.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ trashed: true }),
+      });
+      return describe(confirmed);
+    }
+    return {
+      modifiedTime: created.modifiedTime ?? confirmed.modifiedTime,
+      checksum: await this.checksumText(sourceContent),
+      size: new TextEncoder().encode(sourceContent).length,
+    };
+  }
 
   /**
    * 일시 오류(429/5xx) 자동 재시도 fetch.
@@ -248,8 +428,10 @@ export class DriveSyncAdapter implements IDriveSyncPort {
       fields: 'files(id,name)',
       spaces: 'drive',
     });
-
     const data = await this.request<FilesListResponse>(`/files?${params.toString()}`);
+    if ((data.files?.length ?? 0) > 1) {
+      throw new Error('Google Drive에 쌤핀 동기화 폴더가 중복되어 안전하게 열 수 없습니다.');
+    }
     const existing = data.files?.[0];
     if (existing) {
       return { id: existing.id, name: existing.name };
@@ -263,7 +445,26 @@ export class DriveSyncAdapter implements IDriveSyncPort {
         mimeType: FOLDER_MIME_TYPE,
       }),
     });
-    return { id: folder.id, name: folder.name };
+    const confirmed = await this.request<FilesListResponse>(`/files?${params.toString()}`);
+    const confirmedFiles = confirmed.files ?? [];
+    if (confirmedFiles.length !== 1) {
+      const canonical = [...confirmedFiles].sort((a, b) => a.id.localeCompare(b.id))[0];
+      if (canonical?.id !== folder.id) {
+        await this.request(`/files/${folder.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ trashed: true }),
+        });
+      }
+      throw new Error('Google Drive 동기화 폴더가 동시에 생성되었습니다. 다시 동기화해 주세요.');
+    }
+    const authoritative = confirmedFiles[0]!;
+    if (authoritative.id !== folder.id) {
+      await this.request(`/files/${folder.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ trashed: true }),
+      });
+    }
+    return { id: authoritative.id, name: authoritative.name };
   }
 
   async uploadSyncFile(
@@ -271,8 +472,9 @@ export class DriveSyncAdapter implements IDriveSyncPort {
     filename: string,
     content: string,
   ): Promise<{ fileId: string; modifiedTime: string }> {
+    const physicalFilename = this.toPhysicalSyncFilename(filename);
     // 기존 파일 있으면 업데이트, 없으면 생성
-    const existing = await this.findFileByName(folderId, filename);
+    const existing = await this.findFileByName(folderId, physicalFilename);
     if (existing) {
       const result = await this.uploadText({}, content, 'PATCH', existing.id);
       return {
@@ -280,7 +482,7 @@ export class DriveSyncAdapter implements IDriveSyncPort {
         modifiedTime: result.modifiedTime ?? new Date().toISOString(),
       };
     }
-    const result = await this.uploadText({ name: filename, parents: [folderId] }, content);
+    const result = await this.uploadText({ name: physicalFilename, parents: [folderId] }, content);
     return {
       fileId: result.id,
       modifiedTime: result.modifiedTime ?? new Date().toISOString(),
@@ -292,10 +494,11 @@ export class DriveSyncAdapter implements IDriveSyncPort {
     filename: string,
     content: string,
   ): Promise<{ fileId: string; modifiedTime: string } | null> {
-    if ((await this.findFilesByName(folderId, filename)).length > 0) return null;
+    const physicalFilename = this.toPhysicalSyncFilename(filename);
+    if ((await this.findFilesByName(folderId, physicalFilename)).length > 0) return null;
 
-    const created = await this.uploadText({ name: filename, parents: [folderId] }, content);
-    const matches = await this.findFilesByName(folderId, filename);
+    const created = await this.uploadText({ name: physicalFilename, parents: [folderId] }, content);
+    const matches = await this.findFilesByName(folderId, physicalFilename);
     if (matches.length !== 1 || matches[0]?.id !== created.id) {
       await this.request(`/files/${created.id}`, {
         method: 'PATCH',
@@ -315,7 +518,7 @@ export class DriveSyncAdapter implements IDriveSyncPort {
     content: string,
     expectedModifiedTime: string,
   ): Promise<{ fileId: string; modifiedTime: string } | null> {
-    const matches = await this.findFilesByName(folderId, filename);
+    const matches = await this.findFilesByName(folderId, this.toPhysicalSyncFilename(filename));
     if (matches.length !== 1) return null;
     const existing = matches[0]!;
     if (existing.modifiedTime !== expectedModifiedTime) return null;
@@ -348,14 +551,13 @@ export class DriveSyncAdapter implements IDriveSyncPort {
 
   async getSyncManifest(folderId: string): Promise<DriveSyncManifest | null> {
     const matches = await this.findFilesByName(folderId, MANIFEST_FILENAME);
-    if (matches.length !== 1) return null;
+    if (matches.length === 0) return this.migrateLegacyManifest(folderId);
+    if (matches.length !== 1) {
+      throw new Error('Google Drive의 v2 쌤핀 동기화 장부가 중복되어 안전하게 열 수 없습니다.');
+    }
     const file = matches[0]!;
     const content = await this.downloadText(file.id);
-    try {
-      return JSON.parse(content) as DriveSyncManifest;
-    } catch {
-      return null;
-    }
+    return this.parseManifest(content);
   }
 
   async updateSyncManifest(
@@ -419,18 +621,20 @@ export class DriveSyncAdapter implements IDriveSyncPort {
   }
 
   async listSyncFiles(folderId: string): Promise<DriveSyncFileListItem[]> {
-    const query = `'${folderId}' in parents and trashed=false and name!='${MANIFEST_FILENAME}'`;
+    const query = `'${folderId}' in parents and trashed=false`;
     const params = new URLSearchParams({
       q: query,
       fields: 'files(id,name,modifiedTime)',
       orderBy: 'name',
     });
     const data = await this.request<FilesListResponse>(`/files?${params.toString()}`);
-    return (data.files ?? []).map((f) => ({
-      id: f.id,
-      name: f.name,
-      modifiedTime: f.modifiedTime ?? '',
-    }));
+    return (data.files ?? [])
+      .filter((file) => file.name.startsWith(SYNC_FILE_PREFIX) && file.name !== MANIFEST_FILENAME)
+      .map((file) => ({
+        id: file.id,
+        name: file.name.slice(SYNC_FILE_PREFIX.length),
+        modifiedTime: file.modifiedTime ?? '',
+      }));
   }
 
   async deleteSyncFolder(folderId: string): Promise<void> {
@@ -459,7 +663,7 @@ export class DriveSyncAdapter implements IDriveSyncPort {
    * 파일이 이미 없으면 조용히 넘어간다(멱등) — 파기는 여러 번 시도돼도 안전해야 한다.
    */
   async deleteSyncFile(folderId: string, filename: string): Promise<void> {
-    const escaped = filename.replace(/'/g, "\\'");
+    const escaped = this.toPhysicalSyncFilename(filename).replace(/'/g, "\\'");
     const data = await this.request<FilesListResponse>(
       `/files?q='${folderId}' in parents and name='${encodeURIComponent(escaped)}' and trashed=false&fields=files(id)`,
     );
@@ -471,6 +675,36 @@ export class DriveSyncAdapter implements IDriveSyncPort {
         console.warn(`[DriveSyncAdapter] ${filename} 삭제 실패:`, err);
         throw err;
       }
+    }
+  }
+
+  async deleteSyncFileIfUnchanged(
+    folderId: string,
+    filename: string,
+    expectedModifiedTime: string,
+  ): Promise<boolean> {
+    const matches = await this.findFilesByName(folderId, this.toPhysicalSyncFilename(filename));
+    if (matches.length === 0) return true;
+    if (matches.length !== 1 || matches[0]?.modifiedTime !== expectedModifiedTime) return false;
+
+    const existing = matches[0];
+    const precondition = await this.getFilePrecondition(existing.id);
+    if (!precondition || precondition.modifiedTime !== expectedModifiedTime) return false;
+    // 브라우저/Electron renderer에서는 Google이 ETag를 노출하지 않는다. 덮어쓸 수 있는
+    // 일반 파일은 이 상태에서 DELETE하면 GET→DELETE 사이 최신 revision을 지울 수 있다.
+    // 학생 사진 v2 파일은 프로토콜상 immutable 세대명이므로 같은 이름을 갱신하지 않는다.
+    if (!precondition.etag && !filename.startsWith('student-photos__')) return false;
+    try {
+      await this.request(`/files/${existing.id}`, {
+        method: 'DELETE',
+        headers: precondition.etag ? { 'If-Match': precondition.etag } : undefined,
+      });
+      return true;
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('Drive Sync API error: 412')) {
+        return false;
+      }
+      throw error;
     }
   }
 }

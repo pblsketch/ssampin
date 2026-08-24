@@ -20,6 +20,7 @@ import { photoSubjectKey } from '@domain/rules/studentPhotoRules';
 import { resolveStudentPhotoCloud } from '@adapters/repositories/studentPhotoCloudGateway';
 import { saveRosterPhotos } from '@usecases/studentPhoto/SaveRosterPhotos';
 import { studentPhotoRepository, imageResizer, driveSyncRepository } from '@adapters/di/container';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import {
   STUDENT_STATUS_LABELS,
   STUDENT_STATUS_COLORS,
@@ -123,18 +124,26 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
       const removed = students.filter((s) => !survivingKeys.has(studentKey(s)));
       if (removed.length === 0) return;
       try {
-        const cloud = await resolveStudentPhotoCloud();
+        const cloudResolution = await resolveStudentPhotoCloud();
+        let deletionRecordFailures = 0;
         for (const student of removed) {
-          await deleteStudentPhotos(
+          const result = await deleteStudentPhotos(
             {
               repository: studentPhotoRepository,
               syncRepository: driveSyncRepository,
-              ...(cloud ? { cloud } : {}),
+              ...(cloudResolution.status === 'ready' ? { cloud: cloudResolution.cloud } : {}),
             },
             {
               scope: 'student',
               subjectKey: photoSubjectKey('teaching-class', cls.id, studentKey(student)),
             },
+          );
+          deletionRecordFailures += result.cloudFailures.length;
+        }
+        if (deletionRecordFailures > 0) {
+          showToast(
+            `학생 사진은 이 컴퓨터에서 지웠지만 클라우드 삭제 예약 ${deletionRecordFailures}건을 저장하지 못했어요.`,
+            'error',
           );
         }
       } catch (err) {
@@ -142,7 +151,7 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
         console.warn('[ClassRosterTab] 수업반 학생 사진 파기 실패:', err);
       }
     },
-    [cls, students, syncGroupStudents, updateClass],
+    [cls, students, syncGroupStudents, updateClass, showToast],
   );
 
   const saveEdit = useCallback(async () => {
@@ -999,7 +1008,12 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
               })),
             );
             const saveResult = await saveRosterPhotos(
-              { repository: studentPhotoRepository, resizer: imageResizer },
+              {
+                repository: studentPhotoRepository,
+                resizer: imageResizer,
+                syncRepository: driveSyncRepository,
+                requireSyncManifest: useSettingsStore.getState().settings.sync?.enabled === true,
+              },
               {
                 ownerKind: 'teaching-class',
                 ownerKey: cls.id,

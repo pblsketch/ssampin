@@ -15,30 +15,23 @@
  * 사실대로 안내해야 한다. 조용히 성공한 척하는 것이 가장 나쁘다.
  */
 
-import type { IDriveSyncPort } from '@domain/ports/IDriveSyncPort';
 import type { IDriveSyncRepository } from '@domain/repositories/IDriveSyncRepository';
 import type { IStudentPhotoRepository } from '@domain/repositories/IStudentPhotoRepository';
 import type { StudentPhotoOwnerKind } from '@domain/entities/StudentPhoto';
-import { toBinaryDriveFilename } from '@usecases/sync/binaryDriveFilename';
+import { withDataOperationLock } from '@usecases/shared/dataOperationMutex';
 
 export interface DeleteStudentPhotosDeps {
   readonly repository: IStudentPhotoRepository;
   /**
-   * 동기화 장부. 지운 사진의 항목을 장부에서도 빼기 위해 필요하다.
-   *
-   * ⚠️ 이걸 안 지우면 **장부에는 있는데 실제 파일은 없는** 상태가 남는다.
-   * 다음 동기화가 "장부에 있는 파일이 클라우드에 없다"고 판단해 무결성 오류를 던지면
-   * 사진과 무관한 출결·기록 동기화까지 함께 멈춘다.
+   * 동기화 장부. 로컬 삭제 직후 삭제 표식을 저장해 오프라인이어도 다음 동기화에서
+   * 다른 기기와 클라우드에 전달한다.
    */
   readonly syncRepository?: IDriveSyncRepository;
   /**
    * 클라우드 삭제 수단. 동기화를 쓰지 않는 상태(로그인 안 함 등)면 넘기지 않는다 —
    * 그때는 로컬만 지우면 그것이 완전한 파기다.
    */
-  readonly cloud?: {
-    readonly port: Pick<IDriveSyncPort, 'deleteSyncFile'>;
-    readonly folderId: string;
-  };
+  readonly cloud?: object;
 }
 
 export type DeleteStudentPhotosTarget =
@@ -58,9 +51,18 @@ export interface DeleteStudentPhotosResult {
    * 파기가 끝나지 않았다는 뜻이다.
    */
   readonly cloudFailures: readonly string[];
+  /** 동기화가 켜져 있어 다음 동기화에서 클라우드 실제 파일을 정리해야 하는 사진 수 */
+  readonly cloudPendingCount: number;
 }
 
 export async function deleteStudentPhotos(
+  deps: DeleteStudentPhotosDeps,
+  target: DeleteStudentPhotosTarget,
+): Promise<DeleteStudentPhotosResult> {
+  return withDataOperationLock(() => deleteStudentPhotosUnlocked(deps, target));
+}
+
+async function deleteStudentPhotosUnlocked(
   deps: DeleteStudentPhotosDeps,
   target: DeleteStudentPhotosTarget,
 ): Promise<DeleteStudentPhotosResult> {
@@ -71,9 +73,51 @@ export async function deleteStudentPhotos(
     return photo.ownerKind === target.ownerKind && photo.ownerKey === target.ownerKey;
   });
 
-  if (targets.length === 0) return { deletedCount: 0, cloudFailures: [] };
+  if (targets.length === 0) return { deletedCount: 0, cloudFailures: [], cloudPendingCount: 0 };
 
-  // 1) 로컬 파기 — 여기는 반드시 성공시킨다
+  // 1) 실제 파일보다 삭제 표식을 먼저 남긴다. 네트워크가 없어도 이 의도는 보존된다.
+  const cloudFailures: string[] = [];
+  if (deps.syncRepository) {
+    try {
+      const manifest = await deps.syncRepository.getLocalManifest();
+      if (manifest) {
+        const files = { ...manifest.files };
+        const deletions = { ...(manifest.deletions ?? {}) };
+        const restorations = { ...(manifest.restorations ?? {}) };
+        const deletedAt = new Date().toISOString();
+        for (const photo of targets) {
+          const previousFile = files[photo.storageRef];
+          delete files[photo.storageRef];
+          delete restorations[photo.storageRef];
+          deletions[photo.storageRef] = {
+            deletedAt,
+            deletedBy: manifest.deviceId,
+            deletionId: `${manifest.deviceId}:${deletedAt}:${photo.storageRef}`,
+            ...(previousFile?.driveFilename ? { driveFilename: previousFile.driveFilename } : {}),
+            ...(previousFile?.lastModified
+              ? { expectedModifiedTime: previousFile.lastModified }
+              : {}),
+          };
+        }
+        await deps.syncRepository.saveLocalManifest({
+          ...manifest,
+          version: Math.max(2, manifest.version),
+          files,
+          deletions,
+          restorations,
+        });
+      } else if (deps.cloud) {
+        cloudFailures.push(...targets.map((photo) => photo.storageRef));
+      }
+    } catch (err) {
+      cloudFailures.push(...targets.map((photo) => photo.storageRef));
+      console.warn('[deleteStudentPhotos] 동기화 삭제 표식을 저장하지 못했습니다:', err);
+    }
+  } else if (deps.cloud) {
+    cloudFailures.push(...targets.map((photo) => photo.storageRef));
+  }
+
+  // 2) 장부 상태와 무관하게 요청한 로컬 파기는 반드시 수행한다.
   if (target.scope === 'all') {
     await deps.repository.deleteAll();
   } else if (target.scope === 'student') {
@@ -82,40 +126,9 @@ export async function deleteStudentPhotos(
     await deps.repository.deleteByOwner(target.ownerKind, target.ownerKey);
   }
 
-  // 2) 클라우드 파기 — 실패해도 로컬 파기를 되돌리지 않고 목록으로 알린다
-  const cloudFailures: string[] = [];
-  if (deps.cloud) {
-    for (const photo of targets) {
-      try {
-        await deps.cloud.port.deleteSyncFile(
-          deps.cloud.folderId,
-          toBinaryDriveFilename(photo.storageRef),
-        );
-      } catch (err) {
-        cloudFailures.push(photo.storageRef);
-        console.warn(`[deleteStudentPhotos] 클라우드에서 ${photo.storageRef} 삭제 실패:`, err);
-      }
-    }
-  }
-
-  // 3) 동기화 장부에서도 항목을 뺀다.
-  //    장부에만 남으면 다음 동기화가 "있어야 할 파일이 없다"고 판단해 무결성 오류를 던지고,
-  //    그 오류는 사이클 전체를 멈추므로 출결·기록 동기화까지 함께 죽는다.
-  if (deps.syncRepository) {
-    try {
-      const manifest = await deps.syncRepository.getLocalManifest();
-      if (manifest) {
-        const removed = new Set(targets.map((photo) => photo.storageRef));
-        const nextFiles = Object.fromEntries(
-          Object.entries(manifest.files).filter(([key]) => !removed.has(key)),
-        );
-        await deps.syncRepository.saveLocalManifest({ ...manifest, files: nextFiles });
-      }
-    } catch (err) {
-      // 장부 정리에 실패해도 파기 자체는 이미 끝났다 — 되돌리지 않고 알리기만 한다
-      console.warn('[deleteStudentPhotos] 동기화 장부 정리 실패:', err);
-    }
-  }
-
-  return { deletedCount: targets.length, cloudFailures };
+  return {
+    deletedCount: targets.length,
+    cloudFailures,
+    cloudPendingCount: deps.cloud && cloudFailures.length === 0 ? targets.length : 0,
+  };
 }

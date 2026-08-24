@@ -17,6 +17,9 @@
  * 단일 동기화 도메인의 모든 관심사를 하나의 레코드로 표현한다.
  */
 export interface SyncDomain {
+  /** 이 도메인의 충돌·병합·무결성 처리 전략. */
+  strategy: SyncStrategy;
+
   /**
    * Drive에 저장되는 파일 기본명 (확장자 제외).
    * 매니페스트 키와 동일. e.g. 'class-schedule' → Drive에 'class-schedule.json' 생성.
@@ -60,10 +63,13 @@ export interface SyncDomain {
   enumerateDynamic?: () => Promise<string[]>;
 }
 
+export type SyncStrategy = 'snapshot' | 'record-merge' | 'dynamic-json' | 'binary' | 'archive';
+
 export const SYNC_REGISTRY: SyncDomain[] = [
   // 1. settings ─ 무한루프 방지: 자동 업로드 구독 제외
   {
     fileName: 'settings',
+    strategy: 'snapshot',
     subscribeExcluded: true,
     reload: async () => {
       const { useSettingsStore } = await import('@adapters/stores/useSettingsStore');
@@ -73,6 +79,7 @@ export const SYNC_REGISTRY: SyncDomain[] = [
   // 2. class-schedule ─ useScheduleStore (대표 키)
   {
     fileName: 'class-schedule',
+    strategy: 'snapshot',
     reload: async () => {
       const { useScheduleStore } = await import('@adapters/stores/useScheduleStore');
       useScheduleStore.setState({ loaded: false });
@@ -82,6 +89,7 @@ export const SYNC_REGISTRY: SyncDomain[] = [
   // 3. teacher-schedule ─ useScheduleStore 중복 subscribe 방지
   {
     fileName: 'teacher-schedule',
+    strategy: 'snapshot',
     subscribeExcluded: true,
     reload: async () => {
       const { useScheduleStore } = await import('@adapters/stores/useScheduleStore');
@@ -92,6 +100,7 @@ export const SYNC_REGISTRY: SyncDomain[] = [
   // 4. timetable-overrides ─ useScheduleStore 중복 subscribe 방지
   {
     fileName: 'timetable-overrides',
+    strategy: 'snapshot',
     subscribeExcluded: true,
     reload: async () => {
       const { useScheduleStore } = await import('@adapters/stores/useScheduleStore');
@@ -102,6 +111,7 @@ export const SYNC_REGISTRY: SyncDomain[] = [
   // 5. students
   {
     fileName: 'students',
+    strategy: 'snapshot',
     reload: async () => {
       const { useStudentStore } = await import('@adapters/stores/useStudentStore');
       await useStudentStore.getState().load(true);
@@ -110,6 +120,7 @@ export const SYNC_REGISTRY: SyncDomain[] = [
   // 6. seating
   {
     fileName: 'seating',
+    strategy: 'snapshot',
     reload: async () => {
       const { useSeatingStore } = await import('@adapters/stores/useSeatingStore');
       await useSeatingStore.getState().load(true);
@@ -118,6 +129,7 @@ export const SYNC_REGISTRY: SyncDomain[] = [
   // 7. events
   {
     fileName: 'events',
+    strategy: 'snapshot',
     reload: async () => {
       const { useEventsStore } = await import('@adapters/stores/useEventsStore');
       // reload()는 loaded를 유지한 채 데이터만 교체하는 기존 전용 함수
@@ -127,6 +139,7 @@ export const SYNC_REGISTRY: SyncDomain[] = [
   // 8. memos
   {
     fileName: 'memos',
+    strategy: 'snapshot',
     reload: async () => {
       const { useMemoStore } = await import('@adapters/stores/useMemoStore');
       // loaded:false로 떨어뜨리지 않고 force 리로드 — 편집 중인 메모 카드가
@@ -137,6 +150,7 @@ export const SYNC_REGISTRY: SyncDomain[] = [
   // 9. todos
   {
     fileName: 'todos',
+    strategy: 'snapshot',
     reload: async () => {
       const { useTodoStore } = await import('@adapters/stores/useTodoStore');
       // refresh()는 loaded를 유지한 채 데이터만 교체하는 기존 전용 함수
@@ -146,6 +160,7 @@ export const SYNC_REGISTRY: SyncDomain[] = [
   // 10. student-records
   {
     fileName: 'student-records',
+    strategy: 'record-merge',
     reload: async () => {
       const { useStudentRecordsStore } = await import('@adapters/stores/useStudentRecordsStore');
       await useStudentRecordsStore.getState().load(true);
@@ -154,6 +169,7 @@ export const SYNC_REGISTRY: SyncDomain[] = [
   // 11. bookmarks ─ loaded 플래그 없는 패턴 (loadAll 직접 호출)
   {
     fileName: 'bookmarks',
+    strategy: 'snapshot',
     reload: async () => {
       const { useBookmarkStore } = await import('@adapters/stores/useBookmarkStore');
       await useBookmarkStore.getState().loadAll();
@@ -162,6 +178,7 @@ export const SYNC_REGISTRY: SyncDomain[] = [
   // 12. surveys
   {
     fileName: 'surveys',
+    strategy: 'snapshot',
     reload: async () => {
       const { useSurveyStore } = await import('@adapters/stores/useSurveyStore');
       // useSurveyStore.load()는 loaded 가드가 없어 항상 재조회한다
@@ -171,6 +188,7 @@ export const SYNC_REGISTRY: SyncDomain[] = [
   // 13. assignments ─ loaded 플래그 없는 패턴 (loadAssignments 직접 호출)
   {
     fileName: 'assignments',
+    strategy: 'snapshot',
     reload: async () => {
       const { useAssignmentStore } = await import('@adapters/stores/useAssignmentStore');
       await useAssignmentStore.getState().loadAssignments();
@@ -179,6 +197,7 @@ export const SYNC_REGISTRY: SyncDomain[] = [
   // 14. seat-constraints
   {
     fileName: 'seat-constraints',
+    strategy: 'snapshot',
     reload: async () => {
       const { useSeatConstraintsStore } = await import('@adapters/stores/useSeatConstraintsStore');
       await useSeatConstraintsStore.getState().load(true);
@@ -187,6 +206,7 @@ export const SYNC_REGISTRY: SyncDomain[] = [
   // 15. teaching-classes ─ useTeachingClassStore (대표 키)
   {
     fileName: 'teaching-classes',
+    strategy: 'snapshot',
     reload: async () => {
       const { useTeachingClassStore } = await import('@adapters/stores/useTeachingClassStore');
       await useTeachingClassStore.getState().load(true);
@@ -195,6 +215,7 @@ export const SYNC_REGISTRY: SyncDomain[] = [
   // 16. curriculum-progress ─ useTeachingClassStore 중복 subscribe 방지
   {
     fileName: 'curriculum-progress',
+    strategy: 'snapshot',
     subscribeExcluded: true,
     reload: async () => {
       const { useTeachingClassStore } = await import('@adapters/stores/useTeachingClassStore');
@@ -204,6 +225,7 @@ export const SYNC_REGISTRY: SyncDomain[] = [
   // 17. attendance ─ useTeachingClassStore 중복 subscribe 방지
   {
     fileName: 'attendance',
+    strategy: 'record-merge',
     subscribeExcluded: true,
     reload: async () => {
       const { useTeachingClassStore } = await import('@adapters/stores/useTeachingClassStore');
@@ -213,6 +235,7 @@ export const SYNC_REGISTRY: SyncDomain[] = [
   // 18. dday
   {
     fileName: 'dday',
+    strategy: 'snapshot',
     reload: async () => {
       const { useDDayStore } = await import('@adapters/stores/useDDayStore');
       await useDDayStore.getState().load(true);
@@ -221,6 +244,7 @@ export const SYNC_REGISTRY: SyncDomain[] = [
   // 18-1. staff-contacts ─ 교직원 연락처 (학생·보호자 연락처는 students 키에 이미 포함)
   {
     fileName: 'staff-contacts',
+    strategy: 'snapshot',
     reload: async () => {
       const { useStaffContactStore } = await import('@adapters/stores/useStaffContactStore');
       await useStaffContactStore.getState().load(true);
@@ -229,6 +253,7 @@ export const SYNC_REGISTRY: SyncDomain[] = [
   // 19. consultations
   {
     fileName: 'consultations',
+    strategy: 'snapshot',
     reload: async () => {
       const { useConsultationStore } = await import('@adapters/stores/useConsultationStore');
       // useConsultationStore.load()는 loaded 가드가 없어 항상 재조회한다
@@ -238,6 +263,7 @@ export const SYNC_REGISTRY: SyncDomain[] = [
   // 20. manual-meals ─ useMealStore는 loaded 플래그 없는 패턴 (loadManualMeals 직접 호출)
   {
     fileName: 'manual-meals',
+    strategy: 'snapshot',
     reload: async () => {
       const { useMealStore } = await import('@adapters/stores/useMealStore');
       await useMealStore.getState().loadManualMeals();
@@ -246,6 +272,7 @@ export const SYNC_REGISTRY: SyncDomain[] = [
   // 21. note-notebooks ─ 노트북 메타 (정적). useNoteStore subscribe 대표 키.
   {
     fileName: 'note-notebooks',
+    strategy: 'snapshot',
     reload: async () => {
       const { useNoteStore } = await import('@adapters/stores/useNoteStore');
       // loaded:false로 떨어뜨리지 않고 force 리로드 — 노트 편집기가 스피너로
@@ -256,6 +283,7 @@ export const SYNC_REGISTRY: SyncDomain[] = [
   // 22. note-sections ─ 섹션 메타. 동일 store(useNoteStore) 중복 subscribe 방지.
   {
     fileName: 'note-sections',
+    strategy: 'snapshot',
     subscribeExcluded: true,
     reload: async () => {
       const { useNoteStore } = await import('@adapters/stores/useNoteStore');
@@ -267,6 +295,7 @@ export const SYNC_REGISTRY: SyncDomain[] = [
   // 23. note-pages-meta ─ 페이지 메타. 동일 store(useNoteStore) 중복 subscribe 방지.
   {
     fileName: 'note-pages-meta',
+    strategy: 'snapshot',
     subscribeExcluded: true,
     reload: async () => {
       const { useNoteStore } = await import('@adapters/stores/useNoteStore');
@@ -281,6 +310,7 @@ export const SYNC_REGISTRY: SyncDomain[] = [
   // 본 registry의 enumerateDynamic은 메타테스트(f) 정합성을 위한 placeholder이다.
   {
     fileName: 'note-body',
+    strategy: 'dynamic-json',
     subscribeExcluded: true,
     isDynamic: true,
     enumerateDynamic: async () => [],
@@ -294,6 +324,7 @@ export const SYNC_REGISTRY: SyncDomain[] = [
   // 25. stickers ─ 내 이모티콘
   {
     fileName: 'stickers',
+    strategy: 'snapshot',
     reload: async () => {
       const { useStickerStore } = await import('@adapters/stores/useStickerStore');
       await useStickerStore.getState().load(true);
@@ -302,6 +333,7 @@ export const SYNC_REGISTRY: SyncDomain[] = [
   // 26. rubrics ─ 수행평가 채점 (루브릭 + 채점 기록)
   {
     fileName: 'rubrics',
+    strategy: 'snapshot',
     reload: async () => {
       const { useRubricStore } = await import('@adapters/stores/useRubricStore');
       // useRubricStore.load()는 loaded 가드가 없어 항상 재조회한다
@@ -311,6 +343,7 @@ export const SYNC_REGISTRY: SyncDomain[] = [
   // 27. observations ─ 학생별 수업 기록 (특기사항/관찰 기록)
   {
     fileName: 'observations',
+    strategy: 'record-merge',
     reload: async () => {
       const { useObservationStore } = await import('@adapters/stores/useObservationStore');
       await useObservationStore.getState().load(true);
@@ -319,6 +352,7 @@ export const SYNC_REGISTRY: SyncDomain[] = [
   // 28. record-drafts ─ AI 브릿지 생기부 초안 (영역별 write-back 수신)
   {
     fileName: 'record-drafts',
+    strategy: 'snapshot',
     reload: async () => {
       const { useRecordDraftsStore } = await import('@adapters/stores/useRecordDraftsStore');
       await useRecordDraftsStore.getState().load(true);
@@ -327,6 +361,7 @@ export const SYNC_REGISTRY: SyncDomain[] = [
   // 29. observation-attachments ─ 관찰 첨부 메타(JSON). useObservationAttachmentStore 대표 키.
   {
     fileName: 'observation-attachments',
+    strategy: 'snapshot',
     reload: async () => {
       const { useObservationAttachmentStore } =
         await import('@adapters/stores/useObservationAttachmentStore');
@@ -340,6 +375,7 @@ export const SYNC_REGISTRY: SyncDomain[] = [
   // subscribeExcluded: true — 메타(#29)가 대표 구독 키이므로 중복 구독 방지.
   {
     fileName: 'obs-attachment-binary',
+    strategy: 'binary',
     subscribeExcluded: true,
     isDynamic: true,
     enumerateDynamic: async () => [],
@@ -356,6 +392,7 @@ export const SYNC_REGISTRY: SyncDomain[] = [
   // 본 registry의 enumerateDynamic은 메타테스트(f) 정합성용 placeholder이다.
   {
     fileName: 'archives',
+    strategy: 'archive',
     subscribeExcluded: true,
     isDynamic: true,
     enumerateDynamic: async () => [],
@@ -375,6 +412,7 @@ export const SYNC_REGISTRY: SyncDomain[] = [
   // 변경분은 다음 동기화(수동·주기)에서 매니페스트 비교로 자연히 올라간다.
   {
     fileName: 'student-photos',
+    strategy: 'snapshot',
     subscribeExcluded: true,
     reload: async () => {
       // 사진 메타에는 대응 스토어가 없다 — 화면이 열릴 때 리포지토리에서 직접 읽는다
@@ -388,6 +426,7 @@ export const SYNC_REGISTRY: SyncDomain[] = [
   // subscribeExcluded: true — 메타(#32)가 대표 구독 키다.
   {
     fileName: 'student-photo-binary',
+    strategy: 'binary',
     subscribeExcluded: true,
     isDynamic: true,
     enumerateDynamic: async () => [],

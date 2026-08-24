@@ -1,10 +1,36 @@
 import type { IStoragePort } from '@domain/ports/IStoragePort';
 import type { IDriveSyncPort } from '@domain/ports/IDriveSyncPort';
 import type { IDriveSyncRepository } from '@domain/repositories/IDriveSyncRepository';
-import type { DriveSyncFileInfo, DriveSyncManifest } from '@domain/entities/DriveSyncState';
+import type {
+  DriveSyncDeletionInfo,
+  DriveSyncFileInfo,
+  DriveSyncManifest,
+  DriveSyncRestorationInfo,
+} from '@domain/entities/DriveSyncState';
+import { driveSyncDeletionIdentity } from '@domain/entities/DriveSyncState';
 import { uint8ToBase64 } from './binaryBase64';
+import { withDataOperationLock } from '@usecases/shared/dataOperationMutex';
 import { toBinaryDriveFilename } from './binaryDriveFilename';
 import { SyncIntegrityError } from './SyncIntegrityError';
+
+function defaultDriveFilename(logicalKey: string): string {
+  return `${logicalKey.replace(/\//g, '__')}.json`;
+}
+
+function restorationDriveFilename(
+  logicalKey: string,
+  restoration: DriveSyncRestorationInfo,
+): string {
+  const generation = `${restoration.restoredBy}-${restoration.restoredAt}`.replace(
+    /[^a-zA-Z0-9_-]/g,
+    '_',
+  );
+  return `${defaultDriveFilename(logicalKey)}.restore-${generation}`;
+}
+
+function immutableStudentPhotoDriveFilename(logicalKey: string, checksum: string): string {
+  return `${defaultDriveFilename(logicalKey)}.rev-${checksum}`;
+}
 
 /** SHA-256 체크섬 계산 (Web Crypto API) */
 export async function computeSyncChecksum(content: string): Promise<string> {
@@ -115,6 +141,12 @@ export class SyncToCloud {
   ) {}
 
   async execute(onProgress?: (progress: SyncProgress) => void): Promise<SyncToCloudResult> {
+    return withDataOperationLock(() => this.executeUnlocked(onProgress));
+  }
+
+  private async executeUnlocked(
+    onProgress?: (progress: SyncProgress) => void,
+  ): Promise<SyncToCloudResult> {
     console.log(`[SyncToCloud] ▶ 시작 | deviceId=${this.deviceId} | deviceName=${this.deviceName}`);
     const folder = await this.drivePort.getOrCreateSyncFolder();
     const localManifest = await this.syncRepo.getLocalManifest();
@@ -145,7 +177,7 @@ export class SyncToCloud {
     let remoteManifest = await this.drivePort.getSyncManifest(folder.id);
     if (!remoteManifest) {
       const initialManifest: DriveSyncManifest = {
-        version: 1,
+        version: 2,
         lastSyncedAt: new Date().toISOString(),
         deviceId: this.deviceId,
         deviceName: this.deviceName,
@@ -196,6 +228,53 @@ export class SyncToCloud {
     const nextLocalFiles: Record<string, DriveSyncFileInfo> = {
       ...(localManifest?.files ?? {}),
     };
+    const nextRemoteDeletions: Record<string, DriveSyncDeletionInfo> = {
+      ...(remoteManifest.deletions ?? {}),
+    };
+    const nextLocalDeletions: Record<string, DriveSyncDeletionInfo> = {
+      ...(localManifest?.deletions ?? {}),
+      ...(remoteManifest.deletions ?? {}),
+    };
+    const nextRemoteRestorations: Record<string, DriveSyncRestorationInfo> = {
+      ...(remoteManifest.restorations ?? {}),
+    };
+    const nextLocalRestorations: Record<string, DriveSyncRestorationInfo> = {
+      ...(remoteManifest.restorations ?? {}),
+      ...(localManifest?.restorations ?? {}),
+    };
+    for (const [key, restoration] of Object.entries(nextLocalRestorations)) {
+      if (restoration.completedAt) continue;
+      const remoteDeletion = nextRemoteDeletions[key];
+      if (
+        remoteDeletion &&
+        driveSyncDeletionIdentity(remoteDeletion) !== restoration.replacesDeletionId
+      ) {
+        delete nextLocalRestorations[key];
+      }
+    }
+    for (const [key, restoration] of Object.entries(nextRemoteRestorations)) {
+      if (!restoration.completedAt) continue;
+      const localDeletion = nextLocalDeletions[key];
+      if (
+        localDeletion &&
+        driveSyncDeletionIdentity(localDeletion) === restoration.replacesDeletionId
+      ) {
+        delete nextLocalDeletions[key];
+        manifestReconciled = true;
+      }
+    }
+    const isPendingRestoration = (key: string): boolean =>
+      nextLocalRestorations[key] !== undefined && !nextLocalRestorations[key]?.completedAt;
+    const completeRestoration = (key: string): void => {
+      const restoration = nextLocalRestorations[key];
+      if (!restoration || restoration.completedAt) return;
+      const completed = { ...restoration, completedAt: new Date().toISOString() };
+      nextLocalRestorations[key] = completed;
+      nextRemoteRestorations[key] = completed;
+      delete nextLocalDeletions[key];
+      delete nextRemoteDeletions[key];
+      manifestReconciled = true;
+    };
 
     // 동적 파일 목록 사전 조회 — 진행률 total 계산에 포함
     const dynamicFiles = this.getDynamicSyncFiles ? await this.getDynamicSyncFiles() : [];
@@ -213,9 +292,76 @@ export class SyncToCloud {
     }
     const grandTotal = total + dynamicFiles.length + binaryFilesPreview.length + archiveKeys.length;
 
+    const dynamicSet = new Set(dynamicFiles);
+    const binarySet = new Set(binaryFilesPreview);
+    const inferredDeletes = Object.keys(localManifest?.files ?? {}).filter(
+      (key) =>
+        (key.startsWith('note-body--') && !dynamicSet.has(key)) ||
+        ((key.startsWith('obs-attachments/') || key.startsWith('student-photos/')) &&
+          !binarySet.has(key)),
+    );
+
+    const deletionTimestamp = new Date().toISOString();
+    for (const key of inferredDeletes) {
+      const previousFile = localManifest?.files[key];
+      nextLocalDeletions[key] ??= {
+        deletedAt: deletionTimestamp,
+        deletedBy: this.deviceId,
+        ...(previousFile?.driveFilename ? { driveFilename: previousFile.driveFilename } : {}),
+        ...(previousFile?.lastModified ? { expectedModifiedTime: previousFile.lastModified } : {}),
+      };
+    }
+
+    const deletionCleanupTargets = new Map<
+      string,
+      { driveFilename: string; expectedModifiedTime: string | null }
+    >();
+    for (const [key, deletion] of Object.entries(nextLocalDeletions)) {
+      if (
+        !key.startsWith('note-body--') &&
+        !key.startsWith('obs-attachments/') &&
+        !key.startsWith('student-photos/')
+      ) {
+        continue;
+      }
+      if (isPendingRestoration(key)) continue;
+      delete nextRemoteRestorations[key];
+      const previousRemoteDeletion = nextRemoteDeletions[key];
+      nextRemoteDeletions[key] = deletion;
+      delete nextRemoteFiles[key];
+      delete nextLocalFiles[key];
+      const driveFilename =
+        deletion.driveFilename ??
+        remoteManifest.files[key]?.driveFilename ??
+        defaultDriveFilename(key);
+      const driveFile = findUniqueRemoteFile(key, driveFilename);
+      deletionCleanupTargets.set(key, {
+        driveFilename,
+        expectedModifiedTime: deletion.expectedModifiedTime ?? driveFile?.modifiedTime ?? null,
+      });
+      if (
+        remoteManifest.files[key] ||
+        localManifest?.files[key] ||
+        !localManifest?.deletions?.[key] ||
+        !previousRemoteDeletion ||
+        previousRemoteDeletion.deletedAt !== deletion.deletedAt ||
+        previousRemoteDeletion.deletedBy !== deletion.deletedBy
+      ) {
+        manifestReconciled = true;
+      }
+      skipped.push(key);
+      console.log(`[SyncToCloud]   ${key}: DELETE intent queued`);
+    }
+
     // 정적/동적 파일 모두 동일 로직으로 처리하기 위한 헬퍼
     const uploadOne = async (filename: string, current: number): Promise<void> => {
       onProgress?.({ current, total: grandTotal, filename });
+
+      const restoring = isPendingRestoration(filename);
+      if (!restoring && (nextLocalDeletions[filename] || nextRemoteDeletions[filename])) {
+        skipped.push(filename);
+        return;
+      }
 
       const data = await this.storage.read<unknown>(filename);
       if (data === null) {
@@ -233,7 +379,7 @@ export class SyncToCloud {
       const driveFilename = `${filename}.json`;
       const driveFile = findUniqueRemoteFile(filename, driveFilename);
 
-      if (remoteInfo && !localInfo && !transitionGuardedKeys.has(filename)) {
+      if (remoteInfo && !localInfo && !transitionGuardedKeys.has(filename) && !restoring) {
         skipped.push(filename);
         deferred.push(filename);
         console.log(`[SyncToCloud]   ${filename}: DEFER (로컬 동기화 기준 없음)`);
@@ -242,7 +388,12 @@ export class SyncToCloud {
 
       // 리모트 변경 판정은 "로컬 내용이 바뀌었는지"보다 먼저 해야 한다. 로컬이 마지막
       // 업로드 상태 그대로여도 다른 기기의 리모트 변경은 pull 대상으로 유예해야 한다.
-      if (remoteChecksum && manifestChecksum && remoteChecksum !== manifestChecksum) {
+      if (
+        remoteChecksum &&
+        manifestChecksum &&
+        remoteChecksum !== manifestChecksum &&
+        (!driveFile || driveFile.modifiedTime === remoteInfo?.lastModified)
+      ) {
         // F8a(RT2) — 전환 마커 활성 키는 유예하지 않는다: 마커가 다운로드를 봉쇄하는 동안
         // pull-merge-push가 장부를 갱신하지 못해 DEFER가 영구 교착이 된다.
         if (transitionGuardedKeys.has(filename)) {
@@ -259,7 +410,7 @@ export class SyncToCloud {
         }
       }
 
-      if (!remoteInfo && driveFile) {
+      if (!remoteInfo && driveFile && !restoring) {
         const actualContent = await this.drivePort.downloadSyncFile(driveFile.id);
         const actualChecksum = await computeSyncChecksum(actualContent);
         if (actualChecksum !== checksum) {
@@ -275,6 +426,7 @@ export class SyncToCloud {
         };
         nextRemoteFiles[filename] = reconciledEntry;
         nextLocalFiles[filename] = reconciledEntry;
+        completeRestoration(filename);
         manifestReconciled = true;
         skipped.push(filename);
         console.warn(
@@ -283,7 +435,12 @@ export class SyncToCloud {
         return;
       }
 
-      if (!driveFile && (remoteInfo || localInfo)) {
+      if (
+        !driveFile &&
+        (remoteInfo || localInfo) &&
+        !restoring &&
+        !transitionGuardedKeys.has(filename)
+      ) {
         const knownOwner = remoteInfo?.uploadedBy ?? localInfo?.uploadedBy;
         if (!knownOwner) {
           throw new Error(
@@ -300,6 +457,7 @@ export class SyncToCloud {
       // 실제 파일 revision이 장부와 다르면 내용을 먼저 검증한다. 내용이 장부 체크섬과
       // 같을 때만 조건부 갱신 또는 revision 장부 복구를 허용한다.
       if (
+        !restoring &&
         remoteInfo &&
         driveFile?.modifiedTime &&
         remoteInfo.lastModified &&
@@ -308,9 +466,28 @@ export class SyncToCloud {
         const actualContent = await this.drivePort.downloadSyncFile(driveFile.id);
         const actualChecksum = await computeSyncChecksum(actualContent);
         if (actualChecksum !== remoteInfo.checksum) {
-          // 직전 실행에서 조건부 파일 업로드는 성공했지만 manifest CAS만 실패한 부분 성공.
-          // 실제 Drive 본문이 현재 로컬과 정확히 같으면 재업로드하지 않고 장부만 CAS 복구한다.
-          if (actualChecksum === checksum) {
+          if (actualChecksum === localInfo?.checksum) {
+            const recoveredEntry: DriveSyncFileInfo = {
+              ...localInfo,
+              lastModified: driveFile.modifiedTime,
+              size: new TextEncoder().encode(actualContent).length,
+            };
+            nextRemoteFiles[filename] = recoveredEntry;
+            nextLocalFiles[filename] = recoveredEntry;
+            manifestReconciled = true;
+            if (actualChecksum === checksum) {
+              skipped.push(filename);
+              console.warn(
+                `[SyncToCloud]   ${filename}: 이전 업로드 부분 성공 — 로컬 기준과 일치해 장부만 복구`,
+              );
+              return;
+            }
+            console.warn(
+              `[SyncToCloud]   ${filename}: 이전 업로드 부분 성공 복구 후 최신 로컬 변경을 계속 업로드`,
+            );
+          } else if (actualChecksum === checksum) {
+            // 직전 실행에서 조건부 파일 업로드는 성공했지만 manifest CAS만 실패한 부분 성공.
+            // 실제 Drive 본문이 현재 로컬과 정확히 같으면 재업로드하지 않고 장부만 CAS 복구한다.
             const reconciledEntry: DriveSyncFileInfo = {
               ...remoteInfo,
               lastModified: driveFile.modifiedTime,
@@ -320,16 +497,18 @@ export class SyncToCloud {
             };
             nextRemoteFiles[filename] = reconciledEntry;
             nextLocalFiles[filename] = reconciledEntry;
+            completeRestoration(filename);
             manifestReconciled = true;
             skipped.push(filename);
             console.warn(
               `[SyncToCloud]   ${filename}: 파일 업로드 부분 성공 — 현재 로컬 본문과 일치해 장부만 복구`,
             );
             return;
+          } else {
+            throw new Error(
+              `클라우드 ${filename} 파일과 동기화 장부가 일치하지 않습니다. 클라우드 데이터를 다시 구성해 주세요.`,
+            );
           }
-          throw new Error(
-            `클라우드 ${filename} 파일과 동기화 장부가 일치하지 않습니다. 클라우드 데이터를 다시 구성해 주세요.`,
-          );
         }
         if (manifestChecksum === checksum && remoteInfo.checksum === checksum) {
           const reconciledEntry: DriveSyncFileInfo = {
@@ -339,6 +518,7 @@ export class SyncToCloud {
           };
           nextRemoteFiles[filename] = reconciledEntry;
           nextLocalFiles[filename] = reconciledEntry;
+          completeRestoration(filename);
           manifestReconciled = true;
           skipped.push(filename);
           console.warn(
@@ -380,6 +560,7 @@ export class SyncToCloud {
       };
       nextRemoteFiles[filename] = entry;
       nextLocalFiles[filename] = entry;
+      completeRestoration(filename);
       uploaded.push(filename);
     };
 
@@ -405,6 +586,11 @@ export class SyncToCloud {
       //    실패분은 매니페스트에 기록되지 않으므로 다음 동기화에서 자연히 다시 시도된다
       //    — 바로 아래 아카이브 루프와 같은 계약이다.
       try {
+        const restoring = isPendingRestoration(relPath);
+        if (!restoring && (nextLocalDeletions[relPath] || nextRemoteDeletions[relPath])) {
+          skipped.push(relPath);
+          continue;
+        }
         const bytes = await this.storage.readBinary(relPath);
         if (bytes === null) {
           skipped.push(relPath);
@@ -421,18 +607,27 @@ export class SyncToCloud {
         const remoteInfo = remoteManifest.files[relPath];
         const manifestChecksum = localInfo?.checksum;
         const remoteChecksum = remoteInfo?.checksum;
-        // Drive 파일명: slashes를 '__'로 치환해 단일 파일명으로 평탄화
-        const driveFilename = toBinaryDriveFilename(relPath);
-        const driveFile = findUniqueRemoteFile(relPath, driveFilename);
+        // 복원본은 삭제 대상이던 이전 세대와 다른 물리 파일명을 쓴다.
+        // 삭제 장부 CAS가 늦게 끝나도 이 새 파일을 지울 수 없다.
+        const pendingRestoration = nextLocalRestorations[relPath];
+        const defaultFilename = toBinaryDriveFilename(relPath);
+        const currentDriveFilename =
+          remoteInfo?.driveFilename ?? localInfo?.driveFilename ?? defaultFilename;
+        const driveFile = findUniqueRemoteFile(relPath, currentDriveFilename);
 
-        if (remoteInfo && !localInfo) {
+        if (remoteInfo && !localInfo && !restoring) {
           skipped.push(relPath);
           deferred.push(relPath);
           console.log(`[SyncToCloud]   ${relPath}: DEFER binary (로컬 동기화 기준 없음)`);
           continue;
         }
 
-        if (remoteChecksum && manifestChecksum && remoteChecksum !== manifestChecksum) {
+        if (
+          remoteChecksum &&
+          manifestChecksum &&
+          remoteChecksum !== manifestChecksum &&
+          (!driveFile || driveFile.modifiedTime === remoteInfo?.lastModified)
+        ) {
           console.log(
             `[SyncToCloud]   ${relPath}: DEFER (remote changed, syncFromCloud 병합 후 재업로드 필요)`,
           );
@@ -441,7 +636,7 @@ export class SyncToCloud {
           continue;
         }
 
-        if (!remoteInfo && driveFile) {
+        if (!remoteInfo && driveFile && !restoring) {
           const actualContent = await this.drivePort.downloadSyncFile(driveFile.id);
           const actualChecksum = await computeSyncChecksum(actualContent);
           if (actualChecksum !== checksum) {
@@ -457,6 +652,7 @@ export class SyncToCloud {
           };
           nextRemoteFiles[relPath] = reconciledEntry;
           nextLocalFiles[relPath] = reconciledEntry;
+          completeRestoration(relPath);
           manifestReconciled = true;
           skipped.push(relPath);
           console.warn(
@@ -465,7 +661,7 @@ export class SyncToCloud {
           continue;
         }
 
-        if (!driveFile && (remoteInfo || localInfo)) {
+        if (!driveFile && (remoteInfo || localInfo) && !restoring) {
           const knownOwner = remoteInfo?.uploadedBy ?? localInfo?.uploadedBy;
           if (!knownOwner) {
             throw new SyncIntegrityError(
@@ -480,6 +676,7 @@ export class SyncToCloud {
         }
 
         if (
+          !restoring &&
           remoteInfo &&
           driveFile?.modifiedTime &&
           remoteInfo.lastModified &&
@@ -488,7 +685,20 @@ export class SyncToCloud {
           const actualContent = await this.drivePort.downloadSyncFile(driveFile.id);
           const actualChecksum = await computeSyncChecksum(actualContent);
           if (actualChecksum !== remoteInfo.checksum) {
-            if (actualChecksum === checksum) {
+            if (actualChecksum === localInfo?.checksum) {
+              const recoveredEntry: DriveSyncFileInfo = {
+                ...localInfo,
+                lastModified: driveFile.modifiedTime,
+                size: new TextEncoder().encode(actualContent).length,
+              };
+              nextRemoteFiles[relPath] = recoveredEntry;
+              nextLocalFiles[relPath] = recoveredEntry;
+              manifestReconciled = true;
+              if (actualChecksum === checksum) {
+                skipped.push(relPath);
+                continue;
+              }
+            } else if (actualChecksum === checksum) {
               const reconciledEntry: DriveSyncFileInfo = {
                 ...remoteInfo,
                 lastModified: driveFile.modifiedTime,
@@ -498,14 +708,16 @@ export class SyncToCloud {
               };
               nextRemoteFiles[relPath] = reconciledEntry;
               nextLocalFiles[relPath] = reconciledEntry;
+              completeRestoration(relPath);
               manifestReconciled = true;
               skipped.push(relPath);
               console.warn(`[SyncToCloud]   ${relPath}: 바이너리 업로드 부분 성공 — 장부만 복구`);
               continue;
+            } else {
+              throw new SyncIntegrityError(
+                `클라우드 ${relPath} 파일과 동기화 장부가 일치하지 않습니다. 클라우드 데이터를 다시 구성해 주세요.`,
+              );
             }
-            throw new SyncIntegrityError(
-              `클라우드 ${relPath} 파일과 동기화 장부가 일치하지 않습니다. 클라우드 데이터를 다시 구성해 주세요.`,
-            );
           }
           if (manifestChecksum === checksum && remoteInfo.checksum === checksum) {
             const reconciledEntry: DriveSyncFileInfo = {
@@ -515,6 +727,7 @@ export class SyncToCloud {
             };
             nextRemoteFiles[relPath] = reconciledEntry;
             nextLocalFiles[relPath] = reconciledEntry;
+            completeRestoration(relPath);
             manifestReconciled = true;
             skipped.push(relPath);
             continue;
@@ -529,14 +742,41 @@ export class SyncToCloud {
         console.log(
           `[SyncToCloud]   ${relPath}: UPLOAD binary (checksum ${manifestChecksum?.slice(0, 8) ?? 'NONE'} → ${checksum.slice(0, 8)})`,
         );
-        const result = driveFile
-          ? await this.drivePort.uploadSyncFileIfUnchanged(
-              folder.id,
-              driveFilename,
-              content,
-              driveFile.modifiedTime,
-            )
-          : await this.drivePort.createSyncFileIfMissing(folder.id, driveFilename, content);
+        const uploadDriveFilename =
+          restoring && pendingRestoration
+            ? restorationDriveFilename(relPath, pendingRestoration)
+            : relPath.startsWith('student-photos/')
+              ? immutableStudentPhotoDriveFilename(relPath, checksum)
+              : currentDriveFilename;
+        const immutablePhoto = relPath.startsWith('student-photos/');
+        const immutableExisting = immutablePhoto
+          ? findUniqueRemoteFile(relPath, uploadDriveFilename)
+          : undefined;
+        let result: { fileId: string; modifiedTime: string } | null;
+        if (immutableExisting) {
+          const existingContent = await this.drivePort.downloadSyncFile(immutableExisting.id);
+          if ((await computeSyncChecksum(existingContent)) !== checksum) {
+            throw new SyncIntegrityError(
+              `클라우드 ${relPath} 사진 세대의 내용이 체크섬과 일치하지 않습니다.`,
+            );
+          }
+          result = { fileId: immutableExisting.id, modifiedTime: immutableExisting.modifiedTime };
+        } else if (immutablePhoto) {
+          result = await this.drivePort.createSyncFileIfMissing(
+            folder.id,
+            uploadDriveFilename,
+            content,
+          );
+        } else {
+          result = driveFile
+            ? await this.drivePort.uploadSyncFileIfUnchanged(
+                folder.id,
+                uploadDriveFilename,
+                content,
+                driveFile.modifiedTime,
+              )
+            : await this.drivePort.createSyncFileIfMissing(folder.id, uploadDriveFilename, content);
+        }
         if (!result) {
           throw new SyncIntegrityError(
             driveFile
@@ -549,9 +789,13 @@ export class SyncToCloud {
           checksum,
           size: new TextEncoder().encode(content).length,
           uploadedBy: this.deviceId,
+          ...(uploadDriveFilename !== defaultFilename
+            ? { driveFilename: uploadDriveFilename }
+            : {}),
         };
         nextRemoteFiles[relPath] = entry;
         nextLocalFiles[relPath] = entry;
+        completeRestoration(relPath);
         uploaded.push(relPath);
       } catch (err) {
         // ⚠️ 무결성 위반은 **일부러 멈추는 안전장치**라 여기서 삼키면 안 된다.
@@ -654,11 +898,13 @@ export class SyncToCloud {
     if (uploaded.length > 0 || manifestReconciled) {
       const now = new Date().toISOString();
       const nextRemoteManifest = {
-        version: 1,
+        version: Math.max(2, remoteManifest.version),
         lastSyncedAt: now,
         deviceId: this.deviceId,
         deviceName: this.deviceName,
         files: nextRemoteFiles,
+        deletions: nextRemoteDeletions,
+        restorations: nextRemoteRestorations,
       } as const;
       if (remoteManifest) {
         const updated = await this.drivePort.updateSyncManifestIfUnchanged(
@@ -675,12 +921,40 @@ export class SyncToCloud {
         await this.drivePort.updateSyncManifest(folder.id, nextRemoteManifest);
       }
       await this.syncRepo.saveLocalManifest({
-        version: 1,
+        version: Math.max(2, localManifest?.version ?? remoteManifest.version),
         lastSyncedAt: now,
         deviceId: this.deviceId,
         deviceName: this.deviceName,
         files: nextLocalFiles,
+        deletions: nextLocalDeletions,
+        restorations: nextLocalRestorations,
       });
+    }
+
+    // 삭제 표식이 클라우드 장부에 확정된 뒤에만 실제 파일을 지운다. 실패해도 표식은 남아
+    // 다음 동기화에서 재시도되며, 다른 기기는 이 파일을 다시 내려받거나 올리지 않는다.
+    for (const [key, target] of deletionCleanupTargets) {
+      if (!target.expectedModifiedTime || !this.drivePort.deleteSyncFileIfUnchanged) {
+        if (target.expectedModifiedTime) binaryFailures.push(key);
+        console.warn(`[SyncToCloud]   ${key}: 안전한 조건부 삭제를 사용할 수 없어 물리 삭제 보류`);
+        continue;
+      }
+      try {
+        const deleted = await this.drivePort.deleteSyncFileIfUnchanged(
+          folder.id,
+          target.driveFilename,
+          target.expectedModifiedTime,
+        );
+        if (!deleted) {
+          binaryFailures.push(key);
+          console.warn(`[SyncToCloud]   ${key}: 파일 세대가 바뀌어 물리 삭제 보류`);
+          continue;
+        }
+        console.log(`[SyncToCloud]   ${key}: DELETE unchanged file after tombstone commit`);
+      } catch (err) {
+        binaryFailures.push(key);
+        console.warn(`[SyncToCloud]   ${key}: 실제 파일 삭제 실패 — 다음 동기화에서 재시도`, err);
+      }
     }
 
     console.log(

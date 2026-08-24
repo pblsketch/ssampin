@@ -10,6 +10,7 @@ import type { StudentPhoto } from '@domain/entities/StudentPhoto';
 import type { IStudentPhotoRepository } from '@domain/repositories/IStudentPhotoRepository';
 import { studentPhotoStorageRef } from '@domain/rules/studentPhotoRules';
 import { deleteStudentPhotos } from '../DeleteStudentPhotos';
+import { withDataOperationLock } from '@usecases/shared/dataOperationMutex';
 
 function makePhoto(
   subjectKey: string,
@@ -106,72 +107,41 @@ describe('deleteStudentPhotos — 로컬', () => {
       { repository },
       { scope: 'student', subjectKey: '없음' },
     );
-    expect(result).toEqual({ deletedCount: 0, cloudFailures: [] });
+    expect(result).toEqual({ deletedCount: 0, cloudFailures: [], cloudPendingCount: 0 });
     expect(repository.calls).toEqual([]);
   });
 });
 
-describe('deleteStudentPhotos — 클라우드까지 파기', () => {
-  it('★로컬뿐 아니라 클라우드에서도 같은 파일을 지운다', async () => {
-    const deleteSyncFile = vi.fn().mockResolvedValue(undefined);
-
-    const result = await deleteStudentPhotos(
-      { repository, cloud: { port: { deleteSyncFile }, folderId: 'folder-1' } },
-      { scope: 'owner', ownerKind: 'homeroom', ownerKey: 'homeroom' },
-    );
-
-    expect(result.cloudFailures).toEqual([]);
-    expect(deleteSyncFile).toHaveBeenCalledTimes(2);
-    // 업로드 때와 같은 파일명 규칙이어야 실제로 지워진다
-    expect(deleteSyncFile).toHaveBeenCalledWith('folder-1', 'student-photos__s1.jpg.json');
-    expect(deleteSyncFile).toHaveBeenCalledWith('folder-1', 'student-photos__s2.jpg.json');
-  });
-
+describe('deleteStudentPhotos — 클라우드 파기 예약', () => {
   it('동기화를 안 쓰는 상태면 로컬만 지우고 끝난다', async () => {
     const result = await deleteStudentPhotos({ repository }, { scope: 'all' });
     expect(result.cloudFailures).toEqual([]);
+    expect(result.cloudPendingCount).toBe(0);
   });
 
-  it('★클라우드 삭제가 실패해도 로컬은 지우고, 남은 파일을 사실대로 알린다', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const deleteSyncFile = vi
-      .fn()
-      .mockRejectedValueOnce(new Error('인터넷 끊김'))
-      .mockResolvedValue(undefined);
-
+  it('동기화가 켜져 있으면 실제 파일 삭제를 다음 동기화로 예약한다', async () => {
+    const manifest = {
+      version: 1,
+      lastSyncedAt: '2026-08-19T00:00:00.000Z',
+      deviceId: 'dev-1',
+      deviceName: '내 기기',
+      files: {},
+    };
+    const syncRepository = {
+      getLocalManifest: () => Promise.resolve(manifest),
+      saveLocalManifest: () => Promise.resolve(),
+    };
     const result = await deleteStudentPhotos(
-      { repository, cloud: { port: { deleteSyncFile }, folderId: 'folder-1' } },
+      { repository, syncRepository, cloud: {} },
       { scope: 'owner', ownerKind: 'homeroom', ownerKey: 'homeroom' },
     );
 
-    // 로컬 파기는 반드시 끝난다 (인터넷이 없다고 파기가 막히면 안 된다)
-    expect(repository.photos.map((p) => p.subjectKey)).toEqual(['t1']);
-    // 그러나 클라우드에 남은 것을 조용히 넘기지 않는다
-    expect(result.cloudFailures).toEqual(['student-photos/s1.jpg']);
-    expect(result.deletedCount).toBe(2);
-  });
-
-  it('클라우드가 전부 실패해도 예외를 던지지 않는다 (파기 자체는 진행돼야 한다)', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const deleteSyncFile = vi.fn().mockRejectedValue(new Error('로그인 만료'));
-
-    const result = await deleteStudentPhotos(
-      { repository, cloud: { port: { deleteSyncFile }, folderId: 'f' } },
-      { scope: 'all' },
-    );
-
-    expect(repository.photos).toHaveLength(0);
-    expect(result.cloudFailures).toHaveLength(3);
+    expect(result.cloudFailures).toEqual([]);
+    expect(result.cloudPendingCount).toBe(2);
   });
 });
 
-/**
- * ★ QA 발견 C2 — 지운 사진이 동기화 장부에 남으면 안 된다.
- *
- * 장부에만 남으면 다음 동기화가 "있어야 할 파일이 없다"고 판단해 무결성 오류를 던지고,
- * 그 오류는 사이클 전체를 멈춘다 — 사진과 무관한 출결·기록 동기화까지 함께 죽는다.
- */
-describe('deleteStudentPhotos — 동기화 장부 정리 (C2)', () => {
+describe('deleteStudentPhotos — 삭제 전파 기준 보존', () => {
   function fakeSyncRepo(files: Record<string, unknown>) {
     const state = {
       manifest: {
@@ -180,6 +150,7 @@ describe('deleteStudentPhotos — 동기화 장부 정리 (C2)', () => {
         deviceId: 'dev-1',
         deviceName: '내 기기',
         files,
+        deletions: {} as Record<string, { deletedAt: string; deletedBy: string }>,
       },
     };
     return {
@@ -194,7 +165,7 @@ describe('deleteStudentPhotos — 동기화 장부 정리 (C2)', () => {
     };
   }
 
-  it('★지운 사진의 항목이 장부에서 빠진다', async () => {
+  it('오프라인 삭제도 다음 동기화가 전파할 수 있도록 삭제 표식을 남긴다', async () => {
     const entry = { lastModified: '', checksum: 'x', size: 1 };
     const { state, repo } = fakeSyncRepo({
       'student-photos/s1.jpg': entry,
@@ -212,9 +183,14 @@ describe('deleteStudentPhotos — 동기화 장부 정리 (C2)', () => {
       'obs-attachments/keep.png',
       'students',
     ]);
+    expect(Object.keys(state.manifest.deletions).sort()).toEqual([
+      'student-photos/s1.jpg',
+      'student-photos/s2.jpg',
+    ]);
+    expect(state.manifest.deletions['student-photos/s1.jpg']?.deletedBy).toBe('dev-1');
   });
 
-  it('장부 정리에 실패해도 파기 자체는 되돌리지 않는다', async () => {
+  it('장부 저장소가 불안정해도 로컬 파기 자체는 완료한다', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     const repo = {
       getLocalManifest: () => Promise.reject(new Error('장부 못 읽음')),
@@ -228,5 +204,41 @@ describe('deleteStudentPhotos — 동기화 장부 정리 (C2)', () => {
 
     expect(result.deletedCount).toBe(3);
     expect(repository.photos).toHaveLength(0);
+    expect(result.cloudFailures).toHaveLength(3);
+  });
+
+  it('동기화 작업이 진행 중이면 장부와 사진 삭제를 모두 기다린다', async () => {
+    let releaseSync: () => void = () => undefined;
+    const syncGate = new Promise<void>((resolve) => {
+      releaseSync = resolve;
+    });
+    const activeSync = withDataOperationLock(async () => syncGate);
+    await Promise.resolve();
+    const saveLocalManifest = vi.fn(async () => undefined);
+    const deletion = deleteStudentPhotos(
+      {
+        repository,
+        syncRepository: {
+          getLocalManifest: async () => ({
+            version: 2,
+            lastSyncedAt: '2026-08-24T00:00:00.000Z',
+            deviceId: 'dev-1',
+            deviceName: '내 기기',
+            files: {},
+          }),
+          saveLocalManifest,
+        },
+      },
+      { scope: 'all' },
+    );
+
+    await Promise.resolve();
+    expect(repository.photos).toHaveLength(3);
+    expect(saveLocalManifest).not.toHaveBeenCalled();
+
+    releaseSync();
+    await Promise.all([activeSync, deletion]);
+    expect(repository.photos).toHaveLength(0);
+    expect(saveLocalManifest).toHaveBeenCalledOnce();
   });
 });

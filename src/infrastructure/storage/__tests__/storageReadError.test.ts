@@ -19,6 +19,42 @@ describe('LocalStorageAdapter.read — 오류는 null로 위장하지 않는다 
     await expect(new LocalStorageAdapter().read('attendance')).resolves.toBeNull();
   });
 
+  it('예상한 이전 값이 다르면 조건부 교체를 거부한다', async () => {
+    let raw = JSON.stringify({ value: 'changed' });
+    const setItem = vi.fn((_key: string, value: string) => {
+      raw = value;
+    });
+    vi.stubGlobal('localStorage', { getItem: () => raw, setItem });
+
+    await expect(
+      new LocalStorageAdapter().replaceIfUnchanged(
+        'events',
+        { value: 'baseline' },
+        { value: 'remote' },
+      ),
+    ).resolves.toBe(false);
+    expect(setItem).not.toHaveBeenCalled();
+  });
+
+  it('예상한 이전 값이 같을 때만 조건부 교체한다', async () => {
+    let raw = JSON.stringify({ value: 'baseline' });
+    vi.stubGlobal('localStorage', {
+      getItem: () => raw,
+      setItem: (_key: string, value: string) => {
+        raw = value;
+      },
+    });
+
+    await expect(
+      new LocalStorageAdapter().replaceIfUnchanged(
+        'events',
+        { value: 'baseline' },
+        { value: 'remote' },
+      ),
+    ).resolves.toBe(true);
+    expect(JSON.parse(raw)).toEqual({ value: 'remote' });
+  });
+
   it('본문이 손상되면(JSON 파싱 실패) 예외를 던진다', async () => {
     vi.stubGlobal('localStorage', { getItem: () => '{손상된 json' });
     await expect(new LocalStorageAdapter().read('attendance')).rejects.toThrow();
@@ -54,5 +90,23 @@ describe('ElectronStorageAdapter.read — 오류는 null로 위장하지 않는�
   it('본문이 손상된 JSON이면 예외를 던진다', async () => {
     vi.stubGlobal('window', { electronAPI: { readData: async () => '{손상된 json' } });
     await expect(new ElectronStorageAdapter().read('attendance')).rejects.toThrow();
+  });
+
+  it('조건부 JSON 교체에 이전값과 다음값을 정확히 전달한다', async () => {
+    const writeDataIfUnchanged = vi.fn(async () => true);
+    vi.stubGlobal('window', { electronAPI: { writeDataIfUnchanged } });
+
+    await expect(
+      new ElectronStorageAdapter().replaceIfUnchanged(
+        'events',
+        { value: 'baseline' },
+        { value: 'remote' },
+      ),
+    ).resolves.toBe(true);
+    expect(writeDataIfUnchanged).toHaveBeenCalledWith(
+      'events',
+      JSON.stringify({ value: 'baseline' }),
+      JSON.stringify({ value: 'remote' }, null, 2),
+    );
   });
 });

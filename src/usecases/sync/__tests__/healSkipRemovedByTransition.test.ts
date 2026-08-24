@@ -11,7 +11,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { SyncFromCloud } from '../SyncFromCloud';
-import { SyncToCloud } from '../SyncToCloud';
+import { SyncToCloud, computeSyncChecksum } from '../SyncToCloud';
 import {
   YEAR_TRANSITION_REMOVED_KEY,
   type YearTransitionRemovedMarker,
@@ -89,20 +89,34 @@ interface ScenarioOptions {
 }
 
 /** students 공격 표면 공통 셋업 — 리모트에 옛 명렬, 리모트 modifiedTime은 시계 스큐(미래). */
-function scenario({ localChecksum, storageInit = {} }: ScenarioOptions) {
+async function scenario({ localChecksum, storageInit = {} }: ScenarioOptions) {
+  const remoteContent = JSON.stringify(OLD_ROSTER);
+  const remoteChecksum = await computeSyncChecksum(remoteContent);
   const remote = manifest(
-    { students: { checksum: 'remote-v1', lastModified: SKEWED_FUTURE, size: 100 } },
+    {
+      students: {
+        checksum: remoteChecksum,
+        lastModified: SKEWED_FUTURE,
+        size: remoteContent.length,
+      },
+    },
     'other-pc',
   );
   const local =
     localChecksum === undefined
       ? null
       : manifest(
-          { students: { checksum: localChecksum, lastModified: REMOVED_AT, size: 100 } },
+          {
+            students: {
+              checksum: localChecksum === 'remote-v1' ? remoteChecksum : localChecksum,
+              lastModified: REMOVED_AT,
+              size: remoteContent.length,
+            },
+          },
           'my-pc',
         );
   const { storage, files } = makeStorage(storageInit);
-  const { port } = makeDrive(remote, { students: JSON.stringify(OLD_ROSTER) });
+  const { port } = makeDrive(remote, { students: remoteContent });
   const useCase = new SyncFromCloud(storage, port, makeSyncRepo(local), 'my-pc', '내 PC', 'latest');
   return { useCase, files };
 }
@@ -113,7 +127,7 @@ beforeEach(() => {
 
 describe('F7c — 전환 마커의 전 다운로드 분기 게이트', () => {
   it('qa3-D(치유 분기): 장부 체크섬 동일+로컬 부재+마커 → 다운로드 0 (시계 스큐 무의미 — RH2)', async () => {
-    const { useCase, files } = scenario({
+    const { useCase, files } = await scenario({
       localChecksum: 'remote-v1', // 체크섬 동일 → 치유 분기
       storageInit: { [YEAR_TRANSITION_REMOVED_KEY]: marker(['students', 'seating']) },
     });
@@ -130,7 +144,7 @@ describe('F7c — 전환 마커의 전 다운로드 분기 게이트', () => {
   });
 
   it('RB1 우회①(conflict 분기): 체크섬 상이+마커+로컬 빈 값 → 다운로드 0', async () => {
-    const { useCase, files } = scenario({
+    const { useCase, files } = await scenario({
       localChecksum: 'local-empty-v2', // 체크섬 상이 → conflict 분기(latest)
       storageInit: {
         students: [], // F7b 리셋 직후의 빈 값
@@ -145,7 +159,7 @@ describe('F7c — 전환 마커의 전 다운로드 분기 게이트', () => {
   });
 
   it('RB1 우회②(장부 없는 첫 다운로드): localManifest 없음+마커 → 다운로드 0', async () => {
-    const { useCase, files } = scenario({
+    const { useCase, files } = await scenario({
       localChecksum: undefined, // 장부 자체 없음 → 첫 다운로드 분기
       storageInit: {
         students: [],
@@ -160,7 +174,7 @@ describe('F7c — 전환 마커의 전 다운로드 분기 게이트', () => {
   });
 
   it('해제(a): 로컬 실질 내용 + 리모트 정화 확인(체크섬 일치) → 마커 해제·정상 동기화 재개', async () => {
-    const { useCase, files } = scenario({
+    const { useCase, files } = await scenario({
       localChecksum: 'remote-v1', // F8a: 리모트 == 내가 마지막으로 올린 것(정화 상태)
       storageInit: {
         students: [{ id: 'stu-new', name: '학생새명렬' }], // 사용자가 새로 입력
@@ -176,7 +190,7 @@ describe('F7c — 전환 마커의 전 다운로드 분기 게이트', () => {
   });
 
   it('해제 시 마지막 키였다면 마커 파일 자체를 지운다', async () => {
-    const { useCase, files } = scenario({
+    const { useCase, files } = await scenario({
       localChecksum: 'remote-v1', // 정화 상태
       storageInit: {
         students: [{ id: 'stu-new', name: '학생새명렬' }],
@@ -194,7 +208,7 @@ describe('F7c — 전환 마커의 전 다운로드 분기 게이트', () => {
     // A 사용자가 새 명렬 입력. 구 해제 조건(로컬 실질 내용만)이었다면 해제 직후 충돌 분기가
     // A의 새 명렬을 옛 명렬로 덮었다(QA 3차 재현). 강화 후: 마커 유지+스킵+새 명렬 보존.
     const newRoster = [{ id: 'stu-new', name: '학생새명렬' }];
-    const { useCase, files } = scenario({
+    const { useCase, files } = await scenario({
       localChecksum: 'my-upload-v2', // 리모트(remote-v1)와 불일치 = 되오염
       storageInit: {
         students: newRoster,
@@ -212,7 +226,7 @@ describe('F7c — 전환 마커의 전 다운로드 분기 게이트', () => {
   });
 
   it('revert 후(마커 없음)에는 기존 치유 다운로드가 정상 동작한다 (ADR-024 보존)', async () => {
-    const { useCase, files } = scenario({ localChecksum: 'remote-v1', storageInit: {} });
+    const { useCase, files } = await scenario({ localChecksum: 'remote-v1', storageInit: {} });
 
     const result = await useCase.execute();
 
@@ -221,13 +235,19 @@ describe('F7c — 전환 마커의 전 다운로드 분기 게이트', () => {
   });
 
   it('마커에 없는 파일은 마커가 있어도 정상 치유된다(게이트는 guardDownloads 키에만)', async () => {
-    const entry = { checksum: 'todos-v1', lastModified: REMOVED_AT, size: 50 };
+    const remoteTodos = { items: ['할 일'] };
+    const remoteTodosContent = JSON.stringify(remoteTodos);
+    const entry = {
+      checksum: await computeSyncChecksum(remoteTodosContent),
+      lastModified: REMOVED_AT,
+      size: remoteTodosContent.length,
+    };
     const remote = manifest({ todos: entry }, 'my-pc');
     const local = manifest({ todos: entry }, 'my-pc');
     const { storage, files } = makeStorage({
       [YEAR_TRANSITION_REMOVED_KEY]: marker(['students']),
     });
-    const { port } = makeDrive(remote, { todos: JSON.stringify({ items: ['할 일'] }) });
+    const { port } = makeDrive(remote, { todos: remoteTodosContent });
     const useCase = new SyncFromCloud(
       storage,
       port,
@@ -244,7 +264,7 @@ describe('F7c — 전환 마커의 전 다운로드 분기 게이트', () => {
   });
 
   it('마커 손상(형식 불일치)은 마커 없음으로 취급한다(fail-open — 다운로드는 보호 장치)', async () => {
-    const { useCase, files } = scenario({
+    const { useCase, files } = await scenario({
       localChecksum: 'remote-v1',
       storageInit: { [YEAR_TRANSITION_REMOVED_KEY]: { broken: true } },
     });
@@ -292,7 +312,13 @@ describe('F7c — 전환 마커의 전 다운로드 분기 게이트', () => {
   it('F7b 효과: 리모트가 빈 값으로 정화된 뒤 새 PC(마커 없음)는 빈 값을 받는다 — 옛 명렬 아님', async () => {
     // 전환 기기의 첫 업로드가 students=[]를 올린 상태. 새 PC: 장부·로컬 파일·마커 전부 없음.
     const remote = manifest(
-      { students: { checksum: 'empty-v2', lastModified: SKEWED_FUTURE, size: 2 } },
+      {
+        students: {
+          checksum: await computeSyncChecksum('[]'),
+          lastModified: SKEWED_FUTURE,
+          size: 2,
+        },
+      },
       'transitioned-pc',
     );
     const { storage, files } = makeStorage();

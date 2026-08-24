@@ -380,6 +380,12 @@ describe('ImportSettingsFromCloud', () => {
             size: 512,
           },
         },
+        deletions: {
+          'student-photos/deleted.jpg': {
+            deletedAt: '2026-04-21T00:00:00.000Z',
+            deletedBy: 'LOCAL-DEVICE-ID',
+          },
+        },
       };
       const ctx2 = makeContext({
         localSettings: mkSettings({
@@ -396,6 +402,7 @@ describe('ImportSettingsFromCloud', () => {
       expect(saved.files['settings']?.checksum).toBe('remote-checksum');
       // 다른 엔트리는 그대로 유지
       expect(saved.files['events']).toEqual(otherEntry);
+      expect(saved.deletions).toEqual(localManifest.deletions);
       // deviceId/deviceName 등 로컬 유지
       expect(saved.deviceId).toBe('LOCAL-DEVICE-ID');
       expect(saved.deviceName).toBe('로컬 데스크탑');

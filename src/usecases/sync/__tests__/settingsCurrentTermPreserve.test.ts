@@ -8,6 +8,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { SyncFromCloud, preserveNewerTermGuard } from '../SyncFromCloud';
+import { computeSyncChecksum } from '../SyncToCloud';
 import type { IStoragePort } from '@domain/ports/IStoragePort';
 import type { IDriveSyncPort } from '@domain/ports/IDriveSyncPort';
 import type { IDriveSyncRepository } from '@domain/repositories/IDriveSyncRepository';
@@ -152,7 +153,9 @@ function manifest(files: DriveSyncManifest['files'], deviceId: string): DriveSyn
   };
 }
 
-function harness(localSettings: unknown, remoteSettings: unknown) {
+async function harness(localSettings: unknown, remoteSettings: unknown) {
+  const localContent = JSON.stringify(localSettings);
+  const remoteContent = JSON.stringify(remoteSettings);
   const files: Record<string, unknown> = { settings: localSettings };
   const storage = {
     read: vi.fn(async (filename: string) => (filename in files ? files[filename] : null)),
@@ -171,22 +174,28 @@ function harness(localSettings: unknown, remoteSettings: unknown) {
   const remote = manifest(
     {
       settings: {
-        checksum: 'remote-v2',
+        checksum: await computeSyncChecksum(remoteContent),
         lastModified: '2026-08-06T09:00:00Z',
-        size: 100,
+        size: remoteContent.length,
         uploadedBy: 'other-pc',
       },
     },
     'other-pc',
   );
   const local = manifest(
-    { settings: { checksum: 'local-v1', lastModified: '2026-08-06T01:00:00Z', size: 100 } },
+    {
+      settings: {
+        checksum: await computeSyncChecksum(localContent),
+        lastModified: '2026-08-06T01:00:00Z',
+        size: localContent.length,
+      },
+    },
     'my-pc',
   );
   const port = {
     getOrCreateSyncFolder: vi.fn(async () => ({ id: 'folder-1', name: '쌤핀 동기화' })),
     uploadSyncFile: vi.fn(async () => ({ fileId: 'f', modifiedTime: '2026-08-06T10:00:00Z' })),
-    downloadSyncFile: vi.fn(async () => JSON.stringify(remoteSettings)),
+    downloadSyncFile: vi.fn(async () => remoteContent),
     getSyncManifest: vi.fn(async () => remote),
     updateSyncManifest: vi.fn(async () => 'manifest-1'),
     listSyncFiles: vi.fn(async () => [{ id: 'settings', name: 'settings.json' }]),
@@ -202,7 +211,7 @@ function harness(localSettings: unknown, remoteSettings: unknown) {
 
 describe('SyncFromCloud 통합 — settings 교체 시 currentTerm 보존 (qa3-C)', () => {
   it('미전환 기기의 settings(currentTerm 없음)가 내려와도 로컬 currentTerm이 살아남는다', async () => {
-    const { useCase, files } = harness(
+    const { useCase, files } = await harness(
       { theme: 'dark', currentTerm: '2027-1' },
       { theme: 'light' }, // 미전환 기기가 올린 settings — currentTerm 벗겨짐
     );
@@ -214,7 +223,7 @@ describe('SyncFromCloud 통합 — settings 교체 시 currentTerm 보존 (qa3-C
   });
 
   it('수신 settings가 더 최신 학기면 그대로 채택한다', async () => {
-    const { useCase, files } = harness(
+    const { useCase, files } = await harness(
       { theme: 'dark', currentTerm: '2027-1' },
       { theme: 'light', currentTerm: '2027-2' },
     );
@@ -225,7 +234,7 @@ describe('SyncFromCloud 통합 — settings 교체 시 currentTerm 보존 (qa3-C
   });
 
   it('양쪽 모두 currentTerm 없으면 무동작(현행 통파일 교체 그대로)', async () => {
-    const { useCase, files } = harness({ theme: 'dark' }, { theme: 'light' });
+    const { useCase, files } = await harness({ theme: 'dark' }, { theme: 'light' });
 
     await useCase.execute();
 

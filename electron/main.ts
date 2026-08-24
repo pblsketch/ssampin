@@ -3349,6 +3349,43 @@ function registerIpcHandlers(): void {
     }
   });
 
+  ipcMain.handle(
+    'data:writeIfUnchanged',
+    (_event, filename: string, expectedData: string | null, nextData: string): boolean => {
+      const dataDir = getDataDir();
+      const filePath = path.join(dataDir, `${filename}.json`);
+      const backupPath = path.join(dataDir, `${filename}.backup.json`);
+      const tempPath = path.join(dataDir, `${filename}.tmp.json`);
+      const existing = fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf-8') : null;
+
+      try {
+        const normalizedExisting = existing === null ? null : JSON.stringify(JSON.parse(existing));
+        const normalizedExpected =
+          expectedData === null ? null : JSON.stringify(JSON.parse(expectedData));
+        if (normalizedExisting !== normalizedExpected) return false;
+      } catch {
+        return false;
+      }
+
+      if (existing !== null && existing.length > 10) {
+        fs.writeFileSync(backupPath, existing, 'utf-8');
+      }
+      fs.writeFileSync(tempPath, nextData, 'utf-8');
+      if (fs.readFileSync(tempPath, 'utf-8') !== nextData) {
+        fs.unlinkSync(tempPath);
+        throw new Error(`[data:writeIfUnchanged] ${filename} 쓰기 검증 실패`);
+      }
+      fs.renameSync(tempPath, filePath);
+      broadcastToAllWindows('data:changed', filename, _event.sender.id);
+
+      if (filename === 'settings' && !process.env['VITE_DEV_SERVER_URL']) {
+        const settings = JSON.parse(nextData) as { system?: { autoLaunch?: boolean } };
+        app.setLoginItemSettings({ openAtLogin: settings.system?.autoLaunch ?? false });
+      }
+      return true;
+    },
+  );
+
   ipcMain.handle('data:remove', (_event, filename: string): void => {
     const dataDir = getDataDir();
     const filePath = path.join(dataDir, `${filename}.json`);
@@ -4491,6 +4528,30 @@ function registerIpcHandlers(): void {
   );
 
   ipcMain.handle(
+    'forms:writeBinaryIfUnchanged',
+    (
+      _event,
+      args: { relPath: string; expected: ArrayBuffer | null; next: ArrayBuffer },
+    ): boolean => {
+      const abs = resolveFormsPath(args.relPath, true);
+      const existing = fs.existsSync(abs) ? fs.readFileSync(abs) : null;
+      const expected = args.expected === null ? null : Buffer.from(args.expected);
+      if (
+        (existing === null) !== (expected === null) ||
+        (existing !== null && expected !== null && !existing.equals(expected))
+      ) {
+        return false;
+      }
+
+      fs.mkdirSync(path.dirname(abs), { recursive: true });
+      const temp = `${abs}.sync-tmp`;
+      fs.writeFileSync(temp, Buffer.from(args.next));
+      fs.renameSync(temp, abs);
+      return true;
+    },
+  );
+
+  ipcMain.handle(
     'forms:readBinary',
     async (_event, args: { relPath: string }): Promise<ArrayBuffer | null> => {
       const abs = resolveFormsPath(args.relPath, true);
@@ -4630,7 +4691,7 @@ function registerIpcHandlers(): void {
   // macOS: 코드서명(공증)이 없으면 인앱 자동 업데이트가 차단되므로 칩에 맞는 DMG를 브라우저로 직접 받게 한다.
   // (릴리즈 페이지로 보내면 arm64/x64 중 잘못 고르는 사고가 잦음 — 실행 중인 앱이 칩을 알고 있다)
   //
-  // 2026-08-24: 통합(universal) 단일 파일을 검토했으나 용량 부담(실측 480MB vs 칩별 약 290MB)이 커
+  // 2026-08-24: 통합(universal) 단일 파일을 검토했으나 용량 2배(약 330MB → 640MB) 부담이 커
   // 칩별 2파일을 유지하기로 했다(electron-builder.yml mac.target 주석 참조). 이 분기도 그대로 둔다.
   ipcMain.handle('update:download', (): void => {
     if (process.platform === 'darwin') {

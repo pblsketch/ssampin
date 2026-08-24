@@ -23,6 +23,16 @@ export class ElectronStorageAdapter implements IStoragePort {
     await api.writeData(filename, JSON.stringify(data, null, 2));
   }
 
+  async replaceIfUnchanged<T>(filename: string, expected: T | null, next: T): Promise<boolean> {
+    const api = window.electronAPI;
+    if (!api) return false;
+    return api.writeDataIfUnchanged(
+      filename,
+      expected === null ? null : JSON.stringify(expected),
+      JSON.stringify(next, null, 2),
+    );
+  }
+
   async remove(filename: string): Promise<void> {
     const api = window.electronAPI;
     if (!api) {
@@ -47,6 +57,24 @@ export class ElectronStorageAdapter implements IStoragePort {
     // Uint8Array view 를 정확히 ArrayBuffer 로 잘라 IPC 전송 (share 되는 경우 방지)
     const ab = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
     await api.forms.writeBinary(relPath, ab as ArrayBuffer);
+  }
+
+  async replaceBinaryIfUnchanged(
+    relPath: string,
+    expected: Uint8Array | null,
+    next: Uint8Array,
+  ): Promise<boolean> {
+    const api = window.electronAPI;
+    if (!api?.forms) return false;
+    const expectedBuffer = expected
+      ? expected.buffer.slice(expected.byteOffset, expected.byteOffset + expected.byteLength)
+      : null;
+    const nextBuffer = next.buffer.slice(next.byteOffset, next.byteOffset + next.byteLength);
+    return api.forms.writeBinaryIfUnchanged(
+      relPath,
+      expectedBuffer as ArrayBuffer | null,
+      nextBuffer as ArrayBuffer,
+    );
   }
 
   async removeBinary(relPath: string): Promise<void> {

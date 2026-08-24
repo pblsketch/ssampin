@@ -2,10 +2,12 @@ import type { IStoragePort } from '@domain/ports/IStoragePort';
 import type { IDriveSyncPort } from '@domain/ports/IDriveSyncPort';
 import type { IDriveSyncRepository } from '@domain/repositories/IDriveSyncRepository';
 import type {
+  DriveSyncDeletionInfo,
   DriveSyncManifest,
   DriveSyncConflict,
   DriveSyncFileInfo,
 } from '@domain/entities/DriveSyncState';
+import { driveSyncDeletionIdentity } from '@domain/entities/DriveSyncState';
 import type {
   StudentRecordsData,
   StudentRecord,
@@ -31,8 +33,20 @@ import {
   type GetBinaryDynamicSyncFiles,
 } from './SyncToCloud';
 import { withFileLock } from '@usecases/shared/fileWriteLock';
+import { withDataOperationLock } from '@usecases/shared/dataOperationMutex';
 import { SYNC_FILE_KEYS } from './syncRegistry';
-import { base64ToUint8 } from './binaryBase64';
+import { base64ToUint8, uint8ToBase64 } from './binaryBase64';
+import { classifySyncThreeWay } from './syncThreeWay';
+
+async function computeBinarySyncChecksum(
+  relPath: string,
+  bytes: Uint8Array | null,
+): Promise<string | null> {
+  if (bytes === null) return null;
+  return computeSyncChecksum(
+    JSON.stringify({ __binaryBase64: uint8ToBase64(bytes), __relPath: relPath }),
+  );
+}
 
 /** Q2: 마이그레이션 여부 판별 보조 — tags 가 많을수록 정규화된 쪽으로 본다. */
 function recordTagCount(r: StudentRecord): number {
@@ -696,23 +710,85 @@ export class SyncFromCloud {
    * 통파일 교체 쓰기(비병합 도메인) — settings는 currentTerm "더 최신 학기 승" 보존(F3) 경유.
    * 로컬 읽기 실패(손상 등)는 보존 불가로 보고 수신 그대로 쓴다(fail-open).
    */
+  private prepareReplacedFile(filename: string, parsed: unknown, current: unknown | null): unknown {
+    if (filename !== 'settings') return parsed;
+    return preserveNewerTermGuard(parsed, (current as TermGuardSnapshot | null) ?? {});
+  }
+
   private async writeReplacedFile(filename: string, parsed: unknown): Promise<void> {
-    let data = parsed;
-    if (filename === 'settings') {
-      let local: TermGuardSnapshot | null = null;
-      try {
-        local = await this.storage.read<TermGuardSnapshot>('settings');
-      } catch {
-        local = null;
-      }
-      data = preserveNewerTermGuard(parsed, local ?? {});
+    let current: unknown | null = null;
+    try {
+      current = await this.storage.read<unknown>(filename);
+    } catch {
+      current = null;
     }
-    await this.storage.write(filename, data);
+    await this.storage.write(filename, this.prepareReplacedFile(filename, parsed, current));
   }
 
   private async readStoredChecksum(filename: string): Promise<string | null> {
     const data = await this.storage.read<unknown>(filename);
     return data === null ? null : await computeSyncChecksum(JSON.stringify(data));
+  }
+
+  private async downloadVerifiedJson(
+    filename: string,
+    remoteInfo: DriveSyncFileInfo,
+    remoteFiles: readonly { readonly id: string; readonly name: string }[],
+    allowLocalRecovery = false,
+  ): Promise<unknown> {
+    const driveFile = remoteFiles.find((file) => file.name === `${filename}.json`);
+    if (!driveFile) {
+      throw new Error(`드라이브에서 ${filename}.json 파일을 찾지 못했습니다.`);
+    }
+    const content = await this.drivePort.downloadSyncFile(driveFile.id);
+    const downloadedChecksum = await computeSyncChecksum(content);
+    if (downloadedChecksum !== remoteInfo.checksum) {
+      const localChecksum = allowLocalRecovery ? await this.readStoredChecksum(filename) : null;
+      if (localChecksum !== downloadedChecksum) {
+        throw new Error(`드라이브 ${filename} 파일이 동기화 중 다시 변경되었습니다.`);
+      }
+    }
+    return JSON.parse(content) as unknown;
+  }
+
+  private async replaceRemoteJsonIfLocalUnchanged(
+    filename: string,
+    expectedLocalChecksum: string | null,
+    remoteInfo: DriveSyncFileInfo,
+    remoteFiles: readonly { readonly id: string; readonly name: string }[],
+  ): Promise<boolean> {
+    const parsed = await this.downloadVerifiedJson(filename, remoteInfo, remoteFiles);
+    return this.replaceParsedRemoteJsonIfLocalUnchanged(
+      filename,
+      expectedLocalChecksum,
+      remoteInfo.checksum,
+      parsed,
+    );
+  }
+
+  private async replaceParsedRemoteJsonIfLocalUnchanged(
+    filename: string,
+    expectedLocalChecksum: string | null,
+    remoteChecksum: string,
+    parsed: unknown,
+  ): Promise<boolean> {
+    return withFileLock(filename, async () => {
+      const current = await this.storage.read<unknown>(filename);
+      const currentChecksum =
+        current === null ? null : await computeSyncChecksum(JSON.stringify(current));
+      if (currentChecksum !== expectedLocalChecksum && currentChecksum !== remoteChecksum) {
+        return false;
+      }
+      if (currentChecksum === remoteChecksum) return true;
+
+      const next = this.prepareReplacedFile(filename, parsed, current);
+      if (this.storage.replaceIfUnchanged) {
+        return this.storage.replaceIfUnchanged(filename, current, next);
+      }
+      if ((await this.readStoredChecksum(filename)) !== currentChecksum) return false;
+      await this.storage.write(filename, next);
+      return true;
+    });
   }
 
   /**
@@ -779,6 +855,7 @@ export class SyncFromCloud {
       }
       const nextManifest: DriveSyncManifest = {
         ...latest,
+        version: Math.max(2, latest.version),
         deviceId: this.deviceId,
         deviceName: this.deviceName,
         lastSyncedAt: new Date().toISOString(),
@@ -793,6 +870,12 @@ export class SyncFromCloud {
   }
 
   async execute(onProgress?: (progress: SyncProgress) => void): Promise<SyncFromCloudResult> {
+    return withDataOperationLock(() => this.executeUnlocked(onProgress));
+  }
+
+  private async executeUnlocked(
+    onProgress?: (progress: SyncProgress) => void,
+  ): Promise<SyncFromCloudResult> {
     console.log(
       `[SyncFromCloud] ▶ 시작 | myDeviceId=${this.deviceId} | policy=${this.conflictPolicy}`,
     );
@@ -876,8 +959,73 @@ export class SyncFromCloud {
     const conflicts: DriveSyncConflict[] = [];
     const skipped: string[] = [];
     const updatedFiles: Record<string, DriveSyncFileInfo> = { ...(localManifest?.files ?? {}) };
-    let localManifestChanged = false;
+    const updatedDeletions: Record<string, DriveSyncDeletionInfo> = {
+      ...(localManifest?.deletions ?? {}),
+    };
+    for (const [key, remoteDeletion] of Object.entries(remoteManifest.deletions ?? {})) {
+      const localDeletion = updatedDeletions[key];
+      if (
+        !localDeletion ||
+        remoteDeletion.deletedAt > localDeletion.deletedAt ||
+        (remoteDeletion.deletedAt === localDeletion.deletedAt &&
+          driveSyncDeletionIdentity(remoteDeletion) > driveSyncDeletionIdentity(localDeletion))
+      ) {
+        updatedDeletions[key] = remoteDeletion;
+      }
+    }
+    const updatedRestorations = {
+      ...(localManifest?.restorations ?? {}),
+      ...(remoteManifest.restorations ?? {}),
+    };
+    let staleRestorationRemoved = false;
+    for (const [key, restoration] of Object.entries(updatedRestorations)) {
+      const remoteDeletion = remoteManifest.deletions?.[key];
+      if (restoration.completedAt) {
+        const deletion = updatedDeletions[key];
+        if (deletion && driveSyncDeletionIdentity(deletion) === restoration.replacesDeletionId) {
+          delete updatedDeletions[key];
+          staleRestorationRemoved = true;
+        }
+        continue;
+      }
+      if (
+        remoteDeletion &&
+        driveSyncDeletionIdentity(remoteDeletion) !== restoration.replacesDeletionId
+      ) {
+        delete updatedRestorations[key];
+        staleRestorationRemoved = true;
+      } else {
+        delete updatedDeletions[key];
+      }
+    }
+    const isPendingRestoration = (key: string): boolean =>
+      updatedRestorations[key] !== undefined && !updatedRestorations[key]?.completedAt;
+    let localManifestChanged = staleRestorationRemoved;
     const total = SYNC_FILES.length;
+
+    for (const [key, deletion] of Object.entries(updatedDeletions)) {
+      const isBinary = key.startsWith('obs-attachments/') || key.startsWith('student-photos/');
+      const isDynamicJson = key.startsWith('note-body--');
+      if (!isBinary && !isDynamicJson) continue;
+
+      if (isBinary) await this.storage.removeBinary(key);
+      else await this.storage.remove(key);
+      if (updatedFiles[key]) {
+        delete updatedFiles[key];
+        localManifestChanged = true;
+      }
+      const localDeletion = localManifest?.deletions?.[key];
+      if (
+        !localDeletion ||
+        localDeletion.deletedAt !== deletion.deletedAt ||
+        localDeletion.deletedBy !== deletion.deletedBy ||
+        driveSyncDeletionIdentity(localDeletion) !== driveSyncDeletionIdentity(deletion)
+      ) {
+        localManifestChanged = true;
+      }
+      skipped.push(key);
+      console.log(`[SyncFromCloud]   ${key}: DELETE intent applied`);
+    }
 
     let index = 0;
     for (const filename of SYNC_FILES) {
@@ -886,6 +1034,11 @@ export class SyncFromCloud {
 
       const remoteInfo = remoteManifest.files[filename];
       const localInfo = localManifest?.files[filename];
+
+      if (updatedDeletions[filename]) {
+        skipped.push(filename);
+        continue;
+      }
 
       if (!remoteInfo) {
         skipped.push(filename);
@@ -980,6 +1133,10 @@ export class SyncFromCloud {
               remoteModified: remoteInfo.lastModified,
               localDeviceName: this.deviceName,
               remoteDeviceName: remoteManifest.deviceName,
+              kind: 'json',
+              baselineChecksum: localInfo.checksum,
+              localChecksum: actualChecksum,
+              remoteChecksum: remoteInfo.checksum,
             });
             console.log(
               `[SyncFromCloud]   ${filename}: 🔶 CONFLICT (장부엔 "받았음"인데 로컬이 빈 봉투 ${localSize}B < 리모트 ${remoteInfo.size}B)`,
@@ -994,7 +1151,57 @@ export class SyncFromCloud {
         );
       }
 
-      // 장부가 서로 다르면 실제 로컬 내용까지 확인해 원격 단독 변경과 실제 충돌을 가른다.
+      const isRecordMergeFile =
+        filename === SYNC_FILE_KEYS.studentRecords ||
+        filename === SYNC_FILE_KEYS.attendance ||
+        filename === SYNC_FILE_KEYS.observations;
+
+      // 스냅샷 파일은 장부 시각이 아니라 실제 B/L/R 내용으로 원격 단독 변경과 동시 변경을 가른다.
+      if (localInfo && localInfo.checksum !== remoteInfo.checksum && !isRecordMergeFile) {
+        const localChecksumBeforeDownload = await this.readStoredChecksum(filename);
+        const decision = classifySyncThreeWay({
+          baselineChecksum: localInfo.checksum,
+          localChecksum: localChecksumBeforeDownload,
+          remoteChecksum: remoteInfo.checksum,
+        });
+
+        if (decision === 'converged') {
+          updatedFiles[filename] = remoteInfo;
+          localManifestChanged = true;
+          skipped.push(filename);
+          continue;
+        }
+
+        if (decision === 'remote-only') {
+          const replaced = await this.replaceRemoteJsonIfLocalUnchanged(
+            filename,
+            localChecksumBeforeDownload,
+            remoteInfo,
+            remoteFiles,
+          );
+          if (replaced) {
+            updatedFiles[filename] = remoteInfo;
+            downloaded.push(filename);
+            continue;
+          }
+        }
+
+        // 실제 동시 변경은 로컬 수정 시각을 알 수 없으므로 latest 정책에서도 자동 덮어쓰지 않는다.
+        conflicts.push({
+          filename,
+          localModified: 'content-mismatch',
+          remoteModified: remoteInfo.lastModified,
+          localDeviceName: this.deviceName,
+          remoteDeviceName: remoteManifest.deviceName,
+          kind: 'json',
+          baselineChecksum: localInfo.checksum,
+          localChecksum: localChecksumBeforeDownload,
+          remoteChecksum: remoteInfo.checksum,
+        });
+        continue;
+      }
+
+      // 항목 병합 파일은 기존 도메인 병합 규칙으로 처리한다.
       if (localInfo && localInfo.checksum !== remoteInfo.checksum) {
         if (filename === SYNC_FILE_KEYS.curriculumProgress) {
           const localChecksumBeforeDownload = await this.readStoredChecksum(filename);
@@ -1044,6 +1251,10 @@ export class SyncFromCloud {
                   remoteModified: remoteInfo.lastModified,
                   localDeviceName: this.deviceName,
                   remoteDeviceName: remoteManifest.deviceName,
+                  kind: 'json',
+                  baselineChecksum: localInfo.checksum,
+                  localChecksum: await this.readStoredChecksum(filename),
+                  remoteChecksum: remoteInfo.checksum,
                 });
                 console.log(
                   `[SyncFromCloud]   ${filename}: ⛔ CONFLICT (다운로드 중 로컬 내용 변경)`,
@@ -1072,7 +1283,10 @@ export class SyncFromCloud {
         // 판정은 파일별 uploadedBy 우선 — 매니페스트 최상위 deviceId는 "마지막으로
         // 매니페스트를 쓴 기기"라 다른 파일을 올린 기기로 찍혀 있을 수 있다.
         // uploadedBy 부재(구버전 항목)면 기존 deviceId 폴백 — 스킵은 데이터 무변경이라 안전 방향.
-        if ((remoteInfo.uploadedBy ?? remoteManifest.deviceId) === this.deviceId) {
+        if (
+          !isRecordMergeFile &&
+          (remoteInfo.uploadedBy ?? remoteManifest.deviceId) === this.deviceId
+        ) {
           console.log(`[SyncFromCloud]   ${filename}: ⚠️ SKIP (내가 올린 데이터)`);
           skipped.push(filename);
           continue;
@@ -1081,77 +1295,80 @@ export class SyncFromCloud {
         // conflictPolicy에 따라 처리
         // student-records는 항상 record-level merge (데이터 손실 방지)
         if (filename === 'student-records') {
-          const driveFile = remoteFiles.find((f) => f.name === `${filename}.json`);
-          if (driveFile) {
-            const content = await this.drivePort.downloadSyncFile(driveFile.id);
-            const remoteData = JSON.parse(content) as StudentRecordsData;
-            const merged = await mergeAndWriteLocked(this.storage, filename, remoteData, (local) =>
-              mergeStudentRecords(local, remoteData, currentTerm, lastClosedTerm, lastClosedAt),
-            );
-            updatedFiles[filename] = await this.convergeMergedFile(
-              folder.id,
-              filename,
-              merged,
-              remoteInfo,
-            );
-            downloaded.push(filename);
-          }
+          const remoteData = (await this.downloadVerifiedJson(
+            filename,
+            remoteInfo,
+            remoteFiles,
+            true,
+          )) as StudentRecordsData;
+          const merged = await mergeAndWriteLocked(this.storage, filename, remoteData, (local) =>
+            mergeStudentRecords(local, remoteData, currentTerm, lastClosedTerm, lastClosedAt),
+          );
+          updatedFiles[filename] = await this.convergeMergedFile(
+            folder.id,
+            filename,
+            merged,
+            remoteInfo,
+          );
+          downloaded.push(filename);
           continue;
         }
 
         // attendance도 항상 record-level merge — 폰·PC가 서로 다른 반/날짜를
         // 같은 파일에 쓰는 도메인이라 통째 덮어쓰기가 곧 출결 유실이다.
         if (filename === 'attendance') {
-          const driveFile = remoteFiles.find((f) => f.name === `${filename}.json`);
-          if (driveFile) {
-            const content = await this.drivePort.downloadSyncFile(driveFile.id);
-            const remoteData = JSON.parse(content) as AttendanceData;
-            const merged = await mergeAndWriteLocked(this.storage, filename, remoteData, (local) =>
-              mergeAttendance(
-                local,
-                remoteData,
-                remoteIsNewer,
-                currentTerm,
-                lastClosedTerm,
-                lastClosedAt,
-              ),
-            );
-            updatedFiles[filename] = await this.convergeMergedFile(
-              folder.id,
-              filename,
-              merged,
-              remoteInfo,
-            );
-            downloaded.push(filename);
-          }
+          const remoteData = (await this.downloadVerifiedJson(
+            filename,
+            remoteInfo,
+            remoteFiles,
+            true,
+          )) as AttendanceData;
+          const merged = await mergeAndWriteLocked(this.storage, filename, remoteData, (local) =>
+            mergeAttendance(
+              local,
+              remoteData,
+              remoteIsNewer,
+              currentTerm,
+              lastClosedTerm,
+              lastClosedAt,
+            ),
+          );
+          updatedFiles[filename] = await this.convergeMergedFile(
+            folder.id,
+            filename,
+            merged,
+            remoteInfo,
+          );
+          downloaded.push(filename);
           continue;
         }
 
         // observations(수업 기록)도 항상 record-level merge — 파일 단위 latest 교체가
         // 구/빈 파일 승리 시 학생별 수업 메모 전체를 지웠다(2026-07-13 유실 신고).
         if (filename === 'observations') {
-          const driveFile = remoteFiles.find((f) => f.name === `${filename}.json`);
-          if (driveFile) {
-            const content = await this.drivePort.downloadSyncFile(driveFile.id);
-            const remoteData = JSON.parse(content) as ObservationData;
-            const merged = await mergeAndWriteLocked(this.storage, filename, remoteData, (local) =>
-              mergeObservations(
-                local,
-                remoteData,
-                remoteIsNewer,
-                currentTerm,
-                lastClosedTerm,
-                lastClosedAt,
-              ),
-            );
-            updatedFiles[filename] = await this.convergeMergedFile(
-              folder.id,
-              filename,
-              merged,
-              remoteInfo,
-            );
-            downloaded.push(filename);
-          }
+          const remoteData = (await this.downloadVerifiedJson(
+            filename,
+            remoteInfo,
+            remoteFiles,
+            true,
+          )) as ObservationData;
+          const merged = await mergeAndWriteLocked(this.storage, filename, remoteData, (local) =>
+            mergeObservations(
+              local,
+              remoteData,
+              remoteIsNewer,
+              currentTerm,
+              lastClosedTerm,
+              lastClosedAt,
+            ),
+          );
+          updatedFiles[filename] = await this.convergeMergedFile(
+            folder.id,
+            filename,
+            merged,
+            remoteInfo,
+          );
+          downloaded.push(filename);
           continue;
         }
 
@@ -1181,6 +1398,10 @@ export class SyncFromCloud {
           remoteModified: remoteInfo.lastModified,
           localDeviceName: this.deviceName,
           remoteDeviceName: remoteManifest.deviceName,
+          kind: 'json',
+          baselineChecksum: localInfo.checksum,
+          localChecksum: await this.readStoredChecksum(filename),
+          remoteChecksum: remoteInfo.checksum,
         });
         console.log(`[SyncFromCloud]   ${filename}: 🔶 CONFLICT (ask 정책)`);
         continue;
@@ -1207,6 +1428,10 @@ export class SyncFromCloud {
               remoteModified: remoteInfo.lastModified,
               localDeviceName: this.deviceName,
               remoteDeviceName: remoteManifest.deviceName,
+              kind: 'json',
+              baselineChecksum: null,
+              localChecksum: await computeSyncChecksum(JSON.stringify(localData)),
+              remoteChecksum: remoteInfo.checksum,
             });
             console.log(
               `[SyncFromCloud]   ${filename}: 🔶 CONFLICT (manifest 미등록 + 로컬 데이터 존재)`,
@@ -1216,6 +1441,10 @@ export class SyncFromCloud {
         }
 
         const content = await this.drivePort.downloadSyncFile(driveFile.id);
+        const downloadedChecksum = await computeSyncChecksum(content);
+        if (downloadedChecksum !== remoteInfo.checksum) {
+          throw new Error(`드라이브 ${filename} 파일이 동기화 중 다시 변경되었습니다.`);
+        }
         let downloadedFileInfo = remoteInfo;
         if (filename === 'student-records') {
           const remoteData = JSON.parse(content) as StudentRecordsData;
@@ -1269,7 +1498,26 @@ export class SyncFromCloud {
           );
         } else {
           const parsed = JSON.parse(content) as unknown;
-          await this.writeReplacedFile(filename, parsed);
+          const replaced = await this.replaceParsedRemoteJsonIfLocalUnchanged(
+            filename,
+            null,
+            remoteInfo.checksum,
+            parsed,
+          );
+          if (!replaced) {
+            conflicts.push({
+              filename,
+              localModified: 'content-mismatch',
+              remoteModified: remoteInfo.lastModified,
+              localDeviceName: this.deviceName,
+              remoteDeviceName: remoteManifest.deviceName,
+              kind: 'json',
+              baselineChecksum: null,
+              localChecksum: await this.readStoredChecksum(filename),
+              remoteChecksum: remoteInfo.checksum,
+            });
+            continue;
+          }
         }
         updatedFiles[filename] = downloadedFileInfo;
         downloaded.push(filename);
@@ -1284,12 +1532,13 @@ export class SyncFromCloud {
     if (this.getDynamicSyncFiles) {
       // 동적 파일은 로컬 enumeration이 없을 수 있으므로 리모트 매니페스트의 키도 합집합 처리.
       const localDynamic = await this.getDynamicSyncFiles();
-      const remoteDynamic = Object.keys(remoteManifest.files).filter(
-        (f) => f.startsWith('note-body--') || f.startsWith('obs-attachments/'),
+      const remoteDynamic = Object.keys(remoteManifest.files).filter((f) =>
+        f.startsWith('note-body--'),
       );
       const allDynamic = Array.from(new Set([...localDynamic, ...remoteDynamic]));
 
       for (const filename of allDynamic) {
+        if (updatedDeletions[filename]) continue;
         const remoteInfo = remoteManifest.files[filename];
         const localInfo = localManifest?.files[filename];
 
@@ -1298,19 +1547,65 @@ export class SyncFromCloud {
           continue;
         }
 
-        // 체크섬 동일 → 스킵. 단 로컬 파일 부재 시 장부 오염 치유(정적 루프와 동일).
-        if (localInfo && localInfo.checksum === remoteInfo.checksum) {
+        // 동적 파일은 장부에 기준이 있는데 실제 파일이 없으면 사용자가 삭제한 상태다.
+        // 여기서 되살리지 않고 다음 push가 원격 파일과 양쪽 장부를 함께 정리한다.
+        if (localInfo) {
           const localData = await this.storage.read<unknown>(filename);
-          if (localData !== null) {
+          if (localData === null) {
+            skipped.push(filename);
+            console.log(`[SyncFromCloud]   ${filename}: SKIP (로컬 삭제 전파 대기)`);
+            continue;
+          }
+          if (localInfo.checksum === remoteInfo.checksum) {
             skipped.push(filename);
             continue;
           }
-          console.log(
-            `[SyncFromCloud]   ${filename}: 🩹 장부엔 "받았음"인데 로컬 파일 없음 → 다운로드로 치유 (동적)`,
-          );
         }
 
-        // 양쪽 다 변경됨 → 충돌 처리
+        if (localInfo && localInfo.checksum !== remoteInfo.checksum) {
+          const localChecksumBeforeDownload = await this.readStoredChecksum(filename);
+          const decision = classifySyncThreeWay({
+            baselineChecksum: localInfo.checksum,
+            localChecksum: localChecksumBeforeDownload,
+            remoteChecksum: remoteInfo.checksum,
+          });
+
+          if (decision === 'converged') {
+            updatedFiles[filename] = remoteInfo;
+            localManifestChanged = true;
+            skipped.push(filename);
+            continue;
+          }
+
+          if (decision === 'remote-only') {
+            const replaced = await this.replaceRemoteJsonIfLocalUnchanged(
+              filename,
+              localChecksumBeforeDownload,
+              remoteInfo,
+              remoteFiles,
+            );
+            if (replaced) {
+              updatedFiles[filename] = remoteInfo;
+              downloaded.push(filename);
+              continue;
+            }
+          }
+
+          conflicts.push({
+            filename,
+            localModified: 'content-mismatch',
+            remoteModified: remoteInfo.lastModified,
+            localDeviceName: this.deviceName,
+            remoteDeviceName: remoteManifest.deviceName,
+            kind: 'json',
+            baselineChecksum: localInfo.checksum,
+            localChecksum: localChecksumBeforeDownload,
+            remoteChecksum: remoteInfo.checksum,
+          });
+          continue;
+        }
+
+        // 위 공통 3-way에서 처리되지 않은 레거시 분기.
         if (localInfo && localInfo.checksum !== remoteInfo.checksum) {
           // 파일별 uploadedBy 우선, 부재 시 매니페스트 deviceId 폴백 (정적 루프와 동일)
           if ((remoteInfo.uploadedBy ?? remoteManifest.deviceId) === this.deviceId) {
@@ -1342,6 +1637,10 @@ export class SyncFromCloud {
             remoteModified: remoteInfo.lastModified,
             localDeviceName: this.deviceName,
             remoteDeviceName: remoteManifest.deviceName,
+            kind: 'json',
+            baselineChecksum: localInfo.checksum,
+            localChecksum: await this.readStoredChecksum(filename),
+            remoteChecksum: remoteInfo.checksum,
           });
           continue;
         }
@@ -1358,6 +1657,10 @@ export class SyncFromCloud {
               remoteModified: remoteInfo.lastModified,
               localDeviceName: this.deviceName,
               remoteDeviceName: remoteManifest.deviceName,
+              kind: 'json',
+              baselineChecksum: null,
+              localChecksum: await computeSyncChecksum(JSON.stringify(localData)),
+              remoteChecksum: remoteInfo.checksum,
             });
             console.log(
               `[SyncFromCloud]   ${filename}: 🔶 CONFLICT (동적, manifest 미등록 + 로컬 존재)`,
@@ -1365,8 +1668,27 @@ export class SyncFromCloud {
             continue;
           }
 
-          const content = await this.drivePort.downloadSyncFile(driveFile.id);
-          await this.storage.write(filename, JSON.parse(content) as unknown);
+          const parsed = await this.downloadVerifiedJson(filename, remoteInfo, remoteFiles);
+          const replaced = await this.replaceParsedRemoteJsonIfLocalUnchanged(
+            filename,
+            null,
+            remoteInfo.checksum,
+            parsed,
+          );
+          if (!replaced) {
+            conflicts.push({
+              filename,
+              localModified: 'content-mismatch',
+              remoteModified: remoteInfo.lastModified,
+              localDeviceName: this.deviceName,
+              remoteDeviceName: remoteManifest.deviceName,
+              kind: 'json',
+              baselineChecksum: null,
+              localChecksum: await this.readStoredChecksum(filename),
+              remoteChecksum: remoteInfo.checksum,
+            });
+            continue;
+          }
           updatedFiles[filename] = remoteInfo;
           downloaded.push(filename);
           console.log(`[SyncFromCloud]   ${filename}: ✅ DOWNLOAD (동적 파일)`);
@@ -1380,12 +1702,17 @@ export class SyncFromCloud {
     if (this.getBinaryDynamicSyncFiles) {
       // 로컬 열거 + 리모트 매니페스트의 obs-attachments/ 키를 합집합 처리
       const localBinaryKeys = await this.getBinaryDynamicSyncFiles();
-      const remoteBinaryKeys = Object.keys(remoteManifest.files).filter((f) =>
-        f.startsWith('obs-attachments/'),
+      const remoteBinaryKeys = Object.keys(remoteManifest.files).filter(
+        (f) => f.startsWith('obs-attachments/') || f.startsWith('student-photos/'),
       );
       const allBinaryKeys = Array.from(new Set([...localBinaryKeys, ...remoteBinaryKeys]));
 
       for (const relPath of allBinaryKeys) {
+        if (isPendingRestoration(relPath)) {
+          skipped.push(relPath);
+          continue;
+        }
+        if (updatedDeletions[relPath]) continue;
         const remoteInfo = remoteManifest.files[relPath];
         const localInfo = localManifest?.files[relPath];
 
@@ -1394,31 +1721,50 @@ export class SyncFromCloud {
           continue;
         }
 
-        // 체크섬 동일 → 스킵. 단 로컬 바이너리 부재 시 장부 오염 치유(정적 루프와 동일).
-        let healDownload = false;
-        if (localInfo && localInfo.checksum === remoteInfo.checksum) {
-          const existing = await this.storage.readBinary(relPath);
-          if (existing !== null) {
-            skipped.push(relPath);
-            continue;
-          }
-          healDownload = true;
-          console.log(
-            `[SyncFromCloud]   ${relPath}: 🩹 장부엔 "받았음"인데 로컬 바이너리 없음 → 다운로드로 치유`,
-          );
+        const localBytesBeforeDownload = await this.storage.readBinary(relPath);
+        const localChecksumBeforeDownload = await computeBinarySyncChecksum(
+          relPath,
+          localBytesBeforeDownload,
+        );
+        const decision =
+          localInfo && localBytesBeforeDownload === null
+            ? 'local-only'
+            : classifySyncThreeWay({
+                baselineChecksum: localInfo?.checksum ?? null,
+                localChecksum: localChecksumBeforeDownload,
+                remoteChecksum: remoteInfo.checksum,
+              });
+
+        if (decision === 'unchanged' || decision === 'converged' || decision === 'recovered') {
+          if (decision !== 'unchanged') updatedFiles[relPath] = remoteInfo;
+          skipped.push(relPath);
+          continue;
         }
 
-        // 내가 올린 파일이면 스킵 — 파일별 uploadedBy 우선, 부재 시 매니페스트 deviceId 폴백.
-        // 치유 다운로드는 예외: 내가 올렸던 파일이라도 로컬에 없으면 받아와야 한다.
-        if (!healDownload && (remoteInfo.uploadedBy ?? remoteManifest.deviceId) === this.deviceId) {
+        if (decision === 'local-only') {
           skipped.push(relPath);
+          continue;
+        }
+
+        if (decision === 'concurrent' || decision === 'unknown-concurrent') {
+          conflicts.push({
+            filename: relPath,
+            localModified: 'content-mismatch',
+            remoteModified: remoteInfo.lastModified,
+            localDeviceName: this.deviceName,
+            remoteDeviceName: remoteManifest.deviceName,
+            kind: 'binary',
+            baselineChecksum: localInfo?.checksum ?? null,
+            localChecksum: localChecksumBeforeDownload,
+            remoteChecksum: remoteInfo.checksum,
+          });
           continue;
         }
 
         // 충돌(양쪽 다 변경) — 바이너리는 append-only id 기반이라 덮어쓰기 충돌 없음.
         // latest 정책: 무조건 다운로드(리모트 우선). ask 정책: 마찬가지로 다운로드(바이너리 병합 불가).
         // Drive 파일명: obs-attachments/x.png → obs-attachments__x.png.json
-        const driveFilename = `${relPath.replace(/\//g, '__')}.json`;
+        const driveFilename = remoteInfo.driveFilename ?? `${relPath.replace(/\//g, '__')}.json`;
         const driveFile = remoteFiles.find((f) => f.name === driveFilename);
         if (!driveFile) {
           skipped.push(relPath);
@@ -1427,6 +1773,10 @@ export class SyncFromCloud {
         }
 
         const content = await this.drivePort.downloadSyncFile(driveFile.id);
+        const downloadedChecksum = await computeSyncChecksum(content);
+        if (downloadedChecksum !== remoteInfo.checksum) {
+          throw new Error(`드라이브 ${relPath} 파일이 동기화 중 다시 변경되었습니다.`);
+        }
         let wrapper: { __binaryBase64?: string; __relPath?: string };
         try {
           wrapper = JSON.parse(content) as { __binaryBase64?: string; __relPath?: string };
@@ -1434,6 +1784,10 @@ export class SyncFromCloud {
           console.warn(`[SyncFromCloud]   ${relPath}: SKIP (JSON 파싱 실패)`);
           skipped.push(relPath);
           continue;
+        }
+
+        if (wrapper.__relPath !== relPath) {
+          throw new Error(`드라이브 ${relPath} 파일의 내부 경로가 일치하지 않습니다.`);
         }
 
         if (typeof wrapper.__binaryBase64 !== 'string') {
@@ -1444,7 +1798,32 @@ export class SyncFromCloud {
 
         // base64 디코드 → writeBinary (대용량 안전 청크 디코드)
         const bytes = base64ToUint8(wrapper.__binaryBase64);
-        await this.storage.writeBinary(relPath, bytes);
+        let written = false;
+        await withFileLock(relPath, async () => {
+          const currentBytes = await this.storage.readBinary(relPath);
+          const currentChecksum = await computeBinarySyncChecksum(relPath, currentBytes);
+          if (currentChecksum !== localChecksumBeforeDownload) return;
+          if (this.storage.replaceBinaryIfUnchanged) {
+            written = await this.storage.replaceBinaryIfUnchanged(relPath, currentBytes, bytes);
+          } else {
+            await this.storage.writeBinary(relPath, bytes);
+            written = true;
+          }
+        });
+        if (!written) {
+          conflicts.push({
+            filename: relPath,
+            localModified: 'content-mismatch',
+            remoteModified: remoteInfo.lastModified,
+            localDeviceName: this.deviceName,
+            remoteDeviceName: remoteManifest.deviceName,
+            kind: 'binary',
+            baselineChecksum: localInfo?.checksum ?? null,
+            localChecksum: localChecksumBeforeDownload,
+            remoteChecksum: remoteInfo.checksum,
+          });
+          continue;
+        }
         updatedFiles[relPath] = remoteInfo;
         downloaded.push(relPath);
         console.log(`[SyncFromCloud]   ${relPath}: ✅ DOWNLOAD binary`);
@@ -1549,11 +1928,13 @@ export class SyncFromCloud {
     // 로컬 매니페스트 업데이트
     if (downloaded.length > 0 || localManifestChanged) {
       const newLocalManifest: DriveSyncManifest = {
-        version: 1,
+        version: Math.max(2, localManifest?.version ?? remoteManifest.version),
         lastSyncedAt: new Date().toISOString(),
         deviceId: this.deviceId,
         deviceName: this.deviceName,
         files: updatedFiles,
+        deletions: updatedDeletions,
+        restorations: updatedRestorations,
       };
       await this.syncRepo.saveLocalManifest(newLocalManifest);
     }

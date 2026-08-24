@@ -129,11 +129,13 @@ export class ImportSettingsFromCloud {
         },
       };
       const nextManifest: DriveSyncManifest = {
-        version: localManifest?.version ?? manifest.version ?? 1,
+        version: Math.max(2, localManifest?.version ?? manifest.version ?? 1),
         lastSyncedAt: localManifest?.lastSyncedAt ?? nowIso,
         deviceId: localManifest?.deviceId ?? '',
         deviceName: localManifest?.deviceName ?? '',
         files: nextFiles,
+        deletions: localManifest?.deletions ?? manifest.deletions,
+        restorations: localManifest?.restorations,
       };
       await this.syncRepo.saveLocalManifest(nextManifest);
     } catch (err) {

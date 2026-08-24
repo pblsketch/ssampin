@@ -28,6 +28,7 @@ import type { StudentRecordsData } from '@domain/entities/StudentRecord';
 import { parseTerm } from '@domain/rules/academicCalendar';
 import { parseArchiveId } from '@domain/rules/archiveRules';
 import { withFileLock } from '@usecases/shared/fileWriteLock';
+import { withDataOperationLock } from '@usecases/shared/dataOperationMutex';
 
 /* ─── 전환 대상 파일 정의(계획 §4 S2.4 "아카이브 대상") ─────────────────── */
 
@@ -420,6 +421,13 @@ export async function executeYearTransition(
   deps: YearTransitionDeps,
   options: ExecuteYearTransitionOptions,
 ): Promise<YearTransitionResult> {
+  return withDataOperationLock(() => executeYearTransitionUnlocked(deps, options));
+}
+
+async function executeYearTransitionUnlocked(
+  deps: YearTransitionDeps,
+  options: ExecuteYearTransitionOptions,
+): Promise<YearTransitionResult> {
   const { storage, gateway } = deps;
   const closingTerm = options.closingTerm;
   const derivedNextTerm = deriveNextTerm(closingTerm);
@@ -659,6 +667,13 @@ export async function executeYearTransition(
 export async function revertYearTransition(
   deps: YearTransitionDeps,
   /** F10a — 보관함 디렉토리 이름(회차 포함, 예 '2026-1-2'). 학기 라벨이면 1회차. */
+  closingTerm: string,
+): Promise<RevertResult> {
+  return withDataOperationLock(() => revertYearTransitionUnlocked(deps, closingTerm));
+}
+
+async function revertYearTransitionUnlocked(
+  deps: YearTransitionDeps,
   closingTerm: string,
 ): Promise<RevertResult> {
   const { storage, gateway } = deps;

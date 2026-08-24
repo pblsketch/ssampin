@@ -47,6 +47,20 @@ export class IndexedDBStorageAdapter implements IStoragePort {
     await db.put(DATA_STORE, data, filename);
   }
 
+  async replaceIfUnchanged<T>(filename: string, expected: T | null, next: T): Promise<boolean> {
+    const db = await getDB();
+    const tx = db.transaction(DATA_STORE, 'readwrite');
+    const raw = await tx.store.get(filename);
+    const current = (raw as T | undefined) ?? null;
+    if (JSON.stringify(current) !== JSON.stringify(expected)) {
+      await tx.done;
+      return false;
+    }
+    await tx.store.put(next, filename);
+    await tx.done;
+    return true;
+  }
+
   async remove(filename: string): Promise<void> {
     const db = await getDB();
     await db.delete(DATA_STORE, filename);
@@ -69,6 +83,25 @@ export class IndexedDBStorageAdapter implements IStoragePort {
     const db = await getDB();
     // IndexedDB 는 Uint8Array 를 그대로 저장 가능
     await db.put(FORM_BIN_STORE, bytes, relPath);
+  }
+
+  async replaceBinaryIfUnchanged(
+    relPath: string,
+    expected: Uint8Array | null,
+    next: Uint8Array,
+  ): Promise<boolean> {
+    const db = await getDB();
+    const tx = db.transaction(FORM_BIN_STORE, 'readwrite');
+    const raw = await tx.store.get(relPath);
+    const current =
+      raw instanceof Uint8Array ? raw : raw instanceof ArrayBuffer ? new Uint8Array(raw) : null;
+    if (!sameBytes(current, expected)) {
+      await tx.done;
+      return false;
+    }
+    await tx.store.put(next, relPath);
+    await tx.done;
+    return true;
   }
 
   async removeBinary(relPath: string): Promise<void> {
@@ -99,6 +132,12 @@ export class IndexedDBStorageAdapter implements IStoragePort {
       return [];
     }
   }
+}
+
+function sameBytes(left: Uint8Array | null, right: Uint8Array | null): boolean {
+  if (left === null || right === null) return left === right;
+  if (left.byteLength !== right.byteLength) return false;
+  return left.every((byte, index) => byte === right[index]);
 }
 
 /** Auth 전용 스토어 읽기/쓰기 */

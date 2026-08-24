@@ -4,6 +4,9 @@ import type { IDriveSyncRepository } from '@domain/repositories/IDriveSyncReposi
 import type { DriveSyncConflict, DriveSyncFileInfo } from '@domain/entities/DriveSyncState';
 import { computeSyncChecksum } from './SyncToCloud';
 import { preserveNewerTermGuard, type TermGuardSnapshot } from './SyncFromCloud';
+import { base64ToUint8, uint8ToBase64 } from './binaryBase64';
+import { withFileLock } from '@usecases/shared/fileWriteLock';
+import { withDataOperationLock } from '@usecases/shared/dataOperationMutex';
 
 export class StaleSyncConflictError extends Error {
   constructor() {
@@ -24,18 +27,52 @@ export class ResolveSyncConflict {
     private readonly currentDeviceName = '현재 기기',
   ) {}
 
+  private async readLocalChecksum(conflict: DriveSyncConflict): Promise<string | null> {
+    if (conflict.kind === 'binary') {
+      const bytes = await this.storage.readBinary(conflict.filename);
+      if (bytes === null) return null;
+      return computeSyncChecksum(
+        JSON.stringify({
+          __binaryBase64: uint8ToBase64(bytes),
+          __relPath: conflict.filename,
+        }),
+      );
+    }
+    const data = await this.storage.read<unknown>(conflict.filename);
+    return data === null ? null : computeSyncChecksum(JSON.stringify(data));
+  }
+
+  private driveFilename(conflict: DriveSyncConflict, info?: DriveSyncFileInfo): string {
+    return (
+      info?.driveFilename ??
+      (conflict.kind === 'binary'
+        ? `${conflict.filename.replace(/\//g, '__')}.json`
+        : `${conflict.filename}.json`)
+    );
+  }
+
   private async updateRemoteManifestSafely(
     folderId: string,
     deviceId: string,
     deviceName: string,
     filename: string,
+    expectedPreviousInfo: DriveSyncFileInfo,
     fileInfo: DriveSyncFileInfo,
   ): Promise<void> {
     for (let attempt = 0; attempt < 3; attempt++) {
       const latest = await this.drivePort.getSyncManifest(folderId);
       if (!latest) throw new Error('클라우드 동기화 장부를 다시 확인하지 못했습니다.');
+      const latestInfo = latest.files[filename];
+      if (
+        !latestInfo ||
+        latestInfo.lastModified !== expectedPreviousInfo.lastModified ||
+        latestInfo.checksum !== expectedPreviousInfo.checksum
+      ) {
+        throw new StaleSyncConflictError();
+      }
       const next = {
         ...latest,
+        version: Math.max(2, latest.version),
         deviceId,
         deviceName,
         lastSyncedAt: new Date().toISOString(),
@@ -47,68 +84,151 @@ export class ResolveSyncConflict {
   }
 
   async execute(conflict: DriveSyncConflict, resolution: 'local' | 'remote'): Promise<void> {
+    return withDataOperationLock(() => this.executeUnlocked(conflict, resolution));
+  }
+
+  private async executeUnlocked(
+    conflict: DriveSyncConflict,
+    resolution: 'local' | 'remote',
+  ): Promise<void> {
+    const expectedLocalChecksum =
+      conflict.localChecksum !== undefined
+        ? conflict.localChecksum
+        : await this.readLocalChecksum(conflict);
     const folder = await this.drivePort.getOrCreateSyncFolder();
-    const remoteFiles = await this.drivePort.listSyncFiles(folder.id);
-    const driveFile = remoteFiles.find((f) => f.name === `${conflict.filename}.json`);
     const localManifest = await this.syncRepo.getLocalManifest();
     const remoteManifest = await this.drivePort.getSyncManifest(folder.id);
 
     if (!remoteManifest) throw new Error('클라우드 동기화 장부가 없어 충돌을 해결할 수 없습니다.');
+    const remoteFileInfo = remoteManifest.files[conflict.filename];
+    const driveFilename = this.driveFilename(conflict, remoteFileInfo);
+    const remoteFiles = await this.drivePort.listSyncFiles(folder.id);
+    const driveFile = remoteFiles.find((f) => f.name === driveFilename);
     const manifest = localManifest ?? {
       version: remoteManifest.version,
       lastSyncedAt: new Date(0).toISOString(),
       deviceId: this.currentDeviceId,
       deviceName: this.currentDeviceName || conflict.localDeviceName,
       files: {},
+      deletions: remoteManifest.deletions,
+      restorations: undefined,
     };
 
     if (resolution === 'local') {
-      // 충돌 화면을 띄운 뒤 다른 기기가 같은 파일을 갱신했다면 낡은 선택으로 덮어쓰지 않는다.
-      const preUploadManifest = await this.drivePort.getSyncManifest(folder.id);
-      const currentRemoteInfo = preUploadManifest?.files[conflict.filename];
-      if (!preUploadManifest || currentRemoteInfo?.lastModified !== conflict.remoteModified) {
-        throw new StaleSyncConflictError();
-      }
+      await withFileLock(conflict.filename, async () => {
+        if ((await this.readLocalChecksum(conflict)) !== expectedLocalChecksum) {
+          throw new StaleSyncConflictError();
+        }
+        const preUploadManifest = await this.drivePort.getSyncManifest(folder.id);
+        const currentRemoteInfo = preUploadManifest?.files[conflict.filename];
+        if (
+          !preUploadManifest ||
+          currentRemoteInfo?.lastModified !== conflict.remoteModified ||
+          (conflict.remoteChecksum !== undefined &&
+            currentRemoteInfo.checksum !== conflict.remoteChecksum)
+        ) {
+          throw new StaleSyncConflictError();
+        }
 
-      const data = await this.storage.read<unknown>(conflict.filename);
-      if (data === null) throw new Error(`이 기기의 ${conflict.filename} 데이터가 없습니다.`);
+        let content: string;
+        if (conflict.kind === 'binary') {
+          const bytes = await this.storage.readBinary(conflict.filename);
+          if (bytes === null) {
+            throw new Error(`이 기기의 ${conflict.filename} 데이터가 없습니다.`);
+          }
+          content = JSON.stringify({
+            __binaryBase64: uint8ToBase64(bytes),
+            __relPath: conflict.filename,
+          });
+        } else {
+          const data = await this.storage.read<unknown>(conflict.filename);
+          if (data === null) {
+            throw new Error(`이 기기의 ${conflict.filename} 데이터가 없습니다.`);
+          }
+          content = JSON.stringify(data);
+        }
 
-      const content = JSON.stringify(data);
-      const checksum = await computeSyncChecksum(content);
-      const result = await this.drivePort.uploadSyncFileIfUnchanged(
-        folder.id,
-        `${conflict.filename}.json`,
-        content,
-        conflict.remoteModified,
-      );
-      if (!result) throw new StaleSyncConflictError();
-      const now = new Date().toISOString();
-      const fileInfo: DriveSyncFileInfo = {
-        lastModified: result.modifiedTime,
-        checksum,
-        size: new TextEncoder().encode(content).length,
-        uploadedBy: manifest.deviceId,
-      };
-      await this.updateRemoteManifestSafely(
-        folder.id,
-        manifest.deviceId,
-        manifest.deviceName,
-        conflict.filename,
-        fileInfo,
-      );
-      await this.syncRepo.saveLocalManifest({
-        ...manifest,
-        lastSyncedAt: now,
-        files: { ...manifest.files, [conflict.filename]: fileInfo },
+        const checksum = await computeSyncChecksum(content);
+        if (checksum !== expectedLocalChecksum) throw new StaleSyncConflictError();
+        const immutableStudentPhoto =
+          conflict.kind === 'binary' && conflict.filename.startsWith('student-photos/');
+        const baseDriveFilename = this.driveFilename(conflict);
+        const generation = `${checksum}-${this.currentDeviceId}`.replace(/[^a-zA-Z0-9_-]/g, '_');
+        const resolvedDriveFilename = immutableStudentPhoto
+          ? `${baseDriveFilename}.rev-${generation}`
+          : this.driveFilename(conflict, currentRemoteInfo);
+        let result: { fileId: string; modifiedTime: string } | null;
+        const existingGeneration = immutableStudentPhoto
+          ? remoteFiles.find((file) => file.name === resolvedDriveFilename)
+          : undefined;
+        if (existingGeneration) {
+          const existingContent = await this.drivePort.downloadSyncFile(existingGeneration.id);
+          if ((await computeSyncChecksum(existingContent)) !== checksum) {
+            throw new StaleSyncConflictError();
+          }
+          result = {
+            fileId: existingGeneration.id,
+            modifiedTime: existingGeneration.modifiedTime,
+          };
+        } else if (immutableStudentPhoto) {
+          result = await this.drivePort.createSyncFileIfMissing(
+            folder.id,
+            resolvedDriveFilename,
+            content,
+          );
+        } else {
+          result = await this.drivePort.uploadSyncFileIfUnchanged(
+            folder.id,
+            resolvedDriveFilename,
+            content,
+            conflict.remoteModified,
+          );
+        }
+        if (!result) throw new StaleSyncConflictError();
+        const now = new Date().toISOString();
+        const fileInfo: DriveSyncFileInfo = {
+          lastModified: result.modifiedTime,
+          checksum,
+          size: new TextEncoder().encode(content).length,
+          uploadedBy: manifest.deviceId,
+          ...(resolvedDriveFilename !== baseDriveFilename
+            ? { driveFilename: resolvedDriveFilename }
+            : {}),
+        };
+        const uploadedSnapshotManifest = {
+          ...manifest,
+          version: Math.max(2, manifest.version),
+          lastSyncedAt: now,
+          files: { ...manifest.files, [conflict.filename]: fileInfo },
+        };
+        try {
+          await this.updateRemoteManifestSafely(
+            folder.id,
+            manifest.deviceId,
+            manifest.deviceName,
+            conflict.filename,
+            currentRemoteInfo,
+            fileInfo,
+          );
+        } catch (err) {
+          await this.syncRepo.saveLocalManifest(uploadedSnapshotManifest);
+          throw err;
+        }
+        await this.syncRepo.saveLocalManifest(uploadedSnapshotManifest);
       });
       return;
     }
 
     if (!driveFile)
       throw new Error(`클라우드에서 ${conflict.filename}.json 파일을 찾지 못했습니다.`);
-    const remoteFileInfo = remoteManifest.files[conflict.filename];
     if (!remoteFileInfo) {
       throw new Error(`클라우드 장부에 ${conflict.filename} 항목이 없습니다.`);
+    }
+    if (
+      remoteFileInfo.lastModified !== conflict.remoteModified ||
+      (conflict.remoteChecksum !== undefined && remoteFileInfo.checksum !== conflict.remoteChecksum)
+    ) {
+      throw new StaleSyncConflictError();
     }
 
     const content = await this.drivePort.downloadSyncFile(driveFile.id);
@@ -119,7 +239,14 @@ export class ResolveSyncConflict {
 
     const parsed = JSON.parse(content) as unknown;
     let dataToWrite = parsed;
-    if (conflict.filename === 'settings') {
+    let binaryToWrite: Uint8Array | null = null;
+    if (conflict.kind === 'binary') {
+      const wrapper = parsed as { __binaryBase64?: unknown; __relPath?: unknown };
+      if (typeof wrapper.__binaryBase64 !== 'string' || wrapper.__relPath !== conflict.filename) {
+        throw new Error(`클라우드 ${conflict.filename} 바이너리 형식이 올바르지 않습니다.`);
+      }
+      binaryToWrite = base64ToUint8(wrapper.__binaryBase64);
+    } else if (conflict.filename === 'settings') {
       const localSettings = await this.storage.read<TermGuardSnapshot>('settings');
       dataToWrite = preserveNewerTermGuard(parsed, localSettings ?? {});
     }
@@ -127,11 +254,11 @@ export class ResolveSyncConflict {
     const correctedContent = JSON.stringify(dataToWrite);
     const correctedChecksum = await computeSyncChecksum(correctedContent);
     let resolvedFileInfo = remoteFileInfo;
-    if (correctedChecksum !== remoteFileInfo.checksum) {
+    if (conflict.kind !== 'binary' && correctedChecksum !== remoteFileInfo.checksum) {
       // settings 학기 가드를 보존해 내용이 달라졌다면 교정본을 즉시 클라우드에도 반영한다.
       const result = await this.drivePort.uploadSyncFileIfUnchanged(
         folder.id,
-        `${conflict.filename}.json`,
+        driveFilename,
         correctedContent,
         remoteFileInfo.lastModified,
       );
@@ -147,21 +274,49 @@ export class ResolveSyncConflict {
         manifest.deviceId,
         manifest.deviceName,
         conflict.filename,
+        remoteFileInfo,
         resolvedFileInfo,
       );
     }
 
     const nextLocalManifest = {
       ...manifest,
+      version: Math.max(2, manifest.version),
       lastSyncedAt: new Date().toISOString(),
       files: { ...manifest.files, [conflict.filename]: resolvedFileInfo },
     };
 
-    // 로컬 원본을 덮기 전에 클라우드 교정/CAS와 로컬 장부 저장을 모두 끝낸다.
-    // 앞 단계가 실패하면 사용자가 선택하기 전의 로컬 데이터가 그대로 남는다.
-    // 장부 저장 뒤 데이터 쓰기가 실패하더라도 실제 내용 체크섬 검사가 다시 충돌로
-    // 올리므로, 조용한 데이터 손실 대신 복구 가능한 불일치 상태가 된다.
-    await this.syncRepo.saveLocalManifest(nextLocalManifest);
-    await this.storage.write(conflict.filename, dataToWrite);
+    // 실제 데이터를 CAS로 먼저 확정한다. 장부를 먼저 쓰면 뒤의 데이터
+    // 쓰기 실패가 장부와 실제 내용을 엇갈리게 만든다. 장부 저장만 실패하면 다음
+    // 동기화가 실제 체크섬을 기준으로 안전하게 재수렴시킨다.
+    await withFileLock(conflict.filename, async () => {
+      if (binaryToWrite !== null) {
+        const current = await this.storage.readBinary(conflict.filename);
+        const currentChecksum = await this.readLocalChecksum(conflict);
+        if (currentChecksum !== expectedLocalChecksum) throw new StaleSyncConflictError();
+        const replaced = this.storage.replaceBinaryIfUnchanged
+          ? await this.storage.replaceBinaryIfUnchanged(conflict.filename, current, binaryToWrite)
+          : await (async (): Promise<boolean> => {
+              if ((await this.readLocalChecksum(conflict)) !== expectedLocalChecksum) return false;
+              await this.storage.writeBinary(conflict.filename, binaryToWrite);
+              return true;
+            })();
+        if (!replaced) throw new StaleSyncConflictError();
+      } else {
+        const current = await this.storage.read<unknown>(conflict.filename);
+        const currentChecksum =
+          current === null ? null : await computeSyncChecksum(JSON.stringify(current));
+        if (currentChecksum !== expectedLocalChecksum) throw new StaleSyncConflictError();
+        const replaced = this.storage.replaceIfUnchanged
+          ? await this.storage.replaceIfUnchanged(conflict.filename, current, dataToWrite)
+          : await (async (): Promise<boolean> => {
+              if ((await this.readLocalChecksum(conflict)) !== expectedLocalChecksum) return false;
+              await this.storage.write(conflict.filename, dataToWrite);
+              return true;
+            })();
+        if (!replaced) throw new StaleSyncConflictError();
+      }
+      await this.syncRepo.saveLocalManifest(nextLocalManifest);
+    });
   }
 }

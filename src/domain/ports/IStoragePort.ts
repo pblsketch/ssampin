@@ -5,12 +5,20 @@
 export interface IStoragePort {
   read<T>(filename: string): Promise<T | null>;
   write<T>(filename: string, data: T): Promise<void>;
+  /** 현재 값이 expected와 같을 때만 교체한다. 동기화 다운로드의 최종 CAS에 사용. */
+  replaceIfUnchanged?<T>(filename: string, expected: T | null, next: T): Promise<boolean>;
   remove(filename: string): Promise<void>;
 
   /** 바이너리 파일 읽기. 미존재 시 null (예외 X). */
   readBinary(relPath: string): Promise<Uint8Array | null>;
   /** 바이너리 파일 쓰기. 중간 디렉토리 자동 생성, 덮어쓰기 허용. */
   writeBinary(relPath: string, bytes: Uint8Array): Promise<void>;
+  /** 현재 바이트가 expected와 같을 때만 교체한다. */
+  replaceBinaryIfUnchanged?(
+    relPath: string,
+    expected: Uint8Array | null,
+    next: Uint8Array,
+  ): Promise<boolean>;
   /** 바이너리 파일 삭제. 미존재 시 no-op. */
   removeBinary(relPath: string): Promise<void>;
   /** 디렉토리 내 파일명 목록 (디렉토리 제외, 파일명만). */
