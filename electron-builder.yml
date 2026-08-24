@@ -101,6 +101,20 @@ mac:
       # electron/main.ts 의 update:download, .github/workflows/build-macos.yml 검증 단계도 함께 되돌릴 것.
       arch:
         - universal
+  # mac 전용 제외 — cloudflared 실행 바이너리(터널 기능).
+  #
+  # cloudflared npm 패키지는 postinstall 로 "빌드 머신의 칩에 맞는" 바이너리를 내려받아
+  # node_modules/cloudflared/bin/ 에 둔다. 맥 빌드 러너가 Apple Silicon 이라 arm64 바이너리만
+  # 들어오고, 그게 x64 슬라이스에도 그대로 복사돼 universal 병합을 막는다
+  # (@electron/universal: "same in both x64 and arm64 builds ... x64ArchFiles").
+  # 억지로 통과시키면 Intel Mac 에 arm64 바이너리가 실려 터널이 조용히 깨진다.
+  #
+  # 애초에 쌤핀은 이 바이너리를 첫 사용 시 userData 로 직접 내려받는다
+  # (electron/ipc/tunnel.ts installTunnel(): "첫 사용 시, ~40MB 다운로드", userData 경로 우선).
+  # 동봉본은 이전 버전 호환 fallback 일 뿐이므로 mac 에서는 빼고 런타임 다운로드에 맡긴다.
+  # Windows 는 현행 유지(동봉) — 동작 변화 없음.
+  files:
+    - '!node_modules/cloudflared/bin/**'
   icon: build/icon.png
   category: public.app-category.education
   minimumSystemVersion: '12.0.0'
