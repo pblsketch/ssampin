@@ -8,6 +8,11 @@
     <true/>
     <key>com.apple.security.cs.allow-dyld-environment-variables</key>
     <true/>
+    <!-- ad-hoc 서명(electron-builder.yml 의 identity: '-') 안전장치.
+         hardenedRuntime 을 다시 켜면 라이브러리 검증 때문에 앱이 실행되지 않을 수 있는데,
+         이 항목이 그 실패를 막는다. hardenedRuntime: false 인 동안에는 무시된다. -->
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
     <key>com.apple.security.network.client</key>
     <true/>
     <key>com.apple.security.files.user-selected.read-write</key>

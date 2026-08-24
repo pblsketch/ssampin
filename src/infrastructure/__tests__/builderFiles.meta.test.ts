@@ -76,6 +76,59 @@ describe('electron-builder.yml 미사용 node_modules 배포 제외 보장', () 
   });
 });
 
+/**
+ * macOS 서명·아키텍처 회귀 방지 (2026-08-24).
+ *
+ * 배경:
+ *   v2.4.4 까지 맥 빌드는 서명을 통째로 건너뛰고 있었다. electron-builder 는 인증서를 못 찾으면
+ *   warn 한 줄만 남기고 성공하므로(app-builder-lib macPackager.sign(): identity 없으면 return false),
+ *   빌드도 CI 도 초록불이었다. 그 결과 배포된 DMG 의 앱 번들에는 _CodeSignature 가 0개였고,
+ *   macOS 는 이를 "미확인 개발자"가 아니라 "손상된 앱"으로 취급했다 —
+ *   즉 [그래도 열기] 안내가 통하지 않고 선생님이 터미널 xattr 명령을 쳐야 하는 상태였다.
+ *
+ *   `identity: '-'` 는 Developer ID(연 $99) 없이 쓰는 무료 임시 서명(ad-hoc)이며,
+ *   이 한 줄이 사라지면 위 상태로 조용히 되돌아간다. 그래서 설정을 테스트로 고정한다.
+ *
+ * 되돌려야 할 때:
+ *   Apple Developer Program 에 가입해 Developer ID 서명 + 공증(notarization)을 도입하는 경우다.
+ *   그때는 identity 를 실제 인증서로 바꾸고 hardenedRuntime 을 true 로 되돌린 뒤 이 테스트를 함께 고친다.
+ */
+describe('electron-builder.yml macOS 서명 설정 보장', () => {
+  it('mac.identity 가 설정되어 있다 (서명 건너뛰기 방지)', () => {
+    const src = readElectronBuilderYml();
+    expect(
+      /^\s*identity:\s*'-'\s*$/m.test(src),
+      "electron-builder.yml 의 mac 섹션에 identity: '-' 가 없습니다. " +
+        '이 줄이 없으면 electron-builder 가 인증서를 못 찾고 서명을 통째로 건너뛰어, ' +
+        'macOS 가 앱을 "손상됨"으로 판단해 설치 자체가 막힙니다.',
+    ).toBe(true);
+  });
+
+  it('ad-hoc 서명과 충돌하는 hardenedRuntime 이 꺼져 있다', () => {
+    const src = readElectronBuilderYml();
+    expect(
+      /^\s*hardenedRuntime:\s*false\s*$/m.test(src),
+      'ad-hoc 서명(identity: "-")과 hardenedRuntime: true 를 함께 쓰면 ' +
+        '라이브러리 검증에 걸려 앱이 실행되지 않을 수 있습니다. 공증을 도입하기 전에는 false 로 둡니다.',
+    ).toBe(true);
+  });
+
+  it('mac 타깃이 universal 단일 아키텍처다 (칩 오선택 방지)', () => {
+    const src = readElectronBuilderYml();
+    const macSection = src.slice(src.indexOf('\nmac:'), src.indexOf('\ndmg:'));
+    expect(
+      /-\s*universal\b/.test(macSection),
+      'mac 타깃이 universal 이 아닙니다. arm64/x64 로 나누면 칩에 맞지 않는 DMG 를 받아 ' +
+        '"이 버전의 macOS에서 작동하는지 확인하려면 개발자에게 문의하십시오" 오류를 겪는 사고가 재발합니다.',
+    ).toBe(true);
+    expect(
+      /-\s*(arm64|x64)\b/.test(macSection),
+      'mac 타깃에 arm64/x64 개별 아키텍처가 남아 있습니다. universal 하나만 두세요 ' +
+        '(파일명·다운로드 URL 이 ssampin-universal.dmg 기준으로 맞춰져 있습니다).',
+    ).toBe(false);
+  });
+});
+
 describe('electron-builder.yml prototype 디렉터리 배포 제외 보장', () => {
   it('electron-builder.yml files must include !prototype/**', () => {
     const src = readElectronBuilderYml();

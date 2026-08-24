@@ -28,7 +28,7 @@ const macSteps = [
     number: '01',
     title: '다운로드',
     description:
-      '.dmg 파일을 받으세요. 🍎 메뉴 → "이 Mac에 관하여"의 칩 항목을 보고 Apple Silicon(M1~M4)과 Intel 중 맞는 버전을 고르세요.',
+      '.dmg 파일을 받으세요. Apple Silicon(M1~M4)과 Intel Mac 모두 같은 파일 하나로 설치되니 칩을 확인하실 필요 없어요.',
   },
   {
     number: '02',
@@ -419,11 +419,9 @@ export default function InstallGuide() {
                   뜰 때
                 </p>
                 <p className="mt-1.5 text-xs leading-relaxed text-amber-800/85">
-                  내 Mac의 칩에 맞지 않는 파일을 받은 경우예요. 🍎 메뉴 → &quot;이 Mac에
-                  관하여&quot;에서 칩을 확인하세요.{' '}
-                  <strong className="text-amber-900">Apple M1~M4</strong>면 Apple Silicon용,{' '}
-                  <strong className="text-amber-900">Intel Core</strong>면 Intel용 DMG를 다시
-                  받아주세요.
+                  예전에 받아둔 칩별 파일(ssampin-arm64.dmg / ssampin-x64.dmg)을 실행한 경우예요.
+                  지금은 <strong className="text-amber-900">Apple Silicon·Intel 공용 파일</strong>{' '}
+                  하나로 제공되니, 위 다운로드 버튼에서 최신 파일을 다시 받아주세요.
                 </p>
               </div>
               <div className="mt-2 rounded-lg border border-amber-300/70 bg-white/70 p-4">

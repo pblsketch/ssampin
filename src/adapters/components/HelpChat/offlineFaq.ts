@@ -856,7 +856,7 @@ export const OFFLINE_FAQ: readonly FaqItem[] = [
   {
     question: 'macOS(맥)에서 사용할 수 있나요?',
     answer:
-      'macOS는 현재 베타로 지원해요. ssampin.com에서 macOS용 DMG 파일을 다운로드하세요. 🍎 메뉴 → "이 Mac에 관하여"의 칩 항목을 확인해서 Apple M1~M4면 Apple Silicon용, Intel Core면 Intel용을 받아야 해요. Apple 인증서가 없어 첫 실행 시 보안 경고가 뜨지만 앱은 안전합니다.',
+      'macOS는 현재 베타로 지원해요. ssampin.com에서 macOS용 DMG 파일을 다운로드하세요. Apple Silicon(M1~M4)과 Intel Mac 모두 같은 파일 하나(ssampin-universal.dmg)로 설치되니 칩을 확인하실 필요 없어요. Apple 인증서가 없어 첫 실행 시 보안 경고가 뜨지만 앱은 안전합니다.',
     keywords: ['mac', 'macOS', '맥', '맥북', 'Mac', 'MacBook', '맥os', 'DMG', 'dmg', '베타'],
     category: 'general',
   },
@@ -871,7 +871,7 @@ export const OFFLINE_FAQ: readonly FaqItem[] = [
     question:
       'macOS에서 "이 버전의 macOS에서 작동하는지 확인하려면 개발자에게 문의하십시오" 오류가 떠요',
     answer:
-      '내 Mac의 칩에 맞지 않는 파일을 받은 경우예요. 🍎 메뉴 → "이 Mac에 관하여"에서 칩을 확인하세요. Apple M1~M4면 Apple Silicon용(ssampin-arm64.dmg), Intel Core면 Intel용(ssampin-x64.dmg)을 ssampin.com에서 다시 받아 설치하면 해결됩니다.',
+      '예전에 받아둔 칩별 파일(ssampin-arm64.dmg 또는 ssampin-x64.dmg)을 실행한 경우예요. 지금은 Apple Silicon과 Intel Mac에서 모두 동작하는 공용 파일(ssampin-universal.dmg) 하나로 제공되니, ssampin.com에서 최신 파일을 다시 받아 설치하면 해결됩니다.',
     keywords: [
       '작동',
       '개발자에게 문의',
@@ -890,7 +890,7 @@ export const OFFLINE_FAQ: readonly FaqItem[] = [
   {
     question: 'macOS에서 DMG 파일이 열리지 않거나 "손상" 경고가 반복돼요',
     answer:
-      '다운로드 시 붙는 보안 속성 때문이에요. 터미널을 열고 xattr -cr /Applications/쌤핀.app 명령을 실행한 후 다시 실행해보세요. DMG 파일 자체가 안 열리면 xattr -cr ~/Downloads/ssampin-arm64.dmg (Intel은 ssampin-x64.dmg)를 실행하세요.',
+      '먼저 ssampin.com에서 최신 파일을 다시 받아보세요. 2.4.4 이하 버전의 DMG는 앱 서명이 없어 macOS가 "손상된 앱"으로 판단했고, 그 이후 버전에서 해결됐어요. 최신 파일에서도 반복되면 다운로드 시 붙는 보안 속성 때문이니, 터미널을 열고 xattr -cr /Applications/쌤핀.app 명령을 실행한 후 다시 실행해보세요. DMG 파일 자체가 안 열리면 xattr -cr ~/Downloads/ssampin-universal.dmg 를 실행하세요.',
     keywords: [
       'DMG',
       'dmg',

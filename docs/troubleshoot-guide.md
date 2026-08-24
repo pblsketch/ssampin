@@ -120,13 +120,16 @@ Windows 11의 스마트 앱 컨트롤 기능이 설치를 차단하는 경우예
 **터미널에서 보안 속성 제거:**
 
 1. Finder에서 응용 프로그램 → 유틸리티 → **터미널**을 열어주세요.
-2. 아래 명령어를 입력하세요 (Apple Silicon 기준):
+2. 아래 명령어를 입력하세요:
 
 ```
-xattr -cr ~/Downloads/ssampin-arm64.dmg
+xattr -cr ~/Downloads/ssampin-universal.dmg
 ```
 
-Intel Mac이면: `xattr -cr ~/Downloads/ssampin-x64.dmg` 3. 다시 DMG 파일을 더블클릭하면 정상적으로 열립니다.
+3. 다시 DMG 파일을 더블클릭하면 정상적으로 열립니다.
+
+> macOS 설치 파일은 Apple Silicon·Intel 공용 통합 파일 하나(`ssampin-universal.dmg`)입니다.
+> 예전 칩별 파일(`ssampin-arm64.dmg`, `ssampin-x64.dmg`)을 쓰고 계셨다면 최신 파일로 다시 받으세요.
 
 ### "개발자를 확인할 수 없음" 경고가 떠요
 

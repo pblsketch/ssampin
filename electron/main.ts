@@ -4627,14 +4627,17 @@ function registerIpcHandlers(): void {
   });
 
   // update:download — 업데이트 다운로드
-  // macOS: 코드서명 없이는 인앱 업데이트가 차단되므로 칩에 맞는 DMG를 브라우저로 직접 받게 한다.
-  // (릴리즈 페이지로 보내면 arm64/x64 중 잘못 고르는 사고가 잦음 — 실행 중인 앱이 칩을 알고 있다)
+  // macOS: 코드서명(공증)이 없으면 인앱 자동 업데이트가 차단되므로 DMG를 브라우저로 직접 받게 한다.
+  //
+  // 2026-08-24: 맥 빌드를 통합(universal) 단일 파일로 바꾸면서 칩 분기를 없앴다.
+  // 예전에는 process.arch + runningUnderARM64Translation 으로 arm64/x64 DMG 를 골라 줬는데,
+  // 이제 파일이 하나뿐이라 고를 것이 없다(칩 오선택 사고도 함께 사라진다).
+  // 주의: v2.4.4 이하로 설치된 앱은 이 코드가 아니라 옛 파일명(ssampin-arm64.dmg 등)을 요청한다.
+  // 릴리즈에서 통합 DMG 를 옛 이름으로도 한 벌 더 올려야 그 사용자들의 [다운로드]가 404 나지 않는다.
   ipcMain.handle('update:download', (): void => {
     if (process.platform === 'darwin') {
-      const macArch =
-        process.arch === 'arm64' || app.runningUnderARM64Translation ? 'arm64' : 'x64';
       shell.openExternal(
-        `https://github.com/pblsketch/ssampin/releases/latest/download/ssampin-${macArch}.dmg`,
+        'https://github.com/pblsketch/ssampin/releases/latest/download/ssampin-universal.dmg',
       );
       return;
     }
