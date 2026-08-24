@@ -2,6 +2,48 @@
 
 마지막 업데이트: 2026-08-24 KST
 
+## 🚀 v2.4.4 릴리즈 완료 (2026-08-24)
+
+v2.4.3 이후 94커밋 출시. 주요 범위: **실험실 기능 탭(ADR-070)** — 쌤핀 AI·온라인 교무실·
+쿨메신저 쪽지 가져오기 3종 옵트인 — · 할 일 확장 4건(점검일·시각 알람·관련인·자동 배치 보드) ·
+교직원 연락처(엑셀 일괄 등록) · 일정/진도 드래그 이동 · 겹친 일정 정리 · 숨긴 일정 다시 보기 ·
+원클릭업무포털 카드 · UltraQA 수정 다수.
+
+**릴리즈 게이트(출시 시점)**: tsc 0 / lint 0 errors(경고 136 기존) / test 589파일·7,598건 통과 /
+regression 50-50.
+
+**SOP 8단계 수행 내역**:
+
+1. 버전 7곳 v2.4.4 갱신 (package.json·lock 2곳·mobile version.ts·landing config·layout·Sidebar)
+2. `release-notes.json` v2.4.4 항목 (하이라이트 5·변경 14건)
+3. 챗봇 KB — Q&A 8건 스크립트 추가 완료. **⚠️ ingest 실행은 보류** — `supabase secrets set`
+   (키 로테이션)이 Claude Code 권한 분류기에 차단됨. 오너가 아래 명령을 직접 실행하거나
+   대화형 세션에서 승인 필요:
+   ```powershell
+   $rotKey = [guid]::NewGuid().ToString()
+   npx supabase secrets set ADMIN_API_KEY=$rotKey --project-ref ddbkyaxvnpaxkbqbpijg
+   npx supabase functions deploy ssampin-embed --project-ref ddbkyaxvnpaxkbqbpijg --no-verify-jwt
+   Start-Sleep -Seconds 8
+   $env:SUPABASE_URL = "https://ddbkyaxvnpaxkbqbpijg.supabase.co"; $env:EMBED_AUTH_TOKEN = $rotKey
+   node scripts/ingest-chatbot-qa.mjs
+   Remove-Variable rotKey; $env:EMBED_AUTH_TOKEN = $null
+   ```
+4. /docs 가이드 — **쿨메신저 가져오기 문서 신설**(`features/coolmessenger`, 문서 44→45),
+   releases 페이지 지원 기준 v2.4.4 + 최근 기능 8줄. docs:check·landing build 통과.
+   Vercel 랜딩·모바일 푸시 배포 Ready 실측 (402 장애 없음).
+5. 커밋 2건 — 이전 세션 잔여물 정리(`c281292d`: DECISIONS/PROGRESS 기록 + 교무실 핸드오프 +
+   AssistClient 실패 판정 테스트 회수) · 릴리즈 커밋(`6a65db58`). 푸시 완료.
+6. Windows GHA run 32680980075 → `ssampin-Setup.exe` 293MB + latest.yml(2.4.4) + blockmap
+7. macOS GHA run 32680982123 → arm64/x64 dmg + blockmaps + latest-mac.yml(2.4.4, 파일명 규약 유지)
+8. GitHub 릴리즈 v2.4.4 생성 + 자산 8개 업로드. **URL 검증 9종 전부 302** (버전 고정 5 + latest 4).
+
+**남은 것**:
+
+- ⚠️ 챗봇 KB ingest (위 3번 — 오너 실행 필요)
+- 실기기 확인 권장 4건 (아래 UltraQA 섹션 그대로 유효): 중복 정리 NEIS 접힘 · 쌤핀 AI 쓰기
+  실서버 왕복 · 알람 하루 상한 · NEIS 삭제 구글 사본
+- 임시저장 말머리·태그·첨부 실기기 왕복 확인
+
 ## 📨 쿨메신저 — UltraQA 미수정 P2 5건 해소 (2026-08-24)
 
 아래 UltraQA 섹션 "미수정" 중 쿨메신저 5건(배너 600자 절단 어긋남 · 쪽지 클릭당 복사
