@@ -113,8 +113,16 @@ mac:
   # (electron/ipc/tunnel.ts installTunnel(): "첫 사용 시, ~40MB 다운로드", userData 경로 우선).
   # 동봉본은 이전 버전 호환 fallback 일 뿐이므로 mac 에서는 빼고 런타임 다운로드에 맡긴다.
   # Windows 는 현행 유지(동봉) — 동작 변화 없음.
+  #
+  # koffi(FFI)도 같은 이유로 mac 에서 뺀다. koffi 는 모든 플랫폼용 프리빌드
+  # (build/koffi/darwin_arm64, win32_x64 …)를 통째로 담고 있어 x64·arm64 슬라이스에
+  # 동일 파일로 들어가 병합을 막는다. 그리고 쌤핀에서 koffi 는 Win32 전용 경로에서만 쓴다:
+  #   - desktopWidgetManager.ts: 비Win32면 아예 no-op manager 반환("절대 throw 하지 않는다")
+  #   - win32SendKeys.ts: require('koffi') 가 함수 안 try/catch — 실패 시 autoPasted=false 로 graceful
+  # 따라서 mac 패키지에 없어도 동작에 영향이 없다.
   files:
     - '!node_modules/cloudflared/bin/**'
+    - '!node_modules/koffi/**'
   icon: build/icon.png
   category: public.app-category.education
   minimumSystemVersion: '12.0.0'
