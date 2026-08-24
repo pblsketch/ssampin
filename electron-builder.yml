@@ -38,6 +38,16 @@ files:
       # 과거 주석은 "쌤핀이 직접 쓴다"고 했으나 실제 import 는 없다 — 되돌리기 전 grep 으로 재확인할 것.
       - '!node_modules/sharp/**'
       - '!node_modules/@img/**'
+      # @napi-rs/canvas: pdfjs-dist 의 optional 의존성으로, pdf.js 가 **Node 환경에서** 캔버스에
+      # 래스터라이즈할 때만 require 된다(NodeCanvasFactory._createCanvas 안의 지연 require).
+      # 쌤핀의 PDF 렌더는 전부 renderer(브라우저 컨텍스트)에서 DOM 캔버스로 처리하고
+      # (electron/preload.ts §"renderer 측에서 pdfjs-dist로 렌더 후 PNG 바이트 전달"),
+      # main 프로세스에는 pdfjs import 가 없다. kordoc 도 pdfjs 를 require 하지 않는다.
+      #
+      # 게다가 이 패키지는 칩/OS 전용 바이너리(canvas-darwin-arm64, canvas-win32-x64-msvc 37MB)라
+      # universal 빌드에서 x64·arm64 병합을 막는 원인이었다(@electron/universal x64ArchFiles 오류).
+      # 되돌리기 전에 main 프로세스나 kordoc 이 pdfjs 로 실제 래스터라이즈를 하는지부터 grep 으로 확인할 것.
+      - '!node_modules/@napi-rs/**'
       # kordoc의 MCP 서버 계열도 미사용 — kordoc은 `kordoc-mcp` 라는 별도 실행파일(dist/mcp.js)에서만
       # @modelcontextprotocol/sdk 를 쓴다. 쌤핀이 import 하는 dist/index.cjs 는 xmldom·jszip·markdown-it
       # 만 필요하다(검증: dist/index.cjs 의 외부 require 목록에 sdk 없음).

@@ -58,6 +58,9 @@ const REQUIRED_NODE_MODULES_EXCLUSIONS = [
   'adm-zip',
   'sharp',
   '@img',
+  // @napi-rs — pdfjs-dist 의 Node 전용 캔버스 백엔드. 쌤핀은 renderer 의 DOM 캔버스만 쓴다.
+  // 칩/OS 전용 바이너리라 macOS universal 빌드의 x64·arm64 병합까지 막았다(2026-08-24).
+  '@napi-rs',
 ] as const;
 
 describe('electron-builder.yml 미사용 node_modules 배포 제외 보장', () => {
