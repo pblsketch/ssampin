@@ -23767,6 +23767,7 @@ function normalizeRecord5(o) {
   if (isEvidenceSourceType(o['sourceType'])) rec['sourceType'] = o['sourceType'];
   setIf13(rec, 'sourceId', asString19(o['sourceId']));
   setIf13(rec, 'classId', asString19(o['classId']));
+  if (typeof o['excludedFromAi'] === 'boolean') rec['excludedFromAi'] = o['excludedFromAi'];
   return rec;
 }
 function parseRecordEvidence(raw) {
@@ -27608,6 +27609,7 @@ function getRecordEvidence(ctx, args) {
   const roster = rosterForIdentity(ctx.dataDir, identity, ctx.store);
   const evidence = readRecordEvidence(ctx.dataDir)
     .records.filter((e) => e.studentRef === studentRef)
+    .filter((e) => e.excludedFromAi !== true)
     .filter((e) => areaFilter === void 0 || e.areas.includes(areaFilter))
     .map((e) => {
       const view = {

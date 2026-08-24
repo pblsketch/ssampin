@@ -64,6 +64,17 @@ export interface RecordEvidence {
   readonly sourceId?: string;
   /** 수업반 컨텍스트의 TeachingClass.id(담임이면 미사용). */
   readonly classId?: string;
+  /**
+   * AI 에 보내지 않는다는 표시(기재 금지 항목이 섞였을 때). 없으면 보낸다 — 기존 데이터 호환.
+   *
+   * ★프롬프트로는 못 막는다. 실측에서 금지 항목을 시스템 프롬프트에 전부 열거하고 사용자 턴
+   * 끝에 다시 강조해도 모델이 세특 본문에 그대로 옮겨 적었다(2/2 → 보강 후에도 2/2 실패).
+   * 그래서 **애초에 안 보낸다**(ADR-072 결정 5).
+   *
+   * 저장 시 `detectProhibitedTerms` 로 자동 표시하되, **교사가 켜고 끌 수 있다** — 자동 판정은
+   * 오탐이 나기 마련이고, 되돌릴 수 없는 안전장치는 기능을 죽인다.
+   */
+  readonly excludedFromAi?: boolean;
   readonly createdAt: number;
   readonly updatedAt: number;
 }

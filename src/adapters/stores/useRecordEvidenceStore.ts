@@ -5,6 +5,7 @@ import {
   type EvidenceSourceType,
   type RecordEvidence,
 } from '@domain/entities/RecordEvidence';
+import { hasProhibitedTerms } from '@domain/rules/prohibitedRecordTerms';
 import { recordEvidenceRepository } from '@adapters/di/container';
 import { generateUUID } from '@infrastructure/utils/uuid';
 
@@ -36,6 +37,11 @@ interface RecordEvidenceState {
   /** 여러 근거를 한 번의 저장으로 일괄 추가(학급 전체 끌어오기용). 반환 = 추가된 건수. */
   addMany: (inputs: readonly RecordEvidenceAddInput[]) => Promise<number>;
   update: (id: string, patch: RecordEvidencePatch) => Promise<void>;
+  /**
+   * AI 전송 제외 여부를 교사가 직접 켜고 끈다(자동 판정의 오탐을 되돌리는 길).
+   * 자동 표시와 달리 이쪽이 최종 판단이다.
+   */
+  setExcludedFromAi: (id: string, excluded: boolean) => Promise<void>;
   remove: (id: string) => Promise<void>;
   exists: (id: string) => boolean;
 
@@ -82,6 +88,8 @@ export const useRecordEvidenceStore = create<RecordEvidenceState>((set, get) => 
         ...(input.sourceType !== undefined ? { sourceType: input.sourceType } : {}),
         ...(input.sourceId !== undefined ? { sourceId: input.sourceId } : {}),
         ...(input.classId !== undefined ? { classId: input.classId } : {}),
+        // 기재 금지 항목이 섞였으면 저장 시점에 표시한다 — 모델까지 가지 않게(ADR-072 결정 5).
+        ...(hasProhibitedTerms(input.content) ? { excludedFromAi: true } : {}),
       };
       await persist([...get().records, rec]);
       return rec.id;
@@ -102,6 +110,7 @@ export const useRecordEvidenceStore = create<RecordEvidenceState>((set, get) => 
         ...(input.sourceType !== undefined ? { sourceType: input.sourceType } : {}),
         ...(input.sourceId !== undefined ? { sourceId: input.sourceId } : {}),
         ...(input.classId !== undefined ? { classId: input.classId } : {}),
+        ...(hasProhibitedTerms(input.content) ? { excludedFromAi: true } : {}),
       }));
       await persist([...get().records, ...recs]);
       return recs.length;
@@ -116,12 +125,27 @@ export const useRecordEvidenceStore = create<RecordEvidenceState>((set, get) => 
               ...r,
               ...(patch.areas !== undefined ? { areas: normalizeEvidenceAreas(patch.areas) } : {}),
               ...(patch.content !== undefined ? { content: patch.content } : {}),
+              // 내용이 바뀌면 다시 본다. 단 **붙이기만** 한다 — 교사가 푼 것을 자동으로
+              // 되돌리면 판단을 빼앗는 셈이고, 안전한 방향은 '더 거르는' 쪽이다.
+              ...(patch.content !== undefined && hasProhibitedTerms(patch.content)
+                ? { excludedFromAi: true }
+                : {}),
               ...(patch.date !== undefined ? { date: patch.date } : {}),
               updatedAt: now,
             }
           : r,
       );
       await persist(next);
+    },
+
+    setExcludedFromAi: async (id, excluded) => {
+      await get().load();
+      const now = Date.now();
+      await persist(
+        get().records.map((r) =>
+          r.id === id ? { ...r, excludedFromAi: excluded, updatedAt: now } : r,
+        ),
+      );
     },
 
     remove: async (id) => {

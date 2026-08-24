@@ -32,6 +32,7 @@ import {
   type AssistTurn,
 } from '../_shared/assistLlm.ts';
 import {
+  AssistPromptNotConfiguredError,
   buildAssistSystemPrompt,
   buildToolResultsTurn,
   validateAssistRequest,
@@ -56,7 +57,9 @@ function dailyGlobalLimit(): number {
 }
 
 /** 축소 응답 — 오류가 아니라 200 이다. 앱이 숫자 카드를 유지할 수 있게 한다(P5). */
-function degradedResponse(reason: 'budget' | 'unavailable' | 'upstream'): Response {
+// 'busy'(분당 한도)가 빠져 있었다. 실제로는 108행에서 계속 넘기고 있었고 앱도 받는데
+// (AssistPort.AssistDegraded), 이 파일이 타입 검사를 한 번도 안 거쳐 드러나지 않았다.
+function degradedResponse(reason: 'budget' | 'busy' | 'unavailable' | 'upstream'): Response {
   return jsonResponse({ text: '', toolCalls: [], usage: { in: 0, out: 0 }, degraded: reason }, 200);
 }
 
@@ -116,7 +119,10 @@ serve(async (req: Request): Promise<Response> => {
       // 자정~오전 9시 사이에 하루 어긋난다. en-CA 로캘은 YYYY-MM-DD 꼴을 준다.
       {
         role: 'system',
+        // 프롬프트 본문은 저장소가 아니라 서버 시크릿에 있다(ADR-072 결정 1).
+        // 미설정이면 buildAssistSystemPrompt 가 throw 하고, 아래 catch 가 '축소'로 내린다.
         content: buildAssistSystemPrompt(
+          Deno.env.get('ASSIST_SYSTEM_PROMPT') ?? '',
           new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date()) +
             ' (' +
             new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', weekday: 'short' }).format(
@@ -160,6 +166,12 @@ serve(async (req: Request): Promise<Response> => {
       degraded: null,
     });
   } catch (err) {
+    if (err instanceof AssistPromptNotConfiguredError) {
+      // 프롬프트 미설정도 배포 실수다(시크릿을 안 넣고 배포). 키 미설정과 같게 다룬다 —
+      // 빈 프롬프트로 답하게 두면 모델이 안전 지시 없이 말한다.
+      console.error('[assist] ASSIST_SYSTEM_PROMPT 미설정');
+      return degradedResponse('unavailable');
+    }
     if (err instanceof AssistLlmNotConfiguredError) {
       // 키 미설정은 배포 실수다. 사용자에게는 축소로 보이게 하고 로그로 알린다.
       console.error('[assist] ASSIST_UPSTAGE_API_KEY 미설정');

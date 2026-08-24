@@ -6,6 +6,7 @@ import {
   type SchoolLevel,
 } from '@domain/entities/RecordDraft';
 import { EVIDENCE_SOURCE_LABELS, type RecordEvidence } from '@domain/entities/RecordEvidence';
+import { detectProhibitedTerms, summarizeProhibited } from '@domain/rules/prohibitedRecordTerms';
 import {
   useRecordEvidenceStore,
   type RecordEvidenceAddInput,
@@ -118,6 +119,14 @@ function shortDate(date?: string): string {
   return mm && dd ? `${Number(mm)}/${Number(dd)}` : date;
 }
 
+/** AI 제외 칩의 안내 문구 — 왜 빠졌는지(갈래)를 함께 알려 준다. */
+function exclusionTitle(evidence: RecordEvidence): string {
+  if (!evidence.excludedFromAi) return '이 근거를 AI에게 보내지 않도록 합니다.';
+  const why = summarizeProhibited(detectProhibitedTerms(evidence.content));
+  const reason = why.length > 0 ? ` — ${why.join(', ')}가 들어 있습니다` : '';
+  return `이 근거는 AI에게 보내지 않습니다${reason}. 눌러서 보내도록 바꿉니다.`;
+}
+
 export function RecordEvidenceView({
   context,
   level,
@@ -136,6 +145,7 @@ export function RecordEvidenceView({
   const addMany = useRecordEvidenceStore((s) => s.addMany);
   const update = useRecordEvidenceStore((s) => s.update);
   const remove = useRecordEvidenceStore((s) => s.remove);
+  const setExcludedFromAi = useRecordEvidenceStore((s) => s.setExcludedFromAi);
 
   // 끌어오기 출처 store
   const observations = useObservationStore((s) => s.records);
@@ -895,6 +905,20 @@ export function RecordEvidenceView({
                       <span className="rounded bg-sp-surface px-1.5 py-0.5 text-[0.6rem] text-sp-muted">
                         {EVIDENCE_SOURCE_LABELS[ev.sourceType ?? 'manual']}
                       </span>
+                      {/* AI 전송 제외 — 기재 금지 항목이 섞이면 저장 시 자동으로 켜지고,
+                          자동 판정은 오탐이 나므로 눌러서 되돌릴 수 있다(ADR-072 결정 5). */}
+                      <button
+                        type="button"
+                        onClick={() => void setExcludedFromAi(ev.id, !ev.excludedFromAi)}
+                        title={exclusionTitle(ev)}
+                        className={`rounded px-1.5 py-0.5 text-[0.6rem] transition-colors ${
+                          ev.excludedFromAi
+                            ? 'bg-amber-500/15 text-amber-600'
+                            : 'bg-sp-surface text-sp-muted hover:text-sp-text'
+                        }`}
+                      >
+                        {ev.excludedFromAi ? 'AI 제외' : 'AI 전송'}
+                      </button>
                       <div className="flex-1" />
                       <button
                         type="button"

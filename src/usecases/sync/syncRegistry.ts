@@ -358,6 +358,20 @@ export const SYNC_REGISTRY: SyncDomain[] = [
       await useRecordDraftsStore.getState().load(true);
     },
   },
+  // 28-b. record-evidence ─ 생기부 작성 근거 자료(교사가 모은 재료).
+  // ★초안(record-drafts)은 동기화되는데 그 **재료**가 빠져 있었다. 기기를 바꾸면 초안만 넘어오고
+  //   근거가 안 넘어온다. 보관함(archiveScope)에는 이미 들어 있어 비대칭이었다(ADR-072).
+  {
+    fileName: 'record-evidence',
+    strategy: 'snapshot',
+    reload: async () => {
+      const { useRecordEvidenceStore } = await import('@adapters/stores/useRecordEvidenceStore');
+      // 이 스토어의 load 는 loaded 가드가 있어 force 인자가 없다. 내려받은 내용을 반영하려면
+      // loaded 를 내려 다시 읽게 한다(스토어 API 를 바꾸지 않는 최소 변경).
+      useRecordEvidenceStore.setState({ loaded: false });
+      await useRecordEvidenceStore.getState().load();
+    },
+  },
   // 29. observation-attachments ─ 관찰 첨부 메타(JSON). useObservationAttachmentStore 대표 키.
   {
     fileName: 'observation-attachments',

@@ -35,7 +35,8 @@ vi.mock('@adapters/di/container', () => ({
   recordDraftsRepository: recordDraftsRepoFake,
 }));
 
-import { useRecordDraftsStore } from '../useRecordDraftsStore';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+import { RecordDraftLimitError, useRecordDraftsStore } from '../useRecordDraftsStore';
 
 function makeDraft(
   p: Partial<RecordDraft> & Pick<RecordDraft, 'area' | 'studentRef' | 'content'>,
@@ -143,5 +144,93 @@ describe('useRecordDraftsStore — upsert 키(area+studentRef+subject)', () => {
     expect(useRecordDraftsStore.getState().getByStudentRef('s1')).toHaveLength(2);
     expect(useRecordDraftsStore.getState().getDraft('career', 's1')?.content).toBe('B');
     expect(useRecordDraftsStore.getState().getDraft('career', 's2')).toBeUndefined();
+  });
+});
+
+describe('바이트 한도 — 프롬프트가 아니라 코드에서 자른다 (ADR-072 결정 5)', () => {
+  const long = (bytes: number): string => '가'.repeat(Math.ceil(bytes / 3));
+
+  it('고등 과목세특 1,500B 를 넘으면 저장을 거부한다', async () => {
+    await expect(
+      useRecordDraftsStore.getState().upsert({
+        area: 'subject',
+        studentRef: 's1',
+        content: long(1503),
+        level: 'high',
+      }),
+    ).rejects.toBeInstanceOf(RecordDraftLimitError);
+  });
+
+  it('거부 메시지에 영역 이름과 두 수치가 한국어로 들어간다 — 조용한 실패 금지', async () => {
+    await useRecordDraftsStore
+      .getState()
+      .upsert({ area: 'subject', studentRef: 's1', content: long(1503), level: 'high' })
+      .catch((e: unknown) => {
+        const err = e as RecordDraftLimitError;
+        expect(err.message).toContain('과목별 세부능력 및 특기사항');
+        expect(err.message).toContain('1,500');
+        expect(err.limit).toBe(1500);
+      });
+  });
+
+  it('한도와 정확히 같으면 저장된다(경계값)', async () => {
+    const id = await useRecordDraftsStore
+      .getState()
+      .upsert({ area: 'subject', studentRef: 's2', content: long(1500), level: 'high' });
+    expect(useRecordDraftsStore.getState().exists(id)).toBe(true);
+  });
+
+  it('진로활동은 2,100B 까지 허용한다(영역마다 한도가 다르다)', async () => {
+    const id = await useRecordDraftsStore
+      .getState()
+      .upsert({ area: 'career', studentRef: 's3', content: long(2100), level: 'high' });
+    expect(useRecordDraftsStore.getState().exists(id)).toBe(true);
+  });
+
+  it('초등은 한도 수치가 공식 확인되지 않아 거부하지 않는다', async () => {
+    // isAreaLimitVerified=false — 확인 안 된 숫자로 교사 입력을 막지 않는다.
+    const id = await useRecordDraftsStore
+      .getState()
+      .upsert({ area: 'autonomy', studentRef: 's4', content: long(3000), level: 'elementary' });
+    expect(useRecordDraftsStore.getState().exists(id)).toBe(true);
+  });
+});
+
+describe('P1-1 회귀 — level 미지정(브릿지 live-sync) 이 초등 초안을 거부하면 안 된다', () => {
+  const long = (bytes: number): string => '가'.repeat(Math.ceil(bytes / 3));
+
+  it('설정이 초등이면 level 을 안 넘겨도 자율활동 1,602B 가 저장된다', async () => {
+    // 브릿지는 초등 한도를 "확인 안 됨(flag)"으로 통과시킨다. 앱이 'high' 로 굳으면
+    // 전에는 되던 쓰기가 거부된다 — 그게 회귀였다.
+    useSettingsStore.setState((s) => ({
+      settings: { ...s.settings, schoolLevel: 'elementary' },
+      loaded: true,
+    }));
+    const id = await useRecordDraftsStore
+      .getState()
+      .upsert({ area: 'autonomy', studentRef: 'e1', content: long(1602) });
+    expect(useRecordDraftsStore.getState().exists(id)).toBe(true);
+  });
+
+  it('설정이 고등이면 level 을 안 넘겨도 한도가 그대로 걸린다', async () => {
+    useSettingsStore.setState((s) => ({
+      settings: { ...s.settings, schoolLevel: 'high' },
+      loaded: true,
+    }));
+    await expect(
+      useRecordDraftsStore
+        .getState()
+        .upsert({ area: 'autonomy', studentRef: 'h1', content: long(1602) }),
+    ).rejects.toBeInstanceOf(RecordDraftLimitError);
+  });
+
+  it('설정이 아직 로드되지 않았으면 한도로 막지 않는다 — 잘못 거부하는 쪽이 더 나쁘다', async () => {
+    // 앱 시작 직후 브릿지 쓰기가 들어오는 짧은 창. 기본값('middle')으로 판정하면 초등 교사의
+    // 정상 초안이 거부된다. level 도 설정도 없으면 통과시킨다.
+    useSettingsStore.setState({ loaded: false });
+    const id = await useRecordDraftsStore
+      .getState()
+      .upsert({ area: 'autonomy', studentRef: 'u1', content: long(1602) });
+    expect(useRecordDraftsStore.getState().exists(id)).toBe(true);
   });
 });

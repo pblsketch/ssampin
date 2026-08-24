@@ -808,8 +808,14 @@ export async function applyLiveSyncWrite(
     // req.domain 은 WriteDomain 으로 검증돼 항상 핸들러가 있으나, 방어적으로 미지원 경로를 남긴다.
     const handler = LIVE_SYNC_DISPATCH[req.domain] as LiveSyncHandler | undefined;
     result = handler ? await handler(req, deps) : bad('지원하지 않는 도메인입니다.');
-  } catch {
-    result = { ok: false, status: 500, error: '쓰기 적용 중 오류가 발생했습니다.' };
+  } catch (err) {
+    // 한도 초과처럼 **이유가 분명한 거부**는 메시지를 실어 보낸다. 통째로 뭉개면 AI 도 교사도
+    // 왜 저장이 안 됐는지 알 수 없다(US-006 "조용한 실패 금지").
+    const reason =
+      err instanceof Error && err.name === 'RecordDraftLimitError' ? err.message : null;
+    result = reason
+      ? { ok: false, status: 400, error: reason }
+      : { ok: false, status: 500, error: '쓰기 적용 중 오류가 발생했습니다.' };
   }
   // 예약했을 때만 settle — 성공이면 영속 기록(이후 dedup), 실패/미지원이면 예약 해제(재시도가 새로 적용).
   if (idem && reserved) {

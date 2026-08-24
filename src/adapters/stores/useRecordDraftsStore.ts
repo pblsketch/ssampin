@@ -1,11 +1,17 @@
 import { create } from 'zustand';
 import {
+  coerceSchoolLevel,
+  isAreaLimitVerified,
   neisByteLength,
+  resolveAreaLimit,
+  RECORD_AREA_LABELS,
   type RecordArea,
   type RecordDraft,
   type RecordDraftStatus,
+  type SchoolLevel,
 } from '@domain/entities/RecordDraft';
 import { recordDraftsRepository } from '@adapters/di/container';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { generateUUID } from '@infrastructure/utils/uuid';
 
 /** (area + studentRef + subject) upsert 입력 — UI 직접 편집 / live-sync 수신 공통. */
@@ -21,6 +27,31 @@ export interface RecordDraftUpsertInput {
   basisObservationIds?: readonly string[];
   groundingFlags?: readonly string[];
   status?: RecordDraftStatus;
+  /**
+   * 학교급 — 영역별 바이트 한도 판정에 쓴다. **미지정이면 설정의 학교급을 읽는다**
+   * (화면 경로와 같은 판정). 설정이 아직 로드되지 않았으면 한도로 막지 않는다 — 아래 참조.
+   */
+  level?: SchoolLevel | string;
+}
+
+/**
+ * 바이트 한도를 넘겨 저장이 거부됐을 때 던진다.
+ *
+ * ★한도를 프롬프트로 지키게 하지 않는다 — 실측에서 교사 커스텀 지시 한 줄에 모델이 한도의
+ * 4배(7,156B)를 창작으로 채웠다. 코드에서 자른다(ADR-072 결정 5).
+ */
+export class RecordDraftLimitError extends Error {
+  constructor(
+    readonly area: RecordArea,
+    readonly byteLength: number,
+    readonly limit: number,
+  ) {
+    super(
+      `${RECORD_AREA_LABELS[area]} 한도를 넘었습니다 — ${byteLength.toLocaleString()}바이트 / ` +
+        `${limit.toLocaleString()}바이트. 내용을 줄인 뒤 저장하세요.`,
+    );
+    this.name = 'RecordDraftLimitError';
+  }
 }
 
 interface RecordDraftsState {
@@ -75,6 +106,24 @@ export const useRecordDraftsStore = create<RecordDraftsState>((set, get) => {
       await get().load();
       const now = Date.now();
       const byteLength = neisByteLength(input.content);
+      // 한도 초과는 저장 전에 끊는다. 다만 초등처럼 한도 수치가 공식 확인되지 않은 영역은
+      // 거부하지 않는다 — 확인 안 된 숫자로 교사 입력을 막으면 안 된다(isAreaLimitVerified).
+      // ★기본값을 'high' 로 굳히면 안 된다. 브릿지 live-sync 는 level 을 넘기지 않는데,
+      //   초등 자율·진로·행특은 고등 맵에 존재하고 limitVerified=true 라 "확인 안 된 숫자라
+      //   막지 않기로 한" 한도가 확인된 한도로 승격돼 **전에는 되던 쓰기가 거부된다**(회귀).
+      //   설정의 학교급을 읽어 화면 경로(RecordDraftView)와 같은 판정을 쓴다.
+      const settings = useSettingsStore.getState();
+      // 설정이 아직 로드되지 않았으면 기본값('middle')으로 판정하게 된다. 앱 시작 직후 브릿지
+      // 쓰기가 들어오는 짧은 창에서 초등 교사의 정상 초안을 거부할 수 있으므로, level 을
+      // 명시하지 않았고 설정도 미로드면 **막지 않는다**. 잘못 거부하는 쪽이 더 나쁘다.
+      const levelKnown = typeof input.level === 'string' || settings.loaded;
+      const level = coerceSchoolLevel(
+        typeof input.level === 'string' ? input.level : settings.settings.schoolLevel,
+      );
+      if (levelKnown && isAreaLimitVerified(input.area, level)) {
+        const limit = resolveAreaLimit(input.area, level);
+        if (byteLength > limit) throw new RecordDraftLimitError(input.area, byteLength, limit);
+      }
       const existing = get().records.find((r) =>
         matchKey(r, input.area, input.studentRef, input.subject),
       );

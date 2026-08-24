@@ -114,6 +114,7 @@ import { useStaffContactStore } from '@adapters/stores/useStaffContactStore';
 import { useConsultationStore } from '@adapters/stores/useConsultationStore';
 import { useObservationStore } from '@adapters/stores/useObservationStore';
 import { useRecordDraftsStore } from '@adapters/stores/useRecordDraftsStore';
+import { useRecordEvidenceStore } from '@adapters/stores/useRecordEvidenceStore';
 import { useMealStore } from '@adapters/stores/useMealStore';
 import { useStickerStore } from '@adapters/stores/useStickerStore';
 import { useRubricStore } from '@adapters/stores/useRubricStore';
@@ -1154,6 +1155,7 @@ function MainApp() {
       consultations: (cb) => useConsultationStore.subscribe(cb),
       observations: (cb) => useObservationStore.subscribe(cb),
       'record-drafts': (cb) => useRecordDraftsStore.subscribe(cb),
+      'record-evidence': (cb) => useRecordEvidenceStore.subscribe(cb),
       'manual-meals': (cb) => useMealStore.subscribe(cb),
       // note-cloud-sync PDCA: 노트북 메타가 useNoteStore의 대표 키.
       // note-sections / note-pages-meta / note-body는 동일 store이므로

@@ -12,6 +12,7 @@ import {
   type SchoolLevel,
 } from '@domain/entities/RecordDraft';
 import {
+  RecordDraftLimitError,
   useRecordDraftsStore,
   type RecordDraftUpsertInput,
 } from '@adapters/stores/useRecordDraftsStore';
@@ -469,6 +470,8 @@ function RecordDraftRow({
   const [focused, setFocused] = useState(false);
   const [showBasis, setShowBasis] = useState(false);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
+  /** 저장이 거부된 이유(한도 초과 등). 조용한 실패를 만들지 않기 위한 자리. */
+  const [saveError, setSaveError] = useState<string | null>(null);
   const taRef = useRef<HTMLTextAreaElement | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -507,11 +510,17 @@ function RecordDraftRow({
       ...(student.studentKey !== undefined ? { studentKey: student.studentKey } : {}),
       ...(student.studentId !== undefined ? { studentId: student.studentId } : {}),
       ...(subject !== undefined ? { subject } : {}),
+      level,
     };
     setSaveState('saving');
+    setSaveError(null);
     upsert(input)
       .then(() => setSaveState('saved'))
-      .catch(() => setSaveState('idle'));
+      .catch((err: unknown) => {
+        setSaveState('idle');
+        // 조용히 삼키면 선생님은 저장된 줄 안다. 한도 초과는 이유를 그대로 보여 준다.
+        setSaveError(err instanceof RecordDraftLimitError ? err.message : '저장하지 못했습니다.');
+      });
   };
 
   const onChange = (value: string): void => {
@@ -637,6 +646,12 @@ function RecordDraftRow({
           placeholder="AI에게 초안을 요청하면 자동 입력됩니다 — 또는 직접 작성하세요"
           className="min-h-[48px] w-full resize-y rounded-lg border border-sp-border bg-sp-surface px-3 py-2 text-sm leading-relaxed text-sp-text placeholder:text-sp-muted focus:border-sp-accent focus:outline-none focus:ring-2 focus:ring-sp-accent/30"
         />
+        {saveError !== null && (
+          <div className="flex items-start gap-1 rounded-lg bg-red-500/5 px-2.5 py-1.5 text-[0.7rem] leading-snug text-red-500 ring-1 ring-red-500/20">
+            <span className="material-symbols-outlined text-sm">error</span>
+            <span>{saveError}</span>
+          </div>
+        )}
         {saveState !== 'idle' && (
           <span
             className={`flex w-fit items-center gap-1 text-[0.65rem] ${

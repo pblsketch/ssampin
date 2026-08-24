@@ -193,3 +193,64 @@ describe('근거 유형 분류 — 작성주체 결속(areasForContext × areEvi
     expect(areEvidenceAreasValid(['autonomy'], allowed)).toBe(false);
   });
 });
+
+describe('AI 전송 제외 — 기재 금지 항목은 모델까지 가지 않는다 (ADR-072 결정 5)', () => {
+  it('금지 항목이 섞인 근거는 저장 시 자동으로 제외 표시된다', async () => {
+    const id = await useRecordEvidenceStore.getState().add({
+      studentRef: 's1',
+      areas: ['subject'],
+      content: '교내 대회에서 최우수상을 받음',
+    });
+    const rec = useRecordEvidenceStore.getState().records.find((r) => r.id === id);
+    expect(rec?.excludedFromAi).toBe(true);
+  });
+
+  it('평범한 근거는 표시하지 않는다 — 없으면 보낸다(기존 데이터 호환)', async () => {
+    const id = await useRecordEvidenceStore.getState().add({
+      studentRef: 's1',
+      areas: ['subject'],
+      content: '자료의 출처를 스스로 확인하고 근거를 다시 정리함',
+    });
+    const rec = useRecordEvidenceStore.getState().records.find((r) => r.id === id);
+    expect(rec?.excludedFromAi).toBeUndefined();
+  });
+
+  it('addMany 도 같은 판정을 한다', async () => {
+    await useRecordEvidenceStore.getState().addMany([
+      { studentRef: 's1', areas: ['subject'], content: '토익 점수를 밝힘' },
+      { studentRef: 's1', areas: ['subject'], content: '실험 순서를 스스로 바꿔 다시 측정함' },
+    ]);
+    const recs = useRecordEvidenceStore.getState().records;
+    expect(recs.find((r) => r.content.includes('토익'))?.excludedFromAi).toBe(true);
+    expect(recs.find((r) => r.content.includes('실험'))?.excludedFromAi).toBeUndefined();
+  });
+
+  it('교사가 제외를 풀 수 있다 — 자동 판정의 오탐을 되돌리는 길', async () => {
+    const id = await useRecordEvidenceStore.getState().add({
+      studentRef: 's1',
+      areas: ['subject'],
+      content: '교내 대회에서 최우수상을 받음',
+    });
+    await useRecordEvidenceStore.getState().setExcludedFromAi(id, false);
+    expect(useRecordEvidenceStore.getState().records.find((r) => r.id === id)?.excludedFromAi).toBe(
+      false,
+    );
+  });
+
+  it('내용을 고쳐 금지 항목이 생기면 다시 제외된다 — 붙이기만 하고 자동으로 풀지 않는다', async () => {
+    const id = await useRecordEvidenceStore
+      .getState()
+      .add({ studentRef: 's1', areas: ['subject'], content: '평범한 관찰' });
+    await useRecordEvidenceStore.getState().update(id, { content: '특허를 출원함' });
+    expect(useRecordEvidenceStore.getState().records.find((r) => r.id === id)?.excludedFromAi).toBe(
+      true,
+    );
+
+    // 교사가 푼 뒤 내용을 깨끗하게 고쳐도 자동으로 true 가 되지는 않는다.
+    await useRecordEvidenceStore.getState().setExcludedFromAi(id, false);
+    await useRecordEvidenceStore.getState().update(id, { content: '자료를 다시 정리함' });
+    expect(useRecordEvidenceStore.getState().records.find((r) => r.id === id)?.excludedFromAi).toBe(
+      false,
+    );
+  });
+});

@@ -308,6 +308,52 @@ describe('applyLiveSyncWrite — recordDrafts', () => {
       ).status,
     ).toBe(400);
   });
+  it('한도 초과 거부는 이유를 실어 400 으로 내린다 — 일반 500 으로 뭉개지 않는다', async () => {
+    // 조용한 실패 금지(US-006). 이유가 사라지면 AI 도 교사도 왜 저장이 안 됐는지 알 수 없다.
+    const err = new Error('진로활동 한도를 넘었습니다 — 2,400바이트 / 2,100바이트.');
+    err.name = 'RecordDraftLimitError';
+    const failing: LiveSyncWriteDeps = {
+      ...deps,
+      recordDrafts: {
+        upsert: (() => Promise.reject(err)) as LiveSyncWriteDeps['recordDrafts']['upsert'],
+      },
+    };
+
+    const r = await applyLiveSyncWrite(
+      {
+        domain: 'recordDrafts',
+        op: 'create',
+        idempotencyKey: 'rd-limit',
+        data: { area: 'career', studentRef: 's1', studentId: 's1', content: '가'.repeat(800) },
+      },
+      failing,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.status).toBe(400);
+    expect(r.error).toContain('한도를 넘었습니다');
+  });
+
+  it('그 밖의 예외는 기존대로 일반 500 으로 내린다', async () => {
+    const failing: LiveSyncWriteDeps = {
+      ...deps,
+      recordDrafts: {
+        upsert: (() =>
+          Promise.reject(new Error('디스크 오류'))) as LiveSyncWriteDeps['recordDrafts']['upsert'],
+      },
+    };
+
+    const r = await applyLiveSyncWrite(
+      {
+        domain: 'recordDrafts',
+        op: 'create',
+        idempotencyKey: 'rd-other',
+        data: { area: 'career', studentRef: 's1', studentId: 's1', content: '내용' },
+      },
+      failing,
+    );
+    expect(r.status).toBe(500);
+    expect(r.error).not.toContain('디스크');
+  });
 });
 
 describe('applyLiveSyncWrite — memos', () => {
