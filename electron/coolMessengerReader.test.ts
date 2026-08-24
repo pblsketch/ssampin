@@ -35,6 +35,8 @@ import {
   isCoolMessengerAvailable,
   CoolSchemaMismatchError,
   CoolMemoNotFoundError,
+  toReadableQueryError,
+  dateShape,
 } from './coolMessengerReader';
 
 /** 실물과 같은 스키마의 쪽지함을 만든다 */
@@ -233,6 +235,107 @@ describe('안전 실패 — 조용히 넘어가지 않는다', () => {
   });
 });
 
+/**
+ * ★2026-08-24 신고 "쪽지함을 읽지 못했습니다" 재발 방지.
+ *
+ * 필수 칸 검사는 5칸만 보는데 조회 SQL은 `DeletedDate`·`IsUnRead` 를 더 썼다.
+ * 그래서 **쪽지함은 찾았는데(설정 스위치는 켜짐) 목록만 실패**했고, 화면에는
+ * 원인 없이 영문 `no such column: DeletedDate` 만 떴다.
+ * 쿨메신저는 배포본이 갈리므로 이 두 칸이 없어도 목록은 나와야 한다.
+ */
+describe('★ 선택 칸이 없는 배포본에서도 목록이 나온다', () => {
+  function makeDirWith(createSql: string, insertCols: string, rows: unknown[][]): string {
+    const dir = mkdtempSync(join(tmpdir(), 'cool-optional-'));
+    const db = new DatabaseSync(join(dir, 'm.udb'));
+    db.exec('PRAGMA journal_mode=WAL');
+    db.exec(createSql);
+    const marks = insertCols
+      .split(',')
+      .map(() => '?')
+      .join(',');
+    const st = db.prepare(`INSERT INTO tbl_recv (${insertCols}) VALUES (${marks})`);
+    for (const r of rows) st.run(...(r as never[]));
+    db.close();
+    return dir;
+  }
+
+  const dirs: string[] = [];
+  afterEach(() => {
+    closeCoolReaderSession();
+    while (dirs.length) rmSync(dirs.pop()!, { recursive: true, force: true });
+  });
+
+  it('DeletedDate 칸이 없어도 읽는다 (삭제 걸러내기만 못 한다)', () => {
+    const dir = makeDirWith(
+      `CREATE TABLE tbl_recv (MessageKey INTEGER PRIMARY KEY, Sender TEXT,
+        ReceiveDate TEXT, Title TEXT, MessageText TEXT, IsUnRead INTEGER)`,
+      'MessageKey, Sender, ReceiveDate, Title, MessageText, IsUnRead',
+      [
+        [1, '교무부', '2026/08/20 09:00:00 (목)', '안읽음', '본문', 1],
+        [2, '연구부', '2026/08/19 09:00:00 (수)', '읽음', '본문', 0],
+      ],
+    );
+    dirs.push(dir);
+    const list = readCoolMessages(dir);
+    expect(list).toHaveLength(2);
+    expect(list[0]!.isUnread).toBe(true);
+  });
+
+  it('IsUnRead 칸이 없어도 읽는다 (전부 읽음으로 본다)', () => {
+    const dir = makeDirWith(
+      `CREATE TABLE tbl_recv (MessageKey INTEGER PRIMARY KEY, Sender TEXT,
+        ReceiveDate TEXT, Title TEXT, MessageText TEXT, DeletedDate TEXT)`,
+      'MessageKey, Sender, ReceiveDate, Title, MessageText, DeletedDate',
+      [
+        [1, '교무부', '2026/08/20 09:00:00 (목)', '살아있음', '본문', null],
+        [2, '행정실', '2026/08/19 09:00:00 (수)', '지운 쪽지', '본문', '2026/08/19'],
+      ],
+    );
+    dirs.push(dir);
+    const list = readCoolMessages(dir);
+    expect(list).toHaveLength(1); // DeletedDate 는 있으니 삭제는 걸러진다
+    expect(list[0]!.isUnread).toBe(false);
+  });
+
+  it('두 칸 다 없어도 읽는다', () => {
+    const dir = makeDirWith(
+      `CREATE TABLE tbl_recv (MessageKey INTEGER PRIMARY KEY, Sender TEXT,
+        ReceiveDate TEXT, Title TEXT, MessageText TEXT)`,
+      'MessageKey, Sender, ReceiveDate, Title, MessageText',
+      [[1, '교무부', '2026/08/20 09:00:00 (목)', '제목', '본문']],
+    );
+    dirs.push(dir);
+    expect(readCoolMessages(dir)).toHaveLength(1);
+    expect(readCoolMessage(dir, 1)?.title).toBe('제목');
+  });
+});
+
+describe('영문 DB 오류는 한국어로 바꾼다', () => {
+  it('no such column → 어느 칸이 없는지 한국어로 알려준다', () => {
+    const e = toReadableQueryError(new Error('no such column: DeletedDate'));
+    expect(e).toBeInstanceOf(CoolSchemaMismatchError);
+    expect(e.message).toContain('칸 DeletedDate');
+    expect(e.message).not.toContain('no such');
+  });
+
+  it('no such table 도 한국어로 바꾼다', () => {
+    expect(toReadableQueryError(new Error('no such table: tbl_recv')).message).toContain(
+      '표 tbl_recv',
+    );
+  });
+
+  it('모르는 오류는 그대로 올린다 (조용히 삼키지 않는다)', () => {
+    const original = new Error('database disk image is malformed');
+    expect(toReadableQueryError(original)).toBe(original);
+  });
+});
+
+describe('진단 로그에는 날짜의 모양만 남긴다', () => {
+  it('숫자는 9로, 그 밖의 글자는 ㅁ로 바뀐다', () => {
+    expect(dateShape('2026/07/16 17:04:52 (목)')).toBe('9999/99/99 99:99:99 (ㅁ)');
+  });
+});
+
 describe('받은 시각 파싱', () => {
   it('쿨메신저 형식 "2026/07/16 17:04:52 (목)"', () => {
     const d = parseReceiveDate('2026/07/16 17:04:52 (목)');
@@ -250,5 +353,15 @@ describe('받은 시각 파싱', () => {
   it('형식이 다르면 null', () => {
     expect(parseReceiveDate('어제')).toBeNull();
     expect(parseReceiveDate('')).toBeNull();
+  });
+
+  // ★못 읽은 쪽지는 오류 없이 목록에서 사라진다 — "쪽지가 없습니다"로만 보이는
+  //   가장 찾기 어려운 실패다. 배포본마다 다를 수 있는 표기를 넉넉히 받는다.
+  it('★ 구분자가 -·. 이어도, 초가 없어도 읽는다 (배포본마다 다를 수 있다)', () => {
+    expect(parseReceiveDate('2026-07-16 17:04:52')?.getDate()).toBe(16);
+    expect(parseReceiveDate('2026.07.16 17:04:52')?.getDate()).toBe(16);
+    expect(parseReceiveDate('2026-7-6 9:04')?.getMonth()).toBe(6);
+    expect(parseReceiveDate('2026-07-16T17:04:52')?.getHours()).toBe(17);
+    expect(parseReceiveDate('  2026/07/16 17:04:52  ')?.getMinutes()).toBe(4);
   });
 });

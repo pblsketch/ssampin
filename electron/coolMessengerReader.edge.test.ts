@@ -187,6 +187,39 @@ describe('★ 세션 복사본은 오래된 데이터를 보여주지 않는다'
   });
 });
 
+/**
+ * ★쿨메신저가 **켜진 채** 새 쪽지가 오면 바뀌는 건 -wal 뿐이다.
+ *
+ * 실제 쪽지함은 278MB급이라(coolm-helper record.md) 그때마다 본 파일까지 다시
+ * 복사하면 쪽지를 누를 때마다 앱이 통째로 몇 초씩 멈춘다. 그래서 -wal·-shm 만
+ * 새로 뜨는데 — **빨라지자고 오래된 데이터를 보여주면 그게 더 나쁘다.**
+ */
+describe('★ -wal 만 바뀌면 본 파일은 다시 복사하지 않는다 (신선도는 그대로)', () => {
+  it('쿨메신저가 켜진 채 새 쪽지가 와도 즉시 보이고, 작업 폴더는 그대로 재사용한다', () => {
+    const dir = makeDir([[1, 'A', '2026/08/20 09:00:00 (목)', 'T1', 'B', 0, null]]);
+    expect(readCoolMessages(dir)).toHaveLength(1);
+
+    const before = readdirSync(tmpdir()).filter((n) => n.startsWith('ssampin-cool-'));
+    expect(before).toHaveLength(1);
+
+    // 쿨메신저가 켜진 채로 새 쪽지를 쓴다 — 닫지 않으므로 -wal 에만 쌓인다
+    const db = new DatabaseSync(join(dir, 'm.udb'));
+    db.prepare(
+      'INSERT INTO tbl_recv (MessageKey, Sender, ReceiveDate, Title, MessageText, IsUnRead, DeletedDate) VALUES (?,?,?,?,?,?,?)',
+    ).run(2, 'B', '2026/08/21 10:00:00 (금)', 'T2', 'B2', 1, null);
+
+    try {
+      // 신선도: 새 쪽지가 바로 보여야 한다
+      expect(readCoolMessages(dir)).toHaveLength(2);
+      // 절약: 같은 작업 폴더를 그대로 쓴다(= 본 파일을 다시 복사하지 않았다)
+      const after = readdirSync(tmpdir()).filter((n) => n.startsWith('ssampin-cool-'));
+      expect(after).toEqual(before);
+    } finally {
+      db.close();
+    }
+  });
+});
+
 describe('미리보기는 낱말 경계에서 자른다 (600자 절단 유령 날짜 방지)', () => {
   it('★ 경계에 걸린 "8월 31일"이 "8월 3"으로 잘리지 않는다', () => {
     // 595자 채우기 + " 8월 31일 …" — 600자째가 "31일" 한가운데에 떨어지고,

@@ -11,7 +11,7 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-const appMock = { isPackaged: false, on: vi.fn() };
+const appMock = { isPackaged: false, on: vi.fn(), getPath: () => tmpdir() };
 
 /** 채널별 IPC 핸들러를 붙잡아 둔다 — 게이트 동작을 핸들러 단위로 검증한다 */
 const handlers = new Map<string, (...args: unknown[]) => unknown>();

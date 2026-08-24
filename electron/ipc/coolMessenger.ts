@@ -32,6 +32,7 @@ import {
   readCoolMessages,
   type CoolMessage,
 } from '../coolMessengerReader';
+import { initCoolDiag, coolLog, coolWarn, describeError } from '../coolMessengerDiag';
 
 /** 목록에 담을 읽은 쪽지 수 (안읽은 쪽지는 이와 무관하게 전부 들어간다) */
 const LIST_LIMIT = 30;
@@ -97,6 +98,14 @@ function assertImportEnabled(): void {
 }
 
 export function registerCoolMessengerHandlers(): void {
+  // 실패 원인을 파일에 남긴다 — 화면은 이유가 무엇이든 같은 제목만 보여준다.
+  // 진단이 실패해도 가져오기 기능은 살아야 하므로 삼킨다(로그는 콘솔로만 간다).
+  try {
+    initCoolDiag(app.getPath('userData'));
+  } catch {
+    // userData 를 못 얻는 환경 — 파일 기록만 포기한다
+  }
+
   // 지난 실행이 강제 종료돼 남은 쪽지 사본(%TEMP%)을 지운다 — 개인정보 청소.
   cleanupStaleCoolTempDirs();
 
@@ -108,29 +117,46 @@ export function registerCoolMessengerHandlers(): void {
     // 설정 스위치도 확인하지 않는다 — 스위치를 **켜기 전에** 켤 수 있는지 묻는 통로라서
     // 게이트를 걸면 영원히 못 켠다. 쪽지 내용은 한 글자도 나가지 않는다(true/false 뿐).
     try {
-      return isCoolMessengerAvailable(resolveMemoDir());
-    } catch {
+      const ok = isCoolMessengerAvailable(resolveMemoDir());
+      coolLog('쪽지함 사용 가능 확인', { 결과: ok });
+      return ok;
+    } catch (err) {
+      coolWarn('쪽지함 사용 가능 확인 실패', describeError(err));
       return false;
     }
   });
 
   ipcMain.handle('cool-messenger:list', (): CoolMessage[] => {
-    assertImportEnabled();
-    return readCoolMessages(requireMemoDir(), LIST_LIMIT);
+    try {
+      assertImportEnabled();
+      const list = readCoolMessages(requireMemoDir(), LIST_LIMIT);
+      coolLog('목록 조회 성공', { 건수: list.length });
+      return list;
+    } catch (err) {
+      // 화면은 "쪽지함을 읽지 못했습니다."만 크게 보여준다 — 진짜 이유는 여기 남는다.
+      coolWarn('목록 조회 실패', describeError(err));
+      throw err;
+    }
   });
 
   ipcMain.handle('cool-messenger:get', (_event, key: unknown): CoolMessage | null => {
-    assertImportEnabled();
-    const messageKey = Number(key);
-    if (!Number.isFinite(messageKey)) return null;
-    return readCoolMessage(requireMemoDir(), messageKey);
+    try {
+      assertImportEnabled();
+      const messageKey = Number(key);
+      if (!Number.isFinite(messageKey)) return null;
+      return readCoolMessage(requireMemoDir(), messageKey);
+    } catch (err) {
+      coolWarn('쪽지 전문 조회 실패', describeError(err));
+      throw err;
+    }
   });
 
   ipcMain.handle('cool-messenger:members', (): string[] => {
     try {
       assertImportEnabled();
       return readCoolMemberNames(requireMemoDir());
-    } catch {
+    } catch (err) {
+      coolWarn('교직원 명단 조회 실패', describeError(err));
       return []; // 명단을 못 읽어도 기능은 살아야 한다 — 이름 대조만 못 할 뿐이다
     }
   });
