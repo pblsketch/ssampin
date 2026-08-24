@@ -6,6 +6,8 @@ import { isStudentActive } from '@domain/rules/studentActivity';
 import {
   assignGroups,
   calcGroupCount,
+  calcGroupQuotas,
+  describeGroupSizes,
   type GroupingMember,
   type GroupResult,
   type GroupingMethod,
@@ -152,6 +154,12 @@ export function ToolGroupingPage({ onBack }: Props) {
     return calcGroupCount(memberPool.length, membersPerGroup);
   }, [sizeMode, groupCount, membersPerGroup, memberPool.length]);
 
+  // 실제로 몇 명씩 나뉘는지 미리 보여 준다 (예: "6명 1모둠 · 5명 3모둠")
+  const plannedSizeText = useMemo(
+    () => describeGroupSizes(calcGroupQuotas(memberPool.length, effectiveGroupCount)),
+    [memberPool.length, effectiveGroupCount],
+  );
+
   const canAssign = memberPool.length > 0 && effectiveGroupCount > 0;
 
   const handleAssign = () => {
@@ -260,7 +268,8 @@ export function ToolGroupingPage({ onBack }: Props) {
                     onChange={setMembersPerGroup}
                   />
                   <p className="text-center text-xs text-sp-muted">
-                    약 {effectiveGroupCount}개 모둠으로 편성됩니다
+                    {effectiveGroupCount}개 모둠으로 편성됩니다
+                    {plannedSizeText && ` (${plannedSizeText})`}
                   </p>
                 </>
               )}

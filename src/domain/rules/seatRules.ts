@@ -9,6 +9,7 @@ import type {
 } from '../entities/SeatConstraints';
 import type { OddColumnMode } from './seatingLayoutRules';
 import { buildPairGroups } from './seatingLayoutRules';
+import { calcGroupQuotas } from './groupingRules';
 export type { OddColumnMode, PairGroup } from './seatingLayoutRules';
 export { buildPairGroups } from './seatingLayoutRules';
 
@@ -641,19 +642,23 @@ export function assignGroupsInOrder(
   groupCount: number,
   maxSize: number,
 ): SeatGroup[] {
+  // 앞 모둠부터 maxSize 만큼 꽉 채우면 마지막 모둠만 작아진다(21명 4모둠 → 6-6-6-3).
+  // 목표 인원을 균등하게 잡아 6-5-5-5 가 되게 하고, 정원을 넘더라도 학생을 버리지 않는다.
+  const quotas = calcGroupQuotas(studentIds.length, groupCount);
   const groups: SeatGroup[] = [];
   let idx = 0;
   for (let g = 0; g < groupCount; g++) {
-    const groupStudents = studentIds.slice(idx, idx + maxSize);
+    const size = quotas[g] ?? 0;
+    const groupStudents = studentIds.slice(idx, idx + size);
     if (groupStudents.length === 0) break;
     groups.push({
       id: `grp-${Date.now()}-${g}`,
       name: `${g + 1}모둠`,
       color: GROUP_COLORS[g % GROUP_COLORS.length]!,
       studentIds: groupStudents,
-      maxSize,
+      maxSize: Math.max(maxSize, groupStudents.length),
     });
-    idx += maxSize;
+    idx += size;
   }
   return groups;
 }
@@ -671,25 +676,23 @@ export function shuffleGroups(
   const shuffled = fisherYatesShuffle([...studentIds], random);
   const groups: SeatGroup[] = [];
 
+  // 균등 목표 인원으로 나눈다. 정원(maxSize)이 모자라도 학생이 사라지지 않도록
+  // 실제 배정 인원만큼 정원을 넓혀 준다.
+  const quotas = calcGroupQuotas(shuffled.length, groupCount);
+  let idx = 0;
   for (let i = 0; i < groupCount; i++) {
     const base = existingGroups[i];
+    const size = quotas[i] ?? 0;
+    const assigned = shuffled.slice(idx, idx + size);
+    idx += size;
     groups.push({
       id: base?.id ?? `grp-${Date.now()}-${i}`,
       name: base?.name ?? `${i + 1}모둠`,
       color: base?.color ?? GROUP_COLORS[i % GROUP_COLORS.length]!,
-      studentIds: [],
-      maxSize,
+      studentIds: assigned,
+      maxSize: Math.max(maxSize, assigned.length),
     });
   }
-
-  // 라운드로빈 분배
-  shuffled.forEach((sid, idx) => {
-    const groupIdx = idx % groupCount;
-    const group = groups[groupIdx]!;
-    if (group.studentIds.length < group.maxSize) {
-      groups[groupIdx] = { ...group, studentIds: [...group.studentIds, sid] };
-    }
-  });
 
   return groups;
 }

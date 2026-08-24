@@ -4,6 +4,7 @@ import { GROUP_COLORS } from '@domain/entities/Seating';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { isStudentActive } from '@domain/rules/studentActivity';
+import { calcGroupQuotas, describeGroupSizes } from '@domain/rules/groupingRules';
 
 /* ──────────────────────── 이름 글자 크기 매핑 ──────────────────────── */
 
@@ -31,10 +32,7 @@ function StudentChip({ studentId, groupColor, isEditing, onRemove }: StudentChip
   const nameSizeClass = NAME_SIZE_CLASS[nameSize];
 
   return (
-    <div
-      className="relative flex flex-col items-center gap-1"
-      style={{ minWidth: '4rem' }}
-    >
+    <div className="relative flex flex-col items-center gap-1" style={{ minWidth: '4rem' }}>
       {/* 원형 아바타 */}
       <div
         className="w-14 h-14 rounded-full border-2 flex items-center justify-center text-sm font-bold text-sp-text shadow-sm"
@@ -118,23 +116,27 @@ function GroupCard({ group, isEditing, onUpdate, onRemove }: GroupCardProps) {
       {/* 모둠 헤더 */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <div
-            className="w-3 h-3 rounded-full shrink-0"
-            style={{ background: group.color }}
-          />
+          <div className="w-3 h-3 rounded-full shrink-0" style={{ background: group.color }} />
           {isEditing && editingName ? (
             <input
               className="text-sm font-bold bg-transparent border-b border-sp-border text-sp-text w-24 focus:outline-none focus:border-sp-accent"
               value={nameValue}
               onChange={(e) => setNameValue(e.target.value)}
               onBlur={handleNameBlur}
-              onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') e.currentTarget.blur();
+              }}
               autoFocus
             />
           ) : (
             <span
               className={`text-sm font-bold text-sp-text ${isEditing ? 'cursor-pointer hover:text-sp-accent' : ''}`}
-              onClick={() => { if (isEditing) { setEditingName(true); setNameValue(group.name); } }}
+              onClick={() => {
+                if (isEditing) {
+                  setEditingName(true);
+                  setNameValue(group.name);
+                }
+              }}
             >
               {group.name}
             </span>
@@ -185,15 +187,17 @@ function GroupCard({ group, isEditing, onUpdate, onRemove }: GroupCardProps) {
           />
         ))}
         {/* 빈 슬롯 표시 */}
-        {Array.from({ length: Math.max(0, group.maxSize - group.studentIds.length) }).map((_, i) => (
-          <div
-            key={`empty-${i}`}
-            className="w-14 h-14 rounded-full border-2 border-dashed flex items-center justify-center"
-            style={{ borderColor: group.color + '30' }}
-          >
-            <span className="text-sp-muted text-tiny">빈자리</span>
-          </div>
-        ))}
+        {Array.from({ length: Math.max(0, group.maxSize - group.studentIds.length) }).map(
+          (_, i) => (
+            <div
+              key={`empty-${i}`}
+              className="w-14 h-14 rounded-full border-2 border-dashed flex items-center justify-center"
+              style={{ borderColor: group.color + '30' }}
+            >
+              <span className="text-sp-muted text-tiny">빈자리</span>
+            </div>
+          ),
+        )}
       </div>
     </div>
   );
@@ -208,7 +212,12 @@ interface UnassignedStudentsProps {
   onAssignToGroup: (studentId: string, groupId: string) => void;
 }
 
-function UnassignedStudents({ groups, allStudentIds, isEditing, onAssignToGroup }: UnassignedStudentsProps) {
+function UnassignedStudents({
+  groups,
+  allStudentIds,
+  isEditing,
+  onAssignToGroup,
+}: UnassignedStudentsProps) {
   const assignedIds = new Set(groups.flatMap((g) => [...g.studentIds]));
   const unassigned = allStudentIds.filter((id) => !assignedIds.has(id));
   const getStudent = useStudentStore((s) => s.getStudent);
@@ -219,7 +228,9 @@ function UnassignedStudents({ groups, allStudentIds, isEditing, onAssignToGroup 
     <div className="mt-6 rounded-xl border border-sp-border/50 bg-sp-card/50 p-4">
       <div className="flex items-center gap-2 mb-3">
         <span className="material-symbols-outlined text-sp-highlight text-base">person_off</span>
-        <span className="text-sm font-medium text-sp-highlight">미배정 학생 ({unassigned.length}명)</span>
+        <span className="text-sm font-medium text-sp-highlight">
+          미배정 학생 ({unassigned.length}명)
+        </span>
       </div>
       <div className="flex flex-wrap gap-3">
         {unassigned.map((sid) => {
@@ -232,7 +243,9 @@ function UnassignedStudents({ groups, allStudentIds, isEditing, onAssignToGroup 
               <div className="flex flex-col">
                 <span className="text-xs text-sp-text">{student?.name ?? '알 수 없음'}</span>
                 {student?.studentNumber !== undefined && (
-                  <span className="text-tiny text-sp-muted font-mono">{String(student.studentNumber).padStart(2, '0')}번</span>
+                  <span className="text-tiny text-sp-muted font-mono">
+                    {String(student.studentNumber).padStart(2, '0')}번
+                  </span>
                 )}
               </div>
               {isEditing && groups.length > 0 && (
@@ -246,10 +259,16 @@ function UnassignedStudents({ groups, allStudentIds, isEditing, onAssignToGroup 
                     }
                   }}
                 >
-                  <option value="" disabled>배정...</option>
-                  {groups.filter(g => g.studentIds.length < g.maxSize).map((g) => (
-                    <option key={g.id} value={g.id}>{g.name}</option>
-                  ))}
+                  <option value="" disabled>
+                    배정...
+                  </option>
+                  {groups
+                    .filter((g) => g.studentIds.length < g.maxSize)
+                    .map((g) => (
+                      <option key={g.id} value={g.id}>
+                        {g.name}
+                      </option>
+                    ))}
                 </select>
               )}
             </div>
@@ -269,7 +288,12 @@ interface GroupSeatingViewProps {
   onShuffleGroups: (groupCount: number, maxSize: number) => void;
 }
 
-export function GroupSeatingView({ groups, isEditing, onUpdateGroups, onShuffleGroups }: GroupSeatingViewProps) {
+export function GroupSeatingView({
+  groups,
+  isEditing,
+  onUpdateGroups,
+  onShuffleGroups,
+}: GroupSeatingViewProps) {
   const students = useStudentStore((s) => s.students);
   const allActiveStudentIds = students.filter(isStudentActive).map((s) => s.id);
 
@@ -317,6 +341,12 @@ export function GroupSeatingView({ groups, isEditing, onUpdateGroups, onShuffleG
     groups.length > 0 ? groups.length : Math.max(1, Math.ceil(allActiveStudentIds.length / 6)),
   );
   const [shuffleMaxSize, setShuffleMaxSize] = useState(6);
+
+  // 실제로 몇 명씩 나뉘는지 미리 보여 준다 (예: "6명 1모둠 · 5명 3모둠")
+  const shuffleSizeText = describeGroupSizes(
+    calcGroupQuotas(allActiveStudentIds.length, shuffleGroupCount),
+  );
+  const shuffleOverflow = allActiveStudentIds.length > shuffleGroupCount * shuffleMaxSize;
 
   return (
     <div className="w-full max-w-6xl mx-auto pb-8">
@@ -379,7 +409,9 @@ export function GroupSeatingView({ groups, isEditing, onUpdateGroups, onShuffleG
                   >
                     −
                   </button>
-                  <span className="text-lg font-bold text-sp-text w-8 text-center">{shuffleGroupCount}</span>
+                  <span className="text-lg font-bold text-sp-text w-8 text-center">
+                    {shuffleGroupCount}
+                  </span>
                   <button
                     onClick={() => setShuffleGroupCount(Math.min(12, shuffleGroupCount + 1))}
                     className="w-8 h-8 flex items-center justify-center rounded-lg border border-sp-border bg-sp-surface hover:bg-sp-surface text-sp-text transition-colors"
@@ -397,7 +429,9 @@ export function GroupSeatingView({ groups, isEditing, onUpdateGroups, onShuffleG
                   >
                     −
                   </button>
-                  <span className="text-lg font-bold text-sp-text w-8 text-center">{shuffleMaxSize}</span>
+                  <span className="text-lg font-bold text-sp-text w-8 text-center">
+                    {shuffleMaxSize}
+                  </span>
                   <button
                     onClick={() => setShuffleMaxSize(Math.min(10, shuffleMaxSize + 1))}
                     className="w-8 h-8 flex items-center justify-center rounded-lg border border-sp-border bg-sp-surface hover:bg-sp-surface text-sp-text transition-colors"
@@ -407,8 +441,16 @@ export function GroupSeatingView({ groups, isEditing, onUpdateGroups, onShuffleG
                 </div>
               </div>
               <p className="text-xs text-sp-muted">
-                {allActiveStudentIds.length}명의 학생을 {shuffleGroupCount}개 모둠에 랜덤 배정합니다.
+                {allActiveStudentIds.length}명의 학생을 {shuffleGroupCount}개 모둠에 랜덤
+                배정합니다.
+                {shuffleSizeText && ` (${shuffleSizeText})`}
               </p>
+              {shuffleOverflow && (
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  최대 인원({shuffleMaxSize}명)으로는 전원을 담을 수 없어, 모둠 정원을 자동으로 늘려
+                  배정합니다.
+                </p>
+              )}
             </div>
             <div className="flex justify-end gap-3 mt-6">
               <button

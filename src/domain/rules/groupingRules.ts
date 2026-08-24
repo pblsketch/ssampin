@@ -116,6 +116,37 @@ export function calcMembersPerGroup(totalMembers: number, groupCount: number): n
   return Math.ceil(totalMembers / groupCount);
 }
 
+/**
+ * 모둠별 목표 인원(쿼터) 계산 — 최대·최소 차이가 1명을 넘지 않도록 나눈다.
+ *
+ * 예: 21명 4모둠 → [6, 5, 5, 5] (6-6-6-3 처럼 뒤 모둠만 작아지지 않는다)
+ */
+export function calcGroupQuotas(totalMembers: number, groupCount: number): number[] {
+  if (groupCount <= 0 || totalMembers <= 0) return [];
+  const base = Math.floor(totalMembers / groupCount);
+  const remainder = totalMembers % groupCount;
+  return Array.from({ length: groupCount }, (_, i) => base + (i < remainder ? 1 : 0));
+}
+
+/**
+ * 인원 분포를 사람이 읽는 문구로 요약한다.
+ *
+ * 예: [6, 5, 5, 5] → "6명 1모둠 · 5명 3모둠", [5, 5, 5] → "5명씩 3모둠"
+ */
+export function describeGroupSizes(sizes: readonly number[]): string {
+  if (sizes.length === 0) return '';
+  const counted = new Map<number, number>();
+  for (const size of sizes) {
+    counted.set(size, (counted.get(size) ?? 0) + 1);
+  }
+  const parts = [...counted.entries()].sort((a, b) => b[0] - a[0]);
+  if (parts.length === 1) {
+    const [size, count] = parts[0]!;
+    return `${size}명씩 ${count}모둠`;
+  }
+  return parts.map(([size, count]) => `${size}명 ${count}모둠`).join(' · ');
+}
+
 function makeLabels(count: number): string[] {
   return Array.from({ length: count }, (_, i) => `${i + 1}모둠`);
 }
@@ -137,20 +168,16 @@ function smallestGroupIdx(groups: GroupingMember[][]): number {
 }
 
 /**
- * 성별 분리 그룹의 인원 배분을 위해, 해당 성별이 가장 적은 그룹 인덱스 반환
+ * 아직 목표 인원(쿼터)이 남은 모둠 중 인원이 가장 적은 곳.
+ * 모두 목표를 채웠으면(제약 조건 등으로 넘칠 수 있음) 가장 적은 모둠으로 폴백한다.
  */
-function leastGenderIdx(
-  groups: GroupingMember[][],
-  gender: Gender,
-  maxPerGroup: number,
-): number {
+function openGroupIdx(groups: GroupingMember[][], quotas: readonly number[]): number {
   let minIdx = -1;
-  let minCount = Infinity;
+  let minLen = Infinity;
   for (let i = 0; i < groups.length; i++) {
-    if (groups[i]!.length >= maxPerGroup) continue;
-    const count = groups[i]!.filter((m) => m.gender === gender).length;
-    if (count < minCount) {
-      minCount = count;
+    if (groups[i]!.length >= (quotas[i] ?? 0)) continue;
+    if (groups[i]!.length < minLen) {
+      minLen = groups[i]!.length;
       minIdx = i;
     }
   }
@@ -158,24 +185,53 @@ function leastGenderIdx(
 }
 
 /**
- * 수준별 균등 배분: 해당 레벨이 가장 적은 그룹 인덱스
+ * 성별 분리 그룹의 인원 배분을 위해, 해당 성별이 가장 적은 그룹 인덱스 반환.
+ * 성별 수가 같으면 인원이 적은 모둠을 먼저 채워 모둠 크기가 벌어지지 않게 한다.
+ */
+function leastGenderIdx(
+  groups: GroupingMember[][],
+  gender: Gender,
+  quotas: readonly number[],
+): number {
+  let minIdx = -1;
+  let minCount = Infinity;
+  let minLen = Infinity;
+  for (let i = 0; i < groups.length; i++) {
+    if (groups[i]!.length >= (quotas[i] ?? 0)) continue;
+    const count = groups[i]!.filter((m) => m.gender === gender).length;
+    const len = groups[i]!.length;
+    if (count < minCount || (count === minCount && len < minLen)) {
+      minCount = count;
+      minLen = len;
+      minIdx = i;
+    }
+  }
+  return minIdx === -1 ? openGroupIdx(groups, quotas) : minIdx;
+}
+
+/**
+ * 수준별 균등 배분: 해당 레벨이 가장 적은 그룹 인덱스.
+ * 레벨 수가 같으면(수준 태그를 안 붙인 경우 전원 동점이다) 인원이 적은 모둠을 먼저 채운다.
  */
 function leastLevelIdx(
   groups: GroupingMember[][],
   level: Level,
-  maxPerGroup: number,
+  quotas: readonly number[],
 ): number {
   let minIdx = -1;
   let minCount = Infinity;
+  let minLen = Infinity;
   for (let i = 0; i < groups.length; i++) {
-    if (groups[i]!.length >= maxPerGroup) continue;
+    if (groups[i]!.length >= (quotas[i] ?? 0)) continue;
     const count = groups[i]!.filter((m) => m.level === level).length;
-    if (count < minCount) {
+    const len = groups[i]!.length;
+    if (count < minCount || (count === minCount && len < minLen)) {
       minCount = count;
+      minLen = len;
       minIdx = i;
     }
   }
-  return minIdx === -1 ? smallestGroupIdx(groups) : minIdx;
+  return minIdx === -1 ? openGroupIdx(groups, quotas) : minIdx;
 }
 
 /**
@@ -190,27 +246,50 @@ function assignSameGender(
   const females = members.filter((m) => m.gender === 'F');
   const untagged = members.filter((m) => !m.gender);
 
-  // 성별별로 그룹 수 비례 배분
-  const total = members.length;
-  const maleGroups = total > 0 ? Math.max(1, Math.round(groupCount * males.length / total)) : 0;
-  const femaleGroups = Math.max(groupCount - maleGroups, females.length > 0 ? 1 : 0);
-  const actualMaleGroups = males.length > 0 ? Math.min(maleGroups, males.length) : 0;
-  const actualFemaleGroups = females.length > 0 ? Math.min(femaleGroups, females.length) : 0;
+  // 모둠이 하나뿐이면 성별로 나눌 수 없다 — 전원 한 모둠
+  if (groupCount <= 1) {
+    return assignGroups(members, 1, { method });
+  }
 
-  const maleResults = actualMaleGroups > 0
-    ? assignGroups(males, actualMaleGroups, { method })
-    : [];
-  const femaleResults = actualFemaleGroups > 0
-    ? assignGroups(females, actualFemaleGroups, { method })
-    : [];
+  // 성별별로 모둠 수 비례 배분 (합이 요청한 모둠 수를 넘지 않게)
+  const tagged = males.length + females.length;
+  let maleGroups = 0;
+  let femaleGroups = 0;
+  if (males.length === 0) {
+    femaleGroups = females.length > 0 ? groupCount : 0;
+  } else if (females.length === 0) {
+    maleGroups = groupCount;
+  } else {
+    const raw = Math.round((groupCount * males.length) / tagged);
+    maleGroups = Math.min(Math.max(1, raw), groupCount - 1);
+    femaleGroups = groupCount - maleGroups;
+  }
+  const actualMaleGroups = Math.min(maleGroups, males.length);
+  const actualFemaleGroups = Math.min(femaleGroups, females.length);
+
+  const maleResults = actualMaleGroups > 0 ? assignGroups(males, actualMaleGroups, { method }) : [];
+  const femaleResults =
+    actualFemaleGroups > 0 ? assignGroups(females, actualFemaleGroups, { method }) : [];
+
+  // 성별 태그가 하나도 없으면 동성 모둠을 만들 수 없다 — 일반 배정으로 폴백
+  const all = [...maleResults, ...femaleResults];
+  if (all.length === 0) {
+    return assignGroups(members, groupCount, { method });
+  }
 
   // 미지정 성별은 가장 작은 그룹에 분배
-  const all = [...maleResults, ...femaleResults];
   if (untagged.length > 0) {
+    // 태그된 학생이 적어 모둠 수가 모자라면 빈 모둠을 만들어 요청한 수를 맞춘다
+    // (예: 1명만 성별 태그 → 나머지 전원이 한 모둠에 몰리는 것 방지)
+    while (all.length < groupCount) {
+      all.push({ label: `${all.length + 1}모둠`, members: [] });
+    }
     const ordered = method === 'random' ? shuffleArray(untagged) : untagged;
     for (const m of ordered) {
-      const minGroup = all.reduce((prev, curr) =>
-        curr.members.length < prev.members.length ? curr : prev, all[0]!);
+      const minGroup = all.reduce(
+        (prev, curr) => (curr.members.length < prev.members.length ? curr : prev),
+        all[0]!,
+      );
       minGroup.members.push(m);
     }
   }
@@ -245,7 +324,8 @@ export function assignGroups(
   groupCount: number,
   options: GroupingOptions = { method: 'random' },
 ): GroupResult[] {
-  const { method, constraints, genderMode, balanceLevel, leaderMethod, roles, roleAssignMode } = options;
+  const { method, constraints, genderMode, balanceLevel, leaderMethod, roles, roleAssignMode } =
+    options;
 
   if (members.length === 0 || groupCount <= 0) return [];
   const actualGroupCount = Math.min(groupCount, members.length);
@@ -261,7 +341,8 @@ export function assignGroups(
 
   const labels = makeLabels(actualGroupCount);
   const groups = emptyGroups(actualGroupCount);
-  const maxPerGroup = Math.ceil(members.length / actualGroupCount);
+  // 모둠별 목표 인원. 상한만 두면(=올림값) 앞 모둠부터 꽉 차서 마지막 모둠만 작아진다.
+  const quotas = calcGroupQuotas(members.length, actualGroupCount);
 
   // 정렬된 멤버 목록 준비
   let ordered: GroupingMember[];
@@ -293,13 +374,13 @@ export function assignGroups(
       }
 
       if (targetIdx === -1) {
-        targetIdx = smallestGroupIdx(groups);
+        targetIdx = openGroupIdx(groups, quotas);
       }
 
       for (const name of [a, b]) {
         if (placed.has(name)) continue;
         const member = ordered.find((m) => m.name === name);
-        if (member && groups[targetIdx]!.length < maxPerGroup) {
+        if (member && groups[targetIdx]!.length < (quotas[targetIdx] ?? 0)) {
           groups[targetIdx]!.push(member);
           placed.add(name);
         }
@@ -322,13 +403,13 @@ export function assignGroups(
         let bestLen = Infinity;
         for (let i = 0; i < groups.length; i++) {
           if (i === avoidIdx) continue;
-          if (groups[i]!.length < bestLen && groups[i]!.length < maxPerGroup) {
+          if (groups[i]!.length < bestLen && groups[i]!.length < (quotas[i] ?? 0)) {
             bestLen = groups[i]!.length;
             bestIdx = i;
           }
         }
 
-        if (bestIdx === -1) bestIdx = smallestGroupIdx(groups);
+        if (bestIdx === -1) bestIdx = openGroupIdx(groups, quotas);
         groups[bestIdx]!.push(member);
         placed.add(name);
       }
@@ -348,8 +429,8 @@ export function assignGroups(
       const levelMembers = method === 'random' ? shuffleArray(byLevel[level]!) : byLevel[level]!;
       for (const m of levelMembers) {
         const idx = m.gender
-          ? leastGenderIdx(groups, m.gender, maxPerGroup)
-          : leastLevelIdx(groups, m.level ?? 'mid', maxPerGroup);
+          ? leastGenderIdx(groups, m.gender, quotas)
+          : leastLevelIdx(groups, m.level ?? 'mid', quotas);
         groups[idx]!.push(m);
       }
     }
@@ -363,12 +444,12 @@ export function assignGroups(
     for (const genderGroup of [males, females]) {
       const shuffled = method === 'random' ? shuffleArray(genderGroup) : genderGroup;
       for (const m of shuffled) {
-        const idx = leastGenderIdx(groups, m.gender!, maxPerGroup);
+        const idx = leastGenderIdx(groups, m.gender!, quotas);
         groups[idx]!.push(m);
       }
     }
     for (const m of untagged) {
-      groups[smallestGroupIdx(groups)]!.push(m);
+      groups[openGroupIdx(groups, quotas)]!.push(m);
     }
   } else if (balanceLevel) {
     // 수준별 균등만
@@ -379,22 +460,23 @@ export function assignGroups(
     for (const level of ['high', 'mid', 'low', 'none'] as const) {
       const shuffled = method === 'random' ? shuffleArray(byLevel[level]!) : byLevel[level]!;
       for (const m of shuffled) {
-        const idx = leastLevelIdx(groups, m.level ?? 'mid', maxPerGroup);
+        const idx = leastLevelIdx(groups, m.level ?? 'mid', quotas);
         groups[idx]!.push(m);
       }
     }
   } else {
     // 기본: 순서대로 가장 작은 그룹에 배치
     for (const member of remaining) {
-      const idx = smallestGroupIdx(groups);
+      const idx = openGroupIdx(groups, quotas);
       groups[idx]!.push(member);
     }
   }
 
   const results = labels.map((label, i) => {
-    const membersWithRoles = (roles?.length && roleAssignMode === 'random')
-      ? assignRolesToGroup(groups[i]!, roles)
-      : groups[i]!;
+    const membersWithRoles =
+      roles?.length && roleAssignMode === 'random'
+        ? assignRolesToGroup(groups[i]!, roles)
+        : groups[i]!;
     return {
       label,
       members: membersWithRoles,
@@ -408,9 +490,7 @@ export function assignGroups(
 /**
  * 제약 조건 검증: 충돌하는 together+apart 쌍 검출
  */
-export function validateConstraints(
-  constraints: GroupingConstraints,
-): string[] {
+export function validateConstraints(constraints: GroupingConstraints): string[] {
   const errors: string[] = [];
   const togetherSet = new Set(constraints.together.map(([a, b]) => [a, b].sort().join('|')));
 

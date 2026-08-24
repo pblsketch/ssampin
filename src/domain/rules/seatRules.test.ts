@@ -4,6 +4,8 @@ import {
   shuffleSeatsPreservingGroups,
   shuffleSeatsWithConstraints,
   sanitizeGroups,
+  assignGroupsInOrder,
+  shuffleGroups,
 } from './seatRules';
 import type { SeatConstraints } from '@domain/entities/SeatConstraints';
 import { EMPTY_SEAT_CONSTRAINTS } from '@domain/entities/SeatConstraints';
@@ -300,5 +302,56 @@ describe('sanitizeGroups', () => {
     expect(sanitizeGroups(undefined, new Set(['s1']))).toBeUndefined();
     const empty: readonly SeatGroup[] = [];
     expect(sanitizeGroups(empty, new Set(['s1']))).toBe(empty);
+  });
+});
+
+describe('assignGroupsInOrder — 모둠 인원 균등 배분', () => {
+  const ids = (n: number) => Array.from({ length: n }, (_, i) => `s${i + 1}`);
+
+  it('21명 4모둠은 6-6-6-3이 아니라 6-5-5-5', () => {
+    const groups = assignGroupsInOrder(ids(21), 4, 6);
+    expect(groups.map((g) => g.studentIds.length)).toEqual([6, 5, 5, 5]);
+  });
+
+  it('격자 순서는 그대로 유지된다', () => {
+    const groups = assignGroupsInOrder(ids(21), 4, 6);
+    expect(groups.flatMap((g) => g.studentIds)).toEqual(ids(21));
+  });
+
+  it('정원이 모자라도 학생이 사라지지 않고 정원이 넓혀진다', () => {
+    const groups = assignGroupsInOrder(ids(21), 4, 4);
+    expect(groups.flatMap((g) => g.studentIds)).toHaveLength(21);
+    for (const g of groups) {
+      expect(g.maxSize).toBeGreaterThanOrEqual(g.studentIds.length);
+    }
+  });
+
+  it('학생보다 모둠이 많으면 빈 모둠은 만들지 않는다', () => {
+    expect(assignGroupsInOrder(ids(3), 6, 6)).toHaveLength(3);
+  });
+});
+
+describe('shuffleGroups — 모둠 랜덤 배정', () => {
+  const ids = (n: number) => Array.from({ length: n }, (_, i) => `s${i + 1}`);
+
+  it('21명 4모둠은 6-5-5-5', () => {
+    const groups = shuffleGroups(ids(21), 4, 6, [], mulberry32(7));
+    expect(groups.map((g) => g.studentIds.length).sort((a, b) => b - a)).toEqual([6, 5, 5, 5]);
+  });
+
+  it('정원이 모자라도 학생을 잃지 않는다 (21명 4모둠 최대 5명)', () => {
+    const groups = shuffleGroups(ids(21), 4, 5, [], mulberry32(7));
+    expect(new Set(groups.flatMap((g) => g.studentIds)).size).toBe(21);
+  });
+
+  it('기존 모둠의 이름과 색은 유지한다', () => {
+    const existing: SeatGroup[] = [
+      { id: 'g1', name: '독수리', color: 'red', studentIds: [], maxSize: 6 },
+      { id: 'g2', name: '호랑이', color: 'blue', studentIds: [], maxSize: 6 },
+    ];
+    const groups = shuffleGroups(ids(9), 2, 6, existing, mulberry32(3));
+    expect(groups.map((g) => g.name)).toEqual(['독수리', '호랑이']);
+    expect(groups.map((g) => g.id)).toEqual(['g1', 'g2']);
+    expect(groups.map((g) => g.studentIds.length).sort((a, b) => b - a)).toEqual([5, 4]);
   });
 });

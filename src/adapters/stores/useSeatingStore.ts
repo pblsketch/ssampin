@@ -107,7 +107,12 @@ function repairEmptyGroupsFromSeats(
   const maxSize = existing[0]?.maxSize ?? 6;
   const filled = assignGroupsInOrder(allStudentIds, existing.length, maxSize).map((g, i) => {
     const base = existing[i]!;
-    return { ...base, studentIds: g.studentIds, maxSize: base.maxSize ?? maxSize };
+    // 정원이 배정 인원보다 작으면 정원을 넓힌다 (학생이 정원 밖으로 밀려나지 않게)
+    return {
+      ...base,
+      studentIds: g.studentIds,
+      maxSize: Math.max(base.maxSize ?? maxSize, g.studentIds.length),
+    };
   });
   return { ...seating, groups: filled };
 }
@@ -650,7 +655,11 @@ export const useSeatingStore = create<SeatingState>((set, get) => {
               (g, i) => {
                 const base = existing[i];
                 return base
-                  ? { ...base, studentIds: g.studentIds, maxSize: base.maxSize ?? maxSize }
+                  ? {
+                      ...base,
+                      studentIds: g.studentIds,
+                      maxSize: Math.max(base.maxSize ?? maxSize, g.studentIds.length),
+                    }
                   : g;
               },
             );

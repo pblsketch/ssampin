@@ -11,6 +11,8 @@ import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import {
   assignGroups,
   calcGroupCount,
+  calcGroupQuotas,
+  describeGroupSizes,
   validateConstraints,
   type GroupingMember,
   type GroupResult,
@@ -211,6 +213,12 @@ export function ToolGrouping({ onBack, isFullscreen }: ToolGroupingProps) {
     if (sizeMode === 'byCount') return Math.min(groupCount, totalMembers);
     return calcGroupCount(totalMembers, membersPerGroup);
   }, [sizeMode, groupCount, membersPerGroup, totalMembers]);
+
+  // 실제로 몇 명씩 나뉘는지 미리 보여 준다 (예: "6명 1모둠 · 5명 3모둠")
+  const plannedSizeText = useMemo(
+    () => describeGroupSizes(calcGroupQuotas(totalMembers, effectiveGroupCount)),
+    [totalMembers, effectiveGroupCount],
+  );
 
   // Parse constraints
   const constraints = useMemo((): GroupingConstraints => {
@@ -750,11 +758,8 @@ export function ToolGrouping({ onBack, isFullscreen }: ToolGroupingProps) {
                     </span>
                   </button>
                   <span className="text-sm text-sp-muted ml-2">
-                    → {effectiveGroupCount}모둠 ×{' '}
-                    {totalMembers > 0
-                      ? Math.ceil(totalMembers / Math.max(1, effectiveGroupCount))
-                      : 0}
-                    명
+                    → {effectiveGroupCount}모둠
+                    {plannedSizeText && ` (${plannedSizeText})`}
                   </span>
                 </div>
               </div>
