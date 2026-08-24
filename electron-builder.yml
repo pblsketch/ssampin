@@ -127,25 +127,20 @@ mac:
       arch:
         - x64
         - arm64
-  # mac 전용 제외 ① cloudflared 실행 바이너리(터널 기능) — 잘못된 칩 동봉을 막는 실제 버그 수정이다.
+  # ⛔ mac 아래에 `files:` 를 두지 말 것(2026-08-24 실측으로 확인).
   #
-  # cloudflared npm 패키지는 postinstall 로 "빌드 머신의 칩에 맞는" 바이너리만 내려받아
-  # node_modules/cloudflared/bin/ 에 둔다. 맥 빌드는 Apple Silicon 러너에서 도는데 x64 DMG 도
-  # 같은 node_modules 를 그대로 담으므로, **Intel Mac 용 DMG 에 arm64 cloudflared 가 실려 왔다**
-  # (칩별로 나눠 빌드하던 v2.4.4 이하도 마찬가지 — 인텔 Mac 에서 터널이 조용히 실패했을 것).
+  # mac 전용 제외를 넣으려고 `mac.files: ['!…']` 를 썼다가 DMG 가 329MB → 379MB 로 오히려 커졌다.
+  # app-builder-lib/out/fileMatcher.js getFileMatchers(): 문자열 패턴은 defaultMatcher 로 들어가고
+  # 그 defaultMatcher 가 fileMatchers 앞으로 unshift 되어 matchers[0](주 필터)가 된다.
+  # 그러면 루트 files 의 `{from:'.', filter:[…]}` 목록(포함 대상 한정 + 미사용 패키지 제외)이
+  # 주 필터 자리에서 밀려나, 의도치 않은 파일들이 패키지에 함께 실린다.
+  # 플랫폼별로 빼야 할 것이 생기면 이 방식 대신 루트 files 에서 처리하거나 빌드 스크립트로 걸러낼 것.
   #
-  # 쌤핀은 이 바이너리를 첫 사용 시 userData 로 직접 내려받는다
-  # (electron/ipc/tunnel.ts installTunnel(): "첫 사용 시, ~40MB 다운로드", userData 경로 우선).
-  # 동봉본은 이전 버전 호환 fallback 일 뿐이므로 mac 에서는 빼고 런타임 다운로드(칩에 맞는 판)에 맡긴다.
-  # Windows 는 현행 유지(동봉) — 동작 변화 없음.
-  #
-  # mac 전용 제외 ② koffi(FFI) — mac 에서 쓰지 않는 Win32 전용 부품이다.
-  #   - desktopWidgetManager.ts: 비Win32면 아예 no-op manager 반환("절대 throw 하지 않는다")
-  #   - win32SendKeys.ts: require('koffi') 가 함수 안 try/catch — 실패 시 autoPasted=false 로 graceful
-  # 모든 플랫폼용 프리빌드(build/koffi/darwin_arm64·win32_x64 …)를 통째로 담고 있어 용량만 차지한다.
-  files:
-    - '!**/node_modules/cloudflared/bin/**'
-    - '!**/node_modules/koffi/**'
+  # 그래서 아래 두 건은 제외하지 못하고 mac 패키지에 그대로 들어간다(알려진 상태):
+  #   - cloudflared/bin: npm postinstall 이 "빌드 머신 칩"(Apple Silicon) 바이너리만 받으므로
+  #     Intel Mac 용 DMG 에는 arm64 판이 실린다. 다만 tunnel.ts 는 userData 경로를 먼저 보고
+  #     없으면 칩에 맞는 판을 받아오므로, 최악의 경우에도 첫 사용 시 다운로드로 복구된다.
+  #   - koffi: Win32 전용(비Win32에서는 no-op manager 로 흡수)이라 mac 에서는 용량만 차지한다.
   icon: build/icon.png
   category: public.app-category.education
   minimumSystemVersion: '12.0.0'

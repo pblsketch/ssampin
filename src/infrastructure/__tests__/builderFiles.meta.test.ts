@@ -139,6 +139,25 @@ describe('electron-builder.yml macOS 서명 설정 보장', () => {
    * 파일명 규칙(ssampin-${arch}.dmg)은 latest-mac.yml·랜딩 URL·앱 내 업데이트가 모두 참조하므로
    * 여기서 arch 목록이 바뀌면 그 세 곳도 함께 바뀌어야 한다.
    */
+  /**
+   * mac 섹션에 files: 를 두면 패키지가 오히려 커진다 — 2026-08-24 실측(329MB → 379MB).
+   *
+   * app-builder-lib/out/fileMatcher.js getFileMatchers(): 플랫폼 섹션의 문자열 패턴은
+   * defaultMatcher 로 들어가고, 그 defaultMatcher 가 fileMatchers 맨 앞으로 unshift 되어
+   * 주 필터(matchers[0])가 된다. 그러면 루트 files 의 `{from:'.', filter:[…]}` 목록
+   * (포함 대상 한정 + 미사용 패키지 제외)이 주 필터 자리에서 밀려나 의도치 않은 파일이 함께 실린다.
+   */
+  it('mac 섹션에 files: 를 두지 않는다 (루트 files 필터가 밀려남)', () => {
+    const src = readElectronBuilderYml();
+    const macSection = src.slice(src.indexOf('\nmac:'), src.indexOf('\ndmg:'));
+    expect(
+      /^\s{2}files:\s*$/m.test(macSection),
+      'electron-builder.yml 의 mac 섹션에 files: 가 있습니다. 플랫폼별 files 는 루트 files 의 ' +
+        '주 필터를 밀어내 설치파일이 오히려 커집니다(실측 329MB → 379MB). ' +
+        '플랫폼별로 뺄 것이 있으면 루트 files 에서 처리하거나 빌드 스크립트로 걸러내세요.',
+    ).toBe(false);
+  });
+
   it('mac 타깃이 x64·arm64 2종이다 (파일명·다운로드 URL 규칙과 일치)', () => {
     const src = readElectronBuilderYml();
     const macSection = src.slice(src.indexOf('\nmac:'), src.indexOf('\ndmg:'));
