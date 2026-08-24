@@ -142,4 +142,18 @@ describe('조작', () => {
     await user.click(screen.getByRole('button', { name: '살펴보기' }));
     expect(await screen.findByText('학폭위 심의')).toBeTruthy();
   });
+
+  it('★ 창을 [취소]로 그냥 닫으면 배너를 접지 않는다 (오너 결정 2026-08-24)', async () => {
+    // 지금 볼 시간이 없어 닫았는데 알림까지 사라지면 잊어버린다.
+    // 접는 것은 등록하고 나왔을 때와 [나중에]를 눌렀을 때뿐이다.
+    historyState.dismissBanner.mockClear(); // 앞 테스트('나중에')의 호출이 남아 있다
+    const user = userEvent.setup();
+    render(<CoolImportBanner />);
+    await screen.findByText(/등록 후보 쪽지 1건/);
+    await user.click(screen.getByRole('button', { name: '살펴보기' }));
+    await screen.findByText('학폭위 심의');
+    await user.click(screen.getByRole('button', { name: '취소' }));
+    expect(historyState.dismissBanner).not.toHaveBeenCalled();
+    expect(screen.getByText(/등록 후보 쪽지 1건/)).toBeTruthy();
+  });
 });

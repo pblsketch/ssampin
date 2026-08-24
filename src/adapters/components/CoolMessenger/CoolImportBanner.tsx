@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CoolImportModal } from './CoolImportModal';
 import { useCoolImport } from './useCoolImport';
 import { useCoolImportHistoryStore } from '@adapters/stores/useCoolImportHistoryStore';
@@ -47,6 +47,14 @@ export function CoolImportBanner() {
 
   const [count, setCount] = useState(sessionCount ?? 0);
   const [open, setOpen] = useState(false);
+  /**
+   * 이번에 창을 연 동안 실제로 등록했는가 — 배너를 접을지의 근거.
+   *
+   * ★[취소]·Esc·바깥 클릭으로 그냥 닫은 것은 "처리하고 나온 것"이 아니다 (오너 결정
+   * 2026-08-24). 지금 볼 시간이 없어 닫았는데 알림까지 사라지면 잊어버린다.
+   * 접는 것은 ① 무언가 등록하고 나왔을 때 ② [나중에]를 직접 눌렀을 때 뿐이다.
+   */
+  const submittedRef = useRef(false);
 
   // 앱을 켤 때 한 번만 — 후보 쪽지가 있는지 센다
   const { enabled, loadMessages } = cool;
@@ -116,13 +124,18 @@ export function CoolImportBanner() {
           isOpen={open}
           onClose={() => {
             setOpen(false);
-            // 처리하고 나왔으면 배너를 접는다 — 같은 걸 또 권하지 않는다
-            dismiss();
+            // 무언가 등록하고 나왔을 때만 접는다 — 그냥 닫은 배너는 다음에도 보여야 한다.
+            if (submittedRef.current) dismiss();
+            submittedRef.current = false;
           }}
           loadMessages={cool.loadMessages}
           loadMessage={cool.loadMessage}
           roster={cool.roster}
-          onSubmit={cool.onSubmit}
+          onSubmit={async (items) => {
+            await cool.onSubmit(items);
+            // 여기 도달했으면 등록이 성공한 것이다(실패는 위에서 throw 되어 안 온다)
+            submittedRef.current = true;
+          }}
           isImported={cool.isImported}
           hasImportedFrom={cool.hasImportedFrom}
         />

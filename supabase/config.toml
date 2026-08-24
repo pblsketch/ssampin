@@ -149,3 +149,8 @@ verify_jwt = true
 
 [functions.staffroom-categories]
 verify_jwt = true
+
+# 쌤핀 AI 중계 — 앱이 anon key 를 Authorization 헤더로 보내므로 게이트웨이 1차 필터를 켠다.
+# (2026-08-24 재배포 때 항목이 없던 것을 발견해 명시. 실제 배포 상태와 일치.)
+[functions.ssampin-assist]
+verify_jwt = true
