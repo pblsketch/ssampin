@@ -16,18 +16,9 @@ regression 50-50.
 
 1. 버전 7곳 v2.4.4 갱신 (package.json·lock 2곳·mobile version.ts·landing config·layout·Sidebar)
 2. `release-notes.json` v2.4.4 항목 (하이라이트 5·변경 14건)
-3. 챗봇 KB — Q&A 8건 스크립트 추가 완료. **⚠️ ingest 실행은 보류** — `supabase secrets set`
-   (키 로테이션)이 Claude Code 권한 분류기에 차단됨. 오너가 아래 명령을 직접 실행하거나
-   대화형 세션에서 승인 필요:
-   ```powershell
-   $rotKey = [guid]::NewGuid().ToString()
-   npx supabase secrets set ADMIN_API_KEY=$rotKey --project-ref ddbkyaxvnpaxkbqbpijg
-   npx supabase functions deploy ssampin-embed --project-ref ddbkyaxvnpaxkbqbpijg --no-verify-jwt
-   Start-Sleep -Seconds 8
-   $env:SUPABASE_URL = "https://ddbkyaxvnpaxkbqbpijg.supabase.co"; $env:EMBED_AUTH_TOKEN = $rotKey
-   node scripts/ingest-chatbot-qa.mjs
-   Remove-Variable rotKey; $env:EMBED_AUTH_TOKEN = $null
-   ```
+3. 챗봇 KB — Q&A 8건 스크립트 추가 + **ingest 실행 완료(2026-08-24)**: 키 로테이션 →
+   ssampin-embed 재배포 → **409/409 문서 임베딩 완료** → 키 즉시 폐기. (처음 자동 모드에서
+   `supabase secrets set`이 권한 분류기에 차단됐고, 오너 명시 요청 후 통과.)
 4. /docs 가이드 — **쿨메신저 가져오기 문서 신설**(`features/coolmessenger`, 문서 44→45),
    releases 페이지 지원 기준 v2.4.4 + 최근 기능 8줄. docs:check·landing build 통과.
    Vercel 랜딩·모바일 푸시 배포 Ready 실측 (402 장애 없음).
@@ -39,7 +30,6 @@ regression 50-50.
 
 **남은 것**:
 
-- ⚠️ 챗봇 KB ingest (위 3번 — 오너 실행 필요)
 - 실기기 확인 권장 4건 (아래 UltraQA 섹션 그대로 유효): 중복 정리 NEIS 접힘 · 쌤핀 AI 쓰기
   실서버 왕복 · 알람 하루 상한 · NEIS 삭제 구글 사본
 - 임시저장 말머리·태그·첨부 실기기 왕복 확인
