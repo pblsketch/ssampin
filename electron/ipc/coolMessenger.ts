@@ -19,8 +19,12 @@
  * @see docs/01-plan/features/coolmessenger-import.plan.md
  */
 import { app, ipcMain } from 'electron';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { getContentRoot } from '../dataRoot';
 import {
   cleanupStaleCoolTempDirs,
+  closeCoolReaderSession,
   defaultMemoDir,
   isCoolMessengerAvailable,
   readCoolMemberNames,
@@ -60,12 +64,49 @@ function requireMemoDir(): string {
   return dir;
 }
 
+/**
+ * 설정 파일에서 쿨메신저 가져오기 스위치를 직접 읽는다 — **main 쪽 잠금장치.**
+ *
+ * 화면(renderer)도 `enabled` 로 가리지만, 그것만 믿으면 renderer 코드 어디선가 실수로
+ * (또는 악의로) IPC를 부르는 순간 쪽지함이 읽힌다. 개인 쪽지를 다루는 통로이므로
+ * **읽기의 최종 관문은 파일 접근 권한을 쥔 main** 에 둔다(2026-08-24 UltraQA P2).
+ *
+ * 설정을 못 읽으면 꺼진 것으로 본다 — 이 기능의 기본값이 꺼짐이기 때문이다.
+ */
+export function readCoolImportEnabled(settingsFile: string): boolean {
+  try {
+    const parsed: unknown = JSON.parse(readFileSync(settingsFile, 'utf-8'));
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return false;
+    return (parsed as Record<string, unknown>)['coolMessengerImportEnabled'] === true;
+  } catch {
+    return false;
+  }
+}
+
+/** settings.json 위치 — main.ts 의 getDataDir()와 같은 규칙(자료 루트/data). */
+function settingsFilePath(): string {
+  return join(getContentRoot(), 'data', 'settings.json');
+}
+
+function assertImportEnabled(): void {
+  if (!readCoolImportEnabled(settingsFilePath())) {
+    throw new Error(
+      '쿨메신저 가져오기가 설정에서 꺼져 있습니다. 설정 > 실험실 기능에서 켠 뒤 다시 시도해 주세요.',
+    );
+  }
+}
+
 export function registerCoolMessengerHandlers(): void {
   // 지난 실행이 강제 종료돼 남은 쪽지 사본(%TEMP%)을 지운다 — 개인정보 청소.
   cleanupStaleCoolTempDirs();
 
+  // 세션 복사본(짧은 재사용 캐시)이 남아 있으면 종료 때 닫고 지운다 — 개인정보 청소.
+  app.on('will-quit', () => closeCoolReaderSession());
+
   ipcMain.handle('cool-messenger:available', (): boolean => {
     // 여기서만은 예외를 삼킨다 — "쓸 수 있나?"라는 질문의 답은 true/false 뿐이다.
+    // 설정 스위치도 확인하지 않는다 — 스위치를 **켜기 전에** 켤 수 있는지 묻는 통로라서
+    // 게이트를 걸면 영원히 못 켠다. 쪽지 내용은 한 글자도 나가지 않는다(true/false 뿐).
     try {
       return isCoolMessengerAvailable(resolveMemoDir());
     } catch {
@@ -74,10 +115,12 @@ export function registerCoolMessengerHandlers(): void {
   });
 
   ipcMain.handle('cool-messenger:list', (): CoolMessage[] => {
+    assertImportEnabled();
     return readCoolMessages(requireMemoDir(), LIST_LIMIT);
   });
 
   ipcMain.handle('cool-messenger:get', (_event, key: unknown): CoolMessage | null => {
+    assertImportEnabled();
     const messageKey = Number(key);
     if (!Number.isFinite(messageKey)) return null;
     return readCoolMessage(requireMemoDir(), messageKey);
@@ -85,6 +128,7 @@ export function registerCoolMessengerHandlers(): void {
 
   ipcMain.handle('cool-messenger:members', (): string[] => {
     try {
+      assertImportEnabled();
       return readCoolMemberNames(requireMemoDir());
     } catch {
       return []; // 명단을 못 읽어도 기능은 살아야 한다 — 이름 대조만 못 할 뿐이다

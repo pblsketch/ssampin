@@ -5,6 +5,8 @@
  * 남의 앱 데이터다. 쪽지함이 깨지면 선생님이 업무 연락을 잃는다.
  * `.udb` + `-wal` + `-shm` 세 파일을 임시 폴더에 **복사한 뒤 복사본을 읽기 전용으로** 연다.
  * (`-wal`은 아직 본 파일에 반영 안 된 최신 쪽지가 들어 있어서 같이 복사해야 한다.)
+ * 짧은 시간 안의 연속 읽기(가져오기 창에서 쪽지 클릭)는 복사본 하나를 재사용한다 —
+ * 원본이 바뀌면(수정시각·크기) 즉시 새로 복사하므로 오래된 데이터를 보여주지 않는다.
  *
  * ## 새 의존성이 필요 없다
  * Electron 43이 품은 Node 24에 `node:sqlite`가 **기본 내장**이다.
@@ -21,7 +23,7 @@
  */
 import { DatabaseSync } from 'node:sqlite';
 import { copyFileSync, existsSync, mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { tmpdir } from 'node:os';
 
 /** 쿨메신저가 쪽지함을 두는 곳 */
@@ -34,8 +36,8 @@ export function defaultMemoDir(): string | null {
 /**
  * 앱이 강제 종료돼 못 지운 임시 사본을 쓸어낸다 — 시작 시 한 번 부른다.
  *
- * `withReadOnlyCopy` 의 `finally` 가 지우지만, 복사 도중 프로세스가 죽으면(작업 관리자
- * 종료·크래시) `%TEMP%\ssampin-cool-*` 에 **쪽지 전문 사본**이 그대로 남는다.
+ * 세션 만료·앱 종료 시 `closeCoolReaderSession` 이 지우지만, 그 전에 프로세스가
+ * 죽으면(작업 관리자 종료·크래시) `%TEMP%\ssampin-cool-*` 에 **쪽지 전문 사본**이 그대로 남는다.
  * 개인정보라 다음 실행에서 반드시 청소한다. 실패해도 기능은 계속 간다.
  */
 export function cleanupStaleCoolTempDirs(): void {
@@ -62,12 +64,32 @@ export class CoolSchemaMismatchError extends Error {
   }
 }
 
-/** 쪽지함을 못 찾았을 때 */
+/** 쪽지함을 못 찾았을 때 — 전체 경로는 노출하지 않는다(폴더명까지만) */
 export class CoolMemoNotFoundError extends Error {
   constructor(memoDir: string) {
-    super(`쪽지함 파일(.udb)을 찾을 수 없습니다: ${memoDir}`);
+    super(`쪽지함 파일(.udb)을 찾을 수 없습니다 (폴더: ${basename(memoDir) || memoDir})`);
     this.name = 'CoolMemoNotFoundError';
   }
+}
+
+/**
+ * 파일 접근 오류를 선생님이 읽을 수 있는 한국어로 바꾼다.
+ *
+ * 안 바꾸면 화면에 `EBUSY: resource busy or locked, copyfile 'C:\Users\…\MyMemo.udb' …`
+ * 같은 영문 원문 + **전체 경로**(사용자 계정명 포함)가 그대로 뜬다.
+ * 경로는 폴더명까지만 담는다.
+ */
+export function toReadableCoolError(err: unknown, memoDir: string): Error {
+  const code = (err as NodeJS.ErrnoException | null)?.code;
+  if (code === 'EBUSY' || code === 'EPERM' || code === 'EACCES') {
+    return new Error(
+      '쿨메신저가 쪽지함을 쓰고 있어 잠시 읽을 수 없습니다. 잠시 후 다시 시도해 주세요.',
+    );
+  }
+  if (code === 'ENOENT') {
+    return new CoolMemoNotFoundError(memoDir);
+  }
+  return err instanceof Error ? err : new Error(String(err));
 }
 
 /** 쪽지 한 건 */
@@ -95,6 +117,35 @@ const UNREAD_CAP = 200;
 
 /** 목록에서 미리 읽어올 본문 길이 — 전문을 다 읽으면 큰 쪽지함에서 몇 초씩 걸린다 */
 const BODY_PREVIEW_CHARS = 600;
+
+/**
+ * 경계에서 낱말이 잘리지 않게 더 읽어 오는 여유분.
+ *
+ * ★600자에서 뚝 자르면 "8월 31일"이 "8월 3"이 되고, 배너의 후보 계산이 그 유령 날짜를
+ * 진짜 후보로 세어 모달(전문 기준)과 어긋난다(2026-08-24 UltraQA). 여유분까지 읽은 뒤
+ * 600자 뒤 첫 공백(=낱말 끝)에서 자르면 경계의 날짜 표현이 온전히 살아남는다.
+ */
+const BODY_PREVIEW_MARGIN = 32;
+
+/**
+ * 미리보기 본문을 낱말 경계에서 자른다.
+ *
+ * `fetched` 는 SQL에서 최대 `PREVIEW+MARGIN+1` 자를 읽어 온 것 — 마지막 1자는
+ * "뒤가 더 있는가"를 판별하는 용도라, 그보다 짧으면 본문 전체라서 그대로 돌려준다.
+ * 잘라야 하면: ① 600자 뒤 첫 공백에서(경계의 낱말을 완성), ② 여유분 안에 공백이
+ * 없으면 600자 앞 마지막 공백에서(불완전한 낱말을 통째로 버림 — 유령 날짜 방지),
+ * ③ 공백이 아예 없으면 600자에서 자른다.
+ */
+export function trimPreviewBody(fetched: string): string {
+  const cap = BODY_PREVIEW_CHARS + BODY_PREVIEW_MARGIN;
+  if (fetched.length <= cap) return fetched;
+  const window = fetched.slice(0, cap);
+  const forward = /\s/.exec(window.slice(BODY_PREVIEW_CHARS));
+  if (forward) return window.slice(0, BODY_PREVIEW_CHARS + forward.index);
+  const backward = window.slice(0, BODY_PREVIEW_CHARS).search(/\s\S*$/);
+  if (backward >= 0) return window.slice(0, backward);
+  return window.slice(0, BODY_PREVIEW_CHARS);
+}
 
 /**
  * `2026/07/16 17:04:52 (목)` → Date (지역시간)
@@ -150,9 +201,89 @@ export function isCoolMessengerAvailable(memoDir?: string | null): boolean {
   }
 }
 
-/** 복사본을 읽기 전용으로 열고 콜백에 넘긴다. 끝나면 임시 폴더를 반드시 지운다. */
-function withReadOnlyCopy<T>(memoDir: string, fn: (db: DatabaseSync) => T): T {
+/**
+ * 복사본 세션 — 짧은 시간 안의 연속 읽기는 복사본 하나를 재사용한다.
+ *
+ * ★가져오기 창에서 쪽지를 클릭할 때마다 쪽지함 전체를 새로 복사하고 있었다
+ * (2026-08-24 UltraQA). 큰 쪽지함(수십 MB)에서는 클릭마다 몇 초씩 걸린다.
+ *
+ * 원칙은 그대로다:
+ *  - **원본은 여전히 쓰기 모드로 열지 않는다.** 복사본을 읽기 전용으로 여는 것만 재사용한다.
+ *  - **오래된 데이터를 보여주지 않는다.** 매 호출마다 원본(.udb·-wal·-shm)의 수정 시각·
+ *    크기를 확인하고, 하나라도 바뀌었으면 즉시 새로 복사한다. TTL은 "파일을 잡고 있는
+ *    시간"의 상한일 뿐, 신선도는 이 도장(stamp) 비교가 보장한다.
+ *  - 마지막 사용 후 TTL이 지나면 복사본을 닫고 지운다. 앱 종료 시에는
+ *    `closeCoolReaderSession()` 을 불러 정리한다(ipc 쪽에서 연결).
+ */
+const SESSION_TTL_MS = 30_000;
+
+interface ReaderSession {
+  readonly memoDir: string;
+  readonly srcPath: string;
+  /** 원본 세 파일의 수정시각·크기 — 바뀌면 복사본을 버린다 */
+  readonly srcStamp: string;
+  readonly tmpDir: string;
+  readonly db: DatabaseSync;
+  timer: ReturnType<typeof setTimeout>;
+}
+
+let session: ReaderSession | null = null;
+
+function sourceStamp(src: string): string {
+  const parts: string[] = [];
+  for (const ext of ['', '-wal', '-shm']) {
+    if (!existsSync(src + ext)) continue;
+    const st = statSync(src + ext);
+    parts.push(`${ext}:${st.mtimeMs}:${st.size}`);
+  }
+  return parts.join('|');
+}
+
+/** 세션 복사본을 닫고 임시 폴더를 지운다. 앱 종료·테스트 정리에서도 부른다. */
+export function closeCoolReaderSession(): void {
+  if (!session) return;
+  const s = session;
+  session = null;
+  clearTimeout(s.timer);
+  try {
+    s.db.close();
+  } catch {
+    // 이미 닫혔으면 무시
+  }
+  try {
+    rmSync(s.tmpDir, { recursive: true, force: true });
+  } catch {
+    // 못 지우면 다음 실행의 cleanupStaleCoolTempDirs 가 청소한다
+  }
+}
+
+function scheduleSessionExpiry(s: ReaderSession): void {
+  clearTimeout(s.timer);
+  s.timer = setTimeout(closeCoolReaderSession, SESSION_TTL_MS);
+  // 테스트·종료 중에 타이머가 프로세스를 붙잡지 않게 한다
+  s.timer.unref?.();
+}
+
+function openSession(memoDir: string): ReaderSession {
   const src = findActiveUdb(memoDir);
+  let stamp: string;
+  try {
+    stamp = sourceStamp(src);
+  } catch (err) {
+    throw toReadableCoolError(err, memoDir); // 확인 도중 파일이 사라진 경우 등
+  }
+
+  if (
+    session &&
+    session.memoDir === memoDir &&
+    session.srcPath === src &&
+    session.srcStamp === stamp
+  ) {
+    scheduleSessionExpiry(session);
+    return session;
+  }
+
+  closeCoolReaderSession();
   const tmp = mkdtempSync(join(tmpdir(), 'ssampin-cool-'));
   const dst = join(tmp, 'copy.udb');
   try {
@@ -163,12 +294,36 @@ function withReadOnlyCopy<T>(memoDir: string, fn: (db: DatabaseSync) => T): T {
     const db = new DatabaseSync(dst, { readOnly: true });
     try {
       validateSchema(db);
-      return fn(db);
-    } finally {
+    } catch (err) {
       db.close();
+      throw err;
     }
-  } finally {
+    const next: ReaderSession = {
+      memoDir,
+      srcPath: src,
+      srcStamp: stamp,
+      tmpDir: tmp,
+      db,
+      timer: setTimeout(closeCoolReaderSession, SESSION_TTL_MS),
+    };
+    next.timer.unref?.();
+    session = next;
+    return next;
+  } catch (err) {
     rmSync(tmp, { recursive: true, force: true });
+    throw toReadableCoolError(err, memoDir);
+  }
+}
+
+/** 세션 복사본을 읽기 전용으로 열어(또는 재사용해) 콜백에 넘긴다. */
+function withReadOnlyCopy<T>(memoDir: string, fn: (db: DatabaseSync) => T): T {
+  const s = openSession(memoDir);
+  try {
+    return fn(s.db);
+  } catch (err) {
+    // 질의 도중 오류 — 복사본이 원인일 수 있으니 세션을 버려 다음 호출에 새로 복사한다
+    closeCoolReaderSession();
+    throw err;
   }
 }
 
@@ -218,9 +373,10 @@ function toMessage(row: RecvRow): CoolMessage | null {
  */
 export function readCoolMessages(memoDir: string, limit = 30): CoolMessage[] {
   return withReadOnlyCopy(memoDir, (db) => {
+    // 여유분 +1자까지 읽는다 — trimPreviewBody 가 "뒤가 더 있는가"를 알아야 한다
     const columns =
       `MessageKey, Sender, ReceiveDate, Title, ` +
-      `substr(MessageText, 1, ${BODY_PREVIEW_CHARS}) AS Body, IsUnRead`;
+      `substr(MessageText, 1, ${BODY_PREVIEW_CHARS + BODY_PREVIEW_MARGIN + 1}) AS Body, IsUnRead`;
 
     const unread = db
       .prepare(
@@ -241,7 +397,7 @@ export function readCoolMessages(memoDir: string, limit = 30): CoolMessage[] {
     const out: CoolMessage[] = [];
     for (const row of [...unread, ...read]) {
       const msg = toMessage(row);
-      if (msg) out.push(msg);
+      if (msg) out.push({ ...msg, body: trimPreviewBody(msg.body) });
     }
     out.sort((a, b) => b.receivedAt.localeCompare(a.receivedAt));
     return out;

@@ -11,7 +11,7 @@
  * **"원본이 한 바이트도 안 바뀐다"** — 남의 앱 데이터를 건드리는 기능이라
  * 이게 깨지면 선생님이 업무 연락을 잃는다.
  */
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
 import { DatabaseSync } from 'node:sqlite';
 import {
   mkdtempSync,
@@ -29,6 +29,7 @@ import {
   readCoolMessages,
   readCoolMessage,
   readCoolMemberNames,
+  closeCoolReaderSession,
   findActiveUdb,
   parseReceiveDate,
   isCoolMessengerAvailable,
@@ -67,6 +68,9 @@ function createFakeMemoDir(): { dir: string; db: DatabaseSync } {
   return { dir, db };
 }
 
+// 매 테스트 뒤 세션 복사본을 정리한다 — 임시 폴더가 테스트 실행마다 쌓이지 않게
+afterEach(() => closeCoolReaderSession());
+
 /** 폴더 안 모든 파일의 이름+크기+해시 — 원본 훼손 감지용 */
 function snapshotDir(dir: string): string {
   return readdirSync(dir)
@@ -91,6 +95,7 @@ describe('쪽지함 읽기', () => {
   });
 
   afterAll(() => {
+    closeCoolReaderSession(); // 세션 복사본을 정리한다 (임시 폴더 잔류 방지)
     db.close();
     rmSync(dir, { recursive: true, force: true });
   });
