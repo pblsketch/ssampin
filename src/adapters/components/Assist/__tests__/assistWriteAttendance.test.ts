@@ -148,6 +148,23 @@ describe('★대상 학생을 어떻게 가리키는가', () => {
     expect(reason).toContain('2번');
   });
 
+  it('★반 이름이 설정에 없으면 저장하지 않는다 — 아무도 못 찾는 곳에 쌓인다', () => {
+    // 담임 출결은 설정의 학급 이름을 **반 식별자 그대로** 쓴다. 비면 이름 없는 반에
+    // 출결이 저장되고 출결 화면에서는 영영 안 보인다.
+    const noName: WriteSources = {
+      ...SRC,
+      roster: { ...SRC.roster, homeroomClassId: '' },
+    };
+    const outcome = buildWriteProposal(
+      'set_attendance',
+      JSON.stringify({ student: '15번', status: '결석', period: 3 }),
+      noName,
+    );
+    expect(isWriteProposal(outcome)).toBe(false);
+    if (isWriteProposal(outcome)) return;
+    expect(outcome.reason).toContain('학급 이름');
+  });
+
   it('없는 이름이면 그 말 그대로 되돌려 준다', () => {
     expect(reject({ student: '홍길동', status: '결석', period: 3 })).toContain('홍길동');
   });

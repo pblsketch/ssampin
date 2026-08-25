@@ -122,6 +122,16 @@ function findRoster(
           '담임 학급 명렬표가 비어 있어서 누구인지 정할 수 없었어요. 어느 수업반인지 함께 말씀해 주시겠어요?',
       };
     }
+    // ★반 이름이 비어 있으면 저장하지 않는다. 담임 출결은 이 이름을 **반 식별자
+    //   그대로** 쓰므로(설정의 학급 이름 = 저장 키), 비면 이름 없는 반에 출결이
+    //   쌓이고 출결 화면에서는 영영 안 보인다 — 저장은 됐는데 아무도 못 찾는다.
+    if (src.roster.homeroomClassId.trim().length === 0) {
+      return {
+        ok: false,
+        reason:
+          '우리 반 이름이 아직 설정되지 않아서 출결을 적을 곳을 찾지 못했어요. 설정에서 학급 이름을 먼저 넣어 주세요.',
+      };
+    }
     return {
       ok: true,
       classId: src.roster.homeroomClassId,
