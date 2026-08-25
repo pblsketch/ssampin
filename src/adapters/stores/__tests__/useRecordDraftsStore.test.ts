@@ -36,7 +36,11 @@ vi.mock('@adapters/di/container', () => ({
 }));
 
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
-import { RecordDraftLimitError, useRecordDraftsStore } from '../useRecordDraftsStore';
+import {
+  RecordDraftConfirmedError,
+  RecordDraftLimitError,
+  useRecordDraftsStore,
+} from '../useRecordDraftsStore';
 
 function makeDraft(
   p: Partial<RecordDraft> & Pick<RecordDraft, 'area' | 'studentRef' | 'content'>,
@@ -272,5 +276,77 @@ describe('기재 금지 항목 — 초안 저장 시 경고만 한다(막지 않
     const flags = useRecordDraftsStore.getState().records.find((r) => r.id === id)?.groundingFlags;
     expect(flags).toContain('low_overlap');
     expect(flags).toContain('prohibited_item');
+  });
+});
+
+describe('확정 초안 잠금 — AI 는 못 덮고 교사는 고칠 수 있다', () => {
+  const confirmDraft = async (studentRef: string): Promise<string> => {
+    const id = await useRecordDraftsStore.getState().upsert({
+      area: 'subject',
+      studentRef,
+      content: '교사가 검토를 마친 문장.',
+    });
+    await useRecordDraftsStore.getState().setStatus(id, 'confirmed');
+    return id;
+  };
+
+  it('★브릿지가 확정 초안을 덮으려 하면 거부한다', async () => {
+    // 브릿지 core 에는 이 잠금이 있었지만, 앱이 켜져 있으면 loopback 으로 스토어를 타서
+    // 우회됐다 — 앱이 꺼져 있으면 막히고 켜져 있으면 뚫리는 상태였다.
+    await confirmDraft('c1');
+    await expect(
+      useRecordDraftsStore.getState().upsert({
+        area: 'subject',
+        studentRef: 'c1',
+        content: 'AI 가 새로 쓴 문장.',
+        origin: 'bridge',
+      }),
+    ).rejects.toThrow(RecordDraftConfirmedError);
+  });
+
+  it('★쌤핀 AI(assist)도 마찬가지로 거부한다', async () => {
+    await confirmDraft('c2');
+    await expect(
+      useRecordDraftsStore.getState().upsert({
+        area: 'subject',
+        studentRef: 'c2',
+        content: 'AI 가 새로 쓴 문장.',
+        origin: 'assist',
+      }),
+    ).rejects.toThrow(RecordDraftConfirmedError);
+  });
+
+  it('거부되면 원래 내용이 그대로 남는다', async () => {
+    const id = await confirmDraft('c3');
+    await useRecordDraftsStore
+      .getState()
+      .upsert({ area: 'subject', studentRef: 'c3', content: '덮어쓰기', origin: 'bridge' })
+      .catch(() => undefined);
+    const rec = useRecordDraftsStore.getState().records.find((r) => r.id === id);
+    expect(rec?.content).toBe('교사가 검토를 마친 문장.');
+    expect(rec?.status).toBe('confirmed');
+  });
+
+  it('교사 본인은 확정 초안도 고칠 수 있다 — 자기 기록이다', async () => {
+    const id = await confirmDraft('c4');
+    await useRecordDraftsStore
+      .getState()
+      .upsert({ area: 'subject', studentRef: 'c4', content: '교사가 직접 고침.' });
+    const rec = useRecordDraftsStore.getState().records.find((r) => r.id === id);
+    expect(rec?.content).toBe('교사가 직접 고침.');
+  });
+
+  it('확정 전(draft·reviewing)에는 AI 가 쓸 수 있다', async () => {
+    await useRecordDraftsStore
+      .getState()
+      .upsert({ area: 'subject', studentRef: 'c5', content: '초안' });
+    await expect(
+      useRecordDraftsStore.getState().upsert({
+        area: 'subject',
+        studentRef: 'c5',
+        content: 'AI 가 고쳐 씀',
+        origin: 'bridge',
+      }),
+    ).resolves.toBeTruthy();
   });
 });

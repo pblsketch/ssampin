@@ -29,6 +29,15 @@ export interface RecordDraftUpsertInput {
   groundingFlags?: readonly string[];
   status?: RecordDraftStatus;
   /**
+   * 누가 쓰는가. 미지정이면 교사(화면 직접 편집)로 본다.
+   *
+   * ★확정(confirmed) 초안은 **AI 만** 못 덮는다. 교사는 자기 기록이므로 계속 고칠 수 있다.
+   * 브릿지 core 는 이 잠금을 이미 갖고 있었지만(write.ts 'confirmed 잠금'), 앱이 켜져 있으면
+   * 브릿지 쓰기가 loopback 으로 이 스토어를 타서 **잠금을 우회했다** — 앱이 꺼져 있으면
+   * 막히고 켜져 있으면 뚫리는 상태였다. 잠금을 여기(단일 효과경계)로 올려 경로와 무관하게 막는다.
+   */
+  origin?: 'teacher' | 'bridge' | 'assist';
+  /**
    * 학교급 — 영역별 바이트 한도 판정에 쓴다. **미지정이면 설정의 학교급을 읽는다**
    * (화면 경로와 같은 판정). 설정이 아직 로드되지 않았으면 한도로 막지 않는다 — 아래 참조.
    */
@@ -41,6 +50,17 @@ export interface RecordDraftUpsertInput {
  * ★한도를 프롬프트로 지키게 하지 않는다 — 실측에서 교사 커스텀 지시 한 줄에 모델이 한도의
  * 4배(7,156B)를 창작으로 채웠다. 코드에서 자른다(ADR-072 결정 5).
  */
+/** 확정된 초안을 AI 가 덮으려 할 때. 교사에게는 무슨 일이 막혔는지 한국어로 전한다. */
+export class RecordDraftConfirmedError extends Error {
+  constructor(readonly area: RecordArea) {
+    super(
+      `${RECORD_AREA_LABELS[area]}는 검토 완료된 초안입니다. AI 가 덮어쓰지 않습니다. ` +
+        `다시 쓰려면 상태를 '작성 중'으로 되돌리세요.`,
+    );
+    this.name = 'RecordDraftConfirmedError';
+  }
+}
+
 export class RecordDraftLimitError extends Error {
   constructor(
     readonly area: RecordArea,
@@ -141,6 +161,11 @@ export const useRecordDraftsStore = create<RecordDraftsState>((set, get) => {
       const existing = get().records.find((r) =>
         matchKey(r, input.area, input.studentRef, input.subject),
       );
+      // ★확정 잠금 — 교사가 검토를 마친 법정기록을 AI 가 조용히 덮지 않는다.
+      //   교사 본인(origin 미지정 또는 'teacher')은 계속 고칠 수 있다.
+      if (existing?.status === 'confirmed' && input.origin && input.origin !== 'teacher') {
+        throw new RecordDraftConfirmedError(input.area);
+      }
       const base: RecordDraft = {
         id: existing?.id ?? generateUUID(),
         area: input.area,

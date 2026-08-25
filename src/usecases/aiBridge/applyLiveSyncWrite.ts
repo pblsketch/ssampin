@@ -52,6 +52,8 @@ export interface LiveSyncRecordDraftInput {
   readonly basisObservationIds?: readonly string[];
   readonly groundingFlags?: readonly string[];
   readonly status?: string;
+  /** 누가 쓰는가 — 브릿지 경로는 'bridge'. 스토어가 확정 초안을 지키는 판단에 쓴다. */
+  readonly origin?: 'teacher' | 'bridge' | 'assist';
 }
 
 export interface LiveSyncWriteResult {
@@ -380,7 +382,10 @@ async function applyRecordDrafts(
     basisObservationIds?: readonly string[];
     groundingFlags?: readonly string[];
     status?: string;
-  } = { area, studentRef, content };
+    origin?: 'teacher' | 'bridge' | 'assist';
+    // ★브릿지 쓰기임을 밝힌다. 스토어가 이 값으로 확정(confirmed) 초안을 지킨다 —
+    //   밝히지 않으면 교사 편집으로 취급돼 검토 완료된 법정기록을 덮는다.
+  } = { area, studentRef, content, origin: 'bridge' };
   const classId = asStr(d['classId']);
   if (classId !== undefined) input.classId = classId;
   const studentKey = asStr(d['studentKey']);
