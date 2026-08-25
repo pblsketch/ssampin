@@ -7,12 +7,13 @@
  * 미리보기에는 **파싱된 값을 하나도 빠뜨리지 않고** 적는다. 감추면 [실행] 버튼이
  * 확인이 아니라 요식이 된다 — 잘못된 날짜를 그대로 통과시키는 자리가 정확히 거기다.
  */
-import type { AssistWriteOutcome } from '@domain/entities/AssistWrite';
+import type { AssistWriteOutcome, AssistWriteProposal } from '@domain/entities/AssistWrite';
+import { combineWriteProposals, isWriteProposal } from '@domain/entities/AssistWrite';
 
 import { particle } from '@domain/rules/koreanParticle';
 
 import type { WriteSources } from './writeSources';
-import { bool, choice, date, int, matchOne, missing, text, time } from './writeArgs';
+import { bool, choice, date, int, matchOne, missing, objectList, text, time } from './writeArgs';
 import type { RawArgs } from './writeArgs';
 
 const PRIORITIES = ['high', 'medium', 'low', 'none'] as const;
@@ -37,6 +38,21 @@ function fieldsOf(
 // 만들기는 기존 항목을 보지 않는다 — 그래서 `_src` 다. 표(WRITE_BUILDERS)가
 // 모든 조립기를 같은 모양으로 부르므로 인자는 그대로 받아 둔다.
 export function proposeCreateTodo(args: RawArgs, _src: WriteSources): AssistWriteOutcome {
+  // ★공문 한 장에 할 일이 여럿이면 모델이 `items` 를 채워 보낸다. 한 건씩 만들어 묶는다.
+  //   "도구를 여러 번 부르라"고 설명에 적어 두었을 때는 모델이 여전히 한 번만 불러
+  //   **첫 건만 저장됐다**(2026-08-25 실측) — 부탁 대신 칸을 준 것이 이 코드다.
+  const list = objectList(args, 'items');
+  if (list.length > 0) {
+    const built: AssistWriteProposal[] = [];
+    for (const item of list) {
+      const outcome = proposeCreateTodo(item, _src);
+      // 내용이 없는 항목은 조용히 버리지 않고, 만들 수 있는 것만 모은다.
+      if (isWriteProposal(outcome)) built.push(outcome);
+    }
+    if (built.length === 0) return missing('할 일 내용');
+    return combineWriteProposals(built);
+  }
+
   const body = text(args, 'text');
   if (body === undefined) return missing('할 일 내용');
 

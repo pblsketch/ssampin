@@ -141,6 +141,74 @@ describe('★도구 표 — 25종이 빠짐없이 있다', () => {
   });
 });
 
+describe('★공문 하나에 할 일이 여럿이면 여러 건으로 만든다 (2026-08-25 오너 신고)', () => {
+  /**
+   * "도구를 그 수만큼 따로 부르라"고 설명에 적어 두었는데도 모델은 **한 번만** 불렀고,
+   * 그래서 첫 건만 저장됐다(실측). 부탁 대신 **칸(items)** 을 준 것이 이 동작이다.
+   */
+  const 세건 = {
+    items: [
+      { text: '2학기 수행평가 계획서 제출', dueDate: '2026-08-28', time: '16:00' },
+      { text: '가정통신문 배부', dueDate: '2026-09-02' },
+      { text: '학업성적관리위원회 참석', dueDate: '2026-09-04', time: '15:30' },
+    ],
+  };
+
+  it('세 건이 묶음으로 만들어진다', () => {
+    const outcome = buildWriteProposal('create_todo', JSON.stringify(세건), SRC);
+    if (!isWriteProposal(outcome)) throw new Error(outcome.reason);
+
+    expect(outcome.batch).toHaveLength(3);
+    expect(outcome.title).toContain('3건');
+    expect(outcome.batch?.map((p) => p.values.text)).toEqual([
+      '2학기 수행평가 계획서 제출',
+      '가정통신문 배부',
+      '학업성적관리위원회 참석',
+    ]);
+  });
+
+  it('건마다 마감·시각이 따로 붙는다 — 첫 건 값이 나머지에 번지지 않는다', () => {
+    const outcome = buildWriteProposal('create_todo', JSON.stringify(세건), SRC);
+    if (!isWriteProposal(outcome)) throw new Error(outcome.reason);
+
+    expect(outcome.batch?.[1]?.values.dueDate).toBe('2026-09-02');
+    expect(outcome.batch?.[1]?.values.time).toBeUndefined();
+    expect(outcome.batch?.[2]?.values.time).toBe('15:30');
+  });
+
+  it('카드 한 장에 세 줄이 다 보인다', () => {
+    const outcome = buildWriteProposal('create_todo', JSON.stringify(세건), SRC);
+    if (!isWriteProposal(outcome)) throw new Error(outcome.reason);
+    expect(outcome.fields).toHaveLength(3);
+  });
+
+  it('한 개면 예전 그대로 — 묶음이 붙지 않는다', () => {
+    const outcome = buildWriteProposal(
+      'create_todo',
+      JSON.stringify({ items: [{ text: '결재 올리기' }] }),
+      SRC,
+    );
+    if (!isWriteProposal(outcome)) throw new Error(outcome.reason);
+    expect(outcome.batch).toBeUndefined();
+    expect(outcome.title).toBe('할 일 추가');
+  });
+
+  it('text 로 오던 예전 방식도 그대로 된다', () => {
+    const outcome = buildWriteProposal('create_todo', JSON.stringify({ text: '결재 올리기' }), SRC);
+    if (!isWriteProposal(outcome)) throw new Error(outcome.reason);
+    expect(outcome.values.text).toBe('결재 올리기');
+  });
+
+  it('★내용 없는 항목만 오면 만들지 않고 되묻는다', () => {
+    const outcome = buildWriteProposal(
+      'create_todo',
+      JSON.stringify({ items: [{ dueDate: '2026-09-02' }] }),
+      SRC,
+    );
+    expect(isWriteProposal(outcome)).toBe(false);
+  });
+});
+
 describe('할 일 (4)', () => {
   it('create_todo — 파싱된 값이 모두 미리보기에 뜬다', () => {
     const p = ok(

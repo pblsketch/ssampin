@@ -31,7 +31,7 @@ import { AssistBlockedError } from '@domain/ports/AssistPort';
 import type { ToolResultShape } from '@domain/services/sanitizeToolResult';
 import type { ModelSafe } from '@domain/entities/AssistTool';
 import type { AssistProposalState, AssistWriteProposal } from '@domain/entities/AssistWrite';
-import { isWriteProposal } from '@domain/entities/AssistWrite';
+import { combineWriteProposals, isWriteProposal } from '@domain/entities/AssistWrite';
 import { isWriteTool } from '@usecases/assist/writes/buildWriteProposal';
 import { mentionsWriteIntent } from '@domain/rules/assistWriteIntent';
 
@@ -272,29 +272,6 @@ function sameToolWriteCalls(
   return writes.filter((call) => call.name === first.name).slice(0, 6);
 }
 
-/**
- * 여러 건을 **카드 한 장**으로 묶는다. [실행]은 하나, 저장은 전부.
- *
- * ★카드를 여러 장 띄우지 않는 이유: 하나만 누르고 나머지를 지나치기 쉽다. 무엇무엇이
- * 저장되는지 한 장에 다 적고 한 번에 저장하는 편이, 확인도 되고 빠뜨리지도 않는다.
- */
-function combineProposals(items: readonly AssistWriteProposal[]): AssistWriteProposal {
-  const first = items[0]!;
-  return {
-    tool: first.tool,
-    action: first.action,
-    title: `${first.title} — ${items.length}건`,
-    // 각 건의 **첫 칸**(할 일이면 내용, 일정이면 제목)을 한 줄씩 보여준다.
-    fields: items.map((item, index) => ({
-      label: `${index + 1}`,
-      value: item.fields[0]?.value ?? '',
-    })),
-    values: first.values,
-    ...(first.targetId === undefined ? {} : { targetId: first.targetId }),
-    batch: items,
-  };
-}
-
 export const useAssistStore = create<AssistStore>()(
   persist(
     (set, get) => ({
@@ -529,7 +506,8 @@ export const useAssistStore = create<AssistStore>()(
             const built = outcomes.filter(
               (o): o is AssistWriteProposal => o !== undefined && isWriteProposal(o),
             );
-            const outcome = built.length > 1 ? combineProposals(built) : (outcomes[0] ?? undefined);
+            const outcome =
+              built.length > 1 ? combineWriteProposals(built) : (outcomes[0] ?? undefined);
             if (outcome && isWriteProposal(outcome)) {
               patch({
                 ...extra,

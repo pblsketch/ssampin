@@ -497,14 +497,33 @@ const WRITE_TOOLS: readonly AssistToolDef[] = [
   // ── 할 일 (4) ──
   writeTool(
     'create_todo',
-    '할 일을 새로 만든다. **할 일이 여러 개면 이 도구를 그 수만큼 따로 부른다** — 공문 한 장에 제출·배부·회의가 함께 있으면 세 번 부른다. 한 번에 뭉뚱그리지 않는다. 선생님이 확인 버튼을 누른 뒤에 저장된다.',
+    '할 일을 만든다. **할 일이 여러 개면 items 에 전부 넣어 한 번에 만든다** — 공문 한 장에 제출·배부·회의가 함께 있으면 items 에 세 개를 넣는다. 하나로 뭉뚱그리거나 하나만 고르지 않는다. 한 개뿐이면 text 만 써도 된다. 선생님이 확인 버튼을 누른 뒤에 저장된다.',
     {
-      text: S('할 일 내용'),
+      text: S('할 일 내용(한 개일 때)'),
       dueDate: S('YYYY-MM-DD 마감일'),
       time: S('HH:mm 시각'),
       priority: S('중요도: high | medium | low | none'),
+      // ★배열 하나로 받는 이유: "도구를 세 번 부르라"고 설명에 적어 두었더니 모델이
+      //   여전히 한 번만 불러 **첫 건만 저장됐다**(2026-08-25 실측). 목록 칸을 주면
+      //   한 번 부르면서 전부 채운다 — 같은 말을 구조로 바꾼 것이다.
+      items: {
+        type: 'array',
+        description:
+          '할 일이 여러 개일 때 여기에 전부 넣는다. 각 항목은 text(필수)·dueDate·time·priority.',
+        items: {
+          type: 'object',
+          properties: {
+            text: S('할 일 내용'),
+            dueDate: S('YYYY-MM-DD 마감일'),
+            time: S('HH:mm 시각'),
+            priority: S('중요도: high | medium | low | none'),
+          },
+          required: ['text'],
+        },
+      },
     },
-    ['text'],
+    // text 를 필수에서 뺀다 — items 로만 올 수 있다. 둘 다 없으면 조립기가 되묻는다.
+    [],
   ),
   writeTool(
     'update_todo',

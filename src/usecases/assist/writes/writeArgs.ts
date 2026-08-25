@@ -70,6 +70,20 @@ export function choice<T extends string>(
     : undefined;
 }
 
+/**
+ * 객체 목록. 모델이 배열 칸을 채워 보낼 때 쓴다.
+ *
+ * ★배열이 아니거나 객체가 아닌 원소는 **버린다.** 형식이 어긋난 항목을 억지로 살리면
+ * 무엇이 저장될지 모르는 채로 [실행] 버튼이 뜬다.
+ */
+export function objectList(args: RawArgs, key: string): readonly RawArgs[] {
+  const value = args[key];
+  if (!Array.isArray(value)) return [];
+  return value.filter(
+    (item): item is RawArgs => item !== null && typeof item === 'object' && !Array.isArray(item),
+  );
+}
+
 /** 빠뜨리면 안 되는 값이 없을 때의 거절. 사유는 그대로 화면에 뜬다. */
 export function missing(what: string): AssistWriteRejection {
   return {

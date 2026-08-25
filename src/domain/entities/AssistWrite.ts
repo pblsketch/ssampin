@@ -126,3 +126,29 @@ export function isWriteProposal(outcome: AssistWriteOutcome): outcome is AssistW
 //   저장은 파일 쓰기라 수백 ms 걸리는데, 그동안 버튼이 살아 있으면 이중 저장이 된다
 //   (2026-08-24 UltraQA).
 export type AssistProposalState = 'pending' | 'running' | 'done' | 'expired' | 'failed';
+
+/**
+ * 여러 건을 **카드 한 장**으로 묶는다. [실행]은 하나, 저장은 전부.
+ *
+ * ★카드를 여러 장 띄우지 않는 이유: 하나만 누르고 나머지를 지나치기 쉽다. 무엇무엇이
+ * 저장되는지 한 장에 다 적고 한 번에 저장하는 편이, 확인도 되고 빠뜨리지도 않는다.
+ *
+ * 한 건만 주면 그 건을 그대로 돌려준다 — 묶음 표시가 괜히 붙지 않는다.
+ */
+export function combineWriteProposals(items: readonly AssistWriteProposal[]): AssistWriteProposal {
+  const first = items[0]!;
+  if (items.length === 1) return first;
+  return {
+    tool: first.tool,
+    action: first.action,
+    title: `${first.title} — ${items.length}건`,
+    // 각 건의 **첫 칸**(할 일이면 내용, 일정이면 제목)을 한 줄씩 보여준다.
+    fields: items.map((item, index) => ({
+      label: `${index + 1}`,
+      value: item.fields[0]?.value ?? '',
+    })),
+    values: first.values,
+    ...(first.targetId === undefined ? {} : { targetId: first.targetId }),
+    batch: items,
+  };
+}
