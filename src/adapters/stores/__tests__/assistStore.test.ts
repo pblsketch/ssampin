@@ -279,9 +279,11 @@ describe('켜져 있을 때 — 숫자 카드가 먼저 남는다', () => {
     // ② 카드도 함께 나간다 — 도구를 싣는다고 조회 결과를 버리지 않는다
     expect(port.calls[0]?.toolResults).toHaveLength(1);
     // ③ 모델이 그 도구를 고르면 **저장이 아니라 제안**으로 맺힌다
+    // ★질문 원문도 함께 간다 — 모델이 반 이름 같은 값을 흘렸을 때 선생님 말로 되찾는다.
     expect(proposeWrite).toHaveBeenCalledWith(
       'set_attendance',
       JSON.stringify({ student: '3번', status: '결석' }),
+      '오늘 가가가 결석이야 결석 처리해줘',
     );
     const [turn] = useAssistStore.getState().turns;
     expect(turn?.proposal?.tool).toBe('set_attendance');

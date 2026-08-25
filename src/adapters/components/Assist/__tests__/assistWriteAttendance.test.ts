@@ -280,6 +280,61 @@ describe('★번호가 겹치는 수업반 — 누구인지 잃지 않는다 (20
   });
 });
 
+describe('★선생님이 말한 반이 모델이 준 반보다 먼저다 (2026-08-25 실사용)', () => {
+  /**
+   * 신고: "1학년 7반 구예찬 학생 내일 2교시 결석처리 해줘" 에 앱이
+   * `"우리반"에 맞는 수업반을 찾지 못했어요` 라고 답했다. 모델이 옆에 뜬 조회 카드의
+   * "학급: 우리 반"을 베껴 className 으로 보낸 것이다. 선생님은 그런 말을 한 적이 없다.
+   */
+  const asked = '1학년 7반 구예찬 학생 내일 2교시 결석처리 해줘';
+
+  function proposeAsked(args: object): AssistWriteProposal {
+    const outcome = buildWriteProposal('set_attendance', JSON.stringify(args), SRC, asked);
+    if (!isWriteProposal(outcome)) throw new Error(`제안이 아니다: ${outcome.reason}`);
+    return outcome;
+  }
+
+  it('모델이 "우리반"을 보내도 선생님이 말한 1학년 7반으로 간다', () => {
+    const p = proposeAsked({
+      student: '구예찬',
+      status: '결석',
+      className: '우리반',
+      period: 2,
+    });
+    expect(p.values.classId).toBe('c2');
+    expect(p.values.studentName).toBe('구예찬');
+  });
+
+  it('모델이 반을 아예 안 보내도 선생님 말로 찾는다', () => {
+    expect(proposeAsked({ student: '구예찬', status: '결석', period: 2 }).values.classId).toBe(
+      'c2',
+    );
+  });
+
+  it('질문에 반 이름이 없으면 "우리반"은 담임 학급을 뜻한다 — 수업반에서 찾지 않는다', () => {
+    const outcome = buildWriteProposal(
+      'set_attendance',
+      JSON.stringify({ student: '15번', status: '결석', className: '우리반', period: 3 }),
+      SRC,
+      '15번 오늘 3교시 결석 처리해줘',
+    );
+    if (!isWriteProposal(outcome)) throw new Error(outcome.reason);
+    expect(outcome.values.studentName).toBe('박서연');
+  });
+
+  it('★날짜 속 숫자를 반으로 잘못 읽지 않는다', () => {
+    const outcome = buildWriteProposal(
+      'set_attendance',
+      JSON.stringify({ student: '15번', status: '결석', period: 3 }),
+      SRC,
+      '2026-1-7 에 15번 결석 처리해줘',
+    );
+    if (!isWriteProposal(outcome)) throw new Error(outcome.reason);
+    // "1-7"이 반으로 잡혔다면 박서연(담임)이 아니라 수업반 학생을 찾다 실패했을 것이다
+    expect(outcome.values.studentName).toBe('박서연');
+  });
+});
+
 describe('★번호가 겹치면 고르지 않고 여쭙는다 (오너 결정 2026-08-25)', () => {
   it('"2번"이라고만 하면 이름을 되묻는다 — 맨 앞을 골라 엉뚱한 학생에게 적지 않는다', () => {
     const reason = reject({ student: '2번', status: '결석', className: '1-7', period: 2 });

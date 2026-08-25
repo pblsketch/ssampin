@@ -940,7 +940,8 @@ export function AssistDockContainer() {
           roster,
           (name, rawArguments) => executeAssistTool(name, rawArguments, src),
           // ★제안만 만든다. 이 자리에 실행 함수를 넘기지 않는 것이 안전 구조의 전부다.
-          (name, rawArguments) => buildWriteProposal(name, rawArguments, writeSources),
+          (name, rawArguments, asked) =>
+            buildWriteProposal(name, rawArguments, writeSources, asked),
         );
       },
     [

@@ -131,7 +131,12 @@ interface AssistActions {
      * ★이 자리에 "실행하는 함수"를 넘기지 않는다는 것이 안전 구조의 전부다.
      * 스토어는 저장할 방법을 아예 갖고 있지 않다 — 넘겨받은 것이 제안 조립기뿐이다.
      */
-    proposeWrite?: (name: string, rawArguments: string) => AssistWriteOutcomeLike,
+    /**
+     * ★세 번째 인자는 **선생님이 친 말 그대로**(가리기 전)다. 모델이 반 이름 같은 값을
+     * 흘리거나 옆 카드에서 베껴 올 때, 조립기가 선생님 말로 되찾을 수 있게 함께 넘긴다.
+     * 밖으로 나가는 값이 아니다 — 앱 안에서 제안을 만드는 데만 쓴다.
+     */
+    proposeWrite?: (name: string, rawArguments: string, question: string) => AssistWriteOutcomeLike,
   ) => Promise<void>;
   /**
    * 제안의 상태를 바꾼다. 실제 저장은 **컨테이너**가 하고, 결과만 여기로 들어온다.
@@ -474,6 +479,8 @@ export const useAssistStore = create<AssistStore>()(
             const outcome = proposeWrite?.(
               call.name,
               restoreModelArguments(call.rawArguments, mappings),
+              // ★가린 쪽이 아니라 **원문**이다. 이건 밖으로 안 나가고 앱 안에서만 쓴다.
+              question,
             );
             if (outcome && isWriteProposal(outcome)) {
               patch({

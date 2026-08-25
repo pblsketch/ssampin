@@ -42,7 +42,12 @@ import {
 } from './writeBookmarkNote';
 import { proposeAddObservation, proposeSetAttendance, proposeSetRubricMark } from './writeStudent';
 
-type Builder = (args: RawArgs, src: WriteSources) => AssistWriteOutcome;
+/**
+ * ★세 번째 인자는 **선생님이 실제로 친 말**이다. 모델이 준 인자만 믿으면 안 되는 자리가
+ * 있어서다 — 모델은 옆에 뜬 조회 카드의 "학급: 우리 반"을 베껴 반 이름으로 보내기도
+ * 한다(2026-08-25 실측). 조립기는 선생님 말을 먼저 본다. 안 쓰는 조립기는 안 받으면 된다.
+ */
+type Builder = (args: RawArgs, src: WriteSources, question: string) => AssistWriteOutcome;
 
 /**
  * 계획서 §2 C그룹의 22종(할일4 · 일정3 · 메모3 · 진도3 · 즐겨찾기4 · 노트5)
@@ -106,6 +111,8 @@ export function buildWriteProposal(
   name: string,
   rawArguments: string,
   src: WriteSources,
+  /** 선생님이 친 말 그대로(가리기 전). 반 이름처럼 모델이 흘리는 값을 여기서 되찾는다 */
+  question = '',
 ): AssistWriteOutcome {
   const build = WRITE_BUILDERS[name];
   if (!build) return { reason: '무엇을 하려는지 알아듣지 못했어요.' };
@@ -121,5 +128,5 @@ export function buildWriteProposal(
     return { reason: '무엇을 저장할지 정확히 알아듣지 못해서 아무것도 하지 않았어요.' };
   }
 
-  return build(args, src);
+  return build(args, src, question);
 }

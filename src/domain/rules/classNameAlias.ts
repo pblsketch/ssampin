@@ -30,3 +30,60 @@ export function classAlias(name: string): string {
   if (matched) return `${matched[1]!}-${matched[2]!}`;
   return squashed;
 }
+
+/**
+ * 이 이름의 **여러 말투**. 질문 속에서 반 이름을 찾을 때 쓴다.
+ *
+ * 앱에 "1-7"로 저장돼 있어도 선생님은 "1학년 7반"이라고 말한다. 반대로 "1학년 7반"으로
+ * 저장해 두고 "1-7"이라고 말하기도 한다. 그래서 두 꼴을 모두 만들어 둔다.
+ */
+export function classSpokenForms(name: string): readonly string[] {
+  const alias = classAlias(name);
+  const matched = /^(\d{1,2})-(\d{1,2})$/.exec(alias);
+  if (!matched) return [alias];
+  return [alias, `${matched[1]!}학년${matched[2]!}반`];
+}
+
+/**
+ * "우리 반"을 가리키는 말인가 — 담임 학급을 뜻한다.
+ *
+ * ★모델이 **선생님이 말하지도 않은 "우리반"을 반 이름으로 보내는** 일이 있다(옆에 뜬
+ * 조회 카드의 "학급: 우리 반"을 베낀다, 2026-08-25 실측). 그때 이 말을 수업반 이름으로
+ * 찾으면 "우리반에 맞는 수업반을 찾지 못했어요"가 되어 아무것도 못 한다.
+ */
+export function isHomeroomWord(name: string): boolean {
+  return ['우리반', '우리학급', '담임반', '담임학급', '우리'].includes(squash(name));
+}
+
+/**
+ * 질문에 **선생님이 직접 말한 반 이름**이 있으면 그것.
+ *
+ * ★모델이 준 반 이름보다 이쪽을 **먼저** 본다. 모델은 옆 카드의 학급을 베끼거나 아예
+ * 빠뜨리지만, 선생님의 말은 선생님의 뜻 그대로다.
+ *
+ * ★앞뒤가 **숫자나 하이픈**이면 반 이름으로 보지 않는다 — "2026-1-7"의 "1-7"이 반으로
+ * 잡히면 엉뚱한 반에 적힌다(하이픈까지 봐야 한다: 앞 글자가 숫자가 아니라 "-"였다).
+ */
+export function findClassNameInQuestion<T>(
+  classes: readonly T[],
+  question: string,
+  nameOf: (item: T) => string,
+): T | undefined {
+  const haystack = squash(question);
+  for (const item of classes) {
+    for (const form of classSpokenForms(nameOf(item))) {
+      if (form.length === 0) continue;
+      let from = 0;
+      for (;;) {
+        const at = haystack.indexOf(form, from);
+        if (at < 0) break;
+        const before = haystack[at - 1];
+        const after = haystack[at + form.length];
+        const glued = (ch: string | undefined): boolean => ch !== undefined && /[\d-]/.test(ch);
+        if (!glued(before) && !glued(after)) return item;
+        from = at + 1;
+      }
+    }
+  }
+  return undefined;
+}

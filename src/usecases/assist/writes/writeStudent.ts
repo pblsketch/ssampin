@@ -19,7 +19,7 @@ import {
   formatPeriodLabel,
 } from '@domain/entities/Attendance';
 import { computeAutoPeriods } from '@domain/rules/attendanceRules';
-import { classAlias } from '@domain/rules/classNameAlias';
+import { classAlias, findClassNameInQuestion, isHomeroomWord } from '@domain/rules/classNameAlias';
 import {
   DEFAULT_OBSERVATION_CATEGORIES,
   DEFAULT_OBSERVATION_TAGS,
@@ -126,6 +126,7 @@ function findStudent(
 function findRoster(
   src: WriteSources,
   className: string | undefined,
+  question: string,
 ):
   | {
       ok: true;
@@ -136,7 +137,29 @@ function findRoster(
       students: readonly Target[];
     }
   | { ok: false; reason: string } {
-  if (className === undefined) {
+  // ★선생님이 직접 말한 반이 **모델이 준 반보다 먼저**다. 모델은 옆 카드의 "우리 반"을
+  //   베끼거나 아예 빠뜨린다 — 실제로 "1학년 7반 …결석처리 해줘"에 모델이 className 을
+  //   "우리반"으로 보내 아무것도 못 했다(2026-08-25 실측).
+  const spoken = findClassNameInQuestion(src.roster.teaching, question, (c) => c.className);
+  if (spoken !== undefined) {
+    return {
+      ok: true,
+      classId: spoken.classId,
+      ...(spoken.groupId === undefined ? {} : { groupId: spoken.groupId }),
+      label: spoken.className,
+      homeroom: false,
+      students: spoken.students.map((s) => ({
+        number: s.number,
+        name: s.name,
+        ...(s.grade === undefined ? {} : { grade: s.grade }),
+        ...(s.classNum === undefined ? {} : { classNum: s.classNum }),
+        key: s.key,
+      })),
+    };
+  }
+
+  // "우리 반"이라고 온 것은 담임 학급을 뜻한다 — 수업반 목록에서 찾으면 못 찾는다.
+  if (className === undefined || isHomeroomWord(className)) {
     if (src.roster.homeroom.length === 0) {
       return {
         ok: false,
@@ -260,7 +283,11 @@ function homeroomDaySpan(status: AttendanceStatus, count: number): number[] {
  * 그 반이 그날 몇 교시에 드는지를 이 자리에서 알 수 없어(시간표를 보지 않는다) 되묻는다.
  * 짐작해서 1교시부터 전부 적으면, 들지도 않은 시간의 결석이 나이스까지 따라간다.
  */
-export function proposeSetAttendance(args: RawArgs, src: WriteSources): AssistWriteOutcome {
+export function proposeSetAttendance(
+  args: RawArgs,
+  src: WriteSources,
+  question = '',
+): AssistWriteOutcome {
   // ★번호를 문자열이 아니라 **숫자로** 보내는 일이 잦다. 도구 설명에 `"15번"` 이라고
   //   적어 두어도 모델은 번호처럼 보이는 값을 숫자로 만든다. 여기서 함께 받아 둔다 —
   //   알아들을 수 있는데 "모르겠다"고 답하는 것이 더 나쁘다.
@@ -277,7 +304,7 @@ export function proposeSetAttendance(args: RawArgs, src: WriteSources): AssistWr
     };
   }
 
-  const cls = findRoster(src, text(args, 'className'));
+  const cls = findRoster(src, text(args, 'className'), question);
   if (!cls.ok) return { reason: cls.reason };
 
   const target = findStudent(cls.students, who, cls.label);
@@ -403,12 +430,24 @@ export function proposeSetAttendance(args: RawArgs, src: WriteSources): AssistWr
 function findTeachingRoster(
   src: WriteSources,
   className: string | undefined,
+  question: string,
 ):
   | { ok: true; classId: string; label: string; students: readonly Target[] }
   | { ok: false; reason: string } {
   const pool = src.roster.teaching;
   if (pool.length === 0) {
     return { ok: false, reason: '수업반이 없어서 관찰 기록을 남길 곳을 찾지 못했어요.' };
+  }
+
+  // 위 findRoster 와 같은 이유 — 선생님이 말한 반이 먼저다.
+  const spoken = findClassNameInQuestion(pool, question, (c) => c.className);
+  if (spoken !== undefined) {
+    return {
+      ok: true,
+      classId: spoken.classId,
+      label: spoken.className,
+      students: spoken.students.map((s) => ({ number: s.number, name: s.name, key: s.key })),
+    };
   }
 
   // 반을 안 밝혔는데 수업반이 하나뿐이면 그 반이다. 여럿이면 **고르지 않고 되묻는다** —
@@ -455,7 +494,11 @@ function head(value: string, max = 80): string {
  * 학생에 대한 서술을 AI 가 대신 쓰는 것은 이 저장소가 선을 그어 둔 자리다(ADR-072).
  * 모델이 하는 일은 "누구에게, 어느 반에, 어느 날짜로" 를 인자로 옮기는 것뿐이다.
  */
-export function proposeAddObservation(args: RawArgs, src: WriteSources): AssistWriteOutcome {
+export function proposeAddObservation(
+  args: RawArgs,
+  src: WriteSources,
+  question = '',
+): AssistWriteOutcome {
   const rawStudent = args['student'];
   const who = typeof rawStudent === 'number' ? String(rawStudent) : text(args, 'student');
   if (who === undefined) return missing('대상 학생');
@@ -463,7 +506,7 @@ export function proposeAddObservation(args: RawArgs, src: WriteSources): AssistW
   const content = text(args, 'content');
   if (content === undefined) return missing('관찰 내용');
 
-  const cls = findTeachingRoster(src, text(args, 'className'));
+  const cls = findTeachingRoster(src, text(args, 'className'), question);
   if (!cls.ok) return { reason: cls.reason };
 
   const target = findStudent(cls.students, who, cls.label);
