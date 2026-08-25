@@ -280,6 +280,11 @@ async function runTest(tc: TestCase): Promise<TestResult> {
         sessionId: `test-${tc.id}-${Date.now()}`,
         history: [],
         source: 'test',
+        // ★ 서버가 보는 이름은 `isTest` 다. `source: 'test'` 만 보내면 함수의
+        // `body.isTest ?? false` 가 false 로 떨어져 **품질 테스트 27건이 실제 사용자
+        // 대화로 기록된다.** 2026-08-26 에 실제로 관리자 대시보드의 그날 통계가
+        // 검증 트래픽으로 뒤덮인 것을 확인하고 찾았다(오늘 94세션 중 83세션).
+        isTest: true,
       }),
     });
     const latencyMs = Date.now() - start;
