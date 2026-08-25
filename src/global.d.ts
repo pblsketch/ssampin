@@ -167,13 +167,18 @@ interface OneClickPortalStatus {
   installed: boolean;
   running: boolean;
   version: string | null;
+  /** 업무 바로 열기(v0.1.15 이상)를 쓸 수 있는가. false 면 업무 목록을 감춘다. */
+  supportsTasks: boolean;
 }
 
 type OneClickPortalLaunchResult =
   | { outcome: 'launched' }
+  /** 이미 떠 있던 창에 업무 요청을 전달했다 */
+  | { outcome: 'task-sent' }
   | { outcome: 'already-running' }
   | { outcome: 'not-installed' }
   | { outcome: 'unsupported' }
+  | { outcome: 'task-unsupported'; version: string | null }
   | { outcome: 'failed'; message: string };
 
 /** 쿨메신저 쪽지 한 건 (`electron/coolMessengerReader.ts`의 CoolMessage와 같은 형태) */
@@ -351,7 +356,8 @@ interface ElectronAPI {
    */
   oneclickPortal?: {
     getStatus: () => Promise<OneClickPortalStatus>;
-    launch: () => Promise<OneClickPortalLaunchResult>;
+    /** `task` 를 주면 그 업무 화면까지 바로 연다. 생략하면 프로그램만 실행한다. */
+    launch: (task?: string) => Promise<OneClickPortalLaunchResult>;
   };
   openPath: (folderPath: string) => Promise<string>;
   showOpenDialog: (options: {

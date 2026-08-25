@@ -343,14 +343,23 @@ contextBridge.exposeInMainWorld('electronAPI', {
       installed: boolean;
       running: boolean;
       version: string | null;
+      supportsTasks: boolean;
     }> => ipcRenderer.invoke('oneclick-portal:status'),
-    launch: (): Promise<
+    /**
+     * @param task 바로 열 업무. 생략하면 프로그램만 실행한다.
+     *   여기 무엇을 넣든 메인이 아는 이름과 대조해 통과한 것만 쓴다.
+     */
+    launch: (
+      task?: string,
+    ): Promise<
       | { outcome: 'launched' }
+      | { outcome: 'task-sent' }
       | { outcome: 'already-running' }
       | { outcome: 'not-installed' }
       | { outcome: 'unsupported' }
+      | { outcome: 'task-unsupported'; version: string | null }
       | { outcome: 'failed'; message: string }
-    > => ipcRenderer.invoke('oneclick-portal:launch'),
+    > => ipcRenderer.invoke('oneclick-portal:launch', task),
   },
   coolMessenger: {
     /** 쪽지함을 읽을 수 있는가 — 설정 스위치를 켤 때 확인한다 */

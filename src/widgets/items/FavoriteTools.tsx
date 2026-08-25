@@ -121,8 +121,10 @@ export function FavoriteTools({ isCompactMode = true }: FavoriteToolsProps = {})
       <OneClickPortalLaunchModal
         open={oneclickPortal.modalMode !== null}
         mode={oneclickPortal.modalMode ?? 'first-run'}
+        showNotice={oneclickPortal.showNotice}
         onClose={oneclickPortal.closeModal}
         onLaunch={oneclickPortal.handleLaunchFromModal}
+        onSelectTask={oneclickPortal.handleSelectTask}
         onOpenSite={oneclickPortal.openSite}
       />
     </div>

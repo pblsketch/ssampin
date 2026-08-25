@@ -15,7 +15,8 @@ vi.mock('electron', () => ({
   ipcMain: { handle: vi.fn() },
 }));
 
-const { isUnderExpectedInstallRoot, readRegistryValue } = await import('./oneclickPortal');
+const { isUnderExpectedInstallRoot, readRegistryValue, isVersionAtLeast, ONECLICK_PORTAL_TASKS } =
+  await import('./oneclickPortal');
 
 const LOCAL_APPDATA = 'C:\\Users\\teacher\\AppData\\Local';
 
@@ -93,5 +94,72 @@ describe('readRegistryValue — reg query 출력 파싱', () => {
     expect(readRegistryValue(output, 'Install(Location)')).toBe('C:\\Somewhere');
     // `.` 이 아무 글자와 맞아 다른 이름에 걸리지도 않는다.
     expect(readRegistryValue(REG_OUTPUT, 'Display.ersion')).toBeNull();
+  });
+});
+
+describe('isVersionAtLeast — 업무 바로 열기는 v0.1.15 이상에서만', () => {
+  it('기준 버전과 같으면 통과한다', () => {
+    expect(isVersionAtLeast('0.1.15', '0.1.15')).toBe(true);
+  });
+
+  it('마디 수가 달라도 같은 값으로 본다 (Velopack 은 0.1.15.0 을 쓰기도 한다)', () => {
+    expect(isVersionAtLeast('0.1.15.0', '0.1.15')).toBe(true);
+  });
+
+  it('낮은 버전은 막는다', () => {
+    expect(isVersionAtLeast('0.1.14', '0.1.15')).toBe(false);
+    expect(isVersionAtLeast('0.0.99', '0.1.15')).toBe(false);
+  });
+
+  it('마디를 숫자로 비교한다 — 문자열로 비교하면 0.1.9 가 0.1.15 보다 커진다', () => {
+    expect(isVersionAtLeast('0.1.9', '0.1.15')).toBe(false);
+    expect(isVersionAtLeast('0.1.115', '0.1.15')).toBe(true);
+  });
+
+  it('더 높은 버전은 통과한다', () => {
+    expect(isVersionAtLeast('0.2.0', '0.1.15')).toBe(true);
+    expect(isVersionAtLeast('1.0.0', '0.1.15')).toBe(true);
+  });
+
+  it('버전을 못 읽었거나(null) 숫자가 아니면 지원하지 않는 것으로 본다', () => {
+    // 넘겨짚어 "지원한다"고 답하면 눌렀는데 안 되는 경험이 된다. 모르면 막는 쪽이 안전하다.
+    expect(isVersionAtLeast(null, '0.1.15')).toBe(false);
+    expect(isVersionAtLeast('알 수 없음', '0.1.15')).toBe(false);
+    expect(isVersionAtLeast('', '0.1.15')).toBe(false);
+  });
+
+  it('꼬리표가 붙어도 앞 숫자로 판단한다', () => {
+    expect(isVersionAtLeast('0.1.15-beta.1', '0.1.15')).toBe(true);
+  });
+});
+
+describe('ONECLICK_PORTAL_TASKS — 저쪽 PortalTaskCatalog.cs 와 이름이 같아야 한다', () => {
+  it('그 프로그램이 아는 6가지 업무 이름을 그대로 쓴다', () => {
+    // 하나라도 어긋나면 그 프로그램이 인자를 무시하고 첫 화면만 열어 조용히 어긋난다.
+    expect([...ONECLICK_PORTAL_TASKS]).toEqual([
+      'nice',
+      'leave',
+      'trip',
+      'edufine',
+      'draft',
+      'purchase',
+    ]);
+  });
+
+  it('명령줄 옵션으로 오해될 이름이 없다', () => {
+    // 이 목록에 없는 문자열은 메인이 걸러내지만, 목록 자체에 `--` 로 시작하는 값이
+    // 들어가면 그 검사를 통과해 버린다.
+    for (const task of ONECLICK_PORTAL_TASKS) {
+      expect(task).toMatch(/^[a-z]+$/);
+    }
+  });
+
+  it('화면에 보여주는 목록과 이름·순서가 같다', async () => {
+    // 두 목록은 일부러 따로 둔다 — 메인이 스스로 판단할 수 있어야 화면 쪽 실수가
+    // 실행 구멍이 되지 않기 때문이다. 대신 어긋나면 화면에는 버튼이 보이는데 눌러도
+    // 첫 화면만 열리는 식으로 **조용히** 실패하므로, 여기서 못 박는다.
+    const { ONECLICK_PORTAL_TASKS: displayed } =
+      await import('@adapters/constants/oneclickPortalTasks');
+    expect(displayed.map((task) => task.key)).toEqual([...ONECLICK_PORTAL_TASKS]);
   });
 });
