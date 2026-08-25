@@ -109,7 +109,12 @@ serve(async (req: Request): Promise<Response> => {
     ]);
     if (minuteLimited) return degradedResponse('busy');
     const dailyLimited = await checkRateLimit(supabase, 'assist', [
-      { identifier: validated.installId, windowMs: 86_400_000, max: 40 },
+      // ★40 → 100 (2026-08-25). 40 은 "하루 40번 물어보면 충분하다"는 가정이었는데,
+      //   질문 1건이 왕복 2~3건이라 체감 13~20번이었다. 실제로 오너가 하루 만에 다 썼다.
+      //   왕복 1건 $0.000281 이라 100 회를 다 써도 한 사람당 하루 3센트다. 지출은 아래
+      //   전역 상한(dailyGlobalLimit)이 막으므로, 이 값은 "한 사람이 전체 예산을 혼자
+      //   태우지 못하게" 나누는 몫으로만 본다.
+      { identifier: validated.installId, windowMs: 86_400_000, max: 100 },
       { identifier: 'global', windowMs: 86_400_000, max: dailyGlobalLimit() },
     ]);
     if (dailyLimited) return degradedResponse('budget');
