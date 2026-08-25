@@ -7,6 +7,7 @@
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { embedPassages } from '../_shared/embedding.ts';
 
 // ── 타입 정의 ──────────────────────────────────────────────
 
@@ -23,10 +24,6 @@ interface EmbedRequest {
   action: 'upsert' | 'delete' | 'list';
   documents?: EmbedDocument[];
   source?: string;
-}
-
-interface GeminiBatchEmbeddingResponse {
-  embeddings: Array<{ values: number[] }>;
 }
 
 // ── CORS ──────────────────────────────────────────────────
@@ -65,7 +62,7 @@ serve(async (req: Request): Promise<Response> => {
     const body = (await req.json()) as EmbedRequest;
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
 
     switch (body.action) {
@@ -101,37 +98,15 @@ serve(async (req: Request): Promise<Response> => {
           return jsonResponse({ error: 'documents 배열이 필요합니다' }, 400);
         }
 
-        const apiKey = Deno.env.get('GOOGLE_API_KEY')!;
+        // 문서용 모델(embedding-passage, 4096차원)로 배치 임베딩.
+        // ★질문 쪽(embedding-query)과 **모델이 다르다** — 섞으면 검색이 조용히 나빠진다.
         const texts = body.documents.map((d) => d.content);
-
-        // 배치 임베딩 생성 (gemini-embedding-001, 768차원)
-        const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:batchEmbedContents?key=${apiKey}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              requests: texts.map((text) => ({
-                model: 'models/gemini-embedding-001',
-                content: { parts: [{ text }] },
-                taskType: 'RETRIEVAL_DOCUMENT',
-                outputDimensionality: 768,
-              })),
-            }),
-          }
-        );
-
-        if (!response.ok) {
-          const errorBody = await response.text();
-          throw new Error(`임베딩 생성 실패 (${response.status}): ${errorBody}`);
-        }
-
-        const embedData = (await response.json()) as GeminiBatchEmbeddingResponse;
+        const vectors = await embedPassages(texts);
 
         // DB에 삽입
         const rows = body.documents.map((doc, i) => ({
           content: doc.content,
-          embedding: JSON.stringify(embedData.embeddings[i].values),
+          embedding: JSON.stringify(vectors[i]),
           metadata: { ...doc.metadata, version: '0.2.7' },
         }));
 

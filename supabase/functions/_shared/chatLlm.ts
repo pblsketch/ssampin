@@ -5,15 +5,15 @@
  * 요청 형태가 Gemini 와 전혀 달라(시스템 지시·역할 이름·토큰 옵션) 호출부마다 분기하면
  * ssampin-chat 안에 같은 fetch 가 세 벌 생긴다. 그래서 호출을 이 파일 하나로 모은다.
  *
- * ⚠️ 임베딩(검색용 벡터)은 여기 포함되지 않는다. 문서 테이블이 `vector(768)` 로 고정돼
- * 있어(001_ssampin_chat.sql) 4096차원인 업스테이지 임베딩으로 바꾸려면 DB 이사와 전체
- * 재적재가 필요하다. 임베딩은 계속 Gemini(gemini-embedding-001, 768차원)를 쓴다.
+ * ⚠️ 임베딩(검색용 벡터)은 여기 포함되지 않는다 — `_shared/embedding.ts` 소관이다.
+ * 2026-08-25 에 임베딩도 업스테이지로 옮기면서 문서 테이블을 `vector(4096)` 으로 넓히고
+ * 전체를 다시 적재했다. 이제 챗봇에 필요한 키는 UPSTAGE_API_KEY 하나다.
  *
  * 환경변수
  *   UPSTAGE_API_KEY   업스테이지 API 키. 없으면 Gemini 단독으로 동작한다(기존과 동일).
  *   UPSTAGE_MODEL     기본 'solar-pro3'. 'solar-pro4' 등으로 바꾸려면 값만 교체한다.
  *   UPSTAGE_BASE_URL  기본 'https://api.upstage.ai/v1'
- *   GOOGLE_API_KEY    Gemini 키. 임베딩과 폴백에 공용으로 쓴다.
+ *   GOOGLE_API_KEY    Gemini 키. **답변 생성 폴백 전용**(임베딩은 더 이상 안 쓴다).
  *   GEMINI_MODEL      기본 'gemini-3.1-flash-lite-preview'
  */
 

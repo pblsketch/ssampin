@@ -344,16 +344,27 @@ export function useHelpChat() {
           });
           setStatus('idle');
         }
-      } catch {
-        // 네트워크 에러 → 오프라인 폴백
+      } catch (err) {
+        // ★서버가 응답은 했는데 실패한 경우(HTTP 5xx)와 아예 못 닿은 경우를 나눈다.
+        //   예전에는 둘 다 "인터넷 연결이 불안정해요"로 뭉뚱그려서, 2026-08-25 서버 키
+        //   문제로 챗봇이 죽었을 때 인터넷이 멀쩡한 선생님께 공유기를 확인하라고 했다.
+        //   원인이 다르면 선생님이 할 일도 다르다.
+        const isServerError = err instanceof Error && err.message.startsWith('HTTP ');
+        const lead = isServerError
+          ? '⚡ AI 도우미가 잠시 응답하지 못했어요.'
+          : '⚡ 네트워크 연결이 불안정해요.';
+
         const matches = searchOfflineFaq(trimmed);
         if (matches.length > 0) {
-          const content = `⚡ 네트워크 연결이 불안정해요. 로컬 FAQ에서 찾은 답변이에요:\n\n${matches.map((m) => `**Q: ${m.question}**\n${m.answer}`).join('\n\n')}`;
+          const content = `${lead} 로컬 FAQ에서 찾은 답변이에요:\n\n${matches.map((m) => `**Q: ${m.question}**\n${m.answer}`).join('\n\n')}`;
           addAssistantMessage(content, { isOffline: true });
         } else {
-          addAssistantMessage('네트워크 연결이 불안정해요. 인터넷 연결을 확인해 주세요!', {
-            isOffline: true,
-          });
+          addAssistantMessage(
+            isServerError
+              ? 'AI 도우미가 잠시 응답하지 못했어요. 잠시 후 다시 물어봐 주세요!'
+              : '네트워크 연결이 불안정해요. 인터넷 연결을 확인해 주세요!',
+            { isOffline: true },
+          );
         }
         setStatus('error');
       }

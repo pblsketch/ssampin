@@ -4,7 +4,7 @@
  * 흐름: 질문 → 임베딩 → 벡터 검색 → LLM 답변 생성 → 에스컬레이션 판단
  *
  * 모델:
- *   임베딩: gemini-embedding-001 (768차원) — DB 벡터 차원에 묶여 있어 Gemini 유지
+ *   임베딩: 업스테이지 embedding-query (4096차원) → _shared/embedding.ts
  *   답변: 업스테이지 Solar(기본 solar-pro3), 실패 시 Gemini 자동 폴백 → _shared/chatLlm.ts
  */
 
@@ -12,6 +12,7 @@ import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { checkRateLimit, clientIpFrom } from '../_shared/rateLimit.ts';
 import { generateText } from '../_shared/chatLlm.ts';
+import { embedQuery, EmbeddingNotConfiguredError } from '../_shared/embedding.ts';
 
 // ── 타입 정의 ──────────────────────────────────────────────
 
@@ -53,10 +54,6 @@ interface MatchedDocument {
 }
 
 // Gemini 임베딩 API 타입 (답변 생성은 _shared/chatLlm.ts 가 담당)
-interface GeminiEmbeddingResponse {
-  embedding: { values: number[] };
-}
-
 // ── 시스템 프롬프트 ───────────────────────────────────────
 
 /**
@@ -210,28 +207,15 @@ async function generateHypotheticalAnswer(query: string): Promise<string> {
   }
 }
 
-/** 질문 임베딩 생성 (gemini-embedding-001, 768차원) */
-async function generateQueryEmbedding(query: string, apiKey: string): Promise<number[]> {
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key=${apiKey}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'models/gemini-embedding-001',
-        content: { parts: [{ text: query }] },
-        taskType: 'RETRIEVAL_QUERY',
-        outputDimensionality: 768,
-      }),
-    },
-  );
-
-  if (!response.ok) {
-    throw new Error(`임베딩 생성 실패: ${response.status}`);
-  }
-
-  const data = (await response.json()) as GeminiEmbeddingResponse;
-  return data.embedding.values;
+/**
+ * 질문 임베딩 생성 — 업스테이지 embedding-query (4096차원).
+ *
+ * ★예전에는 여기서 구글을 불렀는데, 2026-08-25 그 키가 무효화되자 **모든 질문이 500** 이
+ *   됐다. 이 단계는 검색보다 앞이고 폴백이 없어서 키 하나가 기능 전체를 멈춘다.
+ *   답변 생성이 이미 업스테이지라, 임베딩도 같은 공급자로 모아 관리할 키를 하나로 줄였다.
+ */
+async function generateQueryEmbedding(query: string): Promise<number[]> {
+  return await embedQuery(query);
 }
 
 /**
@@ -544,8 +528,6 @@ serve(async (req: Request): Promise<Response> => {
     }
 
     // 3. 쿼리 전처리: 대화 맥락 인식 재구성
-    // ⚠️ 이 키는 '임베딩 전용'이다. 답변 생성은 _shared/chatLlm.ts 가 업스테이지를 우선 쓴다.
-    const embeddingApiKey = Deno.env.get('GOOGLE_API_KEY')!;
     const history = body.history?.slice(-6) ?? [];
     let reformulatedQuery = reformulateQuery(body.message, history);
 
@@ -566,11 +548,11 @@ serve(async (req: Request): Promise<Response> => {
     // 5. HyDE: 가상 답변 생성 + 원본 쿼리 임베딩 (병렬 실행)
     const [hydeAnswer, queryEmbedding] = await Promise.all([
       generateHypotheticalAnswer(reformulatedQuery),
-      generateQueryEmbedding(reformulatedQuery, embeddingApiKey),
+      generateQueryEmbedding(reformulatedQuery),
     ]);
 
     // HyDE 답변 임베딩 생성
-    const hydeEmbedding = await generateQueryEmbedding(hydeAnswer, embeddingApiKey);
+    const hydeEmbedding = await generateQueryEmbedding(hydeAnswer);
 
     // 원본 + HyDE 임베딩 평균으로 검색 (가중 평균: 원본 40%, HyDE 60%)
     const combinedEmbedding = queryEmbedding.map((v, i) => v * 0.4 + hydeEmbedding[i] * 0.6);
@@ -685,6 +667,11 @@ serve(async (req: Request): Promise<Response> => {
       confidence,
     } satisfies ChatResponseAnswer);
   } catch (error) {
+    // 키 미설정은 장애가 아니라 배포 실수다. 로그에서 바로 구분되게 따로 남긴다 —
+    // 예전에 구글 키가 죽었을 때 'Chat error' 한 줄뿐이라 원인을 찾는 데 시간이 걸렸다.
+    if (error instanceof EmbeddingNotConfiguredError) {
+      console.error('[chat] UPSTAGE_API_KEY 미설정 — 임베딩 불가');
+    }
     console.error('Chat error:', error);
     return jsonResponse(
       {
