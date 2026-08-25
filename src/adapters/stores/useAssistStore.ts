@@ -253,6 +253,48 @@ export function buildHistoryTurns(
   return [...history, current];
 }
 
+/**
+ * 모델이 고른 **쓰기 호출 전부** — 단, 같은 도구끼리만.
+ *
+ * ★도구가 섞이면(할 일 하나 + 일정 하나) 묶지 않고 **첫 도구 것만** 쓴다. 성격이 다른
+ * 저장을 카드 한 장에 담으면 선생님이 무엇에 [실행]을 누르는지 흐려진다. 섞여 오는
+ * 일은 드물고, 남은 것은 다음 말씀에 다시 하면 된다.
+ *
+ * ★상한 6건 — 모델이 폭주해도 카드가 화면을 넘기지 않게. 읽기 쪽 상한(3)보다 넉넉한
+ * 이유는 공문 한 장에 할 일이 대여섯 건 들어 있는 것이 실제로 흔하기 때문이다.
+ */
+function sameToolWriteCalls(
+  calls: readonly { name: string; rawArguments: string }[],
+): readonly { name: string; rawArguments: string }[] {
+  const writes = calls.filter((call) => isWriteTool(call.name));
+  const first = writes[0];
+  if (!first) return [];
+  return writes.filter((call) => call.name === first.name).slice(0, 6);
+}
+
+/**
+ * 여러 건을 **카드 한 장**으로 묶는다. [실행]은 하나, 저장은 전부.
+ *
+ * ★카드를 여러 장 띄우지 않는 이유: 하나만 누르고 나머지를 지나치기 쉽다. 무엇무엇이
+ * 저장되는지 한 장에 다 적고 한 번에 저장하는 편이, 확인도 되고 빠뜨리지도 않는다.
+ */
+function combineProposals(items: readonly AssistWriteProposal[]): AssistWriteProposal {
+  const first = items[0]!;
+  return {
+    tool: first.tool,
+    action: first.action,
+    title: `${first.title} — ${items.length}건`,
+    // 각 건의 **첫 칸**(할 일이면 내용, 일정이면 제목)을 한 줄씩 보여준다.
+    fields: items.map((item, index) => ({
+      label: `${index + 1}`,
+      value: item.fields[0]?.value ?? '',
+    })),
+    values: first.values,
+    ...(first.targetId === undefined ? {} : { targetId: first.targetId }),
+    batch: items,
+  };
+}
+
 export const useAssistStore = create<AssistStore>()(
   persist(
     (set, get) => ({
@@ -469,19 +511,25 @@ export const useAssistStore = create<AssistStore>()(
            * 1왕복째에도, 조회를 한 번 하고 온 2왕복째에도 같은 자리를 쓴다.
            */
           const settleWithProposal = (
-            call: { name: string; rawArguments: string },
+            calls: readonly { name: string; rawArguments: string }[],
             extra: Partial<AssistTurn>,
           ): void => {
             // ★별칭을 실제 값으로 되돌린 뒤에 넘긴다.
             //   모델은 `［이름1］` 만 봤으므로 대상도 그 말로 가리켜 온다 — 되돌리지 않으면
             //   앱이 이름이 `［이름1］` 인 항목을 찾다가 없다고 답한다(2026-08-25 재현 확인).
             //   ★`mappings` 는 이 함수 스코프에만 있다. 상태로 새지 않는다.
-            const outcome = proposeWrite?.(
-              call.name,
-              restoreModelArguments(call.rawArguments, mappings),
-              // ★가린 쪽이 아니라 **원문**이다. 이건 밖으로 안 나가고 앱 안에서만 쓴다.
-              question,
+            const outcomes = calls.map((call) =>
+              proposeWrite?.(
+                call.name,
+                restoreModelArguments(call.rawArguments, mappings),
+                // ★가린 쪽이 아니라 **원문**이다. 이건 밖으로 안 나가고 앱 안에서만 쓴다.
+                question,
+              ),
             );
+            const built = outcomes.filter(
+              (o): o is AssistWriteProposal => o !== undefined && isWriteProposal(o),
+            );
+            const outcome = built.length > 1 ? combineProposals(built) : (outcomes[0] ?? undefined);
             if (outcome && isWriteProposal(outcome)) {
               patch({
                 ...extra,
@@ -504,9 +552,12 @@ export const useAssistStore = create<AssistStore>()(
             }
           };
 
-          const writeCall = (answer.toolCalls ?? []).find((call) => isWriteTool(call.name));
-          if (wantsToolSelection && proposeWrite && writeCall) {
-            settleWithProposal(writeCall, {});
+          // ★쓰기 호출을 **전부** 모은다. 예전에는 `find` 로 첫 건만 쓰고 나머지를 조용히
+          //   버렸다 — 공문 하나에 할 일이 셋 들어 있으면 하나만 저장되고, 무엇이 빠졌는지
+          //   말해 주지도 않았다(2026-08-25 오너 신고).
+          const writeCalls = sameToolWriteCalls(answer.toolCalls ?? []);
+          if (wantsToolSelection && proposeWrite && writeCalls.length > 0) {
+            settleWithProposal(writeCalls, {});
             return;
           }
 
@@ -570,8 +621,8 @@ export const useAssistStore = create<AssistStore>()(
               });
 
               // 목록을 보고 온 모델이 이제 쓰기를 고르면, 그 제안을 조회 카드와 함께 띄운다.
-              const followUp = (answer.toolCalls ?? []).find((call) => isWriteTool(call.name));
-              if (proposeWrite && followUp) {
+              const followUp = sameToolWriteCalls(answer.toolCalls ?? []);
+              if (proposeWrite && followUp.length > 0) {
                 settleWithProposal(followUp, { outboundCards: secondOutbound });
                 return;
               }

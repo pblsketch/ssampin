@@ -291,6 +291,127 @@ describe('켜져 있을 때 — 숫자 카드가 먼저 남는다', () => {
   });
 });
 
+describe('★할 일이 여러 개면 여러 건으로 저장한다 (2026-08-25 오너 신고)', () => {
+  beforeEach(() => {
+    useAssistStore.setState({ enabled: true });
+  });
+
+  /**
+   * 공문 한 장에 제출·배부·회의 세 가지가 들어 있는데 **하나만** 저장됐다.
+   * 모델이 세 번 불러도 앱이 `find` 로 첫 건만 쓰고 나머지를 조용히 버렸다.
+   */
+  function threeTodoPort(): AssistPort & { calls: AssistRequestPayload[] } {
+    const port: AssistPort & { calls: AssistRequestPayload[] } = {
+      calls: [],
+      ask: vi.fn(async (payload: AssistRequestPayload) => {
+        port.calls.push(payload);
+        return {
+          text: '',
+          degraded: null,
+          toolCalls: [
+            { name: 'create_todo', rawArguments: JSON.stringify({ text: '수행평가 계획서 제출' }) },
+            { name: 'create_todo', rawArguments: JSON.stringify({ text: '가정통신문 배부' }) },
+            { name: 'create_todo', rawArguments: JSON.stringify({ text: '성적관리위원회' }) },
+          ],
+        };
+      }),
+    };
+    return port;
+  }
+
+  const proposalFor = (text: string): AssistWriteProposal => ({
+    tool: 'create_todo',
+    action: 'create',
+    title: '할 일 추가',
+    fields: [{ label: '내용', value: text }],
+    values: { text },
+  });
+
+  it('세 건이 모두 제안에 담긴다 — 하나만 남지 않는다', async () => {
+    const port = threeTodoPort();
+    const propose = vi.fn((_name: string, rawArguments: string) =>
+      proposalFor(String((JSON.parse(rawArguments) as { text: string }).text)),
+    );
+
+    await useAssistStore
+      .getState()
+      .ask(port, '이 메시지 분석해서 할 일 목록에 추가해줘', [], [], undefined, propose);
+
+    const [turn] = useAssistStore.getState().turns;
+    expect(propose).toHaveBeenCalledTimes(3);
+    expect(turn?.proposal?.batch).toHaveLength(3);
+    expect(turn?.proposal?.batch?.map((p) => p.values.text)).toEqual([
+      '수행평가 계획서 제출',
+      '가정통신문 배부',
+      '성적관리위원회',
+    ]);
+  });
+
+  it('카드 한 장에 세 건이 다 보인다 — 무엇이 저장되는지 감추지 않는다', async () => {
+    const port = threeTodoPort();
+    const propose = (_name: string, rawArguments: string): AssistWriteProposal =>
+      proposalFor(String((JSON.parse(rawArguments) as { text: string }).text));
+
+    await useAssistStore.getState().ask(port, '할 일 추가해줘', [], [], undefined, propose);
+
+    const [turn] = useAssistStore.getState().turns;
+    expect(turn?.proposal?.title).toContain('3건');
+    expect(turn?.proposal?.fields.map((f) => f.value)).toEqual([
+      '수행평가 계획서 제출',
+      '가정통신문 배부',
+      '성적관리위원회',
+    ]);
+    // [실행]은 여전히 하나다 — 카드를 여러 장 띄우면 하나만 누르고 지나친다
+    expect(turn?.proposalState).toBe('pending');
+  });
+
+  it('한 건이면 예전 그대로 — 묶음이 붙지 않는다', async () => {
+    const port: AssistPort & { calls: AssistRequestPayload[] } = {
+      calls: [],
+      ask: vi.fn(async (payload: AssistRequestPayload) => {
+        port.calls.push(payload);
+        return {
+          text: '',
+          degraded: null,
+          toolCalls: [{ name: 'create_todo', rawArguments: JSON.stringify({ text: '결재' }) }],
+        };
+      }),
+    };
+
+    await useAssistStore
+      .getState()
+      .ask(port, '할 일 추가해줘', [], [], undefined, () => proposalFor('결재'));
+
+    const [turn] = useAssistStore.getState().turns;
+    expect(turn?.proposal?.batch).toBeUndefined();
+    expect(turn?.proposal?.title).toBe('할 일 추가');
+  });
+
+  it('★도구가 섞이면 묶지 않는다 — 성격이 다른 저장을 한 장에 담으면 안 된다', async () => {
+    const port: AssistPort & { calls: AssistRequestPayload[] } = {
+      calls: [],
+      ask: vi.fn(async (payload: AssistRequestPayload) => {
+        port.calls.push(payload);
+        return {
+          text: '',
+          degraded: null,
+          toolCalls: [
+            { name: 'create_todo', rawArguments: JSON.stringify({ text: '결재' }) },
+            { name: 'create_event', rawArguments: JSON.stringify({ title: '회식' }) },
+          ],
+        };
+      }),
+    };
+    const propose = vi.fn(() => proposalFor('결재'));
+
+    await useAssistStore.getState().ask(port, '추가해줘', [], [], undefined, propose);
+
+    // 첫 도구(create_todo) 것만 쓴다 — 일정은 다음 말씀에 다시 하면 된다
+    expect(propose).toHaveBeenCalledTimes(1);
+    expect(useAssistStore.getState().turns[0]?.proposal?.batch).toBeUndefined();
+  });
+});
+
 describe('★같은 답이 연달아 두 번 실리지 않는다 — 모델이 세 번째도 따라 쓴다 (2026-08-25)', () => {
   /**
    * 실사용: 출결 질문 두 개가 같은 답을 냈고, 그다음 "관찰 기록 남겨줘"에 모델이

@@ -272,6 +272,28 @@ export async function executeAssistWrite(
   proposal: AssistWriteProposal,
   deps: WriteDeps,
 ): Promise<WriteResult> {
+  // ★여러 건 묶음이면 하나씩 저장한다. 한 건이라도 실패하면 **몇 건이 됐고 몇 건이
+  //   안 됐는지** 말한다 — "저장했어요"만 말하면 빠진 것을 아무도 모른다.
+  if (proposal.batch && proposal.batch.length > 0) {
+    const results: WriteResult[] = [];
+    for (const item of proposal.batch) {
+      results.push(await executeAssistWrite(item, deps));
+    }
+    const done = results.filter((r) => r.ok).length;
+    const failed = results.filter((r) => !r.ok);
+    if (done === 0) {
+      return {
+        ok: false,
+        message: `${results.length}건 모두 저장하지 못했어요. ${failed[0]?.message ?? ''}`.trim(),
+      };
+    }
+    if (failed.length === 0) return { ok: true, message: `${done}건을 저장했어요.` };
+    return {
+      ok: true,
+      message: `${done}건을 저장했어요. ${failed.length}건은 안 됐어요 — ${failed[0]!.message}`,
+    };
+  }
+
   const id = needTarget(proposal);
   const targetMissing: WriteResult = {
     ok: false,

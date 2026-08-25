@@ -11,6 +11,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { isWriteProposal } from '@domain/entities/AssistWrite';
+import type { AssistWriteProposal } from '@domain/entities/AssistWrite';
 import { buildWriteProposal } from '@usecases/assist/writes/buildWriteProposal';
 import type { WriteSources } from '@usecases/assist/writes/writeSources';
 import { executeAssistWrite } from '../executeAssistWrite';
@@ -267,6 +268,58 @@ describe('★도구 25종이 각자 제 스토어 함수를 부른다', () => {
     expect(calls).toEqual([...expected]);
     // 결과 문구가 비어 있으면 선생님은 됐는지 안 됐는지 모른다.
     expect(message.length).toBeGreaterThan(0);
+  });
+});
+
+describe('★여러 건 묶음은 하나씩 다 저장한다 (2026-08-25 오너 신고)', () => {
+  function todo(text: string): AssistWriteProposal {
+    return {
+      tool: 'create_todo',
+      action: 'create',
+      title: '할 일 추가',
+      fields: [{ label: '내용', value: text }],
+      values: { text },
+    };
+  }
+
+  it('세 건이면 스토어를 세 번 부른다 — 첫 건만 저장되지 않는다', async () => {
+    const { deps, calls } = fakeDeps();
+    const batch = [todo('제출'), todo('배부'), todo('회의')];
+
+    const result = await executeAssistWrite({ ...todo('제출'), batch }, deps);
+
+    expect(calls).toEqual(['addTodo', 'addTodo', 'addTodo']);
+    expect(result.ok).toBe(true);
+    expect(result.message).toContain('3건');
+  });
+
+  it('★일부가 안 되면 몇 건이 됐고 몇 건이 안 됐는지 말한다', async () => {
+    const { deps, calls } = fakeDeps();
+    // 내용이 없는 건은 조립기가 거르지만, 실행기까지 온 경우를 가정한다
+    const broken: AssistWriteProposal = {
+      tool: 'create_todo',
+      action: 'create',
+      title: '할 일 추가',
+      fields: [],
+      values: {},
+    };
+
+    const result = await executeAssistWrite(
+      { ...todo('제출'), batch: [todo('제출'), broken] },
+      deps,
+    );
+
+    expect(calls).toEqual(['addTodo']);
+    expect(result.message).toContain('1건');
+    expect(result.message).toContain('안 됐');
+  });
+
+  it('묶음이 없으면 예전 그대로 한 건이다', async () => {
+    const { deps, calls } = fakeDeps();
+    const result = await executeAssistWrite(todo('제출'), deps);
+
+    expect(calls).toEqual(['addTodo']);
+    expect(result.message).toContain('제출');
   });
 });
 
