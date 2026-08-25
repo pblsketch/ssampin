@@ -9,6 +9,18 @@ import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, afterAll } 
 import { DatabaseSync } from 'node:sqlite';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+
+/**
+ * 쿨메신저는 윈도우 전용이지만 CI 는 리눅스에서 돈다.
+ *
+ * 기대 경로를 `'…\CoolMessenger\Memo'` 처럼 박아 두면 `node:path` 의 `join` 이
+ * 리눅스에서 `/` 를 쓰기 때문에 **로직이 멀쩡한데도 CI 만 빨간불**이 된다(실제로 7커밋째
+ * 그랬다). 구분자는 `node:path` 의 책임이므로 우리가 검증할 것이 아니고, 우리가 지킬 것은
+ * "LOCALAPPDATA 아래 CoolMessenger/Memo 를 본다" 는 **규칙 자체**다. 그래서 기대값도
+ * 같은 `join` 으로 만들어 양쪽 OS 에서 규칙을 검증한다.
+ */
+const LOCAL_APP_DATA = 'C:\\Users\\tester\\AppData\\Local';
+const DEFAULT_MEMO_DIR = join(LOCAL_APP_DATA, 'CoolMessenger', 'Memo');
 import { tmpdir } from 'node:os';
 
 const appMock = { isPackaged: false, on: vi.fn(), getPath: () => tmpdir() };
@@ -42,7 +54,7 @@ const originalLocal = process.env.LOCALAPPDATA;
 beforeEach(() => {
   appMock.isPackaged = false;
   delete process.env[ENV];
-  process.env.LOCALAPPDATA = 'C:\\Users\\tester\\AppData\\Local';
+  process.env.LOCALAPPDATA = LOCAL_APP_DATA;
 });
 
 afterEach(() => {
@@ -54,7 +66,7 @@ afterEach(() => {
 
 describe('개발 실행', () => {
   it('환경변수가 없으면 쿨메신저 기본 위치를 쓴다', () => {
-    expect(resolveMemoDir()).toBe('C:\\Users\\tester\\AppData\\Local\\CoolMessenger\\Memo');
+    expect(resolveMemoDir()).toBe(DEFAULT_MEMO_DIR);
   });
 
   it('환경변수를 주면 그 폴더를 쓴다 (가짜 쪽지함으로 실기기 확인)', () => {
@@ -64,7 +76,7 @@ describe('개발 실행', () => {
 
   it('공백뿐인 값은 무시한다', () => {
     process.env[ENV] = '   ';
-    expect(resolveMemoDir()).toBe('C:\\Users\\tester\\AppData\\Local\\CoolMessenger\\Memo');
+    expect(resolveMemoDir()).toBe(DEFAULT_MEMO_DIR);
   });
 
   it('앞뒤 공백은 다듬는다', () => {
@@ -77,7 +89,7 @@ describe('★ 배포본에서는 통로가 닫혀 있다', () => {
   it('환경변수가 있어도 무시하고 기본 위치를 쓴다', () => {
     appMock.isPackaged = true;
     process.env[ENV] = 'C:\\어디든\\남의폴더';
-    expect(resolveMemoDir()).toBe('C:\\Users\\tester\\AppData\\Local\\CoolMessenger\\Memo');
+    expect(resolveMemoDir()).toBe(DEFAULT_MEMO_DIR);
   });
 });
 

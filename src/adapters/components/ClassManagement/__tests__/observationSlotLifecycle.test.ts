@@ -12,10 +12,22 @@
  * (이 저장소의 phase6-inline-edit.test.ts 선례와 같은 방식).
  */
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const read = (p: string): string => readFileSync(resolve(process.cwd(), p), 'utf8');
+
+/**
+ * 브릿지(`ssampin-ai-bridge`)는 **별도 저장소**라 CI 체크아웃에 없다.
+ *
+ * 그대로 읽으면 ENOENT 로 CI 가 빨간불이 된다(실제로 7커밋째 그랬다). 로컬에서는 옆
+ * 폴더에 있어 통과하므로 개발 중에는 보이지도 않는다. 그래서 **있을 때만** 검사한다 —
+ * 스킵은 리포트에 남으므로 "검사가 사라진 것"과 구분된다.
+ */
+const bridgeExists = (p: string): boolean => existsSync(resolve(process.cwd(), p));
+const BRIDGE_MCP = '../ssampin-ai-bridge/packages/mcp/src/recordDraftTools.ts';
+const BRIDGE_CORE = '../ssampin-ai-bridge/packages/core/src/entities/recordEvidence.ts';
+const hasBridge = bridgeExists(BRIDGE_MCP) && bridgeExists(BRIDGE_CORE);
 
 const OBSERVATION_FORM = 'src/adapters/components/ClassManagement/ObservationForm.tsx';
 const INPUT_MODE = 'src/adapters/components/Homeroom/Records/InputMode.tsx';
@@ -112,14 +124,17 @@ describe('D5 — 저장한 슬롯을 보고 고칠 수 있다', () => {
   });
 });
 
-describe('D4 — 브릿지가 창고 슬롯을 AI 에게 보낸다', () => {
-  it('get_record_evidence 응답에 슬롯이 실린다', () => {
-    const src = read('../ssampin-ai-bridge/packages/mcp/src/recordDraftTools.ts');
-    expect(src).toContain('slots: e.slots.map');
-  });
+describe.skipIf(!hasBridge)(
+  'D4 — 브릿지가 창고 슬롯을 AI 에게 보낸다 (브릿지 저장소가 있을 때만)',
+  () => {
+    it('get_record_evidence 응답에 슬롯이 실린다', () => {
+      const src = read(BRIDGE_MCP);
+      expect(src).toContain('slots: e.slots.map');
+    });
 
-  it('파서 화이트리스트가 슬롯을 살린다', () => {
-    const src = read('../ssampin-ai-bridge/packages/core/src/entities/recordEvidence.ts');
-    expect(src).toContain("Array.isArray(o['slots'])");
-  });
-});
+    it('파서 화이트리스트가 슬롯을 살린다', () => {
+      const src = read(BRIDGE_CORE);
+      expect(src).toContain("Array.isArray(o['slots'])");
+    });
+  },
+);
