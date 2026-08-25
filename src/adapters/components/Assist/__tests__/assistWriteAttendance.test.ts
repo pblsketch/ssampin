@@ -175,9 +175,26 @@ describe('★언제·몇 교시인가', () => {
     expect(propose({ student: '15번', status: '결석', period: 3 }).values.date).toBe('2026-08-25');
   });
 
-  it('담임 학급에서 교시를 안 밝히면 정규 교시 전체다', () => {
+  it('★담임 학급에서 교시를 안 밝힌 결석은 조회·종례까지다 (2026-08-25 오너 신고)', () => {
+    // 화면에서 하루 결석을 찍으면 조회와 종례도 함께 찍힌다(computeAutoPeriods 정본).
+    // AI 로 적은 결석만 그 두 칸이 빈 채로 남아, 출결부에서 하루가 반쪽으로 보였다.
     const p = propose({ student: '15번', status: '결석' });
-    expect(p.values.periods).toBe('1,2,3,4,5,6,7');
+    expect(p.values.periods).toBe('0,1,2,3,4,5,6,7,9');
+  });
+
+  it('출석으로 되돌릴 때도 조회·종례까지 지운다 — 그 두 칸만 결석으로 남으면 안 된다', () => {
+    expect(propose({ student: '15번', status: '출석' }).values.periods).toBe('0,1,2,3,4,5,6,7,9');
+  });
+
+  it('★교시를 밝히면 그 교시만이다 — 교과 수업반에 조회·종례가 번지면 안 된다', () => {
+    expect(propose({ student: '15번', status: '결석', period: 3 }).values.periods).toBe('3');
+  });
+
+  it('지각은 조회까지, 조퇴는 종례까지 — 화면과 같은 규칙이다', () => {
+    // 지각(등교 교시를 안 밝힘) = 조회에만. 1교시부터는 자리에 있었다는 뜻이다.
+    expect(propose({ student: '15번', status: '지각' }).values.periods).toBe('0');
+    // 조퇴(하교 교시를 안 밝힘) = 하루 전체. 조회 전에 갔다는 뜻이다.
+    expect(propose({ student: '15번', status: '조퇴' }).values.periods).toBe('0,1,2,3,4,5,6,7,9');
   });
 
   it('★교과 수업반은 교시를 안 밝히면 되묻는다 — 짐작해서 하루치를 적지 않는다', () => {
@@ -301,8 +318,8 @@ describe('★이미 적혀 있는 것을 덮어쓸 때 — 조용히 덮지 않�
   });
 
   it('일부 교시만 적혀 있으면 "전부 그렇다"고 말하지 않는다', () => {
-    // 하루 전체(1~7교시)를 적는데 3교시에만 결석이 있다.
-    const outcome = proposeOn(WRITTEN, { student: '15번', status: '지각' });
+    // 하루 전체(조회~종례)를 적는데 3교시에만 결석이 있다.
+    const outcome = proposeOn(WRITTEN, { student: '15번', status: '결석' });
     if (!isWriteProposal(outcome)) throw new Error('제안이어야 한다');
     const now = outcome.fields.find((f) => f.label === '지금')?.value ?? '';
     expect(now).toBe('일부 교시만 결석 (질병)');

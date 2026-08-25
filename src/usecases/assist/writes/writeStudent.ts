@@ -14,9 +14,11 @@ import type { AssistWriteMark, AssistWriteOutcome } from '@domain/entities/Assis
 import type { AttendanceReason, AttendanceStatus } from '@domain/entities/Attendance';
 import {
   ATTENDANCE_REASONS,
+  PERIOD_MORNING,
   findAttendanceRecordForClass,
   formatPeriodLabel,
 } from '@domain/entities/Attendance';
+import { computeAutoPeriods } from '@domain/rules/attendanceRules';
 import {
   DEFAULT_OBSERVATION_CATEGORIES,
   DEFAULT_OBSERVATION_TAGS,
@@ -202,6 +204,26 @@ function currentSummary(
 }
 
 /**
+ * 담임 학급에서 교시를 안 밝혔을 때의 "하루 전체" — **화면과 같은 규칙을 쓴다.**
+ *
+ * ★규칙을 여기서 다시 만들지 않는다. 정본은 `computeAutoPeriods`(출결 그리드·빠른 입력이
+ * 쓰는 그 함수)이고, 그 표에서 하루 결석은 **조회 + 1~N교시 + 종례**다. 예전에는 이
+ * 파일이 제 나름대로 "하루 전체 = 1~N교시"로 세는 바람에, AI 로 적은 결석만 조회·종례가
+ * 빈 칸으로 남았다(2026-08-25 오너 신고, 화면 확인).
+ *
+ * ★출석(present)은 자동 채움 표가 **빈 값**을 준다 — "예외가 없다"는 뜻이라 채울 칸이
+ * 없기 때문이다. 그런데 여기서는 "하루 결석을 출석으로 되돌려 줘"가 되어야 하므로
+ * 결석과 **같은 범위**를 지운다. 빈 값을 그대로 쓰면 조회·종례에 결석만 남는다.
+ */
+function homeroomDaySpan(status: AttendanceStatus, count: number): number[] {
+  const span =
+    status === 'present'
+      ? computeAutoPeriods('absent', PERIOD_MORNING, count)
+      : computeAutoPeriods(status, PERIOD_MORNING, count);
+  return [...span].sort((a, b) => a - b);
+}
+
+/**
  * 출결을 적는다.
  *
  * ★교시를 안 밝히면 **담임 학급에서만** 하루 전체로 본다("오늘 결석"). 교과 수업반은
@@ -249,13 +271,17 @@ export function proposeSetAttendance(args: RawArgs, src: WriteSources): AssistWr
       ? parsedPeriod
       : undefined;
 
+  const count = src.roster.regularPeriodCount;
   let periods: readonly number[];
   if (period !== undefined) {
+    // ★교시를 밝혔으면 그 교시만이다. 특히 **교과 수업반**에서 조회·종례까지 번지면
+    //   그 반이 들지도 않는 시간에 결석이 찍힌다.
     periods = [period];
   } else if (!cls.homeroom) {
     return missing(`${cls.label} 수업의 교시`);
-  } else if (src.roster.regularPeriodCount > 0) {
-    periods = Array.from({ length: src.roster.regularPeriodCount }, (_, i) => i + 1);
+  } else if (count > 0) {
+    // ★담임 학급의 "하루 전체"는 **조회와 종례를 포함한다.**
+    periods = homeroomDaySpan(status, count);
   } else {
     return missing('교시');
   }
