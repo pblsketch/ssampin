@@ -23,7 +23,7 @@
  */
 import { DatabaseSync } from 'node:sqlite';
 import { copyFileSync, existsSync, mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs';
-import { basename, join } from 'node:path';
+import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { coolLog, coolWarn, describeError } from './coolMessengerDiag';
 
@@ -65,10 +65,26 @@ export class CoolSchemaMismatchError extends Error {
   }
 }
 
+/**
+ * 경로에서 **마지막 폴더명만** 뽑는다.
+ *
+ * ★`node:path` 의 `basename` 을 쓰면 안 된다. 쪽지함 경로는 항상 윈도우 형식
+ * (`C:\\Users\\<계정>\\...`)인데 `basename` 은 **실행 중인 OS 의 구분자**만 인정하므로,
+ * 리눅스에서 부르면 백슬래시를 폴더 구분으로 안 보고 **문자열 전체를 그대로 돌려준다.**
+ * 그러면 계정명을 가리려고 만든 이 함수가 계정명을 그대로 흘린다(CI 에서 실제로 잡혔다).
+ *
+ * 개인정보를 가리는 일이 **어느 OS 에서 도는지에 따라 달라지면 안 되므로** 구분자 두 가지를
+ * 직접 처리한다. 빈 값이면 원본을 되돌리지 않는다 — 되돌리면 가리려던 전체 경로가 그대로 나간다.
+ */
+function lastFolderName(p: string): string {
+  const parts = p.split(/[\\/]+/).filter(Boolean);
+  return parts[parts.length - 1] ?? '알 수 없음';
+}
+
 /** 쪽지함을 못 찾았을 때 — 전체 경로는 노출하지 않는다(폴더명까지만) */
 export class CoolMemoNotFoundError extends Error {
   constructor(memoDir: string) {
-    super(`쪽지함 파일(.udb)을 찾을 수 없습니다 (폴더: ${basename(memoDir) || memoDir})`);
+    super(`쪽지함 파일(.udb)을 찾을 수 없습니다 (폴더: ${lastFolderName(memoDir)})`);
     this.name = 'CoolMemoNotFoundError';
   }
 }
