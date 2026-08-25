@@ -899,7 +899,7 @@ export const docsArticles: readonly DocArticle[] = [
   {
     slug: 'features/tools',
     title: '쌤도구',
-    description: '수업 중 바로 쓰는 28가지 교실 도구를 정리하고 실행합니다.',
+    description: '수업 중 바로 쓰는 33가지 교실 도구를 정리하고 실행합니다.',
     category: 'features',
     lastUpdated: '2026-08-25',
     image: { src: '/docs/screenshots/tools-grid.png', alt: '쌤핀 쌤도구 목록 화면' },
@@ -907,7 +907,7 @@ export const docsArticles: readonly DocArticle[] = [
       {
         id: 'count',
         title: '현재 도구 수',
-        body: ['쌤도구에는 수업 중 바로 실행할 수 있는 교실 도구 28가지가 들어 있습니다.'],
+        body: ['쌤도구에는 수업 중 바로 실행할 수 있는 교실 도구 33가지가 들어 있습니다.'],
       },
       {
         id: 'list',
@@ -916,9 +916,11 @@ export const docsArticles: readonly DocArticle[] = [
           '자리뽑기, 랜덤뽑기, 타이머, 활동기호, 룰렛, QR코드, 워드클라우드',
           '주사위, 객관식 설문, 점수판, 신호등, 주관식 설문, 복합 유형 설문',
           '교실약속정하기, 과제수합, 동전던지기, 모둠 편성기',
-          '가치수직선 토론, 신호등 토론, 칠판, 협업 보드',
+          '가치수직선 토론, 신호등 토론, 칠판, 협업 보드, 실시간 담벼락',
           '숲소리, PBL스케치, 서명받기, 서식, 마크다운 변환기, 배점 계산기',
-          '원클릭업무포털 (별개의 무료 프로그램을 실행합니다)',
+          '내 이모티콘, 학교 알리미',
+          '원클릭업무포털 (선생님 컴퓨터에 설치된 별개의 무료 프로그램을 실행합니다)',
+          'DoRms, 도름스 오락실 (쌤핀 안에서 열지 않고 바깥 사이트로 연결됩니다)',
         ],
       },
       {
