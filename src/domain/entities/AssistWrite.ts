@@ -37,6 +37,20 @@ export interface AssistWriteField {
   readonly value: string;
 }
 
+/**
+ * 한 번에 여러 칸을 채우는 제안의 칸 하나 (루브릭 "만점으로 해줘").
+ *
+ * ★`values` 에 담지 않은 이유: `AssistWriteValues` 는 스칼라만 담는다(위 주석 참조).
+ * 목록을 쉼표로 이어 붙이거나 JSON 문자열로 우겨넣으면 실행기가 그것을 다시 **파싱**해야
+ * 하는데, 그 순간 "앱이 확정한 값"이라는 이 타입의 약속이 깨진다. 목록은 목록으로 둔다.
+ */
+export interface AssistWriteMark {
+  readonly criterionId: string;
+  readonly criterionName: string;
+  readonly levelId: string;
+  readonly levelName: string;
+}
+
 export interface AssistWriteProposal {
   /** 레지스트리의 도구 id. 실행기가 이걸로 갈라 읽는다 */
   readonly tool: string;
@@ -61,6 +75,15 @@ export interface AssistWriteProposal {
   readonly values: AssistWriteValues;
   /** 고칠·지울 대상의 내부 식별자. **모델에게는 한 번도 보이지 않는다** */
   readonly targetId?: string;
+  /**
+   * 한 번에 채울 칸들. 지금은 루브릭 채점만 쓴다 — 선생님이 "만점으로 해줘"라고 하면
+   * 평가 요소가 여러 개라 칸도 여러 개가 된다.
+   *
+   * ★한 칸짜리도 여기에 **한 개짜리 목록**으로 들어온다. 실행기가 "한 칸이면 이 길,
+   * 여러 칸이면 저 길"로 갈리면 한쪽만 고치는 사고가 나므로 길을 하나로 둔다.
+   * (`values` 에도 첫 칸이 그대로 들어간다 — 미리보기·문구가 쓰던 자리라 유지한다.)
+   */
+  readonly marks?: readonly AssistWriteMark[];
 }
 
 /**

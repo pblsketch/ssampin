@@ -35,6 +35,22 @@ const ACTION =
 const ASK_TO_WRITE =
   /(적어|기록|등록|저장|남겨|남기|추가|써)\s*(해)?\s*(줘|주세요|주시|주라|자|둬)/;
 
+/**
+ * ★학생 쓰기 3종(출결·관찰·채점)이 쓰는 말 — **여기가 비어 있어서 실제로 안 됐다.**
+ *
+ * 2026-08-25 실사용: "오늘 ○○○ 결석이야 결석 처리해줘" 가 조회로만 답했다. 도구가
+ * 없어서가 아니라 **도구 목록이 모델에게 나가지 않아서**다. "결석"이 정규식 지름길에
+ * 걸려 출결 요약 카드가 먼저 만들어지는데, 그러면 이 판정이 참이어야만 도구가 실린다
+ * (useAssistStore 의 wantsToolSelection). 그런데 위 두 줄에는 "처리해줘"가 없었다 —
+ * 쓰기 3종을 열면서(ADR-074) 도구·조립기·실행기는 다 붙였는데 **모델이 그것을 고를 수
+ * 있게 하는 이 문턱만 옛 22종의 말투 그대로 남아 있었다.**
+ *
+ * ★위 ASK_TO_WRITE 와 같은 이유로 **시키는 어미가 붙었을 때만** 인정한다.
+ * "출결 어떻게 처리했어?"·"입력해 놓은 거 보여줘" 는 조회이므로 걸리면 안 된다.
+ */
+const ASK_TO_MARK =
+  /(처리|입력|표시|반영|채점|매겨|매기|찍어|달아)\s*(해)?\s*(줘|주세요|주시|주라|둬)/;
+
 export function mentionsWriteIntent(question: string): boolean {
-  return ACTION.test(question) || ASK_TO_WRITE.test(question);
+  return ACTION.test(question) || ASK_TO_WRITE.test(question) || ASK_TO_MARK.test(question);
 }

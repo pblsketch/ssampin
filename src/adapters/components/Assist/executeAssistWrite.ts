@@ -13,6 +13,7 @@
  * 진짜 파일에 쓰게 된다 — "무엇을 불렀는지"를 가짜로 확인할 수 있어야 한다.
  */
 import type { AssistWriteProposal } from '@domain/entities/AssistWrite';
+import { particle } from '@domain/rules/koreanParticle';
 import type {
   AttendanceRecord,
   AttendanceStatus,
@@ -651,29 +652,70 @@ export async function executeAssistWrite(
         return targetMissing;
       }
 
-      const now = deps.getRubricMark(rubricId, studentKey, criterionId);
-      // ★결시 학생에게 스토어는 조용히 아무것도 안 한다. 여기서 말해 주지 않으면
-      //   "채점했어요"만 남고 화면에는 아무 변화가 없다.
-      if (now?.absent === true) {
+      // ★한 칸이든 여러 칸이든 **같은 길로** 간다("만점으로 해줘" = 요소 전부).
+      //   조립기가 한 칸짜리도 `marks` 에 한 개로 실어 준다.
+      const marks = proposal.marks ?? [
+        {
+          criterionId,
+          criterionName: str(proposal, 'criterionName') ?? '',
+          levelId,
+          levelName: str(proposal, 'levelName') ?? '',
+        },
+      ];
+      const who = str(proposal, 'studentName') ?? '';
+
+      // ★결시는 학생 단위 사실이라 **첫 칸에서 한 번만** 본다. 결시인데 요소마다
+      //   따로 물으면 같은 말을 여러 번 하게 된다.
+      if (deps.getRubricMark(rubricId, studentKey, marks[0]!.criterionId)?.absent === true) {
         return {
           ok: false,
-          message:
-            `${str(proposal, 'studentName') ?? ''} 학생은 결시로 표시돼 있어서 채점하지 않았어요.`.trim(),
-        };
-      }
-      // ★이미 그 수준이면 부르지 않는다 — 토글이라 그대로 누르면 체크가 **풀린다**.
-      if (now?.levelId === levelId) {
-        return {
-          ok: false,
-          message: `이미 "${str(proposal, 'levelName') ?? ''}"으로 체크돼 있어서 그대로 뒀어요.`,
+          message: `${who} 학생은 결시로 표시돼 있어서 채점하지 않았어요.`.trim(),
         };
       }
 
-      await deps.toggleRubricMark(rubricId, classId, studentKey, criterionId, levelId);
+      const changed: string[] = [];
+      const kept: string[] = [];
+      for (const mark of marks) {
+        // ★이미 그 수준이면 부르지 않는다 — 토글이라 그대로 누르면 체크가 **풀린다**.
+        //   요소마다 따로 본다: 선생님이 화면에서 일부만 미리 찍어 뒀을 수 있다.
+        if (deps.getRubricMark(rubricId, studentKey, mark.criterionId)?.levelId === mark.levelId) {
+          kept.push(mark.criterionName);
+          continue;
+        }
+        await deps.toggleRubricMark(rubricId, classId, studentKey, mark.criterionId, mark.levelId);
+        changed.push(mark.criterionName);
+      }
+
+      // 한 칸짜리 문구는 예전 그대로 둔다 — 선생님이 이미 익숙한 문장이다.
+      if (marks.length === 1) {
+        const only = marks[0]!;
+        if (changed.length === 0) {
+          return {
+            ok: false,
+            message: `이미 "${only.levelName}"으로 체크돼 있어서 그대로 뒀어요.`,
+          };
+        }
+        return {
+          ok: true,
+          message:
+            `${who} 학생의 "${only.criterionName}"${particle(only.criterionName, '을', '를')} "${only.levelName}"으로 체크했어요.`.trim(),
+        };
+      }
+
+      // ★몇 칸을 실제로 바꿨고 몇 칸은 그대로 뒀는지 **둘 다** 말한다. "채점했어요"만
+      //   말하면 이미 찍혀 있던 칸까지 새로 바꾼 줄 안다.
+      if (changed.length === 0) {
+        return {
+          ok: false,
+          message:
+            `${who} 학생은 ${marks.length}개 요소가 이미 그렇게 체크돼 있어서 그대로 뒀어요.`.trim(),
+        };
+      }
       return {
         ok: true,
-        message:
-          `${str(proposal, 'studentName') ?? ''} 학생의 "${str(proposal, 'criterionName') ?? ''}"을(를) "${str(proposal, 'levelName') ?? ''}"으로 체크했어요.`.trim(),
+        message: `${who} 학생의 ${changed.length}개 요소를 채점했어요.${
+          kept.length === 0 ? '' : ` (${kept.length}개는 이미 그렇게 돼 있어 그대로 뒀어요.)`
+        }`.trim(),
       };
     }
 

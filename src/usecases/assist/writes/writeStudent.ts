@@ -10,7 +10,7 @@
  * 선생님이 말한 번호나, 가려진 별칭(［이름1］)이 실제 이름으로 되돌아온 값으로만 온다.
  * 그 말을 실제 학생에 잇는 일이 이 파일이 명렬표를 보는 유일한 이유다.
  */
-import type { AssistWriteOutcome } from '@domain/entities/AssistWrite';
+import type { AssistWriteMark, AssistWriteOutcome } from '@domain/entities/AssistWrite';
 import type { AttendanceReason, AttendanceStatus } from '@domain/entities/Attendance';
 import {
   ATTENDANCE_REASONS,
@@ -23,7 +23,9 @@ import {
 } from '@domain/entities/Observation';
 
 import type { WriteSources } from './writeSources';
-import { choice, date, matchOne, missing, text } from './writeArgs';
+import { particle } from '@domain/rules/koreanParticle';
+
+import { choice, date, matchOne, missing, squash, text } from './writeArgs';
 import type { RawArgs } from './writeArgs';
 import { fieldsOf } from './writeTodoEvent';
 
@@ -219,7 +221,7 @@ export function proposeSetAttendance(args: RawArgs, src: WriteSources): AssistWr
   const status = STATUS_BY_WORD[word];
   if (status === undefined) {
     return {
-      reason: `"${word}"이(가) 어떤 처리인지 알아듣지 못했어요. 결석·지각·조퇴·결과·출석 중에서 말씀해 주세요.`,
+      reason: `"${word}"${particle(word, '이', '가')} 어떤 처리인지 알아듣지 못했어요. 결석·지각·조퇴·결과·출석 중에서 말씀해 주세요.`,
     };
   }
 
@@ -450,6 +452,27 @@ export function proposeAddObservation(args: RawArgs, src: WriteSources): AssistW
  * 지금 상태를 다시 보고, 이미 원하는 결과면 부르지 않는다(`complete_todo` 선례).
  * 그 확인은 실행기에서 한다 — 여기는 순수 함수라 지금 상태를 볼 수 없다.
  */
+/**
+ * "만점" 처럼 **수준 이름이 아니라 '제일 높은 칸'을 가리키는 말.**
+ *
+ * ★실제 수준 이름을 먼저 찾고, **못 찾았을 때만** 이 말로 친다. 기준표에 진짜로
+ * "만점"이라는 수준이 있으면 그 수준이 이긴다 — 선생님이 붙인 이름이 늘 우선이다.
+ *
+ * ★"최고"·"최상"은 일부러 넣지 않았다. 수준 이름으로 쓰기 쉬운 말이라, 없는 수준을
+ * 말했을 때 되묻는 대신 제일 높은 칸을 찍어 버리면 그게 더 위험하다.
+ */
+const TOP_LEVEL_WORDS: readonly string[] = ['만점', '최고점'];
+
+/** 배점이 가장 높은 수준. 배점이 같으면 뒤엣것을 고르지 않는다(먼저 나온 것 유지). */
+function topLevel(
+  levels: readonly { readonly id: string; readonly name: string; readonly score: number }[],
+): { readonly id: string; readonly name: string } | undefined {
+  return levels.reduce<(typeof levels)[number] | undefined>(
+    (best, level) => (best === undefined || level.score > best.score ? level : best),
+    undefined,
+  );
+}
+
 export function proposeSetRubricMark(args: RawArgs, src: WriteSources): AssistWriteOutcome {
   const rawStudent = args['student'];
   const who = typeof rawStudent === 'number' ? String(rawStudent) : text(args, 'student');
@@ -461,21 +484,59 @@ export function proposeSetRubricMark(args: RawArgs, src: WriteSources): AssistWr
   if (!rubricHit.ok) return { reason: rubricHit.reason };
   const rubric = rubricHit.item;
 
-  const criterionName = text(args, 'criterion');
-  if (criterionName === undefined) return missing('어느 평가 요소');
-  const criterionHit = matchOne(rubric.criteria, criterionName, (c) => c.name, '평가 요소');
-  if (!criterionHit.ok) return { reason: criterionHit.reason };
-  const criterion = criterionHit.item;
-
   const levelName = text(args, 'level');
   if (levelName === undefined) return missing('어느 수준');
-  const levelHit = matchOne(criterion.levels, levelName, (l) => l.name, '수준');
-  if (!levelHit.ok) return { reason: levelHit.reason };
+
+  /**
+   * 어느 요소들에 찍을 것인가. 선생님이 요소를 밝히면 그 하나, 안 밝히면 **전부**다.
+   *
+   * ★"만점으로 표시해줘"가 실사용에서 그냥 막혔다(2026-08-25). 요소를 하나씩 집어야만
+   * 되는 구조였는데, 만점은 애초에 "요소를 하나 고르는 말"이 아니다.
+   */
+  const criterionName = text(args, 'criterion');
+  let targets: readonly (typeof rubric.criteria)[number][];
+  if (criterionName === undefined) {
+    if (rubric.criteria.length === 0) {
+      return { reason: `"${rubric.title}"에 평가 요소가 없어서 채점할 칸이 없어요.` };
+    }
+    targets = [...rubric.criteria].sort((a, b) => a.order - b.order);
+  } else {
+    const criterionHit = matchOne(rubric.criteria, criterionName, (c) => c.name, '평가 요소');
+    if (!criterionHit.ok) return { reason: criterionHit.reason };
+    targets = [criterionHit.item];
+  }
+
+  // ★요소마다 수준을 따로 찾는다. 같은 이름의 수준이 요소마다 다른 id 라서, 한 번 찾아
+  //   돌려 쓰면 엉뚱한 칸이 체크된다(기존 테스트가 잠가 둔 규칙).
+  const wantsTop = TOP_LEVEL_WORDS.includes(squash(levelName));
+  const marks: AssistWriteMark[] = [];
+  for (const criterion of targets) {
+    const hit = matchOne(criterion.levels, levelName, (l) => l.name, '수준');
+    const level = hit.ok ? hit.item : wantsTop ? topLevel(criterion.levels) : undefined;
+    if (level === undefined) {
+      // ★일부만 찍고 넘어가지 않는다. 반쯤 채워진 채점표는 선생님이 무엇이 빠졌는지
+      //   모르는 채로 두는 것이라, 아무것도 안 하고 이유를 말하는 편이 낫다.
+      return {
+        reason:
+          targets.length === 1
+            ? (hit as { reason: string }).reason
+            : `"${criterion.name}"에는 "${levelName}"에 해당하는 수준이 없어서 아무것도 바꾸지 않았어요.`,
+      };
+    }
+    marks.push({
+      criterionId: criterion.id,
+      criterionName: criterion.name,
+      levelId: level.id,
+      levelName: level.name,
+    });
+  }
 
   // 반은 루브릭이 이미 알고 있다 — 선생님이 따로 말하지 않아도 된다.
   const cls = src.roster.teaching.find((c) => c.classId === rubric.classId);
   if (cls === undefined) {
-    return { reason: `"${rubric.title}"이(가) 어느 수업반 것인지 찾지 못했어요.` };
+    return {
+      reason: `"${rubric.title}"${particle(rubric.title, '이', '가')} 어느 수업반 것인지 찾지 못했어요.`,
+    };
   }
 
   const target = findStudent(
@@ -488,26 +549,38 @@ export function proposeSetRubricMark(args: RawArgs, src: WriteSources): AssistWr
     return { reason: `${target.item.name} 학생을 어느 자리에 적을지 정하지 못했어요.` };
   }
 
+  const first = marks[0]!;
+  // ★여러 칸이면 **무엇이 어디에 찍히는지 전부** 보여준다. 개수만 적으면 [실행] 버튼이
+  //   확인이 아니라 요식이 된다(미리보기의 원칙).
+  const preview: [string, string | undefined][] =
+    marks.length === 1
+      ? [
+          ['평가 요소', first.criterionName],
+          ['수준', first.levelName],
+        ]
+      : marks.map((mark) => [mark.criterionName, mark.levelName]);
+
   return {
     tool: 'set_rubric_mark',
     action: 'create',
-    title: '루브릭 채점',
+    title: marks.length === 1 ? '루브릭 채점' : `루브릭 채점 — ${marks.length}개 요소`,
     fields: fieldsOf([
       ['수업반', cls.className],
       ['평가 기준표', rubric.title],
       ['학생', `${target.item.number}번 ${target.item.name}`],
-      ['평가 요소', criterion.name],
-      ['수준', levelHit.item.name],
+      ...preview,
     ]),
     values: {
       rubricId: rubric.id,
       classId: rubric.classId,
       studentKey: target.item.key,
       studentName: target.item.name,
-      criterionId: criterion.id,
-      levelId: levelHit.item.id,
-      criterionName: criterion.name,
-      levelName: levelHit.item.name,
+      // 첫 칸은 `values` 에도 그대로 둔다 — 미리보기·문구가 쓰던 자리다.
+      criterionId: first.criterionId,
+      levelId: first.levelId,
+      criterionName: first.criterionName,
+      levelName: first.levelName,
     },
+    marks,
   };
 }

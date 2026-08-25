@@ -237,6 +237,133 @@ describe('켜져 있을 때 — 숫자 카드가 먼저 남는다', () => {
     expect(port.calls[0]?.tools).toBeUndefined();
     expect(executor).not.toHaveBeenCalled();
   });
+
+  it('★실사용 재현 — "결석 처리해줘"는 출결 카드가 있어도 도구 목록을 싣는다 (2026-08-25)', async () => {
+    // 실사용에서 "오늘 ○○○ 결석이야 결석 처리해줘"가 **조회로만** 답했다.
+    // set_attendance 는 이미 등록·조립·실행까지 다 붙어 있었다. 문제는 "결석"이 정규식
+    // 지름길에 걸려 출결 요약 카드가 먼저 만들어졌고, 그 순간 도구 목록이 빠졌다는 것
+    // (mentionsWriteIntent 에 "처리해줘"가 없었다) — 모델은 그 도구를 **본 적이 없다.**
+    // 쓰기 도구를 열 때 이 문턱까지 함께 열지 않으면 기능이 붙어 있어도 닿지 않는다.
+    const port: AssistPort & { calls: AssistRequestPayload[] } = {
+      calls: [],
+      ask: vi.fn(async (payload: AssistRequestPayload) => {
+        port.calls.push(payload);
+        return {
+          text: '',
+          degraded: null,
+          toolCalls: [
+            {
+              name: 'set_attendance',
+              rawArguments: JSON.stringify({ student: '3번', status: '결석' }),
+            },
+          ],
+        };
+      }),
+    };
+    const proposal: AssistWriteProposal = {
+      tool: 'set_attendance',
+      action: 'update',
+      title: '출결 표시',
+      fields: [{ label: '처리', value: '결석' }],
+      values: { status: 'absent' },
+    };
+    const proposeWrite = vi.fn(() => proposal);
+
+    await useAssistStore
+      .getState()
+      .ask(port, '오늘 가가가 결석이야 결석 처리해줘', [safeCard()], [], undefined, proposeWrite);
+
+    // ① 도구 목록이 실제로 나갔고, 그 안에 출결 쓰기 도구가 있다
+    const names = (port.calls[0]?.tools ?? []).map((t) => t.function.name);
+    expect(names).toContain('set_attendance');
+    // ② 카드도 함께 나간다 — 도구를 싣는다고 조회 결과를 버리지 않는다
+    expect(port.calls[0]?.toolResults).toHaveLength(1);
+    // ③ 모델이 그 도구를 고르면 **저장이 아니라 제안**으로 맺힌다
+    expect(proposeWrite).toHaveBeenCalledWith(
+      'set_attendance',
+      JSON.stringify({ student: '3번', status: '결석' }),
+    );
+    const [turn] = useAssistStore.getState().turns;
+    expect(turn?.proposal?.tool).toBe('set_attendance');
+    expect(turn?.proposalState).toBe('pending');
+  });
+});
+
+describe('★같은 답이 연달아 두 번 실리지 않는다 — 모델이 세 번째도 따라 쓴다 (2026-08-25)', () => {
+  /**
+   * 실사용: 출결 질문 두 개가 같은 답을 냈고, 그다음 "관찰 기록 남겨줘"에 모델이
+   * 그 출결 답을 **글자 하나 안 틀리고** 세 번째로 반복했다. 도구 목록도 카드도
+   * 제대로 나갔음을 재현으로 확인했으므로, 앱이 줄 수 있는 빌미는 이력의 연속 중복뿐이다.
+   */
+  const 같은답 = '오늘 우리 반 출석 현황은 다음과 같습니다. - 출석: 22명';
+
+  function doneTurn(id: string, question: string, outboundAnswer: string): AssistTurn {
+    return {
+      id,
+      question,
+      cards: [],
+      answer: outboundAnswer,
+      outboundAnswer,
+      outboundQuestion: question,
+      outboundCards: [],
+      maskedCount: 0,
+      blankedCount: 0,
+      degraded: null,
+      status: 'done',
+    };
+  }
+
+  it('연속으로 같은 답이면 뒤(최근) 것만 남고 질문은 둘 다 남는다', () => {
+    const turns = buildHistoryTurns(
+      [doneTurn('t1', '오늘 결석 어때', 같은답), doneTurn('t2', '결석 처리해줘', 같은답)],
+      '관찰 기록 남겨줘',
+    );
+
+    expect(turns.filter((t) => t.role === 'assistant')).toHaveLength(1);
+    // 무엇을 물었는지는 문맥에 필요하므로 질문은 하나도 빠지지 않는다
+    expect(turns.filter((t) => t.role === 'user').map((t) => t.content)).toEqual([
+      '오늘 결석 어때',
+      '결석 처리해줘',
+      '관찰 기록 남겨줘',
+    ]);
+    // 현재 질문은 언제나 맨 뒤다
+    expect(turns[turns.length - 1]).toEqual({ role: 'user', content: '관찰 기록 남겨줘' });
+  });
+
+  it('세 번 이어져도 한 번만 남는다', () => {
+    const turns = buildHistoryTurns(
+      [
+        doneTurn('t1', '질문1', 같은답),
+        doneTurn('t2', '질문2', 같은답),
+        doneTurn('t3', '질문3', 같은답),
+      ],
+      '질문4',
+    );
+    expect(turns.filter((t) => t.role === 'assistant')).toHaveLength(1);
+  });
+
+  it('답이 다르면 둘 다 남는다 — 과하게 지우면 문맥이 사라진다', () => {
+    const turns = buildHistoryTurns(
+      [doneTurn('t1', '질문1', '답 하나'), doneTurn('t2', '질문2', '답 둘')],
+      '질문3',
+    );
+    expect(turns.filter((t) => t.role === 'assistant').map((t) => t.content)).toEqual([
+      '답 하나',
+      '답 둘',
+    ]);
+  });
+
+  it('사이에 제안 턴(답 없음)이 끼면 연속이 아니다 — 둘 다 남는다', () => {
+    const turns = buildHistoryTurns(
+      [
+        doneTurn('t1', '질문1', 같은답),
+        doneTurn('t2', '결석 처리해줘', ''), // 제안으로 맺힌 턴 — 답 문장이 없다
+        doneTurn('t3', '질문3', 같은답),
+      ],
+      '질문4',
+    );
+    expect(turns.filter((t) => t.role === 'assistant')).toHaveLength(2);
+  });
 });
 
 describe('이력 한도 — 서버가 거절하기 전에 앱이 자른다', () => {

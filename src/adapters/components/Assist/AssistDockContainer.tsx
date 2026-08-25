@@ -851,7 +851,8 @@ export function AssistDockContainer() {
         criteria: r.criteria.map((c) => ({
           id: c.id,
           name: c.name,
-          levels: c.levels.map((l) => ({ id: l.id, name: l.name })),
+          order: c.order,
+          levels: c.levels.map((l) => ({ id: l.id, name: l.name, score: l.score })),
         })),
       })),
     }),

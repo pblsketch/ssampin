@@ -52,15 +52,20 @@ const SRC: WriteSources = {
         {
           id: 'cr1',
           name: '주장의 명확성',
+          order: 0,
           levels: [
-            { id: 'lv-good', name: '잘함' },
-            { id: 'lv-mid', name: '보통' },
+            { id: 'lv-good', name: '잘함', score: 3 },
+            { id: 'lv-mid', name: '보통', score: 2 },
           ],
         },
         {
           id: 'cr2',
           name: '근거의 타당성',
-          levels: [{ id: 'lv2-good', name: '잘함' }],
+          order: 1,
+          levels: [
+            { id: 'lv2-top', name: '탁월함', score: 5 },
+            { id: 'lv2-good', name: '잘함', score: 3 },
+          ],
         },
       ],
     },
@@ -152,6 +157,134 @@ describe('★어느 칸인가', () => {
     expect(shown).toContain('최민호');
     expect(shown).toContain('주장의 명확성');
     expect(shown).toContain('잘함');
+  });
+});
+
+describe('★"만점으로 표시해줘" — 평가 요소를 하나씩 집지 않아도 된다 (2026-08-25 실사용)', () => {
+  /**
+   * 신고: "사회 의제 다룬 매체 비평에서 7번 학생 만점으로 표시해줘" 가 막혔다.
+   * criterion 이 필수였고 "만점"은 수준 이름도 아니라, **두 이유로** 거절됐다.
+   * 만점은 애초에 "요소를 하나 고르는 말"이 아니다.
+   */
+  it('요소를 안 밝히고 "만점"이라고 하면 요소 전부가 최고 수준으로 잡힌다', () => {
+    const p = propose({ student: '7번', rubric: '토론 평가', level: '만점' });
+
+    // cr1 은 잘함(3)이 최고, cr2 는 탁월함(5)이 최고 — **배점으로** 정한다
+    expect(p.marks).toEqual([
+      {
+        criterionId: 'cr1',
+        criterionName: '주장의 명확성',
+        levelId: 'lv-good',
+        levelName: '잘함',
+      },
+      {
+        criterionId: 'cr2',
+        criterionName: '근거의 타당성',
+        levelId: 'lv2-top',
+        levelName: '탁월함',
+      },
+    ]);
+  });
+
+  it('미리보기에 어느 요소가 어느 수준인지 전부 보인다 — 개수만 적으면 [실행]이 요식이 된다', () => {
+    const shown = propose({ student: '7번', rubric: '토론 평가', level: '만점' })
+      .fields.map((f) => `${f.label}=${f.value}`)
+      .join(' | ');
+    expect(shown).toContain('주장의 명확성=잘함');
+    expect(shown).toContain('근거의 타당성=탁월함');
+  });
+
+  it('요소를 안 밝히고 실제 수준 이름을 대면 요소마다 같은 이름의 수준을 찾는다', () => {
+    const p = propose({ student: '7번', rubric: '토론 평가', level: '잘함' });
+    expect(p.marks?.map((m) => m.levelId)).toEqual(['lv-good', 'lv2-good']);
+  });
+
+  it('★한 요소에만 없는 수준이면 일부만 찍지 않고 통째로 거절한다', () => {
+    // '보통'은 cr1 에만 있다. 절반만 채워진 채점표는 무엇이 빠졌는지 알 수 없다.
+    const reason = reject({ student: '7번', rubric: '토론 평가', level: '보통' });
+    expect(reason).toContain('근거의 타당성');
+    expect(reason).toContain('아무것도 바꾸지 않았어요');
+  });
+
+  it('요소를 밝히면 예전처럼 그 한 칸만 잡는다', () => {
+    const p = propose({
+      student: '7번',
+      rubric: '토론 평가',
+      criterion: '주장의 명확성',
+      level: '만점',
+    });
+    expect(p.marks).toHaveLength(1);
+    expect(p.values.levelId).toBe('lv-good');
+  });
+
+  it('★선생님이 붙인 수준 이름이 "만점"이면 그 수준이 이긴다 — 짐작보다 이름이 먼저다', () => {
+    const withReal = {
+      ...SRC,
+      rubrics: [
+        {
+          id: 'rb1',
+          classId: 'c1',
+          title: '토론 평가',
+          criteria: [
+            {
+              id: 'cr1',
+              name: '주장의 명확성',
+              order: 0,
+              levels: [
+                { id: 'lv-top', name: '탁월함', score: 5 },
+                { id: 'lv-manjeom', name: '만점', score: 1 },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    const outcome = buildWriteProposal(
+      'set_rubric_mark',
+      JSON.stringify({ student: '7번', rubric: '토론 평가', level: '만점' }),
+      withReal,
+    );
+    if (!isWriteProposal(outcome)) throw new Error(outcome.reason);
+    // 배점은 1점이라 '최고'가 아니지만, 이름이 맞으므로 이쪽이다
+    expect(outcome.values.levelId).toBe('lv-manjeom');
+  });
+});
+
+describe('★만점 실행 — 여러 칸을 한 번에', () => {
+  it('요소마다 토글을 부르고, 몇 개를 바꿨는지 말한다', async () => {
+    const { deps, toggles } = spyDeps({ absent: false });
+    const result = await executeAssistWrite(
+      propose({ student: '7번', rubric: '토론 평가', level: '만점' }),
+      deps,
+    );
+
+    expect(result.ok).toBe(true);
+    expect(toggles.map((t) => t.criterionId)).toEqual(['cr1', 'cr2']);
+    expect(result.message).toContain('2개 요소');
+  });
+
+  it('★이미 그렇게 돼 있는 칸은 다시 누르지 않는다 — 토글이라 체크가 풀린다', async () => {
+    // 모든 칸이 이미 'lv-good' 이라고 답하는 가짜: cr1 은 그대로 두고 cr2 만 바뀐다
+    const { deps, toggles } = spyDeps({ absent: false, levelId: 'lv-good' });
+    const result = await executeAssistWrite(
+      propose({ student: '7번', rubric: '토론 평가', level: '만점' }),
+      deps,
+    );
+
+    expect(toggles.map((t) => t.criterionId)).toEqual(['cr2']);
+    expect(result.message).toContain('이미');
+  });
+
+  it('결시 학생은 한 번만 말하고 아무것도 찍지 않는다', async () => {
+    const { deps, toggles } = spyDeps({ absent: true });
+    const result = await executeAssistWrite(
+      propose({ student: '7번', rubric: '토론 평가', level: '만점' }),
+      deps,
+    );
+
+    expect(result.ok).toBe(false);
+    expect(toggles).toHaveLength(0);
+    expect(result.message).toContain('결시');
   });
 });
 

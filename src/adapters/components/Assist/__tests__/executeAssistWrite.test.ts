@@ -70,9 +70,10 @@ const SRC: WriteSources = {
         {
           id: 'cr1',
           name: '주장의 명확성',
+          order: 0,
           levels: [
-            { id: 'lv1', name: '잘함' },
-            { id: 'lv2', name: '보통' },
+            { id: 'lv1', name: '잘함', score: 3 },
+            { id: 'lv2', name: '보통', score: 2 },
           ],
         },
       ],

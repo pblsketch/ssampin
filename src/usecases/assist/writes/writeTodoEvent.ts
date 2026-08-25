@@ -9,6 +9,8 @@
  */
 import type { AssistWriteOutcome } from '@domain/entities/AssistWrite';
 
+import { particle } from '@domain/rules/koreanParticle';
+
 import type { WriteSources } from './writeSources';
 import { bool, choice, date, int, matchOne, missing, text, time } from './writeArgs';
 import type { RawArgs } from './writeArgs';
@@ -108,10 +110,14 @@ export function proposeCompleteTodo(args: RawArgs, src: WriteSources): AssistWri
   // 되돌리기(완료 해제)도 같은 도구로 한다 — 스토어가 toggle 하나뿐이라 두 정본이 안 생긴다.
   const undo = bool(args, 'undo') ?? false;
   if (found.item.completed && !undo) {
-    return { reason: `"${found.item.text}"은(는) 이미 끝낸 걸로 돼 있어요.` };
+    return {
+      reason: `"${found.item.text}"${particle(found.item.text, '은', '는')} 이미 끝낸 걸로 돼 있어요.`,
+    };
   }
   if (!found.item.completed && undo) {
-    return { reason: `"${found.item.text}"은(는) 아직 안 끝낸 걸로 돼 있어요.` };
+    return {
+      reason: `"${found.item.text}"${particle(found.item.text, '은', '는')} 아직 안 끝낸 걸로 돼 있어요.`,
+    };
   }
 
   return {

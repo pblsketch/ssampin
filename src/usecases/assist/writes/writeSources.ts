@@ -151,7 +151,14 @@ export interface WriteSources {
     readonly criteria: readonly {
       readonly id: string;
       readonly name: string;
-      readonly levels: readonly { readonly id: string; readonly name: string }[];
+      /** 표시 순서. "만점으로" 처럼 요소 전부를 찍을 때 미리보기가 화면과 같은 차례로 뜬다 */
+      readonly order: number;
+      readonly levels: readonly {
+        readonly id: string;
+        readonly name: string;
+        /** 배점. **"제일 높은 칸"을 이 값으로 정한다** — 목록 순서로 짐작하지 않는다 */
+        readonly score: number;
+      }[];
     }[];
   }[];
 }

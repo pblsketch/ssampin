@@ -202,6 +202,13 @@ export function buildHistoryTurns(
   };
   let totalChars = current.content.length;
   const history: AssistTurnPayload[] = [];
+  /**
+   * 바로 뒤(최종 순서 기준)에 놓일 답변. 뒤에서 앞으로 훑으므로 "직전에 본 답"이
+   * 곧 "이 답 다음에 오는 답"이다. 같으면 연속 중복이라 이번 것을 뺀다.
+   *
+   * ★뺀 것도 여기 남긴다 — 같은 답이 세 번 이어져도 **한 번만** 남기려는 것이다.
+   */
+  let lastSeenAnswer: string | undefined;
 
   for (let i = prior.length - 1; i >= 0; i--) {
     const t = prior[i]!;
@@ -213,8 +220,23 @@ export function buildHistoryTurns(
     const q = (t.outboundQuestion ?? t.question).slice(0, ASSIST_SEND_LIMITS.maxTurnChars);
     if (q.length > 0) pair.push({ role: 'user', content: q });
     const a = t.outboundAnswer.slice(0, ASSIST_SEND_LIMITS.maxTurnChars);
-    if (a.length > 0) pair.push({ role: 'assistant', content: a });
+    // ★똑같은 답이 연달아 두 번 실리면 **모델이 세 번째도 그대로 따라 쓴다.**
+    //
+    //   2026-08-25 실사용: 출결 질문 두 개가 같은 답을 냈고(앞의 "처리해줘" 결함 탓),
+    //   그다음 "관찰 기록 남겨줘"에 모델이 그 출결 답을 **글자 하나 안 틀리고** 세 번째로
+    //   반복했다 — 도구 목록도 카드도 제대로 나갔는데도. 이력에 같은 문장이 연속으로
+    //   놓이는 것 자체가 "이 말을 계속하라"는 신호가 된다.
+    //
+    //   앞 결함을 고치면 이 상황은 대부분 사라지지만(제안으로 맺히면 답 문장이 비어
+    //   이력에 안 들어간다), 같은 조회를 두 번 물으면 언제든 다시 만들어진다.
+    //   ★질문은 남기고 **중복된 답만** 뺀다 — 무엇을 물었는지는 문맥에 필요하고,
+    //   같은 답을 두 번 실어서 얻는 정보는 하나도 없다.
+    const duplicateAnswer = a.length > 0 && a === lastSeenAnswer;
+    if (a.length > 0 && !duplicateAnswer) pair.push({ role: 'assistant', content: a });
     if (pair.length === 0) continue;
+    // 답이 빈 턴(제안으로 맺힌 턴)은 질문만 남아 두 답 사이에 끼어든다 —
+    // 그러면 더는 '연속'이 아니므로 기준을 비운다.
+    lastSeenAnswer = a.length > 0 ? a : undefined;
 
     const pairChars = pair.reduce((n, turn) => n + turn.content.length, 0);
     if (history.length + pair.length + 1 > ASSIST_SEND_LIMITS.maxTurns) break;

@@ -9,6 +9,7 @@
  * 여기를 통과한 값만 `AssistWriteValues` 에 실린다.
  */
 import type { AssistWriteRejection } from '@domain/entities/AssistWrite';
+import { particle } from '@domain/rules/koreanParticle';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_RE = /^\d{2}:\d{2}$/;
@@ -71,7 +72,9 @@ export function choice<T extends string>(
 
 /** 빠뜨리면 안 되는 값이 없을 때의 거절. 사유는 그대로 화면에 뜬다. */
 export function missing(what: string): AssistWriteRejection {
-  return { reason: `${what}을(를) 알 수 없어서 만들지 않았어요. 다시 알려주시겠어요?` };
+  return {
+    reason: `${what}${particle(what, '을', '를')} 알 수 없어서 만들지 않았어요. 다시 알려주시겠어요?`,
+  };
 }
 
 /** 공백을 지운 비교용 문자열. "3학년 2반" 과 "3학년2반" 을 같게 본다. */
@@ -111,7 +114,10 @@ export function matchOne<T>(
         });
 
   if (pool.length === 0) {
-    return { ok: false, reason: `"${query}"에 맞는 ${what}을(를) 찾지 못했어요.` };
+    return {
+      ok: false,
+      reason: `"${query}"에 맞는 ${what}${particle(what, '을', '를')} 찾지 못했어요.`,
+    };
   }
   if (pool.length > 1) {
     const names = pool
@@ -121,7 +127,7 @@ export function matchOne<T>(
     const more = pool.length > 3 ? ` 외 ${pool.length - 3}건` : '';
     return {
       ok: false,
-      reason: `"${query}"에 맞는 ${what}이(가) 여러 개예요(${names}${more}). 어떤 것인지 더 정확히 알려주세요.`,
+      reason: `"${query}"에 맞는 ${what}${particle(what, '이', '가')} 여러 개예요(${names}${more}). 어떤 것인지 더 정확히 알려주세요.`,
     };
   }
   return { ok: true, item: pool[0]! };
