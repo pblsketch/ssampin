@@ -79,6 +79,7 @@ const SRC: WriteSources = {
     { id: 's2', notebookId: 'nb2', title: '수업 준비' },
   ],
   notePages: [{ id: 'p1', sectionId: 's1', title: '2단원 지도안' }],
+  attendance: [],
   rubrics: [
     {
       id: 'rb1',

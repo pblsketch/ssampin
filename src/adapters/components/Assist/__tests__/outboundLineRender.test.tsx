@@ -96,7 +96,13 @@ describe('★경고와 가림이 동시에 걸려도 서로 안 밀어낸다', (
     // 물결 밑줄은 **원문 줄에만** 그어진다 — 위치가 원문 기준이기 때문이다.
     const marks = container.querySelectorAll('mark');
     expect(marks.length).toBe(1);
-    expect(marks[0]?.textContent).toBe('이혼');
+    // ★걸린 단어가 **그대로 남아 있어야** 한다. 예전에는 aria-label 이 내용을 대체해
+    //   듣는 사람만 "이혼"을 통째로 잃었다(문장이 그 자리에서 끊겼다).
+    expect(marks[0]?.textContent).toContain('이혼');
+    expect(marks[0]?.getAttribute('aria-label')).toBeNull();
+    expect(marks[0]?.getAttribute('title')).toContain('가정 형편');
+    // 무엇에 걸렸는지는 대체가 아니라 덧붙임으로 알린다.
+    expect(marks[0]?.querySelector('.sr-only')?.textContent).toBe('(가정 형편 이야기)');
 
     expect(screen.getByText('쓴 문장')).toBeTruthy();
     expect(shown).toContain('［이름1］ 부모님 이혼하셨대요');

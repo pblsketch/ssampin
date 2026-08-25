@@ -805,6 +805,7 @@ export function AssistDockContainer() {
         })),
         teaching: classes.map((c) => ({
           classId: c.id,
+          ...(c.groupId === undefined ? {} : { groupId: c.groupId }),
           className: c.name,
           students: c.students.map((st) => ({
             number: st.number,
@@ -828,6 +829,20 @@ export function AssistDockContainer() {
         title: s.title,
       })),
       notePages: notePages.map((p) => ({ id: p.id, sectionId: p.sectionId, title: p.title })),
+      // ★이미 적혀 있는 출결. 미리보기가 "지금 무엇으로 돼 있는지"를 보여주는 데만 쓴다 —
+      //   감추면 선생님이 빈 칸에 적는 줄 알고 [실행]을 누르는데 실제로는 덮어쓰기가 된다.
+      attendance: classAttendance.map((r) => ({
+        classId: r.classId,
+        ...(r.groupId === undefined ? {} : { groupId: r.groupId }),
+        date: r.date,
+        period: r.period,
+        students: r.students.map((st) => ({
+          number: st.number,
+          status: st.status,
+          ...(st.reason === undefined ? {} : { reason: st.reason }),
+          ...(st.memo === undefined ? {} : { memo: st.memo }),
+        })),
+      })),
       // 채점 제안이 "어느 칸인지"를 정할 때 보는 표. id 는 모델에게 나가지 않는다.
       rubrics: rubrics.map((r) => ({
         id: r.id,
@@ -843,6 +858,7 @@ export function AssistDockContainer() {
     [
       bookmarkGroups,
       bookmarks,
+      classAttendance,
       classes,
       events,
       homeroomName,

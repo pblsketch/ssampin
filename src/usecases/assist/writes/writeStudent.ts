@@ -12,7 +12,11 @@
  */
 import type { AssistWriteOutcome } from '@domain/entities/AssistWrite';
 import type { AttendanceReason, AttendanceStatus } from '@domain/entities/Attendance';
-import { ATTENDANCE_REASONS, formatPeriodLabel } from '@domain/entities/Attendance';
+import {
+  ATTENDANCE_REASONS,
+  findAttendanceRecordForClass,
+  formatPeriodLabel,
+} from '@domain/entities/Attendance';
 import {
   DEFAULT_OBSERVATION_CATEGORIES,
   DEFAULT_OBSERVATION_TAGS,
@@ -101,7 +105,14 @@ function findRoster(
   src: WriteSources,
   className: string | undefined,
 ):
-  | { ok: true; classId: string; label: string; homeroom: boolean; students: readonly Target[] }
+  | {
+      ok: true;
+      classId: string;
+      groupId?: string;
+      label: string;
+      homeroom: boolean;
+      students: readonly Target[];
+    }
   | { ok: false; reason: string } {
   if (className === undefined) {
     if (src.roster.homeroom.length === 0) {
@@ -127,10 +138,55 @@ function findRoster(
   return {
     ok: true,
     classId: found.item.classId,
+    ...(found.item.groupId === undefined ? {} : { groupId: found.item.groupId }),
     label: found.item.className,
     homeroom: false,
     students: found.item.students.map((s) => ({ number: s.number, name: s.name, key: s.key })),
   };
+}
+
+/**
+ * 지금 이 칸에 무엇이 적혀 있는가. **미리보기에만** 쓴다.
+ *
+ * ★그룹 반(같은 교실의 여러 과목)은 물리 반 id 로만 찾으면 다른 과목 명의로 저장된
+ * 공유 기록을 놓친다(2026-07 QA2 B2). 그 판정의 정본이 `findAttendanceRecordForClass`
+ * 라 여기서 규칙을 다시 만들지 않고 그대로 부른다.
+ */
+function currentEntry(
+  src: WriteSources,
+  cls: { readonly classId: string; readonly groupId?: string },
+  date: string,
+  period: number,
+  studentNumber: number,
+): WriteSources['attendance'][number]['students'][number] | undefined {
+  const record = findAttendanceRecordForClass(
+    src.attendance,
+    { id: cls.classId, ...(cls.groupId === undefined ? {} : { groupId: cls.groupId }) },
+    date,
+    period,
+  );
+  return record?.students.find((entry) => entry.number === studentNumber);
+}
+
+/** 여러 교시의 현재 상태를 한 줄로 요약한다. 교시마다 다르면 그 사실을 말한다. */
+function currentSummary(
+  entries: readonly (WriteSources['attendance'][number]['students'][number] | undefined)[],
+): string | undefined {
+  const labels = entries.map((entry) =>
+    entry === undefined
+      ? undefined
+      : `${STATUS_LABEL[entry.status]}${entry.reason === undefined ? '' : ` (${entry.reason})`}`,
+  );
+  const written = labels.filter((label): label is string => label !== undefined);
+  if (written.length === 0) return undefined;
+  const unique = [...new Set(written)];
+  const everyPeriod = written.length === labels.length;
+  if (unique.length === 1) {
+    // 값은 하나인데 일부 교시만 적혀 있다 — "전부 결석"이라고 말하면 그게 거짓말이다.
+    return everyPeriod ? unique[0]! : `일부 교시만 ${unique[0]!}`;
+  }
+  // 교시마다 다르다. 뭉뚱그리면 선생님이 무엇을 덮는지 모른 채 [실행]을 누른다.
+  return `교시마다 달라요 (${unique.slice(0, 3).join(', ')}${unique.length > 3 ? ' 외' : ''})`;
 }
 
 /**
@@ -195,6 +251,27 @@ export function proposeSetAttendance(args: RawArgs, src: WriteSources): AssistWr
   const reason = choice<AttendanceReason>(args, 'reason', ATTENDANCE_REASONS);
   const memo = text(args, 'memo');
 
+  // ★지금 그 칸에 무엇이 적혀 있는지 본다. 미리보기가 이걸 감추면 선생님은 "빈 칸에
+  //   적는다"고 믿으며 [실행]을 누르는데 실제로는 이미 있던 결석이 지각으로 바뀐다.
+  const before = periods.map((p) => currentEntry(src, cls, when, p, target.item.number));
+
+  // ★이미 똑같으면 쓰지 않는다. 같은 값을 다시 저장해도 결과는 같지만, 저장 시각이
+  //   갱신되며 기기 간 동기화가 헛돌고 선생님은 무언가 바뀐 줄 안다.
+  const identical =
+    before.length > 0 &&
+    before.every(
+      (entry) =>
+        entry !== undefined &&
+        entry.status === status &&
+        entry.reason === reason &&
+        (entry.memo ?? undefined) === memo,
+    );
+  if (identical) {
+    return {
+      reason: `${target.item.name} 학생은 이미 ${STATUS_LABEL[status]}(으)로 돼 있어서 그대로 뒀어요.`,
+    };
+  }
+
   // ★교시 이름을 여기서 만들지 않는다. 선생님이 교시에 이름을 붙였으면("창체")
   //   그 이름이 나와야 하고, 그 규칙의 정본은 `formatPeriodLabel` 하나뿐이다.
   //   화면마다 "N교시"를 손으로 짓다가 붙인 이름이 그 화면에서만 무시된 전례가 있어
@@ -219,6 +296,8 @@ export function proposeSetAttendance(args: RawArgs, src: WriteSources): AssistWr
       ['학생', `${target.item.number}번 ${target.item.name}`],
       ['날짜', when],
       ['교시', periodLabel],
+      // 적혀 있던 것이 있을 때만 뜬다 — 빈 칸에 적는 흔한 경우에는 줄이 늘지 않는다.
+      ['지금', currentSummary(before)],
       ['처리', STATUS_LABEL[status]],
       ['사유', reason],
       ['메모', memo],

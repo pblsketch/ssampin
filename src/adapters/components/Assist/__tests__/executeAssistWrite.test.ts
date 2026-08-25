@@ -60,6 +60,7 @@ const SRC: WriteSources = {
   notebooks: [{ id: 'nb1', title: '3학년 수학' }],
   noteSections: [{ id: 's1', notebookId: 'nb1', title: '수업 준비' }],
   notePages: [{ id: 'p1', sectionId: 's1', title: '2단원 지도안' }],
+  attendance: [],
   rubrics: [
     {
       id: 'rb1',

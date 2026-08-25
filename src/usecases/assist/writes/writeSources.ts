@@ -9,6 +9,7 @@
  * 제안 객체 안에만 살고, 화면에는 원문만 보이며, 실행할 때 스토어로 들어갈 뿐이다.
  */
 
+import type { AttendanceReason, AttendanceStatus } from '@domain/entities/Attendance';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 
 export interface WriteSources {
@@ -78,6 +79,12 @@ export interface WriteSources {
     }[];
     readonly teaching: readonly {
       readonly classId: string;
+      /**
+       * 같은 교실의 여러 과목이 출결을 공유하는 묶음. 이게 있으면 출결 조회가
+       * 물리 반 id 가 아니라 이 값을 먼저 본다 — 안 보면 다른 과목 명의로 저장된
+       * 공유 기록을 놓친다(2026-07 QA2 B2).
+       */
+      readonly groupId?: string;
       readonly className: string;
       readonly students: readonly {
         readonly number: number;
@@ -118,6 +125,25 @@ export interface WriteSources {
    * 않는다. 모델이 "주장의 명확성 을 잘함으로" 라고 말하면, 그 말을 id 로 바꾸는 일이
    * 이 목록을 보는 유일한 용도다.
    */
+  /**
+   * **이미 적혀 있는** 출결. 미리보기가 "지금 무엇으로 돼 있는지"를 보여주는 데만 쓴다.
+   *
+   * ★없으면 앱이 조용히 덮어쓴다. 선생님은 [실행]을 누르면서 "빈 칸에 적는다"고 믿는데
+   * 실제로는 이미 있던 결석이 지각으로 바뀔 수 있다 — 미리보기가 값을 감추면 [실행]
+   * 버튼은 확인이 아니라 요식이 된다(AssistWrite.ts 의 `fields` 주석과 같은 이유).
+   */
+  readonly attendance: readonly {
+    readonly classId: string;
+    readonly groupId?: string;
+    readonly date: string;
+    readonly period: number;
+    readonly students: readonly {
+      readonly number: number;
+      readonly status: AttendanceStatus;
+      readonly reason?: AttendanceReason;
+      readonly memo?: string;
+    }[];
+  }[];
   readonly rubrics: readonly {
     readonly id: string;
     readonly classId: string;

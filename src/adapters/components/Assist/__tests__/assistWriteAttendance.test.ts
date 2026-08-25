@@ -46,6 +46,7 @@ const SRC: WriteSources = {
   notebooks: [],
   noteSections: [],
   notePages: [],
+  attendance: [],
   rubrics: [],
 };
 
@@ -197,6 +198,131 @@ describe('★무엇을 적는가', () => {
   it('사유 목록에 없는 말은 버린다 — 나이스가 모르는 사유가 저장되면 안 된다', () => {
     const p = propose({ student: '15번', status: '결석', period: 3, reason: '그냥' });
     expect(p.values.reason).toBeUndefined();
+  });
+});
+
+describe('★이미 적혀 있는 것을 덮어쓸 때 — 조용히 덮지 않는다', () => {
+  /** 3교시에 이미 결석(질병)이 적혀 있는 상황 */
+  const WRITTEN: WriteSources = {
+    ...SRC,
+    attendance: [
+      {
+        classId: '3-2',
+        date: '2026-08-25',
+        period: 3,
+        students: [{ number: 15, status: 'absent', reason: '질병' }],
+      },
+    ],
+  };
+
+  const proposeOn = (src: WriteSources, args: object) =>
+    buildWriteProposal('set_attendance', JSON.stringify(args), src);
+
+  it('★지금 무엇으로 돼 있는지 미리보기에 뜬다', () => {
+    const outcome = proposeOn(WRITTEN, { student: '15번', status: '지각', period: 3 });
+    if (!isWriteProposal(outcome)) throw new Error(`제안이어야 한다: ${outcome.reason}`);
+
+    const shown = outcome.fields.map((f) => `${f.label}=${f.value}`).join(' | ');
+    expect(shown).toContain('지금=결석 (질병)');
+    expect(shown).toContain('처리=지각');
+  });
+
+  it('빈 칸이면 「지금」 줄이 아예 안 뜬다 — 흔한 경우에 줄이 늘지 않는다', () => {
+    const outcome = proposeOn(WRITTEN, { student: '15번', status: '결석', period: 5 });
+    if (!isWriteProposal(outcome)) throw new Error('제안이어야 한다');
+    expect(outcome.fields.some((f) => f.label === '지금')).toBe(false);
+  });
+
+  it('★이미 똑같으면 헛되이 쓰지 않는다', () => {
+    const outcome = proposeOn(WRITTEN, {
+      student: '15번',
+      status: '결석',
+      period: 3,
+      reason: '질병',
+    });
+    expect(isWriteProposal(outcome)).toBe(false);
+    if (isWriteProposal(outcome)) return;
+    expect(outcome.reason).toContain('이미');
+    expect(outcome.reason).toContain('결석');
+  });
+
+  it('사유만 달라도 바꿔 준다 — 같다고 뭉뚱그리지 않는다', () => {
+    const outcome = proposeOn(WRITTEN, {
+      student: '15번',
+      status: '결석',
+      period: 3,
+      reason: '미인정',
+    });
+    expect(isWriteProposal(outcome)).toBe(true);
+  });
+
+  it('교시마다 다르면 그 사실을 말한다 — 하나로 뭉뚱그리면 다시 거짓말이 된다', () => {
+    const mixed: WriteSources = {
+      ...SRC,
+      roster: { ...SRC.roster, regularPeriodCount: 2 },
+      attendance: [
+        {
+          classId: '3-2',
+          date: '2026-08-25',
+          period: 1,
+          students: [{ number: 15, status: 'absent' }],
+        },
+        {
+          classId: '3-2',
+          date: '2026-08-25',
+          period: 2,
+          students: [{ number: 15, status: 'late' }],
+        },
+      ],
+    };
+    const outcome = proposeOn(mixed, { student: '15번', status: '조퇴' });
+    if (!isWriteProposal(outcome)) throw new Error('제안이어야 한다');
+    const now = outcome.fields.find((f) => f.label === '지금')?.value ?? '';
+    expect(now).toContain('교시마다 달라요');
+    expect(now).toContain('결석');
+    expect(now).toContain('지각');
+  });
+
+  it('일부 교시만 적혀 있으면 "전부 그렇다"고 말하지 않는다', () => {
+    // 하루 전체(1~7교시)를 적는데 3교시에만 결석이 있다.
+    const outcome = proposeOn(WRITTEN, { student: '15번', status: '지각' });
+    if (!isWriteProposal(outcome)) throw new Error('제안이어야 한다');
+    const now = outcome.fields.find((f) => f.label === '지금')?.value ?? '';
+    expect(now).toBe('일부 교시만 결석 (질병)');
+  });
+
+  it('다른 학생 것을 내 것으로 착각하지 않는다', () => {
+    const other: WriteSources = {
+      ...SRC,
+      attendance: [
+        {
+          classId: '3-2',
+          date: '2026-08-25',
+          period: 3,
+          students: [{ number: 1, status: 'absent' }],
+        },
+      ],
+    };
+    const outcome = proposeOn(other, { student: '15번', status: '지각', period: 3 });
+    if (!isWriteProposal(outcome)) throw new Error('제안이어야 한다');
+    expect(outcome.fields.some((f) => f.label === '지금')).toBe(false);
+  });
+
+  it('다른 날짜 것을 오늘 것으로 착각하지 않는다', () => {
+    const other: WriteSources = {
+      ...SRC,
+      attendance: [
+        {
+          classId: '3-2',
+          date: '2026-08-24',
+          period: 3,
+          students: [{ number: 15, status: 'absent' }],
+        },
+      ],
+    };
+    const outcome = proposeOn(other, { student: '15번', status: '지각', period: 3 });
+    if (!isWriteProposal(outcome)) throw new Error('제안이어야 한다');
+    expect(outcome.fields.some((f) => f.label === '지금')).toBe(false);
   });
 });
 

@@ -59,10 +59,16 @@ function Highlighted({
     parts.push(
       <mark
         key={`${finding.start}-${index}`}
-        aria-label={`주의: ${finding.label}`}
+        // ★`aria-label` 을 쓰지 않는다. 그 속성은 요소의 내용을 **대체**하므로
+        //   걸린 단어("이혼") 자체가 안 읽히고 "주의: 가정 형편 이야기"만 들린다 —
+        //   문장이 그 자리에서 끊긴다. 눈으로 보는 사람은 단어 위에 밑줄이 그어진
+        //   것을 보는데, 듣는 사람만 단어를 통째로 잃는 셈이다.
+        //   단어는 그대로 두고 무엇에 걸렸는지를 **덧붙인다**.
+        title={`주의: ${finding.label}`}
         className="bg-transparent text-sp-text underline decoration-wavy decoration-sp-warning underline-offset-2"
       >
         {text.slice(finding.start, finding.end)}
+        <span className="sr-only">({finding.label})</span>
       </mark>,
     );
     cursor = finding.end;

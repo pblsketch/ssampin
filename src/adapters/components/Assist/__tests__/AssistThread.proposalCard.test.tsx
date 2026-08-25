@@ -38,6 +38,7 @@ const SRC: WriteSources = {
   notebooks: [],
   noteSections: [],
   notePages: [],
+  attendance: [],
   rubrics: [],
 };
 
