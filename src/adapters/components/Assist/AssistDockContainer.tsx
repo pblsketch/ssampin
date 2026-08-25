@@ -947,5 +947,5 @@ export function AssistDockContainer() {
   );
 
   if (!enabled) return null;
-  return <AssistDock onAsk={handleAsk} onRunProposal={handleRunProposal} />;
+  return <AssistDock onAsk={handleAsk} onRunProposal={handleRunProposal} roster={roster} />;
 }

@@ -39,7 +39,7 @@ describe('AssistDock — 창 조작 버튼 자리', () => {
   it('창 버튼이 떠 있으면 헤더 앞에 자리를 비워 둔다', () => {
     setWindowControlsOverlay(true);
 
-    render(<AssistDock onAsk={() => {}} />);
+    render(<AssistDock onAsk={() => {}} roster={[]} />);
 
     const panel = screen.getByLabelText('쌤핀 AI');
     const header = screen.getByLabelText('쌤핀 AI 닫기').closest('header');
@@ -52,7 +52,7 @@ describe('AssistDock — 창 조작 버튼 자리', () => {
   it('창 버튼이 없는 환경(브라우저·macOS)에서는 빈 줄을 만들지 않는다', () => {
     setWindowControlsOverlay(false);
 
-    render(<AssistDock onAsk={() => {}} />);
+    render(<AssistDock onAsk={() => {}} roster={[]} />);
 
     const panel = screen.getByLabelText('쌤핀 AI');
     const header = screen.getByLabelText('쌤핀 AI 닫기').closest('header');

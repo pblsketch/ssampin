@@ -14,6 +14,7 @@ import { useLayoutEffect, useMemo, useState } from 'react';
 import { AssistThread } from './AssistThread';
 import type { AssistWriteProposal } from '@domain/entities/AssistWrite';
 import { OutboundLine } from './OutboundLine';
+import type { KeywordGroup } from '@domain/privacy/types';
 import { WindowDragStrip } from '@adapters/components/common/WindowDragStrip';
 import {
   ASSIST_MAX_QUESTION_CHARS,
@@ -56,6 +57,11 @@ interface Props {
    * 무엇을 저장할지는 이미 만들어진 제안이 들고 있다.
    */
   readonly onRunProposal?: (turnId: string, proposal: AssistWriteProposal) => void;
+  /**
+   * 학생 명단. 「나갈 문장」 줄이 **실제로 나갈 문장**을 미리 만들어 보여주는 데 쓴다.
+   * domain 은 스토어를 import 하지 않으므로 컨테이너가 만들어 내려준다.
+   */
+  readonly roster: readonly KeywordGroup[];
 }
 
 /**
@@ -98,7 +104,7 @@ function usePublishDockWidth(): (node: HTMLElement | null) => void {
   return setNode;
 }
 
-export function AssistDock({ onAsk, onRunProposal }: Props) {
+export function AssistDock({ onAsk, onRunProposal, roster }: Props) {
   const enabled = useAssistStore((s) => s.enabled);
   const open = useAssistStore((s) => s.open);
   const turns = useAssistStore((s) => s.turns);
@@ -212,7 +218,12 @@ export function AssistDock({ onAsk, onRunProposal }: Props) {
 
       {/* 입력부 */}
       <div className="shrink-0 border-t border-sp-border p-3">
-        <OutboundLine text={draft} screening={screening} onRemoveFinding={handleRemoveFinding} />
+        <OutboundLine
+          text={draft}
+          screening={screening}
+          roster={roster}
+          onRemoveFinding={handleRemoveFinding}
+        />
 
         <textarea
           value={draft}
