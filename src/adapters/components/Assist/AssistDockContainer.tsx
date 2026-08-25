@@ -613,6 +613,9 @@ function writeDeps(): WriteDeps {
     // ★출결은 스토어 함수를 **그대로** 부른다. 화면에서 저장할 때 지나는 길과 같은 길이다.
     upsertStudentAttendance: (params) =>
       useTeachingClassStore.getState().upsertStudentAttendanceEntries(params),
+    // ★[실행] 순간의 최신 출결을 본다 — 같은 번호의 다른 학생을 지키기 위해서다.
+    getDayAttendanceRecords: (classId, date) =>
+      useTeachingClassStore.getState().getDayAttendance(classId, date),
     bridgeHomeroomAttendance: (params) =>
       useStudentRecordsStore.getState().bridgeHomeroomDayAttendance(params),
     homeroomStudents: () => useStudentStore.getState().students,

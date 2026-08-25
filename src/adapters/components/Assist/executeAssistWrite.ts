@@ -146,6 +146,24 @@ export interface WriteDeps {
    * 기록 조회 화면에서는 그 결석이 없는 것으로 보인다(피드백 #147 B-4 의 반대 방향).
    * 화면에서 저장할 때도 늘 이 두 걸음을 함께 밟는다(AttendanceMode.tsx).
    */
+  /**
+   * [실행] 순간 그 반·그날의 출결 기록. **번호가 겹치는 수업반 때문에 필요하다.**
+   *
+   * 부분 저장(`upsertStudentAttendance`)은 **번호만으로** 대상을 가른다 — "2번을 저장한다"
+   * 고 하면 그 교시의 2번 엔트리를 **전부 지우고** 새것을 넣는다. 담임 학급은 번호가
+   * 안 겹쳐 문제가 없지만, 여러 학급에서 모인 수업반에는 2번이 넷일 수 있어 **옆 학생의
+   * 출결이 함께 사라진다**(2026-08-25 확인).
+   *
+   * 그래서 저장 전에 같은 번호의 **다른 학생 엔트리를 읽어 함께 실어 보낸다.**
+   */
+  readonly getDayAttendanceRecords: (
+    classId: string,
+    date: string,
+  ) => readonly {
+    readonly period: number;
+    readonly students: readonly StudentAttendance[];
+  }[];
+
   readonly bridgeHomeroomAttendance: (params: {
     className: string;
     date: string;
@@ -567,8 +585,17 @@ export async function executeAssistWrite(
           : { reason: str(proposal, 'reason') as AttendanceReason }),
         ...(str(proposal, 'memo') === undefined ? {} : { memo: str(proposal, 'memo')! }),
       };
+      // ★같은 번호의 **다른 학생**을 함께 실어 보낸다(위 getDayAttendanceRecords 주석).
+      //   안 그러면 부분 저장이 그 번호 엔트리를 통째로 갈아 끼워 옆 학생 출결이 사라진다.
+      const sameNumber = (a: StudentAttendance): boolean =>
+        a.grade === entry.grade && a.classNum === entry.classNum;
+      const dayNow = deps.getDayAttendanceRecords(classId, when);
       const byPeriod = new Map<number, readonly StudentAttendance[]>(
-        periods.map((period) => [period, [entry]] as const),
+        periods.map((period) => {
+          const now = dayNow.find((record) => record.period === period)?.students ?? [];
+          const others = now.filter((a) => a.number === studentNumber && !sameNumber(a));
+          return [period, [...others, entry]] as const;
+        }),
       );
 
       const saved = await deps.upsertStudentAttendance({

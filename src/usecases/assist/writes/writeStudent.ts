@@ -93,14 +93,28 @@ function findStudent(
 ): { ok: true; item: Target } | { ok: false; reason: string } {
   const wanted = asNumber(value);
   if (wanted !== undefined) {
-    const hit = roster.find((s) => s.number === wanted);
-    if (!hit) {
+    const hits = roster.filter((s) => s.number === wanted);
+    if (hits.length === 0) {
       return {
         ok: false,
         reason: `${where} ${wanted}번 학생을 찾지 못해서 아무것도 적지 않았어요. 번호를 다시 확인해 주시겠어요?`,
       };
     }
-    return { ok: true, item: hit };
+    // ★교과 수업반은 여러 학급에서 모이므로 **번호가 겹친다**(한 반에 "2번"이 넷일 수
+    //   있다). 예전에는 그중 맨 앞을 골랐다 — 선생님은 구예찬을 말했는데 도유산에게
+    //   결석이 적히고, 그 사실은 아무도 모른다. 고르지 않고 **이름을 여쭙는다.**
+    if (hits.length > 1) {
+      const names = hits
+        .slice(0, 4)
+        .map((s) => s.name)
+        .join(', ');
+      const more = hits.length > 4 ? ` 외 ${hits.length - 4}명` : '';
+      return {
+        ok: false,
+        reason: `${where}에는 ${wanted}번이 여러 명이에요(${names}${more}). 이름으로 말씀해 주시면 그 학생에게 적을게요.`,
+      };
+    }
+    return { ok: true, item: hits[0]! };
   }
 
   const found = matchOne(roster, value, (s) => s.name, '학생');

@@ -72,7 +72,12 @@ interface BridgeCall {
   readonly students: readonly { readonly id: string }[];
 }
 
-function spyDeps(options?: { blocked?: boolean; otherStudentOnPeriod?: number }): {
+function spyDeps(options?: {
+  blocked?: boolean;
+  otherStudentOnPeriod?: number;
+  /** [실행] 시점에 이미 저장돼 있는 그날 출결 — 같은 번호 옆 학생 보존을 확인한다 */
+  existingDay?: readonly { period: number; students: readonly StudentAttendance[] }[];
+}): {
   deps: WriteDeps;
   upserts: UpsertCall[];
   bridges: BridgeCall[];
@@ -81,6 +86,7 @@ function spyDeps(options?: { blocked?: boolean; otherStudentOnPeriod?: number })
   const bridges: BridgeCall[] = [];
 
   const deps = {
+    getDayAttendanceRecords: () => options?.existingDay ?? [],
     upsertStudentAttendance: async (params: UpsertCall) => {
       upserts.push(params);
       // 저장이 막힌 상태 — 스토어는 예외가 아니라 null 로 알린다.
@@ -271,6 +277,78 @@ describe('★번호가 겹치는 수업반 — 누구인지 잃지 않는다 (20
     await executeAssistWrite(propose({ student: '15번', status: '결석', period: 3 }), deps);
 
     expect(upserts[0]!.recordsByPeriod.get(3)).toEqual([{ number: 15, status: 'absent' }]);
+  });
+});
+
+describe('★번호가 겹치면 고르지 않고 여쭙는다 (오너 결정 2026-08-25)', () => {
+  it('"2번"이라고만 하면 이름을 되묻는다 — 맨 앞을 골라 엉뚱한 학생에게 적지 않는다', () => {
+    const reason = reject({ student: '2번', status: '결석', className: '1-7', period: 2 });
+    expect(reason).toContain('구예찬');
+    expect(reason).toContain('도유산');
+    expect(reason).toContain('이름으로');
+  });
+
+  it('담임 학급은 번호가 안 겹치니 예전처럼 번호로 바로 된다', () => {
+    expect(propose({ student: '15번', status: '결석', period: 3 }).values.studentName).toBe(
+      '박서연',
+    );
+  });
+});
+
+describe('★같은 번호 옆 학생의 출결이 지워지지 않는다', () => {
+  /**
+   * 부분 저장은 **번호만으로** 대상을 가른다 — "2번을 저장한다"고 하면 그 교시의 2번
+   * 엔트리를 전부 지우고 새것을 넣는다. 수업반에는 2번이 여럿이라 옆 학생이 사라진다.
+   * 그래서 저장 전에 같은 번호의 다른 학생을 읽어 **함께 실어 보낸다.**
+   */
+  it('같은 교시에 있던 다른 2번(도유산)이 함께 실려 살아남는다', async () => {
+    const 도유산: StudentAttendance = { number: 2, status: 'late', grade: 1, classNum: 5 };
+    const { deps, upserts } = spyDeps({
+      existingDay: [{ period: 2, students: [도유산] }],
+    });
+
+    await executeAssistWrite(
+      propose({ student: '구예찬', status: '결석', className: '1-7', period: 2 }),
+      deps,
+    );
+
+    expect(upserts[0]!.recordsByPeriod.get(2)).toEqual([
+      도유산,
+      { number: 2, status: 'absent', grade: 1, classNum: 2 },
+    ]);
+  });
+
+  it('★같은 학생이 이미 있던 것은 겹쳐 넣지 않는다 — 한 사람이 두 줄이 되면 안 된다', async () => {
+    const 구예찬옛것: StudentAttendance = { number: 2, status: 'late', grade: 1, classNum: 2 };
+    const { deps, upserts } = spyDeps({
+      existingDay: [{ period: 2, students: [구예찬옛것] }],
+    });
+
+    await executeAssistWrite(
+      propose({ student: '구예찬', status: '결석', className: '1-7', period: 2 }),
+      deps,
+    );
+
+    expect(upserts[0]!.recordsByPeriod.get(2)).toEqual([
+      { number: 2, status: 'absent', grade: 1, classNum: 2 },
+    ]);
+  });
+
+  it('다른 번호는 애초에 건드리지 않는다 — 부분 저장이 알아서 지킨다', async () => {
+    const { deps, upserts } = spyDeps({
+      existingDay: [
+        { period: 2, students: [{ number: 5, status: 'late', grade: 1, classNum: 2 }] },
+      ],
+    });
+
+    await executeAssistWrite(
+      propose({ student: '구예찬', status: '결석', className: '1-7', period: 2 }),
+      deps,
+    );
+
+    expect(upserts[0]!.recordsByPeriod.get(2)).toEqual([
+      { number: 2, status: 'absent', grade: 1, classNum: 2 },
+    ]);
   });
 });
 

@@ -154,6 +154,8 @@ function fakeDeps(): { deps: WriteDeps; calls: string[]; renamed: string[] } {
       pageIds: [...pageIds],
     }),
 
+    // 저장 전 그날 출결 — 같은 번호의 다른 학생을 지키려고 읽는다(여기선 빈 하루)
+    getDayAttendanceRecords: () => [],
     // 출결 — 진짜 스토어처럼 "저장된 전체 목록"을 돌려준다(실행기가 하루치를 다시 모은다)
     upsertStudentAttendance: async (params: {
       classId: string;
