@@ -10,7 +10,13 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { redactOutbound, redactQuestion, rosterFrom, rosterFromAll } from '../redactOutbound';
+import {
+  questionHasBlockingPii,
+  redactOutbound,
+  redactQuestion,
+  rosterFrom,
+  rosterFromAll,
+} from '../redactOutbound';
 import { restore } from '../../privacy/maskEngine';
 import { findAssistTool } from '../../services/assistToolRegistry';
 import { sanitizeToolResult } from '../../services/sanitizeToolResult';
@@ -151,6 +157,34 @@ describe('연락처·주민번호·이메일은 가리지 않고 칸을 통째�
     expect(titlesOf(result.data)).toEqual([null]);
     expect(result.maskedCount).toBe(0);
     expect(result.blankedCount).toBe(1);
+  });
+});
+
+describe('★공문의 날짜를 생년월일로 잡지 않는다 (2026-08-25 오너 신고)', () => {
+  /**
+   * 수행평가 안내문을 보냈더니 제출 기한·회의 일시가 전부 ［생년월일N］ 이 됐다.
+   * 생년월일 규칙은 모든 달력 날짜를 잡는데, 선생님이 보내는 글은 공문이라
+   * 날짜가 **내용의 핵심**이다. 쿨메신저 쪽지도 같은 이유로 이미 꺼 두었다.
+   */
+  const 공문 =
+    '2학기 수행평가 계획서 제출 - 제출기한: 2026년 8월 28일(금) 16시까지 · ' +
+    '배부일: 2026년 9월 2일(수) · 회신 마감: 2026-09-07 · 일시: 2026년 9월 4일(금) 15시 30분';
+
+  it('날짜가 하나도 지워지지 않는다', () => {
+    const { masked, mappings } = redactQuestion(공문, []);
+    expect(masked).toBe(공문);
+    expect(mappings).toHaveLength(0);
+  });
+
+  it('★생년월일 표시가 한 번도 나오지 않는다', () => {
+    expect(redactQuestion(공문, []).masked).not.toContain('생년월일');
+  });
+
+  it('★막는 힘은 그대로다 — 연락처·주민번호는 여전히 보내지 않는다', () => {
+    expect(questionHasBlockingPii('담당자 010-1234-5678 로 연락 주세요')).toBe(true);
+    expect(questionHasBlockingPii('주민번호 900101-1234567')).toBe(true);
+    // 날짜만 있는 공문은 막히지 않는다
+    expect(questionHasBlockingPii(공문)).toBe(false);
   });
 });
 

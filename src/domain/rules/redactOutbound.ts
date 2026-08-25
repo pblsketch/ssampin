@@ -78,12 +78,26 @@ export function questionHasBlockingPii(question: string): boolean {
 /**
  * **가리기만** 하는 패턴. 오탐이 나도 한 단어 손해라 넓게 켠다.
  * (`address` 는 엔진이 저신뢰로 표시하는 항목이지만, 대가가 작으므로 켜 둔다.)
+ *
+ * ★`birth` 는 **끈다.** "오탐이 나도 한 단어 손해"라는 위 근거가 **날짜에는 성립하지
+ * 않는다.** 생년월일 규칙은 `YYYY-MM-DD`·`YYYY년 M월 D일` 을 전부 잡는데, 선생님이
+ * 보내는 글은 공문·안내문이라 날짜가 내용의 **핵심**이다. 실제로 수행평가 안내문에서
+ * 제출 기한·회의 일시 다섯 곳이 통째로 ［생년월일N］ 이 되어 AI 가 무슨 글인지조차
+ * 알 수 없었다(2026-08-25 오너 신고).
+ *
+ * ★같은 판단이 이미 저장소에 있다 — 쿨메신저 쪽지(`privacy/coolMessagePii.ts`)도
+ * 같은 이유로 `birth` 를 꺼 두었고 그 근거를 적어 두었다("쪽지 본문은 날짜투성이다").
+ * 그 교훈이 이 경로에만 안 와 있었다.
+ *
+ * ★막는 힘은 줄지 않는다: 주민번호·연락처·이메일은 `BLANK_PATTERNS` 에서 **통째로
+ * 비우는** 쪽으로 그대로 살아 있고, 이름·학번은 명렬표 대조로 계속 가린다.
+ * 생년월일이 정말 위험한 꼴(주민번호)은 `rrn` 이 잡는다.
  */
 const MASK_PATTERNS: PatternConfig = {
   phone: false,
   rrn: false,
   email: false,
-  birth: true,
+  birth: false,
   address: true,
 };
 
