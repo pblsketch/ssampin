@@ -10,7 +10,7 @@
 --
 -- 이 마이그레이션이 하는 일
 --   1) 하루 단위로 미리 접어둔 롤업(materialized view) 6개를 만든다.
---   2) pg_cron 으로 15분마다 갱신한다(동시 갱신 → 조회 중단 없음).
+--   2) pg_cron 으로 30분마다 갱신한다(동시 갱신 → 조회 중단 없음).
 --   3) 대시보드용 RPC 를 전부 롤업 위에서 다시 정의한다 → 원본 전수 검사 제거.
 --   4) 원본을 직접 봐야 하는 조회는 created_at 범위 비교(sargable)로 바꿔
 --      기존 idx_analytics_created 색인을 타게 한다.
@@ -309,8 +309,14 @@ EXCEPTION WHEN OTHERS THEN
   RAISE;
 END $$;
 
+-- 운영 실측(777k행/299MB) 롤업별 갱신 소요:
+--   hour_day 15.4s · device_day 10.2s · device_profile 10.2s · device_prop 7.3s
+--   event_day 5.7s · prop_day 3.6s · device_event 1.5s · session_day 0.6s · error_day 0.04s
+--   합계 약 55초. 앱과 같은 DB 를 쓰므로 주기를 30분으로 잡아 부하 비중을 ~3% 로 둔다.
+--   더 자주 필요하면 "자주 바뀌는 것(device_day·event_day·session_day·error_day, 약 17초)"만
+--   짧은 주기로 떼어내는 방법이 있다 — 대신 화면의 '집계 기준' 표시가 둘로 갈린다.
 COMMENT ON FUNCTION analytics_refresh_rollups() IS
-  '롤업 9종을 동시 갱신한다. pg_cron 이 15분마다 호출. 실패 시 analytics_rollup_meta.last_error 에 기록.';
+  '롤업 9종을 동시 갱신한다. pg_cron 이 30분마다 호출. 실패 시 analytics_rollup_meta.last_error 에 기록.';
 
 -- 집계 기준 시각 조회용 (대시보드 상단에 "언제 기준인지" 표시)
 CREATE OR REPLACE FUNCTION analytics_rollup_status()
@@ -335,7 +341,7 @@ BEGIN
     IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'analytics_refresh_rollups') THEN
       PERFORM cron.unschedule('analytics_refresh_rollups');
     END IF;
-    PERFORM cron.schedule('analytics_refresh_rollups', '*/15 * * * *', 'SELECT analytics_refresh_rollups();');
+    PERFORM cron.schedule('analytics_refresh_rollups', '*/30 * * * *', 'SELECT analytics_refresh_rollups();');
   ELSE
     RAISE NOTICE 'pg_cron 미활성 — analytics_refresh_rollups() 를 외부 스케줄러(GitHub Actions 등)로 10분마다 호출하세요.';
   END IF;

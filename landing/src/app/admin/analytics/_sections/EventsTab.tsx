@@ -12,7 +12,7 @@ export default async function EventsTab() {
   return (
     <Section title="최근 이벤트 (최신 100건)">
       <Note>
-        집계가 아니라 방금 들어온 기록을 그대로 보여줍니다. 다른 탭의 수치는 15분마다 갱신되는 미리
+        집계가 아니라 방금 들어온 기록을 그대로 보여줍니다. 다른 탭의 수치는 30분마다 갱신되는 미리
         계산 결과지만, 이 목록만은 항상 실시간입니다.
       </Note>
       <EventLog events={events} />

@@ -25,7 +25,7 @@
 - **롤업 9종**(materialized view)으로 하루 단위 사전 집계:
   `device_day` · `event_day` · `prop_day` · `device_prop` · `device_event` · `hour_day` ·
   `device_profile` · `error_day` · `session_day`
-- **pg_cron 15분 주기**로 `analytics_refresh_rollups()` 동시 갱신(`CONCURRENTLY` — 갱신 중에도
+- **pg_cron 30분 주기**로 `analytics_refresh_rollups()` 동시 갱신(`CONCURRENTLY` — 갱신 중에도
   조회가 막히지 않는다). 갱신 시각은 `analytics_rollup_meta` 에 남고 화면 상단에 표시된다.
 - **RPC 16종**을 롤업 위에서 재정의(`analytics_*_v2`).
 - 원본을 봐야 하는 3개(`prop_ranking` / `error_summary` / `event_breakdown` 의 사용자 수)는
@@ -38,10 +38,10 @@
 
 - **탭 7개**로 분리 — 지금 보는 탭의 자료만 불러온다. 탭·기간은 주소(`?tab=`, `?days=`)에 남는다.
 - **Suspense 스트리밍** — 제목·기간 선택·탭을 먼저 내보내고 집계는 나중에 흘려보낸다.
-- **5분 데이터 캐시**(`DEFAULT_REVALIDATE_SECONDS`). 롤업이 15분 주기라 화면이 뒤처지지 않는다.
+- **5분 데이터 캐시**(`DEFAULT_REVALIDATE_SECONDS`). 롤업이 30분 주기라 화면이 뒤처지지 않는다.
   이벤트 로그 탭만 캐시 없음(실시간).
 - 챗봇 대화 원문 1,000건 → **300건**.
-- 상단에 **"집계 기준: …(N분 전)"** 표시. 30분 넘게 갱신이 안 되면 노랗게 경고.
+- 상단에 **"집계 기준: …(N분 전)"** 표시. 50분 넘게 갱신이 안 되면 노랗게 경고.
 
 ## 3. 새로 볼 수 있게 된 것
 
@@ -94,8 +94,30 @@ CTE 를 `MATERIALIZED` 로 고정, 상관 서브쿼리 제거, 퍼널 8단계를
 최적화 전후 결과값이 같은지는 같은 DB에서 옛 정의와 나란히 돌려 확인했다(퍼널 8/8 단계 일치,
 `avg_dau` 일치).
 
-롤업 갱신은 운영에서 **32초**(로컬 9초보다 무겁다). 그래서 주기를 10분 → **15분**으로 잡았다.
-요청 경로와 무관한 백그라운드 작업이고 `CONCURRENTLY` 라 갱신 중에도 조회가 막히지 않는다.
+### 갱신 비용과 주기
+
+롤업 갱신은 운영에서 **약 55초** 걸린다(로컬 100만 행에서는 9초였다). 롤업별 실측:
+
+| 롤업             | 소요  |
+| ---------------- | ----- |
+| `hour_day`       | 15.4s |
+| `device_day`     | 10.2s |
+| `device_profile` | 10.2s |
+| `device_prop`    | 7.3s  |
+| `event_day`      | 5.7s  |
+| `prop_day`       | 3.6s  |
+| `device_event`   | 1.5s  |
+| `session_day`    | 0.6s  |
+| `error_day`      | 0.04s |
+
+전부 `app_analytics` 전체를 훑기 때문이다. 앱과 같은 DB 를 쓰므로 **주기를 30분**으로 잡아
+부하 비중을 ~3% 로 뒀다(15분이면 ~6%). 요청 경로와 무관한 백그라운드 작업이고
+`CONCURRENTLY` 라 갱신 중에도 조회가 막히지 않는다.
+
+더 신선하게 보고 싶다면, 자주 바뀌는 것(`device_day`·`event_day`·`session_day`·`error_day`,
+합쳐 약 17초)만 짧은 주기로 떼어내는 방법이 있다. 대신 화면의 "집계 기준" 표시가 둘로 갈린다.
+근본적으로 줄이려면 롤업을 증분 갱신(과거 날짜는 다시 계산하지 않음)으로 바꿔야 하는데,
+materialized view 가 아니라 일반 테이블 + upsert 구조가 필요하다.
 
 게이트: 루트 `tsc` 0 에러 · `lint` 0 에러 · `test` 612파일/8,052건 통과 · `regression-check` 51/51 ·
 landing `build` 성공 · `docs:check` 통과.
@@ -106,7 +128,7 @@ landing `build` 성공 · `docs:check` 통과.
 
 - `061_analytics_rollups.sql` 를 Management API 로 적용(35초). 롤업 9종 구축·RPC 16종 등록 확인.
 - `analytics_refresh_rollups()` 수동 1회 실행 → `analytics_rollup_meta.refreshed_at` 기록됨.
-- pg_cron `analytics_refresh_rollups` 15분 주기 등록·활성 확인.
+- pg_cron `analytics_refresh_rollups` 30분 주기 등록. 자동 실행 확인(19:30 → 19:45 정각, 오류 없음).
 - 마이그레이션 이력에 061 을 applied 로 기록(`supabase migration repair`).
 
 > **`db push` 를 쓰지 않은 이유** — 원격에는 **060 도 미적용** 상태다. 060(상담·설문 익명 접근
@@ -119,11 +141,11 @@ landing `build` 성공 · `docs:check` 통과.
 ### pg_cron 이 꺼져 있는 환경이라면
 
 마이그레이션이 `NOTICE` 만 남기고 통과한다. 이 경우 외부 스케줄러(GitHub Actions 등)로
-15분마다 `SELECT analytics_refresh_rollups();` 를 호출하면 된다.
+30분마다 `SELECT analytics_refresh_rollups();` 를 호출하면 된다.
 
 ## 6. 알아둘 점 / 한계
 
-- **수치는 최대 15분 지연**된다(롤업 주기). 상단 "집계 기준" 표시로 언제 기준인지 항상 보인다.
+- **수치는 최대 30분 지연**된다(롤업 주기). 상단 "집계 기준" 표시로 언제 기준인지 항상 보인다.
   이벤트 로그 탭만 실시간.
 - **커스텀 종료일(`to`)의 챗봇 대화 조회**는 원본 타임스탬프 `lte` 라 그 날 자정 이후가 빠지는
   일(日) 단위 한계가 그대로 남아 있다(기존과 동일).

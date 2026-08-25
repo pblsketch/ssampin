@@ -51,10 +51,11 @@ async function RollupFreshness() {
       </span>
     );
   }
+  // 갱신 주기가 30분이라, 그보다 넉넉한 50분을 넘겼을 때만 '뭔가 멈췄다'로 본다.
   const stale = status.stale_minutes ?? 0;
   const at = new Date(status.refreshed_at).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' });
   return (
-    <span className={stale > 30 ? 'text-amber-400' : 'text-gray-500'}>
+    <span className={stale > 50 ? 'text-amber-400' : 'text-gray-500'}>
       집계 기준: {at} ({stale < 1 ? '방금' : `${Math.round(stale)}분 전`})
       {status.last_error ? ` · 갱신 오류: ${status.last_error}` : ''}
     </span>
