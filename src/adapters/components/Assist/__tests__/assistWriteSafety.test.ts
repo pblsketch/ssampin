@@ -22,6 +22,12 @@ import type { WriteDeps } from '../executeAssistWrite';
 const SOURCES: WriteSources = {
   today: '2026-08-23',
   periodTimes: [],
+  roster: {
+    homeroomClassId: '3-2',
+    regularPeriodCount: 7,
+    homeroom: [],
+    teaching: [],
+  },
   todos: [{ id: 't1', text: '장보기', completed: false }],
   events: [{ id: 'e1', title: '학부모 총회', date: '2026-08-25' }],
   memos: [{ id: 'm1', content: '회의 자료 준비' }],
@@ -32,6 +38,7 @@ const SOURCES: WriteSources = {
   notebooks: [{ id: 'nb1', title: '3학년 수학' }],
   noteSections: [{ id: 's1', notebookId: 'nb1', title: '수업 준비' }],
   notePages: [{ id: 'p1', sectionId: 's1', title: '2단원 지도안' }],
+  rubrics: [],
 };
 
 /** 모델이 쓰기 도구를 고른 척하는 포트 */
@@ -285,7 +292,7 @@ describe('★[실행]을 눌러야 비로소 저장된다', () => {
   it('레지스트리의 쓰기 도구와 조립기 표가 정확히 같다', () => {
     // 한쪽에만 있으면 "고를 수는 있는데 제안이 안 만들어지는" 도구가 생긴다.
     expect([...writeToolNames()].sort()).toEqual(ASSIST_WRITE_TOOLS.map((t) => t.id).sort());
-    expect(writeToolNames()).toHaveLength(22);
+    expect(writeToolNames()).toHaveLength(25);
   });
 });
 

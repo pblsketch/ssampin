@@ -13,7 +13,14 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 import { screenAssistInput, type AssistInputScreening } from '@domain/rules/screenAssistInput';
-import { redactOutbound, redactQuestion, restoreModelText } from '@domain/rules/redactOutbound';
+import {
+  ASSIST_PII_BLOCKED_MESSAGE,
+  questionHasBlockingPii,
+  restoreModelArguments,
+  redactOutbound,
+  redactQuestion,
+  restoreModelText,
+} from '@domain/rules/redactOutbound';
 import { createMaskSession } from '@domain/privacy/maskEngine';
 import type { MaskMapping } from '@domain/privacy/types';
 import { findAssistTool } from '@domain/services/assistToolRegistry';
@@ -395,6 +402,20 @@ export const useAssistStore = create<AssistStore>()(
           }));
         };
 
+        // ★연락처·주민번호·이메일이 있으면 **여기서 끝낸다 — 요청이 나가지 않는다.**
+        //
+        //   서버(`assistRequest.ts`)에도 같은 검사가 있고 그 주석은 이렇게 적혀 있다:
+        //   *"앱의 관문(그물 ③)이 막았어야 하는 것이 여기까지 왔다 = 앱 쪽 그물이 뚫렸다는 신호."*
+        //   그런데 앱 쪽 그물은 **카드에만** 걸려 있고 질문에는 없었다 — 연락처가 적힌 질문은
+        //   쌤핀 서버까지 갔다가 거기서 되돌아왔다(2026-08-25 실측).
+        //
+        //   서버 검사는 **그대로 둔다.** 여기가 뚫렸을 때 마지막으로 막아야 한다.
+        //   ★가리고 보내지 않는다 — 원 설계의 판단(몰래 지우느니 정직하게 거절한다)을 잇는다.
+        if (questionHasBlockingPii(question)) {
+          patch({ status: 'blocked', blockedMessage: ASSIST_PII_BLOCKED_MESSAGE });
+          return;
+        }
+
         try {
           let answer = await port.ask({
             installId: get().installId,
@@ -424,7 +445,14 @@ export const useAssistStore = create<AssistStore>()(
             call: { name: string; rawArguments: string },
             extra: Partial<AssistTurn>,
           ): void => {
-            const outcome = proposeWrite?.(call.name, call.rawArguments);
+            // ★별칭을 실제 값으로 되돌린 뒤에 넘긴다.
+            //   모델은 `［이름1］` 만 봤으므로 대상도 그 말로 가리켜 온다 — 되돌리지 않으면
+            //   앱이 이름이 `［이름1］` 인 항목을 찾다가 없다고 답한다(2026-08-25 재현 확인).
+            //   ★`mappings` 는 이 함수 스코프에만 있다. 상태로 새지 않는다.
+            const outcome = proposeWrite?.(
+              call.name,
+              restoreModelArguments(call.rawArguments, mappings),
+            );
             if (outcome && isWriteProposal(outcome)) {
               patch({
                 ...extra,

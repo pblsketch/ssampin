@@ -16,6 +16,26 @@ import type { WriteSources } from '../writeSources';
 const SRC: WriteSources = {
   today: '2026-08-23',
   periodTimes: [],
+  // 출결 제안이 "누구인지"를 정할 때 보는 명단. **모델에게는 나가지 않는다.**
+  roster: {
+    homeroomClassId: '3-2',
+    regularPeriodCount: 7,
+    homeroom: [
+      { id: 'stu-1', name: '김지훈', studentNumber: 1 },
+      { id: 'stu-15', name: '박서연', studentNumber: 15 },
+      { id: 'stu-99', name: '번호없는학생' },
+    ],
+    teaching: [
+      {
+        classId: 'c1',
+        className: '3학년 2반',
+        students: [
+          { number: 7, name: '최민호', key: '7' },
+          { number: 8, name: '이수현', key: '8' },
+        ],
+      },
+    ],
+  },
   todos: [
     { id: 't1', text: '장보기', completed: false, dueDate: '2026-08-25' },
     { id: 't2', text: '수행평가 채점', completed: true },
@@ -59,6 +79,23 @@ const SRC: WriteSources = {
     { id: 's2', notebookId: 'nb2', title: '수업 준비' },
   ],
   notePages: [{ id: 'p1', sectionId: 's1', title: '2단원 지도안' }],
+  rubrics: [
+    {
+      id: 'rb1',
+      classId: 'c1',
+      title: '토론 평가',
+      criteria: [
+        {
+          id: 'cr1',
+          name: '주장의 명확성',
+          levels: [
+            { id: 'lv1', name: '잘함' },
+            { id: 'lv2', name: '보통' },
+          ],
+        },
+      ],
+    },
+  ],
 };
 
 function propose(tool: string, args: object): AssistWriteOutcome {
@@ -81,9 +118,15 @@ function valueOf(proposal: AssistWriteProposal, label: string): string | undefin
   return proposal.fields.find((f) => f.label === label)?.value;
 }
 
-describe('★도구 표 — 22종이 빠짐없이 있다', () => {
-  it('할일4 · 일정3 · 메모3 · 진도3 · 즐겨찾기4 · 노트5', () => {
-    expect(writeToolNames()).toHaveLength(22);
+describe('★도구 표 — 25종이 빠짐없이 있다', () => {
+  it('할일4 · 일정3 · 메모3 · 진도3 · 즐겨찾기4 · 노트5 · 출결1 · 관찰1 · 채점1', () => {
+    expect(writeToolNames()).toHaveLength(25);
+    // 학생에 닿는 쓰기는 이름으로 못 박는다 — 슬그머니 늘어나면 여기가 먼저 터진다.
+    expect(
+      writeToolNames()
+        .filter((n) => /attendance|observation|rubric|record/.test(n))
+        .sort(),
+    ).toEqual(['add_observation', 'set_attendance', 'set_rubric_mark']);
   });
 
   it('표에 없는 이름은 제안이 만들어지지 않는다 — 모델이 지어낸 도구', () => {
@@ -400,10 +443,19 @@ describe('★모든 제안은 사람이 확인할 수 있는 모양이다', () =
     ['create_note_page', { notebook: '학급 운영', section: '수업 준비', title: 'a' }],
     ['rename_note_page', { match: '2단원', title: 'b' }],
     ['delete_note_page', { match: '2단원' }],
+    ['set_attendance', { student: '15번', status: '결석', period: 3 }],
+    [
+      'add_observation',
+      { student: '7번', content: '발표를 또렷하게 했다', className: '3학년 2반' },
+    ],
+    [
+      'set_rubric_mark',
+      { student: '7번', rubric: '토론 평가', criterion: '주장의 명확성', level: '잘함' },
+    ],
   ];
 
-  it('22종 전부 제안이 만들어진다', () => {
-    expect(SAMPLES).toHaveLength(22);
+  it('25종 전부 제안이 만들어진다', () => {
+    expect(SAMPLES).toHaveLength(25);
     expect(SAMPLES.map(([tool]) => tool).sort()).toEqual([...writeToolNames()].sort());
   });
 

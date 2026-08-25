@@ -10,7 +10,7 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { redactOutbound, rosterFrom } from '../redactOutbound';
+import { redactOutbound, redactQuestion, rosterFrom, rosterFromAll } from '../redactOutbound';
 import { restore } from '../../privacy/maskEngine';
 import { findAssistTool } from '../../services/assistToolRegistry';
 import { sanitizeToolResult } from '../../services/sanitizeToolResult';
@@ -219,5 +219,77 @@ describe('명단이 없으면 이름은 못 잡는다 (한계를 명시해 둔�
     const result = redactOutbound(t, sanitizeToolResult(t, todos(['010-1234-5678'])), []);
 
     expect(result.blankedCount).toBe(1);
+  });
+});
+
+/**
+ * ★2026-08-25 — 담임 학급만 명단으로 쓰다가 실제로 새고 있던 구멍.
+ *
+ * `students.json` 은 담임 학급 한 반뿐이라, 교과 수업으로 들어가는 반의 학생 이름은
+ * 대조할 것이 없어 **한 글자도 안 가려진 채** 나갔다. 관찰·채점은 교과 수업반에서도
+ * 쓰는 기능이므로, 쓰기를 여는 이번 변경에서 이 구멍이 정확히 그 자리에서 벌어진다.
+ */
+describe('교과 수업반 학생도 가려진다 (rosterFromAll)', () => {
+  const HOMEROOM = [{ name: '김지훈', studentNumber: 15 }];
+  const TEACHING = [
+    { students: [{ name: '최민호', number: 7 }] },
+    { students: [{ name: '정수아', number: 12 }] },
+  ];
+
+  it('담임 명단에만 있으면 수업반 학생은 그대로 샌다 (고치기 전 동작)', () => {
+    const { masked } = redactQuestion('옆반 최민호 학생도 결석이야', rosterFrom(HOMEROOM));
+
+    expect(masked).toContain('최민호');
+  });
+
+  it('수업반까지 합치면 가려진다', () => {
+    const { masked } = redactQuestion(
+      '옆반 최민호 학생도 결석이야',
+      rosterFromAll(HOMEROOM, TEACHING),
+    );
+
+    expect(masked).not.toContain('최민호');
+    expect(masked).toMatch(/［이름\d+］/);
+  });
+
+  it('담임 학생도 계속 가려진다 (기존 동작 유지)', () => {
+    const { masked } = redactQuestion('김지훈 학생 결석', rosterFromAll(HOMEROOM, TEACHING));
+
+    expect(masked).not.toContain('김지훈');
+  });
+
+  it('여러 수업반의 학생이 모두 들어간다', () => {
+    const { masked } = redactQuestion(
+      '최민호랑 정수아 결석 처리해줘',
+      rosterFromAll(HOMEROOM, TEACHING),
+    );
+
+    expect(masked).not.toContain('최민호');
+    expect(masked).not.toContain('정수아');
+  });
+
+  it('같은 학생이 두 명단에 있어도 별칭은 하나다 — 중복이 번호를 늘리지 않는다', () => {
+    const both = rosterFromAll(HOMEROOM, [{ students: [{ name: '김지훈', number: 15 }] }]);
+    const { masked, mappings } = redactQuestion('김지훈 학생 결석', both);
+
+    expect(masked).not.toContain('김지훈');
+    // 한 사람이므로 되돌릴 매핑도 하나여야 한다.
+    expect(mappings).toHaveLength(1);
+  });
+
+  it('동명이인이 있어도 죽지 않고 둘 다 가려진다', () => {
+    const dup = rosterFromAll(
+      [{ name: '김지훈', studentNumber: 15 }],
+      [{ students: [{ name: '김지훈', number: 3 }] }],
+    );
+    const { masked } = redactQuestion('김지훈 학생 둘 다 결석', dup);
+
+    expect(masked).not.toContain('김지훈');
+  });
+
+  it('수업반이 하나도 없어도 담임 명단만으로 동작한다', () => {
+    const { masked } = redactQuestion('김지훈 학생 결석', rosterFromAll(HOMEROOM, []));
+
+    expect(masked).not.toContain('김지훈');
   });
 });

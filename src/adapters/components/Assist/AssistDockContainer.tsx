@@ -14,7 +14,7 @@ import { useEffect, useMemo } from 'react';
 
 import { AssistDock } from './AssistDock';
 import { findAssistTool } from '@domain/services/assistToolRegistry';
-import { rosterFrom } from '@domain/rules/redactOutbound';
+import { rosterFromAll } from '@domain/rules/redactOutbound';
 import { sanitizeToolResult } from '@domain/services/sanitizeToolResult';
 import type { ModelSafe } from '@domain/entities/AssistTool';
 import type { AssistWriteProposal } from '@domain/entities/AssistWrite';
@@ -23,6 +23,7 @@ import type { ToolResultShape } from '@domain/services/sanitizeToolResult';
 import { useAssistStore } from '@adapters/stores/useAssistStore';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
+import { studentKey } from '@domain/entities/TeachingClass';
 import { useTodoStore } from '@adapters/stores/useTodoStore';
 import {
   addDays,
@@ -60,6 +61,7 @@ import type {
 } from '@usecases/assist/summaries';
 import type { Rubric, RubricGrading } from '@domain/entities/Rubric';
 import { useStudentRecordsStore } from '@adapters/stores/useStudentRecordsStore';
+import { useObservationStore } from '@adapters/stores/useObservationStore';
 import { useMealStore } from '@adapters/stores/useMealStore';
 import { useEventsStore } from '@adapters/stores/useEventsStore';
 import { useDDayStore } from '@adapters/stores/useDDayStore';
@@ -607,6 +609,31 @@ function writeDeps(): WriteDeps {
         pageIds: state.pagesMeta.map((p) => p.id),
       };
     },
+
+    // ★출결은 스토어 함수를 **그대로** 부른다. 화면에서 저장할 때 지나는 길과 같은 길이다.
+    upsertStudentAttendance: (params) =>
+      useTeachingClassStore.getState().upsertStudentAttendanceEntries(params),
+    bridgeHomeroomAttendance: (params) =>
+      useStudentRecordsStore.getState().bridgeHomeroomDayAttendance(params),
+    homeroomStudents: () => useStudentStore.getState().students,
+    addObservation: (params) => useObservationStore.getState().addRecord(params),
+
+    toggleRubricMark: (rubricId, classId, studentId, criterionId, levelId) =>
+      useRubricStore.getState().toggleMark(rubricId, classId, studentId, criterionId, levelId),
+    // ★[실행] 순간의 최신 상태를 본다. 렌더 시점 값을 붙들면 그 사이 선생님이 화면에서
+    //   누른 것을 못 보고, 토글이 정반대로 돈다.
+    getRubricMark: (rubricId, studentId, criterionId) => {
+      const grading = useRubricStore
+        .getState()
+        .gradings.find((g) => g.rubricId === rubricId && g.studentId === studentId);
+      if (grading === undefined) return { absent: false };
+      return {
+        ...(grading.marks[criterionId] === undefined
+          ? {}
+          : { levelId: grading.marks[criterionId] }),
+        absent: grading.status === 'absent',
+      };
+    },
   };
 }
 
@@ -640,6 +667,8 @@ export function AssistDockContainer() {
   const weekendDays = useSettingsStore((s) => s.settings.enableWeekendDays);
   // 교시 이름을 미리보기에 그대로 쓰기 위해 필요하다 — 선생님이 붙인 이름이 있으면 그것.
   const periodTimes = useSettingsStore((s) => s.settings.periodTimes);
+  const homeroomName = useSettingsStore((s) => s.settings.className);
+  const maxPeriods = useSettingsStore((s) => s.settings.maxPeriods);
 
   /**
    * ★쌤핀 AI 가 읽는 자료를 **켜져 있을 때 한 번 불러온다.**
@@ -680,10 +709,16 @@ export function AssistDockContainer() {
 
   // ★그물 ③ 이 쓸 명단. 이름을 지우려면 "무엇이 이름인지"를 알아야 하는데,
   //   domain 은 스토어를 import 하지 않으므로 여기서 만들어 넘긴다.
-  const roster = useMemo(
-    () => rosterFrom(students.map((s) => ({ name: s.name, studentNumber: s.studentNumber }))),
-    [students],
-  );
+  //
+  // ★담임 학급**만** 넣었다가 구멍이 났다 (2026-08-25 실측).
+  //   `students`(students.json)는 담임 학급 한 반뿐이라, 교과 수업으로 들어가는 반의
+  //   학생 이름은 대조할 것이 없어 **그대로 밖으로 나갔다**:
+  //     입력 "옆반 최민호 학생도 결석이야" → 나감 "옆반 최민호 학생도 결석이야"
+  //   여기서 여는 쓰기 3종 중 관찰·채점은 교과 수업반에서도 쓰는 기능이라,
+  //   구멍이 정확히 그 자리에서 벌어진다. 그래서 수업반 학생까지 합쳐 넘긴다.
+  //
+  //   합치는 규칙 자체는 `rosterFromAll`(domain) 에 있다 — 여기 두면 테스트가 안 걸린다.
+  const roster = useMemo(() => rosterFromAll(students, classes), [students, classes]);
 
   const notes: NoteSources = useMemo(
     () => ({ notebooks, sections: noteSections, pages: notePages }),
@@ -756,6 +791,29 @@ export function AssistDockContainer() {
         note: p.note,
       })),
       classes: classes.map((c) => ({ id: c.id, name: c.name })),
+      // ★출결·관찰·채점이 "누구인지"를 정하는 명단. **모델에게는 나가지 않는다** —
+      //   목록 조회 도구가 없어서 모델은 이 명단을 볼 방법이 없고, 대상은 선생님이 말한
+      //   번호나 가려진 별칭이 되돌아온 값으로만 온다.
+      roster: {
+        // 담임 반은 수업반 목록에 없다. 출결 저장이 반 자리에 넣는 값도 반 이름 그대로다.
+        homeroomClassId: homeroomName,
+        regularPeriodCount: maxPeriods,
+        homeroom: students.map((s) => ({
+          id: s.id,
+          name: s.name,
+          ...(s.studentNumber === undefined ? {} : { studentNumber: s.studentNumber }),
+        })),
+        teaching: classes.map((c) => ({
+          classId: c.id,
+          className: c.name,
+          students: c.students.map((st) => ({
+            number: st.number,
+            name: st.name,
+            // ★키 규칙을 여기서 다시 만들지 않는다 — 화면이 쓰는 정본 함수를 그대로 부른다.
+            key: studentKey(st),
+          })),
+        })),
+      },
       bookmarks: bookmarks.map((b) => ({
         id: b.id,
         name: b.name,
@@ -770,18 +828,33 @@ export function AssistDockContainer() {
         title: s.title,
       })),
       notePages: notePages.map((p) => ({ id: p.id, sectionId: p.sectionId, title: p.title })),
+      // 채점 제안이 "어느 칸인지"를 정할 때 보는 표. id 는 모델에게 나가지 않는다.
+      rubrics: rubrics.map((r) => ({
+        id: r.id,
+        classId: r.classId,
+        title: r.title,
+        criteria: r.criteria.map((c) => ({
+          id: c.id,
+          name: c.name,
+          levels: c.levels.map((l) => ({ id: l.id, name: l.name })),
+        })),
+      })),
     }),
     [
       bookmarkGroups,
       bookmarks,
       classes,
       events,
+      homeroomName,
+      maxPeriods,
       memos,
       noteSections,
       periodTimes,
       notePages,
       notebooks,
       progress,
+      rubrics,
+      students,
       todos,
     ],
   );

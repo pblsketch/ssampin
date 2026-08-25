@@ -126,11 +126,22 @@ describe('assistToolRegistry — 계약', () => {
     );
     expect(nonResult).toEqual([]);
 
-    // 학생 데이터에 닿는 쓰기는 **만들지 않는다**(계획서 §6 — 이 계획 밖).
-    const forbidden = ASSIST_WRITE_TOOLS.filter((t) =>
-      /attendance|observation|rubric|grading|record_draft|score/.test(t.id),
+    // ── 학생 데이터에 닿는 쓰기 ──
+    //
+    // 원래 이 자리는 "학생에 닿는 쓰기는 하나도 없다"였다. 2026-08-25 에 조건을 옮긴다 —
+    // 지우지 않고, **무엇이 열렸는지 이름으로 못 박는다.** 목록을 적어 두면 새 도구가
+    // 슬그머니 끼어들 때 이 테스트가 먼저 터진다(가드가 목록이 아니라 정규식이면
+    // `set_attendance2` 같은 이름이 조용히 통과한다).
+    const studentWrites = ASSIST_WRITE_TOOLS.filter((t) =>
+      /attendance|observation|rubric|grading|record_draft|score|evidence|guideline/.test(t.id),
     ).map((t) => t.id);
-    expect(forbidden).toEqual([]);
+    expect(studentWrites.sort()).toEqual(['add_observation', 'set_attendance', 'set_rubric_mark']);
+
+    // ★생기부 3종은 **여전히 존재하지 않는다**(ADR-072). 출결·관찰·채점은 번호와
+    //   집계만 내보내지만, 생기부는 서술 자체를 모델에 보내야 하는 일이라 성격이 다르다.
+    for (const banned of ['save_record_draft', 'get_record_evidence', 'get_record_guidelines']) {
+      expect(findAssistTool(banned), `${banned} 이(가) 등록됐다`).toBeUndefined();
+    }
   });
 
   it('★opaqueFields 와 freeTextFields 는 겹칠 수 없다', () => {

@@ -132,3 +132,77 @@ describe('★어느 왕복에도 학생 이름이 실리지 않는다', () => {
     expect(JSON.stringify(turn?.cards)).toContain(PLANTED);
   });
 });
+
+/**
+ * ★2026-08-25 — 연락처가 **쌤핀 서버까지 갔다가** 되돌아오던 구멍.
+ *
+ * 서버(`assistRequest.ts`)의 PII 거절 주석은 *"앱의 관문이 막았어야 하는 것이 여기까지
+ * 왔다 = 앱 쪽 그물이 뚫렸다는 신호"* 라고 적혀 있었는데, 정작 앱 쪽 그물은 **카드에만**
+ * 걸려 있고 질문에는 없었다. 그래서 연락처가 적힌 질문은 매번 서버를 한 번 지났다.
+ *
+ * 여기서 재는 것은 문구가 아니라 **요청이 나갔는가**다.
+ */
+describe('★연락처·주민번호는 앱에서 막는다 — 요청 자체가 나가지 않는다', () => {
+  it('전화번호가 있으면 port.ask 를 부르지 않는다', async () => {
+    const { port, payloads } = recordingPort([{ text: '답', degraded: null }]);
+
+    await useAssistStore
+      .getState()
+      .ask(port, '김지훈 어머니 010-1234-5678 로 연락해야 해', [], ROSTER);
+
+    expect(payloads).toHaveLength(0);
+    expect(useAssistStore.getState().turns[0]?.status).toBe('blocked');
+  });
+
+  it('주민번호가 있으면 부르지 않는다', async () => {
+    const { port, payloads } = recordingPort([{ text: '답', degraded: null }]);
+
+    await useAssistStore.getState().ask(port, '901010-1234567 이거 맞나?', [], ROSTER);
+
+    expect(payloads).toHaveLength(0);
+  });
+
+  it('이메일이 있으면 부르지 않는다', async () => {
+    const { port, payloads } = recordingPort([{ text: '답', degraded: null }]);
+
+    await useAssistStore.getState().ask(port, 'parent@example.com 으로 보내줘', [], ROSTER);
+
+    expect(payloads).toHaveLength(0);
+  });
+
+  it('막을 때 한국어로 이유를 말한다 — 조용히 아무 일도 없지 않다', async () => {
+    const { port } = recordingPort([{ text: '답', degraded: null }]);
+
+    await useAssistStore.getState().ask(port, '010-1234-5678', [], ROSTER);
+
+    const message = useAssistStore.getState().turns[0]?.blockedMessage ?? '';
+    expect(message).toContain('연락처');
+    expect(message).toContain('보내지 않았습니다');
+  });
+
+  it('★몰래 지우고 보내지 않는다 — 번호를 뺀 채로 나가는 경로가 없다', async () => {
+    const { port, payloads } = recordingPort([{ text: '답', degraded: null }]);
+
+    await useAssistStore.getState().ask(port, '010-1234-5678 로 연락', [], ROSTER);
+
+    // 요청이 0건이므로 "번호만 빠진 질문"이 나갈 자리도 없다.
+    expect(payloads).toHaveLength(0);
+  });
+
+  it('연락처가 없는 평범한 질문은 그대로 나간다 — 오탐으로 기능을 죽이지 않는다', async () => {
+    const { port, payloads } = recordingPort([{ text: '답', degraded: null }]);
+
+    await useAssistStore.getState().ask(port, '오늘 우리 반 출결 알려줘', [cardWithName()], ROSTER);
+
+    expect(payloads).toHaveLength(1);
+    expect(useAssistStore.getState().turns[0]?.status).not.toBe('blocked');
+  });
+
+  it('교시·날짜 같은 숫자는 막지 않는다', async () => {
+    const { port, payloads } = recordingPort([{ text: '답', degraded: null }]);
+
+    await useAssistStore.getState().ask(port, '2026-08-25 3교시 진도 알려줘', [], ROSTER);
+
+    expect(payloads).toHaveLength(1);
+  });
+});

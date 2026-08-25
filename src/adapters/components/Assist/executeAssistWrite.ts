@@ -13,6 +13,13 @@
  * 진짜 파일에 쓰게 된다 — "무엇을 불렀는지"를 가짜로 확인할 수 있어야 한다.
  */
 import type { AssistWriteProposal } from '@domain/entities/AssistWrite';
+import type {
+  AttendanceRecord,
+  AttendanceStatus,
+  AttendanceReason,
+  StudentAttendance,
+} from '@domain/entities/Attendance';
+import type { Student } from '@domain/entities/Student';
 import type { SchoolEvent } from '@domain/entities/SchoolEvent';
 import type { ProgressEntry, ProgressStatus } from '@domain/entities/CurriculumProgress';
 import type { MemoColor } from '@domain/valueObjects/MemoColor';
@@ -115,6 +122,77 @@ export interface WriteDeps {
     readonly sectionIds: readonly string[];
     readonly pageIds: readonly string[];
   };
+
+  /**
+   * 출결 — 대상 학생의 그날 교시만 **부분 갱신**한다.
+   *
+   * ★`saveDayAttendance`(하루 통째 교체)를 쓰지 않은 이유: 지금 화면에서 다른 학생
+   * 출결을 만지고 있을 수 있고, 하루치를 통째로 실어 보내면 그 사이 바뀐 남의 출결을
+   * 낡은 스냅샷이 덮는다(2026-07 QA F3 — 같은 사고로 이 함수가 만들어졌다).
+   * 다른 학생 보존·병합은 이 함수가 **락 안에서** 한다.
+   *
+   * ★반환이 `null` 이면 저장이 막힌 것이다(읽기 실패 등). 그때 "적었어요"라고 말하면
+   * 거짓 성공이 된다 — 호출부가 반드시 실패로 다룬다.
+   */
+  readonly upsertStudentAttendance: (params: {
+    classId: string;
+    date: string;
+    studentNumbers: ReadonlySet<number>;
+    recordsByPeriod: ReadonlyMap<number, readonly StudentAttendance[]>;
+  }) => Promise<readonly AttendanceRecord[] | null>;
+  /**
+   * 담임 출결은 **학생 기록에도 같은 사실이 있어야 한다.** 출결부에만 적고 말면
+   * 기록 조회 화면에서는 그 결석이 없는 것으로 보인다(피드백 #147 B-4 의 반대 방향).
+   * 화면에서 저장할 때도 늘 이 두 걸음을 함께 밟는다(AttendanceMode.tsx).
+   */
+  readonly bridgeHomeroomAttendance: (params: {
+    className: string;
+    date: string;
+    recordsByPeriod: ReadonlyMap<number, readonly StudentAttendance[]>;
+    students: readonly Student[];
+  }) => Promise<void>;
+  /** 담임 학급 명렬표. 위 미러가 번호를 학생 id 에 잇는 데 쓴다 */
+  readonly homeroomStudents: () => readonly Student[];
+
+  /**
+   * 관찰 기록 — 화면에서 저장할 때 지나는 함수 그대로다(ObservationForm.tsx).
+   *
+   * ★`studentId` 는 담임 학급의 학생 id 가 아니라 수업반 안의 키(`studentKey`)다.
+   * 화면이 쓰는 키와 한 글자라도 달라지면, AI 가 남긴 관찰만 그 학생 화면에서 안 보인다.
+   */
+  readonly addObservation: (params: {
+    studentId: string;
+    classId: string;
+    date: string;
+    content: string;
+    tags: string[];
+    category?: string;
+  }) => Promise<string>;
+
+  /**
+   * 루브릭 채점 — **토글이다.** 같은 수준을 다시 부르면 체크가 풀린다.
+   * 그래서 부르기 전에 반드시 아래 `getRubricMark` 로 지금 상태를 본다.
+   */
+  readonly toggleRubricMark: (
+    rubricId: string,
+    classId: string,
+    studentId: string,
+    criterionId: string,
+    levelId: string,
+  ) => Promise<void>;
+  /**
+   * 지금 이 요소에 무엇이 체크돼 있는가. **제안을 만든 뒤 선생님이 화면에서 직접
+   * 눌렀을 수 있다** — 확인 없이 뒤집으면 원하던 것과 정반대가 되고, 앱은
+   * "채점했어요"라고 말한다(`getTodo` 와 같은 이유).
+   *
+   * `absent` 는 결시 표시다. 결시 학생에게는 스토어가 **조용히 아무것도 안 한다** —
+   * 확인하지 않으면 그 침묵이 성공 문구로 둔갑한다.
+   */
+  readonly getRubricMark: (
+    rubricId: string,
+    studentId: string,
+    criterionId: string,
+  ) => { readonly levelId?: string; readonly absent: boolean } | undefined;
 }
 
 export interface WriteResult {
@@ -448,6 +526,155 @@ export async function executeAssistWrite(
       if (deps.getNotePage(id) === undefined) return targetGone;
       await deps.deletePage(id);
       return { ok: true, message: '페이지를 지웠어요.' };
+    }
+
+    // -- 출결 --
+    case 'set_attendance': {
+      const classId = str(proposal, 'classId');
+      const when = str(proposal, 'date');
+      const status = str(proposal, 'status') as AttendanceStatus | undefined;
+      const studentNumber = num(proposal, 'studentNumber');
+      const studentName = str(proposal, 'studentName') ?? '';
+      // 조립기가 쉼표로 붙여 보낸 교시 목록을 되푼다(AssistWriteValues 는 배열을 담지 않는다).
+      const periods = (str(proposal, 'periods') ?? '')
+        .split(',')
+        .map((piece) => Number(piece))
+        .filter((value) => Number.isInteger(value) && value >= 0 && value <= 9);
+      if (
+        classId === undefined ||
+        when === undefined ||
+        status === undefined ||
+        studentNumber === undefined ||
+        periods.length === 0
+      ) {
+        return targetMissing;
+      }
+
+      const entry: StudentAttendance = {
+        number: studentNumber,
+        status,
+        ...(str(proposal, 'reason') === undefined
+          ? {}
+          : { reason: str(proposal, 'reason') as AttendanceReason }),
+        ...(str(proposal, 'memo') === undefined ? {} : { memo: str(proposal, 'memo')! }),
+      };
+      const byPeriod = new Map<number, readonly StudentAttendance[]>(
+        periods.map((period) => [period, [entry]] as const),
+      );
+
+      const saved = await deps.upsertStudentAttendance({
+        classId,
+        date: when,
+        studentNumbers: new Set([studentNumber]),
+        recordsByPeriod: byPeriod,
+      });
+      // ★null = 저장이 막혔다. 조용히 성공 문구를 내면 선생님은 적힌 줄 안다.
+      if (saved === null) {
+        return {
+          ok: false,
+          message: '출결을 저장하지 못했어요. 출결 화면에서 직접 확인해 주세요.',
+        };
+      }
+
+      if (proposal.values.homeroom === true) {
+        // ★미러는 **하루치 전부**를 봐야 한다. 방금 바꾼 교시만 넘기면 나머지 교시의
+        //   이상 출결이 기록에서 통째로 사라진다(bridge 가 attendancePeriods 를 새로 쓴다).
+        //   그래서 저장 결과에서 그날 전체를 다시 모아 넘긴다.
+        const dayByPeriod = new Map<number, readonly StudentAttendance[]>();
+        for (const record of saved) {
+          if (record.date === when && record.classId === classId) {
+            dayByPeriod.set(record.period, record.students);
+          }
+        }
+        await deps.bridgeHomeroomAttendance({
+          className: classId,
+          date: when,
+          recordsByPeriod: dayByPeriod,
+          students: deps.homeroomStudents(),
+        });
+      }
+
+      const label = str(proposal, 'periodLabel') ?? '';
+      return {
+        ok: true,
+        message: `${studentName} 학생 ${when} ${label} 출결을 적었어요.`.replace('  ', ' '),
+      };
+    }
+
+    // -- 관찰 --
+    case 'add_observation': {
+      const classId = str(proposal, 'classId');
+      const studentKey = str(proposal, 'studentKey');
+      const when = str(proposal, 'date');
+      const content = str(proposal, 'content');
+      if (
+        classId === undefined ||
+        studentKey === undefined ||
+        when === undefined ||
+        content === undefined
+      ) {
+        return targetMissing;
+      }
+
+      const tag = str(proposal, 'tag');
+      await deps.addObservation({
+        studentId: studentKey,
+        classId,
+        date: when,
+        content,
+        // 태그는 화면과 같은 모양(배열)으로 넘긴다. 안 골랐으면 빈 배열이다.
+        tags: tag === undefined ? [] : [tag],
+        ...(str(proposal, 'category') === undefined
+          ? {}
+          : { category: str(proposal, 'category')! }),
+      });
+      return {
+        ok: true,
+        message: `${str(proposal, 'studentName') ?? ''} 학생 관찰 기록을 남겼어요.`.trim(),
+      };
+    }
+
+    // -- 루브릭 채점 --
+    case 'set_rubric_mark': {
+      const rubricId = str(proposal, 'rubricId');
+      const classId = str(proposal, 'classId');
+      const studentKey = str(proposal, 'studentKey');
+      const criterionId = str(proposal, 'criterionId');
+      const levelId = str(proposal, 'levelId');
+      if (
+        rubricId === undefined ||
+        classId === undefined ||
+        studentKey === undefined ||
+        criterionId === undefined ||
+        levelId === undefined
+      ) {
+        return targetMissing;
+      }
+
+      const now = deps.getRubricMark(rubricId, studentKey, criterionId);
+      // ★결시 학생에게 스토어는 조용히 아무것도 안 한다. 여기서 말해 주지 않으면
+      //   "채점했어요"만 남고 화면에는 아무 변화가 없다.
+      if (now?.absent === true) {
+        return {
+          ok: false,
+          message:
+            `${str(proposal, 'studentName') ?? ''} 학생은 결시로 표시돼 있어서 채점하지 않았어요.`.trim(),
+        };
+      }
+      // ★이미 그 수준이면 부르지 않는다 — 토글이라 그대로 누르면 체크가 **풀린다**.
+      if (now?.levelId === levelId) {
+        return {
+          ok: false,
+          message: `이미 "${str(proposal, 'levelName') ?? ''}"으로 체크돼 있어서 그대로 뒀어요.`,
+        };
+      }
+
+      await deps.toggleRubricMark(rubricId, classId, studentKey, criterionId, levelId);
+      return {
+        ok: true,
+        message:
+          `${str(proposal, 'studentName') ?? ''} 학생의 "${str(proposal, 'criterionName') ?? ''}"을(를) "${str(proposal, 'levelName') ?? ''}"으로 체크했어요.`.trim(),
+      };
     }
 
     default:

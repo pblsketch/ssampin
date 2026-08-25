@@ -19,6 +19,26 @@ import type { WriteDeps } from '../executeAssistWrite';
 const SRC: WriteSources = {
   today: '2026-08-23',
   periodTimes: [],
+  // 출결 제안이 "누구인지"를 정할 때 보는 명단. **모델에게는 나가지 않는다.**
+  roster: {
+    homeroomClassId: '3-2',
+    regularPeriodCount: 7,
+    homeroom: [
+      { id: 'stu-1', name: '김지훈', studentNumber: 1 },
+      { id: 'stu-15', name: '박서연', studentNumber: 15 },
+      { id: 'stu-99', name: '번호없는학생' },
+    ],
+    teaching: [
+      {
+        classId: 'c1',
+        className: '3학년 2반',
+        students: [
+          { number: 7, name: '최민호', key: '7' },
+          { number: 8, name: '이수현', key: '8' },
+        ],
+      },
+    ],
+  },
   todos: [{ id: 't1', text: '장보기', completed: false }],
   events: [{ id: 'e1', title: '학부모 총회', date: '2026-08-25' }],
   memos: [{ id: 'm1', content: '회의 자료' }],
@@ -40,6 +60,23 @@ const SRC: WriteSources = {
   notebooks: [{ id: 'nb1', title: '3학년 수학' }],
   noteSections: [{ id: 's1', notebookId: 'nb1', title: '수업 준비' }],
   notePages: [{ id: 'p1', sectionId: 's1', title: '2단원 지도안' }],
+  rubrics: [
+    {
+      id: 'rb1',
+      classId: 'c1',
+      title: '토론 평가',
+      criteria: [
+        {
+          id: 'cr1',
+          name: '주장의 명확성',
+          levels: [
+            { id: 'lv1', name: '잘함' },
+            { id: 'lv2', name: '보통' },
+          ],
+        },
+      ],
+    },
+  ],
 };
 
 function fakeDeps(): { deps: WriteDeps; calls: string[]; renamed: string[] } {
@@ -114,6 +151,29 @@ function fakeDeps(): { deps: WriteDeps; calls: string[]; renamed: string[] } {
       sectionIds: [...sectionIds],
       pageIds: [...pageIds],
     }),
+
+    // 출결 — 진짜 스토어처럼 "저장된 전체 목록"을 돌려준다(실행기가 하루치를 다시 모은다)
+    upsertStudentAttendance: async (params: {
+      classId: string;
+      date: string;
+      recordsByPeriod: ReadonlyMap<number, readonly { number: number; status: string }[]>;
+    }) => {
+      calls.push('upsertStudentAttendance');
+      return [...params.recordsByPeriod].map(([period, students]) => ({
+        classId: params.classId,
+        date: params.date,
+        period,
+        students,
+      }));
+    },
+    bridgeHomeroomAttendance: track('bridgeHomeroomAttendance'),
+    homeroomStudents: () => SRC.roster.homeroom,
+    addObservation: async () => {
+      calls.push('addObservation');
+      return 'obs-new';
+    },
+    toggleRubricMark: track('toggleRubricMark'),
+    getRubricMark: () => ({ absent: false }),
   } as unknown as WriteDeps;
 
   return { deps, calls, renamed };
@@ -128,7 +188,7 @@ async function run(tool: string, args: object): Promise<{ calls: string[]; messa
   return { calls, message: result.message };
 }
 
-describe('★도구 22종이 각자 제 스토어 함수를 부른다', () => {
+describe('★도구 25종이 각자 제 스토어 함수를 부른다', () => {
   const CASES: readonly (readonly [string, object, readonly string[]])[] = [
     ['create_todo', { text: '결재' }, ['addTodo']],
     ['update_todo', { match: '장보기', text: '장보기2' }, ['updateTodo']],
@@ -174,10 +234,28 @@ describe('★도구 22종이 각자 제 스토어 함수를 부른다', () => {
     ['create_note_page', { section: '수업 준비', title: '3월' }, ['createPage', 'renamePage']],
     ['rename_note_page', { match: '2단원', title: '새 제목' }, ['renamePage']],
     ['delete_note_page', { match: '2단원' }, ['deletePage']],
+
+    // 출결은 담임 학급이면 **두 걸음**이다 — 출결부에 적고, 학생 기록에도 같은 사실을 남긴다.
+    // 화면에서 저장할 때도 늘 이 둘을 함께 밟는다(AttendanceMode.tsx).
+    [
+      'set_attendance',
+      { student: '15번', status: '결석', period: 3 },
+      ['upsertStudentAttendance', 'bridgeHomeroomAttendance'],
+    ],
+    [
+      'add_observation',
+      { student: '7번', content: '모둠 토의를 이끌었다', className: '3학년 2반' },
+      ['addObservation'],
+    ],
+    [
+      'set_rubric_mark',
+      { student: '7번', rubric: '토론 평가', criterion: '주장의 명확성', level: '잘함' },
+      ['toggleRubricMark'],
+    ],
   ];
 
-  it('22종을 빠짐없이 검사한다', () => {
-    expect(CASES).toHaveLength(22);
+  it('25종을 빠짐없이 검사한다', () => {
+    expect(CASES).toHaveLength(25);
   });
 
   it.each([...CASES])('%s', async (tool, args, expected) => {

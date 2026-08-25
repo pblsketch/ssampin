@@ -40,10 +40,18 @@ import {
   proposeRenameNotePage,
   proposeUpdateBookmark,
 } from './writeBookmarkNote';
+import { proposeAddObservation, proposeSetAttendance, proposeSetRubricMark } from './writeStudent';
 
 type Builder = (args: RawArgs, src: WriteSources) => AssistWriteOutcome;
 
-/** 계획서 §2 C그룹의 22종. 할일4 · 일정3 · 메모3 · 진도3 · 즐겨찾기4 · 노트5 */
+/**
+ * 계획서 §2 C그룹의 22종(할일4 · 일정3 · 메모3 · 진도3 · 즐겨찾기4 · 노트5)
+ * + 학생에게 닿는 쓰기 3종(출결·관찰·채점).
+ *
+ * ★출결·관찰·채점부터는 성격이 다르다 — 잘못 적히면 나이스·생활기록부까지 따라간다.
+ * 그래서 조립기(`writeStudent.ts`)가 다른 곳보다 자주 거절하고, 실행기는 저장이
+ * 막혔을 때(`null`) "적었어요"라고 말하지 않는다.
+ */
 export const WRITE_BUILDERS: Readonly<Record<string, Builder>> = {
   create_todo: proposeCreateTodo,
   update_todo: proposeUpdateTodo,
@@ -72,6 +80,10 @@ export const WRITE_BUILDERS: Readonly<Record<string, Builder>> = {
   create_note_page: proposeCreateNotePage,
   rename_note_page: proposeRenameNotePage,
   delete_note_page: proposeDeleteNotePage,
+
+  set_attendance: proposeSetAttendance,
+  add_observation: proposeAddObservation,
+  set_rubric_mark: proposeSetRubricMark,
 };
 
 /** 이 이름이 쓰기 도구인가. 스토어가 "실행할까 제안할까"를 가르는 데 쓴다. */

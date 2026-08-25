@@ -50,6 +50,32 @@ const BLANK_PATTERNS: PatternConfig = {
 };
 
 /**
+ * 연락처·주민번호·이메일이 **질문에** 있으면 보내지 않는다는 뜻의 한국어 안내.
+ *
+ * ★서버(`supabase/functions/_shared/assistRequest.ts`)가 돌려주는 문구와 **같아야 한다.**
+ * 앱에서 막히든 서버에서 막히든 선생님이 보는 말이 달라질 이유가 없다.
+ * (Deno 쪽은 이 파일을 import 할 수 없어 문자열을 미러한다 — 서버가 최후의 관문이므로
+ *  둘 다 남는다.)
+ */
+export const ASSIST_PII_BLOCKED_MESSAGE =
+  '연락처나 주민번호로 보이는 내용이 있어 보내지 않았습니다';
+
+/**
+ * 질문을 **보내도 되는가.** true 면 보내지 않는다.
+ *
+ * ★왜 가리지 않고 막는가 — 원 설계의 판단을 그대로 잇는다. 이름·학번은 가려도 뜻이
+ * 남지만("［이름1］ 학부모 면담이 있다"), 연락처는 가리면 남는 뜻이 없고 하나만 새도
+ * 피해가 크다. 그래서 **몰래 지우고 보내는 대신 "이 질문은 못 보낸다"고 말한다.**
+ *
+ * ★그리고 이 판정은 **앱 안에서** 한다. 서버(`assistRequest.ts`)도 같은 검사를 하지만
+ * 거기까지 가면 연락처가 이미 쌤핀 서버를 한 번 지난 뒤다. 서버 검사는 지우지 않는다 —
+ * 여기가 뚫렸을 때 마지막으로 막아야 하기 때문이다(두 겹).
+ */
+export function questionHasBlockingPii(question: string): boolean {
+  return detectPatterns(question, BLANK_PATTERNS).length > 0;
+}
+
+/**
  * **가리기만** 하는 패턴. 오탐이 나도 한 단어 손해라 넓게 켠다.
  * (`address` 는 엔진이 저신뢰로 표시하는 항목이지만, 대가가 작으므로 켜 둔다.)
  */
@@ -92,6 +118,33 @@ export function rosterFrom(
   if (numbers.length > 0) groups.push({ label: '학번', values: [...new Set(numbers)] });
 
   return groups;
+}
+
+/**
+ * 담임 학급 + 교과 수업반 명단을 **한 벌로 합쳐** 관문이 쓰는 형태로 만든다.
+ *
+ * ★왜 따로 두는가 — 담임 학급만 넣었다가 구멍이 났기 때문이다(2026-08-25 실측).
+ * `students.json` 은 담임 학급 한 반뿐이라 교과 수업반 학생 이름은 대조할 것이 없었고,
+ * `"옆반 최민호 학생도 결석이야"` 가 **한 글자도 안 가려진 채** 그대로 나갔다.
+ *
+ * 합치는 일 자체는 사소하지만 **호출부(컴포넌트)에 두면 테스트가 안 걸린다.**
+ * 여기 두면 순수 함수라 "수업반 학생이 정말 가려지는가"를 직접 잴 수 있다.
+ *
+ * ★중복은 여기서 걷어내지 않는다 — `detectKeywords` 가 값을 `Set` 으로 한 번 거르므로
+ * 같은 학생이 두 명단에 있어도 별칭은 하나로 유지된다.
+ */
+export function rosterFromAll(
+  homeroom: readonly { readonly name: string; readonly studentNumber?: number }[],
+  teachingClasses: readonly {
+    readonly students: readonly { readonly name: string; readonly number: number }[];
+  }[],
+): readonly KeywordGroup[] {
+  return rosterFrom([
+    ...homeroom,
+    ...teachingClasses.flatMap((c) =>
+      c.students.map((s) => ({ name: s.name, studentNumber: s.number })),
+    ),
+  ]);
 }
 
 interface FieldOutcome {
@@ -243,6 +296,77 @@ export function redactQuestion(
  *
  * ★번호가 긴 것부터 처리한다. `이름1` 규칙이 `이름11` 을 먼저 먹으면 안 된다.
  */
+/**
+ * ★모델이 **쓰기 제안의 인자로** 돌려준 별칭을 실제 값으로 되돌린다.
+ *
+ * 나가는 쪽은 촘촘한데 돌아오는 쪽은 `answer.text` 한 군데만 이어져 있었다.
+ * 그래서 모델이 `match: "［이름1］ 상담"` 이라고 **정확히 옳은 답**을 보내도 앱은
+ * 이름이 `［이름1］` 인 할 일을 찾다가 없다고 답했다(2026-08-25 재현 확인, 5개 중 3개 실패).
+ *
+ * ★문자열 값만 손대고 **구조는 건드리지 않는다.** 통짜 문자열에 정규식을 돌리면
+ * 이름에 따옴표·역슬래시가 있을 때 JSON 이 깨진다 — 파싱해서 값만 바꾸고 다시 만든다.
+ *
+ * ★깨진 인자는 **그대로 돌려준다.** 여기서 삼키면 `buildWriteProposal` 의
+ * "무엇을 저장할지 못 알아들었다" 거절이 안 돌아 조용히 이상한 것이 저장될 수 있다.
+ */
+/**
+ * 인자 한 칸에서 별칭을 되돌린다 — **괄호까지 함께 걷어낸다.**
+ *
+ * ★`restoreModelText`(문장용)와 **일부러 다르다.** 저쪽은 모델이 쓴 괄호를 그대로 둔다 —
+ * 문장에서는 `〈김지훈〉 학생은…` 이 자연스럽고, 괄호를 구분자로 쓴 건지 삽입구로 쓴 건지
+ * 알 수 없어 건드리지 않는 편이 안전하기 때문이다.
+ *
+ * 그런데 **인자에서는 그 판단이 반대**다. `match` 는 읽을 문장이 아니라 **대상을 찾는 열쇠**라,
+ * `〈김지훈〉 상담` 으로 남으면 `김지훈 상담` 을 못 찾는다(재현 테스트에서 실제로 그랬다).
+ * 여기서는 괄호가 장식이라는 것이 확실하므로 걷어낸다.
+ *
+ * ★아무 괄호나 지우지 않는다 — **아는 별칭(접두사+번호)을 감싼 것만** 지운다.
+ *   번호가 긴 것부터 처리한다(`이름1` 규칙이 `이름11` 을 먼저 먹으면 안 된다).
+ */
+function restoreAlias(text: string, mappings: readonly MaskMapping[]): string {
+  const parsed = mappings
+    .map((m) => {
+      const hit = /^［(.+?)(\d+)］$/.exec(m.alias);
+      return hit ? { prefix: hit[1]!, num: hit[2]!, original: m.original } : null;
+    })
+    .filter((v): v is { prefix: string; num: string; original: string } => v !== null)
+    .sort((a, b) => b.num.length - a.num.length || Number(b.num) - Number(a.num));
+
+  let out = text;
+  for (const { prefix, num, original } of parsed) {
+    const open = String.raw`[［\[(〈{]?`;
+    const close = String.raw`[］\])〉}]?`;
+    const core = prefix + String.raw`\s*` + num + String.raw`(?![0-9])`;
+    out = out.replace(new RegExp(open + core + close, 'g'), original);
+  }
+  return out;
+}
+
+export function restoreModelArguments(
+  rawArguments: string,
+  mappings: readonly MaskMapping[],
+): string {
+  if (mappings.length === 0 || rawArguments.length === 0) return rawArguments;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(rawArguments);
+  } catch {
+    return rawArguments; // 기존 거절 경로가 처리한다
+  }
+
+  const walk = (value: unknown): unknown => {
+    if (typeof value === 'string') return restoreAlias(value, mappings);
+    if (Array.isArray(value)) return value.map(walk);
+    if (value !== null && typeof value === 'object') {
+      return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, walk(v)]));
+    }
+    return value;
+  };
+
+  return JSON.stringify(walk(parsed));
+}
+
 export function restoreModelText(text: string, mappings: readonly MaskMapping[]): string {
   const parsed = mappings
     .map((m) => {

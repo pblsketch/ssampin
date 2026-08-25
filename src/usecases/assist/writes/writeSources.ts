@@ -51,6 +51,48 @@ export interface WriteSources {
     readonly note: string;
   }[];
   readonly classes: readonly { readonly id: string; readonly name: string }[];
+  /**
+   * 출결·관찰·채점이 **누구인지**를 정하는 자리.
+   *
+   * ★`classes` 와 따로 두는 이유 — 담임 학급은 `classes`(교과 수업반)에 없다.
+   * 명렬표(`students.json`)는 담임 학급 한 반의 것이고, 출결이 반 자리에 넣는 값도
+   * 수업반 id 가 아니라 설정의 반 이름(`settings.className`)이다. 둘을 한 배열에
+   * 욱여넣으면 "이 id 는 어느 쪽 것인가"를 부르는 곳마다 다시 판별하게 된다.
+   *
+   * ★**모델에게는 이 명단이 나가지 않는다.** 학생 목록 조회 도구는 등록돼 있지 않고,
+   * 모델은 선생님이 말한 번호나 가려진 별칭(［이름1］)으로만 대상을 가리킨다.
+   * 그 말을 실제 학생에 잇는 일이 여기 명단을 보는 유일한 용도다.
+   */
+  readonly roster: {
+    /** 담임 반 키. 출결 저장이 `classId` 자리에 그대로 넣는 값이다(`settings.className`) */
+    readonly homeroomClassId: string;
+    /**
+     * 정규 교시 수(`settings.maxPeriods`). 선생님이 교시를 안 밝혔을 때
+     * "하루 전체"가 몇 교시까지인지 정한다 — 여기 없으면 하루 결석을 적을 수 없다.
+     */
+    readonly regularPeriodCount: number;
+    readonly homeroom: readonly {
+      readonly id: string;
+      readonly name: string;
+      readonly studentNumber?: number;
+    }[];
+    readonly teaching: readonly {
+      readonly classId: string;
+      readonly className: string;
+      readonly students: readonly {
+        readonly number: number;
+        readonly name: string;
+        /**
+         * 관찰 기록이 학생을 가리키는 키(`studentKey`). 번호만일 수도, `학년-반-번호`
+         * 일 수도 있다(다른 반 학생이 섞인 수업반).
+         *
+         * ★규칙을 여기서 다시 만들지 않고 **이미 만들어진 값**을 받는다 — 화면이 쓰는
+         * 키와 한 글자라도 달라지면, AI 가 남긴 관찰만 그 학생 화면에서 안 보인다.
+         */
+        readonly key: string;
+      }[];
+    }[];
+  };
   readonly bookmarks: readonly {
     readonly id: string;
     readonly name: string;
@@ -68,5 +110,22 @@ export interface WriteSources {
     readonly id: string;
     readonly sectionId: string;
     readonly title: string;
+  }[];
+  /**
+   * 루브릭(평가 기준표)과 그 안의 요소·수준.
+   *
+   * ★모델에게 나가는 것은 선생님이 말한 이름뿐이다 — 여기 든 id 는 한 번도 나가지
+   * 않는다. 모델이 "주장의 명확성 을 잘함으로" 라고 말하면, 그 말을 id 로 바꾸는 일이
+   * 이 목록을 보는 유일한 용도다.
+   */
+  readonly rubrics: readonly {
+    readonly id: string;
+    readonly classId: string;
+    readonly title: string;
+    readonly criteria: readonly {
+      readonly id: string;
+      readonly name: string;
+      readonly levels: readonly { readonly id: string; readonly name: string }[];
+    }[];
   }[];
 }

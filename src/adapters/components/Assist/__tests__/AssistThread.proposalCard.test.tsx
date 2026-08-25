@@ -22,6 +22,12 @@ afterEach(cleanup);
 const SRC: WriteSources = {
   today: '2026-08-23',
   periodTimes: [],
+  roster: {
+    homeroomClassId: '3-2',
+    regularPeriodCount: 7,
+    homeroom: [],
+    teaching: [],
+  },
   todos: [{ id: 't1', text: '장보기', completed: false, dueDate: '2026-08-25' }],
   events: [],
   memos: [],
@@ -32,6 +38,7 @@ const SRC: WriteSources = {
   notebooks: [],
   noteSections: [],
   notePages: [],
+  rubrics: [],
 };
 
 function turnWith(tool: string, args: object, state: AssistProposalState): AssistTurn {

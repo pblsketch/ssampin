@@ -17,6 +17,7 @@ import {
   LIMITS,
   validateAssistRequest,
 } from '../../../../supabase/functions/_shared/assistRequest';
+import { ASSIST_WRITE_TOOLS } from '@domain/services/assistToolRegistry';
 
 const INSTALL_ID = 'a4755b0f-69b8-4b05-9129-3171a4a53e17';
 
@@ -180,6 +181,32 @@ describe('validateAssistRequest — 앱을 믿지 않는다', () => {
 describe('허용 등급은 영구 경계다', () => {
   it('ALLOWED_GRADES 가 [1] 이다 (ADR-061 결정 7)', () => {
     expect([...ALLOWED_GRADES]).toEqual([1]);
+  });
+
+  it('★학생에게 닿는 쓰기를 열어도 이 경계는 안 움직인다 (ADR-074 결정 1)', () => {
+    // 2026-08-25 에 출결·관찰·채점을 열었다. 그때 이 테스트가 빨간불이 될 수 있는
+    // 유일한 길은 "쓰기를 열려고 등급을 올리는 것"이다 — 그 길을 여기서 막는다.
+    // 세 도구는 등급을 올리지 않고 열렸다: 모델에게 돌려주는 결과가 아예 없기 때문이다.
+    const opened = ASSIST_WRITE_TOOLS.filter((t) =>
+      ['set_attendance', 'add_observation', 'set_rubric_mark'].includes(t.id),
+    );
+    expect(opened.map((t) => t.id).sort()).toEqual([
+      'add_observation',
+      'set_attendance',
+      'set_rubric_mark',
+    ]);
+    for (const tool of opened) {
+      expect(ALLOWED_GRADES).toContain(tool.grade);
+      expect(tool.resultFields, `${tool.id} 가 결과 필드를 열었다`).toEqual([]);
+    }
+  });
+
+  it('★서버 관문은 그대로다 — 쓰기를 열었다고 연락처를 통과시키지 않는다', () => {
+    // 앱 쪽 관문(그물 ③)이 뚫렸을 때 마지막으로 막는 자리다. 삭제·완화되지 않았다.
+    const result = validateAssistRequest(
+      req({ turns: [{ role: 'user', content: '7번 학생 결석. 보호자 010-1234-5678' }] }),
+    );
+    expect('error' in result, '쓰기를 열었더니 연락처가 통과했다').toBe(true);
   });
 });
 
