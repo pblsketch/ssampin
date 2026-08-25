@@ -146,3 +146,172 @@ export interface Totals {
   totalUsers: number;
   todayUsers: number;
 }
+
+// ── migration 061 롤업 기반 신규 지표 행 타입 ──
+// 모두 analytics_*_v2 RPC 의 반환 형태와 1:1 로 맞춘다.
+// PostgREST 는 bigint/numeric 을 JSON number 로 내려주므로 number 로 받는다.
+
+/** 한눈 요약 (analytics_overview_v2) */
+export interface OverviewRow {
+  total_users: number;
+  active_users: number;
+  new_users: number;
+  returning_users: number;
+  total_events: number;
+  avg_dau: number | null;
+  wau: number;
+  mau: number;
+  /** WAU/MAU — 한 달에 한 번 온 분 중 이번 주에도 온 비율. 습관화 정도. */
+  stickiness: number | null;
+  onboarded_users: number;
+  today_users: number;
+}
+
+/** 일별 활성 — 신규/재방문 분리 (analytics_daily_v2) */
+export interface DailyV2Row {
+  d: string;
+  dau: number;
+  new_users: number;
+  returning_users: number;
+  events: number;
+}
+
+/** 주간 요약 (analytics_weekly_v2) */
+export interface WeeklyV2Row {
+  week_start: string;
+  weekly_active_users: number;
+  new_users: number;
+  total_events: number;
+  app_opens: number;
+  tool_uses: number;
+  exports: number;
+  onboarding_completions: number;
+  errors: number;
+}
+
+/** 속성값 순위 — 도구/화면/기능발견/내보내기 공용 (analytics_prop_ranking_v2) */
+export interface PropRankingRow {
+  prop: string;
+  uses: number;
+  users: number;
+  uses_per_user: number | null;
+}
+
+/** 기능 채택·재사용 (analytics_adoption_v2) */
+export interface AdoptionRow {
+  prop: string;
+  reach_users: number;
+  reach_pct: number | null;
+  repeat_users: number;
+  repeat_pct: number | null;
+  once_only_users: number;
+  once_only_pct: number | null;
+  sticky_users: number;
+  sticky_pct: number | null;
+  avg_uses: number | null;
+}
+
+/** 주간 코호트 리텐션 한 칸 (analytics_cohort_weekly_v2) */
+export interface CohortCellRow {
+  cohort_week: string;
+  cohort_size: number;
+  week_offset: number;
+  retained: number;
+  pct: number | null;
+}
+
+/** 사용 강도 등급 (analytics_engagement_tiers_v2) */
+export interface EngagementTierRow {
+  tier: string;
+  tier_order: number;
+  devices: number;
+  pct: number | null;
+  avg_events: number | null;
+}
+
+/** 이탈 신호 (analytics_churn_v2) */
+export interface ChurnRow {
+  bucket: string;
+  bucket_order: number;
+  devices: number;
+  engaged_devices: number;
+  pct: number | null;
+}
+
+/** 요일 × 시간대 (analytics_rhythm_v2) */
+export interface RhythmRow {
+  dow: number;
+  hour: number;
+  events: number;
+  avg_users: number | null;
+  day_count: number;
+}
+
+/** 온보딩 퍼널 (analytics_onboarding_funnel_v2) */
+export interface FunnelStepRow {
+  step: string;
+  step_order: number;
+  devices: number;
+  pct: number | null;
+  drop_from_prev: number | null;
+}
+
+/** 오류 요약 (analytics_error_summary_v2) */
+export interface ErrorSummaryRow {
+  component: string;
+  message: string;
+  occurrences: number;
+  users: number;
+  last_date: string;
+}
+
+/** 오류 발생률 추이 (analytics_error_rate_v2) */
+export interface ErrorRateRow {
+  d: string;
+  error_events: number;
+  affected_users: number;
+  active_users: number;
+  affected_pct: number | null;
+}
+
+/** 버전 잔류 (analytics_version_adoption_v2) */
+export interface VersionAdoptionRow {
+  app_version: string;
+  users: number;
+  pct: number | null;
+  last_seen: string;
+  is_current: boolean;
+}
+
+/** 학교급·지역 분포 (analytics_school_profile_v2) */
+export interface SchoolProfileRow {
+  dimension: 'level' | 'region';
+  label: string;
+  users: number;
+  pct: number | null;
+}
+
+/** 세션 길이 (analytics_session_v2) */
+export interface SessionV2Row {
+  d: string;
+  sessions: number;
+  avg_seconds: number;
+  median_seconds: number;
+  p90_seconds: number;
+  max_seconds: number;
+}
+
+/** 이벤트 구성 (analytics_event_breakdown_v2) */
+export interface EventBreakdownRow {
+  event: string;
+  events: number;
+  users: number;
+}
+
+/** 롤업 갱신 상태 (analytics_rollup_status) */
+export interface RollupStatusRow {
+  refreshed_at: string | null;
+  duration_ms: number | null;
+  last_error: string | null;
+  stale_minutes: number | null;
+}

@@ -1,19 +1,17 @@
 import { Metadata } from 'next';
 import { Suspense } from 'react';
-import EventLog from './EventLog';
-import VersionDistribution from './VersionDistribution';
-import ChatConversations from './ChatConversations';
 import DateRangePicker from './DateRangePicker';
-import { Section } from './_components/primitives';
-import { SummaryCards } from './_components/SummaryCards';
-import { DailyActiveSection } from './_components/DailyActiveSection';
-import { WeeklySummarySection } from './_components/WeeklySummarySection';
-import { ToolRankingSection } from './_components/ToolRankingSection';
-import { ExportFormatsSection } from './_components/ExportFormatsSection';
-import { SessionStatsSection } from './_components/SessionStatsSection';
-import { RetentionSection } from './_components/RetentionSection';
-import { ChatbotAnalyticsSection } from './_components/ChatbotAnalyticsSection';
-import { loadDashboardData } from './_lib/data';
+import TabNav from './_components/TabNav';
+import { DEFAULT_TAB, TABS, isTabKey } from './_lib/tabs';
+import OverviewTab from './_sections/OverviewTab';
+import RetentionTab from './_sections/RetentionTab';
+import FeaturesTab from './_sections/FeaturesTab';
+import RhythmTab from './_sections/RhythmTab';
+import FrictionTab from './_sections/FrictionTab';
+import ChatbotTab from './_sections/ChatbotTab';
+import EventsTab from './_sections/EventsTab';
+import { loadRollupStatus } from './_lib/data';
+import type { DateRange } from './_lib/data';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,10 +20,70 @@ export const metadata: Metadata = {
   robots: 'noindex, nofollow',
 };
 
+/**
+ * 화면 뼈대(제목·기간 선택·탭)를 먼저 내보내고, 무거운 집계는 Suspense 안에서 흘려보낸다.
+ * 예전에는 18개 조회가 전부 끝나야 첫 글자가 나왔다 — 가장 느린 하나가 전체를 잡아먹었다.
+ */
+function TabSkeleton() {
+  return (
+    <div className="space-y-4" aria-label="불러오는 중">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {[0, 1, 2, 3].map((i) => (
+          <div
+            key={i}
+            className="h-24 bg-gray-900 border border-gray-800 rounded-xl animate-pulse"
+          />
+        ))}
+      </div>
+      <div className="h-64 bg-gray-900 border border-gray-800 rounded-xl animate-pulse" />
+      <div className="h-48 bg-gray-900 border border-gray-800 rounded-xl animate-pulse" />
+    </div>
+  );
+}
+
+/** 헤더에 "이 수치가 언제 기준인지"를 적어준다. 미리 계산해둔 값이라 실시간이 아니다. */
+async function RollupFreshness() {
+  const status = await loadRollupStatus();
+  if (!status?.refreshed_at) {
+    return (
+      <span className="text-gray-500">
+        집계 기준: 확인 불가 — migration 061 적용 여부를 확인하세요
+      </span>
+    );
+  }
+  const stale = status.stale_minutes ?? 0;
+  const at = new Date(status.refreshed_at).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' });
+  return (
+    <span className={stale > 30 ? 'text-amber-400' : 'text-gray-500'}>
+      집계 기준: {at} ({stale < 1 ? '방금' : `${Math.round(stale)}분 전`})
+      {status.last_error ? ` · 갱신 오류: ${status.last_error}` : ''}
+    </span>
+  );
+}
+
+function renderTab(tab: string, range: DateRange) {
+  switch (tab) {
+    case 'retention':
+      return <RetentionTab range={range} />;
+    case 'features':
+      return <FeaturesTab range={range} />;
+    case 'rhythm':
+      return <RhythmTab range={range} />;
+    case 'friction':
+      return <FrictionTab range={range} />;
+    case 'chatbot':
+      return <ChatbotTab range={range} />;
+    case 'events':
+      return <EventsTab />;
+    default:
+      return <OverviewTab range={range} />;
+  }
+}
+
 export default async function AdminAnalyticsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ days?: string; from?: string; to?: string }>;
+  searchParams: Promise<{ days?: string; from?: string; to?: string; tab?: string }>;
 }) {
   const params = await searchParams;
   const days =
@@ -44,19 +102,22 @@ export default async function AdminAnalyticsPage({
   }
   // days === 0 means "전체" → no date filter
 
-  const data = await loadDashboardData({ dateFrom, dateTo });
-  const hasData = data.weekly.length > 0 || data.daily.length > 0;
+  const range: DateRange = { dateFrom, dateTo };
+  const tab = isTabKey(params.tab) ? params.tab : DEFAULT_TAB;
+  const tabLabel = TABS.find((t) => t.key === tab)?.label ?? '';
 
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100 p-4 sm:p-6">
-      <div className="max-w-7xl mx-auto space-y-8">
+      <div className="max-w-7xl mx-auto space-y-6">
         {/* 헤더 */}
         <div className="space-y-3">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <h1 className="text-xl sm:text-2xl font-bold">쌤핀 Analytics</h1>
-              <p className="text-gray-400 text-xs sm:text-sm mt-1">
-                마지막 업데이트: {new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })}
+              <p className="text-xs mt-1">
+                <Suspense fallback={<span className="text-gray-600">집계 기준 확인 중…</span>}>
+                  <RollupFreshness />
+                </Suspense>
               </p>
             </div>
             <a href="/" className="text-sm text-gray-400 hover:text-white transition shrink-0">
@@ -66,58 +127,20 @@ export default async function AdminAnalyticsPage({
           <Suspense fallback={<div className="h-10" />}>
             <DateRangePicker />
           </Suspense>
+          <Suspense fallback={<div className="h-9" />}>
+            <TabNav />
+          </Suspense>
         </div>
 
-        {!hasData ? (
-          <div className="text-center py-20 text-gray-500">
-            <p className="text-lg">데이터가 없습니다</p>
-            <p className="text-sm mt-2">SUPABASE_SERVICE_ROLE_KEY 환경 변수를 확인하세요.</p>
-          </div>
-        ) : (
-          <>
-            <SummaryCards
-              totals={data.totals}
-              daily={data.daily}
-              weekly={data.weekly}
-              sessions={data.sessions}
-            />
+        {/* 탭 본문 — key 를 바꿔 탭/기간이 달라지면 새 Suspense 경계로 다시 흘려보낸다 */}
+        <Suspense key={`${tab}:${dateFrom ?? ''}:${dateTo ?? ''}`} fallback={<TabSkeleton />}>
+          {renderTab(tab, range)}
+        </Suspense>
 
-            <DailyActiveSection daily={data.daily} />
-
-            <WeeklySummarySection weekly={data.weekly} />
-
-            <div className="grid md:grid-cols-2 gap-6">
-              <ToolRankingSection toolsRanged={data.toolsRanged} tools={data.tools} />
-              <ExportFormatsSection exports={data.exports} />
-            </div>
-
-            <SessionStatsSection sessions={data.sessions} />
-
-            <Section title="버전 분포">
-              <VersionDistribution versions={data.versions} />
-            </Section>
-
-            <RetentionSection retention={data.retention} />
-
-            <ChatbotAnalyticsSection
-              chatDaily={data.chatDaily}
-              chatTopics={data.chatTopics}
-              chatDepth={data.chatDepth}
-              chatEscalations={data.chatEscalations}
-              chatConfidence={data.chatConfidence}
-              chatFeedbackStats={data.chatFeedbackStats}
-              chatFeedbackEscalations={data.chatFeedbackEscalations}
-            />
-
-            <Section title="챗봇 대화 원문 (최근)">
-              <ChatConversations conversations={data.chatConversations} />
-            </Section>
-
-            <Section title="최근 이벤트">
-              <EventLog events={data.recentEvents} />
-            </Section>
-          </>
-        )}
+        <p className="text-[11px] text-gray-600 pt-2">
+          현재 보고 있는 항목: {tabLabel} · 기간{' '}
+          {dateFrom ? `${dateFrom} ~ ${dateTo ?? '오늘'}` : '전체'}
+        </p>
       </div>
     </div>
   );

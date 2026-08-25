@@ -20,6 +20,13 @@ export const TOOL_LABELS: Record<string, string> = {
   assignment: '과제수합',
   class_seating: '자리배치',
   poll: '투표',
+  // 실제로 기록되는데 라벨이 빠져 원문 그대로 나오던 것들 (src 에서 track('tool_use') 인자 대조)
+  grouping: '모둠편성',
+  'multi-survey': '발제 피드백',
+  'realtime-wall': '실시간 게시판',
+  'score-allocator': '점수 배분',
+  'trafficlight-discussion': '신호등 토론',
+  'valueline-discussion': '가치수직선 토론',
 };
 
 export const EVENT_LABELS: Record<string, string> = {
@@ -96,3 +103,67 @@ export const PAGE_LABELS: Record<string, string> = {
   'tool-class-seating': '자리배치',
   bookmarks: '즐겨찾기',
 };
+
+export const FEATURE_LABELS: Record<string, string> = {
+  dashboard: '대시보드',
+  timetable: '시간표',
+  seating: '좌석배치',
+  schedule: '일정관리',
+  'student-records': '담임메모',
+  records: '기록',
+  memo: '메모',
+  todo: '할일',
+  settings: '설정',
+  tools: '도구함',
+  'class-management': '수업관리',
+  bookmarks: '즐겨찾기',
+  attendance: '출결',
+  assist: '쌤핀 AI',
+  staffroom: '온라인 교무실',
+};
+
+export const SHARE_METHOD_LABELS: Record<string, string> = {
+  kakao: '카카오톡',
+  clipboard: '링크 복사',
+};
+
+export const LAUNCH_MODE_LABELS: Record<string, string> = {
+  normal: '일반 창',
+  widget: '위젯',
+};
+
+export const SCHOOL_LEVEL_LABELS: Record<string, string> = {
+  elementary: '초등학교',
+  middle: '중학교',
+  high: '고등학교',
+  special: '특수학교',
+  unknown: '미입력',
+};
+
+export const DOW_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
+
+/**
+ * 이벤트 종류에 맞는 라벨 표를 골라준다.
+ * 순위 화면 하나로 도구·화면·기능발견·내보내기·공유를 모두 다루기 때문에 필요하다.
+ */
+export function labelTableFor(event: string): Record<string, string> {
+  switch (event) {
+    case 'tool_use':
+      return TOOL_LABELS;
+    case 'page_view':
+      return PAGE_LABELS;
+    case 'feature_discovery':
+      return FEATURE_LABELS;
+    case 'share_click':
+      return SHARE_METHOD_LABELS;
+    case 'app_open':
+      return LAUNCH_MODE_LABELS;
+    default:
+      return {};
+  }
+}
+
+/** 라벨이 없으면 원래 값을 그대로 보여준다(새 기능이 추가돼도 빈칸이 되지 않게). */
+export function labelOf(table: Record<string, string>, key: string): string {
+  return table[key] ?? key;
+}

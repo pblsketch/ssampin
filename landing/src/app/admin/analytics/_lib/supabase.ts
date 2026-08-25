@@ -3,6 +3,13 @@
 // 헤더 · cache:'no-store' · !res.ok 처리)을 한 함수로 통합한다.
 // 생성되는 REST URL/파라미터는 통합 이전과 동일하다.
 
+/**
+ * 조회 결과를 Next.js 데이터 캐시에 담아두는 기본 시간(초).
+ * 롤업(미리 계산해둔 표)이 15분마다 갱신되므로 5분이면 화면이 뒤처지지 않는다.
+ * 이 값 덕분에 새로고침이나 탭 이동마다 같은 집계를 다시 계산하지 않는다.
+ */
+export const DEFAULT_REVALIDATE_SECONDS = 300;
+
 export interface FetchTableOptions {
   /** PostgREST select 절. 기본값 '*' */
   select?: string;
@@ -14,6 +21,14 @@ export interface FetchTableOptions {
   dateColumn?: string;
   dateFrom?: string | null;
   dateTo?: string | null;
+  /** 캐시 유지 시간(초). 0 이면 캐시하지 않는다. 기본 DEFAULT_REVALIDATE_SECONDS */
+  revalidate?: number;
+}
+
+/** revalidate 값을 fetch 옵션으로 변환 — 0 이면 캐시 끔. */
+function cacheOption(revalidate?: number): RequestInit & { next?: { revalidate: number } } {
+  const seconds = revalidate ?? DEFAULT_REVALIDATE_SECONDS;
+  return seconds > 0 ? { next: { revalidate: seconds } } : { cache: 'no-store' };
 }
 
 /**
@@ -45,7 +60,7 @@ export async function fetchTable<T>(table: string, options?: FetchTableOptions):
       Authorization: `Bearer ${key}`,
       'Content-Type': 'application/json',
     },
-    cache: 'no-store',
+    ...cacheOption(options?.revalidate),
   });
 
   if (!res.ok) {
@@ -62,7 +77,8 @@ export async function fetchTable<T>(table: string, options?: FetchTableOptions):
  */
 export async function fetchRpc<T>(
   fn: string,
-  params?: Record<string, string | null | undefined>,
+  params?: Record<string, string | number | null | undefined>,
+  revalidate?: number,
 ): Promise<T[]> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -72,7 +88,7 @@ export async function fetchRpc<T>(
   const qs = new URLSearchParams();
   if (params) {
     for (const [k, v] of Object.entries(params)) {
-      if (v != null && v !== '') qs.set(k, v);
+      if (v != null && v !== '') qs.set(k, String(v));
     }
   }
   const query = qs.toString();
@@ -84,10 +100,11 @@ export async function fetchRpc<T>(
       Authorization: `Bearer ${key}`,
       'Content-Type': 'application/json',
     },
-    cache: 'no-store',
+    ...cacheOption(revalidate),
   });
 
   if (!res.ok) {
+    // 404 = 아직 migration 061 이 적용되지 않은 상태. 화면은 빈 섹션으로 안전하게 넘어간다.
     console.error(`[Analytics] RPC "${fn}" failed: ${res.status}`);
     return [];
   }
