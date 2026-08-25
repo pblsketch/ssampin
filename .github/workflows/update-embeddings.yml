@@ -9,12 +9,18 @@ on:
       - 'landing/src/components/FAQ.tsx'
       - 'README.md'
       - 'CHANGELOG.md'
+      # ⚠️ 이 워크플로가 돌리는 embed-docs.ts 는 위 문서들만 다룬다.
+      # 챗봇 Q&A(scripts/ingest-chatbot-qa.mjs)는 ADMIN_API_KEY 가 필요해 여기서 못 돌린다 —
+      # 릴리즈 SOP 3단계에서 따로 실행한다. 두 경로를 혼동하면 "반영됐겠지"로 넘어간다.
   workflow_dispatch:
 
 jobs:
   update-embeddings:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # 임베딩(약 4분) + 품질 테스트(27케이스 × 평균 6초 ≒ 3분)를 합치면 5분으로는 모자란다.
+    # 2026-08-26 실측: 임베딩은 끝났는데 품질 테스트 도중 5분 제한에 걸려 취소됐다.
+    # 취소는 "실패"로 남지만 임베딩 자체는 이미 반영된 뒤라 원인을 오해하기 쉽다.
+    timeout-minutes: 20
 
     steps:
       - name: Checkout
