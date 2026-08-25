@@ -19,6 +19,7 @@ import {
   formatPeriodLabel,
 } from '@domain/entities/Attendance';
 import { computeAutoPeriods } from '@domain/rules/attendanceRules';
+import { classAlias } from '@domain/rules/classNameAlias';
 import {
   DEFAULT_OBSERVATION_CATEGORIES,
   DEFAULT_OBSERVATION_TAGS,
@@ -63,6 +64,9 @@ const STATUS_LABEL: Readonly<Record<AttendanceStatus, string>> = {
 interface Target {
   readonly number: number;
   readonly name: string;
+  /** 원 소속 학년·반. 번호가 겹치는 수업반에서 **누구인지 가르는 값** */
+  readonly grade?: number;
+  readonly classNum?: number;
   /** 관찰 기록이 학생을 가리키는 키. 담임 학급에는 없다(관찰은 수업반 기능이다) */
   readonly key?: string;
 }
@@ -147,7 +151,13 @@ function findRoster(
     };
   }
 
-  const found = matchOne(src.roster.teaching, className, (c) => c.className, '수업반');
+  // ★"3학년 1반" 과 "3-1" 은 같은 반이다 — 양쪽을 같은 꼴로 바꿔 견준다(classAlias).
+  const found = matchOne(
+    src.roster.teaching,
+    classAlias(className),
+    (c) => classAlias(c.className),
+    '수업반',
+  );
   if (!found.ok) return { ok: false, reason: found.reason };
   return {
     ok: true,
@@ -155,7 +165,13 @@ function findRoster(
     ...(found.item.groupId === undefined ? {} : { groupId: found.item.groupId }),
     label: found.item.className,
     homeroom: false,
-    students: found.item.students.map((s) => ({ number: s.number, name: s.name, key: s.key })),
+    students: found.item.students.map((s) => ({
+      number: s.number,
+      name: s.name,
+      ...(s.grade === undefined ? {} : { grade: s.grade }),
+      ...(s.classNum === undefined ? {} : { classNum: s.classNum }),
+      key: s.key,
+    })),
   };
 }
 
@@ -349,6 +365,9 @@ export function proposeSetAttendance(args: RawArgs, src: WriteSources): AssistWr
       // 22종을 한 모양으로 유지해 온 이유다). 교시 목록은 쉼표로 붙여 보내고 실행기가 푼다.
       periods: periods.join(','),
       studentNumber: target.item.number,
+      // ★번호가 겹치는 수업반에서 누구인지 가르는 값. 없으면 조회 화면이 "?" 로 띄운다.
+      ...(target.item.grade === undefined ? {} : { studentGrade: target.item.grade }),
+      ...(target.item.classNum === undefined ? {} : { studentClassNum: target.item.classNum }),
       studentName: target.item.name,
       status,
       periodLabel,
@@ -400,7 +419,7 @@ function findTeachingRoster(
     };
   }
 
-  const found = matchOne(pool, className, (c) => c.className, '수업반');
+  const found = matchOne(pool, classAlias(className), (c) => classAlias(c.className), '수업반');
   if (!found.ok) return { ok: false, reason: found.reason };
   return {
     ok: true,

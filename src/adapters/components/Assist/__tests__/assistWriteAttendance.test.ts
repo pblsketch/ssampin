@@ -34,6 +34,15 @@ const SRC: WriteSources = {
           { number: 8, name: '이수현', key: '8' },
         ],
       },
+      {
+        // ★여러 학급에서 모인 수업반 — **2번이 둘**이다. 실제 데이터가 이렇다.
+        classId: 'c2',
+        className: '1-7',
+        students: [
+          { number: 2, name: '구예찬', grade: 1, classNum: 2, key: '1-2-2' },
+          { number: 2, name: '도유산', grade: 1, classNum: 5, key: '1-5-2' },
+        ],
+      },
     ],
   },
   todos: [],
@@ -205,6 +214,63 @@ describe('★언제·몇 교시인가', () => {
   it('조회(0)·종례(9)도 받는다', () => {
     expect(propose({ student: '15번', status: '지각', period: 0 }).values.periods).toBe('0');
     expect(propose({ student: '15번', status: '조퇴', period: 9 }).values.periods).toBe('9');
+  });
+});
+
+describe('★말로 한 반 이름이 저장된 반 이름과 만난다 (2026-08-25 오너 신고)', () => {
+  it('"1학년 7반" 이 수업반 "1-7" 을 찾는다 — 예전에는 못 찾고 되물었다', () => {
+    const p = propose({
+      student: '구예찬',
+      status: '결석',
+      className: '1학년 7반',
+      period: 2,
+    });
+    expect(p.values.classId).toBe('c2');
+  });
+
+  it('★다른 반까지 뭉치지는 않는다', () => {
+    expect(
+      reject({ student: '구예찬', status: '결석', className: '1학년 8반', period: 2 }),
+    ).toContain('찾지 못했');
+  });
+});
+
+describe('★번호가 겹치는 수업반 — 누구인지 잃지 않는다 (2026-08-25 오너 신고)', () => {
+  /**
+   * 수업반은 여러 학급에서 모이므로 번호가 겹친다("2번"이 둘). 번호만 적어 저장하면
+   * 조회 화면이 어느 학생인지 못 정해 **"?" 로 뜬다.** 화면의 출결 저장은 학년·반을
+   * 함께 넘긴다(AttendanceMatrixView) — AI 경로만 빠져 있었다.
+   */
+  it('이름으로 지목하면 그 학생의 학년·반이 함께 실린다', () => {
+    const p = propose({ student: '구예찬', status: '결석', className: '1-7', period: 2 });
+    expect(p.values.studentNumber).toBe(2);
+    expect(p.values.studentGrade).toBe(1);
+    expect(p.values.studentClassNum).toBe(2);
+  });
+
+  it('같은 번호의 다른 학생은 다른 학급으로 갈린다', () => {
+    const p = propose({ student: '도유산', status: '결석', className: '1-7', period: 2 });
+    expect(p.values.studentNumber).toBe(2);
+    expect(p.values.studentClassNum).toBe(5);
+  });
+
+  it('★저장되는 칸에 학년·반이 들어간다 — 이게 없어서 "?" 로 떴다', async () => {
+    const { deps, upserts } = spyDeps();
+    await executeAssistWrite(
+      propose({ student: '구예찬', status: '결석', className: '1-7', period: 2 }),
+      deps,
+    );
+
+    expect(upserts[0]!.recordsByPeriod.get(2)).toEqual([
+      { number: 2, status: 'absent', grade: 1, classNum: 2 },
+    ]);
+  });
+
+  it('담임 학급은 학년·반이 없어도 그대로다 — 번호가 겹치지 않는다', async () => {
+    const { deps, upserts } = spyDeps();
+    await executeAssistWrite(propose({ student: '15번', status: '결석', period: 3 }), deps);
+
+    expect(upserts[0]!.recordsByPeriod.get(3)).toEqual([{ number: 15, status: 'absent' }]);
   });
 });
 

@@ -90,6 +90,14 @@ export interface WriteSources {
         readonly number: number;
         readonly name: string;
         /**
+         * 원 소속 학년·반. **교과 수업반은 여러 학급에서 모이므로 번호가 겹친다**
+         * (한 반에 "2번"이 넷일 수 있다). 출결을 번호만으로 적으면 어느 학생인지
+         * 정해지지 않아 조회 화면에 "?" 로 뜬다(2026-08-25 오너 신고).
+         * 화면의 출결 저장(AttendanceMatrixView)도 이 둘을 함께 넘긴다.
+         */
+        readonly grade?: number;
+        readonly classNum?: number;
+        /**
          * 관찰 기록이 학생을 가리키는 키(`studentKey`). 번호만일 수도, `학년-반-번호`
          * 일 수도 있다(다른 반 학생이 섞인 수업반).
          *

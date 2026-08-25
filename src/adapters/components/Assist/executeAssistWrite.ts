@@ -554,6 +554,14 @@ export async function executeAssistWrite(
       const entry: StudentAttendance = {
         number: studentNumber,
         status,
+        // ★수업반은 번호가 겹친다(한 반에 "2번"이 넷일 수 있다). 이 둘이 없으면
+        //   조회 화면이 어느 학생인지 못 정해 "?" 로 띄운다 — 화면 저장과 같은 짝이다.
+        ...(num(proposal, 'studentGrade') === undefined
+          ? {}
+          : { grade: num(proposal, 'studentGrade')! }),
+        ...(num(proposal, 'studentClassNum') === undefined
+          ? {}
+          : { classNum: num(proposal, 'studentClassNum')! }),
         ...(str(proposal, 'reason') === undefined
           ? {}
           : { reason: str(proposal, 'reason') as AttendanceReason }),

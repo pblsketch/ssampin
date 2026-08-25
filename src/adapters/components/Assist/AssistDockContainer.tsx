@@ -810,6 +810,9 @@ export function AssistDockContainer() {
           students: c.students.map((st) => ({
             number: st.number,
             name: st.name,
+            // ★번호가 겹치는 수업반에서 누구인지 가르는 값 — 화면 저장과 같은 짝이다.
+            ...(st.grade === undefined ? {} : { grade: st.grade }),
+            ...(st.classNum === undefined ? {} : { classNum: st.classNum }),
             // ★키 규칙을 여기서 다시 만들지 않는다 — 화면이 쓰는 정본 함수를 그대로 부른다.
             key: studentKey(st),
           })),
