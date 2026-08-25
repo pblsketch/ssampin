@@ -1,6 +1,61 @@
 # Progress
 
-마지막 업데이트: 2026-08-25 KST
+마지막 업데이트: 2026-08-26 KST
+
+## 🚀 v2.4.5 릴리즈 완료 (2026-08-26)
+
+릴리즈 `45aebd07` · 태그 `v2.4.5` · https://github.com/pblsketch/ssampin/releases/tag/v2.4.5
+
+v2.4.4 이후 커밋 48건을 전수 대조해 릴리즈 노트 18건(highlights 5)으로 묶었다.
+초안(`docs/release-prep/v2.4.5-draft.md`)에는 상담·설문 / 쌤핀 AI / 원클릭업무포털
+세 갈래만 있었고, 여덟 갈래가 더 나와 전부 편입했다 — macOS 설치 차단, 동기화 3종,
+모바일 정렬, 관찰 슬롯, 생기부 금지항목·확정 잠금, 모둠 균등, 쿨메신저, 설치 파일 감량.
+
+**SOP 8단계 결과**
+
+| 단계                  | 결과                                                       |
+| --------------------- | ---------------------------------------------------------- |
+| 1 버전 6곳 + lock 2줄 | ✅ 2.4.5                                                   |
+| 2 릴리즈 노트         | ✅ 18건, 문체 가이드 대조 2건 교정                         |
+| 3 챗봇 KB             | ⚠️ **Q&A 7건 작성만 완료 — ingest 미실행(오너 토큰 필요)** |
+| 4 /docs 가이드        | ✅ 관찰 슬롯·생기부 경고 문단 신설, 지원 기준 v2.4.5       |
+| 5 커밋·푸시           | ✅ `45aebd07`                                              |
+| 6·7 빌드              | ✅ Windows `32903435723` · macOS `32903439317`             |
+| 8 릴리즈·URL 검증     | ✅ 자산 8개, 다운로드 URL 5개 전부 302                     |
+
+**실측으로 확인한 것**
+
+- **macOS 서명이 실제로 들어갔다** — CI 게이트 로그에서 `valid on disk` +
+  `satisfies its Designated Requirement`(arm64·x64 양쪽). 7c206a30 수정이 작동한다.
+- **설치 파일이 실제로 줄었다** — Windows 279 → 206MB, mac arm64 329 → 273MB,
+  x64 331 → 278MB. 릴리즈 노트 "가벼워졌어요" 항목이 사실로 확인됐다.
+  ★수치는 노트에 안 적었다(빌드 전이라 확인 불가였다). 다음 릴리즈에 적을 수 있다.
+- `latest.yml`·`latest-mac.yml` 이 정확한 파일명을 가리킨다(v1.10.4 사고 방지 지점).
+- 랜딩·`/docs` 자동 배포 확인 — 홈 2.4.5, `docs/releases` 지원 기준 v2.4.5,
+  `docs/features/homeroom` 에 "장면 갈래 붙이기" 문단 노출.
+
+**🔴 남은 일**
+
+1. **챗봇 KB ingest** — `scripts/ingest-chatbot-qa.mjs` 에 v2.4.5 Q&A 7건이 들어갔지만
+   실행은 못 했다. `EMBED_AUTH_TOKEN`(= Supabase `ssampin-embed` 함수의 `ADMIN_API_KEY`)
+   이 필요하다. 오너가 실행할 것:
+   `SUPABASE_URL=https://ddbkyaxvnpaxkbqbpijg.supabase.co EMBED_AUTH_TOKEN=<키> node scripts/ingest-chatbot-qa.mjs`
+   ★`Update AI Chatbot Embeddings` 워크플로는 **다른 스크립트**(`embed-docs.ts`, 홈페이지
+   FAQ·문서용)라 이걸로는 Q&A 가 갱신되지 않는다. 경로 조건에 `scripts/` 도 없다.
+2. **CI 적신호 (릴리즈와 무관, 7커밋째)** — 실패 원인 2건 모두 CI 환경 특성이다.
+   - `electron/ipc/coolMessenger.test.ts` — 윈도우 경로(`C:\Users\tester\...`)를 기대하는데
+     CI 는 리눅스라 구분자가 `/` 로 나온다. 쿨메신저는 윈도우 전용인데 OS 가드가 없다.
+   - `observationSlotLifecycle.test.ts` — **별도 저장소** `ssampin-ai-bridge` 소스를 직접
+     읽는데 CI 에 체크아웃되지 않아 ENOENT. 로컬은 옆 폴더에 있어 통과한다.
+3. **실기기 확인** — 맥 실기기에서 터미널 없이 설치되는지가 이번 릴리즈의 핵심 확인
+   지점이다. 그 밖 항목은 `docs/release-prep/v2.4.5-draft.md` 하단 체크리스트에 있다.
+4. **060 마이그레이션** — 새 앱이 충분히 퍼진 뒤 적용. 관리자 분석에서 구버전 비율을 보고
+   판단한다. ⚠️ `--include-all` 이 다른 대기 마이그레이션까지 함께 올리므로 런북대로.
+
+**게이트**: tsc 0 · lint 0 error · regression 51/51 · landing docs:check·build 통과 ·
+vitest 8,104건 — 실패는 전부 5초 타임아웃(내용 위반 0건). 실행마다 2~8건으로 걸리는 파일이
+달라지는 부하성 flaky 다(전부 `src` 전체를 walk 하는 메타 테스트 + I/O 100회 테스트).
+걸린 6파일 단독 재실행 29건 통과(8.6초)로 확인.
 
 ## 🐞 쌤핀 AI — "결석 처리해줘"가 조회로만 답하던 문제 (2026-08-25, 수정 완료·미출시)
 
