@@ -48,54 +48,59 @@ export class ShortLinkClient {
   }
 
   /**
-   * Supabase REST API 직접 호출 (supabase-js 의존 없이)
+   * 스칼라를 돌려주는 RPC 호출.
+   *
+   * 실패를 예외로 올리지 않고 null 로 접는다. 이 경로를 쓰는 곳은 "기존 숏링크가
+   * 있으면 재사용"이라는 **선택적** 최적화라, 조회가 안 되면 새 코드를 만들면 그만이다.
+   * 여기서 throw 하면 숏링크 생성 자체가 실패한다.
    */
-  private async query<T>(
-    table: string,
-    params: string,
-    options?: { method?: string; body?: unknown },
-  ): Promise<T | null> {
-    if (!this.baseUrl || !this.anonKey) {
-      throw new Error('Supabase is not configured');
+  private async rpcScalar<T>(fn: string, body: Record<string, unknown>): Promise<T | null> {
+    if (!this.baseUrl || !this.anonKey) return null;
+    try {
+      const res = await fetch(`${this.baseUrl}/rest/v1/rpc/${fn}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: this.anonKey,
+          Authorization: `Bearer ${this.anonKey}`,
+        },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) return null;
+      return (await res.json()) as T | null;
+    } catch {
+      return null;
     }
-    const url = `${this.baseUrl}/rest/v1/${table}?${params}`;
-    const method = options?.method ?? 'GET';
-
-    const res = await fetch(url, {
-      method,
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': this.anonKey,
-        'Authorization': `Bearer ${this.anonKey}`,
-        'Prefer': method === 'POST' ? 'return=representation' : 'return=minimal',
-      },
-      ...(options?.body ? { body: JSON.stringify(options.body) } : {}),
-    });
-
-    if (!res.ok) {
-      // 409 Conflict (unique violation) → null로 처리
-      if (res.status === 409) return null;
-      const text = await res.text();
-      throw new Error(`ShortLink API error ${res.status}: ${text}`);
-    }
-
-    if (method === 'GET') {
-      const data = await res.json() as T;
-      return data;
-    }
-
-    return null;
   }
 
   /**
    * 커스텀 코드 사용 가능 여부 확인
+   *
+   * 예전에는 `?code=eq.X&select=code` 로 테이블을 읽었다. 그 경로를 남겨두면
+   * 필터를 뺀 `?select=code` 로 코드가 전량 나오고, 그 코드를 resolve_short_link 에
+   * 넣으면 target_path(관리 키 포함)를 회수할 수 있다 — 058 이 무의미해진다.
+   * 지금은 여부(boolean)만 받는다 — 마이그레이션 057.
+   *
+   * 실패하면 던진다. 호출부(생성 모달들)가 catch 해서 안내 문구만 지우고,
+   * 실제 중복은 생성 단계의 409 가 잡는다.
    */
   async isCodeAvailable(code: string): Promise<boolean> {
-    const data = await this.query<Array<{ code: string }>>(
-      'short_links',
-      `code=eq.${encodeURIComponent(code)}&select=code`,
-    );
-    return !data || data.length === 0;
+    if (!this.baseUrl || !this.anonKey) {
+      throw new Error('Supabase is not configured');
+    }
+    const res = await fetch(`${this.baseUrl}/rest/v1/rpc/is_short_code_available`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: this.anonKey,
+        Authorization: `Bearer ${this.anonKey}`,
+      },
+      body: JSON.stringify({ p_code: code }),
+    });
+    if (!res.ok) {
+      throw new Error(`ShortLink API error ${res.status}`);
+    }
+    return (await res.json()) as boolean;
   }
 
   /**
@@ -112,14 +117,17 @@ export class ShortLinkClient {
     const expires = expiresAt ?? new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString();
     const targetPath = fullUrl.replace(BASE_URL, '');
 
-    // 커스텀 코드가 없을 때만 기존 숏링크 재사용
+    // 커스텀 코드가 없을 때만 기존 숏링크 재사용.
+    //
+    // 예전에는 target_path 로 테이블을 직접 조회했다. 그 칸은 공유 링크 원문을
+    // 통째로 담아 관리 키까지 딸려 나온다. 지금은 목적지를 이미 아는 호출자만
+    // code 를 받는다 — 057.
     if (!customCode) {
-      const existing = await this.query<Array<{ code: string }>>(
-        'short_links',
-        `target_path=eq.${encodeURIComponent(targetPath)}&select=code&limit=1`,
-      );
-      if (existing && existing.length > 0 && existing[0]) {
-        return `${BASE_URL}/s/${existing[0].code}`;
+      const existingCode = await this.rpcScalar<string>('find_short_code_by_target', {
+        p_target_path: targetPath,
+      });
+      if (existingCode) {
+        return `${BASE_URL}/s/${existingCode}`;
       }
     }
 
@@ -133,9 +141,9 @@ export class ShortLinkClient {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'apikey': this.anonKey,
-          'Authorization': `Bearer ${this.anonKey}`,
-          'Prefer': 'return=minimal',
+          apikey: this.anonKey,
+          Authorization: `Bearer ${this.anonKey}`,
+          Prefer: 'return=minimal',
         },
         body: JSON.stringify({ code: customCode, target_path: targetPath, expires_at: expires }),
       });
@@ -155,9 +163,9 @@ export class ShortLinkClient {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'apikey': this.anonKey,
-          'Authorization': `Bearer ${this.anonKey}`,
-          'Prefer': 'return=minimal',
+          apikey: this.anonKey,
+          Authorization: `Bearer ${this.anonKey}`,
+          Prefer: 'return=minimal',
         },
         body: JSON.stringify({ code, target_path: targetPath, expires_at: expires }),
       });

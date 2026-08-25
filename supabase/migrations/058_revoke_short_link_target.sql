@@ -1,0 +1,59 @@
+-- =====================================================================
+-- 058_revoke_short_link_target.sql
+--
+-- 🔴 선행조건 — 이 순서를 지키지 않으면 **배포된 모든 숏링크가 죽는다.**
+--    1) 057 적용 완료 (resolve_short_link / find_short_code_by_target /
+--       is_short_code_available 존재)
+--    2) 랜딩 배포 완료 (`/s/[code]` 가 RPC 를 쓰도록 전환된 버전)
+--    3) 랜딩에서 실제 숏링크 하나를 눌러 리다이렉트 확인
+--    → 세 가지가 끝난 뒤에만 이 파일을 적용한다.
+--
+-- 무엇을 막나:
+--   `short_links` 를 anon/authenticated 가 **직접 읽지 못하게** 한다.
+--
+-- 왜:
+--   target_path 는 공유 링크 원문을 통째로 담고, 상담·설문 링크에는 관리 키가
+--   프래그먼트로 붙어 있다. 이 표가 목록으로 열리면 **링크를 받은 적 없는 사람에게도
+--   관리 키가 드러난다.** 관리 키는 예약자 정보를 푸는 열쇠이면서 교사용 조회 RPC 의
+--   인증 수단이라 영향이 크다. 057 이 대신할 경로를 이미 깔아뒀다.
+--
+-- 왜 컬럼 단위(044 방식)가 아니라 전면 회수인가:
+--   처음에는 target_path 만 가리고 `code` 는 남기려 했다(구버전 앱의 커스텀 링크
+--   중복 확인이 code 를 읽으므로). **그렇게 하면 이 마이그레이션이 무의미해진다.**
+--   `short_links_public_read` 정책은 만료만 검사하므로(012:15-16), 필터를 뺀
+--   `?select=code` 하나로 살아 있는 코드가 전량 나온다. 그 코드를
+--   `resolve_short_link` 에 넣으면 target_path 가 그대로 돌아온다.
+--   → **code 목록이 열려 있는 한 target_path 를 가려도 우회된다.** 그래서 전면 회수다.
+--
+-- 구버전 앱 영향 (받아들이는 비용):
+--   057 이전 버전의 **커스텀 링크 이름 중복 확인**이 조용히 실패한다. 세 호출부가 모두
+--   예외를 삼키고 안내 문구만 지우므로(SurveyCreateModal.tsx:92-97,
+--   ConsultationCreateModal.tsx:505-510, AssignmentCreateModal.tsx 동일 패턴),
+--   화면이 깨지지는 않는다. 중복 이름은 생성 단계에서 409 로 걸러지고
+--   "이미 사용 중인 링크입니다"가 뜬다(ShortLinkClient.ts 의 409 처리).
+--   즉 실시간 힌트만 사라지고 최종 결과는 같다.
+--
+-- 영향 없음을 확인한 것:
+--   - 리다이렉트 — resolve_short_link (057, SECURITY DEFINER)
+--   - 숏링크 재사용 — find_short_code_by_target (057, SECURITY DEFINER)
+--   - 커스텀 코드 중복 확인 — is_short_code_available (057, SECURITY DEFINER)
+--   - 숏링크 생성 INSERT — SELECT 와 별개 권한이고 `Prefer: return=minimal` 이라
+--     되읽기가 없다 (ShortLinkClient.ts 의 생성 경로)
+--   - service_role 경로
+--   SECURITY DEFINER 함수는 소유자 권한으로 돌기 때문에 이 회수의 영향을 받지 않는다.
+--
+-- RLS 정책 `short_links_public_read` 는 그대로 둔다. GRANT 가 없으면 정책만으로는
+-- 읽히지 않으므로 회수로 충분하고, 정책은 service_role 및 향후 복구 시 기준으로 남긴다.
+--
+-- 남는 위험 (이 파일 범위 밖):
+--   커스텀 숏코드는 사람이 읽는 한글 단어일 수 있어(`3학년2반상담` 등) **추측 가능**하다.
+--   추측에 성공하면 그 링크 하나의 관리 키는 여전히 드러난다. 목록 수확은 막히지만
+--   근본 해결은 "링크에서 열쇠를 빼는 것"이다(link_key / manage_key 분리).
+--
+-- 롤백:
+--   GRANT SELECT ON public.short_links TO anon, authenticated;
+--
+-- 근거: 보안 조사 문서(저장소 외부 · 비공개). 재현 경로를 이 파일에 옮겨 적지 말 것.
+-- =====================================================================
+
+REVOKE SELECT ON public.short_links FROM anon, authenticated;

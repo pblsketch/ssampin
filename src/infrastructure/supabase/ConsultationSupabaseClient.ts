@@ -327,12 +327,19 @@ export class ConsultationSupabaseClient {
 
   /**
    * 예약 취소 — 예약 삭제 후 슬롯 상태를 available로 복구
+   *
+   * 예전에는 세 번에 나눠 했다: slot_id 조회(RPC) → 예약 DELETE(테이블) → 슬롯 PATCH.
+   * 두 가지 문제가 있었다.
+   *   1) 원자적이지 않다. DELETE 는 됐는데 PATCH 가 실패하면 예약은 사라졌는데 슬롯은
+   *      'booked' 로 남아, 아무도 예약할 수 없는 유령 슬롯이 된다.
+   *   2) DELETE 의 WHERE 가 id 를 읽는다. PostgreSQL 은 WHERE 가 읽는 컬럼에도
+   *      SELECT 권한을 요구하므로, 060 에서 consultation_bookings 의 SELECT 를
+   *      회수하면 이 경로가 그대로 깨진다.
+   * 지금은 RPC 한 번으로 끝낸다 — 마이그레이션 059.
    */
   async cancelBooking(bookingId: string, scheduleId: string, adminKey: string): Promise<void> {
     this.ensureConfigured();
-    // 슬롯 복구용 slotId 조회 — 예전에는 consultation_bookings 를 직접 읽었다.
-    // 목록 조회를 RPC 로 옮긴 뒤에도 이 한 줄이 남아 있었다 (마이그레이션 047).
-    const bookingRes = await fetch(`${this.baseUrl}/rest/v1/rpc/get_consultation_booking_slot`, {
+    const res = await fetch(`${this.baseUrl}/rest/v1/rpc/cancel_consultation_booking_by_admin`, {
       method: 'POST',
       headers: this.headers(),
       body: JSON.stringify({
@@ -342,47 +349,15 @@ export class ConsultationSupabaseClient {
       }),
     });
 
-    if (!bookingRes.ok) {
-      const body = await bookingRes.text().catch(() => '');
-      throwIfPermissionError(bookingRes.status, '예약 정보', body);
-      throw new Error(`Failed to fetch booking for cancellation: ${body.slice(0, 200)}`);
-    }
-
-    const slotId = (await bookingRes.json()) as string | null;
-    if (!slotId) {
-      throw new Error('Booking not found');
-    }
-
-    // 예약 삭제
-    const deleteRes = await fetch(
-      `${this.baseUrl}/rest/v1/consultation_bookings?id=eq.${bookingId}`,
-      {
-        method: 'DELETE',
-        headers: {
-          ...this.headers(),
-          Prefer: 'return=minimal',
-        },
-      },
-    );
-
-    if (!deleteRes.ok) {
-      const err = await deleteRes.text();
-      throw new Error(`Failed to delete booking: ${err}`);
-    }
-
-    // 슬롯 상태 복구
-    const slotRes = await fetch(`${this.baseUrl}/rest/v1/consultation_slots?id=eq.${slotId}`, {
-      method: 'PATCH',
-      headers: {
-        ...this.headers(),
-        Prefer: 'return=minimal',
-      },
-      body: JSON.stringify({ status: 'available' }),
-    });
-
-    if (!slotRes.ok) {
-      const err = await slotRes.text();
-      throw new Error(`Failed to restore slot status: ${err}`);
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throwIfPermissionError(res.status, '예약 정보', body);
+      // P0002(예약 없음) 을 PostgREST 가 404 로 매핑한다. 이미 취소된 예약을 한 번 더
+      // 누른 경우가 대부분이라, 원문 JSON 대신 사람이 읽을 문장을 준다.
+      if (res.status === 404) {
+        throw new Error('이미 취소되었거나 찾을 수 없는 예약입니다. 목록을 새로고침해 주세요.');
+      }
+      throw new Error(`Failed to cancel booking: ${body.slice(0, 200)}`);
     }
   }
 
