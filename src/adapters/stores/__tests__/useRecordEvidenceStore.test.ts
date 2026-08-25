@@ -254,3 +254,49 @@ describe('AI 전송 제외 — 기재 금지 항목은 모델까지 가지 않�
     );
   });
 });
+
+describe('관찰 슬롯 보존 — 창고로 끌어와도 갈래가 남는다', () => {
+  it('원본 슬롯을 그대로 저장한다', async () => {
+    const id = await useRecordEvidenceStore.getState().add({
+      studentRef: 's1',
+      areas: ['subject'],
+      content: '쿠폰 질문을 던짐',
+      sourceType: 'observation',
+      slots: ['질문'],
+    });
+    const rec = useRecordEvidenceStore.getState().records.find((r) => r.id === id);
+    expect(rec?.slots).toEqual(['질문']);
+  });
+
+  it('★슬롯 없는 원본에서는 칸 자체를 만들지 않는다(부재 != 빈 배열)', async () => {
+    const id = await useRecordEvidenceStore.getState().add({
+      studentRef: 's2',
+      areas: ['subject'],
+      content: '슬롯 없는 기록',
+    });
+    const rec = useRecordEvidenceStore.getState().records.find((r) => r.id === id);
+    expect(rec && 'slots' in rec).toBe(false);
+  });
+
+  it('빈 배열을 넘겨도 칸을 만들지 않는다', async () => {
+    const id = await useRecordEvidenceStore.getState().add({
+      studentRef: 's3',
+      areas: ['subject'],
+      content: '빈 슬롯',
+      slots: [],
+    });
+    const rec = useRecordEvidenceStore.getState().records.find((r) => r.id === id);
+    expect(rec && 'slots' in rec).toBe(false);
+  });
+
+  it('일괄 끌어오기(addMany)에서도 슬롯이 실린다', async () => {
+    await useRecordEvidenceStore.getState().addMany([
+      { studentRef: 'm1', areas: ['subject'], content: 'a', slots: ['시도'] },
+      { studentRef: 'm2', areas: ['subject'], content: 'b' },
+    ]);
+    const recs = useRecordEvidenceStore.getState().records;
+    expect(recs.find((r) => r.studentRef === 'm1')?.slots).toEqual(['시도']);
+    const m2 = recs.find((r) => r.studentRef === 'm2');
+    expect(m2 && 'slots' in m2).toBe(false);
+  });
+});

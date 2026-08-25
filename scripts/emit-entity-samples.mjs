@@ -51,6 +51,8 @@ export const ENTITY_FIELD_CONTRACT = {
           'date',
           'content',
           'tags',
+          // 관찰 슬롯("어떤 장면인가") — get_observations 가 탈식별해 노출한다.
+          'slots',
           'visibility',
           'createdAt',
           'updatedAt',
@@ -77,6 +79,8 @@ export const ENTITY_FIELD_CONTRACT = {
           'documentSubmitted',
           'documents',
           'tags',
+          // 관찰 슬롯(행특용) — tags 와 같은 축이 아니라 별개 칸이다.
+          'slots',
         ],
         // updatedAt/fieldUpdatedAt: 기기 간 병합용 동기화 메타데이터 — ManageStudentRecords가
         // 자동 스탬프하므로 미러 불필요(외부 AI 미노출). fieldUpdatedAt은 최상위 type 별칭이라
@@ -192,6 +196,7 @@ export const SAMPLES = {
         date: '2026-06-01',
         content: '수업 중 모둠 토의를 주도하며 근거를 들어 설명함(합성 샘플).',
         tags: ['학습태도', '교과역량'],
+        slots: ['질문', '시행착오'], // 관찰 슬롯(교과) — 태그와 별개 축
         visibility: 'shared',
         createdAt: 1735689600000,
         updatedAt: 1735689600000,
@@ -213,7 +218,8 @@ export const SAMPLES = {
         createdAt: '2026-06-01T00:00:00.000Z', // notMirrored
         reportedToNeis: false,
         documentSubmitted: false,
-        tags: ['칭찬'],
+        tags: ['칭찬'], // 담임의 tags 는 "세부 분류" 축
+        slots: ['인성·관계'], // 관찰 슬롯(행특) — tags 와 별개 칸
       },
       {
         id: 'att-stu-1-2026-06-02',

@@ -18,6 +18,8 @@ export interface RecordEvidenceAddInput {
   sourceType?: EvidenceSourceType;
   sourceId?: string;
   classId?: string;
+  /** 원본 기록에서 이어받은 관찰 슬롯. 비면 필드를 만들지 않는다(부재 != 빈 배열). */
+  slots?: readonly string[];
 }
 
 /** 근거 자료 부분 수정 입력. id 로 대상 지정. */
@@ -88,6 +90,7 @@ export const useRecordEvidenceStore = create<RecordEvidenceState>((set, get) => 
         ...(input.sourceType !== undefined ? { sourceType: input.sourceType } : {}),
         ...(input.sourceId !== undefined ? { sourceId: input.sourceId } : {}),
         ...(input.classId !== undefined ? { classId: input.classId } : {}),
+        ...(input.slots && input.slots.length > 0 ? { slots: [...input.slots] } : {}),
         // 기재 금지 항목이 섞였으면 저장 시점에 표시한다 — 모델까지 가지 않게(ADR-072 결정 5).
         ...(hasProhibitedTerms(input.content) ? { excludedFromAi: true } : {}),
       };
@@ -110,6 +113,7 @@ export const useRecordEvidenceStore = create<RecordEvidenceState>((set, get) => 
         ...(input.sourceType !== undefined ? { sourceType: input.sourceType } : {}),
         ...(input.sourceId !== undefined ? { sourceId: input.sourceId } : {}),
         ...(input.classId !== undefined ? { classId: input.classId } : {}),
+        ...(input.slots && input.slots.length > 0 ? { slots: [...input.slots] } : {}),
         ...(hasProhibitedTerms(input.content) ? { excludedFromAi: true } : {}),
       }));
       await persist([...get().records, ...recs]);

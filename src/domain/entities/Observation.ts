@@ -17,6 +17,12 @@ export interface ObservationRecord {
    * 구 데이터에는 없다(부재 = 현행 병합 폴백, 추측 부착 금지). 계약 분류: notMirrored(동기화 메타).
    */
   readonly term?: string;
+  /**
+   * 관찰 슬롯(`domain/rules/observationSlots.ts` TEACHING_SLOTS) — "어떤 장면인가".
+   * 태그(성격 축)와 직교한다. 구 데이터에는 없다 — **부재는 빈 배열이 아니다.**
+   * 병합에서 부재를 빈 배열로 덮으면 다른 기기의 슬롯이 지워진다.
+   */
+  readonly slots?: readonly string[];
 }
 
 /**
@@ -39,6 +45,8 @@ export interface ObservationData {
   readonly customTags?: readonly string[];
   /** 통합 입력 분류(S4) 사용자 추가 목록 — DEFAULT_OBSERVATION_CATEGORIES 외 직접 추가분. */
   readonly customCategories?: readonly string[];
+  /** 관찰 슬롯 사용자 추가 목록 — TEACHING_SLOTS 외 직접 추가분. */
+  readonly customSlots?: readonly string[];
   /** 삭제 전파용 툼스톤 목록 (과거 데이터에는 없음) */
   readonly deleted?: readonly ObservationTombstone[];
 }

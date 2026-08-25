@@ -238,6 +238,8 @@ export function RecordEvidenceView({
                 sourceType: 'studentRecord' as const,
                 sourceId: r.id,
                 ...(r.date ? { date: r.date } : {}),
+                // 원본 슬롯을 이어받는다 — 창고에서 사라지면 AI 가 근거의 갈래를 잃는다.
+                ...(r.slots && r.slots.length > 0 ? { slots: [...r.slots] } : {}),
               },
             }));
         }
@@ -255,6 +257,7 @@ export function RecordEvidenceView({
                 sourceType: 'observation' as const,
                 sourceId: o.id,
                 ...(o.date ? { date: o.date } : {}),
+                ...(o.slots && o.slots.length > 0 ? { slots: [...o.slots] } : {}),
               },
             }));
         }

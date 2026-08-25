@@ -12,6 +12,7 @@
             "date",
             "content",
             "tags",
+            "slots",
             "visibility",
             "createdAt",
             "updatedAt"
@@ -35,7 +36,8 @@
             "reportedToNeis",
             "documentSubmitted",
             "documents",
-            "tags"
+            "tags",
+            "slots"
           ],
           "notMirrored": [
             "createdAt",

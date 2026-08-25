@@ -39,6 +39,7 @@ export function ClassObservationTab({ classId, className }: ClassObservationTabP
   const load = useMobileObservationStore((s) => s.load);
   const addRecord = useMobileObservationStore((s) => s.addRecord);
   const updateRecord = useMobileObservationStore((s) => s.updateRecord);
+  const customSlots = useMobileObservationStore((s) => s.customSlots);
   const deleteRecord = useMobileObservationStore((s) => s.deleteRecord);
   const allTags = useMobileObservationStore((s) => s.allTags);
 
@@ -178,13 +179,15 @@ export function ClassObservationTab({ classId, className }: ClassObservationTabP
             <ObservationSheet
               mode="add"
               tags={tags}
-              onSave={async (date, content, selectedTagList) => {
+              customSlots={customSlots}
+              onSave={async (date, content, selectedTagList, selectedSlotList) => {
                 await addRecord({
                   studentId: selectedStudentKey,
                   classId,
                   date,
                   content,
                   tags: selectedTagList,
+                  slots: selectedSlotList,
                 });
                 setModalState({ type: 'closed' });
               }}
@@ -198,12 +201,16 @@ export function ClassObservationTab({ classId, className }: ClassObservationTabP
               mode="edit"
               initialRecord={modalState.record}
               tags={tags}
-              onSave={async (date, content, selectedTagList) => {
+              customSlots={customSlots}
+              onSave={async (date, content, selectedTagList, selectedSlotList) => {
+                // 슬롯을 모두 해제하면 칸 자체를 지운다 — 빈 배열로 남기지 않는다.
+                const { slots: _prev, ...rest } = modalState.record;
                 await updateRecord({
-                  ...modalState.record,
+                  ...rest,
                   date,
                   content,
                   tags: selectedTagList,
+                  ...(selectedSlotList.length > 0 ? { slots: selectedSlotList } : {}),
                 });
                 setModalState({ type: 'closed' });
               }}

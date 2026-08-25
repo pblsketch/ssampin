@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { normalizeSlots } from '@domain/rules/observationSlots';
 import { generateUUID } from '@infrastructure/utils/uuid';
 import type { ObservationRecord } from '@domain/entities/Observation';
 import { DEFAULT_OBSERVATION_TAGS } from '@domain/entities/Observation';
@@ -11,6 +12,8 @@ const manageObservations = new ManageObservations(observationRepository);
 interface MobileObservationState {
   records: readonly ObservationRecord[];
   customTags: readonly string[];
+  /** 데스크톱에서 추가한 관찰 슬롯. 모바일은 추가하지 않고 읽기만 한다. */
+  customSlots: readonly string[];
   loaded: boolean;
 
   /**
@@ -33,6 +36,8 @@ interface MobileObservationState {
     date: string;
     content: string;
     tags: string[];
+    /** 관찰 슬롯. 빈 배열이면 필드를 넣지 않는다(부재 ≠ 빈 배열). */
+    slots?: readonly string[];
   }) => Promise<string>;
   updateRecord: (record: ObservationRecord) => Promise<void>;
   deleteRecord: (id: string) => Promise<void>;
@@ -42,13 +47,19 @@ interface MobileObservationState {
 export const useMobileObservationStore = create<MobileObservationState>((set, get) => ({
   records: [],
   customTags: [],
+  customSlots: [],
   loaded: false,
 
   load: async (force = false) => {
     if (!force && get().loaded) return;
     try {
       const data = await manageObservations.getAll();
-      set({ records: data.records, customTags: data.customTags ?? [], loaded: true });
+      set({
+        records: data.records,
+        customTags: data.customTags ?? [],
+        customSlots: data.customSlots ?? [],
+        loaded: true,
+      });
     } catch {
       set({ loaded: true });
     }
@@ -65,8 +76,10 @@ export const useMobileObservationStore = create<MobileObservationState>((set, ge
       .sort((a, b) => b.date.localeCompare(a.date));
   },
 
-  addRecord: async ({ studentId, classId, date, content, tags }) => {
+  addRecord: async ({ studentId, classId, date, content, tags, slots }) => {
     const now = Date.now();
+    // ★정규화를 먼저 한다 — 걸러진 결과가 비면 칸 자체를 만들지 않는다(데스크톱과 동일 규칙).
+    const normalizedSlots = slots ? normalizeSlots(slots, 'teaching', get().customSlots) : [];
     const record: ObservationRecord = {
       id: generateUUID(),
       studentId,
@@ -78,6 +91,7 @@ export const useMobileObservationStore = create<MobileObservationState>((set, ge
       visibility: 'private',
       createdAt: now,
       updatedAt: now,
+      ...(normalizedSlots.length > 0 ? { slots: normalizedSlots } : {}),
     };
     await manageObservations.add(record);
     set((s) => ({ records: [...s.records, record] }));

@@ -96,6 +96,12 @@ export interface StudentRecord {
   /** 통합 입력 폼(S4)에서 부여하는 태그 목록. 기존 레코드는 undefined — additive optional. */
   readonly tags?: readonly string[];
   /**
+   * 관찰 슬롯(`domain/rules/observationSlots.ts` HOMEROOM_SLOTS) — "어떤 장면인가".
+   * ★`tags` 와 섞지 않는다 — 담임의 tags 는 이미 "세부 분류"다(InlineRecordEditor).
+   * 구 데이터에는 없다. **부재는 빈 배열이 아니다**(병합에서 덮지 말 것).
+   */
+  readonly slots?: readonly string[];
+  /**
    * 학기 epoch 스탬프(S2.2·ADR-034) — `date`(사건 발생일)에서 파생한 '2026-1' 형식.
    * buildStudentRecordsSaveData가 저장 시 자동 부착한다(withDerivedTerm — createdAt/updatedAt 금지).
    * 구 데이터에는 없다(부재 = 현행 병합 폴백, 추측 부착 금지). 계약 분류: notMirrored(동기화 메타).

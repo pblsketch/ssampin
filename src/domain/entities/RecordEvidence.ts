@@ -65,6 +65,12 @@ export interface RecordEvidence {
   /** 수업반 컨텍스트의 TeachingClass.id(담임이면 미사용). */
   readonly classId?: string;
   /**
+   * 원본 기록에서 이어받은 관찰 슬롯("어떤 장면인가").
+   * 끌어오기(import)에서 원본의 slots 를 그대로 싣는다 — 창고에서 슬롯이 사라지면
+   * AI 가 근거를 읽을 때 갈래를 잃는다. 원본에 없으면 이 칸도 만들지 않는다.
+   */
+  readonly slots?: readonly string[];
+  /**
    * AI 에 보내지 않는다는 표시(기재 금지 항목이 섞였을 때). 없으면 보낸다 — 기존 데이터 호환.
    *
    * ★프롬프트로는 못 막는다. 실측에서 금지 항목을 시스템 프롬프트에 전부 열거하고 사용자 턴

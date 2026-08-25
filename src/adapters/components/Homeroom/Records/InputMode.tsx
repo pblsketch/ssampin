@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { HOMEROOM_SLOTS, normalizeSlots } from '@domain/rules/observationSlots';
 import { useStudentRecordsStore } from '@adapters/stores/useStudentRecordsStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useToastStore } from '@adapters/components/common/Toast';
@@ -136,6 +137,8 @@ function InputMode({
   const [memo, setMemo] = useState('');
   // 통합 입력 태그(S4, 비출결 누가기록) — StudentRecord.tags? 에 저장. 분류(category)와 직교(P3).
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  // 관찰 슬롯("어떤 장면인가") — StudentRecord.slots? 에 저장. ★tags(세부 분류)와 절대 섞지 않는다.
+  const [selectedSlots, setSelectedSlots] = useState<string[]>([]);
   const [newTagInput, setNewTagInput] = useState('');
   const [selectedMethod, setSelectedMethod] = useState<CounselingMethod | undefined>(undefined);
   const [showFollowUp, setShowFollowUp] = useState(false);
@@ -349,12 +352,19 @@ function InputMode({
       );
       // 통합 입력 태그(S4): 생성된 누가기록에 tags 를 patch한다.
       // 기존 addRecord 시그니처(useStudentRecordsStore)는 보존 — 별도 updateRecord 로만 추가(다른 세션 store 무수정).
-      if (selectedTags.length > 0 && recordIds.length > 0) {
+      // ★정규화를 먼저 한다 — 걸러진 결과가 비면 칸 자체를 만들지 않는다(부재 != 빈 배열).
+      const normalizedSlots = normalizeSlots(selectedSlots, 'homeroom');
+      if ((selectedTags.length > 0 || normalizedSlots.length > 0) && recordIds.length > 0) {
         const sr = useStudentRecordsStore.getState();
         await Promise.all(
           recordIds.map(async (rid) => {
             const rec = sr.records.find((r) => r.id === rid);
-            if (rec) await sr.updateRecord({ ...rec, tags: [...selectedTags] });
+            if (!rec) return;
+            await sr.updateRecord({
+              ...rec,
+              ...(selectedTags.length > 0 ? { tags: [...selectedTags] } : {}),
+              ...(normalizedSlots.length > 0 ? { slots: normalizedSlots } : {}),
+            });
           }),
         );
       }
@@ -365,6 +375,7 @@ function InputMode({
       selectedSub,
       memo,
       selectedTags,
+      selectedSlots,
       records,
       selectedMethod,
       followUp,
@@ -778,6 +789,38 @@ function InputMode({
                     aria-label="태그 직접 추가"
                     className="w-16 px-2 py-1 rounded-lg text-xs bg-sp-surface border border-dashed border-sp-border text-sp-text placeholder:text-sp-muted focus:outline-none focus:border-sp-accent focus:w-24 transition-all"
                   />
+                </div>
+              </div>
+            )}
+
+            {/* 관찰 슬롯 — 태그 아래. HOMEROOM_SLOTS(행특용). ★tags 와 다른 칸에 저장된다. */}
+            {selectedSub && selectedSub.categoryId !== 'attendance' && (
+              <div className="mb-3">
+                <p className="text-xs text-sp-muted mb-1.5">어떤 장면인가요? (선택)</p>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {HOMEROOM_SLOTS.map((slot) => {
+                    const isSelected = selectedSlots.includes(slot);
+                    return (
+                      <button
+                        key={slot}
+                        type="button"
+                        aria-pressed={isSelected}
+                        onClick={() => {
+                          setSelectedSlots((prev) =>
+                            prev.includes(slot) ? prev.filter((s) => s !== slot) : [...prev, slot],
+                          );
+                          markDirty();
+                        }}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                          isSelected
+                            ? 'bg-sp-accent text-white'
+                            : 'bg-sp-surface text-sp-muted hover:text-sp-text'
+                        }`}
+                      >
+                        {slot}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             )}

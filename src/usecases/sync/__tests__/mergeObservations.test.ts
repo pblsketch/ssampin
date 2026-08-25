@@ -193,3 +193,45 @@ describe('buildObservationSaveData — 저장 시 툼스톤 관리', () => {
     expect(saved.customTags).toEqual(['발표력']);
   });
 });
+
+describe('관찰 슬롯 — 기기 간 병합', () => {
+  it('★교사가 추가한 슬롯은 합집합이다 — 한쪽 기기의 저장이 다른 쪽 슬롯을 지우지 않는다', () => {
+    // 덮이면 그 슬롯이 붙은 기록만 남고 목록에서는 고를 수 없게 된다.
+    const local: ObservationData = { records: [], customSlots: ['협업'] };
+    const remote: ObservationData = { records: [], customSlots: ['발표'] };
+    expect(mergeObservations(local, remote, false).customSlots).toEqual(['협업', '발표']);
+  });
+
+  it('한쪽에만 커스텀 슬롯이 있으면 그대로 살아남는다', () => {
+    const local: ObservationData = { records: [], customSlots: ['협업'] };
+    const remote: ObservationData = { records: [] };
+    expect(mergeObservations(local, remote, true).customSlots).toEqual(['협업']);
+    expect(
+      mergeObservations({ records: [] }, { records: [], customSlots: ['발표'] }, false).customSlots,
+    ).toEqual(['발표']);
+  });
+
+  it('양쪽 모두 커스텀 슬롯이 없으면 칸을 만들지 않는다', () => {
+    const merged = mergeObservations({ records: [] }, { records: [] }, false);
+    expect('customSlots' in merged).toBe(false);
+  });
+
+  it('기록의 슬롯은 레코드 단위 최신 우선을 따른다(tags 와 같은 규칙)', () => {
+    const local: ObservationData = {
+      records: [obs({ id: 'a', slots: ['질문'], updatedAt: 2_000 })],
+    };
+    const remote: ObservationData = {
+      records: [obs({ id: 'a', slots: ['시행착오'], updatedAt: 3_000 })],
+    };
+    expect(mergeObservations(local, remote, false).records[0]?.slots).toEqual(['시행착오']);
+  });
+
+  it('슬롯 없는 구 기록과 슬롯 있는 기록이 섞여도 각자 보존된다', () => {
+    const local: ObservationData = { records: [obs({ id: 'old' })] };
+    const remote: ObservationData = { records: [obs({ id: 'new', slots: ['시도'] })] };
+    const merged = mergeObservations(local, remote, false);
+    const old = merged.records.find((r) => r.id === 'old');
+    expect(old && 'slots' in old).toBe(false);
+    expect(merged.records.find((r) => r.id === 'new')?.slots).toEqual(['시도']);
+  });
+});

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useToastStore } from '@adapters/components/common/Toast';
+import { allSlotsForContext } from '@domain/rules/observationSlots';
 import { useObservationStore } from '@adapters/stores/useObservationStore';
 import { useObservationAttachmentStore } from '@adapters/stores/useObservationAttachmentStore';
 import {
@@ -63,6 +64,16 @@ export function ObservationForm({ classId, studentId }: ObservationFormProps) {
   const customTags = useObservationStore((s) => s.customTags);
   const addCustomTag = useObservationStore((s) => s.addCustomTag);
   const allTags = useMemo(() => [...DEFAULT_OBSERVATION_TAGS, ...customTags], [customTags]);
+  // 관찰 슬롯("어떤 장면인가") — 태그·분류와 직교하는 별개 축. 기본 6종 + 교사가 추가한 것.
+  const customSlots = useObservationStore((s) => s.customSlots);
+  const addCustomSlot = useObservationStore((s) => s.addCustomSlot);
+  const allSlots = useMemo(() => allSlotsForContext('teaching', customSlots), [customSlots]);
+  const [selectedSlots, setSelectedSlots] = useState<string[]>([]);
+  const [newSlotInput, setNewSlotInput] = useState('');
+  const toggleSlot = (slot: string): void =>
+    setSelectedSlots((prev) =>
+      prev.includes(slot) ? prev.filter((s) => s !== slot) : [...prev, slot],
+    );
   const customCategories = useObservationStore((s) => s.customCategories);
   const addCustomCategory = useObservationStore((s) => s.addCustomCategory);
   const allCategories = useMemo(
@@ -291,12 +302,14 @@ export function ObservationForm({ classId, studentId }: ObservationFormProps) {
         content: trimmed.slice(0, 500),
         tags: selectedTags,
         category: selectedCategory,
+        slots: selectedSlots,
       });
       await commitPendingAttachments(recordId, pendingFilesRef.current);
       pendingFilesRef.current = [];
       draftMapRef.current.delete(studentId);
       setContent('');
       setSelectedTags([]);
+      setSelectedSlots([]);
       setSelectedCategory(DEFAULT_OBSERVATION_CATEGORIES[0]);
       setDate(todayString());
       setPendingFiles([]);
@@ -307,6 +320,7 @@ export function ObservationForm({ classId, studentId }: ObservationFormProps) {
     content,
     date,
     selectedTags,
+    selectedSlots,
     selectedCategory,
     studentId,
     classId,
@@ -419,6 +433,45 @@ export function ObservationForm({ classId, studentId }: ObservationFormProps) {
         rows={3}
         className="w-full bg-sp-bg border border-sp-border rounded-lg px-3 py-2 text-sm text-sp-text placeholder:text-sp-muted resize-none focus:outline-none focus:border-sp-accent"
       />
+
+      {/* 관찰 슬롯 — 본문 아래에 둔다(설계 (나)안). 쓰고 나서야 무슨 장면인지 알기 때문이다.
+          ★접지 않는다: 한 번 더 눌러야 하면 대부분 안 누르고, 그러면 슬롯이 안 쌓인다.
+          ★선택은 강제하지 않는다. 안 고르고도 저장된다. */}
+      <div className="flex flex-wrap items-center gap-1">
+        <span className="text-caption text-sp-muted mr-0.5">어떤 장면인가요?</span>
+        {allSlots.map((slot) => (
+          <button
+            key={slot}
+            type="button"
+            onClick={() => toggleSlot(slot)}
+            aria-pressed={selectedSlots.includes(slot)}
+            className={`px-2 py-0.5 rounded-full text-caption font-medium transition-colors ${
+              selectedSlots.includes(slot)
+                ? 'bg-sp-accent text-white'
+                : 'bg-sp-surface text-sp-muted hover:text-sp-text'
+            }`}
+          >
+            {slot}
+          </button>
+        ))}
+        <input
+          type="text"
+          value={newSlotInput}
+          onChange={(e) => setNewSlotInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key !== 'Enter') return;
+            e.preventDefault();
+            const v = newSlotInput.trim();
+            if (!v) return;
+            if (!allSlots.includes(v)) void addCustomSlot(v);
+            if (!selectedSlots.includes(v)) toggleSlot(v);
+            setNewSlotInput('');
+          }}
+          placeholder="+ 장면"
+          aria-label="장면 직접 추가"
+          className="w-16 px-2 py-0.5 rounded-full text-caption bg-sp-surface border border-dashed border-sp-border text-sp-text placeholder:text-sp-muted focus:outline-none focus:border-sp-accent focus:w-24 transition-all"
+        />
+      </div>
 
       {/* 첨부 자료 (작성 중 담아두고 저장 시 함께 커밋) */}
       <div

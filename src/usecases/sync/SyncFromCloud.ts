@@ -504,7 +504,7 @@ export function mergeCategories(
  * - 삭제 전파: 양쪽 툼스톤(deleted)을 id별 최신 deletedAt으로 합치고,
  *   기록이 툼스톤보다 나중에 수정된 경우에만 살아남는다(재작성이 삭제를 이김).
  *   동률이면 삭제가 이긴다 — mergeAttendance 와 동일 정책.
- * - customTags/customCategories 는 순서 보존 합집합 (빈 배열이 커스텀을 덮지 않게)
+ * - customTags/customCategories/customSlots 는 순서 보존 합집합 (빈 배열이 커스텀을 덮지 않게)
  * - currentTerm(S2.2b): 있으면 옛 학년도 리모트 레코드를 스킵한다(filterOldYearRemoteRecords)
  */
 export function mergeObservations(
@@ -562,10 +562,14 @@ export function mergeObservations(
 
   const customTags = mergeStringUnion(local?.customTags, remote.customTags);
   const customCategories = mergeStringUnion(local?.customCategories, remote.customCategories);
+  // 교사가 추가한 관찰 슬롯도 합집합이다 — 한쪽 기기에서 만든 슬롯이 다른 기기의 저장에
+  // 덮여 사라지면, 그 슬롯이 붙은 기록만 남고 목록에서는 고를 수 없게 된다.
+  const customSlots = mergeStringUnion(local?.customSlots, remote.customSlots);
   return {
     records: [...map.values()],
     ...(customTags ? { customTags } : {}),
     ...(customCategories ? { customCategories } : {}),
+    ...(customSlots ? { customSlots } : {}),
     ...(deleted.length > 0 ? { deleted } : {}),
   };
 }

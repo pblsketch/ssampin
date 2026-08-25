@@ -10,7 +10,8 @@
       "createdAt": "2026-06-01T00:00:00.000Z",
       "reportedToNeis": false,
       "documentSubmitted": false,
-      "tags": ["칭찬"]
+      "tags": ["칭찬"],
+      "slots": ["인성·관계"]
     },
     {
       "id": "att-stu-1-2026-06-02",

@@ -22731,6 +22731,8 @@ function normalizeRecord(o) {
     tags,
     visibility,
   };
+  const slots = Array.isArray(o['slots']) ? o['slots'].filter((t) => typeof t === 'string') : [];
+  if (slots.length > 0) rec['slots'] = slots;
   setIf2(rec, 'classId', asString2(o['classId']));
   setIf2(rec, 'authorId', asString2(o['authorId']));
   setIf2(rec, 'createdAt', asNumber2(o['createdAt']));
@@ -23027,6 +23029,17 @@ function normalizeRecord3(o) {
   if (Array.isArray(o['tags'])) {
     const tags = o['tags'].filter((t) => typeof t === 'string');
     if (tags.length > 0) rec['tags'] = tags;
+  }
+  if (Array.isArray(o['documents'])) {
+    const docs = o['documents']
+      .filter((d) => typeof d === 'object' && d !== null)
+      .filter((d) => typeof d['kind'] === 'string')
+      .map((d) => ({ kind: d['kind'], submitted: d['submitted'] === true }));
+    if (docs.length > 0) rec['documents'] = docs;
+  }
+  if (Array.isArray(o['slots'])) {
+    const slots = o['slots'].filter((t) => typeof t === 'string');
+    if (slots.length > 0) rec['slots'] = slots;
   }
   return rec;
 }
@@ -27265,6 +27278,9 @@ function getObservations(ctx, args) {
       tags,
       content: text,
     };
+    if (r.slots && r.slots.length > 0) {
+      view['slots'] = r.slots.map((sl) => deidentify(sl, roster).text);
+    }
     const atts = attByObs.get(r.id);
     if (atts && atts.length > 0) {
       const docs = [];

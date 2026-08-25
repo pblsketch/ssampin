@@ -24,6 +24,19 @@ export const REMINDER_PROMPTS: readonly string[] = [
   '오늘 {name} 학생을 관찰한 게 있다면 남겨볼까요?',
 ];
 
+/**
+ * 빈 슬롯을 가리키는 문구 후보 — 슬롯 현황을 아는 경우에만 쓴다.
+ *
+ * ★이것은 **문구만** 바꾼다. 누구를 부를지는 그대로다(공백 오래된 순).
+ * 슬롯이 비었다고 어제 기록한 학생을 다시 부르면 성가시고, 그러면 알림을 꺼 버린다 —
+ * 알림이 꺼지면 기록 누적 자체가 멈춘다(설계서 §6).
+ */
+export const SLOT_REMINDER_PROMPTS: readonly string[] = [
+  "{name} 학생, 요즘 '{slot}' 장면이 안 보이네요. 있었나요?",
+  "{name} 학생의 '{slot}' 을(를) 보여 준 순간이 있었나요?",
+  "{name} 학생, '{slot}' 쪽 기록이 아직 없어요.",
+];
+
 /** 'YYYY-MM-DD' 문자열을 로컬 자정 기준 Date 로 파싱. */
 function parseDateStr(dateStr: string): Date | null {
   const parts = dateStr.split('-').map(Number);
@@ -166,6 +179,24 @@ export function resolvePromptText(rotationIndex: number, studentName: string): s
   const idx =
     ((rotationIndex % REMINDER_PROMPTS.length) + REMINDER_PROMPTS.length) % REMINDER_PROMPTS.length;
   return (REMINDER_PROMPTS[idx] ?? REMINDER_PROMPTS[0]!).replace('{name}', studentName);
+}
+
+/**
+ * 빈 슬롯이 있으면 그걸 가리키는 문구를, 없으면 기존 문구를 돌려준다.
+ *
+ * `emptySlot` 은 호출자가 `emptySlots()` 로 구한 **기본 어휘** 중 하나다 — 교사가 직접
+ * 추가한 슬롯은 재촉하지 않는다(직접 만든 칸을 "왜 안 채웠냐"고 물으면 알림을 끈다).
+ * 슬롯 정보를 모르면 `undefined` 를 넘겨 기존 문구로 폴백한다.
+ */
+export function resolveSlotPromptText(
+  rotationIndex: number,
+  studentName: string,
+  emptySlot: string | undefined,
+): string {
+  if (!emptySlot) return resolvePromptText(rotationIndex, studentName);
+  const pool = SLOT_REMINDER_PROMPTS;
+  const idx = ((rotationIndex % pool.length) + pool.length) % pool.length;
+  return (pool[idx] ?? pool[0]!).replace('{name}', studentName).replace('{slot}', emptySlot);
 }
 
 /** nameExposure 정책에 따라 알림 본문용 이름을 마스킹한다. */

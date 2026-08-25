@@ -49,6 +49,7 @@ export function buildObservationSaveData(
     records: next.records.map(withDerivedTerm),
     ...(next.customTags ? { customTags: next.customTags } : {}),
     ...(next.customCategories ? { customCategories: next.customCategories } : {}),
+    ...(next.customSlots ? { customSlots: next.customSlots } : {}),
   };
   return deleted.length > 0 ? { ...envelope, deleted } : envelope;
 }
@@ -138,6 +139,23 @@ export class ManageObservations {
       if (!trimmed || current.includes(trimmed)) return current;
       const next = [...current, trimmed];
       const updated: ObservationData = { ...data, customCategories: next };
+      await this.repository.saveObservations(buildObservationSaveData(data, updated));
+      return next;
+    });
+  }
+
+  /**
+   * 관찰 슬롯 사용자 추가 — `addCustomCategory` 와 같은 방식(파일 락 안에서 읽고 이어 붙임).
+   * 기본 슬롯과 겹치는 값은 화면(allSlotsForContext)에서 걸러지므로 여기서는 중복만 막는다.
+   */
+  async addCustomSlot(slot: string): Promise<readonly string[]> {
+    const trimmed = slot.trim();
+    return withFileLock(SYNC_FILE_KEYS.observations, async () => {
+      const data = await this.getAll();
+      const current = data.customSlots ?? [];
+      if (!trimmed || current.includes(trimmed)) return current;
+      const next = [...current, trimmed];
+      const updated: ObservationData = { ...data, customSlots: next };
       await this.repository.saveObservations(buildObservationSaveData(data, updated));
       return next;
     });

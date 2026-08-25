@@ -6,6 +6,7 @@ import { isStudentActive } from '@domain/rules/studentActivity';
 import type { AttendanceStatus } from '@domain/entities/Attendance';
 import { ATTENDANCE_TEXT } from '@adapters/presentation/attendanceStatusVariants';
 import { DEFAULT_OBSERVATION_TAGS } from '@domain/entities/Observation';
+import { allSlotsForContext, countSlots } from '@domain/rules/observationSlots';
 import { mixedRecordToDisplay, type DisplayRecord } from '@adapters/presentation/displayRecord';
 import { RecordDetailModal } from '@adapters/components/common/records/RecordDetailModal';
 import { useCurrentTermStartIso } from '@adapters/hooks/useCurrentTerm';
@@ -132,6 +133,32 @@ export function ClassRecordStatsView({ classId }: ClassRecordStatsViewProps) {
     }
     return stats;
   }, [observationRecords, classId, students, dateRange]);
+
+  /* 슬롯 현황 — 기존 태그 표와 **별도 구역**이다.
+     태그 표에 열을 더하면(태그마다 열 하나) 가로로 넘치므로 여기서 따로 센다. */
+  const customSlots = useObservationStore((st) => st.customSlots);
+  const slotColumns = useMemo(() => allSlotsForContext('teaching', customSlots), [customSlots]);
+  const slotStats = useMemo(() => {
+    const filtered = observationRecords.filter(
+      (r) =>
+        r.classId === classId &&
+        (!dateRange.start || r.date >= dateRange.start) &&
+        (!dateRange.end || r.date <= dateRange.end),
+    );
+    const byStudent = new Map<string, Record<string, number>>();
+    for (const s of students) {
+      const key = studentKey(s);
+      byStudent.set(
+        key,
+        countSlots(
+          filtered.filter((r) => r.studentId === key),
+          'teaching',
+          customSlots,
+        ),
+      );
+    }
+    return byStudent;
+  }, [observationRecords, classId, students, dateRange, customSlots]);
 
   /* 셀 클릭 상세 — 기간/반 필터된 원본 기록(상세 모달용) */
   const filteredAttendance = useMemo(
@@ -382,6 +409,56 @@ export function ClassRecordStatsView({ classId }: ClassRecordStatsViewProps) {
                           ) : (
                             count
                           )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* 슬롯 현황 — "어떤 장면이 비었나"를 학생별로 본다.
+          ★기존 태그 표에 열을 더하지 않는다(태그마다 열 하나라 가로로 넘친다). */}
+      <div className="bg-sp-card rounded-xl border border-sp-border overflow-hidden">
+        <div className="px-4 py-3 border-b border-sp-border">
+          <h3 className="text-sm font-semibold text-sp-text">장면(슬롯) 현황</h3>
+          <p className="text-xs text-sp-muted mt-0.5">
+            생기부 초안의 재료가 고르게 쌓였는지 봅니다. 0 인 장면은 아직 기록이 없습니다.
+          </p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-xs text-sp-muted bg-sp-bg">
+                <th className="px-4 py-2 text-left font-medium">번호</th>
+                <th className="px-4 py-2 text-left font-medium">이름</th>
+                {slotColumns.map((slot) => (
+                  <th key={slot} className="px-3 py-2 text-center font-medium">
+                    {slot}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-sp-border">
+              {students.map((s) => {
+                const counts = slotStats.get(studentKey(s));
+                return (
+                  <tr key={studentKey(s)} className="hover:bg-sp-surface">
+                    <td className="px-4 py-2 text-sp-muted">{s.number}</td>
+                    <td className="px-4 py-2 text-sp-text">{s.name}</td>
+                    {slotColumns.map((slot) => {
+                      const n = counts?.[slot] ?? 0;
+                      return (
+                        <td
+                          key={slot}
+                          className={`px-3 py-2 text-center tabular-nums ${
+                            n > 0 ? 'text-sp-text' : 'text-sp-muted'
+                          }`}
+                        >
+                          {n}
                         </td>
                       );
                     })}

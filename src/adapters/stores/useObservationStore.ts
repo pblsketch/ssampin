@@ -4,12 +4,15 @@ import { DEFAULT_OBSERVATION_TAGS } from '@domain/entities/Observation';
 import { observationRepository } from '@adapters/di/container';
 import { ManageObservations } from '@usecases/classManagement/ManageObservations';
 import { generateUUID } from '@infrastructure/utils/uuid';
+import { normalizeSlots } from '@domain/rules/observationSlots';
 import { useObservationAttachmentStore } from './useObservationAttachmentStore';
 
 interface ObservationState {
   records: readonly ObservationRecord[];
   customTags: readonly string[];
   customCategories: readonly string[];
+  /** 교사가 직접 추가한 관찰 슬롯(기본 6종 외). `customTags` 와 같은 방식. */
+  customSlots: readonly string[];
   loaded: boolean;
 
   load: (force?: boolean) => Promise<void>;
@@ -21,6 +24,11 @@ interface ObservationState {
     tags: string[];
     /** 통합 입력 분류 (S4) — ObservationRecord.category? 에 저장. tags 와 별도(P3). */
     category?: string;
+    /**
+     * 관찰 슬롯("어떤 장면인가"). tags·category 와 모두 직교한다.
+     * 빈 배열이면 필드를 아예 넣지 않는다 — 구 데이터와 같은 모양(부재)으로 남긴다.
+     */
+    slots?: readonly string[];
   }) => Promise<string>;
   updateRecord: (record: ObservationRecord) => Promise<void>;
   deleteRecord: (id: string) => Promise<void>;
@@ -28,6 +36,7 @@ interface ObservationState {
   addCustomTag: (tag: string) => Promise<void>;
   removeCustomTag: (tag: string) => Promise<void>;
   addCustomCategory: (category: string) => Promise<void>;
+  addCustomSlot: (slot: string) => Promise<void>;
 
   // 파생 조회
   getByStudent: (studentId: string, classId: string) => readonly ObservationRecord[];
@@ -42,6 +51,7 @@ export const useObservationStore = create<ObservationState>((set, get) => {
     records: [],
     customTags: [],
     customCategories: [],
+    customSlots: [],
     loaded: false,
 
     load: async (force = false) => {
@@ -53,6 +63,7 @@ export const useObservationStore = create<ObservationState>((set, get) => {
           records: data.records,
           customTags: data.customTags ?? [],
           customCategories: data.customCategories ?? [],
+          customSlots: data.customSlots ?? [],
           loaded: true,
         });
       } catch (err) {
@@ -61,8 +72,11 @@ export const useObservationStore = create<ObservationState>((set, get) => {
       }
     },
 
-    addRecord: async ({ studentId, classId, date, content, tags, category }) => {
+    addRecord: async ({ studentId, classId, date, content, tags, category, slots }) => {
       const now = Date.now();
+      // ★정규화를 **먼저** 한다. 길이만 보고 넣으면 맥락에 없는 값만 들어온 경우
+      //   빈 배열이 저장돼 "부재 ≠ 빈 배열" 불변식이 깨진다(병합에서 남의 슬롯을 덮는다).
+      const normalizedSlots = slots ? normalizeSlots(slots, 'teaching', get().customSlots) : [];
       const record: ObservationRecord = {
         id: generateUUID(),
         studentId,
@@ -76,6 +90,8 @@ export const useObservationStore = create<ObservationState>((set, get) => {
         updatedAt: now,
         // 분류는 tags 에 섞지 않고 별도 필드로 보존(P3). 미지정이면 생략(additive).
         ...(category ? { category } : {}),
+        // ★빈 배열이면 넣지 않는다. 부재 ≠ 빈 배열 — 병합에서 다른 기기의 슬롯을 덮지 않게.
+        ...(normalizedSlots.length > 0 ? { slots: normalizedSlots } : {}),
       };
       set((s) => ({ records: [...s.records, record] }));
       await manage.add(record);
@@ -124,6 +140,11 @@ export const useObservationStore = create<ObservationState>((set, get) => {
     addCustomCategory: async (category) => {
       const saved = await manage.addCustomCategory(category);
       set({ customCategories: [...saved] });
+    },
+
+    addCustomSlot: async (slot) => {
+      const saved = await manage.addCustomSlot(slot);
+      set({ customSlots: [...saved] });
     },
 
     getByStudent: (studentId, classId) => {
