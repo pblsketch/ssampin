@@ -23781,6 +23781,10 @@ function normalizeRecord5(o) {
   setIf13(rec, 'sourceId', asString19(o['sourceId']));
   setIf13(rec, 'classId', asString19(o['classId']));
   if (typeof o['excludedFromAi'] === 'boolean') rec['excludedFromAi'] = o['excludedFromAi'];
+  if (Array.isArray(o['slots'])) {
+    const slots = o['slots'].filter((t) => typeof t === 'string');
+    if (slots.length > 0) rec['slots'] = slots;
+  }
   return rec;
 }
 function parseRecordEvidence(raw) {
@@ -27695,6 +27699,10 @@ function getRecordEvidence(ctx, args) {
         content: deidentify(e.content, roster).text,
         sourceType: e.sourceType ?? 'manual',
         ...(e.date !== void 0 ? { date: e.date } : {}),
+        // 슬롯도 자유 문자열(교사가 추가 가능)이라 실명이 섞일 수 있어 탈식별을 거친다.
+        ...(e.slots && e.slots.length > 0
+          ? { slots: e.slots.map((sl) => deidentify(sl, roster).text) }
+          : {}),
       };
       return view;
     });

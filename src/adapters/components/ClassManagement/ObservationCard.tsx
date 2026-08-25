@@ -1,6 +1,7 @@
-import { useState, useCallback } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import type { ObservationRecord } from '@domain/entities/Observation';
 import { useObservationStore } from '@adapters/stores/useObservationStore';
+import { allSlotsForContext } from '@domain/rules/observationSlots';
 import { ObservationAttachmentList } from './ObservationAttachmentList';
 
 interface ObservationCardProps {
@@ -9,6 +10,10 @@ interface ObservationCardProps {
 
 export function ObservationCard({ record }: ObservationCardProps) {
   const [editing, setEditing] = useState(false);
+  // 관찰 슬롯 — 저장한 장면을 **보고 고칠 수 있어야** 한다. 되돌릴 길이 없으면 탭을 망설이게 된다.
+  const customSlots = useObservationStore((s) => s.customSlots);
+  const allSlots = useMemo(() => allSlotsForContext('teaching', customSlots), [customSlots]);
+  const [editSlots, setEditSlots] = useState<string[]>([...(record.slots ?? [])]);
   const [editContent, setEditContent] = useState(record.content);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -18,9 +23,15 @@ export function ObservationCard({ record }: ObservationCardProps) {
   const handleSaveEdit = useCallback(async () => {
     const trimmed = editContent.trim();
     if (!trimmed) return;
-    await updateRecord({ ...record, content: trimmed.slice(0, 500) });
+    // 슬롯을 모두 해제하면 칸 자체를 지운다 — 빈 배열로 남기지 않는다(부재 != 빈 배열).
+    const { slots: _prev, ...rest } = record;
+    await updateRecord({
+      ...rest,
+      content: trimmed.slice(0, 500),
+      ...(editSlots.length > 0 ? { slots: editSlots } : {}),
+    });
     setEditing(false);
-  }, [editContent, record, updateRecord]);
+  }, [editContent, editSlots, record, updateRecord]);
 
   const handleDelete = useCallback(async () => {
     // deleteRecord 가 연결된 첨부까지 함께 정리한다(store cascade)
@@ -42,6 +53,16 @@ export function ObservationCard({ record }: ObservationCardProps) {
               className="px-1.5 py-0.5 rounded-full text-xs font-medium bg-sp-accent/10 text-sp-accent shrink-0"
             >
               {tag}
+            </span>
+          ))}
+          {/* 슬롯은 태그와 다른 축이라 테두리형으로 구분한다(색 하나 더 쓰지 않는다). */}
+          {(record.slots ?? []).map((slot) => (
+            <span
+              key={slot}
+              className="px-1.5 py-0.5 rounded-full text-xs font-medium text-sp-muted ring-1 ring-sp-border shrink-0"
+              title="관찰 장면"
+            >
+              {slot}
             </span>
           ))}
         </div>
@@ -77,6 +98,29 @@ export function ObservationCard({ record }: ObservationCardProps) {
             autoFocus
             className="w-full bg-sp-bg border border-sp-border rounded-lg px-2 py-1.5 text-xs text-sp-text resize-none focus:outline-none focus:border-sp-accent"
           />
+          {/* 오탭한 장면을 여기서 되돌린다 — 전부 해제하면 칸이 지워진다. */}
+          <div className="flex flex-wrap gap-1">
+            {allSlots.map((slot) => {
+              const on = editSlots.includes(slot);
+              return (
+                <button
+                  key={slot}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() =>
+                    setEditSlots((prev) =>
+                      prev.includes(slot) ? prev.filter((v) => v !== slot) : [...prev, slot],
+                    )
+                  }
+                  className={`px-1.5 py-0.5 rounded-full text-xs font-medium transition-colors ${
+                    on ? 'bg-sp-accent text-white' : 'bg-sp-bg text-sp-muted ring-1 ring-sp-border'
+                  }`}
+                >
+                  {slot}
+                </button>
+              );
+            })}
+          </div>
           <div className="flex gap-1">
             <button
               onClick={() => void handleSaveEdit()}

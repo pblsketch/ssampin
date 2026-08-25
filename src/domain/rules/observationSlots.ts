@@ -120,11 +120,13 @@ export function countSlots(
   context: SlotContext,
   customSlots: readonly string[] = [],
 ): Record<string, number> {
-  const counts: Record<string, number> = {};
+  // ★프로토타입 없는 객체를 쓴다. `{}` 리터럴이면 'toString'·'constructor' 같은 이름의
+  //   커스텀 슬롯이 `in` 검사를 통과해 유령 키를 만든다.
+  const counts: Record<string, number> = Object.create(null) as Record<string, number>;
   for (const slot of allSlotsForContext(context, customSlots)) counts[slot] = 0;
   for (const rec of records) {
     for (const s of rec.slots ?? []) {
-      if (s in counts) counts[s] = (counts[s] ?? 0) + 1;
+      if (Object.prototype.hasOwnProperty.call(counts, s)) counts[s] = (counts[s] ?? 0) + 1;
     }
   }
   return counts;

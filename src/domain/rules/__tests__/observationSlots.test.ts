@@ -106,3 +106,16 @@ describe('직접 추가한 슬롯 — 쓰는 데는 차별이 없고, 알림만 
     expect(normalizeSlots(['협업'], 'teaching')).toEqual([]);
   });
 });
+
+describe('D7 — 프로토타입 오염 방지', () => {
+  it("'toString' 같은 이름의 커스텀 슬롯이 유령 키를 만들지 않는다", () => {
+    const c = countSlots([{ slots: ['toString'] }], 'teaching');
+    // 기본 어휘에만 키가 있어야 한다 — 'toString' 은 커스텀 목록에 없으므로 세지 않는다.
+    expect(Object.keys(c).sort()).toEqual([...TEACHING_SLOTS].sort());
+  });
+
+  it('커스텀으로 등록하면 정상적으로 센다', () => {
+    const c = countSlots([{ slots: ['toString'] }], 'teaching', ['toString']);
+    expect(c['toString']).toBe(1);
+  });
+});

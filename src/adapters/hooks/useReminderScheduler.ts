@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { useStudentRecordsStore } from '@adapters/stores/useStudentRecordsStore';
+import { emptySlots } from '@domain/rules/observationSlots';
 import { useObservationStore } from '@adapters/stores/useObservationStore';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
@@ -28,7 +29,7 @@ import {
   daysSinceLastRecord,
   formatDateStr,
   studentDedupKey,
-  resolvePromptText,
+  resolveSlotPromptText,
 } from '@domain/rules/recordReminderRules';
 import { detectJustFinishedClass } from '@domain/rules/reminderClassMatch';
 
@@ -150,7 +151,17 @@ export function useReminderScheduler(): UseReminderSchedulerResult {
           key: r.student.id,
           studentId: r.student.id,
           studentName: r.student.name,
-          promptText: resolvePromptText(cursor + i, r.student.name),
+          // 빈 슬롯이 있으면 그걸 가리키는 문구를, 없으면 기존 문구를 쓴다.
+          // ★선정은 바꾸지 않는다 — 위 pickDueStudents 결과 그대로다. 문구만 갈아 끼운다.
+          // ★빈 슬롯 판정은 기본 어휘만 본다(emptySlots). 교사가 추가한 칸은 재촉하지 않는다.
+          promptText: resolveSlotPromptText(
+            cursor + i,
+            r.student.name,
+            emptySlots(
+              records.filter((rec) => rec.studentId === r.student.id),
+              'homeroom',
+            )[0],
+          ),
           target: 'homeroom' as const,
           classId: null,
           tagOptions: DEFAULT_HOMEROOM_RECORD_TAGS,

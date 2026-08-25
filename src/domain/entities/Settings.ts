@@ -626,6 +626,12 @@ export interface Settings {
   /** 담임 누가기록 통합 입력(S4) 사용자 추가 태그 — DEFAULT_HOMEROOM_RECORD_TAGS 외 직접 추가분. */
   readonly homeroomRecordTags?: readonly string[];
   /**
+   * 담임 누가기록 관찰 슬롯 사용자 추가분 — HOMEROOM_SLOTS 외 직접 추가한 "장면".
+   * 태그(세부 분류)와 다른 축이다. 교과 쪽 customSlots(observations.json)와 대응한다 —
+   * 한쪽만 고정이면 앱이 어색해진다(설계 §4-1).
+   */
+  readonly homeroomRecordSlots?: readonly string[];
+  /**
    * 출결 사유 반복 경고 키워드(M2) — 같은 달 동일 키워드 재입력 시 비차단 경고.
    * 기본 제공 키워드 없음(사용자 등록만) — 규정 판단을 내장하지 않는다.
    */

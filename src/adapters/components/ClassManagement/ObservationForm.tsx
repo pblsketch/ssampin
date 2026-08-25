@@ -27,6 +27,8 @@ interface ObservationDraft {
   date: string;
   content: string;
   tags: string[];
+  /** 관찰 슬롯 — 학생을 왔다 갔다 해도 고른 장면이 살아 있어야 한다. */
+  slots: string[];
   updatedAt: number;
 }
 
@@ -36,7 +38,12 @@ function todayString(): string {
 }
 
 function isDraftEmpty(draft: ObservationDraft): boolean {
-  return !draft.content.trim() && draft.tags.length === 0 && draft.date === todayString();
+  return (
+    !draft.content.trim() &&
+    draft.tags.length === 0 &&
+    draft.slots.length === 0 &&
+    draft.date === todayString()
+  );
 }
 
 export function ObservationForm({ classId, studentId }: ObservationFormProps) {
@@ -56,6 +63,7 @@ export function ObservationForm({ classId, studentId }: ObservationFormProps) {
   const dateRef = useRef(date);
   const contentRef = useRef(content);
   const tagsRef = useRef(selectedTags);
+  const slotsRef = useRef<string[]>([]);
   const categoryRef = useRef(selectedCategory);
   const draftMapRef = useRef<Map<string, ObservationDraft>>(new Map());
 
@@ -70,10 +78,6 @@ export function ObservationForm({ classId, studentId }: ObservationFormProps) {
   const allSlots = useMemo(() => allSlotsForContext('teaching', customSlots), [customSlots]);
   const [selectedSlots, setSelectedSlots] = useState<string[]>([]);
   const [newSlotInput, setNewSlotInput] = useState('');
-  const toggleSlot = (slot: string): void =>
-    setSelectedSlots((prev) =>
-      prev.includes(slot) ? prev.filter((s) => s !== slot) : [...prev, slot],
-    );
   const customCategories = useObservationStore((s) => s.customCategories);
   const addCustomCategory = useObservationStore((s) => s.addCustomCategory);
   const allCategories = useMemo(
@@ -102,6 +106,10 @@ export function ObservationForm({ classId, studentId }: ObservationFormProps) {
   useEffect(() => {
     tagsRef.current = selectedTags;
   }, [selectedTags]);
+
+  useEffect(() => {
+    slotsRef.current = selectedSlots;
+  }, [selectedSlots]);
 
   useEffect(() => {
     categoryRef.current = selectedCategory;
@@ -189,6 +197,7 @@ export function ObservationForm({ classId, studentId }: ObservationFormProps) {
       const savedDate = dateRef.current;
       const savedContent = contentRef.current.trim().slice(0, 500);
       const savedTags = [...tagsRef.current];
+      const savedSlots = [...slotsRef.current];
 
       if (savedContent && savingRef.current !== prevId) {
         savingRef.current = prevId;
@@ -202,6 +211,8 @@ export function ObservationForm({ classId, studentId }: ObservationFormProps) {
           content: savedContent,
           tags: savedTags,
           category: categoryRef.current,
+          // ★자동저장에도 슬롯을 싣는다. 빠뜨리면 학생을 넘기는 순간 고른 장면이 조용히 사라진다.
+          slots: savedSlots,
         })
           .then((recordId) => {
             void commitPendingAttachments(recordId, filesToCommit);
@@ -236,6 +247,9 @@ export function ObservationForm({ classId, studentId }: ObservationFormProps) {
       setDate(nextDraft?.date ?? todayString());
       setContent(nextDraft?.content ?? '');
       setSelectedTags(nextDraft?.tags ?? []);
+      // ★반드시 리셋한다. 안 하면 앞 학생에게 켜 둔 칩이 그대로 남아 **다른 학생 기록에
+      //   남의 장면이 붙는다** — 유실보다 나쁘다(잘못된 근거가 생기부 재료로 들어간다).
+      setSelectedSlots(nextDraft?.slots ?? []);
       setSelectedCategory(DEFAULT_OBSERVATION_CATEGORIES[0]);
       setPendingFiles([]);
       prevStudentIdRef.current = studentId;
@@ -258,6 +272,7 @@ export function ObservationForm({ classId, studentId }: ObservationFormProps) {
         date: nextDate,
         content: contentRef.current,
         tags: tagsRef.current,
+        slots: slotsRef.current,
       });
     },
     [rememberDraft, studentId],
@@ -270,6 +285,7 @@ export function ObservationForm({ classId, studentId }: ObservationFormProps) {
         date: dateRef.current,
         content: nextContent,
         tags: tagsRef.current,
+        slots: slotsRef.current,
       });
     },
     [rememberDraft, studentId],
@@ -283,8 +299,28 @@ export function ObservationForm({ classId, studentId }: ObservationFormProps) {
           date: dateRef.current,
           content: contentRef.current,
           tags: nextTags,
+          slots: slotsRef.current,
         });
         return nextTags;
+      });
+    },
+    [rememberDraft, studentId],
+  );
+
+  // ★toggleTag 와 같은 모양이어야 한다. 앞서는 rememberDraft 선언(185행)보다 위에 있어
+  //   초안에 남길 수 없었고, 그 결과 ObservationDraft.slots 와 isDraftEmpty 의 슬롯 조건이
+  //   죽은 코드가 됐다. 본문 없이 슬롯만 고른 상태가 학생 전환에서 사라진다.
+  const toggleSlot = useCallback(
+    (slot: string) => {
+      setSelectedSlots((prev) => {
+        const next = prev.includes(slot) ? prev.filter((s) => s !== slot) : [...prev, slot];
+        rememberDraft(studentId, {
+          date: dateRef.current,
+          content: contentRef.current,
+          tags: tagsRef.current,
+          slots: next,
+        });
+        return next;
       });
     },
     [rememberDraft, studentId],

@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { HOMEROOM_SLOTS, normalizeSlots } from '@domain/rules/observationSlots';
+import { allSlotsForContext, normalizeSlots } from '@domain/rules/observationSlots';
 import { useStudentRecordsStore } from '@adapters/stores/useStudentRecordsStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useToastStore } from '@adapters/components/common/Toast';
@@ -139,6 +139,13 @@ function InputMode({
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   // 관찰 슬롯("어떤 장면인가") — StudentRecord.slots? 에 저장. ★tags(세부 분류)와 절대 섞지 않는다.
   const [selectedSlots, setSelectedSlots] = useState<string[]>([]);
+  const [newSlotInput, setNewSlotInput] = useState('');
+  // 교과 쪽 customSlots 와 대응 — 한쪽만 고정이면 앱이 어색하다(설계 §4-1).
+  const customHomeroomSlots = useSettingsStore((st) => st.settings.homeroomRecordSlots);
+  const allHomeroomSlots = useMemo(
+    () => allSlotsForContext('homeroom', customHomeroomSlots ?? []),
+    [customHomeroomSlots],
+  );
   const [newTagInput, setNewTagInput] = useState('');
   const [selectedMethod, setSelectedMethod] = useState<CounselingMethod | undefined>(undefined);
   const [showFollowUp, setShowFollowUp] = useState(false);
@@ -353,7 +360,7 @@ function InputMode({
       // 통합 입력 태그(S4): 생성된 누가기록에 tags 를 patch한다.
       // 기존 addRecord 시그니처(useStudentRecordsStore)는 보존 — 별도 updateRecord 로만 추가(다른 세션 store 무수정).
       // ★정규화를 먼저 한다 — 걸러진 결과가 비면 칸 자체를 만들지 않는다(부재 != 빈 배열).
-      const normalizedSlots = normalizeSlots(selectedSlots, 'homeroom');
+      const normalizedSlots = normalizeSlots(selectedSlots, 'homeroom', customHomeroomSlots ?? []);
       if ((selectedTags.length > 0 || normalizedSlots.length > 0) && recordIds.length > 0) {
         const sr = useStudentRecordsStore.getState();
         await Promise.all(
@@ -376,6 +383,7 @@ function InputMode({
       memo,
       selectedTags,
       selectedSlots,
+      customHomeroomSlots,
       records,
       selectedMethod,
       followUp,
@@ -389,6 +397,9 @@ function InputMode({
     setSelectedSub(null);
     setMemo('');
     setSelectedTags([]);
+    // ★반드시 지운다. 담임 입력은 학생 다중 선택 일괄 저장이라, 남으면 한 번의 실수가
+    //   반 전체 기록에 남의 장면을 붙인다.
+    setSelectedSlots([]);
     setSelectedMethod(undefined);
     setShowFollowUp(false);
     setFollowUp('');
@@ -798,7 +809,7 @@ function InputMode({
               <div className="mb-3">
                 <p className="text-xs text-sp-muted mb-1.5">어떤 장면인가요? (선택)</p>
                 <div className="flex flex-wrap items-center gap-1.5">
-                  {HOMEROOM_SLOTS.map((slot) => {
+                  {allHomeroomSlots.map((slot) => {
                     const isSelected = selectedSlots.includes(slot);
                     return (
                       <button
@@ -821,6 +832,28 @@ function InputMode({
                       </button>
                     );
                   })}
+                  <input
+                    type="text"
+                    value={newSlotInput}
+                    onChange={(e) => setNewSlotInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key !== 'Enter') return;
+                      e.preventDefault();
+                      const v = newSlotInput.trim();
+                      if (!v) return;
+                      if (!allHomeroomSlots.includes(v)) {
+                        void updateSettings({
+                          homeroomRecordSlots: [...(customHomeroomSlots ?? []), v],
+                        });
+                      }
+                      setSelectedSlots((prev) => (prev.includes(v) ? prev : [...prev, v]));
+                      setNewSlotInput('');
+                      markDirty();
+                    }}
+                    placeholder="+ 장면"
+                    aria-label="장면 직접 추가"
+                    className="w-16 px-2 py-1 rounded-lg text-xs bg-sp-surface border border-dashed border-sp-border text-sp-text placeholder:text-sp-muted focus:outline-none focus:border-sp-accent focus:w-24 transition-all"
+                  />
                 </div>
               </div>
             )}

@@ -24,6 +24,11 @@ export interface ImportedEvidence {
   readonly sourceType: EvidenceSourceType;
   readonly sourceId: string;
   readonly date?: string;
+  /**
+   * 원본 기록에서 이어받은 관찰 슬롯("어떤 장면인가").
+   * 원본에 없으면 이 칸도 만들지 않는다(부재 != 빈 배열).
+   */
+  readonly slots?: readonly string[];
 }
 
 /** ISO 8601(또는 YYYY-MM-DD) → YYYY-MM-DD. 비면 undefined. */
