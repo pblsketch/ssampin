@@ -60,7 +60,12 @@ import { registerBoardHandlers, endActiveBoardSessionSync } from './ipc/board';
 import { registerMultiSurveyShareHandlers } from './ipc/multiSurveyShare';
 import { registerAiBridgeHandlers } from './ipc/aiBridge';
 import { registerLiveSyncHost, type LiveSyncHost } from './ipc/aiBridgeLiveSyncHost';
-import { createSidePinElectron, type SidePinElectronHandle } from './sidePinElectron';
+import {
+  createSidePinElectron,
+  readSidePinDisplayChoices,
+  setSidePinPreferredDisplayInFile,
+  type SidePinElectronHandle,
+} from './sidePinElectron';
 import {
   SIDE_PIN_RAIL_POSITION_DEFAULT,
   loadSidePinDeviceState,
@@ -2436,6 +2441,146 @@ function createWindow(): void {
   });
 }
 
+/**
+ * "옆핀 모니터" 서브메뉴 항목.
+ *
+ * 모니터가 두 대 이상일 때만 나온다 — 한 대뿐인 사람에게는 고를 것이 없어
+ * 눌러도 아무 일이 없는 메뉴가 된다(트레이의 다른 항목과 같은 판단).
+ *
+ * 옆핀을 아직 한 번도 안 켰어도 고를 수 있다. 그때는 저장값만 고쳐 두고
+ * 다음에 켤 때 그 모니터에서 시작한다.
+ */
+function buildSidePinDisplayMenu(): Electron.MenuItemConstructorOptions[] {
+  try {
+    const choices = readSidePinDisplayChoices();
+    if (choices.length < 2) return [];
+
+    const selected =
+      sidePin !== null
+        ? sidePin.service.getPreferredDisplayId()
+        : loadSidePinDeviceState(app.getPath('userData')).displayId;
+
+    const apply = (displayId: string | null): void => {
+      const result =
+        sidePin !== null
+          ? sidePin.service.setPreferredDisplay(displayId)
+          : setSidePinPreferredDisplayInFile(displayId);
+      // 고른 표시(●)를 지금 상태에 맞춰 다시 그린다.
+      if (result === 'applied' || result === 'deferred') refreshTrayMenu();
+    };
+
+    return [
+      {
+        label: '옆핀 모니터',
+        submenu: [
+          {
+            label: '자동 (주 모니터)',
+            type: 'radio',
+            checked: selected === null,
+            click: () => apply(null),
+          },
+          ...choices.map((choice) => ({
+            label: choice.menuLabel,
+            type: 'radio' as const,
+            checked: selected === choice.id,
+            click: () => apply(choice.id),
+          })),
+        ],
+      },
+      { type: 'separator' },
+    ];
+  } catch {
+    // 모니터 정보를 못 읽어도 트레이 메뉴 전체가 사라지면 안 된다.
+    return [];
+  }
+}
+
+/** 트레이 메뉴 항목 — 모니터 구성이 바뀌면 다시 만들어야 해서 함수로 둔다. */
+function buildTrayMenuTemplate(): Electron.MenuItemConstructorOptions[] {
+  return [
+    {
+      label: '쌤핀 열기',
+      click: () => {
+        void executeWindowTransition('main');
+      },
+    },
+    {
+      label: '위젯 모드',
+      click: () => {
+        void executeWindowTransition('widget');
+      },
+    },
+    {
+      label: '아이콘 모드',
+      click: () => {
+        void executeWindowTransition('icon');
+      },
+    },
+    {
+      // 옆핀도 위젯·아이콘과 같은 계열의 창 모드다(2026-08-14 제품 결정). 그런데
+      // 트레이에만 빠져 있어서, 설정에서 "앱 닫기 동작"을 옆핀으로 바꿔 두지 않은
+      // 사람은 옆핀으로 갈 길이 없었다.
+      //
+      // 옆핀이 꺼져 있어도 눌리면 켜진다 — 전환 분기가 service.enable()을 함께
+      // 부른다. 눌러도 아무 일이 없는 메뉴를 두지 않기 위해 확인한 사항이다.
+      label: '옆핀 모드',
+      click: () => {
+        void executeWindowTransition('sidePin');
+      },
+    },
+    { type: 'separator' },
+    ...buildSidePinDisplayMenu(),
+    {
+      label: '위젯 위치 초기화',
+      click: () => {
+        void resetWidgetPosition();
+      },
+    },
+    {
+      label: '아이콘 위치 초기화',
+      click: () => {
+        void resetIconPosition();
+      },
+    },
+    {
+      // 손잡이는 세로로 끌어 옮길 수 있고(v2.4.1) 그 자리가 기기별로 저장된다.
+      // 위젯·아이콘과 달리 화면 밖으로는 못 나가지만, 모니터를 바꾸면 엉뚱한
+      // 높이에 남을 수 있어 되돌릴 길을 같은 자리에 둔다.
+      label: '옆핀 손잡이 위치 초기화',
+      click: () => {
+        if (sidePin !== null) {
+          sidePin.service.resetRailPosition();
+          return;
+        }
+        // 옆핀을 아직 한 번도 안 연 상태다. 여기서 ensureSidePin()을 부르면
+        // 쓰지도 않을 커서 폴링 타이머가 돌기 시작하므로, 저장값만 고쳐 두고
+        // 다음에 열 때 기본 자리에서 시작하게 한다.
+        const userDataDir = app.getPath('userData');
+        const state = loadSidePinDeviceState(userDataDir);
+        if (state.railPosition === SIDE_PIN_RAIL_POSITION_DEFAULT) return;
+        saveSidePinDeviceState(userDataDir, {
+          ...state,
+          railPosition: SIDE_PIN_RAIL_POSITION_DEFAULT,
+        });
+      },
+    },
+    { type: 'separator' },
+    {
+      label: '완전히 종료',
+      click: () => {
+        isQuitting = true;
+        app.quit();
+      },
+    },
+  ];
+}
+
+/** 트레이 메뉴를 지금 상태로 다시 그린다. 트레이가 없으면 아무 일도 하지 않는다. */
+function refreshTrayMenu(): void {
+  if (tray === null || tray.isDestroyed()) return;
+  tray.setContextMenu(Menu.buildFromTemplate(buildTrayMenuTemplate()));
+}
+
 function createTray(): void {
   try {
     let trayIcon: Electron.NativeImage;
@@ -2453,84 +2598,13 @@ function createTray(): void {
     }
     tray = new Tray(trayIcon);
 
-    const contextMenu = Menu.buildFromTemplate([
-      {
-        label: '쌤핀 열기',
-        click: () => {
-          void executeWindowTransition('main');
-        },
-      },
-      {
-        label: '위젯 모드',
-        click: () => {
-          void executeWindowTransition('widget');
-        },
-      },
-      {
-        label: '아이콘 모드',
-        click: () => {
-          void executeWindowTransition('icon');
-        },
-      },
-      {
-        // 옆핀도 위젯·아이콘과 같은 계열의 창 모드다(2026-08-14 제품 결정). 그런데
-        // 트레이에만 빠져 있어서, 설정에서 "앱 닫기 동작"을 옆핀으로 바꿔 두지 않은
-        // 사람은 옆핀으로 갈 길이 없었다.
-        //
-        // 옆핀이 꺼져 있어도 눌리면 켜진다 — 전환 분기가 service.enable()을 함께
-        // 부른다. 눌러도 아무 일이 없는 메뉴를 두지 않기 위해 확인한 사항이다.
-        label: '옆핀 모드',
-        click: () => {
-          void executeWindowTransition('sidePin');
-        },
-      },
-      { type: 'separator' },
-      {
-        label: '위젯 위치 초기화',
-        click: () => {
-          void resetWidgetPosition();
-        },
-      },
-      {
-        label: '아이콘 위치 초기화',
-        click: () => {
-          void resetIconPosition();
-        },
-      },
-      {
-        // 손잡이는 세로로 끌어 옮길 수 있고(v2.4.1) 그 자리가 기기별로 저장된다.
-        // 위젯·아이콘과 달리 화면 밖으로는 못 나가지만, 모니터를 바꾸면 엉뚱한
-        // 높이에 남을 수 있어 되돌릴 길을 같은 자리에 둔다.
-        label: '옆핀 손잡이 위치 초기화',
-        click: () => {
-          if (sidePin !== null) {
-            sidePin.service.resetRailPosition();
-            return;
-          }
-          // 옆핀을 아직 한 번도 안 연 상태다. 여기서 ensureSidePin()을 부르면
-          // 쓰지도 않을 커서 폴링 타이머가 돌기 시작하므로, 저장값만 고쳐 두고
-          // 다음에 열 때 기본 자리에서 시작하게 한다.
-          const userDataDir = app.getPath('userData');
-          const state = loadSidePinDeviceState(userDataDir);
-          if (state.railPosition === SIDE_PIN_RAIL_POSITION_DEFAULT) return;
-          saveSidePinDeviceState(userDataDir, {
-            ...state,
-            railPosition: SIDE_PIN_RAIL_POSITION_DEFAULT,
-          });
-        },
-      },
-      { type: 'separator' },
-      {
-        label: '완전히 종료',
-        click: () => {
-          isQuitting = true;
-          app.quit();
-        },
-      },
-    ]);
-
     tray.setToolTip('쌤핀');
-    tray.setContextMenu(contextMenu);
+    refreshTrayMenu();
+
+    // 모니터를 꽂거나 빼면 "옆핀 모니터" 목록이 달라진다. 트레이 메뉴는 만들 때
+    // 한 번 그려지므로, 다시 그리지 않으면 새로 꽂은 모니터가 목록에 안 나온다.
+    screen.on('display-added', refreshTrayMenu);
+    screen.on('display-removed', refreshTrayMenu);
 
     tray.on('double-click', () => {
       void executeWindowTransition('main');
@@ -3190,6 +3264,37 @@ function registerIpcHandlers(): void {
   // 단축키 토글 — triggerShortcut(전역)과 useGlobalShortcuts(렌더러 폴백)가 같은 사건으로 잇는다.
   ipcMain.on('sidePin:toggle-shortcut', () => {
     triggerSidePinShortcut();
+  });
+
+  /**
+   * 옆핀을 띄울 모니터 목록과 지금 고른 것.
+   *
+   * 옆핀을 아직 안 켰어도 답한다 — 설정 화면에서 미리 골라 둘 수 있어야 한다.
+   */
+  ipcMain.handle('sidePin:list-displays', () => {
+    const selectedDisplayId =
+      sidePin !== null
+        ? sidePin.service.getPreferredDisplayId()
+        : loadSidePinDeviceState(app.getPath('userData')).displayId;
+    return { displays: readSidePinDisplayChoices(), selectedDisplayId };
+  });
+
+  /**
+   * 옆핀을 띄울 모니터를 정한다. `null`이면 자동(주 모니터)으로 되돌린다.
+   *
+   * 옆핀이 떠 있으면 곧바로 옮기고, 아직 안 켰으면 저장값만 고친다. 여기서
+   * `ensureSidePin()`을 부르지 않는 이유는 쓰지도 않을 커서 감시 타이머가 돌기
+   * 때문이다("옆핀 손잡이 위치 초기화"와 같은 판단).
+   */
+  ipcMain.handle('sidePin:set-display', (_event, displayId: unknown) => {
+    const target = typeof displayId === 'string' ? displayId : null;
+    const result =
+      sidePin !== null
+        ? sidePin.service.setPreferredDisplay(target)
+        : setSidePinPreferredDisplayInFile(target);
+    // 트레이 메뉴에 체크 표시가 있으므로 지금 고른 것을 다시 그려야 한다.
+    if (result === 'applied' || result === 'deferred') refreshTrayMenu();
+    return result;
   });
 
   /**

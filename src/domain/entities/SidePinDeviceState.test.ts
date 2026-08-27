@@ -90,6 +90,8 @@ describe('normalizeSidePinDeviceState', () => {
     ).toEqual({
       schemaVersion: SIDE_PIN_DEVICE_STATE_SCHEMA_VERSION,
       displayId: '12345',
+      // 단서가 없던 옛 저장본 — 번호로만 찾는다
+      displayHint: null,
       panelWidth: 420,
       railPosition: 0.6,
     });
@@ -101,6 +103,7 @@ describe('normalizeSidePinDeviceState', () => {
     expect(normalizeSidePinDeviceState([])).toEqual({
       schemaVersion: SIDE_PIN_DEVICE_STATE_SCHEMA_VERSION,
       displayId: null,
+      displayHint: null,
       panelWidth: SIDE_PIN_WIDTH_DEFAULT,
       railPosition: SIDE_PIN_RAIL_POSITION_DEFAULT,
     });

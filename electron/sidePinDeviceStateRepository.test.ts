@@ -10,6 +10,7 @@ import path from 'path';
 import {
   DEFAULT_SIDE_PIN_DEVICE_STATE,
   SIDE_PIN_DEVICE_STATE_BACKUP_FILENAME,
+  SIDE_PIN_DEVICE_STATE_SCHEMA_VERSION,
   SIDE_PIN_DEVICE_STATE_FILENAME,
   SIDE_PIN_WIDTH_DEFAULT,
   SIDE_PIN_WIDTH_MAX,
@@ -30,8 +31,9 @@ afterEach(() => {
 });
 
 const SAMPLE: SidePinDeviceState = {
-  schemaVersion: 1,
+  schemaVersion: SIDE_PIN_DEVICE_STATE_SCHEMA_VERSION,
   displayId: '12345',
+  displayHint: null,
   panelWidth: 420,
   railPosition: 0.6,
 };
@@ -73,8 +75,9 @@ describe('저장과 읽기', () => {
 
   test('범위 밖 값은 저장 전에 정규화된다', () => {
     saveSidePinDeviceState(dir, {
-      schemaVersion: 1,
+      schemaVersion: SIDE_PIN_DEVICE_STATE_SCHEMA_VERSION,
       displayId: '1',
+      displayHint: null,
       panelWidth: 9999,
       railPosition: 99,
     });
@@ -120,8 +123,9 @@ describe('AC-21 — 누락·파손·구버전 복구', () => {
     );
 
     expect(loadSidePinDeviceState(dir)).toEqual({
-      schemaVersion: 1,
+      schemaVersion: SIDE_PIN_DEVICE_STATE_SCHEMA_VERSION,
       displayId: '777',
+      displayHint: null,
       panelWidth: 360,
       railPosition: DEFAULT_SIDE_PIN_DEVICE_STATE.railPosition,
     });

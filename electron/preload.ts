@@ -1133,6 +1133,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
       return () => ipcRenderer.removeListener('sidePin:panel-shown', handler);
     },
     /** 포인터가 손잡이·패널의 어느 구역에 있는지 (물리 입력 보고) */
+    /** 옆핀을 띄울 수 있는 모니터 목록과 지금 고른 것 */
+    listDisplays: (): Promise<unknown> => ipcRenderer.invoke('sidePin:list-displays'),
+    /** 옆핀을 띄울 모니터를 정한다. null이면 자동(주 모니터) */
+    setDisplay: (displayId: string | null): Promise<unknown> =>
+      ipcRenderer.invoke('sidePin:set-display', displayId),
     reportPointerRegion: (region: string): void => {
       ipcRenderer.send('sidePin:pointer-region', region);
     },

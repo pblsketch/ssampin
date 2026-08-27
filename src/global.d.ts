@@ -205,6 +205,32 @@ interface CoolMessengerElectronAPI {
   members: () => Promise<string[]>;
 }
 
+/** 옆핀을 띄울 수 있는 모니터 하나 — 사람이 읽을 이름까지 만들어져서 온다 */
+interface SidePinDisplayChoiceInfo {
+  readonly id: string;
+  readonly name: string;
+  readonly position: string;
+  readonly resolution: string;
+  readonly scalePercent: number;
+  readonly isPrimary: boolean;
+  /** '모니터 2 · 오른쪽 (2560×1440)' — 그대로 보여 주면 된다 */
+  readonly menuLabel: string;
+}
+
+interface SidePinDisplayListResult {
+  readonly displays: readonly SidePinDisplayChoiceInfo[];
+  /** 사용자가 고른 모니터. null이면 자동(주 모니터) */
+  readonly selectedDisplayId: string | null;
+}
+
+/**
+ * 모니터 지정 결과.
+ *
+ * `deferred`는 메모를 쓰는 중이라 저장만 하고 화면 이동을 미룬 경우다 —
+ * 실패가 아니므로 사용자에게 "저장하면 옮겨집니다"로 알려야 한다.
+ */
+type SidePinSetDisplayResult = 'applied' | 'deferred' | 'unknown-display' | 'save-failed';
+
 interface ElectronAPI {
   readData: (filename: string) => Promise<string | null>;
   coolMessenger: CoolMessengerElectronAPI;
@@ -733,6 +759,15 @@ interface ElectronAPI {
     getState: () => Promise<unknown>;
     onStateChanged: (callback: (state: unknown) => void) => () => void;
     onPanelShown: (callback: () => void) => () => void;
+    /**
+     * 옆핀을 띄울 수 있는 모니터 목록과 지금 고른 것.
+     *
+     * **없을 수 있다.** preload는 앱을 다시 켜야 갱신되므로 새 화면이 옛 preload
+     * 위에서 도는 시간이 있다. 반드시 `?.()`로 감쌀 것.
+     */
+    listDisplays?: () => Promise<SidePinDisplayListResult>;
+    /** 옆핀을 띄울 모니터를 정한다. null이면 자동(주 모니터). 없을 수 있다 */
+    setDisplay?: (displayId: string | null) => Promise<SidePinSetDisplayResult>;
     reportPointerRegion: (region: string) => void;
     startRailDrag?: () => void;
     endRailDrag?: () => void;

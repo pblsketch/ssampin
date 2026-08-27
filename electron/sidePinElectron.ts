@@ -11,7 +11,9 @@ import { createSidePinService, type SidePinService } from './sidePinService';
 import { createSidePinScheduler } from './sidePinScheduler';
 import { createSidePinBrowserWindowFactory, resolveSidePinIndexHtml } from './sidePinBrowserWindow';
 import { loadSidePinDeviceState, saveSidePinDeviceState } from './sidePinDeviceState';
-import type { SidePinDisplayInfo } from './sidePinGeometry';
+import { buildSidePinDisplayHint, type SidePinDisplayInfo } from './sidePinGeometry';
+import { describeSidePinDisplays, type SidePinDisplayChoice } from './sidePinDisplayLabels';
+import type { SidePinSetDisplayResult } from './sidePinService';
 import type { SidePinRuntimeState } from '../src/domain/entities/SidePinRuntimeState';
 import type { SidePinWindowRole } from './sidePinWindow';
 import {
@@ -35,6 +37,15 @@ function toDisplayInfo(display: Electron.Display): SidePinDisplayInfo {
     // Electron은 숫자로 주지만 저장·비교는 문자열로 통일한다.
     id: String(display.id),
     scaleFactor: display.scaleFactor,
+    // 번호가 바뀌어도 같은 모니터를 알아보려면 이름과 전체 영역이 필요하다.
+    // Windows에서 label은 비어 있을 수 있어 없는 것으로 취급될 수 있다.
+    label: display.label,
+    bounds: {
+      x: display.bounds.x,
+      y: display.bounds.y,
+      width: display.bounds.width,
+      height: display.bounds.height,
+    },
     workArea: {
       x: display.workArea.x,
       y: display.workArea.y,
@@ -42,6 +53,48 @@ function toDisplayInfo(display: Electron.Display): SidePinDisplayInfo {
       height: display.workArea.height,
     },
   };
+}
+
+/**
+ * 지금 연결된 모니터를 고르기 좋은 목록으로 준다.
+ *
+ * **옆핀을 아직 한 번도 안 켠 상태에서도 불릴 수 있다.** 그래서 서비스가 아니라
+ * `screen`에서 곧바로 읽는다 — 여기서 `createSidePinElectron()`을 부르면 쓰지도 않을
+ * 커서 감시 타이머가 돌기 시작한다(트레이 "손잡이 위치 초기화"와 같은 판단).
+ */
+export function readSidePinDisplayChoices(): readonly SidePinDisplayChoice[] {
+  return describeSidePinDisplays(
+    screen.getAllDisplays().map(toDisplayInfo),
+    String(screen.getPrimaryDisplay().id),
+  );
+}
+
+/**
+ * 옆핀을 아직 안 켠 상태에서 "어느 모니터에 띄울지"만 파일에 적어 둔다.
+ *
+ * 창이 없으므로 옮길 것도 없다. 다음에 켤 때 그 모니터에서 시작한다.
+ */
+export function setSidePinPreferredDisplayInFile(
+  displayId: string | null,
+): SidePinSetDisplayResult {
+  const userDataDir = app.getPath('userData');
+  const state = loadSidePinDeviceState(userDataDir);
+  const trimmed = typeof displayId === 'string' ? displayId.trim() : '';
+  const target = trimmed === '' ? null : trimmed;
+
+  let next = state;
+  if (target === null) {
+    next = { ...state, displayId: null, displayHint: null };
+  } else {
+    const display = screen
+      .getAllDisplays()
+      .map(toDisplayInfo)
+      .find((candidate) => candidate.id === target);
+    if (display === undefined) return 'unknown-display';
+    next = { ...state, displayId: target, displayHint: buildSidePinDisplayHint(display) };
+  }
+
+  return saveSidePinDeviceState(userDataDir, next) === 'failed' ? 'save-failed' : 'applied';
 }
 
 export interface SidePinElectronHandle {

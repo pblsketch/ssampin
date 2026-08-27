@@ -9,23 +9,81 @@
  */
 import { clampSidePinWidth, SIDE_PIN_WIDTH_DEFAULT } from '../valueObjects/SidePinWidth';
 
-/** 기기 전용 상태 파일 스키마 버전 */
-export const SIDE_PIN_DEVICE_STATE_SCHEMA_VERSION = 1;
+/**
+ * 기기 전용 상태 파일 스키마 버전.
+ *
+ * 2 = `displayHint` 칸이 생기고 `displayId`의 뜻이 바뀐 판(ADR-075).
+ * 1에서 올라오는 파일은 손댈 것이 없다 — 1판에서는 모니터를 고를 수단이 아예 없어
+ * `displayId`가 항상 비어 있었기 때문이다.
+ */
+export const SIDE_PIN_DEVICE_STATE_SCHEMA_VERSION = 2;
 /** 손잡이 세로 위치의 기본값. 예전 8단계의 3번 칸과 같은 자리다. */
 export const SIDE_PIN_RAIL_POSITION_DEFAULT = 3 / 7;
 /** v2.4.0 이전 개발본이 쓰던 8단계 칸 번호의 최댓값. 비율로 옮길 때만 쓴다. */
 const LEGACY_RAIL_SLOT_MAX = 7;
 
+/**
+ * 모니터를 번호가 아닌 생김새로 알아보기 위한 단서.
+ *
+ * 이름이 있으면 이름이 가장 믿을 만하고(같은 모델을 두 대 쓰면 이름도 같으므로
+ * 그때는 자리로 가른다), 없으면 크기와 자리로 찾는다. 좌표는 반올림해 둔다 —
+ * 배율이 125%·150%면 소수로 들어와 같은 모니터인데도 매번 달라 보인다.
+ */
+export interface SidePinDisplayHint {
+  /** Electron `Display.label`. 비어 있을 수 있다 */
+  readonly label: string;
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+/** 저장본에서 단서를 읽는다. 쓸 수 없는 값이면 null(단서 없음) */
+export function normalizeSidePinDisplayHint(value: unknown): SidePinDisplayHint | null {
+  if (value === null || typeof value !== 'object') return null;
+  const raw = value as Partial<Record<keyof SidePinDisplayHint, unknown>>;
+
+  const num = (candidate: unknown): number | null =>
+    typeof candidate === 'number' && Number.isFinite(candidate) ? Math.round(candidate) : null;
+
+  const width = num(raw.width);
+  const height = num(raw.height);
+  const x = num(raw.x);
+  const y = num(raw.y);
+  // 크기가 없으면 무엇과도 대조할 수 없다. 자리(x·y)는 0이 정상이라 없으면 0으로 본다.
+  if (width === null || height === null || width <= 0 || height <= 0) return null;
+
+  return {
+    label: typeof raw.label === 'string' ? raw.label.trim() : '',
+    x: x ?? 0,
+    y: y ?? 0,
+    width,
+    height,
+  };
+}
+
 export interface SidePinDeviceState {
   readonly schemaVersion: number;
   /**
-   * 사용자가 고른 모니터 식별자. 고르지 않았으면 null(주 모니터 사용).
+   * **사용자가 고른** 모니터 식별자. 고르지 않았으면 null(주 모니터 사용).
    *
    * Electron의 `Display.id`는 숫자지만 JSON 왕복과 비교를 단순하게 하려고 문자열로 보관한다.
-   * 어차피 모니터를 뺐다 꽂으면 id가 바뀔 수 있어서, 창을 펼칠 때마다 현재 목록과
-   * 다시 대조하고 없으면 주 모니터로 되돌린다.
+   *
+   * ⚠️ **시스템은 이 값을 덮어쓰지 않는다**(ADR-075). 고른 모니터가 지금 안 보이면
+   * 이번 실행에만 주 모니터로 그리고, 저장값은 그대로 둔다. 덮어쓰면 노트북에 외장
+   * 모니터를 꽂아 쓰는 사람이 **케이블을 뽑을 때마다 선택을 잃는다.**
+   *
+   * 예외가 하나 있다. 같은 모니터를 [[SidePinDisplayHint]]로 다시 찾았는데 번호만
+   * 달라졌으면 그때는 번호를 갱신한다 — 가리키는 대상이 그대로라 선택을 잃지 않는다.
    */
   readonly displayId: string | null;
+  /**
+   * 고른 모니터를 번호 없이도 다시 찾기 위한 단서. 고르지 않았으면 null.
+   *
+   * Windows에서 `Display.id`는 재부팅·케이블 재연결 뒤에 바뀔 수 있다. 번호만 들고
+   * 있으면 그때마다 "고른 모니터가 사라졌다"로 잘못 판정한다.
+   */
+  readonly displayHint: SidePinDisplayHint | null;
   /** 펼친 패널 너비 (DIP) */
   readonly panelWidth: number;
   /**
@@ -44,6 +102,7 @@ export interface SidePinDeviceState {
 export const DEFAULT_SIDE_PIN_DEVICE_STATE: SidePinDeviceState = {
   schemaVersion: SIDE_PIN_DEVICE_STATE_SCHEMA_VERSION,
   displayId: null,
+  displayHint: null,
   panelWidth: SIDE_PIN_WIDTH_DEFAULT,
   railPosition: SIDE_PIN_RAIL_POSITION_DEFAULT,
 };
@@ -99,6 +158,7 @@ export function normalizeSidePinDeviceState(value: unknown): SidePinDeviceState 
   return {
     schemaVersion: SIDE_PIN_DEVICE_STATE_SCHEMA_VERSION,
     displayId: normalizeSidePinDisplayId(raw.displayId),
+    displayHint: normalizeSidePinDisplayHint(raw.displayHint),
     panelWidth: clampSidePinWidth(raw.panelWidth),
     railPosition: readRailPosition(
       raw as { readonly railPosition?: unknown; readonly railSlot?: unknown },

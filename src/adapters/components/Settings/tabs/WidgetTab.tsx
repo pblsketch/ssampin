@@ -8,6 +8,7 @@ import { useFirstRunModeCoachTour } from '@adapters/hooks/useFirstRunModeCoachTo
 import { useToastStore } from '@adapters/components/common/Toast';
 import { PIN_NAME } from '@adapters/components/Icon/pinName';
 import { GlassControls } from '../../shared/GlassControls';
+import { SidePinDisplaySection } from '../SidePinDisplaySection';
 
 interface Props {
   draft: Settings;
@@ -293,7 +294,13 @@ export function WidgetTab({ draft, patch }: Props) {
           자리마다 뒤에 있는 것이 달라(바탕화면 위 / 창 안) 같은 값이 같은 인상을 주지
           않으므로, 자리별 환산은 domain/rules/glassSurface.ts 가 맡는다.
         */}
-        <div className="space-y-1.5">
+        {/*
+          옆핀 모니터 — 동기화되는 설정이 아니라 기기 전용 파일을 쓰므로 draft/patch를
+          받지 않는다. 모니터가 한 대뿐이면 스스로 사라진다.
+        */}
+        <SidePinDisplaySection />
+
+        <div className="space-y-1.5 pt-4 border-t border-sp-border">
           <span className="text-sm font-medium text-sp-text">창 닫기 동작</span>
           <p className="text-xs text-sp-muted mb-2">X 버튼을 누를 때의 동작을 선택합니다.</p>
           {[

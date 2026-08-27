@@ -21,13 +21,22 @@ function readMainTs(): string {
   return fs.readFileSync(MAIN_TS_PATH, 'utf-8');
 }
 
-/** 트레이 메뉴 템플릿 부분만 잘라 낸다 — 파일 다른 곳의 같은 문자열에 속지 않도록 */
+/**
+ * 트레이 메뉴 템플릿 부분만 잘라 낸다 — 파일 다른 곳의 같은 문자열에 속지 않도록.
+ *
+ * 2026-08-27: 기준점이 `createTray()` 에서 `buildTrayMenuTemplate()` 로 바뀌었다.
+ * 모니터 구성이 달라지면 메뉴를 **다시 그려야** 해서(옆핀 모니터 목록) 항목 조립을
+ * 별도 함수로 뺐기 때문이다. 검사하는 내용은 그대로다.
+ */
 function trayMenuSource(): string {
   const source = readMainTs();
-  const start = source.indexOf('function createTray()');
-  expect(start, 'createTray() 를 찾지 못했다 — 트레이 구현이 옮겨졌는가?').toBeGreaterThan(-1);
-  const end = source.indexOf('tray.setContextMenu', start);
-  expect(end, 'tray.setContextMenu 를 찾지 못했다').toBeGreaterThan(start);
+  const start = source.indexOf('function buildTrayMenuTemplate()');
+  expect(
+    start,
+    'buildTrayMenuTemplate() 를 찾지 못했다 — 트레이 메뉴 조립이 옮겨졌는가?',
+  ).toBeGreaterThan(-1);
+  const end = source.indexOf('\n}\n', start);
+  expect(end, '트레이 메뉴 템플릿의 끝을 찾지 못했다').toBeGreaterThan(start);
   return source.slice(start, end);
 }
 
@@ -144,6 +153,39 @@ describe('트레이 메뉴에 창 모드가 모두 있다', () => {
     const item = menu.slice(start, start + 900);
     expect(item, '옆핀이 떠 있을 때 service 를 부르지 않는다').toContain('resetRailPosition()');
     expect(item, '옆핀이 없을 때 저장값을 고치지 않는다').toContain('saveSidePinDeviceState(');
+  });
+
+  test('옆핀 모니터 선택이 트레이에 있다 — 옆핀을 안 연 상태에서도 고를 수 있어야 한다', () => {
+    // 이 메뉴가 유일한 진입점이다(설정 화면 미구현). 조용히 빠지면 기능 전체에 닿지 못한다.
+    const menu = trayMenuSource();
+    expect(menu, '트레이 메뉴가 옆핀 모니터 항목을 붙이지 않는다').toContain(
+      '...buildSidePinDisplayMenu()',
+    );
+
+    const source = readMainTs();
+    const start = source.indexOf('function buildSidePinDisplayMenu(');
+    expect(start, 'buildSidePinDisplayMenu() 를 찾지 못했다').toBeGreaterThan(-1);
+    const fn = source.slice(start, source.indexOf('\n}\n', start));
+
+    expect(fn, '"자동(주 모니터)"으로 되돌릴 길이 없다').toContain("label: '자동 (주 모니터)'");
+    expect(fn, '옆핀이 떠 있을 때 곧바로 옮기지 않는다').toContain('setPreferredDisplay(');
+    expect(fn, '옆핀을 안 연 상태에서 저장값을 고치지 않는다').toContain(
+      'setSidePinPreferredDisplayInFile(',
+    );
+    // 모니터가 한 대뿐이면 고를 것이 없다 — 눌러도 아무 일이 없는 메뉴를 두지 않는다.
+    expect(fn, '모니터가 한 대뿐일 때도 메뉴를 만든다').toContain('length < 2');
+  });
+
+  test('모니터를 꽂거나 빼면 트레이 메뉴를 다시 그린다', () => {
+    // 메뉴는 만들 때 한 번 그려진다. 다시 그리지 않으면 새로 꽂은 모니터가
+    // 목록에 영영 안 나오고, 뽑은 모니터가 계속 남는다.
+    const source = readMainTs();
+    expect(source, '모니터 연결 시 트레이 메뉴를 다시 그리지 않는다').toContain(
+      "screen.on('display-added', refreshTrayMenu)",
+    );
+    expect(source, '모니터 해제 시 트레이 메뉴를 다시 그리지 않는다').toContain(
+      "screen.on('display-removed', refreshTrayMenu)",
+    );
   });
 
   test('옆핀 항목은 눌러도 아무 일이 없으면 안 된다 — 꺼져 있어도 켜져야 한다', () => {

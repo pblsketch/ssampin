@@ -31,15 +31,61 @@ import fs from 'fs';
 export const SIDE_PIN_WIDTH_MIN = 360;
 export const SIDE_PIN_WIDTH_MAX = 460;
 export const SIDE_PIN_WIDTH_DEFAULT = 400;
-export const SIDE_PIN_DEVICE_STATE_SCHEMA_VERSION = 1;
+export const SIDE_PIN_DEVICE_STATE_SCHEMA_VERSION = 2;
 /** 손잡이 세로 위치의 기본값. 예전 8단계의 3번 칸과 같은 자리다. */
 export const SIDE_PIN_RAIL_POSITION_DEFAULT = 3 / 7;
 /** v2.4.0 이전 개발본이 쓰던 8단계 칸 번호의 최댓값. 비율로 옮길 때만 쓴다. */
 const LEGACY_RAIL_SLOT_MAX = 7;
 
+/**
+ * 모니터를 번호가 아닌 생김새로 알아보기 위한 단서.
+ *
+ * 이름이 있으면 이름이 가장 믿을 만하고(같은 모델을 두 대 쓰면 이름도 같으므로
+ * 그때는 자리로 가른다), 없으면 크기와 자리로 찾는다. 좌표는 반올림해 둔다 —
+ * 배율이 125%·150%면 소수로 들어와 같은 모니터인데도 매번 달라 보인다.
+ */
+export interface SidePinDisplayHint {
+  /** Electron `Display.label`. 비어 있을 수 있다 */
+  readonly label: string;
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+/** 저장본에서 단서를 읽는다. 쓸 수 없는 값이면 null(단서 없음) */
+export function normalizeSidePinDisplayHint(value: unknown): SidePinDisplayHint | null {
+  if (value === null || typeof value !== 'object') return null;
+  const raw = value as Partial<Record<keyof SidePinDisplayHint, unknown>>;
+
+  const num = (candidate: unknown): number | null =>
+    typeof candidate === 'number' && Number.isFinite(candidate) ? Math.round(candidate) : null;
+
+  const width = num(raw.width);
+  const height = num(raw.height);
+  const x = num(raw.x);
+  const y = num(raw.y);
+  if (width === null || height === null || width <= 0 || height <= 0) return null;
+
+  return {
+    label: typeof raw.label === 'string' ? raw.label.trim() : '',
+    x: x ?? 0,
+    y: y ?? 0,
+    width,
+    height,
+  };
+}
+
 export interface SidePinDeviceState {
   readonly schemaVersion: number;
+  /**
+   * **사용자가 고른** 모니터. 시스템은 이 값을 덮어쓰지 않는다(ADR-075) —
+   * 케이블을 뽑을 때마다 선택을 잃지 않기 위해서다. 단서로 같은 모니터를 다시 찾아
+   * 번호만 달라진 경우에만 갱신한다.
+   */
   readonly displayId: string | null;
+  /** 번호가 바뀌어도 같은 모니터를 알아보기 위한 단서 */
+  readonly displayHint: SidePinDisplayHint | null;
   readonly panelWidth: number;
   /**
    * 손잡이 세로 위치. 0은 맨 위, 1은 맨 아래다.
@@ -57,6 +103,7 @@ export interface SidePinDeviceState {
 export const DEFAULT_SIDE_PIN_DEVICE_STATE: SidePinDeviceState = {
   schemaVersion: SIDE_PIN_DEVICE_STATE_SCHEMA_VERSION,
   displayId: null,
+  displayHint: null,
   panelWidth: SIDE_PIN_WIDTH_DEFAULT,
   railPosition: SIDE_PIN_RAIL_POSITION_DEFAULT,
 };
@@ -110,6 +157,7 @@ export function normalizeSidePinDeviceState(value: unknown): SidePinDeviceState 
   return {
     schemaVersion: SIDE_PIN_DEVICE_STATE_SCHEMA_VERSION,
     displayId: normalizeSidePinDisplayId(raw.displayId),
+    displayHint: normalizeSidePinDisplayHint(raw.displayHint),
     panelWidth: clampSidePinWidth(raw.panelWidth),
     railPosition: readRailPosition(
       raw as { readonly railPosition?: unknown; readonly railSlot?: unknown },

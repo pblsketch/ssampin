@@ -10,7 +10,7 @@
  */
 import { SidePinController } from '../src/usecases/sidePin/SidePinController';
 import type { SidePinEvent } from '../src/domain/events/SidePinEvent';
-import type { SidePinRuntimeState } from '../src/domain/entities/SidePinRuntimeState';
+import { isEditorBusy, type SidePinRuntimeState } from '../src/domain/entities/SidePinRuntimeState';
 import type { SidePinScheduler } from '../src/usecases/sidePin/SidePinScheduler';
 import type { SidePinLayout } from '../src/usecases/sidePin/SidePinWindowHost';
 import {
@@ -19,6 +19,7 @@ import {
   type SidePinWindowHostHandle,
 } from './sidePinWindow';
 import {
+  buildSidePinDisplayHint,
   clampSidePinRailTop,
   resolveSidePinLayout,
   resolveSidePinRailPositionFromTop,
@@ -47,6 +48,23 @@ export interface SidePinServiceDeps {
   readonly onDisplayFallback?: (correctedTo: string) => void;
 }
 
+/**
+ * 모니터 지정 결과.
+ *
+ * 성공/실패 둘로만 나누면 "저장은 됐는데 화면은 아직 안 옮긴" 경우를 말할 수 없다.
+ * 메모를 쓰는 중에는 일부러 미루므로, 그 사실을 부르는 쪽이 알아야 사용자에게
+ * "메모를 저장하면 옮겨집니다"라고 알려 줄 수 있다.
+ */
+export type SidePinSetDisplayResult =
+  /** 저장하고 화면도 옮겼다 */
+  | 'applied'
+  /** 저장했지만 메모 편집 중이라 화면 이동은 편집이 끝난 뒤로 미뤘다 */
+  | 'deferred'
+  /** 그런 모니터가 지금 없다 — 아무것도 바꾸지 않았다 */
+  | 'unknown-display'
+  /** 파일에 못 썼다. 이번 실행에는 적용되지만 다시 켜면 사라진다 */
+  | 'save-failed';
+
 export interface SidePinService {
   /** 옆핀 켜기 — 손잡이가 뜬다 */
   enable(): void;
@@ -62,6 +80,14 @@ export interface SidePinService {
   commitRailDrag(): void;
   /** 손잡이를 세로 기본 자리로 되돌린다 (트레이 "옆핀 손잡이 위치 초기화") */
   resetRailPosition(): void;
+  /**
+   * 옆핀을 띄울 모니터를 정한다. `null`이면 "자동"(주 모니터)으로 되돌린다.
+   *
+   * 어느 모니터를 골랐든 **그 모니터의 오른쪽 끝**에 붙는다.
+   */
+  setPreferredDisplay(displayId: string | null): SidePinSetDisplayResult;
+  /** 사용자가 고른 모니터. 고르지 않았으면 null */
+  getPreferredDisplayId(): string | null;
   getState(): SidePinRuntimeState;
   getLayout(): SidePinLayout | null;
   dispose(): void;
@@ -72,13 +98,30 @@ export function createSidePinService(deps: SidePinServiceDeps): SidePinService {
   let operationSeq = 0;
   /** 끄는 동안에만 쓰는 임시 윗변. 손을 떼면 8단계로 맞추고 지운다. */
   let railDragTop: number | null = null;
+  /**
+   * 대체 사실을 이미 알린 모니터. 같은 대체를 반복해서 알리지 않기 위한 빗장.
+   *
+   * `getLayout`은 커서 감시 때문에 50ms마다 불린다. 빗장이 없으면 모니터를 뽑아 둔
+   * 동안 초당 스무 번씩 같은 알림이 나간다.
+   */
+  let notifiedFallbackFor: string | null = null;
+  /**
+   * 모니터를 옮기기로 했는데 메모를 쓰는 중이라 미뤄 둔 상태인가.
+   *
+   * 옮기면 창 크기가 달라져 패널 창을 다시 만들게 되고, 그때 **쓰던 글이 사라진다.**
+   * 저장은 바로 하고 화면만 편집이 끝난 뒤에 옮긴다.
+   */
+  let pendingDisplayApply = false;
 
   /**
    * 지금 화면 배치를 계산한다.
    *
-   * 저장된 모니터가 사라졌으면 다른 화면으로 옮기고 **저장값도 고친다.**
-   * 고치지 않으면 다음에 켤 때마다 같은 대체가 반복되고, 사용자는 자기가 고른
-   * 모니터가 왜 안 쓰이는지 영영 모른다.
+   * ⚠️ **저장된 모니터가 사라져도 저장값은 건드리지 않는다**(ADR-075). 이번 실행에만
+   * 주 모니터로 그린다. 예전에는 여기서 저장값을 대체 모니터로 고쳤는데, 모니터를
+   * 고를 수단이 생긴 뒤로는 그것이 곧 **케이블을 뽑을 때마다 선택이 지워지는** 결함이 된다.
+   *
+   * 다만 단서로 **같은 모니터를 새 번호로 다시 찾은** 경우는 다르다. 가리키는 대상이
+   * 그대로라 번호만 갱신하면 되고, 갱신하지 않으면 다음에도 매번 다시 찾아야 한다.
    */
   function getLayout(): SidePinLayout | null {
     const snapshot = deps.readDisplays();
@@ -86,15 +129,25 @@ export function createSidePinService(deps: SidePinServiceDeps): SidePinService {
       displays: snapshot.displays,
       primaryDisplayId: snapshot.primaryDisplayId,
       preferredDisplayId: device.displayId,
+      preferredDisplayHint: device.displayHint,
       panelWidth: device.panelWidth,
       railPosition: device.railPosition,
     });
     if (layout === null) return null;
 
-    if (layout.usedFallbackDisplay && device.displayId !== layout.displayId) {
-      device = { ...device, displayId: layout.displayId };
+    // 같은 모니터인데 번호만 바뀐 경우 — 번호를 따라가 준다.
+    if (layout.rematchedDisplayId !== null && device.displayId !== layout.rematchedDisplayId) {
+      device = { ...device, displayId: layout.rematchedDisplayId };
       deps.saveDeviceState(device);
-      deps.onDisplayFallback?.(layout.displayId);
+    }
+
+    if (layout.usedFallbackDisplay) {
+      if (notifiedFallbackFor !== layout.displayId) {
+        notifiedFallbackFor = layout.displayId;
+        deps.onDisplayFallback?.(layout.displayId);
+      }
+    } else {
+      notifiedFallbackFor = null;
     }
 
     if (railDragTop === null) return { rail: layout.rail, panel: layout.panel };
@@ -127,6 +180,7 @@ export function createSidePinService(deps: SidePinServiceDeps): SidePinService {
       displays: snapshot.displays,
       primaryDisplayId: snapshot.primaryDisplayId,
       preferredDisplayId: device.displayId,
+      preferredDisplayHint: device.displayHint,
       panelWidth: device.panelWidth,
       railPosition: device.railPosition,
     });
@@ -169,6 +223,13 @@ export function createSidePinService(deps: SidePinServiceDeps): SidePinService {
 
     dispatch(event: SidePinEvent): void {
       controller.dispatch(event);
+
+      // 메모를 쓰느라 미뤄 둔 모니터 이동이 있으면, 편집이 끝나는 순간 적용한다.
+      // 여기서 처리하는 이유는 편집 상태가 바뀌는 통로가 이 dispatch 하나뿐이기 때문이다.
+      if (pendingDisplayApply && !isEditorBusy(controller.getState().editorActivity)) {
+        pendingDisplayApply = false;
+        controller.dispatch({ type: 'layout-changed' });
+      }
     },
 
     handleDisplayChange(): void {
@@ -229,6 +290,45 @@ export function createSidePinService(deps: SidePinServiceDeps): SidePinService {
       // v2.3.7에서 같은 판단(from === next면 조기 반환)이 "다시 시도" 버튼까지
       // 죽였다(ADR-042·043). 되돌리는 기능은 언제 눌러도 되돌려야 한다.
       controller.dispatch({ type: 'layout-changed' });
+    },
+
+    setPreferredDisplay(displayId: string | null): SidePinSetDisplayResult {
+      const trimmed = typeof displayId === 'string' ? displayId.trim() : '';
+      const target = trimmed === '' ? null : trimmed;
+
+      let next: SidePinDeviceState;
+      if (target === null) {
+        // "자동"으로 되돌리기 — 단서도 함께 지운다. 남겨 두면 다음에 고를 때
+        // 지워진 선택의 단서가 살아 있어 엉뚱한 모니터를 다시 찾아낼 수 있다.
+        next = { ...device, displayId: null, displayHint: null };
+      } else {
+        const snapshot = deps.readDisplays();
+        const display = snapshot.displays.find((candidate) => candidate.id === target);
+        // 없는 모니터를 저장하면 켤 때마다 대체가 일어나고 사용자는 이유를 알 수 없다.
+        if (display === undefined) return 'unknown-display';
+        next = { ...device, displayId: target, displayHint: buildSidePinDisplayHint(display) };
+      }
+
+      device = next;
+      // 바꾸자마자 대체 빗장을 푼다. 안 그러면 새로 고른 모니터가 나중에 사라져도
+      // 이전 대체와 같은 번호라는 이유로 알림이 한 번 통째로 빠진다.
+      notifiedFallbackFor = null;
+      const saveResult = deps.saveDeviceState(device);
+
+      // 메모를 쓰는 중이면 창을 다시 만들 수 없다 — 쓰던 글이 사라진다.
+      // 저장은 이미 끝났으므로, 편집이 끝나면 dispatch가 대신 옮겨 준다.
+      if (isEditorBusy(controller.getState().editorActivity)) {
+        pendingDisplayApply = true;
+        return saveResult === 'failed' ? 'save-failed' : 'deferred';
+      }
+
+      pendingDisplayApply = false;
+      controller.dispatch({ type: 'layout-changed' });
+      return saveResult === 'failed' ? 'save-failed' : 'applied';
+    },
+
+    getPreferredDisplayId(): string | null {
+      return device.displayId;
     },
 
     getState(): SidePinRuntimeState {

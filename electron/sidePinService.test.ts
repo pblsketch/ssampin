@@ -225,8 +225,72 @@ describe('호버로 펼치기 — 배선 전 구간', () => {
   });
 });
 
-describe('AC-18 — 저장된 모니터가 사라졌을 때', () => {
-  test('다른 화면으로 옮기고 저장값도 고친다', () => {
+describe('모니터 지정 (setPreferredDisplay)', () => {
+  test('고르면 그 모니터의 오른쪽 끝으로 옮기고 단서까지 저장한다', () => {
+    h.snapshot = { displays: [PRIMARY, { ...SECOND, label: '보조화면' }], primaryDisplayId: '1' };
+
+    const result = h.service.setPreferredDisplay('2');
+
+    expect(result).toBe('applied');
+    expect(h.service.getLayout()?.rail.x).toBe(1920 + 1600 - SIDE_PIN_RAIL_WIDTH);
+    expect(h.saved).toHaveLength(1);
+    expect(h.saved[0]?.displayId).toBe('2');
+    // 단서가 없으면 번호가 바뀌는 순간 선택을 잃는다
+    expect(h.saved[0]?.displayHint).toEqual({
+      label: '보조화면',
+      x: 1920,
+      y: 0,
+      width: 1600,
+      height: 900,
+    });
+  });
+
+  test('null 이면 자동(주 모니터)으로 되돌리고 단서도 지운다', () => {
+    h.snapshot = { displays: [PRIMARY, SECOND], primaryDisplayId: '1' };
+    h.service.setPreferredDisplay('2');
+
+    const result = h.service.setPreferredDisplay(null);
+
+    expect(result).toBe('applied');
+    expect(h.service.getPreferredDisplayId()).toBeNull();
+    expect(h.saved.at(-1)?.displayHint).toBeNull();
+    // 오른쪽에 다른 모니터가 맞닿아 있으면 그 경계를 넘지 않도록 1 DIP 물러난다
+    expect(h.service.getLayout()?.rail.x).toBe(1920 - SIDE_PIN_RAIL_WIDTH - 1);
+  });
+
+  test('없는 모니터를 고르면 아무것도 바꾸지 않는다', () => {
+    const result = h.service.setPreferredDisplay('있지도-않은-모니터');
+
+    expect(result).toBe('unknown-display');
+    expect(h.saved).toEqual([]);
+    expect(h.service.getPreferredDisplayId()).toBeNull();
+  });
+
+  test('★메모를 쓰는 중이면 저장만 하고 화면 이동은 미룬다', async () => {
+    h.snapshot = { displays: [PRIMARY, SECOND], primaryDisplayId: '1' };
+    h.service.enable();
+    await flush();
+    const windowCountBefore = h.windows.length;
+
+    h.service.dispatch({ type: 'editor-activity-changed', activity: 'editing' });
+    const result = h.service.setPreferredDisplay('2');
+    await flush();
+
+    // 저장은 즉시 — 여기서 앱이 꺼져도 선택은 남는다
+    expect(result).toBe('deferred');
+    expect(h.saved.at(-1)?.displayId).toBe('2');
+    // 창은 아직 다시 만들지 않았다 (쓰던 글이 사라지지 않도록)
+    expect(h.windows.length).toBe(windowCountBefore);
+
+    // 편집이 끝나면 그때 옮긴다
+    h.service.dispatch({ type: 'editor-activity-changed', activity: 'idle' });
+    await flush();
+    expect(h.service.getLayout()?.rail.x).toBe(1920 + 1600 - SIDE_PIN_RAIL_WIDTH);
+  });
+});
+
+describe('AC-18(개정) — 저장된 모니터가 사라졌을 때 (ADR-075)', () => {
+  test('다른 화면으로 옮기되 저장값은 건드리지 않는다', () => {
     h = makeHarness({
       device: { ...DEFAULT_SIDE_PIN_DEVICE_STATE, displayId: '뽑혀버린-모니터' },
     });
@@ -234,12 +298,30 @@ describe('AC-18 — 저장된 모니터가 사라졌을 때', () => {
     const layout = h.service.getLayout();
 
     expect(layout).not.toBeNull();
-    expect(h.saved).toHaveLength(1);
-    expect(h.saved[0]?.displayId).toBe('1');
+    // 이번 실행에만 주 모니터로 그린다
+    expect(layout?.rail.x).toBe(1920 - SIDE_PIN_RAIL_WIDTH);
+    // ★저장값은 그대로다 — 고쳐 버리면 케이블을 뽑을 때마다 선택이 지워진다
+    expect(h.saved).toEqual([]);
+    expect(h.service.getPreferredDisplayId()).toBe('뽑혀버린-모니터');
     expect(h.fallbacks).toEqual(['1']);
   });
 
-  test('같은 대체를 반복해서 저장하지 않는다', () => {
+  test('★케이블을 뽑았다 다시 꽂으면 고른 모니터로 돌아온다', () => {
+    h = makeHarness({ device: { ...DEFAULT_SIDE_PIN_DEVICE_STATE, displayId: '2' } });
+    h.snapshot = { displays: [PRIMARY, SECOND], primaryDisplayId: '1' };
+    expect(h.service.getLayout()?.rail.x).toBe(1920 + 1600 - SIDE_PIN_RAIL_WIDTH);
+
+    // 뽑았다 — 주 모니터로 밀려난다
+    h.snapshot = { displays: [PRIMARY], primaryDisplayId: '1' };
+    expect(h.service.getLayout()?.rail.x).toBe(1920 - SIDE_PIN_RAIL_WIDTH);
+
+    // 다시 꽂았다 — 저장값이 살아 있으므로 원래 자리로 돌아와야 한다
+    h.snapshot = { displays: [PRIMARY, SECOND], primaryDisplayId: '1' };
+    expect(h.service.getLayout()?.rail.x).toBe(1920 + 1600 - SIDE_PIN_RAIL_WIDTH);
+    expect(h.saved).toEqual([]);
+  });
+
+  test('같은 대체를 반복해서 알리지 않는다', () => {
     h = makeHarness({
       device: { ...DEFAULT_SIDE_PIN_DEVICE_STATE, displayId: '없는-모니터' },
     });
@@ -248,9 +330,59 @@ describe('AC-18 — 저장된 모니터가 사라졌을 때', () => {
     h.service.getLayout();
     h.service.getLayout();
 
+    // 커서 감시가 50ms마다 부르므로 빗장이 없으면 초당 스무 번씩 알림이 나간다
+    expect(h.fallbacks).toEqual(['1']);
+    expect(h.saved).toEqual([]);
+  });
+
+  test('번호가 바뀌어도 단서로 같은 모니터를 찾아 번호만 갱신한다', () => {
+    // 재부팅 뒤 Electron이 같은 모니터에 다른 번호를 붙인 상황
+    h = makeHarness({
+      device: {
+        ...DEFAULT_SIDE_PIN_DEVICE_STATE,
+        displayId: '2',
+        displayHint: { label: 'DELL U2720Q', x: 1920, y: 0, width: 1600, height: 900 },
+      },
+    });
+    const renumbered: SidePinDisplayInfo = { ...SECOND, id: '99', label: 'DELL U2720Q' };
+    h.snapshot = { displays: [PRIMARY, renumbered], primaryDisplayId: '1' };
+
+    const layout = h.service.getLayout();
+
+    // 주 모니터로 밀려나지 않고 원래 그 모니터에 그대로 뜬다
+    expect(layout?.rail.x).toBe(1920 + 1600 - SIDE_PIN_RAIL_WIDTH);
+    expect(h.fallbacks).toEqual([]);
+    // 가리키는 대상이 같으므로 번호는 따라간다 (선택을 잃는 것이 아니다)
+    expect(h.service.getPreferredDisplayId()).toBe('99');
     expect(h.saved).toHaveLength(1);
   });
 
+  test('구별할 수 없는 모니터가 둘이면 단서 매칭을 포기한다', () => {
+    // 같은 모델 두 대 — 이름도 크기도 같아 자리로만 갈린다
+    h = makeHarness({
+      device: {
+        ...DEFAULT_SIDE_PIN_DEVICE_STATE,
+        displayId: '없는번호',
+        displayHint: { label: '같은모델', x: 5000, y: 0, width: 1600, height: 900 },
+      },
+    });
+    const twinA: SidePinDisplayInfo = { ...SECOND, id: 'a', label: '같은모델' };
+    const twinB: SidePinDisplayInfo = {
+      ...SECOND,
+      id: 'b',
+      label: '같은모델',
+      workArea: { x: 3520, y: 0, width: 1600, height: 900 },
+    };
+    h.snapshot = { displays: [PRIMARY, twinA, twinB], primaryDisplayId: '1' };
+
+    const layout = h.service.getLayout();
+
+    // 아무거나 고르지 않는다 — 주 모니터로 물러나고 저장값은 남긴다
+    // (오른쪽에 모니터가 맞닿아 있어 1 DIP 안쪽)
+    expect(layout?.rail.x).toBe(1920 - SIDE_PIN_RAIL_WIDTH - 1);
+    expect(h.service.getPreferredDisplayId()).toBe('없는번호');
+    expect(h.saved).toEqual([]);
+  });
   test('고른 모니터가 그대로 있으면 저장값을 건드리지 않는다', () => {
     h = makeHarness({ device: { ...DEFAULT_SIDE_PIN_DEVICE_STATE, displayId: '2' } });
     h.snapshot = { displays: [PRIMARY, SECOND], primaryDisplayId: '1' };

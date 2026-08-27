@@ -13,6 +13,7 @@ const LAYOUT: SidePinLayout = {
   rail: { x: 1868, y: 456, width: 52, height: 168 },
   panel: { x: 1520, y: 0, width: 400, height: 1080 },
   usedFallbackDisplay: false,
+  rematchedDisplayId: null,
 };
 
 const ACTIVE_STATE: Pick<SidePinRuntimeState, 'enabled' | 'protectedReason' | 'surface'> = {
