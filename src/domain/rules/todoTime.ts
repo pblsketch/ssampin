@@ -20,7 +20,7 @@ const SECONDS_PER_HOUR = 3600;
 const SECONDS_PER_DAY = 86400;
 
 /** 그 달의 날 수. 윤년은 4의 배수이되 100의 배수는 제외, 400의 배수는 다시 포함. */
-function daysInMonth(year: number, month: number): number {
+export function daysInMonth(year: number, month: number): number {
   if (month === 2) {
     const leap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
     return leap ? 29 : 28;
@@ -34,7 +34,7 @@ function daysInMonth(year: number, month: number): number {
  * Howard Hinnant 의 `days_from_civil` 알고리즘. 3월을 해의 시작으로 보면 윤일이 해의
  * 끝에 오므로 분기 없이 계산된다. 400년(146097일) 주기를 그대로 이용한다.
  */
-function daysFromCivil(year: number, month: number, day: number): number {
+export function daysFromCivil(year: number, month: number, day: number): number {
   const y = month <= 2 ? year - 1 : year;
   const era = Math.floor(y / 400);
   const yearOfEra = y - era * 400; // [0, 399]
@@ -43,6 +43,32 @@ function daysFromCivil(year: number, month: number, day: number): number {
   const dayOfEra =
     yearOfEra * 365 + Math.floor(yearOfEra / 4) - Math.floor(yearOfEra / 100) + dayOfYear;
   return era * 146097 + dayOfEra - 719468;
+}
+
+/**
+ * `daysFromCivil` 의 역방향 — 1970-01-01 부터의 일수를 다시 달력 날짜로.
+ *
+ * 달력에서 "마감일을 사흘 뒤로 옮기기" 같은 계산을 하려면 왕복이 모두 필요하다.
+ * 같은 400년 주기를 거꾸로 되짚으므로 위와 짝을 이룬다(Howard Hinnant `civil_from_days`).
+ */
+export function civilFromDays(days: number): { y: number; m: number; d: number } {
+  const z = days + 719468;
+  const era = Math.floor(z / 146097);
+  const dayOfEra = z - era * 146097; // [0, 146096]
+  const yearOfEra = Math.floor(
+    (dayOfEra -
+      Math.floor(dayOfEra / 1460) +
+      Math.floor(dayOfEra / 36524) -
+      Math.floor(dayOfEra / 146096)) /
+      365,
+  ); // [0, 399]
+  const y = yearOfEra + era * 400;
+  const dayOfYear =
+    dayOfEra - (365 * yearOfEra + Math.floor(yearOfEra / 4) - Math.floor(yearOfEra / 100)); // [0, 365]
+  const monthShifted = Math.floor((5 * dayOfYear + 2) / 153); // [0, 11] (3월=0)
+  const d = dayOfYear - Math.floor((153 * monthShifted + 2) / 5) + 1; // [1, 31]
+  const m = monthShifted < 10 ? monthShifted + 3 : monthShifted - 9; // [1, 12]
+  return { y: m <= 2 ? y + 1 : y, m, d };
 }
 
 /** "YYYY-MM-DD" 를 숫자로. 형식이나 범위가 어긋나면 null. */

@@ -739,6 +739,19 @@ export interface Settings {
   readonly todoShowTimetable?: boolean;
   /** 할 일 타임라인: 일정 표시 */
   readonly todoShowEvents?: boolean;
+  /**
+   * 일정 달력에 할 일(마감일)을 함께 표시 (기본 **true**).
+   *
+   * 위의 `todoShowEvents` 와 정반대 방향이다 — 저쪽은 할 일 화면이 일정을 끌어오고,
+   * 이쪽은 일정 달력이 할 일을 끌어온다.
+   *
+   * ★ 끌 수 있어야 하는 이유: 할 일 제목에는 선생님들이 **학생 이름을 자주 쓴다**
+   *   (TodoSettings 의 알림 노출 정책과 같은 사정). 일정 달력은 교무실 큰 모니터나
+   *   화면 공유에 그대로 뜨는 화면이라 "지금은 안 보이게" 할 길이 반드시 있어야 한다.
+   */
+  readonly scheduleShowTodos?: boolean;
+  /** 일정 달력에서 완료한 할 일도 표시 (기본 false = 안 끝낸 것만) */
+  readonly scheduleShowCompletedTodos?: boolean;
   /** 대시보드 글씨 크기 배율 (기본 1.0, 범위 0.8~1.5) */
   readonly dashboardFontScale?: number;
   /** 점심시간 시작 (HH:mm). 미설정 시 학교급 기본값 사용 */

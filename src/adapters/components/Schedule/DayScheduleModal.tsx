@@ -24,6 +24,7 @@ import { EventList } from './EventList';
 import { Modal } from '@adapters/components/common/Modal';
 import { IconButton } from '@adapters/components/common/IconButton';
 import { StaffRoomDayEvents } from '@adapters/components/StaffRoom/StaffRoomPlanOverlay';
+import { ScheduleDayTodos } from './ScheduleTodoOverlay';
 
 interface DayScheduleModalProps {
   date: Date;
@@ -172,6 +173,14 @@ export function DayScheduleModal({
               currentDate={dateStr}
             />
           )}
+
+          {/*
+            이 날 마감인 할 일 (2026-08-27). 달력 칸은 세 줄까지만 보여서 넘친 것이
+            `+N개 더` 뒤로 숨는데, 여기서는 그 날 전부를 보여 준다. 부서 일정과 같은
+            이유로 일정 목록에 섞지 않는다 — 섞으면 누르는 순간 일정 편집·구글 캘린더
+            쓰기 경로로 흘러간다(ScheduleTodoOverlay 주석 참고).
+          */}
+          <ScheduleDayTodos dateKey={dateStr} />
 
           {/*
             온라인 교무실의 부서 일정을 이 날짜에 겹쳐 보여준다 (계획서 §8-B).

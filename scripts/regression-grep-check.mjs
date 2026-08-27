@@ -429,14 +429,19 @@ const absenceChecks = [
     // 개발자 PC(KST)와 CI(UTC)에서 다른 값을 낸다. 알림이 몇 시간씩 어긋나는 고전적 함정이다.
     // 오늘 날짜·시간대 오프셋은 바깥에서 주입받는다.
     //
-    // ★ fileFilter 로 신규 4파일만 겨냥한다. `src/domain/rules/todo*.ts` 로 넓히면
+    // ★ fileFilter 로 신규 파일만 겨냥한다. `src/domain/rules/todo*.ts` 로 넓히면
     //   기존 `todoRules.ts` 의 `new Date(` 8건에 걸려 손도 안 댄 파일 때문에 즉시 빨간불이
     //   된다. 그 8건은 `isOverdue(todo, today = new Date())` 같은 **기본 인자**라 위반이 아니다.
+    //
+    // 2026-08-27 `todoCalendarRules` 추가 — 달력에 얹는 마감일을 날짜 산술로 밀고 당기는
+    //   파일이라 "하루 밀림"이 정확히 이 규칙이 막으려는 사고다. todoTime 의
+    //   daysFromCivil/civilFromDays 를 빌려 쓰므로 `Date` 가 필요 없다.
     name: 'REGRESSION #58: 새 할일 도메인 규칙은 시계를 직접 읽지 않는다 (시간대 무관 보장)',
     roots: ['src/domain/rules'],
     extensions: ['.ts'],
     patterns: [/new Date\(/, /Date\.now\(/],
-    fileFilter: (path) => /todo(CheckRules|Time|AlarmRules|AutoBoard)\.ts$/.test(path),
+    fileFilter: (path) =>
+      /todo(CheckRules|Time|AlarmRules|AutoBoard|CalendarRules)\.ts$/.test(path),
     // 주석에 적은 "이걸 쓰지 마라" 예시까지 잡히면, 설명을 잘 달수록 빨간불이 된다.
     stripComments: true,
   },

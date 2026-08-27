@@ -39,6 +39,7 @@ import { useNeisScheduleStore } from '@adapters/stores/useNeisScheduleStore';
 import { GoogleBadge } from '@adapters/components/Calendar/GoogleBadge';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { NeisSchedulePanel } from './NeisSchedulePanel';
+import { useScheduleTodoOverlay } from './ScheduleTodoOverlay';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { PageHeader } from '@adapters/components/common/PageHeader';
 import { ScrollRow } from '@adapters/components/common/ScrollRow';
@@ -178,6 +179,8 @@ export function Schedule() {
   } = useCalendarSyncStore();
   // 학교급 (custom이면 NEIS 숨김)
   const schoolLevel = useSettingsStore((s) => s.settings.schoolLevel);
+  const showTodosOnCalendar = useSettingsStore((s) => s.settings.scheduleShowTodos ?? true);
+  const updateSettings = useSettingsStore((s) => s.update);
   // NEIS 학사일정 상태
   const neisEnabled = useNeisScheduleStore((s) => s.settings.enabled);
   const neisSyncStatus = useNeisScheduleStore((s) => s.syncStatus);
@@ -271,6 +274,16 @@ export function Schedule() {
 
     return result;
   }, [events, year, month, selectedCategory, sourceFilter]);
+
+  /*
+    이 달의 할 일 (2026-08-27) — 달력 위에 겹쳐 그린다.
+
+    `filteredEvents` 와 달리 카테고리·소스 필터를 타지 않는다. 저 필터들은 **일정의**
+    분류이지 할 일의 분류가 아니어서, '학교' 카테고리를 고르면 할 일이 통째로 사라지는
+    엉뚱한 동작이 된다. 할 일은 자기 알약(아래 [할 일])으로만 켜고 끈다.
+  */
+  const monthKey = `${year}-${String(month + 1).padStart(2, '0')}`;
+  const todoOverlay = useScheduleTodoOverlay(monthKey);
 
   // 해당 연도 전체 공휴일
   const yearHolidays = useMemo(() => getKoreanHolidays(year), [year]);
@@ -686,6 +699,38 @@ export function Schedule() {
 
                   {/* 우측 고정: 소스 필터 + 카테고리 관리 (좁은 창에서도 항상 접근 가능) */}
                   <div className="flex items-center gap-1 shrink-0">
+                    {/*
+                      할 일 켜고 끄기 (2026-08-27).
+
+                      소스 필터와 달리 **연동 여부와 상관없이 늘 보인다.** 할 일 제목에는
+                      학생 이름이 자주 들어가는데, 이 달력은 교무실 모니터나 화면 공유에
+                      그대로 뜬다. "지금 당장 가리는" 길이 화면 안에 있어야 하고, 설정 창
+                      깊숙이 있으면 그 순간에 못 찾는다.
+                    */}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void updateSettings({ scheduleShowTodos: !showTodosOnCalendar })
+                      }
+                      aria-pressed={showTodosOnCalendar}
+                      title={
+                        showTodosOnCalendar ? '달력에서 할 일 숨기기' : '할 일 마감일을 달력에 표시'
+                      }
+                      className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                        showTodosOnCalendar
+                          ? 'bg-sp-accent text-white'
+                          : 'text-sp-muted hover:text-sp-text hover:bg-sp-surface'
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-icon leading-none">
+                        checklist
+                      </span>
+                      할 일
+                      {showTodosOnCalendar && todoOverlay.monthCount > 0 && (
+                        <span className="tabular-nums">{todoOverlay.monthCount}</span>
+                      )}
+                    </button>
+
                     {/* 소스 필터 (구글 또는 NEIS 연결 시) */}
                     {(googleConnected || neisEnabled) && (
                       <div className="flex items-center gap-1 border-l border-sp-border pl-3">
@@ -894,6 +939,10 @@ export function Schedule() {
                     onPrevMonth={goPrevMonth}
                     onNextMonth={goNextMonth}
                     onMoveEvent={handleMoveEvent}
+                    todoChips={todoOverlay.chipsByDate}
+                    todoCategories={todoOverlay.categories}
+                    onToggleTodo={todoOverlay.toggleTodo}
+                    onMoveTodo={todoOverlay.enabled ? todoOverlay.moveTodo : undefined}
                   />
                 </div>
 

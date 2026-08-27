@@ -5,8 +5,20 @@ import type { CalendarBar, WeekBarsResult } from '@domain/rules/eventRules';
 import { getColorsForCategory } from '@adapters/presenters/categoryPresenter';
 import { getHolidayMapForMonth } from '@domain/rules/holidayRules';
 import { columnIndexFromX } from './calendarDropColumn';
+import type { TodoCategory } from '@domain/entities/Todo';
+import type { TodoCalendarChip } from '@domain/rules/todoCalendarRules';
+import { getTodoChipColors } from './ScheduleTodoOverlay';
 
 const DAY_HEADERS = ['일', '월', '화', '수', '목', '금', '토'] as const;
+
+/**
+ * 한 날짜 칸에 보여 줄 칩의 최대 개수 (일정 + 할 일 **합쳐서**).
+ *
+ * 2개였는데 할 일이 들어오면서 3개로 늘렸다. 더 늘리지 않는 이유 — 날짜 칸 높이는
+ * `minmax(64px, 1fr)` 이라 창이 낮으면 칸이 64px 까지 줄고, 그때 4번째 줄부터는
+ * 잘려서 아예 안 보인다. 넘친 것은 `+N개 더` 로 알리고 하루 상세에서 전부 보여 준다.
+ */
+const DAY_CHIP_BUDGET = 3;
 
 interface CalendarViewProps {
   year: number;
@@ -23,13 +35,34 @@ interface CalendarViewProps {
    * 이동량이 정해져야 손끝 느낌과 결과가 어긋나지 않는다.
    */
   onMoveEvent?: (eventId: string, grabDateKey: string, dropDateKey: string) => void;
+
+  /**
+   * 날짜별 할 일 (2026-08-27). 일정과 **합치지 않고 따로 받는다** — 합치면 누르는 순간
+   * 일정 편집·구글 캘린더 쓰기 경로로 흘러간다(ScheduleTodoOverlay 주석 참고).
+   */
+  todoChips?: ReadonlyMap<string, readonly TodoCalendarChip[]>;
+  todoCategories?: readonly TodoCategory[];
+  /** 칩의 동그라미를 눌렀을 때 — 달력에서 바로 완료/해제 */
+  onToggleTodo?: (todoId: string) => void;
+  /** 할 일 칩을 끌어다 다른 날에 놓았을 때 — 마감일 변경 */
+  onMoveTodo?: (todoId: string, dropDateKey: string) => void;
 }
 
-/** 드래그 중인 일정 (잡은 날짜를 함께 기억해야 이동량을 셀 수 있다) */
+/**
+ * 드래그 중인 항목 (잡은 날짜를 함께 기억해야 이동량을 셀 수 있다).
+ *
+ * `kind` 가 필요한 이유 — 일정과 할 일은 id 공간이 다르고 놓았을 때 부르는 곳도 다르다.
+ * 종류를 안 들고 다니면 놓는 순간 "일정 중에 이 id 가 있나" 로 되짚어야 하고, 마침 같은
+ * id 가 양쪽에 있으면 엉뚱한 것이 움직인다.
+ */
 interface DragState {
-  readonly eventId: string;
+  readonly kind: 'event' | 'todo';
+  readonly id: string;
   readonly grabDateKey: string;
 }
+
+const NO_TODO_CHIPS: ReadonlyMap<string, readonly TodoCalendarChip[]> = new Map();
+const NO_TODO_CATEGORIES: readonly TodoCategory[] = [];
 
 interface CalendarDay {
   date: Date;
@@ -230,6 +263,72 @@ function SingleEventChip({
   );
 }
 
+/**
+ * 할 일 칩 — 일정 칩과 나란히 서지만 **동그라미가 하나 더 있다.**
+ *
+ * 구글 캘린더가 구글 Tasks 를 그리는 방식과 같다. 동그라미를 누르면 그 자리에서 완료되고,
+ * 제목을 누르면 그 날 상세가 열린다. 버튼 두 개를 나란히 두는 이유는 하나로 합치면
+ * "완료하려다 창이 열리는" 오조작이 생기기 때문이다.
+ */
+function TodoChip({
+  chip,
+  categories,
+  onToggle,
+  onOpen,
+  draggable = false,
+  isDragging = false,
+  onDragStart,
+  onDragEnd,
+}: {
+  chip: TodoCalendarChip;
+  categories: readonly TodoCategory[];
+  onToggle?: (todoId: string) => void;
+  onOpen: () => void;
+  draggable?: boolean;
+  isDragging?: boolean;
+  onDragStart?: (e: React.DragEvent<HTMLDivElement>) => void;
+  onDragEnd?: () => void;
+}) {
+  const colors = getTodoChipColors(chip, categories);
+
+  return (
+    <div
+      draggable={draggable}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      className={`flex w-full items-center gap-0.5 px-1 py-0.5 rounded-md ${colors.chip} transition-all duration-sp-quick ease-sp-out hover:brightness-95 ${draggable ? 'cursor-grab active:cursor-grabbing' : ''} ${isDragging ? 'opacity-40' : ''} ${chip.completed ? 'opacity-60' : ''}`}
+    >
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggle?.(chip.todoId);
+        }}
+        aria-label={chip.completed ? `'${chip.title}' 완료 해제` : `'${chip.title}' 완료`}
+        aria-pressed={chip.completed}
+        className={`shrink-0 leading-none ${chip.completed ? 'text-sp-accent' : colors.text} hover:opacity-70`}
+      >
+        <span className="material-symbols-outlined text-[11px] leading-none align-middle">
+          {chip.completed ? 'check_circle' : 'radio_button_unchecked'}
+        </span>
+      </button>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onOpen();
+        }}
+        title={chip.time ? `${chip.time} ${chip.title}` : chip.title}
+        className={`min-w-0 flex-1 truncate text-left text-caption leading-none ${
+          chip.completed ? 'text-sp-muted line-through' : 'text-sp-text'
+        }`}
+      >
+        {chip.title}
+      </button>
+    </div>
+  );
+}
+
 /** 날짜별 단일 이벤트 조회 (다일 이벤트 제외, 숨긴 일정 제외) */
 function getSingleDayEventsForDate(
   events: readonly SchoolEvent[],
@@ -253,6 +352,10 @@ export function CalendarView({
   onPrevMonth,
   onNextMonth,
   onMoveEvent,
+  todoChips = NO_TODO_CHIPS,
+  todoCategories = NO_TODO_CATEGORIES,
+  onToggleTodo,
+  onMoveTodo,
 }: CalendarViewProps) {
   const days = useMemo(() => getCalendarDays(year, month), [year, month]);
 
@@ -300,12 +403,15 @@ export function CalendarView({
     [eventById, onMoveEvent],
   );
 
-  const beginDrag = useCallback((e: React.DragEvent, eventId: string, grabDateKey: string) => {
-    e.dataTransfer.effectAllowed = 'move';
-    /* 브라우저·다른 앱이 알아볼 수 있게 최소한의 텍스트도 같이 실어 준다 */
-    e.dataTransfer.setData('text/plain', eventId);
-    setDrag({ eventId, grabDateKey });
-  }, []);
+  const beginDrag = useCallback(
+    (e: React.DragEvent, kind: 'event' | 'todo', id: string, grabDateKey: string) => {
+      e.dataTransfer.effectAllowed = 'move';
+      /* 브라우저·다른 앱이 알아볼 수 있게 최소한의 텍스트도 같이 실어 준다 */
+      e.dataTransfer.setData('text/plain', id);
+      setDrag({ kind, id, grabDateKey });
+    },
+    [],
+  );
 
   const endDrag = useCallback(() => {
     setDrag(null);
@@ -357,11 +463,12 @@ export function CalendarView({
       e.preventDefault();
       const key = dayKeyFromX(e, weekDays);
       if (key !== null && key !== drag.grabDateKey) {
-        onMoveEvent?.(drag.eventId, drag.grabDateKey, key);
+        if (drag.kind === 'todo') onMoveTodo?.(drag.id, key);
+        else onMoveEvent?.(drag.id, drag.grabDateKey, key);
       }
       endDrag();
     },
-    [drag, dayKeyFromX, onMoveEvent, endDrag],
+    [drag, dayKeyFromX, onMoveEvent, onMoveTodo, endDrag],
   );
 
   const monthLabel = `${year}년 ${month + 1}월`;
@@ -439,8 +546,19 @@ export function CalendarView({
                     d.isCurrentMonth && !multiDayDateKeys.has(d.dateKey)
                       ? (singleEventMap.get(d.dateKey) ?? [])
                       : [];
-                  const chipsToShow = singleEvts.slice(0, 2);
-                  const chipOverflow = singleEvts.length - chipsToShow.length;
+                  /*
+                    할 일은 **다일 바가 있는 날에도 그린다.** 일정 칩을 접는 이유는 그 날이
+                    이미 바로 채워져 제목이 겹쳐 보이기 때문인데, 할 일은 바 위쪽 날짜 칸에
+                    들어가고 개수도 적다. 여기서 같이 접으면 "여러 날 행사가 걸친 주에는
+                    마감일이 통째로 안 보이는" 구멍이 생긴다.
+                  */
+                  const dayTodos = d.isCurrentMonth ? (todoChips.get(d.dateKey) ?? []) : [];
+
+                  // 일정 → 할 일 순으로 정해진 칸을 나눠 쓰고, 넘친 것은 한 줄로 합쳐 알린다
+                  const chipsToShow = singleEvts.slice(0, DAY_CHIP_BUDGET);
+                  const todosToShow = dayTodos.slice(0, DAY_CHIP_BUDGET - chipsToShow.length);
+                  const chipOverflow =
+                    singleEvts.length - chipsToShow.length + (dayTodos.length - todosToShow.length);
 
                   /* 지금 놓으면 여기로 간다 — 잡은 날 그대로면 강조하지 않는다 */
                   const isDropTarget =
@@ -499,8 +617,8 @@ export function CalendarView({
                         </span>
                       )}
 
-                      {/* 단일 이벤트 칩 */}
-                      {chipsToShow.length > 0 && (
+                      {/* 단일 이벤트 칩 + 할 일 칩 */}
+                      {(chipsToShow.length > 0 || todosToShow.length > 0) && (
                         <div className="flex flex-col gap-px w-full px-0.5">
                           {chipsToShow.map((evt) => {
                             const colors = getColorsForCategory(evt.category, categories);
@@ -512,12 +630,25 @@ export function CalendarView({
                                 dotClass={colors.dot}
                                 onClick={() => onSelectDate(d.date)}
                                 draggable={isMovable(evt.id)}
-                                isDragging={drag?.eventId === evt.id}
-                                onDragStart={(e) => beginDrag(e, evt.id, d.dateKey)}
+                                isDragging={drag?.kind === 'event' && drag.id === evt.id}
+                                onDragStart={(e) => beginDrag(e, 'event', evt.id, d.dateKey)}
                                 onDragEnd={endDrag}
                               />
                             );
                           })}
+                          {todosToShow.map((todoChip) => (
+                            <TodoChip
+                              key={todoChip.todoId}
+                              chip={todoChip}
+                              categories={todoCategories}
+                              onToggle={onToggleTodo}
+                              onOpen={() => onSelectDate(d.date)}
+                              draggable={onMoveTodo !== undefined}
+                              isDragging={drag?.kind === 'todo' && drag.id === todoChip.todoId}
+                              onDragStart={(e) => beginDrag(e, 'todo', todoChip.todoId, d.dateKey)}
+                              onDragEnd={endDrag}
+                            />
+                          ))}
                           {chipOverflow > 0 && (
                             <span className="text-caption text-sp-muted hover:text-sp-accent font-sp-medium text-center leading-none transition-colors duration-sp-quick">
                               +{chipOverflow}개 더
@@ -543,7 +674,7 @@ export function CalendarView({
                       categories={categories}
                       onClick={() => onSelectDate(weekDays[bar.startCol]!.date)}
                       draggable={isMovable(bar.eventId)}
-                      isDragging={drag?.eventId === bar.eventId}
+                      isDragging={drag?.kind === 'event' && drag.id === bar.eventId}
                       onDragStart={(e) => {
                         /* 바의 어느 칸을 잡았는지 — 가운데를 잡으면 가운데 기준으로 움직인다 */
                         const rect = e.currentTarget.getBoundingClientRect();
@@ -558,7 +689,7 @@ export function CalendarView({
                               )
                             : 0;
                         const grabDay = weekDays[bar.startCol + offset] ?? weekDays[bar.startCol]!;
-                        beginDrag(e, bar.eventId, grabDay.dateKey);
+                        beginDrag(e, 'event', bar.eventId, grabDay.dateKey);
                       }}
                       onDragEnd={endDrag}
                     />
