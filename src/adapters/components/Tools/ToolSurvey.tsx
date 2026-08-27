@@ -15,6 +15,8 @@ import type { ToolTemplate } from '@domain/entities/ToolTemplate';
 import type { MultiSurveyQuestion } from '@domain/entities/MultiSurvey';
 import { TeacherControlPanel } from './TeacherControlPanel';
 import type { RosterEntry, TextAnswerEntry } from './TeacherControlPanel';
+import { buildLocalAccessUrl } from './liveAccessUrl';
+import { CopyLinkButton } from './CopyLinkButton';
 import { RealtimeResponseToggle } from '@adapters/components/common/RealtimeResponseToggle';
 
 interface ToolSurveyProps {
@@ -343,6 +345,12 @@ function CreateView({
       >
         📝 설문 시작
       </button>
+
+      {/* 학생 참여 링크는 시작한 다음 화면에서 만든다 (객관식 설문과 동일한 신고 대응) */}
+      <p className="text-sp-muted text-xs text-center shrink-0">
+        학생 휴대폰으로 응답을 받으시려면, 시작한 뒤 아래쪽 [🔗 학생 참여 링크 만들기]를 누르시면 QR
+        코드와 주소가 나옵니다.
+      </p>
     </div>
   );
 }
@@ -449,7 +457,7 @@ function LiveSurveyPanel({
           onClick={onStop}
           className="px-3 py-1.5 rounded-lg bg-red-500/20 border border-red-500/30 text-red-400 hover:bg-red-500/30 text-xs font-medium transition-all"
         >
-          학생 설문 종료
+          학생 참여 종료
         </button>
       </div>
 
@@ -473,15 +481,7 @@ function LiveSurveyPanel({
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-1.5">
                 <p className="text-sp-text font-mono text-sm break-all flex-1">{tunnelUrl}</p>
-                <button
-                  onClick={() => {
-                    void navigator.clipboard.writeText(tunnelUrl);
-                  }}
-                  className="shrink-0 p-1 rounded-md hover:bg-sp-text/10 text-sp-muted hover:text-sp-text transition-colors"
-                  title="주소 복사"
-                >
-                  <span className="material-symbols-outlined text-icon-sm">content_copy</span>
-                </button>
+                <CopyLinkButton url={tunnelUrl} ariaLabel="전체 주소 링크 복사" />
               </div>
               <p className="text-blue-400 text-xs">🌐 인터넷 모드 — Wi-Fi 불필요</p>
             </div>
@@ -500,15 +500,7 @@ function LiveSurveyPanel({
                 <p className="text-sp-muted text-xs mb-0.5">짧은 주소</p>
                 <div className="flex items-center gap-1.5">
                   <p className="text-sp-accent font-bold text-sm font-mono flex-1">{shortUrl}</p>
-                  <button
-                    onClick={() => {
-                      void navigator.clipboard.writeText(shortUrl);
-                    }}
-                    className="shrink-0 p-1 rounded-md hover:bg-sp-text/10 text-sp-muted hover:text-sp-text transition-colors"
-                    title="주소 복사"
-                  >
-                    <span className="material-symbols-outlined text-icon-sm">content_copy</span>
-                  </button>
+                  <CopyLinkButton url={shortUrl} ariaLabel="짧은 주소 링크 복사" />
                 </div>
               </div>
               <div className="flex items-center gap-1.5">
@@ -705,6 +697,8 @@ function SurveyingView({
             liveFullUrl={tunnelUrl ?? undefined}
             liveShortUrl={shortUrl ?? undefined}
             liveTunnelLoading={tunnelLoading}
+            liveTunnelError={tunnelError ?? undefined}
+            liveLocalUrl={buildLocalAccessUrl(liveServerInfo)}
             onActivate={onTeacherActivate}
             onReveal={onTeacherReveal}
             onAdvance={onTeacherAdvance}
@@ -776,13 +770,18 @@ function SurveyingView({
             {/* Student live survey toggle */}
             <button
               onClick={isLiveMode ? onStopLive : onStartLive}
+              title={
+                isLiveMode
+                  ? '누르면 학생 참여를 종료합니다'
+                  : '학생에게 보여줄 QR 코드와 참여 링크를 만듭니다'
+              }
               className={`px-4 py-2 rounded-xl border text-sm font-medium transition-all ${
                 isLiveMode
                   ? 'bg-green-500/20 border-green-500/30 text-green-400 hover:bg-green-500/30'
                   : 'bg-sp-card border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-text/5'
               }`}
             >
-              {isLiveMode ? `📱 학생 설문 중 (${connectedStudents}명)` : '📱 학생 설문'}
+              {isLiveMode ? `📱 학생 참여 중 (${connectedStudents}명)` : '🔗 학생 참여 링크 만들기'}
             </button>
 
             <button
@@ -1093,7 +1092,7 @@ export function ToolSurvey({ onBack, isFullscreen }: ToolSurveyProps) {
       if (isMultiQuestion) {
         // Multi-question: use liveMultiSurvey IPC
         if (!window.electronAPI?.startLiveMultiSurvey) {
-          setLiveError('학생 설문 기능은 데스크톱 앱에서만 사용할 수 있습니다.');
+          setLiveError('학생 참여 기능은 데스크톱 앱에서만 사용할 수 있습니다.');
           return;
         }
         const surveyQuestions = questions.map((q) => ({
@@ -1137,7 +1136,7 @@ export function ToolSurvey({ onBack, isFullscreen }: ToolSurveyProps) {
       } else {
         // Single question: use liveSurvey IPC
         if (!window.electronAPI?.startLiveSurvey) {
-          setLiveError('학생 설문 기능은 데스크톱 앱에서만 사용할 수 있습니다.');
+          setLiveError('학생 참여 기능은 데스크톱 앱에서만 사용할 수 있습니다.');
           return;
         }
         const q = questions[0]!;
@@ -1174,7 +1173,7 @@ export function ToolSurvey({ onBack, isFullscreen }: ToolSurveyProps) {
         }
       }
     } catch {
-      setLiveError('학생 설문 서버를 시작할 수 없습니다.');
+      setLiveError('학생 참여 서버를 시작할 수 없습니다.');
     }
   }, [questions, isMultiQuestion, stepMode]);
 

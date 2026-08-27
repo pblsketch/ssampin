@@ -86,7 +86,9 @@ export function DiscussionLive({
         margin: 2,
         color: { dark: '#000000', light: '#ffffff' },
         errorCorrectionLevel: 'M',
-      }).catch(() => {/* ignore */});
+      }).catch(() => {
+        /* ignore */
+      });
     }
   }, [displayUrl]);
 
@@ -97,7 +99,9 @@ export function DiscussionLive({
         margin: 3,
         color: { dark: '#000000', light: '#ffffff' },
         errorCorrectionLevel: 'M',
-      }).catch(() => {/* ignore */});
+      }).catch(() => {
+        /* ignore */
+      });
     }
   }, [displayUrl, showQRFullscreen]);
 
@@ -130,7 +134,9 @@ export function DiscussionLive({
           </h2>
           <div className="flex items-center gap-2">
             <span className="text-sp-muted text-xs">
-              <span className="material-symbols-outlined text-icon-sm align-middle mr-0.5">group</span>
+              <span className="material-symbols-outlined text-icon-sm align-middle mr-0.5">
+                group
+              </span>
               <span className="text-sp-text font-bold">{students.length}</span>명 참여
             </span>
             <span className="text-green-400 text-xs font-bold flex items-center gap-1">
@@ -141,9 +147,7 @@ export function DiscussionLive({
         </div>
 
         {/* Tool-specific visualization */}
-        <div className="flex-1 min-h-0 flex items-center justify-center">
-          {children}
-        </div>
+        <div className="flex-1 min-h-0 flex items-center justify-center">{children}</div>
 
         {/* QR panel — compact horizontal layout */}
         <div className="shrink-0 mt-3 bg-sp-card/80 border border-sp-border rounded-xl px-4 py-3">
@@ -162,22 +166,29 @@ export function DiscussionLive({
                 </div>
               ) : tunnelUrl ? (
                 <div className="flex items-center gap-1.5">
-                  <p className="text-sp-text font-mono text-xs break-all flex-1 truncate">{tunnelUrl}</p>
+                  <p className="text-sp-text font-mono text-xs break-all flex-1 truncate">
+                    {tunnelUrl}
+                  </p>
                   <button
                     onClick={() => handleCopy(tunnelUrl, 'tunnel')}
-                    className="shrink-0 p-1 rounded-md hover:bg-sp-text/10 text-sp-muted hover:text-sp-text transition-colors"
-                    title="주소 복사"
+                    className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-md bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/50 transition-colors text-xs font-medium"
+                    aria-label="전체 주소 링크 복사"
                   >
-                    <span className={`material-symbols-outlined text-icon-sm ${copiedField === 'tunnel' ? 'text-green-400' : ''}`}>
+                    <span
+                      aria-hidden="true"
+                      className={`material-symbols-outlined text-icon-sm ${copiedField === 'tunnel' ? 'text-green-400' : ''}`}
+                    >
                       {copiedField === 'tunnel' ? 'check' : 'content_copy'}
                     </span>
+                    {copiedField === 'tunnel' ? '복사됨!' : '링크 복사'}
                   </button>
                 </div>
               ) : tunnelError ? (
                 <div className="flex flex-col gap-0.5">
                   <p className="text-red-400 text-xs">{tunnelError}</p>
                   <p className="text-sp-muted text-caption">
-                    Wi-Fi 직접 접속: http://{serverInfo?.localIPs[0] ?? '...'}:{serverInfo?.port ?? ''}
+                    Wi-Fi 직접 접속: http://{serverInfo?.localIPs[0] ?? '...'}:
+                    {serverInfo?.port ?? ''}
                   </p>
                 </div>
               ) : null}
@@ -186,15 +197,21 @@ export function DiscussionLive({
                 <div className="flex items-center gap-2 border-t border-sp-border/50 pt-1.5">
                   <div className="flex items-center gap-1.5 flex-1 min-w-0">
                     <span className="text-caption text-sp-muted shrink-0">짧은 주소</span>
-                    <p className="text-sp-accent font-bold text-xs font-mono truncate">{shortUrl}</p>
+                    <p className="text-sp-accent font-bold text-xs font-mono truncate">
+                      {shortUrl}
+                    </p>
                     <button
                       onClick={() => handleCopy(shortUrl, 'short')}
-                      className="shrink-0 p-0.5 rounded-md hover:bg-sp-text/10 text-sp-muted hover:text-sp-text transition-colors"
-                      title="주소 복사"
+                      className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/50 transition-colors text-xs font-medium"
+                      aria-label="짧은 주소 링크 복사"
                     >
-                      <span className={`material-symbols-outlined text-icon-sm ${copiedField === 'short' ? 'text-green-400' : ''}`}>
+                      <span
+                        aria-hidden="true"
+                        className={`material-symbols-outlined text-icon-sm ${copiedField === 'short' ? 'text-green-400' : ''}`}
+                      >
                         {copiedField === 'short' ? 'check' : 'content_copy'}
                       </span>
+                      {copiedField === 'short' ? '복사됨!' : '링크 복사'}
                     </button>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
@@ -202,7 +219,9 @@ export function DiscussionLive({
                       type="text"
                       value={customCodeInput}
                       onChange={(e) => onCustomCodeChange(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === 'Enter') onSetCustomCode(); }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') onSetCustomCode();
+                      }}
                       placeholder={shortCode ?? '코드'}
                       maxLength={30}
                       className="w-24 bg-sp-bg border border-sp-border rounded-lg px-2 py-1 text-caption text-sp-text placeholder-sp-muted focus:border-sp-accent focus:outline-none"
@@ -217,9 +236,7 @@ export function DiscussionLive({
                   </div>
                 </div>
               )}
-              {customCodeError && (
-                <p className="text-red-400 text-caption">{customCodeError}</p>
-              )}
+              {customCodeError && <p className="text-red-400 text-caption">{customCodeError}</p>}
             </div>
           </div>
         </div>
@@ -235,7 +252,8 @@ export function DiscussionLive({
               className="px-2.5 py-1 rounded-lg bg-sp-bg border border-sp-border text-sp-muted hover:text-sp-text text-xs transition-all"
               title="QR 코드 크게 보기"
             >
-              <span className="material-symbols-outlined text-icon-sm align-middle">zoom_in</span> 크게
+              <span className="material-symbols-outlined text-icon-sm align-middle">zoom_in</span>{' '}
+              크게
             </button>
           </div>
           <div className="flex items-center gap-2">

@@ -15,6 +15,8 @@ import { useBoardSessionStore } from '@adapters/stores/useBoardSessionStore';
 import type { ToolTemplate } from '@domain/entities/ToolTemplate';
 import { TeacherControlPanel } from './TeacherControlPanel';
 import type { RosterEntry, TextAnswerEntry } from './TeacherControlPanel';
+import { buildLocalAccessUrl } from './liveAccessUrl';
+import { CopyLinkButton } from './CopyLinkButton';
 import { RealtimeResponseToggle } from '@adapters/components/common/RealtimeResponseToggle';
 
 interface ToolPollProps {
@@ -481,6 +483,15 @@ function CreateView({
       >
         {'\u{1F4CA}'} 투표 시작!
       </button>
+
+      {/*
+        학생 참여 링크는 시작한 다음 화면에서 만든다. 이 안내가 없어서
+        "문항 작성 화면에 링크 공유 버튼이 없다"는 신고가 들어왔다.
+      */}
+      <p className="text-sp-muted text-xs text-center shrink-0">
+        학생 휴대폰으로 응답을 받으시려면, 시작한 뒤 아래쪽 [{'\u{1F517}'} 학생 참여 링크 만들기]를
+        누르시면 QR 코드와 주소가 나옵니다.
+      </p>
     </div>
   );
 }
@@ -587,7 +598,7 @@ function LiveVotePanel({
           onClick={onStop}
           className="px-3 py-1.5 rounded-lg bg-red-500/20 border border-red-500/30 text-red-400 hover:bg-red-500/30 text-xs font-medium transition-all"
         >
-          학생 설문 종료
+          학생 참여 종료
         </button>
       </div>
 
@@ -609,15 +620,7 @@ function LiveVotePanel({
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-1.5">
                 <p className="text-sp-text font-mono text-sm break-all flex-1">{tunnelUrl}</p>
-                <button
-                  onClick={() => {
-                    void navigator.clipboard.writeText(tunnelUrl);
-                  }}
-                  className="shrink-0 p-1 rounded-md hover:bg-sp-text/10 text-sp-muted hover:text-sp-text transition-colors"
-                  title="주소 복사"
-                >
-                  <span className="material-symbols-outlined text-icon-sm">content_copy</span>
-                </button>
+                <CopyLinkButton url={tunnelUrl} ariaLabel="전체 주소 링크 복사" />
               </div>
               <p className="text-blue-400 text-xs">{'\u{1F310}'} 인터넷 모드 — Wi-Fi 불필요</p>
             </div>
@@ -636,15 +639,7 @@ function LiveVotePanel({
                 <p className="text-sp-muted text-xs mb-0.5">짧은 주소</p>
                 <div className="flex items-center gap-1.5">
                   <p className="text-sp-accent font-bold text-sm font-mono flex-1">{shortUrl}</p>
-                  <button
-                    onClick={() => {
-                      void navigator.clipboard.writeText(shortUrl);
-                    }}
-                    className="shrink-0 p-1 rounded-md hover:bg-sp-text/10 text-sp-muted hover:text-sp-text transition-colors"
-                    title="주소 복사"
-                  >
-                    <span className="material-symbols-outlined text-icon-sm">content_copy</span>
-                  </button>
+                  <CopyLinkButton url={shortUrl} ariaLabel="짧은 주소 링크 복사" />
                 </div>
               </div>
               <div className="flex items-center gap-1.5">
@@ -1035,6 +1030,11 @@ function VotingView({
           <button
             onClick={isLiveMode ? onStopLive : onStartLive}
             disabled={liveDisabled && !isLiveMode}
+            title={
+              isLiveMode
+                ? '누르면 학생 참여를 종료합니다'
+                : '학생에게 보여줄 QR 코드와 참여 링크를 만듭니다'
+            }
             className={`px-4 py-2 rounded-xl border text-sm font-medium transition-all ${
               isLiveMode
                 ? 'bg-green-500/20 border-green-500/30 text-green-400 hover:bg-green-500/30'
@@ -1043,11 +1043,13 @@ function VotingView({
                   : 'bg-sp-card border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-text/5'
             }`}
           >
-            {isLiveMode ? `\u{1F4F1} 학생 설문 중 (${connectedStudents}명)` : '\u{1F4F1} 학생 설문'}
+            {isLiveMode
+              ? `\u{1F4F1} 학생 참여 중 (${connectedStudents}명)`
+              : '\u{1F517} 학생 참여 링크 만들기'}
           </button>
           {liveDisabled && !isLiveMode && (
             <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-sp-card border border-sp-border rounded-lg text-xs text-sp-muted whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-              복수 문항에서는 학생 설문을 지원하지 않습니다
+              복수 문항에서는 학생 참여를 지원하지 않습니다
             </div>
           )}
         </div>
@@ -1290,6 +1292,8 @@ export function ToolPoll({ onBack, isFullscreen }: ToolPollProps) {
 
   // stepMode=true + 라이브 + 다문항 ⇒ TeacherControlPanel이 메인 (기존 Live/Voting 카드 전부 숨김)
   const isTeacherDrivenLive = isLiveMode && stepMode && questions.length >= 2;
+  // 터널이 실패했을 때 학생이 참여할 수 있는 유일한 대안 주소
+  const localAccessUrl = buildLocalAccessUrl(liveServerInfo);
 
   const handleStart = useCallback(
     (qs: PollQuestion[]) => {
@@ -1351,7 +1355,7 @@ export function ToolPoll({ onBack, isFullscreen }: ToolPollProps) {
       if (isMultiQuestion) {
         // Multi-question: use liveMultiSurvey IPC
         if (!window.electronAPI?.startLiveMultiSurvey) {
-          setLiveError('학생 설문 기능은 데스크톱 앱에서만 사용할 수 있습니다.');
+          setLiveError('학생 참여 기능은 데스크톱 앱에서만 사용할 수 있습니다.');
           return;
         }
         const surveyQuestions = questions.map((q) => ({
@@ -1405,7 +1409,7 @@ export function ToolPoll({ onBack, isFullscreen }: ToolPollProps) {
       } else {
         // Single question: use liveVote IPC
         if (!window.electronAPI?.startLiveVote) {
-          setLiveError('학생 설문 기능은 데스크톱 앱에서만 사용할 수 있습니다.');
+          setLiveError('학생 참여 기능은 데스크톱 앱에서만 사용할 수 있습니다.');
           return;
         }
         const firstQ = questions[0];
@@ -1444,9 +1448,10 @@ export function ToolPoll({ onBack, isFullscreen }: ToolPollProps) {
         }
       }
     } catch {
-      setLiveError('학생 설문 서버를 시작할 수 없습니다.');
+      setLiveError('학생 참여 서버를 시작할 수 없습니다.');
     }
-  }, [questions, isMultiQuestion]);
+    // stepMode 는 서버에 그대로 넘어가는 값이라 의존성에서 빠지면 이전 선택이 전달될 수 있다.
+  }, [questions, isMultiQuestion, stepMode]);
 
   const handleStopLive = useCallback(async () => {
     if (isMultiQuestion) {
@@ -1741,6 +1746,8 @@ export function ToolPoll({ onBack, isFullscreen }: ToolPollProps) {
             liveFullUrl={tunnelUrl ?? undefined}
             liveShortUrl={shortUrl ?? undefined}
             liveTunnelLoading={tunnelLoading}
+            liveTunnelError={tunnelError ?? undefined}
+            liveLocalUrl={localAccessUrl}
             onActivate={() => window.electronAPI?.liveMultiSurveyActivateSession?.()}
             onReveal={() => window.electronAPI?.liveMultiSurveyReveal?.()}
             onAdvance={() => window.electronAPI?.liveMultiSurveyAdvance?.()}

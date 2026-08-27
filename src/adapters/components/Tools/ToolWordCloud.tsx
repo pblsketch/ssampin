@@ -8,6 +8,7 @@ import type { WordCloudSession, WordCloudGroup } from '@domain/entities/WordClou
 import { useWordCloudHistoryStore } from '@adapters/stores/useWordCloudHistoryStore';
 import { useBoardSessionStore } from '@adapters/stores/useBoardSessionStore';
 import { OrganizeView } from './WordCloud/OrganizeView';
+import { CopyLinkButton } from './CopyLinkButton';
 import { LiveSessionClient } from '@infrastructure/supabase/LiveSessionClient';
 
 interface ToolWordCloudProps {
@@ -18,8 +19,16 @@ interface ToolWordCloudProps {
 type ViewMode = 'create' | 'live' | 'organize' | 'history';
 
 const WORD_COLORS = [
-  '#60a5fa', '#f87171', '#34d399', '#fbbf24', '#a78bfa',
-  '#fb923c', '#2dd4bf', '#f472b6', '#818cf8', '#4ade80',
+  '#60a5fa',
+  '#f87171',
+  '#34d399',
+  '#fbbf24',
+  '#a78bfa',
+  '#fb923c',
+  '#2dd4bf',
+  '#f472b6',
+  '#818cf8',
+  '#4ade80',
 ];
 
 const EXAMPLE_QUESTIONS = [
@@ -75,14 +84,18 @@ function CreateView({ isFullscreen, onStart, onShowHistory }: CreateViewProps) {
   };
 
   return (
-    <div className={`w-full max-w-2xl mx-auto flex flex-col gap-6 ${isFullscreen ? 'px-12 py-6' : 'px-6 py-4'}`}>
+    <div
+      className={`w-full max-w-2xl mx-auto flex flex-col gap-6 ${isFullscreen ? 'px-12 py-6' : 'px-6 py-4'}`}
+    >
       <div className="w-full">
         <label className="block text-sp-muted text-sm mb-2">질문</label>
         <input
           type="text"
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') handleStart(); }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') handleStart();
+          }}
           placeholder="학생들에게 물어볼 질문을 입력하세요"
           className="w-full px-4 py-3 rounded-xl bg-sp-bg border border-sp-border text-sp-text text-xl placeholder-sp-muted focus:border-sp-accent focus:outline-none transition-colors"
           autoFocus
@@ -93,11 +106,7 @@ function CreateView({ isFullscreen, onStart, onShowHistory }: CreateViewProps) {
       <div className="w-full">
         <div className="flex items-center justify-between mb-3">
           <span className="text-sp-muted text-sm">자주 쓰는 질문</span>
-          <PresetSelector
-            type="wordcloud"
-            currentItems={currentItems}
-            onLoad={handleLoadPreset}
-          />
+          <PresetSelector type="wordcloud" currentItems={currentItems} onLoad={handleLoadPreset} />
         </div>
         <div className="flex flex-wrap gap-2">
           {savedQuestions.map((eq) => (
@@ -151,7 +160,6 @@ function CreateView({ isFullscreen, onStart, onShowHistory }: CreateViewProps) {
       >
         ☁️ 워드클라우드 시작!
       </button>
-
     </div>
   );
 }
@@ -205,7 +213,9 @@ function LivePanel({
         margin: 2,
         color: { dark: '#000000', light: '#ffffff' },
         errorCorrectionLevel: 'M',
-      }).catch(() => {/* ignore */});
+      }).catch(() => {
+        /* ignore */
+      });
     }
   }, [displayUrl]);
 
@@ -216,7 +226,9 @@ function LivePanel({
         margin: 3,
         color: { dark: '#000000', light: '#ffffff' },
         errorCorrectionLevel: 'M',
-      }).catch(() => {/* ignore */});
+      }).catch(() => {
+        /* ignore */
+      });
     }
   }, [displayUrl, showQRFullscreen]);
 
@@ -225,23 +237,25 @@ function LivePanel({
       <div
         className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white cursor-pointer"
         onClick={onToggleQRFullscreen}
-        onKeyDown={(e) => { if (e.key === 'Escape') onToggleQRFullscreen(); }}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') onToggleQRFullscreen();
+        }}
         tabIndex={0}
         ref={(el) => el?.focus()}
       >
         {displayUrl && <canvas ref={fullscreenCanvasRef} className="mb-6" />}
         <p className="text-gray-800 text-xl font-bold mb-2">☁️ 워드클라우드 참여하기</p>
         {displayUrl && <p className="text-gray-600 text-lg font-mono">{displayUrl}</p>}
-        {tunnelUrl && (
-          <p className="text-blue-500 text-sm mt-1">인터넷 모드 (Wi-Fi 불필요)</p>
-        )}
+        {tunnelUrl && <p className="text-blue-500 text-sm mt-1">인터넷 모드 (Wi-Fi 불필요)</p>}
         <p className="text-gray-400 text-sm mt-4">화면을 클릭하면 돌아갑니다</p>
       </div>
     );
   }
 
   return (
-    <div className={`bg-sp-card border border-sp-border rounded-xl p-4 flex flex-col items-center gap-3 shrink-0 ${isFullscreen ? '' : ''}`}>
+    <div
+      className={`bg-sp-card border border-sp-border rounded-xl p-4 flex flex-col items-center gap-3 shrink-0 ${isFullscreen ? '' : ''}`}
+    >
       <div className="flex items-center gap-2 w-full">
         <span className="text-green-400 text-sm font-bold">● LIVE</span>
         <span className="text-sp-muted text-sm">
@@ -284,14 +298,16 @@ function LivePanel({
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-1.5">
                 <p className="text-sp-text font-mono text-sm break-all flex-1">{tunnelUrl}</p>
-                <button onClick={() => { void navigator.clipboard.writeText(tunnelUrl); }} className="shrink-0 p-1 rounded-md hover:bg-sp-text/10 text-sp-muted hover:text-sp-text transition-colors" title="주소 복사"><span className="material-symbols-outlined text-icon-sm">content_copy</span></button>
+                <CopyLinkButton url={tunnelUrl} ariaLabel="전체 주소 링크 복사" />
               </div>
               <p className="text-blue-400 text-xs">🌐 인터넷 모드 — Wi-Fi 불필요</p>
             </div>
           ) : tunnelError ? (
             <div className="flex flex-col gap-1">
               <p className="text-red-400 text-xs">{tunnelError}</p>
-              <p className="text-sp-muted text-xs">Wi-Fi 직접 접속: http://{serverInfo.localIPs[0] ?? '...'}:{serverInfo.port}</p>
+              <p className="text-sp-muted text-xs">
+                Wi-Fi 직접 접속: http://{serverInfo.localIPs[0] ?? '...'}:{serverInfo.port}
+              </p>
             </div>
           ) : null}
           {shortUrl && (
@@ -300,7 +316,7 @@ function LivePanel({
                 <p className="text-sp-muted text-xs mb-0.5">짧은 주소</p>
                 <div className="flex items-center gap-1.5">
                   <p className="text-sp-accent font-bold text-sm font-mono flex-1">{shortUrl}</p>
-                  <button onClick={() => { void navigator.clipboard.writeText(shortUrl); }} className="shrink-0 p-1 rounded-md hover:bg-sp-text/10 text-sp-muted hover:text-sp-text transition-colors" title="주소 복사"><span className="material-symbols-outlined text-icon-sm">content_copy</span></button>
+                  <CopyLinkButton url={shortUrl} ariaLabel="짧은 주소 링크 복사" />
                 </div>
               </div>
               <div className="flex items-center gap-1.5">
@@ -308,7 +324,9 @@ function LivePanel({
                   type="text"
                   value={customCodeInput}
                   onChange={(e) => onCustomCodeChange(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') onSetCustomCode(); }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') onSetCustomCode();
+                  }}
                   placeholder={shortCode ?? '커스텀 코드'}
                   maxLength={30}
                   className="flex-1 bg-sp-bg border border-sp-border rounded-lg px-2 py-1 text-xs text-sp-text placeholder-sp-muted focus:border-sp-accent focus:outline-none"
@@ -339,7 +357,12 @@ interface WordCloudDisplayProps {
   totalSubmissions: number;
 }
 
-function WordCloudDisplay({ words, question, isFullscreen, totalSubmissions }: WordCloudDisplayProps) {
+function WordCloudDisplay({
+  words,
+  question,
+  isFullscreen,
+  totalSubmissions,
+}: WordCloudDisplayProps) {
   const MIN_FONT = isFullscreen ? 18 : 14;
   const MAX_FONT = isFullscreen ? 96 : 64;
   const MAX_DISPLAY = 50;
@@ -369,14 +392,18 @@ function WordCloudDisplay({ words, question, isFullscreen, totalSubmissions }: W
     <div className="flex-1 flex flex-col">
       {/* Question */}
       <div className="text-center mb-4">
-        <h2 className={`text-sp-text font-bold ${isFullscreen ? 'text-2xl' : 'text-xl'}`}>{question}</h2>
+        <h2 className={`text-sp-text font-bold ${isFullscreen ? 'text-2xl' : 'text-xl'}`}>
+          {question}
+        </h2>
         <p className="text-sp-muted text-sm mt-1">
           총 {totalSubmissions}개 제출 · {words.length}개 고유 단어
         </p>
       </div>
 
       {/* Word cloud */}
-      <div className={`flex-1 flex flex-wrap items-center justify-center content-center gap-3 ${isFullscreen ? 'gap-4 p-8' : 'p-4'} min-h-[200px]`}>
+      <div
+        className={`flex-1 flex flex-wrap items-center justify-center content-center gap-3 ${isFullscreen ? 'gap-4 p-8' : 'p-4'} min-h-[200px]`}
+      >
         {displayWords.map((entry) => (
           <span
             key={entry.normalized}
@@ -459,7 +486,8 @@ function HistoryView({ isFullscreen, onLoadSession, onBack }: HistoryViewProps) 
               <div className="flex-1 min-w-0">
                 <p className="text-sp-text font-medium truncate">{s.question}</p>
                 <p className="text-sp-muted text-xs mt-1">
-                  {s.words.length}개 단어 · {s.groups.length}개 그룹 · {new Date(s.createdAt).toLocaleDateString('ko-KR')}
+                  {s.words.length}개 단어 · {s.groups.length}개 그룹 ·{' '}
+                  {new Date(s.createdAt).toLocaleDateString('ko-KR')}
                 </p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
@@ -503,7 +531,9 @@ export function ToolWordCloud({ onBack, isFullscreen }: ToolWordCloudProps) {
 
   // Live mode state
   const [isLiveMode, setIsLiveMode] = useState(false);
-  const [liveServerInfo, setLiveServerInfo] = useState<{ port: number; localIPs: string[] } | null>(null);
+  const [liveServerInfo, setLiveServerInfo] = useState<{ port: number; localIPs: string[] } | null>(
+    null,
+  );
   const [connectedStudents, setConnectedStudents] = useState(0);
   const [showQRFullscreen, setShowQRFullscreen] = useState(false);
   const [liveError, setLiveError] = useState<string | null>(null);
@@ -540,7 +570,10 @@ export function ToolWordCloud({ onBack, isFullscreen }: ToolWordCloudProps) {
     }
 
     try {
-      const info = await window.electronAPI.startLiveWordCloud({ question: q, maxSubmissions: maxSubs });
+      const info = await window.electronAPI.startLiveWordCloud({
+        question: q,
+        maxSubmissions: maxSubs,
+      });
 
       if (info.localIPs.length === 0) {
         setLiveError('Wi-Fi에 연결되어 있지 않습니다. 네트워크에 연결한 뒤 다시 시도하세요.');
@@ -584,7 +617,10 @@ export function ToolWordCloud({ onBack, isFullscreen }: ToolWordCloudProps) {
     if (!tunnelUrl || !customCodeInput.trim()) return;
     setCustomCodeError(null);
     try {
-      const session = await liveSessionClientRef.current.setCustomCode(tunnelUrl, customCodeInput.trim());
+      const session = await liveSessionClientRef.current.setCustomCode(
+        tunnelUrl,
+        customCodeInput.trim(),
+      );
       setShortUrl(session.shortUrl);
       setShortCode(session.code);
       setCustomCodeInput('');
@@ -626,23 +662,26 @@ export function ToolWordCloud({ onBack, isFullscreen }: ToolWordCloudProps) {
     setViewMode('organize');
   }, [handleStopLive]);
 
-  const handleSaveGroups = useCallback(async (groups: WordCloudGroup[]) => {
-    setCurrentGroups(groups);
-    const session: WordCloudSession = {
-      id: currentSessionId ?? generateSessionId(),
-      question,
-      words: words.map((w) => ({ word: w.word, normalized: w.normalized, count: w.count })),
-      groups,
-      totalSubmissions,
-      createdAt: new Date().toISOString(),
-    };
-    if (currentSessionId) {
-      await updateSession(session);
-    } else {
-      setCurrentSessionId(session.id);
-      await addSession(session);
-    }
-  }, [currentSessionId, question, words, totalSubmissions, addSession, updateSession]);
+  const handleSaveGroups = useCallback(
+    async (groups: WordCloudGroup[]) => {
+      setCurrentGroups(groups);
+      const session: WordCloudSession = {
+        id: currentSessionId ?? generateSessionId(),
+        question,
+        words: words.map((w) => ({ word: w.word, normalized: w.normalized, count: w.count })),
+        groups,
+        totalSubmissions,
+        createdAt: new Date().toISOString(),
+      };
+      if (currentSessionId) {
+        await updateSession(session);
+      } else {
+        setCurrentSessionId(session.id);
+        await addSession(session);
+      }
+    },
+    [currentSessionId, question, words, totalSubmissions, addSession, updateSession],
+  );
 
   const handleLoadSession = useCallback((session: WordCloudSession) => {
     setQuestion(session.question);
@@ -672,9 +711,7 @@ export function ToolWordCloud({ onBack, isFullscreen }: ToolWordCloudProps) {
         const existing = prev.find((w) => w.normalized === norm);
         if (existing) {
           return prev
-            .map((w) =>
-              w.normalized === norm ? { ...w, count: data.count } : w,
-            )
+            .map((w) => (w.normalized === norm ? { ...w, count: data.count } : w))
             .sort((a, b) => b.count - a.count);
         } else {
           const newEntry: WordEntry = {
@@ -733,16 +770,21 @@ export function ToolWordCloud({ onBack, isFullscreen }: ToolWordCloudProps) {
       <div className="flex flex-col h-full">
         {/* Mode indicator */}
         <div className="flex items-center justify-center gap-2 py-2 shrink-0">
-          {([
-            { key: 'create', label: '질문 설정' },
-            { key: 'live', label: '응답 수집' },
-            { key: 'organize', label: '결과' },
-          ] as const).map((step, i) => {
-            const isActive = viewMode === step.key || (viewMode === 'history' && step.key === 'organize');
+          {(
+            [
+              { key: 'create', label: '질문 설정' },
+              { key: 'live', label: '응답 수집' },
+              { key: 'organize', label: '결과' },
+            ] as const
+          ).map((step, i) => {
+            const isActive =
+              viewMode === step.key || (viewMode === 'history' && step.key === 'organize');
             return (
               <Fragment key={step.key}>
                 {i > 0 && <span className="text-sp-border">›</span>}
-                <span className={`text-xs font-medium ${isActive ? 'text-sp-accent' : 'text-sp-muted'}`}>
+                <span
+                  className={`text-xs font-medium ${isActive ? 'text-sp-accent' : 'text-sp-muted'}`}
+                >
                   {step.label}
                 </span>
               </Fragment>
@@ -790,7 +832,9 @@ export function ToolWordCloud({ onBack, isFullscreen }: ToolWordCloudProps) {
                 customCodeInput={customCodeInput}
                 customCodeError={customCodeError}
                 onCustomCodeChange={setCustomCodeInput}
-                onSetCustomCode={() => { void handleSetCustomCode(); }}
+                onSetCustomCode={() => {
+                  void handleSetCustomCode();
+                }}
               />
             )}
 

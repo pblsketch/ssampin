@@ -1,4 +1,4 @@
-﻿export type DocCategory = 'start' | 'features' | 'sync' | 'troubleshooting' | 'reference';
+export type DocCategory = 'start' | 'features' | 'sync' | 'troubleshooting' | 'reference';
 
 export interface DocImage {
   readonly src: string;
@@ -944,7 +944,7 @@ export const docsArticles: readonly DocArticle[] = [
     title: '쌤도구',
     description: '수업 중 바로 쓰는 33가지 교실 도구를 정리하고 실행합니다.',
     category: 'features',
-    lastUpdated: '2026-08-25',
+    lastUpdated: '2026-08-27',
     image: { src: '/docs/screenshots/tools-grid.png', alt: '쌤핀 쌤도구 목록 화면' },
     sections: [
       {
@@ -965,6 +965,29 @@ export const docsArticles: readonly DocArticle[] = [
           '원클릭업무포털 (선생님 컴퓨터에 설치된 별개의 무료 프로그램을 실행합니다)',
           'DoRms, 도름스 오락실 (쌤핀 안에서 열지 않고 바깥 사이트로 연결됩니다)',
         ],
+      },
+      {
+        id: 'student-join-link',
+        title: '학생 휴대폰으로 참여시키기 (참여 링크와 QR)',
+        body: [
+          '객관식 설문, 주관식 설문, 복합 유형 설문, 워드클라우드, 가치수직선 토론, 신호등 토론은 학생이 자기 휴대폰으로 응답할 수 있습니다. 이때 필요한 참여 링크와 QR 코드는 문항을 만드는 화면이 아니라, 도구를 시작한 다음 화면에서 만듭니다.',
+        ],
+        steps: [
+          '쌤도구에서 도구를 열고 문항(또는 질문)을 작성합니다.',
+          '[설문 시작] 또는 [투표 시작]을 눌러 진행 화면으로 넘어갑니다.',
+          '화면 아래쪽 [🔗 학생 참여 링크 만들기]를 누릅니다. 워드클라우드와 토론 도구는 시작하는 순간 바로 나타나므로 이 단계가 없습니다.',
+          'QR 코드와 주소가 나타나면 QR을 교실 화면에 띄우거나 [링크 복사]로 주소를 복사해 학생에게 전달합니다. 🔍 크게를 누르면 QR을 전체 화면으로 키울 수 있습니다.',
+        ],
+        bullets: [
+          '주소는 두 가지가 나옵니다. 짧은 주소는 학생이 직접 입력하기 좋고, 전체 주소는 메신저로 보낼 때 씁니다.',
+          '짧은 주소 옆 칸에 원하는 낱말을 넣고 [변경]을 누르면 기억하기 쉬운 주소로 바꿀 수 있습니다.',
+          '문항이 2개 이상일 때 [👨‍🏫 교사 주도 진행]을 고르면 화면이 진행 제어판으로 바뀝니다. 이때는 오른쪽 위 [🔗 학생 참여 링크]에서 QR과 주소를 봅니다.',
+        ],
+        callout: {
+          title: '인터넷 연결이 안 될 때',
+          body: '참여 링크는 인터넷을 통해 만들어집니다. 학교망에서 연결이 막히면 실패 안내와 함께 "같은 Wi-Fi 직접 접속" 주소가 표시됩니다. 학생 휴대폰을 교사 컴퓨터와 같은 Wi-Fi에 연결한 뒤 그 주소로 접속하면 됩니다.',
+          tone: 'info',
+        },
       },
       {
         id: 'oneclick-portal',

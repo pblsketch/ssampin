@@ -64,27 +64,28 @@ export interface TeacherControlPanelProps {
   liveShortUrl?: string;
   /** 아직 터널 URL을 받는 중이면 true */
   liveTunnelLoading?: boolean;
+  /**
+   * 인터넷(터널) 연결 실패 사유. 있으면 초대 모달에서 오류와 Wi-Fi 폴백을 안내한다.
+   * 사용자 신고("링크 공유 버튼이 보이지 않음") 대응 — 실패해도 초대 버튼은 사라지지 않는다.
+   */
+  liveTunnelError?: string;
+  /** 같은 Wi-Fi에서 직접 접속하는 주소. 터널 실패 시 유일한 대안이라 항상 넘겨준다. */
+  liveLocalUrl?: string;
 }
 
 // ─────────────────────────────────────────────────────────
 // 내부 헬퍼 타입 가드
 // ─────────────────────────────────────────────────────────
 
-function isChoiceAggregate(
-  agg: AggregatedResult,
-): agg is AggregatedSingleMulti {
+function isChoiceAggregate(agg: AggregatedResult): agg is AggregatedSingleMulti {
   return 'counts' in agg && 'total' in agg;
 }
 
-function isScaleAggregate(
-  agg: AggregatedResult,
-): agg is AggregatedScale {
+function isScaleAggregate(agg: AggregatedResult): agg is AggregatedScale {
   return 'avg' in agg && 'distribution' in agg;
 }
 
-function isTextAggregate(
-  agg: AggregatedResult,
-): agg is AggregatedText {
+function isTextAggregate(agg: AggregatedResult): agg is AggregatedText {
   return 'answers' in agg;
 }
 
@@ -98,16 +99,16 @@ interface PhaseBadgeProps {
 
 function PhaseBadge({ phase }: PhaseBadgeProps) {
   const styles: Record<TeacherControlPanelProps['phase'], string> = {
-    lobby:    'bg-sp-muted/20 text-sp-muted',
-    open:     'bg-blue-500/20 text-blue-400',
+    lobby: 'bg-sp-muted/20 text-sp-muted',
+    open: 'bg-blue-500/20 text-blue-400',
     revealed: 'bg-sp-highlight/20 text-sp-highlight',
-    ended:    'bg-green-500/20 text-green-400',
+    ended: 'bg-green-500/20 text-green-400',
   };
   const labels: Record<TeacherControlPanelProps['phase'], string> = {
-    lobby:    '대기',
-    open:     '응답 받는 중',
+    lobby: '대기',
+    open: '응답 받는 중',
     revealed: '결과 공개',
-    ended:    '종료',
+    ended: '종료',
   };
 
   return (
@@ -130,6 +131,8 @@ interface StudentInviteModalProps {
   fullUrl?: string;
   shortUrl?: string;
   tunnelLoading: boolean;
+  tunnelError?: string;
+  localUrl?: string;
   totalConnected: number;
   roster: RosterEntry[];
 }
@@ -141,28 +144,38 @@ function StudentInviteModal({
   fullUrl,
   shortUrl,
   tunnelLoading,
+  tunnelError,
+  localUrl,
   totalConnected,
   roster,
 }: StudentInviteModalProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
+  // 인터넷(터널) 연결이 실패해도 같은 Wi-Fi 주소로는 참여할 수 있으므로 QR을 그 주소로 만든다.
+  const qrUrl = displayUrl || localUrl || '';
+
   // Escape 키로 닫기 (모달이 열려 있고 활성 슬롯일 때만)
-  useToolKeydown((e) => {
-    if (!open) return;
-    if (e.key === 'Escape') onClose();
-  }, [open, onClose]);
+  useToolKeydown(
+    (e) => {
+      if (!open) return;
+      if (e.key === 'Escape') onClose();
+    },
+    [open, onClose],
+  );
 
   // QR 렌더
   useEffect(() => {
-    if (!open || !canvasRef.current || !displayUrl) return;
-    QRCode.toCanvas(canvasRef.current, displayUrl, {
+    if (!open || !canvasRef.current || !qrUrl) return;
+    QRCode.toCanvas(canvasRef.current, qrUrl, {
       width: 280,
       margin: 2,
       color: { dark: '#000000', light: '#ffffff' },
       errorCorrectionLevel: 'M',
-    }).catch(() => { /* noop */ });
-  }, [open, displayUrl]);
+    }).catch(() => {
+      /* noop */
+    });
+  }, [open, qrUrl]);
 
   const handleCopy = useCallback((key: string, text: string) => {
     void navigator.clipboard.writeText(text).then(() => {
@@ -178,29 +191,40 @@ function StudentInviteModal({
         <div className="flex items-start justify-between mb-4">
           <div>
             <h3 className="text-xl font-bold text-sp-text">학생 초대하기</h3>
-            <p className="text-sm text-sp-muted mt-0.5">
-              QR을 스캔하거나 아래 주소로 접속하세요
-            </p>
+            <p className="text-sm text-sp-muted mt-0.5">QR을 스캔하거나 아래 주소로 접속하세요</p>
           </div>
           <IconButton icon="close" label="닫기" variant="ghost" size="md" onClick={onClose} />
         </div>
 
         {/* QR 코드 */}
         <div className="bg-white rounded-xl p-4 flex items-center justify-center mb-4">
-          {tunnelLoading && !displayUrl ? (
+          {tunnelLoading && !qrUrl ? (
             <div className="w-[280px] h-[280px] flex items-center justify-center text-gray-500 text-sm">
               <span className="animate-spin mr-2">⏳</span>
               QR 준비 중...
             </div>
-          ) : displayUrl ? (
+          ) : qrUrl ? (
             <canvas ref={canvasRef} />
           ) : (
             <div className="w-[280px] h-[280px] flex items-center justify-center text-gray-500 text-sm text-center px-4">
-              접속 주소를 생성할 수 없습니다.<br />
+              접속 주소를 생성할 수 없습니다.
+              <br />
               Wi-Fi 연결을 확인해주세요.
             </div>
           )}
         </div>
+
+        {/* 인터넷(터널) 연결 실패 안내 — 실패해도 같은 Wi-Fi 주소로는 참여할 수 있다 */}
+        {tunnelError && !displayUrl && (
+          <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2">
+            <p className="text-xs text-red-400">{tunnelError}</p>
+            <p className="text-xs text-sp-muted mt-1">
+              {localUrl
+                ? '대신 학생과 같은 Wi-Fi에 연결하면 아래 주소로 참여할 수 있습니다.'
+                : 'Wi-Fi 연결을 확인한 뒤 다시 시작해 주세요.'}
+            </p>
+          </div>
+        )}
 
         {/* 주소 정보 */}
         <div className="space-y-3">
@@ -226,9 +250,7 @@ function StudentInviteModal({
             <div>
               <p className="text-xs text-sp-muted mb-1">전체 주소</p>
               <div className="flex items-center gap-2 bg-sp-bg border border-sp-border rounded-lg px-3 py-2">
-                <p className="flex-1 text-sp-text text-xs font-mono truncate">
-                  {fullUrl}
-                </p>
+                <p className="flex-1 text-sp-text text-xs font-mono truncate">{fullUrl}</p>
                 <button
                   type="button"
                   onClick={() => handleCopy('full', fullUrl)}
@@ -239,14 +261,28 @@ function StudentInviteModal({
               </div>
             </div>
           )}
+
+          {!displayUrl && localUrl && (
+            <div>
+              <p className="text-xs text-sp-muted mb-1">같은 Wi-Fi 직접 접속</p>
+              <div className="flex items-center gap-2 bg-sp-bg border border-sp-border rounded-lg px-3 py-2">
+                <p className="flex-1 text-sp-text text-xs font-mono truncate">{localUrl}</p>
+                <button
+                  type="button"
+                  onClick={() => handleCopy('local', localUrl)}
+                  className="shrink-0 text-xs px-2 py-1 rounded-md bg-sp-card text-sp-muted hover:text-sp-text transition-colors"
+                >
+                  {copiedKey === 'local' ? '복사됨!' : '복사'}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* 현재 접속 중인 학생 */}
         <div className="mt-4 pt-4 border-t border-sp-border">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-semibold text-sp-text">
-              대기 중인 학생
-            </span>
+            <span className="text-sm font-semibold text-sp-text">대기 중인 학생</span>
             <span className="text-xs px-2 py-0.5 rounded-full bg-sp-accent/20 text-sp-accent font-bold">
               {totalConnected}명
             </span>
@@ -303,9 +339,7 @@ function ChoiceOpenView({ question }: ChoiceOpenViewProps) {
   const options = question.options ?? [];
 
   if (options.length === 0) {
-    return (
-      <p className="text-sm text-sp-muted text-center py-4">선택지 정보가 없습니다.</p>
-    );
+    return <p className="text-sm text-sp-muted text-center py-4">선택지 정보가 없습니다.</p>;
   }
 
   return (
@@ -319,9 +353,7 @@ function ChoiceOpenView({ question }: ChoiceOpenViewProps) {
           <span className="shrink-0 w-8 h-8 rounded-lg bg-sp-accent/15 text-sp-accent font-bold flex items-center justify-center text-sm">
             {idx + 1}
           </span>
-          <span className="flex-1 text-base text-sp-text font-medium truncate">
-            {opt.text}
-          </span>
+          <span className="flex-1 text-base text-sp-text font-medium truncate">{opt.text}</span>
         </div>
       ))}
     </div>
@@ -416,10 +448,7 @@ function ScaleRevealedView({ question, aggregate }: ScaleRevealedViewProps) {
   const minLabel = question.scaleMinLabel ?? String(min);
   const maxLabel = question.scaleMaxLabel ?? String(max);
 
-  const maxDistCount = Object.values(distribution).reduce(
-    (acc, v) => Math.max(acc, v ?? 0),
-    0,
-  );
+  const maxDistCount = Object.values(distribution).reduce((acc, v) => Math.max(acc, v ?? 0), 0);
 
   const values: number[] = [];
   for (let v = min; v <= max; v += 1) values.push(v);
@@ -442,9 +471,7 @@ function ScaleRevealedView({ question, aggregate }: ScaleRevealedViewProps) {
         <div className="flex items-end gap-2 h-28" role="list" aria-label="척도 분포">
           {values.map((v) => {
             const count = distribution[v] ?? 0;
-            const heightPct = maxDistCount > 0
-              ? Math.round((count / maxDistCount) * 100)
-              : 0;
+            const heightPct = maxDistCount > 0 ? Math.round((count / maxDistCount) * 100) : 0;
             return (
               <div
                 key={v}
@@ -485,9 +512,7 @@ function TextRevealedView({ aggregate, detail }: TextRevealedViewProps) {
   const hasAnon = aggregate.answers.length > 0;
 
   if (!hasDetail && !hasAnon) {
-    return (
-      <p className="text-sm text-sp-muted text-center py-4">아직 답변이 없습니다.</p>
-    );
+    return <p className="text-sm text-sp-muted text-center py-4">아직 답변이 없습니다.</p>;
   }
 
   return (
@@ -499,9 +524,7 @@ function TextRevealedView({ aggregate, detail }: TextRevealedViewProps) {
             type="button"
             onClick={() => setShowNames(true)}
             className={`px-2 py-0.5 rounded-md transition-colors ${
-              showNames
-                ? 'bg-sp-accent/20 text-sp-accent'
-                : 'text-sp-muted hover:text-sp-text'
+              showNames ? 'bg-sp-accent/20 text-sp-accent' : 'text-sp-muted hover:text-sp-text'
             }`}
           >
             이름 표시
@@ -511,9 +534,7 @@ function TextRevealedView({ aggregate, detail }: TextRevealedViewProps) {
             type="button"
             onClick={() => setShowNames(false)}
             className={`px-2 py-0.5 rounded-md transition-colors ${
-              !showNames
-                ? 'bg-sp-accent/20 text-sp-accent'
-                : 'text-sp-muted hover:text-sp-text'
+              !showNames ? 'bg-sp-accent/20 text-sp-accent' : 'text-sp-muted hover:text-sp-text'
             }`}
           >
             무기명
@@ -533,12 +554,8 @@ function TextRevealedView({ aggregate, detail }: TextRevealedViewProps) {
               role="listitem"
               className="bg-sp-card rounded-xl p-3 border border-sp-border"
             >
-              <p className="text-xs font-bold text-sp-accent mb-1">
-                {entry.nickname}
-              </p>
-              <p className="text-base text-sp-text leading-relaxed break-words">
-                {entry.text}
-              </p>
+              <p className="text-xs font-bold text-sp-accent mb-1">{entry.nickname}</p>
+              <p className="text-base text-sp-text leading-relaxed break-words">{entry.text}</p>
             </div>
           ))}
         </div>
@@ -587,6 +604,8 @@ export function TeacherControlPanel({
   liveFullUrl,
   liveShortUrl,
   liveTunnelLoading,
+  liveTunnelError,
+  liveLocalUrl,
 }: TeacherControlPanelProps) {
   // ── 세션 종료 2단 확인 ──
   const [endConfirmActive, setEndConfirmActive] = useState(false);
@@ -614,12 +633,17 @@ export function TeacherControlPanel({
 
   // ── 파생 상태 ──
   const unansweredRoster = roster.filter((r) => !r.answeredCurrent);
-  const answeredPct = totalConnected > 0
-    ? Math.round((totalAnswered / totalConnected) * 100)
-    : 0;
+  const answeredPct = totalConnected > 0 ? Math.round((totalAnswered / totalConnected) * 100) : 0;
   const isLastQuestion = currentQuestionIndex === totalQuestions - 1;
   const isAllAnswered = totalConnected > 0 && totalAnswered >= totalConnected;
-  const canInvite = Boolean(liveDisplayUrl) || Boolean(liveTunnelLoading);
+  /*
+   * 학생 초대 버튼은 라이브 중이면 항상 보여야 한다.
+   * 예전에는 터널 URL이 있을 때만 그렸는데, 인터넷 연결이 실패하면 버튼이 통째로 사라지면서
+   * "우측 상단 [학생 초대]를 누르세요"라는 안내만 남아 링크를 공유할 방법이 없어졌다.
+   * (사용자 신고: "링크 공유 버튼이 보이지 않음")
+   * 이제는 항상 그리고, 실패 사유·Wi-Fi 폴백 주소는 모달 안에서 안내한다.
+   */
+  const inviteUnavailable = !liveDisplayUrl && !liveLocalUrl && !liveTunnelLoading;
 
   // ─────────────────────────────────────────────
   // 렌더링
@@ -632,30 +656,26 @@ export function TeacherControlPanel({
         <PhaseBadge phase={phase} />
         {phase !== 'lobby' && phase !== 'ended' && (
           <span className="text-sm text-sp-muted">
-            문항 <span className="text-sp-text font-bold tabular-nums">{currentQuestionIndex + 1}</span>
+            문항{' '}
+            <span className="text-sp-text font-bold tabular-nums">{currentQuestionIndex + 1}</span>
             <span className="text-sp-muted"> / {totalQuestions}</span>
           </span>
         )}
         <div className="flex-1" />
 
-        <span
-          className="flex items-center gap-1.5 text-sm text-sp-muted"
-          aria-live="polite"
-        >
+        <span className="flex items-center gap-1.5 text-sm text-sp-muted" aria-live="polite">
           <span className="text-green-400">●</span>
           접속 <span className="text-sp-text font-bold tabular-nums">{totalConnected}</span>명
         </span>
 
-        {canInvite && (
-          <button
-            type="button"
-            onClick={() => setInviteOpen(true)}
-            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-sp-accent/15 border border-sp-accent/30 text-sp-accent text-sm font-medium hover:bg-sp-accent/25 transition-colors min-h-[44px]"
-            aria-label="학생 추가 초대"
-          >
-            <span aria-hidden="true">➕</span> 학생 초대
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={() => setInviteOpen(true)}
+          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-sp-accent/15 border border-sp-accent/30 text-sp-accent text-sm font-medium hover:bg-sp-accent/25 transition-colors min-h-[44px]"
+          aria-label="학생 참여 링크 보기 · QR 및 주소 복사"
+        >
+          <span aria-hidden="true">{inviteUnavailable ? '⚠️' : '🔗'}</span> 학생 참여 링크
+        </button>
 
         <button
           type="button"
@@ -673,18 +693,10 @@ export function TeacherControlPanel({
 
       {/* ──────── [블록 2] 현재 문항 / 집계 ──────── */}
       <div className="flex-1 min-h-0 overflow-y-auto bg-sp-surface border border-sp-border rounded-2xl p-6 md:p-8 flex flex-col gap-5">
-        {phase === 'lobby' && (
-          <LobbyBlock
-            roster={roster}
-            totalQuestions={totalQuestions}
-          />
-        )}
+        {phase === 'lobby' && <LobbyBlock roster={roster} totalQuestions={totalQuestions} />}
 
         {phase === 'open' && currentQuestion && (
-          <OpenBlock
-            index={currentQuestionIndex}
-            question={currentQuestion}
-          />
+          <OpenBlock index={currentQuestionIndex} question={currentQuestion} />
         )}
 
         {phase === 'revealed' && currentQuestion && (
@@ -705,12 +717,8 @@ export function TeacherControlPanel({
       {(phase === 'open' || phase === 'revealed') && (
         <div className="shrink-0 bg-sp-surface border border-sp-border rounded-xl px-4 py-3 flex flex-col gap-2">
           <div className="flex items-baseline gap-2">
-            <span className="text-base font-bold text-sp-text tabular-nums">
-              {totalAnswered}
-            </span>
-            <span className="text-sm text-sp-muted">
-              / {totalConnected} 답변 완료
-            </span>
+            <span className="text-base font-bold text-sp-text tabular-nums">{totalAnswered}</span>
+            <span className="text-sm text-sp-muted">/ {totalConnected} 답변 완료</span>
             <span className="ml-auto text-sm font-bold text-sp-accent tabular-nums">
               {answeredPct}%
             </span>
@@ -723,8 +731,8 @@ export function TeacherControlPanel({
             />
           </div>
 
-          {phase === 'open' && (
-            isAllAnswered ? (
+          {phase === 'open' &&
+            (isAllAnswered ? (
               <div className="inline-flex items-center gap-2 text-sm text-green-400 bg-green-500/10 border border-green-500/30 rounded-lg px-3 py-1.5">
                 <span>✨</span>
                 <span className="font-medium">전원 답변 완료! 결과를 공개해 보세요.</span>
@@ -751,8 +759,7 @@ export function TeacherControlPanel({
                   ))}
                 </div>
               </details>
-            ) : null
-          )}
+            ) : null)}
         </div>
       )}
 
@@ -764,11 +771,7 @@ export function TeacherControlPanel({
               type="button"
               onClick={onActivate}
               disabled={roster.length === 0}
-              aria-label={
-                roster.length === 0
-                  ? '학생이 없습니다. 시작할 수 없습니다'
-                  : '세션 시작'
-              }
+              aria-label={roster.length === 0 ? '학생이 없습니다. 시작할 수 없습니다' : '세션 시작'}
               className={`flex-1 bg-sp-accent hover:bg-sp-accent/90 text-white px-6 py-4 rounded-xl font-bold text-lg transition min-h-[56px] shadow-lg shadow-sp-accent/20 ${
                 roster.length === 0 ? 'opacity-50 cursor-not-allowed shadow-none' : ''
               }`}
@@ -856,18 +859,18 @@ export function TeacherControlPanel({
       </div>
 
       {/* 학생 초대 모달 */}
-      {canInvite && (
-        <StudentInviteModal
-          open={inviteOpen}
-          onClose={() => setInviteOpen(false)}
-          displayUrl={liveDisplayUrl ?? ''}
-          fullUrl={liveFullUrl}
-          shortUrl={liveShortUrl}
-          tunnelLoading={Boolean(liveTunnelLoading)}
-          totalConnected={totalConnected}
-          roster={roster}
-        />
-      )}
+      <StudentInviteModal
+        open={inviteOpen}
+        onClose={() => setInviteOpen(false)}
+        displayUrl={liveDisplayUrl ?? ''}
+        fullUrl={liveFullUrl}
+        shortUrl={liveShortUrl}
+        tunnelLoading={Boolean(liveTunnelLoading)}
+        tunnelError={liveTunnelError}
+        localUrl={liveLocalUrl}
+        totalConnected={totalConnected}
+        roster={roster}
+      />
     </div>
   );
 }
@@ -884,13 +887,13 @@ interface LobbyBlockProps {
 function LobbyBlock({ roster, totalQuestions }: LobbyBlockProps) {
   return (
     <div className="flex flex-col items-center justify-center text-center gap-4 py-6">
-      <div className="text-5xl" aria-hidden="true">🎯</div>
-      <h2 className="text-2xl md:text-3xl font-bold text-sp-text">
-        설문을 시작할 준비가 되었어요
-      </h2>
+      <div className="text-5xl" aria-hidden="true">
+        🎯
+      </div>
+      <h2 className="text-2xl md:text-3xl font-bold text-sp-text">설문을 시작할 준비가 되었어요</h2>
       <p className="text-sp-muted">
-        총 <span className="text-sp-text font-bold">{totalQuestions}개</span> 문항 ·
-        학생 접속 대기 중
+        총 <span className="text-sp-text font-bold">{totalQuestions}개</span> 문항 · 학생 접속 대기
+        중
       </p>
 
       <div className="w-full max-w-2xl mt-4">
@@ -917,8 +920,9 @@ function LobbyBlock({ roster, totalQuestions }: LobbyBlockProps) {
           </>
         ) : (
           <p className="text-sm text-sp-muted">
-            아직 접속한 학생이 없습니다.<br />
-            우측 상단 "학생 초대" 버튼에서 QR을 학생들에게 보여주세요.
+            아직 접속한 학생이 없습니다.
+            <br />
+            우측 상단 [🔗 학생 참여 링크] 버튼에서 QR과 주소를 확인해 학생들에게 알려주세요.
           </p>
         )}
       </div>
@@ -970,7 +974,11 @@ function ScaleOpenView({ question }: { question: MultiSurveyQuestion }) {
   return (
     <div className="space-y-3">
       <p className="text-sm text-sp-muted">
-        학생들이 <span className="text-sp-text font-medium">{min} ~ {max}</span> 사이 점수를 선택하고 있어요.
+        학생들이{' '}
+        <span className="text-sp-text font-medium">
+          {min} ~ {max}
+        </span>{' '}
+        사이 점수를 선택하고 있어요.
       </p>
       <div className="flex items-center gap-2 justify-center">
         {values.map((v) => (
@@ -993,7 +1001,9 @@ function ScaleOpenView({ question }: { question: MultiSurveyQuestion }) {
 function TextOpenView() {
   return (
     <div className="py-8 text-center text-sp-muted space-y-2">
-      <div className="text-4xl" aria-hidden="true">✍️</div>
+      <div className="text-4xl" aria-hidden="true">
+        ✍️
+      </div>
       <p className="text-base">학생들이 답변을 입력하고 있어요</p>
       <p className="text-sm">결과 공개 시 모든 답변이 여기에 표시됩니다.</p>
     </div>
@@ -1043,17 +1053,15 @@ interface EndedBlockProps {
 function EndedBlock({ totalConnected, totalQuestions }: EndedBlockProps) {
   return (
     <div className="flex flex-col items-center justify-center text-center gap-3 py-10">
-      <div className="text-5xl" aria-hidden="true">🎉</div>
-      <h2 className="text-2xl md:text-3xl font-bold text-sp-text">
-        수고하셨습니다!
-      </h2>
+      <div className="text-5xl" aria-hidden="true">
+        🎉
+      </div>
+      <h2 className="text-2xl md:text-3xl font-bold text-sp-text">수고하셨습니다!</h2>
       <p className="text-sp-muted">
         총 <span className="text-sp-text font-bold">{totalConnected}명</span>이
         <span className="text-sp-text font-bold"> {totalQuestions}개</span> 문항에 참여했어요.
       </p>
-      <p className="text-xs text-sp-muted mt-2">
-        세션을 종료하면 결과 화면으로 이동합니다.
-      </p>
+      <p className="text-xs text-sp-muted mt-2">세션을 종료하면 결과 화면으로 이동합니다.</p>
     </div>
   );
 }
