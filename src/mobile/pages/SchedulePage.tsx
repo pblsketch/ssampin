@@ -10,7 +10,8 @@ import { EmptyState } from '@mobile/components/common/EmptyState';
 import type { SchoolEvent, CategoryItem } from '@domain/entities/SchoolEvent';
 import { getVisibleEvents, sortByDate } from '@domain/rules/eventRules';
 import type { TodoCalendarChip } from '@domain/rules/todoCalendarRules';
-import { getTodoChipsByDate } from '@domain/rules/todoCalendarRules';
+import { addDaysToKey, getTodoChipsByDate } from '@domain/rules/todoCalendarRules';
+import { useSnackbarStore } from '@mobile/stores/useMobileSnackbarStore';
 import {
   format,
   startOfMonth,
@@ -108,6 +109,18 @@ export function SchedulePage() {
   const todoCategories = useMobileTodoStore((s) => s.categories);
   const loadTodos = useMobileTodoStore((s) => s.load);
   const toggleTodo = useMobileTodoStore((s) => s.toggleTodo);
+  const setTodoDueDate = useMobileTodoStore((s) => s.setTodoDueDate);
+  const showSnackbar = useSnackbarStore((s) => s.show);
+
+  /**
+   * 마감일을 옮길 할 일 (2026-08-27).
+   *
+   * PC 는 칩을 끌어다 다른 날에 놓지만 **터치에서는 HTML5 드래그가 아예 동작하지 않는다.**
+   * 그래서 폰은 줄을 눌러 시트를 열고 날짜를 고른다 — 길게 누르기는 배우지 않으면 모르는
+   * 몸짓이라, 지금 아무 일도 안 하던 제목 부분을 그냥 누르는 것으로 뒀다.
+   */
+  const [dueDateTarget, setDueDateTarget] = useState<TodoCalendarChip | null>(null);
+  useBottomSheet(dueDateTarget !== null, () => setDueDateTarget(null));
 
   const [currentMonth, setCurrentMonth] = useState(() => new Date());
   /** 월 전체 펼침. 기본은 이번 주 한 줄. */
@@ -341,6 +354,23 @@ export function SchedulePage() {
     setShowAddModal(false);
   };
 
+  /**
+   * 마감일 옮기기 + 되돌리기.
+   *
+   * 되돌리기는 원래 날짜로 다시 부르기만 하면 된다 — 도메인 규칙이 이동량만큼 되밀어
+   * 주므로 시작일까지 정확히 제자리로 온다. 되돌릴 값을 따로 들고 다닐 필요가 없다.
+   */
+  const handleMoveDueDate = async (chip: TodoCalendarChip, nextDateKey: string) => {
+    setDueDateTarget(null);
+    if (nextDateKey === chip.dateKey) return;
+    await setTodoDueDate(chip.todoId, nextDateKey);
+    const label = format(new Date(`${nextDateKey}T00:00:00`), 'M월 d일', { locale: ko });
+    showSnackbar(
+      `'${chip.title}' 마감일을 ${label}로 옮겼습니다`,
+      () => void setTodoDueDate(chip.todoId, chip.dateKey),
+    );
+  };
+
   const listHeader = selectedDay
     ? `${format(selectedDay, 'M월 d일', { locale: ko })} 일정`
     : isViewingCurrentMonth
@@ -557,13 +587,24 @@ export function SchedulePage() {
                         radio_button_unchecked
                       </span>
                     </button>
-                    <div className="flex-1 min-w-0">
+                    {/* 제목을 누르면 마감일을 옮기는 시트가 열린다 */}
+                    <button
+                      onClick={() => setDueDateTarget(chip)}
+                      className="flex-1 min-w-0 text-left active:opacity-60 transition-opacity"
+                      aria-label={`'${chip.title}' 마감일 옮기기`}
+                    >
                       <p className="text-sp-text text-sm font-medium truncate">{chip.title}</p>
-                      <p className="text-sp-muted text-xs mt-0.5">
+                      <p className="text-sp-muted text-xs mt-0.5 flex items-center gap-1">
+                        <span
+                          className="material-symbols-outlined text-sm leading-none"
+                          aria-hidden
+                        >
+                          edit_calendar
+                        </span>
                         {format(chipDate, 'M월 d일 (E)', { locale: ko })}
                         {chip.time ? ` ${chip.time}` : ''}
                       </p>
-                    </div>
+                    </button>
                     {chip.overdue && (
                       <span className="shrink-0 text-xs font-bold px-2 py-0.5 rounded-full bg-red-400/15 text-red-400 border border-red-400/40">
                         지남
@@ -574,11 +615,88 @@ export function SchedulePage() {
               })}
             </ul>
             <p className="px-4 pt-2 text-sp-muted text-xs">
-              할 일 화면에서 만든 항목입니다. 내용을 고치려면 할 일에서 열어주세요.
+              할 일을 누르면 마감일을 옮길 수 있어요. 내용을 고치려면 할 일 화면에서 열어주세요.
             </p>
           </>
         )}
       </div>
+
+      {/*
+        마감일 옮기기 시트 (2026-08-27).
+
+        빠른 버튼을 먼저 둔 이유 — 실제로 하는 일의 대부분이 "오늘 못 했으니 내일로",
+        "다음 주로" 다. 날짜를 직접 고르는 것은 그 다음이라 아래에 둔다.
+      */}
+      {dueDateTarget && (
+        <div
+          className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-end justify-center z-50"
+          onClick={() => setDueDateTarget(null)}
+        >
+          <div
+            className="w-full max-w-lg glass-card rounded-t-2xl p-6 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div>
+              <h3 className="text-sp-text font-bold text-base truncate">{dueDateTarget.title}</h3>
+              <p className="text-sp-muted text-xs mt-1">
+                지금 마감일{' '}
+                {format(new Date(`${dueDateTarget.dateKey}T00:00:00`), 'M월 d일 (E)', {
+                  locale: ko,
+                })}
+              </p>
+            </div>
+
+            {/*
+              세 버튼 모두 **오늘 기준**이다. 처음엔 '다음 주'만 마감일 기준(+7)으로 뒀는데,
+              이미 지난 마감(8/21)에서는 8/28이 나와 '내일'과 같은 날이 됐다 — 버튼 세 개 중
+              둘이 같은 곳을 가리키면 하나는 있으나 마나다. 기준을 하나로 맞추면 "이 할 일을
+              오늘/내일/다음 주로 옮긴다"가 되어 지난 마감이든 앞날이든 뜻이 흔들리지 않는다.
+            */}
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { label: '오늘', key: todayKey },
+                { label: '내일', key: addDaysToKey(todayKey, 1) },
+                { label: '다음 주', key: addDaysToKey(todayKey, 7) },
+              ].map((opt) => (
+                <button
+                  key={opt.label}
+                  onClick={() => void handleMoveDueDate(dueDateTarget, opt.key)}
+                  className="flex flex-col items-center justify-center gap-0.5 rounded-xl border border-sp-border py-3 active:bg-black/5 dark:active:bg-white/10 transition-colors"
+                  style={{ minHeight: 56 }}
+                >
+                  <span className="text-sp-text text-sm font-semibold">{opt.label}</span>
+                  <span className="text-sp-muted text-xs">
+                    {format(new Date(`${opt.key}T00:00:00`), 'M/d', { locale: ko })}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <div>
+              <label className="block text-sp-muted text-xs mb-1" htmlFor="todo-due-date">
+                날짜 직접 고르기
+              </label>
+              <input
+                id="todo-due-date"
+                type="date"
+                value={dueDateTarget.dateKey}
+                onChange={(e) => {
+                  if (e.target.value) void handleMoveDueDate(dueDateTarget, e.target.value);
+                }}
+                className="w-full bg-sp-surface border border-sp-border rounded-lg px-3 py-2.5 text-sp-text text-sm"
+              />
+            </div>
+
+            <button
+              onClick={() => setDueDateTarget(null)}
+              className="w-full py-3 rounded-xl border border-sp-border text-sp-muted text-sm font-medium active:bg-black/5 dark:active:bg-white/10 transition-colors"
+              style={{ minHeight: 48 }}
+            >
+              닫기
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Add Event Modal */}
       {showAddModal && (

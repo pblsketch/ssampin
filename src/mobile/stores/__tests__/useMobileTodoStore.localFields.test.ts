@@ -82,6 +82,16 @@ describe('모바일은 데스크톱 전용 항목을 지우지 않는다', () =>
     expect(saved?.relatedStaff).toEqual([{ staffId: 's-1', nameSnapshot: '김민호' }]);
   });
 
+  it('마감일을 옮겨도 점검 날짜·관련인이 그대로 남는다', async () => {
+    await useMobileTodoStore.getState().setTodoDueDate('t1', '2026-09-03');
+
+    const saved = storedTodo('t1');
+    expect(saved?.dueDate).toBe('2026-09-03'); // 하려던 일은 됐고
+    expect(saved?.checkAt).toBe('2026-08-25'); // 나머지는 그대로다
+    expect(saved?.relatedStaff).toEqual([{ staffId: 's-1', nameSnapshot: '김민호' }]);
+    expect(saved?.subTasks).toHaveLength(1);
+  });
+
   it('하위 할 일을 체크해도 그대로 남는다', async () => {
     await useMobileTodoStore.getState().toggleSubTask('t1', 'st1');
 
@@ -130,5 +140,58 @@ describe('모바일은 데스크톱 전용 항목을 지우지 않는다', () =>
     expect(storedTodo('t3')?.relatedStaff).toBeUndefined();
     // 그리고 기존 할 일은 여전히 멀쩡하다.
     expect(storedTodo('t1')?.checkAt).toBe('2026-08-25');
+  });
+});
+
+/**
+ * 마감일 옮기기는 **데스크톱과 같은 도메인 규칙**을 탄다. 여기서 잠그는 것은
+ * "모바일 저장 경로가 그 규칙의 결과를 그대로 반영하는가"다.
+ */
+describe('모바일 마감일 옮기기', () => {
+  it('시작일이 있으면 기간을 유지한 채 함께 밀린다', async () => {
+    todoRepoFake.stored = {
+      todos: [{ ...DESKTOP_TODO, startDate: '2026-08-26', dueDate: '2026-08-28' }],
+      categories: [],
+    };
+    useMobileTodoStore.setState({ todos: [], categories: [], loaded: false });
+    await useMobileTodoStore.getState().load();
+
+    await useMobileTodoStore.getState().setTodoDueDate('t1', '2026-09-04');
+
+    // 마감이 7일 뒤로 갔으니 시작일도 7일 뒤 — 기간(2일)은 그대로다
+    expect(storedTodo('t1')?.dueDate).toBe('2026-09-04');
+    expect(storedTodo('t1')?.startDate).toBe('2026-09-02');
+  });
+
+  it('원래 날짜로 다시 부르면 시작일까지 제자리로 온다 (되돌리기)', async () => {
+    todoRepoFake.stored = {
+      todos: [{ ...DESKTOP_TODO, startDate: '2026-08-26', dueDate: '2026-08-28' }],
+      categories: [],
+    };
+    useMobileTodoStore.setState({ todos: [], categories: [], loaded: false });
+    await useMobileTodoStore.getState().load();
+
+    await useMobileTodoStore.getState().setTodoDueDate('t1', '2026-09-04');
+    await useMobileTodoStore.getState().setTodoDueDate('t1', '2026-08-28');
+
+    expect(storedTodo('t1')?.dueDate).toBe('2026-08-28');
+    expect(storedTodo('t1')?.startDate).toBe('2026-08-26');
+  });
+
+  it('같은 날로 옮기면 저장하지 않는다 — 헛된 동기화를 깨우지 않는다', async () => {
+    syncFake.triggerSaveSync.mockClear();
+
+    await useMobileTodoStore.getState().setTodoDueDate('t1', '2026-08-28');
+
+    expect(syncFake.triggerSaveSync).not.toHaveBeenCalled();
+  });
+
+  it('없는 할 일을 옮기라고 해도 조용히 넘어간다', async () => {
+    syncFake.triggerSaveSync.mockClear();
+
+    await useMobileTodoStore.getState().setTodoDueDate('없는id', '2026-09-01');
+
+    expect(syncFake.triggerSaveSync).not.toHaveBeenCalled();
+    expect(todoRepoFake.stored?.todos).toHaveLength(2);
   });
 });

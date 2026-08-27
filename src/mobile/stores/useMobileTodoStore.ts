@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { Todo, TodoCategory } from '@domain/entities/Todo';
+import { moveTodoDueDate } from '@domain/rules/todoCalendarRules';
 import { todoRepository } from '@mobile/di/container';
 import { useMobileDriveSyncStore } from '@mobile/stores/useMobileDriveSyncStore';
 
@@ -22,6 +23,16 @@ interface MobileTodoState {
   reload: () => Promise<void>;
   addTodo: (todo: Todo) => Promise<void>;
   toggleTodo: (id: string) => Promise<void>;
+  /**
+   * 마감일을 다른 날로 옮긴다 (2026-08-27).
+   *
+   * 판정은 데스크톱과 **같은 도메인 규칙**(`moveTodoDueDate`)을 쓴다 — 시작일이 있으면
+   * 기간을 유지한 채 함께 밀어야 하는데, 그 계산을 여기서 다시 쓰면 PC 와 답이 갈린다.
+   *
+   * 되돌리기는 **원래 날짜로 다시 부르면 된다.** 같은 규칙이 이동량만큼 되밀어 주므로
+   * 시작일까지 정확히 제자리로 온다.
+   */
+  setTodoDueDate: (id: string, dueDate: string) => Promise<void>;
   deleteTodo: (id: string) => Promise<void>;
   toggleSubTask: (todoId: string, subTaskId: string) => Promise<void>;
   /** 완료된(미보관) 할 일을 일괄 보관. 보관된 개수 반환. */
@@ -62,6 +73,22 @@ export const useMobileTodoStore = create<MobileTodoState>((set, get) => ({
 
   toggleTodo: async (id) => {
     const todos = get().todos.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t));
+    set({ todos });
+    await todoRepository.saveTodos({ todos, categories: get().categories });
+    useMobileDriveSyncStore.getState().triggerSaveSync();
+  },
+
+  setTodoDueDate: async (id, dueDate) => {
+    const target = get().todos.find((t) => t.id === id);
+    if (!target) return;
+    const moved = moveTodoDueDate(target, dueDate);
+    // 옮길 수 없거나 같은 날이면 저장하지 않는다 — 안 바뀐 파일을 다시 써서
+    // 드라이브 동기화를 깨우면 다른 기기가 헛되이 내려받는다.
+    if (!moved) return;
+
+    // 통째로 다시 쓰므로 **모르는 항목까지 그대로 들고 가야 한다**(점검 날짜·관련인 등).
+    // 스프레드로 덮어쓰는 이 형태가 그 계약이고, localFields 테스트가 잠근다.
+    const todos = get().todos.map((t) => (t.id === id ? { ...t, ...moved } : t));
     set({ todos });
     await todoRepository.saveTodos({ todos, categories: get().categories });
     useMobileDriveSyncStore.getState().triggerSaveSync();
