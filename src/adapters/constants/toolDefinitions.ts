@@ -125,6 +125,13 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
     color: 'bg-amber-600/20 text-amber-700',
     externalUrl: 'https://edudraft-beta.vercel.app/',
   },
+  {
+    id: 'tool-pdf-lab',
+    name: 'PDF LAB',
+    icon: '📕',
+    color: 'bg-red-600/20 text-red-700',
+    externalUrl: 'https://pdf-lab-kappa.vercel.app/',
+  },
 ];
 
 export const DEFAULT_FAVORITE_TOOLS: readonly string[] = [

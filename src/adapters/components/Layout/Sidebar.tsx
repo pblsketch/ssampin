@@ -42,6 +42,7 @@ export type PageId =
   | 'tool-dorms-arcade'
   | 'tool-oneclick-portal'
   | 'tool-edudraft'
+  | 'tool-pdf-lab'
   | 'tool-assignment'
   | 'tool-assignment-detail'
   | 'tool-grouping'

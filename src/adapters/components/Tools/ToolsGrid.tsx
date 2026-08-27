@@ -175,6 +175,14 @@ export const TOOLS: ToolCard[] = [
     externalUrl: 'https://edudraft-beta.vercel.app/',
     badge: 'NEW',
   },
+  {
+    id: 'tool-pdf-lab',
+    emoji: '📕',
+    name: 'PDF LAB',
+    description: 'PDF 합치기·나누기·서명 — 파일은 내 컴퓨터 안에서만',
+    externalUrl: 'https://pdf-lab-kappa.vercel.app/',
+    badge: 'NEW',
+  },
 ];
 
 const DEFAULT_TOOL_ORDER: readonly PageId[] = TOOLS.map((t) => t.id);
