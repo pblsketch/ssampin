@@ -1207,6 +1207,26 @@ html.sp-glass-on [role='dialog'] .bg-sp-surface {
   user-select: text;
 }
 
+/* ── 옆핀 손잡이: 끌 때 아이콘 글자가 파랗게 블럭 잡히지 않게 ──
+
+   대시보드와 같은 신고가 옆핀에서도 나왔다. 손잡이 가운데 끌기 자리를 잡고 위아래로 끄는 동안
+   브라우저 기본 동작인 “글자 긁기”가 함께 일어난다. 손잡이에 보이는 세 아이콘은
+   material-symbols 합자(ligature)라 실제로는 글자이기 때문에(dashboard·drag_indicator·sticky_note_2),
+   그대로 파란 블럭으로 드러난다.
+
+   ★범위는 손잡이 안쪽뿐이다. 옆핀 손잡이는 electron 이 패널과 **다른 창**으로 띄우고
+   (`?surface=rail`), 그 창에는 긁어 복사할 글자가 없다 — 아이콘 세 개가 전부다. 그래서
+   대시보드와 달리 입력칸 예외가 필요 없다(손잡이에는 입력칸 자체가 없다).
+
+   ★펼쳐지는 패널(메모 편집기·메모 목록·위젯 칸)까지 넓히지 말 것. 메모를 읽고 긁어
+   옮겨 적는 것이 옆핀 메모의 실사용 흐름이고, 메모 편집기는 글자를 고르고 고치는 것이
+   본업이다. 범위를 대시보드로 한정한 2026-08-27 오너 결정과 같은 이유다.
+   이 둘을 묶어 지키는 검사는 `SidePinRail.test.tsx` 에 있다. */
+[data-sidepin-rail] {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 /* ── Widget Grid: 모바일에서 rowSpan 비활성화 ── */
 @media (max-width: 767px) {
   .widget-grid {

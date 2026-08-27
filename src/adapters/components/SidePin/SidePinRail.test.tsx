@@ -228,3 +228,65 @@ describe('디자인 규칙', () => {
     expect(source).toMatch(/h-11 w-11/);
   });
 });
+
+describe('끌 때 글자가 파랗게 잡히지 않는가', () => {
+  /**
+   * 주석을 먼저 걷어낸다.
+   *
+   * 주석에는 중괄호가 없어서, 그냥 두면 규칙 바로 위의 설명문이 통째로 선택자에
+   * 딸려 들어온다(처음 이렇게 짰다가 실제로 걸렸다).
+   */
+  const CSS = readFileSync(resolve(__dirname, '../../../index.css'), 'utf-8').replace(
+    /\/\*[\s\S]*?\*\//g,
+    '',
+  );
+
+  /**
+   * `user-select: none` 을 거는 규칙의 **선택자**만 모은다.
+   *
+   * `-webkit-user-select` 는 세지 않는다(같은 규칙을 두 번 세게 된다). 앞 글자가
+   * 붙임표가 아닌 것만 본다.
+   */
+  const blockingSelectors = [...CSS.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+    .filter((rule) => /(^|[^-])user-select:\s*none/.test(rule[2] as string))
+    .map((rule) => (rule[1] as string).trim());
+
+  test('손잡이에 글자 선택 막기를 건다', () => {
+    // 규칙을 못 찾고 빈 목록끼리 비교하면 아래 검사들이 무의미하게 통과한다.
+    expect(blockingSelectors.length).toBeGreaterThan(0);
+    expect(blockingSelectors).toContain('[data-sidepin-rail]');
+  });
+
+  test('CSS 가 가리키는 표식을 손잡이가 실제로 달고 있다 — 이름이 어긋나면 규칙이 헛돈다', () => {
+    renderRail();
+
+    const rail = document.querySelector('[data-sidepin-rail]');
+    expect(rail).toBeTruthy();
+    // 끌기 자리가 그 안에 있어야 누르는 순간 선택이 시작되지 않는다.
+    expect(rail!.contains(gripOf())).toBe(true);
+  });
+
+  test('패널 쪽으로 범위를 넓히지 않는다 — 메모를 고치고 긁어 복사하는 흐름이 죽는다', () => {
+    // 옆핀 메모는 읽고 옮겨 적는 용도로도 쓰이고, 메모 편집기는 글자를 고르고
+    // 고치는 것이 본업이다. 손잡이 말고 옆핀의 다른 자리를 막으면 여기서 걸린다.
+    const sidePinSelectors = blockingSelectors.filter((selector) =>
+      /sidepin|ssampin-sidepin/i.test(selector),
+    );
+
+    expect(sidePinSelectors).toEqual(['[data-sidepin-rail]']);
+  });
+
+  test('패널 쪽 화면이 코드로도 선택을 막지 않는다', () => {
+    // CSS 를 피해 인라인(style.userSelect)으로 막는 우회로도 같이 닫는다.
+    for (const file of [
+      'SidePinPanel.tsx',
+      'SidePinMemoZone.tsx',
+      'SidePinMemoList.tsx',
+      'SidePinMemoEditor.tsx',
+      'SidePinWidgetZone.tsx',
+    ]) {
+      const source = readFileSync(resolve(__dirname, file), 'utf-8');
+      expect(source).not.toMatch(/userSelect|user-select|select-none/);
+    }
+  });
+});
