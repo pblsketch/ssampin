@@ -1,13 +1,16 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { generateUUID } from '@infrastructure/utils/uuid';
 import { useMobileEventsStore } from '@mobile/stores/useMobileEventsStore';
 import { useMobileSettingsStore } from '@mobile/stores/useMobileSettingsStore';
+import { useMobileTodoStore } from '@mobile/stores/useMobileTodoStore';
 import { useMobileUiTriggerStore } from '@mobile/stores/useMobileUiTriggerStore';
 import { useBottomSheet } from '@mobile/hooks/useBottomSheet';
 import { Toggle } from '@mobile/components/common/Toggle';
 import { EmptyState } from '@mobile/components/common/EmptyState';
 import type { SchoolEvent, CategoryItem } from '@domain/entities/SchoolEvent';
 import { getVisibleEvents, sortByDate } from '@domain/rules/eventRules';
+import type { TodoCalendarChip } from '@domain/rules/todoCalendarRules';
+import { getTodoChipsByDate } from '@domain/rules/todoCalendarRules';
 import {
   format,
   startOfMonth,
@@ -45,9 +48,39 @@ const DOT_COLOR_MAP: Record<string, string> = {
   gray: 'bg-gray-400',
 };
 
+/**
+ * 할 일 표시는 **테두리만 있는 동그라미**다 (2026-08-27).
+ *
+ * 일정 점은 꽉 찬 원이라, 같은 크기·같은 색으로 그리면 6px 안에서 둘이 구분되지 않는다.
+ * 속을 비우면 "아직 안 한 것"이라는 체크박스의 뜻도 함께 실린다 — PC 달력의 칩과 같은 모양이다.
+ */
+const TODO_RING_COLOR_MAP: Record<string, string> = {
+  blue: 'border-blue-400',
+  green: 'border-green-400',
+  yellow: 'border-yellow-400',
+  purple: 'border-purple-400',
+  red: 'border-red-400',
+  pink: 'border-pink-400',
+  indigo: 'border-indigo-400',
+  teal: 'border-teal-400',
+  gray: 'border-gray-400',
+};
+
 function getCategoryColor(categoryId: string, categories: readonly CategoryItem[]): string {
   const cat = categories.find((c) => c.id === categoryId);
   return cat?.color ?? 'gray';
+}
+
+/** 할 일 카테고리 → 테두리 색. 지난 마감은 분류보다 상태가 먼저라 빨강으로 덮는다. */
+function getTodoRingClass(
+  chip: TodoCalendarChip,
+  categories: readonly { readonly id: string; readonly color: string }[],
+): string {
+  if (chip.overdue) return 'border-red-400';
+  const color = chip.categoryId
+    ? (categories.find((c) => c.id === chip.categoryId)?.color ?? 'gray')
+    : 'gray';
+  return TODO_RING_COLOR_MAP[color] ?? 'border-gray-400';
 }
 
 function getDDayLabel(dateStr: string): string | null {
@@ -67,6 +100,14 @@ export function SchedulePage() {
   const events = useMobileEventsStore((s) => s.events);
   const categories = useMobileEventsStore((s) => s.categories);
   const addEvent = useMobileEventsStore((s) => s.addEvent);
+
+  /* 할 일 겹쳐 보기 (2026-08-27) — PC 일정 달력과 같은 도메인 규칙을 그대로 쓴다.
+     끄는 스위치는 PC 에만 있고 폰은 그 값을 따른다(useMobileSettingsStore 주석 참고). */
+  const showTodos = useMobileSettingsStore((s) => s.settings.scheduleShowTodos ?? true);
+  const todos = useMobileTodoStore((s) => s.todos);
+  const todoCategories = useMobileTodoStore((s) => s.categories);
+  const loadTodos = useMobileTodoStore((s) => s.load);
+  const toggleTodo = useMobileTodoStore((s) => s.toggleTodo);
 
   const [currentMonth, setCurrentMonth] = useState(() => new Date());
   /** 월 전체 펼침. 기본은 이번 주 한 줄. */
@@ -90,6 +131,12 @@ export function SchedulePage() {
     void loadEvents();
     void loadSettings();
   }, [loadEvents, loadSettings]);
+
+  // 꺼 두었으면 읽지도 않는다 — 안 쓰는 선생님에게는 없는 기능이어야 한다
+  useEffect(() => {
+    if (!showTodos) return;
+    void loadTodos();
+  }, [showTodos, loadTodos]);
 
   /**
    * 기준일이 속한 주(일~토) 7칸.
@@ -160,6 +207,48 @@ export function SchedulePage() {
   );
 
   const isViewingCurrentMonth = isSameMonth(currentMonth, today);
+
+  const todayKey = format(today, 'yyyy-MM-dd');
+
+  /**
+   * 날짜별 할 일 — **앞뒤 달까지 세 달치를 합쳐 둔다.**
+   *
+   * 이번 달만 계산하면 두 가지 자리에서 표시가 사라진다. ① 월 달력의 앞뒤 여백 칸(7월 27일,
+   * 9월 1일 같은 회색 날짜)과 ② 달을 걸치는 주(8/31~9/5). 접힌 주 보기가 기본이라 ②는
+   * 매달 한 번씩 반드시 걸린다 — "달 바뀌는 주에는 마감이 안 보인다"는 제보가 될 자리다.
+   */
+  const todoChipsByDate = useMemo(() => {
+    const merged = new Map<string, readonly TodoCalendarChip[]>();
+    if (!showTodos) return merged;
+    for (const m of [subMonths(currentMonth, 1), currentMonth, addMonths(currentMonth, 1)]) {
+      for (const [key, chips] of getTodoChipsByDate(todos, format(m, 'yyyy-MM'), todayKey)) {
+        merged.set(key, chips);
+      }
+    }
+    return merged;
+  }, [showTodos, todos, currentMonth, todayKey]);
+
+  /**
+   * 아래 목록에 띄울 할 일.
+   *
+   * 일정 목록과 달리 **지난 것을 걸러내지 않는다.** 지난 일정은 이미 끝난 일이지만 지난
+   * 마감은 아직 남은 일이라, 여기서 빼면 정작 가장 급한 것이 안 보인다. 완료한 것은
+   * 도메인 규칙이 이미 뺐으므로, 남은 것은 전부 "지났거나 앞으로 올" 미완료다.
+   */
+  const displayedTodos = useMemo<readonly TodoCalendarChip[]>(() => {
+    if (!showTodos) return [];
+    const all = [...todoChipsByDate.values()].flat();
+    if (selectedDay) {
+      const key = format(selectedDay, 'yyyy-MM-dd');
+      return all.filter((c) => c.dateKey === key);
+    }
+    const monthKey = format(currentMonth, 'yyyy-MM');
+    // 날짜 오름차순 — 지난 마감이 자연히 맨 위로 온다. 같은 날 안의 순서는
+    // 도메인 규칙이 정해 둔 그대로다(정렬이 안정적이라 유지된다).
+    return all
+      .filter((c) => c.dateKey.startsWith(monthKey))
+      .sort((a, b) => a.dateKey.localeCompare(b.dateKey));
+  }, [showTodos, todoChipsByDate, selectedDay, currentMonth]);
 
   // Displayed events list
   const displayedEvents: readonly SchoolEvent[] = (() => {
@@ -312,6 +401,7 @@ export function SchedulePage() {
             const isToday = isSameDay(day, today);
             const isSelected = selectedDay ? isSameDay(day, selectedDay) : false;
             const dayEvents = eventsOnDay(day);
+            const dayTodos = todoChipsByDate.get(format(day, 'yyyy-MM-dd')) ?? [];
             const colIndex = idx % 7;
 
             return (
@@ -338,7 +428,8 @@ export function SchedulePage() {
                 >
                   {day.getDate()}
                 </span>
-                {/* Event dots */}
+                {/* 일정은 채운 점, 할 일은 속 빈 동그라미.
+                    합쳐서 4개까지만 — 칸 너비가 좁아 그 이상은 점끼리 붙어 뭉개진다. */}
                 <div className="flex gap-0.5 mt-0.5 min-h-[6px]">
                   {dayEvents.slice(0, 3).map((ev) => {
                     const color = getCategoryColor(ev.category, categories);
@@ -349,6 +440,12 @@ export function SchedulePage() {
                       />
                     );
                   })}
+                  {dayTodos.slice(0, Math.max(0, 4 - Math.min(dayEvents.length, 3))).map((chip) => (
+                    <span
+                      key={chip.todoId}
+                      className={`w-1.5 h-1.5 rounded-full border ${getTodoRingClass(chip, todoCategories)}`}
+                    />
+                  ))}
                 </div>
               </button>
             );
@@ -375,16 +472,21 @@ export function SchedulePage() {
 
       {/* Events List — 전체 스크롤 컨테이너 안의 일반 블록 (하단 FAB 여백 확보) */}
       <div className="pb-24">
-        <div className="px-4 pt-4 pb-2">
-          <h3 className="text-sp-text font-semibold text-sm">{listHeader}</h3>
-        </div>
+        {/* 일정이 없고 할 일만 있으면 제목만 덩그러니 남는다 — 그럴 때는 제목도 같이 접는다 */}
+        {(displayedEvents.length > 0 || displayedTodos.length === 0) && (
+          <div className="px-4 pt-4 pb-2">
+            <h3 className="text-sp-text font-semibold text-sm">{listHeader}</h3>
+          </div>
+        )}
 
         {displayedEvents.length === 0 ? (
-          <EmptyState
-            icon="event_available"
-            text="표시할 일정이 없어요"
-            hint="+ 버튼으로 일정을 추가할 수 있어요."
-          />
+          displayedTodos.length === 0 && (
+            <EmptyState
+              icon="event_available"
+              text="표시할 일정이 없어요"
+              hint="+ 버튼으로 일정을 추가할 수 있어요."
+            />
+          )
         ) : (
           <ul className="divide-y divide-sp-border">
             {displayedEvents.map((ev) => {
@@ -418,6 +520,63 @@ export function SchedulePage() {
               );
             })}
           </ul>
+        )}
+
+        {/*
+          할 일 (2026-08-27) — 일정 목록에 **섞지 않고 따로 세운다.**
+
+          섞으면 같은 줄에 선 두 가지가 서로 다른 것을 눌러야 하는 물건이 된다(일정은
+          내용을 보러, 할 일은 끝내러). 무엇보다 일정과 할 일은 저장되는 곳도 고치는
+          길도 달라, 한 목록에 두면 다음 사람이 반드시 같은 경로로 다루려 든다.
+          PC 의 하루 상세 창도 같은 이유로 나눠 두었다.
+        */}
+        {displayedTodos.length > 0 && (
+          <>
+            <div className="flex items-center gap-1.5 px-4 pt-5 pb-2">
+              <span className="material-symbols-outlined text-sp-muted text-base" aria-hidden>
+                checklist
+              </span>
+              <h3 className="text-sp-text font-semibold text-sm">할 일</h3>
+              <span className="text-sp-muted text-xs tabular-nums">{displayedTodos.length}</span>
+            </div>
+            <ul className="divide-y divide-sp-border">
+              {displayedTodos.map((chip) => {
+                const chipDate = new Date(`${chip.dateKey}T00:00:00`);
+                return (
+                  <li key={chip.todoId} className="flex items-center gap-3 px-4 py-3 min-h-[52px]">
+                    {/* 누르면 그 자리에서 끝난다 — 할 일 화면으로 건너가지 않아도 된다.
+                        44px 는 손가락이 빗나가지 않는 최소 크기다. */}
+                    <button
+                      onClick={() => void toggleTodo(chip.todoId)}
+                      aria-label={`'${chip.title}' 완료`}
+                      className={`shrink-0 -ml-2 w-11 h-11 flex items-center justify-center rounded-full active:bg-black/5 dark:active:bg-white/10 transition-colors ${
+                        chip.overdue ? 'text-red-400' : 'text-sp-muted'
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-xl" aria-hidden>
+                        radio_button_unchecked
+                      </span>
+                    </button>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sp-text text-sm font-medium truncate">{chip.title}</p>
+                      <p className="text-sp-muted text-xs mt-0.5">
+                        {format(chipDate, 'M월 d일 (E)', { locale: ko })}
+                        {chip.time ? ` ${chip.time}` : ''}
+                      </p>
+                    </div>
+                    {chip.overdue && (
+                      <span className="shrink-0 text-xs font-bold px-2 py-0.5 rounded-full bg-red-400/15 text-red-400 border border-red-400/40">
+                        지남
+                      </span>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+            <p className="px-4 pt-2 text-sp-muted text-xs">
+              할 일 화면에서 만든 항목입니다. 내용을 고치려면 할 일에서 열어주세요.
+            </p>
+          </>
         )}
       </div>
 

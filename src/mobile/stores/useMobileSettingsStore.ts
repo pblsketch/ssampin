@@ -39,6 +39,17 @@ interface MobileSettings {
    * **PC와 차시가 달라진다.**
    */
   enableWeekendDays?: readonly WeekendDay[];
+  /**
+   * 일정 달력에 할 일 마감일을 함께 표시할지 — **읽기 전용 투영**(데스크톱에서만 끈다).
+   *
+   * 끄는 스위치를 폰에 두지 않은 이유: 이 설정이 있는 까닭은 "할 일 제목에 학생 이름이
+   * 들어가는데 일정 달력이 교무실 큰 모니터에 그대로 뜬다"는 것이다. 폰 화면은 그 상황이
+   * 아니라 좁은 화면에 스위치를 하나 더 얹을 이유가 없다. 다만 PC 에서 껐다면 폰도 따라
+   * 꺼져야 한다 — 한 스위치가 두 답을 내면 껐다고 믿은 쪽이 배신당한다.
+   *
+   * 미설정(undefined) = 켬. 데스크톱의 `?? true` 와 같은 판단을 여기서도 해야 한다.
+   */
+  scheduleShowTodos?: boolean;
 }
 
 const DEFAULT_MOBILE_SETTINGS: MobileSettings = {
@@ -143,6 +154,7 @@ export const useMobileSettingsStore = create<MobileSettingsState>((set, get) => 
             currentTerm: s.currentTerm,
             termEndDates: s.termEndDates,
             enableWeekendDays: s.enableWeekendDays,
+            scheduleShowTodos: s.scheduleShowTodos,
           },
           loaded: true,
         });
