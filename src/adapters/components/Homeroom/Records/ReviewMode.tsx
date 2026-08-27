@@ -29,7 +29,7 @@ interface ReviewModeProps {
 
 const KIND_FILTERS: { key: ReviewKind; label: string }[] = [
   { key: 'neis', label: '나이스' },
-  { key: 'document', label: '서류' },
+  { key: 'document', label: '증빙서류' },
   { key: 'followUp', label: '후속조치' },
 ];
 
@@ -146,11 +146,13 @@ export function ReviewMode({
   const handleBulkDoc = () => {
     if (busy || selDocIds.length === 0) return;
     if (
-      window.confirm(`선택한 출결 기록 ${selDocIds.length}건을 서류 제출 완료로 처리하시겠습니까?`)
+      window.confirm(
+        `선택한 출결 기록 ${selDocIds.length}건을 증빙서류 제출 완료로 처리하시겠습니까?`,
+      )
     ) {
       void runBulk(
         () => bulkMarkDocumentSubmitted(selDocIds),
-        `서류 제출 완료 ${selDocIds.length}건 처리했습니다`,
+        `증빙서류 제출 완료 ${selDocIds.length}건 처리했습니다`,
       );
     }
   };
@@ -185,12 +187,12 @@ export function ReviewMode({
     if (busy) return;
     if (
       window.confirm(
-        `서류 미제출 출결 기록 ${allDocIds.length}건을 모두 제출 완료로 처리하시겠습니까?`,
+        `증빙서류 미제출 출결 기록 ${allDocIds.length}건을 모두 제출 완료로 처리하시겠습니까?`,
       )
     ) {
       void runBulk(
         () => bulkMarkDocumentSubmitted(allDocIds),
-        `서류 제출 완료 ${allDocIds.length}건 처리했습니다`,
+        `증빙서류 제출 완료 ${allDocIds.length}건 처리했습니다`,
       );
     }
   };
@@ -227,7 +229,7 @@ export function ReviewMode({
         <span className="material-symbols-outlined text-4xl text-green-400">check_circle</span>
         <p className="text-sm font-bold text-sp-text">모든 업무 완료!</p>
         <p className="text-xs text-sp-muted">
-          나이스 반영·서류 제출·후속조치가 모두 처리되었습니다.
+          나이스 반영·증빙서류 제출·후속조치가 모두 처리되었습니다.
         </p>
       </div>
     );
@@ -249,7 +251,7 @@ export function ReviewMode({
           }
         />
         <ProgressStat
-          label="서류 제출"
+          label="증빙서류 제출"
           done={progress.docSubmitted}
           total={progress.docRequired}
           barClass="bg-orange-500"
@@ -331,7 +333,7 @@ export function ReviewMode({
               disabled={busy || selDocIds.length === 0}
               className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-green-500/10 text-green-400 border border-green-500/30 hover:bg-green-500/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              서류 제출 {selDocIds.length > 0 ? selDocIds.length : ''}
+              증빙서류 제출 {selDocIds.length > 0 ? selDocIds.length : ''}
             </button>
             <button
               type="button"

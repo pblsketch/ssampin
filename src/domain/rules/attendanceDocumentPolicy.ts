@@ -6,8 +6,9 @@
  * 있었다 — 이 순수 함수(requiresDocument)가 배너·통계·검토 큐·조회 필터의
  * 단일 게이트가 된다.
  *
- * 기본 정책: 출석인정('인정') 사유만 전 상태 요구(교외체험학습 신청서·보고서 등).
- * 질병/미인정/기타는 학교 방침에 따라 설정에서 상태별로 켠다.
+ * 기본 정책: 출석인정('인정')과 '질병' 사유를 전 상태 요구(교외체험학습 신청서·보고서, 진단서 등).
+ * '기타'는 정의가 학교마다 달라 기본 꺼짐 — 설정에서 상태별로 켠다.
+ * '미인정'(무단)은 증빙서류를 걷지 않는 것이 학교 공통이라 정책보다 우선해 항상 제외한다.
  *
  * 다중 교시 집약: attendancePeriods는 교시별 (status, reason) 배열이라 한 기록이
  * 서로 다른 축을 동시에 가질 수 있다 → **OR 집약**(어느 한 교시라도 요구면 요구).
@@ -35,14 +36,31 @@ export const DOC_STATUS_LABELS: Record<DocStatusKey, string> = {
 
 export const DOC_REASON_AXES: readonly DocReasonAxis[] = ['인정', '질병', '미인정', '기타'];
 
+/**
+ * 증빙서류를 걷지 않는 사유 축 — 학교 공통(오너 확정 2026-08-27).
+ * 정책 설정보다 **우선**한다: 저장된 설정에 켜져 있어도 무시되므로 마이그레이션이 필요 없다.
+ */
+export const DOC_EXEMPT_REASON_AXES: readonly DocReasonAxis[] = ['미인정'];
+
+/** 설정 화면에서 편집 가능한 사유 축 — 공통 면제 축은 아예 노출하지 않는다. */
+export const EDITABLE_DOC_REASON_AXES: readonly DocReasonAxis[] = DOC_REASON_AXES.filter(
+  (axis) => !DOC_EXEMPT_REASON_AXES.includes(axis),
+);
+
 /** 사유 축별로 서류를 요구할 상태 집합. 키가 없는 축은 요구하지 않음. */
 export interface AttendanceDocumentPolicy {
   readonly requiredBy: Partial<Record<DocReasonAxis, readonly DocStatusKey[]>>;
 }
 
-/** 기본 정책 — 출석인정만 전 상태 요구. 나머지 축은 학교 방침 선택. */
+/**
+ * 기본 정책 — 출석인정·질병을 전 상태 요구.
+ *
+ * '인정만'이던 기존 기본값은 진단서를 걷는 학교에서 서류 기능이 통째로 안 보이는 원인이었다
+ * (분석: docs/03-analysis/attendance-document-checkbox-discoverability.analysis.md §2).
+ * '기타'는 정의가 학교마다 달라 보수적으로 꺼 둔다. '미인정'은 DOC_EXEMPT_REASON_AXES가 막는다.
+ */
 export const DEFAULT_ATTENDANCE_DOCUMENT_POLICY: AttendanceDocumentPolicy = {
-  requiredBy: { 인정: ALL_DOC_STATUSES },
+  requiredBy: { 인정: ALL_DOC_STATUSES, 질병: ALL_DOC_STATUSES },
 };
 
 function axisOf(reason?: string): DocReasonAxis {
@@ -58,6 +76,8 @@ function isRequired(
   axis: DocReasonAxis,
   status: DocStatusKey,
 ): boolean {
+  // 공통 면제가 정책보다 우선 — 설정에 남아 있는 값이 되살아나지 않게 여기서 먼저 막는다.
+  if (DOC_EXEMPT_REASON_AXES.includes(axis)) return false;
   return policy.requiredBy[axis]?.includes(status) ?? false;
 }
 
@@ -92,6 +112,26 @@ export function requiresDocument(
   const status = statusFromSubcategory(record.subcategory ?? '');
   if (status == null) return false;
   return isRequired(policy, axisOf(record.subcategory), status);
+}
+
+/**
+ * 이 기록이 **공통 면제 축(미인정)만으로** 이뤄져 있는가.
+ *
+ * 화면에서 "방침을 바꾸면 걷을 수 있어요" 안내를 띄울지 가르는 데 쓴다 —
+ * 공통 면제는 학교 방침을 바꿔도 달라지지 않으므로, 그 경우 안내는 거짓말이 된다.
+ * (설계: docs/02-design/features/attendance-document-discoverability.design.md §4-2)
+ *
+ * 다중 교시는 **AND 집약**(전 교시가 면제일 때만 면제) — requiresDocument의 OR 집약과 짝을 이룬다.
+ */
+export function isDocumentExemptByRule(
+  record: Pick<StudentRecord, 'category' | 'subcategory' | 'attendancePeriods'>,
+): boolean {
+  if (record.category !== 'attendance') return false;
+  const periods = record.attendancePeriods;
+  if (periods != null && periods.length > 0) {
+    return periods.every((p) => DOC_EXEMPT_REASON_AXES.includes(axisOf(p.reason)));
+  }
+  return DOC_EXEMPT_REASON_AXES.includes(axisOf(record.subcategory));
 }
 
 /* ── M6 (D-2): 서류 종류별 체크리스트 ── */

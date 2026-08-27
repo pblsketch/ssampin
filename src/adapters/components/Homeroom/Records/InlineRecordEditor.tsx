@@ -8,6 +8,9 @@ import {
 import type { RecordCategoryItem } from '@domain/valueObjects/RecordCategory';
 import type { StudentRecord, AttendancePeriodEntry } from '@domain/entities/StudentRecord';
 import { validateAttendancePeriods } from '@domain/rules/attendanceRules';
+import { requiresDocument, isDocumentExemptByRule } from '@domain/rules/attendanceDocumentPolicy';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+import { openSettingsTab } from '@adapters/utils/openSettingsTab';
 import { GRAY_COLOR, getSubcategoryChipClass } from './recordUtils';
 import { PeriodRowEditor } from './PeriodRowEditor';
 import { ObservationAttachmentList } from '@adapters/components/ClassManagement/ObservationAttachmentList';
@@ -119,6 +122,23 @@ export function InlineRecordEditor({
     // Only re-parse when category changes to attendance or on mount
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editCategory]);
+
+  /**
+   * 증빙서류 노출 판정 — 저장된 record가 아니라 **편집 중인 값**으로 계산한다.
+   * 사유를 질병↔미인정으로 바꾸는 순간 안내/체크박스가 같이 따라가야 하기 때문.
+   */
+  const documentPolicy = useSettingsStore((s) => s.settings.attendanceDocumentPolicy);
+  const liveRecord = useMemo(
+    () => ({
+      category: 'attendance',
+      subcategory: editSubcategory,
+      attendancePeriods: periodEditMode ? attendancePeriods : record.attendancePeriods,
+    }),
+    [editSubcategory, periodEditMode, attendancePeriods, record.attendancePeriods],
+  );
+  const documentRequired = isAttendance && requiresDocument(liveRecord, documentPolicy);
+  /** 미인정은 학교 방침을 바꿔도 안 걷는다 → "방침 바꾸기" 안내를 띄우면 거짓말이 된다. */
+  const documentExemptByRule = isAttendance && isDocumentExemptByRule(liveRecord);
 
   const chipSize = compact ? 'text-detail px-2 py-0.5' : 'px-2.5 py-1 text-xs';
 
@@ -316,7 +336,7 @@ export function InlineRecordEditor({
           </span>
         </label>
       )}
-      {isAttendance && setEditDocumentSubmitted && (
+      {isAttendance && setEditDocumentSubmitted && documentRequired && (
         <label className="flex items-center gap-2 text-xs text-sp-muted cursor-pointer select-none">
           <input
             type="checkbox"
@@ -325,10 +345,30 @@ export function InlineRecordEditor({
             className="w-3.5 h-3.5 rounded border-sp-border text-sp-accent focus:ring-sp-accent focus:ring-offset-0 bg-sp-bg accent-blue-500"
           />
           <span className="flex items-center gap-1">
-            출결 서류 제출 확인
+            증빙서류 제출 확인
             <span className="text-caption text-sp-muted/60">(나중에 변경 가능)</span>
           </span>
         </label>
+      )}
+      {/*
+        정책 밖 출결 — 체크해도 배지·통계 어디에도 반영되지 않으므로 체크박스를 두지 않고
+        "왜 없는지"와 "어디서 바꾸는지"를 그 자리에서 알려준다(발견성 피드백 2026-08-27).
+        미인정은 방침을 바꿔도 안 걷으니 안내조차 띄우지 않는다.
+      */}
+      {isAttendance && setEditDocumentSubmitted && !documentRequired && !documentExemptByRule && (
+        <p className="flex items-center gap-1.5 text-xs text-sp-muted">
+          <span className="material-symbols-outlined text-icon-xs" aria-hidden="true">
+            info
+          </span>
+          지금 방침에선 이 출결의 증빙서류를 걷지 않아요
+          <button
+            type="button"
+            onClick={() => openSettingsTab('record-reminder')}
+            className="font-medium text-sp-accent hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-sp-accent rounded"
+          >
+            방침 바꾸기
+          </button>
+        </p>
       )}
 
       {/* 후속 조치 — 출결 기록의 저장 경로는 후속조치를 지원하지 않아 숨김 */}

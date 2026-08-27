@@ -638,9 +638,18 @@ export interface Settings {
   readonly attendanceReasonKeywords?: readonly string[];
   /**
    * 증빙서류 요구 정책(M4) — 어떤 출결(사유 축×상태)이 서류 수합 대상인지 학교 방침.
-   * 미설정 시 기본 정책(출석인정만 요구, DEFAULT_ATTENDANCE_DOCUMENT_POLICY) 적용.
+   * 미설정 시 기본 정책(출석인정+질병 요구, DEFAULT_ATTENDANCE_DOCUMENT_POLICY) 적용.
+   * '미인정'은 학교 공통으로 제외되므로 이 값에 남아 있어도 무시된다.
    */
   readonly attendanceDocumentPolicy?: import('@domain/rules/attendanceDocumentPolicy').AttendanceDocumentPolicy;
+  /**
+   * 증빙서류 기본값 확대(2026-08-27) 안내 배너를 닫은 시각 (ISO 8601).
+   *
+   * 기본 대상이 '출석인정만'에서 '출석인정+질병'으로 넓어지면서, 정책을 한 번도 설정하지
+   * 않은 사용자는 과거 질병 출결이 한꺼번에 '미제출'로 잡힌다. 그 변화를 예고하는 1회 안내다.
+   * 미설정 = 아직 안 닫음. 정책을 직접 설정한 사용자에게는 애초에 표시하지 않는다.
+   */
+  readonly attendanceDocumentNoticeDismissedAt?: string;
   readonly subject: string;
   readonly schoolLevel: SchoolLevel;
   /** 직접 설정 시 수업 시간(분). schoolLevel이 'custom'일 때 사용 */

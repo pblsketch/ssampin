@@ -9,6 +9,7 @@ import { InputMode } from './InputMode';
 import { ProgressMode } from './ProgressMode';
 import { SearchMode } from './SearchMode';
 import { RecordsExportModal } from './RecordsExportModal';
+import { AttendanceDocumentNoticeBanner } from './AttendanceDocumentNoticeBanner';
 import { todayString } from './recordUtils';
 import type { RecordPrefill } from '../HomeroomPage';
 
@@ -85,6 +86,9 @@ export function RecordsTab({ prefill, onPrefillConsumed, onRecordDirtyChange }: 
 
   return (
     <div className="h-full flex flex-col">
+      {/* 증빙서류 기본값 확대 1회 안내 — 정책 미설정 사용자에게만, 닫으면 영구 해소 */}
+      <AttendanceDocumentNoticeBanner />
+
       {/* 서브탭 + 카테고리 관리 */}
       <div className="mb-2 flex items-center justify-between">
         <div

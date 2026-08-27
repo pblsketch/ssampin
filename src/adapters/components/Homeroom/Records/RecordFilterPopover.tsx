@@ -162,7 +162,7 @@ export function RecordFilterPopover({ categories, filters }: RecordFilterPopover
                     : 'bg-sp-surface text-sp-muted hover:text-sp-text border border-sp-border'
                 }`}
               >
-                서류 미제출
+                증빙서류 미제출
               </button>
             </div>
           </div>

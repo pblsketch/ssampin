@@ -138,7 +138,7 @@ export function AttendanceStatusBanners({ students }: { students: readonly Stude
               <span className="material-symbols-outlined text-icon-sm text-orange-500">
                 description
               </span>
-              서류 미제출 출결 기록{' '}
+              증빙서류 미제출 출결 기록{' '}
               <span className="font-bold text-orange-600">{unsubmitted.length}</span>건
               <span
                 className={`material-symbols-outlined text-sm ml-auto text-sp-muted transition-transform ${showDoc ? 'rotate-180' : ''}`}
@@ -151,7 +151,7 @@ export function AttendanceStatusBanners({ students }: { students: readonly Stude
               onClick={() => {
                 if (
                   window.confirm(
-                    `서류 미제출 출결 기록 ${unsubmitted.length}건을 모두 제출 완료로 처리하시겠습니까?`,
+                    `증빙서류 미제출 출결 기록 ${unsubmitted.length}건을 모두 제출 완료로 처리하시겠습니까?`,
                   )
                 ) {
                   void bulkMarkDocumentSubmitted(unsubmitted.map((r) => r.id));

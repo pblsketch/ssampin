@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { Settings } from '@domain/entities/Settings';
 import {
   DEFAULT_ATTENDANCE_DOCUMENT_POLICY,
-  DOC_REASON_AXES,
+  EDITABLE_DOC_REASON_AXES,
   ALL_DOC_STATUSES,
   DOC_STATUS_LABELS,
   type AttendanceDocumentPolicy,
@@ -463,7 +463,7 @@ export function RecordReminderSection({ draft, patch }: Props) {
           icon="description"
           iconColor="bg-orange-500/10 text-orange-500"
           title="증빙서류 요구 설정"
-          description="체크한 출결만 '서류 미제출'로 집계돼요. 기본은 출석인정(체험학습 등)만 서류를 요구하고, 질병·미인정·기타는 학교 방침에 따라 켜세요."
+          description="체크한 출결만 '증빙서류 미제출'로 집계돼요. 기본은 출석인정(체험학습 등)과 질병이고, 무단(미인정)은 서류를 걷지 않아 목록에 없어요. 기타는 학교 방침에 따라 켜세요."
         >
           <AttendanceDocumentPolicyEditor
             policy={draft.attendanceDocumentPolicy ?? DEFAULT_ATTENDANCE_DOCUMENT_POLICY}
@@ -612,7 +612,7 @@ function AttendanceDocumentPolicyEditor({
             </tr>
           </thead>
           <tbody className="divide-y divide-sp-border/50">
-            {DOC_REASON_AXES.map((axis) => (
+            {EDITABLE_DOC_REASON_AXES.map((axis) => (
               <tr key={axis}>
                 <td className="px-3 py-1.5 text-xs text-sp-text">{AXIS_LABELS[axis]}</td>
                 {ALL_DOC_STATUSES.map((status) => (
@@ -621,7 +621,7 @@ function AttendanceDocumentPolicyEditor({
                       type="checkbox"
                       checked={isOn(axis, status)}
                       onChange={() => toggle(axis, status)}
-                      aria-label={`${AXIS_LABELS[axis]} ${DOC_STATUS_LABELS[status]} 서류 요구`}
+                      aria-label={`${AXIS_LABELS[axis]} ${DOC_STATUS_LABELS[status]} 증빙서류 요구`}
                       className="w-4 h-4 accent-sp-accent cursor-pointer"
                     />
                   </td>
@@ -632,8 +632,9 @@ function AttendanceDocumentPolicyEditor({
         </table>
       </div>
       <p className="text-xs text-sp-muted">
-        예: 질병 결석에 진단서를 걷는 학교라면 '질병' 행의 '결석'을 체크하세요. 바꾸는 즉시 서류
-        미제출 집계(조회·통계·검토)가 다시 계산돼요.
+        예: 질병 결석에 진단서를 걷지 않는 학교라면 '질병' 행의 '결석'을 꺼 두세요. 바꾸는 즉시
+        증빙서류 미제출 집계(조회·통계·검토)가 다시 계산돼요. 무단(미인정)은 서류를 걷지 않아 표에
+        없습니다.
       </p>
     </div>
   );
