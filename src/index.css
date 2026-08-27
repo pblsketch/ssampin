@@ -1179,6 +1179,34 @@ html.sp-glass-on [role='dialog'] .bg-sp-surface {
   animation: widget-drop 0.2s ease-out;
 }
 
+/* ── 대시보드: 마우스로 끌 때 글자가 파랗게 블럭 잡히지 않게 ──
+
+   사용자 신고("대시보드 화면 위에 마우스 블럭 씌워지는 거"): 위젯을 옮기려고 카드를
+   잡고 끌면 이동은 안 되고 대신 브라우저 기본 동작인 “글자 긁기”가 일어나 시간표
+   셀·할 일 등이 통째로 선택됐다(실측: 카드 본문 80자, 그리드 여백 122자).
+   마우스를 떼어도 블럭이 남아 딴 데를 한 번 더 클릭해야 사라졌다.
+
+   범위는 대시보드 화면(헤더·탭 바·위젯 그리드)이다. 위젯만 막았더니 헤더의 날짜·날씨
+   안내·[위젯 관리]·탭 이름이 그대로 파래져서 신고가 반만 해결됐다(실측 125자).
+   이곳들은 전부 눌러서 쓰는 UI 라 긁어 복사할 일이 없다. 반면 글을 직접 읽고 복사하는
+   ★확대 모달(WidgetModal)은 createPortal 로 body 에 따로 그려서 이 규칙을 상속받지
+   않는다 — 복사는 그대로 된다.
+   범위를 사이드바·다른 화면까지 넓히지 말 것(2026-08-27 오너 결정) — 학생 기록·생기부
+   문구를 긁어 나이스에 붙여넣는 실사용 흐름을 막게 된다. */
+.dashboard-surface {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* 단, 실제로 글을 쓰거나 고치는 입력칸은 예외 — 이걸 빼면 입력한 글자를 드래그로 고르거나
+   더블클릭으로 바꾸는 것조차 안 된다(헤더의 '오늘의 한마디', 즐겨찾기·연락처·D-Day 등). */
+.dashboard-surface input,
+.dashboard-surface textarea,
+.dashboard-surface [contenteditable='true'] {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 /* ── Widget Grid: 모바일에서 rowSpan 비활성화 ── */
 @media (max-width: 767px) {
   .widget-grid {

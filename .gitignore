@@ -236,3 +236,6 @@ scripts/render-card-html.cjs
 /test_el.cjs
 tests/fixtures/student-bundle-baseline.json
 
+
+# UI 실화면 검증 임시 스크린샷 (릴리즈 산출물 아님)
+verify-*.png

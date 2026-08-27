@@ -43,7 +43,9 @@ export function Dashboard({ onNavigate }: DashboardProps) {
         커졌다 작아져서 슬라이더 손잡이가 끌고 있는 커서 밑에서 달아났다
         (2026-08-21 준일님 피드백). 조절하는 도구는 조절 대상에 포함되면 안 된다.
     */
-    <div className="h-full flex flex-col">
+    /* dashboard-surface: 마우스로 끌 때 글자에 파란 블럭이 씌워지지 않게 하는 표식.
+       실제 규칙은 index.css 에 있다(입력칸은 예외로 되살린다). */
+    <div className="dashboard-surface h-full flex flex-col">
       {/* 헤더 + 알림 배지 — 배율 적용 대상 */}
       <div className="shrink-0" style={{ zoom: fontScale }}>
         <DashboardHeader

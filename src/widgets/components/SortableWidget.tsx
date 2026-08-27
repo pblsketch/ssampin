@@ -7,6 +7,7 @@ import { WidgetResizeHandle } from './WidgetResizeHandle';
 import { WidgetVerticalResizeHandle } from './WidgetVerticalResizeHandle';
 import { WidgetCornerResizeHandle } from './WidgetCornerResizeHandle';
 import { getSpanClass } from '../utils/getSpanClass';
+import { WIDGET_DRAG_HANDLE_ATTR } from '../utils/widgetDragSensor';
 
 interface SortableWidgetProps {
   instance: WidgetInstance;
@@ -22,7 +23,13 @@ interface SortableWidgetProps {
  *
  * G004 PR-core 변경사항:
  * - isEditMode 제거 — DnD 항상 활성
- * - 드래그 리스너(listeners)는 ⋮ 핸들 버튼에만 부착 → 카드 본문 클릭 보존
+ * - (2026-08-27 개정) 드래그 리스너는 ⋮ 손잡이 **와 카드 전체** 양쪽에 부착한다.
+ *   예전엔 손잡이에만 걸어 카드 본문 클릭을 지켰는데, 손잡이가 300ms 호버 후에야
+ *   뜨는 탓에 카드를 그냥 잡고 끄는 사람에게는 위젯이 안 움직이고 글자만 긁혔다.
+ *   이제 카드 본문 클릭은 WidgetPointerSensor(버튼·입력칸·스크롤바 제외)와
+ *   activationConstraint distance 8(8px 미만은 클릭)이 함께 지킨다.
+ *   ★양쪽 부착은 중복 실행되지 않는다 — dnd-kit 이 nativeEvent.dndKit 으로 표시해
+ *   자식(손잡이)이 먼저 캡처하면 버블링으로 온 카드 핸들러는 그냥 빠져나간다.
  *
  * 리사이즈 발견성 개선:
  * - 리사이즈 그립(우측·하단·우하단 코너)은 항상 mount — 카드 호버만으로
@@ -116,10 +123,19 @@ export function SortableWidget({
       style={style}
       className={`${spanClass} ${isDragging ? 'opacity-50 z-50' : ''}`}
     >
+      {/*
+        드래그 리스너를 카드 전체에 건다. 손잡이(⋮)에만 걸려 있던 예전에는 손잡이가
+        뜨기까지 300ms 를 기다려야 해서, 그냥 카드를 잡고 끄는 사람에게는 위젯이
+        꿈쩍도 안 하고 글자만 파랗게 긁혔다(2026-08-27 피드백).
+        카드 안 버튼·입력칸·스크롤바에서 시작한 누름은 WidgetPointerSensor 가 걸러내므로
+        클릭·스크롤은 그대로 산다. 투명 오버레이를 덮는 옛 방식으로 되돌리지 말 것 —
+        그건 카드 안 버튼 클릭을 삼켰던 방식이다(위 주석 참고).
+      */}
       <div
         className="relative group/widget h-full"
         onMouseEnter={handleCardEnter}
         onMouseLeave={handleCardLeave}
+        {...listeners}
       >
         <div
           className="h-full overflow-hidden bg-sp-card flex flex-col"
@@ -145,10 +161,11 @@ export function SortableWidget({
             showHandles ? 'opacity-100' : 'opacity-0 pointer-events-none'
           }`}
         >
-          {/* 드래그 핸들 — listeners 여기에만 부착 */}
+          {/* 드래그 핸들 — 키보드로도 순서를 바꿀 수 있는 경로(attributes 의 onKeyDown)라 유지한다 */}
           <button
             {...attributes}
             {...listeners}
+            {...{ [WIDGET_DRAG_HANDLE_ATTR]: '' }}
             className="cursor-grab active:cursor-grabbing rounded p-0.5 text-sp-muted hover:text-sp-text hover:bg-sp-border/30 transition-colors"
             title="드래그하여 순서 변경"
             aria-label="드래그하여 순서 변경"

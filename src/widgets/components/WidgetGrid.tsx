@@ -2,13 +2,13 @@ import { useLayoutEffect, useMemo, useState } from 'react';
 import {
   DndContext,
   DragOverlay,
-  PointerSensor,
   KeyboardSensor,
   useSensor,
   useSensors,
   closestCenter,
 } from '@dnd-kit/core';
 import type { DragStartEvent, DragEndEvent } from '@dnd-kit/core';
+import { WidgetPointerSensor } from '../utils/widgetDragSensor';
 import {
   SortableContext,
   rectSortingStrategy,
@@ -100,7 +100,9 @@ export function WidgetGrid({ onNavigate }: WidgetGridProps) {
   const { ref: rootRef, height: scrollportHeight } = useScrollportHeight();
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    // 8px 이상 끌어야 드래그로 친다 — 그 미만은 클릭(카드 눌러 확대)으로 그대로 넘어간다.
+    // WidgetPointerSensor 가 버튼·입력칸·스크롤바 위에서 시작한 누름은 미리 걸러낸다.
+    useSensor(WidgetPointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
