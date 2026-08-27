@@ -157,6 +157,7 @@ export function SortableWidget({
             숨김 상태에서도 mount 하되 pointer-events-none 이라 클릭을 가로채지 않는다. */}
         <div
           data-widget-handle-tab
+          data-sp-floating
           className={`absolute top-4 left-3 z-20 flex items-center gap-0.5 bg-sp-card border border-sp-border/60 rounded-lg px-1 py-0.5 shadow-md transition-opacity duration-150 ${
             showHandles ? 'opacity-100' : 'opacity-0 pointer-events-none'
           }`}

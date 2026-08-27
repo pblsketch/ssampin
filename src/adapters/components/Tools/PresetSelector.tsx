@@ -41,18 +41,24 @@ export function PresetSelector({ type, currentItems, onLoad }: PresetSelectorPro
     setShowSaveDialog(false);
   }, [presetName, type, currentItems, addPreset]);
 
-  const handleSelect = useCallback((presetId: string) => {
-    const preset = presets.find((p) => p.id === presetId);
-    if (preset) {
-      onLoad(preset.items);
-      setIsOpen(false);
-    }
-  }, [presets, onLoad]);
+  const handleSelect = useCallback(
+    (presetId: string) => {
+      const preset = presets.find((p) => p.id === presetId);
+      if (preset) {
+        onLoad(preset.items);
+        setIsOpen(false);
+      }
+    },
+    [presets, onLoad],
+  );
 
-  const handleDelete = useCallback(async (presetId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    await deletePreset(presetId);
-  }, [deletePreset]);
+  const handleDelete = useCallback(
+    async (presetId: string, e: React.MouseEvent) => {
+      e.stopPropagation();
+      await deletePreset(presetId);
+    },
+    [deletePreset],
+  );
 
   return (
     <div className="flex items-center gap-2">
@@ -65,13 +71,14 @@ export function PresetSelector({ type, currentItems, onLoad }: PresetSelectorPro
         >
           <span className="material-symbols-outlined text-icon-sm">folder_open</span>
           <span>불러오기</span>
-          {typePresets.length > 0 && (
-            <span className="text-sp-muted">({typePresets.length})</span>
-          )}
+          {typePresets.length > 0 && <span className="text-sp-muted">({typePresets.length})</span>}
         </button>
 
         {isOpen && typePresets.length > 0 && (
-          <div className="absolute top-full left-0 mt-1 w-56 bg-sp-card border border-sp-border rounded-xl shadow-2xl z-50 py-1 max-h-48 overflow-y-auto">
+          <div
+            data-sp-floating
+            className="absolute top-full left-0 mt-1 w-56 bg-sp-card border border-sp-border rounded-xl shadow-2xl z-50 py-1 max-h-48 overflow-y-auto"
+          >
             {typePresets.map((preset) => (
               <button
                 key={preset.id}
@@ -80,9 +87,7 @@ export function PresetSelector({ type, currentItems, onLoad }: PresetSelectorPro
               >
                 <div className="flex-1 min-w-0">
                   <span className="text-sm text-sp-text truncate block">{preset.name}</span>
-                  <span className="text-caption text-sp-muted">
-                    {preset.items.length}개 항목
-                  </span>
+                  <span className="text-caption text-sp-muted">{preset.items.length}개 항목</span>
                 </div>
                 <button
                   onClick={(e) => handleDelete(preset.id, e)}
@@ -125,9 +130,7 @@ export function PresetSelector({ type, currentItems, onLoad }: PresetSelectorPro
               autoFocus
               className="w-full px-3 py-2 rounded-lg bg-sp-surface border border-sp-border text-sp-text text-sm placeholder-sp-muted focus:outline-none focus:border-sp-accent"
             />
-            <p className="text-xs text-sp-muted mt-2">
-              {currentItems.length}개 항목이 저장됩니다
-            </p>
+            <p className="text-xs text-sp-muted mt-2">{currentItems.length}개 항목이 저장됩니다</p>
             <div className="flex gap-2 mt-4">
               <button
                 onClick={() => setShowSaveDialog(false)}

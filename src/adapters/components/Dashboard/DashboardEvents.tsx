@@ -114,6 +114,7 @@ function RangePicker({
   return (
     <div
       ref={ref}
+      data-sp-floating
       className="absolute right-0 top-full mt-1 z-20 bg-sp-card border border-sp-border rounded-lg shadow-xl p-3 w-52"
     >
       <p className="text-xs font-medium text-sp-muted mb-2">표시 기간</p>

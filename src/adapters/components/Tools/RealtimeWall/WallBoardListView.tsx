@@ -464,6 +464,7 @@ function BoardCard({
         {menuOpen && (
           <div
             role="menu"
+            data-sp-floating
             className="absolute right-0 top-full z-10 mt-1 w-36 overflow-hidden rounded-lg border border-sp-border bg-sp-card shadow-xl"
           >
             <button

@@ -77,7 +77,10 @@ function RubricCard({ rubric, gradedCount, onOpen, onEdit, onCopy, onDelete }: R
             <span className="material-symbols-outlined text-sp-muted text-icon-md">more_vert</span>
           </button>
           {showMenu && (
-            <div className="absolute right-0 top-8 bg-sp-card border border-sp-border rounded-lg shadow-xl py-1 min-w-[130px] z-10">
+            <div
+              data-sp-floating
+              className="absolute right-0 top-8 bg-sp-card border border-sp-border rounded-lg shadow-xl py-1 min-w-[130px] z-10"
+            >
               <button
                 type="button"
                 onClick={() => {

@@ -9,7 +9,12 @@ interface InlineColorPaletteProps {
   onClose: () => void;
 }
 
-export function InlineColorPalette({ label, currentColorId, onSelect, onClose }: InlineColorPaletteProps) {
+export function InlineColorPalette({
+  label,
+  currentColorId,
+  onSelect,
+  onClose,
+}: InlineColorPaletteProps) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -34,6 +39,7 @@ export function InlineColorPalette({ label, currentColorId, onSelect, onClose }:
   return (
     <div
       ref={ref}
+      data-sp-floating
       className="absolute left-1/2 -translate-x-1/2 top-full z-50 mt-1 p-2 rounded-xl bg-sp-card border border-sp-border shadow-2xl"
       onClick={(e) => e.stopPropagation()}
     >

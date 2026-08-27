@@ -28,16 +28,13 @@ export function RealtimeWallTeacherStudentTrackerPanel({
     <div
       role="status"
       aria-live="polite"
+      data-sp-floating
       className="fixed right-4 top-20 z-[55] flex w-72 flex-col gap-2 rounded-xl border border-sky-400/40 bg-sp-card p-3 shadow-xl"
     >
       <header className="flex items-start gap-2">
-        <span className="material-symbols-outlined text-lg text-sky-400">
-          person_search
-        </span>
+        <span className="material-symbols-outlined text-lg text-sky-400">person_search</span>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-bold text-sp-text">
-            작성자 추적
-          </p>
+          <p className="truncate text-sm font-bold text-sp-text">작성자 추적</p>
           <p className="text-xs text-sp-muted">
             {authorLabel ? `${authorLabel} · ` : ''}
             <span className="font-semibold text-sky-300">{matchCount}</span>장 일치
@@ -63,8 +60,8 @@ export function RealtimeWallTeacherStudentTrackerPanel({
           onClick={onBulkHide}
           className="mt-1 flex items-center justify-center gap-1.5 rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-1.5 text-xs font-semibold text-rose-300 transition hover:bg-rose-500/20"
         >
-          <span className="material-symbols-outlined text-sm">visibility_off</span>
-          이 학생 카드 모두 숨김 ({matchCount}장)
+          <span className="material-symbols-outlined text-sm">visibility_off</span>이 학생 카드 모두
+          숨김 ({matchCount}장)
         </button>
       )}
     </div>

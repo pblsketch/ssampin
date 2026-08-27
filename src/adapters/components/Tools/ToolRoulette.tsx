@@ -340,7 +340,10 @@ export function ToolRoulette({ onBack, isFullscreen }: ToolRouletteProps) {
                   <span>수업반</span>
                 </button>
                 {showTcDropdown && (
-                  <div className="absolute top-full left-0 right-0 mt-1 bg-sp-card border border-sp-border rounded-xl shadow-2xl z-50 py-1 max-h-48 overflow-y-auto">
+                  <div
+                    data-sp-floating
+                    className="absolute top-full left-0 right-0 mt-1 bg-sp-card border border-sp-border rounded-xl shadow-2xl z-50 py-1 max-h-48 overflow-y-auto"
+                  >
                     {selectableTcClasses.map((tc) => {
                       const activeCount = tc.students.filter(isStudentActive).length;
                       return (

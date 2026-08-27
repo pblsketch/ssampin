@@ -1662,7 +1662,10 @@ function ArchiveView({
 
       {/* Batch actions bar */}
       {selectedIds.size > 0 && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3 rounded-xl bg-sp-card ring-1 ring-sp-border shadow-2xl shadow-black/40">
+        <div
+          data-sp-floating
+          className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3 rounded-xl bg-sp-card ring-1 ring-sp-border shadow-2xl shadow-black/40"
+        >
           <span className="text-sm text-sp-text font-medium">{selectedIds.size}건 선택됨</span>
           <div className="w-px h-5 bg-sp-border" />
           <button
@@ -2486,7 +2489,10 @@ function TodoItem({
 
             {/* Postpone dropdown */}
             {showPostpone && (
-              <div className="absolute right-0 top-full mt-1 bg-sp-card rounded-xl ring-1 ring-sp-border shadow-xl z-20 py-1 min-w-[160px]">
+              <div
+                data-sp-floating
+                className="absolute right-0 top-full mt-1 bg-sp-card rounded-xl ring-1 ring-sp-border shadow-xl z-20 py-1 min-w-[160px]"
+              >
                 {getPostponeOptions().map((opt) => (
                   <button
                     key={opt.label}

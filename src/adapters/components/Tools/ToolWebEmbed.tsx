@@ -138,12 +138,18 @@ export function ToolWebEmbed({ url, title, onBack, isFullscreen }: ToolWebEmbedP
           style={{ minHeight: 'calc(100vh - 240px)' }}
         >
           {isLoading && !hasError && (
-            <div className="absolute inset-0 z-10 flex items-center justify-center bg-sp-card rounded-xl">
+            <div
+              data-sp-floating
+              className="absolute inset-0 z-10 flex items-center justify-center bg-sp-card rounded-xl"
+            >
               <div className="animate-spin rounded-full h-10 w-10 border-2 border-sp-border border-t-sp-accent" />
             </div>
           )}
           {hasError ? (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-sp-card rounded-xl text-sp-muted">
+            <div
+              data-sp-floating
+              className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-sp-card rounded-xl text-sp-muted"
+            >
               <span className="material-symbols-outlined text-5xl">wifi_off</span>
               <p className="text-sm">페이지를 불러올 수 없습니다</p>
               <div className="flex gap-2">

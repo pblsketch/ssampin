@@ -15,7 +15,12 @@ import {
 
 /* ──────────────── 타입 ──────────────── */
 
-type StudentLike = { readonly id: string; readonly name: string; readonly isVacant?: boolean; readonly number?: number };
+type StudentLike = {
+  readonly id: string;
+  readonly name: string;
+  readonly isVacant?: boolean;
+  readonly number?: number;
+};
 
 /* ──────────────── Props ──────────────── */
 
@@ -52,10 +57,7 @@ export function SurveyDetail({ survey, onBack, students: studentsProp }: SurveyD
   const [showMemos, setShowMemos] = useState(false);
 
   const localData = useSurveyStore((s) => s.getLocalData(survey.id));
-  const totalStudents = useMemo(
-    () => students.filter(isStudentActive).length,
-    [students],
-  );
+  const totalStudents = useMemo(() => students.filter(isStudentActive).length, [students]);
   const progress = getTeacherCheckProgress(survey, localData, totalStudents);
   const activeQuestion = survey.questions[activeQuestionIdx];
 
@@ -153,16 +155,25 @@ export function SurveyDetail({ survey, onBack, students: studentsProp }: SurveyD
             {showMenu && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setShowMenu(false)} />
-                <div className="absolute right-0 top-full mt-1 z-50 bg-sp-card border border-sp-border rounded-lg shadow-xl py-1 min-w-[120px]">
+                <div
+                  data-sp-floating
+                  className="absolute right-0 top-full mt-1 z-50 bg-sp-card border border-sp-border rounded-lg shadow-xl py-1 min-w-[120px]"
+                >
                   <button
-                    onClick={() => { setShowMenu(false); void handleArchive(); }}
+                    onClick={() => {
+                      setShowMenu(false);
+                      void handleArchive();
+                    }}
                     className="w-full text-left px-3 py-2 text-xs text-sp-text hover:bg-sp-surface transition-colors flex items-center gap-2"
                   >
                     <span className="material-symbols-outlined text-sm">archive</span>
                     보관
                   </button>
                   <button
-                    onClick={() => { setShowMenu(false); void handleDelete(); }}
+                    onClick={() => {
+                      setShowMenu(false);
+                      void handleDelete();
+                    }}
                     className="w-full text-left px-3 py-2 text-xs text-red-400 hover:bg-sp-surface transition-colors flex items-center gap-2"
                   >
                     <span className="material-symbols-outlined text-sm">delete</span>
@@ -179,7 +190,9 @@ export function SurveyDetail({ survey, onBack, students: studentsProp }: SurveyD
       <div className="text-xs text-sp-muted mb-3 flex items-center gap-2">
         <span>✏️ 교사 체크</span>
         <span>·</span>
-        <span>{progress.completed}/{progress.total}명 완료 ({progress.percentage}%)</span>
+        <span>
+          {progress.completed}/{progress.total}명 완료 ({progress.percentage}%)
+        </span>
       </div>
 
       {/* 질문 탭 (여러 개일 때) */}
@@ -245,21 +258,21 @@ export function SurveyDetail({ survey, onBack, students: studentsProp }: SurveyD
               .map((s, idx) => ({ ...s, _num: s.number ?? idx + 1 }))
               .filter(isStudentActive)
               .map((s) => (
-              <div key={s.id} className="flex items-center gap-2">
-                <span className="text-xs text-sp-muted w-14 shrink-0">
-                  {s._num} {s.name}
-                </span>
-                <input
-                  type="text"
-                  defaultValue={localData?.studentMemos?.[s.id] ?? ''}
-                  onBlur={(e) => {
-                    void setStudentMemo(survey.id, s.id, e.target.value);
-                  }}
-                  placeholder="메모 입력"
-                  className="flex-1 bg-sp-card border border-sp-border rounded-lg px-2.5 py-1.5 text-xs text-sp-text placeholder-sp-muted/50 focus:border-sp-accent focus:outline-none transition-colors"
-                />
-              </div>
-            ))}
+                <div key={s.id} className="flex items-center gap-2">
+                  <span className="text-xs text-sp-muted w-14 shrink-0">
+                    {s._num} {s.name}
+                  </span>
+                  <input
+                    type="text"
+                    defaultValue={localData?.studentMemos?.[s.id] ?? ''}
+                    onBlur={(e) => {
+                      void setStudentMemo(survey.id, s.id, e.target.value);
+                    }}
+                    placeholder="메모 입력"
+                    className="flex-1 bg-sp-card border border-sp-border rounded-lg px-2.5 py-1.5 text-xs text-sp-text placeholder-sp-muted/50 focus:border-sp-accent focus:outline-none transition-colors"
+                  />
+                </div>
+              ))}
           </div>
         )}
       </div>
@@ -269,18 +282,30 @@ export function SurveyDetail({ survey, onBack, students: studentsProp }: SurveyD
         <div className="mt-3 pt-3 border-t border-sp-border flex flex-wrap gap-3 text-xs text-sp-muted">
           {activeQuestion.type === 'yesno' && (
             <>
-              <span>○ 신청: <strong className="text-green-400">{stats.get('yes') ?? 0}명</strong></span>
-              <span>× 미신청: <strong className="text-red-400">{stats.get('no') ?? 0}명</strong></span>
-              <span>- 미응답: <strong>{stats.get('미응답') ?? 0}명</strong></span>
+              <span>
+                ○ 신청: <strong className="text-green-400">{stats.get('yes') ?? 0}명</strong>
+              </span>
+              <span>
+                × 미신청: <strong className="text-red-400">{stats.get('no') ?? 0}명</strong>
+              </span>
+              <span>
+                - 미응답: <strong>{stats.get('미응답') ?? 0}명</strong>
+              </span>
             </>
           )}
-          {activeQuestion.type === 'choice' && activeQuestion.options?.map((opt, i) => (
-            <span key={opt}>
-              {opt}: <strong className={OPTION_COLORS[i % OPTION_COLORS.length]?.split(' ')[1] ?? 'text-sp-text'}>
-                {stats.get(opt) ?? 0}명
-              </strong>
-            </span>
-          ))}
+          {activeQuestion.type === 'choice' &&
+            activeQuestion.options?.map((opt, i) => (
+              <span key={opt}>
+                {opt}:{' '}
+                <strong
+                  className={
+                    OPTION_COLORS[i % OPTION_COLORS.length]?.split(' ')[1] ?? 'text-sp-text'
+                  }
+                >
+                  {stats.get(opt) ?? 0}명
+                </strong>
+              </span>
+            ))}
         </div>
       )}
 
@@ -366,10 +391,9 @@ interface TextQuestionListProps {
 
 function TextQuestionList({ survey, question, students, localData }: TextQuestionListProps) {
   const setLocalEntry = useSurveyStore((s) => s.setLocalEntry);
-  const nonVacant = useMemo(() =>
-    students
-      .map((s, idx) => ({ ...s, displayNum: s.number ?? idx + 1 }))
-      .filter(isStudentActive),
+  const nonVacant = useMemo(
+    () =>
+      students.map((s, idx) => ({ ...s, displayNum: s.number ?? idx + 1 })).filter(isStudentActive),
     [students],
   );
 
@@ -409,9 +433,7 @@ function TextQuestionList({ survey, question, students, localData }: TextQuestio
               placeholder="입력"
               className="flex-1 bg-sp-card border border-sp-border rounded-lg px-2.5 py-1.5 text-xs text-sp-text placeholder-sp-muted/50 focus:border-sp-accent focus:outline-none transition-colors"
             />
-            {value && (
-              <span className="text-green-400 text-xs shrink-0">✓</span>
-            )}
+            {value && <span className="text-green-400 text-xs shrink-0">✓</span>}
           </div>
         );
       })}

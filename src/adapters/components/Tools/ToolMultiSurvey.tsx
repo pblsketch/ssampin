@@ -1655,6 +1655,7 @@ export function ToolMultiSurvey({ onBack, isFullscreen }: ToolMultiSurveyProps) 
             <button
               type="button"
               onClick={() => setShowLiveBoard(true)}
+              data-sp-floating
               className="absolute right-4 top-4 z-10 flex items-center gap-1.5 rounded-lg border border-sp-border bg-sp-card px-3 py-1.5 text-xs font-medium text-sp-text shadow-sm transition hover:border-sp-highlight hover:text-sp-highlight"
               title="프로젝터용 라이브 피드백 월 (텍스트 응답만 카드로 표시)"
             >

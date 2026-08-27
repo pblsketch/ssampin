@@ -398,6 +398,7 @@ export function NeisAttendanceSection({
               />
               <div
                 role="menu"
+                data-sp-floating
                 className="absolute right-0 mt-1 z-50 w-44 rounded-lg border border-sp-border bg-sp-card shadow-xl py-1"
               >
                 {(

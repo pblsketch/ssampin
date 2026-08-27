@@ -130,6 +130,7 @@ export function CategoryColorPicker({
         createPortal(
           <div
             ref={popupRef}
+            data-sp-floating
             className="fixed z-sp-tooltip bg-sp-card border border-sp-border rounded-xl shadow-2xl p-3"
             style={{ top: pos.top, left: pos.left, minWidth: 200 }}
           >

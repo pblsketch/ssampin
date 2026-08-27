@@ -703,6 +703,165 @@ function runTextWhiteContract() {
 }
 
 // ============================================================
+// 계약 검사 — REGRESSION #64: 떠 있는 면 × data-sp-floating
+// ============================================================
+//
+// 유리를 켜면 index.css 규칙 ① 이 "카드 안 카드"의 배경을 지운다(겹친 면이 두 번 칠해져
+// 다시 불투명해지는 것을 막는 규칙이다). 그런데 드롭다운·팝오버처럼 **위에 떠서 아래를
+// 가려야 하는 면**도 카드 안에 있으면 똑같이 걸려, 배경이 통째로 사라진다.
+//
+// 실제 사고가 세 번 반복됐다:
+//   - 2026-08-23  할 일 수정 창의 달력 팝오버
+//   - 2026-08-28  설정 > 학교 정보 검색 결과 — 뒤 "학년/반"·"담당 과목" 글자와 겹쳐 읽힘
+//                 (실측 배경색 rgba(0,0,0,0) — 반투명이 아니라 아예 없었다)
+//   - 같은 날 훑어보니 날씨 지역 검색·대시보드 일정 필터도 같은 상태였다
+//
+// 처방은 data-sp-floating 표시 하나인데, 붙이는 것을 잊으면 **조용히** 투명해진다.
+// 화면을 열어 보기 전까지 아무도 모른다. 그래서 사람의 기억 대신 이 검사가 지킨다.
+//
+// 검사: 한 JSX 여는 태그 안에서 bg-sp-card 와 위치 클래스(absolute/fixed)가 같이 쓰였는데
+// 그 태그에 data-sp-floating / data-sp-overlay-surface / role="dialog" 중 아무것도 없으면 실패.
+// (뒤 두 가지도 결과적으로 불투명하게 되돌리므로 통과로 본다 — index.css 규칙 ⑥ 소관.)
+//
+// 대상은 유리가 켜지는 **데스크톱 메인 창**뿐이다. useGlassSurface() 를 부르는 곳은
+// src/App.tsx 한 곳이라, src/mobile · src/student 에는 sp-glass-on 이 붙지 않는다.
+//
+// 한계(의도된 범위):
+//   - bg-sp-card/80 처럼 투명도 수식이 붙은 것은 보지 않는다. 그쪽은 애초에 배경색이
+//     칠해지지 않는 별개 결함이고(sp-* 토큰은 Tailwind 알파 수식을 지원하지 않는다),
+//     "원래 얼마나 진해야 하는가"라는 디자인 판단이 필요해 이 검사로 강제할 수 없다.
+//   - 클래스가 변수·헬퍼를 거쳐 조립되면 못 본다. 사고 세 건 모두 태그 안에 직접 쓰여 있었다.
+
+const floatingContract = {
+  name: 'REGRESSION #64: 유리에서 떠 있는 면(bg-sp-card + absolute/fixed)은 data-sp-floating 을 달아야 한다 (드롭다운 유령 상자 계약)',
+  cssFile: 'src/index.css',
+  // 유리가 켜지는 창에서 렌더되는 곳만. mobile/student 는 sp-glass-on 이 붙지 않는다.
+  roots: ['src/adapters', 'src/widgets'],
+  extensions: ['.tsx'],
+};
+
+/** 통과로 인정하는 표시들. index.css 에서 직접 읽어 양방향 계약으로 만든다. */
+function parseFloatingMarkers(css) {
+  const markers = new Set();
+  if (/\[data-sp-floating\]\.bg-sp-card/.test(css)) markers.add('data-sp-floating');
+  if (/\[data-sp-overlay-surface\]/.test(css)) markers.add('data-sp-overlay-surface');
+  if (/\[role='dialog'\]\.bg-sp-card/.test(css)) markers.add('role-dialog');
+  return markers;
+}
+
+/**
+ * src 안의 JSX 여는 태그를 하나씩 떼어 준다.
+ *
+ * 문자열·템플릿 리터럴 안의 <, > 와 중괄호 식({cond ? ... : ...}) 안의 > 에 속지 않아야
+ * 한다. 그래서 따옴표와 중괄호 깊이를 함께 따라간다.
+ */
+function* iterateJsxOpenTags(src) {
+  for (let i = 0; i < src.length; i++) {
+    if (src[i] !== '<') continue;
+    // </div> 닫는 태그와 a < b 같은 비교식은 건너뛴다. 여는 태그는 <Name 또는 <name 이다.
+    if (!/[A-Za-z]/.test(src[i + 1] ?? '')) continue;
+    let depth = 0;
+    let quote = null;
+    let j = i + 1;
+    for (; j < src.length; j++) {
+      const c = src[j];
+      if (quote) {
+        if (c === quote) quote = null;
+        continue;
+      }
+      if (c === '"' || c === "'" || c === '`') {
+        quote = c;
+        continue;
+      }
+      if (c === '{') {
+        depth++;
+        continue;
+      }
+      if (c === '}') {
+        depth--;
+        continue;
+      }
+      if (c === '<' && depth === 0) break; // 태그가 안 닫혔다 — 포기하고 다음으로
+      if (c === '>' && depth === 0) {
+        yield { text: src.slice(i, j + 1), index: i };
+        break;
+      }
+    }
+    i = j;
+  }
+}
+
+/**
+ * 태그 안에 쓰인 클래스 토큰을 모은다.
+ *
+ * 정규식을 문자열로 조립하지 않는 이유: 이스케이프가 한 겹 삼켜지면(`\\s` → `\s`)
+ * 공백 대신 글자 `s` 를 찾게 되어 **아무것도 매치하지 않고 조용히 전부 통과**한다.
+ * 실제로 이 검사를 처음 넣을 때 그 상태로 "52건 통과"가 나왔다.
+ * 그래서 토큰을 직접 쪼개 집합으로 비교한다 — 이스케이프가 끼어들 자리가 없다.
+ *
+ * 따옴표 3종 구간을 모두 모으므로 `className={cond ? 'a' : 'b'}` 처럼 조건부로
+ * 붙는 클래스도 함께 본다.
+ */
+function classTokens(tagText) {
+  const tokens = new Set();
+  for (const m of tagText.matchAll(/(["'`])((?:(?!\1)[\s\S])*)\1/g)) {
+    for (const t of m[2].split(/\s+/)) {
+      if (t) tokens.add(t);
+    }
+  }
+  return tokens;
+}
+
+function runFloatingContract() {
+  const css = readFileSafe(join(ROOT, floatingContract.cssFile));
+  if (css === null) {
+    return { ok: false, scanned: 0, problems: [floatingContract.cssFile + ' 을 읽지 못했다'] };
+  }
+
+  const markers = parseFloatingMarkers(css);
+  // 파싱 실패(선택자 형식 변경 등)가 조용히 "전부 위반"으로 보이지 않게 형태부터 확인한다.
+  if (!markers.has('data-sp-floating')) {
+    return {
+      ok: false,
+      scanned: 0,
+      problems: [
+        'index.css 에서 [data-sp-floating].bg-sp-card 규칙을 찾지 못했다. ' +
+          '규칙 ①-예외를 지웠거나 이름을 바꿨다면 parseFloatingMarkers 를 함께 고칠 것.',
+      ],
+    };
+  }
+
+  const files = floatingContract.roots
+    .flatMap((root) => walk(join(ROOT, root), floatingContract.extensions, []))
+    .filter((f) => !/\.(test|spec)\.tsx?$/.test(f));
+
+  const problems = [];
+  for (const file of files) {
+    const rawSrc = readFileSafe(file);
+    if (rawSrc === null) continue;
+    const src = stripCommentsKeepLines(rawSrc);
+
+    for (const tag of iterateJsxOpenTags(src)) {
+      const tokens = classTokens(tag.text);
+      if (!tokens.has('bg-sp-card')) continue;
+      if (!tokens.has('absolute') && !tokens.has('fixed')) continue;
+
+      const marked =
+        /\bdata-sp-floating\b/.test(tag.text) ||
+        (markers.has('data-sp-overlay-surface') && /\bdata-sp-overlay-surface\b/.test(tag.text)) ||
+        (markers.has('role-dialog') && /role=(["'])dialog\1/.test(tag.text));
+      if (marked) continue;
+
+      const line = src.slice(0, tag.index).split('\n').length;
+      const rel = relative(ROOT, file).split(sep).join('/');
+      problems.push(rel + ':' + line + '  ' + tag.text.replace(/\s+/g, ' ').slice(0, 90));
+    }
+  }
+
+  return { ok: problems.length === 0, scanned: files.length, problems };
+}
+
+// ============================================================
 // Glob walker (의존성 0)
 // ============================================================
 
@@ -866,6 +1025,34 @@ for (const c of absenceChecks) {
     failures.push({ name: textWhiteContract.name, hits: result.problems });
   } else {
     console.log(`OK ${textWhiteContract.name}  (scanned ${result.scanned} file(s))`);
+    passed++;
+  }
+}
+
+// --- 계약 검사: 떠 있는 면 × data-sp-floating ---
+{
+  const result = runFloatingContract();
+  if (!result.ok) {
+    console.error(`X ${floatingContract.name}`);
+    for (const p of result.problems.slice(0, 30)) {
+      console.error(`     - ${p}`);
+    }
+    if (result.problems.length > 30) {
+      console.error(`     ... 외 ${result.problems.length - 30}건`);
+    }
+    console.error(
+      '     → 드롭다운·팝오버·메뉴처럼 다른 내용 위에 뜨는 면이면 여는 태그에 data-sp-floating 을 달 것.',
+    );
+    console.error(
+      '       (유리를 켜면 index.css 규칙 ① 이 카드 안 배경을 지워, 표시가 없으면 그림자만 남은 유령 상자가 된다.)',
+    );
+    console.error(
+      '       배경이 비쳐도 되는 장식용 면이라면 bg-sp-card 대신 다른 표현을 쓰거나 이 검사에 근거와 함께 예외를 남길 것.',
+    );
+    failed++;
+    failures.push({ name: floatingContract.name, hits: result.problems });
+  } else {
+    console.log(`OK ${floatingContract.name}  (scanned ${result.scanned} file(s))`);
     passed++;
   }
 }

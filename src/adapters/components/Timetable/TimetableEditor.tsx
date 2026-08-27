@@ -946,6 +946,7 @@ function EditorPeriodRow({
                 {/* 인라인 색상 팔레트 */}
                 {colorPickerDay === dayIdx && subjectValue && (
                   <div
+                    data-sp-floating
                     className="absolute left-1 top-full z-50 mt-0.5 p-2 rounded-xl bg-sp-card border border-sp-border shadow-2xl"
                     onClick={(e) => e.stopPropagation()}
                   >

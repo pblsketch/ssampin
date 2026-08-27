@@ -104,15 +104,19 @@ export function TemplateLoadDropdown({ toolType, onLoad }: TemplateLoadDropdownP
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full mt-1 z-30 w-72 rounded-xl bg-sp-card border border-sp-border shadow-2xl overflow-hidden">
+        <div
+          data-sp-floating
+          className="absolute left-0 top-full mt-1 z-30 w-72 rounded-xl bg-sp-card border border-sp-border shadow-2xl overflow-hidden"
+        >
           {templates.length === 0 ? (
-            <p className="px-4 py-6 text-center text-sm text-sp-muted">
-              저장된 템플릿이 없습니다
-            </p>
+            <p className="px-4 py-6 text-center text-sm text-sp-muted">저장된 템플릿이 없습니다</p>
           ) : (
             <ul className="max-h-64 overflow-y-auto divide-y divide-sp-border">
               {templates.map((t) => (
-                <li key={t.id} className="flex items-center gap-2 px-3 py-2.5 hover:bg-sp-surface/50 transition-colors">
+                <li
+                  key={t.id}
+                  className="flex items-center gap-2 px-3 py-2.5 hover:bg-sp-surface/50 transition-colors"
+                >
                   {editingId === t.id ? (
                     <input
                       ref={editInputRef}
@@ -127,23 +131,28 @@ export function TemplateLoadDropdown({ toolType, onLoad }: TemplateLoadDropdownP
                       className="flex-1 min-w-0 rounded bg-sp-surface border border-sp-accent px-2 py-0.5 text-sm text-sp-text focus:outline-none"
                     />
                   ) : (
-                    <button
-                      onClick={() => handleLoad(t)}
-                      className="flex-1 min-w-0 text-left"
-                    >
+                    <button onClick={() => handleLoad(t)} className="flex-1 min-w-0 text-left">
                       <span className="block text-sm text-sp-text truncate">{t.name}</span>
-                      <span className="text-xs text-sp-muted">{formatRelativeDate(t.updatedAt)}</span>
+                      <span className="text-xs text-sp-muted">
+                        {formatRelativeDate(t.updatedAt)}
+                      </span>
                     </button>
                   )}
                   <button
-                    onClick={(e) => { e.stopPropagation(); handleStartRename(t.id, t.name); }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleStartRename(t.id, t.name);
+                    }}
                     className="shrink-0 text-sp-muted hover:text-sp-text transition-colors"
                     title="이름 수정"
                   >
                     ✏️
                   </button>
                   <button
-                    onClick={(e) => { e.stopPropagation(); handleDelete(t.id, t.name); }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDelete(t.id, t.name);
+                    }}
                     className="shrink-0 text-sp-muted hover:text-red-400 transition-colors"
                     title="삭제"
                   >

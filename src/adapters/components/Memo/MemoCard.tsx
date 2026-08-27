@@ -458,7 +458,10 @@ export function MemoCard({
 
       {/* 리사이즈 중 크기 표시 — 카드 위에 띄움 */}
       {resizing && (
-        <div className="absolute -top-8 left-1/2 -translate-x-1/2 z-30 bg-sp-card !text-sp-text text-xs px-2.5 py-1 rounded shadow-lg whitespace-nowrap pointer-events-none">
+        <div
+          data-sp-floating
+          className="absolute -top-8 left-1/2 -translate-x-1/2 z-30 bg-sp-card !text-sp-text text-xs px-2.5 py-1 rounded shadow-lg whitespace-nowrap pointer-events-none"
+        >
           {Math.round(resizeSize.width)} &times; {Math.round(resizeSize.height)}
         </div>
       )}

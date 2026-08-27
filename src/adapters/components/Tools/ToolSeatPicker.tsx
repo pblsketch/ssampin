@@ -923,7 +923,10 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
 
                                   {/* Student picker dropdown */}
                                   {isShowingPicker && seatConfigMode === 'fix' && (
-                                    <div className="absolute z-30 top-full left-0 mt-1 w-36 max-h-40 overflow-auto bg-sp-card border border-sp-border rounded-lg shadow-xl">
+                                    <div
+                                      data-sp-floating
+                                      className="absolute z-30 top-full left-0 mt-1 w-36 max-h-40 overflow-auto bg-sp-card border border-sp-border rounded-lg shadow-xl"
+                                    >
                                       {activeStudents
                                         .filter(
                                           (s) => !alreadyFixed.has(s.id) || s.id === fixedStudentId,

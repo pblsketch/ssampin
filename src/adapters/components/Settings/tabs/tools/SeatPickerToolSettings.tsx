@@ -22,7 +22,9 @@ export function SeatPickerToolSettings() {
   const loadTc = useTeachingClassStore((s) => s.load);
   const cfgLoaded = useSeatPickerConfigStore((s) => s.loaded);
   const loadCfg = useSeatPickerConfigStore((s) => s.load);
-  const getPrivateAssignmentsForScope = useSeatPickerConfigStore((s) => s.getPrivateAssignmentsForScope);
+  const getPrivateAssignmentsForScope = useSeatPickerConfigStore(
+    (s) => s.getPrivateAssignmentsForScope,
+  );
   const setPrivateAssignment = useSeatPickerConfigStore((s) => s.setPrivateAssignment);
   const removePrivateAssignment = useSeatPickerConfigStore((s) => s.removePrivateAssignment);
   const clearScope = useSeatPickerConfigStore((s) => s.clearScope);
@@ -38,27 +40,24 @@ export function SeatPickerToolSettings() {
     if (!cfgLoaded) loadCfg();
   }, [seatingLoaded, loadSeating, tcLoaded, loadTc, cfgLoaded, loadCfg]);
 
-  const selectedTc = scope === 'homeroom'
-    ? null
-    : teachingClasses.find((c) => `tc-${c.id}` === scope) ?? null;
+  const selectedTc =
+    scope === 'homeroom' ? null : (teachingClasses.find((c) => `tc-${c.id}` === scope) ?? null);
 
   const activeStudents = useMemo<Student[]>(() => {
     if (scope === 'homeroom') {
       return students.filter(isStudentActive);
     }
     if (!selectedTc) return [];
-    return selectedTc.students
-      .filter(isStudentActive)
-      .map((s) => ({
-        id: `tc-${selectedTc.id}-${s.number}`,
-        studentNumber: s.number,
-        name: s.name?.trim() ? s.name : `${s.number}번`,
-        isVacant: false,
-      }));
+    return selectedTc.students.filter(isStudentActive).map((s) => ({
+      id: `tc-${selectedTc.id}-${s.number}`,
+      studentNumber: s.number,
+      name: s.name?.trim() ? s.name : `${s.number}번`,
+      isVacant: false,
+    }));
   }, [scope, students, selectedTc]);
 
-  const rows = scope === 'homeroom' ? seating.rows : selectedTc?.seating?.rows ?? 0;
-  const cols = scope === 'homeroom' ? seating.cols : selectedTc?.seating?.cols ?? 0;
+  const rows = scope === 'homeroom' ? seating.rows : (selectedTc?.seating?.rows ?? 0);
+  const cols = scope === 'homeroom' ? seating.cols : (selectedTc?.seating?.cols ?? 0);
   const hasGrid = rows > 0 && cols > 0;
 
   const privateAssignments = getPrivateAssignmentsForScope(scope);
@@ -115,8 +114,8 @@ export function SeatPickerToolSettings() {
         <div className="flex-1 min-w-0">
           <h3 className="text-lg font-bold text-sp-text">자리 뽑기</h3>
           <p className="text-xs text-sp-muted mt-0.5 leading-relaxed">
-            비공개 사전 배정 · 학생이 보지 못하는 이 화면에서 일부 학생의 좌석을 미리 정해두면,
-            자리 뽑기 진행 중에 해당 학생이 카드를 뽑는 연출을 거쳐 자연스럽게 그 자리에 배정됩니다.
+            비공개 사전 배정 · 학생이 보지 못하는 이 화면에서 일부 학생의 좌석을 미리 정해두면, 자리
+            뽑기 진행 중에 해당 학생이 카드를 뽑는 연출을 거쳐 자연스럽게 그 자리에 배정됩니다.
           </p>
         </div>
       </header>
@@ -127,7 +126,10 @@ export function SeatPickerToolSettings() {
         <div className="flex flex-wrap gap-1.5">
           <ScopeChip
             active={scope === 'homeroom'}
-            onClick={() => { setScope('homeroom'); setPickerSeatKey(null); }}
+            onClick={() => {
+              setScope('homeroom');
+              setPickerSeatKey(null);
+            }}
             icon="👩‍🎓"
             label="학급 자리 배치"
           />
@@ -138,7 +140,10 @@ export function SeatPickerToolSettings() {
               <ScopeChip
                 key={tc.id}
                 active={scope === id}
-                onClick={() => { setScope(id); setPickerSeatKey(null); }}
+                onClick={() => {
+                  setScope(id);
+                  setPickerSeatKey(null);
+                }}
                 icon="📚"
                 label={tc.name}
                 sub={tc.subject}
@@ -180,22 +185,28 @@ export function SeatPickerToolSettings() {
           ) : activeStudents.length === 0 ? (
             <EmptyNotice
               tone="warning"
-              text={scope === 'homeroom'
-                ? '학급에 등록된 학생이 없습니다.'
-                : '이 수업반에 등록된 학생이 없습니다.'}
+              text={
+                scope === 'homeroom'
+                  ? '학급에 등록된 학생이 없습니다.'
+                  : '이 수업반에 등록된 학생이 없습니다.'
+              }
             />
           ) : !hasGrid ? (
             <EmptyNotice
               tone="warning"
-              text={scope === 'homeroom'
-                ? '좌석 탭에서 먼저 행/열을 지정하세요.'
-                : '이 수업반의 좌석 배치가 아직 없습니다. 자리 뽑기에서 한 번 진행하여 배치한 뒤 이용하세요.'}
+              text={
+                scope === 'homeroom'
+                  ? '좌석 탭에서 먼저 행/열을 지정하세요.'
+                  : '이 수업반의 좌석 배치가 아직 없습니다. 자리 뽑기에서 한 번 진행하여 배치한 뒤 이용하세요.'
+              }
             />
           ) : (
             <div className="space-y-3">
               {/* 교탁 bar */}
               <div className="bg-sp-surface border border-sp-border rounded-md py-1 px-4 text-center">
-                <span className="text-sp-muted text-caption font-semibold tracking-widest">교탁</span>
+                <span className="text-sp-muted text-caption font-semibold tracking-widest">
+                  교탁
+                </span>
               </div>
 
               {/* Grid */}
@@ -240,12 +251,17 @@ export function SeatPickerToolSettings() {
                               </span>
                             </>
                           ) : (
-                            <span className="text-[9px] leading-none">{r + 1},{c + 1}</span>
+                            <span className="text-[9px] leading-none">
+                              {r + 1},{c + 1}
+                            </span>
                           )}
                         </button>
 
                         {isPicker && !assignedId && (
-                          <div className="absolute z-30 top-full left-0 mt-1 w-40 max-h-48 overflow-auto bg-sp-card border border-sp-border rounded-lg shadow-xl ring-1 ring-black/20">
+                          <div
+                            data-sp-floating
+                            className="absolute z-30 top-full left-0 mt-1 w-40 max-h-48 overflow-auto bg-sp-card border border-sp-border rounded-lg shadow-xl ring-1 ring-black/20"
+                          >
                             {activeStudents
                               .filter((s) => !fixedStudentIds.has(s.id))
                               .sort((a, b) => (a.studentNumber ?? 0) - (b.studentNumber ?? 0))
@@ -262,8 +278,11 @@ export function SeatPickerToolSettings() {
                                   {s.studentNumber ?? '-'}번 {s.name}
                                 </button>
                               ))}
-                            {activeStudents.filter((s) => !fixedStudentIds.has(s.id)).length === 0 && (
-                              <div className="px-3 py-2 text-xs text-sp-muted">배정 가능한 학생 없음</div>
+                            {activeStudents.filter((s) => !fixedStudentIds.has(s.id)).length ===
+                              0 && (
+                              <div className="px-3 py-2 text-xs text-sp-muted">
+                                배정 가능한 학생 없음
+                              </div>
                             )}
                           </div>
                         )}
@@ -284,7 +303,10 @@ export function SeatPickerToolSettings() {
 
       {/* Clear confirm */}
       {confirmClear && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center" aria-hidden="true">
+        <div
+          className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center"
+          aria-hidden="true"
+        >
           <div className="bg-sp-card rounded-xl ring-1 ring-sp-border p-6 max-w-sm w-full mx-4">
             <h3 className="text-lg font-bold text-sp-text mb-2">사전 배정 모두 해제</h3>
             <p className="text-sm text-sp-muted mb-6">
@@ -347,12 +369,9 @@ function ScopeChip({
 }
 
 function EmptyNotice({ tone, text }: { tone: 'warning' | 'info'; text: string }) {
-  const cls = tone === 'warning'
-    ? 'bg-amber-500/10 border-amber-500/30 text-amber-400'
-    : 'bg-blue-500/10 border-blue-500/30 text-blue-300';
-  return (
-    <div className={`rounded-lg border px-4 py-3 text-sm ${cls}`}>
-      {text}
-    </div>
-  );
+  const cls =
+    tone === 'warning'
+      ? 'bg-amber-500/10 border-amber-500/30 text-amber-400'
+      : 'bg-blue-500/10 border-blue-500/30 text-blue-300';
+  return <div className={`rounded-lg border px-4 py-3 text-sm ${cls}`}>{text}</div>;
 }

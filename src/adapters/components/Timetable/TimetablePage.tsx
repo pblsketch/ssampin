@@ -994,7 +994,10 @@ export function TimetablePage({ initialIntent = null, onIntentConsumed }: Timeta
                 <span className="hidden xl:inline">내보내기</span>
               </button>
               {showExportMenu && (
-                <div className="absolute right-0 top-full mt-2 w-48 bg-sp-card border border-sp-border rounded-xl shadow-2xl shadow-black/30 z-50 overflow-hidden">
+                <div
+                  data-sp-floating
+                  className="absolute right-0 top-full mt-2 w-48 bg-sp-card border border-sp-border rounded-xl shadow-2xl shadow-black/30 z-50 overflow-hidden"
+                >
                   <button
                     onClick={() => void handleExport('excel')}
                     className="w-full flex items-center gap-3 px-4 py-3 text-sm text-sp-text hover:bg-sp-accent/10 transition-colors"

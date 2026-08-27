@@ -108,14 +108,20 @@ export function MiniAppRunner({ app, onBack, isFullscreen }: MiniAppRunnerProps)
       >
         {/* 로딩 스피너 — 흰 화면 대신 항상 무언가 보이게 */}
         {isLoading && !showRecovery && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center bg-sp-card">
+          <div
+            data-sp-floating
+            className="absolute inset-0 z-10 flex items-center justify-center bg-sp-card"
+          >
             <div className="animate-spin rounded-full h-10 w-10 border-2 border-sp-border border-t-sp-accent" />
           </div>
         )}
 
         {/* 로드 실패 카드 */}
         {status === 'error' && (
-          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-sp-card text-sp-muted">
+          <div
+            data-sp-floating
+            className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-sp-card text-sp-muted"
+          >
             <span className="material-symbols-outlined text-5xl">broken_image</span>
             <p className="text-sm">앱을 불러올 수 없습니다</p>
             <button
@@ -129,7 +135,10 @@ export function MiniAppRunner({ app, onBack, isFullscreen }: MiniAppRunnerProps)
 
         {/* 크래시/무응답 복구 카드 */}
         {status === 'crashed' && (
-          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-sp-card text-sp-muted">
+          <div
+            data-sp-floating
+            className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-sp-card text-sp-muted"
+          >
             <span className="material-symbols-outlined text-5xl">sync_problem</span>
             <p className="text-sm">앱이 응답하지 않아요</p>
             <button

@@ -36,7 +36,10 @@ export function MentionPopover({ query, onPick, onClose }: MentionPopoverProps) 
   );
 
   return (
-    <div className="absolute left-0 right-0 top-full z-20 mt-1 rounded-xl border border-sp-border bg-sp-card shadow-2xl overflow-hidden">
+    <div
+      data-sp-floating
+      className="absolute left-0 right-0 top-full z-20 mt-1 rounded-xl border border-sp-border bg-sp-card shadow-2xl overflow-hidden"
+    >
       {contacts.length === 0 ? (
         <p className="px-3 py-2.5 text-xs text-sp-muted">
           등록된 교직원 연락처가 없습니다. 연락처 화면에서 먼저 등록해주세요.

@@ -17,16 +17,21 @@ function highlightMatch(text: string, query: string): React.ReactNode {
   return (
     <>
       {text.slice(0, idx)}
-      <mark className="bg-sp-accent/30 text-sp-text rounded-sm">{text.slice(idx, idx + query.length)}</mark>
+      <mark className="bg-sp-accent/30 text-sp-text rounded-sm">
+        {text.slice(idx, idx + query.length)}
+      </mark>
       {text.slice(idx + query.length)}
     </>
   );
 }
 
 export function WeatherTab({ draft, patch }: Props) {
-  const patchWeather = useCallback((p: Partial<WeatherSettings>) => {
-    patch({ weather: { ...draft.weather, ...p } });
-  }, [draft.weather, patch]);
+  const patchWeather = useCallback(
+    (p: Partial<WeatherSettings>) => {
+      patch({ weather: { ...draft.weather, ...p } });
+    },
+    [draft.weather, patch],
+  );
 
   const regionGroups = useMemo(() => {
     const groups = new Map<string, typeof KOREAN_CITIES>();
@@ -73,28 +78,39 @@ export function WeatherTab({ draft, patch }: Props) {
 
   const selectedCity = useMemo(() => {
     if (!draft.weather.location) return null;
-    return KOREAN_CITIES.find(
-      (c) => c.lat === draft.weather.location!.lat && c.lon === draft.weather.location!.lon,
-    ) ?? null;
+    return (
+      KOREAN_CITIES.find(
+        (c) => c.lat === draft.weather.location!.lat && c.lon === draft.weather.location!.lon,
+      ) ?? null
+    );
   }, [draft.weather.location]);
 
-  const handleSelect = useCallback((city: City) => {
-    patchWeather({ location: { lat: city.lat, lon: city.lon, name: city.name } });
-    setIsOpen(false);
-    setQuery('');
-  }, [patchWeather]);
+  const handleSelect = useCallback(
+    (city: City) => {
+      patchWeather({ location: { lat: city.lat, lon: city.lon, name: city.name } });
+      setIsOpen(false);
+      setQuery('');
+    },
+    [patchWeather],
+  );
 
-  const handleClear = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    patchWeather({ location: null });
-    setQuery('');
-    setIsOpen(false);
-  }, [patchWeather]);
+  const handleClear = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      patchWeather({ location: null });
+      setQuery('');
+      setIsOpen(false);
+    },
+    [patchWeather],
+  );
 
-  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    setQuery(e.target.value);
-    if (!isOpen) setIsOpen(true);
-  }, [isOpen]);
+  const handleInputChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      setQuery(e.target.value);
+      if (!isOpen) setIsOpen(true);
+    },
+    [isOpen],
+  );
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
@@ -107,11 +123,7 @@ export function WeatherTab({ draft, patch }: Props) {
   const displayValue = isOpen ? query : (selectedCity?.name ?? '');
 
   return (
-    <SettingsSection
-      icon="cloud"
-      iconColor="bg-sky-500/10 text-sky-500"
-      title="날씨"
-    >
+    <SettingsSection icon="cloud" iconColor="bg-sky-500/10 text-sky-500" title="날씨">
       <div className="space-y-5">
         {/* 지역 선택 */}
         <div>
@@ -167,7 +179,10 @@ export function WeatherTab({ draft, patch }: Props) {
 
             {/* Dropdown */}
             {isOpen && (
-              <div className="absolute z-50 w-full mt-1 bg-sp-card border border-sp-border rounded-lg shadow-xl overflow-hidden">
+              <div
+                data-sp-floating
+                className="absolute z-50 w-full mt-1 bg-sp-card border border-sp-border rounded-lg shadow-xl overflow-hidden"
+              >
                 <div className="max-h-64 overflow-y-auto">
                   {totalFiltered === 0 ? (
                     <div className="px-3 py-6 text-center text-sm text-sp-muted">
@@ -216,19 +231,22 @@ export function WeatherTab({ draft, patch }: Props) {
         <div>
           <label className="block text-sm text-sp-muted mb-2">갱신 주기</label>
           <div className="flex bg-sp-surface/80 p-1 rounded-lg border border-sp-border">
-            {([
-              { value: 15, label: '15분' },
-              { value: 30, label: '30분' },
-              { value: 60, label: '1시간' },
-            ] as const).map((opt) => (
+            {(
+              [
+                { value: 15, label: '15분' },
+                { value: 30, label: '30분' },
+                { value: 60, label: '1시간' },
+              ] as const
+            ).map((opt) => (
               <button
                 key={opt.value}
                 type="button"
                 onClick={() => patchWeather({ refreshIntervalMin: opt.value })}
-                className={`flex-1 py-2 rounded-md text-sm font-medium transition-all ${draft.weather.refreshIntervalMin === opt.value
+                className={`flex-1 py-2 rounded-md text-sm font-medium transition-all ${
+                  draft.weather.refreshIntervalMin === opt.value
                     ? 'bg-sp-accent text-white shadow-md'
                     : 'text-sp-muted hover:text-sp-text hover:bg-sp-text/5'
-                  }`}
+                }`}
               >
                 {opt.label}
               </button>
@@ -240,7 +258,9 @@ export function WeatherTab({ draft, patch }: Props) {
         {draft.weather.location && (
           <div className="p-3 bg-sp-surface/50 rounded-lg border border-sp-border">
             <p className="text-xs text-sp-muted">
-              <span className="material-symbols-outlined text-sm align-middle mr-1">location_on</span>
+              <span className="material-symbols-outlined text-sm align-middle mr-1">
+                location_on
+              </span>
               {draft.weather.location.name} · {draft.weather.refreshIntervalMin}분 간격 자동 갱신
             </p>
           </div>

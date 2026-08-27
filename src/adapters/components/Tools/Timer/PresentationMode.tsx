@@ -136,22 +136,25 @@ export function PresentationMode() {
     }
   }, [tcClasses]);
 
-  const loadTeachingClass = useCallback((classId: string) => {
-    const cls = tcClasses.find((c) => c.id === classId);
-    if (!cls) return;
-    const valid = cls.students.filter(isStudentActive);
-    if (valid.length > 0) {
-      setPresenters(
-        valid.map((s, i) => ({
-          id: `tc-${i}`,
-          name: s.name?.trim() ? s.name : `${s.number}번`,
-          number: s.number,
-        })),
-      );
-      setInputMode('teachingClass');
-    }
-    setShowTcDropdown(false);
-  }, [tcClasses]);
+  const loadTeachingClass = useCallback(
+    (classId: string) => {
+      const cls = tcClasses.find((c) => c.id === classId);
+      if (!cls) return;
+      const valid = cls.students.filter(isStudentActive);
+      if (valid.length > 0) {
+        setPresenters(
+          valid.map((s, i) => ({
+            id: `tc-${i}`,
+            name: s.name?.trim() ? s.name : `${s.number}번`,
+            number: s.number,
+          })),
+        );
+        setInputMode('teachingClass');
+      }
+      setShowTcDropdown(false);
+    },
+    [tcClasses],
+  );
 
   const addPresenter = useCallback(() => {
     const name = newName.trim();
@@ -244,41 +247,44 @@ export function PresentationMode() {
   const preWarningRef = useRef(preWarning);
   preWarningRef.current = preWarning;
 
-  const beginCountdown = useCallback((secs: number) => {
-    clearTimer();
-    setRemaining(secs);
-    setState('running');
-    preWarningFiredRef.current = false;
+  const beginCountdown = useCallback(
+    (secs: number) => {
+      clearTimer();
+      setRemaining(secs);
+      setState('running');
+      preWarningFiredRef.current = false;
 
-    let lastTick = Date.now();
-    intervalRef.current = setInterval(() => {
-      const now = Date.now();
-      const delta = Math.floor((now - lastTick) / 1000);
-      if (delta >= 1) {
-        lastTick = now - ((now - lastTick) % 1000);
-        setRemaining((prev) => {
-          const next = prev - delta;
+      let lastTick = Date.now();
+      intervalRef.current = setInterval(() => {
+        const now = Date.now();
+        const delta = Math.floor((now - lastTick) / 1000);
+        if (delta >= 1) {
+          lastTick = now - ((now - lastTick) % 1000);
+          setRemaining((prev) => {
+            const next = prev - delta;
 
-          const pw = preWarningRef.current;
-          if (!preWarningFiredRef.current && next <= 10 && next > 0 && pw.enabled) {
-            preWarningFiredRef.current = true;
-            playPreWarningSound(pw.sound, volumeRef.current, boostRef.current);
-          }
-
-          if (next <= 0) {
-            if (intervalRef.current) {
-              clearInterval(intervalRef.current);
-              intervalRef.current = null;
+            const pw = preWarningRef.current;
+            if (!preWarningFiredRef.current && next <= 10 && next > 0 && pw.enabled) {
+              preWarningFiredRef.current = true;
+              playPreWarningSound(pw.sound, volumeRef.current, boostRef.current);
             }
-            playAlarmSound(selectedSoundRef.current, volumeRef.current, boostRef.current, null);
-            setState('slide-done');
-            return 0;
-          }
-          return next;
-        });
-      }
-    }, 100);
-  }, [clearTimer]);
+
+            if (next <= 0) {
+              if (intervalRef.current) {
+                clearInterval(intervalRef.current);
+                intervalRef.current = null;
+              }
+              playAlarmSound(selectedSoundRef.current, volumeRef.current, boostRef.current, null);
+              setState('slide-done');
+              return 0;
+            }
+            return next;
+          });
+        }
+      }, 100);
+    },
+    [clearTimer],
+  );
 
   const startTimer = useCallback(() => {
     if (orderedPresenters.length === 0) return;
@@ -344,29 +350,41 @@ export function PresentationMode() {
   }, [state, nextPresenter]);
 
   // ─── 알람음 핸들러 ────────────────────────────
-  const handleSelectSound = useCallback(async (id: AlarmSoundId) => {
-    await updateSettings({
-      alarmSound: { ...settings.alarmSound, selectedSound: id },
-    });
-  }, [updateSettings, settings.alarmSound]);
+  const handleSelectSound = useCallback(
+    async (id: AlarmSoundId) => {
+      await updateSettings({
+        alarmSound: { ...settings.alarmSound, selectedSound: id },
+      });
+    },
+    [updateSettings, settings.alarmSound],
+  );
 
-  const handleVolumeChange = useCallback(async (v: number) => {
-    await updateSettings({
-      alarmSound: { ...settings.alarmSound, volume: v },
-    });
-  }, [updateSettings, settings.alarmSound]);
+  const handleVolumeChange = useCallback(
+    async (v: number) => {
+      await updateSettings({
+        alarmSound: { ...settings.alarmSound, volume: v },
+      });
+    },
+    [updateSettings, settings.alarmSound],
+  );
 
-  const handleBoostChange = useCallback(async (b: number) => {
-    await updateSettings({
-      alarmSound: { ...settings.alarmSound, boost: b },
-    });
-  }, [updateSettings, settings.alarmSound]);
+  const handleBoostChange = useCallback(
+    async (b: number) => {
+      await updateSettings({
+        alarmSound: { ...settings.alarmSound, boost: b },
+      });
+    },
+    [updateSettings, settings.alarmSound],
+  );
 
-  const handlePreWarningChange = useCallback(async (pw: PreWarningSettings) => {
-    await updateSettings({
-      alarmSound: { ...settings.alarmSound, preWarning: pw },
-    });
-  }, [updateSettings, settings.alarmSound]);
+  const handlePreWarningChange = useCallback(
+    async (pw: PreWarningSettings) => {
+      await updateSettings({
+        alarmSound: { ...settings.alarmSound, preWarning: pw },
+      });
+    },
+    [updateSettings, settings.alarmSound],
+  );
 
   const handleImportCustom = useCallback(async () => {
     const api = window.electronAPI;
@@ -388,25 +406,28 @@ export function PresentationMode() {
     }
   }, [updateSettings, settings.alarmSound]);
 
-  const handleFileInputChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = async () => {
-      const dataUrl = reader.result as string;
-      setCustomDataUrl(dataUrl);
-      await saveCustomAudio(file.name, dataUrl);
-      await updateSettings({
-        alarmSound: {
-          ...settings.alarmSound,
-          selectedSound: 'custom',
-          customAudioName: file.name,
-        },
-      });
-    };
-    reader.readAsDataURL(file);
-    e.target.value = '';
-  }, [updateSettings, settings.alarmSound]);
+  const handleFileInputChange = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const dataUrl = reader.result as string;
+        setCustomDataUrl(dataUrl);
+        await saveCustomAudio(file.name, dataUrl);
+        await updateSettings({
+          alarmSound: {
+            ...settings.alarmSound,
+            selectedSound: 'custom',
+            customAudioName: file.name,
+          },
+        });
+      };
+      reader.readAsDataURL(file);
+      e.target.value = '';
+    },
+    [updateSettings, settings.alarmSound],
+  );
 
   const handleDeleteCustom = useCallback(async () => {
     setCustomDataUrl(null);
@@ -421,31 +442,33 @@ export function PresentationMode() {
   }, [updateSettings, settings.alarmSound]);
 
   // ─── 키보드 단축키 ────────────────────────────
-  useToolKeydown((e) => {
-    const tag = (document.activeElement as HTMLElement)?.tagName;
-    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+  useToolKeydown(
+    (e) => {
+      const tag = (document.activeElement as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
 
-    if (e.key === ' ') {
-      e.preventDefault();
-      if (state === 'setup') startTimer();
-      else if (state === 'running') pauseTimer();
-      else if (state === 'paused') resumeTimerStable();
-      else if (state === 'slide-done') nextPresenter();
-    } else if (e.key === 'ArrowRight' || e.key === 'n' || e.key === 'N') {
-      e.preventDefault();
-      if (state === 'slide-done' || state === 'running' || state === 'paused') {
-        nextPresenter();
+      if (e.key === ' ') {
+        e.preventDefault();
+        if (state === 'setup') startTimer();
+        else if (state === 'running') pauseTimer();
+        else if (state === 'paused') resumeTimerStable();
+        else if (state === 'slide-done') nextPresenter();
+      } else if (e.key === 'ArrowRight' || e.key === 'n' || e.key === 'N') {
+        e.preventDefault();
+        if (state === 'slide-done' || state === 'running' || state === 'paused') {
+          nextPresenter();
+        }
+      } else if (e.key === 'r' || e.key === 'R') {
+        e.preventDefault();
+        resetAll();
       }
-    } else if (e.key === 'r' || e.key === 'R') {
-      e.preventDefault();
-      resetAll();
-    }
-  }, [state, startTimer, pauseTimer, resumeTimerStable, nextPresenter, resetAll]);
+    },
+    [state, startTimer, pauseTimer, resumeTimerStable, nextPresenter, resetAll],
+  );
 
   // ─── 경고 레벨 ────────────────────────────────
-  const warningLevel = (state === 'running' || state === 'paused')
-    ? getPresentationWarningLevel(remaining)
-    : 'none';
+  const warningLevel =
+    state === 'running' || state === 'paused' ? getPresentationWarningLevel(remaining) : 'none';
 
   const currentPresenter = orderedPresenters[currentIndex];
   const ratio = duration > 0 ? remaining / duration : 0;
@@ -497,7 +520,10 @@ export function PresentationMode() {
               수업반
             </button>
             {showTcDropdown && tcClasses.length > 1 && (
-              <div className="absolute top-full left-0 right-0 mt-1 z-20 bg-sp-card border border-sp-border rounded-xl shadow-lg overflow-hidden">
+              <div
+                data-sp-floating
+                className="absolute top-full left-0 right-0 mt-1 z-20 bg-sp-card border border-sp-border rounded-xl shadow-lg overflow-hidden"
+              >
                 {tcClasses.map((cls) => (
                   <button
                     key={cls.id}
@@ -518,7 +544,9 @@ export function PresentationMode() {
             type="text"
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') addPresenter(); }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') addPresenter();
+            }}
             placeholder="발표자 이름 입력"
             className="flex-1 px-4 py-2.5 bg-sp-bg border border-sp-border rounded-xl text-sm text-sp-text placeholder:text-sp-muted/50 focus:border-sp-accent focus:outline-none"
           />
@@ -559,7 +587,8 @@ export function PresentationMode() {
                 <button
                   onClick={assignOrderRandom}
                   className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-all border ${
-                    orderMap.size > 0 && !presenters.some((p) => p.number != null && orderMap.get(p.id) !== undefined)
+                    orderMap.size > 0 &&
+                    !presenters.some((p) => p.number != null && orderMap.get(p.id) !== undefined)
                       ? 'bg-sp-accent/10 border-sp-accent/30 text-sp-accent'
                       : 'bg-sp-card border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/40'
                   }`}
@@ -637,7 +666,9 @@ export function PresentationMode() {
                       />
                     ) : (
                       <button
-                        onClick={() => setEditingOrder({ id: p.id, value: order != null ? String(order) : '' })}
+                        onClick={() =>
+                          setEditingOrder({ id: p.id, value: order != null ? String(order) : '' })
+                        }
                         className={`w-10 h-7 rounded-lg text-xs font-mono transition-all flex items-center justify-center ${
                           order != null
                             ? 'bg-sp-accent/10 border border-sp-accent/30 text-sp-accent hover:bg-sp-accent/20'
@@ -713,7 +744,10 @@ export function PresentationMode() {
             onChange={handleFileInputChange}
           />
           <button
-            onClick={() => { setShowSoundPanel((v) => !v); setShowPreWarningPanel(false); }}
+            onClick={() => {
+              setShowSoundPanel((v) => !v);
+              setShowPreWarningPanel(false);
+            }}
             className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm transition-all ${
               showSoundPanel
                 ? 'bg-sp-accent/15 text-sp-accent border border-sp-accent/30'
@@ -724,13 +758,17 @@ export function PresentationMode() {
               {volume === 0 ? 'volume_off' : 'volume_up'}
             </span>
             <span>
-              알람음: {selectedSound === 'custom' && customAudioName
+              알람음:{' '}
+              {selectedSound === 'custom' && customAudioName
                 ? customAudioName
-                : ALARM_PRESETS.find((ap) => ap.id === selectedSound)?.label ?? '기본 알림'}
+                : (ALARM_PRESETS.find((ap) => ap.id === selectedSound)?.label ?? '기본 알림')}
             </span>
           </button>
           <button
-            onClick={() => { setShowPreWarningPanel((v) => !v); setShowSoundPanel(false); }}
+            onClick={() => {
+              setShowPreWarningPanel((v) => !v);
+              setShowSoundPanel(false);
+            }}
             className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm transition-all ${
               showPreWarningPanel
                 ? 'bg-amber-500 text-white border border-amber-500'
@@ -740,7 +778,12 @@ export function PresentationMode() {
             }`}
           >
             <span className="material-symbols-outlined text-icon-md">notifications_active</span>
-            <span>예고 알림{preWarning.enabled ? `: ${preWarning.secondsBefore < 60 ? `${preWarning.secondsBefore}초` : `${preWarning.secondsBefore / 60}분`} 전` : ' (꺼짐)'}</span>
+            <span>
+              예고 알림
+              {preWarning.enabled
+                ? `: ${preWarning.secondsBefore < 60 ? `${preWarning.secondsBefore}초` : `${preWarning.secondsBefore / 60}분`} 전`
+                : ' (꺼짐)'}
+            </span>
           </button>
         </div>
 
@@ -767,11 +810,15 @@ export function PresentationMode() {
           <div className="w-full animate-in fade-in slide-in-from-top-2 duration-200">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-amber-400 text-icon-md">notifications_active</span>
+                <span className="material-symbols-outlined text-amber-400 text-icon-md">
+                  notifications_active
+                </span>
                 <span className="text-sm font-medium text-sp-text">종료 전 예고 알림</span>
               </div>
               <button
-                onClick={() => handlePreWarningChange({ ...preWarning, enabled: !preWarning.enabled })}
+                onClick={() =>
+                  handlePreWarningChange({ ...preWarning, enabled: !preWarning.enabled })
+                }
                 className={`relative w-10 h-5 rounded-full transition-colors ${
                   preWarning.enabled ? 'bg-amber-500' : 'bg-sp-border'
                 }`}
@@ -792,7 +839,9 @@ export function PresentationMode() {
                     {PRE_WARNING_TIMES.map((sec) => (
                       <button
                         key={sec}
-                        onClick={() => handlePreWarningChange({ ...preWarning, secondsBefore: sec })}
+                        onClick={() =>
+                          handlePreWarningChange({ ...preWarning, secondsBefore: sec })
+                        }
                         className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
                           preWarning.secondsBefore === sec
                             ? 'bg-amber-500 border-amber-500 text-white'
@@ -821,7 +870,9 @@ export function PresentationMode() {
                             : 'bg-sp-card border-sp-border text-sp-muted hover:text-sp-text hover:border-amber-500/40'
                         }`}
                       >
-                        <span className="material-symbols-outlined text-icon-lg">{preset.icon}</span>
+                        <span className="material-symbols-outlined text-icon-lg">
+                          {preset.icon}
+                        </span>
                         <span className="text-xs font-medium">{preset.label}</span>
                       </button>
                     ))}
@@ -846,8 +897,7 @@ export function PresentationMode() {
           <span className="material-symbols-outlined text-icon-xl">play_arrow</span>
           {hasAllOrders
             ? `발표 시작 (${orderedPresenters.length}명)`
-            : `순서를 지정하세요 (${orderMap.size}/${presenters.length})`
-          }
+            : `순서를 지정하세요 (${orderMap.size}/${presenters.length})`}
         </button>
       </div>
     );
@@ -889,9 +939,7 @@ export function PresentationMode() {
             check_circle
           </span>
           <p className="text-3xl font-bold text-sp-text">발표 완료!</p>
-          <p className="text-sp-muted">
-            {orderedPresenters.length}명 모두 발표를 마쳤습니다
-          </p>
+          <p className="text-sp-muted">{orderedPresenters.length}명 모두 발표를 마쳤습니다</p>
           <button
             onClick={resetAll}
             className="px-8 py-3 rounded-xl bg-sp-accent text-white font-medium hover:bg-sp-accent/80 transition-colors"
@@ -902,43 +950,47 @@ export function PresentationMode() {
       ) : (
         <>
           {/* 현재 발표자 이름 */}
-          <div className={`text-center transition-colors duration-300 ${
-            warningLevel === 'red'
-              ? 'text-red-400'
-              : warningLevel === 'yellow'
-                ? 'text-amber-400'
-                : 'text-sp-text'
-          }`}>
+          <div
+            className={`text-center transition-colors duration-300 ${
+              warningLevel === 'red'
+                ? 'text-red-400'
+                : warningLevel === 'yellow'
+                  ? 'text-amber-400'
+                  : 'text-sp-text'
+            }`}
+          >
             <p className="text-lg text-sp-muted mb-1">현재 발표자</p>
             <p className="text-4xl font-bold">{currentPresenter?.name}</p>
           </div>
 
           {/* 카운트다운 링 */}
-          <div className={`relative w-[280px] h-[280px] flex items-center justify-center rounded-full transition-all duration-500 ${
-            warningLevel === 'red'
-              ? 'ring-4 ring-red-500/30'
-              : warningLevel === 'yellow'
-                ? 'ring-4 ring-amber-500/20'
-                : ''
-          }`}>
+          <div
+            className={`relative w-[280px] h-[280px] flex items-center justify-center rounded-full transition-all duration-500 ${
+              warningLevel === 'red'
+                ? 'ring-4 ring-red-500/30'
+                : warningLevel === 'yellow'
+                  ? 'ring-4 ring-amber-500/20'
+                  : ''
+            }`}
+          >
             <CircleProgress
               ratio={ratio}
               preWarningActive={warningLevel === 'yellow' || warningLevel === 'red'}
             />
             <div className="z-10 flex flex-col items-center">
-              <span className={`text-7xl font-mono font-bold select-none transition-colors duration-300 ${
-                warningLevel === 'red'
-                  ? 'text-red-400 animate-pulse'
-                  : warningLevel === 'yellow'
-                    ? 'text-amber-400'
-                    : 'text-sp-text'
-              }`}>
+              <span
+                className={`text-7xl font-mono font-bold select-none transition-colors duration-300 ${
+                  warningLevel === 'red'
+                    ? 'text-red-400 animate-pulse'
+                    : warningLevel === 'yellow'
+                      ? 'text-amber-400'
+                      : 'text-sp-text'
+                }`}
+              >
                 {formatTime(remaining)}
               </span>
               {state === 'slide-done' && (
-                <p className="text-lg font-bold text-amber-400 mt-2 animate-bounce">
-                  시간 종료!
-                </p>
+                <p className="text-lg font-bold text-amber-400 mt-2 animate-bounce">시간 종료!</p>
               )}
             </div>
           </div>

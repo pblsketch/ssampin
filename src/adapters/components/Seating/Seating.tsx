@@ -715,7 +715,10 @@ export function Seating(props?: { embedded?: boolean }) {
               <span>더보기</span>
             </button>
             {showMoreMenu && (
-              <div className="absolute right-0 top-full mt-2 w-64 bg-sp-card border border-sp-border rounded-xl shadow-2xl shadow-black/30 z-50 overflow-hidden">
+              <div
+                data-sp-floating
+                className="absolute right-0 top-full mt-2 w-64 bg-sp-card border border-sp-border rounded-xl shadow-2xl shadow-black/30 z-50 overflow-hidden"
+              >
                 {/* 배치 기록 (Phase 1) — 교사·학생 시점 모두 노출 (저장된 기록은 모두 동일하게 사용 가능) */}
                 <button
                   onClick={() => {
@@ -791,7 +794,10 @@ export function Seating(props?: { embedded?: boolean }) {
               <span>내보내기</span>
             </button>
             {showExportMenu && (
-              <div className="absolute right-0 top-full mt-2 w-56 bg-sp-card border border-sp-border rounded-xl shadow-2xl shadow-black/30 z-50 overflow-hidden">
+              <div
+                data-sp-floating
+                className="absolute right-0 top-full mt-2 w-56 bg-sp-card border border-sp-border rounded-xl shadow-2xl shadow-black/30 z-50 overflow-hidden"
+              >
                 <button
                   onClick={() => void handleExport('pdf')}
                   className="w-full flex items-center gap-3 px-4 py-3 text-sm text-sp-text hover:bg-sp-accent/10 transition-colors"

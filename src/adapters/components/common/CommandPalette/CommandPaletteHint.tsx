@@ -39,6 +39,7 @@ export function CommandPaletteHint() {
   return (
     <div
       role="status"
+      data-sp-floating
       className="fixed bottom-6 right-6 z-sp-toast w-[330px] max-w-[calc(100vw-2rem)] rounded-xl border border-sp-border bg-sp-card p-4 shadow-xl animate-fade-in"
     >
       <div className="flex items-start gap-3">

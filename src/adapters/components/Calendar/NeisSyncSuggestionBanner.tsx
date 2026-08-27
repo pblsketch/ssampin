@@ -32,6 +32,7 @@ export function NeisSyncSuggestionBanner() {
     <div
       role="region"
       aria-label="NEIS 학사일정 동기화 제안"
+      data-sp-floating
       className="fixed bottom-6 right-6 z-50 max-w-sm rounded-xl border border-sp-border bg-sp-card shadow-lg p-4"
     >
       <div className="flex items-start gap-3">
@@ -39,11 +40,10 @@ export function NeisSyncSuggestionBanner() {
           <span className="material-symbols-outlined">event_available</span>
         </div>
         <div className="flex-1 min-w-0">
-          <h3 className="font-bold text-sp-text">
-            학사일정을 구글 캘린더에서도 확인하시겠어요?
-          </h3>
+          <h3 className="font-bold text-sp-text">학사일정을 구글 캘린더에서도 확인하시겠어요?</h3>
           <p className="mt-1 text-sm text-sp-muted">
-            NEIS 학사일정이 구글 캘린더에 자동으로 동기화됩니다. 휴대폰에서도 학사일정을 바로 확인할 수 있어요.
+            NEIS 학사일정이 구글 캘린더에 자동으로 동기화됩니다. 휴대폰에서도 학사일정을 바로 확인할
+            수 있어요.
           </p>
           <div className="mt-3 flex items-center gap-2">
             <button

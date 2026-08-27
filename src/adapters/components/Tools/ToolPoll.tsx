@@ -1048,7 +1048,10 @@ function VotingView({
               : '\u{1F517} 학생 참여 링크 만들기'}
           </button>
           {liveDisabled && !isLiveMode && (
-            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-sp-card border border-sp-border rounded-lg text-xs text-sp-muted whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+            <div
+              data-sp-floating
+              className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-sp-card border border-sp-border rounded-lg text-xs text-sp-muted whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
+            >
               복수 문항에서는 학생 참여를 지원하지 않습니다
             </div>
           )}

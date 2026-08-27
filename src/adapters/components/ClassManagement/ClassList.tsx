@@ -220,6 +220,7 @@ function SortableClassItem({
       {menuOpenId === cls.id && !selectMode && (
         <div
           ref={menuRef as React.RefObject<HTMLDivElement>}
+          data-sp-floating
           className="absolute right-2 top-full mt-1 z-20 bg-sp-card border border-sp-border rounded-xl shadow-lg py-1 min-w-[128px]"
         >
           <button
@@ -249,7 +250,10 @@ function SortableClassItem({
 
       {/* 삭제 확인 다이얼로그 */}
       {confirmDeleteId === cls.id && (
-        <div className="absolute right-0 top-full mt-1 z-20 bg-sp-card border border-sp-border rounded-xl shadow-lg p-3 min-w-[180px]">
+        <div
+          data-sp-floating
+          className="absolute right-0 top-full mt-1 z-20 bg-sp-card border border-sp-border rounded-xl shadow-lg p-3 min-w-[180px]"
+        >
           <p className="text-xs text-sp-text mb-2">
             &apos;{cls.name}&apos; 학급을 삭제하시겠습니까?
           </p>

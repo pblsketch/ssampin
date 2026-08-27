@@ -889,7 +889,10 @@ export function Schedule() {
                     일괄 삭제 ▾
                   </button>
                   {showBulkMenu && (
-                    <div className="absolute right-0 top-full mt-1 w-48 bg-sp-card border border-sp-border rounded-lg shadow-xl z-20 py-1">
+                    <div
+                      data-sp-floating
+                      className="absolute right-0 top-full mt-1 w-48 bg-sp-card border border-sp-border rounded-lg shadow-xl z-20 py-1"
+                    >
                       <button
                         type="button"
                         onClick={() => {

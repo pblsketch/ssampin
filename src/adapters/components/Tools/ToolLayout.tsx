@@ -251,7 +251,10 @@ export function ToolLayout({
               {showHelp && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setShowHelp(false)} />
-                  <div className="absolute right-0 top-full mt-2 w-52 bg-sp-card border border-sp-border rounded-xl shadow-2xl z-50 p-3">
+                  <div
+                    data-sp-floating
+                    className="absolute right-0 top-full mt-2 w-52 bg-sp-card border border-sp-border rounded-xl shadow-2xl z-50 p-3"
+                  >
                     <h3 className="text-xs font-bold text-sp-text mb-2 flex items-center gap-1.5">
                       <span className="material-symbols-outlined text-icon-sm">keyboard</span>
                       단축키

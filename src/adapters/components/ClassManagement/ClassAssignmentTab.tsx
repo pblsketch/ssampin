@@ -72,7 +72,10 @@ function ClassAssignmentCard({
               </span>
             </button>
             {showMenu && (
-              <div className="absolute right-0 top-8 bg-sp-card border border-sp-border rounded-lg shadow-xl py-1 min-w-[120px] z-10">
+              <div
+                data-sp-floating
+                className="absolute right-0 top-8 bg-sp-card border border-sp-border rounded-lg shadow-xl py-1 min-w-[120px] z-10"
+              >
                 <button
                   onClick={() => {
                     setShowMenu(false);

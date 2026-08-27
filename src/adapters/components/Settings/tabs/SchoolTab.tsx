@@ -288,7 +288,10 @@ export function SchoolTab({ draft, patch }: Props) {
                 )}
 
                 {searchResults.length > 0 && (
-                  <div className="absolute z-20 top-full left-0 mt-1 w-full bg-sp-card rounded-lg border border-sp-border shadow-2xl max-h-60 overflow-y-auto">
+                  <div
+                    data-sp-floating
+                    className="absolute z-20 top-full left-0 mt-1 w-full bg-sp-card rounded-lg border border-sp-border shadow-2xl max-h-60 overflow-y-auto"
+                  >
                     {searchResults.map((school) => (
                       <button
                         key={`${school.atptCode}-${school.schoolCode}`}
@@ -428,7 +431,10 @@ export function SchoolTab({ draft, patch }: Props) {
                     )}
 
                     {mealSearchResults.length > 0 && (
-                      <div className="absolute z-20 top-full left-0 mt-1 w-full bg-sp-card rounded-lg border border-sp-border shadow-2xl max-h-48 overflow-y-auto">
+                      <div
+                        data-sp-floating
+                        className="absolute z-20 top-full left-0 mt-1 w-full bg-sp-card rounded-lg border border-sp-border shadow-2xl max-h-48 overflow-y-auto"
+                      >
                         {mealSearchResults.map((school) => (
                           <button
                             key={`meal-${school.atptCode}-${school.schoolCode}`}

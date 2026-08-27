@@ -102,6 +102,7 @@ export function LaterDropdown({ isSecurity, onSnooze1d, onSnooze3d, onSkip }: La
         <div
           role="menu"
           aria-label="나중에 다시 알림"
+          data-sp-floating
           className="absolute bottom-full right-0 mb-1 bg-sp-card border border-sp-border rounded-lg shadow-lg py-1 min-w-[180px] z-10"
         >
           {items.map((item, idx) => (

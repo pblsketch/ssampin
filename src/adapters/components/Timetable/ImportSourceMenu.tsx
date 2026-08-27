@@ -179,6 +179,7 @@ export function ImportSourceMenu({ sources }: ImportSourceMenuProps) {
         pos &&
         createPortal(
           <div
+            data-sp-floating
             id={menuId}
             ref={menuRef}
             role="menu"

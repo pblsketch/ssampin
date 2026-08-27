@@ -365,6 +365,7 @@ export function AttendanceMatrixCore({
       {/* ── 팝오버 (우클릭 상세 편집) ── */}
       {popover && (
         <div
+          data-sp-floating
           ref={popoverRef}
           style={{
             position: 'fixed',

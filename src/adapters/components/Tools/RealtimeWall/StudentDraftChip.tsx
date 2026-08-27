@@ -28,9 +28,8 @@ export function StudentDraftChip({ draft, onResume }: StudentDraftChipProps) {
   if (!draft) return null;
 
   const previewSource = draft.text.trim() || draft.linkUrl.trim() || '';
-  const preview = previewSource.length > 0
-    ? truncate(previewSource, PREVIEW_MAX_CHARS)
-    : '(빈 카드)';
+  const preview =
+    previewSource.length > 0 ? truncate(previewSource, PREVIEW_MAX_CHARS) : '(빈 카드)';
 
   const attachmentLabel = describeAttachments(draft);
 
@@ -39,6 +38,7 @@ export function StudentDraftChip({ draft, onResume }: StudentDraftChipProps) {
       type="button"
       onClick={onResume}
       aria-label={`작성 중인 카드 다시 열기: ${preview}${attachmentLabel ? ', ' + attachmentLabel : ''}`}
+      data-sp-floating
       className="fixed bottom-5 left-5 z-30 flex max-w-[260px] items-center gap-2 rounded-xl border border-sp-accent/40 bg-sp-card px-3 py-2 text-left text-sm text-sp-text shadow-lg transition hover:bg-sp-card/80 sm:bottom-8 sm:left-8"
     >
       <span className="material-symbols-outlined text-lg text-sp-accent">edit_note</span>

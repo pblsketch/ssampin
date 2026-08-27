@@ -241,6 +241,7 @@ export function ReminderPrompt({
               <div
                 role="menu"
                 aria-label="미루기 옵션"
+                data-sp-floating
                 className="absolute bottom-full left-0 mb-2 z-sp-dropdown w-64 rounded-lg border border-sp-border bg-sp-card shadow-sp-lg overflow-hidden animate-slide-up motion-reduce:animate-none"
               >
                 <div className="px-3 pt-2.5 pb-1">

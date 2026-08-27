@@ -657,7 +657,10 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
             {showMenu && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setShowMenu(false)} />
-                <div className="absolute right-0 top-full mt-1 z-50 bg-sp-card border border-sp-border rounded-lg shadow-xl py-1 min-w-[140px]">
+                <div
+                  data-sp-floating
+                  className="absolute right-0 top-full mt-1 z-50 bg-sp-card border border-sp-border rounded-lg shadow-xl py-1 min-w-[140px]"
+                >
                   {linkStatus === 'open' && (
                     <button
                       onClick={() => {

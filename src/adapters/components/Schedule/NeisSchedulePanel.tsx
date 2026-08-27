@@ -93,8 +93,18 @@ export function NeisSchedulePanel({ open, onClose }: Props) {
     return result;
   }, [allEvents, settings]);
 
-  const totalNeis = groupCounts.holiday.total + groupCounts.exam.total + groupCounts.vacation.total + groupCounts.event.total + groupCounts.etc.total;
-  const totalOn = groupCounts.holiday.on + groupCounts.exam.on + groupCounts.vacation.on + groupCounts.event.on + groupCounts.etc.on;
+  const totalNeis =
+    groupCounts.holiday.total +
+    groupCounts.exam.total +
+    groupCounts.vacation.total +
+    groupCounts.event.total +
+    groupCounts.etc.total;
+  const totalOn =
+    groupCounts.holiday.on +
+    groupCounts.exam.on +
+    groupCounts.vacation.on +
+    groupCounts.event.on +
+    groupCounts.etc.on;
 
   // 매핑은 없는데 events에 googleEventId 흔적이 남은 잔존 NEIS 이벤트 카운트
   const orphanedGoogleEventCount = !hasNeisGoogleMapping
@@ -144,7 +154,10 @@ export function NeisSchedulePanel({ open, onClose }: Props) {
     }
     const result = await syncNow();
     if (result) {
-      showToast(`${result.total}건 동기화 완료 (추가: ${result.added}, 업데이트: ${result.updated})`, 'success');
+      showToast(
+        `${result.total}건 동기화 완료 (추가: ${result.added}, 업데이트: ${result.updated})`,
+        'success',
+      );
     } else if (errorMessage) {
       showToast(errorMessage, 'error');
     }
@@ -183,7 +196,10 @@ export function NeisSchedulePanel({ open, onClose }: Props) {
       <div className="fixed inset-0 z-sp-modal bg-black/40 backdrop-blur-sm" onClick={onClose} />
 
       {/* 패널 (우측 슬라이드) */}
-      <div className="fixed inset-y-0 right-0 z-sp-modal w-full max-w-sm flex flex-col bg-sp-card border-l border-sp-border shadow-2xl animate-slide-in-right">
+      <div
+        data-sp-floating
+        className="fixed inset-y-0 right-0 z-sp-modal w-full max-w-sm flex flex-col bg-sp-card border-l border-sp-border shadow-2xl animate-slide-in-right"
+      >
         {/* 헤더 */}
         <div className="shrink-0 flex items-center justify-between px-5 py-4 border-b border-sp-border">
           <div className="flex items-center gap-2.5">
@@ -192,9 +208,7 @@ export function NeisSchedulePanel({ open, onClose }: Props) {
             </div>
             <div>
               <h3 className="text-sm font-bold text-sp-text">NEIS 학사일정</h3>
-              {schoolName && (
-                <p className="text-detail text-sp-muted">{schoolName}</p>
-              )}
+              {schoolName && <p className="text-detail text-sp-muted">{schoolName}</p>}
             </div>
           </div>
           <button
@@ -222,7 +236,9 @@ export function NeisSchedulePanel({ open, onClose }: Props) {
           {/* 학교 미설정 안내 */}
           {!hasSchoolInfo && (
             <div className="flex items-start gap-2 p-3 rounded-lg bg-yellow-500/5 border border-yellow-500/20">
-              <span className="material-symbols-outlined text-yellow-500 text-icon mt-0.5">info</span>
+              <span className="material-symbols-outlined text-yellow-500 text-icon mt-0.5">
+                info
+              </span>
               <p className="text-detail text-yellow-200/80">
                 설정 → 학교/학급 정보에서 학교를 먼저 검색해주세요.
               </p>
@@ -239,16 +255,24 @@ export function NeisSchedulePanel({ open, onClose }: Props) {
                     {syncStatus === 'syncing' ? (
                       <div className="w-4 h-4 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
                     ) : syncStatus === 'error' ? (
-                      <span className="material-symbols-outlined text-red-400 text-icon-md">error</span>
+                      <span className="material-symbols-outlined text-red-400 text-icon-md">
+                        error
+                      </span>
                     ) : settings.lastSyncAt ? (
-                      <span className="material-symbols-outlined text-green-400 text-icon-md">check_circle</span>
+                      <span className="material-symbols-outlined text-green-400 text-icon-md">
+                        check_circle
+                      </span>
                     ) : (
-                      <span className="material-symbols-outlined text-sp-muted text-icon-md">sync</span>
+                      <span className="material-symbols-outlined text-sp-muted text-icon-md">
+                        sync
+                      </span>
                     )}
                     <div>
                       <p className="text-detail text-sp-muted">마지막 동기화</p>
                       <p className="text-sm text-sp-text font-medium">
-                        {syncStatus === 'syncing' ? '동기화 중...' : formatSyncTime(settings.lastSyncAt)}
+                        {syncStatus === 'syncing'
+                          ? '동기화 중...'
+                          : formatSyncTime(settings.lastSyncAt)}
                       </p>
                     </div>
                   </div>
@@ -268,7 +292,8 @@ export function NeisSchedulePanel({ open, onClose }: Props) {
                 {/* 성공 결과 */}
                 {lastSyncResult && syncStatus === 'success' && (
                   <p className="text-detail text-green-400 bg-green-500/10 rounded-md px-3 py-2">
-                    추가 {lastSyncResult.added}건 · 업데이트 {lastSyncResult.updated}건 · 스킵 {lastSyncResult.skipped}건
+                    추가 {lastSyncResult.added}건 · 업데이트 {lastSyncResult.updated}건 · 스킵{' '}
+                    {lastSyncResult.skipped}건
                   </p>
                 )}
 
@@ -314,7 +339,9 @@ export function NeisSchedulePanel({ open, onClose }: Props) {
                               onChange={(e) => void setGoogleSyncGroup(group, e.target.checked)}
                               className="w-3.5 h-3.5 rounded border-sp-border bg-sp-bg text-blue-500 focus:ring-blue-500"
                             />
-                            <span className={`inline-block w-1.5 h-1.5 rounded-full ${GROUP_DOT_COLOR[group]}`} />
+                            <span
+                              className={`inline-block w-1.5 h-1.5 rounded-full ${GROUP_DOT_COLOR[group]}`}
+                            />
                             <span className="text-sm text-sp-text flex-1">
                               {NEIS_GROUP_LABELS[group]}
                             </span>
@@ -341,12 +368,24 @@ export function NeisSchedulePanel({ open, onClose }: Props) {
                 {!hasNeisGoogleMapping && totalNeis > 0 && googleConnected && (
                   <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 space-y-2">
                     <div className="flex items-start gap-2">
-                      <span className="material-symbols-outlined text-amber-400 text-icon mt-0.5">info</span>
+                      <span className="material-symbols-outlined text-amber-400 text-icon mt-0.5">
+                        info
+                      </span>
                       <p className="text-detail text-sp-text/90 flex-1">
                         {orphanedGoogleEventCount > 0 ? (
-                          <>이전에 보낸 학사일정 <span className="font-bold text-sp-text">{orphanedGoogleEventCount}건</span>이 정리되지 않은 채 남아있어요.</>
+                          <>
+                            이전에 보낸 학사일정{' '}
+                            <span className="font-bold text-sp-text">
+                              {orphanedGoogleEventCount}건
+                            </span>
+                            이 정리되지 않은 채 남아있어요.
+                          </>
                         ) : (
-                          <>구글 캘린더에 학사일정이 남아있나요? <span className="font-bold text-sp-text">자동 정리</span>는 push 후 즉시 삭제합니다.</>
+                          <>
+                            구글 캘린더에 학사일정이 남아있나요?{' '}
+                            <span className="font-bold text-sp-text">자동 정리</span>는 push 후 즉시
+                            삭제합니다.
+                          </>
                         )}
                       </p>
                     </div>
@@ -370,7 +409,9 @@ export function NeisSchedulePanel({ open, onClose }: Props) {
                       {neisSyncInProgress ? (
                         <div className="w-4 h-4 border-2 border-amber-300 border-t-transparent rounded-full animate-spin" />
                       ) : (
-                        <span className="material-symbols-outlined text-icon">cleaning_services</span>
+                        <span className="material-symbols-outlined text-icon">
+                          cleaning_services
+                        </span>
                       )}
                       {neisSyncInProgress
                         ? neisSyncProgress.total > 0
@@ -388,13 +429,20 @@ export function NeisSchedulePanel({ open, onClose }: Props) {
                   type="button"
                   onClick={() => {
                     if (!googleConnected) {
-                      showToast('먼저 구글 캘린더를 연결해주세요. (일정 페이지 헤더 → "구글 캘린더 연결")', 'error');
+                      showToast(
+                        '먼저 구글 캘린더를 연결해주세요. (일정 페이지 헤더 → "구글 캘린더 연결")',
+                        'error',
+                      );
                       return;
                     }
                     void acceptNeisSyncSuggestion();
                   }}
                   disabled={neisSyncInProgress}
-                  title={googleConnected ? '학사일정을 구글 캘린더로 보냅니다' : '구글 캘린더 연결이 필요해요'}
+                  title={
+                    googleConnected
+                      ? '학사일정을 구글 캘린더로 보냅니다'
+                      : '구글 캘린더 연결이 필요해요'
+                  }
                   className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-blue-500/10 border border-blue-500/30 text-blue-300 hover:bg-blue-500/20 text-sm font-medium transition-all disabled:opacity-50"
                 >
                   {neisSyncInProgress ? (
@@ -427,7 +475,9 @@ export function NeisSchedulePanel({ open, onClose }: Props) {
 
               {/* 표시 설정 */}
               <div className="space-y-3">
-                <p className="text-detail font-semibold text-sp-muted uppercase tracking-wider">표시 설정</p>
+                <p className="text-detail font-semibold text-sp-muted uppercase tracking-wider">
+                  표시 설정
+                </p>
 
                 {/* 학년 필터 */}
                 <div className="flex items-center justify-between">
@@ -471,9 +521,15 @@ export function NeisSchedulePanel({ open, onClose }: Props) {
       {/* 삭제 확인 다이얼로그 */}
       {showDeleteConfirm && (
         <>
-          <div className="fixed inset-0 z-[80] bg-black/60 backdrop-blur-sm" onClick={() => setShowDeleteConfirm(false)} />
+          <div
+            className="fixed inset-0 z-[80] bg-black/60 backdrop-blur-sm"
+            onClick={() => setShowDeleteConfirm(false)}
+          />
           <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
-            <div className="w-full max-w-sm bg-sp-card rounded-xl border border-sp-border shadow-2xl p-6" onClick={(e) => e.stopPropagation()}>
+            <div
+              className="w-full max-w-sm bg-sp-card rounded-xl border border-sp-border shadow-2xl p-6"
+              onClick={(e) => e.stopPropagation()}
+            >
               <h4 className="text-base font-bold text-sp-text mb-2">학사일정 동기화 해제</h4>
               <p className="text-sm text-sp-muted mb-5">
                 기존에 가져온 학사일정({settings.syncedCount}건)을 삭제하시겠습니까?
@@ -507,7 +563,10 @@ export function NeisSchedulePanel({ open, onClose }: Props) {
             onClick={() => !neisSyncInProgress && setShowDisconnectConfirm(false)}
           />
           <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
-            <div className="w-full max-w-sm bg-sp-card rounded-xl border border-sp-border shadow-2xl p-6" onClick={(e) => e.stopPropagation()}>
+            <div
+              className="w-full max-w-sm bg-sp-card rounded-xl border border-sp-border shadow-2xl p-6"
+              onClick={(e) => e.stopPropagation()}
+            >
               <h4 className="text-base font-bold text-sp-text mb-2">구글 캘린더 연동 해제</h4>
               <p className="text-sm text-sp-muted mb-5">
                 구글 캘린더에 이미 보낸 학사일정을 어떻게 처리할까요?

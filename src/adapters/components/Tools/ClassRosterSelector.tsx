@@ -233,7 +233,10 @@ export function ClassRosterSelector({
           </button>
 
           {isDropdownOpen && (
-            <div className="absolute top-full left-0 right-0 mt-1 bg-sp-card border border-sp-border rounded-xl shadow-2xl z-50 py-1 max-h-56 overflow-y-auto">
+            <div
+              data-sp-floating
+              className="absolute top-full left-0 right-0 mt-1 bg-sp-card border border-sp-border rounded-xl shadow-2xl z-50 py-1 max-h-56 overflow-y-auto"
+            >
               {selectableClasses.length === 0 && rosters.length === 0 ? (
                 <div className="px-3 py-3 text-xs text-sp-muted text-center">
                   등록된 반이 없습니다

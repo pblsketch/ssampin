@@ -73,7 +73,10 @@ export function RecordFilterPopover({ categories, filters }: RecordFilterPopover
       </button>
 
       {open && (
-        <div className="absolute top-full left-0 mt-1 z-50 bg-sp-card rounded-xl shadow-xl ring-1 ring-sp-border p-3 w-72 space-y-2.5 animate-sp-fade-in">
+        <div
+          data-sp-floating
+          className="absolute top-full left-0 mt-1 z-50 bg-sp-card rounded-xl shadow-xl ring-1 ring-sp-border p-3 w-72 space-y-2.5 animate-sp-fade-in"
+        >
           {/* 카테고리 */}
           <div className="space-y-1">
             <label className="text-caption text-sp-muted">카테고리</label>

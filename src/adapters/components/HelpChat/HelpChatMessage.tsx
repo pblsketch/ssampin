@@ -68,6 +68,7 @@ function ImageLightbox({ src, alt, onClose }: { src: string; alt: string; onClos
         <img src={src} alt={alt} className="max-h-[85vh] max-w-[85vw] rounded-lg object-contain" />
         <button
           onClick={onClose}
+          data-sp-floating
           className="absolute -right-2 -top-2 flex h-8 w-8 items-center justify-center rounded-full bg-sp-card text-sp-text shadow-lg hover:bg-sp-surface"
           aria-label="닫기"
         >
