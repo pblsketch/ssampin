@@ -301,6 +301,54 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
     () => new Set(),
   );
 
+  /**
+   * 정규 수업 시간과 겹치는 슬롯 — **알리기만 한다.**
+   *
+   * 자동 재계산(`recomputeSlotAvailability`)은 학교 행사·시간표 임시 변경만 보고 자동으로
+   * 막는다. 정규 시간표는 여기서 따로 확인하되 자동으로 막지 않는다 — 수업 시간에 슬롯이
+   * 열려 있는 것이 실수인지 의도인지(상담 주간 수업 단축·보결 확보 등) 앱은 모른다.
+   */
+  const [classTimeOpenSlotIds, setClassTimeOpenSlotIds] = useState<readonly string[]>([]);
+  const [classTimeBookedCount, setClassTimeBookedCount] = useState(0);
+  const [classTimeDismissed, setClassTimeDismissed] = useState(false);
+  const [blockingClassTime, setBlockingClassTime] = useState(false);
+
+  const checkClassTimeConflicts = useCallback(() => {
+    void useConsultationStore
+      .getState()
+      .findClassTimeConflicts(schedule.id)
+      .then((res) => {
+        setClassTimeOpenSlotIds(res.openSlotIds);
+        setClassTimeBookedCount(res.bookedSlotIds.length);
+      })
+      .catch(() => {
+        // 무시 — 확인 실패는 기존 화면에 영향 0
+      });
+  }, [schedule.id]);
+
+  useEffect(() => {
+    checkClassTimeConflicts();
+  }, [checkClassTimeConflicts]);
+
+  const handleBlockClassTimeSlots = useCallback(async () => {
+    if (classTimeOpenSlotIds.length === 0) return;
+    setBlockingClassTime(true);
+    const res = await useConsultationStore.getState().blockSlotsByTeacher(classTimeOpenSlotIds);
+    setBlockingClassTime(false);
+    if (res.blocked > 0) {
+      showToast(
+        res.failed > 0
+          ? `${res.blocked}개를 막았습니다 (${res.failed}개 실패)`
+          : `수업과 겹치는 시간 ${res.blocked}개를 막았습니다`,
+        res.failed > 0 ? 'info' : 'success',
+      );
+      await refreshNow();
+      checkClassTimeConflicts();
+    } else {
+      showToast('막지 못했습니다. 잠시 후 다시 시도해주세요', 'error');
+    }
+  }, [classTimeOpenSlotIds, showToast, refreshNow, checkClassTimeConflicts]);
+
   // Phase 2: 상세 진입 시 1회 슬롯 가용성 재계산 (구독 누락 fallback)
   useEffect(() => {
     let cancelled = false;
@@ -738,6 +786,58 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
             </div>
           );
         })()}
+
+      {/* 수업 시간과 겹치는 슬롯 안내 — 앱이 자동으로 막지 않는다 */}
+      {!classTimeDismissed &&
+        (classTimeOpenSlotIds.length > 0 || classTimeBookedCount > 0) &&
+        !schedule.isArchived && (
+          <div className="mb-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 flex flex-col gap-2">
+            <div className="flex items-start gap-2">
+              <span className="material-symbols-outlined text-base text-amber-400 shrink-0">
+                schedule
+              </span>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-sp-text">
+                  수업 시간과 겹치는 상담 시간이 있습니다
+                </p>
+                <p className="text-caption text-sp-muted mt-0.5 leading-relaxed">
+                  {classTimeOpenSlotIds.length > 0 && (
+                    <>
+                      아직 예약이 없는 <strong>{classTimeOpenSlotIds.length}개</strong>가 열려
+                      있습니다.
+                    </>
+                  )}
+                  {classTimeBookedCount > 0 && (
+                    <>
+                      {classTimeOpenSlotIds.length > 0 && ' '}
+                      이미 예약이 들어온 것이 <strong>{classTimeBookedCount}개</strong> 있어 이건
+                      직접 확인하셔야 합니다.
+                    </>
+                  )}
+                </p>
+                <p className="text-caption text-sp-muted/70 mt-1 leading-relaxed">
+                  일부러 열어 두신 것이라면 그대로 두셔도 됩니다. 앱이 자동으로 막지 않습니다.
+                </p>
+              </div>
+              <button
+                onClick={() => setClassTimeDismissed(true)}
+                className="text-sp-muted hover:text-sp-text transition-colors shrink-0"
+                aria-label="안내 닫기"
+              >
+                <span className="material-symbols-outlined text-sm">close</span>
+              </button>
+            </div>
+            {classTimeOpenSlotIds.length > 0 && (
+              <button
+                onClick={() => void handleBlockClassTimeSlots()}
+                disabled={blockingClassTime}
+                className="self-start px-3 py-1.5 rounded-lg bg-amber-500/20 border border-amber-500/40 text-xs text-amber-300 hover:bg-amber-500/30 disabled:opacity-50 transition-colors"
+              >
+                {blockingClassTime ? '막는 중…' : `열려 있는 ${classTimeOpenSlotIds.length}개 막기`}
+              </button>
+            )}
+          </div>
+        )}
 
       {/* 슬롯 리스트 */}
       <div className="flex-1 overflow-y-auto">

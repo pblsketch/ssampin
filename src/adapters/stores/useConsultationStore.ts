@@ -13,6 +13,10 @@ import {
   makePeriodResolver,
 } from '@domain/rules/consultationRules';
 import {
+  computeBreakPresets,
+  findClassTimeOpenSlots,
+} from '@domain/rules/consultationTimetableRules';
+import {
   consultationRepository,
   consultationSupabaseClient,
   shortLinkClient,
@@ -43,6 +47,14 @@ export interface RecomputeResult {
   readonly blockedAdded: number;
   readonly availableRestored: number;
   readonly conflictedBookingIds: readonly string[];
+}
+
+/** 정규 수업 시간과 겹치는 슬롯. 앱이 자동으로 막지 않고 교사에게 알리기만 한다. */
+export interface ClassTimeConflicts {
+  /** 예약이 없고 열려 있는데 수업과 겹침 — 교사가 막을 수 있다 */
+  readonly openSlotIds: readonly string[];
+  /** 이미 예약이 들어왔는데 수업과 겹침 — 막을 수 없고 알리기만 한다 */
+  readonly bookedSlotIds: readonly string[];
 }
 
 const SHARE_BASE_URL = `${SITE_URL}/booking`;
@@ -107,6 +119,22 @@ interface ConsultationState {
    * - archived schedule 은 건너뛴다
    */
   recomputeSlotAvailability: (scheduleId: string) => Promise<RecomputeResult>;
+
+  /**
+   * 이미 만들어진 슬롯 중 "그 날 수업 중인데 아직 열려 있는" 것을 찾는다. **쓰기 없음.**
+   *
+   * `recomputeSlotAvailability` 는 학교 행사·시간표 임시 변경만 보고 자동으로 막는다.
+   * 정규 시간표는 여기서 따로 본다 — 그리고 **자동으로 막지 않는다.** 수업 시간에 슬롯이
+   * 열려 있는 것이 실수인지 의도인지(상담 주간 수업 단축·보결 확보 등) 앱은 모르기 때문이다.
+   * 막을지는 화면에서 교사가 정한다(ADR-060 의 교훈을 반대 방향으로 되풀이하지 않는다).
+   */
+  findClassTimeConflicts: (scheduleId: string) => Promise<ClassTimeConflicts>;
+
+  /**
+   * 교사가 확인한 뒤 여러 슬롯을 한 번에 막는다. `blockedBy: 'teacher'` 로 남아
+   * 자동 재계산이 다시 풀지 않는다. 일부 실패해도 나머지는 계속 진행한다.
+   */
+  blockSlotsByTeacher: (slotIds: readonly string[]) => Promise<{ blocked: number; failed: number }>;
 
   /**
    * 일정표(useScheduleStore) 와 일정(useEventsStore) 변경을 구독해
@@ -418,6 +446,67 @@ export const useConsultationStore = create<ConsultationState>((set, get) => ({
           : `차단을 풀지 못했습니다: ${String(e)}`,
       };
     }
+  },
+
+  findClassTimeConflicts: async (scheduleId) => {
+    const empty = { openSlotIds: [], bookedSlotIds: [] };
+    const schedule = get().schedules.find((s) => s.id === scheduleId);
+    if (!schedule || schedule.isArchived) return empty;
+
+    const settings = useSettingsStore.getState().settings;
+    const presets = computeBreakPresets(
+      settings.periodTimes,
+      settings.lunchStart,
+      settings.lunchEnd,
+    );
+    if (presets.length === 0) return empty; // 교시 시간 미등록 — 판단 근거가 없다
+
+    let slots: Awaited<ReturnType<typeof consultationSupabaseClient.getSlots>>;
+    let bookings: Awaited<ReturnType<typeof consultationSupabaseClient.getBookings>>;
+    try {
+      [slots, bookings] = await Promise.all([
+        consultationSupabaseClient.getSlots(scheduleId),
+        consultationSupabaseClient.getBookings(scheduleId, schedule.adminKey),
+      ]);
+    } catch {
+      return empty;
+    }
+
+    // 날짜별 공강 교시 — 각 날짜는 자기 요일 시간표를 본다
+    const scheduleStore = useScheduleStore.getState();
+    const freePeriodsByDate = new Map<string, Set<number> | null>();
+    for (const date of new Set(slots.map((s) => s.date))) {
+      const day = scheduleStore.getEffectiveTeacherSchedule(date, settings.enableWeekendDays);
+      if (day.length === 0) {
+        freePeriodsByDate.set(date, null); // 시간표 없는 날 — 막을 근거 없음
+        continue;
+      }
+      const free = new Set<number>();
+      day.forEach((p, i) => {
+        if (p === null) free.add(i + 1);
+      });
+      freePeriodsByDate.set(date, free);
+    }
+
+    return findClassTimeOpenSlots({
+      slots,
+      presets,
+      freePeriodsByDate,
+      bookedSlotIds: new Set(bookings.map((b) => b.slotId)),
+    });
+  },
+
+  blockSlotsByTeacher: async (slotIds) => {
+    let blocked = 0;
+    for (const id of slotIds) {
+      try {
+        await consultationSupabaseClient.setSlotBlockedByTeacher(id, true);
+        blocked += 1;
+      } catch {
+        // 하나 실패해도 나머지는 계속 — 부분 성공을 그대로 돌려준다
+      }
+    }
+    return { blocked, failed: slotIds.length - blocked };
   },
 
   recomputeSlotAvailability: async (scheduleId) => {

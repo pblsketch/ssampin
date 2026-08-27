@@ -3,13 +3,22 @@ import { useConsultationStore } from '@adapters/stores/useConsultationStore';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
-import { periodTimeLabel } from '@domain/rules/periodLabel';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { consultationSupabaseClient, shortLinkClient } from '@adapters/di/container';
 import { validateCustomCode } from '@infrastructure/supabase/ShortLinkClient';
 import type { ConsultationType, ConsultationMethod } from '@domain/entities/Consultation';
 import { isStudentActive } from '@domain/rules/studentActivity';
-import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
+import {
+  buildExcludedTimesByDate,
+  computeAvailableRanges,
+  computeBreakPresets,
+  computeDefaultExclusionKeys,
+  exclusionKey,
+  parseExclusionKey,
+  periodNumberOf,
+  type BreakPreset,
+  type TimeRange,
+} from '@domain/rules/consultationTimetableRules';
 import { Modal } from '@adapters/components/common/Modal';
 import { IconButton } from '@adapters/components/common/IconButton';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
@@ -56,86 +65,6 @@ function minutesToTime(mins: number): string {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
-interface BreakPreset {
-  id: string;
-  label: string;
-  startTime: string;
-  endTime: string;
-}
-
-function computeBreakPresets(
-  periodTimes: readonly PeriodTime[],
-  lunchStart?: string,
-  lunchEnd?: string,
-): BreakPreset[] {
-  if (periodTimes.length === 0) return [];
-  const sorted = [...periodTimes].sort(
-    (a, b) => parseTimeToMinutes(a.start) - parseTimeToMinutes(b.start),
-  );
-  const presets: BreakPreset[] = [];
-
-  // 조례 전
-  const firstStart = parseTimeToMinutes(sorted[0]!.start);
-  presets.push({
-    id: 'before-school',
-    label: '조례 전',
-    startTime: minutesToTime(Math.max(firstStart - 20, 0)),
-    endTime: sorted[0]!.start,
-  });
-
-  // 교시 사이 쉬는 시간 (점심 fallback: 가장 긴 간격 >= 30분)
-  let longestGapIdx = -1;
-  let longestGap = 0;
-  for (let i = 0; i < sorted.length - 1; i++) {
-    const endMins = parseTimeToMinutes(sorted[i]!.end);
-    const nextStartMins = parseTimeToMinutes(sorted[i + 1]!.start);
-    const gap = nextStartMins - endMins;
-    if (gap > longestGap) {
-      longestGap = gap;
-      longestGapIdx = i;
-    }
-  }
-
-  for (let i = 0; i < sorted.length; i++) {
-    // 수업 시간
-    presets.push({
-      id: `period-${sorted[i]!.period}`,
-      label: periodTimeLabel(sorted[i]!),
-      startTime: sorted[i]!.start,
-      endTime: sorted[i]!.end,
-    });
-
-    // 쉬는 시간 (다음 교시가 있는 경우)
-    if (i < sorted.length - 1) {
-      const endMins = parseTimeToMinutes(sorted[i]!.end);
-      const nextStartMins = parseTimeToMinutes(sorted[i + 1]!.start);
-      if (nextStartMins <= endMins) continue;
-      const isLunch =
-        lunchStart && lunchEnd
-          ? endMins >= parseTimeToMinutes(lunchStart) &&
-            nextStartMins <= parseTimeToMinutes(lunchEnd)
-          : i === longestGapIdx && longestGap >= 30;
-      presets.push({
-        id: isLunch ? 'lunch' : `break-${sorted[i]!.period}`,
-        label: isLunch ? '점심 시간' : `${periodTimeLabel(sorted[i]!)} 후 쉬는 시간`,
-        startTime: sorted[i]!.end,
-        endTime: sorted[i + 1]!.start,
-      });
-    }
-  }
-
-  // 종례 후
-  const lastEnd = parseTimeToMinutes(sorted[sorted.length - 1]!.end);
-  presets.push({
-    id: 'after-school',
-    label: '종례 후',
-    startTime: sorted[sorted.length - 1]!.end,
-    endTime: minutesToTime(lastEnd + 30),
-  });
-
-  return presets;
-}
-
 /** 학생 상담: 날짜+프리셋 키 생성 */
 function presetKey(date: string, presetId: string): string {
   return `${date}|${presetId}`;
@@ -160,40 +89,12 @@ function buildSlotChips(startTime: string, endTime: string, slotMinutes: number)
   return chips;
 }
 
-/** 전체 시간 범위에서 제외 구간을 빼고 남은 연속 구간 목록 반환 */
-function computeAvailableRanges(
-  rangeStart: string,
-  rangeEnd: string,
-  excludedTimes: { startTime: string; endTime: string }[],
-): { startTime: string; endTime: string }[] {
-  const startMins = parseTimeToMinutes(rangeStart);
-  const endMins = parseTimeToMinutes(rangeEnd);
-  if (startMins >= endMins) return [];
-
-  // 분 단위 가용 배열 (true = 사용 가능)
-  const available = new Array(endMins - startMins).fill(true) as boolean[];
-  for (const ex of excludedTimes) {
-    const exStart = Math.max(parseTimeToMinutes(ex.startTime) - startMins, 0);
-    const exEnd = Math.min(parseTimeToMinutes(ex.endTime) - startMins, available.length);
-    for (let i = exStart; i < exEnd; i++) available[i] = false;
-  }
-
-  // 연속 구간 추출
-  const ranges: { startTime: string; endTime: string }[] = [];
-  let i = 0;
-  while (i < available.length) {
-    if (!available[i]) {
-      i++;
-      continue;
-    }
-    const segStart = i;
-    while (i < available.length && available[i]) i++;
-    ranges.push({
-      startTime: minutesToTime(startMins + segStart),
-      endTime: minutesToTime(startMins + i),
-    });
-  }
-  return ranges;
+/** "YYYY-MM-DD" → "3월 2일 (월)". 어느 날 시간표를 보고 있는지 화면에 적기 위한 것. */
+const WEEKDAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'] as const;
+function formatDateWithWeekday(dateStr: string): string {
+  const d = new Date(`${dateStr}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return dateStr;
+  return `${d.getMonth() + 1}월 ${d.getDate()}일 (${WEEKDAY_LABELS[d.getDay()]})`;
 }
 
 /* ──────────────── 컴포넌트 ──────────────── */
@@ -225,11 +126,21 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
   const [selectedPresets, setSelectedPresets] = useState<Set<string>>(new Set());
 
   // 학부모 상담용: 수업 시간 제외
+  //
+  // ★ 제외는 **날짜별**이다. 키 형식 `${date}|${presetId}` — 학생 상담 selectedPresets 와 같다.
+  //   예전에는 교시 id 하나만 담아 첫 번째 날짜의 시간표로 계산한 결과를 모든 날짜에 복사했고,
+  //   요일이 다른 날을 함께 열면 교사가 수업 중인 시간에 학부모 예약이 들어왔다.
   const [excludeClassTime, setExcludeClassTime] = useState(false);
   const [excludedPeriodIds, setExcludedPeriodIds] = useState<Set<string>>(new Set());
   const [customExclusions, setCustomExclusions] = useState<
-    { startTime: string; endTime: string; label: string }[]
+    { date: string; startTime: string; endTime: string; label: string }[]
   >([]);
+  // 기본값을 이미 채운 날짜. "제외를 전부 해제한 날짜"와 "아직 안 채운 날짜"를 구별하기 위한 것 —
+  // 이게 없으면 날짜를 하나 추가할 때마다 손으로 해제한 항목이 되살아난다.
+  const [seededDates, setSeededDates] = useState<Set<string>>(new Set());
+  // 펼쳐 둔 날짜. 기본은 접힘 — 날짜가 3~4개면 교시 목록이 화면을 가득 채운다.
+  // 접혀 있어도 요약 줄이 "그 날 무엇이 빠졌는지"를 그대로 말해 준다.
+  const [expandedExclusionDates, setExpandedExclusionDates] = useState<Set<string>>(new Set());
 
   // 사전 차단 슬롯 (date_startTime 키 기준)
   const [blockedSlotKeys, setBlockedSlotKeys] = useState<Set<string>>(new Set());
@@ -244,58 +155,126 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
     [settings.periodTimes, settings.lunchStart, settings.lunchEnd],
   );
 
-  // 상담 날짜 기준 공강 교시 판별
-  const freePeriodSet = useMemo(() => {
-    // Use first parent date to determine free periods
-    const targetDate = type === 'parent' && dates.length > 0 ? dates[0]?.date : undefined;
-    if (!targetDate) return new Set<number>();
+  // 상담 날짜 목록만 뽑아 이어 붙인다.
+  // ★ 시작·종료 시간만 고치면 이 문자열은 그대로다 → 아래 공강표가 다시 만들어지지 않고,
+  //   따라서 자동 채움도 돌지 않아 손으로 맞춰 둔 제외가 살아남는다.
+  const parentDateKeysCsv = useMemo(() => {
+    if (type !== 'parent') return '';
+    return [...new Set(dates.map((d) => d.date).filter(Boolean))].sort().join(',');
+  }, [type, dates]);
 
-    const schedule = getEffectiveTeacherSchedule(targetDate, settings.enableWeekendDays);
-    const free = new Set<number>();
-    schedule.forEach((period, idx) => {
-      if (period === null) free.add(idx + 1); // 1-based period number
+  const parentDateList = useMemo(
+    () => (parentDateKeysCsv ? parentDateKeysCsv.split(',') : []),
+    [parentDateKeysCsv],
+  );
+
+  // 날짜별 공강 교시. null = 그 날은 시간표 자체가 없다(주말에 주말 시간표를 안 켠 경우 등).
+  // null 을 "공강 0교시"로 읽으면 모든 교시가 수업으로 분류되어 그 날 슬롯이 통째로 사라진다.
+  const freePeriodsByDate = useMemo(() => {
+    const map = new Map<string, Set<number> | null>();
+    for (const ds of parentDateList) {
+      const schedule = getEffectiveTeacherSchedule(ds, settings.enableWeekendDays);
+      if (schedule.length === 0) {
+        map.set(ds, null);
+        continue;
+      }
+      const free = new Set<number>();
+      schedule.forEach((period, idx) => {
+        if (period === null) free.add(idx + 1); // 1-based period number
+      });
+      map.set(ds, free);
+    }
+    return map;
+  }, [parentDateList, getEffectiveTeacherSchedule, settings.enableWeekendDays]);
+
+  // 학부모: 날짜별 제외 시간대 (수업 교시 + 커스텀)
+  const excludedTimesByDate = useMemo(() => {
+    if (!excludeClassTime || type !== 'parent') return new Map<string, TimeRange[]>();
+    const customByDate = new Map<string, TimeRange[]>();
+    for (const c of customExclusions) {
+      if (!c.date) continue;
+      const list = customByDate.get(c.date) ?? [];
+      list.push({ startTime: c.startTime, endTime: c.endTime });
+      customByDate.set(c.date, list);
+    }
+    return buildExcludedTimesByDate({
+      excludedKeys: excludedPeriodIds,
+      presets: breakPresets,
+      customByDate,
     });
-    return free;
-  }, [type, dates, getEffectiveTeacherSchedule, settings.enableWeekendDays]);
-
-  // 학부모: 제외할 시간대 목록 (수업 교시 + 커스텀)
-  const excludedTimes = useMemo(() => {
-    if (!excludeClassTime || type !== 'parent') return [];
-    const fromPresets = breakPresets
-      .filter((p) => excludedPeriodIds.has(p.id))
-      .map((p) => ({ startTime: p.startTime, endTime: p.endTime }));
-    const fromCustom = customExclusions.map((c) => ({
-      startTime: c.startTime,
-      endTime: c.endTime,
-    }));
-    return [...fromPresets, ...fromCustom];
   }, [excludeClassTime, type, breakPresets, excludedPeriodIds, customExclusions]);
 
-  // 수업 시간 제외 토글 시 실제 수업 교시만 자동 선택 (공강 제외)
-  useEffect(() => {
-    if (excludeClassTime && type === 'parent') {
-      const classPeriodIds = breakPresets
-        .filter((p) => {
-          if (!p.id.startsWith('period-')) return false;
-          const periodNum = parseInt(p.id.replace('period-', ''), 10);
-          return !freePeriodSet.has(periodNum); // 공강이 아닌 교시만 제외
-        })
-        .map((p) => p.id);
-      setExcludedPeriodIds(new Set(classPeriodIds));
-    } else if (!excludeClassTime) {
-      setExcludedPeriodIds(new Set());
-      setCustomExclusions([]);
-    }
-  }, [excludeClassTime, type, breakPresets, freePeriodSet]);
+  const excludedTimesFor = useCallback(
+    (date: string): TimeRange[] => excludedTimesByDate.get(date) ?? [],
+    [excludedTimesByDate],
+  );
 
-  const toggleExcludedPeriod = useCallback((periodId: string) => {
+  // 수업 시간 제외 자동 채움 — **아직 안 채운 날짜만** 채우고 기존 선택은 건드리지 않는다.
+  useEffect(() => {
+    if (!excludeClassTime || type !== 'parent') {
+      // 토글을 끄면 전부 비운다 (기존 동작 유지)
+      if (!excludeClassTime) {
+        setExcludedPeriodIds(new Set());
+        setCustomExclusions([]);
+        setSeededDates(new Set());
+      }
+      return;
+    }
+
+    const known = new Set(parentDateList);
+    const toSeed = parentDateList.filter((d) => !seededDates.has(d));
+    const staleSeeds = [...seededDates].filter((d) => !known.has(d));
+    if (toSeed.length === 0 && staleSeeds.length === 0) return;
+
+    const seeded = computeDefaultExclusionKeys({
+      dates: toSeed,
+      presets: breakPresets,
+      freePeriodsByDate,
+      mode: 'classOnly',
+    });
+
     setExcludedPeriodIds((prev) => {
+      const next = new Set<string>();
+      // 사라진 날짜의 선택은 정리하고, 남은 날짜의 선택은 그대로 지킨다
+      for (const key of prev) {
+        if (known.has(parseExclusionKey(key).date)) next.add(key);
+      }
+      for (const key of seeded) next.add(key);
+      return next;
+    });
+    setCustomExclusions((prev) => prev.filter((c) => known.has(c.date)));
+    setSeededDates(known);
+  }, [excludeClassTime, type, breakPresets, freePeriodsByDate, parentDateList, seededDates]);
+
+  const toggleExcludedPeriod = useCallback((date: string, presetId: string) => {
+    setExcludedPeriodIds((prev) => {
+      const key = exclusionKey(date, presetId);
       const next = new Set(prev);
-      if (next.has(periodId)) next.delete(periodId);
-      else next.add(periodId);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   }, []);
+
+  /** 어느 날짜든 공강이 하나라도 있으면 "공강만 상담 가능" 버튼을 보여 준다. */
+  const hasAnyFreePeriod = useMemo(() => {
+    for (const free of freePeriodsByDate.values()) {
+      if (free !== null && free.size > 0) return true;
+    }
+    return false;
+  }, [freePeriodsByDate]);
+
+  /** 모든 날짜를 "공강만 상담 가능"으로 맞춘다. 각 날짜는 자기 요일 시간표를 본다. */
+  const applyFreeOnlyToAllDates = useCallback(() => {
+    setExcludedPeriodIds(
+      computeDefaultExclusionKeys({
+        dates: parentDateList,
+        presets: breakPresets,
+        freePeriodsByDate,
+        mode: 'freeOnly',
+      }),
+    );
+  }, [parentDateList, breakPresets, freePeriodsByDate]);
 
   // slotMinutes 변경 시 불가 프리셋 해제 + 남은 프리셋 칩 재생성 (모든 학생 상담 날짜에 대해)
   useEffect(() => {
@@ -538,8 +517,9 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
   const slotPreview = useMemo(() => {
     return dates.map((d) => {
       if (!d.date || !d.startTime || !d.endTime) return { ...d, count: 0 };
-      if (type === 'parent' && excludeClassTime && excludedTimes.length > 0) {
-        const ranges = computeAvailableRanges(d.startTime, d.endTime, excludedTimes);
+      const dayExcluded = excludedTimesFor(d.date);
+      if (type === 'parent' && excludeClassTime && dayExcluded.length > 0) {
+        const ranges = computeAvailableRanges(d.startTime, d.endTime, dayExcluded);
         const count = ranges.reduce((sum, r) => {
           const s = parseTimeToMinutes(r.startTime);
           const e = parseTimeToMinutes(r.endTime);
@@ -552,7 +532,63 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
       const count = start < end ? Math.floor((end - start) / slotMinutes) : 0;
       return { ...d, count };
     });
-  }, [dates, slotMinutes, type, excludeClassTime, excludedTimes]);
+  }, [dates, slotMinutes, type, excludeClassTime, excludedTimesFor]);
+
+  const toggleExclusionCard = useCallback((date: string) => {
+    setExpandedExclusionDates((prev) => {
+      const next = new Set(prev);
+      if (next.has(date)) next.delete(date);
+      else next.add(date);
+      return next;
+    });
+  }, []);
+
+  /**
+   * 날짜별 요약 — 접힌 상태에서도 "그 날 무엇이 빠졌고 얼마가 남았는지"를 말해 준다.
+   * 이게 없으면 접는 순간 예전의 "어느 날 기준인지 모름" 문제가 그대로 돌아온다.
+   */
+  const exclusionSummaryFor = useCallback(
+    (date: string) => {
+      const free = freePeriodsByDate.get(date) ?? null;
+      const slots = slotPreview.filter((d) => d.date === date).reduce((sum, d) => sum + d.count, 0);
+      if (free === null) {
+        return { noTimetable: true, excludedLabel: '', freeLabel: '', slots, customCount: 0 };
+      }
+
+      const shortLabel = (presetId: string, label: string) => {
+        const n = periodNumberOf(presetId);
+        return n === null ? label : `${n}`;
+      };
+
+      const excludedPeriods: string[] = [];
+      let excludedOther = 0;
+      for (const p of breakPresets) {
+        if (!excludedPeriodIds.has(exclusionKey(date, p.id))) continue;
+        if (periodNumberOf(p.id) !== null) excludedPeriods.push(shortLabel(p.id, p.label));
+        else excludedOther += 1;
+      }
+
+      const freeOpen: string[] = [];
+      for (const p of breakPresets) {
+        const n = periodNumberOf(p.id);
+        if (n === null || !free.has(n)) continue;
+        if (!excludedPeriodIds.has(exclusionKey(date, p.id))) freeOpen.push(String(n));
+      }
+
+      const parts: string[] = [];
+      if (excludedPeriods.length > 0) parts.push(`${excludedPeriods.join('·')}교시 제외`);
+      if (excludedOther > 0) parts.push(`쉬는시간 ${excludedOther}개 제외`);
+
+      return {
+        noTimetable: false,
+        excludedLabel: parts.join(' · '),
+        freeLabel: freeOpen.length > 0 ? `${freeOpen.join('·')}교시 공강 열림` : '',
+        slots,
+        customCount: customExclusions.filter((c) => c.date === date).length,
+      };
+    },
+    [freePeriodsByDate, breakPresets, excludedPeriodIds, customExclusions, slotPreview],
+  );
 
   const totalSlots = slotPreview.reduce((sum, d) => sum + d.count, 0);
 
@@ -562,8 +598,9 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
     const validDates = dates.filter((d) => d.date && d.startTime && d.endTime);
 
     for (const d of validDates) {
-      if (type === 'parent' && excludeClassTime && excludedTimes.length > 0) {
-        const ranges = computeAvailableRanges(d.startTime, d.endTime, excludedTimes);
+      const dayExcluded = excludedTimesFor(d.date);
+      if (type === 'parent' && excludeClassTime && dayExcluded.length > 0) {
+        const ranges = computeAvailableRanges(d.startTime, d.endTime, dayExcluded);
         for (const r of ranges) {
           let current = parseTimeToMinutes(r.startTime);
           const end = parseTimeToMinutes(r.endTime);
@@ -590,7 +627,7 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
       }
     }
     return result;
-  }, [dates, slotMinutes, type, excludeClassTime, excludedTimes]);
+  }, [dates, slotMinutes, type, excludeClassTime, excludedTimesFor]);
 
   const toggleBlockSlot = useCallback((date: string, startTime: string) => {
     const key = `${date}_${startTime}`;
@@ -629,8 +666,9 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
         dates: dates
           .filter((d) => d.date && d.startTime && d.endTime)
           .flatMap(({ date, startTime, endTime }) => {
-            if (type === 'parent' && excludeClassTime && excludedTimes.length > 0) {
-              return computeAvailableRanges(startTime, endTime, excludedTimes).map((r) => ({
+            const dayExcluded = excludedTimesFor(date);
+            if (type === 'parent' && excludeClassTime && dayExcluded.length > 0) {
+              return computeAvailableRanges(startTime, endTime, dayExcluded).map((r) => ({
                 date,
                 startTime: r.startTime,
                 endTime: r.endTime,
@@ -683,7 +721,7 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
     showToast,
     onClose,
     excludeClassTime,
-    excludedTimes,
+    excludedTimesFor,
     blockedSlotKeys,
   ]);
 
@@ -1161,7 +1199,7 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
                       날짜 추가
                     </button>
 
-                    {/* 수업 시간 제외 */}
+                    {/* 수업 시간 제외 — 날짜마다 그 요일 시간표를 본다 */}
                     {breakPresets.length > 0 ? (
                       <div className="mt-1">
                         <button
@@ -1178,22 +1216,10 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
                           <span className="flex-1 text-left">수업 시간 제외</span>
                           <span className="text-caption text-sp-muted">시간표 연동</span>
                         </button>
-                        {excludeClassTime && freePeriodSet.size > 0 && (
+
+                        {excludeClassTime && hasAnyFreePeriod && (
                           <button
-                            onClick={() => {
-                              // 수업 교시 + 쉬는 시간 + 점심 모두 제외, 공강만 열기
-                              const toExclude = new Set<string>();
-                              for (const p of breakPresets) {
-                                if (p.id === 'before-school' || p.id === 'after-school') continue;
-                                if (p.id.startsWith('period-')) {
-                                  const periodNum = parseInt(p.id.replace('period-', ''), 10);
-                                  if (!freePeriodSet.has(periodNum)) toExclude.add(p.id);
-                                } else {
-                                  toExclude.add(p.id); // 쉬는 시간, 점심
-                                }
-                              }
-                              setExcludedPeriodIds(toExclude);
-                            }}
+                            onClick={applyFreeOnlyToAllDates}
                             className="mt-1 flex items-center gap-2 px-3 py-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/5 text-xs text-emerald-400 hover:bg-emerald-500/10 transition-all w-full"
                           >
                             <span className="material-symbols-outlined text-sm">
@@ -1201,184 +1227,265 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
                             </span>
                             <span className="flex-1 text-left">공강만 상담 가능</span>
                             <span className="text-caption text-emerald-400/60">
-                              {freePeriodSet.size}교시
+                              {parentDateList.length > 1 ? '모든 날짜' : '적용'}
                             </span>
                           </button>
                         )}
 
-                        {excludeClassTime && (
-                          <div className="mt-2 rounded-lg border border-sp-border bg-sp-surface/50 p-3 flex flex-col gap-2">
-                            <label className="text-caption font-medium text-sp-muted">
-                              시간표 기반 제외 시간
-                            </label>
-                            <div className="flex flex-col gap-1">
-                              {breakPresets.map((preset) => {
-                                const isClass = preset.id.startsWith('period-');
-                                const isExcluded = excludedPeriodIds.has(preset.id);
-                                return (
-                                  <button
-                                    key={preset.id}
-                                    onClick={() => toggleExcludedPeriod(preset.id)}
-                                    className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs transition-all ${
-                                      isExcluded
-                                        ? 'bg-red-500/10 text-red-400'
-                                        : 'text-sp-muted hover:text-sp-text'
-                                    }`}
-                                  >
-                                    <span
-                                      className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 ${
-                                        isExcluded
-                                          ? 'bg-red-500 border-red-500'
-                                          : 'border-sp-border'
-                                      }`}
-                                    >
-                                      {isExcluded && (
-                                        <span className="material-symbols-outlined text-icon-xs text-white">
-                                          close
-                                        </span>
-                                      )}
-                                    </span>
-                                    <span className="flex-1 text-left">{preset.label}</span>
-                                    {isClass && (
+                        {excludeClassTime && parentDateList.length === 0 && (
+                          <p className="text-caption text-sp-muted/70 mt-2">
+                            날짜를 먼저 고르면 그 날 시간표에 맞춰 수업 시간을 빼 드립니다
+                          </p>
+                        )}
+
+                        {/* 날짜마다 따로 — 각 날짜는 자기 요일 시간표를 본다 */}
+                        {excludeClassTime &&
+                          parentDateList.map((exDate) => {
+                            const freeSet = freePeriodsByDate.get(exDate) ?? null;
+                            const noTimetable = freeSet === null;
+                            const dayCustom = customExclusions.filter((c) => c.date === exDate);
+                            const isOpen = expandedExclusionDates.has(exDate);
+                            const sum = exclusionSummaryFor(exDate);
+                            const noSlots = sum.slots === 0;
+
+                            return (
+                              <div
+                                key={exDate}
+                                className="mt-2 rounded-lg border border-sp-border bg-sp-surface/50 overflow-hidden"
+                              >
+                                {/* 요약 줄 — 접혀 있어도 "이 날 무엇이 빠졌는지"를 그대로 말한다 */}
+                                <button
+                                  onClick={() => toggleExclusionCard(exDate)}
+                                  aria-expanded={isOpen}
+                                  className="w-full flex items-start gap-2 p-3 text-left hover:bg-sp-card/40 transition-colors"
+                                >
+                                  <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs font-medium text-sp-text">
+                                        {formatDateWithWeekday(exDate)}
+                                      </span>
                                       <span
-                                        className={`text-tiny px-1.5 py-0.5 rounded-full ${
-                                          freePeriodSet.has(
-                                            parseInt(preset.id.replace('period-', ''), 10),
-                                          )
-                                            ? 'bg-emerald-500/15 text-emerald-400'
-                                            : 'bg-sp-muted/10 text-sp-muted'
+                                        className={`text-caption font-medium ${
+                                          noSlots ? 'text-amber-400' : 'text-sp-accent'
                                         }`}
                                       >
-                                        {freePeriodSet.has(
-                                          parseInt(preset.id.replace('period-', ''), 10),
-                                        )
-                                          ? '공강'
-                                          : '수업'}
+                                        {sum.slots}슬롯
                                       </span>
-                                    )}
-                                    <span className="text-caption font-mono text-sp-muted">
-                                      {preset.startTime}~{preset.endTime}
+                                    </div>
+                                    <span className="text-caption text-sp-muted truncate">
+                                      {noTimetable
+                                        ? '시간표 없음 · 전체 시간 열림'
+                                        : [sum.excludedLabel, sum.freeLabel]
+                                            .filter(Boolean)
+                                            .join(' · ') || '제외 없음 · 전체 시간 열림'}
+                                      {sum.customCount > 0 && ` · 직접 추가 ${sum.customCount}개`}
                                     </span>
-                                    {isClass &&
-                                      !isExcluded &&
-                                      freePeriodSet.has(
-                                        parseInt(preset.id.replace('period-', ''), 10),
-                                      ) && (
-                                        <span className="text-tiny text-green-400">상담가능</span>
-                                      )}
-                                  </button>
-                                );
-                              })}
-                            </div>
-
-                            {/* 커스텀 제외 */}
-                            {customExclusions.length > 0 && (
-                              <div className="flex flex-col gap-1 mt-1">
-                                <label className="text-caption font-medium text-sp-muted">
-                                  추가 제외 시간
-                                </label>
-                                {customExclusions.map((ex, idx) => (
-                                  <div
-                                    key={idx}
-                                    className="flex items-center gap-2 px-2.5 py-1.5 bg-red-500/10 rounded-md"
+                                  </div>
+                                  <span
+                                    className={`material-symbols-outlined text-base text-sp-muted shrink-0 transition-transform duration-200 ${
+                                      isOpen ? 'rotate-180' : ''
+                                    }`}
                                   >
-                                    <span className="text-caption font-mono text-red-400">
-                                      {ex.startTime}~{ex.endTime}
-                                    </span>
-                                    {ex.label && (
-                                      <span className="text-caption text-sp-muted">
-                                        ({ex.label})
-                                      </span>
+                                    expand_more
+                                  </span>
+                                </button>
+
+                                {isOpen && (
+                                  <div className="px-3 pb-3 flex flex-col gap-2 border-t border-sp-border/60 pt-2">
+                                    {noTimetable ? (
+                                      <p className="text-caption text-sp-muted/70">
+                                        이 날은 등록된 시간표가 없어 전체 시간이 열립니다
+                                      </p>
+                                    ) : (
+                                      <div className="flex flex-col gap-1">
+                                        {breakPresets.map((preset) => {
+                                          const periodNum = periodNumberOf(preset.id);
+                                          const isClass = periodNum !== null;
+                                          const isFree = isClass && freeSet.has(periodNum);
+                                          const isExcluded = excludedPeriodIds.has(
+                                            exclusionKey(exDate, preset.id),
+                                          );
+                                          return (
+                                            <button
+                                              key={preset.id}
+                                              onClick={() =>
+                                                toggleExcludedPeriod(exDate, preset.id)
+                                              }
+                                              className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs transition-all ${
+                                                isExcluded
+                                                  ? 'bg-red-500/10 text-red-400'
+                                                  : 'text-sp-muted hover:text-sp-text'
+                                              }`}
+                                            >
+                                              <span
+                                                className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 ${
+                                                  isExcluded
+                                                    ? 'bg-red-500 border-red-500'
+                                                    : 'border-sp-border'
+                                                }`}
+                                              >
+                                                {isExcluded && (
+                                                  <span className="material-symbols-outlined text-icon-xs text-white">
+                                                    close
+                                                  </span>
+                                                )}
+                                              </span>
+                                              <span className="flex-1 text-left">
+                                                {preset.label}
+                                              </span>
+                                              {isClass && (
+                                                <span
+                                                  className={`text-tiny px-1.5 py-0.5 rounded-full ${
+                                                    isFree
+                                                      ? 'bg-emerald-500/15 text-emerald-400'
+                                                      : 'bg-sp-muted/10 text-sp-muted'
+                                                  }`}
+                                                >
+                                                  {isFree ? '공강' : '수업'}
+                                                </span>
+                                              )}
+                                              <span className="text-caption font-mono text-sp-muted">
+                                                {preset.startTime}~{preset.endTime}
+                                              </span>
+                                              {isClass && !isExcluded && isFree && (
+                                                <span className="text-tiny text-green-400">
+                                                  상담가능
+                                                </span>
+                                              )}
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
                                     )}
+
+                                    {/* 커스텀 제외 (이 날짜) */}
+                                    {dayCustom.length > 0 && (
+                                      <div className="flex flex-col gap-1 mt-1">
+                                        <label className="text-caption font-medium text-sp-muted">
+                                          추가 제외 시간
+                                        </label>
+                                        {dayCustom.map((ex) => (
+                                          <div
+                                            key={`${ex.date}-${ex.startTime}-${ex.endTime}-${ex.label}`}
+                                            className="flex items-center gap-2 px-2.5 py-1.5 bg-red-500/10 rounded-md"
+                                          >
+                                            <span className="text-caption font-mono text-red-400">
+                                              {ex.startTime}~{ex.endTime}
+                                            </span>
+                                            {ex.label && (
+                                              <span className="text-caption text-sp-muted">
+                                                ({ex.label})
+                                              </span>
+                                            )}
+                                            <button
+                                              onClick={() =>
+                                                setCustomExclusions((prev) =>
+                                                  prev.filter((c) => c !== ex),
+                                                )
+                                              }
+                                              className="ml-auto text-sp-muted hover:text-red-400"
+                                            >
+                                              <span className="material-symbols-outlined text-icon-sm">
+                                                close
+                                              </span>
+                                            </button>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+
                                     <button
                                       onClick={() =>
-                                        setCustomExclusions((prev) =>
-                                          prev.filter((_, i) => i !== idx),
-                                        )
+                                        setCustomExclusions((prev) => [
+                                          ...prev,
+                                          {
+                                            date: exDate,
+                                            startTime: '12:00',
+                                            endTime: '13:00',
+                                            label: '',
+                                          },
+                                        ])
                                       }
-                                      className="ml-auto text-sp-muted hover:text-red-400"
+                                      className="flex items-center justify-center gap-1 py-1.5 rounded-md border border-dashed border-sp-border text-caption text-sp-muted hover:text-sp-accent hover:border-sp-accent/50 transition-all"
                                     >
-                                      <span className="material-symbols-outlined text-icon-sm">
-                                        close
+                                      <span className="material-symbols-outlined text-icon-xs">
+                                        add
                                       </span>
+                                      제외 시간 추가
                                     </button>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
 
-                            <button
-                              onClick={() =>
-                                setCustomExclusions((prev) => [
-                                  ...prev,
-                                  { startTime: '12:00', endTime: '13:00', label: '' },
-                                ])
-                              }
-                              className="flex items-center justify-center gap-1 py-1.5 rounded-md border border-dashed border-sp-border text-caption text-sp-muted hover:text-sp-accent hover:border-sp-accent/50 transition-all"
-                            >
-                              <span className="material-symbols-outlined text-icon-xs">add</span>
-                              제외 시간 추가
-                            </button>
-
-                            {/* 상담 가능 시간 요약 */}
-                            {dates.length > 0 &&
-                              (() => {
-                                const firstDate = dates[0];
-                                if (!firstDate || !firstDate.startTime || !firstDate.endTime)
-                                  return null;
-                                const ranges = computeAvailableRanges(
-                                  firstDate.startTime,
-                                  firstDate.endTime,
-                                  excludedTimes,
-                                );
-                                if (ranges.length === 0) return null;
-                                const hasShortGap = ranges.some((r) => {
-                                  const dur =
-                                    parseTimeToMinutes(r.endTime) - parseTimeToMinutes(r.startTime);
-                                  return dur > 0 && dur < slotMinutes;
-                                });
-                                return (
-                                  <div className="mt-1 p-2 rounded-md bg-sp-card border border-sp-border">
-                                    <p className="text-caption font-medium text-sp-muted mb-1">
-                                      상담 가능 시간
-                                    </p>
-                                    <div className="flex flex-wrap gap-1">
-                                      {ranges.map((r, i) => {
+                                    {/* 이 날짜의 상담 가능 시간 */}
+                                    {(() => {
+                                      const entry = dates.find(
+                                        (d) => d.date === exDate && d.startTime && d.endTime,
+                                      );
+                                      if (!entry) return null;
+                                      const ranges = computeAvailableRanges(
+                                        entry.startTime,
+                                        entry.endTime,
+                                        excludedTimesFor(exDate),
+                                      );
+                                      if (ranges.length === 0) {
+                                        return (
+                                          <p className="text-caption text-amber-400 flex items-center gap-1">
+                                            <span className="material-symbols-outlined text-icon-xs">
+                                              warning
+                                            </span>
+                                            이 날은 남는 시간이 없어 슬롯이 만들어지지 않습니다
+                                          </p>
+                                        );
+                                      }
+                                      const hasShortGap = ranges.some((r) => {
                                         const dur =
                                           parseTimeToMinutes(r.endTime) -
                                           parseTimeToMinutes(r.startTime);
-                                        const slots = Math.floor(dur / slotMinutes);
-                                        return (
-                                          <span
-                                            key={i}
-                                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-caption font-mono ${
-                                              slots > 0
-                                                ? 'bg-sp-accent/10 text-sp-accent'
-                                                : 'bg-sp-surface text-sp-muted/50'
-                                            }`}
-                                          >
-                                            {r.startTime}~{r.endTime}
-                                            <span className="text-tiny">
-                                              ({dur}분{slots > 0 ? ` / ${slots}슬롯` : ''})
-                                            </span>
-                                          </span>
-                                        );
-                                      })}
-                                    </div>
-                                    {hasShortGap && (
-                                      <p className="text-caption text-amber-400 mt-1.5 flex items-center gap-1">
-                                        <span className="material-symbols-outlined text-icon-xs">
-                                          warning
-                                        </span>
-                                        일부 시간대가 {slotMinutes}분보다 짧아 슬롯이 생성되지
-                                        않습니다
-                                      </p>
-                                    )}
+                                        return dur > 0 && dur < slotMinutes;
+                                      });
+                                      return (
+                                        <div className="mt-1 p-2 rounded-md bg-sp-card border border-sp-border">
+                                          <p className="text-caption font-medium text-sp-muted mb-1">
+                                            상담 가능 시간
+                                          </p>
+                                          <div className="flex flex-wrap gap-1">
+                                            {ranges.map((r) => {
+                                              const dur =
+                                                parseTimeToMinutes(r.endTime) -
+                                                parseTimeToMinutes(r.startTime);
+                                              const slots = Math.floor(dur / slotMinutes);
+                                              return (
+                                                <span
+                                                  key={`${r.startTime}-${r.endTime}`}
+                                                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-caption font-mono ${
+                                                    slots > 0
+                                                      ? 'bg-sp-accent/10 text-sp-accent'
+                                                      : 'bg-sp-surface text-sp-muted/50'
+                                                  }`}
+                                                >
+                                                  {r.startTime}~{r.endTime}
+                                                  <span className="text-tiny">
+                                                    ({dur}분{slots > 0 ? ` / ${slots}슬롯` : ''})
+                                                  </span>
+                                                </span>
+                                              );
+                                            })}
+                                          </div>
+                                          {hasShortGap && (
+                                            <p className="text-caption text-amber-400 mt-1.5 flex items-center gap-1">
+                                              <span className="material-symbols-outlined text-icon-xs">
+                                                warning
+                                              </span>
+                                              일부 시간대가 {slotMinutes}분보다 짧아 슬롯이 생성되지
+                                              않습니다
+                                            </p>
+                                          )}
+                                        </div>
+                                      );
+                                    })()}
                                   </div>
-                                );
-                              })()}
-                          </div>
-                        )}
+                                )}
+                              </div>
+                            );
+                          })}
                       </div>
                     ) : (
                       <p className="text-caption text-sp-muted/50 mt-1">

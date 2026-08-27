@@ -22,6 +22,12 @@ import {
   expiryIsoToKstDateString,
   kstDateStringToExpiryIso,
 } from '@domain/rules/consultationRules';
+import {
+  computeBreakPresets,
+  splitRangeByClassTime,
+} from '@domain/rules/consultationTimetableRules';
+import { useScheduleStore } from '@adapters/stores/useScheduleStore';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import type {
   ConsultationDate,
   ConsultationMethod,
@@ -63,6 +69,14 @@ function makeId(): string {
   return Math.random().toString(36).slice(2, 10);
 }
 
+/** "YYYY-MM-DD" → "(월)". 어느 요일 시간표를 보고 있는지 행마다 적기 위한 것. */
+const WEEKDAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'] as const;
+function weekdayOf(dateStr: string): string {
+  const d = new Date(`${dateStr}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return '';
+  return WEEKDAY_LABELS[d.getDay()] ?? '';
+}
+
 function toEntries(dates: readonly ConsultationDate[]): DateEntry[] {
   return dates.map((d) => ({
     id: makeId(),
@@ -99,6 +113,13 @@ export function ConsultationEditModal({
   const [submitting, setSubmitting] = useState(false);
 
   const showToast = useToastStore((s) => s.show);
+  const { settings } = useSettingsStore();
+  const getEffectiveTeacherSchedule = useScheduleStore((s) => s.getEffectiveTeacherSchedule);
+
+  const breakPresets = useMemo(
+    () => computeBreakPresets(settings.periodTimes, settings.lunchStart, settings.lunchEnd),
+    [settings.periodTimes, settings.lunchStart, settings.lunchEnd],
+  );
 
   const slotPresets = type === 'parent' ? PARENT_SLOT_PRESETS : STUDENT_SLOT_PRESETS;
 
@@ -160,6 +181,74 @@ export function ConsultationEditModal({
       },
     ]);
   }, [entries]);
+
+  /**
+   * "수업 시간 빼기" — 그 행의 날짜가 무슨 요일인지 보고, 그 날 수업 중인 교시만 빼서
+   * 한 행을 여러 행으로 쪼갠다.
+   *
+   * 생성 화면과 달리 제외 상태를 계속 들고 있지 않는다. 상담 일정에는 "무엇을 뺐는지"를
+   * 저장하는 칸이 없고(`ConsultationDate` 는 날짜·시작·끝뿐), 되돌리기는 시간을 다시
+   * 입력하면 되므로 **누른 그 순간 한 번** 쪼개는 편이 정직하다.
+   *
+   * 이미 예약이 들어온 슬롯이 사라지면 저장할 때 기존 2단계 확인(ScheduleUpdateImpactWarning)이
+   * 그대로 잡아 준다 — 여기서 따로 막지 않는다.
+   */
+  const splitEntryByClassTime = useCallback(
+    (id: string) => {
+      const entry = entries.find((e) => e.id === id);
+      if (!entry || !entry.date || !entry.startTime || !entry.endTime) return;
+
+      const daySchedule = getEffectiveTeacherSchedule(entry.date, settings.enableWeekendDays);
+      // 시간표가 없는 날(주말에 주말 시간표 미사용 등)은 뺄 근거가 없다
+      const freePeriods =
+        daySchedule.length === 0
+          ? null
+          : new Set(
+              daySchedule
+                .map((p, i) => (p === null ? i + 1 : null))
+                .filter((n): n is number => n !== null),
+            );
+
+      const ranges = splitRangeByClassTime({
+        startTime: entry.startTime,
+        endTime: entry.endTime,
+        presets: breakPresets,
+        freePeriods,
+      });
+
+      if (ranges.length === 0) {
+        showToast('이 날은 수업을 빼면 남는 시간이 없습니다', 'error');
+        return;
+      }
+      if (
+        ranges.length === 1 &&
+        ranges[0]!.startTime === entry.startTime &&
+        ranges[0]!.endTime === entry.endTime
+      ) {
+        showToast(
+          freePeriods === null
+            ? '이 날은 등록된 시간표가 없어 뺄 수업이 없습니다'
+            : '이 시간대에는 걸치는 수업이 없습니다',
+          'info',
+        );
+        return;
+      }
+
+      setEntries((prev) => {
+        const idx = prev.findIndex((e) => e.id === id);
+        if (idx < 0) return prev;
+        const replacement = ranges.map((r) => ({
+          id: makeId(),
+          date: entry.date,
+          startTime: r.startTime,
+          endTime: r.endTime,
+        }));
+        return [...prev.slice(0, idx), ...replacement, ...prev.slice(idx + 1)];
+      });
+      showToast(`수업 시간을 빼고 ${ranges.length}개 시간대로 나눴습니다`, 'success');
+    },
+    [entries, breakPresets, getEffectiveTeacherSchedule, settings.enableWeekendDays, showToast],
+  );
 
   const validate = useCallback((): string | null => {
     if (!title.trim()) return '제목을 입력해주세요';
@@ -430,6 +519,9 @@ export function ConsultationEditModal({
                   onChange={(ev) => updateEntry(e.id, { date: ev.target.value })}
                   className="bg-transparent text-xs text-sp-text border border-sp-border/60 rounded px-1.5 py-1 focus:border-sp-accent outline-none"
                 />
+                {e.date && (
+                  <span className="text-xs text-sp-muted shrink-0">({weekdayOf(e.date)})</span>
+                )}
                 <input
                   type="time"
                   value={e.startTime}
@@ -445,8 +537,22 @@ export function ConsultationEditModal({
                 />
                 <button
                   type="button"
+                  onClick={() => splitEntryByClassTime(e.id)}
+                  disabled={breakPresets.length === 0 || !e.date}
+                  className="ml-auto text-xs text-sp-muted hover:text-sp-accent disabled:opacity-40 disabled:hover:text-sp-muted transition-colors flex items-center gap-1 shrink-0"
+                  title={
+                    breakPresets.length === 0
+                      ? '설정 → 교시 시간을 등록하면 사용할 수 있습니다'
+                      : `${weekdayOf(e.date)}요일 시간표에서 수업 중인 교시를 뺍니다`
+                  }
+                >
+                  <span className="material-symbols-outlined text-sm">content_cut</span>
+                  수업 빼기
+                </button>
+                <button
+                  type="button"
                   onClick={() => removeEntry(e.id)}
-                  className="ml-auto text-sp-muted hover:text-red-400 transition-colors"
+                  className="text-sp-muted hover:text-red-400 transition-colors shrink-0"
                   title="삭제"
                 >
                   <span className="material-symbols-outlined text-sm">close</span>
@@ -462,6 +568,10 @@ export function ConsultationEditModal({
           <p className="text-detail text-sp-muted mt-2 leading-relaxed">
             시간대를 줄이거나 슬롯 길이를 바꾸면 기존 예약이 영향을 받을 수 있어요. 저장 시 영향
             예약이 안내됩니다.
+          </p>
+          <p className="text-detail text-sp-muted mt-1 leading-relaxed">
+            &quot;수업 빼기&quot;는 그 날 요일의 시간표를 보고 수업 중인 교시를 빼서 시간대를
+            나눕니다. 공강·쉬는 시간·점심은 그대로 남습니다.
           </p>
         </div>
 
