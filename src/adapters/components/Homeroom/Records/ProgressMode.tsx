@@ -1230,8 +1230,11 @@ function ProgressMode({ students, records, categories }: ModeProps) {
                   <th className="p-3 font-medium border-b text-center border-l text-sp-muted">
                     나이스
                   </th>
-                  <th className="p-3 font-medium border-b text-center border-l text-sp-muted">
-                    서류
+                  <th
+                    className="p-3 font-medium border-b text-center border-l text-sp-muted"
+                    title="증빙서류 제출 (요구 대상 N건 중 제출 M건)"
+                  >
+                    증빙서류
                   </th>
                 </>
               )}
