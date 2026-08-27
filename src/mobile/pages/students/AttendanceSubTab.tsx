@@ -92,6 +92,8 @@ export function AttendanceSubTab({
           status: newStatus,
           reason: newStatus !== 'present' ? reason || undefined : undefined,
           memo: newStatus !== 'present' ? memo || undefined : undefined,
+          // 하루 전체 집계용 — 다른 교시 기록이 사본에서 사라지지 않게 한다.
+          classId: info.classId,
         });
       }
       setSaving(false);
@@ -131,6 +133,7 @@ export function AttendanceSubTab({
         status: currentStatus,
         reason: currentStatus !== 'present' ? reason || undefined : undefined,
         memo: currentStatus !== 'present' ? memo || undefined : undefined,
+        classId: info.classId,
       });
     }
     setSaving(false);

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Settings } from '@domain/entities/Settings';
+import type { Settings, SchoolLevel } from '@domain/entities/Settings';
 import type { WeekendDay } from '@domain/valueObjects/DayOfWeek';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import { settingsRepository } from '@mobile/di/container';
@@ -50,6 +50,14 @@ interface MobileSettings {
    * 미설정(undefined) = 켬. 데스크톱의 `?? true` 와 같은 판단을 여기서도 해야 한다.
    */
   scheduleShowTodos?: boolean;
+  /**
+   * 학교급 — **읽기 전용 투영**(데스크톱에서만 편집한다).
+   *
+   * 담임 출결 화면이 교시를 보여줄지 가른다. 초등 담임은 거의 전 교시의 출결을 관리하지만
+   * 중·고 담임은 조회·종례만 보면 된다 — 한 화면으로 둘 다 맞출 수 없어 학교급으로 나눈다.
+   * 같은 축의 선례: 시간표 색 구분(초등은 교실이 아니라 과목), 수업반 추가 마법사.
+   */
+  schoolLevel?: SchoolLevel;
 }
 
 const DEFAULT_MOBILE_SETTINGS: MobileSettings = {
@@ -155,6 +163,7 @@ export const useMobileSettingsStore = create<MobileSettingsState>((set, get) => 
             termEndDates: s.termEndDates,
             enableWeekendDays: s.enableWeekendDays,
             scheduleShowTodos: s.scheduleShowTodos,
+            schoolLevel: s.schoolLevel,
           },
           loaded: true,
         });

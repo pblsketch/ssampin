@@ -236,7 +236,12 @@ export function StudentsPage() {
         students: [...others, { number: num, status }],
       });
       const { bridgeAttendanceRecord } = useMobileStudentRecordsStore.getState();
-      await bridgeAttendanceRecord({ studentId: student.id, date: selectedDateStr, status });
+      await bridgeAttendanceRecord({
+        studentId: student.id,
+        date: selectedDateStr,
+        status,
+        classId,
+      });
     },
     [settings.className, selectedDateStr, saveAttendanceRecord],
   );

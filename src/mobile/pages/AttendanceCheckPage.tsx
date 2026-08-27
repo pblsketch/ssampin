@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { resolvePeriodLabel } from '@domain/rules/periodLabel';
+import { formatPeriodLabel, PERIOD_MORNING, PERIOD_CLOSING } from '@domain/entities/Attendance';
 import type {
   AttendanceStatus,
   AttendanceReason,
@@ -101,6 +101,7 @@ export function AttendanceCheckPage({
   const getTodayRecord = useMobileAttendanceStore((s) => s.getTodayRecord);
   const loadAttendance = useMobileAttendanceStore((s) => s.load);
   const attendanceLoaded = useMobileAttendanceStore((s) => s.loaded);
+  const allAttendanceRecords = useMobileAttendanceStore((s) => s.records);
   const loadClasses = useMobileTeachingClassStore((s) => s.load);
   const getClass = useMobileTeachingClassStore((s) => s.getClass);
   const classesLoaded = useMobileTeachingClassStore((s) => s.loaded);
@@ -133,6 +134,63 @@ export function AttendanceCheckPage({
   useBottomSheet(multiDateSheetOpen, () => setMultiDateSheetOpen(false));
   useBottomSheet(textSheetOpen, () => setTextSheetOpen(false));
   const periodCount = settings.periodTimes.length > 0 ? settings.periodTimes.length : 7;
+
+  /**
+   * 담임 출결에 교시 선택을 노출할지.
+   *
+   * 초등 담임은 거의 전 교시의 출결을 관리하지만, 중·고 담임은 조회·종례만 보면 된다.
+   * 한 화면으로 둘 다 맞출 수 없어 학교급으로 나눈다 — 중·고는 종전의 하루뷰(조회 한 화면)를
+   * 그대로 두어 교실에서 빠르게 쓰는 성격을 지킨다.
+   *
+   * 'custom'(교시 수를 직접 설정하는 학교)은 담임 운영 방식을 알 수 없어 초등과 함께 노출한다.
+   * 필요 없으면 안 열면 그만이지만, 필요한데 없으면 그 교시를 기록할 방법이 아예 없다.
+   * 같은 축의 선례: 수업반 추가 마법사도 elementary || custom 을 함께 묶는다.
+   */
+  const homeroomUsesPeriods =
+    type === 'homeroom' &&
+    (settings.schoolLevel === 'elementary' || settings.schoolLevel === 'custom');
+  const showPeriodPicker = type === 'class' || homeroomUsesPeriods;
+
+  /**
+   * 담임은 조회(0교시)로 들어온다 — 홈의 '오늘 남은 일'이 그렇게 열고, 중·고에는 그게 하루 전체다.
+   * 진입 교시는 바꾸지 않고(기존 동선 보존) 목록에서 옮길 수 있게만 한다.
+   *
+   * 조회·종례는 periodTimes 밖의 담임 전용 칸이라 앞뒤로 직접 끼운다 — 담임이 전 교시를 보는
+   * 학교급에서는 종례 출결도 관리 대상이라 빠지면 기록할 방법이 없다.
+   */
+  const periodOptions = useMemo(() => {
+    const lessons = Array.from({ length: periodCount }, (_, i) => i + 1);
+    return homeroomUsesPeriods ? [PERIOD_MORNING, ...lessons, PERIOD_CLOSING] : lessons;
+  }, [homeroomUsesPeriods, periodCount]);
+  /** 라벨은 도메인 정본을 쓴다 — 조회(0)·종례(9)를 손으로 처리하면 종례가 '9교시'로 찍힌다. */
+  const periodOptionLabel = (p: number): string => formatPeriodLabel(p, settings.periodTimes);
+
+  /**
+   * 하루뷰(중·고 담임)는 조회 한 교시만 띄운다 — PC에서 다른 교시에 넣어 둔 기록이 화면에서
+   * 통째로 안 보이면 그 날을 잘못 판단한다. **있다는 사실만** 알리고 고치는 것은 PC에 맡긴다
+   * (데스크톱에서 만든 값을 폰이 읽기만 하는 기존 패턴 — 할 일의 '다시 확인할 날'과 같다).
+   * 교시 선택이 있는 화면(수업·초등 담임)은 직접 옮겨 볼 수 있으므로 띄우지 않는다.
+   */
+  const otherPeriodExceptions = useMemo(() => {
+    if (showPeriodPicker) return { studentCount: 0, periods: [] as number[] };
+    const today = todayString();
+    const periods = new Set<number>();
+    // 학생 수로 센다 — 전일 결석은 교시마다 엔트리를 남기므로 엔트리를 세면
+    // 결석 한 명이 "8건"으로 부풀어 오보가 된다.
+    const students = new Set<number>();
+    for (const r of allAttendanceRecords) {
+      if (r.date !== today || r.classId !== classId || r.groupId) continue;
+      if (r.period === selectedPeriod) continue;
+      const exceptions = r.students.filter((sa) => sa.status !== 'present');
+      if (exceptions.length === 0) continue;
+      periods.add(r.period);
+      for (const sa of exceptions) students.add(sa.number);
+    }
+    return {
+      studentCount: students.size,
+      periods: [...periods].sort((a, b) => a - b),
+    };
+  }, [showPeriodPicker, allAttendanceRecords, classId, selectedPeriod]);
 
   const [studentStatuses, setStudentStatuses] = useState<Map<string, AttendanceStatus>>(new Map());
   const [studentReasons, setStudentReasons] = useState<Map<string, AttendanceReason>>(new Map());
@@ -298,6 +356,8 @@ export function AttendanceCheckPage({
           status: sa.status,
           reason: sa.reason,
           memo: sa.memo,
+          // 하루 전체 집계용 — 화면에 뜬 교시 하나가 아니라 그날 원장 전체를 근거로 삼게 한다.
+          classId,
         });
       }
     }
@@ -472,9 +532,15 @@ export function AttendanceCheckPage({
   }, [classId, selectedPeriod, saveRecord, multiDateSet]);
 
   /* ── 텍스트 빠른 입력 (담임 출결 전용) ──
-     파서는 데스크톱 출결 그리드와 공유. 모바일 담임 출결은 하루 단위 상태 1개만
-     저장하므로 교시 생략을 허용(requirePeriod:false)하고, 파싱 결과의 교시 정보
-     (periods/referencePeriod)는 쓰지 않는다 — status/reason/memo만 반영. */
+     파서는 데스크톱 출결 그리드와 공유.
+
+     교시 생략을 허용(requirePeriod:false)하고 파싱 결과의 교시 정보(periods/referencePeriod)는
+     쓰지 않는다 — status/reason/memo만 반영한다. 저장 대상 교시는 **화면에서 이미 고른 것**
+     (selectedPeriod)이기 때문이다.
+
+     초등처럼 교시 선택이 붙은 경우에도 이 판단은 그대로다. 화면에서 교시를 고른 뒤
+     "3번 지각"이라고 적는 흐름인데 텍스트에 교시를 또 적게 하면 같은 정보를 두 번 요구하는 꼴이고,
+     둘이 어긋나면 어느 쪽을 따를지도 애매해진다. 교시는 화면이, 학생·상태는 텍스트가 맡는다. */
   const parsedLines = useMemo(() => {
     if (!textSheetOpen || textInput.trim() === '') return [];
     return parseAttendanceQuickText(
@@ -594,14 +660,16 @@ export function AttendanceCheckPage({
               ② 이 앱은 반을 잘못 고르면 다른 반 출결에 기록이 들어간다. 화면에서
                  가장 크고 굵은 자리는 "무엇을 하는 화면인가"(담임 출결)가 아니라
                  "어느 반인가"(3학년 2반)가 차지해야 한다.
-              교시 표기는 하드코딩하지 않고 resolvePeriodLabel 을 쓴다 — 0교시·보충처럼
+              교시 표기는 하드코딩하지 않고 formatPeriodLabel 을 쓴다 — 조회·종례·보충처럼
               학교마다 다른 교시 이름을 설정에서 정할 수 있다. */}
           <div className="flex-1 min-w-0">
             <h2 className="text-sp-text font-bold truncate">{className}</h2>
             <p className="text-sp-muted text-xs truncate">
               {type === 'homeroom'
-                ? '담임 출결'
-                : `${resolvePeriodLabel(selectedPeriod, settings.periodTimes)} 출결`}
+                ? homeroomUsesPeriods
+                  ? '담임 출결 · ' + periodOptionLabel(selectedPeriod)
+                  : '담임 출결'
+                : `${formatPeriodLabel(selectedPeriod, settings.periodTimes)} 출결`}
             </p>
           </div>
           {type === 'homeroom' && (
@@ -636,8 +704,8 @@ export function AttendanceCheckPage({
         </header>
       )}
 
-      {/* 교시 선택 — 수업 출결에서만 (담임 출결은 교시 개념 없음) */}
-      {type === 'class' && (
+      {/* 교시 선택 — 수업 출결, 그리고 초등·직접설정 담임 출결(담임이 전 교시를 관리한다) */}
+      {showPeriodPicker && (
         <div className="px-4 pt-3 shrink-0">
           <button
             type="button"
@@ -648,12 +716,36 @@ export function AttendanceCheckPage({
           >
             <span className="material-symbols-outlined text-sp-muted text-icon-md">schedule</span>
             <span className="text-sp-text text-sm font-bold">
-              {resolvePeriodLabel(selectedPeriod, settings.periodTimes)}
+              {periodOptionLabel(selectedPeriod)}
             </span>
             <span className="material-symbols-outlined text-sp-muted text-icon-md">
               expand_more
             </span>
           </button>
+        </div>
+      )}
+
+      {/* 다른 교시 기록 안내 — 하루뷰가 그날 전체를 보여주지 않는다는 사실을 숨기지 않는다.
+          sp-* 토큰에는 Tailwind 투명도 수식이 통하지 않아(조용히 투명) inline color-mix 로 칠한다. */}
+      {otherPeriodExceptions.studentCount > 0 && (
+        <div className="px-4 pt-3 shrink-0">
+          <p
+            role="status"
+            className="flex items-start gap-1.5 rounded-lg border px-3 py-2 text-xs text-sp-text"
+            style={{
+              backgroundColor: 'color-mix(in srgb, var(--sp-accent) 7%, var(--sp-card))',
+              borderColor: 'color-mix(in srgb, var(--sp-accent) 22%, transparent)',
+            }}
+          >
+            <span className="material-symbols-outlined text-icon-sm shrink-0" aria-hidden="true">
+              info
+            </span>
+            <span>
+              이 날 다른 교시에 출결이 잡힌 학생이 {otherPeriodExceptions.studentCount}명 있어요 (
+              {otherPeriodExceptions.periods.map(periodOptionLabel).join(' · ')}). 이 화면은 조회만
+              보여줘요 — 교시별로 고치시려면 컴퓨터 쌤핀에서 해 주세요.
+            </span>
+          </p>
         </div>
       )}
 
@@ -670,7 +762,7 @@ export function AttendanceCheckPage({
             aria-label="교시 선택"
           >
             <p className="text-sp-muted text-xs px-3 py-2">교시 선택</p>
-            {Array.from({ length: periodCount }, (_, i) => i + 1).map((p) => {
+            {periodOptions.map((p) => {
               const isCurrent = currentPeriod === p;
               const isSelected = selectedPeriod === p;
               const start = settings.periodTimes[p - 1]?.start;
@@ -688,7 +780,7 @@ export function AttendanceCheckPage({
                   }`}
                 >
                   <span className="flex items-center gap-2">
-                    <span>{resolvePeriodLabel(p, settings.periodTimes)}</span>
+                    <span>{periodOptionLabel(p)}</span>
                     {start && <span className="text-sp-muted text-xs">{start}</span>}
                   </span>
                   {isCurrent && (
