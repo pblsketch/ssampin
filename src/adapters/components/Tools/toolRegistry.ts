@@ -22,7 +22,7 @@ import { ToolValueLine, ToolTrafficLightDiscussion } from '@adapters/components/
  * 듀얼 모드에서 사용 가능한 도구 식별자.
  *
  * 제외 사유:
- * - tool-supsori / tool-pblsketch / tool-dorms / tool-dorms-arcade: 외부 URL 링크 도구 (별도 브라우저 창)
+ * - tool-supsori / tool-pblsketch / tool-dorms / tool-dorms-arcade / tool-edudraft: 외부 URL 링크 도구 (별도 브라우저 창)
  * - tool-assignment / tool-assignment-detail: { onBack, isFullscreen } 외 추가 props 요구
  * - tool-seat-picker: ToolSeatPicker.tsx:423-428가 document.fullscreenElement를 직접 제어 →
  *   슬롯 로컬 최대화와 충돌. Phase 2에서 DualToolContext 기반 분기 후 지원.

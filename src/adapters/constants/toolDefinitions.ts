@@ -118,6 +118,13 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
     icon: '🧮',
     color: 'bg-emerald-500/20 text-emerald-600',
   },
+  {
+    id: 'tool-edudraft',
+    name: '스마트 행정 자동화시스템',
+    icon: '🧾',
+    color: 'bg-amber-600/20 text-amber-700',
+    externalUrl: 'https://edudraft-beta.vercel.app/',
+  },
 ];
 
 export const DEFAULT_FAVORITE_TOOLS: readonly string[] = [

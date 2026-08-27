@@ -41,6 +41,7 @@ export type PageId =
   | 'tool-dorms'
   | 'tool-dorms-arcade'
   | 'tool-oneclick-portal'
+  | 'tool-edudraft'
   | 'tool-assignment'
   | 'tool-assignment-detail'
   | 'tool-grouping'

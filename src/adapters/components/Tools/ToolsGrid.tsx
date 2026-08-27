@@ -167,6 +167,14 @@ export const TOOLS: ToolCard[] = [
     description: '나이스·에듀파인 업무 화면까지 한 번에',
     badge: 'NEW',
   },
+  {
+    id: 'tool-edudraft',
+    emoji: '🧾',
+    name: '스마트 행정 자동화시스템',
+    description: '에듀파인 품의서 초안과 예산 잔액을 한 곳에서',
+    externalUrl: 'https://edudraft-beta.vercel.app/',
+    badge: 'NEW',
+  },
 ];
 
 const DEFAULT_TOOL_ORDER: readonly PageId[] = TOOLS.map((t) => t.id);
