@@ -32,7 +32,14 @@ serve(async (req: Request) => {
     });
 
     if (!userInfoRes.ok) {
-      return errorResponse('인증에 실패했습니다', 401);
+      // 구글이 "이 토큰은 못 쓴다"고 한 경우(401/403)만 인증 실패로 돌려준다.
+      // 구글 쪽 일시 장애(5xx·네트워크)까지 401 로 뭉뚱그리면, 앱이 교사에게
+      // "다시 로그인하세요"라고 잘못 안내한다 — 다시 로그인해도 낫지 않는 종류의 실패다.
+      // 앱은 이 상태 코드를 보고 "재로그인"과 "잠시 후 재시도"를 갈라 안내한다.
+      const isAuthFailure = userInfoRes.status === 401 || userInfoRes.status === 403;
+      return isAuthFailure
+        ? errorResponse('인증에 실패했습니다', 401)
+        : errorResponse('구글 확인이 일시적으로 실패했습니다. 잠시 후 다시 시도해주세요.', 502);
     }
 
     const userInfo = await userInfoRes.json();
