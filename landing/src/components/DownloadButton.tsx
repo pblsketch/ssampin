@@ -10,6 +10,7 @@ import {
   FILE_SIZE_MAC,
   FALLBACK_DOWNLOAD_URL,
   MOBILE_URL,
+  SITE_URL,
 } from '@/config';
 import WindowsProtectionAnimation from './WindowsProtectionAnimation';
 
@@ -37,7 +38,7 @@ export default function DownloadButton({
 
   const handleCopyUrl = async () => {
     try {
-      await navigator.clipboard.writeText('https://ssampin.com');
+      await navigator.clipboard.writeText(SITE_URL);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {

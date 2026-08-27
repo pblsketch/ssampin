@@ -1,65 +1,9 @@
 'use client';
 
-import type { ReactNode } from 'react';
 import FadeIn from './FadeIn';
+import { faqs } from '@/content/faq';
 
 const FEEDBACK_FORM_URL = 'https://forms.gle/o1X4zLYocUpFKCzy7';
-
-const faqs: { question: string; answer: ReactNode }[] = [
-  {
-    question: '무료인가요?',
-    answer: '네, 완전 무료예요. 광고도 없어요.',
-  },
-  {
-    question: '인터넷 없이도 되나요?',
-    answer:
-      '시간표 직접 입력, 좌석배치, 메모, 할 일, 담임 기록 같은 핵심 기능은 오프라인에서 동작해요. 날씨, 급식 자동 조회, NEIS, Google 연동, 공유 링크가 필요한 기능은 인터넷이 필요합니다.',
-  },
-  {
-    question: '데이터는 어디에 저장되나요?',
-    answer:
-      '출결·관찰·상담 기록, 시간표, 자리 배치 같은 본체 자료는 선생님 컴퓨터에만 저장돼요. 다만 학생·보호자와 온라인으로 주고받아야 하는 기능(과제 수합, 전자 서명, 설문, 상담 예약)을 쓰시면 그 기능에 필요한 자료가 Supabase 클라우드에 저장되고(과제 제출물만은 선생님의 Google 드라이브에 보관돼요), 앱 안의 AI 도우미에 질문하시면 질문 글이 답변 생성을 위해 업스테이지·Google로 전송돼요. Google 드라이브 백업은 이와 별개로, 켜신 경우에만 앱 데이터 사본이 선생님 드라이브의 쌤핀 전용 폴더에 저장됩니다. 나이스 사진 명렬표를 넣어 학생 얼굴 사진을 저장하신 경우, 그 사진도 백업을 켜 두면 같은 폴더에 함께 보관되고(휴대폰에서도 쓰기 위해서예요), 설정 → 백업/복원에서 언제든 컴퓨터와 드라이브에서 함께 지울 수 있어요. 학생에게 보이는 화면에는 사진이 표시되지 않습니다. 어떤 자료가 어디로 가는지는 개인정보처리방침 제11조·제13조에 항목별로 적어두었습니다.',
-  },
-  {
-    question: '보안 경고가 뜨는데 괜찮은가요?',
-    answer:
-      '쌤핀은 안전한 프로그램이에요. 개인 개발 앱이라 아직 Microsoft 인증서가 없어서 경고가 뜰 수 있어요. "추가 정보 → 실행"을 클릭하시거나, 백신의 실시간 감시를 잠시 끄고 설치해보세요. 자세한 방법은 위의 "설치 안내" 섹션을 확인해주세요.',
-  },
-  {
-    question: 'Mac에서도 쓸 수 있나요?',
-    answer:
-      'macOS는 현재 베타로 지원해요. ssampin.com에 Mac으로 접속하면 Apple Silicon(M1~M4)용이 기본으로 제공되고, Intel Mac이면 버튼 아래 "Intel 버전 받기" 링크를 쓰시면 돼요. Apple 인증서가 없어 처음 실행 시 보안 경고가 뜨는데, 경고 창에서 "완료"를 누른 뒤 시스템 설정 → 개인정보 보호 및 보안에서 "그래도 열기"를 클릭하면 실행됩니다. 자세한 방법은 위의 설치 안내 섹션을 확인해주세요.',
-  },
-  {
-    question: '업데이트는 어떻게 하나요?',
-    answer:
-      'Windows는 앱이 자동으로 새 버전을 알려주고, 알림에서 "업데이트" 버튼만 누르면 돼요. macOS(베타)는 자동 설치가 지원되지 않아, 알림에서 "새 버전 다운로드"를 누르면 받아지는 DMG 파일을 열어 응용 프로그램 폴더에 덮어쓰면 됩니다. 데이터는 그대로 유지돼요.',
-  },
-  {
-    question: '구글 캘린더·드라이브 동기화가 안 돼요',
-    answer:
-      '설정의 Google 연동 탭에서 연결 상태를 확인하고, 연결 해제 후 다시 연결해보세요. 학교 네트워크나 인앱 브라우저가 Google 로그인을 막는 경우도 있어 Chrome/Safari 같은 외부 브라우저에서 다시 시도하면 해결되는 경우가 많아요. 자세한 순서는 사용 가이드의 Google 연동 문제 해결 문서에 정리해두었습니다.',
-  },
-  {
-    question: '학운위 심의를 받아야 하나요?',
-    answer: (
-      <>
-        심의 대상인지는 학교가 판단하실 사항이라 저희가 단정해 드리지 않습니다. 판단에 필요한 사실만
-        정확히 말씀드리면, 쌤핀은 학생 계정을 만들지 않고 학생에게서 직접 정보를 받지도 않지만,
-        선생님이 과제 수합·전자 서명 같은 협업 기능을 쓰시면 학생 이름이 클라우드에 저장됩니다.
-        쌤핀은 에듀집 학습지원 소프트웨어 필수기준 점검결과가 등록되어 있고, 심의가 필요하다고
-        보시는 학교를 위해 체크리스트와 도입 절차를{' '}
-        <a
-          href="/school-adoption"
-          className="font-medium text-sp-accent transition-colors hover:underline"
-        >
-          학교 도입 안내
-        </a>
-        페이지에 준비해 두었습니다. 자세한 처리 내역은 개인정보처리방침에 공개하고 있습니다.
-      </>
-    ),
-  },
-];
 
 export default function FAQ() {
   const handleOpenChat = () => {
@@ -89,7 +33,9 @@ export default function FAQ() {
                     +
                   </span>
                 </summary>
-                <div className="pb-5 text-sm leading-relaxed text-sp-muted">{faq.answer}</div>
+                <div className="pb-5 text-sm leading-relaxed text-sp-muted">
+                  {faq.answerNode ?? faq.answer}
+                </div>
               </details>
             </FadeIn>
           ))}

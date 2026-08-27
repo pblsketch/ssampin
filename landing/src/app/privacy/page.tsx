@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { SITE_URL } from '@/config';
 
 export const metadata: Metadata = {
   title: '쌤핀 개인정보처리방침',
@@ -8,6 +9,9 @@ export const metadata: Metadata = {
   robots: {
     index: false,
     follow: false,
+  },
+  alternates: {
+    canonical: `${SITE_URL}/privacy`,
   },
 };
 

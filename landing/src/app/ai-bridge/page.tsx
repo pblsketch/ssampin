@@ -2,11 +2,16 @@ import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import BridgeDiagram from '@/components/BridgeDiagram';
+import { SITE_URL } from '@/config';
+import { buildBreadcrumbJsonLd, jsonLdScriptProps } from '@/content/structuredData';
 
 export const metadata: Metadata = {
   title: '쌤핀 AI 브릿지 — 쓰던 AI 챗봇과 안전하게 연결',
   description:
     '평소 쓰는 AI 챗봇(클로드·GPT·제미나이)에게 쌤핀의 우리 학생들 자료를 안전하게 건네는 다리. API 키 없이, 내 컴퓨터 안에서. 실명은 가리고, 민감한 내용은 동의·게이트로 통제합니다.',
+  alternates: {
+    canonical: `${SITE_URL}/ai-bridge`,
+  },
 };
 
 /* ── 아이콘 (단색 라인 아이콘 — 이모지 대신 톤 통일) ───────────────── */
@@ -484,6 +489,14 @@ function CardHead({
 export default function AiBridgePage() {
   return (
     <div className="min-h-screen bg-sp-bg text-sp-text">
+      <script
+        {...jsonLdScriptProps(
+          buildBreadcrumbJsonLd([
+            { name: '쌤핀 홈', path: '/' },
+            { name: 'AI 브릿지', path: '/ai-bridge' },
+          ]),
+        )}
+      />
       <BackHeader />
 
       <main className="mx-auto max-w-3xl px-6 py-14">

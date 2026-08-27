@@ -15,3 +15,9 @@ export const EDZIP_URL = 'https://edzip.kr/learning-sw/6a840aca03edc81c0fd12a6a'
 export const GUIDE_URL = '/docs';
 export const FALLBACK_DOWNLOAD_URL = '/docs/troubleshooting/download';
 export const MOBILE_URL = 'https://m.ssampin.com';
+
+// 정본(canonical) 주소. apex(ssampin.com)는 www 로 리다이렉트되므로 실제 서빙 주소인
+// www 가 정본이다. 예전에는 메타·사이트맵·구조화 데이터가 apex 를 가리켜, 검색엔진에
+// "정본이라고 신고한 주소가 다른 곳으로 튕기는" 신호 충돌이 있었다.
+// 메타데이터·사이트맵·JSON-LD 는 전부 이 상수를 참조한다 — 도메인을 바꿀 일이 생기면 여기만 고친다.
+export const SITE_URL = 'https://www.ssampin.com';

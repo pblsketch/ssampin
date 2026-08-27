@@ -1,10 +1,15 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { SITE_URL } from '@/config';
+import { buildBreadcrumbJsonLd, jsonLdScriptProps } from '@/content/structuredData';
 
 export const metadata: Metadata = {
   title: '쌤핀 오픈소스 고지',
   description:
     '쌤핀(SsamPin)이 사용한 오픈소스와 원저작자를 밝힙니다. 다른 선생님들이 만들어 나눠 주신 코드에 감사드립니다.',
+  alternates: {
+    canonical: `${SITE_URL}/credits`,
+  },
 };
 
 interface Credit {
@@ -32,6 +37,14 @@ const CREDITS: readonly Credit[] = [
 export default function CreditsPage() {
   return (
     <div className="min-h-screen bg-sp-bg text-sp-text">
+      <script
+        {...jsonLdScriptProps(
+          buildBreadcrumbJsonLd([
+            { name: '쌤핀 홈', path: '/' },
+            { name: '오픈소스 고지', path: '/credits' },
+          ]),
+        )}
+      />
       {/* Header */}
       <header className="border-b border-sp-border bg-sp-surface/80 backdrop-blur-sm">
         <div className="mx-auto max-w-4xl px-6 py-4">

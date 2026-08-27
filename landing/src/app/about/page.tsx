@@ -1,16 +1,21 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import Image from 'next/image';
+import { SITE_URL } from '@/config';
+import { buildBreadcrumbJsonLd, jsonLdScriptProps } from '@/content/structuredData';
 
 export const metadata: Metadata = {
   title: '쌤핀 개발자 소개',
   description: '쌤핀(SsamPin)을 만든 개발자 박준일을 소개합니다.',
+  alternates: {
+    canonical: `${SITE_URL}/about`,
+  },
 };
 
 const CONTACT_EMAIL = 'pblsketch@gmail.com';
 
 const PROJECTS = [
-  { name: '쌤핀', url: 'https://ssampin.com' },
+  { name: '쌤핀', url: SITE_URL },
   { name: 'PBL스케치', url: 'https://pblsketch.xyz' },
   { name: '나무학교 숲소리', url: 'https://supsori.com' },
 ];
@@ -18,6 +23,14 @@ const PROJECTS = [
 export default function AboutPage() {
   return (
     <div className="min-h-screen bg-sp-bg text-sp-text">
+      <script
+        {...jsonLdScriptProps(
+          buildBreadcrumbJsonLd([
+            { name: '쌤핀 홈', path: '/' },
+            { name: '개발자 소개', path: '/about' },
+          ]),
+        )}
+      />
       {/* Header */}
       <header className="border-b border-sp-border bg-sp-surface/80 backdrop-blur-sm">
         <div className="mx-auto max-w-4xl px-6 py-4">

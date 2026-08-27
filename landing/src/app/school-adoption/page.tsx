@@ -2,19 +2,21 @@ import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { EDZIP_URL } from '@/config';
+import { SITE_URL } from '@/config';
+import { buildBreadcrumbJsonLd, jsonLdScriptProps } from '@/content/structuredData';
 
 export const metadata: Metadata = {
   title: '학교 도입 안내 — 쌤핀',
   description:
     '쌤핀은 에듀집 학습지원 소프트웨어 필수기준 점검결과가 등록되어 있습니다. 학교운영위원회 심의가 필요한 경우, 에듀집에 등록된 체크리스트와 증빙자료를 내려받아 심의 서류로 제출하실 수 있습니다.',
   alternates: {
-    canonical: 'https://ssampin.com/school-adoption',
+    canonical: `${SITE_URL}/school-adoption`,
   },
   openGraph: {
     title: '학교 도입 안내 — 쌤핀',
     description:
       '쌤핀은 에듀집 학습지원 소프트웨어 필수기준 점검결과가 등록되어 있습니다. 심의가 필요한 학교를 위해 체크리스트와 도입 절차를 안내합니다.',
-    url: 'https://ssampin.com/school-adoption',
+    url: `${SITE_URL}/school-adoption`,
     siteName: '쌤핀 (SsamPin)',
     type: 'article',
     locale: 'ko_KR',
@@ -208,6 +210,14 @@ function EdzipButton({ className = '' }: { className?: string }) {
 export default function SchoolAdoptionPage() {
   return (
     <div className="min-h-screen bg-sp-bg text-sp-text">
+      <script
+        {...jsonLdScriptProps(
+          buildBreadcrumbJsonLd([
+            { name: '쌤핀 홈', path: '/' },
+            { name: '학교 도입 안내', path: '/school-adoption' },
+          ]),
+        )}
+      />
       <BackHeader />
 
       <main className="mx-auto max-w-3xl px-6 py-14">
