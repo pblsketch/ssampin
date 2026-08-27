@@ -64,6 +64,16 @@ export interface Assignment {
   readonly adminKey: string;
   /** 생성일시 (ISO 8601) */
   readonly createdAt: string;
+  /**
+   * 이 과제를 만든 구글 계정(이메일).
+   *
+   * 학생이 낸 파일은 서버가 **이 계정의** 토큰으로 드라이브에 올린다. 그래서 선생님이
+   * 다른 구글 계정으로 다시 로그인하면, 앱은 "연결됨"이라고 하는데 학생은 계속 막힌다.
+   * 그 어긋남을 알아채려고 만든 계정을 남겨 둔다.
+   *
+   * 이 값이 생기기 전(v2.4.5 이하)에 만든 과제에는 없다 — 없으면 대조를 건너뛴다.
+   */
+  readonly teacherEmail?: string;
 }
 
 export interface Submission {

@@ -556,6 +556,7 @@ export function createAssignmentUseCases(getAccessToken: () => Promise<string>) 
       drivePort,
       assignmentServicePort,
       getAccessToken,
+      () => authenticateGoogle.getEmail(),
     ),
     getAssignments: new GetAssignments(assignmentRepository, assignmentServicePort),
     getSubmissions: new GetSubmissions(assignmentRepository, assignmentServicePort),

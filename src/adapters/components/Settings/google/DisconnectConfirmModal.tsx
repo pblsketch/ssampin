@@ -32,6 +32,14 @@ const AFFECTED_SERVICES: readonly AffectedService[] = [
     title: 'Google Tasks',
     description: '할 일 양방향 연동이 멈춥니다',
   },
+  // 학생 파일은 서버가 교사 토큰으로 대신 올린다. 연결을 끊으면 그 토큰이 폐기되어
+  // 진행 중인 과제의 학생 제출이 즉시 막힌다 — 교사 화면에는 표시되지 않으므로 미리 알린다.
+  {
+    icon: 'upload_file',
+    iconColor: 'bg-amber-500/10 text-amber-400',
+    title: '과제수합',
+    description: '진행 중인 과제에 학생이 제출할 수 없게 됩니다',
+  },
 ];
 
 export function DisconnectConfirmModal({
@@ -53,9 +61,7 @@ export function DisconnectConfirmModal({
           <div className="p-2 rounded-lg bg-red-500/10">
             <span className="material-symbols-outlined text-red-400">link_off</span>
           </div>
-          <h3 className="text-lg font-bold text-sp-text">
-            Google 계정 연결 해제
-          </h3>
+          <h3 className="text-lg font-bold text-sp-text">Google 계정 연결 해제</h3>
         </div>
 
         <p className="text-sm text-sp-muted mb-4">
@@ -66,10 +72,7 @@ export function DisconnectConfirmModal({
 
         <div className="space-y-2 mb-4">
           {AFFECTED_SERVICES.map((svc) => (
-            <div
-              key={svc.title}
-              className="flex items-center gap-3 rounded-lg bg-sp-surface p-3"
-            >
+            <div key={svc.title} className="flex items-center gap-3 rounded-lg bg-sp-surface p-3">
               <div
                 className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${svc.iconColor}`}
               >
@@ -84,7 +87,9 @@ export function DisconnectConfirmModal({
         </div>
 
         <div className="rounded-lg bg-green-500/5 border border-green-500/20 p-3 mb-6 flex items-center gap-2">
-          <span className="material-symbols-outlined text-green-400 text-icon-md">check_circle</span>
+          <span className="material-symbols-outlined text-green-400 text-icon-md">
+            check_circle
+          </span>
           <p className="text-xs text-green-400">
             로컬 데이터(시간표·메모·할 일 등)는 그대로 유지됩니다
           </p>

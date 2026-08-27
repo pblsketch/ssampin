@@ -30,17 +30,21 @@ export class CreateAssignment {
     private readonly drivePort: IGoogleDrivePort,
     private readonly servicePort: IAssignmentServicePort,
     private readonly getAccessToken: () => Promise<string>,
+    /**
+     * 지금 로그인된 구글 계정(이메일)을 알려준다.
+     * 학생 파일은 서버가 이 계정의 토큰으로 올리므로, 나중에 다른 계정으로 갈아탄 걸
+     * 알아채려면 만든 계정을 과제에 남겨 둬야 한다. 못 얻으면 그냥 비워 둔다.
+     */
+    private readonly getTeacherEmail?: () => Promise<string | null>,
   ) {}
 
   async execute(params: CreateAssignmentParams): Promise<Assignment> {
     const accessToken = await this.getAccessToken();
+    const teacherEmail = (await this.getTeacherEmail?.()) ?? undefined;
 
     // ① 구글 드라이브: 루트 폴더 조회/생성 → 서브폴더 생성
     const rootFolder = await this.drivePort.getOrCreateRootFolder();
-    const subFolder = await this.drivePort.createSubFolder(
-      params.driveFolderName,
-      rootFolder.id,
-    );
+    const subFolder = await this.drivePort.createSubFolder(params.driveFolderName, rootFolder.id);
 
     // ② Supabase Edge Function으로 과제 생성 (DB 저장 + admin_key 발급)
     const result = await this.servicePort.createAssignment(accessToken, {
@@ -85,6 +89,7 @@ export class CreateAssignment {
       shareUrl: `${SITE_URL}/submit/${result.id}`,
       adminKey: result.adminKey,
       createdAt: new Date().toISOString(),
+      teacherEmail,
     };
 
     // ④ 로컬 JSON 저장

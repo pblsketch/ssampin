@@ -10,6 +10,7 @@ import { AssignmentDetail } from '@adapters/components/Tools/Assignment/Assignme
 import { AssignmentCreateModal } from '@adapters/components/Tools/Assignment/AssignmentCreateModal';
 import { OfflineNotice } from '@adapters/components/Tools/Assignment/OfflineNotice';
 import { useStudentLists } from '@adapters/hooks/useStudentLists';
+import { useAssignmentGoogleConnect } from '@adapters/hooks/useAssignmentGoogleConnect';
 
 /* ──────────────── ClassAssignmentCard ──────────────── */
 
@@ -20,13 +21,20 @@ interface ClassAssignmentCardProps {
   onCopyLink: (id: string) => void;
 }
 
-function ClassAssignmentCard({ assignment, onClick, onDelete, onCopyLink }: ClassAssignmentCardProps) {
+function ClassAssignmentCard({
+  assignment,
+  onClick,
+  onDelete,
+  onCopyLink,
+}: ClassAssignmentCardProps) {
   const [showMenu, setShowMenu] = useState(false);
 
-  const progress = assignment.totalCount > 0
-    ? Math.round((assignment.submittedCount / assignment.totalCount) * 100)
-    : 0;
-  const isComplete = assignment.submittedCount === assignment.totalCount && assignment.totalCount > 0;
+  const progress =
+    assignment.totalCount > 0
+      ? Math.round((assignment.submittedCount / assignment.totalCount) * 100)
+      : 0;
+  const isComplete =
+    assignment.submittedCount === assignment.totalCount && assignment.totalCount > 0;
 
   const deadline = new Date(assignment.deadline);
   const month = deadline.getMonth() + 1;
@@ -59,18 +67,26 @@ function ClassAssignmentCard({ assignment, onClick, onDelete, onCopyLink }: Clas
               className="p-1 rounded hover:bg-sp-border/40 transition-colors opacity-0 group-hover:opacity-100"
               aria-label="메뉴"
             >
-              <span className="material-symbols-outlined text-sp-muted text-icon-md">more_vert</span>
+              <span className="material-symbols-outlined text-sp-muted text-icon-md">
+                more_vert
+              </span>
             </button>
             {showMenu && (
               <div className="absolute right-0 top-8 bg-sp-card border border-sp-border rounded-lg shadow-xl py-1 min-w-[120px] z-10">
                 <button
-                  onClick={() => { setShowMenu(false); onCopyLink(assignment.id); }}
+                  onClick={() => {
+                    setShowMenu(false);
+                    onCopyLink(assignment.id);
+                  }}
                   className="w-full px-4 py-2 text-left text-sm text-sp-text hover:bg-sp-border/30 transition-colors"
                 >
                   링크 복사
                 </button>
                 <button
-                  onClick={() => { setShowMenu(false); onDelete(assignment.id); }}
+                  onClick={() => {
+                    setShowMenu(false);
+                    onDelete(assignment.id);
+                  }}
                   className="w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-sp-border/30 transition-colors"
                 >
                   과제 삭제
@@ -84,7 +100,9 @@ function ClassAssignmentCard({ assignment, onClick, onDelete, onCopyLink }: Clas
       <div className="flex items-center gap-2 text-xs text-sp-muted mb-2.5 flex-wrap">
         <span>마감: {deadlineText}</span>
         <span className="text-sp-border">│</span>
-        <span>제출: {assignment.submittedCount}/{assignment.totalCount}명</span>
+        <span>
+          제출: {assignment.submittedCount}/{assignment.totalCount}명
+        </span>
       </div>
 
       {!assignment.isExpired && (
@@ -117,11 +135,12 @@ export function ClassAssignmentTab({ classId }: ClassAssignmentTabProps) {
     error,
     loadAssignments,
     needsGoogleConnect,
-    clearGoogleConnectState,
+    connectNotice,
     deleteAssignment,
     selectAssignment,
   } = useAssignmentStore();
-  const { startAuth, isConnected: googleConnected, isLoading: googleAuthLoading } = useCalendarSyncStore();
+  const { isConnected: googleConnected, isLoading: googleAuthLoading } = useCalendarSyncStore();
+  const handleGoogleConnect = useAssignmentGoogleConnect();
   const showToast = useToastStore((s) => s.show);
   const classes = useTeachingClassStore((s) => s.classes);
   const { isOnline, checkOnline } = useOnlineStatus();
@@ -132,10 +151,7 @@ export function ClassAssignmentTab({ classId }: ClassAssignmentTabProps) {
   const [deleteTarget, setDeleteTarget] = useState<AssignmentWithStatus | null>(null);
 
   // 수업반명 계산
-  const currentClass = useMemo(
-    () => classes.find((c) => c.id === classId),
-    [classes, classId],
-  );
+  const currentClass = useMemo(() => classes.find((c) => c.id === classId), [classes, classId]);
   const targetName = currentClass ? `${currentClass.name} (${currentClass.subject})` : '';
 
   // 이 수업반에 해당하는 대상 옵션 (새 과제 기본값으로 전달 + 잠금)
@@ -147,31 +163,28 @@ export function ClassAssignmentTab({ classId }: ClassAssignmentTabProps) {
   // 이 수업반의 과제만 필터
   // id 기반이 정확. 구버전 과제(teachingClassId 없음)는 name 폴백으로 구제 — 단 담임반과 수업반 이름이 같은 경우엔 담임반 과제가 여기로 새지 않도록 type='teaching' 강제.
   const classAssignments = useMemo(
-    () => assignments.filter((a) => {
-      if (a.target.type !== 'teaching') return false;
-      if (a.target.teachingClassId) return a.target.teachingClassId === classId;
-      return a.target.name === targetName;
-    }),
+    () =>
+      assignments.filter((a) => {
+        if (a.target.type !== 'teaching') return false;
+        if (a.target.teachingClassId) return a.target.teachingClassId === classId;
+        return a.target.name === targetName;
+      }),
     [assignments, classId, targetName],
   );
-  const activeAssignments = useMemo(() => classAssignments.filter((a) => !a.isExpired), [classAssignments]);
-  const expiredAssignments = useMemo(() => classAssignments.filter((a) => a.isExpired), [classAssignments]);
+  const activeAssignments = useMemo(
+    () => classAssignments.filter((a) => !a.isExpired),
+    [classAssignments],
+  );
+  const expiredAssignments = useMemo(
+    () => classAssignments.filter((a) => a.isExpired),
+    [classAssignments],
+  );
 
   useEffect(() => {
     if (isOnline) {
       void loadAssignments();
     }
   }, [isOnline, loadAssignments]);
-
-  async function handleGoogleConnect() {
-    try {
-      await startAuth();
-      clearGoogleConnectState();
-      await loadAssignments();
-    } catch {
-      // Auth cancelled or failed
-    }
-  }
 
   function handleCopyLink(assignmentId: string) {
     const url = `${SITE_URL}/submit/${assignmentId}`;
@@ -259,8 +272,7 @@ export function ClassAssignmentTab({ classId }: ClassAssignmentTabProps) {
               onClick={() => setShowCreateModal(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sp-accent text-white text-xs font-medium hover:bg-sp-accent/90 transition-colors"
             >
-              <span className="material-symbols-outlined text-sm">add</span>
-              새 과제
+              <span className="material-symbols-outlined text-sm">add</span>새 과제
             </button>
           )}
         </div>
@@ -271,8 +283,8 @@ export function ClassAssignmentTab({ classId }: ClassAssignmentTabProps) {
         <div className="mb-4 p-5 bg-sp-card rounded-xl border border-sp-border/50 text-center">
           <div className="text-3xl mb-2">🔗</div>
           <h3 className="text-sm font-bold text-sp-text mb-1">Google 계정 연결이 필요합니다</h3>
-          <p className="text-xs text-sp-muted mb-4">
-            과제수합 기능은 Google 드라이브에 파일을 저장합니다.
+          <p className="text-xs text-sp-muted mb-4 whitespace-pre-line">
+            {connectNotice ?? '과제수합 기능은 Google 드라이브에 파일을 저장합니다.'}
           </p>
           <button
             onClick={() => void handleGoogleConnect()}
@@ -286,7 +298,10 @@ export function ClassAssignmentTab({ classId }: ClassAssignmentTabProps) {
 
       {/* 에러 메시지 */}
       {error && !needsGoogleConnect && (
-        <div className="mb-3 p-3 bg-red-500/10 border border-red-500/30 rounded-lg flex items-center justify-between" role="alert">
+        <div
+          className="mb-3 p-3 bg-red-500/10 border border-red-500/30 rounded-lg flex items-center justify-between"
+          role="alert"
+        >
           <span className="text-red-400 text-xs">{error}</span>
           <button
             onClick={() => void loadAssignments()}
@@ -323,13 +338,17 @@ export function ClassAssignmentTab({ classId }: ClassAssignmentTabProps) {
             {/* 진행 중 */}
             {activeAssignments.length > 0 && (
               <>
-                <p className="text-xs text-sp-muted font-medium px-1">진행 중 ({activeAssignments.length})</p>
+                <p className="text-xs text-sp-muted font-medium px-1">
+                  진행 중 ({activeAssignments.length})
+                </p>
                 {activeAssignments.map((assignment) => (
                   <ClassAssignmentCard
                     key={assignment.id}
                     assignment={assignment}
                     onClick={() => handleDetail(assignment.id)}
-                    onDelete={(id) => setDeleteTarget(classAssignments.find((a) => a.id === id) ?? null)}
+                    onDelete={(id) =>
+                      setDeleteTarget(classAssignments.find((a) => a.id === id) ?? null)
+                    }
                     onCopyLink={handleCopyLink}
                   />
                 ))}
@@ -339,13 +358,17 @@ export function ClassAssignmentTab({ classId }: ClassAssignmentTabProps) {
             {/* 마감완료 */}
             {expiredAssignments.length > 0 && (
               <div className="opacity-70">
-                <p className="text-xs text-sp-muted font-medium px-1 mt-2 mb-2">마감완료 ({expiredAssignments.length})</p>
+                <p className="text-xs text-sp-muted font-medium px-1 mt-2 mb-2">
+                  마감완료 ({expiredAssignments.length})
+                </p>
                 {expiredAssignments.map((assignment) => (
                   <ClassAssignmentCard
                     key={assignment.id}
                     assignment={assignment}
                     onClick={() => handleDetail(assignment.id)}
-                    onDelete={(id) => setDeleteTarget(classAssignments.find((a) => a.id === id) ?? null)}
+                    onDelete={(id) =>
+                      setDeleteTarget(classAssignments.find((a) => a.id === id) ?? null)
+                    }
                     onCopyLink={handleCopyLink}
                   />
                 ))}
@@ -370,11 +393,16 @@ export function ClassAssignmentTab({ classId }: ClassAssignmentTabProps) {
       {/* 삭제 확인 다이얼로그 */}
       {deleteTarget && (
         <>
-          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" onClick={() => setDeleteTarget(null)} />
+          <div
+            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
+            onClick={() => setDeleteTarget(null)}
+          />
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
             <div className="bg-sp-card rounded-2xl ring-1 ring-sp-border shadow-2xl w-full max-w-sm pointer-events-auto p-6">
               <h3 className="text-base font-bold text-sp-text mb-2">{`'${deleteTarget.title}' 과제를 삭제하시겠습니까?`}</h3>
-              <p className="text-sm text-sp-muted mb-5">삭제된 과제는 복구할 수 없습니다. 드라이브에 저장된 파일은 유지됩니다.</p>
+              <p className="text-sm text-sp-muted mb-5">
+                삭제된 과제는 복구할 수 없습니다. 드라이브에 저장된 파일은 유지됩니다.
+              </p>
               <div className="flex justify-end gap-3">
                 <button
                   onClick={() => setDeleteTarget(null)}

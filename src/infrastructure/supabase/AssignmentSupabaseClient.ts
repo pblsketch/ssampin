@@ -60,8 +60,8 @@ export class AssignmentSupabaseClient {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'apikey': this.anonKey,
-        'Authorization': `Bearer ${this.anonKey}`,
+        apikey: this.anonKey,
+        Authorization: `Bearer ${this.anonKey}`,
         ...headers,
       },
       body: JSON.stringify(body),
@@ -69,7 +69,14 @@ export class AssignmentSupabaseClient {
 
     if (!res.ok) {
       const err = (await res.json().catch(() => ({ error: res.statusText }))) as ErrorResponse;
-      throw new Error(err.error ?? `Edge Function error: ${res.status}`);
+      // 상태 코드를 에러에 실어 보낸다 — 부르는 쪽에서 401(구글 권한 회수 → 다시 로그인해야 함)과
+      // 5xx·네트워크(일시 장애 → 잠시 뒤 재시도)는 사용자가 할 일이 아예 다르다.
+      // 문구만 보고 판단하면 서버 메시지를 바꿀 때 조용히 오분류된다.
+      const error: Error & { status?: number } = new Error(
+        err.error ?? `Edge Function error: ${res.status}`,
+      );
+      error.status = res.status;
+      throw error;
     }
 
     return res.json() as Promise<T>;
@@ -84,50 +91,38 @@ export class AssignmentSupabaseClient {
     googleAccessToken: string,
     params: CreateAssignmentRequest,
   ): Promise<{ id: string; adminKey: string }> {
-    return this.invoke<{ id: string; adminKey: string }>(
-      'create-assignment',
-      params,
-      { Authorization: `Bearer ${googleAccessToken}` },
-    );
+    return this.invoke<{ id: string; adminKey: string }>('create-assignment', params, {
+      Authorization: `Bearer ${googleAccessToken}`,
+    });
   }
 
   /**
    * 과제 삭제
    * Note: MVP에서는 DB에서만 삭제 (드라이브 파일은 유지)
    */
-  async deleteAssignment(
-    assignmentId: string,
-    adminKey: string,
-  ): Promise<void> {
-    await this.invoke<{ message: string }>(
-      'delete-assignment',
-      { assignmentId, adminKey },
-    );
+  async deleteAssignment(assignmentId: string, adminKey: string): Promise<void> {
+    await this.invoke<{ message: string }>('delete-assignment', { assignmentId, adminKey });
   }
 
   /**
    * 제출 현황 조회 (get-submissions Edge Function)
    */
-  async getSubmissions(
-    assignmentId: string,
-    adminKey: string,
-  ): Promise<Submission[]> {
-    const raw = await this.invoke<Array<{
-      id: string;
-      assignment_id: string;
-      student_id: string | null;
-      student_number: number;
-      student_name: string;
-      submitted_at: string;
-      file_name: string | null;
-      file_size: number;
-      drive_file_id: string | null;
-      text_content: string | null;
-      is_late: boolean;
-    }>>(
-      'get-submissions',
-      { assignmentId, adminKey },
-    );
+  async getSubmissions(assignmentId: string, adminKey: string): Promise<Submission[]> {
+    const raw = await this.invoke<
+      Array<{
+        id: string;
+        assignment_id: string;
+        student_id: string | null;
+        student_number: number;
+        student_name: string;
+        submitted_at: string;
+        file_name: string | null;
+        file_size: number;
+        drive_file_id: string | null;
+        text_content: string | null;
+        is_late: boolean;
+      }>
+    >('get-submissions', { assignmentId, adminKey });
 
     // DB snake_case → domain camelCase 변환
     return raw.map((s) => ({
@@ -168,7 +163,9 @@ export class AssignmentSupabaseClient {
 
     // 즉시 1회 호출 후 반복
     void poll();
-    timerId = setInterval(() => { void poll(); }, intervalMs);
+    timerId = setInterval(() => {
+      void poll();
+    }, intervalMs);
 
     return () => {
       if (timerId !== null) {
@@ -187,9 +184,6 @@ export class AssignmentSupabaseClient {
     refreshToken: string;
     expiresAt: string;
   }): Promise<void> {
-    await this.invoke<{ message: string; teacherId: string }>(
-      'save-teacher-token',
-      tokens,
-    );
+    await this.invoke<{ message: string; teacherId: string }>('save-teacher-token', tokens);
   }
 }

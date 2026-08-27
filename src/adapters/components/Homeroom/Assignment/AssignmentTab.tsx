@@ -10,6 +10,7 @@ import { AssignmentDetail } from '@adapters/components/Tools/Assignment/Assignme
 import { AssignmentCreateModal } from '@adapters/components/Tools/Assignment/AssignmentCreateModal';
 import { OfflineNotice } from '@adapters/components/Tools/Assignment/OfflineNotice';
 import { useStudentLists } from '@adapters/hooks/useStudentLists';
+import { useAssignmentGoogleConnect } from '@adapters/hooks/useAssignmentGoogleConnect';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { RosterEmptyState } from '@adapters/components/common/RosterEmptyState';
 import { isStudentActive } from '@domain/rules/studentActivity';
@@ -21,15 +22,12 @@ export function AssignmentTab() {
     error,
     loadAssignments,
     needsGoogleConnect,
-    clearGoogleConnectState,
+    connectNotice,
     deleteAssignment,
     selectAssignment,
   } = useAssignmentStore();
-  const {
-    startAuth,
-    isConnected: googleConnected,
-    isLoading: googleAuthLoading,
-  } = useCalendarSyncStore();
+  const { isConnected: googleConnected, isLoading: googleAuthLoading } = useCalendarSyncStore();
+  const handleGoogleConnect = useAssignmentGoogleConnect();
   const showToast = useToastStore((s) => s.show);
   const { isOnline, checkOnline } = useOnlineStatus();
   const studentLists = useStudentLists();
@@ -82,16 +80,6 @@ export function AssignmentTab() {
   function handleBack() {
     setView('list');
     setSelectedId(null);
-  }
-
-  async function handleGoogleConnect() {
-    try {
-      await startAuth();
-      clearGoogleConnectState();
-      await loadAssignments();
-    } catch {
-      // 인증 취소 또는 실패 — startAuth가 자체적으로 처리
-    }
   }
 
   function handleCopyLink(assignmentId: string) {
@@ -184,12 +172,18 @@ export function AssignmentTab() {
         <div className="mb-4 p-5 bg-sp-card rounded-xl border border-sp-border/50 text-center">
           <div className="text-3xl mb-2">🔗</div>
           <h3 className="text-sm font-bold text-sp-text mb-1.5">Google 계정 연결이 필요합니다</h3>
-          <p className="text-xs text-sp-muted mb-1">
-            과제수합 기능은 Google 드라이브에 파일을 저장합니다.
-          </p>
-          <p className="text-xs text-sp-muted mb-4">
-            계정을 연결하면 자동으로 드라이브 폴더가 생성됩니다.
-          </p>
+          {connectNotice ? (
+            <p className="text-xs text-sp-muted mb-4 whitespace-pre-line">{connectNotice}</p>
+          ) : (
+            <>
+              <p className="text-xs text-sp-muted mb-1">
+                과제수합 기능은 Google 드라이브에 파일을 저장합니다.
+              </p>
+              <p className="text-xs text-sp-muted mb-4">
+                계정을 연결하면 자동으로 드라이브 폴더가 생성됩니다.
+              </p>
+            </>
+          )}
           <button
             onClick={() => void handleGoogleConnect()}
             className="px-4 py-2 bg-sp-accent text-white rounded-lg hover:bg-sp-accent/80 transition-colors flex items-center gap-2 mx-auto text-sm font-medium"
