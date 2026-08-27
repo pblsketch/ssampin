@@ -103,7 +103,13 @@ export const metadata: Metadata = {
   verification: {
     google: 'googlea16810e6f264caeb',
     other: {
-      'naver-site-verification': ['f6f9923c2fb93efcc9807242b88b28a8b029c867'],
+      // 네이버 서치어드바이저는 사이트(주소)마다 확인 코드를 따로 발급한다.
+      // 앞은 예전 등록분, 뒤는 정본 주소(https://www.ssampin.com) 등록분이다.
+      // 예전 등록의 지표가 끊기지 않도록 둘 다 남긴다.
+      'naver-site-verification': [
+        'f6f9923c2fb93efcc9807242b88b28a8b029c867',
+        '706ee1e620027906cc2e0863b2074cc4eef4c99e',
+      ],
     },
   },
   other: {
