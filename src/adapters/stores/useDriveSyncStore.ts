@@ -8,6 +8,21 @@ import {
   saveDriveSyncLastSyncedAt,
 } from '@adapters/repositories/driveSyncDeviceState';
 
+/**
+ * 화면에 내보낼 오류 문구.
+ *
+ * 제한시간 초과 메시지에는 구글 주소와 Drive 파일 ID 가 들어 있다. 그대로 띄우면
+ * 선생님 화면에 영문 URL 이 뜬다(UI 텍스트 한국어 규칙). 원문은 콘솔에만 남긴다.
+ */
+function toUserFacingSyncError(err: unknown, fallback: string): string {
+  // instanceof 대신 name 으로 본다 — 어댑터는 인프라를 import 하지 않는다(계층 규칙).
+  if (err instanceof Error && err.name === 'GoogleFetchTimeoutError') {
+    console.warn('[DriveSync] 응답 시간 초과:', err.message);
+    return '인터넷이 느려 구글 서버 응답을 기다리다 중단했어요. 잠시 후 다시 시도해 주세요.';
+  }
+  return fallback;
+}
+
 export interface SyncResult {
   direction: 'upload' | 'download';
   timestamp: string;
@@ -59,6 +74,8 @@ interface DriveSyncState {
   importSettingsFromCloud: () => Promise<ImportSettingsResult>;
   resolveConflict: (conflict: DriveSyncConflict, resolution: 'local' | 'remote') => Promise<void>;
   deleteCloudData: () => Promise<void>;
+  /** 장부가 어긋난 클라우드를 지우고 이 기기 자료로 다시 올린다(사이드바 원클릭 복구). */
+  rebuildCloudData: () => Promise<void>;
   resetStatus: () => void;
   triggerSaveSync: () => void;
   /** 앱 시작 시 기기 전용 저장소에서 "마지막 동기화 시각"을 복구(레거시 settings 값 1회 승계). */
@@ -194,7 +211,7 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
       } else {
         set({
           status: 'error',
-          error: msg,
+          error: toUserFacingSyncError(err, msg),
           progress: null,
         });
       }
@@ -314,7 +331,7 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
       } else {
         set({
           status: 'error',
-          error: msg,
+          error: toUserFacingSyncError(err, msg),
           progress: null,
         });
       }
@@ -463,6 +480,27 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
         error: err instanceof Error ? err.message : '클라우드 데이터 삭제 중 오류가 발생했습니다.',
       });
     }
+  },
+
+  /**
+   * 클라우드 백업 다시 만들기 — 지우고(delete) 다시 올리기(upload).
+   *
+   * 장부(manifest)와 실제 Drive 파일이 어긋나면 SyncToCloud 가 일부러 멈춘다.
+   * 그 상태는 재시도로 풀리지 않고, 클라우드를 다시 만들어야만 풀린다.
+   *
+   * ⚠️ 삭제가 실패하면 업로드를 하지 않는다. 어긋난 장부가 그대로 남은 위에
+   *    다시 올리면 같은 무결성 오류가 반복되거나, 더 나쁜 상태로 굳어버린다.
+   */
+  rebuildCloudData: async () => {
+    if (get().status === 'syncing') return;
+    // 첫 동기화 방향을 아직 못 정한 상태라면 손대지 않는다. 여기서 클라우드를 지우면
+    // 뒤이은 syncToCloud 가 자기 firstSyncRequired 가드에 막혀 **조용히 아무것도 올리지 않는다**
+    // — 결과는 빈 클라우드다. 오류도 안 나서 사용자는 복구된 줄 안다.
+    if (get().firstSyncRequired) return;
+    await get().deleteCloudData();
+    // 삭제 실패 — 여기서 멈추고 오류를 그대로 남긴다.
+    if (get().status === 'error') return;
+    await get().syncToCloud();
   },
 
   resetStatus: () => set({ status: 'idle', error: null, progress: null }),

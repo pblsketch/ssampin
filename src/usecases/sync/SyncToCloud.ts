@@ -12,6 +12,10 @@ import { uint8ToBase64 } from './binaryBase64';
 import { withDataOperationLock } from '@usecases/shared/dataOperationMutex';
 import { toBinaryDriveFilename } from './binaryDriveFilename';
 import { SyncIntegrityError } from './SyncIntegrityError';
+import {
+  buildDuplicateFileMessage,
+  buildManifestMismatchMessage,
+} from '@domain/rules/driveSyncRecovery';
 
 function defaultDriveFilename(logicalKey: string): string {
   return `${logicalKey.replace(/\//g, '__')}.json`;
@@ -208,9 +212,7 @@ export class SyncToCloud {
         // ⚠️ 무결성 위반이다 — 어느 쪽이 진짜인지 알 수 없는 상태라 진행하면 안 된다.
         //    평범한 Error 로 던지면 바이너리 루프의 항목별 catch 에 삼켜져
         //    같은 사고가 파일 종류에 따라 다르게 처리된다(정적 파일은 멈추고 사진은 조용히 건너뜀).
-        throw new SyncIntegrityError(
-          `클라우드 ${logicalKey} 파일이 중복되어 안전하게 동기화할 수 없습니다. 클라우드 데이터를 다시 구성해 주세요.`,
-        );
+        throw new SyncIntegrityError(buildDuplicateFileMessage(logicalKey));
       }
       return matches[0];
     };
@@ -414,9 +416,7 @@ export class SyncToCloud {
         const actualContent = await this.drivePort.downloadSyncFile(driveFile.id);
         const actualChecksum = await computeSyncChecksum(actualContent);
         if (actualChecksum !== checksum) {
-          throw new Error(
-            `클라우드 ${filename} 파일과 동기화 장부가 일치하지 않습니다. 클라우드 데이터를 다시 구성해 주세요.`,
-          );
+          throw new Error(buildManifestMismatchMessage(filename));
         }
         const reconciledEntry: DriveSyncFileInfo = {
           lastModified: driveFile.modifiedTime,
@@ -505,9 +505,7 @@ export class SyncToCloud {
             );
             return;
           } else {
-            throw new Error(
-              `클라우드 ${filename} 파일과 동기화 장부가 일치하지 않습니다. 클라우드 데이터를 다시 구성해 주세요.`,
-            );
+            throw new Error(buildManifestMismatchMessage(filename));
           }
         }
         if (manifestChecksum === checksum && remoteInfo.checksum === checksum) {
@@ -640,9 +638,7 @@ export class SyncToCloud {
           const actualContent = await this.drivePort.downloadSyncFile(driveFile.id);
           const actualChecksum = await computeSyncChecksum(actualContent);
           if (actualChecksum !== checksum) {
-            throw new SyncIntegrityError(
-              `클라우드 ${relPath} 파일과 동기화 장부가 일치하지 않습니다. 클라우드 데이터를 다시 구성해 주세요.`,
-            );
+            throw new SyncIntegrityError(buildManifestMismatchMessage(relPath));
           }
           const reconciledEntry: DriveSyncFileInfo = {
             lastModified: driveFile.modifiedTime,
@@ -714,9 +710,7 @@ export class SyncToCloud {
               console.warn(`[SyncToCloud]   ${relPath}: 바이너리 업로드 부분 성공 — 장부만 복구`);
               continue;
             } else {
-              throw new SyncIntegrityError(
-                `클라우드 ${relPath} 파일과 동기화 장부가 일치하지 않습니다. 클라우드 데이터를 다시 구성해 주세요.`,
-              );
+              throw new SyncIntegrityError(buildManifestMismatchMessage(relPath));
             }
           }
           if (manifestChecksum === checksum && remoteInfo.checksum === checksum) {
@@ -850,9 +844,7 @@ export class SyncToCloud {
         const actualContent = await this.drivePort.downloadSyncFile(driveFile.id);
         const actualChecksum = await computeSyncChecksum(actualContent);
         if (actualChecksum !== checksum) {
-          throw new Error(
-            '클라우드 아카이브 파일과 동기화 장부가 일치하지 않습니다. 클라우드 데이터를 다시 구성해 주세요.',
-          );
+          throw new Error(buildManifestMismatchMessage('아카이브'));
         }
         const localInfo = localManifest?.files[key];
         const reconciledEntry: DriveSyncFileInfo = {

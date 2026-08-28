@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import { useDriveSyncStore } from '@adapters/stores/useDriveSyncStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { isGoogleAuthBlockedError } from '@domain/rules/calendarSyncRules';
+import { isCloudRebuildRequiredError } from '@domain/rules/driveSyncRecovery';
 import { Notice } from './Notice';
+import { CloudRebuildConfirmModal } from './CloudRebuildConfirmModal';
 
 interface DriveSyncIndicatorProps {
   /** 사이드바 접힘 등 좁은 공간용 — 아이콘만 표시하고 상세 문구는 title 툴팁으로 전달 */
@@ -32,7 +34,10 @@ export function DriveSyncIndicator({ collapsed = false }: DriveSyncIndicatorProp
     syncFromCloud,
     resetStatus,
     lastSyncedAt,
+    rebuildCloudData,
   } = useDriveSyncStore();
+
+  const [showRebuildConfirm, setShowRebuildConfirm] = useState(false);
 
   // idle 상태의 "n분 전 동기화" 문구를 60초마다 다시 계산
   const [, setTick] = useState(0);
@@ -57,6 +62,10 @@ export function DriveSyncIndicator({ collapsed = false }: DriveSyncIndicatorProp
   };
 
   const isAuthBlocked = error ? isGoogleAuthBlockedError(error) : false;
+  // 장부와 실제 파일이 어긋난 계열만 — 재시도로는 절대 안 풀리고
+  // 클라우드를 다시 만들어야만 풀린다. 일시적 실패에는 띄우지 않는다 —
+  // 기다리면 될 일에 클라우드를 통째 다시 만들게 할 수는 없다.
+  const canRebuild = status === 'error' && !!error && isCloudRebuildRequiredError(error);
   const relativeLabel = formatRelativeSync(lastSyncedAt ?? settings.sync?.lastSyncedAt);
 
   if (collapsed) {
@@ -144,6 +153,16 @@ export function DriveSyncIndicator({ collapsed = false }: DriveSyncIndicatorProp
             </span>
             <span className="material-symbols-outlined text-icon-sm">refresh</span>
           </button>
+          {canRebuild && (
+            <button
+              type="button"
+              onClick={() => setShowRebuildConfirm(true)}
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-sp-border text-xs text-sp-accent hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+            >
+              <span className="material-symbols-outlined text-icon">cloud_sync</span>
+              <span className="flex-1 text-left">클라우드 백업 다시 만들기</span>
+            </button>
+          )}
           {isAuthBlocked && (
             <Notice variant="warning">
               학교 계정(@*.go.kr 등)은 외부 앱 차단 정책일 수 있어요.{' '}
@@ -160,6 +179,15 @@ export function DriveSyncIndicator({ collapsed = false }: DriveSyncIndicatorProp
           <span>충돌 {conflicts.length}건</span>
         </div>
       )}
+
+      <CloudRebuildConfirmModal
+        open={showRebuildConfirm}
+        onCancel={() => setShowRebuildConfirm(false)}
+        onConfirm={() => {
+          setShowRebuildConfirm(false);
+          void rebuildCloudData();
+        }}
+      />
     </div>
   );
 }
