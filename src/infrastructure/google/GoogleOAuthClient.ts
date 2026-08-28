@@ -5,36 +5,12 @@
  * PKCE(S256) 지원.
  */
 import type { IGoogleAuthPort, GoogleAuthTokens } from '@domain/ports/IGoogleAuthPort';
+import { fetchWithTimeout } from './fetchWithTimeout';
 
 const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const GOOGLE_REVOKE_URL = 'https://oauth2.googleapis.com/revoke';
 const GOOGLE_USERINFO_URL = 'https://www.googleapis.com/oauth2/v2/userinfo';
-
-/** 학교망 등에서 일부 Google API가 응답 없이 늘어지는 경우 대비 timeout (30초) */
-const FETCH_TIMEOUT_MS = 30_000;
-
-/** AbortController 기반 fetch wrapper. 일정 시간 응답이 없으면 abort. */
-async function fetchWithTimeout(
-  input: string,
-  init: RequestInit = {},
-  timeoutMs = FETCH_TIMEOUT_MS,
-): Promise<Response> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(input, { ...init, signal: controller.signal });
-  } catch (err) {
-    if (err instanceof Error && err.name === 'AbortError') {
-      throw new Error(`Google API 응답 시간 초과 (${timeoutMs / 1000}초): ${input}`, {
-        cause: err,
-      });
-    }
-    throw err;
-  } finally {
-    clearTimeout(timer);
-  }
-}
 
 /** 토큰 교환 API 응답 */
 interface TokenResponse {

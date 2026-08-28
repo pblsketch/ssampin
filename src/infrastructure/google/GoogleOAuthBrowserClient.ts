@@ -9,6 +9,7 @@
  * security-hardening P0-C / security-audit F-2
  */
 import type { IGoogleAuthPort, GoogleAuthTokens } from '@domain/ports/IGoogleAuthPort';
+import { fetchWithTimeout } from './fetchWithTimeout';
 
 const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const GOOGLE_REVOKE_URL = 'https://oauth2.googleapis.com/revoke';
@@ -71,18 +72,22 @@ export class GoogleOAuthBrowserClient implements IGoogleAuthPort {
       headers['apikey'] = this.anonKey;
       headers['Authorization'] = `Bearer ${this.anonKey}`;
     }
-    const res = await fetch(this.exchangeUrl, {
+    const res = await fetchWithTimeout(this.exchangeUrl, {
       method: 'POST',
       headers,
       body: JSON.stringify({ ...payload, clientId: this.clientId }),
     });
-    const data = (await res.json().catch(() => ({ error: 'invalid_response' }))) as TokenExchangeResponse;
+    const data = (await res
+      .json()
+      .catch(() => ({ error: 'invalid_response' }))) as TokenExchangeResponse;
     if (!res.ok || data.error) {
       const code = data.error ?? `exchange_failed_${res.status}`;
       if (code === 'invalid_grant') {
         throw new Error('INVALID_GRANT: Google 인증이 만료되었습니다. 다시 로그인해주세요.');
       }
-      throw new Error(`Token exchange failed: ${code}${data.error_description ? ` (${data.error_description})` : ''}`);
+      throw new Error(
+        `Token exchange failed: ${code}${data.error_description ? ` (${data.error_description})` : ''}`,
+      );
     }
     return data;
   }
@@ -130,7 +135,7 @@ export class GoogleOAuthBrowserClient implements IGoogleAuthPort {
   }
 
   async revokeTokens(accessToken: string): Promise<void> {
-    await fetch(`${GOOGLE_REVOKE_URL}?token=${accessToken}`, { method: 'POST' });
+    await fetchWithTimeout(`${GOOGLE_REVOKE_URL}?token=${accessToken}`, { method: 'POST' });
   }
 
   getRequiredScopes(): readonly string[] {
@@ -138,7 +143,7 @@ export class GoogleOAuthBrowserClient implements IGoogleAuthPort {
   }
 
   private async fetchEmail(accessToken: string): Promise<string> {
-    const res = await fetch(GOOGLE_USERINFO_URL, {
+    const res = await fetchWithTimeout(GOOGLE_USERINFO_URL, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     if (!res.ok) return '';

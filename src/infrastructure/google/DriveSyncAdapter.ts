@@ -11,6 +11,13 @@ import type { DriveFolderInfo } from '@domain/ports/IGoogleDrivePort';
 import type { IDriveSyncPort, DriveSyncFileListItem } from '@domain/ports/IDriveSyncPort';
 import { GOOGLE_AUTH_BLOCKED_MESSAGE } from '@domain/rules/calendarSyncRules';
 import { MAX_DRIVE_RETRIES, isRetryableDriveStatus, computeDriveRetryDelayMs } from './driveRetry';
+import {
+  fetchWithTimeout,
+  readBodyWithTimeout,
+  transferTimeoutForBytes,
+  GOOGLE_META_TIMEOUT_MS,
+  GOOGLE_TRANSFER_TIMEOUT_MS,
+} from './fetchWithTimeout';
 
 const DRIVE_API_URL = 'https://www.googleapis.com/drive/v3';
 const DRIVE_UPLOAD_URL = 'https://www.googleapis.com/upload/drive/v3';
@@ -224,11 +231,19 @@ export class DriveSyncAdapter implements IDriveSyncPort {
    * 일시 오류(429/5xx) 자동 재시도 fetch.
    * Retry-After 헤더를 존중하고, 없으면 지수 백오프. 그 외 상태는 즉시 반환해
    * 기존 401/403 처리 흐름을 그대로 태운다.
+   *
+   * 제한시간(timeoutMs)은 시도마다 새로 잡힌다. 초과분은 GoogleFetchTimeoutError로
+   * 곧장 던져 이 루프를 빠져나간다 — 응답 자체가 없었던 요청이라 같은 자리에서
+   * 다시 늘어질 뿐이고, 여기서 붙잡고 있으면 동기화가 영영 끝나지 않는다.
    */
-  private async fetchWithRetry(url: string, init: RequestInit): Promise<Response> {
+  private async fetchWithRetry(
+    url: string,
+    init: RequestInit,
+    timeoutMs: number = GOOGLE_META_TIMEOUT_MS,
+  ): Promise<Response> {
     let attempt = 0;
     for (;;) {
-      const res = await fetch(url, init);
+      const res = await fetchWithTimeout(url, init, timeoutMs);
       if (res.ok || !isRetryableDriveStatus(res.status) || attempt >= MAX_DRIVE_RETRIES) {
         return res;
       }
@@ -273,15 +288,21 @@ export class DriveSyncAdapter implements IDriveSyncPort {
       throw new Error(`Drive Sync API error: ${res.status} ${err}`);
     }
     if (res.status === 204) return undefined as T;
-    return res.json() as Promise<T>;
+    return readBodyWithTimeout(
+      () => res.json() as Promise<T>,
+      `${DRIVE_API_URL}${path}`,
+      GOOGLE_META_TIMEOUT_MS,
+    );
   }
 
   /** 텍스트 콘텐츠 다운로드 (alt=media) */
   private async downloadText(fileId: string, isRetry = false): Promise<string> {
     const accessToken = await this.getAccessToken();
-    const res = await this.fetchWithRetry(`${DRIVE_API_URL}/files/${fileId}?alt=media`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
+    const res = await this.fetchWithRetry(
+      `${DRIVE_API_URL}/files/${fileId}?alt=media`,
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+      GOOGLE_TRANSFER_TIMEOUT_MS,
+    );
     if (!res.ok) {
       if (res.status === 401 && !isRetry) {
         return this.downloadText(fileId, true);
@@ -300,7 +321,11 @@ export class DriveSyncAdapter implements IDriveSyncPort {
       }
       throw new Error(`Drive Sync 다운로드 오류: ${res.status} ${err}`);
     }
-    return res.text();
+    return readBodyWithTimeout(
+      () => res.text(),
+      `${DRIVE_API_URL}/files/${fileId}`,
+      GOOGLE_TRANSFER_TIMEOUT_MS,
+    );
   }
 
   /** 멀티파트 업로드 (생성 or 업데이트) */
@@ -330,15 +355,19 @@ export class DriveSyncAdapter implements IDriveSyncPort {
         ? `${DRIVE_UPLOAD_URL}/files?uploadType=multipart&fields=id,name,modifiedTime`
         : `${DRIVE_UPLOAD_URL}/files/${fileId}?uploadType=multipart&fields=id,name,modifiedTime`;
 
-    const res = await this.fetchWithRetry(url, {
-      method,
-      headers: {
-        Authorization: 'Bearer ' + accessToken,
-        'Content-Type': `multipart/related; boundary=${boundary}`,
-        ...(ifMatch ? { 'If-Match': ifMatch } : {}),
+    const res = await this.fetchWithRetry(
+      url,
+      {
+        method,
+        headers: {
+          Authorization: 'Bearer ' + accessToken,
+          'Content-Type': `multipart/related; boundary=${boundary}`,
+          ...(ifMatch ? { 'If-Match': ifMatch } : {}),
+        },
+        body,
       },
-      body,
-    });
+      transferTimeoutForBytes(body.size),
+    );
 
     if (!res.ok) {
       if (res.status === 412) throw new DriveSyncPreconditionFailedError();
@@ -359,7 +388,11 @@ export class DriveSyncAdapter implements IDriveSyncPort {
       }
       throw new Error(`Drive Sync 업로드 오류: ${res.status} ${err}`);
     }
-    return res.json() as Promise<FileResponse>;
+    return readBodyWithTimeout(
+      () => res.json() as Promise<FileResponse>,
+      url,
+      GOOGLE_META_TIMEOUT_MS,
+    );
   }
 
   /** 폴더 내에서 같은 이름의 모든 파일 검색 (경쟁 생성/중복 감지용). */
@@ -415,7 +448,11 @@ export class DriveSyncAdapter implements IDriveSyncPort {
     );
     if (res.status === 401 && !isRetry) return this.getFilePrecondition(fileId, true);
     if (!res.ok) return null;
-    const data = (await res.json()) as FileResponse;
+    const data = (await readBodyWithTimeout(
+      () => res.json(),
+      `${DRIVE_API_URL}/files/${fileId}`,
+      GOOGLE_META_TIMEOUT_MS,
+    )) as FileResponse;
     return { etag: res.headers.get('ETag'), modifiedTime: data.modifiedTime ?? '' };
   }
 
