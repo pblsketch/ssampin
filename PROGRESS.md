@@ -1,6 +1,38 @@
 # Progress
 
-마지막 업데이트: 2026-08-28 KST
+마지막 업데이트: 2026-08-31 KST
+
+## 🚀 v2.4.7 릴리즈 (2026-08-31)
+
+v2.4.6 태그 이후 커밋 5건(문서 정정 1건 제외 실질 4건)을 전수 대조해 릴리즈 노트 4건으로
+묶었다. 되돌려진 가이드 커밋은 없었다(`git log v2.4.6..HEAD | grep -i revert` 0건).
+
+**릴리즈 노트에 넣은 것 (4건)**
+
+| 영역                      | 근거       | 유형 |
+| ------------------------- | ---------- | ---- |
+| 모바일 동기화 0% 정체     | `8dccdea5` | fix  |
+| 클라우드 백업 다시 만들기 | `0b805c1a` | new  |
+| 떠 있는 면 배경 되살림    | `8169aec3` | fix  |
+| 옆핀 손잡이 글자 긁힘     | `cf496be6` | fix  |
+
+**버전 표기** — package.json · package-lock.json(2곳) · src/mobile/version.ts ·
+landing/src/config.ts · Sidebar.tsx. `landing/src/content/structuredData.ts`의
+`softwareVersion`은 `VERSION`을 import하므로 자동 반영된다(SOP의 layout.tsx 안내는 옛 위치).
+
+**/docs 가이드** — 구현 커밋이 문단을 남긴 것은 클라우드 백업 다시 만들기 1건뿐이었고,
+나머지 3건은 문단이 아예 없어 새로 썼다.
+
+- `troubleshooting/google-sync` → "휴대폰에서 동기화가 0%에서 멈춰요" 신설
+- `troubleshooting/display-widget` → "검색 결과 같은 목록이 뒤 글자와 겹쳐 읽혀요" 신설
+- `features/widget-mode` → 옆핀 손잡이 글자 긁힘 항목 추가
+- `releases` → 지원 기준 버전 v2.4.6 → v2.4.7, 최근 반영 기능 4건 추가
+
+게이트: tsc 0 · lint 0 error(경고 135건 전부 기존) · 테스트 636파일 8,380건 통과 ·
+회귀 52/52 · docs:check 통과(문서 45개) · landing build 성공.
+
+**잔여** — KB ingest(SOP 3단계)는 `ADMIN_API_KEY` 로테이션이 권한 차단으로 막혀 미실행.
+Windows/macOS 빌드와 GitHub 릴리즈도 아직이다.
 
 ## 🩹 클라우드 백업 다시 만들기 — 원클릭 복구 (2026-08-28)
 
