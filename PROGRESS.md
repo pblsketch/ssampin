@@ -31,8 +31,13 @@ landing/src/config.ts · Sidebar.tsx. `landing/src/content/structuredData.ts`의
 게이트: tsc 0 · lint 0 error(경고 135건 전부 기존) · 테스트 636파일 8,380건 통과 ·
 회귀 52/52 · docs:check 통과(문서 45개) · landing build 성공.
 
-**잔여** — KB ingest(SOP 3단계)는 `ADMIN_API_KEY` 로테이션이 권한 차단으로 막혀 미실행.
-Windows/macOS 빌드와 GitHub 릴리즈도 아직이다.
+**SOP 8단계 전부 완료.** KB ingest 433건(키 로테이션 → 지문 대조 → 재배포 → 업로드 →
+즉시 폐기), Windows·macOS GHA 빌드 성공, GitHub 릴리즈 v2.4.7 생성(자산 8개, 다운로드 URL
+8종 전부 302). 챗봇에 실제 질문 3건을 던져 v2.4.7 답변이 나오는 것까지 확인했다
+(★isTest:true 로 보내야 관리자 통계가 오염되지 않는다).
+
+**잔여** — 실기기 확인만 남았다: 휴대폰 동기화 정체 해소, 옆핀 손잡이 드래그(듀얼 모니터),
+맥 [그래도 열기].
 
 ## 🩹 클라우드 백업 다시 만들기 — 원클릭 복구 (2026-08-28)
 
