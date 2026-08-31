@@ -26,6 +26,8 @@ const SYNC_FOLDER_NAME = '쌤핀 동기화';
 const MANIFEST_FILENAME = 'v2--manifest.json';
 const LEGACY_MANIFEST_FILENAME = 'manifest.json';
 const SYNC_FILE_PREFIX = 'v2--';
+/** Drive files.list 한 페이지 최대 개수(API 상한 1000, 미지정 시 기본 100). */
+const DRIVE_LIST_PAGE_SIZE = 1000;
 
 /** Files.list API 응답 */
 interface FilesListResponse {
@@ -35,6 +37,7 @@ interface FilesListResponse {
     mimeType?: string;
     modifiedTime?: string;
   }>;
+  nextPageToken?: string;
 }
 
 /** Files.create / Files.update API 응답 */
@@ -657,21 +660,45 @@ export class DriveSyncAdapter implements IDriveSyncPort {
     }
   }
 
+  /**
+   * 동기화 폴더 안의 v2 파일 전체 목록.
+   *
+   * ⚠️ **끝까지 페이지를 넘겨야 한다.** Drive files.list 는 pageSize 를 주지 않으면
+   * **100개까지만** 돌려준다. 예전 구현은 pageSize·pageToken 이 없어서 폴더 파일이 100개를
+   * 넘는 순간 목록이 **조용히 잘렸고**, 잘린 뒤로는 실제로 존재하는 파일을 "없다"고 판정했다.
+   *   - 업로드: driveFile 을 못 찾아 createSyncFileIfMissing 을 타고 → 이미 있으니 null →
+   *     "클라우드 … 파일이 동기화 중 생성되었습니다"가 **매번 반복되는 영구 교착**
+   *   - 다운로드: 이름순 뒤쪽 파일을 아예 내려받지 못함(조용한 자료 누락)
+   * v2.4.7 신고가 정확히 이것이었다 — 학생 사진(`student-photos__*`)이 100개 경계를
+   * 밀어내서, 이름순으로 그 바로 뒤에 오는 `teacher-schedule` 부터 터졌다.
+   */
   async listSyncFiles(folderId: string): Promise<DriveSyncFileListItem[]> {
     const query = `'${folderId}' in parents and trashed=false`;
-    const params = new URLSearchParams({
-      q: query,
-      fields: 'files(id,name,modifiedTime)',
-      orderBy: 'name',
-    });
-    const data = await this.request<FilesListResponse>(`/files?${params.toString()}`);
-    return (data.files ?? [])
-      .filter((file) => file.name.startsWith(SYNC_FILE_PREFIX) && file.name !== MANIFEST_FILENAME)
-      .map((file) => ({
-        id: file.id,
-        name: file.name.slice(SYNC_FILE_PREFIX.length),
-        modifiedTime: file.modifiedTime ?? '',
-      }));
+    const collected: DriveSyncFileListItem[] = [];
+    let pageToken: string | undefined;
+    do {
+      const params = new URLSearchParams({
+        q: query,
+        fields: 'nextPageToken,files(id,name,modifiedTime)',
+        orderBy: 'name',
+        pageSize: String(DRIVE_LIST_PAGE_SIZE),
+        spaces: 'drive',
+      });
+      if (pageToken) params.set('pageToken', pageToken);
+      const data = await this.request<FilesListResponse>(`/files?${params.toString()}`);
+      for (const file of data.files ?? []) {
+        if (!file.name.startsWith(SYNC_FILE_PREFIX) || file.name === MANIFEST_FILENAME) continue;
+        collected.push({
+          id: file.id,
+          name: file.name.slice(SYNC_FILE_PREFIX.length),
+          modifiedTime: file.modifiedTime ?? '',
+        });
+      }
+      // 같은 토큰이 다시 오면 무한 루프다 — 방어적으로 끊는다.
+      const next = data.nextPageToken;
+      pageToken = next && next !== pageToken ? next : undefined;
+    } while (pageToken);
+    return collected;
   }
 
   async deleteSyncFolder(folderId: string): Promise<void> {

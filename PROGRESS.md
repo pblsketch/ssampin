@@ -1,6 +1,40 @@
 # Progress
 
-마지막 업데이트: 2026-08-31 KST
+마지막 업데이트: 2026-09-01 KST
+
+## 🐛 "클라우드 teacher-schedule 파일이 동기화 중 생성되었습니다" 영구 반복 — 원인 수정 (2026-09-01)
+
+v2.4.7 실사용 신고. 동기화를 눌러도 매번 같은 오류가 뜨고 **아무것도 올라가지 않는** 교착이었다.
+
+**원인은 동기화 로직이 아니라 파일 목록 조회였다** — 구글 드라이브의 파일 목록 API는 개수를
+따로 지정하지 않으면 **100개까지만** 돌려준다. `DriveSyncAdapter.listSyncFiles` 가 `pageSize`·
+`pageToken`(다음 쪽 번호) 없이 한 번만 물어봤기 때문에, 동기화 폴더 파일이 100개를 넘는 순간
+목록이 **조용히 잘렸다.** 잘린 뒤로는 드라이브에 멀쩡히 있는 파일을 "없다"고 판정해서
+
+- 올리기: 새로 만들기(`createSyncFileIfMissing`) → 이미 있으니 실패 → **"동기화 중 생성되었습니다"가 매번 반복**
+- 내려받기: 이름순 뒤쪽 파일을 통째로 못 받음(조용한 누락)
+
+가 됐다. 하필 `teacher-schedule` 인 이유는 **이름순 위치** 때문이다 — 학생 사진
+(`student-photos__*`)이 100개 경계를 밀어냈고, 바로 뒤에 오는 첫 파일이 `teacher-schedule` 이다
+(그 앞의 `settings`·`class-schedule` 은 이름이 앞이라 멀쩡히 동기화됐다).
+
+**고친 것** — `src/infrastructure/google/DriveSyncAdapter.ts` 의 `listSyncFiles` 가
+`pageSize=1000` 으로 묻고 `nextPageToken` 을 **끝까지 따라간다.** 같은 토큰이 반복되면 끊는
+무한루프 방지도 넣었다. 구현체가 이 하나뿐이라 데스크톱·모바일이 같이 고쳐진다
+(SyncToCloud·SyncFromCloud·ResolveSyncConflict·ImportSettingsFromCloud 4곳이 이 함수를 쓴다).
+
+**자료 손실은 없다** — 삭제 표식은 파일 목록이 아니라 장부(manifest)에서만 오므로, 목록이
+잘려도 지워지지 않는다. 동기화가 멈췄을 뿐 클라우드 자료는 그대로다.
+
+**검증** — `npx tsc --noEmit` 0개 · `npm run lint` 에러 0(경고 135는 기존) ·
+`npm run regression-check` 53/53 · 신규 회귀 테스트
+`src/infrastructure/google/__tests__/DriveSyncAdapterListPaging.test.ts` 4건
+(100개 넘김·pageSize/pageToken 전송·무한루프 방지·manifest 제외).
+
+**남은 것** — 오너 확인 후 패치 릴리즈 필요. 사용자는 새 버전 전까지 이 오류가 계속 뜬다
+(클라우드 백업 다시 만들기는 임시로도 해결이 안 된다 — 다음 동기화에서 같은 100개 경계에 다시 걸린다).
+
+---
 
 ## 🔒 옆핀 개인정보 보호 1단계 — 발표 중 자동 가리기 (2026-08-31, 구현 완료·실기기 확인 대기)
 
