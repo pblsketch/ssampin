@@ -9,6 +9,7 @@ export const TABS = [
   { key: 'rhythm', label: '현장 리듬' },
   { key: 'friction', label: '문제·마찰' },
   { key: 'chatbot', label: '챗봇' },
+  { key: 'staffroom', label: '교무실' },
   { key: 'events', label: '이벤트 로그' },
 ] as const;
 

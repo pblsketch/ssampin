@@ -9,6 +9,7 @@ import FeaturesTab from './_sections/FeaturesTab';
 import RhythmTab from './_sections/RhythmTab';
 import FrictionTab from './_sections/FrictionTab';
 import ChatbotTab from './_sections/ChatbotTab';
+import StaffroomTab from './_sections/StaffroomTab';
 import EventsTab from './_sections/EventsTab';
 import { loadRollupStatus } from './_lib/data';
 import type { DateRange } from './_lib/data';
@@ -74,6 +75,8 @@ function renderTab(tab: string, range: DateRange) {
       return <FrictionTab range={range} />;
     case 'chatbot':
       return <ChatbotTab range={range} />;
+    case 'staffroom':
+      return <StaffroomTab />;
     case 'events':
       return <EventsTab />;
     default:

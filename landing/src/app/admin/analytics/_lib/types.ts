@@ -315,3 +315,34 @@ export interface RollupStatusRow {
   last_error: string | null;
   stale_minutes: number | null;
 }
+
+/**
+ * 온라인 교무실 건강·사용 스냅샷 (staffroom_health_v1, migration 064 · ADR-079)
+ *
+ * ★ 여기에 부서 이름·교사 이메일·글 제목이 들어오면 안 된다. 부서 id 조차 없다.
+ *   SQL 의 RETURNS TABLE 19칸과 **정확히 짝**이어야 하고, 그 짝은
+ *   staffroomHealthPrivacy.meta.test.ts 가 지킨다. 한쪽만 넓히면 빨간불이 난다.
+ */
+export interface StaffroomHealthRow {
+  generated_at: string;
+  departments_total: number;
+  dept_members_0: number;
+  dept_members_1: number;
+  dept_members_2_5: number;
+  dept_members_6_10: number;
+  dept_members_11_30: number;
+  dept_members_31_up: number;
+  posts_total: number;
+  comments_total: number;
+  files_total: number;
+  files_bytes: number;
+  /** 활동이 0건이면 NULL */
+  last_activity_date: string | null;
+  depts_no_activity: number;
+  health_ok: number;
+  health_broken: number;
+  health_quiet: number;
+  health_unlinked: number;
+  /** 끊긴 적이 없으면 NULL — 계측이 살아 있는지 보는 유일한 창 */
+  last_broken_at: string | null;
+}

@@ -35,6 +35,7 @@ import type {
   RollupStatusRow,
   SchoolProfileRow,
   SessionV2Row,
+  StaffroomHealthRow,
   VersionAdoptionRow,
   WeeklyV2Row,
 } from './types';
@@ -294,5 +295,29 @@ export function loadEventLog(): Promise<EventItem[]> {
 
 export async function loadRollupStatus(): Promise<RollupStatusRow | null> {
   const rows = await fetchRpc<RollupStatusRow>('analytics_rollup_status', undefined, 60);
+  return rows[0] ?? null;
+}
+
+// ── 온라인 교무실 (migration 064 · ADR-079) ──
+
+/**
+ * 교무실 실사용·건강 스냅샷.
+ *
+ * ★ range 를 받지 않는다 — 이건 기간 집계가 아니라 **지금 상태**다(EventsTab 과 같은 선례).
+ * ★ revalidate 를 명시로 넘긴다. 기본 300초의 근거는 "061 롤업이 30분 주기라서"인데
+ *   이 함수는 롤업을 쓰지 않는 라이브 질의라 그 근거를 상속하면 안 된다.
+ * ★ rows[0] 만 돌려준다. SQL 쪽은 바깥 SELECT 에 FROM 이 없어 구조적으로 1행이지만,
+ *   여기서 한 번 더 자른다 — 누가 함수를 부서 단위로 넓히면 2행째가 브라우저로
+ *   직렬화조차 되지 않고, 그 사고가 로그에 남는다(ADR-079).
+ */
+export async function loadStaffroom(): Promise<StaffroomHealthRow | null> {
+  const rows = await fetchRpc<StaffroomHealthRow>('staffroom_health_v1', undefined, 60);
+  if (rows.length !== 1) {
+    // 0행도 로그한다 — 환경변수가 없으면 fetchRpc 가 조용히 [] 를 돌려주는데,
+    // 그때 화면은 "migration 064 를 확인하세요" 라는 엉뚱한 힌트를 띄우게 된다.
+    console.error(
+      `[Analytics] staffroom_health_v1 이 ${rows.length}행을 돌려줬다 — 항상 1행이어야 한다(ADR-079).`,
+    );
+  }
   return rows[0] ?? null;
 }
