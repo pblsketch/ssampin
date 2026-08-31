@@ -85,6 +85,69 @@ import {
 /** 한 번에 내려보내는 파일 수 */
 const PAGE_SIZE = 300;
 
+/** 같은 부서의 끊김을 다시 적기까지 기다리는 시간 (계측이 쓰기를 몰아치지 않게) */
+const BREAK_RECORD_THROTTLE_MS = 60 * 60 * 1000;
+
+/**
+ * 관리자 연결이 **끊겼을 때만** 적는다 (계획서 §6-P0-다, ADR-079).
+ *
+ * ★ 성공은 적지 않는다. adminAccessToken 은 모든 읽기·쓰기가 지나는 뜨거운 길이고
+ *   빠른 경로는 쓰기가 0회다. "정상"은 staffroom_admin_tokens.updated_at 으로 소급해서
+ *   구하므로 여기서 아무것도 할 필요가 없다.
+ *
+ * ★ updated_at 을 **절대 함께 쓰지 않는다.** 이 표를 만지는 기존 두 곳이 전부 updated_at 을
+ *   같이 넣기 때문에 습관으로 넣기 쉬운데, 넣으면 updated_at >= last_broken_at 이 되어
+ *   집계의 "끊김"이 구조적으로 영원히 0 이 된다. 그리고 게이트 4종은 전부 초록이다.
+ *
+ * ★ 전역 설정 사고는 부서 사고가 아니다. 암호화 키(kind 'missing')나 구글 클라이언트
+ *   미설정은 **모든 부서가 동시에** 실패하므로, 부서마다 적으면 오설정 한 번에 표 전체가
+ *   "끊김"으로 물들어 진짜 신호를 덮는다. 그런 경우는 로그만 남기고 진단은 로그로 한다.
+ */
+async function recordAdminTokenBreak(
+  db: Db,
+  departmentId: string,
+  kind: 'missing' | 'broken',
+  tokenIssued: boolean,
+): Promise<void> {
+  if (kind === 'missing') {
+    // 부서 토큰 행이 없는 경우와 암호화 키가 없는 경우가 같은 kind 로 오는데,
+    // 앞은 집계가 LEFT JOIN 으로 정확히 세고 뒤는 전역 사고다. 어느 쪽도 여기서 적지 않는다.
+    console.warn('[staffroom-library] 관리자 토큰 미연결/키 부재 — 기록하지 않음:', departmentId);
+    return;
+  }
+
+  if (!Deno.env.get('GOOGLE_CLIENT_ID') || !Deno.env.get('GOOGLE_CLIENT_SECRET')) {
+    console.warn('[staffroom-library] 구글 클라이언트 미설정(전역) — 부서 끊김으로 적지 않음');
+    return;
+  }
+
+  // tokenIssued 는 catch 가 건드리지 않는 변수여야 한다. driveConnected 는 catch 첫 줄에서
+  // false 로 되돌아가므로 그걸 쓰면 kind 4 가 전부 2 로 기록된다.
+  const brokenKind = tokenIssued ? 4 : 2;
+  const cutoff = new Date(Date.now() - BREAK_RECORD_THROTTLE_MS).toISOString();
+
+  try {
+    // is.null 을 반드시 함께 본다. 컬럼을 새로 더했으므로 기존 행은 전부 NULL 이고,
+    // SQL 에서 NULL < cutoff 는 UNKNOWN 이라 .lt() 만 쓰면 첫 고장이 영영 안 적힌다.
+    //
+    // ★ 반환값의 error 를 반드시 본다 — postgrest 는 HTTP 오류를 **던지지 않고**
+    //   { error } 로 돌려주므로, 안 보면 try/catch 는 네트워크 예외만 잡는다.
+    //   배포 순서를 뒤집어(함수를 064 보다 먼저) 컬럼이 없으면 매 요청이 조용히 실패하고
+    //   지표는 영원히 "끊김 0" 인데, 그건 화면상 "정말 0" 과 구별되지 않는다.
+    const { error } = await db
+      .from('staffroom_admin_tokens')
+      .update({ last_broken_at: new Date().toISOString(), broken_kind: brokenKind })
+      .eq('department_id', departmentId)
+      .or(`last_broken_at.is.null,last_broken_at.lt.${cutoff}`);
+    if (error) {
+      console.warn('[staffroom-library] 끊김 기록 실패(무시):', error.message);
+    }
+  } catch (error) {
+    // 계측이 자료실을 죽이지 않는다.
+    console.warn('[staffroom-library] 끊김 기록 예외(무시):', error);
+  }
+}
+
 /**
  * 서식 글(lexical 저장 구조)에서 **사람이 읽는 글자만** 뽑는다 — 검색 미리보기용.
  *
@@ -221,8 +284,14 @@ serve(async (req: Request) => {
       //   뒤는 **다시 로그인**해야 한다. 하나로 뭉개면 화면이 "아직 연결하지
       //   않으셨다"고 말하는데 실제로는 끊긴 것이라 거짓 안내가 된다.
       let driveStatus: 'connected' | 'missing' | 'broken' = 'missing';
+      // ★ catch 가 재대입하지 않는 변수 — 끊김의 종류를 가르는 데 쓴다(계획서 §6-P0-다).
+      //   driveConnected 는 catch 첫 줄에서 false 로 되돌아가므로 여기 쓸 수 없다.
+      //   토큰까지는 받았는데 그 뒤 driveQuota 가 거부당했다면(용량 초과·폴더 휴지통)
+      //   그건 "갱신 실패"와 조치가 다른 별개의 사고다.
+      let tokenIssued = false;
       try {
         const token = await adminAccessToken(db, departmentId);
+        tokenIssued = true;
         driveConnected = true;
         driveStatus = 'connected';
         const quota = await driveQuota(token);
@@ -233,6 +302,7 @@ serve(async (req: Request) => {
         // 관리자 연결이 끊겼어도 목록은 보여준다 — 무엇이 있는지는 알 수 있어야 한다
         driveConnected = false;
         driveStatus = error.kind;
+        await recordAdminTokenBreak(db, departmentId, error.kind, tokenIssued);
       }
 
       return jsonResponse({
@@ -513,9 +583,11 @@ serve(async (req: Request) => {
       const target = await loadFile(db, fileId, departmentId);
       if (!target) return errorResponse('파일을 찾을 수 없습니다', 404);
 
-      const token = await adminAccessToken(db, departmentId);
-
-      // 이미 권한을 준 적이 있으면 다시 만들지 않는다
+      // ★ 권한 행 조회가 **관리자 토큰보다 먼저**다 (계획서 §6-P0 결함수리).
+      //   계획서 §3.4-나는 "한 번 권한을 받은 파일은 관리자 토큰이 나중에 끊겨도 계속
+      //   열린다"고 약속했는데, 토큰을 먼저 부르면 그 약속이 깨진다 — 이미 드라이브
+      //   권한을 받아 둔 멤버조차 관리자가 전출한 순간 409 로 막힌다.
+      //   폴백 URL 은 DB 값만으로 조립되므로 드라이브 API 가 아예 필요 없다.
       const { data: existing } = await db
         .from('staffroom_file_grants')
         .select('permission_id')
@@ -523,22 +595,35 @@ serve(async (req: Request) => {
         .eq('member_email', myEmail)
         .maybeSingle();
 
-      if (!existing) {
-        const permissionId = await grantReader(token, target.drive_file_id, myEmail);
-        await db.from('staffroom_file_grants').insert({
-          department_id: departmentId,
-          file_id: fileId,
-          drive_file_id: target.drive_file_id,
-          member_email: myEmail,
-          permission_id: permissionId,
-        });
+      // 이 판을 열 수 있는 결정적 주소. 구글이 만들어 주는 webViewLink 와 같은 곳을 가리킨다.
+      const fallbackUrl = `https://drive.google.com/file/d/${target.drive_file_id}/view`;
+
+      if (existing) {
+        // 이미 권한이 있다 → 토큰이 끊겼어도 열린다. 토큰은 "더 좋은 주소(webViewLink)"를
+        // 얻는 데만 쓰고, 실패하면 조용히 폴백한다.
+        try {
+          const token = await adminAccessToken(db, departmentId);
+          const meta = await fileMeta(token, target.drive_file_id);
+          return jsonResponse({ url: meta.webViewLink ?? fallbackUrl, name: target.name });
+        } catch (error) {
+          if (!(error instanceof AdminTokenError)) throw error;
+          return jsonResponse({ url: fallbackUrl, name: target.name });
+        }
       }
 
-      const meta = await fileMeta(token, target.drive_file_id);
-      return jsonResponse({
-        url: meta.webViewLink ?? `https://drive.google.com/file/d/${target.drive_file_id}/view`,
-        name: target.name,
+      // 권한이 없으면 새로 줘야 하므로 관리자 토큰이 꼭 필요하다 — 여기서는 폴백할 수 없다.
+      const token = await adminAccessToken(db, departmentId);
+      const permissionId = await grantReader(token, target.drive_file_id, myEmail);
+      await db.from('staffroom_file_grants').insert({
+        department_id: departmentId,
+        file_id: fileId,
+        drive_file_id: target.drive_file_id,
+        member_email: myEmail,
+        permission_id: permissionId,
       });
+
+      const meta = await fileMeta(token, target.drive_file_id);
+      return jsonResponse({ url: meta.webViewLink ?? fallbackUrl, name: target.name });
     }
 
     // ── 지우기 ──────────────────────────────────────────────────────
