@@ -557,6 +557,33 @@ const absenceChecks = [
       /(main|desktopWidgetManager|desktopWidgetDpiRestore)\.ts$/.test(path) &&
       !path.includes('.test.'),
   },
+  // ────────────────────────────────────────────────────────────────────────
+  // REGRESSION #66 — 온라인 교무실 계측의 개인정보 방어, **소비자 쪽** (2026-08-31, ADR-079).
+  //
+  // 064 마이그레이션은 "부서를 식별할 수 있는 칸을 만들지 않는" 집계 함수 하나만 내보내고,
+  // 그 계약은 staffroomHealthPrivacy.meta.test.ts 가 SQL 쪽에서 지킨다.
+  //
+  // ★ 그런데 SQL 을 한 글자도 안 고치고 뚫는 길이 하나 남는다 —
+  //   `fetchTable('staffroom_departments', { select: 'name,owner_email' })` **한 줄**이면
+  //   부서 이름과 교사 이메일이 그대로 브라우저까지 간다(_lib/supabase.ts 의 fetchTable 은
+  //   service_role 키로 임의의 표를 조회한다). SQL 쪽 테스트는 이걸 절대 못 본다.
+  //
+  // 그래서 관리자 대시보드가 교무실 표를 **직접** 조회하지 못하게 막고,
+  // staffroom_ 참조는 허용된 RPC 이름 하나만 남긴다.
+  // ────────────────────────────────────────────────────────────────────────
+  {
+    name: 'REGRESSION #66: 관리자 대시보드는 교무실 표를 직접 조회하지 않는다 (허용 RPC staffroom_health_v1 하나만)',
+    roots: ['landing/src/app/admin/analytics'],
+    extensions: ['.ts', '.tsx'],
+    patterns: [
+      // 교무실 표를 PostgREST 로 직접 읽는 길을 통째로 막는다
+      /fetchTable\s*\(\s*['"`]staffroom/,
+      // staffroom_health_v1 을 뺀 나머지 staffroom_* 참조 금지.
+      // (ripgrep 이 아니라 JS RegExp 라 부정 전방탐색이 쓸 수 있다)
+      /staffroom_(?!health_v1\b)/,
+    ],
+    stripComments: true,
+  },
 ];
 
 // ============================================================
@@ -991,6 +1018,20 @@ for (const c of absenceChecks) {
       }
     }
   }
+  // ★ 0개를 훑고 초록이 되지 않게 한다 (2026-08-31).
+  //   walk() 는 없는 디렉터리를 만나면 조용히 [] 를 돌려주므로(위 try/catch), roots 에 오타가
+  //   나거나 나중에 폴더 이름이 바뀌면 **검사가 아무것도 안 지키면서 계속 통과한다.**
+  //   개인정보 게이트(#66)처럼 "막고 있다"를 믿고 쓰는 검사에서 이건 조용한 무력화다.
+  const minScanned = c.minScanned ?? 1;
+  if (files.length < minScanned) {
+    console.error(
+      `X ${c.name}\n     - 훑은 파일이 ${files.length}개다 (최소 ${minScanned}). roots=${c.roots.join(', ')} 경로가 살아 있는지 확인하라.`,
+    );
+    failed++;
+    failures.push({ name: c.name, hits: [`scanned ${files.length} file(s)`] });
+    continue;
+  }
+
   if (hits.length > 0) {
     console.error(`X ${c.name}`);
     for (const hit of hits) {
