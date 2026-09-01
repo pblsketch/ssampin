@@ -78,6 +78,8 @@ export interface SidePinWindowHost {
   collapsePanel(ctx: SidePinHostCommandContext): Promise<SidePinHostCommandResult>;
   disposePanel(ctx: SidePinHostCommandContext): Promise<SidePinHostCommandResult>;
   hideAll(ctx: SidePinHostCommandContext): Promise<SidePinHostCommandResult>;
+  /** 손잡이와 패널을 둘 다 감추되 패널 창은 살려 둔다(발표 감지 등 추측 보호용) */
+  concealAll(ctx: SidePinHostCommandContext): Promise<SidePinHostCommandResult>;
   repositionAll(
     ctx: SidePinHostCommandContext,
     layout: SidePinLayout,

@@ -33,6 +33,7 @@ import {
   type SidePinPendingHostOperation,
   type SidePinPendingTransition,
   type SidePinPointerRegion,
+  type SidePinProtectReason,
   type SidePinRuntimeState,
   type SidePinZone,
 } from '../entities/SidePinRuntimeState';
@@ -133,7 +134,7 @@ function withoutKind(
 /**
  * 새 요청을 등록한다. 같은 종류의 지난 요청은 밀어낸다.
  *
- * 목록이 종류 수(9개)를 넘지 않게 하고, 취소된 요청의 늦은 응답이 짝을 잃어
+ * 목록이 종류 수(10개)를 넘지 않게 하고, 취소된 요청의 늦은 응답이 짝을 잃어
  * 자동으로 버려지게 만드는 장치다.
  */
 function withPending(
@@ -192,6 +193,28 @@ function entryZoneOf(region: SidePinPointerRegion): SidePinZone {
 /** 예약을 취소해야 하면 취소 명령을 낸다 */
 function cancelIfScheduled(state: SidePinRuntimeState): SidePinCommand[] {
   return state.pendingTransition !== null ? [{ type: 'cancel-schedule' }] : [];
+}
+
+/**
+ * 추측으로 걸린 보호인가 — 되돌릴 수 있게 다뤄야 하는 등급.
+ *
+ * 전체화면 감지는 시스템 상태를 보고 "발표 중일 것"이라고 짐작하는 것이라 틀릴 수 있다.
+ * 잠금·절전처럼 확실한 근거와 같이 취급하면 오탐 한 번이 쓰던 메모를 지운다.
+ * 등급을 값 하나로 남겨 두면, 보호가 끝난 뒤의 처리(패널을 없앨지)도 이 판단만 보고 갈린다.
+ */
+function isSoftProtectReason(reason: SidePinProtectReason | null): boolean {
+  return reason === 'fullscreen';
+}
+
+/**
+ * 바깥의 보호 이유 추적기(`electron/sidePinProtection.ts`)가 관리하는 이유인가.
+ *
+ * 이 둘만 추적기가 등급을 매겨 보내므로, 등급이 내려오는 판단을 믿어도 되는 것도 이 둘뿐이다.
+ * `adapter-unhealthy`는 전이 함수가 직접 세우고 추적기는 그 존재를 모른다 — 바깥 판단으로
+ * 낮추면 **어댑터가 고장 난 채로 손잡이를 다시 내보내게 된다.**
+ */
+function isTrackedProtectReason(reason: SidePinProtectReason): boolean {
+  return reason === 'lock' || reason === 'suspend' || reason === 'fullscreen';
 }
 
 // ─── 열기·닫기 공통 동작 ────────────────────────────────────────
@@ -724,6 +747,34 @@ function onHostResult(
         isPointerInsideSidePin(state.pointerRegion) &&
         pending.userInitiated !== true;
 
+      // 추측 등급(전체화면)으로 가려진 동안에는 패널을 없앨 예약을 아예 만들지 않는다.
+      //
+      // 이 예약은 보호 중에 터지면 버려지지만, 보호가 풀린 직후 10초 안에 터지면
+      // 그때는 그대로 실행되어 창이 파괴된다(§보호 해제 참고). 만들지 않는 쪽이 가장 단순하다.
+      // 확실한 등급(잠금·절전)은 어차피 `hide-all`로 창이 이미 없으므로 그대로 둔다.
+      // 쓰는 중이면 패널을 없앨 예약을 걸지 않는다 — 경로를 가리지 않는다.
+      //
+      // 예약이 터지면 창이 파괴되고, 그때 화면 쪽 정리가 돌지 않아 **쓰던 내용이 그대로
+      // 사라진다.** 순한 보호로 가려진 동안은 위 분기가 막아 주지만, 보호가 먼저 풀린 뒤
+      // 뒤늦게 도착한 접힘 결과는 그 분기를 못 타고 예약을 건다(발표를 막 끝낸 그 순간이다).
+      // "쓰는 중이면 없애지 않는다"는 규칙 하나면 어느 경로로 와도 막힌다.
+      const busyEditing = isEditorBusy(state.editorActivity);
+
+      if (!canReopen && (isSoftProtectReason(state.protectedReason) || busyEditing)) {
+        return {
+          next: bump(state, {
+            surface: 'collapsed',
+            openReason: null,
+            activeZone: null,
+            // 없앨 예정이 아니므로 'cooldown'이 아니라 살아 있는 창 그대로 적는다.
+            panelLifecycle: 'ready',
+            pendingTransition: null,
+            pendingHostOperations: withoutKind(remaining, 'prepare-panel'),
+          }),
+          commands: cancelIfScheduled(state),
+        };
+      }
+
       const revision = state.revision + 1;
       const transition = canReopen
         ? scheduleOf('reveal', revision, ctx.nowMs, SIDE_PIN_REVEAL_DELAY_MS)
@@ -743,7 +794,16 @@ function onHostResult(
 
     case 'dispose-panel':
       return {
-        next: bump(state, { panelLifecycle: 'absent', pendingHostOperations: remaining }),
+        next: bump(state, {
+          panelLifecycle: 'absent',
+          // 안전망: 창이 사라졌으면 "쓰는 중"도 함께 사라져야 한다.
+          //
+          // 패널 창은 파괴될 때 화면 쪽 정리를 거치지 않아 "이제 안 쓴다"는 신호를
+          // 보내지 못한다. 그 값이 남으면 붙잡아 둘 이유(`shouldHoldOpen`)가 영영 참이라
+          // 옆핀이 다시는 접히지 않는다. 어느 경로로 파기됐든 여기서 되돌린다.
+          editorActivity: 'idle',
+          pendingHostOperations: remaining,
+        }),
         commands: [],
       };
 
@@ -754,6 +814,28 @@ function onHostResult(
           openReason: null,
           activeZone: null,
           panelLifecycle: 'absent',
+          pendingHostOperations: remaining,
+        }),
+        commands: [],
+      };
+
+    /**
+     * 둘 다 감췄다 — 손잡이도 안 보이고 패널도 안 보이지만 **패널 창은 살아 있다.**
+     *
+     * `collapse-panel`과 달리 **파기를 예약하지 않는다.** 그것이 이 명령의 존재 이유다.
+     * 발표가 끝나면 `protect-released`가 `ensure-rail`로 손잡이를 되돌리고, 그때
+     * 패널 창이 그대로 있어야 쓰던 글이 살아 있다. 여기서 10초 파기를 걸면
+     * 발표가 10초만 넘어가도 결국 글이 날아가 순한 등급이 무의미해진다.
+     */
+    case 'conceal-all':
+      return {
+        next: bump(state, {
+          surface: 'collapsed',
+          openReason: null,
+          activeZone: null,
+          // 창을 파괴하지 않았으므로 'absent'로 내리지 않는다. 이미 'absent'였다면
+          // (force에서 내려온 경우) 그 사실을 그대로 잇는다.
+          panelLifecycle: state.panelLifecycle === 'absent' ? 'absent' : 'ready',
           pendingHostOperations: remaining,
         }),
         commands: [],
@@ -830,7 +912,28 @@ function onEditorActivityChanged(
   activity: SidePinRuntimeState['editorActivity'],
   ctx: SidePinTransitionContext,
 ): SidePinTransitionResult {
-  if (!isSidePinResponsive(state)) return unchanged(state);
+  if (!isSidePinResponsive(state)) {
+    /**
+     * 🚨 보호 중이라도 **"이제 안 쓴다"는 사실은 받아 적는다.** 창은 건드리지 않는다.
+     *
+     * `soft-protect` 는 `editorActivity` 를 일부러 안 지운다(쓰던 글을 지키려고).
+     * 그런데 화면 쪽은 보호가 걸리면 편집기를 닫고 `'idle'` 을 보낸다
+     * (`SidePinMemoZone.tsx` 의 "보호 상태가 되면 목록으로 돌린다").
+     * 그 보고를 여기서 통째로 버리면, 보호가 풀린 뒤에도 `'editing'` 이 남는다.
+     * **다시 보내 주는 곳이 없다** — 화면 쪽 effect 의 입력값이 그대로라 재실행되지 않는다.
+     * 그러면 `shouldHoldOpen` 이 영영 참이라 **패널이 다시는 자동으로 안 접히고**
+     * 파기 예약도 안 걸려 창이 그대로 남는다.
+     *
+     * `force-protect` 는 스스로 `'idle'` 로 밀어 버려서 이 구멍이 없었다. 순한 등급을
+     * 만들면서 생긴 자리다.
+     *
+     * 올라가는 쪽(`idle → editing`)은 받지 않는다. 숨어 있는 동안 새로 쓰기 시작할
+     * 방법이 없고, 받아 두면 보호가 풀리는 순간 접힘이 막힌다.
+     */
+    if (isEditorBusy(activity)) return unchanged(state);
+    if (state.editorActivity === activity) return unchanged(state);
+    return { next: bump(state, { editorActivity: activity }), commands: [] };
+  }
   if (state.editorActivity === activity) return unchanged(state);
 
   // 편집을 시작했으면 예약된 접힘을 취소한다 — 쓰던 메모가 사라지면 안 된다.
@@ -910,20 +1013,105 @@ export function resolveSidePinTransition(
       };
     }
 
-    case 'protect-released': {
-      if (state.protectedReason === null) return unchanged(state);
+    /**
+     * 추측(전체화면 감지)으로 가린다 — `force-protect`의 순한 등급.
+     *
+     * `force-protect`와 다른 곳은 셋뿐이고, 셋 다 "판단이 틀렸을 때 되돌릴 수 있는가"에서 나온다.
+     * 1. `editorActivity`를 **건드리지 않는다** — 이 등급이 존재하는 유일한 이유다.
+     * 2. `hide-all`이 아니라 `conceal-all` — 손잡이까지 감추되 **패널 창은 파괴하지 않는다.**
+     *    ⚠️ `collapse-panel`을 쓰면 안 된다. 그 명령은 이름과 달리 `rail.showInactive()`를 불러
+     *    **손잡이를 보이게 한다** — 실제로 그렇게 만들었다가 발표 중에 손잡이가 화면에 남았다
+     *    (2026-09-01 실기기). 되돌릴 길은 손잡이를 남기는 것이 아니라, 발표가 끝나면
+     *    `protect-released`가 `ensure-rail`로 자동으로 되돌리는 것이다.
+     * 3. `panelLifecycle`은 `'absent'`가 아니라 `'ready'` — 패널 창이 파괴되지 않고 살아 있다.
+     *
+     * 나머지(펼침 취소·고정 해제·예약 취소·들어오던 열기 요청 제거)는 force와 똑같다.
+     * 특히 `show-panel`·`prepare-panel` 대기를 지우지 않으면, 가린 뒤에 도착한 열기 응답이
+     * 보호를 뚫고 패널을 띄운다.
+     *
+     * ## 확실한 등급(force)에서 순한 등급으로 **내려오는** 것은 허용한다
+     *
+     * 잠금과 발표가 겹쳤다가 잠금만 풀린 경우다. 이때 그냥 무시하면 `protectedReason`이
+     * `'lock'`에 멈춰 **손잡이가 사라진 채로 발표가 끝날 때까지 남는다** — 선생님은
+     * 옆핀을 되돌릴 방법이 화면에 없다(계획서 D2 "되돌아올 수 있는가" 위반).
+     *
+     * 내려와도 안전한 근거: 이 이벤트는 **추적기가 남은 이유 중 최고 등급이 soft일 때만**
+     * 보낸다. 즉 여기 도달했다는 것은 잠금·절전이 이미 다 풀렸다는 뜻이다.
+     * 잠금이 아직 살아 있으면 추적기가 force를 돌려주므로 이 자리에 오지 않는다.
+     */
+    case 'soft-protect': {
+      if (!state.enabled) return unchanged(state);
+      // 이미 순한 보호가 걸려 있으면 다시 할 일이 없다.
+      if (isSoftProtectReason(state.protectedReason)) return unchanged(state);
+      // 추적기가 다루지 않는 이유(어댑터 이상 등)는 **절대 낮추지 않는다.**
+      // 그런 이유는 전이 함수가 직접 세운 것이라, 바깥의 등급 판단이 그 사정을 모른다.
+      if (state.protectedReason !== null && !isTrackedProtectReason(state.protectedReason)) {
+        return unchanged(state);
+      }
+
       const revision = state.revision + 1;
       return {
         next: bump(state, {
+          surface: 'collapsed',
+          openReason: null,
+          activeZone: null,
+          // 고정은 **그대로 둔다.** 이 등급은 추측으로 걸리고 가릴 때는 한 번만 보고 가리므로
+          // 헛짚는 일이 있는데, 그때마다 사용자가 맞춰 둔 고정을 말없이 풀어 버리면
+          // "오탐의 대가가 싸다"는 이 등급의 전제가 깨진다. 보호 중에는 어차피
+          // `isSidePinResponsive` 가 거짓이라 고정값이 아무 일도 하지 않는다.
+          //
+          // ⚠️ `panelLifecycle` 은 **단정하지 않고 있는 그대로 잇는다.**
+          // 확실한 등급(force)에서 내려온 경우 패널 창은 이미 파괴돼 'absent' 인데,
+          // 여기서 'ready' 라고 적으면 나중에 호버가 준비 단계를 건너뛰고
+          // **없는 창에 대고 "보여줘"를 보낸다.**
+          panelLifecycle: state.panelLifecycle === 'absent' ? 'absent' : 'ready',
+          pendingTransition: null,
+          // editorActivity는 그대로 둔다. 쓰던 글이 살아 있어야 오탐의 대가가 싸진다.
+          pendingHostOperations: withPending(
+            withoutKind(state.pendingHostOperations, 'show-panel', 'prepare-panel'),
+            // 사용자가 닫은 것으로 표시한다 — 안 그러면 접힘 완료가
+            // "커서가 안에 있으니 다시 열기"로 이어져 발표 화면 위에 패널이 되살아난다.
+            pendingOf('conceal-all', ctx, revision, true),
+          ),
+          protectedReason: event.reason,
+        }),
+        commands: [...cancelIfScheduled(state), hostCommand('conceal-all', ctx, revision)],
+      };
+    }
+
+    case 'protect-released': {
+      if (state.protectedReason === null) return unchanged(state);
+      const revision = state.revision + 1;
+      /**
+       * 🚨 예약된 패널 파기를 **여기서** 지운다.
+       *
+       * 보호 중에는 10초짜리 파기 예약이 터져도 `onTimerFired`가 조용히 버린다.
+       * 위험한 자리는 그 다음이다 — 보호가 풀린 **직후 10초** 안에 예약이 터지면
+       * 그때는 반응하는 상태라 파기가 그대로 실행되어 패널 창이 사라지고,
+       * 쓰던 글이 그 순간 날아간다. 발표를 끝낸 직후가 정확히 그 구간이다.
+       *
+       * 예약을 만들지 않는 쪽(`collapse-panel` 처리)만으로는 부족하다.
+       * 다른 경로로 걸린 예약이 보호 중에 남아 있을 수 있다.
+       */
+      const disposeScheduled = state.pendingTransition?.type === 'dispose-panel';
+      const commands: SidePinCommand[] = [];
+      if (disposeScheduled) commands.push({ type: 'cancel-schedule' });
+      commands.push(hostCommand('ensure-rail', ctx, revision));
+      return {
+        next: bump(state, {
           protectedReason: null,
+          pendingTransition: disposeScheduled ? null : state.pendingTransition,
           // 지난 숨김 요청은 지운다. 그 완료가 나중에 도착해 손잡이를 다시 숨기면
           // 복구할 길이 없어진다.
+          //
+          // ⚠️ `conceal-all`도 반드시 함께 지운다. 숨기는 명령이 둘이 됐는데 하나만
+          // 지우면, 늦게 도착한 완료가 방금 되돌린 손잡이를 다시 감춘다.
           pendingHostOperations: withPending(
-            withoutKind(state.pendingHostOperations, 'hide-all'),
+            withoutKind(state.pendingHostOperations, 'hide-all', 'conceal-all'),
             pendingOf('ensure-rail', ctx, revision, true),
           ),
         }),
-        commands: [hostCommand('ensure-rail', ctx, revision)],
+        commands,
       };
     }
 
@@ -979,10 +1167,22 @@ export function resolveSidePinTransition(
 
     case 'close-requested': {
       if (!isSidePinResponsive(state)) return unchanged(state);
+      const forced = event.force === true;
       // 메모를 쓰는 중이면 편집기가 먼저 처리한다(저장·확인). 여기서 닫지 않는다.
-      if (isEditorBusy(state.editorActivity)) return unchanged(state);
+      //
+      // 단, 사용자가 "지금 가리기"를 직접 누른 경우(`force`)는 예외다. 위젯을 열면
+      // 편집 중으로 잡히는데, 급히 가려야 하는 순간이 정확히 그때라 무반응이면
+      // 단추가 고장 난 것으로 보인다. 명시적으로 누른 경우에만 방어를 건너뛴다 —
+      // 자동 접힘은 예전 그대로 쓰던 글을 지킨다.
+      if (!forced && isEditorBusy(state.editorActivity)) return unchanged(state);
       if (state.surface === 'collapsed') return unchanged(state);
-      return closeNow(state, ctx, { pinnedZone: 'none' });
+      // 접으면서 편집 표시도 되돌린다. 남겨 두면 붙잡아 둘 이유가 계속 참이라
+      // 다음부터는 마우스를 빼도 옆핀이 접히지 않는다.
+      return closeNow(
+        state,
+        ctx,
+        forced ? { pinnedZone: 'none', editorActivity: 'idle' } : { pinnedZone: 'none' },
+      );
     }
 
     case 'outside-click': {

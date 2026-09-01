@@ -8,7 +8,7 @@
  * 창 크기는 main이 바꾼다. 접혔을 때는 손잡이 크기, 펼쳤을 때는 패널 크기의 창이
  * 오므로 여기서는 항상 창 전체를 채우기만 한다.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
   MemoEditorActivity,
   SidePinPinnedZone,
@@ -23,6 +23,7 @@ import { SidePinWidgetZone } from './SidePinWidgetZone';
 import { WIDGET_DEFINITIONS } from '@widgets/registry';
 import { useSidePinWidgetIds } from './useSidePinWidgetIds';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { useSidePinAppearance, useSaveSidePinAppearance } from './useSidePinAppearance';
 import { SidePinAppearancePopover } from './SidePinAppearancePopover';
 
@@ -165,6 +166,23 @@ export function SidePinApp() {
     if (view.surface === 'collapsed') setPanelShown(false);
   }, [view.surface]);
 
+  /**
+   * ★옆핀이 펴진 횟수 (2026-09-01 추가).
+   *
+   * 그 전까지 옆핀은 앱 통계에 **한 건도 남기지 않아** 몇 명이 쓰는지 알 수 없었다.
+   *
+   * ★손잡이(rail) 창에서는 세지 않는다. 손잡이와 패널은 **각각 다른 창**이고 둘 다
+   *   이 컴포넌트를 그린다 — 양쪽에서 세면 한 번 편 것이 두 번으로 기록된다.
+   */
+  const { track } = useAnalytics();
+  const wasExpandedRef = useRef(false);
+  useEffect(() => {
+    if (rendererSurface === 'rail') return;
+    const isExpanded = view.surface === 'expanded';
+    if (isExpanded && !wasExpandedRef.current) track('sidepin_open');
+    wasExpandedRef.current = isExpanded;
+  }, [view.surface, rendererSurface, track]);
+
   // `closing`도 패널을 계속 그린다 — 나가는 연출이 끝나야 창이 줄어들기 때문이다.
   // 여기서 빼면 연출할 것이 사라져, 창만 큰 채로 빈 화면이 잠깐 보인다.
   const showPanel =
@@ -214,6 +232,7 @@ export function SidePinApp() {
     const busy = activity !== 'idle';
     if (zone === 'memo') setMemoEditing(busy);
     else setWidgetEditing(busy);
+
     // `?.()`로 감싼다. 옛 preload 위에서 돌면 이 함수가 없는데, 그냥 부르면
     // 그 칸 전체가 죽어 아예 못 쓰게 된다. 접힘 방지가 안 되는 편이 낫다.
     window.electronAPI?.sidePin?.reportEditorActivity?.(activity);
@@ -286,7 +305,9 @@ export function SidePinApp() {
         // `?.()`로 감싼다 — 옛 preload 위에서 돌면 이 함수가 없는데, 그냥 부르면
         // 패널이 통째로 죽는다. 띠를 못 누르는 편이 낫다.
         onFocusZone={(zone) => window.electronAPI?.sidePin?.focusZone?.(zone)}
-        onClose={() => window.electronAPI?.sidePin?.requestClose()}
+        // 직접 누른 [지금 가리기]다 — 위젯을 열어 두었거나 메모를 쓰는 중이어도 접는다.
+        // 급히 가려야 하는 순간이 바로 그때라, 여기서 안 접히면 눌러도 안 되는 단추가 된다.
+        onClose={() => window.electronAPI?.sidePin?.requestClose(true)}
         onOpenMain={() => window.electronAPI?.sidePin?.openMain()}
         memoEditing={memoEditing}
         widgetEditing={widgetEditing}

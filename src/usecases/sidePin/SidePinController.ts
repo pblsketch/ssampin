@@ -156,6 +156,8 @@ export class SidePinController {
         return host.disposePanel(ctx);
       case 'hide-all':
         return host.hideAll(ctx);
+      case 'conceal-all':
+        return host.concealAll(ctx);
       case 'reposition-all':
         return host.repositionAll(ctx, layout);
       case 'focus-panel':

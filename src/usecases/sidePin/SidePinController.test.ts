@@ -135,6 +135,9 @@ class FakeHost implements SidePinWindowHost {
   hideAll(ctx: SidePinHostCommandContext): Promise<SidePinHostCommandResult> {
     return this.respond('hideAll', ctx);
   }
+  concealAll(ctx: SidePinHostCommandContext): Promise<SidePinHostCommandResult> {
+    return this.respond('concealAll', ctx);
+  }
   repositionAll(ctx: SidePinHostCommandContext): Promise<SidePinHostCommandResult> {
     return this.respond('repositionAll', ctx);
   }

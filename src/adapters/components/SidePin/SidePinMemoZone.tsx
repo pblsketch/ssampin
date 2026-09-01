@@ -24,6 +24,7 @@ import type { MemoFontSize } from '@domain/valueObjects/MemoFontSize';
 import { DEFAULT_MEMO_FONT_SIZE } from '@domain/valueObjects/MemoFontSize';
 import type { MemoEditorActivity } from '@domain/entities/SidePinRuntimeState';
 import { useMemoStore } from '@adapters/stores/useMemoStore';
+import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { useSidePinMemos } from './useSidePinMemos';
 import { SidePinMemoList } from './SidePinMemoList';
 import { SidePinMemoEditor, type SidePinImageError } from './SidePinMemoEditor';
@@ -83,6 +84,10 @@ export function SidePinMemoZone({ locked, onEditorActivityChange }: SidePinMemoZ
    */
   const savedRef = useRef('');
 
+  /** 사용량 기록용 — 이미 센 메모 id. 같은 메모를 여러 번 저장해도 한 번만 센다. */
+  const { track } = useAnalytics();
+  const countedMemoIdsRef = useRef<Set<string>>(new Set());
+
   const goToList = useCallback(() => {
     setMode({ kind: 'list' });
     setConfirmingDelete(false);
@@ -100,11 +105,17 @@ export function SidePinMemoZone({ locked, onEditorActivityChange }: SidePinMemoZ
       try {
         await updateMemo(id, content);
         savedRef.current = content;
+        // ★메모 하나당 **한 번만** 센다. 저장은 타자가 멈출 때마다 일어나므로
+        //   그대로 세면 긴 메모 한 개가 수십 건으로 부풀려진다.
+        if (!countedMemoIdsRef.current.has(id)) {
+          countedMemoIdsRef.current.add(id);
+          track('sidepin_action', { action: 'memo_write' });
+        }
       } finally {
         setSaving(false);
       }
     },
-    [updateMemo],
+    [updateMemo, track],
   );
 
   // 타자가 멈추면 저장한다.
@@ -128,6 +139,20 @@ export function SidePinMemoZone({ locked, onEditorActivityChange }: SidePinMemoZ
   // 열어 둔 메모가 바깥에서 사라졌거나, 보호 상태가 되면 목록으로 돌린다.
   useEffect(() => {
     if (mode.kind !== 'edit') return;
+
+    /**
+     * ⚠️ **알려진 한계**: 보호가 걸려 편집기가 닫힐 때, 아직 저장되지 않은
+     * 마지막 몇 글자(미룬 저장 타이머가 돌기 전 분량)는 사라진다.
+     *
+     * 여기서 먼저 저장하고 닫으려고 해 봤는데 두 가지에 걸렸다 —
+     * ① 저장을 기다렸다 닫으면 **보호가 걸린 뒤에도 한 박자 동안 내용이 화면에 남는다**(P3 위반).
+     * ② 저장을 이 effect 안에서 부르면 갱신이 끝없이 겹친다(React "Maximum update depth").
+     *
+     * 화면에서 먼저 치우는 것이 더 중요하므로 지금은 이쪽을 지킨다.
+     * 잃는 양은 저장 지연(`SIDE_PIN_MEMO_SAVE_DELAY_MS`) 이내이고, 이 동작은
+     * 잠금·절전(`force-protect`)에서도 **원래부터 같았다** — 발표 감지가 만든 문제가 아니다.
+     * 제대로 고치려면 저장을 effect 바깥(창 쪽 신호를 받는 자리)으로 옮겨야 한다.
+     */
     if (locked || (loaded && editing === undefined)) goToList();
   }, [mode, locked, loaded, editing, goToList]);
 

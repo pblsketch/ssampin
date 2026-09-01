@@ -229,6 +229,33 @@ export function createSidePinWindowHost(deps: SidePinWindowHostDeps): SidePinWin
     }
   }
 
+  /**
+   * 손잡이와 패널을 **둘 다 감춘다. 패널 창은 파괴하지 않는다.**
+   *
+   * `collapsePanel`은 손잡이를 **보이게** 하므로(발표 중에는 그게 문제였다) 쓸 수 없고,
+   * `hideAll`은 패널을 파괴해 쓰던 글을 날리므로 추측으로 걸리는 보호에는 과하다.
+   * 그 사이가 이 함수다.
+   *
+   * 패널에 `CLEAR_PANEL`을 보내지 않는 것도 의도다 — 창이 이미 화면에서 사라졌고,
+   * 내용은 화면 쪽이 `locked` 판단으로 스스로 비운다. 여기서 비우면 발표가 끝났을 때
+   * 되살릴 것이 없다.
+   *
+   * ⚠️ "쓰던 글이 그대로 남는다"는 **패널 창을 파괴하지 않는다**는 뜻이다.
+   * 편집기가 닫히면서 아직 저장 안 된 마지막 몇 글자는 잃는다
+   * (`SidePinMemoZone` 의 "알려진 한계" 주석 — 잠금·절전에서도 원래 같았다).
+   */
+  async function concealAll(ctx: SidePinHostCommandContext): Promise<SidePinHostCommandResult> {
+    try {
+      alive('panel')?.hide();
+      alive('rail')?.hide();
+      panelVisible = false;
+      railVisible = false;
+      return applied(ctx);
+    } catch (error) {
+      return failed(ctx, describeError(error));
+    }
+  }
+
   async function disposePanel(ctx: SidePinHostCommandContext): Promise<SidePinHostCommandResult> {
     const panel = alive('panel');
     if (panel === null) return applied(ctx);
@@ -330,6 +357,7 @@ export function createSidePinWindowHost(deps: SidePinWindowHostDeps): SidePinWin
     collapsePanel,
     disposePanel,
     hideAll,
+    concealAll,
     repositionAll,
     focusPanel,
     destroyAll,

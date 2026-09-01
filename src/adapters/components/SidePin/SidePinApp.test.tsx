@@ -298,11 +298,11 @@ describe('사람이 한 일을 되돌려 보낸다', () => {
     expect(bridge.togglePin).toHaveBeenCalledWith('both');
   });
 
-  test('닫기 버튼', () => {
+  test('지금 가리기 버튼', () => {
     render(<SidePinApp />);
     send({ surface: 'expanded' });
 
-    fireEvent.click(screen.getByRole('button', { name: '닫기' }));
+    fireEvent.click(screen.getByRole('button', { name: '지금 가리기' }));
 
     expect(bridge.requestClose).toHaveBeenCalled();
   });

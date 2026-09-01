@@ -94,6 +94,8 @@ describe('normalizeSidePinDeviceState', () => {
       displayHint: null,
       panelWidth: 420,
       railPosition: 0.6,
+      // 칸이 없던 옛 저장본 — 발표 중 숨기기는 켜짐으로 채운다(ADR-078)
+      hideOnPresentation: true,
     });
   });
 
@@ -106,6 +108,7 @@ describe('normalizeSidePinDeviceState', () => {
       displayHint: null,
       panelWidth: SIDE_PIN_WIDTH_DEFAULT,
       railPosition: SIDE_PIN_RAIL_POSITION_DEFAULT,
+      hideOnPresentation: true,
     });
   });
 
@@ -136,5 +139,33 @@ describe('normalizeSidePinDeviceState', () => {
     expect(normalizeSidePinDeviceState({ schemaVersion: 0 }).schemaVersion).toBe(
       SIDE_PIN_DEVICE_STATE_SCHEMA_VERSION,
     );
+  });
+
+  // ── 스키마 2 → 3: 발표 중 자동 숨기기 (ADR-078) ──
+
+  it('칸이 없는 스키마 2 파일은 발표 중 숨기기가 켜진 것으로 본다', () => {
+    // 예전 사용자에게는 이 보호가 아예 없었다. 꺼짐으로 기울면 전원이 못 받는다.
+    const migrated = normalizeSidePinDeviceState({ schemaVersion: 2, displayId: '3' });
+    expect(migrated.hideOnPresentation).toBe(true);
+    expect(migrated.schemaVersion).toBe(SIDE_PIN_DEVICE_STATE_SCHEMA_VERSION);
+    // 함께 저장돼 있던 값은 잃지 않는다
+    expect(migrated.displayId).toBe('3');
+  });
+
+  it('사용자가 꺼 둔 값은 그대로 보존한다', () => {
+    // 듀얼 모니터에서 성가셔 끈 선생님의 선택을 앱이 되돌리면 안 된다.
+    expect(normalizeSidePinDeviceState({ hideOnPresentation: false }).hideOnPresentation).toBe(
+      false,
+    );
+  });
+
+  it('boolean이 아닌 값은 켜짐으로 되돌린다', () => {
+    expect(normalizeSidePinDeviceState({ hideOnPresentation: 'no' }).hideOnPresentation).toBe(true);
+    expect(normalizeSidePinDeviceState({ hideOnPresentation: 0 }).hideOnPresentation).toBe(true);
+    expect(normalizeSidePinDeviceState({ hideOnPresentation: null }).hideOnPresentation).toBe(true);
+  });
+
+  it('기본값은 켜짐이다', () => {
+    expect(normalizeSidePinDeviceState(null).hideOnPresentation).toBe(true);
   });
 });

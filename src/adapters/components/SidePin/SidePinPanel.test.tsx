@@ -113,11 +113,11 @@ describe('패널 구조', () => {
     expect(screen.getByRole('region', { name: '옆핀' })).toBeTruthy();
   });
 
-  test('고정·닫기 버튼이 있다', () => {
+  test('고정·지금 가리기 버튼이 있다', () => {
     renderPanel();
 
     expect(screen.getByRole('button', { name: '고정' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: '닫기' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: '지금 가리기' })).toBeTruthy();
   });
 
   test('메인 쌤핀으로 돌아갈 길이 반드시 있다', () => {
@@ -171,10 +171,10 @@ describe('고정 — 지금 보는 칸을 겨눈다', () => {
     expect(screen.getByRole('button', { name: '고정 해제' })).toBeTruthy();
   });
 
-  test('닫기를 누르면 알린다', () => {
+  test('지금 가리기를 누르면 알린다', () => {
     const props = renderPanel();
 
-    fireEvent.click(screen.getByRole('button', { name: '닫기' }));
+    fireEvent.click(screen.getByRole('button', { name: '지금 가리기' }));
 
     expect(props.onClose).toHaveBeenCalled();
   });

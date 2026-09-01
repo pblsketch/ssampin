@@ -768,6 +768,15 @@ interface ElectronAPI {
     listDisplays?: () => Promise<SidePinDisplayListResult>;
     /** 옆핀을 띄울 모니터를 정한다. null이면 자동(주 모니터). 없을 수 있다 */
     setDisplay?: (displayId: string | null) => Promise<SidePinSetDisplayResult>;
+    /**
+     * 발표(전체화면) 중 옆핀을 스스로 가릴 것인가.
+     *
+     * 모니터 선택과 같은 기기 전용 값이라 동기화하지 않는다. **없을 수 있다** —
+     * 옛 preload 위에서 도는 시간이 있으므로 `?.()`로 감쌀 것.
+     */
+    getHideOnPresentation?: () => Promise<boolean>;
+    /** 발표 중 자동 숨기기를 켜고 끈다. 저장에 실패하면 false. 없을 수 있다 */
+    setHideOnPresentation?: (enabled: boolean) => Promise<boolean>;
     reportPointerRegion: (region: string) => void;
     startRailDrag?: () => void;
     endRailDrag?: () => void;
@@ -779,7 +788,13 @@ interface ElectronAPI {
      * 위에서 도는 시간이 있다. 그냥 부르면 패널이 통째로 죽으니 `?.()`로 감쌀 것.
      */
     focusZone?: (zone: 'widget' | 'memo' | 'both') => void;
-    requestClose: () => void;
+    /**
+     * 패널을 접는다. `force`는 사용자가 [지금 가리기]를 직접 눌렀을 때만 참으로 보낸다
+     * — 그때는 쓰는 중이어도 접는다(급히 가려야 하는 순간이라서).
+     *
+     * 인자를 안 넘기면 예전 동작 그대로다(옛 호출부 호환).
+     */
+    requestClose: (force?: boolean) => void;
     toggleShortcut?: () => void;
     openMain: () => void;
     reportPainted: () => void;

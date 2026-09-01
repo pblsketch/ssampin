@@ -77,9 +77,16 @@ import { createShortcutTriggerGate } from './shortcutTriggerGate';
 import { createOwnedGlobalShortcutRegistry } from './ownedGlobalShortcutRegistry';
 import {
   createSidePinProtectionTracker,
-  type SidePinPowerReason,
+  type SidePinTrackedProtectReason,
   type SidePinProtectionDecision,
 } from './sidePinProtection';
+import {
+  queryUserNotificationState,
+  shouldHideForNotificationState,
+  stepPresentationWatch,
+  INITIAL_PRESENTATION_WATCH_STATE,
+  type PresentationWatchState,
+} from './platform/win32Presentation';
 import {
   registerRealtimeWallBoardHandlers,
   saveDirtyWallBoardsSync,
@@ -2060,21 +2067,148 @@ let sidePin: SidePinElectronHandle | null = null;
  */
 const sidePinProtection = createSidePinProtectionTracker();
 
+/**
+ * 트래커의 판단을 실제 창 동작으로 옮긴다.
+ *
+ * ⚠️ **방금 들어온 이유가 아니라 트래커가 돌려준 최고 등급으로 가른다.** 잠금(force)과
+ * 전체화면(soft)이 함께 걸려 있을 때 방금 것으로 가르면, 절전이 풀리는 순간
+ * `soft`로 내려가 **아직 잠금 화면인데 손잡이가 다시 뜬다**(sidePinProtection.ts 머리말).
+ */
 function applySidePinProtection(decision: SidePinProtectionDecision): void {
   if (decision.kind === 'none') return;
   if (decision.kind === 'protect') {
-    sidePin?.service.dispatch({ type: 'force-protect', reason: decision.reason });
+    // force = 잠금·절전(자리에 확실히 없다) → 패널까지 파괴하고 손잡이도 숨긴다.
+    // soft  = 전체화면(추측이다) → 손잡이는 남기고 쓰던 글도 지우지 않는다.
+    sidePin?.service.dispatch({
+      type: decision.severity === 'soft' ? 'soft-protect' : 'force-protect',
+      reason: decision.reason,
+    });
     return;
   }
   sidePin?.service.dispatch({ type: 'protect-released' });
 }
 
-function protectSidePin(reason: SidePinPowerReason): void {
+function protectSidePin(reason: SidePinTrackedProtectReason): void {
   applySidePinProtection(sidePinProtection.protect(reason));
 }
 
-function releaseSidePinProtection(reason: SidePinPowerReason): void {
+function releaseSidePinProtection(reason: SidePinTrackedProtectReason): void {
   applySidePinProtection(sidePinProtection.release(reason));
+}
+
+// ─── 발표(전체화면) 감시 — ADR-078 ───────────────────────────────────────────
+//
+// 잠금·절전은 운영체제가 알려주지만(powerMonitor) **다른 프로그램의 전체화면은
+// 아무도 알려주지 않는다.** 그래서 윈도우에 3초마다 직접 물어본다.
+//
+// 폴링이 싫지만 대안이 없다. 이벤트를 주는 방법(포그라운드 창 크기 재기)은
+// **최대화한 크롬·탐색기도 전체화면으로 오인**해서, 옆핀이 이유 없이 사라진다.
+// 그러면 선생님은 고장으로 여기고 기능을 꺼 버린다 — 보호가 0이 된다.
+
+/** 물어보는 주기 */
+const PRESENTATION_POLL_MS = 3_000;
+// 확인 횟수 상수와 판정 로직은 win32Presentation.ts 가 정본이다(테스트가 있는 쪽).
+/**
+ * ⚠️ **"최소 유지 시간"을 다시 넣지 말 것** (2026-09-01 실기기에서 제거).
+ *
+ * 원래는 "한 번 숨겼으면 30초는 숨긴 채로 둔다"가 있었다. 값이 번갈아 튈 때
+ * 숨었다 나왔다 반복하는 것을 막으려는 의도였다. **두 가지가 틀렸다.**
+ *
+ * 1. 필요가 없다. 가릴 때 1회·되돌릴 때 2회라는 **비대칭**이 이미 그 일을 한다.
+ *    값이 한 칸씩 번갈아 튀면 "아니오"가 두 번 연속 나오지 않으므로 **되돌아가는 일 자체가
+ *    일어나지 않는다.** 흔들림을 막는 것은 이 비대칭이지 유지 시간이 아니었다.
+ * 2. 해롭다. 발표를 30초 안에 끝내면 손잡이가 **남은 시간 동안 사라진 채로 있다.**
+ *    선생님 눈에는 고장이다(실제로 그렇게 신고됐다). 그러면 기능을 꺼 버리고
+ *    보호는 0이 된다 — 계획서 P1이 경고한 바로 그 경로다.
+ *
+ * 되돌리는 것은 **빨라야 한다.** 늦게 되돌리는 대가(고장으로 보임 → 기능을 끔)가
+ * 일찍 되돌리는 대가(잠깐 잘못 나옴, 그나마 2회 확인이 막는다)보다 크다.
+ */
+
+let presentationTimer: NodeJS.Timeout | null = null;
+/** 감시 판정 상태 — 연속 횟수와 지금 보호를 걸어 뒀는지. 갱신은 stepPresentationWatch가 한다 */
+let presentationWatch: PresentationWatchState = INITIAL_PRESENTATION_WATCH_STATE;
+/** 마지막으로 로그를 남긴 상태값. 바뀔 때만 찍는다(3초마다 찍으면 로그가 폭주한다) */
+let presentationLastLoggedState: number | null | undefined;
+/**
+ * 마지막으로 본 옆핀 켜짐 상태.
+ *
+ * `onStateChanged` 는 판번호가 오를 때마다(= 포인터가 움직일 때마다) 불린다.
+ * 값이 **바뀐 순간**만 골라내지 않으면 타이머를 세우고 부수는 일이 초당 몇 번씩 일어난다.
+ */
+let presentationWatchedEnabled = false;
+
+function pollPresentationOnce(): void {
+  const state = queryUserNotificationState();
+  const hide = shouldHideForNotificationState(state);
+
+  if (state !== presentationLastLoggedState) {
+    presentationLastLoggedState = state;
+    console.log(`[presentation] 상태=${String(state)} 숨김판정=${hide}`);
+  }
+
+  // 판정은 순수 함수가 한다(win32Presentation.ts). 여기서는 그 결과를 실행만 한다 —
+  // main.ts 안에 판정을 두었더니 어떤 테스트도 그것을 못 봤다(2026-09-01 실기기 결함).
+  const { next, action } = stepPresentationWatch(presentationWatch, hide);
+  presentationWatch = next;
+
+  if (action === 'protect') {
+    console.log('[presentation] 발표 감지 — 옆핀을 가린다');
+    protectSidePin('fullscreen');
+    return;
+  }
+  if (action === 'release') {
+    console.log('[presentation] 발표 끝 — 옆핀을 되돌린다');
+    releaseSidePinProtection('fullscreen');
+  }
+}
+
+/** 지금 감시를 돌려야 하는 상태인가 — 옆핀이 켜져 있고, 사용자가 끄지 않았을 때만 */
+function shouldWatchPresentation(): boolean {
+  // 감지가 Win32 전용이라 다른 OS에서는 타이머가 3초마다 깨어나 항상 "모름"만 돌려준다.
+  // 아무 일도 못 하면서 배터리만 먹으므로 아예 만들지 않는다.
+  if (process.platform !== 'win32') return false;
+  if (isSystemSuspending) return false;
+  if (sidePin === null) return false;
+  if (!sidePin.service.getState().enabled) return false;
+  return loadSidePinDeviceState(app.getPath('userData')).hideOnPresentation;
+}
+
+/**
+ * 감시 타이머를 지금 상태에 맞춘다. 여러 번 불러도 안전하다.
+ *
+ * 옆핀을 안 쓰는 사람에게 3초 타이머를 남겨 둘 이유가 없다. 절전 중에도 멈춘다 —
+ * 안 그러면 타이머가 절전 복귀를 유발하거나 배터리를 먹는다.
+ */
+function syncPresentationWatch(): void {
+  const wanted = shouldWatchPresentation();
+
+  if (!wanted) {
+    if (presentationTimer !== null) {
+      clearInterval(presentationTimer);
+      presentationTimer = null;
+    }
+    // 감시를 멈출 때 내가 건 보호는 반드시 푼다. 안 그러면 옆핀이 숨은 채로 남는다.
+    if (presentationWatch.hiding) {
+      releaseSidePinProtection('fullscreen');
+    }
+    presentationWatch = INITIAL_PRESENTATION_WATCH_STATE;
+    return;
+  }
+
+  if (presentationTimer !== null) return;
+  presentationTimer = setInterval(pollPresentationOnce, PRESENTATION_POLL_MS);
+  // ★ 즉시 한 번 본다. `setInterval`은 첫 3초를 그냥 흘려보내는데,
+  // 그 3초가 곧 **학생 정보가 교실 화면에 떠 있는 3초**다.
+  // 특히 절전에서 깨어났을 때가 위험하다 — 발표는 계속되는데 옆핀만 먼저 돌아온다.
+  pollPresentationOnce();
+}
+
+/** 앱을 끌 때 감시를 정리한다. 안 하면 창이 사라진 뒤에도 폴링이 돌아 파괴된 창을 건드린다 */
+function stopPresentationWatch(): void {
+  if (presentationTimer === null) return;
+  clearInterval(presentationTimer);
+  presentationTimer = null;
 }
 
 function ensureSidePin(): void {
@@ -2087,6 +2221,14 @@ function ensureSidePin(): void {
       // 화면은 이 상태를 그대로 그리기만 한다(스스로 판단하지 않는다).
       for (const win of sidePin?.getWindows() ?? []) {
         if (!win.isDestroyed()) win.webContents.send('sidePin:state-changed', state);
+      }
+
+      // 발표 감시는 옆핀이 **켜져 있을 때만** 돈다.
+      // ⚠️ 이 콜백은 판번호가 오를 때마다(포인터가 움직일 때마다) 불린다.
+      // 그래서 매번 타이머를 만들지 말고 `enabled` 가 **바뀐 순간만** 골라낸다.
+      if (state.enabled !== presentationWatchedEnabled) {
+        presentationWatchedEnabled = state.enabled;
+        syncPresentationWatch();
       }
 
       // 옆핀이 스스로 꺼졌으면(어댑터 이상 등) 메인으로 되돌린다.
@@ -3257,8 +3399,9 @@ function registerIpcHandlers(): void {
     sidePin?.service.dispatch({ type: 'focus-zone', zone });
   });
 
-  ipcMain.on('sidePin:request-close', () => {
-    sidePin?.service.dispatch({ type: 'close-requested' });
+  ipcMain.on('sidePin:request-close', (_event, force: unknown) => {
+    // 화면이 보내는 값을 그대로 믿지 않는다 — 참일 때만 참으로 본다.
+    sidePin?.service.dispatch({ type: 'close-requested', force: force === true });
   });
 
   // 단축키 토글 — triggerShortcut(전역)과 useGlobalShortcuts(렌더러 폴백)가 같은 사건으로 잇는다.
@@ -3295,6 +3438,40 @@ function registerIpcHandlers(): void {
     // 트레이 메뉴에 체크 표시가 있으므로 지금 고른 것을 다시 그려야 한다.
     if (result === 'applied' || result === 'deferred') refreshTrayMenu();
     return result;
+  });
+
+  /**
+   * 발표(전체화면) 중에 옆핀을 스스로 가릴 것인가 — 지금 값을 읽는다.
+   *
+   * 모니터 선택과 같은 **기기 전용 파일**에 산다. 그 이유는
+   * `SidePinDeviceState.hideOnPresentation` 주석에 적어 두었다(학교의 듀얼 모니터와
+   * 집의 단일 모니터가 서로의 값을 덮어쓰면 안 된다).
+   */
+  ipcMain.handle('sidePin:get-hide-on-presentation', () => {
+    return loadSidePinDeviceState(app.getPath('userData')).hideOnPresentation;
+  });
+
+  /**
+   * 발표 중 자동 숨기기를 켜고 끈다.
+   *
+   * 끄면 폴링 자체를 멈춘다 — 끈 사람에게 3초마다 도는 타이머를 남겨 둘 이유가 없다.
+   * 켜면 다시 시작하되, 옆핀이 실제로 켜져 있을 때만 돈다.
+   */
+  ipcMain.handle('sidePin:set-hide-on-presentation', (_event, enabled: unknown) => {
+    if (typeof enabled !== 'boolean') return false;
+    const userDataDir = app.getPath('userData');
+    const current = loadSidePinDeviceState(userDataDir);
+    if (current.hideOnPresentation !== enabled) {
+      const result = saveSidePinDeviceState(userDataDir, {
+        ...current,
+        hideOnPresentation: enabled,
+      });
+      if (result === 'failed') return false;
+    }
+    // 값이 그대로여도 감시를 다시 맞춘다 — 어쩌다 타이머가 어긋났을 때
+    // **껐다 켜는 것이 고치는 방법**이 되게 한다. 값이 같다고 건너뛰면 그 길이 막힌다.
+    syncPresentationWatch();
+    return true;
   });
 
   /**
@@ -6099,6 +6276,8 @@ if (!gotTheLock) {
       console.log('[power] 시스템 suspend 감지');
       isSystemSuspending = true;
       protectSidePin('suspend');
+      // 자는 동안 3초 타이머를 돌리면 절전 복귀를 유발하거나 배터리를 먹는다.
+      syncPresentationWatch();
       widgetActiveBeforeSleep =
         widgetWasActive || (widgetWindow !== null && !widgetWindow.isDestroyed());
     });
@@ -6107,6 +6286,7 @@ if (!gotTheLock) {
       console.log('[power] 시스템 resume 감지');
       isSystemSuspending = false;
       releaseSidePinProtection('suspend');
+      syncPresentationWatch();
       setTimeout(() => restoreWidgetAfterSleep(), 1000);
       // 바탕화면 아이콘 아래 모드: WorkerW가 절전 복귀 후 stale일 수 있어 재검사.
       if (currentDesktopMode === 'native-desktop' && widgetWindow && !widgetWindow.isDestroyed()) {
@@ -6190,6 +6370,8 @@ if (!gotTheLock) {
 
 app.on('will-quit', () => {
   globalShortcut.unregisterAll();
+  // 창이 사라진 뒤에도 3초 폴링이 돌면 이미 파괴된 창을 건드린다.
+  stopPresentationWatch();
   destroyQuickAddWindow();
   destroyStickerPickerWindow();
   // live-sync loopback 서버 정리(control.json 제거). 비동기지만 best-effort.

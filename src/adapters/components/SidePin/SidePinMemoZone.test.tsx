@@ -312,6 +312,33 @@ describe('바깥에서 벌어진 일', () => {
 
     expect(screen.queryByRole('textbox', { name: '메모 내용' })).toBeNull();
   });
+
+  test('보호로 접히면 화면에서 **즉시** 사라진다 — 저장을 기다리지 않는다', () => {
+    // 저장을 기다렸다 닫으면 보호가 걸린 뒤에도 한 박자 동안 내용이 남는다.
+    // 가려야 할 순간에는 화면을 치우는 쪽이 먼저다(계획서 P3).
+    // 그 대가로 미저장 분량(저장 지연 이내)은 잃는다 — 알려진 한계이고
+    // 잠금·절전에서도 원래부터 같았다.
+    seed([memo('a', '원래 내용', '2026-01-05T00:00:00.000Z')]);
+    const { rerender } = renderZone();
+    fireEvent.click(screen.getByRole('button', { name: /원래 내용/ }));
+
+    const box = screen.getByRole('textbox', { name: '메모 내용' });
+    fireEvent.change(box, { target: { value: '방금 친 글자' } });
+
+    rerender(<SidePinMemoZone locked onEditorActivityChange={onActivity} />);
+
+    expect(screen.queryByRole('textbox', { name: '메모 내용' })).toBeNull();
+  });
+
+  test('바깥에서 지워져 접히는 경우에는 저장하지 않는다 — 지운 메모를 되살리면 안 된다', () => {
+    seed([memo('a', '곧 지워질 항목', '2026-01-05T00:00:00.000Z')]);
+    renderZone();
+    fireEvent.click(screen.getByRole('button', { name: /곧 지워질 항목/ }));
+
+    seed([]);
+
+    expect(useMemoStore.getState()['updateMemo']).not.toHaveBeenCalled();
+  });
 });
 
 describe('빠른 추가와 삭제', () => {

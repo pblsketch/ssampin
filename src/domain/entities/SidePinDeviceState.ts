@@ -12,11 +12,14 @@ import { clampSidePinWidth, SIDE_PIN_WIDTH_DEFAULT } from '../valueObjects/SideP
 /**
  * 기기 전용 상태 파일 스키마 버전.
  *
+ * 3 = `hideOnPresentation` 칸이 생긴 판(ADR-078). 2에서 올라오는 파일은 손댈 것이 없다 —
+ * 칸이 없으면 기본값(켜짐)으로 채워지고, 그것이 예전 사용자에게 맞는 값이다
+ * (예전에는 발표 중에도 옆핀이 그대로 떴으므로, 켜 주는 쪽이 개선이다).
  * 2 = `displayHint` 칸이 생기고 `displayId`의 뜻이 바뀐 판(ADR-075).
  * 1에서 올라오는 파일은 손댈 것이 없다 — 1판에서는 모니터를 고를 수단이 아예 없어
  * `displayId`가 항상 비어 있었기 때문이다.
  */
-export const SIDE_PIN_DEVICE_STATE_SCHEMA_VERSION = 2;
+export const SIDE_PIN_DEVICE_STATE_SCHEMA_VERSION = 3;
 /** 손잡이 세로 위치의 기본값. 예전 8단계의 3번 칸과 같은 자리다. */
 export const SIDE_PIN_RAIL_POSITION_DEFAULT = 3 / 7;
 /** v2.4.0 이전 개발본이 쓰던 8단계 칸 번호의 최댓값. 비율로 옮길 때만 쓴다. */
@@ -97,6 +100,22 @@ export interface SidePinDeviceState {
    * 시작되지 않는다**(2026-08-17 실기기). 튀지 않도록 놓은 자리를 그대로 쓴다.
    */
   readonly railPosition: number;
+  /**
+   * 발표(전체화면)를 감지하면 옆핀을 스스로 가릴 것인가. 기본값은 켜짐.
+   *
+   * ## 왜 동기화하지 않고 기기마다 따로 두는가
+   *
+   * 이 값을 성가시게 만드는 원인은 **책상의 성질**이지 사람의 성질이 아니다.
+   * 발표 중인지 묻는 윈도우 창구는 **화면 단위가 아니라 세션 단위**로 답한다.
+   * 그래서 프로젝터에 슬라이드쇼를 띄우면 **노트북 화면의 옆핀까지 함께 가려진다.**
+   * 학교(모니터 두 대)에서는 끄고 집(한 대)에서는 켜는 것이 자연스러운데,
+   * 동기화 설정에 넣으면 두 기기가 서로의 값을 계속 덮어쓴다.
+   * `displayId`를 여기 둔 것과 같은 이유다.
+   *
+   * 기본값이 켜짐인 것은 의도다 — 이 기능이 지키려는 사람은 "설정을 뒤지지 않는
+   * 선생님"이다. 꺼진 채로 두면 그 사람에게는 없는 기능이나 마찬가지다.
+   */
+  readonly hideOnPresentation: boolean;
 }
 
 export const DEFAULT_SIDE_PIN_DEVICE_STATE: SidePinDeviceState = {
@@ -105,6 +124,7 @@ export const DEFAULT_SIDE_PIN_DEVICE_STATE: SidePinDeviceState = {
   displayHint: null,
   panelWidth: SIDE_PIN_WIDTH_DEFAULT,
   railPosition: SIDE_PIN_RAIL_POSITION_DEFAULT,
+  hideOnPresentation: true,
 };
 
 export function normalizeSidePinRailPosition(value: unknown): number {
@@ -163,5 +183,8 @@ export function normalizeSidePinDeviceState(value: unknown): SidePinDeviceState 
     railPosition: readRailPosition(
       raw as { readonly railPosition?: unknown; readonly railSlot?: unknown },
     ),
+    // 칸이 없는 옛 파일(스키마 2 이하)과 값이 깨진 파일 모두 켜짐으로 채운다.
+    // 여기서 꺼짐으로 기울면 예전 사용자 전원이 이 보호를 못 받는다.
+    hideOnPresentation: typeof raw.hideOnPresentation === 'boolean' ? raw.hideOnPresentation : true,
   };
 }

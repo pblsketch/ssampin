@@ -92,6 +92,15 @@ export type SidePinHostOperationKind =
   | 'collapse-panel'
   | 'dispose-panel'
   | 'hide-all'
+  /**
+   * 손잡이와 패널을 **둘 다 감추되 패널 창은 살려 둔다.**
+   *
+   * `collapse-panel`(손잡이를 *보이고* 패널만 숨김)과 `hide-all`(손잡이를 숨기고
+   * 패널을 *파괴*)의 사이가 비어 있었다. 발표 감지처럼 **추측으로 걸리는 보호**에는
+   * 그 사이가 필요하다 — 화면에서는 완전히 사라져야 하지만(그게 이 기능의 목적이다),
+   * 헛짚었을 때 쓰던 글까지 날리면 안 되기 때문이다.
+   */
+  | 'conceal-all'
   | 'reposition-all'
   | 'focus-panel'
   | 'destroy-all';

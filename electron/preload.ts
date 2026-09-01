@@ -1138,6 +1138,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
     /** 옆핀을 띄울 모니터를 정한다. null이면 자동(주 모니터) */
     setDisplay: (displayId: string | null): Promise<unknown> =>
       ipcRenderer.invoke('sidePin:set-display', displayId),
+    /**
+     * 발표(전체화면) 중 옆핀을 스스로 가릴 것인가.
+     *
+     * 모니터 선택과 같은 기기 전용 값이다 — 학교(모니터 두 대)와 집(한 대)에서
+     * 알맞은 답이 다르므로 동기화하지 않는다.
+     */
+    getHideOnPresentation: (): Promise<boolean> =>
+      ipcRenderer.invoke('sidePin:get-hide-on-presentation'),
+    setHideOnPresentation: (enabled: boolean): Promise<boolean> =>
+      ipcRenderer.invoke('sidePin:set-hide-on-presentation', enabled),
     reportPointerRegion: (region: string): void => {
       ipcRenderer.send('sidePin:pointer-region', region);
     },
@@ -1158,8 +1168,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
     toggleShortcut: (): void => {
       ipcRenderer.send('sidePin:toggle-shortcut');
     },
-    requestClose: (): void => {
-      ipcRenderer.send('sidePin:request-close');
+    /**
+     * 패널을 접는다.
+     *
+     * `force`는 **사용자가 직접 [지금 가리기]를 눌렀을 때만** 참으로 보낸다.
+     * 평소에는 무언가 쓰는 중이면 접지 않는데(쓰던 글이 날아가므로), 직접 누른
+     * 경우는 "지금 당장 가려라"가 그보다 우선한다 — 옆자리에 사람이 왔거나
+     * 화면을 띄우기 직전이라는 뜻이기 때문이다.
+     */
+    requestClose: (force?: boolean): void => {
+      ipcRenderer.send('sidePin:request-close', force === true);
     },
     /** 메인 쌤핀으로 돌아간다 */
     openMain: (): void => {

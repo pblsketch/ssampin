@@ -1388,6 +1388,364 @@ describe('보호 상태', () => {
   });
 });
 
+// ─── 전체화면 보호(soft-protect) ─────────────────────────────────
+
+describe('전체화면 보호(soft-protect)', () => {
+  /** 발표가 시작돼 순한 등급으로 가려진 상태 — 쓰던 메모가 있는 채로 */
+  function softProtectedWhileEditing(): {
+    editing: SidePinRuntimeState;
+    soft: SidePinTransitionResult;
+  } {
+    const editing = apply(
+      expandedByHover(),
+      { type: 'editor-activity-changed', activity: 'editing' },
+      2_000,
+    );
+    return {
+      editing: editing.next,
+      soft: apply(editing.next, { type: 'soft-protect', reason: 'fullscreen' }, 3_000),
+    };
+  }
+
+  it('필드를 표대로 바꾼다 — 쓰던 글만 그대로 둔다', () => {
+    const pinned = apply(expandedByHover(), { type: 'toggle-pin', zone: 'widget' }, 2_000);
+    const editing = apply(
+      pinned.next,
+      { type: 'editor-activity-changed', activity: 'editing' },
+      2_100,
+    );
+
+    const soft = apply(editing.next, { type: 'soft-protect', reason: 'fullscreen' }, 3_000);
+
+    // 화면 쪽 수정이 0줄이 되는 이유 — 잠금과 똑같이 "반응하지 않는 상태"가 된다
+    expect(soft.next.protectedReason).toBe('fullscreen');
+    expect(soft.next.surface).toBe('collapsed');
+    expect(soft.next.openReason).toBeNull();
+    expect(soft.next.activeZone).toBeNull();
+    // 고정은 그대로 둔다 — 헛짚었을 때 사용자가 맞춰 둔 것을 말없이 풀지 않는다.
+    // 보호 중에는 isSidePinResponsive 가 거짓이라 이 값이 아무 일도 하지 않는다.
+    expect(soft.next.pinnedZone).toBe('widget');
+    expect(soft.next.pendingTransition).toBeNull();
+    // 패널 창은 살아 있다 — 'absent'로 적으면 살아 있는 창을 두고 새로 만든다
+    expect(soft.next.panelLifecycle).toBe('ready');
+    // ★ 이 등급이 존재하는 유일한 이유
+    expect(soft.next.editorActivity).toBe('editing');
+  });
+
+  it('★ 손잡이까지 감춘다 — collapse-panel도 hide-all도 아닌 conceal-all이다', () => {
+    // 2026-09-01 실기기에서 잡힌 결함: 처음에는 collapse-panel을 보냈는데, 그 명령은
+    // 이름과 달리 **손잡이를 보이게 한다**(sidePinWindow.ts의 collapsePanel이
+    // rail.showInactive()를 부른다). 그래서 발표 중에 손잡이가 화면에 그대로 남았다 —
+    // "전체화면일 때 옆핀을 숨긴다"는 이 기능의 목적 자체가 달성되지 않았다.
+    //
+    // 그렇다고 hide-all을 쓸 수도 없다. 그쪽은 패널 창을 **파괴**해서 쓰던 글을 날린다.
+    // 둘 사이가 없어서 conceal-all을 새로 만들었다.
+    const { soft } = softProtectedWhileEditing();
+
+    expect(hostCommandOf(soft, 'conceal-all')).toBeDefined();
+    // 손잡이를 보이게 하는 명령이면 안 된다
+    expect(hostCommands(soft).map((c) => c.kind)).not.toContain('collapse-panel');
+    // 패널을 파괴하는 명령이어도 안 된다
+    expect(hostCommands(soft).map((c) => c.kind)).not.toContain('hide-all');
+    expect(soft.next.pendingHostOperations.map((op) => op.kind)).not.toContain('hide-all');
+  });
+
+  it('여는 중에 발표가 시작되면 들어오던 열기 요청을 지운다', () => {
+    // 지우지 않으면 늦게 도착한 "그렸다" 알림이 보호를 뚫고 패널을 띄운다.
+    const entered = apply(
+      enabledState(),
+      { type: 'pointer-region-changed', region: 'rail-widget' },
+      1_000,
+    );
+    const fired = apply(
+      entered.next,
+      { type: 'timer-fired', transition: scheduledTransition(entered) },
+      1_180,
+    );
+    const show = hostCommandOf(fired, 'show-panel');
+
+    const soft = apply(fired.next, { type: 'soft-protect', reason: 'fullscreen' }, 1_190);
+
+    expect(soft.next.pendingHostOperations.map((op) => op.kind)).toEqual(['conceal-all']);
+
+    const painted = apply(
+      soft.next,
+      {
+        type: 'panel-painted',
+        operationId: show.operationId,
+        requestedRevision: show.requestedRevision,
+      },
+      1_200,
+    );
+    expect(painted.next.surface).toBe('collapsed');
+  });
+
+  it('잠금이 풀리고 발표만 남으면 순한 등급으로 내려온다', () => {
+    // 잠금과 발표가 겹쳤다가 잠금만 풀린 경우다. 여기서 무시하면 protectedReason이
+    // 'lock'에 멈춰, 발표가 끝나고 추적기가 release를 보내도 이유가 안 맞아 안 풀린다.
+    //
+    // 화면에서 보이는 것은 두 등급이 같다(둘 다 손잡이까지 감춘다). 다른 것은 **대가**다 —
+    // force는 패널을 파괴하고 soft는 살려 둔다. 그래서 내려오는 것 자체에 값이 있다.
+    //
+    // 내려와도 안전한 근거: 이 이벤트는 추적기가 **남은 이유 중 최고 등급이 soft일 때만**
+    // 보낸다(electron/sidePinProtection.test.ts 가 그 규칙을 못박는다). 즉 여기 도달했다는
+    // 것은 잠금이 이미 풀렸다는 뜻이다.
+    const locked = apply(expandedByHover(), { type: 'force-protect', reason: 'lock' }, 3_000);
+
+    const soft = apply(locked.next, { type: 'soft-protect', reason: 'fullscreen' }, 3_100);
+
+    expect(soft.next.protectedReason).toBe('fullscreen');
+    expect(hostCommandOf(soft, 'conceal-all')).toBeDefined();
+  });
+
+  it('등급이 내려와도 이미 파괴된 패널을 "살아 있다"고 적지 않는다', () => {
+    // force 등급은 hide-all 로 패널 창을 파괴해 panelLifecycle 이 'absent' 다.
+    // 내려오면서 'ready' 라고 단정하면, 나중에 호버가 준비 단계를 건너뛰고
+    // **없는 창에 대고 "보여줘"를 보낸다.**
+    const locked = apply(expandedByHover(), { type: 'force-protect', reason: 'lock' }, 3_000);
+    expect(locked.next.panelLifecycle).toBe('absent');
+
+    const soft = apply(locked.next, { type: 'soft-protect', reason: 'fullscreen' }, 3_100);
+
+    expect(soft.next.panelLifecycle).toBe('absent');
+  });
+
+  it('고정해 둔 칸은 순한 등급이 말없이 풀지 않는다', () => {
+    // 가릴 때 한 번만 보고 가리므로 헛짚는 일이 있다. 그때마다 사용자가 맞춰 둔 고정을
+    // 풀어 버리면 "오탐의 대가가 싸다"는 이 등급의 전제가 깨진다.
+    const pinned = apply(expandedByHover(), { type: 'toggle-pin', zone: 'widget' }, 2_900);
+    expect(pinned.next.pinnedZone).toBe('widget');
+
+    const soft = apply(pinned.next, { type: 'soft-protect', reason: 'fullscreen' }, 3_000);
+
+    expect(soft.next.pinnedZone).toBe('widget');
+  });
+
+  it('어댑터 이상은 전체화면 감지로 낮추지 않는다', () => {
+    // adapter-unhealthy 는 전이 함수가 직접 세우는 이유라 추적기가 그 사정을 모른다.
+    // 바깥 판단으로 낮추면 **어댑터가 고장 난 채로 손잡이를 다시 내보낸다.**
+    const broken = apply(
+      expandedByHover(),
+      { type: 'force-protect', reason: 'adapter-unhealthy' },
+      3_000,
+    );
+
+    const soft = apply(broken.next, { type: 'soft-protect', reason: 'fullscreen' }, 3_100);
+
+    expect(soft.next).toBe(broken.next);
+    expect(soft.commands).toEqual([]);
+  });
+
+  it('이미 순한 보호가 걸려 있으면 다시 하지 않는다', () => {
+    const first = apply(expandedByHover(), { type: 'soft-protect', reason: 'fullscreen' }, 3_000);
+
+    const again = apply(first.next, { type: 'soft-protect', reason: 'fullscreen' }, 3_100);
+
+    expect(again.next).toBe(first.next);
+    expect(again.commands).toEqual([]);
+  });
+
+  it('잠금·절전은 예전 그대로다 — 편집을 버리고 hide-all을 보낸다 (회귀)', () => {
+    const { editing } = softProtectedWhileEditing();
+
+    const forced = apply(editing, { type: 'force-protect', reason: 'lock' }, 3_000);
+
+    expect(hostCommandOf(forced, 'hide-all')).toBeDefined();
+    expect(hostCommands(forced).map((c) => c.kind)).not.toContain('conceal-all');
+    expect(forced.next.editorActivity).toBe('idle');
+    expect(forced.next.panelLifecycle).toBe('absent');
+  });
+
+  it('접기가 끝나도 패널을 없앨 예약을 걸지 않는다', () => {
+    const { soft } = softProtectedWhileEditing();
+
+    const collapsed = ack(soft.next, hostCommandOf(soft, 'conceal-all'), 3_050);
+
+    expect(hasSchedule(collapsed)).toBe(false);
+    expect(collapsed.next.pendingTransition).toBeNull();
+    expect(collapsed.next.panelLifecycle).not.toBe('absent');
+  });
+
+  it('★ 발표 중에 편집기가 닫히면 그 사실을 받아 적는다 — 안 그러면 영영 안 접힌다', () => {
+    // 2026-09-01 리뷰에서 잡힌 결함.
+    // soft-protect 는 editorActivity 를 일부러 안 지운다(쓰던 글 보호). 그런데 화면 쪽은
+    // 보호가 걸리면 편집기를 닫고 'idle' 을 보낸다. 그 보고를 버리면 보호가 풀린 뒤에도
+    // 'editing' 이 남고, **다시 보내 주는 곳이 없어** 패널이 다시는 자동으로 안 접힌다.
+    const { soft } = softProtectedWhileEditing();
+    expect(soft.next.editorActivity).toBe('editing');
+
+    // 화면이 보호를 보고 편집기를 닫았다
+    const reported = apply(soft.next, { type: 'editor-activity-changed', activity: 'idle' }, 3_100);
+    expect(reported.next.editorActivity).toBe('idle');
+    // 숨어 있는 동안 창을 건드리는 명령은 나가면 안 된다
+    expect(hostCommands(reported)).toEqual([]);
+
+    // 발표가 끝나도 'editing' 이 남아 있지 않다
+    const released = apply(reported.next, { type: 'protect-released' }, 60_000);
+    expect(released.next.editorActivity).toBe('idle');
+  });
+
+  it('보호 중에 "쓰기 시작했다"는 보고는 받지 않는다 — 풀리는 순간 접힘이 막힌다', () => {
+    const { soft } = softProtectedWhileEditing();
+    const idled = apply(soft.next, { type: 'editor-activity-changed', activity: 'idle' }, 3_100);
+
+    const busy = apply(idled.next, { type: 'editor-activity-changed', activity: 'editing' }, 3_200);
+
+    expect(busy.next.editorActivity).toBe('idle');
+  });
+
+  it('★ 발표가 끝난 직후 10초 안에 타이머가 터져도 패널이 살아남는다', () => {
+    // 🚨 이 계획이 두 번 넘어진 자리다.
+    // 보호 중에는 타이머가 터져도 버려지므로 "발표 중에 글이 살아 있다"만 확인하면
+    // 고치지 않아도 통과한다. 위험 구간은 보호가 풀린 **직후 10초**다.
+    const { soft } = softProtectedWhileEditing();
+    const collapsed = ack(soft.next, hostCommandOf(soft, 'conceal-all'), 3_050);
+
+    // 발표가 끝났다
+    const released = apply(collapsed.next, { type: 'protect-released' }, 60_000);
+    expect(released.next.protectedReason).toBeNull();
+    expect(released.next.pendingTransition).toBeNull();
+    // ★ 2026-09-01 실기기: 손잡이가 돌아오지 않았다. 되돌리는 명령이 실제로 나가는지 본다.
+    expect(hostCommandOf(released, 'ensure-rail')).toBeDefined();
+    expect(released.next.pendingHostOperations.map((op) => op.kind)).not.toContain('conceal-all');
+
+    // 그래도 어딘가에서 걸린 10초 파기가 지금 터졌다고 가정한다
+    const stalePlan: SidePinPendingTransition = {
+      type: 'dispose-panel',
+      scheduledRevision: collapsed.next.revision,
+      dueAtMs: 3_050 + SIDE_PIN_DISPOSE_DELAY_MS,
+    };
+    const fired = apply(released.next, { type: 'timer-fired', transition: stalePlan }, 60_100);
+
+    expect(hostCommands(fired)).toEqual([]);
+    expect(fired.next.panelLifecycle).not.toBe('absent');
+    // 쓰던 글이 살아 있다
+    expect(fired.next.editorActivity).toBe('editing');
+  });
+
+  it('보호가 풀리면 예약돼 있던 패널 파기를 취소한다', () => {
+    // 접힘 완료가 보호 중에 도착하면(잠금 등) 10초 파기가 걸린다. 그 예약을
+    // 해제 때 지우지 않으면, 풀린 직후 10초에 터져 창이 파괴된다.
+    const left = apply(
+      expandedByHover(),
+      { type: 'pointer-region-changed', region: 'outside' },
+      2_000,
+    );
+    const fired = apply(
+      left.next,
+      { type: 'timer-fired', transition: scheduledTransition(left) },
+      2_400,
+    );
+    const closed = afterCloseAnimation(fired, 2_580);
+    const collapse = hostCommandOf(closed, 'collapse-panel');
+    const locked = apply(closed.next, { type: 'force-protect', reason: 'lock' }, 2_600);
+
+    // 보호 중에 접힘 완료가 도착 → 10초 파기가 예약된다
+    const collapsed = ack(locked.next, collapse, 2_620);
+    expect(collapsed.next.pendingTransition?.type).toBe('dispose-panel');
+
+    const released = apply(collapsed.next, { type: 'protect-released' }, 5_000);
+
+    expect(released.commands).toContainEqual({ type: 'cancel-schedule' });
+    expect(released.next.pendingTransition).toBeNull();
+
+    // 이미 손을 떠난 타이머가 터져도 창을 건드리지 않는다
+    const late = apply(
+      released.next,
+      {
+        type: 'timer-fired',
+        transition: {
+          type: 'dispose-panel',
+          scheduledRevision: collapsed.next.revision,
+          dueAtMs: 2_620 + SIDE_PIN_DISPOSE_DELAY_MS,
+        },
+      },
+      12_620,
+    );
+    expect(hostCommands(late)).toEqual([]);
+  });
+
+  it('패널이 파기되면 편집 표시를 무조건 되돌린다', () => {
+    // 창이 파괴될 때는 화면 쪽 정리가 돌지 않아 "이제 안 쓴다"는 신호가 오지 않는다.
+    // 'editing'이 남으면 붙잡아 둘 이유가 영영 참이라 옆핀이 다시는 접히지 않는다.
+    const left = apply(
+      expandedByHover(),
+      { type: 'pointer-region-changed', region: 'outside' },
+      2_000,
+    );
+    const fired = apply(
+      left.next,
+      { type: 'timer-fired', transition: scheduledTransition(left) },
+      2_400,
+    );
+    const closed = afterCloseAnimation(fired, 2_580);
+    const collapsed = ack(closed.next, hostCommandOf(closed, 'collapse-panel'), 2_580);
+    const disposePlan = scheduledTransition(collapsed);
+
+    const editing = apply(
+      collapsed.next,
+      { type: 'editor-activity-changed', activity: 'editing' },
+      3_000,
+    );
+    const disposeFired = apply(
+      editing.next,
+      { type: 'timer-fired', transition: disposePlan },
+      12_580,
+    );
+    const disposed = ack(disposeFired.next, hostCommandOf(disposeFired, 'dispose-panel'), 12_600);
+
+    expect(disposed.next.panelLifecycle).toBe('absent');
+    expect(disposed.next.editorActivity).toBe('idle');
+  });
+});
+
+// ─── 지금 가리기(close-requested) ────────────────────────────────
+
+describe('지금 가리기(close-requested)', () => {
+  /** 위젯을 열어 둔(= 편집 중으로 잡히는) 펼쳐진 상태 */
+  function editingState(): SidePinRuntimeState {
+    return apply(expandedByHover(), { type: 'editor-activity-changed', activity: 'editing' }, 2_000)
+      .next;
+  }
+
+  it('편집 중에 그냥 누르면 아무 일도 하지 않는다 (회귀)', () => {
+    // 자동 접힘 같은 다른 경로가 쓰던 글을 지우지 못하게 하는 기존 방어다. 그대로 둔다.
+    const state = editingState();
+
+    const closed = apply(state, { type: 'close-requested' }, 2_100);
+
+    expect(closed.next).toBe(state);
+    expect(closed.commands).toEqual([]);
+  });
+
+  it('편집 중이 아니면 예전처럼 접는다 (회귀)', () => {
+    const closed = apply(expandedByHover(), { type: 'close-requested' }, 2_100);
+
+    expect(closed.next.surface).toBe('closing');
+    expect(hostCommandOf(afterCloseAnimation(closed, 2_280), 'collapse-panel')).toBeDefined();
+  });
+
+  it('직접 누른 경우(force)에는 편집 중이라도 접고 편집 표시를 되돌린다', () => {
+    // 위젯을 열어 둔 채 누르면 지금까지 무반응이었다 — 급히 가려야 하는 순간이 정확히 그때다.
+    const closed = apply(editingState(), { type: 'close-requested', force: true }, 2_100);
+
+    expect(closed.next.surface).toBe('closing');
+    expect(closed.next.pinnedZone).toBe('none');
+    // 되돌리지 않으면 다음부터 마우스를 빼도 접히지 않는다
+    expect(closed.next.editorActivity).toBe('idle');
+    expect(hostCommandOf(afterCloseAnimation(closed, 2_280), 'collapse-panel')).toBeDefined();
+  });
+
+  it('이미 접혀 있으면 force여도 아무 일도 하지 않는다', () => {
+    const state = enabledState();
+
+    const closed = apply(state, { type: 'close-requested', force: true }, 2_000);
+
+    expect(closed.next).toBe(state);
+    expect(closed.commands).toEqual([]);
+  });
+});
+
 // ─── 단축키 ──────────────────────────────────────────────────────
 
 describe('단축키', () => {

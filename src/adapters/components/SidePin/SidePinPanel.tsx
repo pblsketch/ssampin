@@ -216,7 +216,12 @@ export function SidePinPanel({
           active={pinned}
           onClick={() => onTogglePin(pinTarget)}
         />
-        <HeaderButton icon="close" label="닫기" onClick={onClose} />
+        {/*
+          "닫기"는 앱을 끄는 말로 읽혀 선생님이 누르길 꺼렸다. 이 버튼은 아무것도
+          끄지 않고 패널을 손잡이로 접을 뿐이라, 실제 쓰임(누가 다가올 때·발표 직전)에
+          맞춰 "지금 가리기"로 부른다.
+        */}
+        <HeaderButton icon="visibility_off" label="지금 가리기" onClick={onClose} />
       </header>
 
       {appearanceSlot}

@@ -118,6 +118,43 @@ describe('옆핀 고정 창 2개 구조', () => {
     expect(panel.boundsHistory).not.toContainEqual(LAYOUT.rail);
   });
 
+  test('★ concealAll은 손잡이와 패널을 둘 다 감추되 패널 창은 살려 둔다', async () => {
+    // 2026-09-01 실기기에서 잡힌 결함의 재발 방지.
+    // 발표(전체화면) 감지에 처음에는 collapsePanel을 썼는데, 그 명령은 이름과 달리
+    // rail.showInactive()를 불러 **손잡이를 보이게 한다.** 그래서 PPT 슬라이드쇼 위에
+    // 손잡이가 그대로 남았다. 도메인 테스트로는 절대 잡히지 않는다 —
+    // 창을 실제로 다루는 건 이 층이기 때문이다.
+    const h = createHarness();
+    await h.host.ensureRail(ctx(), LAYOUT.rail);
+    await h.host.preparePanel(ctx(), LAYOUT.panel);
+    await h.host.showPanel(ctx(), { focus: false });
+    const rail = h.windows.get('rail')!;
+    const panel = h.windows.get('panel')!;
+
+    await h.host.concealAll(ctx());
+
+    // 목적: 화면에서 완전히 사라진다
+    expect(rail.visible).toBe(false);
+    expect(panel.visible).toBe(false);
+    // 대가를 싸게: 패널 창은 파괴하지 않는다(쓰던 글이 살아 있어야 한다)
+    expect(panel.destroyed).toBe(false);
+    expect(h.windows.get('panel')).toBeDefined();
+  });
+
+  test('concealAll 뒤에 손잡이 보장을 요청하면 손잡이가 돌아온다', async () => {
+    // 발표가 끝나면 protect-released가 ensure-rail을 보낸다. 그 경로가 실제로
+    // 손잡이를 되돌리는지 확인한다 — 안 되면 선생님은 옆핀을 영영 잃는다.
+    const h = createHarness();
+    await h.host.ensureRail(ctx(), LAYOUT.rail);
+    await h.host.preparePanel(ctx(), LAYOUT.panel);
+    await h.host.concealAll(ctx());
+    expect(h.windows.get('rail')!.visible).toBe(false);
+
+    await h.host.ensureRail(ctx(), LAYOUT.rail);
+
+    expect(h.windows.get('rail')!.visible).toBe(true);
+  });
+
   test('손잡이 보장을 다시 요청하면 열린 패널을 숨기고 손잡이를 복구한다', async () => {
     const h = createHarness();
     await h.host.ensureRail(ctx(), LAYOUT.rail);

@@ -11,7 +11,7 @@ describe('한 가지 이유', () => {
   it('잠그면 숨기고, 풀면 다시 보인다', () => {
     const tracker = createSidePinProtectionTracker();
 
-    expect(tracker.protect('lock')).toEqual({ kind: 'protect', reason: 'lock' });
+    expect(tracker.protect('lock')).toEqual({ kind: 'protect', reason: 'lock', severity: 'force' });
     expect(tracker.isProtected()).toBe(true);
 
     expect(tracker.release('lock')).toEqual({ kind: 'release' });
@@ -43,7 +43,7 @@ describe('잠금과 절전이 겹칠 때 — 이 기능의 핵심', () => {
 
     const afterResume = tracker.release('suspend');
 
-    expect(afterResume).toEqual({ kind: 'protect', reason: 'lock' });
+    expect(afterResume).toEqual({ kind: 'protect', reason: 'lock', severity: 'force' });
     expect(tracker.isProtected()).toBe(true);
   });
 
@@ -62,8 +62,71 @@ describe('잠금과 절전이 겹칠 때 — 이 기능의 핵심', () => {
     tracker.protect('suspend');
     tracker.protect('lock');
 
-    expect(tracker.release('lock')).toEqual({ kind: 'protect', reason: 'suspend' });
+    expect(tracker.release('lock')).toEqual({
+      kind: 'protect',
+      reason: 'suspend',
+      severity: 'force',
+    });
     expect(tracker.release('suspend')).toEqual({ kind: 'release' });
+  });
+});
+
+describe('soft/force 등급 — 절전·잠금(force)이 전체화면(soft)을 이긴다', () => {
+  // 실제 사고 시나리오: PPT 발표 중(fullscreen 먼저 걸림) → 절전(suspend·lock 추가) →
+  // 깨어나면 resume 이 unlock-screen 보다 먼저 온다(이 파일 머리말 경고).
+  // 그 시점에 release('suspend') 가 오는데, Set 삽입 순서로 고르면 첫 번째로 들어온
+  // fullscreen(soft) 이 뽑혀 나와 "아직 잠금 화면인데 손잡이가 뜨는" 사고가 난다.
+  it('전체화면 → 절전 → 잠금 순으로 걸린 뒤 절전을 풀어도 force 등급(잠금)을 돌려준다', () => {
+    const tracker = createSidePinProtectionTracker();
+    tracker.protect('fullscreen');
+    tracker.protect('suspend');
+    tracker.protect('lock');
+
+    const afterReleaseSuspend = tracker.release('suspend');
+
+    expect(afterReleaseSuspend).toEqual({ kind: 'protect', reason: 'lock', severity: 'force' });
+    expect(tracker.isProtected()).toBe(true);
+  });
+
+  it('전체화면(soft) 중 잠금(force)이 걸렸다가 잠금만 풀리면 남은 전체화면(soft)으로 내려간다', () => {
+    const tracker = createSidePinProtectionTracker();
+    tracker.protect('fullscreen');
+    tracker.protect('lock');
+
+    const afterReleaseLock = tracker.release('lock');
+
+    expect(afterReleaseLock).toEqual({ kind: 'protect', reason: 'fullscreen', severity: 'soft' });
+  });
+
+  it('잠금(force) 중 전체화면(soft)이 걸렸다가 전체화면만 풀리면 여전히 force(잠금)다', () => {
+    const tracker = createSidePinProtectionTracker();
+    tracker.protect('lock');
+    tracker.protect('fullscreen');
+
+    const afterReleaseFullscreen = tracker.release('fullscreen');
+
+    expect(afterReleaseFullscreen).toEqual({ kind: 'protect', reason: 'lock', severity: 'force' });
+  });
+
+  it('전체화면만 걸려 있으면 soft 등급으로 보호한다', () => {
+    const tracker = createSidePinProtectionTracker();
+
+    expect(tracker.protect('fullscreen')).toEqual({
+      kind: 'protect',
+      reason: 'fullscreen',
+      severity: 'soft',
+    });
+    expect(tracker.isProtected()).toBe(true);
+
+    expect(tracker.release('fullscreen')).toEqual({ kind: 'release' });
+    expect(tracker.isProtected()).toBe(false);
+  });
+
+  it('같은 이유가 두 번 와도(전체화면) 상태는 그대로다', () => {
+    const tracker = createSidePinProtectionTracker();
+    tracker.protect('fullscreen');
+
+    expect(tracker.protect('fullscreen')).toEqual({ kind: 'none' });
   });
 });
 

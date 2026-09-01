@@ -31,7 +31,7 @@ import fs from 'fs';
 export const SIDE_PIN_WIDTH_MIN = 360;
 export const SIDE_PIN_WIDTH_MAX = 460;
 export const SIDE_PIN_WIDTH_DEFAULT = 400;
-export const SIDE_PIN_DEVICE_STATE_SCHEMA_VERSION = 2;
+export const SIDE_PIN_DEVICE_STATE_SCHEMA_VERSION = 3;
 /** 손잡이 세로 위치의 기본값. 예전 8단계의 3번 칸과 같은 자리다. */
 export const SIDE_PIN_RAIL_POSITION_DEFAULT = 3 / 7;
 /** v2.4.0 이전 개발본이 쓰던 8단계 칸 번호의 최댓값. 비율로 옮길 때만 쓴다. */
@@ -98,6 +98,15 @@ export interface SidePinDeviceState {
    * 시작되지 않는다**(2026-08-17 실기기). 튀지 않도록 놓은 자리를 그대로 쓴다.
    */
   readonly railPosition: number;
+  /**
+   * 발표(전체화면)를 감지하면 옆핀을 스스로 가릴 것인가. 기본값은 켜짐.
+   *
+   * 동기화하지 않고 기기마다 따로 두는 이유는 정본 주석에 있다 — 요약하면,
+   * 발표 중인지 묻는 윈도우 창구가 **화면 단위가 아니라 세션 단위**로 답해서
+   * 프로젝터에 슬라이드쇼를 띄우면 노트북 옆핀까지 함께 가려지기 때문이다.
+   * 학교(모니터 두 대)에서는 끄고 집(한 대)에서는 켜는 것이 자연스럽다.
+   */
+  readonly hideOnPresentation: boolean;
 }
 
 export const DEFAULT_SIDE_PIN_DEVICE_STATE: SidePinDeviceState = {
@@ -106,6 +115,7 @@ export const DEFAULT_SIDE_PIN_DEVICE_STATE: SidePinDeviceState = {
   displayHint: null,
   panelWidth: SIDE_PIN_WIDTH_DEFAULT,
   railPosition: SIDE_PIN_RAIL_POSITION_DEFAULT,
+  hideOnPresentation: true,
 };
 
 export function normalizeSidePinRailPosition(value: unknown): number {
@@ -162,6 +172,9 @@ export function normalizeSidePinDeviceState(value: unknown): SidePinDeviceState 
     railPosition: readRailPosition(
       raw as { readonly railPosition?: unknown; readonly railSlot?: unknown },
     ),
+    // 칸이 없는 옛 파일(스키마 2 이하)과 값이 깨진 파일 모두 켜짐으로 채운다.
+    // 여기서 꺼짐으로 기울면 예전 사용자 전원이 이 보호를 못 받는다.
+    hideOnPresentation: typeof raw.hideOnPresentation === 'boolean' ? raw.hideOnPresentation : true,
   };
 }
 

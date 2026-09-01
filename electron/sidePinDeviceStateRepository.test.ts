@@ -36,6 +36,7 @@ const SAMPLE: SidePinDeviceState = {
   displayHint: null,
   panelWidth: 420,
   railPosition: 0.6,
+  hideOnPresentation: true,
 };
 
 function primaryFile(): string {
@@ -128,6 +129,8 @@ describe('AC-21 — 누락·파손·구버전 복구', () => {
       displayHint: null,
       panelWidth: 360,
       railPosition: DEFAULT_SIDE_PIN_DEVICE_STATE.railPosition,
+      // 칸이 없던 옛 파일(스키마 0)에서 올라왔다 — 발표 중 숨기기는 켜짐으로 채운다
+      hideOnPresentation: true,
     });
   });
 
