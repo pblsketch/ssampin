@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { useFormStore } from '@adapters/stores/useFormStore';
 import { FormsToolbar } from './FormsToolbar';
 import { FormGrid } from './FormGrid';
@@ -10,6 +11,13 @@ interface FormsPageProps {
 }
 
 export function FormsPage({ onBack }: FormsPageProps = {}) {
+  // 화면 방문(page_view)은 잡혔지만 "도구 사용"으로는 세지 않아, 도구 순위에서 통째로
+  // 빠져 있었다. 다른 도구와 같은 방식으로 센다(2026-09-01).
+  const { track } = useAnalytics();
+  useEffect(() => {
+    track('tool_use', { tool: 'forms' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const loadAll = useFormStore((s) => s.loadAll);
   const loaded = useFormStore((s) => s.loaded);
   const selectedId = useFormStore((s) => s.selectedId);

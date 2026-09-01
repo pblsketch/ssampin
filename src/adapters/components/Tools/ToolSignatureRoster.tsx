@@ -18,6 +18,7 @@
  *  - 세션 삭제:  container.signaturePort.deleteSession
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import QRCode from 'qrcode';
 import { ToolLayout } from './ToolLayout';
 import { buildSignaturePublicUrl } from '../../../signature/signaturePublicUrl';
@@ -117,6 +118,13 @@ interface PendingImport {
 }
 
 export function ToolSignatureRoster({ onBack, isFullscreen }: ToolSignatureRosterProps) {
+  // 화면 방문(page_view)은 잡혔지만 "도구 사용"으로는 세지 않아, 도구 순위에서 통째로
+  // 빠져 있었다. 다른 도구와 같은 방식으로 센다(2026-09-01).
+  const { track } = useAnalytics();
+  useEffect(() => {
+    track('tool_use', { tool: 'signature-roster' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // 진행 중 세션이 영속돼 있으면 그 스냅샷으로 초기화 (도구 재진입·앱 재시작 대응).
   // getState()는 useState 초기값 계산에만 쓰고, 이후 로직은 구독값(activeSession)을 쓴다.
   const [initialSession] = useState(() => useSignatureRosterStore.getState().activeSession);

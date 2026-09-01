@@ -11,6 +11,7 @@ import {
   type DefaultReactSuggestionItem,
 } from '@blocknote/react';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useTextPrompt } from '@adapters/components/common/TextPromptModal';
 import type { NotePageBody as NotePageBodyModel } from '@domain/entities/NotePage';
 import { sortNotebooksForSidebar, sortSectionsForNotebook } from '@domain/rules/notebookRules';
 import { sortPagesForSection } from '@domain/rules/notePageRules';
@@ -233,6 +234,7 @@ function NoteEditor({
 // ─── NotePage ─────────────────────────────────────────────────────────────────
 
 export function NotePage() {
+  const { prompt, promptElement } = useTextPrompt();
   const {
     notebooks,
     sections,
@@ -363,17 +365,24 @@ export function NotePage() {
     [flushPendingSave],
   );
 
-  const askTitle = useCallback((label: string, currentValue = ''): string | null => {
-    const nextValue = window.prompt(label, currentValue)?.trim();
-    if (!nextValue) {
-      return null;
-    }
-    return nextValue;
-  }, []);
+  // window.prompt 는 Electron 에서 동작하지 않는다 — 이름 바꾸기 세 곳이 눌러도
+  // 아무 반응이 없었다. 앱 안의 입력 모달로 바꾼다(2026-09-01).
+  const askTitle = useCallback(
+    async (label: string, currentValue = ''): Promise<string | null> => {
+      const nextValue = (
+        await prompt({ title: '이름 바꾸기', label, initialValue: currentValue })
+      )?.trim();
+      if (!nextValue) {
+        return null;
+      }
+      return nextValue;
+    },
+    [prompt],
+  );
 
   const handleRenameNotebook = useCallback(
     async (id: string, currentTitle: string) => {
-      const nextTitle = askTitle('노트북 이름을 입력하세요.', currentTitle);
+      const nextTitle = await askTitle('노트북 이름을 입력하세요.', currentTitle);
       if (!nextTitle) {
         return;
       }
@@ -389,7 +398,7 @@ export function NotePage() {
 
   const handleRenameSection = useCallback(
     async (id: string, currentTitle: string) => {
-      const nextTitle = askTitle('섹션 이름을 입력하세요.', currentTitle);
+      const nextTitle = await askTitle('섹션 이름을 입력하세요.', currentTitle);
       if (!nextTitle) {
         return;
       }
@@ -401,7 +410,7 @@ export function NotePage() {
 
   const handleRenamePage = useCallback(
     async (id: string, currentTitle: string) => {
-      const nextTitle = askTitle('페이지 이름을 입력하세요.', currentTitle);
+      const nextTitle = await askTitle('페이지 이름을 입력하세요.', currentTitle);
       if (!nextTitle) {
         return;
       }
@@ -429,395 +438,400 @@ export function NotePage() {
   }
 
   return (
-    <div className="flex h-full flex-col -m-8">
-      <PageHeader
-        icon="edit_note"
-        iconIsMaterial
-        title="쌤핀 노트"
-        rightActions={
-          <>
-            <AutosaveBadge savingState={savingState} updatedAt={activePage?.updatedAt} />
-            <button
-              type="button"
-              onClick={toggleAllPanels}
-              className="flex items-center gap-1.5 rounded-xl border border-sp-border bg-sp-card px-3 xl:px-4 py-2 xl:py-2.5 text-xs xl:text-sm font-sp-semibold text-sp-muted hover:border-sp-accent/40 hover:text-sp-text transition-all duration-sp-base ease-sp-out active:scale-95"
-              title={allCollapsed ? '패널 모두 펼치기' : '패널 모두 접기'}
-            >
-              <span className="material-symbols-outlined text-icon">
-                {allCollapsed ? 'keyboard_double_arrow_right' : 'keyboard_double_arrow_left'}
-              </span>
-              <span className="hidden xl:inline">{allCollapsed ? '펼치기' : '접기'}</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => void createNotebook()}
-              className="flex items-center gap-1.5 rounded-xl bg-sp-accent px-3 xl:px-4 py-2 xl:py-2.5 text-xs xl:text-sm font-sp-semibold text-white shadow-sp-accent hover:brightness-110 transition-all duration-sp-base ease-sp-out active:scale-95"
-            >
-              <span className="material-symbols-outlined text-icon">note_add</span>
-              <span className="hidden sm:inline">새 노트북</span>
-            </button>
-            {activeNotebookId && (
-              <button
-                type="button"
-                onClick={() => void createSection(activeNotebookId)}
-                className="flex items-center gap-1.5 rounded-xl border border-sp-border bg-sp-card px-3 xl:px-4 py-2 xl:py-2.5 text-xs xl:text-sm font-sp-semibold text-sp-text hover:border-sp-accent/30 hover:text-sp-accent transition-all duration-sp-base ease-sp-out active:scale-95"
-              >
-                <span className="material-symbols-outlined text-icon">segment</span>
-                <span className="hidden sm:inline">새 섹션</span>
-              </button>
-            )}
-            {activeSectionId && (
-              <button
-                type="button"
-                onClick={() => void createPage(activeSectionId)}
-                className="flex items-center gap-1.5 rounded-xl border border-sp-border bg-sp-card px-3 xl:px-4 py-2 xl:py-2.5 text-xs xl:text-sm font-sp-semibold text-sp-text hover:border-sp-accent/30 hover:text-sp-accent transition-all duration-sp-base ease-sp-out active:scale-95"
-              >
-                <span className="material-symbols-outlined text-icon">description</span>
-                <span className="hidden sm:inline">새 페이지</span>
-              </button>
-            )}
-          </>
-        }
-      />
-
-      {/* ── 3컬럼 + 에디터 ── */}
-      <div className="flex min-h-0 min-w-0 flex-1 gap-3 px-8 py-4">
-        {/* 노트북 패널 */}
-        <CollapsiblePanel
-          title="노트북"
-          icon="book_2"
-          collapsed={notebookCollapsed}
-          onToggleCollapse={() => setNotebookCollapsed((v) => !v)}
-          actionLabel="새 노트북"
-          onAction={() => void createNotebook()}
-          width={notebookCollapsed ? '48px' : '220px'}
-        >
-          <div className="space-y-1">
-            {sortedNotebooks.length === 0 && (
-              <p className="py-6 text-center text-xs text-sp-muted">노트북이 없습니다.</p>
-            )}
-            {sortedNotebooks.map((notebook) => {
-              const isActive = notebook.id === activeNotebookId;
-              const notebookSectionCount = sections.filter(
-                (s) => s.notebookId === notebook.id,
-              ).length;
-
-              return (
-                <div key={notebook.id} className="group relative">
-                  <button
-                    type="button"
-                    onClick={() => void selectNotebook(notebook.id)}
-                    className={`w-full rounded-lg border px-3 py-2.5 text-left transition ${
-                      isActive
-                        ? 'border-sp-accent bg-sp-accent/10'
-                        : 'border-transparent bg-transparent hover:border-sp-border hover:bg-sp-card'
-                    }`}
-                  >
-                    <p className="truncate text-sm font-medium text-sp-text">
-                      {notebook.icon ? `${notebook.icon} ` : ''}
-                      {notebook.title}
-                    </p>
-                    <p className="mt-0.5 text-xs text-sp-muted">섹션 {notebookSectionCount}개</p>
-                  </button>
-                  {/* 호버 시 액션 버튼 */}
-                  <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button
-                      type="button"
-                      className="flex h-6 w-6 items-center justify-center rounded-md text-sp-muted hover:bg-sp-surface hover:text-sp-text transition-colors"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void handleRenameNotebook(notebook.id, notebook.title);
-                      }}
-                      title="이름 바꾸기"
-                      aria-label="이름 바꾸기"
-                    >
-                      <span className="material-symbols-outlined text-sm">edit</span>
-                    </button>
-                    <button
-                      type="button"
-                      className="flex h-6 w-6 items-center justify-center rounded-md text-sp-muted hover:bg-red-500/10 hover:text-red-400 transition-colors"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (!window.confirm(`"${notebook.title}" 노트북을 삭제할까요?`)) return;
-                        void deleteNotebook(notebook.id);
-                      }}
-                      title="삭제"
-                      aria-label="삭제"
-                    >
-                      <span className="material-symbols-outlined text-sm">delete</span>
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </CollapsiblePanel>
-
-        {/* 섹션 패널 */}
-        <CollapsiblePanel
-          title="섹션"
-          icon="segment"
-          collapsed={sectionCollapsed}
-          onToggleCollapse={() => setSectionCollapsed((v) => !v)}
-          actionLabel="새 섹션"
-          onAction={activeNotebookId ? () => void createSection(activeNotebookId) : undefined}
-          width={sectionCollapsed ? '48px' : '200px'}
-        >
-          <div className="space-y-1">
-            {visibleSections.length === 0 && (
-              <p className="py-6 text-center text-xs text-sp-muted">
-                {activeNotebookId ? '섹션이 없습니다.' : '노트북을 선택하세요.'}
-              </p>
-            )}
-            {visibleSections.map((section) => {
-              const isActive = section.id === activeSectionId;
-              const pageCount = pagesMeta.filter((p) => p.sectionId === section.id).length;
-
-              return (
-                <div key={section.id} className="group relative">
-                  <button
-                    type="button"
-                    onClick={() => void selectSection(section.id)}
-                    className={`w-full rounded-lg border px-3 py-2.5 text-left transition ${
-                      isActive
-                        ? 'border-sp-accent bg-sp-accent/10'
-                        : 'border-transparent bg-transparent hover:border-sp-border hover:bg-sp-card'
-                    }`}
-                  >
-                    <p className="flex items-center gap-1.5 truncate text-sm font-medium text-sp-text">
-                      <span className="material-symbols-outlined text-[15px] text-sp-muted">
-                        {section.collapsed ? 'chevron_right' : 'expand_more'}
-                      </span>
-                      {section.title}
-                    </p>
-                    <p className="mt-0.5 text-xs text-sp-muted">페이지 {pageCount}개</p>
-                  </button>
-                  <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button
-                      type="button"
-                      className="flex h-6 w-6 items-center justify-center rounded-md text-sp-muted hover:bg-sp-surface hover:text-sp-text transition-colors"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void toggleSectionCollapsed(section.id);
-                      }}
-                      title={section.collapsed ? '펼치기' : '접기'}
-                      aria-label={section.collapsed ? '펼치기' : '접기'}
-                    >
-                      <span className="material-symbols-outlined text-sm">
-                        {section.collapsed ? 'unfold_more' : 'unfold_less'}
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      className="flex h-6 w-6 items-center justify-center rounded-md text-sp-muted hover:bg-sp-surface hover:text-sp-text transition-colors"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void handleRenameSection(section.id, section.title);
-                      }}
-                      title="이름 바꾸기"
-                      aria-label="이름 바꾸기"
-                    >
-                      <span className="material-symbols-outlined text-sm">edit</span>
-                    </button>
-                    <button
-                      type="button"
-                      className="flex h-6 w-6 items-center justify-center rounded-md text-sp-muted hover:bg-red-500/10 hover:text-red-400 transition-colors"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (!window.confirm(`"${section.title}" 섹션을 삭제할까요?`)) return;
-                        void deleteSection(section.id);
-                      }}
-                      title="삭제"
-                      aria-label="삭제"
-                    >
-                      <span className="material-symbols-outlined text-sm">delete</span>
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </CollapsiblePanel>
-
-        {/* 페이지 패널 */}
-        <CollapsiblePanel
-          title="페이지"
-          icon="description"
-          collapsed={pageCollapsed}
-          onToggleCollapse={() => setPageCollapsed((v) => !v)}
-          actionLabel="새 페이지"
-          onAction={activeSectionId ? () => void createPage(activeSectionId) : undefined}
-          width={pageCollapsed ? '48px' : '220px'}
-        >
-          <div className="space-y-1">
-            {visiblePages.length === 0 && (
-              <p className="py-6 text-center text-xs text-sp-muted">
-                {activeSectionId ? '페이지가 없습니다.' : '섹션을 선택하세요.'}
-              </p>
-            )}
-            {visiblePages.map((page) => {
-              const isActive = page.id === activePageId;
-
-              return (
-                <div key={page.id} className="group relative">
-                  <button
-                    type="button"
-                    onClick={() => void selectPage(page.id)}
-                    className={`w-full rounded-lg border px-3 py-2.5 text-left transition ${
-                      isActive
-                        ? 'border-sp-accent bg-sp-accent/10'
-                        : 'border-transparent bg-transparent hover:border-sp-border hover:bg-sp-card'
-                    }`}
-                  >
-                    <p className="flex items-center gap-1.5 truncate text-sm font-medium text-sp-text">
-                      {page.pinned && (
-                        <span className="material-symbols-outlined text-[13px] text-sp-highlight shrink-0">
-                          keep
-                        </span>
-                      )}
-                      {page.title}
-                    </p>
-                    <p className="mt-0.5 text-xs text-sp-muted">
-                      {page.updatedAt
-                        ? new Date(page.updatedAt).toLocaleDateString('ko-KR')
-                        : '기록 없음'}
-                    </p>
-                  </button>
-                  <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button
-                      type="button"
-                      className={`flex h-6 w-6 items-center justify-center rounded-md transition-colors ${page.pinned ? 'text-sp-highlight' : 'text-sp-muted hover:text-sp-highlight'}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void togglePagePin(page.id);
-                      }}
-                      title={page.pinned ? '고정 해제' : '고정'}
-                      aria-label={page.pinned ? '고정 해제' : '고정'}
-                    >
-                      <span className="material-symbols-outlined text-sm">keep</span>
-                    </button>
-                    <button
-                      type="button"
-                      className="flex h-6 w-6 items-center justify-center rounded-md text-sp-muted hover:bg-sp-surface hover:text-sp-text transition-colors"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void handleRenamePage(page.id, page.title);
-                      }}
-                      title="이름 바꾸기"
-                      aria-label="이름 바꾸기"
-                    >
-                      <span className="material-symbols-outlined text-sm">edit</span>
-                    </button>
-                    <button
-                      type="button"
-                      className="flex h-6 w-6 items-center justify-center rounded-md text-sp-muted hover:bg-red-500/10 hover:text-red-400 transition-colors"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (!window.confirm(`"${page.title}" 페이지를 삭제할까요?`)) return;
-                        void deletePage(page.id);
-                      }}
-                      title="삭제"
-                      aria-label="삭제"
-                    >
-                      <span className="material-symbols-outlined text-sm">delete</span>
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </CollapsiblePanel>
-
-        {/* ── 에디터 영역 ── */}
-        <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-sp-border bg-sp-card/90 px-5 pt-4 pb-3">
-          {!activePage || !activePageBody ? (
-            <div className="flex h-full flex-col items-center justify-center text-center">
-              <span className="material-symbols-outlined text-5xl text-sp-muted/30">edit_note</span>
-              <p className="mt-3 text-sm font-medium text-sp-text">편집할 페이지가 없습니다</p>
-              <p className="mt-1 text-xs text-sp-muted">페이지를 선택하거나 새로 만들어보세요.</p>
-            </div>
-          ) : (
+    <>
+      {promptElement}
+      <div className="flex h-full flex-col -m-8">
+        <PageHeader
+          icon="edit_note"
+          iconIsMaterial
+          title="쌤핀 노트"
+          rightActions={
             <>
-              {/* 에디터 헤더 */}
-              <div className="mb-3 flex items-center justify-between gap-4">
-                <div className="flex min-w-0 items-center gap-3">
-                  <input
-                    value={draftTitle}
-                    onChange={(e) => setDraftTitle(e.target.value)}
-                    onBlur={() => void handleCommitDraftTitle()}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        e.currentTarget.blur();
-                      }
-                    }}
-                    className="min-w-0 bg-transparent text-2xl font-bold tracking-tight text-sp-text outline-none placeholder:text-sp-muted/50"
-                    placeholder="제목 없음"
-                  />
-                  {activePage.pinned && (
-                    <span className="shrink-0 rounded-full border border-sp-highlight/30 bg-sp-highlight/10 px-2 py-0.5 text-xs font-semibold text-sp-highlight">
-                      고정됨
-                    </span>
-                  )}
-                </div>
-                <div
-                  className="flex shrink-0 items-center gap-1 rounded-lg border border-sp-border/60 bg-sp-surface px-2 py-1 text-xs text-sp-muted"
-                  title="Ctrl/Cmd + S로 즉시 저장"
+              <AutosaveBadge savingState={savingState} updatedAt={activePage?.updatedAt} />
+              <button
+                type="button"
+                onClick={toggleAllPanels}
+                className="flex items-center gap-1.5 rounded-xl border border-sp-border bg-sp-card px-3 xl:px-4 py-2 xl:py-2.5 text-xs xl:text-sm font-sp-semibold text-sp-muted hover:border-sp-accent/40 hover:text-sp-text transition-all duration-sp-base ease-sp-out active:scale-95"
+                title={allCollapsed ? '패널 모두 펼치기' : '패널 모두 접기'}
+              >
+                <span className="material-symbols-outlined text-icon">
+                  {allCollapsed ? 'keyboard_double_arrow_right' : 'keyboard_double_arrow_left'}
+                </span>
+                <span className="hidden xl:inline">{allCollapsed ? '펼치기' : '접기'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => void createNotebook()}
+                className="flex items-center gap-1.5 rounded-xl bg-sp-accent px-3 xl:px-4 py-2 xl:py-2.5 text-xs xl:text-sm font-sp-semibold text-white shadow-sp-accent hover:brightness-110 transition-all duration-sp-base ease-sp-out active:scale-95"
+              >
+                <span className="material-symbols-outlined text-icon">note_add</span>
+                <span className="hidden sm:inline">새 노트북</span>
+              </button>
+              {activeNotebookId && (
+                <button
+                  type="button"
+                  onClick={() => void createSection(activeNotebookId)}
+                  className="flex items-center gap-1.5 rounded-xl border border-sp-border bg-sp-card px-3 xl:px-4 py-2 xl:py-2.5 text-xs xl:text-sm font-sp-semibold text-sp-text hover:border-sp-accent/30 hover:text-sp-accent transition-all duration-sp-base ease-sp-out active:scale-95"
                 >
-                  <span className="material-symbols-outlined text-[13px]">
-                    keyboard_command_key
-                  </span>
-                  <span>S</span>
-                </div>
-              </div>
-
-              {!hintDismissed && (
-                <div className="mb-3 flex items-start gap-3 rounded-lg border border-sp-accent/20 bg-sp-accent/5 px-3 py-2.5 text-xs text-sp-muted">
-                  <span className="material-symbols-outlined mt-0.5 text-base text-sp-accent">
-                    lightbulb
-                  </span>
-                  <div className="flex-1 leading-relaxed">
-                    <p className="font-medium text-sp-text">
-                      <kbd className="mx-0.5 rounded border border-sp-border bg-sp-surface px-1.5 py-0.5 font-mono text-detail text-sp-text">
-                        /
-                      </kbd>
-                      를 누르면 제목·목록·체크박스·인용·표·구분선 등을 빠르게 넣을 수 있어요.
-                    </p>
-                    <p className="mt-1 text-sp-muted">
-                      텍스트를 드래그하면 굵게·기울임·링크 도구가 나타납니다. 저장은 자동으로 되고
-                      <kbd className="mx-1 rounded border border-sp-border bg-sp-surface px-1.5 py-0.5 font-mono text-detail text-sp-text">
-                        Ctrl
-                      </kbd>
-                      +
-                      <kbd className="mx-1 rounded border border-sp-border bg-sp-surface px-1.5 py-0.5 font-mono text-detail text-sp-text">
-                        S
-                      </kbd>
-                      로 즉시 저장할 수도 있어요.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={dismissHint}
-                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-sp-muted hover:bg-sp-surface hover:text-sp-text transition-colors"
-                    title="안내 닫기"
-                    aria-label="안내 닫기"
-                  >
-                    <span className="material-symbols-outlined text-[15px]">close</span>
-                  </button>
-                </div>
+                  <span className="material-symbols-outlined text-icon">segment</span>
+                  <span className="hidden sm:inline">새 섹션</span>
+                </button>
               )}
-
-              <div className="min-h-0 flex-1 overflow-hidden">
-                <NoteEditor
-                  pageId={activePage.id}
-                  body={activePageBody}
-                  onChange={(body) => queueBodySave(activePage.id, body)}
-                />
-              </div>
+              {activeSectionId && (
+                <button
+                  type="button"
+                  onClick={() => void createPage(activeSectionId)}
+                  className="flex items-center gap-1.5 rounded-xl border border-sp-border bg-sp-card px-3 xl:px-4 py-2 xl:py-2.5 text-xs xl:text-sm font-sp-semibold text-sp-text hover:border-sp-accent/30 hover:text-sp-accent transition-all duration-sp-base ease-sp-out active:scale-95"
+                >
+                  <span className="material-symbols-outlined text-icon">description</span>
+                  <span className="hidden sm:inline">새 페이지</span>
+                </button>
+              )}
             </>
-          )}
-        </section>
+          }
+        />
+
+        {/* ── 3컬럼 + 에디터 ── */}
+        <div className="flex min-h-0 min-w-0 flex-1 gap-3 px-8 py-4">
+          {/* 노트북 패널 */}
+          <CollapsiblePanel
+            title="노트북"
+            icon="book_2"
+            collapsed={notebookCollapsed}
+            onToggleCollapse={() => setNotebookCollapsed((v) => !v)}
+            actionLabel="새 노트북"
+            onAction={() => void createNotebook()}
+            width={notebookCollapsed ? '48px' : '220px'}
+          >
+            <div className="space-y-1">
+              {sortedNotebooks.length === 0 && (
+                <p className="py-6 text-center text-xs text-sp-muted">노트북이 없습니다.</p>
+              )}
+              {sortedNotebooks.map((notebook) => {
+                const isActive = notebook.id === activeNotebookId;
+                const notebookSectionCount = sections.filter(
+                  (s) => s.notebookId === notebook.id,
+                ).length;
+
+                return (
+                  <div key={notebook.id} className="group relative">
+                    <button
+                      type="button"
+                      onClick={() => void selectNotebook(notebook.id)}
+                      className={`w-full rounded-lg border px-3 py-2.5 text-left transition ${
+                        isActive
+                          ? 'border-sp-accent bg-sp-accent/10'
+                          : 'border-transparent bg-transparent hover:border-sp-border hover:bg-sp-card'
+                      }`}
+                    >
+                      <p className="truncate text-sm font-medium text-sp-text">
+                        {notebook.icon ? `${notebook.icon} ` : ''}
+                        {notebook.title}
+                      </p>
+                      <p className="mt-0.5 text-xs text-sp-muted">섹션 {notebookSectionCount}개</p>
+                    </button>
+                    {/* 호버 시 액션 버튼 */}
+                    <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        type="button"
+                        className="flex h-6 w-6 items-center justify-center rounded-md text-sp-muted hover:bg-sp-surface hover:text-sp-text transition-colors"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void handleRenameNotebook(notebook.id, notebook.title);
+                        }}
+                        title="이름 바꾸기"
+                        aria-label="이름 바꾸기"
+                      >
+                        <span className="material-symbols-outlined text-sm">edit</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="flex h-6 w-6 items-center justify-center rounded-md text-sp-muted hover:bg-red-500/10 hover:text-red-400 transition-colors"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (!window.confirm(`"${notebook.title}" 노트북을 삭제할까요?`)) return;
+                          void deleteNotebook(notebook.id);
+                        }}
+                        title="삭제"
+                        aria-label="삭제"
+                      >
+                        <span className="material-symbols-outlined text-sm">delete</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CollapsiblePanel>
+
+          {/* 섹션 패널 */}
+          <CollapsiblePanel
+            title="섹션"
+            icon="segment"
+            collapsed={sectionCollapsed}
+            onToggleCollapse={() => setSectionCollapsed((v) => !v)}
+            actionLabel="새 섹션"
+            onAction={activeNotebookId ? () => void createSection(activeNotebookId) : undefined}
+            width={sectionCollapsed ? '48px' : '200px'}
+          >
+            <div className="space-y-1">
+              {visibleSections.length === 0 && (
+                <p className="py-6 text-center text-xs text-sp-muted">
+                  {activeNotebookId ? '섹션이 없습니다.' : '노트북을 선택하세요.'}
+                </p>
+              )}
+              {visibleSections.map((section) => {
+                const isActive = section.id === activeSectionId;
+                const pageCount = pagesMeta.filter((p) => p.sectionId === section.id).length;
+
+                return (
+                  <div key={section.id} className="group relative">
+                    <button
+                      type="button"
+                      onClick={() => void selectSection(section.id)}
+                      className={`w-full rounded-lg border px-3 py-2.5 text-left transition ${
+                        isActive
+                          ? 'border-sp-accent bg-sp-accent/10'
+                          : 'border-transparent bg-transparent hover:border-sp-border hover:bg-sp-card'
+                      }`}
+                    >
+                      <p className="flex items-center gap-1.5 truncate text-sm font-medium text-sp-text">
+                        <span className="material-symbols-outlined text-[15px] text-sp-muted">
+                          {section.collapsed ? 'chevron_right' : 'expand_more'}
+                        </span>
+                        {section.title}
+                      </p>
+                      <p className="mt-0.5 text-xs text-sp-muted">페이지 {pageCount}개</p>
+                    </button>
+                    <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        type="button"
+                        className="flex h-6 w-6 items-center justify-center rounded-md text-sp-muted hover:bg-sp-surface hover:text-sp-text transition-colors"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void toggleSectionCollapsed(section.id);
+                        }}
+                        title={section.collapsed ? '펼치기' : '접기'}
+                        aria-label={section.collapsed ? '펼치기' : '접기'}
+                      >
+                        <span className="material-symbols-outlined text-sm">
+                          {section.collapsed ? 'unfold_more' : 'unfold_less'}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        className="flex h-6 w-6 items-center justify-center rounded-md text-sp-muted hover:bg-sp-surface hover:text-sp-text transition-colors"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void handleRenameSection(section.id, section.title);
+                        }}
+                        title="이름 바꾸기"
+                        aria-label="이름 바꾸기"
+                      >
+                        <span className="material-symbols-outlined text-sm">edit</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="flex h-6 w-6 items-center justify-center rounded-md text-sp-muted hover:bg-red-500/10 hover:text-red-400 transition-colors"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (!window.confirm(`"${section.title}" 섹션을 삭제할까요?`)) return;
+                          void deleteSection(section.id);
+                        }}
+                        title="삭제"
+                        aria-label="삭제"
+                      >
+                        <span className="material-symbols-outlined text-sm">delete</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CollapsiblePanel>
+
+          {/* 페이지 패널 */}
+          <CollapsiblePanel
+            title="페이지"
+            icon="description"
+            collapsed={pageCollapsed}
+            onToggleCollapse={() => setPageCollapsed((v) => !v)}
+            actionLabel="새 페이지"
+            onAction={activeSectionId ? () => void createPage(activeSectionId) : undefined}
+            width={pageCollapsed ? '48px' : '220px'}
+          >
+            <div className="space-y-1">
+              {visiblePages.length === 0 && (
+                <p className="py-6 text-center text-xs text-sp-muted">
+                  {activeSectionId ? '페이지가 없습니다.' : '섹션을 선택하세요.'}
+                </p>
+              )}
+              {visiblePages.map((page) => {
+                const isActive = page.id === activePageId;
+
+                return (
+                  <div key={page.id} className="group relative">
+                    <button
+                      type="button"
+                      onClick={() => void selectPage(page.id)}
+                      className={`w-full rounded-lg border px-3 py-2.5 text-left transition ${
+                        isActive
+                          ? 'border-sp-accent bg-sp-accent/10'
+                          : 'border-transparent bg-transparent hover:border-sp-border hover:bg-sp-card'
+                      }`}
+                    >
+                      <p className="flex items-center gap-1.5 truncate text-sm font-medium text-sp-text">
+                        {page.pinned && (
+                          <span className="material-symbols-outlined text-[13px] text-sp-highlight shrink-0">
+                            keep
+                          </span>
+                        )}
+                        {page.title}
+                      </p>
+                      <p className="mt-0.5 text-xs text-sp-muted">
+                        {page.updatedAt
+                          ? new Date(page.updatedAt).toLocaleDateString('ko-KR')
+                          : '기록 없음'}
+                      </p>
+                    </button>
+                    <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        type="button"
+                        className={`flex h-6 w-6 items-center justify-center rounded-md transition-colors ${page.pinned ? 'text-sp-highlight' : 'text-sp-muted hover:text-sp-highlight'}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void togglePagePin(page.id);
+                        }}
+                        title={page.pinned ? '고정 해제' : '고정'}
+                        aria-label={page.pinned ? '고정 해제' : '고정'}
+                      >
+                        <span className="material-symbols-outlined text-sm">keep</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="flex h-6 w-6 items-center justify-center rounded-md text-sp-muted hover:bg-sp-surface hover:text-sp-text transition-colors"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void handleRenamePage(page.id, page.title);
+                        }}
+                        title="이름 바꾸기"
+                        aria-label="이름 바꾸기"
+                      >
+                        <span className="material-symbols-outlined text-sm">edit</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="flex h-6 w-6 items-center justify-center rounded-md text-sp-muted hover:bg-red-500/10 hover:text-red-400 transition-colors"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (!window.confirm(`"${page.title}" 페이지를 삭제할까요?`)) return;
+                          void deletePage(page.id);
+                        }}
+                        title="삭제"
+                        aria-label="삭제"
+                      >
+                        <span className="material-symbols-outlined text-sm">delete</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CollapsiblePanel>
+
+          {/* ── 에디터 영역 ── */}
+          <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-sp-border bg-sp-card/90 px-5 pt-4 pb-3">
+            {!activePage || !activePageBody ? (
+              <div className="flex h-full flex-col items-center justify-center text-center">
+                <span className="material-symbols-outlined text-5xl text-sp-muted/30">
+                  edit_note
+                </span>
+                <p className="mt-3 text-sm font-medium text-sp-text">편집할 페이지가 없습니다</p>
+                <p className="mt-1 text-xs text-sp-muted">페이지를 선택하거나 새로 만들어보세요.</p>
+              </div>
+            ) : (
+              <>
+                {/* 에디터 헤더 */}
+                <div className="mb-3 flex items-center justify-between gap-4">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <input
+                      value={draftTitle}
+                      onChange={(e) => setDraftTitle(e.target.value)}
+                      onBlur={() => void handleCommitDraftTitle()}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          e.currentTarget.blur();
+                        }
+                      }}
+                      className="min-w-0 bg-transparent text-2xl font-bold tracking-tight text-sp-text outline-none placeholder:text-sp-muted/50"
+                      placeholder="제목 없음"
+                    />
+                    {activePage.pinned && (
+                      <span className="shrink-0 rounded-full border border-sp-highlight/30 bg-sp-highlight/10 px-2 py-0.5 text-xs font-semibold text-sp-highlight">
+                        고정됨
+                      </span>
+                    )}
+                  </div>
+                  <div
+                    className="flex shrink-0 items-center gap-1 rounded-lg border border-sp-border/60 bg-sp-surface px-2 py-1 text-xs text-sp-muted"
+                    title="Ctrl/Cmd + S로 즉시 저장"
+                  >
+                    <span className="material-symbols-outlined text-[13px]">
+                      keyboard_command_key
+                    </span>
+                    <span>S</span>
+                  </div>
+                </div>
+
+                {!hintDismissed && (
+                  <div className="mb-3 flex items-start gap-3 rounded-lg border border-sp-accent/20 bg-sp-accent/5 px-3 py-2.5 text-xs text-sp-muted">
+                    <span className="material-symbols-outlined mt-0.5 text-base text-sp-accent">
+                      lightbulb
+                    </span>
+                    <div className="flex-1 leading-relaxed">
+                      <p className="font-medium text-sp-text">
+                        <kbd className="mx-0.5 rounded border border-sp-border bg-sp-surface px-1.5 py-0.5 font-mono text-detail text-sp-text">
+                          /
+                        </kbd>
+                        를 누르면 제목·목록·체크박스·인용·표·구분선 등을 빠르게 넣을 수 있어요.
+                      </p>
+                      <p className="mt-1 text-sp-muted">
+                        텍스트를 드래그하면 굵게·기울임·링크 도구가 나타납니다. 저장은 자동으로 되고
+                        <kbd className="mx-1 rounded border border-sp-border bg-sp-surface px-1.5 py-0.5 font-mono text-detail text-sp-text">
+                          Ctrl
+                        </kbd>
+                        +
+                        <kbd className="mx-1 rounded border border-sp-border bg-sp-surface px-1.5 py-0.5 font-mono text-detail text-sp-text">
+                          S
+                        </kbd>
+                        로 즉시 저장할 수도 있어요.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={dismissHint}
+                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-sp-muted hover:bg-sp-surface hover:text-sp-text transition-colors"
+                      title="안내 닫기"
+                      aria-label="안내 닫기"
+                    >
+                      <span className="material-symbols-outlined text-[15px]">close</span>
+                    </button>
+                  </div>
+                )}
+
+                <div className="min-h-0 flex-1 overflow-hidden">
+                  <NoteEditor
+                    pageId={activePage.id}
+                    body={activePageBody}
+                    onChange={(body) => queueBodySave(activePage.id, body)}
+                  />
+                </div>
+              </>
+            )}
+          </section>
+        </div>
       </div>
-    </div>
+    </>
   );
 }

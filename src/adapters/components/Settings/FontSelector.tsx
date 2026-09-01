@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useTextPrompt } from '@adapters/components/common/TextPromptModal';
 import { FONT_PRESETS, FONT_CATEGORIES } from '@domain/entities/FontPreset';
 import type { FontPreset, FontCategory } from '@domain/entities/FontPreset';
 import type { FontFamily, CustomFontSettings } from '@domain/entities/Settings';
@@ -14,24 +15,32 @@ interface Props {
 /** MIME 타입 → CSS format() 값 */
 function getFontFormat(mimeType: string): string {
   switch (mimeType) {
-    case 'font/woff2': return 'woff2';
-    case 'font/woff': return 'woff';
+    case 'font/woff2':
+      return 'woff2';
+    case 'font/woff':
+      return 'woff';
     case 'font/ttf':
-    case 'application/x-font-ttf': return 'truetype';
+    case 'application/x-font-ttf':
+      return 'truetype';
     case 'font/otf':
-    case 'application/x-font-opentype': return 'opentype';
-    default: return 'woff2';
+    case 'application/x-font-opentype':
+      return 'opentype';
+    default:
+      return 'woff2';
   }
 }
 
 const PRESET_FONTS = FONT_PRESETS.filter((f) => f.id !== 'custom');
 
 export function FontSelector({ value, onChange, customFont, onCustomFontChange }: Props) {
+  const { prompt: askText, promptElement } = useTextPrompt();
   const showToast = useToastStore((s) => s.show);
   const [categoryFilter, setCategoryFilter] = useState<FontCategory | 'all'>('all');
   const [expandedId, setExpandedId] = useState<FontFamily | null>(value);
 
-  useEffect(() => { setExpandedId(value); }, [value]);
+  useEffect(() => {
+    setExpandedId(value);
+  }, [value]);
 
   // 확장된 항목의 폰트만 동적 로드 (미리보기용)
   useEffect(() => {
@@ -81,9 +90,10 @@ export function FontSelector({ value, onChange, customFont, onCustomFontChange }
     `;
   }, [customFont?.dataUrl, customFont?.mimeType]);
 
-  const filtered = categoryFilter === 'all'
-    ? PRESET_FONTS
-    : PRESET_FONTS.filter((f) => f.category === categoryFilter);
+  const filtered =
+    categoryFilter === 'all'
+      ? PRESET_FONTS
+      : PRESET_FONTS.filter((f) => f.category === categoryFilter);
 
   const handleUploadFont = useCallback(async () => {
     const api = window.electronAPI;
@@ -139,7 +149,12 @@ export function FontSelector({ value, onChange, customFont, onCustomFontChange }
 
     // 폰트 이름: 파일명에서 확장자 제거
     const defaultName = fileName.replace(/\.[^.]+$/, '');
-    const fontName = prompt('폰트 이름을 입력하세요:', defaultName);
+    // prompt() 는 Electron 에서 지원되지 않아, 폰트를 골라도 여기서 조용히 끊겼다.
+    const fontName = await askText({
+      title: '폰트 이름',
+      label: '폰트 이름을 입력하세요',
+      initialValue: defaultName,
+    });
     if (!fontName?.trim()) return;
 
     const newCustomFont: CustomFontSettings = {
@@ -152,7 +167,7 @@ export function FontSelector({ value, onChange, customFont, onCustomFontChange }
 
     onCustomFontChange?.(newCustomFont);
     onChange('custom');
-  }, [onChange, onCustomFontChange]);
+  }, [onChange, onCustomFontChange, askText]);
 
   const handleRemoveCustomFont = useCallback(() => {
     onCustomFontChange?.(undefined);
@@ -165,93 +180,106 @@ export function FontSelector({ value, onChange, customFont, onCustomFontChange }
   }, [value, onChange, onCustomFontChange]);
 
   return (
-    <div className="space-y-4">
-      <h4 className="text-sm font-semibold text-sp-muted uppercase tracking-wider">
-        글꼴 (Font)
-      </h4>
+    <>
+      {promptElement}
+      <div className="space-y-4">
+        <h4 className="text-sm font-semibold text-sp-muted uppercase tracking-wider">
+          글꼴 (Font)
+        </h4>
 
-      {/* 카테고리 필터 탭 */}
-      <div className="flex bg-sp-surface/80 p-1 rounded-lg border border-sp-border">
-        <CategoryTab
-          label="전체"
-          count={PRESET_FONTS.length}
-          active={categoryFilter === 'all'}
-          onClick={() => setCategoryFilter('all')}
-        />
-        {FONT_CATEGORIES.map((cat) => (
+        {/* 카테고리 필터 탭 */}
+        <div className="flex bg-sp-surface/80 p-1 rounded-lg border border-sp-border">
           <CategoryTab
-            key={cat.id}
-            label={cat.label}
-            count={PRESET_FONTS.filter((f) => f.category === cat.id).length}
-            active={categoryFilter === cat.id}
-            onClick={() => setCategoryFilter(cat.id)}
+            label="전체"
+            count={PRESET_FONTS.length}
+            active={categoryFilter === 'all'}
+            onClick={() => setCategoryFilter('all')}
           />
-        ))}
-      </div>
+          {FONT_CATEGORIES.map((cat) => (
+            <CategoryTab
+              key={cat.id}
+              label={cat.label}
+              count={PRESET_FONTS.filter((f) => f.category === cat.id).length}
+              active={categoryFilter === cat.id}
+              onClick={() => setCategoryFilter(cat.id)}
+            />
+          ))}
+        </div>
 
-      {/* 폰트 리스트 */}
-      <div className="space-y-1.5">
-        {filtered.map((font) => (
-          <FontListItem
-            key={font.id}
-            font={font}
-            isSelected={value === font.id}
-            isExpanded={expandedId === font.id}
-            onSelect={() => onChange(font.id)}
-            onToggleExpand={() => setExpandedId(expandedId === font.id ? null : font.id)}
-          />
-        ))}
-      </div>
+        {/* 폰트 리스트 */}
+        <div className="space-y-1.5">
+          {filtered.map((font) => (
+            <FontListItem
+              key={font.id}
+              font={font}
+              isSelected={value === font.id}
+              isExpanded={expandedId === font.id}
+              onSelect={() => onChange(font.id)}
+              onToggleExpand={() => setExpandedId(expandedId === font.id ? null : font.id)}
+            />
+          ))}
+        </div>
 
-      {/* 내 폰트 업로드 섹션 */}
-      <div className="border-t border-sp-border/30 pt-3 mt-3">
-        <p className="text-xs text-sp-muted mb-2 font-medium">내 폰트</p>
+        {/* 내 폰트 업로드 섹션 */}
+        <div className="border-t border-sp-border/30 pt-3 mt-3">
+          <p className="text-xs text-sp-muted mb-2 font-medium">내 폰트</p>
 
-        {customFont ? (
-          <div className="flex items-center gap-2 mb-2">
-            <button
-              type="button"
-              onClick={() => onChange('custom')}
-              className={`flex-1 px-3 py-2.5 rounded-xl text-left transition-all border-2 ${
-                value === 'custom'
-                  ? 'border-sp-accent bg-sp-accent/5'
-                  : 'border-sp-border hover:border-sp-muted/50'
-              }`}
-            >
-              <div
-                className="text-sm font-bold text-sp-text truncate"
-                style={{ fontFamily: "'SsampinCustomFontPreview', 'SsampinCustomFont', sans-serif" }}
+          {customFont ? (
+            <div className="flex items-center gap-2 mb-2">
+              <button
+                type="button"
+                onClick={() => onChange('custom')}
+                className={`flex-1 px-3 py-2.5 rounded-xl text-left transition-all border-2 ${
+                  value === 'custom'
+                    ? 'border-sp-accent bg-sp-accent/5'
+                    : 'border-sp-border hover:border-sp-muted/50'
+                }`}
               >
-                {customFont.name}
-              </div>
-              <div className="text-caption text-sp-muted mt-0.5">{customFont.fileName}</div>
-            </button>
-            <button
-              type="button"
-              onClick={handleRemoveCustomFont}
-              className="text-sp-muted hover:text-red-400 p-1.5 transition-colors"
-              title="삭제"
-            >
-              <span className="material-symbols-outlined text-icon">delete</span>
-            </button>
-          </div>
-        ) : null}
+                <div
+                  className="text-sm font-bold text-sp-text truncate"
+                  style={{
+                    fontFamily: "'SsampinCustomFontPreview', 'SsampinCustomFont', sans-serif",
+                  }}
+                >
+                  {customFont.name}
+                </div>
+                <div className="text-caption text-sp-muted mt-0.5">{customFont.fileName}</div>
+              </button>
+              <button
+                type="button"
+                onClick={handleRemoveCustomFont}
+                className="text-sp-muted hover:text-red-400 p-1.5 transition-colors"
+                title="삭제"
+              >
+                <span className="material-symbols-outlined text-icon">delete</span>
+              </button>
+            </div>
+          ) : null}
 
-        <button
-          type="button"
-          onClick={handleUploadFont}
-          className="w-full py-2.5 rounded-xl border-2 border-dashed border-sp-border text-xs text-sp-muted hover:text-sp-accent hover:border-sp-accent transition-colors flex items-center justify-center gap-1.5"
-        >
-          <span className="material-symbols-outlined text-icon-sm">upload_file</span>
-          {customFont ? '폰트 변경' : '폰트 파일 업로드 (.woff2, .ttf, .otf)'}
-        </button>
+          <button
+            type="button"
+            onClick={handleUploadFont}
+            className="w-full py-2.5 rounded-xl border-2 border-dashed border-sp-border text-xs text-sp-muted hover:text-sp-accent hover:border-sp-accent transition-colors flex items-center justify-center gap-1.5"
+          >
+            <span className="material-symbols-outlined text-icon-sm">upload_file</span>
+            {customFont ? '폰트 변경' : '폰트 파일 업로드 (.woff2, .ttf, .otf)'}
+          </button>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
-function CategoryTab({ label, count, active, onClick }: {
-  label: string; count: number; active: boolean; onClick: () => void;
+function CategoryTab({
+  label,
+  count,
+  active,
+  onClick,
+}: {
+  label: string;
+  count: number;
+  active: boolean;
+  onClick: () => void;
 }) {
   return (
     <button
@@ -264,16 +292,24 @@ function CategoryTab({ label, count, active, onClick }: {
       }`}
     >
       {label}
-      <span className={`text-caption px-1.5 py-0.5 rounded-full ${
-        active ? 'bg-white/20' : 'bg-sp-border/50'
-      }`}>
+      <span
+        className={`text-caption px-1.5 py-0.5 rounded-full ${
+          active ? 'bg-white/20' : 'bg-sp-border/50'
+        }`}
+      >
         {count}
       </span>
     </button>
   );
 }
 
-function FontListItem({ font, isSelected, isExpanded, onSelect, onToggleExpand }: {
+function FontListItem({
+  font,
+  isSelected,
+  isExpanded,
+  onSelect,
+  onToggleExpand,
+}: {
   font: FontPreset;
   isSelected: boolean;
   isExpanded: boolean;
@@ -283,9 +319,7 @@ function FontListItem({ font, isSelected, isExpanded, onSelect, onToggleExpand }
   return (
     <div
       className={`rounded-xl border-2 overflow-hidden transition-all ${
-        isSelected
-          ? 'border-sp-accent bg-sp-accent/5'
-          : 'border-sp-border hover:border-sp-muted/50'
+        isSelected ? 'border-sp-accent bg-sp-accent/5' : 'border-sp-border hover:border-sp-muted/50'
       }`}
     >
       {/* 헤더 행 */}
@@ -295,9 +329,11 @@ function FontListItem({ font, isSelected, isExpanded, onSelect, onToggleExpand }
         className="w-full flex items-center gap-3 px-4 py-3 text-left"
       >
         {/* 라디오 인디케이터 */}
-        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
-          isSelected ? 'border-sp-accent bg-sp-accent' : 'border-sp-border'
-        }`}>
+        <div
+          className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
+            isSelected ? 'border-sp-accent bg-sp-accent' : 'border-sp-border'
+          }`}
+        >
           {isSelected && (
             <span className="material-symbols-outlined text-white text-icon-sm">check</span>
           )}
@@ -325,11 +361,21 @@ function FontListItem({ font, isSelected, isExpanded, onSelect, onToggleExpand }
         <span
           role="button"
           tabIndex={0}
-          onClick={(e) => { e.stopPropagation(); onToggleExpand(); }}
-          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); onToggleExpand(); } }}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleExpand();
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.stopPropagation();
+              onToggleExpand();
+            }
+          }}
           className="text-sp-muted hover:text-sp-text transition-colors shrink-0 cursor-pointer"
         >
-          <span className={`material-symbols-outlined text-icon-md transition-transform ${isExpanded ? 'rotate-180' : ''}`}>
+          <span
+            className={`material-symbols-outlined text-icon-md transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+          >
             expand_more
           </span>
         </span>
@@ -341,15 +387,11 @@ function FontListItem({ font, isSelected, isExpanded, onSelect, onToggleExpand }
           className="px-4 pb-4 pt-1 border-t border-sp-border/50 space-y-2"
           style={{ fontFamily: font.cssFamily }}
         >
-          <p className="text-2xl text-sp-text leading-relaxed">
-            가나다라마바사 아자차카타파하
-          </p>
-          <p className="text-base text-sp-text">
-            ABCDEFGHIJKLMNOPQRSTUVWXYZ 0123456789
-          </p>
+          <p className="text-2xl text-sp-text leading-relaxed">가나다라마바사 아자차카타파하</p>
+          <p className="text-base text-sp-text">ABCDEFGHIJKLMNOPQRSTUVWXYZ 0123456789</p>
           <p className="text-sm text-sp-muted leading-relaxed">
-            선생님, 오늘 수업은 프로젝트 학습입니다. 모둠별로 주제를 정해서 탐구해봅시다.
-            The quick brown fox jumps over the lazy dog.
+            선생님, 오늘 수업은 프로젝트 학습입니다. 모둠별로 주제를 정해서 탐구해봅시다. The quick
+            brown fox jumps over the lazy dog.
           </p>
           <div className="flex items-center gap-3 pt-2">
             <span className="text-caption text-sp-muted uppercase tracking-wider">Weight</span>

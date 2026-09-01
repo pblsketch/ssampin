@@ -8,6 +8,7 @@ import {
   type CSSProperties,
 } from 'react';
 import { ToolLayout } from './ToolLayout';
+import { useTextPrompt } from '@adapters/components/common/TextPromptModal';
 import { PastResultsView } from './TemplateManager';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { useBoardSessionStore } from '@adapters/stores/useBoardSessionStore';
@@ -110,6 +111,7 @@ interface ToolRealtimeWallProps {
 type ViewMode = 'list' | 'create' | 'running';
 
 export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps) {
+  const { prompt, promptElement } = useTextPrompt();
   const { track } = useAnalytics();
   // v1.13 Stage A: 기본 진입점을 '보드 목록'으로. 사용자가 이전 담벼락을
   // 재사용할 수 있도록. 새 보드는 list → create로 진입.
@@ -881,30 +883,36 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
     (postId: string) => {
       const target = posts.find((p) => p.id === postId);
       if (!target) return;
-      // 한국어 prompt — 추후 모달로 교체 가능
-      const next = window.prompt(
-        `${target.nickname}의 닉네임을 어떻게 바꿀까요? (1~20자)`,
-        target.nickname,
-      );
-      if (next === null) return;
-      const trimmed = next.trim().slice(0, 20);
-      if (trimmed.length === 0) return;
-      // 같은 작성자의 모든 카드 일괄 변경 (선택) — 단일 카드는 postId 단독
-      const sameAuthorIds = posts
-        .filter(
-          (p) =>
-            (target.ownerSessionToken && p.ownerSessionToken === target.ownerSessionToken) ||
-            (target.studentPinHash && p.studentPinHash === target.studentPinHash),
-        )
-        .map((p) => p.id);
-      const idsToUpdate = new Set<string>(sameAuthorIds.length > 0 ? sameAuthorIds : [postId]);
-      setPosts((prev) =>
-        prev.map((p) => (idsToUpdate.has(p.id) ? { ...p, nickname: trimmed } : p)),
-      );
-      // 서버 broadcast — store action via WebSocket (renderer 측)
-      // 교사 측은 별도 IPC 경로 없음 → 직접 broadcast useEffect 의존 (post 변경이 wall-state에 반영됨)
+      // window.prompt 는 Electron 에서 동작하지 않는다 — 이 버튼은 눌러도 아무 일이
+      // 없었다(2026-09-01). 바깥 서명을 그대로 두려고 안쪽만 비동기로 감싼다.
+      void (async () => {
+        const next = await prompt({
+          title: '닉네임 바꾸기',
+          label: `${target.nickname}의 닉네임을 어떻게 바꿀까요? (1~20자)`,
+          initialValue: target.nickname,
+          maxLength: 20,
+          confirmLabel: '바꾸기',
+        });
+        if (next === null) return;
+        const trimmed = next.trim().slice(0, 20);
+        if (trimmed.length === 0) return;
+        // 같은 작성자의 모든 카드 일괄 변경 (선택) — 단일 카드는 postId 단독
+        const sameAuthorIds = posts
+          .filter(
+            (p) =>
+              (target.ownerSessionToken && p.ownerSessionToken === target.ownerSessionToken) ||
+              (target.studentPinHash && p.studentPinHash === target.studentPinHash),
+          )
+          .map((p) => p.id);
+        const idsToUpdate = new Set<string>(sameAuthorIds.length > 0 ? sameAuthorIds : [postId]);
+        setPosts((prev) =>
+          prev.map((p) => (idsToUpdate.has(p.id) ? { ...p, nickname: trimmed } : p)),
+        );
+        // 서버 broadcast — store action via WebSocket (renderer 측)
+        // 교사 측은 별도 IPC 경로 없음 → 직접 broadcast useEffect 의존 (post 변경이 wall-state에 반영됨)
+      })();
     },
-    [posts],
+    [posts, prompt],
   );
 
   const handleTeacherBulkHideStudent = useCallback(
@@ -1237,52 +1245,71 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
       window.alert(`탭은 최대 ${REALTIME_WALL_MAX_TABS}개까지 만들 수 있어요.`);
       return;
     }
-    const title = window.prompt('새 탭 이름 (1~30자)')?.trim();
-    if (!title) return;
-    try {
-      const tabsBase: readonly RealtimeWallTabConfig[] = currentBoard.tabs ?? teacherTabs;
-      const newTabs = addRealtimeWallTab(tabsBase, title, 'all');
-      const next: WallBoard = { ...currentBoard, tabs: newTabs, updatedAt: Date.now() };
-      setCurrentBoard(next);
-      void wallBoardRepository.save(next);
-      // β-Step12 (post-release hotfix A) — 라이브 모드면 학생 broadcast (회귀 #2 SERVER_TRUSTED_BROADCAST 진입점)
-      if (isLiveMode && window.electronAPI?.broadcastRealtimeWall) {
-        // 신규 탭은 base 와 비교해서 추가된 것 — addRealtimeWallTab 은 배열 끝 + order 재계산
-        const newlyAdded = newTabs.find((t) => !tabsBase.some((b) => b.id === t.id));
-        if (newlyAdded) {
-          void window.electronAPI.broadcastRealtimeWall({ type: 'tab-added', tab: newlyAdded });
+    void (async () => {
+      const title = (
+        await prompt({
+          title: '새 탭',
+          label: '새 탭 이름 (1~30자)',
+          maxLength: 30,
+          confirmLabel: '만들기',
+        })
+      )?.trim();
+      if (!title) return;
+      try {
+        const tabsBase: readonly RealtimeWallTabConfig[] = currentBoard.tabs ?? teacherTabs;
+        const newTabs = addRealtimeWallTab(tabsBase, title, 'all');
+        const next: WallBoard = { ...currentBoard, tabs: newTabs, updatedAt: Date.now() };
+        setCurrentBoard(next);
+        void wallBoardRepository.save(next);
+        // β-Step12 (post-release hotfix A) — 라이브 모드면 학생 broadcast (회귀 #2 SERVER_TRUSTED_BROADCAST 진입점)
+        if (isLiveMode && window.electronAPI?.broadcastRealtimeWall) {
+          // 신규 탭은 base 와 비교해서 추가된 것 — addRealtimeWallTab 은 배열 끝 + order 재계산
+          const newlyAdded = newTabs.find((t) => !tabsBase.some((b) => b.id === t.id));
+          if (newlyAdded) {
+            void window.electronAPI.broadcastRealtimeWall({ type: 'tab-added', tab: newlyAdded });
+          }
         }
+      } catch (e) {
+        if (e instanceof Error) window.alert(e.message);
       }
-    } catch (e) {
-      if (e instanceof Error) window.alert(e.message);
-    }
-  }, [currentBoard, isLiveMode, teacherTabs]);
+    })();
+  }, [currentBoard, isLiveMode, teacherTabs, prompt]);
 
   const handleRenameTab = useCallback(
     (tabId: string) => {
       if (!currentBoard) return;
       const target = (currentBoard.tabs ?? teacherTabs).find((t) => t.id === tabId);
       if (!target) return;
-      const title = window.prompt('새 탭 이름 (1~30자)', target.title)?.trim();
-      if (!title || title === target.title) return;
-      try {
-        const newTabs = renameRealtimeWallTab(currentBoard.tabs ?? teacherTabs, tabId, title);
-        const next: WallBoard = { ...currentBoard, tabs: newTabs, updatedAt: Date.now() };
-        setCurrentBoard(next);
-        void wallBoardRepository.save(next);
-        // hotfix A — tab-renamed broadcast
-        if (isLiveMode && window.electronAPI?.broadcastRealtimeWall) {
-          void window.electronAPI.broadcastRealtimeWall({
-            type: 'tab-renamed',
-            tabId,
-            newTitle: title,
-          });
+      void (async () => {
+        const title = (
+          await prompt({
+            title: '탭 이름 바꾸기',
+            label: '새 탭 이름 (1~30자)',
+            initialValue: target.title,
+            maxLength: 30,
+            confirmLabel: '바꾸기',
+          })
+        )?.trim();
+        if (!title || title === target.title) return;
+        try {
+          const newTabs = renameRealtimeWallTab(currentBoard.tabs ?? teacherTabs, tabId, title);
+          const next: WallBoard = { ...currentBoard, tabs: newTabs, updatedAt: Date.now() };
+          setCurrentBoard(next);
+          void wallBoardRepository.save(next);
+          // hotfix A — tab-renamed broadcast
+          if (isLiveMode && window.electronAPI?.broadcastRealtimeWall) {
+            void window.electronAPI.broadcastRealtimeWall({
+              type: 'tab-renamed',
+              tabId,
+              newTitle: title,
+            });
+          }
+        } catch (e) {
+          if (e instanceof Error) window.alert(e.message);
         }
-      } catch (e) {
-        if (e instanceof Error) window.alert(e.message);
-      }
+      })();
     },
-    [currentBoard, isLiveMode, teacherTabs],
+    [currentBoard, isLiveMode, teacherTabs, prompt],
   );
 
   const handleDeleteTab = useCallback(
@@ -1458,6 +1485,7 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
 
   return (
     <ToolLayout title="실시간 담벼락" emoji="🗂️" onBack={onBack} isFullscreen={isFullscreen}>
+      {promptElement}
       {showPastResults ? (
         <PastResultsView toolType="realtime-wall" onClose={() => setShowPastResults(false)} />
       ) : null}

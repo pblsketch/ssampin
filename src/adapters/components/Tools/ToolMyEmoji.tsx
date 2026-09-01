@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { ToolLayout } from './ToolLayout';
 import { useStickerStore } from '@adapters/stores/useStickerStore';
 import { StickerManager } from './Sticker/StickerManager';
@@ -24,6 +25,13 @@ const FIRST_VISIT_KEY = 'ssampin.sticker.first-visit';
  * 1개 이상 → 관리로 시작.
  */
 export function ToolMyEmoji({ onBack, isFullscreen }: ToolMyEmojiProps): JSX.Element {
+  // 화면 방문(page_view)은 잡혔지만 "도구 사용"으로는 세지 않아, 도구 순위에서 통째로
+  // 빠져 있었다. 다른 도구와 같은 방식으로 센다(2026-09-01).
+  const { track } = useAnalytics();
+  useEffect(() => {
+    track('tool_use', { tool: 'sticker' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const data = useStickerStore((s) => s.data);
   const loaded = useStickerStore((s) => s.loaded);
   const load = useStickerStore((s) => s.load);
@@ -40,8 +48,7 @@ export function ToolMyEmoji({ onBack, isFullscreen }: ToolMyEmojiProps): JSX.Ele
   useEffect(() => {
     if (!loaded || didInitTab) return;
     const firstVisit =
-      typeof window !== 'undefined' &&
-      window.localStorage.getItem(FIRST_VISIT_KEY) === null;
+      typeof window !== 'undefined' && window.localStorage.getItem(FIRST_VISIT_KEY) === null;
     if (firstVisit || data.stickers.length === 0) {
       setTab('guide');
     } else {
@@ -106,13 +113,7 @@ interface TopTabButtonProps {
   count?: number;
 }
 
-function TopTabButton({
-  active,
-  onClick,
-  icon,
-  label,
-  count,
-}: TopTabButtonProps): JSX.Element {
+function TopTabButton({ active, onClick, icon, label, count }: TopTabButtonProps): JSX.Element {
   return (
     <button
       type="button"

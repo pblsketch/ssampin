@@ -1,6 +1,8 @@
 import { useCallback, useMemo, useState } from 'react';
 import type { PageId } from '@adapters/components/Layout/Sidebar';
 import type { MiniApp } from '@domain/entities/MiniApp';
+import type { ToolName } from '@domain/valueObjects/AnalyticsEvent';
+import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { PageHeader } from '@adapters/components/common/PageHeader';
 import { Modal } from '@adapters/components/common/Modal';
@@ -187,6 +189,30 @@ export const TOOLS: ToolCard[] = [
 
 const DEFAULT_TOOL_ORDER: readonly PageId[] = TOOLS.map((t) => t.id);
 
+/**
+ * 바깥 사이트·프로그램으로 나가는 도구의 사용을 센다.
+ *
+ * 카드 id(`tool-supsori`)와 통계 이름(`supsori`)이 다르므로 여기서 한 번 옮긴다.
+ * 목록에 없는 id 는 세지 않는다 — 모르는 이름을 통계에 흘리지 않기 위해서다.
+ */
+const EXTERNAL_TOOL_NAMES: Readonly<Record<string, ToolName>> = {
+  'tool-supsori': 'supsori',
+  'tool-pblsketch': 'pblsketch',
+  'tool-dorms': 'dorms',
+  'tool-dorms-arcade': 'dorms-arcade',
+  'tool-oneclick-portal': 'oneclick-portal',
+  'tool-edudraft': 'edudraft',
+  'tool-pdf-lab': 'pdf-lab',
+};
+
+function trackExternalToolUse(
+  id: string,
+  track: (event: 'tool_use', properties: { tool: ToolName }) => void,
+): void {
+  const tool = EXTERNAL_TOOL_NAMES[id];
+  if (tool) track('tool_use', { tool });
+}
+
 function openExternal(url: string) {
   if (window.electronAPI?.openExternal) {
     void window.electronAPI.openExternal(url);
@@ -218,6 +244,7 @@ function sortByOrder(tools: ToolCard[], order: readonly string[] | undefined): T
 }
 
 export function ToolsGrid({ onNavigate }: ToolsGridProps) {
+  const { track } = useAnalytics();
   const toolsOrder = useSettingsStore((s) => s.settings.toolsOrder);
   const hiddenTools = useSettingsStore((s) => s.settings.hiddenTools);
   const update = useSettingsStore((s) => s.update);
@@ -319,13 +346,18 @@ export function ToolsGrid({ onNavigate }: ToolsGridProps) {
                       // 원클릭업무포털은 웹사이트가 아니라 설치된 외부 프로그램이라
                       // 설치·실행 여부를 확인하는 전용 흐름을 탄다.
                       if (tool.id === ONECLICK_PORTAL_TOOL_ID) {
+                        trackExternalToolUse(tool.id, track);
                         void oneclickPortal.handleCardClick();
                         return;
                       }
                       if (tool.externalUrl) {
+                        // ★바깥으로 나가는 도구는 **여기서 세지 않으면 영영 0 이다.**
+                        //   화면 이동이 없어 방문 기록조차 안 남는다(2026-08 한 달 내내 0건).
+                        trackExternalToolUse(tool.id, track);
                         openExternal(tool.externalUrl);
                         return;
                       }
+                      // 앱 안의 도구는 각자 자기 화면에서 센다 — 여기서 또 세면 두 번이 된다.
                       onNavigate(tool.id);
                     }}
                     className="bg-sp-card rounded-2xl p-6 text-left border border-transparent hover:border-blue-500/30 hover:scale-[1.02] transition-all group"

@@ -54,7 +54,27 @@ export type AnalyticsEventName =
   | 'icon_mode_expand'
   | 'icon_popover_open'
   | 'icon_popover_quick_add'
-  | 'icon_popover_todo_toggle';
+  | 'icon_popover_todo_toggle'
+  // ── 쌤핀 AI (2026-09-01 추가) ──
+  // 그 전까지 쌤핀 AI 는 앱 통계에 **한 건도 남지 않았다.** 사용량을 세려면 서버의
+  // 남용 방지 테이블을 뒤져야 했는데, 그건 통계용이 아니라 언제 지워도 되는 자료다.
+  | 'assist_open'
+  | 'assist_message'
+  | 'assist_degraded'
+  // ── 동기화 (2026-09-01 추가) ──
+  // 지난 두 릴리즈가 모두 동기화 교착 수정이었는데, 재발을 숫자로 볼 방법이 없었다.
+  | 'sync_run'
+  // ── 옆핀 (2026-09-01 추가) ──
+  | 'sidepin_open'
+  | 'sidepin_action'
+  // ── 온라인 교무실 (2026-09-01 추가) ──
+  | 'staffroom_post_create'
+  // ── 모바일 웹 (2026-09-01 추가) ──
+  // ★이름을 `mobile_` 로 시작하게 둔 이유: 데스크톱 지표(활성 사용자·재방문)와 섞이면
+  //   지금까지 쌓은 추세선이 끊긴다. 롤업에서 이 접두사를 걸러 데스크톱 숫자를 지킨다.
+  | 'mobile_app_open'
+  | 'mobile_page_view'
+  | 'mobile_action';
 
 /** tool_use 이벤트의 tool 프로퍼티에 사용 가능한 도구명 */
 export type ToolName =
@@ -78,7 +98,26 @@ export type ToolName =
   | 'valueline-discussion'
   | 'trafficlight-discussion'
   | 'realtime-wall'
-  | 'score-allocator';
+  | 'score-allocator'
+  // ── 2026-09-01 추가: 화면은 있는데 "도구 사용"으로 세지 않던 것들 ──
+  // 이 8개가 빠져 있어서 관리자 화면의 도구 순위가 실제 순위가 아니었다.
+  | 'chalkboard'
+  | 'sticker'
+  | 'collab-board'
+  | 'classroom-agreement'
+  | 'signature-roster'
+  | 'markdown-convert'
+  | 'school-announcements'
+  | 'forms'
+  // ── 2026-09-01 추가: 바깥 사이트·프로그램으로 나가는 도구 ──
+  // 화면 이동이 없어 방문 기록조차 안 남았다. 눌린 순간을 세지 않으면 영영 0 이다.
+  | 'supsori'
+  | 'pblsketch'
+  | 'dorms'
+  | 'dorms-arcade'
+  | 'oneclick-portal'
+  | 'edudraft'
+  | 'pdf-lab';
 
 /** 이벤트별 properties 타입 매핑 */
 export interface AnalyticsEventProperties {
@@ -114,7 +153,15 @@ export interface AnalyticsEventProperties {
   bookmark_add: { url: string };
   bookmark_click: { url: string; type?: string };
   feedback_submit: Record<string, never>;
-  settings_change: { section: string; key: string };
+  /**
+   * 설정 저장.
+   *
+   * ★`keys` 는 **실제로 값이 달라진 항목 이름들**이다(2026-09-01 추가).
+   * 그 전에는 `key` 가 항상 'save' 라서 "어느 탭을 저장했다"만 남고 **무엇을 켰는지는
+   * 알 수 없었다.** 그래서 실험실 기능(쌤핀 AI·교무실)을 몇 명이 켰는지 못 셌다.
+   * 값이 아니라 **항목 이름만** 담는다 — 학교명·반 이름 같은 내용은 넣지 않는다.
+   */
+  settings_change: { section: string; key: string; keys?: string[] };
   timetable_neis_sync: { success: boolean };
   widget_layout_change: { from: string; to: string };
   onboarding_roles_selected: { roles: string[]; hiddenMenuCount: number; visibleMenuCount: number };
@@ -160,4 +207,78 @@ export interface AnalyticsEventProperties {
   icon_popover_quick_add: Record<string, never>;
   /** 팝오버에서 할 일 완료 토글 */
   icon_popover_todo_toggle: Record<string, never>;
+
+  // ── 쌤핀 AI ──
+  /** 쌤핀 AI 대화창을 열었다 */
+  assist_open: Record<string, never>;
+  /**
+   * 질문을 보냈다.
+   *
+   * ★질문 내용은 **절대 담지 않는다.** 학생 이름이 들어 있을 수 있고, 쌤핀 AI 의 설계
+   * 자체가 "이름은 화면에 남고 숫자만 밖으로"이다. 여기서 그 원칙을 깨면 안 된다.
+   */
+  assist_message: {
+    /** 이 질문에 로컬 조회 카드가 붙었는지 — 붙지 않으면 AI 가 맨몸으로 답한다 */
+    hasCards: boolean;
+    /** 이 대화에서 몇 번째 질문인지 (1부터) */
+    turnIndex: number;
+  };
+  /**
+   * 답이 축소되어 돌아왔다 — 예산 소진·혼잡·서버 미설정·상류 오류, 또는 앱이 막은 경우.
+   * 이게 없으면 "AI 를 켜 놨는데 안 되더라"를 신고로만 알게 된다.
+   */
+  assist_degraded: {
+    reason:
+      | 'budget'
+      | 'busy'
+      | 'unavailable'
+      | 'upstream'
+      | 'offline'
+      | 'timeout'
+      | 'unreachable'
+      /** 앱이 보내기 전에 막았다 — 개인정보가 섞인 질문 */
+      | 'blocked';
+  };
+
+  // ── 동기화 ──
+  /**
+   * 동기화 1회의 결과.
+   *
+   * ★실패 사유는 **분류된 이름**만 담는다. 원문 오류 메시지에는 파일명·계정이 섞여 들어온다.
+   */
+  sync_run: {
+    direction: 'upload' | 'download' | 'settings' | 'rebuild';
+    outcome: 'success' | 'conflict' | 'error';
+    /** outcome === 'error' 일 때만. 'scope' | 'network' | 'timeout' | 'quota' | 'unknown' */
+    reason?: string;
+    /** 걸린 시간(초). 교착을 숫자로 보려면 성공·실패 둘 다 필요하다 */
+    durationSec: number;
+    /** 이번 회차에 오간 파일 수 */
+    fileCount?: number;
+  };
+
+  // ── 옆핀 ──
+  /** 옆핀 창이 떴다 */
+  sidepin_open: Record<string, never>;
+  /**
+   * 옆핀 안에서 한 동작.
+   *
+   * 지금은 두 가지만 센다 — 옆핀이 "펴 보기만 하는 것"인지 "실제로 쓰는 것"인지를
+   * 가르는 최소한의 구분이다. 개인정보 보호(PIN 잠금·즉시 숨김)는 아직 작업 중이라
+   * 그쪽 동작은 기능이 끝난 뒤에 붙인다.
+   */
+  sidepin_action: { action: 'memo_write' | 'widget_open' };
+
+  /**
+   * 온라인 교무실에 글을 올렸다.
+   *
+   * ★"교무실을 열었다"는 따로 세지 않는다 — `page_view`(page: 'staffroom') 가 이미 센다.
+   *   같은 것을 두 이름으로 세면 나중에 어느 쪽이 맞는지 다투게 된다.
+   */
+  staffroom_post_create: { hasAttachment: boolean };
+
+  // ── 모바일 웹 ──
+  mobile_app_open: { isReturning: boolean };
+  mobile_page_view: { page: string };
+  mobile_action: { action: string };
 }

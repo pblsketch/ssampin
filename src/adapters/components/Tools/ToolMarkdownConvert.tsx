@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { ToolLayout } from './ToolLayout';
 import { convertDocument, maskMarkdown, manageMaskSessions } from '@adapters/di/container';
 import { useClassRosterStore } from '@adapters/stores/useClassRosterStore';
@@ -157,6 +158,13 @@ function formatDocDate(raw: string): string {
 }
 
 export function ToolMarkdownConvert({ onBack, isFullscreen }: ToolMarkdownConvertProps) {
+  // 화면 방문(page_view)은 잡혔지만 "도구 사용"으로는 세지 않아, 도구 순위에서 통째로
+  // 빠져 있었다. 다른 도구와 같은 방식으로 센다(2026-09-01).
+  const { track } = useAnalytics();
+  useEffect(() => {
+    track('tool_use', { tool: 'markdown-convert' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [tab, setTab] = useState<'convert' | 'restore'>('convert');
   const [helpOpen, setHelpOpen] = useState(true);
 

@@ -10,9 +10,10 @@
  *   모델이 고른 도구는 `executeAssistTool` 이 로컬에서 실행하며 인자를 항상 불신한다.
  * 어느 갈래든 나가는 것은 재구성·가림을 거친 집계뿐이다.
  */
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 
 import { AssistDock } from './AssistDock';
+import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { findAssistTool } from '@domain/services/assistToolRegistry';
 import { rosterFromAll } from '@domain/rules/redactOutbound';
 import { sanitizeToolResult } from '@domain/services/sanitizeToolResult';
@@ -645,6 +646,39 @@ export function AssistDockContainer() {
   const ask = useAssistStore((s) => s.ask);
   const settleProposal = useAssistStore((s) => s.settleProposal);
 
+  /**
+   * ★사용량 기록 (2026-09-01 추가).
+   *
+   * 그 전까지 쌤핀 AI 는 앱 통계에 **한 건도 남기지 않았다.** 얼마나 쓰이는지 물었을 때
+   * 서버의 남용 방지 테이블을 뒤져야 답할 수 있었는데, 그 테이블은 통계용이 아니라
+   * 언제 지워도 되는 자료다. 사라지면 사용량 이력도 같이 사라진다.
+   *
+   * ★남기는 것은 **횟수뿐**이다. 질문 내용은 어디에도 담지 않는다 — 이 기능의 설계가
+   * "이름은 화면에 남고 숫자만 밖으로"이고, 기록이 그 원칙을 깨면 안 된다.
+   */
+  const { track } = useAnalytics();
+  const dockOpen = useAssistStore((s) => s.open);
+  const turns = useAssistStore((s) => s.turns);
+
+  const wasOpenRef = useRef(false);
+  useEffect(() => {
+    if (dockOpen && !wasOpenRef.current) track('assist_open');
+    wasOpenRef.current = dockOpen;
+  }, [dockOpen, track]);
+
+  // 답이 축소되거나 막혔을 때 — 턴 하나당 한 번만 남긴다.
+  // 이게 없으면 "켜 놨는데 안 되더라"를 사용자 신고로만 알게 된다.
+  const reportedTurnsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    for (const turn of turns) {
+      if (turn.status === 'thinking') continue;
+      if (reportedTurnsRef.current.has(turn.id)) continue;
+      reportedTurnsRef.current.add(turn.id);
+      const reason = turn.status === 'blocked' ? 'blocked' : turn.degraded;
+      if (reason) track('assist_degraded', { reason });
+    }
+  }, [turns, track]);
+
   const students = useStudentStore((s) => s.students);
   const classes = useTeachingClassStore((s) => s.classes);
   const todos = useTodoStore((s) => s.todos);
@@ -933,6 +967,11 @@ export function AssistDockContainer() {
           rubricGradings,
         };
         const cards = buildCards(question, src);
+        // 질문 **내용은 담지 않는다.** 카드가 붙었는지와 몇 번째 질문인지만 센다.
+        track('assist_message', {
+          hasCards: cards.length > 0,
+          turnIndex: useAssistStore.getState().turns.length + 1,
+        });
         void ask(
           assistPort,
           question,
@@ -966,6 +1005,7 @@ export function AssistDockContainer() {
       seating,
       students,
       todos,
+      track,
       writeSources,
     ],
   );

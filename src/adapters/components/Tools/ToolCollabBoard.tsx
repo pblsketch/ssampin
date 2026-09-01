@@ -5,6 +5,7 @@
  * Step 7b에서 활성 세션 시 QR·세션 코드·접속자 목록(BoardSessionPanel) 추가 예정.
  */
 import { useEffect, useState } from 'react';
+import { useAnalytics } from '@adapters/hooks/useAnalytics';
 
 import { ToolLayout } from './ToolLayout';
 import { BoardListPanel } from './Board/BoardListPanel';
@@ -19,6 +20,13 @@ interface ToolCollabBoardProps {
 }
 
 export function ToolCollabBoard({ onBack, isFullscreen }: ToolCollabBoardProps): JSX.Element {
+  // 화면 방문(page_view)은 잡혔지만 "도구 사용"으로는 세지 않아, 도구 순위에서 통째로
+  // 빠져 있었다. 다른 도구와 같은 방식으로 센다(2026-09-01).
+  const { track } = useAnalytics();
+  useEffect(() => {
+    track('tool_use', { tool: 'collab-board' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const boards = useBoardStore((s) => s.boards);
   const hydrate = useBoardSessionStore((s) => s.hydrate);
   const subscribe = useBoardSessionStore((s) => s.subscribe);

@@ -7,6 +7,46 @@ import {
   readDriveSyncDeviceState,
   saveDriveSyncLastSyncedAt,
 } from '@adapters/repositories/driveSyncDeviceState';
+import { trackAnalytics } from '@adapters/hooks/useAnalytics';
+
+/**
+ * 실패 사유를 **분류된 이름 한 개**로 줄인다.
+ *
+ * ★원문 오류 메시지를 그대로 통계에 담으면 안 된다 — 파일명·Drive 파일 ID·계정이
+ * 섞여 들어온다. 여기서 미리 정해 둔 이름으로만 바꾼다.
+ */
+function classifySyncError(err: unknown, message: string): string {
+  if (err instanceof Error && err.name === 'GoogleFetchTimeoutError') return 'timeout';
+  if (message.includes('SCOPE_INSUFFICIENT')) return 'scope';
+  if (message.includes('INVALID_GRANT')) return 'auth';
+  if (message.includes('storageQuotaExceeded') || message.includes('quota')) return 'quota';
+  if (message.includes('Failed to fetch') || message.includes('NetworkError')) return 'network';
+  return 'unknown';
+}
+
+/**
+ * 동기화 한 회차의 결과를 남긴다 (2026-09-01 추가).
+ *
+ * ★왜 필요한가: 최근 두 번의 릴리즈가 모두 동기화 교착 수정이었는데, **재발했는지를
+ * 숫자로 확인할 방법이 없었다.** 사용자가 신고해야만 알았다. 성공까지 함께 세야
+ * "실패율이 늘었다"를 말할 수 있어서 성공·실패 양쪽 다 남긴다.
+ *
+ * 담는 것은 방향·결과·분류된 사유·걸린 시간·파일 수뿐이다. 파일 이름은 담지 않는다.
+ */
+function reportSyncRun(
+  direction: 'upload' | 'download' | 'settings' | 'rebuild',
+  outcome: 'success' | 'conflict' | 'error',
+  startedAt: number,
+  extra: { reason?: string; fileCount?: number } = {},
+): void {
+  trackAnalytics('sync_run', {
+    direction,
+    outcome,
+    durationSec: Math.round((Date.now() - startedAt) / 1000),
+    ...(extra.reason === undefined ? {} : { reason: extra.reason }),
+    ...(extra.fileCount === undefined ? {} : { fileCount: extra.fileCount }),
+  });
+}
 
 /**
  * 화면에 내보낼 오류 문구.
@@ -104,6 +144,7 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
     if (get().status === 'syncing') return;
     // 신규 기기 첫 동기화 모달 열려있는 동안 무단 업로드 차단 (경쟁 조건 방지)
     if (get().firstSyncRequired) return;
+    const startedAt = Date.now();
     set({ status: 'syncing', error: null, progress: null });
     try {
       const { driveSyncRepository, getDriveSyncAdapter, authenticateGoogle, storage } =
@@ -160,6 +201,8 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
         },
       });
 
+      reportSyncRun('upload', 'success', startedAt, { fileCount: result.uploaded.length });
+
       // 사진·첨부 업로드 실패는 조용히 넘기지 않는다 — 사용자가 알아야 재시도든 문의든 한다.
       if (result.binaryFailures.length > 0) {
         console.warn(
@@ -192,6 +235,7 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
     } catch (err) {
       console.error('[DriveSync] syncToCloud error:', err);
       const msg = err instanceof Error ? err.message : '동기화 중 오류가 발생했습니다.';
+      reportSyncRun('upload', 'error', startedAt, { reason: classifySyncError(err, msg) });
       if (msg.includes('INVALID_GRANT') || msg.includes('SCOPE_INSUFFICIENT')) {
         // 토큰이 무효화됨 → 동기화 비활성화, 재연결 안내
         const { useSettingsStore } = await import('./useSettingsStore');
@@ -222,6 +266,7 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
     if (get().status === 'syncing') return { downloaded: [], conflicts: [] };
     // 신규 기기 첫 동기화 모달 열려있는 동안 무단 다운로드 차단 (경쟁 조건 방지)
     if (get().firstSyncRequired) return { downloaded: [], conflicts: [] };
+    const startedAt = Date.now();
     set({ status: 'syncing', error: null, progress: null });
     try {
       const { driveSyncRepository, getDriveSyncAdapter, authenticateGoogle, storage } =
@@ -292,6 +337,7 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
       };
 
       if (result.conflicts.length > 0) {
+        reportSyncRun('download', 'conflict', startedAt, { fileCount: result.conflicts.length });
         set({
           status: 'conflict',
           conflicts: result.conflicts,
@@ -300,6 +346,7 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
           lastSyncResult: syncResult,
         });
       } else {
+        reportSyncRun('download', 'success', startedAt, { fileCount: result.downloaded.length });
         set({ status: 'success', lastSyncedAt: now, progress: null, lastSyncResult: syncResult });
         setTimeout(() => {
           if (get().status === 'success') set({ status: 'idle' });
@@ -313,6 +360,7 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
     } catch (err) {
       console.error('[DriveSync] syncFromCloud error:', err);
       const msg = err instanceof Error ? err.message : '동기화 중 오류가 발생했습니다.';
+      reportSyncRun('download', 'error', startedAt, { reason: classifySyncError(err, msg) });
       if (msg.includes('INVALID_GRANT') || msg.includes('SCOPE_INSUFFICIENT')) {
         const { useSettingsStore } = await import('./useSettingsStore');
         const sync = useSettingsStore.getState().settings.sync;
@@ -345,6 +393,7 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
     }
     // ImportSettingsFromCloudError 클래스는 catch에서 instanceof로 쓰므로 try 바깥에서 import
     const { ImportSettingsFromCloudError } = await import('@usecases/sync/ImportSettingsFromCloud');
+    const startedAt = Date.now();
     set({ status: 'syncing', error: null, progress: null });
     try {
       const { createImportSettingsFromCloud, authenticateGoogle } =
@@ -371,6 +420,7 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
           conflicts: [],
         },
       });
+      reportSyncRun('settings', 'success', startedAt, { fileCount: 1 });
       setTimeout(() => {
         if (get().status === 'success') set({ status: 'idle' });
       }, 3000);
@@ -386,6 +436,8 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
       const code: ImportSettingsFromCloudErrorCode = imported?.code ?? 'UNKNOWN';
       const message =
         imported?.message ?? (err instanceof Error ? err.message : '설정 가져오기에 실패했습니다.');
+      // 이 경로는 사유 코드가 이미 분류돼 있다(usecase 가 정한 값) — 그대로 쓴다.
+      reportSyncRun('settings', 'error', startedAt, { reason: code });
       set({ status: 'error', error: message, progress: null });
       setTimeout(() => {
         const s = get();
@@ -497,10 +549,17 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
     // 뒤이은 syncToCloud 가 자기 firstSyncRequired 가드에 막혀 **조용히 아무것도 올리지 않는다**
     // — 결과는 빈 클라우드다. 오류도 안 나서 사용자는 복구된 줄 안다.
     if (get().firstSyncRequired) return;
+    // ★이 버튼이 눌린 횟수 자체가 신호다 — 눌렸다는 건 동기화가 스스로 못 푸는 상태에
+    //   빠졌다는 뜻이다. 교착 재발을 신고 전에 알아채는 가장 이른 지표다.
+    const startedAt = Date.now();
     await get().deleteCloudData();
     // 삭제 실패 — 여기서 멈추고 오류를 그대로 남긴다.
-    if (get().status === 'error') return;
+    if (get().status === 'error') {
+      reportSyncRun('rebuild', 'error', startedAt, { reason: 'delete_failed' });
+      return;
+    }
     await get().syncToCloud();
+    reportSyncRun('rebuild', get().status === 'error' ? 'error' : 'success', startedAt);
   },
 
   resetStatus: () => set({ status: 'idle', error: null, progress: null }),

@@ -131,6 +131,7 @@ import { FirstSyncConfirmModal } from '@adapters/components/common/FirstSyncConf
 import { reloadStores } from '@adapters/hooks/useDriveSync';
 import { SYNC_REGISTRY } from '@usecases/sync/syncRegistry';
 import { validateShareFile } from '@domain/rules/shareRules';
+import { isNoiseError } from '@domain/rules/isNoiseError';
 import { useThemeApplier } from '@adapters/hooks/useThemeApplier';
 import { useGlassSurface } from '@adapters/hooks/useGlassSurface';
 import { AppBackdrop } from '@adapters/components/common/AppBackdrop';
@@ -874,17 +875,21 @@ function MainApp() {
   // 전역 에러 추적
   useEffect(() => {
     const handleError = (e: ErrorEvent) => {
+      const message = e.message || 'Unknown error';
+      if (isNoiseError(message)) return;
       track('error', {
-        message: e.message || 'Unknown error',
+        message,
         component: 'global',
         stack: e.error?.stack?.substring(0, 500),
       });
     };
     const handleRejection = (e: PromiseRejectionEvent) => {
+      const message = String(
+        (e.reason as { message?: string })?.message || e.reason || 'Unhandled rejection',
+      );
+      if (isNoiseError(message)) return;
       track('error', {
-        message: String(
-          (e.reason as { message?: string })?.message || e.reason || 'Unhandled rejection',
-        ),
+        message,
         component: 'global',
         stack: String((e.reason as { stack?: string })?.stack || '').substring(0, 500),
       });

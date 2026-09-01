@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { ToolLayout } from './ToolLayout';
 import { ChalkboardToolbar } from './Chalkboard/ChalkboardToolbar';
 import { useChalkCanvas } from './Chalkboard/useChalkCanvas';
@@ -41,6 +42,13 @@ interface ToolChalkboardProps {
 }
 
 export function ToolChalkboard({ onBack, isFullscreen }: ToolChalkboardProps) {
+  // 화면 방문(page_view)은 잡혔지만 "도구 사용"으로는 세지 않아, 도구 순위에서 통째로
+  // 빠져 있었다. 다른 도구와 같은 방식으로 센다(2026-09-01).
+  const { track } = useAnalytics();
+  useEffect(() => {
+    track('tool_use', { tool: 'chalkboard' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [mode, setMode] = useState<ChalkboardMode>('pen');
   const [penSize, setPenSize] = useState(() => {
     if (typeof window === 'undefined') return PEN_SIZE_DEFAULT;
@@ -182,9 +190,18 @@ export function ToolChalkboard({ onBack, isFullscreen }: ToolChalkboardProps) {
     }
   }, [gridMode, setGridMode]);
 
-  const handleUndo = useCallback(() => { void undo(); }, [undo]);
-  const handleRedo = useCallback(() => { void redo(); }, [redo]);
-  const handleGoToPage = useCallback((n: number) => { void goToPage(n); }, [goToPage]);
+  const handleUndo = useCallback(() => {
+    void undo();
+  }, [undo]);
+  const handleRedo = useCallback(() => {
+    void redo();
+  }, [redo]);
+  const handleGoToPage = useCallback(
+    (n: number) => {
+      void goToPage(n);
+    },
+    [goToPage],
+  );
 
   // S 단축키: 도형 모드가 아니면 진입, 이미 도형 모드면 다음 종류로 순환
   const handleShapeShortcut = useCallback(() => {
@@ -202,33 +219,101 @@ export function ToolChalkboard({ onBack, isFullscreen }: ToolChalkboardProps) {
       { key: 'v', label: '선택', description: '선택/이동 모드', handler: () => setMode('select') },
       { key: 'p', label: '판서', description: '판서 모드', handler: () => setMode('pen') },
       { key: 't', label: '텍스트', description: '텍스트 모드', handler: () => setMode('text') },
-      { key: 'e', label: '개체 지우개', description: '개체 단위 지우개', handler: () => setMode('eraser') },
-      { key: 'e', label: '부분 지우개', description: '드래그로 부분 지우개', modifiers: { shift: true }, handler: () => setMode('pixelEraser') },
-      { key: 's', label: '도형', description: '도형 모드 / 종류 순환', handler: handleShapeShortcut },
-      { key: 'z', label: '실행취소', description: '실행취소', modifiers: { ctrl: true }, handler: handleUndo },
-      { key: 'y', label: '다시실행', description: '다시실행', modifiers: { ctrl: true }, handler: handleRedo },
-      { key: 's', label: '저장', description: '이미지 저장', modifiers: { ctrl: true }, handler: saveAsImage },
-      { key: '[', label: '크기 줄이기', description: '펜 크기 줄이기', handler: () => setPenSize((s) => decrementPenSize(s)) },
-      { key: ']', label: '크기 키우기', description: '펜 크기 키우기', handler: () => setPenSize((s) => incrementPenSize(s)) },
-      { key: 'g', label: '배경', description: '배경 전환 (팝오버 또는 순환)', handler: handleBackgroundShortcut },
-      { key: 'ArrowLeft', label: '이전 페이지', description: '이전 페이지', handler: () => handleGoToPage(currentPage - 1) },
-      { key: 'ArrowRight', label: '다음 페이지', description: '다음 페이지', handler: () => handleGoToPage(currentPage + 1) },
+      {
+        key: 'e',
+        label: '개체 지우개',
+        description: '개체 단위 지우개',
+        handler: () => setMode('eraser'),
+      },
+      {
+        key: 'e',
+        label: '부분 지우개',
+        description: '드래그로 부분 지우개',
+        modifiers: { shift: true },
+        handler: () => setMode('pixelEraser'),
+      },
+      {
+        key: 's',
+        label: '도형',
+        description: '도형 모드 / 종류 순환',
+        handler: handleShapeShortcut,
+      },
+      {
+        key: 'z',
+        label: '실행취소',
+        description: '실행취소',
+        modifiers: { ctrl: true },
+        handler: handleUndo,
+      },
+      {
+        key: 'y',
+        label: '다시실행',
+        description: '다시실행',
+        modifiers: { ctrl: true },
+        handler: handleRedo,
+      },
+      {
+        key: 's',
+        label: '저장',
+        description: '이미지 저장',
+        modifiers: { ctrl: true },
+        handler: saveAsImage,
+      },
+      {
+        key: '[',
+        label: '크기 줄이기',
+        description: '펜 크기 줄이기',
+        handler: () => setPenSize((s) => decrementPenSize(s)),
+      },
+      {
+        key: ']',
+        label: '크기 키우기',
+        description: '펜 크기 키우기',
+        handler: () => setPenSize((s) => incrementPenSize(s)),
+      },
+      {
+        key: 'g',
+        label: '배경',
+        description: '배경 전환 (팝오버 또는 순환)',
+        handler: handleBackgroundShortcut,
+      },
+      {
+        key: 'ArrowLeft',
+        label: '이전 페이지',
+        description: '이전 페이지',
+        handler: () => handleGoToPage(currentPage - 1),
+      },
+      {
+        key: 'ArrowRight',
+        label: '다음 페이지',
+        description: '다음 페이지',
+        handler: () => handleGoToPage(currentPage + 1),
+      },
       { key: 'Delete', label: '삭제', description: '선택 항목 삭제', handler: deleteSelected },
     ],
-    [handleUndo, handleRedo, saveAsImage, handleBackgroundShortcut, handleGoToPage, currentPage, deleteSelected],
+    [
+      handleUndo,
+      handleRedo,
+      saveAsImage,
+      handleBackgroundShortcut,
+      handleGoToPage,
+      currentPage,
+      deleteSelected,
+    ],
   );
 
-  const cursorStyle = mode === 'pen'
-    ? 'crosshair'
-    : mode === 'eraser'
-      ? 'pointer'
-      : mode === 'pixelEraser'
-        ? 'crosshair'
-        : mode === 'text'
-          ? 'text'
-          : mode === 'shape'
-            ? 'crosshair'
-            : 'default';
+  const cursorStyle =
+    mode === 'pen'
+      ? 'crosshair'
+      : mode === 'eraser'
+        ? 'pointer'
+        : mode === 'pixelEraser'
+          ? 'crosshair'
+          : mode === 'text'
+            ? 'text'
+            : mode === 'shape'
+              ? 'crosshair'
+              : 'default';
 
   const containerStyle: React.CSSProperties = {
     backgroundColor: currentBoardBg,
@@ -242,7 +327,14 @@ export function ToolChalkboard({ onBack, isFullscreen }: ToolChalkboardProps) {
   };
 
   return (
-    <ToolLayout title="칠판" emoji="🖍️" onBack={onBack} isFullscreen={isFullscreen} shortcuts={shortcuts} disableZoom>
+    <ToolLayout
+      title="칠판"
+      emoji="🖍️"
+      onBack={onBack}
+      isFullscreen={isFullscreen}
+      shortcuts={shortcuts}
+      disableZoom
+    >
       <div className="flex-1 min-h-0 flex flex-col">
         <div
           className="relative flex-1 rounded-xl border-4 border-amber-800/60 shadow-inner overflow-hidden"
@@ -253,7 +345,10 @@ export function ToolChalkboard({ onBack, isFullscreen }: ToolChalkboardProps) {
 
           {/* Placeholder */}
           {currentPage === 0 && !canUndo && (
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ zIndex: 5 }}>
+            <div
+              className="absolute inset-0 flex items-center justify-center pointer-events-none"
+              style={{ zIndex: 5 }}
+            >
               <p className="text-white/20 text-2xl font-medium select-none">
                 칠판에 자유롭게 판서하세요
               </p>

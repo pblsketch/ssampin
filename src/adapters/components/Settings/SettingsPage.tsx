@@ -4,6 +4,7 @@ import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useEventsStore } from '@adapters/stores/useEventsStore';
 import { useToastStore } from '@adapters/components/common/Toast';
 import type { Settings } from '@domain/entities/Settings';
+import { diffSettingsKeys } from '@domain/services/diffSettingsKeys';
 import { SettingsLayout } from './SettingsLayout';
 
 export type SettingsTabId =
@@ -78,10 +79,16 @@ export function SettingsPage({ initialTab }: SettingsPageProps = {}) {
 
   const handleSave = async () => {
     setSaving(true);
+    // ★저장하기 **전에** 견준다 — update() 뒤에는 스토어 값이 이미 바뀌어 차이가 사라진다.
+    //   담는 것은 달라진 **항목 이름**뿐이고 값은 담지 않는다(diffSettingsKeys 주석 참조).
+    const changedKeys = diffSettingsKeys(
+      settings as unknown as Record<string, unknown>,
+      draft as unknown as Record<string, unknown>,
+    );
     try {
       await update(draft);
       showToast('설정이 저장되었습니다.', 'success');
-      track('settings_change', { section: activeTab, key: 'save' });
+      track('settings_change', { section: activeTab, key: 'save', keys: changedKeys });
 
       // 위젯 설정 변경 시 실행 중인 위젯에 실시간 적용.
       //

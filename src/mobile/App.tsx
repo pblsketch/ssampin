@@ -70,6 +70,7 @@ import { Snackbar } from '@mobile/components/common/Snackbar';
 import { MobileHeader } from '@mobile/components/common/MobileHeader';
 import { useMobileUiTriggerStore } from './stores/useMobileUiTriggerStore';
 import { useRoute } from '@mobile/routing/useRoute';
+import { startMobileAnalytics, trackMobilePageView } from '@mobile/analytics';
 import {
   HOME_ROUTE,
   tabOf,
@@ -163,6 +164,22 @@ export function App() {
   // 화면 전환은 주소 기반이다. 이전에는 useState 5개였고, 주소가 없어서 안드로이드
   // 하드웨어 뒤로가기가 앱을 종료시켰다.
   const { route, navigate, goBack } = useRoute();
+
+  /**
+   * ★모바일 사용 기록 (2026-09-01 추가).
+   *
+   * 그 전까지 모바일 웹은 통계 코드가 **한 줄도 없어서**, 관리자 화면의 사용자 수에
+   * 모바일 사용자가 아예 잡히지 않았다.
+   *
+   * 화면 이름은 주소를 그대로 쓰지 않는다 — 모바일 주소에는 반 이름이 들어 있다
+   * (`analytics.ts` 의 `screenNameOf` 참조).
+   */
+  useEffect(() => {
+    startMobileAnalytics();
+  }, []);
+  useEffect(() => {
+    trackMobilePageView(route);
+  }, [route]);
 
   // 기존 변수명을 그대로 유지해 아래 40여 곳의 사용처를 건드리지 않는다.
   // 값의 출처만 useState → 주소 파생으로 바뀐다.

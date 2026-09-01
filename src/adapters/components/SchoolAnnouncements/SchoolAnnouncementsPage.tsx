@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { PageHeader } from '@adapters/components/common/PageHeader';
 import type { SchoolDisclosureIdentity } from '@domain/services/schoolIdentify';
@@ -52,6 +53,13 @@ const TABS: readonly TabConfig[] = [
 ] as const;
 
 export function SchoolAnnouncementsPage({ onBack }: SchoolAnnouncementsPageProps) {
+  // 화면 방문(page_view)은 잡혔지만 "도구 사용"으로는 세지 않아, 도구 순위에서 통째로
+  // 빠져 있었다. 다른 도구와 같은 방식으로 센다(2026-09-01).
+  const { track } = useAnalytics();
+  useEffect(() => {
+    track('tool_use', { tool: 'school-announcements' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const { settings } = useSettingsStore();
   const ourIdentity = useSchoolIdentity();
   const [selectedSchool, setSelectedSchool] = useState<SchoolDisclosureIdentity | null>(null);

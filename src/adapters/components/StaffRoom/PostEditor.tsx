@@ -9,6 +9,7 @@
  * 골라 칩으로 쌓는 방식만 쓴다 — 오작동 없이 확실하다.
  */
 import { useEffect, useMemo, useState } from 'react';
+import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { useStaffRoomBoardStore } from '@adapters/stores/useStaffRoomBoardStore';
 import { useStaffRoomStore } from '@adapters/stores/useStaffRoomStore';
 import { useGoogleAccountStore } from '@adapters/stores/useGoogleAccountStore';
@@ -37,6 +38,7 @@ interface PostEditorProps {
 }
 
 export function PostEditor({ departmentId, boardId, mode, onDone, onCancel }: PostEditorProps) {
+  const { track } = useAnalytics();
   const currentPost = useStaffRoomBoardStore((s) => s.currentPost);
   // draft 내용 자체는 구독하지 않는다 — 복원은 loadDraft 완료 시 getState() 로
   // 한 번만 읽는다(아래 effect). 구독하면 타자마다 재렌더만 는다.
@@ -273,7 +275,13 @@ export function PostEditor({ departmentId, boardId, mode, onDone, onCancel }: Po
             })
           : false;
     setSubmitting(false);
-    if (ok) onDone();
+    if (ok) {
+      // 온라인 교무실은 앱 통계에 아무 흔적도 남기지 않아, 화면에 들어온 사람 수만
+      // 알고 **실제로 글이 오갔는지는 알 수 없었다**(2026-09-01 추가).
+      // 제목·본문·부서는 담지 않는다 — 새 글인지와 첨부가 붙었는지만 센다.
+      if (mode === 'create') track('staffroom_post_create', { hasAttachment: fileIds.length > 0 });
+      onDone();
+    }
   };
 
   return (
