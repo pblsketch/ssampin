@@ -1201,6 +1201,27 @@ contextBridge.exposeInMainWorld('electronAPI', {
     reportEditorActivity: (activity: string): void => {
       ipcRenderer.send('sidePin:editor-activity', activity);
     },
+    /**
+     * 옆핀에서 PIN 을 풀었다고 알린다.
+     *
+     * 해제 상태를 **창이 들고 있어야** 하는 이유: 패널 창은 접힌 뒤 10초면 파괴된다.
+     * 화면이 기억하면 그때 함께 사라져 스칠 때마다 PIN 을 다시 묻는다.
+     */
+    reportPinUnlocked: (): void => {
+      ipcRenderer.send('sidePin:pin-unlocked');
+    },
+  },
+  /**
+   * PIN 잠금 — **잠그는 방향만** 창을 건넌다.
+   *
+   * 푸는 방향을 전파하면 화면에 떠 있는 옆핀이 저절로 열린다. 그래서 여기에는
+   * "잠갔다"만 있다.
+   */
+  pin: {
+    /** 본 앱에서 잠갔다(수동 잠금·자동 잠금) — 다른 창에도 알린다 */
+    reportLocked: (): void => {
+      ipcRenderer.send('pin:locked');
+    },
   },
   // Cross-window data sync
   onDataChanged: (callback: (filename: string) => void): (() => void) => {

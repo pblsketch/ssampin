@@ -26,15 +26,18 @@
  * 된 네 번째 자리다(메모 본문·파일 대화상자·메모 검색·여기).
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { ComponentType } from 'react';
+import type { ComponentType, ReactNode } from 'react';
 import type { WidgetDefinition } from '@widgets/types';
 import type { MemoEditorActivity } from '@domain/entities/SidePinRuntimeState';
 import {
   selectSidePinWidgets,
   type SidePinWidgetItem,
 } from '@usecases/sidePin/SelectSidePinWidgets';
+import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { SIDE_PIN_MEMO_FOCUS } from './SidePinMemoList';
 import { SidePinZoneHeader } from './SidePinZoneHeader';
+import { SidePinPinGuard } from './SidePinPinGuard';
+import { PIN_FEATURE_MAP } from '@widgets/utils/pinFeatureMap';
 
 /** 위젯 본문은 요약/전체 두 모양을 갖는다. 전체가 곧 고치는 화면이다. */
 type WidgetBody = ComponentType<{ isCompactMode?: boolean }>;
@@ -50,6 +53,15 @@ export interface SidePinWidgetZoneProps {
    * 넣지 않아도 화면은 동작하므로 선택 항목이다(옛 호출부 보호).
    */
   readonly onEditorActivityChange?: (activity: MemoEditorActivity) => void;
+  /**
+   * 창이 들고 있는 "마지막으로 PIN 을 푼 시각". 안 풀었으면 null.
+   *
+   * 이 창이 스스로 기억하지 않는 이유는 패널 창이 접힌 뒤 10초면 파괴되기 때문이다 —
+   * 여기서 기억하면 스칠 때마다 PIN 을 다시 묻는다.
+   */
+  readonly pinUnlockedAt?: number | null;
+  /** PIN 을 풀었다고 창에 알린다 */
+  readonly onPinUnlocked?: () => void;
 }
 
 export function SidePinWidgetZone({
@@ -57,6 +69,8 @@ export function SidePinWidgetZone({
   selectedIds,
   onOpenInApp,
   onEditorActivityChange,
+  pinUnlockedAt = null,
+  onPinUnlocked,
 }: SidePinWidgetZoneProps) {
   const { items } = useMemo(
     () => selectSidePinWidgets({ definitions, selectedIds }),
@@ -71,6 +85,8 @@ export function SidePinWidgetZone({
   /** 열어 둔 위젯 id. null이면 목록이다 */
   const [openId, setOpenId] = useState<string | null>(null);
 
+  const { track } = useAnalytics();
+
   const open = openId === null ? undefined : items.find((item) => item.id === openId);
   const openDefinition = openId === null ? undefined : byId.get(openId);
 
@@ -81,10 +97,18 @@ export function SidePinWidgetZone({
     if (open === undefined || openDefinition === undefined) setOpenId(null);
   }, [openId, open, openDefinition]);
 
+  /**
+   * PIN 판이 떠 있는가. 위젯을 연 것과 **따로** 센다.
+   *
+   * 목록에서 자물쇠를 눌러 PIN 을 치는 동안에는 `openId` 가 null 이라, 이걸 안 세면
+   * "아무것도 안 하는 중"으로 보고돼 **숫자를 누르는 사이 패널이 접힌다.**
+   */
+  const [pinBusy, setPinBusy] = useState(false);
+
   // 열려 있는 동안 "쓰는 중"을 건다. 목록으로 돌아오면 푼다.
   useEffect(() => {
-    onEditorActivityChange?.(openId === null ? 'idle' : 'editing');
-  }, [openId, onEditorActivityChange]);
+    onEditorActivityChange?.(openId === null && !pinBusy ? 'idle' : 'editing');
+  }, [openId, pinBusy, onEditorActivityChange]);
 
   // 화면을 떠날 때는 반드시 손을 뗀다. 안 그러면 창이 영영 접히지 않는다.
   useEffect(() => {
@@ -100,6 +124,10 @@ export function SidePinWidgetZone({
         Body={openDefinition.component as WidgetBody}
         onBack={close}
         onOpenInApp={onOpenInApp}
+        pinUnlockedAt={pinUnlockedAt}
+        onPinUnlocked={onPinUnlocked}
+        onPinBusyChange={setPinBusy}
+        pinBusy={pinBusy}
       />
     );
   }
@@ -125,8 +153,15 @@ export function SidePinWidgetZone({
                   <WidgetBlock
                     item={item}
                     Body={definition.component as WidgetBody}
-                    onOpen={() => setOpenId(item.id)}
+                    onOpen={() => {
+                      // 옆핀을 "펴 보기만" 하는지 "실제로 고치는 데" 쓰는지 가르는 신호다.
+                      track('sidepin_action', { action: 'widget_open' });
+                      setOpenId(item.id);
+                    }}
                     onOpenInApp={onOpenInApp}
+                    pinUnlockedAt={pinUnlockedAt}
+                    onPinUnlocked={onPinUnlocked}
+                    onPinBusyChange={setPinBusy}
                   />
                 </li>
               );
@@ -135,6 +170,39 @@ export function SidePinWidgetZone({
         )}
       </div>
     </section>
+  );
+}
+
+/**
+ * 잠금 대상이면 본문을 자물쇠로 바꾼다. 아니면 그대로 그린다.
+ *
+ * 대상 목록을 여기 적지 않는다 — `PIN_FEATURE_MAP` 하나에서 나오므로 나중에 위젯이
+ * 늘어도 **매핑만 있으면 자동으로 보호된다.** 목록을 복사해 두면 반드시 어긋난다.
+ */
+function GuardedBody({
+  widgetId,
+  pinUnlockedAt,
+  onPinUnlocked,
+  onPinBusyChange,
+  children,
+}: {
+  readonly widgetId: string;
+  readonly pinUnlockedAt: number | null;
+  readonly onPinUnlocked?: () => void;
+  readonly onPinBusyChange?: (busy: boolean) => void;
+  readonly children: ReactNode;
+}) {
+  const feature = PIN_FEATURE_MAP[widgetId];
+  if (feature === undefined) return <>{children}</>;
+  return (
+    <SidePinPinGuard
+      feature={feature}
+      pinUnlockedAt={pinUnlockedAt}
+      onUnlocked={onPinUnlocked}
+      onEditorActivityChange={onPinBusyChange}
+    >
+      {children}
+    </SidePinPinGuard>
   );
 }
 
@@ -150,11 +218,20 @@ function SidePinWidgetDetail({
   Body,
   onBack,
   onOpenInApp,
+  pinUnlockedAt,
+  onPinUnlocked,
+  onPinBusyChange,
+  pinBusy,
 }: {
   readonly item: SidePinWidgetItem;
   readonly Body: WidgetBody;
   readonly onBack: () => void;
   readonly onOpenInApp: (target: string) => void;
+  readonly pinUnlockedAt: number | null;
+  readonly onPinUnlocked?: () => void;
+  readonly onPinBusyChange?: (busy: boolean) => void;
+  /** PIN 판이 떠 있는가 — 떠 있으면 Esc 를 가로채지 않는다 */
+  readonly pinBusy: boolean;
 }) {
   return (
     <section
@@ -164,6 +241,14 @@ function SidePinWidgetDetail({
         // Esc는 목록으로 돌아간다. 여기서 멈추지 않으면 패널 자체가 닫혀
         // 고치던 화면에서 그대로 튕겨 나간다.
         if (e.key !== 'Escape') return;
+        /**
+         * ⚠️ PIN 판이 떠 있으면 **가로채지 않는다.**
+         *
+         * 여기서 `stopPropagation()` 을 부르면 React 18 은 루트에 붙으므로
+         * `PinOverlay` 의 `window` 리스너까지 못 간다. 그러면 Esc 를 눌러도
+         * **PIN 이 취소되지 않고 위젯 목록으로만 튄다** — 사용자는 PIN 판에 갇힌다.
+         */
+        if (pinBusy) return;
         e.preventDefault();
         e.stopPropagation();
         onBack();
@@ -204,7 +289,14 @@ function SidePinWidgetDetail({
         잘라 버리지 말고 스크롤로 닿게 둔다 — 안 보이는 것보다 밀어 보는 편이 낫다.
       */}
       <div className="min-h-0 flex-1 overflow-auto px-2 pb-2">
-        <Body isCompactMode={false} />
+        <GuardedBody
+          widgetId={item.id}
+          pinUnlockedAt={pinUnlockedAt}
+          onPinUnlocked={onPinUnlocked}
+          onPinBusyChange={onPinBusyChange}
+        >
+          <Body isCompactMode={false} />
+        </GuardedBody>
       </div>
     </section>
   );
@@ -215,11 +307,17 @@ function WidgetBlock({
   Body,
   onOpen,
   onOpenInApp,
+  pinUnlockedAt,
+  onPinUnlocked,
+  onPinBusyChange,
 }: {
   readonly item: SidePinWidgetItem;
   readonly Body: WidgetBody;
   readonly onOpen: () => void;
   readonly onOpenInApp: (target: string) => void;
+  readonly pinUnlockedAt: number | null;
+  readonly onPinUnlocked?: () => void;
+  readonly onPinBusyChange?: (busy: boolean) => void;
 }) {
   return (
     /* 바탕(sp-bg)보다 한 단계 어두운 sp-surface를 쓴다. sp-card는 바탕과 밝기 차이가
@@ -262,7 +360,14 @@ function WidgetBlock({
         </button>
       </div>
       <div className="px-2 pb-2">
-        <Body />
+        <GuardedBody
+          widgetId={item.id}
+          pinUnlockedAt={pinUnlockedAt}
+          onPinUnlocked={onPinUnlocked}
+          onPinBusyChange={onPinBusyChange}
+        >
+          <Body />
+        </GuardedBody>
       </div>
     </article>
   );

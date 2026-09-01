@@ -1770,3 +1770,89 @@ describe('단축키', () => {
     expect(toggled.next.pinnedZone).toBe('none');
   });
 });
+
+// ─── PIN 잠금 해제 상태 ─────────────────────────────────────────
+
+describe('PIN 잠금 해제 상태', () => {
+  it('푼 시각을 적어 두고 창은 건드리지 않는다', () => {
+    const result = apply(enabledState(), { type: 'pin-unlocked', atMs: 5_000 }, 5_000);
+
+    expect(result.next.pinUnlockedAt).toBe(5_000);
+    expect(result.commands).toEqual([]);
+  });
+
+  it('다시 잠그면 지운다', () => {
+    const unlocked = apply(enabledState(), { type: 'pin-unlocked', atMs: 5_000 }, 5_000);
+
+    const locked = apply(unlocked.next, { type: 'pin-locked' }, 6_000);
+
+    expect(locked.next.pinUnlockedAt).toBeNull();
+    expect(locked.commands).toEqual([]);
+  });
+
+  it('★ 보호가 걸렸다 풀리면 다시 잠긴다 — 이것이 재잠금 기준의 전부다', () => {
+    // 발표를 띄웠다 끄면(또는 잠금·절전에서 돌아오면) 다시 PIN 을 묻는다.
+    // 시간이 아니라 사건에 거는 이유: 5분 잠금을 옮기면 온종일 자물쇠가 되어
+    // 선생님이 잠금을 꺼 버리고, 그러면 대시보드 보호까지 0이 된다.
+    const unlocked = apply(enabledState(), { type: 'pin-unlocked', atMs: 5_000 }, 5_000);
+    const protectedState = apply(
+      unlocked.next,
+      { type: 'soft-protect', reason: 'fullscreen' },
+      6_000,
+    );
+    expect(protectedState.next.pinUnlockedAt).toBe(5_000);
+
+    const released = apply(protectedState.next, { type: 'protect-released' }, 60_000);
+
+    expect(released.next.pinUnlockedAt).toBeNull();
+  });
+
+  it('마우스가 스쳐 접혔다 펴지는 것으로는 잠기지 않는다', () => {
+    // 이것까지 세면 5분 잠금보다 더 자주 묻게 된다(계획서가 명시적으로 기각한 기준).
+    const state = apply(expandedByHover(), { type: 'pin-unlocked', atMs: 5_000 }, 5_000).next;
+
+    const left = apply(state, { type: 'pointer-region-changed', region: 'outside' }, 5_100);
+    const closed = afterCloseAnimation(
+      apply(left.next, { type: 'timer-fired', transition: scheduledTransition(left) }, 5_600),
+      5_800,
+    );
+
+    expect(closed.next.pinUnlockedAt).toBe(5_000);
+  });
+
+  it('★ [지금 가리기]로 직접 가리면 PIN 도 다시 잠긴다', () => {
+    // 이 단추를 누르는 순간은 "누가 온다"는 뜻이다. 잠금을 안 풀면 그 사람이
+    // 손잡이를 스치는 것만으로 잠근 위젯이 그대로 열린다(최대 12시간).
+    const unlocked = apply(expandedByHover(), { type: 'pin-unlocked', atMs: 5_000 }, 5_000);
+    expect(unlocked.next.pinUnlockedAt).toBe(5_000);
+
+    const hidden = apply(unlocked.next, { type: 'close-requested', force: true }, 5_100);
+
+    expect(hidden.next.pinUnlockedAt).toBeNull();
+  });
+
+  it('마우스가 벗어나 저절로 접히는 것으로는 안 잠근다 — 그것까지 세면 너무 자주 묻는다', () => {
+    const unlocked = apply(expandedByHover(), { type: 'pin-unlocked', atMs: 5_000 }, 5_000);
+
+    const closed = apply(unlocked.next, { type: 'close-requested' }, 5_100);
+
+    expect(closed.next.pinUnlockedAt).toBe(5_000);
+  });
+
+  it('숨어 있는 동안 들어온 해제는 받지 않는다 — PIN 을 칠 방법이 없다', () => {
+    const hidden = apply(enabledState(), { type: 'force-protect', reason: 'lock' }, 3_000);
+
+    const result = apply(hidden.next, { type: 'pin-unlocked', atMs: 3_100 }, 3_100);
+
+    expect(result.next.pinUnlockedAt).toBeNull();
+  });
+
+  it('옆핀을 껐다 켜면 잠긴 상태로 돌아온다', () => {
+    const unlocked = apply(enabledState(), { type: 'pin-unlocked', atMs: 5_000 }, 5_000);
+
+    const off = apply(unlocked.next, { type: 'enabled-changed', enabled: false }, 6_000);
+    const on = apply(off.next, { type: 'enabled-changed', enabled: true }, 7_000);
+
+    expect(on.next.pinUnlockedAt).toBeNull();
+  });
+});

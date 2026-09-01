@@ -3487,6 +3487,32 @@ function registerIpcHandlers(): void {
     sidePin?.service.dispatch({ type: 'editor-activity-changed', activity });
   });
 
+  /**
+   * 옆핀에서 PIN 을 풀었다.
+   *
+   * ⚠️ **"맞았다"는 판단은 화면이 한다.** 여기서는 그 말을 믿고 시각만 적는다.
+   * 이 프로젝트의 위협 모델은 "화면을 보는 사람"이지 악성 렌더러가 아니다 —
+   * 해시 대조를 이쪽으로 옮기는 것은 다른 문제이고, 지금 구조에서는 얻는 것이 없다.
+   *
+   * 시각을 여기서 만드는 이유: 도메인은 `Date.now()` 를 부르지 않는다(순수 함수).
+   */
+  ipcMain.on('sidePin:pin-unlocked', () => {
+    sidePin?.service.dispatch({ type: 'pin-unlocked', atMs: Date.now() });
+  });
+
+  /**
+   * 본 앱에서 잠갔다 — 다른 창에도 전한다.
+   *
+   * **방향이 하나뿐인 것이 핵심이다.** 잠그는 것은 언제나 안전하지만, 푸는 것을
+   * 전파하면 화면에 떠 있는 옆핀이 저절로 열린다. 그래서 `pin:unlocked` 브로드캐스트는
+   * 만들지 않는다.
+   *
+   * 지금은 옆핀만 받는다. 위젯 모드 창까지 함께 잠그는 것은 별개 문제라 넓히지 않는다.
+   */
+  ipcMain.on('pin:locked', () => {
+    sidePin?.service.dispatch({ type: 'pin-locked' });
+  });
+
   ipcMain.on('sidePin:open-main', () => {
     void executeWindowTransition('main');
   });

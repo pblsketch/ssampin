@@ -8,7 +8,12 @@
  */
 import { describe, expect, test, vi, beforeEach, afterEach } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { getSidePinRendererSurface, SidePinApp, toViewState } from './SidePinApp';
+import {
+  getSidePinRendererSurface,
+  SidePinApp,
+  toViewState,
+  mergeEditorActivity,
+} from './SidePinApp';
 
 interface Bridge {
   getState: ReturnType<typeof vi.fn>;
@@ -368,5 +373,30 @@ describe('화면은 스스로 판단하지 않는다', () => {
     delete (window as unknown as { electronAPI?: unknown }).electronAPI;
 
     expect(() => render(<SidePinApp />)).not.toThrow();
+  });
+});
+
+describe('두 칸의 편집 활동 합치기', () => {
+  test('둘 다 안 쓰면 idle', () => {
+    expect(mergeEditorActivity({ memo: 'idle', widget: 'idle' })).toBe('idle');
+  });
+
+  test('★ 메모가 idle 이어도 위젯이 쓰는 중이면 바쁜 것으로 보낸다', () => {
+    // 이게 안 되면 메모 칸의 유예 타이머가 끝나는 순간 위젯 칸의 접힘 방지가 풀려
+    // **PIN 을 치는 도중 패널이 접히고 입력이 날아간다.**
+    expect(mergeEditorActivity({ memo: 'idle', widget: 'editing' })).toBe('editing');
+  });
+
+  test('메모가 쓰는 중이면 위젯이 idle 이어도 바쁘다', () => {
+    expect(mergeEditorActivity({ memo: 'editing', widget: 'idle' })).toBe('editing');
+  });
+
+  test('둘 다 바쁘면 바쁜 상태 하나를 보낸다', () => {
+    expect(mergeEditorActivity({ memo: 'saving', widget: 'editing' })).not.toBe('idle');
+  });
+
+  test('대화상자가 열린 것도 바쁜 것으로 본다', () => {
+    expect(mergeEditorActivity({ memo: 'idle', widget: 'dialog-open' })).toBe('dialog-open');
+    expect(mergeEditorActivity({ memo: 'dialog-open', widget: 'idle' })).toBe('dialog-open');
   });
 });

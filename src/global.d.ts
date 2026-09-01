@@ -811,6 +811,21 @@ interface ElectronAPI {
     reportEditorActivity?: (
       activity: 'idle' | 'editing' | 'saving' | 'dialog-open' | 'save-error',
     ) => void;
+    /**
+     * 옆핀에서 PIN 을 풀었다고 창에 알린다.
+     *
+     * 옛 preload 대비로 선택 항목이다 — 없으면 이 창에서만 임시로 풀린 상태가 되고,
+     * 패널이 다시 만들어질 때 잠긴다(안전한 쪽으로 무너진다).
+     */
+    reportPinUnlocked?: () => void;
+  };
+  /**
+   * PIN 잠금 — **잠그는 방향만** 창을 건넌다.
+   *
+   * 푸는 방향을 전파하면 화면에 떠 있는 옆핀이 저절로 열린다.
+   */
+  pin?: {
+    reportLocked?: () => void;
   };
   // Cross-window data sync
   onDataChanged: (callback: (filename: string) => void) => () => void;

@@ -148,6 +148,24 @@ export interface SidePinRuntimeState {
   readonly revision: number;
   /** 보호 상태(잠금·절전·전체화면·다른 가상 데스크톱)에서는 손잡이도 숨긴다 */
   readonly protectedReason: SidePinProtectReason | null;
+  /**
+   * 옆핀에서 PIN 을 마지막으로 푼 시각(ms). 안 풀었으면 null.
+   *
+   * ## 왜 화면이 아니라 여기에 있는가
+   *
+   * 패널 창은 접힌 뒤 10초면 **통째로 파괴된다**(`SIDE_PIN_DISPOSE_DELAY_MS`).
+   * 이 값을 화면 쪽(`usePinStore`)에 두면 그때 함께 증발해, 선생님이 잠금을 풀고
+   * 마우스를 치웠다가 다시 스치는 것만으로 **PIN 을 또 묻는다.** 하루에 수십 번이 되고,
+   * 그러면 선생님은 PIN 자체를 꺼 버려 대시보드 보호까지 0이 된다.
+   *
+   * 상태 기계는 패널 창보다 오래 살므로 여기 두면 그 문제가 사라진다.
+   * 덤으로 **푸는 방향이 창을 건너 퍼지지 않는 것**도 구조로 강제된다 —
+   * 기록하는 곳이 여기 하나뿐이기 때문이다.
+   *
+   * ⚠️ **만료(12시간 상한)는 여기서 계산하지 않는다.** 상태가 안 바뀌면 시각도 안 바뀌는데
+   * 시간은 계속 흐르므로, 판단은 **화면이 그릴 때마다** 해야 제때 걸린다.
+   */
+  readonly pinUnlockedAt: number | null;
 }
 
 /** 옆핀을 강제로 숨겨야 하는 이유 */
@@ -174,6 +192,7 @@ export const INITIAL_SIDE_PIN_RUNTIME_STATE: SidePinRuntimeState = {
   editorActivity: 'idle',
   revision: 0,
   protectedReason: null,
+  pinUnlockedAt: null,
 };
 
 /**

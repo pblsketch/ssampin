@@ -139,6 +139,16 @@ export const usePinStore = create<PinState>((set, get) => ({
 
   lock: () => {
     set({ lastUnlockedAt: null });
+    /**
+     * 옆핀에도 알린다 — **잠그는 방향만** 창을 건넌다.
+     *
+     * 옆핀은 별개 창이라 이 스토어를 따로 갖는다. 알리지 않으면 선생님이 본 앱에서
+     * "지금 잠그기"를 눌러도 **화면에 떠 있는 옆핀은 그대로 열려 있다** — 이 계획이
+     * 고치려는 문제("잠갔다고 믿는데 안 잠겨 있다")가 그대로 재현된다.
+     *
+     * 푸는 방향은 반대로 **절대 전파하지 않는다.** 그러면 노출된 옆핀이 저절로 열린다.
+     */
+    window.electronAPI?.pin?.reportLocked?.();
   },
 
   checkAutoLock: () => {

@@ -57,6 +57,15 @@ interface SidePinViewState {
    * 숨으므로 더 조심해서 잃을 것이 없고, 나중에 이유가 늘어도 빠뜨리지 않는다.
    */
   readonly locked: boolean;
+  /**
+   * 옆핀에서 PIN 을 마지막으로 푼 시각. 안 풀었으면 null.
+   *
+   * **창이 들고 있는 값을 그대로 받는다.** 화면이 스스로 기억하면 패널 창이 파괴될 때
+   * 함께 사라져, 스칠 때마다 PIN 을 다시 묻게 된다(계획서 §6.1).
+   *
+   * 만료(12시간 상한)는 여기서 재지 않는다 — 가드가 그릴 때마다 잰다.
+   */
+  readonly pinUnlockedAt: number | null;
   readonly revision: number;
 }
 
@@ -66,8 +75,30 @@ const INITIAL_VIEW: SidePinViewState = {
   pointerRegion: 'outside',
   activeZone: null,
   locked: false,
+  pinUnlockedAt: null,
   revision: 0,
 };
+
+/**
+ * 두 칸의 활동을 창에 보낼 **하나의 값**으로 합친다.
+ *
+ * 창은 `editorActivity` 를 하나만 들고 있다. 그래서 한 칸이 보낸 `'idle'` 이 다른 칸이
+ * 걸어 둔 `'editing'` 을 지운다 — 메모 칸의 이미지 고르기 유예 타이머가 끝나면서
+ * `'idle'` 을 보내면 **PIN 을 치는 도중인 위젯 칸의 접힘 방지가 풀린다.**
+ *
+ * 규칙은 하나다: **하나라도 바쁘면 바쁘다.** 어느 쪽이 바쁜지는 창이 알 필요가 없다
+ * (창은 "접어도 되는가"만 묻는다).
+ *
+ * 순수 함수로 빼 둔 이유 — 이 판단이 틀리면 쓰던 입력이 날아가는데, 화면을 통째로
+ * 그려서 확인하려면 두 칸을 동시에 움직여야 해서 시험하기 어렵다.
+ */
+export function mergeEditorActivity(byZone: {
+  readonly memo: MemoEditorActivity;
+  readonly widget: MemoEditorActivity;
+}): MemoEditorActivity {
+  if (byZone.memo !== 'idle') return byZone.memo;
+  return byZone.widget;
+}
 
 /** 창이 보내온 값이 아는 칸 이름일 때만 받는다 */
 function toZone(raw: unknown): SidePinZone | null {
@@ -97,6 +128,9 @@ export function toViewState(raw: unknown): SidePinViewState | null {
     // 잠긴 쪽으로 판단한다 — 애매할 때 내용을 보여주는 쪽으로 기울면,
     // 정작 가려야 할 순간에 새는 것은 이쪽이다.
     locked: s['protectedReason'] !== null,
+    // 숫자가 아니면(형식이 어긋난 전문·옛 창 등) **잠긴 쪽**으로 읽는다.
+    // `locked` 와 같은 규칙이다 — 애매할 때 열어 주면 정작 가려야 할 때 새는 것은 이쪽이다.
+    pinUnlockedAt: typeof s['pinUnlockedAt'] === 'number' ? s['pinUnlockedAt'] : null,
     revision: typeof s['revision'] === 'number' ? s['revision'] : 0,
   };
 }
@@ -224,18 +258,45 @@ export function SidePinApp() {
   /**
    * "쓰는 중"을 창에 알린다 — 이게 걸려 있는 동안 패널이 접히지 않는다.
    *
-   * 알림 자체는 두 칸이 함께 쓰지만, **배치는 칸마다 다르다.** 메모를 쓰면 위젯 칸이
-   * 접히고, 위젯을 고치면 메모 칸이 접힌다. 그래서 보낸 곳을 구분해 기억한다 —
-   * 하나로 합치면 위젯을 여는 순간 **위젯 칸이 접혀** 방금 연 것이 사라진다.
+   * **배치는 칸마다 다르다.** 메모를 쓰면 위젯 칸이 접히고, 위젯을 고치면 메모 칸이 접힌다.
+   * 그래서 보낸 곳을 구분해 기억한다 — 배치용으로 하나로 합치면 위젯을 여는 순간
+   * **위젯 칸이 접혀** 방금 연 것이 사라진다.
+   * (창에 **보낼 때는** 반대로 합쳐야 한다 — 아래 참조.)
    */
+  /**
+   * 칸마다 마지막으로 보고한 활동. 창에 보낼 값을 **합치기 위해** 들고 있다.
+   *
+   * 상태가 아니라 ref 인 이유는 이 값이 바뀌었다고 화면을 다시 그릴 필요가 없어서다.
+   */
+  const activityByZone = useRef<Record<'memo' | 'widget', MemoEditorActivity>>({
+    memo: 'idle',
+    widget: 'idle',
+  });
+
   const reportActivity = useCallback((zone: 'memo' | 'widget', activity: MemoEditorActivity) => {
     const busy = activity !== 'idle';
     if (zone === 'memo') setMemoEditing(busy);
     else setWidgetEditing(busy);
 
+    /**
+     * 🚨 **두 칸을 합쳐서 보낸다.** 칸마다 따로 보내면 안 된다.
+     *
+     * 창은 `editorActivity` 를 **하나만** 들고 있다. 그래서 한 칸이 보낸 `'idle'` 이
+     * 다른 칸이 걸어 둔 `'editing'` 을 지운다 — 예를 들어 메모 칸의 이미지 고르기
+     * 유예 타이머가 끝나면서 `'idle'` 을 보내면, **PIN 을 치는 도중인 위젯 칸의
+     * 접힘 방지가 풀려 패널이 접히고 입력이 날아간다.**
+     *
+     * 계획서(§6.7)는 창 쪽에 칸별 지도를 두자고 했지만, 화면이 이미 두 칸을 다 알고
+     * 있으므로 여기서 합치면 **통신 규약도 창 쪽 상태도 안 바꾸고** 같은 결과를 얻는다.
+     * 창이 죽은 뒤 값이 남는 문제는 어느 쪽을 골라도 같고, 그건 파기 시 `'idle'` 로
+     * 되돌리는 불변식이 이미 막고 있다.
+     */
+    activityByZone.current = { ...activityByZone.current, [zone]: activity };
+    const merged = mergeEditorActivity(activityByZone.current);
+
     // `?.()`로 감싼다. 옛 preload 위에서 돌면 이 함수가 없는데, 그냥 부르면
     // 그 칸 전체가 죽어 아예 못 쓰게 된다. 접힘 방지가 안 되는 편이 낫다.
-    window.electronAPI?.sidePin?.reportEditorActivity?.(activity);
+    window.electronAPI?.sidePin?.reportEditorActivity?.(merged);
   }, []);
 
   const reportMemoActivity = useCallback(
@@ -315,6 +376,10 @@ export function SidePinApp() {
           <SidePinWidgetZone
             definitions={WIDGET_DEFINITIONS}
             selectedIds={widgetIds}
+            // 해제 상태는 이 창이 아니라 **창(상태 기계)**이 들고 있다. 여기서 기억하면
+            // 패널이 파괴될 때 함께 사라져 스칠 때마다 PIN 을 다시 묻는다.
+            pinUnlockedAt={view.pinUnlockedAt}
+            onPinUnlocked={() => window.electronAPI?.sidePin?.reportPinUnlocked?.()}
             // 이미 있는 화면 이동 통로를 쓴다. 메인 창을 띄우고 그 화면으로 보낸 뒤,
             // 창 모드까지 되돌리는 일은 main이 한다.
             onOpenInApp={(target) => void window.electronAPI?.navigateToPage(target)}

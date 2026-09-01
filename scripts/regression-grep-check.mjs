@@ -299,6 +299,19 @@ const presenceChecks = [
     pattern: /className="flex flex-1 min-h-0 min-w-0 flex-col"/,
     name: 'REGRESSION #61: 본문 칸은 min-w-0 유지 (넓은 표가 창을 밀어내 잘리지 않고 가로 스크롤되도록)',
   },
+  // ────────────────────────────────────────────────────────────────────────
+  // REGRESSION #65 — 옆핀 위젯 PIN 잠금 (2026-09-01)
+  //
+  // 대시보드에서 잠근 위젯 4종이 옆핀에서는 그대로 보이던 것이 2단계의 출발점이다.
+  // ★ 이 항목은 **grep 으로 지킬 수 없다.** `import { SidePinPinGuard }` 한 줄만 남고
+  //   JSX 에서 가드가 빠져도 grep 은 초록이 된다. 그래서 진짜 방어선은 렌더 테스트이고
+  //   (`SidePinWidgetZone.pinLock.test.tsx`), 여기서는 **그 테스트가 지워지거나
+  //   속이 비지 않았는지**만 확인한다.
+  {
+    file: 'src/adapters/components/SidePin/SidePinWidgetZone.pinLock.test.tsx',
+    pattern: /queryByText\(SECRET\)\)\.toBeNull\(\)/,
+    name: 'REGRESSION #65: 옆핀 위젯 PIN 잠금 렌더 테스트가 살아 있다 (본문이 DOM 에 없음을 실제로 그려서 확인)',
+  },
 ];
 
 // ============================================================

@@ -1100,6 +1100,21 @@ export function resolveSidePinTransition(
       return {
         next: bump(state, {
           protectedReason: null,
+          /**
+           * 🔒 **여기가 "사건 기반 재잠금"의 전부다.**
+           *
+           * 대시보드는 5분이 지나면 다시 잠근다. 옆핀에 그걸 그대로 옮기면 하루 종일
+           * 떠 있는 창이 **온종일 자물쇠 그림**이 되고, 선생님은 잠금을 꺼 버린다 —
+           * 그러면 대시보드 보호까지 0이 된다.
+           *
+           * 그래서 시간이 아니라 **사건**에 건다. 위험한 순간은 5분이 지났을 때가 아니라
+           * 자리를 떴을 때(잠금·절전)와 화면을 띄웠을 때(발표)다. 그 보호가 풀리는
+           * 지금이 정확히 "돌아왔다"는 뜻이므로, 여기서 한 번만 잠그면 된다.
+           *
+           * 평소 마우스가 스쳐 접혔다 펴지는 것으로는 **잠기지 않는다.** 그것까지 세면
+           * 5분 잠금보다 더 자주 묻게 된다.
+           */
+          pinUnlockedAt: null,
           pendingTransition: disposeScheduled ? null : state.pendingTransition,
           // 지난 숨김 요청은 지운다. 그 완료가 나중에 도착해 손잡이를 다시 숨기면
           // 복구할 길이 없어진다.
@@ -1178,10 +1193,25 @@ export function resolveSidePinTransition(
       if (state.surface === 'collapsed') return unchanged(state);
       // 접으면서 편집 표시도 되돌린다. 남겨 두면 붙잡아 둘 이유가 계속 참이라
       // 다음부터는 마우스를 빼도 옆핀이 접히지 않는다.
+      /**
+       * 🔒 **직접 눌러 가린 경우에는 PIN 도 다시 잠근다.**
+       *
+       * [지금 가리기]를 누르는 순간은 "누가 온다"는 뜻이다. 그런데 잠금을 안 풀면
+       * 그 사람이 손잡이를 스치는 것만으로 **잠근 위젯 4종이 그대로 열린다**(최대 12시간).
+       * 급히 가린 이유가 그 자리에서 무너진다.
+       *
+       * 재잠금 기준을 "사건"으로 잡은 §6.3 과 어긋나지 않는다 — 이것도 사건이고,
+       * 게다가 **사람이 직접 누른** 사건이라 빈도 걱정도 없다.
+       *
+       * 자동 접힘(`force` 아님)은 잠그지 않는다. 마우스가 스쳐 접히는 것까지 세면
+       * 5분 자동 잠금보다 더 자주 묻게 된다.
+       */
       return closeNow(
         state,
         ctx,
-        forced ? { pinnedZone: 'none', editorActivity: 'idle' } : { pinnedZone: 'none' },
+        forced
+          ? { pinnedZone: 'none', editorActivity: 'idle', pinUnlockedAt: null }
+          : { pinnedZone: 'none' },
       );
     }
 
@@ -1200,6 +1230,30 @@ export function resolveSidePinTransition(
         return closeNow(state, ctx, { pinnedZone: 'none' });
       }
       return beginOpen(state, ctx, 'shortcut');
+    }
+
+    /**
+     * PIN 을 풀었다 — 시각만 적어 둔다. **창은 건드리지 않는다.**
+     *
+     * 만료(12시간 상한) 판단을 여기서 하지 않는 이유: 상태가 안 바뀌면 이 값도 안 바뀌는데
+     * 시간은 계속 흐른다. 그래서 만료는 **화면이 그릴 때마다** 재야 제때 걸린다.
+     */
+    case 'pin-unlocked': {
+      if (!state.enabled) return unchanged(state);
+      // 숨어 있는 동안에는 PIN 을 칠 방법이 없다. 이때 들어온 값은 앞뒤가 안 맞는다.
+      if (state.protectedReason !== null) return unchanged(state);
+      if (state.pinUnlockedAt === event.atMs) return unchanged(state);
+      return { next: bump(state, { pinUnlockedAt: event.atMs }), commands: [] };
+    }
+
+    /**
+     * 다시 잠갔다 — 본 앱에서 건너온 신호이거나 옆핀 자신의 결정이다.
+     *
+     * 꺼져 있어도 받는다. 잠그는 쪽은 언제나 안전한 방향이라 막을 이유가 없다.
+     */
+    case 'pin-locked': {
+      if (state.pinUnlockedAt === null) return unchanged(state);
+      return { next: bump(state, { pinUnlockedAt: null }), commands: [] };
     }
 
     default: {
