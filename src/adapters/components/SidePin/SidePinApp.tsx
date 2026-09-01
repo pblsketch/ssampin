@@ -387,7 +387,12 @@ export function SidePinApp() {
           />
         }
         memoSlot={
-          <SidePinMemoZone locked={view.locked} onEditorActivityChange={reportMemoActivity} />
+          <SidePinMemoZone
+            locked={view.locked}
+            pinUnlockedAt={view.pinUnlockedAt}
+            onPinUnlocked={() => window.electronAPI?.sidePin?.reportPinUnlocked?.()}
+            onEditorActivityChange={reportMemoActivity}
+          />
         }
       />
     </div>

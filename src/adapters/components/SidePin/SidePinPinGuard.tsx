@@ -19,20 +19,13 @@
  * PIN을 다시 묻는다.** 그래서 창(상태 기계)이 들고 있는 `pinUnlockedAt`을 받아 쓴다.
  */
 import { useEffect, useState, type ReactNode } from 'react';
-import type { PinSettings, ProtectedFeatureKey } from '@domain/entities/PinSettings';
-import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+import type { ProtectedFeatureKey } from '@domain/entities/PinSettings';
 import { PinOverlay } from '@adapters/components/common/PinOverlay';
 import { SIDE_PIN_MEMO_FOCUS } from './SidePinMemoList';
+import { useSidePinFeatureLock } from './useSidePinFeatureLock';
 
-/**
- * 한 번 풀면 이만큼까지만 유효하다.
- *
- * 이건 대시보드식 "시간 기반 자동 잠금"이 아니다. 옆핀의 재잠금 기준은 **사건**
- * (잠금·절전·발표가 걸렸다 풀릴 때)이고, 이 값은 그 사건이 하루 종일 한 번도 없을 때
- * 해제가 영원히 남는 것을 막는 안전핀일 뿐이다. 그래서 12시간으로 길게 잡는다 —
- * 짧게 잡으면 결국 시간 기반 잠금이 되어 선생님이 잠금을 꺼 버린다.
- */
-export const SIDE_PIN_UNLOCK_MAX_AGE_MS = 12 * 60 * 60 * 1000;
+/** 판단 규칙은 `useSidePinFeatureLock` 이 정본이다. 옛 호출부를 위해 다시 내보낸다. */
+export { SIDE_PIN_UNLOCK_MAX_AGE_MS } from './useSidePinFeatureLock';
 
 export interface SidePinPinGuardProps {
   readonly feature: ProtectedFeatureKey;
@@ -50,12 +43,6 @@ export interface SidePinPinGuardProps {
   readonly children: ReactNode;
 }
 
-/** 지금 이 기능이 잠금 대상인가 — 설정이 실린 뒤에만 답할 수 있다 */
-function isFeatureLocked(settings: PinSettings, feature: ProtectedFeatureKey): boolean {
-  if (!settings.enabled || settings.pinHash === null) return false;
-  return settings.protectedFeatures[feature] === true;
-}
-
 export function SidePinPinGuard({
   feature,
   pinUnlockedAt,
@@ -63,59 +50,14 @@ export function SidePinPinGuard({
   onEditorActivityChange,
   children,
 }: SidePinPinGuardProps) {
-  const loaded = useSettingsStore((s) => s.loaded);
-  const pin = useSettingsStore((s) => s.settings.pin);
   const [showOverlay, setShowOverlay] = useState(false);
-  /**
-   * 이 창에서 방금 PIN 을 맞췄다 — **창의 답을 기다리지 않고 바로 연다.**
-   *
-   * 창(상태 기계)이 정본이지만, 그 답을 기다렸다가 열면 통로가 없는 환경
-   * (옛 preload·브라우저 모드)에서 **영영 안 열린다.** 실제로 그렇게 만들어 봤다가
-   * "PIN 을 맞춰도 안 열린다"는 신고를 받았다.
-   *
-   * 다시 잠글 때 함께 내려가야 한다 — 아래 두 effect 가 그 일을 한다.
-   */
-  const [justUnlocked, setJustUnlocked] = useState(false);
-
-  /**
-   * 창이 "잠겼다"고 하면 임시 해제도 함께 내린다.
-   *
-   * 본 앱에서 "지금 잠그기"를 누르거나 보호가 풀려 재잠금이 걸린 경우다.
-   * 이게 없으면 패널이 떠 있는 동안 계속 열려 있다.
-   */
-  useEffect(() => {
-    if (pinUnlockedAt === null) setJustUnlocked(false);
-  }, [pinUnlockedAt]);
+  const { undecided, locked, markUnlocked } = useSidePinFeatureLock(feature, pinUnlockedAt);
 
   // PIN 판을 띄운 동안에는 접히지 않게 잡아 둔다. 떠날 때는 반드시 놓는다.
   useEffect(() => {
     return () => onEditorActivityChange?.(false);
   }, [onEditorActivityChange]);
 
-  /**
-   * 설정이 아직 안 실렸으면 **아무것도 그리지 않는다.**
-   *
-   * 이때는 "잠글 기능인지"를 알 방법이 없다. 기본값(`pin.enabled === false`)을 믿고
-   * 본문을 그리면, 설정이 실리기 전 몇 프레임 동안 **잠근 위젯이 그대로 보이고
-   * 데이터까지 불러온다.** 자물쇠를 그리는 것도 답이 아니다 — PIN 을 안 쓰는 선생님
-   * 전원에게 자물쇠가 번쩍인다. 그래서 판단이 설 때까지 비워 둔다.
-   */
-  const undecided = !loaded;
-  const featureLocked = !undecided && isFeatureLocked(pin, feature);
-
-  /**
-   * 만료는 **그릴 때마다** 잰다. 창이 상태를 다시 안 밀어도 시간은 흐르므로,
-   * 창에 물어보는 방식이면 만료가 늦게 걸린다.
-   */
-  const stillUnlocked =
-    pinUnlockedAt !== null && Date.now() - pinUnlockedAt < SIDE_PIN_UNLOCK_MAX_AGE_MS;
-
-  const locked = featureLocked && !stillUnlocked && !justUnlocked;
-  /**
-   * PIN 판이 **실제로 화면에 있는가.** `showOverlay` 만 보면 안 된다 —
-   * 잠금이 풀리거나 설정이 바뀌어 자물쇠 자체가 사라져도 그 값은 참으로 남아,
-   * "쓰는 중"이 걸린 채 **옆핀이 영영 안 접힌다.** 1단계에서 같은 종류로 한 번 데었다.
-   */
   const overlayVisible = locked && showOverlay;
 
   useEffect(() => {
@@ -156,7 +98,7 @@ export function SidePinPinGuard({
              * 지금은 무조건 연다 — 창이 답을 주면 그 값이 이어받고(패널이 파괴돼도 살아남고),
              * 안 주면 이 창에서만 열린 채로 남는다. 어느 쪽이든 **잠긴 채로 갇히지 않는다.**
              */
-            setJustUnlocked(true);
+            markUnlocked();
             onUnlocked?.();
           }}
           onCancel={() => setShowOverlay(false)}

@@ -312,6 +312,19 @@ const presenceChecks = [
     pattern: /queryByText\(SECRET\)\)\.toBeNull\(\)/,
     name: 'REGRESSION #65: 옆핀 위젯 PIN 잠금 렌더 테스트가 살아 있다 (본문이 DOM 에 없음을 실제로 그려서 확인)',
   },
+  // ────────────────────────────────────────────────────────────────────────
+  // REGRESSION #67 — 옆핀 메모 칸 PIN 잠금 (2026-09-01)
+  //
+  // `memo` 는 PIN_FEATURE_MAP 에도 ProtectedFeatureKey 에도 있는데, 옆핀 메모 칸은
+  // 위젯이 아니라 전용 화면이라 2단계의 위젯 가드가 닿지 않았다. 그래서 설정에서
+  // "메모"에 자물쇠를 걸어도 옆핀 메모는 그대로 읽혔다.
+  // #65 와 같은 이유로 grep 이 아니라 **렌더 테스트**가 진짜 방어선이고,
+  // 여기서는 그 테스트가 지워지거나 속이 비지 않았는지만 본다.
+  {
+    file: 'src/adapters/components/SidePin/SidePinMemoZone.test.tsx',
+    pattern: /메모 칸 PIN 잠금[\s\S]*?queryByText\(\/학부모 상담 메모\/\)\)\.toBeNull\(\)/,
+    name: 'REGRESSION #67: 옆핀 메모 칸 PIN 잠금 렌더 테스트가 살아 있다 (메모 내용이 DOM 에 없음을 실제로 그려서 확인)',
+  },
 ];
 
 // ============================================================

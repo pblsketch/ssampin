@@ -22,6 +22,8 @@ import type { MemoEditorActivity } from '@domain/entities/SidePinRuntimeState';
 import { DEFAULT_MEMO_FONT_SIZE } from '@domain/valueObjects/MemoFontSize';
 import { SidePinMemoZone } from './SidePinMemoZone';
 import { useMemoStore } from '@adapters/stores/useMemoStore';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+import { hashPin } from '@domain/rules/pinRules';
 
 /** 실제 저장소 대신, 같은 모양으로 동작하는 메모리 저장소를 쓴다 */
 vi.mock('@adapters/stores/useMemoStore', async () => {
@@ -134,6 +136,9 @@ function lastActivity(): string | undefined {
 
 beforeEach(() => {
   useMemoStore.setState({ memos: [], loaded: true });
+  // 설정이 실려 있어야 "메모를 잠글 기능인지"를 판단할 수 있다.
+  // 안 실려 있으면 메모 칸은 **잠긴 쪽으로** 판단해 아무것도 안 그린다(의도된 동작).
+  useSettingsStore.setState({ loaded: true });
   vi.clearAllMocks();
 });
 
@@ -686,5 +691,146 @@ describe('메모 찾기', () => {
     renderZone(true);
 
     expect(screen.queryByRole('searchbox', { name: '메모 찾기' })).toBeNull();
+  });
+});
+
+// ─── 메모 칸 PIN 잠금 ───────────────────────────────────────────
+
+describe('메모 칸 PIN 잠금', () => {
+  const PIN = '1234';
+
+  /** 메모를 잠금 대상으로 세운다 */
+  function lockMemo(): void {
+    const cur = useSettingsStore.getState();
+    useSettingsStore.setState({
+      loaded: true,
+      settings: {
+        ...cur.settings,
+        pin: {
+          ...cur.settings.pin,
+          enabled: true,
+          pinHash: hashPin(PIN),
+          protectedFeatures: { ...cur.settings.pin.protectedFeatures, memo: true },
+        },
+      },
+    });
+  }
+
+  test('★ 잠기면 메모 내용이 DOM 에 없다', () => {
+    useMemoStore.setState({
+      memos: [memo('a', '학부모 상담 메모', '2026-01-05T00:00:00.000Z')],
+      loaded: true,
+    });
+    lockMemo();
+
+    render(
+      <SidePinMemoZone locked={false} pinUnlockedAt={null} onEditorActivityChange={vi.fn()} />,
+    );
+
+    expect(screen.queryByText(/학부모 상담 메모/)).toBeNull();
+    expect(screen.getByRole('button', { name: '잠금 해제' })).toBeTruthy();
+  });
+
+  test('★ 잠기면 검색 칸도 안 보인다 — 쳐도 안 걸러지면 고장으로 보인다', () => {
+    useMemoStore.setState({ memos: [memo('a', '내용', '2026-01-05T00:00:00.000Z')], loaded: true });
+    lockMemo();
+
+    render(
+      <SidePinMemoZone locked={false} pinUnlockedAt={null} onEditorActivityChange={vi.fn()} />,
+    );
+
+    expect(screen.queryByRole('searchbox', { name: '메모 찾기' })).toBeNull();
+  });
+
+  test('창이 "풀려 있다"고 하면 메모가 보인다', () => {
+    useMemoStore.setState({
+      memos: [memo('a', '학부모 상담 메모', '2026-01-05T00:00:00.000Z')],
+      loaded: true,
+    });
+    lockMemo();
+
+    render(
+      <SidePinMemoZone
+        locked={false}
+        pinUnlockedAt={Date.now()}
+        onEditorActivityChange={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(/학부모 상담 메모/)).toBeTruthy();
+  });
+
+  test('메모를 잠금 대상으로 안 골랐으면 그대로 보인다', () => {
+    useMemoStore.setState({
+      memos: [memo('a', '학부모 상담 메모', '2026-01-05T00:00:00.000Z')],
+      loaded: true,
+    });
+    const cur = useSettingsStore.getState();
+    useSettingsStore.setState({
+      loaded: true,
+      settings: {
+        ...cur.settings,
+        pin: {
+          ...cur.settings.pin,
+          enabled: true,
+          pinHash: hashPin(PIN),
+          protectedFeatures: { ...cur.settings.pin.protectedFeatures, memo: false },
+        },
+      },
+    });
+
+    render(
+      <SidePinMemoZone locked={false} pinUnlockedAt={null} onEditorActivityChange={vi.fn()} />,
+    );
+
+    expect(screen.getByText(/학부모 상담 메모/)).toBeTruthy();
+  });
+
+  test('★ 설정이 아직 안 실렸으면 메모를 안 그린다', () => {
+    // 기본값을 믿고 열어 주면 설정이 실리기 전 몇 프레임 동안 잠근 메모가 그대로 보인다.
+    useMemoStore.setState({
+      memos: [memo('a', '학부모 상담 메모', '2026-01-05T00:00:00.000Z')],
+      loaded: true,
+    });
+    useSettingsStore.setState({ loaded: false });
+
+    render(
+      <SidePinMemoZone locked={false} pinUnlockedAt={null} onEditorActivityChange={vi.fn()} />,
+    );
+
+    expect(screen.queryByText(/학부모 상담 메모/)).toBeNull();
+    // 잠글 기능인지조차 모르므로 자물쇠도 안 보여 준다
+    expect(screen.queryByRole('button', { name: '잠금 해제' })).toBeNull();
+  });
+
+  test('보호(잠금·절전·발표) 중에는 자물쇠를 안 보여 준다 — 창이 이미 화면에서 사라졌다', () => {
+    useMemoStore.setState({ memos: [memo('a', '내용', '2026-01-05T00:00:00.000Z')], loaded: true });
+    lockMemo();
+
+    render(<SidePinMemoZone locked pinUnlockedAt={null} onEditorActivityChange={vi.fn()} />);
+
+    expect(screen.queryByRole('button', { name: '잠금 해제' })).toBeNull();
+  });
+
+  test('★ PIN 을 맞추면 창의 답을 기다리지 않고 바로 열린다', async () => {
+    useMemoStore.setState({
+      memos: [memo('a', '학부모 상담 메모', '2026-01-05T00:00:00.000Z')],
+      loaded: true,
+    });
+    lockMemo();
+
+    render(
+      <SidePinMemoZone
+        locked={false}
+        pinUnlockedAt={null}
+        onPinUnlocked={() => {}}
+        onEditorActivityChange={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '잠금 해제' }));
+    for (const d of PIN.split('')) fireEvent.click(screen.getByRole('button', { name: d }));
+
+    await screen.findByText(/학부모 상담 메모/, undefined, { timeout: 3_000 });
   });
 });

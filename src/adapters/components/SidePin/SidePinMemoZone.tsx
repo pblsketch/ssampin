@@ -28,6 +28,10 @@ import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { useSidePinMemos } from './useSidePinMemos';
 import { SidePinMemoList } from './SidePinMemoList';
 import { SidePinMemoEditor, type SidePinImageError } from './SidePinMemoEditor';
+import { useSidePinFeatureLock } from './useSidePinFeatureLock';
+import { SidePinZoneHeader, SIDE_PIN_ZONE_META } from './SidePinZoneHeader';
+import { PinOverlay } from '@adapters/components/common/PinOverlay';
+import { SIDE_PIN_MEMO_FOCUS } from './SidePinMemoList';
 
 /** 타자가 멈추고 이만큼 지나면 저장한다 */
 export const SIDE_PIN_MEMO_SAVE_DELAY_MS = 600;
@@ -48,11 +52,48 @@ type Mode = { readonly kind: 'list' } | { readonly kind: 'edit'; readonly id: st
 export interface SidePinMemoZoneProps {
   /** 잠금·절전 등 보호 상태 */
   readonly locked: boolean;
+  /**
+   * 창이 들고 있는 "마지막으로 PIN 을 푼 시각". 안 풀었으면 null.
+   *
+   * 이 창이 스스로 기억하지 않는 이유는 패널 창이 접힌 뒤 10초면 파괴되기 때문이다 —
+   * 여기서 기억하면 스칠 때마다 PIN 을 다시 묻는다.
+   */
+  readonly pinUnlockedAt?: number | null;
+  /** PIN 을 풀었다고 창에 알린다 */
+  readonly onPinUnlocked?: () => void;
   /** 지금 메모를 쓰는 중인지 창에 알린다 */
   readonly onEditorActivityChange: (activity: MemoEditorActivity) => void;
 }
 
-export function SidePinMemoZone({ locked, onEditorActivityChange }: SidePinMemoZoneProps) {
+export function SidePinMemoZone({
+  locked: protectedLocked,
+  pinUnlockedAt = null,
+  onPinUnlocked,
+  onEditorActivityChange,
+}: SidePinMemoZoneProps) {
+  const [showPinPad, setShowPinPad] = useState(false);
+  const {
+    undecided: pinUndecided,
+    locked: pinLocked,
+    markUnlocked,
+  } = useSidePinFeatureLock('memo', pinUnlockedAt);
+
+  /**
+   * 🔒 **보호(잠금·절전·발표)와 PIN 잠금을 하나로 합쳐서 아래 전부에 먹인다.**
+   *
+   * 이 값이 참이면 `selectSidePinMemos` 가 **제목과 미리보기를 빈 문자열로 만든다** —
+   * 목록을 그린 뒤 CSS 로 가리는 것이 아니라, 글자 자체가 화면 쪽 값으로 만들어지지 않는다.
+   * 편집기도 목록으로 되돌리고 검색어도 지운다.
+   *
+   * ⚠️ **정확히 말하면**: 메모 저장소 자체는 잠금과 무관하게 불러온다
+   * (`useSidePinMemos` 의 `load()`). 본 앱도 같은 저장소를 쓰므로 어차피 메모리에는 있다.
+   * 여기서 보장하는 것은 **옆핀 화면에 글자가 안 나가는 것**이지 "메모리에 없는 것"이 아니다.
+   * PIN 으로 잠긴 경우는 아래에서 목록 자체를 안 그리므로 **개수까지** 안 나간다.
+   *
+   * 설정이 아직 안 실렸을 때(`pinUndecided`)도 잠근 것으로 친다. 기본값을 믿고 열어 주면
+   * 설정이 실리기 전 몇 프레임 동안 잠근 메모가 그대로 보인다.
+   */
+  const locked = protectedLocked || pinLocked || pinUndecided;
   /** 목록에서 찾는 말. 메모를 열었다 돌아와도 유지한다 — 결과로 되돌아와야 한다 */
   const [query, setQuery] = useState('');
   /** 검색 칸에 손이 가 있는가. 참이면 패널이 접히지 않는다 */
@@ -277,6 +318,49 @@ export function SidePinMemoZone({ locked, onEditorActivityChange }: SidePinMemoZ
         onCancelDelete={() => setConfirmingDelete(false)}
         onConfirmDelete={() => void removeMemo()}
       />
+    );
+  }
+
+  /**
+   * PIN 으로 잠긴 경우에만 여는 길을 보여 준다.
+   *
+   * 보호(잠금·절전·발표)로 잠긴 것과 구분해야 한다. 그때는 **창 자체가 화면에서 사라져
+   * 있으므로** 자물쇠를 그려도 아무도 못 보고, 잠금 화면 위에서 PIN 을 받는 것도 이상하다.
+   * 설정이 아직 안 실렸을 때도 안 보여 준다 — 잠글 기능인지조차 아직 모른다.
+   */
+  if (pinLocked && !protectedLocked && !pinUndecided) {
+    return (
+      <section aria-label="메모" className="flex h-full flex-col">
+        <SidePinZoneHeader
+          icon={SIDE_PIN_ZONE_META.memo.icon}
+          title={SIDE_PIN_ZONE_META.memo.title}
+        />
+        <div className="flex min-h-0 flex-1 items-center justify-center px-3 pb-3">
+          <button
+            type="button"
+            onClick={() => setShowPinPad(true)}
+            aria-label="잠금 해제"
+            className={`flex w-full items-center gap-1.5 rounded-lg bg-sp-bg px-2 py-2 text-left text-sp-muted transition-colors duration-sp-quick hover:text-sp-text ${SIDE_PIN_MEMO_FOCUS}`}
+          >
+            <span aria-hidden className="material-symbols-outlined text-icon-sm leading-none">
+              lock
+            </span>
+            <span className="min-w-0 flex-1 truncate text-caption">잠금됨 · 눌러서 보기</span>
+          </button>
+        </div>
+
+        {showPinPad && (
+          <PinOverlay
+            onSuccess={() => {
+              setShowPinPad(false);
+              // 창의 답을 기다리지 않고 바로 연다 — 통로가 없으면 영영 안 열린다.
+              markUnlocked();
+              onPinUnlocked?.();
+            }}
+            onCancel={() => setShowPinPad(false)}
+          />
+        )}
+      </section>
     );
   }
 
