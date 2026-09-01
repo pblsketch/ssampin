@@ -20,6 +20,8 @@ import { ConstraintHintBadge } from './ConstraintHintBadge';
 import { SeatingHistoryPanel } from './SeatingHistoryPanel';
 import { NameLearningMode } from './NameLearningMode';
 import { useStudentPhotoUrls } from '@adapters/hooks/useStudentPhotoUrls';
+import { studentPhotoRepository } from '@adapters/di/container';
+import { loadSeatingPhotos, hasSeatingPhotos } from '@usecases/studentPhoto/LoadSeatingPhotos';
 import { FEATURE_FLAGS } from '@adapters/config/featureFlags';
 import { RosterEmptyState } from '@adapters/components/common/RosterEmptyState';
 import { ScrollRow } from '@adapters/components/common/ScrollRow';
@@ -291,6 +293,9 @@ export function Seating(props?: { embedded?: boolean }) {
   // 사진 기능 출시 보류 중에는 아예 읽지 않는다 — 사진이 안 넘어가면 이름 학습은
   // 예전처럼 이름만 가지고 동작하고, "이름 쓰기" 모드는 스스로 잠긴다.
   const learningPhotoUrls = useStudentPhotoUrls(FEATURE_FLAGS.studentPhotos && showNameLearning);
+  // 사진판 내보내기 줄은 **사진이 실제로 있을 때만** 보여 준다.
+  // 메뉴를 열 때 목록(메타)만 확인한다 — 사진 본체는 내보내기를 누를 때 읽는다.
+  const [hasPhotos, setHasPhotos] = useState(false);
   const [showPresetDialog, setShowPresetDialog] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);
   const moreMenuRef = useRef<HTMLDivElement>(null);
@@ -428,25 +433,58 @@ export function Seating(props?: { embedded?: boolean }) {
     };
   }, [showMoreMenu]);
 
+  useEffect(() => {
+    if (!FEATURE_FLAGS.studentPhotos || !showExportMenu) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const found = await hasSeatingPhotos(studentPhotoRepository, {
+          ownerKind: 'homeroom',
+          ownerKey: 'homeroom',
+        });
+        if (!cancelled) setHasPhotos(found);
+      } catch {
+        if (!cancelled) setHasPhotos(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [showExportMenu]);
+
+  // 자유 배치는 책상이 작아 사진이 들어갈 자리가 없다 — 사진판을 내주지 않는다
+  const showPhotoExport = FEATURE_FLAGS.studentPhotos && hasPhotos && layout !== 'freestyle';
+
   const showToast = useToastStore((s) => s.show);
   const getStudent = useStudentStore((s) => s.getStudent);
 
   const handleExport = useCallback(
-    async (format: 'excel' | 'hwpx' | 'pdf') => {
+    async (format: 'excel' | 'hwpx' | 'pdf', withPhotos = false) => {
       setShowExportMenu(false);
       try {
+        // 사진은 **내보내기를 누른 이 순간에만** 읽는다 — 화면에 상시 올려 두지 않는다.
+        const photos = withPhotos
+          ? await loadSeatingPhotos(studentPhotoRepository, {
+              ownerKind: 'homeroom',
+              ownerKey: 'homeroom',
+            })
+          : undefined;
+        const suffix = withPhotos ? '(사진)' : '';
+
         let data: ArrayBuffer | Uint8Array;
         let defaultFileName: string;
 
         if (format === 'excel') {
+          // 엑셀은 사진판을 내주지 않는다 — 화면 배율이 큰 PC 에서 엑셀이 행 높이를 짧게
+          // 잡아 사진이 이름을 덮는다(실측). 사진이 필요하면 PDF·한글을 쓴다.
           data = await exportSeatingToExcel(seating, getStudent, students, className);
           defaultFileName = '학급자리배치도.xlsx';
         } else if (format === 'hwpx') {
-          data = await exportSeatingToHwpx(seating, getStudent, students, className);
-          defaultFileName = '학급자리배치도.hwpx';
+          data = await exportSeatingToHwpx(seating, getStudent, students, className, photos);
+          defaultFileName = `학급자리배치도${suffix}.hwpx`;
         } else {
-          data = await exportSeatingToPdf(seating, getStudent, students, className);
-          defaultFileName = '학급자리배치도.pdf';
+          data = await exportSeatingToPdf(seating, getStudent, students, className, photos);
+          defaultFileName = `학급자리배치도${suffix}.pdf`;
         }
 
         const normalized: ArrayBuffer | string =
@@ -825,6 +863,32 @@ export function Seating(props?: { embedded?: boolean }) {
                   </span>
                   <span>학급 자리 배치 한글 (.hwpx)</span>
                 </button>
+
+                {showPhotoExport && (
+                  <>
+                    <div className="px-4 pt-3 pb-1 border-t border-sp-border bg-sp-card">
+                      <span className="text-xs font-medium text-sp-muted">얼굴 사진 넣기</span>
+                    </div>
+                    <button
+                      onClick={() => void handleExport('pdf', true)}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-sm text-sp-text hover:bg-sp-accent/10 transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-red-400 text-lg">
+                        picture_as_pdf
+                      </span>
+                      <span>사진 자리 배치 PDF (.pdf)</span>
+                    </button>
+                    <button
+                      onClick={() => void handleExport('hwpx', true)}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-sm text-sp-text hover:bg-sp-accent/10 transition-colors border-t border-sp-border"
+                    >
+                      <span className="material-symbols-outlined text-blue-400 text-lg">
+                        description
+                      </span>
+                      <span>사진 자리 배치 한글 (.hwpx)</span>
+                    </button>
+                  </>
+                )}
               </div>
             )}
           </div>

@@ -7,11 +7,17 @@ import { isStudentActive, isStudentInactive } from '@domain/rules/studentActivit
 import type { TeachingClassStudent } from '@domain/entities/TeachingClass';
 import type { SeatingData } from '@domain/entities/Seating';
 import type { Student } from '@domain/entities/Student';
-import { exportSeatingToExcel, exportSeatingToHwpx } from '@infrastructure/export';
+import {
+  exportSeatingToExcel,
+  exportSeatingToHwpx,
+  exportSeatingToPdf,
+} from '@infrastructure/export';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { buildPairGroups, adjustPairGroupsForRow } from '@domain/rules/seatingLayoutRules';
 import { NameLearningMode } from '@adapters/components/Seating/NameLearningMode';
 import { useStudentPhotoUrls } from '@adapters/hooks/useStudentPhotoUrls';
+import { studentPhotoRepository } from '@adapters/di/container';
+import { loadSeatingPhotos, hasSeatingPhotos } from '@usecases/studentPhoto/LoadSeatingPhotos';
 import { FEATURE_FLAGS } from '@adapters/config/featureFlags';
 import type { LearningStudentInfo } from '@adapters/components/Seating/NameLearningMode';
 
@@ -63,6 +69,9 @@ export function ClassSeatingTab({ classId, onOpenRecordSeatView }: ClassSeatingT
   const [dragOver, setDragOver] = useState<{ row: number; col: number } | null>(null);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);
+  // 사진판 내보내기 줄은 **이 수업반에 사진이 있을 때만** 보여 준다.
+  // 메뉴를 열 때 목록(메타)만 확인한다 — 사진 본체는 내보내기를 누를 때 읽는다.
+  const [hasPhotos, setHasPhotos] = useState(false);
 
   // 내보내기 메뉴 외부 클릭 닫기
   useEffect(() => {
@@ -75,6 +84,27 @@ export function ClassSeatingTab({ classId, onOpenRecordSeatView }: ClassSeatingT
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, [showExportMenu]);
+
+  useEffect(() => {
+    if (!FEATURE_FLAGS.studentPhotos || !showExportMenu) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const found = await hasSeatingPhotos(studentPhotoRepository, {
+          ownerKind: 'teaching-class',
+          ownerKey: classId,
+        });
+        if (!cancelled) setHasPhotos(found);
+      } catch {
+        if (!cancelled) setHasPhotos(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [showExportMenu, classId]);
+
+  const showPhotoExport = FEATURE_FLAGS.studentPhotos && hasPhotos;
 
   // studentKey → student 맵
   const studentMap = useMemo(() => {
@@ -210,14 +240,26 @@ export function ClassSeatingTab({ classId, onOpenRecordSeatView }: ClassSeatingT
   }, [cls]);
 
   const handleExport = useCallback(
-    async (format: 'excel' | 'hwpx') => {
+    async (format: 'excel' | 'hwpx' | 'pdf', withPhotos = false) => {
       setShowExportMenu(false);
       if (!exportSeatingData || !cls) return;
       try {
+        // 사진은 **내보내기를 누른 이 순간에만** 읽는다. 이 수업반 사진만 골라,
+        // 좌석표가 쓰는 `학년-반-번호` 열쇠로 받는다 (변환은 loadSeatingPhotos 안에서).
+        const photos = withPhotos
+          ? await loadSeatingPhotos(studentPhotoRepository, {
+              ownerKind: 'teaching-class',
+              ownerKey: classId,
+            })
+          : undefined;
+        const suffix = withPhotos ? '(사진)' : '';
+
         let data: ArrayBuffer | Uint8Array;
         let defaultFileName: string;
 
         if (format === 'excel') {
+          // 엑셀은 사진판을 내주지 않는다 — 화면 배율이 큰 PC 에서 엑셀이 행 높이를 짧게
+          // 잡아 사진이 이름을 덮는다(실측). 사진이 필요하면 PDF·한글을 쓴다.
           data = await exportSeatingToExcel(
             exportSeatingData,
             exportGetStudent,
@@ -225,14 +267,24 @@ export function ClassSeatingTab({ classId, onOpenRecordSeatView }: ClassSeatingT
             cls.name,
           );
           defaultFileName = `${cls.name} 자리배치도.xlsx`;
+        } else if (format === 'pdf') {
+          data = await exportSeatingToPdf(
+            exportSeatingData,
+            exportGetStudent,
+            exportStudents,
+            cls.name,
+            photos,
+          );
+          defaultFileName = `${cls.name} 자리배치도${suffix}.pdf`;
         } else {
           data = await exportSeatingToHwpx(
             exportSeatingData,
             exportGetStudent,
             exportStudents,
             cls.name,
+            photos,
           );
-          defaultFileName = `${cls.name} 자리배치도.hwpx`;
+          defaultFileName = `${cls.name} 자리배치도${suffix}.hwpx`;
         }
 
         const normalized: ArrayBuffer | string =
@@ -241,8 +293,9 @@ export function ClassSeatingTab({ classId, onOpenRecordSeatView }: ClassSeatingT
             : data;
 
         if (window.electronAPI) {
-          const ext = format === 'excel' ? 'xlsx' : 'hwpx';
-          const filterName = format === 'excel' ? 'Excel 파일' : '한글 문서';
+          const ext = format === 'excel' ? 'xlsx' : format === 'pdf' ? 'pdf' : 'hwpx';
+          const filterName =
+            format === 'excel' ? 'Excel 파일' : format === 'pdf' ? 'PDF 문서' : '한글 문서';
           const saved = await window.electronAPI.showSaveDialog({
             title: '내보내기',
             defaultPath: defaultFileName,
@@ -257,7 +310,9 @@ export function ClassSeatingTab({ classId, onOpenRecordSeatView }: ClassSeatingT
             track('export', { format });
           }
         } else {
-          const blob = new Blob([normalized], { type: 'application/octet-stream' });
+          const blob = new Blob([normalized], {
+            type: format === 'pdf' ? 'application/pdf' : 'application/octet-stream',
+          });
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
@@ -271,7 +326,7 @@ export function ClassSeatingTab({ classId, onOpenRecordSeatView }: ClassSeatingT
         showToast('내보내기 중 오류가 발생했습니다', 'error');
       }
     },
-    [exportSeatingData, exportGetStudent, exportStudents, cls, showToast, track],
+    [exportSeatingData, exportGetStudent, exportStudents, cls, classId, showToast, track],
   );
 
   /* ────── 드래그 앤 드롭 ────── */
@@ -491,8 +546,17 @@ export function ClassSeatingTab({ classId, onOpenRecordSeatView }: ClassSeatingT
               className="absolute right-0 top-full mt-2 w-56 bg-sp-card border border-sp-border rounded-xl shadow-2xl shadow-black/30 z-50 overflow-hidden"
             >
               <button
-                onClick={() => void handleExport('excel')}
+                onClick={() => void handleExport('pdf')}
                 className="w-full flex items-center gap-3 px-4 py-3 text-sm text-sp-text hover:bg-sp-accent/10 transition-colors"
+              >
+                <span className="material-symbols-outlined text-red-400 text-lg">
+                  picture_as_pdf
+                </span>
+                <span>자리 배치 PDF (.pdf)</span>
+              </button>
+              <button
+                onClick={() => void handleExport('excel')}
+                className="w-full flex items-center gap-3 px-4 py-3 text-sm text-sp-text hover:bg-sp-accent/10 transition-colors border-t border-sp-border"
               >
                 <span className="material-symbols-outlined text-green-400 text-lg">table_view</span>
                 <span>자리 배치 Excel (.xlsx)</span>
@@ -504,6 +568,32 @@ export function ClassSeatingTab({ classId, onOpenRecordSeatView }: ClassSeatingT
                 <span className="material-symbols-outlined text-blue-400 text-lg">description</span>
                 <span>자리 배치 한글 (.hwpx)</span>
               </button>
+
+              {showPhotoExport && (
+                <>
+                  <div className="px-4 pt-3 pb-1 border-t border-sp-border bg-sp-card">
+                    <span className="text-xs font-medium text-sp-muted">얼굴 사진 넣기</span>
+                  </div>
+                  <button
+                    onClick={() => void handleExport('pdf', true)}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-sm text-sp-text hover:bg-sp-accent/10 transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-red-400 text-lg">
+                      picture_as_pdf
+                    </span>
+                    <span>사진 자리 배치 PDF (.pdf)</span>
+                  </button>
+                  <button
+                    onClick={() => void handleExport('hwpx', true)}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-sm text-sp-text hover:bg-sp-accent/10 transition-colors border-t border-sp-border"
+                  >
+                    <span className="material-symbols-outlined text-blue-400 text-lg">
+                      description
+                    </span>
+                    <span>사진 자리 배치 한글 (.hwpx)</span>
+                  </button>
+                </>
+              )}
             </div>
           )}
         </div>

@@ -1,11 +1,20 @@
-import { PDFDocument, rgb, degrees, type PDFFont, type PDFPage } from 'pdf-lib';
+import { PDFDocument, rgb, degrees, type PDFFont, type PDFImage, type PDFPage } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
 import type { SeatingData, FreestyleDesk } from '@domain/entities/Seating';
 import { GROUP_COLORS } from '@domain/entities/Seating';
 import type { Student } from '@domain/entities/Student';
+import type { StudentPhotoImage } from '@domain/entities/StudentPhoto';
 import { buildPairGroups } from '@domain/rules/seatingLayoutRules';
 import { isStudentActive } from '@domain/rules/studentActivity';
+import { isPrintableStudentPhotoMime } from '@domain/rules/studentPhotoRules';
 import { loadKoreanFontBuffers } from './FontRegistry';
+
+/** 사진 칸에서 이름 한 줄이 차지하는 높이 (pt) */
+const PHOTO_NAME_LINE_H = 13;
+/** 사진 칸 위아래 여백 (pt) */
+const PHOTO_CELL_PAD = 4;
+/** 사진 모드의 칸 높이 상한 (pt) — 학생이 적어도 칸이 지나치게 커지지 않게 한다 */
+const PHOTO_CELL_MAX_H = 130;
 
 /**
  * 좌석배치 → PDF (A4 landscape).
@@ -15,12 +24,18 @@ import { loadKoreanFontBuffers } from './FontRegistry';
  *   - 좌우 반전 (교탁에서 학생 시점).
  *   - 짝꿍 모드면 짝 그룹 사이에 gap 열.
  *   - 우측에 명렬표 (번호/이름).
+ *
+ * `photos` 를 넘기면 **얼굴 사진이 들어간 배치표**가 된다. 사진을 넘기지 않으면 기존과
+ * 완전히 같은 출력이다 — 기존 "학급 자리 배치 PDF" 메뉴의 동작은 바뀌지 않는다.
+ *
+ * @param photos 좌석표 식별자(담임은 `Student.id`) → 사진. 없으면 이름만 출력.
  */
 export async function exportSeatingToPdf(
   seating: SeatingData,
   getStudent: (id: string | null) => Student | undefined,
   students: readonly Student[],
   className: string,
+  photos?: ReadonlyMap<string, StudentPhotoImage>,
 ): Promise<ArrayBuffer> {
   // 자유 배치 모드는 별도 렌더링 경로 사용 (정규화 좌표 → A4 매핑)
   if (
@@ -60,6 +75,26 @@ export async function exportSeatingToPdf(
   const page = doc.addPage([842, 595]);
   const { width, height } = page.getSize();
   const margin = 30;
+
+  // 사진 미리 심기 — 그리는 반복문은 동기라서 먼저 다 심어 둔다.
+  // 한 장이 실패해도 그 학생만 이름으로 떨어지고 배치표는 정상 출력된다.
+  const embeddedPhotos = new Map<string, PDFImage>();
+  if (photos) {
+    for (const [key, photo] of photos) {
+      if (!isPrintableStudentPhotoMime(photo.mimeType)) continue;
+      try {
+        embeddedPhotos.set(
+          key,
+          photo.mimeType === 'image/png'
+            ? await doc.embedPng(photo.bytes)
+            : await doc.embedJpg(photo.bytes),
+        );
+      } catch {
+        // 깨진 사진 한 장이 배치표 전체를 막지 않는다
+      }
+    }
+  }
+  const photoMode = embeddedPhotos.size > 0;
 
   const title = formatSeatingTitle(className);
   drawText(page, title, {
@@ -103,7 +138,9 @@ export async function exportSeatingToPdf(
   const gridAreaWidth = gridAreaRight - gridAreaLeft;
   const seatW = gridAreaWidth / totalUnits;
   const gapW = seatW * 0.25;
-  const cellH = Math.min(32, (gridAreaTop - gridAreaBottom) / Math.max(seating.rows, 1));
+  // 사진 모드는 칸이 세로로 길어야 한다 — 기존 32pt 상한으로는 얼굴이 들어갈 자리가 없다.
+  const cellHCap = photoMode ? PHOTO_CELL_MAX_H : 32;
+  const cellH = Math.min(cellHCap, (gridAreaTop - gridAreaBottom) / Math.max(seating.rows, 1));
   const gridH = cellH * seating.rows;
   const gridStartY = gridAreaTop;
 
@@ -140,14 +177,43 @@ export async function exportSeatingToPdf(
       });
 
       if (student) {
-        drawText(page, student.name, {
-          x: x + w / 2,
-          y: cellY + cellH / 2 - 4,
-          font: fonts.bold,
-          size: 10,
-          align: 'center',
-          maxWidth: w - 6,
-        });
+        if (photoMode) {
+          // 사진은 칸 위쪽, 이름은 아래 한 줄. 사진이 없는 학생은 **사진 자리를 비우고**
+          // 이름만 같은 자리에 찍는다 — 줄마다 이름 높이가 같아야 눈으로 훑기 쉽다.
+          const img = embeddedPhotos.get(student.id);
+          if (img) {
+            const boxH = cellH - PHOTO_NAME_LINE_H - PHOTO_CELL_PAD * 2;
+            const boxW = w - 8;
+            if (boxH > 0 && boxW > 0) {
+              const scale = Math.min(boxW / img.width, boxH / img.height);
+              const pw = img.width * scale;
+              const ph = img.height * scale;
+              page.drawImage(img, {
+                x: x + (w - pw) / 2,
+                y: cellY + PHOTO_NAME_LINE_H + PHOTO_CELL_PAD + (boxH - ph) / 2,
+                width: pw,
+                height: ph,
+              });
+            }
+          }
+          drawText(page, student.name, {
+            x: x + w / 2,
+            y: cellY + PHOTO_CELL_PAD,
+            font: fonts.bold,
+            size: 10,
+            align: 'center',
+            maxWidth: w - 6,
+          });
+        } else {
+          drawText(page, student.name, {
+            x: x + w / 2,
+            y: cellY + cellH / 2 - 4,
+            font: fonts.bold,
+            size: 10,
+            align: 'center',
+            maxWidth: w - 6,
+          });
+        }
       }
     }
   }

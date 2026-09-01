@@ -1,10 +1,17 @@
-import { HwpxDocument, fetchSkeletonHwpx, loadSkeletonHwpx } from '@ubermensch1218/hwpxcore';
+import {
+  HwpxDocument,
+  HwpxOxmlParagraph,
+  fetchSkeletonHwpx,
+  loadSkeletonHwpx,
+} from '@ubermensch1218/hwpxcore';
 import JSZip from 'jszip';
 import type { ClassScheduleData, TeacherScheduleData } from '@domain/entities/Timetable';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import { resolvePeriodLabel } from '@domain/rules/periodLabel';
 import type { SeatingData } from '@domain/entities/Seating';
 import type { Student } from '@domain/entities/Student';
+import type { StudentPhotoImage } from '@domain/entities/StudentPhoto';
+import { isPrintableStudentPhotoMime } from '@domain/rules/studentPhotoRules';
 import type { StudentRecord } from '@domain/entities/StudentRecord';
 import type { RecordCategoryItem } from '@domain/valueObjects/RecordCategory';
 import type { GroupResult } from '@domain/rules/groupingRules';
@@ -26,6 +33,17 @@ import { buildPairGroups, adjustPairGroupsForRow } from '@domain/rules/seatingLa
 import { isStudentActive } from '@domain/rules/studentActivity';
 
 const DAYS = ['월', '화', '수', '목', '금'] as const;
+
+/* ── 사진 자리배치표 치수 (한글 단위, 7200 = 1인치) ──
+ * A4 가로 용지 59528 에서 좌석 표가 실제로 쓸 수 있는 세로 길이.
+ * 위아래 여백·머리말(사진 모드에서 줄인 값) + 제목 줄 + 구분 줄 + 교탁 줄을 뺀 값이며,
+ * **실물 출력으로 재서 정한 숫자다** — 키우면 교탁 줄이 다음 쪽으로 밀린다.
+ */
+const PHOTO_SEAT_AREA_H = 38000;
+/** 학생이 적어도 칸이 지나치게 커지지 않게 하는 상한 */
+const PHOTO_SEAT_MAX_H = 9500;
+/** 사진 아래 이름 한 줄이 차지하는 높이 + 여백 (11pt 기준, 실물로 재서 맞춤) */
+const PHOTO_NAME_LINE_H = 2100;
 
 let skeletonReady = false;
 
@@ -148,6 +166,58 @@ function findChildByLocalName(parent: Element, name: string): Element | null {
     }
   }
   return null;
+}
+
+/**
+ * 표 칸 안에 얼굴 사진을 넣는다 — 이름 문단 **위에** 사진 문단을 새로 만든다.
+ *
+ * ## 챙긴 함정 3가지 (claw-hwp 가 rhwp 에서 겪은 것과 같은 계열)
+ *
+ * 1. **배치 캐시(`linesegarray`)** — 문단 높이를 미리 적어 두는 칸인데, 그림 높이를 모른 채
+ *    남아 있으면 한글이 그 값을 믿고 다음 줄을 엉뚱한 곳에 놓는다. 새 문단에는 아예 넣지 않는다.
+ * 2. **문단 복사 금지** — 기존 문단을 `cloneNode` 로 베끼면 위 캐시까지 딸려 와 한글이 죽는다.
+ *    (기존 `setCellTwoLines` 가 같은 이유로 문단을 새로 만든다.)
+ * 3. **`imgDim` 은 건드리지 않는다** — 규격상 픽셀 값처럼 보이지만, 이 라이브러리는 표시 크기
+ *    (`orgSz`)와 **같은 한글 단위**로 적고 한컴도 그 전제로 읽는다. 실제 픽셀값(240×320)으로
+ *    "고쳐" 넣었더니 한컴이 사진을 점만 하게 그렸다(실측). 규격 문서만 보고 바꾸지 말 것.
+ */
+function insertCellPhoto(
+  doc: HwpxDocument,
+  section: ReturnType<HwpxDocument['section']>,
+  cellElement: Element,
+  photo: StudentPhotoImage,
+  paraPrId: string,
+  widthHwp: number,
+  heightHwp: number,
+): void {
+  const subList = findChildByLocalName(cellElement, 'subList');
+  if (!subList) return;
+  const namePara = findChildByLocalName(subList, 'p');
+  if (!namePara) return;
+
+  const ownerDoc = subList.ownerDocument;
+  const ns = namePara.namespaceURI;
+  if (!ownerDoc || !ns) return;
+
+  const picPara = ownerDoc.createElementNS(ns, 'p');
+  picPara.setAttribute('paraPrIDRef', paraPrId);
+  picPara.setAttribute('styleIDRef', '0');
+  picPara.setAttribute('pageBreak', '0');
+  picPara.setAttribute('columnBreak', '0');
+  picPara.setAttribute('merged', '0');
+  picPara.setAttribute('id', String(Math.floor(Math.random() * 2000000000)));
+  subList.insertBefore(picPara, namePara);
+
+  const itemId = doc.package.addBinaryItem(photo.bytes, {
+    mediaType: photo.mimeType,
+    extension: photo.mimeType === 'image/png' ? 'png' : 'jpg',
+  });
+
+  new HwpxOxmlParagraph(picPara, section).addPicture(itemId, {
+    width: widthHwp,
+    height: heightHwp,
+    treatAsChar: true,
+  });
 }
 
 function applyCellStyle(
@@ -403,11 +473,18 @@ function formatSeatingTitleHwpx(className: string): string {
   return `${className} 자리배치표`;
 }
 
+/**
+ * `photos` 를 넘기면 **얼굴 사진이 들어간 배치표**가 된다. 넘기지 않으면 기존과 완전히 같은
+ * 출력이다 — 기존 "학급 자리 배치 한글" 메뉴의 동작은 바뀌지 않는다.
+ *
+ * @param photos 좌석표 식별자(담임은 `Student.id`) → 사진. 없으면 학번·이름만 출력.
+ */
 export async function exportSeatingToHwpx(
   seating: SeatingData,
   getStudent: (id: string | null) => Student | undefined,
   students: readonly Student[],
   className: string,
+  photos?: ReadonlyMap<string, StudentPhotoImage>,
 ): Promise<Uint8Array> {
   const doc = await createDoc();
 
@@ -426,6 +503,16 @@ export async function exportSeatingToHwpx(
     return doc.save();
   }
 
+  // 사진 모드 — 그릴 수 있는 형식(JPEG·PNG)이 한 장이라도 있을 때만 켠다.
+  // 페이지 여백부터 달라지므로 쪽 설정보다 먼저 판정한다.
+  const drawablePhotos = new Map<string, StudentPhotoImage>();
+  if (photos) {
+    for (const [key, photo] of photos) {
+      if (isPrintableStudentPhotoMime(photo.mimeType)) drawablePhotos.set(key, photo);
+    }
+  }
+  const photoMode = drawablePhotos.size > 0;
+
   // ── Page setup: A4 Landscape ──
   // Hangul uses landscape="WIDELY" for landscape orientation.
   // Width/height are swapped compared to portrait A4.
@@ -435,14 +522,11 @@ export async function exportSeatingToHwpx(
     height: 59528,
     orientation: 'WIDELY',
   });
-  section.properties.setPageMargins({
-    top: 2834,
-    bottom: 2834,
-    left: 2834,
-    right: 2834,
-    header: 2834,
-    footer: 1417,
-  });
+  // 사진 모드는 위아래 여백·머리말을 줄여 사진 자리를 번다 (좌우는 그대로 — 표 폭이 그대로다)
+  const pageMargin = photoMode
+    ? { top: 1417, bottom: 1417, left: 2834, right: 2834, header: 1417, footer: 850 }
+    : { top: 2834, bottom: 2834, left: 2834, right: 2834, header: 2834, footer: 1417 };
+  section.properties.setPageMargins(pageMargin);
 
   // ── Styles ──
   const centerParaId = doc.ensureParaStyle({ alignment: 'CENTER' });
@@ -516,7 +600,15 @@ export async function exportSeatingToHwpx(
   let seatH: number;
   let numberFontSize: number;
   let nameFontSize: number;
-  if (seatGridRows <= 5) {
+  if (photoMode) {
+    // 사진이 들어가려면 칸이 훨씬 높아야 한다.
+    // A4 가로에서 좌석 영역에 쓸 수 있는 세로 길이가 약 44000 HU 다
+    // (제목·구분줄·교탁 줄을 뺀 값). 그 안에서 줄 수로 나눈다.
+    seatH = Math.min(PHOTO_SEAT_MAX_H, Math.floor(PHOTO_SEAT_AREA_H / Math.max(seatGridRows, 1)));
+    numberFontSize = 8;
+    // 사진 아래 이름 한 줄만 넣으므로 글자를 키우지 않는다
+    nameFontSize = seatGridRows <= 5 ? 11 : 10;
+  } else if (seatGridRows <= 5) {
     seatH = 6649;
     numberFontSize = 9;
     nameFontSize = 18;
@@ -538,7 +630,7 @@ export async function exportSeatingToHwpx(
     landscape: 'WIDELY',
     width: 84188,
     height: 59528,
-    margin: { top: 2834, bottom: 2834, left: 2834, right: 2834, header: 2834, footer: 1417 },
+    margin: pageMargin,
   });
 
   while (doc.paragraphs.length > 0) {
@@ -676,6 +768,15 @@ export async function exportSeatingToHwpx(
   const lastSeatColIdx = seatColIndices[seatColIndices.length - 1]!;
   const lastSeatW = availableForSeats - SEAT_W * (numSeatCols - 1);
 
+  // 사진 크기 — 3:4 세로. 칸 높이에서 이름 줄을 뺀 만큼 쓰되, 칸 안쪽 너비를 넘지 않는다.
+  const seatInnerW = SEAT_W - 510 * 2;
+  let photoH = Math.max(2000, seatH - PHOTO_NAME_LINE_H);
+  let photoW = Math.round((photoH * 3) / 4);
+  if (photoW > seatInnerW) {
+    photoW = seatInnerW;
+    photoH = Math.round((photoW * 4) / 3);
+  }
+
   const seatTable = titlePara.addTable(seatTableRows, tableCols);
   seatTable.pageBreak = 'NONE';
 
@@ -758,7 +859,27 @@ export async function exportSeatingToHwpx(
         cell.setSize(ci === lastSeatColIdx ? lastSeatW : SEAT_W, seatH);
         cell.vertAlign = 'CENTER';
 
-        if (student) {
+        if (student && photoMode) {
+          // 사진 모드는 "사진 + 이름" 두 줄. 학번 줄은 넣지 않는다 — 칸 높이가 모자란다.
+          // 사진이 없는 학생은 **사진 자리를 비우고** 이름만 남는다.
+          seatTable.setCellText(displayRow, ci, student.name);
+          applyCellStyle(seatTable, displayRow, ci, {
+            charPrId: nameCharId,
+            paraPrId: centerParaId,
+          });
+          const photo = drawablePhotos.get(student.id);
+          if (photo) {
+            insertCellPhoto(
+              doc,
+              section,
+              seatTable.cell(displayRow, ci).element,
+              photo,
+              centerParaId,
+              photoW,
+              photoH,
+            );
+          }
+        } else if (student) {
           const num = String(student.studentNumber ?? '');
           setCellTwoLines(
             seatTable,

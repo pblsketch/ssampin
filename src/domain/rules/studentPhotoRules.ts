@@ -94,3 +94,15 @@ export function computePhotoResizeTarget(
 export function photoOwnerId(ownerKind: StudentPhotoOwnerKind, ownerKey: string): string {
   return `${ownerKind}:${ownerKey}`;
 }
+
+/**
+ * 자리배치표에 그릴 수 있는 사진 형식인가.
+ *
+ * PDF 도 한글도 JPEG·PNG 만 안전하게 넣을 수 있다. 저장소에는 그 밖의 형식도 들어올 수 있다 —
+ * 원본이 이미 320px 이하면 축소기가 **다시 압축하지 않고 원본 형식 그대로** 돌려주기 때문이다
+ * (`CanvasImageResizer`). 나이스 명렬표 사진은 대개 작아서 이 경로를 탄다.
+ * 그릴 수 없는 형식이면 그 학생만 이름으로 떨어뜨리고, 배치표 전체는 정상 출력한다.
+ */
+export function isPrintableStudentPhotoMime(mime: string): boolean {
+  return mime === 'image/jpeg' || mime === 'image/png';
+}

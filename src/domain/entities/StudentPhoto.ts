@@ -50,3 +50,23 @@ export interface StudentPhoto {
 export interface StudentPhotosData {
   readonly photos: readonly StudentPhoto[];
 }
+
+/**
+ * 파일로 내보낼 때 그림 하나를 그리는 데 필요한 최소 정보.
+ *
+ * 자리배치표(PDF·엑셀·한글)를 만드는 코드는 사진 저장소를 모른다 — 부르는 쪽이 이 모양으로
+ * 읽어서 넘겨준다. 그래야 학생용 화면에서 사진에 닿을 길이 원리적으로 막힌 상태가 유지된다
+ * (빌드 게이트 `scripts/check-bundle-isolation.mjs` 가 검사하는 약속).
+ */
+export interface StudentPhotoImage {
+  readonly bytes: Uint8Array;
+  readonly mimeType: string;
+  /**
+   * 사진의 실제 픽셀 크기.
+   *
+   * ⚠️ 한글(.hwpx)에 넣을 때 필요하다. 한글 파일은 "원본이 몇 픽셀짜리인가"를 따로 적는데,
+   * 이 값이 틀리면 일부 뷰어가 그림을 엉뚱한 배율로 늘린다(한컴은 알아서 고쳐 읽는다).
+   */
+  readonly width: number;
+  readonly height: number;
+}
