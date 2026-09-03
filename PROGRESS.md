@@ -1,6 +1,55 @@
 # Progress
 
-마지막 업데이트: 2026-09-03 KST
+마지막 업데이트: 2026-09-04 KST
+
+## 🚀 v2.4.9 출시 완료 (2026-09-04)
+
+v2.4.8 이후 쌓인 7커밋을 한 번에 내보낸다. 기능 3건 + 수정 2건 + 계측 1건.
+
+| 담기는 것                                                 | 커밋       |
+| --------------------------------------------------------- | ---------- |
+| 자리배치표에 얼굴 사진 넣어 출력 (PDF·한글, 담임·수업반)  | `24d9009b` |
+| 발표 중 옆핀 자동 가리기 (ADR-078)                        | `15f90974` |
+| 옆핀 위젯 칸 PIN 잠금 (ADR-080)                           | `c163a96e` |
+| 옆핀 메모 칸 PIN 잠금 (REGRESSION #67)                    | `6de178e2` |
+| 사용량 계측 6종 + `window.prompt` 7곳 모달 교체 (ADR-081) | `72ae8d65` |
+| 상담예약 결번 뒤 번호 밀림 수정                           | `04541d9a` |
+
+**SOP 진행** — 릴리즈 커밋 `57fe3841`.
+
+1. ✅ 버전 6곳 (`package.json`·`package-lock` 2곳·`src/mobile/version.ts`·
+   `landing/src/config.ts`·`Sidebar.tsx`). SettingsPage·MorePage 는 `MOBILE_APP_VERSION`
+   을 import 하므로 수동 수정 없음.
+2. ✅ `public/release-notes.json` — v2.4.9 항목 6건.
+3. ✅ KB ingest — **릴리즈 게시 직후에 실행**(v2.4.8 과 같은 이유: 설치파일이 없는 동안
+   "업데이트하세요"라고 답하게 된다). Q&A 5건 추가 → **440건**(378 Q&A + 62 기능요약).
+   키는 새 GUID 로 회전 후 즉시 폐기. ★**실제 질문 3건으로 답을 읽어 확인**했다 —
+   사진 자리배치표·발표 중 숨기기·상담예약 번호 셋 다 정확했고 지어낸 조언 없음.
+4. ✅ `/docs` 4개 문서 — 좌석배치(사진 자리배치표) · 위젯 모드(발표 중 숨기기·PIN 잠금) ·
+   보안과 PIN(적용 범위) · 담임 업무(상담예약 빈 번호) + 업데이트 내역 기준 v2.4.9.
+   **revert 대기 문서 없음**(`git log v2.4.8..HEAD | grep -i revert` 0건, docs.ts 무변경 확인).
+5. ✅ 커밋·푸시 (경로 지정 커밋 7파일, 다른 세션 미커밋 3파일 제외).
+6. ✅ Windows GHA `33812030758` success — `ssampin-Setup.exe` 207MB
+7. ✅ macOS GHA `33812034348` success — arm64 274MB · x64 279MB
+8. ✅ GitHub 릴리즈 `v2.4.9` — **자산 8개**, 검증 URL **8개 전부 302**.
+   `latest.yml`·`latest-mac.yml` 둘 다 `version: 2.4.9` 확인(자동 업데이트 감지 조건).
+
+**게이트** — tsc 0 · lint 0 error · test 8,552 통과 · regression 55/55 ·
+landing `docs:check` 45문서 · landing build 성공. 빌드 가드 2종(`vite.config.ts`·
+`vite.mobile.config.ts`) 생존 확인.
+
+★ **로컬 빌드 금지를 지켰다** — 다른 세션의 미커밋 파일 3개(`landing/AGENTS.md`·
+`landing/CLAUDE.md`·쿨메신저 분석 문서)가 작업 트리에 있었다. GHA 는 푸시된 커밋
+`57fe3841` 로만 만들었으므로 남의 작업이 설치파일에 섞이지 않았다.
+
+⚠️ **GHA 의 "Verify build output" 은 .exe 존재만 본다** — SOP 가 말하는 asar `990268309712`
+grep 은 워크플로에 없다. NSIS 가 압축하므로 `.exe` 직접 grep 도 0 이 나온다(판정 불가).
+실제 방어선은 `vite.config.ts` 의 production throw 가드이고, 빌드 로그에
+`VITE_GOOGLE_CLIENT_ID: ***` 주입 + 빌드 성공으로 통과를 확인했다.
+
+★ **잔여** — 실기기 설치 확인(윈도우 자동 업데이트 알림 · macOS [그래도 열기]),
+그리고 **상담예약 링크의 마지막 번호가 32번인지 31번인지 오너 확인**(31 이면 명렬표
+학번 값 자체가 재부여된 별건).
 
 ## 🗓️ 상담예약 — 결번 뒤 학생 번호가 한 칸씩 밀림 (2026-09-03, 게이트 4종 통과)
 
