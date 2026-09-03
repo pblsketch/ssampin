@@ -364,3 +364,51 @@ export function kstDateStringToExpiryIso(dateStr: string): string {
   const utcMs = Date.UTC(y, m - 1, d) - 9 * 60 * 60 * 1000;
   return new Date(utcMs).toISOString();
 }
+
+/* ──────────────── 예약 번호 ↔ 학생 매핑 ──────────────── */
+
+/**
+ * 출석번호 → 학생 조회표.
+ *
+ * 상담 예약이 들고 있는 "번호"는 명렬표의 출석번호(`studentNumber`)다.
+ * 자퇴·전출로 중간 번호가 비면 배열 위치와 출석번호가 어긋나므로
+ * `students[number - 1]` 같은 **위치 기반 조회는 빈 번호부터 한 칸씩 밀린다**
+ * (16번이 자퇴하면 17번 예약이 18번 학생으로 표시됨).
+ *
+ * 같은 번호가 여럿이면 **앞선 항목을 유지**한다. 호출처에서 활성 학생을
+ * 먼저 넘기면 활성 학생이 우선하고, 예약 후 자퇴한 학생의 이름도 남는다.
+ * 번호가 없거나 0 이하인 학생은 조회 대상에서 제외한다.
+ */
+export function buildStudentNumberIndex<T extends { readonly studentNumber?: number }>(
+  students: readonly T[],
+): ReadonlyMap<number, T> {
+  const index = new Map<number, T>();
+  for (const s of students) {
+    const num = s.studentNumber;
+    if (num === undefined || num <= 0) continue;
+    if (!index.has(num)) index.set(num, s);
+  }
+  return index;
+}
+
+/**
+ * 활성 학생 중 아직 예약하지 않은 학생 목록 (출석번호 기준, 오름차순).
+ *
+ * 위치가 아니라 `studentNumber` 를 그대로 쓰므로 중간 번호가 비어도 밀리지 않는다.
+ * 번호가 비어 있는 학생은 예약 링크에도 노출되지 않으므로 여기서도 제외한다.
+ */
+export function listUnbookedStudents<
+  T extends { readonly studentNumber?: number; readonly name: string },
+>(
+  activeStudents: readonly T[],
+  bookedNumbers: ReadonlySet<number>,
+): { number: number; name: string }[] {
+  return activeStudents
+    .flatMap((s) =>
+      s.studentNumber !== undefined && s.studentNumber > 0
+        ? [{ number: s.studentNumber, name: s.name }]
+        : [],
+    )
+    .filter((s) => !bookedNumbers.has(s.number))
+    .sort((a, b) => a.number - b.number);
+}

@@ -2,12 +2,14 @@ import { describe, expect, it } from 'vitest';
 import {
   analyzeScheduleUpdateImpact,
   buildBusyPeriods,
+  buildStudentNumberIndex,
   computeDefaultConsultationExpiry,
   expandEventDates,
   expiryIsoToKstDateString,
   getConsultationLinkStatus,
   isSlotBlockedByTimetable,
   kstDateStringToExpiryIso,
+  listUnbookedStudents,
   makePeriodResolver,
   resolveEventTimeRange,
 } from './consultationRules';
@@ -551,5 +553,69 @@ describe('expiryIsoToKstDateString / kstDateStringToExpiryIso', () => {
     expect(kstDateStringToExpiryIso(expiryIsoToKstDateString(iso))).toBe(iso);
     const date = '2026-07-01';
     expect(expiryIsoToKstDateString(kstDateStringToExpiryIso(date))).toBe(date);
+  });
+});
+
+// ── 예약 번호 ↔ 학생 매핑 (중간 번호 결번) ───────────────────────────
+
+describe('buildStudentNumberIndex / listUnbookedStudents', () => {
+  /** 32명 중 16번이 자퇴로 빠진 명렬표 (활성 31명). */
+  const roster = Array.from({ length: 32 }, (_, i) => ({
+    studentNumber: i + 1,
+    name: `학생${i + 1}`,
+    status: i + 1 === 16 ? ('withdrawn' as const) : ('active' as const),
+  }));
+  const active = roster.filter((s) => s.status === 'active');
+
+  it('빈 번호 뒤 학생을 번호 그대로 찾는다 (위치로 밀리지 않음)', () => {
+    const index = buildStudentNumberIndex(active);
+    expect(index.get(17)?.name).toBe('학생17');
+    expect(index.get(32)?.name).toBe('학생32');
+    // 위치 기반(active[16])이었다면 '학생18'이 나왔다.
+    expect(active[16]?.name).toBe('학생18');
+  });
+
+  it('결번은 조회되지 않는다', () => {
+    expect(buildStudentNumberIndex(active).get(16)).toBeUndefined();
+  });
+
+  it('앞선 항목이 우선한다 — 활성 학생을 먼저 넘기면 활성이 이긴다', () => {
+    const index = buildStudentNumberIndex([...active, ...roster]);
+    expect(index.get(17)?.name).toBe('학생17');
+    // 예약 후 자퇴한 학생 이름도 남는다.
+    expect(index.get(16)?.name).toBe('학생16');
+  });
+
+  it('번호가 없거나 0 이하면 조회표에서 제외한다', () => {
+    const index = buildStudentNumberIndex([
+      { studentNumber: undefined, name: '무번호' },
+      { studentNumber: 0, name: '영번' },
+      { studentNumber: 3, name: '학생3' },
+    ]);
+    expect(index.size).toBe(1);
+    expect(index.get(3)?.name).toBe('학생3');
+  });
+
+  it('미신청 목록이 실제 출석번호를 쓴다 — 16번 결번이어도 17번은 17번', () => {
+    const unbooked = listUnbookedStudents(active, new Set([1, 2, 17]));
+    expect(unbooked).toHaveLength(28);
+    expect(unbooked.some((s) => s.number === 16)).toBe(false);
+    expect(unbooked.find((s) => s.number === 18)?.name).toBe('학생18');
+    expect(unbooked[unbooked.length - 1]).toEqual({ number: 32, name: '학생32' });
+  });
+
+  it('미신청 목록은 번호 오름차순이며 번호 없는 학생은 뺀다', () => {
+    const unbooked = listUnbookedStudents(
+      [
+        { studentNumber: 5, name: '다섯' },
+        { studentNumber: undefined, name: '무번호' },
+        { studentNumber: 2, name: '둘' },
+      ],
+      new Set<number>(),
+    );
+    expect(unbooked).toEqual([
+      { number: 2, name: '둘' },
+      { number: 5, name: '다섯' },
+    ]);
   });
 });

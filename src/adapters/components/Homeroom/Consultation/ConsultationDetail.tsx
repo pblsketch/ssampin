@@ -9,7 +9,11 @@ import { ExportModal } from '@adapters/components/Homeroom/shared/ExportModal';
 import { consultationSupabaseClient } from '@adapters/di/container';
 import { decrypt } from '@domain/rules/cryptoUtils';
 import { isStudentActive } from '@domain/rules/studentActivity';
-import { getConsultationLinkStatus } from '@domain/rules/consultationRules';
+import {
+  getConsultationLinkStatus,
+  buildStudentNumberIndex,
+  listUnbookedStudents,
+} from '@domain/rules/consultationRules';
 import {
   buildConsultationEventTitle,
   buildConsultationEventDescription,
@@ -256,6 +260,17 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
 
   const nonVacant = useMemo(() => students.filter(isStudentActive), [students]);
 
+  /**
+   * 출석번호 → 학생. 예약은 번호로 들어오므로 배열 위치로 찾으면
+   * 자퇴·전출로 빈 번호부터 한 칸씩 밀린다(16번 자퇴 시 17번 예약이 18번으로 표시).
+   * 활성 학생을 먼저 넣어 번호가 겹칠 때 우선시키고, 예약 후 비활성이 된 학생의
+   * 이름도 남도록 전체 명단을 뒤에 이어 붙인다.
+   */
+  const studentByNumber = useMemo(
+    () => buildStudentNumberIndex([...nonVacant, ...students]),
+    [nonVacant, students],
+  );
+
   /** 변경·취소 직후 호출하여 즉시 슬롯/예약 재조회 */
   const refreshNow = useCallback(async () => {
     try {
@@ -467,7 +482,7 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
 
   /* ── 학생 번호 → 이름 ── */
   function getStudentName(studentNumber: number): string {
-    const s = nonVacant[studentNumber - 1];
+    const s = studentByNumber.get(studentNumber);
     return s ? s.name : `${studentNumber}번`;
   }
 
@@ -480,9 +495,7 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
   /* ── 미신청 학생 ── */
   const unbookedStudents = useMemo(() => {
     const bookedNumbers = new Set(bookings.map((b) => b.studentNumber));
-    return nonVacant
-      .map((s, i) => ({ number: i + 1, name: s.name }))
-      .filter((s) => !bookedNumbers.has(s.number));
+    return listUnbookedStudents(nonVacant, bookedNumbers);
   }, [nonVacant, bookings]);
 
   /* ── 내보내기 데이터 ── */
@@ -512,7 +525,7 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
     });
     return { columns, rows };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slots, bookings, decryptedInfoMap, decryptedMemoMap, nonVacant]);
+  }, [slots, bookings, decryptedInfoMap, decryptedMemoMap, studentByNumber]);
 
   /* ── 메뉴 핸들러 ── */
   const handleArchive = useCallback(async () => {
@@ -603,7 +616,14 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
         setAddingCalendarId(null);
       }
     },
-    [decryptedInfoMap, decryptedMemoMap, addedToCalendarIds, schedule.id, showToast, nonVacant],
+    [
+      decryptedInfoMap,
+      decryptedMemoMap,
+      addedToCalendarIds,
+      schedule.id,
+      showToast,
+      studentByNumber,
+    ],
   );
 
   return (
@@ -987,7 +1007,9 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
                                     {onWriteRecord && (
                                       <button
                                         onClick={() => {
-                                          const student = nonVacant[booking.studentNumber - 1];
+                                          const student = studentByNumber.get(
+                                            booking.studentNumber,
+                                          );
                                           if (!student) return;
                                           onWriteRecord({
                                             studentId: student.id,
