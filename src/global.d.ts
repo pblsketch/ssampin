@@ -249,6 +249,39 @@ interface VoiceTypingElectronAPI {
   }>;
 }
 
+/** "내 AI로 실행" 공급자·상태 — 정본은 `src/domain/entities/OwnAiProvider.ts`. */
+type OwnAiElectronProviderId = import('./domain/entities/OwnAiProvider').OwnAiProviderId;
+type OwnAiElectronConnection = import('./domain/entities/OwnAiProvider').OwnAiConnection;
+/**
+ * "내 AI로 실행" — 선생님 본인 구독 CLI(Claude Code·Codex)를 쌤핀이 대신 띄운다.
+ *
+ * ★토큰은 이 통로로 오가지 않는다. 설치·로그인은 각 회사 CLI 의 자체 흐름을 띄우고
+ *   결과 **상태만** 읽는다(ADR-082 결정 3). preload 의 `ownAi` 와 모양이 같아야 한다.
+ */
+interface OwnAiElectronAPI {
+  status: (provider: OwnAiElectronProviderId) => Promise<OwnAiElectronConnection>;
+  statusAll: () => Promise<OwnAiElectronConnection[]>;
+  /** 공급자별 모델 선택을 main 에 알린다(실행 argv 에 쓰인다). 빈 문자열 = CLI 기본값. */
+  setModel: (provider: OwnAiElectronProviderId, model: string) => Promise<boolean>;
+  /** 공식 설치 명령을 **새 터미널 창**에서 실행한다. 창을 못 열면 false. */
+  install: (provider: OwnAiElectronProviderId) => Promise<boolean>;
+  /** CLI 의 로그인 명령을 띄운다(브라우저는 CLI 가 연다). 끝나면 다시 확인한 상태를 준다. */
+  login: (provider: OwnAiElectronProviderId) => Promise<OwnAiElectronConnection>;
+  logout: (provider: OwnAiElectronProviderId) => Promise<OwnAiElectronConnection>;
+  run: (payload: {
+    runId: string;
+    provider: OwnAiElectronProviderId;
+    kind: 'panel' | 'draft';
+    prompt: string;
+    appendSystemPrompt?: string;
+  }) => Promise<{ ok: boolean; reason?: string }>;
+  cancel: (runId: string) => void;
+  /** 실행 중 이벤트 구독. 반환 함수를 부르면 구독을 끊는다. */
+  onEvent: (handler: (event: unknown) => void) => () => void;
+  /** 구독 실행 중 브릿지가 저장을 요청했다 — 카드로 띄우고 [실행]을 받는다. */
+  onWriteProposal: (handler: (payload: unknown) => void) => () => void;
+}
+
 interface ElectronAPI {
   readData: (filename: string) => Promise<string | null>;
   coolMessenger: CoolMessengerElectronAPI;
@@ -262,6 +295,8 @@ interface ElectronAPI {
   ) => Promise<boolean>;
   removeData: (filename: string) => Promise<void>;
   aiBridge: AiBridgeElectronAPI;
+  /** 데스크톱 앱에서만. 옛 preload 에는 없을 수 있어 선택 속성으로 둔다 — 없으면 화면이 그 사실을 말한다. */
+  ownAi?: OwnAiElectronAPI;
   setAlwaysOnTop: (flag: boolean) => Promise<void>;
   setWidget: (options: {
     width: number;

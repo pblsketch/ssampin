@@ -22,7 +22,8 @@ import {
   restoreModelText,
 } from '@domain/rules/redactOutbound';
 import { createMaskSession } from '@domain/privacy/maskEngine';
-import type { OwnAiProviderId } from '@domain/entities/OwnAiProvider';
+import type { OwnAiErrorKind, OwnAiProviderId } from '@domain/entities/OwnAiProvider';
+import { OWN_AI_ERROR_MESSAGES } from '@domain/rules/ownAiCliRules';
 import type { MaskMapping } from '@domain/privacy/types';
 import { findAssistTool } from '@domain/services/assistToolRegistry';
 import type { KeywordGroup } from '@domain/privacy/types';
@@ -98,6 +99,36 @@ export interface AssistTurn {
   readonly proposalState?: AssistProposalState;
   /** 실행 결과나 실패 사유. 선생님이 무슨 일이 일어났는지 알아야 한다 */
   readonly proposalMessage?: string;
+  /**
+   * 어느 AI 가 답했는가 — 배지용. **질문을 던지는 순간의 선택**을 턴에 박아 둔다.
+   * 나중에 공급자를 바꿔도 지난 답의 배지는 그대로여야 하기 때문이다.
+   * `degraded === 'own-ai-fallback'` 이면 실제로 답한 쪽은 쌤핀 AI 다 — 화면이 그렇게 그린다.
+   */
+  readonly answeredBy?: AssistAnsweredBy;
+  /**
+   * "내 AI"(선생님 구독 CLI) 실행이 실패해 답을 못 받은 사유.
+   * 쌤핀 AI 폴백이 없을 때(동의 안 함)만 채워진다. 문구는 `OWN_AI_ERROR_MESSAGES` 에서 꺼낸다.
+   */
+  readonly ownAiError?: OwnAiErrorKind;
+}
+
+/** 배지에 쓸 "누가 답했나". 모델은 CLI 에 넘긴 값 그대로(빈 문자열 = CLI 기본값). */
+export interface AssistAnsweredBy {
+  readonly provider: OwnAiProviderId | 'ssampin';
+  readonly model: string;
+}
+
+/**
+ * 실행 실패 객체에서 "내 AI" 오류 갈래를 꺼낸다.
+ *
+ * ★클래스(`OwnAiRunError`)는 infrastructure 에 있어 여기서 import 하지 않는다 —
+ *   `kind` 가 알려진 갈래인지만 본다(duck typing). 모르는 오류는 null 을 돌려 종전 경로로 보낸다.
+ */
+function ownAiErrorKindOf(err: unknown): OwnAiErrorKind | null {
+  if (typeof err !== 'object' || err === null || !('kind' in err)) return null;
+  const kind = (err as { kind: unknown }).kind;
+  if (typeof kind !== 'string') return null;
+  return kind in OWN_AI_ERROR_MESSAGES ? (kind as OwnAiErrorKind) : null;
 }
 
 interface AssistState {
@@ -120,6 +151,14 @@ interface AssistState {
   readonly ownAiModels: Readonly<Record<OwnAiProviderId, string>>;
   /** "내 AI" 첫 사용 고지문을 확인한 버전. 0 이면 아직 안 봤다. */
   readonly acknowledgedOwnAiNoticeVersion: number;
+  /**
+   * "내 AI로 실행" 실험실 스위치. ★기본 꺼짐.
+   *
+   * `provider` 와는 다른 물건이다 — 이건 "기능을 켰는가", 저건 "지금 누가 답하는가".
+   * 패널에서 잠시 쌤핀 AI 로 돌려도 이 스위치는 켜진 채라, 언제든 구독으로 되돌릴 수 있다.
+   * 끄면 `provider` 도 `ssampin` 으로 되돌린다(꺼진 통로를 가리키는 선택을 남기지 않는다).
+   */
+  readonly ownAiEnabled: boolean;
   readonly open: boolean;
   readonly turns: readonly AssistTurn[];
   readonly draft: string;
@@ -128,6 +167,7 @@ interface AssistState {
 interface AssistActions {
   setEnabled: (value: boolean) => void;
   setProvider: (value: OwnAiProviderId | 'ssampin') => void;
+  setOwnAiEnabled: (value: boolean) => void;
   setOwnAiModel: (provider: OwnAiProviderId, model: string) => void;
   acknowledgeOwnAiNotice: () => void;
   needsOwnAiNotice: () => boolean;
@@ -309,11 +349,19 @@ export const useAssistStore = create<AssistStore>()(
       provider: 'ssampin',
       ownAiModels: { claude: '', codex: '' },
       acknowledgedOwnAiNoticeVersion: 0,
+      ownAiEnabled: false,
       open: false,
       turns: [],
       draft: '',
 
       setProvider: (value) => set({ provider: value }),
+
+      setOwnAiEnabled: (value) =>
+        set((s) => ({
+          ownAiEnabled: value,
+          // 끄면 선택도 되돌린다 — 꺼진 통로를 가리킨 채 남겨 두면 다음 질문이 어디로 가는지 알 수 없다.
+          provider: value ? s.provider : 'ssampin',
+        })),
 
       setOwnAiModel: (provider, model) =>
         set((s) => ({ ownAiModels: { ...s.ownAiModels, [provider]: model } })),
@@ -343,7 +391,8 @@ export const useAssistStore = create<AssistStore>()(
 
       setOpen: (value) => {
         // 꺼져 있으면 열 수 없다. 화면을 우회해 불러도 마찬가지다.
-        if (value && !get().enabled) return;
+        // "내 AI로 실행"을 켠 선생님은 쌤핀 AI 동의 없이도 연다 — 연결 여부는 패널이 다시 본다.
+        if (value && !get().enabled && !get().ownAiEnabled) return;
         if (!value) {
           // ★닫으면 미실행 제안은 소멸한다 — 닫았다 한참 뒤에 다시 열어 [실행]을 누르면,
           //   그 사이 화면에서 직접 지운 대상에 대해 "지웠어요"라고 거짓말하게 된다.
@@ -463,6 +512,12 @@ export const useAssistStore = create<AssistStore>()(
         effectiveOutbound = effectiveOutbound.slice(0, ASSIST_SEND_LIMITS.maxToolResults);
 
         const id = newId();
+        // 누가 답하는지는 **지금** 정해진다 — 답이 오는 동안 선택을 바꿔도 이 턴의 배지는 안 바뀐다.
+        const chosenProvider = get().provider;
+        const answeredBy: AssistAnsweredBy = {
+          provider: chosenProvider,
+          model: chosenProvider === 'ssampin' ? '' : get().ownAiModels[chosenProvider],
+        };
         // 숫자 카드를 **먼저** 넣는다. 모델이 느려도, 심지어 죽어도 답의 절반은 이미 보인다.
         set((s) => ({
           turns: [
@@ -479,6 +534,7 @@ export const useAssistStore = create<AssistStore>()(
               status: 'thinking' as const,
               maskedCount,
               blankedCount,
+              answeredBy,
             },
           ].slice(-MAX_TURNS_KEPT),
           draft: '',
@@ -685,6 +741,14 @@ export const useAssistStore = create<AssistStore>()(
             patch({ status: 'blocked', blockedMessage: err.message });
             return;
           }
+          // "내 AI" 실행 실패(폴백 없음) — 원인이 다르면 선생님이 할 일도 다르므로 갈래를 남긴다.
+          //   "AI 가 잠시 응답하지 않아요"로 뭉개면 로그인이 풀린 건지 한도인지 알 수 없다.
+          const ownAiKind = ownAiErrorKindOf(err);
+          if (ownAiKind) {
+            console.warn('[assist] 내 AI 실행 실패', ownAiKind);
+            patch({ status: 'done', ownAiError: ownAiKind });
+            return;
+          }
           // 예상 밖 오류여도 **숫자 카드는 남긴다.**
           console.error('[assist] 질문 실패', err);
           patch({ degraded: 'upstream', status: 'done' });
@@ -701,6 +765,7 @@ export const useAssistStore = create<AssistStore>()(
         provider: state.provider,
         ownAiModels: state.ownAiModels,
         acknowledgedOwnAiNoticeVersion: state.acknowledgedOwnAiNoticeVersion,
+        ownAiEnabled: state.ownAiEnabled,
       }),
     },
   ),

@@ -11,13 +11,17 @@
  * ★서버(Supabase)를 부르지 않는다. 이 경로는 100% 로컬이다.
  */
 import type { AssistAnswer, AssistPort, AssistRequestPayload } from '@domain/ports/AssistPort';
-import type { OwnAiProviderId, OwnAiRunEvent } from '@domain/entities/OwnAiProvider';
+import type {
+  OwnAiErrorKind,
+  OwnAiProviderId,
+  OwnAiRunEvent,
+} from '@domain/entities/OwnAiProvider';
 import { OWN_AI_ERROR_MESSAGES } from '@domain/rules/ownAiCliRules';
 
 /** 실행 실패를 그대로 던진다 — 합성 포트가 이걸 보고 폴백할지 정한다. */
 export class OwnAiRunError extends Error {
   constructor(
-    readonly kind: OwnAiRunEvent extends { type: 'error'; kind: infer K } ? K : never,
+    readonly kind: OwnAiErrorKind,
     message: string,
   ) {
     super(message);

@@ -22,6 +22,11 @@ import {
   type AssistInputFinding,
 } from '@domain/rules/screenAssistInput';
 import { useAssistStore } from '@adapters/stores/useAssistStore';
+import {
+  useConnectedOwnAiProviders,
+  useOwnAiStatusStore,
+} from '@adapters/stores/useOwnAiStatusStore';
+import { answererLabel } from './answererLabels';
 
 /**
  * 제안 칩 — **장식이 아니라 1층 방어**다.
@@ -123,6 +128,12 @@ export function AssistDock({ onAsk, onRunProposal, onRunOne, roster }: Props) {
   // 진행 중에 겹쳐 보내면 이력이 반쪽으로 실리고, 서버 분당 상한(6회)도 쉽게 닿는다.
   const busy = turns.some((t) => t.status === 'thinking');
   const canSend = draft.trim().length > 0 && !busy;
+
+  // "내 AI로 실행" — 연결된 공급자와 남은 사용량. 없으면 아래 UI 는 그리지 않는다.
+  const provider = useAssistStore((s) => s.provider);
+  const setProvider = useAssistStore((s) => s.setProvider);
+  const connectedProviders = useConnectedOwnAiProviders();
+  const usage = useOwnAiStatusStore((s) => s.usage);
   // ★[실행] 저장이 진행 중이면 [새 대화]를 잠근다 — 지우면 결과 문구가 적힐 턴이
   //   사라져 "저장은 됐는데 아무 말이 없는" 상태가 된다. 스토어(clearConversation)도
   //   같은 조건으로 거부하므로, 이 버튼은 그 사실을 눈에 보이게 하는 쪽이다.
@@ -171,6 +182,33 @@ export function AssistDock({ onAsk, onRunProposal, onRunOne, roster }: Props) {
           <span aria-hidden="true">✦</span> 쌤핀 AI
         </span>
         <div className="flex items-center gap-1">
+          {/* 연결된 "내 AI"가 있을 때만 고르기가 보인다 — 없으면 예전과 똑같은 화면이다. */}
+          {connectedProviders.length > 0 && (
+            <label className="flex items-center gap-1 text-xs text-sp-muted">
+              <span className="sr-only">답하는 AI 고르기</span>
+              <select
+                value={provider}
+                onChange={(e) => setProvider(e.target.value as typeof provider)}
+                disabled={busy}
+                className="rounded-lg border border-sp-border bg-sp-bg px-1.5 py-0.5 text-xs text-sp-text disabled:opacity-50"
+              >
+                <option value="ssampin">{answererLabel('ssampin')}</option>
+                {connectedProviders.map((p) => (
+                  <option key={p} value={p}>
+                    {answererLabel(p)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {/* 남은 사용량은 알 때만, 그것도 한도가 가까울 때만 말한다 — 평소엔 조용히 둔다. */}
+          {usage?.fiveHourUtilization !== null &&
+            usage !== null &&
+            usage.fiveHourUtilization >= 0.8 && (
+              <span className="rounded-lg bg-sp-card px-1.5 py-0.5 text-[0.65rem] text-sp-muted">
+                한도 {Math.round(usage.fiveHourUtilization * 100)}% 사용
+              </span>
+            )}
           {/* 대화 이력이 답에 실리므로(ADR-067) 주제를 바꿀 때 비울 수단이 필요하다.
               지난 얘기가 계속 실리면 엉뚱한 맥락으로 답하고, 보내는 글자 수도 는다. */}
           {turns.length > 0 && (

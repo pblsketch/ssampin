@@ -10,6 +10,8 @@
 import { useEffect, useRef, useState } from 'react';
 
 import type { AssistTurn } from '@adapters/stores/useAssistStore';
+import { answererLabel, shortModelLabel } from './answererLabels';
+import { OWN_AI_ERROR_MESSAGES } from '@domain/rules/ownAiCliRules';
 import type { AssistWriteProposal } from '@domain/entities/AssistWrite';
 import type { ToolResultShape } from '@domain/services/sanitizeToolResult';
 
@@ -546,6 +548,27 @@ export function AssistThread({
 
           {turn.degraded && (
             <p className="text-xs text-sp-muted">{DEGRADED_MESSAGE[turn.degraded]}</p>
+          )}
+
+          {/*
+            누가 답했는지 — 쌤핀 AI 만 쓰던 때와 화면이 달라지지 않게, **구독으로 물었을 때만**
+            보여 준다. 폴백이 일어났으면 실제로 답한 쪽은 쌤핀 AI 이므로 그렇게 적는다.
+          */}
+          {turn.answeredBy && turn.answeredBy.provider !== 'ssampin' && (
+            <p className="text-[0.65rem] text-sp-muted">
+              {turn.degraded === 'own-ai-fallback'
+                ? `${answererLabel('ssampin')}가 답했어요`
+                : `${answererLabel(turn.answeredBy.provider)}${
+                    turn.answeredBy.model
+                      ? ` · ${shortModelLabel(turn.answeredBy.provider, turn.answeredBy.model)}`
+                      : ''
+                  }`}
+            </p>
+          )}
+
+          {/* "내 AI"로 못 답했고 쌤핀 AI 폴백도 없을 때 — 왜 못 답했는지 한 줄로 말한다. */}
+          {turn.ownAiError && (
+            <p className="text-xs text-sp-muted">{OWN_AI_ERROR_MESSAGES[turn.ownAiError].panel}</p>
           )}
         </div>
       ))}

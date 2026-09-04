@@ -149,11 +149,11 @@ describe('[실행] 을 눌러야 저장된다', () => {
     const { result } = renderHook(() => useOwnAiWriteGate());
     act(() => h.handler?.(proposal('p1', 'k1')));
 
-    let r: { ok?: boolean } | null = null;
+    const results: ({ ok?: boolean } | null)[] = [];
     await act(async () => {
-      r = (await result.current.apply('p1')) as { ok?: boolean } | null;
+      results.push((await result.current.apply('p1')) as { ok?: boolean } | null);
     });
-    expect(r?.ok).toBe(false);
+    expect(results[0]?.ok).toBe(false);
   });
 });
 

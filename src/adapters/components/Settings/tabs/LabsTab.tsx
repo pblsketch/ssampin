@@ -1,5 +1,6 @@
 import type { Settings } from '@domain/entities/Settings';
 import { InAppAssistCard } from '../aiBridge/InAppAssistCard';
+import { OwnAiLabsCard } from '../aiBridge/OwnAiLabsCard';
 import { CoolMessengerSection } from '../CoolMessengerSection';
 import { SettingsSection } from '../shared/SettingsSection';
 import { Toggle } from '../shared/Toggle';
@@ -75,6 +76,9 @@ export function LabsTab({ draft, patch }: Props) {
 
       {/* 쌤핀 AI — 스위치 즉시 적용(고지 확인과 켜짐이 한 동작이어야 한다) */}
       <InAppAssistCard />
+
+      {/* 내 AI로 실행(구독) — 같은 이유로 즉시 적용. 쌤핀 AI 카드 바로 아래(계획서 §6.1). */}
+      <OwnAiLabsCard />
 
       {/* 온라인 교무실·쿨메신저 — 상단 [저장]으로 적용되는 초안 방식 */}
       <StaffRoomLabSection draft={draft} patch={patch} />

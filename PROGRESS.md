@@ -15,7 +15,42 @@
   **Google ⛔** — Gemini CLI 소비자 경로 6/18 종료, Antigravity FAQ "제3자 소프트웨어로 접근 = 약관 위반", 교육청 계정 대상 아님.
   → **인앱은 Claude·Codex 2종, 구글은 브릿지(Antigravity IDE) 통로만.** ★`claude -p --bare` 는 구독 로그인을 안 읽는다(미래 기본값 예고).
 - 이 PC 실측: claude 2.1.258(`auth login/status/logout`) · codex 0.144.4(`exec --json -s -C --skip-git-repo-check`) · agy 1.1.22(`-p --output-format stream-json`).
-- **다음**: S0 실측 스파이크(저장소 밖 하네스, 브릿지 MCP 연결 + ADR-072 사례 A~E) → 오너 남은 결정 4건(계획서 §11).
+- **오너 인터뷰 완료(같은 날)**: 구글 제외 수용 · Solar 는 생기부 제외 기능에 유지(생기부 초안은 구독 전용) · 같은 오른쪽 패널 ·
+  초안 화면 [AI로 초안 쓰기] 신설(지금은 "요청문 복사"만) · 실험실 · **1차 = 읽기·쓰기·생기부 전체** · 프롬프트는 실행 시 서버에서 ·
+  생성 단위 선생님 선택(한 명/남은 모두) · 모델 설정에서 선택. ADR-082 D1~D9. **남은 오너 결정 없음.**
+- **ralplan 합의 완료(같은 날)**: `.omc/plans/ralplan-own-ai-provider.md` — Planner(직접)→Architect→Critic 5회차, **Critic APPROVE**.
+  합의로 바뀐 핵심: 쓰기 게이트는 CLI 권한 프롬프트가 아니라 **loopback 적용 지점(`aiBridgeLiveSyncHost.applyWrite`)에서 "제안 후 즉시 409"** ·
+  쓰기 허용은 **기존 설정 토글(capability 파일)**, env 주입 없음 · 패널 실행은 spawn 직전 `activeUntil=∞`, 종료 시 `now+15초` 대입(`max()` 금지) ·
+  쓰기·생기부·**채점** 토글 중 하나라도 ON 인데 서버가 못 뜨면 **실행 금지**(`ensureServer` 가 시작 책임) · 종료·`app.exit`·크래시 경로에서 **동기 kill** ·
+  ★**채점 쓰기(`allowGradeWrite`)는 loopback 을 안 거치고 파일에 직접 쓴다** — 서버 생존 조건(`:159`·`:206`)에 빠져 있던 구멍 · 별칭 문제는 "남의 이름 복원"이 아니라
+  **［이름1］↔브릿지 토큰 대응 불가** → 학번 힌트 줄 · `--permission-prompts none` 은 2.1.259+ (오너 PC 2.1.258 거부) · `--append-system-prompt-file` 옵션 행 없음.
+  ★OMC 에이전트 빈 반환 3회 — 백그라운드 에이전트는 transcript 파일에서 최장 assistant 블록을 뽑아 회수했고(Architect 1·3판), 포그라운드는 파일이 비어 회수 불가(Critic 5판 본문 유실).
+
+### ✅ 구현 진행 (2026-09-04~05) — S0·S1·S2·S3-A 완료
+
+커밋: `96a91bd0`(domain 규칙) · `53008808`(러너·IPC·쓰기 게이트) · `2c52f185`(근거 꾸러미·프롬프트 함수·공급자 스위치) ·
+`0746d025`(ADR-082 D6 보정) · `4cb514cf`(제안 게이트 훅)
+
+- **S0 실측이 설계를 바꿨다**(원자료는 저장소 밖 `E:\test\ssampin-own-ai-spike\S0-results.md`):
+  `--disallowedTools` 는 블랙리스트라 내장 도구 12개 이상이 샜다 → **`--tools "" --restricted`**.
+  A/B: 34.3초·3턴·훅 7건·도구 72개 → **15.6초·2턴·훅 0건·도구 54개**, 둘 다 정답.
+  ★**stdin 을 닫지 않으면** claude 는 3초를 버리고 **codex 는 무한 대기**(184초 타임아웃 실측).
+  ★`--bare` 금지 근거가 CLI `--help` 안에 있다 — "OAuth and keychain are never read".
+  ★`rate_limit_event` 로 남은 사용량(5시간/7일)을 한도 맞기 전에 안내할 수 있다.
+  ★`%APPDATA%\npm` 이 프로세스 PATH 에 없고 레지스트리에만 있었다(`where claude` 실패).
+- **쓰기 게이트**: 활성 중 브릿지 쓰기는 저장하지 않고 제안만 남기고 **즉시 409**.
+  계약 테스트 12건이 "[실행] 없이 저장 0회"를 고정한다.
+- **구현 중 잡은 결함 6건**: 호스트 플랫폼 경로를 쓰던 이식성 버그 · `startServer` 조기 반환 오판 ·
+  서버 생존 조건에 빠진 `allowGradeWrite` · `app.exit` 경로의 고아 프로세스 ·
+  `useState` 만으로 막던 두 번 누르기(React 비동기라 **두 번 저장됐다**) · `OwnAiRunError` 조건부 타입 붕괴.
+- ★**electron 은 tsc 가 안 본다** — `storageLocation.ts` 구문이 깨졌는데 `npx tsc --noEmit` 이 0건으로 통과했다.
+  electron 은 `npm run test` 만이 관문이다(기존 기억 재확인).
+- 화면(패널 헤더·배지·설정 카드 2장)은 디자인 에이전트에 위임했으나 **세션 한도로 중간에 멈춰**
+  import 만 남기고 카드를 못 만들었다 → 남긴 구조(상태 스토어·라벨 사전)를 살려 카드 2장을 직접 완성했다.
+  **디자인 검토는 아직 못 받았다** — 실기기 확인과 함께 남은 일.
+
+- **남은 것**: US-008 [AI로 초안 쓰기] 버튼(`RecordDraftView.tsx` 는 T 세션 소유라 별도 컴포넌트로 만들고 한 줄 삽입은 T6 요청) ·
+  US-010 `/docs` 사용자 가이드 · 실기기 QA(설치→로그인→첫 답변) · 디자인 검토.
 - 코드 변경 없음. 게이트 미실행(문서만). 다른 세션 파일 미접촉.
 
 ## 🔎 분석 — 누적 관찰 → 과제물 → AI 생기부 초안 흐름 × 성취기준 MCP (2026-09-04, 분석만)

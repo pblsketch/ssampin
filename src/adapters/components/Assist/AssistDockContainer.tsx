@@ -10,7 +10,7 @@
  *   모델이 고른 도구는 `executeAssistTool` 이 로컬에서 실행하며 인자를 항상 불신한다.
  * 어느 갈래든 나가는 것은 재구성·가림을 거친 집계뿐이다.
  */
-import { useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 import { AssistDock } from './AssistDock';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
@@ -79,7 +79,18 @@ import type { WriteSources } from '@usecases/assist/writes/writeSources';
 import { executeAssistWrite } from './executeAssistWrite';
 import type { WriteDeps } from './executeAssistWrite';
 import { buildSplitQuestion, subscribeObservationSplit } from './observationSplitRequest';
-import { assistPort } from '@adapters/di/container';
+import { assistPort, assistPortFor } from '@adapters/di/container';
+import {
+  useConnectedOwnAiProviders,
+  useOwnAiStatusRefresh,
+  useOwnAiStatusStore,
+} from '@adapters/stores/useOwnAiStatusStore';
+import {
+  buildCorrelationHints,
+  formatCorrelationHintBlock,
+} from '@domain/rules/ownAiCorrelationHints';
+import { createMaskSession } from '@domain/privacy/maskEngine';
+import { redactQuestion } from '@domain/rules/redactOutbound';
 
 /**
  * ★담임 학급을 가리키는 내부 키.
@@ -759,6 +770,67 @@ export function AssistDockContainer() {
   //   합치는 규칙 자체는 `rosterFromAll`(domain) 에 있다 — 여기 두면 테스트가 안 걸린다.
   const roster = useMemo(() => rosterFromAll(students, classes), [students, classes]);
 
+  // ─────────────────────────────────────────────────────────────
+  // "내 AI로 실행" — 어느 통로로 물어볼지 여기서 고른다.
+  // ─────────────────────────────────────────────────────────────
+  const ownAiEnabled = useAssistStore((s) => s.ownAiEnabled);
+  const provider = useAssistStore((s) => s.provider);
+  const setUsage = useOwnAiStatusStore((s) => s.setUsage);
+  const connectedProviders = useConnectedOwnAiProviders();
+  // 패널을 여는 순간·창이 돌아올 때 상태를 다시 묻는다(설치·로그인은 쌤핀 밖에서 끝난다).
+  useOwnAiStatusRefresh(ownAiEnabled);
+
+  /** 구독으로 답할 준비가 됐는가 — 스위치 ON + 연결된 공급자 1개 이상. */
+  const ownAiUsable = ownAiEnabled && connectedProviders.length > 0;
+
+  /**
+   * 고른 공급자가 실제로 연결돼 있는지 확인해 실효 공급자를 정한다.
+   * 연결이 끊겼는데 그 값이 남아 있으면 조용히 쌤핀 AI 로 답한다(끊긴 통로로 묻지 않는다).
+   */
+  const effectiveProvider =
+    provider !== 'ssampin' && ownAiUsable && connectedProviders.includes(provider)
+      ? provider
+      : 'ssampin';
+
+  /**
+   * 질문마다 포트를 고른다.
+   *
+   * ★대응 힌트를 **여기서** 만든다 — `MaskMapping` 에는 학번이 없어서, 학생 목록을 가진
+   * 이 화면이 "별칭 = 소속 번호"를 풀어 줘야 한다. 힌트에는 실명이 들어가지 않는다.
+   */
+  const pickPort = useCallback(
+    (question: string) => {
+      if (effectiveProvider === 'ssampin') return assistPort;
+
+      const session = createMaskSession();
+      const { mappings } = redactQuestion(question, roster, session);
+      const hints = buildCorrelationHints(mappings, (name) => {
+        const refs: { scope: string; number: number }[] = [];
+        for (const st of students) {
+          if (st.name === name && typeof st.studentNumber === 'number') {
+            refs.push({ scope: '담임', number: st.studentNumber });
+          }
+        }
+        for (const cls of classes) {
+          for (const st of cls.students) {
+            if (st.name === name) refs.push({ scope: cls.name, number: st.number });
+          }
+        }
+        return refs;
+      });
+      const hintBlock = formatCorrelationHintBlock(hints);
+
+      return assistPortFor({
+        provider: effectiveProvider,
+        // 폴백은 쌤핀 AI 에 **동의한 경우에만** — 동의 없는 전송을 만들지 않는다.
+        solarEnabled: () => useAssistStore.getState().enabled,
+        ...(hintBlock ? { appendSystemPrompt: hintBlock } : {}),
+        onUsage: setUsage,
+      });
+    },
+    [effectiveProvider, roster, students, classes, setUsage],
+  );
+
   const notes: NoteSources = useMemo(
     () => ({ notebooks, sections: noteSections, pages: notePages }),
     [notebooks, noteSections, notePages],
@@ -975,7 +1047,7 @@ export function AssistDockContainer() {
           turnIndex: useAssistStore.getState().turns.length + 1,
         });
         void ask(
-          assistPort,
+          pickPort(question),
           question,
           cards,
           roster,
@@ -987,6 +1059,7 @@ export function AssistDockContainer() {
       },
     [
       ask,
+      pickPort,
       bookmarkGroups,
       bookmarks,
       classAttendance,
@@ -1049,7 +1122,8 @@ export function AssistDockContainer() {
     });
   }, [enabled, handleAsk, setOpen]);
 
-  if (!enabled) return null;
+  // 쌤핀 AI 를 안 켰어도 "내 AI"가 연결돼 있으면 패널을 쓸 수 있다.
+  if (!enabled && !ownAiUsable) return null;
   return (
     <AssistDock
       onAsk={handleAsk}
