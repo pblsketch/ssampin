@@ -350,3 +350,128 @@ describe('확정 초안 잠금 — AI 는 못 덮고 교사는 고칠 수 있다
     ).resolves.toBeTruthy();
   });
 });
+
+describe('서사 품질 점검(T4) — 경고만 달고 저장은 통과시킨다', () => {
+  it('"다른 학생에게 옮겨도 말이 되는" 초안에 경고를 달되 저장은 성공한다', async () => {
+    const id = await useRecordDraftsStore.getState().upsert({
+      area: 'subject',
+      studentRef: 'n1',
+      content: '매사에 성실하고 이해력이 뛰어나며 책임감이 강함.',
+    });
+    const rec = useRecordDraftsStore.getState().records.find((r) => r.id === id);
+    // 막지 않는다 — 저장은 되고 경고만 붙는다.
+    expect(rec).toBeDefined();
+    expect(rec?.groundingFlags).toContain('generic_praise');
+  });
+
+  it('근거가 줄기로 정렬된 초안에는 서사 경고를 달지 않는다', async () => {
+    const id = await useRecordDraftsStore.getState().upsert({
+      area: 'subject',
+      studentRef: 'n2',
+      content:
+        '"할인 쿠폰이 있으면 왜 필요 없는 물건도 사게 되는가"라는 의문을 제기하고, ' +
+        '학급 30명을 두 집단으로 나눠 문구만 바꾼 간이 설문을 설계함. ' +
+        '순서 효과가 섞였음을 스스로 발견해 문항 순서를 뒤집어 다시 조사함.',
+    });
+    const rec = useRecordDraftsStore.getState().records.find((r) => r.id === id);
+    expect(rec?.groundingFlags ?? []).toEqual([]);
+  });
+
+  it('같은 flag 가 두 번 실리지 않는다 — 브릿지가 보낸 것과 스토어가 붙인 것이 겹칠 때', async () => {
+    const id = await useRecordDraftsStore.getState().upsert({
+      area: 'subject',
+      studentRef: 'n3',
+      content: '매사에 성실하고 이해력이 뛰어나며 책임감이 강함.',
+      groundingFlags: ['generic_praise', 'low_overlap'],
+    });
+    const flags = useRecordDraftsStore.getState().records.find((r) => r.id === id)?.groundingFlags;
+    expect(flags?.filter((f) => f === 'generic_praise')).toHaveLength(1);
+    expect(flags).toContain('low_overlap');
+  });
+});
+
+describe('서사 점검 — 공통 입력 문구는 같은 반·같은 영역의 다른 학생과만 견준다', () => {
+  const BOILERPLATE = '한 학기 동안 수업에 참여하며 과제를 기한 내에 제출함.';
+
+  it('먼저 저장한 학생은 경고가 없고, 뒤에 저장한 학생이 경고를 받는다(저장 순서 의존)', async () => {
+    // ★이 비대칭은 설계상 그렇다. 판정 재료가 "이미 저장된 다른 초안"이라 첫 학생에게는
+    //   견줄 대상이 없다. 화면(T2)이 읽는 시점에 다시 계산하면 둘 다 보이게 할 수 있다.
+    const firstId = await useRecordDraftsStore.getState().upsert({
+      area: 'subject',
+      studentRef: 'tc:c1:1',
+      classId: 'c1',
+      subject: '경제',
+      content: BOILERPLATE,
+    });
+    const secondId = await useRecordDraftsStore.getState().upsert({
+      area: 'subject',
+      studentRef: 'tc:c1:2',
+      classId: 'c1',
+      subject: '경제',
+      content: '한 학기 동안 수업에 참여하며 과제를 기한 내에 제출하였음.',
+    });
+    const records = useRecordDraftsStore.getState().records;
+    expect(records.find((r) => r.id === firstId)?.groundingFlags ?? []).not.toContain(
+      'shared_boilerplate',
+    );
+    expect(records.find((r) => r.id === secondId)?.groundingFlags).toContain('shared_boilerplate');
+  });
+
+  it('다른 반 학생의 같은 문장은 견주지 않는다', async () => {
+    await useRecordDraftsStore.getState().upsert({
+      area: 'subject',
+      studentRef: 'tc:c1:1',
+      classId: 'c1',
+      subject: '경제',
+      content: BOILERPLATE,
+    });
+    const otherId = await useRecordDraftsStore.getState().upsert({
+      area: 'subject',
+      studentRef: 'tc:c2:1',
+      classId: 'c2',
+      subject: '경제',
+      content: BOILERPLATE,
+    });
+    expect(
+      useRecordDraftsStore.getState().records.find((r) => r.id === otherId)?.groundingFlags ?? [],
+    ).not.toContain('shared_boilerplate');
+  });
+});
+
+describe('서사 점검 — 변화 서사는 근거를 알 때만 판정한다', () => {
+  const CHANGE_DRAFT = '수업 참여가 점차 늘고 과제를 꾸준히 제출함.';
+
+  it('근거 창고를 아직 읽지 못했으면 판정하지 않는다(모르는 것을 "없음"으로 치지 않는다)', async () => {
+    // 근거 스토어는 loaded=false 인 초기 상태다. 여기서 경고가 뜨면 앱 시작 직후 저장마다 오탐이 난다.
+    const id = await useRecordDraftsStore
+      .getState()
+      .upsert({ area: 'behavior', studentRef: 'n4', content: CHANGE_DRAFT });
+    expect(
+      useRecordDraftsStore.getState().records.find((r) => r.id === id)?.groundingFlags ?? [],
+    ).not.toContain('change_without_basis');
+  });
+
+  it('근거를 넘겨 주면 시기 대비가 없을 때 경고한다', async () => {
+    const id = await useRecordDraftsStore.getState().upsert({
+      area: 'behavior',
+      studentRef: 'n5',
+      content: CHANGE_DRAFT,
+      evidenceBasis: { slots: [], dates: ['2026-03-02'] },
+    });
+    expect(
+      useRecordDraftsStore.getState().records.find((r) => r.id === id)?.groundingFlags,
+    ).toContain('change_without_basis');
+  });
+
+  it('담임 슬롯 "변화"가 붙어 있으면 경고하지 않는다', async () => {
+    const id = await useRecordDraftsStore.getState().upsert({
+      area: 'behavior',
+      studentRef: 'n6',
+      content: CHANGE_DRAFT,
+      evidenceBasis: { slots: ['변화'], dates: ['2026-03-02'] },
+    });
+    expect(
+      useRecordDraftsStore.getState().records.find((r) => r.id === id)?.groundingFlags ?? [],
+    ).not.toContain('change_without_basis');
+  });
+});

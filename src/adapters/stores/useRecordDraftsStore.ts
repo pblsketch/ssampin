@@ -12,7 +12,13 @@ import {
 } from '@domain/entities/RecordDraft';
 import { recordDraftsRepository } from '@adapters/di/container';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+import { useRecordEvidenceStore } from '@adapters/stores/useRecordEvidenceStore';
 import { detectProhibitedTerms } from '@domain/rules/prohibitedRecordTerms';
+import {
+  checkRecordNarrative,
+  narrativeFlagCodes,
+  type NarrativeEvidenceBasis,
+} from '@domain/rules/recordNarrativeChecks';
 import { academicTermForDate } from '@domain/rules/academicCalendar';
 import { trackEventSafely } from '@adapters/analytics/trackEventSafely';
 import { generateUUID } from '@infrastructure/utils/uuid';
@@ -44,6 +50,16 @@ export interface RecordDraftUpsertInput {
    * (화면 경로와 같은 판정). 설정이 아직 로드되지 않았으면 한도로 막지 않는다 — 아래 참조.
    */
   level?: SchoolLevel | string;
+  /**
+   * 이 초안이 딛고 선 성취기준 **원문** — 서사 점검의 "성취기준 복사" 검사에만 쓴다.
+   * ★AI 에는 보내지 않는다. 안 넘기면 그 검사는 돌지 않는다(T3 번들·T2 화면 배선 전까지).
+   */
+  standardTexts?: readonly string[];
+  /**
+   * 변화 서사의 근거 메타. 안 넘기면 스토어가 근거 창고에서 **같은 학생·같은 영역**만 골라 만든다.
+   * 창고가 아직 안 읽혔으면 만들지 않는다 — 모르는 것을 "근거 없음"으로 치면 오탐이 난다.
+   */
+  evidenceBasis?: NarrativeEvidenceBasis;
 }
 
 /**
@@ -155,9 +171,50 @@ export const useRecordDraftsStore = create<RecordDraftsState>((set, get) => {
       // ★브릿지의 checkGrounding 은 이걸 못 잡는다 — 그건 "근거에 없는 말을 지어냈나"를 보는데,
       //   관찰기록에 '최우수상'이 실제로 있으면 근거가 확실하다며 통과시킨다(정반대로 동작).
       const prohibited = detectProhibitedTerms(input.content);
+
+      // 서사 품질 점검(T4) — "문장이 이 학생의 것인가"를 본다. 위 검사들과 축이 다르다:
+      // 근거 검사는 "지어냈나", 금지 항목은 "적으면 안 되는 것이 남았나"를 보고, 여기서는
+      // 성취기준 복사·공통 문구·일반 평가 나열·활동 나열·근거 없는 변화·내면 표현을 본다.
+      // ★여기도 막지 않는다. 재료가 없는 검사는 아예 돌지 않는다(모르는 것을 없는 것으로 치지 않음).
+      const peerContents = get()
+        .records.filter(
+          (r) =>
+            r.area === input.area &&
+            r.studentRef !== input.studentRef &&
+            (r.classId ?? '') === (input.classId ?? '') &&
+            subjectKey(r.subject) === subjectKey(input.subject),
+        )
+        .map((r) => r.content);
+      // ★슬라이스 키를 반드시 (같은 학생 + 같은 영역)으로 좁힌다. 넓히면 **남의 학생 근거**로
+      //   변화 서사가 통과한다 — 이 저장소에서 이미 한 번 난 사고 유형이다.
+      const evidenceBasis = ((): NarrativeEvidenceBasis | undefined => {
+        if (input.evidenceBasis !== undefined) return input.evidenceBasis;
+        const evidence = useRecordEvidenceStore.getState();
+        if (!evidence.loaded) return undefined;
+        const rows = evidence
+          .getByStudentRef(input.studentRef)
+          .filter((e) => e.areas.includes(input.area));
+        return {
+          slots: rows.flatMap((e) => e.slots ?? []),
+          dates: rows.map((e) => e.date).filter((d): d is string => typeof d === 'string'),
+        };
+      })();
+      const narrative = checkRecordNarrative({
+        content: input.content,
+        area: input.area,
+        peerContents,
+        ...(input.standardTexts !== undefined ? { standardTexts: input.standardTexts } : {}),
+        ...(evidenceBasis !== undefined ? { evidenceBasis } : {}),
+      });
+
+      // ★중복 제거 — 브릿지 loopback 이 이미 실어 보낸 flag 를 스토어가 또 붙여 화면에 같은
+      //   라벨이 두 번 찍히던 것을 여기서 정리한다.
       const flags = [
-        ...(input.groundingFlags ?? []),
-        ...(prohibited.length > 0 ? ['prohibited_item'] : []),
+        ...new Set([
+          ...(input.groundingFlags ?? []),
+          ...(prohibited.length > 0 ? ['prohibited_item'] : []),
+          ...narrativeFlagCodes(narrative),
+        ]),
       ];
 
       const existing = get().records.find((r) =>
