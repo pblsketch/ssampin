@@ -270,6 +270,58 @@ UI 변경은 프론트엔드 디자인 에이전트와 함께. 게이트 4종 �
   사본이 셋(본체·브릿지·하네스)이 되어 반드시 어긋난다.
 - ★**아직 실행하지 않았다**(API 호출 비용 — 오너 승인 대기). 채점 경로만 가짜 응답으로 확인했다.
 
+### T1 (말로 남기기) — 2026-09-04
+
+**T1 이 직접 고친 소유 밖 파일 1개** (오너가 Win+H 방식을 고르며 함께 승인, 2026-09-04):
+
+- `electron/platform/win32SendKeys.ts` — `sendWinH()` 추가(공통부를 `sendChord()` 로 묶음).
+  브리핑은 PowerShell 이었지만, 이 파일이 **이미 koffi → user32 `SendInput` 으로 Ctrl+V 를
+  보내고 있었다**(ADR-038, 스티커 붙여넣기에서 검증됨). PowerShell 로 키 입력을 만들면
+  ① 프로세스 기동 + `Add-Type` 컴파일로 첫 호출 1~3초 ② 콘솔 포커스 탈취 가능
+  ③ **학교 보안 프로그램이 흔히 차단하는 형태**가 된다. 기존 경로 재사용이 안전해 오너가
+  이 방식을 택했다. `sendCtrlV()` 의 동작은 그대로다(호출부 변경 없음).
+
+**요청 (T6 가 처리) — 이 3건이 없으면 데스크톱 "말로 남기기"가 동작하지 않는다**
+
+1. **`electron/main.ts` 에 통로 등록 2줄.**
+   `import { registerVoiceTypingHandlers } from './ipc/voiceTyping';` 와,
+   다른 `register*Handlers()` 이웃에 `registerVoiceTypingHandlers();`.
+   ★지금은 preload 가 "등록 없음"을 붙잡아 `reason: 'not-wired'` 로 한국어 안내를 돌려주므로
+   화면이 깨지지는 않는다. 그러나 **받아쓰기가 켜지지 않는다** — 수용 기준 1(관찰 칸에서
+   버튼 → Win+H 패널)은 이 두 줄이 들어가야 충족된다.
+2. **설정 탭에 고지 한 줄.** `<VoiceInputNoticeSection />`
+   (`src/adapters/components/Settings/VoiceInputNoticeSection.tsx` — T1 이 완성해 둠)을
+   설정 탭 한 곳에 꽂아 주세요. 자리는 T6 판단(실험실 탭 또는 시스템 탭).
+   ★음성에 **학생 이름이 섞인다.** 켜기 전에 보이는 자리여야 한다.
+3. **`Reminder/ReminderPrompt.tsx` 에 마이크 버튼** — 소유권 표의 오기로 빠졌다.
+   표는 T1 에게 `ReminderPopup.tsx` 를 줬는데 **그 파일에는 글자 칸이 없다.** 실제
+   `<textarea>`(한 줄 메모)는 형제 파일 `ReminderPrompt.tsx` 에 있고 표에 주인이 없다.
+   넣는 법: textarea 에 `useRef` 를 달고
+   `<VoiceTypingButton onFocusField={() => textareaRef.current?.focus()} />` 한 줄.
+   ★2차 분석 §6-4 가 "**수업 직후**가 핵심"이라고 짚은 자리다. 빠진 채로 내면 이 기능의
+   가장 큰 값(기억이 생생할 때 30초 말하기)이 빠진다.
+
+**요청 (T6) — 선택**
+
+4. `src/global.d.ts` 의 `ElectronAPI` 에 `voiceTyping` 타입을 옮겨 주세요. 지금은
+   `src/adapters/hooks/useVoiceTyping.ts` 안에서 `window` 를 좁혀 쓴다(`any` 아님).
+   공용 선언 파일은 여러 세션이 함께 건드려서 T1 이 비켜 갔다.
+5. 학생별 카드의 **건별 저장 상태**는 턴 전체 상태를 건드리지 않으려고 `AssistThread` 의
+   지역 상태로 기억한다(`settleProposal` 은 턴 단위라 한 장을 저장하면 나머지 [실행]이
+   같이 사라진다). `AssistWriteProposal` 에 건별 상태가 생기면 그쪽으로 옮기는 게 맞다.
+
+**남기는 한계 (정직하게 적는다)**
+
+- 데스크톱은 **윈도우만** 대신 켜 준다. 맥은 "fn 키 두 번" 안내로 대체한다 — 맥의 받아쓰기는
+  코드로 켤 수 없다.
+- 데스크톱 마이크 버튼에는 **"듣는 중" 표시가 없다.** 받아쓰기 패널은 OS 것이라 앱은 언제
+  듣기 시작하고 멈췄는지 알 수 없고, 표시하면 거짓말이 된다. 모바일은 앱이 직접 듣기 때문에
+  (Web Speech) 그쪽에만 진짜 표시가 있다.
+- Web Speech 는 **Electron 에서 동작하지 않는다**(2차 분석 §6-2). 그래서 데스크톱에서는
+  받아쓴 글자가 앱을 거치지 않고 OS 가 칸에 직접 넣는다 — 앱이 후처리할 수 없다.
+- "학생별로 나누기"는 **쌤핀 AI 가 실험실에서 켜져 있을 때만** 보인다(꺼져 있으면 진입 자체가
+  없다). 나눈 결과는 학생마다 카드 한 장이고 **[실행]을 누르기 전에는 아무것도 저장되지 않는다.**
+
 ## 7. 하지 않는 것 (이번 프로그램 밖)
 
 - 인앱 [AI 초안] 버튼·`ALLOWED_GRADES` 개방(Phase 4) · 자기평가서(Phase 3) · 로컬 STT 엔진 · 앱 자체 청취(WinRT) ·

@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useBottomSheet } from '@mobile/hooks/useBottomSheet';
 import { todayISO } from '@mobile/utils/date';
 import type { ObservationRecord } from '@domain/entities/Observation';
 import { DEFAULT_OBSERVATION_TAGS } from '@domain/entities/Observation';
 import { allSlotsForContext } from '@domain/rules/observationSlots';
+import { useSpeechInput } from '@mobile/hooks/useSpeechInput';
 
 interface ObservationSheetProps {
   mode: 'add' | 'edit';
@@ -40,6 +41,24 @@ export function ObservationSheet({
       prev.includes(slot) ? prev.filter((s) => s !== slot) : [...prev, slot],
     );
   const [saving, setSaving] = useState(false);
+
+  const contentId = useId();
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // 시트를 열면 바로 쓸 수 있어야 한다. 커서가 이미 칸에 있으면 휴대폰 키보드의
+  // 마이크까지 한 번만 누르면 된다(코드 한 줄로 얻는 이득이 크다).
+  useEffect(() => {
+    textareaRef.current?.focus();
+  }, []);
+
+  /** 받아쓴 말이 확정될 때마다 칸 끝에 이어 붙인다. 상한(500자)은 여기서 지킨다. */
+  const appendSpoken = useCallback((spoken: string): void => {
+    setContent((prev) => {
+      const joined = prev.trimEnd().length === 0 ? spoken : `${prev.trimEnd()} ${spoken}`;
+      return joined.slice(0, 500);
+    });
+  }, []);
+  const speech = useSpeechInput(appendSpoken);
 
   const toggleTag = (tag: string) => {
     setSelectedTags((prev) =>
@@ -118,16 +137,55 @@ export function ObservationSheet({
 
           {/* 내용 */}
           <div>
-            <label className="block text-sp-muted text-xs mb-1.5">
-              내용 <span className="tabular-nums">({content.length}/500자)</span>
-            </label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label htmlFor={contentId} className="text-sp-muted text-xs">
+                내용 <span className="tabular-nums">({content.length}/500자)</span>
+              </label>
+              {/* 모바일은 앱이 직접 듣는다 — 그래서 여기 "듣는 중" 표시는 거짓말이 아니다.
+                  (데스크톱은 OS 가 패널을 갖고 있어 알 수 없으므로 표시를 두지 않는다.)
+                  지원하지 않는 브라우저에서는 아예 그리지 않는다. */}
+              {speech.supported && (
+                <button
+                  type="button"
+                  onClick={speech.listening ? speech.stop : speech.start}
+                  aria-pressed={speech.listening}
+                  aria-label={speech.listening ? '받아쓰기 멈추기' : '말로 쓰기'}
+                  className={`-m-2 flex h-11 w-11 items-center justify-center rounded-full transition-colors ${
+                    speech.listening ? 'bg-sp-accent text-sp-accent-fg' : 'text-sp-muted'
+                  }`}
+                >
+                  <span
+                    aria-hidden
+                    className={`material-symbols-outlined text-icon-md leading-none ${
+                      speech.listening ? 'animate-pulse motion-reduce:animate-none' : ''
+                    }`}
+                  >
+                    {speech.listening ? 'stop' : 'mic'}
+                  </span>
+                </button>
+              )}
+            </div>
             <textarea
+              id={contentId}
+              ref={textareaRef}
               value={content}
               onChange={(e) => setContent(e.target.value.slice(0, 500))}
               placeholder="학생 관찰 내용을 입력하세요."
               rows={4}
               className="glass-input w-full rounded-xl px-3 py-2 text-sp-text text-sm resize-none"
             />
+            {/* 아직 확정되지 않은 말 — 칸에 넣지 않고 아래에 흐리게 보여 준다.
+                그래야 "적힌 것"과 "아직 듣는 중인 것"이 눈으로 구분된다. */}
+            {speech.interim !== '' && (
+              <p className="mt-1 text-xs text-sp-muted" aria-live="polite">
+                {speech.interim}
+              </p>
+            )}
+            {speech.error !== null && (
+              <p role="alert" className="mt-1 text-xs text-sp-text">
+                {speech.error}
+              </p>
+            )}
           </div>
 
           {/* 관찰 슬롯 — 내용 아래(설계 (나)안). 쓰고 나서야 무슨 장면인지 알기 때문이다.

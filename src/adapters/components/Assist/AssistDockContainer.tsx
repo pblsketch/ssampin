@@ -78,6 +78,7 @@ import { buildWriteProposal } from '@usecases/assist/writes/buildWriteProposal';
 import type { WriteSources } from '@usecases/assist/writes/writeSources';
 import { executeAssistWrite } from './executeAssistWrite';
 import type { WriteDeps } from './executeAssistWrite';
+import { buildSplitQuestion, subscribeObservationSplit } from './observationSplitRequest';
 import { assistPort } from '@adapters/di/container';
 
 /**
@@ -658,6 +659,7 @@ export function AssistDockContainer() {
    */
   const { track } = useAnalytics();
   const dockOpen = useAssistStore((s) => s.open);
+  const setOpen = useAssistStore((s) => s.setOpen);
   const turns = useAssistStore((s) => s.turns);
 
   const wasOpenRef = useRef(false);
@@ -1010,6 +1012,50 @@ export function AssistDockContainer() {
     ],
   );
 
+  /**
+   * 묶음 중 **한 건만** 저장 — 말로 쓴 글을 학생별로 나눈 카드가 쓴다.
+   *
+   * ★`settleProposal` 을 일부러 부르지 않는다. 그건 턴 **전체**의 상태라, 한 장을
+   *   저장하는 순간 나머지 카드의 [실행]이 같이 사라진다. 어느 카드가 저장됐는지는
+   *   카드 쪽이 기억한다(AssistThread).
+   * ★저장 경로는 한 장짜리와 똑같다 — 같은 `executeAssistWrite` 를 지나므로
+   *   실행 직전 재확인·안전 규칙이 그대로 걸린다.
+   */
+  const handleRunOne = useMemo(
+    () =>
+      async (proposal: AssistWriteProposal): Promise<{ ok: boolean; message: string }> => {
+        const result = await executeAssistWrite(proposal, writeDeps());
+        return { ok: result.ok, message: result.message };
+      },
+    [],
+  );
+
+  /**
+   * "말로 쓴 글을 학생별로 나누기" 요청 받기 (T1).
+   *
+   * 관찰 입력·옆핀에서 마이크로 받아쓴 긴 글이 여기로 온다. 창을 열고, **이미 쓰던 길**인
+   * `handleAsk` 로 그대로 넘긴다 — 새 통로를 내지 않는 것이 핵심이다. 그 길에는
+   * 이름을 별칭으로 가리는 관문(`redactQuestion`·`redactOutbound`)이 이미 달려 있어서,
+   * 받아쓴 글에 학생 이름이 들어 있어도 밖으로는 `［이름1］` 로 나간다.
+   *
+   * ★꺼져 있으면 구독하지 않는다 — `ask()` 자체도 꺼져 있으면 요청을 내보내지 않지만,
+   *   창까지 열리는 일이 없도록 여기서 한 번 더 막는다.
+   */
+  useEffect(() => {
+    if (!enabled) return;
+    return subscribeObservationSplit((text) => {
+      setOpen(true);
+      handleAsk(buildSplitQuestion(text));
+    });
+  }, [enabled, handleAsk, setOpen]);
+
   if (!enabled) return null;
-  return <AssistDock onAsk={handleAsk} onRunProposal={handleRunProposal} roster={roster} />;
+  return (
+    <AssistDock
+      onAsk={handleAsk}
+      onRunProposal={handleRunProposal}
+      onRunOne={handleRunOne}
+      roster={roster}
+    />
+  );
 }

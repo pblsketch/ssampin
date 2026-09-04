@@ -1,4 +1,10 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { VoiceTypingButton } from '@adapters/components/common/VoiceTypingButton';
+import { useAssistStore } from '@adapters/stores/useAssistStore';
+import {
+  isSplitWorthwhile,
+  requestObservationSplit,
+} from '@adapters/components/Assist/observationSplitRequest';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { allSlotsForContext } from '@domain/rules/observationSlots';
 import { useObservationStore } from '@adapters/stores/useObservationStore';
@@ -57,6 +63,8 @@ export function ObservationForm({ classId, studentId }: ObservationFormProps) {
   const [newCategoryInput, setNewCategoryInput] = useState('');
   const [newTagInput, setNewTagInput] = useState('');
   const [saving, setSaving] = useState(false);
+  // 쌤핀 AI 가 실험실에서 꺼져 있으면 "학생별로 나누기" 진입은 아예 그리지 않는다.
+  const assistEnabled = useAssistStore((s) => s.enabled);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const prevStudentIdRef = useRef(studentId);
   const savingRef = useRef<string | null>(null);
@@ -564,7 +572,23 @@ export function ObservationForm({ classId, studentId }: ObservationFormProps) {
             e.target.value = '';
           }}
         />
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* 말로 쓰기 — OS 받아쓰기를 부른다. 커서를 이 칸에 두고 부르는 것이 핵심이다
+              (OS 는 커서가 있는 칸에 글자를 넣는다). */}
+          <VoiceTypingButton onFocusField={() => textareaRef.current?.focus()} />
+          {/* 여러 학생이 섞인 긴 글일 때만 나온다. 쌤핀 AI 가 꺼져 있으면 아예 없다. */}
+          {assistEnabled && isSplitWorthwhile(content) && (
+            <button
+              type="button"
+              onClick={() => requestObservationSplit(content)}
+              className="flex items-center gap-1 text-caption text-sp-muted transition-colors hover:text-sp-accent"
+            >
+              <span aria-hidden className="material-symbols-outlined text-sm">
+                call_split
+              </span>
+              학생별로 나누기
+            </button>
+          )}
           <button
             type="button"
             onClick={() => openAttachPicker('teacher')}

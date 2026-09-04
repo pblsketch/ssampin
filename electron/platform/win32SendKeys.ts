@@ -32,6 +32,10 @@ const INPUT_KEYBOARD = 1;
 const KEYEVENTF_KEYUP = 0x0002;
 const VK_CONTROL = 0x11;
 const VK_V = 0x56;
+// 받아쓰기(Win+H)용. 윈도우 키는 단독으로 누르면 시작 메뉴가 열리지만,
+// 사이에 H 가 끼면 OS 가 조합키로 처리하므로 시작 메뉴는 열리지 않는다.
+const VK_LWIN = 0x5b;
+const VK_H = 0x48;
 
 interface KeyStroke {
   readonly vk: number;
@@ -144,28 +148,22 @@ function toInputArray(strokes: readonly KeyStroke[]): unknown[] {
 }
 
 /**
- * 현재 포커스된 창에 Ctrl+V를 보낸다 (Windows 전용).
+ * 조합키 한 벌을 현재 포커스된 창으로 보낸다 (Windows 전용).
  *
+ * @param chordLabel 실패 메시지에 넣을, 사람이 읽는 조합키 이름(예: `Ctrl+V`).
  * @throws {SendKeysError} koffi/user32 로드 실패, 또는 OS가 입력을 하나도 받지 못한 경우.
  *   (UIPI — 관리자 권한으로 실행 중인 창이 대상이면 OS가 차단할 수 있다. 이때도 예외를 던져
- *    호출자가 "자동 붙여넣기 실패, 직접 Ctrl+V" 안내를 하도록 한다.)
+ *    호출자가 사용자에게 직접 누르라고 안내하도록 한다.)
  */
-export function sendCtrlV(): void {
+function sendChord(strokes: readonly KeyStroke[], chordLabel: string): void {
   const b = loadBindings();
-
-  const strokes: KeyStroke[] = [
-    { vk: VK_CONTROL, up: false },
-    { vk: VK_V, up: false },
-    { vk: VK_V, up: true },
-    { vk: VK_CONTROL, up: true },
-  ];
 
   let sent = 0;
   try {
     sent = b.sendInput(strokes.length, toInputArray(strokes), b.sizeofInput);
   } catch (e) {
     throw new SendKeysError(
-      `SendInput 호출 실패: ${e instanceof Error ? e.message : String(e)}`,
+      `${chordLabel} SendInput 호출 실패: ${e instanceof Error ? e.message : String(e)}`,
       e,
     );
   }
@@ -182,7 +180,7 @@ export function sendCtrlV(): void {
       return;
     } catch (e) {
       throw new SendKeysError(
-        `SendInput 실패(${sent}/${strokes.length}) 후 keybd_event 예비 경로도 실패: ` +
+        `${chordLabel} SendInput 실패(${sent}/${strokes.length}) 후 keybd_event 예비 경로도 실패: ` +
           `${e instanceof Error ? e.message : String(e)}`,
         e,
       );
@@ -190,7 +188,49 @@ export function sendCtrlV(): void {
   }
 
   throw new SendKeysError(
-    `SendInput이 입력을 전달하지 못했습니다 (${sent}/${strokes.length}). ` +
+    `${chordLabel} 입력을 전달하지 못했습니다 (${sent}/${strokes.length}). ` +
       '대상 창이 관리자 권한으로 실행 중이면 OS가 입력을 차단할 수 있습니다.',
+  );
+}
+
+/**
+ * 현재 포커스된 창에 Ctrl+V를 보낸다 (Windows 전용).
+ *
+ * @throws {SendKeysError} 실패 시. 호출자(스티커 붙여넣기)가 "자동 붙여넣기 실패,
+ *   직접 Ctrl+V" 안내를 하도록 조용히 삼키지 않는다.
+ */
+export function sendCtrlV(): void {
+  sendChord(
+    [
+      { vk: VK_CONTROL, up: false },
+      { vk: VK_V, up: false },
+      { vk: VK_V, up: true },
+      { vk: VK_CONTROL, up: true },
+    ],
+    'Ctrl+V',
+  );
+}
+
+/**
+ * 현재 포커스된 창에 Win+H를 보낸다 — 윈도우 **받아쓰기** 패널을 띄운다 (Windows 전용).
+ *
+ * 쌤핀은 음성 인식기를 넣지 않는다. 듣고 글자로 바꾸는 일은 전부 OS(마이크로소프트)가 하고,
+ * 앱이 하는 일은 "그 패널을 지금 켜 달라"고 키를 대신 눌러 주는 것뿐이다. 그래서 글자는
+ * 앱을 거치지 않고 **지금 커서가 있는 칸으로 OS 가 직접** 흘려 넣는다.
+ *
+ * ★Electron 은 자기 창 밖으로 OS 단축키를 보낼 수 없어 이 우회가 필요하다.
+ * ★첫 사용 때 OS 의 "온라인 음성 인식 켜기" 동의 화면이 한 번 뜬다(실기기 확인 항목).
+ *
+ * @throws {SendKeysError} 실패 시. 호출자가 "직접 Win+H 를 눌러 주세요"로 안내한다.
+ */
+export function sendWinH(): void {
+  sendChord(
+    [
+      { vk: VK_LWIN, up: false },
+      { vk: VK_H, up: false },
+      { vk: VK_H, up: true },
+      { vk: VK_LWIN, up: true },
+    ],
+    'Win+H',
   );
 }

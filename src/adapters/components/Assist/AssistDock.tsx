@@ -57,6 +57,8 @@ interface Props {
    * 무엇을 저장할지는 이미 만들어진 제안이 들고 있다.
    */
   readonly onRunProposal?: (turnId: string, proposal: AssistWriteProposal) => void;
+  /** 묶음 중 한 건만 저장(말로 쓴 글을 학생별로 나눈 카드용). 턴 상태를 건드리지 않는다. */
+  readonly onRunOne?: (proposal: AssistWriteProposal) => Promise<{ ok: boolean; message: string }>;
   /**
    * 학생 명단. 「나갈 문장」 줄이 **실제로 나갈 문장**을 미리 만들어 보여주는 데 쓴다.
    * domain 은 스토어를 import 하지 않으므로 컨테이너가 만들어 내려준다.
@@ -104,7 +106,7 @@ function usePublishDockWidth(): (node: HTMLElement | null) => void {
   return setNode;
 }
 
-export function AssistDock({ onAsk, onRunProposal, roster }: Props) {
+export function AssistDock({ onAsk, onRunProposal, onRunOne, roster }: Props) {
   const enabled = useAssistStore((s) => s.enabled);
   const open = useAssistStore((s) => s.open);
   const turns = useAssistStore((s) => s.turns);
@@ -213,7 +215,7 @@ export function AssistDock({ onAsk, onRunProposal, roster }: Props) {
           </div>
         </div>
       ) : (
-        <AssistThread turns={turns} onRunProposal={onRunProposal} />
+        <AssistThread turns={turns} onRunProposal={onRunProposal} onRunOne={onRunOne} />
       )}
 
       {/* 입력부 */}

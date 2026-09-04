@@ -361,6 +361,37 @@ contextBridge.exposeInMainWorld('electronAPI', {
       | { outcome: 'failed'; message: string }
     > => ipcRenderer.invoke('oneclick-portal:launch', task),
   },
+  /**
+   * 말로 남기기 — OS 받아쓰기(윈도우: Win+H)를 대신 켜 준다.
+   *
+   * ★음성도 글자도 이 통로로 흐르지 않는다. 오가는 것은 "켜 달라"는 신호와 결과 한 줄뿐이고,
+   *   받아쓴 글자는 OS 가 **지금 커서가 있는 칸에 직접** 넣는다(앱을 거치지 않는다).
+   * ★인자가 없다 — 렌더러 값이 명령에 닿을 길 자체가 없다.
+   */
+  voiceTyping: {
+    start: async (): Promise<{
+      ok: boolean;
+      reason: 'started' | 'unsupported-platform' | 'send-failed' | 'not-wired';
+      message: string;
+    }> => {
+      try {
+        return (await ipcRenderer.invoke('voice-typing:start')) as {
+          ok: boolean;
+          reason: 'started' | 'unsupported-platform' | 'send-failed';
+          message: string;
+        };
+      } catch {
+        // 메인에 통로가 아직 등록되지 않은 빌드에서도 화면이 깨지지 않게 한다
+        // (구버전 main + 신버전 렌더러 조합은 개발 중에 실제로 생긴다).
+        return {
+          ok: false,
+          reason: 'not-wired',
+          message:
+            '이 버전에서는 받아쓰기를 대신 켤 수 없습니다. 키보드에서 직접 Windows 키와 H 를 함께 눌러 주세요.',
+        };
+      }
+    },
+  },
   coolMessenger: {
     /** 쪽지함을 읽을 수 있는가 — 설정 스위치를 켤 때 확인한다 */
     isAvailable: (): Promise<boolean> => ipcRenderer.invoke('cool-messenger:available'),

@@ -7,7 +7,7 @@
  * 말풍선을 쓰지 않는다 — **카드(앱 데이터) vs 평문(AI)** 의 대비로 구분한다.
  * 기존 고객지원 챗봇과 시각적으로 다른 물건임을 그렇게 드러낸다.
  */
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import type { AssistTurn } from '@adapters/stores/useAssistStore';
 import type { AssistWriteProposal } from '@domain/entities/AssistWrite';
@@ -316,6 +316,127 @@ function ProposalCard({
   );
 }
 
+/** 한 장짜리 카드에서 학생 이름을 뽑아 제목으로 쓴다. 없으면 원래 제목으로 돌아간다. */
+function studentHeading(item: AssistWriteProposal): string {
+  return item.fields.find((f) => f.label === '학생')?.value ?? item.title;
+}
+
+type SplitItemState = {
+  readonly kind: 'idle' | 'running' | 'done' | 'failed';
+  readonly msg?: string;
+};
+
+/**
+ * 말로 쓴 글을 학생별로 나눈 **미리보기 카드 묶음** (T1).
+ *
+ * ## 왜 한 장이 아니라 여러 장인가
+ *
+ * 여러 학생 이야기를 한 번에 저장하면, 한 명이 잘못 나뉘었을 때 되돌릴 방법이 통째로
+ * 하나뿐이다. 학생마다 따로 [실행]을 두면 **맞는 것만 저장하고 틀린 것은 버릴 수 있다.**
+ * 그래서 "모두 저장" 단추는 일부러 두지 않는다 — 한 장씩 확인하는 것이 이 기능의
+ * 안전장치다(모델이 나눈 결과를 사람이 검산하는 자리).
+ *
+ * ## 저장한 카드를 지우지 않는 이유
+ *
+ * 저장한 카드가 사라지면 "방금 몇 명이 저장됐지?"를 확인할 방법이 없어진다. 그래서
+ * 흐리게 두고 "저장했어요"로 바꾼다 — 목록의 길이가 변하지 않아 눈이 자리를 잃지 않는다.
+ */
+function ObservationSplitCards({
+  items,
+  expired,
+  onRunOne,
+}: {
+  readonly items: readonly AssistWriteProposal[];
+  readonly expired: boolean;
+  readonly onRunOne: (proposal: AssistWriteProposal) => Promise<{ ok: boolean; message: string }>;
+}) {
+  const [states, setStates] = useState<Readonly<Record<number, SplitItemState>>>({});
+
+  const run = (index: number, item: AssistWriteProposal): void => {
+    // 누르는 즉시 running — 버튼이 사라져 두 번 눌리지 않는다(한 장짜리 카드와 같은 규칙).
+    setStates((prev) => ({ ...prev, [index]: { kind: 'running' } }));
+    void onRunOne(item)
+      .then((r) =>
+        setStates((prev) => ({
+          ...prev,
+          [index]: { kind: r.ok ? 'done' : 'failed', msg: r.message },
+        })),
+      )
+      .catch(() =>
+        setStates((prev) => ({
+          ...prev,
+          [index]: { kind: 'failed', msg: '저장하다가 문제가 생겼어요. 화면에서 직접 해주세요.' },
+        })),
+      );
+  };
+
+  const savedCount = Object.values(states).filter((s) => s.kind === 'done').length;
+
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-xs text-sp-muted">
+        학생 {items.length}명으로 나눴어요. 맞는지 보시고 하나씩 저장해 주세요.
+        {savedCount > 0 && ` (${savedCount}명 저장함)`}
+      </p>
+
+      {items.map((item, index) => {
+        const st = states[index] ?? { kind: 'idle' as const };
+        const done = st.kind === 'done';
+        return (
+          <div
+            key={`${studentHeading(item)}-${index}`}
+            className={`rounded-xl border border-sp-border bg-sp-card p-3 ${
+              done ? 'opacity-60' : ''
+            }`}
+          >
+            <div className="mb-2 flex items-center gap-1.5">
+              <span className="rounded-full bg-sp-bg px-2 py-0.5 text-xs font-sp-medium text-sp-muted">
+                {done ? '저장함' : '아직 저장 안 함'}
+              </span>
+              <span className="text-xs font-sp-semibold text-sp-text">{studentHeading(item)}</span>
+            </div>
+
+            <dl className="flex flex-col gap-1">
+              {item.fields
+                .filter((f) => f.label !== '학생')
+                .map((field) => (
+                  <div key={field.label} className="flex items-baseline gap-2">
+                    <dt className="shrink-0 text-xs text-sp-muted">{field.label}</dt>
+                    <dd className="min-w-0 flex-1 break-words text-sm text-sp-text">
+                      {field.value}
+                    </dd>
+                  </div>
+                ))}
+            </dl>
+
+            {st.kind === 'idle' && !expired && (
+              <div className="mt-3 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => run(index, item)}
+                  className="rounded-lg bg-sp-accent px-3 py-1.5 text-sm font-sp-semibold text-sp-accent-fg"
+                >
+                  실행
+                </button>
+                <span className="text-xs text-sp-muted">누르면 이 학생만 저장돼요</span>
+              </div>
+            )}
+
+            {st.kind === 'running' && <p className="mt-2 text-sm text-sp-muted">저장하는 중…</p>}
+            {st.kind === 'done' && <p className="mt-2 text-sm text-sp-success">✓ {st.msg}</p>}
+            {st.kind === 'failed' && <p className="mt-2 text-sm text-sp-text">⚠ {st.msg}</p>}
+            {st.kind === 'idle' && expired && (
+              <p className="mt-2 text-xs text-sp-muted">
+                다음 질문을 하셔서 이 제안은 취소됐어요. 필요하면 다시 말씀해 주세요.
+              </p>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 /** 축소 사유별 한국어 한 줄. **오류처럼 보이지 않게** 담담하게 쓴다. */
 const DEGRADED_MESSAGE: Readonly<Record<string, string>> = {
   // ★"이번 달"이 아니라 **하루**다(ssampin-assist 의 windowMs 는 24시간).
@@ -334,9 +455,17 @@ const DEGRADED_MESSAGE: Readonly<Record<string, string>> = {
 export function AssistThread({
   turns,
   onRunProposal,
+  onRunOne,
 }: {
   readonly turns: readonly AssistTurn[];
   readonly onRunProposal?: (turnId: string, proposal: AssistWriteProposal) => void;
+  /**
+   * 묶음 중 **한 건만** 저장한다(말로 쓴 글을 학생별로 나눈 카드용).
+   *
+   * 턴 전체의 상태를 건드리지 않는 것이 핵심이다 — `onRunProposal` 은 턴을 통째로
+   * 'done' 으로 만들어서, 한 장을 저장하면 나머지 카드의 [실행]이 같이 사라진다.
+   */
+  readonly onRunOne?: (proposal: AssistWriteProposal) => Promise<{ ok: boolean; message: string }>;
 }) {
   // 새 답은 항상 맨 아래에 붙는다. 스크롤이 안 따라가면 답이 화면 밖에서 조용히 생긴다.
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -389,14 +518,28 @@ export function AssistThread({
             <p className="text-sm leading-relaxed text-sp-text">{turn.answer}</p>
           )}
 
-          {turn.proposal && (
-            <ProposalCard
-              turnId={turn.id}
-              proposal={turn.proposal}
-              state={turn.proposalState}
-              message={turn.proposalMessage}
-              onRun={onRunProposal}
+          {/* 말로 쓴 글을 학생별로 나눈 경우에만 카드를 여러 장으로 편다.
+              다른 묶음(할 일·일정)은 지금까지처럼 한 장으로 둔다 — 그쪽 동작을 바꾸지 않는다. */}
+          {turn.proposal &&
+          onRunOne &&
+          turn.proposal.tool === 'add_observation' &&
+          turn.proposal.batch &&
+          turn.proposal.batch.length > 1 ? (
+            <ObservationSplitCards
+              items={turn.proposal.batch}
+              expired={turn.proposalState === 'expired'}
+              onRunOne={onRunOne}
             />
+          ) : (
+            turn.proposal && (
+              <ProposalCard
+                turnId={turn.id}
+                proposal={turn.proposal}
+                state={turn.proposalState}
+                message={turn.proposalMessage}
+                onRun={onRunProposal}
+              />
+            )
           )}
 
           {turn.degraded && (

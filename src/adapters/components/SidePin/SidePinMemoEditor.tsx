@@ -15,6 +15,7 @@
  * 고를 것이 넷이라 한 줄에 다 못 넣으므로 그것만 펼침 줄로 뺀다.
  */
 import { useEffect, useRef, useState } from 'react';
+import { VoiceTypingButton } from '@adapters/components/common/VoiceTypingButton';
 import { MEMO_COLORS, type MemoColor } from '@domain/valueObjects/MemoColor';
 import {
   MEMO_FONT_SIZES,
@@ -152,6 +153,13 @@ export function SidePinMemoEditor({
         >
           {saving ? '저장 중…' : ''}
         </span>
+
+        {/* 말로 쓰기 — OS 받아쓰기. 커서를 메모 칸에 두고 부른다. */}
+        <VoiceTypingButton
+          variant="compact"
+          className={SIDE_PIN_MEMO_FOCUS}
+          onFocusField={() => textareaRef.current?.focus()}
+        />
 
         <button
           type="button"
