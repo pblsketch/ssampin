@@ -56,6 +56,7 @@ import { registerComciganHandlers } from './ipc/comcigan';
 import { registerOneClickPortalHandlers } from './ipc/oneclickPortal';
 import { registerCoolMessengerHandlers } from './ipc/coolMessenger';
 import { registerAppinHandlers } from './ipc/appin';
+import { registerVoiceTypingHandlers } from './ipc/voiceTyping';
 import { registerBoardHandlers, endActiveBoardSessionSync } from './ipc/board';
 import { registerMultiSurveyShareHandlers } from './ipc/multiSurveyShare';
 import { registerAiBridgeHandlers } from './ipc/aiBridge';
@@ -6184,6 +6185,9 @@ if (!gotTheLock) {
     registerOneClickPortalHandlers();
     registerCoolMessengerHandlers();
     registerAppinHandlers();
+    // 말로 남기기 — 화면이 부르면 OS 받아쓰기(윈도우 Win+H)를 대신 켜 준다.
+    // 이 통로로는 음성도 글자도 흐르지 않는다(켜 달라는 신호와 결과 한 줄뿐).
+    registerVoiceTypingHandlers();
     registerBoardHandlers(mainWindow!);
     registerRealtimeWallBoardHandlers();
     registerAiBridgeHandlers();
