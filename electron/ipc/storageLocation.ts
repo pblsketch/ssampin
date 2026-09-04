@@ -22,6 +22,7 @@ import {
   CONTENT_DIRS,
   type ContentRootReason,
 } from '../dataRoot';
+import { cancelAllOwnAiRunsSync } from './ownAi';
 
 export interface StorageStatePayload {
   readonly contentRoot: string;
@@ -197,6 +198,10 @@ export function registerStorageLocationHandlers(getParent: () => BrowserWindow |
 
   /** 재시작 — 위치 변경 후 화면의 '지금 다시 시작' 버튼용. */
   ipcMain.handle('storage:relaunch', (): void => {
+    // ★app.exit 는 before-quit·will-quit 를 **건너뛴다.** 여기서 직접 죽이지 않으면
+    //   "내 AI" 자식(과 그 손자인 브릿지)이 고아로 남고, 새 인스턴스가 뜬 뒤 그 고아가
+    //   보낸 쓰기가 제안 카드 없이 저장된다.
+    cancelAllOwnAiRunsSync();
     app.relaunch();
     app.exit(0);
   });

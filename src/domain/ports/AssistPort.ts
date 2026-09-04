@@ -74,7 +74,11 @@ export type AssistDegraded =
   | 'upstream'
   | 'offline'
   | 'timeout'
-  | 'unreachable';
+  | 'unreachable'
+  // ★`own-ai-fallback` 은 실패가 아니다 — "내 AI"(선생님 구독 CLI)로 답하려다 못 해서
+  //   쌤핀 AI 가 대신 답했다는 뜻이다. 답은 정상이므로 카드도 문장도 그대로 남는다.
+  //   생기부 초안에는 이 값이 오지 않는다(초안은 폴백하지 않고 멈춘다 — 오너 결정 D2).
+  | 'own-ai-fallback';
 
 export interface AssistAnswer {
   readonly text: string;

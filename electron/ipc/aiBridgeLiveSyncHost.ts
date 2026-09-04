@@ -23,6 +23,11 @@ import {
   isDomainWriteAllowed,
   type ApplyWriteRequest,
 } from './aiBridgeLiveSyncCore';
+import {
+  isOwnAiActive,
+  OWN_AI_WRITE_PENDING_MESSAGE,
+  OWN_AI_WRITE_PENDING_STATUS,
+} from '../../src/domain/rules/ownAiWriteGate';
 
 const APPLY_TIMEOUT_MS = 10_000;
 const IDEMPOTENCY_WINDOW_MS = 60_000;
@@ -39,10 +44,35 @@ export interface LiveSyncHostDeps {
   /** 현재 메인 창(없으면 null). 위임은 항상 이 단일 창으로만 보낸다. */
   readonly getMainWindow: () => BrowserWindow | null;
   readonly dataDir: string;
+  /**
+   * "내 AI로 실행"이 활성인 시각(epoch ms). 지금이 이 값보다 이르면 활성이다.
+   *
+   * 활성 중에 온 쓰기는 **저장하지 않고 제안으로 바꾼다** — 선생님이 화면에서 [실행]을
+   * 눌러야 저장된다(ADR-082 C3′). 없으면 항상 비활성으로 본다(기존 동작 그대로).
+   */
+  readonly ownAiActiveUntil?: () => number;
+}
+
+/** `ensureServer()` 가 돌려주는 판정. "내 AI로 실행" 러너가 spawn 여부를 이걸로 정한다. */
+export interface LiveSyncReadiness {
+  /** 쓰기·생기부·채점 토글 중 하나라도 켜져 있어 loopback 서버가 필요한가. */
+  readonly needsServer: boolean;
+  /** 필요하다면, 실제로 떠 있는가. */
+  readonly ready: boolean;
 }
 
 export interface LiveSyncHost {
   readonly stop: () => Promise<void>;
+  /**
+   * 서버가 필요하면 **직접 띄우고** 결과를 돌려준다.
+   *
+   * ★`control.json` 을 읽어 판정하면 안 된다 — 앞선 인스턴스가 크래시하면 파일이 남아
+   * "떠 있다"고 잘못 답한다. 살아 있는 핸들만 진실이다.
+   *
+   * ★`startServer` 는 실패를 삼키고 아무도 다시 부르지 않는다. 부팅 때 listen 이 실패하면
+   * 토글을 껐다 켜기 전에는 영영 안 뜬다 — 그래서 여기서 **시작까지 책임진다**.
+   */
+  readonly ensureServer: () => Promise<LiveSyncReadiness>;
 }
 
 /**
@@ -53,7 +83,6 @@ export function registerLiveSyncHost(deps: LiveSyncHostDeps): LiveSyncHost {
   const pending = new Map<string, (r: ApplyWriteResult) => void>();
   const recentKeys = new Map<string, { at: number; hash: string }>();
   let handle: LiveSyncServerHandle | null = null;
-  let starting = false;
 
   // 렌더러 → main 결과 회신(요청 id 로 correlation).
   ipcMain.on(
@@ -88,6 +117,28 @@ export function registerLiveSyncHost(deps: LiveSyncHostDeps): LiveSyncHost {
     const win = deps.getMainWindow();
     if (!win || win.isDestroyed()) return { ok: false, status: 503, error: '메인 창이 없습니다.' };
 
+    /*
+     * ★"내 AI로 실행" 중이면 저장하지 않고 **제안만** 남기고 즉시 답한다.
+     *
+     * 도구 호출을 열어 둔 채 승인을 기다릴 수는 없다 — 브릿지 쪽 12초, 이쪽 10초가
+     * 번들에 박힌 상수라 120초짜리 승인을 버틸 수 없고, 늦게 온 [실행]은 결과가 버려져
+     * "모델은 실패했다는데 파일은 바뀐" 분열이 생긴다(ADR-082 C3′).
+     *
+     * 도메인 게이트(위 403) 뒤에 둔다 — 애초에 허용되지 않은 쓰기는 카드도 띄우지 않는다.
+     */
+    if (isOwnAiActive(deps.ownAiActiveUntil?.() ?? 0, now)) {
+      win.webContents.send('ownAi:write-proposal', {
+        proposalId: randomUUID(),
+        request: req,
+        source: 'unknown',
+      });
+      return {
+        ok: false,
+        status: OWN_AI_WRITE_PENDING_STATUS,
+        error: OWN_AI_WRITE_PENDING_MESSAGE,
+      };
+    }
+
     const requestId = randomUUID();
     const result = await new Promise<ApplyWriteResult>((resolve) => {
       const timer = setTimeout(() => {
@@ -104,16 +155,42 @@ export function registerLiveSyncHost(deps: LiveSyncHostDeps): LiveSyncHost {
     return result;
   };
 
+  /**
+   * 시작 중인 호출을 들고 있는다.
+   *
+   * ★예전에는 `starting` 플래그만 보고 **곧바로 돌아왔다.** 그러면 부팅 시 자동 시작
+   * (`void startServer()`)과 겹친 호출이 "아직 안 떴다"를 보고 실패로 판정한다.
+   * 진행 중인 약속을 기다리게 해야 같은 답을 얻는다.
+   */
+  let startPromise: Promise<void> | null = null;
+
   async function startServer(): Promise<void> {
-    if (handle || starting) return;
-    starting = true;
-    try {
-      handle = await startLiveSyncServer({ dataDir: deps.dataDir, applyWrite });
-    } catch (err) {
-      console.error('[aiBridge] live-sync 서버 시작 실패:', err);
-    } finally {
-      starting = false;
-    }
+    if (handle) return;
+    if (startPromise) return startPromise;
+    startPromise = (async () => {
+      try {
+        handle = await startLiveSyncServer({ dataDir: deps.dataDir, applyWrite });
+      } catch (err) {
+        console.error('[aiBridge] live-sync 서버 시작 실패:', err);
+      } finally {
+        startPromise = null;
+      }
+    })();
+    return startPromise;
+  }
+
+  /** 서버가 필요한 상태인가 — 쓰기·생기부·**채점** 중 하나라도 켜져 있으면 필요하다. */
+  function needsLoopbackServer(): boolean {
+    const caps = readCapability(deps.dataDir);
+    // ★채점(allowGradeWrite)을 빠뜨리면 안 된다. 채점 쓰기는 loopback 을 거치지 않고
+    //   앱이 없을 때 파일에 직접 쓰므로, 서버가 떠 있어야 브릿지가 거부한다.
+    return caps.allowWrite || caps.allowRecordWrite || caps.allowGradeWrite;
+  }
+
+  async function ensureServer(): Promise<LiveSyncReadiness> {
+    if (!needsLoopbackServer()) return { needsServer: false, ready: handle !== null };
+    if (!handle) await startServer();
+    return { needsServer: true, ready: handle !== null };
   }
 
   async function stopServer(): Promise<void> {
@@ -156,7 +233,9 @@ export function registerLiveSyncHost(deps: LiveSyncHostDeps): LiveSyncHost {
   }): Promise<CapabilityStatus> {
     // 부분 갱신 — 다른 기능의 토글(이 함수가 모르는 필드)도 보존(클로버 방지).
     const next = mergeCapability(deps.dataDir, partial);
-    if (next.allowWrite || next.allowRecordWrite) await startServer();
+    // ★채점(allowGradeWrite)도 서버가 필요하다 — 채점 쓰기는 loopback 을 거치지 않고
+    //   앱이 없을 때 파일에 직접 쓴다. 서버가 떠 있어야 브릿지가 거부한다.
+    if (next.allowWrite || next.allowRecordWrite || next.allowGradeWrite) await startServer();
     else await stopServer();
     return capabilityStatus();
   }
@@ -203,8 +282,8 @@ export function registerLiveSyncHost(deps: LiveSyncHostDeps): LiveSyncHost {
   // 시작 시 capability 가 이미 켜져 있으면 서버 자동 시작(기본 OFF 라 보통은 무동작).
   {
     const caps = readCapability(deps.dataDir);
-    if (caps.allowWrite || caps.allowRecordWrite) void startServer();
+    if (caps.allowWrite || caps.allowRecordWrite || caps.allowGradeWrite) void startServer();
   }
 
-  return { stop: stopServer };
+  return { stop: stopServer, ensureServer };
 }

@@ -60,6 +60,7 @@ import { registerVoiceTypingHandlers } from './ipc/voiceTyping';
 import { registerBoardHandlers, endActiveBoardSessionSync } from './ipc/board';
 import { registerMultiSurveyShareHandlers } from './ipc/multiSurveyShare';
 import { registerAiBridgeHandlers } from './ipc/aiBridge';
+import { registerOwnAiHandlers, cancelAllOwnAiRunsSync, ownAiActiveUntil } from './ipc/ownAi';
 import { registerLiveSyncHost, type LiveSyncHost } from './ipc/aiBridgeLiveSyncHost';
 import {
   createSidePinElectron,
@@ -6192,7 +6193,17 @@ if (!gotTheLock) {
     registerRealtimeWallBoardHandlers();
     registerAiBridgeHandlers();
     // AI 브릿지 live-sync 쓰기 호스트 — capability.allowWrite 가 켜진 경우에만 loopback 서버 시작(기본 OFF).
-    liveSyncHost = registerLiveSyncHost({ getMainWindow: () => mainWindow, dataDir: getDataDir() });
+    liveSyncHost = registerLiveSyncHost({
+      getMainWindow: () => mainWindow,
+      dataDir: getDataDir(),
+      ownAiActiveUntil,
+    });
+    // "내 AI로 실행" — 선생님 본인 구독 CLI. 쓰기가 필요한데 loopback 서버가 못 뜨면 실행하지 않는다.
+    registerOwnAiHandlers({
+      getMainWindow: () => mainWindow,
+      ensureLiveSyncServer: () =>
+        liveSyncHost?.ensureServer() ?? Promise.resolve({ needsServer: false, ready: false }),
+    });
     // 글로벌 퀵애드 단축키 IPC
     ipcMain.handle('shortcuts:sync', (_event, config: ShortcutSyncConfig) => {
       return applyGlobalShortcuts(config);
@@ -6410,6 +6421,10 @@ app.on('will-quit', () => {
 
 app.on('before-quit', () => {
   isQuitting = true;
+  // ★"내 AI" 자식 프로세스를 **동기로** 죽인다. before-quit 는 await 를 기다리지 않아서,
+  //   비동기로 죽이면 will-quit 의 liveSyncHost.stop()(control.json 삭제)이 먼저 끝나
+  //   남은 브릿지가 "앱이 없다"고 보고 파일을 직접 쓸 수 있다.
+  cancelAllOwnAiRunsSync();
   // 협업 보드 활성 세션이 있으면 동기 저장 (Design §3.2-bis)
   endActiveBoardSessionSync();
   // 실시간 담벼락 dirty WallBoard 동기 저장 (Design §3.3)

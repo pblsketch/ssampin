@@ -51,6 +51,46 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('data:writeIfUnchanged', filename, expectedData, nextData),
   removeData: (filename: string): Promise<void> => ipcRenderer.invoke('data:remove', filename),
   // AI 브릿지 — 외부 AI(Claude/Codex/Antigravity) 연결
+  /**
+   * "내 AI로 실행" — 선생님 본인 구독 CLI(Claude Code·Codex).
+   * ★로그인은 CLI 자체 명령을 띄우기만 한다. 여기로 토큰이 오가지 않는다.
+   */
+  ownAi: {
+    status: (provider: 'claude' | 'codex'): Promise<unknown> =>
+      ipcRenderer.invoke('ownAi:status', provider),
+    statusAll: (): Promise<unknown> => ipcRenderer.invoke('ownAi:statusAll'),
+    setModel: (provider: 'claude' | 'codex', model: string): Promise<boolean> =>
+      ipcRenderer.invoke('ownAi:setModel', provider, model),
+    install: (provider: 'claude' | 'codex'): Promise<boolean> =>
+      ipcRenderer.invoke('ownAi:install', provider),
+    login: (provider: 'claude' | 'codex'): Promise<unknown> =>
+      ipcRenderer.invoke('ownAi:login', provider),
+    logout: (provider: 'claude' | 'codex'): Promise<unknown> =>
+      ipcRenderer.invoke('ownAi:logout', provider),
+    run: (payload: {
+      runId: string;
+      provider: 'claude' | 'codex';
+      kind: 'panel' | 'draft';
+      prompt: string;
+      appendSystemPrompt?: string;
+    }): Promise<{ ok: boolean; reason?: string }> => ipcRenderer.invoke('ownAi:run', payload),
+    cancel: (runId: string): void => {
+      ipcRenderer.send('ownAi:cancel', runId);
+    },
+    /** 실행 중 이벤트 구독. 반환 함수를 부르면 구독을 끊는다. */
+    onEvent: (handler: (event: unknown) => void): (() => void) => {
+      const listener = (_e: unknown, payload: unknown): void => handler(payload);
+      ipcRenderer.on('ownAi:event', listener);
+      return () => ipcRenderer.removeListener('ownAi:event', listener);
+    },
+    /** 쓰기 제안(구독 실행 중 브릿지가 저장을 요청했다). 카드로 띄우고 [실행]을 받는다. */
+    onWriteProposal: (handler: (payload: unknown) => void): (() => void) => {
+      const listener = (_e: unknown, payload: unknown): void => handler(payload);
+      ipcRenderer.on('ownAi:write-proposal', listener);
+      return () => ipcRenderer.removeListener('ownAi:write-proposal', listener);
+    },
+  },
+
   aiBridge: {
     register: (
       client: 'claude' | 'codex' | 'antigravity',
